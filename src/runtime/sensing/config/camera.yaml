@@ -43,7 +43,7 @@
     camera_principal_x: 0.0     # cx (px)
     camera_principal_y: 0.0     # cy (px)
     camera_max_range_m: 0.0     # trustworthy range (m); beyond it is unknown
-    # Select pinhole (existing six values above), homography, or off. A
+    # Select pinhole (existing six values above), homography, nominal (D-423), or off. A
     # homography only becomes active after every profile check passes and the
     # session enable switch is on. The dashboard switch is deliberately not
     # persisted; make an intentional config change for a boot default.
@@ -62,6 +62,21 @@
     camera_homography_min_validation_frames: 2      # 2..20
     camera_homography_min_validation_span_cm: 10.0  # 3..100
     camera_homography_max_range_m: 0.6              # 0.05..3.0
+    # D-423 camera_ground_mode 'nominal': the URDF-nominal camera_nominal.yaml of
+    # the robot's profile package, refined by its accepted camera_profile record
+    # (calibration store), and only with allow_nominal_ground true as well. Off
+    # here: turning it on for a robot is a user-approved config change.
+    nominal_camera_profile_path: ''
+    allow_nominal_ground: false
+    # D-423: range each region with the LiDAR returns in its bearing span (lidar
+    # forward = URDF 180 deg < accepted lidar_mount record). Needs the NOMINAL
+    # plane; subscribes scan. A return nearer than the floor estimate plus the
+    # tolerance wins (L); a farther one means the object is below the scan plane
+    # and the floor estimate stands (G). Advisory evidence only (D-137).
+    region_lidar_range: false
+    region_lidar_max_age_s: 0.3       # |scan stamp - frame stamp|; C1 scans at ~10 Hz
+    region_lidar_tolerance_m: 0.05
+    region_lidar_tolerance_ratio: 0.2
     # D-373: JPEG copy of camera/front on camera/front/compressed for the
     # snapshot recorder only (never leaves the robot, D-136). The launch
     # argument capture:=true turns it on; off here so a plain boot pays no

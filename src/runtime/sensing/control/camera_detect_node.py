@@ -21,15 +21,19 @@ import numpy as np
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy, qos_profile_sensor_data
-from sensor_msgs.msg import CompressedImage, Image
+from sensor_msgs.msg import CompressedImage, Image, LaserScan
 from std_msgs.msg import Bool, Float32, String
 
 from . import executor_choice
+from .calibrated_values import lidar_nose_rad, nominal_camera_profile
+from .sensing.body import LIDAR_X
+from .sensing.lidar import is_robot_scan
 from .sensing.perception.camera import classify_frame
 from .sensing.perception.camera_controls import (
     lock_action, lock_controls, lock_summary, static_controls)
 from .sensing.perception.camera_evidence import observation_payload
-from .sensing.perception.camera_ground import ground_plane
+from .sensing.perception.camera_ground import ground_plane, nominal_ground_plane
+from .sensing.perception.region_range import range_regions, scan_in_camera
 from .sensing.perception.camera_homography import CalibrationThresholds, load_homography_profile
 from .sensing.perception.camera_policy import CameraPolicy
 from .sensing.perception.camera_worker import CameraFrame, CameraPreprocessProfile, CameraPreprocessWorker
@@ -123,6 +127,15 @@ class CameraDetectNode(Node):
         self.declare_parameter('camera_homography_min_validation_frames', 2)
         self.declare_parameter('camera_homography_min_validation_span_cm', 10.0)
         self.declare_parameter('camera_homography_max_range_m', 0.6)
+        # D-423 mode 'nominal': camera_nominal.yaml (URDF nominal) < accepted
+        # camera_profile record, plus the D-364 section 3 second opt-in.
+        self.declare_parameter('nominal_camera_profile_path', '')
+        self.declare_parameter('allow_nominal_ground', False)
+        # D-423: LiDAR range in each region's bearing span (NOMINAL plane only).
+        self.declare_parameter('region_lidar_range', False)
+        self.declare_parameter('region_lidar_max_age_s', 0.3)
+        self.declare_parameter('region_lidar_tolerance_m', 0.05)
+        self.declare_parameter('region_lidar_tolerance_ratio', 0.2)
         # D-373: JPEG copy of camera/front for the snapshot recorder. Off unless
         # the capture launch argument turns it on; encoding costs CPU per frame.
         self.declare_parameter('publish_compressed', False)
@@ -177,6 +190,13 @@ class CameraDetectNode(Node):
             principal_y=float(self.get_parameter('camera_principal_y').value),
             max_range_m=float(self.get_parameter('camera_max_range_m').value))
         self._ground_mode = str(self.get_parameter('camera_ground_mode').value).strip().lower()
+        self._nominal_ground, self._camera_x_m = self._load_nominal_ground()
+        self._scan = None
+        self._lidar_nose = None
+        if bool(self.get_parameter('region_lidar_range').value):
+            self._lidar_nose, nose_source = lidar_nose_rad()
+            self.get_logger().info(f'region LiDAR range on; lidar forward from {nose_source}')
+            self.create_subscription(LaserScan, 'scan', self._on_scan, qos_profile_sensor_data)
         self._homography_enabled = bool(
             self.get_parameter('camera_homography_enabled').value)
         self._homography = load_homography_profile(
@@ -231,8 +251,47 @@ class CameraDetectNode(Node):
             self._ground = (self._homography.model
                             if self._homography_enabled and self._homography.eligible
                             else None)
+        elif self._ground_mode == 'nominal':
+            self._ground = self._nominal_ground
         else:
             self._ground = None
+
+    def _load_nominal_ground(self):
+        """(plane, camera x offset) for mode 'nominal', else (None, None)."""
+        if self._ground_mode != 'nominal':
+            return None, None
+        profile, source = nominal_camera_profile(
+            str(self.get_parameter('nominal_camera_profile_path').value))
+        self.get_logger().info(f'camera profile from {source}')
+        plane = nominal_ground_plane(
+            source='NOMINAL', allowed=bool(self.get_parameter('allow_nominal_ground').value),
+            width_px=int(self.get_parameter('width').value),
+            height_px=int(self.get_parameter('height').value), profile=profile)
+        if plane is None:
+            self.get_logger().warn('NOMINAL ground refused (allow_nominal_ground false or '
+                                   'profile incomplete); regions stay unranged')
+        return plane, profile.get('x_offset_m')
+
+    def _on_scan(self, msg):
+        if is_robot_scan(msg):
+            self._scan = msg
+
+    def _lidar_ranged(self, regions, capture_stamp):
+        """D-423: LiDAR range per region; unchanged without a fresh scan or the NOMINAL plane."""
+        scan = self._scan
+        if (scan is None or self._lidar_nose is None or self._camera_x_m is None
+                or self._ground is None or self._ground is not self._nominal_ground):
+            return regions
+        scan_stamp = scan.header.stamp.sec + scan.header.stamp.nanosec * 1e-9
+        if abs(scan_stamp - capture_stamp) > float(self.get_parameter('region_lidar_max_age_s').value):
+            return regions
+        points = scan_in_camera(scan.ranges, scan.angle_min, scan.angle_increment, scan.range_min,
+                                scan.range_max, nose_rad=self._lidar_nose, lidar_x_m=LIDAR_X,
+                                camera_x_m=float(self._camera_x_m))
+        return range_regions(
+            regions, self._ground, points,
+            tolerance_m=float(self.get_parameter('region_lidar_tolerance_m').value),
+            tolerance_ratio=float(self.get_parameter('region_lidar_tolerance_ratio').value))
 
     def _ground_calibration_status(self):
         status = self._homography.status(
@@ -245,7 +304,9 @@ class CameraDetectNode(Node):
             and self._ground is self._homography.model)
         status['pinhole_active'] = bool(
             self._ground_mode == 'pinhole' and self._pinhole_ground is not None)
-        if self._ground_mode not in ('pinhole', 'homography', 'off'):
+        status['nominal_active'] = bool(
+            self._ground_mode == 'nominal' and self._nominal_ground is not None)
+        if self._ground_mode not in ('pinhole', 'homography', 'nominal', 'off'):
             status['reason'] = 'unsupported_mode'
         elif self._ground_mode != 'homography':
             status['reason'] = 'mode_' + self._ground_mode
@@ -435,9 +496,11 @@ class CameraDetectNode(Node):
             return
 
         self.side_pub.publish(Float32(data=float(res['side'])))
+        res = dict(res, regions=self._lidar_ranged(res.get('regions', []), capture_stamp))
         self.observation_pub.publish(String(data=json.dumps(observation_payload(
             capture_stamp, cliff, blocked, res['side'], res,
-            (bgr.shape[1], bgr.shape[0]), 'onboard_camera_pixels'))))
+            (bgr.shape[1], bgr.shape[0]), 'onboard_camera_pixels',
+            ground_source=self._ground_mode.upper() if self._ground is not None else None))))
         cols = res['cols']
         mcols = res.get('mid_cols', cols)
         self.dbg_pub.publish(

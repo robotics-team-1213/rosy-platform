@@ -35,3 +35,41 @@ def test_operator_override_wins_over_the_accepted_record(tmp_path):
                                 root=tmp_path, robot=ROBOT, override={'pitch_rad': 0.15})
     assert values['pitch_rad'] == 0.15 and values['fx'] == 281.6
     assert rid in source and 'operator override pitch_rad' in source
+
+
+def test_nominal_camera_profile_reads_the_file_then_the_accepted_record(tmp_path):
+    """D-423: camera_detect_node's NOMINAL plane takes the same path as line_observer."""
+    import math
+    import yaml
+    from control.calibrated_values import nominal_camera_profile
+    path = tmp_path / 'camera_nominal.yaml'
+    path.write_text(yaml.safe_dump(FILE), encoding='utf-8')
+    store_root = tmp_path / 'store'
+    values, source = nominal_camera_profile(str(path), root=store_root, robot=ROBOT)
+    assert values == FILE and str(path) in source
+    store = CalibrationStore(store_root)
+    rid = store.add(ROBOT, 'camera_profile', {**FILE, 'pitch_rad': math.radians(11.2)}, method='t/1')
+    store.set_status(ROBOT, 'camera_profile', rid, 'accepted', actor='operator')
+    values, source = nominal_camera_profile(str(path), root=store_root, robot=ROBOT)
+    assert values['pitch_rad'] == math.radians(11.2) and rid in source
+
+
+def test_unreadable_nominal_profile_gives_no_profile_and_says_why(tmp_path):
+    from control.calibrated_values import nominal_camera_profile
+    values, source = nominal_camera_profile(str(tmp_path / 'missing.yaml'), root=tmp_path, robot=ROBOT)
+    assert values == {} and 'unreadable' in source
+    values, source = nominal_camera_profile('', root=tmp_path, robot=ROBOT)
+    assert values == {} and 'no profile file' in source
+
+
+def test_lidar_nose_is_the_urdf_nominal_until_a_mount_record_is_accepted(tmp_path):
+    import math
+    from control.calibrated_values import lidar_nose_rad
+    from control.sensing.lidar import NOSE_YAW
+    nose, source = lidar_nose_rad(root=tmp_path, robot=ROBOT)
+    assert nose == NOSE_YAW and 'no accepted lidar_mount record' in source
+    store = CalibrationStore(tmp_path)
+    rid = store.add(ROBOT, 'lidar_mount', {'lidar_yaw_offset': math.radians(181.8)}, method='t/1')
+    store.set_status(ROBOT, 'lidar_mount', rid, 'accepted', actor='operator')
+    nose, source = lidar_nose_rad(root=tmp_path, robot=ROBOT)
+    assert nose == math.radians(181.8) and rid in source
