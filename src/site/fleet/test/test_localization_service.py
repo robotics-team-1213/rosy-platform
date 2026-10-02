@@ -790,6 +790,27 @@ def test_the_ladder_sends_missions_then_raises_needs_human(caplog):
     assert svc.view("r1")["needs_human"] is False
 
 
+def test_a_decision_after_needs_human_clears_the_flag():
+    """S1 run 3 T3: needs_human is a flag, not a stop. Fleet keeps arbitrating, and the
+    flag (badge "위치 확인 필요") clears once the robot is LOCALIZED."""
+    from fleet.localization import trust
+    clock = FakeClock()
+    r1 = Localizing("r1", ON_A)
+    candidates, r1.candidates = r1.candidates, None                 # nothing to decide yet
+    svc = service(r1, clock=clock)
+    ticks(svc, clock, 121.0)
+    assert svc.view("r1")["needs_human"] is True
+    assert trust.badge(run(r1.state()), svc.view("r1"))["label"] == trust.NEEDS_HUMAN_LABEL
+    r1.candidates = candidates                                       # a slot report arrives
+    ticks(svc, clock, 3.0)
+    assert [[c.value for c in d.cues] for d in r1.decisions] == [["slot"]]
+    ticks(svc, clock, 0.5)
+    view = svc.view("r1")
+    assert view["needs_human"] is False and view["rung"] is None
+    assert trust.badge(run(r1.state()), view)["label"] != trust.NEEDS_HUMAN_LABEL
+    assert svc.anchors() == {"r1"}
+
+
 def test_homing_tries_to_square_first_and_falls_back_when_core_refuses_it():
     clock = FakeClock()
     r1 = FakeRobot("r1", state=state("r1", "CANDIDATES", "odom"))
