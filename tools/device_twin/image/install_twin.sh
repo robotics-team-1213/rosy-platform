@@ -40,7 +40,8 @@ for unit in rosy-release-recover.service rosy-sd-provision.service rosy-core.ser
             rosy-boot-status.timer rosy-boot-status-ready.service rosy-boot-display.service \
             rosy-config.service rosy-network.service rosy-login-code.service rosy-hw-probe.service \
             rosy-hw-probe.path rosy-hw-test.service rosy-hw-test.path rosy-auto-update.service \
-            rosy-auto-update.timer; do
+            rosy-auto-update.timer rosy-ssh-access.service rosy-ssh-access.path rosy-ssh-access-boot.service \
+            rosy-ssh-password-expire.service rosy-ssh-password-expire.timer; do
     install -m 0644 "$NATIVE/$unit" "/etc/systemd/system/$unit"
 done
 install -m 0644 "$CTX/twin/image/rosy-first-boot.service" /etc/systemd/system/rosy-first-boot.service
@@ -79,6 +80,10 @@ python3 -B /opt/rosy/native-runtime/native_release.py \
 # Enabled as on the image (customize-rootfs.sh), minus hardware units. The
 # auto-update timer stays disabled: scenarios start the service by hand.
 systemctl enable rosy-release-recover.service rosy-runtime.target rosy-first-boot.service
+# D-418: sshd as the image runs it (customize-rootfs.sh enables ssh.service, not
+# the socket), and the SSH access watch and boot cleanup the image enables.
+systemctl disable ssh.socket 2>/dev/null || true
+systemctl enable ssh.service rosy-ssh-access.path rosy-ssh-access-boot.service
 # Container noise that has no robot counterpart.
 # systemd-udevd stays: sync-image-layer.py runs `udevadm control --reload`. The
 # container has its own network namespace, so it gets no host uevents; the
@@ -90,6 +95,9 @@ systemctl mask systemd-udev-trigger.service systemd-udev-settle.service \
 install -d -m 0755 /opt/twin
 install -m 0755 "$CTX/twin/image/twin-control" /usr/local/bin/twin-control
 install -m 0755 "$CTX/twin/image/sandbox_probe.py" /opt/twin/sandbox_probe.py
+# D-418: CORE's hand-over module from HEAD, driven by twin-ssh-request as rosy-core.
+install -m 0644 "$SRC/src/runtime/api_web/core_api_web/api/v1/ssh_handoff.py" /opt/twin/ssh_handoff.py
+install -m 0755 "$CTX/twin/image/twin-ssh-request" /usr/local/bin/twin-ssh-request
 # The probe unit is the real rosy-auto-update.service with only ExecStart swapped.
 sed 's#^ExecStart=.*#ExecStart=/usr/bin/python3 -I -B /opt/twin/sandbox_probe.py#' \
     /etc/systemd/system/rosy-auto-update.service > /etc/systemd/system/twin-sandbox-probe.service
