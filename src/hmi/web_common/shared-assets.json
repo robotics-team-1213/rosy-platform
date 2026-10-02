@@ -9,6 +9,8 @@
     "ui.js": "text/javascript",
     "theme.js": "text/javascript",
     "evidence.js": "text/javascript",
+    "request.js": "text/javascript",
+    "scope.js": "text/javascript",
     "icons/cam.svg": "image/svg+xml",
     "icons/pilot.svg": "image/svg+xml",
     "icons/console.svg": "image/svg+xml",

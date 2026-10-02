@@ -4657,3 +4657,8 @@
 - 변경: 앱별 api_owners를 등록부에 명시하고 실제 CORE/Fleet 인증·권한·쓰기 owner·공유 문서·기존 JS caller 계약을 추가. 공통 UI/transport의 literal 운용 API 발행 가드를 추가하고 Pilot 관련 역사 설명을 현행화.
 - 증거: 없는 선언 red 6 failed/15 passed → 책임 suite 33 passed; Fleet authorization Node 3 passed. 선언·CORE limits 권한·Fleet operator 권한·공통 dispatch 변이 4개가 실제 실패하고 byte-for-byte 복원. 임시 증거는 X:/DevTemp/rosy-ui-ownership/task1-mutations.
 - gate 변화: Task 1 SOURCE/LOCAL 계약 완료. wire/권한 정책/최종 writer/폴더/DEVICE/FIELD는 변경하지 않음.
+
+## 2026-10-03 · uncommitted · refactor: D-425 scoped HTTP와 화면 lifetime 도구
+- 변경: 요청별 credential/origin/HTTP 결과/취소를 다루는 request와 signal/generation/guard/cleanup scope를 추가. token 저장·도메인 오류·endpoint 선택·명령 재전송은 consumer에 남김. shared manifest/CMake를 함께 갱신하고 Node ES module 시험 metadata만 추가.
+- 증거: missing module red → Node 27 passed, wrapper/manifest/role 15 passed. origin·늦은 응답 취소·종료 handler·설치 목록 변이 4개 red 후 byte-for-byte 복원. 로그는 X:/DevTemp/rosy-ui-ownership/task2-mutations.
+- gate 변화: Task 2 SOURCE/LOCAL 도구 계약 완료. 실제 client 전환·폴더·installed-only·DEVICE/FIELD는 후속 단계.

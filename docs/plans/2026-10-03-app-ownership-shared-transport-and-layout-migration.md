@@ -10,7 +10,7 @@
 
 ---
 
-**Status:** Tasks 0–1 SOURCE/LOCAL contract complete (2026-10-03); Tasks 2–13 NOT STARTED. 실행 브랜치 `refactor/ui-ownership`, 기준 `d10c77e89`. 아래 시험과 완료 조건은 실행 지침이며 통과 기록이 아니다. 계획 작성 기준은 local main `3bb18bd59`; 각 작업 시작 시 HEAD와 진행 중 브랜치를 다시 확인한다.
+**Status:** Tasks 0–2 SOURCE/LOCAL contract complete (2026-10-03); Tasks 3–13 NOT STARTED. 실행 브랜치 `refactor/ui-ownership`, 기준 `d10c77e89`. 아래 시험과 완료 조건은 실행 지침이며 통과 기록이 아니다. 계획 작성 기준은 local main `3bb18bd59`; 각 작업 시작 시 HEAD와 진행 중 브랜치를 다시 확인한다.
 
 ## 범위와 의존 작업
 
@@ -111,6 +111,8 @@ $env:TMP = $env:ROSY_SCRATCH
 
 **Create:** `src/hmi/web_common/request.js`, `scope.js`, `test/transport/request.test.mjs`, `test/transport/scope.test.mjs`, `test/test_transport.py`.
 
+**Node 시험 metadata:** `src/hmi/web_common/package.json`의 private/type만 사용한다. dependency/bundler를 추가하지 않고 browser allowlist에 설치하지 않는다.
+
 **Modify:** `src/hmi/web_common/shared-assets.json`, `src/hmi/web_common/CMakeLists.txt`, `src/hmi/web_common/test/test_asset_manifest.py`.
 
 1. 두 credential 공급자·두 origin·동시 요청·timeout·abort·비 JSON 응답·204·늦은 응답을 시험한다. 아래 완전한 예시는 새 request 계약의 최소 수용 사례다.
@@ -151,6 +153,8 @@ test('credential scopes stay separate and writes are sent once', async () => {
 5. Node 시험과 pytest wrapper/asset manifest 시험을 실행한다. manifest와 CMake allowlist에 새 자산을 함께 넣고 커밋한다: `refactor: add scoped HTTP transport primitives`.
 
 **출구:** 두 실제 클라이언트가 사용할 최소 통신 도구, 자동 명령 재전송 없음, 설치 자산 누락 없음. WS 공통화는 Task 4의 두 소비자 검증 뒤에만 한다.
+
+**완료 증거 (2026-10-03):** [Task 2 계약·변이 증명](../validation/app-ownership-migration-2026-10-03/task2-request-and-scope.md). Node request/scope 27 passed; wrapper/manifest/role 15 passed. origin/abort/종료 handler/CMake 목록 변이가 각각 실패했고 원본 bytes를 복원했다. SOURCE/LOCAL 도구 계약 완료이며 실제 client 전환은 Tasks 3/4, installed-only 수용은 Tasks 6/11에서 수행한다.
 
 ## Task 3: Console 운용·설치의 Fleet client 공유
 

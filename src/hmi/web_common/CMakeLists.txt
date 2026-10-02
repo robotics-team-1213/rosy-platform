@@ -14,6 +14,8 @@ install(FILES
   ui.js
   theme.js
   evidence.js
+  request.js
+  scope.js
   DESTINATION share/${PROJECT_NAME}
 )
 
