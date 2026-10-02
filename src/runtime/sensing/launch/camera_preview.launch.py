@@ -59,6 +59,7 @@ def generate_launch_description():
     learned_shadow = LaunchConfiguration('learned_shadow')
     capture = LaunchConfiguration('capture')
     recording_root = LaunchConfiguration('recording_root')
+    pilot_recording_root = LaunchConfiguration('pilot_recording_root')
     line_params = [os.path.join(config, 'line_follow.yaml')]
     # D-344 §12: optional per-robot IR calibration overlay, validated here so a
     # malformed file is skipped (IR_LINE stays fail-closed) instead of crash-looping
@@ -76,6 +77,7 @@ def generate_launch_description():
         DeclareLaunchArgument('capture', default_value=_env_switch('ROSY_CAPTURE')),
         DeclareLaunchArgument('recording_root',
                               default_value='/var/lib/rosy/camera/recordings'),
+        DeclareLaunchArgument('pilot_recording_root', default_value='/var/lib/rosy/pilot-recordings'),
         LogInfo(msg=f'IR calibration overlay: {overlay_note}'),
         Node(
             package='control', executable='camera_detect_node', namespace=namespace,
@@ -94,6 +96,10 @@ def generate_launch_description():
             output='screen', respawn=True, respawn_delay=2.0,
             parameters=[os.path.join(config, 'line_follow.yaml')],
         ),
+        # D-411 A: Pilot recording, idle until CORE asks; evidence only (no command topic).
+        Node(package='control', executable='pilot_recorder_node', name='pilot_recorder_node',
+             namespace=namespace, output='screen',
+             parameters=[{'recording_root': pilot_recording_root}]),
         Node(
             package='control', executable='learned_lane_node', namespace=namespace,
             output='screen', respawn=True, respawn_delay=2.0,
