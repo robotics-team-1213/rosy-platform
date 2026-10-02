@@ -3,7 +3,8 @@ learned paint worker - on synthetic floors rendered through the NOMINAL ground."
 import numpy as np
 import pytest
 
-from control.sensing.perception.lane_keep import LaneKeeper, denoise_white_mask, floor_white_mask
+from control.sensing.perception.lane_keep import LaneKeeper, clean_learned_mask, denoise_white_mask, floor_white_mask
+from control.sensing.perception.lane_keep_lines import DENOISE_MIN_AREA_PX
 from control.sensing.perception.learned.paint_worker import LearnedPaintWorker
 from test_lane_keep import GROUND, HALF, X_OFFSET, X, Y, _render
 
@@ -63,13 +64,15 @@ def test_denoise_removes_carpet_sparkle_but_keeps_the_tape():
 
 class _Model:
     def __init__(self, mask=None, fail=False):
-        self.mask, self.fail = mask, fail
+        self.mask, self.fail, self.calls = mask, fail, 0
 
-    def infer_with_mask(self, frame):
+    model_revision = "m1"
+
+    def infer_mask(self, frame):
         if self.fail:
             raise RuntimeError("onnx failed")
-        result = type("R", (), {"model_revision": "m1", "latency_ms": 12.0})()
-        return result, (self.mask if self.mask is not None else np.ones(frame.shape[:2], np.uint8))
+        self.calls += 1
+        return (self.mask if self.mask is not None else np.ones(frame.shape[:2], np.uint8)), 12.0
 
 
 class _Slot:
@@ -119,3 +122,109 @@ def test_node_defaults_to_the_threshold_and_falls_back_to_denoise():
     src = (Path(__file__).resolve().parents[1] / "control" / "line_observer_node.py").read_text(encoding="utf-8")
     assert "self.declare_parameter('paint_source', 'threshold', _READ_ONLY)" in src
     assert "'denoise_fallback'" in src and "paint_source_used=paint_used" in src
+
+
+def test_learned_mask_drops_speckle_keeps_tape_and_cuts_the_horizon():
+    mask = np.zeros((240, 320), np.uint8)
+    mask[150:200, 100:104] = 1                               # tape: 200 px
+    mask[160, 200] = 1                                       # speckle
+    mask[170:172, 220:222] = 1                               # 4 px blob
+    side = int(np.sqrt(DENOISE_MIN_AREA_PX))
+    mask[210:210 + side, 250:250 + side] = 1                 # side^2 = 36 < 40 px
+    mask[10:60, 10:14] = 1                                   # above the horizon (a wall)
+    clean = clean_learned_mask(mask, horizon_row=100.0)
+    assert clean[150:200, 100:104].all()
+    assert clean[160, 200] == 0 and clean[170:172, 220:222].sum() == 0
+    assert clean[:100].sum() == 0
+    assert side * side < DENOISE_MIN_AREA_PX and clean[210:210 + side, 250:250 + side].sum() == 0
+
+
+def test_every_n_submits_each_nth_frame_and_reuses_the_mask_in_between():
+    now = [100.0]
+    model = _Model()
+    worker = LearnedPaintWorker(_Slot(model), stale_s=0.6, clock=lambda: now[0], start=False)
+    frame = np.zeros((240, 320, 3), np.uint8)
+    served = []
+    for _ in range(6):
+        served.append(worker.mask_for(frame, every_n=2) is not None)
+        worker.step()                                        # inference finishes before the next frame
+        now[0] += 0.125
+    assert model.calls == 3                                  # frames 0, 2, 4
+    assert served == [False, True, True, True, True, True]   # frame 0 has none yet; then reused
+
+
+def test_every_n_refuses_a_mask_older_than_n_frames_and_a_stale_one():
+    now = [100.0]
+    worker = LearnedPaintWorker(_Slot(_Model()), stale_s=0.6, clock=lambda: now[0], start=False)
+    frame = np.zeros((240, 320, 3), np.uint8)
+    worker.mask_for(frame, every_n=2)                        # frame 0 submitted
+    worker.step()
+    assert worker.mask_for(frame, every_n=2) is not None     # frame 1: 1 frame old
+    assert worker.mask_for(frame, every_n=2) is not None     # frame 2: 2 frames old, new submit pending
+    worker._pending = None                                   # the inference never completes
+    assert worker.mask_for(frame, every_n=2) is None         # frame 3: 3 > n frames old
+    worker = LearnedPaintWorker(_Slot(_Model()), stale_s=0.6, clock=lambda: now[0], start=False)
+    worker.mask_for(frame, every_n=4)
+    worker.step()
+    now[0] += 0.7
+    assert worker.mask_for(frame, every_n=4) is None         # within n frames but past stale_s
+
+
+def test_paint_path_does_not_compute_lane_evidence(monkeypatch):
+    from control.sensing.perception.learned import runner
+    from test_learned_runner import _factory, _model_dir
+    import tempfile
+    from pathlib import Path
+    calls = []
+    monkeypatch.setattr(runner, "lane_evidence", lambda *a, **k: calls.append(1))
+    with tempfile.TemporaryDirectory() as tmp:
+        model = runner.LaneSegModel.open(_model_dir(Path(tmp)), session_factory=_factory())
+        mask, latency_ms = model.infer_mask(np.zeros((240, 320, 3), np.uint8))
+    assert mask.shape == (240, 320) and mask.any() and latency_ms >= 0 and not calls
+
+
+def test_open_passes_allow_spinning_to_the_default_session(tmp_path, monkeypatch):
+    from control.sensing.perception.learned import runner
+    from test_learned_runner import _factory, _model_dir
+    seen = []
+
+    class Session:
+        def __init__(self, path, threads, allow_spinning=True):
+            seen.append((threads, allow_spinning))
+            self._fake = _factory()(path, threads)
+
+        def run(self, x):
+            return self._fake.run(x)
+
+    monkeypatch.setattr(runner, "_OrtSession", Session)
+    runner.LaneSegModel.open(_model_dir(tmp_path, "a"), threads=1, allow_spinning=False)
+    runner.LaneSegModel.open(_model_dir(tmp_path, "b"))
+    assert seen == [(1, False), (2, True)]                   # the shadow node keeps its defaults
+
+
+def test_ort_session_options_disable_spinning():
+    ort = pytest.importorskip("onnxruntime")
+    from control.sensing.perception.learned import runner
+    entries = {}
+    real = ort.SessionOptions
+
+    class Options(real):
+        def add_session_config_entry(self, key, value):
+            entries[key] = value
+            super().add_session_config_entry(key, value)
+
+    ort.SessionOptions = Options
+    try:
+        with pytest.raises(Exception):                       # no such file: only the options matter
+            runner._OrtSession("missing.onnx", 1, allow_spinning=False)
+    finally:
+        ort.SessionOptions = real
+    assert entries == {"session.intra_op.allow_spinning": "0", "session.inter_op.allow_spinning": "0"}
+
+
+def test_node_wires_the_paint_cadence_and_session_options():
+    from pathlib import Path
+    src = (Path(__file__).resolve().parents[1] / "control" / "line_observer_node.py").read_text(encoding="utf-8")
+    assert "declare_parameter('learned_paint_every_n', 2, _READ_ONLY)" in src
+    assert "declare_parameter('learned_paint_threads', 1, _READ_ONLY)" in src
+    assert "threads=threads, allow_spinning=False" in src and "clean_learned_mask(mask, ground.horizon_row)" in src

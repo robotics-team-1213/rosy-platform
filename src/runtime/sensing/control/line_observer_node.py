@@ -35,7 +35,7 @@ from .sensing.perception.lane import (
 )
 from .sensing.perception.lane_bev import LaneEdgeFollower, pose_if_fresh
 from .sensing.perception.lane_boundaries import LaneBoundaryTracker
-from .sensing.perception.lane_keep import LaneKeeper, denoise_white_mask
+from .sensing.perception.lane_keep import LaneKeeper, clean_learned_mask, denoise_white_mask
 from .sensing.perception.lane_debug import next_publish_due, render_debug
 from .sensing.perception.paint_localizer import PaintMap
 from .sensing.perception.route_camera import RouteCameraFollower
@@ -82,6 +82,9 @@ class LineObserverNode(Node):
         self.declare_parameter('paint_source', 'threshold', _READ_ONLY)
         self.declare_parameter('learned_lane_pointer', '', _READ_ONLY)
         self.declare_parameter('learned_paint_stale_s', 0.6, _READ_ONLY)
+        # D-408 CPU: infer on every Nth keep frame (the mask is reused in between), on 1 thread.
+        self.declare_parameter('learned_paint_every_n', 2, _READ_ONLY)
+        self.declare_parameter('learned_paint_threads', 1, _READ_ONLY)
         self.declare_parameter('camera_lane_mode', 'line', _READ_ONLY)
         self.declare_parameter('lane_half_width_m', 0.0925)
         self.declare_parameter('camera_roi_bottom_fraction', 1.0)
@@ -337,12 +340,18 @@ class LineObserverNode(Node):
         if source != 'learned':
             return None
         from .sensing.perception.learned.paint_worker import LearnedPaintWorker
-        from .sensing.perception.learned.runner import ModelSlot, add_learned_site
+        from .sensing.perception.learned.runner import LaneSegModel, ModelSlot, add_learned_site
         add_learned_site()
         pointer = str(self.get_parameter('learned_lane_pointer').value)
         if not pointer:
             self.get_logger().warning('paint_source learned without learned_lane_pointer: denoise only')
-        return LearnedPaintWorker(ModelSlot(pointer) if pointer else None,
+        every_n = int(self.get_parameter('learned_paint_every_n').value)
+        threads = int(self.get_parameter('learned_paint_threads').value)
+        if every_n < 1 or threads < 1:
+            raise ValueError('learned_paint_every_n and learned_paint_threads must be >= 1')
+        slot = ModelSlot(pointer, opener=lambda folder: LaneSegModel.open(
+            folder, threads=threads, allow_spinning=False)) if pointer else None
+        return LearnedPaintWorker(slot,
                                   stale_s=float(self.get_parameter('learned_paint_stale_s').value),
                                   warn=self.get_logger().warning)
 
@@ -352,10 +361,9 @@ class LineObserverNode(Node):
         if source == 'threshold' or ground is None:
             return None, 'threshold'
         if source == 'learned' and self._paint_worker is not None:
-            self._paint_worker.submit(frame)
-            mask, _summary = self._paint_worker.latest(frame.shape[:2])
+            mask = self._paint_worker.mask_for(frame, int(self.get_parameter('learned_paint_every_n').value))
             if mask is not None:
-                return mask, 'learned'
+                return clean_learned_mask(mask, ground.horizon_row), 'learned'
         return denoise_white_mask(frame, ground.horizon_row), (
             'denoise' if source == 'denoise' else 'denoise_fallback')
 

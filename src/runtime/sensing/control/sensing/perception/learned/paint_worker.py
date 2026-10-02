@@ -23,18 +23,20 @@ class LearnedPaintWorker:
         self._slot, self._stale_s, self._warn, self._clock = slot, float(stale_s), warn, clock
         self._lock = threading.Lock()
         self._wake = threading.Event()
-        self._pending: tuple[float, np.ndarray] | None = None   # (submitted_at, frame)
+        self._pending: tuple[float, np.ndarray, int | None] | None = None   # (submitted_at, frame, tag)
         self._result: tuple[float, np.ndarray, dict] | None = None   # (done_at, mask, summary)
         self._closed = False
+        self._frames = 0
         self.last_error: str | None = None
         self._thread = threading.Thread(target=self._run, name="learned-paint", daemon=True) if start else None
         if self._thread:
             self._thread.start()
 
-    def submit(self, frame: np.ndarray) -> None:
-        """Offer the newest frame; an older frame still waiting is replaced."""
+    def submit(self, frame: np.ndarray, tag: int | None = None) -> None:
+        """Offer the newest frame; an older frame still waiting is replaced. `tag` (the
+        caller's frame counter) comes back in the summary of the mask made from this frame."""
         with self._lock:
-            self._pending = (self._clock(), frame)
+            self._pending = (self._clock(), frame, tag)
         self._wake.set()
 
     def latest(self, shape: tuple[int, int]) -> tuple[np.ndarray | None, dict | None]:
@@ -49,25 +51,38 @@ class LearnedPaintWorker:
             return None, None
         return mask, summary
 
+    def mask_for(self, frame: np.ndarray, every_n: int = 1) -> np.ndarray | None:
+        """The keeper's per-frame entry: submit every `every_n`-th frame and serve the newest
+        mask in between. A mask is served only while it is at most `every_n` frames old
+        (every_n - 1 frames in between plus the one the inference finishes on) and no older
+        than stale_s; otherwise None and the caller falls back for this frame."""
+        index, self._frames = self._frames, self._frames + 1
+        if index % every_n == 0:
+            self.submit(frame, tag=index)
+        mask, summary = self.latest(frame.shape[:2])
+        if mask is None or summary["tag"] is None or index - summary["tag"] > every_n:
+            return None
+        return mask
+
     def step(self) -> None:
         """Run one pending inference now (the worker loop body; tests call it directly)."""
         with self._lock:
             pending, self._pending = self._pending, None
         if pending is None:
             return
-        submitted_at, frame = pending
+        submitted_at, frame, tag = pending
         model = self._slot.poll() if self._slot is not None else None
         if model is None:
             self.last_error = f"no model ({getattr(self._slot, 'last_error', None)})"
             return
         try:
-            result, mask = model.infer_with_mask(frame)
+            mask, latency_ms = model.infer_mask(frame)
         except Exception as exc:  # noqa: BLE001 - a failed inference is no paint, never a crash.
             self.last_error = f"inference failed: {exc}"
             self._warn(f"learned paint: {self.last_error}")
             return
         self.last_error = None
-        summary = {"model_revision": result.model_revision, "latency_ms": round(result.latency_ms, 1)}
+        summary = {"model_revision": model.model_revision, "latency_ms": round(latency_ms, 1), "tag": tag}
         with self._lock:
             self._result = (submitted_at, mask, summary)
 
