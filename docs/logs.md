@@ -4430,6 +4430,8 @@
 - 한계: Python AST는 동적 import/entry point가 아니라 정적 import만 다룬다. 새 API/process roots는 생성할 때 registry에 포함해야 한다.
 - gate 변화: 없음.
 
+
+
 ## 2026-10-02 · uncommitted · docs(adr): D-395 개정 8 — 부하에서도 버티는 닻 규칙, 사람 확인은 표시
 - 변경: S1 세 번째 실행(호스트 과부하로 공정하지 않음, 거울 결정 0, 거울 탐지 1/1, 실제 주행 중 들어 옮김 2/2)의 결과를 기록. 닻 점프 기준의 dt를 1 s로 묶고 거울 서명은 dt와 무관하게 닻을 뺀다(안전). 호출 제한 2.5 s, 시간 초과 결정은 15 s 안 그 자세 도달 시 출처 인정. `needs_human`은 표시이고 중재는 계속된다. 다음 S1은 부하가 낮을 때.
 - 증거: `docs/plans/2026-10-02-d395-s1-bench-results.md` Run 3, 브랜치 fix/d395-anchor-jump-timing.
