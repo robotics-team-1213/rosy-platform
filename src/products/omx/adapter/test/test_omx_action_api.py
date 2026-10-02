@@ -2,7 +2,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from core_common.protocol.schemas import FleetActionGrant
+from core_common.protocol.schemas import FleetActionGrant, FleetCellTransferGrant
 from omx_adapter.action_api import ActionApi, action_grant_digest
 from omx_adapter.action_runner import ActionRunner, DriverSubmission
 from omx_adapter.action_store import ActionStore, InvalidActionTransition
@@ -29,6 +29,32 @@ def _grant(**changes):
         "observation_revision": "obs-1", "authority_epoch": 2,
         "dispatch_generation": 8, "issued_at": now,
         "expires_at": now + timedelta(seconds=15),
+    }
+    value.update(changes)
+    value["request_digest"] = action_grant_digest(value)
+    return value
+
+
+def _cell_transfer_grant(**changes):
+    now = datetime.now(timezone.utc)
+    value = {
+        "mission_id": "cell-mission-1", "step_id": "cell-step-1",
+        "action_id": "cell-action-1", "attempt_id": "cell-attempt-1",
+        "request_digest": "0" * 64, "workcell_id": "omx-1",
+        "instance_id": "omx-1-control", "action_kind": "CELL_TRANSFER",
+        "cell_transfer": {
+            "job_id": "cell-job-1", "recipe_sha256": "a" * 64,
+            "cell_sha256": "b" * 64, "step_index": 0, "item": "box",
+            "pallet": "pallet-1", "layer": 0, "frame": "robot_base",
+            "home": {"x": 0.1, "y": 0.0, "z": 0.2, "yaw": 0.0},
+            "pick": {"x": 0.2, "y": 0.0, "z": 0.04, "yaw": 0.0},
+            "place": {"x": 0.3, "y": 0.0, "z": 0.04, "yaw": 0.0},
+            "pick_approach_z": 0.12, "place_approach_z": 0.12,
+            "carry_z": 0.18,
+        },
+        "capability_revision": "cell-transfer-v1", "config_revision": "cfg-1",
+        "authority_epoch": 2, "dispatch_generation": 8,
+        "issued_at": now, "expires_at": now + timedelta(seconds=15),
     }
     value.update(changes)
     value["request_digest"] = action_grant_digest(value)
@@ -78,7 +104,8 @@ class FakePhaseExecution:
         return {"phase_id": self.active_phase_id, "state": "CANCEL_REQUESTED"}
 
 
-def _runner(tmp_path, driver=None):
+def _runner(tmp_path, driver=None, phase_runner_factories=None,
+            capability_current=None):
     db = tmp_path / "actions.sqlite3"
     store = ActionStore(db)
     driver = driver or FakeDriver()
@@ -89,12 +116,76 @@ def _runner(tmp_path, driver=None):
         store, driver, workcell_id="omx-1", instance_id="omx-1-control",
         principal_for_peer=lambda uid: f"fleet-uid-{uid}", allowed_peer_uids={1001},
         current_fence=lambda epoch, generation: (epoch, generation) == (2, 8),
-        capability_current=lambda grant: grant.config_revision == "cfg-1",
+        capability_current=(capability_current or
+                            (lambda grant: grant.config_revision == "cfg-1")),
         submission_fence=stop,
+        phase_runner_factories=phase_runner_factories,
         enabled=True,
     )
     runner.local_stop = stop
     return store, driver, runner
+
+
+def test_cell_transfer_uds_grant_reaches_only_its_phase_runner(tmp_path):
+    seen = []
+
+    def cell_transfer_factory(grant, recorder):
+        seen.append(grant)
+        return FakePhaseExecution(recorder)
+
+    store, driver, runner = _runner(
+        tmp_path, phase_runner_factories={"CELL_TRANSFER": cell_transfer_factory},
+    )
+    api = ActionApi(runner)
+    grant = FleetCellTransferGrant.model_validate(
+        _cell_transfer_grant(),
+    ).model_dump(mode="json")
+
+    response = api.dispatch({
+        "version": 2, "operation": "SubmitAction", "grant": grant,
+    }, peer_uid=1001)
+
+    assert response["status"] == 200
+    assert response["receipt"]["action_id"] == "cell-action-1"
+    assert response["receipt"]["attempt_id"] == "cell-attempt-1"
+    assert response["receipt"]["state"] == "ACCEPTED"
+    assert len(seen) == 1 and isinstance(seen[0], FleetCellTransferGrant)
+    assert driver.submissions == []
+    assert store.action_phases("cell-action-1")[0]["phase_id"] == "approach"
+    local_action = store.get_action("cell-action-1")
+    assert local_action["observation_id"] == ""
+    assert "observation_revision" not in local_action["request"]["payload"]
+
+
+def test_cell_transfer_is_rejected_without_a_phase_runner_before_journaling(tmp_path):
+    store, driver, runner = _runner(tmp_path)
+    grant = FleetCellTransferGrant.model_validate(_cell_transfer_grant())
+
+    with pytest.raises(PermissionError, match="no admitted executor"):
+        runner.submit(grant, peer_uid=1001)
+
+    assert store.get_action(grant.action_id) is None
+    assert driver.submissions == []
+
+
+def test_cell_transfer_cell_hash_mismatch_is_rejected_before_journaling(tmp_path):
+    store, driver, runner = _runner(
+        tmp_path,
+        phase_runner_factories={"CELL_TRANSFER": lambda grant, recorder:
+                                FakePhaseExecution(recorder)},
+        capability_current=lambda grant: (
+            grant.config_revision == "cfg-1"
+            and (grant.action_kind != "CELL_TRANSFER"
+                 or grant.cell_transfer.cell_sha256 == "c" * 64)
+        ),
+    )
+    grant = FleetCellTransferGrant.model_validate(_cell_transfer_grant())
+
+    with pytest.raises(PermissionError, match="capability or configuration is stale"):
+        runner.submit(grant, peer_uid=1001)
+
+    assert store.get_action(grant.action_id) is None
+    assert driver.submissions == []
 
 
 def test_submit_persists_fleet_ids_and_duplicate_never_replays(tmp_path):

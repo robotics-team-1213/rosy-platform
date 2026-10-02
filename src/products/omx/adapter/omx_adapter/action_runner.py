@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Callable, Mapping, Protocol
 
-from core_common.protocol.schemas import FleetActionGrant
+from core_common.protocol.schemas import FleetActionGrant, FleetCellTransferGrant
 
 from .action_store import ActionStore, InvalidActionTransition
 from .local_stop import LocalStopBlocked
@@ -19,11 +19,25 @@ from .phase_recorder import ActionPhaseRecorder
 # driver path admits. CELL_TRANSFER runs through the phase runner only (D-402 §3).
 PHASE_RUNNER_KINDS = frozenset({"PICK_PLACE", "CELL_TRANSFER"})
 DIRECT_DRIVER_KINDS = frozenset({"PICK_PLACE"})
+ActionGrant = FleetActionGrant | FleetCellTransferGrant
 
 
-def action_grant_digest(value: FleetActionGrant | Mapping[str, object]) -> str:
-    grant = (value if isinstance(value, FleetActionGrant)
-             else FleetActionGrant.model_validate(value))
+def parse_action_grant(value: ActionGrant | Mapping[str, object]) -> ActionGrant:
+    """Parse the two explicitly supported local Action grant variants."""
+    if isinstance(value, (FleetActionGrant, FleetCellTransferGrant)):
+        return value
+    if not isinstance(value, Mapping):
+        raise ValueError("grant must be an object")
+    action_kind = value.get("action_kind")
+    if action_kind == "PICK_PLACE":
+        return FleetActionGrant.model_validate(value)
+    if action_kind == "CELL_TRANSFER":
+        return FleetCellTransferGrant.model_validate(value)
+    raise ValueError("grant action_kind is unsupported")
+
+
+def action_grant_digest(value: ActionGrant | Mapping[str, object]) -> str:
+    grant = parse_action_grant(value)
     document = grant.model_dump(mode="json", exclude={"request_digest"})
     encoded = json.dumps(document, sort_keys=True, separators=(",", ":"),
                          ensure_ascii=False, allow_nan=False)
@@ -52,7 +66,7 @@ class DriverSubmission:
 class LocalActionPort(Protocol):
     """One in-process ROS/device owner supplied by the selected workcell profile."""
 
-    def submit(self, grant: FleetActionGrant) -> DriverSubmission: ...
+    def submit(self, grant: ActionGrant) -> DriverSubmission: ...
 
     def cancel(self, action: Mapping[str, object]) -> bool | None: ...
 
@@ -84,13 +98,13 @@ class ActionRunner:
                  principal_for_peer: Callable[[int], str],
                  allowed_peer_uids: set[int],
                  current_fence: Callable[[int, int], bool],
-                 capability_current: Callable[[FleetActionGrant], bool],
+                 capability_current: Callable[[ActionGrant], bool],
                  submission_fence: StopFence | None = None,
                  phase_runner_factory: Callable[
-                     [FleetActionGrant, ActionPhaseRecorder], PhaseExecution
+                     [ActionGrant, ActionPhaseRecorder], PhaseExecution
                  ] | None = None,
                  phase_runner_factories: Mapping[str, Callable[
-                     [FleetActionGrant, ActionPhaseRecorder], PhaseExecution
+                     [ActionGrant, ActionPhaseRecorder], PhaseExecution
                  ]] | None = None,
                  enabled: bool = False,
                  now: Callable[[], datetime] | None = None) -> None:
@@ -131,7 +145,7 @@ class ActionRunner:
             raise PermissionError("peer UID has no Fleet principal mapping")
         return principal
 
-    def _validate(self, grant: FleetActionGrant) -> None:
+    def _validate(self, grant: ActionGrant) -> None:
         if action_grant_digest(grant) != grant.request_digest:
             raise PermissionError("grant request digest is invalid")
         now = self.now()
@@ -174,7 +188,7 @@ class ActionRunner:
             ) if action.get("attempt_id") else [],
         }
 
-    def submit(self, grant: FleetActionGrant, *, peer_uid: int) -> dict[str, object]:
+    def submit(self, grant: ActionGrant, *, peer_uid: int) -> dict[str, object]:
         principal_id = self._principal(peer_uid)
         if not self.enabled:
             raise PermissionError("local Action capability is disabled")
@@ -190,7 +204,10 @@ class ActionRunner:
             principal_id=principal_id, request_key=grant.action_id,
             action_id=grant.action_id, action_kind=grant.action_kind,
             configuration_revision=grant.config_revision,
-            observation_id=grant.observation_revision,
+            # Cell Transfer is recipe/cell bound and deliberately camera blind.
+            # Empty is a truthful no-observation value; PICK_PLACE remains nonempty.
+            observation_id=(grant.observation_revision
+                            if isinstance(grant, FleetActionGrant) else ""),
             owner_generation=grant.dispatch_generation, payload=request,
         )
         action = created["action"]
@@ -440,7 +457,7 @@ class ActionRunner:
         return action
 
     def _phase_recorder_for_validated_grant(
-        self, grant: FleetActionGrant, *, peer_uid: int,
+        self, grant: ActionGrant, *, peer_uid: int,
     ) -> ActionPhaseRecorder:
         """Mint an in-process, attempt-scoped phase journal after grant checks."""
         principal_id = self._principal(peer_uid)

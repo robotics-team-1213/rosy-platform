@@ -42,8 +42,8 @@
 
 ## 최근 기록
 
+- 2026-10-02 · uncommitted · feat(omx): admit tagged Fleet Cell Transfer grants
 - 2026-10-02 · uncommitted · test(omx): verify planned-start tolerance budget
 - 2026-10-02 · uncommitted · fix(omx): center final state check on planned start
 - 2026-10-02 · uncommitted · fix(omx): make start tolerance ceiling owner-controlled
 - 2026-10-02 · uncommitted · fix(omx): close final-owner joint-state sequence race
-- 2026-10-02 · 31ada4b4 · fix(omx): C2 independent review fixes (D-402)

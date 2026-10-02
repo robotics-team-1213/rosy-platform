@@ -232,3 +232,8 @@
 - Change: Record the measured runner/owner regression result after centering final admission on the planned phase start.
 - Evidence: Full OMX adapter suite 178 passed, 4 skipped; flake8, py_compile, and git diff checks passed. The in-process Jazzy test was skipped because rclpy was unavailable to the selected interpreter. Vendor retry remains unrun.
 - Gate: SOURCE GO; ROS-SIM HOLD; ARTIFACT HOLD; DEVICE/FIELD PARKED.
+
+## 2026-10-02 · uncommitted · feat(omx): admit tagged Fleet Cell Transfer grants
+- 변경: `ActionApi`와 digest 검증이 `FleetActionGrant`/`FleetCellTransferGrant`를 `action_kind`로 구분해 파싱한다. `CELL_TRANSFER`는 전용 phase runner가 등록되지 않으면 저널 전에 거부하고, 등록된 경우에도 capability callback의 셀 해시 확인을 통과해야 한다. camera-blind Cell Transfer의 `observation_id`는 로컬 저널에 빈 값으로 기록하며 기존 ActionStore 스키마와 PICK_PLACE 관측 필수 조건은 유지한다. 낡은 합성 test grant를 실제 tagged schema fixture로 바꿨다.
+- 증거: 전체 OMX adapter test 271 passed, 5 skipped; Cell Transfer API/runner, phase-runner 전용 실행, 해시 불일치 및 무관측 저널을 확인했다. `py_compile`, 허용된 기존 style 위반(E501/W503/W504/E704/E126) 제외 flake8, `git diff --check` 통과. Fleet UDS end-to-end invocation은 1 skipped. 전체 파일 flake8은 이 변경 전부터 있던 style 위반을 보고하므로 무오류로 기록하지 않는다.
+- Gate: SOURCE GO. 이 checkpoint는 ROS-SIM, Gazebo, 장치 동작이나 실제 셀 해시 공급자를 증명하지 않는다. ROS-SIM HOLD; ARTIFACT HOLD; DEVICE/FIELD PARKED.
