@@ -30,13 +30,14 @@ from .sensing.perception.camera_ground import nominal_ground_plane
 from .sensing.perception.image_frame import image_msg_to_frame
 from .sensing.perception.learned.detector import CONFIDENCE, IOU, ObjectDetModel
 from .sensing.perception.learned.runner import ModelSlot
+from .sensing.perception.learned.slots import slot_pointer
 
 
 class ObjectDetectorNode(Node):
     def __init__(self):
         super().__init__('object_detector_node')
         p = lambda name, default: self.declare_parameter(name, default).value  # noqa: E731
-        pointer = p('pointer', '/var/lib/rosy/models/object_det/active')
+        pointer = p('pointer', slot_pointer('object_det', 'active'))
         threads, conf, iou = int(p('threads', 2)), float(p('confidence', CONFIDENCE)), float(p('iou', IOU))
         self._slot = ModelSlot(pointer, opener=lambda folder: ObjectDetModel.open(
             folder, threads=threads, conf=conf, iou=iou))
