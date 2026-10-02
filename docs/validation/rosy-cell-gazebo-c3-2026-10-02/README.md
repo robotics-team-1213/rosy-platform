@@ -16,7 +16,7 @@
 |---|---|
 | 소스 | 브랜치 `feat/rosy-cell-c3-gazebo` (base main `4804d417`) |
 | 이미지 | `rosy-omx-pilot:recording-local`, ID `sha256:faeb86d666c6848ec61478a72087f7cadfc55d6b23e54dff891202b21029efb2` (현재 `Dockerfile.pilot`과 같은 headless·switch-timeout 패치). 기반 `rosy-omx-workstation:native-action-only-local` `sha256:b47034e4…f9f0`. 재빌드·재태그 없음. `rosy-omx-pilot:local`(`e9466260…`)에는 headless 패치가 없어 broadcaster 활성화가 5 s에 시간 초과했다. |
-| vendor | `open_manipulator` `0a4af6a923b8b7d80b8c20506d1839c54d2e993e` (`stack.lock.yaml`) |
+| vendor | `open_manipulator` revision `0a4af6a923b8b7d80b8c20506d1839c54d2e993e` (`stack.lock.yaml`) |
 | 월드 | `src/sim/gz_sim/worlds/omx_cell_workcell.sdf` sha256(LF) `5906ef27edd9aac907b499bb3a4de668960d24508e7d57559829687f8fc71d36`; sim aid 변형 `omx_cell_workcell_sim_aid.sdf` `5c139aee839829eaebd32915298495de5d2a2c6a0da9ce21c5b81e767ebd5e2b`. 두 파일은 `infeed_block`의 DetachableJoint 플러그인만 다르다. |
 | profile_revision | `f49251c4c5cc150daf06aac0fa083eb7f6764c730bfe12d0cd431f102ea1634f` (`deploy/robot/omx/sim/cell_profile.yaml`, 변경 없음) |
 | kinematics_revision | `27cd572830f931b57eedec55081b77749f65dcd059d11e34199bdcb1bb6db04d` |
