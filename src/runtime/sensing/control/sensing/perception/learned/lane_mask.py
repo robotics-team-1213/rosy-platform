@@ -10,11 +10,16 @@ the lane is right of centre, the LaneObservation convention in lane.py.
 confidence = fraction of band rows with a target pixel x mean max-softmax on
 target pixels. `wall` role pixels (D-373 decision 9) are never a target;
 wall_fraction is their share of the near-field band.
-Shadow evidence only: nothing here commands motion (D-209)."""
+Target components smaller than MIN_COMPONENT_PX are dropped before any of
+that: in the 2026-10-02 audit speckle took `visible` from 0.896 to 1.000 and
+offset jitter up 31 %; the filter brought it back to 0.885 and +1 %.
+VisibleHysteresis is the per-stream visible latch; the node owns one.
+Shadow evidence only: nothing here commands motion (D-209). Promotion past
+shadow needs the D-205 replay bench, not these unit numbers."""
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 import cv2
 import numpy as np
@@ -23,6 +28,12 @@ from .manifest import ClassSpec, InputSpec
 
 NEAR_FIELD_FRACTION = 0.40
 DRIVABLE_MIN_FRACTION = 0.02
+#: 8-connected target components below this many pixels are noise. 40 px at the
+#: 320x240 model input, the same floor as lane_keep_lines.DENOISE_MIN_AREA_PX.
+MIN_COMPONENT_PX = 40
+#: Shadow `visible` latch on confidence (audit 2026-10-02): on at 0.35, off below 0.25.
+VISIBLE_ENTER = 0.35
+VISIBLE_EXIT = 0.25
 
 
 class NonFiniteLogits(ValueError):
@@ -55,7 +66,17 @@ def _softmax(logits: np.ndarray) -> np.ndarray:
     return e / e.sum(axis=0, keepdims=True)
 
 
-def lane_evidence(logits: np.ndarray, classes: tuple[ClassSpec, ...]) -> LaneMaskEvidence:
+def _drop_small(mask: np.ndarray, min_px: int) -> np.ndarray:
+    if min_px <= 1 or not mask.any():
+        return mask
+    n, labels, stats, _ = cv2.connectedComponentsWithStats(mask.astype(np.uint8), connectivity=8)
+    keep = np.zeros(n, bool)
+    keep[1:] = stats[1:, cv2.CC_STAT_AREA] >= min_px
+    return keep[labels]
+
+
+def lane_evidence(logits: np.ndarray, classes: tuple[ClassSpec, ...], *,
+                  min_component_px: int = MIN_COMPONENT_PX) -> LaneMaskEvidence:
     if logits.ndim != 4 or logits.shape[0] != 1 or logits.shape[1] != len(classes):
         raise ValueError(f"logits shape {logits.shape} does not match {len(classes)} classes")
     if not np.isfinite(logits).all():
@@ -80,9 +101,9 @@ def lane_evidence(logits: np.ndarray, classes: tuple[ClassSpec, ...]) -> LaneMas
 
     wall = _target("wall")
     wall_fraction = float(wall.mean())
-    target = _target("drivable") & ~wall
+    target = _drop_small(_target("drivable") & ~wall, min_component_px)
     if target.mean() < DRIVABLE_MIN_FRACTION:
-        target = _target("lane_marking") & ~wall
+        target = _drop_small(_target("lane_marking") & ~wall, min_component_px)
     if not target.any():
         return LaneMaskEvidence(False, None, 0.0, fractions, wall_fraction)
 
@@ -92,6 +113,23 @@ def lane_evidence(logits: np.ndarray, classes: tuple[ClassSpec, ...]) -> LaneMas
     row_coverage = float(target.any(axis=1).mean())
     confidence = float(np.clip(row_coverage * band_conf[target].mean(), 0.0, 1.0))
     return LaneMaskEvidence(True, error, confidence, fractions, wall_fraction)
+
+
+class VisibleHysteresis:
+    """Per-stream latch on `visible`: turns on when confidence reaches `enter`,
+    off when the lane is gone or confidence drops below `exit`. Evidence that is
+    latched off loses its error; confidence is passed through as measured."""
+
+    def __init__(self, enter: float = VISIBLE_ENTER, exit: float = VISIBLE_EXIT):
+        if not 0.0 <= exit <= enter <= 1.0:
+            raise ValueError(f"need 0 <= exit ({exit}) <= enter ({enter}) <= 1")
+        self.enter, self.exit = float(enter), float(exit)
+        self.on = False
+
+    def update(self, ev: LaneMaskEvidence) -> LaneMaskEvidence:
+        threshold = self.exit if self.on else self.enter
+        self.on = ev.visible and ev.confidence >= threshold
+        return ev if self.on else replace(ev, visible=False, error=None)
 
 
 def lane_marking_mask(logits: np.ndarray, classes, size: tuple[int, int] | None = None) -> np.ndarray:

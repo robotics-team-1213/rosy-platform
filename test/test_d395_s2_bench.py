@@ -202,3 +202,9 @@ def test_s2d_fails_without_homing_or_without_a_record():
     missing = _run()
     missing["args"] = {"traffic": True}
     assert summary.bar(missing, [])["s2d"] == (False, ["traffic requested, phase not recorded"])
+
+
+def test_physics_step_and_gpu_become_gz_multi_arguments():
+    args = bench.parse_args(["--out", "x", "--physics-step", "0.005", "--gpu", "--launch-arg", "a:=b"])
+    assert args.launch_arg == ["a:=b", "physics_step:=0.005", "gpu:=true"]
+    assert bench.parse_args(["--out", "x"]).launch_arg == []     # defaults: the world's step, CPU render

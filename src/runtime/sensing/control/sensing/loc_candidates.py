@@ -134,6 +134,13 @@ def global_candidates(field, ranges, angles, radius, mount, minimum_fit=.9, keep
     if fine_scan is not None:
         fine_ranges, fine_angles = valid_beams(*fine_scan)
         picked = [_fine(field, pose, fit, fine_ranges, fine_angles, clear) for pose, fit in picked]
+        # The fine stage moves each pick by up to 3 cm / 3 deg and never re-checks
+        # apart(): drop any pick it pulled onto an earlier one (guard, 2026-10-02 audit).
+        kept = []
+        for pose, fit in picked:
+            if all(apart(pose, other) for other, _ in kept):
+                kept.append((pose, fit))
+        picked = kept
     return [PoseCandidate(*base_from_sensor(pose, mount), scan_fit=fit, origin='global')
             for pose, fit in picked]
 
