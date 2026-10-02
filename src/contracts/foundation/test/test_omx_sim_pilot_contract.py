@@ -38,3 +38,11 @@ def test_goal_status_separates_local_ros_cancel_and_terminal_results():
     with pytest.raises(ValidationError):
         OmxSimGoal(command_id="request-1", state="LOCAL_ACCEPTED",
                    ros_goal_id="8b62da7d-f78b-4907-a808-fc0752450020")
+
+
+def test_target_may_carry_a_controls_descriptor():
+    from core_common.protocol.controls import ControlsDescriptor
+    descriptor = ControlsDescriptor(items=())
+    target = OmxSimTarget(instance_id="omx_01", joints=("joint1",), gripper="gripper_joint_1",
+                          controls=descriptor)
+    assert target.model_dump(by_alias=True)["controls"] == {"schema": "rosy.controls/1", "items": ()}

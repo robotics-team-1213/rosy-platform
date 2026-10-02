@@ -12,6 +12,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from core_common.protocol.controls import ControlsDescriptor
+
 
 class _Wire(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -25,6 +27,7 @@ class OmxSimTarget(_Wire):
     gripper: str = Field(min_length=1, max_length=64)
     camera: bool = False
     recording: bool = False
+    controls: ControlsDescriptor | None = None
 
 
 class OmxSimRecordStart(_Wire):
