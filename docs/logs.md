@@ -4521,3 +4521,8 @@
 - 증거: `python -m pytest test/test_d395_s2_bench.py test/test_d395_s1_bench.py -q` 14 passed (Windows). `python tools/sim/d395_s2_bench.py --check --out unused` 배치 문제 0, s2b 낡은 닻 함정 r1 쌍둥이 peers 0.33 대 참 0.67. Gazebo 실행은 아직 없다.
 - gate 변화: 없음. ROS-SIM S2는 실행 대기.
 - 결정: 없음. 시스템 코드·기본값 변경 없음. 충돌은 Gazebo 정답 궤적의 최근접 쌍(< 0.22 m)으로만 판정한다(gz_multi 로봇에 접촉 센서 없음). 센서 주기는 URDF 고정값이라 바꾸지 않는다.
+
+## 2026-10-02 · uncommitted · fix(sim): D-395 S2 bench — independent review findings before the Gazebo slot
+- 변경: 독립 리뷰(code-reviewer) 지적 8건 반영. 양보 자리 도착을 구간 완료로 세지 않고 진실 자세가 목표 0.25 m 안일 때만 센다. 시간 초과로 남은 Fleet 목표는 취소한다. s2b 낙하·검사·낡은 닻 함정은 그 순간의 진실 자세에서 다시 계산한다(r4는 제자리의 쌍둥이로). 탐지 지연은 `initialpose` 발행 시점부터 잰다. s2d는 귀환 중이 아니었거나 기록이 없으면 실패다. 활성 주행 상태는 PLANNING/NAVIGATING/BLOCKED다. CORE `state_stale`은 고발로 세지 않는다. sim 대기는 대기 시작 뒤의 첫 표본부터 잰다.
+- 증거: `python -m pytest test/test_d395_s2_bench.py test/test_d395_s1_bench.py -q` 16 passed (Windows). `--check` 배치 문제 0. Gazebo 실행은 아직 없다.
+- gate 변화: 없음.

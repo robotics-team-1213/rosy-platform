@@ -62,6 +62,8 @@ SEP_M = 0.45
 PEER_VIEW_M = 2.0
 TWIN_MATCH_M = 0.30
 SQUARES = {"A": (-1.26, 0.49), "B": (0.86, -0.52)}
+#: CORE navigation states of a live goal (NAV_STATES); ARRIVED/IDLE/CANCELED/FAILED are not.
+ACTIVE_NAV = ("PLANNING", "NAVIGATING", "BLOCKED")
 
 #: Layout q (x, y, yaw). r3/r4 are placed so that no robot's 180-degree twin lands within
 #: TWIN_MATCH_M of another robot: a twin hypothesis gets no `peers` support (layout_problems).
@@ -69,9 +71,9 @@ SCENARIOS = {
     "q": {
         "spawn": [(-1.26, 0.49, -HALF_PI), (0.86, -0.52, math.pi), (-0.70, -0.20, math.pi), (0.20, 0.25, 0.0)],
         "slots": [0, 1],
-        # s2b: lift r1 and r4 together. r4 lands on its own twin, r1 where its twin would see
-        # r4 at r4's old (stale) pose.
-        "pickup": {"robots": [0, 3], "drops": [(0.45, -0.10, HALF_PI), (-0.20, -0.25, math.pi)]},
+        # s2b: lift r1 and r4 together. r4 lands on the twin of wherever it stands ("twin"),
+        # r1 where its twin would see r4 at r4's old (stale) pose.
+        "pickup": {"robots": [0, 3], "drops": [(0.45, -0.10, HALF_PI), "twin"]},
         # s2c: the off-slot r4; its twin is 0.50 m from r3.
         "mirror": 3,
         # s2d: r4 homes while r1 and r2 run these legs, each passing about 0.5 m from r4.
@@ -154,11 +156,7 @@ def scenario_problems(sc):
     out = [f"spawn: {m}" for m in layout_problems(spawn, slots)]
     pk = sc.get("pickup")
     if pk:
-        after = list(spawn)
-        for idx, drop in zip(pk["robots"], pk["drops"]):
-            after[idx] = drop
-        stay = [i for i in range(len(spawn)) if i not in pk["robots"]]     # LOCALIZED, anchors
-        out += [f"drop: {m}" for m in layout_problems(after, stay)]
+        out += [f"drop: {m}" for m in drop_problems(spawn, pk)]
     tr = sc.get("traffic")
     if tr:
         homer = spawn[tr["homer"]]
@@ -171,17 +169,33 @@ def scenario_problems(sc):
     return out
 
 
-def stale_trap(sc):
-    """s2b: the twin `peers` score of each lifted robot if Fleet kept the other lifted robot's
-    pre-pickup pose as an anchor. > 0 means a stale anchor would drag that robot."""
-    pk, spawn = sc["pickup"], sc["spawn"]
-    after = list(spawn)
+def drop_layout(before, pk):
+    """Poses after the s2b teleport: each lifted robot at its drop; "twin" is the 180-degree
+    twin of where that robot stood."""
+    after = list(before)
     for idx, drop in zip(pk["robots"], pk["drops"]):
-        after[idx] = drop
+        after[idx] = mirror(before[idx]) if drop == "twin" else drop
+    return after
+
+
+def drop_problems(before, pk):
+    """layout_problems of the drop layout (the robots left standing are the anchors), plus
+    "trap disarmed" when no stale anchor would support a lifted robot's twin."""
+    stay = [i for i in range(len(before)) if i not in pk["robots"]]
+    out = layout_problems(drop_layout(before, pk), stay)
+    if not any(twin > 0.0 for _, twin in stale_trap(before, pk).values()):
+        out.append("stale-anchor trap disarmed")
+    return out
+
+
+def stale_trap(before, pk):
+    """s2b: (truth, twin) `peers` score of each lifted robot if Fleet kept the other lifted
+    robot's pre-pickup pose as an anchor. twin > 0 means a stale anchor would drag it."""
+    after = drop_layout(before, pk)
     out = {}
     for idx in pk["robots"]:
         other = [i for i in pk["robots"] if i != idx]
-        anchors = [after[i] for i in range(len(after)) if i != idx and i not in other] + [spawn[i] for i in other]
+        anchors = [after[i] for i in range(len(after)) if i != idx and i not in other] + [before[i] for i in other]
         observed = [after[i] for i in range(len(after)) if i != idx]
         out[f"rosy_{idx + 1:02d}"] = peer_support(after[idx], observed, anchors)
     return out
@@ -296,7 +310,7 @@ class Bench(s1.Bench):
 
     def wait(self, until, timeout_s, period=0.5):
         """As S1, but `timeout_s` is sim seconds, capped at timeout_s / --min-rtf and --max-wall."""
-        start_wall, start_sim = time.monotonic(), self.sim_now()
+        start_wall, start_t, start_sim = time.monotonic(), self.t(), None
         cap = min(timeout_s / self.args.min_rtf, self.args.max_wall)
         snaps = {}
         while True:
@@ -307,8 +321,8 @@ class Bench(s1.Bench):
             if until(snaps):
                 return snaps, True
             sim = self.sim_now()
-            if start_sim is None:
-                start_sim = sim
+            if start_sim is None:   # the first sample taken after the wait began, not an older one
+                start_sim = next((s for t, s, _ in self.clock_samples if t >= start_t), None)
             if start_sim is not None and sim is not None and sim - start_sim >= timeout_s:
                 return snaps, False
             if time.monotonic() - start_wall >= cap:
@@ -361,7 +375,7 @@ class Bench(s1.Bench):
     def arm_traffic(self):
         tr = self.sc["traffic"]
         self.traffic = {"homer": self.rid(tr["homer"]), "started": None, "done": False,
-                        "drivers": {self.rid(i): {"legs": legs, "leg": 0, "posted": None, "attempts": 0,
+                        "drivers": {self.rid(i): {"legs": legs, "leg": 0, "posted": None, "posted_sim": None, "attempts": 0,
                                                   "navigating": False, "done": []}
                                     for i, legs in tr["drivers"].items()},
                         "posts": [], "homer_at_start": None}
@@ -389,22 +403,32 @@ class Bench(s1.Bench):
                 continue
             nav = ((snaps.get(rid) or {}).get("navigation"))
             queued = (rows.get(rid) or {}).get("queued")
+            goal = d["legs"][d["leg"]]
             if d["posted"] is not None:
-                if nav == "NAVIGATING":
+                if queued:
+                    # Held, queued or yielding: an ARRIVED now (a bay) is not this leg; the
+                    # released goal must be seen driving again.
+                    d["navigating"] = False
+                elif nav in ACTIVE_NAV:
                     d["navigating"] = True
-                if d["navigating"] and nav == "ARRIVED" and not queued:
-                    d["done"].append({"leg": d["leg"], "t": self.t(), "truth": self.truth(rid)})
-                    self.note("traffic_leg", robot=rid, leg=d["leg"], truth=self.truth(rid))
+                elif d["navigating"] and nav == "ARRIVED":
+                    truth = self.truth(rid)
+                    off = None if truth is None else round(math.dist(truth[:2], goal[:2]), 3)
+                    d["done"].append({"leg": d["leg"], "t": self.t(), "truth": truth, "off_goal_m": off})
+                    self.note("traffic_leg", robot=rid, leg=d["leg"], truth=truth, off_goal_m=off)
                     d["leg"], d["posted"], d["navigating"], d["attempts"] = d["leg"] + 1, None, False, 0
                     continue
                 # Re-post only when Fleet holds nothing for it and it is not driving: a goal
                 # Nav2 aborted (S1: compute_path_to_pose timeouts under load) or never started.
-                if queued or nav == "NAVIGATING" or now - d["posted"] < 30.0 or d["attempts"] >= 4:
+                sim, sim_posted = self.sim_now(), d["posted_sim"]
+                slow = sim is None or sim_posted is None or sim - sim_posted >= 5.0
+                if queued or nav in ACTIVE_NAV or now - d["posted"] < 30.0 or not slow or d["attempts"] >= 4:
                     continue
-            x, y, yaw = d["legs"][d["leg"]]
+            x, y, yaw = goal
             code, body = self.fleet("POST", f"/api/fleet/robots/{rid}/goal", {"x": x, "y": y, "yaw": yaw},
                                     timeout=15.0)
-            d["posted"], d["navigating"], d["attempts"] = now, False, d["attempts"] + 1
+            d["posted"], d["posted_sim"], d["navigating"] = now, self.sim_now(), False
+            d["attempts"] += 1
             tr["posts"].append({"t": self.t(), "robot": rid, "leg": d["leg"], "code": code, "body": body})
             self.note("traffic_goal", robot=rid, leg=d["leg"], code=code, body=body)
         if all(d["leg"] >= len(d["legs"]) for d in tr["drivers"].values()):
@@ -417,10 +441,21 @@ class Bench(s1.Bench):
         if tr is None:
             return True
         _, done = self.wait(lambda s: tr["done"], self.args.traffic_timeout)
+        cancels = {}
+        if not done:
+            # A goal left in Fleet would be released or keep driving during phases c and b.
+            for rid in tr["drivers"]:
+                cancels[rid] = self.fleet("POST", f"/api/fleet/robots/{rid}/cancel", timeout=15.0)
+            self.fleet_at = -math.inf
+            self.fleet_state()
+            cancels["left_in_fleet"] = {rid: [row.get("goal"), row.get("queued")]
+                                        for rid, row in self.fleet_rows.items()
+                                        if rid in tr["drivers"] and (row.get("goal") or row.get("queued"))}
+            self.note("traffic_cancel", **cancels)
         tr["finished_at"] = self.t()
         self.record["phases"]["traffic"] = {
             "done": done, "homer": tr["homer"], "started": tr["started"], "finished": tr["finished_at"],
-            "homer_at_start": tr["homer_at_start"], "posts": tr["posts"],
+            "homer_at_start": tr["homer_at_start"], "posts": tr["posts"], "cancels": cancels,
             "legs": {rid: d["done"] for rid, d in tr["drivers"].items()},
             "planned": {rid: len(d["legs"]) for rid, d in tr["drivers"].items()},
             "homer_localized": self.first_time(tr["homer"], "LOCALIZED"),
@@ -471,13 +506,14 @@ class Bench(s1.Bench):
 
     def left_localized(self, after, exclude=(), only=None):
         """(t, robot, state, reason) of every non-LOCALIZED state row since `after`, for the
-        robots not in `exclude` (or only robot `only`)."""
+        robots not in `exclude` (or only robot `only`). CORE's `state_stale` rows are skipped."""
         rows = []
         for row in self.timeline:
             loc = row.get("loc") or {}
             rid = row.get("robot")
             if (row["what"] == "state" and row["t"] >= after and rid not in exclude
-                    and (only is None or rid == only) and loc.get("state") not in (None, "LOCALIZED")):
+                    and (only is None or rid == only) and loc.get("state") not in (None, "LOCALIZED")
+                    and loc.get("reason") != "state_stale"):     # CORE's wall-time blip, not an accusation
                 rows.append((row["t"], row["robot"], loc.get("state"), loc.get("reason")))
         return rows
 
@@ -486,7 +522,12 @@ class Bench(s1.Bench):
         pk = self.sc["pickup"]
         lifted = [self.rid(i) for i in pk["robots"]]
         start = self.t()
-        before = {rid: self.truth(rid) for rid in self.robots}
+        before = [self.truth(rid) or s1.last_trail_pose(self.trail, rid) or self.sc["spawn"][i]
+                  for i, rid in enumerate(self.robots)]
+        # Drops and the stale trap from where the robots stand now (traffic may have moved them).
+        drops = [drop_layout(before, pk)[i] for i in pk["robots"]]
+        problems, trap = drop_problems(before, pk), stale_trap(before, pk)
+        self.note("pickup2_layout", drops=drops, problems=problems, stale_trap=trap)
 
         def all_at_once(active):
             threads = [threading.Thread(target=self.pickup, args=(rid, active)) for rid in lifted]
@@ -496,7 +537,7 @@ class Bench(s1.Bench):
                 th.join()
         all_at_once(True)
         t_lifted = self.t()
-        for rid, drop in zip(lifted, pk["drops"]):
+        for rid, drop in zip(lifted, drops):
             self.teleport(rid, drop)
         snaps, _ = self.wait(lambda s: False, 3.0)
         held = {rid: self.loc_state(snaps, rid) for rid in lifted}
@@ -506,7 +547,8 @@ class Bench(s1.Bench):
                                 self.args.localize_timeout)
         if done:
             snaps, _ = self.wait(lambda s: not self.all_localized(s), 5.0)
-        phase = {"lifted": lifted, "drops": pk["drops"], "stale_trap": stale_trap(self.sc), "before": before,
+        phase = {"lifted": lifted, "drops": drops, "layout_problems": problems, "stale_trap": trap,
+                 "before": before,
                  "t_start": start, "t_lifted": t_lifted, "t_set_down": t_down, "state_while_held": held,
                  "t_localized": {rid: self.first_time(rid, "LOCALIZED", t_down) for rid in lifted},
                  "others_left_localized": self.left_localized(start, exclude=lifted), "done": done,
@@ -537,14 +579,15 @@ def main(argv=None):
     args = p.parse_args(argv)
     if args.check:
         sc = SCENARIOS[args.scenario]
-        print(json.dumps({"problems": scenario_problems(sc), "stale_trap": stale_trap(sc)}, indent=1))
+        print(json.dumps({"problems": scenario_problems(sc), "stale_trap": stale_trap(sc["spawn"], sc["pickup"])},
+                         indent=1))
         return
     bench = Bench(args)
     try:
         if args.traffic:
             bench.arm_traffic()
         ok = bench.power_on()
-        ok = ok and bench.traffic_finish()
+        bench.traffic_finish()       # recorded (and left goals cancelled) even after a failed power-on
         for phase in filter(None, args.phases.split(",")):
             if not ok:
                 break

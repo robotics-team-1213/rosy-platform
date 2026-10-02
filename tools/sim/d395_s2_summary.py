@@ -22,6 +22,8 @@ from d395_s2_bench import COLLISION_M, min_pairwise  # noqa: E402
 
 #: Rev. 6: a mirror lock must be flagged within 15 sim s of the injection.
 DETECT_LIMIT_SIM_S = 15.0
+#: A leg counts as driven when the truth ends this close to its goal (sim goal tolerance 0.10).
+LEG_DONE_M = 0.25
 
 LADDER = re.compile(r"localization: (rosy_\d+) ladder (\S+): (\S+) sent \(held (\[.*?\])\)")
 SUSPECT = re.compile(r"localization: (rosy_\d+) observed > .*?; suspect")
@@ -74,19 +76,29 @@ def bar(run, posted):
         why = list(common)
         if not p.get("started"):
             why.append("traffic never started")
+        elif (p.get("homer_at_start") or {}).get("state") == "LOCALIZED":
+            why.append("homer already LOCALIZED when the traffic started: no homing in traffic")
         legs = p.get("legs") or {}
         planned = p.get("planned") or {}
         short = {rid: len(done) for rid, done in legs.items() if len(done) < planned.get(rid, 1)}
         if short:
             why.append(f"legs not finished {short}")
+        off = [(rid, leg.get("off_goal_m")) for rid, done in legs.items() for leg in done
+               if leg.get("off_goal_m") is None or leg["off_goal_m"] > LEG_DONE_M]
+        if off:
+            why.append(f"legs counted away from their goal {off}")
         out["s2d"] = (not why, why)
+    elif (run.get("args") or {}).get("traffic"):
+        out["s2d"] = (False, ["traffic requested, phase not recorded"])
     p = phases.get("mirror")
     if p:
         why = list(common)
         left = p.get("target_left")
         latency = None
         if left:
-            t0 = to_sim(clock, p.get("t_pub_start"))
+            # From the publish (after the ros2 CLI started), not from the call: under load the
+            # CLI alone took 20-60 s wall in S1.
+            t0 = to_sim(clock, p.get("t_injected"))
             t1 = to_sim(clock, left[0])
             latency = None if t0 is None or t1 is None else round(t1 - t0, 1)
         if not left:
@@ -102,6 +114,8 @@ def bar(run, posted):
     p = phases.get("pickup2")
     if p:
         why = list(common)
+        if p.get("layout_problems"):
+            why.append(f"drop layout {p['layout_problems']}")
         if not p.get("done"):
             why.append("lifted robots not re-LOCALIZED")
         if p.get("others_left_localized"):

@@ -12,7 +12,9 @@ Per scenario, judged by `tools/sim/d395_s2_summary.py`:
 - every robot LOCALIZED within 5 cm / 5° of the Gazebo truth;
 - zero Fleet decisions at a robot's 180° twin;
 - zero collisions: the closest pair of robot centres in the truth trail stays at or above 0.22 m (2 × 0.11 m). gz_multi robots have no contact sensor, so there is no contact count;
-- (s2c) the target leaves LOCALIZED within 15 sim s of the injection (rev. 6 window), and no other robot leaves LOCALIZED.
+- (s2c) the target leaves LOCALIZED within 15 sim s of the `initialpose` publish (rev. 6 window), and no other robot leaves LOCALIZED. CORE's `state_stale` rows do not count: they are its wall-time blip (S1 finding 6), not an accusation;
+- (s2d) the homer was not yet LOCALIZED when the traffic started, and every leg ended with the truth within 0.25 m of its goal (an arrival at a yield bay does not count);
+- (s2b) the drop layout passed its checks, with the stale-anchor trap armed.
 
 ## Layout q
 
@@ -41,14 +43,14 @@ Arena: the map_v2_fleet wall faces at x ±1.400, y ±0.625.
     - r1: (−0.30, 0.42), then (−1.00, 0.40);
     - r2: (0.20, −0.25), then (0.95, −0.25).
   - Each first leg ends about 0.5 m from r4.
-  - Fleet's keep-out, its hold (`hold_for_localization`) and its queue decide what moves. The bench records every reply (`accepted`, or `queued` with a reason) and re-posts only a goal that Fleet does not hold and Nav2 dropped.
+  - Fleet's keep-out, its hold (`hold_for_localization`) and its queue decide what moves. The bench records every reply (`accepted`, or `queued` with a reason) and re-posts only a goal that Fleet does not hold and Nav2 dropped (not `PLANNING`/`NAVIGATING`/`BLOCKED`, 30 s wall and 5 sim s after the post). Legs still open when the traffic times out are cancelled through `POST /api/fleet/robots/<id>/cancel`, so Fleet cannot release them during phases c and b.
 - **(s2c) forced mirror** (phase `c`).
   - r4's twin goes straight into its AMCL (`/rosy_04/initialpose`).
   - The bench waits up to 30 sim s for r4 to leave LOCALIZED, then up to 150 sim s for all four robots to be LOCALIZED again.
   - Every other robot's exit from LOCALIZED is recorded as an accusation.
 - **(s2b) simultaneous re-arbitration** (phase `b`).
   - `safety/pickup` true goes to r1 and r4 in parallel threads.
-  - Both are teleported, r1 to (0.45, −0.10, 90°) and r4 to (−0.20, −0.25, 180°), held 3 sim s, then set down together.
+  - Both are teleported, held 3 sim s, then set down together. r1 goes to (0.45, −0.10, 90°). r4 goes to the twin of wherever it stands at that moment, (−0.20, −0.25, 180°) from its spawn. The drops, their checks and the trap are recomputed from the truth then, because the traffic phase moves r1 and r2.
   - **Stale-pose trap.** r4 lands on the twin of its own pre-pickup pose. If Fleet kept r4's old pose as an anchor, r1's twin would score `peers` 0.33 against the truth's 0.67 (`stale_trap`), so r1 would be dragged.
   - **"Not dragged":** both lifted robots re-localize at the truth, and r2 and r3 never leave LOCALIZED.
 
