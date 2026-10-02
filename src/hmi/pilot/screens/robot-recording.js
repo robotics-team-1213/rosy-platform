@@ -28,6 +28,10 @@ export function mountRobotRecording({toggle, detail, openButton, sheetHost, anch
   let stopSheetRefresh = null;
   let refreshing = false;
   let download = null;         // {id, controller}
+  let lastListing = null;      // 마지막 목록과 실패 글자 — 받기가 끝나면 바로 다시 그린다
+  let lastFailure = "";
+  let shown = "";              // 지금 그려진 시트 상태; 같으면 다시 만들지 않는다(초점·live region 보존)
+  let stopResize = null;
   const rowStatus = new Map(); // id → 마지막 받기 결과(목록을 다시 그려도 남는다)
 
   function render() {
@@ -99,6 +103,8 @@ export function mountRobotRecording({toggle, detail, openButton, sheetHost, anch
     if (!sheet) return;
     stopSheetRefresh?.();
     stopSheetRefresh = null;
+    stopResize?.();
+    stopResize = null;
     document.removeEventListener("keydown", onKey);
     // 목록을 다시 그리면 초점 둔 버튼이 바뀌므로 "시트 안"을 따지지 않고 여는 버튼으로 돌려준다.
     sheet.remove();
@@ -109,8 +115,13 @@ export function mountRobotRecording({toggle, detail, openButton, sheetHost, anch
 
   function renderRows(listing, failure) {
     if (!sheet) return;
+    lastListing = listing;
+    lastFailure = failure;
     const rows = sheetRows(listing);
     const message = failure || sheetNotice(listing);
+    const state = JSON.stringify([rows, message, download?.id ?? null, [...rowStatus]]);
+    if (state === shown) return;   // 3 s 새로 읽기가 같은 목록을 가져왔다: 버튼·초점을 그대로 둔다
+    shown = state;
     const noticeNode = sheet.querySelector("[data-recordings-notice]");
     noticeNode.textContent = message;
     noticeNode.hidden = !message;
@@ -155,7 +166,7 @@ export function mountRobotRecording({toggle, detail, openButton, sheetHost, anch
     const controller = new AbortController();
     download = {id, controller};
     rowStatus.delete(id);
-    await refreshSheet();
+    renderRows(lastListing, lastFailure);
     const response = await requestBlob(`/api/v1/recordings/${encodeURIComponent(id)}/archive`,
                                        {signal: controller.signal, timeoutMs: FETCH_TIMEOUT_MS}).catch(() => null);
     download = null;
@@ -171,6 +182,7 @@ export function mountRobotRecording({toggle, detail, openButton, sheetHost, anch
     } else {
       rowStatus.set(id, "받기가 끊겼습니다 — 로봇이 멈춘 뒤 처음부터 다시 받으세요");
     }
+    renderRows(lastListing, lastFailure);    // "받는 중…/취소" 를 바로 거둔다
     refreshSheet();
   }
 
@@ -196,7 +208,14 @@ export function mountRobotRecording({toggle, detail, openButton, sheetHost, anch
     actions.append(refresh, close);
     sheet.append(head, noticeNode, list, actions);
     sheetHost.append(sheet);
+    shown = "";
     placeSheet();
+    // HUD 높이는 줄바꿈·회전으로 바뀐다: 그때마다 시트를 HUD 아래로 다시 붙인다.
+    const onResize = () => { if (sheet) placeSheet(); };
+    const observer = typeof ResizeObserver === "function" ? new ResizeObserver(onResize) : null;
+    observer?.observe(anchor);
+    window.addEventListener("resize", onResize);
+    stopResize = () => { observer?.disconnect(); window.removeEventListener("resize", onResize); };
     openButton.setAttribute("aria-pressed", "true");
     document.addEventListener("keydown", onKey);
     sheet.focus();

@@ -313,7 +313,7 @@ def _recording_writer(request: Request) -> JSONResponse | None:
 
 @app.get("/__test__/recordings")
 def recordings_log():
-    return {key: RECORDINGS[key] for key in ("log", "blocker", "polls", "owned")}
+    return {key: RECORDINGS.get(key, 0) for key in ("log", "blocker", "polls", "owned", "lists")}
 
 
 @app.post("/__test__/recordings")
@@ -335,9 +335,10 @@ async def recordings_script(request: Request):
 def recordings_list(request: Request):
     if _role(request) is None:
         return JSONResponse({"detail": "unauthorized"}, status_code=401)
+    RECORDINGS["lists"] = RECORDINGS.get("lists", 0) + 1
     active = RECORDINGS["active"]
     blocker = "RECORDING_BUSY" if active["state"] != "idle" else RECORDINGS["blocker"]
-    item = {**_RECORDING_ITEM, "bytes": 3 * 10**8} if RECORDINGS["big"] else _RECORDING_ITEM
+    item ={**_RECORDING_ITEM, "bytes": 3 * 10**8} if RECORDINGS["big"] else _RECORDING_ITEM
     return {"active": active, "items": [item], "download_allowed": blocker is None,
             "download_blocker": blocker}
 

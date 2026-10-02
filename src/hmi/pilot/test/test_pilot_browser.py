@@ -886,3 +886,19 @@ def test_a_large_recording_points_to_the_pc_tool(tablet_page):
     assert button.is_disabled()
     assert "rosy_ml fetch" in button.inner_text()
     assert errors == [], errors
+
+
+@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+                    reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
+def test_recordings_sheet_refresh_keeps_keyboard_focus(tablet_page):
+    """3 s 새로 읽기가 같은 목록을 가져오면 행을 다시 만들지 않는다 — 초점·live region 그대로."""
+    base_url, page, errors = tablet_page
+    _enter_recording_drive(page, base_url)
+    row = _open_sheet(page)
+    page.wait_for_function("!document.querySelector('[data-recording-fetch]').disabled")
+    row.locator("[data-recording-fetch]").focus()
+    page.evaluate("window.__focused = document.activeElement")
+    lists = _recordings(page, base_url)["lists"]
+    assert _eventually(lambda: _recordings(page, base_url)["lists"] >= lists + 2)
+    assert page.evaluate("document.activeElement === window.__focused && window.__focused.isConnected")
+    assert errors == [], errors
