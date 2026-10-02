@@ -290,3 +290,20 @@ def test_obstacle_hold_event_carries_the_body_gap():
     assert events and events[0]["clearance_source"] == "lidar"
     assert events[0]["body_gap_m"] == pytest.approx(0.08 - LIDAR_TO_FRONT, abs=1e-3)
     assert events[0]["stop_gap_m"] == pytest.approx(0.0276, abs=1e-4)
+
+
+def test_a_short_half_turn_still_sweeps_at_least_the_resume_gap():
+    """Review M3: v 0.008, w 1.5 -> half a turn is 0.017 m; a contact just after it counts."""
+    side = [(0.0, 0.08)]
+    assert body_path_gap(side, linear=0.008, angular=1.5, **BODY) is None
+    gap = body_path_gap(side, linear=0.008, angular=1.5, min_travel_m=0.06, **BODY)
+    assert gap is not None and gap == pytest.approx(0.0199, abs=1e-3)
+
+
+def test_straight_sweep_is_solved_exactly():
+    """Review M4: the straight case needs no stepping; the rounded nose decides off-centre."""
+    y = 0.05
+    nose = min(0.04205, math.sqrt(0.08257 ** 2 - y * y))
+    assert body_path_gap([(0.20, y)], linear=0.04, angular=0.0, **BODY) == pytest.approx(0.20 - nose)
+    assert body_path_gap([(0.0, 0.0)], linear=0.04, angular=0.0, **BODY) == 0.0
+    assert body_path_gap([(-0.20, 0.0)], linear=0.04, angular=0.0, **BODY) is None

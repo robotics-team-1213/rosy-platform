@@ -186,51 +186,72 @@ def _inside_body(x: float, y: float, front_x: float, rear_x: float, half_width: 
 
 def body_path_gap(points: Sequence[Point], *, linear: float, angular: float, front_x_m: float,
                   rear_x_m: float, half_width_m: float, rotation_radius_m: float,
-                  horizon_m: float, step_m: float = 0.005) -> Optional[float]:
+                  horizon_m: float, min_travel_m: float = 0.0,
+                  step_m: float = 0.005) -> Optional[float]:
     """D-422: how far the robot drives along (linear, angular) before its body touches a point.
 
     points are in base_footprint (x forward, y left), not the LiDAR origin. The body is
     `_inside_body` swept along the arc; the gap is the base origin's travel (arc length) at
-    first contact, refined by bisection. 0 = a point is already inside the outline. The arc
-    ends at horizon_m or half a turn, whichever is first; None = nothing touched by then.
+    first contact. 0 = a point is already inside the outline. The arc ends at horizon_m or half
+    a turn, whichever is first, but never before min_travel_m (review M3: pass the resume gap,
+    so a contact just past a short half turn cannot read as clear). None = nothing touched.
+    Straight lines are solved exactly; arcs are stepped (~step_m of body motion) and refined
+    by bisection, over the points of the annulus the body can reach (review M4).
     linear must be positive: in-place rotation is `rotation_gap`.
     """
     speed = float(linear)
     if not speed > 0.0:
         raise ValueError("body_path_gap needs a forward speed; use rotation_gap in place")
     curvature = float(angular) / speed
-    reach = horizon_m + rotation_radius_m
-    near = [(x, y) for x, y in points if x * x + y * y <= reach * reach]
+    straight = abs(curvature) < 1e-9
+    limit = horizon_m if straight else min(horizon_m, math.pi / abs(curvature))
+    limit = max(limit, float(min_travel_m))
+    reach = limit + rotation_radius_m
+    body = (front_x_m, rear_x_m, half_width_m, rotation_radius_m)
+    if straight:
+        best: Optional[float] = None
+        for x, y in points:
+            if abs(y) > half_width_m or y * y > rotation_radius_m * rotation_radius_m:
+                continue
+            nose = min(front_x_m, math.sqrt(rotation_radius_m ** 2 - y * y))
+            if x > nose:
+                travel = x - nose
+            elif _inside_body(x, y, *body):
+                travel = 0.0
+            else:
+                continue                      # behind the body: driving forward never meets it
+            if travel <= limit and (best is None or travel < best):
+                best = travel
+        return best
+    radius = 1.0 / curvature                  # signed: centre at (0, radius)
+    near = [(x, y) for x, y in points
+            if x * x + y * y <= reach * reach
+            and abs(math.hypot(x, y - radius) - abs(radius)) <= rotation_radius_m]
     if not near:
         return None
-    body = (front_x_m, rear_x_m, half_width_m, rotation_radius_m)
 
-    def touches(travel: float) -> bool:
+    def touches(travel: float, candidates) -> bool:
         heading = curvature * travel
-        if abs(curvature) < 1e-9:
-            px, py = travel, 0.0
-        else:
-            px, py = math.sin(heading) / curvature, (1.0 - math.cos(heading)) / curvature
+        px, py = math.sin(heading) / curvature, (1.0 - math.cos(heading)) / curvature
         c, s = math.cos(heading), math.sin(heading)
-        for x, y in near:
+        for x, y in candidates:
             dx, dy = x - px, y - py
             if _inside_body(c * dx + s * dy, -s * dx + c * dy, *body):
                 return True
         return False
 
-    if touches(0.0):
+    if touches(0.0, near):
         return 0.0
-    limit = horizon_m if abs(curvature) < 1e-9 else min(horizon_m, math.pi / abs(curvature))
     # The body's farthest point moves (1 + |k|·R) times the base travel: keep its step ~step_m.
     step = step_m / (1.0 + abs(curvature) * rotation_radius_m)
     low, travel = 0.0, 0.0
     while travel < limit:
         travel = min(travel + step, limit)
-        if touches(travel):
+        if touches(travel, near):
             high = travel
             for _ in range(10):
                 mid = 0.5 * (low + high)
-                low, high = (low, mid) if touches(mid) else (mid, high)
+                low, high = (low, mid) if touches(mid, near) else (mid, high)
             return high
         low = travel
     return None
