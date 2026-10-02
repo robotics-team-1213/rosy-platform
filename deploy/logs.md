@@ -1941,3 +1941,9 @@
 - gate 변화: 없음. DEVICE HOLD(다음은 두 대 장치 검증).
 - 결정: D-406
 - 교훈: 상태 파일을 쓰는 운영 명령은 업데이터 실행과 같은 잠금을 잡는다. 바쁘면 조용히 덮어쓰지 말고 다시 하라고 말한다.
+
+## 2026-10-02 · uncommitted · feat(native): D-406 업데이터 기본 꺼짐 — 첫 두 대 기기 검증 전까지 로봇별로 켬
+
+- 변경: 사용자 착지 결정(2026-10-02). `rosy_auto_update.py`는 `config.json`이 없거나 `enabled`가 없으면 꺼짐(phase `disabled`, GitHub 요청·적용 없음). ADR D-406·계획 계약·`rosy-release-push` skill에 켜는 명령(로봇별 `config.json` 작성)을 적었다. 시험 fixture는 명시적으로 켜고, 새 시험 2개가 기본 꺼짐을 고정한다. 기기 쌍둥이는 config에 `enabled: true`를 명시하므로 영향 없음.
+- 증거: 업데이터 시험 238 passed; 기본값을 켜짐으로 되돌리면 새 시험 2개 빨강. 기기 쌍둥이 12/12 PASS(직전 실행, 같은 코드에 기본값만 다름).
+- gate 변화: 없음.

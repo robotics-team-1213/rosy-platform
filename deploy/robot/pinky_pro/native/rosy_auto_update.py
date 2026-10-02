@@ -496,14 +496,16 @@ class Updater:
     def _config(self) -> dict:
         path = self.updates / "config.json"
         if not path.exists() and not path.is_symlink():
-            return {"enabled": True, "repo": DEFAULT_REPO, "api_base": None}
+            # Off unless configured until the first two-robot device validation
+            # (D-406 landing decision, 2026-10-02).
+            return {"enabled": False, "repo": DEFAULT_REPO, "api_base": None}
         try:
             data = _read_json(path, 64 * 1024)
         except (OSError, ValueError) as exc:
             raise UpdateError(f"CONFIG_INVALID: {exc}") from exc
         if not isinstance(data, dict):
             raise UpdateError("CONFIG_INVALID: not an object")
-        enabled = data.get("enabled", True)
+        enabled = data.get("enabled", False)
         repo = data.get("repo", DEFAULT_REPO)
         if not isinstance(enabled, bool) or not isinstance(repo, str) or not REPO.fullmatch(repo):
             raise UpdateError("CONFIG_INVALID: enabled must be a bool and repo owner/name")

@@ -14,6 +14,7 @@ import hashlib
 import http.server
 import importlib.util
 import json
+import shutil
 import os
 from pathlib import Path
 import subprocess
@@ -370,6 +371,8 @@ def device(tmp_path, keys):
     boot = tmp_path / "proc/sys/kernel/random/boot_id"
     boot.parent.mkdir(parents=True)
     boot.write_text(BOOT + "\n", encoding="utf-8")
+    # Auto-update is off unless configured (D-406 landing, 2026-10-02).
+    write_json(tmp_path / "var/lib/rosy/updates/config.json", {"enabled": True, "repo": REPO})
     return tmp_path
 
 
@@ -409,6 +412,29 @@ def write_json(path: Path, payload) -> None:
 # --- config and the GitHub check -------------------------------------------------
 
 
+def test_a_robot_without_a_config_is_off_by_default(device, host, hub, keys):
+    # D-406 landing decision (2026-10-02): until the first two-robot device
+    # validation, a robot auto-updates only when config.json says enabled=true.
+    hub.publish(keys, NEXT)
+    (device / "var/lib/rosy/updates/config.json").unlink()
+
+    result = updater(host, hub).run()
+
+    assert result["phase"] == "disabled"
+    assert hub.requests == []
+    assert host.calls == []
+
+
+def test_a_config_without_the_enabled_key_is_off(device, host, hub, keys):
+    hub.publish(keys, NEXT)
+    write_json(device / "var/lib/rosy/updates/config.json", {"repo": REPO})
+
+    result = updater(host, hub).run()
+
+    assert result["phase"] == "disabled"
+    assert hub.requests == []
+
+
 def test_disabled_config_stops_before_any_request(device, host, hub, keys):
     hub.publish(keys, NEXT)
     write_json(device / "var/lib/rosy/updates/config.json", {"enabled": False, "repo": REPO})
@@ -423,7 +449,7 @@ def test_disabled_config_stops_before_any_request(device, host, hub, keys):
 def test_unreadable_config_fails_closed(device, host, hub, keys):
     hub.publish(keys, NEXT)
     path = device / "var/lib/rosy/updates/config.json"
-    path.parent.mkdir(parents=True)
+    path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("{not json", encoding="utf-8")
 
     assert updater(host, hub).run()["phase"] == "error"
@@ -761,6 +787,7 @@ def test_two_samples_ten_seconds_apart_must_both_be_idle(device, host, hub):
 
 
 def test_eligibility_is_read_only(device, host, hub):
+    shutil.rmtree(device / "var/lib/rosy/updates")  # the fixture's config dir
     updater(host, hub).eligibility()
     assert not (device / "var/lib/rosy/updates").exists()
     assert not (device / "run/rosy-claim").exists()
@@ -809,7 +836,7 @@ def test_hold_with_excessive_or_no_expiry_is_refused(device, host, hub, hours):
 ])
 def test_hand_written_invalid_hold_fails_closed(device, host, hub, payload):
     path = device / "var/lib/rosy/updates/hold.json"
-    path.parent.mkdir(parents=True)
+    path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(payload if isinstance(payload, str) else json.dumps(payload), encoding="utf-8")
 
     report = updater(host, hub).eligibility()

@@ -57,6 +57,7 @@
 - 거는 방법: 이 PC의 `deploy/robot/pinky_pro/rosy-update-hold.ps1 -Robot <ip> -Hold -Reason … -Hours …`, 해제는 `-Release`, 상태는 `-Status`. 에이전트 세션도 같은 명령을 쓴다.
 - 시험·주행·봉인을 시작하는 세션은 먼저 hold를 건다. 봉인된 승인이 있으면 hold가 없어도 자동으로 hold로 본다.
 - `config.json`의 `enabled=false`는 로봇의 자동 업데이트를 끈다(벤치 작업용).
+- **착지 결정(2026-10-02, 사용자):** 첫 두 대 기기 검증 전까지 **기본값은 꺼짐**이다. `config.json`이 없거나 `enabled`가 없으면 자동 업데이트를 하지 않는다. 검증할 로봇에서만 `/var/lib/rosy/updates/config.json`에 `{"enabled": true, "repo": "livsbittt/rosy-os"}`를 쓴다. 기기 검증을 통과하면 별도 변경으로 기본값을 켜짐으로 바꾼다.
 
 **5. 수동 경로는 그대로 두고, claim으로 업데이터와 겹치지 않게 한다.**
 - `rosy-release-push.ps1`과 `-Rollback`은 그대로 쓴다.

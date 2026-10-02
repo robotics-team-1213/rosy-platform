@@ -152,6 +152,14 @@ Robots with `rosy-auto-update.timer` fetch signed releases from GitHub themselve
 them only when idle. This PC still decides what ships: nothing reaches a robot until it is
 published here.
 
+- **Off by default (2026-10-02).** Until the first two-robot device validation, a robot
+  auto-updates only when `/var/lib/rosy/updates/config.json` says so. Turn it on per robot
+  over ssh (and off again by writing `false` or deleting the file):
+  ```bash
+  rssh 'sudo -n install -d -m 0755 /var/lib/rosy/updates && echo "{\"enabled\": true, \"repo\": \"livsbittt/rosy-os\"}" | sudo -n tee /var/lib/rosy/updates/config.json'
+  ```
+  Put a hold on any robot a peer is testing on first (`rosy-update-hold.ps1 -Robot <ip> -Hold ...`).
+
 - **Publish.** After step 3, instead of pushing:
   ```powershell
   python tools/release/publish_payload_release.py --tarball <P>\<id>.tar.gz --canary <canary-ip> --robot <other-ip>

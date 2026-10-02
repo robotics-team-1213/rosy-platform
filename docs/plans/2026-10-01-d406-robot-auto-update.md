@@ -29,7 +29,7 @@ All files live under `/var/lib/rosy/updates/` (root 0755; files 0644 except wher
 
 | File | Contents |
 |---|---|
-| `config.json` | `{"enabled": true, "repo": "livsbittt/rosy-os"}`. Missing file = those defaults. |
+| `config.json` | `{"enabled": true, "repo": "livsbittt/rosy-os"}`. **A missing file, or a missing `enabled`, means OFF** (landing decision 2026-10-02: off until the first two-robot device validation; then the default flips by a later change). `repo` defaults to `livsbittt/rosy-os`. |
 | `hold.json` | `{"holder": "...", "reason": "...", "created_at": "<Z>", "expires_at": "<Z>"}`. `expires_at` is required and at most 7 days after `created_at`. An expired hold is ignored and moved to history. |
 | `state.json` | Private to T2 (ETag, staged id, failed ids). |
 | `status.json` | Format below. |
