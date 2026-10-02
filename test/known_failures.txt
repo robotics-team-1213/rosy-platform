@@ -7,8 +7,3 @@
 # a failure your branch introduced. Verified failing on main 986a81ca (2026-09-26, CI run 213).
 test/test_boot_status_indicator.py::test_indicator_writes_only_to_a_root_owned_directory_and_never_follows_links  # ca5fb4fd (D-260 M1) reads run/rosy/status-inputs.json; the Review-H1 guard (9f256c73) bans any run/rosy/ in the script - the D-260 owner must reconcile
 test/test_sd_api_token.py::test_core_accepts_the_issued_credential_from_the_installed_overlay  # ui_registry._asset resolve() guard (a4970791, the file's only commit) rejects CI's install-share symlinked panels/ from get_package_share_directory; the css entries it trips on landed 8 min later in ff603832
-test/test_image_layer_sync.py::test_a_mode_drift_counts_as_a_change  # CI-only: passes on Windows host twice (2026-10-02); failed in CI runs 36909426842 and 36955733308 - environment/timing, deploy owner
-test/test_jpeg_relay.py::test_reason_with_quotes_is_data_not_code  # CI-only: passes on Windows host (2026-10-02); failed in CI runs 36909426842 and 36955733308
-test/test_jpeg_relay.py::test_stale_state_kills_the_old_relay  # CI-only: passes on Windows host (2026-10-02); failed in CI runs 36909426842 and 36955733308
-test/test_jpeg_relay.py::test_reused_pids_from_state_are_never_signalled  # CI-only: passes on Windows host (2026-10-02); failed in CI runs 36909426842 and 36955733308
-test/test_module_separation.py::test_control_imports_no_core_code  # D-395/D-397 sensing work: control/calibrated_values.py + calibration_camera.py import core_common.calibration_store (guarded optional), control/loc_assist.py imports core_common.protocol.localization - the sensing owner must relocate the store or extend the contract; not fixable by bookkeeping

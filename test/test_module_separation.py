@@ -222,15 +222,38 @@ def test_control_imports_no_core_code():
 
     The control application is a plugin that is loaded by core. It must not
     statically import core_features, core_api_web, core, etc.
+
+    D-155 refinement (2026-10-02): ``core_common`` is the contracts
+    foundation, not core runtime — control's package.xml declares it as an
+    exec_depend and the sensing-only slice ships it. Control may import the
+    contract surface only, mirroring the fleet rule (D-18):
+    ``core_common.protocol.*`` (shared contract types) and
+    ``core_common.calibration_store`` (calibration resolution shared with
+    bringup and core, D-397). Runtime packages stay banned outright.
     """
+    runtime_tops = {"core", "core_features", "core_api_web", "core_events"}
+    allowed_contracts = ("core_common.protocol", "core_common.calibration_store")
     violations = []
-    core_tops = {"core", "core_features", "core_api_web", "core_events", "core_common"}
     for path in _prod_py_files(CONTROL_PKG.parent):
-        tops = _import_tops(path)
-        bad = tops & core_tops
-        if bad:
-            rel = path.relative_to(SRC).as_posix()
-            violations.append(f"{rel}: imported {', '.join(sorted(bad))}")
+        try:
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+        except SyntaxError:
+            continue
+        modules = set()
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                modules.update(a.name for a in node.names if a.name.startswith("core"))
+            elif isinstance(node, ast.ImportFrom) and node.module and node.module.split(".")[0] in (
+                    "core", "core_features", "core_api_web", "core_events", "core_common"):
+                modules.add(node.module)
+        for module in sorted(modules):
+            top = module.split(".")[0]
+            if top in runtime_tops:
+                rel = path.relative_to(SRC).as_posix()
+                violations.append(f"{rel}: imported {module}")
+            elif top == "core_common" and not module.startswith(allowed_contracts):
+                rel = path.relative_to(SRC).as_posix()
+                violations.append(f"{rel}: imported {module} (contract surface only, D-155 refinement)")
     assert not violations, "control must not depend on core:\n" + "\n".join(violations)
 
 

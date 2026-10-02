@@ -1695,7 +1695,14 @@ def _alive(pid: int) -> bool:
         os.kill(pid, 0)
     except OSError:
         return False
-    return True
+    # SIGKILL 로도 지워지지 않는 좀비는 죽은 것이다 — 컨테이너의 PID 1 이 고아를
+    # 회수하지 않으면 kill(pid, 0) 이 좀비에게도 성공한다(CI 적색 2026-10-02).
+    try:
+        with open(f"/proc/{pid}/stat", encoding="ascii") as fh:
+            line = fh.read()
+    except OSError:
+        return True
+    return line.rpartition(") ")[2].split()[0] != "Z"
 
 
 def test_a_stray_directory_in_downloads_does_not_block_staging(device, host, hub, keys):
