@@ -1,6 +1,6 @@
 ## D-395 Fleet 보조 위치 확정 — 로봇이 후보를 내고 Fleet이 중재하며, 대칭 맵에서도 사람 입력 없이 map 자세를 얻는다
 
-**Status:** Proposed (2026-10-01). 설계만 정한다. 코드·로봇 설정·params·API 참조서는 바꾸지 않는다. 구현은 아래 Validation의 S1 이후 단계를 사용자가 승인한 뒤 별도 변경으로 한다. 개정 1(2026-10-01, 바닥 기준 사각형을 귀환 기준점·출발 슬롯으로 사용)과 개정 2(슬롯 방향은 축만, 부호는 LiDAR 적합), 개정 3(비대칭 단서 필수, 받은 때부터 재는 유효 시간), 개정 4(2단계 결정과 감시 한계), 개정 5(실기 항목 보류), 개정 6(S1 결과: 닻을 내린 이웃만 단서)이 아래 결정보다 우선한다. 이 ADR은 D-257 5항과 D-393 3항의 일부를 **개정하자고 제안**한다(아래 "개정 제안"). 제안이 Accepted되기 전에는 두 ADR의 해당 문구가 그대로 유효하다.
+**Status:** Proposed (2026-10-01). 설계만 정한다. 코드·로봇 설정·params·API 참조서는 바꾸지 않는다. 구현은 아래 Validation의 S1 이후 단계를 사용자가 승인한 뒤 별도 변경으로 한다. 개정 1(2026-10-01, 바닥 기준 사각형을 귀환 기준점·출발 슬롯으로 사용)과 개정 2(슬롯 방향은 축만, 부호는 LiDAR 적합), 개정 3(비대칭 단서 필수, 받은 때부터 재는 유효 시간), 개정 4(2단계 결정과 감시 한계), 개정 5(실기 항목 보류), 개정 6(S1 결과: 닻을 내린 이웃만 단서), 개정 7(S1 재실행, LOCALIZED 로봇끼리 확인)이 아래 결정보다 우선한다. 이 ADR은 D-257 5항과 D-393 3항의 일부를 **개정하자고 제안**한다(아래 "개정 제안"). 제안이 Accepted되기 전에는 두 ADR의 해당 문구가 그대로 유효하다.
 
 설계 전문: [2026-10-01-fleet-assisted-localization-design.md](../plans/2026-10-01-fleet-assisted-localization-design.md).
 
@@ -197,5 +197,42 @@ S1 Gazebo 벤치(`docs/plans/2026-10-02-d395-s1-bench-results.md`)는 통과하�
    - 위가 고쳐지면 S1을 다시 돌린다. 통과 기준은 처음 그대로다.
    - sim 한계 하나: gz_multi에 카메라가 없어 `lane_to_stopline`이 sim에서 늘 `lane_lost`다.
    - 기준 사각형 B는 영상 유래 좌표로 벽에서 0.105 m라 sim 충돌 반경(0.115 m) 안이다. 그래서 B에서 출발한 주행 시험은 움직이지 못했다. 테이프 실측(개정 5 2항)이 이를 가린다.
+
+**개정 7 (2026-10-02, S1 재실행 결과와 LOCALIZED 로봇끼리의 확인):**
+
+S1 재실행(`docs/plans/2026-10-02-d395-s1-bench-results.md` "Re-run 2026-10-02")은 위치 확정 측면에서 통과했다.
+- 31개 결정 중 거울 결정은 0개였다.
+- 확정은 모두 참 자세 1.1 cm / 2.1° 안이었다.
+- 사각형 출발과 슬롯 밖 출발은 6/6, 두 사각형 출발은 3/3, 들어 옮김 뒤 재확정은 6/6이었다.
+- 거울 잠금은 퍼지지 않았지만 탐지하지 못했다.
+
+그 결과로 정한 것은 다음과 같다.
+
+1. **LOCALIZED 로봇도 물체를 보고한다(API Ref v1.75).** 개정 4 5항의 한계를 닫는다.
+   - `LocalizationStatus`에 선택 필드 `unmapped_objects`(≤16, base_link)와 `objects_stamp`를 더한다. `objects_stamp`는 Fleet의 신선도 판단용 식별 키일 뿐이고, 시계를 서로 비교하지 않는다.
+   - 로봇은 LOCALIZED이고 검사 중이 아닐 때 전체 스캔에서 0.5 s마다 계산한다. 스캔이 1 s 넘게 묵었거나 LOCALIZED가 아니면 두 키를 빼고 보낸다.
+   - CORE는 그대로 전달하되, `odom` 프레임이나 끊긴 상태이면 비운다. 잘못된 물체는 버리고 상태는 살린다.
+2. **LOCALIZED 관찰자.**
+   - Fleet은 LOCALIZED인 닻 로봇의 물체를 그 로봇이 보고한 자세로 놓고, 다른 LOCALIZED 로봇을 확인한다.
+   - 관찰자는 자기 자신의 증거가 될 수 없다.
+   - 증거 규칙과 "15 s 안 2회" 기준은 개정 6 그대로다.
+   - 관찰자 자세는 현재 값이고 스캔은 최대 1 s 묵을 수 있다. 그래서 움직이는 관찰자는 "보임"을 놓칠 수 있다. 증거를 잃을 뿐, 가짜 거울 서명을 만들지는 않는다.
+   - 아직 닻인 두 로봇이 서로를 고발하면 둘 다 SUSPECT가 된다. 안전한 쪽으로 실패한다.
+   - 주입된 거울 자세는 같은 폴링에서 자세 점프로 닻을 잃으므로, 올바른 닻을 고발하지 못한다.
+3. **사다리는 결정이 다가오면 기다린다.**
+   - 중재기에 리드가 잡혀 있거나, 비대칭 단서가 한 후보 쪽에 있거나, 이미 결정을 보냈으면 사다리 시계를 멈춘다. 단계도 재시도도 보내지 않는다. 멈춤은 회차당 최대 30 s다. 그래서 끝내 결정이 나지 않아도 `needs_human`에 닿는다.
+   - 로봇은 3 s 검사 동안 `reason: checking`(상태는 CANDIDATES)을 보고한다. Fleet은 이때 사다리를 멈추고, CORE는 미션을 `busy`로 거부한다.
+   - CORE는 상태의 `request_id`와 다른 후보 보고를 내보내지 않는다.
+4. **탐색은 로봇이 멈춘 뒤에 한다.**
+   - odom twist가 0.01 m/s, 0.02 rad/s 아래로 0.5 s 머문 뒤에만 탐색한다. 미션 끝, 전원 투입, 내려놓음, SUSPECT 모두 해당된다.
+   - 0.5 s보다 오래된 odom은 정지가 아니라 모름으로 친다. 5 s가 지나면 기록을 남기고 그래도 탐색한다.
+   - 구별 후보마다 ±3°·0.5°, ±3 cm 정밀 단계를 더해 2–3° 방향 오차를 없앤다.
+5. **sim Nav2 수정(sim 전용).**
+   - gz_multi의 전방 주시 거리(0.15 m)가 도착 허용 반경(0.25 m)보다 짧아 로봇이 출발하자마자 도착했다고 여겼다. sim 허용 반경을 0.10 m로 내렸다.
+   - 계획용 부풀린 원이 로컬 충돌 검사에도 들어가 벽 옆에서 "충돌"이었다. 원은 전역 코스트맵에만 둔다.
+   - 장치 값(전방 주시 0.3 m, 허용 반경 0.25 m, 사각 발자국)에는 두 문제가 없어 장치 설정은 바꾸지 않았다.
+6. 다음은 이 모두를 합친 S1 세 번째 실행이다.
+   - 강제 거울(c)은 이제 탐지까지 통과 기준에 넣는다.
+   - 주행 중 들어 옮김(d)은 실제로 움직이는 주행으로 한다.
 
 **References:** `docs/adr/D-257-site-lane-map-and-overhead-sightings.md`, `docs/adr/D-393-nav-amcl-update-min-d-and-goal-tolerance.md`, `docs/adr/D-375-overhead-map-registration-from-lane-paint-proposal.md`, `docs/adr/D-360-overhead-field-auto-detection-proposal.md`, `src/runtime/api_web/core_api_web/api/v1/navigation.py`, `src/runtime/gateway/core/bridge/ros_bridge.py`, `src/runtime/sensing/control/localization_node.py`, `src/site/fleet/fleet/swarm/transport.py`, D-2, D-267, D-269, D-321, D-356, D-369, [D-346](D-346-commit-time-collision-defenses.md).

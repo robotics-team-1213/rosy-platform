@@ -266,8 +266,8 @@
 
 ## 최근 기록
 
+- 2026-10-02 · uncommitted · docs(adr): D-395 개정 7 — S1 재실행 결과와 LOCALIZED 로봇끼리의 확인
 - 2026-10-02 · uncommitted · docs(api): D-395 R1 LOCALIZED 물체를 API Ref v1.75로 옮김 (D-407과 v1.74 충돌)
 - 2026-10-02 · uncommitted · docs(plans): D-395 S1 R4 원인과 sim 수정
 - 2026-10-02 · uncommitted · docs(plans): D-395 계약 §3 사다리 멈춤 규칙 (S1 재실행 R2·R5·R6)
 - 2026-10-02 · uncommitted · docs(plans): D-395 S1 재실행 (fix/d395-s1-rerun)
-- 2026-10-02 · uncommitted · docs(adr): D-395 개정 6 — S1 결과, 닻을 내린 이웃만 단서

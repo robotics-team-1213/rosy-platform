@@ -4326,3 +4326,8 @@
 - 변경: 같은 날 main의 D-407(line-follow stuck)이 v1.74를 먼저 가져가 D-395 R1(`unmapped_objects`·`objects_stamp`)을 v1.75로 옮겼다. 헤더·변경 이력 행·§6.1 본문·`app.py` ×2·`test_line_follow_contract_docs.py`·Fleet 핀 시험 3곳·2단계 인터페이스 문서. 앞서 커밋된 로그 항목의 'v1.74' 표기는 이 항목으로 정정한다.
 - 증거: `test_protocol_version_alignment.py`, `test_line_follow_contract_docs.py`, `test_task_contract_docs.py`, `test_mission_progress.py`.
 - gate 변화: 없음.
+
+## 2026-10-02 · uncommitted · docs(adr): D-395 개정 7 — S1 재실행 결과와 LOCALIZED 로봇끼리의 확인
+- 변경: S1 재실행(거울 결정 0/31, 확정 오차 ≤1.1 cm/2.1°)과 뒤이은 수정들을 기록. LOCALIZED 로봇의 `unmapped_objects`·`objects_stamp`(API v1.75)와 닻 관찰자 감시, 결정이 다가오면 사다리 대기(최대 30 s)와 `checking`, 정지 뒤 탐색(0.5 s, 5 s 상한, 묵은 odom은 모름)과 정밀 방향 단계, sim 전용 Nav2 수정(장치 값은 문제 없음). 다음은 강제 거울 탐지까지 포함한 S1 세 번째 실행.
+- 증거: `docs/plans/2026-10-02-d395-s1-bench-results.md`, 브랜치 fix/d395-ladder-pauses·fix/d395-candidate-yaw·fix/gz-multi-nav2-forward·feat/d395-localized-objects.
+- gate 변화: 없음(Proposed).
