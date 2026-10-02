@@ -93,3 +93,12 @@ def test_road_observer_scene_context_is_off_and_sensing_only():
     assert params["scene_context_enter_frames"] >= 1
     assert params["scene_context_exit_frames"] >= 1
     assert 0.0 < params["scene_context_min_confidence"] <= 1.0
+
+
+def test_road_observer_overlays_recent_advisory_detections():
+    """D-423 §2.3: vision/detections join the preview within 0.6 s; display only."""
+    source = (ROOT / "control/road_observer_node.py").read_text(encoding="utf-8")
+    assert "String, 'vision/detections'" in source
+    assert "detections=self._preview_evidence.recent('detections', stamp, DETECTION_JOIN_S)" in source
+    road = (ROOT / "control/sensing/perception/road.py").read_text(encoding="utf-8")
+    assert "detections=detections" in road

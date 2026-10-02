@@ -161,3 +161,72 @@ def test_multiple_boundaries_without_selection_cannot_be_labelled_selected(monke
     assert any('LEFT LANE: UNSEEN' in t for t in texts)
     assert any('RIGHT LANE: UNSEEN' in t for t in texts)
     assert 'FOLLOW PATH' not in texts
+
+
+# --- D-423 §2.3: detections on the overlay, paired with regions for display only ---
+
+from control.sensing.perception.follow_preview import DETECTION_MIN_IOU, pair_detections  # noqa: E402
+
+
+def _texts(monkeypatch):
+    texts = []
+    real_text = cv2.putText
+    def capture(img, text, *args, **kwargs):
+        texts.append(text)
+        return real_text(img, text, *args, **kwargs)
+    monkeypatch.setattr(cv2, 'putText', capture)
+    return texts
+
+
+def _detections(*boxes, ranges=None):
+    doc = {'observed_at': 5.0, 'seq': 1, 'model_revision': 'object-det-r1', 'input_width': 320,
+           'input_height': 240, 'input_fps': 8.0,
+           'detections': [{'label': label, 'x': x / 320, 'y': y / 240, 'w': w / 320, 'h': h / 240,
+                           'confidence': 0.9} for label, x, y, w, h in boxes]}
+    if ranges is not None:
+        doc['ranges'] = ranges
+    return doc
+
+
+def test_pairing_takes_the_best_overlap_once_and_ignores_weak_overlap():
+    regions = [{'b': [20, 150, 60, 200]}, {'b': [200, 100, 260, 160]}, {'b': [0, 0, 10, 10]}]
+    detections = _detections(('cone', 22, 152, 38, 48), ('robot', 205, 100, 50, 60),
+                             ('sign', 2, 2, 60, 60))
+    assert pair_detections(regions, detections['detections'], (320, 240)) == {0: 0, 1: 1}
+    assert 0 < DETECTION_MIN_IOU < 1
+
+
+def test_paired_region_shows_the_class_and_the_detection_range(monkeypatch):
+    texts = _texts(monkeypatch)
+    draw_follow_evidence(np.zeros((240, 320, 3), np.uint8), scale=1.0, objects={
+        'image_size': [320, 240], 'quality': {'valid': True},
+        'regions': [{'b': [20, 150, 60, 200], 'n': 0, 'k': 'f', 'm': 0.5, 's': 'G'}]},
+        detections=_detections(('cone', 22, 152, 38, 48), ranges=[{'m': 0.42, 's': 'L'}]))
+    assert 'OBJ 1 cone 0.42m L' in texts
+
+
+def test_unpaired_detection_is_drawn_on_its_own(monkeypatch):
+    texts = _texts(monkeypatch)
+    image = np.zeros((240, 320, 3), np.uint8)
+    draw_follow_evidence(image, scale=1.0, objects={
+        'image_size': [320, 240], 'quality': {'valid': True}, 'regions': []},
+        detections=_detections(('robot', 200, 100, 60, 60), ranges=[None]))
+    assert 'DET robot unranged' in texts
+    assert any('1 detected' in t for t in texts)
+
+
+def test_detections_of_another_frame_size_are_not_drawn(monkeypatch):
+    texts = _texts(monkeypatch)
+    doc = _detections(('robot', 200, 100, 60, 60))
+    doc['input_width'] = 640
+    draw_follow_evidence(np.zeros((240, 320, 3), np.uint8), scale=1.0, objects={
+        'image_size': [320, 240], 'quality': {'valid': True}, 'regions': []}, detections=doc)
+    assert not any(t.startswith('DET') for t in texts)
+
+
+def test_recent_detection_joins_a_later_frame_within_the_window():
+    evidence = FrameEvidence()
+    evidence.add('detections', _detections(('cone', 1, 1, 5, 5)))     # observed_at 5.0
+    assert evidence.recent('detections', 5.4, .6)['seq'] == 1
+    assert evidence.recent('detections', 5.7, .6) is None
+    assert evidence.recent('detections', 4.9, .6) is None             # never from the future

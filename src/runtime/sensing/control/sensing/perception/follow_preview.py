@@ -2,6 +2,8 @@
 
 Boxes are foreground/dark regions, not semantic object identities or tracks.
 The dotted arrow is a target guide in image space, not a predicted motor path.
+D-423: a detection (vision/detections) names a region it overlaps; the pairing is
+for display only, and the range shown is the detection's own (never borrowed).
 """
 from collections import deque
 import math
@@ -21,9 +23,12 @@ class FrameEvidence:
     """Small capture-stamp join; receipt time never substitutes for capture time."""
 
     def __init__(self):
-        self._samples = {key: deque(maxlen=8) for key in ('keep', 'line', 'objects', 'road_state')}
+        self._samples = {key: deque(maxlen=8)
+                         for key in ('keep', 'line', 'objects', 'road_state', 'detections')}
 
     def add(self, kind, sample):
+        if kind == 'detections' and isinstance(sample, dict) and 'stamp' not in sample:
+            sample = dict(sample, stamp=sample.get('observed_at'))  # DetectionEvidence time
         if isinstance(sample, dict) and _number(sample.get('stamp')):
             self._samples[kind].append(sample)
 
@@ -32,6 +37,13 @@ class FrameEvidence:
             return None
         return next((doc for doc in reversed(self._samples[kind])
                      if abs(doc['stamp'] - stamp) <= 1e-6), None)
+
+    def recent(self, kind, stamp, max_age):
+        """Newest sample taken at or before `stamp`, at most max_age older (2 Hz detections)."""
+        if not _number(stamp):
+            return None
+        return next((doc for doc in reversed(self._samples[kind])
+                     if 0 <= stamp - doc['stamp'] <= max_age), None)
 
     def select_frame(self, frames):
         """Prefer a recently completed frame over a newer in-flight callback."""
@@ -42,6 +54,52 @@ class FrameEvidence:
                     or self.for_frame('line', frame[3]) is not None):
                 return frame
         return latest
+
+
+DETECTION_MIN_IOU = 0.3  # D-423 §2.3: below this a detection and a region are not one object
+
+
+def _box_iou(a, b):
+    w = min(a[2], b[2]) - max(a[0], b[0])
+    h = min(a[3], b[3]) - max(a[1], b[1])
+    inter = max(w, 0) * max(h, 0)
+    union = (a[2] - a[0]) * (a[3] - a[1]) + (b[2] - b[0]) * (b[3] - b[1]) - inter
+    return inter / union if union > 0 else 0.0
+
+
+def _detection_box(detection, size):
+    values = [detection.get(k) for k in ('x', 'y', 'w', 'h')] if isinstance(detection, dict) else []
+    if len(values) != 4 or not all(_number(v) for v in values):
+        return None
+    x, y, w, h = values
+    return [x * size[0], y * size[1], (x + w) * size[0], (y + h) * size[1]]
+
+
+def pair_detections(regions, detections, size, min_iou=DETECTION_MIN_IOU):
+    """{region index: detection index}, greedy by IoU, each used once, IoU >= min_iou."""
+    pairs = []
+    for di, detection in enumerate(detections):
+        box = _detection_box(detection, size)
+        for ri, region in enumerate(regions):
+            rb = region.get('b') if isinstance(region, dict) else None
+            if box is not None and isinstance(rb, (list, tuple)) and len(rb) == 4:
+                iou = _box_iou(box, rb)
+                if iou >= min_iou:
+                    pairs.append((iou, ri, di))
+    out, used = {}, set()
+    for _, ri, di in sorted(pairs, reverse=True):
+        if ri not in out and di not in used:
+            out[ri] = di
+            used.add(di)
+    return out
+
+
+def _range_label(record):
+    distance = record.get('m') if isinstance(record, dict) else None
+    if not (_number(distance) and distance > 0):
+        return 'unranged'
+    source = record.get('s')
+    return f'{distance:.2f}m' + (f' {source}' if source in ('L', 'G') else '')
 
 
 def predicted_road(state):
@@ -60,7 +118,8 @@ def predicted_road(state):
             for x in np.linspace(0, .33, 18)]
 
 
-def draw_follow_evidence(image, *, scale, keep=None, objects=None, road_state=None, line=None, tags=None):
+def draw_follow_evidence(image, *, scale, keep=None, objects=None, road_state=None, line=None, tags=None,
+                         detections=None):
     """Explain chosen boundaries, visible lane candidates and camera objects."""
     h, w = image.shape[:2]
     white, bg, muted = (245, 248, 250), (12, 18, 28), (140, 155, 168)
@@ -128,10 +187,17 @@ def draw_follow_evidence(image, *, scale, keep=None, objects=None, road_state=No
             text(label, (int(centre[0]) - 40, int(centre[1])), muted, .30, True)
 
     object_status = 'OBJECTS: unavailable'
+    found = []
+    if (isinstance(detections, dict) and [detections.get('input_width'), detections.get('input_height')]
+            == original_size):
+        found = records(detections, 'detections', 64)
+    found_ranges = records(detections, 'ranges', 64) if found else []
+    paired = {}
     if (isinstance(objects, dict) and objects.get('image_size') == original_size
             and isinstance(objects.get('quality'), dict) and objects['quality'].get('valid') is True):
         regions = records(objects, 'regions', 48)
         object_status = f'OBJECTS: {len(regions)} unknown'
+        paired = pair_detections(regions, found, original_size)
         labelled = 0
         badges = []
         for index, record in enumerate(regions):
@@ -146,11 +212,12 @@ def draw_follow_evidence(image, *, scale, keep=None, objects=None, road_state=No
             colour = (40, 70, 255) if record.get('n') == 1 else orange
             cv2.rectangle(image, a, b, colour, 2)
             if labelled < 3:
-                distance = record.get('m')
-                ranged = f'{distance:.2f}m' if _number(distance) and distance > 0 else 'unranged'
-                if ranged != 'unranged' and record.get('s') in ('L', 'G'):
-                    ranged += ' ' + record['s']  # D-423: L LiDAR, G ground plane
+                ranged = _range_label(record)  # D-423: L LiDAR, G ground plane
                 kind = 'DARK' if record.get('k') == 'd' else 'UNKNOWN'
+                if index in paired:  # the detection names it and brings its own range
+                    di = paired[index]
+                    kind = str(found[di].get('label'))[:16]
+                    ranged = _range_label(found_ranges[di] if di < len(found_ranges) else None)
                 # Fixed separate rows stay readable when foreground boxes overlap.
                 badges.append((f'OBJ {index + 1} {kind} {ranged}' + (' NEAR' if record.get('n') == 1 else ''),
                                (6, 65 + labelled * int(17 * max(1, w / 400))), colour))
@@ -158,6 +225,18 @@ def draw_follow_evidence(image, *, scale, keep=None, objects=None, road_state=No
                 labelled += 1
         for label, location, colour in badges:
             text(label, location, colour, .32, True)
+    lone = [di for di in range(len(found)) if di not in paired.values()]
+    for row, di in enumerate(lone[:3]):
+        box = _detection_box(found[di], original_size)
+        a, b = (point(box[:2]), point(box[2:])) if box else (None, None)
+        if a is None or b is None:
+            continue
+        cv2.rectangle(image, a, b, (0, 220, 255), 1)
+        label = f'DET {str(found[di].get("label"))[:16]} ' + _range_label(
+            found_ranges[di] if di < len(found_ranges) else None)
+        text(label, (max(6, w - 150), 65 + row * int(17 * max(1, w / 400))), (0, 220, 255), .32, True)
+    if found:
+        object_status += f' | {len(found)} detected'
     for tag in tags[:8] if isinstance(tags, list) else []:
         if not isinstance(tag, dict) or not _number(tag.get('tag_id')):
             continue

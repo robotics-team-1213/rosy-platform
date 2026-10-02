@@ -25,6 +25,10 @@ from .sensing.perception.camera_homography import (
 )
 from .sensing.perception.camera_ground import simulation_ground_plane
 from .sensing.perception.follow_preview import FrameEvidence
+
+# D-423: detections arrive at about 2 Hz, so the overlay takes the newest one up to
+# this old instead of an exact capture-stamp match (display only, never a verdict).
+DETECTION_JOIN_S = 0.6
 from .sensing.perception.visual_tags import detect_visual_tags
 from .sensing.perception.road import (
     RoadObservation,
@@ -183,6 +187,8 @@ class RoadObserverNode(Node):
         self.create_subscription(String, 'line/observation', self._on_line_preview, 10)
         self.create_subscription(String, 'camera/observation', self._on_object_preview, 10)
         self.create_subscription(String, 'perception/road_state', self._on_road_state_preview, latched)
+        # D-423: advisory detections (about 2 Hz) for the overlay only.
+        self.create_subscription(String, 'vision/detections', self._on_detection_preview, 10)
         # Rendering on a bounded timer lets independent callbacks deliver evidence
         # first. Only exact capture-stamp matches may annotate the latest frame.
         self.create_timer(1.0 / self._preview_config.fps, self._flush_preview)
@@ -207,6 +213,9 @@ class RoadObserverNode(Node):
 
     def _on_road_state_preview(self, msg):
         self._add_preview_evidence('road_state', msg)
+
+    def _on_detection_preview(self, msg):
+        self._add_preview_evidence('detections', msg)
 
     def _flush_preview(self):
         if self._preview_pending:
@@ -334,6 +343,7 @@ class RoadObserverNode(Node):
                 objects=self._preview_evidence.for_frame('objects', stamp),
                 road_state=self._preview_evidence.for_frame('road_state', stamp),
                 line=self._preview_evidence.for_frame('line', stamp),
+                detections=self._preview_evidence.recent('detections', stamp, DETECTION_JOIN_S),
                 tags=detect_visual_tags(frame),
             )
             ok, encoded = cv2.imencode('.jpg', preview, [
