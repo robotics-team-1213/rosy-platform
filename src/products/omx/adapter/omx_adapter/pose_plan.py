@@ -102,6 +102,9 @@ class CellPlanningProfile:
     max_joint_state_age_s: float
     action_timeout_s: float
     wall_clock_bound_factor: float
+    # phase -> arm joint -> start tolerance, after grasp only (C3b A5: the held item deflects
+    # the wrist). Joints not named keep start_state_tolerance_rad.
+    phase_start_state_tolerance_rad: Mapping[str, Mapping[str, float]] = MappingProxyType({})
 
     @classmethod
     def load(cls, path: Path | str) -> "CellPlanningProfile":
@@ -171,6 +174,26 @@ class CellPlanningProfile:
         wall_factor = _finite("owner.wall_clock_bound_factor", owner.get("wall_clock_bound_factor"))
         if wall_factor < 1.0:
             raise ValueError("owner.wall_clock_bound_factor must be >= 1")
+        overrides = document.get("phase_start_state_tolerance_rad", {})
+        if not isinstance(overrides, Mapping):
+            raise ValueError("phase_start_state_tolerance_rad must be a mapping")
+        phase_tolerances: dict[str, Mapping[str, float]] = {}
+        for phase_id, joints_tol in overrides.items():
+            if phase_id not in ("transfer", "release") or not isinstance(joints_tol, Mapping):
+                raise ValueError("phase_start_state_tolerance_rad names only transfer, release")
+            checked = {}
+            for name, value in joints_tol.items():
+                if name not in ARM_JOINTS:
+                    raise ValueError("phase_start_state_tolerance_rad names an arm joint only")
+                tolerance = _finite(f"phase_start_state_tolerance_rad.{phase_id}.{name}", value)
+                if tolerance > 0.1:
+                    # Beyond 0.1 rad the wrist is not sagging under a held item; it is a
+                    # grasp fault (C3 run10/11: -0.327 rad over-squeeze).
+                    raise ValueError("phase start tolerance must be at most 0.1 rad")
+                if tolerance < positive["start_state_tolerance_rad"]:
+                    raise ValueError("phase start tolerance must not be below the base tolerance")
+                checked[name] = tolerance
+            phase_tolerances[phase_id] = MappingProxyType(checked)
         fraction = document.get("planning_limit_fraction")
         if (isinstance(fraction, bool) or not isinstance(fraction, (int, float))
                 or not 0.0 < float(fraction) <= 1.0):
@@ -188,7 +211,8 @@ class CellPlanningProfile:
             workspace_max_m=tuple(b[1] for b in bounds),  # type: ignore[arg-type]
             max_joint_state_age_s=_finite("owner.max_joint_state_age_s",
                                           owner.get("max_joint_state_age_s"), positive=True),
-            action_timeout_s=action_timeout, wall_clock_bound_factor=wall_factor, **positive,
+            action_timeout_s=action_timeout, wall_clock_bound_factor=wall_factor,
+            phase_start_state_tolerance_rad=MappingProxyType(phase_tolerances), **positive,
         )
 
     def ik_limits(self) -> IkLimits:
@@ -198,9 +222,14 @@ class CellPlanningProfile:
             singularity_radius_m=self.singularity_radius_m,
         )
 
-    def start_state_tolerances(self) -> dict[str, float]:
-        """Every planned joint. PickPlaceRunner skips the gripper only after grasp (D-402 §3d)."""
-        return {name: self.start_state_tolerance_rad for name in self.joint_names}
+    def start_state_tolerances(self, phase_id: str | None = None) -> dict[str, float]:
+        """Every planned joint. PickPlaceRunner skips the gripper only after grasp (D-402 §3d).
+
+        With ``phase_id`` the profile's after-grasp per-joint tolerances apply (C3b A5).
+        """
+        tolerances = {name: self.start_state_tolerance_rad for name in self.joint_names}
+        tolerances.update(self.phase_start_state_tolerance_rad.get(phase_id, {}))
+        return tolerances
 
     def arm_command_config(self, *, workcell_id: str, instance_id: str,
                            calibration_revision: str,

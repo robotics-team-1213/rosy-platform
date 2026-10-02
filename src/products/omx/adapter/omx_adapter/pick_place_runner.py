@@ -129,6 +129,7 @@ class PickPlaceRunner:
             # in transit and still passed every gate).
             if not callable(gripper_readback) or not isinstance(held_object_id, str) or not held_object_id:
                 raise ValueError("a CellTransferPlan requires gripper_readback and held_object_id")
+        self._cell_profile = cell_profile if isinstance(plan, CellTransferPlan) else None
         self.gripper_readback = gripper_readback
         self.held_object_id = held_object_id
         if not callable(current_execution_state):
@@ -167,6 +168,14 @@ class PickPlaceRunner:
         if not math_is_aware(self.now()):
             raise ValueError("clock must return timezone-aware timestamps")
 
+    def _tolerances(self, phase: PlannedMotionPhase) -> dict[str, float]:
+        """Caller tolerances; for CELL_TRANSFER the accepted profile's after-grasp per-joint
+        overrides replace them for that phase (C3b A5), never the plan's own claim."""
+        tolerances = dict(self.start_state_tolerances)
+        if self._cell_profile is not None:
+            tolerances.update(self._cell_profile.phase_start_state_tolerance_rad.get(phase.phase_id, {}))
+        return tolerances
+
     @property
     def active_phase_id(self) -> str | None:
         with self._lock:
@@ -193,7 +202,7 @@ class PickPlaceRunner:
             "execution_state_sequence": state.sequence,
             "execution_joint_positions": dict(state.joint_positions),
             "start_state_positions": phase.start_state_positions,
-            "start_state_tolerances": self.start_state_tolerances,
+            "start_state_tolerances": self._tolerances(phase),
             "calibration_revision": phase.calibration_revision,
             "transform_revision": phase.transform_revision,
             "planning_scene_revision": phase.planning_scene_revision,
@@ -224,7 +233,7 @@ class PickPlaceRunner:
         for name, expected in zip(phase.joint_names, phase.start_state_positions):
             if name in self._unchecked_joints and phase.phase_id in _AFTER_GRASP_PHASES:
                 continue
-            tolerance = self.start_state_tolerances[name]
+            tolerance = self._tolerances(phase)[name]
             if abs(state.joint_positions[name] - expected) > tolerance:
                 raise ValueError("phase start state is outside the planned tolerance")
             window[name] = (expected, tolerance)

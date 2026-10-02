@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 import pytest
 
 from core_common.protocol.schemas import FleetActionGrant
@@ -251,3 +253,46 @@ def test_release_proceeds_after_a_fresh_hold_readback(tmp_path, kin, profile):
 def test_cell_transfer_runner_requires_a_gripper_readback(tmp_path, kin, profile):
     with pytest.raises(ValueError, match="gripper_readback"):
         _phase_runner(tmp_path, kin, profile, readback=None)
+
+
+def _widened(profile):
+    import copy
+
+    import yaml
+
+    from test_omx_pose_plan import PROFILE_PATH as path
+    document = yaml.safe_load(path.read_text(encoding="utf-8"))
+    document["phase_start_state_tolerance_rad"] = {"transfer": {"joint5": 0.06}}
+    return CellPlanningProfile.from_mapping(copy.deepcopy(document), revision=profile.revision)
+
+
+def test_wrist_deflection_after_grasp_uses_the_profile_phase_tolerance(tmp_path, kin, profile):
+    # A5 (C3b): joint5 sags under the held item; only transfer's joint5 window is widened.
+    widened = _widened(profile)
+    plan = _plan(kin, profile)
+
+    def deflected(phase_id, joint, delta):
+        recorder, port, runner = _phase_runner(tmp_path / f"{phase_id}{joint}{delta}", kin, profile,
+                                               plan=plan, cell_profile=widened)
+        original = runner.current_execution_state
+
+        def state():
+            snapshot = original()
+            index = len(port.submissions)
+            if plan.phases[index].phase_id == phase_id:
+                positions = dict(snapshot.joint_positions)
+                positions[joint] += delta
+                snapshot = replace(snapshot, joint_positions=positions)
+            return snapshot
+
+        runner.current_execution_state = state
+        return recorder, port, runner
+
+    recorder, port, runner = deflected("transfer", "joint5", 0.05)
+    _run_all(runner)
+    window = port.submissions[2][0].start_state_window
+    assert window["joint5"][1] == 0.06 and window["joint4"][1] == 0.02
+    for phase_id, joint in (("transfer", "joint4"), ("grasp", "joint5"), ("release", "joint5")):
+        recorder, port, runner = deflected(phase_id, joint, 0.05)
+        with pytest.raises(RuntimeError, match="start state is invalid"):
+            _run_all(runner)

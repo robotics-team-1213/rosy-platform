@@ -124,6 +124,12 @@ def test_profile_loads_with_content_hash_revision(profile, kin):
     (lambda d: d.update(planning_limit_fraction=0.0), "planning_limit_fraction"),
     (lambda d: d.pop("planning_limit_fraction"), "planning_limit_fraction"),
     (lambda d: d["owner"].pop("wall_clock_bound_factor"), "wall_clock_bound_factor"),
+    # A5: only after-grasp phases, only arm joints, at most 0.1 rad, never below the base.
+    (lambda d: d.update(phase_start_state_tolerance_rad={"approach": {"joint5": 0.05}}), "transfer, release"),
+    (lambda d: d.update(phase_start_state_tolerance_rad={"transfer": {"gripper_joint_1": 0.05}}), "arm joint"),
+    (lambda d: d.update(phase_start_state_tolerance_rad={"transfer": {"joint5": 0.33}}), "0.1"),
+    (lambda d: d.update(phase_start_state_tolerance_rad={"transfer": {"joint5": 0.01}}), "base"),
+    (lambda d: d.update(phase_start_state_tolerance_rad=[]), "mapping"),
     (lambda d: d["owner"].update(wall_clock_bound_factor=0.9), "wall_clock_bound_factor"),
 ])
 def test_profile_validation_fails_closed(mutate, match):
@@ -395,3 +401,15 @@ def test_validate_rejects_foreign_or_tampered_plan(kin, profile):
     with pytest.raises(ValueError, match="joint1 limits"):
         validate_cell_transfer_plan(plan, replace(profile, velocity_limits=rates),
                                     kinematics_revision=kin.revision, now_monotonic_s=101.0)
+
+
+def test_phase_start_tolerances_widen_only_the_named_joint_after_grasp(profile):
+    document = copy.deepcopy(_document())
+    document["phase_start_state_tolerance_rad"] = {"transfer": {"joint5": 0.06}, "release": {"joint4": 0.04}}
+    widened = CellPlanningProfile.from_mapping(document, revision="0" * 64)
+    base = widened.start_state_tolerances()
+    assert base == {name: 0.02 for name in widened.joint_names}
+    assert widened.start_state_tolerances("approach") == base
+    assert widened.start_state_tolerances("grasp") == base
+    assert widened.start_state_tolerances("transfer") == {**base, "joint5": 0.06}
+    assert widened.start_state_tolerances("release") == {**base, "joint4": 0.04}
