@@ -312,6 +312,9 @@ main {
 @media (width < 30rem) {
   .facts > div[data-fact="pose"], .facts > div[data-fact="yaw"] { display: none; }
   .robot { padding: var(--space-2) var(--space-3); }
+  /* D-417 polish — 폰 카드에서 버튼을 한 줄로 더 작게 */
+  .robot-actions ui-button { min-height: var(--target-secondary); }
+  .robot .hint { font-size: var(--text-micro); margin: var(--space-1) 0 0; }
 }
 .robot.s0 { border-left-color: var(--robot-1); }
 .robot.s1 { border-left-color: var(--robot-2); }
@@ -400,12 +403,21 @@ main {
 .log .good { color: var(--nominal-quiet); }
 .log-panel:not([open]) .log { max-height: calc(var(--text-micro) * var(--leading-copy) * 8); }
 
-/* D-417 — 카메라 컴팩트 모드: 소스 없으면 한 줄로 접는다. */
-.vision-preview[data-state="waiting"] .vision-controls,
-.vision-preview[data-state="waiting"] .vision-frame,
-.vision-preview[data-state="waiting"] .install-link { display: none; }
-.vision-preview[data-state="waiting"] { min-height: 0; }
-.vision-preview[data-state="waiting"] .map-head { margin-bottom: 0; }
+/* D-414 — 비상 정지: 팔각형 아이콘 하나로 깔끔하게. 텍스트 없이 아이콘만. */
+.estop { width: var(--target-irreversible); height: var(--target-irreversible); padding: 0; display: inline-flex; align-items: center; justify-content: center; }
+.estop-icon { width: calc(var(--target-irreversible) * 0.55); height: calc(var(--target-irreversible) * 0.55); }
+
+/* D-417 — 카메라 컴팩트 모드: 소스 없거나 연결 불가면 한 줄로 접는다. */
+.vision-preview:has(> .vision-frame[data-state="waiting"]) .vision-controls,
+.vision-preview:has(> .vision-frame[data-state="waiting"]) .vision-frame,
+.vision-preview:has(> .vision-frame[data-state="waiting"]) .install-link,
+.vision-preview:has(> .vision-frame[data-state="warn"]) .vision-controls,
+.vision-preview:has(> .vision-frame[data-state="warn"]) .vision-frame,
+.vision-preview:has(> .vision-frame[data-state="warn"]) .install-link { display: none; }
+.vision-preview:has(> .vision-frame[data-state="waiting"]),
+.vision-preview:has(> .vision-frame[data-state="warn"]) { min-height: 0; }
+.vision-preview:has(> .vision-frame[data-state="waiting"]) .map-head,
+.vision-preview:has(> .vision-frame[data-state="warn"]) .map-head { margin-bottom: 0; }
 
 /* D-415 — 신호등 빈 상태 */
 .signal-empty { color: var(--ink-quiet); font-size: var(--text-label); padding: var(--space-2) 0; }
