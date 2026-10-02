@@ -7,6 +7,7 @@ adr_log: docs/reference/ROSY ADR Log.md
 
 # IDs absent from the ADR log on purpose. Remove an entry once the ADR is written.
 adr_gaps:
+  D-422: "reserved by branch feat/body-referenced-obstacle-stop (line-follow body-referenced obstacle stop, seen 2026-10-02); D-423 landed first; remove once it lands"
   D-419: "reserved by branch feat/d415-saf003-fleet-loss (SAF-003 Fleet link loss, renumbered from D-415 2026-10-02); remove once it lands"
   D-411: "reserved by an in-flight branch (seen 2026-10-02 in git log --all); D-412 landed first; remove once it lands"
   D-29: "unused; the vision accelerator shield design only proposed the number"
