@@ -268,8 +268,8 @@
 
 ## 최근 기록
 
-- 2026-10-02 · uncommitted · docs(adr): D-418 로봇 SSH 접속 — 화면 코드 키 등록, 임시 비밀번호, 팀 키 공유
-- 2026-10-02 · uncommitted · feat(platform): add installation profiles and app compositions
-- 2026-10-02 · uncommitted · feat(platform): bind OMX transfer Skill to device owner
-- 2026-10-02 · uncommitted · feat(platform): isolate pallet.transfer Skill policy
-- 2026-10-02 · uncommitted · test(sim): D-407 Gazebo 재실행 — 관제 연결
+- 2026-10-02 · uncommitted · test(sim): D-395 S2 bench — 4 robots, simultaneous re-arbitration, homing in traffic (test/d395-s2-bench, main 13e6d5e45)
+- 2026-10-02 · uncommitted · docs(logs): D-395 개정 9 항목의 증거 경로 정정
+- 2026-10-02 · uncommitted · docs(adr): D-395 개정 9 — S1 Gazebo 통과
+- 2026-10-02 · uncommitted · docs(plans): D-395 S1 네 번째 실행, 합의된 조용한 시간대 (test/d395-s1-run4, main d366bc6f)
+- 2026-10-02 · uncommitted · feat(platform): start Fleet Cell Job submission boundary
