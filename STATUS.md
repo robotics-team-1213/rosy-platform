@@ -28,7 +28,7 @@
 | [web_common](src/hmi/web_common/progress.md) | CORE | 0409c371 (2026-09-30) | GO | GO | N/A | N/A | N/A | N/A |
 | [dashboard](src/hmi/dashboard/progress.md) | 화면 | e7cdf490 (2026-09-29) | GO | GO | N/A | HOLD | N/A | N/A |
 | [pilot](src/hmi/pilot/progress.md) | 화면 | 434ceb0b (2026-09-29) | GO | HOLD | HOLD | HOLD | HOLD | N/A |
-| [omx_adapter](src/products/omx/adapter/progress.md) | OMX workcell | f63bb564 (2026-10-02) | GO | GO | HOLD | HOLD | PARKED | PARKED |
+| [omx_adapter](src/products/omx/adapter/progress.md) | OMX workcell | 7ae0f65c (2026-10-02) | GO | GO | HOLD | HOLD | PARKED | PARKED |
 | [interfaces](src/contracts/interfaces/progress.md) | 장치 | dc89264 (2026-09-17) | GO | GO | N/A | HOLD | HOLD | PARKED |
 | [pinky_pro](src/products/pinky_pro/profile/progress.md) | 로봇 통합 | uncommitted (2026-09-24) | GO | GO | GO | HOLD | HOLD | PARKED |
 | [omx](src/products/omx/profile/progress.md) | OMX workcell | uncommitted (2026-09-26) | GO | GO | HOLD | HOLD | PARKED | PARKED |

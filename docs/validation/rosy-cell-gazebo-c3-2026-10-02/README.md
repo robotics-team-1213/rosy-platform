@@ -218,6 +218,7 @@ probe에는 대역 플래그가 없다(`--submit-from`, `--feedback-to-runner`, 
 ### 남은 대역과 표시
 
 - **SIM AID**(표시): 런타임 DetachableJoint, hold 증명 뒤에만 붙인다. 운반 중 낙하 여부는 시험하지 않았다. aid가 붙어 있는 동안 블록은 떨어질 수 없다.
+- **A4(release 전 hold 재확인)는 단위 시험으로만 검증했다**(`test_omx_cell_transfer_runner.py`: 잃음·오래됨·다른 물건·readback 실패 → `ITEM_LOST_IN_TRANSIT`). Gazebo에서는 aid 때문에 운반 중 낙하가 일어나지 않는다. 그래서 이 검사는 매 회차 통과만 기록됐고, 잡아낸 적은 없다.
 - **SIM 그리퍼 센서**(표시): gripper_joint_1 위치 기준. hold = 목표 + squeeze 각의 절반 이상. open = 1.0 ± 0.05.
 - **인피드 재적재**: 반복 transfer는 다음 블록을 인피드에 spawn한다(sim 준비 단계, 동작 아님).
 - **C4 범위**(동작 아님): PICK_PLACE로 검증한 grant 봉투에 `action_kind`만 바꾼 것, 항상 열린 stop fence.
@@ -229,3 +230,16 @@ probe에는 대역 플래그가 없다(`--submit-from`, `--feedback-to-runner`, 
 3. **손목 자기 간섭.** joint5 ≈ π/2에서 손가락이 0.46–0.51 rad 아래로 닫히지 않는다. 플래너가 모르는 제약이다. 인피드 yaw로 피했을 뿐이다.
 4. **C3 결과의 재해석.** C3 월드의 블록 쪽 aid는 로드 때 블록을 link5에 붙였다가 뗐다. 그 뒤로는 위 손목 간섭이 나타나지 않았다(C3·diag3의 joint5 ≈ π/2 pick이 0.40에서 블록에 닿음). 원인은 확인하지 않았다. 보정은 그 상태에서 했고, joint5 ≈ 0인 최종 회차의 접촉(0.416, 3 mm squeeze)과 맞는다.
 5. 슬립시트 파지 방법 없음(폭 2 mm → `GRIPPER_WIDTH_INVALID`). `CELL_TRANSFER` grant schema와 완료 journal(C4).
+
+### 리뷰 수정 뒤 (2026-10-02, FIX REQUIRED → 수정)
+
+- **B1 블로커**(성공한 goal이 `action_failed`로 끝남): goal 응답 전에 온 feedback을 버퍼에 두었다가 GOAL_ACCEPTED 뒤에 하나로 재생한다(`e63c0b42`). ROS 종료 status는 journal보다 먼저 기록한다(`7ae0f65c`). 첫 20회 반복 중 Fleet-to-ROS 시험이 1회 실패해서 찾은 결함이다.
+  - WSL Jazzy 반복: `wsl -e bash -lc 'source /opt/ros/jazzy/setup.bash; export ROS_DOMAIN_ID=77 ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST; cd <worktree>; for i in $(seq 25); do python3 -m pytest -q src/products/omx/adapter/test/test_omx_ros_runtime.py src/products/omx/adapter/test/test_omx_ros_runtime_vendor_sim.py src/products/omx/adapter/test/test_omx_fleet_ros_actionserver.py src/products/omx/adapter/test/test_omx_ros_camera_runtime.py; done'`
+  - 결과: **25/25 통과**(회당 8 passed, 1 skipped). 원본: `X:\DevTemposy-cell-c3\c3b\wsl-loop2.txt`.
+- minor 1–5·7은 단위 시험과 함께 고쳤다: 시작 창 상한·포함 범위, 시계 역행 HOLD, release 폭 거절, `fingertip_overhang_m`, 수락 레시피 폭·깊이. minor 8은 `logs.md`에 적었다.
+- **Gazebo 단일 재실행**(`review-single`, `7ae0f65c` 소스, transfer 3 → 슬롯 0)
+  - 배치 오차: xy **0.11 mm**, yaw 0.0006 rad, 윗면 z 0.0 mm, 기울기 0 → 통과.
+  - phase sim s: approach 11.89, grasp 2.93, transfer 14.27, release 10.02. RTF 0.35–0.82(다른 세션의 WSL Gazebo와 겹침).
+  - grasp readback 0.4165, 부착 뒤 0.4191, release 전 재확인 `object_present: true`. 최대 팔 편차 0.0032 rad. owner 최종 `ready`.
+  - profile_revision `b14c5430…eee`. `carry_z` 0.117(fingertip overhang 2.57 mm < 매달린 높이 15 mm라 변하지 않음).
+

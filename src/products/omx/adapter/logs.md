@@ -227,3 +227,11 @@
 - gate 변화: ROS-SIM HOLD 유지(단일 transfer 증거 추가; Fleet 경로·종단 Job·이웃 간섭 남음). DEVICE/FIELD PARKED.
 - 결정: D-401·D-402 보강(2026-10-02, C3b). sim aid는 로봇 쪽 joint, hold 증명 뒤에만 붙인다.
 - 교훈: 메시로 유도한 그리퍼 사상은 Gazebo 접촉과 0.16 rad 어긋났다. 접촉 순간 link 포즈로 확인하고 측정으로 보정한다. 손가락이 블록에 닿지 않고 멈추면, 먼저 빈손 닫힘으로 자기 간섭(joint5 ≈ π/2)을 의심한다.
+
+## 2026-10-02 · e40d182c · fix(omx): C3b 독립 리뷰 수정 (FIX REQUIRED)
+
+- 변경: e63c0b42(B1: goal 응답 전에 온 feedback을 버퍼에 두었다가 GOAL_ACCEPTED 뒤에 RUNNING_FEEDBACK 하나로 재생한다. 관찰 실패로 표시하지 않는다. timeout 시험은 `last_terminal_decision`를 기다린다), 7ae0f65c(ROS 종료 status를 journal보다 먼저 기록; done/succeeded는 그대로 마지막), 92dfea40(minor 1: `max_start_window_rad` 0.1 상한 + 그리퍼 외 전 관절 포함 요구, cap 없는 owner는 정확 sequence 일치 / minor 2: owner 시계 역행 시 `owner_clock_jumped_back` HOLD), 664d0841(minor 3: 닿을 수 없는 release 폭은 계획 거절), a4f446d8(minor 4: `cell.yaml` `fingertip_overhang_m`, 프로필과 계약 시험으로 묶음), 53467537(minor 5: `accepted_item_geometry`로 수락 레시피의 폭·깊이만 허용, `ITEM_GEOMETRY_MISMATCH`), e582dc5b(minor 7), e40d182c(크기 판정).
+- 증거: 아래 WSL 반복과 Gazebo 재실행은 evidence README의 "리뷰 수정" 절에 있다.
+- minor 8(잠금 순서): 실재하지만 좁다. runner replay가 `_event_lock`을 쥔 채 늦은 수락 경로에서 `cancel_goal` → owner lock을 잡는다. 반대로 watchdog은 owner lock 안에서 `handle.cancel()`을 부른다. 거기서 `cancel_goal_async`가 **동기적으로 예외를 던질 때만** `CANCEL_ACK`를 바로 emit → runner `_event_lock`으로 간다. 정상 경로는 응답 콜백이 나중에 executor에서 돌아 교착이 없다. 고치지 않았다. C4에서 owner lock 밖으로 cancel 호출을 옮길 때 같이 정리한다.
+- gate 변화: 없음(ROS-SIM HOLD 유지).
+- 교훈: 콜백 그룹을 나누면 rclpy가 future done 콜백과 feedback의 순서를 보장하지 않는다. Windows는 rclpy 시험을 건너뛰므로, 동시성 변경은 WSL/컨테이너 반복(≥20회)으로 확인한다.
