@@ -130,5 +130,13 @@ def exchange(action: str, by: str, params: dict[str, Any], *, request_path: str 
         if clock() >= deadline:
             # Withdrawn, so a helper that starts late does not apply what nobody waits for.
             _unlink(request_path)
-            raise HandoffUnavailable(f"rosy-ssh-access 가 {wait_s:.0f} s 안에 답하지 않았습니다")
+            _unlink(response_path)
+            if action == "password_on":
+                # The helper may already have set a password nobody will receive: ask it, without
+                # waiting, to turn the password off. It also rolls back a late answer on its own.
+                try:
+                    write_request(request_path, build_request("password_off", by, {}))
+                except OSError:
+                    pass
+            raise HandoffUnavailable(f"rosy-ssh-access 가 {wait_s:.1f} s 안에 답하지 않았습니다")
         sleep(poll_s)

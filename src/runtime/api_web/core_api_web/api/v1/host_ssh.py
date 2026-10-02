@@ -14,6 +14,7 @@ import re
 import socket
 import stat
 import threading
+import time
 from typing import Any, Optional
 
 from fastapi import APIRouter, Body, Depends
@@ -82,12 +83,16 @@ def requester(auth: AuthContext) -> str:
 
 def _call(svc: CoreServicesLike, auth: AuthContext, action: str, params: dict[str, Any]) -> dict[str, Any]:
     request_path, response_path, _keys = _paths(svc)
-    wait_s = wait_seconds(svc.config)
-    if not _exchange_lock.acquire(timeout=wait_s):
+    # One deadline for the lock and the exchange: the caller waits at most the contract's 10 s.
+    deadline = time.monotonic() + wait_seconds(svc.config)
+    if not _exchange_lock.acquire(timeout=max(0.0, deadline - time.monotonic())):
         raise ApiError("SSH_ACCESS_UNAVAILABLE", 503, "다른 SSH 접속 요청을 처리하는 중입니다")
     try:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise ApiError("SSH_ACCESS_UNAVAILABLE", 503, "다른 SSH 접속 요청을 처리하는 중입니다")
         answer = ssh_handoff.exchange(action, requester(auth), params,
-                                      request_path=request_path, response_path=response_path, wait_s=wait_s)
+                                      request_path=request_path, response_path=response_path, wait_s=remaining)
     except ssh_handoff.HandoffUnavailable as exc:
         raise ApiError("SSH_ACCESS_UNAVAILABLE", 503, str(exc)) from exc
     finally:

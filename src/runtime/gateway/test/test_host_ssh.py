@@ -292,3 +292,85 @@ def test_host_keys_are_the_public_lines_without_comments(robot):
     body = response.json()
     assert body["host_keys"] == [ed] and isinstance(body["hostname"], str) and body["hostname"]
     assert "PRIVATE" not in response.text and robot.helper.runs == 0
+
+
+# --- review fixes ---------------------------------------------------------------------
+
+
+def test_turning_the_password_off_works_with_a_corrupt_keys_record(robot):
+    issued = robot.client.post("/api/v1/host/ssh/password", headers=_admin(), json={"minutes": 10})
+    assert issued.status_code == 200, issued.text
+    (robot.root / helper.KEYS).write_text("{not json", encoding="utf-8")
+    robot.helper.system.calls.clear()
+    gone = robot.client.delete("/api/v1/host/ssh/password", headers=_admin())
+    assert gone.status_code == 204, gone.text
+    assert ("lock_password", "rosy") in robot.helper.system.calls
+    assert not (robot.root / helper.PASSWORD_DROPIN).exists()
+
+
+def test_a_password_exchange_that_times_out_asks_the_helper_to_turn_it_off(tmp_path):
+    pytest.importorskip("httpx")
+    from fastapi.testclient import TestClient
+
+    config = _config(tmp_path, wait_s=0.3)
+    client = TestClient(create_app(config, SimpleNamespace(config=config, state=None)))
+    response = client.post("/api/v1/host/ssh/password", headers=_admin(), json={"minutes": 5})
+    assert response.status_code == 503 and response.json()["error"]["code"] == "SSH_ACCESS_UNAVAILABLE"
+    # Best effort, not awaited: a helper that starts late turns off what nobody received.
+    left = json.loads((tmp_path / helper.REQUEST).read_text(encoding="utf-8"))
+    assert left["action"] == "password_off" and set(left) == helper.HEADER_KEYS
+    assert helper.read_request(tmp_path / helper.REQUEST, time.time()) == left
+
+
+def test_only_a_password_on_timeout_leaves_a_password_off_behind(tmp_path):
+    request, response = tmp_path / "request", tmp_path / "response"
+    for action, expected in (("password_on", "password_off"), ("list", None), ("password_off", None)):
+        with pytest.raises(ssh_handoff.HandoffUnavailable):
+            ssh_handoff.exchange(action, "a", {"minutes": 5} if action == "password_on" else {},
+                                 request_path=str(request), response_path=str(response), wait_s=0.05)
+        left = json.loads(request.read_text(encoding="utf-8"))["action"] if request.exists() else None
+        assert left == expected, action
+        request.unlink(missing_ok=True)
+
+
+@pytest.mark.parametrize("lock_s,exchange_wait", [(0.4, 0.6), (1.0, None), (3.0, None)])
+def test_the_lock_wait_and_the_exchange_share_one_deadline(tmp_path, monkeypatch, lock_s, exchange_wait):
+    pytest.importorskip("httpx")
+    from core_api_web.api.v1 import host_ssh
+    from fastapi.testclient import TestClient
+
+    config = _config(tmp_path, wait_s=1.0)
+    client = TestClient(create_app(config, SimpleNamespace(config=config, state=None)))
+    now = [100.0]
+    seen = []
+
+    class SlowLock:
+        """Held by another exchange for `lock_s` of the caller's time."""
+
+        def acquire(self, timeout):
+            now[0] += min(lock_s, timeout)
+            return lock_s < timeout
+
+        def release(self):
+            pass
+
+    def exchange(action, by, params, **kwargs):
+        seen.append(kwargs["wait_s"])
+        raise ssh_handoff.HandoffUnavailable("no answer")
+
+    monkeypatch.setattr(host_ssh, "time", SimpleNamespace(monotonic=lambda: now[0]))
+    monkeypatch.setattr(host_ssh, "_exchange_lock", SlowLock())
+    monkeypatch.setattr(ssh_handoff, "exchange", exchange)
+    response = client.get("/api/v1/host/ssh/keys", headers=_admin())
+    assert response.status_code == 503 and response.json()["error"]["code"] == "SSH_ACCESS_UNAVAILABLE"
+    assert seen == ([] if exchange_wait is None else [pytest.approx(exchange_wait)])
+    assert now[0] - 100.0 <= 1.0 + 1e-9  # the lock never waits past the shared deadline
+
+
+@pytest.mark.parametrize("path", ["/api/v1/host/ssh/keys", "/api/v1/host/ssh/password"])
+def test_malformed_json_is_a_400_envelope_that_never_reaches_root(robot, path):
+    response = robot.client.post(path, headers={**_admin(), "Content-Type": "application/json"},
+                                 content=b"{not json")
+    assert response.status_code == 400, response.text
+    assert set(response.json()) == {"error"} and response.json()["error"]["code"]
+    assert robot.helper.runs == 0
