@@ -74,8 +74,8 @@
 
 ## 최근 기록
 
+- 2026-10-03 · uncommitted · fix(fleet,omx): C4b 1d — 전송 직전 세대 재확인, receipt 먼저 기록, owner journal 식별
 - 2026-10-03 · uncommitted · fix(fleet): C4b 1c — 재시작·정지·404 경로의 출구 (재검토 N1–N3, rosy-a9)
 - 2026-10-03 · uncommitted · fix(fleet): C4b 1b — Cell Job claim 유지, HOLD 출구, 공정한 하달 (리뷰 M1/M2, rosy-a9)
 - 2026-10-03 · uncommitted · fix(fleet): preserve Cell transfer phase receipts over UDS v2
 - 2026-10-02 · uncommitted · feat(fleet): C4b wave 1 — Cell Job 하달 경로 (G4, G5, G3, G6)
-- 2026-10-02 · uncommitted · fix(fleet): D-395 rev. 11 — 거리 없는 사각형 목격은 근거가 아니다
