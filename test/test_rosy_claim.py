@@ -1,4 +1,4 @@
-"""D-406 / D-387 decision 4 (interim): the /run/rosy-claim exclusive claim.
+"""D-410 / D-387 decision 4 (interim): the /run/rosy-claim exclusive claim.
 
 `mkdir /run/rosy-claim` is the atomic step; the winner writes claim.json. An
 expired claim, or one from another boot, may be cleared by exactly one party

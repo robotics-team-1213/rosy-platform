@@ -311,7 +311,7 @@ def test_the_boot_display_and_the_summary_say_the_same_state(tmp_path, case):
 
 SCHEMA_1_KEYS = {"schema", "written_at", "battery_warning_percent", "devices",
                  "robot_mode", "nav_state", "swarm_role"}
-# D-406: what the device updater judges idleness from, without a token.
+# D-410: what the device updater judges idleness from, without a token.
 SCHEMA_2_KEYS = {"velocity_linear", "velocity_angular", "battery_percent", "battery_charging",
                  "docking_state", "line_follow_mode", "line_follow_state", "swarm_active", "estop",
                  "activity_kind"}
@@ -358,11 +358,11 @@ def test_a_core_without_a_state_manager_writes_no_mode(tmp_path):
     written = json.loads((tmp_path / "run/rosy/status-inputs.json").read_text(encoding="utf-8"))
 
     assert written["robot_mode"] is None
-    # D-406: no snapshot means every idleness input is unknown, never a guessed "idle".
+    # D-410: no snapshot means every idleness input is unknown, never a guessed "idle".
     assert {key: written[key] for key in SCHEMA_2_KEYS} == dict.fromkeys(SCHEMA_2_KEYS)
 
 
-# --- D-406: schema 2 carries the idleness inputs from the robot/state snapshot ------
+# --- D-410: schema 2 carries the idleness inputs from the robot/state snapshot ------
 
 
 class SnapshotState:
@@ -618,7 +618,7 @@ def test_the_hand_over_carries_the_robot_mode_to_the_record(tmp_path):
 
 
 def test_a_schema_2_hand_over_reads_exactly_like_schema_1(tmp_path):
-    # D-406: the root reader accepts both; the added keys are the updater's, not the display's.
+    # D-410: the root reader accepts both; the added keys are the updater's, not the display's.
     status = _native("rosy_boot_status_d406b", "rosy-boot-status.py")
     shared = {"robot_mode": "IDLE", "nav_state": "IDLE", "swarm_role": "follower"}
     _hand_over(tmp_path, **shared)

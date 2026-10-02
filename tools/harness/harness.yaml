@@ -20,14 +20,14 @@ adr_gaps:
   D-239: "unused; the design-system rollout plan renumbered to D-245 and D-248-D-253 (2026-09-25), so this reservation went stale"
   D-240: "unused; the design-system rollout plan renumbered to D-245 and D-248-D-253 (2026-09-25), so this reservation went stale"
   D-244: "unused after a same-day numbering collision; the runtime note is D-246 and the E-Stop pilot is D-245"
-  D-398: "reserved by an in-flight branch (seen 2026-10-01 on local main and docs/d399-layered-architecture); D-406 landed first; remove once it lands"
-  D-399: "reserved by an in-flight branch (seen 2026-10-01 on local main and docs/d399-layered-architecture); D-406 landed first; remove once it lands"
-  D-400: "reserved by an in-flight branch (seen 2026-10-01 on docs/core-safety-policy-shadow); D-406 landed first; remove once it lands"
-  D-401: "reserved by an in-flight branch (seen 2026-10-01 on docs/core-safety-policy-shadow); D-406 landed first; remove once it lands"
-  D-402: "reserved by an in-flight branch (seen 2026-10-01 on docs/core-safety-policy-shadow); D-406 landed first; remove once it lands"
-  D-403: "reserved by an in-flight branch (seen 2026-10-01 on docs/core-safety-policy-shadow); D-406 landed first; remove once it lands"
-  D-404: "reserved by an in-flight branch (seen 2026-10-01 on docs/core-safety-policy-shadow); D-406 landed first; remove once it lands"
-  D-405: "reserved by an in-flight branch (seen 2026-10-01 on feat/overhead-markerless-tracking); D-406 landed first; remove once it lands"
+  D-398: "reserved by an in-flight branch (seen 2026-10-01 on local main and docs/d399-layered-architecture); D-410 landed first; remove once it lands"
+  D-399: "reserved by an in-flight branch (seen 2026-10-01 on local main and docs/d399-layered-architecture); D-410 landed first; remove once it lands"
+  D-400: "reserved by an in-flight branch (seen 2026-10-01 on docs/core-safety-policy-shadow); D-410 landed first; remove once it lands"
+  D-401: "reserved by an in-flight branch (seen 2026-10-01 on docs/core-safety-policy-shadow); D-410 landed first; remove once it lands"
+  D-402: "reserved by an in-flight branch (seen 2026-10-01 on docs/core-safety-policy-shadow); D-410 landed first; remove once it lands"
+  D-403: "reserved by an in-flight branch (seen 2026-10-01 on docs/core-safety-policy-shadow); D-410 landed first; remove once it lands"
+  D-404: "reserved by an in-flight branch (seen 2026-10-01 on docs/core-safety-policy-shadow); D-410 landed first; remove once it lands"
+  D-405: "reserved by an in-flight branch (seen 2026-10-01 on feat/overhead-markerless-tracking); D-410 landed first; remove once it lands"
 
 status: STATUS.md
 stale_after_commits: 5

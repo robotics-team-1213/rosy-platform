@@ -500,7 +500,7 @@ PROGRAM_SOURCES = {
     "rosy-hw-probe.service": ["deploy/robot/pinky_pro/native/rosy-hw-probe.py"],
     # D-247 6: standard library; RPi.GPIO is imported lazily for the buzzer only.
     "rosy-hw-test.service": ["deploy/robot/pinky_pro/native/rosy-hw-test.py"],
-    # D-406: the updater, its claim, and the programs it runs as children.
+    # D-410: the updater, its claim, and the programs it runs as children.
     "rosy-auto-update.service": ["deploy/robot/pinky_pro/native/rosy_auto_update.py",
                                  "deploy/robot/pinky_pro/native/rosy_claim.py",
                                  "deploy/robot/pinky_pro/native/rosy-release-unpack.sh",
@@ -709,13 +709,13 @@ def test_required_writable_paths_exist_when_the_unit_starts(unit):
         created |= {line.split()[1] for line in STATE_RULES.read_text(encoding="utf-8").splitlines()
                     if line.startswith("d ")}
     created.add("/opt/rosy")  # customize-rootfs.sh installs the release store there
-    # D-406: mounted by systemd before any unit (/run) or shipped by the base
+    # D-410: mounted by systemd before any unit (/run) or shipped by the base
     # OS packages (systemd, udev, kmod); rosy-auto-update writes into them.
     created |= {"/run", "/etc/systemd/system", "/etc/udev/rules.d", "/etc/modprobe.d"}
     for required in _words(directives, "Requires"):
         if required.endswith(".service") and (NATIVE / required).is_file():
             created |= {f"/run/{entry}" for entry in _words(_directives(required), "RuntimeDirectory")}
-            # D-406: a required unit this one is also ordered after has created its
+            # D-410: a required unit this one is also ordered after has created its
             # StateDirectory (rosy-release-recover's /var/lib/rosy/releases).
             if required in _words(directives, "After"):
                 created |= {f"/var/lib/{entry}" for entry in _words(_directives(required), "StateDirectory")}
@@ -962,7 +962,7 @@ def test_learned_perception_env_example_ships_both_switches_off():
 # Units whose program reaches native_release.py verify (signing.verify_signature
 # uses tempfile). Under ProtectSystem=strict without PrivateTmp the default
 # temp dirs are read-only, so verify fails with "No usable temporary directory".
-# Found by the D-406 device twin (scenario h3, 2026-10-02): a power cut during
+# Found by the D-410 device twin (scenario h3, 2026-10-02): a power cut during
 # activation left a journal, boot recovery could not verify the old release,
 # and rosy-core/rosy-runtime.target (which Require the gate) never started.
 VERIFYING_UNITS = ("rosy-release-recover.service", "rosy-auto-update.service")

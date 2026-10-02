@@ -94,7 +94,7 @@ UNITS = (
     "rosy-hw-probe.path",
     "rosy-hw-test.service",
     "rosy-hw-test.path",
-    # D-406: the idle-time updater; only the timer is enabled.
+    # D-410: the idle-time updater; only the timer is enabled.
     "rosy-auto-update.service",
     "rosy-auto-update.timer",
 )

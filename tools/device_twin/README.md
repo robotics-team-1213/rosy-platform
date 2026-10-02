@@ -1,6 +1,6 @@
-# D-406 device twin
+# D-410 device twin
 
-A systemd container that stands in for a Pinky Pro robot, so D-406 auto-update can be checked end to end without hardware.
+A systemd container that stands in for a Pinky Pro robot, so D-410 auto-update can be checked end to end without hardware.
 
 It is a test tool only. Nothing here goes into the device image or into a payload.
 

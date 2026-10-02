@@ -265,8 +265,8 @@
 
 ## 최근 기록
 
+- 2026-10-02 · uncommitted · docs(adr): 로봇 자동 업데이트 ADR 번호를 D-406에서 D-410으로 — 동시 세션 번호 충돌
 - 2026-10-01 · uncommitted · docs(adr): D-406 로봇 자동 업데이트 — GitHub Releases에서 스스로 받아 유휴 시 승인 없이 적용, 로봇별 hold
 - 2026-10-01 · uncommitted · docs(plan): D-395 Fleet 보조 위치 확정 구현 계획
 - 2026-10-01 · uncommitted · docs(adr): D-395 개정 2 — 출발 슬롯은 방향 축만, 부호는 LiDAR 적합
 - 2026-10-01 · uncommitted · docs(adr): D-395 개정 1 — 바닥 기준 사각형 2개를 귀환 기준점·출발 슬롯으로
-- 2026-10-01 · uncommitted · fix(test): proposal_store.py 크기 판정 행 복구

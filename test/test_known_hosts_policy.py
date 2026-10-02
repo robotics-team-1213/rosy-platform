@@ -1,4 +1,4 @@
-"""D-406 review N3: one known_hosts policy for the operator PowerShell scripts.
+"""D-410 review N3: one known_hosts policy for the operator PowerShell scripts.
 
 ssh parses `-o UserKnownHostsFile=<value>` like an ssh_config line and splits an
 unquoted value at whitespace. Windows PowerShell 5.1 passes an argument that

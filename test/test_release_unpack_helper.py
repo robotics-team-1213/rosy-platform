@@ -331,7 +331,7 @@ def test_a_stale_tmp_directory_from_a_prior_run_is_cleared_at_start(tmp_path, re
 
 
 def test_a_fresh_release_directory_gets_a_fresh_mtime(tmp_path, releases):
-    # D-406: the updater prunes only release directories older than an hour. tar
+    # D-410: the updater prunes only release directories older than an hour. tar
     # restores the archive's own (old) mtime on "./", so the script touches the
     # target after the rename and a just-unpacked release is never pruned.
     import os

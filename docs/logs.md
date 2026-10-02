@@ -4202,3 +4202,10 @@
 - 변경: D-406(Accepted) 작성. 사용자 선택: 완전 자동(유휴 시), GitHub Releases, 이 PC의 발행 명령, 로봇별 hold, A안(로봇 pull + 카나리 1대 뒤 나머지). D-387 결정 2·5와 Alternatives 두 기각을 개정(D-387 Status에 개정 참조 한 줄). 판정 입력은 토큰 없는 `/run/rosy/status-inputs.json` schema 2, 봉인 자동 hold는 `/etc/rosy/approvals/*.approved`의 `release_id`, 잠정 claim(`/run/rosy-claim`)을 push와 업데이터에 함께 구현, `rosy-release-unpack.sh`를 native로 이동. ADR 번호는 브랜치·로컬 main·작업 트리 확인 뒤 D-406; 다른 브랜치가 쓰는 D-398~405는 `adr_gaps`에 예약으로 적었다.
 - 증거: 두 로봇에서 `api.github.com` 200, `github.com` 200, NTP 동기(2026-10-01 읽기 전용). harness lint 0 error.
 - gate 변화: 없음(설계만).
+
+## 2026-10-02 · uncommitted · docs(adr): 로봇 자동 업데이트 ADR 번호를 D-406에서 D-410으로 — 동시 세션 번호 충돌
+
+- 변경: 통합 브랜치 `feat/d406-robot-auto-update`의 "로봇 자동 업데이트" ADR이 D-406으로 쓰였는데, 그 사이 다른 세션이 main에 D-406(관제 카메라 운용·설치 분리)을 착지했다. 이 브랜치의 ADR·계획·코드 주석·시험의 `D-406`을 모두 `D-410`으로 바꾸고 파일을 `D-410-robots-self-update-from-signed-github-releases-when-idle.md`, `docs/plans/2026-10-01-d410-robot-auto-update.md`로 옮겼다. 번호는 모든 브랜치·로컬 main·작업 트리·ADR Log·`adr_gaps` 확인 뒤 골랐다(D-407~409는 다른 브랜치가 사용 중).
+- **이전 일지 항목의 "D-406"(2026-10-01~02, 자동 업데이트·업데이터·기기 쌍둥이·발행 도구·claim)은 모두 이 ADR, 곧 D-410을 가리킨다.** 일지는 추가 전용이라 고치지 않는다. main의 D-406은 다른 결정이다.
+- 증거: 번호 변경 뒤 이 브랜치에 `D-406` 표기가 남지 않음(`git grep`), harness lint의 ADR 순서 검사와 시험 통과.
+- gate 변화: 없음.

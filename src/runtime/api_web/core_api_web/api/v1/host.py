@@ -481,7 +481,7 @@ def _name(value: Any) -> Optional[str]:
 
 
 def _idleness_inputs(snapshot: Any) -> dict[str, Any]:
-    """D-406: what the device updater judges idleness from.
+    """D-410: what the device updater judges idleness from.
 
     Every value is typed or null: an unknown is never written as a resting default,
     because the updater reads null as "not eligible". Sensor-derived values are
@@ -512,7 +512,7 @@ def _idleness_inputs(snapshot: Any) -> dict[str, Any]:
 def status_inputs(svc: CoreServicesLike) -> dict[str, Any]:
     """What the root side cannot know: the live warning threshold, the overlaid device states and the live robot mode.
 
-    Schema 2 (D-406) keeps every schema-1 key and adds the updater's idleness
+    Schema 2 (D-410) keeps every schema-1 key and adds the updater's idleness
     inputs. All state keys come from one snapshot, so they describe one instant.
     """
     hardware = host_hardware(None, svc)

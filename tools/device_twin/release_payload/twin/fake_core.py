@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Device-twin stand-in for the CORE node (D-406 twin only; never shipped).
+"""Device-twin stand-in for the CORE node (D-410 twin only; never shipped).
 
 Runs as rosy-core from WorkingDirectory=/opt/rosy/current, like the real CORE:
 

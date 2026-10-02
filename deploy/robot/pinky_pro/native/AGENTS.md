@@ -44,7 +44,7 @@ Jazzy. This directory is copied into every offline ROSY release payload.
   `rosy-hw-probe.path` reruns it when CORE writes `/run/rosy/hw-probe.request`.
   While `rosy-io`/`rosy-navigation` run it never opens their buses.
 
-- `rosy-auto-update.timer` → `rosy_auto_update.py run` (D-406) stages and applies signed
+- `rosy-auto-update.timer` → `rosy_auto_update.py run` (D-410) stages and applies signed
   GitHub payload releases only when the rollout and the robot allow it; state lives in
   `/var/lib/rosy/updates/`. It and `rosy-release-push.ps1` both hold `/run/rosy-claim`
   (`rosy_claim.py`) and share `rosy-release-unpack.sh`. Tests: `test/test_rosy_auto_update.py`,

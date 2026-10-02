@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The interim exclusive robot claim (D-387 decision 4, D-406 decision 5).
+"""The interim exclusive robot claim (D-387 decision 4, D-410 decision 5).
 
 ``mkdir /run/rosy-claim`` is the atomic step: whoever creates the directory
 holds the claim and writes ``claim.json`` = {holder, purpose, acquired_at,
@@ -31,7 +31,7 @@ import time
 
 CLAIM_DIR = "run/rosy-claim"
 CLAIM_FILE = "claim.json"
-#: Serialises the stale check, the rename aside and the mkdir across parties (D-406 review M9).
+#: Serialises the stale check, the rename aside and the mkdir across parties (D-410 review M9).
 LOCK_FILE = "run/rosy-claim.lock"
 LOCK_WAIT_S = 10.0
 BOOT_ID = "proc/sys/kernel/random/boot_id"
@@ -225,7 +225,7 @@ def release(root: Path, holder: str) -> bool:
 
 
 def refresh(root: Path, holder: str, ttl_s: float, *, now: _dt.datetime | None = None) -> bool:
-    """Push ``holder``'s claim expiry to now + ttl. False when it is not theirs (D-406 review M8)."""
+    """Push ``holder``'s claim expiry to now + ttl. False when it is not theirs (D-410 review M8)."""
     try:
         _refresh(root, holder, ttl_s, now)
     except (ClaimBusy, ClaimMissing):

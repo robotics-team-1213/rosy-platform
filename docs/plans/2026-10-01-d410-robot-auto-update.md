@@ -1,6 +1,6 @@
-# D-406 robot auto-update — implementation plan and shared contract
+# D-410 robot auto-update — implementation plan and shared contract
 
-ADR: `docs/adr/D-406-robots-self-update-from-signed-github-releases-when-idle.md`. Branch: `feat/d406-robot-auto-update`.
+ADR: `docs/adr/D-410-robots-self-update-from-signed-github-releases-when-idle.md`. Branch: `feat/d406-robot-auto-update`.
 
 Three tasks run in parallel worktrees branched from `feat/d406-robot-auto-update` and merge back into it. **The contract below is binding for all three.** Change it only in this file, in a separate commit that every task rebases onto.
 

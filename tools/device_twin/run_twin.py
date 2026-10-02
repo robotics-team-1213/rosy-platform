@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""D-406 device twin: validate robot auto-update end to end without a robot (twin only).
+"""D-410 device twin: validate robot auto-update end to end without a robot (twin only).
 
     python tools/device_twin/run_twin.py --scenario all
     python tools/device_twin/run_twin.py --scenario b,f       # a subset
@@ -33,7 +33,7 @@ from twin_lib import (API_BASE, GH, HOSTNAME, IMAGE, KEY_NAME, RELEASES, REPO, T
 
 def write_report(path: Path, results: list[Result], build: Build, started: dt.datetime) -> None:
     lines = [
-        "# D-406 device twin report", "",
+        "# D-410 device twin report", "",
         f"- Run: {started.strftime('%Y-%m-%d %H:%M:%S')} (local), HEAD `{build.revision}`",
         f"- Twin: image `{IMAGE}` (ubuntu:24.04, systemd PID 1), hostname `{HOSTNAME}`; fake GitHub `{API_BASE}`, "
         f"repo `{REPO}`",

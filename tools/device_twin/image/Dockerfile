@@ -1,4 +1,4 @@
-# D-406 device twin: a systemd container standing in for a Pinky Pro robot.
+# D-410 device twin: a systemd container standing in for a Pinky Pro robot.
 # Twin-only; never part of the device image or a payload. run_twin.py builds it
 # from a context it assembles under X:\DevTemp\d406-twin\ctx (LF content from
 # `git archive HEAD`).
