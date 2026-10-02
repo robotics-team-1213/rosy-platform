@@ -305,3 +305,6 @@ git diff --check
 | 7 Failure replay | IN PROGRESS | late-success-after-restart fixture with phase journal and watermark assertions; legacy persistent replay plus CellJob lost-reply/expiry/stop/phase-conflict tests; independent Cell goal recovery and physical occupancy proof remain |
 | 8 Gazebo | TODO | not run |
 | 9 Compatibility cleanup | TODO | not run |
+
+
+**Progress (2026-10-03, internal Cell producer validation):** Added a bounded simulation evidence envelope and an environment-credential registry pinned to producer, workcell, instance, recipe/cell digests, evaluator revision and expiry. The service checks the persisted grant identity, initial observation after grant issuance, fresh final model/gripper observations after local terminal success, and rechecks pending evidence on terminal reconciliation. Already available preterminal evidence is rejected before persistence; completion binds the verified terminal event ID inside the SQLite transaction to reject a concurrent newer terminal. Focused Cell service/store/dispatcher checks: 48 passed; registry checks: 10 passed; independent review: 44 passed with no remaining Critical/Important checkpoint findings. Public HTTP/app callback, the actual independent placement evaluator, canonical two-ledger Cell replay and ROS-SIM remain open. Tasks 4-5 and 7 remain IN PROGRESS.

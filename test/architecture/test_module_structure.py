@@ -76,8 +76,12 @@ CONTROL_SPLIT = "docs/plans/2026-09-22-control-package-split-design.md"
 #: P6 verdicts: path (relative to src/) or package name -> (lines at verdict, verdict).
 SIZE_VERDICTS = {
     "fleet": (
-        27_684,
+        28_001,
         "split: server HTTP boundary, console, signals and the mission-control stores are separate owners "
+        "today; re-judged 2026-10-03 at 28001 for D-413 internal Cell producer authentication: bounded "
+        "schema, environment credential registry and evidence service are separate modules; goal completion "
+        "retains its existing journal owner and atomically fences the verified terminal event. No new HTTP "
+        "or device owner is added. Existing split verdict and +150 growth allowance remain unchanged; "
         "today; group them into subpackages rather than one flat server/ tree (B2); owner fleet, unscheduled "
         "(re-judged 2026-09-29 at 11164 after mission_store joined the server tree; re-judged 2026-09-30 at "
         "12419 after the D-361 enrollment register, roster and service joined as their own modules, and "

@@ -1406,3 +1406,15 @@
 - Change: move Cell goal completion into its own journal module and require the latest terminal SUCCEEDED event for the exact step, Action and attempt inside the SQLite completion transaction. Permit independently confirmed held success, preserve next-step WAITING/HOLD after authority changes, reject rewritten goal evidence and empty provenance, and keep claims until every ordered goal is confirmed. Dispatch is not rearmed by goal confirmation.
 - Evidence: CellJob/Mission/phase-contract regression 89 passed; independent review 42 passed with no remaining Important/Critical checkpoint findings. Current-main platform contract checks pass 26 tests with explicit source paths (not installed-artifact proof). Quick tier 96 passed/24 existing freshness warnings. Changed Python files pass flake8. Full Fleet regression 1468 passed/7 skipped, known-failure comparison 0 new/0 known; final log/generated-record checks 3 passed and harness lint 0 errors/24 existing freshness warnings.
 - Gate: SOURCE/LOCAL only. Public registered/fresh Cell goal production, actual two-ledger Cell replay, real OMX owner/provider composition and ROS-SIM remain required. Tasks 4-5 and 7 remain IN PROGRESS.
+
+
+## 2026-10-03 · uncommitted · feat(fleet): validate registered Cell goal evidence
+- Change: add separate bounded evidence schema, pinned environment credential registry and internal submission service. Check exact saved grant identity, producer scope/expiry, initial observation, model/gripper freshness and post-terminal ordering; revalidate pending evidence on reconciliation. Reject available invalid evidence before persistence and atomically bind completion to the verified latest terminal event ID. Re-judge Fleet at 28001 lines with unchanged split verdict and +150 allowance.
+- Evidence: focused Cell service/store/dispatcher checks 48 passed; registry checks 10 passed; independent review 44 passed with no remaining Critical/Important checkpoint findings; changed Python files pass flake8. Full Fleet and final quick/harness results follow in a separate append-only row.
+- Gate: internal SOURCE/LOCAL only. HTTP/app callback, independent Gazebo evaluator, canonical two-ledger Cell replay and ROS-SIM remain open; Tasks 4-5 and 7 remain IN PROGRESS. Default dispatch remains disabled.
+
+
+## 2026-10-03 · uncommitted · verify(fleet): registered Cell evidence checkpoint
+- Change: verify the internal Cell evidence checkpoint before local integration; no gate promotion.
+- Evidence: quick tier 96 passed/24 existing freshness warnings; harness lint 0 errors/24 existing freshness warnings; focused Cell service/store/dispatcher 48 passed, registry 10 passed and independent review 44 passed. Full Fleet regression is still running at commit preparation and is not claimed as passed.
+- Gate: SOURCE/LOCAL only. Public ingress, app callback, independent evaluator and ROS-SIM remain open.
