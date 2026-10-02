@@ -10,6 +10,7 @@ import os
 import socket
 import sys
 import threading
+import time
 from pathlib import Path
 
 import pytest
@@ -693,4 +694,257 @@ def test_exit_after_a_failed_engage_posts_no_idle(tablet_page):
         assert page.request.get(f"{base_url}/__test__/mode-log").json()[before:] == []
     finally:
         dev_server.MODE_REFUSALS["remaining"] = 0
+    assert errors == [], errors
+
+
+ROBOT_RECORDING_ID = "20261002T101500Z_rosy_dev"
+ROBOT_RECORD_STOP = "document.querySelector('[data-robot-record]').textContent.includes('중지')"
+
+
+def _recordings(page, base_url, **body):
+    if body:
+        page.request.post(f"{base_url}/__test__/recordings", data=body)
+    return page.request.get(f"{base_url}/__test__/recordings").json()
+
+
+def _eventually(probe, timeout_s=10.0):
+    """Polls probe() until it is truthy; returns its value (no fixed sleeps in the test body)."""
+    deadline = time.monotonic() + timeout_s
+    while True:
+        value = probe()
+        if value or time.monotonic() > deadline:
+            return value
+        time.sleep(0.1)
+
+
+def _settled_polls(page, base_url):
+    """True once GET /recordings/active stops arriving: the recording view was disposed."""
+    last = [-1]
+
+    def probe():
+        polls = _recordings(page, base_url)["polls"]
+        if polls == last[0]:
+            return True
+        last[0] = polls
+        time.sleep(1.3)         # one poll period (1 s) plus slack between the two reads
+        return False
+    return _eventually(probe, 15.0)
+
+
+def _open_sheet(page):
+    page.click("[data-recordings-open]")
+    row = page.locator(f"[data-recordings-sheet] [data-recording-id='{ROBOT_RECORDING_ID}']")
+    row.wait_for()
+    return row
+
+
+def _enter_recording_drive(page, base_url, **scenario):
+    _recordings(page, base_url, reset=True, **scenario)
+    _enter_drive(page, base_url)
+    page.wait_for_function("!document.querySelector('[data-robot-record]').disabled")
+
+
+@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+                    reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
+@pytest.mark.parametrize("viewport", [(2000, 1200), (1200, 2000), (390, 844)])
+def test_robot_recording_toggle_and_sheet(base_url, viewport):
+    """D-411 A: 로봇 녹화 토글(화면 녹화와 따로)과 녹화본 시트 — 받기는 CORE 의 차단 사유를 따른다."""
+    with playwright_sync.sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        page = browser.new_page(viewport={"width": viewport[0], "height": viewport[1]}, accept_downloads=True)
+        errors: list[str] = []
+        page.on("pageerror", lambda exc: errors.append(str(exc)))
+        page.set_default_timeout(10_000)
+        try:
+            _enter_recording_drive(page, base_url)
+            assert page.locator("[data-evidence-record]").inner_text().strip() == "화면 녹화"
+            assert page.evaluate("document.documentElement.scrollWidth - document.documentElement.clientWidth") <= 0
+            page.click("[data-robot-record]")
+            page.wait_for_function(ROBOT_RECORD_STOP)
+            page.wait_for_selector("[data-drive-fact=recording]:not([hidden])")
+            assert "녹화 0:01 / 10:00" in page.inner_text("[data-drive-fact=recording]")
+            assert _recordings(page, base_url)["log"] == ["start"]
+            row = _open_sheet(page)
+            assert page.evaluate("!!document.activeElement.closest('[data-recordings-sheet]')"), "열면 시트로 초점"
+            box = page.evaluate("""(() => { const s = document.querySelector('[data-recordings-sheet]').getBoundingClientRect();
+              const h = document.querySelector('[data-drive-hud]').getBoundingClientRect();
+              return {top: s.top, bottom: s.bottom, left: s.left, right: s.right, hud: h.bottom, vh: innerHeight}; })()""")
+            assert box["top"] >= box["hud"], f"시트가 HUD 를 덮는다 {box}"
+            assert box["left"] >= 0 and box["right"] <= viewport[0] + 1 and box["bottom"] <= box["vh"] + 1, box
+            assert row.locator("[data-recording-fetch]").is_disabled()          # 녹화 중에는 받지 않는다
+            assert "녹화 중에는" in page.inner_text("[data-recordings-notice]")
+            assert page.get_attribute("[data-recordings-notice]", "aria-live") == "polite"
+            page.click("[data-robot-record]")
+            page.wait_for_function("document.querySelector('[data-robot-record]').textContent.trim() === '로봇 녹화'")
+            _recordings(page, base_url, blocker="ROBOT_MOVING")
+            page.click("[data-recordings-refresh]")
+            page.wait_for_function("document.querySelector('[data-recordings-notice]').textContent.includes('멈춘 뒤')")
+            assert row.locator("[data-recording-fetch]").is_disabled()
+            _recordings(page, base_url, blocker=None)
+            # no click: the open sheet refreshes itself every few seconds
+            page.wait_for_function("!document.querySelector('[data-recording-fetch]').disabled")
+            with page.expect_download() as download:
+                row.locator("[data-recording-fetch]").click()
+            assert download.value.suggested_filename == f"{ROBOT_RECORDING_ID}.tar"
+            row.locator("[data-recording-status]").wait_for()
+            assert "받음" in row.locator("[data-recording-status]").inner_text()
+            assert _eventually(lambda: _recordings(page, base_url)["log"] == ["start", "stop", "archive", "archive_done"])
+            page.keyboard.press("Escape")
+            assert page.locator("[data-recordings-sheet]").count() == 0
+            assert page.evaluate("document.activeElement?.hasAttribute('data-recordings-open')")
+        finally:
+            browser.close()
+    assert errors == [], errors
+
+
+@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+                    reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
+def test_robot_recording_shows_starting_until_the_writer_records(tablet_page):
+    """'녹화 중'은 로봇이 실제로 기록할 때부터다. 준비 중에는 타이머 없이 멈출 수만 있다."""
+    base_url, page, errors = tablet_page
+    _enter_recording_drive(page, base_url, starting=True)
+    toggle = "[data-robot-record]"
+    page.click(toggle)
+    page.wait_for_function(f"document.querySelector('{toggle}').dataset.state === 'starting'")
+    assert page.inner_text(toggle).strip() == "녹화 준비 중…"
+    assert page.get_attribute(toggle, "aria-pressed") == "true"
+    assert page.get_attribute(toggle, "aria-label") == "로봇 녹화 준비 중, 누르면 취소"
+    assert not page.locator(toggle).is_disabled()
+    # 켜진 버튼을 흐리게(opacity) 하지 않는다: 조용한 잉크(바탕 대비 4.5:1 이상)와 점선 테두리.
+    look = page.evaluate(f"""(() => {{
+      const b = getComputedStyle(document.querySelector('{toggle}'));
+      const probe = document.createElement('span');
+      probe.style.color = 'var(--ink-quiet)';
+      document.body.append(probe);
+      const quiet = getComputedStyle(probe).color;
+      probe.remove();
+      return {{opacity: b.opacity, color: b.color, quiet, border: b.borderTopStyle, borderColor: b.borderTopColor}};
+    }})()""")
+    assert look["opacity"] == "1", look
+    assert look["color"] == look["quiet"] == look["borderColor"] and look["border"] == "dashed", look
+    fact = page.inner_text("[data-drive-fact=recording]")
+    assert "아직 기록하지 않습니다" in fact and "0:0" not in fact
+    page.click(toggle)                                     # 준비 중 멈춤은 깨끗한 정지
+    page.wait_for_function(f"document.querySelector('{toggle}').textContent.trim() === '로봇 녹화'")
+    assert _recordings(page, base_url)["log"] == ["start", "stop"]
+    page.click(toggle)
+    page.wait_for_function(f"document.querySelector('{toggle}').dataset.state === 'starting'")
+    _recordings(page, base_url, ready=True)                # 기록기가 첫 파일을 열었다
+    page.wait_for_function(ROBOT_RECORD_STOP)
+    page.wait_for_function("document.querySelector('[data-drive-fact=recording]').textContent.includes('녹화 0:')")
+    assert page.get_attribute(toggle, "aria-label") == "로봇 녹화 중지"
+    page.click(toggle)
+    page.wait_for_function(f"document.querySelector('{toggle}').dataset.state === 'idle'")
+    page.click(toggle)
+    page.wait_for_function(f"document.querySelector('{toggle}').dataset.state === 'starting'")
+    page.click("[data-drive-exit]")                        # 준비 중에 나가도 이 기기 녹화는 멈춘다
+    assert _eventually(lambda: _recordings(page, base_url)["log"] == ["start", "stop", "start", "stop",
+                                                                      "start", "stop"])
+    assert errors == [], errors
+
+
+@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+                    reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
+def test_leaving_drive_stops_the_robot_recording_this_device_started(tablet_page):
+    base_url, page, errors = tablet_page
+    _enter_recording_drive(page, base_url)
+    page.click("[data-robot-record]")
+    page.wait_for_function(ROBOT_RECORD_STOP)
+    page.click("[data-drive-exit]")
+    assert _eventually(lambda: _recordings(page, base_url)["log"] == ["start", "stop"])
+    assert errors == [], errors
+
+
+@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+                    reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
+def test_another_devices_recording_is_neither_stopped_nor_stoppable_here(tablet_page):
+    base_url, page, errors = tablet_page
+    _recordings(page, base_url, reset=True, foreign=True)
+    _enter_drive(page, base_url)
+    page.wait_for_function(ROBOT_RECORD_STOP)
+    page.click("[data-robot-record]")
+    page.wait_for_function("document.querySelector('[data-drive-fact=recording]').textContent.includes('다른 기기가 시작한')")
+    page.click("[data-drive-exit]")
+    assert _settled_polls(page, base_url)
+    assert _recordings(page, base_url)["log"] == []
+    assert errors == [], errors
+
+
+@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+                    reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
+def test_a_viewer_is_told_it_needs_an_operator(tablet_page):
+    base_url, page, errors = tablet_page
+    _enter_recording_drive(page, base_url, role="viewer")
+    page.click("[data-robot-record]")
+    page.wait_for_function("document.querySelector('[data-drive-fact=recording]').textContent.includes('운전자(Operator)')")
+    row = _open_sheet(page)
+    row.locator("[data-recording-fetch]").click()
+    page.wait_for_function("document.querySelector('[data-recording-status]')?.textContent.includes('운전자(Operator)')")
+    assert _recordings(page, base_url)["log"] == []
+    assert errors == [], errors
+
+
+@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+                    reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
+@pytest.mark.parametrize("mode, text", [("short", "끊겼습니다"), ("conflict", "멈춘 뒤에")])
+def test_a_cut_or_refused_download_saves_nothing(tablet_page, mode, text):
+    base_url, page, errors = tablet_page
+    _enter_recording_drive(page, base_url, archive=mode)
+    downloads = []
+    page.on("download", lambda item: downloads.append(item))
+    row = _open_sheet(page)
+    row.locator("[data-recording-fetch]").click()
+    page.wait_for_function(f"document.querySelector('[data-recording-status]')?.textContent.includes('{text}')")
+    assert downloads == []
+    assert errors == [], errors
+
+
+@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+                    reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
+@pytest.mark.parametrize("how", ["cancel", "exit"])
+def test_an_in_flight_download_is_aborted_by_cancel_or_leaving(tablet_page, how):
+    """받는 중에 취소하거나 화면을 나가면 요청을 끊는다 — CORE 가 fetched 로 표시하지 않게."""
+    base_url, page, errors = tablet_page
+    _enter_recording_drive(page, base_url, archive="slow")
+    try:
+        row = _open_sheet(page)
+        row.locator("[data-recording-fetch]").click()
+        row.locator("[data-recording-cancel]").wait_for()
+        assert _eventually(lambda: "archive" in _recordings(page, base_url)["log"])
+        page.click("[data-recording-cancel]" if how == "cancel" else "[data-drive-exit]")
+        assert _eventually(lambda: "archive_aborted" in _recordings(page, base_url)["log"]), \
+            _recordings(page, base_url)
+        if how == "cancel":
+            page.wait_for_function("document.querySelector('[data-recording-status]')?.textContent.includes('취소')")
+    finally:
+        _recordings(page, base_url, release=True)
+    assert "archive_done" not in _recordings(page, base_url)["log"]
+    assert errors == [], errors
+
+
+@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+                    reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
+def test_a_large_recording_points_to_the_pc_tool(tablet_page):
+    base_url, page, errors = tablet_page
+    _enter_recording_drive(page, base_url, big=True)
+    row = _open_sheet(page)
+    button = row.locator("[data-recording-fetch]")
+    assert button.is_disabled()
+    assert "rosy_ml fetch" in button.inner_text()
+    assert errors == [], errors
+
+
+@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+                    reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
+def test_recordings_sheet_refresh_keeps_keyboard_focus(tablet_page):
+    """3 s 새로 읽기가 같은 목록을 가져오면 행을 다시 만들지 않는다 — 초점·live region 그대로."""
+    base_url, page, errors = tablet_page
+    _enter_recording_drive(page, base_url)
+    row = _open_sheet(page)
+    page.wait_for_function("!document.querySelector('[data-recording-fetch]').disabled")
+    row.locator("[data-recording-fetch]").focus()
+    page.evaluate("window.__focused = document.activeElement")
+    lists = _recordings(page, base_url)["lists"]
+    assert _eventually(lambda: _recordings(page, base_url)["lists"] >= lists + 2)
+    assert page.evaluate("document.activeElement === window.__focused && window.__focused.isConnected")
     assert errors == [], errors

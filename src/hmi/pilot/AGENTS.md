@@ -15,6 +15,8 @@ Rosy Pilot 원격 조종 표면(D-323). 정적 파일이며 `core_api_web`이 `/
 | `index.html` | web_common `template.html` 기반 `ui-shell`(grammar `spatial`) |
 | `styles.css` | 표면 규칙만 — 색·타이포는 `tokens.css`(D-130.3) |
 | `stick.js` | 입력 → `{linear, angular}` 순수 매핑(데드존·감도 곡선·프리셋·반전) |
+| `recording.js` | D-411 로봇 녹화 순수 표시 판정(경과·크기 서식, 토글, 거부 코드, "녹화본" 시트 행·차단 사유) |
+| `screens/robot-recording.js` | D-411 로봇 녹화 HUD 토글·"녹화본" 시트 DOM(폴링, 시작/정지, 받기 — 정지 중에만, 짧은 본문은 실패) |
 | `progress.md` | Current gate snapshot (SOURCE→FIELD). Overwrite; state of record over this file |
 | `logs.md` | Append-only work journal, one entry per change |
 | `index.md` | Generated. Do not edit |

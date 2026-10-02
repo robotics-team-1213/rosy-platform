@@ -318,6 +318,18 @@ D-280 다섯 원칙은 시각에서 이렇게 묶인다.
 ### 상태 글 — `<ui-status state="…">`
 - 화면 알림 한 줄. `warning`/`error`/`unavailable`/`forbidden`은 주의색 글자. `state`가 없으면 계약 표지가 그려진다.
 
+### 오버레이 칩 — `<ui-chip>`
+- 지도·영상 위에 얹는 한 줄. 장막 바탕 + 표면선 테두리. 지도 조작은 무대의 높이를 훔치지 않는다.
+
+### 분류 머리 — `<ui-triage status="…">`
+- 한 줄 머리. 색을 가진 것은 언제나 하나이고 맥락은 색 없이 따라간다. Fleet 예외 큐(주의·최우선)가 대표 소비자다.
+
+### 증거 · 빈 상태 — `<ui-evidence state="…">` · `<ui-empty>`
+- 증거 네 상태의 한국어와 나이는 공용 표(`core_ui_logic.js`)가 단일 출처다(운용자 말 참조). 빈 목록·읽기 실패는 목록 밖 한 줄 `ui-empty`다(목록은 숨긴다).
+
+### 아이콘 — `class="ui-icon"`
+- 24 viewBox · 실선 2 · `currentColor`. 크기는 `--text-value` 박스 토큰이 정하고(D-405), 식별은 라벨이 나르며 아이콘은 보조다.
+
 ### 배치 묶음
 - **`ui-actions`**: 버튼 줄. 줄바꿈하고, 좁은 칸에서 한 열로 늘어난다.
 - **`.ui-form` / `.ui-field-label`**: 네이티브 폼의 필드 묶음. 좁은 칸에서 한 열.
@@ -328,7 +340,8 @@ D-280 다섯 원칙은 시각에서 이렇게 묶인다.
 - 붙박이, `ground-deep` 바탕, 88px 기준 높이. 왼쪽 `ui-brand`(장미색 워드마크 + 조용한 부제), 오른쪽 끝 비상 정지. 좁은 창의 접기는 표면이 정한다(로봇 셸: 두 줄 격자, Fleet: 90rem 아래 `설정` 뒤로 접기). 워드마크는 한 줄이다: 칸이 모자라면 표면이 이름 칸에 `container-type: inline-size`를 주고 글자가 칸에 맞게 줄어든다(상한 title).
 
 ### 비상 정지
-- `ui-button kind="irreversible"`. 로봇 셸 `#shell-estop`, Fleet `#estop`("전체 정지 / 등록된 모든 로봇"). 줄바꿈하지 않고, 모든 폭에서 첫 화면에 있다.
+- `ui-button kind="irreversible"`. 로봇 셸 `#shell-estop`, Fleet `#estop`(팔각 아이콘만, 접근 이름·`title` "전체 비상 정지 (래치 · 로봇별 관리자 해제)", [D-421](docs/adr/D-421-fleet-cancel-all-driving-separate-from-latched-estop.md)). 줄바꿈하지 않고, 모든 폭에서 첫 화면에 있다.
+- 래치 없는 Fleet **전체 주행 취소**(`#cancel-all`)는 비상 정지가 아니다. 상단바가 아니라 발행 상태 줄에 `primary`로 선다(위험 채움은 비상 정지 하나).
 
 ### 테마 선택
 - `role="group"` 안에 `RosyTheme.choices` 하나마다 `ui-button kind="segment" data-theme-choice="값"`(지금은 어둡게·밝게·시스템). `theme.js`가 누름을 받아 `aria-pressed`를 맞춘다. 로봇은 `/device` 화면 설정 패널, Fleet은 `설정` 안이다.

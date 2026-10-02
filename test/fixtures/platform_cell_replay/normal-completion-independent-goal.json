@@ -1,0 +1,8 @@
+{
+  "scenario": "normal-completion-independent-goal",
+  "expected": {
+    "after_action": "ACTION_SUCCEEDED",
+    "after_conflicting_observation": "HOLD",
+    "after_independent_goal": "GOAL_CONFIRMED"
+  }
+}

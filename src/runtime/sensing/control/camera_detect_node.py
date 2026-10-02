@@ -24,6 +24,7 @@ from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy, qos_profi
 from sensor_msgs.msg import CompressedImage, Image
 from std_msgs.msg import Bool, Float32, String
 
+from core_common.protocol.recording import ACTIVE_TOPIC
 from . import executor_choice
 from .sensing.perception.camera import classify_frame
 from .sensing.perception.camera_controls import (
@@ -35,6 +36,10 @@ from .sensing.perception.camera_policy import CameraPolicy
 from .sensing.perception.camera_worker import CameraFrame, CameraPreprocessProfile, CameraPreprocessWorker
 from .sensing.perception.jpeg_frame import DEFAULT_QUALITY, encode_jpeg
 from .sensing.perception.v4l2_controls import freeze_v4l2_controls, v4l2_lock_summary
+
+# D-411: the Pilot recorder's latched active flag (pilot_recorder_node).
+_RECORDER_QOS = QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE,
+                           durability=DurabilityPolicy.TRANSIENT_LOCAL)
 
 
 class _OpenCVCamera:
@@ -134,12 +139,16 @@ class CameraDetectNode(Node):
         self.dbg_pub = self.create_publisher(String, 'camera/debug', 10)
         self.img_pub = self.create_publisher(Image, 'camera/front', qos_profile_sensor_data)
         self._jpeg_quality = int(self.get_parameter('compressed_quality').value)
+        self._publish_compressed = bool(self.get_parameter('publish_compressed').value)
+        self._recorder_active = False
+        self._jpeg_pub_created = None
         self.jpeg_pub = None
-        if bool(self.get_parameter('publish_compressed').value):
-            # Best effort, depth 1 (D-185): only the latest frame matters.
-            self.jpeg_pub = self.create_publisher(CompressedImage, 'camera/front/compressed',
-                                                  QoSProfile(depth=1, reliability=ReliabilityPolicy.BEST_EFFORT))
-            self.get_logger().info(f'camera/front/compressed on (quality {self._jpeg_quality})')
+        if self._publish_compressed:
+            self.jpeg_pub = self._compressed_publisher()
+        # D-411: the Pilot recorder needs the JPEG copy only while it records.
+        self.create_subscription(Bool, ACTIVE_TOPIC, self._on_recorder_active, _RECORDER_QOS)
+        # A recorder that died while active never sends False: watch its publisher instead.
+        self.create_timer(1.0, self._check_recorder_alive)
         self.observation_pub = self.create_publisher(String, 'camera/observation', 10)
         self.telemetry_pub = self.create_publisher(String, 'camera/telemetry', 10)
         calibration_qos = QoSProfile(
@@ -483,7 +492,8 @@ class CameraDetectNode(Node):
         msg.step = msg.width * 3
         msg.data = np.ascontiguousarray(bgr).tobytes()
         self.img_pub.publish(msg)
-        if self.jpeg_pub is not None:
+        pub = self.jpeg_pub  # read once: the recorder callback may switch it
+        if pub is not None:
             try:
                 data, fmt = encode_jpeg(bgr, self._jpeg_quality)
             except (ValueError, RuntimeError) as exc:
@@ -494,7 +504,31 @@ class CameraDetectNode(Node):
             jpeg.header = msg.header
             jpeg.format = fmt
             jpeg.data = data
-            self.jpeg_pub.publish(jpeg)
+            pub.publish(jpeg)
+
+    def _compressed_publisher(self):
+        if self._jpeg_pub_created is None:
+            # Best effort, depth 1 (D-185): only the latest frame matters.
+            self._jpeg_pub_created = self.create_publisher(
+                CompressedImage, 'camera/front/compressed',
+                QoSProfile(depth=1, reliability=ReliabilityPolicy.BEST_EFFORT))
+            self.get_logger().info(f'camera/front/compressed on (quality {self._jpeg_quality})')
+        return self._jpeg_pub_created
+
+    def _on_recorder_active(self, msg):
+        # The publisher is never destroyed (no teardown while a frame publishes);
+        # while idle it simply carries no messages.
+        self._set_recorder_active(bool(msg.data))
+
+    def _check_recorder_alive(self):
+        if self._recorder_active and self.count_publishers(ACTIVE_TOPIC) == 0:
+            self.get_logger().warn('pilot recorder gone while active; JPEG copy off')
+            self._set_recorder_active(False)
+
+    def _set_recorder_active(self, active):
+        self._recorder_active = active
+        wanted = self._publish_compressed or self._recorder_active
+        self.jpeg_pub = self._compressed_publisher() if wanted else None
 
     def destroy_node(self):
         self._stop_cam()

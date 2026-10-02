@@ -305,6 +305,12 @@
 - 증거: `test/test_localization_contracts.py` +1(왕복, 17개·NaN·inf 거부).
 - gate 변화: 없음.
 
+## 2026-10-02 · f341e9fd · feat(core_common): D-411 A 녹화 계약·CORE 가드·읽기 전용 저장소
+- 변경: `protocol/recording.py`(경로·토픽·서비스 상수, `TeleopIntent`·`RecorderStatus`(boot_id·seq)·`ManifestFile`·`RecordingManifest`(bag_returncode·writer_killed)·`RecordingSummary`, `recording_id_ok`·`safe_member`), `domain/pilot_recording.py`(소유 토큰·`/ws/state` 링크 5 s·seat 변경 정지, 순번 상태 채택, 확인된 정지만 이벤트), `domain/pilot_recording_store.py`(목록·manifest 검증·경로 탈출 차단·USTAR 스트림). `config/rosy_default.yaml` 에 `recording.pilot_root`.
+- 증거: `python -m pytest src/contracts/foundation/test/test_pilot_recording_contract.py src/contracts/foundation/test/test_pilot_recording_guard.py src/contracts/foundation/test/test_pilot_recording_store.py -q` → 65 passed, 2 skipped (2026-10-02 Windows).
+- gate 변화: SOURCE 유지. ROS-SIM HOLD — 계획 Verification ROS-SIM 체크리스트(WSL Ubuntu) 미실행, DEVICE 증거 없음.
+- 결정: D-411 A.
+
 ## 2026-10-02 · uncommitted · feat(contracts): additive D-403 CELL_TRANSFER grant
 
 - 변경: 기존 `FleetActionGrant`의 `PICK_PLACE` 제약은 유지하고 `FleetCellTransferGrant` 합집합 변형을 추가했다. 새 payload는 job/recipe/cell hash, ordered step index, item/pallet/layer, robot-base home/pick/place pose와 approach/carry height를 요구한다.

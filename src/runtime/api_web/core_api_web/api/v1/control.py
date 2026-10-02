@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
@@ -9,10 +11,12 @@ from core_api_web.api.v1.common import apply_mode, operator, require_calibration
 from core_api_web.api.deps import AuthContext, get_services, CoreServicesLike
 from core_api_web.api.errors import ApiError
 from core_api_web.api.deps import Mode
+from core_common.capability import CapabilityError
 from core_common.domain.tasks import TaskKind
 
 
 control_router = APIRouter(prefix="/api/v1", tags=["control"])
+_log = logging.getLogger(__name__)
 
 
 class ModeRequest(BaseModel):
@@ -35,11 +39,22 @@ def set_mode(body: ModeRequest, auth: AuthContext = Depends(operator),
 @control_router.post("/teleop")
 def teleop(body: TeleopRequest, auth: AuthContext = Depends(operator),
            svc: CoreServicesLike = Depends(get_services)):
-    TaskKind.MOVE.require(svc.capability)
-    require_calibration_owner(svc, auth, "teleop")
-    require_kept(svc, "teleop")
+    try:
+        TaskKind.MOVE.require(svc.capability)
+        require_calibration_owner(svc, auth, "teleop")
+        require_kept(svc, "teleop")
+    except (ApiError, CapabilityError) as exc:
+        # D-411: a refusal before the manager is still an operator intent.
+        code = exc.code if isinstance(exc, ApiError) else "CAPABILITY_NOT_SUPPORTED"
+        svc.command.note_intent(body.linear, body.angular, "manual", False, code)
+        raise
     accepted, code = svc.command.teleop(body.linear, body.angular, source="manual")
     if not accepted:
         raise ApiError(code, 409 if code in ("MODE_CONFLICT", "EMERGENCY_ACTIVE") else 400,
                        f"teleop rejected: {code}")
+    try:
+        svc.pilot_recording.on_teleop(auth.token_id)   # D-411: another driver ends the recording
+    except Exception:  # noqa: BLE001 - the command is already accepted; never answer it with a 500
+        svc.pilot_recording.hook_errors += 1
+        _log.exception("pilot recording seat-change hook failed")
     return {"accepted": True}

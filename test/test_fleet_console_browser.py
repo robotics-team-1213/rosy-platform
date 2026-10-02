@@ -433,6 +433,103 @@ def test_fleet_estop_fires_on_one_click_without_any_dialog(console_url):
         browser.close()
 
 
+def test_fleet_cancel_all_requires_confirm_and_logs_each_robot_honestly(console_url):
+    """D-421 — 전체 주행 취소는 confirm을 지나고, 로봇별 결과와 물리 정지 미확인을 쓴다."""
+    from playwright.sync_api import sync_playwright
+
+    step_ok = {"ok": True}
+    api = {
+        "/api/fleet/state": SNAPSHOT,
+        "/api/fleet/map": MAP_GRID,
+        "/api/fleet/formation": FORMATION,
+        "/api/fleet/cancel-all": {
+            "cancelled": 1, "total": 3, "evidence": "CORE_REPLY_ONLY",
+            "robots": [
+                {"robot_id": "rosy_01", "result": "cancelled",
+                 "steps": {"swarm": step_ok, "navigation": step_ok, "line_follow": step_ok},
+                 "tasks": {"awaiting_core_result": ["t-1"]}},
+                {"robot_id": "rosy_02", "result": "unreachable",
+                 "steps": {"swarm": {"ok": False, "error": {"reachable": False,
+                                                             "code": "ConnectError",
+                                                             "message": "gone"}},
+                           "navigation": {"ok": False, "error": {"reachable": False,
+                                                                  "code": "ConnectError",
+                                                                  "message": "gone"}},
+                           "line_follow": {"ok": False, "error": {"reachable": False,
+                                                                   "code": "ConnectError",
+                                                                   "message": "gone"}}},
+                 "tasks": {"awaiting_core_result": []}},
+                {"robot_id": "rosy_03", "result": "failed",
+                 "steps": {"swarm": step_ok, "navigation": step_ok,
+                           "line_follow": {"ok": False, "error": {
+                               "reachable": False, "sent": False,
+                               "code": "ADDRESS_UNVERIFIED", "message": "stop only"}}},
+                 "tasks": {"awaiting_core_result": []}},
+            ],
+            "formation": {"stopped": True, "state": "STOPPED"},
+            "tasks": {"canceled": ["q-1", "q-2"], "error": None},
+        },
+    }
+    posts: list[tuple[str, str]] = []
+    with sync_playwright() as p:
+        browser, page, errors = _open_console(
+            p, api, posts=posts, init_script=DECLINE_CONFIRM)
+        page.goto(console_url, wait_until="networkidle")
+        page.locator("#cancel-all").click()
+        page.wait_for_function("() => window.__confirms.length === 1")
+        declined = [post for post in posts if post[1] == "/api/fleet/cancel-all"]
+        accept_confirm(page)
+        page.locator("#cancel-all").click()
+        page.get_by_text("주행 취소 요청 응답: 1/3 · 물리 정지 미확인").wait_for()
+        page.get_by_text("rosy_02 주행 취소 응답 없음 — 대형 추종 ConnectError · 내비게이션 ConnectError · 차선 추종 ConnectError").wait_for()
+        page.get_by_text("rosy_03 주행 취소 실패 — 주소 미확인 — 차선 추종 끄기 미전송").wait_for()
+        page.get_by_text("대기 작업 2개 취소 · 로봇 취소 확인 대기 작업 1개").wait_for()
+        confirms = page.evaluate("window.__confirms")
+        save_temp_screenshot(page, "fleet_cancel_all_result.png")
+        assert not errors, f"페이지 오류: {errors}"
+        browser.close()
+
+    assert "비상 정지 래치는 걸지 않습니다" in confirms[0]
+    assert declined == []
+    assert ("POST", "/api/fleet/cancel-all") in posts
+    assert ("POST", "/api/fleet/estop") not in posts
+
+
+DELAYED_FORMATION = {
+    **FORMATION,
+    "stream_evidence": {
+        **FORMATION["stream_evidence"],
+        "rosy_02": {"state": "delayed", "age_s": 2.1, "reason": "sample_too_old",
+                    "stale_after_s": 1.0, "source": "follower_tx"},
+    },
+    "relay": {
+        **FORMATION["relay"],
+        "follower_tx_hz": {"rosy_02": 1.2, "rosy_03": 0.0},
+        "follower_connected": {"rosy_02": True, "rosy_03": False},
+    },
+}
+
+HOLDING_FORMATION = {
+    **FORMATION,
+    "state": "HOLDING",
+    "reason": ["STREAM_LOST"],
+    "pending_triggers": [["stream", "rosy_03"]],
+}
+
+UNREACHABLE_SNAPSHOT = {
+    **SNAPSHOT,
+    "fleet": {"name": "site", "online": 2, "total": 3},
+    "robots": [
+        SNAPSHOT["robots"][0],
+        SNAPSHOT["robots"][1],
+        _robot(
+            "rosy_03", {"x": 0.45, "y": 0.4, "yaw": 0.0},
+            online=False,
+            error={"reachable": False, "code": "CONNECT_ERROR"},
+        ),
+    ],
+}
+
 
 def test_delayed_follower_stream_is_named_in_the_roster(console_url):
     """FOR-003 — 바닥 Hz 아래 팔로워는 '지연'으로, 단절 팔로워는 '끊김'으로 갈린다."""
@@ -1375,7 +1472,8 @@ def test_mobile_console_has_no_horizontal_overflow(console_url, width):
           status: document.querySelector('#online-pill').getBoundingClientRect().toJSON(),
           operator: document.querySelector('#user-role').getBoundingClientRect().toJSON(),
           clock: document.querySelector('#clock').getBoundingClientRect().toJSON(),
-          stopScopeHidden: getComputedStyle(document.querySelector('#estop small')).display === 'none',
+          stopScopeHidden: !document.querySelector('#estop small')
+            && [...document.querySelectorAll('#estop span')].every(s => s.classList.contains('sr-only')),
           stopAccessibleName: document.querySelector('#estop').getAttribute('aria-label'),
         })""")
         browser.close()
@@ -1392,7 +1490,8 @@ def test_mobile_console_has_no_horizontal_overflow(console_url, width):
         status, clock = layout["status"], layout["clock"]
         assert min(status["bottom"], clock["bottom"]) - max(status["top"], clock["top"]) > 1, layout
         assert layout["stopScopeHidden"], layout
-        assert layout["stopAccessibleName"] == "전체 로봇 정지", layout
+        # 아이콘만 보이는 정지 — 래치 뜻은 접근 이름이 말한다(D-421).
+        assert layout["stopAccessibleName"] == "전체 비상 정지 (래치 · 로봇별 관리자 해제)", layout
 
 
 @pytest.mark.parametrize("width", [320, 390, 1366])

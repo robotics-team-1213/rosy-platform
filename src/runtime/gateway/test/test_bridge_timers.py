@@ -239,6 +239,8 @@ EXPECTED_SUBSCRIPTIONS = [
     ("localization/state", "_on_loc_state", "LATCHED"),
     ("localization/candidates", "_on_loc_candidates", "LATCHED"),
     ("localization/result", "_on_loc_result", 10),
+    # D-411 A: the camera unit's recorder status (latched; CORE's guard judges on it).
+    ("pilot_recorder/status", "_on_pilot_recorder_status", "LATCHED"),
 ]
 
 #: `(topic, qos)` — `ros_bridge.py:78-80,128-131` (cmd_vel/initialpose first,
@@ -254,6 +256,10 @@ EXPECTED_PUBLISHERS = [
     ("localization/suspect", 5),
     # D-395 P2-7: mission start/end for the sensing node's search-after-mission.
     ("localization/mission", 5),
+    # D-411 A: teleop decisions as evidence for the Pilot recorder.
+    ("teleop/intent", 10),
+    # D-411 A: a recording left CORE in full; the recorder may then evict it under quota.
+    ("pilot_recorder/fetched", 5),
 ]
 
 #: Five, not four. The fourth is behind the optional `slam_toolbox` import and
@@ -261,7 +267,9 @@ EXPECTED_PUBLISHERS = [
 #: literal would pin whatever happened to be installed, and a reshape could drop
 #: `_slam_client` entirely and stay green. The fifth (D-385) hands the face its
 #: mode-chosen expression; absent on a bench, the bridge just keeps the face.
-EXPECTED_CLIENTS = ["set_led", "set_emotion", "start_motor", "stop_motor", "slam_toolbox/save_map"]
+#: The sixth (D-411 A) asks the camera unit's recorder to start or stop.
+EXPECTED_CLIENTS = ["set_led", "set_emotion", "start_motor", "stop_motor", "pilot_recorder/set_active",
+                    "slam_toolbox/save_map"]
 
 
 def test_the_bridge_registers_timers_at_the_expected_periods(registered):
@@ -296,7 +304,7 @@ def test_the_three_latched_endpoints_stay_latched(registered):
     latched |= {t for t, _cb, qos in registered.node.subscriptions if qos == "LATCHED"}
 
     assert latched == {"map", "power/mode", "docking/collision_exemption", "motor/ready",
-                       "localization/state", "localization/candidates"}
+                       "localization/state", "localization/candidates", "pilot_recorder/status"}
 
 
 def test_the_bridge_opens_the_same_service_clients(registered):

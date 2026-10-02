@@ -16,6 +16,12 @@ for _path in (ROOT / "src/products/omx/adapter", ROOT / "src/site/cell"):
     if str(_path) not in sys.path:
         sys.path.insert(0, str(_path))
 
+# The palletizing process ships as the `rosy-palletizing` wheel (PEP 420 `rosy`
+# namespace — ROSY_Platform_Architecture_Design_v0.2). Hosts without the wheel
+# skip the contract instead of erroring at collection (importorskip precedent,
+# docs/logs.md 2026-09-24).
+pytest.importorskip("rosy.processes.palletizing")
+
 from omx_adapter.kinematics import ARM_JOINTS, OmxKinematics, TopDownPose  # noqa: E402
 from omx_adapter.manipulation_plan import ExecutionStateSnapshot  # noqa: E402
 from omx_adapter.pose_plan import (  # noqa: E402

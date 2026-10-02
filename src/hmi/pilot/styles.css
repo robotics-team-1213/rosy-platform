@@ -333,6 +333,49 @@ body[data-pilot-screen="drive"] .pilot-main {
   backdrop-filter: blur(6px);
 }
 
+/* ---- D-411 A 로봇 녹화: HUD 칩과 "녹화본" 시트(입력 조정 패널과 같은 자리·여백) ---- */
+[data-drive-fact=recording] { font-size: var(--text-label); font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(--nominal-quiet); }
+[data-drive-fact=recording][data-state=recording],
+[data-drive-fact=recording][data-state=stopping] { color: var(--status-warn); }
+[data-drive-fact=recording][data-state=refused] { color: var(--status-crit); }
+/* 녹화 준비 중: 아직 기록하지 않는다. 켜진(누르면 취소) 버튼이라 흐리게(opacity) 하지 않고
+   조용한 잉크와 점선으로 구분한다. --ink-quiet 은 바탕 대비 어두운 테마 6.5:1, 밝은 테마 6.6:1
+   (card-2 위 4.9:1) — 4.5:1 이상. */
+ui-button[data-robot-record][data-state="starting"] {
+  color: var(--ink-quiet);
+  border: 1px dashed var(--ink-quiet);
+}
+[data-drive-fact=recording][hidden] { display: none; }
+[data-recordings-sheet] {
+  position: absolute;
+  /* HUD 바로 아래: robot-recording.js 가 HUD 아래끝을 재어 두 변수에 넣는다 */
+  top: calc(var(--recordings-top, 0px) + var(--space-2));
+  right: var(--space-3);
+  width: min(24rem, calc(100vw - var(--space-3) * 2));
+  max-height: calc(100dvh - var(--recordings-viewport-top, 0px) - var(--space-2) * 2);
+  overflow-y: auto;
+  padding: var(--space-3);
+  display: grid;
+  gap: var(--space-2);
+  background: color-mix(in srgb, var(--ground-raise) 94%, transparent);
+  border: 1px solid var(--line-30);
+  border-radius: var(--radius-panel);
+  z-index: 25;
+  backdrop-filter: blur(6px);
+}
+[data-recordings-sheet] [data-recordings-notice][hidden] { display: none; }
+[data-recordings-list] { display: grid; gap: var(--space-2); }
+[data-recordings-list] [data-recording-id] {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding-block: var(--space-1);
+  border-top: 1px solid var(--line-14);
+}
+[data-recording-facts] { display: grid; gap: var(--space-1); min-width: 0; }
+[data-recording-status] { color: var(--status-warn); }
+
 /* 조작 버튼·상단 버튼은 한 줄을 지킨다 — 쪼개진 "제자 리" 는 누를 곳을 흐린다 */
 [data-drive-left] ui-button,
 body[data-pilot-screen="drive"] ui-topbar ui-button { white-space: nowrap; }
@@ -347,6 +390,9 @@ body[data-pilot-screen="drive"] ui-topbar ui-button { white-space: nowrap; }
   [data-drive-controls] { padding-left: var(--space-3); padding-right: var(--space-3); gap: var(--space-2); }
   [data-drive-presets] ui-button { min-width: 2.5rem; padding: 0 var(--space-1); }
   [data-drive-pivots] ui-button { min-width: 0; padding: 0 var(--space-2); }
+  /* HUD 액션 7개(D-411 로봇 녹화·녹화본 포함)는 한 줄에 들지 않는다 — 줄을 넘기되 글자는 쪼개지 않는다 */
+  [data-drive-hud] ui-actions { flex-wrap: wrap; justify-content: flex-end; margin-left: 0; }
+  [data-drive-hud] ui-actions ui-button { white-space: nowrap; }
 }
 
 /* 태블릿 세로·휴대폰 */

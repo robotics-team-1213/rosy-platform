@@ -27,7 +27,8 @@ import tempfile
 _LAUNCH_DIR = os.path.dirname(os.path.abspath(__file__))
 if _LAUNCH_DIR not in sys.path:
     sys.path.insert(0, _LAUNCH_DIR)
-from gz_multi_args import apply_nav_composition, nav_composition_argument, optional_float as _optional_float
+from gz_multi_args import (apply_nav_composition, apply_sim_speed, nav_composition_argument,
+                           optional_float as _optional_float, sim_speed_arguments)
 from world_profiles import (parse_spawn_poses, resolve_asset_path, resolve_world, resolve_world_path,
                             spawn_xy, world_share_parent)
 
@@ -332,11 +333,14 @@ def _launch_setup(context):
         )
     ]
 
-    world_path = str(resolve_world_path(
+    # per-robot bridge config를 런치 시점 생성 (physics_step 의 월드 사본도 여기)
+    bridge_dir = tempfile.mkdtemp(prefix="rosy_gz_multi_")
+    world_path, speed_env = apply_sim_speed(str(resolve_world_path(
         profile,
         rosy_gz_share,
         package_share=get_package_share_directory,
-    ))
+    )), context, bridge_dir)
+    actions += speed_env
 
     # Gazebo 서버 (1회) — headless 여부로 GUI 분기
     server_args = f"-r -s -v4 \"{world_path}\""
@@ -357,9 +361,6 @@ def _launch_setup(context):
                 launch_arguments={"gz_args": "-g -v4"}.items(),
             )
         )
-
-    # per-robot bridge config를 런치 시점 생성
-    bridge_dir = tempfile.mkdtemp(prefix="rosy_gz_multi_")
 
     for i in range(1, robots + 1):
         ns = f"{prefix}_{i:02d}"
@@ -590,6 +591,7 @@ def generate_launch_description():
         DeclareLaunchArgument("loc_assist", default_value="true", choices=["true", "false"],
                               description="mode:=nav 에서 로봇별 D-395 loc_assist_node"),
         nav_composition_argument(),
+        *sim_speed_arguments(),
         DeclareLaunchArgument("api_port_base", default_value="8080",
                               description="첫 로봇의 core API 포트"),
         OpaqueFunction(function=_launch_setup),

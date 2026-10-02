@@ -58,10 +58,13 @@ class GoalEvidenceService:
     def on_action_terminal(self, mission_id: str) -> dict[str, Any] | None:
         """Verify evidence that arrived before terminal action readback."""
         mission = self.missions.get(mission_id)
-        if mission is None or mission.get("status") != "ACTION_SUCCEEDED":
+        if mission is None or mission.get("status") not in {"ACTION_SUCCEEDED", "HOLD"}:
             return None
         action_id, attempt_id = mission.get("action_id"), mission.get("attempt_id")
         if not isinstance(action_id, str) or not isinstance(attempt_id, str):
+            return None
+        if not self.missions.store.terminal_action_succeeded(
+                mission_id, action_id=action_id, attempt_id=attempt_id):
             return None
         stored = self.store.latest_for_attempt(
             mission_id=mission_id, action_id=action_id, attempt_id=attempt_id,
@@ -164,12 +167,12 @@ class GoalEvidenceService:
             raise GoalEvidenceSubmissionError("GOAL_EVIDENCE_INVALID", str(exc)) from exc
 
         current = self.missions.get(mission_id)
-        if current is not None and current["status"] == "ACTION_SUCCEEDED":
+        if current is not None and current["status"] in {"ACTION_SUCCEEDED", "HOLD"}:
             try:
                 result = self.on_action_terminal(mission_id)
             except (GoalEvidenceError, ValueError) as exc:
                 raise GoalEvidenceSubmissionError("GOAL_EVIDENCE_REJECTED", str(exc)) from exc
-            state = result["status"] if result is not None else current["status"]
+            state = result["status"] if result is not None else "PENDING_ACTION_TERMINAL"
         else:
             state = "PENDING_ACTION_TERMINAL"
         return {

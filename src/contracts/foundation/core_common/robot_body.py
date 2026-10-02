@@ -199,18 +199,6 @@ class RobotBody:
                 points.append(point)
         return ScanView(tuple(points), tuple(unknown), low)
 
-    def ultrasonic_points(self, range_m: float, *, half_angle_deg: float,
-                          step_deg: float = 2.5) -> tuple[Point, ...]:
-        """A forward echo at range_m as points across its cone (fail-safe: every point counts)."""
-        if self.ultrasonic_x_m is None:
-            return ()
-        count = max(1, int(math.ceil(2.0 * half_angle_deg / step_deg)))
-        out = []
-        for index in range(count + 1):
-            angle = math.radians(-half_angle_deg + 2.0 * half_angle_deg * index / count)
-            out.append((self.ultrasonic_x_m + range_m * math.cos(angle), range_m * math.sin(angle)))
-        return tuple(out)
-
     # --- judgements ----------------------------------------------------------------------
 
     def translation_gap(self, points: Sequence[Point], *, reverse: bool = False,

@@ -53,7 +53,8 @@ def score(report: CandidateReport, context: Context, now: float,
           weights: Weights = Weights()) -> list[dict]:
     """Per-candidate cue values and weighted total, in report order."""
     objects = [(o.x, o.y) for o in report.unmapped_objects]
-    seen = [(s.bearing_rad, s.range_m) for s in report.square_sightings]
+    # Only ranged sightings are evidence (D-395 rev. 11); bearing-only ones stay on the wire.
+    seen = [(s.bearing_rad, s.range_m) for s in report.square_sightings if s.range_m is not None]
     out = []
     for c in report.candidates:
         pose = (c.x, c.y, c.yaw)

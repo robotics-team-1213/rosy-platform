@@ -59,12 +59,7 @@ class LineFollowManager(BodyStopMixin, StuckRecoveryMixin):
         self._path_evaluated = False
         self._blocked_since: Optional[float] = None
         self._escalated = False
-        # D-422: last forward ultrasonic reading (None = no echo in range) and the body-gap
-        # fields the status reports in body mode ({} otherwise).
-        self._ultrasonic: Optional[float] = None
-        self._ultrasonic_at: Optional[float] = None
-        self._gap_status: dict = {}
-        self._gap_resume: Optional[float] = None
+        self._init_body_stop()  # D-422 (body_stop.py)
         self._init_recovery()  # D-407 (stuck_wiring.py)
 
     def bind_clock(self, clock: Callable[[], float]) -> None:
@@ -121,8 +116,7 @@ class LineFollowManager(BodyStopMixin, StuckRecoveryMixin):
             # 거리가 재출발 거리 안이면 막힌 채로 시작한다(다음 스캔 전 한 틱도 그냥 가지 않게).
             self._obstacle_blocked = (self._scan_points is None and self._clearance is not None
                                       and self._clearance < self._config.sector_resume_m)
-            self._gap_status = {}
-            self._gap_resume = None
+            self._reset_body_stop()
             self._clear_since = None
             self._blocked_since = None
             self._escalated = False
@@ -255,6 +249,7 @@ class LineFollowManager(BodyStopMixin, StuckRecoveryMixin):
         with self._lock:
             self._scan_points = tuple((float(x), float(y)) for x, y in points)
             self._clearance_at = float(now)
+            self._remember_near(float(now))  # D-422: returns that slip under range_min
 
     def _set_clearance(self, distance: Optional[float], now: Optional[float] = None,
                        stop: Optional[float] = None, resume: Optional[float] = None) -> None:
@@ -415,7 +410,7 @@ class LineFollowManager(BodyStopMixin, StuckRecoveryMixin):
         if self._clearance_at is not None:
             # 앞 물체 정지는 차선 상실이 아니다 — LOST 로 누적하지 않고 치워지면 곧바로 간다.
             if current - self._clearance_at > self._config.clearance_stale_s:
-                self._gap_status = {}
+                self._clear_gap()
                 return self._stop_decision("HOLD", "obstacle_sensor_stale")
             if self._scan_points is not None and self._observation is not None:
                 # 관측이 하나도 없으면 의도가 없다 — 재지 않고 WAITING 으로 둔다.
@@ -424,7 +419,7 @@ class LineFollowManager(BodyStopMixin, StuckRecoveryMixin):
                     # D-422: 몸 윤곽이 의도 경로를 따라 쓸고 갈 때 첫 접촉까지의 거리.
                     self._set_clearance(*self._body_clearance(current))
                 else:
-                    self._gap_status = {}
+                    self._clear_gap()
                     self._set_clearance(self._path_clearance(), current)
                 self._path_evaluated = True
             if self._obstacle_blocked:

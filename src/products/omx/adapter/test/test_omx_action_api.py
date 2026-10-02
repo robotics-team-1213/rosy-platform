@@ -155,6 +155,20 @@ def test_cell_transfer_uds_grant_reaches_only_its_phase_runner(tmp_path):
     local_action = store.get_action("cell-action-1")
     assert local_action["observation_id"] == ""
     assert "observation_revision" not in local_action["request"]["payload"]
+    assert response["version"] == 2
+    assert response["receipt"]["phase_summaries"][0]["phase_id"] == "approach"
+    readback = api.dispatch({
+        "version": 2, "operation": "GetAction", "action_id": "cell-action-1",
+    }, peer_uid=1001)
+    assert readback["version"] == 2
+    assert readback["receipt"]["phase_summaries"] == response["receipt"]["phase_summaries"]
+    cancelled = api.dispatch({
+        "version": 2, "operation": "CancelAction", "action_id": "cell-action-1",
+        "attempt_id": "cell-attempt-1", "reason": "SITE_STOP",
+        "requested_at": datetime.now(timezone.utc).isoformat(),
+    }, peer_uid=1001)
+    assert cancelled["version"] == 2 and cancelled["status"] == 200
+    assert cancelled["receipt"]["phase_summaries"][0]["state"] == "CANCEL_REQUESTED"
 
 
 def test_cell_transfer_is_rejected_without_a_phase_runner_before_journaling(tmp_path):

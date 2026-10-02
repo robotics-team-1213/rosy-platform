@@ -51,6 +51,9 @@ DEPLOYED_CONTROL_EXECUTABLES = {
     # closure through hardware.launch.py behind enable_loc_assist (default off on
     # the device). It publishes no velocity command.
     "loc_assist_node",
+    # D-411 A: Pilot learning recording, always started by camera_preview.launch.py and
+    # idle until CORE asks. Evidence only; it publishes no velocity command.
+    "pilot_recorder_node",
 }
 
 #: Control executables that can own the final command (D-149 standalone exception).

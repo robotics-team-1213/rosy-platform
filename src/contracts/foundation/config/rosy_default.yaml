@@ -123,8 +123,11 @@ line_follow:                       # D-143 selected-source, fail-closed policy
   # D-422 body-referenced stop (path mode with body_front_x_m/body_lidar_x_m/body_rear_x_m/
   # body_half_width_m/body_rotation_radius_m from the robot package): the URDF outline is swept
   # along the intended lane arc; stop gap = margin + v*latency + v^2/(2*decel) at the intended
-  # speed, resume = stop + hysteresis. Without a fresh ultrasonic reading the stop gap is at
-  # least the straight-ahead body gap of the scan's range_min (the LiDAR is blind inside it).
+  # speed, resume = stop + hysteresis. The stop gap is always at least the straight-ahead body
+  # gap of the scan's range_min (the LiDAR is blind inside it; the ultrasonic never lifts this);
+  # returns that slip under range_min are remembered from the twist sent to the wheels. The sweep also
+  # covers the tighter arc the traffic gate / safety clip can make. In place: rotation radius
+  # + obstacle_body_margin_m (obstacle_stop_m/resume_m do not apply there).
   obstacle_body_margin_m: 0.02     # URDF/calibration error and floor slip
   obstacle_latency_s: 0.15         # scan age + tick + command to wheels
   obstacle_decel_mps2: 0.5         # conservative Pinky braking (no measured value yet)
@@ -234,6 +237,9 @@ power:                            # PWR-001~004 절전/근접 웨이크 (D-24)
 
 events:
   ring_buffer_size: 1000          # EVT-004
+
+recording:
+  pilot_root: "/var/lib/rosy/pilot-recordings"   # D-411 A; CORE reads only. Tests and Gazebo override it
 
 fleet:
   enabled: false                  # P4-2에서 활성화 (PRT)

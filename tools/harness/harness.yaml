@@ -9,8 +9,6 @@ adr_log: docs/reference/ROSY ADR Log.md
 adr_gaps:
   D-419: "reserved by branch feat/d415-saf003-fleet-loss (SAF-003 Fleet link loss, renumbered from D-415 2026-10-02); remove once it lands"
   D-423: "reserved by branch feat/d423-object-range-detection (camera object range detection, seen 2026-10-02); D-424 written first; remove once it lands"
-  D-421: "reserved by branch feat/d414-fleet-cancel-all (Fleet cancel-all driving, renumbered from D-414/D-417 2026-10-02); remove once it lands"
-  D-411: "reserved by an in-flight branch (seen 2026-10-02 in git log --all); D-412 landed first; remove once it lands"
   D-29: "unused; the vision accelerator shield design only proposed the number"
   D-324: "unused; the Pinky artifact-selection ADR was first written as D-324 and renumbered to D-325 to avoid a same-day collision (commit 45f9470b, 2026-09-29). Remove if another session lands an ADR as D-324"
   D-35: "reserved for the swarm formation HOLD decision pending the sim bench"
@@ -130,7 +128,7 @@ modules:
     functional: [src/runtime/events/test/test_audit.py]
   - name: core_features
     path: src/runtime/services
-    tests: [src/runtime/gateway/test/test_core_logic.py, src/runtime/services/test/test_docking.py, src/runtime/services/test/test_swarm.py, src/runtime/gateway/test/test_power.py, src/runtime/gateway/test/test_traffic_policy.py]
+    tests: [src/runtime/gateway/test/test_core_logic.py, src/runtime/services/test/test_docking.py, src/runtime/services/test/test_swarm.py, src/runtime/gateway/test/test_power.py, src/runtime/gateway/test/test_traffic_policy.py, src/runtime/services/test/test_teleop_intent.py]
     functional_kind: pytest
     functional: [src/runtime/gateway/test/test_core_logic.py, src/runtime/services/test/test_docking.py]
   - name: core_api_web

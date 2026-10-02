@@ -178,54 +178,139 @@ def self_mask_rear_blind_m(mask: SelfMask, *, lidar_x_m: float, rear_x_m: float,
 
 def body_path_gap(points: Sequence[Point], *, linear: float, angular: float, front_x_m: float,
                   rear_x_m: float, half_width_m: float, rotation_radius_m: float,
-                  horizon_m: float, step_m: float = 0.005) -> Optional[float]:
+                  horizon_m: float, min_travel_m: float = 0.0,
+                  step_m: float = 0.005) -> Optional[float]:
     """D-422: how far the robot drives along (linear, angular) before its body touches a point.
 
     points are in base_footprint (x forward, y left), not the LiDAR origin. The body is
     `_inside_body` swept along the arc; the gap is the base origin's travel (arc length) at
-    first contact, refined by bisection. 0 = a point is already inside the outline. The arc
-    ends at horizon_m or half a turn, whichever is first; None = nothing touched by then.
+    first contact. 0 = a point is already inside the outline. The arc ends at horizon_m or half
+    a turn, whichever is first, but never before min_travel_m (review M3: pass the resume gap,
+    so a contact just past a short half turn cannot read as clear) unless a full turn comes
+    first. None = nothing touched.
+    Straight lines are solved exactly; arcs are stepped (~step_m of body motion) and refined
+    by bisection, over the points of the annulus the body can reach (review M4).
     linear must be positive: in-place rotation is `rotation_gap`.
     """
     speed = float(linear)
     if not speed > 0.0:
         raise ValueError("body_path_gap needs a forward speed; use rotation_gap in place")
     curvature = float(angular) / speed
-    reach = horizon_m + rotation_radius_m
-    near = [(x, y) for x, y in points if x * x + y * y <= reach * reach]
+    straight = abs(curvature) < 1e-9
+    limit = horizon_m if straight else min(horizon_m, math.pi / abs(curvature))
+    limit = max(limit, float(min_travel_m))
+    if not straight:
+        limit = min(limit, 2.0 * math.pi / abs(curvature))   # a full turn sweeps everything
+    reach = limit + rotation_radius_m
+    body = (front_x_m, rear_x_m, half_width_m, rotation_radius_m)
+    if straight:
+        best: Optional[float] = None
+        for x, y in points:
+            if abs(y) > half_width_m or y * y > rotation_radius_m * rotation_radius_m:
+                continue
+            nose = min(front_x_m, math.sqrt(rotation_radius_m ** 2 - y * y))
+            if x > nose:
+                travel = x - nose
+            elif _inside_body(x, y, *body):
+                travel = 0.0
+            else:
+                continue                      # behind the body: driving forward never meets it
+            if travel <= limit and (best is None or travel < best):
+                best = travel
+        return best
+    radius = 1.0 / curvature                  # signed: centre at (0, radius)
+    side = 1.0 if radius > 0 else -1.0
+    turned = limit / abs(radius)              # heading change over the sweep
+    # A body point stays within rotation_radius_m of the base, so seen from the centre it
+    # leads or trails the base by at most this angle (all angles when the arc is that tight).
+    lead = (math.pi if abs(radius) <= 2.0 * rotation_radius_m
+            else math.asin(rotation_radius_m / (abs(radius) - rotation_radius_m)))
+    near = []
+    for x, y in points:
+        if (x * x + y * y > reach * reach
+                or abs(math.hypot(x, y - radius) - abs(radius)) > rotation_radius_m):
+            continue
+        if lead < math.pi:
+            angle = math.atan2(x, side * (radius - y))   # 0 at the base, + ahead
+            if angle < -lead:
+                angle += 2.0 * math.pi                     # (-pi, pi] -> [-lead, 2pi - lead)
+            if not -lead <= angle <= turned + lead:
+                continue
+        near.append((x, y))
     if not near:
         return None
-    body = (front_x_m, rear_x_m, half_width_m, rotation_radius_m)
 
-    def touches(travel: float) -> bool:
+    def touches(travel: float, candidates) -> bool:
         heading = curvature * travel
-        if abs(curvature) < 1e-9:
-            px, py = travel, 0.0
-        else:
-            px, py = math.sin(heading) / curvature, (1.0 - math.cos(heading)) / curvature
+        px, py = math.sin(heading) / curvature, (1.0 - math.cos(heading)) / curvature
         c, s = math.cos(heading), math.sin(heading)
-        for x, y in near:
+        for x, y in candidates:
             dx, dy = x - px, y - py
             if _inside_body(c * dx + s * dy, -s * dx + c * dy, *body):
                 return True
         return False
 
-    if touches(0.0):
+    if touches(0.0, near):
         return 0.0
-    limit = horizon_m if abs(curvature) < 1e-9 else min(horizon_m, math.pi / abs(curvature))
     # The body's farthest point moves (1 + |k|·R) times the base travel: keep its step ~step_m.
     step = step_m / (1.0 + abs(curvature) * rotation_radius_m)
     low, travel = 0.0, 0.0
     while travel < limit:
         travel = min(travel + step, limit)
-        if touches(travel):
+        if touches(travel, near):
             high = travel
             for _ in range(10):
                 mid = 0.5 * (low + high)
-                low, high = (low, mid) if touches(mid) else (mid, high)
+                low, high = (low, mid) if touches(mid, near) else (mid, high)
             return high
         low = travel
     return None
+
+
+#: body_envelope_gap: traffic-scale sample step, and the margin that covers a contact falling
+#: between two samples. A 3000-case fuzz against a 0.002 step (Pinky outline, v 0.02-0.07,
+#: |w| <= 0.7, floor 0.15, horizon 0.15) found contacts at most 9.7 mm late at step 0.01.
+ENVELOPE_SCALE_STEP = 0.01
+ENVELOPE_PAD_M = 0.01
+
+
+def body_envelope_gap(points: Sequence[Point], *, linear: float, angular: float,
+                      scale_floor: float, front_x_m: float, rear_x_m: float,
+                      half_width_m: float, rotation_radius_m: float, horizon_m: float,
+                      scale_step: float = ENVELOPE_SCALE_STEP,
+                      pad_m: float = ENVELOPE_PAD_M) -> Optional[float]:
+    """D-422 review: the first contact over every arc the twist can become when something
+    downstream scales linear by s in [scale_floor, 1] but keeps angular (the traffic gate).
+
+    Sampled in s every scale_step or finer, both ends included. An arc between two samples
+    can touch up to pad_m earlier than either, so every arc is swept pad_m past horizon_m and
+    the result is pad_m earlier (clamped at 0): early, never late. Each arc is swept only as
+    far as the best contact so far, over the points within reach."""
+    floor = min(1.0, max(float(scale_floor), 1e-3))
+    sweep = horizon_m + pad_m
+    reach = sweep + rotation_radius_m
+    near = [(x, y) for x, y in points if x * x + y * y <= reach * reach]
+    if not near:
+        return None
+    count = max(1, int(math.ceil((1.0 - floor) / scale_step)))
+    # Every fifth sample first: an early contact prunes the sweeps of the fine samples.
+    order = list(range(0, count + 1, 5)) + [i for i in range(count + 1) if i % 5]
+    if count not in order[:1 + count // 5]:
+        order.remove(count)
+        order.insert(1, count)
+    best: Optional[float] = None
+    for index in order:
+        scale = 1.0 - (1.0 - floor) * index / count
+        limit = sweep if best is None else min(sweep, best)
+        gap = body_path_gap(near, linear=linear * scale, angular=angular, front_x_m=front_x_m,
+                            rear_x_m=rear_x_m, half_width_m=half_width_m,
+                            rotation_radius_m=rotation_radius_m, horizon_m=limit,
+                            min_travel_m=limit)
+        if gap is not None and (best is None or gap < best):
+            best = gap
+            if best <= 0.0:
+                break
+    return None if best is None else max(0.0, best - pad_m)
 
 
 def rotation_gap(points: Sequence[Point], *, rotation_radius_m: float,

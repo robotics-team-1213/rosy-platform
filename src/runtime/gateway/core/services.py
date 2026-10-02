@@ -14,7 +14,8 @@ from core_features.calibration import CalibrationSessionManager
 from core_features.command.arbitration import Mode, ModeMachine, SourceRegistry
 from core_features.command.manager import CommandManager
 from core.teleop_config import teleop_timeout_ms
-from core.line_follow_wiring import _line_follow_config, bind_stuck_recovery  # noqa: F401 (tests import the parser here)
+from core.line_follow_wiring import (  # noqa: F401 (tests import the parser here)
+    _line_follow_config, bind_motion_envelope, bind_stuck_recovery)
 from core_features.docking.agent import DockAgent
 from core_features.docking.database import DockDatabase, DockError, DockInstance, DockType
 from core_features.docking.detector import select_detector
@@ -24,6 +25,7 @@ from core_features.fleet_agent.agent import FleetAgent
 from core_features.localization import LocalizationAssist, LocalizationMission, wire_assist
 from core_features.localization.mission import mission_config
 from core_common.domain.adapters import AdapterRegistry
+from core_common.domain.pilot_recording import PilotRecordingGuard
 
 from core_common.domain.capabilities import runtime_capability_data, runtime_truth
 from core_common.domain.model import inventory_from_config, slices_from_config
@@ -251,6 +253,7 @@ class CoreServices:
     # D-321 addendum: attended calibration lease (visible on every screen, fences drive writes).
     calibration: CalibrationSessionManager
     adapter_registry: AdapterRegistry = field(default_factory=AdapterRegistry)
+    pilot_recording: PilotRecordingGuard = field(default_factory=PilotRecordingGuard)  # D-411 A
     started_at: float = field(default_factory=time.time)
     # Optional absorbed Control worker, owned by the RosyCoreNode lifecycle.
     # It is populated only when the explicit sensor adapter profile is enabled.
@@ -530,6 +533,7 @@ class CoreServices:
         fleet_agent.start()
         bind_stuck_recovery(line_follow, safety=safety, calibration=calibration,
                             fleet_agent=fleet_agent, vision=vision)
+        bind_motion_envelope(line_follow, safety=safety, traffic_policy=traffic_policy)
 
         return cls(config=config, identity=identity, profile=profile, capability=capability, fleet_agent=fleet_agent,
                    events=events, state=state, registry=registry, modes=modes,
@@ -543,7 +547,7 @@ class CoreServices:
                    power=power, battery=battery, docking=docking, swarm=swarm,
                    runtime_probe=runtime_probe, maps=MapSnapshotStore(),
                    audit=audit, calibration=calibration,
-                   adapter_registry=adapter_registry,
+                   adapter_registry=adapter_registry, pilot_recording=PilotRecordingGuard(events=events),
                    dock_feed=dock_feed, localization=localization, loc_mission=loc_mission)
 
     def inventory(self) -> dict[str, Any]:

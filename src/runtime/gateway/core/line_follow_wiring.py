@@ -5,6 +5,8 @@ from typing import Any, Optional
 
 from core_features.line_follow import LineFollowConfig
 from core_features.line_follow.clearance import self_mask_from_config
+from core_features.traffic_policy import TrafficPolicyMode
+from core_features.traffic_policy.manager import APPROACH_MIN_SCALE
 
 
 def _optional_float(value) -> Optional[float]:
@@ -97,6 +99,20 @@ def _line_follow_config(raw: dict[str, Any]) -> LineFollowConfig:
         obstacle_ultrasonic_stale_s=float(raw.get(
             "obstacle_ultrasonic_stale_s", defaults.obstacle_ultrasonic_stale_s)),
     )
+
+
+def bind_motion_envelope(line_follow, *, safety, traffic_policy) -> None:
+    """D-422 review M1: what the lane twist can still become downstream. The nav safety clip
+    limits each axis; an ENFORCED traffic gate scales linear (APPROACH down to
+    APPROACH_MIN_SCALE, PROCEED by proceed_speed_scale) but not angular."""
+    def envelope() -> tuple[float, float, float]:
+        floor = 1.0
+        if traffic_policy.mode is TrafficPolicyMode.ENFORCED:
+            proceed = float(traffic_policy.configuration()["active"]["proceed_speed_scale"])
+            floor = min(APPROACH_MIN_SCALE, proceed)
+        return float(safety.limits.max_linear), float(safety.limits.max_angular), floor
+
+    line_follow.bind_motion_envelope(envelope)
 
 
 def bind_stuck_recovery(line_follow, *, safety, calibration, fleet_agent, vision) -> None:
