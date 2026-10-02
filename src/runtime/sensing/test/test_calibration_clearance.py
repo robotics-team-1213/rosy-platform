@@ -72,22 +72,18 @@ def test_rear_and_invalid_inputs_fail_closed():
     assert motion_clearance(d,.03)['reason']
 
 
-def test_rear_geometry_covers_full_cone_and_keeps_hysteresis():
+def test_rear_geometry_is_the_body_strip_and_keeps_hysteresis():
+    """D-424: both directions judge the URDF body strip; a configured stop only raises it."""
     front,rear=directional_lidar_limits(.12,.14,.076,(-.017,0.))
-    assert front==(.12,.14)
-    assert .09<rear[0]<.1
-    assert abs((rear[1]-rear[0])-.02)<1e-9
-    # All rays in rear cone must clear radius plus18mm and configured extra.
-    for i in range(101):
-        a=math.pi-math.pi/4+i*math.pi/200
-        assert math.hypot(-.017+rear[0]*math.cos(a),rear[0]*math.sin(a))>.094
+    assert front==(.12,.14) and rear==(.12,.14)
     assert directional_lidar_limits(.12,.14,.076)[1]==(.12,.14)
 
 
 def test_generated_low_request_is_normalized_to_geometry_not_used_as_range():
     front,rear=directional_lidar_limits(.018,.028,.076,(-.017,0.))
-    assert abs(front[0]-.111)<1e-9
-    assert .08<rear[0]<.083
+    # LiDAR to body front/rear 0.059 + g(0.014) 0.0223
+    assert abs(front[0]-.081346)<1e-6
+    assert abs(rear[0]-.081296)<1e-6
     d=limits(.144); d['front_stop_m']=front[0]; d['rear_stop_m']=rear[0]
     r=motion_clearance(d,.03)
-    assert r['target_m']==.025 and r['reason'] is None
+    assert r['target_m']==.03 and r['reason'] is None

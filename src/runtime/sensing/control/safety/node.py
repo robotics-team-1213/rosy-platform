@@ -18,7 +18,7 @@ from sensor_msgs.msg import Imu, LaserScan, Range
 from std_msgs.msg import Bool, Float32, String, UInt16MultiArray, Float32MultiArray
 
 from ..sensing.filt import IrMedian, MedianLp
-from ..sensing.body import ROTATION_RADIUS, URDF_RADIUS, use_radius
+from ..sensing.body import BODY, URDF_RADIUS, rotation_radius, use_radius
 from ..sensing.lidar import NOSE_YAW
 from ..sensing.localization import lease_ready
 from ..sensing.pose import planar_pose
@@ -100,8 +100,10 @@ class SafetyNode(Node, Bumper, Hazard, Gate, Scale, Evidence, Obstacles):
         self.declare_parameter('scan_topic', 'scan')
         self.declare_parameter('us_topic', 'us_sensor/range')
         self.declare_parameter('ir_topic', 'ir_sensor/range')
-        self.declare_parameter('stop_distance', 0.12)
-        self.declare_parameter('clear_distance', 0.14)
+        # D-424: 0 = derive from the URDF body and the D-422 gap at safety_max_linear
+        # (Pinky ~0.081 / 0.111 from the LiDAR); a set value can only raise it.
+        self.declare_parameter('stop_distance', 0.0)
+        self.declare_parameter('clear_distance', 0.0)
         self.declare_parameter('us_stop_distance', 0.020)
         self.declare_parameter('us_clear_distance', 0.028)
         self.declare_parameter('front_half_width_deg', 45.0)
@@ -414,12 +416,16 @@ class SafetyNode(Node, Bumper, Hazard, Gate, Scale, Evidence, Obstacles):
             self.blocked = lidar_blocked(travel[0], travel[0], previous_front, 0., .010, True)
             self.rear_blocked = lidar_blocked(travel[1], travel[1], previous_rear, 0., .010, True)
             can_rev = not self.rear_blocked
-        body_radius = (max(self.robot_r, ROTATION_RADIUS) if self.get_parameter('footprint_guard_enabled').value
-                       else self.robot_r)
+        # D-424: never below the URDF rotation radius, whatever robot_radius says.
+        body_radius = rotation_radius(self.robot_r)
         flat = self.get_parameter('rotation_footprint_xy').value or []
         rotation_estimate = self.calibration_lease.rotation_envelope(time.monotonic(), body_radius,
             list(zip(flat[::2], flat[1::2])))
         swept_radius = rotation_estimate['required_radius_m'] if rotation_estimate else None
+        if swept_radius is None:
+            # D-424 review M8: after expiry, never less than the last good learned envelope.
+            fallback = self.calibration_lease.fallback_rotation_radius()
+            swept_radius = None if fallback is None else max(fallback, body_radius)
         can_rotate = lidar_can_rotate(
             (self.lidar_front, self.lidar_rear, self.lidar_left, self.lidar_right,
              self.lidar_rear_left, self.lidar_rear_right),
@@ -435,14 +441,20 @@ class SafetyNode(Node, Bumper, Hazard, Gate, Scale, Evidence, Obstacles):
                 can_rotate, getattr(self, 'lidar_rotation_observed', False), lidar_ok,
                 pivot_margin, (self.lidar_front, self.lidar_rear, self.lidar_left,
                     self.lidar_right, self.lidar_rear_left, self.lidar_rear_right))
-        elif self.calibration_lease.rotation_estimate_required():
+        elif self.calibration_lease.rotation_estimate_required(time.monotonic()):
+            # A live profile demands its envelope; an expired one falls back to the URDF
+            # rotation radius above (D-424: no latch until recalibration).
+            can_rotate = False
+        if getattr(self, 'lidar_rotation_reason', 'no scan') is not None:
+            # D-424 review M1/M2: every base sector seen and no unknown band in the sweep
+            # (behind: never clear; in front: only a fresh finite ultrasonic echo clears it).
             can_rotate = False
         rotation_trial = self.calibration_lease.rotation_trial_live(time.monotonic())
         translation_trial = self.calibration_lease.translation_trial_live(time.monotonic())
         bounded_motion = bool(not self._sensor_only and self.get_parameter('simulation_motion_sweep_enabled').value and
             self.get_parameter('use_sim_time').value and os.environ.get('ROS_DOMAIN_ID') == '227' and
             os.environ.get('GZ_PARTITION') == 'pinky_calmap227' and not rotation_trial and
-            (rotation_estimate is not None or self.calibration_lease.rotation_estimate_required()))
+            (rotation_estimate is not None or self.calibration_lease.rotation_estimate_required(time.monotonic())))
         bounded_travel = None
         planning_escape_travel = None
         if bounded_motion:
@@ -514,10 +526,11 @@ class SafetyNode(Node, Bumper, Hazard, Gate, Scale, Evidence, Obstacles):
             'bounded_geometry': ('trusted_footprint' if rotation_estimate and rotation_estimate.get('footprint_xy')
                                  else 'body_circle') if bounded_motion else None,
             'geometry_revision': self.profile.revision if self.profile_valid else None,
-            'front_stop_m': .043-self.lidar_mount[0]+.010 if footprint else self.stop_d,
-            'front_clear_m': .043-self.lidar_mount[0]+.020 if footprint else self.clear_d,
-            'rear_stop_m': .077+self.lidar_mount[0]+.010 if footprint else self.rear_stop_d,
-            'rear_clear_m': .077+self.lidar_mount[0]+.020 if footprint else self.rear_clear_d,
+            # D-424: URDF body edges (front_x, rear_x) + the 10 mm footprint stand-off.
+            'front_stop_m': BODY.front_x_m-self.lidar_mount[0]+.010 if footprint else self.stop_d,
+            'front_clear_m': BODY.front_x_m-self.lidar_mount[0]+.020 if footprint else self.clear_d,
+            'rear_stop_m': -BODY.rear_x_m+self.lidar_mount[0]+.010 if footprint else self.rear_stop_d,
+            'rear_clear_m': -BODY.rear_x_m+self.lidar_mount[0]+.020 if footprint else self.rear_clear_d,
             'translation_mode': footprint,
             'rotation_radius_m': swept_radius if swept_radius is not None else body_radius,
             'body_radius_m': body_radius,
@@ -528,7 +541,7 @@ class SafetyNode(Node, Bumper, Hazard, Gate, Scale, Evidence, Obstacles):
             'translation_trial': translation_trial,
             'rotation_recovery_m': relocation,
             'rotation_translation_limits_m': relocation_limits,
-            'footprint_half_width_m': .077 if footprint else None,
+            'footprint_half_width_m': BODY.half_width_m+BODY.sweep_pad_m if footprint else None,
             'forward_travel_m': travel[0] if footprint else None,
             'reverse_travel_m': travel[1] if footprint else None,
             'us_stop_m': self.us_stop,

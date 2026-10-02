@@ -12,6 +12,8 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Callable, Mapping
 
+from core_common.protocol.schemas import FleetCellTransferGrant
+
 from .gripper_contract import (
     GripperObservation,
     HoldReceipt,
@@ -72,13 +74,9 @@ class PickPlaceTransaction:
                  instance_id: str, gripper_sensor_revision: str, owner_generation: int,
                  source: TargetEvidence,
                  destination: TargetEvidence) -> None:
-        for name, value in (("action_id", action_id), ("attempt_id", attempt_id),
-                            ("workcell_id", workcell_id), ("instance_id", instance_id),
-                            ("gripper_sensor_revision", gripper_sensor_revision)):
-            if not isinstance(value, str) or not value.strip() or value != value.strip():
-                raise ValueError(f"{name} must be a non-empty trimmed string")
-        if type(owner_generation) is not int or owner_generation < 0:
-            raise ValueError("owner_generation must be a non-negative integer")
+        self._initialize(action_id=action_id, attempt_id=attempt_id, workcell_id=workcell_id,
+                         instance_id=instance_id, gripper_sensor_revision=gripper_sensor_revision,
+                         owner_generation=owner_generation)
         if source.object_id == destination.object_id:
             raise ValueError("source and destination must resolve to different objects")
         if (source.observation_id != destination.observation_id
@@ -86,14 +84,44 @@ class PickPlaceTransaction:
                 or source.calibration_revision != destination.calibration_revision
                 or source.transform_revision != destination.transform_revision):
             raise ValueError("source and destination must share one observation revision")
+        self.source = source
+        self.destination = destination
+        self._item_id = source.object_id
+
+    @classmethod
+    def for_cell_transfer(cls, grant: FleetCellTransferGrant, *,
+                          gripper_sensor_revision: str) -> "PickPlaceTransaction":
+        """Bind the same physical gripper sequence to a camera-blind Cell grant."""
+        if not isinstance(grant, FleetCellTransferGrant):
+            raise ValueError("a validated CELL_TRANSFER grant is required")
+        grant = FleetCellTransferGrant.model_validate(grant.model_dump())
+        transaction = cls.__new__(cls)
+        transaction._initialize(
+            action_id=grant.action_id, attempt_id=grant.attempt_id, workcell_id=grant.workcell_id,
+            instance_id=grant.instance_id, gripper_sensor_revision=gripper_sensor_revision,
+            owner_generation=grant.dispatch_generation,
+        )
+        transaction.source = None
+        transaction.destination = None
+        transaction._item_id = grant.cell_transfer.item
+        transaction._cell_grant = grant
+        return transaction
+
+    def _initialize(self, *, action_id: str, attempt_id: str, workcell_id: str,
+                    instance_id: str, gripper_sensor_revision: str, owner_generation: int) -> None:
+        for name, value in (("action_id", action_id), ("attempt_id", attempt_id),
+                            ("workcell_id", workcell_id), ("instance_id", instance_id),
+                            ("gripper_sensor_revision", gripper_sensor_revision)):
+            if not isinstance(value, str) or not value.strip() or value != value.strip():
+                raise ValueError(f"{name} must be a non-empty trimmed string")
+        if type(owner_generation) is not int or owner_generation < 0:
+            raise ValueError("owner_generation must be a non-negative integer")
         self.action_id = action_id
         self.attempt_id = attempt_id
         self.workcell_id = workcell_id
         self.instance_id = instance_id
         self.gripper_sensor_revision = gripper_sensor_revision
         self.owner_generation = owner_generation
-        self.source = source
-        self.destination = destination
         self.state = PickPlaceState.APPROACH
         self.hold_reason: str | None = None
         self.hold_receipt: HoldReceipt | None = None
@@ -184,7 +212,7 @@ class PickPlaceTransaction:
             raise TransactionError("transaction is not awaiting held-object readback")
         try:
             receipt = verify_held_object(
-                observation, object_id=self.source.object_id, now=now, max_age_s=max_age_s,
+                observation, object_id=self._item_id, now=now, max_age_s=max_age_s,
             )
             if (receipt.workcell_id != self.workcell_id
                     or receipt.instance_id != self.instance_id
@@ -208,7 +236,7 @@ class PickPlaceTransaction:
             raise TransactionError("transaction is not awaiting release readback")
         try:
             receipt = verify_released_object(
-                observation, object_id=self.source.object_id, now=now, max_age_s=max_age_s,
+                observation, object_id=self._item_id, now=now, max_age_s=max_age_s,
             )
             if (receipt.workcell_id != self.workcell_id
                     or receipt.instance_id != self.instance_id
@@ -236,18 +264,23 @@ class PickPlaceTransaction:
         return self.state
 
     def snapshot(self) -> dict[str, Any]:
-        return {
+        cell_grant = getattr(self, "_cell_grant", None)
+        snapshot = {
             "action_id": self.action_id, "attempt_id": self.attempt_id,
             "workcell_id": self.workcell_id, "owner_generation": self.owner_generation,
             "instance_id": self.instance_id,
             "gripper_sensor_revision": self.gripper_sensor_revision,
-            "source_object_id": self.source.object_id,
-            "destination_object_id": self.destination.object_id,
-            "source_observation_id": self.source.observation_id,
-            "destination_observation_id": self.destination.observation_id,
+            "source_object_id": self._item_id,
+            "destination_object_id": (cell_grant.cell_transfer.pallet if cell_grant
+                                      else self.destination.object_id),
+            "source_observation_id": None if cell_grant else self.source.observation_id,
+            "destination_observation_id": None if cell_grant else self.destination.observation_id,
             "state": self.state.value, "hold_reason": self.hold_reason,
             "object_held": self.object_held, "last_result_id": self.last_result_id,
         }
+        if cell_grant is not None:
+            snapshot["cell_grant"] = cell_grant.model_dump(mode="json")
+        return snapshot
 
     @classmethod
     def recover(cls, snapshot: Mapping[str, Any]) -> "PickPlaceTransaction":
@@ -272,6 +305,15 @@ class PickPlaceTransaction:
         recovered.owner_generation = owner_generation
         recovered.source = None
         recovered.destination = None
+        recovered._item_id = snapshot.get("source_object_id")
+        if "cell_grant" in snapshot:
+            grant = FleetCellTransferGrant.model_validate(snapshot["cell_grant"])
+            if (grant.action_id != action_id or grant.attempt_id != attempt_id
+                    or grant.workcell_id != workcell_id or grant.instance_id != instance_id
+                    or grant.dispatch_generation != owner_generation):
+                raise ValueError("Cell transaction snapshot identity does not match its grant")
+            recovered._cell_grant = grant
+            recovered._item_id = grant.cell_transfer.item
         recovered.state = state
         recovered.hold_reason = snapshot.get("hold_reason")
         recovered.hold_receipt = None

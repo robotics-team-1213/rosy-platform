@@ -12,6 +12,8 @@ import re
 from dataclasses import dataclass
 from typing import Optional
 
+from core_common.robot_body import stop_gap_m
+
 #: Pre-D-422 LiDAR-origin defaults: sector mode and path mode without the URDF outline.
 SECTOR_STOP_M = 0.20
 SECTOR_RESUME_M = 0.28
@@ -283,9 +285,9 @@ class LineFollowConfig:
 
     def derived_stop_gap_m(self, speed: float) -> float:
         """D-422 body gap that stops in time from `speed`: margin + reaction + braking."""
-        speed = max(0.0, float(speed))
-        return (self.obstacle_body_margin_m + speed * self.obstacle_latency_s
-                + speed * speed / (2.0 * self.obstacle_decel_mps2))
+        # D-424: the one gap rule shared with the sensing gate and the calibration tools.
+        return stop_gap_m(max(0.0, float(speed)), margin_m=self.obstacle_body_margin_m,
+                          latency_s=self.obstacle_latency_s, decel_mps2=self.obstacle_decel_mps2)
 
     @property
     def body_geometry_known(self) -> bool:

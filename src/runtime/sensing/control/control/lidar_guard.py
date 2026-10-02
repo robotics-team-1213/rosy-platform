@@ -2,52 +2,104 @@
 import math
 from dataclasses import dataclass
 
-from ..sensing.body import LIDAR_X, ROTATION_RADIUS, use_radius
+from core_common.robot_body import ScanView
+from ..sensing.body import BODY, LIDAR_X, ROTATION_RADIUS, rotation_radius
+
+#: The gate's top speed (safety_max_linear); the D-424 stop gap is derived at it.
+MAX_LINEAR_MPS = .014
 
 
-def lidar_limits(stop, clear, radius):
-    # Circumradius plus absolute sensor offset bounds every heading even
-    # before the mounting yaw (URDF nominal 180 deg, D-397) is transformed. Add an
-    # 18 mm stand-off: 76 + 17 + 18 = 111 mm, above the C1 50 mm blind zone.
-    floor = use_radius(radius) + abs(LIDAR_X) + 0.018
+def _body_at(mount):
+    """The URDF body with the LiDAR at `mount` (x, y from TF) when it is a sane pose over it."""
+    if (mount is not None and len(mount) == 2 and all(math.isfinite(v) for v in mount)
+            and BODY.rear_x_m < mount[0] < BODY.front_x_m and abs(mount[1]) < BODY.half_width_m):
+        return BODY.with_lidar(x_m=mount[0], y_m=mount[1])
+    return BODY
+
+
+def lidar_limits(stop, clear, radius=None, *, speed=MAX_LINEAR_MPS, reverse=False, mount=None):
+    """D-424: (stop, clear) LiDAR-equivalent distances of the body strip.
+
+    The floor is the D-422 body gap g(speed) from the URDF body edge, as a range from the
+    LiDAR (Pinky front 0.081 / clear 0.111 at 0.014 m/s). A configured stop/clear may only
+    raise it. `radius` is kept for callers; the strip, not a circle, is judged."""
+    body = _body_at(mount)
+    floor = body.lidar_stop_m(speed, reverse=reverse)
     stop = max(floor, stop) if math.isfinite(stop) else floor
-    clear = max(stop + 0.010, clear) if math.isfinite(clear) else stop + 0.010
+    clear = (max(stop + 0.010, clear) if math.isfinite(clear) and clear > 0
+             else stop + body.hysteresis_m)
     return stop, clear
 
 
-def directional_lidar_limits(stop, clear, radius, mount=None, half_width=math.pi/4):
-    """Circle-ray extent over each bumper cone, preserving configured margin."""
-    conservative = lidar_limits(stop, clear, radius)
-    if (mount is None or len(mount) != 2 or
-            not all(math.isfinite(v) for v in mount) or
-            math.hypot(*mount) >= use_radius(radius)):
-        return conservative, conservative
-    x, y = mount
-    radius = use_radius(radius)
-    def extent(heading):
-        # Max ray length occurs at minimum mount projection onto the cone.
-        angles = [heading-half_width, heading+half_width]
-        opposite = math.atan2(-y, -x)
-        if abs(math.atan2(math.sin(opposite-heading), math.cos(opposite-heading))) <= half_width:
-            angles.append(opposite)
-        projection = min(x*math.cos(a)+y*math.sin(a) for a in angles)
-        return -projection + math.sqrt(radius*radius-x*x-y*y+projection*projection) + .018
-    front, rear = extent(0.), extent(math.pi)
-    front_stop = max(front, conservative[0])
-    extra = front_stop-front
-    hysteresis = conservative[1]-conservative[0]
-    rear_stop = max(.05+.018, rear+extra)
-    return (front_stop, front_stop+hysteresis), (rear_stop, rear_stop+hysteresis)
+def directional_lidar_limits(stop, clear, radius, mount=None, half_width=math.pi/4, *,
+                             speed=MAX_LINEAR_MPS):
+    """Front and rear (stop, clear) for the body strip in each direction (D-424)."""
+    return (lidar_limits(stop, clear, radius, speed=speed, mount=mount),
+            lidar_limits(stop, clear, radius, speed=speed, mount=mount, reverse=True))
+
+
+def strip_ranges(points, unknown=(), *, mount=None, ultrasonic_m=None):
+    """D-424: LiDAR-equivalent (front, rear) distance of the nearest point in the body strip
+    (half width + 0.010). inf = nothing in the strip that way: side points outside it never
+    count. A beam without a return that reaches past the body edge (unknown out to range_min)
+    reads as the body edge itself (gap 0). In front, a fresh finite ultrasonic echo
+    (`ultrasonic_m`, None = stale or no echo) clears only the band inside its cone (review M6)."""
+    body = _body_at(mount)
+    view = ScanView(tuple(points), tuple(unknown), 0.)
+    out = []
+    for reverse in (False, True):
+        offset = body.lidar_to_rear_m if reverse else body.lidar_to_front_m
+        if body.unknown_blocks(view, reverse=reverse, ultrasonic_m=ultrasonic_m):
+            out.append(offset)
+            continue
+        gap = body.translation_gap(view.points, reverse=reverse)
+        out.append(math.inf if gap is None else offset + gap)
+    return tuple(out)
+
+
+def scan_geometry(ranges, angle_min, increment, range_min, range_max, *, mount, rotation,
+                  ignore_m, ultrasonic_m=None, max_range=12.):
+    """D-424: one scan in base_footprint for the bumper (pure; the ROS node only feeds it).
+
+    rotation: added to each scan angle to get the robot-frame angle (TF yaw, or -nose yaw).
+    Every finite return beyond the chassis cut `ignore_m` is an obstacle point -- also below
+    range_min (a near return can only shorten a gap) -- unless it lies inside the URDF body
+    outline (the robot itself). A beam without a return is unknown out to range_min.
+    Returns points, unknown band ends, strip front/rear (LiDAR-equivalent, inf = empty), the
+    nearest point to the base and why a turn is not clear (None = clear)."""
+    far = min(max_range, range_max)
+    points, unknown = [], []
+    for i, distance in enumerate(ranges):
+        angle = angle_min + i*increment + rotation
+        if not math.isfinite(distance) or distance <= 0.0:
+            if range_min > 0.0:
+                unknown.append((mount[0]+range_min*math.cos(angle), mount[1]+range_min*math.sin(angle)))
+            continue
+        if ignore_m < distance <= far:
+            point = (mount[0]+distance*math.cos(angle), mount[1]+distance*math.sin(angle))
+            if not BODY.contains(*point):
+                points.append(point)
+    front, rear = strip_ranges(points, unknown, mount=mount, ultrasonic_m=ultrasonic_m)
+    view = ScanView(tuple(points), tuple(unknown), range_min)
+    return {'points': points, 'unknown': unknown, 'front': front, 'rear': rear,
+            'nearest': min((math.hypot(x, y) for x, y in points), default=math.inf),
+            'rotation_reason': _body_at(mount).rotation_reason(view, ultrasonic_m=ultrasonic_m)}
+
+
+def stale_or_nan(value, fresh):
+    """D-424 review M4: inf now means an empty strip, so a stale reading is NaN (blocked)."""
+    return value if fresh else math.nan
 
 
 def lidar_blocked(raw, filtered, was_blocked, stop, clear, fresh):
-    # Missing echoes cannot release a bumper after a wall enters the blind
-    # zone. A close raw beam brakes now; only clearing uses the smooth value.
-    if not fresh or not math.isfinite(raw) or raw <= 0.0:
+    # D-424: +inf is "nothing in the body strip" (strip_ranges reports an unknown band as the
+    # body edge, a finite near range). NaN, 0 and negative stay unknown and block. A close
+    # raw beam brakes now; only clearing uses the smooth value.
+    if not fresh or math.isnan(raw) or raw <= 0.0:
         return True
     if raw <= stop:
         return True
-    if raw >= clear and math.isfinite(filtered) and filtered >= clear:
+    if raw >= clear and not math.isnan(filtered) and filtered >= clear:
         return False
     return was_blocked
 
@@ -125,20 +177,22 @@ def command_translation_bumpers(evidence, linear, angular, now):
 
 
 def lidar_can_rotate(ranges, radius, fresh, base_clearance=None, *, sweep_radius=None):
-    # The body sweeps its circumradius when spinning. Unknown flank/rear
-    # space is not permission to swing a corner into a wall.
-    required = use_radius(radius)
+    """D-424: the body sweeps at least the URDF rotation radius (never less, whatever the
+    configured radius) + 0.010. Seen points decide; a sector without a return is unknown
+    space a turn does not enter, so it never blocks a turn by itself."""
+    required = rotation_radius(radius)
     if sweep_radius is not None:
         if not math.isfinite(sweep_radius) or sweep_radius < required:
             return False
         required = sweep_radius  # Never clamp a measured swept envelope downward.
+    pad = BODY.sweep_pad_m
     if base_clearance is not None:
-        return (fresh and bool(ranges) and
-                all(math.isfinite(value) and value > 0 for value in ranges) and
-                math.isfinite(base_clearance) and base_clearance > required+.010)
-    limit = required + abs(LIDAR_X) + 0.010
-    return fresh and bool(ranges) and all(
-        math.isfinite(value) and value > limit for value in ranges)
+        # A scan with no return at all is a sensor fault, not an empty room.
+        return bool(fresh and any(math.isfinite(v) and v > 0 for v in ranges)
+                    and not math.isnan(base_clearance) and base_clearance > required + pad)
+    seen = [value for value in ranges if math.isfinite(value) and value > 0]
+    limit = required + abs(LIDAR_X) + pad
+    return bool(fresh and seen and all(value > limit for value in seen))
 
 
 def rotation_scan_observed(ranges, increment, minimum, maximum):

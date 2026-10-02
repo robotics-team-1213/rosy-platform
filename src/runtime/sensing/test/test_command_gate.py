@@ -14,7 +14,9 @@ class CommandGateTest(unittest.TestCase):
         self.assertEqual(self.evaluate(0., .2, obstacle=True).angular, .2)
 
     def test_component_removal_cannot_change_an_arc_into_a_new_path(self):
-        for state in ({'cliff': True}, {'can_rotate': False}, {'rear_blocked': True}):
+        # D-424: an obstacle/rear-blocked arc with a clear turn becomes a turn in place
+        # (test_an_arc_with_forward_blocked_turns_in_place_when_rotation_is_clear).
+        for state in ({'cliff': True}, {'can_rotate': False}):
             with self.subTest(state=state):
                 v = -.1 if 'rear_blocked' in state else .1
                 result = self.evaluate(v, .2, **state)
@@ -68,3 +70,17 @@ class CommandGateTest(unittest.TestCase):
         result = self.evaluate(.08, -.15, command_age=.5)
         self.assertEqual((result.linear, result.angular, result.reason, result.discard),
                          (.08, -.15, 'allow', False))
+
+
+def test_an_arc_with_forward_blocked_turns_in_place_when_rotation_is_clear():
+    """D-424 (F): a clipped v used to stop the whole command (trajectory_changed)."""
+    from control.control.command_gate import GateInputs, evaluate_command
+    result = evaluate_command(.01, .05, GateInputs(obstacle=True, can_rotate=True))
+    assert (result.linear, result.angular) == (0., .05)
+    assert result.reason == 'motion_limited'
+    blocked = evaluate_command(.01, .05, GateInputs(obstacle=True, can_rotate=False))
+    assert (blocked.linear, blocked.angular) == (0., 0.)
+    rear = evaluate_command(-.01, .05, GateInputs(rear_blocked=True, can_rotate=True))
+    assert (rear.linear, rear.angular) == (0., .05)
+    cliff = evaluate_command(.01, .05, GateInputs(cliff=True, can_rotate=True))
+    assert (cliff.linear, cliff.angular, cliff.reason) == (0., 0., 'trajectory_changed')

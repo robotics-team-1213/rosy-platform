@@ -4625,3 +4625,25 @@
 - Change: construct existing PickPlaceRunner with Skill-bound analytic planning and accepted profile/state/geometry; preserve existing owner ports, grant-scoped phase gates, local stop fencing and exact cancellation. Advance remains an explicit local workflow operation.
 - Evidence: missing-factory red regression; focused actual planner/API/runner/journal/Skill/boundary tests 75 passed. Four phases and denied transfer covered; persisted local replay does not submit again, and unresolved parent blocks rearm. Full OMX adapter plus provider/Skill/boundaries: 353 passed / 5 skipped. Quick tier: 96 passed / 25 freshness warnings. Independent review: 6 passed, no Critical/Important findings.
 - Gate: SOURCE/LOCAL only; no second owner or ROS loop added. Parent terminal workflow, Fleet/OMX two-ledger replay and ROS-SIM remain open.
+
+
+## 2026-10-03 · uncommitted · feat: journal Cell hold release and local Action completion
+- Change: reuse physical gripper transaction rules with canonical Cell grant provenance; optionally compose durable workflow gates with the real Skill phase runner. Require matching scoped fresh hold/release readback before local terminal success. Provider/clock/cancel errors and snapshot recovery stay HOLD.
+- Evidence: focused planner/API/runner/transaction/boundary suite 36 passed; sensor and cancel failure review corrections included. Full OMX adapter plus provider/Skill/boundary regression: 371 passed / 5 skipped. Quick tier: 96 passed / 25 freshness warnings. Independent review: 31 passed, no remaining Critical/Important findings.
+- Gate: SOURCE/LOCAL only. Fleet independent goal confirmation, two-ledger Cell replay and ROS-SIM remain open.
+
+## 2026-10-03 · uncommitted · docs(adr): D-425 앱·웹 역할·공유 경계·목표 폴더
+- 변경: 화면/API/상태 정본/최종 writer를 분리한 소유권 표, UI·통신·계약 공유 범위, apps/site·apps/device·ui 목표 배치와 점진 이전 출구를 기록. D-340·D-370·D-413은 부분 대체 범위를 표시하고 역사 본문을 보존. 별도 브랜치의 D-423·D-424 번호를 예약. 코드·wire·제품 폴더는 이전하지 않음.
+- 증거: 작성 전 문서 계약 81 passed. 변경 후 문서 계약·quick tier 120 passed/25 기존 freshness warnings; harness lint와 색인/BOM/CRLF/부분 대체 링크를 확인. 한글이 손상된 신규 로그·색인 행은 UTF-8로 정정하고 검증을 재실행.
+- gate 변화: 없음 — 구조 결정 수용과 구현·설치·DEVICE/FIELD 수용은 별개.
+
+
+## 2026-10-03 · uncommitted · test: verify real Cell runtime two-ledger replay
+- Change: exercise canonical Cell grants through actual analytic Skill, ActionApi, durable phase/workflow journals and Fleet/OMX stores. Confirm independent goal gating and claim release; lost/expired submit recovery preserves identity and restart-stop HOLD without extra motion.
+- Evidence: related replay/dispatcher/public-goal regression 47 passed; independent review 3 passed, no remaining Critical/Important findings. Restart-stop mutation failed at expected HOLD versus ACTION_SUCCEEDED; original source restored byte-for-byte. Quick tier plus new replay: 99 passed / 25 existing freshness warnings; harness lint 0 errors / 25 warnings.
+- Gate: SOURCE/LOCAL only. Compiled submissions, ROS/sensor ports and registered goal producer are host fixtures; actual recipe compiler, UDS peer credentials, ROS lifecycle and Gazebo acceptance remain open. Task 7 stays IN PROGRESS.
+
+## 2026-10-03 · uncommitted · docs(plans): D-425 앱·웹 책임·통신·설치 이전 실행 계획
+- 변경: 현재 소유권/설치 기준선부터 공통 request/scope, Fleet·CORE client, 화면 책임, 앱별 소스 이전과 설치·브라우저 수용, D-413에 의존하는 backend 조합 이전까지 14개 task를 작성. 파일·검증·완료 조건·커밋·롤백을 지정하고, web ament wrapper/Fleet sdist·wheel/Face colcon discovery를 구분. Sep30 계획에는 후속 실행 기준을 연결.
+- 증거: 계획의 기존 파일 경로·공개 route·Fleet 진입 문서를 소스와 대조. 문서 계약·quick tier 120 passed/25 기존 freshness warnings; 로그·색인 추가 후 문서 회귀 27 passed, harness lint 0 errors/25 기존 warnings. 신규 로그 행의 줄바꿈을 정리하고 diff 검사를 통과.
+- gate 변화: 없음 — 계획만 작성; 코드·폴더·설치·DEVICE/FIELD 이전은 시작하지 않음.
