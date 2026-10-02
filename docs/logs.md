@@ -4669,3 +4669,9 @@
 - 변경: 앱별 api_owners를 등록부에 명시하고 실제 CORE/Fleet 인증·권한·쓰기 owner·공유 문서·기존 JS caller 계약을 추가. 공통 UI/transport의 literal 운용 API 발행 가드를 추가하고 Pilot 관련 역사 설명을 현행화.
 - 증거: 없는 선언 red 6 failed/15 passed → 책임 suite 33 passed; Fleet authorization Node 3 passed. 선언·CORE limits 권한·Fleet operator 권한·공통 dispatch 변이 4개가 실제 실패하고 byte-for-byte 복원. 임시 증거는 X:/DevTemp/rosy-ui-ownership/task1-mutations.
 - gate 변화: Task 1 SOURCE/LOCAL 계약 완료. wire/권한 정책/최종 writer/폴더/DEVICE/FIELD는 변경하지 않음.
+
+
+## 2026-10-03 · uncommitted · feat: connect Cell owner phase progression and semantic completion
+- Change: bind existing accepted Cell owner to durable Skill workflow and add advance_pending on its live in-memory executions. Use the existing ROS node timer; preserve one owner, exact cancel, terminal cleanup and restart-stop closure. Correct simulation gripper generation and OPEN/contact classification.
+- Evidence: missing advance_pending/readback-generation red; semantic opt-in removal mutation fails ACCEPTED versus SUCCEEDED, original source restored byte-for-byte. Owner/provider/replay 38 passed; owner/compiler/boundary integration 23 passed. Independent review 38 passed and updated restart suite 5 passed, no Critical/Important findings. Production flake8 passes. Quick tier 96 passed / 26 existing freshness warnings; harness lint 0 errors / 26 warnings. Eight actual wheels built/installed in X: venv; owner/workflow imports verified site-packages with no ROS import, pip check 0. Updated restart suite 5 passed.
+- Gate: SOURCE/LOCAL only. ROS/sensor ports are host substitutes; live ROS timer, Fleet fence/seat integration, accepted thin-sheet geometry and whole recipe Gazebo remain open. No automatic rearm/replay or physical dispatch added.

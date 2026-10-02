@@ -17,7 +17,9 @@ owner (Pilot simulation server or the C3 probe; D-390 §3, D-282 §3).
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+import logging
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -32,16 +34,14 @@ from omx_adapter.journal_identity import journal_identity
 from omx_adapter.kinematics import OmxKinematics
 from omx_adapter.local_stop import LocalStopController
 from omx_adapter.manipulation_plan import ExecutionStateSnapshot
-from omx_adapter.pick_place_runner import PickPlaceRunner
 from omx_adapter.pose_plan import AnalyticCellTransferPlanner, CellPlanningProfile
-from rosy.integrations.robots.omx.transfer_provider import (
-    OMXAnalyticTransferPlanner, create_cell_transfer_phase_factory,
-)
-from rosy.skills.manipulation.transfer import TransferSkill
+from rosy.integrations.robots.omx.transfer_provider import create_omx_cell_transfer_phase_factory
 
 from .omx_cell_documents import PalletizingCellDocumentValidator
 
 ALLOWED_OWNERS = ("pilot_sim", "rule_based")
+GRIPPER_SENSOR_REVISION = "omx-sim-gripper-joint-position-v2"
+_LOG = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -70,6 +70,29 @@ class CellOwner:
     action_api: ActionApi
     uds_server: UnixActionServer
     http_app: Any
+    _executions: dict = field(default_factory=dict, repr=False)
+    _execution_lock: Any = field(default_factory=threading.RLock, repr=False)
+
+    def advance_pending(self) -> None:
+        """One local workflow tick; only live in-memory attempts may progress."""
+        with self._execution_lock:
+            pending = tuple(self._executions.items())
+        for action_id, execution in pending:
+            try:
+                execution.advance()
+            except Exception:
+                _LOG.exception("Cell workflow advancement failed for %s", action_id)
+                try:
+                    execution.cancel_current()
+                except Exception:
+                    _LOG.exception("Cell exact-goal cancellation failed for %s", action_id)
+                with self._execution_lock:
+                    self._executions.pop(action_id, None)
+                continue
+            action = self.store.get_action(action_id)
+            if action is None or action["state"] in {"SUCCEEDED", "FAILED", "CANCELED", "HOLD", "UNKNOWN"}:
+                with self._execution_lock:
+                    self._executions.pop(action_id, None)
 
 
 def build_cell_owner(settings: CellOwnerSettings, *,
@@ -115,33 +138,30 @@ def build_cell_owner(settings: CellOwnerSettings, *,
             planning_scene_revision=kinematics.planning_scene_revision,
             observed_at_monotonic_s=state.received_at)
 
-    def runner_for_grant(grant, recorder, planned) -> PickPlaceRunner:
-        def command_for_phase(phase) -> TrajectoryCommand:
-            return TrajectoryCommand(
-                workcell_id=settings.workcell_id, instance_id=settings.instance_id,
-                command_id=f"{grant.action_id}-{phase.phase_id}", session_id=runtime.owner.session_id,
-                owner="rule_based", positions=dict(zip(phase.joint_names, phase.points[-1].positions)),
-                duration_s=phase.points[-1].time_from_start_s,
-                source_state_sequence=phase.source_state_sequence,
-                calibration_revision=settings.calibration_revision, joint_names=phase.joint_names,
-                trajectory_points=phase.points, phase_id=phase.phase_id)
+    def command_for_phase(grant, phase) -> TrajectoryCommand:
+        return TrajectoryCommand(
+            workcell_id=settings.workcell_id, instance_id=settings.instance_id,
+            command_id=f"{grant.action_id}-{phase.phase_id}", session_id=runtime.owner.session_id,
+            owner="rule_based", positions=dict(zip(phase.joint_names, phase.points[-1].positions)),
+            duration_s=phase.points[-1].time_from_start_s,
+            source_state_sequence=phase.source_state_sequence,
+            calibration_revision=settings.calibration_revision, joint_names=phase.joint_names,
+            trajectory_points=phase.points, phase_id=phase.phase_id)
 
-        return PickPlaceRunner(
-            recorder, grant, planned.plan, command_for_phase=command_for_phase,
-            goal_port=goal_port_factory(runtime), submission_fence=stop,
-            phase_gate=lambda _phase_id: True, current_fence=current_fence,
-            current_execution_state=execution_state,
-            start_state_tolerances=profile.start_state_tolerances(),
-            max_joint_state_age_s=profile.max_joint_state_age_s, monotonic=runtime.monotonic,
-            cell_profile=profile, gripper_readback=lambda: gripper_readback(grant),
-            held_object_id=grant.cell_transfer.item)
+    executions, execution_lock = {}, threading.RLock()
 
-    phase_factory = create_cell_transfer_phase_factory(
-        skill=TransferSkill(),
-        planner_for_grant=lambda grant: OMXAnalyticTransferPlanner(
-            grant, profile=profile, planner=planner, execution_state=execution_state,
-            accepted_item_geometry=acceptance.accepted_item_geometry),
-        executor_for_grant=runner_for_grant)
+    def phase_factory(grant, recorder):
+        factory = create_omx_cell_transfer_phase_factory(
+            profile=profile, planner=planner, execution_state=execution_state,
+            accepted_item_geometry=acceptance.accepted_item_geometry,
+            command_for_phase=command_for_phase, goal_port=goal_port_factory(runtime),
+            submission_fence=stop, phase_gate=lambda accepted, phase: True,
+            current_fence=current_fence, gripper_readback=lambda: gripper_readback(grant),
+            monotonic=runtime.monotonic, gripper_sensor_revision=GRIPPER_SENSOR_REVISION)
+        execution = factory(grant, recorder)
+        with execution_lock:
+            executions[grant.action_id] = execution
+        return execution
     runner = ActionRunner(
         store, _NoDirectDriver(), workcell_id=settings.workcell_id, instance_id=settings.instance_id,
         principal_for_peer=lambda uid: f"fleet-uid-{uid}", allowed_peer_uids={settings.fleet_peer_uid},
@@ -156,7 +176,7 @@ def build_cell_owner(settings: CellOwnerSettings, *,
     uds_server = UnixActionServer(
         action_api, Path(settings.socket_root) / settings.instance_id / "control.sock")
     return CellOwner(settings, profile, runtime, store, stop, acceptance, planner, runner,
-                     action_api, uds_server, http_app_factory(runtime))
+                     action_api, uds_server, http_app_factory(runtime), executions, execution_lock)
 
 
 def sim_gripper_observation(owner: CellOwner, state: Any, grant: Any) -> GripperObservation:
@@ -169,10 +189,15 @@ def sim_gripper_observation(owner: CellOwner, state: Any, grant: Any) -> Gripper
     width = geometry["grasp_width_m"]
     close_q = owner.profile.gripper_close_for_width(width)
     threshold = (owner.profile.gripper_contact_for_width(width) - close_q) / 2
-    present = state.positions[owner.profile.gripper_joint] >= close_q + threshold
+    q = state.positions[owner.profile.gripper_joint]
+    opened = abs(q - owner.profile.gripper_open) <= owner.profile.start_state_tolerance_rad
+    contact_q = owner.profile.gripper_contact_for_width(width)
+    present = not opened and close_q + threshold <= q <= contact_q + threshold
+    readback_state = "OPEN" if opened else ("CLOSED" if q <= contact_q + threshold else "UNKNOWN")
     return GripperObservation(owner.settings.workcell_id, owner.settings.instance_id,
-                              "omx-sim-gripper-joint-position-v2", state.sequence, state.received_at,
-                              "CLOSED", present, transfer.item if present else None, 1)
+                              GRIPPER_SENSOR_REVISION, state.sequence, state.received_at,
+                              readback_state, present, transfer.item if present else None,
+                              grant.dispatch_generation)
 
 
 class _NoDirectDriver:

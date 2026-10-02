@@ -2026,3 +2026,9 @@
 - 변경: `run_cell_owner.py`는 `rosy_agent.omx_cell_owner.sim_gripper_observation`으로 grant의 `recipe_sha256`·item 폭을 쓴다(첫 레시피 아님). HTTP는 기본 127.0.0.1(`ROSY_CELL_OWNER_HTTP_HOST`로만 바꿈; 이 포트를 게시하는 compose·실행 스크립트가 없다). owner HTTP 앱은 아직 수락 저장소를 공유하지 않는다 — G9. `sim_item_pose_producer.py`는 `frame: robot_base`를 싣는다.
 - 증거: `test/test_platform_cell_owner_assembly.py`(스파이로 폭 확인).
 - gate 변화: 없음.
+
+
+## 2026-10-03 · uncommitted · feat: tick local Cell workflow on the existing simulation owner node
+- Change: bind a 50 ms timer on the existing ROS node to owner.advance_pending and destroy it at shutdown. The accepted owner uses the durable workflow for phase/gripper gates; no new owner, thread, grant or retry path is created.
+- Evidence: actual owner host regression 38 passed; integrated owner/compiler/boundaries 23 passed; independent review 38 passed plus updated restart suite 5 passed. Semantic removal mutation fails ACCEPTED versus SUCCEEDED and is restored. Production flake8 and quick96 pass; harness lint0errors/26 existing freshness warnings. Installed owner/workflow wheel imports and pip check pass.
+- Gate: SOURCE/LOCAL only. ROS runtime/timer and Gazebo were not executed; Fleet fence/seat integration and full recipe acceptance remain open.
