@@ -484,9 +484,9 @@ def render_boot(payload: dict, size: tuple[int, int] = DEFAULT_SIZE,
     width, _height = size
     image = Image.new("RGB", size, _BG)
     draw = ImageDraw.Draw(image)
-    # D-396: Rosy 정체성 마크 — 장치 이름 옆 작은 로즈색 점. "The rose colour
-    # is for the ROSY name only"(D-82). 부팅 카드 어디를 보고 있는지 한눈에.
-    _rose = (227, 27, 93, 255)  # --rose #e31b5d
+    # D-396: Rosy 정체성 마크 — 장치 이름 옆 작은 로즈색 점. "ROSY 장미색은
+    # 이름 식별에만 쓴다"(D-277, PRODUCT.md). 부팅 카드 어디를 보고 있는지 한눈에.
+    _rose = (246, 151, 231, 255)  # --brand-rose #f697e7
     draw.ellipse((4, 12, 12, 20), fill=_rose[:3])
     matrix = ap_qr(payload)
     qr_left, qr_bottom = _draw_qr(draw, matrix, width) if matrix else (width, 0)

@@ -3,6 +3,7 @@
 // 조종 입력·명령 루프는 drive.js, 보조 자율은 drive-auto.js 가 가진다.
 
 import {inputConfig, saveInputConfig} from "../input-state.js";
+import {MODE_LABEL} from "/common/core_ui_logic.js";
 
 // 영상이 실제로 그려지는 폭을 계산해 좌우 띠가 조작부를 담을 만큼 넓으면 "side",
 // 아니면 영상 아래에 조작부를 두는 "below" 로 바꾼다.
@@ -159,7 +160,7 @@ function buildHud() {
     el("ui-text", "m/s", {scale: "unit"}),
     el("span", "· 0°/s", {"data-drive-fact": "turn"}),
   );
-  const motion = el("span", "대기", {"data-drive-motion": "", "data-kind": "idle"});
+  const motion = el("span", MODE_LABEL.IDLE, {"data-drive-motion": "", "data-kind": "idle"});
   const cap = el("span", "", {"data-drive-fact": "cap"});
   const zoom = el("span", "", {"data-drive-fact": "zoom", hidden: ""});
   const facts = el("div", null, {"data-drive-facts": ""});

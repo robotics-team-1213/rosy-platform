@@ -13,6 +13,7 @@ Single source of pydantic schemas for REST snapshots and Fleet WS envelope (D-10
 |------|-------------|
 | `__init__.py` | Package marker |
 | `schemas.py` | Enums (`RobotMode`, `PowerMode`, `BatteryLevel`, …), `StateSnapshot`, envelope, events |
+| `localization.py` | D-395 wire models: `LocalizationStatus` (state + `map\|odom` frame flag, on `StateSnapshot.localization`), `CandidateReport`, `LocalizationDecision` (candidate index or direct pose, source, `cues`, `ttl_s` from receipt) |
 
 ## Subdirectories
 

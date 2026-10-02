@@ -10,11 +10,11 @@ gates:
     cmd: "python -m pytest src/hmi/pilot/test src/runtime/api_web/test/test_pilot_route.py -q -p no:cacheprovider"
   LOCAL:
     state: HOLD
-    blocker: "OMX 페어링→조그와 Pinky 게이트 브라우저 시험은 각각 통과. 전체 Pilot 브라우저 경로 및 영상·녹화 수용 시험은 아직 이번 회차에 실행하지 않음"
+    blocker: "OMX 페어링→조그와 Pinky 게이트 브라우저 시험은 각각 통과. 기록 시작 실패·재시도·결과·stale 영상·dispose Chromium 시험과 실제 Gazebo 15프레임→LeRobot 재독출은 통과. 전체 Pilot/Pinky 경로 재측정은 남음"
     cmd: "python -m pytest src/hmi/pilot/test/test_pilot_browser.py -q -p no:cacheprovider"
   ROS-SIM:
     state: HOLD
-    blocker: "OMX 관절·그리퍼·취소의 Gazebo action/readback은 docs/validation/pilot-omx-gazebo-2026-10-01/에서 확인. 그리퍼 정밀 도달·카메라·기록, lease 이탈/재시작, Pinky 이전 재측정은 남음"
+    blocker: "OMX 관절·그리퍼·취소의 Gazebo action/readback은 docs/validation/pilot-omx-gazebo-2026-10-01/에서 확인. Gazebo 작업대 영상·시연 기록 15프레임과 실제 LeRobot v3 재독출도 통과. 그리퍼 정밀 도달·전체 재시작 회복·Pinky 재측정은 남음"
   ARTIFACT:
     state: HOLD
     blocker: "share/pilot 설치를 이미지에서 본 기록이 없다"
@@ -25,6 +25,7 @@ gates:
     state: N/A
 adrs: [D-323, D-365, D-366, D-390]
 plans:
+  - docs/plans/2026-10-01-omx-demonstration-lerobot-design.md
   - docs/plans/2026-09-29-rosy-pilot-teleop-app-design.md
   - docs/plans/2026-09-29-rosy-pilot-teleop-app.md
   - docs/plans/2026-10-01-pilot-omx-gazebo-practice.md

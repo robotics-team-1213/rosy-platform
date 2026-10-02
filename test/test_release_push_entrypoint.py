@@ -28,9 +28,20 @@ TAR = shutil.which("tar")
 RELEASE_ID = "2026.09.25-001"
 
 
+@pytest.fixture(autouse=True)
+def _no_real_operator_credentials(tmp_path, monkeypatch):
+    # A non-preview push runs the calibration guard, which would read the
+    # operator's real DPAPI credentials under LOCALAPPDATA and send a token to
+    # the -Robot host. Tests that need other paths set LOCALAPPDATA themselves.
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "localappdata"))
+    monkeypatch.delenv("ROSY_API_TOKEN", raising=False)
+
+
 def _run(args: list[str]) -> subprocess.CompletedProcess:
     command = [POWERSHELL, "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(SCRIPT), *args]
-    return subprocess.run(command, capture_output=True, text=True, timeout=60)
+    env = dict(os.environ)
+    env.pop("ROSY_API_TOKEN", None)
+    return subprocess.run(command, capture_output=True, text=True, timeout=60, env=env)
 
 
 @pytest.fixture

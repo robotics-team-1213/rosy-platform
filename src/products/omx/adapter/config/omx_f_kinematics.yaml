@@ -1,0 +1,82 @@
+# OMX-F kinematic chain copied verbatim from the pinned open_manipulator URDF
+# (D-402 §4, D-397 rule). Only geometry lives here; limits that protect the
+# arm live in deploy/robot/omx/sim/cell_profile.yaml. The URDF's +/-2*pi
+# joint limits are recorded for drift detection only and protect nothing.
+#
+# Source: https://raw.githubusercontent.com/ROBOTIS-GIT/open_manipulator/
+#   0a4af6a923b8b7d80b8c20506d1839c54d2e993e/open_manipulator_description/urdf/omx_f/omx_f.urdf
+# (file sha256 d06720f50c71b380daa91f6cf52ae089725bc588617e5f42ed2433b6e665b809; byte-identical
+# to src/sim/isaac_sim/assets/open_manipulator_description/urdf/omx_f/omx_f.urdf after CRLF
+# normalisation, checked 2026-10-01). The same values are in omx_f_arm.urdf.xacro and
+# omx_f.urdf.xacro (end_effector_joint) at that revision.
+schema: rosy.omx-kinematics.v1
+model: omx_f
+source:
+  repository: https://github.com/ROBOTIS-GIT/open_manipulator.git
+  release: "5.1.2"
+  revision: 0a4af6a923b8b7d80b8c20506d1839c54d2e993e
+  file: open_manipulator_description/urdf/omx_f/omx_f.urdf
+  file_sha256: d06720f50c71b380daa91f6cf52ae089725bc588617e5f42ed2433b6e665b809
+# Planning base frame = link0 (world_fixed is the identity).
+base_link: link0
+tcp_link: end_effector_link
+# Serial chain in URDF order. origin = parent->joint transform (xyz in m, rpy in rad).
+joints:
+  - name: joint1
+    type: revolute
+    parent: link0
+    child: link1
+    origin: {xyz: [-0.01125, 0.0, 0.034], rpy: [0.0, 0.0, 0.0]}
+    axis: [0.0, 0.0, 1.0]
+    urdf_limit: {lower: -6.283185307179586, upper: 6.283185307179586, velocity: 4.8}
+  - name: joint2
+    type: revolute
+    parent: link1
+    child: link2
+    origin: {xyz: [0.0, 0.0, 0.0635], rpy: [0.0, 0.0, 0.0]}
+    axis: [0.0, 1.0, 0.0]
+    urdf_limit: {lower: -6.283185307179586, upper: 6.283185307179586, velocity: 4.8}
+  - name: joint3
+    type: revolute
+    parent: link2
+    child: link3
+    origin: {xyz: [0.0415, 0.0, 0.11315], rpy: [0.0, 0.0, 0.0]}
+    axis: [0.0, 1.0, 0.0]
+    urdf_limit: {lower: -6.283185307179586, upper: 6.283185307179586, velocity: 4.8}
+  - name: joint4
+    type: revolute
+    parent: link3
+    child: link4
+    origin: {xyz: [0.162, 0.0, 0.0], rpy: [0.0, 0.0, 0.0]}
+    axis: [0.0, 1.0, 0.0]
+    urdf_limit: {lower: -6.283185307179586, upper: 6.283185307179586, velocity: 4.8}
+  - name: joint5
+    type: revolute
+    parent: link4
+    child: link5
+    origin: {xyz: [0.0287, 0.0, 0.0], rpy: [0.0, 0.0, 0.0]}
+    axis: [1.0, 0.0, 0.0]
+    urdf_limit: {lower: -6.283185307179586, upper: 6.283185307179586, velocity: 4.8}
+  - name: end_effector_joint
+    type: fixed
+    parent: link5
+    child: end_effector_link
+    origin: {xyz: [0.09193, -0.0016, 0.0], rpy: [0.0, 0.0, 0.0]}
+# Gripper fingers hang off link5 and do not move the TCP. gripper_joint_2 mimics
+# gripper_joint_1 with multiplier -1; only gripper_joint_1 is commanded.
+gripper_joints:
+  - name: gripper_joint_1
+    parent: link5
+    child: link6
+    origin: {xyz: [0.0295, 0.0075, 0.0], rpy: [0.0, 0.0, 0.0]}
+    axis: [0.0, 0.0, 1.0]
+    urdf_limit: {lower: -6.283185307179586, upper: 6.283185307179586, velocity: 4.8}
+  - name: gripper_joint_2
+    parent: link5
+    child: link7
+    origin: {xyz: [0.0295, -0.0108, 0.0], rpy: [0.0, 0.0, 0.0]}
+    axis: [0.0, 0.0, 1.0]
+    urdf_limit: {lower: -6.283185307179586, upper: 6.283185307179586, velocity: 4.8}
+    mimic: {joint: gripper_joint_1, multiplier: -1.0}
+# open_manipulator_moveit_config/config/omx_f/omx_f.srdf group_state values at the same revision.
+srdf_gripper_states: {open: 1.0, close: 0.0}

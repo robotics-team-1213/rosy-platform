@@ -10,10 +10,12 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 from core.bridge import display
+from core_common.protocol.schemas import DockState
 
 
 def _snapshot(percent=87.6543, voltage=7.8912, estop=False, charging=False,
-              mode="IDLE", navigation="ARRIVED", speed=0.2367, docking_state=None):
+              mode="IDLE", navigation="ARRIVED", speed=0.2367,
+              docking_state=DockState.UNDOCKED):
     return SimpleNamespace(
         battery=SimpleNamespace(percent=percent, voltage=voltage),
         battery_status=SimpleNamespace(charging=charging),
@@ -21,7 +23,7 @@ def _snapshot(percent=87.6543, voltage=7.8912, estop=False, charging=False,
         mode=SimpleNamespace(value=mode),
         navigation=SimpleNamespace(value=navigation),
         velocity=SimpleNamespace(linear=speed, angular=0.0),
-        docking=SimpleNamespace(state=docking_state),
+        docking=SimpleNamespace(state=DockState(docking_state)),
         safety=SimpleNamespace(estop=estop),
         hitl_requested=False,
         activity=None,

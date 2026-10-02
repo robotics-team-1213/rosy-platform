@@ -270,6 +270,24 @@
 - 증거: Fleet 쪽 `src/site/fleet/test/test_transport.py` 첫 프레임 시험.
 - gate 변화: 없음.
 
+## 2026-10-01 · uncommitted · docs(api): 계약 버전 핀 v1.69 (D-395 1단계)
+- 변경: `app.py` 독스트링·FastAPI description의 계약 버전 v1.68 → v1.69(D-347 세 핀 중 하나). 코드 경로 변화 없음.
+- 증거: `test_protocol_version_alignment.py`.
+- gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · feat(omx): record SIM demonstrations and export LeRobot v3
+- 변경: D-390 부록·API v1.69·Pilot 기록 패널·SIM 카메라·원본 recorder·오프라인 exporter. ROS 수락 전에 목표를 등록하고, recording I/O는 별도 writer로 분리.
+- 증거: adapter/Pilot/network 259 passed, 28 skipped; quick tier 95 passed; Chromium recording retry/outcome/stale/dispose 1 passed; 실제 LeRobot 0.4.4 reader 3 passed. Gazebo 원본 15프레임 및 동일 원본 export 재독출 PASS. docs/validation/omx-demonstration-lerobot-2026-10-01/README.md 참조.
+- gate 변화: 물리·ARTIFACT/FIELD 승격 없음. 짧은 SIM 시연/데이터 형식 증거만 추가.
+- 결정: D-390 부록; D-18 typed API와 reference 동시 갱신.
+- 교훈: LeRobot 0.4.4는 explicit timestamp를 거부; source ns를 int64로 유지. Windows shared recording mount는 프레임 누락을 만들 수 있으므로 Linux volume 사용.
+
+## 2026-10-01 · uncommitted · fix(omx): fence recording closure and isolate storage faults
+- 변경: 리뷰의 중요 문제 3개 해소 — recording 오류로 lease watcher 종료 금지, hidden 중 늦은 seat 획득 즉시 반납, 종료 저장 중 interruption을 manifest에 반영.
+- 증거: 리뷰 수정 race/runtime/recorder 21 passed; Chromium 2 passed; 최종 adapter/foundation/assets/network 624 passed, 6 skipped. 최종 tree와 같은 해시의 실제 Gazebo 12프레임→LeRobot 재독출 PASS; 같은 실행 lease 만료 incomplete. 독립 리뷰 재검토 완료.
+- gate 변화: 기존 gate 유지; DEVICE/FIELD 승격 없음.
+- 결정: D-390 부록.
+- 교훈: 파일 쓰기 완료 전 들어온 interruption과 logical closure 경계를 구분한다.
 ## 2026-10-01 · 3d323ade · feat(host): D-406 T1 status-inputs schema 2 — 업데이터 유휴 판정 입력
 - 변경: `status_inputs()`가 schema 2를 쓴다. schema-1 키는 그대로 두고 `velocity_linear`·`velocity_angular`·`battery_percent`·`battery_charging`·`docking_state`·`line_follow_mode`·`line_follow_state`·`swarm_active`·`estop`·`activity_kind`를 더했다. 모든 상태 키는 `GET /robot/state`와 같은 StateSnapshot 한 장에서 읽는다(`_snapshot`, 쓰기 한 번에 한 번). 모르는 값·형식이 틀린 값은 null이고 쉬는 기본값으로 채우지 않는다. 배터리는 요약줄 규칙대로 신선하지 않으면 null. root `rosy-boot-status.py`는 schema 1·2(int만)를 받고 출력은 그대로다.
 - 증거: test_host_status_summary.py 53 passed 1 skipped. gateway 1611 passed 1 failed(test_module_criteria C6, 변경 전에도 실패·bridge 파일), api_web 73 passed, 루트 boot_status·boot_display·native_systemd_contract 287 passed. 변이 증명 7종(쓰기 schema 1, 읽기 schema 1만, int 검사 제거, bool 강제, 배터리 신선도 무시, 스냅샷 두 번, 문자열 강제) 모두 빨강.

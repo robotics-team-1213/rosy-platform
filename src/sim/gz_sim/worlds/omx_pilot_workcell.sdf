@@ -1,0 +1,43 @@
+<?xml version="1.0"?>
+<!-- Fixed SIM-only recording camera. No physical calibration or object success evidence. -->
+<sdf version="1.9">
+  <world name="omx_pilot_workcell">
+    <physics name="physics" type="ignored">
+      <max_step_size>0.001</max_step_size><real_time_factor>1</real_time_factor>
+    </physics>
+    <plugin filename="gz-sim-physics-system" name="gz::sim::systems::Physics"/>
+    <plugin filename="gz-sim-user-commands-system" name="gz::sim::systems::UserCommands"/>
+    <plugin filename="gz-sim-scene-broadcaster-system" name="gz::sim::systems::SceneBroadcaster"/>
+    <plugin filename="gz-sim-sensors-system" name="gz::sim::systems::Sensors">
+      <render_engine>ogre2</render_engine>
+    </plugin>
+    <light name="sun" type="directional">
+      <pose>0 0 10 0 0 0</pose><diffuse>0.9 0.9 0.9 1</diffuse><direction>-0.3 0.2 -1</direction>
+    </light>
+    <model name="ground">
+      <static>true</static>
+      <link name="ground">
+        <collision name="collision"><geometry><plane><normal>0 0 1</normal><size>3 3</size></plane></geometry></collision>
+        <visual name="visual">
+          <geometry><plane><normal>0 0 1</normal><size>3 3</size></plane></geometry>
+          <material><diffuse>0.35 0.35 0.4 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+    <model name="workcell_camera">
+      <static>true</static><pose>0.7 -0.7 0.65 0 0.5 2.35619449</pose>
+      <link name="optical">
+        <sensor name="camera" type="camera">
+          <always_on>true</always_on><update_rate>10</update_rate>
+          <topic>/workcell_camera/image</topic><gz_frame_id>workcell_camera_optical</gz_frame_id>
+          <camera>
+            <horizontal_fov>1.0471975512</horizontal_fov>
+            <image><width>320</width><height>240</height><format>R8G8B8</format></image>
+            <clip><near>0.02</near><far>5</far></clip>
+            <camera_info_topic>/workcell_camera/camera_info</camera_info_topic>
+          </camera>
+        </sensor>
+      </link>
+    </model>
+  </world>
+</sdf>

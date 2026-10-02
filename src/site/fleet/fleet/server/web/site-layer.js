@@ -3,6 +3,7 @@
 // 관측(sighting)은 표시·대조용이다. CORE TF pose 와 합치지 않고, 목표 좌표로 쓰지 않는다.
 
 // 서버 lease(1 s)를 넘기면 `stale` 로 온다. 여기 임계는 그 위의 화면 규칙이다.
+// 증거 어휘는 닫힌 네 상태다(D-359): 서버의 `stale` 는 화면에서 `delayed`(지연)로 그린다.
 export const SIGHTING_STALE_MS = 3000;
 export const SIGHTING_HIDE_MS = 30000;
 export const GRID_STEP_M = 0.5;
@@ -30,7 +31,7 @@ export function classifySightings(snapshot) {
       yaw: row.yaw,
       source_id: row.source_id || "",
       age_ms: row.age_ms,
-      state: row.stale === true || row.age_ms > SIGHTING_STALE_MS ? "stale" : "fresh",
+      state: row.stale === true || row.age_ms > SIGHTING_STALE_MS ? "delayed" : "fresh",
     });
   }
   return out.sort((a, b) => a.robot_id.localeCompare(b.robot_id));
@@ -88,6 +89,8 @@ export function gridLines(lo, hi, step = GRID_STEP_M) {
 
 // 릴레이 건강을 D-72 증거로 옮긴다. fresh 는 아무것도 붙이지 않는다(§7.3 정상은 안 보임).
 // D-359 US-009 — 알약은 로봇 카드에 홀로 붙으므로 무엇의 증거인지("릴레이")를 말한다.
+// D-398 — 증거 어휘 표는 core_ui_logic.js의 EVIDENCE_LABEL 이지만 이 파일은 노드 순수
+// 시험이 돌아야 해서 /common import를 못 한다. 같은 문구를 로컬로 둔다(표를 참조한다).
 export function streamEvidence(formation, robotId) {
   if (!formation?.active) return null;
   const evidence = formation.stream_evidence?.[robotId];
@@ -95,7 +98,8 @@ export function streamEvidence(formation, robotId) {
   if (evidence.state === "fresh") return null;
   if (evidence.state === "disconnected") return { text: "릴레이 끊김", cls: "crit", evidence: "disconnected" };
   if (evidence.state === "delayed") {
-    const age = finite(evidence.age_s) ? ` · ${evidence.age_s.toFixed(1)}초` : "";
+    const age = finite(evidence.age_s)
+      ? ` · ${(Math.round(Math.max(0, evidence.age_s) * 10) / 10)}초 전` : "";
     const reason = evidence.reason === "rate_below_floor" ? " · 송신 빈도 낮음" : "";
     return { text: `릴레이 지연${age}${reason}`, cls: "warn", evidence: "delayed" };
   }

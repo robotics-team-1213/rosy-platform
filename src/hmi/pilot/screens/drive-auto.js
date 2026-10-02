@@ -3,6 +3,7 @@
 // 상태 기계는 autonomy.js, 이 파일은 화면 배선만 한다.
 
 import {createAutoSession, intentView} from "../autonomy.js";
+import {MODE_LABEL} from "/common/core_ui_logic.js";
 
 const DEG = 180 / Math.PI;
 const LF_REASON = {
@@ -42,7 +43,7 @@ export function mountAutoMode({drive, element, apiGet, releaseAll, onIdle}) {
         onIdle();
         const benign = !reason || reason === "released" || reason === "takeover";
         element.motion.dataset.kind = benign ? "idle" : "warn";
-        element.motion.textContent = benign ? "대기" : `자동 멈춤 — ${LF_REASON[reason] ?? reason}`;
+        element.motion.textContent = benign ? MODE_LABEL.IDLE : `자동 멈춤 — ${LF_REASON[reason] ?? reason}`;
         renderIntent(null);
       }
     },

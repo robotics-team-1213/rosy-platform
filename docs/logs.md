@@ -4197,12 +4197,81 @@
 - gate 변화: 없음(문서). D-395는 Proposed 그대로.
 - 결정: D-395 Proposed(설계 승인).
 
+
+## 2026-10-01 · uncommitted · D-398 ADR + 감사 정합 문서
+
+- 변경: docs/adr/D-398 신규 + ADR 로그 추가. DESIGN.md에 표면 문법 절·증거 어휘 공용 표·D-277 원문 문구·D-280 매체 규칙 수집, 팔레트 게이트 문단에 범위 게이트 언급. PRODUCT.md 컴포넌트 수 실측 정정('13종' → 엘리먼트 16종+클래스 부품). CONCEPTS.md에 실행 모드·기능의 운용자 한국어 어휘 등재(DESIGN.md 인용 근거가 실제로 존재하게). D-396 계획 문서 수치 정정·진행 갱신.
+- 근거: 2026-10-01 전 레이어 감사(ADR·DESIGN·PRODUCT·CONCEPTS·tokens·등록부·9 표면·시험).
+- gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · docs(adr): D-395 개정 3 — 비대칭 단서 필수, 수신 기준 유효 시간
+- 변경: 1단계 착수 때 정한 기본값을 D-395 개정 3으로 기록. 거울 가설도 스캔 적합도가 같아 3 s 검증이 거울을 못 거르므로 결정에는 비대칭 단서가 하나 이상 있어야 하고(사람 예외), 유효 시간은 절대 시각 대신 받은 때부터 5 s다. ADR Log 상태 갱신.
+- 증거: `src/runtime/sensing/test/test_loc_state.py` 19 passed.
+- gate 변화: 없음(Proposed).
+
+## 2026-10-01 · uncommitted · docs(api): API Ref v1.69 — 스냅샷 `localization`과 §7.9 D-395 모델
+- 변경: 헤더 v1.69, §6.1 `localization`(state·pose_frame·confidence·reason·needs_human·request_id), §7.9 `CandidateReport`·`LocalizationDecision`(`cues`, 수신 기준 `ttl_s`; 스키마만, 전송 경로는 2단계), 변경 이력 행. 핀 셋(헤더·`app.py`·`test_line_follow_contract_docs.py`)을 함께 옮겼다. `test_module_structure.py`의 `schemas.py` 판정을 1095로 재판정(accept 유지).
+- 증거: `test_protocol_version_alignment.py`, `test_line_follow_contract_docs.py`, `test_localization_contracts.py`의 참조서 시험.
+- gate 변화: 없음.
+- 결정: D-395 Proposed(개정 3), D-18, D-347, PRT-006.
+
+## 2026-10-01 · uncommitted · chore(architecture): `fleet` 크기 판정 재판정 (D-395 중재기)
+- 변경: `test_module_structure.py`의 `fleet` 판정 줄 수를 D-395 `fleet/localization/` 추가 뒤 실측값 23543으로 옮기고 사유를 덧붙였다. 판정(split, 미예정) 그대로.
+- 증거: `test_module_structure.py`.
+- gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · chore(architecture): `control` 크기 판정 재판정 (D-395 1단계)
+- 변경: `test_module_structure.py`의 `control` 판정 줄 수를 D-395 sensing 순수 모듈 추가 뒤 실측값 40547로 옮기고 사유를 덧붙였다. 판정(split, P1a) 그대로.
+- 증거: `test_module_structure.py` 33 passed.
+- gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · docs(plan): D-395 2단계 세 갈래 인터페이스 계약
+- 변경: `docs/plans/2026-10-01-d395-phase2-interfaces.md` — 사용자 2단계 승인(2026-10-01)에 따라 로봇(sensing)·CORE·Fleet 세 갈래가 함께 쓸 계약을 고정. ROS 토픽(`localization/state|candidates|decision|suspect|result`, String JSON), CORE 새 경로(`GET /localization/candidates`, `POST /localization/decision|suspect|mission`), 새 capability `LOCALIZE_ASSIST`, API Ref v1.70 핀 목록, Fleet 서비스·감시·사다리 시간, 교통정리·bays가 믿지 않는 자세, D-395 이전 로봇(`localization: null`)은 현행 유지+경고. 실제 로봇(S3)은 공유 로봇 공지·대기 규칙을 따른다.
+- 증거: 없음(계획 문서).
+- gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · feat(omx): record SIM demonstrations and export LeRobot v3
+- 변경: D-390 부록·API v1.69·Pilot 기록 패널·SIM 카메라·원본 recorder·오프라인 exporter. ROS 수락 전에 목표를 등록하고, recording I/O는 별도 writer로 분리.
+- 증거: adapter/Pilot/network 259 passed, 28 skipped; quick tier 95 passed; Chromium recording retry/outcome/stale/dispose 1 passed; 실제 LeRobot 0.4.4 reader 3 passed. Gazebo 원본 15프레임 및 동일 원본 export 재독출 PASS. docs/validation/omx-demonstration-lerobot-2026-10-01/README.md 참조.
+- gate 변화: 물리·ARTIFACT/FIELD 승격 없음. 짧은 SIM 시연/데이터 형식 증거만 추가.
+- 결정: D-390 부록; D-18 typed API와 reference 동시 갱신.
+- 교훈: LeRobot 0.4.4는 explicit timestamp를 거부; source ns를 int64로 유지. Windows shared recording mount는 프레임 누락을 만들 수 있으므로 Linux volume 사용.
+
+## 2026-10-01 · uncommitted · fix(omx): fence recording closure and isolate storage faults
+- 변경: 리뷰의 중요 문제 3개 해소 — recording 오류로 lease watcher 종료 금지, hidden 중 늦은 seat 획득 즉시 반납, 종료 저장 중 interruption을 manifest에 반영.
+- 증거: 리뷰 수정 race/runtime/recorder 21 passed; Chromium 2 passed; 최종 adapter/foundation/assets/network 624 passed, 6 skipped. 최종 tree와 같은 해시의 실제 Gazebo 12프레임→LeRobot 재독출 PASS; 같은 실행 lease 만료 incomplete. 독립 리뷰 재검토 완료.
+- gate 변화: 기존 gate 유지; DEVICE/FIELD 승격 없음.
+- 결정: D-390 부록.
+- 교훈: 파일 쓰기 완료 전 들어온 interruption과 logical closure 경계를 구분한다.
+
+## 2026-10-01 · uncommitted · fix(pilot): preserve recording errors and reconcile API minor
+- 변경: polling으로 시작/종료 오류가 지워지지 않게 유지. main D-395/v1.69와 충돌한 OMX 추가분은 v1.70. 양쪽 append-only 로그와 source를 보존.
+- 증거: 전체 추가 실행 680 passed, 6 skipped, 2 failed; 원인/제한을 검증 문서에 기록. OMX polling 오류·hidden seat·Pinky calibration 실패 경로 재실행 3 passed.
+- gate 변화: 전체 Pilot LOCAL HOLD 유지.
+- 결정: D-390 부록, D-18.
+- 교훈: 독립 기능 시험과 전체 부하 실행을 구분한다.
+
+## 2026-10-01 · uncommitted · docs(adr): D-395 개정 4 — 2단계 결정과 Fleet 감시 한계
+- 변경: 2단계 구현에서 정한 것을 D-395 개정 4로 기록. D-395 이전 로봇(`localization: null`)은 현행 유지+카드 경고, LOCALIZED 관문(시작 거부·이탈 시 자율 주행 정지, 수동 조종 허용), `LOCALIZE_ASSIST`는 운용자 역할로 부여(토큰별 grant는 후속), 천장 카메라 단서 기본 꺼짐(D-257 개정 수용 전), 사다리 시계·재시도 규칙. 남은 한계: 다른 로봇 관찰은 CANDIDATES 로봇의 보고에만 실려, 모든 로봇이 LOCALIZED인 동안 Fleet 상시 감시가 비어 있다 → LOCALIZED 로봇도 `unmapped_objects`를 싣는 후속 계약 확장 제안. ADR Log 상태 갱신.
+- 증거: 2단계 갈래 B(CORE)·C(Fleet) 구현 보고.
+- gate 변화: 없음(Proposed).
+
 ## 2026-10-01 · uncommitted · docs(adr): D-406 로봇 자동 업데이트 — GitHub Releases에서 스스로 받아 유휴 시 승인 없이 적용, 로봇별 hold
 
 - 변경: D-406(Accepted) 작성. 사용자 선택: 완전 자동(유휴 시), GitHub Releases, 이 PC의 발행 명령, 로봇별 hold, A안(로봇 pull + 카나리 1대 뒤 나머지). D-387 결정 2·5와 Alternatives 두 기각을 개정(D-387 Status에 개정 참조 한 줄). 판정 입력은 토큰 없는 `/run/rosy/status-inputs.json` schema 2, 봉인 자동 hold는 `/etc/rosy/approvals/*.approved`의 `release_id`, 잠정 claim(`/run/rosy-claim`)을 push와 업데이터에 함께 구현, `rosy-release-unpack.sh`를 native로 이동. ADR 번호는 브랜치·로컬 main·작업 트리 확인 뒤 D-406; 다른 브랜치가 쓰는 D-398~405는 `adr_gaps`에 예약으로 적었다.
 - 증거: 두 로봇에서 `api.github.com` 200, `github.com` 200, NTP 동기(2026-10-01 읽기 전용). harness lint 0 error.
 - gate 변화: 없음(설계만).
 
+## 2026-10-02 · uncommitted · follow-preview Gazebo evidence
+- 변경: docs/validation/follow-preview-gazebo-2026-10-02.md에 실제 Gazebo 카메라→추종 증거→CORE 콘솔 표시 검증을 기록.
+- 검증: 주행 구간 228 프레임/57 preview, 차선 없음 76 프레임/19 preview, follow/observer focused 25 passed. road shadow STOP이므로 예측 경로는 숨김; 유효 예측의 ROS-SIM 성공은 주장하지 않음.
+- 한계: 로봇 전원 꺼짐으로 실기 설치 보류, 전체 CI 실패는 별도 기록. 실기·FIELD 관문 변화 없음.
+- gate 변화: ROS-SIM 표시 검증 기록. DEVICE/FIELD 관문 변화 없음.
+
+## 2026-10-02 · uncommitted · docs(adr): D-395 개정 5 — 실기 항목은 로봇이 돌아올 때까지 미룬다
+- 변경: 사용자 결정(로봇 없음)으로 실기가 필요한 항목을 D-395 개정 5에 묶었다: Pi 탐색 시간 실측(WSL 4.7–6.5 s > 예산 3 s), 기준 사각형 테이프 실측(현재 사진 유래 ±3 cm), 실제 카메라 사각형·페인트 검출 범위, 장치 들어 올림 신호(BNO055 센서 작업자 기본 꺼짐), 장치 `enable_loc_assist` 기본값과 릴리스, 실기 S3. 모두 닫히기 전에는 장치에서 켜지 않는다. 그동안 Gazebo S1·S2, P2-7, 개정 4 5항 후속을 먼저 한다.
+- 증거: 2단계 갈래 A 보고(WSL 탐색 시간, 장치 그래프 pickup 없음).
+- gate 변화: 없음(Proposed).
 ## 2026-10-02 · uncommitted · docs(adr): 로봇 자동 업데이트 ADR 번호를 D-406에서 D-410으로 — 동시 세션 번호 충돌
 
 - 변경: 통합 브랜치 `feat/d406-robot-auto-update`의 "로봇 자동 업데이트" ADR이 D-406으로 쓰였는데, 그 사이 다른 세션이 main에 D-406(관제 카메라 운용·설치 분리)을 착지했다. 이 브랜치의 ADR·계획·코드 주석·시험의 `D-406`을 모두 `D-410`으로 바꾸고 파일을 `D-410-robots-self-update-from-signed-github-releases-when-idle.md`, `docs/plans/2026-10-01-d410-robot-auto-update.md`로 옮겼다. 번호는 모든 브랜치·로컬 main·작업 트리·ADR Log·`adr_gaps` 확인 뒤 골랐다(D-407~409는 다른 브랜치가 사용 중).

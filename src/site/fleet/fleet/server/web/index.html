@@ -20,17 +20,17 @@
     <ui-brand><b>ROSY FLEET</b><small id="fleet-name">SITE CONSOLE</small></ui-brand>
     <div class="spacer"></div>
     <!-- D-359 §6.4 — 좁은 창에서 접속·역할·테마는 이 토글 뒤로 접힌다. 넓은 창에서는 토글이 숨고 줄에 선다. -->
-    <ui-button kind="quiet" id="topbar-more" type="button" aria-expanded="false" aria-controls="topbar-extra">설정</ui-button>
+    <ui-button kind="quiet" id="topbar-more" type="button" aria-expanded="false" aria-controls="topbar-extra" title="설정"><svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4 7h16M4 12h16M4 17h16M9 5v4M15 10v4M7 15v4"/></svg><span class="sr-only">설정</span></ui-button>
     <div id="topbar-extra" class="topbar-extra" data-open="false">
       <input id="console-token" class="ui-field token" type="password" placeholder="관제 토큰"
              autocomplete="off" aria-label="관제 토큰">
       <ui-button kind="quiet" id="token-save" type="button">접속</ui-button>
       <ui-tag id="user-role" status="neutral">인증 필요</ui-tag>
       <div id="theme-choice" class="theme-choice" role="group" aria-labelledby="theme-choice-label">
-        <ui-text id="theme-choice-label" scale="label">화면 테마</ui-text>
-        <ui-button kind="segment" type="button" data-theme-choice="dark" aria-pressed="true">어둡게</ui-button>
-        <ui-button kind="segment" type="button" data-theme-choice="light" aria-pressed="false">밝게</ui-button>
-        <ui-button kind="segment" type="button" data-theme-choice="system" aria-pressed="false">시스템</ui-button>
+        <ui-text id="theme-choice-label" scale="label" class="sr-only">화면 테마</ui-text>
+        <ui-button kind="segment" type="button" data-theme-choice="dark" aria-pressed="true" title="어둡게"><svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg><span class="sr-only">어둡게</span></ui-button>
+        <ui-button kind="segment" type="button" data-theme-choice="light" aria-pressed="false" title="밝게"><svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="4"/><path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8"/></svg><span class="sr-only">밝게</span></ui-button>
+        <ui-button kind="segment" type="button" data-theme-choice="system" aria-pressed="false" title="시스템"><svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8.5 20h7M12 16v4"/></svg><span class="sr-only">시스템</span></ui-button>
       </div>
     </div>
     <ui-tag id="online-pill" status="neutral">연결 대기</ui-tag>
@@ -125,7 +125,7 @@
         </div>
 
         <div id="log" class="log" role="status" aria-live="polite" aria-label="최근 관제 이벤트">
-          <p class="log-empty"><strong>최근 이벤트가 없습니다</strong><span>관제 요청과 연결 상태 변화가 여기에 표시됩니다.</span></p>
+          <ui-empty>최근 이벤트가 없습니다 — 관제 요청과 연결 상태 변화가 여기에 표시됩니다.</ui-empty>
         </div>
 
         <section class="discovery device-link" aria-labelledby="device-link-heading">
@@ -247,7 +247,7 @@
         <div class="vision-controls">
           <label for="vision-source">카메라</label>
           <select class="ui-field" id="vision-source" disabled aria-label="관제 카메라 선택"></select>
-          <ui-button kind="quiet" id="vision-refresh" type="button">영상 새로고침</ui-button>
+          <ui-button kind="quiet" id="vision-refresh" type="button" title="영상 새로고침"><svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M21 12a9 9 0 1 1-2.64-6.36L21 8"/><path d="M21 3v5h-5"/></svg><span class="sr-only">영상 새로고침</span></ui-button>
         </div>
         <div class="vision-frame" id="vision-frame" data-state="waiting">
           <div class="vision-image-stage" id="vision-image-stage" hidden>
@@ -270,7 +270,9 @@
         <p class="hint" id="vision-meta">화면에 보이는 카메라의 최신 프레임입니다. 실제 시야 범위는 현장 설치에서 확인해야 합니다.</p>
         <!-- D-360: 경기장 제안은 운용자가 수락해야 조정값이 된다. 관측·주행에는 쓰지 않는다.
              D-375: 차선 페인트로 카메라→지도 맞춤을 제안받는다. 수락해도 이 브라우저의 표시 초안일 뿐이다.
-             두 제안 도구는 한 줄을 나눠 쓴다 — 예외 문법은 한 화면에 다 보인다(D-201). -->
+             D-406: 두 제안 도구는 설치·보정 묶음 안에 접힌다 — 운용 무대에는 영상만 남는다(D-201 좁힘). -->
+        <details class="install-tools" id="camera-install-tools">
+          <summary>카메라 설치·보정 도구</summary>
         <div class="field-tools">
           <ui-button kind="quiet" id="field-detect" type="button">경기장 자동 찾기</ui-button>
           <ui-button kind="quiet" id="field-accept" type="button" hidden>제안 수락</ui-button>
@@ -362,6 +364,7 @@
             <span id="vision-adjustment-state" role="status">현재 브라우저에 조정값을 저장합니다.</span>
             <ui-button kind="quiet" id="vision-reset-adjustments" type="button">조정 초기화</ui-button>
           </div>
+        </details>
         </details>
       </section>
       <details class="note">

@@ -31,6 +31,7 @@ TARGET = {
     "site/fleet": "site/fleet",
     "site/games": "site/games",
     "site/vision": "site/vision",
+    "site/cell": "site/cell",
     "sim/description": "sim/description",
     "sim/gz_sim": "sim/gz_sim",
     "sim/isaac_sim": "sim/isaac_sim",

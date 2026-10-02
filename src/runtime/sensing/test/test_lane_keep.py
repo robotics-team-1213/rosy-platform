@@ -69,6 +69,21 @@ def test_centred_lane_reads_near_zero_with_both_boundaries():
     assert last["target_px"] is not None
 
 
+def test_follow_explanation_marks_only_the_chosen_pair_and_records_lane_width():
+    obs, last = _keep(_render([(HALF, 0.0), (-HALF, 0.0)]))
+    assert obs is not None
+    assert last['lane_width_m'] == pytest.approx(2 * HALF)
+    assert {b['side'] for b in last['boundaries'] if b.get('selected')} == {'left', 'right'}
+    assert sum(bool(b.get('selected')) for b in last['candidates']) == 2
+
+
+def test_hold_does_not_keep_a_previously_selected_boundary():
+    keeper = LaneKeeper(camera_x_offset_m=X_OFFSET, smoothing=0.0)
+    assert keeper.update(_render([(HALF, 0.0), (-HALF, 0.0)]), GROUND) is not None
+    assert keeper.update(_render(), GROUND) is None
+    assert not any(b.get('selected') for b in keeper.last['boundaries'])
+
+
 @pytest.mark.parametrize("shift, sign", [(0.04, -1), (-0.04, +1)])
 def test_off_centre_steers_back_with_core_sign(shift, sign):
     # shift > 0: the lane lies to the robot's left (robot right of centre),

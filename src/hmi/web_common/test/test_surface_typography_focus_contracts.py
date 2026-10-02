@@ -43,9 +43,10 @@ def test_surface_repeated_weights_leading_and_tracking_use_shared_tokens():
         surface_exceptions.update(match.group(1) for match in surface_leading.finditer(css))
 
     assert not violations, "반복 타이포그래피 규칙은 D-300 토큰을 사용해야 합니다:\n" + "\n".join(violations)
-    assert surface_exceptions <= {"1.15", "1.35", "1.45", "1.55", "1.6", "1.7"}, (
-        "예외로 허용한 고유 읽기 줄 간격만 표면 CSS에 남길 수 있습니다: "
-        + str(sorted(surface_exceptions))
+    # D-398 정리 — 마지막 예외(1.15/1.35/1.45/1.55/1.6/1.7)가 토큰으로 은퇴했다.
+    # 표면 CSS 의 줄 간격은 이제 --leading-* 토큰만 쓴다.
+    assert surface_exceptions == set(), (
+        "표면 CSS 의 줄 간격은 --leading-* 토큰만 쓴다(D-398): " + str(sorted(surface_exceptions))
     )
 
 

@@ -217,7 +217,8 @@ def test_camera_status_speaks_korean_with_evidence_and_waits_on_one_line(panel):
         authHeaders: () => ({}), hasToken: () => true, isHidden: () => false});
       await preview.refresh();
     }""")
-    assert status.inner_text() == "지연 · 4초"
+    # D-398 — 나이 뒤처리 규격: `지연 · N초 전`(4200 ms → 4.2).
+    assert status.inner_text() == "지연 · 4.2초 전"
     assert status.get_attribute("data-evidence") == "delayed"
     assert status.get_attribute("title") == "STALE"
     assert "STALE" not in page.inner_text("#root") and "WAITING" not in page.inner_text("#root")
@@ -276,3 +277,41 @@ def test_dock_state_reads_korean_with_the_enum_in_title(panel, module):
     value = page.locator("dl dd").filter(has_text="도크 밖")
     assert value.count() == 1 and value.get_attribute("title") == "UNDOCKED"
     assert "UNDOCKED" not in page.inner_text("#root")
+
+
+def test_camera_explains_lane_object_labels_and_disables_expansion_without_a_frame(panel):
+    page = panel('console/camera.js', role='viewer', width=390, height=844)
+    expand = page.locator('#vision-expand')
+    assert expand.is_disabled()
+    assert expand.get_attribute('reason') == '영상 수신 후 확대할 수 있습니다'
+    page.locator('.surface-camera-legend summary').click()
+    assert 'LEFT LANE' in page.locator('.surface-camera-legend').inner_text()
+    assert 'UNKNOWN' in page.locator('.surface-camera-legend').inner_text()
+    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+
+
+def test_camera_can_expand_live_image_and_return_focus_after_exit(panel):
+    import cv2
+    import numpy as np
+    image = cv2.imencode('.jpg', np.full((240, 320, 3), 90, np.uint8))[1].tobytes()
+    page = panel('console/camera.js', role='viewer')
+    page.route('**/api/v1/vision/front/frame?sequence=1',
+               lambda route: route.fulfill(body=image, content_type='image/jpeg',
+                                          headers={'X-Rosy-Camera-Sequence': '1'}))
+    page.evaluate("""async () => {
+      __unmount();
+      const {session} = await import('/assets/client.js'); session.token = 'rosy-dev-viewer';
+      const {mount} = await import('/assets/panels/console/camera.js');
+      document.querySelector('#root').replaceChildren();
+      __unmount = mount(document.querySelector('#root'), {role:'viewer', api:async () => ({
+        available:true, stale:false, sequence:1, source:'GAZEBO', width:320, height:240,
+        captured_at:5, age_ms:20}), store:{poll(){return () => {};}}});
+    }""")
+    page.locator('#vision-frame').wait_for(state='visible')
+    page.locator('#vision-expand').click()
+    page.wait_for_function("document.fullscreenElement?.id === 'vision-stage'")
+    assert page.locator('.surface-camera-close').is_visible()
+    page.locator('.surface-camera-close').click()
+    page.wait_for_function('document.fullscreenElement === null')
+    assert page.evaluate("document.activeElement.id === 'vision-expand'")
+    page.evaluate('__unmount()')

@@ -16,7 +16,8 @@ tool = importlib.util.module_from_spec(_SPEC)
 _SPEC.loader.exec_module(tool)
 
 RELEASE_ID = "2026.10.01-021"
-SHA = "a48f75f874a077d10be7ce5beb6c49ebaed53f37"
+# Low-entropy stand-in: a real commit sha trips the secret scan's high-entropy rule.
+SHA = "ab" * 20
 ROS_PACKAGES = (
     "ros-jazzy-rclcpp=28.1.9-1noble.20250725.204120\n"
     "ros-jazzy-rmw-fastrtps-cpp=8.4.2-1noble.20250725.201015\n"

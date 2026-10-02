@@ -1820,6 +1820,20 @@
 - gate 변화: 없음.
 - 교훈: 타깃 하나만 stop하는 것은 PartOf 유닛의 멈춤을 기다리지 않는다. 릴리스 전환 뒤에는 readiness 통과가 아니라 CORE 프로세스가 새 릴리스에서 도는지를 본다.
 
+## 2026-10-01 · uncommitted · feat(omx): record SIM demonstrations and export LeRobot v3
+- 변경: D-390 부록·API v1.69·Pilot 기록 패널·SIM 카메라·원본 recorder·오프라인 exporter. ROS 수락 전에 목표를 등록하고, recording I/O는 별도 writer로 분리.
+- 증거: adapter/Pilot/network 259 passed, 28 skipped; quick tier 95 passed; Chromium recording retry/outcome/stale/dispose 1 passed; 실제 LeRobot 0.4.4 reader 3 passed. Gazebo 원본 15프레임 및 동일 원본 export 재독출 PASS. docs/validation/omx-demonstration-lerobot-2026-10-01/README.md 참조.
+- gate 변화: 물리·ARTIFACT/FIELD 승격 없음. 짧은 SIM 시연/데이터 형식 증거만 추가.
+- 결정: D-390 부록; D-18 typed API와 reference 동시 갱신.
+- 교훈: LeRobot 0.4.4는 explicit timestamp를 거부; source ns를 int64로 유지. Windows shared recording mount는 프레임 누락을 만들 수 있으므로 Linux volume 사용.
+
+## 2026-10-01 · uncommitted · fix(omx): fence recording closure and isolate storage faults
+- 변경: 리뷰의 중요 문제 3개 해소 — recording 오류로 lease watcher 종료 금지, hidden 중 늦은 seat 획득 즉시 반납, 종료 저장 중 interruption을 manifest에 반영.
+- 증거: 리뷰 수정 race/runtime/recorder 21 passed; Chromium 2 passed; 최종 adapter/foundation/assets/network 624 passed, 6 skipped. 최종 tree와 같은 해시의 실제 Gazebo 12프레임→LeRobot 재독출 PASS; 같은 실행 lease 만료 incomplete. 독립 리뷰 재검토 완료.
+- gate 변화: 기존 gate 유지; DEVICE/FIELD 승격 없음.
+- 결정: D-390 부록.
+- 교훈: 파일 쓰기 완료 전 들어온 interruption과 logical closure 경계를 구분한다.
+
 ## 2026-10-01 · uncommitted · perf(release): rosdep apt 패키지를 한 트랜잭션으로 — payload 빌드 7분 9초→4분 49초
 
 - 변경: `build-native-payload.sh`가 `rosdep install --simulate`로 계획을 받아 `rosdep_apt_batch.py`(패키지 이름 아닌 것은 거부)로 apt 패키지를 모으고, rosdep과 같은 플래그로 `apt-get install -y` 한 번에 설치한 뒤 rosdep을 그대로 다시 돌려 남은 것이 없음을 확인한다. 전에는 rosdep이 키마다 `apt-get install`을 따로 실행했다(22회, 트리거 30회, ~958 패키지). 워크플로는 일회용 runner에서만 dpkg `force-unsafe-io`와 man-db auto-update 끄기를 둔다(이미지 빌드 경로는 무관, 시험으로 고정).
@@ -1838,6 +1852,25 @@
 - 변경: (1) 잘린 타르볼(EOFError), 깨진 manifest JSON, UTF-8이 아닌 목록(ValueError)을 traceback 없이 `error:`로 끝낸다. (2) 로봇 조회를 `dpkg-query -W -f='${db:Status-Abbrev}\t${binary:Package}\t${Version}\n' 'ros-jazzy-*'`로 바꾸고 상태가 `ii`인 줄만 설치로 센다. `rc`(삭제, 설정만 남음) 패키지는 옛 버전을 그대로 내므로 비교에서 뺀다. 원격 셸에는 작은따옴표만 지나간다. (3) `-o UserKnownHostsFile="<경로>"`로 인용한다. (4) 출력하는 PowerShell 경로를 늘 작은따옴표로 감싸고 `'`는 `''`로 쓴다. (5) `--run`에 `--release-id`가 있으면 내려받기 전에, 없으면 아티팩트 이름을 정한 직후 내려받기 전에 기존 `x/<id>`를 거절한다. (6) 서명·pack 실패 메시지가 다시 돌리기 전에 지울 `x/<id>`를 알려 준다. (7) 심볼릭·하드 링크 멤버가 있으면 풀기 전에 거절한다. 스킬 3·4단계 설명을 맞췄다.
 - 증거: `test/test_prepare_payload_release.py` 30 passed. 변이 8종이 모두 빨강이었다: rc 줄 유지(6 failed), known_hosts 인용 제거, `''` 미적용, 링크 허용(2 failed), EOFError 미포착, ValueError 미포착, 내려받기 전 검사 제거, 이름 확정 뒤 검사 제거(각 1 failed). 새 조회를 192.168.1.202에 읽기 전용으로 한 번 실행했다: `ii` 319줄, `un` 3줄, 판정은 앞 실측과 같은 공통 314개 일치.
 - gate 변화: 없음.
+## 2026-10-01 · uncommitted · fix(release): 보정 가드가 IP로 불릴 때 호스트명 자격 증명을 찾는다
+
+- 변경: `rosy-calibration-guard.ps1`은 `-ApiToken`·`ROSY_API_TOKEN`이 없고 `<Robot>.credential.xml`도 없으면 push와 같은 비대화형 ssh(`rosy@<ip> hostname`, `%LOCALAPPDATA%\Rosy\ssh\rosy-operator-ed25519`, `%LOCALAPPDATA%\Rosy\known_hosts`, `BatchMode=yes`, `StrictHostKeyChecking=yes`, `ConnectTimeout=<TimeoutSec>`)로 장치 호스트명을 묻고, 답이 정확히 한 줄이며 대소문자 구분 `^rosy-[a-z0-9-]+$`일 때만 `<hostname>.credential.xml`을 쓴다. 다른 로봇의 파일은 이 주소에 절대 시도하지 않는다. IP 이름 파일이 있으면 ssh를 부르지 않는다. 조회가 실패하면 예전처럼 경고만 하되 SKIPPED 문구에 찾아본 파일과 조회 실패 이유를 적는다. `-RosyUser`·`-KeyPath`·`-KnownHosts`·`-SshExe`를 주입 가능하게 했고 `rosy-release-push.ps1`이 자기 값을 그대로 넘긴다. known_hosts 경로에 공백·큰따옴표가 있으면 조회하지 않는다(5.1이 native 인자의 큰따옴표를 망가뜨림). 스킬 `rosy-release-push` 5단계 갱신.
+- 증거: 2026-10-01 관찰 — `rosy-release-push.ps1 -Robot 192.168.1.201`이 `192.168.1.201.credential.xml`만 찾아 "CALIBRATION CHECK SKIPPED"를 내고 진행했다. 실제 파일은 `rosy-pinky-9dfk.credential.xml`. `python -m pytest test/test_calibration_guard.py test/test_release_push_entrypoint.py -q` 69 passed(가드 27, 새 11: 호스트명 자격 증명 사용·활성 세션 거절, 나쁜 답 5종, ssh 실패, ssh 없음 시 파일명 표시, IP 파일 우선·ssh 미호출, push 전달). 변형 9종 모두 빨강(정규식 제거, 대소문자 무시, 여러 줄 허용, 종료 코드 무시, IP 파일 우선 제거, 파일명 누락, 조회 제거, BatchMode 제거, push 전달 제거). 가짜 ssh(.ps1)와 localhost 가짜 CORE만 사용, 로봇 접속 없음(Windows).
+- gate 변화: 없음.
+- 교훈: 자격 증명 파일 이름 규칙과 그것을 찾는 쪽의 키가 다르면 안전 점검이 조용히 건너뛰어진다. 건너뜀 경고에는 무엇을 찾았는지를 적는다.
+
+## 2026-10-01 · uncommitted · fix(release): 보정 가드 리뷰 반영 — 호스트명 주장을 호스트 키로 증명, ssh 시간 상한
+
+- 변경: 독립 리뷰(COMMENT) 반영. M1: 로봇이 답한 호스트명은 그 로봇의 `rosy` 계정이 꾸밀 수 있으므로, `<hostname>.credential.xml`을 쓰기 전에 같은 엄격 옵션에 `-o HostKeyAlias=<별칭>`을 더한 두 번째 ssh(`true`)가 성공해야 한다. 별칭은 known_hosts의 평문 항목 중 `<name>`, `<name>.local`, `<name>.lan` 순으로 처음 있는 것(실제 항목이 `rosy-pinky-9dfk.local` 형태). 항목이 없거나 키가 맞지 않으면 토큰을 쓰지 않고 이유를 SKIPPED에 적는다. M2: 모든 ssh에 `-n -o ServerAliveInterval=2 -o ServerAliveCountMax=2`, 그리고 `System.Diagnostics.Process`로 띄워 호출당 `TimeoutSec + 5`초 벽시계 상한, 넘으면 `taskkill /T /F`로 프로세스 트리를 죽인다. 명령줄은 가드가 직접 만든다(공백 인자만 한 번 따옴표, 큰따옴표 든 인자는 거절). `-SshExe`는 native 실행 파일이어야 한다. M3: 가드 시험의 가짜 ssh를 원시 명령줄을 기록하는 `.cmd`로 바꿨다. L4: ssh와 무관한 가드 시험은 존재하지 않는 `-SshExe`를 넘긴다. `test_release_push_entrypoint.py`는 autouse 픽스처로 `LOCALAPPDATA`를 임시 폴더로 돌리고 `ROSY_API_TOKEN`을 지운다. L2: `sync-core-dev.ps1`이 `-RosyUser $PiUser`를 넘긴다. SKILL 5단계에 잔여 위험(known_hosts 신뢰, 호스트 키를 공유하는 복제 이미지는 구별 불가, 평문 항목 없는 로봇은 경고 후 건너뜀) 기록.
+- 증거: `python -m pytest test/test_calibration_guard.py test/test_release_push_entrypoint.py -q` 78 passed(가드 36), `test/test_core_dev_sync.py` 34 passed. 변형 23종 모두 빨강(앞 커밋 9종 재확인 + 별칭 검사 생략, 별칭 종료 코드 무시, known_hosts 항목 불요, HostKeyAlias 누락, `-n` 누락, keepalive 누락, 벽시계 상한 없음, 래퍼만 죽임, RosyUser 검사 제거, 공백 경로 검사 제거, 명시 CredentialPath 무시, ConnectTimeout 고정, 공백 인자 미인용, sync 사용자 미전달). 대소문자 변형은 별칭 조회가 먼저 막아 처음엔 살아남았다 — 시험 known_hosts에 대문자 항목을 넣어 답 검사만으로 막히게 고친 뒤 빨강. 로컬 known_hosts 확인: 9dfk·8kcn 호스트 키는 서로 다르다. 가짜 ssh와 localhost 가짜 CORE만 사용, 로봇 접속 없음(Windows).
+- gate 변화: 없음.
+- 교훈: 상대가 스스로 밝힌 이름으로 비밀을 고를 때는 그 이름을 상대가 꾸밀 수 없는 것(호스트 키)으로 증명한다. 겹겹 방어가 있으면 변형 하나가 다른 층에 가려 살아남는다 — 층마다 따로 막히는 시험 입력을 만든다.
+
+## 2026-10-02 · uncommitted · fix(native): 부팅 복구 게이트에 PrivateTmp — 활성화 중 전원 차단 뒤 CORE가 영영 뜨지 않던 결함
+
+- 변경: `rosy-release-recover.service`에 `PrivateTmp=yes`. recover가 이전 릴리스를 다시 검증할 때(`native_release.verify` → `signing`의 `tempfile`) `ProtectSystem=strict` 아래 임시 디렉터리가 읽기 전용이라 "No usable temporary directory"로 실패했고, `rosy-core.service`·`rosy-runtime.target`이 이 게이트를 Requires 하므로 로봇이 뜨지 않았다. 수동 push에도 해당한다.
+- 증거: D-406 기기 쌍둥이(ubuntu 24.04 + systemd 255 컨테이너, 브랜치 test/d406-device-twin) 시나리오 h3에서 활성화 도중 전원 차단 뒤 재현, PrivateTmp로 복구 성공. 계약 시험 `test_units_that_verify_releases_get_a_writable_private_tmp`(변형으로 빨강 확인). 관련 시험 217 passed.
+- gate 변화: 없음. 기기 확인 필요. 이 유닛은 sync에서 next-boot 대상이라 다음 릴리스 push 뒤 재부팅부터 적용된다.
 
 ## 2026-10-02 · a44f9e00 · feat(native): 로봇 쪽 자동 업데이터 `rosy_auto_update.py`·claim·유닛 (D-406 T2)
 
@@ -1919,12 +1952,6 @@
 - gate 변화: 없음. twin 통과는 HOST 증거이고 DEVICE 증거가 아니다.
 - 결정: D-406
 - 교훈: 저널이 있을 때만 타는 부팅 경로는 실제 sandbox 아래에서 한 번은 돌려 봐야 한다. 단위 시험은 tempfile을 쓸 수 있는 호스트에서 돌았다.
-
-## 2026-10-02 · uncommitted · fix(native): 부팅 복구 게이트에 PrivateTmp — 활성화 중 전원 차단 뒤 CORE가 영영 뜨지 않던 결함
-
-- 변경: `rosy-release-recover.service`에 `PrivateTmp=yes`. recover가 이전 릴리스를 다시 검증할 때(`native_release.verify` → `signing`의 `tempfile`) `ProtectSystem=strict` 아래 임시 디렉터리가 읽기 전용이라 "No usable temporary directory"로 실패했고, `rosy-core.service`·`rosy-runtime.target`·`rosy-auto-update.service`가 이 게이트를 Requires 하므로 로봇이 뜨지 않았다. D-406 이전부터 있던 결함으로 수동 push에도 해당한다. 같이: `rosy-auto-update.service`의 `/etc/udev/rules.d`·`/etc/modprobe.d`를 선택적(`-`) ReadWritePaths로.
-- 증거: D-406 기기 쌍둥이(systemd 255 컨테이너) 시나리오 h3 — 활성화 도중 컨테이너 전원 차단 뒤 recover 실패·CORE 미기동 재현, 쌍둥이 진단용 PrivateTmp로 복구 성공. 계약 시험 `test_units_that_verify_releases_get_a_writable_private_tmp`(빨강 확인 뒤 초록). 관련 시험 421 passed.
-- gate 변화: 없음(기기 확인 필요).
 
 ## 2026-10-02 · 30390e1c · fix(native): D-406 T2 검증 리뷰 2 반영 — current가 실제로 옮겨졌을 때만 자기 되돌림, 꼬리 실패도 backoff
 
