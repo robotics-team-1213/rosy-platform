@@ -4509,3 +4509,9 @@
 - Change: Add `rosy-app-agent` and `rosy-app-gateway`, strict allowlisted `omx_cell_sim` and `site_cell` profiles, wheel installation in CI, gateway composition delegation from the existing Fleet CLI, and the gateway composition path to the site image. Hardware dispatch remains disabled in both profiles.
 - Evidence: Profile/entrypoint tests 7 passed; Fleet CLI tests 31 passed; dependency-boundary tests 5 passed; app flake8 and py_compile passed. Built eight platform wheels and installed them offline in a fresh X: venv without repository `PYTHONPATH`; fake profile lifecycle smoke passed for both apps.
 - Gate: SOURCE/LOCAL only. ROS-SIM HOLD; DEVICE/FIELD PARKED.
+
+## 2026-10-02 · uncommitted · docs(adr): D-418 로봇 SSH 접속 — 화면 코드 키 등록, 임시 비밀번호, 팀 키 공유
+
+- 변경: D-418(Accepted) 작성. 사용자 선택(2026-10-02): 화면 코드 등록 + 로봇별 임시 비밀번호를 기본으로, 키 복사 공유도 함께. 공유는 마스터 키가 아닌 passphrase 잠금 팀 키(회수 가능). 번호는 `git log --all` 스캔 뒤 D-418; D-416·D-417은 다른 브랜치 사용 중이라 `adr_gaps`에 예약.
+- 증거: 설계만. 기존 키 전용 SSH(D-174 F3), LCD 코드 로그인(D-193), `rosy-hw-test.path` 요청 파일 패턴 확인.
+- gate 변화: 없음.
