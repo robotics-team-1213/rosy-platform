@@ -166,14 +166,16 @@ line_follow:                       # D-143 selected-source, fail-closed policy
 
 localization_mission:              # D-395 P2-7 check manoeuvres; D-424 near checks
   # With the URDF body (line_follow.body_* in the robot package) a turn needs every
-  # base_footprint return beyond the rotation radius + rotate_margin_m, and a nudge needs the
+  # base_footprint return beyond the rotation radius + rotate_margin_m (watched while turning
+  # with rotate_stop_margin_m), and a nudge needs the
   # D-422 stop gap at nudge_linear + nudge_min_m (less room shortens the nudge). Without the
   # body the LiDAR-origin rules apply: rotate_clearance_m and min_front_clearance_m.
   rotate_angular: 0.3
   nudge_linear: 0.03
   nudge_max_m: 0.10
   lane_linear: 0.04
-  rotate_margin_m: 0.02
+  rotate_margin_m: 0.03             # start a turn: rho + this (D-424 H1, until device evidence)
+  rotate_stop_margin_m: 0.01        # end a running turn at rho + this
   nudge_min_m: 0.02
   min_front_clearance_m: 0.25
   rotate_clearance_m: 0.20

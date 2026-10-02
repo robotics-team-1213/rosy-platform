@@ -11,8 +11,10 @@ the readiness HOLD, the speed clip and the bound control policy. Kinds:
 
 - `rotate_in_place`: up to one turn at `rotate_angular`, measured by odometry. D-424 (the
   robot's URDF body known from `line_follow.body_*`): refused when a return, moved to
-  base_footprint, is within the rotation radius + `rotate_margin_m` (Pinky 0.103 m; returns
-  inside the body outline are the robot itself, beams without a return never block a turn).
+  base_footprint, is within the rotation radius + `rotate_margin_m` (Pinky 0.113 m; returns
+  inside the body outline are the robot itself), when a base sector has no return, or when
+  a beam without a return crosses the sweep (rotation_reason). While turning, the same check
+  with `rotate_stop_margin_m` (0.093 m) ends the turn ("obstacle"); D-424 review H1.
   Without the body: refused when any valid return is closer than `rotate_clearance_m`.
 - `nudge_forward`: up to `max_distance_m` (<= `nudge_max_m`) by odometry. D-424 with the
   body: the front strip (half width + 0.010) must leave room for the D-422 stop gap
@@ -81,7 +83,9 @@ class MissionConfig:
     max_blind_share: float = 0.3          # inf/NaN/below-range share that blocks a nudge
     rotate_clearance_m: float = 0.20      # nothing this close anywhere before a turn
     # D-424 with the body: rotation radius + this (the D-422 body margin); shortest nudge.
-    rotate_margin_m: float = 0.02
+    # D-424 review H1, until device evidence: start a turn with rho + 0.03, end it at rho + 0.01.
+    rotate_margin_m: float = 0.03
+    rotate_stop_margin_m: float = 0.01
     nudge_min_m: float = 0.02
     stop_line_m: float = 0.12            # the traffic policy's stop distance
     max_time_s: float = 120.0
@@ -104,7 +108,8 @@ def mission_config(raw: Optional[Mapping[str, Any]]) -> MissionConfig:
     config = MissionConfig(**values)
     if not all(math.isfinite(float(getattr(config, f.name))) for f in fields(config)):
         raise ValueError("localization_mission values must be finite")
-    if min(config.rotate_margin_m, config.nudge_min_m) < 0.0 or config.nudge_linear <= 0.0:
+    if (min(config.rotate_margin_m, config.rotate_stop_margin_m, config.nudge_min_m) < 0.0
+            or config.rotate_stop_margin_m > config.rotate_margin_m or config.nudge_linear <= 0.0):
         raise ValueError("localization_mission margins must be >= 0 and nudge_linear > 0")
     return config
 
@@ -278,7 +283,10 @@ class LocalizationMission:
         if self._scan is None or now - self._scan[1] > cfg.sensor_stale_s:
             return "obstacle_sensor_stale"
         if run.kind == ROTATE:
-            return "done" if run.turned_rad >= cfg.rotate_max_rad else None
+            if run.turned_rad >= cfg.rotate_max_rad:
+                return "done"
+            # H1: something entering the sweep during the turn ends it.
+            return "obstacle" if self._judge(ROTATE, now, running=True)[0] is not None else None
         if run.travelled_m >= run.max_distance_m:
             return "done"
         if run.kind == NUDGE:
@@ -335,7 +343,7 @@ class LocalizationMission:
             _log.warning("line_follow body geometry is inconsistent; mission uses the LiDAR-origin rules")
             return None
 
-    def _judge(self, kind: str, now: float) -> tuple[Optional[str], float]:
+    def _judge(self, kind: str, now: float, *, running: bool = False) -> tuple[Optional[str], float]:
         """(why the LiDAR does not show this kind's path clear or None, nudge room in metres).
 
         Room is the straight travel left before the D-422 stop gap (inf = nothing ahead)."""
@@ -349,12 +357,9 @@ class LocalizationMission:
         view = body.scan_view(self._scan[0], forward_deg=config.lidar_forward_deg,
                               self_mask=config.lidar_self_mask)
         if kind == ROTATE:
-            if body.can_rotate(view.points, cfg.rotate_margin_m):
-                return None, math.inf
-            nearest = min(math.hypot(x, y) for x, y in view.points)
-            return (f"a return {nearest:.3f} m from the base < "
-                    f"{body.rotation_clear_m(cfg.rotate_margin_m):.3f} m (rotation radius + margin)",
-                    0.0)
+            margin = cfg.rotate_stop_margin_m if running else cfg.rotate_margin_m
+            reason = body.rotation_reason(view, margin)
+            return (None, math.inf) if reason is None else (reason, 0.0)
         if body.unknown_blocks(view):
             return "front not measurable: a beam without a return reaches past the body front", 0.0
         gap = body.translation_gap(view.points)

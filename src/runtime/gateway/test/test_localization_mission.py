@@ -451,13 +451,39 @@ def _with_pinky_body(services):
         body_ultrasonic_x_m=B.ultrasonic_x_m)
 
 
-def test_rotate_is_allowed_with_returns_at_12_cm_all_around(core):
-    """D-424: base_footprint radius 0.0826 + 0.02 = 0.103; 0.12 from the LiDAR is >= 0.103 everywhere.
-    The pre-D-424 rule refused anything within 0.20 m."""
+def test_rotate_is_allowed_with_returns_at_135_mm_all_around(core):
+    """D-424 (review H1): start needs rho 0.0826 + 0.03 = 0.113 from the base; 0.135 from the
+    LiDAR is >= 0.118 everywhere. The pre-D-424 rule refused anything within 0.20 m."""
     client, services = core
     _with_pinky_body(services)
-    services.loc_mission.observe_scan(_scan(services, front_m=0.12, rest_m=0.12))
+    services.loc_mission.observe_scan(_scan(services, front_m=0.135, rest_m=0.135))
     assert _start(client).status_code == 202
+
+
+def test_rotate_start_is_refused_with_a_wall_at_105_mm_from_the_base(core):
+    client, services = core
+    _with_pinky_body(services)
+    forward = services.line_follow.config.lidar_forward_deg
+    sample = _scan(services)
+    sample["ranges"][int(forward + 90) % 360] = 0.105            # beside: base ~0.106 < 0.113
+    services.loc_mission.observe_scan(sample)
+    assert _code(_start(client)) == "path_not_clear"
+
+
+def test_a_wall_appearing_during_the_turn_stops_it(core):
+    """H1: the turn is watched, not only checked before start (stop at rho + 0.01 = 0.093)."""
+    client, services = core
+    _with_pinky_body(services)
+    assert _start(client).status_code == 202
+    _step(services, odom=(0.0, 0.0, 0.1))
+    assert services.loc_mission._run is not None
+    forward = services.line_follow.config.lidar_forward_deg
+    sample = _scan(services)
+    sample["ranges"][int(forward + 90) % 360] = 0.09              # beside: base ~0.0916
+    services.loc_mission.observe_scan(sample)
+    services.loc_mission.tick()
+    assert client.get(PATH, headers=VIEWER).json()["reason"] == "obstacle"
+    assert services.command._nav_twist is None
 
 
 def test_rotate_is_refused_inside_the_rotation_radius(core):
