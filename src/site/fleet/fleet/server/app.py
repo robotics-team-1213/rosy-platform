@@ -361,7 +361,9 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
 
     install_console_routes(app, console=console, sightings=sightings,
                            require_viewer=require_viewer, read_guard=read_guard,
-                           operator_guard=operator_guard, site_lanes=site_lanes)
+                           operator_guard=operator_guard, site_lanes=site_lanes,
+                           require_operator=require_operator,
+                           answer_log_path=task_service.store.path if task_service else None)
 
     install_task_dispatch_routes(app, console=console, task_service=task_service,
                                  configured_omx=configured_omx,

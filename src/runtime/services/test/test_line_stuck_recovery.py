@@ -197,9 +197,14 @@ def test_back_off_speed_follows_a_lower_manual_limit():
 def test_back_off_refused_before_start(kw, why):
     machine, bus = _machine()
     assert machine.step(_inp(0.0, console_linked=False, **kw)).kind == "hold"
-    assert bus.named("nav.line_stuck_local_result")[-1] == {
-        "stuck_id": "stuck-1", "attempt": 0, "result": "refused", "reason": why,
-        "lane_visible": None, "front_clear": None}
+    result = bus.named("nav.line_stuck_local_result")[-1]
+    assert {k: result[k] for k in ("stuck_id", "attempt", "result", "reason")} == {
+        "stuck_id": "stuck-1", "attempt": 0, "result": "refused", "reason": why}
+    # The refusal carries the scan it was judged on (Gazebo 2026-10-02 diagnosis).
+    expected = _inp(0.0, console_linked=False, **kw)
+    assert (result["rear_clearance_m"], result["rear_blind_m"], result["trail_m"],
+            result["trail_yaw_deg"]) == (expected.rear_m, expected.rear_blind_m,
+                                         expected.trail_m, expected.trail_yaw_deg)
     assert machine.phase == WAITING_CONSOLE
 
 
@@ -367,3 +372,61 @@ def test_self_mask_window_reaching_the_rear_band_is_blind():
     assert self_mask_rear_blind_m(rear, **kw) == pytest.approx(0.2 - 0.059, abs=1e-3)
     assert self_mask_rear_blind_m(side, **kw) == 0.0
     assert self_mask_rear_blind_m((), **kw) == 0.0
+
+
+# ---- re-stuck after recovery: clarification 2026-10-02 --------------------------------
+def _recover(machine, t, **kw):
+    """Open (no console) -> back off -> settle -> recovered. Returns the time after."""
+    machine.step(_inp(t, console_linked=False, **kw))
+    t += 2.7
+    machine.step(_inp(t, **kw))                                   # -> SETTLING
+    t += 1.0
+    machine.step(_inp(t, lane_visible=True, front_clear=True, **kw))
+    return t
+
+
+def test_rapid_re_stucks_carry_attempts_then_wait_for_the_console():
+    machine, bus = _machine()
+    t = _recover(machine, 0.0)
+    assert bus.named("nav.line_stuck_closed")[-1]["reason"] == "recovered"
+    t = _recover(machine, t + 1.0, moved_since_recovery_m=0.05)
+    second = bus.named("nav.line_stuck_opened")[-1]
+    assert second["restuck_of"] == "stuck-1" and second["attempts"] == 1
+    assert len(bus.named("nav.line_stuck_local_attempt")) == 2
+    machine.step(_inp(t + 1.0, console_linked=False, moved_since_recovery_m=0.05))
+    third = bus.named("nav.line_stuck_opened")[-1]
+    assert third["restuck_of"] == "stuck-2" and third["attempts"] == 2
+    assert machine.phase == WAITING_CONSOLE
+    assert bus.named("nav.line_stuck_asked")[-1]["reason"] == "attempts_exhausted"
+    assert machine.step(_inp(t + 60.0, moved_since_recovery_m=0.05)).kind == "hold"
+    assert len(bus.named("nav.line_stuck_local_attempt")) == 2       # no third back-off
+
+
+@pytest.mark.parametrize("after_s, moved, carried", [
+    (5.0, 1.0, True),       # inside recovery_restuck_s, even after driving on
+    (30.0, 0.10, True),     # later, but has not driven recovery_restuck_m yet
+    (30.0, None, True),     # unknown travel: same stuck (conservative)
+    (30.0, 0.50, False),    # later and drove on: a new stuck
+])
+def test_restuck_window_is_time_or_distance(after_s, moved, carried):
+    machine, bus = _machine()
+    t = _recover(machine, 0.0)
+    machine.step(_inp(t + after_s, console_linked=True, moved_since_recovery_m=moved))
+    opened = bus.named("nav.line_stuck_opened")[-1]
+    assert (opened["restuck_of"] == "stuck-1") is carried
+    assert opened["attempts"] == (1 if carried else 0)
+
+
+def test_mode_reset_forgets_the_recovered_stuck():
+    machine, bus = _machine()
+    t = _recover(machine, 0.0)
+    machine.reset("mode_off", t)
+    machine.step(_inp(t + 1.0, moved_since_recovery_m=0.0))
+    assert bus.named("nav.line_stuck_opened")[-1]["restuck_of"] is None
+
+
+def test_forward_trail_net_since():
+    trail = ForwardTrail()
+    for i in range(20):
+        trail.record(i * 0.05, 0.05, 0.0)
+    assert trail.net_since(0.5, 1.0) == pytest.approx(0.05 * 0.5, abs=1e-6)

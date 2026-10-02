@@ -268,8 +268,8 @@
 
 ## 최근 기록
 
+- 2026-10-02 · 184185f92 · docs(platform): record latest-main verification boundary
+- 2026-10-02 · uncommitted · test(sim): D-407 차선 막힘 복구 Gazebo 검증
 - 2026-10-02 · 9da93450 · refactor(platform): extract palletizing process behind legacy imports
 - 2026-10-02 · uncommitted · docs(adr): D-395 개정 8 — 부하에서도 버티는 닻 규칙, 사람 확인은 표시
 - 2026-10-02 · uncommitted · feat(platform): ROS-free Observation·Skill·Plan 계약과 wheel 설치
-- 2026-10-02 · uncommitted · test(platform): 현재 import 소유권과 D-413 경계 간선 guard
-- 2026-10-02 · uncommitted · docs(plans): D-395 S1 세 번째 실행 (test/d395-s1-run3, main 5ea9e144)

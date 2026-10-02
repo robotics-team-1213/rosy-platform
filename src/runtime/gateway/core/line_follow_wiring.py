@@ -72,9 +72,14 @@ def _line_follow_config(raw: dict[str, Any]) -> LineFollowConfig:
         recovery_settle_s=float(raw.get("recovery_settle_s", defaults.recovery_settle_s)),
         recovery_trail_s=float(raw.get("recovery_trail_s", defaults.recovery_trail_s)),
         recovery_trail_yaw_deg=float(raw.get("recovery_trail_yaw_deg", defaults.recovery_trail_yaw_deg)),
+        recovery_restuck_s=float(raw.get("recovery_restuck_s", defaults.recovery_restuck_s)),
+        recovery_restuck_m=float(raw.get("recovery_restuck_m", defaults.recovery_restuck_m)),
+        recovery_rear_lateral_margin_m=float(raw.get(
+            "recovery_rear_lateral_margin_m", defaults.recovery_rear_lateral_margin_m)),
         body_lidar_x_m=_optional_float(raw.get("body_lidar_x_m")),
         body_rear_x_m=_optional_float(raw.get("body_rear_x_m")),
         body_rotation_radius_m=_optional_float(raw.get("body_rotation_radius_m")),
+        body_half_width_m=_optional_float(raw.get("body_half_width_m")),
     )
 
 

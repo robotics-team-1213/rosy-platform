@@ -292,3 +292,48 @@ def test_missing_range_min_refuses_the_back_off():
     m, events = _manager(linked=False)
     _drive(m, 0.0, 5.5, front=0.15, range_min=None)
     assert events.named("nav.line_stuck_local_result")[-1]["reason"] == "rear_blind"
+
+
+def test_rear_band_is_the_body_width_not_the_path_band():
+    """Gazebo 2026-10-02: a side wall 0.08 m to the side is not "behind" a 0.057 m half-wide body."""
+    wall = [(0.15, 0.0), (-0.20, 0.08)]                          # side wall return behind-left
+
+    def rear(**overrides):
+        m, events = _manager(linked=True, **overrides)
+        t = 0.0
+        while t < 5.5:
+            m.observe_clearance(0.15, received_at=t)
+            m.observe_body_points(wall, range_min=0.0, received_at=t)
+            m.observe(LineObservation(source=LineFollowMode.CAMERA_LINE, stamp=t, visible=True,
+                                      error=0.0, confidence=0.9), received_at=t, source_now=t)
+            m.tick(t + 0.01)
+            t = round(t + 0.1, 6)
+        return events.named("nav.line_stuck_opened")[0]["rear_clearance_m"]
+
+    assert rear() == pytest.approx(0.20 + 0.017 - 0.076)          # old ±0.09 band: counted
+    assert rear(body_half_width_m=0.05655) is None                 # ±0.077 band: a side wall
+
+
+def test_estop_closes_the_stuck_with_reason_estop(core_client):
+    client, services = core_client()
+    lf = services.line_follow
+    clock = {"t": 0.0}
+    lf.bind_clock(lambda: clock["t"])
+    lf.bind_recovery(console_linked=lambda: True, calibration_active=lambda: False,
+                     linear_ceiling=lambda: 0.15)
+    client.put("/api/v1/line-follow/mode", json={"mode": "CAMERA_LINE"},
+               headers={"Authorization": "Bearer rosy-dev-operator"})
+    seen = []
+    services.events.subscribe(seen.append)
+    t = 0.0
+    while t < 5.5:
+        lf.observe_clearance(0.15, received_at=t)
+        lf.observe(LineObservation(source=LineFollowMode.CAMERA_LINE, stamp=t, visible=True,
+                                   error=0.0, confidence=0.9), received_at=t, source_now=t)
+        clock["t"] = t + 0.01
+        lf.tick(clock["t"])
+        t = round(t + 0.1, 6)
+    assert lf.status().stuck is not None
+    services.safety.trigger_estop("test")
+    closed = [e for e in seen if e.type == "nav.line_stuck_closed"]
+    assert closed and closed[-1].data["reason"] == "estop"

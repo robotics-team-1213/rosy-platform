@@ -159,6 +159,8 @@ python -B -m venv --system-site-packages $venv
 
 **Validation:** Built and installed the actual wheel in an isolated X: venv. Wheel compatibility 11 passed, legacy Cell suite 143 passed, API mapping 7 passed, architecture 81 passed/1 skipped, known-failure comparison 0 new/0 known; final quick tier 95 passed/24 existing warnings and 0 new known failures. Confirmed legacy import failure without the wheel and recovery after installation. CI YAML parsed; remote CI and ROS/Gazebo were not run. D-18 wire schemas and Fleet dispatch remain unchanged.
 
+**Latest-main sync note (`184185f92`):** The unfiltered architecture and quick suites each expose `test_size_verdicts_are_well_formed_and_current`: Fleet is 25,653 lines against a 25,494 + 150 allowance. The same failure reproduces on clean `main` and arrived with D-407; this migration does not modify that Fleet size verdict. With that case deselected, architecture passed 80/1 skipped and quick passed 94/1 deselected, with 0 new known failures.
+
 ## Task 4: Fleet 접수와 순서 있는 작업 원장
 
 **Modify/Reuse:** `src/site/fleet/fleet/server/{app,mission_routes,mission_service,mission_store,mission_dispatcher,proposal_store,goal_evidence}.py`, `src/contracts/foundation/core_common/protocol/schemas.py`, `docs/reference/ROSY API & Protocol Reference.md`.
@@ -267,7 +269,7 @@ git diff --check
 | 0 Baseline | PASS | `7e577452`; Cell 143, Fleet 1336, OMX 268, architecture 76 passed/1 skipped; ownership manifest committed |
 | 1 Boundary guard | PASS | `59cd3bce`, main sync `d082bf18`; boundary suite 81 passed/1 skipped; quick 95 passed; no new known failures |
 | 2 Minimal APIs | PASS | `d502290b`, main sync `eb306385`; 3 installed wheels, mapping/boundary/protocol 29 passed, docs 80 passed |
-| 3 Process extraction | PASS | `9da93450`; wheel SHA-256 `d915fae9793b46696954e4f7cc94a0fb8556ac3f47ffc921951c20360834c35a`; wheel compatibility 11, Cell 143, mapping 7, architecture 81/1; 0 new known failures |
+| 3 Process extraction | PASS (scope); latest-main boundary documented | `9da93450`, docs `bb84551a`, main sync `184185f92`; wheel compatibility 11, Cell 143, mapping 7; filtered architecture 80/1 skipped and quick 94 passed; one main Fleet-size verdict failure reproduced on clean main |
 | 4 Fleet connection | TODO | not run |
 | 5 Local Skill | TODO | not run |
 | 6 App and install | TODO | not run |

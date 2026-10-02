@@ -354,3 +354,9 @@
 - 변경: `LocalizationAssist` 는 `unmapped_objects`·`objects_stamp` 를 그대로 넘긴다. `pose_frame` 이 `odom` 이면(로봇이 말했든 CORE 가 바꿨든) 비우고, `state_stale` 은 새 상태라 원래 없다. 물체가 잘못된 상태는 물체만 버리고 상태는 받는다. 감시용 부가 정보 때문에 상태가 끊겨 자율 주행이 멈추면 안 된다.
 - 증거: `test/test_localization_assist.py` +5(통과, odom·stale 에서 비움, 17개·문자열·잘못된 시각에서 상태 유지).
 - gate 변화: 없음.
+
+## 2026-10-02 · e83a955d · fix(line_follow): D-407 Gazebo 후속 — 재막힘 시도 이어 세기, 몸 폭 뒤 띠
+
+- 변경: recovered 뒤 `recovery_restuck_s`/`recovery_restuck_m` 안의 재막힘은 시도 수를 이어 받음(`restuck_of`), 뒤 띠 = URDF 몸 반폭 + 0.02 m, 거부·중단 사건에 scan 값, e-stop 닫힘 사유 `estop`. FleetAgent 는 실행 중인 루프가 없으면 시작을 미루고 API lifespan 에서 `start_on_loop()`(94a8b833).
+- 증거: `test_line_stuck_recovery.py`, `test_fleet_agent_loop.py` 초록.
+- gate 변화: 없음.

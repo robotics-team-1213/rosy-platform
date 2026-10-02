@@ -4447,3 +4447,16 @@
 - Change: D-413 Task 3. `modules/processes/palletizing` is the sole Recipe/Cell/Job implementation. Each adjacent pick/place pair maps to one versioned `pallet.transfer` PlanStep; `pallet_done` remains ordered Fleet-ledger metadata. Existing `rosy_cell` imports are compatibility re-exports.
 - Evidence: wheel SHA-256 `d915fae9793b46696954e4f7cc94a0fb8556ac3f47ffc921951c20360834c35a`; installed-wheel compatibility 11 passed, Cell 143 passed, API mapping 7 passed, architecture 81 passed/1 skipped; known-failure 0 new/0 known; final quick tier 95 passed/24 existing warnings. Missing-wheel failure/recovery, CI YAML parse, and unchanged D-18 schema verified.
 - Gate: palletizing SOURCE GO; ROS-SIM/ARTIFACT HOLD. Remote CI, Gazebo, and device execution remain unverified.
+
+## 2026-10-02 · uncommitted · test(sim): D-407 차선 막힘 복구 Gazebo 검증
+
+- 변경: `docs/validation/d407-gazebo-stuck-recovery-2026-10-02/`(result.md, evidence/run_sim.sh)와 `tools/sim/d407_stuck_scenarios.py`(ROS 없는 REST 시나리오 구동기, 가짜 Fleet hub)를 더했다. CORE 코드는 바꾸지 않았다.
+- 증거: map_v2_fleet_real keep, 한 대. 모서리 obstacle_ahead 후진 0.080/0.0805 m → 2회 → WAITING_CONSOLE, 회전교차로 lane_lost 후진 0.077–0.082 m → recovered, 관제 답 다섯(stale/닫힌 id 409 포함), hold 끊김·e-stop 중 0 확인. 원시 기록은 X:\DevTemp\d407-gz.
+- 발견: FleetAgent 를 켜면 CORE 시작이 죽어(services.py:528, agent.py:49) ASKING 15 s 경로를 시험할 수 없다. 복귀 뒤 같은 자리 재막힘이 시도 수를 되살려 끝없이 반복한다. 뒤 띠(±0.09)가 옆 벽과 LiDAR 잡음 한 장으로 후진을 거부·중단한다.
+- gate 변화: 없음. ROS-SIM 부분 증거이며 D-407 은 Proposed 그대로다.
+
+## 2026-10-02 · 184185f92 · docs(platform): record latest-main verification boundary
+
+- Change: Merged the D-407 latest-main changes without touching their Fleet implementation. Kept the corrected `pip3 wheel` invocation and added the palletizing wheel/test to CI.
+- Evidence: palletizing wheel compatibility 11 passed, Cell suite 143 passed, API mapping 7 passed. Architecture 80 passed/1 skipped with the Fleet size-verdict test deselected; quick 94 passed/1 deselected/24 existing warnings; filtered known-failure comparison 0 new/0 known. The excluded test fails identically on clean `main`: Fleet is 25,653 lines vs allowance 25,494 + 150.
+- Gate: D-413 Task 3 SOURCE remains GO. Latest-main Fleet size verdict remains a separate pre-existing failure; no Fleet sizing policy changed here.

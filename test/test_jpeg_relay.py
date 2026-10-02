@@ -185,7 +185,14 @@ def _sessions(tmp_path: Path) -> list[dict]:
 
 
 def _alive(env: dict, pid: str) -> bool:
-    return subprocess.run([BASH, "-c", f"kill -0 {pid}"], env=env, capture_output=True).returncode == 0
+    # SIGKILL 로도 지워지지 않는 좀비는 죽은 것이다 — 컨테이너의 PID 1 이 고아를
+    # 회수하지 않으면 kill -0 이 좀비에게도 성공한다(CI 적색 2026-10-02).
+    probe = (
+        "kill -0 %s 2>/dev/null || exit 1; "
+        "line=$(cat /proc/%s/stat 2>/dev/null) || exit 0; "
+        'state="${line##*) }"; [ "${state:0:1}" = Z ] && exit 1; exit 0' % (pid, pid)
+    )
+    return subprocess.run([BASH, "-c", probe], env=env, capture_output=True).returncode == 0
 
 
 @needs_bash
