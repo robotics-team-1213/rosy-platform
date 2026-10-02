@@ -2,7 +2,7 @@
 
 model_manifest.json pins every model file by sha256 (verify_files), so one Ed25519
 signature over the manifest's exact bytes covers the whole bundle. It is made on
-the PC with the release signing module (deploy/robot/pinky_pro/release/signing.py,
+the PC with the release signing module (release/signing.py in the robot deploy tree,
 sign_checksums: base64 of the raw signature) and checked here the way release
 verification does it (openssl pkeyutl -verify -rawin) against the robot's trusted
 release keys. This package cannot import the deploy tree, hence the small mirror;

@@ -266,7 +266,7 @@ SIZE_VERDICTS = {
         "accept: sim-only read-only viewer server (HTTP handler + ROS subscriptions); the pure logic already lives in live_view_model.py and the page in lane_live_view.html, covered by test_lane_live_view*.py and test_live_view_model.py (X5)",
     ),
     "core_features": (
-        11_061,
+        11_221,
         "accept: the ROS-free CORE feature managers (command, safety, docking, line_follow, "
         "traffic_policy, navigation, swarm, ...) are already one subpackage per feature, each "
         "under the file budget; the package total is a sum of independent owners, not one "
@@ -277,10 +277,12 @@ SIZE_VERDICTS = {
         "(core_features/localization) merged in beside D-407; same verdict, each feature still its "
         "own subpackage under the file budget. Re-judged 2026-10-02 at 11061 when the D-407 console "
         "re-run fixes landed (FleetAgent single receive loop, stuck event fields; main had reached "
-        "10977); same verdict",
+        "10977); same verdict. Re-judged 2026-10-03 at 11221 when D-423 added the read-only "
+        "learned-model status store (core_features/vision/models.py) inside the vision feature; "
+        "same verdict",
     ),
     "control": (
-        42_225,
+        42_884,
         f"split: deploy closure needs only sensing + safety provider (P1a); {CONTROL_SPLIT} "
         "(re-judged 2026-09-30 at 33090 after D-356 added the ROS-free learned perception backend "
         "(sensing/perception/learned), the shadow node and the recording CLI; the learned backend sits "
@@ -335,7 +337,11 @@ SIZE_VERDICTS = {
         "(sensing/perception/region_range.py: LiDAR bearing-span association with ground-plane fallback), "
         "the NOMINAL-profile and lidar-mount store readers (calibrated_values.py) and the opt-in wiring in "
         "camera_detect_node — observation-only, inside sensing/perception, moves with the P1a split, "
-        "verdict unchanged)",
+        "verdict unchanged; re-judged 2026-10-03 at 42884 for D-423 steps 2-3: the ROS-free object_det "
+        "backend, signature check and slot layout (sensing/perception/learned/detector.py, signature.py, "
+        "slots.py), the detector core and its thin node (control/object_detector*.py) and the overlay "
+        "pairing in follow_preview -- advisory evidence beside the learned lane shadow, each its own "
+        "module, moves with the P1a split, verdict unchanged)",
     ),
     # --- D-362 newly-covered files (web assets in src/ packages, ops roots). ---
     "runtime/sensing/web/diagnostic.html": (

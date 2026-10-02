@@ -65,9 +65,9 @@
     # D-423 camera_ground_mode 'nominal': the URDF-nominal camera_nominal.yaml of
     # the robot's profile package, refined by its accepted camera_profile record
     # (calibration store), and only with allow_nominal_ground true as well. Off
-    # here: turning it on for a robot is a user-approved config change. On a
-    # Pinky payload the file is installed at
-    #   /opt/rosy/current/install/share/pinky_pro/config/camera_nominal.yaml
+    # here: turning it on for a robot is a user-approved config change. The
+    # installed path of the robot profile's file is in D-423 section 4 (robot
+    # names stay in the product family, D-196).
     # File, records and overrides are read once at node start; restart the node
     # after accepting a new camera_profile or lidar_mount record.
     nominal_camera_profile_path: ''

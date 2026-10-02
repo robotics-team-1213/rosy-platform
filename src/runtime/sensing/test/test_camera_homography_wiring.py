@@ -68,7 +68,8 @@ def test_camera_node_offers_nominal_ground_and_lidar_region_range_off_by_default
     assert '.nan' not in config
     for token in ('camera_pitch_rad_override', 'camera_height_m_override', 'lidar_yaw_offset_override'):
         assert f"'{token}'" in node and token in config and f'{token}:' not in config
-    assert '/opt/rosy/current/install/share/pinky_pro/config/camera_nominal.yaml' in config
+    adr = next((ROOT.parents[2] / 'docs' / 'adr').glob('D-423-*.md')).read_text(encoding='utf-8')
+    assert '/opt/rosy/current/install/share/pinky_pro/config/camera_nominal.yaml' in adr
     # The same store path as line_observer: URDF nominal < accepted record.
     assert 'nominal_camera_profile(' in node and 'lidar_nose_rad(' in node
     assert "LaserScan, 'scan'" in node and 'qos_profile_sensor_data' in node
