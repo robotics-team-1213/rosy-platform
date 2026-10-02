@@ -37,8 +37,8 @@
 
 ## 최근 기록
 
+- 2026-10-02 · uncommitted · D-409 잔존 높이 함수 dvh 교정
 - 2026-10-02 · uncommitted · D-405 /device 테마 버튼 아이콘 렌더 + fullscreen 100dvh 게이트 수리
 - 2026-10-02 · uncommitted · fix(console): fullscreen uses dynamic viewport height
 - 2026-10-02 · uncommitted · feat(console): camera fullscreen and lane/object legend
 - 2026-10-01 · uncommitted · D-398 후속 — 원시 줄 간격 토큰화
-- 2026-10-01 · uncommitted · D-398 죽은 토큰 참조·펄스·페이드 정리

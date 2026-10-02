@@ -1194,3 +1194,10 @@
 - 변경: (94ad8a82) `Arbiter.pending(robot_id, request_id)` — 그 요청에 리드가 있거나, 비대칭 단서가 한 후보를 편들거나(여유 미달 포함), 결정을 이미 보냈으면 참. `Ladder.update(..., paused=)` — 멈춘 폴 앞의 간격은 세지 않고, 그동안 단은 오르지 않으며 `busy` 재요청도 없다(`holding`). 멈춤은 회차당 `LADDER_PAUSE_MAX_S` 30 s 까지라, 끝내 결정하지 않는 리드도 사람에게 간다. 서비스는 로봇이 CANDIDATES 이고 `reason: checking` 이거나 `pending` 일 때 멈춘다. 벽시계는 그대로(공유 시계 없음, rev. 3).
 - 증거: `test_localization_arbiter.py` +5, `test_localization_service.py` +5(S1 타임라인: 9.0 s 에 닻, 10.5 s 폴에 회전 없음, 11.0 s 에 peers 결정, 미션 0; 검사 중 미션 없음·재요청 없음; 멈춤 상한). 수정 전 S1·검사 시험은 `rotate_in_place` 가 나가 실패함을 확인. `python -m pytest src/site/fleet/test -q` 1328 passed, 7 skipped.
 - gate 변화: 없음. Gazebo 재실행 전.
+
+## 2026-10-02 · uncommitted · 관제 콘솔 회차 3 — D-409 기기 등록·연결 서랍 + 컴팩트 카드 요약
+- 변경: 기기 연결 묶음(로봇 등록 #robot-enrollment + 카메라 연결 승인 #camera-link)을 details#device-install-tools(기본 접힘) 안으로. 아이디·조상 구조 보존으로 test_console_camera_pairing과 JS가 그대로 붙는다. h3 "기기 연결"은 sr-only로(aria-labelledby 유지).
+- 변경: 로스터 카드 측정 칸에 data-fact(pose/yaw/battery/safety)을 달고 컴팩트(<30rem)에서 위치·방향 숨김 — 지도가 말한다. 카드 안쪽 여백 한 단 축소(--space-2/3). 운용 ops 블록은 대형·신호등·기록만 남는다.
+- 근거: D-409(사용자 지시 — 남은 설치 요소 분리·역할 명확화). 원래 회차 번호 D-407이었으나 병렬 작업이 D-407/D-408(차선 복구·페인트 입력)을 선점해 D-409로 재번호.
+- gate 변화: 없음.
+- 최종 증거: fleet 1328 passed 7 skipped; web_common+dashboard 287 passed 82 skipped; 브라우저 재캡처 — 서랍 2개 접힘, 폰 카드 측정 2칭(배터리·안전), 카드 204px, 폰 390 문서 3172→2811px(원점 3431), 페이지 오류 0.
