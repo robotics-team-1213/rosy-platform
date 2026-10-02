@@ -373,7 +373,7 @@ class CellJobStore:
 
     def start_step(self, mission_id: str, *, step_index: int, action_id: str,
                    attempt_id: str, grant: Mapping[str, Any],
-                   now: datetime | None = None) -> dict[str, Any]:
+                   now: datetime | None = None, owner_journal_id: str | None = None) -> dict[str, Any]:
         action_id = _nonempty("action_id", action_id)
         attempt_id = _nonempty("attempt_id", attempt_id)
         parsed = FleetCellTransferGrant.model_validate(dict(grant))
@@ -460,7 +460,8 @@ class CellJobStore:
                         {"action_id": action_id, "attempt_id": attempt_id,
                          "request_digest": parsed.request_digest,
                          "authority_epoch": parsed.authority_epoch,
-                         "dispatch_generation": parsed.dispatch_generation})
+                         "dispatch_generation": parsed.dispatch_generation,
+                         "owner_journal_id": owner_journal_id})
             result = self._get(connection, mission_id)
             connection.commit()
         return result
@@ -546,6 +547,15 @@ class CellJobStore:
                         {"event_id": f"device-receipt:{action_id}:{attempt_id}",
                          "action_id": action_id, "attempt_id": attempt_id})
             connection.commit()
+
+    def submitted_journal_id(self, mission_id: str, action_id: str) -> str | None:
+        """The owner journal identity recorded when this action was started (1d item 3)."""
+        with closing(self._connect()) as connection:
+            row = connection.execute(
+                "SELECT json_extract(detail_json, '$.owner_journal_id') FROM fleet_cell_events "
+                "WHERE mission_id=? AND event_type='CELL_STEP_SUBMITTING' "
+                "AND json_extract(detail_json, '$.action_id')=?", (mission_id, action_id)).fetchone()
+        return None if row is None else row[0]
 
     def has_device_receipt(self, mission_id: str, action_id: str, attempt_id: str) -> bool:
         """A noted receipt, or a device-reported terminal outcome (SUCCEEDED/FAILED, only ever read

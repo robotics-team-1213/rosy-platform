@@ -37,6 +37,7 @@ def _receipt(grant, state, event_id, *, phases=None):
 class Transport:
     def __init__(self):
         self.submissions, self.lookups = [], []
+        self.journal_id = "journal-1"
         self.on_submit = lambda grant: _receipt(grant, "ACCEPTED", 2, phases=("approach",))
         self.on_get = lambda grant: _receipt(grant, "RUNNING", 3, phases=("approach",))
 
@@ -53,7 +54,7 @@ class Transport:
 
     def owner_identity(self, instance_id):
         return {"workcell_id": instance_id.removesuffix("_control"), "instance_id": instance_id,
-                "simulation": True, "profile": "omx-cell-sim"}
+                "simulation": True, "profile": "omx-cell-sim", "journal_id": self.journal_id}
 
 
 def _setup(tmp_path, **kwargs):

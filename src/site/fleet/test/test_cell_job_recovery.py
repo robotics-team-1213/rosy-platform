@@ -451,3 +451,19 @@ def test_restart_then_404_resolves_only_without_a_receipt(tmp_path, receipt_seen
         clock.t += 60
     assert restarted.get("cell-mission-1")["status"] == "HOLD"
     assert {phase for _, _, phase in _claim_phases(path)} == phases
+
+
+@pytest.mark.parametrize("journal_now, phases", [("journal-1", {"HELD"}), ("journal-2", {"UNKNOWN"}),
+                                                 (None, {"UNKNOWN"})])
+def test_not_found_also_needs_the_same_owner_journal(tmp_path, journal_now, phases):
+    """C4b 1d item 3: a 404 from a fresh (or unknown) journal proves nothing; it stays UNKNOWN."""
+    from fleet.server.step_dispatcher import NOT_FOUND_SKEW_S
+    clock = Clock()
+    path, tasks, store, transport, dispatcher = _unknown_job(tmp_path, clock=clock)  # submit lost
+    transport.journal_id = journal_now
+    transport.on_get = lambda grant: None
+    dispatcher.now = _later(15 + NOT_FOUND_SKEW_S + 1)
+    for _ in range(READBACK_FAILURE_LIMIT + 1):
+        dispatcher.reconcile("cell-mission-1")
+        clock.t += 60
+    assert {phase for _, _, phase in _claim_phases(path)} == phases

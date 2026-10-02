@@ -54,9 +54,10 @@ class ActionApi:
         return {"version": version, "status": status,
                 "error": {"code": code, "message": message}}
 
-    @staticmethod
-    def _success(version: int, receipt: Mapping[str, Any]) -> dict[str, Any]:
+    def _success(self, version: int, receipt: Mapping[str, Any]) -> dict[str, Any]:
         payload = dict(receipt)
+        if self.identity and self.identity.get("journal_id"):
+            payload["journal_id"] = self.identity["journal_id"]
         if version == 1:
             payload.pop("phase_summaries", None)
         return {"version": version, "status": 200, "receipt": payload}
@@ -89,8 +90,11 @@ class ActionApi:
                     raise ValueError("GetAction contains unsupported fields")
                 receipt = self.runner.get(request["action_id"], peer_uid=peer_uid)
                 if receipt is None:
-                    return self._error("ACTION_NOT_FOUND", "Action is unavailable",
-                                       status=404, version=version)
+                    missing = self._error("ACTION_NOT_FOUND", "Action is unavailable",
+                                          status=404, version=version)
+                    if self.identity and self.identity.get("journal_id"):
+                        missing["journal_id"] = self.identity["journal_id"]
+                    return missing
                 return self._success(version, receipt)
             if operation == "CancelAction":
                 expected = {"version", "operation", "action_id", "attempt_id",

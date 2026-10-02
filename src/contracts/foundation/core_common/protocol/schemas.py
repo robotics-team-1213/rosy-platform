@@ -395,6 +395,8 @@ class DeviceActionReceipt(BaseModel):
     phase_summaries: tuple[DeviceActionPhaseReceipt, ...] | None = Field(
         default=None, max_length=4,
     )
+    # Owner journal identity (C4b 1d item 3); None for owners that do not report one.
+    journal_id: str | None = Field(default=None, max_length=64)
 
     @field_validator("mission_id", "step_id", "action_id", "attempt_id", "workcell_id", "instance_id")
     @classmethod

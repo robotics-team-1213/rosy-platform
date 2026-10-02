@@ -33,6 +33,7 @@ class FakeRuntime:
 
 
 def _settings(tmp_path):
+    tmp_path.mkdir(parents=True, exist_ok=True)
     return CellOwnerSettings(
         workcell_id="omx_cell_sim", instance_id="omx_cell_sim_01",
         journal_path=tmp_path / "owner.sqlite3", socket_root=tmp_path / "run",
@@ -106,8 +107,10 @@ def test_one_owner_with_the_simulation_owner_policy_serves_both_surfaces(tmp_pat
     assert owner.runner.capability_current == owner.acceptance.capability_current
     assert owner.planner.accepted_cell_sha256 == owner.acceptance.accepted_cell_sha256
     identity = owner.action_api.dispatch({"version": 2, "operation": "GetOwnerIdentity"}, peer_uid=FLEET_UID)
-    assert identity["identity"] == {"workcell_id": "omx_cell_sim", "instance_id": "omx_cell_sim_01",
-                                    "simulation": True, "profile": "omx-cell-sim"}
+    reported = dict(identity["identity"])
+    assert len(reported.pop("journal_id")) == 36
+    assert reported == {"workcell_id": "omx_cell_sim", "instance_id": "omx_cell_sim_01",
+                        "simulation": True, "profile": "omx-cell-sim"}
 
 
 def test_a_second_owner_stops_the_build_before_any_runtime(tmp_path):
@@ -188,3 +191,23 @@ def test_sim_gripper_width_comes_from_the_grant_recipe(tmp_path):
     sim_gripper_observation(owner, state, wide_grant)
     sim_gripper_observation(owner, state, narrow_grant)
     assert widths == [0.036, 0.03]
+
+
+def test_owner_journal_identity_is_persistent_per_journal_and_in_every_reply(tmp_path):
+    # 1d item 3: a random id created with the journal; a new journal file gets a new one.
+    owner, _ = _build(tmp_path)
+    first = owner.action_api.dispatch({"version": 2, "operation": "GetOwnerIdentity"},
+                                      peer_uid=FLEET_UID)["identity"]["journal_id"]
+    again, _ = _build(tmp_path)
+    assert again.action_api.identity["journal_id"] == first
+    fresh, _ = _build(tmp_path / "fresh")
+    assert fresh.action_api.identity["journal_id"] != first
+    missing = owner.action_api.dispatch({"version": 2, "operation": "GetAction", "action_id": "nope"},
+                                        peer_uid=FLEET_UID)
+    assert missing["status"] == 404 and missing["journal_id"] == first
+    owner.stop.rearm(authority_epoch=2, dispatch_generation=8, operator_confirmed=True,
+                     fleet_fence_current=lambda epoch, generation: True)
+    recipe, cell = _docs()
+    cell_sha = owner.acceptance.accept_cell(cell, actor_id="operator-1")["cell_sha256"]
+    recipe_sha = owner.acceptance.accept_recipe(recipe, actor_id="operator-1")["recipe_sha256"]
+    assert _submit(owner, _grant(owner, cell_sha, recipe_sha))["receipt"]["journal_id"] == first

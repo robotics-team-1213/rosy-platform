@@ -28,6 +28,7 @@ from omx_adapter.action_store import ActionStore
 from omx_adapter.cell_acceptance import CellAcceptanceStore
 from omx_adapter.command_owner import TrajectoryCommand
 from omx_adapter.gripper_contract import GripperObservation
+from omx_adapter.journal_identity import journal_identity
 from omx_adapter.kinematics import OmxKinematics
 from omx_adapter.local_stop import LocalStopController
 from omx_adapter.manipulation_plan import ExecutionStateSnapshot
@@ -151,7 +152,7 @@ def build_cell_owner(settings: CellOwnerSettings, *,
                             fleet_fence_current=fleet_fence_current)
     action_api = ActionApi(runner, stop_api=stop_api, identity={
         "workcell_id": settings.workcell_id, "instance_id": settings.instance_id,
-        "simulation": True, "profile": "omx-cell-sim"})
+        "simulation": True, "profile": "omx-cell-sim", "journal_id": journal_identity(store.path)})
     uds_server = UnixActionServer(
         action_api, Path(settings.socket_root) / settings.instance_id / "control.sock")
     return CellOwner(settings, profile, runtime, store, stop, acceptance, planner, runner,

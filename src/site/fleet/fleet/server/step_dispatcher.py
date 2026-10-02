@@ -34,7 +34,8 @@ _LOG = logging.getLogger(__name__)
 READBACK_FAILURE_LIMIT = 5
 # A GetAction ACTION_NOT_FOUND means "never ran" only once the grant can no longer be journaled:
 # the owner refuses an expired grant, so after expires_at + skew no late submit can land. Fleet
-# and the owner share one host clock (D-336), so the skew covers scheduling, not clock drift.
+# and the owner share one host clock (D-336 same-host owner), so the skew covers scheduling, not
+# clock drift; it does not hold for a Fleet and an owner on different hosts (1d item 6).
 NOT_FOUND_SKEW_S = 5.0
 # Per-tick I/O cap (1c item 5). One UDS exchange is bounded at 0.25 s, so 8 exchanges bound a
 # tick at ~2 s; the dispatch loop sleeps 0.25 s between ticks. A round-robin cursor gives every
@@ -78,7 +79,7 @@ class StepJobDispatcher:
         self.on_step_action_succeeded = on_step_action_succeeded
         self.monotonic = monotonic
         self._readback: dict[str, tuple[int, float]] = {}  # action_id -> (failures, next read at)
-        self._identity: dict[str, tuple[bool, float]] = {}  # instance -> (simulation, valid until)
+        self._identity: dict[str, tuple[bool, float, str | None]] = {}  # instance -> (sim, until, journal)
         self._cursor = ""  # round-robin position (mission_id of the last Job visited)
         self._io = 0
 
@@ -137,7 +138,8 @@ class StepJobDispatcher:
             grant = self._grant(job, step)
             started = self.store.start_step(job["mission_id"], step_index=index, action_id=grant.action_id,
                                             attempt_id=grant.attempt_id, grant=grant.model_dump(mode="json"),
-                                            now=self.now())
+                                            now=self.now(),
+                                            owner_journal_id=self._identity.get(job["instance_id"], (0, 0, None))[2])
         except MissionConflict:
             return self._view(self.store.get(job["mission_id"]), index, None)
         except (KeyError, TypeError, ValueError):
@@ -174,15 +176,26 @@ class StepJobDispatcher:
         if cached is not None and cached[1] > self.monotonic():
             return cached[0]
         self._io += 1
+        journal = None
         try:
             identity = self.transport.owner_identity(instance_id)
             ok = (identity.get("simulation") is True and identity.get("instance_id") == instance_id
                   and identity.get("workcell_id") == workcell_id)
+            journal = identity.get("journal_id")
         except Exception:
             _LOG.warning("OMX owner %s did not report a simulation identity", instance_id)
             ok = False
-        self._identity[instance_id] = (ok, self.monotonic() + (IDENTITY_TTL_S if ok else NEGATIVE_IDENTITY_TTL_S))
+        ttl = IDENTITY_TTL_S if ok else NEGATIVE_IDENTITY_TTL_S
+        self._identity[instance_id] = (ok, self.monotonic() + ttl, journal if isinstance(journal, str) else None)
         return ok
+
+    def _current_journal(self, instance_id: str) -> str | None:
+        """Fresh owner journal identity, never cached (1d item 3)."""
+        try:
+            journal = self.transport.owner_identity(instance_id).get("journal_id")
+        except Exception:
+            return None
+        return journal if isinstance(journal, str) else None
 
     def _forget_identity(self, instance_id: str) -> None:
         """Any transport error re-checks the owner's identity before the next submit (1c item 6)."""
@@ -225,8 +238,10 @@ class StepJobDispatcher:
             # 1c item 3: "never ran" needs ACTION_NOT_FOUND after expiry + skew and no receipt ever
             # recorded for the attempt; an owner restarted on a new journal stays UNKNOWN.
             expired = self.now() > grant.expires_at + timedelta(seconds=NOT_FOUND_SKEW_S)
-            if expired and not self.store.has_device_receipt(job["mission_id"], grant.action_id,
-                                                             grant.attempt_id):
+            recorded = self.store.submitted_journal_id(job["mission_id"], grant.action_id) if expired else None
+            same_journal = recorded is not None and recorded == self._current_journal(grant.instance_id)
+            if same_journal and not self.store.has_device_receipt(job["mission_id"], grant.action_id,
+                                                                  grant.attempt_id):
                 self._readback.pop(grant.action_id, None)
                 return self._outcome(job, index, grant, "NOT_FOUND", "LOCAL_ACTION_NOT_FOUND_AFTER_SUBMIT", {})
             return self._readback_failed(job, index, grant)
