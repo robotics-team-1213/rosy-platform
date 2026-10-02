@@ -55,10 +55,24 @@ def test_peer_support_scores_truth_and_twin():
 
 
 def test_the_s2b_stale_trap_is_armed_only_with_a_stale_anchor():
-    trap = bench.stale_trap(bench.SCENARIOS["q"])
+    sc = bench.SCENARIOS["q"]
+    trap = bench.stale_trap(sc["spawn"], sc["pickup"])
     assert trap["rosy_01"][1] > 0.0          # r4's old pose as an anchor supports r1's twin
     assert trap["rosy_01"][0] < 1.0          # and costs the truth
-    assert bench.scenario_problems(bench.SCENARIOS["q"]) == []   # with live anchors only, no twin support
+    assert bench.scenario_problems(sc) == []   # with live anchors only, no twin support
+
+
+def test_s2b_drops_follow_where_the_robots_stand():
+    sc = bench.SCENARIOS["q"]
+    after = bench.drop_layout(sc["spawn"], sc["pickup"])
+    assert after[3][:2] == (-0.20, -0.25)      # r4 on the twin of its spawn
+    # After the s2d legs r1 and r2 stand elsewhere; r4's drop follows r4.
+    moved = [(-1.00, 0.40, math.pi), (0.95, -0.25, 0.0), sc["spawn"][2], (0.10, 0.20, 0.0)]
+    assert bench.drop_layout(moved, sc["pickup"])[3][:2] == (-0.10, -0.20)
+    assert bench.drop_problems(moved, sc["pickup"]) == []
+    # One lifted robot leaves no stale anchor to trap anyone: flagged, not passed.
+    far = {"robots": [3], "drops": ["twin"]}
+    assert "stale-anchor trap disarmed" in bench.drop_problems(sc["spawn"], far)
 
 
 POSE_V = """header {
@@ -142,7 +156,7 @@ def test_the_bar_passes_a_clean_power_on_and_flags_a_collision():
 
 def test_the_bar_judges_mirror_latency_in_sim_seconds_and_accusations():
     ok = {"ok": True, "mirror": False, "err_xy_m": 0.004, "err_yaw_deg": 0.5}
-    mirror = {"target": "rosy_04", "t_pub_start": 100.0, "target_left": (200.0, "rosy_04", "SUSPECT", "fleet_monitor"),
+    mirror = {"target": "rosy_04", "t_pub_start": 50.0, "t_injected": 100.0, "target_left": (200.0, "rosy_04", "SUSPECT", "fleet_monitor"),
               "accused": [], "done": True, **{f"rosy_0{i}": ok for i in (1, 2, 3, 4)}}
     assert summary.bar(_run(mirror=mirror), [])["s2c"] == (True, [])
     slow = dict(mirror, target_left=(400.0, "rosy_04", "SUSPECT", "fleet_monitor"))      # 30 sim s
@@ -169,3 +183,17 @@ def test_fleet_log_lines_are_parsed(tmp_path):
     logs = summary.fleet_log(tmp_path)
     assert logs["ladder"] == [("rosy_04", "rotate", "rotate_in_place", "['rosy_01', 'rosy_02']")]
     assert logs["suspects"] == ["rosy_04"] and logs["jumped"] == ["rosy_04"]
+
+
+def test_s2d_fails_without_homing_or_without_a_record():
+    legs = {"rosy_01": [{"leg": 0, "off_goal_m": 0.05}], "rosy_02": [{"leg": 0, "off_goal_m": 0.04}]}
+    traffic = {"started": 10.0, "homer_at_start": {"state": "CANDIDATES"}, "legs": legs,
+               "planned": {"rosy_01": 1, "rosy_02": 1}}
+    assert summary.bar(_run(traffic=traffic), [])["s2d"] == (True, [])
+    early = dict(traffic, homer_at_start={"state": "LOCALIZED"})
+    assert "no homing in traffic" in summary.bar(_run(traffic=early), [])["s2d"][1][0]
+    bay = dict(traffic, legs={"rosy_01": [{"leg": 0, "off_goal_m": 0.6}], "rosy_02": legs["rosy_02"]})
+    assert summary.bar(_run(traffic=bay), [])["s2d"][1] == ["legs counted away from their goal [('rosy_01', 0.6)]"]
+    missing = _run()
+    missing["args"] = {"traffic": True}
+    assert summary.bar(missing, [])["s2d"] == (False, ["traffic requested, phase not recorded"])
