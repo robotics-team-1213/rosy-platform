@@ -10,8 +10,10 @@ import hashlib
 import json
 from typing import Optional
 
-from fastapi import HTTPException, Request, Response
-from pydantic import BaseModel
+from typing import Literal
+
+from fastapi import Depends, HTTPException, Request, Response
+from pydantic import BaseModel, ConfigDict, Field
 
 from fleet.hub.hub import HubError
 from fleet.server.http_errors import http_error
@@ -43,8 +45,16 @@ class SignalCommandRequest(BaseModel):
     cycle: Optional[dict[str, int]] = None
 
 
+class LineStuckDecisionRequest(BaseModel):
+    """D-407 §2: one answer, bound to the stuck id the operator saw."""
+    model_config = ConfigDict(extra="forbid")
+    stuck_id: str = Field(min_length=1, max_length=64)
+    decision: Literal["WAIT", "RESUME", "BACK_AND_RETRY", "MANUAL", "ABORT"]
+
+
 def install_console_routes(app, *, console, sightings, require_viewer,
-                           read_guard, operator_guard, site_lanes=None) -> None:
+                           read_guard, operator_guard, require_operator,
+                           site_lanes=None) -> None:
     @app.get("/api/fleet/state", dependencies=read_guard, tags=["fleet"])
     async def fleet_state() -> dict:
         return await console.snapshot()
@@ -86,6 +96,40 @@ def install_console_routes(app, *, console, sightings, require_viewer,
             raise HTTPException(status_code=404, detail={"code": "NO_MAP",
                                                          "message": "no robot served a map"})
         return grid
+
+    @app.get("/api/fleet/line-stuck", dependencies=read_guard, tags=["line-stuck"])
+    async def line_stuck_pending() -> dict:
+        # D-407: re-gather so the list is as fresh as /state; CORE's stuck block is the truth.
+        await console.snapshot()
+        return {"pending": console.line_stuck.pending(), "answers": console.line_stuck.answers()}
+
+    @app.post("/api/fleet/robots/{robot_id}/line-stuck/decision", dependencies=operator_guard,
+              tags=["line-stuck"])
+    async def line_stuck_decision(robot_id: str, body: LineStuckDecisionRequest,
+                                  principal: SitePrincipal = Depends(require_operator)) -> dict:
+        board = console.line_stuck
+        try:
+            result = await console.line_stuck_decision(robot_id, body.stuck_id, body.decision)
+        except RobotApiError as exc:
+            # CORE's refusal reaches the operator verbatim (STUCK_ID_MISMATCH, RESUME refused
+            # with its reason, EMERGENCY_ACTIVE, ...). 409 stays 409; anything else is 502.
+            board.record(robot_id=robot_id, stuck_id=body.stuck_id, decision=body.decision,
+                         principal_id=principal.principal_id, accepted=False,
+                         code=exc.code, message=exc.message)
+            raise HTTPException(status_code=409 if exc.status == 409 else 502, detail={
+                "code": exc.code, "message": exc.message, "robot_id": robot_id,
+                "robot_status": exc.status}) from exc
+        except (HubError, OSError) as exc:
+            if not (isinstance(exc, HubError) and exc.code == "UNKNOWN_ROBOT"):
+                board.record(robot_id=robot_id, stuck_id=body.stuck_id, decision=body.decision,
+                             principal_id=principal.principal_id, accepted=False,
+                             code=getattr(exc, "code", type(exc).__name__), message=str(exc))
+            raise http_error(exc) from exc
+        answer = board.record(robot_id=robot_id, stuck_id=body.stuck_id, decision=body.decision,
+                              principal_id=principal.principal_id, accepted=True,
+                              outcome=result.get("outcome"))
+        return {"robot_id": robot_id, "actor_id": principal.principal_id,
+                "answer": answer, "result": result}
 
     @app.get("/api/fleet/formation", dependencies=read_guard, tags=["formation"])
     async def formation_state() -> dict:
