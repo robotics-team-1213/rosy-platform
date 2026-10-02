@@ -65,10 +65,10 @@ jobs:
           mkdir -p "$wheelhouse"
           python3 -m pip wheel --break-system-packages --no-deps --no-build-isolation \
             --wheel-dir "$wheelhouse" \
-            modules/world modules/skills/api modules/execution
+            modules/world modules/skills/api modules/execution modules/processes/palletizing
           python3 -m pip install --break-system-packages --no-cache-dir --no-index \
             --find-links "$wheelhouse" \
-            rosy-world==0.1.0 rosy-skill-api==0.1.0 rosy-execution==0.1.0
+            rosy-world==0.1.0 rosy-skill-api==0.1.0 rosy-execution==0.1.0 rosy-palletizing==0.1.0
 
       - name: Build (colcon)
         run: |
@@ -105,6 +105,9 @@ jobs:
       # Rosy Cell 코어는 ROS·네트워크 없이 돈다(D-399 Application). 기본 이름 겹침이 없도록 따로 돈다.
       - name: Test (Rosy Cell core)
         run: python3 -m pytest src/site/cell/test -q
+
+      - name: Test (palletizing process compatibility and boundaries)
+        run: python3 -m pytest test/test_platform_palletizing_compat.py test/architecture/test_platform_dependency_boundaries.py -q
 
       # 멀티 인스턴스 런치는 로봇마다 포트·HOME·설정을 갈라야 한다. 그 계약은 런치
       # 파일을 실제로 실행해야 검증되므로 ROS 오버레이가 필요하다. ros_gz_sim share 가
