@@ -327,5 +327,51 @@ def test_an_all_skipped_run_is_reported_and_never_a_success(monkeypatch):
     assert [a["action"] for a in adjustments] == ["skipped", "skipped"]
     full = {"records": [{"kind": "straight", "ds": 0.24, "phi_l": 8.6, "phi_r": 8.6}] * 4
             + [{"kind": "pivot", "dth": 6.28, "phi_r": 4.0, "phi_l": -4.0}] * 2}
-    assert "every moving step was skipped" in rc.repeat_reason(full, adjustments, 2)
-    assert rc.repeat_reason(full, adjustments[:1], 2) is None
+    assert "was skipped" in rc.repeat_reason(full, adjustments, steps)
+    assert rc.repeat_reason(full, [], steps) is None
+
+
+def test_skipping_every_pivot_or_every_straight_is_not_accepted():
+    """D-424 follow-up (LOW): a run that kept its straights but skipped all pivots measured
+    no turn gain; one that skipped all straights measured no wheel radius."""
+    steps = rc.protocol(max_linear=0.03, max_angular=0.1)
+    full = {"records": [{"kind": "straight", "ds": 0.24, "phi_l": 8.6, "phi_r": 8.6}] * 4
+            + [{"kind": "pivot", "dth": 6.28, "phi_r": 4.0, "phi_l": -4.0}] * 2}
+    pivots = [{"step": s.name, "action": "skipped"} for s in steps if s.angular and not s.linear]
+    straights = [{"step": s.name, "action": "skipped"} for s in steps if s.linear]
+    assert "every pivot step" in rc.repeat_reason(full, pivots, steps)
+    assert "every straight step" in rc.repeat_reason(full, straights, steps)
+    assert rc.repeat_reason(full, pivots[:1] + straights[:1], steps) is None
+
+
+def test_a_flickering_scan_does_not_end_a_pivot_a_near_return_does(monkeypatch):
+    """D-424 follow-up: an unseen base sector for fewer than PIVOT_GAP_DEBOUNCE_TICKS scans in a
+    row keeps the pivot going; a seen return inside the sweep ends it at once."""
+    monkeypatch.setattr(rc.time, "sleep", lambda s: None)
+    clock = {"t": 0.0}
+    monkeypatch.setattr(rc.time, "monotonic", lambda: clock.__setitem__("t", clock["t"] + 0.05) or clock["t"])
+    gap = sample({}, rest=math.inf)
+    for deg in range(-180, 180, 30):
+        gap["ranges"][(deg + 180) % 360] = 2.0           # returns in a few sectors only
+    for deg in range(-180, -90):
+        gap["ranges"][(deg + 180) % 360] = math.inf     # one quadrant unseen
+
+    class Flicker(FakeCore):
+        def __init__(self, script):
+            super().__init__()
+            self.script = list(script)
+
+        def lidar(self):
+            self.t += 0.1
+            kind = self.script.pop(0) if self.script else "ok"
+            base = {"ok": sample({}), "gap": gap, "near": sample({90: 0.05 + 0.04})}[kind]
+            return dict(base, received_at=self.t)
+
+    pivot = [rc.Step("pivot+", angular=0.1, seconds=1.0)]
+    flicker = ["ok"] + ["gap"] * (rc.PIVOT_GAP_DEBOUNCE_TICKS - 1) + ["ok"] * 40
+    logs = []
+    assert rc.drive(Flicker(flicker), pivot, 182.0, logs.append) is None
+    assert not any("ended early" in line for line in logs)
+    logs = []
+    assert rc.drive(Flicker(["ok", "near"]), pivot, 182.0, logs.append) is None
+    assert any("ended early" in line for line in logs)

@@ -180,6 +180,7 @@ localization_mission:              # D-395 P2-7 check manoeuvres; D-424 near che
   lane_linear: 0.04
   rotate_margin_m: 0.03             # start a turn: rho + this (D-424 H1, until device evidence)
   rotate_stop_margin_m: 0.01        # end a running turn at rho + this
+  rotate_coverage_debounce_ticks: 8   # ...on an evidence gap only after 8 ticks (20 Hz) = 4 scans in a row
   nudge_min_m: 0.02
   min_front_clearance_m: 0.25
   rotate_clearance_m: 0.20

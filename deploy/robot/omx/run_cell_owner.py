@@ -4,8 +4,8 @@ One process: the ROS runtime (one ArmCommandOwner), the D-336 UDS socket in a th
 Pilot simulation HTTP app on the main thread, assembled by rosy_agent.omx_cell_owner. It refuses
 to start beside pilot_sim_server or the C3 probe. Simulation only; not a device entrypoint.
 Wave 1 gaps (see C4b logs): the Pilot HTTP app has no /cell routes or seat<->Action exclusion yet
-(G9), the Fleet stop chain (G7) still has to replace the Fleet-fence callable below, and no
-sequencer advances PickPlaceRunner phases after the first one.
+(G9), the Fleet stop chain (G7) still has to replace the Fleet-fence callable below, while phase
+progression uses the existing locally gated Cell workflow.
 """
 
 from __future__ import annotations
@@ -74,6 +74,7 @@ def main() -> None:
         fleet_fence_current=lambda epoch, generation: True,
     )
     holder["owner"] = owner
+    workflow_timer = node.create_timer(0.05, owner.advance_pending)
     executor = MultiThreadedExecutor(num_threads=4)
     executor.add_node(node)
     threading.Thread(target=executor.spin, daemon=True).start()
@@ -86,6 +87,7 @@ def main() -> None:
                     port=8088, access_log=False)
     finally:
         owner.uds_server.stop()
+        node.destroy_timer(workflow_timer)
         executor.shutdown()
         node.destroy_node()
         rclpy.shutdown()

@@ -45,7 +45,7 @@
 ## 최근 기록
 
 - 2026-10-03 · uncommitted · fix(web): SAFE_STOP 운용 말은 RobotMode 표 밖에 둔다
+- 2026-10-03 · uncommitted · test: D-425 API owner와 공통 호출 경계
 - 2026-10-02 · uncommitted · DESIGN.md Components 절 어휘 보충 — chip·triage·evidence/empty·icon
 - 2026-10-02 · uncommitted · D-410 등록부 audience에 설치 경로 반영 + 두 문서 role-lock 게이트
 - 2026-10-02 · uncommitted · D-405 아이콘 우선 선택지 — theme.js icon 필드와 공용 .ui-icon
-- 2026-10-01 · uncommitted · D-398 후속 — 표면 줄 간격 예외 폐쇄

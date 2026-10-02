@@ -14,7 +14,10 @@ the readiness HOLD, the speed clip and the bound control policy. Kinds:
   base_footprint, is within the rotation radius + `rotate_margin_m` (Pinky 0.113 m; returns
   inside the body outline are the robot itself), when a base sector has no return, or when
   a beam without a return crosses the sweep (rotation_reason). While turning, the same check
-  with `rotate_stop_margin_m` (0.093 m) ends the turn ("obstacle"); D-424 review H1.
+  with `rotate_stop_margin_m` (0.093 m) ends the turn ("obstacle"); D-424 review H1. A seen
+  return that close ends it at once; an evidence gap (no return, an unseen base sector, an
+  unknown band) only after `rotate_coverage_debounce_ticks` consecutive ticks, because single
+  real scans flicker (D-424 follow-up, measured on 8kcn/9dfk teleop scans).
   Without the body: refused when any valid return is closer than `rotate_clearance_m`.
 - `nudge_forward`: up to `max_distance_m` (<= `nudge_max_m`) by odometry. D-424 with the
   body: the front strip (half width + 0.010) must leave room for the D-422 stop gap
@@ -86,6 +89,11 @@ class MissionConfig:
     # D-424 review H1, until device evidence: start a turn with rho + 0.03, end it at rho + 0.01.
     rotate_margin_m: float = 0.03
     rotate_stop_margin_m: float = 0.01
+    # D-424 follow-up: a running turn ends on an evidence gap only after this many consecutive
+    # 20 Hz ticks = 4 scans at 10 Hz (a near return still ends it at once). 43,625 real C1
+    # scans (8kcn, 9dfk): longest gap run 3 scans; 4 scans -> 0 false ends observed (3 -> ~0.5 %
+    # of 21 s turns). See the D-424 ADR.
+    rotate_coverage_debounce_ticks: int = 8
     nudge_min_m: float = 0.02
     stop_line_m: float = 0.12            # the traffic policy's stop distance
     max_time_s: float = 120.0
@@ -109,7 +117,8 @@ def mission_config(raw: Optional[Mapping[str, Any]]) -> MissionConfig:
     if not all(math.isfinite(float(getattr(config, f.name))) for f in fields(config)):
         raise ValueError("localization_mission values must be finite")
     if (min(config.rotate_margin_m, config.rotate_stop_margin_m, config.nudge_min_m) < 0.0
-            or config.rotate_stop_margin_m > config.rotate_margin_m or config.nudge_linear <= 0.0):
+            or config.rotate_stop_margin_m > config.rotate_margin_m or config.nudge_linear <= 0.0
+            or config.rotate_coverage_debounce_ticks < 1):
         raise ValueError("localization_mission margins must be >= 0 and nudge_linear > 0")
     return config
 
@@ -123,6 +132,7 @@ class _Run:
     started_at: float
     travelled_m: float = 0.0
     turned_rad: float = 0.0
+    gap_ticks: int = 0          # consecutive ticks a running turn saw only an evidence gap
 
 
 def _wrap(angle: float) -> float:
@@ -285,8 +295,16 @@ class LocalizationMission:
         if run.kind == ROTATE:
             if run.turned_rad >= cfg.rotate_max_rad:
                 return "done"
-            # H1: something entering the sweep during the turn ends it.
-            return "obstacle" if self._judge(ROTATE, now, running=True)[0] is not None else None
+            # H1: something entering the sweep during the turn ends it at once; an evidence gap
+            # (one flickering scan) only after rotate_coverage_debounce_ticks in a row.
+            kind = self._turn_check(now)
+            if kind is None:
+                run.gap_ticks = 0
+                return None
+            if kind == "near":
+                return "obstacle"
+            run.gap_ticks += 1
+            return "obstacle" if run.gap_ticks >= cfg.rotate_coverage_debounce_ticks else None
         if run.travelled_m >= run.max_distance_m:
             return "done"
         if run.kind == NUDGE:
@@ -342,6 +360,17 @@ class LocalizationMission:
         except ValueError:
             _log.warning("line_follow body geometry is inconsistent; mission uses the LiDAR-origin rules")
             return None
+
+    def _turn_check(self, now: float) -> Optional[str]:
+        """Kind of reason a running turn is not clear (rotation_check kinds), None = clear.
+        Without the URDF body the LiDAR-origin rule counts as a near return."""
+        body = self._body()
+        if body is None:
+            return None if self._blocked(ROTATE, now) is None else "near"
+        config = self._line_follow.config
+        view = body.scan_view(self._scan[0], forward_deg=config.lidar_forward_deg,
+                              self_mask=config.lidar_self_mask)
+        return body.rotation_check(view, self.config.rotate_stop_margin_m)[0]
 
     def _judge(self, kind: str, now: float, *, running: bool = False) -> tuple[Optional[str], float]:
         """(why the LiDAR does not show this kind's path clear or None, nudge room in metres).
