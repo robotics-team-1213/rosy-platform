@@ -83,7 +83,7 @@ SIZE_VERDICTS = {
         "D-395 P2-7 added localization/mission.py (the mission executor, its own module under budget)",
     ),
     "fleet": (
-        25_494,
+        25_653,
         "split: server HTTP boundary, console, signals and the mission-control stores are separate owners "
         "today; group them into subpackages rather than one flat server/ tree (B2); owner fleet, unscheduled "
         "(re-judged 2026-09-29 at 11164 after mission_store joined the server tree; re-judged 2026-09-30 at "
@@ -129,6 +129,8 @@ SIZE_VERDICTS = {
         "Re-judged 2026-10-02 at 24945 when D-410 split the console into two documents "
         "(web/install.html + web/install.js entry now own device enrollment and camera "
         "calibration; index.html/console.js shed the install wiring); verdict unchanged. "
+        "Re-judged 2026-10-02 at 25653 after D-407 line-stuck mediation web module and "
+        "the operate/install split settled; verdict unchanged. "
         "Re-judged 2026-10-02 at 25494 (from 24587 on base 7e577452) when the D-407 Fleet side joined "
         "as its own modules: server/line_stuck.py (stuck board + answer record), two routes in "
         "console_routes.py, web/line-stuck.js (panel), the decision client in transport.py, and "
