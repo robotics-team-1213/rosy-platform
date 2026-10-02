@@ -39,6 +39,11 @@ gripper:
   open: 1.0
   # Full close (SRDF). A grasp never commands it: it closes to the width-matched target.
   closed: 0.0
+  # Fingertips below the TCP along the tool axis, worst case (fingers closed): finger pivot
+  # at link5 x 0.0295 (URDF gripper_joint_1) + follower_07 mesh tip x 0.065 = 0.0945, minus
+  # the TCP at link5 x 0.09193 (end_effector_joint) = 0.00257 m. rosy_cell receives the same
+  # value as cell.yaml fingertip_overhang_m (pinned by test/test_cell_omx_sim_layout_contract.py).
+  fingertip_overhang_m: 0.00257
   # Width-matched close (C3b B2). jaw gap(q) = 2 (o + x sin q + y cos q):
   # o = half the separation of the finger pivots, URDF gripper_joint_1 origin y 0.0075 and
   # gripper_joint_2 origin y -0.0108 in link5 (open_manipulator 0a4af6a9, omx_f_arm.urdf.xacro).

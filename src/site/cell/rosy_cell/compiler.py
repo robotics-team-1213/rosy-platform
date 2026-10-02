@@ -80,6 +80,11 @@ def _check(recipe: Recipe, cell: CellConfig, tol_m: float) -> dict[str, StackPla
         )
         problems += [f"pallet {slot.id}: {msg}" for msg in stack_issues(plan, recipe.box, slot.pallet, tol_m=tol_m)]
         plans[slot.id] = plan
+    # The fingertips reach fingertip_overhang_m below the TCP; a grasp deeper than
+    # height - overhang would put them below the box bottom, into the surface it lands on.
+    if recipe.box.grasp_depth > recipe.box.height - cell.fingertip_overhang_m + 1e-12:
+        problems.append(f"box grasp_depth {recipe.box.grasp_depth:.4f} puts the fingertips "
+                        f"({cell.fingertip_overhang_m:.4f} below the TCP) below the box bottom")
     if problems:
         raise CompileError(problems)
     return plans
@@ -107,7 +112,8 @@ def _carry_z(recipe: Recipe, cell: CellConfig, plans: dict[str, StackPlan]) -> f
                 tops.append(frame.to_base((x, y, plan.height))[2])
     stations = [recipe.pick_station] + ([recipe.slip_sheet_station] if recipe.slip_sheet_station else [])
     tops += [cell.station_pose(s)[2] for s in stations]
-    hang = max(recipe.box.height - recipe.box.grasp_depth, recipe.slip_sheet_thickness or 0.0)
+    hang = max(recipe.box.height - recipe.box.grasp_depth, recipe.slip_sheet_thickness or 0.0,
+               cell.fingertip_overhang_m)
     return max(tops) + hang + cell.approach_clearance_m
 
 

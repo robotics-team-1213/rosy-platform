@@ -25,3 +25,7 @@ home: {x: 0.12, y: 0.0, z: 0.12, yaw: 0.0}
 # OmxKinematics.revision of src/products/omx/adapter/config/omx_f_kinematics.yaml (= cell_profile.yaml).
 kinematics_revision: 27cd572830f931b57eedec55081b77749f65dcd059d11e34199bdcb1bb6db04d
 approach_clearance_m: 0.03
+# Tool: OMX-F fingertips reach this far below the TCP (= deploy/robot/omx/sim/cell_profile.yaml
+# gripper.fingertip_overhang_m, from the pinned URDF and finger mesh). carry_z and the
+# grasp_depth check use it (C3b review minor 4).
+fingertip_overhang_m: 0.00257

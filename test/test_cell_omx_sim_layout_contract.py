@@ -61,6 +61,8 @@ def _transfers(job):
 def test_demo_cell_cites_the_profile_geometry(demo, kin, profile):
     cell, _, _ = demo
     assert cell.kinematics_revision == profile.kinematics_revision == kin.revision
+    # The cell's tool fingertip overhang is the profile's (pinned URDF + finger mesh).
+    assert cell.fingertip_overhang_m == profile.fingertip_overhang_m
 
 
 def test_demo_is_two_pallets_two_layers_with_slip_sheets(demo):

@@ -12,7 +12,8 @@ from .fields import FieldError
 from .geometry import Frame, FrameError
 from .recipe import content_hash
 
-_REQUIRED = ("schema", "frame_rules", "frames", "stations", "home", "kinematics_revision", "approach_clearance_m")
+_REQUIRED = ("schema", "frame_rules", "frames", "stations", "home", "kinematics_revision", "approach_clearance_m",
+             "fingertip_overhang_m")
 _RULES = ("min_span_m", "min_angle_deg", "max_tilt_deg")
 _POINTS = ("origin", "x_point", "plane_point")
 _STATION = ("frame", "x", "y", "z", "yaw")
@@ -52,6 +53,10 @@ class CellConfig:
     kinematics_revision: str
     approach_clearance_m: float
     content_hash: str
+    # How far the tool's fingertips reach below the TCP (m). It comes from the device's tool
+    # geometry (OMX: cell_profile.yaml gripper.fingertip_overhang_m, from the pinned URDF and
+    # finger mesh); carry_z and the grasp-depth check use it (C3b review minor 4).
+    fingertip_overhang_m: float
 
     def station_pose(self, station_id: str) -> tuple[float, float, float, float]:
         s = self.stations[station_id]
@@ -131,6 +136,7 @@ def load_cell(text: str) -> CellConfig:
     home = read("home", _home)
     revision = read("kinematics_revision", _revision)
     clearance = read("approach_clearance_m", fields.positive)
+    overhang = read("fingertip_overhang_m", fields.non_negative)
 
     frames: dict[str, Frame] = {}
     if rules is not None and taught is not None:
@@ -149,4 +155,5 @@ def load_cell(text: str) -> CellConfig:
         problems += [f"station {k}: unknown frame {s.frame!r}" for k, s in stations.items() if s.frame not in taught]
     if problems:
         raise CellError(problems)
-    return CellConfig(MappingProxyType(frames), MappingProxyType(stations), home, revision, clearance, content_hash(data))
+    return CellConfig(MappingProxyType(frames), MappingProxyType(stations), home, revision, clearance,
+                      content_hash(data), overhang)

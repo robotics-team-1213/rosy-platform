@@ -126,6 +126,7 @@ def test_profile_loads_with_content_hash_revision(profile, kin):
     (lambda d: d.pop("planning_limit_fraction"), "planning_limit_fraction"),
     (lambda d: d["owner"].pop("wall_clock_bound_factor"), "wall_clock_bound_factor"),
     (lambda d: d["owner"].pop("max_start_window_rad"), "max_start_window_rad"),
+    (lambda d: d["gripper"].pop("fingertip_overhang_m"), "fingertip_overhang_m"),
     # A5: only after-grasp phases, only arm joints, at most 0.1 rad, never below the base.
     (lambda d: d.update(phase_start_state_tolerance_rad={"approach": {"joint5": 0.05}}), "transfer, release"),
     (lambda d: d.update(phase_start_state_tolerance_rad={"transfer": {"gripper_joint_1": 0.05}}), "arm joint"),

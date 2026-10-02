@@ -97,6 +97,7 @@ class CellPlanningProfile:
     min_grasp_width_m: float
     max_grasp_width_m: float
     gripper_release_clearance_m: float
+    fingertip_overhang_m: float
     phase_max_duration_s: Mapping[str, float]
     workspace_min_m: tuple[float, float, float]
     workspace_max_m: tuple[float, float, float]
@@ -171,6 +172,9 @@ class CellPlanningProfile:
         if pivot_a <= pivot_b or contact_x <= 0:
             raise ValueError("gripper.jaw pivots must be ordered and the contact point ahead of the pivot")
         squeeze = _finite("gripper.jaw.squeeze_m", jaw.get("squeeze_m"), positive=True)
+        overhang = _finite("gripper.fingertip_overhang_m", gripper.get("fingertip_overhang_m"))
+        if overhang < 0:
+            raise ValueError("gripper.fingertip_overhang_m must be non-negative")
         min_width = _finite("gripper.jaw.min_grasp_width_m", jaw.get("min_grasp_width_m"), positive=True)
         max_width = _finite("gripper.jaw.max_grasp_width_m", jaw.get("max_grasp_width_m"), positive=True)
         release_clearance = _finite("gripper.jaw.release_clearance_m", jaw.get("release_clearance_m"),
@@ -240,7 +244,7 @@ class CellPlanningProfile:
             jaw_pivot_half_separation_m=(pivot_a - pivot_b) / 2,
             jaw_contact_point_m=(contact_x, contact_y), gripper_squeeze_m=squeeze,
             min_grasp_width_m=min_width, max_grasp_width_m=max_width,
-            gripper_release_clearance_m=release_clearance,
+            gripper_release_clearance_m=release_clearance, fingertip_overhang_m=overhang,
             phase_max_duration_s=MappingProxyType(phase_max),
             workspace_min_m=tuple(b[0] for b in bounds),  # type: ignore[arg-type]
             workspace_max_m=tuple(b[1] for b in bounds),  # type: ignore[arg-type]

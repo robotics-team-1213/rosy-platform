@@ -46,6 +46,10 @@
     - 자리는 셀 공구 정의가 아니라 물건(레시피)이다. 안전하게 쥘 높이는 물건마다 다르고, 같은 공구로 슬립시트(2 mm)는 윗면에서 쥐어야 하기 때문이다. 공구 쪽 한계(TCP 바닥, 패드 길이)는 장치 플래너가 거절로 지킨다.
     - 상자 Step의 `target.z`는 이제 TCP 파지 높이 = 윗면 − `grasp_depth`다. `approach_z`는 그대로 윗면 + `approach_clearance_m`이다. 슬립시트는 깊이 0이다.
     - `carry_z` = 가장 높은 면 + 매달린 높이 + clearance. 매달린 높이 = max(`height` − `grasp_depth`, 슬립시트 두께)다. 쥔 상자의 바닥이 TCP 아래 `height − grasp_depth`에 있기 때문이다.
+    - 공구 손가락 끝은 TCP보다 `fingertip_overhang_m` 아래까지 내려간다. 이 값은 `cell.yaml`의 필수 필드다. 장치 프로필(OMX: `cell_profile.yaml` `gripper.fingertip_overhang_m`, 고정 URDF와 손가락 mesh에서 0.00257 m)에서 받는다. 두 값은 저장소 루트의 교차 계약 시험이 같게 묶는다. 셀은 공구가 실제로 놓인 자리이고, `rosy_cell`은 장치 패키지를 import하지 않기 때문이다.
+      - 매달린 높이 = max(`height − grasp_depth`, 슬립시트 두께, `fingertip_overhang_m`).
+      - `grasp_depth > height − fingertip_overhang_m`이면 컴파일이 거절한다. 손가락 끝이 상자 바닥 아래로 내려가면 놓는 면을 찌르기 때문이다.
+      - (리뷰 보강 2026-10-02.) 아직 영속된 `cell/2` 파일이 없어 schema 번호는 올리지 않았다.
     - C3 Gazebo에서 Step z가 윗면이라 손가락이 2–3 mm만 걸쳤다(C3 문제 6). 근거와 실측은 [C3 증거](../validation/rosy-cell-gazebo-c3-2026-10-02/README.md)에 있다.
 
 **관련 결정:** [D-328](D-328-model-proposed-missions-and-independent-goal-evidence.md), [D-376](D-376-omx-pick-place-planning-and-execution-boundary.md), [D-377](D-377-app-names-rosy-plus-one-english-word.md), [D-386](D-386-omx-async-goal-acceptance-and-phase-state.md), [D-397](D-397-pinky-geometry-urdf-nominal-calibration-refines.md), [D-399](D-399-rosy-layered-architecture-site-plane-device-pipeline.md), [D-330](D-330-fleet-action-admission-stop-and-recovery.md), [D-336](D-336-fleet-omx-local-ipc-boundary.md)
