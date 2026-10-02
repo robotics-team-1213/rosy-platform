@@ -542,8 +542,9 @@ el("map-canvas").addEventListener("keydown", async (event) => {
   }
 });
 
+// 전체 정지는 한 번의 누름으로 즉시 실행된다(D-413 — 비상 정지는 확인 없는 비상 출구.
+// D-371이 대화상자 위에서 살아 있게 한 이유를 끝까지 밀었다: 어떤 사위에도 즉시 눌린다).
 el("estop").addEventListener("click", async () => {
-  if (!window.confirm("등록된 모든 로봇을 정지시킵니다. 계속할까요?")) return;
   try {
     const result = await call("/api/fleet/estop", { method: "POST" });
     await refreshDispatchControl();
