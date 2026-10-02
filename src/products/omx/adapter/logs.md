@@ -269,3 +269,9 @@
 - 증거: `python -m pytest src/products/omx/adapter/test/ -q` 와 `test/test_omx_pilot_probe.py test/test_omx_workstation.py` 통과 (2026-10-03 Windows; probe 시험은 실제 SIM API·런타임 + owner 를 흉내 낸 가짜 팔 — ROS-SIM 증거 아님). SIM 패치는 vendor 0a4af6a9 원본 세 파일에 `git apply` 확인.
 - gate 변화: ROS-SIM HOLD — `--stall` 이 `holding` 의 차단 관문(progress.md blocker).
 - 결정: D-411 C, 구현 부록 9–13.
+
+## 2026-10-03 · uncommitted · fix(omx_adapter): D-411 C Gazebo 관문 뒤 — 조임 재발행·속도 여유·probe·Gazebo 전용 제약
+- 변경: 쥐고 있음이 된 닫기 뒤 watchdog 이 그리퍼만 멈춘 위치 + preload 로 옮기는 목표 하나(`hold-<id>`)를 낸다(JTC 가 SUCCEEDED 뒤 닫기 목표의 마지막 점을 계속 명령해 첫 조그가 조임을 줄였다). 터미널 때 readback 이 없으면 첫 신선한 readback 이 멈춘 위치. `/state` `gripper.hold_target`. 속도 판정 0.05 rad 여유. 실패 reason 형식 고정 시험. probe: 닿을 수 있으면 정확한 목표, 첫 목표 전 readback 을 `before` 로, `bash -c 'source /opt/ros/jazzy/setup.bash; exec "$@"'` 로 gz, `--pace-margin` 0.9, 보고서에 `open_readback`·`close_goals`·`hold_target`. SIM 패치: 제약을 `gazebo_arm_controller_constraints.yaml`(Gazebo launch spawner `--param-file` 만)로 옮김.
+- 증거: 관문 1회차 `X:\DevTemp\d411-simC\stall3_harness.log`(닫기 4.05 s, 0.359 rad, 조그 세 번 0.377/0.388/0.416). 호스트 `src/products/omx/adapter/test`, `test/test_omx_pilot_probe.py`, `test/test_omx_workstation.py` 통과 (2026-10-03 Windows). 고친 뒤 Gazebo 재실행 없음.
+- gate 변화: ROS-SIM HOLD — 다시 빌드한 이미지로 우회 없이 재실행 필요.
+- 결정: D-411 구현 부록 12·14.

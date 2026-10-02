@@ -33,8 +33,8 @@
 
 ## 최근 기록
 
+- 2026-10-03 · uncommitted · fix(pilot): D-411 C 관문 뒤 — 그리퍼 목표를 0.9 × max_velocity 로
 - 2026-10-03 · uncommitted · fix(pilot): D-411 C 검토 — 그리퍼 목표를 알린 속도로
 - 2026-10-03 · uncommitted · feat(pilot): D-411 C 그리퍼 위젯, 주행 링 위쪽 잘림
 - 2026-10-03 · uncommitted · fix(pilot): D-411 B 재리뷰 — 종결 뒤 readback 실패, 떠 있는 스틱 원점
 - 2026-10-02 · uncommitted · fix(pilot): D-411 B 리뷰 — 실제 SIM 소유자, 순차 조이스틱, 한계, 자리 잃음, 큰 스틱 잡기 구역
-- 2026-10-02 · 10daaae5 · feat(pilot): D-411 B 서술자로 조작부 조립, 팔 조이스틱

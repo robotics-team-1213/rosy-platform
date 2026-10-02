@@ -44,8 +44,8 @@
 
 ## 최근 기록
 
+- 2026-10-03 · uncommitted · fix(omx_adapter): D-411 C Gazebo 관문 뒤 — 조임 재발행·속도 여유·probe·Gazebo 전용 제약
 - 2026-10-03 · uncommitted · fix(omx_adapter): D-411 C 검토 — 속도 제한·제한 조임·안쪽 범위·stall probe
 - 2026-10-03 · uncommitted · feat(omx_adapter): D-411 C 그리퍼 절대 목표·쥠 readback·시연 `action.gripper`
 - 2026-10-02 · uncommitted · test(pilot-sim): D-411 B 렌더 시험 런타임이 실제 소유자처럼 군다
 - 2026-10-02 · 10daaae5 · feat(pilot): D-411 B SIM 이 Pilot 조립 모듈을 서빙
-- 2026-10-02 · uncommitted · feat(pilot-sim): D-411 B `/target` 의 `rosy.controls/1`

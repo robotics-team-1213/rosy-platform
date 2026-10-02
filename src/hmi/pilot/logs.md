@@ -284,3 +284,9 @@
 - 증거: `python -m pytest src/hmi/pilot/test src/runtime/api_web/test/test_pilot_route.py -q` 통과, `ROSY_RUN_BROWSER_TESTS=1 ... -k gripper` 4 passed (2026-10-03 Windows).
 - gate 변화: 없음. ROS-SIM HOLD.
 - 결정: D-411 구현 부록 10.
+
+## 2026-10-03 · uncommitted · fix(pilot): D-411 C 관문 뒤 — 그리퍼 목표를 0.9 × max_velocity 로
+- 변경: `controls.js` `GRIPPER_PACE` 0.9 — readback 흔들림 여유. 전체 1.0 rad 행정은 두 목표(한 번에 0.9 rad). SW 캐시 `2026-10-03-4`.
+- 증거: `test_controls.py`·Pilot 시험 통과, `ROSY_RUN_BROWSER_TESTS=1 ... -k gripper` 4 passed (2026-10-03 Windows).
+- gate 변화: 없음.
+- 결정: D-411 구현 부록 14.
