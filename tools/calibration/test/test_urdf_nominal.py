@@ -61,6 +61,7 @@ def test_extractor_reproduces_the_hand_derived_chain():
     assert (g["imu"]["x_m"], g["imu"]["y_m"], g["imu"]["z_base_link_m"]) == pytest.approx((-0.044, 0.0, 0.0525))
     assert g["footprint"]["rotation_radius_sim_box_m"] == pytest.approx(0.088, abs=5e-4)
     assert 0.080 < g["footprint"]["rotation_radius_m"] < g["footprint"]["rotation_radius_sim_box_m"]
+    assert g["footprint"]["front_x_m"] == pytest.approx(0.04205, abs=1e-5)   # screen mount (D-422)
 
 
 def test_camera_follows_the_tilt_arg():
@@ -206,6 +207,10 @@ def test_line_follow_stuck_body_consumers():
     assert line_follow["body_rear_x_m"] == G["caster"]["rear_x_m"]
     assert line_follow["body_rotation_radius_m"] == G["footprint"]["rotation_radius_m"]
     assert line_follow["body_half_width_m"] == G["footprint"]["half_width_m"]
+    # D-422: the obstacle stop measures from the body front; the ultrasonic gap from its mount.
+    assert line_follow["body_front_x_m"] == G["footprint"]["front_x_m"]
+    assert line_follow["body_ultrasonic_x_m"] == G["ultrasonic"]["x_m"]
+    assert G["ultrasonic"]["x_m"] < G["footprint"]["front_x_m"] < G["footprint"]["rotation_radius_m"]
 
 
 def test_body_and_ir_consumers():
