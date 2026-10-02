@@ -5,9 +5,13 @@ from __future__ import annotations
 import threading
 import time
 
+from core_common.protocol.controls import ControlsDescriptor, JointJogControl, JointRange
 from core_common.protocol.omx_sim import OmxSimJog
 
 from .command_owner import TrajectoryCommand
+
+JOG_MAX_STEP_RAD = 0.05
+JOG_DURATION_S = 0.4
 
 
 class PilotSimRuntime:
@@ -45,6 +49,14 @@ class PilotSimRuntime:
                 "joint_age_ms": round(age * 1000) if age is not None else None,
                 "positions": dict(state.positions) if state else {},
                 "active_goal": self._active}
+
+    def controls(self) -> dict:
+        """rosy.controls/1 for this SIM workcell (D-411 B). Bounded goals only (D-390 §2)."""
+        limits = self.arm.owner.config.position_limits
+        jog = JointJogControl(id="arm", label="팔", max_step_rad=JOG_MAX_STEP_RAD, duration_s=JOG_DURATION_S,
+                              joints=tuple(JointRange(name=n, lower=limits[n][0], upper=limits[n][1])
+                                           for n in self.joint_names))
+        return ControlsDescriptor(items=(jog,)).model_dump(by_alias=True, mode="json")
 
     def submit(self, jog: OmxSimJog) -> dict:
         with self._lock:

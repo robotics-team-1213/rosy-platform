@@ -107,3 +107,11 @@ def test_recording_disk_failure_cannot_disable_cancel_or_seat_expiry():
     runtime.capture = SimpleNamespace(interrupt=broken_recording)
     assert runtime.cancel("request")["state"] == "CANCEL_REQUESTED"
     runtime.cancel_active()  # The seat watcher must survive this failure too.
+
+
+def test_controls_announce_a_bounded_joint_jog_with_limits():
+    from core_common.protocol.controls import ControlsDescriptor
+    descriptor = ControlsDescriptor.model_validate(PilotSimRuntime(Arm()).controls())
+    (jog,) = descriptor.items
+    assert jog.kind == "joint_jog" and jog.max_step_rad == 0.05 and jog.duration_s == 0.4
+    assert [(j.name, j.lower, j.upper) for j in jog.joints] == [("joint1", -1, 1), ("gripper_joint_1", -0.1, 0.1)]

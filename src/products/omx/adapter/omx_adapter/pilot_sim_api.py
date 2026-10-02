@@ -186,7 +186,8 @@ def create_pilot_sim_app(*, runtime: Any, pilot_root: Path, common_root: Path,
                             joints=tuple(j for j in runtime.joint_names if j != runtime.gripper),
                             gripper=runtime.gripper,
                             camera=bool(getattr(runtime, "camera_available", False)),
-                            recording=getattr(runtime, "capture", None) is not None)
+                            recording=getattr(runtime, "capture", None) is not None,
+                            controls=runtime.controls() if hasattr(runtime, "controls") else None)
 
     @app.post(f"{PREFIX}/pair", status_code=201)
     def pair(request: PairRequest) -> dict[str, str]:

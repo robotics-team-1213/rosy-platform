@@ -43,6 +43,9 @@ class FakeRuntime:
     def on_watchdog(self):
         pass
 
+    def controls(self):
+        return {"schema": "rosy.controls/1", "items": []}
+
 
 class FakeCapture:
     def __init__(self):
@@ -153,3 +156,10 @@ def test_recording_needs_own_seat_and_cannot_select_server_output_path():
                           json={"seat_id": seat, "outcome": "success"})
     assert stopped.json()["status"] == "incomplete"
     assert stopped.json()["task_outcome"] == "success"
+
+
+def test_target_carries_the_runtime_controls():
+    client, _ = _client()
+    body = client.get(f"{PREFIX}/target").json()
+    assert body["controls"] == {"schema": "rosy.controls/1", "items": []}
+    assert body["joints"] == ["joint1", "joint2"] and body["gripper"] == "gripper_joint_1"
