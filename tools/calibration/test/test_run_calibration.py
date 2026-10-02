@@ -5,6 +5,8 @@ import math
 import sys
 from pathlib import Path
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import run_calibration as rc  # noqa: E402
@@ -34,20 +36,72 @@ def test_protocol_fits_the_time_budget_and_respects_limits():
 def test_straight_guard_looks_in_the_direction_of_travel_with_the_given_yaw():
     fwd = rc.Step("f", linear=0.03, seconds=1)
     back = rc.Step("b", linear=-0.03, seconds=1)
-    s = sample({182: 0.15})                      # 0.15 m at the nose of a 182-deg mount
+    # D-424: the stop is the body gap g(0.03) ~0.025 m, ~0.085 m from the LiDAR straight ahead.
+    s = sample({182: 0.08})                      # 0.08 m at the nose of a 182-deg mount
     assert "clearance" in rc.clearance_reason(s, fwd, 182.0)
     assert rc.clearance_reason(s, back, 182.0) is None
-    # The same return is 8 deg off the nose, still inside the +-25 sector, for a 190 mount;
-    # at 40 deg off it is outside.
+    assert rc.clearance_reason(sample({182: 0.15}), fwd, 182.0) is None   # was refused (< 0.20)
+    # The same return 8 deg off the nose (190 mount) is still in the body strip; 40 deg off is not.
     assert "clearance" in rc.clearance_reason(s, fwd, 190.0)
-    assert rc.clearance_reason(sample({222: 0.15}), fwd, 182.0) is None
+    assert rc.clearance_reason(sample({222: 0.12}), fwd, 182.0) is None
 
 
-def test_pivot_guard_is_all_around_and_self_returns_are_ignored():
+def test_pivot_guard_is_all_around_in_the_base_frame_and_the_body_is_masked():
     pivot = rc.Step("p", angular=0.1, seconds=1)
-    assert rc.clearance_reason(sample({90: 0.12}), pivot, 182.0) is not None
-    assert rc.clearance_reason(sample({90: 0.05}), pivot, 182.0) is None   # chassis
+    assert rc.clearance_reason(sample({90: 0.09}), pivot, 182.0) is not None
+    assert rc.clearance_reason(sample({90: 0.05}), pivot, 182.0) is None   # inside the body outline
     assert rc.clearance_reason(sample({90: 0.30}), pivot, 182.0) is None
+
+
+def test_side_wall_013_from_the_lidar_allows_the_pivot():
+    """D-424: rotation radius 0.0826 + 0.02; the old guard refused anything within 0.20 m."""
+    pivot = rc.Step("p", angular=0.1, seconds=1)
+    wall = {deg: 0.13 / math.cos(math.radians(deg - 272)) for deg in range(242, 303)}
+    assert rc.clearance_reason(sample(wall), pivot, 182.0) is None
+
+
+def test_a_return_at_007_is_an_obstacle_not_a_self_return():
+    """D-424: the old 0.08 m self-return cut let a robot touching a wall pivot."""
+    pivot = rc.Step("p", angular=0.1, seconds=1)
+    near = dict(sample({182: 0.07}), range_min=0.15)          # also below range_min
+    assert "clearance" in rc.clearance_reason(near, pivot, 182.0)
+    assert rc.plan_step(near, pivot, 182.0)[0] is None
+
+
+def test_a_straight_with_030_ahead_is_shortened_not_aborted():
+    fwd = rc.Step("straight+0", linear=0.03, seconds=0.24 / 0.03)
+    planned, note = rc.plan_step(sample({182: 0.30}), fwd, 182.0)
+    assert planned is not None and "shortened" in note
+    assert planned.linear == fwd.linear
+    # room = (0.30 - 0.05905) - g(0.03) = 0.2155 m
+    assert planned.linear * planned.seconds == pytest.approx(0.2155, abs=1e-3)
+    assert rc.plan_step(sample({182: 0.30}), rc.Step("b", linear=-0.03, seconds=8.0), 182.0) == (
+        rc.Step("b", linear=-0.03, seconds=8.0), None)
+    # No room at all: wait (None) with a reason, never a scan problem.
+    held, why = rc.plan_step(sample({182: 0.10}), fwd, 182.0)
+    assert held is None and rc.scan_problem(sample({182: 0.10})) is None and "room" in why
+
+
+def test_an_unknown_beam_ahead_holds_the_straight_but_not_the_pivot():
+    blind = dict(sample({182: 0.30}), range_min=0.15)
+    blind["ranges"][(181 + 180) % 360] = 0.0                  # no return 1 deg off the nose
+    assert rc.straight_room_m(blind, rc.Step("f", linear=0.03, seconds=1), 182.0) == 0.0
+    assert rc.clearance_reason(blind, rc.Step("p", angular=0.1, seconds=1), 182.0) is None
+
+
+def test_drive_skips_a_blocked_straight_and_keeps_going(monkeypatch):
+    monkeypatch.setattr(rc, "CLEARANCE_WAIT_S", 0.0)
+
+    class Wall(FakeCore):
+        def lidar(self):
+            self.t += 0.1
+            return sample({182: 0.125}, received_at=self.t)   # pivot ok, straight room 0.04
+
+    core, logs = Wall(), []
+    steps = [rc.Step("straight+0", linear=0.03, seconds=8.0), rc.Step("pivot+", angular=0.1, seconds=0.2)]
+    assert rc.drive(core, steps, 182.0, logs.append) is None
+    assert any("skipped" in line for line in logs)
+    assert core.sent and all(v == 0.0 for v, _ in core.sent) and any(w for _, w in core.sent)
 
 
 def test_stale_or_missing_scan_aborts():
