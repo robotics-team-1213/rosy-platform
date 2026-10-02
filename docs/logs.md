@@ -4625,3 +4625,9 @@
 - Change: construct existing PickPlaceRunner with Skill-bound analytic planning and accepted profile/state/geometry; preserve existing owner ports, grant-scoped phase gates, local stop fencing and exact cancellation. Advance remains an explicit local workflow operation.
 - Evidence: missing-factory red regression; focused actual planner/API/runner/journal/Skill/boundary tests 75 passed. Four phases and denied transfer covered; persisted local replay does not submit again, and unresolved parent blocks rearm. Full OMX adapter plus provider/Skill/boundaries: 353 passed / 5 skipped. Quick tier: 96 passed / 25 freshness warnings. Independent review: 6 passed, no Critical/Important findings.
 - Gate: SOURCE/LOCAL only; no second owner or ROS loop added. Parent terminal workflow, Fleet/OMX two-ledger replay and ROS-SIM remain open.
+
+
+## 2026-10-03 · uncommitted · feat: journal Cell hold release and local Action completion
+- Change: reuse physical gripper transaction rules with canonical Cell grant provenance; optionally compose durable workflow gates with the real Skill phase runner. Require matching scoped fresh hold/release readback before local terminal success. Provider/clock/cancel errors and snapshot recovery stay HOLD.
+- Evidence: focused planner/API/runner/transaction/boundary suite 36 passed; sensor and cancel failure review corrections included. Full OMX adapter plus provider/Skill/boundary regression: 371 passed / 5 skipped. Quick tier: 96 passed / 25 freshness warnings. Independent review: 31 passed, no remaining Critical/Important findings.
+- Gate: SOURCE/LOCAL only. Fleet independent goal confirmation, two-ledger Cell replay and ROS-SIM remain open.

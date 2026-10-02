@@ -220,7 +220,13 @@ def test_skill_wrapped_cell_action_cancels_only_its_live_phase(tmp_path):
 
 
 @pytest.mark.parametrize("deny_phase", [None, "transfer"])
-def test_composed_cell_skill_runs_real_analytic_plan_and_phase_journal(tmp_path, deny_phase):
+@pytest.mark.parametrize("workflow_revision,release_fault", [
+    (None, None), ("readback", None), ("readback", "wrong-instance"), ("readback", "old-sequence"),
+    ("readback", "grasp-timeout"), ("readback", "release-timeout"),
+    ("readback", "clock-failure"),
+])
+def test_composed_cell_skill_runs_real_analytic_plan_and_phase_journal(
+        tmp_path, deny_phase, workflow_revision, release_fault):
     from dataclasses import asdict, replace
     from omx_adapter.action_api import ActionApi
     from omx_adapter.action_runner import ActionRunner
@@ -257,6 +263,22 @@ def test_composed_cell_skill_runs_real_analytic_plan_and_phase_journal(tmp_path,
     port.on_submit = succeed
     store, driver, action_runner = _runner(tmp_path)
     executions = []
+
+    def readback():
+        phase_id = port.submissions[-1][0].phase_id
+        if release_fault == f"{phase_id}-timeout":
+            raise TimeoutError("sensor unavailable")
+        return GripperObservation(
+            grant.workcell_id, "elsewhere" if release_fault == "wrong-instance"
+            and phase_id == "release" else grant.instance_id, "readback",
+            8 if phase_id == "release" and release_fault != "old-sequence" else 7, 100.5,
+            "OPEN" if phase_id == "release" else "CLOSED", phase_id != "release",
+            None if phase_id == "release" else request.item, grant.dispatch_generation,
+        )
+
+    def now():
+        return datetime.now(timezone.utc)
+
     factory = create_omx_cell_transfer_phase_factory(
         profile=profile, planner=_planner(kin), execution_state=lambda: states[0],
         accepted_item_geometry=lambda recipe, item: {
@@ -275,11 +297,10 @@ def test_composed_cell_skill_runs_real_analytic_plan_and_phase_journal(tmp_path,
         goal_port=port, submission_fence=action_runner.submission_fence,
         phase_gate=lambda accepted, phase: accepted is grant and phase != deny_phase,
         current_fence=action_runner.current_fence,
-        gripper_readback=lambda: GripperObservation(
-            grant.workcell_id, grant.instance_id, "readback", 7, 100.5,
-            "CLOSED", True, request.item, grant.dispatch_generation,
-        ),
+        gripper_readback=readback,
         monotonic=lambda: 100.5,
+        now=now,
+        **({"gripper_sensor_revision": workflow_revision} if workflow_revision else {}),
     )
 
     def capture(accepted, recorder):
@@ -298,7 +319,14 @@ def test_composed_cell_skill_runs_real_analytic_plan_and_phase_journal(tmp_path,
     assert response["receipt"]["state"] == "ACCEPTED", response
     execution = executions[0]
     execution.advance()
-    if deny_phase:
+    if release_fault == "grasp-timeout":
+        from omx_adapter.pick_place_transaction import TransactionError
+        with pytest.raises(TransactionError):
+            execution.advance()
+        assert store.get_action(grant.action_id)["state"] == "HOLD"
+        execution.advance()
+        assert len(port.submissions) == 2
+    elif deny_phase:
         with pytest.raises(RuntimeError, match="semantic workflow gate"):
             execution.advance()
         assert [row["phase_id"] for row in store.action_phases(grant.action_id)] == ["approach", "grasp"]
@@ -306,8 +334,24 @@ def test_composed_cell_skill_runs_real_analytic_plan_and_phase_journal(tmp_path,
         execution.advance()
         execution.advance()
         assert [row["state"] for row in store.action_phases(grant.action_id)] == ["SUCCEEDED"] * 4
-        with pytest.raises(RuntimeError, match="already been submitted"):
+        if workflow_revision:
+            if release_fault:
+                from omx_adapter.pick_place_transaction import TransactionError
+                if release_fault == "clock-failure":
+                    def unavailable_clock():
+                        raise RuntimeError("clock unavailable")
+                    execution.now = unavailable_clock
+                with pytest.raises(RuntimeError if release_fault == "clock-failure" else TransactionError):
+                    execution.advance()
+                assert store.get_action(grant.action_id)["state"] == "HOLD"
+            else:
+                execution.advance()
+                assert store.get_action(grant.action_id)["state"] == "SUCCEEDED"
+                assert store.latest_workflow_state(grant.action_id, grant.attempt_id) == "ACTION_SUCCEEDED"
             execution.advance()
+        else:
+            with pytest.raises(RuntimeError, match="already been submitted"):
+                execution.advance()
         assert len(port.submissions) == 4
     assert driver.submissions == []
     from omx_adapter.local_stop import LocalStopBlocked, LocalStopController
@@ -318,9 +362,10 @@ def test_composed_cell_skill_runs_real_analytic_plan_and_phase_journal(tmp_path,
     reopened_stop = LocalStopController(
         tmp_path / "actions.sqlite3", workcell_id=grant.workcell_id, instance_id=grant.instance_id,
     )
-    with pytest.raises(LocalStopBlocked, match="unresolved local Actions"):
-        reopened_stop.rearm(authority_epoch=2, dispatch_generation=8, operator_confirmed=True,
-                            fleet_fence_current=action_runner.current_fence)
+    if not (workflow_revision and not deny_phase and not release_fault):
+        with pytest.raises(LocalStopBlocked, match="unresolved local Actions"):
+            reopened_stop.rearm(authority_epoch=2, dispatch_generation=8, operator_confirmed=True,
+                                fleet_fence_current=action_runner.current_fence)
     reopened_runner = ActionRunner(
         reopened_store, reopened_driver, workcell_id=grant.workcell_id, instance_id=grant.instance_id,
         principal_for_peer=action_runner.principal_for_peer, allowed_peer_uids={1001},
@@ -334,6 +379,102 @@ def test_composed_cell_skill_runs_real_analytic_plan_and_phase_journal(tmp_path,
     assert replay["receipt"]["attempt_id"] == grant.attempt_id
     assert replay["receipt"]["created"] is False
     assert len(executions) == 1
-    assert len(port.submissions) == (2 if deny_phase else 4)
+    assert len(port.submissions) == (2 if deny_phase or release_fault == "grasp-timeout" else 4)
     assert reopened_store.action_phases(grant.action_id) == store.action_phases(grant.action_id)
     assert reopened_driver.submissions == []
+
+
+def test_cell_transaction_has_recipe_provenance_and_reuses_gripper_checks():
+    from omx_adapter.gripper_contract import GripperObservation
+    from omx_adapter.pick_place_transaction import ArmActionResult, PickPlaceTransaction, TransactionError
+
+    grant = _grant()
+    tx = PickPlaceTransaction.for_cell_transfer(grant, gripper_sensor_revision="sensor-1")
+    snapshot = tx.snapshot()
+    assert snapshot["cell_grant"] == grant.model_dump(mode="json")
+    assert snapshot["source_observation_id"] is None
+
+    def result(stage):
+        return ArmActionResult(grant.action_id, grant.attempt_id, grant.workcell_id,
+                              grant.dispatch_generation, stage, True, True, True, f"ros-{stage}", 10.0)
+
+    tx.record_arm_result(result("approach"))
+    tx.record_arm_result(result("grasp"))
+    held = GripperObservation(grant.workcell_id, grant.instance_id, "sensor-1", 1,
+                              10.0, "CLOSED", True, "box", grant.dispatch_generation)
+    tx.verify_gripper_held(held, now=10.1, max_age_s=0.5)
+    tx.record_arm_result(result("transfer"))
+    tx.record_arm_result(result("release"))
+    released = GripperObservation(grant.workcell_id, grant.instance_id, "sensor-1", 2,
+                                  10.2, "OPEN", False, None, grant.dispatch_generation)
+    tx.verify_gripper_released(released, now=10.3, max_age_s=0.5)
+    assert tx.workflow_evidence()["workflow_state"] == "ACTION_SUCCEEDED"
+    assert tx.workflow_evidence()["evidence_refs"]["gripper_release_sequence"] == 2
+    recovered = PickPlaceTransaction.recover(snapshot)
+    assert recovered.state.value == "HOLD"
+    assert recovered.snapshot()["cell_grant"] == snapshot["cell_grant"]
+    with pytest.raises(ValueError, match="identity does not match"):
+        PickPlaceTransaction.recover({**snapshot, "attempt_id": "another-attempt"})
+    with pytest.raises(TransactionError, match="HOLD"):
+        recovered.record_arm_result(result("approach"))
+
+
+@pytest.mark.parametrize("field,value", [("instance_id", "elsewhere"), ("owner_generation", 123),
+                                       ("sensor_revision", "other"), ("object_id", "other")])
+def test_cell_transaction_rejects_gripper_identity_mismatch(field, value):
+    from dataclasses import replace
+    from omx_adapter.gripper_contract import GripperObservation
+    from omx_adapter.pick_place_transaction import ArmActionResult, PickPlaceTransaction, TransactionError
+
+    grant = _grant()
+    tx = PickPlaceTransaction.for_cell_transfer(grant, gripper_sensor_revision="sensor-1")
+    for stage in ("approach", "grasp"):
+        tx.record_arm_result(ArmActionResult(grant.action_id, grant.attempt_id, grant.workcell_id,
+                             grant.dispatch_generation, stage, True, True, True, f"ros-{stage}", 10.0))
+    held = GripperObservation(grant.workcell_id, grant.instance_id, "sensor-1", 1,
+                              10.0, "CLOSED", True, "box", grant.dispatch_generation)
+    with pytest.raises(TransactionError):
+        tx.verify_gripper_held(replace(held, **{field: value}), now=10.1, max_age_s=0.5)
+    assert tx.state.value == "HOLD"
+
+
+def test_cell_cancel_timeout_records_workflow_hold_and_blocks_late_success(tmp_path):
+    from omx_adapter.action_api import ActionApi
+    from omx_adapter.pick_place_transaction import PickPlaceTransaction, PickPlaceWorkflowJournal
+    from rosy.integrations.robots.omx.cell_workflow import CellTransferWorkflowExecution
+    from test_omx_action_api import FakePhaseExecution, _cell_transfer_grant, _runner
+
+    executions = []
+
+    def create(grant, recorder):
+        workflow = PickPlaceWorkflowJournal(PickPlaceTransaction.for_cell_transfer(
+            grant, gripper_sensor_revision="sensor-1"), recorder)
+        underlying = FakePhaseExecution(recorder)
+
+        def timeout():
+            recorder.request_cancel(phase_id="approach")
+            raise TimeoutError("cancel ACK unavailable")
+
+        underlying.cancel_current = timeout
+        execution = CellTransferWorkflowExecution(
+            underlying, workflow, recorder, gripper_readback=lambda: None,
+            max_age_s=0.5, monotonic=lambda: 10.0,
+        )
+        executions.append(execution)
+        return execution
+
+    store, driver, runner = _runner(tmp_path, phase_runner_factories={"CELL_TRANSFER": create})
+    api = ActionApi(runner)
+    grant = FleetCellTransferGrant.model_validate(_cell_transfer_grant()).model_dump(mode="json")
+    assert api.dispatch({"version": 2, "operation": "SubmitAction", "grant": grant}, peer_uid=1001)["status"] == 200
+    with pytest.raises(TimeoutError):
+        runner.cancel("cell-action-1", "cell-attempt-1", peer_uid=1001)
+    assert store.get_action("cell-action-1")["state"] == "HOLD"
+    assert store.latest_workflow_state("cell-action-1", "cell-attempt-1") == "HOLD"
+    executions[0].recorder.record_terminal(
+        phase_id="approach", driver_goal_id="ros-goal-approach", outcome="SUCCEEDED",
+        result_source="ros-action-result", result_observed_at=datetime.now(timezone.utc).isoformat(), result={},
+    )
+    assert executions[0].advance()["state"] == "HOLD"
+    assert len(store.action_phases("cell-action-1")) == 1
+    assert driver.submissions == driver.cancellations == []
