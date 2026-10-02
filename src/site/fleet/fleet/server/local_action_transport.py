@@ -66,8 +66,10 @@ class UnixLocalActionTransport:
         })
         if response.get("version") != version:
             raise LocalActionUnavailable("local Action protocol version is unsupported")
-        if type(response.get("status")) is int and response.get("status") == 404:
-            return None
+        error = response.get("error")
+        if (response.get("status") == 404 and isinstance(error, Mapping)
+                and error.get("code") == "ACTION_NOT_FOUND"):
+            return None  # only the owner's explicit "no such Action"; other 404s are errors
         return self._parse_receipt(grant, response)
 
     def cancel(self, grant: ActionGrant, *, reason: str) -> DeviceActionReceipt:

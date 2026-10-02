@@ -298,8 +298,11 @@ class ActionRunner:
     def get(self, action_id: str, *, peer_uid: int) -> dict[str, object] | None:
         principal_id = self._principal(peer_uid)
         action = self.store.get_action(action_id)
-        if action is None or action["principal_id"] != principal_id:
+        if action is None:
             return None
+        if action["principal_id"] != principal_id:
+            # Not "absent": Fleet must not read another principal's Action as never journaled.
+            raise PermissionError("peer UID does not own this Action")
         return self._receipt(action, created=False)
 
     def cancel(self, action_id: str, attempt_id: str, *, peer_uid: int) -> dict[str, object]:

@@ -59,6 +59,7 @@ def test_confirmed_failure_or_not_found_keeps_hold_but_parks_claims(tmp_path, ou
     path, tasks, store, transport, dispatcher = _unknown_job(tmp_path)
     transport.on_get = (lambda grant: None) if outcome == "NOT_FOUND" else (
         lambda grant: _receipt(grant, "FAILED", 20))
+    dispatcher.now = _later(60)  # past grant expiry + skew (1c item 3)
     dispatcher.dispatch_next()
     job = store.get("cell-mission-1")
     assert job["status"] == "HOLD" and job["reason"] == reason
@@ -377,3 +378,45 @@ def test_release_before_send_frees_claims_only_without_progress(tmp_path):
     with pytest.raises(TypeError):
         store.hold("cell-mission-1", reason="X", claim_phase=None, actor_id="op", event_key="k",
                    not_submitted=True)
+
+
+def _later(seconds):
+    from datetime import datetime, timedelta, timezone
+    moment = datetime.now(timezone.utc) + timedelta(seconds=seconds)
+    return lambda: moment
+
+
+def test_not_found_needs_grant_expiry_plus_skew_and_no_receipt(tmp_path):
+    """C4b 1c item 3 / N3: a 404 is 'never ran' only after expiry + skew and with no receipt."""
+    from fleet.server.step_dispatcher import NOT_FOUND_SKEW_S
+    path, tasks, store, transport, dispatcher = _unknown_job(tmp_path)  # submit lost: no receipt
+    transport.on_get = lambda grant: None
+    dispatcher.dispatch_next()  # grant still valid: a 404 may be a not-yet-journaled submit
+    assert store.get("cell-mission-1")["reason"] == "LOCAL_ACTION_SUBMIT_OUTCOME_UNKNOWN"
+    assert {phase for _, _, phase in _claim_phases(path)} == {"UNKNOWN"}
+    dispatcher.now = _later(15 + NOT_FOUND_SKEW_S + 1)
+    dispatcher.reconcile("cell-mission-1")
+    job = store.get("cell-mission-1")
+    assert job["reason"] == "LOCAL_ACTION_NOT_FOUND_AFTER_SUBMIT"
+    assert {phase for _, _, phase in _claim_phases(path)} == {"HELD"}
+
+
+def test_a_404_after_a_device_receipt_never_reads_as_not_found(tmp_path):
+    from fleet.server.step_dispatcher import NOT_FOUND_SKEW_S
+    clock = Clock()
+    path, tasks, _, enabled = _stores(tmp_path)
+    store = CellJobStore(path)
+    _create(store)
+    store.admit("cell-mission-1", actor_id="operator-1", expected_generation=enabled["generation"])
+    transport = Transport()
+    dispatcher = StepJobDispatcher(store, tasks, transport, {"omx_01": "omx_01_control"}, REVISIONS,
+                                   deployment_profile="simulation", monotonic=clock)
+    dispatcher.dispatch_next()  # ACCEPTED receipt recorded
+    dispatcher.now = _later(15 + NOT_FOUND_SKEW_S + 1)
+    transport.on_get = lambda grant: None  # e.g. the owner restarted on a new journal
+    for _ in range(READBACK_FAILURE_LIMIT):
+        dispatcher.dispatch_next()
+        clock.t += 60
+    job = store.get("cell-mission-1")
+    assert job["status"] == "HOLD" and job["reason"] == "LOCAL_ACTION_READBACK_UNKNOWN"
+    assert {phase for _, _, phase in _claim_phases(path)} == {"UNKNOWN"}

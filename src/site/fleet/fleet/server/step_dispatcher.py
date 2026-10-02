@@ -32,6 +32,10 @@ _LOG = logging.getLogger(__name__)
 # 15 s; 5 failures spaced 0.5+1+2+4 s span ~8 s plus the reads themselves, so a briefly busy or
 # restarting owner is not declared UNKNOWN, while a dead owner is within about one grant lifetime.
 READBACK_FAILURE_LIMIT = 5
+# A GetAction ACTION_NOT_FOUND means "never ran" only once the grant can no longer be journaled:
+# the owner refuses an expired grant, so after expires_at + skew no late submit can land. Fleet
+# and the owner share one host clock (D-336), so the skew covers scheduling, not clock drift.
+NOT_FOUND_SKEW_S = 5.0
 READBACK_BACKOFF_S = (0.5, 1.0, 2.0, 4.0)
 
 
@@ -176,18 +180,27 @@ class StepJobDispatcher:
         try:
             receipt = self.transport.get(grant)
         except Exception:
-            failures = self._readback.get(grant.action_id, (0, 0.0))[0] + 1
-            if failures < READBACK_FAILURE_LIMIT:
-                delay = READBACK_BACKOFF_S[min(failures, len(READBACK_BACKOFF_S)) - 1]
-                self._readback[grant.action_id] = (failures, self.monotonic() + delay)
-                return self._view(job, index, "READBACK_RETRY", grant)
-            self._readback.pop(grant.action_id, None)
-            return self._outcome(job, index, grant, "UNKNOWN", "LOCAL_ACTION_READBACK_UNKNOWN", {})
-        self._readback.pop(grant.action_id, None)
+            return self._readback_failed(job, index, grant)
         if receipt is None:
-            # GetAction 404: the owner never journaled this attempt, so nothing ran.
-            return self._outcome(job, index, grant, "NOT_FOUND", "LOCAL_ACTION_NOT_FOUND_AFTER_SUBMIT", {})
+            # 1c item 3: "never ran" needs ACTION_NOT_FOUND after expiry + skew and no receipt ever
+            # recorded for the attempt; an owner restarted on a new journal stays UNKNOWN.
+            expired = self.now() > grant.expires_at + timedelta(seconds=NOT_FOUND_SKEW_S)
+            if expired and not self.store.has_device_receipt(job["mission_id"], grant.action_id,
+                                                             grant.attempt_id):
+                self._readback.pop(grant.action_id, None)
+                return self._outcome(job, index, grant, "NOT_FOUND", "LOCAL_ACTION_NOT_FOUND_AFTER_SUBMIT", {})
+            return self._readback_failed(job, index, grant)
+        self._readback.pop(grant.action_id, None)
         return self._apply(job, index, grant, receipt)
+
+    def _readback_failed(self, job: Mapping[str, Any], index: int, grant) -> dict[str, Any]:
+        failures = self._readback.get(grant.action_id, (0, 0.0))[0] + 1
+        if failures < READBACK_FAILURE_LIMIT:
+            delay = READBACK_BACKOFF_S[min(failures, len(READBACK_BACKOFF_S)) - 1]
+            self._readback[grant.action_id] = (failures, self.monotonic() + delay)
+            return self._view(job, index, "READBACK_RETRY", grant)
+        self._readback.pop(grant.action_id, None)
+        return self._outcome(job, index, grant, "UNKNOWN", "LOCAL_ACTION_READBACK_UNKNOWN", {})
 
     def _apply(self, job: Mapping[str, Any], index: int, grant, receipt: object) -> dict[str, Any]:
         try:
@@ -195,6 +208,7 @@ class StepJobDispatcher:
         except (TypeError, ValueError):
             return self._outcome(job, index, grant, "UNKNOWN", "LOCAL_ACTION_RECEIPT_INVALID", {})
         state = verified.state.value
+        self.store.note_device_receipt(job["mission_id"], index, grant.action_id, grant.attempt_id)
         if state in _IN_FLIGHT:
             return self._view(job, index, state, grant)
         facts = {"state": state, "journal_event_id": verified.journal_event_id,

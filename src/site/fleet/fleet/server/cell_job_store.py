@@ -533,6 +533,21 @@ class CellJobStore:
                 "ORDER BY j.updated_at, j.mission_id").fetchall()
             return [self._get(connection, row["mission_id"]) for row in rows]
 
+    def note_device_receipt(self, mission_id: str, step_index: int, action_id: str, attempt_id: str) -> None:
+        """Remember that the owner journaled this attempt (1c item 3: a later 404 is not 'never ran')."""
+        with closing(self._connect()) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            self._event(connection, mission_id, step_index, "CELL_STEP_DEVICE_RECEIPT", "device",
+                        {"event_id": f"device-receipt:{action_id}:{attempt_id}",
+                         "action_id": action_id, "attempt_id": attempt_id})
+            connection.commit()
+
+    def has_device_receipt(self, mission_id: str, action_id: str, attempt_id: str) -> bool:
+        with closing(self._connect()) as connection:
+            return connection.execute(
+                "SELECT 1 FROM fleet_cell_events WHERE event_key=?",
+                (f"{mission_id}:device-receipt:{action_id}:{attempt_id}",)).fetchone() is not None
+
     def resource_claims(self) -> list[dict[str, Any]]:
         """Every durable claim with its owner; a Cell Job owner adds its status and reason."""
         with closing(self._connect()) as connection:

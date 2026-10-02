@@ -203,3 +203,24 @@ def test_owner_reports_its_simulation_identity_over_uds(tmp_path, monkeypatch):
     assert LocalTransport(apis["sim"]).owner_identity("omx-1-control") == identity
     with pytest.raises(LocalActionRejected, match="UNKNOWN_OPERATION"):
         LocalTransport(apis["plain"]).owner_identity("omx-1-control")
+
+
+def test_only_action_not_found_reads_as_absent(cell_exchange):
+    """C4b 1c item 3: a 404 for another reason, or another principal, is an error, not 'absent'."""
+    transport, grant, api, _, _, _ = cell_exchange
+    assert transport.get(grant) is None  # never submitted: the owner answers ACTION_NOT_FOUND
+    transport.submit(grant)
+    other_principal = json.loads(json.dumps(api.dispatch(
+        {"version": 2, "operation": "GetAction", "action_id": grant.action_id}, peer_uid=1001)))
+    assert other_principal["status"] == 200
+    api.runner.principal_for_peer = lambda uid: "someone-else"
+    with pytest.raises(LocalActionRejected, match="PEER_NOT_ALLOWED"):
+        transport.get(grant)
+
+    class Unknown(UnixLocalActionTransport):
+        def _exchange(self, instance_id, request):
+            return {"version": 2, "status": 404,
+                    "error": {"code": "UNKNOWN_OPERATION", "message": "operation is not supported"}}
+
+    with pytest.raises(LocalActionRejected, match="UNKNOWN_OPERATION"):
+        Unknown(transport.socket_root).get(grant)
