@@ -43,8 +43,8 @@
 
 ## 최근 기록
 
+- 2026-10-02 · uncommitted · feat(omx): C4b wave 1 — v2 CELL_TRANSFER, 종류별 완료 기록, 수락 저장소 (G4, G8, G2a)
 - 2026-10-02 · c07896af · merge: main (D-413, pl3 dispatch safety) into feat/rosy-cell-c3-gazebo
 - 2026-10-02 · aa77cb9c · test(omx): WSL rclpy loop under nice -n 19 during another session's Gazebo
 - 2026-10-02 · 0380d789 · fix(omx): re-review fixes N1 and minor 4
 - 2026-10-02 · e40d182c · fix(omx): C3b 독립 리뷰 수정 (FIX REQUIRED)
-- 2026-10-02 · f63bb564 · fix(omx): C3b — C3 결함 수정, 대역 없는 Gazebo 단일 배치

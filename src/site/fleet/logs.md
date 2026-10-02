@@ -1170,3 +1170,11 @@
 - 증거: src/site/fleet/test 1414 passed/7 skipped, 	est/architecture 81 passed/1 skipped, known_failures 새 실패 0; 버전 핀·대화상자 계약 7 passed; 옵트인 Chromium 전체 주행 취소·비상 정지 한 번 누름 등 4 passed. 	est_holding_formation_enables_resume_and_warns 는 main 의 신호등 문구(signals.yaml)와 시험이 어긋나 실패한다 — 이 가지와 무관(main 에서는 HOLDING_FORMATION 정의가 없어 그 전에 실패했다).
 - 크기: fleet 27134 재판정(main 26498).
 - gate 변화: 없음.
+
+## 2026-10-02 · uncommitted · feat(fleet): C4b wave 1 — Cell Job 하달 경로 (G4, G5, G3, G6)
+- 변경: (G4) `local_action_transport.py`가 `FleetActionGrant | FleetCellTransferGrant`를 받고, 종류별 표로 wire 버전을 고른다(PICK_PLACE 2, CELL_TRANSFER 2). 모르는 종류는 I/O 전에 거절. (G5) `server/cell_compiler.py` `PalletizingCellJobCompiler(tol_m)` — palletizing 로더·`compile_job`·`carry_z()`(불일치면 거절)·`compile_plan_bundle`, `cli.py --cell-job-stack-tol-m`(지연 import). (G3) `server/step_action_kinds.py`(종류별 규칙: 열린 프로필, grant 본문, phase, 거절 사유), `server/step_dispatcher.py` `StepJobDispatcher`(Step마다 Action 하나, k−1 GOAL_CONFIRMED 뒤에만, RUNNING은 GetAction으로만 대조, 거절·실패·불명은 Job HOLD+사유), `create_app(deployment_profile, omx_cell_grant_revisions)` — (simulation, CELL_TRANSFER)만 열리고 PICK_PLACE 하달기는 모든 프로필에서 닫힘. `cell_job_store.py`에 rosy-a9(D-420) 요청 1–8: 제출 때 claim DISPATCHING 승격, 결과 SUCCEEDED/FAILED/REJECTED/UNKNOWN+호출자 사유, 펜스 변경 시 HOLD 기록(예외 아님), 범용 `hold()`, 이벤트 키로 재생 먼저 판정, SUBMITTING 이벤트에 epoch·generation. (G6) `goal_evidence_registry` `sim_model_pose`는 simulation 프로필에서만, `server/cell_goal_evidence.py`가 생산자 토큰·workcell·attempt 확인 뒤 Fleet이 `item_at_pose`를 판정하고 만족할 때만 `confirm_step_goal`.
+- 판단: `test_mission_api`의 하달기 시험은 D-403 §7에 맞게 바꿨다(production 거절, simulation은 셀 하달기만). `test_cell_job_store`의 펜스 변경 시험은 예외 대신 HOLD를 본다(D-420 항목 3).
+- 증거: C4b 보고(fleet·omx·test 전체, known_failures).
+- 크기: fleet 27811 재판정(main 27134), `cell_job_store.py` 617 accept, `cli.py` 604 accept.
+- 남음(wave 2): G7 정지 사슬과 (a)–(i), G9 pilot_sim /cell·seat 배제, goal-evidence HTTP 경로, UNKNOWN 대조(reconcile) 경로, 재시작 직후 다음 Step 자동 제출 여부(e).
+- gate 변화: 없음.

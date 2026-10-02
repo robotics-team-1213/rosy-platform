@@ -287,3 +287,9 @@
 - cap 없는 owner: C3b는 창을 무시하고 정확 일치로 넘어갔다. main은 `start_state_tolerance_policy_missing`로 거절한다. 더 엄격한 main 쪽을 남겼다. C3b 시험은 지우지 않고 그 결과를 검사하도록 바꿨다. 보낸 command 객체는 원본 그대로다(main 시험 `action.commands == [command]`). C3b 시험은 바인딩을 `_last_command_state_sequence`로 확인한다.
 - 증거: owner 68, adapter 전체·layout·cell·compat 501 passed / 5 skipped(모듈 경로 PYTHONPATH).
 - gate 변화: 없음.
+
+## 2026-10-02 · uncommitted · feat(omx): C4b wave 1 — v2 CELL_TRANSFER, 종류별 완료 기록, 수락 저장소 (G4, G8, G2a)
+- 변경: (G4) `action_api.py`는 v1 CELL_TRANSFER 제출을 journal 전에 `UNSUPPORTED_VERSION`으로 거절. (G8) `action_store.py` 완료 기록을 행의 `action_kind`로 고른다 — PICK_PLACE는 기존 이름 그대로, CELL_TRANSFER는 `cell-transfer-workflow`/`CELL_TRANSFER_ACTION_COMPLETED`. 스키마 변경 없음(1194→1191행, 판정 갱신). (G2a) 새 `cell_acceptance.py` `CellAcceptanceStore`: 수락한 셀·레시피 텍스트, 해시(소유자가 다시 계산), kinematics 확인, 미해결 Action 중 교체 거절, 교체 시 레시피 폐기, `capability_current`·`accepted_cell_sha256`·`accepted_item_geometry`. 문서 검증은 port이고 palletizing 검증은 `rosy_agent/omx_cell_documents.py`가 주입한다(D-413 §1).
+- 증거: C4b 보고.
+- 남음: G9(PUT/GET /cell, seat↔Action 배제), G7, CELL_TRANSFER phase 진행기(아래 deploy 기록).
+- gate 변화: 없음.
