@@ -252,7 +252,7 @@ SIZE_VERDICTS = {
         "accept: sim-only read-only viewer server (HTTP handler + ROS subscriptions); the pure logic already lives in live_view_model.py and the page in lane_live_view.html, covered by test_lane_live_view*.py and test_live_view_model.py (X5)",
     ),
     "control": (
-        41_833,
+        42_013,
         f"split: deploy closure needs only sensing + safety provider (P1a); {CONTROL_SPLIT} "
         "(re-judged 2026-09-30 at 33090 after D-356 added the ROS-free learned perception backend "
         "(sensing/perception/learned), the shadow node and the recording CLI; the learned backend sits "
@@ -301,7 +301,9 @@ SIZE_VERDICTS = {
         "paint sources (denoise_white_mask in lane_keep_lines.py, learned/paint_worker.py, the lane-mask "
         "helper) — ROS-free inside sensing/perception, they move with the P1a split, verdict unchanged; "
         "re-judged 2026-10-02 at 41833 on the D-395 Phase 2 integration branch with D-408 and loc_assist "
-        "together — same subjects, verdict unchanged)",
+        "together — same subjects, verdict unchanged; re-judged 2026-10-02 at 42013 when D-395 S1 R1 "
+        "made LOCALIZED robots report unmapped objects (control/loc_assist*.py) — same subjects, "
+        "verdict unchanged)",
     ),
     # --- D-362 newly-covered files (web assets in src/ packages, ops roots). ---
     "runtime/sensing/web/diagnostic.html": (
