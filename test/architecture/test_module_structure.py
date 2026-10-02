@@ -288,7 +288,7 @@ SIZE_VERDICTS = {
         "accept: sim-only read-only viewer server (HTTP handler + ROS subscriptions); the pure logic already lives in live_view_model.py and the page in lane_live_view.html, covered by test_lane_live_view*.py and test_live_view_model.py (X5)",
     ),
     "core_features": (
-        12_140,
+        12_297,
         "accept: the ROS-free CORE feature managers (command, safety, docking, line_follow, "
         "traffic_policy, navigation, swarm, ...) are already one subpackage per feature, each "
         "under the file budget; the package total is a sum of independent owners, not one "
@@ -308,7 +308,8 @@ SIZE_VERDICTS = {
         "freshness and backoff merged into the D-407 single receive loop in "
         "fleet_agent/agent.py; same verdict. D-424 merged on top (within the allowance) "
         "(localization/mission.py body-referenced rotate and nudge checks, watched turn, "
-        "mission_config); same verdict",
+        "mission_config); same verdict. Re-judged 2026-10-03 at 12297 for the D-424 follow-up (debounced turn evidence gaps in "
+        "localization/mission.py); same verdict",
     ),
     "control": (
         43_055,
