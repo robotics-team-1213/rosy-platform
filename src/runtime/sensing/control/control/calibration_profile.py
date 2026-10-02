@@ -26,6 +26,22 @@ def make_profile(session, sequence, issued, enabled, gains, geometry, rotation=N
     return packet
 
 
+#: D-424 review M7: a recorded body radius up to this above the floor is the old mm-ceiled rho.
+LEGACY_RADIUS_TOLERANCE_M = .001
+
+
+def _lift_to_floor(report, floor):
+    """A recorded envelope whose body radius is below `floor` (pre-D-424 record) grows its
+    pivot and required radius by the difference, so it never asks for less than rho."""
+    grow = max(0., floor-report['body_radius_m'])
+    if grow == 0.:
+        return report
+    lifted = json.loads(json.dumps(report))
+    lifted['pivot_radius_m'] = report['pivot_radius_m']+grow
+    lifted['required_radius_m'] = max(report['required_radius_m']+grow, floor)
+    return lifted
+
+
 class ProfileLease:
     def __init__(self):
         self.active = None
@@ -154,7 +170,14 @@ class ProfileLease:
             source = self.last_good
         if source is not None:
             report = (source.get('rotation') or {}).get('envelope')
-            if validate_envelope(report, radius_floor):
+            # D-424 review M7: profiles recorded before D-424 carry the old body radius (0.076
+            # with footprint_guard off, 0.083 = rho ceiled to the mm with it on); the floor is
+            # now rho 0.08257. Accept them and lift what they require to the floor.
+            if validate_envelope(report, 0.):
+                if (footprint is not None and
+                        report['body_radius_m'] > radius_floor + LEGACY_RADIUS_TOLERANCE_M):
+                    return None   # recorded for a bigger body than this configuration
+                report = _lift_to_floor(report, radius_floor)
                 if footprint is not None:
                     try:
                         # Geometry comes from local configuration, never from
@@ -166,12 +189,22 @@ class ProfileLease:
                                     raise ValueError('nonfinite footprint')
                                 result.add((float(x),float(y)))
                             return result
-                        if (not math.isclose(report['body_radius_m'],radius_floor,rel_tol=0.,abs_tol=1e-9) or
-                                normalized(report['footprint_xy']) != normalized(footprint)):
+                        if normalized(report['footprint_xy']) != normalized(footprint):
                             return None
                     except (KeyError,TypeError,ValueError,OverflowError):
                         return None
                 return report
+        return None
+
+    def fallback_rotation_radius(self):
+        """D-424 review M8: the required radius of the last good envelope, or None. After the
+        lease expires the gate turns with max(rho, this), never less than it learned."""
+        report = ((self.last_good or {}).get('rotation') or {}).get('envelope')
+        try:
+            if validate_envelope(report, 0.):
+                return float(report['required_radius_m'])
+        except (KeyError, TypeError, ValueError):
+            pass
         return None
 
     def rotation_estimate_required(self, now):

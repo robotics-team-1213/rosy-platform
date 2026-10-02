@@ -38,22 +38,57 @@ def directional_lidar_limits(stop, clear, radius, mount=None, half_width=math.pi
             lidar_limits(stop, clear, radius, speed=speed, mount=mount, reverse=True))
 
 
-def strip_ranges(points, unknown=(), *, mount=None, ultrasonic_covers=False):
+def strip_ranges(points, unknown=(), *, mount=None, ultrasonic_m=None):
     """D-424: LiDAR-equivalent (front, rear) distance of the nearest point in the body strip
     (half width + 0.010). inf = nothing in the strip that way: side points outside it never
     count. A beam without a return that reaches past the body edge (unknown out to range_min)
-    reads as the body edge itself (gap 0) -- in front unless a fresh ultrasonic covers it."""
+    reads as the body edge itself (gap 0). In front, a fresh finite ultrasonic echo
+    (`ultrasonic_m`, None = stale or no echo) clears only the band inside its cone (review M6)."""
     body = _body_at(mount)
     view = ScanView(tuple(points), tuple(unknown), 0.)
     out = []
     for reverse in (False, True):
         offset = body.lidar_to_rear_m if reverse else body.lidar_to_front_m
-        if body.unknown_blocks(view, reverse=reverse) and (reverse or not ultrasonic_covers):
+        if body.unknown_blocks(view, reverse=reverse, ultrasonic_m=ultrasonic_m):
             out.append(offset)
             continue
         gap = body.translation_gap(view.points, reverse=reverse)
         out.append(math.inf if gap is None else offset + gap)
     return tuple(out)
+
+
+def scan_geometry(ranges, angle_min, increment, range_min, range_max, *, mount, rotation,
+                  ignore_m, ultrasonic_m=None, max_range=12.):
+    """D-424: one scan in base_footprint for the bumper (pure; the ROS node only feeds it).
+
+    rotation: added to each scan angle to get the robot-frame angle (TF yaw, or -nose yaw).
+    Every finite return beyond the chassis cut `ignore_m` is an obstacle point -- also below
+    range_min (a near return can only shorten a gap) -- unless it lies inside the URDF body
+    outline (the robot itself). A beam without a return is unknown out to range_min.
+    Returns points, unknown band ends, strip front/rear (LiDAR-equivalent, inf = empty), the
+    nearest point to the base and why a turn is not clear (None = clear)."""
+    far = min(max_range, range_max)
+    points, unknown = [], []
+    for i, distance in enumerate(ranges):
+        angle = angle_min + i*increment + rotation
+        if not math.isfinite(distance) or distance <= 0.0:
+            if range_min > 0.0:
+                unknown.append((mount[0]+range_min*math.cos(angle), mount[1]+range_min*math.sin(angle)))
+            continue
+        if ignore_m < distance <= far:
+            point = (mount[0]+distance*math.cos(angle), mount[1]+distance*math.sin(angle))
+            if not BODY.contains(*point):
+                points.append(point)
+    front, rear = strip_ranges(points, unknown, mount=mount, ultrasonic_m=ultrasonic_m)
+    view = ScanView(tuple(points), tuple(unknown), range_min)
+    return {'points': points, 'unknown': unknown, 'front': front, 'rear': rear,
+            'nearest': min((math.hypot(x, y) for x, y in points), default=math.inf),
+            'rotation_reason': _body_at(mount).rotation_reason(view, ultrasonic_m=ultrasonic_m)}
+
+
+def stale_or_nan(value, fresh):
+    """D-424 review M4: inf now means an empty strip, so a stale reading is NaN (blocked)."""
+    return value if fresh else math.nan
 
 
 def lidar_blocked(raw, filtered, was_blocked, stop, clear, fresh):

@@ -10,10 +10,10 @@ from rclpy.time import Time
 from tf2_ros import TransformException
 
 from ..sensing.body import BODY, footprint_bounds, ignore_m, use_radius
-from ..control.lidar_guard import strip_ranges
+from ..control.lidar_guard import scan_geometry, stale_or_nan
 from ..sensing.lidar import find_frontiers, is_robot_scan, opening_max, sector_range, wrap_pi
 from ..control.route import line_route
-from ..control.lidar_guard import directional_lidar_limits
+from ..control.lidar_guard import MAX_LINEAR_MPS, directional_lidar_limits
 from ..sensing.lidar_mount import nose_from_quaternion
 
 
@@ -125,24 +125,17 @@ class Bumper:
         else:
             mount_xy = (BODY.lidar_x_m, BODY.lidar_y_m)
             rotation = -yaw                     # scan angle - nose yaw = robot-frame angle
-        far = min(12., msg.range_max)
-        points, unknown = [], []
-        for i, distance in enumerate(msg.ranges):
-            angle = msg.angle_min + i*msg.angle_increment + rotation
-            if not math.isfinite(distance) or distance <= 0.0:
-                if msg.range_min > 0.0:
-                    unknown.append((mount_xy[0]+msg.range_min*math.cos(angle),
-                                    mount_xy[1]+msg.range_min*math.sin(angle)))
-                continue
-            if lo < distance <= far:
-                point = (mount_xy[0]+distance*math.cos(angle), mount_xy[1]+distance*math.sin(angle))
-                if not BODY.contains(*point):
-                    points.append(point)
-        us_covers = self.observations.fresh('us', time.monotonic()) if hasattr(self, 'observations') else False
-        self.lidar_front, self.lidar_rear = strip_ranges(points, unknown, mount=mount_xy,
-                                                         ultrasonic_covers=us_covers)
+        us = getattr(self, 'us_front', None) if (hasattr(self, 'observations') and
+                               self.observations.fresh('us', time.monotonic())) else None
+        echo = us if us is not None and math.isfinite(us) else None   # no echo proves nothing
+        geometry = scan_geometry(msg.ranges, msg.angle_min, msg.angle_increment, msg.range_min,
+                                 msg.range_max, mount=mount_xy, rotation=rotation, ignore_m=lo,
+                                 ultrasonic_m=echo)
+        points = geometry['points']
+        self.lidar_front, self.lidar_rear = geometry['front'], geometry['rear']
+        self.lidar_rotation_reason = geometry['rotation_reason']
         if bool(self.get_parameter('lidar_use_tf').value):
-            self.lidar_rotation_clearance = min((math.hypot(x, y) for x, y in points), default=math.inf)
+            self.lidar_rotation_clearance = geometry['nearest']
             self.lidar_rotation_points = points
             if self.get_parameter('footprint_guard_enabled').value:
                 self.translation_clearance = translation_clearance(points, footprint_bounds())
@@ -207,14 +200,11 @@ class Bumper:
         return d
 
     def lidar_distance(self) -> float:
-        if self.age(self.last_scan_time) < self.timeout:
-            return self.lidar_front
-        return float('inf')
+        # D-424 review M4: inf means an empty body strip; stale is NaN (blocks).
+        return stale_or_nan(getattr(self, 'lidar_front', math.nan), self.age(self.last_scan_time) < self.timeout)
 
     def rear_distance(self) -> float:
-        if self.age(self.last_scan_time) < self.timeout:
-            return self.lidar_rear
-        return float('inf')
+        return stale_or_nan(getattr(self, 'lidar_rear', math.nan), self.age(self.last_scan_time) < self.timeout)
 
     def sensors_ok(self) -> bool:
         return self.observations.fresh('lidar', time.monotonic())
@@ -238,10 +228,13 @@ class Bumper:
             self.robot_r = use_radius(self.get_parameter('robot_radius').value)
         # The 8-degree centre cone missed corners in the chassis path.
         self.half_w = max(math.pi / 4, self.half_w)
+        # D-424 review M3: the stop gap is derived at the gate's actual top speed.
+        speed = (float(self.get_parameter('safety_max_linear').value)
+                 if self.has_parameter('safety_max_linear') else MAX_LINEAR_MPS)
         front, rear = directional_lidar_limits(
             self.stop_d, self.clear_d, self.robot_r,
             getattr(self, 'lidar_mount', None) if self.get_parameter('lidar_use_tf').value else None,
-            self.half_w)
+            self.half_w, speed=speed)
         self.stop_d, self.clear_d = front
         self.rear_stop_d, self.rear_clear_d = rear
         fc = float(self.get_parameter('filt_hz').value)

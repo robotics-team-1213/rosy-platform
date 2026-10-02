@@ -118,7 +118,8 @@ class LidarGuardTest(unittest.TestCase):
         self.assertEqual(rear, math.inf)
         unknown = [(.133, 0.0)]                                   # a no-return beam to range_min 0.15
         self.assertAlmostEqual(strip_ranges([], unknown)[0], .05905, places=6)
-        self.assertEqual(strip_ranges([], unknown, ultrasonic_covers=True)[0], math.inf)
+        self.assertEqual(strip_ranges([], unknown, ultrasonic_m=.5)[0], math.inf)
+        self.assertAlmostEqual(strip_ranges([], unknown, ultrasonic_m=None)[0], .05905, places=6)
         # A corner contact 40 deg off the nose at 0.09 is in the strip (gap 0.010).
         corner = (-.017 + .09 * math.cos(math.radians(40)), .09 * math.sin(math.radians(40)))
         stop, clear = lidar_limits(math.nan, math.nan, .076)
@@ -133,3 +134,64 @@ class LidarGuardTest(unittest.TestCase):
         raw = sector_range(scan, NOSE_YAW, math.pi / 4, pctl=0.0)
         self.assertAlmostEqual(raw, .09)
         self.assertTrue(lidar_blocked(raw, .5, False, .12, .14, True))
+
+
+class ReviewFixesTest(unittest.TestCase):
+    """D-424 review M3/M4/M1/L3: pure scan geometry as the bumper feeds it."""
+
+    @staticmethod
+    def scan(values, default=2.0, range_min=.15):
+        """720 beams, scan angle 0 = robot rear (nose 180 deg), {scan deg: range}."""
+        ranges = [default] * 720
+        for deg, value in values.items():
+            ranges[int(deg * 2) % 720] = value
+        return dict(ranges=ranges, angle_min=0., increment=math.pi / 360, range_min=range_min,
+                    range_max=12.)
+
+    def geometry(self, values, default=2.0, range_min=.15, ultrasonic_m=None):
+        from control.control.lidar_guard import scan_geometry
+        scan = self.scan(values, default, range_min)
+        return scan_geometry(scan['ranges'], scan['angle_min'], scan['increment'], scan['range_min'],
+                             scan['range_max'], mount=(-.017, 0.), rotation=-math.pi, ignore_m=.04,
+                             ultrasonic_m=ultrasonic_m)
+
+    def test_stop_gap_uses_the_actual_top_speed(self):
+        """M3: g(0.1) = 0.02 + 0.015 + 0.01 = 0.045 -> 0.104 from the LiDAR."""
+        stop, clear = lidar_limits(math.nan, math.nan, .076, speed=.1)
+        self.assertAlmostEqual(stop, .05905 + .045, places=6)
+        self.assertAlmostEqual(clear, stop + .03, places=6)
+        self.assertTrue(lidar_blocked(.10, .10, False, stop, clear, True))
+
+    def test_stale_reading_is_nan_and_blocks(self):
+        from control.control.lidar_guard import stale_or_nan
+        self.assertTrue(math.isnan(stale_or_nan(math.inf, False)))
+        self.assertTrue(lidar_blocked(stale_or_nan(math.inf, False), math.inf, False, .08, .11, True))
+        self.assertFalse(lidar_blocked(stale_or_nan(math.inf, True), math.inf, True, .08, .11, True))
+
+    def test_near_return_below_range_min_blocks_forward(self):
+        g = self.geometry({180: .07})
+        stop, clear = lidar_limits(math.nan, math.nan, .076)
+        self.assertAlmostEqual(g['front'], .07, places=6)
+        self.assertTrue(lidar_blocked(g['front'], .5, False, stop, clear, True))
+        self.assertGreater(g['rear'], 1.)                       # the far wall behind
+
+    def test_no_return_beam_ahead_is_the_body_edge_unless_a_real_echo_clears_it(self):
+        g = self.geometry({180: math.inf})
+        self.assertAlmostEqual(g['front'], .05905, places=6)                  # gap 0 -> blocked
+        self.assertGreater(self.geometry({180: math.inf}, ultrasonic_m=.5)['front'], 1.)   # far wall
+        self.assertAlmostEqual(self.geometry({180: math.inf}, ultrasonic_m=.05)['front'], .05905, places=6)
+        self.assertIsNotNone(g['rotation_reason'])                            # front band, no echo
+        self.assertIsNotNone(self.geometry({0: math.inf}, ultrasonic_m=.5)['rotation_reason'])  # rear
+
+    def test_self_return_inside_the_outline_is_dropped_outside_it_counts(self):
+        inside = self.geometry({270: .045})        # beside the LiDAR: base (-0.017, -0.045) inside
+        self.assertEqual(len(inside['points']), 719)
+        outside = self.geometry({270: .075})       # base y 0.075 > half width: an obstacle
+        self.assertEqual(len(outside['points']), 720)
+        self.assertGreater(outside['front'], 1.)                     # outside the strip
+        self.assertIsNotNone(outside['rotation_reason'])             # 0.077 < rho + 0.010
+
+    def test_one_finite_beam_is_not_a_clear_turn(self):
+        g = self.geometry({90: 2.0}, default=math.inf, range_min=.05)
+        self.assertIn('sectors', g['rotation_reason'])
+        self.assertIsNone(self.geometry({}, range_min=.05)['rotation_reason'])

@@ -6,7 +6,13 @@ calibration tools use. Lidar sits on top of the chassis, so a live scan is walls
 """
 import math
 
-from core_common.robot_body import PINKY_PRO as BODY
+try:
+    from core_common.robot_body import PINKY_PRO as BODY
+except ImportError as error:  # pragma: no cover - packaging fault, fail loudly at startup
+    # D-424 review L4: no silent fallback to literals. The safety node must not start
+    # without the shared body; say why in the traceback the launch log shows.
+    raise ImportError('control needs core_common (exec_depend) for the D-424 robot body '
+                      '(core_common.robot_body); install/source the core_common package') from error
 
 # URDF nominal (D-397: src/products/pinky_pro/profile/config/geometry.yaml, from
 # rosy.urdf.xacro; drift-tested), metres, base_link origin. A calibrated

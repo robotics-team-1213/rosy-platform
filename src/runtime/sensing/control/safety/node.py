@@ -422,6 +422,10 @@ class SafetyNode(Node, Bumper, Hazard, Gate, Scale, Evidence, Obstacles):
         rotation_estimate = self.calibration_lease.rotation_envelope(time.monotonic(), body_radius,
             list(zip(flat[::2], flat[1::2])))
         swept_radius = rotation_estimate['required_radius_m'] if rotation_estimate else None
+        if swept_radius is None:
+            # D-424 review M8: after expiry, never less than the last good learned envelope.
+            fallback = self.calibration_lease.fallback_rotation_radius()
+            swept_radius = None if fallback is None else max(fallback, body_radius)
         can_rotate = lidar_can_rotate(
             (self.lidar_front, self.lidar_rear, self.lidar_left, self.lidar_right,
              self.lidar_rear_left, self.lidar_rear_right),
@@ -440,6 +444,10 @@ class SafetyNode(Node, Bumper, Hazard, Gate, Scale, Evidence, Obstacles):
         elif self.calibration_lease.rotation_estimate_required(time.monotonic()):
             # A live profile demands its envelope; an expired one falls back to the URDF
             # rotation radius above (D-424: no latch until recalibration).
+            can_rotate = False
+        if getattr(self, 'lidar_rotation_reason', 'no scan') is not None:
+            # D-424 review M1/M2: every base sector seen and no unknown band in the sweep
+            # (behind: never clear; in front: only a fresh finite ultrasonic echo clears it).
             can_rotate = False
         rotation_trial = self.calibration_lease.rotation_trial_live(time.monotonic())
         translation_trial = self.calibration_lease.translation_trial_live(time.monotonic())

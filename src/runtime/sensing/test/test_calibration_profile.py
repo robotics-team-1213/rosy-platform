@@ -92,7 +92,7 @@ class ProfileLeaseTest(unittest.TestCase):
         self.assertIsNotNone(lease.rotation_envelope(10.,radius,footprint[::-1]+footprint))
         self.assertIsNone(lease.rotation_envelope(10.,radius,[]))
         self.assertIsNone(lease.rotation_envelope(10.,radius,[[x,-y] for x,y in [[-.08,-.05],[-.08,.05],[.04,.05],[.04,-.05]]]))
-        self.assertIsNone(lease.rotation_envelope(10.,radius-.0001,footprint))
+        self.assertIsNone(lease.rotation_envelope(10.,radius-.002,footprint))   # D-424 M7: 1 mm tolerance
         self.assertIsNone(lease.rotation_envelope(10.,radius,[[float('nan'),0]]))
         self.assertTrue(lease.rotation_estimate_required(10.))      # live: its envelope decides
         self.assertIsNone(lease.rotation_envelope(12.,radius,footprint))
@@ -166,3 +166,38 @@ class ProfileLeaseTest(unittest.TestCase):
         self.assertFalse(lease.accept(self.packet(), 103., 10., 'geometry-a'))
         with self.assertRaises(ValueError):
             self.packet(gains=(float('nan'), 1.))
+
+
+class LegacyEnvelopeTest(unittest.TestCase):
+    """D-424 review M7/M8."""
+
+    def _lease(self, body):
+        from test.test_calibration_certificate import RotationCertificateTest
+        from control.control.rotation_envelope import RotationEnvelope
+        estimator=RotationEnvelope(body)
+        for yaw in (.2,.2,-.2,-.2):estimator.add((0,0,yaw),(0,0,yaw),yaw,.0001)
+        rotation=RotationCertificateTest.rotation();rotation['envelope']=estimator.report()
+        lease=ProfileLease()
+        self.assertTrue(lease.accept(make_profile('legacy',1,100.,True,(1.,1.),'g',rotation),100.,10.,'g'))
+        return lease, estimator.report()
+
+    def test_profiles_recorded_with_the_old_radius_still_apply_after_upgrade(self):
+        from control.sensing.body import ROTATION_RADIUS
+        for old in (.083, .076):
+            lease, recorded = self._lease(old)
+            report = lease.rotation_envelope(10., ROTATION_RADIUS, [])
+            self.assertIsNotNone(report, old)
+            self.assertGreaterEqual(report['required_radius_m'], ROTATION_RADIUS)
+            self.assertGreaterEqual(report['pivot_radius_m'], recorded['pivot_radius_m'])
+
+    def test_expired_envelope_falls_back_to_at_least_its_learned_radius(self):
+        from control.control.lidar_guard import lidar_can_rotate
+        lease, recorded = self._lease(.10)
+        self.assertIsNone(lease.rotation_envelope(20., .08257, []))
+        self.assertFalse(lease.rotation_estimate_required(20.))
+        fallback = lease.fallback_rotation_radius()
+        self.assertAlmostEqual(fallback, recorded['required_radius_m'])
+        sweep = max(fallback, .08257)
+        self.assertFalse(lidar_can_rotate([.3]*6, .076, True, sweep + .005, sweep_radius=sweep))
+        self.assertTrue(lidar_can_rotate([.3]*6, .076, True, sweep + .02, sweep_radius=sweep))
+        self.assertIsNone(ProfileLease().fallback_rotation_radius())
