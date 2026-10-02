@@ -190,3 +190,29 @@ def test_preview_format_parser_sanitizes_source_for_response_headers():
         "jpeg; source=gazebo\r\nx-injected: yes; width=640; height=360")
 
     assert parsed["source"] == "GAZEBO_X-INJECTED_YES"
+
+
+def test_model_status_api_is_read_only_viewer_data(core_client):
+    """D-423 §3.6: GET only; promote/rollback stay on the operator CLI (rosy_ml)."""
+    import json
+    import time
+    client, services = core_client()
+    assert client.get("/api/v1/vision/models").status_code == 401
+    empty = client.get("/api/v1/vision/models", headers=VIEWER)
+    assert empty.status_code == 200 and empty.json() == {"tasks": []}
+    assert empty.headers["cache-control"] == "no-store"
+    services.vision.models.accept("perception/learned/object_det/status", json.dumps({
+        "schema": "rosy.perception.learned_status/1", "model_revision": "object-det-r1",
+        "last_error": None, "frames_inferred": 3, "latency_ms_p50": 200.0}), now=time.monotonic())
+    tasks = client.get("/api/v1/vision/models", headers=VIEWER).json()["tasks"]
+    assert [(t["task"], t["slot"], t["model_revision"], t["stale"]) for t in tasks] == [
+        ("object_det", "active", "object-det-r1", False)]
+    for method in ("post", "put", "delete"):
+        assert getattr(client, method)("/api/v1/vision/models", headers=VIEWER).status_code == 405
+
+
+def test_bridge_feeds_both_model_status_topics_latched():
+    from pathlib import Path
+    source = (Path(__file__).resolve().parents[1] / "core" / "bridge" / "ros_bridge.py").read_text(
+        encoding="utf-8")
+    assert "MODEL_STATUS_TOPICS" in source and "self._svc.vision.models.accept(" in source

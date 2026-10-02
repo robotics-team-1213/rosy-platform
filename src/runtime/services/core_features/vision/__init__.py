@@ -7,6 +7,7 @@ from .transport import (
     TransportUnavailable,
     accept_preview,
 )
+from .models import MODEL_STATUS_TOPICS, ModelStatusStore
 from .store import (
     VisionFrame,
     VisionFrameAdvanced,
@@ -17,6 +18,8 @@ from .store import (
 
 __all__ = [
     "CAMERA_TOPIC",
+    "MODEL_STATUS_TOPICS",
+    "ModelStatusStore",
     "PERCEPTION_TOPIC",
     "PREVIEW_TOPIC",
     "TransportUnavailable",

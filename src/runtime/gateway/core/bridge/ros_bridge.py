@@ -45,7 +45,7 @@ from core.bridge.cmd_vel import cmd_vel_cycle
 from core.bridge.docking_executor import BridgeDockingExecutor
 from core.bridge.goal_tracker import GoalTracker
 from core_features.maps import occupancy_map_id
-from core_features.vision import PREVIEW_TOPIC
+from core_features.vision import MODEL_STATUS_TOPICS, PREVIEW_TOPIC
 from core_features.navigation.initial_pose import amcl_pose_covariance
 from interfaces.srv import Emotion, SetLed
 import tf2_ros
@@ -102,6 +102,12 @@ class RosBridge:
         node.create_subscription(
             CompressedImage, PREVIEW_TOPIC,
             self._on_camera_preview, preview_qos)
+        # D-423 §3.6: learned-model status per task (latched by the model nodes); display only.
+        latched = QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE,
+                             durability=DurabilityPolicy.TRANSIENT_LOCAL)
+        for topic in MODEL_STATUS_TOPICS:
+            node.create_subscription(String, topic, lambda msg, t=topic: self._svc.vision.models.accept(
+                t, msg.data, now=time.monotonic()), latched)
         # Nav2 lifecycle nodes announce their authoritative goal state on
         # transition_event.  CORE never infers readiness from node discovery;
         # it requires these active transitions plus the motor adapter lease.
