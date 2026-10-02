@@ -61,6 +61,12 @@ class FakeSystem(helper.System):
     def core_group(self):
         return None
 
+    def boot_id(self):
+        return "boot-1"
+
+    def ntp_synced(self):
+        return False
+
 
 class Helper:
     """rosy-ssh-access.path + service: run the helper whenever the request file appears."""
