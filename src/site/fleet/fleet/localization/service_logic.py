@@ -3,7 +3,8 @@
 The service in `fleet.server.localization_service` polls robots and posts; this
 module only decides: the reference squares and slots from `lane_rules.yaml`, the
 §9 monitor (a LOCALIZED robot observed > 25 cm or > 60 degrees away in 2 distinct
-reports within 15 s, none agreeing between them, is suspect), the escalation ladder timers (10 s, 25 s, 60 s in CANDIDATES), and the
+reports within 15 s, none agreeing between them, is suspect), the escalation ladder timers (10 s, 45 s, 120 s in CANDIDATES, paused while a
+decision may still come), and the
 peer observations a candidate report gives of LOCALIZED robots. No transport, no
 asyncio; time is passed in.
 """
@@ -46,6 +47,10 @@ REPORT_FRESH_S = 1.0
 LADDER_ROTATE_S = 10.0
 LADDER_HOMING_S = 45.0
 LADDER_HUMAN_S = 120.0
+#: S1 re-run R2/R6: the ladder stops its clock while the arbiter has a pending lead for the
+#: robot's request or the robot runs its 3 s check, but for at most this long per episode,
+#: so a lead that never decides still reaches a human.
+LADDER_PAUSE_MAX_S = 30.0
 #: A rung CORE refused as `busy` is asked again this often until CORE takes it.
 BUSY_RETRY_S = 2.0
 #: Missions each rung asks CORE for, in order (P2-7): `to_square` first when a square is
@@ -181,17 +186,36 @@ class Ladder:
     rotate_s: float = LADDER_ROTATE_S
     homing_s: float = LADDER_HOMING_S
     human_s: float = LADDER_HUMAN_S
+    pause_max_s: float = LADDER_PAUSE_MAX_S
     _since: dict = field(default_factory=dict)
     _rung: dict = field(default_factory=dict)
+    _paused: dict = field(default_factory=dict)      # robot -> (paused s so far, last update)
+    _holding: set = field(default_factory=set)
 
-    def update(self, robot_id: str, state: Optional[LocState], now: float) -> Optional[str]:
-        """Feed one observed state; returns a rung name the first time it is reached."""
+    def update(self, robot_id: str, state: Optional[LocState], now: float,
+               paused: bool = False) -> Optional[str]:
+        """Feed one observed state; returns a rung name the first time it is reached.
+
+        `paused`: the arbiter may still decide, or the robot is checking a decision. The
+        poll interval before a paused poll does not count (wall time: there is no clock
+        shared with the robot, rev. 3), up to `pause_max_s` per episode, and no rung fires."""
         if state is None or state is LocState.LOCALIZED:
             self.forget(robot_id)
             return None
         if robot_id not in self._since and state is not LocState.CANDIDATES:
             return None
-        elapsed = now - self._since.setdefault(robot_id, now)
+        since = self._since.setdefault(robot_id, now)
+        spent, last = self._paused.get(robot_id, (0.0, now))
+        shift = min(max(now - last, 0.0), self.pause_max_s - spent) if paused else 0.0
+        if shift > 0.0:
+            since = self._since[robot_id] = since + shift
+            spent += shift
+        self._paused[robot_id] = (spent, now)
+        if paused and spent < self.pause_max_s:
+            self._holding.add(robot_id)
+            return None
+        self._holding.discard(robot_id)
+        elapsed = now - since
         rung = ("needs_human" if elapsed > self.human_s else "homing" if elapsed > self.homing_s
                 else "rotate" if elapsed > self.rotate_s else None)
         if rung is None or rung == self._rung.get(robot_id):
@@ -206,9 +230,15 @@ class Ladder:
                 "candidates_for_s": None if since is None else round(now - since, 1),
                 "rung_missions": list(RUNG_MISSIONS.get(rung, ()))}
 
+    def holding(self, robot_id: str) -> bool:
+        """True while the last update paused this robot's ladder (no mission, no retry)."""
+        return robot_id in self._holding
+
     def forget(self, robot_id: str) -> None:
         self._since.pop(robot_id, None)
         self._rung.pop(robot_id, None)
+        self._paused.pop(robot_id, None)
+        self._holding.discard(robot_id)
 
     def robots(self) -> Sequence[str]:
         return list(self._since)

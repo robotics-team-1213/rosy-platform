@@ -16,7 +16,10 @@ to the arbiter and the monitor for sim/bench work; leave it off on a live site.
 Ladder missions (P2-7): at 10 s `rotate_in_place`, at 45 s `to_square` (when a square
 is known; CORE refuses it as `unsupported` today) then `lane_to_stopline`, at 120 s
 `needs_human` (console badge "위치 확인 필요"). A rung CORE answers `busy` (the previous
-mission still running) is asked again every 2 s while the ladder stays on it. CORE drives every mission; Fleet only
+mission still running) is asked again every 2 s while the ladder stays on it. The ladder
+clock stops, and no rung or retry goes out, while the arbiter may still decide the robot's
+open request (`Arbiter.pending`) or the robot reports `reason: checking`, for at most
+30 s per episode (S1 re-run R2, R6). CORE drives every mission; Fleet only
 asks (D-2, D-369). Before a mission Fleet holds the robots near the mover through the
 console's traffic keep-out (`traffic_hold`), and it never asks a LOCALIZED robot or one
 that predates D-395.
@@ -33,7 +36,8 @@ from typing import Awaitable, Callable, Mapping, Optional, Sequence
 
 import yaml
 
-from core_common.protocol.localization import DecisionSource, LocalizationDecision, LocState
+from core_common.protocol.localization import (CHECKING, DecisionSource, LocalizationDecision,
+                                               LocState)
 from fleet.localization import cues, service_logic, trust
 from fleet.localization.arbiter import Arbiter, Context
 from fleet.localization.service_logic import Ladder, Monitor
@@ -187,17 +191,27 @@ class LocalizationService:
         await self._watch(localized, observations, now)
         for rid, state in states.items():
             status = trust.status_of(state)
-            rung = self._ladder.update(rid, status.state if status else None, now)
+            rung = self._ladder.update(rid, status.state if status else None, now,
+                                       paused=self._decision_pending(rid, status))
             if rid not in self._ladder.robots():
                 self._unsupported.pop(rid, None)          # the ladder episode ended
             retry = self._busy_rung.get(rid)
-            if rung is None and retry is not None and retry[0] == self._ladder.view(rid, now)["rung"]                     and now - retry[1] >= service_logic.BUSY_RETRY_S:
+            if (rung is None and retry is not None and not self._ladder.holding(rid)
+                    and retry[0] == self._ladder.view(rid, now)["rung"]
+                    and now - retry[1] >= service_logic.BUSY_RETRY_S):
                 rung = retry[0]
             if rung is not None:
                 self._busy_rung.pop(rid, None)
                 await self._climb(rid, clients[rid], rung, status, now)
 
     # --- steps ----------------------------------------------------------------------
+
+    def _decision_pending(self, rid: str, status) -> bool:
+        """S1 re-run R2/R6: the ladder waits while a decision may still come for the robot's
+        open request (an arbiter lead or cue, or one just sent) or its 3 s check runs."""
+        if status is None or status.state is not LocState.CANDIDATES:
+            return False
+        return status.reason == CHECKING or self._arbiter.pending(rid, status.request_id)
 
     async def _bounded(self, call):
         return await asyncio.wait_for(call, self._timeout_s)
