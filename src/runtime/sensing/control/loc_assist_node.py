@@ -14,6 +14,9 @@ points (`camera_paint_points`, the keep mode's front end) at the same 2 Hz;
 each candidate gets `paint_score` against the map bundle's STL paint map. No
 bundle STL (a site map without it) or no ground plane: paint_score is None.
 
+While LOCALIZED, each state message (2 Hz) also carries the unmapped objects of a
+full scan at the AMCL pose, with that scan's stamp (D-395 rev. 4 §5, S1 R1).
+
 The search runs on one worker thread over a 2 cm max-pooled copy of the map;
 the clear-footprint mask is computed once per map. A search longer than
 `search_budget_s` is logged: numpy cannot be pre-empted, so the budget is a
@@ -39,7 +42,7 @@ from tf2_ros import TransformListener
 
 from . import executor_choice
 from .calibrated_values import calibrated
-from .loc_assist import LocAssist, lane_rules_near, pooled_grid, search
+from .loc_assist import LocAssist, lane_rules_near, localized_objects, pooled_grid, search
 from .sensing.body import URDF_RADIUS
 from .sensing.loc_candidates import Mount, reference_squares
 from .sensing.localization import MapAgreement, planar_yaw
@@ -192,9 +195,26 @@ class LocAssistNode(Node):
         except Exception:
             return                          # no fit this scan; a long gap fails the check on tick
         tr = tf.transform.translation
+        sensor = (tr.x, tr.y, yaw(tf.transform.rotation))
         ranges, angles = self.scan_arrays(msg)
-        fit = self.field.score((tr.x, tr.y, yaw(tf.transform.rotation)), ranges, angles)
-        self.publish(self.core.on_fit(self.now(), fit))
+        fit = self.field.score(sensor, ranges, angles)
+        now = self.now()
+        self.publish(self.core.on_fit(now, fit))
+        if self.core.objects_due(now):
+            self.report_objects(now, msg, sensor)
+
+    def report_objects(self, now, msg, sensor):
+        """D-395 rev. 4 §5 (S1 R1): a LOCALIZED robot reports what the map does not explain,
+        from every beam at its map pose, so Fleet can check the other robots against it."""
+        try:
+            mount_tf = self.tf.lookup_transform('base_link', msg.header.frame_id, rclpy.time.Time())
+        except Exception:
+            return
+        t = mount_tf.transform.translation
+        mount = Mount(t.x, t.y, yaw(mount_tf.transform.rotation))
+        objects = localized_objects(self.field, sensor, *self.scan_arrays(msg, 1), mount,
+                                    self.p('robot_radius'))
+        self.core.on_objects(now, rclpy.time.Time.from_msg(msg.header.stamp).nanoseconds * 1e-9, objects)
 
     def on_pose(self, msg):
         p = msg.pose.pose

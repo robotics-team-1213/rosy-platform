@@ -58,6 +58,9 @@ MISSION_PAUSE_S = 130.
 STILL_MPS, STILL_RADPS, SETTLE_S = .01, .02, .5
 #: A robot that never settles (odom lost, a creeping wheel) still gets a search after this.
 SETTLE_CAP_S = 5.
+#: LOCALIZED objects (S1 R1): computed at most once per state period, sent while the scan
+#: they came from is younger than this.
+OBJECTS_FRESH_S = 1.
 
 
 @dataclass(frozen=True)
@@ -96,6 +99,8 @@ class LocAssist:
         self._twist_at = None               # when the latest odom twist arrived
         self._due_since = None              # since when a search waits for the robot to settle
         self.settle_timed_out = None        # why SETTLE_CAP_S released the last due search
+        self._objects = None                # (scan stamp, base_link objects) while LOCALIZED
+        self._objects_at = -math.inf        # when the node last handed objects in
 
     # --- inputs -------------------------------------------------------------
     def on_amcl_pose(self, pose):
@@ -137,6 +142,19 @@ class LocAssist:
             self._still_since = None
         elif self._still_since is None:
             self._still_since = float(now_s)
+
+    def objects_due(self, now_s):
+        """Whether the node should compute unmapped objects from this scan: LOCALIZED, no
+        check running, and none handed in for a state period (D-395 rev. 4 §5, S1 R1)."""
+        return (self.machine.state is LocState.LOCALIZED and self.machine.check is None
+                and now_s - self._objects_at >= self.state_period_s)
+
+    def on_objects(self, now_s, scan_s, objects):
+        """Base_link (x, y) objects from the full scan stamped `scan_s`; kept only while LOCALIZED."""
+        if self.machine.state is not LocState.LOCALIZED:
+            return
+        self._objects_at = float(now_s)
+        self._objects = (float(scan_s), [(float(x), float(y)) for x, y in list(objects)[:MAX_OBJECTS]])
 
     def on_suspect(self, now_s, payload):
         reason = payload.get('reason') if isinstance(payload, dict) else None
@@ -302,12 +320,19 @@ class LocAssist:
 
     def _state(self, now_s):
         m = self.machine
+        seen = {}
+        if (m.state is LocState.LOCALIZED and self._objects is not None
+                and now_s - self._objects[0] <= OBJECTS_FRESH_S):
+            seen = {'unmapped_objects': [{'x': x, 'y': y} for x, y in self._objects[1]],
+                    'objects_stamp': self._objects[0]}
         status = LocalizationStatus(
             state=m.state.value, pose_frame='odom' if self.pose is None else 'map',
             confidence=0. if self.fit is None else min(1., max(0., self.fit)),
             reason=self._reason(),
-            request_id=m.request_id if m.state is LocState.CANDIDATES else None)
-        payload = {'status': status.model_dump(mode='json'),
+            request_id=m.request_id if m.state is LocState.CANDIDATES else None, **seen)
+        # Left out, not empty, when there are none: a v1.73 CORE forbids unknown keys.
+        payload = {'status': status.model_dump(mode='json', exclude=set() if seen else
+                                               {'unmapped_objects', 'objects_stamp'}),
                    'pose': None if self.pose is None else dict(zip(('x', 'y', 'yaw'), self.pose)),
                    'stamp': float(now_s)}
         self._state_key, self._state_s = self._key(), now_s
@@ -341,11 +366,17 @@ def search(field, clear, squares, ranges, angles, radius, mount, minimum_fit=.9,
     if found:
         first = found[0]
         object_ranges, object_angles = (ranges, angles) if object_scan is None else object_scan
-        objects = unmapped_objects(field, sensor_from_base((first.x, first.y, first.yaw), mount),
-                                   object_ranges, object_angles, mount)
-        # Every beam also keeps chassis returns: no peer is inside this robot's own radius.
-        objects = [o for o in objects if math.hypot(*o) > radius]
+        objects = localized_objects(field, sensor_from_base((first.x, first.y, first.yaw), mount),
+                                    object_ranges, object_angles, mount, radius)
     return found, objects, clear
+
+
+def localized_objects(field, sensor_pose, ranges, angles, mount, radius):
+    """Unmapped objects (base_link) seen from a map-frame sensor pose; pass the full scan.
+
+    Every beam also keeps chassis returns: no peer is inside this robot's own radius."""
+    objects = unmapped_objects(field, sensor_pose, ranges, angles, mount)
+    return [o for o in objects if math.hypot(*o) > radius]
 
 
 def pooled_grid(grid, resolution, target):

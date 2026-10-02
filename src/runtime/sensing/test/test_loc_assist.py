@@ -10,8 +10,9 @@ import numpy as np
 import pytest
 from core_common.protocol.localization import CandidateReport, LocalizationStatus
 
-from control.loc_assist import (COVARIANCE, LocAssist, lane_rules_near, pooled_grid, search)
-from control.sensing.loc_candidates import PoseCandidate
+from control.loc_assist import (COVARIANCE, LocAssist, lane_rules_near, localized_objects, pooled_grid,
+                                search)
+from control.sensing.loc_candidates import PoseCandidate, sensor_from_base
 from loc_world import MOUNT, SQUARES, field, scan
 
 ODOM = (0., 0., 0.)
@@ -656,6 +657,65 @@ def test_a_running_check_is_reported_as_candidates_checking():
     assert one(a.tick(2.5), 'state')['status']['reason'] == 'checking'   # the 2 Hz cadence too
     done = one(hold(a, 2.1, 5.6), 'state')['status']
     assert done['state'] == 'LOCALIZED' and done['reason'] is None
+
+
+def localized_core():
+    a = core()
+    a.on_amcl_pose((TRUTH.x, TRUTH.y, TRUTH.yaw))
+    candidates_ready(a)
+    a.on_decision(2., decision('r-1', 2.))
+    assert one(hold(a, 2.1, 5.6), 'state')['status']['state'] == 'LOCALIZED'
+    return a
+
+
+def test_a_localized_robot_reports_its_unmapped_objects_on_every_state():
+    """D-395 rev. 4 §5 follow-up (S1 R1): Fleet's monitor needs a LOCALIZED observer."""
+    a = localized_core()
+    assert a.objects_due(5.7)
+    a.on_objects(5.7, 5.65, [(.6, -.1)] + [(1., float(i)) for i in range(20)])
+    assert not a.objects_due(6.)                    # one computation per state period
+    status = one(a.tick(6.2), 'state')['status']
+    assert status['unmapped_objects'][0] == {'x': .6, 'y': -.1}
+    assert len(status['unmapped_objects']) == 16 and status['objects_stamp'] == 5.65
+    assert LocalizationStatus.model_validate(status).objects_stamp == 5.65
+    assert a.objects_due(6.2)
+
+
+def test_objects_older_than_a_second_are_left_out():
+    a = localized_core()
+    a.on_objects(5.7, 5.7, [(.6, -.1)])
+    assert 'unmapped_objects' in one(a.tick(6.2), 'state')['status']
+    status = one(a.tick(6.8), 'state')['status']
+    assert 'unmapped_objects' not in status and 'objects_stamp' not in status
+
+
+def test_no_objects_outside_localized():
+    a = core()
+    a.on_amcl_pose((TRUTH.x, TRUTH.y, TRUTH.yaw))
+    assert not a.objects_due(0.)
+    a.on_objects(0., 0., [(.6, -.1)])
+    assert 'unmapped_objects' not in one(a.tick(0.), 'state')['status']
+    candidates_ready(a)
+    a.on_decision(2., decision('r-1', 2.))
+    assert not a.objects_due(2.5)                   # not while the 3 s check runs
+    a = localized_core()
+    a.on_objects(5.7, 5.7, [(.6, -.1)])
+    status = one(a.on_suspect(5.8, {'reason': 'fleet_monitor'}), 'state')['status']
+    assert status['state'] == 'SUSPECT' and 'unmapped_objects' not in status
+    assert not a.objects_due(6.)
+
+
+def test_localized_objects_use_the_full_scan_and_drop_chassis_returns():
+    truth, peer = (.86, -.52, math.pi), (-1.26, .49)
+    ranges, angles = scan(truth, peers=[peer], beams=640)
+    ranges = ranges.copy()
+    ranges[200:206] = .07                                   # a self-hit cluster
+    sensor = sensor_from_base(truth, MOUNT)
+    objects = localized_objects(field(), sensor, ranges, angles, MOUNT, .105)
+    assert len(objects) == 1
+    c, s = math.cos(truth[2]), math.sin(truth[2])
+    dx, dy = peer[0] - truth[0], peer[1] - truth[1]
+    assert math.dist(objects[0], (c * dx + s * dy, -s * dx + c * dy)) < .08
 
 
 def test_a_failed_check_reports_its_rejection_not_checking():
