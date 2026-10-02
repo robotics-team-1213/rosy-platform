@@ -41,6 +41,8 @@ from fleet.server.mission_progress import MissionProgressService
 from fleet.server.mission_service import MissionService
 from fleet.server.policy_evidence import PolicyEvidenceStore
 from fleet.server.proposal_store import ProposalStore
+from fleet.server.step_action_kinds import dispatch_open
+from fleet.server.step_dispatcher import StepJobDispatcher
 from fleet.server.task_service import FleetTaskService
 
 from fleet.server.console_routes import install_console_routes
@@ -65,6 +67,7 @@ from fleet.server.task_dispatch_routes import (  # noqa: F401 — GoalRequest �
 )
 
 _LOG = logging.getLogger(__name__)
+DEPLOYMENT_PROFILES = frozenset({"production", "simulation"})
 
 
 class VisionLeaseRequest(BaseModel):
@@ -107,7 +110,10 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                post_action_observation_source=None,
                site_lanes: Optional[Mapping] = None,
                pairing=None, pairing_sync_token: Optional[str] = None,
-               localization_service=None) -> FastAPI:
+               localization_service=None, deployment_profile: str = "production",
+               omx_cell_grant_revisions: Optional[Mapping[str, Mapping[str, str]]] = None) -> FastAPI:
+    if deployment_profile not in DEPLOYMENT_PROFILES:
+        raise ValueError(f"unsupported deployment_profile {deployment_profile!r}")
     mission_configured = mission_service is not None or proposal_store is not None
     if (mission_service is None) != (proposal_store is None):
         raise ValueError("Mission API requires both MissionService and ProposalStore")
@@ -160,19 +166,27 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     stop_transport = omx_stop_transport
     if configured_omx and stop_transport is None:
         stop_transport = UnixLocalStopTransport(omx_socket_root)
-    if enable_mission_dispatcher and (not mission_configured or candidate_resolver is None):
-        raise ValueError("Mission dispatcher requires the complete Mission API and candidate resolver")
+    if enable_mission_dispatcher and not mission_configured:
+        raise ValueError("Mission dispatcher requires the complete Mission API")
     if enable_mission_dispatcher and not configured_omx:
         raise ValueError("Mission dispatcher requires configured OMX workcells")
     action_transport = omx_action_transport
     if enable_mission_dispatcher and action_transport is None:
         action_transport = UnixLocalActionTransport(omx_socket_root)
+    # D-403 §7: dispatch opens per (deployment profile, Action kind). PICK_PLACE has no open
+    # profile; CELL_TRANSFER opens only in `simulation`, where StepJobDispatcher refuses any
+    # other profile and any OMX instance without declared simulation grant revisions.
     mission_dispatcher = (
         MissionDispatcher(
             mission_service, task_service.store, action_transport, configured_omx,
             on_action_terminal=(goal_evidence_service.on_action_terminal
                                 if goal_evidence_service is not None else None),
         )
+        if enable_mission_dispatcher and dispatch_open(deployment_profile, "PICK_PLACE") else None
+    )
+    cell_job_dispatcher = (
+        StepJobDispatcher(cell_job_store, task_service.store, action_transport, configured_omx,
+                          omx_cell_grant_revisions or {}, deployment_profile=deployment_profile)
         if enable_mission_dispatcher else None
     )
     mission_progress = (
@@ -237,6 +251,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     async def lifespan(app):
         dispatcher = None
         mission_worker = None
+        cell_job_worker = None
         proposal_expiry = None
         goal_evidence_worker = None
         mission_feedback_scheduler = None
@@ -250,6 +265,8 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
             proposal_expiry = asyncio.create_task(_proposal_expiry_loop(proposal_store))
         if mission_dispatcher is not None:
             mission_worker = asyncio.create_task(_mission_dispatch_loop(mission_dispatcher))
+        if cell_job_dispatcher is not None:
+            cell_job_worker = asyncio.create_task(_mission_dispatch_loop(cell_job_dispatcher))
         if goal_evidence_service is not None:
             goal_evidence_worker = asyncio.create_task(
                 _goal_evidence_expiry_loop(goal_evidence_service)
@@ -265,7 +282,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         try:
             yield
         finally:
-            for background in (dispatcher, mission_worker, proposal_expiry,
+            for background in (dispatcher, mission_worker, cell_job_worker, proposal_expiry,
                                goal_evidence_worker, mission_feedback_scheduler,
                                mission_model_turn_worker_task, localization_task):
                 if background is not None:
@@ -297,6 +314,8 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     app.state.mission_model_turn_worker = mission_model_turn_worker
     app.state.post_action_observation_source = post_action_observation_source
     app.state.mission_dispatcher = mission_dispatcher
+    app.state.cell_job_dispatcher = cell_job_dispatcher
+    app.state.deployment_profile = deployment_profile
     app.state.proposal_store = proposal_store
     app.state.omx_instances = configured_omx
     app.state.localization_service = localization_service
@@ -520,7 +539,7 @@ async def _mission_model_turn_worker_loop(worker) -> None:
         await asyncio.sleep(0.25)
 
 
-async def _mission_dispatch_loop(dispatcher: MissionDispatcher) -> None:
+async def _mission_dispatch_loop(dispatcher: MissionDispatcher | StepJobDispatcher) -> None:
     """Run the explicit, disabled-by-default Mission to OMX bridge off request handlers."""
     while True:
         try:

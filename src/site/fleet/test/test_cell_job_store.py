@@ -2,7 +2,6 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from core_common.protocol.schemas import FleetCellTransferGrant
 from fleet.server.cell_job_store import CellJobStore, cell_transfer_grant_digest
 from fleet.server.mission_store import MissionConflict, MissionStore
 from fleet.server.task_store import FleetTaskStore
@@ -194,7 +193,7 @@ def test_unknown_cell_action_survives_restart_as_hold_without_replay(tmp_path):
     held = store.record_action_result(
         "cell-mission-1", step_index=0, event_id="timeout-event",
         action_id="action-0", attempt_id="attempt-0", outcome="UNKNOWN",
-        result={"transport": "timeout"},
+        reason="LOCAL_ACTION_SUBMIT_OUTCOME_UNKNOWN", result={"transport": "timeout"},
     )
 
     restarted = CellJobStore(path).get("cell-mission-1")
@@ -222,8 +221,143 @@ def test_cell_grant_cannot_change_a_pose_or_run_under_a_stale_generation(tmp_pat
 
     stopped = tasks.trip_stop_latch(actor_id="operator-1")
     tasks.rearm_dispatch(expected_generation=stopped["generation"], actor_id="operator-1")
-    with pytest.raises(MissionConflict, match="generation changed"):
-        store.start_step(
-            "cell-mission-1", step_index=0, action_id="action-0", attempt_id="attempt-0",
-            grant=_grant(ready, 0),
+    held = store.start_step(
+        "cell-mission-1", step_index=0, action_id="action-0", attempt_id="attempt-0",
+        grant=_grant(ready, 0),
+    )
+    assert held["status"] == "HOLD"
+    assert held["reason"] == "FLEET_FENCE_CHANGED_BEFORE_SUBMISSION"
+    assert held["steps"][0]["status"] == "HOLD" and held["steps"][0]["action_id"] is None
+
+
+def _running(tmp_path):
+    path, tasks, _, enabled = _stores(tmp_path)
+    store = CellJobStore(path)
+    _create(store)
+    ready = store.admit("cell-mission-1", actor_id="operator-1",
+                        expected_generation=enabled["generation"])
+    running = store.start_step(
+        "cell-mission-1", step_index=0, action_id="action-0", attempt_id="attempt-0",
+        grant=_grant(ready, 0),
+    )
+    return path, tasks, store, running
+
+
+def _phases(tasks):
+    return sorted({claim["phase"] for kind, ident in (("workcell", "omx_01"), ("pallet", "pallet-1"))
+                   for claim in tasks.resource_claims(resource_kind=kind, resource_id=ident)})
+
+
+def test_submission_promotes_claims_so_a_stop_cannot_drop_an_inflight_claim(tmp_path):
+    # rosy-a9 item 1: the latch deletes CLAIMED claims; an in-flight Action's claims are DISPATCHING.
+    _, tasks, _, running = _running(tmp_path)
+    assert running["status"] == "RUNNING" and _phases(tasks) == ["DISPATCHING"]
+
+    stopped = tasks.trip_stop_latch(actor_id="operator-1")
+
+    assert _phases(tasks) == ["DISPATCHING"]
+    with pytest.raises(Exception, match="unresolved Action claims"):
+        tasks.rearm_dispatch(expected_generation=stopped["generation"], actor_id="operator-1")
+
+
+@pytest.mark.parametrize("outcome, reason, status, phases", [
+    ("SUCCEEDED", None, "ACTION_SUCCEEDED", ["CLAIMED"]),
+    ("FAILED", "LOCAL_ACTION_FAILED", "HOLD", ["CLAIMED"]),
+    ("REJECTED", "LOCAL_ACTION_REJECTED", "HOLD", ["CLAIMED"]),
+    ("UNKNOWN", "LOCAL_ACTION_READBACK_UNKNOWN", "HOLD", ["UNKNOWN"]),
+])
+def test_result_outcomes_set_status_reason_and_claim_phase(tmp_path, outcome, reason, status, phases):
+    # rosy-a9 item 2: a confirmed end returns the claims; only an unknown outcome pins them.
+    _, tasks, store, _ = _running(tmp_path)
+    result = store.record_action_result(
+        "cell-mission-1", step_index=0, event_id="device-event-0", action_id="action-0",
+        attempt_id="attempt-0", outcome=outcome, reason=reason, result={"journal_event_id": 3},
+    )
+    assert result["status"] == result["steps"][0]["status"] == status
+    assert result["reason"] == result["steps"][0]["reason"] == reason
+    assert _phases(tasks) == phases
+
+
+def test_a_non_success_needs_a_reason_and_outcomes_are_closed(tmp_path):
+    _, _, store, _ = _running(tmp_path)
+    with pytest.raises(ValueError, match="reason"):
+        store.record_action_result("cell-mission-1", step_index=0, event_id="e", action_id="action-0",
+                                   attempt_id="attempt-0", outcome="FAILED", result={})
+    with pytest.raises(ValueError, match="outcome"):
+        store.record_action_result("cell-mission-1", step_index=0, event_id="e", action_id="action-0",
+                                   attempt_id="attempt-0", outcome="HOLD", reason="X", result={})
+
+
+def test_device_results_use_the_callers_event_id_and_replays_are_noops(tmp_path):
+    # rosy-a9 item 5 + key check: the key is the caller's event_id; replay is checked before status.
+    path, _, store, _ = _running(tmp_path)
+    first = store.record_action_result(
+        "cell-mission-1", step_index=0, event_id="device:abc", action_id="action-0",
+        attempt_id="attempt-0", outcome="SUCCEEDED", result={"journal_event_id": 3},
+    )
+    replay = store.record_action_result(
+        "cell-mission-1", step_index=0, event_id="device:abc", action_id="action-0",
+        attempt_id="attempt-0", outcome="SUCCEEDED", result={"journal_event_id": 3},
+    )
+    assert replay == first
+    with store._connect() as connection:
+        keys = [row[0] for row in connection.execute(
+            "SELECT event_key FROM fleet_cell_events WHERE event_type LIKE 'CELL_STEP_ACTION_%'")]
+    assert keys == ["cell-mission-1:device:abc"]
+    with pytest.raises(MissionConflict, match="reused"):
+        store.record_action_result(
+            "cell-mission-1", step_index=0, event_id="device:abc", action_id="action-0",
+            attempt_id="attempt-0", outcome="FAILED", reason="LOCAL_ACTION_FAILED", result={},
         )
+
+    confirmed = store.confirm_step_goal(
+        "cell-mission-1", step_index=0, action_id="action-0", attempt_id="attempt-0",
+        evidence=_goal("action-0", "attempt-0", "goal-0"),
+    )
+    again = store.confirm_step_goal(
+        "cell-mission-1", step_index=0, action_id="action-0", attempt_id="attempt-0",
+        evidence=_goal("action-0", "attempt-0", "goal-0"),
+    )
+    assert again == confirmed and again["current_step_index"] == 1
+    changed = {**_goal("action-0", "attempt-0", "goal-0"), "producer_id": "other"}
+    with pytest.raises(MissionConflict, match="reused"):
+        store.confirm_step_goal("cell-mission-1", step_index=0, action_id="action-0",
+                                attempt_id="attempt-0", evidence=changed)
+
+
+def test_submitting_event_carries_the_fence(tmp_path):
+    # rosy-a9 item 6.
+    _, _, _, running = _running(tmp_path)
+    submitting = [event for event in running["events"] if event["event_type"] == "CELL_STEP_SUBMITTING"]
+    assert submitting[0]["detail"]["authority_epoch"] == running["authority_epoch"]
+    assert submitting[0]["detail"]["dispatch_generation"] == running["dispatch_generation"]
+
+
+@pytest.mark.parametrize("claim_phase, phases", [("CLAIMED", ["CLAIMED"]), ("UNKNOWN", ["UNKNOWN"]),
+                                                 (None, [])])
+def test_generic_hold_from_running_is_idempotent(tmp_path, claim_phase, phases):
+    # rosy-a9 item 4.
+    _, tasks, store, _ = _running(tmp_path)
+    held = store.hold("cell-mission-1", reason="FLEET_FENCE_CHANGED_BEFORE_LOCAL_SUBMIT",
+                      claim_phase=claim_phase, actor_id="mission-dispatcher", event_key="hold-1")
+    again = store.hold("cell-mission-1", reason="FLEET_FENCE_CHANGED_BEFORE_LOCAL_SUBMIT",
+                       claim_phase=claim_phase, actor_id="mission-dispatcher", event_key="hold-1")
+    assert held == again
+    assert held["status"] == held["steps"][0]["status"] == "HOLD"
+    assert held["reason"] == "FLEET_FENCE_CHANGED_BEFORE_LOCAL_SUBMIT"
+    assert _phases(tasks) == phases
+    assert [event["event_type"] for event in held["events"]].count("CELL_JOB_HELD") == 1
+
+
+def test_generic_hold_is_valid_only_from_ready_running_or_action_succeeded(tmp_path):
+    path, _, _, enabled = _stores(tmp_path)
+    store = CellJobStore(path)
+    _create(store)
+    with pytest.raises(MissionConflict, match="cannot be held"):
+        store.hold("cell-mission-1", reason="X", claim_phase=None, actor_id="op", event_key="k")
+    store.admit("cell-mission-1", actor_id="operator-1", expected_generation=enabled["generation"])
+    ready_hold = store.hold("cell-mission-1", reason="OPERATOR_HOLD", claim_phase="CLAIMED",
+                            actor_id="operator-1", event_key="k")
+    assert ready_hold["steps"][0]["status"] == "HOLD"
+    with pytest.raises(MissionConflict, match="cannot be held"):
+        store.hold("cell-mission-1", reason="X", claim_phase=None, actor_id="op", event_key="k2")

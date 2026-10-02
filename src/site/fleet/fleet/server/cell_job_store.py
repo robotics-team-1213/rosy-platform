@@ -16,9 +16,19 @@ from .dispatch_admission import release as release_claims
 from .dispatch_admission import reserve as reserve_claims
 from .mission_store import MissionConflict, _nonempty, _now
 from .sqlite_policy import configure_connection, enable_wal
+from .step_action_kinds import step_action_kind
 
 _MIGRATION_VERSION = 1
 _IDENTIFIER_HASH_FIELDS = ("recipe_digest", "cell_digest", "process_artifact_digest")
+# Device outcome -> (step and Job status, claim phase). A confirmed end returns the claims to
+# CLAIMED; only an unknown outcome pins them as UNKNOWN until reconciled (rosy-a9 item 2).
+_OUTCOMES = {
+    "SUCCEEDED": ("ACTION_SUCCEEDED", "CLAIMED"),
+    "FAILED": ("HOLD", "CLAIMED"),
+    "REJECTED": ("HOLD", "CLAIMED"),
+    "UNKNOWN": ("HOLD", "UNKNOWN"),
+}
+_HOLDABLE = frozenset({"READY", "RUNNING", "ACTION_SUCCEEDED"})
 
 
 def _json(value: object) -> str:
@@ -242,6 +252,15 @@ class CellJobStore:
         with closing(self._connect()) as connection:
             return self._get(connection, mission_id)
 
+    def next_job(self, status: str) -> dict[str, Any] | None:
+        """Oldest-updated Job in ``status`` (dispatcher scan; RUNNING is reconciled first)."""
+        with closing(self._connect()) as connection:
+            row = connection.execute(
+                "SELECT mission_id FROM fleet_cell_jobs WHERE status=? ORDER BY updated_at, mission_id LIMIT 1",
+                (status,),
+            ).fetchone()
+            return None if row is None else self._get(connection, row["mission_id"])
+
     def admit(self, mission_id: str, *, actor_id: str, expected_generation: int) -> dict[str, Any]:
         actor_id = _nonempty("actor_id", actor_id, limit=96)
         if type(expected_generation) is not int or expected_generation < 0:
@@ -321,7 +340,18 @@ class CellJobStore:
             if (control is None or not control["dispatch_enabled"]
                     or control["authority_epoch"] != job["authority_epoch"]
                     or control["generation"] != job["dispatch_generation"]):
-                raise MissionConflict("Fleet authority or stop generation changed before submission")
+                # Nothing was sent: hold with a reason instead of leaving a stuck READY Job.
+                self._hold_in_transaction(
+                    connection, job, reason="FLEET_FENCE_CHANGED_BEFORE_SUBMISSION",
+                    claim_phase=None, actor_id="fleet",
+                    event_key=f"hold-before-submit:{step_index}:{job['dispatch_generation']}",
+                    detail={"current_authority_epoch": None if control is None else control["authority_epoch"],
+                            "current_generation": None if control is None else control["generation"],
+                            "dispatch_enabled": bool(control and control["dispatch_enabled"])},
+                )
+                result = self._get(connection, mission_id)
+                connection.commit()
+                return result
             if (parsed.mission_id != mission_id or parsed.step_id != step["step_id"]
                     or parsed.action_id != action_id or parsed.attempt_id != attempt_id
                     or parsed.workcell_id != job["workcell_id"]
@@ -333,27 +363,11 @@ class CellJobStore:
                     or parsed.authority_epoch != job["authority_epoch"]
                     or parsed.dispatch_generation != job["dispatch_generation"]):
                 raise ValueError("CELL_TRANSFER grant does not match the current persisted step")
-            execution_step = json.loads(step["step_json"])
-            inputs = execution_step["inputs"]
-
-            def wire_pose(value: Mapping[str, Any]) -> dict[str, float]:
-                return {"x": value["x_m"], "y": value["y_m"],
-                        "z": value["z_m"], "yaw": value["yaw_rad"]}
-
-            expected_payload = {
-                "job_id": job["job_id"], "recipe_sha256": job["recipe_digest"],
-                "cell_sha256": job["cell_digest"], "step_index": step_index,
-                "item": inputs["item"], "pallet": inputs["pallet_id"],
-                "layer": inputs["layer_index"], "frame": "robot_base",
-                "home": wire_pose(inputs["home_pose_base"]),
-                "pick": wire_pose(inputs["source_pose_base"]),
-                "place": wire_pose(inputs["destination_pose_base"]),
-                "pick_approach_z": inputs["source_approach_z_base_m"],
-                "place_approach_z": inputs["destination_approach_z_base_m"],
-                "carry_z": inputs["carry_z_base_m"],
-            }
-            if parsed.cell_transfer.model_dump(mode="json") != expected_payload:
+            kind = step_action_kind(step["action_kind"])
+            expected_payload = kind.body(job, step_index, json.loads(step["step_json"])["inputs"])
+            if getattr(parsed, kind.body_field).model_dump(mode="json") != expected_payload:
                 raise ValueError("CELL_TRANSFER payload does not match the persisted PlanBundle step")
+            self._set_claims(connection, job, "DISPATCHING")
             connection.execute(
                 """UPDATE fleet_cell_steps SET status='RUNNING', action_id=?, attempt_id=?,
                    request_digest=?, grant_json=?, updated_at=?
@@ -367,16 +381,29 @@ class CellJobStore:
             )
             self._event(connection, mission_id, step_index, "CELL_STEP_SUBMITTING", "fleet",
                         {"action_id": action_id, "attempt_id": attempt_id,
-                         "request_digest": parsed.request_digest})
+                         "request_digest": parsed.request_digest,
+                         "authority_epoch": parsed.authority_epoch,
+                         "dispatch_generation": parsed.dispatch_generation})
             result = self._get(connection, mission_id)
             connection.commit()
         return result
 
     def record_action_result(self, mission_id: str, *, step_index: int, event_id: str,
                              action_id: str, attempt_id: str, outcome: str,
-                             result: Mapping[str, Any]) -> dict[str, Any]:
+                             result: Mapping[str, Any], reason: str | None = None) -> dict[str, Any]:
+        """Record one device outcome under the caller's ``event_id``; a replay is a no-op."""
         event_id = _nonempty("event_id", event_id)
-        result_json = _json(dict(result))
+        if outcome not in _OUTCOMES:
+            raise ValueError("unsupported Action outcome")
+        if outcome == "SUCCEEDED":
+            if reason is not None:
+                raise ValueError("a successful Action result carries no hold reason")
+        else:
+            reason = _nonempty("reason", reason, limit=96)
+        step_state, claim_phase = _OUTCOMES[outcome]
+        detail = {"event_id": event_id, "action_id": action_id, "attempt_id": attempt_id,
+                  "outcome": outcome, "reason": reason, "result": dict(result)}
+        event_type = f"CELL_STEP_ACTION_{outcome}"
         now = _now()
         with closing(self._connect()) as connection:
             connection.execute("BEGIN IMMEDIATE")
@@ -389,31 +416,99 @@ class CellJobStore:
             ).fetchone()
             if job is None or step is None:
                 raise KeyError(mission_id if job is None else (mission_id, step_index))
+            if self._replayed(connection, mission_id, step_index, event_type, "device", event_id, detail):
+                result_row = self._get(connection, mission_id)
+                connection.commit()
+                return result_row
             if (step["status"] != "RUNNING" or step["action_id"] != action_id
                     or step["attempt_id"] != attempt_id):
                 raise MissionConflict("Action result does not match the current Cell transfer attempt")
-            if outcome == "SUCCEEDED":
-                step_state, job_state, reason = "ACTION_SUCCEEDED", "ACTION_SUCCEEDED", None
-                event_type = "CELL_STEP_ACTION_SUCCEEDED"
-            else:
-                step_state, job_state, reason = "HOLD", "HOLD", "ACTION_OUTCOME_UNKNOWN"
-                event_type = "CELL_STEP_ACTION_UNKNOWN"
             connection.execute(
                 "UPDATE fleet_cell_steps SET status=?, result_json=?, reason=?, updated_at=? "
                 "WHERE mission_id=? AND step_index=?",
-                (step_state, result_json, reason, now, mission_id, step_index),
+                (step_state, _json(dict(result)), reason, now, mission_id, step_index),
             )
             connection.execute(
                 "UPDATE fleet_cell_jobs SET status=?, reason=?, updated_at=? WHERE mission_id=?",
-                (job_state, reason, now, mission_id),
+                (step_state, reason, now, mission_id),
             )
-            self._event(connection, mission_id, step_index, event_type, "device", {
-                "event_id": event_id, "action_id": action_id, "attempt_id": attempt_id,
-                "outcome": outcome, "result": json.loads(result_json),
-            })
+            self._set_claims(connection, job, claim_phase)
+            self._event(connection, mission_id, step_index, event_type, "device", detail)
             result_row = self._get(connection, mission_id)
             connection.commit()
         return result_row
+
+    def hold(self, mission_id: str, *, reason: str, claim_phase: str | None, actor_id: str,
+             event_key: str) -> dict[str, Any]:
+        """HOLD a READY, RUNNING or ACTION_SUCCEEDED Job and its current step (idempotent).
+
+        ``claim_phase`` sets the Job's claims to CLAIMED or UNKNOWN; None releases them.
+        """
+        reason = _nonempty("reason", reason, limit=96)
+        actor_id = _nonempty("actor_id", actor_id, limit=96)
+        event_key = _nonempty("event_key", event_key)
+        if claim_phase not in {"CLAIMED", "UNKNOWN", None}:
+            raise ValueError("claim_phase must be CLAIMED, UNKNOWN or None")
+        with closing(self._connect()) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            job = connection.execute(
+                "SELECT * FROM fleet_cell_jobs WHERE mission_id=?", (mission_id,),
+            ).fetchone()
+            if job is None:
+                raise KeyError(mission_id)
+            detail = {"event_id": event_key, "reason": reason, "claim_phase": claim_phase}
+            if not self._replayed(connection, mission_id, job["current_step_index"], "CELL_JOB_HELD",
+                                  actor_id, event_key, detail):
+                if job["status"] not in _HOLDABLE:
+                    raise MissionConflict(f"a {job['status']} Cell Job cannot be held")
+                self._hold_in_transaction(connection, job, reason=reason, claim_phase=claim_phase,
+                                          actor_id=actor_id, event_key=event_key, detail={})
+            result = self._get(connection, mission_id)
+            connection.commit()
+        return result
+
+    def _hold_in_transaction(self, connection: sqlite3.Connection, job: sqlite3.Row, *,
+                             reason: str, claim_phase: str | None, actor_id: str,
+                             event_key: str, detail: Mapping[str, Any]) -> None:
+        now = _now()
+        connection.execute(
+            "UPDATE fleet_cell_steps SET status='HOLD', reason=?, updated_at=? "
+            "WHERE mission_id=? AND step_index=? AND status IN ('READY', 'RUNNING', 'ACTION_SUCCEEDED')",
+            (reason, now, job["mission_id"], job["current_step_index"]),
+        )
+        connection.execute(
+            "UPDATE fleet_cell_jobs SET status='HOLD', reason=?, updated_at=? WHERE mission_id=?",
+            (reason, now, job["mission_id"]),
+        )
+        self._set_claims(connection, job, claim_phase)
+        self._event(connection, job["mission_id"], job["current_step_index"], "CELL_JOB_HELD", actor_id,
+                    {"event_id": event_key, "reason": reason, "claim_phase": claim_phase, **detail})
+
+    @staticmethod
+    def _set_claims(connection: sqlite3.Connection, job: sqlite3.Row, phase: str | None) -> None:
+        if phase is None:
+            release_claims(connection, owner_kind="mission", owner_id=job["mission_id"],
+                           generation=job["dispatch_generation"])
+            return
+        connection.execute(
+            "UPDATE fleet_action_claims SET phase=?, lease_until=NULL "
+            "WHERE owner_kind='mission' AND owner_id=? AND generation=?",
+            (phase, job["mission_id"], job["dispatch_generation"]),
+        )
+
+    @staticmethod
+    def _replayed(connection: sqlite3.Connection, mission_id: str, step_index: int | None,
+                  event_type: str, actor_id: str, event_id: str, detail: Mapping[str, Any]) -> bool:
+        """True for an exact replay of ``event_id``; a reuse with other content raises."""
+        prior = connection.execute(
+            "SELECT * FROM fleet_cell_events WHERE event_key=?", (f"{mission_id}:{event_id}",),
+        ).fetchone()
+        if prior is None:
+            return False
+        if (prior["step_index"] != step_index or prior["event_type"] != event_type
+                or prior["actor_id"] != actor_id or prior["detail_json"] != _json(dict(detail))):
+            raise MissionConflict("Cell Job event identity was reused with different evidence")
+        return True
 
     def confirm_step_goal(self, mission_id: str, *, step_index: int,
                           action_id: str, attempt_id: str,
@@ -433,6 +528,8 @@ class CellJobStore:
         if evidence["satisfied"] is not True:
             raise MissionConflict("unsatisfied Cell step goal evidence cannot advance the Job")
         evidence_json = _json(dict(evidence))
+        event_id = f"goal:{step_index}:{_nonempty('evidence_id', evidence['evidence_id'])}"
+        detail = {**json.loads(evidence_json), "event_id": event_id}
         now = _now()
         with closing(self._connect()) as connection:
             connection.execute("BEGIN IMMEDIATE")
@@ -445,6 +542,15 @@ class CellJobStore:
             ).fetchone()
             if job is None or step is None:
                 raise KeyError(mission_id if job is None else (mission_id, step_index))
+            final = connection.execute(
+                "SELECT MAX(step_index) FROM fleet_cell_steps WHERE mission_id=?", (mission_id,),
+            ).fetchone()[0] == step_index
+            event_type = "CELL_JOB_GOAL_CONFIRMED" if final else "CELL_STEP_GOAL_CONFIRMED"
+            if self._replayed(connection, mission_id, step_index, event_type, "goal-evidence",
+                              event_id, detail):
+                result = self._get(connection, mission_id)
+                connection.commit()
+                return result
             if (job["status"] != "ACTION_SUCCEEDED" or step["status"] != "ACTION_SUCCEEDED"
                     or step["action_id"] != action_id or step["attempt_id"] != attempt_id):
                 raise MissionConflict("independent goal evidence requires this step's terminal Action success")
@@ -480,8 +586,7 @@ class CellJobStore:
                 release_claims(connection, owner_kind="mission", owner_id=mission_id,
                                generation=job["dispatch_generation"])
                 event_type = "CELL_JOB_GOAL_CONFIRMED"
-            self._event(connection, mission_id, step_index, event_type, "goal-evidence",
-                        json.loads(evidence_json))
+            self._event(connection, mission_id, step_index, event_type, "goal-evidence", detail)
             result = self._get(connection, mission_id)
             connection.commit()
         return result
