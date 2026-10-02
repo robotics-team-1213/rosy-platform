@@ -22,6 +22,7 @@ from core_features.docking.feed import DockObservationFeed
 from core_features.docking.manager import DockingConfig, DockingManager
 from core_features.fleet_agent.agent import FleetAgent
 from core_features.localization import LocalizationAssist, LocalizationMission, wire_assist
+from core_features.localization.mission import mission_config
 from core_common.domain.adapters import AdapterRegistry
 
 from core_common.domain.capabilities import runtime_capability_data, runtime_truth
@@ -523,7 +524,8 @@ class CoreServices:
             data_path=waypoints_path.parent,
         )
         localization, loc_mission = wire_assist(events, lambda: identity.robot_id, nav=nav, line_follow=line_follow,
-            command=command, state=state, modes=modes, swarm=swarm, docking=docking, safety=safety, traffic_policy=traffic_policy)
+            command=command, state=state, modes=modes, swarm=swarm, docking=docking, safety=safety, traffic_policy=traffic_policy,
+            mission_config=mission_config(config.get("localization_mission")))
         fleet_agent = FleetAgent(state, events, config, identity)
         fleet_agent.start()
         bind_stuck_recovery(line_follow, safety=safety, calibration=calibration,
