@@ -182,6 +182,16 @@ main {
     column-gap: var(--space-4);
     align-items: start;
   }
+  /* D-417 디자인 — 카메라가 컴팩트(39px)면 칼럼을 반납하고 지도가 전체 폭을 쓴다. */
+  main > .panel[aria-labelledby="map-heading"]:has(> .vision-preview .vision-frame[data-state="waiting"]),
+  main > .panel[aria-labelledby="map-heading"]:has(> .vision-preview .vision-frame[data-state="warn"]) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  main > .panel[aria-labelledby="map-heading"]:has(> .vision-preview .vision-frame[data-state="waiting"]) > .vision-preview,
+  main > .panel[aria-labelledby="map-heading"]:has(> .vision-preview .vision-frame[data-state="warn"]) > .vision-preview {
+    grid-column: 1;
+    grid-row: auto;
+  }
   main > .panel[aria-labelledby="map-heading"] > .map-head { grid-column: 1 / -1; }
   main > .panel[aria-labelledby="map-heading"] > .map-stage { grid-column: 1; grid-row: 2; }
   main > .panel[aria-labelledby="map-heading"] > .vision-preview {
