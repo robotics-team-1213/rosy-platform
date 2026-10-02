@@ -76,7 +76,7 @@ CONTROL_SPLIT = "docs/plans/2026-09-22-control-package-split-design.md"
 #: P6 verdicts: path (relative to src/) or package name -> (lines at verdict, verdict).
 SIZE_VERDICTS = {
     "fleet": (
-        27_303,
+        27_684,
         "split: server HTTP boundary, console, signals and the mission-control stores are separate owners "
         "today; group them into subpackages rather than one flat server/ tree (B2); owner fleet, unscheduled "
         "(re-judged 2026-09-29 at 11164 after mission_store joined the server tree; re-judged 2026-09-30 at "
@@ -146,7 +146,12 @@ SIZE_VERDICTS = {
         "atomically marks ownership DISPATCHING, and gateway startup holds obsolete authority. "
         "These remain Fleet journal/admission responsibilities under the D-413 migration plan; "
         "CellJob dispatch/reconciliation composition remains open. Full Fleet regression 1425 "
-        "passed/7 skipped; split verdict and the +150 growth allowance remain unchanged",
+        "passed/7 skipped. Re-judged 2026-10-03 at 27684 after current-main integration for the "
+        "opt-in CellJob dispatcher "
+        "and its transactional readback/fence/phase-history modules plus regression tests: these "
+        "compose Fleet-owned admission and ordered journals without a second device owner. "
+        "cell_job_store.py shrinks while transport-neutral receipt validation is shared with "
+        "legacy Mission dispatch. The split verdict and +150 growth allowance remain unchanged",
     ),
     "site/fleet/fleet/server/proposal_store.py": (
         730,

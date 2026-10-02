@@ -2,6 +2,8 @@ from hashlib import sha256
 from pathlib import Path
 import sys
 
+import pytest
+
 from fastapi.testclient import TestClient
 
 ROOT = Path(__file__).resolve().parents[4]
@@ -60,7 +62,7 @@ class FixedCellCompiler:
         )
 
 
-def _setup(tmp_path):
+def _setup(tmp_path, **options):
     db = tmp_path / "fleet.sqlite3"
     task_service = FleetTaskService(FleetTaskStore(db), robot_ids=("rosy_01",))
     users = {
@@ -80,6 +82,7 @@ def _setup(tmp_path):
         task_service=task_service, site_users=users,
         mission_service=MissionService(MissionStore(db)),
         proposal_store=ProposalStore(db), cell_job_compiler=compiler,
+        **options,
     )
     return TestClient(app), task_service, compiler
 
@@ -195,3 +198,39 @@ def test_cell_proposal_does_not_admit_when_service_and_operator_identity_match(t
 
     assert response.status_code == 403
     assert response.json()["detail"]["code"] == "CELL_JOB_APPROVER_MUST_DIFFER_FROM_PROPOSER"
+
+
+def test_cell_dispatcher_is_disabled_by_default_and_requires_pinned_configuration(tmp_path):
+    client, _, _ = _setup(tmp_path)
+    assert client.app.state.cell_job_dispatcher is None
+    with pytest.raises(ValueError, match="pinned config revision"):
+        _setup(tmp_path, enable_cell_job_dispatcher=True,
+               omx_instances={"omx_01": "omx_01_control"})
+
+
+def test_approved_cell_api_job_reaches_composed_dispatcher(tmp_path):
+    from test_cell_job_dispatcher import Transport
+
+    transport = Transport(None, None)
+    client, tasks, _ = _setup(
+        tmp_path, enable_cell_job_dispatcher=True,
+        omx_instances={"omx_01": "omx_01_control"}, omx_action_transport=transport,
+        cell_job_config_revisions={"omx_01": "cell-config-v1"},
+    )
+    transport.store, transport.tasks = client.app.state.cell_job_store, tasks.store
+    control = tasks.store.dispatch_control()
+    generation = tasks.store.rearm_dispatch(expected_generation=control["generation"], actor_id="operator-1")[
+        "generation"]
+    created = _post(client, "/api/fleet/proposals", "cell-secret", {
+        "request_key": "composed-cell", "workcell_id": "omx_01",
+        "instance_id": "omx_01_control", "candidate": _candidate(),
+    }).json()
+    identifier = created["proposal"]["proposal_id"]
+    assert client.app.state.cell_job_dispatcher.dispatch_next() is None
+    _post(client, f"/api/fleet/proposals/{identifier}/resolve", "cell-secret")
+    assert client.app.state.cell_job_dispatcher.dispatch_next() is None
+    assert _post(client, f"/api/fleet/missions/{identifier}/admit", "operator-secret",
+                 {"expected_generation": generation}).status_code == 200
+    assert client.app.state.cell_job_dispatcher.dispatch_next()["state"] == "ACCEPTED"
+    assert transport.submissions[0].cell_transfer.recipe_sha256 == RECIPE_SHA
+    assert transport.submissions[0].config_revision == "cell-config-v1"

@@ -31,6 +31,7 @@ from pydantic import BaseModel, ConfigDict, field_validator
 from core_common.protocol.vision_preview import VisionLeaseSigner
 from fleet.server.cancel_all import DriveCancelFence
 from fleet.server.cell_job_store import CellJobStore
+from fleet.server.cell_job_dispatcher import CellJobDispatcher
 from fleet.server.console import FleetConsole
 from fleet.server.goal_evidence_service import GoalEvidenceService
 from fleet.server.local_action_transport import UnixLocalActionTransport
@@ -100,6 +101,8 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                omx_socket_root: Path | str = "/run/rosy/omx",
                omx_stop_transport=None,
                enable_mission_dispatcher: bool = False,
+               enable_cell_job_dispatcher: bool = False,
+               cell_job_config_revisions: Optional[Mapping[str, str]] = None,
                omx_action_transport=None,
                enrollment=None,
                robot_credential_key: Optional[str] = None,
@@ -168,7 +171,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     if enable_mission_dispatcher and not configured_omx:
         raise ValueError("Mission dispatcher requires configured OMX workcells")
     action_transport = omx_action_transport
-    if enable_mission_dispatcher and action_transport is None:
+    if (enable_mission_dispatcher or enable_cell_job_dispatcher) and action_transport is None:
         action_transport = UnixLocalActionTransport(omx_socket_root)
     mission_dispatcher = (
         MissionDispatcher(
@@ -177,6 +180,15 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                                 if goal_evidence_service is not None else None),
         )
         if enable_mission_dispatcher else None
+    )
+    if type(enable_cell_job_dispatcher) is not bool:
+        raise ValueError("Cell dispatcher enablement must be an explicit boolean")
+    if enable_cell_job_dispatcher and (cell_job_compiler is None or cell_job_store is None):
+        raise ValueError("Cell dispatcher requires the persistent Cell Job API and compiler")
+    cell_job_dispatcher = (
+        CellJobDispatcher(cell_job_store, task_service.store, action_transport, configured_omx,
+                          config_revisions=cell_job_config_revisions or {})
+        if enable_cell_job_dispatcher else None
     )
     mission_progress = (
         MissionProgressService(mission_service.store) if mission_configured else None
@@ -255,8 +267,8 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                 _task_dispatch_loop(console, task_service, drive_cancel))
         if proposal_store is not None:
             proposal_expiry = asyncio.create_task(_proposal_expiry_loop(proposal_store))
-        if mission_dispatcher is not None:
-            mission_worker = asyncio.create_task(_mission_dispatch_loop(mission_dispatcher))
+        if mission_dispatcher is not None or cell_job_dispatcher is not None:
+            mission_worker = asyncio.create_task(_mission_dispatch_loop(mission_dispatcher, cell_job_dispatcher))
         if goal_evidence_service is not None:
             goal_evidence_worker = asyncio.create_task(
                 _goal_evidence_expiry_loop(goal_evidence_service)
@@ -304,6 +316,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     app.state.mission_model_turn_worker = mission_model_turn_worker
     app.state.post_action_observation_source = post_action_observation_source
     app.state.mission_dispatcher = mission_dispatcher
+    app.state.cell_job_dispatcher = cell_job_dispatcher
     app.state.proposal_store = proposal_store
     app.state.omx_instances = configured_omx
     app.state.localization_service = localization_service
@@ -522,13 +535,17 @@ async def _mission_model_turn_worker_loop(worker) -> None:
         await asyncio.sleep(0.25)
 
 
-async def _mission_dispatch_loop(dispatcher: MissionDispatcher) -> None:
+async def _mission_dispatch_loop(dispatcher: MissionDispatcher | None,
+                                 cell_dispatcher: CellJobDispatcher | None = None) -> None:
     """Run the explicit, disabled-by-default Mission to OMX bridge off request handlers."""
     while True:
-        try:
-            await asyncio.to_thread(dispatcher.dispatch_next)
-        except asyncio.CancelledError:
-            raise
-        except Exception:
-            _LOG.exception("Fleet Mission dispatcher cycle failed")
+        for owner in (dispatcher, cell_dispatcher):
+            if owner is None:
+                continue
+            try:
+                await asyncio.to_thread(owner.dispatch_next)
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                _LOG.exception("Fleet Mission dispatcher cycle failed")
         await asyncio.sleep(0.25)

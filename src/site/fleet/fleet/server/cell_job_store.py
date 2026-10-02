@@ -12,6 +12,8 @@ from typing import Any, Mapping
 
 from core_common.protocol.schemas import FleetCellTransferGrant
 
+from .cell_job_codec import _json, cell_transfer_grant_digest
+from .cell_job_readback import CellJobReadbackMixin
 from .dispatch_admission import release as release_claims
 from .dispatch_admission import reserve as reserve_claims
 from .dispatch_admission import normalize_resources
@@ -22,23 +24,7 @@ _MIGRATION_VERSION = 1
 _IDENTIFIER_HASH_FIELDS = ("recipe_digest", "cell_digest", "process_artifact_digest")
 
 
-def _json(value: object) -> str:
-    try:
-        return json.dumps(value, sort_keys=True, separators=(",", ":"), allow_nan=False)
-    except (TypeError, ValueError) as exc:
-        raise ValueError("Cell Job data must be finite JSON") from exc
-
-
-def cell_transfer_grant_digest(grant: Mapping[str, Any]) -> str:
-    """Digest the canonical complete CELL_TRANSFER grant, excluding its digest field."""
-    parsed = FleetCellTransferGrant.model_validate(dict(grant))
-    document = parsed.model_dump(mode="json")
-    document.pop("request_digest")
-    canonical = json.dumps(document, sort_keys=True, separators=(",", ":"), allow_nan=False)
-    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
-
-
-class CellJobStore:
+class CellJobStore(CellJobReadbackMixin):
     """Persist Cell Job ordering beside, but separate from, legacy PICK_PLACE rows."""
 
     def __init__(self, path: Path | str) -> None:
@@ -422,49 +408,6 @@ class CellJobStore:
             result = self._get(connection, mission_id)
             connection.commit()
         return result
-
-    def record_action_result(self, mission_id: str, *, step_index: int, event_id: str,
-                             action_id: str, attempt_id: str, outcome: str,
-                             result: Mapping[str, Any]) -> dict[str, Any]:
-        event_id = _nonempty("event_id", event_id)
-        result_json = _json(dict(result))
-        now = _now()
-        with closing(self._connect()) as connection:
-            connection.execute("BEGIN IMMEDIATE")
-            job = connection.execute(
-                "SELECT * FROM fleet_cell_jobs WHERE mission_id=?", (mission_id,),
-            ).fetchone()
-            step = connection.execute(
-                "SELECT * FROM fleet_cell_steps WHERE mission_id=? AND step_index=?",
-                (mission_id, step_index),
-            ).fetchone()
-            if job is None or step is None:
-                raise KeyError(mission_id if job is None else (mission_id, step_index))
-            if (step["status"] != "RUNNING" or step["action_id"] != action_id
-                    or step["attempt_id"] != attempt_id):
-                raise MissionConflict("Action result does not match the current Cell transfer attempt")
-            if outcome == "SUCCEEDED":
-                step_state, job_state, reason = "ACTION_SUCCEEDED", "ACTION_SUCCEEDED", None
-                event_type = "CELL_STEP_ACTION_SUCCEEDED"
-            else:
-                step_state, job_state, reason = "HOLD", "HOLD", "ACTION_OUTCOME_UNKNOWN"
-                event_type = "CELL_STEP_ACTION_UNKNOWN"
-            connection.execute(
-                "UPDATE fleet_cell_steps SET status=?, result_json=?, reason=?, updated_at=? "
-                "WHERE mission_id=? AND step_index=?",
-                (step_state, result_json, reason, now, mission_id, step_index),
-            )
-            connection.execute(
-                "UPDATE fleet_cell_jobs SET status=?, reason=?, updated_at=? WHERE mission_id=?",
-                (job_state, reason, now, mission_id),
-            )
-            self._event(connection, mission_id, step_index, event_type, "device", {
-                "event_id": event_id, "action_id": action_id, "attempt_id": attempt_id,
-                "outcome": outcome, "result": json.loads(result_json),
-            })
-            result_row = self._get(connection, mission_id)
-            connection.commit()
-        return result_row
 
     def confirm_step_goal(self, mission_id: str, *, step_index: int,
                           action_id: str, attempt_id: str,
