@@ -177,3 +177,41 @@ def test_palletizing_process_has_no_ros_runtime_import():
 
     assert rosy.processes.palletizing.__name__ == "rosy.processes.palletizing"
     assert not ({"rclpy", "rclpy.node"} & set(sys.modules) - before)
+
+
+# C3b (merged onto D-413): grasp_depth, the tool fingertip overhang and the carry_z hang
+# rule live in the palletizing module; the legacy facade only re-exports them.
+DEPTH = ("height: 0.02, mass_kg: 0.01}", "height: 0.02, mass_kg: 0.01, grasp_depth: 0.008}")
+
+
+def test_process_module_owns_grasp_depth_and_fingertip_overhang():
+    recipe, cell = _inputs(DEPTH)
+    assert recipe.box.grasp_depth == 0.008
+    assert cell.fingertip_overhang_m == 0.0025
+    flat_recipe, _ = _inputs()
+    deep, flat = compile_job(recipe, cell, **TOLERANCE), compile_job(flat_recipe, cell, **TOLERANCE)
+    box_pairs = [(a, b) for a, b in zip(flat.steps, deep.steps) if a.item == "box"]
+    assert box_pairs and all(b.target.z == pytest.approx(a.target.z - 0.008) for a, b in box_pairs)
+    # hang = max(0.02 - 0.008, sheet 0.002, overhang 0.0025) = 0.012
+    assert carry_z(recipe, cell, **TOLERANCE) == pytest.approx(0.042 + 0.012 + 0.05)
+    assert legacy_carry_z(recipe, cell, **TOLERANCE) == carry_z(recipe, cell, **TOLERANCE)
+
+
+def test_process_module_refuses_fingertips_below_the_box():
+    recipe, cell = _inputs(("height: 0.02, mass_kg: 0.01}", "height: 0.02, mass_kg: 0.01, grasp_depth: 0.018}"))
+    with pytest.raises(CompileError, match="fingertip"):
+        compile_job(recipe, cell, **TOLERANCE)
+
+
+def test_plan_bundle_recompiles_jobs_with_grasp_depth():
+    recipe, cell = _inputs(DEPTH)
+    job = compile_job(recipe, cell, **TOLERANCE)
+    compiled = compile_plan_bundle(job, recipe, cell,
+                                   process_artifact_digest=sha256(b"rosy-palletizing-0.1.0").hexdigest(),
+                                   tol_m=1e-6)
+    first = compiled.bundle.steps[0].invocation
+    assert first.inputs["carry_z_base_m"] == pytest.approx(job.carry_z)
+    assert first.inputs["source_pose_base"]["z_m"] == pytest.approx(job.steps[0].target.z)
+    with pytest.raises(ValueError, match="must match the current recipe/cell compilation"):
+        compile_plan_bundle(compile_job(*_inputs(), **TOLERANCE), recipe, cell,
+                            process_artifact_digest=sha256(b"x").hexdigest(), tol_m=1e-6)

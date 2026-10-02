@@ -31,6 +31,7 @@
 - [2026-10-01-model-tool-contract-implementation.md](../../../../docs/plans/2026-10-01-model-tool-contract-implementation.md)
 - [2026-10-01-omx-demonstration-lerobot-design.md](../../../../docs/plans/2026-10-01-omx-demonstration-lerobot-design.md)
 - [2026-10-01-pilot-omx-gazebo-practice.md](../../../../docs/plans/2026-10-01-pilot-omx-gazebo-practice.md)
+- [2026-10-02-rosy-cell-c3-gazebo.md](../../../../docs/plans/2026-10-02-rosy-cell-c3-gazebo.md)
 
 ## 교훈 (docs/solutions)
 
@@ -42,8 +43,8 @@
 
 ## 최근 기록
 
-- 2026-10-02 · uncommitted · feat(omx): admit tagged Fleet Cell Transfer grants
-- 2026-10-02 · uncommitted · test(omx): verify planned-start tolerance budget
-- 2026-10-02 · uncommitted · fix(omx): center final state check on planned start
-- 2026-10-02 · uncommitted · fix(omx): make start tolerance ceiling owner-controlled
-- 2026-10-02 · uncommitted · fix(omx): close final-owner joint-state sequence race
+- 2026-10-02 · c07896af · merge: main (D-413, pl3 dispatch safety) into feat/rosy-cell-c3-gazebo
+- 2026-10-02 · aa77cb9c · test(omx): WSL rclpy loop under nice -n 19 during another session's Gazebo
+- 2026-10-02 · 0380d789 · fix(omx): re-review fixes N1 and minor 4
+- 2026-10-02 · e40d182c · fix(omx): C3b 독립 리뷰 수정 (FIX REQUIRED)
+- 2026-10-02 · f63bb564 · fix(omx): C3b — C3 결함 수정, 대역 없는 Gazebo 단일 배치

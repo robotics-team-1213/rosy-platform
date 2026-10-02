@@ -32,3 +32,19 @@
 - Change: Recipe/Cell/Job source moved to the `modules/processes/palletizing` wheel. Existing `rosy_cell` imports only re-export canonical types and functions.
 - Evidence: installed wheel compatibility 11 passed; Cell suite 143 passed. SOURCE remains GO. No MoveIt/IK, Motion Intent, or reachability behavior was added.
 - Gate: SOURCE GO; ROS-SIM remains HOLD.
+
+## 2026-10-02 · 52ef7f91 · feat(cell): OMX sim demo cell/recipe for C3
+
+- 변경: `examples/omx_sim/cell.yaml`(cell/2, home (0.12, 0, 0.12), 프로필과 같은 `kinematics_revision`)과 `recipe.yaml`(2 팔레트 × 2층 × 4블록 40×30×30 mm 20 g + 슬립시트 2장, grid, gap 15 mm). 저장소 루트 `test/test_cell_omx_sim_layout_contract.py`가 Job 18 transfer 전부를 OMX 해석 플래너로 계획하고 Gazebo 월드 포즈와 대조한다(rosy_cell과 omx_adapter는 서로 import하지 않는다).
+- 증거: layout contract 6 passed(변이 확인: 슬립시트 z 0.002, 월드 팔레트 x +0.01 각각 실패); cell suite 143 passed.
+- gate 변화: ROS-SIM HOLD 유지(C3 증거 추가, C6 아님).
+- 결정: D-402 §5 도달 실측, D-403 §2.
+- 교훈: Step z는 물건 윗면인데 OMX-F TCP는 손가락 끝이라 파지 깊이를 실을 자리가 필요하다(C4). 탁자 위 슬립시트(z 0.002)는 프로필 TCP 바닥 0.005 아래라 거절된다.
+
+## 2026-10-02 · a31ebde1 · feat(cell): per-item grasp_depth (C3b B1)
+
+- 변경: 레시피 `box.grasp_depth`(선택, 0 ≤ d < height, 없으면 0 = 윗면). 상자 Step `target.z` = 윗면 − `grasp_depth`, `approach_z` = 윗면 + clearance, `carry_z` 매달린 높이 = max(`height − grasp_depth`, 슬립시트 두께). 데모 레시피 15 mm. C3b B3(cb58f71f)에서 데모 인피드 yaw를 π/2로 돌렸다(cell.yaml·두 월드).
+- 증거: cell suite 150 passed(새 시험: 깊이만큼 낮은 상자 Step, 같은 approach_z, carry_z = 0.042 + 0.012 + 0.05, 슬립시트가 더 두꺼우면 그것이 매달린 높이); layout contract 5 passed(상자 transfer 전부 계획, 슬립시트는 `GRIPPER_WIDTH_INVALID`).
+- gate 변화: 없음. ROS-SIM은 omx_adapter의 C3b 단일 transfer 증거.
+- 결정: D-401 보강(2026-10-02, C3b). 깊이는 셀 공구가 아니라 물건에 둔다.
+- 교훈: 레시피 gap 15 mm(20 mm도)는 Gazebo의 실제 손가락 폭보다 좁아, 층을 채우면 나중 배치가 이웃을 민다. gap 검증에 공구 폭이 들어가야 한다(C4/C6).

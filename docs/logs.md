@@ -4490,6 +4490,13 @@
 - 변경: 바로 앞 "D-395 개정 9 — S1 Gazebo 통과" 항목의 원시 로그 경로가 `DevTemposy-d395-s1d`로 깨져 기록됐다. 올바른 경로는 `X:\DevTemp\rosy-d395-s1d\`다.
 - 증거: 해당 폴더.
 - gate 변화: 없음.
+
+## 2026-10-02 · uncommitted · test(sim): D-407 Gazebo 재실행 — 관제 연결
+- 변경: `docs/validation/d407-gazebo-console-rerun-2026-10-02/`(result.md, evidence/run_sim.sh·console.sh), `tools/sim/d407_stuck_scenarios.py --fleet-base`(Fleet 경로로 답, Fleet 보드 기록). CORE·Fleet 코드는 바꾸지 않았다.
+- 증거: map_v2_fleet_real keep, 한 대, 실제 `rosy_fleet console`(8096). HUB=1 로 CORE 정상 기동, `console_linked: true`, 무응답 ASKING 15 s(sim) 뒤 로컬, Fleet 경로 WAIT/BACK_AND_RETRY/RESUME 적용·stale·닫힌 id 409 그대로, 회전교차로 재막힘 `restuck_of` 로 2 회 뒤 WAITING_CONSOLE, A1 모서리 뒤 여유 0.365 m 로 후진 진행. 원시 기록 X:\DevTemp\d407-gz2.
+- 발견: `nav.line_stuck_answered` 의 `token_id`(stuck_recovery.py:387)를 Fleet 사건 감사가 `EVENT_NOT_AUDITABLE` 로 거부한다. ASKING 중 FleetAgent 연결이 한 번 끊겨 `no_console` 로 일찍 후진했다(원인 미확정).
+- gate 변화: 없음. ROS-SIM 증거이며 D-407 은 Proposed 그대로다.
+
 ## 2026-10-02 · uncommitted · feat(platform): isolate pallet.transfer Skill policy
 - 변경: Add a ROS-free `pallet.transfer` Skill contract with injected planner, phase execution and evidence ports. Validate work item, poses, heights and carry clearance; require phase success, gripper release evidence and destination pose evidence before reporting success. Move shared `AttemptIdentity` and `ReceiptBinding` to `execution/local/receipts.py` while preserving `rosy.execution.api` imports. Add the manipulation wheel to CI build/install.
 - 증거: Platform transfer boundary, contract mapping, Cell submission and CI dependency tests: 25 passed. The forbidden-import guard failed under a temporary `sqlite3` import and passed after restoration. New modules passed flake8, py_compile and diff checks. Built three wheels and installed them offline into a fresh X: venv; import smoke passed.

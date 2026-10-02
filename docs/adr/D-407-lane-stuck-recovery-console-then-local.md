@@ -67,6 +67,7 @@ Status 는 Proposed 그대로다. CORE 쪽만 구현했고 Fleet 콘솔 화면(�
 - Gazebo 검증(2026-10-02, ROS-SIM 한 대): `docs/validation/d407-gazebo-stuck-recovery-2026-10-02/result.md`. 무응답(관제 연결 없음) → 후진 0.08 m → 1 s → 재판정 → 복귀/2회 뒤 관제 대기, 답 다섯, hold 끊김·e-stop 우선을 확인했다. ASKING 15 s 창은 FleetAgent 시작 결함으로 시험하지 못했고, 복귀 직후 같은 자리 재막힘이 시도 수를 되살리는 반복을 발견했다.
 - **확인 (2026-10-02, 조정자 결정, Gazebo 실행 뒤): 복구 뒤 곧 다시 막히면 같은 막힘이다.** `recovered` 로 닫힌 뒤 `recovery_restuck_s`(기본 20 s, 단조 시계) 안이거나, 복구 뒤 CORE 가 낸 순 전진이 `recovery_restuck_m`(기본 0.30 m)에 못 미친 채 다시 막히면 시도 수를 이어 센다. 새 `stuck_id` 를 쓰되 `nav.line_stuck_opened` 에 `restuck_of`(앞 막힘 id)와 이어받은 `attempts` 를 싣고, 이미 `recovery_max_attempts` 를 다 썼으면 곧바로 관제 답만 기다린다. 복구-재막힘이 끝없이 반복되던 Gazebo 관찰을 막는다. 모드 변경은 이 기억을 지운다.
 - Gazebo 후속(2026-10-02): 뒤 띠 폭을 경로 띠(±0.09 m) 대신 URDF 몸 반폭(`footprint.half_width_m` 0.05655 m, geometry.yaml 에 추가, drift 시험)과 `recovery_rear_lateral_margin_m`(0.02 m)으로 — 옆 벽이 "뒤"로 세어지던 것을 고친다. 거부·중단 사건에 판정한 scan 의 뒤 여유·사각·trail 값, 비상정지로 닫힌 막힘은 사유 `estop`. FleetAgent 는 CoreServices.build 가 아니라 API 이벤트 루프에서 시작한다(hub_url 설정 시 CORE 가 죽던 결함).
+- Gazebo 재실행(2026-10-02, 실제 Fleet 관제 연결): `docs/validation/d407-gazebo-console-rerun-2026-10-02/result.md` — CORE 기동·ASKING 15 s·Fleet 경로 답(409 그대로)·재막힘 2 회 뒤 관제 대기·좁힌 뒤 띠 확인. `nav.line_stuck_answered` 의 `token_id` 가 Fleet 감사에 거부되는 결함과 ASKING 중 연결 끊김을 보고했다.
 
 ## 구현 메모 (2026-10-02, Fleet 쪽, feat/d407-console-stuck-decisions)
 

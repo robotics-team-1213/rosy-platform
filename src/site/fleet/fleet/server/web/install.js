@@ -3,7 +3,7 @@
 // (rosy-console-token)를 공유한다 — 운용 화면에서 접속했으면 여기도 풀려 있다.
 
 import { applyRoleToControls } from "./authorization.js";
-import { createEnrollmentPanel } from "./enrollment.js";
+import { DISCOVERY_LABELS, createEnrollmentPanel } from "./enrollment.js";
 import { createCameraPairingPanel } from "./camera-pairing.js";
 import { createVisionView } from "./vision-view.js";
 import { createFieldView } from "./field-view.js";
@@ -154,9 +154,9 @@ el("console-token").addEventListener("keydown", (event) => {
   if (event.key === "Enter") saveToken();
 });
 
-// 전체 정지는 운용 표면의 규칙을 그대로 따른다(D-280 — 모든 관제 표면 첫 화면).
+// 전체 정지는 한 번의 누름으로 즉시 실행된다(D-414 — 비상 정지는 확인 없는
+// 비상 출구다. D-371이 대화상자 위에서 살아 있게 했던 이유를 끝까지 밀었다).
 el("estop").addEventListener("click", async () => {
-  if (!window.confirm("등록된 모든 로봇을 정지시킵니다. 계속할까요?")) return;
   try {
     const result = await call("/api/fleet/estop", { method: "POST" });
     log(`정지 요청 응답: ${result.stopped}/${result.total} · 물리 정지 미확인`, "bad");
@@ -175,6 +175,22 @@ async function refreshDiscovery() {
     const status = el("discovery-status");
     status.textContent = snapshot.scanner_online
       ? `${snapshot.devices.length}대 발견` : "검색기 연결 대기";
+    // D-413 — 발견(mDNS) 장치는 이 화면의 주인공이다: 이름·주소·단계·상태와
+    // 곧바로 누르는 등록 버튼(enrollment.decorateDiscoveryRow).
+    const rows = snapshot.devices.map((device) => {
+      const item = document.createElement("li");
+      const label = document.createElement("b");
+      label.textContent = device.name;
+      const detail = document.createElement("small");
+      detail.textContent = `${device.address}:${device.port} · ${device.stage || "부팅 중"}`;
+      const state = document.createElement("span");
+      state.textContent = DISCOVERY_LABELS[device.status] || "확인 필요";
+      state.className = `discovery-state ${device.status}`;
+      item.append(label, detail, state);
+      enrollment.decorateDiscoveryRow(item, device);
+      return item;
+    });
+    el("discovery-list").replaceChildren(...rows);
   } catch (err) {
     if (discoveryGate.fail(err.status, err.code) === "absent") {
       const status = el("discovery-status");

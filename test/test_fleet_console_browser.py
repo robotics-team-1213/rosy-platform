@@ -405,78 +405,33 @@ def test_gather_loss_removes_last_known_robot_position(console_url):
 DECLINE_ESTOP_CONFIRM = DECLINE_CONFIRM
 
 
-def test_fleet_estop_requires_confirm_and_decline_blocks_it(console_url):
-    """D-92(a) — 전체 정지는 confirm을 지나며 거부하면 나가지 않는다."""
+def test_fleet_estop_fires_on_one_click_without_any_dialog(console_url):
+    """D-413 — 전체 정지는 확인 없이 한 번의 누름으로 즉시 나간다(D-92a 좁힘).
+
+    비상 정지는 비상 출구다: 확인 대화상자는 마찰이고, 거절 경로는 사고다.
+    대화상자가 열리지 않는 것까지 확인한다(window.confirm 스텁이 한 번도
+    불리지 않으면 통과).
+    """
     from playwright.sync_api import sync_playwright
 
-    api = {
-        "/api/fleet/state": SNAPSHOT,
-        "/api/fleet/map": MAP_GRID,
-        "/api/fleet/formation": FORMATION,
-        "/api/fleet/estop": {"stopped": 3, "total": 3, "robots": []},
-    }
-    posts: list[tuple[str, str]] = []
+    posts: list[str] = []
+    api = dict(API)
+    api["/api/fleet/estop"] = {"stopped": 3, "total": 3, "robots": []}
     with sync_playwright() as p:
-        browser, page, errors = _open_console(
-            p, api, posts=posts, init_script=DECLINE_ESTOP_CONFIRM)
-        page.goto(console_url, wait_until="networkidle")
+        browser, page, errors = _open_console(p, api, posts=posts, init_script=DECLINE_CONFIRM)
+        page.goto(console_url, wait_until="domcontentloaded")
+        page.fill("#console-token", "operator-token")
+        page.locator("#token-save").click()
         page.wait_for_function(
-            "() => (window.__swarmOverlay?.slots || 0) === 2", timeout=8000
-        )
-        save_temp_screenshot(page, "fleet_estop_preconfirm.png")
+            "() => document.querySelector('#user-role')?.textContent.includes('운영자')", timeout=3000)
         page.locator("#estop").click()
-        page.wait_for_function("() => window.__confirms.length === 1")
-        declined = [post for post in posts if post[1] == "/api/fleet/estop"]
-        accept_confirm(page)
-        page.locator("#estop").click()
-        for _ in range(40):
-            if any(post == ("POST", "/api/fleet/estop") for post in posts):
-                break
-            page.wait_for_timeout(100)
-        confirms = page.evaluate("window.__confirms")
-        page.get_by_text("정지 요청 응답: 3/3 · 물리 정지 미확인").wait_for()
-        assert not errors, f"페이지 오류: {errors}"
+        page.wait_for_function("() => window.__confirms !== undefined", timeout=3000)
+        page.wait_for_timeout(300)
+        assert any(path == "/api/fleet/estop" for _method, path in posts), posts
+        assert page.evaluate("() => window.__confirms.length") == 0
+        assert not errors
         browser.close()
 
-    assert "등록된 모든 로봇을 정지시킵니다" in confirms[0]
-    assert declined == []
-    assert any(post == ("POST", "/api/fleet/estop") for post in posts)
-
-
-DELAYED_FORMATION = {
-    **FORMATION,
-    "stream_evidence": {
-        **FORMATION["stream_evidence"],
-        "rosy_02": {"state": "delayed", "age_s": 2.1, "reason": "sample_too_old",
-                    "stale_after_s": 1.0, "source": "follower_tx"},
-    },
-    "relay": {
-        **FORMATION["relay"],
-        "follower_tx_hz": {"rosy_02": 1.2, "rosy_03": 0.0},
-        "follower_connected": {"rosy_02": True, "rosy_03": False},
-    },
-}
-
-HOLDING_FORMATION = {
-    **FORMATION,
-    "state": "HOLDING",
-    "reason": ["STREAM_LOST"],
-    "pending_triggers": [["stream", "rosy_03"]],
-}
-
-UNREACHABLE_SNAPSHOT = {
-    **SNAPSHOT,
-    "fleet": {"name": "site", "online": 2, "total": 3},
-    "robots": [
-        SNAPSHOT["robots"][0],
-        SNAPSHOT["robots"][1],
-        _robot(
-            "rosy_03", {"x": 0.45, "y": 0.4, "yaw": 0.0},
-            online=False,
-            error={"reachable": False, "code": "CONNECT_ERROR"},
-        ),
-    ],
-}
 
 
 def test_delayed_follower_stream_is_named_in_the_roster(console_url):
