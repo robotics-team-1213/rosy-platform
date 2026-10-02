@@ -18,7 +18,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from d395_s1_summary import decisions, fmt, rtf_range, to_sim, verdict  # noqa: E402
-from d395_s2_bench import COLLISION_M, min_pairwise  # noqa: E402
+from d395_s2_layout import COLLISION_M, min_pairwise  # noqa: E402
 
 #: Rev. 6: a mirror lock must be flagged within 15 sim s of the injection.
 DETECT_LIMIT_SIM_S = 15.0

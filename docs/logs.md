@@ -4483,13 +4483,37 @@
 
 ## 2026-10-02 · uncommitted · docs(adr): D-395 개정 9 — S1 Gazebo 통과
 - 변경: 다른 세션과 조율한 조용한 시간대(13:54–16:09 KST)의 S1 네 번째 실행 15회를 기록하고 S1을 닫았다. 확정 오차 ≤1.2 cm / 1.2°, 거울 결정 0/35, 강제 거울 탐지 6/6(3.1–4.1 sim s), 실제 주행 중 들어 옮김 4회 완전 통과. 남은 단계는 S2(4대 sim), 실기(개정 5)·S3, D-257·D-393 개정 수락(사용자 승인).
-- 증거: `docs/plans/2026-10-02-d395-s1-bench-results.md` Run 4, `X:\DevTemp
-osy-d395-s1d\`.
+- 증거: `docs/plans/2026-10-02-d395-s1-bench-results.md` Run 4, `X:\DevTemposy-d395-s1d\`.
 - gate 변화: 없음(Proposed). ROS-SIM S1 통과.
 
 ## 2026-10-02 · uncommitted · docs(logs): D-395 개정 9 항목의 증거 경로 정정
 - 변경: 바로 앞 "D-395 개정 9 — S1 Gazebo 통과" 항목의 원시 로그 경로가 `DevTemposy-d395-s1d`로 깨져 기록됐다. 올바른 경로는 `X:\DevTemp\rosy-d395-s1d\`다.
 - 증거: 해당 폴더.
+- gate 변화: 없음.
+
+## 2026-10-02 · uncommitted · test(sim): D-407 Gazebo 재실행 — 관제 연결
+- 변경: `docs/validation/d407-gazebo-console-rerun-2026-10-02/`(result.md, evidence/run_sim.sh·console.sh), `tools/sim/d407_stuck_scenarios.py --fleet-base`(Fleet 경로로 답, Fleet 보드 기록). CORE·Fleet 코드는 바꾸지 않았다.
+- 증거: map_v2_fleet_real keep, 한 대, 실제 `rosy_fleet console`(8096). HUB=1 로 CORE 정상 기동, `console_linked: true`, 무응답 ASKING 15 s(sim) 뒤 로컬, Fleet 경로 WAIT/BACK_AND_RETRY/RESUME 적용·stale·닫힌 id 409 그대로, 회전교차로 재막힘 `restuck_of` 로 2 회 뒤 WAITING_CONSOLE, A1 모서리 뒤 여유 0.365 m 로 후진 진행. 원시 기록 X:\DevTemp\d407-gz2.
+- 발견: `nav.line_stuck_answered` 의 `token_id`(stuck_recovery.py:387)를 Fleet 사건 감사가 `EVENT_NOT_AUDITABLE` 로 거부한다. ASKING 중 FleetAgent 연결이 한 번 끊겨 `no_console` 로 일찍 후진했다(원인 미확정).
+- gate 변화: 없음. ROS-SIM 증거이며 D-407 은 Proposed 그대로다.
+
+## 2026-10-02 · uncommitted · feat(platform): isolate pallet.transfer Skill policy
+- 변경: Add a ROS-free `pallet.transfer` Skill contract with injected planner, phase execution and evidence ports. Validate work item, poses, heights and carry clearance; require phase success, gripper release evidence and destination pose evidence before reporting success. Move shared `AttemptIdentity` and `ReceiptBinding` to `execution/local/receipts.py` while preserving `rosy.execution.api` imports. Add the manipulation wheel to CI build/install.
+- 증거: Platform transfer boundary, contract mapping, Cell submission and CI dependency tests: 25 passed. The forbidden-import guard failed under a temporary `sqlite3` import and passed after restoration. New modules passed flake8, py_compile and diff checks. Built three wheels and installed them offline into a fresh X: venv; import smoke passed.
+- gate 변화: None. OMX provider wiring to the existing Action owner remains. This does not establish ROS-SIM, Gazebo or device acceptance.
+## 2026-10-02 · uncommitted · feat(platform): bind OMX transfer Skill to device owner
+- Change: Add `integrations/robots/omx` to map validated `FleetCellTransferGrant` data into `pallet.transfer`, resolve grasp geometry from the accepted recipe, adapt the existing analytic Cell planner, and wrap `PickPlaceRunner` start/exact cancellation. Register the import boundary and build/install the integration wheel in CI.
+- Evidence: Provider/owner boundary 12 passed; dependency boundary 5 passed; platform mapping/submission/compatibility 27 passed; OMX adapter regression 333 passed, 5 skipped. New provider passed flake8 and py_compile. Six platform wheels built; Skill and integration wheels installed offline into a fresh X: venv; installed provider import smoke passed.
+- Gate: SOURCE only; ROS-SIM HOLD and DEVICE/FIELD PARKED.
+## 2026-10-02 · uncommitted · feat(platform): add installation profiles and app compositions
+- Change: Add `rosy-app-agent` and `rosy-app-gateway`, strict allowlisted `omx_cell_sim` and `site_cell` profiles, wheel installation in CI, gateway composition delegation from the existing Fleet CLI, and the gateway composition path to the site image. Hardware dispatch remains disabled in both profiles.
+- Evidence: Profile/entrypoint tests 7 passed; Fleet CLI tests 31 passed; dependency-boundary tests 5 passed; app flake8 and py_compile passed. Built eight platform wheels and installed them offline in a fresh X: venv without repository `PYTHONPATH`; fake profile lifecycle smoke passed for both apps.
+- Gate: SOURCE/LOCAL only. ROS-SIM HOLD; DEVICE/FIELD PARKED.
+
+## 2026-10-02 · uncommitted · docs(adr): D-418 로봇 SSH 접속 — 화면 코드 키 등록, 임시 비밀번호, 팀 키 공유
+
+- 변경: D-418(Accepted) 작성. 사용자 선택(2026-10-02): 화면 코드 등록 + 로봇별 임시 비밀번호를 기본으로, 키 복사 공유도 함께. 공유는 마스터 키가 아닌 passphrase 잠금 팀 키(회수 가능). 번호는 `git log --all` 스캔 뒤 D-418; D-416·D-417은 다른 브랜치 사용 중이라 `adr_gaps`에 예약.
+- 증거: 설계만. 기존 키 전용 SSH(D-174 F3), LCD 코드 로그인(D-193), `rosy-hw-test.path` 요청 파일 패턴 확인.
 - gate 변화: 없음.
 
 ## 2026-10-02 · uncommitted · test(sim): D-395 S2 bench — 4 robots, simultaneous re-arbitration, homing in traffic (test/d395-s2-bench, main 13e6d5e45)
@@ -4509,3 +4533,8 @@ osy-d395-s1d\`.
 - gate 변화: 없음. ROS-SIM S2 미완료.
 - 결정: 없음. 안전 발견 F1(전원 투입 직후 `localization: null` 행의 odom 자세를 Fleet이 마지막 신뢰 자세로 기록해 전 구간 차단 대신 0.45 m 금지 구역만 적용, q0에서 미확정 로봇 옆으로 목표 하달)은 별도 레인 제안. 권고: 전용/유휴 호스트, gpu_lidar GPU 렌더링 확인, sim 전용 물리 스텝 5 ms(rig_rate.py 선례).
 - 교훈: 2대에서 0.1–0.16이던 RTF가 4대에서 0.02로 떨어졌다. 대수에 비례하지 않는다 — 실행 전 짧은 전원 투입 측정으로 RTF를 먼저 확인했어야 했다.
+
+## 2026-10-02 · uncommitted · refactor(sim): D-395 S2 bench and gz_multi back under the D-362 600-line budget
+- 변경: 동작 변경 없음. `tools/sim/d395_s2_bench.py`(605→398행)의 배치·순수 함수를 `tools/sim/d395_s2_layout.py`로 옮겼다(요약 도구도 거기서 읽는다). `gz_multi.launch.py`(607→596행)의 `nav_composition` 인자·적용과 `_optional_float`를 `launch/gz_multi_args.py`로 옮겼다(`world_profiles.py`와 같은 형제 모듈 방식).
+- 증거: `python -m pytest test/architecture -q` 81 passed/1 skipped; `test/test_d395_s2_bench.py test/test_d395_s1_bench.py test/architecture/test_module_structure.py src/sim/gz_sim/test` 319 passed/2 skipped; `--check` 배치 문제 0. WSL 실행 없음.
+- gate 변화: 없음.
