@@ -25,6 +25,8 @@ CURRENT_COMPONENTS = {
         "integrations/robots/omx/src/rosy/integrations/robots/omx",
         "rosy.integrations.robots.omx",
     ),
+    "gateway_app": ("apps/gateway/src/rosy_gateway", "rosy_gateway"),
+    "agent_app": ("apps/agent/src/rosy_agent", "rosy_agent"),
 }
 
 

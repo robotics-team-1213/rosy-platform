@@ -1,0 +1,14 @@
+schema: rosy.installation-profile.v1
+profile_id: omx-cell-sim
+provider_id: omx.cell-transfer.sim.v1
+wheels:
+  - rosy-world
+  - rosy-skill-api
+  - rosy-skill-manipulation
+  - rosy-execution
+  - rosy-palletizing
+  - rosy-integration-robot-omx
+  - rosy-app-agent
+ros_packages:
+  - omx_adapter
+hardware_dispatch_enabled: false

@@ -29,6 +29,12 @@ components:
   - name: omx_transfer_integration
     path: integrations/robots/omx/src/rosy/integrations/robots/omx
     import_prefix: rosy.integrations.robots.omx
+  - name: gateway_app
+    path: apps/gateway/src/rosy_gateway
+    import_prefix: rosy_gateway
+  - name: agent_app
+    path: apps/agent/src/rosy_agent
+    import_prefix: rosy_agent
 
 # Static absolute imports and relative imports resolved from their package path.
 boundaries:
@@ -45,6 +51,8 @@ boundaries:
   - importer_prefix: rosy.processes.palletizing
     forbidden_imports: [fleet, rosy_cell, omx_adapter, rclpy]
   - importer_prefix: rosy.integrations.robots.omx
+    forbidden_imports: [fleet, rosy_cell, rclpy]
+  - importer_prefix: rosy_agent
     forbidden_imports: [fleet, rosy_cell, rclpy]
 
 # Contract canaries exercise forbidden edges even when one endpoint is not built yet.

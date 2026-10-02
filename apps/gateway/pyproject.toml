@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rosy-app-gateway"
+version = "0.1.0"
+description = "ROSY site gateway application composition"
+requires-python = ">=3.12"
+dependencies = ["PyYAML>=6"]
+
+[project.scripts]
+rosy-site-gateway = "rosy_gateway.compose:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["rosy_gateway*"]
+namespaces = true

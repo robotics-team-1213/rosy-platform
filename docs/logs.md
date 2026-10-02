@@ -4505,3 +4505,7 @@
 - Change: Add `integrations/robots/omx` to map validated `FleetCellTransferGrant` data into `pallet.transfer`, resolve grasp geometry from the accepted recipe, adapt the existing analytic Cell planner, and wrap `PickPlaceRunner` start/exact cancellation. Register the import boundary and build/install the integration wheel in CI.
 - Evidence: Provider/owner boundary 12 passed; dependency boundary 5 passed; platform mapping/submission/compatibility 27 passed; OMX adapter regression 333 passed, 5 skipped. New provider passed flake8 and py_compile. Six platform wheels built; Skill and integration wheels installed offline into a fresh X: venv; installed provider import smoke passed.
 - Gate: SOURCE only; ROS-SIM HOLD and DEVICE/FIELD PARKED.
+## 2026-10-02 · uncommitted · feat(platform): add installation profiles and app compositions
+- Change: Add `rosy-app-agent` and `rosy-app-gateway`, strict allowlisted `omx_cell_sim` and `site_cell` profiles, wheel installation in CI, gateway composition delegation from the existing Fleet CLI, and the gateway composition path to the site image. Hardware dispatch remains disabled in both profiles.
+- Evidence: Profile/entrypoint tests 7 passed; Fleet CLI tests 31 passed; dependency-boundary tests 5 passed; app flake8 and py_compile passed. Built eight platform wheels and installed them offline in a fresh X: venv without repository `PYTHONPATH`; fake profile lifecycle smoke passed for both apps.
+- Gate: SOURCE/LOCAL only. ROS-SIM HOLD; DEVICE/FIELD PARKED.

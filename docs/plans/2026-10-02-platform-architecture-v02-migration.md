@@ -8,7 +8,7 @@
 
 **Tech Stack:** Python, 기존 FastAPI·SQLite·Pydantic, ROS 2 Jazzy, colcon/ament, namespace wheel, OMX Gazebo, 기존 pytest·harness. 새 빌드 도구·모델 SDK 도입은 이 계획의 전제가 아니다.
 
-**Status:** Tasks 0-4 complete; Task 5 in progress (the ROS-free Skill boundary and receipt extraction are committed; the OMX provider binding is implemented and under checkpoint verification). Tasks 6-9 not run. PASS conditions below are instructions and do not imply unfinished tasks passed.
+**Status:** Tasks 0-5 SOURCE complete; Task 6 in progress (gateway/agent app seams and installation profiles are implemented; deployment and full installed-runtime proof remain). Tasks 7-9 not run. PASS conditions below are instructions and do not imply unfinished tasks passed.
 
 **설계:** [ROSY Platform Architecture v0.2](../reference/ROSY_Platform_Architecture_Design_v0.2.md) 3·5·6·15·16장.
 
@@ -212,6 +212,8 @@ Cell compiler port, additive `CELL_TRANSFER` ??, `service` ???? ?? operator ?? ?
 5. OMX 설치에서 Pinky·학습·모델 SDK 제거를 확인한다. 기존 Pinky 설치 집합이 바뀌지 않았음을 비교한다. Pinky의 새 agent 전환은 첫 회차의 완료 요건이 아니다.
 
 **검증:** `python -B -X utf8 -m pytest test/test_platform_installed_entrypoints.py test/test_platform_minimal_install.py -q -p no:cacheprovider`. 기대: wheel/ament 파일 중복 0, 소스 경로 없는 실행, 필요 없는 전이 의존성 없음. 커밋: `build: compose and install the fixed-cell slice`.
+
+**Progress (2026-10-02):** Added gateway and agent app wheels, strict allowlisted `site_cell` and `omx_cell_sim` installation profiles, and profile-driven fake provider composition. The existing Fleet CLI delegates through the gateway composition with a source-only legacy fallback; the site image includes the composition package path. Profile/entrypoint tests 7 passed; Fleet CLI tests 31 passed; dependency-boundary tests 5 passed; app lint and py_compile passed. Built the module, OMX integration, agent and gateway wheels, installed them offline into a fresh X: venv with no repository `PYTHONPATH`, and passed both profile fake-lifecycle smokes. The OMX profile excludes Pinky, learning and model SDK dependencies and keeps hardware dispatch disabled. Pilot image runtime integration, ROS/Jazzy lifecycle and remote CI remain unverified.
 
 ## Task 7: 결과 불명과 재시작의 재생 시험
 

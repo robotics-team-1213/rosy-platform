@@ -268,8 +268,8 @@
 
 ## 최근 기록
 
+- 2026-10-02 · uncommitted · feat(platform): add installation profiles and app compositions
 - 2026-10-02 · uncommitted · feat(platform): bind OMX transfer Skill to device owner
 - 2026-10-02 · uncommitted · feat(platform): isolate pallet.transfer Skill policy
 - 2026-10-02 · uncommitted · test(sim): D-407 Gazebo 재실행 — 관제 연결
 - 2026-10-02 · uncommitted · docs(logs): D-395 개정 9 항목의 증거 경로 정정
-- 2026-10-02 · uncommitted · docs(adr): D-395 개정 9 — S1 Gazebo 통과
