@@ -441,7 +441,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
 
         install_cell_job_routes(app, cell_job_store=cell_job_store,
                                 require_named_operator=require_named_operator,
-                                operator_guard=operator_guard)
+                                operator_guard=operator_guard, read_guard=read_guard)
 
     install_intent_routes(app, console=console, task_service=task_service,
                           require_operator=require_operator,

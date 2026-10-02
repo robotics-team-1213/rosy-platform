@@ -208,3 +208,30 @@ def test_operator_routes_need_a_named_operator(tmp_path):
     cancelled = _post(client, f"{base}/cancel", "operator-secret")
     assert cancelled.status_code == 200 and cancelled.json()["job"]["reason"] == "CANCELLED_BY_OPERATOR"
     assert tasks.store.resource_claims(resource_kind="workcell", resource_id="omx_01") == []
+
+
+def test_claims_read_api_names_the_owning_job_status_and_phase(tmp_path):
+    """C4b 1b (rosy-a9 condition 3): each claimed resource shows its owning Cell Job."""
+    from test_cell_job_api import _setup, _post, _candidate
+
+    client, tasks, _ = _setup(tmp_path)
+    request = {"request_key": "cell-job-1", "workcell_id": "omx_01",
+               "instance_id": "omx_01_control", "candidate": _candidate()}
+    proposal_id = _post(client, "/api/fleet/proposals", "cell-secret", request).json()["proposal"]["proposal_id"]
+    _post(client, f"/api/fleet/proposals/{proposal_id}/resolve", "cell-secret")
+    control = tasks.store.dispatch_control()
+    generation = tasks.store.rearm_dispatch(expected_generation=control["generation"],
+                                            actor_id="operator-1")["generation"]
+    _post(client, f"/api/fleet/missions/{proposal_id}/admit", "operator-secret",
+          {"expected_generation": generation})
+    tasks.store.trip_stop_latch(actor_id="operator-1")
+
+    response = client.get("/api/fleet/resource-claims", headers={"Authorization": "Bearer viewer-secret"})
+
+    assert response.status_code == 200
+    claims = {claim["resource_key"]: claim for claim in response.json()["claims"]}
+    assert set(claims) == {"workcell:omx_01", "pallet:pallet-1"}
+    for claim in claims.values():
+        assert claim["owner_kind"] == "mission" and claim["mission_id"] == proposal_id
+        assert (claim["job_status"], claim["job_reason"], claim["phase"]) == ("HOLD", "site_stop", "HELD")
+    assert client.get("/api/fleet/resource-claims").status_code in {401, 403}

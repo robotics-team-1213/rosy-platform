@@ -17,12 +17,17 @@ from .site_auth import SitePrincipal
 
 
 def install_cell_job_routes(app, *, cell_job_store: CellJobStore, require_named_operator,
-                            operator_guard) -> None:
+                            operator_guard, read_guard) -> None:
     def refused(exc: Exception) -> HTTPException:
         if isinstance(exc, KeyError):
             return HTTPException(status_code=404, detail={"code": "CELL_JOB_NOT_FOUND"})
         return HTTPException(status_code=409, detail={"code": "CELL_JOB_RECOVERY_REFUSED",
                                                       "message": str(exc)})
+
+    @app.get("/api/fleet/resource-claims", dependencies=read_guard, tags=["fleet-cell-jobs"])
+    def resource_claims() -> dict:
+        """Who holds each workcell/pallet/object: a held Job's claims stay visible with their owner."""
+        return {"claims": cell_job_store.resource_claims()}
 
     @app.post("/api/fleet/cell-jobs/{mission_id}/reconcile", dependencies=operator_guard,
               tags=["fleet-cell-jobs"])

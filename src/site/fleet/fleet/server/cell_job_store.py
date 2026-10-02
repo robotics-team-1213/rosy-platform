@@ -519,6 +519,16 @@ class CellJobStore:
                 "WHERE j.status='HOLD' AND c.phase='UNKNOWN' ORDER BY j.updated_at, j.mission_id").fetchall()
             return [self._get(connection, row["mission_id"]) for row in rows]
 
+    def resource_claims(self) -> list[dict[str, Any]]:
+        """Every durable claim with its owner; a Cell Job owner adds its status and reason."""
+        with closing(self._connect()) as connection:
+            rows = connection.execute(
+                "SELECT c.resource_key, c.resource_kind, c.resource_id, c.owner_kind, c.owner_id, c.generation, "
+                "c.phase, j.mission_id, j.status AS job_status, j.reason AS job_reason "
+                "FROM fleet_action_claims c LEFT JOIN fleet_cell_jobs j "
+                "ON c.owner_kind='mission' AND j.mission_id=c.owner_id ORDER BY c.resource_key").fetchall()
+        return [dict(row) for row in rows]
+
     def resume(self, mission_id: str, *, actor_id: str, expected_generation: int) -> dict[str, Any]:
         """Operator re-approval of a HOLD Job under the current fence (D-420 item 18).
 
