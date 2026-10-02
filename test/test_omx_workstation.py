@@ -5,6 +5,7 @@ import stat
 from pathlib import Path
 
 import pytest
+import yaml
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -205,6 +206,17 @@ def test_ai_simulation_patch_selects_supported_mimic_engine_and_sync_hardware():
     assert "is_async=\"${'false' if str(use_sim).lower() == 'true' else 'true'}\"" in patch
     assert "enforce_command_limits: true" in patch
     assert "omx_f_follower_ai/hardware_controller_manager.yaml" in patch
+
+
+def test_ai_simulation_patch_bounds_trajectory_goals_but_lets_a_gripper_stall_succeed():
+    """D-411 C review: Jazzy JTC defaults wait forever (goal_time 0) and check no goal position."""
+    patch = (OMX / "patches" / "omx-ai-sim-gates.patch").read_text(encoding="utf-8")
+    added = [line[1:].strip() for line in patch.splitlines() if line.startswith("+") and not line.startswith("+++")]
+    assert "constraints:" in added and "goal_time: 1.0" in added and "stopped_velocity_tolerance: 0.05" in added
+    tolerance = yaml.safe_load((OMX / "sim" / "cell_profile.yaml").read_text(encoding="utf-8"))["start_state_tolerance_rad"]
+    for joint in ("joint1", "joint2", "joint3", "joint4", "joint5"):
+        assert f"{joint}: {{goal: {tolerance}}}" in added
+    assert "gripper_joint_1: {goal: 0.0}" in added      # unchecked: a close may stop on an object
 
 
 def test_vendor_patches_keep_lf_endings_in_windows_build_context():

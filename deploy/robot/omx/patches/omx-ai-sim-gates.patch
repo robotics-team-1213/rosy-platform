@@ -33,3 +33,23 @@ diff --git a/open_manipulator_bringup/config/omx_f_follower_ai/hardware_controll
  
        joint_state_broadcaster:
          type: joint_state_broadcaster/JointStateBroadcaster
+@@ -30,3 +31,19 @@
+         - velocity
+ 
+       allow_partial_joints_goal: true
++
++      # Rosy D-411 C (SIM only): finite goal checks for the Pilot owner. Jazzy JTC defaults are
++      # goal_time 0 (wait forever), stopped_velocity_tolerance 0.01 and per-joint goal 0 (unchecked).
++      # Arm joints must end within the owner's start-state tolerance (cell_profile.yaml 0.02 rad);
++      # the gripper position stays unchecked (goal 0.0) so a close that stalls on an object ends
++      # SUCCEEDED once it stops moving. goal_time and stopped_velocity_tolerance are nominal and are
++      # tuned from probe_pilot_sim_http.py --stall (time-to-terminal, peak velocity over 0.5 s).
++      constraints:
++        goal_time: 1.0
++        stopped_velocity_tolerance: 0.05
++        joint1: {goal: 0.02}
++        joint2: {goal: 0.02}
++        joint3: {goal: 0.02}
++        joint4: {goal: 0.02}
++        joint5: {goal: 0.02}
++        gripper_joint_1: {goal: 0.0}
