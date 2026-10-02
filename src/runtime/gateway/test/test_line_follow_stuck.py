@@ -197,3 +197,41 @@ def test_manual_and_abort_answers_close_the_stuck():
     _blocked_until_stuck(m)
     assert m.stuck_decision(m.status().stuck.stuck_id, "ABORT", by="operator") == "idle"
     assert m.status().stuck is None
+
+
+def test_lane_lost_stuck_survives_a_transient_sensor_stale_hold():
+    """Review H1: a stale-LiDAR HOLD is not "cleared"; id and attempts stay (no retry loop)."""
+    m, events = _manager(linked=False)
+    _run(m, 0.0, 0.5, front=1.0)
+    _run(m, 0.5, 14.0, front=1.0, lane=False)
+    stuck = m.status().stuck
+    assert stuck.phase == "WAITING_CONSOLE" and stuck.attempts == 2
+    m.tick(15.0)                                       # no scan for 1 s: obstacle_sensor_stale
+    assert m.status().reason == "obstacle_sensor_stale"
+    after = m.status().stuck
+    assert after.stuck_id == stuck.stuck_id and after.attempts == 2
+    assert events.named("nav.line_stuck_closed") == []
+    _run(m, 15.0, 30.0, front=1.0, lane=False)
+    assert len(events.named("nav.line_stuck_local_attempt")) == 2
+
+
+def test_accepted_answer_outdates_a_precomputed_back_off():
+    """Review L1: a back twist computed before WAIT cannot be applied after it."""
+    m, _ = _manager(linked=False)
+    _blocked_until_stuck(m)
+    _feed(m, 5.5, front=0.15)
+    back = m.tick(5.51)
+    assert back.linear < 0.0
+    m.stuck_decision(m.status().stuck.stuck_id, "WAIT", by="operator")
+    applied = []
+    assert m.apply_if_current(back, applied.append) is False and applied == []
+
+
+def test_manual_or_abort_stops_line_follow_before_any_tick_can_reopen():
+    """Review L3: the stop happens under the manager lock with the answer."""
+    m, events = _manager(linked=True)
+    _blocked_until_stuck(m)
+    m.stuck_decision(m.status().stuck.stuck_id, "MANUAL", by="operator")
+    assert m.mode is LineFollowMode.OFF
+    _run(m, 5.5, 12.0, front=0.15)
+    assert len(events.named("nav.line_stuck_opened")) == 1

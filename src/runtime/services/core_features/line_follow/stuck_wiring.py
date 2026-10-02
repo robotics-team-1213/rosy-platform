@@ -52,8 +52,15 @@ class StuckRecoveryMixin:
         current = float(self._clock() if now is None else now)
         with self._lock:
             outcome = self._recovery.answer(current, stuck_id, decision, by)
+            # Any accepted answer outdates a twist computed before it (e.g. a back-off
+            # before WAIT): apply_if_current then rejects it (review L1).
+            self._evidence_revision += 1
             if outcome == "resume":
                 self._release_stuck(current)
+            elif outcome in ("manual", "idle"):
+                # Stop under the same lock, so no tick can reopen a stuck before the
+                # caller's mode transition (review L3).
+                self.set_mode(LineFollowMode.OFF)
             self._status = self._status.model_copy(update={"stuck": self._stuck_status(current)})
             return outcome
 
@@ -99,8 +106,10 @@ class StuckRecoveryMixin:
         lane = bool(obs is not None and obs.visible and obs.source is self._mode
                     and obs.confidence >= config.min_confidence and not self._invalid_observation
                     and age is not None and 0.0 <= age <= config.stale_after_s)
+        # From the latches, not the reported state: a transient HOLD (stale LiDAR, ladder
+        # limit) must not read as "cleared" and reset the attempts (review H1).
         cause = ("obstacle_ahead" if self._escalated
-                 else "lane_lost" if self._status.state == "LOST" else None)
+                 else "lane_lost" if self._lost_latched else None)
         ceiling = self._provided("linear_ceiling")
         return StuckInput(
             now=now, cause=cause, lane_visible=lane, front_clear=front_clear,
