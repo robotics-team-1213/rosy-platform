@@ -68,7 +68,14 @@ RECORDING_SIDE_TOPIC = (
     'SIDE_TOPICS = ("cmd_vel", "line/observation", SHADOW_TOPIC, SCAN_TOPIC, ODOM_TOPIC)',
 )
 
-FINAL_TOPIC_EXCEPTIONS = (LEGACY_FINAL_PUBLISHER, RECORDING_SIDE_TOPIC)
+#: D-411 A: the Pilot recorder's rosbag2 topic list records the CORE final
+#: command as evidence (rosbag2 subscribes; nothing is published). Same pin rule.
+PILOT_RECORDING_TOPICS = (
+    "runtime/sensing/control/pilot_recording.py",
+    'PILOT_TOPICS = (COMPRESSED_CAMERA_TOPIC, "cmd_vel", ODOM_TOPIC, SCAN_TOPIC, "line/observation",',
+)
+
+FINAL_TOPIC_EXCEPTIONS = (LEGACY_FINAL_PUBLISHER, RECORDING_SIDE_TOPIC, PILOT_RECORDING_TOPICS)
 
 
 def _prod_py_files(tree: Path):
