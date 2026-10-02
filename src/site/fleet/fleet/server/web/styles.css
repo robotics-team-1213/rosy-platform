@@ -403,6 +403,10 @@ main {
 .log .good { color: var(--nominal-quiet); }
 .log-panel:not([open]) .log { max-height: calc(var(--text-micro) * var(--leading-copy) * 8); }
 
+/* D-414 — 비상 정지: 팔각형 아이콘 하나로 깔끔하게. 텍스트 없이 아이콘만. */
+.estop { width: var(--target-irreversible); height: var(--target-irreversible); padding: 0; display: inline-flex; align-items: center; justify-content: center; }
+.estop-icon { width: calc(var(--target-irreversible) * 0.55); height: calc(var(--target-irreversible) * 0.55); }
+
 /* D-417 — 카메라 컴팩트 모드: 소스 없거나 연결 불가면 한 줄로 접는다. */
 .vision-preview:has(> .vision-frame[data-state="waiting"]) .vision-controls,
 .vision-preview:has(> .vision-frame[data-state="waiting"]) .vision-frame,
