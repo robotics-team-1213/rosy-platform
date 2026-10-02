@@ -4490,3 +4490,9 @@
 - 변경: 바로 앞 "D-395 개정 9 — S1 Gazebo 통과" 항목의 원시 로그 경로가 `DevTemposy-d395-s1d`로 깨져 기록됐다. 올바른 경로는 `X:\DevTemp\rosy-d395-s1d\`다.
 - 증거: 해당 폴더.
 - gate 변화: 없음.
+
+## 2026-10-02 · uncommitted · test(sim): D-395 S2 bench — 4 robots, simultaneous re-arbitration, homing in traffic (test/d395-s2-bench, main 13e6d5e45)
+- 변경: `tools/sim/d395_s2_bench.py`(S1 드라이버를 상속, 배치 q: r1 사각형 A·r2 사각형 B·r3·r4 슬롯 밖; s2a 전원 투입, `--traffic` s2d, 단계 c s2c, 단계 b s2b), `tools/sim/d395_s2_summary.py`(시나리오별 통과 기준), `test/test_d395_s2_bench.py`. S1 드라이버는 `SCENARIOS`를 클래스에서 읽게만 바꿨다. 결과 문서 `docs/plans/2026-10-02-d395-s2-bench-results.md` 신설(배치 검사, 자원 계획, 명령; 실행 결과는 WSL 시간대 뒤), S1 결과 문서에서 링크.
+- 증거: `python -m pytest test/test_d395_s2_bench.py test/test_d395_s1_bench.py -q` 14 passed (Windows). `python tools/sim/d395_s2_bench.py --check --out unused` 배치 문제 0, s2b 낡은 닻 함정 r1 쌍둥이 peers 0.33 대 참 0.67. Gazebo 실행은 아직 없다.
+- gate 변화: 없음. ROS-SIM S2는 실행 대기.
+- 결정: 없음. 시스템 코드·기본값 변경 없음. 충돌은 Gazebo 정답 궤적의 최근접 쌍(< 0.22 m)으로만 판정한다(gz_multi 로봇에 접촉 센서 없음). 센서 주기는 URDF 고정값이라 바꾸지 않는다.
