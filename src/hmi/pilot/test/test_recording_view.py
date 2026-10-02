@@ -60,7 +60,7 @@ def test_toggle_view():
 def test_error_text_names_every_recording_code():
     out = _run_js("""console.log(JSON.stringify(['RECORDING_BUSY', 'ROBOT_MOVING', 'RECORDER_UNAVAILABLE',
       'RECORDING_QUOTA_FULL', 'RECORDING_DISK_FULL', 'FORBIDDEN', 'RECORDING_NOT_ACTIVE',
-      'RECORDING_NOT_FOUND', 'SOMETHING_ELSE', undefined].map((c) => m.errorText(c))))""")
+      'RECORDING_NOT_FOUND', 'SOMETHING_ELSE', undefined].map((c) => m.errorText(c, 'stop'))))""")
     assert all(out) and len(set(out[:8])) == 8
     assert out[5] == "다른 기기가 시작한 녹화입니다"
     assert out[8] == out[9] == "요청이 거부되었습니다"
@@ -94,3 +94,26 @@ def test_sheet_notice_names_the_blocker():
       m.sheetNotice(null),
     ]))""")
     assert out == ["", "녹화본이 없습니다", "녹화 중에는 받을 수 없습니다", "목록을 불러오지 못했습니다"]
+
+
+def test_large_recordings_are_left_to_the_pc_tool():
+    out = _run_js("""console.log(JSON.stringify([m.PILOT_FETCH_MAX_BYTES,
+      m.sheetRows({download_allowed: true, items: [
+        {id: 'a', status: 'complete', started_at: 'x', duration_s: 600, bytes: 256e6},
+        {id: 'b', status: 'complete', started_at: 'x', duration_s: 600, bytes: 256e6 + 1}]}),
+      m.sheetRows({download_allowed: false, download_blocker: 'ROBOT_MOVING', items: [
+        {id: 'b', status: 'complete', started_at: 'x', duration_s: 600, bytes: 3e8}]}),
+    ]))""")
+    assert out[0] == 256e6
+    assert out[1][0]["canFetch"] is True
+    big = "큰 녹화본은 PC에서 받으세요: rosy_ml fetch <로봇> --http"
+    assert out[1][1]["canFetch"] is False and out[1][1]["reason"] == big
+    assert out[2][0]["canFetch"] is False and out[2][0]["reason"] == big
+
+
+def test_forbidden_depends_on_what_was_refused():
+    out = _run_js("""console.log(JSON.stringify([m.errorText('FORBIDDEN', 'stop'), m.errorText('FORBIDDEN', 'start'),
+      m.errorText('FORBIDDEN', 'fetch'), m.errorText('FORBIDDEN'), m.errorText('ROBOT_MOVING', 'fetch')]))""")
+    assert out[0] == "다른 기기가 시작한 녹화입니다"
+    assert out[1] == out[2] == out[3] == "운전자(Operator) 권한이 필요합니다"
+    assert out[4] == "로봇이 멈춘 뒤에 받을 수 있습니다"

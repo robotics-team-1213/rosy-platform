@@ -432,7 +432,7 @@ export function mountDrive(root, {onExit} = {}) {
   element.hud.append(recordingFact, actions);
   const robotRecording = mountRobotRecording({
     toggle: robotRecordButton, detail: recordingFact, openButton: recordingsButton,
-    sheetHost: root.querySelector("[data-drive-stage]"), save: saveCameraFile,
+    sheetHost: root.querySelector("[data-drive-stage]"), anchor: element.hud, save: saveCameraFile,
   });
   view.applyZoom();
 

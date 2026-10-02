@@ -50,12 +50,15 @@ export async function postJson(path, body, {timeoutMs} = {}) {
 
 // D-411: 같은 Bearer 머리로 바이너리를 받는다(토큰은 URL 에 넣지 않는다). length 는
 // Content-Length — 본문이 그보다 짧으면 서버가 도중에 끊은 것이다(실패).
-export async function apiBlob(path, {timeoutMs} = {}) {
-  const controller = timeoutMs ? new AbortController() : null;
-  const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
+// signal 로 호출자가 끊을 수 있다(취소·화면 나가기); timeoutMs 가 지나도 끊는다.
+export async function apiBlob(path, {timeoutMs, signal} = {}) {
+  const controller = new AbortController();
+  const abort = () => controller.abort();
+  if (signal?.aborted) abort();
+  signal?.addEventListener("abort", abort, {once: true});
+  const timer = timeoutMs ? setTimeout(abort, timeoutMs) : null;
   try {
-    const response = await fetch(path, {cache: "no-store", headers: authHeaders(),
-                                        ...(controller ? {signal: controller.signal} : {})});
+    const response = await fetch(path, {cache: "no-store", headers: authHeaders(), signal: controller.signal});
     if (!response.ok) {
       const body = await response.json().catch(() => ({}));
       return {status: response.status, ok: false, body, blob: null, length: null};
@@ -65,6 +68,7 @@ export async function apiBlob(path, {timeoutMs} = {}) {
             length: header == null ? null : Number(header)};
   } finally {
     if (timer) clearTimeout(timer);
+    signal?.removeEventListener("abort", abort);
   }
 }
 

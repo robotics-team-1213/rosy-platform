@@ -2,6 +2,9 @@
 // 화면 녹화(브라우저 MediaRecorder, evidence.js)와는 다른 것이다 — 이것은 로봇이 쓴다.
 
 export const RECORDING_POLL_MS = 1000;
+// Pilot 은 받은 tar 를 통째로 메모리(blob)에 둔다. 이보다 큰 녹화본은 PC 도구로 받는다.
+export const PILOT_FETCH_MAX_BYTES = 256e6;
+const TOO_BIG_TEXT = "큰 녹화본은 PC에서 받으세요: rosy_ml fetch <로봇> --http";
 
 const BLOCKER_TEXT = Object.freeze({
   RECORDING_BUSY: "녹화 중에는 받을 수 없습니다",
@@ -13,7 +16,6 @@ const ERROR_TEXT = Object.freeze({
   RECORDER_UNAVAILABLE: "녹화기 응답 없음",
   RECORDING_QUOTA_FULL: "녹화 공간이 찼습니다 — 녹화본을 받으면 비워집니다",
   RECORDING_DISK_FULL: "로봇 저장 공간이 부족합니다",
-  FORBIDDEN: "다른 기기가 시작한 녹화입니다",
   RECORDING_NOT_ACTIVE: "진행 중인 녹화가 없습니다",
   RECORDING_NOT_FOUND: "녹화본이 없습니다",
 });
@@ -40,7 +42,9 @@ export function formatBytes(bytes) {
   return `${(value / 1e9).toFixed(1)} GB`;
 }
 
-export function errorText(code) {
+// action: "start" | "stop" | "fetch". 403 은 정지에서만 "남의 녹화" 이고, 시작·받기에서는 권한 부족이다.
+export function errorText(code, action) {
+  if (code === "FORBIDDEN") return action === "stop" ? "다른 기기가 시작한 녹화입니다" : "운전자(Operator) 권한이 필요합니다";
   return ERROR_TEXT[code] ?? "요청이 거부되었습니다";
 }
 
@@ -77,13 +81,15 @@ export function sheetRows(listing) {
   const blocker = listing?.download_allowed ? "" : (BLOCKER_TEXT[listing?.download_blocker] ?? "지금은 받을 수 없습니다");
   return (listing?.items ?? []).map((item) => {
     const complete = item.status === "complete";
+    const tooBig = complete && Number(item.bytes) > PILOT_FETCH_MAX_BYTES;
     const duration = item.duration_s == null ? "—" : formatElapsed(item.duration_s);
     return {
       id: item.id,
       title: formatStarted(item.started_at),
       detail: `${duration} · ${formatBytes(item.bytes)}${item.fetched ? " · 받음" : ""}`,
-      canFetch: complete && !blocker,
-      reason: !complete ? (item.status === "recording" ? "녹화 중입니다" : "끝나지 않은 녹화입니다") : blocker,
+      canFetch: complete && !tooBig && !blocker,
+      reason: !complete ? (item.status === "recording" ? "녹화 중입니다" : "끝나지 않은 녹화입니다")
+        : tooBig ? TOO_BIG_TEXT : blocker,
     };
   });
 }

@@ -19,7 +19,7 @@ from pathlib import Path
 
 import uvicorn
 from fastapi import FastAPI, Request, Response, WebSocket, WebSocketDisconnect
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 
 from PIL import Image, ImageDraw
 
@@ -273,12 +273,16 @@ async def front_evidence(request: Request):
                         status_code=201)
 
 
-# --- D-411 A 로봇 녹화 흉내: 시험이 /__test__/recordings 로 받기 차단 사유를 정하고 요청 순서를 읽는다 ---
+# --- D-411 A 로봇 녹화 흉내: 시험이 /__test__/recordings 로 상황을 정하고 요청 순서를 읽는다 ---
+# blocker: 받기 차단 사유, role: "operator"|"viewer"(쓰기·받기 403), archive: "ok"|"short"(본문이
+# Content-Length 보다 짧음)|"slow"(첫 조각 뒤 release 까지 멈춤)|"conflict"(목록과 달리 409),
+# foreign: 다른 기기가 시작한 녹화, big: 256 MB 를 넘는 녹화본. polls 는 GET /active 횟수.
 RECORDING_ID = "20261002T101500Z_rosy_dev"
 _IDLE_RECORDER = {"schema": "rosy.pilot.recording.status/1", "state": "idle", "id": None, "elapsed_s": 0.0,
                   "bytes": 0, "max_duration_s": 600, "quota_free_bytes": 10**9, "last_stop_reason": "",
                   "boot_id": "dev", "seq": 0}
-RECORDINGS = {"active": dict(_IDLE_RECORDER), "blocker": None, "log": []}
+_RECORDING_DEFAULTS = {"blocker": None, "role": "operator", "archive": "ok", "big": False, "release": False}
+RECORDINGS = {"active": dict(_IDLE_RECORDER), "owned": False, "log": [], "polls": 0, **_RECORDING_DEFAULTS}
 _RECORDING_ITEM = {"id": RECORDING_ID, "started_at": "2026-10-02T10:15:00Z", "ended_at": "2026-10-02T10:16:05Z",
                    "duration_s": 65.0, "bytes": 1536, "topics": ["camera/front/compressed", "cmd_vel"],
                    "status": "complete", "manifest_sha256": "0" * 64, "fetched": False}
@@ -287,7 +291,7 @@ _RECORDING_ITEM = {"id": RECORDING_ID, "started_at": "2026-10-02T10:15:00Z", "en
 def _recording_tar() -> bytes:
     import io
     import tarfile
-    data, body = io.BytesIO(), b'{"schema": "rosy.pilot.recording.manifest/1"}'
+    data, body = io.BytesIO(), b'{"schema": "rosy.pilot.recording.manifest/1"}' * 64
     with tarfile.open(fileobj=data, mode="w", format=tarfile.USTAR_FORMAT) as archive:
         info = tarfile.TarInfo(f"{RECORDING_ID}/manifest.json")
         info.size = len(body)
@@ -299,19 +303,32 @@ def _recording_error(code: str, status: int) -> JSONResponse:
     return JSONResponse({"error": {"code": code, "message": code, "detail": None}}, status_code=status)
 
 
+def _recording_writer(request: Request) -> JSONResponse | None:
+    if _role(request) is None:
+        return JSONResponse({"detail": "unauthorized"}, status_code=401)
+    if RECORDINGS["role"] != "operator":
+        return _recording_error("FORBIDDEN", 403)
+    return None
+
+
 @app.get("/__test__/recordings")
 def recordings_log():
-    return {"log": RECORDINGS["log"], "blocker": RECORDINGS["blocker"]}
+    return {key: RECORDINGS[key] for key in ("log", "blocker", "polls", "owned")}
 
 
 @app.post("/__test__/recordings")
 async def recordings_script(request: Request):
-    """본문 {"blocker": "ROBOT_MOVING"|null}. 로그와 녹화기 상태도 처음으로 돌린다(reset: true)."""
+    """본문의 키만 바꾼다. reset: true 면 모두 처음으로, foreign: true 면 남의 녹화가 돈다."""
     body = await request.json()
-    RECORDINGS["blocker"] = body.get("blocker")
     if body.get("reset"):
-        RECORDINGS.update(active=dict(_IDLE_RECORDER), log=[])
-    return {"blocker": RECORDINGS["blocker"]}
+        RECORDINGS.update(active=dict(_IDLE_RECORDER), owned=False, log=[], polls=0, **_RECORDING_DEFAULTS)
+    for key in _RECORDING_DEFAULTS:
+        if key in body:
+            RECORDINGS[key] = body[key]
+    if body.get("foreign"):
+        RECORDINGS.update(owned=False, active={**_IDLE_RECORDER, "state": "recording",
+                                               "id": "20261002T103000Z_rosy_dev", "elapsed_s": 3.0, "bytes": 4096})
+    return {key: RECORDINGS[key] for key in _RECORDING_DEFAULTS}
 
 
 @app.get("/api/v1/recordings")
@@ -320,7 +337,8 @@ def recordings_list(request: Request):
         return JSONResponse({"detail": "unauthorized"}, status_code=401)
     active = RECORDINGS["active"]
     blocker = "RECORDING_BUSY" if active["state"] != "idle" else RECORDINGS["blocker"]
-    return {"active": active, "items": [_RECORDING_ITEM], "download_allowed": blocker is None,
+    item = {**_RECORDING_ITEM, "bytes": 3 * 10**8} if RECORDINGS["big"] else _RECORDING_ITEM
+    return {"active": active, "items": [item], "download_allowed": blocker is None,
             "download_blocker": blocker}
 
 
@@ -328,16 +346,18 @@ def recordings_list(request: Request):
 def recordings_active(request: Request):
     if _role(request) is None:
         return JSONResponse({"detail": "unauthorized"}, status_code=401)
-    return {"active": RECORDINGS["active"], "owned": RECORDINGS["active"]["state"] != "idle"}
+    RECORDINGS["polls"] += 1
+    return {"active": RECORDINGS["active"], "owned": RECORDINGS["owned"]}
 
 
 @app.post("/api/v1/recordings", status_code=201)
 def recordings_start(request: Request):
-    if _role(request) is None:
-        return JSONResponse({"detail": "unauthorized"}, status_code=401)
+    if (refused := _recording_writer(request)) is not None:
+        return refused
     if RECORDINGS["active"]["state"] != "idle":
         return _recording_error("RECORDING_BUSY", 409)
     RECORDINGS["log"].append("start")
+    RECORDINGS["owned"] = True
     RECORDINGS["active"] = {**_IDLE_RECORDER, "state": "recording", "id": "20261002T102000Z_rosy_dev",
                             "elapsed_s": 1.0, "bytes": 2048}
     return RECORDINGS["active"]
@@ -345,27 +365,51 @@ def recordings_start(request: Request):
 
 @app.post("/api/v1/recordings/active/stop")
 def recordings_stop(request: Request):
-    if _role(request) is None:
-        return JSONResponse({"detail": "unauthorized"}, status_code=401)
+    if (refused := _recording_writer(request)) is not None:
+        return refused
     if RECORDINGS["active"]["state"] == "idle":
         return _recording_error("RECORDING_NOT_ACTIVE", 409)
+    if not RECORDINGS["owned"]:
+        return _recording_error("FORBIDDEN", 403)
     RECORDINGS["log"].append("stop")
+    RECORDINGS["owned"] = False
     RECORDINGS["active"] = {**_IDLE_RECORDER, "last_stop_reason": "requested"}
     return RECORDINGS["active"]
 
 
 @app.get("/api/v1/recordings/{recording_id:path}/archive")
 def recordings_archive(recording_id: str, request: Request):
-    if _role(request) is None:
-        return JSONResponse({"detail": "unauthorized"}, status_code=401)
-    if RECORDINGS["blocker"]:
-        return _recording_error(RECORDINGS["blocker"], 409)
+    if (refused := _recording_writer(request)) is not None:
+        return refused
+    if RECORDINGS["blocker"] or RECORDINGS["archive"] == "conflict":
+        return _recording_error(RECORDINGS["blocker"] or "ROBOT_MOVING", 409)
     if recording_id != RECORDING_ID:
         return _recording_error("RECORDING_NOT_FOUND", 404)
     RECORDINGS["log"].append("archive")
-    return Response(_recording_tar(), media_type="application/x-tar",
-                    headers={"Cache-Control": "no-store",
-                             "Content-Disposition": f'attachment; filename="{recording_id}.tar"'})
+    body, mode = _recording_tar(), RECORDINGS["archive"]
+
+    async def stream():
+        done = False
+        try:
+            if mode == "short":
+                yield body[: len(body) // 2]       # CORE cut the stream: fewer bytes than promised
+                return
+            if mode == "slow":
+                yield body[:512]
+                for _ in range(300):               # at most 15 s, until the test releases it
+                    if RECORDINGS["release"]:
+                        break
+                    await asyncio.sleep(0.05)
+                yield body[512:]
+            else:
+                yield body
+            done = True
+        finally:
+            RECORDINGS["log"].append("archive_done" if done else "archive_aborted")
+
+    return StreamingResponse(stream(), media_type="application/x-tar",
+                             headers={"Cache-Control": "no-store", "Content-Length": str(len(body)),
+                                      "Content-Disposition": f'attachment; filename="{recording_id}.tar"'})
 
 
 @app.websocket("/ws/state")
