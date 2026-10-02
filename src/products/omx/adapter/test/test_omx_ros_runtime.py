@@ -476,3 +476,58 @@ def test_feedback_before_the_goal_response_does_not_fail_the_goal():
     assert [event.kind for event in events] == [
         "GOAL_ACCEPTED", "RUNNING_FEEDBACK", "RUNNING_FEEDBACK", "TERMINAL_RESULT"]
     assert [event.sequence for event in events] == [1, 2, 3, 4]
+
+
+def test_feedback_between_goal_id_and_goal_accepted_waits_for_the_acceptance():
+    """Re-review N1: _on_goal_response records the goal id under the handle lock and emits
+    GOAL_ACCEPTED after releasing it. Feedback landing in that gap must not reach the sink
+    before GOAL_ACCEPTED (the runner has no goal id yet and would fail the goal)."""
+    from types import SimpleNamespace
+    from uuid import uuid4
+
+    from action_msgs.msg import GoalStatus
+    from omx_adapter.ros_runtime import RosTrajectoryActionHandle
+
+    class Future:
+        def __init__(self, value=None):
+            self.value, self.callbacks = value, []
+
+        def add_done_callback(self, callback):
+            self.callbacks.append(callback)
+
+        def result(self):
+            return self.value
+
+    sent = {}
+
+    class Client:
+        def send_goal_async(self, goal, feedback_callback):
+            sent["feedback"] = feedback_callback
+            sent["future"] = Future()
+            return sent["future"]
+
+    events = []
+    command = TrajectoryCommand(
+        workcell_id="w", instance_id="i", command_id="gap-feedback", session_id="s", owner="moveit",
+        positions={"joint1": 0.1}, duration_s=0.5, source_state_sequence=1, calibration_revision="cal",
+        phase_id="approach",
+    )
+    handle = RosTrajectoryActionHandle(Client(), command, lambda event: events.append(event) or True)
+    original_emit = handle._emit
+
+    def emit_with_feedback_in_the_gap(kind, **facts):
+        if kind == "GOAL_ACCEPTED":
+            sent["feedback"](SimpleNamespace())  # goal id already set, acceptance not yet emitted
+        return original_emit(kind, **facts)
+
+    handle._emit = emit_with_feedback_in_the_gap
+    result_future = Future(SimpleNamespace(status=GoalStatus.STATUS_SUCCEEDED, result=SimpleNamespace(
+        error_code=FollowJointTrajectory.Result.SUCCESSFUL)))
+    sent["future"].value = SimpleNamespace(accepted=True, goal_id=SimpleNamespace(uuid=list(uuid4().bytes)),
+                                           get_result_async=lambda: result_future)
+    for callback in sent["future"].callbacks:
+        callback(sent["future"])
+    for callback in result_future.callbacks:
+        callback(result_future)
+    assert [event.kind for event in events] == ["GOAL_ACCEPTED", "RUNNING_FEEDBACK", "TERMINAL_RESULT"]
+    assert handle.succeeded()

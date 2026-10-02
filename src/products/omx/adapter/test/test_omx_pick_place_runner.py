@@ -528,3 +528,23 @@ def test_live_feedback_waits_for_the_queued_goal_acceptance_replay(tmp_path):
     live["thread"].join(5.0)
     assert live["result"] is True
     assert recorder.phases()[0]["state"] == "RUNNING"
+
+
+def test_feedback_overtaken_by_a_later_event_is_acknowledged_not_failed(tmp_path):
+    # Re-review N1: the replayed early feedback and a live feedback come from different
+    # threads; the sink can see sequence 3 before 2. Stale feedback is telemetry: it is
+    # acknowledged (True) without journaling, never a reason to fail the ROS goal.
+    store, recorder, port, runner = _harness(tmp_path)
+    captured = {}
+
+    def accept(command, goal, callback):
+        captured.update(command=command, goal=goal, callback=callback)
+        callback(_event("GOAL_ACCEPTED", command, "approach", goal, 1))
+
+    port.on_submit = accept
+    runner.start()
+    command, goal, callback = captured["command"], captured["goal"], captured["callback"]
+    assert callback(_event("RUNNING_FEEDBACK", command, "approach", goal, 3, feedback_sequence=2))
+    assert callback(_event("RUNNING_FEEDBACK", command, "approach", goal, 2, feedback_sequence=1))
+    assert callback(_event("TERMINAL_RESULT", command, "approach", goal, 4, status=4, result_code=0))
+    assert recorder.phases()[0]["state"] == "SUCCEEDED"

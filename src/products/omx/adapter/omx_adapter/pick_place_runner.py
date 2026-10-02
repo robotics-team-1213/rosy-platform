@@ -422,7 +422,9 @@ class PickPlaceRunner:
                 self._pending_events.append(event)
                 return True
             if event.sequence <= self._last_event_sequence:
-                return False
+                # Feedback from another callback thread can be overtaken by a later event
+                # (re-review N1). It is telemetry: acknowledge, do not journal, do not fail.
+                return event.kind == "RUNNING_FEEDBACK"
             self._last_event_sequence = event.sequence
 
         if event.kind in {"GOAL_ACCEPTANCE_UNKNOWN", "GOAL_REJECTED"}:

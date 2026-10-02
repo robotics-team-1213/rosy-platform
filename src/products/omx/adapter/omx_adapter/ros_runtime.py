@@ -56,6 +56,7 @@ class RosTrajectoryActionHandle(ActionHandle):
         self._event_sequence = 0
         self._feedback_sequence = 0
         self._early_feedback = 0
+        self._acceptance_emitted = False
         self._observation_failed = False
 
         goal = FollowJointTrajectory.Goal()
@@ -110,11 +111,11 @@ class RosTrajectoryActionHandle(ActionHandle):
     def _on_feedback(self, message: Any) -> None:
         with self._lock:
             goal_id = self._goal_id
-            if goal_id is None:
+            if goal_id is None or not self._acceptance_emitted:
                 # rclpy may run feedback (action-client callback group) before the send-goal
-                # future's done callback that records the goal id. Buffer it (only that it
-                # happened) and replay one RUNNING_FEEDBACK after GOAL_ACCEPTED; never fail
-                # the observation for it (review B1).
+                # future's done callback has recorded the goal id AND emitted GOAL_ACCEPTED.
+                # Count it and replay one RUNNING_FEEDBACK after GOAL_ACCEPTED; never fail the
+                # observation for it (review B1, re-review N1). No lock is held while emitting.
                 self._early_feedback += 1
                 return
             self._feedback_sequence += 1
@@ -171,12 +172,16 @@ class RosTrajectoryActionHandle(ActionHandle):
             self._goal_handle = goal_handle
             self._goal_id = goal_id
             cancel_pending = self._cancel_requested
-            early_feedback = self._early_feedback
         self._emit("GOAL_ACCEPTED", goal_id=goal_id)
-        if early_feedback:
-            with self._lock:
+        # One step with _on_feedback: feedback counted up to here is replayed once; feedback
+        # after this point is emitted live, so none can precede GOAL_ACCEPTED (N1).
+        with self._lock:
+            self._acceptance_emitted = True
+            early_feedback = self._early_feedback
+            if early_feedback:
                 self._feedback_sequence += 1
                 feedback_sequence = self._feedback_sequence
+        if early_feedback:
             self._emit("RUNNING_FEEDBACK", goal_id=goal_id, feedback_sequence=feedback_sequence)
         try:
             result_future = goal_handle.get_result_async()
