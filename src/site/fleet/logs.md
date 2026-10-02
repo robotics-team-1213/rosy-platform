@@ -1170,3 +1170,10 @@
 - 증거: src/site/fleet/test 1414 passed/7 skipped, 	est/architecture 81 passed/1 skipped, known_failures 새 실패 0; 버전 핀·대화상자 계약 7 passed; 옵트인 Chromium 전체 주행 취소·비상 정지 한 번 누름 등 4 passed. 	est_holding_formation_enables_resume_and_warns 는 main 의 신호등 문구(signals.yaml)와 시험이 어긋나 실패한다 — 이 가지와 무관(main 에서는 HOLDING_FORMATION 정의가 없어 그 전에 실패했다).
 - 크기: fleet 27134 재판정(main 26498).
 - gate 변화: 없음.
+
+## 2026-10-02 · uncommitted · fix(fleet): D-395 rev. 11 — 거리 없는 사각형 목격은 근거가 아니다
+
+- 원인: 후처리 감사(2026-10-02). 실제 프레임 506장의 거짓 사각형 검출 20건이 모두 거리 없음이었다. 예전 `square_cue` 는 방위만 맞으면 +1, 아니면 -1 을 줬고 가중치가 가장 크다(3.0).
+- 변경: `cues.square_cue` 는 `range_m` 이 None 인 목격을 무시한다. `arbiter.score` 는 거리 있는 목격만 넘겨, 거리 없는 목격뿐이면 사각형 단서가 모든 후보에서 0 이다. 선로 계약(`range_m>0|null`)은 그대로이고 API Ref 에 한 문장을 더했다.
+- 증거: `test_localization_cues.py` 사각형 표 갱신(+2), `test_localization_arbiter.py` +1(거리 없는 목격만으로는 결정 없음). fleet localization 176 passed.
+- gate 변화: 없음.

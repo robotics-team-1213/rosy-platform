@@ -1,5 +1,6 @@
 """D-395 rev. 1 §6: the HSV reference-square detector on synthetic floor images."""
 import math
+import pathlib
 
 import numpy as np
 import pytest
@@ -83,3 +84,84 @@ def test_beyond_trusted_range_keeps_the_bearing_without_a_range():
     assert len(found) == 1 and found[0].range_m is None
     assert found[0].bearing_rad > 0
     assert isinstance(found[0], SquareObservation)
+
+
+# --- D-395 rev. 11: horizon gate and one detection per square (NMS) ----------------------------
+
+def _stripe(img, centre, width_px):
+    """A 1-3 px bright stripe (glare, tape) cut through the blue core's middle column."""
+    core = np.argwhere((np.abs(FWD - centre[0]) <= .045) & (np.abs(LEFT - centre[1]) <= .04))
+    col = int(np.median(core[:, 1]))
+    out = img.copy()
+    band = slice(col - width_px + 1, col + width_px)
+    blue = np.all(out[:, band] == BLUE, axis=-1)
+    out[:, band][blue] = WHITE
+    return out
+
+
+@pytest.mark.parametrize("centre", [(.30, 0.), (.30, .06), (.45, -.08), (.60, .05)])
+@pytest.mark.parametrize("width_px", [1, 2, 3])
+def test_a_stripe_through_the_core_is_still_one_square(centre, width_px):
+    """Audit 2026-10-02: a 1 px stripe split 4 of 4 squares into 2 detections at confidence 1.0."""
+    found = HsvSquareDetector(CAM_X).detect(_stripe(render([(centre, *SQUARE_B)]), centre, width_px), GROUND)
+    assert len(found) == 1
+    assert found[0].range_m == pytest.approx(math.hypot(*centre), abs=.03)
+    assert found[0].bearing_rad == pytest.approx(math.atan2(centre[1], centre[0]), abs=math.radians(6))
+
+
+def test_a_ring_and_core_above_the_horizon_is_not_a_floor_square():
+    """Blue wall tape behind a red cable (real frame 133221Z/000068): no floor point, no square."""
+    img = render()
+    top = int(GROUND.horizon_row / 2)
+    img[top - 9:top + 9, 140:180] = RED
+    img[top - 4:top + 4, 150:170] = BLUE
+    assert HsvSquareDetector(CAM_X).detect(img, GROUND) == []
+
+
+def _perception_data():
+    """data/perception is gitignored (D-379): look in this checkout, then the main checkout
+    behind a linked worktree, then $ROSY_PERCEPTION_DATA."""
+    import os
+    repo = pathlib.Path(__file__).resolve().parents[4]
+    roots = [repo / 'data' / 'perception']
+    dot_git = repo / '.git'
+    if dot_git.is_file():
+        gitdir = (repo / dot_git.read_text().split(':', 1)[1].strip()).resolve()
+        roots.append(gitdir.parents[1].parent / 'data' / 'perception')
+    if os.environ.get('ROSY_PERCEPTION_DATA'):
+        roots.insert(0, pathlib.Path(os.environ['ROSY_PERCEPTION_DATA']))
+    return next((r for r in roots if r.is_dir()), None)
+
+
+def _real_frame(index):
+    root = _perception_data()
+    path = None if root is None else (
+        root / 'labels' / '20260930T133221Z_rosy-pinky-8kcn' / 'frames' / f'{index:06d}.jpg')
+    if path is None or not path.is_file():
+        pytest.skip(f'REAL-FRAME CHECK NOT RUN: 133221Z frame {index:06d} not found '
+                    '(gitignored data/perception; set ROSY_PERCEPTION_DATA)')
+    import cv2
+    img = cv2.imread(str(path))
+    h, w = img.shape[:2]
+    ground = GroundPlane(height_m=.059, pitch_rad=math.radians(11.8), focal_px=focal_from_hfov(w, 1.1519),
+                         principal_x=w / 2, principal_y=h / 2, max_range_m=.8)
+    return img, ground
+
+
+def test_real_frame_with_wall_tape_and_a_red_cable_keeps_only_the_floor_square():
+    """133221Z/000068 before the fix: the real square (23.9 deg, 0.368 m) plus two unranged
+    hits on blue wall tape behind a red cable (0.2 and -12.9 deg). Zero false detections now;
+    the real floor square stays."""
+    img, ground = _real_frame(68)
+    found = HsvSquareDetector(CAM_X).detect(img, ground)
+    assert len(found) == 1
+    assert found[0].range_m == pytest.approx(.368, abs=.01)
+    assert math.degrees(found[0].bearing_rad) == pytest.approx(23.9, abs=1.)
+
+
+def test_real_frame_key_square_is_one_detection_at_its_range():
+    img, ground = _real_frame(78)
+    found = HsvSquareDetector(CAM_X).detect(img, ground)
+    assert len(found) == 1
+    assert found[0].range_m == pytest.approx(.385, abs=.01)
+    assert math.degrees(found[0].bearing_rad) == pytest.approx(10.1, abs=1.)

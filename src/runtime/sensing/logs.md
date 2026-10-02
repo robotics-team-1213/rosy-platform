@@ -940,3 +940,10 @@
 - 변경: `LocAssist.objects_due`·`on_objects`. LOCALIZED 이고 검사가 돌지 않을 때 노드가 한 상태 주기(0.5 s)에 한 번 AMCL 센서 자세에서 전체 스캔으로 물체를 계산한다(`localized_objects`, 후보 탐색과 같은 차체 반경 필터, ≤16). 매 상태 메시지(2 Hz)의 `status` 에 `unmapped_objects` 와 스캔 시각 `objects_stamp` 를 싣되 스캔이 1 s 넘게 묵으면 뺀다. LOCALIZED 밖에서는 두 키를 아예 빼서 v1.73 CORE 도 상태를 읽는다.
 - 증거: `test_loc_assist.py` +4(LOCALIZED 에서 실림·16개 제한·주기, 1 s 넘은 물체 빠짐, LOCALIZED 밖·검사 중·SUSPECT 에서 없음, 전체 스캔·차체 반경 필터).
 - gate 변화: 없음. Gazebo 재실행 전.
+
+## 2026-10-02 · uncommitted · fix(perception): D-395 rev. 11 — 기준 사각형 수평선 문턱과 한 사각형 한 검출(NMS)
+
+- 원인: 후처리 감사(2026-10-02, 실제 프레임 506장). 거짓 검출 20건이 13장(2.6 %)에 있었고 모두 거리 없음이었다. 133221Z/000068 처럼 벽의 파란 테이프 앞에 빨간 케이블이 걸리면 링과 코어가 갖춰진다. 합성 사각형은 코어를 가르는 1 px 줄무늬 하나로 4개 중 4개가 신뢰도 1.0 검출 둘로 갈라졌다.
+- 변경: `HsvSquareDetector` 는 코어 무게중심이 지면 수평선 위(또는 위)에 있으면 버린다(바닥 점이 아니다). 같은 사각형의 조각은 신뢰도(같으면 코어 면적) 순으로 하나만 남긴다: 더 센 검출의 링 상자 안에 무게중심이 들거나 바닥에서 `MERGE_M`(0.1 m, 외곽 0.13 m 보다 작음) 안이면 같은 사각형이다. 수평선 아래 신뢰 거리 밖의 방위만 검출은 그대로 낸다(`range_m=None` 이 표시). 로봇(`loc_assist`)은 그대로 보고하고, Fleet `square_cue` 가 근거에서 뺀다.
+- 증거: `test_reference_square.py` +15(줄무늬 1–3 px × 위치 4 → 1건, 수평선 위 링+코어 → 0건, 실제 000068 → 실제 사각형 1건 23.9°/0.368 m, 000078 → 1건 0.385 m). 실제 프레임 시험은 gitignored `data/perception` 을 이 checkout, worktree 뒤 main checkout, `ROSY_PERCEPTION_DATA` 순으로 찾고 없으면 `REAL-FRAME CHECK NOT RUN` 으로 건너뛴다. 506장 재스캔: 거짓 20 → 0, 실제 거리 있는 검출 42 → 42.
+- gate 변화: 없음. 장치 재확인 전.

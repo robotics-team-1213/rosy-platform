@@ -135,6 +135,16 @@ def test_score_reports_every_cue_and_the_total():
     assert rows[0]["total"] == pytest.approx(0.99 + 1.5) and rows[1]["total"] == pytest.approx(0.99)
 
 
+def test_unranged_square_sightings_are_no_evidence_for_any_candidate():
+    """D-395 rev. 11: a bearing-only sighting (range_m null) scores 0 everywhere, so it can
+    neither lead a candidate nor push the truth below its mirror."""
+    near_a = pair((-1.26, 0.19, math.pi / 2))
+    rows = score(report(near_a, squares=[(0.0, None), (0.2, None)]), Context(squares=(A, B)), 0.0)
+    assert [r["square"] for r in rows] == [0.0, 0.0]
+    t, decision = run(Arbiter(), report(near_a, squares=[(0.0, None)]), Context(squares=(A, B)))
+    assert decision is None
+
+
 def test_a_hidden_peer_cannot_carry_a_decision_to_the_mirror():
     """Review C1 / S1 finding 3: a peer in range but hidden from the scan scores 0 for
     every candidate, so it cannot lead anyone, let alone the mirror."""

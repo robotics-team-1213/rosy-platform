@@ -103,9 +103,11 @@ def square_cue(pose: Pose, squares: Sequence[tuple[float, float]],
     """+1 when a seen square lands on a mapped one; -1 when a seen square lands on none,
     or a mapped one should be in view and is not; 0 when nothing is seen or expected.
 
-    `sightings` are (bearing_rad, range_m) in base_link; an unranged sighting counts
-    as seen when a mapped square lies on its bearing within the view.
+    `sightings` are (bearing_rad, range_m) in base_link. An unranged sighting
+    (range_m None) is no evidence either way and is ignored (D-395 rev. 11): all
+    20 false detections in 506 real frames were unranged (audit 2026-10-02).
     """
+    sightings = [(b, r) for b, r in sightings if r is not None]
     c, s = math.cos(pose[2]), math.sin(pose[2])
     expected = []
     for sx, sy in squares:
@@ -113,13 +115,9 @@ def square_cue(pose: Pose, squares: Sequence[tuple[float, float]],
         forward, left = c * dx + s * dy, -s * dx + c * dy
         bearing, rng = math.atan2(left, forward), math.hypot(forward, left)
         if forward > 0.0 and rng <= SQUARE_VIEW_M and abs(bearing) <= SQUARE_HALF_FOV_RAD:
-            expected.append((bearing, rng, (sx, sy)))
+            expected.append((sx, sy))
     for bearing, rng in sightings:
-        for e_bearing, e_range, centre in expected:
-            if rng is None:
-                if abs(wrap(bearing - e_bearing)) * e_range <= SQUARE_MATCH_M:
-                    return 1.0
-            elif math.dist(to_map(pose, (rng * math.cos(bearing), rng * math.sin(bearing))),
-                           centre) <= SQUARE_MATCH_M:
-                return 1.0
+        seen = to_map(pose, (rng * math.cos(bearing), rng * math.sin(bearing)))
+        if any(math.dist(seen, centre) <= SQUARE_MATCH_M for centre in expected):
+            return 1.0
     return -1.0 if expected or sightings else 0.0
