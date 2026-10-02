@@ -277,11 +277,14 @@ async def front_evidence(request: Request):
 # blocker: 받기 차단 사유, role: "operator"|"viewer"(쓰기·받기 403), archive: "ok"|"short"(본문이
 # Content-Length 보다 짧음)|"slow"(첫 조각 뒤 release 까지 멈춤)|"conflict"(목록과 달리 409),
 # foreign: 다른 기기가 시작한 녹화, big: 256 MB 를 넘는 녹화본. polls 는 GET /active 횟수.
+# starting: 시작이 먼저 "starting"(기록기가 아직 첫 파일을 열지 않음)이 되고, ready: true 로 recording.
 RECORDING_ID = "20261002T101500Z_rosy_dev"
 _IDLE_RECORDER = {"schema": "rosy.pilot.recording.status/1", "state": "idle", "id": None, "elapsed_s": 0.0,
                   "bytes": 0, "max_duration_s": 600, "quota_free_bytes": 10**9, "last_stop_reason": "",
                   "boot_id": "dev", "seq": 0}
-_RECORDING_DEFAULTS = {"blocker": None, "role": "operator", "archive": "ok", "big": False, "release": False}
+_RECORDING_DEFAULTS = {"blocker": None, "role": "operator", "archive": "ok", "big": False, "release": False,
+                       "starting": False}
+_RECORDING_LIVE = {"state": "recording", "id": "20261002T102000Z_rosy_dev", "elapsed_s": 1.0, "bytes": 2048}
 RECORDINGS = {"active": dict(_IDLE_RECORDER), "owned": False, "log": [], "polls": 0, **_RECORDING_DEFAULTS}
 _RECORDING_ITEM = {"id": RECORDING_ID, "started_at": "2026-10-02T10:15:00Z", "ended_at": "2026-10-02T10:16:05Z",
                    "duration_s": 65.0, "bytes": 1536, "topics": ["camera/front/compressed", "cmd_vel"],
@@ -328,6 +331,8 @@ async def recordings_script(request: Request):
     if body.get("foreign"):
         RECORDINGS.update(owned=False, active={**_IDLE_RECORDER, "state": "recording",
                                                "id": "20261002T103000Z_rosy_dev", "elapsed_s": 3.0, "bytes": 4096})
+    if body.get("ready") and RECORDINGS["active"]["state"] == "starting":
+        RECORDINGS["active"] = {**_IDLE_RECORDER, **_RECORDING_LIVE}
     return {key: RECORDINGS[key] for key in _RECORDING_DEFAULTS}
 
 
@@ -359,8 +364,8 @@ def recordings_start(request: Request):
         return _recording_error("RECORDING_BUSY", 409)
     RECORDINGS["log"].append("start")
     RECORDINGS["owned"] = True
-    RECORDINGS["active"] = {**_IDLE_RECORDER, "state": "recording", "id": "20261002T102000Z_rosy_dev",
-                            "elapsed_s": 1.0, "bytes": 2048}
+    RECORDINGS["active"] = ({**_IDLE_RECORDER, "state": "starting", "id": _RECORDING_LIVE["id"]}
+                            if RECORDINGS["starting"] else {**_IDLE_RECORDER, **_RECORDING_LIVE})
     return RECORDINGS["active"]
 
 

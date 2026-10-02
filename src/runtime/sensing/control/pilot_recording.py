@@ -1,7 +1,9 @@
 """D-411 A: the Pilot recording session. ROS-free; pilot_recorder_node is a thin wrapper.
 
 One session at a time, at most MAX_DURATION_S, a dedicated quota with a reserve, a free-disk
-floor. Nothing here blocks a ROS callback for long: stop() sends SIGINT, tick() ends the
+floor. A session is `starting` until rosbag2 opened its first file (writer_ready), then
+`recording`; elapsed time and duration count from that moment, and a writer that opens no
+file within START_TIMEOUT_S is stopped. Nothing here blocks a ROS callback for long: stop() sends SIGINT, tick() ends the
 session once rosbag2 has exited and hashes the manifest on one worker thread. shutdown()
 only ends the session (it must fit the launch SIGTERM window); recover() at the next start
 stops a writer that outlived its node and writes every missing manifest. Only fetched
@@ -39,6 +41,10 @@ DEFAULT_RESERVE_BYTES = 1024 ** 3
 DEFAULT_MIN_FREE_BYTES = 512 * 1024 ** 2
 STOP_TIMEOUT_S = 6.0          # SIGINT -> SIGKILL, inside the camera unit's TimeoutStopSec=10
 SHUTDOWN_WAIT_S = 3.5         # node shutdown, inside launch's 5 s SIGINT -> SIGTERM window
+# `starting` -> stop("writer_start_timeout") when rosbag2 opened no file by then. The Gazebo
+# run took 4.0 s from popen to the file (the ros2 CLI's Python start-up is most of it).
+START_TIMEOUT_S = 15.0
+START_TIMEOUT_REASON = "writer_start_timeout"
 WRITER_PID_NAME = ".writer.pid"   # dotfile: never in a manifest
 SIGKILL = getattr(signal, "SIGKILL", 9)
 _POLL_S = 0.1
@@ -114,8 +120,31 @@ def _disk_free(root: Path) -> int:
 
 
 def _safe_device(device: str) -> str:
-    safe = re.sub(r"[^A-Za-z0-9_-]", "_", device or "")[:_DEVICE_MAX].rstrip("_")
+    safe = re.sub(r"[^A-Za-z0-9_-]", "_", (device or "").strip())[:_DEVICE_MAX].rstrip("_")
     return safe or "rosy"
+
+
+def recording_device(param: str, namespace: str, hostname: str) -> str:
+    """session.device: the robot, not the host. An explicit `device` parameter wins, then
+    the node namespace (ROSY_NAMESPACE = rosy_NN on a provisioned robot, CORE's robot id);
+    the hostname only when neither is set (an un-namespaced bench)."""
+    for candidate in (param, (namespace or "").strip("/"), hostname):
+        if (candidate or "").strip():
+            return _safe_device(candidate)
+    return _safe_device("")
+
+
+def writer_ready(folder: Path) -> bool:
+    """rosbag2 has opened its first storage file: `<folder>/bag/*.mcap` exists.
+
+    Not its size: MCAP buffers whole chunks (zstd_fast) and the writer caches messages, so
+    the file stays 0 bytes for many seconds (a 20 s Gazebo session never grew on disk before
+    close). rosbag2 opens the file right before it subscribes ("Starting recording to" then
+    "Subscribed to topic" within ~0.4 s; first message 0.2 s after the open)."""
+    try:
+        return any(path.is_file() for path in (Path(folder) / "bag").glob("*.mcap"))
+    except OSError:
+        return False
 
 
 class PilotRecorder:
@@ -147,7 +176,8 @@ class PilotRecorder:
         self._proc = None
         self._folder: Path | None = None
         self._finalizing = None       # (future, reason) while the worker hashes
-        self._started = 0.0
+        self._started = 0.0           # popen
+        self._recording_since: float | None = None   # writer_ready(); None while `starting`
         self._stopping_since: float | None = None
         self._stop_reason = ""
         self._killed = False
@@ -194,7 +224,24 @@ class PilotRecorder:
             self._log(f"pilot recording: writer pid not kept: {exc}")
         self._proc, self._folder, self._killed = proc, folder, False
         self._started, self._stopping_since, self._stop_reason = self._clock(), None, ""
+        self._recording_since = None
         return True, folder.name
+
+    def poll_start(self) -> bool:
+        """`starting` -> `recording` once rosbag2 opened its first file. True on that change.
+        session.json's started_at becomes that moment (the first request stays requested_at),
+        so the listing, the manifest and recover() all count from when data began."""
+        if self._proc is None or self._stopping_since is not None \
+                or self._recording_since is not None or not writer_ready(self._folder):
+            return False
+        self._recording_since = self._clock()
+        try:
+            meta = _read_meta(self._folder)
+            meta.update(requested_at=meta.get("started_at"), started_at=_iso(self._now()))
+            _write_meta(self._folder, meta)
+        except (OSError, ValueError) as exc:
+            self._log(f"pilot recording: started_at of {self._folder.name} not updated: {exc}")
+        return True
 
     def stop(self, reason: str) -> tuple[bool, str]:
         if self._proc is None:
@@ -216,7 +263,8 @@ class PilotRecorder:
         code = self._proc.poll()
         if code is not None:
             reason = self._stop_reason if self._stopping_since is not None else "recorder_exit"
-            duration = max(0.0, self._clock() - self._started)
+            since = self._recording_since
+            duration = 0.0 if since is None else max(0.0, self._clock() - since)
             folder = self._folder
             self._proc = None
             self._end(folder, reason, code, self._killed)
@@ -224,13 +272,20 @@ class PilotRecorder:
                                 reason)
             return self._collect()
         if self._stopping_since is None:
+            self.poll_start()
+            if self._recording_since is None and self._clock() - self._started >= START_TIMEOUT_S:
+                self._log(f"pilot recording {self._folder.name}: rosbag2 opened no file in "
+                          f"{START_TIMEOUT_S:.0f} s; stopping ({START_TIMEOUT_REASON})")
+                self.stop(START_TIMEOUT_REASON)
+                return None
             self._check_limits()
         elif self._clock() - self._stopping_since >= STOP_TIMEOUT_S:
             self._kill(self._proc)
         return None
 
     def _check_limits(self) -> None:
-        if self._clock() - self._started >= self._max_duration_s:
+        since = self._recording_since
+        if since is not None and self._clock() - since >= self._max_duration_s:
             self.stop("max_duration")
             return
         try:
@@ -249,6 +304,7 @@ class PilotRecorder:
         if not future.done():
             return None
         self._finalizing, self._folder, self._stopping_since = None, None, None
+        self._recording_since = None
         error = future.exception()
         if error is not None:
             # The session stays without a manifest; recover() writes it at the next start.
@@ -281,16 +337,23 @@ class PilotRecorder:
     def status(self) -> dict:
         busy = self._busy()
         stopping = self._finalizing is not None or self._stopping_since is not None
+        since = self._recording_since
         try:
             used = _total_bytes(self._root)
             folder_bytes = _total_bytes(self._folder) if busy else 0
         except OSError:
             used, folder_bytes = self._quota, 0
+        if not busy:
+            state = "idle"
+        elif stopping:
+            state = "stopping"
+        else:
+            state = "starting" if since is None else "recording"
         return {
             "schema": STATUS_SCHEMA,
-            "state": ("stopping" if stopping else "recording") if busy else "idle",
+            "state": state,
             "id": self._folder.name if busy else None,
-            "elapsed_s": max(0.0, self._clock() - self._started) if busy else 0.0,
+            "elapsed_s": max(0.0, self._clock() - since) if busy and since is not None else 0.0,
             "bytes": folder_bytes,
             "max_duration_s": self._max_duration_s,
             "quota_free_bytes": max(0, self._quota - used),
@@ -390,6 +453,7 @@ class PilotRecorder:
                     pass
             self._end(folder, self._stop_reason or "shutdown", proc.poll(), self._killed)
             self._proc, self._folder, self._stopping_since = None, None, None
+            self._recording_since = None
         self._finalizing = None
         # A hash still running is abandoned here; recover() rewrites that manifest.
         self._executor.shutdown(wait=False, cancel_futures=True)

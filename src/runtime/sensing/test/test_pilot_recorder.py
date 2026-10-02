@@ -99,6 +99,14 @@ class Rig:
         bag.mkdir(exist_ok=True)
         (bag / "bag_0.mcap").write_bytes(b"x" * size)
 
+    def start_recording(self, size=2048):
+        """Start, then let the writer open its first file: the session is `recording`."""
+        ok, rid = self.rec.start()
+        assert ok, rid
+        self.write_bag(self.rec._root / rid, size)
+        assert self.rec.tick() is None and self.rec.status()["state"] == "recording"
+        return rid
+
     def finish(self, code=0):
         self.procs[-1].code = code
         return self.rec.tick()
@@ -124,11 +132,13 @@ def test_bag_command_records_the_d411_topics_namespaced_and_dies_with_its_parent
 def test_start_stop_finish_writes_a_verifiable_manifest(tmp_path):
     rig = Rig(tmp_path)
     ok, rid = rig.rec.start()
-    assert ok and rig.rec.status()["state"] == "recording" and rig.rec.status()["id"] == rid
+    assert ok and rig.rec.status()["state"] == "starting" and rig.rec.status()["id"] == rid
     folder = tmp_path / rid
     assert (folder / pr.WRITER_PID_NAME).read_text("utf-8").strip() == "4242"
     assert rig.rec.start() == (False, "RECORDING_BUSY")
     rig.write_bag(folder)
+    rig.rec.tick()
+    assert rig.rec.status()["state"] == "recording"
     rig.t += 30
     assert rig.rec.stop("requested") == (True, rid)
     assert rig.procs[0].signals == [signal.SIGINT]
@@ -161,7 +171,7 @@ def test_hashing_runs_off_the_timer_and_the_recorder_stays_busy_meanwhile(tmp_pa
 
 def test_max_duration_stops_by_itself(tmp_path):
     rig = Rig(tmp_path)
-    rig.rec.start()
+    rig.start_recording()
     rig.t += 600
     assert rig.rec.tick() is None
     assert rig.procs[0].signals == [signal.SIGINT]
@@ -360,6 +370,84 @@ def test_live_writer_check_matches_the_exact_bag_argument(tmp_path):
     assert pr._writer_alive(11, folder, proc_root=proc) is False
     assert pr._writer_alive(12, folder, proc_root=proc) is False
     assert pr._writer_alive(13, folder, proc_root=proc) is False
+
+
+def test_a_started_writer_is_starting_until_its_first_mcap_file_exists(tmp_path):
+    # rosbag2 needs seconds (CLI start, discovery) before it writes: "recording" must mean data.
+    rig = Rig(tmp_path)
+    _, rid = rig.rec.start()
+    folder = tmp_path / rid
+    status = RecorderStatus.model_validate(rig.rec.status())
+    assert status.state == "starting" and status.id == rid and status.elapsed_s == 0.0
+    (folder / "bag").mkdir()
+    (folder / "bag" / "metadata.yaml").write_text("x", "utf-8")   # not the writer's data file
+    rig.t += 3
+    assert rig.rec.poll_start() is False and rig.rec.status()["state"] == "starting"
+    rig.write_bag(folder, size=0)          # rosbag2 opened its first file: subscriptions follow
+    rig.wall += timedelta(seconds=4)
+    rig.t += 1
+    assert rig.rec.poll_start() is True and rig.rec.poll_start() is False
+    status = rig.rec.status()
+    assert status["state"] == "recording" and status["elapsed_s"] == 0.0
+    meta = _meta(folder)
+    assert meta["started_at"] == "2026-10-02T10:15:04+00:00"
+    assert meta["requested_at"] == "2026-10-02T10:15:00+00:00"
+    rig.t += 5
+    assert rig.rec.status()["elapsed_s"] == pytest.approx(5.0)
+
+
+def test_duration_counts_from_when_the_writer_really_records(tmp_path):
+    rig = Rig(tmp_path)
+    _, rid = rig.rec.start()
+    rig.t += 4
+    rig.write_bag(tmp_path / rid)
+    rig.rec.tick()
+    rig.t += 30
+    rig.rec.stop("requested")
+    assert rig.finish(0) == "requested"
+    assert _manifest(tmp_path / rid).duration_s == pytest.approx(30.0)
+
+
+def test_a_writer_that_never_opens_its_file_is_stopped_as_a_start_timeout(tmp_path):
+    rig = Rig(tmp_path)
+    _, rid = rig.rec.start()
+    rig.t += pr.START_TIMEOUT_S - 0.1
+    assert rig.rec.tick() is None and rig.procs[0].signals == []
+    rig.t += 0.2
+    assert rig.rec.tick() is None
+    assert rig.procs[0].signals == [signal.SIGINT] and rig.rec.status()["state"] == "stopping"
+    assert any("writer_start_timeout" in line for line in rig.logs)
+    assert rig.finish(0) == "writer_start_timeout"
+    assert rig.rec.status()["last_stop_reason"] == "writer_start_timeout"
+    manifest = _manifest(tmp_path / rid)
+    assert manifest.stop_reason == "writer_start_timeout" and manifest.duration_s == 0.0
+
+
+def test_stop_while_starting_is_a_clean_stop(tmp_path):
+    rig = Rig(tmp_path)
+    _, rid = rig.rec.start()
+    assert rig.rec.stop("requested") == (True, rid)
+    assert rig.rec.status()["state"] == "stopping"
+    rig.write_bag(tmp_path / rid)          # a late file never turns a stopping session back
+    assert rig.rec.poll_start() is False
+    assert rig.finish(0) == "requested"
+    assert rig.rec.status()["state"] == "idle" and rig.rec.status()["last_stop_reason"] == "requested"
+    assert _manifest(tmp_path / rid).duration_s == 0.0
+
+
+def test_the_recording_device_is_the_robot_identity(tmp_path):
+    assert pr.recording_device("", "/rosy_03", "PERPROS") == "rosy_03"
+    assert pr.recording_device("rosy_01", "", "PERPROS") == "rosy_01"
+    assert pr.recording_device("rosy_01", "/rosy_03", "PERPROS") == "rosy_01"
+    assert pr.recording_device("", "", "PERPROS") == "PERPROS"
+    assert pr.recording_device("  ", "/", "") == "rosy"
+    long = pr.recording_device("", "", "h" * 80 + "__")
+    rig = Rig(tmp_path)
+    rig.rec = pr.PilotRecorder(tmp_path, device=long, popen=lambda cmd, **_: Proc(),
+                               clock=lambda: rig.t, now=lambda: rig.wall, executor=SyncExecutor(),
+                               disk_free=lambda root: 100 * GIB, killpg=None)
+    ok, rid = rig.rec.start()
+    assert ok and recording_id_ok(rid) and not rid.endswith("_")
 
 
 def test_status_is_idle_with_quota_when_nothing_runs(tmp_path):

@@ -47,6 +47,22 @@ def test_node_falls_back_to_the_default_reserve_when_it_does_not_fit_the_quota()
     assert "DEFAULT_RESERVE_BYTES" in src.split("except ValueError as exc:", 1)[1]
 
 
+def test_node_names_sessions_after_the_robot_not_the_host():
+    # session.device must match CORE's robot id: explicit `device`, else the namespace.
+    src = _src("pilot_recorder_node.py")
+    assert "self.declare_parameter('device', '')" in src
+    flat = "".join(src.split())
+    assert ("recording_device(self.get_parameter('device').value,self.get_namespace(),"
+            "socket.gethostname())") in flat
+
+
+def test_node_turns_the_camera_copy_on_from_starting_and_notices_the_writer_quickly():
+    src = _src("pilot_recorder_node.py")
+    assert "status['state'] in ('starting', 'recording', 'stopping')" in src
+    assert "create_timer(START_POLL_S, self._poll_start)" in src
+    assert "self._recorder.poll_start()" in src
+
+
 def test_executor_choice_warns_that_threads_break_the_recorder_pdeathsig():
     src = _src("executor_choice.py")
     assert "MultiThreadedExecutor" in src and "pdeathsig" in src and "pilot_recording" in src

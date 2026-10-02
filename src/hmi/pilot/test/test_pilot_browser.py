@@ -799,6 +799,40 @@ def test_robot_recording_toggle_and_sheet(base_url, viewport):
 
 @pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
                     reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
+def test_robot_recording_shows_starting_until_the_writer_records(tablet_page):
+    """'녹화 중'은 로봇이 실제로 기록할 때부터다. 준비 중에는 타이머 없이 멈출 수만 있다."""
+    base_url, page, errors = tablet_page
+    _enter_recording_drive(page, base_url, starting=True)
+    toggle = "[data-robot-record]"
+    page.click(toggle)
+    page.wait_for_function(f"document.querySelector('{toggle}').dataset.state === 'starting'")
+    assert page.inner_text(toggle).strip() == "녹화 준비 중…"
+    assert page.get_attribute(toggle, "aria-pressed") == "true"
+    assert page.get_attribute(toggle, "aria-label") == "로봇 녹화 준비 중, 누르면 취소"
+    assert not page.locator(toggle).is_disabled()
+    fact = page.inner_text("[data-drive-fact=recording]")
+    assert "아직 기록하지 않습니다" in fact and "0:0" not in fact
+    page.click(toggle)                                     # 준비 중 멈춤은 깨끗한 정지
+    page.wait_for_function(f"document.querySelector('{toggle}').textContent.trim() === '로봇 녹화'")
+    assert _recordings(page, base_url)["log"] == ["start", "stop"]
+    page.click(toggle)
+    page.wait_for_function(f"document.querySelector('{toggle}').dataset.state === 'starting'")
+    _recordings(page, base_url, ready=True)                # 기록기가 첫 파일을 열었다
+    page.wait_for_function(ROBOT_RECORD_STOP)
+    page.wait_for_function("document.querySelector('[data-drive-fact=recording]').textContent.includes('녹화 0:')")
+    assert page.get_attribute(toggle, "aria-label") == "로봇 녹화 중지"
+    page.click(toggle)
+    page.wait_for_function(f"document.querySelector('{toggle}').dataset.state === 'idle'")
+    page.click(toggle)
+    page.wait_for_function(f"document.querySelector('{toggle}').dataset.state === 'starting'")
+    page.click("[data-drive-exit]")                        # 준비 중에 나가도 이 기기 녹화는 멈춘다
+    assert _eventually(lambda: _recordings(page, base_url)["log"] == ["start", "stop", "start", "stop",
+                                                                      "start", "stop"])
+    assert errors == [], errors
+
+
+@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+                    reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
 def test_leaving_drive_stops_the_robot_recording_this_device_started(tablet_page):
     base_url, page, errors = tablet_page
     _enter_recording_drive(page, base_url)

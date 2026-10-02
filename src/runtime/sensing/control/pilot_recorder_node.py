@@ -19,10 +19,12 @@ from core_common.protocol.recording import (
     ACTIVE_TOPIC, FETCHED_TOPIC, PILOT_RECORDING_ROOT, SET_ACTIVE_SERVICE, STATUS_TOPIC)
 from . import executor_choice
 from .pilot_recording import DEFAULT_QUOTA_BYTES, DEFAULT_RESERVE_BYTES, PilotRecorder
+from .pilot_recording import recording_device
 
 _LATCHED = QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE,
                       durability=DurabilityPolicy.TRANSIENT_LOCAL)
 _GIB = 1024 ** 3
+START_POLL_S = 0.2
 
 
 class PilotRecorderNode(Node):
@@ -31,11 +33,15 @@ class PilotRecorderNode(Node):
         self.declare_parameter('recording_root', PILOT_RECORDING_ROOT)
         self.declare_parameter('quota_gib', DEFAULT_QUOTA_BYTES / _GIB)
         self.declare_parameter('reserve_gib', DEFAULT_RESERVE_BYTES / _GIB)
+        # session.device names the robot (CORE's robot id), not the host: '' = the namespace.
+        self.declare_parameter('device', '')
         namespace = self.get_namespace().strip('/')
         quota = int(float(self.get_parameter('quota_gib').value) * _GIB)
         reserve = int(float(self.get_parameter('reserve_gib').value) * _GIB)
-        recorder = dict(device=namespace or socket.gethostname(), namespace=namespace,
-                        quota_bytes=quota, log=self.get_logger().warn)
+        device = recording_device(self.get_parameter('device').value, self.get_namespace(),
+                                  socket.gethostname())
+        recorder = dict(device=device, namespace=namespace, quota_bytes=quota,
+                        log=self.get_logger().warn)
         try:
             self._recorder = PilotRecorder(self.get_parameter('recording_root').value,
                                            reserve_bytes=reserve, **recorder)
@@ -56,6 +62,8 @@ class PilotRecorderNode(Node):
         self.create_service(SetBool, SET_ACTIVE_SERVICE, self._on_set_active)
         self.create_subscription(String, FETCHED_TOPIC, self._on_fetched, 5)
         self.create_timer(1.0, self._tick)
+        # `starting` -> `recording` within START_POLL_S of rosbag2 opening its file, not 1 s.
+        self.create_timer(START_POLL_S, self._poll_start)
         self._publish()
 
     def _on_set_active(self, request, response):
@@ -80,10 +88,15 @@ class PilotRecorderNode(Node):
             self.get_logger().info(f'pilot recording finished: {reason}')
         self._publish()
 
+    def _poll_start(self):
+        if self._recorder.poll_start():
+            self._publish()
+
     def _publish(self):
         status = self._recorder.status()
         self._status_pub.publish(String(data=json.dumps(status)))
-        self._active_pub.publish(Bool(data=status['state'] in ('recording', 'stopping')))
+        # From `starting`: the camera's JPEG copy must flow before rosbag2 subscribes.
+        self._active_pub.publish(Bool(data=status['state'] in ('starting', 'recording', 'stopping')))
 
     def destroy_node(self):
         self._recorder.shutdown()

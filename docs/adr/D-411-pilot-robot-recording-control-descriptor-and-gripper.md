@@ -21,6 +21,7 @@
 5. **수신:** `GET /api/v1/recordings`(목록: id, 시작·끝, 길이, 크기, 토픽, 상태, sha256 manifest), `GET /api/v1/recordings/{id}/archive`(tar 스트림, 무압축 — mcap이 이미 zstd). 수신은 **로봇이 정지해 있을 때만**(MANUAL 입력 없음·자율 모드 아님·녹화 중 아님) 허용한다(D-136 §6). 실패 코드는 `RECORDING_BUSY`·`ROBOT_MOVING`·`RECORDING_NOT_FOUND`.
 6. **PC:** `rosy_ml fetch --http`가 위 API로 받고 manifest sha256을 검증한 뒤 `bag_to_video`로 변환하고, 사이드카에서 프레임·`cmd_vel`·`teleop/intent` 짝을 다시 읽어 개수를 확인한다. 저장 위치는 D-379 store를 따른다.
 7. **Pilot UI:** 주행 화면에 로봇 녹화 토글(경과 시간·크기), "녹화본" 시트(목록·받기·정지 중에만 받기 가능). 기존 브라우저 녹화는 "화면 녹화"로 이름을 바꿔 둔다.
+8. **녹화 시작 판정(2026-10-02 Gazebo 실행 뒤 보강):** 녹화기 상태에 `starting` 을 둔다. rosbag2 를 띄운 뒤 첫 mcap 파일이 생길 때까지(실측 4 s)는 `starting` 이고 경과 시간을 세지 않으며, 그 순간부터 `recording`·`started_at`·길이를 센다. 15 s 안에 파일이 없으면 `writer_start_timeout` 으로 멈춘다. Pilot 은 그동안 "녹화 준비 중…"(멈춤 가능)을 보인다. session `device` 는 호스트 이름이 아니라 로봇(네임스페이스 또는 `device` 파라미터)이다. 세부는 API Ref §5.10.
 
 ### B. 기기가 알리는 조작부 서술자 `rosy.controls/1`
 

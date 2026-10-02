@@ -46,15 +46,30 @@ def test_toggle_view():
       m.recordingView({state: 'idle', elapsed_s: 0, bytes: 0, max_duration_s: 600, last_stop_reason: 'max_duration'}),
       m.recordingView({state: 'error', elapsed_s: 0, bytes: 0, max_duration_s: 600, last_stop_reason: ''}),
     ]))""")
-    assert out[0] == {"recording": False, "available": False, "busy": False, "label": "로봇 녹화",
-                      "detail": "", "reason": "녹화기 응답 없음"}
-    assert out[1] == {"recording": False, "available": True, "busy": False, "label": "로봇 녹화",
-                      "detail": "", "reason": ""}
+    assert out[0] == {"recording": False, "available": False, "busy": False, "starting": False,
+                      "label": "로봇 녹화", "ariaLabel": "로봇 녹화", "detail": "", "reason": "녹화기 응답 없음"}
+    assert out[1] == {"recording": False, "available": True, "busy": False, "starting": False,
+                      "label": "로봇 녹화", "ariaLabel": "로봇 녹화", "detail": "", "reason": ""}
     assert out[2]["recording"] is True and out[2]["label"] == "로봇 녹화 중지"
+    assert out[2]["starting"] is False and out[2]["ariaLabel"] == "로봇 녹화 중지"
     assert out[2]["detail"] == "녹화 1:05 / 10:00 · 1.5 KB" and out[2]["busy"] is False
     assert out[3]["busy"] is True and out[3]["label"] == "녹화 정리 중"
     assert out[4]["recording"] is False and out[4]["detail"] == "지난 녹화: 10분 상한에서 멈춤"
     assert out[5]["available"] is True and out[5]["detail"] == "녹화기 오류"
+
+
+def test_starting_is_on_and_stoppable_but_shows_no_timer_yet():
+    out = _run_js("""console.log(JSON.stringify([
+      m.recordingView({state: 'starting', elapsed_s: 0, bytes: 0, max_duration_s: 600}),
+      m.recordingView({state: 'idle', elapsed_s: 0, bytes: 0, max_duration_s: 600,
+                       last_stop_reason: 'writer_start_timeout'}),
+    ]))""")
+    starting = out[0]
+    assert starting["recording"] is True and starting["available"] is True and starting["busy"] is False
+    assert starting["starting"] is True and starting["label"] == "녹화 준비 중…"
+    assert starting["detail"] == "녹화 준비 중 — 아직 기록하지 않습니다"
+    assert starting["ariaLabel"] == "로봇 녹화 준비 중, 누르면 취소"
+    assert out[1]["detail"] == "지난 녹화: 녹화기가 시작되지 않아 멈춤"
 
 
 def test_error_text_names_every_recording_code():

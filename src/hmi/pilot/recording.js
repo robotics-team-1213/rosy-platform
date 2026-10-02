@@ -27,6 +27,7 @@ const STOP_TEXT = Object.freeze({
   disk_full: "저장 공간 부족으로 멈춤",
   recorder_exit: "녹화기가 끝나 멈춤",
   shutdown: "녹화기 종료로 멈춤",
+  writer_start_timeout: "녹화기가 시작되지 않아 멈춤",
 });
 
 export function formatElapsed(seconds) {
@@ -49,23 +50,28 @@ export function errorText(code, action) {
 }
 
 // active: GET /api/v1/recordings/active 의 `active`(낡았거나 녹화기가 없으면 null).
-// label 은 HUD 버튼 글자(짧게), detail 은 그 옆 칩.
+// label 은 HUD 버튼 글자(짧게), ariaLabel 은 그 버튼이 하는 일, detail 은 그 옆 칩.
+// starting: 로봇의 기록기가 돌지만 아직 첫 파일을 열지 않았다(몇 초) — 켜져 있고 멈출 수 있지만
+// 기록은 아직 없으므로 시간을 세지 않는다. 운전은 "로봇 녹화 중지"(= recording)가 보인 뒤에.
 export function recordingView(active) {
-  if (!active) {
-    return {recording: false, available: false, busy: false, label: "로봇 녹화", detail: "",
-            reason: "녹화기 응답 없음"};
+  const off = {recording: false, available: true, busy: false, starting: false,
+               label: "로봇 녹화", ariaLabel: "로봇 녹화", detail: "", reason: ""};
+  if (!active) return {...off, available: false, reason: "녹화기 응답 없음"};
+  if (active.state === "starting") {
+    return {...off, recording: true, starting: true, label: "녹화 준비 중…",
+            ariaLabel: "로봇 녹화 준비 중, 누르면 취소", detail: "녹화 준비 중 — 아직 기록하지 않습니다"};
   }
   if (active.state === "recording" || active.state === "stopping") {
     const busy = active.state === "stopping";
+    const label = busy ? "녹화 정리 중" : "로봇 녹화 중지";
     return {
-      recording: true, available: true, busy, label: busy ? "녹화 정리 중" : "로봇 녹화 중지",
+      ...off, recording: true, busy, label, ariaLabel: label,
       detail: `녹화 ${formatElapsed(active.elapsed_s)} / ${formatElapsed(active.max_duration_s)} · ${formatBytes(active.bytes)}`,
       reason: busy ? "녹화본을 정리하는 중입니다" : "",
     };
   }
   const stopped = STOP_TEXT[active.last_stop_reason];
-  const detail = active.state === "error" ? "녹화기 오류" : stopped ? `지난 녹화: ${stopped}` : "";
-  return {recording: false, available: true, busy: false, label: "로봇 녹화", detail, reason: ""};
+  return {...off, detail: active.state === "error" ? "녹화기 오류" : stopped ? `지난 녹화: ${stopped}` : ""};
 }
 
 function formatStarted(iso) {

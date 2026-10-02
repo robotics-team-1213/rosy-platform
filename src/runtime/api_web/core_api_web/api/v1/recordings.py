@@ -21,7 +21,7 @@ from core_api_web.api.errors import ApiError
 from core_api_web.api.v1.common import operator, viewer
 from core_common.domain.pilot_recording import RecordingRefused
 from core_common.domain.pilot_recording_store import archive_plan, iter_archive, list_recordings
-from core_common.protocol.recording import PILOT_RECORDING_ROOT
+from core_common.protocol.recording import ACTIVE_STATES, PILOT_RECORDING_ROOT
 
 recordings_router = APIRouter(prefix="/api/v1/recordings", tags=["recordings"])
 _log = logging.getLogger(__name__)
@@ -81,7 +81,7 @@ def _refused(exc: RecordingRefused) -> ApiError:
 @recordings_router.get("")
 def recordings(_: AuthContext = Depends(viewer), svc: CoreServicesLike = Depends(get_services)):
     status = svc.pilot_recording.status()
-    active_id = status["id"] if status and status["state"] in ("recording", "stopping") else None
+    active_id = status["id"] if status and status["state"] in ACTIVE_STATES else None
     blocker = _download_blocker(svc)
     return {"active": status, "items": list_recordings(_root(svc), active_id=active_id),
             "download_allowed": blocker is None, "download_blocker": blocker}
