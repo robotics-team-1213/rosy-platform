@@ -1305,3 +1305,8 @@
 - Change: extend the two-ledger restart replay to verify four phase snapshots plus one terminal event, then a separate goal-confirmation event.
 - Evidence: targeted Mission, dispatcher, service, progress, task, OMX ActionStore, and replay suites: 77 passed; known-failure comparison: 0 new, 0 known.
 - Gate: SOURCE/LOCAL only; remaining interruption fixtures and expiry/occupancy cases are still open.
+
+## 2026-10-02 · uncommitted · fix(fleet): a legacy-null pose is never a last trusted pose (D-395 S2 Finding 1)
+- Change: `trust.trusted_xy` returns a pose only for LOCALIZED + map; the console stores no trusted pose from a `localization: null` snapshot. A robot first read null and then CANDIDATES has no trusted pose and blocks the whole track. A robot that reported localization and then goes null is untrusted (badge not legacy) until null for 30 s (`trust.LAPSED_GRACE_S`); then legacy again with its stale trusted pose dropped. Contract §3 records both rules.
+- Evidence: `test_localization_trust.py`, `test_server_traffic.py` (S2 sequence, null→LOCALIZED, LOCALIZED→CANDIDATES keep-out, lapsed robot, grace reset, true legacy); Fleet suite 1380 passed/7 skipped.
+- Gate: SOURCE/LOCAL only; the S2 bench must be rerun on the ROS box.
