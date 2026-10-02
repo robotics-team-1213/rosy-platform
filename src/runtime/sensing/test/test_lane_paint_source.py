@@ -227,4 +227,105 @@ def test_node_wires_the_paint_cadence_and_session_options():
     src = (Path(__file__).resolve().parents[1] / "control" / "line_observer_node.py").read_text(encoding="utf-8")
     assert "declare_parameter('learned_paint_every_n', 2, _READ_ONLY)" in src
     assert "declare_parameter('learned_paint_threads', 1, _READ_ONLY)" in src
-    assert "threads=threads, allow_spinning=False" in src and "clean_learned_mask(mask, ground.horizon_row)" in src
+    assert "threads=threads, allow_spinning=False" in src and "clean_learned_mask(m, ground.horizon_row)" in src
+
+
+def _stamped(worker, n, every_n, t, step=True, dt=0.125, clean=None):
+    out = []
+    for _ in range(n):
+        out.append(worker.mask_for(np.zeros((240, 320, 3), np.uint8), every_n, t[0], clean))
+        if step:
+            worker.step()
+        t[0] += dt
+    return out
+
+
+def test_reuse_is_bound_by_frame_stamps_not_call_counts():
+    t = [10.0]
+    worker = LearnedPaintWorker(_Slot(_Model()), stale_s=5.0, clock=lambda: 0.0, start=False)
+    _stamped(worker, 3, 2, t)                                # 8 Hz frames teach the period
+    worker._pending = None                                   # no new mask arrives
+    t[0] += 0.5                                              # then a long camera pause, 1 call later
+    assert worker.mask_for(np.zeros((240, 320, 3), np.uint8), 2, t[0]) is None   # 0.6 s > 1.5*2*0.125
+
+
+def test_reset_clears_cached_mask_pending_frame_and_counter():
+    t = [10.0]
+    model = _Model()
+    worker = LearnedPaintWorker(_Slot(model), stale_s=5.0, clock=lambda: 0.0, start=False)
+    _stamped(worker, 2, 2, t)
+    assert worker.mask_for(np.zeros((240, 320, 3), np.uint8), 2, t[0]) is not None
+    worker.reset()
+    assert worker.latest((240, 320))[0] is None and worker._frames == 0 and worker._pending is None
+    worker.step()
+    assert model.calls == 1                                  # nothing pending survived the reset
+    # an inference that was running during the reset must not repopulate the cache
+    worker.submit(np.zeros((240, 320, 3), np.uint8), tag=0, stamp=t[0])
+    pending = worker._pending
+    worker._pending = None
+    worker.reset()
+    worker._pending = pending                                # the stale generation's frame
+    worker.step()
+    assert worker.latest((240, 320))[0] is None
+
+
+def test_a_reused_mask_is_cleaned_once_per_new_mask():
+    t = [10.0]
+    worker = LearnedPaintWorker(_Slot(_Model()), stale_s=5.0, clock=lambda: 0.0, start=False)
+    cleaned = []
+
+    def clean(m):
+        cleaned.append(1)
+        return m
+
+    got = _stamped(worker, 4, 2, t, clean=clean)             # submits at frames 0 and 2 -> 2 masks
+    assert [g is not None for g in got] == [False, True, True, True]
+    assert len(cleaned) == 2
+
+
+def test_cadence_one_while_turning_infers_every_frame():
+    t = [10.0]
+    model = _Model()
+    worker = LearnedPaintWorker(_Slot(model), stale_s=5.0, clock=lambda: 0.0, start=False)
+    _stamped(worker, 4, 1, t)
+    assert model.calls == 4
+
+
+def test_node_gates_reuse_on_turn_rate_and_resets_the_worker():
+    from pathlib import Path
+    src = (Path(__file__).resolve().parents[1] / "control" / "line_observer_node.py").read_text(encoding="utf-8")
+    assert "declare_parameter('learned_paint_reuse_max_wz', 0.15)" in src
+    assert "abs(wz) > float(self.get_parameter('learned_paint_reuse_max_wz').value)" in src
+    assert src.count("self._paint_worker.reset()") >= 4
+    assert "self._odom_wz = float(msg.twist.twist.angular.z)" in src
+
+
+def test_ort_session_options_with_a_fake_onnxruntime(monkeypatch):
+    import sys
+    from control.sensing.perception.learned import runner
+    entries = {}
+
+    class Options:
+        intra_op_num_threads = 0
+        inter_op_num_threads = 0
+
+        def add_session_config_entry(self, key, value):
+            entries[key] = value
+
+    class Session:
+        def __init__(self, path, sess_options=None, providers=None):
+            self.opts = sess_options
+
+        def get_inputs(self):
+            return [type("I", (), {"name": "x"})()]
+
+    fake = type(sys)("onnxruntime")
+    fake.SessionOptions, fake.InferenceSession = Options, Session
+    monkeypatch.setitem(sys.modules, "onnxruntime", fake)
+    monkeypatch.setattr(runner, "add_learned_site", lambda: None)
+    spin_off = runner._OrtSession("m.onnx", 1, allow_spinning=False)
+    assert entries == {"session.intra_op.allow_spinning": "0", "session.inter_op.allow_spinning": "0"}
+    assert spin_off._s.opts.intra_op_num_threads == 1 and spin_off._s.opts.inter_op_num_threads == 1
+    entries.clear()
+    default = runner._OrtSession("m.onnx", 2)
+    assert entries == {} and default._s.opts.intra_op_num_threads == 2
