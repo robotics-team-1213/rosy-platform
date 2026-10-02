@@ -122,9 +122,14 @@ export function refusalText(robotId, decision, err) {
   } else if (code === "EMERGENCY_ACTIVE") why = "비상정지 중입니다";
   else if (code === "CALIBRATION_ACTIVE") why = "보정 세션이 로봇을 쥐고 있습니다";
   else if (err && err.status === 403) why = "운용자 권한이 필요합니다";
-  else why = "답을 전하지 못했습니다";
+  else if (code === "ROBOT_UNREACHABLE") why = "로봇에 닿지 않아 답이 전해지지 않았습니다";
+  else if (code === "STUCK_DECISION_OUTCOME_UNKNOWN") {
+    why = "로봇이 응답하지 않았습니다. CORE가 이미 적용했을 수 있으니 막힘 상태를 다시 확인한 뒤 답하세요";
+  } else why = "답을 전하지 못했습니다";
+  const verb = code === "STUCK_DECISION_OUTCOME_UNKNOWN" ? "결과 불명"
+    : code === "ROBOT_UNREACHABLE" ? "전달 실패" : "거부";
   const raw = code ? `${code}: ${message}` : message;
-  return `${robotId} ${DECISION_LABEL[decision] || decision} 거부 — ${why}${raw ? ` (${raw})` : ""}`;
+  return `${robotId} ${DECISION_LABEL[decision] || decision} ${verb} — ${why}${raw ? ` (${raw})` : ""}`;
 }
 
 function button(text, kind) {
@@ -149,6 +154,7 @@ export function createLineStuckPanel({ el, view, call, log, isOperator }) {
   const signatures = new Map();
 
   async function send(robotId, stuckId, decision) {
+    if (busy.has(robotId)) return;   // one answer in flight per robot (no double submit)
     confirming.delete(robotId);
     busy.add(robotId);
     render();
@@ -225,24 +231,28 @@ export function createLineStuckPanel({ el, view, call, log, isOperator }) {
       facts.append(cell);
     }
 
+    // render() already dropped a confirm step whose stuck id is no longer the live one.
     const pending = confirming.get(robotId);
+    const specs = decisionButtons(stuck, { operator: isOperator(), busy: busy.has(robotId) });
     const actions = document.createElement("div");
     actions.className = "stuck-actions";
     actions.setAttribute("role", "group");
     actions.setAttribute("aria-labelledby", name.id);
-    for (const spec of decisionButtons(stuck, { operator: isOperator(), busy: busy.has(robotId) })) {
+    for (const spec of specs) {
       const node = button(spec.confirm ? `${spec.label}…` : spec.label, "quiet");
       node.dataset.decision = spec.decision;
       node.dataset.focusKey = `decision-${spec.decision}`;
       node.setAttribute("aria-label", `${robotId} ${spec.label} (${spec.decision})`);
       setReason(node, spec.reason);
-      if (pending && pending.decision === spec.decision) node.setAttribute("aria-expanded", "true");
+      if (spec.confirm) {
+        node.setAttribute("aria-expanded", String(pending?.decision === spec.decision));
+      }
       node.addEventListener("click", () => choose(robotId, stuck.stuck_id, spec.decision));
       actions.append(node);
     }
     li.append(head, facts, actions);
 
-    if (pending && pending.stuck_id === stuck.stuck_id) {
+    if (pending) {
       const box = document.createElement("div");
       box.className = "stuck-confirm";
       box.setAttribute("role", "group");
@@ -252,6 +262,8 @@ export function createLineStuckPanel({ el, view, call, log, isOperator }) {
       box.setAttribute("aria-labelledby", text.id);
       const yes = button(`${DECISION_LABEL[pending.decision]} 보내기`, "primary");
       yes.dataset.focusKey = "confirm-yes";
+      // 보내기는 그 답 버튼과 같은 사유로 막힌다(권한·연결·전송 중·로컬 복구 꺼짐).
+      setReason(yes, specs.find((spec) => spec.decision === pending.decision)?.reason || "");
       yes.addEventListener("click", () => send(robotId, stuck.stuck_id, pending.decision));
       const no = button("취소", "quiet");
       no.dataset.focusKey = "confirm-no";
@@ -286,8 +298,11 @@ export function createLineStuckPanel({ el, view, call, log, isOperator }) {
     const list = el("stuck-list");
     if (!panel || !list) return;
     const stucks = view.stateUnavailable ? [] : pendingStucks(view.robots);
-    const live = new Set(stucks.map((robot) => robot.robot_id));
-    for (const key of [...confirming.keys()]) if (!live.has(key)) confirming.delete(key);
+    const live = new Map(stucks.map((robot) => [robot.robot_id, robot.line_stuck.stuck_id]));
+    // A confirm step belongs to one stuck id: a closed or replaced stuck drops it.
+    for (const [key, entry] of [...confirming]) {
+      if (live.get(key) !== entry.stuck_id) confirming.delete(key);
+    }
     for (const key of [...signatures.keys()]) if (!live.has(key)) signatures.delete(key);
 
     const active = document.activeElement;
@@ -323,8 +338,10 @@ export function createLineStuckPanel({ el, view, call, log, isOperator }) {
     if (count) count.textContent = ordered.length ? `${ordered.length}건` : "";
 
     if (keepFocus?.robot && keepFocus.key) {
-      const target = [...list.children].find((node) => node.dataset.robotId === keepFocus.robot)
-        ?.querySelector(`[data-focus-key="${keepFocus.key}"]`);
+      const owner = [...list.children].find((node) => node.dataset.robotId === keepFocus.robot);
+      // The focused control may be gone (confirm step dropped): land on the item's first answer.
+      const target = owner?.querySelector(`[data-focus-key="${keepFocus.key}"]`)
+        || owner?.querySelector("ui-button[data-decision]");
       if (target && document.activeElement !== target) target.focus({ preventScroll: true });
     }
   }

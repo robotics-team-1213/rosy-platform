@@ -86,6 +86,17 @@ test("CORE refusals keep their code and message verbatim", () => {
     /운용자 권한/);
 });
 
+test("transport failures say not delivered or outcome unknown, never refused", () => {
+  const unreachable = refusalText("rosy_01", "ABORT", { status: 502, code: "ROBOT_UNREACHABLE",
+    message: "answer not delivered: the robot could not be reached" });
+  assert.match(unreachable, /^rosy_01 중단 전달 실패 — 로봇에 닿지 않아/);
+  const unknown = refusalText("rosy_01", "RESUME", { status: 502, code: "STUCK_DECISION_OUTCOME_UNKNOWN",
+    message: "the robot did not reply; CORE may have applied the answer. Re-read the stuck before answering again" });
+  assert.match(unknown, /^rosy_01 재개 결과 불명 — /);
+  assert.match(unknown, /이미 적용했을 수 있으니 막힘 상태를 다시 확인/);
+  assert.match(unknown, /\(STUCK_DECISION_OUTCOME_UNKNOWN: the robot did not reply/);
+});
+
 test("accepted answers say what the robot will do", () => {
   assert.match(outcomeText("rosy_01", "WAIT", { outcome: "hold" }), /^rosy_01 대기: 대기로 답했습니다/);
   assert.match(outcomeText("rosy_01", "ABORT", { outcome: "idle" }), /IDLE/);
