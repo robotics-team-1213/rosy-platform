@@ -32,12 +32,20 @@ class PilotRecorderNode(Node):
         self.declare_parameter('quota_gib', DEFAULT_QUOTA_BYTES / _GIB)
         self.declare_parameter('reserve_gib', DEFAULT_RESERVE_BYTES / _GIB)
         namespace = self.get_namespace().strip('/')
-        self._recorder = PilotRecorder(
-            self.get_parameter('recording_root').value,
-            device=namespace or socket.gethostname(), namespace=namespace,
-            quota_bytes=int(float(self.get_parameter('quota_gib').value) * _GIB),
-            reserve_bytes=int(float(self.get_parameter('reserve_gib').value) * _GIB),
-            log=self.get_logger().warn)
+        quota = int(float(self.get_parameter('quota_gib').value) * _GIB)
+        reserve = int(float(self.get_parameter('reserve_gib').value) * _GIB)
+        recorder = dict(device=namespace or socket.gethostname(), namespace=namespace,
+                        quota_bytes=quota, log=self.get_logger().warn)
+        try:
+            self._recorder = PilotRecorder(self.get_parameter('recording_root').value,
+                                           reserve_bytes=reserve, **recorder)
+        except ValueError as exc:
+            # Never smaller than a quarter of the quota, so a small quota still fits.
+            fallback = min(DEFAULT_RESERVE_BYTES, quota // 4)
+            self.get_logger().error(f'reserve_gib does not fit quota_gib ({exc}); '
+                                    f'using a reserve of {fallback} bytes')
+            self._recorder = PilotRecorder(self.get_parameter('recording_root').value,
+                                           reserve_bytes=fallback, **recorder)
         try:
             # Stops a writer left by a hard-killed predecessor and writes missing manifests.
             self._recorder.recover()

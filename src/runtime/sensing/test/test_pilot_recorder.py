@@ -338,6 +338,30 @@ def test_long_device_names_still_make_a_valid_recording_id(tmp_path):
     assert ok and recording_id_ok(rid)
 
 
+def test_manifest_refuses_a_session_that_has_not_ended(tmp_path):
+    folder = new_session(tmp_path, device="rosy_01", camera_profile_revision="", model_revision="",
+                         task_id=None, reason="pilot",
+                         now=datetime(2026, 10, 2, 10, 0, tzinfo=timezone.utc),
+                         topics=pr.PILOT_TOPICS, extra={"mode": "pilot"})
+    with pytest.raises(ValueError):
+        pr.write_manifest(folder)
+    assert not (folder / MANIFEST_NAME).exists()
+
+
+def test_live_writer_check_matches_the_exact_bag_argument(tmp_path):
+    folder = tmp_path / "20261002T101500Z_rosy_01"
+    proc = tmp_path / "proc"
+    for pid, argv in ((10, ["ros2", "bag", "record", "-o", str(folder / "bag")]),
+                      (11, ["ros2", "bag", "record", "-o", str(folder) + "_2/bag"]),
+                      (12, ["ros2", "bag", "record", "-o", str(folder / "bag") + "x"])):
+        (proc / str(pid)).mkdir(parents=True)
+        (proc / str(pid) / "cmdline").write_bytes(b"\0".join(a.encode() for a in argv) + b"\0")
+    assert pr._writer_alive(10, folder, proc_root=proc) is True
+    assert pr._writer_alive(11, folder, proc_root=proc) is False
+    assert pr._writer_alive(12, folder, proc_root=proc) is False
+    assert pr._writer_alive(13, folder, proc_root=proc) is False
+
+
 def test_status_is_idle_with_quota_when_nothing_runs(tmp_path):
     status = RecorderStatus.model_validate(Rig(tmp_path).rec.status())
     assert status.state == "idle" and status.max_duration_s == 600 and status.quota_free_bytes > 0

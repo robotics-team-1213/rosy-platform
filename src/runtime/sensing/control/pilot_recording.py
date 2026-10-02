@@ -73,6 +73,8 @@ def _duration(meta: dict) -> float:
 def write_manifest(folder: Path, *, duration_s: float | None = None) -> Path:
     """Hash every file of an ended session. The stop facts come from session.json."""
     meta = _read_meta(folder)
+    if not isinstance(meta.get("ended_at"), str):
+        raise ValueError(f"session {folder.name} has not ended; recover() finishes it")
     files = []
     for path in sorted(p for p in folder.rglob("*") if p.is_file() and not p.is_symlink()):
         rel = path.relative_to(folder).as_posix()
@@ -95,13 +97,14 @@ def write_manifest(folder: Path, *, duration_s: float | None = None) -> Path:
     return folder / MANIFEST_NAME
 
 
-def _writer_alive(pid: int, folder: Path) -> bool:
-    """A live rosbag2 writing into `folder` (pid reuse safe: its cmdline names the folder)."""
+def _writer_alive(pid: int, folder: Path, proc_root: Path = Path("/proc")) -> bool:
+    """A live rosbag2 writing into `folder` (pid reuse safe: one argv element is exactly
+    the session's bag path, so `<folder>_2/bag` or a longer path never matches)."""
     try:
-        cmdline = Path(f"/proc/{pid}/cmdline").read_bytes()
+        cmdline = (Path(proc_root) / str(pid) / "cmdline").read_bytes()
     except OSError:
         return False
-    return str(folder).encode() in cmdline
+    return (b"\0" + cmdline).find(b"\0" + str(Path(folder) / "bag").encode() + b"\0") >= 0
 
 
 def _disk_free(root: Path) -> int:

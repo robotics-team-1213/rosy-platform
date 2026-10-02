@@ -41,6 +41,17 @@ def test_node_survives_a_recover_failure_and_logs_through_ros():
     assert "reserve_gib" in src
 
 
+def test_node_falls_back_to_the_default_reserve_when_it_does_not_fit_the_quota():
+    src = _src("pilot_recorder_node.py")
+    assert "except ValueError as exc:" in src
+    assert "DEFAULT_RESERVE_BYTES" in src.split("except ValueError as exc:", 1)[1]
+
+
+def test_executor_choice_warns_that_threads_break_the_recorder_pdeathsig():
+    src = _src("executor_choice.py")
+    assert "MultiThreadedExecutor" in src and "pdeathsig" in src and "pilot_recording" in src
+
+
 def test_camera_publishes_compressed_only_while_the_recorder_is_active():
     src = _src("camera_detect_node.py")
     assert "create_subscription(Bool, ACTIVE_TOPIC, self._on_recorder_active, _RECORDER_QOS)" in src
