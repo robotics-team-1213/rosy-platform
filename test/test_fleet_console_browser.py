@@ -596,7 +596,7 @@ def test_unreachable_robot_is_never_drawn_healthy(console_url):
 
 @pytest.mark.parametrize("safety, expected, reason", [
     (None, "정보 없음", "안전 상태를 확인할 수 없어"),
-    ({"estop": True}, "E-STOP", "비상정지가 활성화되어"),
+    ({"estop": True}, "비상 정지", "비상정지가 활성화되어"),
 ])
 def test_goal_is_unavailable_when_safety_is_unknown_or_stopped(console_url, safety, expected, reason):
     from playwright.sync_api import sync_playwright
@@ -614,9 +614,9 @@ def test_goal_is_unavailable_when_safety_is_unknown_or_stopped(console_url, safe
         page.goto(console_url, wait_until="networkidle")
         card = page.locator("#roster article").filter(has_text="rosy_01")
         card.wait_for()
-        safety_row = card.locator(".facts div").filter(has_text="SAFETY")
-        # E-STOP은 값이 아니라 crit 태그로 렌더된다(D-202) — 요소 타입이 아니라
-        # 행의 값으로 단정한다.
+        safety_row = card.locator('[data-fact="safety"]')
+        # Stable fact identity survives translated/icon labels; stop remains a
+        # visible value and goal dispatch remains disabled.
         assert expected in safety_row.inner_text()
         assert reason in card.inner_text()
         assert card.locator("ui-button[data-goal-robot-id]").evaluate("node => node.disabled")

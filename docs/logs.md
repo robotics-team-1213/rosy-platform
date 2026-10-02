@@ -4693,3 +4693,9 @@
 - Evidence: installed default load reproduced FileNotFoundError before the fix; prefix/ament path tests failed before the resolver change. OMX/owner/replay regression: 365 passed / 5 skipped. Wheel built from an X: source copy and force-installed into the isolated venv; actual build_cell_owner initialized from site-packages with injected ROS ports, matched the pinned profile geometry and kept local stop closed. Removing the installed asset caused FileNotFoundError and was restored. pip check and production flake8 passed.
 - Review: independent 29 passed; no Critical/Important findings. Final quick tier plus install-path tests: 100 passed / 26 existing warnings. Installed YAML equals source byte-for-byte.
 - Gate: SOURCE/LOCAL only. This closes host installed-resource composition, not Jazzy/colcon, live ROS timer, Fleet fencing/seat integration, thin-sheet geometry or the full two-layer/two-pallet vendor Gazebo acceptance.
+
+## 2026-10-03 · uncommitted · test: D-425 browser baseline and safety evidence
+
+- 변경: 전환 전/후 browser 실패 목록을 보존하고 안전 행 시험을 data-fact 및 한국어 표시로 연결. 제품 API·권한·guard는 유지.
+- 증거: baseline 45 passed/22 failed, HTTP checkpoint 48 passed/22 failed, 실패 ID 집합 동일·new 0. 안전 시험 2 passed, guard 변이 2 failed, bytes 복원 후 2 passed. main 병합 후 공유/static/ownership/quick 364 passed/24 skipped; lint 0 errors/26 warnings.
+- gate 변화: HTTP 체크포인트 무신규회귀. 기존 browser 20개 실패·Task 3 화면 scope·Tasks 4–13은 계속 미완료.

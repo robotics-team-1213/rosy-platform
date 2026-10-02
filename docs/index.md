@@ -270,8 +270,8 @@
 
 ## 최근 기록
 
+- 2026-10-03 · uncommitted · test: D-425 browser baseline and safety evidence
 - 2026-10-03 · uncommitted · fix: install canonical OMX geometry for Cell owner composition
 - 2026-10-03 · uncommitted · feat: connect Cell owner phase progression and semantic completion
 - 2026-10-03 · uncommitted · refactor: D-425 Fleet HTTP client checkpoint
 - 2026-10-03 · uncommitted · refactor: D-425 scoped HTTP와 화면 lifetime 도구
-- 2026-10-03 · uncommitted · test: D-425 실제 API 책임·권한 경계

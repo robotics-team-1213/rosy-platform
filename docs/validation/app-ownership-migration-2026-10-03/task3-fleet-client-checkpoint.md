@@ -17,7 +17,9 @@
 - Windows 시험 서버의 SO_REUSEADDR가 다른 병행 fixture의 파일을 반환할 수 있음을 HTTP 응답으로 발견했다. 이전 병행 브라우저 결과는 수용 근거에서 제외했다. 독점 바인딩, 확장한 안전 포트 범위, shutdown/close/join, 요청한 JS와 현재 파일 bytes의 비교로 시험 경계를 보강했다.
 - 변이는 현재 source와 bytes가 같은 X: 사본에서만 실행해 병행 회귀를 오염시키지 않는다. Fleet 오류 status 제거는 Node 실패를 만든다. 사본/로그는 `X:/DevTemp/rosy-ui-ownership/task3-mutations/`에 둔다.
 - quick·ownership·roles·request/scope·asset 검사 **136 passed**, lint **0 errors, 26 warnings**. 첫 quick 실패는 새 작업 로그의 잘못된 `###` 구분자로 마지막 기존 항목에 붙은 것이었고, 새 미커밋 항목만 `##`와 필수 필드로 바로잡아 재검사했다. 이전 로그 bytes는 보존했다.
-- 전체 Chromium 회귀는 진행 중이며 실패를 포함한다. 첫 안전 행 실패는 HTTP 전환 전 `HEAD`의 Console/install source를 X:에 복제한 baseline에서도 같은 `SAFETY` selector timeout으로 재현했다. 현재 renderer는 `data-fact="safety"`·한국어 이름을 사용한다. 전체 전환 전/후 비교가 끝나기 전까지 전체 브라우저 무회귀를 주장하거나 Task 3 완료로 처리하지 않는다.
+- 전체 Chromium 회귀 비교를 완료했다. 전환 전 `51f17c505` Console/install source의 baseline은 **45 passed, 22 failed**, HTTP 전환 체크포인트 `ab40eb56`은 **48 passed, 22 failed**였다. 실패 node ID 집합 22개가 정확히 같고 **new failures 0**이다. 추가 세션/origin 3개는 통과했다. baseline은 같은 나머지 정적 자산·독점 fixture를 사용하고 두 entry source만 HTTP 전환 전 버전으로 대체했다. 비교/실패 목록은 `X:/DevTemp/rosy-ui-ownership/task3-browser-comparison.json`에 있다. 전체 무실패나 Task 3 완료 증거로 표현하지 않는다.
+- 최신 main 병합 후 공유 UI/static/ownership/quick 검사 **364 passed, 24 skipped**, lint **0 errors, 26 warnings**를 확인했다. skip은 browser 수용으로 계산하지 않는다.
+- 동일하게 재현된 안전 행 시험 2개는 옛 `SAFETY`/`E-STOP` 문구 대신 현재 `data-fact="safety"`·한국어 표시로 연결했다. **2 passed**이며, 목표 버튼의 estop/안전 정보 부재 guard를 제거하면 **2 failed**가 되고 원본 bytes 복원 후 **2 passed**였다. 제품 권한과 안전 규칙은 바꾸지 않았다. 이 2개 외 전체 20개 기존 실패는 후속 화면/브라우저 수용에서 해결해야 한다. 전체 suite를 다시 실행해 50 passed로 계산하지 않는다.
 
 ## 남은 Task 3 범위
 
