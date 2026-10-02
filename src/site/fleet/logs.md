@@ -1368,3 +1368,9 @@
 - Change: verify exact Action/attempt terminal proof inside completion transaction and authenticated producer callback; retain claims for non-success outcomes. Add restart replay fixtures for accepted, cancel-acknowledged and release-command states plus stale/conflicting goal evidence.
 - Evidence: focused Mission, Action, provenance and replay suites 101 passed; changed Python files pass flake8.
 - Gate: SOURCE/LOCAL only. Actual CELL_TRANSFER CellJob recovery and ROS-SIM acceptance remain open; Task 7 is IN PROGRESS.
+
+## 2026-10-02 · uncommitted · styles.css 흐림 원시 값 → 공용 토큰
+- 변경: 지도 빈 상태 아이콘(.map-empty-icon)의 opacity: 0.4를 var(--disabled-opacity)로 바꿨다(0d579299d가 들여온 값). 회귀였고 known_failures.txt에 등록된 적 없는 실패였다.
+- 근거: D-294 흐림 척도 계약(test_dimming_uses_the_disabled_token_not_an_opacity_literal).
+- gate 변화: 없음.
+- 최종 증거: test_surface_typography_focus_contracts.py 6 passed.
