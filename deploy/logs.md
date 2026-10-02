@@ -1991,3 +1991,9 @@
 - 근거: CI 실행 36959800081 대조 WSL 재현(윈도는 skip/DrvFS로 증거 불가).
 - gate 변화: 없음.
 - 최종 증거: WSL — jpeg_relay 14 passed, auto_update timeout 시험 passed, mode-drift passed; module_separation 7 passed(윈도).
+
+## 2026-10-02 · uncommitted · fix(release): 준비·발행 도구의 ssh known_hosts 값을 따옴표 없이 — 첫 실운영에서 "invalid quotes"
+
+- 변경: `prepare_payload_release.ssh_argv`가 `-o UserKnownHostsFile="<경로>"`로 따옴표를 붙였는데, Windows의 ssh가 그 따옴표를 글자 그대로 받아 "command-line line 0: invalid quotes"로 실패했다(2026-10-02 릴리스 025 준비, 두 로봇 ABI 검사). 따옴표 없이 넘기고 공백·따옴표가 든 경로는 `PrepareError`로 거절한다(`rosy-update-hold.ps1`과 같은 정책). 발행 도구는 같은 함수를 쓰므로 함께 고쳐진다.
+- 증거: 새 시험 `test_the_real_ssh_client_accepts_the_built_options`가 실제 `ssh -G -F <빈 설정>`으로 인자를 해석시켜 결함을 로봇 없이 재현(따옴표를 되돌리면 빨강). 준비·발행 시험 106 passed. 독립 리뷰가 권한 "인용" 수정이 실제 ssh.exe에서는 틀렸던 경우라, 가짜 ssh만으로 검증한 인자 경로는 실제 클라이언트로 한 번 해석시킨다는 교훈.
+- gate 변화: 없음.

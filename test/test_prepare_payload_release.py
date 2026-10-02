@@ -5,6 +5,8 @@ from __future__ import annotations
 import importlib.util
 import io
 from pathlib import Path
+import shutil
+import subprocess
 import tarfile
 
 import pytest
@@ -194,7 +196,29 @@ def test_robot_abi_check_runs_read_only_dpkg_query_over_ssh(tmp_path):
     for option in ("IdentitiesOnly=yes", "BatchMode=yes", "StrictHostKeyChecking=yes", "ConnectTimeout=5"):
         assert option in joined
     assert str(tmp_path / "Rosy" / "ssh" / "rosy-operator-ed25519") in argv
-    assert f'UserKnownHostsFile="{tmp_path / "Rosy" / "known_hosts"}"' in argv
+    # Unquoted: ssh.exe receives a quoted value literally and fails with "invalid quotes"
+    # (first live run, 2026-10-02). Paths with spaces are refused instead.
+    assert f'UserKnownHostsFile={tmp_path / "Rosy" / "known_hosts"}' in argv
+    assert not any('"' in arg for arg in argv[:-1])
+
+
+def test_a_known_hosts_path_with_a_space_or_quote_is_refused(tmp_path):
+    for bad in (tmp_path / "has space", tmp_path / 'has"quote'):
+        with pytest.raises(tool.PrepareError):
+            tool.ssh_argv("192.168.1.202", bad)
+
+
+@pytest.mark.skipif(shutil.which("ssh") is None, reason="OpenSSH client required")
+def test_the_real_ssh_client_accepts_the_built_options(tmp_path):
+    # ssh -G resolves the options without connecting; the 2026-10-02 quoted value
+    # failed here with "invalid quotes" before any network traffic.
+    argv = tool.ssh_argv("192.168.1.202", tmp_path)
+    empty = tmp_path / "empty_ssh_config"  # isolate from the operator's own ~/.ssh/config
+    empty.write_text("", encoding="ascii")
+    probe = [argv[0], "-G", "-F", str(empty), *argv[1:-1]]
+    done = subprocess.run(probe, capture_output=True, text=True, timeout=30)
+    assert done.returncode == 0, done.stderr
+    assert "userknownhostsfile " in done.stdout.lower()
 
 
 def test_robot_abi_check_fails_on_mismatch_and_on_ssh_error(tmp_path):
