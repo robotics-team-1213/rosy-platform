@@ -130,7 +130,7 @@ def test_forget_drops_the_count():
 
 
 def _report_at(objects, observer=None):
-    return report("r2", observer or ON_A, objects=objects)
+    return report("r2", observer or ON_A, objects=objects).unmapped_objects
 
 
 def test_a_peer_is_seen_only_by_an_object_within_25_cm_of_its_reported_pose():
@@ -554,6 +554,112 @@ def test_an_unchanged_report_goes_stale_1_s_after_fleet_first_saw_it():
     _, r1, _, svc = _mirror_locked(clock, restamp=False)
     ticks(svc, clock, 5.0)
     assert r1.suspects == []
+
+
+# --- D-395 rev. 4 §5 follow-up (S1 R1): LOCALIZED anchors observe LOCALIZED robots ----------
+
+
+class Anchor(Localizing):
+    """Localizes through Fleet like `Localizing`; `see()` then puts unmapped objects in its
+    LOCALIZED status, re-stamped on every read (2 Hz state) unless `restamp=False`."""
+
+    def __init__(self, robot_id, pose, clock, objects=()):
+        super().__init__(robot_id, pose, objects=objects)
+        self.clock, self.seeing, self.restamp, self._stamp = clock, None, True, None
+
+    def see(self, objects, restamp=True):
+        self.seeing, self.restamp, self._stamp = list(objects), restamp, None
+
+    async def state(self):
+        out = await super().state()
+        if self.seeing is not None:
+            if self.restamp or self._stamp is None:
+                self._stamp = self.clock() + 1000.0          # a robot clock, not Fleet's
+            out["localization"] = {**out["localization"], "objects_stamp": self._stamp,
+                                   "unmapped_objects": [{"x": x, "y": y} for x, y in self.seeing]}
+        return out
+
+
+def _two_anchors(clock):
+    """S1 layout a: r1 on square A by `slot`, r2 off-slot by `peers` from r1."""
+    r1 = Anchor("r1", ON_A, clock)
+    r2 = Anchor("r2", R2_TRUE, clock, objects=[seen_from(R2_TRUE, ON_A)])
+    svc = service(r1, r2, clock=clock)
+    ticks(svc, clock, 10.0)
+    assert svc.anchors() == {"r1", "r2"}
+    return r1, r2, svc
+
+
+def test_an_anchor_marks_a_mirror_injected_anchor_suspect_after_two_polls():
+    """S1 (c) while both are LOCALIZED: r2 is injected at its twin (the jump drops its
+    anchor); r1 keeps seeing the real r2 and reports it on every state."""
+    clock = FakeClock()
+    r1, r2, svc = _two_anchors(clock)
+    r2._state = state("r2", "LOCALIZED", pose=mirror(R2_TRUE))
+    r2.see([seen_from(R2_TRUE, ON_A)])          # placed from its wrong pose: r1's mirror
+    r1.see([seen_from(ON_A, R2_TRUE)])
+    ticks(svc, clock, 0.5)
+    assert svc.anchors() == {"r1"} and r2.suspects == []
+    ticks(svc, clock, 0.5)
+    assert r2.suspects == ["fleet_monitor"] and r1.suspects == []
+
+
+def test_a_mirror_locked_non_anchor_cannot_accuse_an_anchor():
+    clock = FakeClock()
+    r1 = Anchor("r1", ON_A, clock)
+    svc = service(r1, clock=clock)
+    ticks(svc, clock, 5.0)
+    r2 = Anchor("r2", R2_TRUE, clock)
+    r2._state = state("r2", "LOCALIZED", pose=mirror(R2_TRUE))     # first seen LOCALIZED
+    r2.see([seen_from(R2_TRUE, ON_A)])
+    svc._clients = lambda: {"r1": r1, "r2": r2}
+    ticks(svc, clock, 5.0)
+    assert svc.anchors() == {"r1"} and r1.suspects == []
+
+
+def test_two_anchors_in_one_poll_count_as_two_observations():
+    clock = FakeClock()
+    a = Anchor("a", ON_A, clock)
+    x = Anchor("x", X_OFF, clock, objects=[seen_from(X_OFF, ON_A)])
+    svc = service(a, x, clock=clock)
+    ticks(svc, clock, 10.0)
+    assert svc.anchors() == {"a", "x"}
+    t = FakeRobot("t", state=state("t", "LOCALIZED", pose=mirror(R2_TRUE)))
+    a.see([seen_from(ON_A, R2_TRUE)])
+    x.see([seen_from(X_OFF, R2_TRUE)])
+    svc._clients = lambda: {"a": a, "x": x, "t": t}
+    ticks(svc, clock, 0.5)
+    assert t.suspects == ["fleet_monitor"] and a.suspects == x.suspects == []
+
+
+@pytest.mark.parametrize("objects", [[], [(0.3, -0.8)]])
+def test_a_hidden_robot_or_an_unrelated_object_gives_no_evidence(objects):
+    clock = FakeClock()
+    r1, r2, svc = _two_anchors(clock)
+    r2._state = state("r2", "LOCALIZED", pose=mirror(R2_TRUE))
+    r1.see(objects)
+    ticks(svc, clock, 5.0)
+    assert r2.suspects == [] and r1.suspects == []
+
+
+def test_an_agreeing_anchor_observation_never_marks_suspect():
+    clock = FakeClock()
+    r1, r2, svc = _two_anchors(clock)
+    r1.see([seen_from(ON_A, R2_TRUE)])
+    r2.see([seen_from(R2_TRUE, ON_A)])
+    ticks(svc, clock, 5.0)
+    assert r1.suspects == r2.suspects == [] and svc.anchors() == {"r1", "r2"}
+
+
+def test_a_stale_anchor_status_is_ignored():
+    """The same objects_stamp re-read counts once and stops counting 1 s after Fleet first
+    saw it: a robot whose state stopped arriving (CORE serves it for 3 s) is no evidence."""
+    clock = FakeClock()
+    r1, r2, svc = _two_anchors(clock)
+    r2._state = state("r2", "LOCALIZED", pose=mirror(R2_TRUE))
+    r1.see([seen_from(ON_A, R2_TRUE)], restamp=False)
+    ticks(svc, clock, 5.0)
+    assert r2.suspects == []
 
 
 def test_the_overhead_sighting_is_ignored_while_the_flag_is_off():

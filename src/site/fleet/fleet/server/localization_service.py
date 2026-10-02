@@ -6,7 +6,9 @@ peers, see `_track_provenance`, the reference squares and slots from `lane_rules
 older than 300 ms) and posts the arbiter's decision. While CORE runs a mission for the
 robot (`GET /localization/mission` says `running`) and for 1 s after it ends, Fleet
 neither arbitrates nor decides for it. It also runs the §9 monitor
-(`POST /localization/suspect`) and times the escalation ladder.
+(`POST /localization/suspect`) and times the escalation ladder. Monitor evidence comes from
+CANDIDATES reports and from the unmapped objects in each LOCALIZED anchor's status, placed
+from the anchor's reported pose (S1 R1), so a mirror lock shows while every robot is LOCALIZED.
 
 **Overhead sightings are off by default.** D-257 §5 still says a sighting does not
 enter robot localization; D-395 only *proposes* to amend that, and the amendment is
@@ -130,6 +132,8 @@ class LocalizationService:
         self._localized_at: dict[str, tuple[cues.Pose, float]] = {}
         #: robot_id -> ((request_id, stamp), Fleet monotonic time first seen).
         self._report_seen: dict[str, tuple] = {}
+        #: anchor robot_id -> (objects_stamp, Fleet monotonic time first seen) (S1 R1).
+        self._objects_seen: dict[str, tuple] = {}
         #: Robots whose CORE mission was `running` at the last poll, and the Fleet time
         #: until which a robot whose mission ended stays without decisions.
         self._mission_running: set[str] = set()
@@ -188,6 +192,7 @@ class LocalizationService:
             for rid, state in states.items()
             if rid not in quiet
             and (status := trust.status_of(state)) is not None and status.state is LocState.CANDIDATES))
+        self._observe_from_anchors(states, localized, anchors, observations, now)
         await self._watch(localized, observations, now)
         for rid, state in states.items():
             status = trust.status_of(state)
@@ -300,7 +305,7 @@ class LocalizationService:
             seen = self._report_seen[rid] = (key, now)
         fresh = now - seen[1] <= service_logic.REPORT_FRESH_S
         if leader is not None and fresh:
-            for peer, seen in service_logic.peer_observations(report, leader, peers).items():
+            for peer, seen in service_logic.peer_observations(report.unmapped_objects, leader, peers).items():
                 observations.setdefault(peer, []).append(((rid, *key), seen))
         decision = self._arbiter.observe(report, context, now)
         if decision is not None:
@@ -326,6 +331,28 @@ class LocalizationService:
             record["result"] = "unreachable"
             logger.warning("localization: decision %s to %s failed: %s", decision.request_id, rid, exc)
         self._last_decision[rid] = record
+
+    def _observe_from_anchors(self, states: Mapping[str, dict], localized: Mapping[str, cues.Pose],
+                              anchors: Mapping[str, cues.Pose], observations: dict, now: float) -> None:
+        """D-395 rev. 4 §5 follow-up (S1 R1): a LOCALIZED anchor's status carries what its
+        lidar sees; placed from its reported map pose, it is evidence about every other
+        LOCALIZED robot. Anchors only: a mirror-locked robot places a correct one on its
+        twin, and an observer is never evidence about itself. Each (anchor, objects_stamp)
+        is one observation, fresh for REPORT_FRESH_S after Fleet first saw it."""
+        for rid, pose in anchors.items():
+            status = trust.status_of(states.get(rid))
+            if status is None or status.objects_stamp is None:
+                self._objects_seen.pop(rid, None)
+                continue
+            seen = self._objects_seen.get(rid)
+            if seen is None or seen[0] != status.objects_stamp:
+                seen = self._objects_seen[rid] = (status.objects_stamp, now)
+            if now - seen[1] > service_logic.REPORT_FRESH_S:
+                continue
+            targets = {o: p for o, p in localized.items() if o != rid}
+            for target, observed in service_logic.peer_observations(
+                    status.unmapped_objects, pose, targets).items():
+                observations.setdefault(target, []).append((("objects", rid, status.objects_stamp), observed))
 
     async def _watch(self, localized: Mapping[str, cues.Pose], observations: Mapping[str, list],
                      now: float) -> None:
@@ -429,6 +456,7 @@ class LocalizationService:
             self._busy_rung.pop(rid, None)
             self._unsupported.pop(rid, None)
             self._report_seen.pop(rid, None)
+            self._objects_seen.pop(rid, None)
             self._mission_running.discard(rid)
             self._quiet_until.pop(rid, None)
             self._anchors.discard(rid)

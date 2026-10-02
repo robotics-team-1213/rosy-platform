@@ -5,8 +5,8 @@ module only decides: the reference squares and slots from `lane_rules.yaml`, the
 §9 monitor (a LOCALIZED robot observed > 25 cm or > 60 degrees away in 2 distinct
 reports within 15 s, none agreeing between them, is suspect), the escalation ladder timers (10 s, 45 s, 120 s in CANDIDATES, paused while a
 decision may still come), and the
-peer observations a candidate report gives of LOCALIZED robots. No transport, no
-asyncio; time is passed in.
+peer observations a candidate report, or a LOCALIZED anchor's status (S1 R1), gives of
+LOCALIZED robots. No transport, no asyncio; time is passed in.
 """
 
 from __future__ import annotations
@@ -118,15 +118,16 @@ def mirror(pose: cues.Pose) -> cues.Pose:
     return (-pose[0], -pose[1], cues.wrap(pose[2] + math.pi))
 
 
-def peer_observations(report: CandidateReport, observer: cues.Pose,
+def peer_observations(objects: Sequence, observer: cues.Pose,
                       peers: Mapping[str, cues.Pose]) -> dict[str, Observation]:
-    """Unambiguous evidence `report` gives about each LOCALIZED peer, objects placed from `observer`.
+    """Unambiguous evidence `objects` (base_link points with .x/.y: a candidate report's, or a
+    LOCALIZED status's) give about each LOCALIZED peer, placed from `observer`'s map pose.
 
     Seen: an object within `PEER_EVIDENCE_M` of the peer's reported pose (observed there).
     Seen elsewhere (the mirror-lock signature): no object near the reported pose and exactly
     one within `PEER_EVIDENCE_M` of its 180-degree mirror (observed at that object). Anything
     else (no objects, objects elsewhere, a hidden peer) is no evidence (review of lane C)."""
-    placed = [cues.to_map(observer, (o.x, o.y)) for o in report.unmapped_objects]
+    placed = [cues.to_map(observer, (o.x, o.y)) for o in objects]
     out = {}
     for robot_id, pose in peers.items():
         near = [p for p in placed if math.dist(p, pose[:2]) <= PEER_EVIDENCE_M]
