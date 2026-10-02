@@ -3,7 +3,7 @@
 # track in 'keep' mode (lane ends at wall corners, lane is lost at the roundabout).
 # Runs in WSL in the foreground: keep the calling wsl.exe open or WSL may stop the distro.
 #
-#   wsl -d Ubuntu -- bash ".../docs/validation/d407-gazebo-stuck-recovery-2026-10-02/run_sim.sh" [spawn_x:=.. ...]
+#   wsl -d Ubuntu -- bash ".../docs/validation/d407-gazebo-stuck-recovery-2026-10-02/evidence/run_sim.sh" [spawn_x:=.. ...]
 #
 # Sim-only CORE overlay (device defaults untouched): api_port 8095 and
 # line_follow.recovery_local_enabled true. Obstacle stop/resume stay at the device
@@ -17,7 +17,7 @@
 WS=${WS:-/rosy_d407_ws}
 PORT=${PORT:-8095}
 HERE="$(cd "$(dirname "$0")" && pwd)"
-REPO="$(cd "$HERE/../../.." && pwd)"
+REPO="$(cd "$HERE/../../../.." && pwd)"
 cd "$WS" || exit 1
 source /opt/ros/jazzy/setup.bash; source install/setup.bash
 export ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-57} GZ_PARTITION=${GZ_PARTITION:-rosy_d407}
