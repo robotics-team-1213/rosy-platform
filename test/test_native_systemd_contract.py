@@ -359,6 +359,9 @@ DECLARED_WRITES = {
         "/run/rosy/hw-test.request", "$HOME/.rosy/hw-confirmations.json",
         # D-260 M1: the boot display's inputs only CORE knows (api/v1/host.py STATUS_INPUTS_FILE).
         "/run/rosy/status-inputs.json",
+        # D-418: the hand-over to rosy-ssh-access.path (ssh_handoff.py REQUEST_FILE), and
+        # the root helper's answer, which CORE deletes once read (RESPONSE_FILE).
+        "/run/rosy/ssh-access.request", "/run/rosy/ssh-access.response",
     },
     "rosy-io.service": {"/var/log/rosy-io/launch.log"},
     "rosy-camera.service": {
@@ -432,6 +435,8 @@ DECLARED_READS = {
         "/run/rosy-boot/hw-test.json",
         # D-260 5: rosy-boot-status's stage for the summary line (BOOT_STATUS_FILE), 0644.
         "/run/rosy-boot/boot-status.json",
+        # D-418: the public host keys (ssh_host_*_key.pub, 0644) for GET /host/ssh/host-keys.
+        "/etc/ssh",
     },
     "rosy-navigation.service": {
         "/var/lib/rosy/maps/site.yaml", "/etc/rosy/line_follow.yaml", "/etc/rosy/profile.yaml",
