@@ -15,7 +15,6 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
-from starlette.background import BackgroundTask
 
 from core_api_web.api.deps import AuthContext, CoreServicesLike, Mode, get_services
 from core_api_web.api.errors import ApiError
@@ -58,6 +57,21 @@ def _once(action):
                 done[0] = True
                 action()
     return run
+
+
+class _SlotResponse(StreamingResponse):
+    """Frees the download slot when the response ends however it ends (finished, aborted,
+    client gone before the stream ran), independent of Starlette's background semantics."""
+
+    def __init__(self, content, *, release, **kwargs) -> None:
+        super().__init__(content, **kwargs)
+        self._release = release
+
+    async def __call__(self, scope, receive, send) -> None:
+        try:
+            await super().__call__(scope, receive, send)
+        finally:
+            self._release()
 
 
 def _refused(exc: RecordingRefused) -> ApiError:
@@ -131,6 +145,4 @@ def archive(recording_id: str, _: AuthContext = Depends(operator),
 
     headers = {"Content-Length": str(length), "Cache-Control": "no-store", "Content-Encoding": "identity",
                "Content-Disposition": f'attachment; filename="{recording_id}.tar"'}
-    # The background task releases the slot when the stream never ran (client gone first).
-    return StreamingResponse(stream(), media_type="application/x-tar", headers=headers,
-                             background=BackgroundTask(release))
+    return _SlotResponse(stream(), release=release, media_type="application/x-tar", headers=headers)

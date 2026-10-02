@@ -4,7 +4,8 @@ import json
 
 import pytest
 
-from core_common.domain.pilot_recording import LINK_GRACE_S, PilotRecordingGuard, RecordingRefused
+from core_common.domain.pilot_recording import (
+    LINK_GRACE_S, STOP_RETRY_S, PilotRecordingGuard, RecordingRefused)
 
 RID = "20261002T101500Z_rosy_01"
 
@@ -192,6 +193,40 @@ def test_a_refused_async_stop_claims_nothing_and_is_retried(rig):
     assert guard.owner() == "tok-a"
     guard.on_teleop("tok-b")                    # not pending any more: asks again
     assert calls.count((False, False)) == 2
+
+
+def test_an_unconfirmed_seat_change_stop_is_sent_again(rig):
+    # The stop was sent but the recorder never stopped: the next status after the retry
+    # window asks again, though no further teleop arrives.
+    guard, calls, events, t = rig
+    guard.start("tok-a")
+    guard.on_teleop("tok-b")
+    guard.on_status(status())
+    assert calls.count((False, False)) == 1
+    t[0] += STOP_RETRY_S + 0.1
+    guard.on_status(status())
+    assert calls.count((False, False)) == 2 and stopped(events) == []
+    guard.on_status(status("idle", reason="requested"))
+    assert stopped(events) == [{"id": RID, "by": None, "reason": "seat_changed"}]
+
+
+def test_an_ownerless_recording_that_ends_on_the_recorder_side_is_announced(rig):
+    # CORE restarted mid-session: the audit trail still records the end, once.
+    guard, _, events, _ = rig
+    guard.on_status(status("recording"))
+    guard.on_status(status("stopping"))
+    guard.on_status(status("idle", reason="max_duration"))
+    guard.on_status(status("idle", reason="max_duration"))
+    assert stopped(events) == [{"id": RID, "by": None, "reason": "max_duration"}]
+
+
+def test_an_ownerless_operator_stop_is_announced_once(rig):
+    guard, _, events, _ = rig
+    guard.on_status(status("recording"))
+    guard.stop("tok-b", is_admin=False)
+    guard.on_status(status("stopping"))
+    guard.on_status(status("idle", reason="requested"))
+    assert stopped(events) == [{"id": RID, "by": "tok-b", "reason": "operator"}]
 
 
 def test_a_raising_transport_never_escapes_the_guard(rig):

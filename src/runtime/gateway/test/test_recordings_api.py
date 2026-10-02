@@ -87,6 +87,36 @@ def test_a_download_aborts_when_manual_input_starts_mid_stream(rec_client, monke
     response = client.get(f"/api/v1/recordings/{RID}/archive", headers=OPERATOR)
     assert len(response.content) < int(response.headers["content-length"])
     assert sent == []                            # an aborted download is never "fetched"
+    # The aborted stream gave its slot back: the retry from zero is served in full.
+    monkeypatch.undo()
+    svc.command.clear_manual()
+    again = client.get(f"/api/v1/recordings/{RID}/archive", headers=OPERATOR)
+    assert again.status_code == 200 and len(again.content) == int(again.headers["content-length"])
+    assert sent == [RID]
+
+
+def test_the_download_slot_is_released_by_the_response_itself():
+    # Version-independent: the slot is freed around the response's own __call__, even
+    # when sending fails before the stream generator ever runs (client already gone).
+    import asyncio
+    from core_api_web.api.v1 import recordings
+    released, started = [], []
+
+    def body():
+        started.append(1)
+        yield b"x"
+
+    async def receive():
+        return {"type": "http.disconnect"}
+
+    async def send(_message):
+        raise OSError("client gone")
+
+    response = recordings._SlotResponse(body(), release=lambda: released.append(1),
+                                        media_type="application/x-tar")
+    with pytest.raises(OSError):
+        asyncio.run(response({"type": "http", "asgi": {"spec_version": "2.3"}}, receive, send))
+    assert released == [1] and started == []
 
 
 def test_a_download_that_fails_mid_stream_is_not_fetched(rec_client, monkeypatch):

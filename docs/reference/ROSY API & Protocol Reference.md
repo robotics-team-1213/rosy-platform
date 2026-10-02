@@ -388,12 +388,12 @@ v1.70 추가 경로(모두 Bearer 인증):
 | GET | `/api/v1/recordings/active` | Viewer | `{active, owned}` — `owned` 는 호출 토큰이 시작한 녹화인가 |
 | POST | `/api/v1/recordings` | Operator | 201 `RecorderStatus`. 거부: 409 `RECORDING_BUSY`, 507 `RECORDING_QUOTA_FULL`·`RECORDING_DISK_FULL`, 503 `RECORDER_UNAVAILABLE` |
 | POST | `/api/v1/recordings/active/stop` | Operator | `RecorderStatus`(대개 `stopping`). 시작한 토큰·Admin, 또는 소유자가 없는 녹화(CORE 재시작)면 아무 Operator; 그 밖은 403 `FORBIDDEN`. 없으면 409 `RECORDING_NOT_ACTIVE` |
-| GET | `/api/v1/recordings/{id}/archive` | Operator | `application/x-tar` 무압축 USTAR(mcap 은 이미 zstd), `Content-Length` 정확, `Cache-Control: no-store`. 멤버는 `<id>/manifest.json` 다음 manifest 가 적은 파일만. 정지 중에만(409 `RECORDING_BUSY`·`ROBOT_MOVING`), 한 번에 한 수신만(진행 중이면 409 `RECORDING_BUSY`), 없는·안전하지 않은 id 404 `RECORDING_NOT_FOUND`. 수신 중에도 정지 조건을 블록마다 다시 보고, 깨지거나 파일이 계획과 달라지면(링크·교체·크기) 본문을 `Content-Length` 보다 짧게 끊는다 |
+| GET | `/api/v1/recordings/{id}/archive` | Operator | `application/x-tar` 무압축 USTAR(mcap 은 이미 zstd), `Content-Length` 정확, `Cache-Control: no-store`. 멤버는 `<id>/manifest.json` 다음 manifest 가 적은 파일만. 정지 중에만(409 `RECORDING_BUSY`·`ROBOT_MOVING`), 한 번에 한 수신만(진행 중이면 409 `RECORDING_BUSY`), 없는·안전하지 않은 id 404 `RECORDING_NOT_FOUND`. 수신 중에도 정지 조건을 블록마다 다시 보고, 깨지거나 파일이 계획과 달라지면(링크·교체·크기) 본문을 `Content-Length` 보다 짧게 끊는다. 짧은 본문은 실패이며, tar 는 이어 받을 수 없으므로 나중에 처음부터 다시 받는다 |
 
 - 한 번에 1개, 최대 600 s. 전용 쿼터(기본 4 GiB, 예비 1 GiB) 안에서 시작하며, 디스크 빈 공간이 512 MiB 이하면 시작하지 않는다. 쿼터를 넘기면 녹화기가 `quota`, 빈 공간이 바닥나면 `disk_full` 로 스스로 멈춘다.
 - 정지 뒤 녹화기가 manifest(`rosy.pilot.recording.manifest/1`: 파일별 `{path, bytes, sha256}`, 선택 `bag_returncode`·`writer_killed`)를 작업 스레드에서 쓰는 동안 상태는 `stopping` 이고, 그동안 시작·수신은 `RECORDING_BUSY` 다.
 - 토픽: `camera/front/compressed`(녹화 중에만 발행), `cmd_vel`, `odom`, `scan`, `line/observation`, `teleop/intent`.
-- CORE 가 스스로 멈추는 경우: 시작 토큰이 `/ws/state` 를 한 번이라도 연 뒤 그 연결이 5 s 넘게 없음(`link_lost`), 다른 토큰의 teleop 이 수락됨(`seat_changed`). `/ws/state` 를 열지 않은 REST 전용 소유자는 `link_lost` 로 멈추지 않는다(600 s 상한은 그대로). 둘 다 비차단 정지 요청이고, `recording.stopped` 는 녹화기 상태가 정지를 확인한 뒤에야 낸다(거부되면 내지 않고 다음 판정에서 다시 묻는다). 이벤트는 §8 `recording.started`·`recording.stopped`.
+- CORE 가 스스로 멈추는 경우: 시작 토큰이 `/ws/state` 를 한 번이라도 연 뒤 그 연결이 5 s 넘게 없음(`link_lost`), 다른 토큰의 teleop 이 수락됨(`seat_changed`). `/ws/state` 를 열지 않은 REST 전용 소유자는 `link_lost` 로 멈추지 않는다(600 s 상한은 그대로). 둘 다 비차단 정지 요청이고, `recording.stopped` 는 녹화기 상태가 정지를 확인한 뒤에야 낸다(거부되거나 3 s 안에 확인되지 않으면 다음 상태에서 다시 묻는다). 소유자 없는 녹화(CORE 재시작)가 녹화기 쪽에서 끝나도 `recording.stopped`(`by: null`)를 한 번 낸다. 이벤트는 §8 `recording.started`·`recording.stopped`.
 - 녹화기 상태는 `boot_id`(녹화기 기동마다 새 값)와 `seq`(상태를 만들 때마다 증가)를 싣는다. CORE 는 같은 `boot_id` 에서 이미 받은 것보다 오래된 상태(예: 시작 전에 나가 시작 뒤에 도착한 `idle`)를 버린다. `seq: 0` 은 순번 없음.
 - tar 의 마지막 바이트가 나간 녹화만 CORE 가 `pilot_recorder/fetched`(`{id}`)로 알리고, 녹화기가 `fetched.json` 을 써 쿼터 정리 대상으로 삼는다. 받지 않은 녹화는 지우지 않는다.
 - 저장 위치는 `/var/lib/rosy/pilot-recordings`(설정 `recording.pilot_root`): `rosy-camera` 가 쓰고 setgid `rosy-core` 그룹으로 CORE 가 읽기만 한다.

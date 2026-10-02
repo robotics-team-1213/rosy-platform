@@ -59,6 +59,8 @@ class PilotRecordingGuard:
         self._lost_at: Optional[float] = None
         #: (reason, asked_at) of a guard stop the recorder has not confirmed yet.
         self._pending: Optional[tuple[str, float]] = None
+        #: The recording whose recording.stopped is already out (one announcement each).
+        self._announced: Optional[str] = None
         #: Guard stops that could not be sent (refused or raised). Never raised to callers.
         self.async_stop_failures = 0
         #: Failures of the teleop hook in the API (counted there, never a 500).
@@ -98,14 +100,20 @@ class PilotRecordingGuard:
             previous = self._status
             if not self._adopt(status):
                 return
-            if status["state"] not in _ACTIVE and self._owner is not None:
+            was_active = previous is not None and previous["state"] in _ACTIVE
+            if status["state"] not in _ACTIVE and (self._owner is not None or (
+                    was_active and previous["id"] != self._announced)):
+                # Owned, or ownerless after a CORE restart: either way the end is audited once.
                 reason = self._pending[0] if self._pending else (
                     status["last_stop_reason"] or "recorder_exit")
                 ended = (previous["id"] if previous else None, reason)
                 self._clear_owner()
+            pending = self._pending[0] if self._pending else None
         if ended is not None:
             self._stopped(ended[0], None, ended[1])
             return
+        if pending is not None:
+            self._stop_async(pending)       # re-sent once STOP_RETRY_S passed unconfirmed
         self._check_link()
 
     def link_opened(self, token_id: str) -> None:
@@ -251,6 +259,8 @@ class PilotRecordingGuard:
         return body if isinstance(body, dict) else {}
 
     def _stopped(self, recording_id: Optional[str], by: Optional[str], reason: str) -> None:
+        with self._lock:
+            self._announced = recording_id
         if self._events is not None:
             self._events.publish("recording.stopped", severity="info", source="pilot_recording",
                                  data={"id": recording_id, "by": by, "reason": reason})
