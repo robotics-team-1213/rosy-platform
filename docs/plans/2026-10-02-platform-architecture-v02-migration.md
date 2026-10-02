@@ -8,7 +8,7 @@
 
 **Tech Stack:** Python, 기존 FastAPI·SQLite·Pydantic, ROS 2 Jazzy, colcon/ament, namespace wheel, OMX Gazebo, 기존 pytest·harness. 새 빌드 도구·모델 SDK 도입은 이 계획의 전제가 아니다.
 
-**상태:** 계획 작성 완료, Task 0~9 미실행. 이 문서에 적힌 명령과 PASS 조건은 실행 지침이며 시험 결과가 아니다.
+**상태:** Task 0 완료 (2026-10-02, Windows source baseline); Task 1~9 미실행. 아래 PASS 조건은 실행 지침이며 미완료 task의 결과를 뜻하지 않는다.
 
 **설계:** [ROSY Platform Architecture v0.2](../reference/ROSY_Platform_Architecture_Design_v0.2.md) 3·5·6·15·16장.
 
@@ -77,6 +77,8 @@ python -B -X utf8 test/known_failures.py <ROSY_SCRATCH의 해당 실행 로그>
 ```
 
 **출구:** 기존 실패와 새 실패를 구별할 수 있고, D-402 플래너·D-403 경로의 남은 작업 및 담당 경로가 명시됨. 코드 이동 없음. 커밋: `docs: capture platform migration baseline`.
+
+**완료 증거 (2026-10-02):** [Task 0 기준선](../validation/platform-architecture-v02-2026-10-02/README.md), [소유권 표](../validation/platform-architecture-v02-2026-10-02/ownership.csv). Cell 143 passed; Fleet 1336 passed/7 skipped; OMX 268 passed/5 skipped; architecture 76 passed/1 skipped. 네 suite의 known-failure 판정은 각각 0 new, 0 known. D-402 해석 IK는 main에 있고, C3 시뮬레이션 작업은 `feat/rosy-cell-c3-gazebo`에 남아 있으며, Fleet Cell ordered transfer 경로는 Task 4의 잔여 구현으로 남긴다. 이 완료는 SOURCE 기준선만 뜻한다.
 
 ## Task 1: 새 책임 경로와 설치 검사의 허용 범위
 

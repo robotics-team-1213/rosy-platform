@@ -4399,3 +4399,10 @@
 - 증거: main과 233개 로컬 브랜치의 ADR 경로, 등록된 worktree의 미추적 ADR/Log, harness 예약 번호를 확인해 D-413을 선택했다. 이 항목은 문서 작성 기록이며 계획의 구현 task들은 모두 TODO다.
 - 검증: 문서 계약 시험 80 passed, 24 warnings(기존 last_verified 기록 관련). 독립 검토에서 발견한 CI wheel 설치 순서 누락을 Task 2·3·5·6과 공통 규칙에 반영했다. 새 import를 사용하는 커밋에서 CI 설치 목록을 함께 갱신한다.
 - gate 변화: 없음. ADR Accepted는 목표 구조와 단계적 이전 결정에 한정하며 코드·설치·ROS-SIM·실물 수용 상태는 유지한다.
+
+## 2026-10-02 · uncommitted · docs(platform): D-413 Task 0 고정 셀 이전 기준선
+
+- 변경: `docs/validation/platform-architecture-v02-2026-10-02/README.md`에 main/Cell C3 worktree/Fleet C4 착지 상태와 소유권 표를 기록했다. 기존 Mission·Action 정본 및 롤백 위치를 파일 단위로 고정했다. 제품 소스는 변경하지 않았다.
+- 검증: Cell 143 passed; Fleet 1336 passed/7 skipped; OMX 268 passed/5 skipped; architecture 76 passed/1 skipped. 네 로그 모두 `test/known_failures.py`에서 0 new, 0 known으로 분류됐다. 로그·pytest 임시 경로는 X:\DevTemp에 뒀다.
+- 한계: suite는 Windows/Python 3.14 source 검사다. C3 feature 브랜치의 Gazebo 증거를 재실행하거나 C4 접수를 수용하지 않았다. Task 0의 구현 전 기준선만 고정했다.
+- gate 변화: 없음.
