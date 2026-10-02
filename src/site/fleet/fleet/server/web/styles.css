@@ -106,8 +106,8 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-3);
-  margin: var(--space-2) var(--space-5) 0;
+  gap: var(--space-2);
+  margin: var(--space-1) var(--space-5) 0;
   padding: var(--space-1) var(--space-3);
   border: 1px solid var(--line-14);
   border-radius: var(--radius-control);
@@ -115,10 +115,15 @@ body {
   font-size: var(--text-label);
   line-height: var(--leading-body);
 }
+.dispatch-control > div { display: flex; align-items: baseline; gap: var(--space-2); min-width: 0; }
+.dispatch-control strong { color: var(--ink); white-space: nowrap; }
+.dispatch-control small { color: var(--ink-quiet); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dispatch-control > div { display: grid; gap: var(--space-1); min-width: 0; }
 .dispatch-control strong { color: var(--ink); }
 .dispatch-control small { color: var(--ink-quiet); line-height: var(--leading-body); }
 #dispatch-rearm[hidden] { display: none; }
+/* D-421 — 재허가와 전체 주행 취소는 글 뒤에서 오른쪽에 붙어 선다(한 열 단에서는 글 아래). */
+.dispatch-control > div { margin-right: auto; }
 
 /* ui-button의 display 규칙보다 hidden 속성이 우선해야 빈 목록에서 토글이 사라진다. */
 #roster-toggle[hidden] { display: none; }
@@ -181,6 +186,16 @@ main {
     grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
     column-gap: var(--space-4);
     align-items: start;
+  }
+  /* D-417 디자인 — 카메라가 컴팩트(39px)면 칼럼을 반납하고 지도가 전체 폭을 쓴다. */
+  main > .panel[aria-labelledby="map-heading"]:has(> .vision-preview .vision-frame[data-state="waiting"]),
+  main > .panel[aria-labelledby="map-heading"]:has(> .vision-preview .vision-frame[data-state="warn"]) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  main > .panel[aria-labelledby="map-heading"]:has(> .vision-preview .vision-frame[data-state="waiting"]) > .vision-preview,
+  main > .panel[aria-labelledby="map-heading"]:has(> .vision-preview .vision-frame[data-state="warn"]) > .vision-preview {
+    grid-column: 1;
+    grid-row: auto;
   }
   main > .panel[aria-labelledby="map-heading"] > .map-head { grid-column: 1 / -1; }
   main > .panel[aria-labelledby="map-heading"] > .map-stage { grid-column: 1; grid-row: 2; }
@@ -247,8 +262,9 @@ main {
   pointer-events: none;
 }
 .map-empty[hidden], .legend[hidden] { display: none; }
-.map-empty strong { color: var(--ink); font-size: var(--text-title); font-weight: var(--weight-emphasis); }
-.map-empty p { max-width: 34ch; margin: 0; color: var(--ink-quiet); font-size: var(--text-label); line-height: var(--leading-copy); }
+.map-empty strong { color: var(--ink); font-size: var(--text-label); font-weight: var(--weight-label); letter-spacing: var(--track-label); }
+.map-empty p { max-width: 34ch; margin: 0; color: var(--ink-quiet); font-size: var(--text-micro); line-height: var(--leading-copy); }
+.map-empty-icon { width: var(--text-display); height: var(--text-display); opacity: 0.4; }
 
 #map-canvas {
   /* D-201 — 지도는 페이지를 밀지 않고 프레임에 맞는다. 박스는 폭을 채우고
@@ -303,20 +319,23 @@ main {
   border-left: 3px solid var(--line-10);
   border-radius: var(--radius-panel);
   background: var(--surface-raised);
-  padding: var(--space-3) var(--space-4);
+  padding: var(--space-2) var(--space-3);
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
+  gap: var(--space-1);
 }
 
-/* D-409 — 컴팩트(<30rem) 카드 요약: 위치·방향은 지도가 말하고 카드는 모드·배터리·안전만.
-   카드 안쪽 여백도 한 단 줄인다. */
+/* D-409 — 컴팩트 카드 요약: 위치·방향은 지도가 말하고 카드는 모드·배터리·안전만.
+   D-417: 칸 질의로 확장 — 뷰포트가 넓어도 칸이 좁으면 접는다(태블릿 세로 768px). */
 @media (width < 30rem) {
   .facts > div[data-fact="pose"], .facts > div[data-fact="yaw"] { display: none; }
   .robot { padding: var(--space-2) var(--space-3); }
-  /* D-417 polish — 폰 카드에서 버튼을 한 줄로 더 작게 */
   .robot-actions ui-button { min-height: var(--target-secondary); }
   .robot .hint { font-size: var(--text-micro); margin: var(--space-1) 0 0; }
+}
+/* D-417 — 중간 폭(태블릿 세로)에서도 로스터가 지도를 밀어내지 않게 한다. */
+@media (width >= 30rem) and (width < 64rem) {
+  #roster { max-height: min(52dvh, 36rem); overflow-y: auto; }
 }
 .robot.s0 { border-left-color: var(--robot-1); }
 .robot.s1 { border-left-color: var(--robot-2); }
@@ -338,7 +357,15 @@ main {
   gap: var(--space-1) var(--space-3);
   margin: var(--space-2) 0 var(--space-3);
 }
-.facts div { display: flex; flex-direction: column; gap: 0; }
+/* D-417 — 넓은 칸에서 팩트는 한 줄로: 위치·방향이 넓게, 배터리·안전은 좁게. */
+@media (width >= 64rem) {
+  .facts { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-3); align-items: baseline; }
+  .facts div { flex: 0 1 auto; min-width: 0; }
+  .facts div[data-fact="pose"] { flex: 1 1 140px; }
+  .facts div[data-fact="yaw"] { flex: 0 1 80px; }
+  .facts div[data-fact="battery"] { flex: 0 1 70px; }
+  .facts div[data-fact="safety"] { flex: 0 1 60px; }
+}
 .facts span { font-family: var(--mono); font-size: var(--text-micro); letter-spacing: var(--track-label); color: var(--ink-quiet); }
 /* D-405 — 측정 라벨 아이콘은 라벨 척도(label 단계)를 따른다. 값(1.125rem)과 같으면 무겁다. */
 .facts .ui-icon { width: var(--text-label); height: var(--text-label); }
@@ -422,6 +449,11 @@ main {
 .vision-preview:has(> .vision-frame[data-state="warn"]) { min-height: 0; }
 .vision-preview:has(> .vision-frame[data-state="waiting"]) .map-head,
 .vision-preview:has(> .vision-frame[data-state="warn"]) .map-head { margin-bottom: 0; }
+
+/* D-415/D-417 — 신호등 빈 상태: 카드 영역과 안내를 접는다. 제목과 태그만 남는다. */
+.signals:not(:has(> .signal-cards > *)) .signal-cards { display: none; }
+.signals:not(:has(> .signal-cards > *)) .hint { display: none; }
+.signals:not(:has(> .signal-cards > *)) { min-height: 0; }
 
 /* D-415 — 신호등 빈 상태 */
 .signal-empty { color: var(--ink-quiet); font-size: var(--text-label); padding: var(--space-2) 0; }
@@ -586,12 +618,12 @@ main {
 /* ADR-1000: Warning / Critical Queues */
 .queues-container {
   display: flex;
-  gap: var(--space-4);
-  margin-top: var(--space-4);
+  gap: var(--space-2);
+  margin-top: var(--space-2);
 }
 .queue {
   flex: 1;
-  padding: var(--space-4);
+  padding: var(--space-2);
   border-radius: var(--radius-control);
   background: var(--surface-raised);
   border: 1px solid var(--line-10);
@@ -606,7 +638,7 @@ main {
   border-left: 4px solid var(--status-crit);
 }
 .queue ui-triage {
-  margin: 0 0 var(--space-2) 0;
+  margin: 0 0 var(--space-1) 0;
 }
 .issue-list {
   list-style: none;
@@ -614,9 +646,9 @@ main {
   margin: 0;
 }
 .issue-list li {
-  padding: var(--space-2);
+  padding: var(--space-1) var(--space-2);
   background: var(--ground-raise);
-  margin-bottom: var(--space-2);
+  margin-bottom: var(--space-1);
   border-radius: var(--radius-control);
   display: flex;
   justify-content: space-between;

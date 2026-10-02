@@ -74,8 +74,8 @@
 
 ## 최근 기록
 
-- 2026-10-02 · uncommitted · fix(fleet): a legacy-null pose is never a last trusted pose (D-395 S2 Finding 1)
-- 2026-10-02 · uncommitted · test(fleet): track Mission event watermark across replay
-- 2026-10-02 · uncommitted · test(fleet): replay late OMX success without clearing Mission HOLD
-- 2026-10-02 · bcce15c9d · fix(hub): 닫힌 소켓에 보내지 않음; 판단 요청 패널 뒤 여유 "비어 있음"/"알 수 없음"
-- 2026-10-02 · uncommitted · 관제 콘솔 회차 7 — D-415 운용 가시성(로그 뷰어·진단 패널·신호등 빈 상태)
+- 2026-10-02 · uncommitted · feat(fleet): D-421 전체 주행 취소를 main d5b3bd10 위에 다시 얹음
+- 2026-10-02 · uncommitted · docs(adr): 전체 주행 취소 ADR D-417 → D-421
+- 2026-10-02 · e223af71 · fix(fleet): D-417 재검토 — 표시를 목표 호출 전에, 시도·출처·유예로 맞춘다
+- 2026-10-02 · d3b0444b · fix(fleet): D-417 검토 반영 — CORE 확인된 취소가 로봇 점유를 푼다
+- 2026-10-02 · 7e121603 · feat(fleet): D-417 전체 주행 취소(래치 없음)와 래치를 말하는 전체 비상 정지
