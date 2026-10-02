@@ -228,7 +228,7 @@ Cell compiler port, additive `CELL_TRANSFER` ??, `service` ???? ?? operator ?? ?
 
 **검증:** `python -B -X utf8 -m pytest test/test_platform_cell_replay.py -q -p no:cacheprovider`. 기대: 제출 횟수·저널 행·projection watermark와 최종 상태를 함께 검증. 커밋: `test: replay cell interruption and reconciliation`.
 
-**Progress (2026-10-02):** Added a persistent two-ledger replay fixture and integration test for a local successful Action whose submit receipt is lost before Fleet records it. Reopening Fleet and OMX SQLite stores keeps the same attempt, does not resubmit, and now retains `HOLD` and resource claims until independent post-action camera/gripper evidence confirms the goal. Broader interruption fixtures and projection-watermark assertions remain open; this is a Task 7 checkpoint, not completion.
+**Progress (2026-10-02):** Added a persistent two-ledger replay fixture and integration test for a local successful Action whose submit receipt is lost before Fleet records it. Reopening Fleet and OMX SQLite stores keeps the same attempt, does not resubmit, and now retains `HOLD` and resource claims until independent post-action camera/gripper evidence confirms the goal. The test also checks journal phase rows and verifies that event watermarks advance across reconciliation and goal confirmation. Separate interruption fixtures and expiry/occupancy cases remain open; this is a Task 7 checkpoint, not completion.
 
 ## Task 8: 정식 경로의 Gazebo 종단 수용
 
@@ -287,6 +287,6 @@ git diff --check
 | 4 Fleet connection | IN PROGRESS | execution compiler-port mapping 6 passed; CELL_TRANSFER contract + core schema suite 424 passed/1 skipped; endpoint/ordered journal/recovery remain |
 | 5 Local Skill | IN PROGRESS | tagged `FleetCellTransferGrant` reaches only its registered phase runner; added ROS-free `pallet.transfer` Skill and `execution/local` receipt seam; boundary/compiler/submission tests 25 passed and three wheels install in an isolated venv. OMX provider and owner integration remain |
 | 6 App and install | PASS (LOCAL) | `030821bc`; isolated wheel installs and fake lifecycle smokes; pilot deployment and ROS/Jazzy runtime remain unverified |
-| 7 Failure replay | IN PROGRESS | late-success-after-restart fixture; Fleet 1371/7 skipped, OMX ActionStore 23, replay/Skill boundary 10 passed; other interruption fixtures and projection watermark remain |
+| 7 Failure replay | IN PROGRESS | late-success-after-restart fixture with phase journal and watermark assertions; other interruption fixtures and expiry/occupancy cases remain |
 | 8 Gazebo | TODO | not run |
 | 9 Compatibility cleanup | TODO | not run |

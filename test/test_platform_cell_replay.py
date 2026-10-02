@@ -134,6 +134,10 @@ def test_late_success_after_site_restart_keeps_unknown_mission_held(tmp_path):
         service, task_store, transport, {"omx-1": "omx-1-control"},
     ).dispatch_next()
     original_grant = service.get(mission["mission_id"])["action_grant"]
+    before_reconcile = service.store.mission_events_after(
+        mission["mission_id"], after_event_id=0, limit=200,
+    )
+    unknown_watermark = before_reconcile["snapshot_event_id"]
 
     # Reopen both Fleet stores to exercise SQLite recovery, then reconcile the
     # same persisted attempt after the site process has restarted.
@@ -143,6 +147,9 @@ def test_late_success_after_site_restart_keeps_unknown_mission_held(tmp_path):
         restarted_service, restarted_tasks, transport, {"omx-1": "omx-1-control"},
     ).dispatch_next()
     current = restarted_service.get(mission["mission_id"])
+    after_reconcile = restarted_service.store.mission_events_after(
+        mission["mission_id"], after_event_id=unknown_watermark, limit=200,
+    )
 
     assert initial["state"] == "UNKNOWN"
     assert reconciled["attempt_id"] == original_grant["attempt_id"]
@@ -152,6 +159,11 @@ def test_late_success_after_site_restart_keeps_unknown_mission_held(tmp_path):
     assert len(transport.submissions) == scenario["expected"]["automatic_resubmit_count"] + 1
     assert transport.lookups == [(original_grant["action_id"], original_grant["attempt_id"])]
     assert transport.action_store.get_action(original_grant["action_id"])["state"] == "SUCCEEDED"
+    assert after_reconcile["snapshot_event_id"] > unknown_watermark
+    assert [event["event_type"] for event in after_reconcile["events"]] == [
+        "ACTION_PHASE_SNAPSHOT", "ACTION_PHASE_SNAPSHOT", "ACTION_PHASE_SNAPSHOT",
+        "ACTION_PHASE_SNAPSHOT", "ACTION_TERMINAL_RESULT",
+    ]
     assert restarted_tasks.resource_claims(resource_kind="object", resource_id="block-1")
 
     goal_time = time.time() + 1.0
@@ -173,3 +185,10 @@ def test_late_success_after_site_restart_keeps_unknown_mission_held(tmp_path):
     )
     assert confirmed["status"] == "GOAL_CONFIRMED"
     assert restarted_tasks.resource_claims(resource_kind="object", resource_id="block-1") == []
+    after_goal = restarted_service.store.mission_events_after(
+        mission["mission_id"], after_event_id=after_reconcile["snapshot_event_id"], limit=200,
+    )
+    assert after_goal["snapshot_event_id"] > after_reconcile["snapshot_event_id"]
+    assert [event["event_type"] for event in after_goal["events"]] == [
+        "GOAL_PREDICATE_CONFIRMED",
+    ]
