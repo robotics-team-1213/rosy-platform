@@ -1289,3 +1289,8 @@
 - 근거: D-415(사용자 지시 — "로그도 볼 수 있게, 디버그 생각할 수 있게"). 계측: 로그 21px→144px, 진단 0→4 항목, 신호등 빈 상태 안내.
 - gate 변화: 없음.
 - 최종 증거: web_common 209 passed; fleet 문법·앱·큐·태스크 54 passed; 브라우저 — 로그 패널(min 144/max 432px)·지우기 버튼·진단('3대 · 갱신됨')·신호등 빈 상태 표시, 페이지 오류 0.
+
+## 2026-10-02 · uncommitted · test(fleet): replay late OMX success without clearing Mission HOLD
+- Change: replayed a lost submit receipt across independently reopened Fleet and OMX SQLite stores. Fleet reuses the persisted Action/attempt, records late success while retaining HOLD and object/workcell claims, and only confirms the goal after independent post-action camera and gripper evidence.
+- Evidence: `test/test_platform_cell_replay.py`; Fleet suite 1371 passed/7 skipped; OMX ActionStore 23 passed; replay/Skill boundary tests 10 passed.
+- Gate: SOURCE/LOCAL only; no ROS-SIM, Gazebo, device, or field promotion.

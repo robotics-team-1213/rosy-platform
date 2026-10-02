@@ -8,7 +8,7 @@
 
 **Tech Stack:** Python, 기존 FastAPI·SQLite·Pydantic, ROS 2 Jazzy, colcon/ament, namespace wheel, OMX Gazebo, 기존 pytest·harness. 새 빌드 도구·모델 SDK 도입은 이 계획의 전제가 아니다.
 
-**Status:** Tasks 0-5 SOURCE complete; Task 6 in progress (gateway/agent app seams and installation profiles are implemented; deployment and full installed-runtime proof remain). Tasks 7-9 not run. PASS conditions below are instructions and do not imply unfinished tasks passed.
+**Status:** Tasks 0-5 SOURCE complete; Task 6 LOCAL complete for isolated wheel installs and fake lifecycles (pilot deployment and ROS/Jazzy runtime remain unverified); Task 7 in progress. Tasks 8-9 not run. PASS conditions below are instructions and do not imply unfinished tasks passed.
 
 **설계:** [ROSY Platform Architecture v0.2](../reference/ROSY_Platform_Architecture_Design_v0.2.md) 3·5·6·15·16장.
 
@@ -228,6 +228,8 @@ Cell compiler port, additive `CELL_TRANSFER` ??, `service` ???? ?? operator ?? ?
 
 **검증:** `python -B -X utf8 -m pytest test/test_platform_cell_replay.py -q -p no:cacheprovider`. 기대: 제출 횟수·저널 행·projection watermark와 최종 상태를 함께 검증. 커밋: `test: replay cell interruption and reconciliation`.
 
+**Progress (2026-10-02):** Added a persistent two-ledger replay fixture and integration test for a local successful Action whose submit receipt is lost before Fleet records it. Reopening Fleet and OMX SQLite stores keeps the same attempt, does not resubmit, and now retains `HOLD` and resource claims until independent post-action camera/gripper evidence confirms the goal. Broader interruption fixtures and projection-watermark assertions remain open; this is a Task 7 checkpoint, not completion.
+
 ## Task 8: 정식 경로의 Gazebo 종단 수용
 
 **Modify/Reuse:** `deploy/robot/omx/probe_fleet_ros_vendor_sim.sh`, `src/sim/gz_sim/worlds/omx_pilot_workcell.sdf`, 기존 C3/C4 harness와 Cell fixture.
@@ -284,7 +286,7 @@ git diff --check
 | 3 Process extraction | PASS (source); runtime/artifact/device gates remain open | `9da93450`, docs `bb84551a`, latest-main sync `cc76161f5` / merge `d9e70f71`; wheel compatibility 11, Cell 143, mapping 7; architecture 81/1 skipped, quick 95 passed/24 existing warnings; known-failure comparisons 0 new/0 known |
 | 4 Fleet connection | IN PROGRESS | execution compiler-port mapping 6 passed; CELL_TRANSFER contract + core schema suite 424 passed/1 skipped; endpoint/ordered journal/recovery remain |
 | 5 Local Skill | IN PROGRESS | tagged `FleetCellTransferGrant` reaches only its registered phase runner; added ROS-free `pallet.transfer` Skill and `execution/local` receipt seam; boundary/compiler/submission tests 25 passed and three wheels install in an isolated venv. OMX provider and owner integration remain |
-| 6 App and install | TODO | not run |
-| 7 Failure replay | TODO | not run |
+| 6 App and install | PASS (LOCAL) | `030821bc`; isolated wheel installs and fake lifecycle smokes; pilot deployment and ROS/Jazzy runtime remain unverified |
+| 7 Failure replay | IN PROGRESS | late-success-after-restart fixture; Fleet 1371/7 skipped, OMX ActionStore 23, replay/Skill boundary 10 passed; other interruption fixtures and projection watermark remain |
 | 8 Gazebo | TODO | not run |
 | 9 Compatibility cleanup | TODO | not run |
