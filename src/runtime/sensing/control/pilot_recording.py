@@ -70,6 +70,10 @@ def _sha256(path: Path) -> str:
 
 
 def _duration(meta: dict) -> float:
+    # A session whose writer never opened its file recorded nothing, however long it ran
+    # (a shutdown or crash during `starting`). Older session.json files lack the key.
+    if meta.get("writer_ready") is False:
+        return 0.0
     try:
         started = datetime.fromisoformat(meta["started_at"])
         ended = datetime.fromisoformat(meta["ended_at"])
@@ -119,18 +123,23 @@ def _disk_free(root: Path) -> int:
     return shutil.disk_usage(root).free
 
 
+def _sanitised(device: str) -> str:
+    return re.sub(r"[^A-Za-z0-9_-]", "_", (device or "").strip())[:_DEVICE_MAX].rstrip("_")
+
+
 def _safe_device(device: str) -> str:
-    safe = re.sub(r"[^A-Za-z0-9_-]", "_", (device or "").strip())[:_DEVICE_MAX].rstrip("_")
-    return safe or "rosy"
+    return _sanitised(device) or "rosy"
 
 
 def recording_device(param: str, namespace: str, hostname: str) -> str:
     """session.device: the robot, not the host. An explicit `device` parameter wins, then
     the node namespace (ROSY_NAMESPACE = rosy_NN on a provisioned robot, CORE's robot id);
-    the hostname only when neither is set (an un-namespaced bench)."""
+    the hostname only when neither is set (an un-namespaced bench). A candidate that
+    sanitises to nothing falls through to the next."""
     for candidate in (param, (namespace or "").strip("/"), hostname):
-        if (candidate or "").strip():
-            return _safe_device(candidate)
+        safe = _sanitised(candidate)
+        if safe:
+            return safe
     return _safe_device("")
 
 
@@ -203,7 +212,8 @@ class PilotRecorder:
                 return False, "RECORDING_DISK_FULL"
             folder = new_session(self._root, device=self._device, camera_profile_revision="",
                                  model_revision="", task_id=None, reason="pilot",
-                                 now=self._now(), topics=PILOT_TOPICS, extra={"mode": "pilot"})
+                                 now=self._now(), topics=PILOT_TOPICS,
+                                 extra={"mode": "pilot", "writer_ready": False})
         except OSError as exc:
             self._log(f"pilot recording cannot start: {exc}")
             return False, "RECORDER_UNAVAILABLE"
@@ -237,7 +247,8 @@ class PilotRecorder:
         self._recording_since = self._clock()
         try:
             meta = _read_meta(self._folder)
-            meta.update(requested_at=meta.get("started_at"), started_at=_iso(self._now()))
+            meta.update(requested_at=meta.get("started_at"), started_at=_iso(self._now()),
+                        writer_ready=True)
             _write_meta(self._folder, meta)
         except (OSError, ValueError) as exc:
             self._log(f"pilot recording: started_at of {self._folder.name} not updated: {exc}")

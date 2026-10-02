@@ -282,8 +282,7 @@ def test_mark_fetched_refuses_unknown_or_unsafe_ids(tmp_path):
 
 def test_recover_finishes_an_interrupted_session_with_its_real_duration(tmp_path):
     rig = Rig(tmp_path)
-    _, rid = rig.rec.start()
-    rig.write_bag(tmp_path / rid)
+    rid = rig.start_recording()
     again = Rig(tmp_path)          # a restart: the old process is gone
     again.wall += timedelta(seconds=45)
     assert again.rec.recover() == [rid]
@@ -433,6 +432,50 @@ def test_stop_while_starting_is_a_clean_stop(tmp_path):
     assert rig.finish(0) == "requested"
     assert rig.rec.status()["state"] == "idle" and rig.rec.status()["last_stop_reason"] == "requested"
     assert _manifest(tmp_path / rid).duration_s == 0.0
+
+
+def test_session_json_says_whether_the_writer_ever_recorded(tmp_path):
+    rig = Rig(tmp_path)
+    _, rid = rig.rec.start()
+    assert _meta(tmp_path / rid)["writer_ready"] is False
+    rig.write_bag(tmp_path / rid)
+    rig.rec.poll_start()
+    assert _meta(tmp_path / rid)["writer_ready"] is True
+
+
+def test_shutdown_during_starting_records_no_duration(tmp_path):
+    rig = Rig(tmp_path)
+    _, rid = rig.rec.start()
+    rig.wall += timedelta(seconds=9)
+    rig.procs[0].code = 0
+    rig.rec.shutdown()
+    assert Rig(tmp_path).rec.recover() == [rid]
+    manifest = _manifest(tmp_path / rid)
+    assert manifest.stop_reason == "shutdown" and manifest.duration_s == 0.0
+
+
+def test_recover_of_a_crash_during_starting_records_no_duration(tmp_path):
+    rig = Rig(tmp_path)
+    _, rid = rig.rec.start()
+    again = Rig(tmp_path)          # the node died while rosbag2 was still starting
+    again.wall += timedelta(hours=3)
+    assert again.rec.recover() == [rid]
+    manifest = _manifest(tmp_path / rid)
+    assert manifest.stop_reason == "recovered" and manifest.duration_s == 0.0
+
+
+def test_a_session_from_before_writer_ready_keeps_its_duration():
+    # session.json written before this field existed: counted from started_at as before.
+    meta = {"started_at": "2026-10-02T10:00:00+00:00", "ended_at": "2026-10-02T10:01:00+00:00"}
+    assert pr._duration(meta) == pytest.approx(60.0)
+    assert pr._duration({**meta, "writer_ready": False}) == 0.0
+
+
+def test_recording_device_falls_through_names_that_sanitise_to_nothing():
+    assert pr.recording_device("___", "/rosy_03", "PERPROS") == "rosy_03"
+    assert pr.recording_device("", "/!!", "PERPROS") == "PERPROS"
+    assert pr.recording_device("", "/rosy", "PERPROS") == "rosy"
+    assert pr.recording_device("***", "", "@@@") == "rosy"
 
 
 def test_the_recording_device_is_the_robot_identity(tmp_path):

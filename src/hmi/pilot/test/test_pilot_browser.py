@@ -810,6 +810,18 @@ def test_robot_recording_shows_starting_until_the_writer_records(tablet_page):
     assert page.get_attribute(toggle, "aria-pressed") == "true"
     assert page.get_attribute(toggle, "aria-label") == "로봇 녹화 준비 중, 누르면 취소"
     assert not page.locator(toggle).is_disabled()
+    # 켜진 버튼을 흐리게(opacity) 하지 않는다: 조용한 잉크(바탕 대비 4.5:1 이상)와 점선 테두리.
+    look = page.evaluate(f"""(() => {{
+      const b = getComputedStyle(document.querySelector('{toggle}'));
+      const probe = document.createElement('span');
+      probe.style.color = 'var(--ink-quiet)';
+      document.body.append(probe);
+      const quiet = getComputedStyle(probe).color;
+      probe.remove();
+      return {{opacity: b.opacity, color: b.color, quiet, border: b.borderTopStyle, borderColor: b.borderTopColor}};
+    }})()""")
+    assert look["opacity"] == "1", look
+    assert look["color"] == look["quiet"] == look["borderColor"] and look["border"] == "dashed", look
     fact = page.inner_text("[data-drive-fact=recording]")
     assert "아직 기록하지 않습니다" in fact and "0:0" not in fact
     page.click(toggle)                                     # 준비 중 멈춤은 깨끗한 정지

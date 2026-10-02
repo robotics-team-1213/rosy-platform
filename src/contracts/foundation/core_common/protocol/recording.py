@@ -85,6 +85,8 @@ def teleop_intent(*, raw_linear, raw_angular, clipped, source, mode, accepted, c
 #: A session exists in these states. `starting`: rosbag2 runs but has not opened its first
 #: file yet (CLI start + discovery take seconds); nothing is recorded until `recording`.
 ACTIVE_STATES = ("starting", "recording", "stopping")
+#: A session the owner (or an admin) may stop, and that link loss or a seat change ends.
+STOPPABLE_STATES = ("starting", "recording")
 
 
 class RecorderStatus(_Wire):

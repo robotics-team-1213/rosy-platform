@@ -58,7 +58,8 @@ def test_node_names_sessions_after_the_robot_not_the_host():
 
 def test_node_turns_the_camera_copy_on_from_starting_and_notices_the_writer_quickly():
     src = _src("pilot_recorder_node.py")
-    assert "status['state'] in ('starting', 'recording', 'stopping')" in src
+    assert "status['state'] in ACTIVE_STATES" in src
+    assert "ACTIVE_STATES" in src.split("from core_common.protocol.recording import", 1)[1].split(")", 1)[0]
     assert "create_timer(START_POLL_S, self._poll_start)" in src
     assert "self._recorder.poll_start()" in src
 
