@@ -288,7 +288,8 @@ def search(field, clear, squares, ranges, angles, radius, mount, minimum_fit=.9,
     of 640, so a stride of 4 leaves it one beam, under MIN_POINTS (S1 finding 2)."""
     clear = field.clear_poses(radius) if clear is None else clear
     found = merge(slot_candidates(field, squares, ranges, angles, radius, mount, minimum_fit, clear=clear),
-                  global_candidates(field, ranges, angles, radius, mount, minimum_fit, clear=clear))
+                  global_candidates(field, ranges, angles, radius, mount, minimum_fit, clear=clear,
+                                    fine_scan=object_scan))
     found = found[:MAX_CANDIDATES]
     objects = []
     if found:

@@ -135,6 +135,55 @@ def test_merge_keeps_slot_candidates_first_and_drops_global_duplicates():
     assert merge(slot, global_) == [slot[0], global_[1]]
 
 
+def test_a_candidate_stuck_between_coarse_headings_refines_on_the_full_scan(monkeypatch):
+    """S1 re-run R3: a candidate 2.5 deg off failed the 3 s check; the fine stage corrects it."""
+    f = field()
+    truth = (-.70, .15, math.radians(-177.5))
+    ranges, angles = scan(truth, beams=640)
+    real = f.global_results
+    stuck = np.array(sensor_from_base((truth[0] + .02, truth[1], truth[2] + math.radians(2.5)), MOUNT))
+
+    def coarse(*args, **kwargs):
+        results, reason = real(*args, **kwargs)
+        return [(c, a, stuck if near(PoseCandidate(*base_from_sensor(p, MOUNT), a, "global"), truth) else p)
+                for c, a, p in results], reason
+
+    monkeypatch.setattr(f, "global_results", coarse)
+    coarse_only = global_candidates(f, ranges[::4], angles[::4], RADIUS, MOUNT)
+    found = global_candidates(f, ranges[::4], angles[::4], RADIUS, MOUNT, fine_scan=(ranges, angles))
+    assert len(found) == len(coarse_only) == 2
+    assert not any(near(c, truth, yaw=math.radians(2)) for c in coarse_only)
+    assert any(near(c, mirror(truth)) for c in found)
+    hit = [c for c in found if near(c, truth, yaw=math.radians(4))]
+    assert len(hit) == 1
+    assert abs(math.degrees(hit[0].yaw - truth[2])) <= .5
+    assert math.dist((hit[0].x, hit[0].y), truth[:2]) <= .01
+    assert hit[0].scan_fit >= .9
+
+
+def test_the_fine_stage_keeps_the_distinct_count_and_the_mirror():
+    for truth in [(0., -.51, math.radians(2.5)), (-.75, .30, math.radians(2.4)), (-1.26, .49, -math.pi / 2)]:
+        ranges, angles = scan(truth, beams=640)
+        coarse = global_candidates(field(), ranges[::4], angles[::4], RADIUS, MOUNT)
+        fine = global_candidates(field(), ranges[::4], angles[::4], RADIUS, MOUNT, fine_scan=(ranges, angles))
+        assert len(fine) == len(coarse)
+        assert any(near(c, truth, yaw=math.radians(.75)) for c in fine)
+        assert any(near(c, mirror(truth), yaw=math.radians(.75)) for c in fine)
+
+
+def test_global_match_is_not_changed_by_the_fine_stage():
+    """global_match answers before the fine stage existed (872a5cc5)."""
+    result = field().global_match(*scan((0., -.51, 0.)), RADIUS)
+    assert result["unique"] is False
+    assert result["pose"] == pytest.approx([.015, -.51, -math.pi])
+    assert result["margin"] == pytest.approx(.02053882221947323)
+    d = np.load(Path(__file__).parent / "fixtures/gazebo_localization_corner.npz")
+    m = MapAgreement(d["grid"], float(d["resolution"]), d["origin"])
+    result = m.global_match(d["ranges"], d["angles"], RADIUS)
+    assert result["unique"] is True
+    assert result["pose"] == pytest.approx([.45591146128098453, 3.4560854302207504, math.pi / 2])
+
+
 def test_a_recorded_gazebo_scan_on_an_asymmetric_map_keeps_its_true_pose():
     """Independent of loc_world's ray caster: a real Gazebo scan and map (fixture)."""
     d = np.load(Path(__file__).parent / "fixtures/gazebo_localization_corner.npz")

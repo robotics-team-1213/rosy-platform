@@ -32,6 +32,10 @@ SLOT_YAW_RAD = math.radians(20.)
 SLOT_OFFSETS = np.array(np.meshgrid(
     np.arange(-SLOT_XY_M, SLOT_XY_M + 1e-9, .02), np.arange(-SLOT_XY_M, SLOT_XY_M + 1e-9, .02),
     np.radians(np.arange(-20., 20.1, 4.)), indexing='ij')).reshape(3, -1).T
+#: Final stage for distinct global candidates only: +-3 cm in 1 cm, +-3 deg in 0.5 deg (637 poses).
+FINE_OFFSETS = np.array(np.meshgrid(
+    np.arange(-.03, .031, .01), np.arange(-.03, .031, .01), np.radians(np.arange(-3., 3.1, .5)),
+    indexing='ij')).reshape(3, -1).T
 
 
 @dataclass(frozen=True)
@@ -116,13 +120,33 @@ def distinct(results, minimum_fit=.9, keep_within=.05, limit=4):
 
 
 def global_candidates(field, ranges, angles, radius, mount, minimum_fit=.9, keep_within=.05, limit=4,
-                      clear=None):
+                      clear=None, fine_scan=None):
     """Every distinct global pose; [] when the scan or the map cannot support one.
 
-    `clear` is an optional precomputed `field.clear_poses(radius)` mask."""
+    `clear` is an optional precomputed `field.clear_poses(radius)` mask.
+    `fine_scan`: the full-resolution (ranges, angles). When given, each distinct
+    pose is refined once more by FINE_OFFSETS on it and re-scored (S1 re-run R3:
+    a 1 deg refinement on a strided scan left a candidate 2-3 deg off)."""
+    if fine_scan is not None and clear is None:
+        clear = field.clear_poses(radius)
     results, _ = field.global_results(ranges, angles, radius, clear=clear)
+    picked = distinct(results, minimum_fit, keep_within, limit)
+    if fine_scan is not None:
+        fine_ranges, fine_angles = valid_beams(*fine_scan)
+        picked = [_fine(field, pose, fit, fine_ranges, fine_angles, clear) for pose, fit in picked]
     return [PoseCandidate(*base_from_sensor(pose, mount), scan_fit=fit, origin='global')
-            for pose, fit in distinct(results, minimum_fit, keep_within, limit)]
+            for pose, fit in picked]
+
+
+def _fine(field, pose, fit, ranges, angles, clear):
+    """The best FINE_OFFSETS refinement of one sensor pose, or the pose itself when none qualifies."""
+    if len(ranges) < 30:
+        return pose, fit
+    refined = field.refine([pose], ranges, angles, clear, FINE_OFFSETS)
+    if not refined:
+        return pose, fit
+    _, agreement, best = max(refined, key=lambda item: item[0])
+    return best, float(agreement)
 
 
 def slot_candidates(field, squares, ranges, angles, radius, mount, minimum_fit=.9, clear=None):

@@ -314,6 +314,16 @@ def test_peer_objects_come_from_the_full_scan_while_the_search_is_strided():
     assert math.dist(objects[0], (c * dx + s * dy, -s * dx + c * dy)) < .08
 
 
+def test_the_global_fine_stage_gets_the_full_scan(monkeypatch):
+    """S1 re-run R3: the fine yaw stage runs on every beam, not the strided search scan."""
+    import control.loc_assist as loc_assist
+    seen = {}
+    monkeypatch.setattr(loc_assist, 'global_candidates', lambda *a, **kw: seen.update(kw) or [])
+    full = scan((-.7, .15, math.pi), beams=640)
+    search(field(), None, SQUARES, full[0][::4], full[1][::4], .105, MOUNT, object_scan=full)
+    assert seen['fine_scan'] is full
+
+
 def test_returns_inside_the_robot_body_are_not_peer_objects():
     """Gazebo fix_a1: on square A every full-scan report carried an object 7 cm from
     base_link (a chassis/wall return the stride used to thin to one beam). No peer
