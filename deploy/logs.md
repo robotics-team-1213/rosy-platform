@@ -2004,3 +2004,20 @@
 - gate 변화: 없음
 - 결정: D-418, D-161, D-388
 - 교훈: 모양 검사가 정확하면 길이 상한 같은 겹친 방어선은 변이 증명에서 살아남는다 — 살아남은 변이는 시험 구멍이거나 죽은 코드다.
+
+## 2026-10-02 · 53f312a8 · fix(native,api): D-418 독립 검토 반영 — 실패해도 닫힘, 부팅 순서, 늦은 비밀번호
+
+- 변경: 도우미 정리는 비밀번호 끄기(부팅은 강제, 그 밖은 만료)를 먼저 하고 단계마다 따로 잡는다. `keys.json`이 깨져도 `--boot`·`--expire`·`DELETE /password`가 비밀번호를 잠그고 `60-rosy-temp-password.conf`를 지운다. 깨진 기록은 키 경로에서만 503이다.
+- 변경: `usermod` 잠금이 실패하면 같은 경로에 `Match User rosy` → `PasswordAuthentication no` 거부 drop-in을 쓰고 sshd를 다시 읽히고 만료 타이머를 켠다. 타이머의 `--expire`가 잠금을 다시 시도한다. `--boot`는 0이 아닌 값으로 끝난다.
+- 변경: `password_on` 답이 CORE의 10 s 기한(여유 1 s)을 넘기면 도우미가 비밀번호를 되돌리고 결과 없이 503으로 답한다. CORE도 시간 초과 때 기다리지 않는 `password_off` 요청을 남긴다. 만료 타이머 시작 실패는 `HelperError`로 되돌리며, 타이머는 sshd reload보다 먼저 켠다. `OSError`도 503 `SSH_ACCESS_UNAVAILABLE`과 되돌리기로 간다.
+- 변경: 키·비밀번호 만료는 `max(시계, clock.json의 가장 늦게 본 시각)`으로 판단한다. 앞서 간 시계는 일찍 만료시킬 뿐이다(닫힘 쪽).
+- 변경: `sshd -t` 전에 `/run/sshd`(0755)를 만든다. 실행 중 새 요청은 끝나기 전에 처리하고(최대 8개), 잘못된 요청은 지운다. `history.jsonl`은 1 MiB를 넘기면 최근 512 KiB만 남긴다. CORE는 잠금 대기와 교환에 한 기한(10 s)을 쓴다.
+- 변경: `rosy-ssh-access-boot.service`를 `DefaultDependencies=no`, `After=local-fs.target`, `Before=sockets.target ssh.socket ssh.service shutdown.target`, `Conflicts=shutdown.target`으로 바꿨다. 기본 의존이면 `After=basic.target`이 되고, `Before=ssh.socket`과 함께 순서 순환이 된다. 실기 두 대(2026-10-02 읽기 전용 확인)에서 `ssh.socket`이 켜져 있다.
+- 변경: 기기 쌍둥이를 실기처럼 바꿨다. `ssh.socket`·`ssh.service`를 둘 다 켜고, `50-cloud-init.conf`에 `PasswordAuthentication no`를 넣었다. 새 시나리오 `ssh_socket`은 소켓 활성화만 쓴다.
+- 증거: `test/test_ssh_access.py` 117 passed 2 skipped, `test_host_ssh.py` 45 passed, native systemd 계약·이미지 층 동기화 216 passed 4 skipped, 프로토콜 버전·이벤트 목록·line-follow 문서 시험 통과(Windows).
+- 증거(변이): 도우미 18종과 CORE 4종이 모두 빨강이다. 처음 살아남은 1종(잠금 대기가 기한을 넘김)은 가짜 시계로 경과 시간을 고정해서 죽였다. 단위 변이(`DefaultDependencies=no` 제거)는 계약 시험과 쌍둥이 대조군이 잡는다.
+- 증거(쌍둥이, HEAD 86106da1): `run_twin.py --scenario ssh,ssh_socket`에서 ssh PASS 36/36, ssh_socket PASS 39/39다. 두 경우 모두 재시작 전후 `journalctl -b`에 ordering cycle이 없고, `systemd-analyze verify default.target`은 exit 0에 출력이 없다. 부팅 정리는 `ssh.socket`/`ssh.service`보다 먼저 활성이었다. `/run/sshd`가 없을 때도 비밀번호가 켜졌고, 재시작 뒤에는 꺼졌다. cloud-init 전역 no 아래에서 사설 대역 rosy만 yes였고, rosy의 `AuthorizedKeysFile`은 `.ssh/authorized_keys`(카드 키)와 관리 파일이다. 대조군으로 기본 의존을 되살리면 verify가 `basic.target: Found ordering cycle on sockets.target/start … Job sockets.target/start deleted`를 낸다.
+- 미증명: 실기 부팅. `usermod` 실패 경로는 가짜 시스템으로만 확인했다. 시계가 마지막으로 본 시각보다 뒤에 있는 동안 진짜 경과 시간은 알 수 없다(하한일 뿐이다).
+- gate 변화: 없음
+- 결정: D-418, D-161, D-388
+- 교훈: `Before=`로 소켓보다 앞에 서려는 단위는 기본 의존(`After=basic.target`)과 부딪혀 순환이 된다. systemd는 이 순환을 `sockets.target` 작업을 지워서 끊으므로 조용히 큰 사고가 된다. 쌍둥이에서 대조군 drop-in으로 순환을 재현해야 수정이 증명된다.
