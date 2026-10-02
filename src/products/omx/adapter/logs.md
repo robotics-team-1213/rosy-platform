@@ -242,3 +242,10 @@
 - 증거: host suites 629 passed, 실패는 main 기존 `test_control_imports_no_core_code` 하나. WSL Jazzy rclpy 반복 결과는 evidence README에 있다.
 - gate 변화: 없음(ROS-SIM HOLD 유지).
 - 결정: `fingertip_overhang_m`는 `rosy_cell.cell/2`의 필수 필드가 됐다. 버전은 올리지 않았다. /2는 아직 배포되지 않았고 이 브랜치 밖에서 쓰인 적이 없기 때문이다.
+
+## 2026-10-02 · aa77cb9c · test(omx): WSL rclpy loop under nice -n 19 during another session's Gazebo
+
+- 변경: 없음(검증 기록).
+- 증거: HEAD 20회 반복(`nice -n 19`, `ROS_DOMAIN_ID=77`, WSL load average 33–55): 12/20 통과. 실패는 `joint_state_stale`(시험의 0.2–0.5 s joint-state 나이 상한)과 그 뒤의 HOLD다. 같은 조건에서 base `7ae0f65c`(이전 무부하 25/25)와 HEAD를 번갈아 8회씩 돌렸다: base 5/8, HEAD 7/8. base도 같은 시험(`test_slow_feedback…`, `test_runtime_subscribes…`)에서 실패하므로 회귀가 아니라 부하로 본다. 원본: `X:\DevTemp\rosy-cell-c3\c3b\wsl-loop3.txt`, `ab2-loop.txt`.
+- gate 변화: 없음.
+- 결정: 수용 기준(연속 20회 무실패)은 WSL이 비면(17:00 KST 이후) nice 없이 다시 확인한다.

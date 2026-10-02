@@ -43,8 +43,8 @@
 
 ## 최근 기록
 
+- 2026-10-02 · aa77cb9c · test(omx): WSL rclpy loop under nice -n 19 during another session's Gazebo
 - 2026-10-02 · 0380d789 · fix(omx): re-review fixes N1 and minor 4
 - 2026-10-02 · e40d182c · fix(omx): C3b 독립 리뷰 수정 (FIX REQUIRED)
 - 2026-10-02 · f63bb564 · fix(omx): C3b — C3 결함 수정, 대역 없는 Gazebo 단일 배치
 - 2026-10-02 · d8f96fb8 · feat(omx): C3 Gazebo CELL_TRANSFER probe (D-402, plan C3)
-- 2026-10-02 · 31ada4b4 · fix(omx): C2 independent review fixes (D-402)
