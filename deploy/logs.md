@@ -2003,3 +2003,9 @@
 - 변경: `rosy_auto_update.py`의 `config.json`이 없거나 `enabled`가 없으면 켜짐으로 바꿨다. `{"enabled": false}`만 끈다. ADR D-412, 계획 계약, `rosy-release-push` skill 문구를 고쳤고 시험 2개는 기본 켜짐을 고정한다.
 - 증거: 2026-10-02 실제 로봇. 025 수동 push로 두 로봇에 업데이터 설치(기본 꺼짐). 9dfk config 켬. 이 PC에서 `payload-2026.10.02-026` 발행(카나리 9dfk). 12:11 GitHub 시간 초과는 error로 처리되고 철회되지 않음. 12:26 staged, 12:26 applying, 12:27 committed(CORE·io·camera 026, 옛 릴리스 3개 정리), 발행 도구가 `canary_ok=true`를 올림. 8kcn은 사용자 지시로 수동 push(026)했고 config는 켰으며 rosy-c5 hold 중. 업데이터 시험 238 passed 1 skipped(기본 켜짐 시험 2개는 바꾸기 전 빨강 확인).
 - gate 변화: D-412 DEVICE(카나리 단계) 통과. 카나리 다음 로봇 순서는 기기 쌍둥이만.
+
+## 2026-10-03 · 119382fe6 · docs(native): D-423 `ROSY_OBJECT_DET=false` 를 learned-perception.env 예시에
+
+- 변경: `native/learned-perception.env.example` 에 `ROSY_OBJECT_DET=false`(+ `ROSY_OBJECT_DET_MAX_HZ` 설명). 서비스·권한 변화 없음. 모델은 `/var/lib/rosy/models/object_det/` 아래이고 deliver 가 root:rosy-camera 0750 으로 만든다.
+- 증거: `test_native_systemd_contract.py` env 예시 시험.
+- gate 변화: 없음. 켜는 것은 사용자 승인 뒤.

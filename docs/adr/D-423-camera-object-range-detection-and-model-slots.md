@@ -61,6 +61,21 @@
 - Gazebo: 상자와 다른 Pinky 를 앞에 두고 `m`/`s` 를 실제 거리와 비교한다. 지금 Gazebo 런치는 `camera_detect_node` 를 띄우지 않는다(카메라는 `rendered_camera_adapter`). 시뮬에서 이 노드를 띄우는 런치만 `accept_simulation_scans: true` 를 넣는다(기본 false; 시뮬 스캔은 `is_robot_scan` 이 버리고, 스캔이 와도 모두 버려지면 노드가 한 번 경고한다).
 - 실기: 사용자 승인 뒤 4 의 설정으로 줄자 거리와 비교한다(승인 기록 전후).
 
+## 구현 기록 (2026-10-03, `feat/d423-object-range-detection`)
+
+1단계(거리)에 이어 2·3단계를 저장소 코드와 호스트 시험으로 들였다. Gazebo·실기 검증(§검증)은 아직이다. 장치 기본값은 모두 꺼짐이다.
+
+- **매니페스트**: `TASKS = (lane_seg, object_det)`. `object_det` 은 출력 `yolo_cxcywh_scores`(`[1, 4+C, A]`, NMS 는 밖), 클래스 이름과 순서가 §2.2 여섯 개와 같아야 하고 역할은 `object` 하나다(차선 `ROLES` 는 닫힌 그대로). **입력은 32 의 배수**여야 해서 320×240 프레임을 320×256 으로 레터박스한다(§2.1 의 "320×240 입력"을 이렇게 읽는다).
+- **검출 백엔드** `learned/detector.py`: 레터박스(114 회색), 클래스별 NMS(IoU 0.5, 신뢰도 0.25), 프레임 정규화 상자, 64 개 상한, 프레임마다 NaN 거부. 패킷은 `DetectionEvidence` 필드 그대로이고 `ranges` 만 덧붙인다. 거리는 검출 상자 자체로 잰다(`region_range.range_boxes`).
+- **노드** `object_detector_node`(ROS 없는 핵심 `control/object_detector.py`): `vision/detections`, 상태 `perception/learned/object_det/status`(latched). `camera_preview.launch.py` `object_det`(`ROSY_OBJECT_DET`, 기본 false), 상한 `ROSY_OBJECT_DET_MAX_HZ`(기본 2.0). CORE 는 `detection_evidence` 만 구독하고 `vision/detections` 는 읽지 않는다(D-137). `seq` 는 낸 패킷 수라 속도 상한으로 거른 프레임은 "놓침"이 아니다. 거리는 `camera_detect_node` 와 같은 두 번 켜기(NOMINAL 프로필 + `allow_nominal_ground`)와 `region_lidar_range` 를 따른다.
+- **화면**: 검출과 영역은 IoU ≥ 0.3 으로 한 번씩만 짝짓고(표시용), 짝이 없는 검출은 `DET <class> <거리>` 로 따로 그린다. 검출은 약 2 Hz 라 미리보기는 0.6 s 안의 가장 최근 패킷을 쓴다.
+- **슬롯**: `learned/slots.py` — `object_det` 은 `/var/lib/rosy/models/object_det/{shadow,active,previous}`. **`lane_seg` 는 이전 판 동안 D-373 의 평평한 루트(`/var/lib/rosy/models/shadow`)를 그대로 쓴다**(§3.1 의 `<task>/` 를 차선에는 아직 적용하지 않음; 옮기려면 이전 판이 필요). 작업 루트는 `deliver.py` 가 잠금 아래 root:rosy-camera 0750 으로 만든다.
+- **도구**: `deliver.py --task`, `promote`(active ← shadow, 이전 active → previous), `rollback --slot active`(active ← previous); 다른 작업 모델의 push 는 거부. `intake.py` 는 작업별 게이트(`intake_gate.yaml` 의 `object_det` 절: 지연, NaN, 오류, 프레임당 상자 수 p95 ≤ 32). `rosy_ml deliver|promote|rollback|status --task`(promote 는 CLI 전용).
+- **.pt → ONNX** `tools/perception/model/convert.py`(PC 전용): TorchScript, state_dict + 저장소 모델 클래스 등록부(`lane_unet`), ultralytics export(object_det). 고정 시드 탐침 동등성(최대 절대 차 ≤ 1e-3, 모양이 바뀌면 실패, 실패 시 아무것도 쓰지 않음), 선택 int8 QDQ(정밀도 차는 지표로만 남기고 판정은 intake). torch/onnx/onnxruntime/ultralytics 는 함수 안에서만 가져온다.
+- **서명**: `sign_model.py` 가 릴리스 서명 모듈(`deploy/robot/pinky_pro/release/signing.py` `sign_checksums`)로 `model_manifest.json.sig` 를 만든다. 로봇은 `/etc/rosy/trusted-release-keys/*.pem` 으로 openssl 검증한다(`learned/signature.py`; 이 패키지는 deploy 를 가져올 수 없어 작은 거울을 두고, 시험이 둘을 맞춘다). `object_detector_node` 는 서명 없는 묶음을 거부하고, `allow_unsigned_models`(기본 false)는 개발 전용 우회다. 서명이 있는데 틀리면 우회해도 거부한다. **`lane_seg`(learned_lane_node)에는 아직 강제하지 않았다** — 현장의 0930 차선 모델이 서명 없이 돌고 있어 켜면 shadow 가 멈춘다(사용자 결정 필요).
+- **CORE·Pilot**: `GET /api/v1/vision/models`(viewer, 읽기 전용, API Ref v1.83). CORE 는 포인터 파일을 읽지 못해(root:rosy-camera 0750) 노드가 돌지 않는 슬롯(object_det shadow, lane_seg active)은 보이지 않는다. Pilot 주행 화면의 "모델" 패널은 5 초마다 읽기만 하고, promote/rollback 은 `rosy_ml` 에만 있다. CORE 쓰기 API 는 더하지 않았다.
+- **학습 데이터**: `dataset/object_boxes.py` — 벽보다 짧은 스캔 묶음을 클래스 없는 후보 상자로(바닥 접점이 아랫변, 윗변은 스캔 높이라 하한), 사람 상자가 이기고 `none` 은 후보를 지운다. 사람이 본 프레임만 YOLO 라벨 파일을 얻고(빈 파일 = "없음"은 사람만 말할 수 있음) 나머지는 `review_queue.jsonl` 에 남는다. `autolabel.py --object-boxes`.
+
 ## 잇는 결정
 
 D-137(YOLO 자문역, LiDAR/IR 결정), D-199(인식 고정 계약과 교체 백엔드), D-205(실물 차선 전환 순서·학습 출력의 문), D-209(인식·학습 백엔드 자리), D-356/D-373(학습 루프, 모델 전달·섀도), D-379(학습 데이터·자동 라벨), D-384(도로 상태 추정), D-397(URDF NOMINAL, 보정이 다듬음), D-408(학습 페인트 입력, 센서 QoS), D-411(Pilot 로봇 녹화).

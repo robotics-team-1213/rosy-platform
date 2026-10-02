@@ -379,3 +379,9 @@
 - 변경: `connected` 는 WELCOME~세션 끝, backoff 는 WELCOME 뒤에만 재설정, HELLO 답 5 s. 보낸 envelope 순서 기억(전송 잠금)과 답 짝짓기, 일시 오류 재전송(3 회), 영구 거부는 seq·종류 기록 후 버림, 미응답·전송 중 취소 사건 재버퍼. `principal_ref` 키 HMAC(0c56f3d6f).
 - 증거: `test_fleet_agent_link.py` 12 passed, `test_line_follow_stuck*.py` 46 passed, `test_hub_server.py` 9 passed.
 - gate 변화: 없음.
+
+## 2026-10-03 · b84e72c55 · feat(vision): D-423 학습 모델 상태 저장소(읽기 전용)
+
+- 변경: `core_features/vision/models.py` `ModelStatusStore` — `perception/learned/status`(lane_seg shadow)·`perception/learned/object_det/status`(object_det active) 상태를 작업별로 보관, 나이·stale. `VisionFrameStore.models` 로 붙인다. 교체·선택 기능 없음.
+- 증거: `test_vision_models.py` 8 passed; `src/runtime/services/test` 포함 묶음 739 passed, 37 skipped.
+- gate 변화: 없음.

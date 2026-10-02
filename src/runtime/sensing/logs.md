@@ -958,3 +958,11 @@
 - gate 변화: 없음. 장치 기본값 불변.
 - 결정: D-423 Proposed
 - 교훈: 없음
+
+## 2026-10-03 · 66c83863d · feat(perception): D-423 2·3단계 — 물체 검출 백엔드·노드·화면·작업별 슬롯·서명
+
+- 변경: 매니페스트 `object_det`(e75079a62), `learned/detector.py`·`region_range.range_boxes`(a5916a45c), `control/object_detector.py`·`object_detector_node.py`·`camera_preview.launch.py` `object_det`(`ROSY_OBJECT_DET`, 기본 false)(119382fe6), `follow_preview` 짝짓기·`road_observer_node` 0.6 s 결합(43b7f88d6), `learned/slots.py`(e7f0b8e80), 검출기 프레임별 NaN 거부(88d84455d), `learned/signature.py`·`checked_opener`·`allow_unsigned_models`(fd613c6ca), hotpath 감시 목록(9d0416dd3), D-137 단일 발행자 화이트리스트에 `object_detector.py`(f4c311569). 장치 기본값 모두 꺼짐.
+- 증거: `python -m pytest src/runtime/sensing/test/ -q` 네 묶음 2407 passed, 106 skipped(Windows, 2026-10-03), `test/known_failures.py` 0 new.
+- gate 변화: 없음. Gazebo·실기 검증은 조정자 일정.
+- 결정: D-423 Proposed(구현 기록 추가)
+- 교훈: D-137 의 `vision/detections` 는 발행자 하나로 예약돼 있었다(gateway `test_core_logic`). 토픽 글자를 한 파일에만 두고 구독자는 상수를 가져오게 해 화이트리스트를 한 줄로 유지했다.

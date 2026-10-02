@@ -244,3 +244,9 @@
 - gate 변화: 전체 Pilot LOCAL HOLD 유지.
 - 결정: D-390 부록, D-18.
 - 교훈: 독립 기능 시험과 전체 부하 실행을 구분한다.
+
+## 2026-10-03 · 09553e730 · feat(pilot): D-423 "모델" 패널(읽기 전용)
+
+- 변경: `models.js`(5 s 폴링 `GET /api/v1/vision/models`, 작업·슬롯·판·마지막 오류), 주행 화면 HUD 에 접는 패널, 셸 캐시 키 `2026-10-03-1`, 설치 목록. promote/rollback 은 `rosy_ml` 에만.
+- 증거: `src/hmi/pilot/test` 53 passed, 24 skipped(브라우저 시험은 이 PC 에서 건너뜀).
+- gate 변화: 없음.

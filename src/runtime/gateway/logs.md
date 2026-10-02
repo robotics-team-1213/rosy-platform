@@ -728,3 +728,9 @@
 - 변경: `fleet.hub_url`+`pairing_token` 이 있으면 `CoreServices.build` 의 `fleet_agent.start()` 가 루프 없이 `asyncio.create_task` 를 불러 CORE 가 죽었다(D-407 Gazebo 2026-10-02). `create_app` 이 라우터 lifespan 을 감싸 uvicorn 루프에서 `start_on_loop()` 를 부른다. e-stop 리스너는 `line_follow.stop(reason="estop")`.
 - 증거: `test_fleet_agent_startup.py`(core_client, hub_url 설정으로 build 후 startup 에서 작업 생성), `test_line_follow_stuck.py` 초록.
 - gate 변화: 없음.
+
+## 2026-10-03 · f4c311569 · feat(bridge): D-423 모델 상태 두 토픽 latched 구독
+
+- 변경: `ros_bridge.py` `_on_lane_model_status`·`_on_object_det_model_status`(TRANSIENT_LOCAL) → `svc.vision.models`. 구독 목록·latched 시험 갱신. `test_core_logic` D-137 단일 발행자에 `runtime/sensing/control/object_detector.py`.
+- 증거: gateway 두 묶음 1141+715 passed; 실패 `test_core_node_teardown::test_run_drains_executor_workers_before_returning` 1건은 부하 아래에서만(단독 8 passed).
+- gate 변화: 없음.
