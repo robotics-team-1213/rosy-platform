@@ -235,7 +235,8 @@ def test_cell_job_startup_fences_old_authority_without_replaying_steps(tmp_path,
         assert held["steps"][0][field] == previous["steps"][0][field]
     if prior_state != "READY":
         assert tasks.resource_claims(resource_kind="workcell", resource_id="omx_01")
-        assert control["rearm_available"] is False
+    # An in-flight Action (DISPATCHING) blocks rearm; held claims do not (D-403 보강 2026-10-03).
+    assert control["rearm_available"] is (prior_state != "RUNNING")
     with pytest.raises(MissionConflict, match="current READY"):
         restarted.start_step("cell-mission-1", step_index=0, action_id="another-action",
                              attempt_id="another-attempt", grant=grant)
@@ -250,13 +251,13 @@ def test_cell_step_cannot_start_without_every_admitted_resource_claim(tmp_path):
     with store._connect() as connection:
         connection.execute("DELETE FROM fleet_action_claims WHERE resource_key='pallet:pallet-1'")
         connection.commit()
-    with pytest.raises(MissionConflict, match="all durable resource claims"):
-        store.start_step("cell-mission-1", step_index=0, action_id="action-0",
-                         attempt_id="attempt-0", grant=_grant(ready, 0))
-    unchanged = store.get("cell-mission-1")
-    assert unchanged["status"] == unchanged["steps"][0]["status"] == "READY"
-    assert unchanged["steps"][0]["action_id"] is None
-    assert tasks.resource_claims(resource_kind="workcell", resource_id="omx_01")[0]["phase"] == "CLAIMED"
+    # C4b 1b A4: a missing claim holds the Job before anything is sent, and releases the rest (A5).
+    held = store.start_step("cell-mission-1", step_index=0, action_id="action-0",
+                            attempt_id="attempt-0", grant=_grant(ready, 0))
+    assert held["status"] == held["steps"][0]["status"] == "HOLD"
+    assert held["reason"] == "FLEET_CLAIM_MISSING_BEFORE_SUBMISSION"
+    assert held["steps"][0]["action_id"] is None
+    assert tasks.resource_claims(resource_kind="workcell", resource_id="omx_01") == []
 
 
 def test_cell_grant_cannot_change_a_pose_or_run_under_a_stale_generation(tmp_path):
@@ -276,13 +277,13 @@ def test_cell_grant_cannot_change_a_pose_or_run_under_a_stale_generation(tmp_pat
 
     stopped = tasks.trip_stop_latch(actor_id="operator-1")
     tasks.rearm_dispatch(expected_generation=stopped["generation"], actor_id="operator-1")
-    held = store.start_step(
-        "cell-mission-1", step_index=0, action_id="action-0", attempt_id="attempt-0",
-        grant=_grant(ready, 0),
-    )
-    assert held["status"] == "HOLD"
-    assert held["reason"] == "FLEET_FENCE_CHANGED_BEFORE_SUBMISSION"
-    assert held["steps"][0]["status"] == "HOLD" and held["steps"][0]["action_id"] is None
+    held = store.get("cell-mission-1")
+    assert held["status"] == "HOLD" and held["reason"] == "site_stop"
+    with pytest.raises(MissionConflict, match="current READY"):
+        store.start_step(
+            "cell-mission-1", step_index=0, action_id="action-0", attempt_id="attempt-0",
+            grant=_grant(ready, 0),
+        )
 
 
 def _running(tmp_path):
@@ -317,8 +318,8 @@ def test_submission_promotes_claims_so_a_stop_cannot_drop_an_inflight_claim(tmp_
 
 @pytest.mark.parametrize("outcome, reason, status, phases", [
     ("SUCCEEDED", None, "ACTION_SUCCEEDED", ["CLAIMED"]),
-    ("FAILED", "LOCAL_ACTION_FAILED", "HOLD", ["CLAIMED"]),
-    ("REJECTED", "LOCAL_ACTION_REJECTED", "HOLD", ["CLAIMED"]),
+    ("FAILED", "LOCAL_ACTION_FAILED", "HOLD", ["HELD"]),
+    ("REJECTED", "LOCAL_ACTION_REJECTED", "HOLD", ["HELD"]),
     ("UNKNOWN", "LOCAL_ACTION_READBACK_UNKNOWN", "HOLD", ["UNKNOWN"]),
 ])
 def test_result_outcomes_set_status_reason_and_claim_phase(tmp_path, outcome, reason, status, phases):
@@ -388,20 +389,63 @@ def test_submitting_event_carries_the_fence(tmp_path):
     assert submitting[0]["detail"]["dispatch_generation"] == running["dispatch_generation"]
 
 
-@pytest.mark.parametrize("claim_phase, phases", [("CLAIMED", ["CLAIMED"]), ("UNKNOWN", ["UNKNOWN"]),
-                                                 (None, [])])
+@pytest.mark.parametrize("claim_phase, phases", [("UNKNOWN", ["UNKNOWN"]),
+                                                 ("DISPATCHING", ["DISPATCHING"])])
 def test_generic_hold_from_running_is_idempotent(tmp_path, claim_phase, phases):
-    # rosy-a9 item 4.
+    # rosy-a9 item 4; 1b A2: a RUNNING Job keeps its claims (UNKNOWN or DISPATCHING).
     _, tasks, store, _ = _running(tmp_path)
-    held = store.hold("cell-mission-1", reason="FLEET_FENCE_CHANGED_BEFORE_LOCAL_SUBMIT",
+    held = store.hold("cell-mission-1", reason="LOCAL_ACTION_READBACK_UNKNOWN",
                       claim_phase=claim_phase, actor_id="mission-dispatcher", event_key="hold-1")
-    again = store.hold("cell-mission-1", reason="FLEET_FENCE_CHANGED_BEFORE_LOCAL_SUBMIT",
+    again = store.hold("cell-mission-1", reason="LOCAL_ACTION_READBACK_UNKNOWN",
                        claim_phase=claim_phase, actor_id="mission-dispatcher", event_key="hold-1")
     assert held == again
     assert held["status"] == held["steps"][0]["status"] == "HOLD"
-    assert held["reason"] == "FLEET_FENCE_CHANGED_BEFORE_LOCAL_SUBMIT"
     assert _phases(tasks) == phases
     assert [event["event_type"] for event in held["events"]].count("CELL_JOB_HELD") == 1
+
+
+@pytest.mark.parametrize("claim_phase, not_submitted, error", [
+    (None, False, ValueError), ("HELD", False, MissionConflict),
+])
+def test_running_hold_cannot_release_or_park_in_flight_claims(tmp_path, claim_phase, not_submitted, error):
+    # 1b A2: release needs an explicit not_submitted; HELD is not a RUNNING phase.
+    _, tasks, store, _ = _running(tmp_path)
+    with pytest.raises(error):
+        store.hold("cell-mission-1", reason="X", claim_phase=claim_phase, actor_id="op",
+                   event_key="k", not_submitted=not_submitted)
+    assert store.get("cell-mission-1")["status"] == "RUNNING" and _phases(tasks) == ["DISPATCHING"]
+
+
+def test_pre_send_hold_releases_and_action_succeeded_hold_parks_claims(tmp_path):
+    # 1b A2/A5 and the untested ACTION_SUCCEEDED hold path.
+    _, tasks, store, _ = _running(tmp_path)
+    store.record_action_result("cell-mission-1", step_index=0, event_id="e", action_id="action-0",
+                               attempt_id="attempt-0", outcome="SUCCEEDED", result={})
+    with pytest.raises(MissionConflict):
+        store.hold("cell-mission-1", reason="X", claim_phase="UNKNOWN", actor_id="op", event_key="k")
+    held = store.hold("cell-mission-1", reason="OPERATOR_HOLD", claim_phase="HELD", actor_id="op",
+                      event_key="k")
+    assert held["status"] == held["steps"][0]["status"] == "HOLD" and _phases(tasks) == ["HELD"]
+
+
+def test_hold_after_re_approval_is_not_a_replay(tmp_path):
+    # 1b B2: the hold key carries the approval count.
+    path, _, _, enabled = _stores(tmp_path)
+    store = CellJobStore(path)
+    _create(store)
+    store.admit("cell-mission-1", actor_id="operator-1", expected_generation=enabled["generation"])
+    store.hold("cell-mission-1", reason="R", claim_phase="HELD", actor_id="op", event_key="same")
+    with store._connect() as connection:
+        connection.execute(
+            "INSERT INTO fleet_cell_events (event_key, mission_id, step_index, event_type, actor_id, "
+            "detail_json, created_at) VALUES ('m:resumed', 'cell-mission-1', 0, 'CELL_JOB_RESUMED', "
+            "'op', '{}', 'now')")
+        connection.execute("UPDATE fleet_cell_jobs SET status='READY'")
+        connection.execute("UPDATE fleet_cell_steps SET status='READY' WHERE step_index=0")
+        connection.commit()
+    again = store.hold("cell-mission-1", reason="R", claim_phase="HELD", actor_id="op", event_key="same")
+    assert again["status"] == "HOLD"
+    assert [event["event_type"] for event in again["events"]].count("CELL_JOB_HELD") == 2
 
 
 def test_generic_hold_is_valid_only_from_ready_running_or_action_succeeded(tmp_path):
@@ -409,10 +453,76 @@ def test_generic_hold_is_valid_only_from_ready_running_or_action_succeeded(tmp_p
     store = CellJobStore(path)
     _create(store)
     with pytest.raises(MissionConflict, match="cannot be held"):
-        store.hold("cell-mission-1", reason="X", claim_phase=None, actor_id="op", event_key="k")
+        store.hold("cell-mission-1", reason="X", claim_phase="HELD", actor_id="op", event_key="k")
     store.admit("cell-mission-1", actor_id="operator-1", expected_generation=enabled["generation"])
-    ready_hold = store.hold("cell-mission-1", reason="OPERATOR_HOLD", claim_phase="CLAIMED",
+    ready_hold = store.hold("cell-mission-1", reason="OPERATOR_HOLD", claim_phase="HELD",
                             actor_id="operator-1", event_key="k")
     assert ready_hold["steps"][0]["status"] == "HOLD"
     with pytest.raises(MissionConflict, match="cannot be held"):
-        store.hold("cell-mission-1", reason="X", claim_phase=None, actor_id="op", event_key="k2")
+        store.hold("cell-mission-1", reason="X", claim_phase="HELD", actor_id="op", event_key="k2")
+
+
+def _claim_phases(path):
+    import sqlite3
+    connection = sqlite3.connect(path)
+    try:
+        return sorted(connection.execute(
+            "SELECT owner_id, resource_key, phase FROM fleet_action_claims").fetchall())
+    finally:
+        connection.close()
+
+
+def _second_job(store, generation):
+    store.create(mission_id="cell-mission-2", proposal_principal_id="cell-service",
+                 request_key="cell-request-2", request_digest="d" * 64, submission=_submission())
+    return store.admit("cell-mission-2", actor_id="operator-1", expected_generation=generation)
+
+
+def test_stop_latch_keeps_a_failed_jobs_claims_so_another_job_cannot_take_them(tmp_path):
+    # C4b 1b A1 (review M1 probe): A HOLD after FAILED -> stop -> B must not be admitted.
+    path, tasks, store, _ = _running(tmp_path)
+    store.record_action_result("cell-mission-1", step_index=0, event_id="e1", action_id="action-0",
+                               attempt_id="attempt-0", outcome="FAILED", reason="LOCAL_ACTION_FAILED",
+                               result={})
+    stopped = tasks.trip_stop_latch(actor_id="operator-1")
+    assert {phase for _, _, phase in _claim_phases(path)} == {"HELD"}
+    rearmed = tasks.rearm_dispatch(expected_generation=stopped["generation"], actor_id="operator-1")
+    with pytest.raises(MissionConflict, match="conflicts"):
+        _second_job(store, rearmed["generation"])
+
+
+@pytest.mark.parametrize("state", ["READY", "ACTION_SUCCEEDED", "HOLD"])
+def test_stop_latch_holds_a_non_terminal_job_and_keeps_claims_out_of_its_reach(tmp_path, state):
+    path, tasks, _, enabled = _stores(tmp_path)
+    store = CellJobStore(path)
+    _create(store)
+    ready = store.admit("cell-mission-1", actor_id="operator-1", expected_generation=enabled["generation"])
+    if state != "READY":
+        store.start_step("cell-mission-1", step_index=0, action_id="action-0", attempt_id="attempt-0",
+                         grant=_grant(ready, 0))
+        store.record_action_result(
+            "cell-mission-1", step_index=0, event_id="e1", action_id="action-0", attempt_id="attempt-0",
+            outcome="SUCCEEDED" if state == "ACTION_SUCCEEDED" else "REJECTED",
+            reason=None if state == "ACTION_SUCCEEDED" else "LOCAL_ACTION_REJECTED", result={})
+    stopped = tasks.trip_stop_latch(actor_id="operator-1")
+    job = store.get("cell-mission-1")
+    assert job["status"] == "HOLD"
+    if state != "HOLD":
+        assert job["reason"] == "site_stop"
+    assert {phase for _, _, phase in _claim_phases(path)} == {"HELD"}
+    # Held claims do not block rearm (only unresolved DISPATCHING/UNKNOWN do).
+    assert stopped["rearm_available"] is True
+    rearmed = tasks.rearm_dispatch(expected_generation=stopped["generation"], actor_id="operator-1")
+    assert rearmed["dispatch_enabled"]
+    with pytest.raises(MissionConflict):
+        store.confirm_step_goal("cell-mission-1", step_index=0, action_id="action-0", attempt_id="attempt-0",
+                                evidence=_goal("action-0", "attempt-0", "goal-0"))
+
+
+def test_startup_fence_keeps_claims_held(tmp_path):
+    path, tasks, store, _ = _running(tmp_path)
+    store.record_action_result("cell-mission-1", step_index=0, event_id="e1", action_id="action-0",
+                               attempt_id="attempt-0", outcome="SUCCEEDED", result={})
+    tasks.close_dispatch_for_startup()
+    CellJobStore(path).recover_after_startup()
+    assert {phase for _, _, phase in _claim_phases(path)} == {"HELD"}

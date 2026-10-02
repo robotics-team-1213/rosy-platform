@@ -143,7 +143,7 @@ def test_rejected_action_holds_the_job_with_a_reason_and_returns_claims(tmp_path
     assert job["status"] == job["steps"][0]["status"] == "HOLD"
     assert job["reason"] == "LOCAL_ACTION_REJECTED"
     assert job["steps"][0]["result"]["detail"].startswith("GRANT_REJECTED")
-    assert _claims(tasks) == ["CLAIMED"]
+    assert _claims(tasks) == ["HELD"]  # the held Job keeps its claims until it is terminal
     assert dispatcher.dispatch_next() is None and len(transport.submissions) == 1
 
 
@@ -174,7 +174,7 @@ def test_success_without_every_phase_is_not_success(tmp_path):
 
 
 @pytest.mark.parametrize("state, reason, claims", [
-    ("FAILED", "LOCAL_ACTION_FAILED", ["CLAIMED"]),
+    ("FAILED", "LOCAL_ACTION_FAILED", ["HELD"]),
     ("HOLD", "LOCAL_ACTION_HOLD", ["UNKNOWN"]),
     ("UNKNOWN", "LOCAL_ACTION_UNKNOWN", ["UNKNOWN"]),
 ])
@@ -202,12 +202,13 @@ def test_a_stop_between_start_and_submit_holds_without_sending(tmp_path):
     assert store.get("cell-mission-1")["reason"] == "FLEET_FENCE_CHANGED_BEFORE_LOCAL_SUBMIT"
 
 
-def test_a_stop_before_start_holds_the_job_with_the_fence_reason(tmp_path):
+def test_a_stop_before_start_holds_the_job_and_keeps_its_claims(tmp_path):
     store, tasks, transport, dispatcher = _setup(tmp_path)
     tasks.trip_stop_latch(actor_id="operator-1")
-    assert dispatcher.dispatch_next()["state"] == "HOLD"
+    assert dispatcher.dispatch_next() is None
     assert transport.submissions == []
-    assert store.get("cell-mission-1")["reason"] == "FLEET_FENCE_CHANGED_BEFORE_SUBMISSION"
+    assert store.get("cell-mission-1")["reason"] == "site_stop"
+    assert _claims(tasks) == ["HELD"]
 
 
 def test_unconfigured_instance_is_left_untouched(tmp_path):

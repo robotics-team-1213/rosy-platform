@@ -21,12 +21,15 @@ from .step_action_kinds import step_action_kind
 
 _MIGRATION_VERSION = 1
 _IDENTIFIER_HASH_FIELDS = ("recipe_digest", "cell_digest", "process_artifact_digest")
-# Device outcome -> (step and Job status, claim phase). A confirmed end returns the claims to
-# CLAIMED; only an unknown outcome pins them as UNKNOWN until reconciled (rosy-a9 item 2).
+# Claim phases (D-403 §4 보강 2026-10-03): a Cell Job holds its claims from admission until it is
+# terminal. CLAIMED = admitted and runnable; DISPATCHING = an Action is in flight; UNKNOWN = the
+# device outcome is unresolved (blocks rearm); HELD = the Job is in HOLD with a confirmed device
+# state (the stop latch skips it, rearm ignores it, admission of the same resources is refused).
+# Device outcome -> (step and Job status, claim phase).
 _OUTCOMES = {
     "SUCCEEDED": ("ACTION_SUCCEEDED", "CLAIMED"),
-    "FAILED": ("HOLD", "CLAIMED"),
-    "REJECTED": ("HOLD", "CLAIMED"),
+    "FAILED": ("HOLD", "HELD"),
+    "REJECTED": ("HOLD", "HELD"),
     "UNKNOWN": ("HOLD", "UNKNOWN"),
 }
 _HOLDABLE = frozenset({"READY", "RUNNING", "ACTION_SUCCEEDED"})
@@ -46,6 +49,29 @@ def cell_transfer_grant_digest(grant: Mapping[str, Any]) -> str:
     document.pop("request_digest")
     canonical = json.dumps(document, sort_keys=True, separators=(",", ":"), allow_nan=False)
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def hold_for_site_stop(connection: sqlite3.Connection, *, now: str, hold_reason: str | None) -> None:
+    """Called inside the stop/startup latch transaction, before it drops CLAIMED claims.
+
+    A non-terminal Cell Job keeps its claims: READY and ACTION_SUCCEEDED Jobs go to HOLD
+    (``hold_reason``; None leaves the status to ``recover_after_startup``) and every CLAIMED
+    claim of a Cell Job becomes HELD, which the latch skips. RUNNING claims stay DISPATCHING.
+    """
+    if connection.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='fleet_cell_jobs'"
+                          ).fetchone() is None:
+        return
+    if hold_reason is not None:
+        generation = connection.execute(
+            "SELECT generation FROM fleet_dispatch_control WHERE control_id=1").fetchone()[0]
+        for job in connection.execute(
+                "SELECT * FROM fleet_cell_jobs WHERE status IN ('READY', 'ACTION_SUCCEEDED')").fetchall():
+            CellJobStore._hold_in_transaction(
+                connection, job, reason=hold_reason, claim_phase="HELD", actor_id="site-stop",
+                event_key=f"site-stop:{generation}", detail={}, now=now)
+    connection.execute(
+        "UPDATE fleet_action_claims SET phase='HELD', lease_until=NULL WHERE owner_kind='mission' "
+        "AND phase='CLAIMED' AND owner_id IN (SELECT mission_id FROM fleet_cell_jobs)")
 
 
 class CellJobStore:
@@ -381,7 +407,7 @@ class CellJobStore:
                 self._hold_in_transaction(
                     connection, job, reason="FLEET_FENCE_CHANGED_BEFORE_SUBMISSION",
                     claim_phase=None, actor_id="fleet",
-                    event_key=f"hold-before-submit:{step_index}:{job['dispatch_generation']}",
+                    event_key=f"hold-before-submit:{step_index}:{self._approvals(connection, job)}",
                     detail={"current_authority_epoch": None if control is None else control["authority_epoch"],
                             "current_generation": None if control is None else control["generation"],
                             "dispatch_enabled": bool(control and control["dispatch_enabled"])},
@@ -404,6 +430,15 @@ class CellJobStore:
             expected_payload = kind.body(job, step_index, json.loads(step["step_json"])["inputs"])
             if getattr(parsed, kind.body_field).model_dump(mode="json") != expected_payload:
                 raise ValueError("CELL_TRANSFER payload does not match the persisted PlanBundle step")
+            if not self._owns_runnable_claims(connection, job):
+                # Nothing was sent: a pre-send hold releases what is left (D-420 §4.5 row 1).
+                self._hold_in_transaction(
+                    connection, job, reason="FLEET_CLAIM_MISSING_BEFORE_SUBMISSION", claim_phase=None,
+                    actor_id="fleet", event_key=f"claim-missing:{step_index}:{self._approvals(connection, job)}",
+                    detail={})
+                result = self._get(connection, mission_id)
+                connection.commit()
+                return result
             self._set_claims(connection, job, "DISPATCHING")
             connection.execute(
                 """UPDATE fleet_cell_steps SET status='RUNNING', action_id=?, attempt_id=?,
@@ -476,16 +511,21 @@ class CellJobStore:
         return result_row
 
     def hold(self, mission_id: str, *, reason: str, claim_phase: str | None, actor_id: str,
-             event_key: str) -> dict[str, Any]:
+             event_key: str, not_submitted: bool = False) -> dict[str, Any]:
         """HOLD a READY, RUNNING or ACTION_SUCCEEDED Job and its current step (idempotent).
 
-        ``claim_phase`` sets the Job's claims to CLAIMED or UNKNOWN; None releases them.
+        A held Job keeps its claims (D-403 보강 2026-10-03): ``claim_phase`` is HELD from READY or
+        ACTION_SUCCEEDED, and UNKNOWN or DISPATCHING (kept) from RUNNING. None releases them and is
+        allowed only with ``not_submitted=True`` from READY or from the dispatcher's pre-send edge
+        of a RUNNING step (nothing was sent; D-420 §4.5 row 1).
         """
         reason = _nonempty("reason", reason, limit=96)
         actor_id = _nonempty("actor_id", actor_id, limit=96)
         event_key = _nonempty("event_key", event_key)
-        if claim_phase not in {"CLAIMED", "UNKNOWN", None}:
-            raise ValueError("claim_phase must be CLAIMED, UNKNOWN or None")
+        if claim_phase not in {"HELD", "UNKNOWN", "DISPATCHING", None}:
+            raise ValueError("claim_phase must be HELD, UNKNOWN, DISPATCHING or None")
+        if claim_phase is None and not_submitted is not True:
+            raise ValueError("claims are released only before anything was sent (not_submitted=True)")
         with closing(self._connect()) as connection:
             connection.execute("BEGIN IMMEDIATE")
             job = connection.execute(
@@ -493,21 +533,27 @@ class CellJobStore:
             ).fetchone()
             if job is None:
                 raise KeyError(mission_id)
+            event_key = f"{event_key}@{self._approvals(connection, job)}"
             detail = {"event_id": event_key, "reason": reason, "claim_phase": claim_phase}
             if not self._replayed(connection, mission_id, job["current_step_index"], "CELL_JOB_HELD",
                                   actor_id, event_key, detail):
                 if job["status"] not in _HOLDABLE:
                     raise MissionConflict(f"a {job['status']} Cell Job cannot be held")
+                allowed = ({"UNKNOWN", "DISPATCHING", None} if job["status"] == "RUNNING"
+                           else {"HELD", None} if job["status"] == "READY" else {"HELD"})
+                if claim_phase not in allowed:
+                    raise MissionConflict(f"a {job['status']} Cell Job cannot hold its claims as {claim_phase}")
                 self._hold_in_transaction(connection, job, reason=reason, claim_phase=claim_phase,
                                           actor_id=actor_id, event_key=event_key, detail={})
             result = self._get(connection, mission_id)
             connection.commit()
         return result
 
-    def _hold_in_transaction(self, connection: sqlite3.Connection, job: sqlite3.Row, *,
+    @staticmethod
+    def _hold_in_transaction(connection: sqlite3.Connection, job: sqlite3.Row, *,
                              reason: str, claim_phase: str | None, actor_id: str,
-                             event_key: str, detail: Mapping[str, Any]) -> None:
-        now = _now()
+                             event_key: str, detail: Mapping[str, Any], now: str | None = None) -> None:
+        now = now or _now()
         connection.execute(
             "UPDATE fleet_cell_steps SET status='HOLD', reason=?, updated_at=? "
             "WHERE mission_id=? AND step_index=? AND status IN ('READY', 'RUNNING', 'ACTION_SUCCEEDED')",
@@ -517,9 +563,10 @@ class CellJobStore:
             "UPDATE fleet_cell_jobs SET status='HOLD', reason=?, updated_at=? WHERE mission_id=?",
             (reason, now, job["mission_id"]),
         )
-        self._set_claims(connection, job, claim_phase)
-        self._event(connection, job["mission_id"], job["current_step_index"], "CELL_JOB_HELD", actor_id,
-                    {"event_id": event_key, "reason": reason, "claim_phase": claim_phase, **detail})
+        CellJobStore._set_claims(connection, job, claim_phase)
+        CellJobStore._event(
+            connection, job["mission_id"], job["current_step_index"], "CELL_JOB_HELD", actor_id,
+            {"event_id": event_key, "reason": reason, "claim_phase": claim_phase, **detail})
 
     @staticmethod
     def _set_claims(connection: sqlite3.Connection, job: sqlite3.Row, phase: str | None) -> None:
@@ -527,11 +574,31 @@ class CellJobStore:
             release_claims(connection, owner_kind="mission", owner_id=job["mission_id"],
                            generation=job["dispatch_generation"])
             return
-        connection.execute(
+        updated = connection.execute(
             "UPDATE fleet_action_claims SET phase=?, lease_until=NULL "
             "WHERE owner_kind='mission' AND owner_id=? AND generation=?",
             (phase, job["mission_id"], job["dispatch_generation"]),
-        )
+        ).rowcount
+        if updated != len(normalize_resources(json.loads(job["resources_json"]))):
+            raise MissionConflict("Cell Job no longer owns all durable resource claims")
+
+    @staticmethod
+    def _owns_runnable_claims(connection: sqlite3.Connection, job: sqlite3.Row) -> bool:
+        claims = connection.execute(
+            "SELECT resource_key, phase FROM fleet_action_claims "
+            "WHERE owner_kind='mission' AND owner_id=? AND generation=?",
+            (job["mission_id"], job["dispatch_generation"]),
+        ).fetchall()
+        expected = {key for _, _, key in normalize_resources(json.loads(job["resources_json"]))}
+        return ({claim["resource_key"] for claim in claims} == expected
+                and all(claim["phase"] == "CLAIMED" for claim in claims))
+
+    @staticmethod
+    def _approvals(connection: sqlite3.Connection, job: sqlite3.Row) -> int:
+        """Approval count: hold event keys include it, so a hold after re-approval is not a replay."""
+        return connection.execute(
+            "SELECT COUNT(*) FROM fleet_cell_events WHERE mission_id=? AND event_type IN "
+            "('CELL_JOB_ADMITTED', 'CELL_JOB_RESUMED')", (job["mission_id"],)).fetchone()[0]
 
     @staticmethod
     def _replayed(connection: sqlite3.Connection, mission_id: str, step_index: int | None,

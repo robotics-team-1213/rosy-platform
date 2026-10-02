@@ -71,8 +71,8 @@ class StepJobDispatcher:
         try:
             grant = self._grant(job, step)
         except (KeyError, TypeError, ValueError):
-            held = self.store.hold(job["mission_id"], reason="ACTION_GRANT_INVALID", claim_phase="CLAIMED",
-                                   actor_id=_ACTOR, event_key=f"grant-invalid:{index}")
+            held = self.store.hold(job["mission_id"], reason="ACTION_GRANT_INVALID", claim_phase=None,
+                                   actor_id=_ACTOR, event_key=f"grant-invalid:{index}", not_submitted=True)
             return self._view(held, index, "HOLD")
         try:
             started = self.store.start_step(job["mission_id"], step_index=index, action_id=grant.action_id,
@@ -84,9 +84,10 @@ class StepJobDispatcher:
         control = self.task_store.dispatch_control()
         if (not control["dispatch_enabled"] or control["authority_epoch"] != grant.authority_epoch
                 or control["generation"] != grant.dispatch_generation):
+            # Pre-send hold: nothing was sent, so the claims are released (D-420 §4.5 row 1).
             held = self.store.hold(job["mission_id"], reason="FLEET_FENCE_CHANGED_BEFORE_LOCAL_SUBMIT",
-                                   claim_phase="CLAIMED", actor_id=_ACTOR,
-                                   event_key=f"fence-before-send:{grant.action_id}")
+                                   claim_phase=None, actor_id=_ACTOR,
+                                   event_key=f"fence-before-send:{grant.action_id}", not_submitted=True)
             return self._view(held, index, "HOLD")
         try:
             receipt = self.transport.submit(grant)
