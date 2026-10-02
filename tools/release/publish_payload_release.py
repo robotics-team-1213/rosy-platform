@@ -1,4 +1,4 @@
-"""Publish a signed payload as a GitHub Release, let one canary robot take it, then open it to the rest (D-410).
+"""Publish a signed payload as a GitHub Release, let one canary robot take it, then open it to the rest (D-412).
 
 Takes the signed tarball prepare_payload_release.py made and does what the robots' updater reads:
 
@@ -10,7 +10,7 @@ Takes the signed tarball prepare_payload_release.py made and does what the robot
    `manifest.json` and `source-revision.txt`.
 2. rollout: tarball sha256, source revision, the canary's hostname (`ssh rosy@<ip> hostname`, must match
    ^rosy-[a-z0-9-]+$). `rollout.json` is sorted-key LF UTF-8 JSON
-   (docs/plans/2026-10-01-d410-robot-auto-update.md, schema 1).
+   (docs/plans/2026-10-01-d412-robot-auto-update.md, schema 1).
 3. sign: `signing.sign_checksums` with the operator's private key <key-name>, then verified against the
    repo public key before anything is uploaded.
 4. release: `gh release create payload-<id> --target <source_revision>` with the tarball, rollout.json and
@@ -236,7 +236,7 @@ class Publisher:
     def create(self, rollout: dict, tarball: Path, canary: str) -> None:
         data, files = self.write_signed(rollout)
         notes = (f"ROSY native payload {self.release_id} from {rollout['source_revision'][:12]}. "
-                 f"Signed rollout (D-410): canary {canary} first, the rest after canary_ok.")
+                 f"Signed rollout (D-412): canary {canary} first, the rest after canary_ok.")
         self.gh("release", "create", self.tag, "--repo", self.repo, "--target", rollout["source_revision"],
                 "--title", self.tag, "--notes", notes, str(tarball), *map(str, files))
         self.last_uploaded = data

@@ -1,5 +1,5 @@
 [Unit]
-Description=Check for a ROSY payload update every 10 minutes (D-410)
+Description=Check for a ROSY payload update every 10 minutes (D-412)
 
 [Timer]
 OnBootSec=5min

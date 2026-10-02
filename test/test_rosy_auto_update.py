@@ -1,4 +1,4 @@
-"""D-410: the robot-side updater (deploy/robot/pinky_pro/native/rosy_auto_update.py).
+"""D-412: the robot-side updater (deploy/robot/pinky_pro/native/rosy_auto_update.py).
 
 A fake GitHub runs on a local HTTP server and is reached through the real
 urllib transport. The device is a temporary root plus a FakeHost that records
@@ -371,7 +371,7 @@ def device(tmp_path, keys):
     boot = tmp_path / "proc/sys/kernel/random/boot_id"
     boot.parent.mkdir(parents=True)
     boot.write_text(BOOT + "\n", encoding="utf-8")
-    # Auto-update is off unless configured (D-410 landing, 2026-10-02).
+    # Auto-update is off unless configured (D-412 landing, 2026-10-02).
     write_json(tmp_path / "var/lib/rosy/updates/config.json", {"enabled": True, "repo": REPO})
     return tmp_path
 
@@ -413,7 +413,7 @@ def write_json(path: Path, payload) -> None:
 
 
 def test_a_robot_without_a_config_is_off_by_default(device, host, hub, keys):
-    # D-410 landing decision (2026-10-02): until the first two-robot device
+    # D-412 landing decision (2026-10-02): until the first two-robot device
     # validation, a robot auto-updates only when config.json says enabled=true.
     hub.publish(keys, NEXT)
     (device / "var/lib/rosy/updates/config.json").unlink()

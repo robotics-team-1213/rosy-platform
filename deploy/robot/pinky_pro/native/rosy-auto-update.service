@@ -1,5 +1,5 @@
 [Unit]
-Description=ROSY auto-update from signed GitHub Releases when idle (D-410)
+Description=ROSY auto-update from signed GitHub Releases when idle (D-412)
 # Started only by rosy-auto-update.timer. A run checks GitHub, stages a newer
 # signed payload, and applies it only when the rollout and the robot allow it;
 # every outcome lands in /var/lib/rosy/updates/status.json, so the run itself
@@ -19,7 +19,7 @@ ExecStart=/usr/bin/python3 -I -B /opt/rosy/native-runtime/rosy_auto_update.py ru
 # Download + unpack + verify + activation + 60 s health; each step is bounded
 # inside the program, this bounds the whole run.
 TimeoutStartSec=45min
-# Staging runs while the robot works (D-410 3.3): stay out of its way.
+# Staging runs while the robot works (D-412 3.3): stay out of its way.
 Nice=19
 IOSchedulingClass=idle
 UMask=0022

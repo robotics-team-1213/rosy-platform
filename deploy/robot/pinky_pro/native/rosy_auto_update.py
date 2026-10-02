@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The robot-side auto-updater (D-410).
+"""The robot-side auto-updater (D-412).
 
 Runs from rosy-auto-update.timer as root. One ``run``:
 
@@ -71,7 +71,7 @@ API_BASE = "https://api.github.com"
 # config.json "api_base": another GitHub-compatible API (the device twin's fake
 # GitHub). Content is still trusted only through the release key signatures.
 API_BASE_URL = re.compile(r"^https?://[A-Za-z0-9.:\[\]-]+(/[A-Za-z0-9._~/-]*)?$")
-USER_AGENT = "rosy-auto-update/1 (D-410)"
+USER_AGENT = "rosy-auto-update/1 (D-412)"
 DEFAULT_REPO = "livsbittt/rosy-os"
 REPO = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 RELEASE_ID = re.compile(r"^[0-9]{4}\.[0-9]{2}\.[0-9]{2}-[0-9]{3}$")
@@ -497,7 +497,7 @@ class Updater:
         path = self.updates / "config.json"
         if not path.exists() and not path.is_symlink():
             # Off unless configured until the first two-robot device validation
-            # (D-410 landing decision, 2026-10-02).
+            # (D-412 landing decision, 2026-10-02).
             return {"enabled": False, "repo": DEFAULT_REPO, "api_base": None}
         try:
             data = _read_json(path, 64 * 1024)

@@ -85,7 +85,7 @@ def _print_push(release: dict, robot: str = "rosy-e4us.local", *extra: str) -> s
 
 
 def _without_claim(plan: list[dict]) -> list[dict]:
-    """D-410: the claim brackets every plan and is refreshed after the upload (test_release_push_claim.py)."""
+    """D-412: the claim brackets every plan and is refreshed after the upload (test_release_push_claim.py)."""
     assert plan[0]["role"] == "claim-acquire" and plan[-1]["role"] == "claim-release"
     return [step for step in plan[1:-1] if step["role"] != "claim-refresh"]
 
@@ -419,7 +419,7 @@ def test_a_rollback_to_a_release_without_the_sync_warns_and_skips_it(tmp_path, m
     assert not any("systemctl restart" in line and "CORE_RELEASE" not in line for line in calls)
     assert sum("IMAGE_LAYER_SYNC_MISSING" in line for line in calls) == 1
     # Readiness is still checked, after the skipped sync.
-    assert "wait-core-ready.py" in calls[-2]  # the claim release (D-410) is last
+    assert "wait-core-ready.py" in calls[-2]  # the claim release (D-412) is last
 
 
 def test_restart_runs_only_rosy_units_the_apply_reported():
@@ -564,7 +564,7 @@ def test_a_core_that_does_not_come_back_after_the_restart_fails_the_push_by_name
     assert "COREdidnotstart" in flat
     assert ("journalctl-urosy-core" if rollback else "-Rollback") in flat
     # Nothing runs after a CORE that is down.
-    assert "CORE_RELEASE_OK" in calls[-2]  # then only the claim release (D-410)
+    assert "CORE_RELEASE_OK" in calls[-2]  # then only the claim release (D-412)
 
 
 @pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")

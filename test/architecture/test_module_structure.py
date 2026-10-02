@@ -303,17 +303,17 @@ SIZE_VERDICTS = {
     ),
     "deploy/robot/pinky_pro/native/rosy_auto_update.py": (
         1517,
-        "split: D-410 robot-side updater — the GitHub/rollout fetch and staging, the eligibility "
+        "split: D-412 robot-side updater — the GitHub/rollout fetch and staging, the eligibility "
         "reader (status-inputs, hold, seals, claim), and the apply/resume/rollback transaction with "
         "its journal are separate seams; move fetch+staging and eligibility into sibling modules in "
-        "deploy/robot/pinky_pro/native after the first two-robot device validation (D-410 Validation). "
+        "deploy/robot/pinky_pro/native after the first two-robot device validation (D-412 Validation). "
         "Re-judged at 1505 (+33): second verification review (self-rollback vs operator rollback, "
         "bounded tail loop, rollback_failed acknowledgement); 1515 (+10) after the final batch "
         "(release-hold under the run lock, refused rollback is sticky); verdict unchanged",
     ),
     "tools/release/publish_payload_release.py": (
         655,
-        "accept: D-410 operator publish tool; rollout signing, the GitHub release I/O and the "
+        "accept: D-412 operator publish tool; rollout signing, the GitHub release I/O and the "
         "canary watch are one short sequential flow; split the canary watch out if it grows further",
     ),
     "deploy/robot/pinky_pro/native/sync-image-layer.py": (

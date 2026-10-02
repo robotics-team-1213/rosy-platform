@@ -1,6 +1,6 @@
 ---
 name: rosy-release-push
-description: Use when current main (CORE, dashboard, ROS nodes) must run on an existing Rosy robot without re-flashing the SD card — build a native payload release on the GitHub ARM64 runner, sign it on the operator PC, push and activate it with rosy-release-push.ps1, which then syncs the image layer (native-runtime scripts, rosy units, udev, modprobe) from the new release. Also to publish a release for the robots' automatic update (D-410: canary, withdraw, per-robot hold), and when a dev overlay of newer main crashed CORE on an older release.
+description: Use when current main (CORE, dashboard, ROS nodes) must run on an existing Rosy robot without re-flashing the SD card — build a native payload release on the GitHub ARM64 runner, sign it on the operator PC, push and activate it with rosy-release-push.ps1, which then syncs the image layer (native-runtime scripts, rosy units, udev, modprobe) from the new release. Also to publish a release for the robots' automatic update (D-412: canary, withdraw, per-robot hold), and when a dev overlay of newer main crashed CORE on an older release.
 ---
 
 # Shipping main to a robot as a payload release (D-225)
@@ -161,7 +161,7 @@ Verified twice on 2026-09-26: releases 013 and 014 on a Pinky Pro running image 
    from `rosy-device-access`. Check the changed surfaces, log the session out, and delete
    any local token file.
 
-## Automatic rollout (D-410)
+## Automatic rollout (D-412)
 
 Robots with `rosy-auto-update.timer` fetch signed releases from GitHub themselves and apply
 them only when idle. This PC still decides what ships: nothing reaches a robot until it is
@@ -203,7 +203,7 @@ published here.
   A hold always expires (at most 168 h). The reason allows letters, digits, space and
   `. , : _ / ( ) + = @ -`. A held robot still stages the release.
 - Audit lines go to `X:\DevTemp\rosy-rollout-evidence\<date>\rollout.jsonl`.
-- **Use a manual push (steps 5-6) when** the robot has no updater yet (its first D-410
+- **Use a manual push (steps 5-6) when** the robot has no updater yet (its first D-412
   release arrives by push), it is offline from GitHub, you need a release on one robot only,
   or you are rolling back. The push takes the same claim as the updater
   (`rosy_claim.py acquire --purpose push`) and releases it at the end; `claimed by another
@@ -223,4 +223,4 @@ published here.
 ## Related
 
 `rosy-device-access`, `rosy-hw-bringup`, `rosy-land-on-main`, `rosy-dashboard-drive`;
-ADR D-225, D-247, D-260, D-388, D-410.
+ADR D-225, D-247, D-260, D-388, D-412.

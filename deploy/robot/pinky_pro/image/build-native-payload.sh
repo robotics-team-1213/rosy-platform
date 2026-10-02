@@ -202,7 +202,7 @@ cp "$NATIVE_RUNTIME_SOURCE/rosy-hw-probe.path" "$OVERLAY/etc/systemd/system/"
 # D-247 6: the buzzer/lamp test an administrator starts through CORE.
 cp "$NATIVE_RUNTIME_SOURCE/rosy-hw-test.service" "$OVERLAY/etc/systemd/system/"
 cp "$NATIVE_RUNTIME_SOURCE/rosy-hw-test.path" "$OVERLAY/etc/systemd/system/"
-# D-410: the idle-time updater, started by its timer.
+# D-412: the idle-time updater, started by its timer.
 cp "$NATIVE_RUNTIME_SOURCE/rosy-auto-update.service" "$OVERLAY/etc/systemd/system/"
 cp "$NATIVE_RUNTIME_SOURCE/rosy-auto-update.timer" "$OVERLAY/etc/systemd/system/"
 cp "$NATIVE_RUNTIME_SOURCE/defaults.yaml" "$OVERLAY/etc/rosy/defaults.yaml"

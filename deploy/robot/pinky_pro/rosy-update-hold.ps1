@@ -12,7 +12,7 @@ param(
     [string]$KnownHosts = "",
     [string]$SshExe = "ssh"
 )
-# D-410 decision 4: hold a robot's automatic update (a test, a drive or a seal
+# D-412 decision 4: hold a robot's automatic update (a test, a drive or a seal
 # is running), release the hold, or show the updater's status.json. The robot
 # keeps staging a new release while held; it only does not apply it. A hold
 # always expires (at most 168 h).
@@ -113,7 +113,7 @@ if ($code -ne 0) {
 }
 
 if ($Release) {
-    # D-410: the device answers with what release-hold acknowledged. An older
+    # D-412: the device answers with what release-hold acknowledged. An older
     # device CLI prints something else; show that as it is.
     try {
         $answer = ($output -join "`n") | ConvertFrom-Json

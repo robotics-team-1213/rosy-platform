@@ -2,7 +2,7 @@
 
 **Status:** Accepted (2026-10-01).
 - 사용자가 운용 방식 "승인 후 자동"을 골랐고, "사용자 결정"의 다섯 기본값을 쓴 그대로 승인했다(2026-10-01).
-- **2026-10-01 개정 참조:** [D-410](D-410-robots-self-update-from-signed-github-releases-when-idle.md)이 결정 2(카탈로그)·결정 5(운영자 승인)와 Alternatives의 "완전 자동 기각"·"GitHub에서 직접 받기 기각"을 개정한다. 사용자가 같은 날 완전 자동(유휴 시)·GitHub Releases·로봇별 hold를 골랐다.
+- **2026-10-01 개정 참조:** [D-412](D-412-robots-self-update-from-signed-github-releases-when-idle.md)이 결정 2(카탈로그)·결정 5(운영자 승인)와 Alternatives의 "완전 자동 기각"·"GitHub에서 직접 받기 기각"을 개정한다. 사용자가 같은 날 완전 자동(유휴 시)·GitHub Releases·로봇별 hold를 골랐다.
 - 독립 리뷰 판정은 ACCEPT WITH EDITS였고, 이 판에 그 수정을 모두 반영했다(2026-10-01).
 - 결정은 이 문서의 설계를 받아들인다는 뜻이다. 구현 GO, DEVICE·FIELD 승격, 로봇 조작이 아니다. 각 단계는 결정 16의 게이트를 따로 통과해야 한다.
 

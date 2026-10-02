@@ -1,4 +1,4 @@
-"""D-410 deploy/robot/pinky_pro/rosy-update-hold.ps1: hold, release and status over ssh.
+"""D-412 deploy/robot/pinky_pro/rosy-update-hold.ps1: hold, release and status over ssh.
 
 A fake ssh (a PowerShell script passed as -SshExe) records the argument array and
 answers like the device CLI, so nothing here reaches a robot.
@@ -218,7 +218,7 @@ def test_no_native_argument_carries_a_double_quote(tmp_path):
 
 
 def test_release_prints_what_the_device_acknowledged(tmp_path):
-    # D-410 final verification LOW 2: the device's release-hold JSON, readable.
+    # D-412 final verification LOW 2: the device's release-hold JSON, readable.
     answer = tmp_path / "release.json"
     answer.write_text(json.dumps({"ok": True, "released": True,
                                   "acknowledged_rollback_failure": "2026.10.01-022",

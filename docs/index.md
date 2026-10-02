@@ -266,8 +266,8 @@
 
 ## 최근 기록
 
+- 2026-10-02 · uncommitted · docs(adr): 로봇 자동 업데이트 ADR 번호를 D-410에서 D-412로 — 두 번째 번호 충돌
 - 2026-10-02 · uncommitted · docs(adr): 로봇 자동 업데이트 ADR 번호를 D-406에서 D-410으로 — 동시 세션 번호 충돌
 - 2026-10-02 · uncommitted · docs(adr): D-395 개정 5 — 실기 항목은 로봇이 돌아올 때까지 미룬다
 - 2026-10-02 · uncommitted · follow-preview Gazebo evidence
 - 2026-10-01 · uncommitted · docs(adr): D-406 로봇 자동 업데이트 — GitHub Releases에서 스스로 받아 유휴 시 승인 없이 적용, 로봇별 hold
-- 2026-10-01 · uncommitted · docs(adr): D-395 개정 4 — 2단계 결정과 Fleet 감시 한계

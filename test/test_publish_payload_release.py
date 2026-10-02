@@ -1,4 +1,4 @@
-"""D-410 tools/release/publish_payload_release.py with a fake gh, fake ssh and a fake clock.
+"""D-412 tools/release/publish_payload_release.py with a fake gh, fake ssh and a fake clock.
 
 Nothing here reaches GitHub or a robot. The signing key pair is generated per test
 with openssl (the same tool signing.py shells out to).

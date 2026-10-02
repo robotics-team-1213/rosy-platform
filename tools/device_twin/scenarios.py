@@ -1,4 +1,4 @@
-"""The D-410 device twin scenarios. Each runs on a fresh twin and checks real systemd state. Twin only."""
+"""The D-412 device twin scenarios. Each runs on a fresh twin and checks real systemd state. Twin only."""
 
 from __future__ import annotations
 
@@ -426,7 +426,7 @@ class Scenarios:
                                                       in reports.items()))
         d406 = ("rosy-auto-update.service", "rosy-auto-update.timer", "rosy-core.service", "rosy-io.service",
                 "rosy-camera.service", "rosy-runtime.target", "rosy-release-recover.service")
-        self.r.check("systemd-analyze verify: D-410 path units exit 0 with no output",
+        self.r.check("systemd-analyze verify: D-412 path units exit 0 with no output",
                      all(reports[unit] == (0, "") for unit in d406),
                      {unit: reports[unit] for unit in d406 if reports[unit] != (0, "")})
         self.r.check("systemd-analyze verify: every rosy unit exits 0",

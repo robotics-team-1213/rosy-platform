@@ -1,4 +1,4 @@
-"""D-410: rosy-release-push.ps1 takes the D-387 claim on the robot for the whole push.
+"""D-412: rosy-release-push.ps1 takes the D-387 claim on the robot for the whole push.
 
 The claim helper (/opt/rosy/native-runtime/rosy_claim.py acquire|release|status) is
 shared with the robot's auto-updater, so a push and an automatic update never run

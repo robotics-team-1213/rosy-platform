@@ -339,7 +339,7 @@ def test_the_runtime_part_of_units_are_core_io_and_camera():
     assert _part_of_runtime_units() == {"rosy-core.service", "rosy-io.service", "rosy-camera.service"}
 
 
-# --- D-410 review N1: a precondition the activator runs right before stopping --------------
+# --- D-412 review N1: a precondition the activator runs right before stopping --------------
 
 
 def test_a_refusing_precheck_stops_activation_before_the_runtime_stops(native_case):

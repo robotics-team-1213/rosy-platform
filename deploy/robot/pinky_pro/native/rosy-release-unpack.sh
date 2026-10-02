@@ -129,7 +129,7 @@ fi
 
 mv -T -- "$TMP" "$TARGET"
 trap - EXIT
-# tar gave the directory the archive's own (old) mtime; the D-410 updater prunes
+# tar gave the directory the archive's own (old) mtime; the D-412 updater prunes
 # only release directories older than an hour, so mark this one as new.
 touch -- "$TARGET"
 sync -f -- "$TARGET" 2>/dev/null || sync

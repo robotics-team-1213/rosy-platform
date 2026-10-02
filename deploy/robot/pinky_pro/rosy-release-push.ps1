@@ -306,8 +306,8 @@ function Get-ClaimTtl([long]$TarballBytes) {
 }
 
 function Get-ClaimArguments([string]$Action, [string]$Holder, [int]$ClaimTtl = 1800) {
-    # D-387/D-410 claim: the push and the robot's auto-updater never run at the
-    # same time. The helper ships in native-runtime from D-410 on; an older
+    # D-387/D-412 claim: the push and the robot's auto-updater never run at the
+    # same time. The helper ships in native-runtime from D-412 on; an older
     # robot has none, so the wrapper says so instead of failing. Single quotes
     # only: PowerShell 5.1 eats embedded double quotes.
     $helper = "/opt/rosy/native-runtime/rosy_claim.py"
@@ -490,7 +490,7 @@ foreach ($step in $plan) {
         $answer = $result.output -join " "
         if ($answer -match "ROSY_CLAIM_HELPER_MISSING") {
             $claimed = $false
-            Write-Warning "$Robot has no rosy_claim.py (native-runtime older than D-410): pushing without the claim; its auto-updater, if any, is not excluded."
+            Write-Warning "$Robot has no rosy_claim.py (native-runtime older than D-412): pushing without the claim; its auto-updater, if any, is not excluded."
             continue
         }
         if ($result.exit_code -eq 3 -or $answer -match "CLAIM_BUSY") {
@@ -501,7 +501,7 @@ foreach ($step in $plan) {
                       "left by an interrupted push. If no other push from here is running, release it with:`n" +
                       "  $($releaseStep.display)`nthen push again.")
             }
-            Fail "Release push refused: $Robot is claimed by another job (D-410 claim): $answer"
+            Fail "Release push refused: $Robot is claimed by another job (D-412 claim): $answer"
         }
         if ($result.exit_code -ne 0) {
             Fail "Release push refused: the claim helper failed (exit $($result.exit_code)) on ${Robot}: $answer"

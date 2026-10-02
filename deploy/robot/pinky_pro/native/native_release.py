@@ -148,7 +148,7 @@ class NativeReleaseManager:
         self.lock = self.state / "native-release.lock"
         self._runtime = runtime or self._systemctl
         self.links = links or SymlinkStore(self.current.parent, self.releases)
-        # D-410 review N1: a last condition (the updater's hold/seal/idle check) run
+        # D-412 review N1: a last condition (the updater's hold/seal/idle check) run
         # after verification and right before the runtime stops; raising refuses.
         self.precheck = precheck
 
