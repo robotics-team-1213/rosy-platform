@@ -170,6 +170,29 @@ def test_console_mission_api_persists_candidates_without_enabling_dispatch(
     assert unresolved.json()["detail"]["code"] == "MISSION_RESOLVER_UNAVAILABLE"
 
 
+def test_cell_job_stack_tolerance_injects_the_palletizing_compiler(tmp_path, monkeypatch):
+    """C4b G5: the Fleet composition root injects the production CellJobCompiler."""
+    robots = _write(tmp_path)
+    users = tmp_path / "site-users.yaml"
+    users.write_text(yaml.safe_dump({"users": [{
+        "principal_id": "operator-1", "role": "operator",
+        "token_sha256": sha256(b"operator-secret").hexdigest(),
+    }]}), encoding="utf-8")
+    captured = {}
+    monkeypatch.setattr("uvicorn.run", lambda app, **kwargs: captured.update(app=app))
+    base = ["console", "--robots", str(robots), "--users-file", str(users),
+            "--tasks-db", str(tmp_path / "fleet.sqlite3")]
+    with pytest.raises(SystemExit, match="--cell-job-stack-tol-m requires --mission-api"):
+        cli.run_console(cli.parse_args(base + ["--cell-job-stack-tol-m", "0.001"]))
+
+    cli.run_console(cli.parse_args(base + ["--mission-api", "--cell-job-stack-tol-m", "0.001"]))
+
+    compiler = captured["app"].state.cell_job_compiler
+    assert type(compiler).__name__ == "PalletizingCellJobCompiler"
+    assert compiler.tol_m == 0.001
+    assert captured["app"].state.mission_dispatcher is None
+
+
 def test_mission_api_does_not_start_task_dispatcher_for_existing_queued_tasks(
         tmp_path, monkeypatch):
     from fleet.server.task_store import FleetTaskStore

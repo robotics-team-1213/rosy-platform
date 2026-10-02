@@ -82,7 +82,8 @@ def _resolution(candidate, *, workcell_id, instance_id, now):
 def _client(tmp_path, *, resolver=_resolution, named_users=True,
             enable_mission_dispatcher=False, action_transport=None,
             goal_evidence_enabled=False, mission_model_turn_worker_factory=None,
-            post_action_observation_source=None):
+            post_action_observation_source=None, deployment_profile="production",
+            omx_cell_grant_revisions=None):
     tmp_path.mkdir(parents=True, exist_ok=True)
     db = tmp_path / "fleet.sqlite3"
     robot = FakeRobot("rosy_01")
@@ -132,6 +133,8 @@ def _client(tmp_path, *, resolver=_resolution, named_users=True,
         omx_instances=({"omx_01": "omx_01_control"}
                        if enable_mission_dispatcher else None),
         omx_action_transport=action_transport,
+        deployment_profile=deployment_profile,
+        omx_cell_grant_revisions=omx_cell_grant_revisions,
     )
     return TestClient(app), tasks, credentials
 
@@ -325,14 +328,41 @@ def test_mission_admission_rechecks_evidence_then_claims_resources_without_dispa
 
 
 def test_dispatcher_requires_explicit_enablement_and_action_transport_is_injected(tmp_path):
+    # D-403 §7 (C4b G3): only the simulation profile opens dispatch, and only for CELL_TRANSFER;
+    # the PICK_PLACE dispatcher stays closed in every profile until its owner opens it.
     class Transport:
         pass
 
+    revisions = {"omx_01_control": {"capability_revision": "cell-transfer-v1",
+                                    "config_revision": "cell-config-v1"}}
     client, _, _ = _client(
         tmp_path, enable_mission_dispatcher=True, action_transport=Transport(),
+        deployment_profile="simulation", omx_cell_grant_revisions=revisions,
     )
 
-    assert client.app.state.mission_dispatcher is not None
+    assert client.app.state.cell_job_dispatcher is not None
+    assert client.app.state.cell_job_dispatcher.transport is not None
+    assert client.app.state.mission_dispatcher is None
+
+
+@pytest.mark.parametrize("profile", ["production", "device", "field"])
+def test_dispatcher_refuses_to_start_outside_simulation(tmp_path, profile):
+    with pytest.raises(ValueError, match="closed|unsupported deployment_profile"):
+        _client(tmp_path, enable_mission_dispatcher=True, action_transport=object(),
+                deployment_profile=profile,
+                omx_cell_grant_revisions={"omx_01_control": {"capability_revision": "c",
+                                                             "config_revision": "c"}})
+
+
+def test_simulation_dispatcher_needs_every_instance_declared_with_revisions(tmp_path):
+    with pytest.raises(ValueError, match="revisions"):
+        _client(tmp_path, enable_mission_dispatcher=True, action_transport=object(),
+                deployment_profile="simulation")
+
+
+def test_unknown_profile_is_refused_even_without_dispatch(tmp_path):
+    with pytest.raises(ValueError, match="deployment_profile"):
+        _client(tmp_path, deployment_profile="simulaton")
 
 
 def test_viewer_and_unnamed_development_principal_cannot_admit_mission(tmp_path):

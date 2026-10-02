@@ -76,7 +76,7 @@ CONTROL_SPLIT = "docs/plans/2026-09-22-control-package-split-design.md"
 #: P6 verdicts: path (relative to src/) or package name -> (lines at verdict, verdict).
 SIZE_VERDICTS = {
     "fleet": (
-        28_001,
+        28_734,
         "split: server HTTP boundary, console, signals and the mission-control stores are separate owners "
         "today; re-judged 2026-10-03 at 28001 for D-413 internal Cell producer authentication: bounded "
         "schema, environment credential registry and evidence service are separate modules; goal completion "
@@ -150,12 +150,30 @@ SIZE_VERDICTS = {
         "atomically marks ownership DISPATCHING, and gateway startup holds obsolete authority. "
         "These remain Fleet journal/admission responsibilities under the D-413 migration plan; "
         "CellJob dispatch/reconciliation composition remains open. Full Fleet regression 1425 "
-        "passed/7 skipped. Re-judged 2026-10-03 at 27684 after current-main integration for the "
-        "opt-in CellJob dispatcher "
-        "and its transactional readback/fence/phase-history modules plus regression tests: these "
-        "compose Fleet-owned admission and ordered journals without a second device owner. "
-        "cell_job_store.py shrinks while transport-neutral receipt validation is shared with "
-        "legacy Mission dispatch. The split verdict and +150 growth allowance remain unchanged",
+        "passed/7 skipped; split verdict and the +150 growth allowance remain unchanged. "
+        "Main briefly carried a parallel opt-in CellJob dispatcher (27684); the 2026-10-03 C4b merge kept "
+        "the StepJobDispatcher design and removed it. Re-judged 2026-10-02 at 27870 (C4b G3/G5, D-403 §3/§5/§7): the production Cell Job compiler "
+        "adapter (server/cell_compiler.py), the per-kind step dispatch table (server/step_action_kinds.py) "
+        "and the step-ledger dispatcher (server/step_dispatcher.py) joined as their own modules, the "
+        "deployment_profile gate in app.py; verdict unchanged. Re-judged 2026-10-03 at 28160 (C4b 1b): "
+        "the Cell Job claim lifecycle (HELD phase, latch hook), GetAction readback with backoff and the "
+        "operator recovery routes (server/cell_job_routes.py); verdict unchanged. Re-judged 2026-10-03 at "
+        "28340 (C4b 1c): restart/stop/404 exits, release_before_send, receipt notes, bounded round-robin "
+        "ticks and the identity cache, all inside the existing ledger/dispatcher modules; verdict unchanged. "
+        "Re-judged 2026-10-03 at 28734 on merging main: main's parallel Cell dispatcher/readback/goal mixins were "
+        "removed and its public Cell goal ingress (registry, routes, service) kept and rewired to the "
+        "stored item_at_pose predicate; verdict unchanged",
+    ),
+    "site/fleet/fleet/server/cell_job_store.py": (
+        824,
+        "accept: one owner (2026-10-02, C4b G3) for the ordered step ledger: Job, step, claim phase and "
+        "event rows change in one SQLite transaction (submit promotes claims, outcomes return or pin "
+        "them, hold and replay checks share the event key). Split the read model (_get/next_job) out "
+        "if a second step kind (D-420 Pinky multi-step) adds more than its kind-table entry. "
+        "Re-judged 2026-10-03 at 824 (C4b 1b): the claim lifecycle (HELD, site-stop hook), readback "
+        "from HOLD and operator resume/cancel joined because each changes Job, step and claim rows in "
+        "one transaction. Split: move resume/cancel/hold_for_site_stop into a recovery module when "
+        "D-420 v2 adds the CANCELLED status (schema change), before any further growth",
     ),
     "site/fleet/fleet/server/proposal_store.py": (
         730,
@@ -459,8 +477,16 @@ SIZE_VERDICTS = {
         "accept: single-entry hardware probe CLI the commissioning runbook drives top-to-bottom — "
         "splitting probe sequence from reporting would sever one diagnostic narrative (X5)",
     ),
+    "site/fleet/fleet/cli.py": (
+        604,
+        "accept: the Fleet composition root (2026-10-02, C4b G5) parses every console flag and "
+        "assembles create_app once; the Cell Job compiler flag added 10 lines and the palletizing "
+        "import stays lazy here so a site install without that wheel still starts. Split the "
+        "per-feature service builders (mission, pairing, localization) into a builder module "
+        "before the next flag",
+    ),
     "products/omx/adapter/omx_adapter/action_store.py": (
-        1_194,
+        1_191,
         "accept: one owner for the durable local Action, per-attempt ROS phase journal, and semantic "
         "workflow terminal gate; they share SQLite transactions, identity fences, and restart-to-UNKNOWN "
         "recovery. ROS-free and host-testable. Re-judged 2026-10-01 at 1109 after the durable gripper "
@@ -468,8 +494,9 @@ SIZE_VERDICTS = {
         "transaction so the Action, phase, and possible-held-object state cannot split. Re-judged "
         "2026-10-01 at 1176 for late ROS UUID and exact-cancel intent journaling after UNKNOWN/HOLD "
         "without reopening phase state (D-386). Re-judged 2026-10-01 at 1187 after the "
-        "canceled-action hold joined (peer's change). The hard-tier "
-        "zero-growth rule prevents silent expansion",
+        "canceled-action hold joined (peer's change). Re-judged 2026-10-02 at 1191 (C4b G8): "
+        "completion is journaled per kind (PICK_PLACE names kept, CELL_TRANSFER its own) with "
+        "net -3 lines. The hard-tier zero-growth rule prevents silent expansion",
     ),
     "products/omx/adapter/omx_adapter/command_owner.py": (
         621,
