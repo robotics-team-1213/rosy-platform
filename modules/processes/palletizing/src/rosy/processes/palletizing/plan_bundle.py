@@ -129,6 +129,7 @@ def compile_plan_bundle(
                 "item": current.item,
                 "pallet_id": current.pallet,
                 "layer_index": current.layer,
+                "home_pose_base": _pose(cell.home, "cell home"),
                 "source_pose_base": source_pose,
                 "destination_pose_base": destination_pose,
                 "source_approach_z_base_m": source_approach,

@@ -4466,3 +4466,10 @@
 - 변경: main `cc76161f5` 통합 뒤 D-413 Task 3 계획과 palletizing progress 증거를 갱신했다. 이 main 변경에서 앞선 snapshot의 Fleet size-verdict allowance mismatch가 해소됐다.
 - 증거: 비선별 architecture 81 passed/1 skipped, quick tier 95 passed/24 기존 warnings, known-failure 비교 둘 다 0 new/0 known. Wheel 호환 11, Cell 143, API 매핑 7 passed.
 - gate 변화: Task 3 SOURCE GO 유지. ROS/Gazebo, release artifact, device, field 증거는 남아 있으며 이번 후속 변경은 Fleet runtime 동작을 바꾸지 않았다.
+
+## 2026-10-02 · uncommitted · feat(platform): start Fleet Cell Job submission boundary
+
+- 변경: 실행 계층에 주입형 process compiler port를 두고 후보 Job 재컴파일, PlanBundle hash/ordered transfer 검사, pallet ledger marker 및 workcell/pallet claim 생성을 추가했다. 공유 계약은 additive `FleetCellTransferGrant`로 정의하고 기존 `PICK_PLACE`를 그대로 뒀다. transfer Skill 입력에 티칭된 `home_pose_base`를 포함했다.
+- 증거: compiler-port 시험 6 passed, installed palletizing wheel 호환+Cell submission 17 passed, core_common schema suite 424 passed/1 skipped, Fleet API Reference contract test 1 passed, CI YAML parse 및 `git diff --check` 통과.
+- 경계: Fleet proposal/admission route, versioned ordered-step journal, independent step goal evidence, dispatcher integration은 남아 있다. 새 schema만으로 Fleet/device dispatch는 켜지지 않는다.
+- gate 변화: Task 4 IN PROGRESS; Task 3 SOURCE GO 유지, ROS-SIM HOLD, DEVICE/FIELD PARKED.

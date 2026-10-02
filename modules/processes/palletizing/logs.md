@@ -14,3 +14,9 @@
 - 증거: 비선별 architecture suite 81 passed/1 skipped, quick tier 95 passed/24 기존 warnings. 두 known-failure 비교 모두 0 new/0 known; Wheel compatibility 11, Cell 143, 계약 매핑 7 passed.
 - 경계: 이전 main에서 드러난 Fleet size-verdict budget 불일치는 후속 main 변경으로 해소됐다. ROS/Gazebo, 배포 artifact, 장치/현장 실행은 여전히 검증하지 않았다.
 - gate 변화: SOURCE GO 유지; ROS-SIM·ARTIFACT HOLD, DEVICE·FIELD PARKED 유지.
+
+## 2026-10-02 · uncommitted · feat(process): include taught home pose in transfer plan
+
+- 변경: 각 `pallet.transfer/1.0.0` invocation에 셀의 robot-base `home_pose_base`를 포함해 D-403 Fleet grant가 현재 Cell 설정만으로 home/pick/place를 구성할 수 있게 했다.
+- 증거: 재빌드한 `rosy-palletizing` wheel SHA-256 `86d3a46e17ebac9c944bd61cf189bc3f45ef2209bdf280511f6988305b908dfe`; 설치 wheel로 palletizing compatibility와 Cell submission 시험 17 passed.
+- gate 변화: SOURCE GO 유지; 장치 실행·ROS-SIM·artifact/device/field 상태는 바꾸지 않았다.

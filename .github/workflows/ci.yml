@@ -110,7 +110,7 @@ jobs:
         run: python3 -m pytest src/site/cell/test -q
 
       - name: Test (palletizing process compatibility and boundaries)
-        run: python3 -m pytest test/test_platform_palletizing_compat.py test/architecture/test_platform_dependency_boundaries.py -q
+        run: python3 -m pytest test/test_platform_palletizing_compat.py test/test_platform_cell_submission.py test/architecture/test_platform_dependency_boundaries.py -q
 
       # 멀티 인스턴스 런치는 로봇마다 포트·HOME·설정을 갈라야 한다. 그 계약은 런치
       # 파일을 실제로 실행해야 검증되므로 ROS 오버레이가 필요하다. ros_gz_sim share 가

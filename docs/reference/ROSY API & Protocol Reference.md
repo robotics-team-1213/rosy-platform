@@ -2,7 +2,7 @@
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.77
+**Version:** v1.78
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -1522,6 +1522,15 @@ digest, camera, optical frame, calibration, transform revision, and capture
 time. Image evidence is not a 3D pose, grasp, reachability decision, or
 permission to bypass the local planner.
 
+D-403 adds the separate additive `FleetCellTransferGrant` variant with
+`action_kind: CELL_TRANSFER`; it does not alter or widen `FleetActionGrant`.
+Its bounded `cell_transfer` body binds `job_id`, recipe/cell SHA-256 revisions,
+ordered `step_index`, item/pallet/layer, `frame: robot_base`, and finite `home`,
+`pick`, and `place` poses with pick/place approach heights and `carry_z`. The
+carry height must cover both approaches. This schema describes one atomic
+pick-plus-place unit. It does not enable Fleet dispatch or certify that any
+receiver executes the variant; the D-403 simulation gate remains in force.
+
 `DeviceActionState` is the durable local Action journal state: `PREPARED`,
 `SUBMITTING`, `ACCEPTED`, `RUNNING`, `CANCEL_REQUESTED`, `UNKNOWN`, `SUCCEEDED`,
 `FAILED`, or `HOLD`. A successful transport response or `SUCCEEDED` Action
@@ -1802,6 +1811,7 @@ fake credentials and clocks; device and field acceptance remain separate gates.
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.78 | 2026-10-02 | Additive (D-403 / D-413 Task 4): define separate `FleetCellTransferGrant` and bounded `CELL_TRANSFER` body for one recipe/cell-bound pick/place pair. Existing `PICK_PLACE` schema, payload and digest remain unchanged; Fleet dispatch stays gated on simulation evidence. |
 | v1.77 | 2026-10-02 | Additive (D-407 Fleet 쪽, feat/d407-console-stuck-decisions): Site Fleet 새 경로 `GET /api/fleet/line-stuck`(viewer+)·`POST /api/fleet/robots/{robot_id}/line-stuck/decision`(operator), `GET /api/fleet/state` 로봇 행에 선택 필드 `line_stuck`(§10.8). Fleet 은 CORE 거부를 그대로 409 로 옮긴다. 로봇 계약(`/api/v1/*`)·이벤트·FleetAgent 프로토콜 변경 없음 |
 | v1.76 | 2026-10-02 | Additive (D-407 Gazebo 후속, fix/d407-sim-findings): `nav.line_stuck_opened` 에 `restuck_of`·`attempts` — `recovered` 로 닫힌 뒤 `line_follow.recovery_restuck_s`(20 s) 안이거나 순 전진 `recovery_restuck_m`(0.30 m) 전에 다시 막히면 같은 막힘으로 시도 수를 이어 센다(다 쓰면 곧바로 관제 답만 기다림). `nav.line_stuck_local_result` 에 판정한 scan 의 `rear_clearance_m`·`rear_blind_m`·`trail_m`·`trail_yaw_deg`. `nav.line_stuck_closed` 사유 `estop`. 뒤 띠 폭은 URDF 몸 반폭(`body_half_width_m`) + `recovery_rear_lateral_margin_m`(0.02). 기존 필드 변화 없음 |
 | v1.75 | 2026-10-02 | Additive (D-395 개정 4 5항 후속, S1 R1, feat/d395-localized-objects): 상태 스냅샷·하트비트 `localization` 에 선택 필드 `unmapped_objects[≤16]` `{x, y}`(base_link)·`objects_stamp`(로봇 시각 s). `LOCALIZED` 로봇이 전체 스캔의 지도 밖 물체를 상태(2 Hz)마다 싣고, 밖에서는 빈 목록이다. CORE 는 그대로 넘기고 `pose_frame: odom`·`state_stale` 에서 비운다. Fleet 감시가 닻 로봇의 관찰로 다른 `LOCALIZED` 로봇의 거울 잠금을 잡는다. 기존 필드 변화 없음 |

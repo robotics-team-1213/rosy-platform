@@ -163,6 +163,8 @@ python -B -m venv --system-site-packages $venv
 
 ## Task 4: Fleet 접수와 순서 있는 작업 원장
 
+**진행 기록 (2026-10-02):** 실행 계층에 process compiler port 기반 Cell Job 재컴파일·PlanBundle 검증 경계를 추가했다. `PICK_PLACE` wire는 고정한 채 `FleetCellTransferGrant` schema를 별도 합집합으로 정의하고 API Reference v1.78에 기록했다. 다음 구현은 service principal 제안/별도 운영자 승인, SQLite ordered-step migration, 독립 목표 증거와 dispatcher 연결이다. 현재 변경은 아직 Fleet endpoint나 장치 하달을 열지 않는다.
+
 **Modify/Reuse:** `src/site/fleet/fleet/server/{app,mission_routes,mission_service,mission_store,mission_dispatcher,proposal_store,goal_evidence}.py`, `src/contracts/foundation/core_common/protocol/schemas.py`, `docs/reference/ROSY API & Protocol Reference.md`.
 
 **Create:** `modules/execution/src/rosy/execution/site/cell_submission.py`, `src/site/fleet/test/test_platform_cell_job_route.py`, `src/site/fleet/test/test_platform_cell_job_recovery.py`.
@@ -270,7 +272,7 @@ git diff --check
 | 1 Boundary guard | PASS | `59cd3bce`, main sync `d082bf18`; boundary suite 81 passed/1 skipped; quick 95 passed; no new known failures |
 | 2 Minimal APIs | PASS | `d502290b`, main sync `eb306385`; 3 installed wheels, mapping/boundary/protocol 29 passed, docs 80 passed |
 | 3 Process extraction | PASS (source); runtime/artifact/device gates remain open | `9da93450`, docs `bb84551a`, latest-main sync `cc76161f5` / merge `d9e70f71`; wheel compatibility 11, Cell 143, mapping 7; architecture 81/1 skipped, quick 95 passed/24 existing warnings; known-failure comparisons 0 new/0 known |
-| 4 Fleet connection | TODO | not run |
+| 4 Fleet connection | IN PROGRESS | execution compiler-port mapping 6 passed; CELL_TRANSFER contract + core schema suite 424 passed/1 skipped; endpoint/ordered journal/recovery remain |
 | 5 Local Skill | TODO | not run |
 | 6 App and install | TODO | not run |
 | 7 Failure replay | TODO | not run |

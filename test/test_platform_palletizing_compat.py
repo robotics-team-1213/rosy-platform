@@ -95,6 +95,7 @@ def test_palletizing_process_preserves_fixture_job_and_converts_transfer_pairs()
     ]
     first = compiled.bundle.steps[0].invocation
     assert (first.skill_id, first.version) == ("pallet.transfer", "1.0.0")
+    assert set(first.inputs["home_pose_base"]) == {"x_m", "y_m", "z_m", "yaw_rad"}
     assert first.inputs["item"] == "box"
     assert first.inputs["source_pose_base"]["y_m"] == pytest.approx(0.2)
     assert first.inputs["destination_pose_base"]["x_m"] == pytest.approx(0.295)

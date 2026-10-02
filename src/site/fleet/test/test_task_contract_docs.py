@@ -23,7 +23,7 @@ def test_task_contract_is_versioned_documented_and_wired_to_the_site_stack():
     web_contract = web + roster
     compose = (ROOT / "deploy/site/compose.yaml").read_text(encoding="utf-8")
 
-    assert "**Version:** v1.77" in reference
+    assert "**Version:** v1.78" in reference
     assert "## 10.16 Fleet goal-evidence producer contract (D-348)" in reference
     assert "`/api/fleet/goal-evidence`" in reference
     assert "X-Goal-Evidence-Token" in reference
@@ -34,6 +34,8 @@ def test_task_contract_is_versioned_documented_and_wired_to_the_site_stack():
     assert "`/api/fleet/missions/{mission_id}/admit`" in reference
     assert "`physical_submission: NOT_CONNECTED`" in reference
     assert "GetStopState(LocalStopQuery)" in reference
+    assert "`FleetCellTransferGrant`" in reference
+    assert "`action_kind: CELL_TRANSFER`" in reference
     assert "trusted producer" in reference
     assert "post-action frame" in reference
     assert "gripper `OPEN` readback" in reference

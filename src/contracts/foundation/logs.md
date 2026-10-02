@@ -304,3 +304,9 @@
 - 변경: `LocalizationStatus` 에 선택 필드 `unmapped_objects`(≤16, `RobotPoint`, 기본 `[]`)와 `objects_stamp`(유한 실수, 기본 null)를 더했다. ADR 개정 4 5항 후속(S1 재실행 R1). API Reference v1.73→v1.74, 판 고정 6곳(머리말, `app.py` ×2, `test_line_follow_contract_docs.py`, `test_task_contract_docs.py` ×2, `test_mission_progress.py`). `schemas.py` 는 손대지 않았다.
 - 증거: `test/test_localization_contracts.py` +1(왕복, 17개·NaN·inf 거부).
 - gate 변화: 없음.
+
+## 2026-10-02 · uncommitted · feat(contracts): additive D-403 CELL_TRANSFER grant
+
+- 변경: 기존 `FleetActionGrant`의 `PICK_PLACE` 제약은 유지하고 `FleetCellTransferGrant` 합집합 변형을 추가했다. 새 payload는 job/recipe/cell hash, ordered step index, item/pallet/layer, robot-base home/pick/place pose와 approach/carry height를 요구한다.
+- 증거: `test_device_action_contracts.py`에서 새 grant 왕복 및 잘못된 kind/hash/frame/높이/비유한 pose 거부를 추가했다. 전체 core_common SOURCE suite 424 passed/1 skipped; API Reference를 v1.78로 함께 올렸다.
+- gate 변화: 없음. 새 grant schema는 아직 producer/consumer dispatch 경로에서 사용되지 않는다.
