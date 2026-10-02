@@ -338,6 +338,22 @@
 - gate 변화: 없음.
 
 
+## 2026-10-02 · 8dd300c52 · feat(safety): `GET /safety/state` 에 `fleet_link` (D-415, API v1.80)
+- 변경: `_safety_payload` 가 `svc.fleet_loss.status()` 를 `fleet_link` 로 싣는다(없으면 null). `CoreServicesLike` 에 `fleet_loss`. PUT 이 받는 정책 값은 그대로. 계약 버전 v1.80(app.py).
+- 증거: `src/runtime/gateway/test/test_fleet_loss_wiring.py`, `test_api.py` 안전 경로 통과.
+- gate 변화: 없음.
+
+## 2026-10-02 · 758f9878e · feat(safety): `PUT /safety/limits` RETURN_HOME 경고 (D-419, 구 D-415)
+- 변경: `fleet_loss_policy: RETURN_HOME` 을 받으면 로그 경고와 응답 선택 필드 `warning`(사이트 Fleet 이 죽으면 모든 로봇이 교통정리 없이 동시에 귀환). 거절하지 않는다.
+- 증거: `src/runtime/gateway/test/test_fleet_loss_wiring.py::test_put_return_home_is_accepted_with_a_warning`.
+- 번호: 앞 항목들의 D-415(SAF-003)는 **D-419** 로 바뀌었다 — main 에 다른 D-415(콘솔 운영 가시성)가 먼저 들어왔다. ADR 파일 `docs/adr/D-419-saf003-fleet-link-loss-policy.md`.
+- gate 변화: 없음.
+
+## 2026-10-02 · uncommitted · docs(api): D-419 계약 버전 v1.86
+- 변경: main 이 v1.80(D-407)·v1.81(D-421)·v1.82(D-403 정리)·v1.83(D-411 A)·v1.84(D-422)·v1.85(D-413 Cell 목표 증거)을 먼저 써서 D-419 는 v1.86. `app.py` docstring·description, `v1/safety.py` 주석.
+- 증거: `test_line_follow_contract_docs.py`, `test_task_contract_docs.py`, `test_mission_progress.py` 의 버전 고정을 v1.86 로.
+- gate 변화: 없음.
+
 ## 2026-10-03 · uncommitted · docs(api): align contract description with v1.84
 - Change: Update the existing API app contract description to API Reference v1.84 for the additive site Fleet Cell evidence route. The route belongs to the site Fleet app.
 - Evidence: Protocol alignment is included in foundation/alignment 427 passed/1 skipped; final legacy and contract-document checks 64 passed.

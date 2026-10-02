@@ -31,7 +31,7 @@
 ## 최근 기록
 
 - 2026-10-03 · uncommitted · docs(api): align contract description with v1.84
+- 2026-10-02 · uncommitted · docs(api): D-419 계약 버전 v1.86
+- 2026-10-02 · 758f9878e · feat(safety): `PUT /safety/limits` RETURN_HOME 경고 (D-419, 구 D-415)
+- 2026-10-02 · 8dd300c52 · feat(safety): `GET /safety/state` 에 `fleet_link` (D-415, API v1.80)
 - 2026-10-02 · 7322d1e2 · fix(host): D-406 T1 리뷰 반영 — 속도 신선도, 유한수, 충전 플래그
-- 2026-10-02 · 4e99d92e · feat(core_api_web): D-411 A /api/v1/recordings 와 Pilot 녹화 자산
-- 2026-10-02 · uncommitted · chore(api): D-395 P2-7 계약 버전 v1.72 → v1.73
-- 2026-10-02 · uncommitted · feat(api): D-395 P2-7 `POST`·`GET /localization/mission`, API Ref v1.72

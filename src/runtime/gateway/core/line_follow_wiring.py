@@ -118,8 +118,10 @@ def bind_motion_envelope(line_follow, *, safety, traffic_policy) -> None:
 def bind_stuck_recovery(line_follow, *, safety, calibration, fleet_agent, vision) -> None:
     """D-407 inputs: console link (FleetAgent), calibration lease, D-342 linear limit, preview seq."""
     line_follow.bind_recovery(
-        # A brief agent reconnect does not read as "no console" mid-ASKING (D-407 2026-10-02).
-        console_linked=lambda: fleet_agent.linked_within(line_follow.config.recovery_console_grace_s),
+        # A brief agent reconnect does not read as "no console" mid-ASKING (D-407 2026-10-02),
+        # nor does a hub heard within the D-419 link freshness (heartbeat + reply deadline).
+        console_linked=lambda: (fleet_agent.linked_within(line_follow.config.recovery_console_grace_s)
+                                or fleet_agent.recently_heard()),
         calibration_active=lambda: calibration.current() is not None,
         linear_ceiling=lambda: float(safety.limits.manual_linear),
         preview_seq=lambda: vision.status().get("sequence"),
