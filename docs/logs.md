@@ -4577,3 +4577,8 @@
 - Change: Document strict CellGoalEvidenceSubmission, producer credential isolation, initial/final/gripper provenance, pending terminal callback reconciliation and atomic latest-terminal proof in API Reference v1.84. Append D-413 progress while retaining incomplete OMX/Gazebo/two-ledger gates.
 - Evidence: Final API/registry/legacy/version checks 64 passed; foundation/alignment 427 passed/1 skipped; independent review 25 passed. Full public-composition Fleet and quick checks are running.
 - Gate: SOURCE/LOCAL only. Tasks 4-5 and 7 remain IN PROGRESS.
+
+## 2026-10-03 · uncommitted · docs(plans): 학습 페인트 후처리 — 담당 세션 결정과 실측 (a)(b)(c)
+- 변경: 차선 유지 담당 세션이 학습 마스크 ≥40 px 필터를 직접 넣기로 했다(선 NMS 불필요). 그 세션의 재생 설정(8kcn 130842Z 842 프레임)에서 읽기 전용으로 재고 기록했다. (a) 권고: INT8, 1스레드, spinning 끔, 2프레임마다, lane_evidence 생략. 추론 전 자르기는 모델을 망친다. (b) 수평선 아래 반사는 keeper가 읽지 않는 행에 있어 절단 여유가 필요 없다. (c) steep_crossing은 굽은 길·회전교차로의 진짜 테이프를 130 프레임에서 거부하지만 둘째 쪽만 잃는다.
+- 증거: `X:\DevTemp\rosy-lane-meas\report.md`.
+- gate 변화: 없음(코드 변경 없음).

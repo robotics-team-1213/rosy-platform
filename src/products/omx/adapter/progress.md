@@ -24,7 +24,7 @@ gates:
     blocker: "No OMX-AI, leader/follower OpenRB, or workcell camera is connected for physical acceptance"
   FIELD:
     state: PARKED
-adrs: [D-61, D-147, D-168, D-273, D-282, D-336, D-369, D-376, D-386, D-390, D-402, D-403]
+adrs: [D-61, D-147, D-168, D-273, D-282, D-336, D-369, D-376, D-386, D-390, D-402, D-403, D-411]
 plans:
   - docs/plans/2026-10-01-omx-demonstration-lerobot-design.md
   - docs/plans/2026-09-15-module-harness-design.md
@@ -33,5 +33,6 @@ plans:
   - docs/plans/2026-09-30-omx-pick-place-local-execution.md
   - docs/plans/2026-10-01-pilot-omx-gazebo-practice.md
   - docs/plans/2026-10-01-model-tool-contract-implementation.md
+  - docs/plans/2026-10-02-d411-pilot-recording-controls-plan.md
   - docs/plans/2026-10-02-rosy-cell-c3-gazebo.md
 ---

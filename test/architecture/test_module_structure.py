@@ -298,7 +298,7 @@ SIZE_VERDICTS = {
         "10977); same verdict",
     ),
     "control": (
-        42_013,
+        42_784,
         f"split: deploy closure needs only sensing + safety provider (P1a); {CONTROL_SPLIT} "
         "(re-judged 2026-09-30 at 33090 after D-356 added the ROS-free learned perception backend "
         "(sensing/perception/learned), the shadow node and the recording CLI; the learned backend sits "
@@ -349,7 +349,15 @@ SIZE_VERDICTS = {
         "re-judged 2026-10-02 at 41833 on the D-395 Phase 2 integration branch with D-408 and loc_assist "
         "together — same subjects, verdict unchanged; re-judged 2026-10-02 at 42013 when D-395 S1 R1 "
         "made LOCALIZED robots report unmapped objects (control/loc_assist*.py) — same subjects, "
-        "verdict unchanged)",
+        "verdict unchanged; re-judged 2026-10-02 at 42225 when D-411 A added the ROS-free Pilot "
+        "recording session (control/pilot_recording.py) beside control/recording.py — evidence only, "
+        "it moves with the P1a sensing split, verdict unchanged; re-judged 2026-10-02 at 42346 with its "
+        "thin node (control/pilot_recorder_node.py) and the camera's on-demand JPEG switch — same "
+        "subjects, verdict unchanged; re-judged 2026-10-02 at 42540 after the D-411 A review hardening "
+        "(orphan-writer recovery, off-timer hashing, reserve and disk floor in control/pilot_recording.py, "
+        "the camera's dead-recorder check) — same subjects, verdict unchanged; re-judged 2026-10-03 at "
+        "42784 when D-411 A landed on main beside D-395 rev. 11 (reference-square NMS, lidar self-beam "
+        "drop, learned lane component filter) — same subjects, verdict unchanged)",
     ),
     # --- D-362 newly-covered files (web assets in src/ packages, ops roots). ---
     "runtime/sensing/web/diagnostic.html": (
@@ -384,6 +392,12 @@ SIZE_VERDICTS = {
         693,
         "accept: the harness gate itself (lint/generate) — one CLI owner pinned by "
         "test/test_harness_contracts.py (X5)",
+    ),
+    "tools/perception/rosy_ml.py": (
+        615,
+        "accept: the operator CLI is one argparse dispatcher over the wrapped tools (deliver, "
+        "harvest, fetch_http, intake), which own the behaviour; covered by "
+        "tools/perception/test/test_rosy_ml.py (X5, D-411 fetch --http)",
     ),
     "deploy/robot/pinky_pro/native/rosy-boot-display.py": (
         688,

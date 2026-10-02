@@ -27,7 +27,7 @@ from lifecycle_msgs.msg import TransitionEvent
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy, qos_profile_sensor_data
 from sensor_msgs.msg import BatteryState, CompressedImage, Imu, LaserScan, Range
 from std_msgs.msg import Bool, Float32, String
-from std_srvs.srv import Empty
+from std_srvs.srv import Empty, SetBool
 
 from core.bridge import (
     battery_policy,
@@ -61,6 +61,8 @@ from core_features.diagnostics.collector import (
 )
 from core_features.navigation.manager import NavGoalSpec, NavigationError
 from core_common.protocol.schemas import HealthState
+from core_common.protocol.recording import (
+    FETCHED_TOPIC, SET_ACTIVE_SERVICE, STATUS_TOPIC, TELEOP_INTENT_TOPIC, teleop_intent)
 
 # 늦게 뜬 노드도 현재 모드를 즉시 받도록 latch 한다 (PWR-003).
 _LATCHED = QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE,
@@ -133,6 +135,8 @@ class RosBridge:
         node.create_subscription(String, "localization/state", self._on_loc_state, _LATCHED)
         node.create_subscription(String, "localization/candidates", self._on_loc_candidates, _LATCHED)
         node.create_subscription(String, "localization/result", self._on_loc_result, 10)
+        # D-411 A: the camera unit's recorder status (1 Hz, latched); the guard judges on it.
+        node.create_subscription(String, STATUS_TOPIC, self._on_pilot_recorder_status, _LATCHED)
 
         self.power_mode_pub = node.create_publisher(String, "power/mode", _LATCHED)
         self.display_info_pub = node.create_publisher(String, "display/info", 10)
@@ -142,12 +146,16 @@ class RosBridge:
         self.loc_suspect_pub = node.create_publisher(String, "localization/suspect", 5)
         # D-395 P2-7: mission start/end; the sensing node searches again after an end.
         self.loc_mission_pub = node.create_publisher(String, "localization/mission", 5)
+        # D-411 A: teleop decisions as evidence for the Pilot recorder (never read by control).
+        self.intent_pub = node.create_publisher(String, TELEOP_INTENT_TOPIC, 10)
+        self.pilot_fetched_pub = node.create_publisher(String, FETCHED_TOPIC, 5)
         self._led_client = node.create_client(SetLed, "set_led")
         # D-385: 모드별 표정 — 정책은 core_features.command.emotion_map, 노드는 감정 서버.
         self._emotion_client = node.create_client(Emotion, "set_emotion")
         # sllidar_ros2가 제공하는 모터 제어 서비스 (PWR-005).
         self._lidar_start_client = node.create_client(Empty, "start_motor")
         self._lidar_stop_client = node.create_client(Empty, "stop_motor")
+        self._pilot_recorder_client = node.create_client(SetBool, SET_ACTIVE_SERVICE)  # D-411 A
 
         self._cmd_timer = node.create_timer(1.0 / 50.0, self._publish_cmd_vel)
         self._state_timer = node.create_timer(1.0 / self._state_hz, self._tick_state)
@@ -235,7 +243,45 @@ class RosBridge:
         loc.publish_suspect = lambda body: self.loc_suspect_pub.publish(String(data=json.dumps(body)))
         self._svc.loc_mission.publish = (
             lambda body: self.loc_mission_pub.publish(String(data=json.dumps(body))))
+        self._svc.command.intent_sink = lambda **fields: self.intent_pub.publish(
+            String(data=json.dumps(teleop_intent(**fields))))
+        guard = self._svc.pilot_recording
+        guard.request_active = self._request_pilot_recording
+        guard.publish_fetched = lambda rid: self.pilot_fetched_pub.publish(
+            String(data=json.dumps({"id": rid})))
         self._node.get_logger().info("ros_bridge ready (cmd_vel sole publisher @50Hz)")
+
+    def _on_pilot_recorder_status(self, msg: String) -> None:
+        try:
+            self._svc.pilot_recording.on_status(json.loads(msg.data))
+        except (ValueError, TypeError) as exc:
+            self._node.get_logger().warn(f"pilot recorder status ignored: {exc}",
+                                         throttle_duration_sec=10.0)
+
+    def _request_pilot_recording(self, on: bool, wait: bool) -> tuple[bool, str]:
+        """D-411: ask the camera unit's recorder. wait=False from executor callbacks."""
+        client = self._pilot_recorder_client
+        if not client.service_is_ready():
+            return False, ""
+        request = SetBool.Request()
+        request.data = on
+        future = client.call_async(request)
+        if not wait:
+            # The guard announces nothing until the recorder's status confirms; log a refusal.
+            future.add_done_callback(self._log_pilot_recording_refusal)
+            return True, ""
+        try:
+            response = save_map.await_call(future, timeout=3.0)
+        except RuntimeError:
+            return False, ""
+        return bool(response.success), str(response.message)
+
+    def _log_pilot_recording_refusal(self, future) -> None:
+        response = future.result() if not future.cancelled() and future.exception() is None else None
+        if response is None:
+            self._node.get_logger().warn("pilot recorder did not answer a guard stop")
+        elif not response.success:
+            self._node.get_logger().warn(f"pilot recorder refused a guard stop: {response.message}")
 
     def _on_odom(self, msg: Odometry) -> None:
         self._last_odom_ts = time.monotonic()

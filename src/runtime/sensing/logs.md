@@ -941,6 +941,12 @@
 - 증거: `test_loc_assist.py` +4(LOCALIZED 에서 실림·16개 제한·주기, 1 s 넘은 물체 빠짐, LOCALIZED 밖·검사 중·SUSPECT 에서 없음, 전체 스캔·차체 반경 필터).
 - gate 변화: 없음. Gazebo 재실행 전.
 
+## 2026-10-02 · 410c6832 · feat(control): D-411 A pilot_recorder_node 와 녹화 상태기계
+- 변경: `control/pilot_recording.py`(ROS-free 상태기계: 1개·600 s 상한, 전용 쿼터·디스크 바닥, rosbag2 종료 감지·고아 writer 정리, 복구, 작업 스레드 manifest sha256, fetched 표시)와 얇은 `pilot_recorder_node.py`(SetBool `pilot_recorder/set_active`, 래치 상태·활성 토픽, `fetched` 구독, 1 Hz 틱, boot_id·seq). `camera_detect_node` 는 녹화 중에만 `camera/front/compressed` 를 낸다. `camera_preview.launch.py` 가 녹화 노드를 상시 기동, `setup.py` entry point, 노드 레지스트리 등록.
+- 증거: `python -m pytest src/runtime/sensing/test/test_pilot_recorder.py src/runtime/sensing/test/test_pilot_recorder_node.py src/runtime/sensing/test/test_camera_preview_launch.py -q` → 38 passed, 20 skipped (2026-10-02 Windows, rclpy 없음 — 노드는 소스 텍스트 단언).
+- gate 변화: SOURCE 유지. ROS-SIM HOLD — 계획 Verification ROS-SIM 체크리스트(WSL Ubuntu) 미실행, DEVICE 증거 없음.
+- 결정: D-411 A.
+
 ## 2026-10-02 · uncommitted · fix(perception): D-395 rev. 11 — 기준 사각형 수평선 문턱과 한 사각형 한 검출(NMS)
 
 - 원인: 후처리 감사(2026-10-02, 실제 프레임 506장). 거짓 검출 20건이 13장(2.6 %)에 있었고 모두 거리 없음이었다. 133221Z/000068 처럼 벽의 파란 테이프 앞에 빨간 케이블이 걸리면 링과 코어가 갖춰진다. 합성 사각형은 코어를 가르는 1 px 줄무늬 하나로 4개 중 4개가 신뢰도 1.0 검출 둘로 갈라졌다.

@@ -72,3 +72,4 @@ sim/isaac_sim/run_rosy.py
 site/fleet/fleet/localization/service_logic.py
 site/fleet/fleet/server/bays.py
 site/fleet/fleet/server/traffic.py
+site/fleet/fleet/server/cancel_all.py

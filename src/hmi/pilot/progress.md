@@ -2,7 +2,7 @@
 module: pilot
 logical_modules: []
 owner: 화면
-last_verified: { commit: "434ceb0b", date: 2026-09-29 }
+last_verified: { commit: "4e99d92e", date: 2026-10-02 }
 gates:
   SOURCE:
     state: GO
@@ -23,12 +23,13 @@ gates:
     blocker: "실기 Pinky 에서 페달 hold-해제가 실제 정지로 이어지는 확인 전"
   FIELD:
     state: N/A
-adrs: [D-323, D-365, D-366, D-390]
+adrs: [D-323, D-365, D-366, D-390, D-411]
 plans:
   - docs/plans/2026-10-01-omx-demonstration-lerobot-design.md
   - docs/plans/2026-09-29-rosy-pilot-teleop-app-design.md
   - docs/plans/2026-09-29-rosy-pilot-teleop-app.md
   - docs/plans/2026-10-01-pilot-omx-gazebo-practice.md
+  - docs/plans/2026-10-02-d411-pilot-recording-controls-plan.md
 ---
 
 ## 지금 상태

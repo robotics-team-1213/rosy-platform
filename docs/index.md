@@ -268,8 +268,8 @@
 
 ## 최근 기록
 
+- 2026-10-03 · uncommitted · docs(plans): 학습 페인트 후처리 — 담당 세션 결정과 실측 (a)(b)(c)
 - 2026-10-03 · uncommitted · docs: record public Cell evidence contract and progress
 - 2026-10-03 · uncommitted · docs: record internal Cell evidence checkpoint
 - 2026-10-03 · uncommitted · fix(fleet): require durable Cell success for goal recovery
 - 2026-10-03 · uncommitted · feat(fleet): dispatch admitted ordered Cell transfers
-- 2026-10-02 · uncommitted · docs(adr): D-395 개정 11 — 사각형 검출 후처리, 거리 없는 목격, LiDAR 물체; 학습 페인트 면적 문턱 제안
