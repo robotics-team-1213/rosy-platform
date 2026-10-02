@@ -208,7 +208,7 @@ def test_conflicts_come_back_from_the_helper(robot):
 
 def test_the_temporary_password_round_trip(robot):
     off = robot.client.get("/api/v1/host/ssh/password", headers=_admin())
-    assert off.status_code == 200 and off.json() == {"enabled": False, "expires_at": None}
+    assert off.status_code == 200 and off.json() == {"enabled": False, "expires_at": None, "lock_pending": False}
 
     issued = robot.client.post("/api/v1/host/ssh/password", headers=_admin(), json={"minutes": 10})
     assert issued.status_code == 200, issued.text
@@ -374,3 +374,70 @@ def test_malformed_json_is_a_400_envelope_that_never_reaches_root(robot, path):
     assert response.status_code == 400, response.text
     assert set(response.json()) == {"error"} and response.json()["error"]["code"]
     assert robot.helper.runs == 0
+
+
+# --- second review: CORE's real deadline and a pending password_off ---------------------
+
+
+def _capture_requests(request: Path) -> tuple[list, callable]:
+    seen: list = []
+
+    def sleep(_seconds):
+        if request.exists():
+            seen.append(json.loads(request.read_text(encoding="utf-8")))
+        time.sleep(0.01)
+
+    return seen, sleep
+
+
+def test_the_request_carries_when_core_stops_waiting(tmp_path):
+    request, response = tmp_path / "request", tmp_path / "response"
+    seen, sleep = _capture_requests(request)
+    before = time.time()
+    with pytest.raises(ssh_handoff.HandoffUnavailable):
+        ssh_handoff.exchange("list", "a", {}, request_path=str(request), response_path=str(response),
+                             wait_s=0.3, sleep=sleep)
+    assert seen and set(seen[0]) == helper.HEADER_KEYS
+    assert before + 0.2 <= seen[0]["answer_by"] <= time.time() + 0.05
+
+
+def test_a_pending_password_off_is_never_overwritten(tmp_path):
+    request, response = tmp_path / "request", tmp_path / "response"
+    off = ssh_handoff.build_request("password_off", "a", {})
+    ssh_handoff.write_request(str(request), off)
+    with pytest.raises(ssh_handoff.HandoffUnavailable):
+        ssh_handoff.exchange("password_on", "a", {"minutes": 5}, request_path=str(request),
+                             response_path=str(response), wait_s=0.2)
+    assert json.loads(request.read_text(encoding="utf-8"))["request_id"] == off["request_id"]
+
+
+def test_a_pending_password_off_is_waited_for_until_it_is_consumed(tmp_path):
+    request, response = tmp_path / "request", tmp_path / "response"
+    ssh_handoff.write_request(str(request), ssh_handoff.build_request("password_off", "a", {}))
+    seen = []
+
+    def sleep(_seconds):
+        current = json.loads(request.read_text(encoding="utf-8")) if request.exists() else None
+        seen.append(current and current["action"])
+        if current and current["action"] == "password_off":
+            request.unlink()  # the helper consumed it
+        time.sleep(0.01)
+
+    with pytest.raises(ssh_handoff.HandoffUnavailable):
+        ssh_handoff.exchange("list", "a", {}, request_path=str(request), response_path=str(response),
+                             wait_s=0.3, sleep=sleep)
+    assert seen[0] == "password_off" and "list" in seen
+
+
+def test_a_stale_pending_request_is_replaced(tmp_path):
+    from datetime import datetime, timedelta, timezone
+
+    request, response = tmp_path / "request", tmp_path / "response"
+    old = ssh_handoff.build_request("password_off", "a", {},
+                                    now=datetime.now(timezone.utc) - timedelta(seconds=helper.REQUEST_MAX_AGE_S + 5))
+    ssh_handoff.write_request(str(request), old)
+    seen, sleep = _capture_requests(request)
+    with pytest.raises(ssh_handoff.HandoffUnavailable):
+        ssh_handoff.exchange("list", "a", {}, request_path=str(request), response_path=str(response),
+                             wait_s=0.2, sleep=sleep)
+    assert seen and seen[0]["action"] == "list"

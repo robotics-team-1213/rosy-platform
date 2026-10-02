@@ -13,7 +13,7 @@ All API routes are under `/api/v1/host/ssh` and require the **administrator** ro
 | `POST /keys` | `{"public_key": "<type> <base64> [comment]", "label": "<label>", "expires_days": 1..365}` | `201 {"label", "fingerprint", "expires_at"}`; `409` label exists; `422` invalid key, label or days; `409` when 32 managed keys exist |
 | `DELETE /keys/{label}` | — | `204`; `404` unknown label |
 | `POST /password` | `{"minutes": 1..60}` | `200 {"user": "rosy", "password": "rosy-xxxx-xxxx-xxxx", "expires_at"}` |
-| `GET /password` | — | `{"enabled": bool, "expires_at": "<Z>" or null}` |
+| `GET /password` | — | `{"enabled": bool, "expires_at": "<Z>" or null, "lock_pending": bool}` (`lock_pending` added after review: a failed lock waits for its retry) |
 | `DELETE /password` | — | `204` (turns it off now) |
 
 - **Labels:** `^[a-z0-9][a-z0-9._:-]{0,47}$`. Team keys use `team:<name>`, enrolled devices `dev:<name>`.
