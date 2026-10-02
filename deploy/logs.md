@@ -1991,3 +1991,12 @@
 - 근거: CI 실행 36959800081 대조 WSL 재현(윈도는 skip/DrvFS로 증거 불가).
 - gate 변화: 없음.
 - 최종 증거: WSL — jpeg_relay 14 passed, auto_update timeout 시험 passed, mode-drift passed; module_separation 7 passed(윈도).
+
+## 2026-10-02 · uncommitted · feat(tools): D-418 P — 운영 PC SSH 접속 도구와 안내
+
+- 변경: `tools/ssh/rosy_ssh_enroll.py`(화면 administrator 코드로 기기 키 `dev:<이름>` 등록, host key로 `known_hosts_rosy`, `~/.ssh/config`에 관리 `Host` 블록을 멱등으로, 토큰은 `finally`에서 logout·출력 안 함). `tools/ssh/rosy_ssh_share.py create|revoke|list`(passphrase로 잠긴 팀 키 — OpenSSH bcrypt 확인 전에는 등록·묶음 없음, `team:<이름>` 로봇별 등록, `rosy-ssh-<팀>.zip`에 잠긴 키·config·known_hosts·한국어 README, passphrase는 어느 파일에도 없음, 생성 시 한 번만 표시, 뒤 로봇 실패 시 묶음 없이 revoke 명령 안내, `--via-operator-key`로 코드를 운영 키 ssh에서 받음). `docs/deployment/robot-ssh-access.md`(세 길, 임시 비밀번호 curl/PowerShell과 끄기, R1–R3). `rosy-device-access` skill에 도구 안내.
+- 사고(같은 날): 변형 시험 중 인자 검사를 지운 변형이 기본 경로로 실행돼 운영 PC의 실제 `~/.ssh/config`에 `rosy-pinky-test1` 블록과 빈 `ProxyCommand` 줄을 써서 모든 ssh가 깨졌다(그 밖에 `known_hosts_rosy`, `rosy_dev_*`, `rosy_team_x` 키). 조정자가 블록을 지우고 파일을 `X:\DevTemp\ssh-test-leak-20261002`로 옮겼다. 고침: 모든 시험이 HOME·USERPROFILE·LOCALAPPDATA를 임시 폴더로 돌리고, 실제 `~/.ssh` 스냅샷이 모듈 끝에 그대로인지 확인한다. 도구는 config 블록의 모든 줄을 허용 목록(빈 값·제어 문자 없음)으로 검사하고, known_hosts 이름도 검사하며, 쓰기 전 `config.rosy-backup-<UTC>`로 백업하고 원자적으로 바꾼 뒤 `ssh -G -F <file> <host>`로 읽혀 보고 실패하거나 다른 주소로 풀리면 되돌린다.
+- 증거: `python -m pytest test/test_rosy_ssh_enroll.py test/test_rosy_ssh_share.py -q` 59 passed(가짜 CORE localhost; 묶음 시험은 실제 Windows OpenSSH ssh-keygen 9.5로 `-y -P ''` 실패·맞는 passphrase 성공, config 시험은 실제 `ssh -G`로 파싱). 가드 변형 42개(enroll 28, share 14) 모두 빨강, 실행 전후 실제 `~/.ssh` 변화 없음.
+- gate 변화: 없음. 로봇 쪽 R(`feat/d418-robot`)과 합친 뒤 TWIN·DEVICE 확인 필요.
+- 결정: D-418
+- 교훈: 사용자 파일을 기본 경로로 쓰는 도구는 시험이 HOME을 격리하지 않으면 변형 시험이 곧 실제 사고가 된다. 가드 하나만 지우는 변형이 살아남으면 시험이 다른 가드에 기대어 통과하고 있다는 뜻이니 원인을 하나로 좁힌 입력을 쓴다.
