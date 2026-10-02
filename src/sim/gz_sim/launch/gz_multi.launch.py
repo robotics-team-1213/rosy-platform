@@ -298,6 +298,7 @@ def _launch_setup(context):
     api_port_base = int(LaunchConfiguration("api_port_base").perform(context))
     map_yaml = LaunchConfiguration("map").perform(context)
     loc_assist = LaunchConfiguration("loc_assist").perform(context).lower() in ("true", "1")
+    nav_composition = LaunchConfiguration("nav_composition").perform(context).lower() in ("true", "1")
     spawn_spacing_raw = LaunchConfiguration("spawn_spacing").perform(context)
     profile = resolve_world(
         world_name,
@@ -433,6 +434,10 @@ def _launch_setup(context):
                 # hosts that race can abort the manager before /load_node exists.
                 "use_composition": "False",
             }
+            if nav_composition:
+                # Opt-in (D-395 S2): one Nav2 container per robot, as on the device
+                # (hardware.launch.py). Four uncomposed stacks starved this host to RTF 0.02.
+                nav_args["use_composition"] = "True"
             if map_yaml:
                 nav_args["map"] = map_yaml
             mode_actions.append(
@@ -594,6 +599,8 @@ def generate_launch_description():
                               description="mode:=nav 맵 yaml. 비면 월드 카탈로그"),
         DeclareLaunchArgument("loc_assist", default_value="true", choices=["true", "false"],
                               description="mode:=nav 에서 로봇별 D-395 loc_assist_node"),
+        DeclareLaunchArgument("nav_composition", default_value="false", choices=["true", "false"],
+                              description="mode:=nav: Nav2 in one container per robot (device layout)"),
         DeclareLaunchArgument("api_port_base", default_value="8080",
                               description="첫 로봇의 core API 포트"),
         OpaqueFunction(function=_launch_setup),

@@ -576,6 +576,8 @@ def main(argv=None):
     p.add_argument("--min-rtf", type=float, default=0.04, help="wall cap = sim timeout / this")
     p.add_argument("--max-wall", type=float, default=1500.0, help="wall cap of any one wait")
     p.add_argument("--loc-param", action="append", default=[], metavar="NAME=VALUE")
+    p.add_argument("--launch-arg", action="append", default=[], metavar="NAME:=VALUE",
+                   help="extra gz_multi argument, e.g. nav_composition:=true")
     args = p.parse_args(argv)
     if args.check:
         sc = SCENARIOS[args.scenario]
