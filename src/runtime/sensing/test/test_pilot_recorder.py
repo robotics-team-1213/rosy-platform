@@ -365,3 +365,12 @@ def test_live_writer_check_matches_the_exact_bag_argument(tmp_path):
 def test_status_is_idle_with_quota_when_nothing_runs(tmp_path):
     status = RecorderStatus.model_validate(Rig(tmp_path).rec.status())
     assert status.state == "idle" and status.max_duration_s == 600 and status.quota_free_bytes > 0
+
+
+def test_every_status_is_sequenced_within_one_boot(tmp_path):
+    # CORE drops a status older than the one it already adopted (a late idle after a start).
+    rec = Rig(tmp_path).rec
+    first, second = rec.status(), rec.status()
+    assert first["boot_id"] and first["boot_id"] == second["boot_id"]
+    assert 0 < first["seq"] < second["seq"]
+    assert Rig(tmp_path / "other").rec.status()["boot_id"] != first["boot_id"]

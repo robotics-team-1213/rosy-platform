@@ -267,12 +267,21 @@ class RosBridge:
         request.data = on
         future = client.call_async(request)
         if not wait:
+            # The guard announces nothing until the recorder's status confirms; log a refusal.
+            future.add_done_callback(self._log_pilot_recording_refusal)
             return True, ""
         try:
             response = save_map.await_call(future, timeout=3.0)
         except RuntimeError:
             return False, ""
         return bool(response.success), str(response.message)
+
+    def _log_pilot_recording_refusal(self, future) -> None:
+        response = future.result() if not future.cancelled() and future.exception() is None else None
+        if response is None:
+            self._node.get_logger().warn("pilot recorder did not answer a guard stop")
+        elif not response.success:
+            self._node.get_logger().warn(f"pilot recorder refused a guard stop: {response.message}")
 
     def _on_odom(self, msg: Odometry) -> None:
         self._last_odom_ts = time.monotonic()

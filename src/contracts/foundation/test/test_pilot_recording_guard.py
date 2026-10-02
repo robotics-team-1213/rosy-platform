@@ -9,10 +9,15 @@ from core_common.domain.pilot_recording import LINK_GRACE_S, PilotRecordingGuard
 RID = "20261002T101500Z_rosy_01"
 
 
-def status(state="recording", rid=RID, reason=""):
+def status(state="recording", rid=RID, reason="", seq=0, boot="boot-a"):
     return {"schema": "rosy.pilot.recording.status/1", "state": state,
             "id": rid if state in ("recording", "stopping") else None, "elapsed_s": 1.0,
-            "bytes": 10, "max_duration_s": 600, "quota_free_bytes": 100, "last_stop_reason": reason}
+            "bytes": 10, "max_duration_s": 600, "quota_free_bytes": 100, "last_stop_reason": reason,
+            "boot_id": boot, "seq": seq}
+
+
+def stopped(events):
+    return [data for type_, data in events.published if type_ == "recording.stopped"]
 
 
 class Events:
@@ -129,7 +134,12 @@ def test_link_loss_beyond_grace_stops_without_waiting(rig):
     t[0] += LINK_GRACE_S + 0.1
     guard.on_status(status())
     assert calls[-1] == (False, False)
-    assert events.published[-1][1]["reason"] == "link_lost"
+    assert stopped(events) == []                # asked, not yet confirmed by the recorder
+    guard.on_status(status())
+    assert calls.count((False, False)) == 1     # one request while it is pending
+    guard.on_status(status("idle", reason="requested"))
+    assert stopped(events) == [{"id": RID, "by": None, "reason": "link_lost"}]
+    assert guard.owner() is None
 
 
 def test_reconnect_inside_grace_keeps_recording(rig):
@@ -152,8 +162,82 @@ def test_another_drivers_teleop_is_a_seat_change(rig):
     guard.on_teleop("tok-a")
     assert calls == [(True, True)]
     guard.on_teleop("tok-b")
+    assert calls[-1] == (False, False) and stopped(events) == []
+    guard.on_status(status("idle", reason="requested"))
+    assert stopped(events) == [{"id": RID, "by": None, "reason": "seat_changed"}]
+
+
+def test_rest_only_owner_is_not_stopped_for_a_link_it_never_opened(rig):
+    # Policy (D-411 §5.10): the grace starts only after the owner's first /ws/state link.
+    guard, calls, events, t = rig
+    guard.start("tok-a")
+    t[0] += LINK_GRACE_S * 3
+    guard.on_status(status())
+    assert calls == [(True, True)] and guard.owner() == "tok-a"
+    guard.link_opened("tok-a")
+    guard.link_closed("tok-a")
+    guard.on_status(status())
+    t[0] += LINK_GRACE_S + 0.1
+    guard.on_status(status())
     assert calls[-1] == (False, False)
-    assert events.published[-1][1]["reason"] == "seat_changed"
+
+
+def test_a_refused_async_stop_claims_nothing_and_is_retried(rig):
+    guard, calls, events, t = rig
+    guard.link_opened("tok-a")
+    guard.start("tok-a")
+    guard.request_active = lambda on, wait: calls.append((on, wait)) or (False, "")
+    guard.on_teleop("tok-b")
+    assert calls[-1] == (False, False) and stopped(events) == [] and guard.async_stop_failures == 1
+    assert guard.owner() == "tok-a"
+    guard.on_teleop("tok-b")                    # not pending any more: asks again
+    assert calls.count((False, False)) == 2
+
+
+def test_a_raising_transport_never_escapes_the_guard(rig):
+    guard, _, events, _ = rig
+    guard.link_opened("tok-a")
+    guard.start("tok-a")
+
+    def boom(on, wait):
+        raise RuntimeError("executor gone")
+
+    guard.request_active = boom
+    guard.on_teleop("tok-b")
+    assert guard.async_stop_failures == 1 and stopped(events) == []
+
+
+def test_a_late_idle_queued_before_the_start_keeps_the_owner(rig):
+    guard, calls, events, _ = rig
+    guard.on_status(status("idle", seq=4))
+
+    def request(on, wait):
+        calls.append((on, wait))
+        return True, json.dumps({"code": "", "status": status("recording", seq=6)})
+
+    guard.request_active = request
+    guard.start("tok-a")
+    guard.on_status(status("idle", seq=5))      # published before the start, delivered after
+    assert guard.owner() == "tok-a" and guard.active() and stopped(events) == []
+    guard.on_status(status("recording", seq=7))
+    guard.on_status(status("idle", seq=8, reason="max_duration"))
+    assert stopped(events) == [{"id": RID, "by": None, "reason": "max_duration"}]
+
+
+def test_a_new_recorder_boot_resets_the_sequence(rig):
+    guard, *_ = rig
+    guard.on_status(status("idle", seq=50))
+    guard.on_status(status("recording", seq=1, boot="boot-b"))
+    assert guard.active()
+
+
+def test_an_ownerless_recording_is_stopped_by_any_operator(rig):
+    # CORE restarted mid-session: nobody owns it, and it must not need an admin.
+    guard, calls, events, _ = rig
+    guard.on_status(status("recording"))
+    guard.stop("tok-b", is_admin=False)
+    assert calls[-1] == (False, True)
+    assert stopped(events) == [{"id": RID, "by": "tok-b", "reason": "operator"}]
 
 
 def test_recorder_side_end_clears_the_owner_once(rig):

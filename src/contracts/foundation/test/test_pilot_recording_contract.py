@@ -96,3 +96,14 @@ def test_recorder_status_round_trip():
     dumped = status.model_dump(by_alias=True)
     assert dumped["schema"] == rec.STATUS_SCHEMA
     assert rec.RecorderStatus.model_validate(dumped) == status
+
+
+def test_recorder_status_carries_a_boot_and_a_sequence():
+    status = rec.RecorderStatus(state="idle", elapsed_s=0.0, bytes=0, max_duration_s=600,
+                                quota_free_bytes=10)
+    assert (status.boot_id, status.seq) == ("", 0)      # unsequenced: older recorders
+    dumped = rec.RecorderStatus(state="idle", elapsed_s=0.0, bytes=0, max_duration_s=600,
+                                quota_free_bytes=10, boot_id="b" * 32, seq=7).model_dump(by_alias=True)
+    assert dumped["boot_id"] == "b" * 32 and dumped["seq"] == 7
+    with pytest.raises(ValidationError):
+        rec.RecorderStatus.model_validate({**dumped, "seq": -1})

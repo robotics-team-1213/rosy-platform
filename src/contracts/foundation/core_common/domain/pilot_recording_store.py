@@ -13,6 +13,7 @@ import os
 import stat
 import tarfile
 from pathlib import Path
+from typing import NamedTuple
 
 from core_common.protocol.recording import (
     FETCHED_NAME, MANIFEST_NAME, SESSION_NAME, RecordingManifest, RecordingSummary, recording_id_ok)
@@ -90,22 +91,53 @@ def list_recordings(root: Path, *, active_id: str | None) -> list[dict]:
     return rows
 
 
-def archive_plan(root: Path, recording_id: str) -> tuple[list[tuple[str, Path, int]], int]:
-    """(arcname, path, size) for manifest.json then every manifest file, and the exact tar
-    length. LookupError for an unknown/unsafe id, a missing or invalid manifest, a member that
-    escapes the folder, is not a regular file, or whose size differs from the manifest."""
+class Member(NamedTuple):
+    """One tar member. `data` is set for manifest.json (streamed from the validated bytes);
+    a file member is identified by (dev, ino) so a swap after the plan is caught."""
+    arcname: str
+    path: Path
+    size: int
+    mtime: float
+    ident: tuple[int, int]
+    data: bytes | None = None
+
+
+def _open_nofollow(path: Path) -> int:
+    """O_NOFOLLOW where the platform has it (Linux); Windows has no such flag."""
+    return os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_BINARY", 0))
+
+
+def _read_manifest(path: Path) -> tuple[bytes, os.stat_result]:
+    fd = _open_nofollow(path)
+    try:
+        info = os.fstat(fd)
+        if not stat.S_ISREG(info.st_mode):
+            raise OSError(f"{path.name} is not a regular file")
+        with os.fdopen(os.dup(fd), "rb") as handle:
+            return handle.read(), info
+    finally:
+        os.close(fd)
+
+
+def archive_plan(root: Path, recording_id: str) -> tuple[list[Member], int]:
+    """Members for manifest.json then every manifest file, and the exact tar length.
+    LookupError for an unknown/unsafe id, a symlinked folder, a missing or invalid manifest, a
+    member that escapes the folder, is not a regular file, or whose size differs."""
     if not recording_id_ok(recording_id):
         raise LookupError("unknown recording")
     folder = Path(root) / recording_id
+    if folder.is_symlink():
+        raise LookupError("recording folder is a link")
     base = folder.resolve(strict=False)
     try:
-        raw = (folder / MANIFEST_NAME).read_bytes()
+        raw, manifest_info = _read_manifest(folder / MANIFEST_NAME)
         manifest = RecordingManifest.model_validate_json(raw)
     except (OSError, ValueError) as exc:
         raise LookupError("recording has no valid manifest") from exc
     if manifest.id != recording_id:
         raise LookupError("manifest names another recording")
-    members = [(f"{recording_id}/{MANIFEST_NAME}", folder / MANIFEST_NAME, len(raw))]
+    members = [Member(f"{recording_id}/{MANIFEST_NAME}", folder / MANIFEST_NAME, len(raw),
+                      manifest_info.st_mtime, (0, 0), raw)]
     for item in manifest.files:
         path = folder / item.path
         try:
@@ -115,8 +147,9 @@ def archive_plan(root: Path, recording_id: str) -> tuple[list[tuple[str, Path, i
             raise LookupError(f"member {item.path} is missing") from exc
         if not stat.S_ISREG(info.st_mode) or not inside or info.st_size != item.bytes:
             raise LookupError(f"member {item.path} changed or escapes the recording")
-        members.append((f"{recording_id}/{item.path}", path, item.bytes))
-    length = sum(_BLOCK + -(-size // _BLOCK) * _BLOCK for _, _, size in members) + 2 * _BLOCK
+        members.append(Member(f"{recording_id}/{item.path}", path, item.bytes, info.st_mtime,
+                              (info.st_dev, info.st_ino)))
+    length = sum(_BLOCK + -(-m.size // _BLOCK) * _BLOCK for m in members) + 2 * _BLOCK
     return members, length
 
 
@@ -126,19 +159,33 @@ def _header(arcname: str, size: int, mtime: float) -> bytes:
     return info.tobuf(format=tarfile.USTAR_FORMAT, encoding="utf-8", errors="strict")
 
 
+def _file_blocks(member: Member, chunk_size: int):
+    fd = _open_nofollow(member.path)
+    try:
+        info = os.fstat(fd)
+        if (info.st_dev, info.st_ino) != member.ident or info.st_size != member.size:
+            raise OSError(f"{member.arcname} changed since the archive was planned")
+        yield _header(member.arcname, member.size, member.mtime)
+        sent = 0
+        while sent < member.size:
+            block = os.read(fd, min(chunk_size, member.size - sent))
+            if not block:
+                raise OSError(f"{member.arcname} shrank while streaming")
+            sent += len(block)
+            yield block
+    finally:
+        os.close(fd)
+
+
 def iter_archive(members, chunk_size: int = 1 << 20):
     """Uncompressed USTAR stream (mcap is already zstd): header, data, pad, two zero blocks.
-    OSError if a member shrank since archive_plan: the stream then ends short of its length."""
-    for arcname, path, size in members:
-        with path.open("rb") as handle:
-            yield _header(arcname, size, os.fstat(handle.fileno()).st_mtime)
-            sent = 0
-            while sent < size:
-                block = handle.read(min(chunk_size, size - sent))
-                if not block:
-                    raise OSError(f"{arcname} shrank while streaming")
-                sent += len(block)
-                yield block
-        if size % _BLOCK:
-            yield b"\0" * (_BLOCK - size % _BLOCK)
+    OSError if a member changed since archive_plan: the stream then ends short of its length."""
+    for member in members:
+        if member.data is not None:
+            yield _header(member.arcname, member.size, member.mtime)
+            yield member.data
+        else:
+            yield from _file_blocks(member, chunk_size)
+        if member.size % _BLOCK:
+            yield b"\0" * (_BLOCK - member.size % _BLOCK)
     yield b"\0" * (2 * _BLOCK)

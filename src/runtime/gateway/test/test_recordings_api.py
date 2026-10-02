@@ -63,7 +63,97 @@ def _recording(root):
 def rec_client(core_client, tmp_path):
     client, svc = core_client(config_overrides={"recording": {"pilot_root": str(tmp_path / "rec")}})
     (tmp_path / "rec").mkdir()
+    # Frozen evidence clock: a velocity set by the test stays fresh however slow the host is.
+    svc.state._clock = lambda: 1_790_000_000.0
     return client, svc, tmp_path / "rec"
+
+
+def test_a_download_aborts_when_manual_input_starts_mid_stream(rec_client, monkeypatch):
+    from core_api_web.api.v1 import recordings
+    client, svc, root = rec_client
+    _, sent = _wire(svc)
+    _recording(root)
+    svc.state.set_velocity(0.0, 0.0)
+    assert client.post("/api/v1/mode", json={"mode": "MANUAL"}, headers=OPERATOR).status_code == 200
+    real = recordings.iter_archive
+
+    def driven(members, *args, **kwargs):
+        for index, block in enumerate(real(members, *args, **kwargs)):
+            if index == 1:
+                assert svc.command.teleop(0.1, 0.0) == (True, "")   # the stick moves mid-download
+            yield block
+
+    monkeypatch.setattr(recordings, "iter_archive", driven)
+    response = client.get(f"/api/v1/recordings/{RID}/archive", headers=OPERATOR)
+    assert len(response.content) < int(response.headers["content-length"])
+    assert sent == []                            # an aborted download is never "fetched"
+
+
+def test_a_download_that_fails_mid_stream_is_not_fetched(rec_client, monkeypatch):
+    from core_api_web.api.v1 import recordings
+    client, svc, root = rec_client
+    _, sent = _wire(svc)
+    _recording(root)
+    svc.state.set_velocity(0.0, 0.0)
+    real = recordings.iter_archive
+
+    def failing(members, *args, **kwargs):
+        stream = real(members, *args, **kwargs)
+        yield next(stream)
+        raise OSError("bag_0.mcap was replaced while streaming")
+
+    monkeypatch.setattr(recordings, "iter_archive", failing)
+    response = client.get(f"/api/v1/recordings/{RID}/archive", headers=OPERATOR)
+    assert len(response.content) < int(response.headers["content-length"])
+    assert sent == []
+    monkeypatch.undo()
+    assert client.get(f"/api/v1/recordings/{RID}/archive", headers=OPERATOR).status_code == 200
+
+
+def test_only_one_download_at_a_time(rec_client):
+    from core_api_web.api.v1 import recordings
+    client, svc, root = rec_client
+    _wire(svc)
+    _recording(root)
+    svc.state.set_velocity(0.0, 0.0)
+    assert recordings._DOWNLOADS.acquire(blocking=False)
+    try:
+        response = client.get(f"/api/v1/recordings/{RID}/archive", headers=OPERATOR)
+        assert response.status_code == 409 and response.json()["error"]["code"] == "RECORDING_BUSY"
+    finally:
+        recordings._DOWNLOADS.release()
+    assert client.get(f"/api/v1/recordings/{RID}/archive", headers=OPERATOR).status_code == 200
+    # Released after each download, finished or not.
+    assert client.get(f"/api/v1/recordings/{RID}/archive", headers=OPERATOR).status_code == 200
+
+
+def test_download_refused_while_docking_or_line_following(rec_client, monkeypatch):
+    client, svc, root = rec_client
+    _wire(svc)
+    _recording(root)
+    svc.state.set_velocity(0.0, 0.0)
+    from core_api_web.api.deps import Mode
+    assert svc.modes.transition(Mode.DOCKING)[0]
+    response = client.get(f"/api/v1/recordings/{RID}/archive", headers=OPERATOR)
+    assert response.json()["error"]["code"] == "ROBOT_MOVING"
+    assert svc.modes.transition(Mode.IDLE)[0]
+    assert client.get(f"/api/v1/recordings/{RID}/archive", headers=OPERATOR).status_code == 200
+    monkeypatch.setattr(type(svc.line_follow), "active", property(lambda self: True))
+    response = client.get(f"/api/v1/recordings/{RID}/archive", headers=OPERATOR)
+    assert response.json()["error"]["code"] == "ROBOT_MOVING"
+
+
+def test_a_failing_recording_hook_never_refuses_an_accepted_teleop(rec_client):
+    client, svc, _ = rec_client
+
+    def boom(_token):
+        raise RuntimeError("guard broke")
+
+    svc.pilot_recording.on_teleop = boom
+    svc.state.set_velocity(0.0, 0.0)     # odometry evidence keeps teleop available
+    assert client.post("/api/v1/mode", json={"mode": "MANUAL"}, headers=OPERATOR).status_code == 200
+    assert client.post("/api/v1/teleop", json={"linear": 0.05}, headers=OPERATOR).status_code == 200
+    assert svc.pilot_recording.hook_errors == 1
 
 
 def test_start_and_stop_go_through_the_recorder(rec_client):

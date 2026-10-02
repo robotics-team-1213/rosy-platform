@@ -88,9 +88,9 @@ async def ws_state(websocket: WebSocket):
     if svc is None:
         return
     token_id = websocket.state.token_id
-    svc.pilot_recording.link_opened(token_id)     # D-411: the Pilot link for recording ownership
     rate = float(svc.config.get("state", {}).get("rate_hz", 10.0))
     try:
+        svc.pilot_recording.link_opened(token_id)     # D-411: the Pilot link for recording ownership
         while True:
             await websocket.send_json(svc.state.snapshot().model_dump())
             await asyncio.sleep(1.0 / rate)

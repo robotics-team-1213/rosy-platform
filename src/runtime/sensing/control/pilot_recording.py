@@ -11,6 +11,7 @@ stops a writer that outlived its node and writes every missing manifest. Only fe
 from __future__ import annotations
 
 import hashlib
+import itertools
 import json
 import os
 import re
@@ -18,6 +19,7 @@ import shutil
 import signal
 import subprocess
 import time
+import uuid
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
@@ -150,6 +152,8 @@ class PilotRecorder:
         self._stop_reason = ""
         self._killed = False
         self._last_stop_reason = ""
+        self._boot_id = uuid.uuid4().hex
+        self._seqs = itertools.count(1)   # next() is atomic: any thread may build a status
 
     # ------------------------------------------------------------------ state
     def _busy(self) -> bool:
@@ -291,6 +295,8 @@ class PilotRecorder:
             "max_duration_s": self._max_duration_s,
             "quota_free_bytes": max(0, self._quota - used),
             "last_stop_reason": self._last_stop_reason,
+            "boot_id": self._boot_id,
+            "seq": next(self._seqs),
         }
 
     # ------------------------------------------------------------ disk upkeep

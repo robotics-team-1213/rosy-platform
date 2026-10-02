@@ -91,6 +91,10 @@ class RecorderStatus(_Wire):
     max_duration_s: int = Field(gt=0, le=MAX_DURATION_S)
     quota_free_bytes: int = Field(ge=0)
     last_stop_reason: str = Field("", max_length=64)
+    # Per recorder boot, seq grows with every status it builds, so CORE can drop one that
+    # arrives after a newer one it already adopted. 0 / "" means unsequenced.
+    boot_id: str = Field("", max_length=64)
+    seq: int = Field(0, ge=0)
 
     @model_validator(mode="after")
     def id_when_active(self) -> "RecorderStatus":

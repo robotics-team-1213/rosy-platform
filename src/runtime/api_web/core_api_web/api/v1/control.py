@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
@@ -14,6 +16,7 @@ from core_common.domain.tasks import TaskKind
 
 
 control_router = APIRouter(prefix="/api/v1", tags=["control"])
+_log = logging.getLogger(__name__)
 
 
 class ModeRequest(BaseModel):
@@ -49,5 +52,9 @@ def teleop(body: TeleopRequest, auth: AuthContext = Depends(operator),
     if not accepted:
         raise ApiError(code, 409 if code in ("MODE_CONFLICT", "EMERGENCY_ACTIVE") else 400,
                        f"teleop rejected: {code}")
-    svc.pilot_recording.on_teleop(auth.token_id)   # D-411: another driver ends the recording
+    try:
+        svc.pilot_recording.on_teleop(auth.token_id)   # D-411: another driver ends the recording
+    except Exception:  # noqa: BLE001 - the command is already accepted; never answer it with a 500
+        svc.pilot_recording.hook_errors += 1
+        _log.exception("pilot recording seat-change hook failed")
     return {"accepted": True}

@@ -145,3 +145,34 @@ def test_a_member_that_shrinks_while_streaming_fails_the_stream(tmp_path):
     (folder / "bag" / "bag_0.mcap").write_bytes(b"m" * 10)
     with pytest.raises(OSError):
         b"".join(store.iter_archive(members))
+
+
+@pytest.mark.skipif(os.name == "nt", reason="symlinks need privileges on Windows")
+def test_a_symlinked_recording_folder_is_refused(tmp_path):
+    real = make(tmp_path / "elsewhere")
+    (tmp_path / "rec").mkdir()
+    (tmp_path / "rec" / RID).symlink_to(real, target_is_directory=True)
+    with pytest.raises(LookupError):
+        store.archive_plan(tmp_path / "rec", RID)
+    assert store.list_recordings(tmp_path / "rec", active_id=None) == []
+
+
+def test_a_member_replaced_after_the_plan_fails_the_stream(tmp_path):
+    folder = make(tmp_path)
+    members, _ = store.archive_plan(tmp_path, RID)
+    keep = folder / "bag" / "keep"
+    (folder / "bag" / "bag_0.mcap").rename(keep)          # the planned file stays alive
+    (folder / "bag" / "bag_0.mcap").write_bytes(b"n" * 700)   # same size, another file
+    with pytest.raises(OSError):
+        b"".join(store.iter_archive(members))
+
+
+def test_the_manifest_is_streamed_from_the_validated_bytes(tmp_path):
+    folder = make(tmp_path)
+    original = (folder / "manifest.json").read_bytes()
+    members, length = store.archive_plan(tmp_path, RID)
+    (folder / "manifest.json").write_bytes(b"{}")
+    data = b"".join(store.iter_archive(members))
+    assert len(data) == length
+    with tarfile.open(fileobj=io.BytesIO(data), mode="r:") as archive:
+        assert archive.extractfile(f"{RID}/manifest.json").read() == original
