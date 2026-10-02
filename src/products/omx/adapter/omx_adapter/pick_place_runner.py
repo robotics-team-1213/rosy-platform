@@ -100,6 +100,10 @@ class PickPlaceRunner:
         self._last_event_sequence = 0
         self._cancel_ack_recorded = False
         self._last_command_state_sequence = -1
+        # Feedback journaling (C3b A2): RUNNING is journalled once per goal; later feedback
+        # is only counted, and the count is journalled with the terminal result.
+        self._running_journaled_goal: str | None = None
+        self._feedback_events = 0
 
         if not isinstance(plan, (ResolvedPickPlacePlan, CellTransferPlan)):
             raise ValueError("plan must be a validated ResolvedPickPlacePlan or CellTransferPlan")
@@ -283,6 +287,8 @@ class PickPlaceRunner:
             self._cancel_ack_recorded = False
             self._pending_events.clear()
             self._pending_overflow = False
+            self._running_journaled_goal = None
+            self._feedback_events = 0
             self._submitting = True
 
         try:
@@ -463,6 +469,12 @@ class PickPlaceRunner:
             return True
         if goal_id is None or event.goal_id != goal_id:
             return False
+        if event.kind == "RUNNING_FEEDBACK":
+            with self._lock:
+                self._feedback_events += 1
+                if self._running_journaled_goal == goal_id:
+                    # ~100 Hz JTC feedback: no storage I/O in the ROS callback (C3 run4).
+                    return True
         parent = self.recorder.parent()
         if (parent is not None and parent["state"] in {"UNKNOWN", "HOLD"}
                 and any(row["phase_id"] == phase.phase_id and row["state"] == "UNKNOWN"
@@ -481,6 +493,8 @@ class PickPlaceRunner:
             parent = self.recorder.parent()
             if parent is not None and parent["state"] == "ACCEPTED":
                 self.recorder.mark_action_running(driver_goal_id=goal_id)
+            with self._lock:
+                self._running_journaled_goal = goal_id
             return True
         if event.kind == "CANCEL_ACK":
             if self._cancel_ack_recorded:
@@ -502,6 +516,8 @@ class PickPlaceRunner:
             else:
                 outcome = "FAILED"
             observed_at = self.now()
+            with self._lock:
+                feedback_events = self._feedback_events
             if not math_is_aware(observed_at):
                 self.recorder.hold(reason="LOCAL_CLOCK_INVALID")
                 return False
@@ -510,7 +526,7 @@ class PickPlaceRunner:
                 outcome=outcome, result_source="ros-action-result",
                 result_observed_at=observed_at.astimezone(timezone.utc).isoformat(),
                 result={"status": event.status, "result_code": event.result_code,
-                        "event_sequence": event.sequence},
+                        "event_sequence": event.sequence, "feedback_events": feedback_events},
             )
             return True
         return False

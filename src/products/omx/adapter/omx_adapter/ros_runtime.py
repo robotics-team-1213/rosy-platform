@@ -14,6 +14,7 @@ from typing import Any, Callable
 from action_msgs.msg import GoalStatus
 from control_msgs.action import FollowJointTrajectory
 from rclpy.action import ActionClient
+from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 from rclpy.clock import Clock, ClockType
 from rclpy.duration import Duration
 from rclpy.qos import qos_profile_sensor_data
@@ -266,10 +267,12 @@ class RosTrajectoryActionPort:
         node: Any,
         action_name: str,
         event_sink: Callable[[RosGoalEvent], None] | None = None,
+        callback_group: Any | None = None,
     ) -> None:
         if not isinstance(action_name, str) or not action_name.strip():
             raise ValueError("action_name must be non-empty")
-        self._client = ActionClient(node, FollowJointTrajectory, action_name)
+        self._client = ActionClient(node, FollowJointTrajectory, action_name,
+                                    callback_group=callback_group)
         self._event_sink = event_sink
         self.last_handle: RosTrajectoryActionHandle | None = None
 
@@ -293,6 +296,12 @@ class RosArmCommandRuntime:
     This exposes an in-process submit API. It deliberately does not create a
     remote action/service endpoint or claim DDS access control. Deployment must
     admit exactly one local command source and isolate the vendor action graph.
+
+    Callback groups (C3b A2): joint-state intake and the watchdog share one mutually
+    exclusive group; the action client (goal response, feedback, result, and every goal
+    event sink, including a phase runner's journal writes) uses another. Spin the node on
+    a MultiThreadedExecutor with at least two threads, or slow goal-event handling can
+    still delay joint states past max_joint_state_age_s (C3 run2-run7).
     """
 
     def __init__(
@@ -322,8 +331,11 @@ class RosArmCommandRuntime:
         if on_goal_event is not None and not callable(on_goal_event):
             raise ValueError("on_goal_event must be callable when provided")
         self._observer_goal_event = on_goal_event
+        self.state_callback_group = MutuallyExclusiveCallbackGroup()
+        self.action_callback_group = MutuallyExclusiveCallbackGroup()
         self.action_port = RosTrajectoryActionPort(
             node, trajectory_action, self._dispatch_goal_event,
+            callback_group=self.action_callback_group,
         )
         self.owner = ArmCommandOwner(config, self.action_port, monotonic=time.monotonic)
         self.last_decision = CommandDecision(True, "ready", "ready")
@@ -333,12 +345,14 @@ class RosArmCommandRuntime:
             joint_state_topic,
             self._on_joint_state,
             qos_profile_sensor_data,
+            callback_group=self.state_callback_group,
         )
         self._steady_clock = Clock(clock_type=ClockType.STEADY_TIME)
         self._timer = node.create_timer(
             poll_period_s,
             self._watchdog_tick,
             clock=self._steady_clock,
+            callback_group=self.state_callback_group,
         )
 
     def _on_joint_state(self, message: JointState) -> None:

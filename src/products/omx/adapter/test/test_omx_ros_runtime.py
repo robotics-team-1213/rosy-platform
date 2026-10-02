@@ -292,3 +292,93 @@ def test_runtime_timeout_latches_hold_and_late_cancel_result_does_not_reopen_own
         for node in (server_node, feedback_node, owner_node):
             node.destroy_node()
         rclpy.shutdown()
+
+
+def test_slow_feedback_handling_cannot_starve_the_joint_state_subscription():
+    """C3b A2: a feedback handler slower than max_joint_state_age_s (C3 run4/run7 journal
+    writes took up to 0.64 s) must not delay joint-state intake on a MultiThreadedExecutor."""
+    rclpy.init()
+    server_node = Node("omx_test_flood_server")
+    feedback_node = Node("omx_test_flood_state")
+    owner_node = Node("omx_test_flood_owner")
+    slow_feedbacks = []
+
+    def execute(goal_handle):
+        for _ in range(40):  # 40 feedback messages over ~0.8 s
+            feedback = FollowJointTrajectory.Feedback()
+            feedback.joint_names = ["joint1"]
+            goal_handle.publish_feedback(feedback)
+            time.sleep(0.02)
+        goal_handle.succeed()
+        result = FollowJointTrajectory.Result()
+        result.error_code = FollowJointTrajectory.Result.SUCCESSFUL
+        return result
+
+    action_name = "/test/omx/flood/arm_controller/follow_joint_trajectory"
+    action_server = ActionServer(server_node, FollowJointTrajectory, action_name,
+                                 execute_callback=execute)
+    state_topic = "/test/omx/flood/joint_states"
+    state_publisher = feedback_node.create_publisher(JointState, state_topic, 10)
+    config = ArmCommandConfig(
+        enabled=True, workcell_id="test_workcell", instance_id="test_instance",
+        joint_names=("joint1",), position_limits={"joint1": (-1.0, 1.0)},
+        allowed_owners=("moveit",), calibration_revision="cal-test",
+        max_joint_state_age_s=0.2, max_goal_duration_s=2.0, action_timeout_s=4.0,
+    )
+    runtime = RosArmCommandRuntime(owner_node, config, joint_state_topic=state_topic,
+                                   trajectory_action=action_name, poll_period_s=0.01)
+    phase_port = RosArmPhaseGoalPort(runtime)
+    executor = MultiThreadedExecutor(num_threads=4)
+    for node in (server_node, feedback_node, owner_node):
+        executor.add_node(node)
+    spinner = ThreadPoolExecutor(max_workers=1)
+    spinning = spinner.submit(executor.spin)
+    stop = threading.Event()
+
+    def publish_states():
+        while not stop.is_set():
+            message = JointState()
+            message.name = ["joint1"]
+            message.position = [0.0]
+            state_publisher.publish(message)
+            stop.wait(0.01)
+
+    publisher = threading.Thread(target=publish_states, daemon=True)
+    publisher.start()
+
+    def slow_sink(event):
+        if event.kind == "RUNNING_FEEDBACK" and not slow_feedbacks:
+            slow_feedbacks.append(event)
+            time.sleep(0.6)  # 3x max_joint_state_age_s inside the ROS callback
+        return True
+
+    try:
+        deadline = time.monotonic() + 5.0
+        while time.monotonic() < deadline and not (
+                runtime.action_port.server_is_ready() and runtime.latest_joint_state is not None):
+            time.sleep(0.01)
+        state = runtime.latest_joint_state
+        command = TrajectoryCommand(
+            workcell_id=config.workcell_id, instance_id=config.instance_id,
+            command_id="flood-command", session_id=runtime.owner.session_id, owner="moveit",
+            positions={"joint1": 0.1}, duration_s=1.0, source_state_sequence=state.sequence,
+            calibration_revision=config.calibration_revision, phase_id="approach",
+            start_state_window={"joint1": (0.0, 0.01)},
+        )
+        assert phase_port.submit(command, on_goal_event=slow_sink).dispatched is True
+        deadline = time.monotonic() + 6.0
+        while time.monotonic() < deadline and runtime.last_terminal_decision is None:
+            time.sleep(0.01)
+        assert slow_feedbacks, "the server never sent feedback"
+        assert runtime.last_terminal_decision.reason == "completed", runtime.last_terminal_decision
+        assert runtime.owner.state == "ready"
+    finally:
+        stop.set()
+        publisher.join(timeout=1.0)
+        executor.shutdown(timeout_sec=2.0)
+        spinning.result(timeout=3.0)
+        runtime.destroy()
+        action_server.destroy()
+        for node in (server_node, feedback_node, owner_node):
+            node.destroy_node()
+        rclpy.shutdown()

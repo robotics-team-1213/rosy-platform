@@ -445,3 +445,51 @@ def test_nonadvancing_joint_sequence_holds_before_next_phase_intent(tmp_path):
     assert len(port.submissions) == 1
     assert len(recorder.phases()) == 1
     assert store.get_action("action-1")["state"] == "HOLD"
+
+
+class _CountingStore:
+    """Counts every ActionStore call the recorder makes (A2: storage I/O per ROS event)."""
+
+    def __init__(self, inner):
+        self.inner = inner
+        self.calls = []
+
+    def __getattr__(self, name):
+        target = getattr(self.inner, name)
+        if not callable(target):
+            return target
+
+        def counted(*args, **kwargs):
+            self.calls.append(name)
+            return target(*args, **kwargs)
+        return counted
+
+
+def test_feedback_flood_journals_running_once_and_terminal_always(tmp_path):
+    # C3 run4: 119 feedback events in 3.4 s each opened SQLite inside the ROS callback.
+    # The RUNNING transition and the terminal result are journalled; later feedback is
+    # counted in memory only and its count lands in the terminal result.
+    store, recorder, port, runner = _harness(tmp_path)
+    counting = _CountingStore(recorder._store)
+    recorder._store = counting
+    captured = {}
+
+    def accept(command, goal, callback):
+        captured.update(command=command, goal=goal, callback=callback)
+        callback(_event("GOAL_ACCEPTED", command, "approach", goal, 1))
+
+    port.on_submit = accept
+    runner.start()
+    command, goal, callback = captured["command"], captured["goal"], captured["callback"]
+    counting.calls.clear()
+    assert callback(_event("RUNNING_FEEDBACK", command, "approach", goal, 2, feedback_sequence=1))
+    first_feedback_calls = len(counting.calls)
+    assert first_feedback_calls > 0
+    for n in range(3, 503):
+        assert callback(_event("RUNNING_FEEDBACK", command, "approach", goal, n, feedback_sequence=n - 1))
+    assert len(counting.calls) == first_feedback_calls
+    assert callback(_event("TERMINAL_RESULT", command, "approach", goal, 503, status=4, result_code=0))
+    row = recorder.phases()[0]
+    assert row["state"] == "SUCCEEDED"
+    assert recorder.parent()["state"] == "RUNNING"
+    assert "feedback_events" in str(row) and "501" in str(row)
