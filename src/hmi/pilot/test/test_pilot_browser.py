@@ -1262,6 +1262,29 @@ def test_a_base_without_pivot_or_fine_draws_neither_and_ignores_q_e(tablet_page)
     assert all(entry["angular"] == 0 for entry in dev_server.TELEOP_LOG)
     assert errors == [], errors
 
+# A zone point straight above the ring, as high as the column allows (top edge + 4 px).
+_ZONE_TOP = """() => {
+  const stick = document.querySelector('[data-drive-stick]').getBoundingClientRect();
+  const column = document.querySelector('[data-drive-right]').getBoundingClientRect();
+  const cx = stick.left + stick.width / 2, cy = stick.top + stick.height / 2, r = stick.width / 2;
+  for (let k = 1.75; k > 1.05; k -= 0.05) {
+    const y = Math.max(column.top + 4, cy - k * r);
+    if (cy - y > r && document.elementFromPoint(cx, y)?.closest('[data-drive-stick]')) {
+      return {x: cx, y, r, clamped: y - r < column.top};
+    }
+  }
+  return null;
+}"""
+_RING_IN_COLUMN = """() => {
+  const el = document.querySelector('[data-drive-stick]');
+  const ring = el.getBoundingClientRect();
+  const column = document.querySelector('[data-drive-right]').getBoundingClientRect();
+  return {inside: ring.top >= column.top - 0.5 && ring.bottom <= column.bottom + 0.5
+                  && ring.left >= column.left - 0.5 && ring.right <= column.right + 0.5,
+          ring: [ring.left, ring.top, ring.right, ring.bottom], column: [column.left, column.top, column.right, column.bottom]};
+}"""
+
+
 def _zone_point(page):
     """A point 1.5 ring radii from the stick centre, outside the ring but inside its column."""
     return page.evaluate("""() => {
@@ -1312,6 +1335,31 @@ def test_stick_grabs_a_touch_outside_the_ring_but_not_a_neighbour_button(base_ur
             assert abs(peak - cap) <= 0.0051 and all(c["angular"] == 0 for c in moved), (cap, moved)
             assert page.evaluate("getComputedStyle(document.querySelector('[data-drive-stick]')).translate") in ("none", "")
             assert sent[-1]["linear"] == 0 and sent[-1]["angular"] == 0      # release ends the hold
+            # D-411 B follow-up (phone): a touch at the top of the zone must not push the drawn ring
+            # out of its column (it was clipped); only the drawing is clamped, zero stays under the finger.
+            top = page.evaluate(_ZONE_TOP)
+            assert top, "no zone point near the top of the column"
+            before = len(page.request.get(log).json())
+            page.mouse.move(top["x"], top["y"])
+            page.mouse.down()
+            page.wait_for_timeout(400)
+            ring = page.evaluate(_RING_IN_COLUMN)
+            assert ring["inside"], ring
+            if viewport[0] < 600:
+                assert top["clamped"], top           # phone: unclamped, the ring would leave the column
+            if viewport[0] < 600:
+                shots = Path(os.environ.get("ROSY_SHOT_DIR", "X:/DevTemp/d411-c"))
+                if shots.drive and Path(shots.drive + "/").exists():
+                    shots.mkdir(parents=True, exist_ok=True)
+                    page.screenshot(path=str(shots / f"pilot-drive-zone-top-{viewport[0]}x{viewport[1]}.png"))
+            landed = page.request.get(log).json()[before:]
+            assert all(c["linear"] == 0 and c["angular"] == 0 for c in landed), landed
+            page.mouse.move(top["x"], top["y"] - top["r"], steps=4)          # up one radius from the touch
+            page.wait_for_timeout(600)
+            page.mouse.up()
+            page.wait_for_timeout(300)
+            moved = page.request.get(log).json()[before + len(landed):]
+            assert abs(max(c["linear"] for c in moved) - cap) <= 0.0051, (cap, moved)
             for selector in ("[data-drive-pedal=forward]", "[data-drive-pivot=right]"):
                 box = page.locator(selector).bounding_box()
                 page.mouse.move(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)

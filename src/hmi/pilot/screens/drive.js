@@ -233,8 +233,14 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
     const outside = Math.hypot(event.clientX - centre.x, event.clientY - centre.y) > centre.r;
     origin = outside ? {x: event.clientX, y: event.clientY, r: centre.r} : centre;
     if (outside) {
+      // Only the drawing is clamped: the ring stays inside its column (phone: no clipped top),
+      // while the zero point stays under the finger.
+      const column = (stick.closest("[data-drive-right]") ?? stick.parentElement).getBoundingClientRect();
+      const clamp = (value, low, high) => Math.min(Math.max(value, low), high);
+      const tx = clamp(event.clientX - centre.x, column.left - rect.left, column.right - rect.right);
+      const ty = clamp(event.clientY - centre.y, column.top - rect.top, column.bottom - rect.bottom);
       stick.classList.add("floating");
-      stick.style.translate = `${event.clientX - centre.x}px ${event.clientY - centre.y}px`;
+      stick.style.translate = `${tx}px ${ty}px`;
     }
     applyStick(event);
   });
