@@ -61,3 +61,19 @@ def test_target_may_carry_a_controls_descriptor():
     target = OmxSimTarget(instance_id="omx_01", joints=("joint1",), gripper="gripper_joint_1",
                           controls=descriptor)
     assert target.model_dump(by_alias=True)["controls"] == {"schema": "rosy.controls/1", "items": ()}
+
+
+def _gripper(**changes):
+    from core_common.protocol.omx_sim import OmxSimGripperGoal
+    body = {"instance_id": "omx_01", "seat_id": "s", "request_id": "r", "position": 0.5,
+            "duration_s": 0.8, "state_sequence": 3, "expires_at_ms": 10**13}
+    return OmxSimGripperGoal(**{**body, **changes})
+
+
+def test_gripper_goal_is_absolute_and_duration_bounded():
+    assert _gripper().position == 0.5
+    assert _gripper(duration_s=0.2).duration_s == 0.2 and _gripper(duration_s=2.0).duration_s == 2.0
+    for bad in ({"duration_s": 0.1}, {"duration_s": 2.5}, {"position": float("nan")},
+                {"position": float("inf")}, {"joint": "x"}, {"state_sequence": -1}, {"seat_id": ""}):
+        with pytest.raises(ValidationError):
+            _gripper(**bad)
