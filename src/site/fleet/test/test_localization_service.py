@@ -15,7 +15,7 @@ from core_common.protocol.localization import CandidateReport, LocState
 from fakes import FakeClock, FakeRobot, run
 from fleet.localization import cues, service_logic
 from fleet.localization.service_logic import Ladder, Monitor
-from fleet.server.localization_service import LocalizationService, load_lane_rules
+from fleet.server.localization_service import CALL_TIMEOUT_S, LocalizationService, load_lane_rules
 from fleet.swarm.transport import RobotApiError
 
 LANE_RULES = (Path(__file__).resolve().parents[3] / "runtime" / "sensing" / "map" / "map_v2_fleet"
@@ -952,6 +952,64 @@ def test_one_hung_robot_does_not_stall_the_others():
     run(drive())
 
     assert len(ok.decisions) == 1
+
+
+def test_the_default_call_timeout_is_2_5_s_and_hung_robots_wait_side_by_side():
+    """S1 run 3 T2: 1 s lost observer evidence under load. Three hung robots still cost one
+    timeout per tick, not three, and the healthy robot is read in the same tick."""
+    assert CALL_TIMEOUT_S == 2.5
+    clock = FakeClock()
+    hung = [Hanging(f"h{i}", state=state(f"h{i}", "CANDIDATES", "odom")) for i in range(3)]
+    ok = FakeRobot("ok", state=state("ok", "CANDIDATES", "odom"))
+    ok.candidates = report("ok", ON_A)
+    svc = service(*hung, ok, clock=clock)
+    run(asyncio.wait_for(svc.tick(), CALL_TIMEOUT_S + 1.0))
+    assert ("localization_candidates",) in ok.calls
+
+
+class TimingOut(Localizing):
+    """CORE takes the decision, but Fleet's call times out (S1 run 3 d3); the robot stays
+    in its check until the test moves it."""
+
+    async def localization_decision(self, decision):
+        await FakeRobot.localization_decision(self, decision)
+        raise asyncio.TimeoutError()
+
+
+def _unconfirmed(clock):
+    r = TimingOut("r", ON_A)
+    svc = service(r, clock=clock)
+    ticks(svc, clock, 5.0)
+    assert len(r.decisions) == 1 and svc.anchors() == set()
+    assert svc.view("r")["last_decision"]["result"] == "unreachable"
+    return r, svc
+
+
+def test_an_unconfirmed_decision_the_robot_then_reaches_gives_an_anchor():
+    clock = FakeClock()
+    r, svc = _unconfirmed(clock)
+    r._state = state("r", "LOCALIZED", pose=(ON_A[0] + 0.03, ON_A[1], ON_A[2] + math.radians(3)))
+    ticks(svc, clock, 0.5)
+    assert svc.anchors() == {"r"}
+
+
+@pytest.mark.parametrize("pose", [(ON_A[0] + 0.06, ON_A[1], ON_A[2]),
+                                  (ON_A[0], ON_A[1], ON_A[2] + math.radians(6)), mirror(ON_A)])
+def test_an_unconfirmed_decision_reached_elsewhere_gives_no_anchor(pose):
+    clock = FakeClock()
+    r, svc = _unconfirmed(clock)
+    r._state = state("r", "LOCALIZED", pose=pose)
+    ticks(svc, clock, 0.5)
+    assert svc.anchors() == set()
+
+
+def test_an_unconfirmed_decision_reached_after_15_s_gives_no_anchor():
+    clock = FakeClock()
+    r, svc = _unconfirmed(clock)
+    ticks(svc, clock, 15.0)
+    r._state = state("r", "LOCALIZED", pose=ON_A)
+    ticks(svc, clock, 0.5)
+    assert svc.anchors() == set()
 
 
 def test_the_cli_wiring_holds_traffic_through_the_console():
