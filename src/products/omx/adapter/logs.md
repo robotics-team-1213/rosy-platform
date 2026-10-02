@@ -245,3 +245,9 @@
 - gate 변화: SOURCE 유지. ROS-SIM HOLD.
 - 결정: D-411 B. 실물 OMX 는 열지 않는다(D-390).
 - 후속: vendor URDF 한계는 모든 관절 ±2π 라 교집합은 지금 `pilot_sim_server.py` 의 허용 리터럴(팔 ±3.0, 그리퍼 ±0.5)과 같다. 검토된 SIM 명목 한계는 `deploy/robot/omx/sim/cell_profile.yaml` 에 있는데 Pilot SIM owner 는 아직 그것을 읽지 않는다 — owner 허용 범위를 cell_profile 에서 만들도록 옮긴다(그리퍼는 Part C2 에서 시작).
+
+## 2026-10-02 · 10daaae5 · feat(pilot): D-411 B SIM 이 Pilot 조립 모듈을 서빙
+- 변경: `PILOT_ASSETS` 에 `controls.js`·`arm-stick.js`·`screens/compose.js`·`widgets/joint_jog.js`. 렌더 시험의 가짜 런타임이 빈 `items` 대신 `joint_jog` 를 알린다(빈 목록은 이제 "조작부 없음"으로 그려진다).
+- 증거: `python -m pytest src/products/omx/adapter/test -q`, `test_pilot_sim_browser.py` 통과 (2026-10-02 Windows).
+- gate 변화: SOURCE 유지. ROS-SIM HOLD.
+- 결정: D-411 B. 실물 OMX 는 열지 않는다(D-390).

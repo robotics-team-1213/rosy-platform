@@ -1007,8 +1007,11 @@ inventory 기술자의 `state`(available/constrained/… presentation 어휘)와
 `gripper`(`joint`·`closed`·`open`·`unit`·`presets{open, half, close}`·`readback`)다.
 
 - `base_velocity`: `max_linear`·`max_angular` 는 지금의 수동 한도다. **0 은 "구동은 있으나 지금 정지로 제한됨"**
-  (`PUT /safety/limits` 가 0 을 받는다)이며 오류가 아니다. `autonomy` 는 기기가 서빙함을 보인 모드만 싣는다 — CORE 는
-  line-follow 서비스가 있을 때만 `["line"]`, 없으면 `[]`. `pivot`·`fine` 은 Pinky 프로필 상수다(런타임 증거 아님).
+  (`PUT /safety/limits` 가 0 을 받는다)이며 오류가 아니다. `autonomy` 는 기기가 **제공하는** 자율 모드다 — CORE 는
+  line-follow 서비스를 가질 때 `["line"]`, 없으면 `[]`. 이것은 지금 차선 추종을 시작할 수 있다는 런타임 증거가 **아니다**
+  (차선 관측은 모드를 켠 뒤에만 들어오고, 쉬는 동안 카메라·차선 준비를 보여 주는 신호가 없다). 시작 가능 여부는
+  `PUT /line-follow/mode` 응답과 `GET /line-follow` 상태(`WAITING`·`LOST` 등)가 판정한다. `pivot`·`fine` 은 Pinky
+  프로필 상수다(런타임 증거 아님).
 - `joint_jog`: 요청 한 번은 관절 하나를 `max_step_rad` 이하로 옮긴다. `duration_s` 는 **클라이언트가 각 요청에 보낼 목표
   길이**다. 이전 목표가 끝난 뒤에만 다음 목표를 보낸다(D-390 §2).
 - `gripper`: `presets.open` = `open`, `presets.close` = `closed`, `presets.half` 는 둘 사이(끝값 제외)다.
@@ -1866,7 +1869,7 @@ fake credentials and clocks; device and field acceptance remain separate gates.
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
-| v1.76 | 2026-10-02 | Additive (D-411 A, feat/d411-pilot-recording-controls): §5.10 Pilot 로봇 녹화 (`GET/POST /api/v1/recordings`, `GET /recordings/active`, `POST /recordings/active/stop`, `GET /recordings/{id}/archive`), ERR-102 `RECORDING_BUSY`·`RECORDING_NOT_ACTIVE`·`ROBOT_MOVING`·`RECORDING_NOT_FOUND`·`RECORDING_QUOTA_FULL`·`RECORDING_DISK_FULL`·`RECORDER_UNAVAILABLE`, §8 `recording.started`·`recording.stopped`, ROS 증거 토픽 `teleop/intent`, 녹화기 상태 `boot_id`·`seq`, 설정 `recording.pilot_root`. B: capabilities `controls`(`rosy.controls/1`), OMX SIM `GET /sim/omx/target` `controls`. 기존 필드 변화 없음 |
+| v1.76 | 2026-10-02 | Additive (D-411 A, feat/d411-pilot-recording-controls): §5.10 Pilot 로봇 녹화 (`GET/POST /api/v1/recordings`, `GET /recordings/active`, `POST /recordings/active/stop`, `GET /recordings/{id}/archive`), ERR-102 `RECORDING_BUSY`·`RECORDING_NOT_ACTIVE`·`ROBOT_MOVING`·`RECORDING_NOT_FOUND`·`RECORDING_QUOTA_FULL`·`RECORDING_DISK_FULL`·`RECORDER_UNAVAILABLE`, §8 `recording.started`·`recording.stopped`, ROS 증거 토픽 `teleop/intent`, 녹화기 상태 `boot_id`·`seq`, 설정 `recording.pilot_root`. B: capabilities `controls`(`rosy.controls/1`), OMX SIM `GET /sim/omx/target` `controls`; Pilot 이 `controls` 로 주행·팔 조작부를 조립(필드 없음 = 구 서버 대체, 빈 `items` = 조작부 없음, 팔 조이스틱은 순차 제한 목표·떼면 새 목표만 멈춤). 기존 필드 변화 없음 |
 | v1.75 | 2026-10-02 | Additive (D-395 개정 4 5항 후속, S1 R1, feat/d395-localized-objects): 상태 스냅샷·하트비트 `localization` 에 선택 필드 `unmapped_objects[≤16]` `{x, y}`(base_link)·`objects_stamp`(로봇 시각 s). `LOCALIZED` 로봇이 전체 스캔의 지도 밖 물체를 상태(2 Hz)마다 싣고, 밖에서는 빈 목록이다. CORE 는 그대로 넘기고 `pose_frame: odom`·`state_stale` 에서 비운다. Fleet 감시가 닻 로봇의 관찰로 다른 `LOCALIZED` 로봇의 거울 잠금을 잡는다. 기존 필드 변화 없음 |
 | v1.74 | 2026-10-02 | Additive (D-407, feat/d407-stuck-recovery-core): `POST /api/v1/line-follow/stuck/decision`, line-follow 상태 `stuck`(`LineStuckStatus`: `stuck_id, cause, phase, held_s, attempts, max_attempts, local_enabled, ask_remaining_s, last_answer, decisions`, 막힘 없으면 null)·`state` 값 `RECOVERING`·사유 `stuck_back_off`·`stuck_<phase>`, 에러 `STUCK_ID_MISMATCH`·`STUCK_DECISION_REFUSED`, 이벤트 `nav.line_stuck_opened/asked/answered/local_attempt/local_result/closed`, 설정 `line_follow.recovery_*`(로컬 복구 기본 꺼짐; `recovery_trail_s`·`recovery_trail_yaw_deg` 는 사각 띠 후진 조건)·`body_lidar_x_m`·`body_rear_x_m`·`body_rotation_radius_m`(URDF, 로봇 패키지). Fleet 콘솔·FleetAgent 답 중계는 다음 단계. 기존 필드 변화 없음 |
 | v1.73 | 2026-10-02 | Additive (D-395 P2-7, feat/d395-p2-7-missions): 새 경로 `POST /localization/mission`(`LOCALIZE_ASSIST`)·`GET /localization/mission`(Viewer) — `LOCALIZED` 가 아닌 로봇에서 CORE 가 확인 기동·귀환 미션(`rotate_in_place`, `nudge_forward`, `lane_to_stopline`; `to_square` 는 409 `unsupported`)을 자기 장애물 정지·e-stop·거리·시간 한도 아래 아주 느리게 실행한다; 거부 409 코드 `localized`·`busy`·`estop`·`path_not_clear`·`calibration_lease`·`unsupported`; 이벤트 `localization.mission`. **행동 변화:** `lane_to_stopline` 미션은 이 미션에 한해 line-follow 를 `LOCALIZED` 관문 없이 켠다(공개 `PUT /line-follow/mode` 의 관문은 그대로); 미션 중에는 Nav2 `nav_cmd_vel` 을 버린다; 미션이 도는 동안 모드는 NAVIGATION 이고 MANUAL·IDLE 로 바꾸면 미션이 `cancelled` 로 끝난다 |

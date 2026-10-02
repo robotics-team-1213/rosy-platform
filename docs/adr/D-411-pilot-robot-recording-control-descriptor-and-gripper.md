@@ -57,3 +57,12 @@
 - **DEVICE:** 사용자 확인 후 실기 녹화·수신을 별도 기록한다. 이 결정만으로 승격하지 않는다.
 
 **관련 결정:** [D-2](D-2-cmd-vel.md), [D-136](D-136-.md), [D-323](D-323-rosy-pilot-teleop-app.md), [D-356](D-356-perception-learning-loop-and-model-delivery.md), [D-366](D-366-pilot-multidevice-roadmap.md), [D-373](D-373-learned-perception-on-pinky-and-capture-loop.md), [D-379](D-379-learning-data-pipeline-auto-labels-local-store.md), [D-386](D-386-omx-async-goal-acceptance-and-phase-state.md), [D-390](D-390-pilot-omx-simulation-practice-boundary.md), [D-404](D-404-omx-setup-teaching-api-simulation-first.md).
+
+## 구현 부록 (2026-10-02)
+
+1. **떼면 취소 → 떼면 새 목표만 멈춤(결정 10 조정).** OMX `ArmCommandOwner.cancel()` 은 소유자를 HOLD 로 건다(`omx_adapter/command_owner.py` `_enter_hold("cancel_requested")`). 풀려면 `recover(operator_confirmed=True)` 가 필요한데 Pilot SIM API 에는 recover 경로가 없어, 손을 뗄 때마다 취소하면 첫 손 떼기 뒤 팔이 다시 움직이지 못한다. 그래서 조이스틱은 손을 떼면 다음 목표 발행을 즉시 끊고, 이미 나간 목표(≤ `max_step_rad`, 길이 `duration_s`)는 끝까지 둔다. 명시적 "진행 중 명령 취소" 버튼(HOLD 를 거는 비상 경로)은 남긴다. 목표는 여전히 하나씩, 이전 목표가 종결 상태가 된 뒤에만 보내며 100 ms 스트림은 쓰지 않는다(D-390 §2).
+2. **두 축 동시 기울임은 우세 축 하나.** 목표 하나는 관절 하나(`OmxSimJog.joint`)라 더 크게 기운 축의 관절만 보낸다. 크기는 데드존(0.15) 너머 기울기에 비례해 `max_step_rad` 까지.
+3. **CORE capabilities 의 `provides`.** 켜진 adapter manifest 의 `provides` 에서 유도하고, manifest 가 없으면 `teleop` 플래그에서 `drive` 를 유도한다. `teleop` 이 보류되면 `drive` 는 빠진다.
+4. **CORE "seat".** 녹화 가드의 seat 는 녹화를 시작한 토큰의 `/ws/state` 링크이며, 다른 토큰의 teleop 이 수락되면 seat 변경으로 본다.
+5. **`autonomy` 의 뜻.** CORE 는 line-follow 서비스를 가질 때 `["line"]` 을 낸다. 쉬는 동안 차선을 따라갈 수 있음을 보이는 정직한 런타임 신호가 없어(차선 관측은 모드를 켠 뒤에만 들어온다) "제공함"으로 정의하고, 시작 가능 여부는 `PUT /line-follow/mode`·`GET /line-follow` 가 판정한다(API Ref §9.1).
+6. **Pilot 소비 규칙.** `controls` 필드가 없으면 구 서버로 보고 기존 Pinky 프로필(SIM 은 기존 0.02 rad 관절·그리퍼 조그)로 대체한다. 빈 `items` 는 "지금 조작부 없음"으로 보이고 대체하지 않는다. 모르는 kind 는 "지원하지 않는 조작부 · 이름"으로 보이고 화면은 계속 동작한다.

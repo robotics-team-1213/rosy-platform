@@ -44,8 +44,8 @@
 
 ## 최근 기록
 
+- 2026-10-02 · 10daaae5 · feat(pilot): D-411 B SIM 이 Pilot 조립 모듈을 서빙
 - 2026-10-02 · uncommitted · feat(pilot-sim): D-411 B `/target` 의 `rosy.controls/1`
 - 2026-10-02 · 4e99d92e · fix(pilot-sim): D-411 A 새 Pilot 자산 서빙
 - 2026-10-02 · uncommitted · test(omx): verify planned-start tolerance budget
 - 2026-10-02 · uncommitted · fix(omx): center final state check on planned start
-- 2026-10-02 · uncommitted · fix(omx): make start tolerance ceiling owner-controlled

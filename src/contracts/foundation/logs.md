@@ -310,3 +310,9 @@
 - 증거: `python -m pytest src/contracts/foundation/test/test_pilot_recording_contract.py src/contracts/foundation/test/test_pilot_recording_guard.py src/contracts/foundation/test/test_pilot_recording_store.py -q` → 65 passed, 2 skipped (2026-10-02 Windows).
 - gate 변화: SOURCE 유지. ROS-SIM HOLD — 계획 Verification ROS-SIM 체크리스트(WSL Ubuntu) 미실행, DEVICE 증거 없음.
 - 결정: D-411 A.
+
+## 2026-10-02 · uncommitted · docs(controls): D-411 B `autonomy` 는 "제공함"이다
+- 변경: `BaseVelocityControl`·`pinky_controls` docstring — `autonomy` 는 기기가 제공하는 모드이고 지금 시작할 수 있다는 증거가 아니다(쉬는 동안 차선 준비를 보이는 신호가 없다).
+- 증거: 문서만. `test_controls_contract.py` 변화 없음.
+- gate 변화: 없음.
+- 결정: D-411 구현 부록 5.

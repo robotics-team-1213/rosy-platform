@@ -33,7 +33,9 @@ class BaseVelocityControl(_Wire):
 
     ``max_linear``/``max_angular`` are the live manual limits; 0 means the drive is
     announced but currently limited to standstill (``PUT /safety/limits`` allows 0).
-    ``autonomy`` lists only modes the device proves it serves. Pinky's ``pivot`` and
+    ``autonomy`` lists the modes the device provides (CORE: it has the line-follow
+    service). It is not evidence that the mode can start right now; the mode's own
+    start/status API decides that. Pinky's ``pivot`` and
     ``fine`` are profile constants of that base, not runtime evidence.
     """
 
@@ -129,7 +131,7 @@ def pinky_controls(*, provides, max_linear: float, max_angular: float,
                    autonomy: tuple[Literal["line"], ...] = ()) -> dict:
     """Pinky's controls from its adapter manifest's `provides` (D-411 §8).
 
-    `autonomy` is what the caller proved is served; pivot/fine are Pinky profile constants.
+    `autonomy` is what the caller provides (not live readiness); pivot/fine are Pinky profile constants.
     """
     items = []
     if "drive" in provides:

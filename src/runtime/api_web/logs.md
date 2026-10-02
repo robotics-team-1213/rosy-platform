@@ -323,3 +323,9 @@
 - 증거: `python -m pytest src/runtime/api_web/test -q` → 73 passed, 13 skipped (2026-10-02 Windows).
 - gate 변화: SOURCE 유지. ROS-SIM HOLD — 계획 Verification ROS-SIM 체크리스트(WSL Ubuntu) 미실행, DEVICE 증거 없음.
 - 결정: D-411 A.
+
+## 2026-10-02 · uncommitted · feat(pilot): D-411 B 자산과 `autonomy` 문구
+- 변경: `pilot_assets` 에 `controls.js`·`arm-stick.js`·`screens/compose.js`·`widgets/joint_jog.js`. capabilities `controls` 주석 — `autonomy: ["line"]` 은 CORE 가 line-follow 서비스를 가질 때 낸다(런타임 준비 증거 아님, API Ref §9.1).
+- 증거: `python -m pytest src/runtime/api_web/test/test_pilot_route.py src/runtime/gateway/test/test_capabilities_controls.py -q` (2026-10-02 Windows).
+- gate 변화: 없음.
+- 결정: D-411 B, 구현 부록 5.

@@ -256,3 +256,9 @@
 - 증거: `python -m pytest src/hmi/pilot/test src/runtime/api_web/test/test_pilot_route.py src/products/omx/adapter/test/test_pilot_sim_api.py -q` → 63 passed, 35 skipped; `ROSY_RUN_BROWSER_TESTS=1` 브라우저 전체 35 passed(기존 23 + 녹화 12), 녹화 12개는 3회 반복 모두 통과 (2026-10-02 Windows, Chromium; 기계 부하로 Chromium 종료가 회당 20–50 s).
 - gate 변화: SOURCE 유지. ROS-SIM HOLD — 계획 Verification ROS-SIM 체크리스트(WSL Ubuntu) 미실행, DEVICE 증거 없음.
 - 결정: D-411 A.
+
+## 2026-10-02 · 10daaae5 · feat(pilot): D-411 B 서술자로 조작부 조립, 팔 조이스틱
+- 변경: 순수 `controls.js`(`rosy.controls/1` 읽기, 위젯 계획, 필드 없음 = 기존 프로필 대체, 빈 `items` = 조작부 없음, 모르는 autonomy 무시)와 `arm-stick.js`(축·데드존·우세 축 단계, 순차 조거 — 이전 목표 종결 뒤에만 다음, 실패·거절이면 멈춤, 남의 명령 종결은 무시). `screens/compose.js`(kind→위젯, 미지원 표시), `widgets/joint_jog.js`(2축 패드·축별 관절 선택·방향키·± 버튼·readout). `screens/arm.js` 를 세션 컨텍스트(`submitJog`·`onUpdate`·활성 목표 250 ms 폴링)로 재구성 — 떼면 새 목표만 멈추고 취소하지 않는다, 취소 버튼은 활성 목표가 있을 때만. 태블릿 가로는 왼쪽 작업 공간·오른쪽 조작부. 주행은 capabilities `controls` 의 `base_velocity` 로 프로필(차선 자동 토글은 `autonomy`), 미지원 조작부는 영상 왼쪽 위 표시. 자산 다섯 곳 등록, SW 캐시 `2026-10-02-4`. dev_server `/__test__/controls`.
+- 증거: `python -m pytest src/hmi/pilot/test src/runtime/api_web/test/test_pilot_route.py src/products/omx/adapter/test -q` → 351 passed, 49 skipped; `ROSY_RUN_BROWSER_TESTS=1` `test_pilot_browser.py` + `test_pilot_sim_browser.py` → 45 passed (2026-10-02 Windows, Chromium; 새 시험: 미지 kind, 구 CORE 대체, autonomy 토글, 빈 목록, 조이스틱 순차·떼면 취소 없음, 축 재지정·방향키·버튼 대기, 390×844 가로 넘침 없음).
+- gate 변화: SOURCE 유지. ROS-SIM HOLD — OMX Gazebo 에서 조이스틱 미실행.
+- 결정: D-411 B, D-411 구현 부록 1·2·6.
