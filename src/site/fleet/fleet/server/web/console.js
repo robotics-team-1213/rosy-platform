@@ -558,6 +558,37 @@ el("estop").addEventListener("click", async () => {
 });
 
 
+// D-421 — 래치 없는 전체 주행 취소. 응답은 CORE 응답 수이지 물리 정지가 아니다(D-298).
+const CANCEL_ALL_RESULT = { failed: "실패", unreachable: "응답 없음" };
+const CANCEL_ALL_STEP = { swarm: "대형 추종", navigation: "내비게이션", line_follow: "차선 추종" };
+el("cancel-all").addEventListener("click", async () => {
+  if (!window.confirm("등록된 모든 로봇의 주행(내비게이션 목표·대형 추종·차선 추종)과 대기 작업을 취소합니다. 비상 정지 래치는 걸지 않습니다. 계속할까요?")) return;
+  try {
+    const result = await call("/api/fleet/cancel-all", { method: "POST" });
+    // 0/0 은 성공이 아니다 — 취소할 로봇이 없었다.
+    const allAnswered = result.total > 0 && result.cancelled === result.total;
+    log(result.total === 0 ? "주행 취소 대상 로봇 없음 — 등록된 로봇을 확인하세요"
+      : `주행 취소 요청 응답: ${result.cancelled}/${result.total} · 물리 정지 미확인`,
+    allAnswered ? undefined : "bad");
+    result.robots.filter((r) => r.result !== "cancelled").forEach((r) => {
+      const steps = Object.entries(r.steps).filter(([, step]) => !step.ok).map(([name, step]) =>
+        step.error?.sent === false && name === "line_follow" ? "주소 미확인 — 차선 추종 끄기 미전송"
+          : `${CANCEL_ALL_STEP[name] || name} ${step.error?.code || "—"}`);
+      log(`  ${r.robot_id} 주행 취소 ${CANCEL_ALL_RESULT[r.result] || r.result} — ${steps.join(" · ")}`, "bad");
+    });
+    const awaiting = result.robots.reduce((n, r) => n + r.tasks.awaiting_core_result.length, 0);
+    log(result.tasks.error ? "대기 작업 취소 실패 — 작업 저장소를 확인하세요"
+      : `대기 작업 ${result.tasks.canceled.length}개 취소 · 로봇 취소 확인 대기 작업 ${awaiting}개`,
+    result.tasks.error ? "bad" : undefined);
+    // CORE 가 취소를 확인하면 그 로봇은 다시 배정되고, 확인이 없으면 작업은 대조가 필요하다.
+    if (awaiting) log("  확인 대기 작업: 로봇이 취소를 알리면 다시 배정, 알리지 않으면 대조 필요", "bad");
+    await refreshDispatchControl();
+  } catch (err) {
+    log(`전체 주행 취소 실패 — ${err.message}`, "bad");
+  }
+});
+
+
 // D-262: 대형 패널은 formation.js 팩토리가 가진다. 셸은 지도 오버레이와
 // 명렬 렌더를 쥐고, 대형 상태는 view.formation 으로 공유한다.
 const formation = createFormation({ el, view, log, call, render });

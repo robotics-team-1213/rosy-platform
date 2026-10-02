@@ -119,6 +119,8 @@ body {
 .dispatch-control strong { color: var(--ink); }
 .dispatch-control small { color: var(--ink-quiet); line-height: var(--leading-body); }
 #dispatch-rearm[hidden] { display: none; }
+/* D-421 — 재허가와 전체 주행 취소는 글 뒤에서 오른쪽에 붙어 선다(한 열 단에서는 글 아래). */
+.dispatch-control > div { margin-right: auto; }
 
 /* ui-button의 display 규칙보다 hidden 속성이 우선해야 빈 목록에서 토글이 사라진다. */
 #roster-toggle[hidden] { display: none; }
@@ -313,10 +315,10 @@ main {
   border-left: 3px solid var(--line-10);
   border-radius: var(--radius-panel);
   background: var(--surface-raised);
-  padding: var(--space-3) var(--space-4);
+  padding: var(--space-2) var(--space-3);
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
+  gap: var(--space-1);
 }
 
 /* D-409 — 컴팩트 카드 요약: 위치·방향은 지도가 말하고 카드는 모드·배터리·안전만.
@@ -599,12 +601,12 @@ main {
 /* ADR-1000: Warning / Critical Queues */
 .queues-container {
   display: flex;
-  gap: var(--space-4);
-  margin-top: var(--space-4);
+  gap: var(--space-2);
+  margin-top: var(--space-2);
 }
 .queue {
   flex: 1;
-  padding: var(--space-4);
+  padding: var(--space-2);
   border-radius: var(--radius-control);
   background: var(--surface-raised);
   border: 1px solid var(--line-10);
@@ -619,7 +621,7 @@ main {
   border-left: 4px solid var(--status-crit);
 }
 .queue ui-triage {
-  margin: 0 0 var(--space-2) 0;
+  margin: 0 0 var(--space-1) 0;
 }
 .issue-list {
   list-style: none;
@@ -627,9 +629,9 @@ main {
   margin: 0;
 }
 .issue-list li {
-  padding: var(--space-2);
+  padding: var(--space-1) var(--space-2);
   background: var(--ground-raise);
-  margin-bottom: var(--space-2);
+  margin-bottom: var(--space-1);
   border-radius: var(--radius-control);
   display: flex;
   justify-content: space-between;

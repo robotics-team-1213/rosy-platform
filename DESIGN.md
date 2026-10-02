@@ -328,7 +328,8 @@ D-280 다섯 원칙은 시각에서 이렇게 묶인다.
 - 붙박이, `ground-deep` 바탕, 88px 기준 높이. 왼쪽 `ui-brand`(장미색 워드마크 + 조용한 부제), 오른쪽 끝 비상 정지. 좁은 창의 접기는 표면이 정한다(로봇 셸: 두 줄 격자, Fleet: 90rem 아래 `설정` 뒤로 접기). 워드마크는 한 줄이다: 칸이 모자라면 표면이 이름 칸에 `container-type: inline-size`를 주고 글자가 칸에 맞게 줄어든다(상한 title).
 
 ### 비상 정지
-- `ui-button kind="irreversible"`. 로봇 셸 `#shell-estop`, Fleet `#estop`("전체 정지 / 등록된 모든 로봇"). 줄바꿈하지 않고, 모든 폭에서 첫 화면에 있다.
+- `ui-button kind="irreversible"`. 로봇 셸 `#shell-estop`, Fleet `#estop`(팔각 아이콘만, 접근 이름·`title` "전체 비상 정지 (래치 · 로봇별 관리자 해제)", [D-421](docs/adr/D-421-fleet-cancel-all-driving-separate-from-latched-estop.md)). 줄바꿈하지 않고, 모든 폭에서 첫 화면에 있다.
+- 래치 없는 Fleet **전체 주행 취소**(`#cancel-all`)는 비상 정지가 아니다. 상단바가 아니라 발행 상태 줄에 `primary`로 선다(위험 채움은 비상 정지 하나).
 
 ### 테마 선택
 - `role="group"` 안에 `RosyTheme.choices` 하나마다 `ui-button kind="segment" data-theme-choice="값"`(지금은 어둡게·밝게·시스템). `theme.js`가 누름을 받아 `aria-pressed`를 맞춘다. 로봇은 `/device` 화면 설정 패널, Fleet은 `설정` 안이다.
