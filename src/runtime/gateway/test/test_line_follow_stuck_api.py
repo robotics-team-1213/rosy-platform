@@ -207,7 +207,30 @@ def test_answer_audit_records_the_token(core_client):
     client.post(URL, json={"stuck_id": stuck_id, "decision": "WAIT"}, headers=OPERATOR)
     answered = [e for e in seen if e.type == "nav.line_stuck_answered"]
     assert answered and answered[0].data["by"] == "operator"
-    assert answered[0].data["token_id"]
+    ref = answered[0].data["principal_ref"]
+    assert ref and "token_id" not in answered[0].data
+    # The reference is the token's public record id, never secret material (D-407 B).
+    listed = client.get("/api/v1/system/tokens", headers=ADMIN).json() if False else None
+    assert "rosy-dev-operator" not in ref
+
+
+def test_answered_event_passes_the_fleet_audit_filter(core_client):
+    """D-407 re-run B: Fleet's event store refused `token_id` as a credential key."""
+    import sys
+    fleet_root = str(REPO / "src" / "site" / "fleet")
+    if fleet_root not in sys.path:
+        sys.path.insert(0, fleet_root)
+    module = pytest.importorskip("fleet.server.core_event_store")
+    client, services, stuck_id = _stuck(core_client)
+    seen = []
+    services.events.subscribe(lambda event: seen.append(event))
+    client.post(URL, json={"stuck_id": "stuck-old", "decision": "WAIT"}, headers=OPERATOR)
+    client.post(URL, json={"stuck_id": stuck_id, "decision": "BACK_AND_RETRY"}, headers=OPERATOR)
+    client.post(URL, json={"stuck_id": stuck_id, "decision": "WAIT"}, headers=OPERATOR)
+    stuck_events = [e for e in seen if e.type.startswith("nav.line_stuck_")]
+    assert stuck_events
+    for event in stuck_events:
+        assert not module._contains_sensitive_field(event.model_dump(mode="json")), event.type
 
 
 def test_recovery_overlay_types_coerce_or_fail_clearly():

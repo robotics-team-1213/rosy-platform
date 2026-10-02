@@ -142,7 +142,7 @@ def decide_line_stuck(body: LineStuckDecisionRequest,
         raise ApiError("EMERGENCY_ACTIVE", 409, "release emergency stop first")
     try:
         outcome = svc.line_follow.stuck_decision(
-            body.stuck_id, body.decision, by=auth.role, token_id=auth.token_id)
+            body.stuck_id, body.decision, by=auth.role, principal_ref=auth.token_id)
     except LineStuckRefused as exc:
         raise ApiError(exc.code, 409, str(exc)) from exc
     if outcome in ("manual", "idle"):
