@@ -2024,7 +2024,7 @@
 
 ## 2026-10-03 · 27025b10 · fix(native,api): D-418 2차 검토 — 앞서 간 시계, CORE의 실제 기한
 
-- 변경(HIGH): 시계가 한 번 1년 앞섰던 기록(`clock.json`) 때문에 5분 비밀번호가 실제로 30일 넘게 켜져 있고, 키가 영구히 지워졌다(검토 probe로 재현). 이제 비밀번호는 `system.now()`로 만든 `expires_at`(벽시계)과 `password.json`에 넣은 `CLOCK_BOOTTIME` 기한·boot id 가운데 먼저 오는 쪽으로 꺼진다. boot id가 다르면 바로 끈다.
+- 변경: (HIGH) 시계가 한 번 1년 앞섰던 기록(`clock.json`) 때문에 5분 비밀번호가 실제로 30일 넘게 켜져 있고, 키가 영구히 지워졌다(검토 probe로 재현). 이제 비밀번호는 `system.now()`로 만든 `expires_at`(벽시계)과 `password.json`에 넣은 `CLOCK_BOOTTIME` 기한·boot id 가운데 먼저 오는 쪽으로 꺼진다. boot id가 다르면 바로 끈다.
 - 변경(HIGH): 키 기준 시각은 시계보다 2일 넘게 앞선 기록이나 시각을 버리고 다시 쓴다. timesyncd가 동기를 알리면(`/run/systemd/timesync/synchronized`) 시계를 그대로 쓴다. 60 s 이상 오를 때만 쓰고(SD 마모), 쓰기 실패는 기록만 하고 값은 돌려준다. 시계가 뒤로 간 경우의 보호는 그대로 둔다.
 - 변경(MEDIUM): 요청에 `answer_by`(CORE가 잠금 대기 뒤 실제로 기다리기를 멈추는 epoch 초)를 넣었다. 도우미는 `answer_by - 1 s`를 넘긴 비밀번호를 되돌린다. CORE는 아직 살아 있는(30 s 이내) `password_off` 요청을 덮어쓰지 않고, 같은 기한 안에서 처리되기를 기다린다.
 - 변경(LOW): 답 파일을 못 쓰면 켠 비밀번호를 다시 끈다(사유 `undelivered`). `GET /password`에 `lock_pending`을 추가했고(스키마·API 문서·계획 계약), 잠금 실패를 `password_deny` 이력으로 남긴다. 요청은 이름 바꾸기로 먼저 가져간 뒤 읽으므로, 그 사이 CORE가 쓴 요청이 읽히지 않고 지워지는 일이 없다.
