@@ -47,7 +47,8 @@ class CellGoalEvidence(BaseModel):
     gripper_evidence_id: Text
     gripper_evidence_revision: Text
     gripper_observed_at: Timestamp
-    satisfied: bool
+    # No ``satisfied`` field: Fleet judges the pose against the step's stored item_at_pose
+    # predicate; a producer cannot assert that the goal is met (C4b, D-328 §4).
 
 
 class CellGoalEvidenceSubmission(BaseModel):

@@ -48,5 +48,5 @@
 - 2026-10-03 · uncommitted · fix(omx_adapter): D-411 C Gazebo 관문 뒤 — 조임 재발행·속도 여유·probe·Gazebo 전용 제약
 - 2026-10-03 · uncommitted · fix(omx_adapter): D-411 C 검토 — 속도 제한·제한 조임·안쪽 범위·stall probe
 - 2026-10-03 · uncommitted · feat(omx_adapter): D-411 C 그리퍼 절대 목표·쥠 readback·시연 `action.gripper`
-- 2026-10-03 · uncommitted · feat: journal Cell hold release and local Action completion
-- 2026-10-02 · uncommitted · test(pilot-sim): D-411 B 렌더 시험 런타임이 실제 소유자처럼 군다
+- 2026-10-03 · uncommitted · feat(omx): C4b 1d — journal 식별
+- 2026-10-03 · uncommitted · fix(omx): C4b 1c — GetAction은 다른 principal을 '없음'으로 답하지 않는다

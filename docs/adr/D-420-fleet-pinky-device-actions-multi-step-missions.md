@@ -166,6 +166,8 @@ D-421은 "주행"을 navigate·대형·차선으로 정하고 도킹과 D-395 �
 | HOLD(`result_unknown`, `cancel_pending`, `fleet_loss`, `late_accept_after_stop`, `evidence_link_lost`, `policy_changed` 종료 전) | `UNKNOWN` | 운영자 대조로 결과가 정해지기 전에는 놓지 않는다. rearm도 거절된다(D-330 §1) |
 | HOLD(CORE 거절, 상관 실패 종료 확인, `goal_unconfirmed`, `site_cancel` 뒤 종료 확인, `not_localized`, `estop`) | `CLAIMED` | 운영자 중단으로 놓거나 §4.4 재승인 때 기록한 `(authority_epoch, generation)`으로 claim을 이어 잡는다 |
 
+> **보강 (2026-10-03): Cell Job에는 D-403 보강이 이 표를 대체한다.** Cell Job claim은 승인부터 종결(목표 확인 완료·운영자 취소)까지 유지한다. 현장 정지는 HOLD(`site_stop`)로 두고 claim을 래치가 지우지 않는 단계 `HELD`로 옮긴다. rearm은 `DISPATCHING`·`UNKNOWN`만 막고, 운영자 취소가 claim을 원자적으로 놓는다. 그래서 위 표의 첫 행(정지 래치가 `CLAIMED`를 놓음)과 HOLD 행들의 `CLAIMED`는 Cell Job에는 적용하지 않는다. 규칙·근거: [D-403 보강 "Cell Job claim 유지 규칙"](D-403-fleet-cell-job-route-cell-transfer.md)(C4b 1b·1c·1d, main `52975530a`). Pinky Mission이 같은 Step 표를 쓰므로(§3), F5를 구현할 때 이 표를 D-403 규칙에 맞춰 고친다.
+
 #### 4.6 다른 Fleet 구성요소와의 경계
 
 - **D-395 위치 확정 사다리.** 사다리는 claim 없이 자동으로 기동을 낸다. Mission claim이 **없는** 로봇에는 지금처럼 동작한다. Mission claim이 **있는** 로봇에 대해서는 **기록된 단일 예외**로 둔다. 조건: 로봇이 `NOT_LOCALIZED`이고, 그 Mission이 Step 진행 없이 HOLD(`not_localized`)이며 claim이 `CLAIMED`일 때만이다. `DISPATCHING`/`UNKNOWN` claim이 있는 로봇에는 사다리가 기동을 내지 않는다. 사다리 기동은 Mission 이벤트에 기록한다. 이 검사는 `localization_service.py`에 새로 넣어야 한다(F9). 대안(사다리가 `direct_action` claim을 잡음)은 Mission claim과 충돌하므로 채택하지 않는다.

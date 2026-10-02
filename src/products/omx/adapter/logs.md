@@ -313,10 +313,31 @@
 - gate 변화: SOURCE 유지. ROS-SIM HOLD.
 - 결정: D-411 B. 실물 OMX 는 열지 않는다(D-390).
 
+## 2026-10-02 · uncommitted · feat(omx): C4b wave 1 — v2 CELL_TRANSFER, 종류별 완료 기록, 수락 저장소 (G4, G8, G2a)
+- 변경: (G4) `action_api.py`는 v1 CELL_TRANSFER 제출을 journal 전에 `UNSUPPORTED_VERSION`으로 거절. (G8) `action_store.py` 완료 기록을 행의 `action_kind`로 고른다 — PICK_PLACE는 기존 이름 그대로, CELL_TRANSFER는 `cell-transfer-workflow`/`CELL_TRANSFER_ACTION_COMPLETED`. 스키마 변경 없음(1194→1191행, 판정 갱신). (G2a) 새 `cell_acceptance.py` `CellAcceptanceStore`: 수락한 셀·레시피 텍스트, 해시(소유자가 다시 계산), kinematics 확인, 미해결 Action 중 교체 거절, 교체 시 레시피 폐기, `capability_current`·`accepted_cell_sha256`·`accepted_item_geometry`. 문서 검증은 port이고 palletizing 검증은 `rosy_agent/omx_cell_documents.py`가 주입한다(D-413 §1).
+- 증거: C4b 보고.
+- 남음: G9(PUT/GET /cell, seat↔Action 배제), G7, CELL_TRANSFER phase 진행기(아래 deploy 기록).
+- gate 변화: 없음.
+
 ## 2026-10-03 · uncommitted · feat: journal Cell hold release and local Action completion
 - Change: reuse physical gripper transaction rules with canonical Cell grant provenance; optionally compose durable workflow gates with the real Skill phase runner. Require matching scoped fresh hold/release readback before local terminal success. Provider/clock/cancel errors and snapshot recovery stay HOLD.
 - Evidence: focused planner/API/runner/transaction/boundary suite 36 passed; sensor and cancel failure review corrections included. Full OMX adapter plus provider/Skill/boundary regression: 371 passed / 5 skipped. Quick tier: 96 passed / 25 freshness warnings. Independent review: 31 passed, no remaining Critical/Important findings.
 - Gate: SOURCE/LOCAL only. Fleet independent goal confirmation, two-ledger Cell replay and ROS-SIM remain open.
+
+## 2026-10-03 · uncommitted · feat(omx): C4b 1b — owner 식별 보고 (C3)
+- 변경: `ActionApi(identity=...)`에 읽기 전용 `GetOwnerIdentity`(v2)를 더했다. 조립이 준 `{workcell_id, instance_id, simulation, profile}`을 돌려준다. 식별이 없는 owner는 `UNKNOWN_OPERATION`이라 Fleet이 하달하지 않는다(D-403 §7, D-390 §5).
+- 증거: `test/test_fleet_omx_cell_transfer_contract.py`, `test/test_platform_cell_owner_assembly.py`.
+- gate 변화: 없음.
+
+## 2026-10-03 · uncommitted · fix(omx): C4b 1c — GetAction은 다른 principal을 '없음'으로 답하지 않는다
+- 변경: `ActionRunner.get`이 다른 principal의 Action에 None 대신 PermissionError를 내어 API가 403 PEER_NOT_ALLOWED로 답한다. `ACTION_NOT_FOUND`는 정말 journal에 없는 Action에만 쓴다.
+- 증거: `test/test_fleet_omx_cell_transfer_contract.py::test_only_action_not_found_reads_as_absent`.
+- gate 변화: 없음.
+
+## 2026-10-03 · uncommitted · feat(omx): C4b 1d — journal 식별
+- 변경: 새 `journal_identity.py`가 owner SQLite journal에 임의 `journal_id`를 한 번 만든다. `ActionApi`는 식별이 있으면 모든 receipt와 GetAction 404 응답에 그것을 싣는다. `DeviceActionReceipt.journal_id`(선택) 추가.
+- 증거: `test/test_platform_cell_owner_assembly.py::test_owner_journal_identity_is_persistent_per_journal_and_in_every_reply`.
+- gate 변화: 없음.
 
 ## 2026-10-03 · uncommitted · feat(omx_adapter): D-411 C 그리퍼 절대 목표·쥠 readback·시연 `action.gripper`
 - 변경: 순수 `pilot_sim_gripper.py` `gripper_state()`(open·closed·holding·moving·unknown, 허용오차 0.05 rad, 정지 판정 0.5 s/0.005 rad). `PilotSimRuntime` 그리퍼 모드(`gripper_open`·`gripper_closed`): 공통 `_dispatch`(instance → 허용 → 단일 진행 목표 → ready → 제공한 sequence), `submit_gripper`(절대 위치, 범위 밖 `gripper_limit`), 스냅샷 `gripper`, `controls()` 가 그리퍼를 `joint_jog` 에서 빼고 `gripper` 항목을 낸다. 그리퍼 목표가 `SUCCEEDED` 로 끝난 뒤의 팔 조그는 그리퍼 칸에 그 목표 위치를 보낸다(readback 이면 쥠이 풀린다). `sim_admission_limits()` — SIM owner 허용 범위 = `deploy/robot/omx/sim/cell_profile.yaml` ∩ URDF(팔·그리퍼 모두; 리터럴 ±3.0/±0.5 제거), 목표 길이 상한 2.0 s, 셀 프로필 바이트를 출처 해시에. `POST /api/v1/sim/omx/gripper`(조그와 같은 영수증·seat·만료·409 규칙). 시연 기록: 출처 `gripper_joint`(선택), 행 `action.gripper`(= `action` 그리퍼 칸, 다르면 `gripper_action`), 목표 길이 0.1–2.0 s, LeRobot `action.gripper` 특성·프레임. 이전 에피소드는 그대로 검증·export.

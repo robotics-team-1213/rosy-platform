@@ -1679,6 +1679,10 @@ Resolved Mission metadata is limited to 64 KiB and rejects the same secret/image
 | GET | `/api/fleet/missions/{mission_id}` | Viewer | Read caller-owned candidate, Mission state, and Fleet Mission event history. |
 | POST | `/api/fleet/missions/{mission_id}/admit` | Named Operator | Recheck evidence and revisions, then atomically acquire the shared workcell/object claims at `expected_generation`. |
 | GET | `/api/fleet/cell-jobs/{mission_id}` | Viewer | Read the resolved Cell Job, ordered step states, and Fleet journal events; a named operator may inspect another principal's Cell Job. |
+| POST | `/api/fleet/cell-jobs/{mission_id}/reconcile` | Named Operator | Read the current step back from the OMX owner now (GetAction), ignoring the readback backoff. 503 when the dispatcher is disabled. |
+| POST | `/api/fleet/cell-jobs/{mission_id}/resume` | Named Operator | Body `{expected_generation}`. Re-approve a HOLD Job under the current fence: the first unconfirmed step becomes READY (or ACTION_SUCCEEDED if its last device outcome was a success; it is never resent), claims are re-taken at the new generation. Refused (409) while a claim is DISPATCHING or UNKNOWN, or for a cancelled Job. |
+| POST | `/api/fleet/cell-jobs/{mission_id}/cancel` | Named Operator | End the Job: status HOLD with reason `CANCELLED_BY_OPERATOR` (terminal; no CANCELLED status until the D-420 v2 schema) and its claims released in the same transaction. Refused while a claim is DISPATCHING or UNKNOWN. |
+| GET | `/api/fleet/resource-claims` | Viewer | `{claims: [{resource_key, resource_kind, resource_id, owner_kind, owner_id, generation, phase, mission_id, job_status, job_reason}]}`; `mission_id`/`job_status`/`job_reason` are set when a Cell Job owns the claim, otherwise null. `phase` is CLAIMED, DISPATCHING, UNKNOWN or HELD (a held Cell Job; the stop latch keeps it, rearm ignores it). |
 
 `POST /api/fleet/proposals` accepts `request_key`, `workcell_id`, `instance_id`,
 and either an ER 2 selector candidate or a service-owned `cell_job` candidate.
@@ -1913,9 +1917,11 @@ fake credentials and clocks; device and field acceptance remain separate gates.
 
 ## 10.17 Cell goal-evidence producer contract (D-413)
 
-Exposed only when the existing Fleet app is composed with `cell_goal_registry`
-and a persistent Cell Job compiler/API. Dispatch remains a separate explicit
-opt-in. There is one Cell journal and one existing site dispatch worker.
+Exposed only when the existing Fleet app is composed with `cell_goal_registry`,
+a persistent Cell Job compiler/API and `deployment_profile="simulation"`
+(`sim_model_pose` is simulation-only evidence, D-403 §5); any other profile
+refuses at startup. There is one Cell journal and one site dispatch worker
+(`StepJobDispatcher`, C4b).
 
 | Method | Path | Credential | Body |
 |---|---|---|---|
@@ -1934,7 +1940,13 @@ whitespace/control characters in identifiers are rejected. The evidence includes
 | `observation_id`, `observation_digest`, `evidence_revision`, `observed_at`, `model_pose_base` | Final independent model observation, provenance and robot-base pose. |
 | `initial_observation_id`, `initial_observation_digest`, `initial_observed_at`, `initial_model_pose_base` | Initial independent observation after grant issuance and before terminal success. |
 | `gripper_state`, `gripper_evidence_id`, `gripper_evidence_revision`, `gripper_observed_at` | Separately sourced post-terminal gripper `OPEN` readback. |
-| `satisfied` | Strict Boolean placement attestation from the pinned evaluator; only `true` can advance a step. |
+
+There is no `satisfied` field (C4b merge, 2026-10-03): a producer reports
+observations only. Fleet judges `model_pose_base` against the `item_at_pose`
+predicate stored in the step at resolution (target, xy/z/yaw/tilt tolerances and
+their basis) and confirms the step only when it is met, after the step's durable
+device `SUCCEEDED` for the same attempt. A submission carrying `satisfied` is
+rejected (422).
 
 Both poses require finite `x_m`, `y_m`, `z_m`, `roll_rad`, `pitch_rad`, `yaw_rad`.
 Observation timestamps are nonnegative epoch seconds. The read-only YAML registry

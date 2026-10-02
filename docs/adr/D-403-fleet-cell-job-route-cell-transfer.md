@@ -119,3 +119,20 @@
 - **DEVICE / FIELD:** 이 결정으로 승격하지 않는다.
 
 **관련 결정:** [D-12](D-12-mission-fleet.md), [D-18](D-18-rosy-core.md), [D-282](D-282-per-hardware-ros-ownership-and-control-boundaries.md), [D-327](D-327-semantic-manipulation-actions-and-device-adapters.md), [D-328](D-328-model-proposed-missions-and-independent-goal-evidence.md), [D-330](D-330-fleet-action-admission-stop-and-recovery.md), [D-336](D-336-fleet-omx-local-ipc-boundary.md), [D-376](D-376-omx-pick-place-planning-and-execution-boundary.md), [D-386](D-386-omx-async-goal-acceptance-and-phase-state.md), [D-390](D-390-pilot-omx-simulation-practice-boundary.md), [D-399](D-399-rosy-layered-architecture-site-plane-device-pipeline.md), [D-401](D-401-rosy-cell-application.md), [D-402](D-402-omx-motion-planner-v1-analytic-top-down-ik.md), [D-404](D-404-omx-setup-teaching-api-simulation-first.md)
+
+## 보강 (2026-10-03, C4b 1b): Cell Job claim 유지 규칙
+
+- **claim은 승인부터 종결까지 유지한다.** Cell Job이 승인(admit)될 때 잡은 작업대·팔레트 claim은 Job이 종결될 때까지 놓지 않는다. 종결은 목표 확인 완료와 운영자 취소다. 예외는 아무것도 보내지 않은 제출 직전 HOLD뿐이며, 이때만 claim을 명시적으로 해제한다.
+- **현장 정지는 종결되지 않은 Cell Job을 HOLD(site_stop)로 두고 claim을 유지한다.** 정지 래치는 같은 트랜잭션에서 READY·ACTION_SUCCEEDED Job을 HOLD(`site_stop`)로 바꾸고, 그 claim을 래치가 지우지 않는 단계 `HELD`로 옮긴다. 진행 중 Action의 claim은 `DISPATCHING`으로 남는다. 다른 Job은 이 자원을 승인받을 수 없다.
+- **rearm을 막는 것은 미해결 claim뿐이다.** 결과를 모르는 `UNKNOWN`(그리고 아직 진행 중인 `DISPATCHING`)만 rearm을 막는다. `HELD`는 rearm을 막지 않는다. rearm 조건 자체는 바꾸지 않았다.
+- **운영자 취소는 claim을 원자적으로 해제한다.** `POST /api/fleet/cell-jobs/{id}/cancel`(이름 있는 운영자)은 종결 전이와 claim 해제를 한 트랜잭션에서 한다. `DISPATCHING`이나 `UNKNOWN` claim이 있으면 거절하므로, 먼저 readback이나 `reconcile`로 결과를 확정한다. 재승인은 `resume`이 현재 세대로 claim을 다시 잡는다.
+- 이 보강은 Cell Job에 대해 D-420 §4.5 첫 행(HOLD 때 claim 해제)을 대체한다. D-420은 이 절을 가리키도록 고친다.
+- 근거: 리뷰 M1 재현(FAILED 뒤 HOLD인 Job A의 claim이 정지 래치로 지워져 같은 자원에 Job B가 승인됨). 구현과 시험은 브랜치 `feat/rosy-cell-c4b-wiring`의 C4b 1b 커밋.
+
+### 보강 추가 (2026-10-03, C4b 1c)
+
+- **재시작 뒤 진행 중이던 claim은 UNKNOWN을 거쳐 정리한다.** Fleet 시작 때 `recover_after_startup`이 자기 트랜잭션에서 READY·RUNNING·ACTION_SUCCEEDED Job을 HOLD(`SITE_AUTHORITY_CHANGED`)로 둔다. 이때 RUNNING Job의 `DISPATCHING` claim을 `UNKNOWN`으로 옮겨 readback이 결과를 읽게 한다. 결과를 읽기 전까지 rearm은 막힌다.
+- **래치 뒤에 끝난 Action은 HOLD(site_stop)와 `HELD` claim이 된다.** 정지나 권한 변경 뒤에 도착한 성공도 Job을 진행시키지 않는다. 성공 기록은 남기고, 운영자 `resume`이 새 세대에서 그 Step을 ACTION_SUCCEEDED로 되돌린 뒤 목표 증거를 기다린다. 진행이 있는 Job의 제출 직전 HOLD도 claim을 `HELD`로 두며, claim 해제는 진행이 없는 Job(Step 0, 제출 이력 없음)의 제출 전 해제와 운영자 취소뿐이다.
+- **GetAction 404는 기본이 UNKNOWN이다.** owner가 `ACTION_NOT_FOUND`라고 답하고, grant 만료 시각에 허용 지연(5 s)을 더한 시각이 지났고, 그 시도에 대해 장치 receipt를 한 번도 기록한 적이 없을 때만 "실행되지 않음"(HELD)으로 본다. 그 밖의 404와 다른 principal의 Action은 오류다. owner journal 식별은 아직 없다.
+- **한계(후속):** UNKNOWN은 장치 journal을 읽어야만 풀린다. owner를 영구히 잃으면 운영자가 증언하는 해결 경로가 생길 때까지 rearm이 막힌다(계획됨).
+- **(2026-10-03, C4b 1d)** Fleet은 `start_step` 뒤 전송 직전에 정지 세대를 다시 읽고, 바뀌었으면 보내지 않은 Step을 HOLD로 두고 claim을 `HELD`로 옮긴다. owner는 journal을 만들 때 임의 식별자(`journal_id`)를 한 번 만들어 receipt·GetAction·GetOwnerIdentity에 싣고, Fleet은 제출 때 그것을 기록한다. 404를 "실행되지 않음"으로 보려면 위 조건에 더해 owner의 현재 `journal_id`가 기록한 값과 같아야 하며, 다르거나 모르면 UNKNOWN이다.

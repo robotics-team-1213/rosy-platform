@@ -27,14 +27,13 @@ class InvalidActionTransition(ValueError):
 
 _TERMINAL = {"SUCCEEDED", "FAILED"}
 _PICK_PLACE_PHASES = ("approach", "grasp", "transfer", "release")
-_WORKFLOW_STATES = frozenset({
-    "APPROACH", "GRASP", "VERIFY_HOLD", "TRANSFER", "RELEASE",
-    "VERIFY_RELEASE", "ACTION_SUCCEEDED", "HOLD",
-})
+_WORKFLOW_STATES = frozenset({"APPROACH", "GRASP", "VERIFY_HOLD", "TRANSFER", "RELEASE",
+                              "VERIFY_RELEASE", "ACTION_SUCCEEDED", "HOLD"})
 _WORKFLOW_EVIDENCE_KEYS = frozenset({
-    "phase_result_id", "gripper_hold_sequence", "gripper_release_sequence",
-    "hold_reason",
-})
+    "phase_result_id", "gripper_hold_sequence", "gripper_release_sequence", "hold_reason"})
+# Completion is journaled under the completed kind; PICK_PLACE names stay as historic rows have them.
+_COMPLETION_BY_KIND = {"PICK_PLACE": ("pick-place-workflow", "PICK_PLACE_ACTION_COMPLETED"),
+                       "CELL_TRANSFER": ("cell-transfer-workflow", "CELL_TRANSFER_ACTION_COMPLETED")}
 
 
 def _utc_now() -> str:
@@ -860,23 +859,21 @@ class ActionStore:
                 raise InvalidActionTransition("Action completion evidence refs are incomplete")
             if refs["gripper_release_sequence"] <= refs["gripper_hold_sequence"]:
                 raise InvalidActionTransition("release readback must follow the hold readback")
+            source, completed = _COMPLETION_BY_KIND[action["action_kind"]]
             connection.execute(
-                """UPDATE omx_actions SET state='SUCCEEDED', result_source='pick-place-workflow',
+                """UPDATE omx_actions SET state='SUCCEEDED', result_source=?,
                    result_observed_at=?, result_json=?, reason=NULL, updated_at=?
                    WHERE action_id=? AND attempt_id=?""",
-                (result_observed_at, result_json, now, action_id, attempt_id),
+                (source, result_observed_at, result_json, now, action_id, attempt_id),
             )
             self._append_event(
                 connection, action_id=action_id, attempt_id=attempt_id, state="SUCCEEDED",
-                event_type="PICK_PLACE_ACTION_COMPLETED", actor_id=action["principal_id"],
-                detail={"result_source": "pick-place-workflow",
-                        "result_observed_at": result_observed_at,
+                event_type=completed, actor_id=action["principal_id"],
+                detail={"result_source": source, "result_observed_at": result_observed_at,
                         "phase_count": len(phases), "result": dict(result)},
                 created_at=now,
             )
-            updated = connection.execute(
-                "SELECT * FROM omx_actions WHERE action_id=?", (action_id,),
-            ).fetchone()
+            updated = connection.execute("SELECT * FROM omx_actions WHERE action_id=?", (action_id,)).fetchone()
             connection.commit()
         return self._dict(updated)
 
