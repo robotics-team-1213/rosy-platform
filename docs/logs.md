@@ -4406,3 +4406,10 @@
 - 검증: Cell 143 passed; Fleet 1336 passed/7 skipped; OMX 268 passed/5 skipped; architecture 76 passed/1 skipped. 네 로그 모두 `test/known_failures.py`에서 0 new, 0 known으로 분류됐다. 로그·pytest 임시 경로는 X:\DevTemp에 뒀다.
 - 한계: suite는 Windows/Python 3.14 source 검사다. C3 feature 브랜치의 Gazebo 증거를 재실행하거나 C4 접수를 수용하지 않았다. Task 0의 구현 전 기준선만 고정했다.
 - gate 변화: 없음.
+
+## 2026-10-02 · uncommitted · test(sim): D-407 차선 막힘 복구 Gazebo 검증
+
+- 변경: `docs/validation/d407-gazebo-stuck-recovery-2026-10-02/`(result.md, evidence/run_sim.sh)와 `tools/sim/d407_stuck_scenarios.py`(ROS 없는 REST 시나리오 구동기, 가짜 Fleet hub)를 더했다. CORE 코드는 바꾸지 않았다.
+- 증거: map_v2_fleet_real keep, 한 대. 모서리 obstacle_ahead 후진 0.080/0.0805 m → 2회 → WAITING_CONSOLE, 회전교차로 lane_lost 후진 0.077–0.082 m → recovered, 관제 답 다섯(stale/닫힌 id 409 포함), hold 끊김·e-stop 중 0 확인. 원시 기록은 X:\DevTemp\d407-gz.
+- 발견: FleetAgent 를 켜면 CORE 시작이 죽어(services.py:528, agent.py:49) ASKING 15 s 경로를 시험할 수 없다. 복귀 뒤 같은 자리 재막힘이 시도 수를 되살려 끝없이 반복한다. 뒤 띠(±0.09)가 옆 벽과 LiDAR 잡음 한 장으로 후진을 거부·중단한다.
+- gate 변화: 없음. ROS-SIM 부분 증거이며 D-407 은 Proposed 그대로다.

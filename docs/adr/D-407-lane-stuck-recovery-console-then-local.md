@@ -64,3 +64,4 @@ Status 는 Proposed 그대로다. CORE 쪽만 구현했고 Fleet 콘솔 화면(�
   - 막힘 중 앞이 스스로 비면(`obstacle_ahead` 가 풀리면) 사건을 `cleared` 로 닫는다.
   - D-379 녹화 구간 표시는 아직 없다. 사건의 시각으로 구간을 찾을 수 있다.
 - 독립 검토 반영(2026-10-02): 막힘 원인을 보고 상태가 아니라 래치(`_escalated`·`_lost_latched`)로 판단(일시 HOLD 가 막힘을 `cleared` 로 닫고 시도를 되살리던 결함), 받아들인 답은 증거 개정을 올려 미리 계산된 후진을 막고, MANUAL·ABORT 는 관리자 잠금 안에서 차선 추종을 끈 뒤 `POST /mode` 와 같은 전이(보정 lease, navigation·swarm 취소)를 쓴다. 답 사건에 토큰 id, LiDAR 정지를 쓰는데 scan 이 없으면 RESUME 거부, 설정 형 검사, sector 모드의 몸 점은 막힘 근처에서만 계산.
+- Gazebo 검증(2026-10-02, ROS-SIM 한 대): `docs/validation/d407-gazebo-stuck-recovery-2026-10-02/result.md`. 무응답(관제 연결 없음) → 후진 0.08 m → 1 s → 재판정 → 복귀/2회 뒤 관제 대기, 답 다섯, hold 끊김·e-stop 우선을 확인했다. ASKING 15 s 창은 FleetAgent 시작 결함으로 시험하지 못했고, 복귀 직후 같은 자리 재막힘이 시도 수를 되살리는 반복을 발견했다.

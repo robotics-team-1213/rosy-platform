@@ -11,9 +11,11 @@
 # Body geometry (body_lidar_x_m / body_rear_x_m / rotation radius) comes from the
 # pinky_pro robot package core.yaml (URDF nominal), exactly as on the device.
 #
+# REAR_BLIND=1 adds a rear self-mask window so the rear blind band matches the device.
 # FAKE_HUB=1 also points the FleetAgent at tools/sim/d407_stuck_scenarios.py's fake hub
 # (ws://127.0.0.1:8096/ws/robots) so console_linked is true and a stuck stays ASKING for
-# recovery_ask_s; start the hub first (d407_stuck_scenarios.py hub).
+# recovery_ask_s; start the hub first (d407_stuck_scenarios.py hub). As of 7e577452 this
+# reproduces a CORE start crash instead (FleetAgent.start outside an event loop, result.md).
 WS=${WS:-/rosy_d407_ws}
 PORT=${PORT:-8095}
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -27,6 +29,17 @@ cat >> "$RUN/core_overlay.yaml" <<'YAML'
 line_follow:
   recovery_local_enabled: true
 YAML
+if [ "${REAR_BLIND:-0}" = "1" ]; then
+  # Trail-rule bench: the sim LiDAR's range_min is 0.05 m (< 0.059 m LiDAR-to-body-rear),
+  # so its rear blind band is 0. A rear self-mask window reaching 0.15 m (the C1's
+  # range_min) hides 0.091 m behind the body rear, as on the device, so the
+  # "space it just drove through" rule (recovery_trail_s) has to admit every back-off.
+  cat >> "$RUN/core_overlay.yaml" <<'YAML'
+  lidar_self_mask:
+    - {from_deg: 165.0, to_deg: 180.0, max_range_m: 0.15}
+    - {from_deg: -180.0, to_deg: -165.0, max_range_m: 0.15}
+YAML
+fi
 if [ "${FAKE_HUB:-0}" = "1" ]; then
   cat >> "$RUN/core_overlay.yaml" <<'YAML'
 fleet:

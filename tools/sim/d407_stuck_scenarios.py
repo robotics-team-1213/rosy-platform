@@ -201,6 +201,9 @@ def run(args) -> int:
         if next_answer_at is not None and time.monotonic() >= next_answer_at and answers:
             token = answers.pop(0)
             current = (stuck or {}).get("stuck_id")
+            if token == "pause":
+                next_answer_at = time.monotonic() + args.gap
+                continue
             if token == "stale":
                 sid, decision = "stuck-000000000000", "WAIT"
             elif token == "old":
@@ -358,7 +361,8 @@ def main() -> int:
     r.add_argument("--out", required=True)
     r.add_argument("--duration", type=float, default=240.0, help="wall seconds cap")
     r.add_argument("--hold-s", type=float, default=0.5)
-    r.add_argument("--answers", default="", help="e.g. stale,WAIT,RESUME,BACK_AND_RETRY,ABORT,old")
+    r.add_argument("--answers", default="",
+                   help="e.g. stale,WAIT,RESUME,BACK_AND_RETRY,pause,ABORT,old (pause = skip one gap)")
     r.add_argument("--first-answer-after", type=float, default=2.0)
     r.add_argument("--gap", type=float, default=4.0)
     r.add_argument("--on-attempt", choices=("release", "estop"))
