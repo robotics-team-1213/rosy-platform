@@ -37,8 +37,8 @@
 
 ## 최근 기록
 
+- 2026-10-03 · uncommitted · fix(fleet_agent): D-419 착지 리뷰 — 이벤트 동시 전송 상한, 되돌림 중복, 하트비트 시한
 - 2026-10-02 · uncommitted · fix(fleet_agent): D-419 착지 — main 의 D-407 수신 루프와 병합
 - 2026-10-02 · uncommitted · fix(fleet_agent): D-419 최종 리뷰 LOW — 실패한 보내기의 `_awaiting` 항목 회수
 - 2026-10-02 · uncommitted · fix(fleet_agent): D-419 라운드 4 — 인코딩 불가 이벤트, EVENT 에 대한 오류
 - 2026-10-02 · uncommitted · fix(fleet_agent): D-419 라운드 3 — ERROR 답은 살아 있음, Fleet 없는 로봇 부팅
-- 2026-10-02 · uncommitted · fix(safety): D-419 재리뷰 — 링크 신선도 분리, 리더 하나, backoff

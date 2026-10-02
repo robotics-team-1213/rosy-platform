@@ -6,7 +6,9 @@ Like fleet/hub/server.py, it answers every message once and strictly in order: W
 `heartbeat_error`, or nothing (`answer_heartbeats=False` / `answered_limit` — a silent
 or broken hub, the only case where order is not preserved because a reply is missing).
 Every reply goes through one ordered delay queue: a reply is released `delay` s after its
-request but never before the reply to an earlier request.
+request but never before the reply to an earlier request. `service_s` models a hub that
+handles one message at a time (one durable commit per event): each reply also waits
+`service_s` after the previous one, so a backlog delays everything queued behind it.
 """
 
 from __future__ import annotations
@@ -23,12 +25,14 @@ def envelope(kind: EnvelopeType, payload=None) -> str:
 
 class FakeHub:
     def __init__(self, *, welcome=True, answer_heartbeats=True, delay=0.0,
-                 answered_limit=None, heartbeat_error=None, event_error=None) -> None:
+                 answered_limit=None, heartbeat_error=None, event_error=None,
+                 service_s=0.0) -> None:
         self.inbox: asyncio.Queue = asyncio.Queue()
         self.sent: list[str] = []
         self.welcome = welcome
         self.answer_heartbeats = answer_heartbeats
         self.delay = delay
+        self.service_s = service_s
         self.answered_limit = answered_limit
         self.heartbeat_error = heartbeat_error
         self.event_error = event_error
@@ -44,7 +48,7 @@ class FakeHub:
     def _reply(self, text: str, delay: float) -> None:
         loop = asyncio.get_running_loop()
         # Strictly increasing release times keep FIFO order even for equal delays.
-        release = max(loop.time() + delay, self._last_release + 1e-6)
+        release = max(loop.time() + delay, self._last_release + max(self.service_s, 1e-6))
         self._last_release = release
         loop.call_at(release, self.inbox.put_nowait, text)
 

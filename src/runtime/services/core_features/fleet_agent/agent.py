@@ -6,7 +6,6 @@ import ssl
 import time
 import urllib.parse
 from pathlib import Path
-from typing import Optional
 
 from core_common.protocol.schemas import Envelope, EnvelopeType, HelloPayload, HeartbeatPayload
 from .discovery import locate_fleet
@@ -45,6 +44,10 @@ HELLO_TIMEOUT_S = 5.0
 #: EVENT_MAX_TRIES times in total, then dropped with a log line (D-407 review M3).
 PERMANENT_EVENT_CODES = frozenset({"EVENT_NOT_AUDITABLE"})
 EVENT_MAX_TRIES = 3
+#: Unanswered EVENTs on the wire at once. The hub answers in order with one durable
+#: commit per event, so a heartbeat queued behind a 1000-event backlog would miss its
+#: deadline and flap the link (D-419 landing review); behind 8 it does not.
+MAX_EVENTS_IN_FLIGHT = 8
 
 
 def next_backoff(current: float) -> float:
@@ -66,7 +69,7 @@ def heartbeat_reply_timeout_s(fleet_cfg: dict) -> float:
     """Read and validate `fleet.heartbeat_reply_timeout_s`."""
     raw = (fleet_cfg or {}).get("heartbeat_reply_timeout_s", DEFAULT_REPLY_TIMEOUT_S)
     if isinstance(raw, bool) or not isinstance(raw, (int, float)):
-        raise ValueError("fleet.heartbeat_reply_timeout_s must be a number")
+        raise ValueError("fleet.heartbeat_reply_timeout_s must be a number")  # noqa: TRY004
     value = float(raw)
     low, high = REPLY_TIMEOUT_RANGE_S
     if not math.isfinite(value) or not low <= value <= high:
@@ -83,10 +86,10 @@ class FleetAgent:
         self.enabled = False
         #: `connected` is True only between the hub's WELCOME and the session ending (D-419).
         self._connected = False
-        self._link_lost_at: Optional[float] = None
+        self._link_lost_at: float | None = None
         self._clock = time.monotonic
         #: time.monotonic() of the last message received from the hub, or None.
-        self.last_rx: Optional[float] = None
+        self.last_rx: float | None = None
         fleet_cfg = (config or {}).get("fleet") or {}
         try:
             self.reply_timeout_s = heartbeat_reply_timeout_s(fleet_cfg)
@@ -101,12 +104,14 @@ class FleetAgent:
         #: Injectable so tests run the real loop on a scaled clock.
         self.heartbeat_period_s = HEARTBEAT_PERIOD_S
         self.link_slack_s = LINK_SLACK_S
-        self._task: Optional[asyncio.Task] = None
-        self._pending: Optional[tuple[str, str]] = None
+        self._task: asyncio.Task | None = None
+        self._pending: tuple[str, str] | None = None
         self._ws = None
         self._event_buffer = []
         self._event_seq = 0
-        self._hb_reply: Optional[asyncio.Event] = None
+        self._hb_reply: asyncio.Event | None = None
+        #: Set by the reader whenever an EVENT entry leaves `_awaiting` (in-flight cap).
+        self._event_slot: asyncio.Event | None = None
         self._answered = 0
         #: Our messages still waiting for the hub's reply, as (type, event or None). The hub
         #: answers every message once and in order (fleet/hub/server.py), so the head is
@@ -141,11 +146,11 @@ class FleetAgent:
         + slack. SAF-003 and the lane-stuck console link both judge freshness with it."""
         return self.heartbeat_period_s + self.reply_timeout_s + self.link_slack_s
 
-    def recently_heard(self, now: Optional[float] = None) -> bool:
+    def recently_heard(self, now: float | None = None) -> bool:
         last_rx = self.last_rx
         if last_rx is None:
             return False
-        return (time.monotonic() if now is None else now) - last_rx < self.link_fresh_s
+        return (self._clock() if now is None else now) - last_rx < self.link_fresh_s
 
     def start(self) -> None:
         fleet_cfg = self.config.get("fleet", {})
@@ -204,6 +209,7 @@ class FleetAgent:
         try:
             while self.enabled:
                 stable = False
+                why = None
                 try:
                     current_hub = (await asyncio.to_thread(
                         locate_fleet, discovery["expected_hostname"], ca_file)
@@ -219,8 +225,6 @@ class FleetAgent:
                         stable = self._stable
                         if why is None:
                             break                    # hello refused: stop for good
-                        if self.enabled:
-                            logger.warning("Fleet agent link lost (%s); reconnecting", why)
 
                 except (WebSocketException, OSError) as exc:
                     logger.warning("Fleet agent disconnected: %s", exc)
@@ -234,13 +238,16 @@ class FleetAgent:
                 if self.enabled:
                     if stable:
                         backoff = 1.0
+                    if why is not None:
+                        logger.warning("Fleet agent link lost (%s); reconnecting in %.0f s",
+                                       why, backoff)
                     await asyncio.sleep(backoff)
                     backoff = next_backoff(backoff)
         finally:
             self.connected = False
             unsubscribe()
 
-    async def _session(self, ws, pairing_token: str) -> Optional[str]:
+    async def _session(self, ws, pairing_token: str) -> str | None:
         """HELLO, then serve. Returns why the session ended, or None when the hub refused
         HELLO (the agent then stops for good). `_stable` says whether it was stable."""
         self._stable = False
@@ -260,7 +267,7 @@ class FleetAgent:
             # D-419: the link is up only once the hub has welcomed us; an open socket
             # that never gets there is still a lost link (and does not stamp last_rx).
             return f"unexpected hello reply {reply.type.value}"
-        self.last_rx = time.monotonic()
+        self.last_rx = self._clock()
         logger.info("Fleet agent welcomed by hub")
         last_event_seq = reply.payload.get("last_event_seq", 0)
         self._event_buffer = [e for e in self._event_buffer if e.seq > last_event_seq]
@@ -273,6 +280,7 @@ class FleetAgent:
         Returns True when the session survived STABLE_HEARTBEATS answered heartbeats;
         `_end_reason` names the loop that ended it and why."""
         self._hb_reply = asyncio.Event()
+        self._event_slot = asyncio.Event()
         self._answered = 0
         self._awaiting.clear()
         self.connected = True
@@ -300,11 +308,25 @@ class FleetAgent:
     def _requeue_unanswered(self) -> None:
         """Events sent but never answered go back to the front, oldest first (D-407 M3;
         the hub de-duplicates by event_id, so re-sending one it did store is harmless)."""
-        unanswered = [ev for kind, ev in self._awaiting
-                      if kind == EnvelopeType.EVENT and ev is not None]
+        entries = list(self._awaiting)
         self._awaiting.clear()
-        if unanswered:
-            self._event_buffer[:0] = unanswered
+        self._requeue(entries)
+
+    def _requeue(self, entries) -> None:
+        """Put the events of these `_awaiting` entries back at the buffer front, oldest
+        first, skipping any still in the buffer (an interrupted send peeks, so its event
+        never left the head) — one event, one buffer slot."""
+        present = {id(e) for e in self._event_buffer}
+        events = []
+        for kind, ev in entries:
+            if kind == EnvelopeType.EVENT and ev is not None and id(ev) not in present:
+                present.add(id(ev))
+                events.append(ev)
+        if events:
+            self._event_buffer[:0] = events
+
+    def _events_in_flight(self) -> int:
+        return sum(1 for kind, _ in self._awaiting if kind == EnvelopeType.EVENT)
 
     async def _send(self, ws, env: Envelope) -> None:
         # Encode first: a message that cannot be encoded never enters `_awaiting`.
@@ -338,20 +360,28 @@ class FleetAgent:
             except Exception as exc:
                 logger.info("Fleet hub socket closed: %s", exc)
                 return f"connection closed ({exc})"
-            self.last_rx = time.monotonic()
+            self.last_rx = self._clock()
             try:
                 env = Envelope.model_validate_json(text)
-            except Exception:
+            except ValueError:
                 env = None
             if env is not None and env.type == EnvelopeType.HEARTBEAT:
                 # A heartbeat reply names itself; resynchronise the queue on it so a reply
-                # the hub skipped cannot shift later attributions.
+                # the hub skipped cannot shift later attributions. Events it skipped are
+                # unanswered: they go back to the buffer.
                 answers, ev = EnvelopeType.HEARTBEAT, None
-                while self._awaiting and self._awaiting.popleft()[0] != EnvelopeType.HEARTBEAT:
-                    pass
+                skipped = []
+                while self._awaiting:
+                    entry = self._awaiting.popleft()
+                    if entry[0] == EnvelopeType.HEARTBEAT:
+                        break
+                    skipped.append(entry)
+                self._requeue(skipped)
             else:
                 # ACK and ERROR do not say what they answer: the oldest outstanding request.
                 answers, ev = self._awaiting.popleft() if self._awaiting else (None, None)
+            if self._event_slot is not None:
+                self._event_slot.set()       # an EVENT entry may have left: wake the sender
             if env is None:
                 continue
             if env.type == EnvelopeType.ERROR:
@@ -428,8 +458,8 @@ class FleetAgent:
                 # One heartbeat outstanding at a time: clear before sending so only the
                 # reply to this one can wake us.
                 self._hb_reply.clear()
-                await self._send(ws, env)
-                await asyncio.wait_for(self._hb_reply.wait(), timeout=self.reply_timeout_s)
+                # One deadline over send and reply: a send held in drain also aborts.
+                await asyncio.wait_for(self._send_heartbeat(ws, env), timeout=self.reply_timeout_s)
             except asyncio.TimeoutError:
                 logger.warning("Fleet hub did not answer a heartbeat within %.1f s; aborting",
                                self.reply_timeout_s)
@@ -444,6 +474,10 @@ class FleetAgent:
             self._answered += 1
             await asyncio.sleep(self.heartbeat_period_s)
         return "agent disabled"
+
+    async def _send_heartbeat(self, ws, env: Envelope) -> None:
+        await self._send(ws, env)
+        await self._hb_reply.wait()
 
     @staticmethod
     async def _abort(ws) -> None:
@@ -475,11 +509,19 @@ class FleetAgent:
         whose send fails on the transport or is cancelled stays for the next session; any
         other send error drops it and the loop goes on. A sent event waits in `_awaiting`
         for the hub's answer: an ERROR may send it again (`_refuse_event`), and one still
-        unanswered when the session ends goes back to the buffer (D-407 M3)."""
+        unanswered when the session ends goes back to the buffer (D-407 M3). At most
+        MAX_EVENTS_IN_FLIGHT events wait for an answer at once, so a heartbeat never
+        queues behind a long backlog at the hub."""
         import websockets
+        if self._event_slot is None:
+            self._event_slot = asyncio.Event()
         while self.enabled:
             if not self._event_buffer:
                 await asyncio.sleep(0.1)
+                continue
+            if self._events_in_flight() >= MAX_EVENTS_IN_FLIGHT:
+                self._event_slot.clear()
+                await self._event_slot.wait()
                 continue
             ev = self._event_buffer[0]
             try:

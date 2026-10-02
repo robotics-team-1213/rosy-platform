@@ -564,20 +564,19 @@ def test_transient_retries_are_bounded():
 def test_an_event_cancelled_mid_send_is_kept():
     """M2: cancelling the event loop while ws.send is awaited must not lose the event."""
     agent = _agent_with([_bus_event(5)])
-    agent._send_lock = None
 
     class Stuck(FakeHubSocket):
         async def send(self, text):
             await asyncio.sleep(10)
 
     async def run():
-        agent._send_lock = asyncio.Lock()
         task = asyncio.create_task(agent._event_loop(Stuck(reject_events=False)))
         await asyncio.sleep(0.1)
         task.cancel()
         await asyncio.gather(task, return_exceptions=True)
     asyncio.run(run())
     assert [e.seq for e in agent._event_buffer] == [5]
+    assert list(agent._awaiting) == []
 
 
 def test_unanswered_events_go_back_when_the_session_ends():
@@ -613,8 +612,9 @@ def test_a_silent_hello_times_out(monkeypatch):
     assert why.startswith("no hello reply") and agent.connected is False
 
 
-def test_backoff_resets_only_after_a_welcome(monkeypatch):
-    """L1: a socket that connects but never gets WELCOME keeps backing off."""
+def test_backoff_keeps_doubling_without_a_stable_session(monkeypatch):
+    """L1 + D-419: the backoff resets only after a session gets STABLE_HEARTBEATS (3)
+    answered heartbeats; a socket that connects but never gets WELCOME never does."""
     import websockets
     agent = FleetAgent(State(), Bus(), CONFIG, IDENTITY)
     agent.enabled = True
@@ -648,3 +648,112 @@ def test_backoff_resets_only_after_a_welcome(monkeypatch):
             monkeypatch.setattr(module.asyncio, "sleep", real_sleep)
     asyncio.run(run())
     assert sleeps == [1.0, 2.0, 4.0]
+
+
+# ---- D-419 landing review (2026-10-03) -------------------------------------------------
+def test_event_backlog_does_not_starve_the_heartbeat(fast):
+    """MEDIUM: after a long outage the agent used to send its whole backlog back to back;
+    a hub that commits one event at a time then answered the heartbeat queued behind them
+    too late, the session aborted and SAF-003 could fire on a live hub. With at most
+    MAX_EVENTS_IN_FLIGHT unanswered events every heartbeat is answered in time and the
+    backlog still arrives complete and in order."""
+    agent = _agent()
+    agent.reply_timeout_s = 0.3
+    hub = FakeHub(service_s=0.025)            # ~ reply deadline / 12 per reply
+    agent._event_buffer.extend(_event(i) for i in range(200))
+    timeouts = []
+
+    async def run():
+        serve = asyncio.create_task(agent._serve(hub))
+        for _ in range(200):
+            await asyncio.sleep(0.05)
+            if not agent._event_buffer and not agent._awaiting or serve.done():
+                break
+            timeouts.append(agent._events_in_flight() <= agent_mod.MAX_EVENTS_IN_FLIGHT)
+        seen = agent.connected, serve.done()
+        agent.enabled = False
+        hub._abort()
+        await serve
+        return seen
+    connected, ended = asyncio.run(run())
+    assert connected is True and ended is False and all(timeouts)
+    assert [p["seq"] for p in hub.events_sent()] == list(range(200))
+    assert agent._answered >= 3
+
+
+class _Held:
+    """A socket whose send of one envelope type never completes (held in drain)."""
+
+    def __init__(self, held: EnvelopeType):
+        self.held = held
+        self.closed = asyncio.Event()
+        self.aborted = False
+        self.transport = SimpleNamespace(abort=self._abort)
+
+    def _abort(self):
+        self.aborted = True
+        self.closed.set()
+
+    async def send(self, text):
+        if Envelope.model_validate_json(text).type is self.held:
+            await asyncio.Event().wait()
+
+    async def recv(self):
+        await self.closed.wait()
+        raise OSError("connection lost")
+
+
+def test_requeue_does_not_duplicate_an_event_held_in_send(fast):
+    """LOW-1: the event's send is held, a heartbeat goes out behind it, the session ends:
+    the event's entry is not last, so it stays in `_awaiting`, but the event never left
+    the buffer head — requeueing it again would make the buffer [1, 1]."""
+    agent = _agent()
+    agent.reply_timeout_s = 0.1
+    agent._event_buffer.append(_event(1))
+    asyncio.run(asyncio.wait_for(agent._serve(_Held(EnvelopeType.EVENT)), timeout=2.0))
+    assert [e.seq for e in agent._event_buffer] == [1]
+    assert list(agent._awaiting) == []
+
+
+def test_heartbeat_send_held_in_drain_aborts_at_the_deadline(fast, caplog):
+    """LOW-2: the reply deadline covers the send too."""
+    agent = _agent()
+    agent.reply_timeout_s = 0.1
+    ws = _Held(EnvelopeType.HEARTBEAT)
+
+    async def run():
+        start = asyncio.get_running_loop().time()
+        await asyncio.wait_for(agent._serve(ws), timeout=2.0)
+        return asyncio.get_running_loop().time() - start
+    with caplog.at_level(logging.WARNING, logger="fleet_agent"):
+        elapsed = asyncio.run(run())
+    assert ws.aborted is True and agent.connected is False
+    assert elapsed < 1.0
+    assert any("did not answer a heartbeat" in r.getMessage() for r in caplog.records)
+
+
+def test_heartbeat_resync_puts_skipped_events_back():
+    """LOW: a HEARTBEAT reply that skips earlier EVENT entries leaves those events
+    unanswered; they go back to the buffer (once) instead of being lost."""
+    agent = _agent()
+    first, second = _event(1), _event(2)
+    agent._event_buffer.append(second)          # still queued: must not be duplicated
+
+    class OneHeartbeat:
+        def __init__(self):
+            self.replies = [envelope(EnvelopeType.HEARTBEAT)]
+
+        async def recv(self):
+            if self.replies:
+                return self.replies.pop(0)
+            raise OSError("closed")
+
+    async def run():
+        agent._hb_reply = asyncio.Event()
+        agent._awaiting.extend([(EnvelopeType.EVENT, first), (EnvelopeType.EVENT, second),
+                                (EnvelopeType.HEARTBEAT, None)])
+        await agent._reader_loop(OneHeartbeat())
+        return agent._hb_reply.is_set()
+    assert asyncio.run(run()) is True
+    assert [e.seq for e in agent._event_buffer] == [1, 2]
+    assert list(agent._awaiting) == []

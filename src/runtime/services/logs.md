@@ -422,3 +422,10 @@
 - 시험: `test_fleet_agent_link.py` 를 두 쪽 합본으로 — D-419 의 hello 무응답·취소 보존 시험은 같은 것을 보는 D-407 시험으로 대체, `_awaiting` 튜플, EVENT 오류 로그는 이벤트마다(`event seq`)·하트비트 degraded 경고와 분리. D-407 `Closing` 은 `recv` 로 끊긴다(리더가 `async for` 대신 `recv()`).
 - 증거: `test_fleet_agent_link.py`+`test_fleet_loss.py` 62 passed.
 - gate 변화: 없음.
+
+## 2026-10-03 · uncommitted · fix(fleet_agent): D-419 착지 리뷰 — 이벤트 동시 전송 상한, 되돌림 중복, 하트비트 시한
+- 변경: 답을 기다리는 EVENT 를 `MAX_EVENTS_IN_FLIGHT`(8)개로 묶는다(리더가 EVENT 항목을 뺄 때마다 `_event_slot` 을 깨움) — 긴 단절 뒤 최대 1000 개를 연달아 보내면 이벤트마다 한 번 커밋하는 허브가 그 뒤의 하트비트를 2 s 시한 밖에서 답해 세션이 끊기고 backoff 가 늘며 SAF-003 가 살아 있는 허브에서 STOP 할 수 있었다(MEDIUM). `_requeue` 는 버퍼에 아직 있는 이벤트(같은 객체)를 건너뛴다 — drain 에 걸린 보내기의 항목이 꼬리가 아니면 남아 버퍼가 [1, 1] 이 되던 것(LOW-1). 하트비트의 보내기와 답 대기를 한 `wait_for(reply_timeout_s)` 로(LOW-2). HEARTBEAT 재동기가 건너뛴 EVENT 항목은 버리지 않고 버퍼로 되돌린다. `recently_heard`·`last_rx` 는 `self._clock`. main 의 `reconnecting in N s` 로그 복원. agent.py ruff 지적 17→8(`X | None`, 파싱 `except ValueError`, TRY004 noqa; 남은 것은 main 에도 있는 import 순서·광범위 except).
+- 시험: `test_event_backlog_does_not_starve_the_heartbeat`(상한을 풀면 실패 확인), `test_requeue_does_not_duplicate_an_event_held_in_send`, `test_heartbeat_send_held_in_drain_aborts_at_the_deadline`, `test_heartbeat_resync_puts_skipped_events_back`; `test_backoff_keeps_doubling_without_a_stable_session`(이름·설명을 답 3 개 규칙으로), 취소 시험에서 죽은 `_send_lock` 제거·`_awaiting` 비었음 확인. `fleet_hub_fake.FakeHub(service_s=…)` 는 한 번에 하나씩 처리하는 허브.
+- 증거: `test_fleet_agent_link.py` 35 passed ×3.
+- 열린 D-407 후속(고치지 않음): 일시 오류로 거부되어 `_refuse_event` 가 버퍼 앞에 다시 넣은 이벤트는, 그 사이 세션이 끊기고 재접속 WELCOME 의 `last_event_seq` 가 그보다 큰 seq 를 가리키면(뒤 이벤트는 저장됨) `_session` 의 seq 필터(`e.seq > last_event_seq`)에 걸려 조용히 사라진다. 제안: 재전송 대기 이벤트를 seq 필터에서 면제되는 별도 재시도 목록에 두기(허브는 event_id 로 중복을 걸러 다시 보내도 안전).
+- gate 변화: 없음.
