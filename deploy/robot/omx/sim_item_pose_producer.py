@@ -45,7 +45,8 @@ class SimItemPoseProducer:
         return {
             "predicate_id": f"{item_id}:item_at_pose", "item_id": item_id,
             "evidence_source": "sim_model_pose", "evidence_id": str(uuid.uuid4()),
-            "producer_id": self.producer_id, "model_name": model_name, "pose": pose,
+            # Gazebo world == OMX link0 in the cell workcell (cell.yaml), so model poses are robot_base.
+            "producer_id": self.producer_id, "model_name": model_name, "frame": "robot_base", "pose": pose,
             "observed_at": self.clock(), "action_id": action_id, "attempt_id": attempt_id,
             "gripper_state": gripper_state, "gripper_evidence_id": gripper_evidence_id,
         }

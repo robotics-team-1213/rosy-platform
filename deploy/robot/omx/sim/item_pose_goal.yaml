@@ -13,7 +13,5 @@ yaw_rad: 0.05
 tilt_rad: 0.05
 # Box yaw is symmetric under a half turn.
 yaw_period_rad: 3.141592653589793
-# Model origin (the box centre) above the step place TCP: grasp_depth - height / 2 of the
-# omx_sim recipe (15 mm - 30 mm / 2). A slip sheet has no grasp and no entry.
-item_centre_above_tcp_m:
-  box: 0.0
+# The model-centre offset above the TCP is not configured here: Fleet derives it per step from
+# the recipe at resolution (grasp_depth_m - height_m / 2) and stores it in the step (C4b 1b C1).

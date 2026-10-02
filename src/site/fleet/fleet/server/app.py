@@ -112,7 +112,8 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                site_lanes: Optional[Mapping] = None,
                pairing=None, pairing_sync_token: Optional[str] = None,
                localization_service=None, deployment_profile: str = "production",
-               omx_cell_grant_revisions: Optional[Mapping[str, Mapping[str, str]]] = None) -> FastAPI:
+               omx_cell_grant_revisions: Optional[Mapping[str, Mapping[str, str]]] = None,
+               cell_item_pose_tolerance=None) -> FastAPI:
     if deployment_profile not in DEPLOYMENT_PROFILES:
         raise ValueError(f"unsupported deployment_profile {deployment_profile!r}")
     mission_configured = mission_service is not None or proposal_store is not None
@@ -147,13 +148,17 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     cell_job_resolver = None
     if cell_job_compiler is not None:
         from rosy.execution.site.cell_submission import compile_cell_submission
+        from fleet.server.cell_goal_evidence import attach_goal_predicates
 
         def compile_cell_job(candidate, *, workcell_id, instance_id):
             submission = compile_cell_submission(
                 candidate, compiler=cell_job_compiler,
                 workcell_id=workcell_id, instance_id=instance_id,
             )
-            return submission.as_store_document()
+            document = submission.as_store_document()
+            if cell_item_pose_tolerance is not None:
+                attach_goal_predicates(document, candidate["recipe"], cell_item_pose_tolerance)
+            return document
         cell_job_resolver = compile_cell_job
     if site_users is not None and task_service is None:
         raise ValueError("per-user site authorization requires persistent task/audit storage")

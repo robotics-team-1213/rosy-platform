@@ -12,19 +12,33 @@ import time
 from typing import Any, Callable, Mapping
 
 from rosy.execution.site.item_pose import (
-    ItemPoseEvidence, ItemPoseTolerance, item_pose_predicate, verify_item_at_pose,
+    ItemPoseEvidence, ItemPoseTolerance, centre_above_tcp_m, item_pose_predicate, step_goal_predicate,
+    verify_item_at_pose,
 )
 
 from .cell_job_store import CellJobStore
 from .goal_evidence_registry import GoalEvidenceRegistry
 
 
+def attach_goal_predicates(document: dict, recipe: Mapping[str, Any], tolerance: ItemPoseTolerance) -> None:
+    """Fix each step's item_at_pose predicate at resolution, from the recipe being resolved."""
+    box = recipe["box"]
+    offsets = {"box": centre_above_tcp_m(grasp_depth_m=box.get("grasp_depth", 0.0), height_m=box["height"])}
+    if isinstance(recipe.get("slip_sheet"), Mapping):
+        offsets["slip_sheet"] = centre_above_tcp_m(grasp_depth_m=0.0, height_m=recipe["slip_sheet"]["thickness"])
+    for step in document["steps"]:
+        step["goal_predicate"] = step_goal_predicate(step["inputs"], tolerance, offsets[step["inputs"]["item"]])
+
+
 class CellStepGoalEvidence:
-    def __init__(self, store: CellJobStore, registry: GoalEvidenceRegistry,
-                 tolerance: ItemPoseTolerance, *, now: Callable[[], float] = time.time) -> None:
-        if not isinstance(tolerance, ItemPoseTolerance):
-            raise ValueError("configured item pose tolerances are required")
-        self.store, self.registry, self.tolerance, self.now = store, registry, tolerance, now
+    """Judges evidence against the predicate stored in the step at resolution (1b C1), never
+    against current config. The gripper state cannot yet be checked against the owner journal
+    (Fleet receipts carry phase summaries, not gripper readbacks), so the record marks it
+    ``producer_asserted``; the owner-side release check before completion is wave 2."""
+
+    def __init__(self, store: CellJobStore, registry: GoalEvidenceRegistry, *,
+                 now: Callable[[], float] = time.time) -> None:
+        self.store, self.registry, self.now = store, registry, now
 
     def submit(self, token: str, document: Mapping[str, Any]) -> dict[str, Any]:
         now = self.now()
@@ -46,7 +60,7 @@ class CellStepGoalEvidence:
         step = job["steps"][step_index]
         if (evidence.action_id, evidence.attempt_id) != (step["action_id"], step["attempt_id"]):
             raise PermissionError("evidence does not cite this step's Action attempt")
-        predicate = item_pose_predicate(mission_id, step_index, step["step"]["inputs"], self.tolerance)
+        predicate = item_pose_predicate(mission_id, step_index, step["step"].get("goal_predicate"))
         verdict = verify_item_at_pose(predicate, evidence, now=now, max_age_s=producer.max_age_s)
         if not verdict.satisfied:
             return {"mission_id": mission_id, "step_index": step_index, "satisfied": False,
@@ -57,7 +71,8 @@ class CellStepGoalEvidence:
                 "producer_id": producer.producer_id, "evidence_id": evidence.evidence_id,
                 "evidence_source": "sim_model_pose", "action_id": evidence.action_id,
                 "attempt_id": evidence.attempt_id, "satisfied": True,
-                "gripper_state": evidence.gripper_state,
+                "gripper_state": evidence.gripper_state, "gripper_state_source": "producer_asserted",
+                "frame": evidence.frame,
                 "gripper_evidence_id": evidence.gripper_evidence_id,
                 "model_name": evidence.model_name, "pose": dict(evidence.pose),
                 "observed_at": evidence.observed_at, "predicate": predicate.to_dict(),

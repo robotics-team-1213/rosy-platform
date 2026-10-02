@@ -225,7 +225,8 @@ class CellJobStore:
              markers_json, now, now),
         )
         for index, step in enumerate(steps):
-            if not isinstance(step, Mapping) or set(step) != {"skill_id", "version", "inputs"}:
+            # goal_predicate: the item_at_pose predicate fixed at resolution (C4b 1b C1), optional.
+            if not isinstance(step, Mapping) or set(step) - {"goal_predicate"} != {"skill_id", "version", "inputs"}:
                 raise ValueError("Cell Job step has an invalid execution shape")
             if step["skill_id"] != "pallet.transfer" or step["version"] != "1.0.0":
                 raise ValueError("Cell Job steps must use pallet.transfer/1.0.0")

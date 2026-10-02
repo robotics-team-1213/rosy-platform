@@ -12,12 +12,12 @@ from collections.abc import Mapping
 from dataclasses import asdict, dataclass
 
 _EVIDENCE_FIELDS = frozenset({
-    "predicate_id", "item_id", "evidence_source", "evidence_id", "producer_id", "model_name",
+    "predicate_id", "item_id", "evidence_source", "evidence_id", "producer_id", "model_name", "frame",
     "pose", "observed_at", "action_id", "attempt_id", "gripper_state", "gripper_evidence_id",
 })
 _POSE = ("x", "y", "z", "roll", "pitch", "yaw")
-_TOLERANCE_FIELDS = frozenset({"schema", "basis", "xy_m", "z_m", "yaw_rad", "tilt_rad",
-                               "yaw_period_rad", "item_centre_above_tcp_m"})
+_TOLERANCE_FIELDS = frozenset({"schema", "basis", "xy_m", "z_m", "yaw_rad", "tilt_rad", "yaw_period_rad"})
+_TOLERANCE_VALUES = ("xy_m", "z_m", "yaw_rad", "tilt_rad", "yaw_period_rad")
 
 
 def _finite(value: object, field: str, *, positive: bool = False) -> float:
@@ -43,7 +43,6 @@ class ItemPoseTolerance:
     yaw_rad: float
     tilt_rad: float
     yaw_period_rad: float
-    item_centre_above_tcp_m: Mapping[str, float]
     basis: str
 
     @classmethod
@@ -51,9 +50,6 @@ class ItemPoseTolerance:
         if (not isinstance(raw, Mapping) or set(raw) != _TOLERANCE_FIELDS
                 or raw["schema"] != "rosy.item-pose-tolerance.v1"):
             raise ValueError("item pose tolerance config has an invalid shape")
-        offsets = raw["item_centre_above_tcp_m"]
-        if not isinstance(offsets, Mapping) or not offsets:
-            raise ValueError("item_centre_above_tcp_m must name at least one item")
         if not isinstance(raw["basis"], str) or len(raw["basis"].strip()) < 20:
             raise ValueError("item pose tolerances must state their basis")
         return cls(
@@ -62,8 +58,6 @@ class ItemPoseTolerance:
             yaw_rad=_finite(raw["yaw_rad"], "yaw_rad", positive=True),
             tilt_rad=_finite(raw["tilt_rad"], "tilt_rad", positive=True),
             yaw_period_rad=_finite(raw["yaw_period_rad"], "yaw_period_rad", positive=True),
-            item_centre_above_tcp_m={_text(key, "item"): _finite(value, f"offset {key}")
-                                     for key, value in offsets.items()},
             basis=raw["basis"].strip(),
         )
 
@@ -79,26 +73,40 @@ class ItemPosePredicate:
 
     def to_dict(self) -> dict:
         tolerance = asdict(self.tolerance)
-        tolerance.pop("item_centre_above_tcp_m")
         return {"predicate_id": self.predicate_id, "condition": self.condition,
                 "item_id": self.item_id, "target": dict(self.target), "tolerance": tolerance,
                 "evidence_source": self.evidence_source}
 
 
-def item_pose_predicate(job_id: str, step_index: int, inputs: Mapping,
-                        tolerance: ItemPoseTolerance) -> ItemPosePredicate:
-    """The predicate of one pallet.transfer step: the item's model centre at its place pose."""
-    item = inputs["item"]
-    if item not in tolerance.item_centre_above_tcp_m:
-        raise ValueError(f"no configured item model offset for {item!r}")
+def centre_above_tcp_m(*, grasp_depth_m: float, height_m: float) -> float:
+    """Model centre height above the place TCP (positive = above).
+
+    The TCP grasps ``grasp_depth_m`` below the item top (C3b B1), so the top is TCP + depth and
+    the centre is that minus half the height. A slip sheet is taken at its top face (depth 0).
+    """
+    return _finite(grasp_depth_m, "grasp_depth_m") - _finite(height_m, "height_m", positive=True) / 2
+
+
+def step_goal_predicate(inputs: Mapping, tolerance: ItemPoseTolerance, centre_offset_m: float) -> dict:
+    """The JSON predicate stored in the step at resolution; later config changes cannot move it."""
     place = inputs["destination_pose_base"]
+    return {"condition": "item_at_pose", "evidence_source": "sim_model_pose", "frame": "robot_base",
+            "target": {"x": place["x_m"], "y": place["y_m"],
+                       "z": place["z_m"] + _finite(centre_offset_m, "centre_offset_m"), "yaw": place["yaw_rad"]},
+            "tolerance": {"schema": "rosy.item-pose-tolerance.v1", "basis": tolerance.basis,
+                          **{name: getattr(tolerance, name) for name in _TOLERANCE_VALUES}}}
+
+
+def item_pose_predicate(job_id: str, step_index: int, stored: Mapping) -> ItemPosePredicate:
+    """The predicate of one step, rebuilt from the copy stored in that step."""
+    if (not isinstance(stored, Mapping) or stored.get("condition") != "item_at_pose"
+            or stored.get("evidence_source") != "sim_model_pose" or stored.get("frame") != "robot_base"):
+        raise ValueError("step has no stored item_at_pose predicate in robot_base")
+    target = {key: _finite(stored["target"][key], f"target.{key}") for key in ("x", "y", "z", "yaw")}
     item_id = f"{_text(job_id, 'job_id')}:{step_index}"
     return ItemPosePredicate(
-        predicate_id=f"{item_id}:item_at_pose", condition="item_at_pose", item_id=item_id,
-        target={"x": place["x_m"], "y": place["y_m"],
-                "z": place["z_m"] + tolerance.item_centre_above_tcp_m[item], "yaw": place["yaw_rad"]},
-        tolerance=tolerance, evidence_source="sim_model_pose",
-    )
+        predicate_id=f"{item_id}:item_at_pose", condition="item_at_pose", item_id=item_id, target=target,
+        tolerance=ItemPoseTolerance.from_mapping(stored["tolerance"]), evidence_source="sim_model_pose")
 
 
 @dataclass(frozen=True)
@@ -111,6 +119,7 @@ class ItemPoseEvidence:
     evidence_id: str
     producer_id: str
     model_name: str
+    frame: str
     pose: Mapping[str, float]
     observed_at: float
     action_id: str
@@ -124,6 +133,8 @@ class ItemPoseEvidence:
             raise ValueError("item pose evidence has an invalid shape (producers do not judge it)")
         if raw["evidence_source"] != "sim_model_pose":
             raise ValueError("item_at_pose evidence must come from sim_model_pose")
+        if raw["frame"] != "robot_base":
+            raise ValueError("item_at_pose evidence must be in robot_base")
         pose = raw["pose"]
         if not isinstance(pose, Mapping) or set(pose) != set(_POSE):
             raise ValueError("pose must contain x, y, z, roll, pitch and yaw")
@@ -171,5 +182,5 @@ def verify_item_at_pose(predicate: ItemPosePredicate, evidence: ItemPoseEvidence
 
 __all__ = [
     "ItemPoseEvidence", "ItemPosePredicate", "ItemPoseTolerance", "ItemPoseVerdict",
-    "item_pose_predicate", "verify_item_at_pose",
+    "centre_above_tcp_m", "item_pose_predicate", "step_goal_predicate", "verify_item_at_pose",
 ]
