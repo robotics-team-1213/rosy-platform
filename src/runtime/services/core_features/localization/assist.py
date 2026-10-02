@@ -12,6 +12,8 @@ Two rules are CORE's own:
   the robot says `map`. CORE never upgrades an `odom` claim to `map`.
 - A sensing node that goes quiet fails closed: after `STATE_STALE_S` the status
   reads UNKNOWN (`state_stale`), so navigation stays refused.
+- `unmapped_objects` (S1 R1) pass through unchanged, but not with an `odom` frame
+  or a stale state; malformed ones are dropped and the state kept.
 
 No `localization/state` yet means a robot that predates D-395: `status()` is None
 and every caller keeps today's behaviour.
@@ -139,6 +141,8 @@ class LocalizationAssist:
                                         reason="state_stale")
         if self._odom_owns_pose and status.pose_frame is PoseFrame.MAP:
             status = status.model_copy(update={"pose_frame": PoseFrame.ODOM})
+        if status.pose_frame is PoseFrame.ODOM and (status.unmapped_objects or status.objects_stamp is not None):
+            status = status.model_copy(update={"unmapped_objects": [], "objects_stamp": None})
         return status
 
     def autonomy_allowed(self) -> bool:
@@ -161,10 +165,8 @@ class LocalizationAssist:
 
     def on_state(self, raw: str) -> None:
         data = _load(raw)
-        try:
-            status = LocalizationStatus.model_validate((data or {}).get("status"))
-        except ValidationError as exc:
-            _rejected("localization state", exc)
+        status = self._parse_status((data or {}).get("status"))
+        if status is None:
             return
         with self.gate:
             with self._lock:
@@ -176,6 +178,25 @@ class LocalizationAssist:
                 if self._report is not None and status.request_id != self._report.request_id:
                     self._report = None
             self._after_change()
+
+    @staticmethod
+    def _parse_status(raw: Any) -> Optional[LocalizationStatus]:
+        """The robot's status. Malformed seen objects (S1 R1) cost only the objects, not
+        the state: a stale state would halt autonomy over a monitoring extra."""
+        try:
+            return LocalizationStatus.model_validate(raw)
+        except ValidationError as exc:
+            if not isinstance(raw, dict) or not {"unmapped_objects", "objects_stamp"} & raw.keys():
+                _rejected("localization state", exc)
+                return None
+        try:
+            status = LocalizationStatus.model_validate(
+                {k: v for k, v in raw.items() if k not in ("unmapped_objects", "objects_stamp")})
+        except ValidationError as exc:
+            _rejected("localization state", exc)
+            return None
+        _log.warning("dropped malformed localization unmapped_objects")
+        return status
 
     def tick(self, odom_owns_pose: bool) -> None:
         """State-timer hook: the frame flag and the stale timeout move here."""

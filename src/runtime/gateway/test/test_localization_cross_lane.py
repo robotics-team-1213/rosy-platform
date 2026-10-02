@@ -176,6 +176,26 @@ def test_fleet_decision_round_trip_localizes_the_robot(stack):
     assert stack.services.localization.autonomy_allowed()
 
 
+def test_a_localized_robots_objects_reach_fleet_through_the_snapshot(stack):
+    """D-395 rev. 4 §5 follow-up (S1 R1): A's LOCALIZED state carries its objects, B relays
+    them in `/robot/state`, and C's snapshot parser reads them back."""
+    from fleet.localization import trust
+    _localize_through_fleet(stack)
+    robot = stack.robot
+    assert robot.core.objects_due(robot.now)
+    robot.core.on_objects(robot.now, robot.now - 0.05, [(0.6, -0.1), (1.2, 0.4)])
+    robot.now += 0.5
+    _relay(stack.services, robot.wire(robot.core.tick(robot.now)))
+    state = stack.client.get("/api/v1/robot/state", headers=OPERATOR).json()
+    raw = state["localization"]
+    assert raw["state"] == "LOCALIZED" and raw["objects_stamp"] == pytest.approx(robot.now - 0.55)
+    status = trust.status_of(state)
+    assert [(o.x, o.y) for o in status.unmapped_objects] == [(0.6, -0.1), (1.2, 0.4)]
+    robot.now += 1.0                      # the scan is older than 1 s: the robot leaves them out
+    _relay(stack.services, robot.wire(robot.core.tick(robot.now)))
+    assert _robot_state(stack)["unmapped_objects"] == []
+
+
 def test_fleet_suspect_reaches_the_robot(stack):
     robot_id = _localize_through_fleet(stack)
     assert _fleet_call(stack, robot_id,

@@ -106,6 +106,41 @@ def test_a_silent_sensing_node_fails_closed_to_unknown(assist):
     assert status.reason == "state_stale"
 
 
+_SEEN = {"unmapped_objects": [{"x": 0.6, "y": -0.1}], "objects_stamp": 77.5}
+
+
+def test_localized_objects_pass_through_unchanged(assist):
+    """D-395 rev. 4 §5 follow-up (S1 R1): CORE relays what a LOCALIZED robot sees."""
+    assist.on_state(_state("LOCALIZED", **_SEEN))
+    status = assist.status()
+    assert [(o.x, o.y) for o in status.unmapped_objects] == [(0.6, -0.1)]
+    assert status.objects_stamp == 77.5
+
+
+def test_objects_are_dropped_with_an_odom_frame(assist):
+    assist.on_state(_state("LOCALIZED", frame="odom", **_SEEN))
+    assert assist.status().unmapped_objects == [] and assist.status().objects_stamp is None
+    assist.on_state(_state("LOCALIZED", frame="map", **_SEEN))
+    assist.tick(odom_owns_pose=True)
+    assert assist.status().unmapped_objects == [] and assist.status().objects_stamp is None
+    assist.tick(odom_owns_pose=False)
+    assert assist.status().objects_stamp == 77.5
+    assist.mono.now += STATE_STALE_S + 0.1
+    assert assist.status().unmapped_objects == []
+
+
+@pytest.mark.parametrize("bad", [
+    {"unmapped_objects": [{"x": 0.0, "y": 0.0}] * 17, "objects_stamp": 1.0},
+    {"unmapped_objects": [{"x": "far", "y": 0.0}], "objects_stamp": 1.0},
+    {"unmapped_objects": [{"x": 0.6, "y": 0.0}], "objects_stamp": "late"},
+])
+def test_malformed_objects_are_dropped_and_the_state_kept(assist, bad):
+    assist.on_state(_state("LOCALIZED", **bad))
+    status = assist.status()
+    assert status.state is LocState.LOCALIZED
+    assert status.unmapped_objects == [] and status.objects_stamp is None
+
+
 @pytest.mark.parametrize("raw", [
     "not json", "[]", json.dumps({"status": {"state": "LOST", "pose_frame": "map"}}),
     json.dumps({"pose": None}),
