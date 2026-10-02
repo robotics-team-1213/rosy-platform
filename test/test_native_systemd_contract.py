@@ -927,3 +927,21 @@ def test_learned_perception_env_example_ships_both_switches_off():
     assert "/etc/rosy/learned-perception.env" in example
     launch = (ROOT / "src/runtime/sensing/launch/camera_preview.launch.py").read_text(encoding="utf-8")
     assert "'ROSY_LEARNED_SHADOW'" in launch and "'ROSY_CAPTURE'" in launch
+
+# Units whose program reaches native_release.py verify (signing.verify_signature
+# uses tempfile). Under ProtectSystem=strict without PrivateTmp the default
+# temp dirs are read-only, so verify fails with "No usable temporary directory".
+# Found by the D-406 device twin (scenario h3, 2026-10-02): a power cut during
+# activation left a journal, boot recovery could not verify the old release,
+# and rosy-core/rosy-runtime.target (which Require the gate) never started.
+VERIFYING_UNITS = ("rosy-release-recover.service",)
+
+
+@pytest.mark.parametrize("unit_name", VERIFYING_UNITS)
+def test_units_that_verify_releases_get_a_writable_private_tmp(unit_name):
+    unit = _read(unit_name)
+
+    assert re.search(r"^ProtectSystem=strict$", unit, re.M), unit_name
+    assert re.search(r"^PrivateTmp=(yes|true)$", unit, re.M), (
+        f"{unit_name} verifies signatures (tempfile) under ProtectSystem=strict and needs PrivateTmp"
+    )

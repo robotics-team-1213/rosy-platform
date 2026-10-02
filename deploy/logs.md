@@ -1865,3 +1865,9 @@
 - 증거: `python -m pytest test/test_calibration_guard.py test/test_release_push_entrypoint.py -q` 78 passed(가드 36), `test/test_core_dev_sync.py` 34 passed. 변형 23종 모두 빨강(앞 커밋 9종 재확인 + 별칭 검사 생략, 별칭 종료 코드 무시, known_hosts 항목 불요, HostKeyAlias 누락, `-n` 누락, keepalive 누락, 벽시계 상한 없음, 래퍼만 죽임, RosyUser 검사 제거, 공백 경로 검사 제거, 명시 CredentialPath 무시, ConnectTimeout 고정, 공백 인자 미인용, sync 사용자 미전달). 대소문자 변형은 별칭 조회가 먼저 막아 처음엔 살아남았다 — 시험 known_hosts에 대문자 항목을 넣어 답 검사만으로 막히게 고친 뒤 빨강. 로컬 known_hosts 확인: 9dfk·8kcn 호스트 키는 서로 다르다. 가짜 ssh와 localhost 가짜 CORE만 사용, 로봇 접속 없음(Windows).
 - gate 변화: 없음.
 - 교훈: 상대가 스스로 밝힌 이름으로 비밀을 고를 때는 그 이름을 상대가 꾸밀 수 없는 것(호스트 키)으로 증명한다. 겹겹 방어가 있으면 변형 하나가 다른 층에 가려 살아남는다 — 층마다 따로 막히는 시험 입력을 만든다.
+
+## 2026-10-02 · uncommitted · fix(native): 부팅 복구 게이트에 PrivateTmp — 활성화 중 전원 차단 뒤 CORE가 영영 뜨지 않던 결함
+
+- 변경: `rosy-release-recover.service`에 `PrivateTmp=yes`. recover가 이전 릴리스를 다시 검증할 때(`native_release.verify` → `signing`의 `tempfile`) `ProtectSystem=strict` 아래 임시 디렉터리가 읽기 전용이라 "No usable temporary directory"로 실패했고, `rosy-core.service`·`rosy-runtime.target`이 이 게이트를 Requires 하므로 로봇이 뜨지 않았다. 수동 push에도 해당한다.
+- 증거: D-406 기기 쌍둥이(ubuntu 24.04 + systemd 255 컨테이너, 브랜치 test/d406-device-twin) 시나리오 h3에서 활성화 도중 전원 차단 뒤 재현, PrivateTmp로 복구 성공. 계약 시험 `test_units_that_verify_releases_get_a_writable_private_tmp`(변형으로 빨강 확인). 관련 시험 217 passed.
+- gate 변화: 없음. 기기 확인 필요. 이 유닛은 sync에서 next-boot 대상이라 다음 릴리스 push 뒤 재부팅부터 적용된다.
