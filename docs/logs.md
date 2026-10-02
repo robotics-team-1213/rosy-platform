@@ -4385,6 +4385,14 @@
 - 증거: Windows 문서 계약 시험 `python -B -X utf8 -m pytest test/test_network_topology_contracts.py test/test_harness_contracts.py -q -p no:cacheprovider` 80 passed, 24 warnings(기존 last_verified 기록 관련). 본문 로컬 링크 4개·현재 경로 17개·번호 절 51개·A01~A15·UTF-8·코드 블록 검사 통과. 제품 실행·ROS-SIM·실기 시험은 이번 문서 변경에서 수행하지 않았다.
 - gate 변화: 없음. 목표 설계 보강이며 코드 이동·공개 API 변경·ADR 승격·배포 실행은 포함하지 않는다.
 
+## 2026-10-02 · uncommitted · CI 삼각측량 — 시크릿 스캔 면제·해시 문서 규약·스코어카드 기준선·설치 문서 브라우저 시험
+- 변경: secret_scan.py KNOWN_FIXTURES에 D-395 loc-assist fixture(SECRET-PAYLOAD-VALUE) 등록. OMX 증명 해시 3곳을 매처의 무결성 문맥 규약으로 서술(README 'revision'/'dataset commit', omx_f_kinematics.yaml 'at revision') — 의미 불변. test_release_boundary_gates no_secrets 재녹색.
+- 변경: D-178 스코어카드에 rosy_cell 잠정 행(4/4/4/4/4=80 A) 추가 — 집합 동일성 회복. robot_literal_backlog.txt 갱신(신규 8·삭제 2). known_failures.txt에 병렬 작업 사전 존재 실패 5건 기록(CI 전용 플레이크 4 + module_separation 소유자 판단 1).
+- 변경: test_fleet_console_browser.py에 D-410 설치 문서 렌더 계약 시험 추가(옵트인 Chromium — 문법·소유물·운용 표면 부재·E-stop·무오류). 통과 59s.
+- 근거: 2026-10-02 CI 실행 36909426842/36955733308 실패 대 조 로컬 재현. docs/validation/uiux-console-refactor-2026-10-02/README.md 회차 기록.
+- gate 변화: 없음.
+- 최종 증거: scorecard·literals·no_secrets 각 재녹색; 브라우저 신규 시험 1 passed.
+
 ## 2026-10-02 · uncommitted · docs(architecture): D-413 네 영역 전환 결정과 고정 셀 실행 계획
 
 - 변경: D-413에 modules·integrations·apps·profiles 목표, 사이트/로컬 원장 소유권, 공정·Skill·OMX 연결, 기존 결정의 좁은 대체 범위를 기록했다. 실행 계획은 기준선·계약·공정·Fleet·owner·설치·복구·Gazebo·호환층 정리의 Task 0~9와 파일·검증·출구·롤백을 지정한다. v0.2 설계와 ADR/계획을 상호 연결하고 docs progress/index에 등록했다.

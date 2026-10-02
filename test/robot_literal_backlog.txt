@@ -1,6 +1,16 @@
 # D-196 de-Pinky backlog: product literals outside products/pinky_pro and products/omx.
 # Paths follow the regrouped tree (runtime/sensing, products/pinky_pro/bringup, products/omx/adapter).
+contracts/foundation/config/rosy_default.yaml
+contracts/foundation/core_common/calibration_store.py
+contracts/foundation/core_common/profile.py
+contracts/foundation/core_common/protocol/schemas.py
+hmi/face/emotion/info_screen.py
+hmi/face/emotion/wifi_qr.py
+hmi/web_common/surfaces.yaml
+products/omx/adapter/omx_adapter/pilot_sim_api.py
 runtime/api_web/core_api_web/api/app.py
+runtime/navigation/launch/hardware.launch.py
+runtime/navigation/params/nav2_params.yaml
 runtime/sensing/config/line_follow.yaml
 runtime/sensing/config/robot.yaml
 runtime/sensing/control/calibration_relocation.py
@@ -8,15 +18,16 @@ runtime/sensing/control/dock_observer_node.py
 runtime/sensing/control/goal_escape.py
 runtime/sensing/control/ir_adc_node.py
 runtime/sensing/control/line_observer_node.py
-runtime/sensing/control/road_observer_node.py
+runtime/sensing/control/loc_assist_node.py
 runtime/sensing/control/safety/node.py
 runtime/sensing/control/sensing/body.py
 runtime/sensing/control/sensing/dock_tag.py
 runtime/sensing/control/sensing/ir_adc.py
 runtime/sensing/control/sensing/lidar.py
+runtime/sensing/control/sensing/loc_objects.py
+runtime/sensing/control/sensing/odometry_fit.py
 runtime/sensing/control/sensing/perception/camera_controls.py
 runtime/sensing/control/sensing/perception/camera_ground.py
-runtime/sensing/control/sensing/perception/road.py
 runtime/sensing/control/wander/navigator.py
 runtime/sensing/map/map_260905.world
 runtime/sensing/map/map_260905_update_v2/original/map_260905.world
@@ -45,12 +56,6 @@ runtime/sensing/tools/gz/rig_rate.py
 runtime/sensing/tools/gz/rig_reload_navigation.py
 runtime/sensing/tools/gz/run_calibration_spaces.py
 runtime/sensing/tools/gz/track_run_monitor.py
-contracts/foundation/config/rosy_default.yaml
-contracts/foundation/core_common/profile.py
-contracts/foundation/core_common/protocol/schemas.py
-hmi/face/emotion/wifi_qr.py
-runtime/navigation/launch/hardware.launch.py
-runtime/navigation/params/nav2_params.yaml
 runtime/services/core_features/line_follow/clearance.py
 sim/gz_sim/config/simulation_actuation.yaml
 sim/gz_sim/config/worlds.yaml
@@ -64,5 +69,6 @@ sim/gz_sim/worlds/rosy_gauntlet.world
 sim/gz_sim/worlds/rosy_maze.world
 sim/isaac_sim/model_checks.py
 sim/isaac_sim/run_rosy.py
+site/fleet/fleet/localization/service_logic.py
 site/fleet/fleet/server/bays.py
 site/fleet/fleet/server/traffic.py
