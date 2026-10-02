@@ -2,7 +2,9 @@
 
 deliver.py push <host> <model_revision> [--models data/perception/models]
 deliver.py rollback <host> [--slot shadow|active]
-deliver.py promote <host>        (D-423: active <- shadow, the old active -> previous)
+deliver.py promote <host>        (D-423: active <- shadow, the old active -> previous;
+                                  a no-op when shadow is already active; not for lane_seg)
+push: [--allow-unsigned] [--check KEYS_DIR]  object_det must be signed (sign_model.py)
 deliver.py release-hold <host>   (removes the hold file; the pointer is not changed)
 deliver.py status <host>
 common: [--task lane_seg|object_det] [--user rosy] [--identity KEY] [--known-hosts FILE]
@@ -66,8 +68,12 @@ for _p in (ROOT / "src" / "runtime" / "sensing", ROOT / "tools" / "perception"):
 import operator_ssh  # noqa: E402
 from control.sensing.perception.learned.manifest import (  # noqa: E402
     MANIFEST_NAME, TASKS, ManifestError, check_revision, load_manifest, verify_files)
-from control.sensing.perception.learned.slots import task_root  # noqa: E402
-from control.sensing.perception.learned.signature import SIGNATURE_NAME  # noqa: E402
+from control.sensing.perception.learned.slots import FLAT_TASKS, task_root  # noqa: E402
+from control.sensing.perception.learned.signature import (  # noqa: E402
+    SIGNATURE_NAME, SignatureError, verify_manifest_signature)
+
+#: Tasks whose robot node refuses unsigned bundles (D-423; lane_seg is warn-only for now).
+SIGNED_TASKS = ("object_det",)
 
 REMOTE_ROOT = "/var/lib/rosy/models"
 REPORT_NAME = "intake_report.json"
@@ -292,6 +298,8 @@ def remote_script(action: str, rev: str | None, root: str = REMOTE_ROOT, *,
                 f"test -s {ptr} || {{ echo 'no shadow model to promote' >&2; exit 1; }}",
                 f"new=$(cat {ptr})",
                 f"cur=$(cat {act} 2>/dev/null || true)",
+                # nothing to do: no hold, no previous, no history line
+                'if [ "$new" = "$cur" ]; then echo "shadow is already active; nothing changed"; exit 0; fi',
                 *history_ready(),
                 *write_hold("promote", '"${new##*/}"'),
                 f"if test -f {act}; then install{own}{fmode} {act} {act_prev}.tmp; mv {act_prev}.tmp {act_prev}; fi",
@@ -412,6 +420,17 @@ def _push(args, ssh, scp, runner) -> int:
     if manifest.task != args.task:
         print(f"refused: {rev} is a {manifest.task} model, not {args.task}", file=sys.stderr)
         return 2
+    if manifest.task in SIGNED_TASKS:
+        if not (folder / SIGNATURE_NAME).is_file() and not args.allow_unsigned:
+            print(f"refused: {rev} is unsigned and the robot refuses unsigned {manifest.task} bundles; "
+                  f"sign it (sign_model.py) or pass --allow-unsigned for a dev robot", file=sys.stderr)
+            return 2
+        if args.check:
+            try:
+                print(f"signature verified with {verify_manifest_signature(folder, args.check)}")
+            except SignatureError as exc:
+                print(f"refused: {exc}", file=sys.stderr)
+                return 2
     if report.get("files") != [{"name": f.name, "sha256": f.sha256} for f in manifest.files]:
         print(f"refused: intake report files differ from the manifest of {rev}", file=sys.stderr)
         return 2
@@ -472,6 +491,10 @@ def main(argv=None, runner=subprocess.run) -> int:
         if name == "push":
             p.add_argument("revision")
             p.add_argument("--models", default=str(ROOT / "data" / "perception" / "models"))
+            p.add_argument("--allow-unsigned", action="store_true",
+                           help="push an unsigned object_det bundle (the robot also needs "
+                                "ROSY_ALLOW_UNSIGNED_MODELS=true)")
+            p.add_argument("--check", help="verify the signature against this trusted-keys folder first")
             p.add_argument("--unless-held", action="store_true",
                            help="site watcher: exit 76 without changes if the robot is held; "
                                 "without it a push is manual and holds the robot")
@@ -495,6 +518,10 @@ def main(argv=None, runner=subprocess.run) -> int:
     if not _SAFE_ROOT.fullmatch(args.root) or ".." in args.root.split("/"):
         print(f"refused: --root must be an absolute plain path, got {args.root!r}",
               file=sys.stderr)
+        return 2
+    if args.task in FLAT_TASKS and (args.action == "promote" or getattr(args, "slot", "shadow") == "active"):
+        print(f"refused: {args.task} keeps the flat D-373 layout (shadow only); promote and "
+              f"rollback --slot active are for per-task slots such as object_det", file=sys.stderr)
         return 2
     args.root = task_root(args.task, args.root)
     try:

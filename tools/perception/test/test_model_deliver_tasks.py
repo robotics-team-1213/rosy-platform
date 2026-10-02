@@ -98,3 +98,71 @@ def test_active_rollback_without_previous_refuses(bash_root):
     (root / "active").write_text("/m/object_det/r2")
     r = run("rollback-active")
     assert r.returncode != 0 and (root / "active").read_text() == "/m/object_det/r2"
+
+
+# --- review 2026-10-03: H2 flat lane root has no active slot, M3 unsigned push, L3 promote no-op ---
+
+@pytest.mark.parametrize("argv", [["promote", "robot"], ["promote", "robot", "--task", "lane_seg"],
+                                  ["rollback", "robot", "--slot", "active"]])
+def test_flat_lane_task_has_no_active_slot(argv, capsys):
+    runner = FakeRunner()
+    assert deliver.main([*argv, *SSH], runner=runner) == 2 and runner.calls == []
+    assert "lane_seg" in capsys.readouterr().err
+
+
+def _object_model(models, signed=False):
+    import hashlib
+    import json
+    sys_path_model = models / "object-det-20261003-00000001"
+    sys_path_model.mkdir(parents=True)
+    (sys_path_model / "model.onnx").write_bytes(b"onnx")
+    from control.sensing.perception.learned.manifest import OBJECT_CLASSES
+    doc = {"schema": "rosy.perception.model/1", "model_revision": sys_path_model.name, "task": "object_det",
+           "files": [{"name": "model.onnx", "sha256": hashlib.sha256(b"onnx").hexdigest(), "precision": "fp32"}],
+           "input": {"shape": [1, 3, 256, 320], "color": "rgb", "scale": 1 / 255, "mean": [0, 0, 0],
+                     "std": [1, 1, 1], "layout": "nchw"},
+           "output": {"layout": "yolo_cxcywh_scores", "classes": [
+               {"index": i, "name": n, "role": "object"} for i, n in enumerate(OBJECT_CLASSES)]},
+           "dataset": {"repo": "r", "revision": "a" * 40}, "camera_profile_revision": "c"}
+    (sys_path_model / "model_manifest.json").write_text(json.dumps(doc), encoding="utf-8")
+    (sys_path_model / "intake_report.json").write_text(json.dumps({
+        "model_revision": sys_path_model.name, "verdict": "pass",
+        "files": [{"name": "model.onnx", "sha256": hashlib.sha256(b"onnx").hexdigest()}]}), encoding="utf-8")
+    if signed:
+        (sys_path_model / "model_manifest.json.sig").write_text("c2ln", encoding="ascii")
+    return sys_path_model.name
+
+
+def test_unsigned_object_det_push_is_refused_unless_allowed(tmp_path, capsys):
+    rev = _object_model(tmp_path)
+    base = ["push", "robot", rev, "--task", "object_det", "--models", str(tmp_path), *SSH]
+    runner = FakeRunner()
+    assert deliver.main(base, runner=runner) == 2 and runner.calls == []
+    assert "unsigned" in capsys.readouterr().err
+    runner = FakeRunner()
+    assert deliver.main([*base, "--allow-unsigned"], runner=runner) == 0
+
+
+def test_signed_object_det_push_goes_through_and_check_verifies_locally(tmp_path, monkeypatch):
+    rev = _object_model(tmp_path, signed=True)
+    base = ["push", "robot", rev, "--task", "object_det", "--models", str(tmp_path), *SSH]
+    assert deliver.main(base, runner=FakeRunner()) == 0
+    seen = []
+    monkeypatch.setattr(deliver, "verify_manifest_signature", lambda folder, keys: seen.append(keys) or "k")
+    assert deliver.main([*base, "--check", str(tmp_path / "keys")], runner=FakeRunner()) == 0
+    assert seen == [str(tmp_path / "keys")]
+
+    def bad(folder, keys):
+        raise deliver.SignatureError("no trusted key verifies")
+    monkeypatch.setattr(deliver, "verify_manifest_signature", bad)
+    assert deliver.main([*base, "--check", str(tmp_path / "keys")], runner=FakeRunner()) == 2
+
+
+def test_promote_when_shadow_is_already_active_changes_nothing(bash_root):
+    root, run = bash_root
+    (root / "shadow").write_text("/m/object_det/r1")
+    (root / "active").write_text("/m/object_det/r1")
+    r = run("promote")
+    assert r.returncode == 0, r.stderr
+    assert "already active" in r.stdout
+    assert not (root / "previous").exists() and not (root / "hold").exists()

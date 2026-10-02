@@ -54,6 +54,7 @@ for _p in (HERE, HERE / "model", HERE / "dataset"):
         sys.path.insert(0, str(_p))
 
 import operator_ssh  # noqa: E402
+import slot_cli  # noqa: E402
 import store  # noqa: E402
 
 SITE_TOKEN_FILE = "/etc/rosy/site/secrets/hf_token"
@@ -515,11 +516,7 @@ def main(argv=None, *, runner=subprocess.run, connect=socket.create_connection,
     p = sub.add_parser("repin")
     p.add_argument("robot")
     p.add_argument("--watch-config", help="read the site watcher's config")
-    for name in ("deliver", "promote", "rollback", "release-hold"):  # --task: D-423 slots
-        p = sub.add_parser(name)
-        p.add_argument("robot")
-        p.add_argument("--task", default="lane_seg")
-        p.add_argument(*(["revision"] if name == "deliver" else ["--slot"]), default="shadow")
+    slot_cli.add_parsers(sub)  # deliver, promote, rollback, release-hold (D-423 --task/--slot)
     p = sub.add_parser("harvest")
     p.add_argument("robot")
     p.add_argument("--dest")
@@ -564,9 +561,7 @@ def main(argv=None, *, runner=subprocess.run, connect=socket.create_connection,
                 rc = max(rc, deliver.main(["status", host, *_ssh_argv(cfg, name), "--history",
                                            str(args.history), "--task", args.task], runner=runner))
             return rc
-        head = (["push", hosts[0], args.revision, "--models", str(cfg["intake_out"])]
-                if args.cmd == "deliver" else [args.cmd, hosts[0]])
-        head += ["--task", args.task] + (["--slot", args.slot] if args.cmd == "rollback" else [])
+        head = slot_cli.deliver_argv(args, hosts[0], str(cfg["intake_out"]))
         return deliver.main([*head, *_ssh_argv(cfg, robots[0]), "--operator", cfg["operator"]],
                             runner=runner)
     if args.cmd == "harvest":

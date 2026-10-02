@@ -34,3 +34,23 @@ def test_defaults_stay_the_lane_shadow(tmp_path, monkeypatch):
     assert rosy_ml.main(["rollback", "pinky-b"]) == 0
     assert seen[0][seen[0].index("--task") + 1] == "lane_seg"
     assert seen[0][seen[0].index("--slot") + 1] == "shadow"
+
+
+
+def test_slot_exists_only_on_rollback_with_its_choices(tmp_path, monkeypatch):
+    import pytest
+    _init(tmp_path, monkeypatch=monkeypatch)
+    _seen(monkeypatch)
+    for argv in (["promote", "pinky-a", "--slot", "active"], ["release-hold", "pinky-a", "--slot", "x"],
+                 ["rollback", "pinky-a", "--slot", "previous"]):
+        with pytest.raises(SystemExit):
+            rosy_ml.main(argv)
+
+
+def test_allow_unsigned_and_check_reach_deliver_push(tmp_path, monkeypatch):
+    _init(tmp_path, monkeypatch=monkeypatch)
+    seen = _seen(monkeypatch)
+    assert rosy_ml.main(["deliver", "pinky-a", "rev-1", "--task", "object_det", "--allow-unsigned",
+                         "--check", "/keys"]) == 0
+    push = seen[0]
+    assert "--allow-unsigned" in push and push[push.index("--check") + 1] == "/keys"
