@@ -117,14 +117,9 @@ class StepJobDispatcher:
             return self._view(held, index, "HOLD")
         if started["status"] != "RUNNING":
             return self._view(started, index, started["status"])
-        control = self.task_store.dispatch_control()
-        if (not control["dispatch_enabled"] or control["authority_epoch"] != grant.authority_epoch
-                or control["generation"] != grant.dispatch_generation):
-            # Pre-send hold: nothing was sent, so the claims are released (D-420 §4.5 row 1).
-            held = self.store.hold(job["mission_id"], reason="FLEET_FENCE_CHANGED_BEFORE_LOCAL_SUBMIT",
-                                   claim_phase=None, actor_id=_ACTOR,
-                                   event_key=f"fence-before-send:{grant.action_id}", not_submitted=True)
-            return self._view(held, index, "HOLD")
+        # The fence is checked inside start_step's transaction (pre-send). A stop that lands
+        # after that commit is caught by the owner's generation fence on the grant (D-403 §6);
+        # a started step never releases its claims (1c P1).
         try:
             receipt = self.transport.submit(grant)
         except LocalActionRejected as exc:

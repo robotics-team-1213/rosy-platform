@@ -64,7 +64,7 @@ def hold_for_site_stop(connection: sqlite3.Connection, *, now: str, hold_reason:
                 "SELECT * FROM fleet_cell_jobs WHERE status IN ('READY', 'ACTION_SUCCEEDED')").fetchall():
             CellJobStore._hold_in_transaction(
                 connection, job, reason=hold_reason, claim_phase="HELD", actor_id="site-stop",
-                event_key=f"site-stop:{generation}", detail={}, now=now)
+                event_key=f"site-stop:{generation}", detail={}, now=now, strict=False)
     connection.execute(
         "UPDATE fleet_action_claims SET phase='HELD', lease_until=NULL WHERE owner_kind='mission' "
         "AND phase='CLAIMED' AND owner_id IN (SELECT mission_id FROM fleet_cell_jobs)")
@@ -300,6 +300,11 @@ class CellJobStore:
                 (control["authority_epoch"], control["generation"]),
             ).fetchall()
             for job in rows:
+                # 1c N1: an Action that was in flight across the restart has an unknown outcome;
+                # UNKNOWN claims put it on the readback path (and block rearm until resolved).
+                connection.execute(
+                    "UPDATE fleet_action_claims SET phase='UNKNOWN' WHERE owner_kind='mission' "
+                    "AND owner_id=? AND phase='DISPATCHING'", (job["mission_id"],))
                 connection.execute(
                     "UPDATE fleet_cell_jobs SET status='HOLD', reason='SITE_AUTHORITY_CHANGED', "
                     "updated_at=? WHERE mission_id=?", (now, job["mission_id"]),
@@ -491,7 +496,8 @@ class CellJobStore:
                 connection.commit()
                 return result_row
             # RUNNING, or a readback of a HOLD whose claims are still UNKNOWN (1b A3).
-            readback = step["status"] == "HOLD" and self._claim_phases(connection, job) == {"UNKNOWN"}
+            phases = self._claim_phases(connection, job)
+            readback = step["status"] == "HOLD" and bool(phases) and phases <= {"UNKNOWN", "DISPATCHING"}
             if ((step["status"] != "RUNNING" and not readback) or step["action_id"] != action_id
                     or step["attempt_id"] != attempt_id or (readback and outcome == "UNKNOWN")):
                 raise MissionConflict("Action result does not match the current Cell transfer attempt")
@@ -516,7 +522,8 @@ class CellJobStore:
             rows = connection.execute(
                 "SELECT DISTINCT j.mission_id FROM fleet_cell_jobs j JOIN fleet_action_claims c "
                 "ON c.owner_kind='mission' AND c.owner_id=j.mission_id AND c.generation=j.dispatch_generation "
-                "WHERE j.status='HOLD' AND c.phase='UNKNOWN' ORDER BY j.updated_at, j.mission_id").fetchall()
+                "WHERE j.status='HOLD' AND c.phase IN ('UNKNOWN', 'DISPATCHING') "
+                "ORDER BY j.updated_at, j.mission_id").fetchall()
             return [self._get(connection, row["mission_id"]) for row in rows]
 
     def resource_claims(self) -> list[dict[str, Any]]:
@@ -620,15 +627,14 @@ class CellJobStore:
         """HOLD a READY, RUNNING or ACTION_SUCCEEDED Job and its current step (idempotent).
 
         A held Job keeps its claims (D-403 보강 2026-10-03): ``claim_phase`` is HELD from READY or
-        ACTION_SUCCEEDED, and UNKNOWN or DISPATCHING (kept) from RUNNING. None releases them and is
-        allowed only with ``not_submitted=True`` from READY or from the dispatcher's pre-send edge
-        of a RUNNING step (nothing was sent; D-420 §4.5 row 1).
+        ACTION_SUCCEEDED, and UNKNOWN from RUNNING (so readback picks it up). None releases them and is
+        allowed only from READY with ``not_submitted=True`` (nothing was sent; D-420 §4.5 row 1).
         """
         reason = _nonempty("reason", reason, limit=96)
         actor_id = _nonempty("actor_id", actor_id, limit=96)
         event_key = _nonempty("event_key", event_key)
-        if claim_phase not in {"HELD", "UNKNOWN", "DISPATCHING", None}:
-            raise ValueError("claim_phase must be HELD, UNKNOWN, DISPATCHING or None")
+        if claim_phase not in {"HELD", "UNKNOWN", None}:
+            raise ValueError("claim_phase must be HELD, UNKNOWN or None")
         if claim_phase is None and not_submitted is not True:
             raise ValueError("claims are released only before anything was sent (not_submitted=True)")
         with closing(self._connect()) as connection:
@@ -644,7 +650,7 @@ class CellJobStore:
                                   actor_id, event_key, detail):
                 if job["status"] not in _HOLDABLE:
                     raise MissionConflict(f"a {job['status']} Cell Job cannot be held")
-                allowed = ({"UNKNOWN", "DISPATCHING", None} if job["status"] == "RUNNING"
+                allowed = ({"UNKNOWN"} if job["status"] == "RUNNING"
                            else {"HELD", None} if job["status"] == "READY" else {"HELD"})
                 if claim_phase not in allowed:
                     raise MissionConflict(f"a {job['status']} Cell Job cannot hold its claims as {claim_phase}")
@@ -657,7 +663,8 @@ class CellJobStore:
     @staticmethod
     def _hold_in_transaction(connection: sqlite3.Connection, job: sqlite3.Row, *,
                              reason: str, claim_phase: str | None, actor_id: str,
-                             event_key: str, detail: Mapping[str, Any], now: str | None = None) -> None:
+                             event_key: str, detail: Mapping[str, Any], now: str | None = None,
+                             strict: bool = True) -> None:
         now = now or _now()
         connection.execute(
             "UPDATE fleet_cell_steps SET status='HOLD', reason=?, updated_at=? "
@@ -668,13 +675,14 @@ class CellJobStore:
             "UPDATE fleet_cell_jobs SET status='HOLD', reason=?, updated_at=? WHERE mission_id=?",
             (reason, now, job["mission_id"]),
         )
-        CellJobStore._set_claims(connection, job, claim_phase)
+        CellJobStore._set_claims(connection, job, claim_phase, strict=strict)
         CellJobStore._event(
             connection, job["mission_id"], job["current_step_index"], "CELL_JOB_HELD", actor_id,
             {"event_id": event_key, "reason": reason, "claim_phase": claim_phase, **detail})
 
     @staticmethod
-    def _set_claims(connection: sqlite3.Connection, job: sqlite3.Row, phase: str | None) -> None:
+    def _set_claims(connection: sqlite3.Connection, job: sqlite3.Row, phase: str | None, *,
+                    strict: bool = True) -> None:
         if phase is None:
             release_claims(connection, owner_kind="mission", owner_id=job["mission_id"],
                            generation=job["dispatch_generation"])
@@ -684,8 +692,14 @@ class CellJobStore:
             "WHERE owner_kind='mission' AND owner_id=? AND generation=?",
             (phase, job["mission_id"], job["dispatch_generation"]),
         ).rowcount
-        if updated != len(normalize_resources(json.loads(job["resources_json"]))):
+        expected = len(normalize_resources(json.loads(job["resources_json"])))
+        if updated != expected and strict:
             raise MissionConflict("Cell Job no longer owns all durable resource claims")
+        if updated != expected:
+            # 1c N2: the stop path never fails on bookkeeping; it records what needs reconciling.
+            CellJobStore._event(connection, job["mission_id"], job["current_step_index"],
+                                "CLAIM_SET_INCOMPLETE_AT_STOP", "site-stop",
+                                {"expected_claims": expected, "updated_claims": updated, "phase": phase})
 
     @staticmethod
     def _owns_runnable_claims(connection: sqlite3.Connection, job: sqlite3.Row) -> bool:

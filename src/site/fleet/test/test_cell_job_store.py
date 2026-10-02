@@ -390,10 +390,9 @@ def test_submitting_event_carries_the_fence(tmp_path):
     assert submitting[0]["detail"]["dispatch_generation"] == running["dispatch_generation"]
 
 
-@pytest.mark.parametrize("claim_phase, phases", [("UNKNOWN", ["UNKNOWN"]),
-                                                 ("DISPATCHING", ["DISPATCHING"])])
+@pytest.mark.parametrize("claim_phase, phases", [("UNKNOWN", ["UNKNOWN"])])
 def test_generic_hold_from_running_is_idempotent(tmp_path, claim_phase, phases):
-    # rosy-a9 item 4; 1b A2: a RUNNING Job keeps its claims (UNKNOWN or DISPATCHING).
+    # rosy-a9 item 4; 1b A2, 1c: a RUNNING Job holds with UNKNOWN claims only.
     _, tasks, store, _ = _running(tmp_path)
     held = store.hold("cell-mission-1", reason="LOCAL_ACTION_READBACK_UNKNOWN",
                       claim_phase=claim_phase, actor_id="mission-dispatcher", event_key="hold-1")
@@ -406,7 +405,7 @@ def test_generic_hold_from_running_is_idempotent(tmp_path, claim_phase, phases):
 
 
 @pytest.mark.parametrize("claim_phase, not_submitted, error", [
-    (None, False, ValueError), ("HELD", False, MissionConflict),
+    (None, False, ValueError), ("HELD", False, MissionConflict), ("DISPATCHING", False, ValueError),
 ])
 def test_running_hold_cannot_release_or_park_in_flight_claims(tmp_path, claim_phase, not_submitted, error):
     # 1b A2: release needs an explicit not_submitted; HELD is not a RUNNING phase.

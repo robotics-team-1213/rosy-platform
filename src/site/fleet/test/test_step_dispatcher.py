@@ -192,7 +192,9 @@ def test_device_terminal_states_hold_the_job(tmp_path, state, reason, claims):
     assert _claims(tasks) == claims
 
 
-def test_a_stop_between_start_and_submit_holds_without_sending(tmp_path):
+def test_a_stop_after_start_keeps_the_claims_and_relies_on_the_owner_fence(tmp_path):
+    # 1c P1: once start_step committed, the step's claims are never released by the dispatcher.
+    # The grant still carries the old generation, which the owner's stop fence refuses.
     store, tasks, transport, dispatcher = _setup(tmp_path)
     start_step = store.start_step
 
@@ -202,9 +204,10 @@ def test_a_stop_between_start_and_submit_holds_without_sending(tmp_path):
         return result
 
     store.start_step = start_then_stop
-    assert dispatcher.dispatch_next()["state"] == "HOLD"
-    assert transport.submissions == []
-    assert store.get("cell-mission-1")["reason"] == "FLEET_FENCE_CHANGED_BEFORE_LOCAL_SUBMIT"
+    dispatcher.dispatch_next()
+    assert transport.submissions[0].dispatch_generation < tasks.dispatch_control()["generation"]
+    assert _claims(tasks) == ["DISPATCHING"]
+    assert tasks.dispatch_control()["rearm_available"] is False
 
 
 def test_a_stop_before_start_holds_the_job_and_keeps_its_claims(tmp_path):

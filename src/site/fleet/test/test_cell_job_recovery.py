@@ -235,3 +235,71 @@ def test_claims_read_api_names_the_owning_job_status_and_phase(tmp_path):
         assert claim["owner_kind"] == "mission" and claim["mission_id"] == proposal_id
         assert (claim["job_status"], claim["job_reason"], claim["phase"]) == ("HOLD", "site_stop", "HELD")
     assert client.get("/api/fleet/resource-claims").status_code in {401, 403}
+
+
+def test_restart_with_a_running_step_has_an_exit(tmp_path):
+    """C4b 1c N1 (D-403 §7(e)): restart -> HOLD with claims UNKNOWN -> readback resolves it."""
+    for outcome, status, phases in (("SUCCEEDED", "ACTION_SUCCEEDED", {"CLAIMED"}),
+                                    ("FAILED", "HOLD", {"HELD"})):
+        path, tasks, _, enabled = _stores(tmp_path / outcome)
+        store = CellJobStore(path)
+        _create(store)
+        store.admit("cell-mission-1", actor_id="operator-1", expected_generation=enabled["generation"])
+        transport = Transport()
+        dispatcher = StepJobDispatcher(store, tasks, transport, {"omx_01": "omx_01_control"}, REVISIONS,
+                                       deployment_profile="simulation", monotonic=Clock())
+        dispatcher.dispatch_next()  # RUNNING, claims DISPATCHING
+        tasks.close_dispatch_for_startup()
+        restarted = CellJobStore(path)
+        restarted.recover_after_startup()
+        held = restarted.get("cell-mission-1")
+        assert held["status"] == "HOLD" and held["reason"] == "SITE_AUTHORITY_CHANGED"
+        assert {phase for _, _, phase in _claim_phases(path)} == {"UNKNOWN"}
+        assert tasks.dispatch_control()["rearm_available"] is False
+        transport.on_get = lambda grant, outcome=outcome: _receipt(grant, outcome, 20)
+        StepJobDispatcher(restarted, tasks, transport, {"omx_01": "omx_01_control"}, REVISIONS,
+                          deployment_profile="simulation", monotonic=Clock()).dispatch_next()
+        job = restarted.get("cell-mission-1")
+        assert job["status"] == status
+        assert {phase for _, _, phase in _claim_phases(path)} == phases
+        assert tasks.dispatch_control()["rearm_available"] is True
+        assert len(transport.submissions) == 1
+
+
+def test_readback_also_accepts_dispatching_claims_on_a_hold_job(tmp_path):
+    # 1c N1 defence in depth: a HOLD Job whose claims were left DISPATCHING is still read back.
+    path, tasks, store, transport, dispatcher = _unknown_job(tmp_path)
+    with store._connect() as connection:
+        connection.execute("UPDATE fleet_action_claims SET phase='DISPATCHING'")
+        connection.commit()
+    assert [job["mission_id"] for job in store.next_unresolved()] == ["cell-mission-1"]
+    transport.on_get = lambda grant: _receipt(grant, "SUCCEEDED", 20)
+    dispatcher.dispatch_next()
+    assert store.get("cell-mission-1")["status"] == "ACTION_SUCCEEDED"
+
+
+def test_a_site_stop_never_fails_on_claim_bookkeeping(tmp_path):
+    """C4b 1c N2: one missing claim must not roll the stop latch back."""
+    path, tasks, _, enabled = _stores(tmp_path)
+    store = CellJobStore(path)
+    _create(store)
+    store.admit("cell-mission-1", actor_id="operator-1", expected_generation=enabled["generation"])
+    with store._connect() as connection:
+        connection.execute("DELETE FROM fleet_action_claims WHERE resource_key='pallet:pallet-1'")
+        connection.commit()
+    stopped = tasks.trip_stop_latch(actor_id="operator-1")
+    assert stopped["dispatch_enabled"] is False
+    job = store.get("cell-mission-1")
+    assert job["status"] == "HOLD" and job["reason"] == "site_stop"
+    assert any(event["event_type"] == "CLAIM_SET_INCOMPLETE_AT_STOP" for event in job["events"])
+    assert {phase for _, _, phase in _claim_phases(path)} == {"HELD"}
+
+
+def test_release_from_running_is_refused_entirely(tmp_path):
+    # 1c P1: release (claim_phase=None) only from READY, even with not_submitted=True.
+    from test_cell_job_store import _running
+    _, _, store, _ = _running(tmp_path)
+    with pytest.raises(MissionConflict):
+        store.hold("cell-mission-1", reason="X", claim_phase=None, actor_id="op", event_key="k",
+                   not_submitted=True)
+    assert store.get("cell-mission-1")["status"] == "RUNNING"
