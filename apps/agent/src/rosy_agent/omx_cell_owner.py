@@ -4,7 +4,9 @@
 runtime, ``allowed_owners=("pilot_sim", "rule_based")``), one SQLite journal holding the Action
 store, the local stop latch and the accepted cell/recipe store, the CELL_TRANSFER phase factory
 (transfer Skill + analytic planner + PickPlaceRunner), the D-336 ``ActionApi``/``UnixActionServer``
-and the D-404 HTTP app. The HTTP API and the UDS socket see the same acceptance store.
+and the D-404 HTTP app from the same runtime. Only the UDS path uses the acceptance store today:
+the HTTP app is the unchanged Pilot simulation app and has no /cell routes, so it does not yet
+share the store with UDS; PUT/GET /cell and seat<->Action exclusion land with G9.
 
 ROS is injected (``runtime_factory``, ``goal_port_factory``) so this composition stays rclpy-free
 and host-testable; ``deploy/robot/omx/run_cell_owner.py`` supplies the real runtime. Before any

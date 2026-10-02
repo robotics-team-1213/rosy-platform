@@ -80,7 +80,10 @@ def main() -> None:
     uds = threading.Thread(target=owner.uds_server.serve_forever, daemon=True)
     uds.start()
     try:
-        uvicorn.run(owner.http_app, host="0.0.0.0", port=8088, access_log=False)
+        # Loopback by default: no sim compose/run script publishes this port. Set
+        # ROSY_CELL_OWNER_HTTP_HOST only for a container that publishes it deliberately.
+        uvicorn.run(owner.http_app, host=os.environ.get("ROSY_CELL_OWNER_HTTP_HOST", "127.0.0.1"),
+                    port=8088, access_log=False)
     finally:
         owner.uds_server.stop()
         executor.shutdown()
