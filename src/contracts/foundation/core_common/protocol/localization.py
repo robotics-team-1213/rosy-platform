@@ -20,6 +20,9 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 Finite = Annotated[float, Field(allow_inf_nan=False)]
 Unit = Annotated[float, Field(ge=0.0, le=1.0, allow_inf_nan=False)]
 _REQUEST_ID = re.compile(r"^[A-Za-z0-9_.:-]{1,64}$")
+#: `LocalizationStatus.reason` while the robot's 3 s injection check runs (state stays
+#: CANDIDATES). Fleet's ladder and CORE's missions wait on it (D-395 S1 re-run R6).
+CHECKING = "checking"
 
 
 class LocState(str, enum.Enum):

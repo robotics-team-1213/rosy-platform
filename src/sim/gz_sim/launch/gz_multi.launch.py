@@ -160,9 +160,8 @@ def _nav_config(ns: str, rosy_nav_share: str,
     # SmacPlanner2D searches x/y cells without a heading state.  A rectangular
     # footprint can therefore be accepted near a corner at yaw=0 even though
     # the controller must later rotate it through the corner; the next replan
-    # then reports "Start occupied".  Simulation uses the padded
-    # circumscribed radius in both costmaps so planning is conservative for
-    # every yaw.  This never shrinks the physical envelope or inflation layer.
+    # then reports "Start occupied".  Only the planner's global costmap takes the padded
+    # circumscribed radius; RPP's local check keeps the device footprint (D-395 R4).
     costmap_params = [
         params[name][name]["ros__parameters"]
         for name in ("local_costmap", "global_costmap")
@@ -175,7 +174,7 @@ def _nav_config(ns: str, rosy_nav_share: str,
         vertices = yaml.safe_load(source_footprint)
         padding = max(float(item.get("footprint_padding", 0.)) for item in costmap_params)
         circumscribed_radius = max(math.hypot(float(x), float(y)) for x, y in vertices) + padding
-        for item in costmap_params:
+        for item in costmap_params[1:]:  # global_costmap only
             item.pop("footprint", None)
             item["robot_radius"] = circumscribed_radius
             item["footprint_padding"] = 0.
@@ -200,14 +199,15 @@ def _nav_config(ns: str, rosy_nav_share: str,
     follow["use_regulated_linear_velocity_scaling"] = True
     follow["use_cost_regulated_linear_velocity_scaling"] = True
     follow["cost_scaling_gain"] = min(float(follow["cost_scaling_gain"]), 1.0)
-    local_inflation = params["local_costmap"]["local_costmap"]["ros__parameters"][
-        "inflation_layer"]
+    local_inflation = params["local_costmap"]["local_costmap"]["ros__parameters"]["inflation_layer"]
     follow["cost_scaling_dist"] = min(
         float(follow["cost_scaling_dist"]), float(local_inflation["inflation_radius"]))
-    follow["inflation_cost_scaling_factor"] = float(
-        local_inflation["cost_scaling_factor"])
+    follow["inflation_cost_scaling_factor"] = float(local_inflation["cost_scaling_factor"])
     controller["progress_checker"]["required_movement_radius"] = min(
         float(controller["progress_checker"]["required_movement_radius"]), .05)
+    # D-395 R4: RPP only rotates while its carrot (~min_lookahead ahead) is within xy_goal_tolerance.
+    tol = controller["general_goal_checker"]
+    tol["xy_goal_tolerance"] = min(float(tol["xy_goal_tolerance"]), .10)
 
     smoother = params["velocity_smoother"]["ros__parameters"]
     smoother["max_velocity"] = [

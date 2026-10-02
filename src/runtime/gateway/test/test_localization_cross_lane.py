@@ -349,4 +349,7 @@ def test_fleet_mission_runs_in_core_and_the_robot_searches_after_it(stack):
         mission.tick()
     assert mission.status() == {"kind": "rotate_in_place", "state": "done", "reason": "done"}
     robot.core.on_mission(robot.now, json.loads(published[-1]))
-    assert robot.core.search_due(robot.now, (0.0, 0.0, 0.1))         # fresh candidates now
+    # S1 re-run R3: the search also waits until the robot has stood still for 0.5 s.
+    for dt in (0.0, 0.3, 0.6):
+        robot.core.on_twist(robot.now + dt, 0.0, 0.0)
+    assert robot.core.search_due(robot.now + 0.6, (0.0, 0.0, 0.1))   # fresh candidates now

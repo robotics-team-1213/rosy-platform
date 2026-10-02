@@ -67,5 +67,5 @@
 - 2026-10-02 · 7459be67 · fix(localization): D-395 S1 재실행 R3 — 낡은 odom twist 는 정지가 아니다
 - 2026-10-02 · c00b368d · fix(localization): D-395 S1 재실행 R3 — 로봇이 멈춘 뒤에만 탐색
 - 2026-10-02 · ead31a99 · fix(localization): D-395 S1 재실행 R3 — 구별 후보의 마지막 yaw 정밀화
+- 2026-10-02 · 2b922678 · feat(localization): D-395 S1 재실행 R6 — 검사 중 상태는 CANDIDATES/`checking`
 - 2026-10-02 · uncommitted · fix(localization): D-395 S1 재실행 — 미션 중 결정은 `mission_running` 으로 거부
-- 2026-10-02 · 5016499f · fix(localization): D-395 S1 결과 1·2 (e62d110b, 64d8197b, 5016499f) — 3 s 검증의 지연된 map->odom, 전체 스캔 피어 객체

@@ -170,6 +170,34 @@ def test_the_ladder_rungs_and_their_reset():
     assert ladder.view("r", 122.0)["needs_human"] is False
 
 
+def test_a_paused_ladder_does_not_count_the_pause():
+    """S1 re-run R2/R6: no time counts while a lead is pending or the robot checks."""
+    ladder = Ladder()
+    assert ladder.update("r", LocState.CANDIDATES, 0.0) is None
+    assert ladder.update("r", LocState.CANDIDATES, 5.0) is None
+    for t in (5.5, 9.0, 10.5, 15.0):
+        assert ladder.update("r", LocState.CANDIDATES, t, paused=True) is None
+    assert ladder.holding("r") is True
+    assert ladder.update("r", LocState.CANDIDATES, 20.0) is None          # 10 s counted
+    assert ladder.holding("r") is False
+    assert ladder.update("r", LocState.CANDIDATES, 20.5) == "rotate"
+
+
+def test_the_pause_is_capped_so_a_stuck_lead_still_reaches_a_human():
+    ladder = Ladder()
+    ladder.update("r", LocState.CANDIDATES, 0.0)
+    rungs = {}
+    t = 0.5
+    while t <= 200.0:
+        rung = ladder.update("r", LocState.CANDIDATES, t, paused=True)
+        if rung is not None:
+            rungs[rung] = t
+        t += 0.5
+    cap = service_logic.LADDER_PAUSE_MAX_S
+    assert rungs == {"rotate": 10.5 + cap, "homing": 45.5 + cap, "needs_human": 120.5 + cap}
+    assert ladder.holding("r") is False
+
+
 def test_each_rung_starts_after_the_previous_mission_can_have_ended():
     """Review fix: rotate (sent at 10 s, at most 30 s) ends before homing; homing ends
     before needs_human, so the ladder can complete."""
@@ -785,3 +813,70 @@ def test_a_busy_refusal_is_retried_on_later_polls():
     sent = len(r1.missions)
     ticks(svc, clock, 5.0)
     assert len(r1.missions) == sent                           # accepted: no more retries
+
+
+# --- ladder pauses (S1 re-run R2, R6) ---------------------------------------------------------
+
+
+def candidates_state(robot_id, request_id, reason=None):
+    return {"robot_id": robot_id, "pose": {"x": 0.0, "y": 0.0, "yaw": 0.0},
+            "localization": {"state": "CANDIDATES", "pose_frame": "odom", "reason": reason,
+                             "request_id": request_id}}
+
+
+def test_s1_a_lead_pending_at_the_rotate_rung_holds_the_ladder_until_the_decision():
+    """S1 re-run R2 timeline: the peer r1 is anchored at 9.0 s, r2's peers lead starts then
+    and its 2 s hold ends at 11.0 s. The ladder's rotate rung (> 10 s) must not fire at
+    10.5 s; the decision comes at the hold end and no mission is ever sent."""
+    clock = FakeClock()
+    start = clock()
+    r1 = Localizing("r1", ON_A)
+    r1._state, r1.candidates = state("r1", "UNKNOWN", "odom"), None
+    r2 = Localizing("r2", X_OFF, objects=[seen_from(X_OFF, ON_A)], request_id="r2-1")
+    r2._state = candidates_state("r2", "r2-1")
+    svc = service(r1, r2, clock=clock)
+    ticks(svc, clock, 6.5)
+    r1._state = candidates_state("r1", "r1-1")                  # r1's slot report: 6.5 s
+    r1.candidates = report("r1", ON_A, request_id="r1-1")
+    while clock() - start < 10.75:                              # through the 10.5 s poll
+        run(svc.tick())
+        clock.advance(0.5)
+    assert len(r1.decisions) == 1 and svc.anchors() == {"r1"}
+    assert r2.decisions == [] and r2.missions == []
+    assert svc.view("r2")["candidates_for_s"] < 10.0            # the pending lead did not count
+    run(svc.tick())                                             # 11.0 s: the hold ends
+    assert clock() - start == pytest.approx(11.0)
+    assert [[c.value for c in d.cues] for d in r2.decisions] == [["peers"]]
+    ticks(svc, clock, 2.0)
+    assert r2.missions == []
+
+
+def test_no_ladder_mission_while_the_robot_runs_its_check():
+    """S1 re-run R6: d1-d3 started rotate_in_place over a running 3 s check."""
+    clock = FakeClock()
+    r1 = FakeRobot("r1", state=candidates_state("r1", "r1-1"))
+    svc = service(r1, clock=clock)
+    ticks(svc, clock, 9.0)
+    r1._state = candidates_state("r1", "r1-1", reason="checking")
+    ticks(svc, clock, 5.0)
+    assert r1.missions == []
+    r1._state = candidates_state("r1", "r1-1")                  # rejected: back to searching
+    ticks(svc, clock, 1.5)
+    assert r1.missions == []                                    # 5 s of checking did not count
+    ticks(svc, clock, 0.5)
+    assert [m[0] for m in r1.missions] == ["rotate_in_place"]
+
+
+def test_a_busy_rung_is_not_retried_while_the_robot_checks():
+    clock = FakeClock()
+    r1 = FakeRobot("r1", state=candidates_state("r1", "r1-1"))
+    r1.mission_error = RobotApiError("r1", 409, "busy", "mission rotate_in_place is running")
+    svc = service(r1, clock=clock)
+    ticks(svc, clock, 11.0)
+    assert len(r1.missions) == 1
+    r1._state = candidates_state("r1", "r1-1", reason="checking")
+    ticks(svc, clock, 5.0)
+    assert len(r1.missions) == 1
+    r1._state = candidates_state("r1", "r1-1")
+    ticks(svc, clock, 0.5)
+    assert len(r1.missions) == 2                                # retried once the check is over

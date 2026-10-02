@@ -211,3 +211,10 @@
 - gate 변화: 없음
 - 결정: 없음
 - 교훈: 런치 그래프 시험에서 문자열 비교는 실행 전 값인지 먼저 확인한다 — repr에 대한 `endswith`는 언제나 거짓이다.
+
+## 2026-10-02 · uncommitted · fix(sim): gz_multi Nav2 가 직진하지 않던 D-395 R4
+- 변경: `gz_multi._nav_config` 두 곳. (1) 목표 판정 `xy_goal_tolerance` 를 min(·, 0.10) — sim 시험값 `min_lookahead_dist` 0.15 아래로. (2) 패딩 외접원(0.115 m)을 전역 비용지도(플래너)에만 넣고, 지역 비용지도(RPP 충돌 검사)는 장치 풋프린트를 그대로 둔다. `nav2_params.yaml`(장치)은 바꾸지 않았다. 파일 600줄(예산 600).
+- 증거: 수정 전 열린 가운데에서 0.40 m 목표 — `cmd_vel_nav` 1043개 표본 모두 linear 0, 이동 0.001 m, "Failed to make progress". 0.15 m 안쪽 스캔 반환 0개, 로봇 주변 비용 0 → 자기 반사·이웃 가설 기각. Jazzy RPP 1.3.12 는 carrot 거리가 목표 허용오차보다 짧으면 목표 방향으로 제자리 회전만 한다. 수정 1만: 사각형 A 에서 "collision ahead", 0.013 m. 두 수정 후: 열린 가운데 1 m 목표 2/2 SUCCEEDED(0.93, 0.91 m 이동), 사각형 A 3/3 SUCCEEDED(0.26–0.30 m), 사각형 A 1회는 재계획 "Start occupied" 로 중단. WSL Jazzy, 로봇 1대, `core:=false` + 중계, GZ_PARTITION rosy_g4, ROS_DOMAIN_ID 97, 원시 `X:\DevTemp\rosy-g4\`. `test_gz_multi_core.py` 에 두 단언(수정 전 실패 확인), WSL `src/sim/gz_sim/test` 280 passed, 1 skipped.
+- gate 변화: 없음
+- 결정: 없음. 장치 기본값 변경 제안 없음 — 장치 값(lookahead 0.3 > 허용 0.25, 지역 정사각 풋프린트)은 이 문제가 없다.
+- 교훈: RPP 의 lookahead 를 줄이면 목표 허용오차도 같이 봐야 한다 — carrot 이 허용오차 안이면 "도착"으로 보고 회전만 한다. 그리고 플래너용 보수적 풋프린트를 컨트롤러 비용지도에 같이 넣으면 벽 옆 출발이 막힌다.

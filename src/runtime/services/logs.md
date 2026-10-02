@@ -329,3 +329,10 @@
 - 변경: `localization/assist.py` 에 `bind_clock` — 3 s `state_stale` 창이 벽시계 대신 브리지의 line clock(use_sim_time 이면 ROS 시계, 실기는 monotonic)으로 잰다. 로봇 노드는 상태를 자기 노드 시계로 0.5 s 마다 내므로, 벽시계 창은 RTF ≈ 0.17 아래에서 깜빡였다. `received_s` 는 그대로 `clock`(로봇 노드의 ROS 시계).
 - 증거: `test/test_localization_assist.py` +2 (RTF 0.1, 벽 5 s 간격에도 stale 없음; 그 시계로 3.1 s 침묵은 stale + halt).
 - gate 변화: 없음.
+
+## 2026-10-02 · 80db8125 · fix(localization): D-395 S1 재실행 R5·R6 — 버린 보고는 다시 주지 않고, 검사 중 미션은 `busy`
+
+- 원인: R5 — 미션 시작으로 로봇이 열린 요청을 버린 뒤(`request_id: null`)에도 CORE 가 미션 전 보고를 계속 내줘 Fleet 이 그 보고로 결정하고 `stale_request` 를 받았다(d3). R6 — 로봇의 3 s 검사 중에도 미션을 받았다.
+- 변경: `LocalizationAssist.on_state` 는 상태의 `request_id` 가 null 이거나 보관한 보고와 다르면 보고를 버린다. `candidates()` 는 보고의 id 가 상태의 id 와 같을 때만 낸다. 상태보다 먼저 온 새 보고는 새 id 라 남고, 상태가 따라오면 나간다(토픽 간 순서가 엇갈려 버려져도 로봇이 2 s 마다 다시 보고한다). `LocalizationMission.start` 는 상태 `reason == checking` 이면 409 `busy`.
+- 증거: `gateway/test/test_localization_api.py` +3, `gateway/test/test_localization_mission.py` +1.
+- gate 변화: 없음.

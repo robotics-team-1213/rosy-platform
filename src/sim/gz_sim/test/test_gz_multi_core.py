@@ -82,6 +82,11 @@ def test_nav_config_applies_reducing_only_narrow_space_trial():
     assert follow["use_cost_regulated_linear_velocity_scaling"] is True
     assert follow["cost_scaling_dist"] == pytest.approx(.15)
     assert controller["progress_checker"]["required_movement_radius"] == pytest.approx(.05)
+    # D-395 R4: RPP rotates to the goal heading with linear 0 whenever the carrot is
+    # nearer than xy_goal_tolerance. The carrot sits about one lookahead ahead, so a
+    # tolerance at or above min_lookahead_dist means the robot never drives forward.
+    goal_checker = controller["general_goal_checker"]
+    assert goal_checker["xy_goal_tolerance"] < follow["min_lookahead_dist"]
     assert smoother["max_velocity"] == pytest.approx([.10, 0., .50])
     assert smoother["min_velocity"] == pytest.approx([-.10, 0., -.50])
 
@@ -89,11 +94,17 @@ def test_nav_config_applies_reducing_only_narrow_space_trial():
     # circumscribed radius so a square robot cannot enter a corner that only
     # fits at yaw=0 and then become "start occupied" while turning.
     padded_radius = (2 * .06 ** 2) ** .5 + .03
-    for costmap in ("local_costmap", "global_costmap"):
-        costmap_params = params[costmap][costmap]["ros__parameters"]
-        assert "footprint" not in costmap_params
-        assert costmap_params["robot_radius"] == pytest.approx(padded_radius)
-        assert costmap_params["footprint_padding"] == pytest.approx(0.)
+    global_params = params["global_costmap"]["global_costmap"]["ros__parameters"]
+    assert "footprint" not in global_params
+    assert global_params["robot_radius"] == pytest.approx(padded_radius)
+    assert global_params["footprint_padding"] == pytest.approx(0.)
+    # D-395 R4: the local costmap is RPP's collision checker, not the planner's. The
+    # padded circle (0.115 m) plus 5 cm cells covers the wall 0.14 m from square A, so
+    # RPP reported "collision ahead" before the first move. It keeps the device footprint.
+    local_params = params["local_costmap"]["local_costmap"]["ros__parameters"]
+    assert local_params["footprint"] == '[[0.06, 0.06], [0.06, -0.06], [-0.06, -0.06], [-0.06, 0.06]]'
+    assert "robot_radius" not in local_params
+    for costmap_params in (global_params, local_params):
         assert costmap_params["inflation_layer"]["inflation_radius"] == pytest.approx(.15)
 
 

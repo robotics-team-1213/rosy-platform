@@ -644,3 +644,23 @@ def test_the_set_down_and_suspect_searches_also_wait_for_stillness(when):
     assert not a.search_due(t + .7, ODOM)
     a.on_twist(t + .8, 0., 0.)
     assert a.search_due(t + .8, ODOM)
+
+
+def test_a_running_check_is_reported_as_candidates_checking():
+    """S1 re-run R6: Fleet's ladder and CORE's missions wait while the 3 s check runs."""
+    a = core()
+    candidates_ready(a)
+    status = one(a.on_decision(2., decision('r-1', 2.)), 'state')['status']
+    assert status['state'] == 'CANDIDATES' and status['reason'] == 'checking'
+    assert status['request_id'] == 'r-1'
+    assert one(a.tick(2.5), 'state')['status']['reason'] == 'checking'   # the 2 Hz cadence too
+    done = one(hold(a, 2.1, 5.6), 'state')['status']
+    assert done['state'] == 'LOCALIZED' and done['reason'] is None
+
+
+def test_a_failed_check_reports_its_rejection_not_checking():
+    a = core()
+    candidates_ready(a)
+    a.on_decision(2., decision('r-1', 2.))
+    status = one(a.tick(2.7), 'state')['status']
+    assert status['state'] == 'SUSPECT' and status['reason'] == 'inject_rejected'

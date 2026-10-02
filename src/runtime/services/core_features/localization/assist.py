@@ -153,7 +153,7 @@ class LocalizationAssist:
             status, report = self._effective(), self._report
         if status is None or report is None or status.state is not LocState.CANDIDATES:
             return None
-        if status.request_id is not None and status.request_id != report.request_id:
+        if status.request_id != report.request_id:
             return None
         return report
 
@@ -170,6 +170,11 @@ class LocalizationAssist:
             with self._lock:
                 self._status = status
                 self._status_at = self._monotonic()
+                # S1 re-run R5: the robot dropped the request this report answers (a mission
+                # start clears it to null) or moved on; the report never answers again. A
+                # newer report that arrived before its state carries the new id and stays.
+                if self._report is not None and status.request_id != self._report.request_id:
+                    self._report = None
             self._after_change()
 
     def tick(self, odom_owns_pose: bool) -> None:

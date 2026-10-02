@@ -266,8 +266,8 @@
 
 ## 최근 기록
 
+- 2026-10-02 · uncommitted · docs(plans): D-395 S1 R4 원인과 sim 수정
+- 2026-10-02 · uncommitted · docs(plans): D-395 계약 §3 사다리 멈춤 규칙 (S1 재실행 R2·R5·R6)
 - 2026-10-02 · uncommitted · docs(plans): D-395 S1 재실행 (fix/d395-s1-rerun)
 - 2026-10-02 · uncommitted · docs(adr): D-395 개정 6 — S1 결과, 닻을 내린 이웃만 단서
 - 2026-10-02 · uncommitted · docs(plans): D-395 S1 Gazebo bench 결과 (P2-8)
-- 2026-10-02 · uncommitted · merge: D-395 2단계 통합 — main 재병합, 계약 v1.72
-- 2026-10-02 · uncommitted · merge: D-395 2단계 갈래 A·B·C 통합
