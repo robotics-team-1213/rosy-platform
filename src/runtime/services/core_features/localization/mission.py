@@ -38,7 +38,7 @@ import time
 from dataclasses import dataclass
 from typing import Any, Callable, Optional
 
-from core_common.protocol.localization import LocState
+from core_common.protocol.localization import CHECKING, LocState
 from core_common.protocol.schemas import RobotMode
 from core_features.command.arbitration import Mode
 from core_features.command.manager import Twist
@@ -170,6 +170,8 @@ class LocalizationMission:
                 raise MissionRefused("localized", "the robot is LOCALIZED; missions only run without a pose")
             if self._run is not None:
                 raise MissionRefused("busy", f"mission {self._run.kind} is running")
+            if status is not None and status.reason == CHECKING:
+                raise MissionRefused("busy", "the robot's 3 s injection check is running")
             reason = self._busy() or (None if self._modes.mode is Mode.IDLE
                                       else f"mode is {self._modes.mode.value}")
             if reason:

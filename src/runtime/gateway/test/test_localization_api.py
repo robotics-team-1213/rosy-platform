@@ -176,6 +176,36 @@ def test_candidates_404_when_not_in_candidates(core):
     assert client.get("/api/v1/localization/candidates", headers=OPERATOR).status_code == 404
 
 
+def test_a_report_the_robot_dropped_is_not_served_again(core):
+    """S1 re-run R5: a mission start drops the robot's open request (`request_id: null`);
+    CORE drops its cached report with it, so Fleet cannot decide on it (stale_request)."""
+    client, services = core
+    _open_candidates(services, "req-1")
+    assert client.get("/api/v1/localization/candidates", headers=OPERATOR).status_code == 200
+    services.localization.on_state(_state("CANDIDATES", request_id=None))
+    assert client.get("/api/v1/localization/candidates", headers=OPERATOR).status_code == 404
+    services.localization.on_state(_state("CANDIDATES", request_id="req-1"))
+    assert client.get("/api/v1/localization/candidates", headers=OPERATOR).status_code == 404
+
+
+def test_a_report_for_another_request_is_dropped(core):
+    client, services = core
+    _open_candidates(services, "req-1")
+    services.localization.on_state(_state("CANDIDATES", request_id="req-2"))
+    services.localization.on_state(_state("CANDIDATES", request_id="req-1"))
+    assert client.get("/api/v1/localization/candidates", headers=OPERATOR).status_code == 404
+
+
+def test_a_report_that_arrives_before_its_state_is_served_once_the_state_catches_up(core):
+    client, services = core
+    _open_candidates(services, "req-1")
+    services.localization.on_candidates(_report("req-2"))       # the new search, state not yet
+    assert client.get("/api/v1/localization/candidates", headers=OPERATOR).status_code == 404
+    services.localization.on_state(_state("CANDIDATES", request_id="req-2"))
+    served = client.get("/api/v1/localization/candidates", headers=OPERATOR)
+    assert served.status_code == 200 and served.json()["request_id"] == "req-2"
+
+
 def test_decision_is_published_with_core_receipt_time(core):
     client, services = core
     _open_candidates(services)
