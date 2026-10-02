@@ -540,3 +540,141 @@ bash /mnt/x/DevTemp/rosy-d395-s1c/run_series.sh a1:a:c d2:d:d b2:b: l1:l: a2:a:c
 python tools/sim/d395_s1_summary.py X:\DevTemp\rosy-d395-s1c\a2 ...
 python X:\DevTemp\rosy-d395-s1c\rows.py tools\sim a1 a2 ...
 ```
+
+## Run 4 2026-10-02 (quiet slot)
+
+Main d366bc6f, which contains rev. 8 (206316f5: a poll-independent anchor-jump rule, 2.5 s Fleet calls, adoption of timed-out decisions, `needs_human` as a flag), on branch `test/d395-s1-run4`. The runs took place 14:01–16:08 KST. Other Rosy sessions had agreed not to start Gazebo or sim containers during that window. Raw logs are in `X:\DevTemp\rosy-d395-s1d\<run>\`. Each run directory also holds `load.txt`, the WSL load sampled every 15 s. The folder also holds `run_series.sh`, `rows.py` and `nh.py`.
+
+**Verdict: S1 passed on rev. 8.**
+- The forced mirror was detected in all 6 runs with no help, and there were no mirror decisions.
+- (d) passed fully from a moving drive in 4 runs.
+- The only missed bar is d4. The ladder's wall-clock rotation delayed its off-slot robot's correct decision until about 2 s before the bench's 420 s wall limit. So the robot did not LOCALIZE in time (U4).
+
+The slot removed the other Rosy sims, but the host was still busy. Windows CPU was at 91–96 %, and a non-Rosy container (`serion-f01-quality`) used 164 %. Two-robot runs averaged RTF 0.105–0.155, close to run 3 (0.07–0.17) and far below the re-run (0.37–0.64). So rev. 8 passed under run 3's load, not on a quiet host.
+
+| Scenario | Runs | Result | Key numbers (sim s) |
+|---|---|---|---|
+| (a) square A + off-slot | a1–a3 | **3/3** | slot robot LOCALIZED at 10.0–11.5. Off-slot robot (`peers`) at 41.9–42.3. Errors ≤ 1.1 cm / 1.2°. |
+| (a′) the same layout mirrored, (d) power-on | d1–d6 | **5/6** | slot robot at 9.5–12.8. Off-slot robot at 37.6–43.2, ≤ 1.2 cm / 1.0°. d4 ran out of time (U4). |
+| (b) both on squares | b1–b3 | **3/3** | LOCALIZED at 10.2–13.4, each on its first decision, ≤ 0.4 cm / 0.7° |
+| (c) forced mirror, detection required | a1–a3, b1–b3 | **6/6 detected** | SUSPECT `fleet_monitor` 3.1–4.1 sim s (19–31 s wall) after the injection, with no pulse. Then LOCALIZED at the truth, ≤ 0.8 cm / 0.3°. "pose jumped" was logged 6/6. |
+| (d) pickup during a real drive | d1–d3, d5, d6 (d4: phase not reached) | **4 full passes**, halt 5/5 | d1, d2, d5, d6 travelled 0.126–0.136 m and were lifted in motion. d3 travelled 0.304 m, but the bench missed it and lifted it standing at the goal (U5). In 5/5: SUSPECT `pickup`, 0.0 m drift while held, LOCALIZED 6.3–7.5 sim s after set-down at ≤ 0.3 cm / 0.3°, and 0.0 m in the 20 s after it. |
+| (l) lone off-slot | l1–l3 | **3/3 as expected** | `needs_human`, 0 decisions. Fleet kept reading candidates after the flag: 216–331 reads per run. |
+
+**Pass bar:**
+- **Zero human input:** met in all 15 runs.
+- **LOCALIZED within 5 cm / 5°:** every LOCALIZED pose was within 1.2 cm / 1.2° of the truth.
+- **Mirror decisions:** 0 of 35 Fleet decisions. All 35 were judged at the truth.
+- **(c) detected:** 6/6.
+
+### Setup differences
+
+- **Isolation:** `GZ_PARTITION=rosy_d395d`, `ROS_DOMAIN_ID=99`, workspace `/rosy_d395d_ws` (a fresh rsync of the worktree's `src` and `tools`), CORE APIs on 18970/18971, Fleet on 18999. Only this bench's process groups were stopped. At the end no process carried the partition and the ports were free.
+- **Load gate:** each run waited for a 1-min load under 15, for at most 5 min. Every run started at 6.0–15.0.
+- **Phases:** (c) also ran in the b layout (b1–b3), where the robots are 2.35 m apart. d4–d6 ran with the bench fix from U5.
+- **Speed:** two robots averaged RTF 0.105–0.155, one robot 0.39–0.47. The WSL 1-min load peaked at 44–66 with two robots and 27–33 with one. Candidate searches took 10.2–23.4 s wall.
+
+### (a) square A + off-slot, and the mirrored (d) power-on
+
+| run | avg RTF | load start → peak | slot robot CANDIDATES → LOCALIZED | error | off-slot robot CANDIDATES → LOCALIZED | error | mirror |
+|---|---|---|---|---|---|---|---|
+| a1 | 0.141 | 6.0 → 60.2 | r1: 45 (6.6) → 70 (11.0) | 0.2 cm / 0.7° | r2: 47 (7.1) → 282 (41.9), peers | 1.1 cm / 0.6° | 0 |
+| a2 | 0.135 | 13.2 → 60.3 | r1: 47 (5.6) → 76 (10.0) | 0.2 cm / 0.8° | r2: 53 (6.3) → 327 (41.9), peers | 1.0 cm / 1.2° | 0 |
+| a3 | 0.152 | 13.6 → 55.9 | r1: 47 (7.1) → 76 (11.5) | 0.4 cm / 0.8° | r2: 52 (7.7) → 278 (42.3), peers | 1.0 cm / 0.9° | 0 |
+| d1 | 0.145 | 13.8 → 50.9 | r2: 74 (5.2) → 111 (9.5) | 0.3 cm / 0.8° | r1: 68 (4.6) → 302 (37.6), peers | 1.0 cm / 0.9° | 0 |
+| d2 | 0.127 | 12.8 → 60.6 | r2: 52 (7.3) → 85 (12.1) | 0.2 cm / 0.8° | r1: 49 (6.9) → 349 (43.2), peers | 1.0 cm / 1.0° | 0 |
+| d3 | 0.129 | 12.9 → 54.1 | r2: 61 (7.9) → 97 (12.6) | 0.3 cm / 0.8° | r1: 54 (6.8) → 334 (43.2), peers | 0.8 cm / 1.0° | 0 |
+| d4 | 0.105 | 14.7 → 66.3 | r2: 57 (6.4) → 94 (10.9) | 0.3 cm / 0.6° | r1: 53 (5.7) → none in 420 s; the `peers` decision for the truth was posted at about 432 | (AMCL 69.1 cm / 179.8°, CANDIDATES) | 0 |
+| d5 | 0.115 | 11.4 → 57.5 | r2: 60 (6.4) → 124 (12.8) | 0.1 cm / 0.8° | r1: 57 (6.0) → 392 (42.6), peers | 1.2 cm / 0.5° | 0 |
+| d6 | 0.136 | 15.0 → 60.4 | r2: 49 (7.6) → 75 (11.6) | 0.2 cm / 0.8° | r1: 47 (7.3) → 291 (41.6), peers | 0.9 cm / 0.8° | 0 |
+
+Times are wall seconds since launch, with sim seconds in parentheses.
+
+- No decision was rejected in any run. Each decision had one `checking` report.
+- The off-slot robot always waited for the ladder's `rotate_in_place`. The rotation started 62–93 s wall after launch and ran 164–268 s wall. Fleet decided `peers` only after it ended (U4).
+- **`needs_human` (rev. 8 §3):**
+  - Fleet raised it for the off-slot robot in all 9 runs.
+  - In 8 of them it kept arbitrating, and the robot LOCALIZED at the truth 104–212 s wall later. The flag clears at LOCALIZED (`LadderClock.update` forgets the robot).
+  - In d4 the decision came just before the bench's limit.
+
+### (b) both on squares
+
+| run | avg RTF | load start → peak | r1 CANDIDATES → LOCALIZED | r2 CANDIDATES → LOCALIZED | errors r1 / r2 | rejects | mirror |
+|---|---|---|---|---|---|---|---|
+| b1 | 0.155 | 11.6 → 47.5 | 64 (6.0) → 89 (10.2) | 68 (6.7) → 94 (11.2) | 0.1 cm 0.5° / 0.2 cm 0.7° | 0 | 0 |
+| b2 | 0.153 | 12.2 → 58.3 | 43 (6.6) → 70 (10.9) | 52 (8.1) → 89 (13.4) | 0.4 cm 0.4° / 0.1 cm 0.7° | 0 | 0 |
+| b3 | 0.154 | 12.2 → 44.0 | 50 (6.4) → 74 (10.6) | 58 (7.8) → 87 (12.3) | 0.4 cm 0.5° / 0.2 cm 0.7° | 0 | 0 |
+
+Every decision was `slot` and passed on the first try. `needs_human` was never raised.
+
+### (c) forced mirror, LOCALIZED observer
+
+| run | layout | injected | r2 after the fault | anchor | SUSPECT | r2 re-localized | r1 |
+|---|---|---|---|---|---|---|---|
+| a1 | a (0.66 m) | 295 (44.0) | twin, 142.7 cm / 179.8° | dropped ("pose jumped") | 326 (47.5) `fleet_monitor`, no pulse | 383 (54.4), `peers`, 0.8 cm / 0.3° | LOCALIZED throughout, 0.2 cm / 0.7° |
+| a2 | a | 341 (43.7) | 142.9 cm / 179.7° | dropped | 362 (46.8) | 409 (54.3), `peers`, 0.7 cm / 0.2° | 0.2 cm / 0.8° |
+| a3 | a | 289 (43.8) | 142.9 cm / 179.8° | dropped | 316 (47.9) | 365 (54.7), `peers`, 0.8 cm / 0.2° | 0.4 cm / 0.8° |
+| b1 | b (2.35 m) | 107 (12.8) | 270.0 cm / 179.8° | dropped | 126 (16.3) | 170 (23.8), `slot`, 0.3 cm / 0.3° | 0.1 cm / 0.5° |
+| b2 | b | 101 (15.2) | 270.0 cm / 179.8° | dropped | 123 (18.5) | 172 (25.7), `slot`, 0.3 cm / 0.2° | 0.4 cm / 0.4° |
+| b3 | b | 99 (14.1) | 270.1 cm / 179.8° | dropped | 123 (17.6) | 161 (24.1), `slot`, 0.2 cm / 0.3° | 0.4 cm / 0.5° |
+
+- **Rev. 8 §1 works under run 3's load.** "pose jumped while LOCALIZED: no longer an anchor" was logged after every injection, 6/6. In run 3 it was 0/2. So the locked robot never accused the correct one. r1 stayed LOCALIZED and was never SUSPECT.
+- The monitor detected the lock 3.1–4.1 sim s after the injection, from r1's LOCALIZED objects alone. No pickup pulse was needed.
+- That includes the b layout, where the robots are 2.35 m apart. In run 3 b1 this failed (T2).
+
+### (d) pickup during a real drive
+
+| run | travelled before the lift (truth) | moving at the lift | SUSPECT | drift while held | set-down → LOCALIZED | r1 end | after LOCALIZED |
+|---|---|---|---|---|---|---|---|
+| d1 | **0.126 m** | yes | 372 (48.9) `pickup` | 0.0 m | 383 (51.0) → 423 (57.3), `peers` | 0.2 cm / 0.3° | 0.0 m in 20 s |
+| d2 | **0.131 m** | yes | 447 (54.9) | 0.0 m | 459 (56.8) → 511 (63.8) | 0.1 cm / 0.1° | 0.0 m |
+| d3 | 0.304 m by the trail; the bench recorded none (U5) | no: it stood 0.10 m from the goal, under a re-sent goal | 492 (63.6) | 0.0 m | 510 (66.0) → 567 (73.5) | 0.1 cm / 0.1° | 0.0 m |
+| d4 | phase not reached (U4) | — | — | — | — | — | — |
+| d5 | **0.134 m** | yes | 499 (54.3) | 0.0 m | 512 (56.1) → 559 (62.9) | 0.2 cm / 0.0° | 0.0 m |
+| d6 | **0.136 m** | yes | 395 (54.3) | 0.0 m | 408 (56.5) → 462 (63.5) | 0.3 cm / 0.1° | 0.0 m |
+
+- The re-localization was always one `peers` decision, 6.3–7.5 sim s after the set-down. Run 3 took 6.2–6.5.
+- bt_navigator again timed out acknowledging `compute_path_to_pose` under load. The bench re-sent goals (200/409 pairs, 6–16 posts per drive), and the robot still drove.
+
+### (l) lone off-slot
+
+| run | avg RTF | load start → peak | ladder | end |
+|---|---|---|---|---|
+| l1 | 0.468 | 11.9 → 26.8 | `rotate_in_place` 49 → 105 done, `to_square` refused once, `lane_to_stopline` 108 → 115 aborted `lane_lost` | `needs_human`, CANDIDATES (AMCL 71.6 cm / 179.6°), 0 decisions |
+| l2 | 0.390 | 11.2 → 31.6 | `rotate_in_place` 55 → 119, `lane_to_stopline` 121 → 128 aborted | same, 63.9 cm / 177.7° |
+| l3 | 0.409 | 13.9 → 32.6 | `rotate_in_place` 53 → about 120, `lane_to_stopline` 124 → 133 aborted | same, 66.7 cm / 179.9° (trail) |
+
+**Does arbitration continue after `needs_human` (rev. 8)?** Yes. In l1–l3 Fleet read the robot's candidates 216–331 more times after the flag, and the ladder sent nothing more. But the robot searched only twice per run: at power-on, and after the rotation. A stationary CANDIDATES robot does not search again, so the tie (truth and twin) never changed, and no decision was possible. That is the intended last rung. Finding 4's "re-search every `retry_s` when stationary" is still open, but it could not break a true tie either.
+
+### Findings (run 4)
+
+- **U1. Rev. 8 §1 is confirmed.** The anchor dropped after 6/6 injections at Fleet poll gaps from this load. In run 3 it dropped after 0/2. No correct robot was accused.
+- **U2. Rev. 8 §2's 2.5 s call limit removed T2.** Fleet logged no call timeouts in 15 runs, and every decision had a known provenance ("LOCALIZED by a Fleet decision: anchor"). The adoption path for a timed-out decision was therefore never exercised.
+- **U3. Rev. 8 §3 is confirmed.** `needs_human` was raised 12 times: in 9 two-robot runs and in 3 lone runs. In 8 of the two-robot runs Fleet kept arbitrating, and a later decision localized the robot correctly, 104–212 s wall after the flag.
+- **U4. The ladder's wall clock (R2/T3) is the only cause of a missed bar.**
+  - The off-slot robot's peer was an anchor by 9.5–12.8 sim s. But `rotate_in_place`, started on the 10 s *wall* rung, ran 165–270 s wall at RTF 0.1.
+  - The `peers` decision came only after it, at 37.6–43.2 sim s.
+  - In d4 (RTF 0.105) that was about 432 s wall since launch, about 2 s before the bench's power-on limit (420 s after power-on).
+  - This costs time, not safety. R2's proposal (the ladder on sim time under `use_sim_time`) still stands.
+- **U5. Bench defect, fixed in 8e024801b (tested).**
+  - In d3, the `gz model` read before the drive timed out, so the start pose was `None`. The 0.10 m travel check could then never fire.
+  - The robot drove 0.304 m, stopped near the goal, and was lifted only when the 120 s window ended.
+  - The bench now falls back to the newest truth-trail sample. d5 and d6 ran with the fix and were lifted in motion.
+- **U6. The host was still the limit.** The agreed slot removed the Rosy sims, but Windows CPU stayed at 91–96 % and a non-Rosy container used 164 %. Two-robot RTF was 0.105–0.155. A dedicated box remains the only way to reach the re-run's 0.4–0.6.
+- **No code defect in the system under test.** All 35 decisions were at the truth, with 0 rejects and 0 `stale_request`. CORE logged no `state_stale` transition.
+
+**Defaults:** none changed.
+
+### Commands (run 4)
+
+```bash
+# WSL workspace and build (fresh rsync of the worktree's src and tools)
+bash /mnt/x/DevTemp/rosy-d395-s1d/build.sh
+# the series (partition rosy_d395d, domain 99, API 18970, Fleet 18999, --drive-timeout 120)
+bash /mnt/x/DevTemp/rosy-d395-s1d/run_series.sh a1:a:c d1:d:d a2:a:c d2:d:d a3:a:c d3:d:d
+bash /mnt/x/DevTemp/rosy-d395-s1d/run_series.sh b1:b:c l1:l: b2:b:c l2:l: b3:b:c l3:l:
+DEADLINE=16:15 bash /mnt/x/DevTemp/rosy-d395-s1d/run_series.sh d4:d:d d5:d:d d6:d:d   # with the U5 fix
+# Windows
+python tools/sim/d395_s1_summary.py X:\DevTemp\rosy-d395-s1d\a1 ...
+python X:\DevTemp\rosy-d395-s1d\rows.py tools\sim a1 a2 ...
+```
