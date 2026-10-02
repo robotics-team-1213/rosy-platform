@@ -162,7 +162,8 @@ def test_a_path_containing_equals_is_not_split_and_unknown_map_ids_are_reported(
 def test_console_serves_the_map_fit_view_wired_to_vision_and_fleet():
     client = _client(None)
 
-    page = client.get("/console").text
+    # D-410 — 맵 맞춤 도구와 레이어 토글은 설치 문서에 산다.
+    page = client.get("/console/install").text
     pure = client.get("/console/assets/map-fit.js")
     fit_view = client.get("/console/assets/map-fit-view.js").text
     vision_view = client.get("/console/assets/vision-view.js").text
@@ -174,7 +175,7 @@ def test_console_serves_the_map_fit_view_wired_to_vision_and_fleet():
     assert 'import { warpImage } from "./field-view.js"' in fit_view
     # Vision serves the proposal on the same lease; Fleet never relays it.
     assert 'fetchFieldProposal("map-proposal")' in vision_view
-    assert "createMapFitView({ el, view, call, visionView, onChanged: () => fieldView.render() })" in shell
+    assert "createMapFitView({ el, view, call, visionView, onChanged: () => fieldView.render() })" in client.get("/console/assets/install.js").text
     # D-360 fallback: the field view warps through the full map homography, never the clamped corners.
     field_view = client.get("/console/assets/field-view.js").text
     assert "view.mapFieldFallback?.(frame)" in field_view
