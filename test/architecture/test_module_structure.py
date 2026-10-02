@@ -191,9 +191,10 @@ SIZE_VERDICTS = {
         "2026-10-01 at 887 after idempotent per-attempt phase projection joined the Mission event transaction",
     ),
     "contracts/foundation/core_common/protocol/schemas.py": (
-        1_240,
+        1_245,
         "accept: the D-18 single contract source — every envelope, event and capability model in one "
         "importable place; re-judged 2026-10-03 at 1240 for the D-413 public CellGoalEvidenceSubmission "
+        "re-export, then at 1245 after combining main's D-422 body-stop fields with that one-line export. "
         "re-export. Bounded Cell models live in protocol/cell_goal_evidence.py, with no runtime ownership "
         "or new version pin; the existing zero-growth allowance remains unchanged. "
         "importable place; per-domain schema files would fork the version pin that "
@@ -212,7 +213,10 @@ SIZE_VERDICTS = {
         "LineFollowStatus, v1.74) joined; the logic stays in line_follow/stuck_recovery.py; same verdict."
         " Re-judged 2026-10-02 at 1239 for D-413 Task 4's additive FleetCellTransferGrant, "
         "CellTransferPayload, and CellTransferPose wire contracts; the single protocol source remains "
-        "authoritative and this establishes a new zero-growth baseline.",
+        "authoritative and this establishes a new zero-growth baseline."
+        " Re-judged 2026-10-02 at 1244 for D-422's three optional LineFollowStatus fields "
+        "(body_gap_m, stop_gap_m, clearance_source); the logic stays in line_follow/body_stop.py; "
+        "same verdict.",
     ),
     "site/fleet/fleet/server/task_store.py": (
         1060,
@@ -284,7 +288,7 @@ SIZE_VERDICTS = {
         "accept: sim-only read-only viewer server (HTTP handler + ROS subscriptions); the pure logic already lives in live_view_model.py and the page in lane_live_view.html, covered by test_lane_live_view*.py and test_live_view_model.py (X5)",
     ),
     "core_features": (
-        11_061,
+        11_596,
         "accept: the ROS-free CORE feature managers (command, safety, docking, line_follow, "
         "traffic_policy, navigation, swarm, ...) are already one subpackage per feature, each "
         "under the file budget; the package total is a sum of independent owners, not one "
@@ -295,7 +299,10 @@ SIZE_VERDICTS = {
         "(core_features/localization) merged in beside D-407; same verdict, each feature still its "
         "own subpackage under the file budget. Re-judged 2026-10-02 at 11061 when the D-407 console "
         "re-run fixes landed (FleetAgent single receive loop, stuck event fields; main had reached "
-        "10977); same verdict",
+        "10977); same verdict. Re-judged 2026-10-02 at 11430 when D-422 body-referenced "
+        "obstacle stop joined as line_follow/body_stop.py (mixin) and clearance.py geometry; "
+        "same verdict. Re-judged 2026-10-02 at 11596 for the D-422 review fixes (near-point "
+        "memory, motion envelope, exact straight sweep) inside body_stop.py/clearance.py; same verdict",
     ),
     "control": (
         42_784,

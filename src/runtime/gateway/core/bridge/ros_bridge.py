@@ -171,6 +171,7 @@ class RosBridge:
 
         self._last_odom_ts = 0.0
         self._last_odom_pose = None
+        self._wheels_warned_at = -1e9   # D-422 wheels_sent warning throttle (monotonic)
         # 최상단 임포트는 노드 기동 전체를 실패시킨다(core 에 없고 slam: false).
         # 여기서 시도하고, 클라이언트는 생성자에서 만들어야 DDS 엔드포인트 매칭에
         # 노드 수명만큼의 시간이 주어진다.
@@ -420,6 +421,15 @@ class RosBridge:
         msg.linear.x = out.linear
         msg.angular.z = out.angular
         self.cmd_vel_pub.publish(msg)
+        # D-422: line follow's near-point memory integrates exactly what reached the wheels.
+        # wheels_sent never raises; a failure erases the memory and holds line follow until
+        # its next scan, and is warned at most every 5 s here.
+        problem = observation.wheels_sent(self._svc, out)
+        if problem is not None:
+            now = time.monotonic()
+            if now - self._wheels_warned_at >= 5.0:
+                self._wheels_warned_at = now
+                self._node.get_logger().warning(problem)
 
     def _tick_state(self) -> None:
         try:

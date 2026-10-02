@@ -14,7 +14,8 @@ from core_features.calibration import CalibrationSessionManager
 from core_features.command.arbitration import Mode, ModeMachine, SourceRegistry
 from core_features.command.manager import CommandManager
 from core.teleop_config import teleop_timeout_ms
-from core.line_follow_wiring import _line_follow_config, bind_stuck_recovery  # noqa: F401 (tests import the parser here)
+from core.line_follow_wiring import (  # noqa: F401 (tests import the parser here)
+    _line_follow_config, bind_motion_envelope, bind_stuck_recovery)
 from core_features.docking.agent import DockAgent
 from core_features.docking.database import DockDatabase, DockError, DockInstance, DockType
 from core_features.docking.detector import select_detector
@@ -530,6 +531,7 @@ class CoreServices:
         fleet_agent.start()
         bind_stuck_recovery(line_follow, safety=safety, calibration=calibration,
                             fleet_agent=fleet_agent, vision=vision)
+        bind_motion_envelope(line_follow, safety=safety, traffic_policy=traffic_policy)
 
         return cls(config=config, identity=identity, profile=profile, capability=capability, fleet_agent=fleet_agent,
                    events=events, state=state, registry=registry, modes=modes,
