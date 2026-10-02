@@ -207,3 +207,15 @@ def test_answer_audit_records_the_token(core_client):
     answered = [e for e in seen if e.type == "nav.line_stuck_answered"]
     assert answered and answered[0].data["by"] == "operator"
     assert answered[0].data["token_id"]
+
+
+def test_recovery_overlay_types_coerce_or_fail_clearly():
+    """Review L5: 2.0 attempts is 2; a quoted "true" is refused with the key named."""
+    assert _line_follow_config({"recovery_max_attempts": 2.0}).recovery_max_attempts == 2
+    assert _line_follow_config({"recovery_local_enabled": True}).recovery_local_enabled is True
+    with pytest.raises(ValueError, match="recovery_local_enabled must be true or false"):
+        _line_follow_config({"recovery_local_enabled": "true"})
+    with pytest.raises(ValueError, match="recovery_max_attempts must be a whole number"):
+        _line_follow_config({"recovery_max_attempts": 1.5})
+    with pytest.raises(ValueError, match="recovery_max_attempts must be a whole number"):
+        _line_follow_config({"recovery_max_attempts": "2"})

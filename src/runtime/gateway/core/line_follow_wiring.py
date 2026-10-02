@@ -11,6 +11,25 @@ def _optional_float(value) -> Optional[float]:
     return None if value is None else float(value)
 
 
+def _flag(raw: dict, key: str, default: bool) -> bool:
+    """A YAML boolean only: a quoted "true" or a 1 is an operator typo, not a yes."""
+    value = raw.get(key, default)
+    if not isinstance(value, bool):
+        raise ValueError(f"line_follow.{key} must be true or false (unquoted YAML boolean), "
+                         f"got {value!r}")
+    return value
+
+
+def _whole(raw: dict, key: str, default: int) -> int:
+    """A whole number; an integral float from an overlay (2.0) is accepted as 2."""
+    value = raw.get(key, default)
+    if isinstance(value, float) and value.is_integer():
+        value = int(value)
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ValueError(f"line_follow.{key} must be a whole number, got {value!r}")
+    return value
+
+
 def _line_follow_config(raw: dict[str, Any]) -> LineFollowConfig:
     """Parse the operator-tunable D-143 policy with validation in one place."""
     defaults = LineFollowConfig()
@@ -44,12 +63,12 @@ def _line_follow_config(raw: dict[str, Any]) -> LineFollowConfig:
         ir_guard_edge_error=float(raw.get("ir_guard_edge_error", defaults.ir_guard_edge_error)),
         ir_guard_turn=float(raw.get("ir_guard_turn", defaults.ir_guard_turn)),
         ir_guard_speed_scale=float(raw.get("ir_guard_speed_scale", defaults.ir_guard_speed_scale)),
-        recovery_local_enabled=raw.get("recovery_local_enabled", defaults.recovery_local_enabled),
+        recovery_local_enabled=_flag(raw, "recovery_local_enabled", defaults.recovery_local_enabled),
         recovery_ask_s=float(raw.get("recovery_ask_s", defaults.recovery_ask_s)),
         recovery_back_m=float(raw.get("recovery_back_m", defaults.recovery_back_m)),
         recovery_back_speed=float(raw.get("recovery_back_speed", defaults.recovery_back_speed)),
         recovery_rear_clear_m=float(raw.get("recovery_rear_clear_m", defaults.recovery_rear_clear_m)),
-        recovery_max_attempts=raw.get("recovery_max_attempts", defaults.recovery_max_attempts),
+        recovery_max_attempts=_whole(raw, "recovery_max_attempts", defaults.recovery_max_attempts),
         recovery_settle_s=float(raw.get("recovery_settle_s", defaults.recovery_settle_s)),
         recovery_trail_s=float(raw.get("recovery_trail_s", defaults.recovery_trail_s)),
         recovery_trail_yaw_deg=float(raw.get("recovery_trail_yaw_deg", defaults.recovery_trail_yaw_deg)),
