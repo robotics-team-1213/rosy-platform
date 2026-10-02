@@ -190,3 +190,40 @@ def test_a_recorded_gazebo_scan_on_an_asymmetric_map_keeps_its_true_pose():
     m = MapAgreement(d["grid"], float(d["resolution"]), d["origin"])
     found = global_candidates(m, d["ranges"], d["angles"], RADIUS, Mount(0., 0., 0.))
     assert found and math.dist((found[0].x, found[0].y), d["truth"][:2]) < .02
+
+
+# --- 2026-10-02 post-processing audit: guards only, no algorithm change -------------------------
+
+class _ConvergingField:
+    """Global search gives two distinct seeds; the fine stage pulls both onto one pose."""
+
+    def __init__(self, seeds, refined):
+        self.seeds, self.refined = seeds, refined
+
+    def clear_poses(self, radius):
+        return np.ones((1, 1), bool)
+
+    def global_results(self, ranges, angles, radius, clear=None):
+        return [(.99, .97, s) for s in self.seeds], None
+
+    def refine(self, seeds, ranges, angles, clear, offsets=None):
+        return [(.99, .98, self.refined)]
+
+
+def test_a_duplicate_the_fine_stage_converged_is_dropped():
+    a, b = np.array([0., 0., 0.]), np.array([.2, 0., 0.])          # apart before refinement
+    field_ = _ConvergingField([a, b], np.array([.1, 0., 0.]))
+    ranges, angles = np.full(40, 1.), np.linspace(-1., 1., 40)
+    found = global_candidates(field_, ranges, angles, RADIUS, Mount(0., 0., 0.), fine_scan=(ranges, angles))
+    assert len(found) == 1 and (found[0].x, found[0].y) == (.1, 0.)
+
+
+@pytest.mark.parametrize("pose", [(0., 0., 0.), (.4, -.3, 1.), (-1.26, .49, -math.pi / 2), (.03, .01, 3.1)])
+@pytest.mark.parametrize("twin", ["in_place", "mirror"])
+def test_the_180_degree_twin_always_survives_distinct(pose, twin):
+    """The yaw half of apart() is an OR: any radius tuning must keep the 180-degree twin,
+    in place (same xy) or on the symmetric map's mirror, even with a better third nearby."""
+    other = (pose[0], pose[1], pose[2] + math.pi) if twin == "in_place" else mirror(pose)
+    nudge = (pose[0] + .05, pose[1], pose[2] + .1)                  # the same hypothesis, blurred
+    picked = [p for p, _ in distinct([(.99, .97, pose), (.985, .97, nudge), (.98, .96, other)])]
+    assert picked == [pose, other]
