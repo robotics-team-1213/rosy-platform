@@ -324,7 +324,7 @@ SIZE_VERDICTS = {
     ),
     "products/omx/adapter/omx_adapter/pose_plan.py": (
         685,
-        "accept (2026-10-02, C3b): one owner for the simulation cell profile and the analytic "
+        "accept: one owner (2026-10-02, C3b) for the simulation cell profile and the analytic "
         "CELL_TRANSFER planner that reads it. C3b added the profile's width-matched jaw mapping, "
         "after-grasp per-phase tolerances and wall-clock bound, and the request's grasp depth/width; "
         "the planner and validate_cell_transfer_plan consume exactly these fields, so a profile/"
