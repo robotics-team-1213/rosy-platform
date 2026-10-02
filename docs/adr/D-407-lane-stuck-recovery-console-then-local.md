@@ -46,3 +46,21 @@
 ## 잇는 결정
 
 D-2(단일 cmd_vel), D-143(차선 추종), D-321 부록(보정 세션), D-342(수동 한도 계단), D-344 §8·§11(hold·앞물체 정지), D-379(학습 자료), D-397(URDF 기본값·로봇별 교정).
+
+## 구현 메모 (2026-10-02, CORE 쪽, feat/d407-stuck-recovery-core)
+
+Status 는 Proposed 그대로다. CORE 쪽만 구현했고 Fleet 콘솔 화면(판단 요청 목록과 다섯 답)과 FleetAgent 의 답 중계는 다음 단계다. 막힘 사건은 다른 사건처럼 FleetAgent 사건 버퍼로 이미 올라간다.
+
+- 상태기계: `src/runtime/services/core_features/line_follow/stuck_recovery.py`(ROS 없음). 관리자 연결은 `stuck_wiring.py`(mixin), CORE 입력 묶기는 `src/runtime/gateway/core/line_follow_wiring.py`(관제 연결 = `FleetAgent.connected`, 보정 lease, `safety.manual_linear`, 미리보기 순서번호). 묶이지 않은 입력은 닫힌 쪽(연결 없음, 보정 중, 선속도 한도 0)으로 읽어 막힘을 열지 않는다.
+- 후진은 차선 추종 결정(`LineFollowDecision`, 음의 선속도)으로 나가 기존 line → traffic gate → CommandManager 경로를 탄다(D-2). 교통 정책이 ENFORCED 에서 HOLD 면 후진도 0 이다.
+- 답: `POST /api/v1/line-follow/stuck/decision {stuck_id, decision}`(Operator 이상, API Ref v1.72). 상태: `GET /api/v1/line-follow` 의 `stuck`. 사건 `nav.line_stuck_opened/asked/answered/local_attempt/local_result/closed`.
+- 설정: `line_follow.recovery_*`(기본 `recovery_local_enabled: false`), 몸 기하 `body_lidar_x_m`·`body_rear_x_m`·`body_rotation_radius_m` 는 로봇 패키지 `core.yaml` 에 URDF 공칭값(geometry.yaml, drift 시험)으로만 둔다. 없으면 후진하지 않는다.
+- 해석과 차이:
+  - 후진 거리는 시간으로 잰다(`recovery_back_m / 속도`). 오도메트리 폐루프가 아니다.
+  - 뒤 여유는 self-mask 적용 LiDAR 점의 뒤 직진 띠(`obstacle_corridor_half_width_m`)에서 몸 뒤끝(caster.rear_x_m)까지다. LiDAR 가 못 보는 뒤 띠(사각)는 `range_min - (LiDAR 에서 몸 뒤끝까지)` 와, 몸 뒤끝을 넘어 뒤 띠에 닿는 self-mask 창이 가리는 깊이 중 큰 값이다. scan 이 `range_min` 을 주지 않으면 사각을 모르는 것으로 보고 후진하지 않는다.
+  - **사용자 결정 (2026-10-02): 방금 지나온 공간은 허용한다.** 사각이 `recovery_rear_clear_m` 보다 깊으면, CORE 가 실제로 낸(교통 게이트 뒤) 차선 추종 명령을 단조 시계로 적분해, 마지막 전진 명령까지 `recovery_trail_s`(기본 5 s) 동안 앞으로 순 `recovery_back_m` 이상 왔고 누적 |yaw| 가 `recovery_trail_yaw_deg`(기본 10°) 이하일 때만 후진한다. 후진 거리는 그 순 전진 거리를 넘지 않는다(후진·이전 시도는 순 거리에서 빠진다). 제자리 회전, 기록 없음, 기록이 1 s 넘게 끊김, 모드 변경 뒤에는 `rear_blind` 로 거부한다. 보이는 뒤 여유(사각 밖)는 후진 전·중 계속 `recovery_rear_clear_m` 보다 커야 한다. 해석: 막힘이 열릴 때는 이미 `obstacle_escalate_s` 넘게 서 있으므로, 창은 벽시계 최근 5 s 가 아니라 마지막 전진 명령에서 끝나는 5 s 다. 그 뒤로 로봇이 서 있던 동안 사각에 무언가 들어왔을 가능성은 이 규칙이 막지 않는다.
+  - 실패한 시도 뒤 시도가 남으면 관제를 다시 15 s 기다리지 않고 바로 다음 후진을 한다. 시도를 다 쓰거나 거부·중단되면 HOLD 로 남아 관제 답만 기다린다.
+  - `BACK_AND_RETRY` 도 `recovery_local_enabled` 와 최대 시도 수를 따른다(로컬 복구의 전제인 self-mask 측정이 같으므로).
+  - 막힘 중 앞이 스스로 비면(`obstacle_ahead` 가 풀리면) 사건을 `cleared` 로 닫는다.
+  - D-379 녹화 구간 표시는 아직 없다. 사건의 시각으로 구간을 찾을 수 있다.
+- 독립 검토 반영(2026-10-02): 막힘 원인을 보고 상태가 아니라 래치(`_escalated`·`_lost_latched`)로 판단(일시 HOLD 가 막힘을 `cleared` 로 닫고 시도를 되살리던 결함), 받아들인 답은 증거 개정을 올려 미리 계산된 후진을 막고, MANUAL·ABORT 는 관리자 잠금 안에서 차선 추종을 끈 뒤 `POST /mode` 와 같은 전이(보정 lease, navigation·swarm 취소)를 쓴다. 답 사건에 토큰 id, LiDAR 정지를 쓰는데 scan 이 없으면 RESUME 거부, 설정 형 검사, sector 모드의 몸 점은 막힘 근처에서만 계산.

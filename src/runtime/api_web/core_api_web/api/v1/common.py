@@ -13,6 +13,7 @@ from core_api_web.api.deps import AuthContext, require_role, CoreServicesLike
 from core_api_web.api.errors import ApiError
 from core_api_web.api.deps import Mode, NavigationError
 from core_common.domain.capabilities import runtime_truth
+from core_common.domain.tasks import TaskKind
 from core_common.protocol.schemas import RobotMode
 
 viewer = require_role("viewer")
@@ -75,6 +76,32 @@ def require_calibration_owner(svc: CoreServicesLike, auth: AuthContext, action: 
             f"{action} refused: calibration '{session['label']}' is in progress",
             detail={"session": session},
         )
+
+
+def apply_mode(svc: CoreServicesLike, auth: AuthContext, new_mode: Mode) -> None:
+    """`POST /mode` semantics, shared with the D-407 MANUAL / ABORT stuck answers."""
+    if new_mode is not Mode.IDLE:
+        # IDLE only stops the robot, so like e-stop it stays open to everyone.
+        require_calibration_owner(svc, auth, "mode change")
+    if svc.line_follow.active:
+        status = svc.line_follow.stop()
+        svc.command.clear_navigation()
+        svc.state.set_line_follow(status)
+    if new_mode is Mode.NAVIGATION:
+        TaskKind.NAVIGATE.require(svc.capability)
+        if svc.modes.mode is not Mode.NAVIGATION:
+            svc.command.clear_navigation()
+    if new_mode is Mode.MANUAL:
+        # 조건 없이 부른다. `cancel()` 은 거둘 것이 없으면 스스로 돌아서고,
+        # nav_state 만 보면 아직 목표를 내지 않은 군집 세션을 놓친다 —
+        # 그러면 수동으로 넘어간 뒤에도 대형이 무장된 채로 남는다.
+        svc.nav.cancel(source=f"mode:{auth.role}")
+    ok, reason = svc.modes.transition(new_mode)
+    if not ok:
+        raise ApiError("MODE_CONFLICT", 409, reason)
+    svc.state.set_mode(RobotMode(new_mode.value))
+    svc.events.publish("mode.changed", source="api",
+                       data={"from": "api", "to": new_mode.value, "by": auth.role})
 
 
 def enter_navigation_mode(svc: CoreServicesLike, auth: AuthContext) -> None:

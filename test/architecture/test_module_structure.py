@@ -162,7 +162,7 @@ SIZE_VERDICTS = {
         "2026-10-01 at 887 after idempotent per-attempt phase projection joined the Mission event transaction",
     ),
     "contracts/foundation/core_common/protocol/schemas.py": (
-        1_137,
+        1_153,
         "accept: the D-18 single contract source — every envelope, event and capability model in one "
         "importable place; per-domain schema files would fork the version pin that "
         "test_protocol_version_alignment guards. Re-judged 2026-09-30 at 1000 lines after the bounded "
@@ -175,7 +175,9 @@ SIZE_VERDICTS = {
         " Re-judged 2026-10-01 at 1119 lines: D-400 SafetyPolicyStatus joins the state contract; "
         "the single contract source still outweighs a split (same verdict)."
         " Re-judged 2026-10-01 at 1137 lines: the typed shadow sub-blocks (ShadowRecordRef, "
-        "ShadowEvalStats) joined SafetyPolicyStatus; same verdict.",
+        "ShadowEvalStats) joined SafetyPolicyStatus; same verdict."
+        " Re-judged 2026-10-02 at 1153 lines: D-407 LineStuckStatus (the typed stuck block on "
+        "LineFollowStatus, v1.74) joined; the logic stays in line_follow/stuck_recovery.py; same verdict.",
     ),
     "site/fleet/fleet/server/task_store.py": (
         1060,
@@ -208,13 +210,6 @@ SIZE_VERDICTS = {
         765,
         "accept: one concern (lane/IR line detection), ROS-free pure functions and trackers, host-testable (X5); "
         "the ground-geometry lane keeper already lives apart in lane_keep.py (D-364)",
-    ),
-    "runtime/gateway/core/services.py": (
-        601,
-        "accept: the CoreServices DI container, one wiring line per manager; it crossed 600 on the "
-        "D-395 Phase 2 integration branch (2026-10-02) when lane B's localization assist/halt wiring "
-        "met main's D-400 safety-policy and line-follow self-mask wiring. The logic lives in the "
-        "managers; split only if wiring keeps growing",
     ),
     "runtime/gateway/core/bridge/ros_bridge.py": (
         606,
@@ -250,6 +245,18 @@ SIZE_VERDICTS = {
     "sim/gz_sim/scripts/lane_live_view.py": (
         709,
         "accept: sim-only read-only viewer server (HTTP handler + ROS subscriptions); the pure logic already lives in live_view_model.py and the page in lane_live_view.html, covered by test_lane_live_view*.py and test_live_view_model.py (X5)",
+    ),
+    "core_features": (
+        10_849,
+        "accept: the ROS-free CORE feature managers (command, safety, docking, line_follow, "
+        "traffic_policy, navigation, swarm, ...) are already one subpackage per feature, each "
+        "under the file budget; the package total is a sum of independent owners, not one "
+        "tangled module. First judged 2026-10-02 at 10104 when D-407 lane stuck recovery joined "
+        "as its own modules (line_follow/stuck_recovery.py, stuck_wiring.py). Re-judge on the "
+        "next +150; split by feature into separate packages only if a feature gains its own "
+        "deploy unit. Re-judged 2026-10-02 at 10849 when main's D-395 P2-7 localization mission "
+        "(core_features/localization) merged in beside D-407; same verdict, each feature still its "
+        "own subpackage under the file budget",
     ),
     "control": (
         42_013,

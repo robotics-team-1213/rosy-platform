@@ -206,13 +206,18 @@ def test_bridge_feeds_points_in_path_mode_and_distance_in_sector_mode():
     def services(mode):
         line = SimpleNamespace(
             config=LineFollowConfig(obstacle_mode=mode),
+            wants_body_points=False,
+            observe_body_points=lambda points, range_min, received_at: calls.append(
+                ("body", len(points))),
             observe_scan_points=lambda points, received_at: calls.append(("points", len(points))),
             observe_clearance=lambda distance, received_at: calls.append(("distance", distance)))
         return SimpleNamespace(line_follow=line, loc_mission=None)
 
     bridge_observation.front_clearance(services("path"), sample, received_at=1.0)
     bridge_observation.front_clearance(services("sector"), sample, received_at=1.0)
-    assert calls == [("points", 2), ("distance", 0.15)]
+    # D-407: path mode also feeds its self-masked points to the stuck body clearances;
+    # sector mode builds them only while a stuck can be near (wants_body_points).
+    assert calls == [("body", 2), ("points", 2), ("distance", 0.15)]
 
 
 def test_obstacle_config_is_validated_and_parsed():

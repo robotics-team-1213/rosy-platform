@@ -4321,3 +4321,8 @@
 - gate 변화: 없음. (d) 이동 중 집어 올리기는 이 수정 위에서 다시 돌려야 한다.
 - 결정: 없음
 - 교훈: 없음
+
+## 2026-10-02 · uncommitted · docs(api): D-395 R1 LOCALIZED 물체를 API Ref v1.75로 옮김 (D-407과 v1.74 충돌)
+- 변경: 같은 날 main의 D-407(line-follow stuck)이 v1.74를 먼저 가져가 D-395 R1(`unmapped_objects`·`objects_stamp`)을 v1.75로 옮겼다. 헤더·변경 이력 행·§6.1 본문·`app.py` ×2·`test_line_follow_contract_docs.py`·Fleet 핀 시험 3곳·2단계 인터페이스 문서. 앞서 커밋된 로그 항목의 'v1.74' 표기는 이 항목으로 정정한다.
+- 증거: `test_protocol_version_alignment.py`, `test_line_follow_contract_docs.py`, `test_task_contract_docs.py`, `test_mission_progress.py`.
+- gate 변화: 없음.

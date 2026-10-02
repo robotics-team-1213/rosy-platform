@@ -705,6 +705,18 @@
 - 증거: `test/test_localization_cross_lane.py` +7 (sim·device 시계 각각: `received_s` 가 `RECEIPT_AHEAD_S` 안이고 수락됨, line clock 3 s 에 stale; device 에서 monotonic 수령 시각은 거부; 브리지 배선 AST 2).
 - gate 변화: 없음.
 
+## 2026-10-02 · 7a44f39d · feat(core): D-407 막힘 답 API와 CORE 배선
+
+- 변경: `POST /api/v1/line-follow/stuck/decision`(Operator+, `STUCK_ID_MISMATCH`·`STUCK_DECISION_REFUSED` 409, MANUAL·ABORT 는 차선 추종 OFF 후 MANUAL·IDLE), `core/line_follow_wiring.py`(설정 파서를 services.py 에서 옮김 + FleetAgent 연결·보정 lease·수동 선속도·미리보기 순서번호 묶기), scan 브리지가 self-mask 점과 `range_min` 을 넘김. API Ref v1.72.
+- 증거: `python -m pytest src/runtime/gateway/test/ test/architecture` 1780 passed, 17 skipped; `known_failures.py` 0 new.
+- gate 변화: 없음. Fleet 콘솔·FleetAgent 답 중계는 다음 단계.
+
+## 2026-10-02 · caa0d51d · fix(api): D-407 검토 반영 — MANUAL 답은 POST /mode 규칙, 답 감사에 토큰
+
+- 변경: `/mode` 전이를 `common.apply_mode` 로 옮겨 MANUAL·ABORT 막힘 답이 같이 씀(보정 lease 를 막힘 소비 전에 확인, MANUAL 은 navigation·swarm 취소). `nav.line_stuck_answered` 에 `token_id`. 설정 형 검사(`recovery_local_enabled` 불리언만, `recovery_max_attempts` 정수·정수 float). sector 모드 몸 점은 막힘 근처에서만, scan `range_min` 없으면 None.
+- 증거: `test_line_follow_stuck_api.py` 14 passed, line-follow·calibration·api 시험 초록.
+- gate 변화: 없음.
+
 ## 2026-10-02 · b9f1b277 · test(localization): D-395 S1 R1 — LOCALIZED 물체 세 갈래 왕복
 
 - 변경: 코드 변경 없음(브리지는 원문을 `LocalizationAssist` 에 넘긴다). `test_localization_cross_lane.py` 에 왕복 시험을 더했다. 로봇 A 의 LOCALIZED 상태에 실린 물체가 CORE `/api/v1/robot/state` 를 거쳐 Fleet `trust.status_of` 로 그대로 읽히고, 스캔이 1 s 넘게 묵으면 빈 목록이 된다.

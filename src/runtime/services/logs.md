@@ -337,6 +337,18 @@
 - 증거: `gateway/test/test_localization_api.py` +3, `gateway/test/test_localization_mission.py` +1.
 - gate 변화: 없음.
 
+## 2026-10-02 · 776173dc · feat(line_follow): D-407 막힘 복구 상태기계와 관리자 연결
+
+- 변경: `line_follow/stuck_recovery.py`(ROS 없는 상태기계: 열림·관제 요청·답 5종·15 s 시간초과·후진·1 s 정지·재판단·최대 시도), `stuck_wiring.py`(관리자 mixin: self-mask 점에서 몸 기준 앞 띠·뒤·회전 여유, 후진은 관리자 자신의 결정으로), `clearance.body_clearances`, `LineFollowConfig.recovery_*`·`body_*`. `set_mode`(OFF·E-Stop·IDLE)와 운전자 hold 끊김이 막힘을 닫는다.
+- 증거: `test_line_stuck_recovery.py` 31 passed(서비스), `test_line_follow_stuck.py` 12 passed(게이트웨이).
+- gate 변화: 없음. SOURCE만. 로컬 복구는 기본 꺼짐이고 어느 로봇에서도 켜지 않았다.
+
+## 2026-10-02 · f93d922d · fix(line_follow): D-407 검토 반영과 뒤 사각 규칙
+
+- 변경: 막힘 원인은 래치에서(일시 HOLD 가 막힘을 닫지 않음), 받아들인 답은 증거 개정을 올림, MANUAL·ABORT 는 잠금 안에서 OFF. 뒤 사각(range_min, 몸 뒤끝을 넘는 self-mask 창)은 사용자 결정 2026-10-02 대로 방금 앞으로 지나온 길(`ForwardTrail`, 교통 게이트 뒤 명령 적분)일 때만 들어간다. range_min 없음은 거부, LiDAR 정지 중 scan 없는 RESUME 거부.
+- 증거: `test_line_stuck_recovery.py` 43 passed, `test_line_follow_stuck.py` 19 passed.
+- gate 변화: 없음. 로컬 복구는 기본 꺼짐.
+
 ## 2026-10-02 · b9f1b277 · feat(localization): D-395 S1 R1 — LOCALIZED 물체를 스냅샷으로 넘긴다
 
 - 변경: `LocalizationAssist` 는 `unmapped_objects`·`objects_stamp` 를 그대로 넘긴다. `pose_frame` 이 `odom` 이면(로봇이 말했든 CORE 가 바꿨든) 비우고, `state_stale` 은 새 상태라 원래 없다. 물체가 잘못된 상태는 물체만 버리고 상태는 받는다. 감시용 부가 정보 때문에 상태가 끊겨 자율 주행이 멈추면 안 된다.

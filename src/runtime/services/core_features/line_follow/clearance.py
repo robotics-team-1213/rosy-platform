@@ -127,6 +127,55 @@ def scan_points(sample: Mapping[str, Any], *, forward_deg: float = 0.0,
                  if distance <= max_range)
 
 
+def body_clearances(points: Sequence[Point], *, lidar_x_m: float, rear_x_m: float,
+                    half_width_m: float,
+                    rotation_radius_m: Optional[float] = None) -> dict[str, Optional[float]]:
+    """D-407: 몸 기준 여유. points 는 `scan_points`(LiDAR 원점, self-mask 적용) 그대로다.
+
+    - front_band_m: 앞 직진 띠(±half_width) 안 가장 가까운 점의 LiDAR 기준 x(obstacle_stop_m 과 같은 기준).
+    - rear_m: 뒤 띠 안 가장 가까운 점과 몸 뒤끝(URDF base_footprint x = rear_x_m) 사이 거리.
+    - turn_m: 제자리 회전 반경(rotation_radius_m) 밖 여유. 반경이 없으면 None.
+    점이 없으면 각각 None(= 아무것도 안 보임). LiDAR range_min 안은 보이지 않는다.
+    """
+    front: Optional[float] = None
+    rear: Optional[float] = None
+    turn: Optional[float] = None
+    for x, y in points:
+        base_x = x + lidar_x_m
+        if abs(y) <= half_width_m:
+            if x > 0.0 and (front is None or x < front):
+                front = x
+            if base_x < rear_x_m and (rear is None or rear_x_m - base_x < rear):
+                rear = rear_x_m - base_x
+        if rotation_radius_m is not None:
+            gap = math.hypot(base_x, y) - rotation_radius_m
+            if turn is None or gap < turn:
+                turn = gap
+    return {"front_band_m": front, "rear_m": rear, "turn_m": turn}
+
+
+def self_mask_rear_blind_m(mask: SelfMask, *, lidar_x_m: float, rear_x_m: float,
+                           half_width_m: float) -> float:
+    """D-407 review M1: how deep behind the body rear a self-mask window hides the rear band.
+
+    A masked return is dropped as "the robot itself", so a real obstacle inside a window that
+    reaches past the body rear would read as clear. That depth is blind like range_min.
+    Sampled every 0.5 deg across each window; 0 when no window reaches the rear band.
+    """
+    behind = lidar_x_m - rear_x_m              # LiDAR to body rear, metres (> 0)
+    worst = 0.0
+    for lo, hi, reach in mask:
+        steps = max(1, int(math.ceil((hi - lo) / 0.5)))
+        for index in range(steps + 1):
+            angle = math.radians(lo + (hi - lo) * index / steps)
+            back, side = -math.cos(angle), abs(math.sin(angle))
+            if back <= 0.0:
+                continue
+            far = reach if side < 1e-9 else min(reach, half_width_m / side)
+            worst = max(worst, far * back - behind)
+    return worst
+
+
 def path_clearance(points: Sequence[Point], *, linear: float, angular: float,
                    half_width_m: float, horizon_m: float,
                    window_m: float = 0.0, near_m: float = 0.0) -> Optional[float]:
