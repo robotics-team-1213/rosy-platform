@@ -352,6 +352,12 @@ SIZE_VERDICTS = {
         "accept: the harness gate itself (lint/generate) — one CLI owner pinned by "
         "test/test_harness_contracts.py (X5)",
     ),
+    "tools/perception/rosy_ml.py": (
+        613,
+        "accept: the operator CLI is one argparse dispatcher over the wrapped tools (deliver, "
+        "harvest, fetch_http, intake), which own the behaviour; covered by "
+        "tools/perception/test/test_rosy_ml.py (X5, D-411 fetch --http)",
+    ),
     "deploy/robot/pinky_pro/native/rosy-boot-display.py": (
         688,
         "accept: single-entry boot status display (T0 indicator) — one render loop, covered by "
