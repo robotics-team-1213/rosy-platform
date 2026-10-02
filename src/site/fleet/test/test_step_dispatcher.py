@@ -192,9 +192,8 @@ def test_device_terminal_states_hold_the_job(tmp_path, state, reason, claims):
     assert _claims(tasks) == claims
 
 
-def test_a_stop_after_start_keeps_the_claims_and_relies_on_the_owner_fence(tmp_path):
-    # 1c P1: once start_step committed, the step's claims are never released by the dispatcher.
-    # The grant still carries the old generation, which the owner's stop fence refuses.
+def test_a_stop_between_start_and_send_holds_unsent_with_held_claims(tmp_path):
+    # 1d item 1: the fence is re-read after start_step; a latch in between sends nothing.
     store, tasks, transport, dispatcher = _setup(tmp_path)
     start_step = store.start_step
 
@@ -204,10 +203,22 @@ def test_a_stop_after_start_keeps_the_claims_and_relies_on_the_owner_fence(tmp_p
         return result
 
     store.start_step = start_then_stop
-    dispatcher.dispatch_next()
-    assert transport.submissions[0].dispatch_generation < tasks.dispatch_control()["generation"]
+    assert dispatcher.dispatch_next()["state"] == "HOLD"
+    assert transport.submissions == []
+    job = store.get("cell-mission-1")
+    assert (job["status"], job["reason"]) == ("HOLD", "FLEET_FENCE_CHANGED_BEFORE_LOCAL_SUBMIT")
+    assert _claims(tasks) == ["HELD"]
+    assert tasks.dispatch_control()["rearm_available"] is True
+
+
+def test_hold_unsent_refuses_an_attempt_the_owner_may_have_seen(tmp_path):
+    from fleet.server.mission_store import MissionConflict
+    store, tasks, transport, dispatcher = _setup(tmp_path)
+    dispatcher.dispatch_next()  # sent: ACCEPTED receipt noted
+    action_id = transport.submissions[0].action_id
+    with pytest.raises(MissionConflict):
+        store.hold_unsent("cell-mission-1", action_id=action_id, reason="X")
     assert _claims(tasks) == ["DISPATCHING"]
-    assert tasks.dispatch_control()["rearm_available"] is False
 
 
 def test_a_stop_before_start_holds_the_job_and_keeps_its_claims(tmp_path):

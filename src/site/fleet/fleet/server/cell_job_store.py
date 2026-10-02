@@ -679,6 +679,31 @@ class CellJobStore:
             connection.commit()
         return result
 
+    def hold_unsent(self, mission_id: str, *, action_id: str, reason: str) -> dict[str, Any]:
+        """RUNNING -> HOLD with DISPATCHING -> HELD for a started step that was never sent (1d item 1).
+
+        Refused unless the step's current action is ``action_id`` and the owner never answered for
+        it (no receipt, no CELL_STEP_ACTION_* event): only then is "not sent" a fact.
+        """
+        reason = _nonempty("reason", reason, limit=96)
+        with closing(self._connect()) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            job = self._require(connection, mission_id)
+            step = connection.execute("SELECT * FROM fleet_cell_steps WHERE mission_id=? AND step_index=?",
+                                      (mission_id, job["current_step_index"])).fetchone()
+            seen = connection.execute(
+                "SELECT 1 FROM fleet_cell_events WHERE mission_id=? AND (event_key=? OR "
+                "(event_type LIKE 'CELL_STEP_ACTION_%' AND json_extract(detail_json, '$.action_id')=?)) LIMIT 1",
+                (mission_id, f"{mission_id}:device-receipt:{action_id}:{step['attempt_id'] if step else ''}",
+                 action_id)).fetchone()
+            if job["status"] != "RUNNING" or step is None or step["action_id"] != action_id or seen is not None:
+                raise MissionConflict("only a started, never answered step can be held as unsent")
+            self._hold_in_transaction(connection, job, reason=reason, claim_phase="HELD", actor_id="fleet",
+                                      event_key=f"unsent:{action_id}", detail={"action_id": action_id})
+            result = self._get(connection, mission_id)
+            connection.commit()
+        return result
+
     def release_before_send(self, mission_id: str, *, reason: str, event_key: str) -> dict[str, Any]:
         """HOLD a READY Job whose current step was never started; release its claims only if the
         Job has no progress (step 0, nothing ever submitted), else park them HELD (1c item 2b)."""

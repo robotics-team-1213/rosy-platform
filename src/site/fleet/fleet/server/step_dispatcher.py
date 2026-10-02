@@ -147,9 +147,15 @@ class StepJobDispatcher:
             return self._view(held, index, "HOLD")
         if started["status"] != "RUNNING":
             return self._view(started, index, started["status"])
-        # The fence is checked inside start_step's transaction (pre-send). A stop that lands
-        # after that commit is caught by the owner's generation fence on the grant (D-403 §6);
-        # a started step never releases its claims (1c P1).
+        # The fence was checked inside start_step's transaction; re-read it before sending (1d
+        # item 1). A stop that commits in between holds the unsent step with HELD claims; one
+        # that lands after the send is caught by the owner's generation fence (D-403 §6).
+        control = self.task_store.dispatch_control()
+        if (not control["dispatch_enabled"] or control["authority_epoch"] != grant.authority_epoch
+                or control["generation"] != grant.dispatch_generation):
+            held = self.store.hold_unsent(job["mission_id"], action_id=grant.action_id,
+                                          reason="FLEET_FENCE_CHANGED_BEFORE_LOCAL_SUBMIT")
+            return self._view(held, index, "HOLD", grant)
         self._io += 1
         try:
             receipt = self.transport.submit(grant)
