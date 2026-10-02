@@ -106,8 +106,8 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-3);
-  margin: var(--space-2) var(--space-5) 0;
+  gap: var(--space-2);
+  margin: var(--space-1) var(--space-5) 0;
   padding: var(--space-1) var(--space-3);
   border: 1px solid var(--line-14);
   border-radius: var(--radius-control);
@@ -115,6 +115,9 @@ body {
   font-size: var(--text-label);
   line-height: var(--leading-body);
 }
+.dispatch-control > div { display: flex; align-items: baseline; gap: var(--space-2); min-width: 0; }
+.dispatch-control strong { color: var(--ink); white-space: nowrap; }
+.dispatch-control small { color: var(--ink-quiet); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dispatch-control > div { display: grid; gap: var(--space-1); min-width: 0; }
 .dispatch-control strong { color: var(--ink); }
 .dispatch-control small { color: var(--ink-quiet); line-height: var(--leading-body); }
@@ -437,6 +440,11 @@ main {
 .vision-preview:has(> .vision-frame[data-state="warn"]) { min-height: 0; }
 .vision-preview:has(> .vision-frame[data-state="waiting"]) .map-head,
 .vision-preview:has(> .vision-frame[data-state="warn"]) .map-head { margin-bottom: 0; }
+
+/* D-415/D-417 — 신호등 빈 상태: 카드 영역과 안내를 접는다. 제목과 태그만 남는다. */
+.signals:not(:has(> .signal-cards > *)) .signal-cards { display: none; }
+.signals:not(:has(> .signal-cards > *)) .hint { display: none; }
+.signals:not(:has(> .signal-cards > *)) { min-height: 0; }
 
 /* D-415 — 신호등 빈 상태 */
 .signal-empty { color: var(--ink-quiet); font-size: var(--text-label); padding: var(--space-2) 0; }
