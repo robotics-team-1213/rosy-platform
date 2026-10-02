@@ -21,6 +21,10 @@ from core_common.protocol.schemas import (
 from .action_runner import ActionRunner, action_grant_digest, parse_action_grant
 from .local_stop import LocalStopBlocked, LocalStopController
 
+# A phase-runner-only kind is never journaled from a v1 frame, whose reply drops the
+# ordered phase summaries Fleet needs to reconcile it (D-403 §2).
+MIN_SUBMIT_VERSION_BY_KIND = {"CELL_TRANSFER": 2}
+
 
 class ActionApi:
     """Dispatch requests after deriving the caller identity from Unix peer UID."""
@@ -70,6 +74,10 @@ class ActionApi:
                 if set(request) != {"version", "operation", "grant"}:
                     raise ValueError("SubmitAction contains unsupported fields")
                 grant = parse_action_grant(request["grant"])
+                if version < MIN_SUBMIT_VERSION_BY_KIND.get(grant.action_kind, 1):
+                    return self._error("UNSUPPORTED_VERSION",
+                                       f"{grant.action_kind} requires protocol version 2",
+                                       status=400, version=version)
                 receipt = self.runner.submit(grant, peer_uid=peer_uid)
                 return self._success(version, receipt)
             if operation == "GetAction":

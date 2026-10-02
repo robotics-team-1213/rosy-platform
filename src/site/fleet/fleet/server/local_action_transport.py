@@ -12,10 +12,15 @@ from typing import Any, Mapping, Protocol
 from core_common.protocol.schemas import (
     DeviceActionReceipt,
     FleetActionGrant,
+    FleetCellTransferGrant,
 )
 
 
 _INSTANCE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,191}$")
+# One wire version per admitted kind. Both kinds report ordered phase summaries
+# (v2); a kind missing here has no local executor and is refused before any I/O.
+_PROTOCOL_VERSION_BY_KIND = {"PICK_PLACE": 2, "CELL_TRANSFER": 2}
+ActionGrant = FleetActionGrant | FleetCellTransferGrant
 
 
 class LocalActionUnavailable(TimeoutError):
@@ -27,11 +32,11 @@ class LocalActionRejected(ValueError):
 
 
 class DeviceActionTransport(Protocol):
-    def submit(self, grant: FleetActionGrant) -> DeviceActionReceipt: ...
+    def submit(self, grant: ActionGrant) -> DeviceActionReceipt: ...
 
-    def get(self, grant: FleetActionGrant) -> DeviceActionReceipt | None: ...
+    def get(self, grant: ActionGrant) -> DeviceActionReceipt | None: ...
 
-    def cancel(self, grant: FleetActionGrant, *, reason: str) -> DeviceActionReceipt: ...
+    def cancel(self, grant: ActionGrant, *, reason: str) -> DeviceActionReceipt: ...
 
 
 class UnixLocalActionTransport:
@@ -47,14 +52,14 @@ class UnixLocalActionTransport:
             raise ValueError("UDS Action timeout must be between 10 ms and 2 s")
         self.timeout_s = float(timeout_s)
 
-    def submit(self, grant: FleetActionGrant) -> DeviceActionReceipt:
+    def submit(self, grant: ActionGrant) -> DeviceActionReceipt:
         version = self._version(grant)
         return self._receipt(grant, {
             "version": version, "operation": "SubmitAction",
             "grant": grant.model_dump(mode="json"),
         })
 
-    def get(self, grant: FleetActionGrant) -> DeviceActionReceipt | None:
+    def get(self, grant: ActionGrant) -> DeviceActionReceipt | None:
         version = self._version(grant)
         response = self._exchange(grant.instance_id, {
             "version": version, "operation": "GetAction", "action_id": grant.action_id,
@@ -65,7 +70,7 @@ class UnixLocalActionTransport:
             return None
         return self._parse_receipt(grant, response)
 
-    def cancel(self, grant: FleetActionGrant, *, reason: str) -> DeviceActionReceipt:
+    def cancel(self, grant: ActionGrant, *, reason: str) -> DeviceActionReceipt:
         if not isinstance(reason, str) or not reason.strip() or len(reason) > 256:
             raise ValueError("cancel reason must be non-empty and at most 256 characters")
         version = self._version(grant)
@@ -76,16 +81,19 @@ class UnixLocalActionTransport:
             "requested_at": datetime.now(timezone.utc).isoformat(),
         })
 
-    def _receipt(self, grant: FleetActionGrant,
+    def _receipt(self, grant: ActionGrant,
                  document: Mapping[str, Any]) -> DeviceActionReceipt:
         return self._parse_receipt(grant, self._exchange(grant.instance_id, document))
 
     @staticmethod
-    def _version(grant: FleetActionGrant) -> int:
-        return 2 if grant.action_kind == "PICK_PLACE" else 1
+    def _version(grant: ActionGrant) -> int:
+        version = _PROTOCOL_VERSION_BY_KIND.get(grant.action_kind)
+        if version is None:
+            raise ValueError(f"action kind {grant.action_kind!r} has no local Action protocol")
+        return version
 
     @staticmethod
-    def _parse_receipt(grant: FleetActionGrant,
+    def _parse_receipt(grant: ActionGrant,
                        response: Mapping[str, Any]) -> DeviceActionReceipt:
         version = UnixLocalActionTransport._version(grant)
         if response.get("version") != version:
@@ -167,6 +175,6 @@ class UnixLocalActionTransport:
 
 
 __all__ = [
-    "DeviceActionTransport", "LocalActionRejected", "LocalActionUnavailable",
+    "ActionGrant", "DeviceActionTransport", "LocalActionRejected", "LocalActionUnavailable",
     "UnixLocalActionTransport",
 ]
