@@ -166,3 +166,44 @@ def test_a_newer_report_for_the_same_request_can_be_decided_again():
     assert run(arbiter, report(pair(ON_A)), Context(slots=SLOTS))[1] is not None
     rep2 = report(pair(ON_A)).model_copy(update={"stamp": 5.0})
     assert run(arbiter, rep2, Context(slots=SLOTS), 6.0, 9.0)[0] == pytest.approx(8.0)
+
+
+# --- pending (S1 re-run R2): the ladder waits while the arbiter may still decide -------------
+
+
+def test_a_held_lead_is_pending_for_its_request_only():
+    arbiter = Arbiter()
+    assert arbiter.pending("r1", "r1-1") is False
+    assert arbiter.observe(report(pair(ON_A)), Context(slots=SLOTS), 0.0) is None
+    assert arbiter.pending("r1", "r1-1") is True
+    assert arbiter.pending("r1", "r1-2") is False          # the robot dropped that request
+    assert arbiter.pending("r1", None) is False
+    assert arbiter.pending("r2", "r1-1") is False
+
+
+def test_an_asymmetric_cue_below_the_margin_is_pending():
+    """Paint favours the truth (0.4 against 0.1) but by 0.6 < 1.0: no lead, yet a cue."""
+    arbiter = Arbiter()
+    assert arbiter.observe(report(pair(OFF, paint=(0.4, 0.1))), Context(), 0.0) is None
+    assert arbiter.pending("r1", "r1-1") is True
+
+
+def test_no_cue_is_not_pending():
+    arbiter = Arbiter()
+    assert arbiter.observe(report(pair(OFF)), Context(slots=SLOTS), 0.0) is None
+    assert arbiter.pending("r1", "r1-1") is False
+
+
+def test_a_cue_that_goes_away_is_no_longer_pending():
+    arbiter = Arbiter()
+    arbiter.observe(report(pair(ON_A)), Context(slots=SLOTS), 0.0)
+    arbiter.observe(report(pair(ON_A)), Context(), 0.5)
+    assert arbiter.pending("r1", "r1-1") is False
+
+
+def test_a_decided_request_stays_pending_until_the_robot_moves_on():
+    """Between the post and the robot's `checking` state there is a poll's gap."""
+    arbiter = Arbiter()
+    assert run(arbiter, report(pair(ON_A)), Context(slots=SLOTS))[1] is not None
+    assert arbiter.pending("r1", "r1-1") is True
+    assert arbiter.pending("r1", "r1-2") is False
