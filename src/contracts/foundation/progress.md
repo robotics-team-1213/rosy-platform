@@ -1,15 +1,15 @@
 ---
 module: core_common
 owner: CORE
-last_verified: { commit: "4e99d92e", date: 2026-10-02 }
+last_verified: { commit: "b587404b", date: 2026-10-02 }
 gates:
   SOURCE:
     state: GO
-    evidence: "101 passed; includes PolicyEvidencePayload (D-268 T1) and Device Action/Local Stop SOURCE schemas (D-333/D-336, 2026-09-29 Windows)"
+    evidence: "424 passed/1 skipped; includes the additive FleetCellTransferGrant / CELL_TRANSFER contract and finite robot-base pose checks"
     cmd: "python -m pytest src/contracts/foundation/test -q"
   LOCAL:
     state: GO
-    evidence: "101 passed (2026-09-29 Windows); contract shapes do not imply a UDS listener, runner, or device acceptance"
+    evidence: "424 passed/1 skipped on Windows host; contract shapes do not imply a UDS listener, runner, or device acceptance"
     cmd: "python -m pytest src/contracts/foundation/test -q"
   ROS-SIM:
     state: N/A

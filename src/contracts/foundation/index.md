@@ -37,6 +37,6 @@
 
 - 2026-10-03 · uncommitted · feat(controls): D-411 C 검토 — `GripperControl.max_velocity`
 - 2026-10-03 · uncommitted · feat(core_common): D-411 C `OmxSimGripperGoal`
+- 2026-10-03 · uncommitted · feat(protocol): publish strict Cell goal submission contract
 - 2026-10-02 · uncommitted · docs(controls): D-411 B `autonomy` 는 "제공함"이다
-- 2026-10-02 · f341e9fd · feat(core_common): D-411 A 녹화 계약·CORE 가드·읽기 전용 저장소
-- 2026-10-02 · dbe014f4 · feat(contracts): D-395 LOCALIZED 로봇의 `unmapped_objects` (API v1.74)
+- 2026-10-02 · uncommitted · config: SAF-003 판정 시간 5 s, 하트비트 답 시한 (D-419)

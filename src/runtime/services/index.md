@@ -37,8 +37,8 @@
 
 ## 최근 기록
 
-- 2026-10-02 · 410c6832 · feat(core_features): D-411 A teleop/intent 증거 훅
-- 2026-10-02 · b9f1b277 · feat(localization): D-395 S1 R1 — LOCALIZED 물체를 스냅샷으로 넘긴다
-- 2026-10-02 · f93d922d · fix(line_follow): D-407 검토 반영과 뒤 사각 규칙
-- 2026-10-02 · 776173dc · feat(line_follow): D-407 막힘 복구 상태기계와 관리자 연결
-- 2026-10-02 · 80db8125 · fix(localization): D-395 S1 재실행 R5·R6 — 버린 보고는 다시 주지 않고, 검사 중 미션은 `busy`
+- 2026-10-03 · uncommitted · test(fleet_agent): D-419 시험 시간 여유 — 포화된 호스트
+- 2026-10-03 · uncommitted · fix(fleet_agent): D-419 착지 리뷰 — 이벤트 동시 전송 상한, 되돌림 중복, 하트비트 시한
+- 2026-10-02 · uncommitted · fix(fleet_agent): D-419 착지 — main 의 D-407 수신 루프와 병합
+- 2026-10-02 · uncommitted · fix(fleet_agent): D-419 최종 리뷰 LOW — 실패한 보내기의 `_awaiting` 항목 회수
+- 2026-10-02 · uncommitted · fix(fleet_agent): D-419 라운드 4 — 인코딩 불가 이벤트, EVENT 에 대한 오류

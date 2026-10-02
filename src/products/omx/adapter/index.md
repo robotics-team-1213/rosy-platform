@@ -33,6 +33,7 @@
 - [2026-10-01-omx-demonstration-lerobot-design.md](../../../../docs/plans/2026-10-01-omx-demonstration-lerobot-design.md)
 - [2026-10-01-pilot-omx-gazebo-practice.md](../../../../docs/plans/2026-10-01-pilot-omx-gazebo-practice.md)
 - [2026-10-02-d411-pilot-recording-controls-plan.md](../../../../docs/plans/2026-10-02-d411-pilot-recording-controls-plan.md)
+- [2026-10-02-rosy-cell-c3-gazebo.md](../../../../docs/plans/2026-10-02-rosy-cell-c3-gazebo.md)
 
 ## 교훈 (docs/solutions)
 
@@ -47,5 +48,5 @@
 - 2026-10-03 · uncommitted · fix(omx_adapter): D-411 C Gazebo 관문 뒤 — 조임 재발행·속도 여유·probe·Gazebo 전용 제약
 - 2026-10-03 · uncommitted · fix(omx_adapter): D-411 C 검토 — 속도 제한·제한 조임·안쪽 범위·stall probe
 - 2026-10-03 · uncommitted · feat(omx_adapter): D-411 C 그리퍼 절대 목표·쥠 readback·시연 `action.gripper`
+- 2026-10-03 · uncommitted · feat: journal Cell hold release and local Action completion
 - 2026-10-02 · uncommitted · test(pilot-sim): D-411 B 렌더 시험 런타임이 실제 소유자처럼 군다
-- 2026-10-02 · 10daaae5 · feat(pilot): D-411 B SIM 이 Pilot 조립 모듈을 서빙

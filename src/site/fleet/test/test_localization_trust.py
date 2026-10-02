@@ -33,9 +33,11 @@ def test_classify(state, expected):
     assert trust.classify(state) == expected
 
 
-def test_trusted_xy_only_from_trusted_or_legacy_snapshots():
+def test_trusted_xy_only_from_localized_map_snapshots():
+    """S2 Finding 1: a legacy-null pose (power-on odom) is never a *trusted* pose."""
     assert trust.trusted_xy(snap(loc())) == (1.0, 2.0)
-    assert trust.trusted_xy(snap()) == (1.0, 2.0)
+    assert trust.trusted_xy(snap()) is None
+    assert trust.trusted_xy(snap(None)) is None
     assert trust.trusted_xy(snap(loc(frame="odom"))) is None
     assert trust.trusted_xy({"localization": loc()}) is None          # no pose
 
@@ -68,3 +70,9 @@ def test_badge_names_the_state_and_flags_legacy_and_needs_human():
     assert odom["trusted"] is False and odom["state"] == "CANDIDATES"
     assert trust.badge(snap(loc("CANDIDATES", "odom")), {"needs_human": True})["label"] == "위치 확인 필요"
     assert trust.badge(snap(loc("SUSPECT", "map", needs_human=True)))["needs_human"] is True
+
+
+def test_badge_of_a_lapsed_d395_robot_is_untrusted_not_legacy():
+    lapsed = trust.badge(snap(), lapsed=True)
+    assert lapsed["legacy"] is False and lapsed["trusted"] is False
+    assert lapsed["label"] == "위치 모름"

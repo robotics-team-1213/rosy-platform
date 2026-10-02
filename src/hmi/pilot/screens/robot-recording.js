@@ -137,13 +137,17 @@ export function mountRobotRecording({toggle, detail, openButton, sheetHost, anch
                                           "aria-live": "polite"}));
       let action;
       if (busy) {
-        action = el("ui-button", "취소", {type: "button", "data-recording-cancel": ""});
-        action.addEventListener("click", () => download?.controller.abort());
+        const cancel = el("ui-button", "취소", {type: "button", "data-recording-cancel": ""});
+        cancel.setAttribute("kind", "quiet");
+        cancel.addEventListener("click", () => download?.controller.abort());
+        action = cancel;
       } else {
-        action = el("ui-button", "받기", {type: "button", "data-recording-fetch": ""});
-        action.disabled = !row.canFetch || download !== null;
-        action.reason = action.disabled && row.reason !== message ? row.reason : "";
-        action.addEventListener("click", () => fetchRecording(row.id));
+        const receive = el("ui-button", "받기", {type: "button", "data-recording-fetch": ""});
+        receive.setAttribute("kind", "quiet");
+        receive.disabled = !row.canFetch || download !== null;
+        receive.reason = receive.disabled && row.reason !== message ? row.reason : "";
+        receive.addEventListener("click", () => fetchRecording(row.id));
+        action = receive;
       }
       action.setAttribute("kind", "quiet");
       item.append(facts, action);

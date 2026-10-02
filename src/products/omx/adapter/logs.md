@@ -38,6 +38,7 @@
 - 제한: `poll()`은 호출자 구동이다. bounded 주기 scheduler, ROS/vendor action 연결, action server의 cancel acknowledgement는 아직 없다. API 반환은 실제 취소나 정지를 증명하지 않는다.
 - gate 변화: SOURCE 근거 보강. 두 인스턴스 vendor 시뮬 결과는 연결된 probe 보고서로 확인; target workstation timing·camera topics·실물 stop/recovery가 남아 ROS-SIM HOLD, DEVICE/FIELD PARKED.
 - 결정: D-282; 실제 OMX capability는 계속 비활성.
+
 ## 2026-09-26 · uncommitted · OMX ROS arm and calibrated camera runtime
 
 - Added optional ROS 2 FollowJointTrajectory runtime wiring with configured-joint feedback filtering, steady-clock watchdog polling, cancellation acknowledgement, and terminal action status. Profile remains disabled and runtime has no remote command endpoint.
@@ -217,7 +218,6 @@
 - Evidence: Regression tests failed before the fields existed; afterward, owner/runner tests passed. Full OMX adapter suite: 171 passed, 4 skipped. Changed Python files passed flake8 and py_compile. Vendor Gazebo attempt ended before Fleet grant because the controller was not observed active in the former 45-second preflight; launch log later showed activation and a joint3 command-limit warning. No ROS goal was sent. Current Jazzy in-process rerun skipped at collection because rclpy was unavailable to the selected interpreter.
 - Gate: SOURCE GO. ROS-SIM HOLD; new 180-second vendor retry remains pending. ARTIFACT HOLD; DEVICE/FIELD PARKED. No hardware stop, E-stop, grasp/place, or field claim.
 
-
 ## 2026-10-02 · uncommitted · fix(omx): make start tolerance ceiling owner-controlled
 - Change: Add trusted per-joint max_start_state_tolerances to ArmCommandConfig. Tolerance-qualified submissions fail closed when policy is absent or a command asks for a wider bound. Vendor probe verifies read-only /repo, loopback-only networking, and no serial/video grants itself.
 - Evidence: New missing-policy, oversized-tolerance, malformed-map, negative, and non-finite config tests. Full OMX adapter suite: 176 passed, 4 skipped. Flake8 and Python compilation passed. The first complete Jazzy ROS callback rerun remained skipped at collection because rclpy was unavailable to the selected interpreter; no ROS-SIM claim is made.
@@ -239,6 +239,61 @@
 - gate 변화: SOURCE 유지. ROS-SIM HOLD — 계획 Verification ROS-SIM 체크리스트(WSL Ubuntu) 미실행, DEVICE 증거 없음.
 - 결정: D-411 A.
 
+## 2026-10-02 · uncommitted · feat(omx): admit tagged Fleet Cell Transfer grants
+- 변경: `ActionApi`와 digest 검증이 `FleetActionGrant`/`FleetCellTransferGrant`를 `action_kind`로 구분해 파싱한다. `CELL_TRANSFER`는 전용 phase runner가 등록되지 않으면 저널 전에 거부하고, 등록된 경우에도 capability callback의 셀 해시 확인을 통과해야 한다. camera-blind Cell Transfer의 `observation_id`는 로컬 저널에 빈 값으로 기록하며 기존 ActionStore 스키마와 PICK_PLACE 관측 필수 조건은 유지한다. 낡은 합성 test grant를 실제 tagged schema fixture로 바꿨다.
+- 증거: 전체 OMX adapter test 271 passed, 5 skipped; Cell Transfer API/runner, phase-runner 전용 실행, 해시 불일치 및 무관측 저널을 확인했다. `py_compile`, 허용된 기존 style 위반(E501/W503/W504/E704/E126) 제외 flake8, `git diff --check` 통과. Fleet UDS end-to-end invocation은 1 skipped. 전체 파일 flake8은 이 변경 전부터 있던 style 위반을 보고하므로 무오류로 기록하지 않는다.
+- Gate: SOURCE GO. 이 checkpoint는 ROS-SIM, Gazebo, 장치 동작이나 실제 셀 해시 공급자를 증명하지 않는다. ROS-SIM HOLD; ARTIFACT HOLD; DEVICE/FIELD PARKED.
+
+## 2026-10-02 · d8f96fb8 · feat(omx): C3 Gazebo CELL_TRANSFER probe (D-402, plan C3)
+
+- 변경: `deploy/robot/omx/probe_cell_transfer.py`(owner 프로세스 하나: 프로필로 만든 `ArmCommandOwner` → `AnalyticCellTransferPlanner` → `PickPlaceRunner` → `/arm_controller`; `gripper_contract` readback, `gz model -p` = `sim_model_pose`), `run_cell_sim.sh`(owner 없는 vendor follower). 프로덕션 코드는 바꾸지 않았다. 대역은 플래그와 evidence JSON에 남긴다: owner lock 안 sequence rebind, 첫 RUNNING_FEEDBACK만 runner로, tmpfs journal, 표시된 DetachableJoint sim aid.
+- 증거: docs/validation/rosy-cell-gazebo-c3-2026-10-02/README.md (실행 16회, 허용오차 안 배치 0회). 네 phase ROS `SUCCEEDED`(run8). 그대로의 runner/owner는 run1 `joint_state_sequence_mismatch`, run2–4·7 `joint_state_stale` HOLD(feedback 119건 처리 5.94 s, journal 쓰기 최대 0.64 s). 마찰 파지 실패: 깊이 15 mm는 운반 중 낙하인데 모든 gate 통과, 22 mm는 joint5 −0.327 rad 비틀림으로 transfer start-state HOLD. DetachableJoint sim aid는 손가락이 블록을 지나 닫혀(gripper −0.42/짝 +0.71) owner `joint_state_limit` HOLD. 무하중 그리퍼 readback 오차 ≤ 0.0003 rad, 하중 아래 mimic 차 0.02–0.09 rad.
+- gate 변화: ROS-SIM HOLD 유지(C3 증거 추가; C6·Fleet 경로 아님).
+- 결정: D-402 §3·§8, D-403 §5·§8. C4 과제: owner/runner 경쟁과 콜백 그룹 분리, wall/sim 시간 기준, release 전 hold 재확인, grasp 깊이 필드, `CELL_TRANSFER` grant schema.
+- 교훈: SUCCEEDED 네 개와 그리퍼 계약 통과만으로는 물체 이동을 말할 수 없다. `sim_model_pose`가 낙하를 잡았다.
+
+## 2026-10-02 · f63bb564 · fix(omx): C3b — C3 결함 수정, 대역 없는 Gazebo 단일 배치
+
+- 변경: 커밋 bc6a9955(A1 owner `start_state_window`: lock 안에서 최신 state로 검사·바인딩), 1df18501·3d4a693b(A2 RUNNING 한 번만 journal, feedback은 메모리 계수, joint-state·watchdog와 ActionClient 콜백 그룹 분리, 대기 이벤트 replay 경쟁), e9d5c1b6(A3 `owner_clock="sim"` + `wall_clock_bound_factor` 4.0), c832a53d(A4 release 전 `verify_held_object`, `ITEM_LOST_IN_TRANSIT`), 2b534abf·4316246b(A5 phase별 관절 허용오차 장치, 실측으로 덮어쓰기 없음), a31ebde1(B1 `grasp_depth`), bd56fa7a·2de7832d(B2 폭 맞춤 닫힘, Gazebo 보정 jaw 사상, release 부분 열림), cb58f71f(B3 런타임 sim aid, 대역 없는 probe, 인피드 yaw π/2), aee19f65·f63bb564(pose_plan.py 크기 판정).
+- 증거: host adapter+profile+cell+layout+architecture 602 passed, 6 skipped, 실패 2(아키텍처 크기 판정은 수정 커밋으로 해소; `test_control_imports_no_core_code`는 main 기존 실패). 컨테이너(rclpy) ROS·runner·owner·planner 148 passed, 1 skipped. Gazebo `final-single`: 인피드 → 팔레트 A 층 0 슬롯 0, xy 0.30 mm, yaw 0.0009 rad, 윗면 z 0.0 mm, 네 phase SUCCEEDED, owner HOLD 0, RTF 0.46–0.71. `final-three`: 배치 3/3 허용오차 안이지만 마지막 하강이 슬롯 2 블록을 24.9 mm 밀었다. docs/validation/rosy-cell-gazebo-c3-2026-10-02/README.md C3b 절.
+- gate 변화: ROS-SIM HOLD 유지(단일 transfer 증거 추가; Fleet 경로·종단 Job·이웃 간섭 남음). DEVICE/FIELD PARKED.
+- 결정: D-401·D-402 보강(2026-10-02, C3b). sim aid는 로봇 쪽 joint, hold 증명 뒤에만 붙인다.
+- 교훈: 메시로 유도한 그리퍼 사상은 Gazebo 접촉과 0.16 rad 어긋났다. 접촉 순간 link 포즈로 확인하고 측정으로 보정한다. 손가락이 블록에 닿지 않고 멈추면, 먼저 빈손 닫힘으로 자기 간섭(joint5 ≈ π/2)을 의심한다.
+
+## 2026-10-02 · e40d182c · fix(omx): C3b 독립 리뷰 수정 (FIX REQUIRED)
+
+- 변경: e63c0b42(B1: goal 응답 전에 온 feedback을 버퍼에 두었다가 GOAL_ACCEPTED 뒤에 RUNNING_FEEDBACK 하나로 재생한다. 관찰 실패로 표시하지 않는다. timeout 시험은 `last_terminal_decision`를 기다린다), 7ae0f65c(ROS 종료 status를 journal보다 먼저 기록; done/succeeded는 그대로 마지막), 92dfea40(minor 1: `max_start_window_rad` 0.1 상한 + 그리퍼 외 전 관절 포함 요구, cap 없는 owner는 정확 sequence 일치 / minor 2: owner 시계 역행 시 `owner_clock_jumped_back` HOLD), 664d0841(minor 3: 닿을 수 없는 release 폭은 계획 거절), a4f446d8(minor 4: `cell.yaml` `fingertip_overhang_m`, 프로필과 계약 시험으로 묶음), 53467537(minor 5: `accepted_item_geometry`로 수락 레시피의 폭·깊이만 허용, `ITEM_GEOMETRY_MISMATCH`), e582dc5b(minor 7), e40d182c(크기 판정).
+- 증거: 아래 WSL 반복과 Gazebo 재실행은 evidence README의 "리뷰 수정" 절에 있다.
+- minor 8(잠금 순서): 실재하지만 좁다. runner replay가 `_event_lock`을 쥔 채 늦은 수락 경로에서 `cancel_goal` → owner lock을 잡는다. 반대로 watchdog은 owner lock 안에서 `handle.cancel()`을 부른다. 거기서 `cancel_goal_async`가 **동기적으로 예외를 던질 때만** `CANCEL_ACK`를 바로 emit → runner `_event_lock`으로 간다. 정상 경로는 응답 콜백이 나중에 executor에서 돌아 교착이 없다. 고치지 않았다. C4에서 owner lock 밖으로 cancel 호출을 옮길 때 같이 정리한다.
+- gate 변화: 없음(ROS-SIM HOLD 유지).
+- 교훈: 콜백 그룹을 나누면 rclpy가 future done 콜백과 feedback의 순서를 보장하지 않는다. Windows는 rclpy 시험을 건너뛰므로, 동시성 변경은 WSL/컨테이너 반복(≥20회)으로 확인한다.
+
+## 2026-10-02 · 0380d789 · fix(omx): re-review fixes N1 and minor 4
+
+- 변경: fb3997c4(N1: GOAL_ACCEPTED를 emit하기 전까지 feedback은 세기만 하고, 그 뒤 하나로 재생한다. runner는 추월당한 RUNNING_FEEDBACK을 journal 없이 인정한다), 0380d789(minor 4 장치 쪽: 수락 item 형상에 `height_m`, `grasp_depth_m > height_m − fingertip_overhang_m`이면 `GRASP_DEPTH_BELOW_FINGERTIPS`로 거절).
+- 증거: host suites 629 passed, 실패는 main 기존 `test_control_imports_no_core_code` 하나. WSL Jazzy rclpy 반복 결과는 evidence README에 있다.
+- gate 변화: 없음(ROS-SIM HOLD 유지).
+- 결정: `fingertip_overhang_m`는 `rosy_cell.cell/2`의 필수 필드가 됐다. 버전은 올리지 않았다. /2는 아직 배포되지 않았고 이 브랜치 밖에서 쓰인 적이 없기 때문이다.
+
+## 2026-10-02 · aa77cb9c · test(omx): WSL rclpy loop under nice -n 19 during another session's Gazebo
+
+- 변경: 없음(검증 기록).
+- 증거: HEAD 20회 반복(`nice -n 19`, `ROS_DOMAIN_ID=77`, WSL load average 33–55): 12/20 통과. 실패는 `joint_state_stale`(시험의 0.2–0.5 s joint-state 나이 상한)과 그 뒤의 HOLD다. 같은 조건에서 base `7ae0f65c`(이전 무부하 25/25)와 HEAD를 번갈아 8회씩 돌렸다: base 5/8, HEAD 7/8. base도 같은 시험(`test_slow_feedback…`, `test_runtime_subscribes…`)에서 실패하므로 회귀가 아니라 부하로 본다. 원본: `X:\DevTemp\rosy-cell-c3\c3b\wsl-loop3.txt`, `ab2-loop.txt`.
+- gate 변화: 없음.
+- 결정: 수용 기준(연속 20회 무실패)은 WSL이 비면(17:00 KST 이후) nice 없이 다시 확인한다.
+
+## 2026-10-02 · c07896af · merge: main (D-413, pl3 dispatch safety) into feat/rosy-cell-c3-gazebo
+
+- 변경: 시작 상태 메커니즘을 하나로 합쳤다. main의 `TrajectoryCommand.expected_start_state_positions`/`start_state_tolerances`(모든 관절)와 `ArmCommandConfig.max_start_state_tolerances`(관절별 상한)를 남겼다. C3b의 `start_state_window`, `max_start_window_rad`, `start_window_exempt_joints`는 지웠다. 두 쪽의 성질은 모두 남는다.
+  - owner가 lock 안에서 최신 fresh state로 다시 검사한다(b0979ad6, C3b A1). 최신 sequence에 바인딩한다(`_last_command_state_sequence`).
+  - 요청자의 sequence는 더 오래될 수는 있어도 더 새로울 수는 없다. 이미 쓴 sequence는 거절한다. 시계 역행은 `owner_clock_jumped_back`로 HOLD한다.
+  - 기준점은 계획된 시작점이다(11ae6e70).
+  - C3b의 grasp 뒤 그리퍼 예외는 owner의 예외 목록이 아니다. runner가 그 관절을 자기가 방금 검사한 readback에 묶는다. 이 방식은 main의 "모든 관절" 규칙보다 엄격하다.
+- 상한 결정: main은 관절별 정책(7735c307)을 두었고, C3b는 0.1 rad 한 값을 두었다. 관절별 쪽을 남겼다. 프로필은 관절마다 기준 허용오차와 grasp 뒤 덮어쓰기 중 큰 값을 상한으로 만든다(현재 모든 관절 0.02 rad). C3b의 0.1보다 5배 엄격하고, 프로필이 요구할 수 있는 값은 모두 덮는다.
+- cap 없는 owner: C3b는 창을 무시하고 정확 일치로 넘어갔다. main은 `start_state_tolerance_policy_missing`로 거절한다. 더 엄격한 main 쪽을 남겼다. C3b 시험은 지우지 않고 그 결과를 검사하도록 바꿨다. 보낸 command 객체는 원본 그대로다(main 시험 `action.commands == [command]`). C3b 시험은 바인딩을 `_last_command_state_sequence`로 확인한다.
+- 증거: owner 68, adapter 전체·layout·cell·compat 501 passed / 5 skipped(모듈 경로 PYTHONPATH).
+- gate 변화: 없음.
+
 ## 2026-10-02 · uncommitted · feat(pilot-sim): D-411 B `/target` 의 `rosy.controls/1`
 - 변경: `PilotSimRuntime.controls()` 가 `joint_jog` 하나를 낸다. 관절 한계 = 고정된 vendor URDF 범위(`config/omx_f_kinematics.yaml` `urdf_limit`, `urdf_position_limits()`) ∩ owner SIM 허용 범위. 1회 최대 변화는 `core_common.protocol.controls.BOUNDED_JOG_MAX_STEP_RAD` 하나를 `OmxSimJog` 와 함께 쓴다. `/target` 이 `controls` 를 싣는다.
 - 증거: `python -m pytest src/products/omx/adapter/test/ -q` (2026-10-02 Windows). Gazebo 미실행.
@@ -251,11 +306,17 @@
 - 증거: `python -m pytest src/products/omx/adapter/test -q`, `test_pilot_sim_browser.py` 통과 (2026-10-02 Windows).
 - gate 변화: SOURCE 유지. ROS-SIM HOLD.
 - 결정: D-411 B. 실물 OMX 는 열지 않는다(D-390).
+
 ## 2026-10-02 · uncommitted · test(pilot-sim): D-411 B 렌더 시험 런타임이 실제 소유자처럼 군다
 - 변경: `test_pilot_sim_browser.py` 가짜 런타임 — 실행 중 `ready:false`·`owner_state:"active"`·`active_goal`, 준비된 스냅샷이 준 sequence 만 받음, 한 번에 하나. 실제 SIM HTTP API 로 스틱을 잡은 채 3 개 이상 순차 목표, 거절 0 시험.
 - 증거: `ROSY_RUN_BROWSER_TESTS=1 python -m pytest src/products/omx/adapter/test/test_pilot_sim_browser.py -q` (2026-10-02 Windows).
 - gate 변화: SOURCE 유지. ROS-SIM HOLD.
 - 결정: D-411 B. 실물 OMX 는 열지 않는다(D-390).
+
+## 2026-10-03 · uncommitted · feat: journal Cell hold release and local Action completion
+- Change: reuse physical gripper transaction rules with canonical Cell grant provenance; optionally compose durable workflow gates with the real Skill phase runner. Require matching scoped fresh hold/release readback before local terminal success. Provider/clock/cancel errors and snapshot recovery stay HOLD.
+- Evidence: focused planner/API/runner/transaction/boundary suite 36 passed; sensor and cancel failure review corrections included. Full OMX adapter plus provider/Skill/boundary regression: 371 passed / 5 skipped. Quick tier: 96 passed / 25 freshness warnings. Independent review: 31 passed, no remaining Critical/Important findings.
+- Gate: SOURCE/LOCAL only. Fleet independent goal confirmation, two-ledger Cell replay and ROS-SIM remain open.
 
 ## 2026-10-03 · uncommitted · feat(omx_adapter): D-411 C 그리퍼 절대 목표·쥠 readback·시연 `action.gripper`
 - 변경: 순수 `pilot_sim_gripper.py` `gripper_state()`(open·closed·holding·moving·unknown, 허용오차 0.05 rad, 정지 판정 0.5 s/0.005 rad). `PilotSimRuntime` 그리퍼 모드(`gripper_open`·`gripper_closed`): 공통 `_dispatch`(instance → 허용 → 단일 진행 목표 → ready → 제공한 sequence), `submit_gripper`(절대 위치, 범위 밖 `gripper_limit`), 스냅샷 `gripper`, `controls()` 가 그리퍼를 `joint_jog` 에서 빼고 `gripper` 항목을 낸다. 그리퍼 목표가 `SUCCEEDED` 로 끝난 뒤의 팔 조그는 그리퍼 칸에 그 목표 위치를 보낸다(readback 이면 쥠이 풀린다). `sim_admission_limits()` — SIM owner 허용 범위 = `deploy/robot/omx/sim/cell_profile.yaml` ∩ URDF(팔·그리퍼 모두; 리터럴 ±3.0/±0.5 제거), 목표 길이 상한 2.0 s, 셀 프로필 바이트를 출처 해시에. `POST /api/v1/sim/omx/gripper`(조그와 같은 영수증·seat·만료·409 규칙). 시연 기록: 출처 `gripper_joint`(선택), 행 `action.gripper`(= `action` 그리퍼 칸, 다르면 `gripper_action`), 목표 길이 0.1–2.0 s, LeRobot `action.gripper` 특성·프레임. 이전 에피소드는 그대로 검증·export.

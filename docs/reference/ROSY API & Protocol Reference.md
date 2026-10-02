@@ -2,7 +2,7 @@
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.76
+**Version:** v1.87
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -142,13 +142,13 @@ Fleet 의 로봇 토큰은 operator 토큰이다(`robots.yaml` 의 `token`, 또�
 | `LINE_FOLLOW_ACTIVE` | 409 | 라인 추종이 켜져 있어 도킹/언도킹을 시작하지 않음 — `line-follow/mode` 를 `OFF` 로 먼저 (v1.18) | 로봇 |
 | `IR_FALLBACK_NOT_READY` | 409 | 카메라 고장 상태, IR 라인 증거 최신성, 보정 revision, 또는 센서 안전 정책을 만족하지 못함 | 로봇 |
 | `NO_ODOMETRY` | 409 | 오도메트리가 없어 언도킹 후진 거리를 잴 수 없음 (v1.18) | 로봇 |
-| `RECORDING_BUSY` | 409 | Pilot 로봇 녹화가 진행 중이거나 manifest 해시를 끝내는 중(`stopping`) — 동시 녹화는 1개, 그동안 시작·수신 불가 (D-411, v1.76) | 로봇 |
-| `RECORDING_NOT_ACTIVE` | 409 | 정지할 녹화가 없음 (`POST /recordings/active/stop`, D-411, v1.76) | 로봇 |
-| `ROBOT_MOVING` | 409 | 녹화 수신은 정지 중에만: 살아 있는 MANUAL 입력 없음·NAVIGATION/DOCKING 아님·line-follow OFF·신선한 0 속도(또는 E-Stop). MANUAL 모드 자체는 막지 않는다 (D-411, D-136 §6, v1.76) | 로봇 |
-| `RECORDING_NOT_FOUND` | 404 | 없는 녹화 id, 안전하지 않은 id, manifest 없음·무효, manifest 와 다른 크기·폴더 밖·일반 파일 아닌 멤버 (D-411, v1.76) | 로봇 |
-| `RECORDING_QUOTA_FULL` | 507 | 받지 않은(fetched 아님) 녹화로 전용 쿼터의 예비분까지 찼다 — 받아 가면 정리 대상이 된다 (D-411, v1.76) | 로봇 |
-| `RECORDING_DISK_FULL` | 507 | 녹화 디스크의 빈 공간이 512 MiB 이하라 시작을 거부함 (D-411, v1.76) | 로봇 |
-| `RECORDER_UNAVAILABLE` | 503 | 카메라 유닛 녹화기의 상태가 없거나 3 s 넘게 낡음, 서비스 무응답, 저장 디렉터리 없음·쓰기 불가, rosbag2 기동 실패 (D-411, v1.76) | 로봇 |
+| `RECORDING_BUSY` | 409 | Pilot 로봇 녹화가 진행 중이거나 manifest 해시를 끝내는 중(`stopping`) — 동시 녹화는 1개, 그동안 시작·수신 불가 (D-411, v1.83) | 로봇 |
+| `RECORDING_NOT_ACTIVE` | 409 | 정지할 녹화가 없음 (`POST /recordings/active/stop`, D-411, v1.83) | 로봇 |
+| `ROBOT_MOVING` | 409 | 녹화 수신은 정지 중에만: 살아 있는 MANUAL 입력 없음·NAVIGATION/DOCKING 아님·line-follow OFF·신선한 0 속도(또는 E-Stop). MANUAL 모드 자체는 막지 않는다 (D-411, D-136 §6, v1.83) | 로봇 |
+| `RECORDING_NOT_FOUND` | 404 | 없는 녹화 id, 안전하지 않은 id, manifest 없음·무효, manifest 와 다른 크기·폴더 밖·일반 파일 아닌 멤버 (D-411, v1.83) | 로봇 |
+| `RECORDING_QUOTA_FULL` | 507 | 받지 않은(fetched 아님) 녹화로 전용 쿼터의 예비분까지 찼다 — 받아 가면 정리 대상이 된다 (D-411, v1.83) | 로봇 |
+| `RECORDING_DISK_FULL` | 507 | 녹화 디스크의 빈 공간이 512 MiB 이하라 시작을 거부함 (D-411, v1.83) | 로봇 |
+| `RECORDER_UNAVAILABLE` | 503 | 카메라 유닛 녹화기의 상태가 없거나 3 s 넘게 낡음, 서비스 무응답, 저장 디렉터리 없음·쓰기 불가, rosbag2 기동 실패 (D-411, v1.83) | 로봇 |
 | `ROBOT_OFFLINE` | 503 | 대상 로봇 미접속 | Fleet |
 | `HW_PROBE_UNAVAILABLE` | 503 | 장치 점검 요청 파일을 쓰지 못함 (`POST /host/hardware/refresh`, D-247) | 로봇 |
 | `HW_TEST_COOLDOWN` | 429 | 부저·램프 시험을 10초 안에 다시 요청함 (`POST /host/hardware/test`, D-247 6, v1.23) | 로봇 |
@@ -212,7 +212,7 @@ config `control.sensor_adapter.mode` 와 같은 문자열이다(D-400). 일반 �
 |---|---|---|---|
 | GET | `/api/v1/system/info` | Viewer | IDN-003. `caller_role`(v1.18 additive) — 이 요청 토큰의 역할(`viewer`\|`operator`\|`administrator`). 대시보드는 이것으로 관리 패널을 가르고, 권한 밖 경로를 찔러 보지 않는다. `robot_name` 은 오버레이에 이름이 없고 기본값(`Rosy 01`)뿐이면 프로비저닝 신원(`ROSY_DEVICE_NAME`, 없으면 `Rosy NN` ← `ROSY_ROBOT_NUMBER`)에서 온다 |
 | PUT | `/api/v1/system/info` | Admin | IDN-003 (payload: `{robot_id?, robot_name?}`) — 로컬 오버레이에 영속 |
-| GET | `/api/v1/system/capabilities` | Viewer | CAP-001. 지킬 수 있는 것만 광고한다(D-32) — §9.1 `withheld`, `runtime`(v1.21), `controls`(v1.76, D-411): `rosy.controls/1` `{schema, items[]}` — Pinky는 adapter `provides`의 `drive`(manifest가 없으면 `teleop`)에서 `base_velocity` 하나. 스키마 정본 `core_common.protocol.controls` |
+| GET | `/api/v1/system/capabilities` | Viewer | CAP-001. 지킬 수 있는 것만 광고한다(D-32) — §9.1 `withheld`, `runtime`(v1.21), `controls`(v1.87, D-411): `rosy.controls/1` `{schema, items[]}` — Pinky는 adapter `provides`의 `drive`(manifest가 없으면 `teleop`)에서 `base_velocity` 하나. 스키마 정본 `core_common.protocol.controls` |
 | GET | `/api/v1/system/runtime` | Viewer | ROS-102 — 호스트 OS/CPU/RAM/디스크/온도 + 읽기 전용 ROS 그래프 스냅샷 |
 | GET | `/api/v1/system/tokens` | Admin | SEC-101 — `{id, role, label, created_at, legacy, expires_at, source, current, last_used_at}`. `current` 는 호출자 자신의 토큰, `last_used_at` 은 CORE 가 켜진 뒤 마지막 인증 시각(메모리, 없으면 null). 만료된 토큰은 빠진다. 토큰에서 유도된 값은 싣지 않는다 |
 | POST | `/api/v1/system/tokens` | Admin | SEC-101 (payload: `{role, label?, token?}`) — `token` 을 비우면 서버가 생성해 응답에 **단 한 번** 싣는다. 직접 정하면 16자 이상. 응답은 `Cache-Control: no-store`. 만료가 있는 호출자(페어링 세션)는 403 — 만료 없는 토큰을 만들 수 없다(D-193 보안 리뷰) |
@@ -247,7 +247,7 @@ config `control.sensor_adapter.mode` 와 같은 문자열이다(D-400). 일반 �
 | POST | `/api/v1/navigation/home` | Operator | NAV-003. 기능 보류 시 409 `CAPABILITY_WITHHELD`. D-395 로봇이 `LOCALIZED` 가 아니면 409 `NOT_LOCALIZED` (v1.72) |
 | GET | `/api/v1/navigation/state` | Viewer | NAV-004 |
 | GET | `/api/v1/navigation/path` | Viewer | MAP-003 |
-| GET | `/api/v1/line-follow` | Viewer | D-143 — 선택 모드, 상태, 증거 신뢰도·나이, 최종 선속도·각속도와 사유. `clearance_m`(정면 LiDAR 최소 거리, 없으면 null)과 정지 사유 `obstacle_ahead`·`obstacle_sensor_stale`·`driver_released` (D-344, v1.63). IR 이탈 감시(`line_follow.ir_guard_enabled`)가 켜지면 추종 사유 `lane_edge_left`·`lane_edge_right`(경계 반대로 비킴)와 정지 사유 `lane_departure`·`lane_guard_stale` (D-344 §12, v1.63). 공칭 지면(`ground: NOMINAL`) 카메라 증거는 `hold_s` 세션이 없으면 `nominal_ground_requires_driver` 로 멈춘다 (D-364 §3, v1.63). 정지 사유 `limit_level_too_low`(수동 한도 L1 미만)·`angular_limit_zero`(각속도 한도를 읽을 수 없음) (D-344 §13, feat/device-prep, v1.64) |
+| GET | `/api/v1/line-follow` | Viewer | D-143 — 선택 모드, 상태, 증거 신뢰도·나이, 최종 선속도·각속도와 사유. `clearance_m`(정면 LiDAR 최소 거리, 없으면 null)과 정지 사유 `obstacle_ahead`·`obstacle_sensor_stale`·`driver_released` (D-344, v1.63). IR 이탈 감시(`line_follow.ir_guard_enabled`)가 켜지면 추종 사유 `lane_edge_left`·`lane_edge_right`(경계 반대로 비킴)와 정지 사유 `lane_departure`·`lane_guard_stale` (D-344 §12, v1.63). 공칭 지면(`ground: NOMINAL`) 카메라 증거는 `hold_s` 세션이 없으면 `nominal_ground_requires_driver` 로 멈춘다 (D-364 §3, v1.63). 정지 사유 `limit_level_too_low`(수동 한도 L1 미만)·`angular_limit_zero`(각속도 한도를 읽을 수 없음) (D-344 §13, feat/device-prep, v1.64). 몸 기준 정지(D-422, v1.84: `obstacle_mode: path` + 로봇 패키지 URDF 몸 기하)에서는 `body_gap_m`(의도한 차선 호를 따라 몸 윤곽이 닿기까지의 거리, 없으면 null)·`stop_gap_m`(그 속도의 정지 간격)·`clearance_source`(`lidar`·`memory`(LiDAR `range_min` 아래로 사라져 기억한 반환)·`ultrasonic`·`odometry_lost`(바퀴 값 적분 실패 — 다음 스캔까지 정지), 아무것도 없으면 null)가 오고 `clearance_m` 은 `body_gap_m` 과 같은 몸 간격이다. 그 밖에는 세 필드 모두 null |
 | PUT | `/api/v1/line-follow/mode` | Operator | D-143 — `{mode: OFF\|IR_LINE\|CAMERA_LINE, hold_s?}`. 소스는 상호 배타적이며 변경 즉시 이전 증거와 명령을 폐기. 도킹/언도킹 중에는 409 `DOCKING_ACTIVE` (v1.18). 요구 능력은 구동(`mobility.move`)이다 — Nav2 가 없는 `motor` 런타임에서도 켜진다(D-344 §7, v1.63). `hold_s`(0 < s ≤ 2)를 주면 운전자 확인 세션이다: `POST /line-follow/hold` 가 그 안에 계속 와야 하고, 끊기면 CORE 가 스스로 OFF(`reason: driver_released`)로 내리고 바퀴 명령을 지운다(D-344 §8, v1.63). OFF 가 아닌 모드는 D-395 로봇이 `LOCALIZED` 가 아니면 409 `NOT_LOCALIZED` (v1.72) |
 | POST | `/api/v1/line-follow/hold` | Operator | D-344 §8 — 운전자가 "진행"을 누르고 있다. 활성 `hold_s` 세션의 만료를 `hold_s` 만큼 미룬다. 세션이 없으면 409 `LINE_FOLLOW_NOT_HELD` (v1.63) |
 | POST | `/api/v1/line-follow/stuck/decision` | Operator | D-407 §2 — `{stuck_id, decision: WAIT\|RESUME\|BACK_AND_RETRY\|MANUAL\|ABORT}`. 열린 막힘(`GET /line-follow` 의 `stuck`)에 대한 관제 답. `WAIT` 그대로 HOLD·로컬 복구 안 함; `RESUME` 앞물체 정지를 한 번 풀어 `obstacle_stop_m` 까지 접근 허용·LOST 해제 후 차선 추종 재개; `BACK_AND_RETRY` 짧은 후진과 재판단을 즉시(로컬 복구가 켜져 있어야 함); `MANUAL` 차선 추종 OFF + MANUAL(D-342 한도); `ABORT` 차선 추종 OFF + IDLE. 응답은 line-follow 상태 + `outcome`(`hold\|back\|resume\|manual\|idle`). `RESUME`·`BACK_AND_RETRY`·`MANUAL` 은 보정 lease 를, `RESUME`·`BACK_AND_RETRY` 는 E-Stop 을 지킨다. `MANUAL`·`ABORT` 의 모드 전이는 `POST /mode` 와 같다(`MANUAL` 은 navigation·swarm 취소, `mode.changed`). 409 `STUCK_ID_MISMATCH`·`STUCK_DECISION_REFUSED`·`CALIBRATION_ACTIVE`·`EMERGENCY_ACTIVE` (v1.74) |
@@ -297,8 +297,8 @@ config `control.sensor_adapter.mode` 와 같은 문자열이다(D-400). 일반 �
 | DELETE | `/api/v1/calibration/session/{id}` | Operator | owner 또는 Admin(걸린 lease 강제 해제). 끝난 `{session}`. 그 밖의 토큰 403, 없는 id 404 |
 | POST | `/api/v1/safety/stop` | Viewer↑ | SAF-001 (누구나). 보정 세션 중에도 막지 않는다 |
 | POST | `/api/v1/safety/release` | Admin | SAF-001 |
-| GET | `/api/v1/safety/state` | Viewer | SAF-001 |
-| PUT | `/api/v1/safety/limits` | Admin | SAF-004 — `{manual_linear?, manual_angular?}` 는 프로필 최대값으로 clamp. SAF-005 배터리 임계값 `{battery_warning_percent?, battery_critical_percent?, battery_deep_percent?, battery_critical_policy?}` 과 `{fleet_loss_policy?}` 도 같은 경로로 받는다. 임계값은 `0 < deep < critical < warning <= 100` 을 만족해야 한다 |
+| GET | `/api/v1/safety/state` | Viewer | SAF-001. `fleet_loss_policy` 와 선택 필드 `fleet_link` (SAF-003, D-419, v1.86) `{configured, connected, lost, timeout_s, applied, correlation_id, disconnected_s, held_goal}` — `configured` 는 FleetAgent 가 돌고 있는가(승인된 `pairing_token` + 주소), `lost` 는 이번 단절에서 정책을 적용했는가, `applied` 는 실제로 한 것(`STOP`·`HOLD`·`RETURN_HOME`·`CONTINUE`·`NONE`), `held_goal` 은 `HOLD` 가 보관한 `{correlation_id, x, y, yaw}`(재접속 이벤트 뒤 비움). 서비스가 없으면 `null` |
+| PUT | `/api/v1/safety/limits` | Admin | SAF-004 — `{manual_linear?, manual_angular?}` 는 프로필 최대값으로 clamp. SAF-005 배터리 임계값 `{battery_warning_percent?, battery_critical_percent?, battery_deep_percent?, battery_critical_policy?}` 과 `{fleet_loss_policy?}` 도 같은 경로로 받는다. 임계값은 `0 < deep < critical < warning <= 100` 을 만족해야 한다. `fleet_loss_policy` 는 `STOP`·`HOLD`·`RETURN_HOME`·`CONTINUE`(`CONTINUE_CURRENT_NAVIGATION` 은 `CONTINUE` 로 저장), 그 밖은 400. `RETURN_HOME` 을 받으면 응답에 선택 필드 `warning`(문자열) — 사이트 Fleet 이 죽으면 이 정책의 로봇이 Fleet 교통정리 없이 동시에 home 으로 간다 — 을 싣고 로그에 경고를 남긴다(거절하지 않음). 판정 시간 `safety.fleet_loss_timeout_s`(기본 5.0, 4–60 s, `1 + fleet.heartbeat_reply_timeout_s + 1` 이상)와 하트비트 답 시한 `fleet.heartbeat_reply_timeout_s`(기본 2.0, 0.5–10 s)는 설정 파일 전용이고, Fleet 링크가 설정된 로봇에서 어기면 CORE 가 기동하지 않는다(Fleet 없는 로봇은 경고 후 기본값) (D-419) |
 
 ## 5.6 이벤트·진단·관리
 
@@ -354,19 +354,19 @@ v1.42: `GET /api/v1/host/network`와 `/release`는 기존 `{available,ok?,code,d
 
 | Method | 경로 | 요청/응답 |
 |---|---|---|
-| GET | `/api/v1/sim/omx/target` | 공개 `{kind:"omx_sim",simulation:true,instance_id,joints,gripper,camera,recording,controls}`; `controls`(v1.76 additive, D-411 B)는 §9.1 `rosy.controls/1` — SIM은 `joint_jog` 하나(`id:"arm"`, 관절별 한계 = 고정된 vendor URDF 범위(`omx_f_kinematics.yaml`) ∩ SIM owner 허용 범위, `max_step_rad` 0.05, `duration_s` 0.4 = 각 요청에 보낼 목표 길이, `command:"bounded_goal"`; 이전 목표가 끝난 뒤에만 다음 목표, 100 ms 스트림 없음, D-390 §2). D-411 C부터 그리퍼는 `joint_jog`에서 빠지고 따로 `gripper` 항목(`id:"gripper"`, `joint`, `open`·`closed` = 셀 프로필 `gripper.open`·`gripper.closed`(1.0·0.0 rad), `presets{open, half, close}` — `half`는 가운데, `readback:["position","grasp"]`, `max_velocity` = 셀 프로필과 URDF 그리퍼 속도 중 작은 값(0.5 rad/s))이 된다. SIM owner 허용 범위는 모든 관절(팔·그리퍼)이 `deploy/robot/omx/sim/cell_profile.yaml` 범위 ∩ URDF 범위다(실물 한계 아님, URDF에 없는 관절은 서버 기동 오류). `joint_jog`에 알리는 범위는 그 허용 범위를 양쪽에서 `start_state_tolerance_rad`(0.02 rad)만큼 줄인 것이다 — 알린 끝을 조금 넘어 멈춰도 readback이 허용 범위 안이라 owner가 HOLD(`joint_state_limit`)를 걸지 않는다. 조그는 알린 범위 밖으로 더 나가는 목표를 409 `joint_limit`으로 거절하고, 범위 밖에서 안쪽으로 돌아오는 목표는 받는다. 시뮬레이션 전용이며 실물 OMX를 열지 않는다; Pinky CORE에서는 404 |
+| GET | `/api/v1/sim/omx/target` | 공개 `{kind:"omx_sim",simulation:true,instance_id,joints,gripper,camera,recording,controls}`; `controls`(v1.87 additive, D-411 B)는 §9.1 `rosy.controls/1` — SIM은 `joint_jog` 하나(`id:"arm"`, 관절별 한계 = 고정된 vendor URDF 범위(`omx_f_kinematics.yaml`) ∩ SIM owner 허용 범위, `max_step_rad` 0.05, `duration_s` 0.4 = 각 요청에 보낼 목표 길이, `command:"bounded_goal"`; 이전 목표가 끝난 뒤에만 다음 목표, 100 ms 스트림 없음, D-390 §2). D-411 C부터 그리퍼는 `joint_jog`에서 빠지고 따로 `gripper` 항목(`id:"gripper"`, `joint`, `open`·`closed` = 셀 프로필 `gripper.open`·`gripper.closed`(1.0·0.0 rad), `presets{open, half, close}` — `half`는 가운데, `readback:["position","grasp"]`, `max_velocity` = 셀 프로필과 URDF 그리퍼 속도 중 작은 값(0.5 rad/s))이 된다. SIM owner 허용 범위는 모든 관절(팔·그리퍼)이 `deploy/robot/omx/sim/cell_profile.yaml` 범위 ∩ URDF 범위다(실물 한계 아님, URDF에 없는 관절은 서버 기동 오류). `joint_jog`에 알리는 범위는 그 허용 범위를 양쪽에서 `start_state_tolerance_rad`(0.02 rad)만큼 줄인 것이다 — 알린 끝을 조금 넘어 멈춰도 readback이 허용 범위 안이라 owner가 HOLD(`joint_state_limit`)를 걸지 않는다. 조그는 알린 범위 밖으로 더 나가는 목표를 409 `joint_limit`으로 거절하고, 범위 밖에서 안쪽으로 돌아오는 목표는 받는다. 시뮬레이션 전용이며 실물 OMX를 열지 않는다; Pinky CORE에서는 404 |
 | POST | `/api/v1/sim/omx/pair` | 로컬 콘솔의 10분 유효 일회용 `{code}` → `{token}`; 성공 201, 재사용 403 |
 | GET | `/api/v1/sim/omx/whoami` | Bearer → `{role:"operator"}` |
 | POST/PUT/DELETE | `/api/v1/sim/omx/seat[/{seat_id}]` | 단일 조종권 취득·1초 간격 갱신·반납. lease 10초; 만료/반납 시 진행 목표 취소 요청. 취소 ACK는 정지 증거가 아니다 |
-| GET | `/api/v1/sim/omx/state` | `{instance_id,ready,owner_state,owner_reason,action_server_ready,state_sequence,joint_age_ms,positions,active_goal,gripper}`. 신선한 관절 상태와 action server가 없으면 `ready:false`(목표 실행 중에도 `ready:false`·`owner_state:"active"`). `gripper`(v1.76, D-411 C) `{joint, position, state, open, closed, hold_target}`(`hold_target` = 끝난 그리퍼 목표 뒤 팔 목표가 그리퍼 칸에 보낼 명령 값, 없으면 `null`) — `state` ∈ `open`·`closed`·`holding`·`moving`·`unknown`. `unknown` = 관절 상태가 낡았거나 owner HOLD, 마지막 그리퍼 목표가 `UNKNOWN_HOLD`. `moving` = 그리퍼 목표 진행 중이거나 최근 0.5 s 안에 위치가 0.005 rad 넘게 변함. `closed` = 위치가 `closed`에서 0.05 rad 이내. **`holding`** = 닫기 목표(`closed`에서 0.05 rad 이내인 목표)가 `SUCCEEDED`로 끝났는데 위치가 `closed`에서 0.05 rad 넘게 떨어져 멈춤 — 손가락이 무언가에 걸렸다는 시뮬레이션 위치 판정이며 쥠 힘 증거가 아니다(D-390 §5). 그 밖은 `open` |
+| GET | `/api/v1/sim/omx/state` | `{instance_id,ready,owner_state,owner_reason,action_server_ready,state_sequence,joint_age_ms,positions,active_goal,gripper}`. 신선한 관절 상태와 action server가 없으면 `ready:false`(목표 실행 중에도 `ready:false`·`owner_state:"active"`). `gripper`(v1.87, D-411 C) `{joint, position, state, open, closed, hold_target}`(`hold_target` = 끝난 그리퍼 목표 뒤 팔 목표가 그리퍼 칸에 보낼 명령 값, 없으면 `null`) — `state` ∈ `open`·`closed`·`holding`·`moving`·`unknown`. `unknown` = 관절 상태가 낡았거나 owner HOLD, 마지막 그리퍼 목표가 `UNKNOWN_HOLD`. `moving` = 그리퍼 목표 진행 중이거나 최근 0.5 s 안에 위치가 0.005 rad 넘게 변함. `closed` = 위치가 `closed`에서 0.05 rad 이내. **`holding`** = 닫기 목표(`closed`에서 0.05 rad 이내인 목표)가 `SUCCEEDED`로 끝났는데 위치가 `closed`에서 0.05 rad 넘게 떨어져 멈춤 — 손가락이 무언가에 걸렸다는 시뮬레이션 위치 판정이며 쥠 힘 증거가 아니다(D-390 §5). 그 밖은 `open` |
 | POST | `/api/v1/sim/omx/goals` | `OmxSimJog` → `OmxSimGoal`, 202. 같은 `request_id`·동일 payload는 멱등; 다른 payload는 409 |
-| POST | `/api/v1/sim/omx/gripper` | v1.76, D-411 C. `OmxSimGripperGoal` → `OmxSimGoal`, 202. 그리퍼만 절대 위치로 옮기는 목표 하나(팔 관절은 현재 readback). 조그와 같은 seat·instance·만료·단일 진행 목표·HOLD 규칙, 같은 영수증 공간(같은 `request_id`를 조그와 그리퍼가 함께 쓰면 409). 위치가 알린 범위(허용 범위에서 0.02 rad 안쪽) 밖이면 409 `gripper_limit`, `|position − readback| − 0.05 rad > max_velocity × duration_s`이면 409 `gripper_velocity_limit`(0.05 rad는 클라이언트가 목표를 잰 readback과 접수 시 readback의 차이를 받는 여유), 그리퍼 목표를 받지 않는 서버는 409 `gripper_not_configured`. 진행·취소는 `/goals/{command_id}` 경로 그대로 |
+| POST | `/api/v1/sim/omx/gripper` | v1.87, D-411 C. `OmxSimGripperGoal` → `OmxSimGoal`, 202. 그리퍼만 절대 위치로 옮기는 목표 하나(팔 관절은 현재 readback). 조그와 같은 seat·instance·만료·단일 진행 목표·HOLD 규칙, 같은 영수증 공간(같은 `request_id`를 조그와 그리퍼가 함께 쓰면 409). 위치가 알린 범위(허용 범위에서 0.02 rad 안쪽) 밖이면 409 `gripper_limit`, `|position − readback| − 0.05 rad > max_velocity × duration_s`이면 409 `gripper_velocity_limit`(0.05 rad는 클라이언트가 목표를 잰 readback과 접수 시 readback의 차이를 받는 여유), 그리퍼 목표를 받지 않는 서버는 409 `gripper_not_configured`. 진행·취소는 `/goals/{command_id}` 경로 그대로 |
 | GET | `/api/v1/sim/omx/goals/{command_id}` | 비동기 goal readback. 미등록 404 |
 | POST | `/api/v1/sim/omx/goals/{command_id}/cancel?seat_id=...` | 취소 요청. `CANCEL_REQUESTED`는 정지 완료가 아니다 |
 
 `OmxSimJog` 필수 필드: `instance_id`, `seat_id`, `request_id`, `joint`, `delta_rad`(0이 아니며 절댓값 ≤0.05 rad), `duration_s`(0.1~1.0), `state_sequence`, `expires_at_ms`. 명령은 현재 관절 상태에서 해당 관절만 상대 이동하며 모든 관절의 현재 값을 함께 보낸다. 최근 5초 안에 Pilot API가 제공하지 않은 sequence, 6초보다 먼 만료 시각, 이미 만료된 요청, 범위 초과, 진행 중 goal, HOLD는 거부한다. ROS는 새 sequence를 계속 발행하므로 제출 시점에는 가장 최근의 신선한 관절 상태를 사용한다. `OmxSimGoal.state`는 `LOCAL_ACCEPTED`, `ROS_ACCEPTED`, `RUNNING`, `SUCCEEDED`, `REJECTED`, `CANCEL_REQUESTED`, `CANCELED`, `UNKNOWN_HOLD` 중 하나다. `LOCAL_ACCEPTED`는 ROS 수락이 아니고, action의 `SUCCEEDED`는 물리적 정지나 목표 도달의 독립 증거가 아니다. schema 정본은 `core_common.protocol.omx_sim`이다.
 
-`OmxSimGripperGoal`(v1.76, D-411 C) 필수 필드: `instance_id`, `seat_id`, `request_id`, `position`(유한한 rad, 절대값), `duration_s`(0.2~2.0), `state_sequence`, `expires_at_ms`. 다른 필드는 거부한다. SIM owner의 목표 길이 상한은 2.0 s다(`OmxSimJog`는 스키마가 1.0 s까지만 받는다). 그리퍼 목표가 `SUCCEEDED`로 끝난 뒤의 팔 조그는 그리퍼 칸에 readback 대신 명령 값을 보낸다(readback을 보내면 쥔 물체를 놓는다). 닫기 목표가 닫힘에 못 미쳐 멈춘 경우(`holding`)에는 **멈춘 위치에서 닫힘 쪽으로 `gripper.preload`(셀 프로필 0.05 rad)만큼** — 닫힘 자체가 아니다(위치 제어에서 닫힘을 명령하면 멈춘 오차 전체로 누른다). 이 값은 목표가 끝난 순간의 readback(없으면 그 뒤 첫 신선한 readback)으로 고정되어 조그마다 더 조여지지 않으며 닫힘을 넘지 않는다. 컨트롤러는 SUCCEEDED 뒤 그 목표의 마지막 점(닫힘 쪽 목표 = 멈춘 오차 전체)을 계속 명령하므로, 서버는 쥐고 있음이 된 닫기 직후 owner가 비면 그리퍼 목표만 `hold_target`으로 옮기는 목표 하나(`command_id` `hold-<닫기 id>`)를 스스로 낸다 — 쉬는 동안의 조임과 팔 조그 중의 조임이 같아진다. 그동안 `owner_state`는 `active`다. ROS 실패·시간 초과로 끝난 그리퍼 목표는 `UNKNOWN_HOLD`(`reason` `terminal_status_<status>_result_<code>`)이며 `holding`으로 읽지 않는다. Pilot은 한 번에 목표 하나를 보내며, 길이는 `거리 / (0.9 × max_velocity)`를 올림해 0.2–2.0 s 안으로 맞추고(0.9는 readback 흔들림 여유), 2.0 s로 못 가는 거리(0.5 rad/s에서 0.9 rad 넘게)는 2.0 s에 닿는 곳까지만 보낸다(다시 누르면 마저 간다). `max_velocity`가 없는 서버에는 전체 행정을 2.0 s로 보고 비례한다. 열림 % 슬라이더는 손을 뗄 때 목표 하나만 보낸다.
+`OmxSimGripperGoal`(v1.87, D-411 C) 필수 필드: `instance_id`, `seat_id`, `request_id`, `position`(유한한 rad, 절대값), `duration_s`(0.2~2.0), `state_sequence`, `expires_at_ms`. 다른 필드는 거부한다. SIM owner의 목표 길이 상한은 2.0 s다(`OmxSimJog`는 스키마가 1.0 s까지만 받는다). 그리퍼 목표가 `SUCCEEDED`로 끝난 뒤의 팔 조그는 그리퍼 칸에 readback 대신 명령 값을 보낸다(readback을 보내면 쥔 물체를 놓는다). 닫기 목표가 닫힘에 못 미쳐 멈춘 경우(`holding`)에는 **멈춘 위치에서 닫힘 쪽으로 `gripper.preload`(셀 프로필 0.05 rad)만큼** — 닫힘 자체가 아니다(위치 제어에서 닫힘을 명령하면 멈춘 오차 전체로 누른다). 이 값은 목표가 끝난 순간의 readback(없으면 그 뒤 첫 신선한 readback)으로 고정되어 조그마다 더 조여지지 않으며 닫힘을 넘지 않는다. 컨트롤러는 SUCCEEDED 뒤 그 목표의 마지막 점(닫힘 쪽 목표 = 멈춘 오차 전체)을 계속 명령하므로, 서버는 쥐고 있음이 된 닫기 직후 owner가 비면 그리퍼 목표만 `hold_target`으로 옮기는 목표 하나(`command_id` `hold-<닫기 id>`)를 스스로 낸다 — 쉬는 동안의 조임과 팔 조그 중의 조임이 같아진다. 그동안 `owner_state`는 `active`다. ROS 실패·시간 초과로 끝난 그리퍼 목표는 `UNKNOWN_HOLD`(`reason` `terminal_status_<status>_result_<code>`)이며 `holding`으로 읽지 않는다. Pilot은 한 번에 목표 하나를 보내며, 길이는 `거리 / (0.9 × max_velocity)`를 올림해 0.2–2.0 s 안으로 맞추고(0.9는 readback 흔들림 여유), 2.0 s로 못 가는 거리(0.5 rad/s에서 0.9 rad 넘게)는 2.0 s에 닿는 곳까지만 보낸다(다시 누르면 마저 간다). `max_velocity`가 없는 서버에는 전체 행정을 2.0 s로 보고 비례한다. 열림 % 슬라이더는 손을 뗄 때 목표 하나만 보낸다.
 
 v1.70 추가 경로(모두 Bearer 인증):
 
@@ -379,9 +379,9 @@ v1.70 추가 경로(모두 Bearer 인증):
 | POST | `/recordings/{episode_id}/stop` | 소유 조종권 `{seat_id,outcome:success\|failure\|unspecified}` → 기록 상태 |
 | GET | `/recordings/{episode_id}/manifest` | 원본 manifest; 미등록/잘못된 UUID 404; 서버 파일 경로 없음 |
 
-기록은 10 simulation FPS 영상과 그 시각 이전 50 ms 이내의 관절 상태, ROS 수락 UUID가 있는 절대 목표(rad)를 묶는다. 영상 신선도 2초와 현재 관절 스트림 신선도 0.5초는 별도다. 지연 영상은 과거 상태와 pair하며 미래 상태를 사용하지 않는다. 프레임 누락/시계 역행/취소/HOLD/조종권 반납·만료/서버 종료/미선택 결과는 `incomplete`이며 export를 거부한다. `success`는 운용자가 지정한 과제 결과이며 Action 성공과 구분한다. 기록은 최대 3000프레임, 저장 위치는 서버 설정으로만 지정한다. 행의 목표 길이는 0.1~2.0 s다. v1.76(D-411 C): 그리퍼 목표를 받는 서버의 에피소드는 출처에 `gripper_joint`를 두고 모든 행에 `action.gripper`(그 행 `action`의 그리퍼 칸과 같은 절대 목표 rad)를 남기며, LeRobot export에 `action.gripper` 특성(`float32`, `(1,)`, `["position_rad"]`)을 더한다. `gripper_joint`가 없는 이전 에피소드는 그대로 검증·export된다. LeRobot 0.4.4 오프라인 변환은 `omx_sim_ros`/rad를 유지하고, 영상 시간축은 index/fps, 실제 Gazebo 시각은 int64 source 필드와 원본 해시로 보존한다. 업로드·학습·정책 실행 API는 없다. 실물 OMX 명령을 이 경로로 보내거나 `omx.disabled.yaml`을 켜서는 안 된다.
+기록은 10 simulation FPS 영상과 그 시각 이전 50 ms 이내의 관절 상태, ROS 수락 UUID가 있는 절대 목표(rad)를 묶는다. 영상 신선도 2초와 현재 관절 스트림 신선도 0.5초는 별도다. 지연 영상은 과거 상태와 pair하며 미래 상태를 사용하지 않는다. 프레임 누락/시계 역행/취소/HOLD/조종권 반납·만료/서버 종료/미선택 결과는 `incomplete`이며 export를 거부한다. `success`는 운용자가 지정한 과제 결과이며 Action 성공과 구분한다. 기록은 최대 3000프레임, 저장 위치는 서버 설정으로만 지정한다. 행의 목표 길이는 0.1~2.0 s다. v1.87(D-411 C): 그리퍼 목표를 받는 서버의 에피소드는 출처에 `gripper_joint`를 두고 모든 행에 `action.gripper`(그 행 `action`의 그리퍼 칸과 같은 절대 목표 rad)를 남기며, LeRobot export에 `action.gripper` 특성(`float32`, `(1,)`, `["position_rad"]`)을 더한다. `gripper_joint`가 없는 이전 에피소드는 그대로 검증·export된다. LeRobot 0.4.4 오프라인 변환은 `omx_sim_ros`/rad를 유지하고, 영상 시간축은 index/fps, 실제 Gazebo 시각은 int64 source 필드와 원본 해시로 보존한다. 업로드·학습·정책 실행 API는 없다. 실물 OMX 명령을 이 경로로 보내거나 `omx.disabled.yaml`을 켜서는 안 된다.
 
-## 5.10 Pilot 로봇 녹화 (D-411, v1.76)
+## 5.10 Pilot 로봇 녹화 (D-411, v1.83)
 
 녹화 주체는 카메라 유닛(`rosy-camera`)의 `pilot_recorder_node` 다. CORE 는 `std_srvs/SetBool` `pilot_recorder/set_active` 로 시작·정지를 **요청**만 하고, 래치된 `pilot_recorder/status`(`rosy.pilot.recording.status/1`, 1 Hz)를 받아 판단한다. 녹화는 증거일 뿐이며 제어 경로는 이 토픽들을 읽지 않는다(D-2). 스키마 정본은 `core_common.protocol.recording` 이다.
 
@@ -772,7 +772,7 @@ Fleet 추적 타임아웃(기본 10초) 내 ack 없으면 Fleet 기록에 `COMMA
 - Exponential backoff: 1s → 2s → 4s → ... 최대 30s
 - `fleet.discovery`를 설정한 로봇은 재접속마다 예상 `.local` 호스트의 `_rosy-fleet._tcp` 광고를 조회하고 별도 설치된 사이트 CA로 TLS health를 확인한다. mDNS 광고만으로 토큰을 발급하거나 연결 대상을 바꾸지 않는다. 승인된 `fleet.pairing_token`이 없으면 Agent를 시작하지 않는다.
 - 재접속 즉시 `hello` → 마지막 전송 `seq` 이후 이벤트 재전송
-- 접속 단절 시 SAF-003 정책 적용
+- 접속 단절 시 SAF-003 정책 적용 (D-419, v1.86): Agent 가 돌고 있고, 링크가 끊긴 순간 Fleet 주행 목표(`correlation_id` 가 있는 `POST /navigation/goal`)가 진행 중이었으며, 그 목표가 그대로인 채로 `safety.fleet_loss_timeout_s` 동안 계속 끊겨 있으면 한 번 적용한다. 로컬 목표·teleop·swarm follow(SWM-004 가 따로 지킴)·끊긴 뒤 들어온 목표는 대상이 아니다. `STOP` 은 그 목표 취소(e-stop 아님), `HOLD` 는 같은 정지에 재개용 목표 기록(자동 재개 없음), `RETURN_HOME` 은 취소 뒤 `__home__` 귀환(home 이 없거나 `LOCALIZED` 가 아니면 선 채로 `applied: STOP`), `CONTINUE` 는 이벤트만. 재접속은 아무것도 재개하지 않는다. 링크가 살아 있다는 것은 허브 `welcome` 을 받은 뒤이고 마지막 허브 수신이 링크 신선도(1 s 하트비트 주기 + `fleet.heartbeat_reply_timeout_s` + 0.5 s) 이내라는 뜻이다 — 판정 시간과 따로다(설정 여부는 기동 설정으로 정하고, 뒤에 Agent 가 hello 거부·중지로 꺼져도 끊긴 링크로 본다). 하트비트 답이 `fleet.heartbeat_reply_timeout_s`(기본 2 s) 안에 오지 않으면 로봇이 소켓을 끊는다(반쯤 열린 TCP). 하트비트에 대한 `error` 답(예: `TASK_PROJECTION_UNAVAILABLE`)도 답이라 링크를 유지하고, `PAIRING_INVALID`·`SESSION_NOT_PAIRED`·`DUPLICATE_IDENTITY`·`IDENTITY_DRIFT`·`PROTOCOL_UNSUPPORTED` 가 하트비트에 대한 답이면 세션을 즉시 끝낸다(`PAIRING_INVALID` 는 언제나). `event` 에 대한 `error` 는 이벤트 거부로 기록하고 세션을 유지한다. SAF-003 은 허브 건강이 아니라 링크 생존을 판정한다. hello 답 시한은 D-407 의 5 s(링크는 `welcome` 전까지 끊긴 것이라 SAF-003 판정에 영향 없음). `event` 에 대한 `error` 는 D-407 규칙대로 `EVENT_NOT_AUDITABLE` 이면 버리고, 다른 코드면 최대 3 번까지 다시 보낸다. 답을 기다리는 `event` 는 한 번에 8 개까지만 보낸다 — 재접속 뒤 밀린 이벤트가 하트비트 답을 시한 밖으로 밀어내지 않게. 단절은 마지막 허브 수신부터 잰다 — 답 하나를 놓친 기본 설정에서 정책은 마지막 수신 뒤 5 s. 재접속 backoff 는 세션이 하트비트 답 3 개를 받은 뒤에만 1 s 로 돌아간다. 취소가 그 목표를 찾지 못하면 `applied: NONE`·`reason: goal_changed`
 
 ## 7.7 프로토콜 버저닝 (PRT-006)
 
@@ -819,7 +819,7 @@ close code: `4401` 은 토큰이 없거나 틀린 것(`/ws/state` 와 동일), `
 | `CandidateReport` | 로봇 → Fleet | `robot_id`, `request_id`(1–64자 `[A-Za-z0-9_.:-]`), `candidates[1..8]` `{x, y, yaw, scan_fit 0–1, paint_score 0–1\|null}`(map 프레임 base_link), `unmapped_objects[≤16]` `{x, y}`(base_link, 앞 x·왼쪽 y), `square_sightings[≤4]` `{bearing_rad, range_m>0\|null, confidence 0–1}`, `pickup`, `stamp`(로봇 시각 s) |
 | `LocalizationDecision` | Fleet → 로봇 | `request_id`, `candidate_index`(0–7) **또는** `pose {x, y, yaw}` 중 정확히 하나, `source` `candidate`\|`overhead`\|`homing_ref`\|`human`(`candidate` 는 인덱스와만, 나머지는 `pose` 와만), `cues`(≤6, `square`\|`paint`\|`peers`\|`slot`\|`last_good`\|`overhead`), `evidence`(≤16 키), `ttl_s`(받은 때부터 유효한 초, 0 초과 30 이하, 기본 5) |
 
-로봇은 낡은 `request_id` 와, 받은 뒤 `ttl_s` 가 지난 결정을 무시한다(Fleet·로봇 시계 동기 불필요, D-395 개정 3). 사람이 아닌 결정은 `cues` 에 비대칭 단서(`square`·`paint`·`peers`·`slot`)가 하나 이상 있어야 받는다 — `last_good`·`overhead` 만으로는 거부한다. 받아들인 결정도 주입 뒤 3 s 스캔/지도 일치를 통과해야 `LOCALIZED` 가 되고, 실패하면 `SUSPECT`(`inject_rejected`)다. 대칭 맵에서는 거울상도 같은 적합도라 이 검증이 거울 주입을 거르지 못한다 — 거울은 Fleet 중재와 감시가 막는다. `square_sightings` 는 설계 4.2절 표 이후 개정 1의 `square_seen` 단서를 위해 더한 선택 필드다.
+로봇은 낡은 `request_id` 와, 받은 뒤 `ttl_s` 가 지난 결정을 무시한다(Fleet·로봇 시계 동기 불필요, D-395 개정 3). 사람이 아닌 결정은 `cues` 에 비대칭 단서(`square`·`paint`·`peers`·`slot`)가 하나 이상 있어야 받는다 — `last_good`·`overhead` 만으로는 거부한다. 받아들인 결정도 주입 뒤 3 s 스캔/지도 일치를 통과해야 `LOCALIZED` 가 되고, 실패하면 `SUSPECT`(`inject_rejected`)다. 대칭 맵에서는 거울상도 같은 적합도라 이 검증이 거울 주입을 거르지 못한다 — 거울은 Fleet 중재와 감시가 막는다. `square_sightings` 는 설계 4.2절 표 이후 개정 1의 `square_seen` 단서를 위해 더한 선택 필드다. `range_m` 이 null 인 목격(방위만)은 선로에 그대로 실리지만 Fleet 은 근거로 세지 않는다(D-395 개정 11).
 
 ---
 
@@ -848,13 +848,13 @@ close code: `4401` 은 토큰이 없거나 틀린 것(`/ws/state` 와 동일), `
 | `nav.lane_lost` | warning | 로봇 | `{mode, reason, lost_after_s}` (NAV-007 차선 상실 — 유예 `lost_after_s` 초과 시 정지, 자동 재탐색 없음) |
 | `nav.line_mode_changed` | info | 로봇 | `{from, to}` — D-143 line-follow 모드 선택 |
 | `nav.line_driver_released` | info | 로봇 | `{mode}` — D-344 §8 운전자 확인(`hold_s`)이 끊겨 CORE 가 line-follow 를 스스로 내림 (v1.63) |
-| `nav.line_obstacle_hold` | warning | 로봇 | `{mode, clearance_m, held_s}` — D-344 §11 앞 물체 정지(`obstacle_ahead`)가 `line_follow.obstacle_escalate_s` 넘게 이어짐, 정지 한 번에 한 번 (feat/device-prep, v1.64) |
-| `nav.line_stuck_opened` | warning | 로봇 | `{stuck_id, cause, front_clearance_m, rear_clearance_m, turn_clearance_m, rear_blind_m, last_lane, preview_seq}` — D-407 §1 막힘 열림: `cause` 는 `obstacle_ahead`(앞물체 정지가 `obstacle_escalate_s` 이상) 또는 `lane_lost`. 여유는 로봇별 self-mask 적용, 앞은 LiDAR 기준 경로 띠, 뒤는 URDF 몸 뒤끝 기준, 회전은 회전 반경 밖; `rear_blind_m` 은 LiDAR `range_min` 때문에 안 보이는 뒤 거리. 같은 막힘에 한 번 (v1.74) |
+| `nav.line_obstacle_hold` | warning | 로봇 | `{mode, clearance_m, held_s}` — D-344 §11 앞 물체 정지(`obstacle_ahead`)가 `line_follow.obstacle_escalate_s` 넘게 이어짐, 정지 한 번에 한 번 (feat/device-prep, v1.64). 몸 기준 정지(D-422)면 `body_gap_m`·`stop_gap_m`·`clearance_source` 도 온다 (v1.84) |
+| `nav.line_stuck_opened` | warning | 로봇 | `{stuck_id, cause, front_clearance_m, rear_clearance_m, rear_state, turn_clearance_m, rear_blind_m, last_lane, preview_seq, restuck_of, attempts}` — D-407 §1 막힘 열림: `cause` 는 `obstacle_ahead`(앞물체 정지가 `obstacle_escalate_s` 이상) 또는 `lane_lost`. 여유는 로봇별 self-mask 적용, 앞은 LiDAR 기준 경로 띠, 뒤는 URDF 몸 뒤끝 기준, 회전은 회전 반경 밖; `rear_blind_m` 은 LiDAR `range_min` 때문에 안 보이는 뒤 거리. 같은 막힘에 한 번 (v1.74) |
 | `nav.line_stuck_asked` | info | 로봇 | `{stuck_id, cause, console_linked, local_fallback_s, attempts, reason, decisions}` — D-407 §2·§3 관제 판단 요청(FleetAgent 가 중계). `local_fallback_s` 가 null 이면 로컬 복구로 넘어가지 않고 관제 답만 기다린다(`reason`: `opened`·`console_wait`·`local_disabled`·`local_refused`·`local_aborted`·`attempts_exhausted`) (v1.74) |
-| `nav.line_stuck_answered` | info | 로봇 | `{stuck_id, decision, by, token_id, accepted, reason}` — D-407 §2 관제 답. `by` 는 역할, `token_id` 는 답한 토큰. 거부된 답(`stuck_id_mismatch`, 거부 사유)도 남는다 (v1.74) |
-| `nav.line_stuck_local_attempt` | warning | 로봇 | `{stuck_id, attempt, trigger, back_m, speed_mps, rear_clearance_m, rear_blind_m, trail_m}` — D-407 §4 로컬 후진 시작. `rear_blind_m` 은 LiDAR `range_min` 과 몸 뒤끝을 넘는 self-mask 창이 가리는 뒤 깊이, `trail_m` 은 방금 앞으로 지나온 거리(사용자 결정 2026-10-02: 사각 띠는 그 안에서만 들어간다)(`trigger`: `ask_timeout`·`no_console`·`retry`·`console`) (v1.74) |
-| `nav.line_stuck_local_result` | info | 로봇 | `{stuck_id, attempt, result, reason, lane_visible, front_clear}` — D-407 §4 결과: `recovered`·`still_stuck`·`refused`(시작 전)·`aborted`(후진 중 뒤 여유·scan stale·관제 WAIT) (v1.74) |
-| `nav.line_stuck_closed` | info | 로봇 | `{stuck_id, cause, reason, attempts, held_s}` — D-407 막힘 닫힘(`cleared`·`recovered`·`console_resume`·`console_manual`·`console_abort`·`mode_off`·`mode_changed`·`driver_released`) (v1.74) |
+| `nav.line_stuck_answered` | info | 로봇 | `{stuck_id, decision, by, principal_ref, accepted, reason, rear_blind_m, trail_m, trail_yaw_deg, trail_age_s}` — D-407 §2 관제 답. `by` 는 역할, `principal_ref` 는 답한 토큰의 이름 — 설정된 id 가 있으면 그 id, 없으면 `anon-` + CORE 프로세스마다 새로 만드는 키로 낸 HMAC 앞 12자(해시 앞자리를 그대로 내면 후보 토큰으로 확인할 수 있어서다; 이 값은 CORE 한 번 실행 동안만 같다). 비밀이 아니다. v1.80 에서 `token_id` 에서 이름을 바꿈: Fleet 감사 저장소가 자격 증명 이름으로 거부했다. `BACK_AND_RETRY` 거부면 판정한 scan 의 `rear_blind_m`·`trail_m`·`trail_yaw_deg`·`trail_age_s`, 아니면 null. 거부된 답(`stuck_id_mismatch`, 거부 사유)도 남는다 (v1.74) |
+| `nav.line_stuck_local_attempt` | warning | 로봇 | `{stuck_id, attempt, trigger, back_m, speed_mps, rear_clearance_m, rear_blind_m, trail_m, trail_age_s}` — D-407 §4 로컬 후진 시작. `rear_blind_m` 은 LiDAR `range_min` 과 몸 뒤끝을 넘는 self-mask 창이 가리는 뒤 깊이, `trail_m` 은 방금 앞으로 지나온 거리(사용자 결정 2026-10-02: 사각 띠는 그 안에서만 들어간다)(`trigger`: `ask_timeout`·`no_console`·`retry`·`console`) (v1.74) |
+| `nav.line_stuck_local_result` | info | 로봇 | `{stuck_id, attempt, result, reason, lane_visible, front_clear, rear_clearance_m, rear_blind_m, trail_m, trail_yaw_deg, trail_age_s}` — D-407 §4 결과: `recovered`·`still_stuck`·`refused`(시작 전)·`aborted`(후진 중 뒤 여유·scan stale·관제 WAIT) (v1.74) |
+| `nav.line_stuck_closed` | info | 로봇 | `{stuck_id, cause, reason, attempts, held_s}` — D-407 막힘 닫힘(`cleared`·`recovered`·`console_resume`·`console_manual`·`console_abort`·`mode_off`·`mode_changed`·`driver_released`·`estop`) (v1.74) |
 | `nav.traffic_policy_staged` | info | 로봇 | `{actor, policy_revision}` — D-151 traffic policy 변경 대기 |
 | `nav.traffic_policy_applied` | info | 로봇 | `{actor, policy_revision, mode}` — D-151 대기 정책 적용(정지 상태에서만) |
 | `nav.traffic_policy_reset` | info | 로봇 | `{reason}` — D-151 정책 상태 초기화(HOLD/DISABLED 로 복귀) |
@@ -866,13 +866,15 @@ close code: `4401` 은 토큰이 없거나 틀린 것(`/ws/state` 와 동일), `
 | `safety.watchdog` | warning | 로봇 | `{timeout_ms}` |
 | `safety.shadow_verdict` | info | 로봇 | `{verdict, reason, source, t, commanded, output, limited, suppressed}` — D-400 그림자 판정. 판정이 바뀔 때·명령 중(0 아닌 후보) 같은 판정 1 s마다·최대 5/s. `suppressed` 는 그 사이 억제된 판정 변화 수, `commanded` 는 프로필 클립 뒤 값, `t` 는 CORE monotonic 초 (v1.71) |
 | `safety.policy_off` | warning | 로봇 | `{source}` — D-400 정책 off 에서 navigation·docking 출력이 처음 0 이 아닐 때, 모드 진입마다 한 번 (v1.71) |
+| `safety.fleet_lost` | warning | 로봇 | `{policy, applied, activity, correlation_id, goal, disconnected_s, reason}` — SAF-003(D-419): FleetAgent 링크가 `fleet_loss_timeout_s` 넘게 끊긴 채 Fleet 주행 목표가 진행 중이어서 정책을 적용했다(행동 뒤 발행, 단절마다 한 번). `policy` 는 설정값, `applied` 는 실제로 한 것(`STOP`·`HOLD`·`RETURN_HOME`·`CONTINUE`·`NONE`), `activity` 는 `navigation`, `goal` 은 `{x, y, yaw}`, `reason` 은 `null` 또는 `unknown_policy`·`home_unavailable: …`·`action_failed: …`·`goal_changed`(취소 순간 그 목표가 이미 끝났거나 바뀜, `applied: NONE`). 취소는 `nav.canceled {source: fleet_loss}` 로도 보인다 (v1.86) |
+| `safety.fleet_restored` | info | 로봇 | `{applied, correlation_id, disconnected_s, held_goal}` — `safety.fleet_lost` 뒤 링크가 돌아왔다. 아무것도 재개하지 않는다. `held_goal` 은 `HOLD` 가 보관한 `{correlation_id, x, y, yaw}` 또는 `null` (v1.86) |
 | `battery.low` | warning | 로봇 | `{percent}` |
 | `battery.critical` | critical | 로봇 | `{percent, policy}` |
 | `battery.deep` | critical | 로봇 | `{percent, voltage, dwell_s}` — D-27 딥 방전. 모터가 서고 셧다운 센티넬이 무장된다 |
 | `battery.shutdown_request_failed` | error | 로봇 | `{path, error, armed}` — D-27 셧다운 센티넬을 쓰지 못했다. 딥배터리 보호가 무장되지 않았다는 뜻이므로 조용히 넘어가면 안 된다 |
 | `command.rejected` | warning | 로봇 | `{source, reason}` |
-| `recording.started` | info | 로봇 | `{id, owner}` — D-411 §5.10 Pilot 로봇 녹화가 시작됐다. `owner` 는 시작한 토큰 id (v1.76) |
-| `recording.stopped` | info | 로봇 | `{id, by, reason}` — D-411 녹화 끝. `by` 는 정지한 토큰 id 또는 `null`(CORE 가드·녹화기 쪽 종료). `reason` ∈ `operator`·`link_lost`·`seat_changed`·`max_duration`·`quota`·`disk_full`·`recorder_exit`·`requested`·`shutdown`·`recovered` (v1.76) |
+| `recording.started` | info | 로봇 | `{id, owner}` — D-411 §5.10 Pilot 로봇 녹화가 시작됐다. `owner` 는 시작한 토큰 id (v1.83) |
+| `recording.stopped` | info | 로봇 | `{id, by, reason}` — D-411 녹화 끝. `by` 는 정지한 토큰 id 또는 `null`(CORE 가드·녹화기 쪽 종료). `reason` ∈ `operator`·`link_lost`·`seat_changed`·`max_duration`·`quota`·`disk_full`·`recorder_exit`·`requested`·`shutdown`·`recovered` (v1.83) |
 | `waypoint.created/updated/deleted` | info | 로봇 | `{name}` |
 | `slam.started` | info | 로봇 | `{by, reset}` — `reset` 은 재시작일 때만 (NAV-005) |
 | `slam.stopped` | info | 로봇 | `{by}` |
@@ -1005,7 +1007,7 @@ CAP-003 게이트는 이 변경으로 바뀌지 않는다. `POST /teleop`, `/nav
 inventory 기술자의 `state`(available/constrained/… presentation 어휘)와의 대응은 D-347 본문의 표가 정한다:
 `unavailable` ≈ `blocked`, `ready` ≈ `available`·`constrained`·`degraded_fallback`, 대응 없음 ≈ `not_provided`.
 
-**`controls` (v1.76 additive, D-411 B)**: 이 기기가 받는 조작부 서술자 `rosy.controls/1` `{schema, items[]}`. 항목은
+**`controls` (v1.87 additive, D-411 B)**: 이 기기가 받는 조작부 서술자 `rosy.controls/1` `{schema, items[]}`. 항목은
 `{id, kind, label, ...}`이고 kind 는 `base_velocity`(`max_linear`·`max_angular`·`pivot`·`fine`·`autonomy`),
 `joint_jog`(`joints[{name, lower, upper}]`·`max_step_rad` ≤ 0.05·`duration_s` 0.1–1.0·`command: "bounded_goal"`),
 `gripper`(`joint`·`closed`·`open`·`unit`·`presets{open, half, close}`·`readback`)다.
@@ -1122,6 +1124,13 @@ listener·자격 증명이며 중앙 Fleet catalog의 구현 상태로 간주하
 `stopped`는 CORE HTTP 응답을 받은 수/여부다. CORE 안전 래치, 속도 0,
 물리 E-stop 또는 드라이버 인터록의 확인 결과가 아니다. 응답 실패 대상의 실제
 정지 상태는 `UNKNOWN`으로 취급하며 현장 readback을 따로 확인한다(D-298).
+이 경로는 래치형 **전체 비상 정지**다: CORE EMERGENCY 래치와 Fleet 발행 래치를
+걸고, 다시 움직이려면 로봇별 Admin `safety/release`와 발행 재허가가 필요하다.
+래치 없는 **전체 주행 취소**는 `POST /api/fleet/cancel-all`이다(D-421, v1.81,
+§10.8): 대기 Fleet 작업 취소, 대형 해제, 로봇마다 `swarm/cancel`·
+`navigation/cancel`·`line-follow/mode OFF`. e-stop 래치·발행 래치·수동 조작은
+건드리지 않으며 응답은 CORE 응답이지 물리 정지 증거가 아니다. CTR-002 STOP ALL은
+이 두 경로로 나뉜다.
 아래 `/api/v1/fleet/*`는 목표 계약이며 현행 `/api/fleet/*`와 혼동하지 않는다.
 
 | Method | Path | Role | 요구사항 |
@@ -1314,6 +1323,9 @@ command. Reusing a key for a different request returns `409 IDEMPOTENCY_CONFLICT
 | POST | `/api/fleet/do` (when `do` is `navigate`) | `operator` bearer + `Idempotency-Key` | Uses the same task service; each navigation step gets a deterministic child key from the request key and step position. |
 | GET | `/api/fleet/tasks/{task_id}` | any configured user bearer | Returns the durable task projection and append-only status history. |
 | POST | `/api/fleet/tasks/{task_id}/cancel` | `operator` bearer | Cancels a task only while it is still queued; it does not cancel a goal already dispatched to CORE. |
+| POST | `/api/fleet/cancel-all` | `operator` bearer | D-421 (v1.81): non-latching site-wide driving cancel. In order: queued tasks of every robot become `CANCELED` with reason `FLEET_CANCEL_ALL` and the operator as actor (dispatch latch and generation unchanged); an open formation is stopped; then per robot, concurrently, `POST /api/v1/swarm/cancel`, `POST /api/v1/navigation/cancel`, `PUT /api/v1/line-follow/mode {mode: OFF}`, each attempted even when an earlier one failed. It never calls `safety/stop`/`safety/release`, `/mode`, signals or OMX stop. Each request writes a durable record in the task journal database (`fleet_cancel_all`: id, principal, opened/closed times, robot ids, canceled queued task ids, robots whose navigation cancel was answered; closed records older than 30 days are pruned when a window opens) and tags the in-flight dispatch attempts of those robots by `(task_id, attempt_id)` (`ACCEPTED`, `RUNNING`, mid-dispatch `QUEUED`, and `UNKNOWN` changed since the window opened or not already canceled). Dispatched tasks are not rewritten by Fleet: a correlated CORE `nav.canceled` (evidence that a cancel was issued, not of standstill, D-298) moves a tagged task to `HOLD` with reason `FLEET_CANCEL_ALL`, which releases its robot claim, so in-flight robots become dispatchable once CORE confirms the cancel. The event must match the tagged attempt, its `data.source` (when present) must be `api:*`, and the window must be open, or closed at most 30 s ago with that robot's navigation cancel answered or a fence re-cancel; other later cancels stay `UNKNOWN`. A dispatch started inside the window is tagged before its CORE goal call, and tagging settles an attempt whose `nav.canceled` already arrived during the window. Correlated events and dispatch receipts arriving after `HOLD(FLEET_CANCEL_ALL)` are logged, not applied. If the record cannot be written the fanout continues and the response carries `record_error: "CANCEL_ALL_RECORD_UNAVAILABLE"`; without that event the task stays as it was (`ACCEPTED`/`UNKNOWN`), the robot stays claimed and the task needs reconciliation (no operator reconcile route exists yet). An untagged `nav.canceled` still yields `UNKNOWN`/`CORE_CANCEL_RESULT_PENDING`. `tasks.awaiting_core_result` lists per robot the `ACCEPTED`/`RUNNING` tasks plus `UNKNOWN` tasks changed since the window opened. A dispatcher CORE goal call that overlaps the request (including a task submitted and dispatched inside the window) is inspected when it ends: an explicit CORE reject stays `FAILED`/`COMMAND_REJECTED`; a dispatch left in Fleet's own traffic queue with no live CORE goal becomes `CANCELED`/`FLEET_CANCEL_ALL`; otherwise the task is tagged, Fleet sends `navigation/cancel` to the robot and to any robot it sent to a bay for it, and the task becomes `UNKNOWN`/`FLEET_CANCEL_ALL_DURING_DISPATCH` (no retry); a goal call that raised is re-canceled the same way and keeps its existing classification. 200 even on partial failure: `{cancel_all_id, record_error, cancelled, total, evidence: "CORE_REPLY_ONLY", robots[{robot_id, result: cancelled\|failed\|unreachable, steps{swarm, navigation, line_follow: {ok, error?{reachable, sent?, code, message}}}, tasks{awaiting_core_result[]}}], formation{stopped, state, error?}, tasks{canceled[], error}}`; `sent: false` marks a step Fleet's D-361 address gate refused locally (`ADDRESS_UNVERIFIED`; `line-follow/mode` is not a stop path because a path-level gate would also allow turning it on). `cancelled` = all three CORE calls replied 2xx; `unreachable` = no call got a reply; otherwise `failed`. A reply is not physical stop evidence (D-298). Repeating the request is safe. Normal audit gate applies (`503 AUDIT_STORAGE_UNAVAILABLE`); the D-330 audit exception stays with `/api/fleet/estop`. |
+| GET | `/api/fleet/line-stuck` | any configured user bearer | D-407 (v1.77): returns the board as of the last `GET /api/fleet/state` gather (it does not contact the robots) as `{pending[], answers[], observed_age_s}`; `observed_age_s` is null before the first gather. `pending` has one row per robot whose CORE `line_follow.stuck` is open: the CORE `LineStuckStatus` fields plus `robot_id`, `front_clearance_m`, `rear_clearance_m`, `turn_clearance_m`, `rear_blind_m`, `preview_seq` (from the `nav.line_stuck_opened` FleetAgent event, `null` when not received; `opened_event` says which), `robot_online` (false = last value kept while the robot is unreachable), `observed_age_s` and `fleet_answer` (the last forwarded answer for this stuck id). `answers` is the recent forwarded-answer record `{robot_id, stuck_id, decision, principal_id, accepted, outcome, code, message, audit_id, at}` (`accepted` null = outcome unknown). The same row appears as `line_stuck` on each robot of `GET /api/fleet/state`. |
+| POST | `/api/fleet/robots/{robot_id}/line-stuck/decision` | `operator` bearer | D-407 (v1.77): `{stuck_id, decision: WAIT\|RESUME\|BACK_AND_RETRY\|MANUAL\|ABORT}`; `stuck_id` 1-64 chars of `[A-Za-z0-9_.:-]` (CORE ids are `stuck-<12 hex>`), extra fields 422. Forwarded unchanged to that robot's `POST /api/v1/line-follow/stuck/decision` with the robot credential; Fleet never refuses on CORE's behalf. 200 `{robot_id, actor_id, answer, result}` (`result` is CORE's body incl. `outcome`). A CORE 409 (`STUCK_ID_MISMATCH`, `STUCK_DECISION_REFUSED` with its reason, `EMERGENCY_ACTIVE`, `CALIBRATION_ACTIVE`) is returned as 409 `{code, message, robot_id, robot_status}` with CORE's code and message verbatim; other robot error statuses are 502 with the same body, unknown robot 404. A transport failure is 502 `{code, message, robot_id, transport}`: `ROBOT_UNREACHABLE` when the connection was never made (not delivered), `STUCK_DECISION_OUTCOME_UNKNOWN` on a timeout or a dropped reply (CORE may have applied the answer; re-read the stuck before answering again). Every forwarded answer is recorded with the site principal in memory and, with durable task storage, in the `fleet_line_stuck_answers` table of the Fleet journal database, keyed by the API audit `request_id` (§10.10). |
 
 Task status is the shared `FleetTaskStatus` enum: `REQUESTED`, `QUEUED`,
 `ACCEPTED`, `RUNNING`, `COMPLETED`, `FAILED`, `UNKNOWN`, `HOLD`, `CANCELED`,
@@ -1340,13 +1352,15 @@ CORE safety request. An `UNKNOWN` task is shown as requiring manual CORE status
 verification; the UI never turns a command receipt into completion.
 
 The site Compose configuration loads an individual `site-users.yaml` registry.
-Each row binds a unique `principal_id` and role (`viewer`, `operator`, or
-`policy-admin`) to a SHA-256 digest of one high-entropy bearer token. The raw
+Each row binds a unique `principal_id` and role (`viewer`, `operator`,
+`policy-admin`, or `service`) to a SHA-256 digest of one high-entropy bearer token. The raw
 token is delivered separately and is never stored in that file. `viewer` may
 read Fleet state, evidence, and task history. `operator` may also request,
-cancel, and stop work. `policy-admin` may not issue robot commands; no policy
-mutation endpoint exists yet. The separate `/registry` endpoint continues to
-use its own server-side credential.
+cancel, and stop work. A `service` principal may create and resolve `cell_job`
+proposals only; it cannot admit work. Cell Job admission requires a different
+named `operator` principal. `policy-admin` may not issue robot commands; no
+policy mutation endpoint exists yet. The separate `/registry` endpoint
+continues to use its own server-side credential.
 
 Authenticated `POST /api/fleet/*` requests other than source-authenticated
 `POST /api/fleet/sightings` and read-only mDNS observation
@@ -1568,12 +1582,13 @@ generation against the persisted grant before accepting that readback.
 such as cancellation, not the v1 `GetAction` request shape. A lookup does not
 resubmit or create an attempt.
 
-Pick-and-place receipts use UDS protocol v2 while retaining the same six
-operation names. V2 adds at most four ordered `phase_summaries`, each containing
+Phased `PICK_PLACE` and `CELL_TRANSFER` receipts use UDS protocol v2 while
+retaining the same six operation names. V2 adds at most four ordered `phase_summaries`, each containing
 only fixed `phase_id`, `ordinal`, bounded ROS phase `state`, local
 `journal_event_id`, and aware `observed_at`. It excludes ROS goal UUIDs, joint
 trajectories, camera payloads, and planner scenes. Fleet requires v2 for
-`PICK_PLACE` and fails closed on a missing summary; it never falls back to v1.
+`PICK_PLACE` and `CELL_TRANSFER` submission, readback and cancellation, and
+fails closed on a missing summary; it never falls back to v1.
 V1 remains available to non-phased operations. Stop requests remain v1.
 Every response — success or error — carries the version of the request it
 answers; only frames rejected before version validation (bad JSON, framing,
@@ -1595,6 +1610,15 @@ object evidences must identify distinct objects in the same observation, image
 digest, camera, optical frame, calibration, transform revision, and capture
 time. Image evidence is not a 3D pose, grasp, reachability decision, or
 permission to bypass the local planner.
+
+D-403 adds the separate additive `FleetCellTransferGrant` variant with
+`action_kind: CELL_TRANSFER`; it does not alter or widen `FleetActionGrant`.
+Its bounded `cell_transfer` body binds `job_id`, recipe/cell SHA-256 revisions,
+ordered `step_index`, item/pallet/layer, `frame: robot_base`, and finite `home`,
+`pick`, and `place` poses with pick/place approach heights and `carry_z`. The
+carry height must cover both approaches. This schema describes one atomic
+pick-plus-place unit. It does not enable Fleet dispatch or certify that any
+receiver executes the variant; the D-403 simulation gate remains in force.
 
 `DeviceActionState` is the durable local Action journal state: `PREPARED`,
 `SUBMITTING`, `ACCEPTED`, `RUNNING`, `CANCEL_REQUESTED`, `UNKNOWN`, `SUCCEEDED`,
@@ -1649,14 +1673,20 @@ Resolved Mission metadata is limited to 64 KiB and rejects the same secret/image
 
 | Method | Path | Role | Meaning |
 |---|---|---|---|
-| POST | `/api/fleet/proposals` | Operator | Store one immutable, idempotent candidate under `(principal_id, request_key)`; performs no model call, Mission creation, claim, or device submission. |
-| GET | `/api/fleet/proposals/{proposal_id}` | Viewer | Read the caller-owned candidate and resolution status. |
-| POST | `/api/fleet/proposals/{proposal_id}/resolve` | Operator | Recheck the exact current observation/capability through the server-injected resolver; on one unambiguous match, create a `PROPOSED` Mission draft. |
+| POST | `/api/fleet/proposals` | Operator; `service` for `cell_job` only | Store one immutable, idempotent candidate under `(principal_id, request_key)`; performs no model call or device submission. A cell service cannot submit ER 2 candidates; operators cannot submit Cell Jobs. |
+| GET | `/api/fleet/proposals/{proposal_id}` | Viewer | Read the caller-owned candidate and resolution status; a named operator may inspect a Cell Job proposal. |
+| POST | `/api/fleet/proposals/{proposal_id}/resolve` | Operator; `service` for `cell_job` only | Recheck current evidence/capability through the injected resolver or recompile a Cell Job through the process compiler port; create a proposal-only Mission draft and ordered steps. |
 | GET | `/api/fleet/missions/{mission_id}` | Viewer | Read caller-owned candidate, Mission state, and Fleet Mission event history. |
 | POST | `/api/fleet/missions/{mission_id}/admit` | Named Operator | Recheck evidence and revisions, then atomically acquire the shared workcell/object claims at `expected_generation`. |
+| GET | `/api/fleet/cell-jobs/{mission_id}` | Viewer | Read the resolved Cell Job, ordered step states, and Fleet journal events; a named operator may inspect another principal's Cell Job. |
 
 `POST /api/fleet/proposals` accepts `request_key`, `workcell_id`, `instance_id`,
-and an ER 2 selector candidate. Its authenticated owner and request scope are
+and either an ER 2 selector candidate or a service-owned `cell_job` candidate.
+The Cell Job candidate contains `recipe`, `cell`, `recipe_sha256`,
+`cell_sha256`, and submitted compiled `job`; its metadata limit is 64 KiB
+(ER 2 remains 32 KiB). Fleet recompiles with the injected process compiler and
+rejects a Job or digest mismatch. Recipe/Cell calculations remain outside
+Fleet. Its authenticated owner and request scope are
 stored by Fleet; duplicate same-content requests return the existing proposal,
 while reuse with a changed candidate or workcell/instance returns `409
 REQUEST_CONFLICT`. The API does not call ER 2. Candidate records allow only
@@ -1677,14 +1707,21 @@ separately identified `PROPOSED` successor Mission with
 still requires the ordinary admission gate. Image bytes are used for model
 reasoning only and are never persisted in proposal metadata.
 
-Resolution is available only when a trusted current-observation and capability
+ER 2 resolution is available only when a trusted current-observation and capability
 resolver is explicitly injected into the Site Fleet app. It receives the stored
 candidate, requested workcell/instance, and current time; it must verify image
 digest, camera/frame, capture time, calibration/transform/config revisions,
 freshness, unique target and destination, and capability. Missing resolver,
 stale or ambiguous evidence, or changed revisions fail closed. Resolution
 stores a target/goal predicate and shared resources in the Fleet Mission journal;
-it does not submit a device Action.
+it does not submit a device Action. Cell Job resolution stores canonical
+PlanBundle data as ordered `CELL_TRANSFER` rows in the versioned `cell_jobs`
+journal; the legacy single-step `PICK_PLACE` table and digest are unchanged.
+Admission recompiles and compares the ordered plan, then atomically claims the
+workcell and every pallet for the complete Job. Only step zero becomes `READY`;
+later steps remain `WAITING` until the prior step receives independent goal
+confirmation. The Cell Job journal is not connected to a device dispatcher in
+this source slice.
 
 Admission requires a configured named operator credential; the development
 fallback principal is refused. The server re-resolves the candidate and compares
@@ -1694,7 +1731,9 @@ generation or any existing navigation/direct-action/workcell/object claim
 returns `409` with no new claim. General mutation audit failure returns `503`
 before proposal or admission mutation. The synchronous admission response reports
 `physical_submission: NOT_CONNECTED`: admission itself is only a claim transaction.
-If the separately configured, explicitly enabled background dispatcher is running,
+For Cell Jobs, the approving operator must have a different principal ID from
+the service proposer. Changed compilation, changed generation, or resource
+conflict leaves the Job unadmitted and creates no claim. If the separately configured, explicitly enabled background dispatcher is running,
 it may later submit one fenced local Action. Neither response proves ROS goal
 completion, software stop, driver standstill, object placement, or physical E-stop
 state.
@@ -1872,11 +1911,78 @@ stop, gripper, placement, or hardware acceptance unless the trusted producer
 supplies the corresponding separately sourced evidence. SOURCE/LOCAL tests use
 fake credentials and clocks; device and field acceptance remain separate gates.
 
+## 10.17 Cell goal-evidence producer contract (D-413)
+
+Exposed only when the existing Fleet app is composed with `cell_goal_registry`
+and a persistent Cell Job compiler/API. Dispatch remains a separate explicit
+opt-in. There is one Cell journal and one existing site dispatch worker.
+
+| Method | Path | Credential | Body |
+|---|---|---|---|
+| POST | `/api/fleet/cell-goal-evidence` | `X-Goal-Evidence-Token` | `CellGoalEvidenceSubmission`: `{ "mission_id": "...", "evidence": {...} }` |
+
+The shared strict contract is `core_common.protocol.cell_goal_evidence`, exposed
+through `core_common.protocol.schemas.CellGoalEvidenceSubmission`. All fields
+are required; additional fields, Boolean step indices, nonfinite numbers and
+whitespace/control characters in identifiers are rejected. The evidence includes:
+
+| Fields | Meaning |
+|---|---|
+| `producer_id`, `evidence_id`, `evidence_source`, `evaluator_revision` | Registered producer, immutable evidence identity, literal `sim_model_pose`, pinned evaluator revision. |
+| `job_id`, `step_id`, `step_index`, `action_id`, `attempt_id`, `request_digest`, `recipe_sha256`, `cell_sha256` | Exact persisted canonical CELL_TRANSFER grant and ordered step. Digests are lowercase 64-character SHA-256 values. |
+| `model_id` | Attempt model identity: `cell_` followed by the saved Action ID. The independent evaluator must bind that model to the physical item and pinned recipe/cell. |
+| `observation_id`, `observation_digest`, `evidence_revision`, `observed_at`, `model_pose_base` | Final independent model observation, provenance and robot-base pose. |
+| `initial_observation_id`, `initial_observation_digest`, `initial_observed_at`, `initial_model_pose_base` | Initial independent observation after grant issuance and before terminal success. |
+| `gripper_state`, `gripper_evidence_id`, `gripper_evidence_revision`, `gripper_observed_at` | Separately sourced post-terminal gripper `OPEN` readback. |
+| `satisfied` | Strict Boolean placement attestation from the pinned evaluator; only `true` can advance a step. |
+
+Both poses require finite `x_m`, `y_m`, `z_m`, `roll_rad`, `pitch_rad`, `yaw_rad`.
+Observation timestamps are nonnegative epoch seconds. The read-only YAML registry
+pins producer/workcell/instance/recipe/cell/evaluator identities, `max_age_s`
+(positive, at most 60 seconds), timezone-aware `valid_until`, and environment-only
+`token_env`. Producer credentials must differ from user, robot, discovery,
+Vision, pairing, policy and legacy goal producer credentials. They cannot propose,
+admit, rearm or dispatch a Job.
+
+The service matches evidence to the saved grant, checks registry scope/expiry and
+freshness using server receipt time, and requires final model and gripper samples
+after the local terminal success. Evidence received before terminal readback stays
+`PENDING_ACTION_TERMINAL`; the composed dispatcher revalidates it after recording
+the exact successful receipt. Rejected pending evidence retains the successful
+Action record and claims. Placement geometry belongs to the pinned independent
+evaluator, rather than Fleet journal arithmetic.
+
+Already available invalid/preterminal evidence is rejected before persistence.
+Accepted evidence IDs are immutable and replay identical content idempotently.
+Completion rechecks the exact latest terminal event ID inside its SQLite
+transaction. A concurrent newer terminal cannot complete a step using older
+samples. Intermediate completion returns `READY` or `HOLD` depending on the live
+site fence; only every ordered goal confirmed releases claims and returns
+`GOAL_CONFIRMED`. Goal confirmation never rearms dispatch. Errors include `401
+PRODUCER_UNAUTHORIZED`, `404 MISSION_NOT_FOUND`, `409` scope/conflict/invalid-evidence
+codes, and `422` strict envelope validation errors. Responses never include tokens.
+
+This contract and host tests establish SOURCE/LOCAL composition. Independent
+Gazebo placement evaluation, the actual OMX owner/provider and ROS-SIM, device
+and field acceptance require their own evidence.
+
 # 11. 변경 이력
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
-| v1.76 | 2026-10-02 | Additive (D-411 A, feat/d411-pilot-recording-controls): §5.10 Pilot 로봇 녹화 (`GET/POST /api/v1/recordings`, `GET /recordings/active`, `POST /recordings/active/stop`, `GET /recordings/{id}/archive`), ERR-102 `RECORDING_BUSY`·`RECORDING_NOT_ACTIVE`·`ROBOT_MOVING`·`RECORDING_NOT_FOUND`·`RECORDING_QUOTA_FULL`·`RECORDING_DISK_FULL`·`RECORDER_UNAVAILABLE`, §8 `recording.started`·`recording.stopped`, ROS 증거 토픽 `teleop/intent`, 녹화기 상태 `boot_id`·`seq`, 설정 `recording.pilot_root`. B: capabilities `controls`(`rosy.controls/1`), OMX SIM `GET /sim/omx/target` `controls`; Pilot 이 `controls` 로 주행·팔 조작부를 조립(필드 없음 = 구 서버 대체, 빈 `items` = 조작부 없음, 팔 조이스틱은 순차 제한 목표·떼면 새 목표만 멈춤). C: OMX SIM `POST /sim/omx/gripper`(`OmxSimGripperGoal`, 절대 위치·0.2–2.0 s), `/state` `gripper` readback(`open`·`closed`·`holding`·`moving`·`unknown`), `/target` `controls` 의 `gripper` 항목(그리퍼는 `joint_jog` 에서 빠짐, 선택 `max_velocity`, 409 `gripper_velocity_limit`), SIM 허용 범위 = 셀 프로필 ∩ URDF·알리는 범위는 0.02 rad 안쪽·목표 길이 상한 2.0 s, 쥔 채 팔 조그는 멈춘 위치 + preload, 시연 기록 `action.gripper` 열과 LeRobot 특성(선택, 이전 에피소드 유효). 기존 필드 변화 없음 |
+| v1.87 | 2026-10-03 | Additive (D-411 B+C, feat/d411bc-pilot-controls-gripper; A 는 v1.83 에서 먼저 들어감): B: capabilities `controls`(`rosy.controls/1`, §9.1), OMX SIM `GET /sim/omx/target` `controls`; Pilot 이 `controls` 로 주행·팔 조작부를 조립(필드 없음 = 구 서버 대체, 빈 `items` = 조작부 없음, 팔 조이스틱은 순차 제한 목표·떼면 새 목표만 멈춤). C: OMX SIM `POST /sim/omx/gripper`(`OmxSimGripperGoal`, 절대 위치·0.2–2.0 s), `/state` `gripper` readback(`open`·`closed`·`holding`·`moving`·`unknown`), `/target` `controls` 의 `gripper` 항목(그리퍼는 `joint_jog` 에서 빠짐, 선택 `max_velocity`(`GripperControl.max_velocity`), 409 `gripper_velocity_limit`), SIM 허용 범위 = 셀 프로필 ∩ URDF·알리는 범위는 0.02 rad 안쪽·목표 길이 상한 2.0 s, 쥔 채 팔 조그는 멈춘 위치 + preload, 시연 기록 `action.gripper` 열과 LeRobot 특성(선택, 이전 에피소드 유효). 기존 필드 변화 없음 |
+| v1.86 | 2026-10-03 | Additive (D-419, feat/d419-saf003-fleet-loss): SAF-003 이 처음으로 동작한다. 이벤트 `safety.fleet_lost`(warning)·`safety.fleet_restored`(info), `GET /safety/state` 선택 필드 `fleet_link`, 설정 `safety.fleet_loss_timeout_s`(기본 5.0, 4–60 s)·`fleet.heartbeat_reply_timeout_s`(기본 2.0, 0.5–10 s), 판정 시간 ≥ 1 + 답 시한 + 1 (어기면 기동 실패). §7.6 판정 규칙. `PUT /safety/limits` 의 받는 값은 그대로(`RETURN_HOME` 포함), `RETURN_HOME` 이면 응답 선택 필드 `warning`. 기동 때 저장된 모르는 정책은 `STOP` 으로 읽는다. envelope `protocol_version` 1.0 유지 |
+| v1.85 | 2026-10-03 | Additive (D-413): opt-in independent Cell goal-evidence ingress, shared strict submission schema, isolated producer credentials and terminal callback reconciliation with atomic latest-terminal fencing. No physical dispatch or ROS-SIM promotion. |
+| v1.84 | 2026-10-03 | Additive (D-422, feat/body-referenced-obstacle-stop): `GET /api/v1/line-follow` 상태에 선택 필드 `body_gap_m`·`stop_gap_m`·`clearance_source`(`lidar`·`memory`·`ultrasonic`), `nav.line_obstacle_hold` 데이터에 같은 세 필드(몸 기준 정지일 때만). 몸 기준 정지에서 `clearance_m` 은 LiDAR 원점 거리가 아니라 몸 간격이다(path + 로봇 패키지 몸 기하에서만; sector 와 몸 기하 없는 path 는 그대로). 설정 `line_follow.body_front_x_m`·`body_ultrasonic_x_m`(URDF, 로봇 패키지), `obstacle_body_margin_m`(0.02)·`obstacle_latency_s`(0.15)·`obstacle_decel_mps2`(0.5)·`obstacle_resume_hysteresis_m`(0.03)·`obstacle_ultrasonic_half_angle_deg`(15)·`obstacle_ultrasonic_stale_s`(0.3). `obstacle_stop_m`·`obstacle_resume_m` 은 기본 yaml 에서 빠지고(비면 0.20 / 0.28 또는 유도) LiDAR 원점 기준 덮어쓰기로 남는다 — 옛 overlay 는 그대로 읽힌다. 덮어쓰기는 앞으로 가는 판정에만 쓰고 제자리 회전(회전 반경 원 밖 `obstacle_body_margin_m`)에는 쓰지 않는다. 움직이는 판정의 `stop_gap_m` 은 초음파와 상관없이 LiDAR `range_min` 사각 하한 이상이고, `range_min` 아래로 사라진 반환은 기억해 `body_gap_m` 에 계속 든다(`clearance_source: memory`; 기억은 바퀴로 나간 명령으로 적분하고 차선 추종 출력이 아니면 지운다). 기존 필드 이름·형식 변화 없음 |
+| v1.83 | 2026-10-03 | Additive (D-411 A, feat/d411-pilot-recording-controls): §5.10 Pilot 로봇 녹화 (`GET/POST /api/v1/recordings`, `GET /recordings/active`, `POST /recordings/active/stop`, `GET /recordings/{id}/archive`), ERR-102 `RECORDING_BUSY`·`RECORDING_NOT_ACTIVE`·`ROBOT_MOVING`·`RECORDING_NOT_FOUND`·`RECORDING_QUOTA_FULL`·`RECORDING_DISK_FULL`·`RECORDER_UNAVAILABLE`, §8 `recording.started`·`recording.stopped`, ROS 증거 토픽 `teleop/intent`, 녹화기 상태 `boot_id`·`seq`, 설정 `recording.pilot_root`. 기존 필드 변화 없음 |
+| v1.82 | 2026-10-03 | Clarify (D-403 / D-413): Fleet uses existing UDS v2 for phased CELL_TRANSFER submission, readback and cancellation; missing phase summaries fail closed. OMX already accepts the additive grant in v2. Simulation dispatch gates and independent goal requirements remain unchanged. |
+| v1.81 | 2026-10-02 | Additive (D-421, feat/d421-fleet-cancel-all): Site Fleet 새 경로 `POST /api/fleet/cancel-all`(operator, §10.8) — 래치 없는 전체 주행 취소(대기 작업 `CANCELED`/`FLEET_CANCEL_ALL`, 대형 해제, 로봇마다 `swarm/cancel`·`navigation/cancel`·`line-follow/mode OFF`, 로봇별 `cancelled`/`failed`/`unreachable`, `evidence: CORE_REPLY_ONLY`). 발행 겹침 작업은 `UNKNOWN`/`FLEET_CANCEL_ALL_DURING_DISPATCH`. 창마다 취소 기록(`cancel_all_id`)을 남기고, 표시된 진행 중 작업의 CORE `nav.canceled` 는 `HOLD`/`FLEET_CANCEL_ALL` 로 로봇 점유를 푼다(사건이 없으면 그대로). §10.2 에 `/api/fleet/estop` 이 래치형 전체 비상 정지임을 명시(의미 불변). FLEET SRS CTR-002 개정. 로봇 계약(`/api/v1/*`)·이벤트·FleetAgent 프로토콜 변경 없음 |
+| v1.80 | 2026-10-02 | Corrective + Additive (D-407 관제 재실행, fix/d407-console-link-and-event-fields): **Corrective** `nav.line_stuck_answered` 의 `token_id` → `principal_ref`(비밀 아닌 이름: 설정 id, 없으면 프로세스 키 HMAC `anon-…`) — Fleet 사건 저장소가 `token` 이 든 키를 자격 증명으로 보고 `EVENT_NOT_AUDITABLE` 로 거부해 이 사건이 Fleet 감사에 남지 않았다. **Additive** `nav.line_stuck_opened` `rear_state`(`clear`·`blocked`·`unknown` — `rear_clearance_m` null 이 "띠가 비었다"와 "모른다"를 함께 뜻하던 것을 가름), 거부된 `BACK_AND_RETRY` 답에 `rear_blind_m`·`trail_m`·`trail_yaw_deg`·`trail_age_s`. FleetAgent 는 hub 의 모든 답을 한 수신 루프로 읽는다(사건 답이 쌓여 연결이 끊기던 결함; envelope 형식 변화 없음, `protocol_version` 1.0). 설정 `line_follow.recovery_console_grace_s`(3 s) |
+| v1.79 | 2026-10-02 | Additive (D-407, fix/d407-trail-age-and-recording-marker): `nav.line_stuck_local_attempt`·`nav.line_stuck_local_result` 에 `trail_age_s`(지나온 길의 마지막 전진 명령 뒤 경과, 단조 초). 사각 띠 후진은 그 값이 `line_follow.recovery_trail_max_age_s`(30 s) 이하일 때만 — 넘으면 `rear_blind`. 기존 필드 변화 없음 |
+| v1.78 | 2026-10-02 | Additive (D-403 / D-413 Task 4): define separate `FleetCellTransferGrant` and bounded `CELL_TRANSFER` body for one recipe/cell-bound pick/place pair. Existing `PICK_PLACE` schema, payload and digest remain unchanged; Fleet dispatch stays gated on simulation evidence. |
+| v1.79 | 2026-10-02 | Additive (D-403 / D-413 Task 4): scope a `service` principal to Cell Job proposals/resolution, require a distinct named operator for admission, expose ordered Cell Job status, and persist ordered `CELL_TRANSFER` steps. Existing `PICK_PLACE` records remain unchanged; device dispatch and independent goal evidence remain gated. |
+| v1.77 | 2026-10-02 | Additive (D-407 Fleet 쪽, feat/d407-console-stuck-decisions): Site Fleet 새 경로 `GET /api/fleet/line-stuck`(viewer+)·`POST /api/fleet/robots/{robot_id}/line-stuck/decision`(operator), `GET /api/fleet/state` 로봇 행에 선택 필드 `line_stuck`(§10.8). Fleet 은 CORE 거부를 그대로 409 로 옮긴다. 로봇 계약(`/api/v1/*`)·이벤트·FleetAgent 프로토콜 변경 없음 |
+| v1.76 | 2026-10-02 | Additive (D-407 Gazebo 후속, fix/d407-sim-findings): `nav.line_stuck_opened` 에 `restuck_of`·`attempts` — `recovered` 로 닫힌 뒤 `line_follow.recovery_restuck_s`(20 s) 안이거나 순 전진 `recovery_restuck_m`(0.30 m) 전에 다시 막히면 같은 막힘으로 시도 수를 이어 센다(다 쓰면 곧바로 관제 답만 기다림). `nav.line_stuck_local_result` 에 판정한 scan 의 `rear_clearance_m`·`rear_blind_m`·`trail_m`·`trail_yaw_deg`. `nav.line_stuck_closed` 사유 `estop`. 뒤 띠 폭은 URDF 몸 반폭(`body_half_width_m`) + `recovery_rear_lateral_margin_m`(0.02). 기존 필드 변화 없음 |
 | v1.75 | 2026-10-02 | Additive (D-395 개정 4 5항 후속, S1 R1, feat/d395-localized-objects): 상태 스냅샷·하트비트 `localization` 에 선택 필드 `unmapped_objects[≤16]` `{x, y}`(base_link)·`objects_stamp`(로봇 시각 s). `LOCALIZED` 로봇이 전체 스캔의 지도 밖 물체를 상태(2 Hz)마다 싣고, 밖에서는 빈 목록이다. CORE 는 그대로 넘기고 `pose_frame: odom`·`state_stale` 에서 비운다. Fleet 감시가 닻 로봇의 관찰로 다른 `LOCALIZED` 로봇의 거울 잠금을 잡는다. 기존 필드 변화 없음 |
 | v1.74 | 2026-10-02 | Additive (D-407, feat/d407-stuck-recovery-core): `POST /api/v1/line-follow/stuck/decision`, line-follow 상태 `stuck`(`LineStuckStatus`: `stuck_id, cause, phase, held_s, attempts, max_attempts, local_enabled, ask_remaining_s, last_answer, decisions`, 막힘 없으면 null)·`state` 값 `RECOVERING`·사유 `stuck_back_off`·`stuck_<phase>`, 에러 `STUCK_ID_MISMATCH`·`STUCK_DECISION_REFUSED`, 이벤트 `nav.line_stuck_opened/asked/answered/local_attempt/local_result/closed`, 설정 `line_follow.recovery_*`(로컬 복구 기본 꺼짐; `recovery_trail_s`·`recovery_trail_yaw_deg` 는 사각 띠 후진 조건)·`body_lidar_x_m`·`body_rear_x_m`·`body_rotation_radius_m`(URDF, 로봇 패키지). Fleet 콘솔·FleetAgent 답 중계는 다음 단계. 기존 필드 변화 없음 |
 | v1.73 | 2026-10-02 | Additive (D-395 P2-7, feat/d395-p2-7-missions): 새 경로 `POST /localization/mission`(`LOCALIZE_ASSIST`)·`GET /localization/mission`(Viewer) — `LOCALIZED` 가 아닌 로봇에서 CORE 가 확인 기동·귀환 미션(`rotate_in_place`, `nudge_forward`, `lane_to_stopline`; `to_square` 는 409 `unsupported`)을 자기 장애물 정지·e-stop·거리·시간 한도 아래 아주 느리게 실행한다; 거부 409 코드 `localized`·`busy`·`estop`·`path_not_clear`·`calibration_lease`·`unsupported`; 이벤트 `localization.mission`. **행동 변화:** `lane_to_stopline` 미션은 이 미션에 한해 line-follow 를 `LOCALIZED` 관문 없이 켠다(공개 `PUT /line-follow/mode` 의 관문은 그대로); 미션 중에는 Nav2 `nav_cmd_vel` 을 버린다; 미션이 도는 동안 모드는 NAVIGATION 이고 MANUAL·IDLE 로 바꾸면 미션이 `cancelled` 로 끝난다 |

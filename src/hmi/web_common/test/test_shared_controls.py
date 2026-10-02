@@ -713,9 +713,11 @@ def test_every_disabled_control_states_its_reason_or_is_listed():
     lock = (fleet / "authorization.js").read_text(encoding="utf-8")
     assert 'setAttribute("reason", OPERATOR_REASON)' in lock
     assert ".role-lock-note" in lock and "aria-describedby" in lock
-    page = (fleet / "index.html").read_text(encoding="utf-8")
-    assert page.count("data-role-lock") == page.count('class="role-lock-note"') >= 2
-    assert page.count("운용자 권한이 필요합니다</ui-status>") == page.count('class="role-lock-note"')
+    # D-410 — 운용 문서(대형 잠금)와 설치 문서(카메라·보정 잠금)가 각각 자기 잠금 안내를 둔다.
+    for page_name in ("index.html", "install.html"):
+        page = (fleet / page_name).read_text(encoding="utf-8")
+        assert page.count("data-role-lock") == page.count('class="role-lock-note"') >= 1
+        assert page.count("운용자 권한이 필요합니다</ui-status>") == page.count('class="role-lock-note"')
     stale = sorted(set(DISABLED_WITHOUT_REASON) - set(used))
     assert not missing, "사유 없는 비활성:\n" + "\n".join(missing)
     assert not stale, f"목록에 남은 옛 항목: {stale}"

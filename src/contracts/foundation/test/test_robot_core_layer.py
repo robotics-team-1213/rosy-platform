@@ -78,7 +78,7 @@ def test_layer_values_merge_under_the_defaults(monkeypatch, robot_share):
     (robot_share / "core.yaml").write_text("line_follow:\n  lidar_forward_deg: 90.0\n", encoding="utf-8")
     monkeypatch.setenv("ROSY_ROBOT", "robo")
     line_follow = load_config()["line_follow"]
-    assert line_follow["lidar_forward_deg"] == 90.0 and line_follow["obstacle_stop_m"] == 0.20
+    assert line_follow["lidar_forward_deg"] == 90.0 and line_follow["obstacle_half_angle_deg"] == 20.0
 
 
 def test_pinky_pro_layer_is_shipped(no_ament_share):

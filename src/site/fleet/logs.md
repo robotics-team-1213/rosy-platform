@@ -1208,3 +1208,225 @@
 - 변경: `LocalizationService._observe_from_anchors`. 매 폴에서 `objects_stamp` 가 있는 LOCALIZED 닻마다 상태의 물체를 자기 보고 map 자세로 놓고, 다른 모든 LOCALIZED 로봇에 대한 증거로 쓴다. 관찰자는 닻만이다(거울 잠긴 로봇은 옳은 로봇을 그 쌍둥이 자리에 놓는다). 자기 자신은 대상이 아니다. 증거 하나는 (닻, `objects_stamp`)이고 Fleet 이 처음 본 뒤 1.0 s 동안 신선하다. 같은 폴의 두 닻은 따로 센다. 증거 규칙(0.25 m, 거울 서명)과 15 s 안 2개 문턱은 그대로다. `peer_observations` 는 보고 대신 물체 목록을 받는다.
 - 증거: `test_localization_service.py` +7(닻 둘 중 주입된 거울이 2폴에 SUSPECT, 닻이 아닌 거울 로봇은 닻을 고발하지 못함, 같은 폴 닻 둘 = 2개, 숨은 로봇·무관한 물체·일치는 증거 아님, 같은 stamp 재읽기는 낡음). `python -m pytest src/site/fleet/test -q` 1335 passed, 7 skipped.
 - gate 변화: 없음. Gazebo 재실행 전.
+
+## 2026-10-02 · uncommitted · 관제 콘솔 회차 4 — D-410 운용/설치 두 문서로 분리
+- 변경: 설치·보정 화면 /console/install(install.html + install.js, 문법 procedure)을 만들고 기기 등록·카메라 연결 승인·경기장/맵 보정·설치 기록을 이관했다. 아이디·조상 구조 보존 이관. 운용 문서(/console)는 링크 안내만 남고 문서가 가벼워졌다(1920 기준 1,154px).
+- 변경: console.js에서 등록·카메라 승인·경기장/맵 보정 배선 제거. 발견 요청은 검색기 건강 로그와 고정 주소 판정만 남긴다. vision-view.js는 보정 칸 없는 프리뷰 전용 모드(빈 패널 스텁 + 프리뷰 가드)를 지원한다. 주소 이동 조작은 설치 문서가, 안내 배너는 운용 문서가 가진다.
+- 변경: static_routes에 install.js 자산과 /console/install 라우트(CSP 동일). surfaces.yaml console audience에 설치 경로 반영. 시험 6건+shared_controls 1건을 두 문서 세계로 갱신(신규 라우트·자산·링크 시험 포함).
+- 근거: D-410(사용자 지시 — 역할 명확화 완성). D-406/D-409의 접힌 서랍 이관.
+- gate 변화: 없음.
+- 최종 증거: fleet+web_common 1545 passed 31 skipped; 브라우저 — 두 화면 페이지 오류 0, 설치 화면 세션 토큰 공유 자동 인증, 운용 문서에 등록·보정 마크업 부재·링크 2개 확인.
+
+## 2026-10-02 · uncommitted · 관제 콘솔 회차 5 — 예외 큐 첫 행 고정(운용 블록 위계)
+- 변경: 넓은 창(64rem+)에서 예외 큐(주의·개입)를 왼쪽 열 1행으로, 지도를 2행으로 바꿨다. 회차 계측에서 큐가 지도 아래 963px(첫 화면 밖)에 있어 오프라인 로봇이 큐를 채우는 순간 '예외가 먼저'(D-201)가 위반됐다. 큐 top 963→186, 문서 높이 불변(열 균형 유지), 폰(단일 열)은 영향 없음.
+- 변경: test_console_queues_contract의 그리드 핀을 새 배치로 갱신(큐 1행 + 지도 2행 고정, 위반 경위를 문서화).
+- 근거: D-201(예외 문법), 2026-10-02 회차 계측. 대형 폼은 컨테이너 반응형(D-359 §6.3)으로 이미 적합 — 조정 없음.
+- gate 변화: 없음.
+- 최종 증거: queues contract + web_common 214 passed 24 skipped(반응형 계층 게이트 포함); 재계측 큐 top 186.
+
+## 2026-10-02 · uncommitted · CI 삼각측량 — 시크릿 스캔 면제·해시 문서 규약·스코어카드 기준선·설치 문서 브라우저 시험
+- 변경: secret_scan.py KNOWN_FIXTURES에 D-395 loc-assist fixture(SECRET-PAYLOAD-VALUE) 등록. OMX 증명 해시 3곳을 매처의 무결성 문맥 규약으로 서술(README 'revision'/'dataset commit', omx_f_kinematics.yaml 'at revision') — 의미 불변. test_release_boundary_gates no_secrets 재녹색.
+- 변경: D-178 스코어카드에 rosy_cell 잠정 행(4/4/4/4/4=80 A) 추가 — 집합 동일성 회복. robot_literal_backlog.txt 갱신(신규 8·삭제 2). known_failures.txt에 병렬 작업 사전 존재 실패 5건 기록(CI 전용 플레이크 4 + module_separation 소유자 판단 1).
+- 변경: test_fleet_console_browser.py에 D-410 설치 문서 렌더 계약 시험 추가(옵트인 Chromium — 문법·소유물·운용 표면 부재·E-stop·무오류). 통과 59s.
+- 근거: 2026-10-02 CI 실행 36909426842/36955733308 실패 대 조 로컬 재현. docs/validation/uiux-console-refactor-2026-10-02/README.md 회차 기록.
+- gate 변화: 없음.
+- 최종 증거: scorecard·literals·no_secrets 각 재녹색; 브라우저 신규 시험 1 passed.
+
+## 2026-10-02 · uncommitted · D-407 판단 요청 — 관제 목록과 다섯 답 중계
+- 변경: `server/line_stuck.py` `LineStuckBoard` — 모은 상태의 CORE `line_follow.stuck` 으로 로봇별 열린 막힘을 들고, 같은 id 의 `nav.line_stuck_opened` FleetAgent 사건에서 앞·뒤·회전 여유와 미리보기 순서번호를 붙인다(사건이 없으면 null). 닿지 않는 로봇은 마지막 값을 `robot_online: false` 로 남긴다. 보드는 `console_routes.py` 가 만들고 `GET /api/fleet/state` 모음마다 갱신해 로봇 행에 `line_stuck` 을 싣는다 — console.py 는 D-362 상한 위라 늘리지 않았다.
+- 변경: `GET /api/fleet/line-stuck`(viewer+), `POST /api/fleet/robots/{robot_id}/line-stuck/decision`(operator) — 로봇 자격으로 CORE `POST /api/v1/line-follow/stuck/decision` 에 그대로 넘긴다. Fleet 은 CORE 대신 거부하지 않는다. CORE 409(`STUCK_ID_MISMATCH`, `STUCK_DECISION_REFUSED` 사유)는 code·message 그대로 409, 나머지는 502. 넘긴 답마다 site principal·결과를 기록(API 감사 행과 별도). `HttpRobotClient.line_stuck_decision`.
+- 변경: 콘솔 예외 큐 패널 안 `판단 요청`(line-stuck.js) — 원인·단계 한국어, 여유·멈춘 시간·후진 시도·미리보기 #seq, 다섯 답. RESUME·BACK_AND_RETRY 는 패널 안 확인 단계(Esc 취소, 1 s 폴링에도 유지, 포커스 보존), 로컬 복구 꺼짐·시도 소진이면 BACK_AND_RETRY 비활성 + 사유. 거부는 채움 줄로 CORE 코드·문장 그대로. 최우선 개입 큐에 `판단 요청` 항목, 카드도 예외로 보인다.
+- FleetAgent 중계는 만들지 않았다: Fleet→로봇 명령은 전부 REST(로봇 자격)이고 FleetAgent 는 내려오는 명령 경로가 없다(hub 는 사건·하트비트만 받는다). 같은 CORE 경로를 REST 로 부른다.
+- 로봇 영상은 중계하지 않는다(D-59, test_no_video_relay) — 미리보기는 순서번호만 보인다.
+- 근거: D-407 §2 결과(관제 화면 변경). API Ref v1.76.
+- gate 변화: 없음(SOURCE/LOCAL 호스트 시험만, 실물·시뮬 없음).
+- 크기: fleet 묶음 24587 → 25494(+907, 시험 포함). 크기 판정을 25494 로 다시 내렸다(split 그대로, 미일정). 병렬 D-395 가지가 옛 24565 핀에 25011 을 보고했으므로 둘을 합칠 때 한 번 더 판정한다.
+- 최종 증거: `python -m pytest src/site/fleet/test -q` 1349 passed/7 skipped(새 `test_line_stuck_api.py` 13, `test_transport.py` 1, node `line-stuck.test.mjs` 9 는 glob runner 로 포함); 옵트인 Chromium `-k "line_stuck or queues_render or camera_fault or mobile_console"` 5 passed(확인 단계·Esc·폴링 유지·409 그대로); `src/runtime/gateway/test` + `test/architecture` 새 실패 0(known_failures); harness lint 0 errors. Windows 호스트만, 로봇 접촉 없음.
+
+## 2026-10-02 · uncommitted · D-407 판단 요청 검토 반영 — 전송 실패·지속 기록·확인 단계
+- 변경: 답 중계가 httpx 오류(`HttpRobotClient` 는 OSError 가 아니라 httpx 예외를 올린다)를 잡는다. 연결 자체 실패는 502 `ROBOT_UNREACHABLE`(전달 안 됨), 시간 초과·응답 끊김은 502 `STUCK_DECISION_OUTCOME_UNKNOWN`(CORE 가 이미 적용했을 수 있음, 막힘을 다시 보고 답할 것). 둘 다 기록된다(결과 불명은 `accepted: null`). 전에는 맨 500 에 기록 없음이었다.
+- 변경: 넘긴 답마다 Fleet 저널 DB 의 `fleet_line_stuck_answers` 에 API 감사 `request_id` 와 함께 남긴다(작업 저장소가 있을 때). 저장 실패는 로그만 — 로봇은 이미 답을 받았다.
+- 변경: `stuck_id` 는 `^[A-Za-z0-9_.:-]+$`(CORE id 는 `stuck-<12 hex>`). `GET /api/fleet/line-stuck` 은 로봇을 다시 모으지 않고 마지막 `/state` 모음과 `observed_age_s` 를 준다.
+- 변경: 콘솔 — 확인 단계 "보내기"가 그 답 버튼과 같은 사유로 막히고, 전송 중 두 번째 답은 무시하며, 막힘 id 가 바뀌면 확인 단계를 버린다(aria-expanded false). 전송 실패 문구는 "전달 실패"/"결과 불명"이지 "거부"가 아니다.
+- 근거: D-407 Fleet 쪽 검토(M1, L1–L6). API Ref v1.76 행 문구 갱신(버전 유지, 같은 가지의 미병합 추가분).
+- gate 변화: 없음.
+- 크기: fleet 25590(판정 25494+150 안).
+- 최종 증거: `src/site/fleet/test` 1352 passed/7 skipped(전송 실패 매개 4: ConnectError·ConnectionRefused·ReadTimeout·RemoteProtocolError, 지속 기록·감사 id, 목록이 로봇을 다시 부르지 않음, id 형식); node `line-stuck.test.mjs` 10; 옵트인 Chromium `-k "line_stuck or queues_render or camera_fault or mobile_console"` 7 passed(새 2: 성공 결과·전송 중 이중 제출 막힘, 확인 중 막힘 교체·오프라인 로봇) — 확인 단계 id 비교를 되돌린 변이는 적색; gateway+architecture 1918 passed, known_failures 새 실패 0; harness lint 0 errors.
+
+## 2026-10-02 · 95e13278 · fix(fleet): D-395 S1 3회차 T1–T3 — 폴 간격과 무관한 도약 판정, 시간 초과 결정 확인, needs_human 은 깃발
+
+- 원인: T1 — 부하 중 폴이 4–10 s 간격이라 도약 상한(0.25 m + 0.5 m/s·dt, 0.5 rad + 2 rad/s·dt)이 1.43 m·2.70 m 거울 주입을 넘겼다. 거울 잠긴 로봇이 닻으로 남아 옳은 로봇을 고발했다. T2 — 1 s 호출 상한이 관찰 증거를 잃었고, d3 에서 시간 초과된 결정 POST 를 CORE 는 받아 로봇이 "출처 모름"으로 LOCALIZED 됐다. T3 — `needs_human` 이 멈춤인지 깃발인지 정해지지 않았다.
+- 변경: (768d2f4a) `service_logic.jumped` 가 dt 를 `JUMP_DT_CAP_S` 1.0 s 로 자른다(상한 최대 0.75 m / 2.5 rad, π 미만이라 180° 뒤집힘은 늘 도약). dt 와 무관한 `mirrored`: 새 자세가 이전 자세의 180° 쌍둥이(지도 중심 기준)에서 0.3 m·0.5 rad 안이면 닻을 뗀다. 대가(문서화): 폴이 1 s 넘게 벌어지면 실제로 0.75 m 넘게 움직였거나 2.5 rad 넘게 돈 로봇도 닻을 잃는다 — 다시 위치를 잡을 때까지 증거만 잃는다.
+- 변경: (b8d00fdb) `CALL_TIMEOUT_S` 1.0 → 2.5 s, 로봇별 호출은 그대로 병렬. 결정 POST 가 시간 초과되면 (request_id, 결정 자세, 단서가 닻이 되는지, 시각)을 미확인으로 기억한다. 로봇이 15 s 안에 그 자세(5 cm·5° 안)로 처음 LOCALIZED 되면 확인된 결정처럼 출처를 받아들인다. 다른 자세·15 s 뒤·이후 성공한 결정은 기록을 버린다. 거절·연결 오류는 기록하지 않는다.
+- 변경: (95e13278) T3 은 현재 동작 확인: `needs_human` 뒤에도 중재·결정은 계속되고, LOCALIZED 가 되면 사다리 회차가 끝나 깃발이 지워진다. 콘솔 배지는 깃발이 선 동안 "위치 확인 필요". 코드 변경 없이 시험으로 고정.
+- 증거: `test_localization_service.py` +13(8 s 폴 거울 주입은 다음 폴에 닻 상실, 8 s 폴의 실제 0.8 m 이동도 닻 상실, 0.5 s 폴로 달리고 도는 로봇은 닻 유지, dt 상한·거울 서명 순수 시험; 기본 2.5 s 상한과 매달린 로봇 셋이 한 번의 상한만 쓰는 병렬성; 미확인 결정 도달 = 닻, 6 cm·6°·거울·15 s 뒤 = 닻 아님; needs_human 뒤 결정이 깃발을 지움). 수정 전 T1·T2 새 시험은 실패함을 확인. `python -m pytest src/site/fleet/test -q` 1348 passed, 7 skipped.
+- 결정: ADR 은 손대지 않음(개정 8 은 컨트롤러가 쓴다). 계약 `docs/plans/2026-10-01-d395-phase2-interfaces.md` §3 갱신.
+- gate 변화: 없음. Gazebo 재실행 전.
+
+## 2026-10-02 · uncommitted · D-407 판단 요청 — main 병합, API Ref v1.77
+- 변경: main(039786e3, D-407 Gazebo 후속이 API Ref v1.76 을 씀)을 병합했다. 이 가지의 Fleet 경로·`line_stuck` 행·검토 반영 문구는 v1.77 로 옮겼다(위 두 기록의 "v1.76" 은 병합 전 번호다). 버전 핀(시험 3, CORE app.py 설명) v1.77.
+- gate 변화: 없음.
+- 크기: fleet 25643(판정 25494+150 안, 여유 1줄 — 다음 증가는 다시 판정해야 한다).
+- 증거: 병합 뒤 `src/site/fleet/test` 1364 passed/7 skipped; 옵트인 Chromium `-k line_stuck` 3 passed; `src/runtime/gateway/test` + `test/architecture` 1926 passed/17 skipped, known_failures 새 실패 0; harness lint 0 errors.
+
+## 2026-10-02 · uncommitted · D-413 Task 4 Cell Job journal and approval boundary
+- 변경: connected the compiler port, service-only Cell Job proposal flow, distinct named-operator approval, and versioned ordered-step SQLite journal. Existing PICK_PLACE Mission tables remain unchanged. Persisted grants are checked against PlanBundle inputs, job/recipe/cell digests, authority epoch, and dispatch generation. Action success does not advance a step or release resources without independent goal and post-action gripper evidence; unknown outcomes remain HOLD.
+- Contract: API Reference v1.79. Re-judged Fleet at 26340 lines and protocol schemas.py at 1239; existing growth limits remain active.
+- 증거: Fleet suite completed with 1370 passed, 7 skipped, and one failure from the prior v1.77 reference pin. After updating that pin, test_mission_progress.py passed (16). Cell Job API/store/site-user: 11 passed; existing Mission API/store/service: 26 passed; task/API/dispatch contracts: 39 passed; protocol/compiler port: 23 passed; size verdict: 1 passed. Windows host SOURCE/LOCAL evidence only.
+- gate 변화: dispatcher/UDS/OMX submission and authenticated external goal-evidence producer wiring remain unimplemented. This is a Task 4 checkpoint, not device or ROS-SIM acceptance.
+
+## 2026-10-02 · uncommitted · 관제 콘솔 회차 6 — D-414 바로 동작(원클릭 정지·발견 카드·안내 축소)
+- 변경: console.js/install.js의 전체 정지에서 window.confirm 제거 — 비상 정지는 확인 없는 한 번 누름(D-92a 계보의 확인 시험을 원클릭 시험로 재작성, 대화상자 핀 console.js 3→2). install.js refreshDiscovery가 발견(mDNS) 장치 카드(이름·주소:포트·단계·상태)와 등록 버튼을 그린다(D-410 이관 때 빠진 렌더 충원).
+- 변경: 운용 문서의 상시 안내 문단(대형·신호등·지도·목표)은 제목 title로 물러나고 문단은 운용 상태가 쓴다. 기록(#log)이 '기록' 제목을 얻는다(aria-labelledby). 설치 문서의 발견 안내·카메라 문구도 title로.
+- 근거: D-414(사용자 지시 — "설명하지 말고 명확하게, 그냥 누르면 되게; mDNS 등록이 대충 보이기만 한다"). 비활성 사유(D-359 §5.3)는 글로 유지.
+- gate 변화: 없음.
+- 최종 증거: web_common 209 passed; fleet 1371 passed 7 skipped; 브라우저 — 원클릭 estop POST+대화상자 0회(1 passed), 설치 문서 발견 카드 2종+등록 버튼 렌더, 운용 문서 힌트 hidden/title 확인.
+
+## 2026-10-02 · uncommitted · 관제 콘솔 회차 7 — D-415 운용 가시성(로그 뷰어·진단 패널·신호등 빈 상태)
+- 변경: #log가 펼침 패널(details#log-panel, 기본 open)이 되고 지우기 버튼(#log-clear)과 최소 8줄/최대 24줄 높이를 얻었다. LOG_MAX 40→120. render() 끝에 refreshDiagnostics()가 진단 dd 4개(상태 갱신·발견 검색기·로봇 오류·카메라)를 채운다.
+- 변경: signals.js render()가 빈 상태에서 signals-hint의 hidden을 풀고 "설정된 신호등이 없습니다" 문장을 보인다(D-415 결정 3).
+- 변경: console.js refreshDiagnostics() — REACH_LABEL 참조를 직접 계산으로 바꿈(console.js 범위 밖이라 ReferenceError).
+- 근거: D-415(사용자 지시 — "로그도 볼 수 있게, 디버그 생각할 수 있게"). 계측: 로그 21px→144px, 진단 0→4 항목, 신호등 빈 상태 안내.
+- gate 변화: 없음.
+- 최종 증거: web_common 209 passed; fleet 문법·앱·큐·태스크 54 passed; 브라우저 — 로그 패널(min 144/max 432px)·지우기 버튼·진단('3대 · 갱신됨')·신호등 빈 상태 표시, 페이지 오류 0.
+
+## 2026-10-02 · bcce15c9d · fix(hub): 닫힌 소켓에 보내지 않음; 판단 요청 패널 뒤 여유 "비어 있음"/"알 수 없음"
+
+- 변경: `/ws/robots` 는 연결이 끊긴 뒤 답을 보내지 않는다(이유를 info 로). 판단 요청 보드가 `rear_state` 를 옮기고 패널은 `비어 있음`·`알 수 없음`(클래스 `stuck-fact-unknown`)을 구분한다(9300adf1d).
+- 증거: `test_hub_server.py`(거부된 사건 뒤에도 heartbeat 응답), `test_line_stuck_api.py`, `web/line-stuck.test.mjs` 초록.
+- gate 변화: 없음.
+
+## 2026-10-02 · uncommitted · test(fleet): replay late OMX success without clearing Mission HOLD
+- Change: replayed a lost submit receipt across independently reopened Fleet and OMX SQLite stores. Fleet reuses the persisted Action/attempt, records late success while retaining HOLD and object/workcell claims, and only confirms the goal after independent post-action camera and gripper evidence.
+- Evidence: `test/test_platform_cell_replay.py`; Fleet suite 1371 passed/7 skipped; OMX ActionStore 23 passed; replay/Skill boundary tests 10 passed.
+- Gate: SOURCE/LOCAL only; no ROS-SIM, Gazebo, device, or field promotion.
+
+## 2026-10-02 · uncommitted · test(fleet): track Mission event watermark across replay
+- Change: extend the two-ledger restart replay to verify four phase snapshots plus one terminal event, then a separate goal-confirmation event.
+- Evidence: targeted Mission, dispatcher, service, progress, task, OMX ActionStore, and replay suites: 77 passed; known-failure comparison: 0 new, 0 known.
+- Gate: SOURCE/LOCAL only; remaining interruption fixtures and expiry/occupancy cases are still open.
+
+## 2026-10-02 · uncommitted · verify(fleet): platform cell replay watermark
+- 변경: record platform cell replay watermark verification.
+- Evidence: replay test 1 passed; Fleet UI/API group 109 passed; formation 22 passed; four web suites 29 passed. Harness contract failure isolated to append-only history check.
+- Gate: SOURCE/LOCAL only; remaining interruption fixtures and expiry/occupancy cases are still open.
+
+## 2026-10-02 · uncommitted · verify(fleet): platform cell final regression
+- Change: record final checks after reconciling the parallel watermark evidence entry.
+- Evidence: replay 1 passed; Fleet UI/API and formation 131 passed; web suites 29 passed; harness contracts 57 passed with 24 known staleness warnings.
+- Gate: SOURCE/LOCAL only; interruption fixtures and expiry/occupancy cases remain open.
+
+## 2026-10-02 · uncommitted · fix(fleet): a legacy-null pose is never a last trusted pose (D-395 S2 Finding 1)
+- Change: `trust.trusted_xy` returns a pose only for LOCALIZED + map; the console stores no trusted pose from a `localization: null` snapshot. A robot first read null and then CANDIDATES has no trusted pose and blocks the whole track. A robot that reported localization and then goes null is untrusted (badge not legacy) until null for 30 s (`trust.LAPSED_GRACE_S`); then legacy again with its stale trusted pose dropped. Contract §3 records both rules.
+- Evidence: `test_localization_trust.py`, `test_server_traffic.py` (S2 sequence, null→LOCALIZED, LOCALIZED→CANDIDATES keep-out, lapsed robot, grace reset, true legacy); Fleet suite 1380 passed/7 skipped.
+- Gate: SOURCE/LOCAL only; the S2 bench must be rerun on the ROS box.
+
+## 2026-10-02 · 7e121603 · feat(fleet): D-417 전체 주행 취소(래치 없음)와 래치를 말하는 전체 비상 정지
+- 변경: 새 `POST /api/fleet/cancel-all`(operator, `server/cancel_all.py`) — 대기 작업 `CANCELED`/`FLEET_CANCEL_ALL`(행위자 = 운용자, 발행 래치·세대 그대로) → 열린 대형 해제 → 로봇마다(로봇끼리 동시) `swarm/cancel` → `navigation/cancel` → `line-follow/mode OFF`, 단계마다 계속. 로봇별 `cancelled`/`failed`/`unreachable`, `evidence: CORE_REPLY_ONLY`. 발행된 작업은 바꾸지 않고 `awaiting_core_result` 로 보인다(CORE `nav.canceled` 투영이 바꾼다). `DriveCancelFence` 가 디스패처 목표 호출을 감싸 취소와 겹친 발행은 다시 취소하고 `UNKNOWN`/`FLEET_CANCEL_ALL_DURING_DISPATCH`. 허브 `scatter_swarm_cancel`. `task_store` 취소 사유 인자(두 SELECT 를 합쳐 −5줄), `console.py` 불변. 운용 화면 발행 상태 줄에 "전체 주행 취소"(confirm, 로봇별 결과 기록), 상단 버튼 "전체 비상 정지 / 래치 · 로봇별 관리자 해제"(두 문서). FLEET SRS CTR-002 개정, API Ref v1.80(§10.2, §10.8, 핀 4곳).
+- 결정: D-417 Proposed(처음 D-414 로 썼으나 다른 세션의 D-414·D-415·D-416 과 겹쳐 옮김). 권고에서 벗어난 점: 발행된 작업은 Fleet 이 `CANCELED` 로 쓰지 않는다(상태 기계·D-170/D-293), 감사 예외는 비상 정지 하나로 둔다.
+- 증거: `src/site/fleet/test` + `test/architecture/test_module_structure.py` + 버전 핀·대화상자 계약 1431 passed/7 skipped, `test/known_failures.py` 새 실패 0. `test_cancel_all.py` 20(겹침 울타리는 울타리를 끈 변이 탐침에서 적색 확인). 옵트인 Chromium 전체 49 passed/18 failed — 18 개는 깨끗한 main(13e6d5e4)에서도 똑같이 실패(D-410 설치 문서 이관 뒤 index.html 을 보는 시험들, 넓은 머리 줄 시험 포함); 이 가지의 새 시험(전체 주행 취소·비상 정지 이름·모바일 머리)은 통과. Windows 호스트 SOURCE/LOCAL 증거뿐 — Gazebo·실물 정지 readback 미실행.
+- 크기: fleet 26543 으로 재판정(+203, 새 모듈 중심).
+- gate 변화: 없음.
+- 교훈: 래치 없는 정지 경로에는 "막 집힌 발행" 창이 남는다 — 발행 쪽에서 await 뒤에 다시 확인하는 울타리로 닫는다(docs/solutions 의 await 뒤 재확인 패턴).
+
+## 2026-10-02 · d3b0444b · fix(fleet): D-417 검토 반영 — CORE 확인된 취소가 로봇 점유를 푼다
+- 원인: 발행된 작업은 취소 뒤 `UNKNOWN`/`CORE_CANCEL_RESULT_PENDING` 으로 남아 `robot:` 점유를 쥐었다. `UNKNOWN` 을 대조하는 운용자 경로가 없어(작업 취소는 대기 작업만) 그 로봇은 새 작업을 영영 못 받았다.
+- 변경: (4256f34b) `server/cancel_all_store.py` — 창마다 기록(id·운용자·연/닫은 시각·로봇·취소한 대기 작업)과 진행 중 작업 표시. `task_results` 가 표시된 작업의 상관 `nav.canceled` 를 `HOLD`/`FLEET_CANCEL_ALL` 로 옮겨 점유를 푼다(표시 없으면 예전 그대로, 사건 없으면 작업·점유 그대로). 울타리: 목표 호출이 예외여도 재취소, 그 로봇을 위해 베이로 간 로봇도 취소, 명시 거절은 `FAILED`, Fleet 대기열에 남은 것은 `CANCELED`. `awaiting_core_result` 는 `ACCEPTED`/`RUNNING` + 창 이후 `UNKNOWN`. `console.cancel` 은 주소 미확인 로봇의 점유를 지우지 않는다. 주소 관문 거부는 `sent: false`. 화면은 실패 단계마다 코드, 0/0 은 경고. (d3b0444b) ADR·API Ref 문구와 D-416 연결.
+- 증거: `src/site/fleet/test` + `test_module_structure.py` + `test_web_dialog_contract.py` 1438 passed/7 skipped, known_failures 새 실패 0. `test_cancel_all.py` 31(탐침: 제출→발행→전체 주행 취소→`nav.canceled`→새 작업 발행; 사건 없는 경우). 옵트인 Chromium 전체 주행 취소 1 passed. Windows 호스트 증거뿐.
+- 크기: fleet 26793 재판정.
+- gate 변화: 없음.
+- 교훈: "UNKNOWN 이면 정직하다"는 그 UNKNOWN 을 푸는 길이 있을 때만 참이다 — 없으면 정직한 상태가 자원을 영원히 쥔다. 상태를 남기기 전에 그 상태의 출구를 찾는다.
+
+## 2026-10-02 · e223af71 · fix(fleet): D-417 재검토 — 표시를 목표 호출 전에, 시도·출처·유예로 맞춘다
+- 원인: (재현 탐침 `probe_ca.py`) 창 안에서 발행된 작업에 창의 취소가 먼저 닿으면 CORE `nav.canceled` 가 표시보다 먼저 와 `UNKNOWN`/`CORE_CANCEL_RESULT_PENDING` 이 되고, 재취소는 CORE 가 이미 쉬고 있어 사건을 다시 내지 않았다 — 점유가 영원히 남았다. 또 표시가 `task_id` 만 보아 나중의 무관한 취소(운용자·막힘·안전)도 `HOLD(FLEET_CANCEL_ALL)` 이 됐다.
+- 변경: 창이 열려 있으면 울타리가 목표 호출 전에 표시. 표시하는 쪽(울타리·창 닫기)이 창 안에서 이미 취소된 같은 시도를 같은 트랜잭션에서 `HOLD` 로 정리. 표시는 `(task_id, attempt_id)`·출처(window/fence), 기록에 `navigation/cancel` 응답 로봇. 투영은 시도 일치 + `data.source` 가 `api:*`(있을 때) + 창이 열려 있거나 닫힌 지 `HOLD_GRACE_S`(30 s) 안이고 로봇 응답 또는 울타리 재취소일 때만 `HOLD`. `HOLD(FLEET_CANCEL_ALL)` 뒤 늦은 상관 사건·발행 응답은 로그. 울타리 태거는 창별(`window(tag)`), `except (Exception, CancelledError)`, 표는 `FleetTaskStore` 가 생성(색인 `(task_id, attempt_id)`), 닫힌 지 30일 넘은 기록 정리(작업 일지에는 정리 규칙이 없다), 기록 실패 시 `record_error: CANCEL_ALL_RECORD_UNAVAILABLE` 과 미완 작업 대체.
+- 증거: 탐침 — 고치기 전 "A final UNKNOWN CORE_CANCEL_RESULT_PENDING / A next dispatch -> None / B -> HOLD", 고친 뒤 "A final HOLD FLEET_CANCEL_ALL / A next dispatch -> ACCEPTED / B -> UNKNOWN CORE_CANCEL_RESULT_PENDING". `test_cancel_all.py` 41. `src/site/fleet/test` + `test_module_structure.py` + `test_web_dialog_contract.py` 1448 passed/7 skipped, known_failures 새 실패 0. Windows 호스트 증거뿐.
+- 크기: fleet 26953 재판정, `task_store.py` 1057(상한 1060).
+- gate 변화: 없음.
+- 교훈: 비동기 증거(사건)와 그 증거를 해석할 표시는 어느 쪽이 먼저 와도 같은 결과가 나와야 한다 — 표시를 미리 달고, 늦게 단 표시는 이미 온 증거를 다시 읽는다.
+
+## 2026-10-02 · uncommitted · docs(adr): 전체 주행 취소 ADR D-417 → D-421
+- 변경: 다른 세션이 main 에서 D-417(콘솔 밀도 정리)을 잡아 이 가지의 전체 주행 취소 ADR 을 D-421 로 옮겼다(D-418 origin/main, D-419 SAF-003, D-420 Pinky 장치 동작). 파일 이름, ADR Log 행, FLEET SRS CTR-002 링크, API Ref, DESIGN.md, 코드·시험 주석. ADR 안의 Pinky 장치 동작 ADR 참조는 D-416 → D-420. 위의 기록들에 적힌 D-417 은 당시 번호다(고치지 않는다).
+- 증거: 아래 커밋의 시험 기록.
+- gate 변화: 없음.
+
+## 2026-10-02 · uncommitted · feat(fleet): D-421 전체 주행 취소를 main d5b3bd10 위에 다시 얹음
+- 변경: 가지 `feat/d414-fleet-cancel-all`(옛 main 13e6d5e4 기반)의 이 기능 변경만 새 가지 `feat/d421-fleet-cancel-all` 로 옮겼다(main 의 D-414~D-418·D-420 콘솔·장치 작업 위). API Ref 는 main 이 이미 v1.80 이라 v1.81(핀 4곳). 콘솔 확인 수 핀은 main 의 2(D-414 비상 정지 확인 없음) + 전체 주행 취소 1 = 3. `adr_gaps` 의 D-421 예약 제거.
+- 판단: main 의 브라우저 시험 파일은 옛 비상 정지 확인 시험을 지우며 `DELAYED_FORMATION`·`HOLDING_FORMATION`·`UNREACHABLE_SNAPSHOT` 정의까지 잃었다(쓰는 시험은 남음). 이 가지의 같은 자리 정의를 살려 두었다.
+- 위 기록들의 D-414·D-417 은 당시 번호다. main dae5479c 위로 다시 얹으며 비상 정지는 main 의 글자 없는 팔각 아이콘을 따랐다 — 위 기록의 "전체 비상 정지 / 래치 · 로봇별 관리자 해제" 글자는 이제 접근 이름·	itle "전체 비상 정지 (래치 · 로봇별 관리자 해제)" 이다(모바일 머리 시험 갱신).
+- 증거: src/site/fleet/test 1414 passed/7 skipped, 	est/architecture 81 passed/1 skipped, known_failures 새 실패 0; 버전 핀·대화상자 계약 7 passed; 옵트인 Chromium 전체 주행 취소·비상 정지 한 번 누름 등 4 passed. 	est_holding_formation_enables_resume_and_warns 는 main 의 신호등 문구(signals.yaml)와 시험이 어긋나 실패한다 — 이 가지와 무관(main 에서는 HOLDING_FORMATION 정의가 없어 그 전에 실패했다).
+- 크기: fleet 27134 재판정(main 26498).
+- gate 변화: 없음.
+
+## 2026-10-02 · uncommitted · test(fleet): retain ownership after grant expiry while Action is running
+- Change: add an expired-grant replay where a running local Action remains authoritative after both stores reopen; assert no resubmit, HOLD, retained DISPATCHING claims, and rejection of a conflicting Mission admission.
+- Evidence: `test/test_platform_cell_replay.py` 2 passed.
+- Gate: SOURCE/LOCAL only; stop/cancel interruptions and independent physical-occupancy evidence remain open.
+
+
+## 2026-10-02 · uncommitted · fix(fleet): require durable Action success when recovering goal HOLD
+- Change: verify exact Action/attempt terminal proof inside completion transaction and authenticated producer callback; retain claims for non-success outcomes. Add restart replay fixtures for accepted, cancel-acknowledged and release-command states plus stale/conflicting goal evidence.
+- Evidence: focused Mission, Action, provenance and replay suites 101 passed; changed Python files pass flake8.
+- Gate: SOURCE/LOCAL only. Actual CELL_TRANSFER CellJob recovery and ROS-SIM acceptance remain open; Task 7 is IN PROGRESS.
+
+
+## 2026-10-02 · uncommitted · fix(fleet): retain Cell transfer claims across site restart
+- Change: atomically verify all CellJob claims and mark them DISPATCHING with the persisted transfer attempt. Gateway startup fences obsolete CellJob authority to HOLD, preserving grants/results and blocking automatic next-step submission. Correct the migration header to keep Tasks 4-5 in progress. Re-judge Fleet size at 27303 for these journal/admission duties; split plan and +150 allowance remain unchanged.
+- Evidence: CellJob/API/task/app 71 passed; full Fleet 1425 passed/7 skipped, known-failure comparison 0 new/0 known. Changed source passes flake8; API fixture imports retain the existing E402 bootstrap exception.
+- Gate: SOURCE/LOCAL only. CellJob dispatch/reconciliation composition, independent step-goal recovery, ROS-SIM and device acceptance remain open.
+
+
+## 2026-10-02 · uncommitted · styles.css 흐림 원시 값 → 공용 토큰
+- 변경: 지도 빈 상태 아이콘(.map-empty-icon)의 opacity: 0.4를 var(--disabled-opacity)로 바꿨다(0d579299d가 들여온 값). 회귀였고 known_failures.txt에 등록된 적 없는 실패였다.
+- 근거: D-294 흐림 척도 계약(test_dimming_uses_the_disabled_token_not_an_opacity_literal).
+- gate 변화: 없음.
+- 최종 증거: test_surface_typography_focus_contracts.py 6 passed.
+
+
+## 2026-10-02 · uncommitted · fix(fleet): D-395 rev. 11 — 거리 없는 사각형 목격은 근거가 아니다
+
+- 원인: 후처리 감사(2026-10-02). 실제 프레임 506장의 거짓 사각형 검출 20건이 모두 거리 없음이었다. 예전 `square_cue` 는 방위만 맞으면 +1, 아니면 -1 을 줬고 가중치가 가장 크다(3.0).
+- 변경: `cues.square_cue` 는 `range_m` 이 None 인 목격을 무시한다. `arbiter.score` 는 거리 있는 목격만 넘겨, 거리 없는 목격뿐이면 사각형 단서가 모든 후보에서 0 이다. 선로 계약(`range_m>0|null`)은 그대로이고 API Ref 에 한 문장을 더했다.
+- 증거: `test_localization_cues.py` 사각형 표 갱신(+2), `test_localization_arbiter.py` +1(거리 없는 목격만으로는 결정 없음). fleet localization 176 passed.
+- gate 변화: 없음.
+
+## 2026-10-03 · uncommitted · fix(fleet): preserve Cell transfer phase receipts over UDS v2
+- Change: accept the separate CELL_TRANSFER grant in the Fleet Action transport and select existing UDS v2 for submission, lookup and exact-attempt cancel. Missing phase summaries fail closed. Record the shared phased contract in API Reference v1.82 and update the current-version document checks.
+- Evidence: producer/consumer/legacy dispatcher/API contract suites 55 passed; architecture and dependency boundaries 38 passed; changed Python files pass flake8. Full Fleet regression 1431 passed/7 skipped; known-failure comparison 0 new/0 known. Log/generated contracts 6 passed; harness lint 0 errors/24 existing freshness warnings.
+- Gate: SOURCE/LOCAL only. CellJob dispatch/reconciliation composition and ROS-SIM acceptance remain open; transport changes do not enable dispatch.
+
+
+## 2026-10-03 · uncommitted · feat(fleet): dispatch admitted ordered Cell transfers
+- Change: compose the opt-in CellJob dispatcher in the existing single site worker with pinned cell configuration revisions. Persist the canonical grant and DISPATCHING claims before one local submission; reconcile/cancel the exact attempt without resubmission after lost replies or grant expiry. Readback atomically checks live authority/generation, duplicate receipt identity and durable phase history. Late success after HOLD retains claims and cannot start the next step. Re-judge Fleet size at 27684 after current-main integration; split verdict and +150 allowance remain unchanged.
+- Evidence: full Fleet regression 1451 passed/7 skipped, known-failure comparison 0 new/0 known before the final phase-history correction. Final dispatcher/API/store/legacy/app/replay suites 107 passed; integrated-main localization regression 54 passed; architecture/dependency boundary suites 38 passed. Independent review found and then verified fixes for in-process stop, phase-history conflicts and superseded phase-success evidence; final review 31 passed with no remaining Important/Critical checkpoint findings. Changed runtime and dispatcher/API test Python files pass flake8. Align the FastAPI contract description with API Reference v1.82 (3 protocol-version tests passed); harness lint reports 0 errors/24 existing freshness warnings.
+- Gate: SOURCE/LOCAL only. Default dispatch is disabled. Registered/fresh Cell goal production and held-success goal recovery, actual OMX owner/provider integration, Gazebo, device and field acceptance remain open; D-413 Tasks 4-5 and 7 stay IN PROGRESS.
+
+
+## 2026-10-03 · uncommitted · fix(fleet): require durable Cell success for goal recovery
+- Change: move Cell goal completion into its own journal module and require the latest terminal SUCCEEDED event for the exact step, Action and attempt inside the SQLite completion transaction. Permit independently confirmed held success, preserve next-step WAITING/HOLD after authority changes, reject rewritten goal evidence and empty provenance, and keep claims until every ordered goal is confirmed. Dispatch is not rearmed by goal confirmation.
+- Evidence: CellJob/Mission/phase-contract regression 89 passed; independent review 42 passed with no remaining Important/Critical checkpoint findings. Current-main platform contract checks pass 26 tests with explicit source paths (not installed-artifact proof). Quick tier 96 passed/24 existing freshness warnings. Changed Python files pass flake8. Full Fleet regression 1468 passed/7 skipped, known-failure comparison 0 new/0 known; final log/generated-record checks 3 passed and harness lint 0 errors/24 existing freshness warnings.
+- Gate: SOURCE/LOCAL only. Public registered/fresh Cell goal production, actual two-ledger Cell replay, real OMX owner/provider composition and ROS-SIM remain required. Tasks 4-5 and 7 remain IN PROGRESS.
+
+
+## 2026-10-03 · uncommitted · feat(fleet): validate registered Cell goal evidence
+- Change: add separate bounded evidence schema, pinned environment credential registry and internal submission service. Check exact saved grant identity, producer scope/expiry, initial observation, model/gripper freshness and post-terminal ordering; revalidate pending evidence on reconciliation. Reject available invalid evidence before persistence and atomically bind completion to the verified latest terminal event ID. Re-judge Fleet at 28001 lines with unchanged split verdict and +150 allowance.
+- Evidence: focused Cell service/store/dispatcher checks 48 passed; registry checks 10 passed; independent review 44 passed with no remaining Critical/Important checkpoint findings; changed Python files pass flake8. Full Fleet and final quick/harness results follow in a separate append-only row.
+- Gate: internal SOURCE/LOCAL only. HTTP/app callback, independent Gazebo evaluator, canonical two-ledger Cell replay and ROS-SIM remain open; Tasks 4-5 and 7 remain IN PROGRESS. Default dispatch remains disabled.
+
+
+## 2026-10-03 · uncommitted · verify(fleet): registered Cell evidence checkpoint
+- Change: verify the internal Cell evidence checkpoint before local integration; no gate promotion.
+- Evidence: quick tier 96 passed/24 existing freshness warnings; harness lint 0 errors/24 existing freshness warnings; focused Cell service/store/dispatcher 48 passed, registry 10 passed and independent review 44 passed. Full Fleet regression is still running at commit preparation and is not claimed as passed.
+- Gate: SOURCE/LOCAL only. Public ingress, app callback, independent evaluator and ROS-SIM remain open.
+
+
+## 2026-10-03 · uncommitted · feat(fleet): compose public Cell goal producer ingress
+- Change: Add opt-in pinned Cell registry and strict shared HTTP ingress; wire pending goal reconciliation into the existing Cell dispatcher. Preserve durable successful Action receipts when goal callback validation/storage fails. Isolate credentials, reject whitespace/control credentials, confirm ordered goals through the actual proposal/admission HTTP surface and release claims only after final completion. Move the evidence contract to foundation without a Fleet duplicate.
+- Evidence: App/service/registry/legacy checks 110 passed; final API/registry/legacy/version-document checks 64 passed; independent final review 25 passed; changed Python passes flake8. Prior 778f5029 full Fleet shards yielded 1498 passed/7 skipped with one Hub startup timeout, which passed isolated on unchanged main (1 passed in 9.25s); new public-composition full regression and quick tier are running.
+- Gate: SOURCE/LOCAL only. Actual OMX provider, independent Gazebo evaluator, canonical two-ledger Cell replay and ROS-SIM remain open. Default dispatch remains disabled.
+
+
+## 2026-10-03 · uncommitted · verify(fleet): public Cell ingress regression
+- Change: verify the final public Cell producer composition before local integration; no gate promotion.
+- Evidence: final full Fleet regression in four file shards 1514 passed/7 skipped, all four process exit codes 0, with no retries on the final public code. Foundation/protocol alignment 427 passed/1 skipped; app/service/registry/legacy checks 110 passed, final API/registry/legacy/version checks 64 passed, independent final review 25 passed. Quick tier 96 passed/24 existing freshness warnings; record contracts 3 passed; harness lint 0 errors/24 existing freshness warnings. Changed Python passes flake8.
+- Gate: SOURCE/LOCAL only. Canonical two-ledger Cell replay, actual OMX owner/provider composition, independent model/gripper evaluation and ROS-SIM remain open.

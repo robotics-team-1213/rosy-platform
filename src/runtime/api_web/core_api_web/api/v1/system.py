@@ -205,7 +205,7 @@ def capabilities(_: AuthContext = Depends(viewer), svc: CoreServicesLike = Depen
     # not failed". The inventory descriptors' presentation states map to
     # these in the D-347 table, not in code.
     data["lifecycle"] = lifecycle_from(svc.capability.to_dict(), truth.reasons)
-    # `controls` (v1.76 additive, D-411 B): rosy.controls/1, what Pilot may draw.
+    # `controls` (v1.87 additive, D-411 B): rosy.controls/1, what Pilot may draw.
     # Line autonomy is announced when CORE has the line-follow service. No honest
     # idle signal says a line can be followed now (observations arrive only after
     # the mode is on), so readiness stays with PUT /line-follow/mode and its status.

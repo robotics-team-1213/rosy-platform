@@ -145,7 +145,8 @@ class _Ids(HTMLParser):
 
 def _page() -> _Ids:
     parser = _Ids()
-    parser.feed((WEB / "index.html").read_text(encoding="utf-8"))
+    # D-410 — 기기 등록·카메라 연결 승인은 설치 화면(install.html)에 산다.
+    parser.feed((WEB / "install.html").read_text(encoding="utf-8"))
     return parser
 
 
@@ -167,7 +168,7 @@ def test_the_camera_section_sits_in_device_link_beside_robot_enrollment_with_a_r
     assert "data-role-lock" in section["attrs"]
     assert page.ids["camera-role-lock"]["attrs"].get("class") == "role-lock-note"
     assert page.order.index("robot-enrollment") < page.order.index("camera-link")
-    heading = (WEB / "index.html").read_text(encoding="utf-8")
+    heading = (WEB / "install.html").read_text(encoding="utf-8")
     assert '<h4 id="camera-link-heading">카메라 연결 승인</h4>' in heading
     for name in ("camera-approve-source", "camera-approve-code"):
         assert "ui-field" in page.ids[name]["attrs"].get("class", ""), name
@@ -175,7 +176,8 @@ def test_the_camera_section_sits_in_device_link_beside_robot_enrollment_with_a_r
 
 
 def test_the_shell_wires_the_panel_and_reasks_it_on_every_login():
-    shell = (WEB / "console.js").read_text(encoding="utf-8")
+    # D-410 — 카메라 연결 승인 패널은 설치 화면 엔트리(install.js)가 잇는다.
+    shell = (WEB / "install.js").read_text(encoding="utf-8")
     module = (WEB / "camera-pairing.js").read_text(encoding="utf-8")
     assert 'import { createCameraPairingPanel } from "./camera-pairing.js";' in shell
     assert "dialogs: { confirmIrreversible, openLiveDialog }" in shell

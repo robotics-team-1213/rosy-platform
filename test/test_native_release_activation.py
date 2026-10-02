@@ -337,3 +337,114 @@ def test_stopping_the_runtime_waits_for_every_unit_that_is_part_of_it(monkeypatc
 def test_the_runtime_part_of_units_are_core_io_and_camera():
     # Guards the helper above against reading an empty directory.
     assert _part_of_runtime_units() == {"rosy-core.service", "rosy-io.service", "rosy-camera.service"}
+
+
+# --- D-412 review N1: a precondition the activator runs right before stopping --------------
+
+
+def test_a_refusing_precheck_stops_activation_before_the_runtime_stops(native_case):
+    manager_type, root, key, _private, first, _second, links = native_case
+    runtime = RuntimeRecorder()
+    calls = []
+
+    def precheck() -> None:
+        calls.append("precheck")
+        raise ValueError("NATIVE_PRECHECK_REFUSED: robot is moving")
+
+    manager = manager_type(root=root, public_key=key, runtime=runtime, links=links, precheck=precheck)
+
+    with pytest.raises(ValueError, match="NATIVE_PRECHECK_REFUSED"):
+        manager.activate(first.name)
+
+    assert calls == ["precheck"]
+    assert runtime.actions == []
+    assert links.values["current"] is None
+    assert not (root / "var/lib/rosy/releases/native-activation.json").exists()
+
+
+def test_the_precheck_runs_after_verification_and_before_the_stop(native_case):
+    manager_type, root, key, _private, first, _second, links = native_case
+    order = []
+    runtime = RuntimeRecorder()
+
+    def recording_runtime(action: str) -> None:
+        order.append(action)
+        runtime(action)
+
+    manager = manager_type(root=root, public_key=key, runtime=recording_runtime, links=links,
+                           precheck=lambda: order.append("precheck"))
+    manager.activate(first.name)
+    assert order == ["precheck", "stop", "start"]
+
+    (first / "install/.rosy-release").write_text("tampered", encoding="utf-8")
+    order.clear()
+    links.values["current"] = None
+    with pytest.raises(ValueError):
+        manager.activate(first.name)
+    assert order == []  # a release that does not verify never reaches the precheck
+
+
+def test_the_precheck_command_comes_from_the_environment(monkeypatch):
+    import sys
+
+    from deploy.robot.pinky_pro.native.native_release import PRECHECK_ENV, _env_precheck
+
+    python = sys.executable.replace("\\", "/")
+    monkeypatch.delenv(PRECHECK_ENV, raising=False)
+    assert _env_precheck() is None
+
+    monkeypatch.setenv(PRECHECK_ENV, f'"{python}" -c "import sys; print(\'moving\'); sys.exit(3)"')
+    with pytest.raises(ValueError, match="NATIVE_PRECHECK_REFUSED.*moving"):
+        _env_precheck()()
+
+    monkeypatch.setenv(PRECHECK_ENV, f'"{python}" -c "pass"')
+    _env_precheck()()  # exit 0 passes
+
+
+def test_the_cli_activation_runs_the_environment_precheck(native_case, monkeypatch, capsys):
+    import sys
+
+    from deploy.robot.pinky_pro.native import native_release
+
+    _manager_type, root, key, _private, first, _second, _links = native_case
+    python = sys.executable.replace("\\", "/")
+    monkeypatch.setenv(native_release.PRECHECK_ENV, f'"{python}" -c "import sys; sys.exit(3)"')
+
+    code = native_release._main(["--root", str(root), "--public-key", str(key),
+                                 "activate", "--release-id", first.name])
+
+    result = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
+    assert code == 1
+    assert result["ok"] is False and result["error"].startswith("NATIVE_PRECHECK_REFUSED")
+    assert not (root / "opt/rosy/current").exists()
+
+
+def test_only_the_precheck_busy_exit_is_a_refusal(monkeypatch):
+    # Verification review M2: exit 3 is "robot busy"; any other exit is a failed precheck.
+    import sys
+
+    from deploy.robot.pinky_pro.native.native_release import PRECHECK_ENV, _env_precheck
+
+    python = sys.executable.replace("\\", "/")
+    monkeypatch.setenv(PRECHECK_ENV, f'"{python}" -c "import sys; sys.exit(1)"')
+    with pytest.raises(ValueError, match="^NATIVE_PRECHECK_FAILED: exit 1"):
+        _env_precheck()()
+    monkeypatch.setenv(PRECHECK_ENV, f'"{python}" -c "import sys; sys.exit(3)"')
+    with pytest.raises(ValueError, match="^NATIVE_PRECHECK_REFUSED"):
+        _env_precheck()()
+    monkeypatch.setenv(PRECHECK_ENV, '"/definitely/not/a/program"')
+    with pytest.raises(ValueError, match="^NATIVE_PRECHECK_FAILED: precheck could not run"):
+        _env_precheck()()
+
+
+def test_a_precheck_that_hangs_times_out_as_failed(monkeypatch):
+    # Verification review L6
+    import sys
+
+    from deploy.robot.pinky_pro.native import native_release
+
+    python = sys.executable.replace("\\", "/")
+    monkeypatch.setattr(native_release, "PRECHECK_TIMEOUT_S", 1)
+    monkeypatch.setenv(native_release.PRECHECK_ENV, f'"{python}" -c "import time; time.sleep(30)"')
+    with pytest.raises(ValueError, match="^NATIVE_PRECHECK_FAILED: precheck could not run"):
+        native_release._env_precheck()()

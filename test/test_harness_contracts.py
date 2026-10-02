@@ -246,6 +246,26 @@ def test_logs_must_not_lose_or_edit_committed_entries():
     assert not harness.is_append_only(GOOD_LOG, GOOD_LOG.replace("- 변경: a", "- 변경: rewritten"))
 
 
+def test_logs_allow_exact_reconciliation_of_concurrent_pending_evidence():
+    heading = "## 2026-10-02 · uncommitted · test(fleet): track Mission event watermark across replay"
+    pending = (
+        GOOD_LOG
+        + f"\n{heading}\n"
+        + "- Change: extend the two-ledger restart replay to verify four phase snapshots plus one terminal event, "
+        + "then a separate goal-confirmation event.\n"
+        + "- Evidence: targeted Mission, dispatcher, service, progress, task, OMX ActionStore, and replay suites: "
+        + "pending final worktree verification.\n"
+        + "- Gate: SOURCE/LOCAL only; remaining interruption fixtures and expiry/occupancy cases are still open.\n"
+    )
+    verified = pending.replace(
+        "pending final worktree verification.",
+        "77 passed; known-failure comparison: 0 new, 0 known.",
+    )
+    assert harness.is_append_only(pending, verified)
+    changed_scope = verified.replace("four phase snapshots", "three phase snapshots")
+    assert not harness.is_append_only(pending, changed_scope)
+
+
 def test_logs_tolerate_merge_reordering_but_not_loss_or_edits():
     """두 세션이 각자 항목을 추가한 브랜치를 병합하면 순서가 섞인다 — 보존만 되면 합격."""
     a = GOOD_LOG + "\n## 2026-09-20 · abcdef1 · a-entry\n\n- 변경: a1\n"

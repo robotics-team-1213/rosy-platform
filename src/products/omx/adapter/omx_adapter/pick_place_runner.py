@@ -15,6 +15,7 @@ from core_common.protocol.schemas import FleetActionGrant
 
 from .action_runner import StopFence
 from .command_owner import TrajectoryCommand
+from .gripper_contract import GripperObservation, verify_held_object
 from .local_stop import LocalStopBlocked
 from .manipulation_plan import (
     ExecutionStateSnapshot,
@@ -77,6 +78,8 @@ class PickPlaceRunner:
         monotonic: Callable[[], float] = time.monotonic,
         now: Callable[[], datetime] | None = None,
         cell_profile: CellPlanningProfile | None = None,
+        gripper_readback: Callable[[], GripperObservation] | None = None,
+        held_object_id: str | None = None,
     ) -> None:
         self.recorder = recorder
         self.grant = grant
@@ -100,6 +103,10 @@ class PickPlaceRunner:
         self._last_event_sequence = 0
         self._cancel_ack_recorded = False
         self._last_command_state_sequence = -1
+        # Feedback journaling (C3b A2): RUNNING is journalled once per goal; later feedback
+        # is only counted, and the count is journalled with the terminal result.
+        self._running_journaled_goal: str | None = None
+        self._feedback_events = 0
 
         if not isinstance(plan, (ResolvedPickPlacePlan, CellTransferPlan)):
             raise ValueError("plan must be a validated ResolvedPickPlacePlan or CellTransferPlan")
@@ -118,6 +125,13 @@ class PickPlaceRunner:
                 now_monotonic_s=monotonic(),
             )
             self._unchecked_joints = frozenset({cell_profile.gripper_joint})
+            # A4 (C3b): the hold is re-read right before release (C3 run8 dropped the block
+            # in transit and still passed every gate).
+            if not callable(gripper_readback) or not isinstance(held_object_id, str) or not held_object_id:
+                raise ValueError("a CellTransferPlan requires gripper_readback and held_object_id")
+        self._cell_profile = cell_profile if isinstance(plan, CellTransferPlan) else None
+        self.gripper_readback = gripper_readback
+        self.held_object_id = held_object_id
         if not callable(current_execution_state):
             raise ValueError("fresh execution-state and monotonic clock providers are required")
         if isinstance(max_joint_state_age_s, bool):
@@ -154,6 +168,14 @@ class PickPlaceRunner:
         if not math_is_aware(self.now()):
             raise ValueError("clock must return timezone-aware timestamps")
 
+    def _tolerances(self, phase: PlannedMotionPhase) -> dict[str, float]:
+        """Caller tolerances; for CELL_TRANSFER the accepted profile's after-grasp per-joint
+        overrides replace them for that phase (C3b A5), never the plan's own claim."""
+        tolerances = dict(self.start_state_tolerances)
+        if self._cell_profile is not None:
+            tolerances.update(self._cell_profile.phase_start_state_tolerance_rad.get(phase.phase_id, {}))
+        return tolerances
+
     @property
     def active_phase_id(self) -> str | None:
         with self._lock:
@@ -180,7 +202,7 @@ class PickPlaceRunner:
             "execution_state_sequence": state.sequence,
             "execution_joint_positions": dict(state.joint_positions),
             "start_state_positions": phase.start_state_positions,
-            "start_state_tolerances": self.start_state_tolerances,
+            "start_state_tolerances": self._tolerances(phase),
             "calibration_revision": phase.calibration_revision,
             "transform_revision": phase.transform_revision,
             "planning_scene_revision": phase.planning_scene_revision,
@@ -207,11 +229,18 @@ class PickPlaceRunner:
                 or state.transform_revision != phase.transform_revision
                 or state.planning_scene_revision != phase.planning_scene_revision):
             raise ValueError("phase start state calibration, transform, or planning scene changed")
+        tolerances = self._tolerances(phase)
+        # Owner reference = the planned start (main 11ae6e70: the tolerance budget stays the
+        # planned one). Exception: the CELL_TRANSFER gripper after grasp, whose readback is the
+        # item width, not the plan (D-402 §3d); it is bound to the value checked here instead.
+        expected_start: dict[str, float] = {}
         for name, expected in zip(phase.joint_names, phase.start_state_positions):
             if name in self._unchecked_joints and phase.phase_id in _AFTER_GRASP_PHASES:
+                expected_start[name] = state.joint_positions[name]
                 continue
-            if abs(state.joint_positions[name] - expected) > self.start_state_tolerances[name]:
+            if abs(state.joint_positions[name] - expected) > tolerances[name]:
                 raise ValueError("phase start state is outside the planned tolerance")
+            expected_start[name] = expected
 
         command = self.command_for_phase(phase)
         if not isinstance(command, TrajectoryCommand):
@@ -225,13 +254,14 @@ class PickPlaceRunner:
                 or command.trajectory_points != phase.points):
             raise ValueError("phase command identity/path does not match the validated plan")
         self._last_command_state_sequence = state.sequence
-        # Rebind only after an explicit bounded start-state and revision match;
-        # ArmCommandOwner checks this sequence again at the final dispatch edge.
+        # Rebind only after an explicit bounded start-state and revision match. The journal
+        # write follows and joint states keep arriving, so ArmCommandOwner repeats this check
+        # on its newest fresh state under its lock at the final dispatch edge (C3b A1, b0979ad6).
         return replace(
             command,
             source_state_sequence=state.sequence,
-            expected_start_state_positions=dict(zip(phase.joint_names, phase.start_state_positions)),
-            start_state_tolerances=self.start_state_tolerances,
+            expected_start_state_positions=expected_start,
+            start_state_tolerances=tolerances,
         ), state
 
     def start(self) -> dict[str, object]:
@@ -264,6 +294,14 @@ class PickPlaceRunner:
             raise RuntimeError("prior phase identity is not the coordinator's active phase")
         if self._current_goal_id != previous["driver_goal_id"]:
             raise RuntimeError("prior terminal result does not match the active ROS goal")
+        if isinstance(self.plan, CellTransferPlan) and next_phase.phase_id == "release":
+            try:
+                verify_held_object(self.gripper_readback(), object_id=self.held_object_id,
+                                   now=self.monotonic(), max_age_s=self.max_joint_state_age_s)
+            except Exception as exc:
+                self.recorder.hold(reason="ITEM_LOST_IN_TRANSIT")
+                raise RuntimeError("item_lost_in_transit: gripper no longer proves the hold; "
+                                   "release is not submitted") from exc
         return self._submit_phase(next_phase, first=False)
 
     def _submit_phase(self, phase: PlannedMotionPhase, *, first: bool) -> dict[str, object]:
@@ -283,6 +321,8 @@ class PickPlaceRunner:
             self._cancel_ack_recorded = False
             self._pending_events.clear()
             self._pending_overflow = False
+            self._running_journaled_goal = None
+            self._feedback_events = 0
             self._submitting = True
 
         try:
@@ -327,17 +367,20 @@ class PickPlaceRunner:
 
         phase_rows = self.recorder.phases()
         recorded = next((row for row in phase_rows if row["phase_id"] == phase.phase_id), None)
-        with self._lock:
-            self._submitting = False
-            self._current_goal_id = recorded["driver_goal_id"] if recorded else None
-            pending = tuple(self._pending_events)
-            overflow = self._pending_overflow
-            self._pending_events.clear()
-        if overflow:
-            self.recorder.hold(reason="ROS_EVENT_BUFFER_OVERFLOW")
-        else:
-            for event in pending:
-                self.on_ros_goal_event(event)
+        # Hold the event lock from clearing _submitting until the queue is replayed: a live
+        # event (e.g. feedback) must not overtake a queued GOAL_ACCEPTED (C3b run9).
+        with self._event_lock:
+            with self._lock:
+                self._submitting = False
+                self._current_goal_id = recorded["driver_goal_id"] if recorded else None
+                pending = tuple(self._pending_events)
+                overflow = self._pending_overflow
+                self._pending_events.clear()
+            if overflow:
+                self.recorder.hold(reason="ROS_EVENT_BUFFER_OVERFLOW")
+            else:
+                for event in pending:
+                    self._process_ros_goal_event(event)
         if result.get("reason") == "STOP_GENERATION_FENCED":
             return result
         phase_rows = self.recorder.phases()
@@ -387,7 +430,9 @@ class PickPlaceRunner:
                 self._pending_events.append(event)
                 return True
             if event.sequence <= self._last_event_sequence:
-                return False
+                # Feedback from another callback thread can be overtaken by a later event
+                # (re-review N1). It is telemetry: acknowledge, do not journal, do not fail.
+                return event.kind == "RUNNING_FEEDBACK"
             self._last_event_sequence = event.sequence
 
         if event.kind in {"GOAL_ACCEPTANCE_UNKNOWN", "GOAL_REJECTED"}:
@@ -463,6 +508,12 @@ class PickPlaceRunner:
             return True
         if goal_id is None or event.goal_id != goal_id:
             return False
+        if event.kind == "RUNNING_FEEDBACK":
+            with self._lock:
+                self._feedback_events += 1
+                if self._running_journaled_goal == goal_id:
+                    # ~100 Hz JTC feedback: no storage I/O in the ROS callback (C3 run4).
+                    return True
         parent = self.recorder.parent()
         if (parent is not None and parent["state"] in {"UNKNOWN", "HOLD"}
                 and any(row["phase_id"] == phase.phase_id and row["state"] == "UNKNOWN"
@@ -481,6 +532,8 @@ class PickPlaceRunner:
             parent = self.recorder.parent()
             if parent is not None and parent["state"] == "ACCEPTED":
                 self.recorder.mark_action_running(driver_goal_id=goal_id)
+            with self._lock:
+                self._running_journaled_goal = goal_id
             return True
         if event.kind == "CANCEL_ACK":
             if self._cancel_ack_recorded:
@@ -502,6 +555,8 @@ class PickPlaceRunner:
             else:
                 outcome = "FAILED"
             observed_at = self.now()
+            with self._lock:
+                feedback_events = self._feedback_events
             if not math_is_aware(observed_at):
                 self.recorder.hold(reason="LOCAL_CLOCK_INVALID")
                 return False
@@ -510,7 +565,7 @@ class PickPlaceRunner:
                 outcome=outcome, result_source="ros-action-result",
                 result_observed_at=observed_at.astimezone(timezone.utc).isoformat(),
                 result={"status": event.status, "result_code": event.result_code,
-                        "event_sequence": event.sequence},
+                        "event_sequence": event.sequence, "feedback_events": feedback_events},
             )
             return True
         return False

@@ -31,10 +31,19 @@ SUSPECT_REASON = "fleet_monitor"
 #: Anchor provenance (S1 finding 3): a LOCALIZED pose that moves more than
 #: JUMP_M + JUMP_SPEED_MPS * dt, or turns more than JUMP_YAW_RAD + JUMP_RATE_RADPS * dt,
 #: between two polls was re-set, not driven (0.5 m / 86 degrees at the 0.5 s poll).
+#: S1 run 3 T1: dt is capped at JUMP_DT_CAP_S, so the bound never passes 0.75 m / 2.5 rad
+#: (< pi: a 180-degree flip always counts) however far apart the polls are. A slow poll
+#: may then drop the anchor of a robot that really drove or turned; that only loses
+#: evidence until the robot re-localizes (fail safe).
 JUMP_M = 0.25
 JUMP_SPEED_MPS = 0.5
 JUMP_YAW_RAD = 0.5
 JUMP_RATE_RADPS = 2.0
+JUMP_DT_CAP_S = 1.0
+#: The mirror signature, independent of dt: the new pose is this close to the previous
+#: pose's 180-degree twin about the map centre.
+MIRROR_M = 0.3
+MIRROR_YAW_RAD = 0.5
 #: Cues from the world itself; `peers` anchors only because Context.peers holds anchors.
 WORLD_CUES = ("paint", "slot", "square")
 #: A peer observation is an object this close to the peer's reported pose or its mirror.
@@ -96,10 +105,19 @@ def disagrees(reported: cues.Pose, observed: Observation) -> bool:
 
 def jumped(before: cues.Pose, after: cues.Pose, dt: float) -> bool:
     """A LOCALIZED pose moved further between two polls than a Pinky can drive: the
-    signature of a pose injected while LOCALIZED (S1 forced mirror), not motion."""
-    dt = max(dt, 0.0)
-    return (math.dist(before[:2], after[:2]) > JUMP_M + JUMP_SPEED_MPS * dt
+    signature of a pose injected while LOCALIZED (S1 forced mirror), not motion.
+    dt is capped at JUMP_DT_CAP_S (S1 run 3 T1), and a landing on the mirror always counts."""
+    dt = min(max(dt, 0.0), JUMP_DT_CAP_S)
+    return (mirrored(before, after)
+            or math.dist(before[:2], after[:2]) > JUMP_M + JUMP_SPEED_MPS * dt
             or abs(cues.wrap(after[2] - before[2])) > JUMP_YAW_RAD + JUMP_RATE_RADPS * dt)
+
+
+def mirrored(before: cues.Pose, after: cues.Pose) -> bool:
+    """`after` is within MIRROR_M and MIRROR_YAW_RAD of `before`'s 180-degree twin."""
+    twin = mirror(before)
+    return (math.dist(twin[:2], after[:2]) <= MIRROR_M
+            and abs(cues.wrap(after[2] - twin[2])) <= MIRROR_YAW_RAD)
 
 
 def clear_leader(report: CandidateReport, context: Context, now: float,

@@ -147,6 +147,28 @@ def test_line_follow_mode_uses_put_and_only_forwards_ir_or_stop():
         run(client.line_follow_mode("CAMERA_LINE"))
 
 
+def test_line_stuck_decision_posts_the_id_and_answer_and_keeps_cores_refusal():
+    seen = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.update(method=request.method, path=request.url.path,
+                    auth=request.headers.get("authorization"), body=json.loads(request.content))
+        if seen["body"]["stuck_id"] == "late":
+            return httpx.Response(409, json={"error": {
+                "code": "STUCK_ID_MISMATCH", "message": "no open stuck with this id"}})
+        return httpx.Response(200, json={"outcome": "hold"})
+
+    client = _client(handler)
+    assert run(client.line_stuck_decision("stuck-1", "WAIT"))["outcome"] == "hold"
+    assert seen == {"method": "POST", "path": "/api/v1/line-follow/stuck/decision",
+                    "auth": "Bearer op-token",
+                    "body": {"stuck_id": "stuck-1", "decision": "WAIT"}}
+    with pytest.raises(RobotApiError) as exc:
+        run(client.line_stuck_decision("late", "RESUME"))
+    assert (exc.value.status, exc.value.code) == (409, "STUCK_ID_MISMATCH")
+    assert exc.value.message == "no open stuck with this id"
+
+
 def test_socket_urls_point_at_the_robot_without_the_token():
     c = _client(lambda r: httpx.Response(200, json={}))
     assert c.pose_url() == "ws://robot:8080/ws/swarm/pose"

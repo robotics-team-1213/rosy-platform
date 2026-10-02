@@ -184,6 +184,8 @@
 | D-377 | 앱 이름 규칙: Rosy + 영어 한 단어 — 표시 이름 `Rosy <Word>`, id·폴더 끝 `<word>`, 패키지 `rosy_<word>`, Android `io.github.livsbittt.rosy.<word>`, Gradle `rosy-<word>`, 아이콘 `<word>.svg`; Rosy Cam·Vision·Console·Robot·Pilot |
 | D-382 | 로봇 ↔ 사이트 관제 통신은 계약 스냅샷 하나로 판정하고, 실물 확인은 읽기 전용 적합성 탐침으로 시작한다 |
 | D-390 | Pilot의 OMX-AI 연습은 시뮬레이션 전용 장치 API를 거쳐 로컬 팔 명령 소유자에 연결한다 |
+| D-413 | ROSY는 modules·integrations·apps·profiles로 책임을 나누고 고정 셀 한 흐름부터 이전한다 |
+| D-425 | 앱·웹의 작업 소유권과 공유 경계를 고정하고 실행 조합 apps와 사용자 화면 ui를 분리한다 |
 
 ## 계획·결과 문서
 
@@ -254,6 +256,8 @@
 - [2026-09-30-site-app-roles-and-shared-link-plan.md](plans/2026-09-30-site-app-roles-and-shared-link-plan.md)
 - [2026-10-01-omx-demonstration-lerobot-design.md](plans/2026-10-01-omx-demonstration-lerobot-design.md)
 - [2026-10-01-pilot-omx-gazebo-practice.md](plans/2026-10-01-pilot-omx-gazebo-practice.md)
+- [2026-10-02-platform-architecture-v02-migration.md](plans/2026-10-02-platform-architecture-v02-migration.md)
+- [2026-10-03-app-ownership-shared-transport-and-layout-migration.md](plans/2026-10-03-app-ownership-shared-transport-and-layout-migration.md)
 
 ## 교훈 (docs/solutions)
 
@@ -266,8 +270,8 @@
 
 ## 최근 기록
 
-- 2026-10-02 · uncommitted · docs(adr): D-395 개정 7 — S1 재실행 결과와 LOCALIZED 로봇끼리의 확인
-- 2026-10-02 · uncommitted · docs(api): D-395 R1 LOCALIZED 물체를 API Ref v1.75로 옮김 (D-407과 v1.74 충돌)
-- 2026-10-02 · uncommitted · docs(plans): D-395 S1 R4 원인과 sim 수정
-- 2026-10-02 · uncommitted · docs(plans): D-395 계약 §3 사다리 멈춤 규칙 (S1 재실행 R2·R5·R6)
-- 2026-10-02 · uncommitted · docs(plans): D-395 S1 재실행 (fix/d395-s1-rerun)
+- 2026-10-03 · uncommitted · docs: D-425 앱·웹 이전 소유권·설치 기준선
+- 2026-10-03 · uncommitted · docs(plans): D-425 앱·웹 책임·통신·설치 이전 실행 계획
+- 2026-10-03 · uncommitted · test: verify real Cell runtime two-ledger replay
+- 2026-10-03 · uncommitted · docs(adr): D-425 앱·웹 역할·공유 경계·목표 폴더
+- 2026-10-03 · uncommitted · feat: journal Cell hold release and local Action completion

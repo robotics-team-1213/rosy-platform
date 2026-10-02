@@ -3,7 +3,7 @@
 <package format="3">
   <name>rosy_cell</name>
   <version>0.1.0</version>
-  <description>Rosy Cell: ROS-free palletizing recipes, taught cell frames and Job compilation (D-399 Application).</description>
+  <description>Legacy ROS package and import facade for the ROS-free palletizing process wheel (D-399 Application).</description>
   <maintainer email="56295815+livsbittt@users.noreply.github.com">ROSY</maintainer>
   <license>Apache-2.0</license>
 

@@ -566,7 +566,7 @@ def _relax_retired_sighting_targets(sources, *, known: set, retired: set):
     return kept
 
 
-def main(argv: Optional[Sequence[str]] = None) -> None:
+def _main_impl(argv: Optional[Sequence[str]] = None) -> None:
     args = parse_args(argv)
     if args.command == "console":
         try:
@@ -579,6 +579,15 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
         asyncio.run(runner(args))
     except KeyboardInterrupt:
         pass
+
+
+def main(argv: Optional[Sequence[str]] = None) -> None:
+    """Use the gateway app composition when installed, retaining the legacy fallback."""
+    try:
+        from rosy_gateway.compose import main as gateway_main
+    except ImportError:
+        return _main_impl(argv)
+    return gateway_main(argv)
 
 
 if __name__ == "__main__":

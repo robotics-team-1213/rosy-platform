@@ -164,3 +164,68 @@ def test_carry_z_refuses_unknown_frames_and_stations_like_compile_job():
     recipe, cell = _inputs(recipe_edit=("pick_station: infeed", "pick_station: dock"))
     with pytest.raises(CompileError, match="dock"):
         carry_z(recipe, cell, **TOL)
+
+
+# grasp_depth (C3b B1): the OMX-F TCP sits at the fingertips, so the TCP grasps a box
+# grasp_depth below its top face. Box Step targets carry that TCP height; approach_z still
+# clears the top face; the held box hangs (height - grasp_depth) below the TCP in carry.
+DEPTH = ("height: 0.02, mass_kg: 0.01}", "height: 0.02, mass_kg: 0.01, grasp_depth: 0.008}")
+
+
+def test_box_steps_target_the_tcp_grasp_depth_below_the_top_face():
+    flat, deep = compile_job(*_inputs(), **TOL), compile_job(*_inputs(recipe_edit=DEPTH), **TOL)
+    for a, b in zip(flat.steps, deep.steps):
+        if a.kind == "pallet_done":
+            continue
+        drop = 0.008 if a.item == "box" else 0.0  # slip sheets are taken at their top face
+        assert b.target.z == pytest.approx(a.target.z - drop)
+        assert b.approach_z == pytest.approx(a.approach_z)  # clearance above the top face
+        assert (b.target.x, b.target.y, b.target.yaw) == (a.target.x, a.target.y, a.target.yaw)
+
+
+def test_carry_z_hangs_the_box_below_the_tcp_by_height_minus_depth():
+    # highest surface 0.042 + (0.02 - 0.008) + clearance 0.05
+    recipe, cell = _inputs(recipe_edit=DEPTH)
+    assert carry_z(recipe, cell, **TOL) == pytest.approx(0.042 + 0.012 + 0.05)
+    job = compile_job(recipe, cell, **TOL)
+    assert all(s.approach_z <= job.carry_z for s in job.steps if s.approach_z is not None)
+
+
+def test_carry_z_still_clears_a_slip_sheet_thicker_than_the_box_overhang():
+    recipe, cell = _inputs(recipe_edit=("height: 0.02, mass_kg: 0.01}",
+                                        "height: 0.02, mass_kg: 0.01, grasp_depth: 0.0195}"),
+                           cell_edit=("fingertip_overhang_m: 0.0025", "fingertip_overhang_m: 0.0"))
+    # box overhang 0.0005 < sheet 0.002 (tool without fingertip overhang): the sheet sets the hang
+    assert carry_z(recipe, cell, **TOL) == pytest.approx(0.042 + 0.002 + 0.05)
+
+
+# Review minor 4: the fingertips reach fingertip_overhang_m below the TCP (cell.yaml tool
+# field, the same value as the OMX profile; test/test_cell_omx_sim_layout_contract.py pins it).
+
+
+def test_cell_carries_the_tool_fingertip_overhang():
+    _, cell = _inputs()
+    assert cell.fingertip_overhang_m == pytest.approx(0.0025)
+
+
+def test_carry_z_hangs_the_fingertips_when_they_reach_below_the_box():
+    # box 0.02 - depth 0.008 = 0.012 overhang below TCP < fingertips 0.015 below TCP
+    recipe, cell = _inputs(recipe_edit=DEPTH, cell_edit=(
+        "fingertip_overhang_m: 0.0025", "fingertip_overhang_m: 0.012"))
+    assert carry_z(recipe, cell, **TOL) == pytest.approx(0.042 + 0.012 + 0.05)
+    recipe, cell = _inputs(recipe_edit=("height: 0.02, mass_kg: 0.01}",
+                                        "height: 0.02, mass_kg: 0.01, grasp_depth: 0.006}"),
+                           cell_edit=("fingertip_overhang_m: 0.0025", "fingertip_overhang_m: 0.014"))
+    assert carry_z(recipe, cell, **TOL) == pytest.approx(0.042 + 0.014 + 0.05)
+
+
+def test_grasp_depth_that_puts_the_fingertips_below_the_box_is_refused():
+    recipe, cell = _inputs(recipe_edit=("height: 0.02, mass_kg: 0.01}",
+                                        "height: 0.02, mass_kg: 0.01, grasp_depth: 0.018}"))
+    with pytest.raises(CompileError, match="fingertip"):
+        compile_job(recipe, cell, **TOL)
+    with pytest.raises(CompileError, match="fingertip"):
+        carry_z(recipe, cell, **TOL)
+    recipe, cell = _inputs(recipe_edit=("height: 0.02, mass_kg: 0.01}",
+                                        "height: 0.02, mass_kg: 0.01, grasp_depth: 0.0175}"))
+    assert compile_job(recipe, cell, **TOL)  # exactly h - overhang is allowed

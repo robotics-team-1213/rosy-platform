@@ -436,3 +436,94 @@ def test_the_bridge_ticks_missions_on_the_line_clock():
              and getattr(node.func, "attr", None) == "bind_clock"
              and "loc_mission" in ast.unparse(node.func)]
     assert [ast.unparse(c.args[0]) for c in calls] == ["self._line_clock"]
+
+
+# --- D-424: the URDF body decides what is near ----------------------------------------
+
+def _with_pinky_body(services):
+    """The Pinky Pro URDF body keys of products/pinky_pro/profile/config/core.yaml."""
+    import dataclasses
+    from core_common.robot_body import PINKY_PRO as B
+    lf = services.line_follow
+    lf._config = dataclasses.replace(
+        lf.config, body_front_x_m=B.front_x_m, body_rear_x_m=B.rear_x_m, body_lidar_x_m=B.lidar_x_m,
+        body_half_width_m=B.half_width_m, body_rotation_radius_m=B.rotation_radius_m,
+        body_ultrasonic_x_m=B.ultrasonic_x_m)
+
+
+def test_rotate_is_allowed_with_returns_at_135_mm_all_around(core):
+    """D-424 (review H1): start needs rho 0.0826 + 0.03 = 0.113 from the base; 0.135 from the
+    LiDAR is >= 0.118 everywhere. The pre-D-424 rule refused anything within 0.20 m."""
+    client, services = core
+    _with_pinky_body(services)
+    services.loc_mission.observe_scan(_scan(services, front_m=0.135, rest_m=0.135))
+    assert _start(client).status_code == 202
+
+
+def test_rotate_start_is_refused_with_a_wall_at_105_mm_from_the_base(core):
+    client, services = core
+    _with_pinky_body(services)
+    forward = services.line_follow.config.lidar_forward_deg
+    sample = _scan(services)
+    sample["ranges"][int(forward + 90) % 360] = 0.105            # beside: base ~0.106 < 0.113
+    services.loc_mission.observe_scan(sample)
+    assert _code(_start(client)) == "path_not_clear"
+
+
+def test_a_wall_appearing_during_the_turn_stops_it(core):
+    """H1: the turn is watched, not only checked before start (stop at rho + 0.01 = 0.093)."""
+    client, services = core
+    _with_pinky_body(services)
+    assert _start(client).status_code == 202
+    _step(services, odom=(0.0, 0.0, 0.1))
+    assert services.loc_mission._run is not None
+    forward = services.line_follow.config.lidar_forward_deg
+    sample = _scan(services)
+    sample["ranges"][int(forward + 90) % 360] = 0.09              # beside: base ~0.0916
+    services.loc_mission.observe_scan(sample)
+    services.loc_mission.tick()
+    assert client.get(PATH, headers=VIEWER).json()["reason"] == "obstacle"
+    assert services.command._nav_twist is None
+
+
+def test_rotate_is_refused_inside_the_rotation_radius(core):
+    client, services = core
+    _with_pinky_body(services)
+    sample = _scan(services)
+    sample["ranges"][90] = 0.09                          # beside the robot: base ~0.09 < 0.103
+    services.loc_mission.observe_scan(sample)
+    refused = _start(client)
+    assert refused.status_code == 409 and "rotation radius" in refused.json()["error"]["message"]
+
+
+def test_nudge_is_allowed_at_15_cm_and_shortened_to_the_room(core):
+    """D-424: stop gap g(0.03) ~0.025 m (0.085 m from the LiDAR); 0.15 leaves 0.0655 m of room."""
+    client, services = core
+    _with_pinky_body(services)
+    services.loc_mission.observe_scan(_scan(services, front_m=0.15, within_deg=1.0))
+    assert _start(client, "nudge_forward", 0.05).status_code == 202
+    assert services.loc_mission._run.max_distance_m == 0.05
+    services.loc_mission.end("cancelled")
+    assert _start(client, "nudge_forward", 0.10).status_code == 202
+    assert services.loc_mission._run.max_distance_m == pytest.approx(0.0655, abs=1e-3)
+
+
+def test_nudge_stops_at_the_body_stop_gap(core):
+    client, services = core
+    _with_pinky_body(services)
+    services.loc_mission.observe_scan(_scan(services, front_m=0.30))
+    assert _start(client, "nudge_forward", 0.10).status_code == 202
+    _step(services, odom=(0.01, 0.0, 0.0))
+    assert services.loc_mission._run is not None
+    services.loc_mission.observe_scan(_scan(services, front_m=0.08))
+    services.loc_mission.tick()
+    assert client.get(PATH, headers=VIEWER).json()["reason"] == "obstacle"
+
+
+def test_mission_config_reads_old_and_new_configs():
+    from core_features.localization.mission import MissionConfig, mission_config
+    assert mission_config(None) == MissionConfig() == mission_config({})
+    tuned = mission_config({"rotate_margin_m": 0.03, "min_front_beams": 4})
+    assert tuned.rotate_margin_m == 0.03 and tuned.min_front_beams == 4
+    with pytest.raises(ValueError):
+        mission_config({"rotate_clearence_m": 0.1})

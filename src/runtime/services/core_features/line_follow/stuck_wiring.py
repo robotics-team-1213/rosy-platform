@@ -68,11 +68,11 @@ class StuckRecoveryMixin:
         self._trail.clear()
 
     def stuck_decision(self, stuck_id: str, decision: str, *, by: str,
-                       token_id: Optional[str] = None, now: Optional[float] = None) -> str:
+                       principal_ref: Optional[str] = None, now: Optional[float] = None) -> str:
         """Console answer (D-407 §2). Raises AnswerRefused; returns hold|back|resume|manual|idle."""
         current = float(self._clock() if now is None else now)
         with self._lock:
-            outcome = self._recovery.answer(current, stuck_id, decision, by, token_id)
+            outcome = self._recovery.answer(current, stuck_id, decision, by, principal_ref)
             # Any accepted answer outdates a twist computed before it (e.g. a back-off
             # before WAIT): apply_if_current then rejects it (review L1).
             self._evidence_revision += 1
@@ -99,7 +99,7 @@ class StuckRecoveryMixin:
             return _PROVIDERS[name]
 
     def _release_stuck(self, now: float) -> None:
-        """RESUME / recovered: lift the obstacle latch once (re-blocks below obstacle_stop_m)."""
+        """RESUME / recovered: lift the obstacle latch once (re-blocks below the stop distance)."""
         self._obstacle_blocked = False
         self._clear_since = None
         self._blocked_since = None
@@ -107,6 +107,21 @@ class StuckRecoveryMixin:
         if self._lost_latched:
             self._lost_latched = False
             self._loss_started_at = now
+
+    def _rear_state(self, known: bool, rear_m: Optional[float], now: float) -> str:
+        fresh = (self._body_points is not None and self._body_at is not None
+                 and now - self._body_at <= self._config.clearance_stale_s)
+        if not known or not fresh:
+            return "unknown"
+        if rear_m is not None and rear_m <= self._config.recovery_rear_clear_m:
+            return "blocked"
+        return "clear"
+
+    def _rear_half_width(self) -> float:
+        config = self._config
+        if config.body_half_width_m is None:
+            return config.obstacle_corridor_half_width_m
+        return config.body_half_width_m + config.recovery_rear_lateral_margin_m
 
     def _stuck_input(self, now: float) -> StuckInput:
         config = self._config
@@ -119,9 +134,22 @@ class StuckRecoveryMixin:
                 self._body_points, lidar_x_m=lidar_x, rear_x_m=rear_x,
                 half_width_m=config.obstacle_corridor_half_width_m,
                 rotation_radius_m=config.body_rotation_radius_m if known else None)
+            # Behind the robot only the body's own width (+ margin) matters: the wider path
+            # band counted side walls as "behind" (Gazebo 2026-10-02).
+            seen["rear_m"] = body_clearances(
+                self._body_points, lidar_x_m=lidar_x, rear_x_m=rear_x,
+                half_width_m=self._rear_half_width())["rear_m"]
         front = seen["front_band_m"]
-        front_clear = ((front is None or front >= config.obstacle_resume_m)
-                       and (self._clearance is None or self._clearance >= config.obstacle_resume_m))
+        front_stop = None
+        if self._gap_resume is not None and config.body_stop_known:
+            # D-422: the body gap along the intended path decides; the straight band is only
+            # reported (and bounds RESUME at the stop gap seen from the LiDAR).
+            front_clear = self._clearance is None or self._clearance >= self._gap_resume
+            front_stop = (self._gap_status.get("stop_gap_m") or 0.0) + (
+                config.body_front_x_m - config.body_lidar_x_m)
+        else:
+            front_clear = ((front is None or front >= config.sector_resume_m)
+                           and (self._clearance is None or self._clearance >= config.sector_resume_m))
         obs = self._observation
         age = None if self._received_at is None else now - self._received_at
         lane = bool(obs is not None and obs.visible and obs.source is self._mode
@@ -136,14 +164,21 @@ class StuckRecoveryMixin:
         if known and self._range_min is not None:
             blind = max(0.0, self._range_min - (lidar_x - rear_x), self_mask_rear_blind_m(
                 config.lidar_self_mask, lidar_x_m=lidar_x, rear_x_m=rear_x,
-                half_width_m=config.obstacle_corridor_half_width_m))
+                half_width_m=self._rear_half_width()))
         trail_m, trail_yaw = self._trail.measure(now, config.recovery_trail_s)
+        last_forward = self._trail.last_forward_at()
+        recovered_at = self._recovery.recovered_at
+        moved = None if recovered_at is None else self._trail.net_since(recovered_at, now)
         return StuckInput(
             now=now, cause=cause, lane_visible=lane, front_clear=front_clear,
-            front_band_m=front, rear_m=seen["rear_m"] if known else None, turn_m=seen["turn_m"],
+            front_band_m=front, front_stop_m=front_stop,
+            rear_m=seen["rear_m"] if known else None, turn_m=seen["turn_m"],
             rear_blind_m=blind, trail_m=trail_m, trail_yaw_deg=trail_yaw,
+            trail_age_s=None if last_forward is None else round(now - last_forward, 3),
             scan_age_s=None if self._body_at is None else now - self._body_at,
             lidar_expected=self._clearance_at is not None,
+            moved_since_recovery_m=moved,
+            rear_state=self._rear_state(known, seen["rear_m"] if known else None, now),
             geometry_known=known,
             console_linked=self._provided("console_linked") is True,
             calibration_active=self._provided("calibration_active") is not False,

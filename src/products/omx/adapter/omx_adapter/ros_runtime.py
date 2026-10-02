@@ -14,6 +14,7 @@ from typing import Any, Callable
 from action_msgs.msg import GoalStatus
 from control_msgs.action import FollowJointTrajectory
 from rclpy.action import ActionClient
+from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 from rclpy.clock import Clock, ClockType
 from rclpy.duration import Duration
 from rclpy.qos import qos_profile_sensor_data
@@ -54,6 +55,8 @@ class RosTrajectoryActionHandle(ActionHandle):
         self._goal_id: str | None = None
         self._event_sequence = 0
         self._feedback_sequence = 0
+        self._early_feedback = 0
+        self._acceptance_emitted = False
         self._observation_failed = False
 
         goal = FollowJointTrajectory.Goal()
@@ -108,12 +111,15 @@ class RosTrajectoryActionHandle(ActionHandle):
     def _on_feedback(self, message: Any) -> None:
         with self._lock:
             goal_id = self._goal_id
+            if goal_id is None or not self._acceptance_emitted:
+                # rclpy may run feedback (action-client callback group) before the send-goal
+                # future's done callback has recorded the goal id AND emitted GOAL_ACCEPTED.
+                # Count it and replay one RUNNING_FEEDBACK after GOAL_ACCEPTED; never fail the
+                # observation for it (review B1, re-review N1). No lock is held while emitting.
+                self._early_feedback += 1
+                return
             self._feedback_sequence += 1
             feedback_sequence = self._feedback_sequence
-        if goal_id is None:
-            with self._lock:
-                self._observation_failed = True
-            return
         self._emit(
             "RUNNING_FEEDBACK",
             goal_id=goal_id,
@@ -167,6 +173,16 @@ class RosTrajectoryActionHandle(ActionHandle):
             self._goal_id = goal_id
             cancel_pending = self._cancel_requested
         self._emit("GOAL_ACCEPTED", goal_id=goal_id)
+        # One step with _on_feedback: feedback counted up to here is replayed once; feedback
+        # after this point is emitted live, so none can precede GOAL_ACCEPTED (N1).
+        with self._lock:
+            self._acceptance_emitted = True
+            early_feedback = self._early_feedback
+            if early_feedback:
+                self._feedback_sequence += 1
+                feedback_sequence = self._feedback_sequence
+        if early_feedback:
+            self._emit("RUNNING_FEEDBACK", goal_id=goal_id, feedback_sequence=feedback_sequence)
         try:
             result_future = goal_handle.get_result_async()
             result_future.add_done_callback(self._on_result)
@@ -191,6 +207,10 @@ class RosTrajectoryActionHandle(ActionHandle):
             success = False
         with self._lock:
             goal_id = self._goal_id
+            # The ROS status is a fact as soon as the result resolves; record it before the
+            # sinks journal it, so a reader that sees the journal also sees the status (WSL
+            # loop: journal SUCCEEDED while status was still None). done/succeeded stay last.
+            self._status = status
         if status is None or goal_id is None:
             self._emit("TERMINAL_UNKNOWN", goal_id=goal_id)
         else:
@@ -266,10 +286,12 @@ class RosTrajectoryActionPort:
         node: Any,
         action_name: str,
         event_sink: Callable[[RosGoalEvent], None] | None = None,
+        callback_group: Any | None = None,
     ) -> None:
         if not isinstance(action_name, str) or not action_name.strip():
             raise ValueError("action_name must be non-empty")
-        self._client = ActionClient(node, FollowJointTrajectory, action_name)
+        self._client = ActionClient(node, FollowJointTrajectory, action_name,
+                                    callback_group=callback_group)
         self._event_sink = event_sink
         self.last_handle: RosTrajectoryActionHandle | None = None
 
@@ -293,6 +315,12 @@ class RosArmCommandRuntime:
     This exposes an in-process submit API. It deliberately does not create a
     remote action/service endpoint or claim DDS access control. Deployment must
     admit exactly one local command source and isolate the vendor action graph.
+
+    Callback groups (C3b A2): joint-state intake and the watchdog share one mutually
+    exclusive group; the action client (goal response, feedback, result, and every goal
+    event sink, including a phase runner's journal writes) uses another. Spin the node on
+    a MultiThreadedExecutor with at least two threads, or slow goal-event handling can
+    still delay joint states past max_joint_state_age_s (C3 run2-run7).
     """
 
     def __init__(
@@ -304,7 +332,10 @@ class RosArmCommandRuntime:
         trajectory_action: str = "/arm_controller/follow_joint_trajectory",
         poll_period_s: float = 0.02,
         on_goal_event: Callable[[RosGoalEvent], None] | None = None,
+        owner_clock: str = "steady",
     ) -> None:
+        if owner_clock not in {"steady", "sim"}:
+            raise ValueError("owner_clock must be 'steady' or 'sim'")
         if not config.enabled:
             raise ValueError("ROS arm runtime requires an explicitly enabled policy")
         if not math.isfinite(poll_period_s) or poll_period_s <= 0:
@@ -322,10 +353,27 @@ class RosArmCommandRuntime:
         if on_goal_event is not None and not callable(on_goal_event):
             raise ValueError("on_goal_event must be callable when provided")
         self._observer_goal_event = on_goal_event
+        self.state_callback_group = MutuallyExclusiveCallbackGroup()
+        self.action_callback_group = MutuallyExclusiveCallbackGroup()
         self.action_port = RosTrajectoryActionPort(
             node, trajectory_action, self._dispatch_goal_event,
+            callback_group=self.action_callback_group,
         )
-        self.owner = ArmCommandOwner(config, self.action_port, monotonic=time.monotonic)
+        # Owner clock (C3b A3). "sim": the node clock, which must be sim time, so owner
+        # deadlines run on the trajectory's time base; the steady clock then bounds them at
+        # config.wall_clock_bound_factor. "steady" (default, Pilot): steady time only.
+        if owner_clock == "sim":
+            if node.get_parameter("use_sim_time").value is not True:
+                raise ValueError("owner_clock 'sim' requires use_sim_time")
+            if config.wall_clock_bound_factor is None:
+                raise ValueError("owner_clock 'sim' requires config.wall_clock_bound_factor")
+            node_clock = node.get_clock()
+            self.monotonic: Callable[[], float] = lambda: node_clock.now().nanoseconds / 1e9
+            self.owner = ArmCommandOwner(config, self.action_port, monotonic=self.monotonic,
+                                         wall_monotonic=time.monotonic)
+        else:
+            self.monotonic = time.monotonic
+            self.owner = ArmCommandOwner(config, self.action_port, monotonic=time.monotonic)
         self.last_decision = CommandDecision(True, "ready", "ready")
         self.last_terminal_decision: CommandDecision | None = None
         self._subscription = node.create_subscription(
@@ -333,12 +381,14 @@ class RosArmCommandRuntime:
             joint_state_topic,
             self._on_joint_state,
             qos_profile_sensor_data,
+            callback_group=self.state_callback_group,
         )
         self._steady_clock = Clock(clock_type=ClockType.STEADY_TIME)
         self._timer = node.create_timer(
             poll_period_s,
             self._watchdog_tick,
             clock=self._steady_clock,
+            callback_group=self.state_callback_group,
         )
 
     def _on_joint_state(self, message: JointState) -> None:
@@ -354,7 +404,7 @@ class RosArmCommandRuntime:
         snapshot = JointStateSnapshot(
             positions=positions,
             sequence=self._sequence,
-            received_at=time.monotonic(),
+            received_at=self.monotonic(),
             calibration_revision=self.owner.config.calibration_revision,
         )
         self.latest_joint_state = snapshot
@@ -398,8 +448,11 @@ class RosArmCommandRuntime:
                 self.unregister_phase_event_sink(event.command_id)
 
     def _watchdog_tick(self) -> None:
+        # Steady-clock timer: it keeps polling (and the wall bound keeps working) when sim
+        # time is frozen.
         self.last_decision = self.owner.poll()
-        if self.last_decision.reason in {"action_timeout", "joint_state_stale"}:
+        if self.last_decision.reason in {"action_timeout", "joint_state_stale",
+                                         "action_wall_timeout", "joint_state_stale_wall_clock"}:
             handle = self.action_port.last_handle
             if handle is not None:
                 handle.mark_timeout()

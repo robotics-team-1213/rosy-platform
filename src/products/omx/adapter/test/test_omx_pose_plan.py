@@ -32,6 +32,8 @@ from omx_adapter.pose_plan import (
 
 PROFILE_PATH = Path(__file__).resolve().parents[5] / "deploy/robot/omx/sim/cell_profile.yaml"
 CELL = "c" * 64
+# The device's accepted recipe (its hash) -> item -> grasp geometry (review minor 5).
+_ACCEPTED_ITEMS = {("a" * 64, "box"): {"grasp_width_m": 0.03, "grasp_depth_m": 0.01, "height_m": 0.03}}
 
 
 @pytest.fixture(scope="module")
@@ -54,7 +56,8 @@ def _request(**overrides):
         home=TopDownPose(0.12, 0.0, 0.12, 0.0),
         pick=TopDownPose(0.18, -0.12, 0.02, 0.3),
         place=TopDownPose(0.17, 0.13, 0.045, -0.5),
-        pick_approach_z=0.06, place_approach_z=0.085, carry_z=0.11,
+        pick_approach_z=0.06, place_approach_z=0.085, carry_z=0.11, grasp_depth_m=0.01,
+        grasp_width_m=0.03,
     )
     values.update(overrides)
     return CellTransferRequest(**values)
@@ -74,13 +77,21 @@ def _state(kin, profile, *, home=None, sequence=7, delta=None, scene=None):
     )
 
 
-def _planner(kin, accepted=CELL):
+def _planner(kin, accepted=CELL, items=None):
+    items = _ACCEPTED_ITEMS if items is None else items
     return AnalyticCellTransferPlanner(kin, accepted_cell_sha256=lambda: accepted,
+                                       accepted_item_geometry=lambda recipe, item: items.get((recipe, item)),
                                        monotonic=lambda: 100.5)
 
 
-def _plan(kin, profile, **overrides):
-    return _planner(kin).plan_transfer(_request(**overrides), profile, _state(kin, profile))
+def _plan(kin, profile, items=None, **overrides):
+    """Plans with an accepted recipe that defines exactly the request's grasp geometry,
+    unless ``items`` gives the accepted recipe explicitly."""
+    request = _request(**overrides)
+    if items is None:
+        items = {(request.recipe_sha256, request.item): {
+            "grasp_width_m": request.grasp_width_m, "grasp_depth_m": request.grasp_depth_m, "height_m": 0.06}}
+    return _planner(kin, items=items).plan_transfer(request, profile, _state(kin, profile))
 
 
 # ---- profile -------------------------------------------------------------------
@@ -126,6 +137,15 @@ def test_profile_loads_with_content_hash_revision(profile, kin):
     (lambda d: d.update(planning_limit_fraction=1.2), "planning_limit_fraction"),
     (lambda d: d.update(planning_limit_fraction=0.0), "planning_limit_fraction"),
     (lambda d: d.pop("planning_limit_fraction"), "planning_limit_fraction"),
+    (lambda d: d["owner"].pop("wall_clock_bound_factor"), "wall_clock_bound_factor"),
+    (lambda d: d["gripper"].pop("fingertip_overhang_m"), "fingertip_overhang_m"),
+    # A5: only after-grasp phases, only arm joints, at most 0.1 rad, never below the base.
+    (lambda d: d.update(phase_start_state_tolerance_rad={"approach": {"joint5": 0.05}}), "transfer, release"),
+    (lambda d: d.update(phase_start_state_tolerance_rad={"transfer": {"gripper_joint_1": 0.05}}), "arm joint"),
+    (lambda d: d.update(phase_start_state_tolerance_rad={"transfer": {"joint5": 0.33}}), "0.1"),
+    (lambda d: d.update(phase_start_state_tolerance_rad={"transfer": {"joint5": 0.01}}), "base"),
+    (lambda d: d.update(phase_start_state_tolerance_rad=[]), "mapping"),
+    (lambda d: d["owner"].update(wall_clock_bound_factor=0.9), "wall_clock_bound_factor"),
 ])
 def test_profile_validation_fails_closed(mutate, match):
     document = copy.deepcopy(_document())
@@ -140,6 +160,10 @@ def test_owner_config_is_built_from_the_profile(profile):
     assert config.allowed_owners == ("pilot_sim", "rule_based")
     assert config.max_goal_duration_s == max(profile.phase_max_duration_s.values())
     assert dict(config.position_limits) == dict(profile.position_limits)
+    assert config.wall_clock_bound_factor == profile.wall_clock_bound_factor == 4.0
+    # Owner cap per joint = the largest start tolerance the profile can request (merge with
+    # main 7735c307; stricter than C3b's flat 0.1 rad).
+    assert dict(config.max_start_state_tolerances) == {name: 0.02 for name in profile.joint_names}
 
 
 # ---- planning ------------------------------------------------------------------
@@ -185,13 +209,14 @@ def test_phase_shapes_are_vertical_then_carry_height_never_diagonal(kin, profile
     assert (end.x, end.y, end.z) == pytest.approx((0.18, -0.12, 0.02), abs=1e-6)
     assert abs(math.remainder(end.yaw - 0.3, math.pi)) < 1e-6
     assert all(point.positions[5] == profile.gripper_open for point in approach.points)
-    # grasp moves only the gripper, open -> closed.
+    # grasp moves only the gripper, open -> width-matched close (C3b B2), never 0.0 full close.
     assert {point.positions[:5] for point in grasp.points} == {approach.points[-1].positions[:5]}
-    assert grasp.points[-1].positions[5] == profile.gripper_closed
+    close = profile.gripper_close_for_width(request.grasp_width_m)
+    assert grasp.points[-1].positions[5] == close and close > profile.gripper_closed + 0.2
     end = kin.fk(transfer.points[-1].positions[:5])
     assert (end.x, end.y, end.z) == pytest.approx((0.17, 0.13, 0.045), abs=1e-6)
     assert abs(math.remainder(end.yaw + 0.5, math.pi)) < 1e-6
-    assert all(point.positions[5] == profile.gripper_closed for point in transfer.points)
+    assert all(point.positions[5] == close for point in transfer.points)
     # release opens first, then retreats to home.
     assert release.points[0].positions[:5] == transfer.points[-1].positions[:5]
     assert release.points[-1].positions[5] == profile.gripper_open
@@ -266,8 +291,9 @@ def test_real_command_owner_accepts_every_generated_phase(kin, profile):
 def test_measured_phase_durations_are_reported(kin, profile):
     plan = _plan(kin, profile)
     durations = {phase.phase_id: phase.points[-1].time_from_start_s for phase in plan.phases}
-    # 1.0 rad stroke at 0.4 rad/s, 0.4 rad/s^2 (0.8 x 0.5): 1 s + 1.5 s + 1 s.
-    assert durations["grasp"] == pytest.approx(3.5, abs=1e-9)
+    # Stroke 1.0 - close(30 mm) at 0.4 rad/s, 0.4 rad/s^2 (0.8 x 0.5): 2 x 1 s ramps + cruise.
+    stroke = profile.gripper_open - profile.gripper_close_for_width(0.03)
+    assert durations["grasp"] == pytest.approx(2.0 + (stroke - 0.4) / 0.4, abs=1e-9)
     assert all(value > 0 for value in durations.values())
 
 
@@ -333,6 +359,19 @@ def test_rejects_insufficient_carry_and_approach_heights(kin, profile):
     assert _reason(lambda: _plan(kin, profile, pick_approach_z=0.01)) == CARRY_Z_INSUFFICIENT
 
 
+def test_request_carries_grasp_depth_and_approach_clears_the_item_top(kin, profile):
+    # C3b B1: pick/place z are TCP heights grasp_depth_m below the item top; the open
+    # fingertips (~TCP) must be at or above that top before the vertical descent.
+    assert _plan(kin, profile, grasp_depth_m=0.04).phases  # 0.02 + 0.04 = 0.06 = approach
+    assert _reason(lambda: _plan(kin, profile, grasp_depth_m=0.041)) == CARRY_Z_INSUFFICIENT
+    with pytest.raises(ValueError, match="grasp_depth_m"):
+        _request(grasp_depth_m=-0.001)
+    with pytest.raises(TypeError):
+        values = dict(_request().__dict__)
+        values.pop("grasp_depth_m")
+        CellTransferRequest(**values)
+
+
 def test_rejects_wrong_state_geometry(kin, profile):
     assert _reason(lambda: _planner(kin).plan_transfer(
         _request(), profile, _state(kin, profile, scene="kin:" + "0" * 64))) == STATE_INVALID
@@ -395,3 +434,116 @@ def test_validate_rejects_foreign_or_tampered_plan(kin, profile):
     with pytest.raises(ValueError, match="joint1 limits"):
         validate_cell_transfer_plan(plan, replace(profile, velocity_limits=rates),
                                     kinematics_revision=kin.revision, now_monotonic_s=101.0)
+
+
+def test_phase_start_tolerances_widen_only_the_named_joint_after_grasp(profile):
+    document = copy.deepcopy(_document())
+    document["phase_start_state_tolerance_rad"] = {"transfer": {"joint5": 0.06}, "release": {"joint4": 0.04}}
+    widened = CellPlanningProfile.from_mapping(document, revision="0" * 64)
+    base = widened.start_state_tolerances()
+    assert base == {name: 0.02 for name in widened.joint_names}
+    assert widened.start_state_tolerances("approach") == base
+    assert widened.start_state_tolerances("grasp") == base
+    assert widened.start_state_tolerances("transfer") == {**base, "joint5": 0.06}
+    assert widened.start_state_tolerances("release") == {**base, "joint4": 0.04}
+
+
+# ---- width-matched close (C3b B2) ------------------------------------------------
+
+
+def test_jaw_gap_mapping_reproduces_the_gazebo_contact_angles(profile):
+    # Gazebo 2026-10-02 (cell_profile.yaml gripper.jaw): 20/30/40 mm blocks stopped
+    # gripper_joint_1 at 0.3187/0.4072/0.4956 rad.
+    for q, gap_mm in ((0.3187, 20.0), (0.4072, 30.0), (0.4956, 40.0)):
+        assert profile.jaw_gap_m(q) * 1000 == pytest.approx(gap_mm, abs=0.1)
+    assert profile.jaw_pivot_half_separation_m == pytest.approx((0.0075 + 0.0108) / 2)  # URDF pivots
+    for width in (0.01, 0.02, 0.03, 0.04):
+        assert profile.jaw_gap_m(profile.gripper_contact_for_width(width)) == pytest.approx(width, abs=1e-9)
+
+
+def test_close_target_squeezes_by_the_profile_margin(profile):
+    squeeze = profile.gripper_squeeze_m
+    assert 0 < squeeze <= 0.005
+    close = profile.gripper_close_for_width(0.03)
+    assert profile.jaw_gap_m(close) == pytest.approx(0.03 - squeeze, abs=1e-9)
+    assert profile.gripper_closed < close < profile.gripper_contact_for_width(0.03) < profile.gripper_open
+
+
+def test_grasp_width_outside_the_jaw_range_is_rejected(kin, profile):
+    from omx_adapter.pose_plan import GRIPPER_WIDTH_INVALID
+
+    assert _reason(lambda: _plan(kin, profile, grasp_width_m=0.002)) == GRIPPER_WIDTH_INVALID
+    assert _reason(lambda: _plan(kin, profile, grasp_width_m=0.09)) == GRIPPER_WIDTH_INVALID
+    with pytest.raises(ValueError, match="grasp_width_m"):
+        _request(grasp_width_m=0.0)
+
+
+@pytest.mark.parametrize("mutate, match", [
+    (lambda d: d["gripper"].pop("jaw"), "jaw"),
+    (lambda d: d["gripper"]["jaw"].update(squeeze_m=0.0), "squeeze_m"),
+    (lambda d: d["gripper"]["jaw"].update(contact_point_m=[0.06]), "contact_point_m"),
+])
+def test_jaw_geometry_fails_closed(mutate, match):
+    document = copy.deepcopy(_document())
+    mutate(document)
+    with pytest.raises(ValueError, match=match):
+        CellPlanningProfile.from_mapping(document, revision="0" * 64)
+
+
+def test_release_opens_only_to_the_release_width_until_carry_height(kin, profile):
+    # C3b Gazebo run11: a full 1.0 rad open at the place swept a fingertip into the 15 mm-gap
+    # neighbour and knocked it off the pallet. Release opens to item width + release
+    # clearance, retreats vertically to carry_z, and opens fully only there.
+    request = _request()
+    plan = _planner(kin).plan_transfer(request, profile, _state(kin, profile))
+    release = plan.phases[3]
+    width_open = profile.gripper_contact_for_width(request.grasp_width_m + profile.gripper_release_clearance_m)
+    place_arm = plan.phases[2].points[-1].positions[:5]
+    at_place = [p for p in release.points if p.positions[:5] == place_arm]
+    assert at_place and max(p.positions[5] for p in at_place) == pytest.approx(width_open)
+    full = [p for p in release.points if p.positions[5] > width_open + 1e-9]
+    assert full, "release must still end fully open"
+    for point in full:
+        assert kin.fk(point.positions[:5]).z >= request.carry_z - 1e-6
+    assert release.points[-1].positions[5] == profile.gripper_open
+
+
+@pytest.mark.parametrize("clearance", [0.08, 0.2])  # release width past full open / off the jaw model
+def test_release_width_the_jaw_cannot_reach_is_rejected_not_fully_opened(kin, clearance):
+    # Review minor 3: falling back to a full open at the place is the run11 hazard.
+    from omx_adapter.pose_plan import GRIPPER_WIDTH_INVALID
+
+    document = copy.deepcopy(_document())
+    document["gripper"]["jaw"]["release_clearance_m"] = clearance
+    wide = CellPlanningProfile.from_mapping(document, revision="0" * 64)
+    assert _reason(lambda: _planner(kin).plan_transfer(_request(), wide, _state(kin, wide))) == GRIPPER_WIDTH_INVALID
+
+
+@pytest.mark.parametrize("changes", [
+    {"grasp_width_m": 0.025},                       # over-squeeze from a wrong width
+    {"grasp_depth_m": 0.015},
+    {"recipe_sha256": "b" * 64},                     # not the accepted recipe
+    {"item": "slip_sheet"},                          # item the accepted recipe does not define here
+])
+def test_grasp_geometry_must_match_the_accepted_recipe(kin, profile, changes):
+    # Review minor 5: width and depth decide the close target and the TCP height, so the
+    # planner takes them only as the accepted recipe (by hash) defines them.
+    from omx_adapter.pose_plan import ITEM_GEOMETRY_MISMATCH
+
+    assert _reason(lambda: _plan(kin, profile, items=_ACCEPTED_ITEMS, **changes)) == ITEM_GEOMETRY_MISMATCH
+
+
+def test_planner_requires_an_accepted_item_geometry_provider(kin):
+    with pytest.raises(ValueError, match="item"):
+        AnalyticCellTransferPlanner(kin, accepted_cell_sha256=lambda: CELL, accepted_item_geometry=None)
+
+
+@pytest.mark.parametrize(("height", "reason"), [(0.0126, None), (0.0125, "GRASP_DEPTH_BELOW_FINGERTIPS")])
+def test_device_rejects_a_grasp_depth_that_puts_the_fingertips_below_the_item(kin, profile, height, reason):
+    # Re-review minor 4: rosy_cell refuses grasp_depth > height - fingertip_overhang_m at compile
+    # time; the device enforces the same rule with its own profile value (0.00257 m).
+    items = {("a" * 64, "box"): {"grasp_width_m": 0.03, "grasp_depth_m": 0.01, "height_m": height}}
+    if reason is None:
+        assert _plan(kin, profile, items=items).phases
+    else:
+        assert _reason(lambda: _plan(kin, profile, items=items)) == reason

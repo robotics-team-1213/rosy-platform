@@ -441,3 +441,15 @@
 - 근거: D-405. 표준 trio(달/해/모니터 — shadcn mode-toggle·GitHub·Linear 준용), 사용자 지시 2026-10-02.
 - gate 변화: 없음.
 - 최종 증거: web_common 209 passed 24 skipped; Fleet 브라우저 렌더에서 3종 아이콘 + sr-only 이름 확인.
+
+## 2026-10-02 · uncommitted · D-410 등록부 audience에 설치 경로 반영 + 두 문서 role-lock 게이트
+- 변경: surfaces.yaml console audience에 "/console/install 기기 등록·카메라 보정(설치자)" 추가. test_shared_controls의 role-lock 대수 계산을 두 문서(index.html ≥1, install.html ≥1)로 갱신 — 운용 문서는 대형 잠금, 설치 문서는 카메라·보정 잠금이 각자 자기 안내를 둔다.
+- 근거: D-410. 사용자 지시 2026-10-02.
+- gate 변화: 없음.
+- 최종 증거: web_common 209 passed 24 skipped.
+
+## 2026-10-02 · uncommitted · DESIGN.md Components 절 어휘 보충 — chip·triage·evidence/empty·icon
+- 변경: DESIGN.md Components에 ui-chip(오버레이 칩)·ui-triage(분류 머리)·ui-evidence/ui-empty·.ui-icon 절을 추가했다. 견본(styleguide.html) 패리티 항목은 dashboard 로그 참조. 토큰·부품 코드(components.css·ui.js)는 건드리지 않았다.
+- 근거: D-92, D-359, D-405.
+- gate 변화: 없음.
+- 최종 증거: web_common+dashboard 286 passed 82 skipped.

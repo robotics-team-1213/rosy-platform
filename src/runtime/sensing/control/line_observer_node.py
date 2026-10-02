@@ -35,7 +35,7 @@ from .sensing.perception.lane import (
 )
 from .sensing.perception.lane_bev import LaneEdgeFollower, pose_if_fresh
 from .sensing.perception.lane_boundaries import LaneBoundaryTracker
-from .sensing.perception.lane_keep import LaneKeeper, denoise_white_mask
+from .sensing.perception.lane_keep import LaneKeeper, clean_learned_mask, denoise_white_mask
 from .sensing.perception.lane_debug import next_publish_due, render_debug
 from .sensing.perception.paint_localizer import PaintMap
 from .sensing.perception.route_camera import RouteCameraFollower
@@ -82,6 +82,12 @@ class LineObserverNode(Node):
         self.declare_parameter('paint_source', 'threshold', _READ_ONLY)
         self.declare_parameter('learned_lane_pointer', '', _READ_ONLY)
         self.declare_parameter('learned_paint_stale_s', 0.6, _READ_ONLY)
+        # D-408 CPU: infer on every Nth keep frame (the mask is reused in between), on 1 thread.
+        self.declare_parameter('learned_paint_every_n', 2, _READ_ONLY)
+        self.declare_parameter('learned_paint_threads', 1, _READ_ONLY)
+        # Turning moves the image between frames: above this |odom wz| (or with no fresh odom) the
+        # mask is not reused (cadence 1: every frame infers, a late mask falls back to denoise).
+        self.declare_parameter('learned_paint_reuse_max_wz', 0.15)
         self.declare_parameter('camera_lane_mode', 'line', _READ_ONLY)
         self.declare_parameter('lane_half_width_m', 0.0925)
         self.declare_parameter('camera_roi_bottom_fraction', 1.0)
@@ -126,6 +132,7 @@ class LineObserverNode(Node):
         self._nominal_profile_cache = None
         self._odom_pose = None
         self._odom_stamp = None
+        self._odom_wz = None
         self._corner_tracker = LaneCornerTracker(
             camera_x_offset_m=float(self.get_parameter('camera_x_offset_m').value))
         self._edge_follower = LaneEdgeFollower(
@@ -337,23 +344,37 @@ class LineObserverNode(Node):
         if source != 'learned':
             return None
         from .sensing.perception.learned.paint_worker import LearnedPaintWorker
-        from .sensing.perception.learned.runner import ModelSlot, add_learned_site
+        from .sensing.perception.learned.runner import LaneSegModel, ModelSlot, add_learned_site
         add_learned_site()
         pointer = str(self.get_parameter('learned_lane_pointer').value)
         if not pointer:
             self.get_logger().warning('paint_source learned without learned_lane_pointer: denoise only')
-        return LearnedPaintWorker(ModelSlot(pointer) if pointer else None,
+        every_n = int(self.get_parameter('learned_paint_every_n').value)
+        threads = int(self.get_parameter('learned_paint_threads').value)
+        if every_n < 1 or threads < 1:
+            raise ValueError('learned_paint_every_n and learned_paint_threads must be >= 1')
+        slot = ModelSlot(pointer, opener=lambda folder: LaneSegModel.open(
+            folder, threads=threads, allow_spinning=False)) if pointer else None
+        return LearnedPaintWorker(slot,
                                   stale_s=float(self.get_parameter('learned_paint_stale_s').value),
                                   warn=self.get_logger().warning)
 
-    def _paint_for(self, frame, ground):
+    def _paint_for(self, frame, ground, stamp=None):
         """(paint mask or None, source actually used) for one keep frame (D-408)."""
         source = str(self.get_parameter('paint_source').value)
         if source == 'threshold' or ground is None:
+            if self._paint_worker is not None:
+                self._paint_worker.reset()
             return None, 'threshold'
         if source == 'learned' and self._paint_worker is not None:
-            self._paint_worker.submit(frame)
-            mask, _summary = self._paint_worker.latest(frame.shape[:2])
+            every_n = int(self.get_parameter('learned_paint_every_n').value)
+            wz = self._odom_wz
+            fresh = (stamp is not None and self._odom_stamp is not None
+                     and abs(stamp - self._odom_stamp) <= KEEP_MAX_FRAME_GAP_S)
+            if not fresh or wz is None or abs(wz) > float(self.get_parameter('learned_paint_reuse_max_wz').value):
+                every_n = 1
+            mask = self._paint_worker.mask_for(
+                frame, every_n, stamp, clean=lambda m: clean_learned_mask(m, ground.horizon_row))
             if mask is not None:
                 return mask, 'learned'
         return denoise_white_mask(frame, ground.horizon_row), (
@@ -368,10 +389,14 @@ class LineObserverNode(Node):
             self._publish('CAMERA_LINE', None, stamp=(
                 float(msg.header.stamp.sec) + float(msg.header.stamp.nanosec) * 1e-9))
             self._keep_last_stamp = None
+            if self._paint_worker is not None:
+                self._paint_worker.reset()
             return
         try:
             frame = image_msg_to_frame(msg)
             mode = str(self.get_parameter('camera_lane_mode').value)
+            if mode != 'keep' and self._paint_worker is not None:
+                self._paint_worker.reset()
             if mode == 'line':
                 observation = detect_lane_error(
                     frame,
@@ -397,9 +422,11 @@ class LineObserverNode(Node):
                 if (self._keep_last_stamp is None
                         or not 0.0 <= image_stamp - self._keep_last_stamp <= KEEP_MAX_FRAME_GAP_S):
                     self._lane_keeper.reset()
+                    if self._paint_worker is not None:
+                        self._paint_worker.reset()
                 self._keep_last_stamp = image_stamp
                 ground = self._ground(frame.shape[1], frame.shape[0])
-                paint, paint_used = self._paint_for(frame, ground)
+                paint, paint_used = self._paint_for(frame, ground, image_stamp)
                 observation = self._lane_keeper.update(
                     frame, ground, paint_mask=paint,
                     lane_half_width_m=float(self.get_parameter('lane_half_width_m').value))
@@ -510,6 +537,7 @@ class LineObserverNode(Node):
         self._odom_pose = (float(pose.position.x), float(pose.position.y), yaw)
         # The header stamp, not arrival time: edge_left compares it with the
         # image stamp, so dead or delayed odometry is no pose.
+        self._odom_wz = float(msg.twist.twist.angular.z)
         self._odom_stamp = (float(msg.header.stamp.sec)
                             + float(msg.header.stamp.nanosec) * 1e-9)
 

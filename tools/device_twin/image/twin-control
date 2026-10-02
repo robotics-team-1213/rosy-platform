@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# twin-control MODE: what the fake CORE reports in status-inputs.json.
+# idle | moving | manual | battery | estop | stale (CORE stops writing)
+set -euo pipefail
+case "${1:-}" in
+    idle|moving|manual|battery|estop|stale) ;;
+    *) echo "usage: twin-control idle|moving|manual|battery|estop|stale" >&2; exit 2 ;;
+esac
+mkdir -p /run/twin
+printf '{"mode": "%s"}\n' "$1" > /run/twin/.core-control.json
+chmod 0644 /run/twin/.core-control.json
+mv -f /run/twin/.core-control.json /run/twin/core-control.json

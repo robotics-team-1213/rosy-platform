@@ -93,6 +93,17 @@ def make_command(*, command_id="cmd-1", owner="moveit", sequence=10, **changes):
     return TrajectoryCommand(**values)
 
 
+# C3b A1 tests on the unified start-state mechanism (merge with main b0979ad6/7735c307):
+# a per-joint owner cap of 0.1 rad, the C3b profile's after-grasp ceiling.
+WINDOW_CONFIG = {"max_start_state_tolerances": {"joint_1": 0.1, "joint_2": 0.1}}
+
+
+def window(spec):
+    """{joint: (expected, tolerance)} -> TrajectoryCommand start-state fields."""
+    return {"expected_start_state_positions": {k: v[0] for k, v in spec.items()},
+            "start_state_tolerances": {k: v[1] for k, v in spec.items()}}
+
+
 def owner_at(clock, config=None, client=None):
     action = client or FakeActionClient()
     owner = ArmCommandOwner(
@@ -620,3 +631,253 @@ def test_multi_point_command_requires_explicit_velocity_and_acceleration_limits(
 
     assert not result.accepted and result.reason == "trajectory_rate_limits_missing"
     assert action.commands == []
+
+
+# A1 (C3b): the caller reads a joint state, journals, then submits; joint states keep
+# arriving at ~100 Hz in between. A command with expected start positions and tolerances is
+# checked against the owner's own latest state under its lock and bound to that sequence.
+WINDOW = {"joint_1": (0.1, 0.02), "joint_2": (-0.1, 0.02)}
+
+
+def test_window_command_binds_to_a_newer_state_that_arrived_before_submit():
+    clock = [100.0]
+    owner, action = owner_at(clock, make_config(**WINDOW_CONFIG))
+    owner.observe_joint_state(make_state(sequence=10))
+    command = make_command(sequence=10, **window(WINDOW))
+    clock[0] = 100.01
+    owner.observe_joint_state(make_state(sequence=11, received_at=100.01))
+
+    result = owner.submit(command)
+
+    assert result.accepted and result.reason == "submitted"
+    # Bound to the newest state the check passed on (main: the command object is sent as is).
+    assert owner._last_command_state_sequence == 11
+    assert action.commands[0].command_id == command.command_id
+
+
+def test_single_goal_home_command_with_window_survives_the_same_race():
+    clock = [100.0]
+    owner, action = owner_at(clock, make_config(**WINDOW_CONFIG))
+    owner.observe_joint_state(make_state(sequence=10))
+    home = make_command(command_id="home", sequence=10, owner="rule_based",
+                        **window({"joint_1": (0.1, 0.05), "joint_2": (-0.1, 0.05)}))
+    for seq in (11, 12, 13):
+        owner.observe_joint_state(make_state(sequence=seq, received_at=100.0))
+    assert owner.submit(home).accepted
+    assert owner._last_command_state_sequence == 13
+
+
+def test_window_command_still_rejects_a_stale_latest_state():
+    clock = [100.0]
+    owner, action = owner_at(clock, make_config(**WINDOW_CONFIG))
+    owner.observe_joint_state(make_state(sequence=10))
+    clock[0] = 100.6  # max_joint_state_age_s 0.5
+    result = owner.submit(make_command(sequence=10, **window(WINDOW)))
+    assert not result.accepted and result.reason == "joint_state_stale"
+    assert owner.state == "hold" and action.commands == []
+
+
+def test_window_command_rejects_a_latest_state_outside_the_window():
+    clock = [100.0]
+    owner, action = owner_at(clock, make_config(**WINDOW_CONFIG))
+    owner.observe_joint_state(make_state(sequence=10))
+    moved = JointStateSnapshot(positions={"joint_1": 0.15, "joint_2": -0.1}, sequence=11,
+                               received_at=100.0, calibration_revision="cal-7")
+    owner.observe_joint_state(moved)
+    result = owner.submit(make_command(sequence=10, **window(WINDOW)))
+    assert not result.accepted and result.reason == "start_state_outside_tolerance"
+    assert action.commands == [] and owner.state == "ready"
+
+
+def test_window_command_rejects_a_sequence_the_owner_never_observed():
+    clock = [100.0]
+    owner, action = owner_at(clock, make_config(**WINDOW_CONFIG))
+    owner.observe_joint_state(make_state(sequence=10))
+    owner.observe_joint_state(make_state(sequence=11))
+    result = owner.submit(make_command(sequence=12, **window(WINDOW)))
+    assert not result.accepted and result.reason == "joint_state_sequence_mismatch"
+    assert action.commands == []
+
+
+def test_partial_window_checks_only_the_listed_joints():
+    # Unified mechanism: every joint is listed. After grasp the runner binds the gripper to
+    # the value it checked (object width, D-402 §3d) instead of the plan, so a joint the plan
+    # does not judge is still held to "did not move since the check".
+    clock = [100.0]
+    owner, action = owner_at(clock, make_config(**WINDOW_CONFIG))
+    owner.observe_joint_state(JointStateSnapshot(positions={"joint_1": 0.1, "joint_2": 0.4}, sequence=10,
+                                                 received_at=100.0, calibration_revision="cal-7"))
+    result = owner.submit(make_command(sequence=10, **window({"joint_1": (0.1, 0.02), "joint_2": (0.4, 0.02)})))
+    assert result.accepted
+    with pytest.raises(ValueError, match="start-state positions and tolerances"):
+        make_command(sequence=10, **window({"joint_1": (0.1, 0.02)}))
+
+
+def test_window_window_values_are_validated_on_the_command():
+    with pytest.raises(ValueError, match="start-state positions and tolerances"):
+        make_command(**window({"joint_1": (0.1, -0.01), "joint_2": (0.0, 0.01)}))
+    with pytest.raises(ValueError, match="start-state positions and tolerances"):
+        make_command(**window({"joint_9": (0.1, 0.01)}))
+    with pytest.raises(ValueError, match="start-state positions and tolerances"):
+        make_command(**window({}))
+
+
+def test_window_command_never_rebinds_to_a_sequence_already_used():
+    clock = [100.0]
+    owner, action = owner_at(clock, make_config(**WINDOW_CONFIG))
+    owner.observe_joint_state(make_state(sequence=10))
+    assert owner.submit(make_command(command_id="a", sequence=10, **window(WINDOW))).accepted
+    action.handles[0].finished = action.handles[0].success = True
+    assert owner.poll().reason == "completed"
+    result = owner.submit(make_command(command_id="b", sequence=10, **window(WINDOW)))
+    assert not result.accepted and result.reason == "joint_state_not_advanced"
+
+
+# A3 (C3b): with use_sim_time the owner's deadlines run on sim time (the trajectory's own
+# clock). A wall clock stays as an outer bound, wall_clock_bound_factor x the sim limits,
+# so a frozen or crawling simulation still HOLDs.
+def sim_owner(sim, wall, factor=4.0):
+    owner = ArmCommandOwner(make_config(wall_clock_bound_factor=factor), FakeActionClient(),
+                            monotonic=lambda: sim[0], wall_monotonic=lambda: wall[0],
+                            session_id=SESSION)
+    return owner, owner._action_port
+
+
+def test_slow_simulation_is_timed_on_sim_time_not_wall_time():
+    sim, wall = [100.0], [5000.0]
+    owner, action = sim_owner(sim, wall)
+    owner.observe_joint_state(make_state(sequence=10, received_at=100.0))
+    assert owner.submit(make_command(sequence=10)).accepted
+    seq = 10
+    while sim[0] < 102.9:  # RTF 0.3: 2.9 s of sim time is ~9.7 s of wall time
+        sim[0] = round(sim[0] + 0.03, 6)
+        wall[0] += 0.1
+        seq += 1
+        owner.observe_joint_state(make_state(sequence=seq, received_at=sim[0]))
+        assert owner.poll().reason == "active"
+    assert wall[0] - 5000.0 > 3.0  # past action_timeout_s in wall time, still active
+    sim[0] = 103.0
+    owner.observe_joint_state(make_state(sequence=seq + 1, received_at=103.0))
+    assert owner.poll().reason == "action_timeout"
+
+
+def test_frozen_simulation_holds_on_the_wall_clock_bound():
+    sim, wall = [100.0], [5000.0]
+    owner, action = sim_owner(sim, wall)
+    owner.observe_joint_state(make_state(sequence=10, received_at=100.0))
+    assert owner.submit(make_command(sequence=10)).accepted
+    wall[0] += 1.9  # sim frozen: no new joint state, sim age stays 0
+    assert owner.poll().reason == "active"
+    wall[0] += 0.2  # > max_joint_state_age_s 0.5 x factor 4
+    decision = owner.poll()
+    assert decision.reason == "joint_state_stale_wall_clock" and owner.state == "hold"
+    assert action.handles[0].cancel_calls == 1
+
+
+def test_crawling_simulation_holds_on_the_wall_action_bound():
+    sim, wall = [100.0], [5000.0]
+    owner, _ = sim_owner(sim, wall)
+    owner.observe_joint_state(make_state(sequence=10, received_at=100.0))
+    assert owner.submit(make_command(sequence=10)).accepted
+    seq = 10
+    while wall[0] < 5000.0 + 11.9:  # RTF 0.05: joint states fresh, sim barely moves
+        wall[0] += 0.1
+        sim[0] += 0.005
+        seq += 1
+        owner.observe_joint_state(make_state(sequence=seq, received_at=sim[0]))
+        assert owner.poll().reason == "active"
+    wall[0] += 0.2  # action_timeout_s 3.0 x factor 4 = 12 s wall
+    owner.observe_joint_state(make_state(sequence=seq + 1, received_at=sim[0]))
+    assert owner.poll().reason == "action_wall_timeout" and owner.state == "hold"
+
+
+def test_submit_rejects_a_state_that_is_fresh_in_sim_time_but_old_in_wall_time():
+    sim, wall = [100.0], [5000.0]
+    owner, action = sim_owner(sim, wall)
+    owner.observe_joint_state(make_state(sequence=10, received_at=100.0))
+    wall[0] += 2.5
+    result = owner.submit(make_command(sequence=10))
+    assert result.reason == "joint_state_stale_wall_clock" and action.commands == []
+
+
+@pytest.mark.parametrize("factor", [0.5, 0.0, float("nan"), True])
+def test_wall_clock_bound_factor_must_be_at_least_one(factor):
+    with pytest.raises(ValueError, match="wall_clock_bound_factor"):
+        make_config(wall_clock_bound_factor=factor)
+
+
+def test_sim_clock_owner_requires_a_wall_clock_bound():
+    with pytest.raises(ValueError, match="wall"):
+        ArmCommandOwner(make_config(), FakeActionClient(), monotonic=lambda: 0.0,
+                        wall_monotonic=lambda: 0.0, session_id=SESSION)
+
+
+# Review minor 1: the owner caps the caller's tolerances (main's per-joint policy) and the
+# command must cover every commanded joint.
+@pytest.mark.parametrize(("config", "spec", "reason"), [
+    (WINDOW_CONFIG, {"joint_1": (0.1, 1e9), "joint_2": (-0.1, 0.02)}, "start_state_tolerance_exceeds_policy"),
+    (WINDOW_CONFIG, {"joint_1": (0.1, 0.02)}, "incomplete"),
+])
+def test_owner_rejects_wide_partial_or_unconfigured_windows(config, spec, reason):
+    clock = [100.0]
+    owner, action = owner_at(clock, make_config(**config))
+    owner.observe_joint_state(make_state(sequence=10))
+    if reason == "incomplete":
+        with pytest.raises(ValueError, match="start-state positions and tolerances"):
+            make_command(sequence=10, **window(spec))
+        return
+    result = owner.submit(make_command(sequence=10, **window(spec)))
+    assert not result.accepted and result.reason == reason
+    assert action.commands == []
+
+
+def test_owner_without_a_window_cap_requires_the_exact_sequence():
+    # Merge: C3b let an uncapped owner ignore the window and use the exact sequence match;
+    # main rejects tolerance evidence without an owner policy. The stricter rule (main) stays.
+    clock = [100.0]
+    owner, action = owner_at(clock, make_config(max_start_state_tolerances=None))
+    owner.observe_joint_state(make_state(sequence=10))
+    owner.observe_joint_state(make_state(sequence=11))
+    result = owner.submit(make_command(sequence=10, **window(WINDOW)))
+    assert result.reason == "start_state_tolerance_policy_missing" and action.commands == []
+    assert owner.submit(make_command(command_id="cmd-2", sequence=11)).accepted  # exact match path
+
+
+@pytest.mark.parametrize("changes", [
+    {"max_start_state_tolerances": {"joint_1": float("inf"), "joint_2": 0.1}},
+    {"max_start_state_tolerances": {"joint_1": 0.1, "joint_9": 0.1}},
+])
+def test_start_window_config_is_validated(changes):
+    with pytest.raises(ValueError, match="max_start_state_tolerances"):
+        make_config(**changes)
+
+
+# Review minor 2: a sim world reset sends the owner clock backwards; ages go negative and
+# no timeout would ever fire. That is a HOLD of its own.
+def test_owner_clock_jumping_back_during_an_action_holds():
+    sim, wall = [100.0], [5000.0]
+    owner, action = sim_owner(sim, wall)
+    owner.observe_joint_state(make_state(sequence=10, received_at=100.0))
+    assert owner.submit(make_command(sequence=10)).accepted
+    sim[0] = 3.0  # world reset
+    owner.observe_joint_state(make_state(sequence=11, received_at=3.0))
+    decision = owner.poll()
+    assert decision.reason == "owner_clock_jumped_back" and owner.state == "hold"
+    assert action.handles[0].cancel_calls == 1
+
+
+def test_joint_state_older_than_the_last_one_holds_as_clock_jump():
+    clock = [100.0]
+    owner, _ = owner_at(clock)
+    owner.observe_joint_state(make_state(sequence=10, received_at=100.0))
+    assert not owner.observe_joint_state(make_state(sequence=11, received_at=99.0))
+    assert owner.state == "hold" and owner.poll().reason == "owner_clock_jumped_back"
+
+
+def test_submit_after_the_clock_jumped_back_holds():
+    clock = [100.0]
+    owner, action = owner_at(clock)
+    owner.observe_joint_state(make_state(sequence=10, received_at=100.0))
+    clock[0] = 50.0
+    result = owner.submit(make_command(sequence=10))
+    assert result.reason == "owner_clock_jumped_back" and action.commands == []

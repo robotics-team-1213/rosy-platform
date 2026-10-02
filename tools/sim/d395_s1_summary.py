@@ -95,6 +95,12 @@ def main(argv):
         stale = sum(1 for row in run.get("timeline", ()) if row.get("what") == "state"
                     and (row.get("loc") or {}).get("reason") == "state_stale")
         print(f"- CORE state_stale transitions: {stale}")
+        checking = [(row["t"], row.get("robot")) for row in run.get("timeline", ()) if row.get("what") == "state"
+                    and (row.get("loc") or {}).get("reason") == "checking"]
+        suspect = [(row["t"], row.get("robot"), (row.get("loc") or {}).get("reason"))
+                   for row in run.get("timeline", ()) if row.get("what") == "state"
+                   and (row.get("loc") or {}).get("state") == "SUSPECT"]
+        print(f"- checking (t, robot): {checking or '-'}; SUSPECT (t, robot, reason): {suspect or '-'}")
         missions = [(row["t"], row.get("robot"), (row.get("mission") or {}).get("kind"),
                      (row.get("mission") or {}).get("state")) for row in run.get("timeline", ())
                     if row.get("what") == "mission" and row.get("mission")]
@@ -111,13 +117,15 @@ def main(argv):
                       f"{fmt(r.get('t_localized'), clock)}, {verdict(r)}")
         p = phases.get("pickup")
         if p:
-            print(f"- pickup: moved {p.get('moved')}, goal codes {p.get('goal_code')}, drift while held "
+            print(f"- pickup: moved {p.get('moved')} ({p.get('travelled_m')} m), moved after LOCALIZED "
+                  f"{p.get('moved_after_localized_m')} m, goal codes {p.get('goal_code')}, drift while held "
                   f"{p.get('drift_while_held_m')} m, state while held {p.get('state_while_held')}, SUSPECT "
                   f"{fmt(p.get('t_suspect'), clock)}, set down {fmt(p.get('t_set_down'), clock)}, LOCALIZED "
                   f"{fmt(p.get('t_localized'), clock)}, r1 {verdict(p.get('rosy_01'))}, r2 {verdict(p.get('rosy_02'))}")
         p = phases.get("mirror")
         if p:
-            print(f"- mirror: detected alone {p.get('detected_without_peer_report')}, r2 after injection "
+            print(f"- mirror: injected {fmt(p.get('t_injected'), clock)}, detected alone "
+                  f"{p.get('detected_without_peer_report')}, pulse {p.get('pulse_sent')}, r2 after injection "
                   f"{verdict(p.get('r2_after_injection'))}, r2 SUSPECT {fmt(p.get('t_r2_suspect'), clock)}, "
                   f"r1 LOCALIZED {fmt(p.get('t_r1_localized'), clock)}, r2 LOCALIZED "
                   f"{fmt(p.get('t_r2_localized'), clock)}, end r1 {verdict(p.get('rosy_01'))}, "

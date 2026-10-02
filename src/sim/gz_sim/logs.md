@@ -218,3 +218,16 @@
 - gate 변화: 없음
 - 결정: 없음. 장치 기본값 변경 제안 없음 — 장치 값(lookahead 0.3 > 허용 0.25, 지역 정사각 풋프린트)은 이 문제가 없다.
 - 교훈: RPP 의 lookahead 를 줄이면 목표 허용오차도 같이 봐야 한다 — carrot 이 허용오차 안이면 "도착"으로 보고 회전만 한다. 그리고 플래너용 보수적 풋프린트를 컨트롤러 비용지도에 같이 넣으면 벽 옆 출발이 막힌다.
+
+## 2026-10-02 · d8f96fb8 · feat(sim): omx_cell_workcell world (Rosy Cell C3)
+
+- 변경: `worlds/omx_cell_workcell.sdf`(탁자, 팔레트 2, 인피드 블록, 슬립시트 받침; world = OMX link0, step 2 ms, 카메라 없음)와 `omx_cell_workcell_sim_aid.sdf`(블록↔link5 DetachableJoint, 표시된 sim aid). 실행은 `deploy/robot/omx/run_cell_sim.sh`.
+- 증거: docs/validation/rosy-cell-gazebo-c3-2026-10-02/README.md. 소프트웨어 렌더 카메라를 켜면 RTF 0.06, 끄면 0.3–0.95.
+- gate 변화: 없음(gz_sim 다중 로봇 gate와 무관).
+- 결정: D-402, D-403 §5.
+
+## 2026-10-02 · uncommitted · feat(sim): gz_multi sim-only physics_step / real_time_factor / gpu (D-395 S2 rerun)
+- 변경: `gz_multi_args.py`에 `physics_step`(빈 값 기본, 예 `physics_step:=0.005`), `real_time_factor`(빈 값 기본), `gpu`(기본 false) 인자. 물리 단계는 Gazebo가 읽기 전 월드 SDF 사본(`<bridge_dir>/physics_<world>`)의 `<physics>`만 바꾼다 — `set_physics` 서비스는 gz.msgs.Physics 전체를 받아 빠진 필드가 0이 된다. 단계 상한 0.01 s(IMU 100 Hz). `gpu:=true`는 서버 기동 전 `GALLIUM_DRIVER=d3d12`. 로봇 코드·센서 속도·샘플 수는 그대로. `d395_s2_bench.py`에 `--physics-step`, `--gpu`.
+- 증거: WSL `glxinfo -B` 기본 llvmpipe(Accelerated: no), `GALLIUM_DRIVER=d3d12`에서 "D3D12 (AMD Radeon(TM) 860M Graphics)" GL 4.6 Accelerated: yes(EGL surfaceless 같음). WSL Jazzy `test_gz_multi_core.py` 20 passed, host `test_d395_s2_bench.py test_gz_multi_core.py` 16 passed/1 skipped.
+- gate 변화: 없음(기본값 불변).
+- 결정: 없음

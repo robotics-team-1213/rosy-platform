@@ -48,8 +48,15 @@ from fleet.swarm.transport import RobotApiError, RobotClient
 logger = logging.getLogger("fleet.localization")
 
 POLL_S = 0.5
-#: Each robot call is bounded so one stalled CORE cannot hold up the others (review of lane C).
-CALL_TIMEOUT_S = 1.0
+#: Each robot call is bounded so one stalled CORE cannot hold up the others (review of lane C);
+#: calls to different robots run side by side. S1 run 3 T2: 1 s lost observer evidence under load.
+CALL_TIMEOUT_S = 2.5
+#: S1 run 3 T2: a decision POST that timed out may still have reached CORE. If the robot is
+#: then first seen LOCALIZED within UNCONFIRMED_S at the decided pose (within UNCONFIRMED_M
+#: and UNCONFIRMED_YAW_RAD), Fleet adopts the decision's provenance as if it were confirmed.
+UNCONFIRMED_S = 15.0
+UNCONFIRMED_M = 0.05
+UNCONFIRMED_YAW_RAD = math.radians(5.0)
 #: No decision while a CORE mission moves the robot, nor this long after it ends: a pose
 #: decided mid-rotation failed its check at fit 0.18-0.39 (S1 re-run, F1 WSL run).
 MISSION_QUIET_S = 1.0
@@ -129,6 +136,9 @@ class LocalizationService:
         #: decision sent and not yet seen LOCALIZED, and each LOCALIZED robot's last pose.
         self._anchors: set[str] = set()
         self._pending: dict[str, cues.Pose] = {}
+        #: robot_id -> (request_id, decided pose, whether its cues anchor, Fleet time) of a
+        #: timed-out decision POST.
+        self._unconfirmed: dict[str, tuple] = {}
         self._localized_at: dict[str, tuple[cues.Pose, float]] = {}
         #: robot_id -> ((request_id, stamp), Fleet monotonic time first seen).
         self._report_seen: dict[str, tuple] = {}
@@ -226,6 +236,7 @@ class LocalizationService:
         """Anchors (S1 finding 3): LOCALIZED at the pose of a Fleet decision that a world
         cue, `source: human` or anchored peers carried. The track is 180-degree symmetric,
         so robots mirrored together agree with each other; only an anchor may be a peer.
+        A decision whose POST timed out counts when the robot reaches its pose (`_reached`).
 
         Provenance resets when the robot is seen outside LOCALIZED (an unreadable poll
         keeps it) and when its pose jumps while LOCALIZED (a pose injected past Fleet).
@@ -241,15 +252,30 @@ class LocalizationService:
             self._localized_at[rid] = (pose, now)
             if previous is None:
                 decided = self._pending.pop(rid, None)
+                unconfirmed = self._unconfirmed.pop(rid, None)
                 if decided is not None and not service_logic.disagrees(decided, pose):
                     self._anchors.add(rid)
                     logger.info("localization: %s LOCALIZED by a Fleet decision: anchor", rid)
+                elif unconfirmed is not None and self._reached(unconfirmed, pose, now):
+                    self._anchors.add(rid)
+                    logger.info("localization: %s LOCALIZED at timed-out decision %s: confirmed, "
+                                "anchor", rid, unconfirmed[0])
                 else:
                     logger.info("localization: %s LOCALIZED without a Fleet-known decision: "
                                 "not an anchor, not a peer", rid)
             elif rid in self._anchors and service_logic.jumped(previous[0], pose, now - previous[1]):
                 self._anchors.discard(rid)
                 logger.warning("localization: %s pose jumped while LOCALIZED: no longer an anchor", rid)
+
+    @staticmethod
+    def _reached(unconfirmed: tuple, pose: cues.Pose, now: float) -> bool:
+        """A timed-out decision is confirmed by the robot's first LOCALIZED pose: soon enough,
+        close enough, and carried by cues that anchor (S1 run 3 T2)."""
+        _, decided, anchoring, sent = unconfirmed
+        return (now - sent <= UNCONFIRMED_S
+                and math.dist(decided[:2], pose[:2]) <= UNCONFIRMED_M
+                and abs(cues.wrap(pose[2] - decided[2])) <= UNCONFIRMED_YAW_RAD
+                and anchoring)
 
     def anchors(self) -> set:
         """Robots whose LOCALIZED pose Fleet can trace to a world cue (tests, console)."""
@@ -310,20 +336,28 @@ class LocalizationService:
         decision = self._arbiter.observe(report, context, now)
         if decision is not None:
             c = report.candidates[decision.candidate_index]
-            await self._post_decision(rid, client, decision, (c.x, c.y, c.yaw))
+            await self._post_decision(rid, client, decision, (c.x, c.y, c.yaw), now)
 
     async def _post_decision(self, rid: str, client: RobotClient,
-                             decision: LocalizationDecision, pose: cues.Pose) -> None:
+                             decision: LocalizationDecision, pose: cues.Pose, now: float) -> None:
         record = {"request_id": decision.request_id, "candidate_index": decision.candidate_index,
                   "cues": [c.value for c in decision.cues], "result": "sent"}
+        # Context.peers holds anchors only, so a `peers` cue is anchored too.
+        anchoring = decision.source is DecisionSource.HUMAN or any(
+            k in service_logic.WORLD_CUES or k == "peers" for k in record["cues"])
         try:
             await self._bounded(client.localization_decision(decision))
             logger.info("localization: %s decision %s candidate %s cues %s", rid,
                         decision.request_id, decision.candidate_index, record["cues"])
-            # Context.peers holds anchors only, so a `peers` cue is anchored too.
-            if decision.source is DecisionSource.HUMAN or any(
-                    k in service_logic.WORLD_CUES or k == "peers" for k in record["cues"]):
+            self._unconfirmed.pop(rid, None)
+            if anchoring:
                 self._pending[rid] = pose
+        except asyncio.TimeoutError:
+            # CORE may have taken it (S1 run 3 d3): confirmed later by the robot's pose.
+            record["result"] = "unreachable"
+            self._unconfirmed[rid] = (decision.request_id, pose, anchoring, now)
+            logger.warning("localization: decision %s to %s timed out; unconfirmed for %.0f s",
+                           decision.request_id, rid, UNCONFIRMED_S)
         except RobotApiError as exc:
             record["result"] = exc.code
             logger.info("localization: %s refused decision %s: %s", rid, decision.request_id, exc.code)
@@ -461,5 +495,6 @@ class LocalizationService:
             self._quiet_until.pop(rid, None)
             self._anchors.discard(rid)
             self._pending.pop(rid, None)
+            self._unconfirmed.pop(rid, None)
             self._localized_at.pop(rid, None)
         self._known = current

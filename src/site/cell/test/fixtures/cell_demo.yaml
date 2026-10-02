@@ -11,3 +11,4 @@ stations:
 home: {x: 0.1, y: 0.0, z: 0.15, yaw: 0.0}
 kinematics_revision: fixture-urdf-1
 approach_clearance_m: 0.05
+fingertip_overhang_m: 0.0025

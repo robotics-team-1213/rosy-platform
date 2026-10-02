@@ -50,9 +50,12 @@ def test_empty_queues_disappear_by_attribute_not_style():
 
 
 def test_the_queues_panel_is_pinned_to_the_left_column():
-    """배치는 큐 가시성과 무관하다 — grid 영역이 고정돼 있다(D-201)."""
+    """배치는 grid 영역이 고정돼 있다(D-201 예외가 먼저). 2026-10-02 회차: 오프라인
+    로봇이 큐를 채우게 된 뒤 지도 아래 칸은 위반이었다(1920에서 큐 상단 963px).
+    큐는 첫 행, 지도는 둘째 행이다."""
     styles = (WEB / "styles.css").read_text(encoding="utf-8")
-    assert ".queues-panel { grid-column: 1; grid-row: 2; }" in styles
+    assert ".queues-panel { grid-column: 1; grid-row: 1; }" in styles
+    assert 'main > .panel[aria-labelledby="map-heading"] {\n    grid-column: 1;\n    grid-row: 2;' in styles
 
 
 def test_both_queues_exist_in_the_markup():

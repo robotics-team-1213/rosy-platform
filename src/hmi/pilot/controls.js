@@ -31,7 +31,7 @@ export function profileFromBaseVelocity(control) {
           max_linear: cap(control?.max_linear), max_angular: cap(control?.max_angular)};
 }
 
-// SIM servers before v1.76 have no `controls`: the legacy screen jogged every joint and the
+// SIM servers before v1.87 have no `controls`: the legacy screen jogged every joint and the
 // gripper by 0.02 rad, so that is the fallback (limits unknown → null).
 export function fallbackOmxControls(target) {
   const names = [...new Set([...(target?.joints ?? []), ...(target?.gripper ? [target.gripper] : [])])];

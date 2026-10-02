@@ -232,3 +232,13 @@ X:/DevTemp/rosy-omx-lerobot-044/Scripts/python.exe -m omx_adapter.lerobot_export
 ```
 
 export 결과가 verified이고 실제 reader가 모든 frame을 재독출한 경우에만 데이터셋 연계 검증이다. 원본 복사와 해시는 rosy_provenance에 남는다. robot_type=omx_sim_ros, ROS joint 순서와 rad를 유지한다. native OMX follower의 body normalization/degree·gripper 0~100으로 자동 변환하지 않는다. 학습·정책 실행·Hub 업로드·실물 활성화는 별도다.
+
+## Rosy Cell C3: one CELL_TRANSFER in Gazebo (D-402)
+
+`run_cell_sim.sh` starts the locked follower in `src/sim/gz_sim/worlds/omx_cell_workcell.sdf`
+(or `OMX_CELL_WORLD=<path without .sdf>`) with no command owner. `probe_cell_transfer.py`,
+run with `docker exec` in that container, is the single owner process for the run: profile-built
+`ArmCommandOwner`, analytic planner, `PickPlaceRunner`, gripper readback and `gz model -p`
+block poses (helpers in `cell_sim_tools.py`). Do not start `pilot_sim_server` beside it; the
+probe refuses to run if one is present. Commands, stand-in flags, sim aid and results:
+[docs/validation/rosy-cell-gazebo-c3-2026-10-02](../../../docs/validation/rosy-cell-gazebo-c3-2026-10-02/README.md).

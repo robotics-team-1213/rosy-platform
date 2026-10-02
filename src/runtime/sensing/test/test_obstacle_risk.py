@@ -71,7 +71,16 @@ def test_frozen_tracking_preserves_wait_replan_and_camera_hold_distinctions():
     assert captured(camera={'stamp': 100., 'blocked': True}).evaluate(.1, 10.01) == {
         'action': 'limit', 'reason': 'camera_obstacle_unranged'}
     assert captured(pose_stamp=99.5).evaluate(.1, 10.01)['action'] == 'stop'
-    assert captured(camera={'stamp': 99., 'blocked': False}).evaluate(.1, 10.01)['action'] == 'stop'
+    # D-424: a stale camera limits forward speed; it does not stop the robot by itself.
+    assert captured(camera={'stamp': 99., 'blocked': False}).evaluate(.1, 10.01) == {
+        'action': 'limit', 'reason': 'camera_observation_unavailable'}
+
+
+def test_invalid_or_warming_up_camera_limits_and_never_stops():
+    """D-424 (J/K): camera invalid/missing/stale/warm-up used to STOP all motion."""
+    for camera in ({'stamp': 100., 'blocked': False, 'quality': {'valid': False}},
+                   {'stamp': 100.}, {'stamp': 95., 'blocked': True}):
+        assert captured(camera=camera).evaluate(.1, 10.01)['action'] == 'limit'
 
 
 def test_tracking_copy_is_bounded_and_rejects_invalid_geometry():

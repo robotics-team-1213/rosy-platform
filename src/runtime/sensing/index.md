@@ -66,8 +66,8 @@
 
 ## 최근 기록
 
+- 2026-10-02 · uncommitted · fix(localization): 후보 미세 단계 뒤 분리 재검사 가드, 180° 쌍둥이 시험
+- 2026-10-02 · uncommitted · fix(localization): D-395 rev. 11 — LiDAR 물체: 자기 빔은 묶기 전에, 붙은 로봇은 나누고, 중심은 밀어 낸다
+- 2026-10-02 · uncommitted · fix(learned): 그림자 차선 근거 — 연결 성분 면적 문턱과 visible 히스테리시스
+- 2026-10-02 · uncommitted · fix(perception): D-395 rev. 11 — 기준 사각형 수평선 문턱과 한 사각형 한 검출(NMS)
 - 2026-10-02 · 410c6832 · feat(control): D-411 A pilot_recorder_node 와 녹화 상태기계
-- 2026-10-02 · c8a5822c · feat(sensing): D-395 S1 R1 — LOCALIZED 로봇도 지도 밖 물체를 보고한다
-- 2026-10-02 · 7459be67 · fix(localization): D-395 S1 재실행 R3 — 낡은 odom twist 는 정지가 아니다
-- 2026-10-02 · c00b368d · fix(localization): D-395 S1 재실행 R3 — 로봇이 멈춘 뒤에만 탐색
-- 2026-10-02 · ead31a99 · fix(localization): D-395 S1 재실행 R3 — 구별 후보의 마지막 yaw 정밀화

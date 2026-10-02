@@ -60,6 +60,10 @@ def test_fixture_loads_with_a_stable_hash():
         ("mode: palletize", "mode: [palletize]", "mode"),
         ("pallets:\n", "pallets: {A: 1}\nold_pallets:\n", "pallets"),
         ("height: 0.02", "height: 0.02, colour: red", "box.colour"),
+        # grasp_depth (C3b B1): TCP below the top face, inside the box
+        ("height: 0.02", "height: 0.02, grasp_depth: -0.001", "box.grasp_depth"),
+        ("height: 0.02", "height: 0.02, grasp_depth: 0.02", "grasp_depth"),
+        ("height: 0.02", "height: 0.02, grasp_depth: .nan", "box.grasp_depth"),
         ("gap: 0.0", "gap: 0.0\napproach: '+x'", "approach"),
         ("gap: 0.0", "gap: 0.0\nmade_on: 2026-10-01", "made_on"),
         ("gap: 0.0", "gap: 0.0\n1: one", "1"),
@@ -92,3 +96,11 @@ def test_hash_is_over_parsed_values_so_int_and_float_differ():
     # documented false reject (safe direction): `gap: 0` and `gap: 0.0` parse to int and float
     text = FIXTURE.read_text(encoding="utf-8")
     assert load_recipe(text).content_hash != load_recipe(text.replace("gap: 0.0", "gap: 0", 1)).content_hash
+
+
+def test_grasp_depth_is_optional_and_defaults_to_the_top_face():
+    text = FIXTURE.read_text(encoding="utf-8")
+    assert load_recipe(text).box.grasp_depth == 0.0
+    deep = load_recipe(text.replace("height: 0.02", "height: 0.02, grasp_depth: 0.008", 1))
+    assert deep.box.grasp_depth == 0.008
+    assert deep.content_hash != load_recipe(text).content_hash

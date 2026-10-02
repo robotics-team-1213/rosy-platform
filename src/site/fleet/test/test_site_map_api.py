@@ -271,7 +271,10 @@ def test_field_view_review_fixes_are_served():
     # so the token input never covers the wordmark and the stop keeps its own column.
     assert "@media (width < 90rem)" in styles and '"brand pill clock more estop"' in styles
     assert 'id="topbar-more"' in page and 'id="topbar-extra"' in page
-    assert 'id="map-layer-hint"' in page and 'id="field-storage-state"' in page
+    # D-410 — 지도 레이어 안내는 운용 문서에, 보정 도구 문장은 설치 문서에 있다.
+    install = client.get("/console/install").text
+    assert 'id="map-layer-hint"' in page
+    assert 'id="field-storage-state"' in install
 
 
 def test_console_web_node_unit_tests_pass():

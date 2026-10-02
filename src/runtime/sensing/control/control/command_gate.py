@@ -8,7 +8,12 @@ from dataclasses import dataclass, replace
 from threading import Lock
 from uuid import uuid4
 from .lidar_guard import TranslationEvidence, command_translation_bumpers
-from .obstacle_risk import TrackedEvidence
+from .obstacle_risk import CAMERA_LIMIT_REASONS, TrackedEvidence
+
+#: D-424: forward speed share left while the camera is unavailable or warming up. Policy, not
+#: geometry; the LiDAR body strip still stops at the gap. An unranged camera obstacle stops
+#: forward motion instead (review H2).
+CAMERA_LIMIT_SCALE = .5
 
 
 @dataclass(frozen=True)
@@ -156,7 +161,15 @@ class CommandPolicy:
                 if not isinstance(snapshot.tracking, TrackedEvidence):
                     raise ValueError('Invalid tracking evidence')
                 tracking = snapshot.tracking.evaluate(linear, now)
-                if tracking['action'] != 'clear':
+                if tracking['action'] == 'limit' and tracking['reason'] in CAMERA_LIMIT_REASONS:
+                    # D-424 (J/K, review H2): camera evidence never stops a turn or a reverse.
+                    # An unranged camera obstacle stops FORWARD motion (low clutter below the
+                    # scan plane); an unusable camera only limits forward speed.
+                    v = result.linear
+                    if v > 0.:
+                        v = 0. if tracking['reason'] == 'camera_obstacle_unranged' else v*CAMERA_LIMIT_SCALE
+                    result = GateResult(v, result.angular, tracking['reason'])
+                elif tracking['action'] != 'clear':
                     result = GateResult(0., 0., tracking['reason'], tracking['action'] == 'stop')
             if (snapshot.linear_limit is not None and result.linear != 0. and
                     abs(result.linear) > snapshot.linear_limit and
@@ -210,6 +223,11 @@ def evaluate_command(linear: float, angular: float, state: GateInputs) -> GateRe
         v = 0.
     if not state.can_rotate and not state.bounded_motion:
         w = 0.
+    if linear != 0. and angular != 0. and v == 0. and w == angular and not (state.cliff or state.tilt):
+        # D-424 (F): translation is blocked by an obstacle but the turn is clear: turn in place
+        # (it never moves the body closer) instead of freezing the whole command. A cliff or
+        # tilt still stops everything.
+        return GateResult(0., w, 'motion_limited')
     if linear != 0. and angular != 0. and (v != linear or w != angular):
         return stop('trajectory_changed')
     return GateResult(v, w, 'allow' if (v, w) == (linear, angular) else 'motion_limited')

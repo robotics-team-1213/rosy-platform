@@ -24,11 +24,10 @@
     calibration_require_us_agreement: false
     # Installed ADC conversion saturates near .9698 m despite max_range=3.
     calibration_us_max_range: 0.95
-    # Lidar-origin range: body radius 76mm + offset 17mm + stand-off 18mm.
-    # Round the conservative 111mm floor upward; the C1 cannot see 18mm.
-    stop_distance: 0.12
+    # D-424: safety stop/clear are derived from the URDF body strip and the D-422 gap at
+    # safety_max_linear (~0.081 / 0.111 m from the LiDAR); set stop_distance/clear_distance
+    # here only to raise them. stop_front is wander's own advisory band.
     stop_front: 0.12
-    clear_distance: 0.14
     us_stop_distance: 0.020
     us_clear_distance: 0.028
     # Wander's close-wall bands remain advisory; safety's body envelope wins.
@@ -50,6 +49,7 @@
     cliff_clear_raw: 1500
     cliff_mode: low
     # Circumradius from base_link (URDF rear caster 7.6cm). Calib yaml wins if set.
+    # D-424: in-place turns never use less than the URDF rotation radius 0.0826 (body.rotation_radius).
     robot_radius: 0.076
     # Narrow maze HUD / opening cap. Safety auto-cals from L+R.
     auto_map: true

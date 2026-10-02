@@ -46,6 +46,7 @@ _TRANSFORM_FIELDS = {
 }
 _SELECTOR_FIELDS = {"label", "point_yx_1000", "box_yxyx_1000"}
 _MAX_CANDIDATE_BYTES = 32 * 1024
+_MAX_CELL_JOB_CANDIDATE_BYTES = 64 * 1024
 _MAX_POST_ACTION_OBSERVATION_AGE = timedelta(
     seconds=ER2_POST_ACTION_OBSERVATION_MAX_AGE_SECONDS,
 )
@@ -69,6 +70,23 @@ def _check_candidate(value: Mapping[str, Any]) -> dict[str, Any]:
     if not isinstance(value, Mapping):
         raise ValueError("candidate must be a JSON object")
     document = dict(value)
+
+    if document.get("kind") == "cell_job":
+        required = {"kind", "recipe", "cell", "recipe_sha256", "cell_sha256", "job"}
+        if set(document) != required:
+            raise ValueError("cell_job candidate requires recipe, cell, hashes, and compiled Job")
+        for field in ("recipe", "cell", "job"):
+            if not isinstance(document[field], Mapping):
+                raise ValueError(f"cell_job candidate {field} must be an object")
+        for field in ("recipe_sha256", "cell_sha256"):
+            digest = document[field]
+            if (not isinstance(digest, str) or len(digest) != 64
+                    or any(char not in "0123456789abcdef" for char in digest)):
+                raise ValueError(f"cell_job candidate {field} must be lowercase SHA-256")
+        encoded = _json(document)
+        if len(encoded.encode("utf-8")) > _MAX_CELL_JOB_CANDIDATE_BYTES:
+            raise ValueError("cell_job candidate metadata exceeds 64 KiB")
+        return json.loads(encoded)
 
     if set(document) - _ALLOWED_FIELDS:
         forbidden = set(document) - _ALLOWED_FIELDS
@@ -662,6 +680,47 @@ class ProposalStore:
         if mission is None:
             raise ProposalConflict("Mission draft was not persisted")
         return self._row(updated), mission, True
+
+    def finalize_cell_job(self, cell_job_store: Any, *, proposal_id: str,
+                          principal_id: str, submission: Mapping[str, Any]) -> tuple[dict, dict, bool]:
+        """Atomically persist a recompiled ordered Cell Job and resolve its proposal."""
+        proposal_id = _text("proposal_id", proposal_id)
+        principal_id = _text("principal_id", principal_id, limit=96)
+        resolution_json = _json(dict(submission))
+        with closing(self._connect()) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            row = connection.execute(
+                "SELECT * FROM fleet_proposals WHERE proposal_id=? AND principal_id=?",
+                (proposal_id, principal_id),
+            ).fetchone()
+            if row is None:
+                raise KeyError(proposal_id)
+            candidate = json.loads(row["candidate_json"])
+            if candidate.get("kind") != "cell_job":
+                raise ProposalConflict("only a cell_job proposal can create an ordered Cell Job")
+            if row["state"] == "RESOLVED":
+                existing = cell_job_store._get(connection, proposal_id)
+                if existing is None:
+                    raise ProposalConflict("resolved Cell Job proposal has no durable ordered steps")
+                connection.commit()
+                return self._row(row), existing, False
+            if row["state"] != "PROPOSED":
+                raise ProposalConflict("proposal is not available for resolution")
+            cell_job = cell_job_store.create_in_transaction(
+                connection, mission_id=proposal_id, proposal_principal_id=principal_id,
+                request_key=row["request_key"], request_digest=row["candidate_digest"],
+                submission=submission,
+            )
+            connection.execute(
+                """UPDATE fleet_proposals SET state='RESOLVED', resolved_json=?, mission_id=?,
+                   reason=NULL, updated_at=? WHERE proposal_id=? AND principal_id=?""",
+                (resolution_json, proposal_id, _now(), proposal_id, principal_id),
+            )
+            updated = connection.execute(
+                "SELECT * FROM fleet_proposals WHERE proposal_id=?", (proposal_id,),
+            ).fetchone()
+            connection.commit()
+        return self._row(updated), cell_job, True
 
     def get(self, proposal_id: str, *, principal_id: str | None = None) -> dict[str, Any] | None:
         proposal_id = _text("proposal_id", proposal_id)

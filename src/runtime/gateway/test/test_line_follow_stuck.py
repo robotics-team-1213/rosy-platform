@@ -292,3 +292,81 @@ def test_missing_range_min_refuses_the_back_off():
     m, events = _manager(linked=False)
     _drive(m, 0.0, 5.5, front=0.15, range_min=None)
     assert events.named("nav.line_stuck_local_result")[-1]["reason"] == "rear_blind"
+
+
+def test_rear_band_is_the_body_width_not_the_path_band():
+    """Gazebo 2026-10-02: a side wall 0.08 m to the side is not "behind" a 0.057 m half-wide body."""
+    wall = [(0.15, 0.0), (-0.20, 0.08)]                          # side wall return behind-left
+
+    def rear(**overrides):
+        m, events = _manager(linked=True, **overrides)
+        t = 0.0
+        while t < 5.5:
+            m.observe_clearance(0.15, received_at=t)
+            m.observe_body_points(wall, range_min=0.0, received_at=t)
+            m.observe(LineObservation(source=LineFollowMode.CAMERA_LINE, stamp=t, visible=True,
+                                      error=0.0, confidence=0.9), received_at=t, source_now=t)
+            m.tick(t + 0.01)
+            t = round(t + 0.1, 6)
+        return events.named("nav.line_stuck_opened")[0]["rear_clearance_m"]
+
+    assert rear() == pytest.approx(0.20 + 0.017 - 0.076)          # old ±0.09 band: counted
+    assert rear(body_half_width_m=0.05655) is None                 # ±0.077 band: a side wall
+
+
+def test_estop_closes_the_stuck_with_reason_estop(core_client):
+    client, services = core_client()
+    lf = services.line_follow
+    clock = {"t": 0.0}
+    lf.bind_clock(lambda: clock["t"])
+    lf.bind_recovery(console_linked=lambda: True, calibration_active=lambda: False,
+                     linear_ceiling=lambda: 0.15)
+    client.put("/api/v1/line-follow/mode", json={"mode": "CAMERA_LINE"},
+               headers={"Authorization": "Bearer rosy-dev-operator"})
+    seen = []
+    services.events.subscribe(seen.append)
+    t = 0.0
+    while t < 5.5:
+        lf.observe_clearance(0.15, received_at=t)
+        lf.observe(LineObservation(source=LineFollowMode.CAMERA_LINE, stamp=t, visible=True,
+                                   error=0.0, confidence=0.9), received_at=t, source_now=t)
+        clock["t"] = t + 0.01
+        lf.tick(clock["t"])
+        t = round(t + 0.1, 6)
+    assert lf.status().stuck is not None
+    services.safety.trigger_estop("test")
+    closed = [e for e in seen if e.type == "nav.line_stuck_closed"]
+    assert closed and closed[-1].data["reason"] == "estop"
+
+
+def test_trail_expires_while_waiting_for_the_console():
+    """Decision 2026-10-02: standing still for the console ages the trail past 30 s."""
+    m, events = _manager(linked=True)
+    _drive(m, 0.0, 3.0, front=1.0, range_min=0.15)
+    _drive(m, 3.0, 8.5, front=0.15, range_min=0.15)
+    stuck_id = m.status().stuck.stuck_id
+    m.stuck_decision(stuck_id, "WAIT", by="operator", now=8.5)
+    _drive(m, 8.5, 20.0, front=0.15, range_min=0.15)
+    assert m.stuck_decision(stuck_id, "BACK_AND_RETRY", by="operator", now=20.0) == "back"
+    m.stuck_decision(stuck_id, "WAIT", by="operator", now=20.0)
+    _drive(m, 20.0, 40.0, front=0.15, range_min=0.15)            # last forward ~3 s, now 40 s
+    with pytest.raises(AnswerRefused, match="rear_blind"):
+        m.stuck_decision(stuck_id, "BACK_AND_RETRY", by="operator", now=40.0)
+
+
+@pytest.mark.parametrize("known, scan_age, rear_m, state", [
+    (True, 0.1, None, "clear"),          # fresh scan, rear band empty
+    (True, 0.1, 0.30, "clear"),          # wider than recovery_rear_clear_m
+    (True, 0.1, 0.061, "clear"),
+    (True, 0.1, 0.06, "blocked"),        # at the threshold counts as blocked
+    (True, 0.1, 0.02, "blocked"),
+    (True, 0.6, None, "unknown"),        # scan older than clearance_stale_s (0.5)
+    (True, None, None, "unknown"),       # no scan at all
+    (False, 0.1, None, "unknown"),       # no URDF body geometry
+])
+def test_rear_state_tells_empty_from_unknown(known, scan_age, rear_m, state):
+    """Review M4: StuckRecoveryMixin._rear_state directly."""
+    m, _ = _manager(linked=True)
+    if scan_age is not None:
+        m.observe_body_points([], range_min=0.0, received_at=10.0 - scan_age)
+    assert m._rear_state(known, rear_m, 10.0) == state

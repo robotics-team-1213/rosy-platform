@@ -1,0 +1,21 @@
+{
+  "scenario": "expired-grant-running-action",
+  "events": [
+    "fleet-persists-short-lived-grant",
+    "local-controller-accepts-action",
+    "submit-receipt-is-lost",
+    "fleet-persists-unknown-and-resource-claims",
+    "grant-expires",
+    "site-process-restarts",
+    "fleet-reads-same-action-as-running",
+    "conflicting-admission-is-rejected"
+  ],
+  "expected": {
+    "mission_state": "HOLD",
+    "reason": "LOCAL_ACTION_STILL_NONTERMINAL",
+    "resource_claim_retained": true,
+    "resource_claim_phase": "DISPATCHING",
+    "automatic_resubmit_count": 0,
+    "conflicting_admission": "rejected"
+  }
+}

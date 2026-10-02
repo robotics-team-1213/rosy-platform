@@ -58,4 +58,6 @@ imu:
   height_m: 0.0805
 footprint:
   rotation_radius_m: 0.08257
+  half_width_m: 0.05655
+  front_x_m: 0.04205
   rotation_radius_sim_box_m: 0.08826

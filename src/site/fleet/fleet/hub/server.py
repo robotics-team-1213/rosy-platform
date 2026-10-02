@@ -4,10 +4,24 @@ import logging
 from typing import Optional
 
 from fastapi import APIRouter, FastAPI, Header, HTTPException, WebSocket, WebSocketDisconnect
+from starlette.websockets import WebSocketState
 from core_common.protocol.schemas import Envelope, EnvelopeType
 from fleet.hub.hub import SiteHub
 
 logger = logging.getLogger("hub.server")
+
+async def send_reply(websocket, reply: Envelope) -> bool:
+    """Reply unless the agent has gone: never send into a closed socket (D-407 re-run:
+    "websocket.send after websocket.close" when the agent dropped the link)."""
+    if websocket.client_state is not WebSocketState.CONNECTED:
+        return False
+    try:
+        await websocket.send_json(reply.model_dump(exclude_none=True))
+        return True
+    except (WebSocketDisconnect, RuntimeError, OSError) as exc:
+        logger.info("robot link closed before the hub reply was sent: %s", exc)
+        return False
+
 
 def install_hub_routes(app: FastAPI, hub: SiteHub,
                        hub_token: Optional[str] = None) -> FastAPI:
@@ -29,6 +43,10 @@ def install_hub_routes(app: FastAPI, hub: SiteHub,
     async def ws_robots(websocket: WebSocket):
         await websocket.accept()
         session = hub.open_session()
+
+        async def send(reply: Envelope) -> bool:
+            return await send_reply(websocket, reply)
+
         try:
             while True:
                 text = await websocket.receive_text()
@@ -44,15 +62,17 @@ def install_hub_routes(app: FastAPI, hub: SiteHub,
                 if reply.type is EnvelopeType.ERROR:
                     code = reply.payload.get("code")
                     logger.warning("hub rejected %s: %s", env.type.value, code)
-                    await websocket.send_json(reply.model_dump(exclude_none=True))
+                    if not await send(reply):
+                        break
                     # A refused HELLO, or a socket another connection took over,
                     # must not linger: close so the agent's backoff reconnects.
                     if env.type is EnvelopeType.HELLO or code == "PAIRING_INVALID":
                         await websocket.close(code=4401)
                         break
                     continue
-                
-                await websocket.send_json(reply.model_dump(exclude_none=True))
+
+                if not await send(reply):
+                    break
         except WebSocketDisconnect:
             pass
         except Exception as exc:
