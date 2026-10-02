@@ -4619,3 +4619,8 @@
 - Change: forward the existing OMX coordinator active_phase_id through both Skill integration layers so ActionRunner exact-phase cancel reaches the journaled goal. Reject a mismatched phase and retain separate phase cancel and parent terminal meanings.
 - Evidence: red reproduction on real ActionApi/ActionRunner/ActionStore before the fix; focused provider/Skill/API/Cell/PickPlaceRunner regression 68 passed. Independent review: 4 passed, no Critical/Important findings. Quick tier: 96 passed / 25 freshness warnings.
 - Gate: SOURCE/LOCAL only. Full runtime composition, Cell two-ledger replay and ROS-SIM remain unproven.
+
+## 2026-10-03 · uncommitted · docs(adr): D-425 앱·웹 역할·공유 경계·목표 폴더
+- 변경: 화면/API/상태 정본/최종 writer를 분리한 소유권 표, UI·통신·계약 공유 범위, apps/site·apps/device·ui 목표 배치와 점진 이전 출구를 기록. D-340·D-370·D-413은 부분 대체 범위를 표시하고 역사 본문을 보존. 별도 브랜치의 D-423·D-424 번호를 예약. 코드·wire·제품 폴더는 이전하지 않음.
+- 증거: 작성 전 문서 계약 81 passed. 변경 후 문서 계약·quick tier 120 passed/25 기존 freshness warnings; harness lint와 색인/BOM/CRLF/부분 대체 링크를 확인. 한글이 손상된 신규 로그·색인 행은 UTF-8로 정정하고 검증을 재실행.
+- gate 변화: 없음 — 구조 결정 수용과 구현·설치·DEVICE/FIELD 수용은 별개.
