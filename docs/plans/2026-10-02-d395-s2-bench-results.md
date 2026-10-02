@@ -196,3 +196,11 @@ bash /mnt/x/DevTemp/rosy-d395-s2/stop_q.sh q1          # at 21:00 for the 21:35 
 bash /mnt/x/DevTemp/rosy-d395-s2/kill_partition.sh     # "left: 0", ports free
 python tools/sim/d395_s2_summary.py X:\DevTemp\rosy-d395-s2\q1
 ```
+
+## S2 rerun attempt 2026-10-02 22:21–22:52 KST (aborted)
+
+- New sim-only, opt-in launch args on `gz_multi.launch.py` (defaults unchanged): `physics_step:=<s>` (≤ 0.01, launches a world copy with that `<physics><max_step_size>`), `real_time_factor:=<x>`, `gpu:=true` (sets `GALLIUM_DRIVER=d3d12`).
+- GPU: WSL on this host renders OpenGL with `llvmpipe` (Mesa 25.2.8, software), so `gpu:=true` changes nothing here.
+- With `physics_step:=0.005` and 4 robots: RTF 0.017 after 70 s wall, WSL load 122. Top CPU users were the four `core` processes (~41 % each), Gazebo (`ruby`, ~28 %) and `loc_assist` (~24 %), so the physics step is not the limit; the per-robot stack is.
+- WSL restarted at about 22:50 KST, ending the attempt; no scenario ran.
+- Verdict: S2 cannot run on this host. It needs a machine with roughly 4× the free CPU, or the robots' CORE/loc_assist stacks spread over hosts. Logs: `X:\DevTemp\rosy-d395-s2b\`.

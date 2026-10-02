@@ -262,8 +262,9 @@ main {
   pointer-events: none;
 }
 .map-empty[hidden], .legend[hidden] { display: none; }
-.map-empty strong { color: var(--ink); font-size: var(--text-title); font-weight: var(--weight-emphasis); }
-.map-empty p { max-width: 34ch; margin: 0; color: var(--ink-quiet); font-size: var(--text-label); line-height: var(--leading-copy); }
+.map-empty strong { color: var(--ink); font-size: var(--text-label); font-weight: var(--weight-label); letter-spacing: var(--track-label); }
+.map-empty p { max-width: 34ch; margin: 0; color: var(--ink-quiet); font-size: var(--text-micro); line-height: var(--leading-copy); }
+.map-empty-icon { width: var(--text-display); height: var(--text-display); opacity: 0.4; }
 
 #map-canvas {
   /* D-201 — 지도는 페이지를 밀지 않고 프레임에 맞는다. 박스는 폭을 채우고
@@ -356,7 +357,15 @@ main {
   gap: var(--space-1) var(--space-3);
   margin: var(--space-2) 0 var(--space-3);
 }
-.facts div { display: flex; flex-direction: column; gap: 0; }
+/* D-417 — 넓은 칸에서 팩트는 한 줄로: 위치·방향이 넓게, 배터리·안전은 좁게. */
+@media (width >= 64rem) {
+  .facts { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-3); align-items: baseline; }
+  .facts div { flex: 0 1 auto; min-width: 0; }
+  .facts div[data-fact="pose"] { flex: 1 1 140px; }
+  .facts div[data-fact="yaw"] { flex: 0 1 80px; }
+  .facts div[data-fact="battery"] { flex: 0 1 70px; }
+  .facts div[data-fact="safety"] { flex: 0 1 60px; }
+}
 .facts span { font-family: var(--mono); font-size: var(--text-micro); letter-spacing: var(--track-label); color: var(--ink-quiet); }
 /* D-405 — 측정 라벨 아이콘은 라벨 척도(label 단계)를 따른다. 값(1.125rem)과 같으면 무겁다. */
 .facts .ui-icon { width: var(--text-label); height: var(--text-label); }

@@ -123,7 +123,8 @@ def _setup(mod, **overrides):
         "robots": "3", "prefix": "rosy", "world_name": "rosy_factory.world", "mode": "none",
         "headless": "true", "spawn_spacing": "1.5", "core": "true", "api_port_base": "8080",
         "inflation_radius": "", "spawn_x": "", "spawn_y": "", "map": "", "loc_assist": "true",
-        "spawn_poses": "", "seed_initialpose": "true",
+        "spawn_poses": "", "seed_initialpose": "true", "nav_composition": "false",
+        "physics_step": "", "real_time_factor": "", "gpu": "false",
         **overrides,
     })
     try:
@@ -254,3 +255,109 @@ def test_seed_initialpose_false_leaves_amcl_unseeded():
     mod = _module()
     actions, context = _setup(mod, robots="2", core="false", mode="nav", seed_initialpose="false")
     assert _named(actions, context, "seed_initialpose.py") == []
+
+
+# --- D-395 S2 rerun: sim-only physics step and GPU rendering --------------------------------
+FLEET_WORLD = LAUNCH.parents[3] / "runtime" / "sensing" / "map" / "map_v2_fleet" / "worlds" / "map_v2_fleet.world"
+FACTORY_WORLD = LAUNCH.parents[1] / "worlds" / "rosy_factory.world"
+
+
+def _args_module():
+    import sys
+    sys.path.insert(0, str(LAUNCH.parent))
+    import gz_multi_args
+    return gz_multi_args
+
+
+def _physics(path):
+    import xml.etree.ElementTree as ET
+    world = ET.parse(path).getroot().find("world")
+    return world, world.findall("physics")
+
+
+def test_physics_step_default_loads_the_world_unchanged(tmp_path):
+    args = _args_module()
+    assert args.physics_world(str(FLEET_WORLD), None, None, str(tmp_path)) == str(FLEET_WORLD)
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_physics_step_writes_a_world_copy_with_only_the_physics_changed(tmp_path):
+    args = _args_module()
+    path = args.physics_world(str(FLEET_WORLD), 0.005, None, str(tmp_path))
+    assert os.path.dirname(path) == str(tmp_path)
+    world, physics = _physics(path)
+    assert len(physics) == 1     # map_v2_fleet has none; Gazebo would default to 1 ms
+    assert float(physics[0].find("max_step_size").text) == 0.005
+    assert float(physics[0].find("real_time_factor").text) == 1.0
+    source, _ = _physics(FLEET_WORLD)
+    assert world.get("name") == source.get("name")
+    for tag in ("plugin", "model", "include", "light"):
+        assert len(world.findall(tag)) == len(source.findall(tag))
+    assert "model://control/map/map_v2_fleet/meshes/road_lines.stl" in open(path, encoding="utf-8").read()
+
+
+def test_physics_step_replaces_an_existing_physics_block(tmp_path):
+    args = _args_module()
+    path = args.physics_world(str(FACTORY_WORLD), 0.004, 2.0, str(tmp_path))
+    _, physics = _physics(path)
+    assert len(physics) == 1
+    assert len(physics[0].findall("max_step_size")) == 1
+    assert float(physics[0].find("max_step_size").text) == 0.004
+    assert float(physics[0].find("real_time_factor").text) == 2.0
+
+
+@pytest.mark.parametrize("step,rtf", [(0.02, None), (0., None), (-0.005, None), (0.005, 0.)])
+def test_physics_step_rejects_steps_the_imu_cannot_keep_up_with(tmp_path, step, rtf):
+    args = _args_module()
+    with pytest.raises(ValueError):
+        args.physics_world(str(FLEET_WORLD), step, rtf, str(tmp_path))
+
+
+def _gz_server_args(actions, context):
+    from launch.actions import IncludeLaunchDescription
+    for action in actions:
+        if isinstance(action, IncludeLaunchDescription):
+            launch_args = {_text(k, context): _text(v, context) for k, v in action.launch_arguments}
+            if " -s " in launch_args.get("gz_args", ""):
+                return launch_args["gz_args"]
+    raise AssertionError("no gz sim server include")
+
+
+def _set_env(actions, context):
+    from launch.actions import SetEnvironmentVariable
+    return {_text(a.name, context): _text(a.value, context)
+            for a in actions if isinstance(a, SetEnvironmentVariable)}
+
+
+def test_launch_defaults_keep_the_catalog_world_and_the_software_renderer():
+    mod = _module()
+    actions, context = _setup(mod, robots="1", core="false")
+    assert "physics_" not in _gz_server_args(actions, context)
+    assert "GALLIUM_DRIVER" not in _set_env(actions, context)
+    declared = {a.name: a.default_value for a in mod.generate_launch_description().entities
+                if hasattr(a, "default_value")}
+    assert _text(declared["physics_step"], context) == ""
+    assert _text(declared["real_time_factor"], context) == ""
+    assert _text(declared["gpu"], context) == "false"
+
+
+def test_launch_physics_step_and_gpu_reach_the_gazebo_server():
+    mod = _module()
+    actions, context = _setup(mod, robots="1", core="false", physics_step="0.005", gpu="true")
+    gz_args = _gz_server_args(actions, context)
+    world = gz_args.split('"')[1]
+    assert os.path.basename(world) == "physics_rosy_factory.world"
+    _, physics = _physics(world)
+    assert float(physics[0].find("max_step_size").text) == 0.005
+    assert _set_env(actions, context)["GALLIUM_DRIVER"] == "d3d12"
+    # Set before the server starts: launch runs its actions in order.
+    env_at = next(i for i, a in enumerate(actions) if "GALLIUM_DRIVER" in _set_env([a], context))
+    server_at = next(i for i, a in enumerate(actions) if _gz_server_args_or_none([a], context))
+    assert env_at < server_at
+
+
+def _gz_server_args_or_none(actions, context):
+    try:
+        return _gz_server_args(actions, context)
+    except AssertionError:
+        return None
