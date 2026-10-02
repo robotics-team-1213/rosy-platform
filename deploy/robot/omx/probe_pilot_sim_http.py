@@ -33,6 +33,9 @@ BASE = "http://127.0.0.1:8088/api/v1/sim/omx"
 TERMINAL = {"SUCCEEDED", "REJECTED", "CANCELED", "UNKNOWN_HOLD"}
 GRIPPER_MIN_S, GRIPPER_MAX_S = 0.2, 2.0      # OmxSimGripperGoal duration bounds
 GRIPPER_READBACK_TOLERANCE = 0.05            # mimic readback error near closed is ~0.011 rad
+GRIPPER_STILL_RAD, GRIPPER_STILL_S, GRIPPER_SETTLE_S = 0.002, 0.2, 1.5
+# Same single retry as Pilot arm.js RETRYABLE: a new /joint_states between GET /state and POST.
+RETRYABLE = ("joint_state_sequence_mismatch", "readback_not_recently_served")
 WORLD = "omx_pilot_workcell"
 CUBE = "rosy_probe_cube"
 
@@ -103,11 +106,20 @@ class Probe:
         raise RuntimeError("owner did not return to ready between goals")
 
     def _post(self, path: str, fields: dict, current: dict) -> str:
-        command_id = str(uuid4())
-        goal = self.call(path, method="POST", body={
-            "instance_id": current["instance_id"], "seat_id": self.seat, "request_id": command_id,
-            **fields, "state_sequence": current["state_sequence"],
-            "expires_at_ms": int(time.time() * 1000) + 5000})
+        def post(state: dict) -> tuple[str, dict]:
+            command_id = str(uuid4())
+            return command_id, self.call(path, method="POST", body={
+                "instance_id": state["instance_id"], "seat_id": self.seat, "request_id": command_id,
+                **fields, "state_sequence": state["state_sequence"],
+                "expires_at_ms": int(time.time() * 1000) + 5000})
+
+        try:
+            command_id, goal = post(current)
+        except RuntimeError as exc:
+            if not any(reason in str(exc) for reason in RETRYABLE):
+                raise
+            self.log(f"retry_after={next(reason for reason in RETRYABLE if reason in str(exc))}")
+            command_id, goal = post(self.ready_state())
         if goal["state"] != "LOCAL_ACCEPTED":
             raise RuntimeError(f"{path} {fields}: local command was not accepted: {goal}")
         return command_id
@@ -123,6 +135,29 @@ class Probe:
                 return goal, time.monotonic() - started
             time.sleep(0.05)
         raise RuntimeError(f"goal {command_id} did not reach a terminal state")
+
+    def settle_gripper(self) -> dict:
+        """/state once the gripper readback is still (< 0.002 rad over 0.2 s), or after 1.5 s.
+
+        The Gazebo gripper goal tolerance is 0.0, so a gripper goal can end SUCCEEDED before the
+        fingers arrive (gate 2026-10-03: open read 0.027-0.056 rad short).
+        """
+        joint = self.gripper["joint"]
+        samples: list[tuple[float, float]] = []
+        started = time.monotonic()
+        while True:
+            state = self.call("/state")
+            now = time.monotonic()
+            position = state["positions"].get(joint)
+            if position is not None:
+                samples.append((now, position))
+            recent = [value for at, value in samples if now - at <= GRIPPER_STILL_S]
+            if (samples and now - samples[0][0] >= GRIPPER_STILL_S
+                    and max(recent) - min(recent) < GRIPPER_STILL_RAD):
+                return state
+            if now - started >= GRIPPER_SETTLE_S:
+                return state
+            time.sleep(0.05)
 
     def run_jog(self, joint: str, delta: float, *, duration_s: float = 0.4, check: bool = True) -> dict:
         current = self.ready_state()
@@ -168,7 +203,7 @@ class Probe:
             position, duration = self.gripper_goal(target, readback)
             command_id = self._post("/gripper", {"position": position, "duration_s": duration}, current)
             goal, elapsed = self.follow(command_id, samples)
-            state = self.call("/state")
+            state = self.settle_gripper() if goal["state"] == "SUCCEEDED" else self.call("/state")
             # "before" is the readback before the FIRST goal of this move, not of the last attempt.
             result = {"goal": goal, "elapsed_s": round(elapsed, 3), "position": position, "duration_s": duration,
                       "before": first, "after": state["positions"].get(joint), "state": state,
@@ -293,6 +328,7 @@ class Probe:
             report["hold_target"] = self.ready_state()["gripper"].get("hold_target")
             for _ in range(3):
                 result = self.run_jog("joint1", 0.05, check=False)
+                result["state"] = self.settle_gripper()
                 grip = self.settled_gripper_state()
                 report["holding_jogs"].append({"state": result["goal"]["state"],
                                                "reason": result["goal"].get("reason", ""), "gripper_state": grip,
@@ -301,6 +337,11 @@ class Probe:
                                                "hold_target": result["state"].get("gripper", {}).get("hold_target")})
                 if result["goal"]["state"] != "SUCCEEDED" or grip != "holding":
                     break
+        # Follow-up (not gating yet): how far the held fingers opened over the jogs (+ = toward open).
+        opening = math.copysign(1.0, open_ - closed)
+        last = report["holding_jogs"][-1]["gripper_readback"] if report["holding_jogs"] else None
+        report["holding_drift_rad"] = (None if last is None or report["gripper_readback"] is None
+                                       else round((last - report["gripper_readback"]) * opening, 6))
         report["passed"] = (report["terminal_state"] == "SUCCEEDED" and report["gripper_state"] == "holding"
                             and len(report["holding_jogs"]) == 3
                             and all(jog["state"] == "SUCCEEDED" and jog["gripper_state"] == "holding"

@@ -45,8 +45,8 @@
 
 ## 최근 기록
 
+- 2026-10-03 · uncommitted · fix(omx-sim): D-411 C 관문 수용 — probe 경합 두 개, 쥠 drift 보고
 - 2026-10-03 · uncommitted · fix(omx_adapter): D-411 C Gazebo 관문 뒤 — 조임 재발행·속도 여유·probe·Gazebo 전용 제약
 - 2026-10-03 · uncommitted · fix(omx_adapter): D-411 C 검토 — 속도 제한·제한 조임·안쪽 범위·stall probe
 - 2026-10-03 · uncommitted · feat(omx_adapter): D-411 C 그리퍼 절대 목표·쥠 readback·시연 `action.gripper`
 - 2026-10-03 · uncommitted · feat(omx): C4b 1d — journal 식별
-- 2026-10-03 · uncommitted · fix(omx): C4b 1c — GetAction은 다른 principal을 '없음'으로 답하지 않는다

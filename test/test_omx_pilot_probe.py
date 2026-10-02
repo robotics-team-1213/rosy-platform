@@ -45,7 +45,7 @@ TIME_SCALE = 0.1          # fake goals settle in a tenth of their duration
 class FakeArm:
     """Owner-like arm: 'active' while a goal runs, settles to the target after its duration."""
 
-    def __init__(self, *, fail_close=False):
+    def __init__(self, *, fail_close=False, gripper_lag_s=0.0, mismatches=0):
         config = ArmCommandConfig(
             enabled=True, workcell_id="sim", instance_id="omx_pilot_sim_01", joint_names=CELL.joint_names,
             position_limits=sim_admission_limits(CELL.position_limits, urdf_position_limits()),
@@ -57,6 +57,9 @@ class FakeArm:
         self.sequence = 0
         self.object_at = None            # gripper position where the fingers meet a spawned cube
         self.fail_close = fail_close
+        # Gazebo: the gripper goal tolerance is 0.0, so SUCCEEDED can arrive before the fingers do.
+        self.gripper_lag_s = gripper_lag_s
+        self.mismatches = mismatches     # owner refusals "joint_state_sequence_mismatch" still to give
         self.runtime = None
         self.commands = []
         self._stop = threading.Event()
@@ -81,6 +84,9 @@ class FakeArm:
         self._stop.set()
 
     def submit(self, command):
+        if self.mismatches:
+            self.mismatches -= 1
+            return CommandDecision(False, "ready", "joint_state_sequence_mismatch", command.command_id)
         self.commands.append(command)
         self.owner.state = "active"
         threading.Thread(target=self._run, args=(command,), daemon=True).start()
@@ -100,8 +106,18 @@ class FakeArm:
         closing_on_object = self.object_at is not None and target[gripper] < self.object_at
         if closing_on_object:
             target[gripper] = self.object_at
+        late = self.gripper_lag_s and target[gripper] != self.positions[gripper]
+        if late:
+            final, target[gripper] = target[gripper], self.positions[gripper] + 0.6 * (target[gripper] - self.positions[gripper])
         self.positions.update(target)
-        self._publish()                  # the controller ends a goal only once the readback is there
+        self._publish()
+        if late:
+            def arrive():   # the fingers keep moving after SUCCEEDED, then stop at the target
+                start, steps = self.positions[gripper], max(1, round(self.gripper_lag_s / 0.02))
+                for step in range(1, steps + 1):
+                    time.sleep(0.02)
+                    self.positions[gripper] = start + (final - start) * step / steps
+            threading.Thread(target=arrive, daemon=True).start()
         if closing_on_object and self.fail_close:
             self.owner.state = "hold"
             self._event(command, goal_id, "TERMINAL_RESULT", 2, status=6, result_code=-5)
@@ -275,3 +291,44 @@ def test_gz_service_runs_with_the_ros_environment_sourced(monkeypatch):
     seen.clear()
     probe.gz_spawner("--inside")[1]()
     assert seen[0][:2] == ["bash", "-c"]
+
+
+def test_probe_waits_for_the_fingers_after_an_early_success(capsys):
+    """Gazebo gate 2026-10-03: open SUCCEEDED 0.027-0.056 rad short; the probe must wait for stillness."""
+    arm = FakeArm(gripper_lag_s=0.3)
+    with _server(arm) as (base, _):
+        assert probe.main(["--inside"], base=base, code="ABCD-EFGH") == 0, capsys.readouterr()
+    out = capsys.readouterr().out
+    assert "gripper_open=SUCCEEDED" in out and "after=1.0000" in out
+
+
+def test_probe_retries_one_sequence_mismatch(capsys):
+    arm = FakeArm(mismatches=1)
+    with _server(arm) as (base, _):
+        assert probe.main(["--inside"], base=base, code="ABCD-EFGH") == 0, capsys.readouterr()
+    assert arm.mismatches == 0
+
+
+def test_stall_report_carries_holding_drift_without_gating(capsys):
+    arm = FakeArm()
+    drift = iter([0.01, 0.02, 0.03])
+
+    def spawn(*_):
+        arm.object_at = 0.3
+
+    original = arm._run
+
+    def slipping(command):
+        original(command)
+        if command.command_id.startswith("hold-") or arm.object_at is None:
+            return
+        if command.positions[CELL.gripper_joint] == pytest.approx(0.3 - CELL.gripper_preload_rad):
+            arm.positions[CELL.gripper_joint] = 0.3 + next(drift)    # the cube slips a little per jog
+
+    arm._run = slipping
+    with _server(arm) as (base, _):
+        code = probe.main(["--inside", "--stall"], base=base, code="ABCD-EFGH", spawner=(spawn, lambda: None))
+    out = capsys.readouterr().out
+    report = probe.json.loads(next(line for line in out.splitlines() if line.startswith("stall_probe="))[12:])
+    assert code == 0 and report["passed"] is True
+    assert report["holding_drift_rad"] == pytest.approx(0.03, abs=1e-6)   # opened by 0.03 rad over the jogs
