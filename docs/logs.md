@@ -4636,3 +4636,9 @@
 - 변경: 화면/API/상태 정본/최종 writer를 분리한 소유권 표, UI·통신·계약 공유 범위, apps/site·apps/device·ui 목표 배치와 점진 이전 출구를 기록. D-340·D-370·D-413은 부분 대체 범위를 표시하고 역사 본문을 보존. 별도 브랜치의 D-423·D-424 번호를 예약. 코드·wire·제품 폴더는 이전하지 않음.
 - 증거: 작성 전 문서 계약 81 passed. 변경 후 문서 계약·quick tier 120 passed/25 기존 freshness warnings; harness lint와 색인/BOM/CRLF/부분 대체 링크를 확인. 한글이 손상된 신규 로그·색인 행은 UTF-8로 정정하고 검증을 재실행.
 - gate 변화: 없음 — 구조 결정 수용과 구현·설치·DEVICE/FIELD 수용은 별개.
+
+
+## 2026-10-03 · uncommitted · test: verify real Cell runtime two-ledger replay
+- Change: exercise canonical Cell grants through actual analytic Skill, ActionApi, durable phase/workflow journals and Fleet/OMX stores. Confirm independent goal gating and claim release; lost/expired submit recovery preserves identity and restart-stop HOLD without extra motion.
+- Evidence: related replay/dispatcher/public-goal regression 47 passed; independent review 3 passed, no remaining Critical/Important findings. Restart-stop mutation failed at expected HOLD versus ACTION_SUCCEEDED; original source restored byte-for-byte. Quick tier plus new replay: 99 passed / 25 existing freshness warnings; harness lint 0 errors / 25 warnings.
+- Gate: SOURCE/LOCAL only. Compiled submissions, ROS/sensor ports and registered goal producer are host fixtures; actual recipe compiler, UDS peer credentials, ROS lifecycle and Gazebo acceptance remain open. Task 7 stays IN PROGRESS.
