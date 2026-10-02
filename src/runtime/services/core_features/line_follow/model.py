@@ -108,10 +108,17 @@ class LineFollowConfig:
     # recovery_trail_s 동안 앞으로 recovery_back_m 이상 왔고 누적 |yaw| 가 이 값 이하일 때만 들어간다.
     recovery_trail_s: float = 5.0
     recovery_trail_yaw_deg: float = 10.0
+    # 확인 2026-10-02: recovered 로 닫힌 뒤 이 시간 안이거나 이 거리를 아직 못 갔을 때 다시 막히면
+    # 같은 막힘으로 시도 수를 이어 센다(복구-재막힘 무한 반복 방지).
+    recovery_restuck_s: float = 20.0
+    recovery_restuck_m: float = 0.30
+    # 뒤 띠 폭 = URDF 몸 반폭(body_half_width_m) + 이 여유. 반폭이 없으면 obstacle_corridor_half_width_m.
+    recovery_rear_lateral_margin_m: float = 0.02
     # D-397 URDF 몸 기하(base_footprint, x 앞): 없으면 뒤 여유를 잴 수 없어 후진하지 않는다.
     body_lidar_x_m: Optional[float] = None
     body_rear_x_m: Optional[float] = None
     body_rotation_radius_m: Optional[float] = None
+    body_half_width_m: Optional[float] = None
 
     def __post_init__(self) -> None:
         self._check_recovery()
@@ -174,7 +181,7 @@ class LineFollowConfig:
             raise ValueError("recovery_local_enabled must be a boolean")
         timing = (self.recovery_ask_s, self.recovery_back_m, self.recovery_back_speed,
                   self.recovery_rear_clear_m, self.recovery_settle_s, self.recovery_trail_s,
-                  self.recovery_trail_yaw_deg)
+                  self.recovery_trail_yaw_deg, self.recovery_restuck_s, self.recovery_restuck_m)
         if not all(_finite(value) and value > 0 for value in timing):
             raise ValueError("line-follow recovery times and distances must be positive and finite")
         if self.recovery_trail_s > 30.0 or self.recovery_trail_yaw_deg > 45.0:
@@ -184,6 +191,12 @@ class LineFollowConfig:
         if (type(self.recovery_max_attempts) is not int
                 or not 0 <= self.recovery_max_attempts <= 5):
             raise ValueError("recovery_max_attempts must be an integer in [0, 5]")
+        if (not _finite(self.recovery_rear_lateral_margin_m)
+                or not 0.0 <= self.recovery_rear_lateral_margin_m <= 0.10):
+            raise ValueError("recovery_rear_lateral_margin_m must be in [0, 0.10]")
+        if self.body_half_width_m is not None and (
+                not _finite(self.body_half_width_m) or not 0.0 < self.body_half_width_m <= 0.5):
+            raise ValueError("body_half_width_m must be in (0, 0.5]")
         body = (self.body_lidar_x_m, self.body_rear_x_m, self.body_rotation_radius_m)
         if any(value is not None and not _finite(value) for value in body):
             raise ValueError("line-follow body geometry must be finite or unset")

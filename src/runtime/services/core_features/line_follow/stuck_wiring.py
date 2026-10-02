@@ -108,6 +108,12 @@ class StuckRecoveryMixin:
             self._lost_latched = False
             self._loss_started_at = now
 
+    def _rear_half_width(self) -> float:
+        config = self._config
+        if config.body_half_width_m is None:
+            return config.obstacle_corridor_half_width_m
+        return config.body_half_width_m + config.recovery_rear_lateral_margin_m
+
     def _stuck_input(self, now: float) -> StuckInput:
         config = self._config
         known = config.body_geometry_known
@@ -119,6 +125,11 @@ class StuckRecoveryMixin:
                 self._body_points, lidar_x_m=lidar_x, rear_x_m=rear_x,
                 half_width_m=config.obstacle_corridor_half_width_m,
                 rotation_radius_m=config.body_rotation_radius_m if known else None)
+            # Behind the robot only the body's own width (+ margin) matters: the wider path
+            # band counted side walls as "behind" (Gazebo 2026-10-02).
+            seen["rear_m"] = body_clearances(
+                self._body_points, lidar_x_m=lidar_x, rear_x_m=rear_x,
+                half_width_m=self._rear_half_width())["rear_m"]
         front = seen["front_band_m"]
         front_clear = ((front is None or front >= config.obstacle_resume_m)
                        and (self._clearance is None or self._clearance >= config.obstacle_resume_m))
@@ -136,14 +147,17 @@ class StuckRecoveryMixin:
         if known and self._range_min is not None:
             blind = max(0.0, self._range_min - (lidar_x - rear_x), self_mask_rear_blind_m(
                 config.lidar_self_mask, lidar_x_m=lidar_x, rear_x_m=rear_x,
-                half_width_m=config.obstacle_corridor_half_width_m))
+                half_width_m=self._rear_half_width()))
         trail_m, trail_yaw = self._trail.measure(now, config.recovery_trail_s)
+        recovered_at = self._recovery.recovered_at
+        moved = None if recovered_at is None else self._trail.net_since(recovered_at, now)
         return StuckInput(
             now=now, cause=cause, lane_visible=lane, front_clear=front_clear,
             front_band_m=front, rear_m=seen["rear_m"] if known else None, turn_m=seen["turn_m"],
             rear_blind_m=blind, trail_m=trail_m, trail_yaw_deg=trail_yaw,
             scan_age_s=None if self._body_at is None else now - self._body_at,
             lidar_expected=self._clearance_at is not None,
+            moved_since_recovery_m=moved,
             geometry_known=known,
             console_linked=self._provided("console_linked") is True,
             calibration_active=self._provided("calibration_active") is not False,

@@ -4406,3 +4406,38 @@
 - 검증: Cell 143 passed; Fleet 1336 passed/7 skipped; OMX 268 passed/5 skipped; architecture 76 passed/1 skipped. 네 로그 모두 `test/known_failures.py`에서 0 new, 0 known으로 분류됐다. 로그·pytest 임시 경로는 X:\DevTemp에 뒀다.
 - 한계: suite는 Windows/Python 3.14 source 검사다. C3 feature 브랜치의 Gazebo 증거를 재실행하거나 C4 접수를 수용하지 않았다. Task 0의 구현 전 기준선만 고정했다.
 - gate 변화: 없음.
+
+## 2026-10-02 · uncommitted · CI 잔여 5건 해소 — 좀비 인식 생존 판정·모드 드리프트 독립·D-155 가드 정정
+- 변경: rec_compact.sh의 생존 판정을 좀비 인식(alive: kill -0 + /proc stat Z 제외)으로 바꿨다 — 컨테이너의 PID 1이 고아를 회수하지 않으면 SIGKILL 후에도 kill -0이 성공해 "did not exit" 오탐(CI 적색 3건). test_rosy_auto_update.py의 _alive 헬퍼도 같은 맹점이라 동일 패치. 실증: WSL에서 좀비 생성 후 kill -0=성공/stat=Z.
+- 변경: test_image_layer_sync 모드 드리프트 시험의 chmod를 0o644→0o600 — 실제 Linux 체크아웃(git 100644)에서 644는 드리프트가 아니었다. 플랫폼 무관하게 드리프트가 된다.
+- 변경: test_module_separation 가드4를 D-155 정정에 맞춰 계약면 허용(core_common.protocol.*, core_common.calibration_store)으로 좁힘 — control package.xml의 exec_depend 선언과 D-18 fleet 선례가 근거. D-155 ADR에 Refinement 조항 추가.
+- 변경: known_failures.txt에서 해소 5항목 제거. docs/solutions/deployment/container-zombie-kill0-blindness.md 교훈 문서화.
+- 근거: CI 실행 36959800081 대조 WSL 재현(윈도는 skip/DrvFS로 증거 불가).
+- gate 변화: 없음.
+- 최종 증거: WSL — jpeg_relay 14 passed, auto_update timeout 시험 passed, mode-drift passed; module_separation 7 passed(윈도).
+
+## 2026-10-02 · uncommitted · docs(plans): D-395 S1 세 번째 실행 (test/d395-s1-run3, main 5ea9e144)
+- 변경: `docs/plans/2026-10-02-d395-s1-bench-results.md` 에 "Run 3 2026-10-02" 절 추가(앞 두 절은 그대로). 벤치: (d) 정답 기준 0.10 m 이동 뒤 들어 올림·재확정 뒤 20 s 정지 확인, (c) 탐지가 없을 때만 r1 펄스, LOCALIZED `objects_stamp` 기록, `ros2 topic pub` 60 s·3회, `gz model` 20 s. 요약기에 `checking`·SUSPECT·이동 거리.
+- 증거: WSL Jazzy Gazebo 13회(GZ_PARTITION rosy_d395c, ROS_DOMAIN_ID 98). 공유 호스트(docker-desktop 가 같은 VM, 다른 세션 sim 컨테이너 165–250 %)로 부하 45–74, 2대 평균 RTF 0.07–0.17(재실행 0.37–0.64). b 3/3, (d 배치) 전원 투입 4/4, a 1/3(사다리 회전이 벽시계 420 s 안에 안 끝남), c 1/2 탐지(a2: 주입 4.8 sim s 뒤 `fleet_monitor` SUSPECT, 0.7 cm/0.1° 재확정; b1 은 Fleet 폴링 고갈), d 2/4 완전 통과(0.120–0.127 m 주행 중 정지·SUSPECT·6.2–6.5 sim s 재확정·재개 없음), l 3/3 needs_human. 거울 결정 0, 확정 오차 ≤1.1 cm/1.1°. 원시 로그 `X:\DevTemp\rosy-d395-s1c\`.
+- gate 변화: 없음. S1 미통과 — 이 호스트 속도에서는 공정한 시험이 아니어서 조용한 호스트에서 다시 해야 한다.
+- 결정: 없음. 기본값·코드 변경 없음(T1 닻 점프 판정이 폴링 간격에 비례, T2 Fleet 1 s 호출 제한의 증거·출처 손실, T3 `needs_human` 뒤에도 결정 — 다른 갈래로 보고).
+- 교훈: 안전 판정에 dt 를 곱하는 허용치(0.25 m + 0.5 m/s·dt)는 관찰 간격이 늘면 스스로 무력해진다 — 느린 호스트가 거울 잠금 로봇을 닻으로 남겼다(T1).
+
+## 2026-10-02 · uncommitted · test(platform): 현재 import 소유권과 D-413 경계 간선 guard
+
+- 변경: `tools/harness/platform_dependencies.yaml`은 현재 core_common·rosy_cell·fleet·omx_adapter 경로만 등록한다. 새 architecture test는 해당 소스의 absolute import와 상대 import를 검사하고 execution→공정, decision→장치 SDK, Skill→execution의 잘못된 간선을 fixture로 검출한다. 아직 존재하지 않는 wheel이나 ROS package는 registry에 넣지 않았다.
+- 검증: RED에서 정책 파일 누락과 relative-import 우회를 각각 재현한 뒤 보완했다. focused guard 5 passed; 전체 architecture 81 passed/1 skipped; quick tier 95 passed/24 warnings; `known_failures.py` 0 new; harness lint 0 errors/24 기존 progress warnings.
+- 한계: Python AST는 동적 import/entry point가 아니라 정적 import만 다룬다. 새 API/process roots는 생성할 때 registry에 포함해야 한다.
+- gate 변화: 없음.
+
+## 2026-10-02 · uncommitted · feat(platform): ROS-free Observation·Skill·Plan 계약과 wheel 설치
+
+- 변경: modules/world observation snapshot, skills/api 계약·불변 JSON 입력, execution PlanBundle 및 기존 grant/receipt 필드 projection을 추가했다. 세 ROS-free wheel은 D-18 wire schema에 의존하거나 수정하지 않으며 `PICK_PLACE` 요청 digest·source revisions·attempt identities를 보존한다. 새 API roots를 boundary guard에 등록했다.
+- 검증: source copies와 wheelhouse/venv는 X:\DevTemp에 두고 실제 wheel을 설치했다. package mapping·architecture boundary·protocol schema 29 passed; 전체 architecture 81 passed/1 skipped; commit 전 quick tier 95 passed/24 warnings; known-failure 비교 0 new. import smoke는 wheel의 venv `site-packages` 경로를 확인했고 ROS/FastAPI import가 없었다. CI workflow YAML parse 성공.
+- 한계: receipt projection은 저장 기록이며 물리 목표 확인을 대신하지 않는다. PlanBundle의 승인/authority 필드는 없고 Skill 단위·Job Step 의미 변환은 후속 task에 남아 있다. CI는 소스 변경 후 로컬 정적 검사만 실행했으며 원격 CI 실행은 없다.
+- gate 변화: 없음.
+
+## 2026-10-02 · uncommitted · docs(adr): D-395 개정 8 — 부하에서도 버티는 닻 규칙, 사람 확인은 표시
+- 변경: S1 세 번째 실행(호스트 과부하로 공정하지 않음, 거울 결정 0, 거울 탐지 1/1, 실제 주행 중 들어 옮김 2/2)의 결과를 기록. 닻 점프 기준의 dt를 1 s로 묶고 거울 서명은 dt와 무관하게 닻을 뺀다(안전). 호출 제한 2.5 s, 시간 초과 결정은 15 s 안 그 자세 도달 시 출처 인정. `needs_human`은 표시이고 중재는 계속된다. 다음 S1은 부하가 낮을 때.
+- 증거: `docs/plans/2026-10-02-d395-s1-bench-results.md` Run 3, 브랜치 fix/d395-anchor-jump-timing.
+- gate 변화: 없음(Proposed).

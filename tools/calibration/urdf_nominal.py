@@ -349,6 +349,19 @@ def rotation_radius(links, poses):
     return best
 
 
+def half_width(links, poses):
+    """Largest |y| from base_link of any collision point, every joint at zero: the body's
+    lateral half-width (D-407 rear band; wider bands count side walls as behind)."""
+    base_inv = _invert(poses["base_link"])
+    best = 0.0
+    for link in links:
+        for spec in link["collisions"]:
+            m = _mul(base_inv, _mul(poses[link["name"]], _matrix(spec["xyz"], spec["rpy"])))
+            for point in _shape_points(spec):
+                best = max(best, abs(_apply(m, point)[1]))
+    return best
+
+
 def _invert(m):
     rot = [[m[j][i] for j in range(3)] for i in range(3)]
     t = [-sum(rot[i][k] * m[k][3] for k in range(3)) for i in range(3)]
@@ -403,6 +416,7 @@ def nominal(args=None):
         "ultrasonic": {"x_m": pos("ultrasonic_link")[0], "height_m": pos("ultrasonic_link")[2]},
         "imu": {"x_m": imu_base[0], "y_m": imu_base[1], "z_base_link_m": imu_base[2], "height_m": imu[2]},
         "footprint": {"rotation_radius_m": rotation_radius(links, poses),
+                      "half_width_m": half_width(links, poses),
                       "rotation_radius_sim_box_m": rotation_radius(sim_links, poses)},
     }
 

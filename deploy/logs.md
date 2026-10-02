@@ -1982,3 +1982,12 @@
 - 근거: 2026-10-02 CI 실행 36909426842/36955733308 실패 대 조 로컬 재현. docs/validation/uiux-console-refactor-2026-10-02/README.md 회차 기록.
 - gate 변화: 없음.
 - 최종 증거: scorecard·literals·no_secrets 각 재녹색; 브라우저 신규 시험 1 passed.
+
+## 2026-10-02 · uncommitted · CI 잔여 5건 해소 — 좀비 인식 생존 판정·모드 드리프트 독립·D-155 가드 정정
+- 변경: rec_compact.sh의 생존 판정을 좀비 인식(alive: kill -0 + /proc stat Z 제외)으로 바꿨다 — 컨테이너의 PID 1이 고아를 회수하지 않으면 SIGKILL 후에도 kill -0이 성공해 "did not exit" 오탐(CI 적색 3건). test_rosy_auto_update.py의 _alive 헬퍼도 같은 맹점이라 동일 패치. 실증: WSL에서 좀비 생성 후 kill -0=성공/stat=Z.
+- 변경: test_image_layer_sync 모드 드리프트 시험의 chmod를 0o644→0o600 — 실제 Linux 체크아웃(git 100644)에서 644는 드리프트가 아니었다. 플랫폼 무관하게 드리프트가 된다.
+- 변경: test_module_separation 가드4를 D-155 정정에 맞춰 계약면 허용(core_common.protocol.*, core_common.calibration_store)으로 좁힘 — control package.xml의 exec_depend 선언과 D-18 fleet 선례가 근거. D-155 ADR에 Refinement 조항 추가.
+- 변경: known_failures.txt에서 해소 5항목 제거. docs/solutions/deployment/container-zombie-kill0-blindness.md 교훈 문서화.
+- 근거: CI 실행 36959800081 대조 WSL 재현(윈도는 skip/DrvFS로 증거 불가).
+- gate 변화: 없음.
+- 최종 증거: WSL — jpeg_relay 14 passed, auto_update timeout 시험 passed, mode-drift passed; module_separation 7 passed(윈도).

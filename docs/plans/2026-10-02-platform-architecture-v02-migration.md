@@ -8,7 +8,7 @@
 
 **Tech Stack:** Python, 기존 FastAPI·SQLite·Pydantic, ROS 2 Jazzy, colcon/ament, namespace wheel, OMX Gazebo, 기존 pytest·harness. 새 빌드 도구·모델 SDK 도입은 이 계획의 전제가 아니다.
 
-**상태:** Task 0 완료 (2026-10-02, Windows source baseline); Task 1~9 미실행. 아래 PASS 조건은 실행 지침이며 미완료 task의 결과를 뜻하지 않는다.
+**상태:** Task 0~2 완료 (2026-10-02, Windows source baseline/API wheels); Task 3~9 미실행. 아래 PASS 조건은 실행 지침이며 미완료 task의 결과를 뜻하지 않는다.
 
 **설계:** [ROSY Platform Architecture v0.2](../reference/ROSY_Platform_Architecture_Design_v0.2.md) 3·5·6·15·16장.
 
@@ -82,16 +82,18 @@ python -B -X utf8 test/known_failures.py <ROSY_SCRATCH의 해당 실행 로그>
 
 ## Task 1: 새 책임 경로와 설치 검사의 허용 범위
 
-**Modify:** `test/architecture/test_target_layout.py`, `test/architecture/test_folder_layout.py`, `test/architecture/test_folder_package_names.py`, `test/architecture/test_module_structure.py`, `tools/harness/harness.yaml` — 실제 새 모듈 등록이 필요한 항목만.
+**검토 후 필요한 경우에만 수정:** `test/architecture/test_target_layout.py`, `test/architecture/test_folder_layout.py`, `test/architecture/test_folder_package_names.py`, `test/architecture/test_module_structure.py`, `tools/harness/harness.yaml`. 기존 `src` ROS package 목록은 이 task에서 달라지지 않아 exact-layout 예외나 새 harness module은 추가하지 않는다.
 
 **Create:** `test/architecture/test_platform_dependency_boundaries.py`, `tools/harness/platform_dependencies.yaml`.
 
-1. 이 회차에서 만드는 world API·skill API·execution API·palletizing 경로와 기존 colcon 경로를 함께 허용하는 규칙을 시험한다. `src` 밖 ROS 없는 wheel을 임의 ROS 패키지로 등록하지 않는다.
-2. `execution → 공정 구현`, `decision → 장치 SDK`, `Skill → execution 구현`의 금지 import를 주입해 실패를 확인한다. 경로 이름만 확인하는 검사를 통과 기준으로 삼지 않는다.
-3. 정적 import와 배포 의존성의 차이를 검사할 수 있게 책임/소유 패키지 표를 추가한다. 아직 만들지 않은 미래 모듈은 등록하지 않는다.
+1. 현재 실제 존재하는 `core_common`·`rosy_cell`·`fleet`·`omx_adapter`만 패키지 표에 등록하고 기존 colcon 경로와 함께 검사한다. 아직 만들지 않은 플랫폼 package path는 등록하지 않는다.
+2. execution→공정, decision→장치 SDK, Skill→execution의 금지 import를 절대/상대 fixture로 주입해 실패를 확인한다. 경로 이름만 확인하는 검사를 통과 기준으로 삼지 않는다.
+3. 정적 import와 배포 의존성의 차이를 검사할 수 있게 현재 존재하는 경로/소유 package 표와 독립 간선 정책을 추가한다. 새 package가 실제 생성될 때 그 같은 변경에서 경로를 등록한다.
 4. 기존 exact-layout 검사는 실제로 전환하는 항목만 좁게 고친다. 모든 루트·모든 패키지를 허용하는 예외를 만들지 않는다.
 
 **검증:** `python -B -X utf8 -m pytest test/architecture -q -p no:cacheprovider`. 기대: 기준선 대비 NEW 0, 잘못된 의존 주입 시 새 가드 실패. 커밋: `test: enforce incremental platform boundaries`.
+
+**완료 증거 (2026-10-02):** [platform dependency guard](../../test/architecture/test_platform_dependency_boundaries.py)와 `tools/harness/platform_dependencies.yaml`은 현재 네 Python root만 등록하고 future roots는 canary import fixture로만 확인한다. absolute·relative import prefix 우회도 잡는다. 전체 architecture suite 81 passed/1 skipped, commit 전 quick tier 95 passed/24 warnings, known-failure 비교 0 new, harness lint 0 errors/24 기존 progress warnings. 새 ROS package/root나 `harness.yaml` module은 만들지 않았다.
 
 ## Task 2: 첫 작업에 필요한 API와 호환 매핑
 
@@ -102,6 +104,8 @@ python -B -X utf8 test/known_failures.py <ROSY_SCRATCH의 해당 실행 로그>
 - `modules/execution/pyproject.toml`, `modules/execution/src/rosy/execution/api/plan.py`
 - `test/test_platform_contract_mapping.py`
 
+**Also modify:** `tools/harness/platform_dependencies.yaml` and `test/architecture/test_platform_dependency_boundaries.py` to register only the three newly created API roots, pin their import prefixes, and exercise their forbidden edges. A created package must enter this guard in the same commit as its first consumer.
+
 **Reuse:** `src/contracts/foundation/core_common/protocol/schemas.py`, `src/site/cell/rosy_cell/compiler.py`, `src/site/fleet/fleet/server/mission_dispatcher.py`.
 
 **Modify:** `.github/workflows/ci.yml` — 새 패키지를 사용하는 job의 wheel 빌드·설치 단계.
@@ -109,18 +113,39 @@ python -B -X utf8 test/known_failures.py <ROSY_SCRATCH의 해당 실행 로그>
 1. 첫 고정 셀에서 실제 사용하는 필드와 기존 타입의 대응표를 작성한다. 아래 항목 중 소비자가 없는 선택 필드는 만들지 않는다.
 2. 관측 계약은 출처·캡처/수신 시각·좌표계·보정 revision·근거 참조·유효성을 표현한다. Skill 계약은 ID/버전·입력·전제/완료조건·자원·취소·결과 증거를 표현한다.
 3. 계획 계약은 공정 artifact digest, recipe/cell 해시, 순서 있는 Skill 단계와 검증 참조를 표현한다. 승인·principal·authority epoch는 신뢰된 실행 경계가 부여하며 모델/공정 입력으로 받지 않는다.
-4. 기존 Job·grant·receipt와의 변환에서 단위·ID·revision·기존 `PICK_PLACE` digest가 보존되는지 시험한다. 누락·알 수 없는 버전·잘못된 단위·변경된 hash는 거부한다.
+4. 기존 Job의 recipe/cell hash, Observation evidence의 ns/frame/revision, grant/receipt의 ID·generation·revision·기존 `PICK_PLACE` request digest가 그대로 매핑되는지 시험한다. 잘못된 출처 hash·알 수 없는 계약 버전·형식이 깨진 단위/ID·변조 digest는 거부한다. 일반 PlanBundle은 Skill 입력을 재해석하지 않으며, 도메인 단위 검증은 Task 3/5의 process·Skill schema가 소유한다.
 5. 최소 타입과 변환을 구현한다. 이 task는 내부 계약이며 기존 wire 타입의 정본은 유지한다. 불가피한 wire 변경은 Task 4의 D-18 동시 변경으로 넘긴다.
 6. 공유 namespace 부모에는 `__init__.py`를 두지 않고 소유 하위 패키지에만 둔다. wheel 소유 범위를 명시한다. execution 배포물은 첫 API/필요 규칙만 포함하고 FastAPI·ROS·모델 SDK에 의존하지 않는다.
 7. 위 세 패키지의 정확한 소스 경로를 CI 설치 목록에 등록한다. `python -m pip wheel --wheel-dir <외부 scratch>/wheels <패키지 경로들>`로 선언된 의존성과 함께 빌드한 뒤, 생성된 wheel 파일을 `python -m pip install --no-index --find-links <외부 scratch>/wheels <생성된 wheel 파일들>`로 설치한다. 버전과 의존성은 기존 잠금 정책에 맞춰 고정한다. CI의 임시 경로는 runner 외부 scratch를 사용하고 로컬 Windows/WSL 검증은 X:를 사용한다. editable 설치나 저장소 루트를 PYTHONPATH에 넣어 설치 누락을 숨기지 않는다.
 
+   Windows에서는 setuptools가 source directory 아래 `build/`를 만들므로 로컬 패키지 세 디렉터리를 먼저 `ROSY_SCRATCH/sources/`로 복사하고 그 복사본으로 wheel을 만든다. 임시 venv도 `ROSY_SCRATCH/`에 만든다. 저장소 경로를 `PYTHONPATH`에 추가하지 않고 venv의 Python으로 아래 시험을 실행한다. CI는 버려지는 Linux runner의 `/tmp/rosy-platform-wheelhouse`를 사용한다.
+
+```powershell
+$wheelSource = Join-Path $env:ROSY_SCRATCH 'task2-sources'
+$wheelhouse = Join-Path $env:ROSY_SCRATCH 'task2-wheels'
+$venv = Join-Path $env:ROSY_SCRATCH 'task2-venv'
+New-Item -ItemType Directory -Force -Path $wheelSource,$wheelhouse | Out-Null
+Copy-Item modules/world (Join-Path $wheelSource 'world') -Recurse
+Copy-Item modules/skills/api (Join-Path $wheelSource 'skill-api') -Recurse
+Copy-Item modules/execution (Join-Path $wheelSource 'execution') -Recurse
+python -B -m pip wheel --no-deps --wheel-dir $wheelhouse `
+  (Join-Path $wheelSource 'world') (Join-Path $wheelSource 'skill-api') (Join-Path $wheelSource 'execution')
+python -B -m venv --system-site-packages $venv
+& (Join-Path $venv 'Scripts/python.exe') -B -m pip install --no-index --find-links $wheelhouse `
+  rosy-world==0.1.0 rosy-skill-api==0.1.0 rosy-execution==0.1.0
+```
+
 **검증:** 새 파일 설치 후 `python -B -X utf8 -m pytest test/test_platform_contract_mapping.py src/runtime/gateway/test/test_protocol_schemas.py -q -p no:cacheprovider`. 기대: 변환 round-trip과 거부 사례 PASS, 기존 wire/digest 불변. 커밋: `feat: define minimal platform work contracts`.
+
+**완료 증거 (2026-10-02):** 세 wheel을 X: 아래 임시 source copy에서 빌드하고 fresh venv에 설치했다. import 경로가 세 wheel 모두 venv의 `site-packages`였고 smoke에서 `rclpy`/FastAPI 로드가 없었다. 매핑·경계·기존 protocol 시험 29 passed; 전체 architecture 81 passed/1 skipped; commit 전 quick tier 95 passed/24 warnings; known-failure 비교 0 new. CI에 동일 세 wheel 빌드/로컬 find-links 설치를 colcon 앞에 추가했다. `D-18` schema 및 protocol version은 변경하지 않았고, `CELL_TRANSFER`를 기존 grant schema에 넣지 않았다. 출처 Job의 개별 Step→Skill 의미 변환과 이동 단위 규칙은 Task 3/5에 남아 있다.
 
 ## Task 3: Cell 공정 추출과 계획 생성
 
 **Modify/Reuse:** `src/site/cell/setup.py`, `src/site/cell/package.xml`, `src/site/cell/rosy_cell/{cell,compiler,fields,geometry,load,pattern,recipe,sequence,stack}.py`, 기존 `src/site/cell/test`, `.github/workflows/ci.yml`.
 
 **Create:** `modules/processes/palletizing/pyproject.toml`, `modules/processes/palletizing/src/rosy/processes/palletizing/` 아래 위 동명 구현 파일 및 `plan_bundle.py`, `test/test_platform_palletizing_compat.py`.
+
+**Also modify:** `tools/harness/platform_dependencies.yaml` and `test/architecture/test_platform_dependency_boundaries.py` in this commit so the newly created process root is scanned immediately.
 
 1. 동일 recipe/cell fixture로 기존 Job·carry_z·해시·Step 순서를 기준값으로 잡는다. 새 네임스페이스와 기존 import가 같은 구현/타입으로 이어져야 한다.
 2. 공정 계산을 새 모듈로 옮기고 기존 `rosy_cell`은 필요한 재수출·진입점 위임만 남긴다. 두 컴파일러를 유지하지 않는다.

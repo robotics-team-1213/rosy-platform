@@ -722,3 +722,9 @@
 - 변경: 코드 변경 없음(브리지는 원문을 `LocalizationAssist` 에 넘긴다). `test_localization_cross_lane.py` 에 왕복 시험을 더했다. 로봇 A 의 LOCALIZED 상태에 실린 물체가 CORE `/api/v1/robot/state` 를 거쳐 Fleet `trust.status_of` 로 그대로 읽히고, 스캔이 1 s 넘게 묵으면 빈 목록이 된다.
 - 증거: `test/test_localization_cross_lane.py` +1 (13 passed).
 - gate 변화: 없음.
+
+## 2026-10-02 · 94a8b833 · fix(fleet_agent): hub 작업을 API 루프에서 시작
+
+- 변경: `fleet.hub_url`+`pairing_token` 이 있으면 `CoreServices.build` 의 `fleet_agent.start()` 가 루프 없이 `asyncio.create_task` 를 불러 CORE 가 죽었다(D-407 Gazebo 2026-10-02). `create_app` 이 라우터 lifespan 을 감싸 uvicorn 루프에서 `start_on_loop()` 를 부른다. e-stop 리스너는 `line_follow.stop(reason="estop")`.
+- 증거: `test_fleet_agent_startup.py`(core_client, hub_url 설정으로 build 후 startup 에서 작업 생성), `test_line_follow_stuck.py` 초록.
+- gate 변화: 없음.
