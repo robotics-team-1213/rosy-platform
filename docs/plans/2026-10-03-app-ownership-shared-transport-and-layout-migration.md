@@ -234,11 +234,11 @@ test('credential scopes stay separate and writes are sent once', async () => {
 
 ## Task 9: Console operate/install 원본 이전
 
-**Create:** `ui/console/assets.json` (Task 6 schema 사용). **Move:** `src/site/fleet/fleet/server/web` → `ui/console`; 운용 문서는 `operate`, 설치 문서는 `install`, 둘이 실제 소비하는 모듈은 `shared` 하위에 둔다.
+**Create:** `ui/console/assets.json` (Task 6 schema 사용). **Move:** `src/site/fleet/fleet/server/web`의 HTML/CSS/JS·Node 메타데이터 → `ui/console`; 운용 문서는 `operate`, 설치 문서는 `install`, 둘이 실제 소비하는 모듈은 `shared` 하위에 둔다. 기존 Python `web/__init__.py`는 wheel 설치 package scaffold로 남기며 UI 자산 사본은 두지 않는다.
 
 **Modify:** Fleet `build_assets.py`·`setup.py`·`fleet/server/static_routes.py`, `deploy/site/Dockerfile.fleet`, Fleet web 시험, harness/CI/구조 path, UI source 참조.
 
-1. manifest에 `source`와 기존 `installed_relative_path` 대응을 기록한다. 두 entry HTML의 import/공통 자산 그래프를 검사하고 manifest 누락·서빙 allowlist 밖 경로로 red를 확인한다.
+1. manifest의 `version`, `entrypoints`, `assets`를 정의하고 각 asset의 `source`, 기존 `installed_relative_path`, `media_type`을 기록한다. manifest 자체도 wheel에 설치해 runtime allowlist의 기준으로 사용한다. 두 entry HTML의 import/공통 자산 그래프를 검사하고 manifest 누락·서빙 allowlist 밖 경로로 red를 확인한다.
 2. 파일을 이동하고 wheel 설치 목적지는 기존 Fleet web으로 유지한다. 브라우저 URL `/console`, `/console/install`, 자산 URL, CSP, same-origin session은 유지한다.
 3. Fleet runtime은 설치된 자산을 우선 사용하고 개발 fallback만 `ui/console`을 찾는다. Docker는 동일 manifest를 사용해 설치/수집한 자산을 포함한다. source checkout 전체를 runtime dependency로 만들지 않는다.
 4. Fleet Node web suite와 static/package 시험, sdist→wheel 설치 시험을 실행한다. Docker smoke에서 두 문서·공유 아이콘·client JS·없는 asset 404·traversal 거절을 확인한다.
