@@ -239,8 +239,9 @@ def test_claims_read_api_names_the_owning_job_status_and_phase(tmp_path):
 
 def test_restart_with_a_running_step_has_an_exit(tmp_path):
     """C4b 1c N1 (D-403 §7(e)): restart -> HOLD with claims UNKNOWN -> readback resolves it."""
-    for outcome, status, phases in (("SUCCEEDED", "ACTION_SUCCEEDED", {"CLAIMED"}),
-                                    ("FAILED", "HOLD", {"HELD"})):
+    # After a restart the authority changed, so even a success parks the Job HELD (1c item 2a);
+    # the success event is kept and resume returns the step to ACTION_SUCCEEDED.
+    for outcome, status, phases in (("SUCCEEDED", "HOLD", {"HELD"}), ("FAILED", "HOLD", {"HELD"})):
         path, tasks, _, enabled = _stores(tmp_path / outcome)
         store = CellJobStore(path)
         _create(store)
@@ -296,10 +297,83 @@ def test_a_site_stop_never_fails_on_claim_bookkeeping(tmp_path):
 
 
 def test_release_from_running_is_refused_entirely(tmp_path):
-    # 1c P1: release (claim_phase=None) only from READY, even with not_submitted=True.
+    # 1c P1: hold() never releases; release_before_send refuses a started step.
     from test_cell_job_store import _running
     _, _, store, _ = _running(tmp_path)
+    with pytest.raises(ValueError):
+        store.hold("cell-mission-1", reason="X", claim_phase=None, actor_id="op", event_key="k")
     with pytest.raises(MissionConflict):
+        store.release_before_send("cell-mission-1", reason="X", event_key="k")
+    assert store.get("cell-mission-1")["status"] == "RUNNING"
+
+
+def test_a_late_success_after_a_stop_parks_the_job_and_resume_keeps_the_progress(tmp_path):
+    """C4b 1c item 2a (rosy-a9): stop while RUNNING -> late SUCCEEDED -> rearm must not free claims."""
+    path, tasks, _, enabled = _stores(tmp_path)
+    store = CellJobStore(path)
+    _create(store)
+    store.admit("cell-mission-1", actor_id="operator-1", expected_generation=enabled["generation"])
+    transport = Transport()
+    dispatcher = StepJobDispatcher(store, tasks, transport, {"omx_01": "omx_01_control"}, REVISIONS,
+                                   deployment_profile="simulation", monotonic=Clock())
+    dispatcher.dispatch_next()
+    stopped = tasks.trip_stop_latch(actor_id="operator-1")
+    transport.on_get = lambda grant: _receipt(grant, "SUCCEEDED", 9)
+    dispatcher.dispatch_next()
+    job = store.get("cell-mission-1")
+    assert (job["status"], job["reason"]) == ("HOLD", "site_stop")
+    assert any(event["event_type"] == "CELL_STEP_ACTION_SUCCEEDED" for event in job["events"])
+    assert {phase for _, _, phase in _claim_phases(path)} == {"HELD"}
+    rearmed = tasks.rearm_dispatch(expected_generation=stopped["generation"], actor_id="operator-1")
+    assert {phase for _, _, phase in _claim_phases(path)} == {"HELD"}
+    grant = transport.submissions[0]
+    with pytest.raises(MissionConflict):
+        store.confirm_step_goal("cell-mission-1", step_index=0, action_id=grant.action_id,
+                                attempt_id=grant.attempt_id, evidence=_goal(grant.action_id, grant.attempt_id, "g"))
+    resumed = store.resume("cell-mission-1", actor_id="operator-2", expected_generation=rearmed["generation"])
+    assert resumed["status"] == "ACTION_SUCCEEDED" and resumed["dispatch_generation"] == rearmed["generation"]
+    store.confirm_step_goal("cell-mission-1", step_index=0, action_id=grant.action_id,
+                            attempt_id=grant.attempt_id, evidence=_goal(grant.action_id, grant.attempt_id, "g"))
+    dispatcher.dispatch_next()
+    assert transport.submissions[-1].cell_transfer.step_index == 1
+    assert transport.submissions[-1].dispatch_generation == rearmed["generation"]
+
+
+def test_a_fence_change_after_progress_parks_claims_instead_of_releasing(tmp_path):
+    """C4b 1c item 2b: the reproduced end state HOLD/step 1/claims [] must not happen."""
+    from test_cell_job_store import _grant
+    path, tasks, _, enabled = _stores(tmp_path)
+    store = CellJobStore(path)
+    _create(store)
+    ready = store.admit("cell-mission-1", actor_id="operator-1", expected_generation=enabled["generation"])
+    store.start_step("cell-mission-1", step_index=0, action_id="action-0", attempt_id="attempt-0",
+                     grant=_grant(ready, 0))
+    store.record_action_result("cell-mission-1", step_index=0, event_id="e0", action_id="action-0",
+                               attempt_id="attempt-0", outcome="SUCCEEDED", result={})
+    step1 = store.confirm_step_goal("cell-mission-1", step_index=0, action_id="action-0",
+                                    attempt_id="attempt-0", evidence=_goal("action-0", "attempt-0", "g0"))
+    with store._connect() as connection:  # authority moves without the latch hook (another writer)
+        connection.execute("UPDATE fleet_dispatch_control SET generation=generation+1")
+        connection.commit()
+    held = store.start_step("cell-mission-1", step_index=1, action_id="action-1", attempt_id="attempt-1",
+                            grant=_grant(step1, 1))
+    assert (held["status"], held["reason"], held["current_step_index"]) == (
+        "HOLD", "FLEET_FENCE_CHANGED_BEFORE_SUBMISSION", 1)
+    assert {phase for _, _, phase in _claim_phases(path)} == {"HELD"}
+
+
+def test_release_before_send_frees_claims_only_without_progress(tmp_path):
+    # rosy-a9 narrowing: a dedicated method replaces hold(not_submitted=True).
+    path, tasks, _, enabled = _stores(tmp_path)
+    store = CellJobStore(path)
+    _create(store)
+    store.admit("cell-mission-1", actor_id="operator-1", expected_generation=enabled["generation"])
+    released = store.release_before_send("cell-mission-1", reason="ACTION_GRANT_INVALID", event_key="k")
+    assert released["status"] == "HOLD" and _claim_phases(path) == []
+    from test_cell_job_store import _running
+    _, _, running_store, _ = _running(tmp_path / "running")
+    with pytest.raises(MissionConflict):
+        running_store.release_before_send("cell-mission-1", reason="X", event_key="k")
+    with pytest.raises(TypeError):
         store.hold("cell-mission-1", reason="X", claim_phase=None, actor_id="op", event_key="k",
                    not_submitted=True)
-    assert store.get("cell-mission-1")["status"] == "RUNNING"

@@ -112,8 +112,8 @@ class StepJobDispatcher:
             return self._view(self.store.get(job["mission_id"]), index, None)
         except (KeyError, TypeError, ValueError):
             # Nothing was started or sent (1b B3): release the claims with the reason.
-            held = self.store.hold(job["mission_id"], reason="ACTION_GRANT_INVALID", claim_phase=None,
-                                   actor_id=_ACTOR, event_key=f"grant-invalid:{index}", not_submitted=True)
+            held = self.store.release_before_send(job["mission_id"], reason="ACTION_GRANT_INVALID",
+                                                  event_key=f"grant-invalid:{index}")
             return self._view(held, index, "HOLD")
         if started["status"] != "RUNNING":
             return self._view(started, index, started["status"])

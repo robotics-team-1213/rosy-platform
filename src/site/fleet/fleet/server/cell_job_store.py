@@ -406,10 +406,11 @@ class CellJobStore:
             if (control is None or not control["dispatch_enabled"]
                     or control["authority_epoch"] != job["authority_epoch"]
                     or control["generation"] != job["dispatch_generation"]):
-                # Nothing was sent: hold with a reason instead of leaving a stuck READY Job.
+                # Nothing was sent. The claims are released only if the Job has no progress yet;
+                # otherwise they are parked HELD for operator re-approval (1c item 2b, D-420 §4.1).
                 self._hold_in_transaction(
                     connection, job, reason="FLEET_FENCE_CHANGED_BEFORE_SUBMISSION",
-                    claim_phase=None, actor_id="fleet",
+                    claim_phase=self._pre_send_claim_phase(connection, job), actor_id="fleet", strict=False,
                     event_key=f"hold-before-submit:{step_index}:{self._approvals(connection, job)}",
                     detail={"current_authority_epoch": None if control is None else control["authority_epoch"],
                             "current_generation": None if control is None else control["generation"],
@@ -436,9 +437,9 @@ class CellJobStore:
             if not self._owns_runnable_claims(connection, job):
                 # Nothing was sent: a pre-send hold releases what is left (D-420 §4.5 row 1).
                 self._hold_in_transaction(
-                    connection, job, reason="FLEET_CLAIM_MISSING_BEFORE_SUBMISSION", claim_phase=None,
-                    actor_id="fleet", event_key=f"claim-missing:{step_index}:{self._approvals(connection, job)}",
-                    detail={})
+                    connection, job, reason="FLEET_CLAIM_MISSING_BEFORE_SUBMISSION",
+                    claim_phase=self._pre_send_claim_phase(connection, job), actor_id="fleet", strict=False,
+                    event_key=f"claim-missing:{step_index}:{self._approvals(connection, job)}", detail={})
                 result = self._get(connection, mission_id)
                 connection.commit()
                 return result
@@ -501,14 +502,20 @@ class CellJobStore:
             if ((step["status"] != "RUNNING" and not readback) or step["action_id"] != action_id
                     or step["attempt_id"] != attempt_id or (readback and outcome == "UNKNOWN")):
                 raise MissionConflict("Action result does not match the current Cell transfer attempt")
+            job_reason = reason
+            if outcome == "SUCCEEDED" and not self._fence_current(connection, job):
+                # 1c item 2a: the Action ended after a stop or authority change. Keep the success
+                # event (resume returns the step to ACTION_SUCCEEDED) but park the Job and claims.
+                step_state, claim_phase = "HOLD", "HELD"
+                job_reason = job["reason"] if job["status"] == "HOLD" else "site_stop"
             connection.execute(
                 "UPDATE fleet_cell_steps SET status=?, result_json=?, reason=?, updated_at=? "
                 "WHERE mission_id=? AND step_index=?",
-                (step_state, _json(dict(result)), reason, now, mission_id, step_index),
+                (step_state, _json(dict(result)), job_reason, now, mission_id, step_index),
             )
             connection.execute(
                 "UPDATE fleet_cell_jobs SET status=?, reason=?, updated_at=? WHERE mission_id=?",
-                (step_state, reason, now, mission_id),
+                (step_state, job_reason, now, mission_id),
             )
             self._set_claims(connection, job, claim_phase)
             self._event(connection, mission_id, step_index, event_type, "device", detail)
@@ -623,20 +630,18 @@ class CellJobStore:
             (job["mission_id"],))}
 
     def hold(self, mission_id: str, *, reason: str, claim_phase: str | None, actor_id: str,
-             event_key: str, not_submitted: bool = False) -> dict[str, Any]:
+             event_key: str) -> dict[str, Any]:
         """HOLD a READY, RUNNING or ACTION_SUCCEEDED Job and its current step (idempotent).
 
         A held Job keeps its claims (D-403 보강 2026-10-03): ``claim_phase`` is HELD from READY or
-        ACTION_SUCCEEDED, and UNKNOWN from RUNNING (so readback picks it up). None releases them and is
-        allowed only from READY with ``not_submitted=True`` (nothing was sent; D-420 §4.5 row 1).
+        ACTION_SUCCEEDED, and UNKNOWN from RUNNING (so readback picks it up). hold() never releases
+        claims; ``release_before_send`` and ``cancel`` are the only release paths.
         """
         reason = _nonempty("reason", reason, limit=96)
         actor_id = _nonempty("actor_id", actor_id, limit=96)
         event_key = _nonempty("event_key", event_key)
-        if claim_phase not in {"HELD", "UNKNOWN", None}:
-            raise ValueError("claim_phase must be HELD, UNKNOWN or None")
-        if claim_phase is None and not_submitted is not True:
-            raise ValueError("claims are released only before anything was sent (not_submitted=True)")
+        if claim_phase not in {"HELD", "UNKNOWN"}:
+            raise ValueError("claim_phase must be HELD or UNKNOWN; hold() never releases claims")
         with closing(self._connect()) as connection:
             connection.execute("BEGIN IMMEDIATE")
             job = connection.execute(
@@ -650,8 +655,7 @@ class CellJobStore:
                                   actor_id, event_key, detail):
                 if job["status"] not in _HOLDABLE:
                     raise MissionConflict(f"a {job['status']} Cell Job cannot be held")
-                allowed = ({"UNKNOWN"} if job["status"] == "RUNNING"
-                           else {"HELD", None} if job["status"] == "READY" else {"HELD"})
+                allowed = {"UNKNOWN"} if job["status"] == "RUNNING" else {"HELD"}
                 if claim_phase not in allowed:
                     raise MissionConflict(f"a {job['status']} Cell Job cannot hold its claims as {claim_phase}")
                 self._hold_in_transaction(connection, job, reason=reason, claim_phase=claim_phase,
@@ -659,6 +663,44 @@ class CellJobStore:
             result = self._get(connection, mission_id)
             connection.commit()
         return result
+
+    def release_before_send(self, mission_id: str, *, reason: str, event_key: str) -> dict[str, Any]:
+        """HOLD a READY Job whose current step was never started; release its claims only if the
+        Job has no progress (step 0, nothing ever submitted), else park them HELD (1c item 2b)."""
+        reason = _nonempty("reason", reason, limit=96)
+        event_key = _nonempty("event_key", event_key)
+        with closing(self._connect()) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            job = self._require(connection, mission_id)
+            step = connection.execute("SELECT * FROM fleet_cell_steps WHERE mission_id=? AND step_index=?",
+                                      (mission_id, job["current_step_index"])).fetchone()
+            if job["status"] != "READY" or step is None or step["action_id"] is not None:
+                raise MissionConflict("only a READY step that was never started can be released before send")
+            event_key = f"{event_key}@{self._approvals(connection, job)}"
+            phase = self._pre_send_claim_phase(connection, job)
+            detail = {"event_id": event_key, "reason": reason, "claim_phase": phase}
+            if not self._replayed(connection, mission_id, job["current_step_index"], "CELL_JOB_HELD",
+                                  "mission-dispatcher", event_key, detail):
+                self._hold_in_transaction(connection, job, reason=reason, claim_phase=phase,
+                                          actor_id="mission-dispatcher", event_key=event_key, detail={})
+            result = self._get(connection, mission_id)
+            connection.commit()
+        return result
+
+    @staticmethod
+    def _pre_send_claim_phase(connection: sqlite3.Connection, job: sqlite3.Row) -> str | None:
+        """None (release) only without progress: step 0 and nothing ever submitted; else HELD."""
+        submitted = connection.execute(
+            "SELECT 1 FROM fleet_cell_events WHERE mission_id=? AND event_type='CELL_STEP_SUBMITTING' LIMIT 1",
+            (job["mission_id"],)).fetchone()
+        return None if job["current_step_index"] == 0 and submitted is None else "HELD"
+
+    @staticmethod
+    def _fence_current(connection: sqlite3.Connection, job: sqlite3.Row) -> bool:
+        control = connection.execute("SELECT authority_epoch, generation, dispatch_enabled "
+                                     "FROM fleet_dispatch_control WHERE control_id=1").fetchone()
+        return bool(control and control["dispatch_enabled"] and control["authority_epoch"] == job["authority_epoch"]
+                    and control["generation"] == job["dispatch_generation"])
 
     @staticmethod
     def _hold_in_transaction(connection: sqlite3.Connection, job: sqlite3.Row, *,

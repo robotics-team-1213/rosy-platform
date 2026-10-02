@@ -404,15 +404,14 @@ def test_generic_hold_from_running_is_idempotent(tmp_path, claim_phase, phases):
     assert [event["event_type"] for event in held["events"]].count("CELL_JOB_HELD") == 1
 
 
-@pytest.mark.parametrize("claim_phase, not_submitted, error", [
-    (None, False, ValueError), ("HELD", False, MissionConflict), ("DISPATCHING", False, ValueError),
+@pytest.mark.parametrize("claim_phase, error", [
+    (None, ValueError), ("HELD", MissionConflict), ("DISPATCHING", ValueError),
 ])
-def test_running_hold_cannot_release_or_park_in_flight_claims(tmp_path, claim_phase, not_submitted, error):
-    # 1b A2: release needs an explicit not_submitted; HELD is not a RUNNING phase.
+def test_running_hold_cannot_release_or_park_in_flight_claims(tmp_path, claim_phase, error):
+    # 1b A2 / 1c: a RUNNING Job holds with UNKNOWN only; hold() never releases.
     _, tasks, store, _ = _running(tmp_path)
     with pytest.raises(error):
-        store.hold("cell-mission-1", reason="X", claim_phase=claim_phase, actor_id="op",
-                   event_key="k", not_submitted=not_submitted)
+        store.hold("cell-mission-1", reason="X", claim_phase=claim_phase, actor_id="op", event_key="k")
     assert store.get("cell-mission-1")["status"] == "RUNNING" and _phases(tasks) == ["DISPATCHING"]
 
 
