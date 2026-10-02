@@ -295,32 +295,39 @@ class RobotBody:
         return len({int((math.atan2(y, x) + math.pi) / (2.0 * math.pi) * ROTATION_SECTORS)
                     % ROTATION_SECTORS for x, y in points})
 
-    def rotation_reason(self, view: ScanView, margin_m: Optional[float] = None, *,
-                        ultrasonic_m: Optional[float] = None) -> Optional[str]:
-        """Why an in-place turn is not clear (None = clear), D-424 + review M1/M2:
-        - every sector around the base needs a seen return (coverage), else unknown;
-        - every seen point must clear rotation_radius + margin;
-        - a beam without a return whose unknown band leaves the body crosses the swept annulus:
-          behind the body (no rear sensor) it is never clear; in front only a fresh finite
-          ultrasonic echo inside its cone clears it."""
+    def rotation_check(self, view: ScanView, margin_m: Optional[float] = None, *,
+                       ultrasonic_m: Optional[float] = None) -> tuple[Optional[str], Optional[str]]:
+        """(kind, why) an in-place turn is not clear; (None, None) = clear. D-424 + review M1/M2.
+
+        kind "near": a seen return within rotation_radius + margin (judged first: real
+        evidence, a running turn stops on it at once). Then the evidence gaps, which a running
+        turn may debounce (D-424 follow-up, a single flickering scan): "empty" (no return),
+        "coverage" (a base sector of 360/ROTATION_SECTORS deg without a return) and "unknown"
+        (a beam without a return whose band leaves the body crosses the sweep: behind the body
+        never clear, in front only a fresh finite ultrasonic echo in its cone clears it)."""
         if not view.points:
-            return "no LiDAR return to judge the turn"
-        seen = self.seen_sectors(view.points)
-        if seen < ROTATION_SECTORS:
-            return f"the scan sees only {seen} of {ROTATION_SECTORS} sectors around the base"
+            return "empty", "no LiDAR return to judge the turn"
         need = self.rotation_clear_m(margin_m)
         nearest = min(math.hypot(x, y) for x, y in view.points)
         if nearest <= need:
-            return (f"a return {nearest:.3f} m from the base <= {need:.3f} m "
-                    "(rotation radius + margin)")
+            return "near", (f"a return {nearest:.3f} m from the base <= {need:.3f} m "
+                            "(rotation radius + margin)")
+        seen = self.seen_sectors(view.points)
+        if seen < ROTATION_SECTORS:
+            return "coverage", f"the scan sees only {seen} of {ROTATION_SECTORS} sectors around the base"
         for end in view.unknown:
             if self.contains(*end):
                 continue                      # the blind zone ends inside the body
             if end[0] < 0.0:
-                return "a beam without a return behind the body crosses the turn's sweep"
+                return "unknown", "a beam without a return behind the body crosses the turn's sweep"
             if not self.ultrasonic_clears(end, ultrasonic_m):
-                return "a beam without a return in front crosses the turn's sweep"
-        return None
+                return "unknown", "a beam without a return in front crosses the turn's sweep"
+        return None, None
+
+    def rotation_reason(self, view: ScanView, margin_m: Optional[float] = None, *,
+                        ultrasonic_m: Optional[float] = None) -> Optional[str]:
+        """Why an in-place turn is not clear (None = clear); see rotation_check."""
+        return self.rotation_check(view, margin_m, ultrasonic_m=ultrasonic_m)[1]
 
     def with_lidar(self, *, x_m: Optional[float] = None, y_m: Optional[float] = None,
                    forward_deg: Optional[float] = None) -> "RobotBody":

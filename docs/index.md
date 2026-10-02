@@ -272,6 +272,6 @@
 
 - 2026-10-03 · uncommitted · refactor: D-425 scoped HTTP와 화면 lifetime 도구
 - 2026-10-03 · uncommitted · test: D-425 실제 API 책임·권한 경계
+- 2026-10-03 · uncommitted · test: align compiler and replay with current Cell execution path
 - 2026-10-03 · uncommitted · docs: D-425 앱·웹 이전 소유권·설치 기준선
-- 2026-10-03 · uncommitted · docs(plans): D-425 앱·웹 책임·통신·설치 이전 실행 계획
-- 2026-10-03 · uncommitted · test: verify real Cell runtime two-ledger replay
+- 2026-10-03 · uncommitted · feat: bind actual palletizing compiler at gateway composition

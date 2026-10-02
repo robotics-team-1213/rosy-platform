@@ -527,3 +527,77 @@ def test_mission_config_reads_old_and_new_configs():
     assert tuned.rotate_margin_m == 0.03 and tuned.min_front_beams == 4
     with pytest.raises(ValueError):
         mission_config({"rotate_clearence_m": 0.1})
+
+
+# --- D-424 follow-up: a flickering real scan must not end a running turn -------------------
+
+def _real_flicker_scans(services):
+    """Three real 8kcn C1 scans whose only reason is an unseen base sector (no near return)."""
+    from pathlib import Path
+    fixture = Path(__file__).resolve().parents[4] / "test" / "fixtures" / "robot_body" / \
+        "c1_coverage_flicker_scans.json"
+    doc = json.loads(fixture.read_text(encoding="utf-8"))
+    meta = doc["meta"]
+    out = []
+    for ranges in doc["scans"]:
+        out.append({"ranges": [math.inf if r is None else r for r in ranges],
+                    "angle_min": meta["angle_min"],
+                    "angle_max": meta["angle_min"] + meta["angle_increment"] * (len(ranges) - 1),
+                    "range_min": meta["range_min"], "range_max": meta["range_max"]})
+    return out
+
+
+def _turn_tick(services, sample, turned):
+    services.clock.now += 0.05
+    services.loc_mission.observe_odom(0.0, 0.0, turned)
+    services.loc_mission.observe_scan(sample)
+    services.loc_mission.tick()
+
+
+def test_flickering_real_scans_do_not_end_a_running_turn(core):
+    client, services = core
+    _with_pinky_body(services)
+    from core_common.robot_body import PINKY_PRO
+    services.line_follow._config = __import__("dataclasses").replace(
+        services.line_follow.config, lidar_forward_deg=PINKY_PRO.lidar_forward_deg)
+    clear = _scan(services)
+    assert _start(client).status_code == 202
+    flicker = _real_flicker_scans(services)
+    debounce = services.loc_mission.config.rotate_coverage_debounce_ticks
+    turned = 0.0
+    # Each real gap scan arrives twice (10 Hz scans, 20 Hz ticks), with clear scans between,
+    # like the longest gap run measured on the device (3 scans = 6 ticks < 8).
+    script = [clear] * 4 + [s for s in flicker for _ in range(2)] + [clear] * 4 + flicker[:1] * 2
+    for sample in script + [clear] * 400:
+        turned += 0.02
+        _turn_tick(services, sample, turned)
+        if services.loc_mission._run is None:
+            break
+    assert 3 * 2 < debounce
+    assert client.get(PATH, headers=VIEWER).json()["reason"] == "done"
+
+
+def test_a_sustained_evidence_gap_ends_the_turn_after_the_debounce(core):
+    client, services = core
+    _with_pinky_body(services)
+    assert _start(client).status_code == 202
+    blind = _scan(services, rest_m=math.inf, front_m=2.0)      # only the front sector seen
+    debounce = services.loc_mission.config.rotate_coverage_debounce_ticks
+    for tick in range(debounce - 1):
+        _turn_tick(services, blind, 0.01 * (tick + 1))
+        assert services.loc_mission._run is not None
+    _turn_tick(services, blind, 0.01 * debounce)
+    assert client.get(PATH, headers=VIEWER).json()["reason"] == "obstacle"
+
+
+def test_a_near_return_ends_the_turn_at_once_even_mid_debounce(core):
+    client, services = core
+    _with_pinky_body(services)
+    assert _start(client).status_code == 202
+    blind = _scan(services, rest_m=math.inf, front_m=2.0)
+    _turn_tick(services, blind, 0.01)                          # one gap tick counted
+    forward = services.line_follow.config.lidar_forward_deg
+    near = _scan(services)
+    near["ranges"][int(forward + 90) % 360] = 0.09             # base ~0.0916 < 0.0926
+    _turn_tick(services, near, 0.02)
+    assert client.get(PATH, headers=VIEWER).json()["reason"] == "obstacle"
