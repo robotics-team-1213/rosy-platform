@@ -27,3 +27,8 @@
 - 증거: `test/test_platform_palletizing_compat.py` 14 passed(새 3개: 모듈의 깊이·overhang·carry_z, fingertip 거절, plan bundle 재컴파일). 기존 Cell 155 passed. 실행 경로는 설치 wheel 대신 `PYTHONPATH=modules/execution/src;modules/processes/palletizing/src;modules/world/src;modules/skills/api/src`.
 - gate 변화: SOURCE GO 유지(wheel은 다시 빌드하지 않았다. ARTIFACT HOLD 그대로).
 - 결정: `fingertip_overhang_m`는 `rosy_cell.cell/2`의 필수 필드가 됐다. 버전은 올리지 않았다. /2는 아직 배포되지 않았고 이 브랜치 밖에서 쓰인 적이 없기 때문이다.
+
+## 2026-10-02 · uncommitted · feat(palletizing): `job_document(job)` (C4b G5)
+- 변경: Job의 정본 JSON(`recipe_hash`, `cell_hash`, `carry_z`, `steps`)을 하나로 둔다. Rosy Cell 제안과 Fleet 재컴파일이 같은 바이트로 비교한다(D-403 §3).
+- 증거: `src/site/fleet/test/test_cell_compiler.py`.
+- gate 변화: 없음.

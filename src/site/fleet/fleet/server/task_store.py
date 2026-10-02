@@ -416,6 +416,8 @@ class FleetTaskStore:
                 (int(advance_authority_epoch), int(enabled), reason, actor_id, now),
             )
             if release_pre_dispatch:
+                from fleet.server.cell_job_store import hold_for_site_stop  # Cell Jobs keep claims (D-403)
+                hold_for_site_stop(connection, now=now, hold_reason=None if advance_authority_epoch else "site_stop")
                 rows = connection.execute(
                     """SELECT owner_kind, owner_id FROM fleet_action_claims
                        WHERE phase='CLAIMED'"""

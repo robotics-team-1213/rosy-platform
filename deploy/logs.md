@@ -2010,8 +2010,19 @@
 - 증거: 2026-10-02 실제 로봇. 025 수동 push로 두 로봇에 업데이터 설치(기본 꺼짐). 9dfk config 켬. 이 PC에서 `payload-2026.10.02-026` 발행(카나리 9dfk). 12:11 GitHub 시간 초과는 error로 처리되고 철회되지 않음. 12:26 staged, 12:26 applying, 12:27 committed(CORE·io·camera 026, 옛 릴리스 3개 정리), 발행 도구가 `canary_ok=true`를 올림. 8kcn은 사용자 지시로 수동 push(026)했고 config는 켰으며 rosy-c5 hold 중. 업데이터 시험 238 passed 1 skipped(기본 켜짐 시험 2개는 바꾸기 전 빨강 확인).
 - gate 변화: D-412 DEVICE(카나리 단계) 통과. 카나리 다음 로봇 순서는 기기 쌍둥이만.
 
+## 2026-10-02 · uncommitted · feat(omx-sim): 셀 owner 실행기와 sim_model_pose 생산자 (C4b G2b, G6)
+- 변경: `robot/omx/run_cell_owner.py`(UDS 스레드 + uvicorn, `rosy_agent.omx_cell_owner` 조립), `cell_sim_tools.refuse_second_owner`가 `run_cell_owner`도 보고 `proc_root`를 받는다, `robot/omx/sim_item_pose_producer.py`(생산자 interface + Gazebo 포즈 reader), `robot/omx/sim/item_pose_goal.yaml`(허용오차 5 mm / 2 mm / 0.05 rad / 기울기 0.05, 근거 C3b).
+- 증거: `test/test_platform_cell_owner_assembly.py`(가짜 ROS runtime), `src/site/fleet/test/test_cell_goal_evidence.py`(가짜 포즈 reader), `test/test_platform_item_pose.py`.
+- 판단: 실행기는 WSL에서 돌려 보지 않았다(wave 1은 Gazebo 없음). 첫 phase 뒤 phase를 진행하고 Action을 완료하는 진행기가 없어 실제 Job은 approach에서 멈춘다 — wave 2.
+- gate 변화: 없음.
+
 ## 2026-10-03 · uncommitted · fleet 빌드 맥락에 apps/gateway/src 재허용
 - 변경: Dockerfile.fleet.dockerignore에 !apps/gateway/src/** 한 줄. Dockerfile.fleet이 apps/gateway/src를 COPY하는데 허용 목록에 없어 test_build_contexts_carry_only_what_the_images_copy와 CI가 실패했다(플랫폼 게이트웨이 준비 작업이 COPY를 먼저 실음). 잎 글로브 원칙은 유지.
 - 근거: test/test_site_map_fit_deploy.py.
 - gate 변화: 없음.
 - 최종 증거: test_site_map_fit_deploy.py 4 passed.
+
+## 2026-10-03 · uncommitted · fix(omx-sim): C4b 1b — 그리퍼 폭은 grant의 레시피, HTTP는 루프백 (C2, C4)
+- 변경: `run_cell_owner.py`는 `rosy_agent.omx_cell_owner.sim_gripper_observation`으로 grant의 `recipe_sha256`·item 폭을 쓴다(첫 레시피 아님). HTTP는 기본 127.0.0.1(`ROSY_CELL_OWNER_HTTP_HOST`로만 바꿈; 이 포트를 게시하는 compose·실행 스크립트가 없다). owner HTTP 앱은 아직 수락 저장소를 공유하지 않는다 — G9. `sim_item_pose_producer.py`는 `frame: robot_base`를 싣는다.
+- 증거: `test/test_platform_cell_owner_assembly.py`(스파이로 폭 확인).
+- gate 변화: 없음.

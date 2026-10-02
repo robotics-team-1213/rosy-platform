@@ -32,7 +32,7 @@ def reserve(connection: sqlite3.Connection, *, owner_kind: str, owner_id: str,
         raise ValueError("invalid dispatch claim owner")
     if isinstance(generation, bool) or not isinstance(generation, int) or generation < 0:
         raise ValueError("generation must be a non-negative integer")
-    if phase not in {"CLAIMED", "DISPATCHING", "UNKNOWN"}:
+    if phase not in {"CLAIMED", "DISPATCHING", "UNKNOWN", "HELD"}:
         raise ValueError("invalid dispatch claim phase")
     normalized = normalize_resources(resources)
     connection.execute("SAVEPOINT reserve_dispatch_resources")

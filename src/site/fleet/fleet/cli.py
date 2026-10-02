@@ -110,6 +110,8 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     console.add_argument("--mission-api", action="store_true",
                          help=("enable persistent Mission proposal/read APIs without ER 2 or Mission "
                                "dispatch; existing Fleet operator commands remain available"))
+    console.add_argument("--cell-job-stack-tol-m", default=None, type=float, help=(
+        "recompile Cell Job proposals with palletizing at this stack tolerance; needs --mission-api"))
     console.add_argument("--goal-evidence-config", default=None, type=Path,
                          help="optional scoped goal-evidence producer registry YAML")
     console.add_argument("--pairing-ca", default=None, type=Path,
@@ -341,6 +343,9 @@ def run_console(args: argparse.Namespace) -> None:
     goal_evidence_config = getattr(args, "goal_evidence_config", None)
     if goal_evidence_config is not None and not mission_api:
         sys.exit("--goal-evidence-config requires --mission-api")
+    cell_job_tol_m = getattr(args, "cell_job_stack_tol_m", None)
+    if cell_job_tol_m is not None and not mission_api:
+        sys.exit("--cell-job-stack-tol-m requires --mission-api")
     if mission_api and tasks_db is None:
         sys.exit("--tasks-db is required with --mission-api")
     if mission_api and site_users is None:
@@ -429,6 +434,10 @@ def run_console(args: argparse.Namespace) -> None:
     mission_service = None
     proposal_store = None
     goal_evidence_service = None
+    cell_job_compiler = None
+    if cell_job_tol_m is not None:  # the palletizing wheel is needed only with this flag
+        from fleet.server.cell_compiler import PalletizingCellJobCompiler
+        cell_job_compiler = PalletizingCellJobCompiler(tol_m=cell_job_tol_m)
     if mission_api:
         from fleet.server.mission_service import MissionService
         from fleet.server.mission_store import MissionStore
@@ -486,6 +495,7 @@ def run_console(args: argparse.Namespace) -> None:
     app = create_app(console, console_token=console_token, web_common=args.web_common,
                      hub=hub, sightings=sighting_service, task_service=task_service,
                      mission_service=mission_service, proposal_store=proposal_store,
+                     cell_job_compiler=cell_job_compiler,
                      goal_evidence_service=goal_evidence_service,
                      site_users=site_users, discovery=discovery,
                      discovery_token=discovery_token,

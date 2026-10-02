@@ -4653,3 +4653,14 @@
 - Change: adapt canonical Recipe/Cell/Job/PlanBundle through the app-supplied Fleet compiler port; declare actual process/execution wheel dependencies. Original18-transfer demo crosses public proposal/resolve/operator admit and actual Skill/API/two ledgers. Four box transfers complete; original thin sheet is refused without motion and claims remain.
 - Evidence: new compiler/public-ingress plus prior replay 9 passed. Thin-sheet safety mutation fails HOLD versus ACTION_SUCCEEDED; planner restored byte-for-byte. Four real wheels built/installed in X: venv; imports verified site-packages, 18 transfers/two markers and pip check 0. Final compiler/API/replay/compatibility/install/boundary regression 45 passed; independent review 14 passed, no Critical/Important findings. Quick tier 96 passed / 25 existing freshness warnings; harness lint 0 errors / 25 warnings; new adapter flake8 passes.
 - Gate: SOURCE/LOCAL only. Original 2 mm sheet conflicts with 2.57 mm fingertip overhang; no safety bypass or recipe modification. ROS/sensor/goal producer are host ports; actual ROS lifecycle, UDS and full recipe Gazebo acceptance remain open.
+
+## 2026-10-03 · uncommitted · docs: D-425 앱·웹 이전 소유권·설치 기준선
+- 변경: refactor/ui-ownership worktree에서 화면/API/자격 audience/상태 정본/writer 표와 소스/설치/caller/목표 경로 표를 작성. 과거 web-transport의 미착지 구현과 충돌은 보존하고 재사용·의존 범위를 기록. Task 0 상태와 실제 teleop 경로 예시를 정렬.
+- 증거: 역할/shared/Robot/Pilot/API/Fleet 별도 기준선 합계 1939 passed/139 skipped; 각 known-failure 판정 0 new/0 known. Python 3.14.5, Node v24.15.0 Windows 호스트. 로그·pytest 임시 폴더는 X:/DevTemp/rosy-ui-ownership/baseline.
+- gate 변화: Task 0 SOURCE 기준선만 완료. 코드·폴더 이전 없음; skip·브라우저·installed-only·ROS-SIM·DEVICE/FIELD는 미수용.
+
+
+## 2026-10-03 · uncommitted · test: align compiler and replay with current Cell execution path
+- Change: preserve incoming C4b owner/Fleet changes and port host replay to StepJobDispatcher, simulation identity, persistent journal identity and stored item_at_pose predicates. Reuse canonical process job_document and expose recipe geometry at the app compiler port. Producers report model-centre observations without satisfied claims.
+- Evidence: compiler/public-ingress and existing two-ledger replay 9 passed on integrated tree. Integrated Cell family, compiler, replay, owner acceptance/assembly, compatibility, install and boundaries: 209 passed. Rebuilt/reinstalled actual wheels, verified venv-only imports/18 steps/two markers and pip check 0. Independent review 14 passed, no Critical/Important findings. Quick tier 96 passed / 25 existing freshness warnings; harness lint 0 errors / 25 warnings; adapter flake8 passes.
+- Gate: SOURCE/LOCAL only; original thin sheet remains safely refused. Full recipe Gazebo acceptance remains open.

@@ -270,8 +270,8 @@
 
 ## 최근 기록
 
+- 2026-10-03 · uncommitted · test: align compiler and replay with current Cell execution path
+- 2026-10-03 · uncommitted · docs: D-425 앱·웹 이전 소유권·설치 기준선
 - 2026-10-03 · uncommitted · feat: bind actual palletizing compiler at gateway composition
 - 2026-10-03 · uncommitted · docs(plans): D-425 앱·웹 책임·통신·설치 이전 실행 계획
 - 2026-10-03 · uncommitted · test: verify real Cell runtime two-ledger replay
-- 2026-10-03 · uncommitted · docs(adr): D-425 앱·웹 역할·공유 경계·목표 폴더
-- 2026-10-03 · uncommitted · feat: journal Cell hold release and local Action completion

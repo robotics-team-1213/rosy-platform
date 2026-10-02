@@ -63,6 +63,7 @@ def test_actual_demo_compilation_stops_at_unsupported_thin_sheet_without_motion(
     path = tmp_path / "fleet.sqlite3"
     tasks, jobs = FleetTaskStore(path), CellJobStore(path)
     MissionStore(path)
+    from test_platform_cell_runtime_replay import _goal_tolerance
     from hashlib import sha256
     from fastapi.testclient import TestClient
     from fleet.server.app import create_app
@@ -75,7 +76,8 @@ def test_actual_demo_compilation_stops_at_unsupported_thin_sheet_without_motion(
                                             ("operator-secret", "operator-1", "operator"))}
     app = create_app(FleetConsole([], []), task_service=FleetTaskService(tasks, robot_ids=()),
         mission_service=MissionService(MissionStore(path)), proposal_store=ProposalStore(path),
-        cell_job_compiler=compiler, site_users=users, start_task_dispatcher=False)
+        cell_job_compiler=compiler, site_users=users, start_task_dispatcher=False,
+        deployment_profile="simulation", cell_item_pose_tolerance=_goal_tolerance())
     client = TestClient(app)
     control = tasks.rearm_dispatch(expected_generation=tasks.dispatch_control()["generation"], actor_id="operator-1")
     def post(route, token, body=None):
@@ -100,7 +102,8 @@ def test_actual_demo_compilation_stops_at_unsupported_thin_sheet_without_motion(
     transport = LocalTransport(tmp_path / "omx.sqlite3", tasks, counters, rearm=True,
                                accepted_cell=bundle.cell_digest, accepted_items=items)
     dispatcher = CellJobDispatcher(jobs, tasks, transport, {"omx_01": "omx_01_control"},
-                                   config_revisions={"omx_01": "cell-config-v1"})
+                                   grant_revisions={"omx_01_control": {"capability_revision": "cell-transfer-v1",
+                                   "config_revision": "cell-config-v1"}}, deployment_profile="simulation")
     registry = CellGoalRegistry((CellGoalProducer(producer_id="gazebo-pose", token="pose-secret",
         workcell_id="omx_01", instance_id="omx_01_control", recipe_sha256=bundle.recipe_digest,
         cell_sha256=bundle.cell_digest, evaluator_revisions=("placement-v1",), max_age_s=5,

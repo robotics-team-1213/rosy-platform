@@ -115,13 +115,14 @@ def test_replayed_gripper_sequence_cannot_prove_a_later_release():
     assert tx.state is PickPlaceState.HOLD
 
 
-def _accepted_four_phase_action(tmp_path):
+def _accepted_four_phase_action(tmp_path, action_kind="PICK_PLACE"):
     store = ActionStore(tmp_path / "workflow.sqlite3")
     created = store.create_action(
         workcell_id="omx_01", instance_id="omx_01_control",
         principal_id="fleet-1", request_key="workflow-action",
-        action_id="workflow-action", action_kind="PICK_PLACE",
-        configuration_revision="cfg-v1", observation_id="obs-4",
+        action_id="workflow-action", action_kind=action_kind,
+        configuration_revision="cfg-v1",
+        observation_id="" if action_kind == "CELL_TRANSFER" else "obs-4",
         owner_generation=8, payload={"mission_id": "mission-1"},
     )
     attempt = store.begin_submission(
@@ -243,3 +244,40 @@ def test_restart_recovery_never_resubmits_an_ambiguous_stage():
     assert recovered.object_held
     with pytest.raises(TransactionError, match="HOLD"):
         recovered.record_arm_result(arm_result("transfer"))
+
+
+@pytest.mark.parametrize("kind, source, event_type", [
+    ("PICK_PLACE", "pick-place-workflow", "PICK_PLACE_ACTION_COMPLETED"),
+    ("CELL_TRANSFER", "cell-transfer-workflow", "CELL_TRANSFER_ACTION_COMPLETED"),
+])
+def test_completion_journal_names_the_completed_kind(tmp_path, kind, source, event_type):
+    # C4b G8: a CELL_TRANSFER completion was journaled as pick-place-workflow.
+    store, recorder = _accepted_four_phase_action(tmp_path, action_kind=kind)
+    store.record_workflow_state(
+        "workflow-action", "workflow-attempt", workflow_state="ACTION_SUCCEEDED",
+        object_may_be_held=False,
+        evidence_refs={"gripper_hold_sequence": 11, "gripper_release_sequence": 12},
+    )
+    recorder.complete_pick_place(result_observed_at="2026-10-01T00:00:03Z", result={})
+
+    action = store.get_action("workflow-action")
+    completed = [event for event in store.history("workflow-action")
+                 if event["event_type"].endswith("_ACTION_COMPLETED")]
+    assert action["state"] == "SUCCEEDED" and action["result_source"] == source
+    assert [event["event_type"] for event in completed] == [event_type]
+    assert completed[0]["detail"]["result_source"] == source
+
+
+def test_pick_place_completion_history_survives_reopen(tmp_path):
+    # History compatibility: rows written before G8 keep their PICK_PLACE names.
+    store, recorder = _accepted_four_phase_action(tmp_path)
+    store.record_workflow_state(
+        "workflow-action", "workflow-attempt", workflow_state="ACTION_SUCCEEDED",
+        object_may_be_held=False,
+        evidence_refs={"gripper_hold_sequence": 11, "gripper_release_sequence": 12},
+    )
+    recorder.complete_pick_place(result_observed_at="2026-10-01T00:00:03Z", result={})
+    reopened = ActionStore(store.path)
+    assert reopened.get_action("workflow-action")["result_source"] == "pick-place-workflow"
+    assert "PICK_PLACE_ACTION_COMPLETED" in [
+        event["event_type"] for event in reopened.history("workflow-action")]
