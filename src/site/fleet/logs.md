@@ -1305,3 +1305,8 @@
 - Change: extend the two-ledger restart replay to verify four phase snapshots plus one terminal event, then a separate goal-confirmation event.
 - Evidence: targeted Mission, dispatcher, service, progress, task, OMX ActionStore, and replay suites: pending final worktree verification.
 - Gate: SOURCE/LOCAL only; remaining interruption fixtures and expiry/occupancy cases are still open.
+
+## 2026-10-02 · uncommitted · verify(fleet): platform cell replay watermark
+- 변경: record platform cell replay watermark verification.
+- Evidence: replay test 1 passed; Fleet UI/API group 109 passed; formation 22 passed; four web suites 29 passed. Harness contract failure isolated to append-only history check.
+- Gate: SOURCE/LOCAL only; remaining interruption fixtures and expiry/occupancy cases are still open.

@@ -127,9 +127,15 @@ def missing_required(required_text: str, inventory_text: str) -> list[str]:
 
 def ssh_argv(host: str, local_appdata: Path, command: str = DPKG_COMMAND) -> list[str]:
     rosy = Path(local_appdata) / "Rosy"
+    known_hosts = str(rosy / "known_hosts")
+    # ssh.exe takes a quoted -o value literally ("invalid quotes", first live run
+    # 2026-10-02) and splits an unquoted one at spaces, so pass it bare and refuse
+    # the paths that cannot be passed bare (same policy as rosy-update-hold.ps1).
+    if any(ch.isspace() or ch in "\"'" for ch in known_hosts):
+        raise PrepareError(f"known_hosts path has a space or quote; ssh cannot take it: {known_hosts}")
     return ["ssh", "-i", str(rosy / "ssh" / "rosy-operator-ed25519"),
             "-o", "IdentitiesOnly=yes", "-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=yes",
-            "-o", f'UserKnownHostsFile="{rosy / "known_hosts"}"', "-o", "ConnectTimeout=5",
+            "-o", f"UserKnownHostsFile={known_hosts}", "-o", "ConnectTimeout=5",
             f"rosy@{host}", command]
 
 

@@ -400,6 +400,13 @@ main {
 .log .good { color: var(--nominal-quiet); }
 .log-panel:not([open]) .log { max-height: calc(var(--text-micro) * var(--leading-copy) * 8); }
 
+/* D-417 — 카메라 컴팩트 모드: 소스 없으면 한 줄로 접는다. */
+.vision-preview[data-state="waiting"] .vision-controls,
+.vision-preview[data-state="waiting"] .vision-frame,
+.vision-preview[data-state="waiting"] .install-link { display: none; }
+.vision-preview[data-state="waiting"] { min-height: 0; }
+.vision-preview[data-state="waiting"] .map-head { margin-bottom: 0; }
+
 /* D-415 — 신호등 빈 상태 */
 .signal-empty { color: var(--ink-quiet); font-size: var(--text-label); padding: var(--space-2) 0; }
 
