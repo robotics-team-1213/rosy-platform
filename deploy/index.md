@@ -67,8 +67,8 @@
 
 ## 최근 기록
 
+- 2026-10-02 · 93848e520 · fix(tools): D-418 P 리뷰 반영 — 별칭 이름공간, ssh -G 확인, host key 교체 게이트, 묶음 폴더
 - 2026-10-02 · uncommitted · feat(tools): D-418 P — 운영 PC SSH 접속 도구와 안내
 - 2026-10-02 · uncommitted · CI 잔여 5건 해소 — 좀비 인식 생존 판정·모드 드리프트 독립·D-155 가드 정정
 - 2026-10-02 · uncommitted · CI 삼각측량 — 시크릿 스캔 면제·해시 문서 규약·스코어카드 기준선·설치 문서 브라우저 시험
 - 2026-10-02 · uncommitted · feat(native): D-406 업데이터 기본 꺼짐 — 첫 두 대 기기 검증 전까지 로봇별로 켬
-- 2026-10-02 · 6d281ae7 · fix(native): D-406 T2 최종 검증 묶음 — release-hold를 run lock 아래로, 확인 내용 보고

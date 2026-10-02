@@ -2000,3 +2000,11 @@
 - gate 변화: 없음. 로봇 쪽 R(`feat/d418-robot`)과 합친 뒤 TWIN·DEVICE 확인 필요.
 - 결정: D-418
 - 교훈: 사용자 파일을 기본 경로로 쓰는 도구는 시험이 HOME을 격리하지 않으면 변형 시험이 곧 실제 사고가 된다. 가드 하나만 지우는 변형이 살아남으면 시험이 다른 가드에 기대어 통과하고 있다는 뜻이니 원인을 하나로 좁힌 입력을 쓴다.
+
+## 2026-10-02 · 93848e520 · fix(tools): D-418 P 리뷰 반영 — 별칭 이름공간, ssh -G 확인, host key 교체 게이트, 묶음 폴더
+
+- 변경: `rosy_ssh_enroll.py` — 별칭은 `rosy-[a-z0-9-]+` 로봇 이름만, 관리 블록이 다른 HostName을 가리키면 `--replace` 필요. 블록은 config의 첫 `Host`/`Match`/`Include` 앞에 넣고, 쓴 뒤 `ssh -G`로 hostname·user `rosy`·IdentityFile(우리 키)·UserKnownHostsFile까지 비교해 다르면 되돌림. host key가 바뀌면 옛·새 SHA256 지문을 보이고 `--accept-new-host-keys` 없이는 멈춤. `--key`·`--known-hosts`·`--ssh-config`는 절대 경로로(심볼릭 링크 config는 링크를 두고 대상 파일을 원자적으로 고침), `%`·`$` 경로 거절, 표식 개수 깨짐 거절, "already enrolled"에 기존 만료일, 리다이렉트 거절, 25 s 시간 제한과 "적용됐을 수 있음" 안내, OSError·UnicodeDecodeError는 깔끔한 오류, 비ASCII PC 이름은 짧은 해시 접미사. `rosy_ssh_share.py` — 묶음 안 hostname 중복 거절, `rosy-<팀>.zip`은 폴더 없는 평면 항목이라 Windows "모두 압축 풀기"·macOS Archive Utility·`unzip -d`가 config가 가리키는 `~/.ssh/rosy-<팀>/`과 같은 폴더를 만듦(README 일치, 시험으로 확인), 끝에 정확한 revoke 명령과 비밀 없는 `<out>/rosy-<팀>.robots.txt`, 묶음 쓰기 실패 때도 revoke 안내, `revoke --label dev:<이름>`, 생성 passphrase는 stderr에만(터미널 아니면 경고). 시험 가드는 실제 `~/.ssh`의 모든 이름을 스냅샷. 안내서: host key 신뢰 = LAN 신뢰(평문 HTTP), 갱신 = revoke 후 enroll, host key 바뀜은 확인 후 `--accept-new-host-keys`, PowerShell `cd`, 공개 안내서에서 `X:` 경로 제거.
+- 증거: 커밋 560e486e4·7a3778185·93848e520. Windows `python -m pytest test/test_rosy_ssh_enroll.py test/test_rosy_ssh_share.py -q` 98 passed, 1 skipped(심볼릭 링크 시험은 POSIX 전용). WSL Ubuntu Python 3.12에서 같은 두 파일 99 passed(심볼릭 링크 시험 포함). 새 가드 변형 27개(enroll 18 + WSL 심볼릭 링크 1, share 8) 모두 빨강. 실행 전후 실제 `~/.ssh`는 모듈 가드 스냅샷으로 변화 없음.
+- gate 변화: 없음. 로봇 쪽 R(`feat/d418-robot`)과 합친 뒤 TWIN·DEVICE 확인 필요. 로봇은 건드리지 않음.
+- 결정: D-418
+- 교훈: ssh config는 처음 맞은 값이 이기므로 hostname만 확인하면 앞선 `Host *`의 `User`·`IdentityFile`이 조용히 이긴다. 블록을 맨 앞에 넣고 `ssh -G`로 user·키·known_hosts까지 비교해야 한다.
