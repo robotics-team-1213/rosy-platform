@@ -406,3 +406,4 @@
 | D-407 | 차선 자율 막힘 복구: 앞물체·차선 상실이 이어지면 관제에 판단 요청(WAIT·RESUME·BACK_AND_RETRY·MANUAL·ABORT), 답이 없으면 뒤 여유 확인 후 짧은 후진과 재판단(최대 2회, 기본 꺼짐) | Proposed |
 | D-408 | 차선 추종 페인트 입력: 학습 모델 바닥 차선(수평선 아래) 기본, 실패 시 프레임 단위 OpenCV 반사 제거 예비, 밝기 문턱은 진단용; 재학습 클래스 재정의; 장치 기본값 불변 | Proposed |
 | D-409 | 기기 연결 묶음(로봇 등록·카메라 연결 승인)도 details#device-install-tools 설치 서랍으로 접히고(아이디·조상 구조 보존), 컴팩트(<30rem) 로스터 카드는 요약(위치·방향 숨김 — 지도가 말한다, data-fact 칸 이름, 안쪽 여백 한 단 축소), 대시보드 잔존 높이 함수 4곳 dvh로 교정(console-detail 31vh·60vh, shell 24vh 2곡) — D-405 잔존 목록 소진 | Accepted (2026-10-02, 사용자 지시 — 남은 설치 요소 분리·역할 명확화; 별도 설치 뷰는 다음 단계) |
+| D-411 | Pilot 로봇측 학습 녹화(카메라 유닛 소유, CORE는 시작·정지 요청, `teleop/intent` 원 입력·주체 기록, 1회 10분)와 정지 중에만 허용하는 HTTP 수신(목록·tar·sha256 manifest, `rosy_ml fetch --http`); 기기가 알리는 조작부 서술자 `rosy.controls/1`(base_velocity·joint_jog·gripper, 드라이버는 전송·위젯은 kind별, 팔 조이스틱은 이전 목표 종료 후 순차 제한 목표); OMX 그리퍼 전용 절대 목표·쥠 readback(시뮬레이션만, D-390 유지) | Proposed (2026-10-02, 사용자 승인 — A→B→C) |
