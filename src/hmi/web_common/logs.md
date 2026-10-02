@@ -453,3 +453,8 @@
 - 근거: D-92, D-359, D-405.
 - gate 변화: 없음.
 - 최종 증거: web_common+dashboard 286 passed 82 skipped.
+
+## 2026-10-03 · uncommitted · test: D-425 API owner와 공통 호출 경계
+- 변경: 실제 소비자 6개에 api_owners 명시. 공통 UI/transport는 운용 endpoint를 직접 선택하지 않으며 계약별 client는 별도 책임으로 구분. evidence의 경로 이름표는 발행으로 취급하지 않음.
+- 증거: CORE/Fleet 실제 권한·owner·JS caller 및 역할 가드 33 passed; 선언/권한/공유 발행 변이 4개 red 후 bytes 복원. 관련 등록부 회귀를 함께 실행.
+- gate 변화: SOURCE/LOCAL 계약 강화; 설치/DEVICE/FIELD 수용은 이 증거로 승격하지 않음.
