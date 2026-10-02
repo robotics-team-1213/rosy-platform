@@ -55,6 +55,7 @@ def _request(**overrides):
         pick=TopDownPose(0.18, -0.12, 0.02, 0.3),
         place=TopDownPose(0.17, 0.13, 0.045, -0.5),
         pick_approach_z=0.06, place_approach_z=0.085, carry_z=0.11, grasp_depth_m=0.01,
+        grasp_width_m=0.03,
     )
     values.update(overrides)
     return CellTransferRequest(**values)
@@ -191,13 +192,14 @@ def test_phase_shapes_are_vertical_then_carry_height_never_diagonal(kin, profile
     assert (end.x, end.y, end.z) == pytest.approx((0.18, -0.12, 0.02), abs=1e-6)
     assert abs(math.remainder(end.yaw - 0.3, math.pi)) < 1e-6
     assert all(point.positions[5] == profile.gripper_open for point in approach.points)
-    # grasp moves only the gripper, open -> closed.
+    # grasp moves only the gripper, open -> width-matched close (C3b B2), never 0.0 full close.
     assert {point.positions[:5] for point in grasp.points} == {approach.points[-1].positions[:5]}
-    assert grasp.points[-1].positions[5] == profile.gripper_closed
+    close = profile.gripper_close_for_width(request.grasp_width_m)
+    assert grasp.points[-1].positions[5] == close and close > profile.gripper_closed + 0.2
     end = kin.fk(transfer.points[-1].positions[:5])
     assert (end.x, end.y, end.z) == pytest.approx((0.17, 0.13, 0.045), abs=1e-6)
     assert abs(math.remainder(end.yaw + 0.5, math.pi)) < 1e-6
-    assert all(point.positions[5] == profile.gripper_closed for point in transfer.points)
+    assert all(point.positions[5] == close for point in transfer.points)
     # release opens first, then retreats to home.
     assert release.points[0].positions[:5] == transfer.points[-1].positions[:5]
     assert release.points[-1].positions[5] == profile.gripper_open
@@ -272,8 +274,9 @@ def test_real_command_owner_accepts_every_generated_phase(kin, profile):
 def test_measured_phase_durations_are_reported(kin, profile):
     plan = _plan(kin, profile)
     durations = {phase.phase_id: phase.points[-1].time_from_start_s for phase in plan.phases}
-    # 1.0 rad stroke at 0.4 rad/s, 0.4 rad/s^2 (0.8 x 0.5): 1 s + 1.5 s + 1 s.
-    assert durations["grasp"] == pytest.approx(3.5, abs=1e-9)
+    # Stroke 1.0 - close(30 mm) at 0.4 rad/s, 0.4 rad/s^2 (0.8 x 0.5): 2 x 1 s ramps + cruise.
+    stroke = profile.gripper_open - profile.gripper_close_for_width(0.03)
+    assert durations["grasp"] == pytest.approx(2.0 + (stroke - 0.4) / 0.4, abs=1e-9)
     assert all(value > 0 for value in durations.values())
 
 
@@ -426,3 +429,46 @@ def test_phase_start_tolerances_widen_only_the_named_joint_after_grasp(profile):
     assert widened.start_state_tolerances("grasp") == base
     assert widened.start_state_tolerances("transfer") == {**base, "joint5": 0.06}
     assert widened.start_state_tolerances("release") == {**base, "joint4": 0.04}
+
+
+# ---- width-matched close (C3b B2) ------------------------------------------------
+
+
+def test_jaw_gap_mapping_matches_the_pinned_finger_mesh(profile):
+    # Reference: follower_07/08 meshes (open_manipulator 0a4af6a9) rotated about the URDF
+    # gripper_joint_1/2 axes; narrowest inner gap over the fingertip pad, measured offline
+    # (X:/DevTemp/rosy-cell-c3/c3b/jaw.py): 0.0 mm at q 0, 12.0 mm at 0.10, 24.2 at 0.20,
+    # 30.1 at 0.25, 36.0 at 0.30, 47.8 at 0.40.
+    for q, gap_mm in ((0.0, 0.0), (0.10, 12.0), (0.20, 24.2), (0.25, 30.1), (0.30, 36.0), (0.40, 47.8)):
+        assert profile.jaw_gap_m(q) * 1000 == pytest.approx(gap_mm, abs=0.4)
+    for width in (0.01, 0.02, 0.03, 0.04):
+        assert profile.jaw_gap_m(profile.gripper_contact_for_width(width)) == pytest.approx(width, abs=1e-9)
+
+
+def test_close_target_squeezes_by_the_profile_margin(profile):
+    squeeze = profile.gripper_squeeze_m
+    assert 0 < squeeze <= 0.005
+    close = profile.gripper_close_for_width(0.03)
+    assert profile.jaw_gap_m(close) == pytest.approx(0.03 - squeeze, abs=1e-9)
+    assert profile.gripper_closed < close < profile.gripper_contact_for_width(0.03) < profile.gripper_open
+
+
+def test_grasp_width_outside_the_jaw_range_is_rejected(kin, profile):
+    from omx_adapter.pose_plan import GRIPPER_WIDTH_INVALID
+
+    assert _reason(lambda: _plan(kin, profile, grasp_width_m=0.002)) == GRIPPER_WIDTH_INVALID
+    assert _reason(lambda: _plan(kin, profile, grasp_width_m=0.09)) == GRIPPER_WIDTH_INVALID
+    with pytest.raises(ValueError, match="grasp_width_m"):
+        _request(grasp_width_m=0.0)
+
+
+@pytest.mark.parametrize("mutate, match", [
+    (lambda d: d["gripper"].pop("jaw"), "jaw"),
+    (lambda d: d["gripper"]["jaw"].update(squeeze_m=0.0), "squeeze_m"),
+    (lambda d: d["gripper"]["jaw"].update(contact_point_m=[0.06]), "contact_point_m"),
+])
+def test_jaw_geometry_fails_closed(mutate, match):
+    document = copy.deepcopy(_document())
+    mutate(document)
+    with pytest.raises(ValueError, match=match):
+        CellPlanningProfile.from_mapping(document, revision="0" * 64)

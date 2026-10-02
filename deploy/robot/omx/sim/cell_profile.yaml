@@ -37,7 +37,26 @@ gripper:
   velocity: 0.5
   acceleration: 0.5
   open: 1.0
+  # Full close (SRDF). A grasp never commands it: it closes to the width-matched target.
   closed: 0.0
+  # Width-matched close (C3b B2). jaw gap(q) = 2 (o + x sin q + y cos q):
+  # o = half the separation of the finger pivots, URDF gripper_joint_1 origin y 0.0075 and
+  # gripper_joint_2 origin y -0.0108 in link5 (open_manipulator 0a4af6a9, omx_f_arm.urdf.xacro);
+  # (x, y) = inner fingertip contact point in the finger frame, the follower_07 mesh's
+  # innermost inner-face y over finger x 55-65 mm (the hooked pad the block meets at
+  # grasp_depth >= ~8 mm). Model vs mesh sweep (X:/DevTemp/rosy-cell-c3/c3b/jaw.py) within
+  # 0.4 mm for q 0-0.40. The mesh's convex hull (if a physics engine used it) would give a
+  # 2-3 mm narrower gap at the same q; the Gazebo run records the real contact angle.
+  jaw:
+    pivot_y_m: [0.0075, -0.0108]
+    contact_point_m: [0.060, -0.00915]
+    # Squeeze 3 mm total: the target is 1.5 mm per side inside the item. At 30 mm that is
+    # 0.026 rad of finger travel, above the 0.011 rad transient readback error seen on
+    # 2026-10-01 and 80x the 0.0003 rad static error (C3), so a held item reads clearly
+    # above the target while an empty close reaches it.
+    squeeze_m: 0.003
+    # The mapping is mesh-checked to q 0.5 (59 mm); beyond it the narrowest gap leaves the pad.
+    max_grasp_width_m: 0.055
 
 # One ROS goal per phase; a phase that needs longer is rejected, never split (D-402 §6).
 # Rejection is the safe outcome: no partial plan, the Job holds for the operator.

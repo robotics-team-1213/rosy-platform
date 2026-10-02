@@ -19,7 +19,9 @@ for _path in (ROOT / "src/products/omx/adapter", ROOT / "src/site/cell"):
 from omx_adapter.kinematics import ARM_JOINTS, OmxKinematics, TopDownPose  # noqa: E402
 from omx_adapter.manipulation_plan import ExecutionStateSnapshot  # noqa: E402
 from omx_adapter.pose_plan import (  # noqa: E402
+    GRIPPER_WIDTH_INVALID,
     AnalyticCellTransferPlanner,
+    CellTransferPlanRejected,
     CellPlanningProfile,
     CellTransferRequest,
 )
@@ -103,7 +105,7 @@ def test_gazebo_world_matches_the_demo_cell(demo, world):
     assert cell.station_pose(recipe.slip_sheet_station) == pytest.approx((sx, sy, sz + thickness / 2, 0.0))
 
 
-def test_every_transfer_plans_without_rejection(demo, kin, profile):
+def test_every_box_transfer_plans_and_slip_sheets_are_refused_by_width(demo, kin, profile):
     cell, recipe, job = demo
     assert recipe.box.grasp_depth > 0  # Step z of a box is already the TCP grasp height (C3b B1)
     home = TopDownPose(cell.home.x, cell.home.y, cell.home.z, cell.home.yaw)
@@ -127,6 +129,14 @@ def test_every_transfer_plans_without_rejection(demo, kin, profile):
             place=TopDownPose(place.target.x, place.target.y, place.target.z, place.target.yaw),
             pick_approach_z=pick.approach_z, place_approach_z=place.approach_z, carry_z=job.carry_z,
             grasp_depth_m=depth,
+            # A box is squeezed across its width (yaw = its length axis). A 2 mm slip sheet
+            # has no width the OMX-F fingers can close on (C3 problem 7; C6 decides how).
+            grasp_width_m=recipe.box.width if pick.item == "box" else recipe.slip_sheet_thickness,
         )
+        if pick.item == "slip_sheet":
+            with pytest.raises(CellTransferPlanRejected) as rejected:
+                planner.plan_transfer(request, profile, state)
+            assert rejected.value.reason == GRIPPER_WIDTH_INVALID
+            continue
         plan = planner.plan_transfer(request, profile, state)  # raises on any HOLD reason
         assert [phase.phase_id for phase in plan.phases] == ["approach", "grasp", "transfer", "release"]

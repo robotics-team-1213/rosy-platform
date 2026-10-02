@@ -46,6 +46,7 @@ GRIPPER_NOT_OPEN = "GRIPPER_NOT_OPEN"
 CARRY_Z_INSUFFICIENT = "CARRY_Z_INSUFFICIENT"
 WAYPOINT_DISCONTINUITY = "WAYPOINT_DISCONTINUITY"
 PHASE_DURATION_EXCEEDED = "PHASE_DURATION_EXCEEDED"
+GRIPPER_WIDTH_INVALID = "GRIPPER_WIDTH_INVALID"
 
 
 def _finite(name: str, value: object, *, positive: bool = False) -> float:
@@ -88,6 +89,12 @@ class CellPlanningProfile:
     acceleration_limits: Mapping[str, float]
     gripper_open: float
     gripper_closed: float
+    # Width-matched close (C3b B2): jaw gap(q) = 2 (o + x sin q + y cos q), o = half the
+    # finger-pivot separation, (x, y) = inner fingertip contact point in the finger frame.
+    jaw_pivot_half_separation_m: float
+    jaw_contact_point_m: tuple[float, float]
+    gripper_squeeze_m: float
+    max_grasp_width_m: float
     phase_max_duration_s: Mapping[str, float]
     workspace_min_m: tuple[float, float, float]
     workspace_max_m: tuple[float, float, float]
@@ -147,6 +154,21 @@ class CellPlanningProfile:
             raise ValueError("gripper open/closed targets must lie within gripper limits")
         if gripper_open == gripper_closed:
             raise ValueError("gripper open and closed targets must differ")
+        jaw = gripper.get("jaw")
+        if not isinstance(jaw, Mapping):
+            raise ValueError("gripper.jaw geometry is required (width-matched close)")
+        pivots = jaw.get("pivot_y_m")
+        contact = jaw.get("contact_point_m")
+        if not isinstance(pivots, list) or len(pivots) != 2:
+            raise ValueError("gripper.jaw.pivot_y_m must list the two finger pivot y values")
+        if not isinstance(contact, list) or len(contact) != 2:
+            raise ValueError("gripper.jaw.contact_point_m must be [x, y]")
+        pivot_a, pivot_b = (_finite("gripper.jaw.pivot_y_m", value) for value in pivots)
+        contact_x, contact_y = (_finite("gripper.jaw.contact_point_m", value) for value in contact)
+        if pivot_a <= pivot_b or contact_x <= 0:
+            raise ValueError("gripper.jaw pivots must be ordered and the contact point ahead of the pivot")
+        squeeze = _finite("gripper.jaw.squeeze_m", jaw.get("squeeze_m"), positive=True)
+        max_width = _finite("gripper.jaw.max_grasp_width_m", jaw.get("max_grasp_width_m"), positive=True)
         durations = document.get("phase_max_duration_s")
         if not isinstance(durations, Mapping) or tuple(durations) != MOTION_PHASES:
             raise ValueError("phase_max_duration_s must list approach, grasp, transfer, release")
@@ -206,6 +228,9 @@ class CellPlanningProfile:
             velocity_limits=MappingProxyType(velocity),
             acceleration_limits=MappingProxyType(acceleration),
             gripper_open=gripper_open, gripper_closed=gripper_closed,
+            jaw_pivot_half_separation_m=(pivot_a - pivot_b) / 2,
+            jaw_contact_point_m=(contact_x, contact_y), gripper_squeeze_m=squeeze,
+            max_grasp_width_m=max_width,
             phase_max_duration_s=MappingProxyType(phase_max),
             workspace_min_m=tuple(b[0] for b in bounds),  # type: ignore[arg-type]
             workspace_max_m=tuple(b[1] for b in bounds),  # type: ignore[arg-type]
@@ -214,6 +239,32 @@ class CellPlanningProfile:
             action_timeout_s=action_timeout, wall_clock_bound_factor=wall_factor,
             phase_start_state_tolerance_rad=MappingProxyType(phase_tolerances), **positive,
         )
+
+    def jaw_gap_m(self, q: float) -> float:
+        """Inner fingertip gap at gripper_joint_1 = q (gripper_joint_2 mimics -q)."""
+        x, y = self.jaw_contact_point_m
+        return 2.0 * (self.jaw_pivot_half_separation_m + x * math.sin(q) + y * math.cos(q))
+
+    def gripper_contact_for_width(self, width_m: float) -> float:
+        """Finger angle at which the fingertips touch an item of this width."""
+        x, y = self.jaw_contact_point_m
+        radius = math.hypot(x, y)
+        ratio = (width_m / 2.0 - self.jaw_pivot_half_separation_m) / radius
+        if not -1.0 <= ratio <= 1.0:
+            raise ValueError("width is outside the jaw geometry")
+        return math.asin(ratio) - math.atan2(y, x)
+
+    def gripper_close_for_width(self, width_m: float) -> float:
+        """Width-matched close target: contact minus the profile squeeze margin (C3b B2)."""
+        width = _finite("grasp width", width_m, positive=True)
+        if width > self.max_grasp_width_m or width - self.gripper_squeeze_m <= self.jaw_gap_m(self.gripper_closed):
+            raise ValueError("grasp width is outside the gripper's validated range")
+        target = self.gripper_contact_for_width(width - self.gripper_squeeze_m)
+        lower, upper = self.position_limits[self.gripper_joint]
+        if not (lower <= target <= upper and min(self.gripper_closed, self.gripper_open)
+                < target < max(self.gripper_closed, self.gripper_open)):
+            raise ValueError("width-matched close target is outside the gripper stroke")
+        return target
 
     def ik_limits(self) -> IkLimits:
         return IkLimits(
@@ -266,6 +317,8 @@ class CellTransferRequest:
     # pick/place z are TCP heights this far below the item's top face (C3b B1; the recipe's
     # box grasp_depth, 0 for a slip sheet). Required so that no caller relies on a default.
     grasp_depth_m: float
+    # Item width across the fingers (C3b B2): the grasp closes to the width-matched target.
+    grasp_width_m: float
 
     def __post_init__(self) -> None:
         _text("job_id", self.job_id)
@@ -284,6 +337,7 @@ class CellTransferRequest:
         if depth < 0:
             raise ValueError("grasp_depth_m must be finite and non-negative")
         object.__setattr__(self, "grasp_depth_m", depth)
+        object.__setattr__(self, "grasp_width_m", _finite("grasp_width_m", self.grasp_width_m, positive=True))
 
 
 @dataclass(frozen=True)
@@ -455,8 +509,12 @@ class AnalyticCellTransferPlanner:
         if abs(state.joint_positions[profile.gripper_joint] - profile.gripper_open) > profile.start_state_tolerance_rad:
             raise CellTransferPlanRejected(GRIPPER_NOT_OPEN, "gripper is not open at the start of approach")
 
+        try:
+            closed = profile.gripper_close_for_width(request.grasp_width_m)
+        except ValueError as exc:
+            raise CellTransferPlanRejected(GRIPPER_WIDTH_INVALID, str(exc)) from None
         names = profile.joint_names
-        open_, closed = profile.gripper_open, profile.gripper_closed
+        open_ = profile.gripper_open
         pose_home = TopDownPose(request.home.x, request.home.y, request.home.z,
                                 home[0] - home[4])
         segments: dict[str, list[list[tuple[float, ...]]]] = {}
