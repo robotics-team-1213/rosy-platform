@@ -106,8 +106,13 @@ class FleetConsole:
         #: 마지막으로 본 로봇의 pose 와 주행 상태. 길을 막고 선 로봇을 찾으려면 좌표가
         #: 있어야 하는데, 로봇 상태는 스냅샷으로 들어온다.
         self._seen: dict[str, dict] = {}
-        #: D-395 P2-2: last pose traffic may use, per robot (`trust.trusted_xy`).
+        #: D-395 P2-2: last pose traffic may use, per robot (`trust.trusted_xy`): only
+        #: from a LOCALIZED map snapshot, never from a legacy-null one (S2 Finding 1).
         self._trusted: dict[str, tuple] = {}
+        #: Robots that have reported `localization` -> since when they report null (None
+        #: while reporting). Such a robot is untrusted, not legacy, while null for less
+        #: than `trust.LAPSED_GRACE_S` (a CORE restart); after that it is legacy again.
+        self._loc_null_since: dict[str, Optional[float]] = {}
         #: robot_id -> the localization service's view (needs_human), set by app.py.
         self._localization_view: Optional[Callable[[str], Optional[dict]]] = None
         #: Robots whose pinned address is unverified (D-361 3): stop-only, kept as a
@@ -186,7 +191,7 @@ class FleetConsole:
         self._agent_pairing_tokens.pop(robot_id, None)
         self._hub.drop(robot_id)
         for table in (self._goals, self._claims, self._queued, self._yielding, self._seen,
-                      self._held, self._trusted):
+                      self._held, self._trusted, self._loc_null_since):
             table.pop(robot_id, None)
         return client
 
@@ -247,7 +252,8 @@ class FleetConsole:
             row["held"] = hold["reason"] if hold is not None else None
             view = self._localization_view
             row["localization"] = trust.badge(
-                row["state"], view(row["robot_id"]) if view is not None else None)
+                row["state"], view(row["robot_id"]) if view is not None else None,
+                lapsed=self._lapsed(row["robot_id"]))
         online = sum(1 for r in robots if r["online"])
         if self._signals is not None:
             # 신호등 갱신은 로봇 gather 뒤에서, 그리고 실패해도 로봇 상태를 흔들지 않는다.
@@ -341,7 +347,7 @@ class FleetConsole:
                     "cancel_confirmed": False, "blocked_by": yielding["for"],
                     "waiting_on": [yielding["for"]], "reason": "YIELDED"}
         client = self._client(robot_id)
-        if trust.classify(self._seen.get(robot_id)) == trust.UNTRUSTED:
+        if self._verdict(robot_id) == trust.UNTRUSTED:
             # D-395: an unlocalized robot gets no goal (CORE would refuse it); it waits for LOCALIZED.
             self._claims.pop(robot_id, None)
             self._queued[robot_id] = self._task_mission(
@@ -472,7 +478,7 @@ class FleetConsole:
         here = self._pose_of(mover)
         for robot_id in self._order:
             if (robot_id == mover or robot_id in self._claims
-                    or trust.classify(self._seen.get(robot_id)) == trust.UNTRUSTED):
+                    or self._verdict(robot_id) == trust.UNTRUSTED):
                 continue
             pose = self._pose_of(robot_id)
             if pose is None:
@@ -563,17 +569,38 @@ class FleetConsole:
                 continue
             state = row.get("state") or {}
             if state:
-                self._seen[row["robot_id"]] = state
+                robot_id = row["robot_id"]
+                self._seen[robot_id] = state
+                if state.get("localization") is not None:
+                    self._loc_null_since[robot_id] = None
+                elif robot_id in self._loc_null_since:
+                    since = self._loc_null_since[robot_id]
+                    if since is None:
+                        self._loc_null_since[robot_id] = self._clock()
+                    elif self._clock() - since >= trust.LAPSED_GRACE_S:
+                        # Legacy again. Its old trusted pose is stale by now: if it reports
+                        # again unlocalized, it blocks the whole track until LOCALIZED.
+                        del self._loc_null_since[robot_id]
+                        self._trusted.pop(robot_id, None)
                 trusted = trust.trusted_xy(state)
                 if trusted is not None:
-                    self._trusted[row["robot_id"]] = trusted
+                    self._trusted[robot_id] = trusted
+
+    def _lapsed(self, robot_id: str) -> bool:
+        """A robot that reported localization and is null inside its grace (a CORE restart)."""
+        return self._loc_null_since.get(robot_id) is not None
+
+    def _verdict(self, robot_id: str) -> str:
+        """`trust.classify`, except a lapsed D-395 robot is untrusted, not legacy."""
+        verdict = trust.classify(self._seen.get(robot_id))
+        return trust.UNTRUSTED if verdict == trust.LEGACY and self._lapsed(robot_id) else verdict
 
     def _untrusted_blocks(self, robot_id: str, route: Sequence) -> bool:
-        return (trust.classify(self._seen.get(robot_id)) == trust.UNTRUSTED
+        return (self._verdict(robot_id) == trust.UNTRUSTED
                 and trust.blocks(route, self._trusted.get(robot_id)))
 
     def _pose_of(self, robot_id: str) -> Optional[tuple]:
-        if trust.classify(self._seen.get(robot_id)) == trust.UNTRUSTED:
+        if self._verdict(robot_id) == trust.UNTRUSTED:
             return self._trusted.get(robot_id)        # D-395 P2-2: skip the untrusted pose
         pose = (self._seen.get(robot_id) or {}).get("pose") or {}
         try:
@@ -729,7 +756,7 @@ class FleetConsole:
             return self._route_still_occupied(mission)
         if mission.get("reason") == "LOCALIZATION_UNTRUSTED":
             # No route: the mover itself was unlocalized; any route: a robot in its way is.
-            return (trust.classify(self._seen.get(mission["blocked_by"])) == trust.UNTRUSTED
+            return (self._verdict(mission["blocked_by"]) == trust.UNTRUSTED
                     if "route" not in mission
                     else self._untrusted_blocks(mission["blocked_by"], mission["route"]))
         blocker = mission["blocked_by"]
