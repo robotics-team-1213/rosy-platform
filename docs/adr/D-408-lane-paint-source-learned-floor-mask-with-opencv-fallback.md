@@ -38,6 +38,16 @@
 - 재생: 2026-10-01 8kcn 영상과 0919 텔레옵 영상에서 세 출처의 통계를 비교하고 장면 모음을 남긴다.
 - 실기: 사용자 승인 뒤 8kcn 에 `learned` 를 켜고 녹화와 함께 차선 추종을 다시 시험한다(D-407 막힘 복구와 함께).
 
+## 구현 메모: 학습 페인트 CPU 절감 (2026-10-03)
+
+실기 8kcn 에서 `line_observer` 가 학습 페인트로 CPU 165 % 를 썼다. 8kcn 녹화(움직임 842프레임, 학습 기준선 on_line/both 21/384)로 동료 세션이 잰 결과(`X:\DevTemposy-lane-measeport.md`)를 반영했다.
+
+- 측정: INT8 모델은 마스크 IoU 0.995(on_line/both 17/382). 추론을 2프레임마다 한 번으로 줄이면 IoU 0.944(16/385), INT8과 함께 0.941(16/381). 3프레임마다는 0.898로 떨어진다. 해상도 축소와 ROI 자르기는 오히려 나빠져 채택하지 않는다. onnxruntime `allow_spinning=0` 은 CPU 약 15 % 절감. Pi 추정은 INT8 1스레드 2프레임마다 약 0.8코어(현재 약 1.2–1.9).
+- 구현: (1) 학습 마스크도 수평선 위를 자른 뒤 40 px 미만 덩어리를 버린다. denoise 와 같은 상수 `DENOISE_MIN_AREA_PX`·같은 함수(`drop_small_components`). 킵퍼는 BEV 앞 0.09–0.40 m(이미지 행 약 107–236)만 읽으므로 수평선 여유는 더하지 않는다. (2) 페인트 경로는 `LaneSegModel.infer_mask` 로 마스크만 구하고 `lane_evidence`(8.7 ms)는 건너뛴다. `infer_with_mask` 는 그대로 둔다. (3) 페인트 세션은 `learned_paint_threads`(기본 1)로 intra-op 스레드를 정하고 intra/inter-op `allow_spinning=0` 으로 연다. 그림자 노드(`learned_lane_node`)는 기본값(스핀 허용, `threads` 2)을 그대로 쓴다. (4) `learned_paint_every_n`(기본 2)번째 keep 프레임마다 추론을 제출하고, 그 사이에는 최신 마스크를 재사용한다. 마스크는 `learned_paint_stale_s` 이내이면서 그 마스크를 만든 프레임에서 `every_n` 프레임 이내(사이 `every_n-1` 프레임과 추론이 끝나는 프레임)일 때만 쓰고, 아니면 프레임별 denoise 예비로 넘어간다. (5) 모델 파일은 바꾸지 않는다. 장치 번들 10ccb388 은 이미 INT8 이며 코드에 fp32 가정이 없다.
+- 미검증: 위 IoU·CPU 수치는 호스트 재생 추정이다. Pi 실측과 `PAINT=learned` 재생은 WSL 사용 가능할 때 다시 한다.
+
+알려진 문제: `steep_crossing`(`lane_keep.py` 327–335)이 왼쪽 굽이와 회전교차로 코의 실제 바깥 테이프를 잘못 버린다(842프레임 중 130프레임). 영향은 두 번째 면을 못 얻는 데 그치며 on_line 은 늘지 않는다. 방향(heading)만 보는 규칙으로는 정면 L/T 모서리와 구별할 수 없으므로, 곡률·lane_graph 맥락을 쓰는 후속 과제로 남긴다.
+
 ## 잇는 결정
 
 D-356/D-373(학습 루프, 번들 intake), D-364(keep), D-379(자동 라벨), D-397(URDF 기본값·로봇별 교정), D-407(막힘 복구).
