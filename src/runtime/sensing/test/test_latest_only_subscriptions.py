@@ -44,6 +44,9 @@ UNRESOLVED = {
     ('goal_node.py', 'self.on_map'), ('goal_node.py', 'self.on_odom'),
     ('obstacle_observer_node.py', 'self.on_scan'), ('wander/node.py', 'self.on_odom'),
     ('web_node.py', 'self.on_battery'),
+    # D-423: the D-137 detections topic is object_detector.TOPIC, a name, so the literal
+    # stays in one file (gateway test_core_logic); depth 10 is a String evidence feed.
+    ('road_observer_node.py', 'self._on_detection_preview'),
     *(('safety/node.py', f'self.{name}') for name in
       ('on_scan', 'on_us', 'on_ir', 'on_cam_cliff', 'on_cam_block', 'on_imu', 'on_cmd')),
 }
