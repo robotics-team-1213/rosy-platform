@@ -36,6 +36,15 @@ READBACK_FAILURE_LIMIT = 5
 # the owner refuses an expired grant, so after expires_at + skew no late submit can land. Fleet
 # and the owner share one host clock (D-336), so the skew covers scheduling, not clock drift.
 NOT_FOUND_SKEW_S = 5.0
+# Per-tick I/O cap (1c item 5). One UDS exchange is bounded at 0.25 s, so 8 exchanges bound a
+# tick at ~2 s; the dispatch loop sleeps 0.25 s between ticks. A round-robin cursor gives every
+# Job a turn when more Jobs are due than the cap allows.
+MAX_IO_PER_TICK = 8
+# Owner simulation identity cache (1c P2, items 5/6). A positive answer is reused for 10 s (well
+# inside one 15 s grant lifetime) and dropped on any transport error; a negative answer is kept
+# for 5 s so an owner that is not a simulation identity is not asked every 0.25 s tick.
+IDENTITY_TTL_S = 10.0
+NEGATIVE_IDENTITY_TTL_S = 5.0
 READBACK_BACKOFF_S = (0.5, 1.0, 2.0, 4.0)
 
 
@@ -69,15 +78,32 @@ class StepJobDispatcher:
         self.on_step_action_succeeded = on_step_action_succeeded
         self.monotonic = monotonic
         self._readback: dict[str, tuple[int, float]] = {}  # action_id -> (failures, next read at)
-        self._simulation_instances: set[str] = set()  # instances whose owner reported simulation
+        self._identity: dict[str, tuple[bool, float]] = {}  # instance -> (simulation, valid until)
+        self._cursor = ""  # round-robin position (mission_id of the last Job visited)
+        self._io = 0
 
     def dispatch_next(self) -> dict[str, Any] | None:
-        """One cycle over every Job (1b B1): read back each in-flight or unresolved Job under its
-        own backoff, then submit every actionable READY Job. No Job blocks another; a READY Job on
-        an unconfigured instance or a closed kind is skipped and left untouched."""
-        outcomes = [self._reconcile(job) for job in
-                    self.store.jobs("RUNNING") + self.store.next_unresolved() if self._due(job)]
-        outcomes += [self._submit(job) for job in self.store.jobs("READY")]
+        """One bounded cycle over every Job (1b B1, 1c item 5): read back each in-flight or
+        unresolved Job under its own backoff and submit each actionable READY Job, in round-robin
+        order from the last Job visited, stopping at MAX_IO_PER_TICK device exchanges. No Job
+        blocks another; a READY Job on an unconfigured instance or a closed kind is skipped."""
+        self._io = 0
+        work = [("readback", job) for job in self.store.jobs("RUNNING") + self.store.next_unresolved()]
+        work += [("submit", job) for job in self.store.jobs("READY")]
+        work.sort(key=lambda item: item[1]["mission_id"])
+        start = next((i for i, (_, job) in enumerate(work) if job["mission_id"] > self._cursor), 0)
+        outcomes = []
+        for kind, job in work[start:] + work[:start]:
+            if self._io + (1 if kind == "readback" else 2) > MAX_IO_PER_TICK:
+                break
+            if kind == "readback":
+                if not self._due(job):
+                    continue
+                self._io += 1
+                outcomes.append(self._reconcile(job))
+            else:
+                outcomes.append(self._submit(job))
+            self._cursor = job["mission_id"]
         acted = [item for item in outcomes if item is not None and item["state"] not in _SKIPPED]
         skipped = [item for item in outcomes if item is not None]
         return acted[0] if acted else (skipped[0] if skipped else None)
@@ -124,6 +150,7 @@ class StepJobDispatcher:
         # The fence is checked inside start_step's transaction (pre-send). A stop that lands
         # after that commit is caught by the owner's generation fence on the grant (D-403 §6);
         # a started step never releases its claims (1c P1).
+        self._io += 1
         try:
             receipt = self.transport.submit(grant)
         except LocalActionRejected as exc:
@@ -131,23 +158,29 @@ class StepJobDispatcher:
             return self._outcome(job, index, grant, "REJECTED", rejection_reason(grant.action_kind, code),
                                  {"detail": str(exc)[:256]})
         except Exception:
+            self._forget_identity(grant.instance_id)
             return self._outcome(job, index, grant, "UNKNOWN", "LOCAL_ACTION_SUBMIT_OUTCOME_UNKNOWN", {})
         return self._apply(job, index, grant, receipt)
 
     def _simulation_identity(self, workcell_id: str, instance_id: str) -> bool:
         """D-403 §7 / D-390 §5: the target owner itself must report a simulation identity."""
-        if instance_id in self._simulation_instances:
-            return True
+        cached = self._identity.get(instance_id)
+        if cached is not None and cached[1] > self.monotonic():
+            return cached[0]
+        self._io += 1
         try:
             identity = self.transport.owner_identity(instance_id)
+            ok = (identity.get("simulation") is True and identity.get("instance_id") == instance_id
+                  and identity.get("workcell_id") == workcell_id)
         except Exception:
             _LOG.warning("OMX owner %s did not report a simulation identity", instance_id)
-            return False
-        if (identity.get("simulation") is True and identity.get("instance_id") == instance_id
-                and identity.get("workcell_id") == workcell_id):
-            self._simulation_instances.add(instance_id)
-            return True
-        return False
+            ok = False
+        self._identity[instance_id] = (ok, self.monotonic() + (IDENTITY_TTL_S if ok else NEGATIVE_IDENTITY_TTL_S))
+        return ok
+
+    def _forget_identity(self, instance_id: str) -> None:
+        """Any transport error re-checks the owner's identity before the next submit (1c item 6)."""
+        self._identity.pop(instance_id, None)
 
     def _grant(self, job: Mapping[str, Any], step: Mapping[str, Any]):
         kind = step_action_kind(step["action_kind"])
@@ -180,6 +213,7 @@ class StepJobDispatcher:
         try:
             receipt = self.transport.get(grant)
         except Exception:
+            self._forget_identity(grant.instance_id)
             return self._readback_failed(job, index, grant)
         if receipt is None:
             # 1c item 3: "never ran" needs ACTION_NOT_FOUND after expiry + skew and no receipt ever

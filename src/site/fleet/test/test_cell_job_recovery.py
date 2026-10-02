@@ -420,3 +420,34 @@ def test_a_404_after_a_device_receipt_never_reads_as_not_found(tmp_path):
     job = store.get("cell-mission-1")
     assert job["status"] == "HOLD" and job["reason"] == "LOCAL_ACTION_READBACK_UNKNOWN"
     assert {phase for _, _, phase in _claim_phases(path)} == {"UNKNOWN"}
+
+
+@pytest.mark.parametrize("receipt_seen, phases", [(False, {"HELD"}), (True, {"UNKNOWN"})])
+def test_restart_then_404_resolves_only_without_a_receipt(tmp_path, receipt_seen, phases):
+    # rosy-a9 1c item 1/3: restart while RUNNING, then the owner answers ACTION_NOT_FOUND. Without a
+    # receipt (submit never reached the owner) it resolves HELD after expiry; with one it stays
+    # UNKNOWN (an owner on a new journal; operator-attested resolve is wave 2).
+    from fleet.server.step_dispatcher import NOT_FOUND_SKEW_S
+    path, tasks, _, enabled = _stores(tmp_path)
+    store = CellJobStore(path)
+    _create(store)
+    store.admit("cell-mission-1", actor_id="operator-1", expected_generation=enabled["generation"])
+    transport = Transport()
+    if not receipt_seen:
+        transport.submit = lambda grant: transport.submissions.append(grant) or (_ for _ in ()).throw(
+            TimeoutError("lost"))
+    clock = Clock()
+    StepJobDispatcher(store, tasks, transport, {"omx_01": "omx_01_control"}, REVISIONS,
+                      deployment_profile="simulation", monotonic=clock).dispatch_next()
+    tasks.close_dispatch_for_startup()
+    restarted = CellJobStore(path)
+    restarted.recover_after_startup()
+    transport.on_get = lambda grant: None
+    dispatcher = StepJobDispatcher(restarted, tasks, transport, {"omx_01": "omx_01_control"}, REVISIONS,
+                                   deployment_profile="simulation", monotonic=clock,
+                                   now=_later(15 + NOT_FOUND_SKEW_S + 1))
+    for _ in range(READBACK_FAILURE_LIMIT + 1):
+        dispatcher.dispatch_next()
+        clock.t += 60
+    assert restarted.get("cell-mission-1")["status"] == "HOLD"
+    assert {phase for _, _, phase in _claim_phases(path)} == phases

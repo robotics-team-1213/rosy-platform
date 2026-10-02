@@ -349,3 +349,69 @@ def test_a_target_that_is_not_a_simulation_identity_is_not_dispatched(tmp_path, 
     transport.owner_identity = report
     assert dispatcher.dispatch_next()["state"] == "NOT_SIMULATION"
     assert transport.submissions == [] and store.get("cell-mission-1")["status"] == "READY"
+
+
+class _Mono:
+    def __init__(self):
+        self.t = 100.0
+
+    def __call__(self):
+        return self.t
+
+
+def test_simulation_identity_is_rechecked_after_its_ttl_and_after_a_transport_error(tmp_path):
+    # 1c P2 / item 6: the positive identity cache has a TTL and is dropped on a transport error.
+    from fleet.server.step_dispatcher import IDENTITY_TTL_S
+    clock = _Mono()
+    store, _, transport, _ = _setup(tmp_path)
+    dispatcher = StepJobDispatcher(store, None, transport, {"omx_01": "omx_01_control"}, REVISIONS,
+                                   deployment_profile="simulation", monotonic=clock)
+    asked = []
+    real = transport.owner_identity
+    transport.owner_identity = lambda instance: asked.append(instance) or real(instance)
+    assert dispatcher._simulation_identity("omx_01", "omx_01_control")
+    assert dispatcher._simulation_identity("omx_01", "omx_01_control") and len(asked) == 1
+    clock.t += IDENTITY_TTL_S + 1
+    assert dispatcher._simulation_identity("omx_01", "omx_01_control") and len(asked) == 2
+    dispatcher._forget_identity("omx_01_control")
+    assert dispatcher._simulation_identity("omx_01", "omx_01_control") and len(asked) == 3
+
+
+def test_a_negative_identity_is_cached_briefly_and_asked_once_per_tick(tmp_path):
+    # Item 5: an owner that is not a simulation identity is not asked again every tick.
+    from fleet.server.step_dispatcher import NEGATIVE_IDENTITY_TTL_S
+    clock = _Mono()
+    store, _, transport, _ = _setup(tmp_path)
+    dispatcher = StepJobDispatcher(store, None, transport, {"omx_01": "omx_01_control"}, REVISIONS,
+                                   deployment_profile="simulation", monotonic=clock)
+    asked = []
+    transport.owner_identity = lambda instance: asked.append(instance) or {"simulation": False}
+    dispatcher.dispatch_next()
+    dispatcher.dispatch_next()
+    assert len(asked) == 1
+    clock.t += NEGATIVE_IDENTITY_TTL_S + 1
+    dispatcher.dispatch_next()
+    assert len(asked) == 2 and transport.submissions == []
+
+
+def test_io_per_tick_is_capped_and_round_robins_across_jobs(tmp_path):
+    # Item 5: at most MAX_IO_PER_TICK device exchanges per tick; the next tick starts after the last.
+    from fleet.server.step_dispatcher import MAX_IO_PER_TICK
+    path, tasks, _, enabled = _stores(tmp_path)
+    store = CellJobStore(path)
+    count = MAX_IO_PER_TICK + 2
+    instances = {f"omx_{n:02d}": f"omx_{n:02d}_control" for n in range(count)}
+    for workcell, instance in instances.items():
+        _job_on(store, enabled["generation"], f"job-{workcell}", workcell, instance, f"pallet-{workcell}")
+    transport = Transport()
+    dispatcher = StepJobDispatcher(store, tasks, transport, instances,
+                                   {i: REVISIONS["omx_01_control"] for i in instances.values()},
+                                   deployment_profile="simulation")
+    transport.owner_identity = lambda instance: {"workcell_id": instance.removesuffix("_control"),
+                                                 "instance_id": instance, "simulation": True}
+    dispatcher.dispatch_next()
+    first = {grant.mission_id for grant in transport.submissions}
+    assert 0 < len(first) <= MAX_IO_PER_TICK // 2  # identity + submit per new instance
+    dispatcher.dispatch_next()
+    second = {grant.mission_id for grant in transport.submissions} - first
+    assert second and not (second & first)
