@@ -320,3 +320,10 @@
 - 변경: 새 `journal_identity.py`가 owner SQLite journal에 임의 `journal_id`를 한 번 만든다. `ActionApi`는 식별이 있으면 모든 receipt와 GetAction 404 응답에 그것을 싣는다. `DeviceActionReceipt.journal_id`(선택) 추가.
 - 증거: `test/test_platform_cell_owner_assembly.py::test_owner_journal_identity_is_persistent_per_journal_and_in_every_reply`.
 - gate 변화: 없음.
+
+
+## 2026-10-03 · uncommitted · fix: install canonical OMX geometry for Cell owner composition
+- Change: install the existing canonical kinematics YAML under share/omx_adapter/config. Default loading resolves the source asset, installed Python prefix or lazy ament package share; explicit paths stay exact and missing assets refuse. No geometry values or approval hashes changed.
+- Evidence: installed default load reproduced FileNotFoundError before the fix; prefix/ament path tests failed before the resolver change. OMX/owner/replay regression: 365 passed / 5 skipped. Wheel built from an X: source copy and force-installed into the isolated venv; actual build_cell_owner initialized from site-packages with injected ROS ports, matched the pinned profile geometry and kept local stop closed. Removing the installed asset caused FileNotFoundError and was restored. pip check and production flake8 passed.
+- Review: independent 29 passed; no Critical/Important findings. Final quick tier plus install-path tests: 100 passed / 26 existing warnings. Installed YAML equals source byte-for-byte.
+- Gate: SOURCE/LOCAL only. This closes host installed-resource composition, not Jazzy/colcon, live ROS timer, Fleet fencing/seat integration, thin-sheet geometry or the full two-layer/two-pallet vendor Gazebo acceptance.
