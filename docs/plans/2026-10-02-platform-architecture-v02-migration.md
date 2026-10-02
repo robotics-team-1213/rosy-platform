@@ -8,7 +8,7 @@
 
 **Tech Stack:** Python, 기존 FastAPI·SQLite·Pydantic, ROS 2 Jazzy, colcon/ament, namespace wheel, OMX Gazebo, 기존 pytest·harness. 새 빌드 도구·모델 SDK 도입은 이 계획의 전제가 아니다.
 
-**Status:** Tasks 0-3 complete (2026-10-02, Windows source baseline/API and process wheel); Tasks 4-9 not run. PASS conditions below are instructions and do not imply unfinished tasks passed.
+**Status:** Tasks 0-4 complete; Task 5 in progress (the ROS-free Skill boundary and receipt extraction are committed; the OMX provider binding is implemented and under checkpoint verification). Tasks 6-9 not run. PASS conditions below are instructions and do not imply unfinished tasks passed.
 
 **설계:** [ROSY Platform Architecture v0.2](../reference/ROSY_Platform_Architecture_Design_v0.2.md) 3·5·6·15·16장.
 
@@ -196,6 +196,8 @@ Cell compiler port, additive `CELL_TRANSFER` ??, `service` ???? ?? operator ?? ?
 5. manipulation·OMX integration wheel을 CI 설치 목록에 추가해 소비자 시험 전에 설치한다. ROS 없는 계약 시험에는 ROS 실행 의존성이 유입되지 않도록 선택 의존성을 구분한다.
 
 **검증:** 새 owner 경계 시험과 기존 OMX `test_omx_command_owner.py`, `test_omx_action_store.py`, `test_omx_pick_place_runner.py`, `test_omx_cell_transfer_runner.py`, `test_omx_pose_plan.py`를 실행한다. 기대: ROS를 직접 호출하는 Skill 없음, 중복 writer/attempt 없음, 거부 및 phase 결과 의미 보존. 커밋: `refactor: separate transfer skill from omx ownership`.
+
+**Progress (2026-10-02):** Added `integrations/robots/omx` as the explicit provider seam. It projects a validated `FleetCellTransferGrant` into `pallet.transfer`, adapts accepted-recipe geometry and the current joint-state snapshot to the existing analytic OMX planner, and wraps the existing `PickPlaceRunner` start/exact-cancel methods. The integration wheel is in the CI install list and the dependency-boundary registry. Provider/owner boundary 12 passed; dependency-boundary suite 5 passed; platform mapping/submission/compatibility 27 passed; OMX adapter suite 333 passed/5 skipped. Six wheels built and the Skill/integration wheels installed offline into a fresh X: venv with provider import smoke PASS. ROS-SIM and device acceptance remain unproven.
 
 ## Task 6: 기존 앱 조합과 최소 설치
 

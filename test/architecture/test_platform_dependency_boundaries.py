@@ -21,6 +21,10 @@ CURRENT_COMPONENTS = {
     "world_api": ("modules/world/src/rosy/world/api", "rosy.world.api"),
     "skill_api": ("modules/skills/api/src/rosy/skills/api", "rosy.skills.api"),
     "execution_api": ("modules/execution/src/rosy/execution/api", "rosy.execution.api"),
+    "omx_transfer_integration": (
+        "integrations/robots/omx/src/rosy/integrations/robots/omx",
+        "rosy.integrations.robots.omx",
+    ),
 }
 
 
