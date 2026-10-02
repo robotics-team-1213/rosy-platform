@@ -8,8 +8,12 @@ verification does it (openssl pkeyutl -verify -rawin) against the robot's truste
 release keys. This package cannot import the deploy tree, hence the small mirror;
 test_learned_signature.py signs with the release module and verifies with this one.
 
-Unsigned bundles are refused unless the node's allow_unsigned_models dev flag is
-on. A bundle whose signature is present but wrong is refused even then."""
+object_det enforces: unsigned bundles are refused unless the dev override
+ROSY_ALLOW_UNSIGNED_MODELS=true is in the node's environment (read once at start,
+never a ROS parameter); a present but wrong signature is refused even then.
+lane_seg is warn-only for now (coordinator decision 2026-10-03): the field's 0930
+lane model is unsigned, so the node opens it, logs, and reports signed: false.
+Follow-up: sign the 0930 lane model, then enforce for lane_seg too."""
 
 from __future__ import annotations
 
@@ -25,6 +29,7 @@ from .manifest import MANIFEST_NAME, ManifestError
 SIGNATURE_NAME = MANIFEST_NAME + ".sig"
 TRUSTED_KEYS = "/etc/rosy/trusted-release-keys"
 SIGNATURE_LENGTH = 64  # Ed25519, RFC 8032
+ALLOW_UNSIGNED_ENV = "ROSY_ALLOW_UNSIGNED_MODELS"
 _WINDOWS_OPENSSL = (r"C:\Program Files\Git\usr\bin", r"C:\Program Files\Git\mingw64\bin")
 
 
@@ -70,10 +75,38 @@ def verify_manifest_signature(folder, keys_dir=TRUSTED_KEYS) -> str:
     raise SignatureError(f"no trusted key in {keys_dir} verifies {SIGNATURE_NAME}")
 
 
+def allow_unsigned_from_env(environ=os.environ) -> bool:
+    """The object_det dev override: only the exact text "true" turns it on."""
+    return environ.get(ALLOW_UNSIGNED_ENV) == "true"
+
+
+class SignatureCheck:
+    """A ModelSlot opener that checks the signature first.
+
+    enforce=True refuses (SignatureError keeps the previous model), except an
+    unsigned bundle under allow_unsigned. enforce=False opens anyway. Either way
+    signed/reason describe the model that was last opened successfully."""
+
+    def __init__(self, open_folder, *, enforce: bool, allow_unsigned: bool = False,
+                 keys_dir=TRUSTED_KEYS):
+        self._open, self._enforce, self._allow, self._keys = open_folder, enforce, allow_unsigned, keys_dir
+        self.signed: bool | None = None
+        self.reason: str | None = None
+
+    def __call__(self, folder):
+        try:
+            verify_manifest_signature(folder, self._keys)
+            signed, reason = True, None
+        except SignatureError as exc:
+            unsigned = not (Path(folder) / SIGNATURE_NAME).exists()
+            if self._enforce and not (self._allow and unsigned):
+                raise
+            signed, reason = False, str(exc)
+        model = self._open(folder)
+        self.signed, self.reason = signed, reason
+        return model
+
+
 def checked_opener(open_folder, *, allow_unsigned: bool, keys_dir=TRUSTED_KEYS):
-    """A ModelSlot opener that verifies the signature first; a failure keeps the old model."""
-    def opener(folder):
-        if not (allow_unsigned and not (Path(folder) / SIGNATURE_NAME).exists()):
-            verify_manifest_signature(folder, keys_dir)
-        return open_folder(folder)
-    return opener
+    """The enforcing check (object_det)."""
+    return SignatureCheck(open_folder, enforce=True, allow_unsigned=allow_unsigned, keys_dir=keys_dir)

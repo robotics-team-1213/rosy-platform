@@ -966,3 +966,11 @@
 - gate 변화: 없음. Gazebo·실기 검증은 조정자 일정.
 - 결정: D-423 Proposed(구현 기록 추가)
 - 교훈: D-137 의 `vision/detections` 는 발행자 하나로 예약돼 있었다(gateway `test_core_logic`). 토픽 글자를 한 파일에만 두고 구독자는 상수를 가져오게 해 화이트리스트를 한 줄로 유지했다.
+
+## 2026-10-03 · uncommitted · fix(perception): D-423 조정자 결정 — 차선 서명 경고만, 서명 우회는 환경 변수로만
+
+- 변경: `learned/signature.py` `SignatureCheck`(enforce/경고만, 마지막으로 연 모델의 `signed`·`reason`), `allow_unsigned_from_env`(`ROSY_ALLOW_UNSIGNED_MODELS`, 정확히 "true" 만). `object_detector_node` 는 ROS 파라미터 `allow_unsigned_models` 를 없애고 환경 변수를 시작 때 한 번 읽는다; `trusted_keys_dir` 는 읽기 전용. `learned_lane_node` 는 경고만 — 서명 없는 모델도 열고 경고 로그, 상태 `signed`. `LearnedStatus.payload(signed=)`. CORE 상태 저장소가 `signed` 를 넘긴다. ADR: `vision/detections` 는 `object_detector.py` 소유, Hailo 는 이 노드의 백엔드(D-209); 후속 = 0930 차선 모델 서명 뒤 강제.
+- 증거: 아래 커밋의 sensing·services·gateway 관련 시험.
+- gate 변화: 없음.
+- 결정: D-423 (조정자 결정 2026-10-03)
+- 교훈: 없음

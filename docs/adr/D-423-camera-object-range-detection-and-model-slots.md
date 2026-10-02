@@ -72,9 +72,15 @@
 - **슬롯**: `learned/slots.py` — `object_det` 은 `/var/lib/rosy/models/object_det/{shadow,active,previous}`. **`lane_seg` 는 이전 판 동안 D-373 의 평평한 루트(`/var/lib/rosy/models/shadow`)를 그대로 쓴다**(§3.1 의 `<task>/` 를 차선에는 아직 적용하지 않음; 옮기려면 이전 판이 필요). 작업 루트는 `deliver.py` 가 잠금 아래 root:rosy-camera 0750 으로 만든다.
 - **도구**: `deliver.py --task`, `promote`(active ← shadow, 이전 active → previous), `rollback --slot active`(active ← previous); 다른 작업 모델의 push 는 거부. `intake.py` 는 작업별 게이트(`intake_gate.yaml` 의 `object_det` 절: 지연, NaN, 오류, 프레임당 상자 수 p95 ≤ 32). `rosy_ml deliver|promote|rollback|status --task`(promote 는 CLI 전용).
 - **.pt → ONNX** `tools/perception/model/convert.py`(PC 전용): TorchScript, state_dict + 저장소 모델 클래스 등록부(`lane_unet`), ultralytics export(object_det). 고정 시드 탐침 동등성(최대 절대 차 ≤ 1e-3, 모양이 바뀌면 실패, 실패 시 아무것도 쓰지 않음), 선택 int8 QDQ(정밀도 차는 지표로만 남기고 판정은 intake). torch/onnx/onnxruntime/ultralytics 는 함수 안에서만 가져온다.
-- **서명**: `sign_model.py` 가 릴리스 서명 모듈(`deploy/robot/pinky_pro/release/signing.py` `sign_checksums`)로 `model_manifest.json.sig` 를 만든다. 로봇은 `/etc/rosy/trusted-release-keys/*.pem` 으로 openssl 검증한다(`learned/signature.py`; 이 패키지는 deploy 를 가져올 수 없어 작은 거울을 두고, 시험이 둘을 맞춘다). `object_detector_node` 는 서명 없는 묶음을 거부하고, `allow_unsigned_models`(기본 false)는 개발 전용 우회다. 서명이 있는데 틀리면 우회해도 거부한다. **`lane_seg`(learned_lane_node)에는 아직 강제하지 않았다** — 현장의 0930 차선 모델이 서명 없이 돌고 있어 켜면 shadow 가 멈춘다(사용자 결정 필요).
+- **서명**: `sign_model.py` 가 릴리스 서명 모듈(`deploy/robot/pinky_pro/release/signing.py` `sign_checksums`)로 `model_manifest.json.sig` 를 만든다. 로봇은 `/etc/rosy/trusted-release-keys/*.pem` 으로 openssl 검증한다(`learned/signature.py`; 이 패키지는 deploy 를 가져올 수 없어 작은 거울을 두고, 시험이 둘을 맞춘다). `object_detector_node` 는 서명 없는 묶음을 거부한다. 개발 전용 우회는 환경 변수 `ROSY_ALLOW_UNSIGNED_MODELS=true` 하나뿐이고, 노드 시작 때 한 번 읽는다(ROS 파라미터가 아니라 실행 중에 바꿀 수 없다; `trusted_keys_dir` 는 읽기 전용 파라미터). 서명이 있는데 틀리면 우회해도 거부한다. `lane_seg`(learned_lane_node)는 **경고만** 한다(조정자 결정 2026-10-03): 서명이 없거나 틀려도 열고, 로그를 남기고, 상태에 `signed: false` 를 싣는다(CORE `GET /api/v1/vision/models` 에도 `signed`).
 - **CORE·Pilot**: `GET /api/v1/vision/models`(viewer, 읽기 전용, API Ref v1.83). CORE 는 포인터 파일을 읽지 못해(root:rosy-camera 0750) 노드가 돌지 않는 슬롯(object_det shadow, lane_seg active)은 보이지 않는다. Pilot 주행 화면의 "모델" 패널은 5 초마다 읽기만 하고, promote/rollback 은 `rosy_ml` 에만 있다. CORE 쓰기 API 는 더하지 않았다.
 - **학습 데이터**: `dataset/object_boxes.py` — 벽보다 짧은 스캔 묶음을 클래스 없는 후보 상자로(바닥 접점이 아랫변, 윗변은 스캔 높이라 하한), 사람 상자가 이기고 `none` 은 후보를 지운다. 사람이 본 프레임만 YOLO 라벨 파일을 얻고(빈 파일 = "없음"은 사람만 말할 수 있음) 나머지는 `review_queue.jsonl` 에 남는다. `autolabel.py --object-boxes`.
+
+### 결정 (조정자, 2026-10-03)
+
+- `vision/detections` 의 단일 발행자는 `control/object_detector.py`(`object_detector_node`)다. 나중의 Hailo/rosy-vision 경로는 별도 발행자가 아니라 이 노드의 또 하나의 백엔드가 된다(D-209 백엔드 자리). gateway `test_core_logic` 의 D-137 단일 발행자 목록이 이 파일 하나를 고정한다.
+- 서명: `object_det` 강제, `lane_seg` 경고만. 서명 우회는 환경 변수로만.
+- 후속: 0930 차선 모델을 릴리스 키로 서명(`sign_model.py`)해 다시 전달한 뒤 `lane_seg` 도 강제로 바꾼다.
 
 ## 잇는 결정
 

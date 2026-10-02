@@ -22,6 +22,7 @@ from . import executor_choice
 from .sensing.perception.image_frame import image_msg_to_frame
 from .sensing.perception.learned.runner import LaneSegModel, ModelSlot
 from .sensing.perception.learned.shadow import TOPIC, RuleRing, shadow_payload
+from .sensing.perception.learned.signature import TRUSTED_KEYS, SignatureCheck
 from .sensing.perception.learned.status import STATUS_TOPIC, LearnedStatus, rate_limited
 
 
@@ -40,8 +41,11 @@ class LearnedLaneNode(Node):
         # heavy for an always-on shadow. Infer at most max_rate_hz; 0 = no limit.
         self._max_rate_hz = float(self.declare_parameter('max_rate_hz', 3.0).value)
         threads = int(self.declare_parameter('threads', 2).value)
-        self._slot = ModelSlot(pointer,
-                               opener=lambda folder: LaneSegModel.open(folder, threads=threads))
+        # D-423 (2026-10-03): lane_seg signatures are warn-only until the field's 0930
+        # model is signed; the status reports signed and an unsigned model is logged.
+        self._signature = SignatureCheck(lambda folder: LaneSegModel.open(folder, threads=threads),
+                                         enforce=False, keys_dir=TRUSTED_KEYS)
+        self._slot = ModelSlot(pointer, opener=self._signature)
         self._last_infer: float | None = None
         self._busy = False  # only matters under a MultiThreadedExecutor
         # Rule answers keyed by image stamp: compared per frame, not newest-wins.
@@ -86,7 +90,8 @@ class LearnedLaneNode(Node):
         model = self._slot.current
         payload = self._status.payload(
             model_revision=model.model_revision if model is not None else None,
-            last_error=self._slot.last_error)
+            last_error=self._slot.last_error,
+            signed=self._signature.signed if model is not None else None)
         self._status_pub.publish(String(data=json.dumps(payload, sort_keys=True)))
 
     def _on_camera(self, msg: Image) -> None:
@@ -114,6 +119,9 @@ class LearnedLaneNode(Node):
         if model.model_revision != self._logged_revision:
             self._logged_revision = model.model_revision
             self.get_logger().info(f'shadow model {model.model_revision}')
+            if self._signature.signed is False:
+                self.get_logger().warn(f'shadow model {model.model_revision} is not release-signed '
+                                       f'({self._signature.reason}); warn-only for lane_seg (D-423)')
         self._busy = True
         self._last_infer = now
         try:

@@ -136,6 +136,8 @@ def node_module(monkeypatch, tmp_path):
             'sensor_msgs.msg': types.SimpleNamespace(Image=None, LaserScan=None),
             'std_msgs': types.ModuleType('std_msgs'),
             'std_msgs.msg': types.SimpleNamespace(String=None),
+            'rcl_interfaces': types.ModuleType('rcl_interfaces'),
+            'rcl_interfaces.msg': types.SimpleNamespace(ParameterDescriptor=lambda **kw: kw),
         }
         for name, module in stubs.items():
             monkeypatch.setitem(sys.modules, name, module)
@@ -180,5 +182,13 @@ def test_node_opens_models_through_the_signature_check():
     source = (Path(__file__).resolve().parents[1] / 'control' / 'object_detector_node.py').read_text(
         encoding='utf-8')
     assert "checked_opener(" in source
-    assert "p('allow_unsigned_models', False)" in source
-    assert "p('trusted_keys_dir', TRUSTED_KEYS)" in source
+    # The dev override is read once from the environment, never a ROS parameter (2026-10-03).
+    assert "allow_unsigned_from_env()" in source and "allow_unsigned_models" not in source
+    assert "self.declare_parameter('trusted_keys_dir', TRUSTED_KEYS, _READ_ONLY)" in source
+
+
+def test_lane_node_checks_signatures_warn_only_and_reports_signed():
+    source = (Path(__file__).resolve().parents[1] / 'control' / 'learned_lane_node.py').read_text(
+        encoding='utf-8')
+    assert "SignatureCheck(" in source and "enforce=False" in source
+    assert "signed=self._signature.signed" in source

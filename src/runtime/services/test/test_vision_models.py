@@ -28,7 +28,7 @@ def test_snapshot_reports_known_tasks_with_age_and_staleness():
     by_task = {t["task"]: t for t in snap["tasks"]}
     assert by_task["object_det"] == {
         "task": "object_det", "slot": "active", "model_revision": "object-det-r1", "last_error": None,
-        "frames_inferred": 12, "latency_ms_p50": 210.5, "age_s": 4.0, "stale": False}
+        "frames_inferred": 12, "latency_ms_p50": 210.5, "signed": None, "age_s": 4.0, "stale": False}
     assert by_task["lane_seg"]["slot"] == "shadow" and by_task["lane_seg"]["last_error"] == "no shadow model loaded"
     later = {t["task"]: t["stale"] for t in store.snapshot(now=15.5)["tasks"]}
     assert later == {"object_det": True, "lane_seg": False}
@@ -48,3 +48,12 @@ def test_unknown_topic_and_overlong_text_are_dropped():
     assert store.accept("perception/learned/status", status(error="x" * 5000), now=1.0) is False
     assert store.accept("perception/learned/status", status(error="x" * 1000), now=1.0) is True
     assert len(store.snapshot(now=1.0)["tasks"][0]["last_error"]) <= 200
+
+
+def test_signed_passes_through_when_the_node_reports_it():
+    """lane_seg is warn-only (2026-10-03): its status says signed false; absent stays None."""
+    store = ModelStatusStore()
+    store.accept("perception/learned/status", status("lane-r3", signed=False), now=1.0)
+    store.accept("perception/learned/object_det/status", status(), now=1.0)
+    by_task = {t["task"]: t for t in store.snapshot(now=1.0)["tasks"]}
+    assert by_task["lane_seg"]["signed"] is False and by_task["object_det"]["signed"] is None

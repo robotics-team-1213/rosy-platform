@@ -120,3 +120,44 @@ def test_a_present_but_bad_signature_is_refused_even_with_the_dev_flag(tmp_path,
     sign(folder, pairs["stranger"])
     with pytest.raises(SignatureError):
         checked_opener(lambda f: f, allow_unsigned=True, keys_dir=trusted)(folder)
+
+
+# --- coordinator decisions 2026-10-03: lane warn-only, object_det enforced, env-only dev flag ---
+
+def test_warn_only_check_opens_an_unsigned_lane_model_and_records_why(tmp_path):
+    from control.sensing.perception.learned.signature import SignatureCheck
+    folder = model(tmp_path)
+    check = SignatureCheck(lambda f: "lane-model", enforce=False, keys_dir=tmp_path)
+    assert check(folder) == "lane-model"
+    assert check.signed is False and "unsigned" in check.reason
+
+
+def test_warn_only_check_reports_a_good_signature(tmp_path, keys):
+    from control.sensing.perception.learned.signature import SignatureCheck
+    trusted, pairs = keys
+    folder = model(tmp_path)
+    sign(folder, pairs["rosy-release-test"])
+    check = SignatureCheck(lambda f: "m", enforce=False, keys_dir=trusted)
+    check(folder)
+    assert check.signed is True and check.reason is None
+
+
+def test_a_failed_open_keeps_the_previous_signature_state(tmp_path):
+    from control.sensing.perception.learned.signature import SignatureCheck
+    def broken(folder):
+        raise ManifestError("bad")
+    check = SignatureCheck(lambda f: "m", enforce=False, keys_dir=tmp_path)
+    check(model(tmp_path))
+    check._open = broken
+    with pytest.raises(ManifestError):
+        check(model(tmp_path, "m2"))
+    assert check.signed is False and "unsigned" in check.reason   # still the loaded model's
+
+
+@pytest.mark.parametrize("value,expected", [
+    (None, False), ("false", False), ("1", False), ("TRUE", False), (" true", False), ("true", True)])
+def test_dev_override_comes_from_the_environment_only_and_strictly(value, expected):
+    from control.sensing.perception.learned.signature import ALLOW_UNSIGNED_ENV, allow_unsigned_from_env
+    assert ALLOW_UNSIGNED_ENV == "ROSY_ALLOW_UNSIGNED_MODELS"
+    environ = {} if value is None else {ALLOW_UNSIGNED_ENV: value}
+    assert allow_unsigned_from_env(environ) is expected

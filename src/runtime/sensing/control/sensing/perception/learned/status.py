@@ -71,7 +71,8 @@ class LearnedStatus:
         self.frames_inferred += 1
         self._latency.append(float(latency_ms))
 
-    def payload(self, *, model_revision: str | None, last_error: str | None) -> dict:
+    def payload(self, *, model_revision: str | None, last_error: str | None,
+                signed: bool | None = None) -> dict:
         if model_revision is None and last_error is None:
             last_error = NO_MODEL  # D-62: off is reported, not silent
         p50 = round(statistics.median(self._latency), 3) if self._latency else None
@@ -80,7 +81,7 @@ class LearnedStatus:
         # while no model was loaded. skip_ratio is overload only.
         missed = max(0, self.frames_expected - self.frames_inferred - self.frames_rate_limited)
         ratio = missed / self.frames_expected if self.frames_expected else 0.0
-        return {
+        out = {
             "schema": STATUS_SCHEMA,
             "model_revision": model_revision,
             "last_error": last_error,
@@ -92,3 +93,6 @@ class LearnedStatus:
             "skip_ratio": round(ratio, 4),
             "latency_ms_p50": p50,
         }
+        if signed is not None:  # D-423: whether the loaded model's manifest is release-signed
+            out["signed"] = bool(signed)
+        return out

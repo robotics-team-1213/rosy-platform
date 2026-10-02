@@ -60,7 +60,9 @@ class ModelStatusStore:
                  "model_revision": revision[:MAX_TEXT] if revision else None,
                  "last_error": error[:MAX_TEXT] if error else None,
                  "frames_inferred": _int(doc.get("frames_inferred")),
-                 "latency_ms_p50": _number(doc.get("latency_ms_p50")), "_at": float(now)}
+                 "latency_ms_p50": _number(doc.get("latency_ms_p50")),
+                 "signed": doc["signed"] if isinstance(doc.get("signed"), bool) else None,
+                 "_at": float(now)}
         with self._lock:
             self._tasks[task] = entry
         return True
