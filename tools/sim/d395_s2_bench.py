@@ -426,7 +426,7 @@ class Bench(s1.Bench):
                     continue
             x, y, yaw = goal
             code, body = self.fleet("POST", f"/api/fleet/robots/{rid}/goal", {"x": x, "y": y, "yaw": yaw},
-                                    timeout=15.0)
+                                    timeout=45.0)     # S2 q0: 15 s timed out at load 150
             d["posted"], d["posted_sim"], d["navigating"] = now, self.sim_now(), False
             d["attempts"] += 1
             tr["posts"].append({"t": self.t(), "robot": rid, "leg": d["leg"], "code": code, "body": body})
