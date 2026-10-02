@@ -305,7 +305,7 @@ SIZE_VERDICTS = {
         "memory, motion envelope, exact straight sweep) inside body_stop.py/clearance.py; same verdict",
     ),
     "control": (
-        42_784,
+        42_888,
         f"split: deploy closure needs only sensing + safety provider (P1a); {CONTROL_SPLIT} "
         "(re-judged 2026-09-30 at 33090 after D-356 added the ROS-free learned perception backend "
         "(sensing/perception/learned), the shadow node and the recording CLI; the learned backend sits "
@@ -364,7 +364,8 @@ SIZE_VERDICTS = {
         "(orphan-writer recovery, off-timer hashing, reserve and disk floor in control/pilot_recording.py, "
         "the camera's dead-recorder check) — same subjects, verdict unchanged; re-judged 2026-10-03 at "
         "42784 when D-411 A landed on main beside D-395 rev. 11 (reference-square NMS, lidar self-beam "
-        "drop, learned lane component filter) — same subjects, verdict unchanged)",
+        "drop, learned lane component filter) — same subjects, verdict unchanged;"
+        "re-judged 2026-10-03 at 42888 for the D-408 paint CPU follow-up (learned mask area filter, mask-only inference, paint cadence in learned/paint_worker.py) — same subjects inside sensing/perception, verdict unchanged)",
     ),
     # --- D-362 newly-covered files (web assets in src/ packages, ops roots). ---
     "runtime/sensing/web/diagnostic.html": (
