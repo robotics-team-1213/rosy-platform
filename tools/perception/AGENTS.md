@@ -25,11 +25,11 @@ Developer-side half of the D-356 perception learning loop: turn robot recordings
 
 | Directory | Purpose |
 |-----------|---------|
-| `dataset/` | Recordings to datasets |
-| `model/` | Export, intake, delivery |
-| `training/` | Trainer contract |
+| `dataset/` | Recordings to datasets (see `dataset/AGENTS.md`) |
+| `model/` | Export, intake, delivery (see `model/AGENTS.md`) |
+| `training/` | Trainer contract (see `training/AGENTS.md`) |
 | `test/` | Tests |
-| `prototype/` | D-205 prototypes, not the learned loop |
+| `prototype/` | D-205 prototypes, not the learned loop (see `prototype/AGENTS.md`) |
 
 ## For AI Agents
 

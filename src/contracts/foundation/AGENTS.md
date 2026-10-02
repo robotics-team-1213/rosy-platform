@@ -23,6 +23,12 @@ Library/contract tier (D-168 P2): no process of its own. ROS-SIM/ARTIFACT/DEVICE
 | `config/` | Shipped defaults and development authentication overlay |
 | `core_common/identity.py`, `profile.py`, `capability.py`, `rmw.py` | Identity, hardware profile, capability manifest, RMW settings |
 
+## Subdirectories
+
+| Directory | Purpose |
+|-----------|---------|
+| `core_common/` | Importable package: config, identity, profile, capability, domain (see `core_common/AGENTS.md`) |
+
 ## For AI Agents
 
 ### Working In This Directory

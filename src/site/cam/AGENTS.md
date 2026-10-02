@@ -18,7 +18,8 @@ Moved out of `src/site/overhead/android` on 2026-09-30 (D-374 stage 1), then ren
 
 | Directory | Purpose |
 |-----------|---------|
-| `app/src/main/java/io/github/livsbittt/rosy/cam/` | `camera/` (CameraX capture, JPEG), `link/` (`OverheadLink` WebSocket client, frame header, protocol), `settings/` (pairing URI, DataStore `cam_settings`, mDNS discovery), `pairing/` (D-341 `rosy-pair/1` console-approved pairing: code, shapes, `PairingClient` state machine, HTTPS transport, `PairingSession`), `service/` (foreground stream service), `ui/` (Compose screens), `health/` |
+| `app/` | Gradle module `:app`: manifest, resources, code, tests (see `app/AGENTS.md`) |
+| `app/src/main/java/io/github/livsbittt/rosy/cam/` (see its `AGENTS.md`) | `camera/` (CameraX capture, JPEG), `link/` (`OverheadLink` WebSocket client, frame header, protocol), `settings/` (pairing URI, DataStore `cam_settings`, mDNS discovery), `pairing/` (D-341 `rosy-pair/1` console-approved pairing: code, shapes, `PairingClient` state machine, HTTPS transport, `PairingSession`), `service/` (foreground stream service), `ui/` (Compose screens), `health/` |
 | `app/src/test/java/io/github/livsbittt/rosy/cam/` | JVM unit tests (no emulator) |
 
 ## For AI Agents

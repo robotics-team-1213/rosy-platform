@@ -23,6 +23,8 @@ Rosy Pilot 원격 조종 표면(D-323). 정적 파일이며 `core_api_web`이 `/
 
 | Directory | Purpose |
 |-----------|---------|
+| `drivers/` | Device-kind drivers and registry (see `drivers/AGENTS.md`) |
+| `screens/` | Connect, drive, inputs, arm screens (see `screens/AGENTS.md`) |
 | `test/` | Node 서브프로세스 순수 시험(`test_stick.py`)과 브라우저 시험(예정) |
 
 ## For AI Agents

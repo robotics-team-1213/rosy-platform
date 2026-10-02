@@ -19,7 +19,7 @@ Rosy Cell (D-377 id `cell`, package `rosy_cell`): the D-399 Application for pall
 
 | Directory | Purpose |
 |-----------|---------|
-| `rosy_cell/` | `geometry`, `load`, `pattern`, `stack`, `sequence`, `fields`, `recipe`, `cell`, `compiler` |
+| `rosy_cell/` | `geometry`, `load`, `pattern`, `stack`, `sequence`, `fields`, `recipe`, `cell`, `compiler` (see `rosy_cell/AGENTS.md`) |
 | `test/` | ROS-free pytest; `conftest.py` puts the package on `sys.path` |
 
 ## For AI Agents

@@ -23,7 +23,7 @@ Camera and lane evidence (D-209, D-228). This folder answers what is visible. It
 
 | Directory | Purpose |
 |-----------|---------|
-| `learned/` | D-356 learned lane backend, shadow only: `manifest.py` (model manifest contract, sha256 and shape checks), `lane_mask.py` (segmentation logits to lane evidence), `runner.py` (ONNX runner, keep-previous hot swap), `shadow.py` (`perception/learned/shadow` payload, no command fields). `onnxruntime` is imported lazily; it is not in the device image yet |
+| `learned/` | D-356 learned lane backend, shadow only: `manifest.py` (model manifest contract, sha256 and shape checks), `lane_mask.py` (segmentation logits to lane evidence), `runner.py` (ONNX runner, keep-previous hot swap), `shadow.py` (`perception/learned/shadow` payload, no command fields). `onnxruntime` is imported lazily; it is not in the device image yet (see `learned/AGENTS.md`) |
 
 ## For AI Agents
 
