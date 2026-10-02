@@ -510,7 +510,7 @@ class CoreServices:
         safety.estop_listeners.append(swarm.on_estop)
         safety.estop_listeners.append(lambda: nav.cancel(source='safety_manager'))
         def stop_line_follow():
-            status = line_follow.stop()
+            status = line_follow.stop(reason="estop")
             command.clear_navigation()
             state.set_line_follow(status)
         safety.estop_listeners.append(stop_line_follow)

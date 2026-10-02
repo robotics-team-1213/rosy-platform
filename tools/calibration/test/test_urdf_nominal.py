@@ -205,6 +205,7 @@ def test_line_follow_stuck_body_consumers():
     assert line_follow["body_lidar_x_m"] == G["lidar"]["x_m"]
     assert line_follow["body_rear_x_m"] == G["caster"]["rear_x_m"]
     assert line_follow["body_rotation_radius_m"] == G["footprint"]["rotation_radius_m"]
+    assert line_follow["body_half_width_m"] == G["footprint"]["half_width_m"]
 
 
 def test_body_and_ir_consumers():
