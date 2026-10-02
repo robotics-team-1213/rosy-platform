@@ -17,6 +17,7 @@ import {mountInputs} from "./inputs.js";
 import {slewCommand} from "../stick.js";
 import {mountAutoMode} from "./drive-auto.js";
 import {mountRobotRecording} from "./robot-recording.js";
+import {readControls, profileFromBaseVelocity} from "../controls.js";
 import {calibrationView} from "../calibration.js";
 import {el, mountDriveView, buildStage, buildControls} from "./drive-view.js";
 import {createCameraCapture, classifyOperation, saveCameraFile} from "/common/evidence.js";
@@ -197,13 +198,16 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
   const view = mountDriveView(drive, element);
 
   // --- 입력: 2축 스틱(노브가 손가락을 따라간다) -------------------------------
+  // 잡기 구역(styles.css)은 링보다 넓다. 링 안에서 누르면 링 중심이 0, 링 밖(구역 안)에서
+  // 누르면 그 자리가 0 이다(떠 있는 원점 — 닿자마자 최대 편향으로 출발하지 않는다). 그때 링이
+  // 손가락 밑으로 옮겨와 원점을 보이고, 놓으면 제자리로 돌아간다.
   const stick = element.stick;
   let stickPointer = null;
+  let origin = null;               // {x, y, r}: 이번 누름의 0 점(화면 좌표)과 링 반지름
   function applyStick(event) {
-    const rect = stick.getBoundingClientRect();
-    const radius = rect.width / 2;
-    let dx = (event.clientX - (rect.left + radius)) / radius;
-    let dy = (event.clientY - (rect.top + radius)) / radius;
+    const radius = origin.r;
+    let dx = (event.clientX - origin.x) / radius;
+    let dy = (event.clientY - origin.y) / radius;
     const mag = Math.hypot(dx, dy);
     if (mag > 1) { dx /= mag; dy /= mag; }
     setStickInput(dx, -dy);        // 화면 y 는 아래가 + — 위로 밀면 전진
@@ -212,9 +216,11 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
   }
   function releaseStick() {
     stickPointer = null;
+    origin = null;
     setStickInput(0, 0);
     element.knob.style.transform = "translate(-50%, -50%)";
-    stick.classList.remove("active");
+    stick.style.translate = "";
+    stick.classList.remove("active", "floating");
   }
   stick.addEventListener("pointerdown", (event) => {
     if (calibrationLocked) return;
@@ -222,6 +228,14 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
     stickPointer = event.pointerId;
     stick.setPointerCapture(event.pointerId);
     stick.classList.add("active");
+    const rect = stick.getBoundingClientRect();
+    const centre = {x: rect.left + rect.width / 2, y: rect.top + rect.height / 2, r: rect.width / 2};
+    const outside = Math.hypot(event.clientX - centre.x, event.clientY - centre.y) > centre.r;
+    origin = outside ? {x: event.clientX, y: event.clientY, r: centre.r} : centre;
+    if (outside) {
+      stick.classList.add("floating");
+      stick.style.translate = `${event.clientX - centre.x}px ${event.clientY - centre.y}px`;
+    }
     applyStick(event);
   });
   stick.addEventListener("pointermove", (event) => {
@@ -366,17 +380,29 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
   document.addEventListener("visibilitychange", onVisibility);
 
   // --- CORE 수동 한도(프리셋의 기준) ------------------------------------------
+  // D-411 B: the device's base_velocity carries the live manual limits; they cap the CORE
+  // safety limits (0 = drive announced but held at standstill — shown as such). Both are read
+  // together here so a limit changed between the gate and this screen is not stale.
+  let announced = {max_linear: profile.max_linear ?? null, max_angular: profile.max_angular ?? null};
   async function loadLimits() {
-    const response = await apiGet("/api/v1/safety/state").catch(() => null);
-    if (response?.status === 200 && response.body?.limits) setServerLimits(withProfileLimits(response.body.limits));
+    const [response, caps] = await Promise.all([
+      apiGet("/api/v1/safety/state").catch(() => null),
+      apiGet("/api/v1/system/capabilities").catch(() => null),
+    ]);
+    const base = caps?.status === 200
+      ? readControls(caps.body?.controls)?.find((control) => control.kind === "base_velocity") : null;
+    if (base) {
+      const fresh = profileFromBaseVelocity(base);
+      announced = {max_linear: fresh.max_linear, max_angular: fresh.max_angular};
+    }
+    const limits = response?.status === 200 ? response.body?.limits : null;
+    if (limits || base) setServerLimits(withProfileLimits(limits));
     renderCap();
   }
-  // D-411 B: the device's base_velocity carries the live manual limits; they cap the CORE
-  // safety limits read here (0 = drive announced but held at standstill — shown as such).
   function withProfileLimits(limits) {
     const capped = {...(limits ?? {})};
-    if (profile.max_linear != null) capped.manual_linear = Math.min(profile.max_linear, capped.manual_linear ?? Infinity);
-    if (profile.max_angular != null) capped.manual_angular = Math.min(profile.max_angular, capped.manual_angular ?? Infinity);
+    if (announced.max_linear != null) capped.manual_linear = Math.min(announced.max_linear, capped.manual_linear ?? Infinity);
+    if (announced.max_angular != null) capped.manual_angular = Math.min(announced.max_angular, capped.manual_angular ?? Infinity);
     return capped;
   }
   function renderCap() {
@@ -386,7 +412,7 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
     element.cap.textContent = standstill ? "정지로 제한됨 · 상한 0"
       : `상한 ${limits.linear.toFixed(2)} m/s · ${Math.round(limits.angular * DEG)}°/s`;
   }
-  if (profile.max_linear != null || profile.max_angular != null) setServerLimits(withProfileLimits(null));
+  if (announced.max_linear != null || announced.max_angular != null) setServerLimits(withProfileLimits(null));
   loadLimits();
 
   // --- 로봇 상태 폴링: 실측 속도·회전율 ---------------------------------------

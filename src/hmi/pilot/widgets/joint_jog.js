@@ -34,6 +34,7 @@ export function mountJointJog(slot, control, session) {
   const idPart = String(control.id ?? "arm").replace(/[^A-Za-z0-9_-]/g, "_");
   let joint = names[0] ?? "";
   let blocked = "조작 보류";
+  let lastError = null;   // the last update's error stays until the next update (stop/press re-render)
   let padPointer = null;
 
   // --- pad ------------------------------------------------------------------
@@ -143,7 +144,7 @@ export function mountJointJog(slot, control, session) {
   }
   function stop() {
     const {inFlight} = releasePad();
-    render(session.state(), null);
+    render(session.state(), lastError);
     if (!blocked && inFlight) setPadStatus("놓음 · 진행 중인 목표만 마칩니다");
   }
   function press(axes) {
@@ -151,7 +152,7 @@ export function mountJointJog(slot, control, session) {
     pad.classList.add("active");
     moveKnob(axes);
     jogger.press(axes);
-    render(session.state(), null);
+    render(session.state(), lastError);
   }
 
   pad.addEventListener("pointerdown", (event) => {
@@ -196,6 +197,7 @@ export function mountJointJog(slot, control, session) {
   }
 
   const unsubscribe = session.onUpdate(({state, settled, error}) => {
+    lastError = error ?? null;
     if (settled) jogger.settled(settled.state, settled.commandId);
     render(state, error);
     if (!blocked && !session.busy()) jogger.poke();     // a held stick resumes once the arm is free

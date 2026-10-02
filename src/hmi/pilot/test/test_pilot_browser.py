@@ -1031,6 +1031,7 @@ _ARM_HARNESS = """async (opts) => {
     if (path === '/seat') return {seat_id: 's'};
     if (path.startsWith('/seat/')) { if (window.seatLost && options.method === 'PUT') throw new Error('409: seat expired'); return {seat_id: 's'}; }
     if (path === '/state') {
+      if (window.failNextState) { window.failNextState = false; throw new Error('503: {"error":{"message":"busy"}}'); }
       const busy = running(); window.seq += 1;
       if (!busy) window.served.add(window.seq);
       return {ready: !busy, state_sequence: window.seq, owner_state: busy ? 'active' : 'ready', joint_age_ms: 5,
@@ -1050,6 +1051,7 @@ _ARM_HARNESS = """async (opts) => {
     if (path.endsWith('/cancel')) { window.cancels++; return {state: 'CANCEL_REQUESTED'}; }
     if (path.startsWith('/goals/')) {
       if (window.forgetGoals) throw new Error('404: {"error":{"message":"goal unknown"}}');
+      if (window.settleOnPoll) { window.settleOnPoll = false; window.terminal = 'SUCCEEDED'; window.failNextState = true; }
       return {state: goalState(decodeURIComponent(path.slice(7)))};
     }
     return {};
@@ -1290,18 +1292,25 @@ def test_stick_grabs_a_touch_outside_the_ring_but_not_a_neighbour_button(base_ur
             _enter_drive(page, base_url)
             point = _zone_point(page)
             assert point, "no room for the zone around the ring"
+            # Floating origin (re-review I-B): a touch outside the ring is zero, not full deflection.
             before = len(page.request.get(log).json())
             page.mouse.move(point["x"], point["y"])
             page.mouse.down()
-            page.wait_for_timeout(700)
+            page.wait_for_timeout(600)
             assert page.locator("[data-drive-stick].active").count() == 1
+            landed = page.request.get(log).json()[before:]
+            assert all(c["linear"] == 0 and c["angular"] == 0 for c in landed), landed   # no motion (zeros or nothing)
+            cap = float(page.inner_text("[data-drive-fact=cap]").split()[1])
+            page.mouse.move(point["x"], point["y"] - point["r"], steps=4)       # up by one ring radius
+            page.wait_for_timeout(800)
             page.mouse.up()
             page.wait_for_timeout(400)
             sent = page.request.get(log).json()
-            moving = [c for c in sent[before:] if c["linear"] or c["angular"]]
-            expect = {"up": lambda c: c["linear"] > 0, "down": lambda c: c["linear"] < 0,
-                      "right": lambda c: c["angular"] < 0, "left": lambda c: c["angular"] > 0}[point["name"]]
-            assert moving and all(expect(c) for c in moving), (point["name"], moving)
+            moved = sent[before + len(landed):]
+            peak = max(c["linear"] for c in moved)
+            # the HUD shows the cap to 2 decimals (0.105 → "0.10"); full deflection reaches it.
+            assert abs(peak - cap) <= 0.0051 and all(c["angular"] == 0 for c in moved), (cap, moved)
+            assert page.evaluate("getComputedStyle(document.querySelector('[data-drive-stick]')).translate") in ("none", "")
             assert sent[-1]["linear"] == 0 and sent[-1]["angular"] == 0      # release ends the hold
             for selector in ("[data-drive-pedal=forward]", "[data-drive-pivot=right]"):
                 box = page.locator(selector).bounding_box()
@@ -1317,3 +1326,26 @@ def test_stick_grabs_a_touch_outside_the_ring_but_not_a_neighbour_button(base_ur
             assert errors == [], errors
         finally:
             browser.close()
+
+@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1", reason="ROSY_RUN_BROWSER_TESTS=1")
+def test_a_settle_survives_a_failed_readback_right_after_it(tablet_page):
+    """Re-review I-A: /state fails once right after SUCCEEDED — the stick must not wait forever."""
+    base_url, page, errors = tablet_page
+    _mount_arm(page, base_url)
+    page.evaluate("""() => {
+      const pad = document.querySelector('[data-arm-pad]'); const box = pad.getBoundingClientRect();
+      pad.dispatchEvent(new PointerEvent('pointerdown', {clientX: box.right, clientY: box.top + box.height / 2, pointerId: 1, bubbles: true}));
+    }""")
+    page.wait_for_function("window.goals.length === 1")
+    page.evaluate("window.terminal = 'RUNNING'; window.settleOnPoll = true")
+    page.wait_for_function("document.querySelector('[data-sim-status]').textContent.startsWith('조작 보류')")
+    page.evaluate("document.querySelector('[data-arm-pad]').dispatchEvent(new PointerEvent('pointerup', {pointerId: 1, bubbles: true}))")
+    page.wait_for_function("document.querySelector('[data-sim-status]').textContent === '조작 가능'")
+    page.evaluate("""() => {
+      const pad = document.querySelector('[data-arm-pad]'); const box = pad.getBoundingClientRect();
+      pad.dispatchEvent(new PointerEvent('pointerdown', {clientX: box.right, clientY: box.top + box.height / 2, pointerId: 2, bubbles: true}));
+    }""")
+    page.wait_for_function("window.goals.length === 2", timeout=5000)
+    page.evaluate("document.querySelector('[data-arm-pad]').dispatchEvent(new PointerEvent('pointerup', {pointerId: 2, bubbles: true}))")
+    assert page.evaluate("window.rejections") == []
+    assert errors == [], errors

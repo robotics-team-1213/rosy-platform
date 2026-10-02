@@ -133,15 +133,17 @@ export function mountArm(root, target, driver) {
     try {
       state = await request("/state");
       if (disposed) return;
-      let settled = null;
       if (active) {
         const following = active;
         const goal = await goalState(following);
         if (disposed || active !== following) return;
         setStatus(goalStatus(goal));
         if (TERMINAL.includes(goal.state)) {
-          settled = {commandId: following, state: goal.state};
           active = "";
+          // Tell widgets first: if the re-read below fails, the settle must not be lost (a
+          // stick would otherwise wait for it forever). A widget that tries to send now sees
+          // the running readback (busy) and asks for the next one.
+          notify({state, settled: {commandId: following, state: goal.state}, error: null});
           // The readback above was taken while the goal ran (ready:false, old sequence). The
           // next goal needs a ready, freshly served sequence, so read it again now.
           state = await request("/state");
@@ -153,7 +155,7 @@ export function mountArm(root, target, driver) {
       }
       $("[data-sim-readback]").textContent = JSON.stringify({sequence: state.state_sequence,
         age_ms: state.joint_age_ms, joints: state.positions, goal: active || null}, null, 2);
-      notify({state, settled, error: null});
+      notify({state, settled: null, error: null});
       if (target.recording && !goalOnly) await refreshRecording();
     } catch (error) { failed = true; state = null; showError(error); }
     finally {

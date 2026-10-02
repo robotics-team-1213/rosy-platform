@@ -283,9 +283,15 @@ body[data-pilot-screen="drive"] .pilot-main {
 /* 우하단: 2 축 주행 스틱 — 노브가 손가락을 따라간다 */
 /* 손가락 잡기 구역(태블릿 실측 2026-10-02: 링이 작아 잡기 어렵다): 보이는 링은 그대로 두고
    보이지 않는 원(링 반지름의 ~1.8 배)이 터치를 받는다 — 가상 요소의 터치는 스틱 자신의 것이라
-   편향은 링 중심에서 재고 링 가장자리에서 잘린다. 오른쪽 칸 밖(왼쪽 버튼·영상)은 overflow 가
+   링 밖에서 누르면 그 자리가 0(떠 있는 원점, drive.js)이고 편향은 링 반지름에서 잘린다. 오른쪽 칸 밖(왼쪽 버튼·영상)은 overflow 가
    잘라 훔치지 않는다. */
-[data-drive-right] { display: grid; place-items: center; overflow: hidden; }
+[data-drive-right] {
+  display: grid; place-items: center;
+  /* clip (not hidden): the knob shadow and the active ring border get a small margin. */
+  overflow: clip; overflow-clip-margin: var(--space-2);
+}
+/* 링 밖에서 누르면 링이 손가락 밑으로 옮겨와 그 자리가 0 임을 보인다(drive.js 떠 있는 원점). */
+[data-drive-stick].floating { transition: none; }
 [data-drive-stick]::before {
   content: "";
   position: absolute;
