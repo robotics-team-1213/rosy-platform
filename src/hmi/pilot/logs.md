@@ -278,3 +278,9 @@
 - 증거: `python -m pytest src/hmi/pilot/test src/runtime/api_web/test/test_pilot_route.py -q` → 85 passed, 58 skipped; `ROSY_RUN_BROWSER_TESTS=1` `test_pilot_browser.py -k "arm or gripper or zone or grabs"` → 13 passed(그 전 한 번은 13개 모두 실패 후 단독·재실행 통과 — 같은 시각 기계 부하/다른 에이전트의 브라우저 시험으로 보이며 원인은 확인하지 못함; 새: 프리셋·슬라이더·배지, 오른손 칸 2000×1200·390×844, 링이 칸 안 — 고치기 전 코드로는 실패 확인), `test_pilot_sim_browser.py` 3 passed (2026-10-03 Windows, Chromium). 화면 `X:\DevTemp\d411-c\pilot-arm-gripper-*.png`, `pilot-drive-zone-top-390x844.png`.
 - gate 변화: SOURCE 유지. ROS-SIM HOLD — OMX Gazebo 에서 그리퍼 위젯 미실행.
 - 결정: D-411 C, 구현 부록 10.
+
+## 2026-10-03 · uncommitted · fix(pilot): D-411 C 검토 — 그리퍼 목표를 알린 속도로
+- 변경: `controls.js` `gripperGoal(from, to, g)` — `max_velocity` 가 있으면 길이 = 거리/속도 올림(0.2–2.0 s), 2.0 s 로 못 가는 거리는 닿는 곳까지; 없으면 행정 비례. `widgets/gripper.js` 가 이를 쓴다. SW 캐시 `2026-10-03-3`.
+- 증거: `python -m pytest src/hmi/pilot/test src/runtime/api_web/test/test_pilot_route.py -q` 통과, `ROSY_RUN_BROWSER_TESTS=1 ... -k gripper` 4 passed (2026-10-03 Windows).
+- gate 변화: 없음. ROS-SIM HOLD.
+- 결정: D-411 구현 부록 10.

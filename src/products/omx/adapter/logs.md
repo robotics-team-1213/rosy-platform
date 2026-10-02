@@ -263,3 +263,9 @@
 - gate 변화: SOURCE 유지. ROS-SIM HOLD — OMX Gazebo 에서 그리퍼 열기/닫기/쥠·시연 export 미실행.
 - 결정: D-411 C, 구현 부록 7–9. 실물 OMX 는 열지 않는다(D-390).
 - 후속: Gazebo 에서 물체를 쥔 닫기 목표가 컨트롤러 허용오차로 실패하면 owner 가 HOLD 로 가고 배지는 `unknown` 이 된다 — ROS-SIM 에서 확인. 쥔 채 팔 조그가 같은 허용오차로 실패하는지도 함께 본다.
+
+## 2026-10-03 · uncommitted · fix(omx_adapter): D-411 C 검토 — 속도 제한·제한 조임·안쪽 범위·stall probe
+- 변경: 그리퍼 목표 `gripper_velocity_limit`(|목표−readback|/duration > min(셀, URDF) 그리퍼 속도), 서술자 `gripper.max_velocity`. 쥔 채 팔 조그는 멈춘 위치 + `gripper.preload`(셀 프로필 0.05 rad, 고정·ratchet 없음·닫힘을 넘지 않음). Pilot 에 알리는 범위 = 허용 범위 − `start_state_tolerance_rad`, 그 밖으로 더 나가는 조그 거절. 실패 끝은 `terminal_status_<s>_result_<c>` 이고 holding 이 아니다. URDF 에 없는 셀 관절은 오류, 교집합 한 번. 그리퍼 움직임은 watchdog 에서도 표본. `gripper_state(fresh=)`, 공개 `gripper_joint_for_goals`, 시연 길이 상한은 core_common 에서. SIM 패치에 JTC `constraints`(goal_time 1.0, 팔 goal 0.02, 그리퍼 goal 0.0, stopped_velocity_tolerance 0.05 — 명목). `probe_pilot_sim_http.py`: 그리퍼는 `POST /gripper`, 닫기 뒤 열기, `--stall`(정육면체 쥐기, 끝 사실 기록, 쥔 채 조그 세 번).
+- 증거: `python -m pytest src/products/omx/adapter/test/ -q` 와 `test/test_omx_pilot_probe.py test/test_omx_workstation.py` 통과 (2026-10-03 Windows; probe 시험은 실제 SIM API·런타임 + owner 를 흉내 낸 가짜 팔 — ROS-SIM 증거 아님). SIM 패치는 vendor 0a4af6a9 원본 세 파일에 `git apply` 확인.
+- gate 변화: ROS-SIM HOLD — `--stall` 이 `holding` 의 차단 관문(progress.md blocker).
+- 결정: D-411 C, 구현 부록 9–13.

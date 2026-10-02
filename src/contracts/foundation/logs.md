@@ -322,3 +322,9 @@
 - 증거: `python -m pytest src/contracts/foundation/test/ -q` → 498 passed, 3 skipped (2026-10-03 Windows).
 - gate 변화: 없음.
 - 결정: D-411 C 결정 12.
+
+## 2026-10-03 · uncommitted · feat(controls): D-411 C 검토 — `GripperControl.max_velocity`
+- 변경: 선택 필드 `max_velocity`(rad/s, >0, 유한). 이보다 빠른 그리퍼 목표는 기기가 거절한다.
+- 증거: `python -m pytest src/contracts/foundation/test/ -q` 통과 (2026-10-03 Windows).
+- gate 변화: 없음.
+- 결정: D-411 구현 부록 10.
