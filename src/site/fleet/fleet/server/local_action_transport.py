@@ -81,6 +81,15 @@ class UnixLocalActionTransport:
             "requested_at": datetime.now(timezone.utc).isoformat(),
         })
 
+    def owner_identity(self, instance_id: str) -> Mapping[str, Any]:
+        """The owner's self-reported identity (simulation flag, D-390 §5), read over the same UDS."""
+        response = self._exchange(instance_id, {"version": 2, "operation": "GetOwnerIdentity"})
+        if response.get("status") != 200 or not isinstance(response.get("identity"), Mapping):
+            error = response.get("error") if isinstance(response.get("error"), Mapping) else {}
+            raise LocalActionRejected(f"{error.get('code', 'OWNER_IDENTITY_UNAVAILABLE')}: "
+                                      f"{error.get('message', 'owner identity is unavailable')}")
+        return dict(response["identity"])
+
     def _receipt(self, grant: ActionGrant,
                  document: Mapping[str, Any]) -> DeviceActionReceipt:
         return self._parse_receipt(grant, self._exchange(grant.instance_id, document))

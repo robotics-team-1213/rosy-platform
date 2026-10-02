@@ -147,7 +147,9 @@ def build_cell_owner(settings: CellOwnerSettings, *,
     stop_api = LocalStopApi(stop, source_by_peer_uid={settings.fleet_peer_uid: StopRequestSource.FLEET},
                             cancel_active=lambda uid: runner.cancel_unresolved(peer_uid=uid),
                             fleet_fence_current=fleet_fence_current)
-    action_api = ActionApi(runner, stop_api=stop_api)
+    action_api = ActionApi(runner, stop_api=stop_api, identity={
+        "workcell_id": settings.workcell_id, "instance_id": settings.instance_id,
+        "simulation": True, "profile": "omx-cell-sim"})
     uds_server = UnixActionServer(
         action_api, Path(settings.socket_root) / settings.instance_id / "control.sock")
     return CellOwner(settings, profile, runtime, store, stop, acceptance, planner, runner,

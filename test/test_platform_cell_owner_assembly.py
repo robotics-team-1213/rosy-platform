@@ -105,6 +105,9 @@ def test_one_owner_with_the_simulation_owner_policy_serves_both_surfaces(tmp_pat
     assert owner.uds_server.socket_path == tmp_path / "run" / "omx_cell_sim_01" / "control.sock"
     assert owner.runner.capability_current == owner.acceptance.capability_current
     assert owner.planner.accepted_cell_sha256 == owner.acceptance.accepted_cell_sha256
+    identity = owner.action_api.dispatch({"version": 2, "operation": "GetOwnerIdentity"}, peer_uid=FLEET_UID)
+    assert identity["identity"] == {"workcell_id": "omx_cell_sim", "instance_id": "omx_cell_sim_01",
+                                    "simulation": True, "profile": "omx-cell-sim"}
 
 
 def test_a_second_owner_stops_the_build_before_any_runtime(tmp_path):

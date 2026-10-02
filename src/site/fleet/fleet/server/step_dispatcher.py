@@ -65,6 +65,7 @@ class StepJobDispatcher:
         self.on_step_action_succeeded = on_step_action_succeeded
         self.monotonic = monotonic
         self._readback: dict[str, tuple[int, float]] = {}  # action_id -> (failures, next read at)
+        self._simulation_instances: set[str] = set()  # instances whose owner reported simulation
 
     def dispatch_next(self) -> dict[str, Any] | None:
         """One cycle over every Job (1b B1): read back each in-flight or unresolved Job under its
@@ -100,6 +101,8 @@ class StepJobDispatcher:
         if (self.omx_instances.get(job["workcell_id"]) != job["instance_id"]
                 or job["instance_id"] not in self.grant_revisions):
             return self._view(job, index, "NOT_CONFIGURED")
+        if not self._simulation_identity(job["workcell_id"], job["instance_id"]):
+            return self._view(job, index, "NOT_SIMULATION")
         try:
             grant = self._grant(job, step)
             started = self.store.start_step(job["mission_id"], step_index=index, action_id=grant.action_id,
@@ -131,6 +134,21 @@ class StepJobDispatcher:
         except Exception:
             return self._outcome(job, index, grant, "UNKNOWN", "LOCAL_ACTION_SUBMIT_OUTCOME_UNKNOWN", {})
         return self._apply(job, index, grant, receipt)
+
+    def _simulation_identity(self, workcell_id: str, instance_id: str) -> bool:
+        """D-403 §7 / D-390 §5: the target owner itself must report a simulation identity."""
+        if instance_id in self._simulation_instances:
+            return True
+        try:
+            identity = self.transport.owner_identity(instance_id)
+        except Exception:
+            _LOG.warning("OMX owner %s did not report a simulation identity", instance_id)
+            return False
+        if (identity.get("simulation") is True and identity.get("instance_id") == instance_id
+                and identity.get("workcell_id") == workcell_id):
+            self._simulation_instances.add(instance_id)
+            return True
+        return False
 
     def _grant(self, job: Mapping[str, Any], step: Mapping[str, Any]):
         kind = step_action_kind(step["action_kind"])
@@ -244,6 +262,6 @@ class StepJobDispatcher:
                 "action_id": grant.action_id if grant is not None else None}
 
 
-_SKIPPED = {"NOT_OPEN", "NOT_CONFIGURED"}
+_SKIPPED = {"NOT_OPEN", "NOT_CONFIGURED", "NOT_SIMULATION"}
 
 __all__ = ["READBACK_FAILURE_LIMIT", "StepJobDispatcher"]

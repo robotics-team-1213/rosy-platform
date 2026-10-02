@@ -51,6 +51,10 @@ class Transport:
     def cancel(self, grant, *, reason):
         raise AssertionError("the dispatcher never cancels")
 
+    def owner_identity(self, instance_id):
+        return {"workcell_id": instance_id.removesuffix("_control"), "instance_id": instance_id,
+                "simulation": True, "profile": "omx-cell-sim"}
+
 
 def _setup(tmp_path, **kwargs):
     path, tasks, _, enabled = _stores(tmp_path)
@@ -323,3 +327,22 @@ def test_a_result_conflict_is_reported_once_and_not_retried(tmp_path, monkeypatc
     monkeypatch.setattr(store, "record_action_result", conflict)
     assert dispatcher.dispatch_next()["state"] == "RESULT_CONFLICT"
     assert "could not be recorded" in caplog.text
+
+
+@pytest.mark.parametrize("identity", [
+    {"workcell_id": "omx_01", "instance_id": "omx_01_control", "simulation": False},
+    {"workcell_id": "omx_01", "instance_id": "other", "simulation": True},
+    None,
+])
+def test_a_target_that_is_not_a_simulation_identity_is_not_dispatched(tmp_path, identity):
+    # 1b C3 (D-403 §7, D-390 §5): the owner's own report gates dispatch, not just the profile.
+    store, _, transport, dispatcher = _setup(tmp_path)
+
+    def report(instance_id):
+        if identity is None:
+            raise LocalActionRejected("UNKNOWN_OPERATION: operation is not supported")
+        return identity
+
+    transport.owner_identity = report
+    assert dispatcher.dispatch_next()["state"] == "NOT_SIMULATION"
+    assert transport.submissions == [] and store.get("cell-mission-1")["status"] == "READY"

@@ -181,3 +181,25 @@ def test_unknown_kind_is_refused_before_any_frame(tmp_path):
     unknown = pick_place.model_copy(update={"action_kind": "PICK"})
     with pytest.raises(ValueError, match="action kind"):
         transport.submit(unknown)
+
+
+def test_owner_reports_its_simulation_identity_over_uds(tmp_path, monkeypatch):
+    """C4b 1b C3 (D-390 §5): Fleet reads the owner's own identity before opening dispatch."""
+    monkeypatch.syspath_prepend(str(OMX_ROOT))
+    from omx_adapter.action_api import ActionApi
+
+    identity = {"workcell_id": "omx-1", "instance_id": "omx-1-control", "simulation": True,
+                "profile": "omx-cell-sim"}
+    apis = {"sim": ActionApi(object(), identity=identity), "plain": ActionApi(object())}
+
+    class LocalTransport(UnixLocalActionTransport):
+        def __init__(self, api):
+            super().__init__(tmp_path)
+            self.api = api
+
+        def _exchange(self, instance_id, request):
+            return json.loads(json.dumps(self.api.dispatch(json.loads(json.dumps(request)), peer_uid=1001)))
+
+    assert LocalTransport(apis["sim"]).owner_identity("omx-1-control") == identity
+    with pytest.raises(LocalActionRejected, match="UNKNOWN_OPERATION"):
+        LocalTransport(apis["plain"]).owner_identity("omx-1-control")
