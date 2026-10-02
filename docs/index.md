@@ -270,7 +270,7 @@
 ## 최근 기록
 
 - 2026-10-03 · uncommitted · docs(adr): D-425 앱·웹 역할·공유 경계·목표 폴더
+- 2026-10-03 · uncommitted · feat: compose Cell Skill with actual OMX planner and phase runner
 - 2026-10-03 · uncommitted · fix: preserve live Cell phase cancellation through Skill adapter
 - 2026-10-03 · uncommitted · docs(plans): 학습 페인트 후처리 — 담당 세션 결정과 실측 (a)(b)(c)
 - 2026-10-03 · uncommitted · docs: record public Cell evidence contract and progress
-- 2026-10-03 · uncommitted · docs: record internal Cell evidence checkpoint
