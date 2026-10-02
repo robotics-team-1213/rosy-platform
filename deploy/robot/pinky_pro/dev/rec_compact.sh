@@ -35,16 +35,26 @@ exec(sys.argv[2])
 t = p + ".tmp"; f = open(t, "w"); json.dump(d, f, indent=2); f.flush(); os.fsync(f.fileno()); f.close(); os.replace(t, p)
 PY
 }
+_proc_state() {  # _proc_state <pid>: the scheduler state letter, or nothing (gone)
+  local line
+  line=$(cat "$PROC_ROOT/$1/stat" 2>/dev/null) || return 1
+  # comm 은 공백·괄호를 포함할 수 있어 마지막 ") " 뒤가 상태 문자다.
+  printf '%s' "${line##*) }" | cut -c1
+}
+alive() {  # alive <pid>: SIGKILL 로도 지워지지 않는 좀비는 죽은 것이다
+  kill -0 "$1" 2>/dev/null || return 1
+  [ "$(_proc_state "$1")" != "Z" ]
+}
 ours() {  # ours <pid> <mark>: alive AND its cmdline contains mark (a PID reused after a reboot is not ours)
-  [ -n "$1" ] && kill -0 "$1" 2>/dev/null && [ -r "$PROC_ROOT/$1/cmdline" ] \
+  [ -n "$1" ] && alive "$1" && [ -r "$PROC_ROOT/$1/cmdline" ] \
     && tr '\0' ' ' < "$PROC_ROOT/$1/cmdline" | grep -qF -- "$2"
 }
 stop_pid() {  # stop_pid <pid> <seconds>: SIGTERM, wait, SIGKILL; returns 1 if it is still alive
-  kill -0 "$1" 2>/dev/null || return 0
+  alive "$1" || return 0
   kill -TERM "$1" 2>/dev/null
-  for _ in $(seq 1 "$2"); do kill -0 "$1" 2>/dev/null || return 0; sleep 1; done
+  for _ in $(seq 1 "$2"); do alive "$1" || return 0; sleep 1; done
   kill -KILL "$1" 2>/dev/null; sleep 1
-  ! kill -0 "$1" 2>/dev/null
+  alive "$1"
 }
 case "${1:-status}" in
   start)
@@ -75,12 +85,12 @@ case "${1:-status}" in
     echo "$bpid $rpid $folder" > "$STATE"
     # Both must stay alive for the whole window; poll so an early exit is caught as soon as it happens.
     deadline=$((SECONDS + ${REC_START_WAIT:-3}))
-    while kill -0 "$bpid" 2>/dev/null && kill -0 "$rpid" 2>/dev/null; do
+    while alive "$bpid" && alive "$rpid"; do
       [ "$SECONDS" -ge "$deadline" ] && { echo "recording: $folder"; exit 0; }
       sleep 0.2
     done
-    kill -0 "$bpid" 2>/dev/null || why="recorder exited"
-    kill -0 "$rpid" 2>/dev/null || why="${why:+$why; }relay exited"
+    alive "$bpid" || why="recorder exited"
+    alive "$rpid" || why="${why:+$why; }relay exited"
     echo "FAILED ($why):"; tail -5 "$folder/record.log" "$folder/relay.log"
     stop_pid "$bpid" 10; stop_pid "$rpid" 5
     REC_FAILURE="start failed: $why" meta "$folder" "d['ended_at'] = now; d['failure'] = env('REC_FAILURE')"
@@ -94,8 +104,8 @@ case "${1:-status}" in
     # No SIGKILL for the recorder: a killed bag loses its footer, so wait and report instead.
     if ours "$bpid" "$BAG_MARK"; then
       kill -TERM "$bpid"
-      for _ in $(seq 1 30); do kill -0 "$bpid" 2>/dev/null || break; sleep 1; done
-      kill -0 "$bpid" 2>/dev/null && { echo "recorder $bpid did not exit; not marking ended"; exit 1; }
+      for _ in $(seq 1 30); do alive "$bpid" || break; sleep 1; done
+      alive "$bpid" && { echo "recorder $bpid did not exit; not marking ended"; exit 1; }
     fi
     if ours "$rpid" "$RELAY_MARK"; then stop_pid "$rpid" 10 || echo "relay $rpid did not exit"; fi
     meta "$folder" "d['ended_at'] = now"
