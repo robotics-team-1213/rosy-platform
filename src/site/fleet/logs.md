@@ -1465,6 +1465,18 @@
 - 증거: C4b merge 보고.
 - gate 변화: 없음.
 
+## 2026-10-03 · uncommitted · refactor: D-425 Console HTTP adapter checkpoint
+
+- 변경: 운용·설치 call 중복을 Fleet adapter로 전환하고 session token·잠금·poll gate는 문서에 유지. Windows fixture 포트 공유를 독점 bind로 차단.
+- 증거: Node 18 passed; static/ownership/manifest 재검사 53 passed. 오류 status/문서 잠금 변이 red 후 bytes 복원, 실제 source 사본 Chromium session/origin 3 passed.
+- gate 변화: HTTP·인증 체크포인트. 문서 종료·token 교체 scope는 Task 3 미완료.
+
+## 2026-10-03 · uncommitted · test: D-425 browser baseline and safety facts
+
+- 변경: Console 전환 전/후 전체 browser 비교 및 안전 행 renderer 계약 복구. durable 실패 목록은 docs/validation/app-ownership-migration-2026-10-03/task3-browser-regressions.md.
+- 증거: baseline 45 passed/22 failed, HTTP adapter 48 passed/22 failed, new 0. 안전 상태 시험 2 green·guard mutation 2 red·원본 bytes 복원 후 2 green.
+- gate 변화: 전체 browser는 HOLD. 20개 기존 실패와 문서/token scope 정리가 남음.
+
 
 ## 2026-10-03 · uncommitted · feat: read live Fleet fence on the simulation Cell owner
 - Change: replace the entrypoint unconditional Fleet-current callback with uncached authenticated GET /api/fleet/dispatch-control on an explicitly configured literal loopback endpoint. Require a separately provisioned viewer secret before ROS loads. Direct HTTP avoids proxies/redirects; status, 8 KiB body, strict generation types and finite JSON checks refuse on uncertainty. Existing Action/stop/rearm stays on UDS. Offload async Fleet rearm I/O so the event loop can answer the owner's reverse readback; preserve operator guard and rollback.

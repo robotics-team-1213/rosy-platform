@@ -4670,6 +4670,17 @@
 - 증거: 없는 선언 red 6 failed/15 passed → 책임 suite 33 passed; Fleet authorization Node 3 passed. 선언·CORE limits 권한·Fleet operator 권한·공통 dispatch 변이 4개가 실제 실패하고 byte-for-byte 복원. 임시 증거는 X:/DevTemp/rosy-ui-ownership/task1-mutations.
 - gate 변화: Task 1 SOURCE/LOCAL 계약 완료. wire/권한 정책/최종 writer/폴더/DEVICE/FIELD는 변경하지 않음.
 
+## 2026-10-03 · uncommitted · refactor: D-425 scoped HTTP와 화면 lifetime 도구
+- 변경: 요청별 credential/origin/HTTP 결과/취소를 다루는 request와 signal/generation/guard/cleanup scope를 추가. token 저장·도메인 오류·endpoint 선택·명령 재전송은 consumer에 남김. shared manifest/CMake를 함께 갱신하고 Node ES module 시험 metadata만 추가.
+- 증거: missing module red → Node 27 passed, wrapper/manifest/role 15 passed. origin·늦은 응답 취소·종료 handler·설치 목록 변이 4개 red 후 byte-for-byte 복원. 로그는 X:/DevTemp/rosy-ui-ownership/task2-mutations.
+- gate 변화: Task 2 SOURCE/LOCAL 도구 계약 완료. 실제 client 전환·폴더·installed-only·DEVICE/FIELD는 후속 단계.
+
+## 2026-10-03 · uncommitted · refactor: D-425 Fleet HTTP client checkpoint
+
+- 변경: Console 운용/설치의 JSON call을 같은 Fleet adapter로 연결. token 저장·잠금 UI·404 poll gate는 문서가 소유. Windows fixture에 독점 bind·close/join·자산 bytes 검사를 추가.
+- 증거: Node 18 passed, static/ownership/manifest 재검사 53 passed. 화면 잠금 변이는 독점 서버에서 red, bytes 복원 후 Chromium session/origin 3 passed.
+- gate 변화: Task 3 HTTP 체크포인트. 종료/토큰 교체 scope와 Tasks 4–13은 미완료.
+
 
 ## 2026-10-03 · uncommitted · feat: connect Cell owner phase progression and semantic completion
 - Change: bind existing accepted Cell owner to durable Skill workflow and add advance_pending on its live in-memory executions. Use the existing ROS node timer; preserve one owner, exact cancel, terminal cleanup and restart-stop closure. Correct simulation gripper generation and OPEN/contact classification.
@@ -4683,6 +4694,11 @@
 - Review: independent 29 passed; no Critical/Important findings. Final quick tier plus install-path tests: 100 passed / 26 existing warnings. Installed YAML equals source byte-for-byte.
 - Gate: SOURCE/LOCAL only. This closes host installed-resource composition, not Jazzy/colcon, live ROS timer, Fleet fencing/seat integration, thin-sheet geometry or the full two-layer/two-pallet vendor Gazebo acceptance.
 
+## 2026-10-03 · uncommitted · test: D-425 browser baseline and safety evidence
+
+- 변경: 전환 전/후 browser 실패 목록을 보존하고 안전 행 시험을 data-fact 및 한국어 표시로 연결. 제품 API·권한·guard는 유지.
+- 증거: baseline 45 passed/22 failed, HTTP checkpoint 48 passed/22 failed, 실패 ID 집합 동일·new 0. 안전 시험 2 passed, guard 변이 2 failed, bytes 복원 후 2 passed. main 병합 후 공유/static/ownership/quick 364 passed/24 skipped; lint 0 errors/26 warnings.
+- gate 변화: HTTP 체크포인트 무신규회귀. 기존 browser 20개 실패·Task 3 화면 scope·Tasks 4–13은 계속 미완료.
 
 ## 2026-10-03 · uncommitted · fix: fence Cell owner progression and terminal completion
 - Change: combine injected live Fleet epoch/generation readback with the local stop at Action validation and phase submission. Check the live attempt before each owner tick; unavailable or non-boolean readback closes the local fence and cancels the exact goal to durable HOLD. Retain the grant beside its live execution; never restore it on restart. Final release readback precedes a mandatory serialized completion fence, so revocation cannot report success. Keep ROS callback waits outside the timer stop lock.

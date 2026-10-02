@@ -10,7 +10,7 @@
 
 ---
 
-**Status:** Tasks 0–1 SOURCE/LOCAL contract complete (2026-10-03); Tasks 2–13 NOT STARTED. 실행 브랜치 `refactor/ui-ownership`, 기준 `d10c77e89`. 아래 시험과 완료 조건은 실행 지침이며 통과 기록이 아니다. 계획 작성 기준은 local main `3bb18bd59`; 각 작업 시작 시 HEAD와 진행 중 브랜치를 다시 확인한다.
+**Status:** Tasks 0–2 SOURCE/LOCAL contract complete (2026-10-03); Task 3 IN PROGRESS (Fleet HTTP adapter/두 문서 전환, 종료·토큰 교체 scope는 미완료); Tasks 4–13 NOT STARTED. 실행 브랜치 `refactor/ui-ownership`, 기준 `d10c77e89`. 아래 시험과 완료 조건은 실행 지침이며 통과 기록이 아니다. 계획 작성 기준은 local main `3bb18bd59`; 각 작업 시작 시 HEAD와 진행 중 브랜치를 다시 확인한다.
 
 ## 범위와 의존 작업
 
@@ -111,6 +111,8 @@ $env:TMP = $env:ROSY_SCRATCH
 
 **Create:** `src/hmi/web_common/request.js`, `scope.js`, `test/transport/request.test.mjs`, `test/transport/scope.test.mjs`, `test/test_transport.py`.
 
+**Node 시험 metadata:** `src/hmi/web_common/package.json`의 private/type만 사용한다. dependency/bundler를 추가하지 않고 browser allowlist에 설치하지 않는다.
+
 **Modify:** `src/hmi/web_common/shared-assets.json`, `src/hmi/web_common/CMakeLists.txt`, `src/hmi/web_common/test/test_asset_manifest.py`.
 
 1. 두 credential 공급자·두 origin·동시 요청·timeout·abort·비 JSON 응답·204·늦은 응답을 시험한다. 아래 완전한 예시는 새 request 계약의 최소 수용 사례다.
@@ -152,6 +154,8 @@ test('credential scopes stay separate and writes are sent once', async () => {
 
 **출구:** 두 실제 클라이언트가 사용할 최소 통신 도구, 자동 명령 재전송 없음, 설치 자산 누락 없음. WS 공통화는 Task 4의 두 소비자 검증 뒤에만 한다.
 
+**완료 증거 (2026-10-03):** [Task 2 계약·변이 증명](../validation/app-ownership-migration-2026-10-03/task2-request-and-scope.md). Node request/scope 27 passed; wrapper/manifest/role 15 passed. origin/abort/종료 handler/CMake 목록 변이가 각각 실패했고 원본 bytes를 복원했다. SOURCE/LOCAL 도구 계약 완료이며 실제 client 전환은 Tasks 3/4, installed-only 수용은 Tasks 6/11에서 수행한다.
+
 ## Task 3: Console 운용·설치의 Fleet client 공유
 
 **Create:** `src/hmi/web_common/fleet-client.js`, `src/site/fleet/test/web/fleet-client.test.mjs`.
@@ -165,6 +169,8 @@ test('credential scopes stay separate and writes are sent once', async () => {
 5. 커밋: `refactor: share Fleet client across Console documents`.
 
 **출구:** 두 Console 문서가 같은 계약 adapter를 사용하고 기존 인증·오류·선택 기능 의미를 유지함.
+
+**HTTP 전환 체크포인트 (2026-10-03, Task 3 미완료):** [Fleet client·세션 증거](../validation/app-ownership-migration-2026-10-03/task3-fleet-client-checkpoint.md). 두 문서의 JSON 요청이 같은 Fleet adapter를 사용한다. token storage/잠금 UI/404 gate는 화면 소유다. Task 2 scope를 연결해 토큰 교체·문서 종료 시 JSON/영상 요청·timer·handler와 늦은 repaint를 정리하는 작업은 다음 체크포인트이며 아직 수용하지 않았다.
 
 ## Task 4: Robot·Pilot의 CORE client와 연결 수명주기
 
