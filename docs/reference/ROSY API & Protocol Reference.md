@@ -2,7 +2,7 @@
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.85
+**Version:** v1.86
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -297,8 +297,8 @@ config `control.sensor_adapter.mode` 와 같은 문자열이다(D-400). 일반 �
 | DELETE | `/api/v1/calibration/session/{id}` | Operator | owner 또는 Admin(걸린 lease 강제 해제). 끝난 `{session}`. 그 밖의 토큰 403, 없는 id 404 |
 | POST | `/api/v1/safety/stop` | Viewer↑ | SAF-001 (누구나). 보정 세션 중에도 막지 않는다 |
 | POST | `/api/v1/safety/release` | Admin | SAF-001 |
-| GET | `/api/v1/safety/state` | Viewer | SAF-001 |
-| PUT | `/api/v1/safety/limits` | Admin | SAF-004 — `{manual_linear?, manual_angular?}` 는 프로필 최대값으로 clamp. SAF-005 배터리 임계값 `{battery_warning_percent?, battery_critical_percent?, battery_deep_percent?, battery_critical_policy?}` 과 `{fleet_loss_policy?}` 도 같은 경로로 받는다. 임계값은 `0 < deep < critical < warning <= 100` 을 만족해야 한다 |
+| GET | `/api/v1/safety/state` | Viewer | SAF-001. `fleet_loss_policy` 와 선택 필드 `fleet_link` (SAF-003, D-419, v1.86) `{configured, connected, lost, timeout_s, applied, correlation_id, disconnected_s, held_goal}` — `configured` 는 FleetAgent 가 돌고 있는가(승인된 `pairing_token` + 주소), `lost` 는 이번 단절에서 정책을 적용했는가, `applied` 는 실제로 한 것(`STOP`·`HOLD`·`RETURN_HOME`·`CONTINUE`·`NONE`), `held_goal` 은 `HOLD` 가 보관한 `{correlation_id, x, y, yaw}`(재접속 이벤트 뒤 비움). 서비스가 없으면 `null` |
+| PUT | `/api/v1/safety/limits` | Admin | SAF-004 — `{manual_linear?, manual_angular?}` 는 프로필 최대값으로 clamp. SAF-005 배터리 임계값 `{battery_warning_percent?, battery_critical_percent?, battery_deep_percent?, battery_critical_policy?}` 과 `{fleet_loss_policy?}` 도 같은 경로로 받는다. 임계값은 `0 < deep < critical < warning <= 100` 을 만족해야 한다. `fleet_loss_policy` 는 `STOP`·`HOLD`·`RETURN_HOME`·`CONTINUE`(`CONTINUE_CURRENT_NAVIGATION` 은 `CONTINUE` 로 저장), 그 밖은 400. `RETURN_HOME` 을 받으면 응답에 선택 필드 `warning`(문자열) — 사이트 Fleet 이 죽으면 이 정책의 로봇이 Fleet 교통정리 없이 동시에 home 으로 간다 — 을 싣고 로그에 경고를 남긴다(거절하지 않음). 판정 시간 `safety.fleet_loss_timeout_s`(기본 5.0, 4–60 s, `1 + fleet.heartbeat_reply_timeout_s + 1` 이상)와 하트비트 답 시한 `fleet.heartbeat_reply_timeout_s`(기본 2.0, 0.5–10 s)는 설정 파일 전용이고, Fleet 링크가 설정된 로봇에서 어기면 CORE 가 기동하지 않는다(Fleet 없는 로봇은 경고 후 기본값) (D-419) |
 
 ## 5.6 이벤트·진단·관리
 
@@ -769,7 +769,7 @@ Fleet 추적 타임아웃(기본 10초) 내 ack 없으면 Fleet 기록에 `COMMA
 - Exponential backoff: 1s → 2s → 4s → ... 최대 30s
 - `fleet.discovery`를 설정한 로봇은 재접속마다 예상 `.local` 호스트의 `_rosy-fleet._tcp` 광고를 조회하고 별도 설치된 사이트 CA로 TLS health를 확인한다. mDNS 광고만으로 토큰을 발급하거나 연결 대상을 바꾸지 않는다. 승인된 `fleet.pairing_token`이 없으면 Agent를 시작하지 않는다.
 - 재접속 즉시 `hello` → 마지막 전송 `seq` 이후 이벤트 재전송
-- 접속 단절 시 SAF-003 정책 적용
+- 접속 단절 시 SAF-003 정책 적용 (D-419, v1.86): Agent 가 돌고 있고, 링크가 끊긴 순간 Fleet 주행 목표(`correlation_id` 가 있는 `POST /navigation/goal`)가 진행 중이었으며, 그 목표가 그대로인 채로 `safety.fleet_loss_timeout_s` 동안 계속 끊겨 있으면 한 번 적용한다. 로컬 목표·teleop·swarm follow(SWM-004 가 따로 지킴)·끊긴 뒤 들어온 목표는 대상이 아니다. `STOP` 은 그 목표 취소(e-stop 아님), `HOLD` 는 같은 정지에 재개용 목표 기록(자동 재개 없음), `RETURN_HOME` 은 취소 뒤 `__home__` 귀환(home 이 없거나 `LOCALIZED` 가 아니면 선 채로 `applied: STOP`), `CONTINUE` 는 이벤트만. 재접속은 아무것도 재개하지 않는다. 링크가 살아 있다는 것은 허브 `welcome` 을 받은 뒤이고 마지막 허브 수신이 링크 신선도(1 s 하트비트 주기 + `fleet.heartbeat_reply_timeout_s` + 0.5 s) 이내라는 뜻이다 — 판정 시간과 따로다(설정 여부는 기동 설정으로 정하고, 뒤에 Agent 가 hello 거부·중지로 꺼져도 끊긴 링크로 본다). 하트비트 답이 `fleet.heartbeat_reply_timeout_s`(기본 2 s) 안에 오지 않으면 로봇이 소켓을 끊는다(반쯤 열린 TCP). 하트비트에 대한 `error` 답(예: `TASK_PROJECTION_UNAVAILABLE`)도 답이라 링크를 유지하고, `PAIRING_INVALID`·`SESSION_NOT_PAIRED`·`DUPLICATE_IDENTITY`·`IDENTITY_DRIFT`·`PROTOCOL_UNSUPPORTED` 가 하트비트에 대한 답이면 세션을 즉시 끝낸다(`PAIRING_INVALID` 는 언제나). `event` 에 대한 `error` 는 이벤트 거부로 기록하고 세션을 유지한다. SAF-003 은 허브 건강이 아니라 링크 생존을 판정한다. hello 답 시한은 D-407 의 5 s(링크는 `welcome` 전까지 끊긴 것이라 SAF-003 판정에 영향 없음). `event` 에 대한 `error` 는 D-407 규칙대로 `EVENT_NOT_AUDITABLE` 이면 버리고, 다른 코드면 최대 3 번까지 다시 보낸다. 단절은 마지막 허브 수신부터 잰다 — 답 하나를 놓친 기본 설정에서 정책은 마지막 수신 뒤 5 s. 재접속 backoff 는 세션이 하트비트 답 3 개를 받은 뒤에만 1 s 로 돌아간다. 취소가 그 목표를 찾지 못하면 `applied: NONE`·`reason: goal_changed`
 
 ## 7.7 프로토콜 버저닝 (PRT-006)
 
@@ -863,6 +863,8 @@ close code: `4401` 은 토큰이 없거나 틀린 것(`/ws/state` 와 동일), `
 | `safety.watchdog` | warning | 로봇 | `{timeout_ms}` |
 | `safety.shadow_verdict` | info | 로봇 | `{verdict, reason, source, t, commanded, output, limited, suppressed}` — D-400 그림자 판정. 판정이 바뀔 때·명령 중(0 아닌 후보) 같은 판정 1 s마다·최대 5/s. `suppressed` 는 그 사이 억제된 판정 변화 수, `commanded` 는 프로필 클립 뒤 값, `t` 는 CORE monotonic 초 (v1.71) |
 | `safety.policy_off` | warning | 로봇 | `{source}` — D-400 정책 off 에서 navigation·docking 출력이 처음 0 이 아닐 때, 모드 진입마다 한 번 (v1.71) |
+| `safety.fleet_lost` | warning | 로봇 | `{policy, applied, activity, correlation_id, goal, disconnected_s, reason}` — SAF-003(D-419): FleetAgent 링크가 `fleet_loss_timeout_s` 넘게 끊긴 채 Fleet 주행 목표가 진행 중이어서 정책을 적용했다(행동 뒤 발행, 단절마다 한 번). `policy` 는 설정값, `applied` 는 실제로 한 것(`STOP`·`HOLD`·`RETURN_HOME`·`CONTINUE`·`NONE`), `activity` 는 `navigation`, `goal` 은 `{x, y, yaw}`, `reason` 은 `null` 또는 `unknown_policy`·`home_unavailable: …`·`action_failed: …`·`goal_changed`(취소 순간 그 목표가 이미 끝났거나 바뀜, `applied: NONE`). 취소는 `nav.canceled {source: fleet_loss}` 로도 보인다 (v1.86) |
+| `safety.fleet_restored` | info | 로봇 | `{applied, correlation_id, disconnected_s, held_goal}` — `safety.fleet_lost` 뒤 링크가 돌아왔다. 아무것도 재개하지 않는다. `held_goal` 은 `HOLD` 가 보관한 `{correlation_id, x, y, yaw}` 또는 `null` (v1.86) |
 | `battery.low` | warning | 로봇 | `{percent}` |
 | `battery.critical` | critical | 로봇 | `{percent, policy}` |
 | `battery.deep` | critical | 로봇 | `{percent, voltage, dwell_s}` — D-27 딥 방전. 모터가 서고 셧다운 센티넬이 무장된다 |
@@ -1938,6 +1940,7 @@ and field acceptance require their own evidence.
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.86 | 2026-10-03 | Additive (D-419, feat/d419-saf003-fleet-loss): SAF-003 이 처음으로 동작한다. 이벤트 `safety.fleet_lost`(warning)·`safety.fleet_restored`(info), `GET /safety/state` 선택 필드 `fleet_link`, 설정 `safety.fleet_loss_timeout_s`(기본 5.0, 4–60 s)·`fleet.heartbeat_reply_timeout_s`(기본 2.0, 0.5–10 s), 판정 시간 ≥ 1 + 답 시한 + 1 (어기면 기동 실패). §7.6 판정 규칙. `PUT /safety/limits` 의 받는 값은 그대로(`RETURN_HOME` 포함), `RETURN_HOME` 이면 응답 선택 필드 `warning`. 기동 때 저장된 모르는 정책은 `STOP` 으로 읽는다. envelope `protocol_version` 1.0 유지 |
 | v1.85 | 2026-10-03 | Additive (D-413): opt-in independent Cell goal-evidence ingress, shared strict submission schema, isolated producer credentials and terminal callback reconciliation with atomic latest-terminal fencing. No physical dispatch or ROS-SIM promotion. |
 | v1.84 | 2026-10-03 | Additive (D-422, feat/body-referenced-obstacle-stop): `GET /api/v1/line-follow` 상태에 선택 필드 `body_gap_m`·`stop_gap_m`·`clearance_source`(`lidar`·`memory`·`ultrasonic`), `nav.line_obstacle_hold` 데이터에 같은 세 필드(몸 기준 정지일 때만). 몸 기준 정지에서 `clearance_m` 은 LiDAR 원점 거리가 아니라 몸 간격이다(path + 로봇 패키지 몸 기하에서만; sector 와 몸 기하 없는 path 는 그대로). 설정 `line_follow.body_front_x_m`·`body_ultrasonic_x_m`(URDF, 로봇 패키지), `obstacle_body_margin_m`(0.02)·`obstacle_latency_s`(0.15)·`obstacle_decel_mps2`(0.5)·`obstacle_resume_hysteresis_m`(0.03)·`obstacle_ultrasonic_half_angle_deg`(15)·`obstacle_ultrasonic_stale_s`(0.3). `obstacle_stop_m`·`obstacle_resume_m` 은 기본 yaml 에서 빠지고(비면 0.20 / 0.28 또는 유도) LiDAR 원점 기준 덮어쓰기로 남는다 — 옛 overlay 는 그대로 읽힌다. 덮어쓰기는 앞으로 가는 판정에만 쓰고 제자리 회전(회전 반경 원 밖 `obstacle_body_margin_m`)에는 쓰지 않는다. 움직이는 판정의 `stop_gap_m` 은 초음파와 상관없이 LiDAR `range_min` 사각 하한 이상이고, `range_min` 아래로 사라진 반환은 기억해 `body_gap_m` 에 계속 든다(`clearance_source: memory`; 기억은 바퀴로 나간 명령으로 적분하고 차선 추종 출력이 아니면 지운다). 기존 필드 이름·형식 변화 없음 |
 | v1.83 | 2026-10-03 | Additive (D-411 A, feat/d411-pilot-recording-controls): §5.10 Pilot 로봇 녹화 (`GET/POST /api/v1/recordings`, `GET /recordings/active`, `POST /recordings/active/stop`, `GET /recordings/{id}/archive`), ERR-102 `RECORDING_BUSY`·`RECORDING_NOT_ACTIVE`·`ROBOT_MOVING`·`RECORDING_NOT_FOUND`·`RECORDING_QUOTA_FULL`·`RECORDING_DISK_FULL`·`RECORDER_UNAVAILABLE`, §8 `recording.started`·`recording.stopped`, ROS 증거 토픽 `teleop/intent`, 녹화기 상태 `boot_id`·`seq`, 설정 `recording.pilot_root`. 기존 필드 변화 없음 |

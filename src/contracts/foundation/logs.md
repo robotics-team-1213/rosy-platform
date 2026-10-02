@@ -318,6 +318,22 @@
 - gate 변화: 없음. 새 grant schema는 아직 producer/consumer dispatch 경로에서 사용되지 않는다.
 
 
+## 2026-10-02 · 8dd300c52 · config: `safety.fleet_loss_timeout_s` (D-415)
+- 변경: `rosy_default.yaml` 에 `fleet_loss_timeout_s: 3.0`(1–60 s), `fleet_loss_policy` 주석에 네 값, `fleet.enabled` 주석을 "읽히지 않는다"로 정정. 스키마 변경 없음(`safety/state` 는 dict 응답).
+- 증거: `src/runtime/gateway/test/test_fleet_loss_wiring.py`(범위 밖 값은 빌드 실패).
+- gate 변화: 없음.
+
+## 2026-10-02 · uncommitted · config: SAF-003 주석의 ADR 번호
+- 변경: `rosy_default.yaml` 의 `fleet_loss_*`·`fleet.enabled` 주석이 D-419 를 가리킨다.
+- 번호: 앞 항목들의 D-415(SAF-003)는 **D-419** 로 바뀌었다 — main 에 다른 D-415(콘솔 운영 가시성)가 먼저 들어왔다. ADR 파일 `docs/adr/D-419-saf003-fleet-link-loss-policy.md`.
+- 증거: `git log --all` 의 D-415~D-418 점유 확인(2026-10-02), 번호 변경 뒤 리뷰 시험 묶음 통과.
+- gate 변화: 없음.
+
+## 2026-10-02 · uncommitted · config: SAF-003 판정 시간 5 s, 하트비트 답 시한 (D-419)
+- 변경: `safety.fleet_loss_timeout_s` 기본 5.0(4–60, ≥ 1 + 답 시한 + 1), 새 `fleet.heartbeat_reply_timeout_s: 2.0`(0.5–10).
+- 증거: `src/runtime/gateway/test/test_fleet_loss_wiring.py`(어기면 빌드 실패).
+- gate 변화: 없음.
+
 ## 2026-10-03 · uncommitted · feat(protocol): publish strict Cell goal submission contract
 - Change: Move the bounded Cell goal envelope to protocol/cell_goal_evidence.py and re-export CellGoalEvidenceSubmission from schemas.py. Keep envelope protocol_version 1.0 and record additive API Reference v1.84. Re-judge the one-line schemas export at 1240 with unchanged zero-growth allowance.
 - Evidence: Foundation and protocol alignment 427 passed/1 skipped; final HTTP producer/consumer and legacy/version checks 64 passed; changed contract Python passes flake8.

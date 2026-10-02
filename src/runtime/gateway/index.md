@@ -72,8 +72,8 @@
 
 ## 최근 기록
 
-- 2026-10-02 · 94a8b833 · fix(fleet_agent): hub 작업을 API 루프에서 시작
-- 2026-10-02 · f341e9fd · feat(core): D-411 A 녹화 브리지 배선과 API 시험
-- 2026-10-02 · b9f1b277 · test(localization): D-395 S1 R1 — LOCALIZED 물체 세 갈래 왕복
-- 2026-10-02 · caa0d51d · fix(api): D-407 검토 반영 — MANUAL 답은 POST /mode 규칙, 답 감사에 토큰
-- 2026-10-02 · 7a44f39d · feat(core): D-407 막힘 답 API와 CORE 배선
+- 2026-10-02 · uncommitted · fix(core): D-419 착지 — console_linked 를 D-407 유예와 합침
+- 2026-10-02 · uncommitted · fix(core): D-419 라운드 4 — Fleet 링크 판정 함수 하나
+- 2026-10-02 · uncommitted · fix(core): D-419 라운드 3 — Fleet 없는 로봇의 SAF-003 검증
+- 2026-10-02 · uncommitted · fix(core): D-419 재리뷰 — 배선 타이밍, console_linked 디바운스
+- 2026-10-02 · 758f9878e · fix(core): D-419(구 D-415) 리뷰 반영 — 배선

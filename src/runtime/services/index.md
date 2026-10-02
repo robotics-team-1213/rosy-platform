@@ -37,8 +37,8 @@
 
 ## 최근 기록
 
-- 2026-10-02 · 4a5a65083 · fix(fleet_agent): 검토 반영 — WELCOME 뒤에만 연결, 사건 잃지 않기
-- 2026-10-02 · bcce15c9d · fix(fleet_agent): hub 답을 모두 읽는 수신 루프, 재연결 기록, 관제 grace
-- 2026-10-02 · 7e699e452 · fix(line_follow): D-407 지나온 길 유효 기간
-- 2026-10-02 · e83a955d · fix(line_follow): D-407 Gazebo 후속 — 재막힘 시도 이어 세기, 몸 폭 뒤 띠
-- 2026-10-02 · 410c6832 · feat(core_features): D-411 A teleop/intent 증거 훅
+- 2026-10-02 · uncommitted · fix(fleet_agent): D-419 착지 — main 의 D-407 수신 루프와 병합
+- 2026-10-02 · uncommitted · fix(fleet_agent): D-419 최종 리뷰 LOW — 실패한 보내기의 `_awaiting` 항목 회수
+- 2026-10-02 · uncommitted · fix(fleet_agent): D-419 라운드 4 — 인코딩 불가 이벤트, EVENT 에 대한 오류
+- 2026-10-02 · uncommitted · fix(fleet_agent): D-419 라운드 3 — ERROR 답은 살아 있음, Fleet 없는 로봇 부팅
+- 2026-10-02 · uncommitted · fix(safety): D-419 재리뷰 — 링크 신선도 분리, 리더 하나, backoff
