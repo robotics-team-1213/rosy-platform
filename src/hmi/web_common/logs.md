@@ -469,3 +469,9 @@
 - 변경: request 위에 Fleet body/error/status 해석을 분리하고 Console 두 문서에 연결. shared manifest/CMake가 fleet-client.js를 함께 설치. DOM/storage/명령 replay는 adapter에 없음.
 - 증거: Fleet/authorization/poll gate Node 18 passed; 오류 status 변이가 실패하고 source 사본 bytes 복원.
 - gate 변화: SOURCE/LOCAL HTTP 계약 강화. 실제 문서 scope와 installed-only 검증은 후속 Task 범위.
+
+## 2026-10-03 · uncommitted · fix(web): SAFE_STOP 운용 말은 RobotMode 표 밖에 둔다
+- 변경: `operatorModeLabel`이 DeviceState 문자열 SAFE_STOP을 "안전 정지"로 보이고, 나머지 모드는 MODE_LABEL을 그대로 쓴다. MODE_LABEL 키는 RobotMode와 같다.
+- 근거: D-359 US-009. protocol RobotMode에 SAFE_STOP이 없다.
+- 증거: 2026-10-03 Windows. test_enum_labels.py와 test_operator_copy.py가 콘솔 묶음 240 passed 안에 포함된다. SAFE_STOP은 MODE_LABEL 키가 아니다.
+- gate 변화: 없음.

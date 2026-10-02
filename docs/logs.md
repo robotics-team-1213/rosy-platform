@@ -4680,3 +4680,16 @@
 - 변경: Console 운용/설치의 JSON call을 같은 Fleet adapter로 연결. token 저장·잠금 UI·404 poll gate는 문서가 소유. Windows fixture에 독점 bind·close/join·자산 bytes 검사를 추가.
 - 증거: Node 18 passed, static/ownership/manifest 재검사 53 passed. 화면 잠금 변이는 독점 서버에서 red, bytes 복원 후 Chromium session/origin 3 passed.
 - gate 변화: Task 3 HTTP 체크포인트. 종료/토큰 교체 scope와 Tasks 4–13은 미완료.
+
+
+## 2026-10-03 · uncommitted · feat: connect Cell owner phase progression and semantic completion
+- Change: bind existing accepted Cell owner to durable Skill workflow and add advance_pending on its live in-memory executions. Use the existing ROS node timer; preserve one owner, exact cancel, terminal cleanup and restart-stop closure. Correct simulation gripper generation and OPEN/contact classification.
+- Evidence: missing advance_pending/readback-generation red; semantic opt-in removal mutation fails ACCEPTED versus SUCCEEDED, original source restored byte-for-byte. Owner/provider/replay 38 passed; owner/compiler/boundary integration 23 passed. Independent review 38 passed and updated restart suite 5 passed, no Critical/Important findings. Production flake8 passes. Quick tier 96 passed / 26 existing freshness warnings; harness lint 0 errors / 26 warnings. Eight actual wheels built/installed in X: venv; owner/workflow imports verified site-packages with no ROS import, pip check 0. Updated restart suite 5 passed.
+- Gate: SOURCE/LOCAL only. ROS/sensor ports are host substitutes; live ROS timer, Fleet fence/seat integration, accepted thin-sheet geometry and whole recipe Gazebo remain open. No automatic rearm/replay or physical dispatch added.
+
+
+## 2026-10-03 · uncommitted · fix: install canonical OMX geometry for Cell owner composition
+- Change: install the existing canonical kinematics YAML under share/omx_adapter/config. Default loading resolves the source asset, installed Python prefix or lazy ament package share; explicit paths stay exact and missing assets refuse. No geometry values or approval hashes changed.
+- Evidence: installed default load reproduced FileNotFoundError before the fix; prefix/ament path tests failed before the resolver change. OMX/owner/replay regression: 365 passed / 5 skipped. Wheel built from an X: source copy and force-installed into the isolated venv; actual build_cell_owner initialized from site-packages with injected ROS ports, matched the pinned profile geometry and kept local stop closed. Removing the installed asset caused FileNotFoundError and was restored. pip check and production flake8 passed.
+- Review: independent 29 passed; no Critical/Important findings. Final quick tier plus install-path tests: 100 passed / 26 existing warnings. Installed YAML equals source byte-for-byte.
+- Gate: SOURCE/LOCAL only. This closes host installed-resource composition, not Jazzy/colcon, live ROS timer, Fleet fencing/seat integration, thin-sheet geometry or the full two-layer/two-pallet vendor Gazebo acceptance.

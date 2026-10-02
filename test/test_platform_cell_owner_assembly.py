@@ -178,6 +178,8 @@ def test_sim_gripper_width_comes_from_the_grant_recipe(tmp_path):
 
     class Spy:
         gripper_joint = real.gripper_joint
+        gripper_open = real.gripper_open
+        start_state_tolerance_rad = real.start_state_tolerance_rad
 
         def gripper_close_for_width(self, width):
             widths.append(width)

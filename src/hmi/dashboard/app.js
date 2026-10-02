@@ -6,7 +6,7 @@ import { createHostCards } from "./host-cards.js";
 import { createVisionPreview } from "./vision.js";
 import { createStatusSummary } from "./status-summary.js";
 import { completeDashboardAuthentication, dashboardSurfaceBridge } from "./surface-navigation.js";
-import { HeadlessState, MODE_LABEL, NETWORK_MODE_LABEL, enumLabel } from "/common/core_ui_logic.js";
+import { HeadlessState, MODE_LABEL, NAVIGATION_LABEL, NETWORK_MODE_LABEL, enumLabel, operatorModeLabel } from "/common/core_ui_logic.js";
 import {
   bindFormSave,
   elements,
@@ -99,13 +99,20 @@ const visionPreview = createVisionPreview({
 const stopVisionPreview = (message) => visionPreview.stop(message);
 const startVisionPreview = () => visionPreview.start();
 
+function streamLabel(state) {
+  const evidence = state?.evidence;
+  const judged = ["pose", "velocity"].map((name) => evidence?.[name]?.evidence);
+  if (judged.some((value) => value && value !== "fresh")) return "통로만 연결";
+  return "값 수신 중";
+}
+
 function renderRobotState(state) {
   session.robotState = state;
   elements["hitl-escalation"].hidden = state.hitl_requested !== true;
   // robot-id는 계보줄이다 — 식별 렌더(renderRobotInfo, 느린 주기)가 유일한
   // 작성자다. 여기 10Hz 가 매 틱 덮어쓰면 "모델/버전/모드"가 state.robot_id
   // 하나로 지워진다(D-383 계보가 깜빡이다 사라지던 원인).
-  setText("robot-mode", enumLabel(MODE_LABEL, state.mode));
+  setText("robot-mode", operatorModeLabel(state.mode));
   renderCalibrationChip(state.activity);
   renderFormationHero(state.swarm);
   setText("state-sequence", `SEQ ${state.seq ?? "—"}`);
@@ -121,7 +128,7 @@ function renderRobotState(state) {
     else el.removeAttribute("data-pending");
   });
   setText("battery-voltage", metricNumber(state.battery?.voltage) === null ? "voltage —" : `${number(state.battery.voltage, 2)} V`, "—", state.evidence?.battery);
-  setText("navigation-state", state.navigation, "—", state.evidence?.navigation);
+  setText("navigation-state", enumLabel(NAVIGATION_LABEL, state.navigation), "—", state.evidence?.navigation);
   // D-396: 목표 좌표 — 지도에서 보냈던 목표를 기억했다가 내비게이션이 살아 있는
   // 동안 표시한다. 내비게이션이 끝나면 지운다.
   const navGoal = elements["navigation-goal"];
@@ -148,7 +155,7 @@ function renderRobotState(state) {
   renderTrafficStatus(state.traffic_policy);
 
   renderSafetyHero();
-  setConnection("online", "상태 스트림 연결");
+  setConnection("online", streamLabel(state));
   setText("last-sync", `마지막 동기화 ${new Date().toLocaleTimeString("ko-KR")}`);
   renderTriage();
   if (teleopActive() && !teleopEligible()) stopTeleop("운전 조건이 변경되어 정지했습니다.");
@@ -562,7 +569,7 @@ elements["view-inspect"].addEventListener("click", () => showView("inspect"));
 showView("operate");
 
 elements["emergency-stop"].addEventListener("click", async () => {
-  if (!window.confirm("Rosy를 즉시 정지할까요?")) return;
+  // 빨간 버튼이 확인이다. 정지 해제는 release-stop이 묻는다.
   stopTeleop("비상정지를 요청했습니다.");
   try {
     await api("/api/v1/safety/stop", { method: "POST" });
@@ -600,7 +607,7 @@ document.addEventListener("keydown", (event) => {
   if (event.target?.isContentEditable) return;
   if (event.repeat) return;
   if (session.robotState?.safety?.estop === true) return;
-  if (!session.hasToken()) return;
+  if (!session.token) return;
   stopTeleop("Escape 키로 비상정지를 요청했습니다.");
   api("/api/v1/safety/stop", { method: "POST" })
     .then(async () => {

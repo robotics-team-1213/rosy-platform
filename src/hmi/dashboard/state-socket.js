@@ -83,7 +83,7 @@ export function createStateSocket({ onState, poll, onUnauthorized }) {
         }, RECONNECT_STABLE_MS);
         clearInterval(session.fallbackTimer);
         session.fallbackTimer = null;
-        setConnection("online", "상태 스트림 연결");
+        setConnection("online", "값 수신 중");
       }
       try { onState(JSON.parse(event.data)); } catch (_error) { setConnection("error", "상태 해석 실패"); }
     });

@@ -66,6 +66,12 @@ def test_evidence_age_text_is_the_canonical_suffix():
         " · 4초 전", " · 1.3초 전", "", "", ""]
 
 
+def test_safe_stop_is_an_operator_word_outside_robot_mode():
+    assert _run("logic.operatorModeLabel('SAFE_STOP')") == "안전 정지"
+    assert _run("logic.operatorModeLabel('IDLE')") == "대기"
+    assert "SAFE_STOP" not in _run("Object.keys(logic.MODE_LABEL)")
+
+
 def test_enum_label_shows_an_unknown_value_as_received_and_a_missing_one_as_fallback():
     assert _run("[logic.enumLabel(logic.MODE_LABEL, 'IDLE'), logic.enumLabel(logic.MODE_LABEL, 'NEW_MODE'),"
                 " logic.enumLabel(logic.MODE_LABEL, ''), logic.enumLabel(logic.MODE_LABEL, null, '확인 중'),"

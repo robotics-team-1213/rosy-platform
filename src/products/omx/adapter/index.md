@@ -45,8 +45,8 @@
 
 ## 최근 기록
 
+- 2026-10-03 · uncommitted · fix: install canonical OMX geometry for Cell owner composition
 - 2026-10-03 · uncommitted · feat(omx): C4b 1d — journal 식별
 - 2026-10-03 · uncommitted · fix(omx): C4b 1c — GetAction은 다른 principal을 '없음'으로 답하지 않는다
 - 2026-10-03 · uncommitted · feat(omx): C4b 1b — owner 식별 보고 (C3)
 - 2026-10-03 · uncommitted · feat: journal Cell hold release and local Action completion
-- 2026-10-02 · uncommitted · feat(omx): C4b wave 1 — v2 CELL_TRANSFER, 종류별 완료 기록, 수락 저장소 (G4, G8, G2a)

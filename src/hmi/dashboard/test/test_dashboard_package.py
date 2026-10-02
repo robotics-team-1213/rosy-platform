@@ -34,9 +34,9 @@ def test_the_mode_control_speaks_korean():
     assert ">자율주행</ui-button>" in html
     assert ">IDLE</ui-button>" not in html
     assert ">MANUAL</ui-button>" not in html
-    # 히어로 모드 표시가 enumLabel 을 쓰는지 (원본 enum 이 아니라)
+    # 히어로는 운용 말(SAFE_STOP 포함)을 쓴다. 원본 모드 문자열을 그대로 찍지 않는다.
     js = (ROOT / "app.js").read_text(encoding="utf-8")
-    assert 'enumLabel(MODE_LABEL, state.mode)' in js
+    assert 'operatorModeLabel(state.mode)' in js
     assert 'setText("robot-mode", state.mode)' not in js
 
 
