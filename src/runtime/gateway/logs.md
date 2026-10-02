@@ -704,3 +704,9 @@
 - 변경: (d1d297d1, 00b806cb) `ros_bridge.py` 가 `localization.bind_clock(self._line_clock)` — `state_stale` 이 sim 초로 잰다. `received_s` 는 노드 ROS 시계 그대로: 두 노드가 use_sim_time 을 같이 쓰므로 sim 에선 sim 시각, 실기에선 epoch 시각이다(실기 line clock 인 monotonic 이면 로봇이 만료로 거부). `pose_frame` 을 정하는 2 s map-pose 신선도도 line clock 으로 찍고 재며, 초기값은 `-inf`(sim 시각은 0 근처에서 시작).
 - 증거: `test/test_localization_cross_lane.py` +7 (sim·device 시계 각각: `received_s` 가 `RECEIPT_AHEAD_S` 안이고 수락됨, line clock 3 s 에 stale; device 에서 monotonic 수령 시각은 거부; 브리지 배선 AST 2).
 - gate 변화: 없음.
+
+## 2026-10-02 · b9f1b277 · test(localization): D-395 S1 R1 — LOCALIZED 물체 세 갈래 왕복
+
+- 변경: 코드 변경 없음(브리지는 원문을 `LocalizationAssist` 에 넘긴다). `test_localization_cross_lane.py` 에 왕복 시험을 더했다. 로봇 A 의 LOCALIZED 상태에 실린 물체가 CORE `/api/v1/robot/state` 를 거쳐 Fleet `trust.status_of` 로 그대로 읽히고, 스캔이 1 s 넘게 묵으면 빈 목록이 된다.
+- 증거: `test/test_localization_cross_lane.py` +1 (13 passed).
+- gate 변화: 없음.

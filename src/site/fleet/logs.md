@@ -1201,3 +1201,10 @@
 - 근거: D-409(사용자 지시 — 남은 설치 요소 분리·역할 명확화). 원래 회차 번호 D-407이었으나 병렬 작업이 D-407/D-408(차선 복구·페인트 입력)을 선점해 D-409로 재번호.
 - gate 변화: 없음.
 - 최종 증거: fleet 1328 passed 7 skipped; web_common+dashboard 287 passed 82 skipped; 브라우저 재캡처 — 서랍 2개 접힘, 폰 카드 측정 2칭(배터리·안전), 카드 204px, 폰 390 문서 3172→2811px(원점 3431), 페이지 오류 0.
+
+## 2026-10-02 · fbb12ef0 · feat(localization): D-395 S1 R1 — LOCALIZED 닻이 다른 LOCALIZED 로봇을 본다
+
+- 원인: S1 재실행 R1. 관찰자가 첫 결정에 LOCALIZED 가 되면 거울 증거가 보고 하나로 끝나 2개 문턱에 못 닿았다.
+- 변경: `LocalizationService._observe_from_anchors`. 매 폴에서 `objects_stamp` 가 있는 LOCALIZED 닻마다 상태의 물체를 자기 보고 map 자세로 놓고, 다른 모든 LOCALIZED 로봇에 대한 증거로 쓴다. 관찰자는 닻만이다(거울 잠긴 로봇은 옳은 로봇을 그 쌍둥이 자리에 놓는다). 자기 자신은 대상이 아니다. 증거 하나는 (닻, `objects_stamp`)이고 Fleet 이 처음 본 뒤 1.0 s 동안 신선하다. 같은 폴의 두 닻은 따로 센다. 증거 규칙(0.25 m, 거울 서명)과 15 s 안 2개 문턱은 그대로다. `peer_observations` 는 보고 대신 물체 목록을 받는다.
+- 증거: `test_localization_service.py` +7(닻 둘 중 주입된 거울이 2폴에 SUSPECT, 닻이 아닌 거울 로봇은 닻을 고발하지 못함, 같은 폴 닻 둘 = 2개, 숨은 로봇·무관한 물체·일치는 증거 아님, 같은 stamp 재읽기는 낡음). `python -m pytest src/site/fleet/test -q` 1335 passed, 7 skipped.
+- gate 변화: 없음. Gazebo 재실행 전.

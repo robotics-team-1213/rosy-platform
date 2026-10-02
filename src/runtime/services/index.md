@@ -34,8 +34,8 @@
 
 ## 최근 기록
 
+- 2026-10-02 · b9f1b277 · feat(localization): D-395 S1 R1 — LOCALIZED 물체를 스냅샷으로 넘긴다
 - 2026-10-02 · 80db8125 · fix(localization): D-395 S1 재실행 R5·R6 — 버린 보고는 다시 주지 않고, 검사 중 미션은 `busy`
 - 2026-10-02 · e93fdd8b · fix(localization): state_stale 창을 묶을 수 있는 시계로 (D-395 S1 finding 6)
 - 2026-10-02 · uncommitted · fix(localization): D-395 P2-7 리뷰 — 못 보는 정면은 막힘, 회전 가드, 모든 종류 LiDAR 끊김
 - 2026-10-02 · uncommitted · feat(localization): D-395 P2-7 확인 기동·귀환 미션 실행기
-- 2026-10-01 · uncommitted · feat(core_features): D-400 shadow verdicts without touching the output

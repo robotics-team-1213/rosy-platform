@@ -933,3 +933,10 @@
 - 증거: `test_loc_assist.py` +1(정지 뒤 침묵: 재시도가 0.5 s 넘은 twist 로는 안 풀리고 상한에서 `no_fresh_odom`), 정지 문 시험은 twist 를 직접 신선하게 넣고 나머지 시험의 `core()` 는 `search_due` 마다 정지 twist 가 오는 살아 있는 odom. `test_loc_assist_node_ros.py` 는 0.6 s 정지 뒤 신선한 twist 로 통과. WSL loc 시험 68 passed. 호스트 sensing 2296 passed, 104 skipped.
 - 남은 것: Gazebo 재실행으로 d1·d2 거부가 사라지는지 확인.
 - gate 변화: 없음.
+
+## 2026-10-02 · c8a5822c · feat(sensing): D-395 S1 R1 — LOCALIZED 로봇도 지도 밖 물체를 보고한다
+
+- 원인: S1 재실행 R1. 물체는 CANDIDATES 보고에만 실려, 모든 로봇이 LOCALIZED 이면 Fleet 감시에 관찰이 없었다.
+- 변경: `LocAssist.objects_due`·`on_objects`. LOCALIZED 이고 검사가 돌지 않을 때 노드가 한 상태 주기(0.5 s)에 한 번 AMCL 센서 자세에서 전체 스캔으로 물체를 계산한다(`localized_objects`, 후보 탐색과 같은 차체 반경 필터, ≤16). 매 상태 메시지(2 Hz)의 `status` 에 `unmapped_objects` 와 스캔 시각 `objects_stamp` 를 싣되 스캔이 1 s 넘게 묵으면 뺀다. LOCALIZED 밖에서는 두 키를 아예 빼서 v1.73 CORE 도 상태를 읽는다.
+- 증거: `test_loc_assist.py` +4(LOCALIZED 에서 실림·16개 제한·주기, 1 s 넘은 물체 빠짐, LOCALIZED 밖·검사 중·SUSPECT 에서 없음, 전체 스캔·차체 반경 필터).
+- gate 변화: 없음. Gazebo 재실행 전.

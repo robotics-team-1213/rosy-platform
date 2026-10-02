@@ -336,3 +336,9 @@
 - 변경: `LocalizationAssist.on_state` 는 상태의 `request_id` 가 null 이거나 보관한 보고와 다르면 보고를 버린다. `candidates()` 는 보고의 id 가 상태의 id 와 같을 때만 낸다. 상태보다 먼저 온 새 보고는 새 id 라 남고, 상태가 따라오면 나간다(토픽 간 순서가 엇갈려 버려져도 로봇이 2 s 마다 다시 보고한다). `LocalizationMission.start` 는 상태 `reason == checking` 이면 409 `busy`.
 - 증거: `gateway/test/test_localization_api.py` +3, `gateway/test/test_localization_mission.py` +1.
 - gate 변화: 없음.
+
+## 2026-10-02 · b9f1b277 · feat(localization): D-395 S1 R1 — LOCALIZED 물체를 스냅샷으로 넘긴다
+
+- 변경: `LocalizationAssist` 는 `unmapped_objects`·`objects_stamp` 를 그대로 넘긴다. `pose_frame` 이 `odom` 이면(로봇이 말했든 CORE 가 바꿨든) 비우고, `state_stale` 은 새 상태라 원래 없다. 물체가 잘못된 상태는 물체만 버리고 상태는 받는다. 감시용 부가 정보 때문에 상태가 끊겨 자율 주행이 멈추면 안 된다.
+- 증거: `test/test_localization_assist.py` +5(통과, odom·stale 에서 비움, 17개·문자열·잘못된 시각에서 상태 유지).
+- gate 변화: 없음.

@@ -64,8 +64,8 @@
 
 ## 최근 기록
 
+- 2026-10-02 · c8a5822c · feat(sensing): D-395 S1 R1 — LOCALIZED 로봇도 지도 밖 물체를 보고한다
 - 2026-10-02 · 7459be67 · fix(localization): D-395 S1 재실행 R3 — 낡은 odom twist 는 정지가 아니다
 - 2026-10-02 · c00b368d · fix(localization): D-395 S1 재실행 R3 — 로봇이 멈춘 뒤에만 탐색
 - 2026-10-02 · ead31a99 · fix(localization): D-395 S1 재실행 R3 — 구별 후보의 마지막 yaw 정밀화
 - 2026-10-02 · 2b922678 · feat(localization): D-395 S1 재실행 R6 — 검사 중 상태는 CANDIDATES/`checking`
-- 2026-10-02 · uncommitted · fix(localization): D-395 S1 재실행 — 미션 중 결정은 `mission_running` 으로 거부

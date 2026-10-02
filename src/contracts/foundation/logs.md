@@ -299,3 +299,8 @@
 - 변경: `core_common.protocol.localization.CHECKING = "checking"` — 로봇의 3 s 주입 검사 중 `LocalizationStatus.reason`(상태 CANDIDATES). 스키마 변화 없음(64자 제한 안의 값). API Reference 의 `reason` 목록과 ERR-102 `busy` 설명을 함께 고쳤다.
 - 증거: `test/test_localization_contracts.py` +1.
 - gate 변화: 없음.
+
+## 2026-10-02 · dbe014f4 · feat(contracts): D-395 LOCALIZED 로봇의 `unmapped_objects` (API v1.74)
+- 변경: `LocalizationStatus` 에 선택 필드 `unmapped_objects`(≤16, `RobotPoint`, 기본 `[]`)와 `objects_stamp`(유한 실수, 기본 null)를 더했다. ADR 개정 4 5항 후속(S1 재실행 R1). API Reference v1.73→v1.74, 판 고정 6곳(머리말, `app.py` ×2, `test_line_follow_contract_docs.py`, `test_task_contract_docs.py` ×2, `test_mission_progress.py`). `schemas.py` 는 손대지 않았다.
+- 증거: `test/test_localization_contracts.py` +1(왕복, 17개·NaN·inf 거부).
+- gate 변화: 없음.
