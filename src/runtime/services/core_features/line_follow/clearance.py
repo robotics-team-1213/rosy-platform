@@ -17,6 +17,9 @@ from __future__ import annotations
 import math
 from typing import Any, Iterator, Mapping, Optional, Sequence
 
+from core_common.robot_body import inside_body as _inside_body
+from core_common.robot_body import masked as _masked
+
 Point = tuple[float, float]
 #: (from_deg, to_deg, max_range_m) in the robot frame (0 = forward, + = left): returns of the
 #: robot's own body. A mask only reaches SELF_MASK_MAX_RANGE_M, so it never hides a real
@@ -40,11 +43,6 @@ def self_mask_from_config(raw) -> SelfMask:
             raise ValueError(f"lidar_self_mask entry out of range: {item!r}")
         out.append((lo, hi, reach))
     return tuple(out)
-
-
-def _masked(angle: float, distance: float, mask: SelfMask) -> bool:
-    deg = math.degrees(angle)
-    return any(lo <= deg <= hi and distance <= reach for lo, hi, reach in mask)
 
 
 def _returns(sample: Mapping[str, Any], forward_deg: float,
@@ -176,12 +174,6 @@ def self_mask_rear_blind_m(mask: SelfMask, *, lidar_x_m: float, rear_x_m: float,
             far = reach if side < 1e-9 else min(reach, half_width_m / side)
             worst = max(worst, far * back - behind)
     return worst
-
-
-def _inside_body(x: float, y: float, front_x: float, rear_x: float, half_width: float,
-                 radius: float) -> bool:
-    """D-422 body outline: the URDF rectangle cut by the rotation circle (rounded corners)."""
-    return rear_x <= x <= front_x and abs(y) <= half_width and x * x + y * y <= radius * radius
 
 
 def body_path_gap(points: Sequence[Point], *, linear: float, angular: float, front_x_m: float,

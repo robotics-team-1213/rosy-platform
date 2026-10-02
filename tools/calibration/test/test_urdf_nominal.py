@@ -213,15 +213,39 @@ def test_line_follow_stuck_body_consumers():
     assert G["ultrasonic"]["x_m"] < G["footprint"]["front_x_m"] < G["footprint"]["rotation_radius_m"]
 
 
+def test_shared_robot_body_matches_geometry():
+    """D-424: core_common.robot_body.PINKY_PRO is the one body every near/stop check uses."""
+    foundation = str(SRC / "contracts" / "foundation")
+    if foundation not in sys.path:
+        sys.path.insert(0, foundation)
+    from core_common import robot_body as body_module
+    nominal = body_module.PINKY_PRO_GEOMETRY
+    for section, values in nominal.items():
+        for key, value in values.items():
+            assert value == G[section][key], f"{section}.{key}"
+    body = body_module.PINKY_PRO
+    assert (body.front_x_m, body.rear_x_m, body.half_width_m, body.rotation_radius_m) == (
+        G["footprint"]["front_x_m"], G["caster"]["rear_x_m"], G["footprint"]["half_width_m"],
+        G["footprint"]["rotation_radius_m"])
+    assert (body.lidar_x_m, body.lidar_y_m, body.lidar_forward_deg, body.ultrasonic_x_m) == (
+        G["lidar"]["x_m"], G["lidar"]["y_m"], G["lidar"]["forward_deg"], G["ultrasonic"]["x_m"])
+    # D-422 gap policy: the CORE defaults equal the shared module's.
+    defaults = _yaml(SRC / "contracts" / "foundation" / "config" / "rosy_default.yaml")["line_follow"]
+    assert (defaults["obstacle_body_margin_m"], defaults["obstacle_latency_s"], defaults["obstacle_decel_mps2"],
+            defaults["obstacle_resume_hysteresis_m"]) == (
+        body_module.MARGIN_M, body_module.LATENCY_S, body_module.DECEL_MPS2, body_module.HYSTERESIS_M)
+
+
 def test_body_and_ir_consumers():
     body = _module_constants(SENSING / "control" / "sensing" / "body.py", "WHEEL_Y", "WHEEL_R", "CASTER_X",
-                             "CASTER_EXTRA", "LIDAR_X", "FRONT_X", "ROTATION_RADIUS")
+                             "CASTER_EXTRA", "FRONT_X")
     assert body["WHEEL_Y"] == G["wheels"]["joint_y_m"]
     assert body["WHEEL_R"] == G["wheels"]["radius_m"]
     assert body["CASTER_X"] + body["CASTER_EXTRA"] == pytest.approx(-G["caster"]["rear_x_m"], abs=1e-9)
-    assert body["LIDAR_X"] == G["lidar"]["x_m"]
     assert body["FRONT_X"] == G["ir"]["mid"]["x_m"]
-    assert body["ROTATION_RADIUS"] == math.ceil(G["footprint"]["rotation_radius_m"] * 1000) / 1000
+    # LIDAR_X and ROTATION_RADIUS come from the shared body (D-424); no literal left in body.py.
+    text = _text(SENSING / "control" / "sensing" / "body.py")
+    assert "LIDAR_X = BODY.lidar_x_m" in text and "ROTATION_RADIUS = BODY.rotation_radius_m" in text
     circumradius = max(body["WHEEL_Y"] + body["WHEEL_R"], body["CASTER_X"] + body["CASTER_EXTRA"], body["FRONT_X"])
     for config, block in (("robot.yaml", "/**"), ("auto_calib.yaml", "/**/safety_node")):
         radius = _yaml(SENSING / "config" / config)[block]["ros__parameters"]["robot_radius"]

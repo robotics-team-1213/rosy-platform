@@ -50,6 +50,7 @@
     cliff_clear_raw: 1500
     cliff_mode: low
     # Circumradius from base_link (URDF rear caster 7.6cm). Calib yaml wins if set.
+    # D-424: in-place turns never use less than the URDF rotation radius 0.0826 (body.rotation_radius).
     robot_radius: 0.076
     # Narrow maze HUD / opening cap. Safety auto-cals from L+R.
     auto_map: true
