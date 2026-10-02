@@ -82,3 +82,4 @@ Status 는 Proposed 그대로다. CORE 쪽만 구현했고 Fleet 콘솔 화면(�
   - **확인: 짧은 재연결은 연결로 본다.** `console_linked` 는 끊긴 뒤 `recovery_console_grace_s`(기본 3 s) 동안 참이다. 더 길면 지금처럼 로컬 복구로 간다(그 자체가 뒤 여유·사각·trail 규칙으로 지켜진다).
   - 답 사건의 `token_id` 는 `principal_ref`(토큰 기록 id, 비밀 아님)로 바꿨다 — Fleet 감사 저장소가 자격 증명 이름으로 거부해 답 사건이 Fleet 에 남지 않았다. Fleet 의 거부 규칙은 그대로다. 막힘 열림 사건에 `rear_state`(`clear`·`blocked`·`unknown`), 거부된 관제 `BACK_AND_RETRY` 답에 판정한 scan 의 trail·사각 값.
   - **§2·§4 명시.** 관제 `BACK_AND_RETRY` 는 §4 의 로컬 복구를 지금 시작하라는 뜻이다. 그 시도가 실패하고 시도가 남아 있으면(`recovery_max_attempts` 안) 관제에 다시 묻지 않고 다음 후진을 한다. 시도를 다 쓰면 HOLD 로 관제 답만 기다린다.
+  - 검토 반영(2026-10-02): 에이전트는 WELCOME 을 받은 뒤에만 연결로 보고, 보낸 envelope 을 순서대로 기억해 hub 답과 짝짓는다. 일시 오류(`EVENT_STORAGE_UNAVAILABLE` 등)는 그 사건을 다시 보낸다(최대 3 번), `EVENT_NOT_AUDITABLE` 은 seq·종류를 남기고 버린다, 답 없이 끝난 사건과 보내던 중 취소된 사건은 버퍼로 돌아간다. `principal_ref` 는 설정된 토큰 id, 없으면 CORE 프로세스 키 HMAC(`anon-…`) — 해시 앞자리는 후보 토큰 확인에 쓰일 수 있어 내지 않는다.

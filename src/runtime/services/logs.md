@@ -373,3 +373,9 @@
 - 변경: `_session`/`_receive_loop`(모든 답 소비, ERROR 는 그 envelope 만), 끊김 경고에 이유, `linked_within(grace)`; 막힘 답 사건 `principal_ref`·`rear_state`·거부 근거(9300adf1d).
 - 증거: `test_fleet_agent_link.py` 4 passed, `test_line_stuck_recovery.py` 초록.
 - gate 변화: 없음. Gazebo 재확인은 다음 WSL 슬롯.
+
+## 2026-10-02 · 4a5a65083 · fix(fleet_agent): 검토 반영 — WELCOME 뒤에만 연결, 사건 잃지 않기
+
+- 변경: `connected` 는 WELCOME~세션 끝, backoff 는 WELCOME 뒤에만 재설정, HELLO 답 5 s. 보낸 envelope 순서 기억(전송 잠금)과 답 짝짓기, 일시 오류 재전송(3 회), 영구 거부는 seq·종류 기록 후 버림, 미응답·전송 중 취소 사건 재버퍼. `principal_ref` 키 HMAC(0c56f3d6f).
+- 증거: `test_fleet_agent_link.py` 12 passed, `test_line_follow_stuck*.py` 46 passed, `test_hub_server.py` 9 passed.
+- gate 변화: 없음.
