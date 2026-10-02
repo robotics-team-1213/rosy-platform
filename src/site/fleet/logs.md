@@ -1303,10 +1303,15 @@
 
 ## 2026-10-02 · uncommitted · test(fleet): track Mission event watermark across replay
 - Change: extend the two-ledger restart replay to verify four phase snapshots plus one terminal event, then a separate goal-confirmation event.
-- Evidence: targeted Mission, dispatcher, service, progress, task, OMX ActionStore, and replay suites: pending final worktree verification.
+- Evidence: targeted Mission, dispatcher, service, progress, task, OMX ActionStore, and replay suites: 77 passed; known-failure comparison: 0 new, 0 known.
 - Gate: SOURCE/LOCAL only; remaining interruption fixtures and expiry/occupancy cases are still open.
 
 ## 2026-10-02 · uncommitted · verify(fleet): platform cell replay watermark
 - 변경: record platform cell replay watermark verification.
 - Evidence: replay test 1 passed; Fleet UI/API group 109 passed; formation 22 passed; four web suites 29 passed. Harness contract failure isolated to append-only history check.
 - Gate: SOURCE/LOCAL only; remaining interruption fixtures and expiry/occupancy cases are still open.
+
+## 2026-10-02 · uncommitted · verify(fleet): platform cell final regression
+- Change: record final checks after reconciling the parallel watermark evidence entry.
+- Evidence: replay 1 passed; Fleet UI/API and formation 131 passed; web suites 29 passed; harness contracts 57 passed with 24 known staleness warnings.
+- Gate: SOURCE/LOCAL only; interruption fixtures and expiry/occupancy cases remain open.
