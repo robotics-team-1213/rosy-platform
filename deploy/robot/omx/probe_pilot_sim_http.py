@@ -10,7 +10,7 @@ Modes:
              result code, time to terminal, gripper readback and peak per-joint speed over the
              last 0.5 s; then three joint1 jogs while holding (each SUCCEEDED, state stays holding).
 
-Usage: probe_pilot_sim_http.py [container|--inside] [--stall] [--cube-size M] [--grasp-z M]
+Usage: probe_pilot_sim_http.py [container|--inside] [--stall] [--cube-size M] [--grasp-z M] [--pace-margin F]
 """
 
 from __future__ import annotations
@@ -79,8 +79,11 @@ def peak_speeds(samples: list[tuple[float, dict]], window_s: float = 0.5) -> dic
 
 class Probe:
     def __init__(self, token: str, seat: str, *, base: str = BASE, stop: threading.Event | None = None,
-                 log=print) -> None:
+                 log=print, pace_margin: float = 0.9) -> None:
+        if not 0 < pace_margin <= 1:
+            raise ValueError("pace margin must be in (0, 1]")
         self.token, self.seat, self.base, self.log = token, seat, base, log
+        self.pace_margin = pace_margin
         self.stop = stop or threading.Event()
         self.target = self.call("/target")
         items = {item["kind"]: item for item in (self.target.get("controls") or {}).get("items", [])}
@@ -140,24 +143,36 @@ class Probe:
         return {"goal": goal, "state": after_state}
 
     def gripper_goal(self, target: float, readback: float) -> tuple[float, float]:
-        """One paced absolute goal toward ``target``: at most max_velocity, 0.2-2.0 s."""
-        speed = float(self.gripper.get("max_velocity") or abs(self.gripper["open"] - self.gripper["closed"]) / GRIPPER_MAX_S)
+        """One paced absolute goal toward ``target``: at most pace_margin x max_velocity, 0.2-2.0 s.
+
+        Within reach the exact target is sent (so the caller can tell it arrived); a clipped
+        intermediate position is rounded.
+        """
+        stroke_speed = abs(self.gripper["open"] - self.gripper["closed"]) / GRIPPER_MAX_S
+        speed = float(self.gripper.get("max_velocity") or stroke_speed) * getattr(self, "pace_margin", 0.9)
         reach = speed * GRIPPER_MAX_S
-        position = target if abs(target - readback) <= reach else readback + math.copysign(reach, target - readback)
+        if abs(target - readback) <= reach:
+            position = target
+        else:
+            position = round(readback + math.copysign(reach, target - readback), 4)
         duration = math.ceil(abs(position - readback) / speed * 100 - 1e-9) / 100
-        return round(position, 4), min(max(duration, GRIPPER_MIN_S), GRIPPER_MAX_S)
+        return position, min(max(duration, GRIPPER_MIN_S), GRIPPER_MAX_S)
 
     def move_gripper(self, target: float, *, samples: list | None = None, attempts: int = 3) -> dict:
         joint = self.gripper["joint"]
-        for _ in range(attempts):
+        first = None
+        for attempt in range(1, attempts + 1):
             current = self.ready_state()
             readback = current["positions"][joint]
+            first = readback if first is None else first
             position, duration = self.gripper_goal(target, readback)
             command_id = self._post("/gripper", {"position": position, "duration_s": duration}, current)
             goal, elapsed = self.follow(command_id, samples)
             state = self.call("/state")
+            # "before" is the readback before the FIRST goal of this move, not of the last attempt.
             result = {"goal": goal, "elapsed_s": round(elapsed, 3), "position": position, "duration_s": duration,
-                      "before": readback, "after": state["positions"].get(joint), "state": state}
+                      "before": first, "after": state["positions"].get(joint), "state": state,
+                      "goals": attempt}
             if goal["state"] != "SUCCEEDED" or position == target:
                 return result
         return result
@@ -250,31 +265,40 @@ class Probe:
         if not solved.ok:
             raise RuntimeError(f"grasp pose IK failed: {solved.reason} {solved.detail}")
         open_, closed = self.gripper["open"], self.gripper["closed"]
-        self.check_gripper("open", self.move_gripper(open_), open_, None)
+        opened = self.move_gripper(open_)
+        self.check_gripper("open", opened, open_, None)
         self.jog_to(dict(zip(("joint1", "joint2", "joint3", "joint4", "joint5"), solved.joints)))
         positions = self.ready_state()["positions"]
         tcp = kinematics.fk([positions[f"joint{i}"] for i in range(1, 6)])
         spawn(cube_size, tcp.x, tcp.y, cube_size / 2, tcp.yaw)
         time.sleep(1.0)                                    # let the cube settle on the ground
         samples: list = []
-        close = self.move_gripper(closed, samples=samples, attempts=1)
+        # A paced stroke may need two goals (reach = pace x max_velocity x 2.0 s); the fingers stop on
+        # the cube during one of them and the last one, aimed at closed, is the close that is judged.
+        close = self.move_gripper(closed, samples=samples)
         facts = terminal_facts(close["goal"])
         report = {"terminal_state": close["goal"]["state"], "reason": close["goal"].get("reason", ""),
                   "status": facts["status"], "result_code": facts["result_code"],
                   "time_to_terminal_s": close["elapsed_s"], "sent": close["position"],
                   "duration_s": close["duration_s"], "gripper_readback": close["after"],
                   "peak_speed_last_0_5s": peak_speeds(samples), "cube_size_m": cube_size,
-                  "grasp_z_m": grasp_z, "tcp": [round(tcp.x, 4), round(tcp.y, 4), round(tcp.z, 4)]}
+                  "grasp_z_m": grasp_z, "tcp": [round(tcp.x, 4), round(tcp.y, 4), round(tcp.z, 4)],
+                  "open_readback": opened["after"], "pace_margin": self.pace_margin}
+        report["close_goals"] = close["goals"]
         report["gripper_state"] = self.settled_gripper_state()
+        report["hold_target"] = None
         report["holding_jogs"] = []
         if report["terminal_state"] == "SUCCEEDED" and report["gripper_state"] == "holding":
+            # The runtime re-issues a holding close at stall + preload; wait for it before jogging.
+            report["hold_target"] = self.ready_state()["gripper"].get("hold_target")
             for _ in range(3):
                 result = self.run_jog("joint1", 0.05, check=False)
                 grip = self.settled_gripper_state()
                 report["holding_jogs"].append({"state": result["goal"]["state"],
                                                "reason": result["goal"].get("reason", ""), "gripper_state": grip,
                                                "gripper_readback": result["state"]["positions"].get(
-                                                   self.gripper["joint"])})
+                                                   self.gripper["joint"]),
+                                               "hold_target": result["state"].get("gripper", {}).get("hold_target")})
                 if result["goal"]["state"] != "SUCCEEDED" or grip != "holding":
                     break
         report["passed"] = (report["terminal_state"] == "SUCCEEDED" and report["gripper_state"] == "holding"
@@ -287,7 +311,9 @@ class Probe:
 
 def gz_spawner(container: str):
     """Spawn/remove a dynamic cube through the Gazebo transport service (inside the container)."""
-    prefix = [] if container == "--inside" else ["docker", "exec", container]
+    # A non-login docker exec has no ROS/Gazebo environment (gz -> exit 127): source it first.
+    prefix = ([] if container == "--inside" else ["docker", "exec", container]) + [
+        "bash", "-c", 'source /opt/ros/jazzy/setup.bash; exec "$@"', "gz"]
 
     def gz(service: str, reqtype: str, req: str) -> None:
         subprocess.run([*prefix, "gz", "service", "-s", f"/world/{WORLD}/{service}", "--reqtype", reqtype,
@@ -334,6 +360,8 @@ def main(argv: list[str] | None = None, *, base: str = BASE, code: str | None = 
     parser.add_argument("--stall", action="store_true", help="D-411 C holding gate (spawns a cube)")
     parser.add_argument("--cube-size", type=float, default=0.025, help="cube edge, m (nominal; tune)")
     parser.add_argument("--grasp-z", type=float, default=0.015, help="TCP height for the grasp, m (nominal)")
+    parser.add_argument("--pace-margin", type=float, default=0.9,
+                        help="gripper goals move at this fraction of max_velocity (readback drift margin)")
     args = parser.parse_args(argv)
     if args.inside:
         args.container = "--inside"
@@ -376,7 +404,7 @@ def main(argv: list[str] | None = None, *, base: str = BASE, code: str | None = 
                                f"seq={state['state_sequence']}, age_ms={state['joint_age_ms']}, "
                                f"action_server_ready={state.get('action_server_ready')}, "
                                f"last_renew_error={renew_errors[-1] if renew_errors else 'none'}")
-        probe = Probe(token, seat, base=base, stop=stop)
+        probe = Probe(token, seat, base=base, stop=stop, pace_margin=args.pace_margin)
         if not args.stall:
             probe.basic()
             return 0

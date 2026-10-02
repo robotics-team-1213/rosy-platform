@@ -163,6 +163,9 @@ def test_basic_probe_jogs_paces_the_gripper_and_closes_then_opens(capsys):
     with _server(arm) as (base, _):
         assert probe.main(["--inside"], base=base, code="ABCD-EFGH") == 0
     out = capsys.readouterr().out
+    # Gazebo 2026-10-03 D1: the nudge was resent three times (rounded target never "arrived").
+    nudges = [command for command in arm.commands if command.positions[CELL.gripper_joint] == pytest.approx(0.02)]
+    assert len(nudges) == 1, [command.positions for command in arm.commands]
     for line in ("joint1_goal=SUCCEEDED", "gripper_nudge=SUCCEEDED", "gripper_close=SUCCEEDED",
                  "gripper_open=SUCCEEDED", "cancel_terminal=CANCELED"):
         assert line in out, out
@@ -195,6 +198,10 @@ def test_stall_probe_records_terminal_facts_and_holds_through_three_jogs(capsys)
     squeezes = [command.positions[CELL.gripper_joint] for command in arm.commands[-3:]]
     assert squeezes == [pytest.approx(0.3 - CELL.gripper_preload_rad)] * 3
     assert spawned[0][0] == 0.025 and spawned[-1] == "removed"
+    # The holding close is re-issued at stall + preload before the jogs (Gazebo grip loosening, L1).
+    assert report["hold_target"] == pytest.approx(0.3 - CELL.gripper_preload_rad)
+    assert arm.commands[-4].command_id.startswith("hold-")
+    assert report["open_readback"] == 1.0 and report["close_goals"] == 2 and report["pace_margin"] == 0.9
 
 
 def test_stall_probe_reports_a_failed_close_and_does_not_pass(capsys):
@@ -215,10 +222,56 @@ def test_stall_probe_reports_a_failed_close_and_does_not_pass(capsys):
 def test_paced_gripper_goal_never_exceeds_the_speed():
     fake = SimpleNamespace(gripper={"open": 1.0, "closed": 0.0, "max_velocity": 0.5})
     goal = probe.Probe.gripper_goal
-    assert goal(fake, 0.02, 0.0) == (0.02, 0.2)
+    # pace margin 0.9: 0.45 rad/s, reach 0.9 rad in 2.0 s; within reach the EXACT target is returned.
+    assert goal(fake, 0.0168 + 0.02, 0.0168) == (0.0168 + 0.02, 0.2)
+    assert goal(fake, 1.0, 0.0) == (0.9, 2.0)
+    assert goal(fake, 1.0, -0.011) == (0.889, 2.0)        # clipped to what 2.0 s reaches
+    assert goal(fake, 0.0, 0.333) == (0.0, 0.74)
+    fake.pace_margin = 1.0
     assert goal(fake, 1.0, 0.0) == (1.0, 2.0)
-    assert goal(fake, 1.0, -0.011) == (0.989, 2.0)        # clipped to what 2.0 s reaches
-    assert goal(fake, 0.0, 0.333) == (0.0, 0.67)
     assert probe.terminal_facts({"state": "UNKNOWN_HOLD", "reason": "terminal_status_6_result_-5"}) == {
         "status": 6, "result_code": -5}
     assert probe.peak_speeds([(0.0, {"j": 0.0}), (0.1, {"j": 0.05}), (0.2, {"j": 0.05})]) == {"j": 0.5}
+
+
+def test_move_gripper_reports_the_readback_before_its_first_goal():
+    calls = []
+
+    class Fake(probe.Probe):
+        def __init__(self):
+            self.gripper = {"joint": "g", "open": 1.0, "closed": 0.0, "max_velocity": 0.5}
+            self.pace_margin = 0.9
+            self.readback = 0.0
+
+        def ready_state(self, timeout_s=30.0):
+            return {"positions": {"g": self.readback}, "instance_id": "i", "state_sequence": 1}
+
+        def _post(self, path, fields, current):
+            calls.append(fields["position"])
+            self.readback = fields["position"]
+            return "id"
+
+        def follow(self, command_id, samples=None, timeout_s=60.0):
+            return {"state": "SUCCEEDED"}, 0.1
+
+        def call(self, path, **kwargs):
+            return {"positions": {"g": self.readback}}
+
+    result = Fake().move_gripper(1.0)
+    assert calls == [0.9, 1.0] and result["before"] == 0.0 and result["goals"] == 2
+
+
+def test_gz_service_runs_with_the_ros_environment_sourced(monkeypatch):
+    seen = []
+    monkeypatch.setattr(probe.subprocess, "run", lambda cmd, **kwargs: seen.append(cmd))
+    spawn, remove = probe.gz_spawner("rosy-omx-pilot-sim")
+    spawn(0.025, 0.18, 0.0, 0.0125, 0.0)
+    remove()
+    for cmd in seen:
+        assert cmd[:7] == ["docker", "exec", "rosy-omx-pilot-sim", "bash", "-c",
+                           'source /opt/ros/jazzy/setup.bash; exec "$@"', "gz"]
+        assert cmd[7:9] == ["gz", "service"]
+    assert [cmd[10] for cmd in seen] == ["/world/omx_pilot_workcell/create", "/world/omx_pilot_workcell/remove"]
+    seen.clear()
+    probe.gz_spawner("--inside")[1]()
+    assert seen[0][:2] == ["bash", "-c"]
