@@ -29,7 +29,7 @@
 | [web_common](src/hmi/web_common/progress.md) | CORE | 0409c371 (2026-09-30) | GO | GO | N/A | N/A | N/A | N/A |
 | [dashboard](src/hmi/dashboard/progress.md) | 화면 | e7cdf490 (2026-09-29) | GO | GO | N/A | HOLD | N/A | N/A |
 | [pilot](src/hmi/pilot/progress.md) | 화면 | 434ceb0b (2026-09-29) | GO | HOLD | HOLD | HOLD | HOLD | N/A |
-| [omx_adapter](src/products/omx/adapter/progress.md) | OMX workcell | 11ae6e70 (2026-10-02) | GO | GO | HOLD | HOLD | PARKED | PARKED |
+| [omx_adapter](src/products/omx/adapter/progress.md) | OMX workcell | 7ae0f65c (2026-10-02) | GO | GO | HOLD | HOLD | PARKED | PARKED |
 | [interfaces](src/contracts/interfaces/progress.md) | 장치 | dc89264 (2026-09-17) | GO | GO | N/A | HOLD | HOLD | PARKED |
 | [pinky_pro](src/products/pinky_pro/profile/progress.md) | 로봇 통합 | uncommitted (2026-09-24) | GO | GO | GO | HOLD | HOLD | PARKED |
 | [omx](src/products/omx/profile/progress.md) | OMX workcell | uncommitted (2026-09-26) | GO | GO | HOLD | HOLD | PARKED | PARKED |
@@ -49,7 +49,7 @@
 - control ARTIFACT: 서명된 ARM64 manifest·immutable digest 발행 전. 흡수된 코드는 deploy가 소유하는 OS 이미지에 번들된다
 - control DEVICE: Pi bench Device 설치와 device-readback.sh --json 증거 없음. Control sensor adapter 활성화는 Device 보정 generation에 묶인다(D-47)
 - fleet ROS-SIM: D-87: 현재 트리의 colcon install/setup.bash가 없다. 2026-09-17 WSL Task 14 로그는 설계 입력이며 GO가 아니다 (D-89)
-- rosy_cell ROS-SIM: needs roadmap P3/P4 (MoveIt OMX-F Gazebo, device Step API)
+- rosy_cell ROS-SIM: No Fleet route (C4) or end-to-end Job run (C6). Step z is the item top face, but the OMX-F TCP is at the fingertips, so a box grasp needs a depth below the top that no Rosy Cell or grant field carries yet.
 - palletizing ROS-SIM: Task 8 must verify fixed-cell transfer execution and interrupted recovery in Gazebo
 - palletizing ARTIFACT: The wheel is locally built and installed for validation; a declared installation profile and release provenance are Task 6
 - navigation ROS-SIM: Nav2/SLAM Toolbox 실물 launch 미재실행. 현재는 ament_lint와 조합 계약 시험뿐 — ROS 2 Jazzy 환경에서 hardware.launch.py/gz_*.launch.xml 재실행 필요
@@ -73,7 +73,7 @@
 - pilot ROS-SIM: OMX 관절·그리퍼·취소의 Gazebo action/readback은 docs/validation/pilot-omx-gazebo-2026-10-01/에서 확인. Gazebo 작업대 영상·시연 기록 15프레임과 실제 LeRobot v3 재독출도 통과. 그리퍼 정밀 도달·전체 재시작 회복·Pinky 재측정은 남음
 - pilot ARTIFACT: share/pilot 설치를 이미지에서 본 기록이 없다
 - pilot DEVICE: 실기 Pinky 에서 페달 hold-해제가 실제 정지로 이어지는 확인 전
-- omx_adapter ROS-SIM: Full gate still requires a Fleet Mission admission/grant-to-device-owner simulator harness against vendor Gazebo, a pending vendor goal fenced by generation change, restart recovery to UNKNOWN/HOLD without replay, and four-phase execution with fresh state and independent simulated object/gripper evidence. Pilot workcell RGB recording is available; full Fleet pick/place still has no contact/object evidence and does not prove independent stop, ARM64, or physical hardware.
+- omx_adapter ROS-SIM: C3 findings fixed in C3b. Open: layer fill disturbs neighbours (a later placement pushed an earlier block 16-25 mm: Gazebo's effective finger is wider than the 15-20 mm recipe gap); Gazebo's finger contact is ~5-9 mm wider than the pinned mesh and the jaw mapping is calibrated, not derived; fingers stop on the wrist near joint5 = pi/2 in Gazebo; no slip-sheet grasp. Full gate still requires a Fleet Mission admission/grant-to-device-owner simulator harness against vendor Gazebo, a pending vendor goal fenced by generation change, restart recovery to UNKNOWN/HOLD without replay, and four-phase execution with fresh state and independent simulated object/gripper evidence. Pilot workcell RGB recording is available; full Fleet pick/place still has no contact/object evidence and does not prove independent stop, ARM64, or physical hardware.
 - omx_adapter ARTIFACT: No signed/published production artifact digest, complete SBOM, or provider deployment/secret-injection configuration is available. Simulation manifest does not qualify as a releasable runtime artifact.
 - interfaces ARTIFACT: io 이미지에 포함된다(deploy/robot/pinky_pro/image/ 빌더 `COPY src/interfaces`, `--packages-select`에 포함). 서명 manifest·OCI archive·immutable registry digest 발행 전
 - interfaces DEVICE: Pi OS Lite bench Device의 install-pi.sh 설치, verify-pi.sh, device-readback.sh --json 증거 없음

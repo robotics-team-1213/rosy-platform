@@ -262,6 +262,10 @@ def test_runtime_timeout_latches_hold_and_late_cancel_result_does_not_reopen_own
         while time.monotonic() < deadline and runtime.owner.state != "hold":
             time.sleep(0.01)
         assert runtime.owner.state == "hold"
+        # The watchdog assigns last_terminal_decision just after owner.poll() latches HOLD.
+        deadline = time.monotonic() + 3.0
+        while time.monotonic() < deadline and runtime.last_terminal_decision is None:
+            time.sleep(0.01)
         assert runtime.owner.poll().reason == "action_timeout"
         assert runtime.last_terminal_decision.reason == "action_timeout"
         assert runtime.submit(command).reason == "hold_latched"
@@ -292,3 +296,238 @@ def test_runtime_timeout_latches_hold_and_late_cancel_result_does_not_reopen_own
         for node in (server_node, feedback_node, owner_node):
             node.destroy_node()
         rclpy.shutdown()
+
+
+def test_slow_feedback_handling_cannot_starve_the_joint_state_subscription():
+    """C3b A2: a feedback handler slower than max_joint_state_age_s (C3 run4/run7 journal
+    writes took up to 0.64 s) must not delay joint-state intake on a MultiThreadedExecutor."""
+    rclpy.init()
+    server_node = Node("omx_test_flood_server")
+    feedback_node = Node("omx_test_flood_state")
+    owner_node = Node("omx_test_flood_owner")
+    slow_feedbacks = []
+
+    def execute(goal_handle):
+        for _ in range(40):  # 40 feedback messages over ~0.8 s
+            feedback = FollowJointTrajectory.Feedback()
+            feedback.joint_names = ["joint1"]
+            goal_handle.publish_feedback(feedback)
+            time.sleep(0.02)
+        goal_handle.succeed()
+        result = FollowJointTrajectory.Result()
+        result.error_code = FollowJointTrajectory.Result.SUCCESSFUL
+        return result
+
+    action_name = "/test/omx/flood/arm_controller/follow_joint_trajectory"
+    action_server = ActionServer(server_node, FollowJointTrajectory, action_name,
+                                 execute_callback=execute)
+    state_topic = "/test/omx/flood/joint_states"
+    state_publisher = feedback_node.create_publisher(JointState, state_topic, 10)
+    config = ArmCommandConfig(
+        enabled=True, workcell_id="test_workcell", instance_id="test_instance",
+        joint_names=("joint1",), position_limits={"joint1": (-1.0, 1.0)},
+        allowed_owners=("moveit",), calibration_revision="cal-test",
+        max_joint_state_age_s=0.2, max_goal_duration_s=2.0, action_timeout_s=4.0,
+        max_start_state_tolerances={"joint1": 0.05},
+    )
+    runtime = RosArmCommandRuntime(owner_node, config, joint_state_topic=state_topic,
+                                   trajectory_action=action_name, poll_period_s=0.01)
+    phase_port = RosArmPhaseGoalPort(runtime)
+    executor = MultiThreadedExecutor(num_threads=4)
+    for node in (server_node, feedback_node, owner_node):
+        executor.add_node(node)
+    spinner = ThreadPoolExecutor(max_workers=1)
+    spinning = spinner.submit(executor.spin)
+    stop = threading.Event()
+
+    def publish_states():
+        while not stop.is_set():
+            message = JointState()
+            message.name = ["joint1"]
+            message.position = [0.0]
+            state_publisher.publish(message)
+            stop.wait(0.01)
+
+    publisher = threading.Thread(target=publish_states, daemon=True)
+    publisher.start()
+
+    def slow_sink(event):
+        if event.kind == "RUNNING_FEEDBACK" and not slow_feedbacks:
+            slow_feedbacks.append(event)
+            time.sleep(0.6)  # 3x max_joint_state_age_s inside the ROS callback
+        return True
+
+    try:
+        deadline = time.monotonic() + 5.0
+        while time.monotonic() < deadline and not (
+                runtime.action_port.server_is_ready() and runtime.latest_joint_state is not None):
+            time.sleep(0.01)
+        state = runtime.latest_joint_state
+        command = TrajectoryCommand(
+            workcell_id=config.workcell_id, instance_id=config.instance_id,
+            command_id="flood-command", session_id=runtime.owner.session_id, owner="moveit",
+            positions={"joint1": 0.1}, duration_s=1.0, source_state_sequence=state.sequence,
+            calibration_revision=config.calibration_revision, phase_id="approach",
+            expected_start_state_positions={"joint1": 0.0}, start_state_tolerances={"joint1": 0.01},
+        )
+        assert phase_port.submit(command, on_goal_event=slow_sink).dispatched is True
+        deadline = time.monotonic() + 6.0
+        while time.monotonic() < deadline and runtime.last_terminal_decision is None:
+            time.sleep(0.01)
+        assert slow_feedbacks, "the server never sent feedback"
+        assert runtime.last_terminal_decision.reason == "completed", runtime.last_terminal_decision
+        assert runtime.owner.state == "ready"
+    finally:
+        stop.set()
+        publisher.join(timeout=1.0)
+        executor.shutdown(timeout_sec=2.0)
+        spinning.result(timeout=3.0)
+        runtime.destroy()
+        action_server.destroy()
+        for node in (server_node, feedback_node, owner_node):
+            node.destroy_node()
+        rclpy.shutdown()
+
+
+def test_sim_owner_clock_uses_the_node_clock_and_requires_a_wall_bound():
+    from dataclasses import replace
+
+    from rclpy.parameter import Parameter
+
+    rclpy.init()
+    node = Node("omx_test_sim_clock", parameter_overrides=[Parameter("use_sim_time", value=True)])
+    config = ArmCommandConfig(
+        enabled=True, workcell_id="w", instance_id="i", joint_names=("joint1",),
+        position_limits={"joint1": (-1.0, 1.0)}, allowed_owners=("moveit",),
+        calibration_revision="cal", max_joint_state_age_s=0.5, max_goal_duration_s=1.0,
+        action_timeout_s=2.0,
+    )
+    runtime = None
+    try:
+        with pytest.raises(ValueError, match="wall_clock_bound_factor"):
+            RosArmCommandRuntime(node, config, joint_state_topic="/t/sim/js",
+                                 trajectory_action="/t/sim/fjt", owner_clock="sim")
+        steady = RosArmCommandRuntime(node, config, joint_state_topic="/t/sim/js1",
+                                      trajectory_action="/t/sim/fjt1")
+        assert steady.monotonic is time.monotonic  # default: Pilot keeps steady time
+        steady.destroy()
+        runtime = RosArmCommandRuntime(node, replace(config, wall_clock_bound_factor=4.0),
+                                       joint_state_topic="/t/sim/js2", trajectory_action="/t/sim/fjt2",
+                                       owner_clock="sim")
+        # No /clock yet: sim time is 0, far from the steady clock.
+        assert runtime.monotonic() == 0.0
+        assert runtime.owner._monotonic is runtime.monotonic
+        assert runtime.owner._wall is time.monotonic
+    finally:
+        if runtime is not None:
+            runtime.destroy()
+        node.destroy_node()
+        rclpy.shutdown()
+
+
+def test_feedback_before_the_goal_response_does_not_fail_the_goal():
+    """Review B1: with the action client in its own callback group, rclpy may run the
+    feedback callback before the send-goal future's done callback. That feedback has no
+    goal id yet; it must be dropped as telemetry, never mark the observation failed."""
+    from types import SimpleNamespace
+    from uuid import uuid4
+
+    from action_msgs.msg import GoalStatus
+    from omx_adapter.ros_runtime import RosTrajectoryActionHandle
+
+    class Future:
+        def __init__(self, value=None):
+            self.value, self.callbacks = value, []
+
+        def add_done_callback(self, callback):
+            self.callbacks.append(callback)
+
+        def result(self):
+            return self.value
+
+    sent = {}
+
+    class Client:
+        def send_goal_async(self, goal, feedback_callback):
+            sent["feedback"] = feedback_callback
+            sent["future"] = Future()
+            return sent["future"]
+
+    events = []
+    command = TrajectoryCommand(
+        workcell_id="w", instance_id="i", command_id="early-feedback", session_id="s", owner="moveit",
+        positions={"joint1": 0.1}, duration_s=0.5, source_state_sequence=1, calibration_revision="cal",
+        phase_id="approach",
+    )
+    handle = RosTrajectoryActionHandle(Client(), command, lambda event: events.append(event) or True)
+    sent["feedback"](SimpleNamespace())  # before the goal response
+    result_future = Future(SimpleNamespace(status=GoalStatus.STATUS_SUCCEEDED, result=SimpleNamespace(
+        error_code=FollowJointTrajectory.Result.SUCCESSFUL)))
+    goal_handle = SimpleNamespace(accepted=True, goal_id=SimpleNamespace(uuid=list(uuid4().bytes)),
+                                  get_result_async=lambda: result_future)
+    sent["future"].value = goal_handle
+    for callback in sent["future"].callbacks:
+        callback(sent["future"])
+    sent["feedback"](SimpleNamespace())
+    for callback in result_future.callbacks:
+        callback(result_future)
+    assert handle.done() and handle.succeeded()
+    # The early feedback is replayed once after acceptance, in order.
+    assert [event.kind for event in events] == [
+        "GOAL_ACCEPTED", "RUNNING_FEEDBACK", "RUNNING_FEEDBACK", "TERMINAL_RESULT"]
+    assert [event.sequence for event in events] == [1, 2, 3, 4]
+
+
+def test_feedback_between_goal_id_and_goal_accepted_waits_for_the_acceptance():
+    """Re-review N1: _on_goal_response records the goal id under the handle lock and emits
+    GOAL_ACCEPTED after releasing it. Feedback landing in that gap must not reach the sink
+    before GOAL_ACCEPTED (the runner has no goal id yet and would fail the goal)."""
+    from types import SimpleNamespace
+    from uuid import uuid4
+
+    from action_msgs.msg import GoalStatus
+    from omx_adapter.ros_runtime import RosTrajectoryActionHandle
+
+    class Future:
+        def __init__(self, value=None):
+            self.value, self.callbacks = value, []
+
+        def add_done_callback(self, callback):
+            self.callbacks.append(callback)
+
+        def result(self):
+            return self.value
+
+    sent = {}
+
+    class Client:
+        def send_goal_async(self, goal, feedback_callback):
+            sent["feedback"] = feedback_callback
+            sent["future"] = Future()
+            return sent["future"]
+
+    events = []
+    command = TrajectoryCommand(
+        workcell_id="w", instance_id="i", command_id="gap-feedback", session_id="s", owner="moveit",
+        positions={"joint1": 0.1}, duration_s=0.5, source_state_sequence=1, calibration_revision="cal",
+        phase_id="approach",
+    )
+    handle = RosTrajectoryActionHandle(Client(), command, lambda event: events.append(event) or True)
+    original_emit = handle._emit
+
+    def emit_with_feedback_in_the_gap(kind, **facts):
+        if kind == "GOAL_ACCEPTED":
+            sent["feedback"](SimpleNamespace())  # goal id already set, acceptance not yet emitted
+        return original_emit(kind, **facts)
+
+    handle._emit = emit_with_feedback_in_the_gap
+    result_future = Future(SimpleNamespace(status=GoalStatus.STATUS_SUCCEEDED, result=SimpleNamespace(
+        error_code=FollowJointTrajectory.Result.SUCCESSFUL)))
+    sent["future"].value = SimpleNamespace(accepted=True, goal_id=SimpleNamespace(uuid=list(uuid4().bytes)),
+                                           get_result_async=lambda: result_future)
+    for callback in sent["future"].callbacks:
+        callback(sent["future"])
+    for callback in result_future.callbacks:
+        callback(result_future)
+    assert [event.kind for event in events] == ["GOAL_ACCEPTED", "RUNNING_FEEDBACK", "TERMINAL_RESULT"]
+    assert handle.succeeded()

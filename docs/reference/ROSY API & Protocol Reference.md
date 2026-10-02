@@ -2,7 +2,7 @@
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.79
+**Version:** v1.80
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -802,9 +802,9 @@ close code: `4401` 은 토큰이 없거나 틀린 것(`/ws/state` 와 동일), `
 | `nav.line_mode_changed` | info | 로봇 | `{from, to}` — D-143 line-follow 모드 선택 |
 | `nav.line_driver_released` | info | 로봇 | `{mode}` — D-344 §8 운전자 확인(`hold_s`)이 끊겨 CORE 가 line-follow 를 스스로 내림 (v1.63) |
 | `nav.line_obstacle_hold` | warning | 로봇 | `{mode, clearance_m, held_s}` — D-344 §11 앞 물체 정지(`obstacle_ahead`)가 `line_follow.obstacle_escalate_s` 넘게 이어짐, 정지 한 번에 한 번 (feat/device-prep, v1.64) |
-| `nav.line_stuck_opened` | warning | 로봇 | `{stuck_id, cause, front_clearance_m, rear_clearance_m, turn_clearance_m, rear_blind_m, last_lane, preview_seq, restuck_of, attempts}` — D-407 §1 막힘 열림: `cause` 는 `obstacle_ahead`(앞물체 정지가 `obstacle_escalate_s` 이상) 또는 `lane_lost`. 여유는 로봇별 self-mask 적용, 앞은 LiDAR 기준 경로 띠, 뒤는 URDF 몸 뒤끝 기준, 회전은 회전 반경 밖; `rear_blind_m` 은 LiDAR `range_min` 때문에 안 보이는 뒤 거리. 같은 막힘에 한 번 (v1.74) |
+| `nav.line_stuck_opened` | warning | 로봇 | `{stuck_id, cause, front_clearance_m, rear_clearance_m, rear_state, turn_clearance_m, rear_blind_m, last_lane, preview_seq, restuck_of, attempts}` — D-407 §1 막힘 열림: `cause` 는 `obstacle_ahead`(앞물체 정지가 `obstacle_escalate_s` 이상) 또는 `lane_lost`. 여유는 로봇별 self-mask 적용, 앞은 LiDAR 기준 경로 띠, 뒤는 URDF 몸 뒤끝 기준, 회전은 회전 반경 밖; `rear_blind_m` 은 LiDAR `range_min` 때문에 안 보이는 뒤 거리. 같은 막힘에 한 번 (v1.74) |
 | `nav.line_stuck_asked` | info | 로봇 | `{stuck_id, cause, console_linked, local_fallback_s, attempts, reason, decisions}` — D-407 §2·§3 관제 판단 요청(FleetAgent 가 중계). `local_fallback_s` 가 null 이면 로컬 복구로 넘어가지 않고 관제 답만 기다린다(`reason`: `opened`·`console_wait`·`local_disabled`·`local_refused`·`local_aborted`·`attempts_exhausted`) (v1.74) |
-| `nav.line_stuck_answered` | info | 로봇 | `{stuck_id, decision, by, token_id, accepted, reason}` — D-407 §2 관제 답. `by` 는 역할, `token_id` 는 답한 토큰. 거부된 답(`stuck_id_mismatch`, 거부 사유)도 남는다 (v1.74) |
+| `nav.line_stuck_answered` | info | 로봇 | `{stuck_id, decision, by, principal_ref, accepted, reason, rear_blind_m, trail_m, trail_yaw_deg, trail_age_s}` — D-407 §2 관제 답. `by` 는 역할, `principal_ref` 는 답한 토큰의 이름 — 설정된 id 가 있으면 그 id, 없으면 `anon-` + CORE 프로세스마다 새로 만드는 키로 낸 HMAC 앞 12자(해시 앞자리를 그대로 내면 후보 토큰으로 확인할 수 있어서다; 이 값은 CORE 한 번 실행 동안만 같다). 비밀이 아니다. v1.80 에서 `token_id` 에서 이름을 바꿈: Fleet 감사 저장소가 자격 증명 이름으로 거부했다. `BACK_AND_RETRY` 거부면 판정한 scan 의 `rear_blind_m`·`trail_m`·`trail_yaw_deg`·`trail_age_s`, 아니면 null. 거부된 답(`stuck_id_mismatch`, 거부 사유)도 남는다 (v1.74) |
 | `nav.line_stuck_local_attempt` | warning | 로봇 | `{stuck_id, attempt, trigger, back_m, speed_mps, rear_clearance_m, rear_blind_m, trail_m, trail_age_s}` — D-407 §4 로컬 후진 시작. `rear_blind_m` 은 LiDAR `range_min` 과 몸 뒤끝을 넘는 self-mask 창이 가리는 뒤 깊이, `trail_m` 은 방금 앞으로 지나온 거리(사용자 결정 2026-10-02: 사각 띠는 그 안에서만 들어간다)(`trigger`: `ask_timeout`·`no_console`·`retry`·`console`) (v1.74) |
 | `nav.line_stuck_local_result` | info | 로봇 | `{stuck_id, attempt, result, reason, lane_visible, front_clear, rear_clearance_m, rear_blind_m, trail_m, trail_yaw_deg, trail_age_s}` — D-407 §4 결과: `recovered`·`still_stuck`·`refused`(시작 전)·`aborted`(후진 중 뒤 여유·scan stale·관제 WAIT) (v1.74) |
 | `nav.line_stuck_closed` | info | 로봇 | `{stuck_id, cause, reason, attempts, held_s}` — D-407 막힘 닫힘(`cleared`·`recovered`·`console_resume`·`console_manual`·`console_abort`·`mode_off`·`mode_changed`·`driver_released`·`estop`) (v1.74) |
@@ -1828,6 +1828,7 @@ fake credentials and clocks; device and field acceptance remain separate gates.
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.80 | 2026-10-02 | Corrective + Additive (D-407 관제 재실행, fix/d407-console-link-and-event-fields): **Corrective** `nav.line_stuck_answered` 의 `token_id` → `principal_ref`(비밀 아닌 이름: 설정 id, 없으면 프로세스 키 HMAC `anon-…`) — Fleet 사건 저장소가 `token` 이 든 키를 자격 증명으로 보고 `EVENT_NOT_AUDITABLE` 로 거부해 이 사건이 Fleet 감사에 남지 않았다. **Additive** `nav.line_stuck_opened` `rear_state`(`clear`·`blocked`·`unknown` — `rear_clearance_m` null 이 "띠가 비었다"와 "모른다"를 함께 뜻하던 것을 가름), 거부된 `BACK_AND_RETRY` 답에 `rear_blind_m`·`trail_m`·`trail_yaw_deg`·`trail_age_s`. FleetAgent 는 hub 의 모든 답을 한 수신 루프로 읽는다(사건 답이 쌓여 연결이 끊기던 결함; envelope 형식 변화 없음, `protocol_version` 1.0). 설정 `line_follow.recovery_console_grace_s`(3 s) |
 | v1.79 | 2026-10-02 | Additive (D-407, fix/d407-trail-age-and-recording-marker): `nav.line_stuck_local_attempt`·`nav.line_stuck_local_result` 에 `trail_age_s`(지나온 길의 마지막 전진 명령 뒤 경과, 단조 초). 사각 띠 후진은 그 값이 `line_follow.recovery_trail_max_age_s`(30 s) 이하일 때만 — 넘으면 `rear_blind`. 기존 필드 변화 없음 |
 | v1.78 | 2026-10-02 | Additive (D-403 / D-413 Task 4): define separate `FleetCellTransferGrant` and bounded `CELL_TRANSFER` body for one recipe/cell-bound pick/place pair. Existing `PICK_PLACE` schema, payload and digest remain unchanged; Fleet dispatch stays gated on simulation evidence. |
 | v1.79 | 2026-10-02 | Additive (D-403 / D-413 Task 4): scope a `service` principal to Cell Job proposals/resolution, require a distinct named operator for admission, expose ordered Cell Job status, and persist ordered `CELL_TRANSFER` steps. Existing `PICK_PLACE` records remain unchanged; device dispatch and independent goal evidence remain gated. |

@@ -68,11 +68,11 @@ class StuckRecoveryMixin:
         self._trail.clear()
 
     def stuck_decision(self, stuck_id: str, decision: str, *, by: str,
-                       token_id: Optional[str] = None, now: Optional[float] = None) -> str:
+                       principal_ref: Optional[str] = None, now: Optional[float] = None) -> str:
         """Console answer (D-407 §2). Raises AnswerRefused; returns hold|back|resume|manual|idle."""
         current = float(self._clock() if now is None else now)
         with self._lock:
-            outcome = self._recovery.answer(current, stuck_id, decision, by, token_id)
+            outcome = self._recovery.answer(current, stuck_id, decision, by, principal_ref)
             # Any accepted answer outdates a twist computed before it (e.g. a back-off
             # before WAIT): apply_if_current then rejects it (review L1).
             self._evidence_revision += 1
@@ -107,6 +107,15 @@ class StuckRecoveryMixin:
         if self._lost_latched:
             self._lost_latched = False
             self._loss_started_at = now
+
+    def _rear_state(self, known: bool, rear_m: Optional[float], now: float) -> str:
+        fresh = (self._body_points is not None and self._body_at is not None
+                 and now - self._body_at <= self._config.clearance_stale_s)
+        if not known or not fresh:
+            return "unknown"
+        if rear_m is not None and rear_m <= self._config.recovery_rear_clear_m:
+            return "blocked"
+        return "clear"
 
     def _rear_half_width(self) -> float:
         config = self._config
@@ -160,6 +169,7 @@ class StuckRecoveryMixin:
             scan_age_s=None if self._body_at is None else now - self._body_at,
             lidar_expected=self._clearance_at is not None,
             moved_since_recovery_m=moved,
+            rear_state=self._rear_state(known, seen["rear_m"] if known else None, now),
             geometry_known=known,
             console_linked=self._provided("console_linked") is True,
             calibration_active=self._provided("calibration_active") is not False,

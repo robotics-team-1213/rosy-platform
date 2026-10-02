@@ -107,6 +107,12 @@ export function createSignals({ el, view, log, call, refreshState }) {
     el("signals-state").textContent = rows.length
       ? `${rows.filter((r) => r.online).length}/${rows.length} 연결`
       : "—";
+    // D-415 — 빈 상태는 ui-empty 규칙으로 말한다.
+    const empty = el("signals-hint");
+    if (empty) {
+      empty.hidden = rows.length > 0;
+      if (!rows.length) empty.textContent = "설정된 신호등이 없습니다 — signals.yaml 등록은 설치 화면에서 합니다.";
+    }
   }
 
   return { render };

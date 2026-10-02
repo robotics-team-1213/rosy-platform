@@ -40,9 +40,8 @@ PINNED_CONFIRMS = {
     "settings.js": 8,  # D-371: 목록 행 삭제 셋(토큰·도크·웨이포인트)은 confirmIrreversible
     "map.js": 1,
     "telemetry.js": 1,  # 교통 정책 적용 확인 — D-362 P1 분할로 app.js에서 이동
-    "console.js": 3,   # Fleet 목표 지정, 전체 정지, 정지 래치 재허가
+    "console.js": 2,   # Fleet 목표 지정, 정지 래치 재허가 (전체 정지는 D-414로 확인 없음)
     "roster.js": 1,    # 카메라 고장 뒤 IR 추적 선택 확인
-    "install.js": 1,   # D-410 설치 문서의 전체 정지 — 관제 표면의 첫 화면 규칙을 따른다
 }
 
 

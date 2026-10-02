@@ -18,6 +18,7 @@ MODES = ("palletize", "depalletize")
 _REQUIRED = ("schema", "name", "mode", "box", "pallets", "pick_station", "gap", "layers")
 _OPTIONAL = ("slip_sheet",)
 _BOX = ("length", "width", "height", "mass_kg")
+_BOX_OPTIONAL = ("grasp_depth",)
 _PALLET = ("id", "frame", "length", "width", "max_stack_height", "max_load_kg")
 
 
@@ -60,10 +61,11 @@ def content_hash(data: object) -> str:
 
 
 def _box(value: object, field: str) -> Box:
-    d = fields.mapping(value, field, _BOX)
+    d = fields.mapping(value, field, _BOX, _BOX_OPTIONAL)
     sizes = [fields.number(d[k], f"{field}.{k}") for k in _BOX]
+    depth = fields.non_negative(d["grasp_depth"], f"{field}.grasp_depth") if "grasp_depth" in d else 0.0
     try:
-        return Box(*sizes)
+        return Box(*sizes, grasp_depth=depth)
     except ValueError as exc:
         raise FieldError(f"{field}: {exc}") from None
 

@@ -45,10 +45,16 @@ def _on_pallet(frame: Frame, x: float, y: float, z: float, yaw: float) -> Pose:
     return Pose(bx, by, bz, frame.yaw_to_base(yaw))
 
 
-def _transfer(src: Pose, dst: Pose, item: str, pallet: str, layer: int, clearance: float) -> list[Step]:
+def _transfer(src: Pose, dst: Pose, item: str, pallet: str, layer: int, clearance: float,
+              depth: float = 0.0) -> list[Step]:
+    """src/dst are the item's top face. The Step target is the TCP grasp height, depth below
+    the top (C3b B1); approach_z clears the top face by the clearance."""
+    def tcp(top: Pose) -> Pose:
+        return Pose(top.x, top.y, top.z - depth, top.yaw)
+
     return [
-        Step("pick", item, pallet, layer, src, src.z + clearance),
-        Step("place", item, pallet, layer, dst, dst.z + clearance),
+        Step("pick", item, pallet, layer, tcp(src), src.z + clearance),
+        Step("place", item, pallet, layer, tcp(dst), dst.z + clearance),
     ]
 
 
@@ -74,13 +80,21 @@ def _check(recipe: Recipe, cell: CellConfig, tol_m: float) -> dict[str, StackPla
         )
         problems += [f"pallet {slot.id}: {msg}" for msg in stack_issues(plan, recipe.box, slot.pallet, tol_m=tol_m)]
         plans[slot.id] = plan
+    # The fingertips reach fingertip_overhang_m below the TCP; a grasp deeper than
+    # height - overhang would put them below the box bottom, into the surface it lands on.
+    if recipe.box.grasp_depth > recipe.box.height - cell.fingertip_overhang_m + 1e-12:
+        problems.append(f"box grasp_depth {recipe.box.grasp_depth:.4f} puts the fingertips "
+                        f"({cell.fingertip_overhang_m:.4f} below the TCP) below the box bottom")
     if problems:
         raise CompileError(problems)
     return plans
 
 
 def carry_z(recipe: Recipe, cell: CellConfig, *, tol_m: float) -> float:
-    """Highest surface over the whole Job + box height + approach clearance (D-402 §6).
+    """Highest surface over the whole Job + held-item hang below the TCP + approach clearance (D-402 §6).
+
+    The hang is box height - grasp_depth (the TCP grasps grasp_depth below the box top, C3b
+    B1), or the slip-sheet thickness if that is larger (a sheet is taken at its top face).
 
     Surfaces: the top of every pallet's full stack (all four footprint corners, so a tilted frame is
     covered) and every station pose the recipe uses. Home is not an obstacle and is not included.
@@ -98,12 +112,15 @@ def _carry_z(recipe: Recipe, cell: CellConfig, plans: dict[str, StackPlan]) -> f
                 tops.append(frame.to_base((x, y, plan.height))[2])
     stations = [recipe.pick_station] + ([recipe.slip_sheet_station] if recipe.slip_sheet_station else [])
     tops += [cell.station_pose(s)[2] for s in stations]
-    return max(tops) + recipe.box.height + cell.approach_clearance_m
+    hang = max(recipe.box.height - recipe.box.grasp_depth, recipe.slip_sheet_thickness or 0.0,
+               cell.fingertip_overhang_m)
+    return max(tops) + hang + cell.approach_clearance_m
 
 
 def compile_job(recipe: Recipe, cell: CellConfig, *, tol_m: float) -> Job:
     plans = _check(recipe, cell, tol_m)
     clearance = cell.approach_clearance_m
+    depth = recipe.box.grasp_depth
     station = Pose(*cell.station_pose(recipe.pick_station))
     sheet_station = Pose(*cell.station_pose(recipe.slip_sheet_station)) if recipe.slip_sheet_station else None
     steps: list[Step] = []
@@ -122,12 +139,12 @@ def compile_job(recipe: Recipe, cell: CellConfig, *, tol_m: float) -> Job:
                 if sheet_pose:
                     steps += _transfer(sheet_station, sheet_pose, "slip_sheet", slot.id, n, clearance)
                 for b in ordered:
-                    target = _on_pallet(frame, b.x, b.y, b.z_top, b.yaw)
-                    steps += _transfer(station, target, "box", slot.id, n, clearance)
+                    steps += _transfer(station, _on_pallet(frame, b.x, b.y, b.z_top, b.yaw), "box", slot.id, n,
+                                       clearance, depth)
             else:
                 for b in reversed(ordered):
-                    source = _on_pallet(frame, b.x, b.y, b.z_top, b.yaw)
-                    steps += _transfer(source, station, "box", slot.id, n, clearance)
+                    steps += _transfer(_on_pallet(frame, b.x, b.y, b.z_top, b.yaw), station, "box", slot.id, n,
+                                       clearance, depth)
                 if sheet_pose:
                     steps += _transfer(sheet_pose, sheet_station, "slip_sheet", slot.id, n, clearance)
         steps.append(Step("pallet_done", "", slot.id, None, None, None))

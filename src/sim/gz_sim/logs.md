@@ -218,3 +218,10 @@
 - gate 변화: 없음
 - 결정: 없음. 장치 기본값 변경 제안 없음 — 장치 값(lookahead 0.3 > 허용 0.25, 지역 정사각 풋프린트)은 이 문제가 없다.
 - 교훈: RPP 의 lookahead 를 줄이면 목표 허용오차도 같이 봐야 한다 — carrot 이 허용오차 안이면 "도착"으로 보고 회전만 한다. 그리고 플래너용 보수적 풋프린트를 컨트롤러 비용지도에 같이 넣으면 벽 옆 출발이 막힌다.
+
+## 2026-10-02 · d8f96fb8 · feat(sim): omx_cell_workcell world (Rosy Cell C3)
+
+- 변경: `worlds/omx_cell_workcell.sdf`(탁자, 팔레트 2, 인피드 블록, 슬립시트 받침; world = OMX link0, step 2 ms, 카메라 없음)와 `omx_cell_workcell_sim_aid.sdf`(블록↔link5 DetachableJoint, 표시된 sim aid). 실행은 `deploy/robot/omx/run_cell_sim.sh`.
+- 증거: docs/validation/rosy-cell-gazebo-c3-2026-10-02/README.md. 소프트웨어 렌더 카메라를 켜면 RTF 0.06, 끄면 0.3–0.95.
+- gate 변화: 없음(gz_sim 다중 로봇 gate와 무관).
+- 결정: D-402, D-403 §5.

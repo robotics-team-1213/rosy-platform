@@ -14,5 +14,5 @@ package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["rosy.execution.api*", "rosy.execution.site*"]
+include = ["rosy.execution.api*", "rosy.execution.local*", "rosy.execution.site*"]
 namespaces = true

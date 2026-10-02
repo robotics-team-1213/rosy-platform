@@ -35,6 +35,8 @@ def test_fixture_builds_frames_and_stations():
         ("x_point: [0.3, 0, 0]", "x_point: [0.205, 0, 0]", "pallet_a"),
         ("{frame: base, x: 0.0", "{frame: nowhere, x: 0.0", "unknown frame"),
         ("approach_clearance_m: 0.05", "approach_clearance_m: 0", "approach_clearance_m"),
+        ("fingertip_overhang_m: 0.0025", "fingertip_overhang_m: -0.001", "fingertip_overhang_m"),
+        ("fingertip_overhang_m: 0.0025" + chr(10), "", "fingertip_overhang_m"),
         # non-finite and wrong-typed numbers
         ("approach_clearance_m: 0.05", "approach_clearance_m: .nan", "approach_clearance_m"),
         ("approach_clearance_m: 0.05", "approach_clearance_m: .inf", "approach_clearance_m"),

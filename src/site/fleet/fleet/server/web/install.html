@@ -56,7 +56,7 @@
               <h4 id="discovery-heading">로봇 등록</h4>
               <ui-tag id="discovery-status" status="neutral">검색 대기</ui-tag>
             </div>
-            <p class="hint">발견된 주소는 접속 힌트입니다. 등록은 로봇 화면의 코드로 Fleet이 직접 확인합니다.</p>
+            <p class="hint" title="등록은 로봇 화면의 8자리 코드로 Fleet이 직접 확인합니다">발견 목록</p>
             <p id="enroll-unavailable" class="hint bad" hidden>자격 키를 읽을 수 없음 — 등록을 쓸 수 없습니다.</p>
             <p id="enroll-alarm" class="enroll-alarm" role="alert" hidden></p>
             <ul id="discovery-list" class="discovery-list" aria-live="polite"></ul>
@@ -162,7 +162,7 @@
           </div>
           <p id="vision-message" role="status">관제 사용자 인증 후 카메라를 선택하세요.</p>
         </div>
-        <p class="hint" id="vision-meta">화면에 보이는 카메라의 최신 프레임입니다. 실제 시야 범위는 현장 설치에서 확인해야 합니다.</p>
+        <p class="hint" id="vision-meta" title="화면에 보이는 카메라의 최신 프레임입니다. 실제 시야 범위는 현장 설치에서 확인해야 합니다"></p>
 
         <div class="field-tools">
           <ui-button kind="quiet" id="field-detect" type="button">경기장 자동 찾기</ui-button>

@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rosy-integration-robot-omx"
+version = "0.1.0"
+description = "OMX binding for the ROSY pallet transfer Skill and local Action owner"
+requires-python = ">=3.12"
+dependencies = ["rosy-skill-manipulation==0.1.0"]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["rosy.integrations.robots.omx*"]
+namespaces = true

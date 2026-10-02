@@ -76,7 +76,7 @@ CONTROL_SPLIT = "docs/plans/2026-09-22-control-package-split-design.md"
 #: P6 verdicts: path (relative to src/) or package name -> (lines at verdict, verdict).
 SIZE_VERDICTS = {
     "fleet": (
-        26_340,
+        26_498,
         "split: server HTTP boundary, console, signals and the mission-control stores are separate owners "
         "today; group them into subpackages rather than one flat server/ tree (B2); owner fleet, unscheduled "
         "(re-judged 2026-09-29 at 11164 after mission_store joined the server tree; re-judged 2026-09-30 at "
@@ -259,7 +259,7 @@ SIZE_VERDICTS = {
         "accept: sim-only read-only viewer server (HTTP handler + ROS subscriptions); the pure logic already lives in live_view_model.py and the page in lane_live_view.html, covered by test_lane_live_view*.py and test_live_view_model.py (X5)",
     ),
     "core_features": (
-        10_849,
+        11_061,
         "accept: the ROS-free CORE feature managers (command, safety, docking, line_follow, "
         "traffic_policy, navigation, swarm, ...) are already one subpackage per feature, each "
         "under the file budget; the package total is a sum of independent owners, not one "
@@ -268,7 +268,9 @@ SIZE_VERDICTS = {
         "next +150; split by feature into separate packages only if a feature gains its own "
         "deploy unit. Re-judged 2026-10-02 at 10849 when main's D-395 P2-7 localization mission "
         "(core_features/localization) merged in beside D-407; same verdict, each feature still its "
-        "own subpackage under the file budget",
+        "own subpackage under the file budget. Re-judged 2026-10-02 at 11061 when the D-407 console "
+        "re-run fixes landed (FleetAgent single receive loop, stuck event fields; main had reached "
+        "10977); same verdict",
     ),
     "control": (
         42_013,
@@ -401,7 +403,7 @@ SIZE_VERDICTS = {
         "splitting probe sequence from reporting would sever one diagnostic narrative (X5)",
     ),
     "products/omx/adapter/omx_adapter/action_store.py": (
-        1_187,
+        1_194,
         "accept: one owner for the durable local Action, per-attempt ROS phase journal, and semantic "
         "workflow terminal gate; they share SQLite transactions, identity fences, and restart-to-UNKNOWN "
         "recovery. ROS-free and host-testable. Re-judged 2026-10-01 at 1109 after the durable gripper "
@@ -411,6 +413,23 @@ SIZE_VERDICTS = {
         "without reopening phase state (D-386). Re-judged 2026-10-01 at 1187 after the "
         "canceled-action hold joined (peer's change). The hard-tier "
         "zero-growth rule prevents silent expansion",
+    ),
+    "products/omx/adapter/omx_adapter/command_owner.py": (
+        621,
+        "accept: one owner (2026-10-02, C3b review) for the single-writer arm command policy: "
+        "config, joint-state intake, submit admission (limits, start window), poll timeouts on "
+        "the owner and wall clocks, cancel and recovery share one lock and one HOLD latch; "
+        "splitting admission from the watchdog would split that lock. ROS-free and host-testable",
+    ),
+    "products/omx/adapter/omx_adapter/pose_plan.py": (
+        714,
+        "accept: one owner (2026-10-02, C3b) for the simulation cell profile and the analytic "
+        "CELL_TRANSFER planner that reads it. C3b added the profile's width-matched jaw mapping, "
+        "after-grasp per-phase tolerances and wall-clock bound, and the request's grasp depth/width; "
+        "the planner and validate_cell_transfer_plan consume exactly these fields, so a profile/"
+        "planner split would only move the shared validation. ROS-free and host-testable. Split "
+        "the profile loader out if MoveIt (D-402 follow-up) adds a second planner. Re-judged at 714 "
+        "after the review's accepted-recipe item check, release rejection and fingertip overhang",
     ),
     "hmi/dashboard/app.js": (
         803,

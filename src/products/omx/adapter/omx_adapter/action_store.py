@@ -184,7 +184,14 @@ class ActionStore:
         request_key = _nonempty("request_key", request_key, maximum=160)
         action_kind = _nonempty("action_kind", action_kind, maximum=48)
         configuration_revision = _nonempty("configuration_revision", configuration_revision)
-        observation_id = _nonempty("observation_id", observation_id)
+        if action_kind == "CELL_TRANSFER":
+            # This tagged action is camera blind; its durable request has no
+            # observation revision. Keep the existing NOT NULL column without
+            # inventing an observation identifier.
+            if observation_id != "":
+                raise ValueError("CELL_TRANSFER observation_id must be empty")
+        else:
+            observation_id = _nonempty("observation_id", observation_id)
         if type(owner_generation) is not int or owner_generation < 0:
             raise ValueError("owner_generation must be a non-negative integer")
         if action_id is not None:

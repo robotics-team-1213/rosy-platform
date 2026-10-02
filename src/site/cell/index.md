@@ -18,6 +18,7 @@
 - [2026-10-01-rosy-cell-pattern-core.md](../../../docs/plans/2026-10-01-rosy-cell-pattern-core.md)
 - [2026-10-01-rosy-layered-architecture-roadmap.md](../../../docs/plans/2026-10-01-rosy-layered-architecture-roadmap.md)
 - [2026-10-02-platform-architecture-v02-migration.md](../../../docs/plans/2026-10-02-platform-architecture-v02-migration.md)
+- [2026-10-02-rosy-cell-c3-gazebo.md](../../../docs/plans/2026-10-02-rosy-cell-c3-gazebo.md)
 
 ## 교훈 (docs/solutions)
 
@@ -29,8 +30,8 @@
 
 ## 최근 기록
 
+- 2026-10-02 · a31ebde1 · feat(cell): per-item grasp_depth (C3b B1)
+- 2026-10-02 · 52ef7f91 · feat(cell): OMX sim demo cell/recipe for C3
 - 2026-10-02 · 9da93450 · refactor: extract palletizing process with legacy imports
 - 2026-10-01 · 13614bc0 · fix(cell): carry_z runs the compile checks, reject padded kinematics_revision
 - 2026-10-01 · c0900cff · feat(cell): rosy_cell.cell/2 with home and kinematics_revision, compiler.carry_z
-- 2026-10-01 · 014acdf6 · feat(cell): rosy_cell 코어와 리뷰 수정
-- 2026-10-01 · uncommitted · feat(cell): rosy_cell package scaffold

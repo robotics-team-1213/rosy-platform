@@ -117,24 +117,22 @@
             <ui-button kind="quiet" id="formation-resume" type="button">재개</ui-button>
             <ui-button kind="quiet" id="formation-stop" type="button">해제</ui-button>
           </div>
-          <p class="hint" id="formation-detail">리더를 고르고 무장하면 나머지가 슬롯으로 따라붙습니다.</p>
+          <p class="hint" id="formation-detail" title="리더를 고르고 무장하면 나머지가 슬롯으로 따라붙습니다"></p>
         </div>
 
         <div class="signals" aria-labelledby="signals-heading">
           <div class="robot-head">
-            <h3 id="signals-heading">신호등</h3>
+            <h3 id="signals-heading" title="장치가 관제 접촉을 잃으면 스스로 적색 점멸(failsafe)로 들어가고, 콘솔이 마지막 명령을 한 번 다시 내립니다">신호등</h3>
             <span class="spacer"></span>
             <ui-tag id="signals-state" status="neutral">—</ui-tag>
           </div>
           <div id="signal-cards" class="signal-cards"></div>
-          <p class="hint" id="signals-hint">현장에 등록된 사이트 신호등입니다. 장치가 관제 접촉을 잃으면 스스로 적색 점멸(failsafe)로 들어가고, 콘솔이 마지막 명령을 한 번 다시 내립니다.</p>
+          <p class="hint" id="signals-hint" hidden></p>
         </div>
 
-        <div id="log" class="log" role="status" aria-live="polite" aria-label="최근 관제 이벤트">
-          <ui-empty>최근 이벤트가 없습니다 — 관제 요청과 연결 상태 변화가 여기에 표시됩니다.</ui-empty>
-        </div>
+        <h3 id="log-heading" class="sr-only">기록</h3>
 
-        <section class="discovery device-link" aria-labelledby="device-link-heading">
+<section class="discovery device-link" aria-labelledby="device-link-heading">
           <h3 id="device-link-heading" class="sr-only">기기 연결</h3>
           <!-- D-409 — 등록·승인은 설치 일이다. 운용 흐름에서는 접힌 서랍으로 간다
                (알림 문장은 role=alert/aria-live로 여전히 소리 난다). -->
@@ -142,13 +140,23 @@
           <p class="hint install-link">기기 등록·카메라 연결 승인은 <a href="/console/install">설치·보정 화면</a>에서 합니다.</p>
 
         </section>
+
+        <details id="console-diagnostics" class="console-diagnostics">
+          <summary>진단</summary>
+          <dl class="diag-readout">
+            <dt>상태 갱신</dt><dd id="diag-state">—</dd>
+            <dt>발견 검색기</dt><dd id="diag-scanner">—</dd>
+            <dt>로봇 오류</dt><dd id="diag-robots">—</dd>
+            <dt>카메라</dt><dd id="diag-vision">—</dd>
+          </dl>
+        </details>
       </div>
     </section>
 
     <section class="panel" aria-labelledby="map-heading">
       <div class="map-head">
         <div>
-          <h2 id="map-heading">현장 지도</h2>
+          <h2 id="map-heading" title="로봇 카드의 목표 지정을 누른 뒤 지도를 찍으면 그 로봇에게만 목표가 갑니다">현장 지도</h2>
         </div>
         <div class="spacer"></div>
         <span class="hint layer-hint" id="map-layer-hint" role="status" hidden></span>
@@ -173,7 +181,7 @@
         <span><i class="sw goal"></i>목표</span>
         <span id="legend-sighting" hidden><i class="sw sighting"></i>카메라 관측</span>
       </div>
-      <p class="hint" id="hint" aria-live="polite">로봇 카드의 <b>목표 지정</b>을 누른 뒤 지도를 찍으면 그 로봇에게만 목표가 갑니다.</p>
+      <p class="hint" id="hint" aria-live="polite" title="로봇 카드의 목표 지정을 누른 뒤 지도를 찍으면 그 로봇에게만 목표가 갑니다" hidden></p>
       <section class="vision-preview" aria-labelledby="vision-heading">
         <div class="map-head">
           <h2 id="vision-heading">관제 카메라</h2>
@@ -211,6 +219,16 @@
         <p class="hint install-link">경기장 찾기·맵 맞춤·왜곡 보정은 <a href="/console/install">설치·보정 화면</a>에서 합니다.</p>
 
       </section>
+      <details id="log-panel" class="log-panel" open>
+          <summary>기록</summary>
+          <div class="log-toolbar">
+            <ui-button kind="quiet" id="log-clear" type="button" title="화면의 기록을 지웁니다">지우기</ui-button>
+          </div>
+          <div id="log" class="log" role="status" aria-live="polite" aria-labelledby="log-heading">
+            <ui-empty>최근 이벤트가 없습니다 — 관제 요청과 연결 상태 변화가 여기에 표시됩니다.</ui-empty>
+          </div>
+        </details>
+
       <details class="note">
         <summary>관제 범위 안내</summary>
         <p>이 화면은 사이트 관제입니다. 로봇 한 대의 현장 화면·수동 조작·비상정지는 그 로봇의 대시보드에 있고, 관제 PC가 꺼져도 살아 있습니다. 여기서는 목표·취소·정지 같은 원자 액션을 내리며 바퀴 속도는 로봇 안에서만 만들어집니다.</p>

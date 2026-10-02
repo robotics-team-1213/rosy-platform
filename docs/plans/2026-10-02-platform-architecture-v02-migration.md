@@ -8,7 +8,7 @@
 
 **Tech Stack:** Python, 기존 FastAPI·SQLite·Pydantic, ROS 2 Jazzy, colcon/ament, namespace wheel, OMX Gazebo, 기존 pytest·harness. 새 빌드 도구·모델 SDK 도입은 이 계획의 전제가 아니다.
 
-**Status:** Tasks 0-3 complete (2026-10-02, Windows source baseline/API and process wheel); Tasks 4-9 not run. PASS conditions below are instructions and do not imply unfinished tasks passed.
+**Status:** Tasks 0-5 SOURCE complete; Task 6 LOCAL complete for isolated wheel installs and fake lifecycles (pilot deployment and ROS/Jazzy runtime remain unverified); Task 7 in progress. Tasks 8-9 not run. PASS conditions below are instructions and do not imply unfinished tasks passed.
 
 **설계:** [ROSY Platform Architecture v0.2](../reference/ROSY_Platform_Architecture_Design_v0.2.md) 3·5·6·15·16장.
 
@@ -197,6 +197,8 @@ Cell compiler port, additive `CELL_TRANSFER` ??, `service` ???? ?? operator ?? ?
 
 **검증:** 새 owner 경계 시험과 기존 OMX `test_omx_command_owner.py`, `test_omx_action_store.py`, `test_omx_pick_place_runner.py`, `test_omx_cell_transfer_runner.py`, `test_omx_pose_plan.py`를 실행한다. 기대: ROS를 직접 호출하는 Skill 없음, 중복 writer/attempt 없음, 거부 및 phase 결과 의미 보존. 커밋: `refactor: separate transfer skill from omx ownership`.
 
+**Progress (2026-10-02):** Added `integrations/robots/omx` as the explicit provider seam. It projects a validated `FleetCellTransferGrant` into `pallet.transfer`, adapts accepted-recipe geometry and the current joint-state snapshot to the existing analytic OMX planner, and wraps the existing `PickPlaceRunner` start/exact-cancel methods. The integration wheel is in the CI install list and the dependency-boundary registry. Provider/owner boundary 12 passed; dependency-boundary suite 5 passed; platform mapping/submission/compatibility 27 passed; OMX adapter suite 333 passed/5 skipped. Six wheels built and the Skill/integration wheels installed offline into a fresh X: venv with provider import smoke PASS. ROS-SIM and device acceptance remain unproven.
+
 ## Task 6: 기존 앱 조합과 최소 설치
 
 **Modify/Reuse:** `src/site/fleet/fleet/cli.py`, `src/site/fleet/fleet/server/app.py`, `src/products/omx/adapter/omx_adapter/pilot_sim_server.py`, `deploy/site/Dockerfile.fleet`, `deploy/robot/omx/Dockerfile.pilot`, `deploy/robot/omx/stack.lock.yaml`, `.github/workflows/ci.yml`.
@@ -211,6 +213,8 @@ Cell compiler port, additive `CELL_TRANSFER` ??, `service` ???? ?? operator ?? ?
 
 **검증:** `python -B -X utf8 -m pytest test/test_platform_installed_entrypoints.py test/test_platform_minimal_install.py -q -p no:cacheprovider`. 기대: wheel/ament 파일 중복 0, 소스 경로 없는 실행, 필요 없는 전이 의존성 없음. 커밋: `build: compose and install the fixed-cell slice`.
 
+**Progress (2026-10-02):** Added gateway and agent app wheels, strict allowlisted `site_cell` and `omx_cell_sim` installation profiles, and profile-driven fake provider composition. The existing Fleet CLI delegates through the gateway composition with a source-only legacy fallback; the site image includes the composition package path. Profile/entrypoint tests 7 passed; Fleet CLI tests 31 passed; dependency-boundary tests 5 passed; app lint and py_compile passed. Built the module, OMX integration, agent and gateway wheels, installed them offline into a fresh X: venv with no repository `PYTHONPATH`, and passed both profile fake-lifecycle smokes. The OMX profile excludes Pinky, learning and model SDK dependencies and keeps hardware dispatch disabled. Pilot image runtime integration, ROS/Jazzy lifecycle and remote CI remain unverified.
+
 ## Task 7: 결과 불명과 재시작의 재생 시험
 
 **Create:** `test/test_platform_cell_replay.py`, `test/fixtures/platform_cell_replay/`의 사건 fixture, `modules/execution/src/rosy/execution/local/reconcile.py` — 기존 규칙을 추출할 필요가 있을 때만.
@@ -223,6 +227,8 @@ Cell compiler port, additive `CELL_TRANSFER` ??, `service` ???? ?? operator ?? ?
 4. 관측과 원장이 충돌하면 UNKNOWN/HOLD를 유지한다. 확인된 boundary에서만 다음 단계를 선택한다. 만료된 자원 예약이 실제 점유 해제를 뜻하지 않는 사례도 포함한다.
 
 **검증:** `python -B -X utf8 -m pytest test/test_platform_cell_replay.py -q -p no:cacheprovider`. 기대: 제출 횟수·저널 행·projection watermark와 최종 상태를 함께 검증. 커밋: `test: replay cell interruption and reconciliation`.
+
+**Progress (2026-10-02):** Added a persistent two-ledger replay fixture and integration test for a local successful Action whose submit receipt is lost before Fleet records it. Reopening Fleet and OMX SQLite stores keeps the same attempt, does not resubmit, and now retains `HOLD` and resource claims until independent post-action camera/gripper evidence confirms the goal. Broader interruption fixtures and projection-watermark assertions remain open; this is a Task 7 checkpoint, not completion.
 
 ## Task 8: 정식 경로의 Gazebo 종단 수용
 
@@ -279,8 +285,8 @@ git diff --check
 | 2 Minimal APIs | PASS | `d502290b`, main sync `eb306385`; 3 installed wheels, mapping/boundary/protocol 29 passed, docs 80 passed |
 | 3 Process extraction | PASS (source); runtime/artifact/device gates remain open | `9da93450`, docs `bb84551a`, latest-main sync `cc76161f5` / merge `d9e70f71`; wheel compatibility 11, Cell 143, mapping 7; architecture 81/1 skipped, quick 95 passed/24 existing warnings; known-failure comparisons 0 new/0 known |
 | 4 Fleet connection | IN PROGRESS | execution compiler-port mapping 6 passed; CELL_TRANSFER contract + core schema suite 424 passed/1 skipped; endpoint/ordered journal/recovery remain |
-| 5 Local Skill | TODO | not run |
-| 6 App and install | TODO | not run |
-| 7 Failure replay | TODO | not run |
+| 5 Local Skill | IN PROGRESS | tagged `FleetCellTransferGrant` reaches only its registered phase runner; added ROS-free `pallet.transfer` Skill and `execution/local` receipt seam; boundary/compiler/submission tests 25 passed and three wheels install in an isolated venv. OMX provider and owner integration remain |
+| 6 App and install | PASS (LOCAL) | `030821bc`; isolated wheel installs and fake lifecycle smokes; pilot deployment and ROS/Jazzy runtime remain unverified |
+| 7 Failure replay | IN PROGRESS | late-success-after-restart fixture; Fleet 1371/7 skipped, OMX ActionStore 23, replay/Skill boundary 10 passed; other interruption fixtures and projection watermark remain |
 | 8 Gazebo | TODO | not run |
 | 9 Compatibility cleanup | TODO | not run |

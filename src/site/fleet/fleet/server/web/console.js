@@ -20,7 +20,7 @@ const el = (id) => document.getElementById(id);
 // 셸 폴링 운율과 로그 상한은 셸이 가진다. 지도 격자·오버레이 임계는 map-view.js에 있다.
 const STATE_MS = 1000;
 const MAP_MS = 5000;
-const LOG_MAX = 40;
+const LOG_MAX = 120;
 
 // 꺼진 기능(라우트 없음 404)은 다음 로그인·토큰 저장까지 두드리지 않는다. poll-gate.js 참고.
 const dispatchGate = createPollGate();
@@ -254,6 +254,7 @@ function render() {
         ? "천장 카메라 관측 전용 지도입니다. 목표 지정은 로봇 지도가 수신되면 사용할 수 있습니다."
         : "지도가 수신되면 로봇의 목표 지정을 사용할 수 있습니다.";
   if (hint.textContent !== nextHint) hint.textContent = nextHint;
+  refreshDiagnostics();
 }
 
 let statePollInFlight = false;
@@ -542,8 +543,9 @@ el("map-canvas").addEventListener("keydown", async (event) => {
   }
 });
 
+// 전체 정지는 한 번의 누름으로 즉시 실행된다(D-413 — 비상 정지는 확인 없는 비상 출구.
+// D-371이 대화상자 위에서 살아 있게 한 이유를 끝까지 밀었다: 어떤 사위에도 즉시 눌린다).
 el("estop").addEventListener("click", async () => {
-  if (!window.confirm("등록된 모든 로봇을 정지시킵니다. 계속할까요?")) return;
   try {
     const result = await call("/api/fleet/estop", { method: "POST" });
     await refreshDispatchControl();
@@ -585,6 +587,31 @@ el("roster-toggle").addEventListener("click", () => {
   view.showAllRobots = !view.showAllRobots;
   render();
 });
+
+// D-415 — 로그 지우기
+el("log-clear")?.addEventListener("click", () => {
+  const box = el("log");
+  box.replaceChildren(document.createElement("ui-empty"));
+  box.firstChild.textContent = "지웠습니다.";
+});
+
+// D-415 — 진단 패널 갱신: 상태 주기·발견·로봇 오류·카메라
+let lastStateOk = null;
+function refreshDiagnostics() {
+  const diag = (id, text) => {
+    const node = el(id);
+    if (node) node.textContent = text;
+  };
+  diag("diag-state", view.stateUnavailable ? "불가"
+    : `${view.robots.length}대 · ${view.stateLoaded ? "갱신됨" : "대기"}`);
+  diag("diag-scanner", scannerLost ? "끊김"
+    : "정상");
+  const robotErrors = view.robots
+    .filter((r) => r.error)
+    .map((r) => `${r.robot_id}: ${r.error.reachable === false ? "닿지 않음" : "거부"} ${r.error.code ?? ""}`.trim());
+  diag("diag-robots", robotErrors.length ? robotErrors.join(" · ") : "오류 없음");
+  diag("diag-vision", el("vision-state")?.textContent ?? "—");
+}
 
 // D-262: 신호등 카드는 signals.js 팩토리가 그린다.
 const signals = createSignals({ el, view, log, call, refreshState });

@@ -1,0 +1,6 @@
+schema: rosy.installation-profile.v1
+profile_id: site-cell
+provider_id: fleet.site-cell.v1
+wheels:
+  - rosy-app-gateway
+hardware_dispatch_enabled: false
