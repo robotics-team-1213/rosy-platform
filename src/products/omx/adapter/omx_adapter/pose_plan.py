@@ -94,7 +94,9 @@ class CellPlanningProfile:
     jaw_pivot_half_separation_m: float
     jaw_contact_point_m: tuple[float, float]
     gripper_squeeze_m: float
+    min_grasp_width_m: float
     max_grasp_width_m: float
+    gripper_release_clearance_m: float
     phase_max_duration_s: Mapping[str, float]
     workspace_min_m: tuple[float, float, float]
     workspace_max_m: tuple[float, float, float]
@@ -168,7 +170,12 @@ class CellPlanningProfile:
         if pivot_a <= pivot_b or contact_x <= 0:
             raise ValueError("gripper.jaw pivots must be ordered and the contact point ahead of the pivot")
         squeeze = _finite("gripper.jaw.squeeze_m", jaw.get("squeeze_m"), positive=True)
+        min_width = _finite("gripper.jaw.min_grasp_width_m", jaw.get("min_grasp_width_m"), positive=True)
         max_width = _finite("gripper.jaw.max_grasp_width_m", jaw.get("max_grasp_width_m"), positive=True)
+        release_clearance = _finite("gripper.jaw.release_clearance_m", jaw.get("release_clearance_m"),
+                                    positive=True)
+        if min_width - squeeze <= 0 or min_width >= max_width:
+            raise ValueError("gripper.jaw needs squeeze_m < min_grasp_width_m < max_grasp_width_m")
         durations = document.get("phase_max_duration_s")
         if not isinstance(durations, Mapping) or tuple(durations) != MOTION_PHASES:
             raise ValueError("phase_max_duration_s must list approach, grasp, transfer, release")
@@ -230,7 +237,8 @@ class CellPlanningProfile:
             gripper_open=gripper_open, gripper_closed=gripper_closed,
             jaw_pivot_half_separation_m=(pivot_a - pivot_b) / 2,
             jaw_contact_point_m=(contact_x, contact_y), gripper_squeeze_m=squeeze,
-            max_grasp_width_m=max_width,
+            min_grasp_width_m=min_width, max_grasp_width_m=max_width,
+            gripper_release_clearance_m=release_clearance,
             phase_max_duration_s=MappingProxyType(phase_max),
             workspace_min_m=tuple(b[0] for b in bounds),  # type: ignore[arg-type]
             workspace_max_m=tuple(b[1] for b in bounds),  # type: ignore[arg-type]
@@ -257,7 +265,7 @@ class CellPlanningProfile:
     def gripper_close_for_width(self, width_m: float) -> float:
         """Width-matched close target: contact minus the profile squeeze margin (C3b B2)."""
         width = _finite("grasp width", width_m, positive=True)
-        if width > self.max_grasp_width_m or width - self.gripper_squeeze_m <= self.jaw_gap_m(self.gripper_closed):
+        if not self.min_grasp_width_m <= width <= self.max_grasp_width_m:
             raise ValueError("grasp width is outside the gripper's validated range")
         target = self.gripper_contact_for_width(width - self.gripper_squeeze_m)
         lower, upper = self.position_limits[self.gripper_joint]
@@ -526,11 +534,20 @@ class AnalyticCellTransferPlanner:
         transfer, arm, pose = self._travel(pose, arm, request.place, request.place_approach_z,
                                            request.carry_z, limits, profile)
         segments["transfer"] = [[a + (closed,) for a in seg] for seg in transfer]
-        release_open = self._gripper(arm, closed, open_, profile)
+        # Open only to item width + release clearance at the place, so the fingertips do not
+        # sweep into a neighbour (C3b run11); open fully after the vertical retreat to carry_z.
+        try:
+            release_q = min(profile.gripper_contact_for_width(
+                request.grasp_width_m + profile.gripper_release_clearance_m), open_)
+        except ValueError:
+            release_q = open_
+        release_open = self._gripper(arm, closed, release_q, profile)
         # Return to the same home joint vector we started from (one q5 of the two yaw twins).
         retreat, arm, _ = self._travel(pose, arm, request.home, request.home.z,
                                        request.carry_z, limits, profile, end_reference_q5=home[4])
-        segments["release"] = [release_open] + [[a + (open_,) for a in seg] for seg in retreat]
+        segments["release"] = ([release_open, [a + (release_q,) for a in retreat[0]],
+                                self._gripper(retreat[0][-1], release_q, open_, profile)]
+                               + [[a + (open_,) for a in seg] for seg in retreat[1:]])
 
         phases = []
         start = home + (open_,)

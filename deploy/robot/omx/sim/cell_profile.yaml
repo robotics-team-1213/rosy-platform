@@ -41,22 +41,29 @@ gripper:
   closed: 0.0
   # Width-matched close (C3b B2). jaw gap(q) = 2 (o + x sin q + y cos q):
   # o = half the separation of the finger pivots, URDF gripper_joint_1 origin y 0.0075 and
-  # gripper_joint_2 origin y -0.0108 in link5 (open_manipulator 0a4af6a9, omx_f_arm.urdf.xacro);
-  # (x, y) = inner fingertip contact point in the finger frame, the follower_07 mesh's
-  # innermost inner-face y over finger x 55-65 mm (the hooked pad the block meets at
-  # grasp_depth >= ~8 mm). Model vs mesh sweep (X:/DevTemp/rosy-cell-c3/c3b/jaw.py) within
-  # 0.4 mm for q 0-0.40. The mesh's convex hull (if a physics engine used it) would give a
-  # 2-3 mm narrower gap at the same q; the Gazebo run records the real contact angle.
+  # gripper_joint_2 origin y -0.0108 in link5 (open_manipulator 0a4af6a9, omx_f_arm.urdf.xacro).
+  # (x, y) = effective fingertip contact point in the finger frame, CALIBRATED IN GAZEBO
+  # (2026-10-02, this world, grasp_depth 15 mm): 40 mm long blocks 20/30/40 mm wide stopped
+  # gripper_joint_1 at 0.3187/0.4072/0.4956 rad; the fit reproduces them within 0.03 mm.
+  # The pinned follower_07 mesh alone gives (0.060, -0.00915): it predicts contact at 0.248
+  # rad for 30 mm, yet in Gazebo the mesh is still ~9 mm from the block when the finger
+  # stops (link poses checked, X:/DevTemp/rosy-cell-c3/c3b/diag_an2.py). Gazebo's finger
+  # collision is ~7 mm thicker than the mesh; hardware needs its own measured value.
   jaw:
     pivot_y_m: [0.0075, -0.0108]
-    contact_point_m: [0.060, -0.00915]
+    contact_point_m: [0.0543, -0.01703]
     # Squeeze 3 mm total: the target is 1.5 mm per side inside the item. At 30 mm that is
-    # 0.026 rad of finger travel, above the 0.011 rad transient readback error seen on
+    # 0.027 rad of finger travel, above the 0.011 rad transient readback error seen on
     # 2026-10-01 and 80x the 0.0003 rad static error (C3), so a held item reads clearly
     # above the target while an empty close reaches it.
     squeeze_m: 0.003
-    # The mapping is mesh-checked to q 0.5 (59 mm); beyond it the narrowest gap leaves the pad.
-    max_grasp_width_m: 0.055
+    # Calibrated for 20-40 mm; admitted 10 mm beyond each end, nothing narrower or wider.
+    min_grasp_width_m: 0.01
+    max_grasp_width_m: 0.05
+    # Release opens to item width + this at the place and opens fully only at carry_z. A full
+    # 1.0 rad open at the place swung a fingertip into the neighbour 15 mm away and knocked it
+    # off the pallet (C3b Gazebo run11); 10 mm is 5 mm per side, a third of the recipe gap.
+    release_clearance_m: 0.01
 
 # One ROS goal per phase; a phase that needs longer is rejected, never split (D-402 §6).
 # Rejection is the safe outcome: no partial plan, the Job holds for the operator.

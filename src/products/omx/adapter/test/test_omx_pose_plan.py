@@ -434,13 +434,12 @@ def test_phase_start_tolerances_widen_only_the_named_joint_after_grasp(profile):
 # ---- width-matched close (C3b B2) ------------------------------------------------
 
 
-def test_jaw_gap_mapping_matches_the_pinned_finger_mesh(profile):
-    # Reference: follower_07/08 meshes (open_manipulator 0a4af6a9) rotated about the URDF
-    # gripper_joint_1/2 axes; narrowest inner gap over the fingertip pad, measured offline
-    # (X:/DevTemp/rosy-cell-c3/c3b/jaw.py): 0.0 mm at q 0, 12.0 mm at 0.10, 24.2 at 0.20,
-    # 30.1 at 0.25, 36.0 at 0.30, 47.8 at 0.40.
-    for q, gap_mm in ((0.0, 0.0), (0.10, 12.0), (0.20, 24.2), (0.25, 30.1), (0.30, 36.0), (0.40, 47.8)):
-        assert profile.jaw_gap_m(q) * 1000 == pytest.approx(gap_mm, abs=0.4)
+def test_jaw_gap_mapping_reproduces_the_gazebo_contact_angles(profile):
+    # Gazebo 2026-10-02 (cell_profile.yaml gripper.jaw): 20/30/40 mm blocks stopped
+    # gripper_joint_1 at 0.3187/0.4072/0.4956 rad.
+    for q, gap_mm in ((0.3187, 20.0), (0.4072, 30.0), (0.4956, 40.0)):
+        assert profile.jaw_gap_m(q) * 1000 == pytest.approx(gap_mm, abs=0.1)
+    assert profile.jaw_pivot_half_separation_m == pytest.approx((0.0075 + 0.0108) / 2)  # URDF pivots
     for width in (0.01, 0.02, 0.03, 0.04):
         assert profile.jaw_gap_m(profile.gripper_contact_for_width(width)) == pytest.approx(width, abs=1e-9)
 
@@ -472,3 +471,21 @@ def test_jaw_geometry_fails_closed(mutate, match):
     mutate(document)
     with pytest.raises(ValueError, match=match):
         CellPlanningProfile.from_mapping(document, revision="0" * 64)
+
+
+def test_release_opens_only_to_the_release_width_until_carry_height(kin, profile):
+    # C3b Gazebo run11: a full 1.0 rad open at the place swept a fingertip into the 15 mm-gap
+    # neighbour and knocked it off the pallet. Release opens to item width + release
+    # clearance, retreats vertically to carry_z, and opens fully only there.
+    request = _request()
+    plan = _planner(kin).plan_transfer(request, profile, _state(kin, profile))
+    release = plan.phases[3]
+    width_open = profile.gripper_contact_for_width(request.grasp_width_m + profile.gripper_release_clearance_m)
+    place_arm = plan.phases[2].points[-1].positions[:5]
+    at_place = [p for p in release.points if p.positions[:5] == place_arm]
+    assert at_place and max(p.positions[5] for p in at_place) == pytest.approx(width_open)
+    full = [p for p in release.points if p.positions[5] > width_open + 1e-9]
+    assert full, "release must still end fully open"
+    for point in full:
+        assert kin.fk(point.positions[:5]).z >= request.carry_z - 1e-6
+    assert release.points[-1].positions[5] == profile.gripper_open
