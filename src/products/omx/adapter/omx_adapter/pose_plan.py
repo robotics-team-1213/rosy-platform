@@ -101,6 +101,7 @@ class CellPlanningProfile:
     planning_limit_fraction: float
     max_joint_state_age_s: float
     action_timeout_s: float
+    wall_clock_bound_factor: float
 
     @classmethod
     def load(cls, path: Path | str) -> "CellPlanningProfile":
@@ -167,6 +168,9 @@ class CellPlanningProfile:
         action_timeout = _finite("owner.action_timeout_s", owner.get("action_timeout_s"), positive=True)
         if action_timeout < max(phase_max.values()):
             raise ValueError("owner.action_timeout_s must cover the longest phase")
+        wall_factor = _finite("owner.wall_clock_bound_factor", owner.get("wall_clock_bound_factor"))
+        if wall_factor < 1.0:
+            raise ValueError("owner.wall_clock_bound_factor must be >= 1")
         fraction = document.get("planning_limit_fraction")
         if (isinstance(fraction, bool) or not isinstance(fraction, (int, float))
                 or not 0.0 < float(fraction) <= 1.0):
@@ -184,7 +188,7 @@ class CellPlanningProfile:
             workspace_max_m=tuple(b[1] for b in bounds),  # type: ignore[arg-type]
             max_joint_state_age_s=_finite("owner.max_joint_state_age_s",
                                           owner.get("max_joint_state_age_s"), positive=True),
-            action_timeout_s=action_timeout, **positive,
+            action_timeout_s=action_timeout, wall_clock_bound_factor=wall_factor, **positive,
         )
 
     def ik_limits(self) -> IkLimits:
@@ -211,6 +215,7 @@ class CellPlanningProfile:
             max_joint_state_age_s=self.max_joint_state_age_s,
             max_goal_duration_s=max(self.phase_max_duration_s.values()),
             action_timeout_s=self.action_timeout_s,
+            wall_clock_bound_factor=self.wall_clock_bound_factor,
         )
 
 

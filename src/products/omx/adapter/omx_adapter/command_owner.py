@@ -56,6 +56,10 @@ class ArmCommandConfig:
     max_joint_state_age_s: float = 0.5
     max_goal_duration_s: float = 1.0
     action_timeout_s: float = 2.0
+    # Set only when the owner clock is simulation time (C3b A3): the wall clock then bounds
+    # joint-state age and action time at this factor x the sim limits, so a frozen or
+    # crawling simulation still HOLDs. None = the owner clock is already a wall clock.
+    wall_clock_bound_factor: float | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.enabled, bool):
@@ -114,6 +118,12 @@ class ArmCommandConfig:
         ))
         if self.action_timeout_s < self.max_goal_duration_s:
             raise ValueError("action_timeout_s must be at least max_goal_duration_s")
+        if self.wall_clock_bound_factor is not None:
+            factor = self.wall_clock_bound_factor
+            if (isinstance(factor, bool) or not isinstance(factor, (int, float))
+                    or not math.isfinite(factor) or factor < 1.0):
+                raise ValueError("wall_clock_bound_factor must be a finite number >= 1")
+            object.__setattr__(self, "wall_clock_bound_factor", float(factor))
 
 
 @dataclass(frozen=True)
@@ -270,11 +280,20 @@ class ArmCommandOwner:
         action_port: ActionPort,
         *,
         monotonic: Callable[[], float] = time.monotonic,
+        wall_monotonic: Callable[[], float] | None = None,
         session_id: str | None = None,
     ) -> None:
+        """``monotonic`` is the owner clock (sim time under use_sim_time, else steady wall
+        time). ``wall_monotonic`` is given only with a sim owner clock and then requires
+        ``config.wall_clock_bound_factor`` (C3b A3)."""
+        if wall_monotonic is not None and config.enabled and config.wall_clock_bound_factor is None:
+            raise ValueError("a separate wall clock requires config.wall_clock_bound_factor")
         self.config = config
         self._action_port = action_port
         self._monotonic = monotonic
+        self._wall = wall_monotonic
+        self._joint_state_wall: float | None = None
+        self._active_wall: float | None = None
         generated_session = secrets.token_hex(16) if session_id is None else session_id
         self.session_id = _nonempty("session_id", generated_session)
         self._lock = threading.RLock()
@@ -326,8 +345,23 @@ class ArmCommandOwner:
             return False
         return now - snapshot.received_at <= self.config.max_joint_state_age_s
 
+    def _wall_stale_reason(self) -> str | None:
+        """Outer wall-clock bound; only with a sim owner clock (C3b A3)."""
+        if self._wall is None or self.config.wall_clock_bound_factor is None:
+            return None
+        factor = self.config.wall_clock_bound_factor
+        now = self._wall()
+        if (self._joint_state_wall is None
+                or now - self._joint_state_wall > self.config.max_joint_state_age_s * factor):
+            return "joint_state_stale_wall_clock"
+        if (self._active_wall is not None
+                and now - self._active_wall >= self.config.action_timeout_s * factor):
+            return "action_wall_timeout"
+        return None
+
     def _cancel_active(self) -> str | None:
         active, self._active = self._active, None
+        self._active_wall = None
         if active is None:
             return None
         handle = active[1]
@@ -376,6 +410,8 @@ class ArmCommandOwner:
                     self._enter_hold("joint_state_limit")
                     return False
             self._joint_state = snapshot
+            if self._wall is not None:
+                self._joint_state_wall = self._wall()
             return True
 
     def submit(self, command: TrajectoryCommand) -> CommandDecision:
@@ -399,6 +435,10 @@ class ArmCommandOwner:
             if not self._fresh_joint_state(now):
                 self._enter_hold("joint_state_stale")
                 return self._decision(False, "joint_state_stale", command_id)
+            wall_reason = self._wall_stale_reason()
+            if wall_reason is not None:
+                self._enter_hold(wall_reason)
+                return self._decision(False, wall_reason, command_id)
             if command.workcell_id != self.config.workcell_id:
                 return self._decision(False, "workcell_mismatch", command_id)
             if command.instance_id != self.config.instance_id:
@@ -463,6 +503,7 @@ class ArmCommandOwner:
                 return self._decision(False, "action_submission_failed", command_id)
             self._last_command_state_sequence = command.source_state_sequence
             self._active = (command, handle, now)
+            self._active_wall = None if self._wall is None else self._wall()
             self._state = "active"
             return self._decision(True, "submitted", command_id)
 
@@ -490,6 +531,10 @@ class ArmCommandOwner:
             if now - started_at >= self.config.action_timeout_s:
                 cancel_outcome = self._enter_hold("action_timeout")
                 return self._decision(False, "action_timeout", command.command_id, cancel_outcome)
+            wall_reason = self._wall_stale_reason()
+            if wall_reason is not None:
+                cancel_outcome = self._enter_hold(wall_reason)
+                return self._decision(False, wall_reason, command.command_id, cancel_outcome)
             try:
                 if not handle.done():
                     return self._decision(True, "active", command.command_id)
@@ -497,6 +542,7 @@ class ArmCommandOwner:
             except Exception:
                 succeeded = False
             self._active = None
+            self._active_wall = None
             if succeeded:
                 self._state = "ready"
                 return self._decision(True, "completed", command.command_id)

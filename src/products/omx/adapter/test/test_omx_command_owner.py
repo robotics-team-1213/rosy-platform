@@ -592,3 +592,82 @@ def test_window_command_never_rebinds_to_a_sequence_already_used():
     assert owner.poll().reason == "completed"
     result = owner.submit(make_command(command_id="b", sequence=10, start_state_window=WINDOW))
     assert not result.accepted and result.reason == "joint_state_not_advanced"
+
+
+# A3 (C3b): with use_sim_time the owner's deadlines run on sim time (the trajectory's own
+# clock). A wall clock stays as an outer bound, wall_clock_bound_factor x the sim limits,
+# so a frozen or crawling simulation still HOLDs.
+def sim_owner(sim, wall, factor=4.0):
+    owner = ArmCommandOwner(make_config(wall_clock_bound_factor=factor), FakeActionClient(),
+                            monotonic=lambda: sim[0], wall_monotonic=lambda: wall[0],
+                            session_id=SESSION)
+    return owner, owner._action_port
+
+
+def test_slow_simulation_is_timed_on_sim_time_not_wall_time():
+    sim, wall = [100.0], [5000.0]
+    owner, action = sim_owner(sim, wall)
+    owner.observe_joint_state(make_state(sequence=10, received_at=100.0))
+    assert owner.submit(make_command(sequence=10)).accepted
+    seq = 10
+    while sim[0] < 102.9:  # RTF 0.3: 2.9 s of sim time is ~9.7 s of wall time
+        sim[0] = round(sim[0] + 0.03, 6)
+        wall[0] += 0.1
+        seq += 1
+        owner.observe_joint_state(make_state(sequence=seq, received_at=sim[0]))
+        assert owner.poll().reason == "active"
+    assert wall[0] - 5000.0 > 3.0  # past action_timeout_s in wall time, still active
+    sim[0] = 103.0
+    owner.observe_joint_state(make_state(sequence=seq + 1, received_at=103.0))
+    assert owner.poll().reason == "action_timeout"
+
+
+def test_frozen_simulation_holds_on_the_wall_clock_bound():
+    sim, wall = [100.0], [5000.0]
+    owner, action = sim_owner(sim, wall)
+    owner.observe_joint_state(make_state(sequence=10, received_at=100.0))
+    assert owner.submit(make_command(sequence=10)).accepted
+    wall[0] += 1.9  # sim frozen: no new joint state, sim age stays 0
+    assert owner.poll().reason == "active"
+    wall[0] += 0.2  # > max_joint_state_age_s 0.5 x factor 4
+    decision = owner.poll()
+    assert decision.reason == "joint_state_stale_wall_clock" and owner.state == "hold"
+    assert action.handles[0].cancel_calls == 1
+
+
+def test_crawling_simulation_holds_on_the_wall_action_bound():
+    sim, wall = [100.0], [5000.0]
+    owner, _ = sim_owner(sim, wall)
+    owner.observe_joint_state(make_state(sequence=10, received_at=100.0))
+    assert owner.submit(make_command(sequence=10)).accepted
+    seq = 10
+    while wall[0] < 5000.0 + 11.9:  # RTF 0.05: joint states fresh, sim barely moves
+        wall[0] += 0.1
+        sim[0] += 0.005
+        seq += 1
+        owner.observe_joint_state(make_state(sequence=seq, received_at=sim[0]))
+        assert owner.poll().reason == "active"
+    wall[0] += 0.2  # action_timeout_s 3.0 x factor 4 = 12 s wall
+    owner.observe_joint_state(make_state(sequence=seq + 1, received_at=sim[0]))
+    assert owner.poll().reason == "action_wall_timeout" and owner.state == "hold"
+
+
+def test_submit_rejects_a_state_that_is_fresh_in_sim_time_but_old_in_wall_time():
+    sim, wall = [100.0], [5000.0]
+    owner, action = sim_owner(sim, wall)
+    owner.observe_joint_state(make_state(sequence=10, received_at=100.0))
+    wall[0] += 2.5
+    result = owner.submit(make_command(sequence=10))
+    assert result.reason == "joint_state_stale_wall_clock" and action.commands == []
+
+
+@pytest.mark.parametrize("factor", [0.5, 0.0, float("nan"), True])
+def test_wall_clock_bound_factor_must_be_at_least_one(factor):
+    with pytest.raises(ValueError, match="wall_clock_bound_factor"):
+        make_config(wall_clock_bound_factor=factor)
+
+
+def test_sim_clock_owner_requires_a_wall_clock_bound():
+    with pytest.raises(ValueError, match="wall"):
+        ArmCommandOwner(make_config(), FakeActionClient(), monotonic=lambda: 0.0,
+                        wall_monotonic=lambda: 0.0, session_id=SESSION)

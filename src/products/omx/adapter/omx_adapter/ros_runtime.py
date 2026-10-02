@@ -313,7 +313,10 @@ class RosArmCommandRuntime:
         trajectory_action: str = "/arm_controller/follow_joint_trajectory",
         poll_period_s: float = 0.02,
         on_goal_event: Callable[[RosGoalEvent], None] | None = None,
+        owner_clock: str = "steady",
     ) -> None:
+        if owner_clock not in {"steady", "sim"}:
+            raise ValueError("owner_clock must be 'steady' or 'sim'")
         if not config.enabled:
             raise ValueError("ROS arm runtime requires an explicitly enabled policy")
         if not math.isfinite(poll_period_s) or poll_period_s <= 0:
@@ -337,7 +340,21 @@ class RosArmCommandRuntime:
             node, trajectory_action, self._dispatch_goal_event,
             callback_group=self.action_callback_group,
         )
-        self.owner = ArmCommandOwner(config, self.action_port, monotonic=time.monotonic)
+        # Owner clock (C3b A3). "sim": the node clock, which must be sim time, so owner
+        # deadlines run on the trajectory's time base; the steady clock then bounds them at
+        # config.wall_clock_bound_factor. "steady" (default, Pilot): steady time only.
+        if owner_clock == "sim":
+            if node.get_parameter("use_sim_time").value is not True:
+                raise ValueError("owner_clock 'sim' requires use_sim_time")
+            if config.wall_clock_bound_factor is None:
+                raise ValueError("owner_clock 'sim' requires config.wall_clock_bound_factor")
+            node_clock = node.get_clock()
+            self.monotonic: Callable[[], float] = lambda: node_clock.now().nanoseconds / 1e9
+            self.owner = ArmCommandOwner(config, self.action_port, monotonic=self.monotonic,
+                                         wall_monotonic=time.monotonic)
+        else:
+            self.monotonic = time.monotonic
+            self.owner = ArmCommandOwner(config, self.action_port, monotonic=time.monotonic)
         self.last_decision = CommandDecision(True, "ready", "ready")
         self.last_terminal_decision: CommandDecision | None = None
         self._subscription = node.create_subscription(
@@ -368,7 +385,7 @@ class RosArmCommandRuntime:
         snapshot = JointStateSnapshot(
             positions=positions,
             sequence=self._sequence,
-            received_at=time.monotonic(),
+            received_at=self.monotonic(),
             calibration_revision=self.owner.config.calibration_revision,
         )
         self.latest_joint_state = snapshot
@@ -412,8 +429,11 @@ class RosArmCommandRuntime:
                 self.unregister_phase_event_sink(event.command_id)
 
     def _watchdog_tick(self) -> None:
+        # Steady-clock timer: it keeps polling (and the wall bound keeps working) when sim
+        # time is frozen.
         self.last_decision = self.owner.poll()
-        if self.last_decision.reason in {"action_timeout", "joint_state_stale"}:
+        if self.last_decision.reason in {"action_timeout", "joint_state_stale",
+                                         "action_wall_timeout", "joint_state_stale_wall_clock"}:
             handle = self.action_port.last_handle
             if handle is not None:
                 handle.mark_timeout()

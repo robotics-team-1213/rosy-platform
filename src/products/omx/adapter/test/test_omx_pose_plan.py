@@ -123,6 +123,8 @@ def test_profile_loads_with_content_hash_revision(profile, kin):
     (lambda d: d.update(planning_limit_fraction=1.2), "planning_limit_fraction"),
     (lambda d: d.update(planning_limit_fraction=0.0), "planning_limit_fraction"),
     (lambda d: d.pop("planning_limit_fraction"), "planning_limit_fraction"),
+    (lambda d: d["owner"].pop("wall_clock_bound_factor"), "wall_clock_bound_factor"),
+    (lambda d: d["owner"].update(wall_clock_bound_factor=0.9), "wall_clock_bound_factor"),
 ])
 def test_profile_validation_fails_closed(mutate, match):
     document = copy.deepcopy(_document())
@@ -137,6 +139,7 @@ def test_owner_config_is_built_from_the_profile(profile):
     assert config.allowed_owners == ("pilot_sim", "rule_based")
     assert config.max_goal_duration_s == max(profile.phase_max_duration_s.values())
     assert dict(config.position_limits) == dict(profile.position_limits)
+    assert config.wall_clock_bound_factor == profile.wall_clock_bound_factor == 4.0
 
 
 # ---- planning ------------------------------------------------------------------

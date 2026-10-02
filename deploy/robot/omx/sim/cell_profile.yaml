@@ -90,3 +90,9 @@ owner:
   max_joint_state_age_s: 0.5
   # Longest phase plus 5 s for ROS acceptance/feedback latency.
   action_timeout_s: 45.0
+  # The simulation owner times max_joint_state_age_s and action_timeout_s on sim time (the
+  # trajectory's clock, C3b A3). The steady wall clock bounds both at this factor: no joint
+  # state for 0.5 x 4 = 2 s wall, or an action older than 45 x 4 = 180 s wall, HOLDs even
+  # when sim time is frozen. Basis: C3 measured real-time factor 0.3-0.95 without a camera
+  # (0.06 with one); 4 admits RTF down to 0.25 and refuses the camera-on world.
+  wall_clock_bound_factor: 4.0

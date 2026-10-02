@@ -382,3 +382,39 @@ def test_slow_feedback_handling_cannot_starve_the_joint_state_subscription():
         for node in (server_node, feedback_node, owner_node):
             node.destroy_node()
         rclpy.shutdown()
+
+
+def test_sim_owner_clock_uses_the_node_clock_and_requires_a_wall_bound():
+    from dataclasses import replace
+
+    from rclpy.parameter import Parameter
+
+    rclpy.init()
+    node = Node("omx_test_sim_clock", parameter_overrides=[Parameter("use_sim_time", value=True)])
+    config = ArmCommandConfig(
+        enabled=True, workcell_id="w", instance_id="i", joint_names=("joint1",),
+        position_limits={"joint1": (-1.0, 1.0)}, allowed_owners=("moveit",),
+        calibration_revision="cal", max_joint_state_age_s=0.5, max_goal_duration_s=1.0,
+        action_timeout_s=2.0,
+    )
+    runtime = None
+    try:
+        with pytest.raises(ValueError, match="wall_clock_bound_factor"):
+            RosArmCommandRuntime(node, config, joint_state_topic="/t/sim/js",
+                                 trajectory_action="/t/sim/fjt", owner_clock="sim")
+        steady = RosArmCommandRuntime(node, config, joint_state_topic="/t/sim/js1",
+                                      trajectory_action="/t/sim/fjt1")
+        assert steady.monotonic is time.monotonic  # default: Pilot keeps steady time
+        steady.destroy()
+        runtime = RosArmCommandRuntime(node, replace(config, wall_clock_bound_factor=4.0),
+                                       joint_state_topic="/t/sim/js2", trajectory_action="/t/sim/fjt2",
+                                       owner_clock="sim")
+        # No /clock yet: sim time is 0, far from the steady clock.
+        assert runtime.monotonic() == 0.0
+        assert runtime.owner._monotonic is runtime.monotonic
+        assert runtime.owner._wall is time.monotonic
+    finally:
+        if runtime is not None:
+            runtime.destroy()
+        node.destroy_node()
+        rclpy.shutdown()
