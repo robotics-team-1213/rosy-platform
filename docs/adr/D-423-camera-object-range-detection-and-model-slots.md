@@ -13,7 +13,7 @@
 
 ### 1. 영역 거리 — ML 없이, LiDAR 우선, 바닥 평면 예비 (지금 구현)
 
-1. **바닥 평면은 NOMINAL 프로필에서 만든다.** `camera_detect_node` 에 `camera_ground_mode: nominal` 을 더한다. `nominal_camera_profile_path`(로봇 패키지의 `camera_nominal.yaml`, URDF NOMINAL)를 읽고, 그 로봇의 승인된 `camera_profile` 기록이 이기며(`calibrated_values.calibrated` → `calibration_store.resolve`), 운영자 덮어쓰기가 둘을 이긴다. D-364 §3 처럼 두 번 켜야 한다: 모드 `nominal` 과 `allow_nominal_ground: true`. 하나라도 없으면 평면은 없고 영역은 unranged 다. 기존 `pinhole`(측정 여섯 값)·`homography` 모드는 그대로다.
+1. **바닥 평면은 NOMINAL 프로필에서 만든다.** `camera_detect_node` 에 `camera_ground_mode: nominal` 을 더한다. `nominal_camera_profile_path`(로봇 패키지의 `camera_nominal.yaml`, URDF NOMINAL)를 읽고, 그 로봇의 승인된 `camera_profile` 기록이 이기며(`calibrated_values.calibrated` → `calibration_store.resolve`), 운영자 덮어쓰기(`camera_pitch_rad_override`·`camera_height_m_override`, NaN 이면 없음, `line_observer_node` 와 같음)가 둘을 이긴다. LiDAR 앞 방향도 `lidar_yaw_offset_override` 가 승인 `lidar_mount` 기록을 이긴다. D-364 §3 처럼 두 번 켜야 한다: 모드 `nominal` 과 `allow_nominal_ground: true`. 하나라도 없으면 평면은 없고 영역은 unranged 다. 기존 `pinhole`(측정 여섯 값)·`homography` 모드는 그대로다.
 2. **바닥 거리는 영역의 아랫변에서 잰다**(기존 `GroundPlane.region_distance`). 수평선 위·신뢰 범위 밖은 모른다(None).
 3. **LiDAR 를 영역의 방위 폭에 붙인다.** 영역 네 꼭짓점의 화소를 같은 평면의 초점·주점·기울기로 로봇 앞 방향 기준 방위로 바꾼다(기울기를 넣은 정확한 식). 스캔의 각 빔은 `lidar_mount` 앞 방향(URDF 180°, 승인 기록이 다듬음)으로 로봇 방위를 얻고, LiDAR 위치(`geometry.yaml` lidar.x_m)에서 카메라 위치(x_offset_m)로 옮겨 카메라 기준 방위와 앞 거리로 바꾼다. 방위 폭 안 빔 중 가장 가까운 앞 거리가 그 영역의 LiDAR 거리다. 카메라 프레임과 스캔 시각 차가 `region_lidar_max_age_s` 보다 크면 쓰지 않는다.
 4. **어느 거리를 낼지.** LiDAR 거리 L, 바닥 거리 G(신뢰 범위 제한 없는 값 G\* 도 함께).
@@ -23,13 +23,14 @@
    - 허용오차는 `region_lidar_tolerance_m` + `region_lidar_tolerance_ratio`×G\* 이고 노드 파라미터다.
 5. **증거 스키마는 뒤로 호환된다.** 영역에 `s` 키를 더한다: `'L'` LiDAR, `'G'` 바닥 평면. `m` 이 있을 때만 붙고, `m` 이 없으면 여전히 unranged 다. `s` 가 없는 예전 관측은 출처 미표기로 읽는다. 상한 48 영역 최악 크기는 3175 B 에서 약 3.6 KB 로 4 KB 아래에 남는다. 관측 문서에 `ground_source`(`PINHOLE`/`HOMOGRAPHY`/`NOMINAL`)를 붙여 어떤 기하로 쟀는지 남긴다.
 6. **화면은 "OBJ 1 UNKNOWN 0.42m L" 처럼 보인다.** `follow_preview` 가 `s` 를 거리 뒤에 붙인다. 종류는 2단계 전까지 UNKNOWN/DARK 그대로다.
-7. **영역 거리는 자문 증거다.** 지금 `m` 을 읽는 판단 코드는 없다(`obstacle_risk` 는 `blocked` 만 본다). 이 거리를 정지·감속에 쓰려면 별도 ADR 과 시험이 필요하다(D-137: LiDAR/IR 가 결정한다).
+7. **기하는 노드 시작 때 한 번 읽는다.** 프로필 파일·승인 기록·덮어쓰기·LiDAR 앞 방향은 `camera_detect_node` 가 시작할 때 읽는다. 새 `camera_profile`·`lidar_mount` 기록을 승인하면 노드를 다시 시작해야 반영된다. `region_lidar_range` 는 NOMINAL 평면이 만들어졌을 때만 `scan` 을 구독하고, 아니면 경고만 남긴다.
+8. **영역 거리는 자문 증거다.** 지금 `m` 을 읽는 판단 코드는 없다(`obstacle_risk` 는 `blocked` 만 본다). 이 거리를 정지·감속에 쓰려면 별도 ADR 과 시험이 필요하다(D-137: LiDAR/IR 가 결정한다).
 
 ### 2. 물체 검출 모델 — 작업 `object_det` (결정, 구현은 뒤)
 
 1. **모델.** Pi 5 CPU 에서 도는 작은 int8 ONNX 검출기(YOLO-nano 급), 입력 320×240, 추론 2–3 Hz 상한(D-185 CPU 예산 안). 카메라 프레임은 센서 QoS(BEST_EFFORT)로 받는다(D-408 의 교훈).
 2. **클래스(사용자 선택).** `robot`(다른 Pinky), `obstacle_box`, `cone`, `traffic_light`, `sign`, `person_feet`. 매니페스트가 클래스 목록을 고정하고, 목록이 바뀌면 새 계약 판이다.
-3. **출력 계약.** `vision/detections` 에 기존 `core_common/protocol/detections.py` 의 `DetectionEvidence` 로 낸다(D-199 의 고정 계약 위에 백엔드만 교체). 각 검출은 1단계와 같은 방식으로 LiDAR/바닥 거리와 출처를 얻는다. 검출과 1단계 영역은 상자 겹침으로 짝지어 화면에서 "OBJ 1 cone 0.42m L" 이 된다.
+3. **출력 계약.** `vision/detections` 에 기존 `core_common/protocol/detections.py` 의 `DetectionEvidence` 로 낸다(D-199 의 고정 계약 위에 백엔드만 교체). 각 검출은 1단계와 같은 방식으로 LiDAR/바닥 거리와 출처를 얻는다. 검출과 1단계 영역은 상자 겹침으로 짝지어 화면에서 "OBJ 1 cone 0.42m L" 이 된다. 짝짓기는 표시용일 뿐이다: 검출의 거리는 검출 상자 자체로 잰다(영역의 거리를 빌리지 않는다). 한 검출이 여러 영역과 겹치면 가장 많이 겹친 하나와만 짝짓고, 겹침이 기준(IoU) 아래면 짝짓지 않아 영역은 UNKNOWN 으로, 검출은 따로 표시한다. 기준값은 2단계 시험에서 정한다.
 4. **자문 전용(D-137).** LiDAR/IR 정지 판단이 검출보다 위다. 검출은 정지 사유를 만들지 못하고, 주행 사용은 D-205/D-356 의 문을 따로 통과해야 한다.
 5. **학습 데이터.** D-411 Pilot 녹화(로봇 녹화 제어), D-379 카탈로그와 자동 라벨에 LiDAR 군집이 카메라에 투영된 자동 상자(1단계의 방위 변환을 재사용)를 더하고, 사람이 확인·수정한 라벨이 이긴다. 학습은 PC/Colab 에서만 한다(D-356).
 
@@ -45,7 +46,7 @@
 
 ### 4. 장치 기본값
 
-`camera.yaml` 의 실기 기본은 `camera_ground_mode: pinhole` + 0 여섯 값 그대로다. 1단계를 로봇에서 보려면 사용자 승인 뒤 그 로봇의 설정에 다음을 넣는다: `camera_ground_mode: nominal`, `allow_nominal_ground: true`, `nominal_camera_profile_path: <pinky_pro 프로필>/config/camera_nominal.yaml`, `region_lidar_range: true`. 그리고 정확한 바닥 거리를 원하면 그 로봇의 `camera_profile` 기록을 운영자가 승인한다(8kcn 기울기 ≈ 11.2°).
+`camera.yaml` 의 실기 기본은 `camera_ground_mode: pinhole` + 0 여섯 값 그대로다. 1단계를 로봇에서 보려면 사용자 승인 뒤 그 로봇의 설정에 다음을 넣는다: `camera_ground_mode: nominal`, `allow_nominal_ground: true`, `nominal_camera_profile_path: /opt/rosy/current/install/share/pinky_pro/config/camera_nominal.yaml`(Pinky 페이로드의 설치 위치, `pinky_pro` 의 `install(DIRECTORY config ...)`), `region_lidar_range: true`. 그리고 정확한 바닥 거리를 원하면 그 로봇의 `camera_profile` 기록을 운영자가 승인한다(8kcn 기울기 ≈ 11.2°).
 
 ## 결과
 
@@ -57,7 +58,7 @@
 ## 검증
 
 - 호스트: 방위 변환(가운데·좌우 대칭·기울기), 스캔 → 카메라 기준 변환(앞 방향 180°, 위치 차), 거리 선택 규칙(수평선 위, 일치, LiDAR 가 더 먼 경우, 신선하지 않은 스캔), NOMINAL 평면의 두 번 켜기와 승인 기록 우선, 증거 `s` 키의 뒤 호환, 화면 글자 "0.42m L".
-- Gazebo: 상자와 다른 Pinky 를 앞에 두고 `m`/`s` 를 실제 거리와 비교한다.
+- Gazebo: 상자와 다른 Pinky 를 앞에 두고 `m`/`s` 를 실제 거리와 비교한다. 지금 Gazebo 런치는 `camera_detect_node` 를 띄우지 않는다(카메라는 `rendered_camera_adapter`). 시뮬에서 이 노드를 띄우는 런치만 `accept_simulation_scans: true` 를 넣는다(기본 false; 시뮬 스캔은 `is_robot_scan` 이 버리고, 스캔이 와도 모두 버려지면 노드가 한 번 경고한다).
 - 실기: 사용자 승인 뒤 4 의 설정으로 줄자 거리와 비교한다(승인 기록 전후).
 
 ## 잇는 결정

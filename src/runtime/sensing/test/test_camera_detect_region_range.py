@@ -12,6 +12,8 @@ from pathlib import Path
 import pytest
 import yaml
 
+from control.sensing import lidar as lidar_module
+
 from control.sensing.body import LIDAR_X
 from control.sensing.lidar import NOSE_YAW
 from control.sensing.perception.camera_ground import nominal_ground_plane
@@ -92,3 +94,97 @@ def test_regions_pass_through_when_the_lidar_cannot_be_trusted(node_module, case
         node._ground = node._nominal_ground = None
     regions = above_horizon_region()
     assert node_module.CameraDetectNode._lidar_ranged(node, regions, stamp) is regions
+
+
+class FakeLogger:
+    def __init__(self):
+        self.lines = []
+
+    def info(self, text, **_):
+        self.lines.append(('info', text))
+
+    def warn(self, text, **_):
+        self.lines.append(('warn', text))
+
+
+def startup_node(tmp_path, **params):
+    profile_path = tmp_path / 'camera_nominal.yaml'
+    profile_path.write_text(yaml.safe_dump(PROFILE), encoding='utf-8')
+    values = {'nominal_camera_profile_path': str(profile_path), 'allow_nominal_ground': True,
+              'width': 320, 'height': 240, 'camera_pitch_rad_override': math.nan,
+              'camera_height_m_override': math.nan, 'lidar_yaw_offset_override': math.nan,
+              'region_lidar_range': True, 'accept_simulation_scans': False}
+    values.update(params)
+    logger = FakeLogger()
+    subscriptions = []
+    node = types.SimpleNamespace(
+        _ground_mode=values.pop('mode', 'nominal'), _scan=None, _scan_rejected_logged=False,
+        _lidar_nose=None, _on_scan=None, get_logger=lambda: logger,
+        get_parameter=lambda name: types.SimpleNamespace(value=values[name]),
+        create_subscription=lambda *args: subscriptions.append(args))
+    node.logger, node.subscriptions = logger, subscriptions
+    return node
+
+
+@pytest.fixture
+def isolated_store(monkeypatch, tmp_path):
+    monkeypatch.setenv('ROSY_CALIBRATION_ROOT', str(tmp_path / 'store'))
+    monkeypatch.setenv('ROSY_CALIBRATION_ROBOT', 'rosy-test')
+    monkeypatch.setattr(lidar_module, '_simulation_scans', False)
+
+
+@pytest.mark.parametrize('allow,expect_plane', [(False, False), (True, True)])
+def test_load_nominal_ground_needs_the_second_opt_in(node_module, tmp_path, isolated_store, allow, expect_plane):
+    node = startup_node(tmp_path, allow_nominal_ground=allow)
+    plane, camera_x = node_module.CameraDetectNode._load_nominal_ground(node)
+    assert (plane is not None) is expect_plane
+    assert camera_x == PROFILE['x_offset_m']
+    if expect_plane:
+        assert plane.pitch_rad == pytest.approx(PROFILE['pitch_rad'])
+    else:
+        assert any(level == 'warn' and 'refused' in text for level, text in node.logger.lines)
+
+
+def test_load_nominal_ground_is_off_outside_nominal_mode(node_module, tmp_path, isolated_store):
+    node = startup_node(tmp_path, mode='pinhole')
+    assert node_module.CameraDetectNode._load_nominal_ground(node) == (None, None)
+
+
+def test_operator_pitch_override_reaches_the_plane(node_module, tmp_path, isolated_store):
+    node = startup_node(tmp_path, camera_pitch_rad_override=math.radians(11.2))
+    plane, _ = node_module.CameraDetectNode._load_nominal_ground(node)
+    assert plane.pitch_rad == pytest.approx(math.radians(11.2))
+    assert any('operator override pitch_rad' in text for _, text in node.logger.lines)
+
+
+def test_lidar_subscription_needs_the_nominal_plane(node_module, tmp_path, isolated_store):
+    node = startup_node(tmp_path)
+    node._nominal_ground = None
+    node_module.CameraDetectNode._start_region_lidar(node)
+    assert node.subscriptions == [] and node._lidar_nose is None
+    assert any(level == 'warn' and 'not subscribed' in text for level, text in node.logger.lines)
+
+
+def test_lidar_subscription_with_the_plane_and_an_operator_yaw(node_module, tmp_path, isolated_store):
+    node = startup_node(tmp_path, lidar_yaw_offset_override=math.radians(182.0))
+    node._nominal_ground, _ = node_module.CameraDetectNode._load_nominal_ground(node)
+    node_module.CameraDetectNode._start_region_lidar(node)
+    assert len(node.subscriptions) == 1 and node.subscriptions[0][1] == 'scan'
+    assert node._lidar_nose == pytest.approx(math.radians(182.0))
+    assert lidar_module._simulation_scans is False
+
+
+def test_simulation_scans_only_on_request(node_module, tmp_path, isolated_store):
+    node = startup_node(tmp_path, accept_simulation_scans=True)
+    node._nominal_ground, _ = node_module.CameraDetectNode._load_nominal_ground(node)
+    node_module.CameraDetectNode._start_region_lidar(node)
+    assert lidar_module._simulation_scans is True
+
+
+def test_rejected_scans_are_reported_once(node_module, tmp_path, isolated_store):
+    node = startup_node(tmp_path)
+    remote = scan_msg(100.0, 0.6)                  # sim-time stamp: not this robot's C1
+    for _ in range(3):
+        node_module.CameraDetectNode._on_scan(node, remote)
+    warnings = [text for level, text in node.logger.lines if level == 'warn']
+    assert node._scan is None and len(warnings) == 1 and 'accept_simulation_scans' in warnings[0]

@@ -54,13 +54,18 @@ def test_camera_node_offers_nominal_ground_and_lidar_region_range_off_by_default
     node = source('control/camera_detect_node.py')
     config = source('config/camera.yaml')
     for token in ('nominal_camera_profile_path', 'allow_nominal_ground', 'region_lidar_range',
-                  'region_lidar_max_age_s', 'region_lidar_tolerance_m', 'region_lidar_tolerance_ratio'):
+                  'region_lidar_max_age_s', 'region_lidar_tolerance_m', 'region_lidar_tolerance_ratio',
+                  'camera_pitch_rad_override', 'camera_height_m_override', 'lidar_yaw_offset_override',
+                  'accept_simulation_scans'):
         assert f"'{token}'" in node
         assert f'{token}:' in config
     assert "camera_ground_mode: pinhole" in config
     assert 'allow_nominal_ground: false' in config
     assert 'region_lidar_range: false' in config
     assert "nominal_camera_profile_path: ''" in config
+    assert 'accept_simulation_scans: false' in config
+    assert 'lidar_yaw_offset_override: .nan' in config
+    assert '/opt/rosy/current/install/share/pinky_pro/config/camera_nominal.yaml' in config
     # The same store path as line_observer: URDF nominal < accepted record.
     assert 'nominal_camera_profile(' in node and 'lidar_nose_rad(' in node
     assert "LaserScan, 'scan'" in node and 'qos_profile_sensor_data' in node

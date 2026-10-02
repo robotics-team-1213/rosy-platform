@@ -14,8 +14,9 @@
   /camera/controls    the exposure/gain/white-balance the sensor was frozen at
   /camera/debug       one-line human-readable column scores
 """
-import time
 import json
+import math
+import time
 
 import numpy as np
 import rclpy
@@ -25,9 +26,9 @@ from sensor_msgs.msg import CompressedImage, Image, LaserScan
 from std_msgs.msg import Bool, Float32, String
 
 from . import executor_choice
-from .calibrated_values import lidar_nose_rad, nominal_camera_profile
+from .calibrated_values import finite_overrides, lidar_nose_rad, nominal_camera_profile
 from .sensing.body import LIDAR_X
-from .sensing.lidar import is_robot_scan
+from .sensing.lidar import enable_simulation_scans, is_robot_scan
 from .sensing.perception.camera import classify_frame
 from .sensing.perception.camera_controls import (
     lock_action, lock_controls, lock_summary, static_controls)
@@ -131,11 +132,15 @@ class CameraDetectNode(Node):
         # camera_profile record, plus the D-364 section 3 second opt-in.
         self.declare_parameter('nominal_camera_profile_path', '')
         self.declare_parameter('allow_nominal_ground', False)
+        for name in ('camera_pitch_rad_override', 'camera_height_m_override', 'lidar_yaw_offset_override'):
+            self.declare_parameter(name, math.nan)  # D-397 operator layer; NaN = no override
         # D-423: LiDAR range in each region's bearing span (NOMINAL plane only).
         self.declare_parameter('region_lidar_range', False)
         self.declare_parameter('region_lidar_max_age_s', 0.3)
         self.declare_parameter('region_lidar_tolerance_m', 0.05)
         self.declare_parameter('region_lidar_tolerance_ratio', 0.2)
+        # Gazebo /scan only when a sim launch asks; the robot keeps its own C1.
+        self.declare_parameter('accept_simulation_scans', False)
         # D-373: JPEG copy of camera/front for the snapshot recorder. Off unless
         # the capture launch argument turns it on; encoding costs CPU per frame.
         self.declare_parameter('publish_compressed', False)
@@ -191,12 +196,8 @@ class CameraDetectNode(Node):
             max_range_m=float(self.get_parameter('camera_max_range_m').value))
         self._ground_mode = str(self.get_parameter('camera_ground_mode').value).strip().lower()
         self._nominal_ground, self._camera_x_m = self._load_nominal_ground()
-        self._scan = None
-        self._lidar_nose = None
-        if bool(self.get_parameter('region_lidar_range').value):
-            self._lidar_nose, nose_source = lidar_nose_rad()
-            self.get_logger().info(f'region LiDAR range on; lidar forward from {nose_source}')
-            self.create_subscription(LaserScan, 'scan', self._on_scan, qos_profile_sensor_data)
+        self._scan, self._scan_rejected_logged, self._lidar_nose = None, False, None
+        self._start_region_lidar()
         self._homography_enabled = bool(
             self.get_parameter('camera_homography_enabled').value)
         self._homography = load_homography_profile(
@@ -261,7 +262,9 @@ class CameraDetectNode(Node):
         if self._ground_mode != 'nominal':
             return None, None
         profile, source = nominal_camera_profile(
-            str(self.get_parameter('nominal_camera_profile_path').value))
+            str(self.get_parameter('nominal_camera_profile_path').value),
+            override=finite_overrides({key: self.get_parameter(f'camera_{key}_override').value
+                                       for key in ('pitch_rad', 'height_m')}))
         self.get_logger().info(f'camera profile from {source}')
         plane = nominal_ground_plane(
             source='NOMINAL', allowed=bool(self.get_parameter('allow_nominal_ground').value),
@@ -272,26 +275,42 @@ class CameraDetectNode(Node):
                                    'profile incomplete); regions stay unranged')
         return plane, profile.get('x_offset_m')
 
+    def _start_region_lidar(self):
+        """Subscribe scan for region range only with the NOMINAL plane (read once, at start)."""
+        if not bool(self.get_parameter('region_lidar_range').value):
+            return
+        if self._nominal_ground is None:
+            self.get_logger().warn('region_lidar_range needs camera_ground_mode nominal with a '
+                                   'NOMINAL plane; scan not subscribed')
+            return
+        if bool(self.get_parameter('accept_simulation_scans').value):
+            enable_simulation_scans(True)
+        self._lidar_nose, source = lidar_nose_rad(override=finite_overrides(
+            {'lidar_yaw_offset': self.get_parameter('lidar_yaw_offset_override').value}))
+        self.get_logger().info(f'region LiDAR range on; lidar forward from {source}')
+        self.create_subscription(LaserScan, 'scan', self._on_scan, qos_profile_sensor_data)
+
     def _on_scan(self, msg):
         if is_robot_scan(msg):
             self._scan = msg
+        elif self._scan is None and not self._scan_rejected_logged:
+            self._scan_rejected_logged = True
+            self.get_logger().warn('scan arrives but is not from the onboard C1 (is_robot_scan); '
+                                   'Gazebo needs accept_simulation_scans')
 
     def _lidar_ranged(self, regions, capture_stamp):
         """D-423: LiDAR range per region; unchanged without a fresh scan or the NOMINAL plane."""
-        scan = self._scan
-        if (scan is None or self._lidar_nose is None or self._camera_x_m is None
-                or self._ground is None or self._ground is not self._nominal_ground):
-            return regions
-        scan_stamp = scan.header.stamp.sec + scan.header.stamp.nanosec * 1e-9
-        if abs(scan_stamp - capture_stamp) > float(self.get_parameter('region_lidar_max_age_s').value):
+        scan, value = self._scan, lambda name: float(self.get_parameter(name).value)
+        if (scan is None or self._lidar_nose is None or self._camera_x_m is None or self._ground is None
+                or self._ground is not self._nominal_ground
+                or abs(scan.header.stamp.sec + scan.header.stamp.nanosec * 1e-9 - capture_stamp)
+                > value('region_lidar_max_age_s')):
             return regions
         points = scan_in_camera(scan.ranges, scan.angle_min, scan.angle_increment, scan.range_min,
                                 scan.range_max, nose_rad=self._lidar_nose, lidar_x_m=LIDAR_X,
                                 camera_x_m=float(self._camera_x_m))
-        return range_regions(
-            regions, self._ground, points,
-            tolerance_m=float(self.get_parameter('region_lidar_tolerance_m').value),
-            tolerance_ratio=float(self.get_parameter('region_lidar_tolerance_ratio').value))
+        return range_regions(regions, self._ground, points, tolerance_m=value('region_lidar_tolerance_m'),
+                             tolerance_ratio=value('region_lidar_tolerance_ratio'))
 
     def _ground_calibration_status(self):
         status = self._homography.status(

@@ -73,3 +73,31 @@ def test_lidar_nose_is_the_urdf_nominal_until_a_mount_record_is_accepted(tmp_pat
     store.set_status(ROBOT, 'lidar_mount', rid, 'accepted', actor='operator')
     nose, source = lidar_nose_rad(root=tmp_path, robot=ROBOT)
     assert nose == math.radians(181.8) and rid in source
+
+
+def test_operator_override_beats_the_accepted_profile_and_mount_records(tmp_path):
+    """D-397 order for the D-423 readers too: an operator override wins over an accepted record."""
+    import math
+    import yaml
+    from control.calibrated_values import lidar_nose_rad, nominal_camera_profile
+    path = tmp_path / 'camera_nominal.yaml'
+    path.write_text(yaml.safe_dump(FILE), encoding='utf-8')
+    store = CalibrationStore(tmp_path / 'store')
+    rid = store.add(ROBOT, 'camera_profile', {**FILE, 'pitch_rad': 0.20}, method='t/1')
+    store.set_status(ROBOT, 'camera_profile', rid, 'accepted', actor='operator')
+    values, source = nominal_camera_profile(str(path), root=tmp_path / 'store', robot=ROBOT,
+                                            override={'pitch_rad': 0.15})
+    assert values['pitch_rad'] == 0.15 and 'operator override pitch_rad' in source
+    rid = store.add(ROBOT, 'lidar_mount', {'lidar_yaw_offset': math.radians(181.8)}, method='t/1')
+    store.set_status(ROBOT, 'lidar_mount', rid, 'accepted', actor='operator')
+    nose, source = lidar_nose_rad(root=tmp_path / 'store', robot=ROBOT,
+                                  override={'lidar_yaw_offset': math.radians(182.5)})
+    assert nose == math.radians(182.5) and 'operator override lidar_yaw_offset' in source
+
+
+def test_non_mapping_profile_gives_no_profile_and_says_why(tmp_path):
+    from control.calibrated_values import nominal_camera_profile
+    path = tmp_path / 'camera_nominal.yaml'
+    path.write_text('- 1\n- 2\n', encoding='utf-8')
+    values, source = nominal_camera_profile(str(path), root=tmp_path, robot=ROBOT)
+    assert values == {} and 'not a mapping' in source

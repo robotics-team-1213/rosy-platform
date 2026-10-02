@@ -949,3 +949,12 @@
 - gate 변화: 없음. 실기 적용은 사용자 승인 뒤 설정 변경(D-423 §4).
 - 결정: D-423 Proposed
 - 교훈: URDF 8° 기울기로는 0.4 m 앞 접지점을 약 0.66 m 로 읽는다(실측 11.2–11.8°). 그래서 LiDAR 가 더 가까우면 LiDAR 를 믿는 비대칭 규칙을 썼다.
+
+## 2026-10-03 · uncommitted · fix(sensing): D-423 리뷰 반영 — 운영자 덮어쓰기, 시뮬 스캔, 구독 조건
+
+- 원인: D-423 1단계 리뷰(I-1, I-2, M-1, M-3..M-6).
+- 변경: `camera_detect_node` 에 `camera_pitch_rad_override`·`camera_height_m_override`·`lidar_yaw_offset_override`(NaN = 없음, `line_observer_node` 와 같음)를 두고 `calibrated_values.nominal_camera_profile`·`lidar_nose_rad` 의 `override=` 로 넘긴다(`finite_overrides`). `accept_simulation_scans`(기본 false)가 `enable_simulation_scans(True)` 를 부르고, 스캔이 와도 모두 버려지면 한 번 경고한다. `region_lidar_range` 는 NOMINAL 평면이 있을 때만 `scan` 을 구독하고 아니면 경고한다(`_start_region_lidar`). 매핑이 아닌 YAML 은 ({}, 사유). `camera.yaml` 주석에 설치 경로 `/opt/rosy/current/install/share/pinky_pro/config/camera_nominal.yaml` 와 시작 때 한 번 읽음을 적었다. 기하·기록·덮어쓰기는 노드 시작 때 한 번 읽으므로 새 기록 승인 뒤에는 노드를 다시 시작한다. ADR §1.1·§1.7·§2.3(짝짓기는 표시용)·§4·§검증 보강.
+- 증거: 아래 커밋 메시지와 동일한 실행(센서 시험 전체, harness lint, test/architecture).
+- gate 변화: 없음. 장치 기본값 불변.
+- 결정: D-423 Proposed
+- 교훈: 없음
