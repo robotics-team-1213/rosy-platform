@@ -401,7 +401,7 @@ SIZE_VERDICTS = {
         "splitting probe sequence from reporting would sever one diagnostic narrative (X5)",
     ),
     "products/omx/adapter/omx_adapter/action_store.py": (
-        1_187,
+        1_194,
         "accept: one owner for the durable local Action, per-attempt ROS phase journal, and semantic "
         "workflow terminal gate; they share SQLite transactions, identity fences, and restart-to-UNKNOWN "
         "recovery. ROS-free and host-testable. Re-judged 2026-10-01 at 1109 after the durable gripper "
