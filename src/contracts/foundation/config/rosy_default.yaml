@@ -144,6 +144,7 @@ line_follow:                       # D-143 selected-source, fail-closed policy
   # close, or before recovery_restuck_m of net forward travel since, is the same stuck for
   # attempt counting (new stuck_id, restuck_of=<previous>, attempts carried).
   recovery_restuck_s: 20.0
+  recovery_console_grace_s: 3.0    # a FleetAgent reconnect this short still counts as linked
   recovery_restuck_m: 0.30
   recovery_rear_lateral_margin_m: 0.02   # rear band = body_half_width_m (URDF) + this
 

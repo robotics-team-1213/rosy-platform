@@ -462,3 +462,25 @@ def test_forward_trail_last_forward_at():
     trail.record(1.05, 0.0, 0.0)
     trail.record(1.10, -0.03, 0.0)
     assert trail.last_forward_at() == 1.0
+
+
+# ---- D-407 console re-run 2026-10-02: event fields ---------------------------------------
+@pytest.mark.parametrize("state", ["clear", "blocked", "unknown"])
+def test_opened_event_says_whether_the_rear_is_clear_or_unknown(state):
+    machine, bus = _machine()
+    machine.step(_inp(0.0, rear_m=None, rear_state=state))
+    opened = bus.named("nav.line_stuck_opened")[-1]
+    assert opened["rear_clearance_m"] is None and opened["rear_state"] == state
+
+
+def test_refused_back_and_retry_answer_carries_the_judged_scan():
+    machine, bus = _machine()
+    machine.step(_inp(0.0, rear_blind_m=0.09, trail_m=0.15, trail_yaw_deg=14.6,
+                      trail_age_s=20.1))
+    with pytest.raises(AnswerRefused):
+        machine.answer(1.0, "stuck-1", "BACK_AND_RETRY", "operator", "a1b2c3d4e5f6")
+    answered = bus.named("nav.line_stuck_answered")[-1]
+    assert answered["accepted"] is False and answered["reason"] == "rear_blind"
+    assert (answered["trail_m"], answered["trail_yaw_deg"], answered["trail_age_s"],
+            answered["rear_blind_m"]) == (0.15, 14.6, 20.1, 0.09)
+    assert answered["principal_ref"] == "a1b2c3d4e5f6" and "token_id" not in answered

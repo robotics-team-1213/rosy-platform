@@ -57,7 +57,7 @@ def _opened_event(stuck_id="stuck-abc", seq=4) -> EventMessage:
     return EventMessage(seq=seq, robot_id="rosy_01", type="nav.line_stuck_opened",
                         data={"stuck_id": stuck_id, "cause": "obstacle_ahead",
                               "front_clearance_m": 0.12, "rear_clearance_m": 0.31,
-                              "turn_clearance_m": 0.09, "rear_blind_m": 0.05,
+                              "rear_state": "clear", "turn_clearance_m": 0.09, "rear_blind_m": 0.05,
                               "preview_seq": 812, "last_lane": None})
 
 
@@ -79,6 +79,7 @@ def test_the_state_row_carries_the_open_stuck_with_clearances_from_the_opened_ev
     assert stuck["cause"] == "obstacle_ahead" and stuck["max_attempts"] == 2
     assert stuck["front_clearance_m"] == 0.12 and stuck["rear_clearance_m"] == 0.31
     assert stuck["turn_clearance_m"] == 0.09 and stuck["preview_seq"] == 812
+    assert stuck["rear_state"] == "clear"           # D-407 re-run C: empty vs unknown
     assert stuck["opened_event"] is True and stuck["robot_online"] is True
     assert stuck["fleet_answer"] is None
 

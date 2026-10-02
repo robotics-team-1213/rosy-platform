@@ -43,6 +43,9 @@ class StuckInput:
     front_clear: bool = True             # no path-band return within obstacle_resume_m
     front_band_m: Optional[float] = None
     rear_m: Optional[float] = None       # from the body rear (URDF), self-mask applied
+    # "clear" (band empty or wider than recovery_rear_clear_m), "blocked", or "unknown"
+    # (no geometry / no fresh scan): rear_m None alone cannot tell empty from unknown.
+    rear_state: str = "unknown"
     turn_m: Optional[float] = None
     # Rear band behind the body rear that the LiDAR cannot see (range_min, self-mask
     # windows). None = unknown (no range_min, no geometry): never back off.
@@ -197,19 +200,20 @@ class StuckRecovery:
 
     # ---- console ----------------------------------------------------------------
     def answer(self, now: float, stuck_id: str, decision: str, by: str,
-               token_id: Optional[str] = None) -> str:
+               principal_ref: Optional[str] = None) -> str:
         """Apply a console answer; returns hold | back | resume | manual | idle."""
         if decision not in DECISIONS:
             raise AnswerRefused("VALIDATION_ERROR", f"unknown stuck decision {decision!r}")
         if self._id is None or stuck_id != self._id:
-            self._answered(stuck_id, decision, by, token_id, False, "stuck_id_mismatch")
+            self._answered(stuck_id, decision, by, principal_ref, False, "stuck_id_mismatch")
             raise AnswerRefused("STUCK_ID_MISMATCH",
                                 "no open stuck with this id (late or wrong answer)")
         why = self._answer_refusal(decision, now)
         if why is not None:
-            self._answered(stuck_id, decision, by, token_id, False, why)
+            self._answered(stuck_id, decision, by, principal_ref, False, why,
+                           evidence=self._last_or(now) if decision == "BACK_AND_RETRY" else None)
             raise AnswerRefused("STUCK_DECISION_REFUSED", f"{decision} refused: {why}")
-        self._answered(stuck_id, decision, by, token_id, True, None)
+        self._answered(stuck_id, decision, by, principal_ref, True, None)
         self._last_answer = decision
         if decision == "WAIT":
             if self._phase == BACKING:
@@ -355,7 +359,7 @@ class StuckRecovery:
             data={"stuck_id": self._id, "cause": inp.cause,
                   "front_clearance_m": inp.front_band_m, "rear_clearance_m": inp.rear_m,
                   "turn_clearance_m": inp.turn_m, "rear_blind_m": inp.rear_blind_m,
-                  "last_lane": inp.last_lane, "preview_seq": inp.preview_seq,
+                  "rear_state": inp.rear_state, "last_lane": inp.last_lane, "preview_seq": inp.preview_seq,
                   "restuck_of": self._restuck_of, "attempts": self._attempts},
         )
         if self._attempts >= self._config.recovery_max_attempts:
@@ -380,12 +384,21 @@ class StuckRecovery:
                   "decisions": list(DECISIONS)},
         )
 
-    def _answered(self, stuck_id: str, decision: str, by: str, token_id: Optional[str],
-                  accepted: bool, reason: Optional[str]) -> None:
+    def _answered(self, stuck_id: str, decision: str, by: str, principal_ref: Optional[str],
+                  accepted: bool, reason: Optional[str],
+                  evidence: Optional[StuckInput] = None) -> None:
+        # principal_ref: the CORE token *record id* (configured id or digest[:12], already public
+        # in the token list), never the secret. A key named like a credential ("token_id") was
+        # refused by Fleet's audit store (EVENT_NOT_AUDITABLE, D-407 re-run 2026-10-02).
+        # evidence: the scan a refused BACK_AND_RETRY was judged on, so the console sees why.
         self._events.publish(
             "nav.line_stuck_answered", source=_SOURCE,
-            data={"stuck_id": stuck_id, "decision": decision, "by": by, "token_id": token_id,
-                  "accepted": accepted, "reason": reason},
+            data={"stuck_id": stuck_id, "decision": decision, "by": by,
+                  "principal_ref": principal_ref, "accepted": accepted, "reason": reason,
+                  "rear_blind_m": None if evidence is None else evidence.rear_blind_m,
+                  "trail_m": None if evidence is None else evidence.trail_m,
+                  "trail_yaw_deg": None if evidence is None else evidence.trail_yaw_deg,
+                  "trail_age_s": None if evidence is None else evidence.trail_age_s},
         )
 
     def _result(self, result: str, reason: Optional[str], *, attempt: Optional[int] = None,
