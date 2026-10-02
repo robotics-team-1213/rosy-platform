@@ -918,3 +918,11 @@
 - 증거: `test_loc_assist.py` +6(정지면 바로, 회전 중이면 미룸, 움직임이 창을 다시 시작, 5 s 상한, odom 없음, 내려놓음·SUSPECT), 기존 시험의 `core()` 는 t=0 이전부터 정지한 로봇. `test_loc_assist_node_ros.py` +1(WSL Jazzy: `/rosy_loc_test/odom` 구독, 회전 twist 는 미룸). WSL loc 시험 67 passed. 호스트 sensing 2295 passed, 104 skipped.
 - 남은 것: odom 이 끊기면 마지막 twist 가 남는다(정지였으면 바로 탐색). Gazebo 재실행으로 d1·d2 거부가 사라지는지 확인해야 한다.
 - gate 변화: 없음.
+
+## 2026-10-02 · 7459be67 · fix(localization): D-395 S1 재실행 R3 — 낡은 odom twist 는 정지가 아니다
+
+- 원인: 위 항목의 남은 것. 정지 twist 뒤 odom 이 끊기면 정지 문이 그 값을 계속 믿고 바로 탐색했다.
+- 변경: `LocAssist` 는 마지막 twist 시각을 들고, 0.5 s(`SETTLE_S`)보다 오래된 twist 는 정지가 아니라 모름으로 친다. 탐색은 기다리고 5 s 상한이 푼다. `settle_timed_out` 은 이유 문자열(`no_fresh_odom` 또는 `never_settled`)이고 노드 경고에 그대로 찍힌다.
+- 증거: `test_loc_assist.py` +1(정지 뒤 침묵: 재시도가 0.5 s 넘은 twist 로는 안 풀리고 상한에서 `no_fresh_odom`), 정지 문 시험은 twist 를 직접 신선하게 넣고 나머지 시험의 `core()` 는 `search_due` 마다 정지 twist 가 오는 살아 있는 odom. `test_loc_assist_node_ros.py` 는 0.6 s 정지 뒤 신선한 twist 로 통과. WSL loc 시험 68 passed. 호스트 sensing 2296 passed, 104 skipped.
+- 남은 것: Gazebo 재실행으로 d1·d2 거부가 사라지는지 확인.
+- gate 변화: 없음.
