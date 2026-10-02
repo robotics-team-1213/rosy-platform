@@ -275,3 +275,10 @@
 - 증거: 관문 1회차 `X:\DevTemp\d411-simC\stall3_harness.log`(닫기 4.05 s, 0.359 rad, 조그 세 번 0.377/0.388/0.416). 호스트 `src/products/omx/adapter/test`, `test/test_omx_pilot_probe.py`, `test/test_omx_workstation.py` 통과 (2026-10-03 Windows). 고친 뒤 Gazebo 재실행 없음.
 - gate 변화: ROS-SIM HOLD — 다시 빌드한 이미지로 우회 없이 재실행 필요.
 - 결정: D-411 구현 부록 12·14.
+
+## 2026-10-03 · uncommitted · fix(omx-sim): D-411 C 관문 수용 — probe 경합 두 개, 쥠 drift 보고
+- 변경: `probe_pilot_sim_http.py` — 그리퍼 목표가 SUCCEEDED 된 뒤 readback 이 멈출 때(0.2 s 동안 Δ<0.002 rad, 최대 1.5 s)까지 기다린 뒤 위치 확인(쥔 채 조그 뒤 readback 도 같음); 목표 POST 가 `joint_state_sequence_mismatch`/`readback_not_recently_served` 면 새 `/state` 로 한 번 재시도; stall 보고서에 `holding_drift_rad`(열린 쪽 +, 판정 없음).
+- 증거: Gazebo 관문 2회차 수용 — `rosy-omx-pilot:d411c2` `sha256:5c905d91b62269c57f1be7e7ded03f34e5ddb9855b9e4e118158f4075b81052b`, workstation `sha256:326a62d04e765675a1438e75c037f60ba086b302692f3037ea20bd5fe196fe0a`, `X:\DevTemp\d411-simC2` (빌드·제약·기본·target 통과, `--stall` 3회차 통과: 닫기 2.29 s, 0.352 rad, holding, `hold-` 목표 0.295, 조그 세 번 SUCCEEDED·holding, 열림 0.352→0.366→0.375→0.389). 호스트 `test/test_omx_pilot_probe.py`(이른 SUCCEEDED·재시도·drift 시험 포함)와 `src/products/omx/adapter/test` 통과 (2026-10-03 Windows).
+- gate 변화: ROS-SIM — D-411 C `holding` 수용(컨트롤러 결정). 나머지 ROS-SIM 항목은 HOLD 그대로.
+- 결정: D-411 구현 부록 15.
+- 후속: 쥔 채 조그 drift +0.037 rad/3 조그 — `gripper.preload` 조정·정육면체 미끄러짐 조사, 기준이 정해지면 `holding_drift_rad` 로 관문 판정.
