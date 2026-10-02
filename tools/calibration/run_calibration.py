@@ -170,12 +170,10 @@ def clearance_reason(sample, step: Step, lidar_yaw_deg, fresh=True, *, body=BODY
     if step.linear == 0.0 and step.angular == 0.0:
         return None
     if step.linear == 0.0:
-        view = _view(sample, lidar_yaw_deg, body, self_mask)
-        if body.can_rotate(view.points, PIVOT_MARGIN_M):
-            return None
-        nearest = min(math.hypot(x, y) for x, y in view.points)
-        return (f"clearance {nearest:.3f} m from the base < {body.rotation_clear_m(PIVOT_MARGIN_M):.3f} m "
-                "(rotation radius + margin)")
+        # D-424 review M1/L2: every base sector seen, every point beyond rho + margin, no
+        # unknown band in the sweep (this tool has no ultrasonic); an empty scan is not clear.
+        reason = body.rotation_reason(_view(sample, lidar_yaw_deg, body, self_mask), PIVOT_MARGIN_M)
+        return None if reason is None else f"clearance: {reason}"
     room = straight_room_m(sample, step, lidar_yaw_deg, body=body, self_mask=self_mask)
     if room > 0.0:
         return None
@@ -265,14 +263,36 @@ def pull(host, remote_folder, dest_root=RAW):
     return dest_root / Path(remote_folder).name
 
 
-def drive(core: Core, steps, lidar_yaw_deg, log, stop_event=None, *, body=BODY, self_mask=()):
+def parse_self_mask(text):
+    """--self-mask: name=FROM:TO:REACH[/FROM:TO:REACH...],name2=... (robot-frame degrees, 0 =
+    forward, + = left; reach in metres, at most 0.30) -- the robot's line_follow.lidar_self_mask
+    (D-422 format). Returns {name: ((from, to, reach), ...)}."""
+    out = {}
+    for item in filter(None, (part.strip() for part in (text or "").split(","))):
+        name, _, windows = item.partition("=")
+        mask = []
+        for window in filter(None, windows.split("/")):
+            lo, hi, reach = (float(v) for v in window.split(":"))
+            if not (-180.0 <= lo < hi <= 180.0) or not 0.0 < reach <= 0.30:
+                raise ValueError(f"self-mask window out of range: {window!r}")
+            mask.append((lo, hi, reach))
+        if not name.strip() or not mask:
+            raise ValueError(f"self-mask needs name=FROM:TO:REACH: {item!r}")
+        out[name.strip()] = tuple(mask)
+    return out
+
+
+def drive(core: Core, steps, lidar_yaw_deg, log, stop_event=None, *, body=BODY, self_mask=(),
+          adjustments=None):
     """Run the steps; returns None or the abort reason (zero is always sent last).
 
     A missing or stale scan aborts. Clearance never aborts the run (D-424): a step is first
     planned (a straight is shortened to the room there is), a step without room waits up to
     CLEARANCE_WAIT_S sending zero and is then skipped, and a step that reaches its stop gap
-    while moving ends there."""
+    while moving ends there. Each adjustment is appended to `adjustments` (a list) as
+    {"step", "action": skipped | shortened | ended_early, "note"} for the run's result."""
     freshness = ScanFreshness()
+    adjustments = [] if adjustments is None else adjustments
     look = {"body": body, "self_mask": self_mask}
 
     def tick_wait(tick):
@@ -297,9 +317,11 @@ def drive(core: Core, steps, lidar_yaw_deg, log, stop_event=None, *, body=BODY, 
                     tick_wait(tick)
                 if planned is None:
                     log(f"{step.name}: skipped, {note}")
+                    adjustments.append({"step": step.name, "action": "skipped", "note": note})
                     continue
                 if note:
                     log(f"{step.name}: {note}")
+                    adjustments.append({"step": step.name, "action": "shortened", "note": note})
                 step = planned
             log(f"{step.name}: v={step.linear:+.3f} w={step.angular:+.2f} {step.seconds:.1f}s")
             end = time.monotonic() + step.seconds
@@ -314,6 +336,7 @@ def drive(core: Core, steps, lidar_yaw_deg, log, stop_event=None, *, body=BODY, 
                     if scan_problem(sample, fresh):
                         return f"{step.name}: {reason}"
                     log(f"{step.name}: ended early, {reason}")
+                    adjustments.append({"step": step.name, "action": "ended_early", "note": reason})
                     break
                 core.teleop(step.linear, step.angular)   # zero during rests keeps the deadman fed
                 tick_wait(tick)
@@ -326,8 +349,12 @@ def drive(core: Core, steps, lidar_yaw_deg, log, stop_event=None, *, body=BODY, 
 
 # --- repeat rule ----------------------------------------------------------------
 
-def repeat_reason(run):
-    """Why the run must be repeated (None = accept the run for the candidate)."""
+def repeat_reason(run, adjustments=(), moving_steps=None):
+    """Why the run must be repeated (None = accept the run for the candidate). D-424 review
+    M5: a run whose moving steps were all skipped is never a success, whatever was recorded."""
+    skipped = sum(1 for a in adjustments if a.get("action") == "skipped")
+    if moving_steps and skipped >= moving_steps:
+        return f"every moving step was skipped for clearance ({skipped} of {moving_steps})"
     recs = [r for r in run["records"] if "error" not in r]
     radii = [r["ds"] / ((r["phi_l"] + r["phi_r"]) / 2) for r in recs
              if r["kind"] == "straight" and abs(r["phi_l"] + r["phi_r"]) > 1.0]
@@ -400,7 +427,12 @@ def _run_robot(name, host, code, args, results, stop_event, live, state, log):
             return
         state["recording"] = True
         folder = started.stdout.split("recording:", 1)[1].strip().splitlines()[0]
-        abort = drive(core, steps, yaw, log, stop_event)
+        adjustments = []
+        abort = drive(core, steps, yaw, log, stop_event, self_mask=getattr(args, "self_mask", {}).get(name, ()),
+                      adjustments=adjustments)
+        if adjustments:
+            log(f"clearance adjusted {len(adjustments)} step(s): "
+                + ", ".join(f"{a['step']} {a['action']}" for a in adjustments))
         stopped = ssh(host, "~/rosy_rec.sh stop")
         state["recording"] = False
         if args.session_api:
@@ -408,17 +440,18 @@ def _run_robot(name, host, code, args, results, stop_event, live, state, log):
         log(f"recorder: {stopped.stdout.strip().splitlines()[:1]}")
         if abort:
             log(f"ABORTED: {abort}")
-            results[name] = {"error": abort, "sessions": sessions}
+            results[name] = {"error": abort, "sessions": sessions, "adjusted_steps": adjustments}
             return
         local = pull(host, folder)
         sessions.append(local)
         import analyze_session as AS
         run = AS.analyse_run(local, yaw, AS.load_profile())
-        why = repeat_reason(run)
+        why = repeat_reason(run, adjustments, sum(1 for s in steps if s.linear or s.angular))
         log(f"attempt {attempt}: {'accepted run' if why is None else 'repeat: ' + why}")
         if why is None:
             break
-    results[name] = {"sessions": [str(s) for s in sessions]}
+    results[name] = {"sessions": [str(s) for s in sessions], "adjusted_steps": adjustments,
+                     "repeat_reason": why}
 
 
 def stop_all(stop_event, live, threads):
@@ -469,6 +502,9 @@ def main(argv=None) -> int:
     ap.add_argument("--max-angular", default="", help="name=rad/s,... robot limit (default 0.1, L0)")
     ap.add_argument("--max-linear", default="", help="name=m/s,... robot limit (default 0.03)")
     ap.add_argument("--lidar-yaw-deg", type=float, default=None)
+    ap.add_argument("--self-mask", default="",
+                    help="name=FROM:TO:REACH[/...],... robot-frame deg + m: the robot's own parts the "
+                         "LiDAR sees (its line_follow.lidar_self_mask; D-424)")
     ap.add_argument("--session-api", action="store_true", help="call the CORE calibration session API")
     ap.add_argument("--session-api-path", default="/api/v1/calibration/session")
     ap.add_argument("--dry-run", action="store_true", help="print the protocol; touch nothing")
@@ -478,6 +514,7 @@ def main(argv=None) -> int:
     def pairs(text, cast=str):
         return {k.strip(): cast(v.strip()) for k, v in (p.split("=", 1) for p in text.split(",") if "=" in p)}
     args.max_angular, args.max_linear = pairs(args.max_angular, float), pairs(args.max_linear, float)
+    args.self_mask = parse_self_mask(args.self_mask)
     if args.offline:
         import analyze_session as AS
         extra = ["--lidar-yaw-deg", str(args.lidar_yaw_deg)] if args.lidar_yaw_deg is not None else []

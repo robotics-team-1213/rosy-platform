@@ -12,9 +12,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import run_calibration as rc  # noqa: E402
 
 
-def sample(returns_by_deg, n=360, received_at=100.0):
-    """Scan with angle_min -pi, 1-deg steps; {scan deg: range}."""
-    ranges = [math.inf] * n
+def sample(returns_by_deg, n=360, received_at=100.0, rest=2.0):
+    """Scan with angle_min -pi, 1-deg steps; {scan deg: range}, `rest` elsewhere (D-424: a turn
+    needs returns all around the base)."""
+    ranges = [rest] * n
     for deg, r in returns_by_deg.items():
         ranges[(deg + 180) % n] = r
     return {"ranges": ranges, "angle_min": -math.pi, "angle_max": math.pi * (n - 2) / n,
@@ -82,11 +83,14 @@ def test_a_straight_with_030_ahead_is_shortened_not_aborted():
     assert held is None and rc.scan_problem(sample({182: 0.10})) is None and "room" in why
 
 
-def test_an_unknown_beam_ahead_holds_the_straight_but_not_the_pivot():
+def test_an_unknown_beam_ahead_holds_the_straight_and_the_pivot():
+    """D-424 review M2: this tool has no ultrasonic, so an unknown band in front of the body
+    is neither free to drive into nor clear for the sweep; a reverse is still free."""
     blind = dict(sample({182: 0.30}), range_min=0.15)
     blind["ranges"][(181 + 180) % 360] = 0.0                  # no return 1 deg off the nose
     assert rc.straight_room_m(blind, rc.Step("f", linear=0.03, seconds=1), 182.0) == 0.0
-    assert rc.clearance_reason(blind, rc.Step("p", angular=0.1, seconds=1), 182.0) is None
+    assert rc.straight_room_m(blind, rc.Step("b", linear=-0.03, seconds=1), 182.0) > 1.0
+    assert "without a return" in rc.clearance_reason(blind, rc.Step("p", angular=0.1, seconds=1), 182.0)
 
 
 def test_drive_skips_a_blocked_straight_and_keeps_going(monkeypatch):
@@ -288,3 +292,40 @@ def test_repeat_rule():
     bad = good[:3] + [rec("straight", ds=0.24 * 1.02, phi_l=8.88, phi_r=8.88)] + good[4:]
     assert "radius spread" in rc.repeat_reason({"records": bad})
     assert "too few" in rc.repeat_reason({"records": good[:2]})
+
+
+def test_one_finite_beam_or_an_empty_scan_is_not_a_clear_pivot():
+    """D-424 review M1/L2: all([]) is not clearance."""
+    pivot = rc.Step("p", angular=0.1, seconds=1)
+    assert "sectors" in rc.clearance_reason(sample({90: 2.0}, rest=math.inf), pivot, 182.0)
+    assert "no LiDAR return" in rc.clearance_reason(sample({}, rest=math.inf), pivot, 182.0)
+
+
+def test_self_mask_cli_hides_a_known_fixed_part():
+    masks = rc.parse_self_mask("8kcn=-66:-52:0.17/10:20:0.1,9dfk=-5:5:0.12")
+    assert masks["8kcn"] == ((-66.0, -52.0, 0.17), (10.0, 20.0, 0.1)) and "9dfk" in masks
+    pivot = rc.Step("p", angular=0.1, seconds=1)
+    part = sample({182 - 59: 0.09})                      # robot-frame -59 deg, base ~0.08 from the centre
+    assert rc.clearance_reason(part, pivot, 182.0) is not None
+    assert rc.clearance_reason(part, pivot, 182.0, self_mask=masks["8kcn"]) is None
+    for bad in ("8kcn=-66:-52:0.5", "8kcn=10:5:0.1", "=1:2:0.1"):
+        with pytest.raises(ValueError):
+            rc.parse_self_mask(bad)
+
+
+def test_an_all_skipped_run_is_reported_and_never_a_success(monkeypatch):
+    monkeypatch.setattr(rc, "CLEARANCE_WAIT_S", 0.0)
+
+    class Boxed(FakeCore):
+        def lidar(self):
+            self.t += 0.1
+            return sample({}, received_at=self.t, rest=0.09)      # walls all around
+
+    adjustments = []
+    steps = [rc.Step("straight+0", linear=0.03, seconds=8.0), rc.Step("pivot+", angular=0.1, seconds=1.0)]
+    assert rc.drive(Boxed(), steps, 182.0, lambda m: None, adjustments=adjustments) is None
+    assert [a["action"] for a in adjustments] == ["skipped", "skipped"]
+    full = {"records": [{"kind": "straight", "ds": 0.24, "phi_l": 8.6, "phi_r": 8.6}] * 4
+            + [{"kind": "pivot", "dth": 6.28, "phi_r": 4.0, "phi_l": -4.0}] * 2}
+    assert "every moving step was skipped" in rc.repeat_reason(full, adjustments, 2)
+    assert rc.repeat_reason(full, adjustments[:1], 2) is None
