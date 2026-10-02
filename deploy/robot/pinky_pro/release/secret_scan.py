@@ -339,6 +339,9 @@ KNOWN_FIXTURES = frozenset({
     # The ER 2 adapter tests pass an obviously invented key next to a mock
     # transport. Deliberately invented; never a value a real deployment holds.
     "test-secret",
+    # D-395 loc-assist tests feed an invented payload through the redaction
+    # path. Deliberately invented; never a value a real deployment holds.
+    "SECRET-PAYLOAD-VALUE",
     # The device Python runtime id pinned by test_python_runtime_id.py (D-189):
     # the sha256 of the tracked device-python-requirements.txt, recomputed by
     # that test from the repository itself — a public digest, never a credential.

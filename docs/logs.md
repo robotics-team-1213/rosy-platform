@@ -4378,3 +4378,17 @@
 - **이전 일지 항목에서 자동 업데이트를 가리키는 "D-406"·"D-410"은 모두 D-412다.** 일지는 추가 전용이라 고치지 않는다. main의 D-406·D-410은 다른 결정이다.
 - 증거: `git log --all --name-only -- docs/adr`와 ADR Log·`adr_gaps` 이력으로 D-412가 어느 브랜치에도 없음을 확인. 이 브랜치의 merge base(5f78d029)에는 D-410 표기가 없어 일괄 변경이 안전하다.
 - gate 변화: 없음.
+
+## 2026-10-02 · uncommitted · docs(architecture): 플랫폼 v0.2의 실제 이전 경계와 첫 수용 범위 구체화
+
+- 변경: `docs/reference/ROSY_Platform_Architecture_Design_v0.2.md`에 execution/site·local 원장 소유권, 작은 world 범위, Skill/제품 연동과 profiles/deploy 경계, 실제 코드 기준 이전표, 기존 ADR 전환 관계를 반영했다. 첫 완료 단위는 AI 없는 고정 셀 Gazebo 흐름이며 패키징·진입점 전환을 분리했다.
+- 증거: Windows 문서 계약 시험 `python -B -X utf8 -m pytest test/test_network_topology_contracts.py test/test_harness_contracts.py -q -p no:cacheprovider` 80 passed, 24 warnings(기존 last_verified 기록 관련). 본문 로컬 링크 4개·현재 경로 17개·번호 절 51개·A01~A15·UTF-8·코드 블록 검사 통과. 제품 실행·ROS-SIM·실기 시험은 이번 문서 변경에서 수행하지 않았다.
+- gate 변화: 없음. 목표 설계 보강이며 코드 이동·공개 API 변경·ADR 승격·배포 실행은 포함하지 않는다.
+
+## 2026-10-02 · uncommitted · CI 삼각측량 — 시크릿 스캔 면제·해시 문서 규약·스코어카드 기준선·설치 문서 브라우저 시험
+- 변경: secret_scan.py KNOWN_FIXTURES에 D-395 loc-assist fixture(SECRET-PAYLOAD-VALUE) 등록. OMX 증명 해시 3곳을 매처의 무결성 문맥 규약으로 서술(README 'revision'/'dataset commit', omx_f_kinematics.yaml 'at revision') — 의미 불변. test_release_boundary_gates no_secrets 재녹색.
+- 변경: D-178 스코어카드에 rosy_cell 잠정 행(4/4/4/4/4=80 A) 추가 — 집합 동일성 회복. robot_literal_backlog.txt 갱신(신규 8·삭제 2). known_failures.txt에 병렬 작업 사전 존재 실패 5건 기록(CI 전용 플레이크 4 + module_separation 소유자 판단 1).
+- 변경: test_fleet_console_browser.py에 D-410 설치 문서 렌더 계약 시험 추가(옵트인 Chromium — 문법·소유물·운용 표면 부재·E-stop·무오류). 통과 59s.
+- 근거: 2026-10-02 CI 실행 36909426842/36955733308 실패 대 조 로컬 재현. docs/validation/uiux-console-refactor-2026-10-02/README.md 회차 기록.
+- gate 변화: 없음.
+- 최종 증거: scorecard·literals·no_secrets 각 재녹색; 브라우저 신규 시험 1 passed.

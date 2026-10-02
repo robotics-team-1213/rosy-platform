@@ -266,8 +266,8 @@
 
 ## 최근 기록
 
+- 2026-10-02 · uncommitted · CI 삼각측량 — 시크릿 스캔 면제·해시 문서 규약·스코어카드 기준선·설치 문서 브라우저 시험
+- 2026-10-02 · uncommitted · docs(architecture): 플랫폼 v0.2의 실제 이전 경계와 첫 수용 범위 구체화
 - 2026-10-02 · uncommitted · docs(adr): 로봇 자동 업데이트 ADR 번호를 D-410에서 D-412로 — 두 번째 번호 충돌
 - 2026-10-02 · uncommitted · docs(adr): 로봇 자동 업데이트 ADR 번호를 D-406에서 D-410으로 — 동시 세션 번호 충돌
 - 2026-10-02 · uncommitted · docs(adr): D-395 개정 7 — S1 재실행 결과와 LOCALIZED 로봇끼리의 확인
-- 2026-10-02 · uncommitted · docs(api): D-395 R1 LOCALIZED 물체를 API Ref v1.75로 옮김 (D-407과 v1.74 충돌)
-- 2026-10-02 · uncommitted · docs(plans): D-395 S1 R4 원인과 sim 수정
