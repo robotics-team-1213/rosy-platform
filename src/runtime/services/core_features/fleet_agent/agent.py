@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import ssl
+import time
 import urllib.parse
 from pathlib import Path
 from typing import Optional
@@ -25,12 +26,32 @@ class FleetAgent:
         self.config = config
         self.identity = identity
         self.enabled = False
-        self.connected = False
+        self._connected = False
+        self._link_lost_at: Optional[float] = None
+        self._clock = time.monotonic
         self._task: Optional[asyncio.Task] = None
         self._pending: Optional[tuple[str, str]] = None
         self._ws = None
         self._event_buffer = []
         self._event_seq = 0
+
+    @property
+    def connected(self) -> bool:
+        return self._connected
+
+    @connected.setter
+    def connected(self, value: bool) -> None:
+        value = bool(value)
+        if self._connected and not value:
+            self._link_lost_at = self._clock()
+        self._connected = value
+
+    def linked_within(self, grace_s: float) -> bool:
+        """Linked now, or lost the link at most ``grace_s`` ago (a brief reconnect, D-407)."""
+        if self._connected:
+            return True
+        return (self._link_lost_at is not None and grace_s > 0.0
+                and self._clock() - self._link_lost_at <= grace_s)
 
     def start(self) -> None:
         fleet_cfg = self.config.get("fleet", {})
@@ -109,35 +130,12 @@ class FleetAgent:
                         self._ws = ws
                         self.connected = True
                         backoff = 1.0
-
-                        hello = HelloPayload(**self.hello_payload(pairing_token))
-                        env = Envelope(type=EnvelopeType.HELLO, payload=hello.model_dump())
-                        await ws.send(env.model_dump_json(exclude_none=True))
-
-                        reply_text = await ws.recv()
-                        reply = Envelope.model_validate_json(reply_text)
-                        if reply.type == EnvelopeType.ERROR:
-                            logger.error("Fleet hub rejected hello: %s", reply.payload.get("code"))
-                            self.enabled = False
-                            break
-
-                        last_event_seq = 0
-                        if reply.type == EnvelopeType.WELCOME:
-                            logger.info("Fleet agent welcomed by hub")
-                            last_event_seq = reply.payload.get("last_event_seq", 0)
-
-                        # Prune buffer up to last_event_seq
-                        self._event_buffer = [e for e in self._event_buffer if e.seq > last_event_seq]
-
-                        hb_task = asyncio.create_task(self._heartbeat_loop(ws))
-                        ev_task = asyncio.create_task(self._event_loop(ws))
-
-                        done, pending = await asyncio.wait(
-                            [hb_task, ev_task],
-                            return_when=asyncio.FIRST_COMPLETED
-                        )
-                        for task in pending:
-                            task.cancel()
+                        why = await self._session(ws, pairing_token)
+                        if why is None:
+                            break                    # hello refused: stop for good
+                        if self.enabled:
+                            logger.warning("Fleet agent link lost (%s); reconnecting in %.0f s",
+                                           why, backoff)
 
                 except (WebSocketException, OSError) as exc:
                     self.connected = False
@@ -156,6 +154,63 @@ class FleetAgent:
         finally:
             unsubscribe()
 
+    async def _session(self, ws, pairing_token: str) -> Optional[str]:
+        """HELLO, then send heartbeats and events while ONE reader drains every reply.
+
+        The hub answers each heartbeat and each event (EVENT accepted or ERROR). The old
+        loop read one reply per heartbeat, so event replies piled up unread; the client's
+        receive queue filled, it stopped reading the socket, keepalive pongs went unread and
+        the link timed out mid-stuck (D-407 Gazebo re-run 2026-10-02: `no_console` after
+        ~10 s, hub "websocket.send after websocket.close"). Returns why the session ended,
+        or None when the hub refused HELLO.
+        """
+        hello = HelloPayload(**self.hello_payload(pairing_token))
+        env = Envelope(type=EnvelopeType.HELLO, payload=hello.model_dump())
+        await ws.send(env.model_dump_json(exclude_none=True))
+        reply = Envelope.model_validate_json(await ws.recv())
+        if reply.type == EnvelopeType.ERROR:
+            logger.error("Fleet hub rejected hello: %s", reply.payload.get("code"))
+            self.enabled = False
+            return None
+        last_event_seq = 0
+        if reply.type == EnvelopeType.WELCOME:
+            logger.info("Fleet agent welcomed by hub")
+            last_event_seq = reply.payload.get("last_event_seq", 0)
+        self._event_buffer = [e for e in self._event_buffer if e.seq > last_event_seq]
+        tasks = {
+            asyncio.create_task(self._receive_loop(ws)): "receive",
+            asyncio.create_task(self._heartbeat_loop(ws)): "heartbeat",
+            asyncio.create_task(self._event_loop(ws)): "event",
+        }
+        try:
+            done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+        finally:
+            for task in tasks:
+                if not task.done():
+                    task.cancel()
+        ended = next(iter(done))
+        reason = ended.result() if not ended.cancelled() and ended.exception() is None else None
+        return f"{tasks[ended]} loop ended: {reason or ended.exception() or 'cancelled'}"
+
+    async def _receive_loop(self, ws) -> str:
+        """Drain every hub reply. An ERROR reply refuses one envelope; the link stays."""
+        import websockets
+        try:
+            async for text in ws:
+                try:
+                    reply = Envelope.model_validate_json(text)
+                except ValueError:
+                    logger.warning("Fleet hub sent an unreadable reply; ignored")
+                    continue
+                if reply.type == EnvelopeType.ERROR:
+                    code = reply.payload.get("code")
+                    logger.warning("Fleet hub refused an envelope: %s", code)
+                    if code == "PAIRING_INVALID":
+                        return "hub refused pairing"
+        except websockets.exceptions.ConnectionClosed as exc:
+            return f"connection closed ({exc})"
+        return "connection closed"
+
     def _buffer_event(self, ev) -> None:
         # The bus hands every subscriber the object it keeps in its ring buffer;
         # renumber a copy so /api/v1/events and audit keep the bus seq (D-382 I4).
@@ -173,13 +228,14 @@ class FleetAgent:
                 hb = HeartbeatPayload(state_snapshot=snap)
                 env = Envelope(type=EnvelopeType.HEARTBEAT, payload=hb.model_dump(mode="json"))
                 await ws.send(env.model_dump_json(exclude_none=True))
-                await ws.recv()
-            except websockets.exceptions.WebSocketException:
-                break
+                # The reply is drained by _receive_loop; reading it here desynced the link.
+            except websockets.exceptions.WebSocketException as exc:
+                return f"send failed ({exc})"
             except Exception as exc:
                 logger.error("heartbeat loop error: %s", exc)
-                break
+                return f"error ({exc})"
             await asyncio.sleep(1.0)
+        return "agent disabled"
 
     async def _event_loop(self, ws) -> None:
         import websockets
@@ -191,13 +247,14 @@ class FleetAgent:
                     await ws.send(env.model_dump_json(exclude_none=True))
                 else:
                     await asyncio.sleep(0.1)
-            except websockets.exceptions.WebSocketException:
+            except websockets.exceptions.WebSocketException as exc:
                 # Re-insert the event at the front if we failed to send
                 self._event_buffer.insert(0, ev)
-                break
+                return f"send failed ({exc})"
             except Exception as exc:
                 logger.error("event loop error: %s", exc)
-                break
+                return f"error ({exc})"
+        return "agent disabled"
 
     def _connect(self, url: str) -> None:
         pass

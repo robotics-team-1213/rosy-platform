@@ -147,3 +147,25 @@ def test_old_socket_closing_after_reconnect_keeps_the_new_pairing():
     event = Envelope.model_validate(_event_env("rosy_01"))
     assert hub.handle(event, session=new).payload == {"accepted": True}
     assert hub.handle(event, session=old).type is EnvelopeType.ERROR
+
+
+def test_a_refused_event_keeps_the_robot_link(tmp_path):
+    """D-407 re-run 2026-10-02: EVENT_NOT_AUDITABLE refuses that event only; the socket stays
+    open and the next heartbeat is answered (the agent drains every reply)."""
+    from core_common.protocol.schemas import EventMessage
+    from fleet.server.core_event_store import CoreEventStore
+
+    hub = SiteHub([_ep("rosy_01")], event_store=CoreEventStore(tmp_path / "events.db"))
+    client = TestClient(create_hub_app(hub))
+    with client.websocket_connect("/ws/robots") as ws:
+        ws.send_json(_hello_env("rosy_01", "pair-01"))
+        assert ws.receive_json()["type"] == "welcome"
+        bad = EventMessage(seq=1, robot_id="rosy_01", type="nav.line_stuck_answered",
+                           data={"stuck_id": "s", "token_id": "abc"})
+        ws.send_json(Envelope(type=EnvelopeType.EVENT,
+                              payload=bad.model_dump(mode="json")).model_dump(mode="json"))
+        reply = ws.receive_json()
+        assert reply["type"] == "error" and reply["payload"]["code"] == "EVENT_NOT_AUDITABLE"
+        ws.send_json(_heartbeat_env("rosy_01"))
+        assert ws.receive_json()["type"] == "heartbeat"
+        assert hub.registry.online_ids() == ["rosy_01"]
