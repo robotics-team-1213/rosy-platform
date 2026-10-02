@@ -14,7 +14,9 @@ frames:
   pallet_b: {origin: [0.13, -0.09, 0.01], x_point: [0.23, -0.09, 0.01], plane_point: [0.13, -0.01, 0.01]}
 stations:
   # Pose of the item's top face (TCP convention of rosy_cell Steps).
-  infeed: {frame: base, x: 0.0, y: 0.17, z: 0.03, yaw: 0.0}
+  # yaw pi/2 (C3b): the pick then runs at joint5 ~ 0. At yaw 0 it needs joint5 ~ pi/2, where
+  # in Gazebo the fingers stop on the wrist at ~0.47 rad even when empty (2026-10-02).
+  infeed: {frame: base, x: 0.0, y: 0.17, z: 0.03, yaw: 1.5707963267948966}
   # Sheet stack on a 28 mm stand: a sheet lying on the table (z 0.002) is below the profile's
   # TCP floor z 0.005 and was rejected OUTSIDE_WORKSPACE in the first sweep.
   sheets: {frame: base, x: 0.0, y: -0.17, z: 0.03, yaw: 0.0}

@@ -10,7 +10,9 @@
   Layout (must match cell.yaml / recipe.yaml; test/test_cell_omx_sim_layout_contract.py):
     pallet_a  0.10 x 0.08 x 0.01 plate, near-left top corner (0.13,  0.01, 0.01)
     pallet_b  0.10 x 0.08 x 0.01 plate, near-left top corner (0.13, -0.09, 0.01)
-    infeed    block 0.04 x 0.03 x 0.03 (20 g foam), top face centre (0.00, 0.17, 0.03), yaw 0
+    infeed    block 0.04 x 0.03 x 0.03 (20 g foam), top face centre (0.00, 0.17, 0.03), yaw pi/2
+              (length along y, C3b: a yaw-0 pick needs joint5 ~ pi/2, where the fingers stop
+              on the wrist at ~0.47 rad in Gazebo even with nothing between them)
     sheets    stand 0.028 m + one 0.002 m sheet, top face centre (0.00, -0.17, 0.03)
   No physical calibration; the block is the only free object used by C3.
 
@@ -109,7 +111,7 @@
 
     <!-- Infeed block: 40 x 30 x 30 mm, 20 g. Inertia = m/12 * (b^2 + c^2). -->
     <model name="infeed_block">
-      <pose>0 0.17 0.015 0 0 0</pose>
+      <pose>0 0.17 0.015 0 0 1.5707963267948966</pose>
       <link name="block">
         <inertial>
           <mass>0.02</mass>

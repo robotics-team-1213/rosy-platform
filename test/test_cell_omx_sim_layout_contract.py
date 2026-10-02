@@ -97,9 +97,9 @@ def test_gazebo_world_matches_the_demo_cell(demo, world):
         assert frame.to_base((0.0, 0.0, 0.0)) == pytest.approx((cx - sx / 2, cy - sy / 2, cz + sz / 2))
         assert frame.to_base((slot.pallet.length, slot.pallet.width, 0.0)) == pytest.approx(
             (cx + sx / 2, cy + sy / 2, cz + sz / 2))
-    (bx, by, bz, *_), size = models["infeed_block"]
+    (bx, by, bz, _, _, byaw), size = models["infeed_block"]
     assert size == pytest.approx([recipe.box.length, recipe.box.width, recipe.box.height])
-    assert cell.station_pose(recipe.pick_station) == pytest.approx((bx, by, bz + size[2] / 2, 0.0))
+    assert cell.station_pose(recipe.pick_station) == pytest.approx((bx, by, bz + size[2] / 2, byaw))
     (sx, sy, sz, *_), (_, _, thickness) = models["slip_sheet_0"]
     assert thickness == pytest.approx(recipe.slip_sheet_thickness)
     assert cell.station_pose(recipe.slip_sheet_station) == pytest.approx((sx, sy, sz + thickness / 2, 0.0))

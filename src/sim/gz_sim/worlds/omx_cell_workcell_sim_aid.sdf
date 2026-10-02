@@ -10,13 +10,25 @@
   Layout (must match cell.yaml / recipe.yaml; test/test_cell_omx_sim_layout_contract.py):
     pallet_a  0.10 x 0.08 x 0.01 plate, near-left top corner (0.13,  0.01, 0.01)
     pallet_b  0.10 x 0.08 x 0.01 plate, near-left top corner (0.13, -0.09, 0.01)
-    infeed    block 0.04 x 0.03 x 0.03 (20 g foam), top face centre (0.00, 0.17, 0.03), yaw 0
+    infeed    block 0.04 x 0.03 x 0.03 (20 g foam), top face centre (0.00, 0.17, 0.03), yaw pi/2
+              (length along y, C3b: a yaw-0 pick needs joint5 ~ pi/2, where the fingers stop
+              on the wrist at ~0.47 rad in Gazebo even with nothing between them)
     sheets    stand 0.028 m + one 0.002 m sheet, top face centre (0.00, -0.17, 0.03)
   No physical calibration; the block is the only free object used by C3.
 
   No camera: with the headless software-rendered (LIBGL_ALWAYS_SOFTWARE) 320x240 workcell
   camera the real-time factor measured 0.06 on the C3 host; without it 0.3-0.7 (2026-10-02).
   Physics step 2 ms (pilot world: 1 ms) to raise RTF: the owner's action timeout is wall time.
+
+  SIM AID (C3b, labelled, simulation only). Runs in this world variant may attach a block to
+  the gripper with a gz DetachableJoint (parent omx_f::link5, child <block>::block, topics
+  /c3_sim_aid/<block>/{attach,detach,state}). The probe (deploy/robot/omx/probe_cell_transfer.py)
+  adds that joint through /world/omx_cell_workcell/entity/system/add only after the
+  width-matched close and the gripper readback proved a hold, and detaches it right before
+  release; repeat-transfer blocks are spawned at the infeed. It replaces the friction grasp
+  (the operator chose not to tune it) and is not evidence that the OMX-F holds a block.
+  The world itself carries no plugin: in C3 a block-side joint (block = parent of link5,
+  attached from load) fought the finger contact and threw the fingers past their limits.
 -->
 
 <sdf version="1.9">
@@ -109,7 +121,7 @@
 
     <!-- Infeed block: 40 x 30 x 30 mm, 20 g. Inertia = m/12 * (b^2 + c^2). -->
     <model name="infeed_block">
-      <pose>0 0.17 0.015 0 0 0</pose>
+      <pose>0 0.17 0.015 0 0 1.5707963267948966</pose>
       <link name="block">
         <inertial>
           <mass>0.02</mass>
@@ -124,19 +136,6 @@
           <material><diffuse>0.9 0.35 0.2 1</diffuse></material>
         </visual>
       </link>
-    <!-- SIM AID (C3, labelled): fixed joint block <-> omx_f::link5. It starts attached; the
-           probe detaches it before any motion, attaches only after the gripper readback has
-           proved a hold, and detaches before release. It replaces the friction grasp that
-           failed in run8/run9; it is not evidence that the OMX-F gripper holds the block. -->
-      <plugin filename="gz-sim-detachable-joint-system" name="gz::sim::systems::DetachableJoint">
-        <parent_link>block</parent_link>
-        <child_model>omx_f</child_model>
-        <child_link>link5</child_link>
-        <attach_topic>/c3_sim_aid/attach</attach_topic>
-        <detach_topic>/c3_sim_aid/detach</detach_topic>
-        <output_topic>/c3_sim_aid/state</output_topic>
-        <suppress_child_warning>true</suppress_child_warning>
-      </plugin>
     </model>
 
   </world>
