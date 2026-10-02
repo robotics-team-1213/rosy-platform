@@ -293,3 +293,9 @@
 - cap 없는 owner: C3b는 창을 무시하고 정확 일치로 넘어갔다. main은 `start_state_tolerance_policy_missing`로 거절한다. 더 엄격한 main 쪽을 남겼다. C3b 시험은 지우지 않고 그 결과를 검사하도록 바꿨다. 보낸 command 객체는 원본 그대로다(main 시험 `action.commands == [command]`). C3b 시험은 바인딩을 `_last_command_state_sequence`로 확인한다.
 - 증거: owner 68, adapter 전체·layout·cell·compat 501 passed / 5 skipped(모듈 경로 PYTHONPATH).
 - gate 변화: 없음.
+
+
+## 2026-10-03 · uncommitted · feat: journal Cell hold release and local Action completion
+- Change: reuse physical gripper transaction rules with canonical Cell grant provenance; optionally compose durable workflow gates with the real Skill phase runner. Require matching scoped fresh hold/release readback before local terminal success. Provider/clock/cancel errors and snapshot recovery stay HOLD.
+- Evidence: focused planner/API/runner/transaction/boundary suite 36 passed; sensor and cancel failure review corrections included. Full OMX adapter plus provider/Skill/boundary regression: 371 passed / 5 skipped. Quick tier: 96 passed / 25 freshness warnings. Independent review: 31 passed, no remaining Critical/Important findings.
+- Gate: SOURCE/LOCAL only. Fleet independent goal confirmation, two-ledger Cell replay and ROS-SIM remain open.

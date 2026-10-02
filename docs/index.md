@@ -272,6 +272,7 @@
 
 - 2026-10-03 · uncommitted · docs(plans): D-425 앱·웹 책임·통신·설치 이전 실행 계획
 - 2026-10-03 · uncommitted · docs(adr): D-425 앱·웹 역할·공유 경계·목표 폴더
+- 2026-10-03 · uncommitted · feat: journal Cell hold release and local Action completion
 - 2026-10-03 · uncommitted · feat: compose Cell Skill with actual OMX planner and phase runner
 - 2026-10-03 · uncommitted · fix: preserve live Cell phase cancellation through Skill adapter
 - 2026-10-03 · uncommitted · docs(plans): 학습 페인트 후처리 — 담당 세션 결정과 실측 (a)(b)(c)
