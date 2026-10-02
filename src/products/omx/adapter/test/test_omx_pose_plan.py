@@ -491,3 +491,14 @@ def test_release_opens_only_to_the_release_width_until_carry_height(kin, profile
     for point in full:
         assert kin.fk(point.positions[:5]).z >= request.carry_z - 1e-6
     assert release.points[-1].positions[5] == profile.gripper_open
+
+
+@pytest.mark.parametrize("clearance", [0.08, 0.2])  # release width past full open / off the jaw model
+def test_release_width_the_jaw_cannot_reach_is_rejected_not_fully_opened(kin, clearance):
+    # Review minor 3: falling back to a full open at the place is the run11 hazard.
+    from omx_adapter.pose_plan import GRIPPER_WIDTH_INVALID
+
+    document = copy.deepcopy(_document())
+    document["gripper"]["jaw"]["release_clearance_m"] = clearance
+    wide = CellPlanningProfile.from_mapping(document, revision="0" * 64)
+    assert _reason(lambda: _planner(kin).plan_transfer(_request(), wide, _state(kin, wide))) == GRIPPER_WIDTH_INVALID

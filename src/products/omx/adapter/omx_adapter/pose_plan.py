@@ -541,11 +541,15 @@ class AnalyticCellTransferPlanner:
         segments["transfer"] = [[a + (closed,) for a in seg] for seg in transfer]
         # Open only to item width + release clearance at the place, so the fingertips do not
         # sweep into a neighbour (C3b run11); open fully after the vertical retreat to carry_z.
+        # A release width the jaw cannot reach below full open is rejected, never replaced by
+        # a full open at the place (review minor 3).
         try:
-            release_q = min(profile.gripper_contact_for_width(
-                request.grasp_width_m + profile.gripper_release_clearance_m), open_)
+            release_q = profile.gripper_contact_for_width(
+                request.grasp_width_m + profile.gripper_release_clearance_m)
         except ValueError:
-            release_q = open_
+            raise CellTransferPlanRejected(GRIPPER_WIDTH_INVALID, "release width is outside the jaw model") from None
+        if not closed < release_q < open_:
+            raise CellTransferPlanRejected(GRIPPER_WIDTH_INVALID, "release width needs a full open at the place")
         release_open = self._gripper(arm, closed, release_q, profile)
         # Return to the same home joint vector we started from (one q5 of the two yaw twins).
         retreat, arm, _ = self._travel(pose, arm, request.home, request.home.z,
