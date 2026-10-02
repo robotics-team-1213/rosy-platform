@@ -32,6 +32,12 @@ from core_common.protocol.vision_preview import VisionLeaseSigner
 from fleet.server.cancel_all import DriveCancelFence
 from fleet.server.cell_job_store import CellJobStore
 from fleet.server.cell_job_dispatcher import CellJobDispatcher
+from fleet.server.cell_goal_evidence_service import CellGoalEvidenceService
+from fleet.server.cell_goal_evidence_registry import CellGoalRegistry
+from fleet.server.cell_goal_evidence_routes import (
+    assert_cell_producer_credentials_isolated, install_cell_goal_evidence_routes,
+)
+from fleet.server.goal_evidence_store import GoalEvidenceStore
 from fleet.server.console import FleetConsole
 from fleet.server.goal_evidence_service import GoalEvidenceService
 from fleet.server.local_action_transport import UnixLocalActionTransport
@@ -89,6 +95,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                mission_service: Optional[MissionService] = None,
                proposal_store: Optional[ProposalStore] = None,
                cell_job_compiler=None,
+               cell_goal_registry: Optional[CellGoalRegistry] = None,
                goal_evidence_service: Optional[GoalEvidenceService] = None,
                candidate_resolver=None,
                policy_evidence: Optional[PolicyEvidenceStore] = None,
@@ -139,6 +146,13 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         if len(database_paths) != 1:
             raise ValueError("Mission, proposal, audit, and resource claims must share one SQLite database")
     cell_job_store = CellJobStore(mission_service.store.path) if mission_configured else None
+    if cell_goal_registry is not None:
+        if cell_job_compiler is None or not isinstance(cell_goal_registry, CellGoalRegistry):
+            raise ValueError("Cell goal registry requires the persistent Cell Job API and compiler")
+    cell_goal_evidence_service = (
+        CellGoalEvidenceService(cell_job_store, cell_goal_registry, GoalEvidenceStore(mission_service.store.path))
+        if cell_goal_registry is not None else None
+    )
     if cell_job_store is not None:
         cell_job_store.recover_after_startup()
     cell_job_resolver = None
@@ -187,7 +201,9 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         raise ValueError("Cell dispatcher requires the persistent Cell Job API and compiler")
     cell_job_dispatcher = (
         CellJobDispatcher(cell_job_store, task_service.store, action_transport, configured_omx,
-                          config_revisions=cell_job_config_revisions or {})
+                          config_revisions=cell_job_config_revisions or {},
+                          on_action_terminal=(cell_goal_evidence_service.on_action_terminal
+                                              if cell_goal_evidence_service is not None else None))
         if enable_cell_job_dispatcher else None
     )
     mission_progress = (
@@ -310,6 +326,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     app.state.cell_job_store = cell_job_store
     app.state.cell_job_compiler = cell_job_compiler
     app.state.goal_evidence_service = goal_evidence_service
+    app.state.cell_goal_evidence_service = cell_goal_evidence_service
     app.state.mission_progress = mission_progress
     app.state.mission_model_turn_store = mission_model_turn_store
     app.state.mission_model_turn_scheduler = mission_model_turn_scheduler
@@ -354,6 +371,15 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         install_hub_routes(app, hub, hub_token=console_token)
 
     principals = parse_site_principals(site_users, console)
+    if cell_goal_registry is not None:
+        other_tokens = (console_token, discovery_token, vision_lease_secret, robot_credential_key, pairing_sync_token)
+        if goal_evidence_service is not None:
+            other_tokens += tuple(item.token for item in goal_evidence_service.registry.producers)
+        assert_cell_producer_credentials_isolated(
+            cell_goal_registry, console=console, principals=principals,
+            other_tokens=other_tokens, other_services=(sightings, policy_evidence),
+        )
+        install_cell_goal_evidence_routes(app, cell_goal_evidence_service)
     if principals:
         assert_registry_credential_isolated(console_token, principals)
     if robot_credential_key is not None:

@@ -48,3 +48,9 @@ class CellGoalEvidence(BaseModel):
     gripper_evidence_revision: Text
     gripper_observed_at: Timestamp
     satisfied: bool
+
+
+class CellGoalEvidenceSubmission(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    mission_id: Text
+    evidence: CellGoalEvidence

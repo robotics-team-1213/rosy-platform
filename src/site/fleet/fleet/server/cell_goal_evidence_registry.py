@@ -29,7 +29,8 @@ class CellGoalProducer:
             if (not isinstance(value, str) or not value or value != value.strip() or len(value) > 128
                     or any(ord(char) < 32 for char in value)):
                 raise ValueError("invalid Cell producer " + name)
-        if not isinstance(self.token, str) or not self.token.strip() or len(self.token) > 4096:
+        if (not isinstance(self.token, str) or not self.token.strip() or self.token != self.token.strip()
+                or len(self.token) > 4096 or any(ord(char) < 32 or ord(char) == 127 for char in self.token)):
             raise ValueError("Cell producer token is required")
         for name in ("recipe_sha256", "cell_sha256"):
             if not isinstance(getattr(self, name), str) or not re.fullmatch("[0-9a-f]{64}", getattr(self, name)):

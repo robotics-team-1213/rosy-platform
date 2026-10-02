@@ -25,6 +25,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 from core_common.protocol.evidence import EvidenceState, ValueEvidence
 from core_common.protocol.localization import LocalizationStatus
+from core_common.protocol.cell_goal_evidence import CellGoalEvidenceSubmission  # noqa: F401
 
 PROTOCOL_VERSION = "1.0"
 

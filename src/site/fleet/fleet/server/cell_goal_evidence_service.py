@@ -6,7 +6,7 @@ import time
 
 from pydantic import ValidationError
 
-from .cell_goal_evidence import CellGoalEvidence
+from core_common.protocol.cell_goal_evidence import CellGoalEvidence
 from .goal_evidence_service import GoalEvidenceSubmissionError
 from .goal_evidence_store import GoalEvidenceConflict
 from .mission_store import MissionConflict
