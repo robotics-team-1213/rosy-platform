@@ -2,13 +2,15 @@
 import math
 
 import numpy as np
-import pytest
-
 import perception_data
+import pytest
 
 from control.sensing.perception.camera_ground import GroundPlane, focal_from_hfov
 from control.sensing.perception.reference_square import (
-    HsvSquareDetector, SquareDetector, SquareObservation)
+    HsvSquareDetector,
+    SquareDetector,
+    SquareObservation,
+)
 
 W, H = 320, 180
 CAM_X = .034

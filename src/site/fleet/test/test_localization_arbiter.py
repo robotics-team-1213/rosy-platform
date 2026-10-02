@@ -141,7 +141,7 @@ def test_unranged_square_sightings_are_no_evidence_for_any_candidate():
     near_a = pair((-1.26, 0.19, math.pi / 2))
     rows = score(report(near_a, squares=[(0.0, None), (0.2, None)]), Context(squares=(A, B)), 0.0)
     assert [r["square"] for r in rows] == [0.0, 0.0]
-    t, decision = run(Arbiter(), report(near_a, squares=[(0.0, None)]), Context(squares=(A, B)))
+    _, decision = run(Arbiter(), report(near_a, squares=[(0.0, None)]), Context(squares=(A, B)))
     assert decision is None
 
 

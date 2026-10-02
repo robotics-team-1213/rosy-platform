@@ -955,3 +955,10 @@
 - 증거: `test_learned_lane_mask.py` +7(반점만 → 안 보임, 반점이 실제 차선 오프셋을 못 옮김, 문턱 설정, 133221Z/000120 실제 라벨 → 보임·반점 뒤 오프셋 ±0.02, 히스테리시스 순서, 문턱 역전 거부), `test_learned_shadow.py` +1(노드가 발행 전 래치, 교체 시 새 래치). 대역 softmax 동치 시험은 이 필터와 무관한 지름길을 고정하므로 `min_component_px=0` 으로 돈다. 실제 데이터 위치는 `test/perception_data.py` 하나로 모았다(`ROSY_PERCEPTION_DATA` → 이 checkout → worktree 뒤 main checkout).
 - 결정: D-356 그림자 전용이다. `road_state` 융합(시그마 0.03)과 캡처 트리거가 이 값을 읽으므로 수치가 바뀐다. D-205 승격은 이 단위 시험이 아니라 replay bench 를 거쳐야 한다.
 - gate 변화: 없음.
+
+## 2026-10-02 · uncommitted · fix(localization): D-395 rev. 11 — LiDAR 물체: 자기 빔은 묶기 전에, 붙은 로봇은 나누고, 중심은 밀어 낸다
+
+- 원인: 후처리 감사(2026-10-02). S2 q1(rosy_02, LOCALIZED)의 물체 4개 중 1개가 base_link 에서 0.158 m(뒤 왼쪽 약 123°)의 유령이었다. 나머지 3개는 동료와 맞았지만 관측자 쪽으로 3.7–7 cm 치우쳤다. 가장자리 간격 6 cm 미만의 두 동료는 합성 12건 모두 한 물체로 합쳐졌다.
+- 변경: `loc_objects.unmapped_objects(..., radius=)` 가 반경을 받으면 (1) 빔 거리 < radius + `SELF_MARGIN_M`(0.03 m) 인 빔을 묶기 **전에** 버리고, (2) 끝에서 끝까지 `SPLIT_DIAMETERS`(1.6) × 지름보다 넓은 묶음을 가장 큰 내부 간격에서 재귀적으로 자르고, (3) 무게중심을 라이다에서의 광선을 따라 반경 × 2/π 만큼 밀어 원판 중심으로 옮긴다. 반원 호의 무게중심이 중심에서 2R/π 앞에 있으므로 R 만큼 밀면 loc_world 에서 1.5 cm 지나치고 2R/π 는 0.7 cm 다. 반경은 노드의 `robot_radius`(URDF 0.076, 보정이 다듬음)이고 동료도 같은 Pinky 라 같은 값을 쓴다. `loc_assist.localized_objects` 는 사후 무게중심 반경 필터를 버리고 이 경로를 쓴다. 반경 없이 부르면 예전 묶기 그대로다.
+- 증거: `test_loc_objects.py` +13(S2 유령 기제: 몸 안 빔 + 떨어진 반환 1개 → 예전 1개·이제 0개, 5 cm 떨어진 두 로봇 4배치 → 예전 1개·이제 2개 각 4 cm 안, 중심 치우침 0.3/0.8/1.8 m 에서 예전 >3.5 cm·이제 <1.5 cm, 한 로봇은 0.3–2 m 에서 안 쪼개짐). S2 원 스캔은 기록되지 않아 유령 시험은 정확한 스캔이 아니라 기제를 재현한다. `test_loc_assist.py`·`test_loc_e2e.py` 73 passed.
+- gate 변화: 없음. Fleet `peers` 단서(가중치 2.0) 입력이 바뀌므로 Gazebo S2 재실행 때 확인한다.
