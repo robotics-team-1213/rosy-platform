@@ -49,11 +49,16 @@ class InferResult:
 
 
 class _OrtSession:
-    def __init__(self, path: Path, threads: int):
+    def __init__(self, path: Path, threads: int, *, inter_op: int | None = None,
+                 config: dict | None = None):
         add_learned_site()
         import onnxruntime as ort  # lazy: optional on the device image
         opts = ort.SessionOptions()
         opts.intra_op_num_threads = threads
+        if inter_op is not None:
+            opts.inter_op_num_threads = inter_op
+        for key, value in (config or {}).items():
+            opts.add_session_config_entry(key, value)
         self._s = ort.InferenceSession(str(path), sess_options=opts,
                                        providers=["CPUExecutionProvider"])
         self._in = self._s.get_inputs()[0].name

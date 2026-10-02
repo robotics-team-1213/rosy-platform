@@ -63,15 +63,19 @@ def verify_manifest_signature(folder, keys_dir=TRUSTED_KEYS) -> str:
     if not keys:
         raise SignatureError(f"no trusted keys in {keys_dir}")
     openssl = openssl_path()
-    with tempfile.TemporaryDirectory() as tmp:
-        sig_file = Path(tmp) / "signature"
-        sig_file.write_bytes(raw)
-        for key in keys:
-            result = subprocess.run([openssl, "pkeyutl", "-verify", "-pubin", "-inkey", str(key),
-                                     "-rawin", "-in", str(folder / MANIFEST_NAME), "-sigfile", str(sig_file)],
-                                    capture_output=True, check=False)
-            if result.returncode == 0:
-                return key.stem
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            sig_file = Path(tmp) / "signature"
+            sig_file.write_bytes(raw)
+            for key in keys:
+                result = subprocess.run([openssl, "pkeyutl", "-verify", "-pubin", "-inkey", str(key),
+                                         "-rawin", "-in", str(folder / MANIFEST_NAME),
+                                         "-sigfile", str(sig_file)],
+                                        capture_output=True, check=False, timeout=30)
+                if result.returncode == 0:
+                    return key.stem
+    except (OSError, subprocess.SubprocessError) as exc:  # review M5: a process error is not a crash
+        raise SignatureError(f"openssl verification could not run: {exc}") from exc
     raise SignatureError(f"no trusted key in {keys_dir} verifies {SIGNATURE_NAME}")
 
 

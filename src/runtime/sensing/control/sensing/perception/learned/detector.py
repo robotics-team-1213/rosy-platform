@@ -25,6 +25,11 @@ from .runner import _OrtSession
 
 # Wire caps from control/control/detection_evidence.py: 64 boxes per packet.
 MAX_DETECTIONS = 64
+# Review M2: an untrained or broken model can score every anchor (2100 at 320x256);
+# per-class NMS is quadratic, so only the best MAX_CANDIDATES go into it.
+MAX_CANDIDATES = 300
+# Review L5: a 2-3 Hz detector must not keep Pi cores spinning between frames.
+SESSION_CONFIG = {"session.intra_op.allow_spinning": "0", "session.inter_op.allow_spinning": "0"}
 PAD_VALUE = 114  # the ultralytics letterbox grey, so training and runtime pad alike
 CONFIDENCE = 0.25
 IOU = 0.5
@@ -62,6 +67,9 @@ def decode(output, names, *, scale, pad, frame_size, conf=CONFIDENCE, iou=IOU):
     best = scores[np.arange(len(cls)), cls]
     keep = best >= conf
     boxes, cls, best = out[keep, :4], cls[keep], best[keep]
+    if len(best) > MAX_CANDIDATES:
+        top = np.argpartition(-best, MAX_CANDIDATES - 1)[:MAX_CANDIDATES]
+        boxes, cls, best = boxes[top], cls[top], best[top]
     fw, fh = frame_size
     xyxy = np.stack([boxes[:, 0] - boxes[:, 2] / 2, boxes[:, 1] - boxes[:, 3] / 2,
                      boxes[:, 0] + boxes[:, 2] / 2, boxes[:, 1] + boxes[:, 3] / 2], axis=1)
@@ -84,6 +92,11 @@ def decode(output, names, *, scale, pad, frame_size, conf=CONFIDENCE, iou=IOU):
                 idx = idx[_iou(xyxy[i], xyxy[idx]) < iou]
     found.sort(key=lambda d: -d['confidence'])
     return found
+
+
+def detector_session(path, threads):
+    """The object_det onnxruntime CPU session: no spin-waiting, one inter-op thread."""
+    return _OrtSession(path, threads, inter_op=1, config=SESSION_CONFIG)
 
 
 @dataclass(frozen=True)
@@ -109,7 +122,7 @@ class ObjectDetModel:
         if manifest.task != "object_det":
             raise ManifestError(f"task {manifest.task}: this slot needs object_det")
         verify_files(manifest)
-        factory = session_factory or (lambda p, t: _OrtSession(p, t))
+        factory = session_factory or detector_session
         try:
             session = factory(manifest.onnx_file(), threads)
         except Exception as exc:

@@ -152,3 +152,52 @@ def test_non_finite_output_after_warm_up_is_refused_per_frame(tmp_path):
     model._session = FakeSession(nan=True)
     with pytest.raises(NonFiniteLogits):
         model.infer(np.zeros((240, 320, 3), np.uint8))
+
+
+def test_a_flood_of_candidates_is_capped_before_nms():
+    """Review M2: an untrained or broken model can score every anchor; NMS stays bounded."""
+    from control.sensing.perception.learned.detector import MAX_CANDIDATES
+    anchors = 5000
+    out = np.zeros((1, 4 + C, anchors), np.float32)
+    out[0, 0] = np.tile(np.arange(0, 320, 4, dtype=np.float32), anchors // 80 + 1)[:anchors]
+    out[0, 1] = np.repeat(np.arange(0, 256, 4, dtype=np.float32), 80)[:anchors]
+    out[0, 2:4] = 3.0
+    out[0, 4] = np.linspace(0.3, 0.99, anchors)
+    found = decode(out, OBJECT_CLASSES, scale=1.0, pad=(0, 0), frame_size=(320, 256), conf=0.25, iou=0.5)
+    assert MAX_CANDIDATES == 300
+    assert len(found) <= MAX_CANDIDATES
+    assert found[0]['confidence'] == pytest.approx(0.99)        # the best survive the cap
+
+
+def test_detector_session_options_keep_the_pi_cores_quiet(monkeypatch):
+    """Review L5: no spin-waiting threads and one inter-op thread, for this node's session only."""
+    import sys
+    import types
+    from control.sensing.perception.learned import runner
+
+    class Options:
+        def __init__(self):
+            self.entries = {}
+
+        def add_session_config_entry(self, key, value):
+            self.entries[key] = value
+
+    made = {}
+
+    class Session:
+        def __init__(self, path, sess_options, providers):
+            made['options'] = sess_options
+
+        def get_inputs(self):
+            return [types.SimpleNamespace(name='images')]
+
+    fake = types.SimpleNamespace(SessionOptions=Options, InferenceSession=Session)
+    monkeypatch.setitem(sys.modules, 'onnxruntime', fake)
+    monkeypatch.setattr(runner, 'add_learned_site', lambda: None)
+    from control.sensing.perception.learned.detector import detector_session
+    detector_session('m.onnx', 2)
+    opts = made['options']
+    assert opts.intra_op_num_threads == 2 and opts.inter_op_num_threads == 1
+    assert opts.entries == {'session.intra_op.allow_spinning': '0', 'session.inter_op.allow_spinning': '0'}
+    runner._OrtSession('m.onnx', 2)                              # the lane session is untouched
+    assert made['options'].entries == {}

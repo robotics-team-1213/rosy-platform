@@ -161,3 +161,20 @@ def test_dev_override_comes_from_the_environment_only_and_strictly(value, expect
     assert ALLOW_UNSIGNED_ENV == "ROSY_ALLOW_UNSIGNED_MODELS"
     environ = {} if value is None else {ALLOW_UNSIGNED_ENV: value}
     assert allow_unsigned_from_env(environ) is expected
+
+
+def test_an_openssl_process_failure_is_a_signature_error_not_a_crash(tmp_path, keys, monkeypatch):
+    """Review M5: warn-only lane must never refuse a model because openssl could not run."""
+    from control.sensing.perception.learned import signature
+    from control.sensing.perception.learned.signature import SignatureCheck
+    trusted, pairs = keys
+    folder = model(tmp_path)
+    sign(folder, pairs["rosy-release-test"])
+
+    def broken(*a, **k):
+        raise OSError("exec format error")
+    monkeypatch.setattr(signature.subprocess, "run", broken)
+    with pytest.raises(SignatureError, match="openssl"):
+        verify_manifest_signature(folder, trusted)
+    check = SignatureCheck(lambda f: "lane", enforce=False, keys_dir=trusted)
+    assert check(folder) == "lane" and check.signed is False
