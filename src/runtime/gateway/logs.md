@@ -765,3 +765,9 @@
 - 변경: `bind_stuck_recovery` 의 `console_linked` 는 main 의 `linked_within(line_follow.recovery_console_grace_s)` **또는** D-419 `recently_heard()`(마지막 허브 수신이 링크 신선도 이내). 둘 다 재접속 깜빡임을 덮고, 앞은 끊긴 시각부터, 뒤는 마지막 수신부터 잰다.
 - 증거: `test_line_follow_stuck_api.py`(D-419 디바운스 시험 포함), `test_fleet_loss_wiring.py`.
 - gate 변화: 없음.
+
+## 2026-10-03 · uncommitted · test(console): 지도 도구는 격자 밖에 둔다
+- 변경: `test_the_map_tools_stay_off_the_raster`가 툴바를 무대 밖 한 행으로, 범례를 캔버스 아래로 고정한다. 절대 위치 겹침 게이트는 뺐다.
+- 근거: D-77 운용 화면. 격자를 가리던 배치를 계약으로 되돌리지 않기 위해서.
+- 증거: 2026-10-03 Windows. test_the_map_tools_stay_off_the_raster가 콘솔 묶음 240 passed 안에 포함된다.
+- gate 변화: 없음.

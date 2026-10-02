@@ -326,3 +326,6 @@ git diff --check
 
 
 **Integration note (2026-10-03):** Preserve main recording and D-422 body-stop contracts together with Cell producer ingress; the final shared contract header is v1.85. Existing recorded checkpoint versions remain historical. App/API integration at the first main merge passed 125 tests/13 skipped; platform mapping passed 7 source tests, repaired harness passed 57 tests and quick tier passed 96 tests. OMX/Gazebo and canonical two-ledger Cell evidence remain open.
+
+
+**Progress (2026-10-03, Task 6 installed geometry):** Installed default loading originally failed because the wheel lacked the canonical YAML. Install the unchanged asset in ament share and resolve source, Python prefix or ament overlay. The installed venv initialized actual build_cell_owner without repository Python paths; ROS ports were injected, the profile geometry revision matched, and local stop remained closed. Removing the installed asset refused loading and was restored. OMX/owner/replay: 365 passed / 5 skipped. This proves host installed-resource composition only; Jazzy/colcon, actual ROS, Fleet fencing/seat exclusion, thin sheets and the full two-layer/two-pallet Gazebo acceptance remain open. Keep Task 6 LOCAL and Task 8 incomplete.

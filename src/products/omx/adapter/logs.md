@@ -364,3 +364,9 @@
 - gate 변화: ROS-SIM — D-411 C `holding` 수용(컨트롤러 결정). 나머지 ROS-SIM 항목은 HOLD 그대로.
 - 결정: D-411 구현 부록 15.
 - 후속: 쥔 채 조그 drift +0.037 rad/3 조그 — `gripper.preload` 조정·정육면체 미끄러짐 조사, 기준이 정해지면 `holding_drift_rad` 로 관문 판정.
+
+## 2026-10-03 · uncommitted · fix: install canonical OMX geometry for Cell owner composition
+- Change: install the existing canonical kinematics YAML under share/omx_adapter/config. Default loading resolves the source asset, installed Python prefix or lazy ament package share; explicit paths stay exact and missing assets refuse. No geometry values or approval hashes changed.
+- Evidence: installed default load reproduced FileNotFoundError before the fix; prefix/ament path tests failed before the resolver change. OMX/owner/replay regression: 365 passed / 5 skipped. Wheel built from an X: source copy and force-installed into the isolated venv; actual build_cell_owner initialized from site-packages with injected ROS ports, matched the pinned profile geometry and kept local stop closed. Removing the installed asset caused FileNotFoundError and was restored. pip check and production flake8 passed.
+- Review: independent 29 passed; no Critical/Important findings. Final quick tier plus install-path tests: 100 passed / 26 existing warnings. Installed YAML equals source byte-for-byte.
+- Gate: SOURCE/LOCAL only. This closes host installed-resource composition, not Jazzy/colcon, live ROS timer, Fleet fencing/seat integration, thin-sheet geometry or the full two-layer/two-pallet vendor Gazebo acceptance.
