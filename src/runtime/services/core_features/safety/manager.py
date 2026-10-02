@@ -345,7 +345,7 @@ class SafetyManager:
             snapshot, result = output
             disposition = ('limit' if result.reason in ('allow', 'motion_limited', 'trajectory_changed',
                            'adaptive_speed_limit', 'obstacle_replan', 'obstacle_wait',
-                           'camera_obstacle_unranged')
+                           'camera_obstacle_unranged', 'camera_observation_unavailable')   # D-424: camera limits only
                            else 'stop')
             return SafetyDecision(request.command_id, request.source, snapshot.calibration_revision,
                                   snapshot.observed_at, snapshot.expires_at,

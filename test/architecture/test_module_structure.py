@@ -306,10 +306,12 @@ SIZE_VERDICTS = {
         "SAF-003 landed beside D-422 as its own module (safety/fleet_loss.py, the FleetLossMonitor), "
         "the Fleet-goal hooks in navigation/manager.py, and FleetAgent's reply deadline, link "
         "freshness and backoff merged into the D-407 single receive loop in "
-        "fleet_agent/agent.py; same verdict",
+        "fleet_agent/agent.py; same verdict. D-424 merged on top (within the allowance) "
+        "(localization/mission.py body-referenced rotate and nudge checks, watched turn, "
+        "mission_config); same verdict",
     ),
     "control": (
-        42_888,
+        43_055,
         f"split: deploy closure needs only sensing + safety provider (P1a); {CONTROL_SPLIT} "
         "(re-judged 2026-09-30 at 33090 after D-356 added the ROS-free learned perception backend "
         "(sensing/perception/learned), the shadow node and the recording CLI; the learned backend sits "
@@ -369,7 +371,10 @@ SIZE_VERDICTS = {
         "the camera's dead-recorder check) — same subjects, verdict unchanged; re-judged 2026-10-03 at "
         "42784 when D-411 A landed on main beside D-395 rev. 11 (reference-square NMS, lidar self-beam "
         "drop, learned lane component filter) — same subjects, verdict unchanged;"
-        "re-judged 2026-10-03 at 42888 for the D-408 paint CPU follow-up (learned mask area filter, mask-only inference, paint cadence in learned/paint_worker.py) — same subjects inside sensing/perception, verdict unchanged)",
+        "re-judged 2026-10-03 at 42888 for the D-408 paint CPU follow-up (learned mask area filter, mask-only inference, paint cadence in learned/paint_worker.py) — same subjects inside sensing/perception, verdict unchanged; "
+        "re-judged 2026-10-03 at 43055 with D-424 (the bumper's pure scan_geometry "
+        "and strip_ranges in control/lidar_guard.py, the shared-body delegation in sensing/body.py, "
+        "legacy-envelope lifting in calibration_profile.py) — same subjects, verdict unchanged)",
     ),
     # --- D-362 newly-covered files (web assets in src/ packages, ops roots). ---
     "runtime/sensing/web/diagnostic.html": (

@@ -248,9 +248,11 @@ def test_the_module_imports_in_a_fresh_interpreter():
     from pathlib import Path
 
     package_root = str(Path(__file__).resolve().parents[1])
+    # core_common is a declared exec_depend of control (D-424 body, calibration store).
+    foundation = str(Path(__file__).resolve().parents[3] / "contracts" / "foundation")
     env = dict(os.environ)
     env["PYTHONPATH"] = os.pathsep.join(
-        [package_root] + [p for p in env.get("PYTHONPATH", "").split(os.pathsep) if p])
+        [package_root, foundation] + [p for p in env.get("PYTHONPATH", "").split(os.pathsep) if p])
     result = subprocess.run(
         [sys.executable, "-X", "faulthandler", "-c", "import control.sensing.dock_tag"],
         env=env, capture_output=True, text=True, timeout=60, check=False)

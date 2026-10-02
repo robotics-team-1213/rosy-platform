@@ -4637,6 +4637,12 @@
 - 증거: 작성 전 문서 계약 81 passed. 변경 후 문서 계약·quick tier 120 passed/25 기존 freshness warnings; harness lint와 색인/BOM/CRLF/부분 대체 링크를 확인. 한글이 손상된 신규 로그·색인 행은 UTF-8로 정정하고 검증을 재실행.
 - gate 변화: 없음 — 구조 결정 수용과 구현·설치·DEVICE/FIELD 수용은 별개.
 
+
+## 2026-10-03 · uncommitted · test: verify real Cell runtime two-ledger replay
+- Change: exercise canonical Cell grants through actual analytic Skill, ActionApi, durable phase/workflow journals and Fleet/OMX stores. Confirm independent goal gating and claim release; lost/expired submit recovery preserves identity and restart-stop HOLD without extra motion.
+- Evidence: related replay/dispatcher/public-goal regression 47 passed; independent review 3 passed, no remaining Critical/Important findings. Restart-stop mutation failed at expected HOLD versus ACTION_SUCCEEDED; original source restored byte-for-byte. Quick tier plus new replay: 99 passed / 25 existing freshness warnings; harness lint 0 errors / 25 warnings.
+- Gate: SOURCE/LOCAL only. Compiled submissions, ROS/sensor ports and registered goal producer are host fixtures; actual recipe compiler, UDS peer credentials, ROS lifecycle and Gazebo acceptance remain open. Task 7 stays IN PROGRESS.
+
 ## 2026-10-03 · uncommitted · docs(plans): D-425 앱·웹 책임·통신·설치 이전 실행 계획
 - 변경: 현재 소유권/설치 기준선부터 공통 request/scope, Fleet·CORE client, 화면 책임, 앱별 소스 이전과 설치·브라우저 수용, D-413에 의존하는 backend 조합 이전까지 14개 task를 작성. 파일·검증·완료 조건·커밋·롤백을 지정하고, web ament wrapper/Fleet sdist·wheel/Face colcon discovery를 구분. Sep30 계획에는 후속 실행 기준을 연결.
 - 증거: 계획의 기존 파일 경로·공개 route·Fleet 진입 문서를 소스와 대조. 문서 계약·quick tier 120 passed/25 기존 freshness warnings; 로그·색인 추가 후 문서 회귀 27 passed, harness lint 0 errors/25 기존 warnings. 신규 로그 행의 줄바꿈을 정리하고 diff 검사를 통과.
