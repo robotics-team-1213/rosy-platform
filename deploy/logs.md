@@ -2052,6 +2052,18 @@
 - 결정: D-418, D-161, D-388
 - 교훈: `Before=`로 소켓보다 앞에 서려는 단위는 기본 의존(`After=basic.target`)과 부딪혀 순환이 된다. systemd는 이 순환을 `sockets.target` 작업을 지워서 끊으므로 조용히 큰 사고가 된다. 쌍둥이에서 대조군 drop-in으로 순환을 재현해야 수정이 증명된다.
 
+## 2026-10-02 · uncommitted · fix(release): 준비·발행 도구의 ssh known_hosts 값을 따옴표 없이 — 첫 실운영에서 "invalid quotes"
+
+- 변경: `prepare_payload_release.ssh_argv`가 `-o UserKnownHostsFile="<경로>"`로 따옴표를 붙였는데, Windows의 ssh가 그 따옴표를 글자 그대로 받아 "command-line line 0: invalid quotes"로 실패했다(2026-10-02 릴리스 025 준비, 두 로봇 ABI 검사). 따옴표 없이 넘기고 공백·따옴표가 든 경로는 `PrepareError`로 거절한다(`rosy-update-hold.ps1`과 같은 정책). 발행 도구는 같은 함수를 쓰므로 함께 고쳐진다.
+- 증거: 새 시험 `test_the_real_ssh_client_accepts_the_built_options`가 실제 `ssh -G -F <빈 설정>`으로 인자를 해석시켜 결함을 로봇 없이 재현(따옴표를 되돌리면 빨강). 준비·발행 시험 106 passed. 독립 리뷰가 권한 "인용" 수정이 실제 ssh.exe에서는 틀렸던 경우라, 가짜 ssh만으로 검증한 인자 경로는 실제 클라이언트로 한 번 해석시킨다는 교훈.
+- gate 변화: 없음.
+
+## 2026-10-02 · uncommitted · feat(native): D-412 업데이터 기본 켜짐 — 첫 실제 카나리 성공 뒤
+
+- 변경: `rosy_auto_update.py`의 `config.json`이 없거나 `enabled`가 없으면 켜짐으로 바꿨다. `{"enabled": false}`만 끈다. ADR D-412, 계획 계약, `rosy-release-push` skill 문구를 고쳤고 시험 2개는 기본 켜짐을 고정한다.
+- 증거: 2026-10-02 실제 로봇. 025 수동 push로 두 로봇에 업데이터 설치(기본 꺼짐). 9dfk config 켬. 이 PC에서 `payload-2026.10.02-026` 발행(카나리 9dfk). 12:11 GitHub 시간 초과는 error로 처리되고 철회되지 않음. 12:26 staged, 12:26 applying, 12:27 committed(CORE·io·camera 026, 옛 릴리스 3개 정리), 발행 도구가 `canary_ok=true`를 올림. 8kcn은 사용자 지시로 수동 push(026)했고 config는 켰으며 rosy-c5 hold 중. 업데이터 시험 238 passed 1 skipped(기본 켜짐 시험 2개는 바꾸기 전 빨강 확인).
+- gate 변화: D-412 DEVICE(카나리 단계) 통과. 카나리 다음 로봇 순서는 기기 쌍둥이만.
+
 ## 2026-10-03 · 27025b10 · fix(native,api): D-418 2차 검토 — 앞서 간 시계, CORE의 실제 기한
 
 - 변경: (HIGH) 시계가 한 번 1년 앞섰던 기록(`clock.json`) 때문에 5분 비밀번호가 실제로 30일 넘게 켜져 있고, 키가 영구히 지워졌다(검토 probe로 재현). 이제 비밀번호는 `system.now()`로 만든 `expires_at`(벽시계)과 `password.json`에 넣은 `CLOCK_BOOTTIME` 기한·boot id 가운데 먼저 오는 쪽으로 꺼진다. boot id가 다르면 바로 끈다.
@@ -2068,14 +2080,3 @@
 - gate 변화: 없음
 - 결정: D-418, D-161, D-388
 - 교훈: 시간을 한 방향으로만 미는 보호(high-water)는 반대 방향 고장(시계가 앞섬)을 영구 상태로 만든다. 비밀번호처럼 짧은 수명은 NTP가 건드리지 않는 부팅 시계로 묶고, 긴 수명의 하한 기록에는 상한과 리셋이 필요하다.
-## 2026-10-02 · uncommitted · fix(release): 준비·발행 도구의 ssh known_hosts 값을 따옴표 없이 — 첫 실운영에서 "invalid quotes"
-
-- 변경: `prepare_payload_release.ssh_argv`가 `-o UserKnownHostsFile="<경로>"`로 따옴표를 붙였는데, Windows의 ssh가 그 따옴표를 글자 그대로 받아 "command-line line 0: invalid quotes"로 실패했다(2026-10-02 릴리스 025 준비, 두 로봇 ABI 검사). 따옴표 없이 넘기고 공백·따옴표가 든 경로는 `PrepareError`로 거절한다(`rosy-update-hold.ps1`과 같은 정책). 발행 도구는 같은 함수를 쓰므로 함께 고쳐진다.
-- 증거: 새 시험 `test_the_real_ssh_client_accepts_the_built_options`가 실제 `ssh -G -F <빈 설정>`으로 인자를 해석시켜 결함을 로봇 없이 재현(따옴표를 되돌리면 빨강). 준비·발행 시험 106 passed. 독립 리뷰가 권한 "인용" 수정이 실제 ssh.exe에서는 틀렸던 경우라, 가짜 ssh만으로 검증한 인자 경로는 실제 클라이언트로 한 번 해석시킨다는 교훈.
-- gate 변화: 없음.
-
-## 2026-10-02 · uncommitted · feat(native): D-412 업데이터 기본 켜짐 — 첫 실제 카나리 성공 뒤
-
-- 변경: `rosy_auto_update.py`의 `config.json`이 없거나 `enabled`가 없으면 켜짐으로 바꿨다. `{"enabled": false}`만 끈다. ADR D-412, 계획 계약, `rosy-release-push` skill 문구를 고쳤고 시험 2개는 기본 켜짐을 고정한다.
-- 증거: 2026-10-02 실제 로봇. 025 수동 push로 두 로봇에 업데이터 설치(기본 꺼짐). 9dfk config 켬. 이 PC에서 `payload-2026.10.02-026` 발행(카나리 9dfk). 12:11 GitHub 시간 초과는 error로 처리되고 철회되지 않음. 12:26 staged, 12:26 applying, 12:27 committed(CORE·io·camera 026, 옛 릴리스 3개 정리), 발행 도구가 `canary_ok=true`를 올림. 8kcn은 사용자 지시로 수동 push(026)했고 config는 켰으며 rosy-c5 hold 중. 업데이터 시험 238 passed 1 skipped(기본 켜짐 시험 2개는 바꾸기 전 빨강 확인).
-- gate 변화: D-412 DEVICE(카나리 단계) 통과. 카나리 다음 로봇 순서는 기기 쌍둥이만.

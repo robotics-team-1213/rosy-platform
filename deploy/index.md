@@ -67,8 +67,8 @@
 
 ## 최근 기록
 
+- 2026-10-03 · 27025b10 · fix(native,api): D-418 2차 검토 — 앞서 간 시계, CORE의 실제 기한
 - 2026-10-02 · uncommitted · feat(native): D-412 업데이터 기본 켜짐 — 첫 실제 카나리 성공 뒤
 - 2026-10-02 · uncommitted · fix(release): 준비·발행 도구의 ssh known_hosts 값을 따옴표 없이 — 첫 실운영에서 "invalid quotes"
-- 2026-10-03 · 27025b10 · fix(native,api): D-418 2차 검토 — 앞서 간 시계, CORE의 실제 기한
 - 2026-10-02 · 53f312a8 · fix(native,api): D-418 독립 검토 반영 — 실패해도 닫힘, 부팅 순서, 늦은 비밀번호
 - 2026-10-02 · 7f0bc0af · feat(native): D-418 로봇 SSH 접속 — root 도우미, 단위, 이미지 층, 기기 쌍둥이
