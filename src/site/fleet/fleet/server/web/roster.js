@@ -219,6 +219,23 @@ export function createRoster({ el, view, log, call, render, streamEvidence, isOp
       node.appendChild(why);
     }
 
+    // D-416 — 오프라인 로봇의 마지막 응답 시각: "언제부터 안 됐지?"에 바로 답한다.
+    if (!view.stateUnavailable && !robot.online) {
+      const seen = document.createElement("p");
+      seen.className = "hint";
+      seen.dataset.fact = "last-seen";
+      const ts = robot.state?.ts;
+      if (typeof ts === "number" && ts > 0) {
+        const age = Math.max(0, Math.floor((Date.now() / 1000) - ts));
+        seen.textContent = age < 60 ? `마지막 응답: ${age}초 전`
+          : age < 3600 ? `마지막 응답: ${Math.floor(age / 60)}분 전`
+          : `마지막 응답: ${Math.floor(age / 3600)}시간 전`;
+      } else {
+        seen.textContent = "응답 없음";
+      }
+      node.appendChild(seen);
+    }
+
     const actions = document.createElement("div");
     actions.className = "robot-actions";
     const aim = document.createElement("ui-button");

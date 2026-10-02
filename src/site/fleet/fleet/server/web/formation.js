@@ -78,8 +78,13 @@ export function createFormation({ el, view, log, call, render }) {
     // 대형이 열려 있는 동안에는 멤버를 바꿀 수 없다 — 해제하고 다시 연다.
     el("formation-members").querySelectorAll("input").forEach((i) => { i.disabled = status.active; });
 
+    // D-416 — 대형 모니터링 모드: RUNNING/HOLDING일 때 폼을 접고 요약만 보인다.
+    const form = document.querySelector(".formation-form");
+    if (form) form.hidden = status.active;
+
     const detail = el("formation-detail");
     if (!status.active) {
+      if (form) form.hidden = false;
       syncPendingSummary();
       return;
     }
