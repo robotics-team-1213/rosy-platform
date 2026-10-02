@@ -49,6 +49,7 @@ class StuckInput:
     rear_blind_m: Optional[float] = None
     trail_m: Optional[float] = None      # net forward CORE-issued travel (ForwardTrail)
     trail_yaw_deg: Optional[float] = None
+    trail_age_s: Optional[float] = None  # since the trail's last forward command (None = none)
     scan_age_s: Optional[float] = None   # None = no LiDAR scan ever
     lidar_expected: bool = False         # a LiDAR obstacle stop has seen scans this session
     # Net forward CORE-issued travel since the last `recovered` close (None = unknown).
@@ -99,6 +100,13 @@ class ForwardTrail:
             end = samples[index + 1][0] if index + 1 < len(samples) else now
             net += lin * max(0.0, min(end - t, self.MAX_DT_S))
         return net
+
+    def last_forward_at(self) -> Optional[float]:
+        """Time of the newest forward (linear > 0) issued twist, or None."""
+        for t, lin, _ in reversed(self._samples):
+            if lin > 0.0:
+                return t
+        return None
 
     def measure(self, now: float, window_s: float) -> tuple[Optional[float], Optional[float]]:
         samples = list(self._samples)
@@ -262,7 +270,11 @@ class StuckRecovery:
 
     def _trail_covers(self, inp: StuckInput) -> bool:
         config = self._config
+        # Decision 2026-10-02: the ground just driven is trusted only while the last forward
+        # command is at most recovery_trail_max_age_s old (standing still for the console counts).
         return (inp.trail_m is not None and inp.trail_yaw_deg is not None
+                and inp.trail_age_s is not None
+                and inp.trail_age_s <= config.recovery_trail_max_age_s
                 and inp.trail_m >= config.recovery_back_m
                 and inp.trail_yaw_deg <= config.recovery_trail_yaw_deg)
 
@@ -293,7 +305,7 @@ class StuckRecovery:
             data={"stuck_id": self._id, "attempt": self._attempts, "trigger": trigger,
                   "back_m": config.recovery_back_m, "speed_mps": self._speed,
                   "rear_clearance_m": inp.rear_m, "rear_blind_m": inp.rear_blind_m,
-                  "trail_m": inp.trail_m},
+                  "trail_m": inp.trail_m, "trail_age_s": inp.trail_age_s},
         )
 
     def _backing(self, inp: StuckInput) -> StuckAction:
@@ -389,7 +401,8 @@ class StuckRecovery:
                   "rear_clearance_m": None if inp is None else inp.rear_m,
                   "rear_blind_m": None if inp is None else inp.rear_blind_m,
                   "trail_m": None if inp is None else inp.trail_m,
-                  "trail_yaw_deg": None if inp is None else inp.trail_yaw_deg},
+                  "trail_yaw_deg": None if inp is None else inp.trail_yaw_deg,
+                  "trail_age_s": None if inp is None else inp.trail_age_s},
         )
 
     def _close(self, reason: str, now: float) -> None:
