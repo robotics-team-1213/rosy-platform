@@ -202,6 +202,10 @@ class RosTrajectoryActionHandle(ActionHandle):
             success = False
         with self._lock:
             goal_id = self._goal_id
+            # The ROS status is a fact as soon as the result resolves; record it before the
+            # sinks journal it, so a reader that sees the journal also sees the status (WSL
+            # loop: journal SUCCEEDED while status was still None). done/succeeded stay last.
+            self._status = status
         if status is None or goal_id is None:
             self._emit("TERMINAL_UNKNOWN", goal_id=goal_id)
         else:
