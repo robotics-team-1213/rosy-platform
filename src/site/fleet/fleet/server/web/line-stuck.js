@@ -45,7 +45,7 @@ const OUTCOME_TEXT = Object.freeze({
   back: "후진 후 재시도를 시작했습니다",
   resume: "재개했습니다 — 차선 추종을 다시 시작합니다",
   manual: "수동 모드로 넘겼습니다",
-  idle: "차선 추종을 중단했습니다(IDLE)",
+  idle: "차선 추종을 중단했습니다",
 });
 
 const CONFIRMED = new Set(["RESUME", "BACK_AND_RETRY"]);
@@ -132,9 +132,19 @@ export function refusalText(robotId, decision, err) {
   return `${robotId} ${DECISION_LABEL[decision] || decision} ${verb} — ${why}${raw ? ` (${raw})` : ""}`;
 }
 
-function button(text, kind) {
+// 계약(D-359 §5.2)은 버튼마다 글자 kind 를 요구한다 — 변수 kind 헬퍼는 정적 검사가
+// 못 본다. 종류별 헬퍼가 리터럴을 담는다.
+function quietButton(text) {
   const node = document.createElement("ui-button");
-  node.setAttribute("kind", kind);
+  node.setAttribute("kind", "quiet");
+  node.type = "button";
+  node.textContent = text;
+  return node;
+}
+
+function primaryButton(text) {
+  const node = document.createElement("ui-button");
+  node.setAttribute("kind", "primary");
   node.type = "button";
   node.textContent = text;
   return node;
@@ -239,7 +249,7 @@ export function createLineStuckPanel({ el, view, call, log, isOperator }) {
     actions.setAttribute("role", "group");
     actions.setAttribute("aria-labelledby", name.id);
     for (const spec of specs) {
-      const node = button(spec.confirm ? `${spec.label}…` : spec.label, "quiet");
+      const node = quietButton(spec.confirm ? `${spec.label}…` : spec.label);
       node.dataset.decision = spec.decision;
       node.dataset.focusKey = `decision-${spec.decision}`;
       node.setAttribute("aria-label", `${robotId} ${spec.label} (${spec.decision})`);
@@ -260,12 +270,12 @@ export function createLineStuckPanel({ el, view, call, log, isOperator }) {
       text.id = `stuck-confirm-${robotId}`;
       text.textContent = confirmText(robotId, pending.decision);
       box.setAttribute("aria-labelledby", text.id);
-      const yes = button(`${DECISION_LABEL[pending.decision]} 보내기`, "primary");
+      const yes = primaryButton(`${DECISION_LABEL[pending.decision]} 보내기`);
       yes.dataset.focusKey = "confirm-yes";
       // 보내기는 그 답 버튼과 같은 사유로 막힌다(권한·연결·전송 중·로컬 복구 꺼짐).
       setReason(yes, specs.find((spec) => spec.decision === pending.decision)?.reason || "");
       yes.addEventListener("click", () => send(robotId, stuck.stuck_id, pending.decision));
-      const no = button("취소", "quiet");
+      const no = quietButton("취소");
       no.dataset.focusKey = "confirm-no";
       no.addEventListener("click", () => cancelConfirm(robotId, pending.decision));
       box.addEventListener("keydown", (event) => {
