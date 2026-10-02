@@ -16,6 +16,9 @@ if TYPE_CHECKING:
 
 
 class _PhaseExecutor(Protocol):
+    @property
+    def active_phase_id(self) -> str | None: ...
+
     def start(self, planned: PlannedTransfer) -> object: ...
 
     def cancel_current(self) -> Mapping[str, object]: ...
@@ -23,6 +26,9 @@ class _PhaseExecutor(Protocol):
 
 class _PickPlaceRunner(Protocol):
     plan: object
+
+    @property
+    def active_phase_id(self) -> str | None: ...
 
     def start(self) -> object: ...
 
@@ -40,6 +46,10 @@ class OMXPickPlaceExecutor:
             raise ValueError("OMX PickPlaceRunner must own the Skill's exact planned transfer")
         self.runner = runner
         self.planned = planned
+
+    @property
+    def active_phase_id(self) -> str | None:
+        return self.runner.active_phase_id
 
     def start(self, planned: PlannedTransfer) -> object:
         if planned is not self.planned:
@@ -154,6 +164,10 @@ class _SkillPhaseExecution:
         self.skill = skill
         self.planned = planned
         self.executor = executor
+
+    @property
+    def active_phase_id(self) -> str | None:
+        return self.executor.active_phase_id
 
     def start(self) -> object:
         return self.skill.start(self.planned, self.executor)

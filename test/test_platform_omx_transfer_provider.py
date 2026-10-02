@@ -14,6 +14,7 @@ for package_root in (
     ROOT / "src/contracts/foundation",
     ROOT / "src/products/omx/adapter",
     ROOT / "integrations/robots/omx/src",
+    ROOT / "src/products/omx/adapter/test",
 ):
     if str(package_root) not in sys.path:
         sys.path.insert(0, str(package_root))
@@ -66,9 +67,11 @@ class _Runner:
         self.plan = plan
         self.started = 0
         self.cancelled = 0
+        self.active_phase_id = None
 
     def start(self):
         self.started += 1
+        self.active_phase_id = "approach"
         return {"state": "SUBMITTING"}
 
     def cancel_current(self):
@@ -92,7 +95,11 @@ def test_grant_maps_to_skill_invocation_and_existing_runner_ports():
         executor_for_grant=runner_for_grant,
     )
     phase = factory(grant, "recorder")
+    assert phase.active_phase_id is None
     receipt = phase.start()
+    assert phase.active_phase_id == "approach"
+    runners[0][3].active_phase_id = "carry"
+    assert phase.active_phase_id == "carry"
     cancelled = phase.cancel_current()
 
     assert invocation.inputs["item"] == "box"
@@ -161,3 +168,52 @@ def test_provider_rejects_invocation_or_invalid_accepted_geometry_before_plannin
     with pytest.raises(ValueError, match="height"):
         adapter.plan(cell_transfer_invocation(grant))
     assert calls == []
+
+
+def test_skill_wrapped_cell_action_cancels_only_its_live_phase(tmp_path):
+    from omx_adapter.action_api import ActionApi
+    from omx_adapter.action_store import InvalidActionTransition
+    from test_omx_action_api import FakePhaseExecution, _cell_transfer_grant, _runner
+
+    executions = []
+
+    def executor_for_grant(grant, recorder, planned):
+        execution = FakePhaseExecution(recorder)
+        execution.plan = planned.plan
+        executions.append(execution)
+        return execution
+
+    factory = create_cell_transfer_phase_factory(
+        skill=TransferSkill(), planner_for_grant=lambda _: _Planner(),
+        executor_for_grant=executor_for_grant,
+    )
+    store, driver, runner = _runner(
+        tmp_path, phase_runner_factories={"CELL_TRANSFER": factory},
+    )
+    api = ActionApi(runner)
+    submitted = api.dispatch({
+        "version": 2, "operation": "SubmitAction", "grant": FleetCellTransferGrant.model_validate(
+            _cell_transfer_grant(),
+        ).model_dump(mode="json"),
+    }, peer_uid=1001)
+    assert submitted["status"] == 200, submitted
+    assert submitted["receipt"]["state"] == "ACCEPTED"
+    with pytest.raises(InvalidActionTransition, match="active ROS goal"):
+        runner.cancel_phase("cell-action-1", "cell-attempt-1",
+                            phase_id="release", peer_uid=1001)
+    assert store.action_phases("cell-action-1")[0]["state"] == "ACCEPTED"
+
+    cancelled = api.dispatch({
+        "version": 2, "operation": "CancelAction", "action_id": "cell-action-1",
+        "attempt_id": "cell-attempt-1", "reason": "SITE_STOP",
+        "requested_at": datetime.now(timezone.utc).isoformat(),
+    }, peer_uid=1001)
+    assert cancelled["status"] == 200
+    # A phase cancel request does not establish a terminal parent Action result.
+    assert cancelled["receipt"]["state"] == "ACCEPTED"
+    phase = store.action_phases("cell-action-1")[0]
+    assert (phase["phase_id"], phase["driver_goal_id"], phase["state"]) == (
+        "approach", "ros-goal-approach", "CANCEL_REQUESTED",
+    )
+    assert len(executions) == 1
+    assert driver.submissions == driver.cancellations == driver.phase_cancellations == []
