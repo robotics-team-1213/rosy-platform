@@ -24,7 +24,7 @@ import threading
 import time
 from typing import Callable, Optional
 
-from core_common.protocol.recording import RecorderStatus
+from core_common.protocol.recording import ACTIVE_STATES, RecorderStatus
 
 STATUS_STALE_S = 3.0
 LINK_GRACE_S = 5.0
@@ -32,7 +32,10 @@ LINK_GRACE_S = 5.0
 STOP_RETRY_S = 3.0
 _REFUSAL_STATUS = {"RECORDING_BUSY": 409, "RECORDING_QUOTA_FULL": 507, "RECORDING_DISK_FULL": 507,
                    "RECORDING_NOT_ACTIVE": 409, "RECORDER_UNAVAILABLE": 503}
-_ACTIVE = ("recording", "stopping")
+_ACTIVE = ACTIVE_STATES
+#: A session the owner (or an admin) may stop, and that link loss or a seat change ends.
+#: `starting` counts: the writer is already running.
+_STOPPABLE = ("starting", "recording")
 _log = logging.getLogger(__name__)
 
 
@@ -168,7 +171,7 @@ class PilotRecordingGuard:
             owner = self._owner
         if request is None or status is None:
             raise _refused("RECORDER_UNAVAILABLE", "the camera unit's recorder is not reporting")
-        if status["state"] != "recording":
+        if status["state"] not in _STOPPABLE:
             raise _refused("RECORDING_NOT_ACTIVE", "no recording is running")
         # An ownerless recording (CORE restarted mid-session) is any operator's to stop.
         if owner not in (None, token_id) and not is_admin:
@@ -191,7 +194,7 @@ class PilotRecordingGuard:
     # ------------------------------------------------------------ internals
     def _recording_owner(self) -> Optional[str]:
         status = self._fresh_status()
-        if status is None or status["state"] != "recording":
+        if status is None or status["state"] not in _STOPPABLE:
             return None
         return self._owner
 

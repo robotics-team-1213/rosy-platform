@@ -98,6 +98,17 @@ def test_recorder_status_round_trip():
     assert rec.RecorderStatus.model_validate(dumped) == status
 
 
+def test_a_starting_recorder_names_its_session():
+    # starting: the writer runs but has not opened its first file yet (no data so far).
+    status = rec.RecorderStatus(state="starting", id="20261002T101500Z_rosy_01", elapsed_s=0.0,
+                                bytes=0, max_duration_s=600, quota_free_bytes=10)
+    assert status.state == "starting"
+    assert rec.ACTIVE_STATES == ("starting", "recording", "stopping")
+    with pytest.raises(ValidationError):
+        rec.RecorderStatus(state="starting", id=None, elapsed_s=0.0, bytes=0, max_duration_s=600,
+                           quota_free_bytes=10)
+
+
 def test_recorder_status_carries_a_boot_and_a_sequence():
     status = rec.RecorderStatus(state="idle", elapsed_s=0.0, bytes=0, max_duration_s=600,
                                 quota_free_bytes=10)

@@ -82,9 +82,14 @@ def teleop_intent(*, raw_linear, raw_angular, clipped, source, mode, accepted, c
                         ).model_dump(by_alias=True)
 
 
+#: A session exists in these states. `starting`: rosbag2 runs but has not opened its first
+#: file yet (CLI start + discovery take seconds); nothing is recorded until `recording`.
+ACTIVE_STATES = ("starting", "recording", "stopping")
+
+
 class RecorderStatus(_Wire):
     schema_id: Literal["rosy.pilot.recording.status/1"] = Field(STATUS_SCHEMA, alias="schema")
-    state: Literal["idle", "recording", "stopping", "error"]
+    state: Literal["idle", "starting", "recording", "stopping", "error"]
     id: str | None = None
     elapsed_s: float = Field(ge=0)
     bytes: int = Field(ge=0)
@@ -98,7 +103,7 @@ class RecorderStatus(_Wire):
 
     @model_validator(mode="after")
     def id_when_active(self) -> "RecorderStatus":
-        if self.state in ("recording", "stopping") and not recording_id_ok(self.id):
+        if self.state in ACTIVE_STATES and not recording_id_ok(self.id):
             raise ValueError("an active recording names its id")
         return self
 

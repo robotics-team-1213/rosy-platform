@@ -12,7 +12,7 @@ RID = "20261002T101500Z_rosy_01"
 
 def status(state="recording", rid=RID, reason="", seq=0, boot="boot-a"):
     return {"schema": "rosy.pilot.recording.status/1", "state": state,
-            "id": rid if state in ("recording", "stopping") else None, "elapsed_s": 1.0,
+            "id": rid if state in ("starting", "recording", "stopping") else None, "elapsed_s": 1.0,
             "bytes": 10, "max_duration_s": 600, "quota_free_bytes": 100, "last_stop_reason": reason,
             "boot_id": boot, "seq": seq}
 
@@ -116,6 +116,66 @@ def test_only_owner_or_admin_stops(rig):
     guard.stop("tok-b", is_admin=True)
     assert calls[-1] == (False, True)
     assert events.published[-1] == ("recording.stopped", {"id": RID, "by": "tok-b", "reason": "operator"})
+
+
+def _starting(guard, calls):
+    """The recorder answers a start with `starting` (its writer has not opened a file yet)."""
+    def request(on, wait):
+        calls.append((on, wait))
+        return True, json.dumps({"code": "", "status": status("starting" if on else "stopping")})
+    guard.request_active = request
+
+
+def test_a_starting_recording_is_active_owned_and_busy(rig):
+    guard, calls, events, _ = rig
+    _starting(guard, calls)
+    body = guard.start("tok-a")
+    assert body["state"] == "starting" and guard.active() and guard.owner() == "tok-a"
+    assert events.published[-1] == ("recording.started", {"id": RID, "owner": "tok-a"})
+    with pytest.raises(RecordingRefused) as refused:
+        guard.start("tok-b")
+    assert refused.value.code == "RECORDING_BUSY" and calls == [(True, True)]
+    guard.on_status(status("recording"))        # the writer opened its file: same session
+    assert guard.owner() == "tok-a" and stopped(events) == []
+
+
+def test_stop_while_starting_is_allowed_and_audited(rig):
+    guard, calls, events, _ = rig
+    _starting(guard, calls)
+    guard.start("tok-a")
+    with pytest.raises(RecordingRefused) as refused:
+        guard.stop("tok-b", is_admin=False)
+    assert refused.value.status == 403
+    body = guard.stop("tok-a", is_admin=False)
+    assert body["state"] == "stopping" and calls[-1] == (False, True)
+    assert stopped(events) == [{"id": RID, "by": "tok-a", "reason": "operator"}]
+
+
+def test_seat_and_link_rules_apply_while_starting(rig):
+    guard, calls, events, t = rig
+    _starting(guard, calls)
+    guard.link_opened("tok-a")
+    guard.start("tok-a")
+    guard.on_teleop("tok-b")
+    assert calls[-1] == (False, False)
+    guard.on_status(status("idle", reason="requested"))
+    assert stopped(events) == [{"id": RID, "by": None, "reason": "seat_changed"}]
+    guard.start("tok-a")
+    guard.link_closed("tok-a")
+    guard.on_status(status("starting"))
+    t[0] += LINK_GRACE_S + 0.1
+    guard.on_status(status("starting"))
+    assert calls[-1] == (False, False)
+
+
+def test_a_writer_start_timeout_ends_the_session_with_its_reason(rig):
+    guard, calls, events, _ = rig
+    _starting(guard, calls)
+    guard.start("tok-a")
+    guard.on_status(status("stopping"))
+    guard.on_status(status("idle", reason="writer_start_timeout"))
+    assert stopped(events) == [{"id": RID, "by": None, "reason": "writer_start_timeout"}]
+    assert guard.owner() is None
 
 
 def test_stop_without_a_recording_is_not_active(rig):

@@ -41,6 +41,7 @@ export function mountRobotRecording({toggle, detail, openButton, sheetHost, anch
     toggle.reason = pending ? "요청 보내는 중" : toggle.disabled ? view.reason : "";
     toggle.dataset.state = active?.state ?? "offline";
     toggle.setAttribute("aria-pressed", String(view.recording));
+    toggle.setAttribute("aria-label", view.ariaLabel);
     const text = notice || view.detail;
     detail.textContent = text;
     detail.hidden = !text;
@@ -235,7 +236,7 @@ export function mountRobotRecording({toggle, detail, openButton, sheetHost, anch
       await pending;
       const response = await request("/api/v1/recordings/active", {timeoutMs: REQUEST_TIMEOUT_MS}).catch(() => null);
       const state = response?.body?.active?.state;
-      if (response?.status === 200 && response.body?.owned && state === "recording") {
+      if (response?.status === 200 && response.body?.owned && (state === "recording" || state === "starting")) {
         await request("/api/v1/recordings/active/stop", {method: "POST", timeoutMs: REQUEST_TIMEOUT_MS})
           .catch(() => null);
       }

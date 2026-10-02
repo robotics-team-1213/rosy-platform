@@ -247,6 +247,28 @@ def test_download_refused_while_recording(rec_client):
     assert response.status_code == 409 and response.json()["error"]["code"] == "RECORDING_BUSY"
 
 
+def test_a_starting_recording_is_busy_listed_as_recording_and_stoppable(rec_client):
+    # starting: rosbag2 runs but has not opened its first file; nothing is recorded yet.
+    client, svc, root = rec_client
+    svc.pilot_recording._clock = lambda: 0.0      # the recorder status never goes stale here
+    calls, _ = _wire(svc)
+    _recording(root)
+    svc.state.set_velocity(0.0, 0.0)
+    svc.pilot_recording.request_active = lambda on, wait: calls.append((on, wait)) or (
+        True, json.dumps({"code": "", "status": _status("starting" if on else "stopping", RID)}))
+    started = client.post("/api/v1/recordings", headers=OPERATOR)
+    assert started.status_code == 201 and started.json()["state"] == "starting"
+    assert client.post("/api/v1/recordings", headers=OPERATOR).json()["error"]["code"] == "RECORDING_BUSY"
+    listing = client.get("/api/v1/recordings", headers=VIEWER).json()
+    assert listing["download_blocker"] == "RECORDING_BUSY"
+    assert listing["items"][0]["status"] == "recording"
+    response = client.get(f"/api/v1/recordings/{RID}/archive", headers=OPERATOR)
+    assert response.status_code == 409 and response.json()["error"]["code"] == "RECORDING_BUSY"
+    stopped = client.post("/api/v1/recordings/active/stop", headers=OPERATOR)
+    assert stopped.status_code == 200 and stopped.json()["state"] == "stopping"
+    assert calls == [(True, True), (False, True)]
+
+
 def test_download_refused_while_the_manifest_is_hashing(rec_client):
     client, svc, root = rec_client
     _wire(svc)
