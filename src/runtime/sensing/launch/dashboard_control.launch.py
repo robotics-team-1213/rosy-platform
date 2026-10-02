@@ -30,7 +30,7 @@ def generate_launch_description():
         TimerAction(period=1.5, actions=[node('safety_node',
             ('safety.yaml', 'cliff_calib.yaml', 'auto_calib.yaml'),
             {'start_estopped': True, 'lidar_use_tf': True,
-             'stop_distance': .12, 'clear_distance': .14})]),
+             'stop_distance': 0., 'clear_distance': 0.})]),   # D-424: derived from the body
         TimerAction(period=3.0, actions=[node('wander_node', ('wander.yaml',),
             {'auto_start': False, 'calibration_required': True})]),
         TimerAction(period=3.5, actions=[node('goal_node', ('goal.yaml',), {'mode': 'stop'}),

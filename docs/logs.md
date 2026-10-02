@@ -4483,7 +4483,8 @@
 
 ## 2026-10-02 · uncommitted · docs(adr): D-395 개정 9 — S1 Gazebo 통과
 - 변경: 다른 세션과 조율한 조용한 시간대(13:54–16:09 KST)의 S1 네 번째 실행 15회를 기록하고 S1을 닫았다. 확정 오차 ≤1.2 cm / 1.2°, 거울 결정 0/35, 강제 거울 탐지 6/6(3.1–4.1 sim s), 실제 주행 중 들어 옮김 4회 완전 통과. 남은 단계는 S2(4대 sim), 실기(개정 5)·S3, D-257·D-393 개정 수락(사용자 승인).
-- 증거: `docs/plans/2026-10-02-d395-s1-bench-results.md` Run 4, `X:\DevTemposy-d395-s1d\`.
+- 증거: `docs/plans/2026-10-02-d395-s1-bench-results.md` Run 4, `X:\DevTemp
+osy-d395-s1d\`.
 - gate 변화: 없음(Proposed). ROS-SIM S1 통과.
 
 ## 2026-10-02 · uncommitted · docs(logs): D-395 개정 9 항목의 증거 경로 정정
@@ -4642,3 +4643,8 @@
 - Change: exercise canonical Cell grants through actual analytic Skill, ActionApi, durable phase/workflow journals and Fleet/OMX stores. Confirm independent goal gating and claim release; lost/expired submit recovery preserves identity and restart-stop HOLD without extra motion.
 - Evidence: related replay/dispatcher/public-goal regression 47 passed; independent review 3 passed, no remaining Critical/Important findings. Restart-stop mutation failed at expected HOLD versus ACTION_SUCCEEDED; original source restored byte-for-byte. Quick tier plus new replay: 99 passed / 25 existing freshness warnings; harness lint 0 errors / 25 warnings.
 - Gate: SOURCE/LOCAL only. Compiled submissions, ROS/sensor ports and registered goal producer are host fixtures; actual recipe compiler, UDS peer credentials, ROS lifecycle and Gazebo acceptance remain open. Task 7 stays IN PROGRESS.
+
+## 2026-10-03 · uncommitted · docs(plans): D-425 앱·웹 책임·통신·설치 이전 실행 계획
+- 변경: 현재 소유권/설치 기준선부터 공통 request/scope, Fleet·CORE client, 화면 책임, 앱별 소스 이전과 설치·브라우저 수용, D-413에 의존하는 backend 조합 이전까지 14개 task를 작성. 파일·검증·완료 조건·커밋·롤백을 지정하고, web ament wrapper/Fleet sdist·wheel/Face colcon discovery를 구분. Sep30 계획에는 후속 실행 기준을 연결.
+- 증거: 계획의 기존 파일 경로·공개 route·Fleet 진입 문서를 소스와 대조. 문서 계약·quick tier 120 passed/25 기존 freshness warnings; 로그·색인 추가 후 문서 회귀 27 passed, harness lint 0 errors/25 기존 warnings. 신규 로그 행의 줄바꿈을 정리하고 diff 검사를 통과.
+- gate 변화: 없음 — 계획만 작성; 코드·폴더·설치·DEVICE/FIELD 이전은 시작하지 않음.

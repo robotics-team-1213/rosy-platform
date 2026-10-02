@@ -1,21 +1,30 @@
-"""Pinky Pro circumradius. URDF first; calib param wins if it is sane.
+"""Pinky Pro body for the sensing nodes. URDF first; calib param wins if it is sane.
 
-Lidar sits on top of the chassis, so a live scan is walls, not the body.
+D-424: the body (front/rear/half width/rotation radius, LiDAR pose) is the shared
+core_common.robot_body.PINKY_PRO, the same one CORE line follow (D-422) and the PC
+calibration tools use. Lidar sits on top of the chassis, so a live scan is walls, not the body.
 """
 import math
 
+try:
+    from core_common.robot_body import PINKY_PRO as BODY
+except ImportError as error:  # pragma: no cover - packaging fault, fail loudly at startup
+    # D-424 review L4: no silent fallback to literals. The safety node must not start
+    # without the shared body; say why in the traceback the launch log shows.
+    raise ImportError('control needs core_common (exec_depend) for the D-424 robot body '
+                      '(core_common.robot_body); install/source the core_common package') from error
+
 # URDF nominal (D-397: src/products/pinky_pro/profile/config/geometry.yaml, from
 # rosy.urdf.xacro; drift-tested), metres, base_link origin. A calibrated
-# robot_radius refines the circumradius below (use_radius).
+# robot_radius refines the radius below (use_radius), never under ROTATION_RADIUS for turns.
 WHEEL_Y = 0.04055                 # wheels.joint_y_m
 WHEEL_R = 0.028                   # wheels.radius_m
 CASTER_X = 0.0585
 CASTER_EXTRA = 0.011 + 0.0065     # CASTER_X + CASTER_EXTRA = -caster.rear_x_m
-LIDAR_X = -0.017                  # lidar.x_m
-FRONT_X = 0.0295                  # ir.mid.x_m
-# Swept body radius for in-place rotation: footprint.rotation_radius_m (collision
-# meshes, 0.0826) rounded up to the millimetre.
-ROTATION_RADIUS = 0.083
+LIDAR_X = BODY.lidar_x_m          # lidar.x_m
+FRONT_X = 0.0295                  # ir.mid.x_m (IR bar; the body front is BODY.front_x_m)
+# Swept body radius for in-place rotation: footprint.rotation_radius_m (collision meshes).
+ROTATION_RADIUS = BODY.rotation_radius_m
 
 RADIUS_LO = 0.040
 RADIUS_HI = 0.150
@@ -28,6 +37,8 @@ def urdf_radius() -> float:
     return max(wheel, caster, front)
 
 
+# Wheel/caster circumradius (planning radius). D-424: in-place turns use rotation_radius(),
+# never below ROTATION_RADIUS: the collision meshes (screen mount, corners) reach further.
 URDF_RADIUS = urdf_radius()
 
 
@@ -52,3 +63,14 @@ def ignore_m(radius: float) -> float:
 def turn_clear_m(radius: float, margin: float = 0.010) -> float:
     """Free space needed beside the body to spin in place."""
     return float(radius) + float(margin)
+
+
+def rotation_radius(calib) -> float:
+    """D-424: radius for in-place rotation checks: a calibrated radius may grow it, never
+    shrink it below the URDF rotation radius."""
+    return max(use_radius(calib), ROTATION_RADIUS)
+
+
+def footprint_bounds() -> tuple:
+    """D-424: (rear, front, half width) of the URDF body for footprint_guard."""
+    return BODY.box_bounds()

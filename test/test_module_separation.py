@@ -236,10 +236,13 @@ def test_control_imports_no_core_code():
     contract surface only, mirroring the fleet rule (D-18):
     ``core_common.protocol.*`` (shared contract types) and
     ``core_common.calibration_store`` (calibration resolution shared with
-    bringup and core, D-397). Runtime packages stay banned outright.
+    bringup and core, D-397), ``core_common.robot_body`` (the one URDF body
+    every near/stop check shares with CORE and the calibration tools, D-424).
+    Runtime packages stay banned outright.
     """
     runtime_tops = {"core", "core_features", "core_api_web", "core_events"}
-    allowed_contracts = ("core_common.protocol", "core_common.calibration_store")
+    allowed_contracts = ("core_common.protocol", "core_common.calibration_store",
+                         "core_common.robot_body")
     violations = []
     for path in _prod_py_files(CONTROL_PKG.parent):
         try:

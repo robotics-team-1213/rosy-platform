@@ -2,7 +2,10 @@
 import unittest
 
 from control.sensing.body import (
+    ROTATION_RADIUS,
     URDF_RADIUS,
+    footprint_bounds,
+    rotation_radius,
     ignore_m,
     turn_clear_m,
     urdf_radius,
@@ -17,6 +20,20 @@ class BodyTest(unittest.TestCase):
         self.assertGreater(r, 0.068)
         self.assertLess(r, 0.090)
         self.assertAlmostEqual(r, 0.076, places=3)
+
+    def test_rotation_radius_is_the_urdf_mesh_radius(self):
+        """D-424: the wheel/caster circumradius 0.076 under-reads the mesh rotation radius."""
+        self.assertAlmostEqual(ROTATION_RADIUS, 0.08257)
+
+    def test_worker_rotation_radius_never_below_rho(self):
+        """D-424: the old robot.yaml 0.076 must not shrink the in-place turn check."""
+        self.assertGreaterEqual(rotation_radius(0.076), 0.0825)
+        self.assertGreaterEqual(rotation_radius(None), 0.0825)
+        self.assertAlmostEqual(rotation_radius(0.12), 0.12)
+
+    def test_footprint_box_is_the_urdf_body(self):
+        rear, front, half_width = footprint_bounds()
+        self.assertAlmostEqual((rear, front, half_width), (0.076, 0.04205, 0.05655))
 
     def test_calib_param_wins(self):
         self.assertAlmostEqual(use_radius(0.080), 0.080)
