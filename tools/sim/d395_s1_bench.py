@@ -313,7 +313,7 @@ class Bench:
         self.spawn(["ros2", "launch", "gz_sim", "gz_multi.launch.py", f"robots:={len(self.robots)}",
                     f"world_name:={WORLD}.world", "mode:=nav", "core:=true", "headless:=true",
                     "loc_assist:=true", "seed_initialpose:=false", f"api_port_base:={self.args.api_port}",
-                    f"spawn_poses:={poses}"], "launch.log")
+                    f"spawn_poses:={poses}", *getattr(self.args, "launch_arg", ())], "launch.log")
         manifest = None
         for _ in range(240):
             m = re.search(r"fleet robots\.yaml: (\S+)", (self.out / "launch.log").read_text(errors="replace"))
