@@ -119,7 +119,8 @@ def test_geometry_permission_is_recomputed_for_each_selected_candidate(linked):
     assert command.select_output(now=10.03) == Twist()
     assert not safety.estop
     command.set_nav_twist(Twist(.01, .1), now=10.04)
-    assert command.select_output(now=10.05) == Twist()
+    # D-424 (F): the arc's translation is refused, its clear turn passes in place.
+    assert command.select_output(now=10.05) == Twist(0., .1)
     command.set_nav_twist(Twist(-.01, 0.), now=10.06)
     assert command.select_output(now=10.07) == Twist(-.01, 0.)
     # A tighter non-lidar restriction remains in force.
