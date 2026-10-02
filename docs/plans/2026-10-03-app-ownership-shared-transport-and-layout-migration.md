@@ -10,7 +10,7 @@
 
 ---
 
-**Status:** 계획 작성 완료, Tasks 0–13 NOT STARTED. 아래 시험과 완료 조건은 실행 지침이며 통과 기록이 아니다. 작성 기준은 local main `3bb18bd59` (2026-10-03); 실행 시 HEAD와 진행 중 브랜치를 다시 확인한다.
+**Status:** Task 0 SOURCE baseline complete (2026-10-03); Tasks 1–13 NOT STARTED. 실행 브랜치 `refactor/ui-ownership`, 기준 `d10c77e89`. 아래 시험과 완료 조건은 실행 지침이며 통과 기록이 아니다. 계획 작성 기준은 local main `3bb18bd59`; 각 작업 시작 시 HEAD와 진행 중 브랜치를 다시 확인한다.
 
 ## 범위와 의존 작업
 
@@ -89,6 +89,8 @@ $env:TMP = $env:ROSY_SCRATCH
 
 **출구:** 실제 호출·빌드 경로에 근거한 표, 기존 실패 목록, D-413 작업 충돌/의존 목록. 아직 이동하지 않는다.
 
+**완료 증거 (2026-10-03):** [소유권·설치 기준선](../validation/app-ownership-migration-2026-10-03/README.md), ownership.csv·migration.csv 각 12개 행. 역할/shared/Robot/Pilot/API/Fleet 별도 실행 합계 1939 passed/139 skipped, 모든 known-failure 비교 0 new/0 known. 기존 web-transport worktree의 충돌과 다른 세션 변경은 보존했다. skip·브라우저·설치·DEVICE/FIELD는 미수용이며 다음 단계에서 별도 검증한다.
+
 ## Task 1: 선언과 실제 동작을 연결하는 소유권 검사
 
 **Modify:** `src/hmi/web_common/surfaces.yaml`, `test/architecture/test_app_roles.py`, `src/hmi/web_common/test/test_surface_registry.py`, `src/runtime/api_web/test/test_surface_manifest_api.py`, `src/site/fleet/test/web/authorization.test.mjs`.
@@ -129,7 +131,7 @@ test('credential scopes stay separate and writes are sent once', async () => {
   const fleet = createRequest({origin: 'https://fleet.test',
     credential: () => 'fleet-token', fetchImpl});
   const [a, b] = await Promise.all([
-    core('/api/v1/control/intent', {method: 'POST', body: '{}'}),
+    core('/api/v1/teleop', {method: 'POST', body: '{}'}),
     fleet('/api/state'),
   ]);
   assert.equal(a.status, 503);
