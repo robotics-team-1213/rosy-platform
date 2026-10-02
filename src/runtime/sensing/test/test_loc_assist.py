@@ -20,8 +20,11 @@ MIRROR = PoseCandidate(1.26, -.49, math.pi / 2, .97, 'global')
 
 
 def core(**kwargs):
+    """A core whose robot has stood still since before t=0 (odom twist zero)."""
     ids = itertools.count(1)
-    return LocAssist(lambda: f"r-{next(ids)}", **kwargs)
+    a = LocAssist(lambda: f"r-{next(ids)}", **kwargs)
+    a.on_twist(-10., 0., 0.)
+    return a
 
 
 def kinds(out, kind):
@@ -316,7 +319,7 @@ def test_peer_objects_come_from_the_full_scan_while_the_search_is_strided():
 
 def test_the_global_fine_stage_gets_the_full_scan(monkeypatch):
     """S1 re-run R3: the fine yaw stage runs on every beam, not the strided search scan."""
-    import control.loc_assist as loc_assist
+    from control import loc_assist
     seen = {}
     monkeypatch.setattr(loc_assist, 'global_candidates', lambda *a, **kw: seen.update(kw) or [])
     full = scan((-.7, .15, math.pi), beams=640)
@@ -533,3 +536,73 @@ def test_a_lost_mission_end_stops_pausing_the_search_after_the_longest_mission()
     a.on_mission(0., {"kind": "lane_to_stopline", "state": "running", "reason": None})
     assert not a.search_due(130., ODOM)
     assert a.search_due(130.1, ODOM)
+
+
+# --- S1 re-run R3: search only once the robot is still ------------------------
+
+
+def test_a_still_robot_searches_at_once():
+    a = core()
+    assert a.search_due(0., ODOM) and not a.settle_timed_out
+
+
+def test_a_turning_robot_defers_the_search_until_half_a_second_still():
+    """d1/d2: the search ran on the rotation's `done` while the robot still turned 1-3 deg."""
+    a = core()
+    a.on_mission(0., {"kind": "rotate_in_place", "state": "running", "reason": None})
+    a.on_twist(1., 0., .3)
+    a.on_mission(1., {"kind": "rotate_in_place", "state": "done", "reason": "done"})
+    assert not a.search_due(1., ODOM)                 # done, but still turning
+    a.on_twist(1.2, 0., .019)                         # below 0.02 rad/s: still from here
+    assert not a.search_due(1.6, ODOM)
+    a.on_twist(1.65, .009, 0.)
+    assert a.search_due(1.7, ODOM) and not a.settle_timed_out
+
+
+def test_any_motion_restarts_the_still_window():
+    a = core()
+    a.on_twist(0., .01, 0.)                           # 0.01 m/s is not still
+    a.on_twist(.1, 0., 0.)
+    a.on_twist(.4, 0., .02)                           # 0.02 rad/s is not still
+    a.on_twist(.5, 0., 0.)
+    assert not a.search_due(.9, ODOM)
+    assert a.search_due(1., ODOM)
+
+
+def test_a_robot_that_never_settles_searches_after_five_seconds():
+    a = core()
+    a.on_twist(0., 0., .5)
+    assert not a.search_due(0., ODOM)
+    assert not a.search_due(4.9, ODOM)
+    assert a.search_due(5., ODOM) and a.settle_timed_out
+    a.search_started(5., ODOM)
+    a.search_finished(5.5, ODOM, [])
+    assert not a.search_due(10.5, ODOM)               # retry due again: the cap restarts here
+    assert not a.search_due(15.4, ODOM)
+    assert a.search_due(15.5, ODOM) and a.settle_timed_out
+
+
+def test_without_any_odom_the_cap_still_releases_the_search():
+    a = LocAssist(lambda: "r-1")
+    assert not a.search_due(0., ODOM)
+    assert a.search_due(5., ODOM) and a.settle_timed_out
+
+
+@pytest.mark.parametrize('when', ['pickup', 'suspect'])
+def test_the_set_down_and_suspect_searches_also_wait_for_stillness(when):
+    a = core()
+    candidates_ready(a)
+    if when == 'pickup':
+        a.on_pickup(2., True)
+        a.on_pickup(3., False)                        # the set-down wants a search at once
+        t = 3.
+    else:
+        a.on_decision(2., decision('r-1', 2.))
+        hold(a, 2.1, 5.6)
+        a.on_suspect(6., {'reason': 'fleet_monitor'})
+        t = 6.1                                       # SUSPECT searches after retry_s
+    a.on_twist(t, .05, 0.)
+    assert not a.search_due(t + .2, ODOM)
+    a.on_twist(t + .3, 0., 0.)
+    assert not a.search_due(t + .7, ODOM)
+    assert a.search_due(t + .8, ODOM)

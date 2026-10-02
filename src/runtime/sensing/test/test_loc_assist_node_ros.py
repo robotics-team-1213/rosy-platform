@@ -48,6 +48,19 @@ def test_the_camera_subscription_exists_only_outside_localized(node):
     assert camera_topics(node) == ['/rosy_loc_test/camera/front']
 
 
+def test_the_node_feeds_the_namespaced_odom_twist_to_the_settle_gate(node):
+    from nav_msgs.msg import Odometry
+    assert [s.topic_name for s in node.subscriptions if s.topic_name.endswith('/odom')] == \
+        ['/rosy_loc_test/odom']
+    turning = Odometry()
+    turning.twist.twist.angular.z = .3
+    node.on_odom(turning)
+    now = node.now()
+    assert not node.core.search_due(now + .6, ODOM)
+    node.on_odom(Odometry())
+    assert node.core.search_due(node.now() + .6, ODOM)
+
+
 def test_a_stop_between_the_paint_load_and_the_search_skips_the_search():
     import threading
     from control.loc_assist_node import search_job

@@ -6,6 +6,7 @@ docs/plans/2026-10-01-d395-phase2-interfaces.md §1):
   out  localization/state, localization/candidates, localization/result,
        initialpose (PoseWithCovarianceStamped, map frame, only on an accepted decision)
   in   map, scan, amcl_pose, camera/front (reference-square sightings, paint points),
+       odom (twist: a search waits until the robot is still),
        safety/pickup, localization/decision, localization/suspect
 
 Paint: the camera frame already decoded for squares also gives floor paint
@@ -29,7 +30,7 @@ import numpy as np
 import rclpy
 import yaml
 from geometry_msgs.msg import PoseWithCovarianceStamped
-from nav_msgs.msg import OccupancyGrid
+from nav_msgs.msg import OccupancyGrid, Odometry
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy, qos_profile_sensor_data
 from sensor_msgs.msg import Image, LaserScan
@@ -118,6 +119,8 @@ class LocAssistNode(Node):
         self.create_subscription(PoseWithCovarianceStamped, 'amcl_pose', self.on_pose, latched)
         self.camera = None                  # camera/front exists only outside LOCALIZED (sync_camera)
         self.stopping = threading.Event()   # set by main() before the pool shuts down
+        # Always held: a 20-50 Hz twist is cheap, and every search waits on it (S1 re-run R3).
+        self.create_subscription(Odometry, 'odom', self.on_odom, qos_profile_sensor_data)
         self.create_subscription(Bool, 'safety/pickup', self.on_pickup, 1)
         self.create_subscription(String, 'localization/decision', self.on_decision, 5)
         self.create_subscription(String, 'localization/suspect', self.on_suspect, 5)
@@ -199,6 +202,10 @@ class LocAssistNode(Node):
             self.core.on_amcl_pose((p.position.x, p.position.y, yaw(p.orientation)))
         except ValueError:
             pass
+
+    def on_odom(self, msg):
+        t = msg.twist.twist
+        self.core.on_twist(self.now(), math.hypot(t.linear.x, t.linear.y), t.angular.z)
 
     def on_pickup(self, msg):
         self.publish(self.core.on_pickup(self.now(), bool(msg.data)))
@@ -342,6 +349,8 @@ class LocAssistNode(Node):
         if self.search is None and self.field is not None and self.scan is not None:
             odom = self.odom()
             if odom is not None and self.core.search_due(now, odom):
+                if self.core.settle_timed_out:
+                    self.get_logger().warning('robot never settled (odom twist) within the cap; searching anyway')
                 self.start_search(now, odom)
 
     # --- outputs ------------------------------------------------------------

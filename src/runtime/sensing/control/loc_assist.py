@@ -51,6 +51,11 @@ RECEIPT_AHEAD_S = .5
 #: CORE's longest mission (120 s) plus a margin: a running mission whose end never arrives
 #: (lost message, CORE restart) stops pausing the search after this (P2-7).
 MISSION_PAUSE_S = 130.
+#: S1 re-run R3: a search waits until the odom twist stays under these for SETTLE_S;
+#: a scan taken while the robot still turns puts the candidate degrees off.
+STILL_MPS, STILL_RADPS, SETTLE_S = .01, .02, .5
+#: A robot that never settles (odom lost, a creeping wheel) still gets a search after this.
+SETTLE_CAP_S = 5.
 
 
 @dataclass(frozen=True)
@@ -85,6 +90,9 @@ class LocAssist:
         self._state_s, self._state_key = -math.inf, None
         self._pending = None                # request id whose 3 s check is running
         self._mission = None                # since when a CORE mission moves the robot (P2-7)
+        self._still_since = None            # first odom twist of the current still run
+        self._due_since = None              # since when a search waits for the robot to settle
+        self.settle_timed_out = False       # the last due search came from SETTLE_CAP_S
 
     # --- inputs -------------------------------------------------------------
     def on_amcl_pose(self, pose):
@@ -117,6 +125,14 @@ class LocAssist:
             self.machine.request_id, self._report = None, None
         elif state in ('done', 'aborted'):
             self._mission, self._wanted = None, True
+
+    def on_twist(self, now_s, linear_mps, angular_radps):
+        """Odom twist: speed in m/s and yaw rate in rad/s. Still means both under the limits."""
+        still = abs(linear_mps) < STILL_MPS and abs(angular_radps) < STILL_RADPS  # NaN: moving
+        if not still:
+            self._still_since = None
+        elif self._still_since is None:
+            self._still_since = float(now_s)
 
     def on_suspect(self, now_s, payload):
         reason = payload.get('reason') if isinstance(payload, dict) else None
@@ -176,7 +192,20 @@ class LocAssist:
 
     # --- search -------------------------------------------------------------
     def search_due(self, now_s, odom):
-        """Whether the node should start a candidate search now (odom: current (x, y, yaw))."""
+        """Whether the node should start a candidate search now (odom: current (x, y, yaw)).
+
+        A due search waits until the robot has been still for SETTLE_S, at most
+        SETTLE_CAP_S; `settle_timed_out` says the cap released it."""
+        if not self._search_wanted(now_s, odom):
+            self._due_since = None
+            return False
+        if self._due_since is None:
+            self._due_since = float(now_s)
+        settled = self._still_since is not None and now_s - self._still_since >= SETTLE_S
+        self.settle_timed_out = not settled and now_s - self._due_since >= SETTLE_CAP_S
+        return settled or self.settle_timed_out
+
+    def _search_wanted(self, now_s, odom):
         if (self._searching is not None or self.held or self.machine.check is not None
                 or self._mission_running(now_s)):
             return False
@@ -199,6 +228,7 @@ class LocAssist:
 
     def search_started(self, now_s, odom):
         self._searching = (tuple(odom), self._epoch, float(now_s))
+        self._due_since = None
 
     def search_finished(self, now_s, odom, candidates, unmapped=(), sightings=(), paint_scores=None,
                         evidence_s=None):
