@@ -284,7 +284,7 @@ class CameraDetectNode(Node):
                                    'NOMINAL plane; scan not subscribed')
             return
         if bool(self.get_parameter('accept_simulation_scans').value):
-            enable_simulation_scans(True)
+            enable_simulation_scans(True)  # process-wide: every is_robot_scan caller in this process
         self._lidar_nose, source = lidar_nose_rad(override=finite_overrides(
             {'lidar_yaw_offset': self.get_parameter('lidar_yaw_offset_override').value}))
         self.get_logger().info(f'region LiDAR range on; lidar forward from {source}')

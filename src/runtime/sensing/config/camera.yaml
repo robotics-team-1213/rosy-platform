@@ -72,11 +72,10 @@
     # after accepting a new camera_profile or lidar_mount record.
     nominal_camera_profile_path: ''
     allow_nominal_ground: false
-    # D-397 operator layer: a finite value wins over file and accepted record;
-    # .nan = no override (as line_observer_node). lidar_yaw_offset in radians.
-    camera_pitch_rad_override: .nan
-    camera_height_m_override: .nan
-    lidar_yaw_offset_override: .nan
+    # D-397 operator layer: camera_pitch_rad_override, camera_height_m_override
+    # and lidar_yaw_offset_override (radians). A finite value wins over the file
+    # and the accepted record; unset here, so the node's declared NaN default
+    # (no override, as line_observer_node) applies. Set one only to override.
     # D-423: range each region with the LiDAR returns in its bearing span (lidar
     # forward = URDF 180 deg < accepted lidar_mount record). Needs the NOMINAL
     # plane; subscribes scan. A return nearer than the floor estimate plus the

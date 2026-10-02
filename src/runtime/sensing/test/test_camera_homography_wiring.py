@@ -55,7 +55,6 @@ def test_camera_node_offers_nominal_ground_and_lidar_region_range_off_by_default
     config = source('config/camera.yaml')
     for token in ('nominal_camera_profile_path', 'allow_nominal_ground', 'region_lidar_range',
                   'region_lidar_max_age_s', 'region_lidar_tolerance_m', 'region_lidar_tolerance_ratio',
-                  'camera_pitch_rad_override', 'camera_height_m_override', 'lidar_yaw_offset_override',
                   'accept_simulation_scans'):
         assert f"'{token}'" in node
         assert f'{token}:' in config
@@ -64,7 +63,11 @@ def test_camera_node_offers_nominal_ground_and_lidar_region_range_off_by_default
     assert 'region_lidar_range: false' in config
     assert "nominal_camera_profile_path: ''" in config
     assert 'accept_simulation_scans: false' in config
-    assert 'lidar_yaw_offset_override: .nan' in config
+    # Overrides rely on the node's declared NaN default: no '.nan' in a ROS params file,
+    # since rcl_yaml_param_parser support is unverified on the device. Named in a comment.
+    assert '.nan' not in config
+    for token in ('camera_pitch_rad_override', 'camera_height_m_override', 'lidar_yaw_offset_override'):
+        assert f"'{token}'" in node and token in config and f'{token}:' not in config
     assert '/opt/rosy/current/install/share/pinky_pro/config/camera_nominal.yaml' in config
     # The same store path as line_observer: URDF nominal < accepted record.
     assert 'nominal_camera_profile(' in node and 'lidar_nose_rad(' in node
