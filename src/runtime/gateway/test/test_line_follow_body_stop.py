@@ -14,7 +14,8 @@ import yaml
 
 from core.services import _line_follow_config
 from core_common.config import _deep_merge
-from core_features.line_follow.clearance import body_path_gap, rotation_gap, ultrasonic_points
+from core_features.line_follow.clearance import (
+    body_envelope_gap, body_path_gap, rotation_gap, ultrasonic_points)
 from core_features.line_follow.manager import (
     LineFollowConfig, LineFollowManager, LineFollowMode, LineObservation)
 
@@ -227,12 +228,12 @@ def _visible(world, travelled):
 
 
 def _drive_straight(m, world, *, scans, dt=0.5, speed=0.04):
-    """Line follow drives straight; CORE issues `speed`; one scan every dt. Returns metres moved."""
+    """Line follow drives straight; the wheels get `speed`; one scan every dt. Returns metres moved."""
     travelled, t = 0.0, T
     for index in range(scans):
         decision, status = _step(m, _visible(world, travelled), t=t, range_min=RANGE_MIN)
         assert status.state == "TRACKING", (index, status.reason)
-        m.note_issued(speed, 0.0, t)
+        m.note_wheels(speed, 0.0, owned=True, now=t)
         t += dt
         travelled += speed * dt
     return travelled, t
@@ -246,7 +247,7 @@ def test_an_object_that_vanished_under_range_min_still_stops_the_robot():
     m.observe_ultrasonic(None, received_at=t)
     assert _visible(post, travelled) == []                               # gone from the scan
     _, status = _step(m, [], t=t, range_min=RANGE_MIN)
-    assert (status.reason, status.clearance_source) == ("obstacle_ahead", "lidar")
+    assert (status.reason, status.clearance_source) == ("obstacle_ahead", "memory")
     assert status.body_gap_m == pytest.approx(0.143 - travelled - 0.04205, abs=2e-3)
     fresh = _manager()                                                   # the same scan, no memory
     assert _step(fresh, [], t=t, range_min=RANGE_MIN)[1].state == "TRACKING"
@@ -292,7 +293,7 @@ def test_pinky_range_min_straight_stop_is_at_the_blind_edge():
     _, status = _step(m, _visible(world, 0.0), range_min=RANGE_MIN)
     assert status.state == "TRACKING"
     assert status.stop_gap_m == pytest.approx(RANGE_MIN - LIDAR_TO_FRONT, abs=1e-4)
-    m.note_issued(0.04, 0.0, T)
+    m.note_wheels(0.04, 0.0, owned=True, now=T)
     # 0.02 m on, the wall ahead is under range_min; only returns beside the body remain.
     _, status = _step(m, _visible(world, 0.02), t=T + 0.5, range_min=RANGE_MIN)
     assert status.reason == "obstacle_ahead"
@@ -476,3 +477,141 @@ def test_tighter_arc_check_holds_for_a_right_turn_too():
     m.bind_motion_envelope(lambda: (math.inf, math.inf, 0.15))
     _, status = _step(m, post, error=0.3)
     assert status.reason == "obstacle_ahead"
+
+
+# ---- re-review: odometry from the wheels, envelope sampling, prefilter wrap ---------------
+
+def _remembering_manager():
+    """A post that slipped under range_min beside the robot after one 0.02 m step."""
+    m = _manager()
+    travelled, t = _drive_straight(m, [(0.143, 0.04)], scans=1)
+    return m, t
+
+
+def test_teleop_interlude_forgets_the_memory():
+    """HIGH 1: wheel output that is not line follow's own moved the robot unseen."""
+    m, t = _remembering_manager()
+    m.note_wheels(0.10, 0.5, owned=False, now=t)                         # teleop / docking / e-stop
+    _, status = _step(m, [], t=t + 0.1, range_min=RANGE_MIN)
+    assert status.state == "TRACKING"
+    with m._lock:
+        assert m._near_memory == () and m._odometer == 0.0
+
+
+def test_a_zero_output_pause_does_not_advance_the_odometry():
+    """HIGH 1: readiness HOLD / not-ready returns ZERO; the memory must not age while stopped."""
+    m, t = _remembering_manager()
+    with m._lock:
+        before = m._odometer
+    for k in range(40):                                                  # 20 s of ZERO output
+        m.note_wheels(0.0, 0.0, owned=True, now=t + 0.5 * k)
+        _, status = _step(m, [], t=t + 0.5 * k, range_min=RANGE_MIN)
+        assert status.reason == "obstacle_ahead"
+    with m._lock:
+        assert m._odometer == pytest.approx(before + 0.02)               # only the drive itself
+
+
+def test_odometry_integrates_the_clipped_twist_not_the_lane_command():
+    m = _manager()
+    _step(m, [], range_min=RANGE_MIN)
+    m.note_wheels(0.015, 0.0, owned=True, now=T)                         # clipped from 0.04
+    _step(m, [], t=T + 0.5, range_min=RANGE_MIN)
+    with m._lock:
+        assert m._odometer == pytest.approx(0.015 * 0.5)
+
+
+def test_wheels_sent_owns_only_line_follow_navigation_output():
+    from types import SimpleNamespace
+
+    from core.bridge.observation import wheels_sent
+    from core_features.command.arbitration import Mode
+
+    calls = []
+    line = SimpleNamespace(active=True, note_wheels=lambda l, a, owned: calls.append((l, a, owned)))
+    modes = SimpleNamespace(mode=Mode.NAVIGATION, is_emergency=False)
+    services = SimpleNamespace(line_follow=line, modes=modes, safety=SimpleNamespace(estop=False))
+    out = SimpleNamespace(linear=0.03, angular=0.1)
+    wheels_sent(services, out)
+    modes.mode = Mode.MANUAL
+    wheels_sent(services, out)
+    modes.mode, services.safety.estop = Mode.NAVIGATION, True
+    wheels_sent(services, out)
+    services.safety.estop, line.active = False, False
+    wheels_sent(services, out)
+    assert [owned for *_, owned in calls] == [True, False, False, False]
+
+
+def test_envelope_samples_the_arcs_between_the_ends():
+    """HIGH 2 probe: v 0.04, w 0.2, point (0, 0.13): an in-between traffic scale hits first."""
+    point = [(0.0, 0.13)]
+    ends = [body_path_gap(point, linear=0.04 * s, angular=0.2, min_travel_m=0.30, **BODY)
+            for s in (1.0, 0.15)]
+    family = body_envelope_gap(point, linear=0.04, angular=0.2, scale_floor=0.15, **BODY)
+    assert family is not None and family == pytest.approx(0.106, abs=2e-3)
+    assert all(end is None or end > family + 0.002 for end in ends)
+
+
+def test_memory_hold_is_reported_as_memory_in_the_event():
+    m, t = _remembering_manager()
+    for k in range(12):
+        m.note_wheels(0.0, 0.0, owned=True, now=t + 0.5 * k)
+        _step(m, [], t=t + 0.5 * k, range_min=RANGE_MIN)
+    events = [kw["data"] for name, kw in m._events.published if name == "nav.line_obstacle_hold"]
+    assert events and events[0]["clearance_source"] == "memory"
+
+
+def _reference_gap(points, linear, angular, horizon, min_travel=0.0, step=0.0005):
+    """Unfiltered brute force: step the whole outline along the arc over every point."""
+    k = angular / linear
+    straight = abs(k) < 1e-9
+    limit = horizon if straight else min(horizon, math.pi / abs(k))
+    limit = max(limit, min_travel)
+    if not straight:
+        limit = min(limit, 2 * math.pi / abs(k))
+
+    def touches(s):
+        h = k * s
+        px, py = (s, 0.0) if straight else (math.sin(h) / k, (1 - math.cos(h)) / k)
+        c, sn = math.cos(h), math.sin(h)
+        for x, y in points:
+            bx, by = c * (x - px) + sn * (y - py), -sn * (x - px) + c * (y - py)
+            if (-0.076 <= bx <= 0.04205 and abs(by) <= 0.05655
+                    and bx * bx + by * by <= 0.08257 ** 2):
+                return True
+        return False
+
+    s = 0.0
+    while s <= limit + 1e-12:
+        if touches(s):
+            return s
+        s += step
+    return None
+
+
+@pytest.mark.parametrize("horizon", [0.30, 2.0])
+def test_prefiltered_sweep_matches_an_unfiltered_brute_force(horizon):
+    """M3/M4: random points, both turn directions, short and long horizons (wrap past pi)."""
+    import random
+
+    rng = random.Random(422)
+    body = {key: value for key, value in BODY.items() if key != "horizon_m"}
+    for _ in range(150):
+        reach = min(horizon, 0.7)
+        point = [(rng.uniform(-reach, reach), rng.uniform(-reach, reach))]
+        linear = rng.choice([0.01, 0.04, 0.07])
+        angular = rng.choice([-1.0, 1.0]) * rng.uniform(0.05, 0.8)
+        got = body_path_gap(point, linear=linear, angular=angular, horizon_m=horizon,
+                            min_travel_m=0.06, **body)
+        want = _reference_gap(point, linear, angular, horizon, min_travel=0.06)
+        assert (got is None) == (want is None), (point, linear, angular, got, want)
+        if got is not None:
+            assert got == pytest.approx(want, abs=0.006), (point, linear, angular)
+
+
+def test_prefilter_keeps_points_near_the_end_of_a_long_half_turn():
+    """M3 probe: (-0.02, -0.54), v 0.07, w -0.256, horizon 2.0 was dropped by the angle wrap."""
+    body = {key: value for key, value in BODY.items() if key != "horizon_m"}
+    point = [(-0.02, -0.54)]
+    got = body_path_gap(point, linear=0.07, angular=-0.256, horizon_m=2.0, **body)
+    want = _reference_gap(point, 0.07, -0.256, 2.0)
+    assert want is not None and got == pytest.approx(want, abs=0.006)

@@ -7,10 +7,12 @@ the rotation radius (clearance.rotation_gap). Every method runs under the manage
 Review fixes (2026-10-02):
 - The LiDAR blind-zone floor always applies; an ultrasonic echo only adds points (H1).
 - Returns that slip under the LiDAR range_min are remembered in an odometry frame
-  integrated from the twists CORE issued (note_issued), so a curved path or an in-place
-  turn still sees them (H2, M2). They expire after obstacle_path_horizon_m of body motion.
-- The sweep covers the curvature envelope the traffic gate and the safety clip can make of
-  the intended twist (M1).
+  integrated from the twist that actually went to the wheels (note_wheels, fed by the one
+  cmd_vel publisher), so a curved path or an in-place turn still sees them (H2, M2). They
+  expire after obstacle_path_horizon_m of body motion; any wheel output that is not line
+  follow's own (teleop, docking, e-stop, another mode) forgets them (re-review HIGH 1).
+- The sweep covers the arcs the traffic gate (linear scaled by s in [floor, 1], angular kept)
+  and the safety clip can make of the intended twist (M1, re-review HIGH 2).
 """
 
 from __future__ import annotations
@@ -18,11 +20,12 @@ from __future__ import annotations
 import math
 from typing import Callable, Optional
 
-from core_features.line_follow.clearance import body_path_gap, rotation_gap, ultrasonic_points
+from core_features.line_follow.clearance import (
+    body_envelope_gap, body_path_gap, rotation_gap, ultrasonic_points)
 from core_features.line_follow.model import _finite
 
-#: CommandManager drops a nav twist older than this (command/manager.py _nav_timeout_s): a twist
-#: CORE stopped re-issuing has stopped the wheels by then, so odometry integrates no further.
+#: The wheels hold the last cmd_vel at most this long (CommandManager nav timeout, 0.5 s; the
+#: publisher runs at 50 Hz): a longer gap between published twists integrates no further.
 TWIST_HOLD_S = 0.5
 #: Returns this far outside range_min are candidates for memory: one scan period of motion
 #: (0.10 m/s x 0.1 s) plus an in-place sweep of the body edge, with room to spare.
@@ -41,6 +44,9 @@ class BodyStopMixin:
     def _reset_body_stop(self) -> None:
         """New session: no status fields, no remembered points, odometry restarts."""
         self._clear_gap()
+        self._forget_near()
+
+    def _forget_near(self) -> None:
         self._odom = (0.0, 0.0, 0.0)
         self._odom_at: Optional[float] = None
         self._odometer = 0.0
@@ -68,12 +74,23 @@ class BodyStopMixin:
         with self._lock:
             self._motion_envelope_provider = provider
 
-    # ---- near-point memory (odometry from issued twists) ---------------------------------
+    # ---- near-point memory (odometry from the twist sent to the wheels) --------------------
 
-    def _note_motion(self, linear: float, angular: float, now: float) -> None:
-        self._integrate(now)
-        self._twist = (float(linear), float(angular)) if _finite(linear) and _finite(angular) \
-            else (0.0, 0.0)
+    def note_wheels(self, linear: float, angular: float, *, owned: bool,
+                    now: Optional[float] = None) -> None:
+        """The twist the cmd_vel publisher just sent (after CommandManager and readiness).
+
+        owned: line follow is active and its NAVIGATION output is what reached the wheels (no
+        e-stop, no other mode). Anything else moved (or held) the robot without line follow
+        knowing why, so the memory and its odometry restart."""
+        current = self._clock() if now is None else now
+        with self._lock:
+            if not owned:
+                self._forget_near()
+                return
+            self._integrate(float(current))
+            ok = _finite(linear) and _finite(angular)
+            self._twist = (float(linear), float(angular)) if ok else (0.0, 0.0)
 
     def _integrate(self, now: float) -> None:
         if self._odom_at is None:
@@ -171,14 +188,14 @@ class BodyStopMixin:
         linear = min(linear, max_linear)
         angular = max(-max_angular, min(max_angular, angular))
         lidar = [(x + c.body_lidar_x_m, y) for x, y in self._scan_points or ()]
-        lidar += self._remembered_points()
         echo = self._ultrasonic_echo(now)
         sonar = () if echo is None else ultrasonic_points(
             echo, sensor_x_m=c.body_ultrasonic_x_m,
             half_angle_deg=c.obstacle_ultrasonic_half_angle_deg)
+        groups = (("lidar", lidar), ("memory", self._remembered_points()), ("ultrasonic", sonar))
         if linear <= 1e-6:
             gaps = [rotation_gap(points, rotation_radius_m=c.body_rotation_radius_m,
-                                 reach_m=c.obstacle_path_horizon_m) for points in (lidar, sonar)]
+                                 reach_m=c.obstacle_path_horizon_m) for _, points in groups]
             stop = resume = c.obstacle_body_margin_m
         else:
             stop, resume = self._stop_resume_gaps(linear)
@@ -187,24 +204,29 @@ class BodyStopMixin:
                 # Stop before a straight-ahead return slips under range_min (always, review H1).
                 resume += blind - stop
                 stop = blind
-            # The traffic gate scales linear only: the same angular on a slower linear is a
-            # tighter arc (review M1). Sweep both ends of that envelope.
-            speeds = (linear,) if floor >= 1.0 or abs(angular) <= 1e-6 else (linear, linear * floor)
+            body = dict(front_x_m=c.body_front_x_m, rear_x_m=c.body_rear_x_m,
+                        half_width_m=c.body_half_width_m,
+                        rotation_radius_m=c.body_rotation_radius_m)
             gaps = []
-            for points in (lidar, sonar):
-                found = [body_path_gap(points, linear=speed, angular=angular,
-                                       front_x_m=c.body_front_x_m, rear_x_m=c.body_rear_x_m,
-                                       half_width_m=c.body_half_width_m,
-                                       rotation_radius_m=c.body_rotation_radius_m,
-                                       horizon_m=c.obstacle_path_horizon_m, min_travel_m=resume)
-                         for speed in speeds] if points else []
-                found = [gap for gap in found if gap is not None]
-                gaps.append(min(found) if found else None)
-        lidar_gap, sonar_gap = gaps
-        if sonar_gap is not None and (lidar_gap is None or sonar_gap < lidar_gap):
-            gap, source = sonar_gap, "ultrasonic"
-        else:
-            gap, source = lidar_gap, None if lidar_gap is None else "lidar"
+            for _, points in groups:
+                if not points:
+                    gaps.append(None)
+                    continue
+                gap = body_path_gap(points, linear=linear, angular=angular,
+                                    horizon_m=c.obstacle_path_horizon_m, min_travel_m=resume,
+                                    **body)
+                if floor < 1.0 and abs(angular) > 1e-6:
+                    # The traffic gate scales linear only, by any s in [floor, 1]: every such
+                    # arc is tighter. Only contacts within the resume gap change the decision.
+                    family = body_envelope_gap(points, linear=linear, angular=angular,
+                                               scale_floor=floor, horizon_m=resume, **body)
+                    if family is not None and (gap is None or family < gap):
+                        gap = family
+                gaps.append(gap)
+        gap, source = None, None
+        for (name, _), found in zip(groups, gaps):
+            if found is not None and (gap is None or found < gap):
+                gap, source = found, name
         self._gap_resume = resume
         self._gap_status = {"body_gap_m": None if gap is None else round(gap, 4),
                             "stop_gap_m": round(stop, 4), "clearance_source": source}

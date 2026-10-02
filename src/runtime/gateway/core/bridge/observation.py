@@ -19,6 +19,7 @@ from typing import Callable, Optional
 
 from core.bridge import battery_policy, translate
 from core.bridge.hitl import parse_hitl_request
+from core_features.command.arbitration import Mode
 from core_features.command.manager import Twist as CoreTwist
 from core_features.line_follow import LineFollowMode, LineObservation
 from core_features.line_follow.clearance import front_clearance as _front_clearance
@@ -226,6 +227,17 @@ def nav_costmap(services, kind: str, msg, *, warn: Warn) -> None:
         services.maps.set_costmap(kind, translate.grid_from_costmap(msg))
     except ValueError as exc:
         warn(f"ignored {kind} costmap: {exc}")
+
+
+def wheels_sent(services, out) -> None:
+    """D-422: the twist the one cmd_vel publisher just sent feeds the line-follow near-point
+    memory. It belongs to line follow only while line follow is active, the mode is
+    NAVIGATION and nothing stops the wheels; anything else makes it forget (re-review HIGH 1)."""
+    line = services.line_follow
+    modes = services.modes
+    owned = bool(line.active and modes.mode is Mode.NAVIGATION and not modes.is_emergency
+                 and not services.safety.estop)
+    line.note_wheels(out.linear, out.angular, owned=owned)
 
 
 def us_range(services, msg, *, received_at: float) -> None:

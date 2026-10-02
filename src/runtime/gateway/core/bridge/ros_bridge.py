@@ -374,6 +374,8 @@ class RosBridge:
         msg.linear.x = out.linear
         msg.angular.z = out.angular
         self.cmd_vel_pub.publish(msg)
+        # D-422: line follow's near-point memory integrates exactly what reached the wheels.
+        observation.wheels_sent(self._svc, out)
 
     def _tick_state(self) -> None:
         try:

@@ -240,6 +240,8 @@ def body_path_gap(points: Sequence[Point], *, linear: float, angular: float, fro
             continue
         if lead < math.pi:
             angle = math.atan2(x, side * (radius - y))   # 0 at the base, + ahead
+            if angle < -lead:
+                angle += 2.0 * math.pi                     # (-pi, pi] -> [-lead, 2pi - lead)
             if not -lead <= angle <= turned + lead:
                 continue
         near.append((x, y))
@@ -271,6 +273,37 @@ def body_path_gap(points: Sequence[Point], *, linear: float, angular: float, fro
             return high
         low = travel
     return None
+
+
+def body_envelope_gap(points: Sequence[Point], *, linear: float, angular: float,
+                      scale_floor: float, front_x_m: float, rear_x_m: float,
+                      half_width_m: float, rotation_radius_m: float, horizon_m: float,
+                      scale_step: float = 0.05) -> Optional[float]:
+    """D-422 review: the first contact over every arc the twist can become when something
+    downstream scales linear by s in [scale_floor, 1] but keeps angular (the traffic gate).
+
+    Sampled in s every scale_step or finer, both ends included. Each arc is swept only as far
+    as the best contact so far (later contacts cannot lower the minimum), over the points
+    within reach of horizon_m."""
+    floor = min(1.0, max(float(scale_floor), 1e-3))
+    reach = horizon_m + rotation_radius_m
+    near = [(x, y) for x, y in points if x * x + y * y <= reach * reach]
+    if not near:
+        return None
+    count = max(1, int(math.ceil((1.0 - floor) / scale_step)))
+    best: Optional[float] = None
+    for index in range(count + 1):
+        scale = 1.0 - (1.0 - floor) * index / count
+        limit = horizon_m if best is None else min(horizon_m, best)
+        gap = body_path_gap(near, linear=linear * scale, angular=angular, front_x_m=front_x_m,
+                            rear_x_m=rear_x_m, half_width_m=half_width_m,
+                            rotation_radius_m=rotation_radius_m, horizon_m=limit,
+                            min_travel_m=limit)
+        if gap is not None and (best is None or gap < best):
+            best = gap
+            if best <= 0.0:
+                break
+    return best
 
 
 def rotation_gap(points: Sequence[Point], *, rotation_radius_m: float,
