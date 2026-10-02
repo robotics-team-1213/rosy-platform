@@ -62,6 +62,7 @@ class StuckRecoveryMixin:
         """The twist CORE actually handed the CommandManager (after the traffic gate)."""
         with self._lock:
             self._trail.record(now, linear, angular)
+            self._note_motion(linear, angular, now)  # D-422 near-point memory (body_stop.py)
 
     def _recovery_reset(self, reason: str, now: float) -> None:
         self._recovery.reset(reason, now)

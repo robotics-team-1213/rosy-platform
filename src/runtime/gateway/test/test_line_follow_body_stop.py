@@ -198,19 +198,150 @@ def test_stale_ultrasonic_is_ignored():
     assert status.state == "TRACKING" and status.clearance_source is None
 
 
-def test_without_ultrasonic_the_stop_gap_covers_the_lidar_blind_zone():
-    """range_min 0.17: an object nearer than that vanishes, so stop before it does."""
+def test_the_lidar_blind_zone_floor_holds_whatever_the_ultrasonic_says():
+    """Review H1: range_min 0.17 -- a return nearer than that vanishes, so stop before it does.
+    No echo, a far echo or the wall's own echo never lift the floor."""
     wall = _wall(0.16)                                                   # body gap 0.101
+    for echo in ("unset", None, 1.0, 0.134):
+        m = _manager()
+        if echo != "unset":
+            m.observe_ultrasonic(echo, received_at=T)
+        _, status = _step(m, wall, range_min=0.17)
+        assert status.reason == "obstacle_ahead", echo
+        assert status.stop_gap_m == pytest.approx(0.17 - LIDAR_TO_FRONT, abs=1e-4)
+
+
+# ---- returns that slip under range_min (review H1/H2/M2, Pinky range_min 0.15) ----------
+
+RANGE_MIN = 0.15
+
+
+def _visible(world, travelled):
+    """LiDAR-frame returns of base-frame-at-start points after driving `travelled` straight."""
+    out = []
+    for wx, wy in world:
+        point = (wx - travelled + 0.017, wy)
+        if math.hypot(*point) >= RANGE_MIN:
+            out.append(point)
+    return out
+
+
+def _drive_straight(m, world, *, scans, dt=0.5, speed=0.04):
+    """Line follow drives straight; CORE issues `speed`; one scan every dt. Returns metres moved."""
+    travelled, t = 0.0, T
+    for index in range(scans):
+        decision, status = _step(m, _visible(world, travelled), t=t, range_min=RANGE_MIN)
+        assert status.state == "TRACKING", (index, status.reason)
+        m.note_issued(speed, 0.0, t)
+        t += dt
+        travelled += speed * dt
+    return travelled, t
+
+
+def test_an_object_that_vanished_under_range_min_still_stops_the_robot():
+    """No-echo ultrasonic, an off-axis post slips under range_min on the way: still a stop."""
+    post = [(0.143, 0.04)]                                               # LiDAR range 0.165
     m = _manager()
-    _, status = _step(m, wall, range_min=0.17)
+    travelled, t = _drive_straight(m, post, scans=1)
+    m.observe_ultrasonic(None, received_at=t)
+    assert _visible(post, travelled) == []                               # gone from the scan
+    _, status = _step(m, [], t=t, range_min=RANGE_MIN)
+    assert (status.reason, status.clearance_source) == ("obstacle_ahead", "lidar")
+    assert status.body_gap_m == pytest.approx(0.143 - travelled - 0.04205, abs=2e-3)
+    fresh = _manager()                                                   # the same scan, no memory
+    assert _step(fresh, [], t=t, range_min=RANGE_MIN)[1].state == "TRACKING"
+
+
+def test_a_curve_into_an_object_that_vanished_beside_the_robot_stops():
+    """Review H2: a post beside the lane slips under range_min, then the lane bends into it."""
+    post = [(0.128, 0.075)]                                              # LiDAR range 0.163
+    m = _manager()
+    travelled, t = _drive_straight(m, post, scans=3)
+    assert _visible(post, travelled) == []
+    _, status = _step(m, [], error=-0.3, t=t, range_min=RANGE_MIN)      # gentle left arc
     assert status.reason == "obstacle_ahead"
-    assert status.stop_gap_m == pytest.approx(0.17 - LIDAR_TO_FRONT, abs=1e-4)
+    assert _step(_manager(), [], error=-0.3, t=t, range_min=RANGE_MIN)[1].state == "TRACKING"
+
+
+def test_in_place_turn_sees_a_remembered_object_inside_the_sweep_annulus():
+    """Review M2: with range_min 0.15 the LiDAR never sees the R..R+0.02 annulus directly."""
+    post = [(0.13, -0.068)]                                              # ends at base (0.07, -0.068)
     m = _manager()
-    m.observe_ultrasonic(0.134, received_at=T)                           # the wall, seen in front
-    _, status = _step(m, wall, range_min=0.17)
+    travelled, t = _drive_straight(m, post, scans=4, speed=0.03)
+    assert _visible(post, travelled) == []
+    _, status = _step(m, [], error=-0.5, confidence=0.35, t=t, range_min=RANGE_MIN)
+    assert (status.reason, status.stop_gap_m) == ("obstacle_ahead", 0.02)
+    assert status.body_gap_m == pytest.approx(math.hypot(0.13 - travelled, 0.068) - 0.08257, abs=2e-3)
+    fresh = _manager()                                                   # no memory: unprotected
+    assert _step(fresh, [], error=-0.5, confidence=0.35, t=t, range_min=RANGE_MIN)[1].state == "TRACKING"
+
+
+def test_memory_expires_after_the_horizon_of_motion():
+    post = [(0.143, 0.04)]
+    m = _manager()
+    travelled, t = _drive_straight(m, post, scans=1)
+    with m._lock:
+        m._odometer += 0.31                                              # moved past the horizon
+    assert _step(m, [], t=t, range_min=RANGE_MIN)[1].state == "TRACKING"
+
+
+def test_pinky_range_min_straight_stop_is_at_the_blind_edge():
+    """Review M5: with range_min 0.15 the straight stop is where the LiDAR would lose the wall."""
+    world = [(x - 0.017, y) for x, y in _wall(0.152)]                    # base frame
+    m = _manager()
+    _, status = _step(m, _visible(world, 0.0), range_min=RANGE_MIN)
     assert status.state == "TRACKING"
-    assert status.stop_gap_m == pytest.approx(LineFollowConfig(**PINKY).derived_stop_gap_m(0.04),
-                                              abs=1e-4)
+    assert status.stop_gap_m == pytest.approx(RANGE_MIN - LIDAR_TO_FRONT, abs=1e-4)
+    m.note_issued(0.04, 0.0, T)
+    # 0.02 m on, the wall ahead is under range_min; only returns beside the body remain.
+    _, status = _step(m, _visible(world, 0.02), t=T + 0.5, range_min=RANGE_MIN)
+    assert status.reason == "obstacle_ahead"
+    assert status.body_gap_m == pytest.approx(0.152 - 0.02 - LIDAR_TO_FRONT, abs=2e-3)
+
+
+def test_pinky_range_min_corner_turn_away_keeps_driving_when_the_wall_is_seen():
+    m = _manager()
+    decision, status = _step(m, _wall(0.24), error=-0.5, range_min=RANGE_MIN)
+    assert status.state == "TRACKING" and decision.angular > 0.0
+    assert status.body_gap_m is None or status.body_gap_m > status.stop_gap_m
+
+
+def test_pinky_range_min_override_still_wins_above_the_blind_edge():
+    m = _manager(obstacle_stop_m=0.20, obstacle_resume_m=0.28)
+    _, status = _step(m, _wall(0.19), range_min=RANGE_MIN)
+    assert status.reason == "obstacle_ahead"
+    assert status.stop_gap_m == pytest.approx(0.20 - LIDAR_TO_FRONT, abs=1e-4)
+
+
+# ---- what the command can still become (review M1) --------------------------------------
+
+def test_sweep_covers_the_tighter_arc_the_traffic_gate_can_make():
+    """APPROACH scales linear down to 0.15 but keeps angular: the arc is 6.7x tighter."""
+    post = [(0.017, 0.07)]                                               # base (0.0, 0.07)
+    loose = _manager()
+    assert _step(loose, post, error=-0.3)[1].state == "TRACKING"
+    tight = _manager()
+    tight.bind_motion_envelope(lambda: (math.inf, math.inf, 0.15))
+    _, status = _step(tight, post, error=-0.3)
+    assert status.reason == "obstacle_ahead" and status.body_gap_m < status.stop_gap_m
+
+
+def test_sweep_uses_the_safety_clipped_twist():
+    """A nav linear limit below the lane speed shortens linear only: the clipped arc is swept."""
+    post = [(0.017, 0.07)]
+    m = _manager()
+    m.bind_motion_envelope(lambda: (0.0322 * 0.15, math.inf, 1.0))
+    assert _step(m, post, error=-0.3)[1].reason == "obstacle_ahead"
+
+
+def test_an_unreadable_motion_envelope_fails_closed():
+    m = _manager()
+
+    def broken():
+        raise RuntimeError("no limits")
+
+    m.bind_motion_envelope(broken)
+    assert _step(m, _wall(0.40))[1].reason == "obstacle_ahead"
 
 
 # ---- precedence and old overlays --------------------------------------------------------
@@ -307,3 +438,21 @@ def test_straight_sweep_is_solved_exactly():
     assert body_path_gap([(0.20, y)], linear=0.04, angular=0.0, **BODY) == pytest.approx(0.20 - nose)
     assert body_path_gap([(0.0, 0.0)], linear=0.04, angular=0.0, **BODY) == 0.0
     assert body_path_gap([(-0.20, 0.0)], linear=0.04, angular=0.0, **BODY) is None
+
+
+def test_core_binds_the_envelope_from_the_safety_limits_and_the_traffic_gate():
+    from types import SimpleNamespace
+
+    from core.line_follow_wiring import bind_motion_envelope
+    from core_features.traffic_policy import TrafficPolicyMode
+
+    traffic = SimpleNamespace(mode=TrafficPolicyMode.DISABLED,
+                              configuration=lambda: {"active": {"proceed_speed_scale": 0.5}})
+    safety = SimpleNamespace(limits=SimpleNamespace(max_linear=0.2, max_angular=0.8))
+    m = _manager()
+    bind_motion_envelope(m, safety=safety, traffic_policy=traffic)
+    assert m._envelope() == (0.2, 0.8, 1.0)
+    traffic.mode = TrafficPolicyMode.ENFORCED
+    assert m._envelope() == (0.2, 0.8, 0.15)
+    traffic.configuration = lambda: {"active": {"proceed_speed_scale": 0.1}}
+    assert m._envelope() == (0.2, 0.8, 0.1)

@@ -194,7 +194,8 @@ def body_path_gap(points: Sequence[Point], *, linear: float, angular: float, fro
     `_inside_body` swept along the arc; the gap is the base origin's travel (arc length) at
     first contact. 0 = a point is already inside the outline. The arc ends at horizon_m or half
     a turn, whichever is first, but never before min_travel_m (review M3: pass the resume gap,
-    so a contact just past a short half turn cannot read as clear). None = nothing touched.
+    so a contact just past a short half turn cannot read as clear) unless a full turn comes
+    first. None = nothing touched.
     Straight lines are solved exactly; arcs are stepped (~step_m of body motion) and refined
     by bisection, over the points of the annulus the body can reach (review M4).
     linear must be positive: in-place rotation is `rotation_gap`.
@@ -206,6 +207,8 @@ def body_path_gap(points: Sequence[Point], *, linear: float, angular: float, fro
     straight = abs(curvature) < 1e-9
     limit = horizon_m if straight else min(horizon_m, math.pi / abs(curvature))
     limit = max(limit, float(min_travel_m))
+    if not straight:
+        limit = min(limit, 2.0 * math.pi / abs(curvature))   # a full turn sweeps everything
     reach = limit + rotation_radius_m
     body = (front_x_m, rear_x_m, half_width_m, rotation_radius_m)
     if straight:
