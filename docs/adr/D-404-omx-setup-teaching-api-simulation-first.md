@@ -1,6 +1,6 @@
 ## D-404 OMX 셋업·티칭 API는 시뮬레이션부터 D-390 seat와 제한 jog에 읽기 전용 TCP(FK) 조회를 더한다
 
-**Status:** Proposed (2026-10-01, 경계·계약 결정; Rosy Cell 셋업 중계와 D-390 클라이언트 확장은 사용자 승인 2026-10-01). 시뮬레이션 장치 API(`/api/v1/sim/omx`)만 다룬다. 실물 OMX 장치·티칭 API, 리더 팔 티칭, 손으로 끌어 가르치기, Cartesian jog, DEVICE/FIELD 수용은 포함하지 않는다. 경로·필드·오류코드는 D-18에 따라 C5 구현 변경에서 API Reference·typed schema와 함께 확정한다.
+**Status:** Accepted (2026-10-02, 사용자 승인; 시뮬레이션 범위. C3/C3b Gazebo 증거 `docs/validation/rosy-cell-gazebo-c3-2026-10-02/`. 실물 OMX·DEVICE·FIELD는 계속 닫혀 있다. 이전 기록: Proposed (2026-10-01, 경계·계약 결정; Rosy Cell 셋업 중계와 D-390 클라이언트 확장은 사용자 승인 2026-10-01). 시뮬레이션 장치 API(`/api/v1/sim/omx`)만 다룬다. 실물 OMX 장치·티칭 API, 리더 팔 티칭, 손으로 끌어 가르치기, Cartesian jog, DEVICE/FIELD 수용은 포함하지 않는다. 경로·필드·오류코드는 D-18에 따라 C5 구현 변경에서 API Reference·typed schema와 함께 확정한다.
 
 ## 배경
 

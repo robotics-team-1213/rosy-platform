@@ -107,11 +107,13 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: var(--space-3);
-  margin: var(--space-3) var(--space-5) 0;
-  padding: var(--space-3) var(--space-4);
+  margin: var(--space-2) var(--space-5) 0;
+  padding: var(--space-1) var(--space-3);
   border: 1px solid var(--line-14);
-  border-radius: var(--radius-panel);
+  border-radius: var(--radius-control);
   background: var(--surface-raised);
+  font-size: var(--text-label);
+  line-height: var(--leading-body);
 }
 .dispatch-control > div { display: grid; gap: var(--space-1); min-width: 0; }
 .dispatch-control strong { color: var(--ink); }
@@ -403,13 +405,19 @@ main {
 .log .good { color: var(--nominal-quiet); }
 .log-panel:not([open]) .log { max-height: calc(var(--text-micro) * var(--leading-copy) * 8); }
 
+/* D-414 — 비상 정지: 팔각형 아이콘 하나로 깔끔하게. 텍스트 없이 아이콘만. */
+.estop { width: var(--target-irreversible); height: var(--target-irreversible); padding: 0; display: inline-flex; align-items: center; justify-content: center; }
+.estop-icon { width: calc(var(--target-irreversible) * 0.55); height: calc(var(--target-irreversible) * 0.55); }
+
 /* D-417 — 카메라 컴팩트 모드: 소스 없거나 연결 불가면 한 줄로 접는다. */
 .vision-preview:has(> .vision-frame[data-state="waiting"]) .vision-controls,
 .vision-preview:has(> .vision-frame[data-state="waiting"]) .vision-frame,
 .vision-preview:has(> .vision-frame[data-state="waiting"]) .install-link,
+.vision-preview:has(> .vision-frame[data-state="waiting"]) > .hint,
 .vision-preview:has(> .vision-frame[data-state="warn"]) .vision-controls,
 .vision-preview:has(> .vision-frame[data-state="warn"]) .vision-frame,
-.vision-preview:has(> .vision-frame[data-state="warn"]) .install-link { display: none; }
+.vision-preview:has(> .vision-frame[data-state="warn"]) .install-link,
+.vision-preview:has(> .vision-frame[data-state="warn"]) > .hint { display: none; }
 .vision-preview:has(> .vision-frame[data-state="waiting"]),
 .vision-preview:has(> .vision-frame[data-state="warn"]) { min-height: 0; }
 .vision-preview:has(> .vision-frame[data-state="waiting"]) .map-head,

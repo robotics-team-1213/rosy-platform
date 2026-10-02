@@ -371,7 +371,7 @@ def device(tmp_path, keys):
     boot = tmp_path / "proc/sys/kernel/random/boot_id"
     boot.parent.mkdir(parents=True)
     boot.write_text(BOOT + "\n", encoding="utf-8")
-    # Auto-update is off unless configured (D-412 landing, 2026-10-02).
+    # Explicitly enabled (it is also the default since 2026-10-02).
     write_json(tmp_path / "var/lib/rosy/updates/config.json", {"enabled": True, "repo": REPO})
     return tmp_path
 
@@ -412,27 +412,26 @@ def write_json(path: Path, payload) -> None:
 # --- config and the GitHub check -------------------------------------------------
 
 
-def test_a_robot_without_a_config_is_off_by_default(device, host, hub, keys):
-    # D-412 landing decision (2026-10-02): until the first two-robot device
-    # validation, a robot auto-updates only when config.json says enabled=true.
+def test_a_robot_without_a_config_is_on_by_default(device, host, hub, keys):
+    # D-412 (2026-10-02): default flipped to ON after the first real canary
+    # (rosy-pinky-9dfk committed 2026.10.02-026); only enabled=false turns it off.
     hub.publish(keys, NEXT)
     (device / "var/lib/rosy/updates/config.json").unlink()
 
     result = updater(host, hub).run()
 
-    assert result["phase"] == "disabled"
-    assert hub.requests == []
-    assert host.calls == []
+    assert result["phase"] != "disabled"
+    assert hub.requests != []
 
 
-def test_a_config_without_the_enabled_key_is_off(device, host, hub, keys):
+def test_a_config_without_the_enabled_key_is_on(device, host, hub, keys):
     hub.publish(keys, NEXT)
     write_json(device / "var/lib/rosy/updates/config.json", {"repo": REPO})
 
     result = updater(host, hub).run()
 
-    assert result["phase"] == "disabled"
-    assert hub.requests == []
+    assert result["phase"] != "disabled"
+    assert hub.requests != []
 
 
 def test_disabled_config_stops_before_any_request(device, host, hub, keys):
