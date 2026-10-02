@@ -128,6 +128,10 @@ class RecordingManifest(_Wire):
     topics: tuple[str, ...]
     stop_reason: str = Field(max_length=64)
     files: tuple[ManifestFile, ...] = Field(min_length=1)
+    # How rosbag2 ended: its exit status (None when unknown, e.g. a crash recovery) and
+    # whether it had to be killed (its last split file may then be unindexed).
+    bag_returncode: int | None = None
+    writer_killed: bool = Field(False, strict=True)
 
     @model_validator(mode="after")
     def _identity(self) -> "RecordingManifest":

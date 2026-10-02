@@ -9,6 +9,7 @@ import json
 import socket
 
 import rclpy
+from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from std_msgs.msg import Bool, String
@@ -17,23 +18,31 @@ from std_srvs.srv import SetBool
 from core_common.protocol.recording import (
     ACTIVE_TOPIC, FETCHED_TOPIC, PILOT_RECORDING_ROOT, SET_ACTIVE_SERVICE, STATUS_TOPIC)
 from . import executor_choice
-from .pilot_recording import DEFAULT_QUOTA_BYTES, PilotRecorder
+from .pilot_recording import DEFAULT_QUOTA_BYTES, DEFAULT_RESERVE_BYTES, PilotRecorder
 
 _LATCHED = QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE,
                       durability=DurabilityPolicy.TRANSIENT_LOCAL)
+_GIB = 1024 ** 3
 
 
 class PilotRecorderNode(Node):
     def __init__(self):
         super().__init__('pilot_recorder_node')
         self.declare_parameter('recording_root', PILOT_RECORDING_ROOT)
-        self.declare_parameter('quota_gib', DEFAULT_QUOTA_BYTES / 1024 ** 3)
+        self.declare_parameter('quota_gib', DEFAULT_QUOTA_BYTES / _GIB)
+        self.declare_parameter('reserve_gib', DEFAULT_RESERVE_BYTES / _GIB)
         namespace = self.get_namespace().strip('/')
         self._recorder = PilotRecorder(
             self.get_parameter('recording_root').value,
             device=namespace or socket.gethostname(), namespace=namespace,
-            quota_bytes=int(float(self.get_parameter('quota_gib').value) * 1024 ** 3))
-        self._recorder.recover()
+            quota_bytes=int(float(self.get_parameter('quota_gib').value) * _GIB),
+            reserve_bytes=int(float(self.get_parameter('reserve_gib').value) * _GIB),
+            log=self.get_logger().warn)
+        try:
+            # Stops a writer left by a hard-killed predecessor and writes missing manifests.
+            self._recorder.recover()
+        except OSError as exc:
+            self.get_logger().error(f'pilot recording recover failed: {exc}')
         self._status_pub = self.create_publisher(String, STATUS_TOPIC, _LATCHED)
         self._active_pub = self.create_publisher(Bool, ACTIVE_TOPIC, _LATCHED)
         self.create_service(SetBool, SET_ACTIVE_SERVICE, self._on_set_active)
@@ -78,7 +87,7 @@ def main():
     node = PilotRecorderNode()
     try:
         executor_choice.spin(node, rclpy)
-    except KeyboardInterrupt:
+    except (KeyboardInterrupt, ExternalShutdownException):
         pass
     finally:
         node.destroy_node()

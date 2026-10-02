@@ -76,6 +76,20 @@ def test_manifest_rejects_unsafe_and_duplicate_paths():
             rec.RecordingManifest.model_validate({**good, "files": files})
 
 
+def test_manifest_records_how_the_bag_writer_ended():
+    base = {"schema": rec.MANIFEST_SCHEMA, "id": "20261002T101500Z_rosy_01",
+            "started_at": "2026-10-02T10:15:00Z", "ended_at": "2026-10-02T10:16:00Z",
+            "duration_s": 60.0, "topics": ["cmd_vel"], "stop_reason": "requested",
+            "files": [{"path": "session.json", "bytes": 10, "sha256": "a" * 64}]}
+    unknown = rec.RecordingManifest.model_validate(base)
+    assert unknown.bag_returncode is None and unknown.writer_killed is False
+    killed = rec.RecordingManifest.model_validate({**base, "bag_returncode": -9, "writer_killed": True})
+    dumped = killed.model_dump(by_alias=True)
+    assert dumped["bag_returncode"] == -9 and dumped["writer_killed"] is True
+    with pytest.raises(ValidationError):
+        rec.RecordingManifest.model_validate({**base, "writer_killed": "yes"})
+
+
 def test_recorder_status_round_trip():
     status = rec.RecorderStatus(state="recording", id="20261002T101500Z_rosy_01", elapsed_s=3.0,
                                 bytes=1024, max_duration_s=600, quota_free_bytes=10)

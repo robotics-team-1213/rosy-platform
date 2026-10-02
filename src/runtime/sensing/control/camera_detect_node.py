@@ -147,6 +147,8 @@ class CameraDetectNode(Node):
             self.jpeg_pub = self._compressed_publisher()
         # D-411: the Pilot recorder needs the JPEG copy only while it records.
         self.create_subscription(Bool, ACTIVE_TOPIC, self._on_recorder_active, _RECORDER_QOS)
+        # A recorder that died while active never sends False: watch its publisher instead.
+        self.create_timer(1.0, self._check_recorder_alive)
         self.observation_pub = self.create_publisher(String, 'camera/observation', 10)
         self.telemetry_pub = self.create_publisher(String, 'camera/telemetry', 10)
         calibration_qos = QoSProfile(
@@ -516,7 +518,15 @@ class CameraDetectNode(Node):
     def _on_recorder_active(self, msg):
         # The publisher is never destroyed (no teardown while a frame publishes);
         # while idle it simply carries no messages.
-        self._recorder_active = bool(msg.data)
+        self._set_recorder_active(bool(msg.data))
+
+    def _check_recorder_alive(self):
+        if self._recorder_active and self.count_publishers(ACTIVE_TOPIC) == 0:
+            self.get_logger().warn('pilot recorder gone while active; JPEG copy off')
+            self._set_recorder_active(False)
+
+    def _set_recorder_active(self, active):
+        self._recorder_active = active
         wanted = self._publish_compressed or self._recorder_active
         self.jpeg_pub = self._compressed_publisher() if wanted else None
 

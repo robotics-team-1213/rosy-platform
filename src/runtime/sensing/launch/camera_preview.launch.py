@@ -97,8 +97,9 @@ def generate_launch_description():
             parameters=[os.path.join(config, 'line_follow.yaml')],
         ),
         # D-411 A: Pilot recording, idle until CORE asks; evidence only (no command topic).
+        # Respawned: on start it stops a writer its predecessor left and finishes that session.
         Node(package='control', executable='pilot_recorder_node', name='pilot_recorder_node',
-             namespace=namespace, output='screen',
+             namespace=namespace, output='screen', respawn=True, respawn_delay=2.0,
              parameters=[{'recording_root': pilot_recording_root}]),
         Node(
             package='control', executable='learned_lane_node', namespace=namespace,
