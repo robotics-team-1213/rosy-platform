@@ -29,6 +29,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, field_validator
 
 from core_common.protocol.vision_preview import VisionLeaseSigner
+from fleet.server.cancel_all import DriveCancelFence
 from fleet.server.cell_job_store import CellJobStore
 from fleet.server.console import FleetConsole
 from fleet.server.goal_evidence_service import GoalEvidenceService
@@ -233,6 +234,9 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     if pairing_sync_token is not None and pairing is None:
         raise ValueError("pairing sync credential requires D-341 pairing (--pairing-ca with --tls-cert)")
 
+    # D-421: one fence shared by cancel-all and the dispatcher closes the overlap window.
+    drive_cancel = DriveCancelFence()
+
     @asynccontextmanager
     async def lifespan(app):
         dispatcher = None
@@ -245,7 +249,8 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         if localization_service is not None:
             localization_task = asyncio.create_task(localization_service.run())
         if task_service is not None and start_task_dispatcher:
-            dispatcher = asyncio.create_task(_task_dispatch_loop(console, task_service))
+            dispatcher = asyncio.create_task(
+                _task_dispatch_loop(console, task_service, drive_cancel))
         if proposal_store is not None:
             proposal_expiry = asyncio.create_task(_proposal_expiry_loop(proposal_store))
         if mission_dispatcher is not None:
@@ -390,7 +395,8 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                                  stop_transport=stop_transport,
                                  require_viewer=require_viewer,
                                  require_operator=require_operator,
-                                 read_guard=read_guard, operator_guard=operator_guard)
+                                 read_guard=read_guard, operator_guard=operator_guard,
+                                 drive_cancel=drive_cancel)
 
     if mission_service is not None:
         install_mission_routes(app, mission_service=mission_service,
@@ -439,7 +445,8 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     return app
 
 
-async def _task_dispatch_loop(console: FleetConsole, task_service: FleetTaskService) -> None:
+async def _task_dispatch_loop(console: FleetConsole, task_service: FleetTaskService,
+                              drive_cancel: DriveCancelFence) -> None:
     """Dispatch one eligible task at a time from the app-owned background worker."""
     while True:
         try:
@@ -456,14 +463,7 @@ async def _task_dispatch_loop(console: FleetConsole, task_service: FleetTaskServ
                 and row["state"].get("safety", {}).get("estop") is False
             }
             await task_service.dispatch_next(
-                available,
-                dispatch=lambda task: console.goal(
-                    task["robot_id"], task["request"]["goal"]["x"],
-                    task["request"]["goal"]["y"], task["request"]["goal"]["yaw"],
-                    task_id=task["task_id"], attempt_id=task["attempt_id"],
-                    attempt_seq=task["attempt_seq"],
-                ),
-            )
+                available, dispatch=lambda task: drive_cancel.fenced_goal(console, task))
         except asyncio.CancelledError:
             raise
         except Exception:

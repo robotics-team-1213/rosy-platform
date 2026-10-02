@@ -119,6 +119,8 @@ body {
 .dispatch-control strong { color: var(--ink); }
 .dispatch-control small { color: var(--ink-quiet); line-height: var(--leading-body); }
 #dispatch-rearm[hidden] { display: none; }
+/* D-421 — 재허가와 전체 주행 취소는 글 뒤에서 오른쪽에 붙어 선다(한 열 단에서는 글 아래). */
+.dispatch-control > div { margin-right: auto; }
 
 /* ui-button의 display 규칙보다 hidden 속성이 우선해야 빈 목록에서 토글이 사라진다. */
 #roster-toggle[hidden] { display: none; }

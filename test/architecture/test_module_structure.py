@@ -76,7 +76,7 @@ CONTROL_SPLIT = "docs/plans/2026-09-22-control-package-split-design.md"
 #: P6 verdicts: path (relative to src/) or package name -> (lines at verdict, verdict).
 SIZE_VERDICTS = {
     "fleet": (
-        26_498,
+        27_134,
         "split: server HTTP boundary, console, signals and the mission-control stores are separate owners "
         "today; group them into subpackages rather than one flat server/ tree (B2); owner fleet, unscheduled "
         "(re-judged 2026-09-29 at 11164 after mission_store joined the server tree; re-judged 2026-09-30 at "
@@ -135,7 +135,12 @@ SIZE_VERDICTS = {
         "journal, proposal finalization and service/operator admission path (docs/plans/"
         "2026-10-02-platform-architecture-v02-migration.md); these remain Fleet-owned durable records, "
         "while device dispatch and manipulation ownership stay in later tasks. This re-judgment resets "
-        "the package growth baseline; the existing +150 allowance still blocks silent growth",
+        "the package growth baseline; the existing +150 allowance still blocks silent growth. "
+        "Re-judged 2026-10-02 at 27134 (main d5b3bd10 at 26498) when D-421 cancel-all joined as its "
+        "own modules: server/cancel_all.py (fanout, per-robot verdict, dispatch-overlap fence) and "
+        "server/cancel_all_store.py (durable window record and attempt tags read by the CORE event "
+        "projection in task_results.py), one route, the hub swarm-cancel scatter and ~35 console.js "
+        "lines; console.py did not grow and task_store.py stays under its 1060 ceiling; verdict unchanged",
     ),
     "site/fleet/fleet/server/proposal_store.py": (
         730,

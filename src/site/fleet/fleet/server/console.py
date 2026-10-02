@@ -802,7 +802,7 @@ class FleetConsole:
     async def cancel(self, robot_id: str) -> dict:
         result = await self._client(robot_id).navigation_cancel()
         self._goals.pop(robot_id, None)
-        self._claims.pop(robot_id, None)
+        self._held.get(robot_id) or self._claims.pop(robot_id, None)  # D-361: held keeps its claim
         self._queued.pop(robot_id, None)
         self._yielding.pop(robot_id, None)
         return result

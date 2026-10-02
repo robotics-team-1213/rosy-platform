@@ -1,7 +1,7 @@
 """작업·디스패치 HTTP 표면 — task_store 소유 경로와 국소 정지 팬아웃.
 
 디스패치 통제 readback/rearm, 로봇 목표·취소·라인 모드, 작업 readback/취소,
-전체 정지(estop)가 여기 산다. OMX 국소 정지 팬아웃(`fanout_local_omx_stops`)은
+전체 주행 취소(cancel-all, D-421, 래치 없음)와 전체 비상 정지(estop)가 여기 산다. OMX 국소 정지 팬아웃(`fanout_local_omx_stops`)은
 rearm 롤백·fleet_do·estop 이 같은 영수증 규칙으로 쓴다.
 
 task_service 가 없는 배치에서도 목표·취소·정지 경로는 남는다 — 대기열 없이
@@ -19,6 +19,7 @@ from fastapi import Depends, Header, HTTPException
 from pydantic import BaseModel, ConfigDict, field_validator
 
 from fleet.hub.hub import HubError
+from fleet.server.cancel_all import DriveCancelFence, cancel_all_driving
 from fleet.server.http_errors import http_error
 from fleet.server.site_auth import SitePrincipal
 from fleet.server.task_store import IdempotencyConflict, InvalidTaskTransition
@@ -106,8 +107,10 @@ def cancel_pending_task_queue(task_service, console, robot_id: Optional[str] = N
 def install_task_dispatch_routes(
     app, *, console, task_service, configured_omx,
     stop_transport, require_viewer, require_operator,
-    read_guard, operator_guard,
+    read_guard, operator_guard, drive_cancel: DriveCancelFence | None = None,
 ) -> None:
+    drive_cancel = drive_cancel or DriveCancelFence()
+
     if task_service is not None:
         @app.get("/api/fleet/dispatch-control", dependencies=read_guard,
                  tags=["fleet-control"])
@@ -249,6 +252,12 @@ def install_task_dispatch_routes(
         except (HubError, RobotApiError, OSError) as exc:
             raise http_error(exc) from exc
         return result
+
+    @app.post("/api/fleet/cancel-all", dependencies=operator_guard, tags=["fleet"])
+    async def fleet_cancel_all(principal: SitePrincipal = Depends(require_operator)) -> dict:
+        # D-421: 래치 없는 전체 주행 취소. 한 대가 실패해도 200 — 본문이 로봇별로 말한다.
+        return await cancel_all_driving(console, task_service, drive_cancel,
+                                        actor_id=principal.principal_id)
 
     @app.post("/api/fleet/estop", dependencies=operator_guard, tags=["fleet"])
     async def fleet_estop(principal: SitePrincipal = Depends(require_operator)) -> dict:

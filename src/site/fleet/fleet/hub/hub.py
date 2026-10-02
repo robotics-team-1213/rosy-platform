@@ -142,6 +142,13 @@ class SiteHub:
             raise HubError("UNKNOWN_ROBOT", robot_id)
         return await client.estop()
 
+    async def scatter_swarm_cancel(self, robot_id: str) -> dict:
+        """D-421 전체 주행 취소의 추종 단계. 로봇 REST 원자 액션이지 twist 가 아니다."""
+        client = self._clients.get(robot_id)
+        if client is None:
+            raise HubError("UNKNOWN_ROBOT", robot_id)
+        return await client.swarm_cancel()
+
     def _bound(self, robot_id: str, session: HubSession | None) -> bool:
         if session is None:
             return robot_id in self._paired
