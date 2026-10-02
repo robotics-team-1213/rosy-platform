@@ -1274,3 +1274,10 @@
 - Contract: API Reference v1.79. Re-judged Fleet at 26340 lines and protocol schemas.py at 1239; existing growth limits remain active.
 - 증거: Fleet suite completed with 1370 passed, 7 skipped, and one failure from the prior v1.77 reference pin. After updating that pin, test_mission_progress.py passed (16). Cell Job API/store/site-user: 11 passed; existing Mission API/store/service: 26 passed; task/API/dispatch contracts: 39 passed; protocol/compiler port: 23 passed; size verdict: 1 passed. Windows host SOURCE/LOCAL evidence only.
 - gate 변화: dispatcher/UDS/OMX submission and authenticated external goal-evidence producer wiring remain unimplemented. This is a Task 4 checkpoint, not device or ROS-SIM acceptance.
+
+## 2026-10-02 · uncommitted · 관제 콘솔 회차 6 — D-414 바로 동작(원클릭 정지·발견 카드·안내 축소)
+- 변경: console.js/install.js의 전체 정지에서 window.confirm 제거 — 비상 정지는 확인 없는 한 번 누름(D-92a 계보의 확인 시험을 원클릭 시험로 재작성, 대화상자 핀 console.js 3→2). install.js refreshDiscovery가 발견(mDNS) 장치 카드(이름·주소:포트·단계·상태)와 등록 버튼을 그린다(D-410 이관 때 빠진 렌더 충원).
+- 변경: 운용 문서의 상시 안내 문단(대형·신호등·지도·목표)은 제목 title로 물러나고 문단은 운용 상태가 쓴다. 기록(#log)이 '기록' 제목을 얻는다(aria-labelledby). 설치 문서의 발견 안내·카메라 문구도 title로.
+- 근거: D-414(사용자 지시 — "설명하지 말고 명확하게, 그냥 누르면 되게; mDNS 등록이 대충 보이기만 한다"). 비활성 사유(D-359 §5.3)는 글로 유지.
+- gate 변화: 없음.
+- 최종 증거: web_common 209 passed; fleet 1371 passed 7 skipped; 브라우저 — 원클릭 estop POST+대화상자 0회(1 passed), 설치 문서 발견 카드 2종+등록 버튼 렌더, 운용 문서 힌트 hidden/title 확인.
