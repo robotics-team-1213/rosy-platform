@@ -144,3 +144,11 @@ def test_open_refuses_a_lane_model(tmp_path):
     (d / 'model_manifest.json').write_text(json.dumps(doc))
     with pytest.raises(ManifestError, match='object_det'):
         ObjectDetModel.open(d, session_factory=lambda p, t: FakeSession())
+
+
+def test_non_finite_output_after_warm_up_is_refused_per_frame(tmp_path):
+    from control.sensing.perception.learned.lane_mask import NonFiniteLogits
+    model = open_model(tmp_path)
+    model._session = FakeSession(nan=True)
+    with pytest.raises(NonFiniteLogits):
+        model.infer(np.zeros((240, 320, 3), np.uint8))

@@ -19,7 +19,7 @@ from dataclasses import dataclass
 import cv2
 import numpy as np
 
-from .lane_mask import preprocess
+from .lane_mask import NonFiniteLogits, preprocess
 from .manifest import ManifestError, ModelManifest, load_manifest, verify_files
 from .runner import _OrtSession
 
@@ -126,6 +126,8 @@ class ObjectDetModel:
         spec = self.manifest.input
         image, scale, pad_x, pad_y = letterbox(bgr, spec.width, spec.height)
         out = self._session.run(preprocess(image, spec))
+        if not np.isfinite(out).all():
+            raise NonFiniteLogits("object_det output holds NaN/inf")
         found = decode(out, self._names, scale=scale, pad=(pad_x, pad_y),
                        frame_size=(bgr.shape[1], bgr.shape[0]), conf=self._conf, iou=self._iou)
         return DetectResult(found[:MAX_DETECTIONS], (time.perf_counter() - t0) * 1000.0,
