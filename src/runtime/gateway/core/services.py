@@ -21,6 +21,7 @@ from core_features.docking.detector import select_detector
 from core_features.docking.feed import DockObservationFeed
 from core_features.docking.manager import DockingConfig, DockingManager
 from core_features.fleet_agent.agent import FleetAgent
+from core_features.localization import LocalizationAssist, LocalizationMission, wire_assist
 from core_common.domain.adapters import AdapterRegistry
 
 from core_common.domain.capabilities import runtime_capability_data, runtime_truth
@@ -255,6 +256,8 @@ class CoreServices:
     control_adapter: Any = field(default=None, repr=False)
     # control's dock/observation evidence (ros_bridge ingests, docking reads).
     dock_feed: DockObservationFeed = field(default_factory=DockObservationFeed)
+    localization: Optional[LocalizationAssist] = None  # D-395 P2-1 (ros_bridge ingests)
+    loc_mission: Optional[LocalizationMission] = None  # D-395 P2-7 (ros_bridge ticks)
 
     @classmethod
     def build(cls, config: dict[str, Any], profile: RobotProfile,
@@ -519,11 +522,13 @@ class CoreServices:
             host_root=os.environ.get("ROSY_HOST_ROOT", "/"),
             data_path=waypoints_path.parent,
         )
+        localization, loc_mission = wire_assist(events, lambda: identity.robot_id, nav=nav, line_follow=line_follow,
+            command=command, state=state, modes=modes, swarm=swarm, docking=docking, safety=safety, traffic_policy=traffic_policy)
         fleet_agent = FleetAgent(state, events, config, identity)
         fleet_agent.start()
         bind_stuck_recovery(line_follow, safety=safety, calibration=calibration,
                             fleet_agent=fleet_agent, vision=vision)
-        
+
         return cls(config=config, identity=identity, profile=profile, capability=capability, fleet_agent=fleet_agent,
                    events=events, state=state, registry=registry, modes=modes,
                    command=command, safety=safety, advisory_feed=advisory_feed,
@@ -537,7 +542,7 @@ class CoreServices:
                    runtime_probe=runtime_probe, maps=MapSnapshotStore(),
                    audit=audit, calibration=calibration,
                    adapter_registry=adapter_registry,
-                   dock_feed=dock_feed)
+                   dock_feed=dock_feed, localization=localization, loc_mission=loc_mission)
 
     def inventory(self) -> dict[str, Any]:
         cap001 = self.capability.to_dict()

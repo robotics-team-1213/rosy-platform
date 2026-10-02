@@ -129,11 +129,19 @@ class RosBridge:
         # `_raw` 만 구독한다 — `costmap`(OccupancyGrid) 쪽은 타입이 안 맞아 영원히 무음이다. 근거는 bridge/AGENTS.md.
         node.create_subscription(Costmap, "local_costmap/costmap_raw", self._on_local_costmap, 10)
         node.create_subscription(Costmap, "global_costmap/costmap_raw", self._on_global_costmap, 10)
+        # D-395 P2-1: sensing loc_assist_node JSON (contract docs/plans/2026-10-01-d395-phase2-interfaces.md §1).
+        node.create_subscription(String, "localization/state", self._on_loc_state, _LATCHED)
+        node.create_subscription(String, "localization/candidates", self._on_loc_candidates, _LATCHED)
+        node.create_subscription(String, "localization/result", self._on_loc_result, 10)
 
         self.power_mode_pub = node.create_publisher(String, "power/mode", _LATCHED)
         self.display_info_pub = node.create_publisher(String, "display/info", 10)
         self.dock_exemption_pub = node.create_publisher(
             Bool, "docking/collision_exemption", _LATCHED)
+        self.loc_decision_pub = node.create_publisher(String, "localization/decision", 5)
+        self.loc_suspect_pub = node.create_publisher(String, "localization/suspect", 5)
+        # D-395 P2-7: mission start/end; the sensing node searches again after an end.
+        self.loc_mission_pub = node.create_publisher(String, "localization/mission", 5)
         self._led_client = node.create_client(SetLed, "set_led")
         # D-385: 모드별 표정 — 정책은 core_features.command.emotion_map, 노드는 감정 서버.
         self._emotion_client = node.create_client(Emotion, "set_emotion")
@@ -183,7 +191,8 @@ class RosBridge:
         #: map→base TF 를 마지막으로 읽은 시각. 이것이 신선하면 odom 은 pose 를 건드리지
         #: 않는다. 지역화가 없는 구성(맵도 SLAM 도 없는 teleop)에서는 만료되고, 그때만
         #: odom 이 화면에 무엇이라도 띄우는 폴백이 된다.
-        self._map_pose_ts: float = 0.0
+        #: On the line clock (D-395 S1 finding 6): sim time starts near 0, so "never" is -inf.
+        self._map_pose_ts: float = float('-inf')
 
         self._setup_diagnostics()
         # D-137 T4: 자문 피드의 시계를 노드 시계로 맞춘다. 패킷의 observed_at은
@@ -203,6 +212,7 @@ class RosBridge:
             bool(node.get_parameter("use_sim_time").value),
             lambda: self._node.get_clock().now().nanoseconds / 1e9)
         self._svc.line_follow.bind_clock(self._line_clock)
+        self._svc.loc_mission.bind_clock(self._line_clock)
         # The dock observation feed is stamped on the same clock, so the
         # docking manager judges tag freshness and phase timeouts on it too.
         self._svc.docking.bind_clock(self._line_clock)
@@ -212,17 +222,31 @@ class RosBridge:
             publish_exemption=lambda on: self.dock_exemption_pub.publish(Bool(data=on)),
             odom_pose=lambda: self._last_odom_pose, info=self._node.get_logger().info)
         self._svc.docking.executor = self.docking_executor
+        # D-395 P2-4: `received_s` on the ROS clock; decisions and suspects go out as JSON.
+        # It must be the robot node's clock (its ttl counts from it): both nodes share
+        # use_sim_time, so this is sim time in sim and epoch time on the device, where
+        # the line clock (monotonic) would read as long expired.
+        loc = self._svc.localization
+        loc.clock = lambda: self._node.get_clock().now().nanoseconds / 1e9
+        # D-395 S1 finding 6: the state_stale window runs on the line clock, so a
+        # Gazebo below RTF ~0.17 no longer flaps the robot's 0.5 s state stale.
+        loc.bind_clock(self._line_clock)
+        loc.publish_decision = lambda body: self.loc_decision_pub.publish(String(data=json.dumps(body)))
+        loc.publish_suspect = lambda body: self.loc_suspect_pub.publish(String(data=json.dumps(body)))
+        self._svc.loc_mission.publish = (
+            lambda body: self.loc_mission_pub.publish(String(data=json.dumps(body))))
         self._node.get_logger().info("ros_bridge ready (cmd_vel sole publisher @50Hz)")
 
     def _on_odom(self, msg: Odometry) -> None:
         self._last_odom_ts = time.monotonic()
         sample = translate.odom_sample(msg)
-        if odometry.odom_owns_pose(self._map_pose_ts, time.monotonic()):
+        if odometry.odom_owns_pose(self._map_pose_ts, self._line_clock()):
             # map 프레임 pose 가 없을 때만 odom 이 보고 pose 를 쓴다 (규칙은 odometry.py).
             self._svc.state.set_pose(sample["x"], sample["y"], sample["yaw"])
         self._svc.state.set_velocity(sample["linear_x"], sample["angular_z"])
         self._last_odom_pose = (sample["x"], sample["y"], sample["yaw"])
         self._svc.nav.on_pose_progress(sample["x"], sample["y"])
+        self._svc.loc_mission.observe_odom(sample["x"], sample["y"], sample["yaw"])
 
     def _on_battery(self, msg: Float32) -> None:
         self._voltage_topic_seen = True
@@ -262,11 +286,22 @@ class RosBridge:
             self._node.get_logger().warning(
                 f"ignored dock observation: {exc}", throttle_duration_sec=5.0)
 
+    def _on_loc_state(self, msg: String) -> None:
+        self._svc.localization.on_state(msg.data)
+
+    def _on_loc_candidates(self, msg: String) -> None:
+        self._svc.localization.on_candidates(msg.data)
+
+    def _on_loc_result(self, msg: String) -> None:
+        self._svc.localization.on_result(msg.data)
+
     def _on_camera_preview(self, msg: CompressedImage) -> None:
         observation.camera_preview(
             self._svc, msg, warn=self._node.get_logger().warning)
 
     def _tick_line_follow(self) -> None:
+        # D-395 P2-7 mission ends and rotate/nudge twists ride this 20 Hz timer.
+        self._svc.loc_mission.tick()
         if not self._svc.line_follow.active:
             return
         now = self._line_clock()
@@ -348,9 +383,11 @@ class RosBridge:
             q = tf.transform.rotation
             yaw = math.atan2(2.0 * (q.w * q.z + q.x * q.y), 1.0 - 2.0 * (q.y ** 2 + q.z ** 2))
             self._svc.state.set_pose(t.x, t.y, yaw)
-            self._map_pose_ts = time.monotonic()
+            self._map_pose_ts = self._line_clock()
         except tf2_ros.TransformException:
             pass
+        # D-395 P2-1: the frame flag follows the same freshness rule as `_on_odom`.
+        self._svc.localization.tick(odometry.odom_owns_pose(self._map_pose_ts, self._line_clock()))
         snapshot = self._svc.state.snapshot()
         # 로봇 모드가 IDLE이 아니면 절전 진입을 막는다 (PWR-001 안전 인터록).
         self._svc.power.on_robot_mode(snapshot.mode)

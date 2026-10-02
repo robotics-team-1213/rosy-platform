@@ -115,3 +115,21 @@ def test_control_package_installs_the_map_v2_fleet_bundle():
     setup_py = (ROOT.parents[1] / "runtime" / "sensing" / "setup.py").read_text(
         encoding="utf-8")
     assert "map_v2_fleet" in setup_py
+
+
+def test_parse_spawn_poses_one_pose_per_robot_or_none():
+    mod = _mod()
+    assert mod.parse_spawn_poses("", 2) == []
+    assert mod.parse_spawn_poses(" -1.26,0.49,1.57 ;0.3,-0.3,0", 2) == [(-1.26, 0.49, 1.57), (0.3, -0.3, 0.0)]
+    with pytest.raises(ValueError):
+        mod.parse_spawn_poses("0,0,0", 2)
+    with pytest.raises(ValueError):
+        mod.parse_spawn_poses("0,0;1,1", 2)
+
+
+def test_world_share_parent_adds_the_world_package_for_isolated_installs():
+    mod = _mod()
+    v2 = mod.profile_for("map_v2_fleet.world")
+    shares = {"control": "/ws/install/control/share/control"}
+    assert mod.world_share_parent(v2, shares.__getitem__) == ":" + str(Path("/ws/install/control/share"))
+    assert mod.world_share_parent(mod.profile_for("rosy_factory.world"), shares.__getitem__) == ""

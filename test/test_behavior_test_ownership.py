@@ -66,6 +66,10 @@ KNOWN_EXTERNAL_BEHAVIOR_TESTS = frozenset({
     "src/runtime/gateway/test/test_emotion_map.py",
     "src/runtime/gateway/test/test_lidar_mount_source.py",
     "src/runtime/gateway/test/test_teleop_watchdog_config.py",
+    # 2026-10-02 D-395 Phase 2 integration: the one cross-lane contract test. It runs
+    # the sensing node's pure core (control.loc_assist), CORE's relay and app, and
+    # Fleet's client against each other, so it belongs to no single package.
+    "src/runtime/gateway/test/test_localization_cross_lane.py",
 })
 
 

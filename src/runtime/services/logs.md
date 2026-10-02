@@ -290,10 +290,52 @@
 - 증거: test_emotion_map.py 6신규 (변이: bored→basic 되돌리면 빨강).
 - gate 변화: 없음.
 
+## 2026-10-01 · uncommitted · feat(localization,state): D-395 P2-1 LocalizationAssist
+
+- 변경: 새 `core_features/localization/assist.py` — 로봇 sensing 노드 JSON 파싱, 정직한 `pose_frame`(CORE 가 odom 대체 중이면 odom, odom→map 승격 없음), 3 s 무응답이면 UNKNOWN(`state_stale`), CandidateReport `robot_id` 를 CORE 신원으로, STALE 판정, `localization.state|candidates|result` 이벤트. `state/manager.py` 는 localization provider 를 live 로 읽는다.
+- 증거: `test/test_localization_assist.py` 24.
+- gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · feat(localization): D-395 LOCALIZED 이탈 시 자율 주행 정지
+
+- 변경: `LocalizationAssist.on_lost` — 상태가 LOCALIZED 에서 SUSPECT·CANDIDATES·UNKNOWN(`state_stale` 포함)으로 내려가면 한 번 호출. 새 `localization/halt.py` `autonomy_halt`: swarm 취소(`reason: localization`), 도킹 취소, line-follow OFF, `nav.cancel`, NAVIGATION → IDLE. MANUAL 은 건드리지 않는다. `wire_assist` 가 CORE 조립을 맡는다.
+- 증거: `test/test_localization_assist.py` +5 (변이: 훅 제거 → 8 빨강).
+- gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · fix(localization,docking): D-395 리뷰 — 내부 시작 게이트, 결과 검증, 잠금
+
+- 변경: `LocalizationAssist.autonomy_allowed()`(LOCALIZED + map, 또는 D-395 이전 로봇)와 `gate`(RLock: 상태 반영·이탈 정지와 모든 시작이 같은 잠금). `localization/result` 는 모델 검증(`request_id` 규칙, `reason` ≤ 64), 64 KiB 넘는 메시지는 버림, 거부 로그는 예외 타입과 오류 종류만. `DockingManager.localization_ok` — `dock()` 거부(`NOT_LOCALIZED`), 배터리 복귀는 대기로 남아 LOCALIZED 가 되면 틱이 이어 간다. `wire_assist` 가 바인딩.
+- 증거: `test/test_localization_assist.py` +20, `test/test_docking_localization_gate.py` 5.
+- gate 변화: 없음.
 ## 2026-10-01 · uncommitted · feat(core_features): D-400 shadow verdicts without touching the output
 - 변경: `SafetyManager.check_decision`/`decision_valid` 분리, `shadow.py` `ShadowLog`(락, 판정 단위 전이 이벤트, 1 s 반복, 최소 0.2 s 간격, suppressed/dropped 카운터), 그림자·집행 바인딩 상호 배타와 `shadow_evaluate`(예외 비전파), `CommandManager`가 그림자를 `announce_pending`에서 바퀴 출력 뒤에 판정, 네비게이션·도킹의 `policy_off`(모드 진입마다 첫 0 아닌 출력), `StateManager.set_safety_policy_provider`.
 - 증거: 전체 시험(gateway+services+foundation+api_web+test/) `5 failed, 5919 passed, 249 skipped, 31 warnings, 4 errors in 3428.70s`; `known_failures.py`는 exit 1: 9건 모두 이 브랜치가 건드리지 않은 시험이며(main 4804d417에서도 test_module_separation, test_release_boundary_guards, test_robot_literals, test_dashboard_drive 4건이 같게 실패, test_module_criteria C6와 test_behavior_test_ownership은 main이 이후 고쳤고 이 브랜치는 그 이전 기준) 이 브랜치 기인 실패는 0건.
 - gate 변화: 없음. SOURCE만. 그림자는 어느 로봇에서도 켜지 않았다(기본 off).
+
+## 2026-10-02 · uncommitted · feat(localization): D-395 P2-7 확인 기동·귀환 미션 실행기
+
+- 변경: 새 `localization/mission.py` `LocalizationMission` — `LOCALIZED` 가 아닐 때만 `rotate_in_place`(오도메트리 한 바퀴, 0.3 rad/s), `nudge_forward`(≤ 0.10 m, 0.03 m/s, 정면 0.25 m 정지), `lane_to_stopline`(카메라 line-follow 를 이 미션에 한해 LOCALIZED 관문 없이, 세션 속도 0.04 m/s, 정지선 0.12 m·거리·시간에서 끝). `to_square` 는 `unsupported`(map 프레임 없이 차선 경로가 없다, 후속). 바퀴는 NAVIGATION 모드의 nav 슬롯(`set_nav_twist`)으로만 — 50 Hz `select_output` 이 최종 중재. 끝(완료·시간·장애물·e-stop·LOCALIZED·센서 끊김·모드 이탈)은 명령을 지우고 IDLE 로, `localization.mission` 이벤트와 `publish`(ROS `localization/mission`). 시작은 `assist.gate` 안에서 검사·출발. `wire_assist` 가 미션을 만들고 LOCALIZED 진입 훅이 미션을 끝낸다(반환값 `(assist, mission)`).
+- 증거: `gateway/test/test_localization_mission.py` 30.
+- gate 변화: 없음.
+
+## 2026-10-02 · uncommitted · fix(localization): D-395 P2-7 리뷰 — 못 보는 정면은 막힘, 회전 가드, 모든 종류 LiDAR 끊김
+
+- 변경: `line_follow/clearance.py` 새 `front_sector`(정면 최단 유효 거리·유효 빔·빔 수; inf·NaN·`range_min` 미만은 무효 빔으로 셈, self-mask 반사는 빔에서 뺌). `nudge_forward` 는 정면 ±20° 에 유효 빔이 5 개 미만이거나 무효 빔이 30 % 를 넘으면 거부·정지(`range_min` 안 물체는 그렇게 보인다). `lidar_self_mask` 를 넘긴다. `rotate_in_place` 는 전체 스캔에 0.20 m 안 유효 반사가 있거나 스캔이 낡으면 거부. LiDAR 끊김(0.5 s)은 모든 종류를 `obstacle_sensor_stale` 로 끝낸다. `end()` 의 nav 슬롯 지우기는 한 번(지우면 시험이 빨개진다). `bind_clock` — 브리지가 line clock(use_sim_time 이면 ROS 시계)을 준다.
+- 증거: `gateway/test/test_localization_mission.py` +14 (변이: `end()` 의 `clear_navigation` 삭제 → 7 빨강).
+- gate 변화: 없음.
+
+## 2026-10-02 · e93fdd8b · fix(localization): state_stale 창을 묶을 수 있는 시계로 (D-395 S1 finding 6)
+
+- 변경: `localization/assist.py` 에 `bind_clock` — 3 s `state_stale` 창이 벽시계 대신 브리지의 line clock(use_sim_time 이면 ROS 시계, 실기는 monotonic)으로 잰다. 로봇 노드는 상태를 자기 노드 시계로 0.5 s 마다 내므로, 벽시계 창은 RTF ≈ 0.17 아래에서 깜빡였다. `received_s` 는 그대로 `clock`(로봇 노드의 ROS 시계).
+- 증거: `test/test_localization_assist.py` +2 (RTF 0.1, 벽 5 s 간격에도 stale 없음; 그 시계로 3.1 s 침묵은 stale + halt).
+- gate 변화: 없음.
+
+## 2026-10-02 · 80db8125 · fix(localization): D-395 S1 재실행 R5·R6 — 버린 보고는 다시 주지 않고, 검사 중 미션은 `busy`
+
+- 원인: R5 — 미션 시작으로 로봇이 열린 요청을 버린 뒤(`request_id: null`)에도 CORE 가 미션 전 보고를 계속 내줘 Fleet 이 그 보고로 결정하고 `stale_request` 를 받았다(d3). R6 — 로봇의 3 s 검사 중에도 미션을 받았다.
+- 변경: `LocalizationAssist.on_state` 는 상태의 `request_id` 가 null 이거나 보관한 보고와 다르면 보고를 버린다. `candidates()` 는 보고의 id 가 상태의 id 와 같을 때만 낸다. 상태보다 먼저 온 새 보고는 새 id 라 남고, 상태가 따라오면 나간다(토픽 간 순서가 엇갈려 버려져도 로봇이 2 s 마다 다시 보고한다). `LocalizationMission.start` 는 상태 `reason == checking` 이면 409 `busy`.
+- 증거: `gateway/test/test_localization_api.py` +3, `gateway/test/test_localization_mission.py` +1.
+- gate 변화: 없음.
 
 ## 2026-10-02 · 776173dc · feat(line_follow): D-407 막힘 복구 상태기계와 관리자 연결
 

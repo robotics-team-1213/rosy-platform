@@ -121,7 +121,12 @@ def _range_min(sample) -> Optional[float]:
 
 
 def front_clearance(services, sample, *, received_at: float) -> None:
-    """D-344 §11: LiDAR 를 차선 추종 정지 판정에 넘긴다 — path 는 점, sector 는 정면 최소 거리."""
+    """D-344 §11: LiDAR 를 차선 추종 정지 판정에 넘긴다 — path 는 점, sector 는 정면 최소 거리.
+
+    D-395 P2-7 미션도 같은 표본을 받는다(정면 여유는 미션이 필요할 때만 잰다)."""
+    mission = services.loc_mission
+    if mission is not None:
+        mission.observe_scan(sample)
     line = services.line_follow
     config = line.config
     path = config.obstacle_mode == "path"

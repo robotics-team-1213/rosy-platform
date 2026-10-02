@@ -62,12 +62,16 @@ def to_map(pose: Pose, point: tuple[float, float]) -> tuple[float, float]:
 
 def peers_cue(pose: Pose, objects: Sequence[tuple[float, float]],
               peers: Sequence[tuple[float, float]]) -> float:
-    """(+1 per peer an object lands on, -1 per peer in view with none) / peers in view."""
+    """(+1 per peer an object lands on) / peers in view.
+
+    A peer in view but not seen counts 0, not -1 (S1 finding 3): detection is marginal,
+    and a miss at the truth handed the mirror a 2.0 lead. Only "seen where expected" is
+    evidence; the caller passes anchored peers only (D-395 S1 fix)."""
     placed = [to_map(pose, o) for o in objects]
     in_view = [p for p in peers if math.dist(pose[:2], p) <= PEER_VIEW_M]
     if not in_view:
         return 0.0
-    seen = sum(1 if any(math.dist(p, q) <= PEER_MATCH_M for q in placed) else -1 for p in in_view)
+    seen = sum(1 for p in in_view if any(math.dist(p, q) <= PEER_MATCH_M for q in placed))
     return seen / len(in_view)
 
 

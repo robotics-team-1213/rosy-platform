@@ -98,3 +98,9 @@
 - gate 변화: 없음.
 - 결정: web 표면은 core 단일(D-3·D-23). navigation XML은 Nav2/SLAM 조립만 담당한다.
 - 교훈: 삭제 반전 가드는 존재 가드보다 강하다 — 부재를 단정하면 되살아나는 순간 잡힌다.
+
+## 2026-10-01 · uncommitted · feat(launch): hardware.launch.py에 D-395 loc_assist 옵트인 (P2-3)
+- 변경: `enable_loc_assist`(기본 false)로 control의 `loc_assist.launch.py`를 namespace·use_sim_time·map과 함께 포함한다. line_follow와 같은 navigation→control include 경로(KNOWN_UNDECLARED 기존 행). `nav2_params.yaml`의 `set_initial_pose`는 바꾸지 않았다.
+- 결정: 기기 기본 꺼짐 — Pi 탐색 비용 미측정, CORE 결정 중계(lane B) 전, 기기 그래프에 `safety/pickup` 발행자 없음. 근거는 sensing logs 같은 날 항목.
+- 증거: `src/runtime/sensing/test/test_loc_assist_launch.py`, `test/test_line_follow_runtime.py`, `test/test_control_launch_boundary.py`, `test/test_nav2_hardware_slice.py` 통과.
+- gate 변화: 없음.

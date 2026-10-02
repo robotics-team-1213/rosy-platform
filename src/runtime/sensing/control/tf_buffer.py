@@ -24,3 +24,9 @@ class RobotTransformBuffer(Buffer):
     def lookup_transform(self, target_frame, source_frame, time, *args, **kwargs):
         return super().lookup_transform(self.robot_frame(target_frame),
                                         self.robot_frame(source_frame), time, *args, **kwargs)
+
+    def lookup_transform_full(self, target_frame, target_time, source_frame, source_time, fixed_frame,
+                              *args, **kwargs):
+        return super().lookup_transform_full(self.robot_frame(target_frame), target_time,
+                                             self.robot_frame(source_frame), source_time,
+                                             self.robot_frame(fixed_frame), *args, **kwargs)

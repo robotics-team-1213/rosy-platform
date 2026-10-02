@@ -36,6 +36,6 @@
 
 - 2026-10-02 · f93d922d · fix(line_follow): D-407 검토 반영과 뒤 사각 규칙
 - 2026-10-02 · 776173dc · feat(line_follow): D-407 막힘 복구 상태기계와 관리자 연결
-- 2026-10-01 · uncommitted · feat(core_features): D-400 shadow verdicts without touching the output
-- 2026-10-01 · uncommitted · feat(command): 대기 5분 후 bored 표정
-- 2026-10-01 · uncommitted · fix(road_behaviour): 발행하지 않는 이벤트 이름 두 개를 사유 코드로
+- 2026-10-02 · 80db8125 · fix(localization): D-395 S1 재실행 R5·R6 — 버린 보고는 다시 주지 않고, 검사 중 미션은 `busy`
+- 2026-10-02 · e93fdd8b · fix(localization): state_stale 창을 묶을 수 있는 시계로 (D-395 S1 finding 6)
+- 2026-10-02 · uncommitted · fix(localization): D-395 P2-7 리뷰 — 못 보는 정면은 막힘, 회전 가드, 모든 종류 LiDAR 끊김

@@ -81,6 +81,22 @@ def spawn_xy(index: int, spawn_x: float, spawn_y: float, spacing: float) -> tupl
     return spawn_x + (index - 1) * spacing, spawn_y
 
 
+def parse_spawn_poses(text: str, robots: int) -> list[tuple[float, float, float]]:
+    """`x,y,yaw_rad;x,y,yaw_rad;...`, one per robot in namespace order. Empty: []."""
+    text = (text or "").strip()
+    if not text:
+        return []
+    poses = []
+    for item in text.split(";"):
+        parts = [p.strip() for p in item.split(",")]
+        if len(parts) != 3:
+            raise ValueError(f"spawn pose {item!r} is not x,y,yaw_rad")
+        poses.append(tuple(float(p) for p in parts))
+    if len(poses) != robots:
+        raise ValueError(f"spawn_poses has {len(poses)} poses for {robots} robots")
+    return poses
+
+
 def profile_for(world_name: str, path: Path | None = None) -> WorldProfile:
     worlds = load_worlds(path)
     key = _key(world_name)
@@ -134,6 +150,18 @@ def resolve_world_path(
     if profile.world_source:
         return _package_uri_path(profile.world_source, package_share)
     return Path(gz_sim_share) / "worlds" / profile.world_name
+
+
+def world_share_parent(profile: WorldProfile, package_share) -> str:
+    """`:<share parent>` of the package a catalog world comes from, else "".
+
+    Such a world (map_v2_fleet: package://control/...) loads model://<pkg>/ meshes;
+    description/.. covers every package only in a merge-install layout, not in
+    colcon's isolated default, so GZ_SIM_RESOURCE_PATH needs this entry too."""
+    if not profile.world_source.startswith("package://"):
+        return ""
+    package = profile.world_source[len("package://"):].split("/", 1)[0]
+    return ":" + str(Path(package_share(package)).parent)
 
 
 def resolve_asset_path(value: str, default_root: Path, *, package_share) -> Path:

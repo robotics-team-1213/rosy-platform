@@ -90,6 +90,12 @@ class StateManager:
         self._activity_provider: Optional[Callable[[], Optional[dict]]] = None
         self._safety_policy_provider: Optional[Callable[[], Optional[dict]]] = None
         self._safety_policy_error: Optional[str] = None  # last logged error type
+        self._localization_provider: Optional[Callable[[], object]] = None
+
+    def set_localization_provider(self, provider: Optional[Callable[[], object]]) -> None:
+        """D-395 P2-1: read live, so the stale timeout and the odom frame flag apply."""
+        with self._lock:
+            self._localization_provider = provider
 
     def set_hitl_requested(self, requested: bool) -> None:
         with self._lock:
@@ -238,6 +244,8 @@ class StateManager:
                 if type(exc).__name__ != self._safety_policy_error:
                     self._safety_policy_error = type(exc).__name__
                     log.warning("safety_policy block unavailable: %s: %s", type(exc).__name__, exc)
+        localization_provider = self._localization_provider
+        localization = localization_provider() if localization_provider is not None else None
         with self._lock:
             self._seq += 1
             now = self._clock()
@@ -275,4 +283,5 @@ class StateManager:
                 capabilities_degraded=list(self._capabilities_degraded),
                 activity=activity,
                 safety_policy=safety_policy,
+                localization=localization,
             )

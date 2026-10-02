@@ -72,6 +72,6 @@
 
 - 2026-10-02 · caa0d51d · fix(api): D-407 검토 반영 — MANUAL 답은 POST /mode 규칙, 답 감사에 토큰
 - 2026-10-02 · 7a44f39d · feat(core): D-407 막힘 답 API와 CORE 배선
-- 2026-10-02 · uncommitted · fix(bridge): D-394 주행 카드 reach 셋 삭제(C6) — 죽은 current_goal 판정
-- 2026-10-01 · uncommitted · feat(core): D-400 safety policy mode and shadow assembly
-- 2026-10-01 · uncommitted · feat(bridge,display): 주행 카드 도킹 상태 + hello 인사
+- 2026-10-02 · 00b806cb · fix(bridge): 지역화 시간을 로봇 노드 시계에 맞춤 (D-395 S1 finding 6)
+- 2026-10-02 · uncommitted · fix(bridge): D-395 P2-7 미션도 line clock 으로
+- 2026-10-02 · uncommitted · feat(bridge): D-395 P2-7 미션 조립과 배선

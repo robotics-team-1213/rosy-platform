@@ -14,6 +14,7 @@ if rclpy is not None:
     from control.calib_node import CalibNode
     from control.startup_calibration_node import StartupCalibrationNode
     from control.localization_node import LocalizationNode
+    from control.loc_assist_node import LocAssistNode
     from control.obstacle_observer_node import ObstacleObserver
 
 
@@ -27,7 +28,7 @@ class ProcessingGraphTests(unittest.TestCase):
             try:
                 for constructor in (SafetyNode, WanderNode, GoalNode, ControlNode,
                                     CalibNode, StartupCalibrationNode,
-                                    LocalizationNode, ObstacleObserver):
+                                    LocalizationNode, LocAssistNode, ObstacleObserver):
                     node = constructor()
                     nodes.append(node)
                     for attribute in ('tf', 'lidar_tf', 'navigation_tf'):

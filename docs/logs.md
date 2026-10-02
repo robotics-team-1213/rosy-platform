@@ -4251,22 +4251,24 @@
 - 결정: D-390 부록, D-18.
 - 교훈: 독립 기능 시험과 전체 부하 실행을 구분한다.
 
-## 2026-10-01 · uncommitted · docs(adr): D-398 CORE 안전 정책 off·shadow·enforce 설계
-- 변경: `docs/plans/2026-10-01-core-safety-policy-shadow-design.md`, `docs/adr/D-398-core-safety-policy-off-shadow-enforce.md`(Proposed), ADR Log 행. 발견: `control.sensor_adapter`가 어느 로봇에서도 꺼져 있고, 꺼져 있으면 `evaluate_candidate`가 명령을 통과시킨다(`rosy_default.yaml:35`의 "정지 상태" 주석은 사실이 아님). 설계: 그림자 모드로 판정만 기록 → Gazebo·실주행 근거 → 로봇별 집행. 파라미터는 D-47 addendum 저장소 하나(URDF NOMINAL < 승인 레코드 < 운영자), 집행 중 짧은 끊김 HOLD·긴 끊김 래치, 워커 이름 `core_safety_worker`, D-66 이미지 개정.
-- 증거: 코드 읽기만(설계 문서). `python tools/harness/rosy_harness.py lint` 오류 0.
-- gate 변화: 없음(문서). 코드·설정 미변경.
-- 결정: D-398 Proposed(설계 사용자 승인). 그림자 실주행·집행은 로봇별 별도 승인.
-
-## 2026-10-01 · uncommitted · docs(adr): D-398 → D-400 번호 변경 (동시 세션 충돌)
-- 변경: 브랜치 `docs/core-safety-policy-shadow`의 CORE 안전 정책 ADR을 D-398에서 D-400으로 옮겼다. ADR 파일·ADR Log 행·설계·계획·소스 주석의 번호를 바꿨다. 위의 2026-10-01 D-398 항목(이 브랜치 커밋 42b77772)은 같은 결정이다.
-- 증거: 다른 세션(rosy-b7 알림)이 main 체크아웃에 `D-398-evidence-words-single-source-and-scope-gates.md`를 쓰고 있었고 D-399도 쓰는 중. 이 브랜치는 아직 main에 없어 옮기는 쪽이 싸다.
-- gate 변화: 없음.
-- 결정: 이 브랜치의 ADR 번호는 D-400.
-
 ## 2026-10-01 · uncommitted · docs(adr): D-395 개정 4 — 2단계 결정과 Fleet 감시 한계
 - 변경: 2단계 구현에서 정한 것을 D-395 개정 4로 기록. D-395 이전 로봇(`localization: null`)은 현행 유지+카드 경고, LOCALIZED 관문(시작 거부·이탈 시 자율 주행 정지, 수동 조종 허용), `LOCALIZE_ASSIST`는 운용자 역할로 부여(토큰별 grant는 후속), 천장 카메라 단서 기본 꺼짐(D-257 개정 수용 전), 사다리 시계·재시도 규칙. 남은 한계: 다른 로봇 관찰은 CANDIDATES 로봇의 보고에만 실려, 모든 로봇이 LOCALIZED인 동안 Fleet 상시 감시가 비어 있다 → LOCALIZED 로봇도 `unmapped_objects`를 싣는 후속 계약 확장 제안. ADR Log 상태 갱신.
 - 증거: 2단계 갈래 B(CORE)·C(Fleet) 구현 보고.
 - gate 변화: 없음(Proposed).
+## 2026-10-01 · uncommitted · docs(api-ref): v1.70 — D-395 2단계 CORE 경로·capability·이벤트
+- 변경: API Ref v1.70. §2 AUTH-102 토큰 capability 표, ERR-102 `NOT_LOCALIZED`·`STALE_REQUEST`·`NO_CANDIDATES`·D-395 lease 423, §5.3 새 경로 3개와 initialpose·goal·home·line-follow 행, §6.1 스냅샷이 실제로 채워짐·frame 정직성·state_stale, §7.9 전송 경로 열림, §8 `localization.state|candidates|result` 와 initialpose `source`, 변경 이력 행. 핀: `app.py` ×2, `test/test_line_follow_contract_docs.py`, `src/site/fleet/test/test_task_contract_docs.py` ×2, `test_mission_progress.py`.
+- 증거: `test_protocol_version_alignment.py`, `test_event_catalogue.py`, 핀 시험.
+- gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · docs(api-ref): v1.70 보강 — LOCALIZED 이탈 정지, 도킹·follow 게이트
+- 변경: §8 `localization.state` 와 `swarm.aborted`(`reason: localization`), ERR-102 `NOT_LOCALIZED` 대상에 `docking/dock`·`swarm/follow`, v1.70 변경 이력 행.
+- 증거: `test_event_catalogue.py`.
+- gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · docs(api-ref): v1.70 보강 — odom 프레임 거부, 내부 시작 게이트
+- 변경: ERR-102 `NOT_LOCALIZED` 에 `pose_frame: odom`, 시작·정지 잠금 순서, 배터리 자동 도킹 대기와 SAF-005 귀환 e-stop. v1.70 변경 이력 행 보강.
+- 증거: `test_event_catalogue.py`, `test_protocol_version_alignment.py`.
+- gate 변화: 없음.
 
 ## 2026-10-02 · uncommitted · follow-preview Gazebo evidence
 - 변경: docs/validation/follow-preview-gazebo-2026-10-02.md에 실제 Gazebo 카메라→추종 증거→CORE 콘솔 표시 검증을 기록.
@@ -4278,3 +4280,44 @@
 - 변경: 사용자 결정(로봇 없음)으로 실기가 필요한 항목을 D-395 개정 5에 묶었다: Pi 탐색 시간 실측(WSL 4.7–6.5 s > 예산 3 s), 기준 사각형 테이프 실측(현재 사진 유래 ±3 cm), 실제 카메라 사각형·페인트 검출 범위, 장치 들어 올림 신호(BNO055 센서 작업자 기본 꺼짐), 장치 `enable_loc_assist` 기본값과 릴리스, 실기 S3. 모두 닫히기 전에는 장치에서 켜지 않는다. 그동안 Gazebo S1·S2, P2-7, 개정 4 5항 후속을 먼저 한다.
 - 증거: 2단계 갈래 A 보고(WSL 탐색 시간, 장치 그래프 pickup 없음).
 - gate 변화: 없음(Proposed).
+
+## 2026-10-02 · uncommitted · merge: D-395 2단계 갈래 A·B·C 통합
+- 변경: `feat/d395-p2-integration` 에 B(CORE)→C(Fleet)→A(로봇 노드) 순으로 병합. main 이 D-390 으로 v1.70 을 먼저 썼으므로 갈래 B 계약은 API Ref **v1.71** 로 재번호(헤더, 변경 이력 행, D-395 절 언급, `app.py` ×2, Fleet·line-follow 핀; 인터페이스 계획서의 "v1.70" 은 계획 당시 기록으로 둔다). 갈래 간 계약 시험 `src/runtime/gateway/test/test_localization_cross_lane.py`(A 의 실제 payload → B 중계·앱 → C 클라이언트·Arbiter → B 결정 → A `on_decision`, suspect, 레거시 initialpose) 추가 — 불일치 없음. 배포 closure 등록부에 `loc_assist_node` 추가(A 가 `hardware.launch.py` 에 연결). control 크기 판정 41649 재측정, roster.js 는 main 의 오프라인 경고 뒤에 D-395 위치 확인 필요 항목.
+- 증거: sensing 2243 passed/104 skipped, gateway·api_web·services·foundation 2553 passed/30 skipped, Fleet 1278 passed/7 skipped, node web 86/86, harness lint 0 errors. `test/` 전체는 1500 s 안에 끝나지 않아 실패 지점만 재실행: `test_module_separation`(control→core_common, main 에서도 실패; A 의 `loc_assist.py` 가 계약 모델로 한 줄 추가), `test_module_scorecard`, `test_release_boundary_guards`, `test_dashboard_drive`(Playwright) 는 main 에서도 실패.
+- gate 변화: 없음. 장치 항목은 D-395 개정 5 대로 대기.
+
+## 2026-10-02 · uncommitted · merge: D-395 2단계 통합 — main 재병합, 계약 v1.72
+- 변경: 통합 브랜치에 최신 main 재병합. main 이 D-400 으로 v1.71 을 먼저 써서 D-395 2단계 계약을 API Ref **v1.72** 로 다시 올림(헤더, 변경 이력 행 v1.72→v1.71→v1.70 순, D-395 절 언급, `app.py` ×2, Fleet·line-follow 핀). `StateManager` 는 D-400 `safety_policy` 와 D-395 `localization` 공급자를 둘 다 둔다.
+- 증거: 재병합 뒤 빠른 검사(아래 보고).
+- gate 변화: 없음.
+
+## 2026-10-02 · uncommitted · docs(plans): D-395 S1 Gazebo bench 결과 (P2-8)
+- 변경: `docs/plans/2026-10-02-d395-s1-bench-results.md` — 2대 S1(a 슬롯+슬롯 밖, b 두 사각형, c 강제 거울, d 주행 중 픽업)과 1대 슬롯 밖(l) 사다리 시나리오, 런별 표·발견 10개·조정 제안·정확한 명령. 최종 런은 main 5b346b2b(P2-7 사다리 포함) 병합본, 이전 148af568 런은 보조 근거.
+- 증거: WSL Jazzy Gazebo `tools/sim/d395_s1_bench.py` 21회(최종 9회 + 이전 12회, 스모크 제외), Gazebo 정답 대조. 결과: b 9/9 통과, a 2/3, d 3/3(P2-7 회전 필요, 이전 1/3), c 0/5 감지, l 0/3(needs_human). 시스템이 만든 거울 잠금 0, 거울 결정 송신 0. 원시 로그 `X:\DevTemp\rosy-d395-s1\`.
+- gate 변화: 없음. D-395 S1 미통과 — 사람 입력 0·전원 LOCALIZED 기준을 a·c에서 못 채움.
+- 결정: 없음. 기본값 변경 없음(slot 1.5·margin 1.0은 57/57 정답; 발견 1–4·6–7은 다른 갈래의 코드 변경).
+- 교훈: 공유 호스트에서 Gazebo RTF가 0.002–1.9로 흔들린다 — 벽시계 타이머(CORE state_stale 3 s, Fleet 사다리·감시)와 ROS 시계 타이머(로봇 상태 0.5 s, 재보고 2 s)가 섞인 경로는 sim에서 sim 초로 환산해 읽어야 하고, 섞인 것 자체가 발견이다.
+
+## 2026-10-02 · uncommitted · docs(adr): D-395 개정 6 — S1 결과, 닻을 내린 이웃만 단서
+- 변경: S1 Gazebo(미통과: 사각형 9/9, 들어 옮김 3/3, 슬롯 밖 2/3, 강제 거울 탐지 0/5)로 설계를 고쳤다. 대칭 지도에서 함께 뒤집힌 무리는 서로 맞으므로 이웃 단서는 세계 단서·사람·닻 이웃으로 확정된 '닻' 로봇만 쓴다. 안 보이는 이웃은 −1이 아니라 0. 감시는 연속 1.5 s 대신 15 s 안 신선한 거울 서명 2회. `to_square` unsupported는 그 회차에 최종. 수정 중 결함(첫 주입 거부, 성긴 스캔의 이웃 놓침, CORE state_stale 벽시계)과 sim 한계(gz_multi 카메라 없음, 사각형 B가 벽에 너무 가까움)를 기록.
+- 증거: `docs/plans/2026-10-02-d395-s1-bench-results.md`.
+- gate 변화: 없음(Proposed, S1 미통과).
+
+## 2026-10-02 · uncommitted · docs(plans): D-395 S1 재실행 (fix/d395-s1-rerun)
+- 변경: `docs/plans/2026-10-02-d395-s1-bench-results.md` 에 "Re-run 2026-10-02" 절 추가(첫 실행은 그대로). 이 갈래의 미션 중 결정 금지 수정(로봇 782014f5, Fleet 0666dacc) 위에서 a·b·c·d·l 각 3회 이상. 벤치에 열린 출발 `d` 시나리오(사각형은 벽에 붙어 RPP 가 출발 못 함), 요약기에 Fleet 결정의 정답 대조(거울 결정 집계)와 미션 상태 변화만 남기기.
+- 증거: WSL Jazzy Gazebo 12회(GZ_PARTITION rosy_d395b, ROS_DOMAIN_ID 96, 부하 15–36, RTF 0.37–1.0). a 6/6, b 3/3(첫 결정에 LOCALIZED, 14.6–16.9 sim s), c 3/3 개정 6 기대대로(닻 해제, 이웃 안 끌림; 잠금 미탐지), d 재국지화 6/6(놓은 뒤 6.4–7.7 sim s, 첫 결정), 주행 이동 0/6, l 3/3 needs_human. Fleet 결정 31건 중 거울 0. 원시 로그 `X:\DevTemp\rosy-d395-s1b\`.
+- gate 변화: 없음. S1 은 a·b·c·l 통과, d 는 Nav2 가 sim 에서 직진하지 않아 미증명(R4).
+- 결정: 없음. 기본값 변경 없음.
+- 교훈: 첫 결정이 통과하게 되자 관찰자가 보고 한 번 만에 LOCALIZED 가 되어, 2보고 감시가 거울 잠금 증거를 받을 틈이 사라졌다 — 한 수정이 다른 안전장치의 입력 빈도를 바꾼다(R1).
+
+## 2026-10-02 · uncommitted · docs(plans): D-395 계약 §3 사다리 멈춤 규칙 (S1 재실행 R2·R5·R6)
+- 변경: `docs/plans/2026-10-01-d395-phase2-interfaces.md` §3 에 사다리 멈춤 규칙(중재기 `pending`·로봇 `checking` 동안 시계 정지, 회차당 30 s 상한), 로봇 `checking` 사유, CORE 의 검사 중 `busy` 와 버린 보고 폐기를 적었다. API Reference 의 `reason`·ERR-102 `busy` 도 갱신.
+- 증거: Fleet·sensing·CORE 시험(각 모듈 logs.md).
+- gate 변화: 없음.
+
+## 2026-10-02 · uncommitted · docs(plans): D-395 S1 R4 원인과 sim 수정
+- 변경: `docs/plans/2026-10-02-d395-s1-bench-results.md` R4 에 원인 두 가지(RPP lookahead < 목표 허용오차 → 회전만; 패딩 외접원이 지역 비용지도에도 들어가 사각형 A 벽과 겹침)와 증거·남은 점(시드 AMCL 7–8 cm 오차, 전역 "Start occupied" 1/4) 추가. 수정은 `gz_multi._nav_config`(sim 전용).
+- 증거: WSL Jazzy 로봇 1대 — 1 m 목표 2/2, 사각형 A 출발 3/4 SUCCEEDED. 원시 `X:\DevTemp\rosy-g4\`.
+- gate 변화: 없음. (d) 이동 중 집어 올리기는 이 수정 위에서 다시 돌려야 한다.
+- 결정: 없음
+- 교훈: 없음

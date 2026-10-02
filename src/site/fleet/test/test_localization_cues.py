@@ -22,9 +22,11 @@ def test_to_map_places_a_forward_point_along_the_heading():
 
 @pytest.mark.parametrize("pose, objects, peers, expected", [
     ((0.0, 0.0, 0.0), [(1.0, 0.0)], [(1.0, 0.05)], 1.0),                 # object lands on the peer
-    ((0.0, 0.0, math.pi), [(1.0, 0.0)], [(1.0, 0.05)], -1.0),            # mirror heading: lands at (-1, 0)
-    ((0.0, 0.0, 0.0), [], [(1.0, 0.0)], -1.0),                           # peer in view, nothing seen
-    ((0.0, 0.0, 0.0), [(1.0, 0.0)], [(1.0, 0.0), (0.0, 1.0)], 0.0),      # one seen, one missing
+    # S1 finding 3: a peer in view but not seen is no evidence (0), never -1.
+    ((0.0, 0.0, math.pi), [(1.0, 0.0)], [(1.0, 0.05)], 0.0),             # mirror heading: lands at (-1, 0)
+    ((0.0, 0.0, 0.0), [], [(1.0, 0.0)], 0.0),                            # peer in view, nothing seen
+    ((0.0, 0.0, 0.0), [(1.0, 0.0)], [(1.0, 0.0), (0.0, 1.0)], 0.5),      # one seen, one missing
+    ((0.0, 0.0, 0.0), [(1.0, 0.0), (0.0, 1.0)], [(1.0, 0.0), (0.0, 1.0)], 1.0),  # both seen
     ((0.0, 0.0, 0.0), [(1.0, 0.0)], [(3.0, 0.0)], 0.0),                  # peer out of view
     ((0.0, 0.0, 0.0), [(1.0, 0.0)], [], 0.0),                            # no peers
 ])

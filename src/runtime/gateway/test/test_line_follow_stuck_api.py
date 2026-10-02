@@ -136,6 +136,7 @@ def test_scan_bridge_feeds_self_masked_body_points():
 
     class Services:
         line_follow = LineFollow()
+        loc_mission = None          # D-395 P2-7 mission (main) shares the scan
 
     n = 360
     ranges = [float("inf")] * n

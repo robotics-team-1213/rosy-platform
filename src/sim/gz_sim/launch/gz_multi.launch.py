@@ -27,7 +27,8 @@ import tempfile
 _LAUNCH_DIR = os.path.dirname(os.path.abspath(__file__))
 if _LAUNCH_DIR not in sys.path:
     sys.path.insert(0, _LAUNCH_DIR)
-from world_profiles import resolve_asset_path, resolve_world, resolve_world_path, spawn_xy
+from world_profiles import (parse_spawn_poses, resolve_asset_path, resolve_world, resolve_world_path,
+                            spawn_xy, world_share_parent)
 
 from ament_index_python.packages import get_package_share_directory
 
@@ -159,9 +160,8 @@ def _nav_config(ns: str, rosy_nav_share: str,
     # SmacPlanner2D searches x/y cells without a heading state.  A rectangular
     # footprint can therefore be accepted near a corner at yaw=0 even though
     # the controller must later rotate it through the corner; the next replan
-    # then reports "Start occupied".  Simulation uses the padded
-    # circumscribed radius in both costmaps so planning is conservative for
-    # every yaw.  This never shrinks the physical envelope or inflation layer.
+    # then reports "Start occupied".  Only the planner's global costmap takes the padded
+    # circumscribed radius; RPP's local check keeps the device footprint (D-395 R4).
     costmap_params = [
         params[name][name]["ros__parameters"]
         for name in ("local_costmap", "global_costmap")
@@ -174,7 +174,7 @@ def _nav_config(ns: str, rosy_nav_share: str,
         vertices = yaml.safe_load(source_footprint)
         padding = max(float(item.get("footprint_padding", 0.)) for item in costmap_params)
         circumscribed_radius = max(math.hypot(float(x), float(y)) for x, y in vertices) + padding
-        for item in costmap_params:
+        for item in costmap_params[1:]:  # global_costmap only
             item.pop("footprint", None)
             item["robot_radius"] = circumscribed_radius
             item["footprint_padding"] = 0.
@@ -199,14 +199,15 @@ def _nav_config(ns: str, rosy_nav_share: str,
     follow["use_regulated_linear_velocity_scaling"] = True
     follow["use_cost_regulated_linear_velocity_scaling"] = True
     follow["cost_scaling_gain"] = min(float(follow["cost_scaling_gain"]), 1.0)
-    local_inflation = params["local_costmap"]["local_costmap"]["ros__parameters"][
-        "inflation_layer"]
+    local_inflation = params["local_costmap"]["local_costmap"]["ros__parameters"]["inflation_layer"]
     follow["cost_scaling_dist"] = min(
         float(follow["cost_scaling_dist"]), float(local_inflation["inflation_radius"]))
-    follow["inflation_cost_scaling_factor"] = float(
-        local_inflation["cost_scaling_factor"])
+    follow["inflation_cost_scaling_factor"] = float(local_inflation["cost_scaling_factor"])
     controller["progress_checker"]["required_movement_radius"] = min(
         float(controller["progress_checker"]["required_movement_radius"]), .05)
+    # D-395 R4: RPP only rotates while its carrot (~min_lookahead ahead) is within xy_goal_tolerance.
+    tol = controller["general_goal_checker"]
+    tol["xy_goal_tolerance"] = min(float(tol["xy_goal_tolerance"]), .10)
 
     smoother = params["velocity_smoother"]["ros__parameters"]
     smoother["max_velocity"] = [
@@ -296,6 +297,7 @@ def _launch_setup(context):
     core = LaunchConfiguration("core").perform(context).lower() in ("true", "1")
     api_port_base = int(LaunchConfiguration("api_port_base").perform(context))
     map_yaml = LaunchConfiguration("map").perform(context)
+    loc_assist = LaunchConfiguration("loc_assist").perform(context).lower() in ("true", "1")
     spawn_spacing_raw = LaunchConfiguration("spawn_spacing").perform(context)
     profile = resolve_world(
         world_name,
@@ -305,6 +307,7 @@ def _launch_setup(context):
         spawn_spacing=_optional_float(spawn_spacing_raw),
         map_yaml=map_yaml.strip() or None,
     )
+    spawn_poses = parse_spawn_poses(LaunchConfiguration("spawn_poses").perform(context), robots)
     spawn_x = profile.spawn_x
     spawn_y = profile.spawn_y
     spacing = profile.spawn_spacing
@@ -330,7 +333,8 @@ def _launch_setup(context):
             "GZ_SIM_RESOURCE_PATH",
             os.path.join(rosy_desc_share, "..")
             + ":" + os.path.join(rosy_gz_share, "models")
-            + ":" + os.path.join(os.environ.get("HOME", ""), ".gazebo", "models"),
+            + ":" + os.path.join(os.environ.get("HOME", ""), ".gazebo", "models")
+            + world_share_parent(profile, get_package_share_directory),
         )
     ]
 
@@ -381,7 +385,7 @@ def _launch_setup(context):
         )
 
         # 2) spawn — spawn_x/spawn_y 에서 x축으로 spacing 간격 배치
-        x, y = spawn_xy(i, spawn_x, spawn_y, spacing)
+        x, y, spawn_yaw = spawn_poses[i - 1] if spawn_poses else (*spawn_xy(i, spawn_x, spawn_y, spacing), 0.)
         group_actions.append(
             Node(
                 package="ros_gz_sim",
@@ -391,7 +395,7 @@ def _launch_setup(context):
                 arguments=[
                     "-name", ns,
                     "-topic", f"{ns}/robot_description",
-                    "-x", str(x), "-y", str(y), "-z", "0.1",
+                    "-x", str(x), "-y", str(y), "-z", "0.1", "-Y", str(spawn_yaw),
                 ],
                 parameters=[{"use_sim_time": True}],
             )
@@ -439,6 +443,10 @@ def _launch_setup(context):
                     launch_arguments=nav_args.items(),
                 )
             )
+            if loc_assist:  # D-395 P2-3: power-on is UNKNOWN; the seeded AMCL pose is not evidence
+                mode_actions.append(IncludeLaunchDescription(PythonLaunchDescriptionSource(os.path.join(
+                    get_package_share_directory("control"), "launch", "loc_assist.launch.py")),
+                    launch_arguments={"namespace": ns, "use_sim_time": "true", "map_yaml": map_yaml}.items()))
         elif mode in ("slam", "slam_nav"):
             slam_cfg = os.path.join(bridge_dir, f"mapper_{ns}.yaml")
             with open(slam_cfg, "w", encoding="utf-8") as f:
@@ -492,7 +500,7 @@ def _launch_setup(context):
         if mode_actions:
             group_actions.append(TimerAction(period=15.0, actions=mode_actions))
 
-        if mode == "nav":
+        if mode == "nav" and LaunchConfiguration("seed_initialpose").perform(context).lower() == "true":
             group_actions.append(
                 Node(
                     package="gz_sim",
@@ -504,7 +512,7 @@ def _launch_setup(context):
                         "use_sim_time": True,
                         "x": x,
                         "y": y,
-                        "yaw": 0.0,
+                        "yaw": spawn_yaw,
                     }],
                 )
             )
@@ -578,10 +586,14 @@ def generate_launch_description():
         DeclareLaunchArgument("spawn_spacing", default_value="",
                               description="로봇 간 x축 배치 간격 (m). 비우면 월드 프로필 값 "
                                           "(config/worlds.yaml), 그것도 없으면 1.5"),
+        DeclareLaunchArgument("spawn_poses", default_value="", description="'x,y,yaw_rad;..' 로봇별"),
+        DeclareLaunchArgument("seed_initialpose", default_value="true", description="false: AMCL 시드 없음"),
         DeclareLaunchArgument("core", default_value="false",
                               description="로봇별 core 기동 (포트 api_port_base + i - 1)"),
         DeclareLaunchArgument("map", default_value="",
                               description="mode:=nav 맵 yaml. 비면 월드 카탈로그"),
+        DeclareLaunchArgument("loc_assist", default_value="true", choices=["true", "false"],
+                              description="mode:=nav 에서 로봇별 D-395 loc_assist_node"),
         DeclareLaunchArgument("api_port_base", default_value="8080",
                               description="첫 로봇의 core API 포트"),
         OpaqueFunction(function=_launch_setup),

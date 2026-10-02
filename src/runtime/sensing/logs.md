@@ -820,9 +820,116 @@
 - 한계: 객체 박스는 F/D 분할 영역이며 종류·지속 track ID·객체 이동 예측은 아니다. 목표 점선은 모터 궤적이 아니다. road_state 구독은 노드를 활성화하지 않으며 미실행 시 예측 없음. ROS-SIM·ARTIFACT·DEVICE·FIELD를 승격하지 않는다.
 - 설계/실행: docs/plans/2026-10-01-follow-preview-design.md, docs/plans/2026-10-01-follow-preview.md.
 - gate 변화: 없음(SOURCE/LOCAL 기존 GO 유지; ROS-SIM·ARTIFACT·DEVICE·FIELD 미승격).
+## 2026-10-01 · uncommitted · feat(localization): LocAssist 순수 코어 — 상태·후보·결과·주입 (D-395 P2-3)
+- 변경: `control/loc_assist.py` `LocAssist` — `loc_assist_node`가 할 판단을 ROS 없이 모았다(계약 `docs/plans/2026-10-01-d395-phase2-interfaces.md` 1절). 전원 투입·SUSPECT·픽업 뒤 내려놓음에 탐색, 3 s 검증 중이나 들린 동안은 탐색 안 함, 탐색 중 움직였으면 결과 버림, CANDIDATES는 움직이고 `retry_s`(5 s)가 지나야 재탐색. 후보는 2 s마다 새 stamp로 재보고, 상태는 2 Hz와 변화마다. 결정마다 결과 하나(거부는 즉시, 주입은 3 s 검증이 끝날 때). 출처별 공분산 candidate 0.05 m/0.1 rad, human 0.15/0.3, overhead 0.10/0.2, homing_ref 0.05/0.1. Nav2 목표 취소·재계획은 목표 주인인 CORE가 하고, LOCALIZED 전이의 상태 메시지에 `"cancel_nav_goal": true`를 한 번 싣는다. `search`(슬롯+전역 후보 8개, 첫 후보에서 지도 밖 물체, clear 마스크 재사용), `pooled_grid`(5 mm 지도를 2 cm로 max-pool), `lane_rules_near`.
+- 증거: `test_loc_assist.py` 28 passed.
+- gate 변화: 없음(SOURCE/LOCAL).
+
+## 2026-10-01 · uncommitted · feat(localization): loc_assist_node ROS 어댑터, localization_node의 자체 주입 제거 (D-395 P2-3)
+- 변경: `control/loc_assist_node.py` — ROS 입출력만. 구독 `map`(2 cm max-pool, clear 마스크는 지도마다 한 번), `scan`(검증 중·LOCALIZED일 때 스캔마다 AMCL TF 자세에서 `MapAgreement.score` → `observe_fit`), `amcl_pose`, `camera/front`(`HsvSquareDetector`, 지면 평면은 line_observer와 같은 GAZEBO/NOMINAL 규칙, 0.5 s마다, LOCALIZED면 안 봄), `safety/pickup`(depth 1), `localization/decision`, `localization/suspect`. 발행 `localization/state`·`localization/candidates`(reliable, depth 1, transient-local), `localization/result`(depth 10), `initialpose`(map, 결정 수락 때만). 탐색은 작업 스레드 하나, `search_budget_s`(3 s) 초과는 경고 로그(측정이지 중단은 아니다). 페인트 점은 ROS 토픽이 없어(line_observer 내부 bird's-eye) `paint_score`는 항상 None. 진입점 `loc_assist_node`, `hotpath_measure.NODE_NAMES`, 실행기 선택자 사용 수 19, D-185 latest-only 표에 `safety/pickup` 추가.
+- 변경: `control/localization_node.py` — 유일 해 전역 매치의 자체 `initialpose` 발행(기각안 B)과 `reinitialize_global_localization` 전역 재초기화를 지웠다(대칭 트랙에서 둘 다 거울을 우연히 고르고, 재초기화는 3 s 검증 중 입자를 흩는다). 준비 판정의 "확정"은 이제 `localization/state`의 LOCALIZED다. 상태 JSON의 `recoveries`·`global_candidate`와 `localization.yaml`의 `recovery_interval`·`global_minimum_*`은 사라졌다. `tools/gz/localization_rig.py`의 전역 복구 시나리오는 이 기능을 전제하므로 더는 맞지 않는다(수동 도구, 고치지 않음).
+- 증거: sensing 호스트 전체 2197 passed(이 변경 뒤 실패 2건 — 실행기 수·hotpath 이름 — 을 고쳐 재실행 통과), 아키텍처 76 passed(`control` 41059로 재판정). WSL Jazzy 스모크(가짜 지도·스캔·TF로 노드 구동): UNKNOWN → 후보 2개 보고 → 결정 → `initialpose`(공분산 0.05²) → 3 s 뒤 LOCALIZED·결과 수락. 부하 평균 ~9인 공유 WSL에서 몇 번은 주입 직후 0.5 s 넘는 실행기 정지로 `stale_scan` 실패(환경, 1단계 `InjectionCheck`의 0.5 s 공백 규칙대로).
+- gate 변화: 없음(SOURCE/LOCAL). ROS-SIM은 P2-8 Gazebo S1.
+
+## 2026-10-01 · uncommitted · feat(launch): loc_assist 배선 — sim 켬, 기기 끔 (D-395 P2-3)
+- 변경: `launch/loc_assist.launch.py`(인자 `loc_assist` 기본 true, `namespace`, `use_sim_time`, `map_yaml`, `lane_rules_file`, `search_budget_s`; 움직임 출력 없음). `localization.launch.py`가 이를 포함한다(localization_node의 준비가 LOCALIZED를 기다리므로). 기기 `hardware.launch.py`는 `enable_loc_assist` 기본 false, Gazebo `gz_multi` nav 모드는 `loc_assist` 기본 true. `nav2_params.yaml`의 `set_initial_pose`는 그대로.
+- 결정: 기기 기본 꺼짐. 이유 (1) 전역 탐색이 Pi·사이트 지도에서 측정되지 않았다(`loc_candidates.py` 비용 메모가 기기 투입 전 측정을 요구; WSL x86·부하 ~9에서 120빔 2 cm 탐색 4.7–6.5 s로 예산 3 s 초과), (2) CORE가 결정을 아직 중계하지 않는다(lane B), (3) 기기 그래프에는 `safety/pickup` 발행자가 없다(레거시 safety_node만 발행).
+- 증거: `test_loc_assist_launch.py` 8 passed(Windows 7 + 1 skip, WSL Jazzy에서 launch 매개변수 평가 포함 전부 통과), `test_os_control_graph.py`(WSL, LocAssistNode가 rosy_01/rosy_02 이름공간을 따름) 통과.
+- gate 변화: 없음(SOURCE/LOCAL). ROS-SIM은 P2-8.
+
+## 2026-10-01 · uncommitted · fix(localization): state에서 `cancel_nav_goal` 키 제거 (D-395 P2-3 후속)
+- 변경: `control/loc_assist.py` — `localization/state`는 계약 1절대로 `{status, pose, stamp}`만 싣는다. Nav2 목표 취소·재계획은 CORE(lane B)가 LOCALIZED 전이와 수락 결과에서 스스로 한다.
+- 증거: `test_loc_assist.py` 28 passed(상태 키 집합 단정으로 바꿈, 먼저 실패 확인).
+- gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · fix(localization): 3 s 검증의 스캔 공백 허용을 매개변수로, 노드는 1.0 s (D-395 P2-3 후속)
+- 변경: `sensing/loc_state.py` `LocalizationStateMachine(max_gap_s=.5)`가 `InjectionCheck`에 넘긴다(순수 기본값 0.5 s 유지). `LocAssist(max_gap_s=...)`, `loc_assist_node` 매개변수 `max_gap_s` 기본 1.0. 공유 WSL(부하 ~9) 스모크에서 주입 직후 0.5 s 넘는 실행기 정지가 맞는 주입을 `stale_scan`으로 떨어뜨렸다. 10 Hz LiDAR는 1 s 창에서도 초당 ~10번 적합도를 준다.
+- 증거: 새 시험 2개(0.8 s 정지는 통과, 1.1 s 침묵은 실패; 상태 기계가 값을 검증에 전달). `test_loc_assist.py`·`test_loc_state.py`·`test_loc_verify.py`·`test_loc_e2e.py` 60 passed.
+- gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · fix(tools): Gazebo localization rig를 D-395 흐름으로 (P2-3 후속)
+- 변경: `tools/gz/localization_rig.py` — 지워진 전역 복구(`recoveries`)를 기대하던 판정을 바꿨다. 새 구성 요소 `LOCALIZATION_COMPONENT=loc_assist`(LocAssistNode)를 `monitor` 옆에 띄우고, 리그가 Fleet·운영자 대역이 된다: 후보가 정확히 하나면 그 자세로 `source: human` 결정을 보낸다(지상 실측은 고르지 않는다, 채점만). 후보가 둘 이상이면 "Fleet 중재기 필요"로 실패. 스캔 공백 판정은 "새 후보 요청이 생기지 않음"으로 바꿨다.
+- 증거: `test_loc_assist_launch.py`에 리그 텍스트 계약 1개(9 passed). Gazebo 미로 실행은 하지 않았다(도메인 228 격리 박스 필요).
+- gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · feat(localization): 카메라 페인트 점으로 후보별 paint_score (D-395 P2-3 후속)
+- 변경: `sensing/perception/paint_hypothesis.py` `camera_paint_points(bgr, ground, camera_x_offset_m, view=None)` — keep 모드와 같은 앞단(`floor_white_mask`를 `lane_bev.BirdsEye` 바닥 격자에 샘플)으로 한 프레임의 base_link 페인트 점을 낸다(최대 400개, 지면 평면 없거나 씻긴 바닥이면 없음). line_observer는 이 점을 밖으로 내지 않으므로(keep 내부 지역 변수) 새 토픽 대신 `loc_assist_node`가 사각형용으로 이미 해독하는 2 Hz 프레임에서 함께 계산한다. 페인트 지도는 lane_rules.yaml 번들의 STL(`PaintMap.from_bundle`)을 첫 탐색 때 작업 스레드에서 한 번 읽고, 없으면 None. 탐색이 끝날 때 1 s 안의 점으로 후보마다 `paint_score`.
+- 증거: `test_paint_hypothesis.py` 10 passed(합성 바닥 테이프 선: 점이 선 위, 참 자세 > 0.5, 6 cm 옆 < 0.1, 맨 카펫·지면 없음은 0개), `test_loc_assist.py` paint 전달 1개. WSL Jazzy 스모크(번들 지정: 사각형 2개·STL 페인트 지도 적재, 카메라 없음) UNKNOWN → 후보 → 결정 → LOCALIZED 통과.
+- gate 변화: 없음. 실제 카메라 페인트 점 품질은 P2-8 실측.
+- 정정: 앞 리그 항목의 "9 passed"는 Windows에서 8 passed, 1 skip(launch 매개변수 평가는 WSL에서만)이다. 리그의 결정 발행 토픽은 bench 도구 규칙(`test_gz_tools_topics.py`, 절대 발행 토픽 금지)에 따라 상대 `localization/decision`으로 바꿨다.
+
+## 2026-10-02 · uncommitted · fix(localization): lane A 리뷰 — 픽업 epoch, 검증 중 재보고·중복 결정, received_s 필수, 증거 시각 (D-395 P2-3)
+- 변경: `control/loc_assist.py`. (중요) 픽업 epoch: 탐색 중 픽업이 있었거나 들린 채면 결과를 버리고, 들린 동안 결정은 `held`로 거부. (중요) 3 s 검증 중에는 후보를 재보고하지 않고, 검증 중인 같은 request_id의 중복 결정은 결과 없이 조용히 무시(노드가 debug 로그). (경미) `received_s` 필수 — 없거나 유한하지 않거나 `now_s`보다 0.5 s 넘게 앞서면 `bad_receipt`(코어에 둠; 1단계 `loc_state.decide`의 기본값은 그대로). (경미) 사각형·페인트 증거는 탐색 시작 뒤에 본 것만(`evidence_s >= 시작`), 아니면 버린다. `camera_wanted`(LOCALIZED 밖에서만).
+- 증거: `test_loc_assist.py` 43 passed(새 시험 12개, 먼저 11개 실패 확인).
+- gate 변화: 없음.
+
+## 2026-10-02 · uncommitted · fix(localization): lane A 리뷰 — 카메라 구독은 LOCALIZED 밖에서만, 종료 플래그, 작업 스레드 로그 없음 (D-395 P2-3)
+- 변경: `control/loc_assist_node.py`. `camera/front` 구독을 LOCALIZED에 들어가면 없애고 나오면 다시 만든다(`sync_camera`, 틱마다; 저장소에 스로틀된 카메라 토픽은 없다). 작업 스레드 본문을 `search_job`으로 빼고, 페인트 지도 적재와 탐색 사이에 `stopping` 플래그를 본다(main이 풀 종료 전에 세움). 작업 스레드는 로그를 남기지 않고 메모를 돌려주며 `finish_search`가 실행기 스레드에서 남긴다. 사각형·페인트 증거 시각을 코어에 `evidence_s`로 넘긴다. 검증 중 중복 결정은 debug 로그만.
+- 증거: `test_loc_assist_node_ros.py` 2개(WSL Jazzy: 카메라 구독 생성·제거·재생성, 정지 플래그가 탐색을 건너뜀) — WSL ROS 시험 55 passed. 호스트 sensing 2224 passed, 104 skipped; 아키텍처 76 passed(`control` 41237로 재판정).
+- gate 변화: 없음.
 
 ## 2026-10-02 · uncommitted · feat(perception): visible lane candidates and object labels
 - 변경: LEFT/RIGHT LANE 선택 경계, CURRENT LANE와 인접 차로 후보, FOLLOW PATH 목표 안내를 구분. 폭·방향·중첩 구간으로 후보를 제한하고 중복 경계 조각을 합침. 전경 영역에 UNKNOWN/DARK와 거리 미확인 표시, 실제 ArUco 픽셀에 TAG 번호를 표시. 진단 전용 선택·차폭·카메라 지면 출처 정보를 추가하고 주행 관측 ground enum은 유지.
 - 증거: 추종·keeper·topology·tag·observer wiring 집중 시험 113 passed. 다차선 11 사례, 표식 픽셀 및 무효 입력, GAZEBO 주행 serializer 회귀 포함. docs/plans/2026-10-02-lane-object-preview-design.md.
 - 한계: 후보는 현재 프레임의 관측이며 전체 도로 차선 수·자동 차선 변경·객체 종류/추적/미래 궤적을 뜻하지 않음. 실기 설치는 전원 꺼짐으로 미확인.
 - gate 변화: 없음. SOURCE/LOCAL 표시 개선 검증; DEVICE/FIELD 미승격.
+
+## 2026-10-02 · uncommitted · feat(localization): D-395 P2-7 미션 뒤 재탐색
+
+- 변경: `LocAssist.on_mission` — CORE `localization/mission` 이 `running` 이면 탐색하지 않고, `done`·`aborted` 면 바로 한 번 탐색한다(CANDIDATES 에서도 이동·재시도 시간을 기다리지 않음). `loc_assist_node` 가 그 토픽을 구독한다.
+- 증거: `test/test_loc_assist.py` +3.
+- gate 변화: 없음.
+
+## 2026-10-02 · uncommitted · fix(localization): D-395 P2-7 리뷰 — 미션 중 탐색 멈춤은 130 s 뒤 풀린다
+
+- 변경: `LocAssist` 는 `running` 을 받은 시각을 들고, `MISSION_PAUSE_S`(CORE 최장 미션 120 s + 10 s) 가 지나면 끝 메시지가 없어도(유실·CORE 재시작) 다시 탐색한다.
+- 증거: `test/test_loc_assist.py` +1.
+- gate 변화: 없음.
+
+## 2026-10-02 · 5016499f · fix(localization): D-395 S1 결과 1·2 (e62d110b, 64d8197b, 5016499f) — 3 s 검증의 지연된 map->odom, 전체 스캔 피어 객체
+
+- 원인(결과 1): AMCL 은 map->odom 을 스캔 시각 + `transform_tolerance`(시뮬 1.0 s, 실기 0.3 s)로 찍는다. `loc_assist_node.on_scan` 이 스캔 시각으로 map->센서를 조회해서, `/initialpose` 뒤 약 1 s 동안 주입 전 보정으로 적합도를 계산했고(0.013–0.019) 0.5 s 안정 시간 직후 `fit_low` 로 떨어졌다. Gazebo 프로브(`X:\DevTemp\rosy-d395-f1\base_b\probe_r1.txt`): 주입 +0.04–0.94 s 동안 스캔 시각 조회는 옛 자세, +1.06 s 에 바뀜; 주입 자세 자체의 적합도는 내내 0.97–0.99. 같은 자세 재결정이 통과한 것은 AMCL 이 이미 그 자세였기 때문.
+- 변경: odom->센서는 스캔 시각, map->odom 은 최신으로 합성(`lookup_transform_full`, `RobotTransformBuffer` 에 같은 접두 규칙 추가). AMCL 이 적용하지 않은 자세나 틀린 자세는 여전히 거부.
+- 변경(결과 2): `search(..., object_scan=)` — 탐색은 `scan_stride` 그대로, `unmapped_objects` 는 전체 640 빔. 전체 스캔이 남기는 차체 반사(정사각형 A 에서 base_link 7 cm)는 로봇 반경 안이라 버린다. 호스트 비용: `unmapped_objects` 0.15 → 0.24 ms/탐색(탐색 ~1.3 s 대비 무시). Pi 측정은 D-395 rev. 5 대로 보류.
+- 증거: `test_loc_assist_node_ros.py` +2(WSL: 수정 전 올바른 주입이 `inject_rejected` 로 실패 확인, 수정 후 통과; 30 cm 틀린 주입은 거부), `test_loc_assist.py` +5(2.35 m 피어: stride 4 는 객체 0, 전체 스캔은 1; 빈 트랙 3 자세 객체 0; 차체 반사 제거). 호스트 sensing 2282 passed, 104 skipped; WSL loc 시험 60 passed.
+- Gazebo 재실행(WSL, GZ_PARTITION rosy_f1, ROS_DOMAIN_ID 95, 시나리오 a, 부하 23–68): 수정 전 기준 `base_b` 는 두 로봇 모두 첫 결정 거부. `fix_a1`·`fix_a2` 에서 r1(slot)은 첫 결정 통과. r2 의 남은 거부는 진짜였다: 첫 결정은 P2-7 `rotate_in_place` 회전 중에 주입돼 주입 자세 적합도도 0.18–0.39, `fix_a1` 두 번째는 후보 yaw 가 약 4° 틀려 0.8. 피어 객체는 r1 16/16, r2 35/35 보고에서 보였다(`fix_a2`). 원시 로그 `X:\DevTemp\rosy-d395-f1\`.
+- 남은 것: Fleet 이 회전 미션 중에도 결정을 보낸다(결과 아님, Fleet 레인). `localization_node` 도 스캔 시각 map 조회라 재국지화 뒤 ~1 s 늦게 반응한다(확인 지연만, 수정 안 함).
+- gate 변화: 없음.
+
+## 2026-10-02 · uncommitted · fix(localization): D-395 S1 재실행 — 미션 중 결정은 `mission_running` 으로 거부
+
+- 원인: F1 WSL 실행에서 Fleet 이 r2 의 첫 결정을 `rotate_in_place` 회전 중에 보냈고, 주입 자세 적합도가 0.18–0.39 라 3 s 검증이 옳게 거부했다.
+- 변경: `LocAssist.on_decision` 은 CORE 미션이 진행 중이면(`localization/mission` `running`, `MISSION_PAUSE_S` 안) 주입하지 않고 `mission_running` 으로 거부한다. 미션 시작 때 열린 request id 와 그 보고를 버린다(미션 전 후보는 미션 뒤에 낡았다). 미션 끝의 재탐색이 새 id 를 만든다. 옛 id 결정은 `stale_request`.
+- 증거: `test/test_loc_assist.py` +2(미션 중 결정 거부·주입 없음, 시작 시 id·재보고 폐기 후 새 id 로 주입).
+- gate 변화: 없음.
+
+## 2026-10-02 · 2b922678 · feat(localization): D-395 S1 재실행 R6 — 검사 중 상태는 CANDIDATES/`checking`
+
+- 원인: Fleet 사다리가 로봇의 3 s 주입 검사 중에 `rotate_in_place` 를 보냈다(d1–d3). 검사는 밖에서 보이지 않았다.
+- 변경: `LocAssist` 는 검사가 도는 동안 `localization/state` 의 `reason` 을 `checking`(`core_common.protocol.localization.CHECKING`)으로 낸다. 상태는 CANDIDATES, `request_id` 는 그대로. 결정을 받는 즉시 상태가 바뀌어 한 번 나가고 2 Hz 주기에도 실린다. 검사가 끝나면 LOCALIZED(`reason: null`) 또는 SUSPECT(`inject_rejected`).
+- 증거: `test/test_loc_assist.py` +2. 호스트 sensing 2286 passed, 104 skipped.
+- gate 변화: 없음.
+
+## 2026-10-02 · ead31a99 · fix(localization): D-395 S1 재실행 R3 — 구별 후보의 마지막 yaw 정밀화
+
+- 원인: S1 재실행(`X:\DevTemp\rosy-d395-s1b\` a1·d1·d2)에서 회전 뒤 첫 결정 3건이 후보 yaw 180.0°/179.0° 로 주입됐고 truth 는 −177.2°…−177.6° 였다(오차 2.4–2.8°). 3 s 검증이 옳게 거부했고 다음 탐색(−178.0°/−177.0°)은 통과했다. 전역 탐색은 5° 씨앗 + 1° 정밀화를 stride 4 스캔(160 빔)에서 한다.
+- 변경: `loc_candidates.global_candidates(..., fine_scan=)` — `distinct` 로 고른 후보마다 `FINE_OFFSETS`(±3 cm 1 cm, ±3° 0.5°, 637 자세)로 전체 640 빔 스캔에서 한 번 더 `refine` 하고 적합도를 다시 매긴다. `search` 는 `object_scan` 을 그대로 넘긴다. `global_match`·slot 탐색은 그대로.
+- 증거: 호스트 sensing 2288 passed, 104 skipped. `test_loc_candidates.py` +3(거친 단계가 2.5°·2 cm 어긋난 후보를 0.5°·1 cm 안으로, 후보 수·거울 유지, `global_match` 답이 872a5cc5 와 같음), `test_loc_assist.py` +1(`search` 가 전체 스캔을 넘김). 호스트 비용(loc_world 2 cm 지도): 정밀화 후보당 중앙값 87 ms(최대 130 ms), `global_candidates` 중앙값 1.83 → 1.92 s. Pi 측정은 D-395 rev. 5 대로 보류.
+- 남은 것: d1·d2 는 회전 미션 `done` 직후 바로 탐색했고 그때 로봇이 아직 1–3° 더 돌고 있었을 수 있다(driver truth 샘플 간격이 거칠어 확정 못 함). 그 경우 스캔 자체가 180° 자세라 정밀화로는 못 고친다. 미션 끝 뒤 정지 확인 후 탐색할지는 Gazebo 재실행으로 가린다.
+- gate 변화: 없음.
+
+## 2026-10-02 · c00b368d · fix(localization): D-395 S1 재실행 R3 — 로봇이 멈춘 뒤에만 탐색
+
+- 원인: 위 항목의 남은 것. d1·d2 는 회전 `done` 직후 아직 도는 중의 스캔으로 탐색했을 수 있다.
+- 변경: `LocAssist.on_twist` — odom twist 가 0.01 m/s, 0.02 rad/s 미만으로 0.5 s 이어져야 탐색한다(`STILL_MPS`·`STILL_RADPS`·`SETTLE_S`). 전원 켬, 미션 끝, 내려놓음, SUSPECT, 재시도 모두 같은 문을 지난다. 탐색이 필요해진 뒤 5 s(`SETTLE_CAP_S`)가 지나면 그래도 탐색하고 노드가 "never settled" 경고를 남긴다. odom 이 아예 없어도 5 s 상한으로 풀린다. 노드는 네임스페이스 상대 `odom`(gz_multi `/rosy_XX/odom`, 실기 bringup `odom`)을 늘 구독한다(트위스트만, 값쌈).
+- 증거: `test_loc_assist.py` +6(정지면 바로, 회전 중이면 미룸, 움직임이 창을 다시 시작, 5 s 상한, odom 없음, 내려놓음·SUSPECT), 기존 시험의 `core()` 는 t=0 이전부터 정지한 로봇. `test_loc_assist_node_ros.py` +1(WSL Jazzy: `/rosy_loc_test/odom` 구독, 회전 twist 는 미룸). WSL loc 시험 67 passed. 호스트 sensing 2295 passed, 104 skipped.
+- 남은 것: odom 이 끊기면 마지막 twist 가 남는다(정지였으면 바로 탐색). Gazebo 재실행으로 d1·d2 거부가 사라지는지 확인해야 한다.
+- gate 변화: 없음.
+
+## 2026-10-02 · 7459be67 · fix(localization): D-395 S1 재실행 R3 — 낡은 odom twist 는 정지가 아니다
+
+- 원인: 위 항목의 남은 것. 정지 twist 뒤 odom 이 끊기면 정지 문이 그 값을 계속 믿고 바로 탐색했다.
+- 변경: `LocAssist` 는 마지막 twist 시각을 들고, 0.5 s(`SETTLE_S`)보다 오래된 twist 는 정지가 아니라 모름으로 친다. 탐색은 기다리고 5 s 상한이 푼다. `settle_timed_out` 은 이유 문자열(`no_fresh_odom` 또는 `never_settled`)이고 노드 경고에 그대로 찍힌다.
+- 증거: `test_loc_assist.py` +1(정지 뒤 침묵: 재시도가 0.5 s 넘은 twist 로는 안 풀리고 상한에서 `no_fresh_odom`), 정지 문 시험은 twist 를 직접 신선하게 넣고 나머지 시험의 `core()` 는 `search_due` 마다 정지 twist 가 오는 살아 있는 odom. `test_loc_assist_node_ros.py` 는 0.6 s 정지 뒤 신선한 twist 로 통과. WSL loc 시험 68 passed. 호스트 sensing 2296 passed, 104 skipped.
+- 남은 것: Gazebo 재실행으로 d1·d2 거부가 사라지는지 확인.
+- gate 변화: 없음.
