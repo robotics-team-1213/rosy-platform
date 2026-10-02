@@ -426,3 +426,27 @@ def test_io_per_tick_is_capped_and_round_robins_across_jobs(tmp_path):
     dispatcher.dispatch_next()
     second = {grant.mission_id for grant in transport.submissions} - first
     assert second and not (second & first)
+
+
+def test_a_receipt_that_fails_verification_still_counts_as_journaled(tmp_path):
+    # 1d item 2: the receipt is noted before verification.
+    store, _, transport, dispatcher = _setup(tmp_path)
+    transport.on_submit = lambda grant: _receipt(grant, "SUCCEEDED", 2, phases=PHASES[:2])  # invalid
+    dispatcher.dispatch_next()
+    grant = transport.submissions[0]
+    assert store.get("cell-mission-1")["reason"] == "LOCAL_ACTION_RECEIPT_INVALID"
+    assert store.has_device_receipt("cell-mission-1", grant.action_id, grant.attempt_id)
+
+
+def test_prior_action_events_count_as_receipts_and_repeat_notes_do_not_write(tmp_path, monkeypatch):
+    from test_cell_job_store import _running
+    _, _, store, _ = _running(tmp_path)
+    assert not store.has_device_receipt("cell-mission-1", "action-0", "attempt-0")
+    store.record_action_result("cell-mission-1", step_index=0, event_id="e", action_id="action-0",
+                               attempt_id="attempt-0", outcome="SUCCEEDED", result={})
+    assert store.has_device_receipt("cell-mission-1", "action-0", "attempt-0")  # pre-upgrade attempt
+    store.note_device_receipt("cell-mission-1", 0, "action-0", "attempt-0")
+    writes = []
+    monkeypatch.setattr(store, "_event", lambda *args, **kwargs: writes.append(args))
+    store.note_device_receipt("cell-mission-1", 0, "action-0", "attempt-0")
+    assert writes == []

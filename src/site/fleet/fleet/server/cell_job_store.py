@@ -75,6 +75,7 @@ class CellJobStore:
 
     def __init__(self, path: Path | str) -> None:
         self.path = Path(path)
+        self._noted: set[tuple[str, str, str]] = set()  # device receipts already recorded
         with closing(self._connect()) as connection:
             enable_wal(connection)
             connection.executescript(
@@ -535,6 +536,10 @@ class CellJobStore:
 
     def note_device_receipt(self, mission_id: str, step_index: int, action_id: str, attempt_id: str) -> None:
         """Remember that the owner journaled this attempt (1c item 3: a later 404 is not 'never ran')."""
+        key = (mission_id, action_id, attempt_id)
+        if key in self._noted or self.has_device_receipt(mission_id, action_id, attempt_id):
+            self._noted.add(key)  # already recorded: no write transaction (1d item 2)
+            return
         with closing(self._connect()) as connection:
             connection.execute("BEGIN IMMEDIATE")
             self._event(connection, mission_id, step_index, "CELL_STEP_DEVICE_RECEIPT", "device",
@@ -543,10 +548,17 @@ class CellJobStore:
             connection.commit()
 
     def has_device_receipt(self, mission_id: str, action_id: str, attempt_id: str) -> bool:
+        """A noted receipt, or a device-reported terminal outcome (SUCCEEDED/FAILED, only ever read
+        from an owner receipt) for the attempt: covers attempts in flight before receipts were
+        noted. Fleet-side UNKNOWN/REJECTED/NOT_FOUND outcomes do not prove journaling."""
         with closing(self._connect()) as connection:
             return connection.execute(
-                "SELECT 1 FROM fleet_cell_events WHERE event_key=?",
-                (f"{mission_id}:device-receipt:{action_id}:{attempt_id}",)).fetchone() is not None
+                "SELECT 1 FROM fleet_cell_events WHERE event_key=? OR (mission_id=? AND event_type IN "
+                "('CELL_STEP_ACTION_SUCCEEDED', 'CELL_STEP_ACTION_FAILED') "
+                "AND json_extract(detail_json, '$.action_id')=? "
+                "AND json_extract(detail_json, '$.attempt_id')=?) LIMIT 1",
+                (f"{mission_id}:device-receipt:{action_id}:{attempt_id}", mission_id, action_id,
+                 attempt_id)).fetchone() is not None
 
     def resource_claims(self) -> list[dict[str, Any]]:
         """Every durable claim with its owner; a Cell Job owner adds its status and reason."""

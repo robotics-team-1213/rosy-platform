@@ -243,12 +243,13 @@ class StepJobDispatcher:
         return self._outcome(job, index, grant, "UNKNOWN", "LOCAL_ACTION_READBACK_UNKNOWN", {})
 
     def _apply(self, job: Mapping[str, Any], index: int, grant, receipt: object) -> dict[str, Any]:
+        # Any 200 reply proves the owner journaled the attempt, even one that fails verification.
+        self.store.note_device_receipt(job["mission_id"], index, grant.action_id, grant.attempt_id)
         try:
             verified = self._verified(grant, receipt)
         except (TypeError, ValueError):
             return self._outcome(job, index, grant, "UNKNOWN", "LOCAL_ACTION_RECEIPT_INVALID", {})
         state = verified.state.value
-        self.store.note_device_receipt(job["mission_id"], index, grant.action_id, grant.attempt_id)
         if state in _IN_FLIGHT:
             return self._view(job, index, state, grant)
         facts = {"state": state, "journal_event_id": verified.journal_event_id,
