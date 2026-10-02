@@ -125,7 +125,7 @@ line_follow:                       # D-143 selected-source, fail-closed policy
   # along the intended lane arc; stop gap = margin + v*latency + v^2/(2*decel) at the intended
   # speed, resume = stop + hysteresis. The stop gap is always at least the straight-ahead body
   # gap of the scan's range_min (the LiDAR is blind inside it; the ultrasonic never lifts this);
-  # returns that slip under range_min are remembered from the issued twists. The sweep also
+  # returns that slip under range_min are remembered from the twist sent to the wheels. The sweep also
   # covers the tighter arc the traffic gate / safety clip can make. In place: rotation radius
   # + obstacle_body_margin_m (obstacle_stop_m/resume_m do not apply there).
   obstacle_body_margin_m: 0.02     # URDF/calibration error and floor slip
