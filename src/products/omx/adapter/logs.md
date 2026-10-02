@@ -219,3 +219,11 @@
 - gate 변화: ROS-SIM HOLD 유지(C3 증거 추가; C6·Fleet 경로 아님).
 - 결정: D-402 §3·§8, D-403 §5·§8. C4 과제: owner/runner 경쟁과 콜백 그룹 분리, wall/sim 시간 기준, release 전 hold 재확인, grasp 깊이 필드, `CELL_TRANSFER` grant schema.
 - 교훈: SUCCEEDED 네 개와 그리퍼 계약 통과만으로는 물체 이동을 말할 수 없다. `sim_model_pose`가 낙하를 잡았다.
+
+## 2026-10-02 · f63bb564 · fix(omx): C3b — C3 결함 수정, 대역 없는 Gazebo 단일 배치
+
+- 변경: 커밋 bc6a9955(A1 owner `start_state_window`: lock 안에서 최신 state로 검사·바인딩), 1df18501·3d4a693b(A2 RUNNING 한 번만 journal, feedback은 메모리 계수, joint-state·watchdog와 ActionClient 콜백 그룹 분리, 대기 이벤트 replay 경쟁), e9d5c1b6(A3 `owner_clock="sim"` + `wall_clock_bound_factor` 4.0), c832a53d(A4 release 전 `verify_held_object`, `ITEM_LOST_IN_TRANSIT`), 2b534abf·4316246b(A5 phase별 관절 허용오차 장치, 실측으로 덮어쓰기 없음), a31ebde1(B1 `grasp_depth`), bd56fa7a·2de7832d(B2 폭 맞춤 닫힘, Gazebo 보정 jaw 사상, release 부분 열림), cb58f71f(B3 런타임 sim aid, 대역 없는 probe, 인피드 yaw π/2), aee19f65·f63bb564(pose_plan.py 크기 판정).
+- 증거: host adapter+profile+cell+layout+architecture 602 passed, 6 skipped, 실패 2(아키텍처 크기 판정은 수정 커밋으로 해소; `test_control_imports_no_core_code`는 main 기존 실패). 컨테이너(rclpy) ROS·runner·owner·planner 148 passed, 1 skipped. Gazebo `final-single`: 인피드 → 팔레트 A 층 0 슬롯 0, xy 0.30 mm, yaw 0.0009 rad, 윗면 z 0.0 mm, 네 phase SUCCEEDED, owner HOLD 0, RTF 0.46–0.71. `final-three`: 배치 3/3 허용오차 안이지만 마지막 하강이 슬롯 2 블록을 24.9 mm 밀었다. docs/validation/rosy-cell-gazebo-c3-2026-10-02/README.md C3b 절.
+- gate 변화: ROS-SIM HOLD 유지(단일 transfer 증거 추가; Fleet 경로·종단 Job·이웃 간섭 남음). DEVICE/FIELD PARKED.
+- 결정: D-401·D-402 보강(2026-10-02, C3b). sim aid는 로봇 쪽 joint, hold 증명 뒤에만 붙인다.
+- 교훈: 메시로 유도한 그리퍼 사상은 Gazebo 접촉과 0.16 rad 어긋났다. 접촉 순간 link 포즈로 확인하고 측정으로 보정한다. 손가락이 블록에 닿지 않고 멈추면, 먼저 빈손 닫힘으로 자기 간섭(joint5 ≈ π/2)을 의심한다.

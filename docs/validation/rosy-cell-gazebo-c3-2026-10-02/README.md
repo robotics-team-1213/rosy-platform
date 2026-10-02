@@ -4,7 +4,7 @@
 
 [C3 하위 계획](../../plans/2026-10-02-rosy-cell-c3-gazebo.md)의 ROS-SIM 실행 기록이다. 해석 IK 플래너(D-402) → `PickPlaceRunner` → 단일 `ArmCommandOwner` → `/arm_controller/follow_joint_trajectory` 경로로 Rosy Cell 데모 Job의 `CELL_TRANSFER` 하나를 Gazebo에서 실행했다. Fleet 경로(C4), 종단 Job(C6), 실물·DEVICE·FIELD는 범위 밖이다.
 
-**판정: C3 ROS-SIM HOLD. 경로는 끝까지 돌았지만 블록을 목표에 놓지 못했다.**
+**판정: C3 ROS-SIM HOLD. 경로는 끝까지 돌았지만 블록을 목표에 놓지 못했다.** 결함을 고친 C3b 재실행은 단일 transfer를 대역 없이 xy 0.30 mm로 놓았다([C3b](#c3b--2026-10-02--결함-수정-뒤-재실행)).
 
 - 플래너가 만든 네 phase는 owner와 vendor 컨트롤러가 모두 수락·완료했다(run8, `SUCCEEDED`).
 - 그러나 owner/runner를 수정 없이 쓰면 첫 phase에서 HOLD가 난다. 문제 1·2를 probe 쪽 대역(stand-in)으로 우회해야 끝까지 갔다. 대역은 아래와 evidence JSON에 표시했다.
@@ -130,3 +130,102 @@ sim aid는 run13–16에서 detach·attach 상태 echo로 확인됐다. 하지�
 - 파지: 마찰이 안 되면 C6도 sim aid를 쓰고, 증거에 그렇게 적는다. 슬립시트 파지 방법을 정한다.
 - 시뮬 owner의 wall/sim 시간 기준과 RTF 기록. 카메라 영상(C6 증거)은 RTF를 0.06까지 떨어뜨린다.
 - `CELL_TRANSFER` grant schema(C4). probe는 PICK_PLACE envelope를 검증한 뒤 `action_kind`만 바꾼 대역 grant를 썼다. RGB-D 필드는 자리채움값이며 아무 판정에도 쓰지 않았다.
+
+## C3b · 2026-10-02 · 결함 수정 뒤 재실행
+
+**판정: 단일 `CELL_TRANSFER`(인피드 → 팔레트 A 층 0 슬롯 0) ROS-SIM 통과. C3 대역은 모두 걷었고, 남은 것은 표시된 sim attach aid와 sim 그리퍼 센서, C4 범위의 grant 봉투·stop fence다. 층 채우기(3회 연속)는 배치 자체는 3/3 허용오차 안이지만, 마지막 배치가 이웃 블록을 밀어 층 판정은 실패다.**
+
+Fleet 경로(C4), 종단 Job(C6), 실물·DEVICE·FIELD는 여전히 범위 밖이다. Action 부모는 `RUNNING`으로 남는다. `CELL_TRANSFER` 완료 journal은 C4다.
+
+### 고친 것 (커밋)
+
+| 항목 | 커밋 | 설계 |
+|---|---|---|
+| A1 sequence 경쟁 | `bc6a9955` | `TrajectoryCommand.start_state_window`(관절 → 기대값, 허용오차). owner가 lock 안에서 자기 최신 joint state로 같은 검사를 하고 그 sequence에 묶는다. 오래된 state는 HOLD, 벗어난 state는 `start_state_deviation`, 본 적 없는 sequence나 이미 쓴 sequence는 거절이다. home 단건 goal도 같은 창을 쓴다. |
+| A2 feedback journal | `1df18501`, `3d4a693b` | RUNNING은 goal마다 한 번만 기록하고, 이후 feedback은 메모리에서 세기만 한다. 수는 terminal result에 `feedback_events`로 남긴다. joint-state 구독과 watchdog은 한 콜백 그룹, ActionClient는 다른 그룹이다. 모든 호출자는 MultiThreadedExecutor다. Gazebo run9에서 대기열의 GOAL_ACCEPTED를 실시간 feedback이 앞질러 owner가 `action_failed` HOLD를 냈다. replay가 끝날 때까지 event lock을 쥐게 고쳤다. |
+| A3 시계 | `e9d5c1b6` | `RosArmCommandRuntime(owner_clock="sim")`: owner 시계와 joint-state 시각이 노드 시계(sim time)다. steady 시계는 `wall_clock_bound_factor`(프로필 4.0) × sim 한계의 바깥 상한이다. 멈춘 sim은 `joint_state_stale_wall_clock`, 기는 sim은 `action_wall_timeout`으로 HOLD한다. Pilot은 기본값 `steady` 그대로다. |
+| A4 release 전 hold | `c832a53d` | `CellTransferPlan` runner는 `gripper_readback`과 `held_object_id`를 요구한다. release 제출 직전에 `verify_held_object`를 다시 한다. 실패하면 `ITEM_LOST_IN_TRANSIT` HOLD이고 release는 나가지 않는다. |
+| A5 손목 처짐 | `2b534abf`, `4316246b` | 프로필 `phase_start_state_tolerance_rad.{transfer,release}.<팔 관절>` (grasp 뒤만, 기준 이상, 0.1 rad 이하). 실측 처짐은 아래 표에 있다. 기준 0.02로 충분해 덮어쓴 관절은 없다. |
+| B1 파지 깊이 | `a31ebde1` | 레시피 `box.grasp_depth`(물건마다; 슬립시트는 0). 상자 Step z = 윗면 − 깊이, `carry_z` 매달린 높이 = `height − grasp_depth`. 요청 필수 필드 `grasp_depth_m`. D-401·D-402 보강. |
+| B2 폭 맞춤 닫힘 | `bd56fa7a`, `2de7832d` | gap(q) = 2(o + x sin q + y cos q). o는 URDF 손가락 축이다. 접촉점 (x, y)는 Gazebo 보정값이다(아래). 닫힘 목표는 폭 − `squeeze_m` 3 mm다. release는 폭 + 10 mm까지만 열고, carry_z로 올라간 뒤 완전히 연다. |
+| B3 sim aid | `cb58f71f` | 부모 `omx_f::link5`, 자식 블록인 DetachableJoint다. readback이 hold를 증명한 뒤에만 `entity/system/add`로 붙이고, release 직전에 뗀다. 월드 파일에는 표시만 있고 플러그인은 없다. |
+
+### 재현 정보 (C3b)
+
+| 항목 | 값 |
+|---|---|
+| 소스 | `feat/rosy-cell-c3-gazebo` `f63bb564` |
+| 이미지 | C3와 같다: `rosy-omx-pilot:recording-local` `sha256:faeb86d6…efb2`. 재빌드하지 않았다. |
+| 월드 | `omx_cell_workcell_sim_aid.sdf` sha256(LF) `afe637e6a3081148e54a1cbf6776adce633111329b8ec83b4ec6f3573229aa31` (본 월드와 머리 주석만 다르다) |
+| profile_revision | `d639cbf7fcf1d8a64bc53ed0b631608d3f1bed9277206bb1db28f196dc7b4e64` |
+| cell_sha256 / recipe_sha256 | `a5d4221f…4549` / `8b620e59…bd0c` |
+| 컨테이너 | `rosy-cell-c3-sim`, C3와 같은 격리(`--network none`, `ROS_DOMAIN_ID=77`, 저장소 read-only) |
+| 원본 | `X:\DevTemp\rosy-cell-c3\c3b\` (`final-single/`, `final-three/`, run1–run18, diag1–diag6) |
+
+```powershell
+docker exec rosy-cell-c3-sim bash -c "source /opt/ros/jazzy/setup.bash; source /opt/omx_ws/install/setup.bash; `
+  export ROS_DOMAIN_ID=77 ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST; `
+  python3 /repo/deploy/robot/omx/probe_cell_transfer.py --out /scratch/final-single --transfers 3"
+# 3회: --transfers 1,2,3 (Job 순서: 슬롯 1, 2, 0)
+```
+
+probe에는 대역 플래그가 없다(`--submit-from`, `--feedback-to-runner`, `--arm-start-tolerance`, `--grasp-depth`, `--sim-aid` 삭제). journal은 overlay `/tmp`에 둔다.
+
+### 단일 transfer 결과 (`final-single`, transfer 3 → 슬롯 0)
+
+| phase | 계획 s | sim s | wall s | RTF | feedback | gripper_joint_1 / 짝 | 다음 phase 시작 대비 최대 팔 편차 |
+|---|---|---|---|---|---|---|---|
+| home | 8.66 | 9.50 | 14.73 | 0.65 | — | 1.0000 | — |
+| approach | 11.38 | 12.02 | 16.90 | 0.71 | 321 | 1.0000 / −1.0000 | 0.0000 |
+| grasp | 2.55 | 2.85 | 4.55 | 0.63 | 73 | **0.4162** / −0.4181 (목표 0.3804) | 0.0003 (joint5) |
+| transfer | 13.52 | 14.20 | 23.41 | 0.61 | 444 | 0.4194 / −0.4190 | 0.0019 (joint5) |
+| release | 9.64 | 10.17 | 21.94 | 0.46 | 396 | 1.0000 / −1.0000 | — |
+
+- 배치 오차: xy **0.30 mm**(dx −0.30, dy +0.02), yaw **0.0009 rad**(π 법), 윗면 z **0.0 mm**, 기울기 0. 허용오차 5 mm / 0.05 rad / 2 mm를 넘지 않는다.
+- 그리퍼: 30 mm 블록의 닫힘 목표 0.3804, 보정 모델의 접촉각 0.4069, hold 판정 문턱 = 목표 + 0.0132. grasp 뒤 readback 0.4162 → `verify_held_object` 통과 → aid 부착이 확인됐다(`attached` echo). 부착 1 s 뒤 0.4188, release 직전 0.4194다. 손가락은 블록을 지나 닫히지 않았다. runner의 release 전 재확인은 `object_present: true`였다.
+- journal: 네 phase `SUCCEEDED`. feedback은 phase마다 73–444건이었고, 저장소 쓰기는 RUNNING 한 번뿐이다. owner HOLD 0회.
+
+### 3회 연속 (`final-three`, Job 순서 transfer 1, 2, 3 → 슬롯 1, 2, 0)
+
+| transfer → 슬롯 | 배치 xy / yaw / 윗면 z | grasp readback | phase sim s (approach/grasp/transfer/release) | RTF | 최대 팔 편차 | 앞서 놓은 블록 |
+|---|---|---|---|---|---|---|
+| 1 → 슬롯 1 (0.2075, 0.0275) | 0.31 mm / 0.0007 / 0.0 | 0.4165 | 12.0 / 3.2 / 18.9 / 13.8 | 0.80–0.95 | 0.0025 | — |
+| 2 → 슬롯 2 (0.1525, 0.0725) | 0.14 mm / −0.0039 / 0.0 | 0.4160 | 12.0 / 4.3 / 16.7 / 11.4 | 0.58–0.62 | 0.0049 | 슬롯 1: 0.3 mm |
+| 3 → 슬롯 0 (0.1525, 0.0275) | 0.31 mm / 0.0042 / 0.0 | 0.4162 | 12.1 / 3.3 / 19.0 / 10.4 | 0.31–0.44 | 0.0014 | 슬롯 1: 0.3 mm, **슬롯 2: 24.9 mm** |
+
+- 세 배치는 모두 그 순간 허용오차 안이었다. 그러나 transfer 3의 transfer phase(슬롯 0으로 하강)에서 슬롯 2 블록이 (0.1489, 0.0896, yaw −0.33)으로 밀렸다. 손가락이 y 방향으로 닫히므로, +y 손가락이 슬롯 0과 슬롯 2 사이 15 mm 틈에 들어간다. Gazebo의 실효 손가락은 그 틈보다 넓다. probe는 앞서 놓은 블록을 phase마다 다시 읽어 이를 잡았고 종료 코드 2를 냈다. **층 채우기 판정: 실패.**
+- RTF 0.31–0.44(transfer 3)는 같은 시각 호스트 pytest 실행과 겹친 값이다. sim-time owner와 4배 wall 상한 아래에서 HOLD는 없었다.
+- 손목 처짐(A5 근거): run10·11·12·15·18의 13회(검사 26번)에서 계획된 transfer/release 시작 대비 팔 관절 최대 0.0115 rad(joint4 ≤ 0.0099, joint5 ≤ 0.0056)였다. 최종 4회는 ≤ 0.0049다. 기준 0.02 rad에 1.7배 여유가 있다.
+
+### 실행 기록 (C3b)
+
+| 회차 | 내용 | 결과 |
+|---|---|---|
+| run1 | 메시 사상(0.060, −0.00915), 닫힘 목표 0.223 | 손가락이 0.408에서 멈췄다. C3의 블록 쪽 aid 부착 뒤 손가락이 지나 닫혀 owner `joint_state_limit` HOLD |
+| diag1 | 접촉 순간 link 포즈 | 메시 손가락은 블록 중심에서 24 mm(면에서 9 mm), 볼록 껍질도 19.7 mm 떨어져 있었다. Gazebo의 실제 접촉은 메시보다 넓다 |
+| diag3 | 20/30/40 mm 블록 보정 | gripper_joint_1 0.3187 / 0.4072 / 0.4956 → 접촉점 (0.0543, −0.01703), 잔차 0.03 mm |
+| run2 | 보정 사상 + 3 mm squeeze, 블록 쪽 aid | 네 phase 성공. 부착 순간 블록이 pitch −0.15 rad 기울어 xy 7.6 mm 불합격 |
+| run3 | squeeze 1 mm | transfer 중 손가락 튐 → `joint_state_limit` HOLD. 블록 쪽 aid를 버렸다 |
+| run4–8 | 로봇 쪽 runtime aid | 손가락이 블록에 닿지 않고 0.52에서 멈췄다. 빈손 시험(diag4/diag6): joint5 ≈ 0이면 0.0까지 닫히고, joint5 = 1.5이면 0.46–0.51에서 손목에 걸린다. yaw 0 인피드 pick은 joint5 ≈ π/2를 요구하므로 인피드를 yaw π/2로 돌렸다. 엔티티 이름만으로는 플러그인이 붙지 않아 id로 바꿨다 |
+| run9 | | approach `SUCCEEDED` 뒤 owner `action_failed`: GOAL_ACCEPTED replay 경쟁(A2 보강 `3d4a693b`) |
+| run10 | 깊이 10 mm | 첫 정상 배치 xy 0.21 mm |
+| run11 | 3회, 슬롯 0 먼저, release 완전 열림 | 배치 3/3 통과. 그러나 슬롯 0 블록이 팔레트 밖으로 옆으로 누웠다(release 손가락 휩쓸기) → release를 폭 + 10 mm로 제한 |
+| run12 | 같은 순서, 부분 열림 | 슬롯 0 블록이 22 mm 밀렸다(yaw −0.73) |
+| run13/14/17 | | 첫 부착 echo를 놓쳤다(부착은 실제로 됐다) → 감시 노드를 probe 수명 동안 유지하고, 재명령 fallback을 넣었다 |
+| run15 | Job 순서 1,2,3, gap 15 mm | 배치 3/3 통과. transfer 3이 슬롯 2 블록을 15.7 mm 밀었다 |
+| run18 | 같은 순서, gap 20 mm(시험만, 되돌림) | 슬롯 2 블록이 21.7 mm 밀렸다. gap을 넓혀도 해결되지 않는다 |
+
+### 남은 대역과 표시
+
+- **SIM AID**(표시): 런타임 DetachableJoint, hold 증명 뒤에만 붙인다. 운반 중 낙하 여부는 시험하지 않았다. aid가 붙어 있는 동안 블록은 떨어질 수 없다.
+- **SIM 그리퍼 센서**(표시): gripper_joint_1 위치 기준. hold = 목표 + squeeze 각의 절반 이상. open = 1.0 ± 0.05.
+- **인피드 재적재**: 반복 transfer는 다음 블록을 인피드에 spawn한다(sim 준비 단계, 동작 아님).
+- **C4 범위**(동작 아님): PICK_PLACE로 검증한 grant 봉투에 `action_kind`만 바꾼 것, 항상 열린 stop fence.
+
+### C4·C6로 넘길 것
+
+1. **이웃 간섭.** Gazebo의 실효 손가락이 레시피 gap 15–20 mm보다 넓다. 2×2 층에서는 마지막 배치가 이웃을 민다. 레시피/셀 검증에 공구 폭 대비 gap 검사가 필요하고, 플래너에는 충돌 장면이 필요하다(D-402 §7).
+2. **사상 출처.** 접촉점은 Gazebo 보정값이다. 고정된 메시만으로는 30 mm에서 0.25 rad를 예측하지만, Gazebo는 0.41에서 멈춘다(메시가 아직 5–9 mm 떨어진 상태). 실물은 자기 측정값이 필요하다.
+3. **손목 자기 간섭.** joint5 ≈ π/2에서 손가락이 0.46–0.51 rad 아래로 닫히지 않는다. 플래너가 모르는 제약이다. 인피드 yaw로 피했을 뿐이다.
+4. **C3 결과의 재해석.** C3 월드의 블록 쪽 aid는 로드 때 블록을 link5에 붙였다가 뗐다. 그 뒤로는 위 손목 간섭이 나타나지 않았다(C3·diag3의 joint5 ≈ π/2 pick이 0.40에서 블록에 닿음). 원인은 확인하지 않았다. 보정은 그 상태에서 했고, joint5 ≈ 0인 최종 회차의 접촉(0.416, 3 mm squeeze)과 맞는다.
+5. 슬립시트 파지 방법 없음(폭 2 mm → `GRIPPER_WIDTH_INVALID`). `CELL_TRANSFER` grant schema와 완료 journal(C4).

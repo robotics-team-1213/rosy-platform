@@ -34,3 +34,11 @@
 - gate 변화: ROS-SIM HOLD 유지(C3 증거 추가, C6 아님).
 - 결정: D-402 §5 도달 실측, D-403 §2.
 - 교훈: Step z는 물건 윗면인데 OMX-F TCP는 손가락 끝이라 파지 깊이를 실을 자리가 필요하다(C4). 탁자 위 슬립시트(z 0.002)는 프로필 TCP 바닥 0.005 아래라 거절된다.
+
+## 2026-10-02 · a31ebde1 · feat(cell): per-item grasp_depth (C3b B1)
+
+- 변경: 레시피 `box.grasp_depth`(선택, 0 ≤ d < height, 없으면 0 = 윗면). 상자 Step `target.z` = 윗면 − `grasp_depth`, `approach_z` = 윗면 + clearance, `carry_z` 매달린 높이 = max(`height − grasp_depth`, 슬립시트 두께). 데모 레시피 15 mm. C3b B3(cb58f71f)에서 데모 인피드 yaw를 π/2로 돌렸다(cell.yaml·두 월드).
+- 증거: cell suite 150 passed(새 시험: 깊이만큼 낮은 상자 Step, 같은 approach_z, carry_z = 0.042 + 0.012 + 0.05, 슬립시트가 더 두꺼우면 그것이 매달린 높이); layout contract 5 passed(상자 transfer 전부 계획, 슬립시트는 `GRIPPER_WIDTH_INVALID`).
+- gate 변화: 없음. ROS-SIM은 omx_adapter의 C3b 단일 transfer 증거.
+- 결정: D-401 보강(2026-10-02, C3b). 깊이는 셀 공구가 아니라 물건에 둔다.
+- 교훈: 레시피 gap 15 mm(20 mm도)는 Gazebo의 실제 손가락 폭보다 좁아, 층을 채우면 나중 배치가 이웃을 민다. gap 검증에 공구 폭이 들어가야 한다(C4/C6).

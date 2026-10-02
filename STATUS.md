@@ -28,7 +28,7 @@
 | [web_common](src/hmi/web_common/progress.md) | CORE | 0409c371 (2026-09-30) | GO | GO | N/A | N/A | N/A | N/A |
 | [dashboard](src/hmi/dashboard/progress.md) | 화면 | e7cdf490 (2026-09-29) | GO | GO | N/A | HOLD | N/A | N/A |
 | [pilot](src/hmi/pilot/progress.md) | 화면 | 434ceb0b (2026-09-29) | GO | HOLD | HOLD | HOLD | HOLD | N/A |
-| [omx_adapter](src/products/omx/adapter/progress.md) | OMX workcell | 31ada4b4 (2026-10-02) | GO | GO | HOLD | HOLD | PARKED | PARKED |
+| [omx_adapter](src/products/omx/adapter/progress.md) | OMX workcell | f63bb564 (2026-10-02) | GO | GO | HOLD | HOLD | PARKED | PARKED |
 | [interfaces](src/contracts/interfaces/progress.md) | 장치 | dc89264 (2026-09-17) | GO | GO | N/A | HOLD | HOLD | PARKED |
 | [pinky_pro](src/products/pinky_pro/profile/progress.md) | 로봇 통합 | uncommitted (2026-09-24) | GO | GO | GO | HOLD | HOLD | PARKED |
 | [omx](src/products/omx/profile/progress.md) | OMX workcell | uncommitted (2026-09-26) | GO | GO | HOLD | HOLD | PARKED | PARKED |
@@ -70,7 +70,7 @@
 - pilot ROS-SIM: OMX 관절·그리퍼·취소의 Gazebo action/readback은 docs/validation/pilot-omx-gazebo-2026-10-01/에서 확인. Gazebo 작업대 영상·시연 기록 15프레임과 실제 LeRobot v3 재독출도 통과. 그리퍼 정밀 도달·전체 재시작 회복·Pinky 재측정은 남음
 - pilot ARTIFACT: share/pilot 설치를 이미지에서 본 기록이 없다
 - pilot DEVICE: 실기 Pinky 에서 페달 hold-해제가 실제 정지로 이어지는 확인 전
-- omx_adapter ROS-SIM: C3 findings first: ArmCommandOwner exact joint-state sequence vs PickPlaceRunner journal writes (race), RUNNING_FEEDBACK journaling in the shared callback group (joint_state_stale HOLD), wall-clock action timeout vs sim time, no held check before release, no grasp-depth field. Full gate still requires a Fleet Mission admission/grant-to-device-owner simulator harness, a pending vendor goal fenced by generation change, restart recovery to UNKNOWN/HOLD without replay, and four-phase execution with fresh state and independent simulated object/gripper evidence. Pilot workcell RGB recording is available; full Fleet pick/place still has no contact/object evidence and does not prove independent stop, ARM64, or physical hardware.
+- omx_adapter ROS-SIM: C3 findings fixed in C3b. Open: layer fill disturbs neighbours (a later placement pushed an earlier block 16-25 mm: Gazebo's effective finger is wider than the 15-20 mm recipe gap); Gazebo's finger contact is ~5-9 mm wider than the pinned mesh and the jaw mapping is calibrated, not derived; fingers stop on the wrist near joint5 = pi/2 in Gazebo; no slip-sheet grasp. Full gate still requires a Fleet Mission admission/grant-to-device-owner simulator harness, a pending vendor goal fenced by generation change, restart recovery to UNKNOWN/HOLD without replay, and four-phase execution with fresh state and independent simulated object/gripper evidence. Pilot workcell RGB recording is available; full Fleet pick/place still has no contact/object evidence and does not prove independent stop, ARM64, or physical hardware.
 - omx_adapter ARTIFACT: No signed/published production artifact digest, complete SBOM, or provider deployment/secret-injection configuration is available. Simulation manifest does not qualify as a releasable runtime artifact.
 - interfaces ARTIFACT: io 이미지에 포함된다(deploy/robot/pinky_pro/image/ 빌더 `COPY src/interfaces`, `--packages-select`에 포함). 서명 manifest·OCI archive·immutable registry digest 발행 전
 - interfaces DEVICE: Pi OS Lite bench Device의 install-pi.sh 설치, verify-pi.sh, device-readback.sh --json 증거 없음
