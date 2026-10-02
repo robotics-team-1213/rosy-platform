@@ -1,0 +1,97 @@
+// D-411 A: 로봇 학습 녹화(카메라 유닛 bag)의 순수 표시 판정. DOM·fetch·시계 없음.
+// 화면 녹화(브라우저 MediaRecorder, evidence.js)와는 다른 것이다 — 이것은 로봇이 쓴다.
+
+export const RECORDING_POLL_MS = 1000;
+
+const BLOCKER_TEXT = Object.freeze({
+  RECORDING_BUSY: "녹화 중에는 받을 수 없습니다",
+  ROBOT_MOVING: "로봇이 멈춘 뒤에 받을 수 있습니다",
+});
+
+const ERROR_TEXT = Object.freeze({
+  ...BLOCKER_TEXT,
+  RECORDER_UNAVAILABLE: "녹화기 응답 없음",
+  RECORDING_QUOTA_FULL: "녹화 공간이 찼습니다 — 녹화본을 받으면 비워집니다",
+  RECORDING_DISK_FULL: "로봇 저장 공간이 부족합니다",
+  FORBIDDEN: "다른 기기가 시작한 녹화입니다",
+  RECORDING_NOT_ACTIVE: "진행 중인 녹화가 없습니다",
+  RECORDING_NOT_FOUND: "녹화본이 없습니다",
+});
+
+// 녹화기가 스스로 멈춘 이유(last_stop_reason). 'requested'(누가 멈춤)는 따로 말하지 않는다.
+const STOP_TEXT = Object.freeze({
+  max_duration: "10분 상한에서 멈춤",
+  quota: "녹화 공간 한도에서 멈춤",
+  disk_full: "저장 공간 부족으로 멈춤",
+  recorder_exit: "녹화기가 끝나 멈춤",
+  shutdown: "녹화기 종료로 멈춤",
+});
+
+export function formatElapsed(seconds) {
+  const total = Math.max(0, Math.floor(Number(seconds) || 0));
+  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`;
+}
+
+export function formatBytes(bytes) {
+  const value = Math.max(0, Number(bytes) || 0);
+  if (value < 1e3) return `${Math.round(value)} B`;
+  if (value < 1e6) return `${(value / 1e3).toFixed(1)} KB`;
+  if (value < 1e9) return `${(value / 1e6).toFixed(1)} MB`;
+  return `${(value / 1e9).toFixed(1)} GB`;
+}
+
+export function errorText(code) {
+  return ERROR_TEXT[code] ?? "요청이 거부되었습니다";
+}
+
+// active: GET /api/v1/recordings/active 의 `active`(낡았거나 녹화기가 없으면 null).
+// label 은 HUD 버튼 글자(짧게), detail 은 그 옆 칩.
+export function recordingView(active) {
+  if (!active) {
+    return {recording: false, available: false, busy: false, label: "로봇 녹화", detail: "",
+            reason: "녹화기 응답 없음"};
+  }
+  if (active.state === "recording" || active.state === "stopping") {
+    const busy = active.state === "stopping";
+    return {
+      recording: true, available: true, busy, label: busy ? "녹화 정리 중" : "로봇 녹화 중지",
+      detail: `녹화 ${formatElapsed(active.elapsed_s)} / ${formatElapsed(active.max_duration_s)} · ${formatBytes(active.bytes)}`,
+      reason: busy ? "녹화본을 정리하는 중입니다" : "",
+    };
+  }
+  const stopped = STOP_TEXT[active.last_stop_reason];
+  const detail = active.state === "error" ? "녹화기 오류" : stopped ? `지난 녹화: ${stopped}` : "";
+  return {recording: false, available: true, busy: false, label: "로봇 녹화", detail, reason: ""};
+}
+
+function formatStarted(iso) {
+  const at = new Date(iso);
+  if (Number.isNaN(at.getTime())) return String(iso ?? "");
+  const two = (n) => String(n).padStart(2, "0");
+  return `${two(at.getMonth() + 1)}-${two(at.getDate())} ${two(at.getHours())}:${two(at.getMinutes())}`;
+}
+
+// listing: GET /api/v1/recordings. 받기 가능 여부는 CORE 의 download_allowed 를 따른다
+// (받는 도중에도 CORE 가 다시 보고, 움직이면 끊는다).
+export function sheetRows(listing) {
+  const blocker = listing?.download_allowed ? "" : (BLOCKER_TEXT[listing?.download_blocker] ?? "지금은 받을 수 없습니다");
+  return (listing?.items ?? []).map((item) => {
+    const complete = item.status === "complete";
+    const duration = item.duration_s == null ? "—" : formatElapsed(item.duration_s);
+    return {
+      id: item.id,
+      title: formatStarted(item.started_at),
+      detail: `${duration} · ${formatBytes(item.bytes)}${item.fetched ? " · 받음" : ""}`,
+      canFetch: complete && !blocker,
+      reason: !complete ? (item.status === "recording" ? "녹화 중입니다" : "끝나지 않은 녹화입니다") : blocker,
+    };
+  });
+}
+
+export function sheetNotice(listing) {
+  if (!listing) return "목록을 불러오지 못했습니다";
+  if (!listing.download_allowed && listing.items?.length) {
+    return BLOCKER_TEXT[listing.download_blocker] ?? "지금은 받을 수 없습니다";
+  }
+  return listing.items?.length ? "" : "녹화본이 없습니다";
+}

@@ -694,3 +694,73 @@ def test_exit_after_a_failed_engage_posts_no_idle(tablet_page):
     finally:
         dev_server.MODE_REFUSALS["remaining"] = 0
     assert errors == [], errors
+
+
+ROBOT_RECORDING_ID = "20261002T101500Z_rosy_dev"
+
+
+@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+                    reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
+@pytest.mark.parametrize("viewport", [(2000, 1200), (1200, 2000), (390, 844)])
+def test_robot_recording_toggle_and_sheet(base_url, viewport):
+    """D-411 A: 로봇 녹화 토글(화면 녹화와 따로)과 녹화본 시트 — 받기는 CORE 의 차단 사유를 따른다."""
+    with playwright_sync.sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        page = browser.new_page(viewport={"width": viewport[0], "height": viewport[1]}, accept_downloads=True)
+        errors: list[str] = []
+        page.on("pageerror", lambda exc: errors.append(str(exc)))
+        page.set_default_timeout(10_000)
+        page.request.post(f"{base_url}/__test__/recordings", data={"blocker": None, "reset": True})
+        try:
+            _enter_drive(page, base_url)
+            assert page.locator("[data-evidence-record]").inner_text().strip() == "화면 녹화"
+            page.wait_for_function("!document.querySelector('[data-robot-record]').disabled")
+            assert page.evaluate("document.documentElement.scrollWidth - document.documentElement.clientWidth") <= 0
+            page.click("[data-robot-record]")
+            page.wait_for_function("document.querySelector('[data-robot-record]').textContent.includes('중지')")
+            page.wait_for_selector("[data-drive-fact=recording]:not([hidden])")
+            assert "녹화 0:01 / 10:00" in page.inner_text("[data-drive-fact=recording]")
+            assert page.request.get(f"{base_url}/__test__/recordings").json()["log"] == ["start"]
+            page.click("[data-recordings-open]")
+            row = page.locator(f"[data-recordings-sheet] [data-recording-id='{ROBOT_RECORDING_ID}']")
+            row.wait_for()
+            assert row.locator("[data-recording-fetch]").is_disabled()          # 녹화 중에는 받지 않는다
+            assert "녹화 중에는" in page.inner_text("[data-recordings-notice]")
+            page.click("[data-robot-record]")
+            page.wait_for_function("document.querySelector('[data-robot-record]').textContent.trim() === '로봇 녹화'")
+            page.request.post(f"{base_url}/__test__/recordings", data={"blocker": "ROBOT_MOVING"})
+            page.click("[data-recordings-refresh]")
+            page.wait_for_function("document.querySelector('[data-recordings-notice]').textContent.includes('멈춘 뒤')")
+            assert row.locator("[data-recording-fetch]").is_disabled()
+            page.request.post(f"{base_url}/__test__/recordings", data={"blocker": None})
+            page.click("[data-recordings-refresh]")
+            page.wait_for_function("!document.querySelector('[data-recording-fetch]').disabled")
+            sheet = page.locator("[data-recordings-sheet]").bounding_box()
+            assert sheet["x"] >= 0 and sheet["x"] + sheet["width"] <= viewport[0] + 1, sheet
+            with page.expect_download() as download:
+                row.locator("[data-recording-fetch]").click()
+            assert download.value.suggested_filename == f"{ROBOT_RECORDING_ID}.tar"
+            row.locator("[data-recording-status]").wait_for()
+            assert "받음" in row.locator("[data-recording-status]").inner_text()
+            log = page.request.get(f"{base_url}/__test__/recordings").json()["log"]
+            assert log == ["start", "stop", "archive"], log
+            page.click("[data-recordings-close]")
+            assert page.locator("[data-recordings-sheet]").count() == 0
+        finally:
+            browser.close()
+    assert errors == [], errors
+
+
+@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+                    reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
+def test_leaving_drive_stops_the_robot_recording_this_device_started(tablet_page):
+    base_url, page, errors = tablet_page
+    page.request.post(f"{base_url}/__test__/recordings", data={"blocker": None, "reset": True})
+    _enter_drive(page, base_url)
+    page.wait_for_function("!document.querySelector('[data-robot-record]').disabled")
+    page.click("[data-robot-record]")
+    page.wait_for_function("document.querySelector('[data-robot-record]').textContent.includes('중지')")
+    page.click("[data-drive-exit]")
+    page.wait_for_timeout(500)
+    assert page.request.get(f"{base_url}/__test__/recordings").json()["log"] == ["start", "stop"]
+    assert errors == [], errors

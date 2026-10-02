@@ -48,6 +48,26 @@ export async function postJson(path, body, {timeoutMs} = {}) {
   return api(path, {method: "POST", body: JSON.stringify(body ?? {}), timeoutMs});
 }
 
+// D-411: 같은 Bearer 머리로 바이너리를 받는다(토큰은 URL 에 넣지 않는다). length 는
+// Content-Length — 본문이 그보다 짧으면 서버가 도중에 끊은 것이다(실패).
+export async function apiBlob(path, {timeoutMs} = {}) {
+  const controller = timeoutMs ? new AbortController() : null;
+  const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
+  try {
+    const response = await fetch(path, {cache: "no-store", headers: authHeaders(),
+                                        ...(controller ? {signal: controller.signal} : {})});
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}));
+      return {status: response.status, ok: false, body, blob: null, length: null};
+    }
+    const header = response.headers.get("Content-Length");
+    return {status: response.status, ok: true, body: null, blob: await response.blob(),
+            length: header == null ? null : Number(header)};
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
 export function whoami() {
   return api("/api/v1/auth/whoami");
 }
