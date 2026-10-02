@@ -173,3 +173,12 @@ def test_node_ranger_needs_the_same_two_opt_ins_as_camera_detect(node_module, tm
                                                      lambda name, default: values.get(name, default))
     assert (ranger_ is not None) is expect_ranger
     assert [s[1] for s in subscriptions] == (['scan'] if expect_scan else [])
+
+
+def test_node_opens_models_through_the_signature_check():
+    """D-423 §3.4: unsigned object_det bundles are refused unless allow_unsigned_models (dev)."""
+    source = (Path(__file__).resolve().parents[1] / 'control' / 'object_detector_node.py').read_text(
+        encoding='utf-8')
+    assert "checked_opener(" in source
+    assert "p('allow_unsigned_models', False)" in source
+    assert "p('trusted_keys_dir', TRUSTED_KEYS)" in source

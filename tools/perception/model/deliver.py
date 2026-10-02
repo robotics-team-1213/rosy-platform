@@ -67,6 +67,7 @@ import operator_ssh  # noqa: E402
 from control.sensing.perception.learned.manifest import (  # noqa: E402
     MANIFEST_NAME, TASKS, ManifestError, check_revision, load_manifest, verify_files)
 from control.sensing.perception.learned.slots import task_root  # noqa: E402
+from control.sensing.perception.learned.signature import SIGNATURE_NAME  # noqa: E402
 
 REMOTE_ROOT = "/var/lib/rosy/models"
 REPORT_NAME = "intake_report.json"
@@ -417,6 +418,8 @@ def _push(args, ssh, scp, runner) -> int:
     target = f"{args.user}@{args.host}"
     checks = [(f.sha256, f.name) for f in manifest.files]
     checks.append((_sha256(folder / MANIFEST_NAME), MANIFEST_NAME))
+    if (folder / SIGNATURE_NAME).is_file():  # D-423: the robot verifies it before opening
+        checks.append((_sha256(folder / SIGNATURE_NAME), SIGNATURE_NAME))
     report_check = (_sha256(folder / REPORT_NAME), REPORT_NAME)
     t = args.timeout
     r = _run(runner, [*ssh, target, remote_script("prepare", rev)], t)

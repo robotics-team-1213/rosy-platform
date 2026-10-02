@@ -30,6 +30,7 @@ from .sensing.perception.camera_ground import nominal_ground_plane
 from .sensing.perception.image_frame import image_msg_to_frame
 from .sensing.perception.learned.detector import CONFIDENCE, IOU, ObjectDetModel
 from .sensing.perception.learned.runner import ModelSlot
+from .sensing.perception.learned.signature import TRUSTED_KEYS, checked_opener
 from .sensing.perception.learned.slots import slot_pointer
 
 
@@ -39,8 +40,11 @@ class ObjectDetectorNode(Node):
         p = lambda name, default: self.declare_parameter(name, default).value  # noqa: E731
         pointer = p('pointer', slot_pointer('object_det', 'active'))
         threads, conf, iou = int(p('threads', 2)), float(p('confidence', CONFIDENCE)), float(p('iou', IOU))
-        self._slot = ModelSlot(pointer, opener=lambda folder: ObjectDetModel.open(
-            folder, threads=threads, conf=conf, iou=iou))
+        # D-423 §3.4: only release-signed bundles; allow_unsigned_models is a dev-only override.
+        opener = checked_opener(lambda folder: ObjectDetModel.open(folder, threads=threads, conf=conf, iou=iou),
+                                allow_unsigned=bool(p('allow_unsigned_models', False)),
+                                keys_dir=str(p('trusted_keys_dir', TRUSTED_KEYS)))
+        self._slot = ModelSlot(pointer, opener=opener)
         self._core = ObjectDetectorCore(self._slot, max_rate_hz=float(p('max_rate_hz', 2.0)),
                                         camera_fps=float(p('camera_fps', 8.0)), ranger=self._ranger(p))
         self._busy, self._logged_error = False, None
