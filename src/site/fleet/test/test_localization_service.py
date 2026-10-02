@@ -409,6 +409,71 @@ def test_an_anchor_whose_pose_jumps_while_localized_loses_its_anchor():
     assert svc.anchors() == set()
 
 
+def test_the_jump_bound_caps_dt_at_1_s_so_a_180_degree_flip_always_counts():
+    """S1 run 3 T1: polls 4-10 s apart let a mirror injection pass as motion."""
+    before = (0.70, -0.15, 0.0)
+    for dt in (0.5, 1.0, 8.0, 60.0):
+        assert service_logic.jumped(before, mirror(before), dt)
+        assert service_logic.jumped(before, (*before[:2], math.pi), dt)        # turned in place
+    assert not service_logic.jumped(before, (0.70, -0.15 + 0.7, 2.4), 60.0)    # under 0.75 m, 2.5 rad
+    assert service_logic.jumped(before, (0.70, -0.15 + 0.8, 0.0), 60.0)
+
+
+def test_the_mirror_signature_is_independent_of_dt():
+    before = (0.10, 0.05, 0.3)
+    near_twin = (-0.10 + 0.2, -0.05, cues.wrap(0.3 + math.pi + 0.4))
+    assert service_logic.mirrored(before, near_twin)
+    assert not service_logic.mirrored(before, (-0.10 + 0.35, -0.05, cues.wrap(0.3 + math.pi)))
+    assert not service_logic.mirrored(before, (-0.10, -0.05, cues.wrap(0.3 + math.pi + 0.6)))
+    assert not service_logic.mirrored(before, before)
+
+
+def _poll_every(svc, clock, gap_s, polls, move=None):
+    for i in range(polls):
+        if move is not None:
+            move(i)
+        run(svc.tick())
+        clock.advance(gap_s)
+
+
+def test_s1_run3_a_mirror_injection_between_8_s_polls_drops_the_anchor():
+    """S1 run 3 (c) a2: Fleet polled ~10 s apart under load; the injection stayed an anchor."""
+    clock = FakeClock()
+    r1, r2, svc = _two_anchors(clock)
+    _poll_every(svc, clock, 8.0, 2)                                  # slow polls, standing still
+    assert svc.anchors() == {"r1", "r2"}
+    r2._state = state("r2", "LOCALIZED", pose=mirror(R2_TRUE))      # the injected fault
+    _poll_every(svc, clock, 8.0, 1)
+    assert svc.anchors() == {"r1"}
+
+
+def test_a_genuine_slow_move_at_8_s_polls_loses_the_anchor():
+    """Fail safe, documented: 0.8 m between two polls 8 s apart may have been driven, but
+    Fleet cannot tell it from a reset, so the robot stops being evidence until it re-localizes."""
+    clock = FakeClock()
+    a = Localizing("a", ON_A)
+    svc = service(a, clock=clock)
+    ticks(svc, clock, 5.0)
+    assert svc.anchors() == {"a"}
+    clock.advance(7.5)
+    a._state = state("a", "LOCALIZED", pose=(ON_A[0], ON_A[1] - 0.8, ON_A[2]))   # 0.1 m/s
+    ticks(svc, clock, 0.5)
+    assert svc.anchors() == set()
+
+
+def test_a_robot_moving_and_turning_at_normal_polls_keeps_its_anchor():
+    clock = FakeClock()
+    a = Localizing("a", ON_A)
+    svc = service(a, clock=clock)
+    ticks(svc, clock, 5.0)
+
+    def drive(i):            # 0.3 m/s and 1.5 rad/s, polled every 0.5 s
+        a._state = state("a", "LOCALIZED", pose=(ON_A[0], ON_A[1] - 0.15 * (i + 1),
+                                                cues.wrap(ON_A[2] + 0.75 * (i + 1))))
+    _poll_every(svc, clock, 0.5, 12, move=drive)
+    assert svc.anchors() == {"a"}
+
+
 def test_a_decision_that_ends_elsewhere_does_not_anchor():
     """LOCALIZED away from the decided pose was not that decision."""
     clock = FakeClock()
