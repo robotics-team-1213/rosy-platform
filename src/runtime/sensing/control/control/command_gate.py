@@ -10,8 +10,9 @@ from uuid import uuid4
 from .lidar_guard import TranslationEvidence, command_translation_bumpers
 from .obstacle_risk import CAMERA_LIMIT_REASONS, TrackedEvidence
 
-#: D-424: forward speed share left while the camera is unavailable/warming up or sees an
-#: unranged obstacle. Policy, not geometry; the LiDAR body strip still stops at the gap.
+#: D-424: forward speed share left while the camera is unavailable or warming up. Policy, not
+#: geometry; the LiDAR body strip still stops at the gap. An unranged camera obstacle stops
+#: forward motion instead (review H2).
 CAMERA_LIMIT_SCALE = .5
 
 
@@ -161,9 +162,12 @@ class CommandPolicy:
                     raise ValueError('Invalid tracking evidence')
                 tracking = snapshot.tracking.evaluate(linear, now)
                 if tracking['action'] == 'limit' and tracking['reason'] in CAMERA_LIMIT_REASONS:
-                    # D-424 (J/K): camera evidence alone limits forward speed; it never stops a
-                    # turn or a reverse (LiDAR/ultrasonic own the stop inside the body gap).
-                    v = result.linear*CAMERA_LIMIT_SCALE if result.linear > 0. else result.linear
+                    # D-424 (J/K, review H2): camera evidence never stops a turn or a reverse.
+                    # An unranged camera obstacle stops FORWARD motion (low clutter below the
+                    # scan plane); an unusable camera only limits forward speed.
+                    v = result.linear
+                    if v > 0.:
+                        v = 0. if tracking['reason'] == 'camera_obstacle_unranged' else v*CAMERA_LIMIT_SCALE
                     result = GateResult(v, result.angular, tracking['reason'])
                 elif tracking['action'] != 'clear':
                     result = GateResult(0., 0., tracking['reason'], tracking['action'] == 'stop')
