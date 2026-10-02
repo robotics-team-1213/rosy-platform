@@ -294,3 +294,8 @@
 - 변경: `SafetyPolicyStatus`/`StateSnapshot.safety_policy`(API v1.71, 소문자 평문 mode·verdict는 캐싱 규칙 예외), `rosy_default.yaml`은 `mode`를 두지 않고(주석만) `stale_hold_s`를 더했다.
 - 증거: 전체 시험(gateway+services+foundation+api_web+test/) `5 failed, 5919 passed, 249 skipped, 31 warnings, 4 errors in 3428.70s`; `known_failures.py`는 exit 1: 9건 모두 이 브랜치가 건드리지 않은 시험이며(main 4804d417에서도 test_module_separation, test_release_boundary_guards, test_robot_literals, test_dashboard_drive 4건이 같게 실패, test_module_criteria C6와 test_behavior_test_ownership은 main이 이후 고쳤고 이 브랜치는 그 이전 기준) 이 브랜치 기인 실패는 0건.
 - gate 변화: 없음. SOURCE만. 그림자는 어느 로봇에서도 켜지 않았다(기본 off).
+
+## 2026-10-02 · 34bac08a · feat(core_common): D-395 `CHECKING` 사유
+- 변경: `core_common.protocol.localization.CHECKING = "checking"` — 로봇의 3 s 주입 검사 중 `LocalizationStatus.reason`(상태 CANDIDATES). 스키마 변화 없음(64자 제한 안의 값). API Reference 의 `reason` 목록과 ERR-102 `busy` 설명을 함께 고쳤다.
+- 증거: `test/test_localization_contracts.py` +1.
+- gate 변화: 없음.

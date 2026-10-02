@@ -115,6 +115,19 @@ def test_a_robot_in_manual_or_already_on_a_mission_is_busy(core):
     assert manual.status_code == 409 and _code(manual) == "busy"
 
 
+def test_a_running_injection_check_is_busy(core):
+    """S1 re-run R6: no mission over the robot's 3 s check (CANDIDATES, reason `checking`)."""
+    client, services = core
+    services.localization.on_state(json.dumps({
+        "status": {"state": "CANDIDATES", "pose_frame": "map", "reason": "checking",
+                   "request_id": "req-1"}, "pose": None, "stamp": 1.0}))
+    refused = _start(client)
+    assert refused.status_code == 409 and _code(refused) == "busy"
+    assert services.modes.mode.value == "IDLE" and _events(services) == []
+    services.localization.on_state(_state())
+    assert _start(client).status_code == 202
+
+
 def test_nudge_needs_a_clear_front(core):
     client, services = core
     services.loc_mission.observe_scan(_scan(services, front_m=0.2))

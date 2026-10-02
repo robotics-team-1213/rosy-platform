@@ -9,7 +9,7 @@ import pytest
 from pydantic import ValidationError
 
 from core_common.protocol.localization import (
-    CandidateReport, DecisionSource, LocalizationDecision, LocalizationStatus, LocState, PoseFrame)
+    CHECKING, CandidateReport, DecisionSource, LocalizationDecision, LocalizationStatus, LocState, PoseFrame)
 from core_common.protocol.schemas import StateSnapshot
 
 REFERENCE = Path(__file__).resolve().parents[4] / "docs" / "reference" / "ROSY API & Protocol Reference.md"
@@ -106,3 +106,10 @@ def test_the_api_reference_documents_the_field_and_the_models():
     assert "## 7.9 Fleet 보조 위치 확정 모델" in text
     for name in ("CandidateReport", "LocalizationDecision", "square_sightings", "pose_frame", "ttl_s", "cues"):
         assert name in text
+
+
+def test_a_running_check_is_the_candidates_reason_checking():
+    """S1 re-run R6: the robot shows its 3 s injection check; Fleet and CORE pause on it."""
+    status = LocalizationStatus(state="CANDIDATES", pose_frame="odom", reason=CHECKING,
+                                request_id="rosy_01-7")
+    assert status.reason == "checking" and len(CHECKING) <= 64

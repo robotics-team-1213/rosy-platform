@@ -19,7 +19,8 @@ Rules kept here, not in the node:
   decision is retried (D-395 rev. 3). State goes out every `state_period_s`
   and on every change.
 - Every decision gets exactly one result: at once when rejected, otherwise
-  when its 3 s check passes or ends.
+  when its 3 s check passes or ends. While the check runs the state says
+  CANDIDATES with reason `checking`.
 - The Nav2 goal cancel and replan on LOCALIZED is CORE's: it owns the goal and
   acts on the LOCALIZED state and the accepted result. The state payload stays
   `{status, pose, stamp}` (contract §1).
@@ -31,7 +32,7 @@ import os
 from dataclasses import dataclass
 
 import numpy as np
-from core_common.protocol.localization import (CandidateReport, LocalizationDecision,
+from core_common.protocol.localization import (CHECKING, CandidateReport, LocalizationDecision,
                                                LocalizationStatus)
 from pydantic import ValidationError
 
@@ -246,9 +247,17 @@ class LocAssist:
             self._wanted = True             # a fresh SUSPECT searches at once
         return out + self._state_if_changed(now_s)
 
+    def _reason(self):
+        """`checking` while the 3 s check runs (state stays CANDIDATES): Fleet's ladder and
+        CORE's missions wait on it (S1 re-run R6). Otherwise the machine's reason."""
+        m = self.machine
+        if m.check is not None:
+            return CHECKING
+        return None if m.reason is None else str(m.reason)[:64]
+
     def _key(self):
         m = self.machine
-        return (m.state.value, m.reason, m.request_id if m.state is LocState.CANDIDATES else None,
+        return (m.state.value, self._reason(), m.request_id if m.state is LocState.CANDIDATES else None,
                 self.pose is None)
 
     def _state_if_changed(self, now_s):
@@ -259,7 +268,7 @@ class LocAssist:
         status = LocalizationStatus(
             state=m.state.value, pose_frame='odom' if self.pose is None else 'map',
             confidence=0. if self.fit is None else min(1., max(0., self.fit)),
-            reason=None if m.reason is None else str(m.reason)[:64],
+            reason=self._reason(),
             request_id=m.request_id if m.state is LocState.CANDIDATES else None)
         payload = {'status': status.model_dump(mode='json'),
                    'pose': None if self.pose is None else dict(zip(('x', 'y', 'yaw'), self.pose)),

@@ -902,3 +902,10 @@
 - 변경: `LocAssist.on_decision` 은 CORE 미션이 진행 중이면(`localization/mission` `running`, `MISSION_PAUSE_S` 안) 주입하지 않고 `mission_running` 으로 거부한다. 미션 시작 때 열린 request id 와 그 보고를 버린다(미션 전 후보는 미션 뒤에 낡았다). 미션 끝의 재탐색이 새 id 를 만든다. 옛 id 결정은 `stale_request`.
 - 증거: `test/test_loc_assist.py` +2(미션 중 결정 거부·주입 없음, 시작 시 id·재보고 폐기 후 새 id 로 주입).
 - gate 변화: 없음.
+
+## 2026-10-02 · 2b922678 · feat(localization): D-395 S1 재실행 R6 — 검사 중 상태는 CANDIDATES/`checking`
+
+- 원인: Fleet 사다리가 로봇의 3 s 주입 검사 중에 `rotate_in_place` 를 보냈다(d1–d3). 검사는 밖에서 보이지 않았다.
+- 변경: `LocAssist` 는 검사가 도는 동안 `localization/state` 의 `reason` 을 `checking`(`core_common.protocol.localization.CHECKING`)으로 낸다. 상태는 CANDIDATES, `request_id` 는 그대로. 결정을 받는 즉시 상태가 바뀌어 한 번 나가고 2 Hz 주기에도 실린다. 검사가 끝나면 LOCALIZED(`reason: null`) 또는 SUSPECT(`inject_rejected`).
+- 증거: `test/test_loc_assist.py` +2. 호스트 sensing 2286 passed, 104 skipped.
+- gate 변화: 없음.

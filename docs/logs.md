@@ -4310,6 +4310,11 @@
 - 결정: 없음. 기본값 변경 없음.
 - 교훈: 첫 결정이 통과하게 되자 관찰자가 보고 한 번 만에 LOCALIZED 가 되어, 2보고 감시가 거울 잠금 증거를 받을 틈이 사라졌다 — 한 수정이 다른 안전장치의 입력 빈도를 바꾼다(R1).
 
+## 2026-10-02 · uncommitted · docs(plans): D-395 계약 §3 사다리 멈춤 규칙 (S1 재실행 R2·R5·R6)
+- 변경: `docs/plans/2026-10-01-d395-phase2-interfaces.md` §3 에 사다리 멈춤 규칙(중재기 `pending`·로봇 `checking` 동안 시계 정지, 회차당 30 s 상한), 로봇 `checking` 사유, CORE 의 검사 중 `busy` 와 버린 보고 폐기를 적었다. API Reference 의 `reason`·ERR-102 `busy` 도 갱신.
+- 증거: Fleet·sensing·CORE 시험(각 모듈 logs.md).
+- gate 변화: 없음.
+
 ## 2026-10-02 · uncommitted · docs(plans): D-395 S1 R4 원인과 sim 수정
 - 변경: `docs/plans/2026-10-02-d395-s1-bench-results.md` R4 에 원인 두 가지(RPP lookahead < 목표 허용오차 → 회전만; 패딩 외접원이 지역 비용지도에도 들어가 사각형 A 벽과 겹침)와 증거·남은 점(시드 AMCL 7–8 cm 오차, 전역 "Start occupied" 1/4) 추가. 수정은 `gz_multi._nav_config`(sim 전용).
 - 증거: WSL Jazzy 로봇 1대 — 1 m 목표 2/2, 사각형 A 출발 3/4 SUCCEEDED. 원시 `X:\DevTemp\rosy-g4\`.
