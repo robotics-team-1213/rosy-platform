@@ -366,3 +366,10 @@
 - 변경: 사각 띠 후진의 지나온 길은 마지막 전진 명령이 `recovery_trail_max_age_s`(30 s) 이내일 때만(관제 대기 포함). 시도·결과 사건에 `trail_age_s`.
 - 증거: `test_line_stuck_recovery.py`(29 s 허용, 31 s 거부, 사건에 trail_age_s), `test_line_follow_stuck.py`(관제 대기 중 만료).
 - gate 변화: 없음.
+
+## 2026-10-02 · bcce15c9d · fix(fleet_agent): hub 답을 모두 읽는 수신 루프, 재연결 기록, 관제 grace
+
+- 원인: hub 는 heartbeat·사건마다 답하는데 에이전트는 heartbeat 마다 하나만 읽어 답이 쌓였고, websocket 큐가 차 읽기가 멈춰 keepalive 가 끊겼다(D-407 관제 재실행, ASKING 중 `no_console`).
+- 변경: `_session`/`_receive_loop`(모든 답 소비, ERROR 는 그 envelope 만), 끊김 경고에 이유, `linked_within(grace)`; 막힘 답 사건 `principal_ref`·`rear_state`·거부 근거(9300adf1d).
+- 증거: `test_fleet_agent_link.py` 4 passed, `test_line_stuck_recovery.py` 초록.
+- gate 변화: 없음. Gazebo 재확인은 다음 WSL 슬롯.
