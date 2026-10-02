@@ -110,6 +110,11 @@ singularity_radius_m: 0.05
 tool_down_tolerance_rad: 0.02
 home_joint_tolerance_rad: 0.02
 start_state_tolerance_rad: 0.02
+# Per-phase arm tolerances after grasp (phase_start_state_tolerance_rad, C3b A5): none.
+# Under the width-matched close the held 20 g block moved any arm joint by at most 0.0115 rad
+# from the planned transfer/release start (Gazebo 2026-10-02, 13 transfers, 26 checks:
+# joint4 <= 0.0099, joint5 <= 0.0056), so the 0.02 rad base keeps a 1.7x margin. The C3
+# deflections (0.02-0.33 rad) came from the 0.0 full close and the block-side sim-aid joint.
 
 owner:
   # Same as the Pilot simulation owner (pilot_sim_server.py).
