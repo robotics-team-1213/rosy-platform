@@ -235,3 +235,8 @@
 - minor 8(잠금 순서): 실재하지만 좁다. runner replay가 `_event_lock`을 쥔 채 늦은 수락 경로에서 `cancel_goal` → owner lock을 잡는다. 반대로 watchdog은 owner lock 안에서 `handle.cancel()`을 부른다. 거기서 `cancel_goal_async`가 **동기적으로 예외를 던질 때만** `CANCEL_ACK`를 바로 emit → runner `_event_lock`으로 간다. 정상 경로는 응답 콜백이 나중에 executor에서 돌아 교착이 없다. 고치지 않았다. C4에서 owner lock 밖으로 cancel 호출을 옮길 때 같이 정리한다.
 - gate 변화: 없음(ROS-SIM HOLD 유지).
 - 교훈: 콜백 그룹을 나누면 rclpy가 future done 콜백과 feedback의 순서를 보장하지 않는다. Windows는 rclpy 시험을 건너뛰므로, 동시성 변경은 WSL/컨테이너 반복(≥20회)으로 확인한다.
+
+## 2026-10-02 · re-review fixes (N1, minor 4)
+
+- N1: feedback is counted until GOAL_ACCEPTED has been emitted, then replayed once; the runner acknowledges an overtaken RUNNING_FEEDBACK without journaling. Minor 4 (device side): the planner rejects `grasp_depth_m > height_m − fingertip_overhang_m` as `GRASP_DEPTH_BELOW_FINGERTIPS`; the accepted item geometry now carries `height_m`.
+- `fingertip_overhang_m` became required under `rosy_cell.cell/2` without a version bump, because /2 has not been released or used outside this branch.

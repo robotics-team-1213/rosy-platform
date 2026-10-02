@@ -274,7 +274,8 @@ def main() -> int:
             raise RuntimeError(f"owner after home: {state} {runtime.last_terminal_decision}")
 
         # Grasp geometry only as the accepted recipe (by hash) defines it (review minor 5).
-        accepted_items = {"box": {"grasp_width_m": box.width, "grasp_depth_m": box.grasp_depth}}
+        accepted_items = {"box": {"grasp_width_m": box.width, "grasp_depth_m": box.grasp_depth,
+                                  "height_m": box.height}}
         planner = AnalyticCellTransferPlanner(
             kin, accepted_cell_sha256=lambda: job.cell_hash, monotonic=clock,
             accepted_item_geometry=lambda sha, item: accepted_items.get(item) if sha == job.recipe_hash else None)

@@ -33,7 +33,7 @@ from omx_adapter.pose_plan import (
 PROFILE_PATH = Path(__file__).resolve().parents[5] / "deploy/robot/omx/sim/cell_profile.yaml"
 CELL = "c" * 64
 # The device's accepted recipe (its hash) -> item -> grasp geometry (review minor 5).
-_ACCEPTED_ITEMS = {("a" * 64, "box"): {"grasp_width_m": 0.03, "grasp_depth_m": 0.01}}
+_ACCEPTED_ITEMS = {("a" * 64, "box"): {"grasp_width_m": 0.03, "grasp_depth_m": 0.01, "height_m": 0.03}}
 
 
 @pytest.fixture(scope="module")
@@ -90,7 +90,7 @@ def _plan(kin, profile, items=None, **overrides):
     request = _request(**overrides)
     if items is None:
         items = {(request.recipe_sha256, request.item): {
-            "grasp_width_m": request.grasp_width_m, "grasp_depth_m": request.grasp_depth_m}}
+            "grasp_width_m": request.grasp_width_m, "grasp_depth_m": request.grasp_depth_m, "height_m": 0.06}}
     return _planner(kin, items=items).plan_transfer(request, profile, _state(kin, profile))
 
 
@@ -532,3 +532,14 @@ def test_grasp_geometry_must_match_the_accepted_recipe(kin, profile, changes):
 def test_planner_requires_an_accepted_item_geometry_provider(kin):
     with pytest.raises(ValueError, match="item"):
         AnalyticCellTransferPlanner(kin, accepted_cell_sha256=lambda: CELL, accepted_item_geometry=None)
+
+
+@pytest.mark.parametrize(("height", "reason"), [(0.0126, None), (0.0125, "GRASP_DEPTH_BELOW_FINGERTIPS")])
+def test_device_rejects_a_grasp_depth_that_puts_the_fingertips_below_the_item(kin, profile, height, reason):
+    # Re-review minor 4: rosy_cell refuses grasp_depth > height - fingertip_overhang_m at compile
+    # time; the device enforces the same rule with its own profile value (0.00257 m).
+    items = {("a" * 64, "box"): {"grasp_width_m": 0.03, "grasp_depth_m": 0.01, "height_m": height}}
+    if reason is None:
+        assert _plan(kin, profile, items=items).phases
+    else:
+        assert _reason(lambda: _plan(kin, profile, items=items)) == reason

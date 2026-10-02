@@ -19,6 +19,7 @@ for _path in (ROOT / "src/products/omx/adapter", ROOT / "src/site/cell"):
 from omx_adapter.kinematics import ARM_JOINTS, OmxKinematics, TopDownPose  # noqa: E402
 from omx_adapter.manipulation_plan import ExecutionStateSnapshot  # noqa: E402
 from omx_adapter.pose_plan import (  # noqa: E402
+    GRASP_DEPTH_BELOW_FINGERTIPS,
     GRIPPER_WIDTH_INVALID,
     AnalyticCellTransferPlanner,
     CellTransferPlanRejected,
@@ -120,8 +121,10 @@ def test_every_box_transfer_plans_and_slip_sheets_are_refused_by_width(demo, kin
         observed_at_monotonic_s=0.5,
     )
     # The device's accepted recipe defines each item's grasp geometry (review minor 5).
-    items = {"box": {"grasp_width_m": recipe.box.width, "grasp_depth_m": recipe.box.grasp_depth},
-             "slip_sheet": {"grasp_width_m": recipe.slip_sheet_thickness, "grasp_depth_m": 0.0}}
+    items = {"box": {"grasp_width_m": recipe.box.width, "grasp_depth_m": recipe.box.grasp_depth,
+                     "height_m": recipe.box.height},
+             "slip_sheet": {"grasp_width_m": recipe.slip_sheet_thickness, "grasp_depth_m": 0.0,
+                            "height_m": recipe.slip_sheet_thickness}}
     planner = AnalyticCellTransferPlanner(kin, accepted_cell_sha256=lambda: job.cell_hash,
                                           accepted_item_geometry=lambda sha, item: (
                                               items.get(item) if sha == job.recipe_hash else None),
@@ -143,7 +146,9 @@ def test_every_box_transfer_plans_and_slip_sheets_are_refused_by_width(demo, kin
         if pick.item == "slip_sheet":
             with pytest.raises(CellTransferPlanRejected) as rejected:
                 planner.plan_transfer(request, profile, state)
-            assert rejected.value.reason == GRIPPER_WIDTH_INVALID
+            # The 2 mm sheet is also thinner than the 2.57 mm fingertip overhang, which the
+            # device checks first (re-review minor 4); either way it is refused.
+            assert rejected.value.reason in (GRASP_DEPTH_BELOW_FINGERTIPS, GRIPPER_WIDTH_INVALID)
             continue
         plan = planner.plan_transfer(request, profile, state)  # raises on any HOLD reason
         assert [phase.phase_id for phase in plan.phases] == ["approach", "grasp", "transfer", "release"]

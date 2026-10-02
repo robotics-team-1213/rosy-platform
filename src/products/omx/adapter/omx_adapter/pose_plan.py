@@ -48,6 +48,7 @@ WAYPOINT_DISCONTINUITY = "WAYPOINT_DISCONTINUITY"
 PHASE_DURATION_EXCEEDED = "PHASE_DURATION_EXCEEDED"
 GRIPPER_WIDTH_INVALID = "GRIPPER_WIDTH_INVALID"
 ITEM_GEOMETRY_MISMATCH = "ITEM_GEOMETRY_MISMATCH"
+GRASP_DEPTH_BELOW_FINGERTIPS = "GRASP_DEPTH_BELOW_FINGERTIPS"
 
 
 def _finite(name: str, value: object, *, positive: bool = False) -> float:
@@ -488,7 +489,7 @@ class AnalyticCellTransferPlanner:
                  accepted_item_geometry: Callable[[str, str], Mapping[str, float] | None],
                  monotonic: Callable[[], float] = time.monotonic) -> None:
         """``accepted_item_geometry(recipe_sha256, item)`` returns the grasp geometry
-        (``grasp_width_m``, ``grasp_depth_m``) of that item in the recipe the device
+        (``grasp_width_m``, ``grasp_depth_m``, ``height_m``) of that item in the recipe the device
         accepted under that hash, or None (review minor 5)."""
         if not isinstance(kinematics, OmxKinematics) or not callable(accepted_cell_sha256):
             raise ValueError("planner requires kinematics and an accepted-cell provider")
@@ -517,6 +518,13 @@ class AnalyticCellTransferPlanner:
                 or geometry.get("grasp_depth_m") != request.grasp_depth_m):
             raise CellTransferPlanRejected(ITEM_GEOMETRY_MISMATCH,
                                            "grasp width/depth are not the accepted recipe's item")
+        # The fingertips reach fingertip_overhang_m below the TCP; deeper than the item height
+        # minus that, they would touch the surface the item stands on (re-review minor 4).
+        height = geometry.get("height_m")
+        if (isinstance(height, bool) or not isinstance(height, (int, float))
+                or request.grasp_depth_m > float(height) - profile.fingertip_overhang_m + 1e-12):
+            raise CellTransferPlanRejected(GRASP_DEPTH_BELOW_FINGERTIPS,
+                                           "grasp_depth_m exceeds item height - fingertip_overhang_m")
         kin = self.kinematics
         if profile.kinematics_revision != kin.revision:
             raise CellTransferPlanRejected(STATE_INVALID, "profile was reviewed against other geometry")
