@@ -5,7 +5,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from test_model_intake import GATE, intake  # noqa: F401  (path setup lives there)
+from test_model_intake import intake  # path setup lives there
 from control.sensing.perception.learned.detector import DetectResult
 from control.sensing.perception.learned.lane_mask import NonFiniteLogits
 
@@ -63,3 +63,21 @@ def test_run_routes_an_object_det_manifest_to_the_detector(tmp_path, monkeypatch
     rc, report = intake.run(str(folder), out=tmp_path / "out")
     assert rc == 0 and report["verdict"] == "pass" and report["task"] == "object_det"
     assert json.loads((tmp_path / "out" / "object-det-r1" / "intake_report.json").read_text())["task"] == "object_det"
+
+
+# --- review 2026-10-03 M1: int8 distance from fp32 is gated for object_det ---
+
+@pytest.mark.parametrize("rel,precision,ok", [(0.01, "int8", True), (0.2, "int8", False),
+                                              (None, "int8", False), (None, "fp32", True)])
+def test_object_det_int8_distance_is_gated(rel, precision, ok):
+    gate = intake.task_gate(intake.load_gate(intake.DEFAULT_GATE), "object_det")
+    assert 0 < gate["max_int8_vs_fp32_rel"] < 1
+    stats = {"frames": 10, "latency_ms": {"p50": 50.0}, "nan_frames": 0,
+             "detections_per_frame": {"p95": 3}, "precision": precision, "int8_vs_fp32_rel": rel}
+    assert (intake.judge(stats, gate)[0] == "pass") is ok
+
+
+def test_int8_metrics_come_from_the_manifest():
+    manifest = type("M", (), {"files": (type("F", (), {"precision": "int8"})(),),
+                              "raw": {"metrics": {"int8_vs_fp32_rel": 0.03}}})()
+    assert intake.int8_metrics(manifest) == {"precision": "int8", "int8_vs_fp32_rel": 0.03}

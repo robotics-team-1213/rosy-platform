@@ -85,6 +85,13 @@ def judge(stats: dict, gate: dict) -> tuple[str, list[str]]:
         reasons.append(f"NaN frames {stats['nan_frames']} > {gate['max_nan_frames']}")
     if stats.get("error_frames", 0) > 0:
         reasons.append(f"inference error frames {stats['error_frames']} > 0")
+    rel_cap = gate.get("max_int8_vs_fp32_rel")
+    if rel_cap is not None and stats.get("precision") == "int8":
+        rel = stats.get("int8_vs_fp32_rel")
+        if rel is None:
+            reasons.append("int8 model without int8_vs_fp32_rel (convert.py --int8 records it)")
+        elif rel > rel_cap:
+            reasons.append(f"int8 vs fp32 {rel:.3g} > {rel_cap} (relative, on random probes)")
     cap = gate.get("max_detections_per_frame_p95")
     p95 = (stats.get("detections_per_frame") or {}).get("p95")
     if cap is not None and p95 is not None and p95 > cap:
@@ -173,6 +180,14 @@ def _video_frames(path: Path, max_frames: int):
             i += 1
     finally:
         cap.release()
+
+
+def int8_metrics(manifest) -> dict:
+    """precision and convert.py's int8_vs_fp32_rel from the manifest (D-423 review M1)."""
+    int8 = any(getattr(f, "precision", None) == "int8" for f in getattr(manifest, "files", ()))
+    rel = ((getattr(manifest, "raw", None) or {}).get("metrics") or {}).get("int8_vs_fp32_rel")
+    return {"precision": "int8" if int8 else "fp32",
+            "int8_vs_fp32_rel": float(rel) if isinstance(rel, (int, float)) and not isinstance(rel, bool) else None}
 
 
 def task_gate(gate: dict, task: str) -> dict:
@@ -299,7 +314,8 @@ def run(source: str, *, out, gate_path=DEFAULT_GATE, root=ROOT, max_frames=None,
         gate = report["gate"] = task_gate(gate, task)
         videos = replay_videos(gate, root)
         if task == "object_det":
-            stats = replay_detections(ObjectDetModel.open(folder), videos, max_frames)
+            stats = {**replay_detections(ObjectDetModel.open(folder), videos, max_frames),
+                     **int8_metrics(manifest)}
         else:
             stats = replay(LaneSegModel.open(folder), videos, max_frames)
         report.update(stats)

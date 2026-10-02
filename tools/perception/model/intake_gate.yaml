@@ -9,3 +9,6 @@ object_det:
   max_host_latency_ms_p50: 400
   max_nan_frames: 0
   max_detections_per_frame_p95: 32  # a flood of boxes is a broken model or threshold
+  # int8 models only: convert.py's max |int8 - fp32| / peak |fp32| on random probes
+  # (not camera frames, so a coarse bound; missing on an int8 model fails).
+  max_int8_vs_fp32_rel: 0.05
