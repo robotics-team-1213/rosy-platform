@@ -10,7 +10,7 @@
 
 ---
 
-**Status:** Task 0 SOURCE baseline complete (2026-10-03); Tasks 1–13 NOT STARTED. 실행 브랜치 `refactor/ui-ownership`, 기준 `d10c77e89`. 아래 시험과 완료 조건은 실행 지침이며 통과 기록이 아니다. 계획 작성 기준은 local main `3bb18bd59`; 각 작업 시작 시 HEAD와 진행 중 브랜치를 다시 확인한다.
+**Status:** Tasks 0–1 SOURCE/LOCAL contract complete (2026-10-03); Tasks 2–13 NOT STARTED. 실행 브랜치 `refactor/ui-ownership`, 기준 `d10c77e89`. 아래 시험과 완료 조건은 실행 지침이며 통과 기록이 아니다. 계획 작성 기준은 local main `3bb18bd59`; 각 작업 시작 시 HEAD와 진행 중 브랜치를 다시 확인한다.
 
 ## 범위와 의존 작업
 
@@ -104,6 +104,8 @@ $env:TMP = $env:ROSY_SCRATCH
 5. 위 다섯 기존 시험과 새 시험을 실행하고 커밋한다: `test: enforce app ownership at API boundaries`.
 
 **출구:** 선언·실제 요청·API 권한 거절이 함께 검증되고 UI 검사 자체가 실행 권한으로 취급되지 않음.
+
+**완료 증거 (2026-10-03):** [Task 1 계약·변이 증명](../validation/app-ownership-migration-2026-10-03/task1-ownership-contracts.md). api_owners 6개 명시, 실제 CORE/Fleet 인증·권한·설정/정지 owner 거절/승인 및 기존 JS caller를 Node로 검증. 책임 suite 33 passed, 기존 Fleet authorization Node 3 passed. owner 선언·CORE/Fleet 권한 guard·공통 literal dispatch의 변이 4개가 예상대로 실패했고 원본 bytes를 복원했다. 원격/DEVICE gate와 Pilot 이행 예외는 그대로다.
 
 ## Task 2: 공통 HTTP·화면 scope 도구
 

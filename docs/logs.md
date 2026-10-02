@@ -4664,3 +4664,8 @@
 - Change: preserve incoming C4b owner/Fleet changes and port host replay to StepJobDispatcher, simulation identity, persistent journal identity and stored item_at_pose predicates. Reuse canonical process job_document and expose recipe geometry at the app compiler port. Producers report model-centre observations without satisfied claims.
 - Evidence: compiler/public-ingress and existing two-ledger replay 9 passed on integrated tree. Integrated Cell family, compiler, replay, owner acceptance/assembly, compatibility, install and boundaries: 209 passed. Rebuilt/reinstalled actual wheels, verified venv-only imports/18 steps/two markers and pip check 0. Independent review 14 passed, no Critical/Important findings. Quick tier 96 passed / 25 existing freshness warnings; harness lint 0 errors / 25 warnings; adapter flake8 passes.
 - Gate: SOURCE/LOCAL only; original thin sheet remains safely refused. Full recipe Gazebo acceptance remains open.
+
+## 2026-10-03 · uncommitted · test: D-425 실제 API 책임·권한 경계
+- 변경: 앱별 api_owners를 등록부에 명시하고 실제 CORE/Fleet 인증·권한·쓰기 owner·공유 문서·기존 JS caller 계약을 추가. 공통 UI/transport의 literal 운용 API 발행 가드를 추가하고 Pilot 관련 역사 설명을 현행화.
+- 증거: 없는 선언 red 6 failed/15 passed → 책임 suite 33 passed; Fleet authorization Node 3 passed. 선언·CORE limits 권한·Fleet operator 권한·공통 dispatch 변이 4개가 실제 실패하고 byte-for-byte 복원. 임시 증거는 X:/DevTemp/rosy-ui-ownership/task1-mutations.
+- gate 변화: Task 1 SOURCE/LOCAL 계약 완료. wire/권한 정책/최종 writer/폴더/DEVICE/FIELD는 변경하지 않음.
