@@ -581,6 +581,28 @@ main {
   color: var(--ink);
 }
 
+/* D-407 판단 요청 — 예외 큐 아래. 원인은 crit 태그, 답 다섯은 한 줄에서 접힌다. */
+.stuck-panel { margin-top: var(--space-4); padding-top: var(--space-3); border-top: 1px solid var(--line-14); }
+.stuck-panel h3 { margin: 0; font-size: var(--text-title); font-weight: var(--weight-emphasis); }
+.stuck-panel h3 small { color: var(--ink-quiet); font-weight: var(--weight-label); }
+.stuck-list { list-style: none; margin: var(--space-3) 0 0; padding: 0; display: grid; gap: var(--space-3); }
+.stuck-item { display: grid; gap: var(--space-2); padding: var(--space-3); background: var(--surface-raised);
+  border: 1px solid var(--line-10); border-left: 4px solid var(--status-crit); border-radius: var(--radius-control); }
+.stuck-item.offline { border-left-color: var(--status-warn); }
+.stuck-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.stuck-facts { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-4); margin: 0; }
+.stuck-facts div { display: flex; gap: var(--space-1); align-items: baseline; }
+.stuck-facts dt { font-size: var(--text-label); color: var(--ink-quiet); }
+.stuck-facts dd { margin: 0; font-family: var(--mono); font-size: var(--text-label); color: var(--ink); }
+.stuck-actions, .stuck-confirm-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.stuck-actions ui-button, .stuck-confirm-actions ui-button { flex: 1 1 auto; white-space: nowrap; word-break: keep-all; }
+.stuck-confirm { padding: var(--space-3); border: 1px solid var(--line-30); border-radius: var(--radius-panel); }
+.stuck-confirm p { margin: 0 0 var(--space-2); color: var(--ink); }
+.stuck-result { margin: 0; font-size: var(--text-label); color: var(--ink-quiet); }
+/* D-202 — 거부는 채운다(경보 글자 대신 위험 채움 + 종이 잉크). */
+.stuck-result[data-kind="bad"] { color: var(--ink-on-crit); background: var(--status-crit);
+  padding: var(--space-1) var(--space-2); border-radius: var(--radius-control); }
+
 .discovery { margin-top: var(--space-4); padding-top: var(--space-3); border-top: 1px solid var(--line-14); }
 .discovery-list { list-style: none; margin: var(--space-3) 0; padding: 0; display: grid; gap: var(--space-2); }
 .discovery-list li { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2);

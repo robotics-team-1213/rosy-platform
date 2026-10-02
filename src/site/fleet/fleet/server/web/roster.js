@@ -48,7 +48,8 @@ export function createRoster({ el, view, log, call, render, streamEvidence, isOp
     return view.stateUnavailable || !robot.online || !state || state.safety?.estop !== false
       || state.hitl_requested === true || Boolean(state.capabilities_degraded?.length)
       || state.navigation === "FAILED" || Boolean(robot.queued) || Boolean(robot.yielding)
-      || (evidence !== null && evidence.cls !== "") || localizationUrgent(robot.localization);
+      || (evidence !== null && evidence.cls !== "") || localizationUrgent(robot.localization)
+      || Boolean(robot.line_stuck);
   }
   function navTag(state) {
     const nav = state && state.navigation;
@@ -372,6 +373,11 @@ export function createRoster({ el, view, log, call, render, streamEvidence, isOp
         warnList.appendChild(queueItem(r.robot_id, ": 상태 확인 불가"));
         warningCount++;
         continue;
+      }
+      if (r.line_stuck) {
+        // D-407: 막힌 로봇이 답을 기다린다. 답하는 자리는 이 패널 아래 판단 요청이다.
+        critList.appendChild(queueItem(r.robot_id, ": 판단 요청 — 차선 추종이 막혔습니다"));
+        criticalCount++;
       }
       if (localizationUrgent(r.localization)) {
         // D-395 사다리 끝: Fleet이 스스로 위치를 못 잡았다. 사람만 풀 수 있다.
