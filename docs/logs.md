@@ -4647,3 +4647,9 @@
 - 변경: 현재 소유권/설치 기준선부터 공통 request/scope, Fleet·CORE client, 화면 책임, 앱별 소스 이전과 설치·브라우저 수용, D-413에 의존하는 backend 조합 이전까지 14개 task를 작성. 파일·검증·완료 조건·커밋·롤백을 지정하고, web ament wrapper/Fleet sdist·wheel/Face colcon discovery를 구분. Sep30 계획에는 후속 실행 기준을 연결.
 - 증거: 계획의 기존 파일 경로·공개 route·Fleet 진입 문서를 소스와 대조. 문서 계약·quick tier 120 passed/25 기존 freshness warnings; 로그·색인 추가 후 문서 회귀 27 passed, harness lint 0 errors/25 기존 warnings. 신규 로그 행의 줄바꿈을 정리하고 diff 검사를 통과.
 - gate 변화: 없음 — 계획만 작성; 코드·폴더·설치·DEVICE/FIELD 이전은 시작하지 않음.
+
+
+## 2026-10-03 · uncommitted · feat: bind actual palletizing compiler at gateway composition
+- Change: adapt canonical Recipe/Cell/Job/PlanBundle through the app-supplied Fleet compiler port; declare actual process/execution wheel dependencies. Original18-transfer demo crosses public proposal/resolve/operator admit and actual Skill/API/two ledgers. Four box transfers complete; original thin sheet is refused without motion and claims remain.
+- Evidence: new compiler/public-ingress plus prior replay 9 passed. Thin-sheet safety mutation fails HOLD versus ACTION_SUCCEEDED; planner restored byte-for-byte. Four real wheels built/installed in X: venv; imports verified site-packages, 18 transfers/two markers and pip check 0. Final compiler/API/replay/compatibility/install/boundary regression 45 passed; independent review 14 passed, no Critical/Important findings. Quick tier 96 passed / 25 existing freshness warnings; harness lint 0 errors / 25 warnings; new adapter flake8 passes.
+- Gate: SOURCE/LOCAL only. Original 2 mm sheet conflicts with 2.57 mm fingertip overhang; no safety bypass or recipe modification. ROS/sensor/goal producer are host ports; actual ROS lifecycle, UDS and full recipe Gazebo acceptance remain open.

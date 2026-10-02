@@ -37,8 +37,12 @@ from test_cell_goal_evidence_api import _evidence
 
 
 class LocalTransport:
-    def __init__(self, path, tasks, counters, *, lose_reply=False, rearm=False):
+    def __init__(self, path, tasks, counters, *, lose_reply=False, rearm=False,
+                 accepted_cell="c" * 64, accepted_items=None):
         self.counters, self.lose_reply = counters, lose_reply
+        accepted_items = accepted_items if accepted_items is not None else {("a" * 64, "box"): {
+            "grasp_width_m": .03, "grasp_depth_m": .01, "height_m": .03,
+        }}
         self.store = ActionStore(path)
         self.driver = FakeDriver()
         stop = LocalStopController(path, workcell_id="omx_01", instance_id="omx_01_control")
@@ -54,6 +58,7 @@ class LocalTransport:
         port = _GoalPort()
         self.port = port
         self.executions = {}
+        self.planning_errors = []
 
         def succeed(command, goal, callback):
             counters["commands"].append((command.command_id, command.phase_id, goal))
@@ -72,10 +77,9 @@ class LocalTransport:
                     None if released else grant.cell_transfer.item, grant.dispatch_generation)
 
             factory = create_omx_cell_transfer_phase_factory(
-                profile=profile, planner=_planner(kin), execution_state=lambda: state[0],
-                accepted_item_geometry=lambda recipe, item: {
-                    "grasp_width_m": .03, "grasp_depth_m": .01, "height_m": .03,
-                } if (recipe, item) == ("a" * 64, "box") else None,
+                profile=profile, planner=_planner(kin, accepted=accepted_cell, items=accepted_items),
+                execution_state=lambda: state[0],
+                accepted_item_geometry=lambda recipe, item: accepted_items.get((recipe, item)),
                 command_for_phase=lambda accepted, phase: TrajectoryCommand(
                     workcell_id=accepted.workcell_id, instance_id=accepted.instance_id,
                     command_id=f"{accepted.action_id}-{phase.phase_id}", session_id="session-1", owner="rule_based",
@@ -86,7 +90,11 @@ class LocalTransport:
                 goal_port=port, submission_fence=stop, phase_gate=lambda accepted, phase: True,
                 current_fence=current, gripper_readback=readback, monotonic=lambda: 100.5,
                 gripper_sensor_revision="readback")
-            execution = factory(grant, recorder)
+            try:
+                execution = factory(grant, recorder)
+            except Exception as exc:
+                self.planning_errors.append(exc)
+                raise
             self.executions[grant.action_id] = execution
             return execution
 
