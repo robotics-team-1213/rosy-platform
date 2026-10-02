@@ -22,6 +22,7 @@ line_follow:
   body_lidar_x_m: -0.017
   body_rear_x_m: -0.076
   body_rotation_radius_m: 0.08257
+  body_half_width_m: 0.05655       # footprint.half_width_m (collision meshes)
 
 safety:
   # SAF-002 teleop watchdog (default 500 ms). D-311 G4 requires a command-loss stop

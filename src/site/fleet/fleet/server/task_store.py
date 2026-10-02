@@ -178,7 +178,7 @@ class FleetTaskStore:
     def begin_api_audit(self, *, principal_id: str, role: str,
                         method: str, path: str) -> str:
         if (not principal_id or len(principal_id) > 96 or any(ord(char) < 32 for char in principal_id)
-                or role not in {"viewer", "operator", "policy-admin"}
+                or role not in {"viewer", "operator", "policy-admin", "service"}
                 or method != "POST" or not path.startswith("/api/fleet/")
                 or path == "/api/fleet/sightings"):
             raise ValueError("invalid site API audit entry")

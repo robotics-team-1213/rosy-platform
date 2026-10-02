@@ -11,11 +11,13 @@
 |---|---|
 | D-399 | ROSY 계층 아키텍처: Application · Fleet(사이트) · 장치별 Command Pipeline — 숙고형 AI는 Fleet 제안, 반응형 정책은 같은 호스트 엔벌로프 스킬 |
 | D-401 | Rosy Cell 애플리케이션: 셀 설정·레시피 분리, 해시로 묶은 Job(Step 목록), 팔레타이징 패턴 v1 |
+| D-413 | ROSY는 modules·integrations·apps·profiles로 책임을 나누고 고정 셀 한 흐름부터 이전한다 |
 
 ## 계획·결과 문서
 
 - [2026-10-01-rosy-cell-pattern-core.md](../../../docs/plans/2026-10-01-rosy-cell-pattern-core.md)
 - [2026-10-01-rosy-layered-architecture-roadmap.md](../../../docs/plans/2026-10-01-rosy-layered-architecture-roadmap.md)
+- [2026-10-02-platform-architecture-v02-migration.md](../../../docs/plans/2026-10-02-platform-architecture-v02-migration.md)
 
 ## 교훈 (docs/solutions)
 
@@ -27,6 +29,7 @@
 
 ## 최근 기록
 
+- 2026-10-02 · 9da93450 · refactor: extract palletizing process with legacy imports
 - 2026-10-01 · 13614bc0 · fix(cell): carry_z runs the compile checks, reject padded kinematics_revision
 - 2026-10-01 · c0900cff · feat(cell): rosy_cell.cell/2 with home and kinematics_revision, compiler.carry_z
 - 2026-10-01 · 014acdf6 · feat(cell): rosy_cell 코어와 리뷰 수정

@@ -83,7 +83,7 @@ SIZE_VERDICTS = {
         "D-395 P2-7 added localization/mission.py (the mission executor, its own module under budget)",
     ),
     "fleet": (
-        24_945,
+        26_340,
         "split: server HTTP boundary, console, signals and the mission-control stores are separate owners "
         "today; group them into subpackages rather than one flat server/ tree (B2); owner fleet, unscheduled "
         "(re-judged 2026-09-29 at 11164 after mission_store joined the server tree; re-judged 2026-09-30 at "
@@ -129,7 +129,20 @@ SIZE_VERDICTS = {
         "Re-judged 2026-10-02 at 24945 when D-410 split the console into two documents "
         "(web/install.html + web/install.js entry now own device enrollment and camera "
         "calibration; index.html/console.js shed the install wiring); verdict unchanged. "
-        "Split remains unscheduled (docs/plans/2026-09-30-er2-mission-feedback-loop.md)",
+        "Re-judged 2026-10-02 at 25653 after D-407 line-stuck mediation web module and "
+        "the operate/install split settled; verdict unchanged. "
+        "Re-judged 2026-10-02 at 25494 (from 24587 on base 7e577452) when the D-407 Fleet side joined "
+        "as its own modules: server/line_stuck.py (stuck board + answer record), two routes in "
+        "console_routes.py, web/line-stuck.js (panel), the decision client in transport.py, and "
+        "tests (~175 prod + ~370 web + ~360 test lines); console.py did not grow. A parallel D-395 "
+        "branch reported 25011 against the older 24565 pin, so merging both needs one more re-judge; "
+        "neither adds a new owner to the flat server/ tree beyond its own module; verdict unchanged. "
+        "Split remains unscheduled (docs/plans/2026-09-30-er2-mission-feedback-loop.md). "
+        "Re-judged 2026-10-02 at 26340 after D-413 Task 4 added a separately owned ordered Cell Job "
+        "journal, proposal finalization and service/operator admission path (docs/plans/"
+        "2026-10-02-platform-architecture-v02-migration.md); these remain Fleet-owned durable records, "
+        "while device dispatch and manipulation ownership stay in later tasks. This re-judgment resets "
+        "the package growth baseline; the existing +150 allowance still blocks silent growth",
     ),
     "site/fleet/fleet/server/proposal_store.py": (
         730,
@@ -165,7 +178,7 @@ SIZE_VERDICTS = {
         "2026-10-01 at 887 after idempotent per-attempt phase projection joined the Mission event transaction",
     ),
     "contracts/foundation/core_common/protocol/schemas.py": (
-        1_153,
+        1_239,
         "accept: the D-18 single contract source — every envelope, event and capability model in one "
         "importable place; per-domain schema files would fork the version pin that "
         "test_protocol_version_alignment guards. Re-judged 2026-09-30 at 1000 lines after the bounded "
@@ -180,7 +193,10 @@ SIZE_VERDICTS = {
         " Re-judged 2026-10-01 at 1137 lines: the typed shadow sub-blocks (ShadowRecordRef, "
         "ShadowEvalStats) joined SafetyPolicyStatus; same verdict."
         " Re-judged 2026-10-02 at 1153 lines: D-407 LineStuckStatus (the typed stuck block on "
-        "LineFollowStatus, v1.74) joined; the logic stays in line_follow/stuck_recovery.py; same verdict.",
+        "LineFollowStatus, v1.74) joined; the logic stays in line_follow/stuck_recovery.py; same verdict."
+        " Re-judged 2026-10-02 at 1239 for D-413 Task 4's additive FleetCellTransferGrant, "
+        "CellTransferPayload, and CellTransferPose wire contracts; the single protocol source remains "
+        "authoritative and this establishes a new zero-growth baseline.",
     ),
     "site/fleet/fleet/server/task_store.py": (
         1060,

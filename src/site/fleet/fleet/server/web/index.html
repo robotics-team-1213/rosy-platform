@@ -64,6 +64,12 @@
           <ul id="critical-list" class="issue-list"></ul>
         </div>
       </div>
+      <!-- D-407 판단 요청: 차선 추종이 막힌 로봇의 질문과 다섯 답. CORE가 판단하고 거부한다. -->
+      <section id="stuck-panel" class="stuck-panel" aria-labelledby="stuck-heading" hidden>
+        <h3 id="stuck-heading">판단 요청 <small id="stuck-count"></small></h3>
+        <p class="hint">차선 추종이 막힌 로봇이 다음 동작을 묻습니다. 답이 없으면 로봇은 정해진 시간 뒤 짧게 물러나 다시 보거나(로컬 복구가 켜진 로봇), 멈춘 채 답을 기다립니다.</p>
+        <ul id="stuck-list" class="stuck-list" aria-labelledby="stuck-heading"></ul>
+      </section>
     </section>
 
     <section class="panel" aria-labelledby="roster-heading">

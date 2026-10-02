@@ -12,6 +12,10 @@ POLICY = ROOT / "tools" / "harness" / "platform_dependencies.yaml"
 CURRENT_COMPONENTS = {
     "contracts": ("src/contracts/foundation/core_common", "core_common"),
     "cell_process_compat": ("src/site/cell/rosy_cell", "rosy_cell"),
+    "palletizing_process": (
+        "modules/processes/palletizing/src/rosy/processes/palletizing",
+        "rosy.processes.palletizing",
+    ),
     "fleet_site": ("src/site/fleet/fleet", "fleet"),
     "omx_device_adapter": ("src/products/omx/adapter/omx_adapter", "omx_adapter"),
     "world_api": ("modules/world/src/rosy/world/api", "rosy.world.api"),

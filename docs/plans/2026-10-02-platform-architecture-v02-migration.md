@@ -8,7 +8,7 @@
 
 **Tech Stack:** Python, 기존 FastAPI·SQLite·Pydantic, ROS 2 Jazzy, colcon/ament, namespace wheel, OMX Gazebo, 기존 pytest·harness. 새 빌드 도구·모델 SDK 도입은 이 계획의 전제가 아니다.
 
-**상태:** Task 0~2 완료 (2026-10-02, Windows source baseline/API wheels); Task 3~9 미실행. 아래 PASS 조건은 실행 지침이며 미완료 task의 결과를 뜻하지 않는다.
+**Status:** Tasks 0-3 complete (2026-10-02, Windows source baseline/API and process wheel); Tasks 4-9 not run. PASS conditions below are instructions and do not imply unfinished tasks passed.
 
 **설계:** [ROSY Platform Architecture v0.2](../reference/ROSY_Platform_Architecture_Design_v0.2.md) 3·5·6·15·16장.
 
@@ -55,8 +55,8 @@ Task 0 기준선 → 1 구조·설치 경계 → 2 최소 API → 3 공정 추�
 | 0~1 | 기존 실패·소유권·설치 집합 고정, 단계별 import/설치 검사 | SOURCE/LOCAL 준비 |
 | 2~5 | 변환·권한·phase·원장의 양 끝 시험, 기존 동작 회귀 없음 | SOURCE/LOCAL |
 | 6~7 | 저장소 없는 설치 실행, 최소 의존성, 재시작·UNKNOWN 재생 | LOCAL. 배포 가능한 ARTIFACT는 별도 |
-| 8 | 정식 Fleet→UDS→vendor Gazebo와 독립 물체/그리퍼 증거 | 해당 고정 셀 ROS-SIM |
-| 9 | 전환된 호출자·설치 증거로 해당 호환층만 제거 | 해당 이전 범위 완료 |
+| 8 | formal Fleet-to-UDS-to-vendor Gazebo plus independent object/gripper evidence | fixed-cell ROS-SIM |
+| 9 | remove only compatibility paths with migrated callers and install evidence | migration scope complete |
 
 ## Task 0: 현재 코드와 진행 중 작업의 기준선
 
@@ -155,7 +155,15 @@ python -B -m venv --system-site-packages $venv
 
 **검증:** 새 호환 시험과 기존 Cell suite를 별도 실행한다. 기대: 출력·오류 의미가 기준선과 같고 ROS/OMX import 없음. 커밋: `refactor: extract palletizing process with legacy imports`.
 
+**Task 3 completion evidence (2026-10-02, `9da93450`):** Recipe/Cell/Job calculations now have one implementation in `modules/processes/palletizing`; existing `rosy_cell` imports re-export the same types and functions. Each pick/place pair maps to one versioned `pallet.transfer` Skill step, while `pallet_done` remains ordered site-ledger metadata. Mapping recompiles the Job from the supplied Recipe/Cell and rejects changed steps, carry height, or source hashes. See palletizing and Cell progress/logs.
+
+**Validation:** Built and installed the actual wheel in an isolated X: venv. Wheel compatibility 11 passed, legacy Cell suite 143 passed, API mapping 7 passed, architecture 81 passed/1 skipped, known-failure comparison 0 new/0 known; final quick tier 95 passed/24 existing warnings and 0 new known failures. Confirmed legacy import failure without the wheel and recovery after installation. CI YAML parsed; remote CI and ROS/Gazebo were not run. D-18 wire schemas and Fleet dispatch remain unchanged.
+
+**Latest-main follow-up (`cc76161f5`, merged as `d9e70f71`):** After `184185f92` exposed the Fleet size-verdict budget mismatch on clean main, main updated that verdict allowance. The unfiltered architecture suite now passes 81/1 skipped and the quick tier passes 95 with 24 existing warnings; both known-failure comparisons report 0 new/0 known. This resolves the prior latest-main test boundary without changing Fleet implementation in this migration.
+
 ## Task 4: Fleet 접수와 순서 있는 작업 원장
+
+**진행 기록 (2026-10-02):** 실행 계층에 process compiler port 기반 Cell Job 재컴파일·PlanBundle 검증 경계를 추가했다. `PICK_PLACE` wire는 고정한 채 `FleetCellTransferGrant` schema를 별도 합집합으로 정의하고 API Reference v1.78에 기록했다. 다음 구현은 service principal 제안/별도 운영자 승인, SQLite ordered-step migration, 독립 목표 증거와 dispatcher 연결이다. 현재 변경은 아직 Fleet endpoint나 장치 하달을 열지 않는다.
 
 **Modify/Reuse:** `src/site/fleet/fleet/server/{app,mission_routes,mission_service,mission_store,mission_dispatcher,proposal_store,goal_evidence}.py`, `src/contracts/foundation/core_common/protocol/schemas.py`, `docs/reference/ROSY API & Protocol Reference.md`.
 
@@ -168,6 +176,12 @@ python -B -m venv --system-site-packages $venv
 5. 공개 envelope 또는 endpoint 의미를 바꾸면 API Reference·schema·생산자/소비자 시험을 같은 커밋에서 고친다. PlanBundle 전체를 기존 wire에 무조건 노출하지 않는다.
 
 **검증:** 새 2개 시험과 기존 `test_mission_store.py`, `test_mission_service.py`, `test_mission_dispatcher.py`, `test_mission_api.py`, `test_fleet_omx_action_phase_contract.py` 실행. 기대: 기존 PICK_PLACE 호환, 권한 분리, 다음 Step 선행 실행 없음, 불명 결과 자동 재제출 없음. 커밋: `feat: connect cell plans to fleet admission and steps`.
+
+### Task 4 ?? ????? (2026-10-02)
+
+Cell compiler port, additive `CELL_TRANSFER` ??, `service` ???? ?? operator ?? ??, ??? ?? SQLite ordered-step ??? ????. ??? ?? `PICK_PLACE` Mission ???? ???? ???, ???? ????fence ?????? ??? ?? ?? HOLD? ???. Action ??? ???? ??/??? ?? ??? ?? ?? ?? ??? ????, ?? ?? ? ?? Step? ?? ??? ???? ???.
+
+?? ??? SOURCE/LOCAL ?? ????. Cell Job ???? ?? ??? ?? API??, ??? ?? producer?Fleet dispatcher?UDS/OMX Action???? reconciliation? ?? ???? ???. ??? Task 4? ?? ??? ?? ???? fixed-cell ROS-SIM ??? ??? ???. ?? Fleet ? ??/?? ?? ??? ?? ??? ??? Fleet progress? ????. Task 5?? manipulation Skill/OMX owner? ????, Task 7?? persisted interruption recovery? ??? ? Task 8? Gazebo ?? ??? ????.
 
 ## Task 5: 조작 Skill과 OMX owner 연결
 
@@ -260,13 +274,13 @@ git diff --check
 
 | Task | 상태 | commit / 시험 / 증거 |
 |---|---|---|
-| 0 기준선 | TODO | 미실행 |
-| 1 구조 가드 | TODO | 미실행 |
-| 2 최소 API | TODO | 미실행 |
-| 3 공정 추출 | TODO | 미실행 |
-| 4 Fleet 연결 | TODO | 미실행 |
-| 5 로컬 Skill | TODO | 미실행 |
-| 6 앱·설치 | TODO | 미실행 |
-| 7 오류 재생 | TODO | 미실행 |
-| 8 Gazebo | TODO | 미실행 |
-| 9 호환층 정리 | TODO | 미실행 |
+| 0 Baseline | PASS | `7e577452`; Cell 143, Fleet 1336, OMX 268, architecture 76 passed/1 skipped; ownership manifest committed |
+| 1 Boundary guard | PASS | `59cd3bce`, main sync `d082bf18`; boundary suite 81 passed/1 skipped; quick 95 passed; no new known failures |
+| 2 Minimal APIs | PASS | `d502290b`, main sync `eb306385`; 3 installed wheels, mapping/boundary/protocol 29 passed, docs 80 passed |
+| 3 Process extraction | PASS (source); runtime/artifact/device gates remain open | `9da93450`, docs `bb84551a`, latest-main sync `cc76161f5` / merge `d9e70f71`; wheel compatibility 11, Cell 143, mapping 7; architecture 81/1 skipped, quick 95 passed/24 existing warnings; known-failure comparisons 0 new/0 known |
+| 4 Fleet connection | IN PROGRESS | execution compiler-port mapping 6 passed; CELL_TRANSFER contract + core schema suite 424 passed/1 skipped; endpoint/ordered journal/recovery remain |
+| 5 Local Skill | TODO | not run |
+| 6 App and install | TODO | not run |
+| 7 Failure replay | TODO | not run |
+| 8 Gazebo | TODO | not run |
+| 9 Compatibility cleanup | TODO | not run |

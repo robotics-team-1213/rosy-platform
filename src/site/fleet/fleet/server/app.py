@@ -29,6 +29,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, field_validator
 
 from core_common.protocol.vision_preview import VisionLeaseSigner
+from fleet.server.cell_job_store import CellJobStore
 from fleet.server.console import FleetConsole
 from fleet.server.goal_evidence_service import GoalEvidenceService
 from fleet.server.local_action_transport import UnixLocalActionTransport
@@ -85,6 +86,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                task_service: Optional[FleetTaskService] = None,
                mission_service: Optional[MissionService] = None,
                proposal_store: Optional[ProposalStore] = None,
+               cell_job_compiler=None,
                goal_evidence_service: Optional[GoalEvidenceService] = None,
                candidate_resolver=None,
                policy_evidence: Optional[PolicyEvidenceStore] = None,
@@ -113,6 +115,10 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         raise ValueError("Mission candidate resolver requires MissionService and ProposalStore")
     if candidate_resolver is not None and not callable(candidate_resolver):
         raise ValueError("Mission candidate resolver must be callable")
+    if cell_job_compiler is not None and not mission_configured:
+        raise ValueError("Cell Job compiler requires the persistent Mission API")
+    if cell_job_compiler is not None and not callable(getattr(cell_job_compiler, "compile", None)):
+        raise ValueError("Cell Job compiler must implement compile(recipe, cell)")
     if goal_evidence_service is not None and not mission_configured:
         raise ValueError("goal evidence requires the persistent Mission API")
     if goal_evidence_service is not None and goal_evidence_service.missions is not mission_service:
@@ -128,6 +134,18 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
             database_paths.add(goal_evidence_service.store.path.resolve())
         if len(database_paths) != 1:
             raise ValueError("Mission, proposal, audit, and resource claims must share one SQLite database")
+    cell_job_store = CellJobStore(mission_service.store.path) if mission_configured else None
+    cell_job_resolver = None
+    if cell_job_compiler is not None:
+        from rosy.execution.site.cell_submission import compile_cell_submission
+
+        def compile_cell_job(candidate, *, workcell_id, instance_id):
+            submission = compile_cell_submission(
+                candidate, compiler=cell_job_compiler,
+                workcell_id=workcell_id, instance_id=instance_id,
+            )
+            return submission.as_store_document()
+        cell_job_resolver = compile_cell_job
     if site_users is not None and task_service is None:
         raise ValueError("per-user site authorization requires persistent task/audit storage")
     if bool(discovery) != bool(discovery_token):
@@ -270,6 +288,8 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     app.state.web_common = Path(web_common) if web_common is not None else None
     app.state.task_service = task_service
     app.state.mission_service = mission_service
+    app.state.cell_job_store = cell_job_store
+    app.state.cell_job_compiler = cell_job_compiler
     app.state.goal_evidence_service = goal_evidence_service
     app.state.mission_progress = mission_progress
     app.state.mission_model_turn_store = mission_model_turn_store
@@ -329,7 +349,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
             console=console, sightings=sightings, policy_evidence=policy_evidence,
             principals=principals)
     authorize = build_authorize(console_token, principals, task_service)
-    require_viewer, require_operator, require_named_operator = build_role_guards(
+    require_viewer, require_operator, require_named_operator, require_proposer = build_role_guards(
         authorize, principals)
     read_guard = [Depends(require_viewer)]
     operator_guard = [Depends(require_operator)]
@@ -361,7 +381,9 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
 
     install_console_routes(app, console=console, sightings=sightings,
                            require_viewer=require_viewer, read_guard=read_guard,
-                           operator_guard=operator_guard, site_lanes=site_lanes)
+                           operator_guard=operator_guard, site_lanes=site_lanes,
+                           require_operator=require_operator,
+                           answer_log_path=task_service.store.path if task_service else None)
 
     install_task_dispatch_routes(app, console=console, task_service=task_service,
                                  configured_omx=configured_omx,
@@ -373,12 +395,15 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     if mission_service is not None:
         install_mission_routes(app, mission_service=mission_service,
                                proposal_store=proposal_store,
+                               cell_job_store=cell_job_store,
+                               cell_job_resolver=cell_job_resolver,
                                goal_evidence_service=goal_evidence_service,
                                mission_progress=mission_progress,
                                candidate_resolver=candidate_resolver,
                                require_viewer=require_viewer,
                                require_operator=require_operator,
                                require_named_operator=require_named_operator,
+                               require_proposer=require_proposer,
                                read_guard=read_guard, operator_guard=operator_guard)
 
     install_intent_routes(app, console=console, task_service=task_service,

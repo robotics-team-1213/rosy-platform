@@ -286,6 +286,92 @@ class FleetActionGrant(BaseModel):
         return self
 
 
+class CellTransferPose(BaseModel):
+    """Finite robot-base pose carried by the fixed-cell transfer grant (D-403)."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    x: float = Field(strict=True, allow_inf_nan=False)
+    y: float = Field(strict=True, allow_inf_nan=False)
+    z: float = Field(strict=True, allow_inf_nan=False)
+    yaw: float = Field(strict=True, allow_inf_nan=False)
+
+
+class CellTransferPayload(BaseModel):
+    """One inseparable pick/place pair compiled from an approved Cell Job."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    job_id: str = Field(min_length=1, max_length=192)
+    recipe_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    cell_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    step_index: int = Field(strict=True, ge=0)
+    item: Literal["box", "slip_sheet"]
+    pallet: str = Field(min_length=1, max_length=96)
+    layer: int = Field(strict=True, ge=0)
+    frame: Literal["robot_base"]
+    home: CellTransferPose
+    pick: CellTransferPose
+    place: CellTransferPose
+    pick_approach_z: float = Field(strict=True, allow_inf_nan=False)
+    place_approach_z: float = Field(strict=True, allow_inf_nan=False)
+    carry_z: float = Field(strict=True, allow_inf_nan=False)
+
+    @field_validator("job_id", "pallet")
+    @classmethod
+    def _cell_transfer_identifier(cls, value: str) -> str:
+        if not _ACTION_ID.fullmatch(value):
+            raise ValueError("Cell Transfer identity must be a trimmed identifier")
+        return value
+
+    @model_validator(mode="after")
+    def _approaches_are_carried(self):
+        if (self.pick_approach_z < self.pick.z or self.place_approach_z < self.place.z
+                or self.carry_z < max(self.pick_approach_z, self.place_approach_z)):
+            raise ValueError("carry_z must cover both target approach heights")
+        return self
+
+
+class FleetCellTransferGrant(BaseModel):
+    """Fleet authority for exactly one ordered Cell Job transfer step."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    mission_id: str = Field(min_length=1, max_length=192)
+    step_id: str = Field(min_length=1, max_length=192)
+    action_id: str = Field(min_length=1, max_length=192)
+    attempt_id: str = Field(min_length=1, max_length=192)
+    request_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    workcell_id: str = Field(min_length=1, max_length=96)
+    instance_id: str = Field(min_length=1, max_length=96)
+    action_kind: Literal["CELL_TRANSFER"]
+    cell_transfer: CellTransferPayload
+    capability_revision: str = Field(min_length=1, max_length=128)
+    config_revision: str = Field(min_length=1, max_length=128)
+    authority_epoch: int = Field(strict=True, ge=0)
+    dispatch_generation: int = Field(strict=True, ge=0)
+    issued_at: datetime
+    expires_at: datetime
+
+    @field_validator("mission_id", "step_id", "action_id", "attempt_id", "workcell_id",
+                     "instance_id", "capability_revision", "config_revision")
+    @classmethod
+    def _cell_grant_identifier(cls, value: str) -> str:
+        if not _ACTION_ID.fullmatch(value):
+            raise ValueError("identity must be a trimmed identifier")
+        return value
+
+    @model_validator(mode="after")
+    def _cell_grant_consistency(self):
+        identities = (self.mission_id, self.step_id, self.action_id, self.attempt_id)
+        if len(set(identities)) != len(identities):
+            raise ValueError("mission, step, action and attempt identities must be distinct")
+        if (self.issued_at.tzinfo is None or self.expires_at.tzinfo is None
+                or self.expires_at <= self.issued_at):
+            raise ValueError("grant expiry must follow an aware issuance timestamp")
+        return self
+
+
 class DeviceActionReceipt(BaseModel):
     """Local journal receipt; driver success and Mission goal are separate facts."""
 

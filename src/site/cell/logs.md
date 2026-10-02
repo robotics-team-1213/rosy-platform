@@ -26,3 +26,9 @@
 - 변경: `carry_z(recipe, cell, *, tol_m)`가 `_check`를 먼저 돌려 알 수 없는 frame/station을 KeyError 대신 CompileError로 거절한다(`compile_job`은 `_check`를 한 번만 실행). 앞뒤 공백이 있는 `kinematics_revision`은 CellError. D-401 §2에 `cell/2` 안내 한 줄.
 - 증거: `python -m pytest src/site/cell/test -q -p no:cacheprovider` 143 passed; harness lint 0 error(s).
 - gate 변화: SOURCE GO 유지(증거 140 -> 143).
+
+## 2026-10-02 · 9da93450 · refactor: extract palletizing process with legacy imports
+
+- Change: Recipe/Cell/Job source moved to the `modules/processes/palletizing` wheel. Existing `rosy_cell` imports only re-export canonical types and functions.
+- Evidence: installed wheel compatibility 11 passed; Cell suite 143 passed. SOURCE remains GO. No MoveIt/IK, Motion Intent, or reachability behavior was added.
+- Gate: SOURCE GO; ROS-SIM remains HOLD.

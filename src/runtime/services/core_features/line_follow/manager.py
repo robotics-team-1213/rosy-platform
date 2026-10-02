@@ -92,7 +92,7 @@ class LineFollowManager(StuckRecoveryMixin):
             return self._mode is not LineFollowMode.OFF
 
     def set_mode(self, mode: LineFollowMode | str,
-                 hold_s: Optional[float] = None) -> LineFollowStatus:
+                 hold_s: Optional[float] = None, *, reason: Optional[str] = None) -> LineFollowStatus:
         selected = mode if isinstance(mode, LineFollowMode) else LineFollowMode(mode)
         if hold_s is not None and (not _finite(hold_s) or not 0.0 < float(hold_s) <= 2.0):
             raise ValueError("line-follow hold_s must be in (0, 2]")
@@ -104,8 +104,8 @@ class LineFollowManager(StuckRecoveryMixin):
                 self._hold_s = float(hold_s)
                 self._hold_until = self._clock() + self._hold_s
             previous = self._mode
-            self._recovery_reset("mode_off" if selected is LineFollowMode.OFF
-                                 else "mode_changed", self._clock())
+            default = "mode_off" if selected is LineFollowMode.OFF else "mode_changed"
+            self._recovery_reset(reason or default, self._clock())
             self._generation += 1
             self._mode = selected
             self._observation = None
@@ -134,8 +134,9 @@ class LineFollowManager(StuckRecoveryMixin):
                 )
             return self._status.model_copy()
 
-    def stop(self) -> LineFollowStatus:
-        return self.set_mode(LineFollowMode.OFF)
+    def stop(self, reason: str = "mode_off") -> LineFollowStatus:
+        """reason: why an open D-407 stuck closes (e.g. "estop" from the safety listener)."""
+        return self.set_mode(LineFollowMode.OFF, reason=reason)
 
     def observe(self, observation: LineObservation, received_at: Optional[float] = None,
                 source_now: Optional[float] = None) -> bool:

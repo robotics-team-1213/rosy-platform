@@ -628,7 +628,7 @@ Pinky와 OMX는 별도 장치로 유지한다. 이동·도킹·인계·집기·�
 
 | 현재 경로와 구현 | 목표 책임 | 보존할 경계와 첫 작업 |
 |---|---|---|
-| `src/site/cell/rosy_cell` — `compiler.py`의 Job·Step, recipe·pattern·stack | `modules/processes/palletizing` | ROS 없는 공정 계산을 재사용. Job에서 계획 계약으로의 명시적 변환과 검증 증적 연결 |
+| `modules/processes/palletizing` — Recipe/Cell/Job compiler와 Job→PlanBundle 변환; `src/site/cell/rosy_cell`은 단방향 호환 facade | `modules/processes/palletizing` | 단일 공정 구현을 유지. 변환 시 현재 Recipe/Cell로 Job을 재컴파일해 Step·carry_z·해시 일치를 확인하고 `pallet_done` 원장 표지를 보존 |
 | `src/site/fleet/fleet/server` — `mission_service.py`, `mission_store.py`, `mission_dispatcher.py`, task 서비스 | `modules/execution/site` + `apps/gateway` | Mission/Step·grant·결과 상관관계 유지. 업무 규칙을 추출하고 HTTP·lifespan은 앱 조합으로 유지 |
 | `src/site/fleet/fleet/ai` 및 server의 `mission_model_turn_*` | `modules/decision` + `integrations/models` + 앱의 워커 조합 | 판단 제공자·도구 계약과 SDK/전송 분리. 기존 제안 권한과 재판단 비활성 경계 보존 |
 | `src/runtime/gateway/core` — `services.py`, `node.py`, `bridge` 및 `src/runtime/api_web` | Pinky `apps/agent` 조합 + ROS/API 연동 | rclpy와 FastAPI의 단일 프로세스, 기존 API와 최종 cmd_vel owner 유지 |
@@ -641,7 +641,7 @@ Pinky와 OMX는 별도 장치로 유지한다. 이동·도킹·인계·집기·�
 | `src/sim`, OMX demonstration·export 및 `tools/perception` | 시뮬 연동, `modules/learning`, 선택 worker | 실제 존재하는 기능부터 분류. 시뮬/학습 도구의 물리 권한 격리 유지 |
 | `deploy/robot`, `deploy/site` | `deploy` + `profiles/installations` | 설치기·서비스·릴리스 잠금은 deploy, 구성 선택은 profiles. 실제 설치 경로 검증 |
 
-현재 [Cell progress](../../src/site/cell/progress.md)는 SOURCE GO·ROS-SIM HOLD, [OMX adapter progress](../../src/products/omx/adapter/progress.md)는 SOURCE/LOCAL GO·전체 ROS-SIM HOLD를 기록한다. 이는 기존 검증 기록이며 본 문서 작성 중 시험을 재실행했다는 의미가 아니다. 현재 상태는 해당 progress와 [STATUS](../../STATUS.md)를 확인한다.
+현재 [palletizing progress](../../modules/processes/palletizing/progress.md)와 [Cell progress](../../src/site/cell/progress.md)는 SOURCE GO, ROS-SIM HOLD를 기록한다. [OMX adapter progress](../../src/products/omx/adapter/progress.md)는 SOURCE/LOCAL GO·전체 ROS-SIM HOLD를 기록한다. 이 표의 나머지 경로는 단계적 이전 후보이며, 현재 상태는 각 progress와 [STATUS](../../STATUS.md)를 확인한다.
 
 ## 15.2 적용 순서
 

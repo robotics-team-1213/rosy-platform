@@ -1,0 +1,360 @@
+// D-407 판단 요청 — 차선 추종이 막힌 로봇이 관제에 묻는다. 막힘은 CORE 가 열고 판단하며,
+// 화면은 서버(Fleet)가 모은 막힘(robot.line_stuck)을 보이고 운용자의 답 하나를 Fleet 에
+// 넘길 뿐이다. 거부(늦은 답, 재개 거부 사유)는 CORE 의 말 그대로 옮긴다.
+// 상태 폴링은 1 s 마다 다시 그리므로, 바뀐 항목만 다시 만든다 — 확인 단계와 포커스가
+// 폴링에 지워지지 않게 한다. 색은 클래스로만 준다(CSP style-src 'self').
+
+export const DECISIONS = Object.freeze(["WAIT", "RESUME", "BACK_AND_RETRY", "MANUAL", "ABORT"]);
+
+export const DECISION_LABEL = Object.freeze({
+  WAIT: "대기",
+  RESUME: "재개",
+  BACK_AND_RETRY: "후진 후 재시도",
+  MANUAL: "수동",
+  ABORT: "중단",
+});
+
+export const CAUSE_LABEL = Object.freeze({
+  obstacle_ahead: "앞 물체로 멈춤",
+  lane_lost: "차선을 잃고 멈춤",
+});
+
+export const PHASE_LABEL = Object.freeze({
+  ASKING: "관제 답 기다림 · 시간이 지나면 로컬 복구",
+  WAITING_CONSOLE: "관제 답만 기다림",
+  BACKING: "로컬 복구 · 후진 중",
+  SETTLING: "로컬 복구 · 다시 보는 중",
+});
+
+// CORE stuck_recovery 의 거부 사유. 모르는 사유는 받은 그대로 보인다.
+export const REFUSAL_REASON = Object.freeze({
+  no_scan: "LiDAR 스캔이 없습니다",
+  scan_stale: "LiDAR 스캔이 오래되었습니다",
+  object_within_stop_distance: "정지 거리 안에 아직 물체가 있습니다",
+  local_recovery_disabled: "이 로봇은 로컬 복구가 꺼져 있습니다",
+  attempts_exhausted: "후진 시도를 모두 썼습니다",
+  calibration_active: "보정 세션 중입니다",
+  body_geometry_unset: "몸 치수(URDF) 설정이 없습니다",
+  rear_blind: "뒤 사각을 확인할 수 없습니다",
+  rear_blocked: "뒤가 막혀 있습니다",
+  linear_limit_zero: "수동 속도 한도가 0입니다",
+});
+
+const OUTCOME_TEXT = Object.freeze({
+  hold: "대기로 답했습니다 — 다음 요청까지 멈춰 있습니다",
+  back: "후진 후 재시도를 시작했습니다",
+  resume: "재개했습니다 — 차선 추종을 다시 시작합니다",
+  manual: "수동 모드로 넘겼습니다",
+  idle: "차선 추종을 중단했습니다",
+});
+
+const CONFIRMED = new Set(["RESUME", "BACK_AND_RETRY"]);
+
+const metres = (value) => (typeof value === "number" && Number.isFinite(value)
+  ? `${value.toFixed(2)} m` : "—");
+
+export function pendingStucks(robots) {
+  return (robots || []).filter((robot) => robot && robot.line_stuck && robot.line_stuck.stuck_id);
+}
+
+export function needsConfirm(decision) {
+  return CONFIRMED.has(decision);
+}
+
+/** Fact rows for one stuck: [key, label, value]. */
+export function stuckFacts(stuck) {
+  const attempts = `${stuck.attempts ?? 0}/${stuck.max_attempts ?? 0}`;
+  const held = typeof stuck.held_s === "number" ? `${Math.round(stuck.held_s)} s` : "—";
+  const rows = [
+    ["front", "앞 여유", metres(stuck.front_clearance_m)],
+    ["rear", "뒤 여유", metres(stuck.rear_clearance_m)],
+    ["turn", "회전 여유", metres(stuck.turn_clearance_m)],
+    ["held", "멈춘 시간", held],
+    ["attempts", "후진 시도", attempts],
+  ];
+  if (stuck.preview_seq !== null && stuck.preview_seq !== undefined) {
+    rows.push(["preview", "카메라 미리보기", `#${stuck.preview_seq}`]);
+  }
+  return rows;
+}
+
+/** One button per CORE decision, disabled with the first reason that applies. */
+export function decisionButtons(stuck, { operator, busy = false }) {
+  return DECISIONS.map((decision) => {
+    let reason = "";
+    if (!operator) reason = "운용자 권한이 필요합니다";
+    else if (stuck.robot_online === false) reason = "로봇 연결이 끊겼습니다";
+    else if (busy) reason = "답을 보내는 중";
+    else if (decision === "BACK_AND_RETRY" && !stuck.local_enabled) {
+      reason = "이 로봇은 로컬 복구가 꺼져 있습니다";
+    } else if (decision === "BACK_AND_RETRY" && (stuck.attempts ?? 0) >= (stuck.max_attempts ?? 0)) {
+      reason = "후진 시도를 모두 썼습니다";
+    }
+    return { decision, label: DECISION_LABEL[decision], confirm: needsConfirm(decision), reason };
+  });
+}
+
+export function confirmText(robotId, decision) {
+  if (decision === "RESUME") {
+    return `${robotId} 재개 — 앞이 비었는지 직접 확인했습니까? `
+      + "CORE가 정지 거리 안 물체를 다시 보고 거부할 수 있습니다.";
+  }
+  if (decision === "BACK_AND_RETRY") {
+    return `${robotId} 후진 후 재시도 — 로봇이 짧게 뒤로 물러난 뒤 다시 봅니다. 뒤가 비었습니까?`;
+  }
+  return "";
+}
+
+export function outcomeText(robotId, decision, result) {
+  const outcome = result && result.outcome;
+  return `${robotId} ${DECISION_LABEL[decision] || decision}: ${OUTCOME_TEXT[outcome] || "CORE가 받았습니다"}`;
+}
+
+/** CORE's refusal in operator Korean, with CORE's own code and message kept verbatim. */
+export function refusalText(robotId, decision, err) {
+  const code = err && err.code;
+  const message = (err && err.message) || "";
+  let why;
+  if (code === "STUCK_ID_MISMATCH") why = "이미 닫혔거나 바뀐 막힘입니다 — 새 요청을 보고 다시 답하세요";
+  else if (code === "STUCK_DECISION_REFUSED") {
+    const reason = message.includes(": ") ? message.slice(message.lastIndexOf(": ") + 2) : "";
+    why = REFUSAL_REASON[reason] || "CORE가 거부했습니다";
+  } else if (code === "EMERGENCY_ACTIVE") why = "비상정지 중입니다";
+  else if (code === "CALIBRATION_ACTIVE") why = "보정 세션이 로봇을 쥐고 있습니다";
+  else if (err && err.status === 403) why = "운용자 권한이 필요합니다";
+  else if (code === "ROBOT_UNREACHABLE") why = "로봇에 닿지 않아 답이 전해지지 않았습니다";
+  else if (code === "STUCK_DECISION_OUTCOME_UNKNOWN") {
+    why = "로봇이 응답하지 않았습니다. CORE가 이미 적용했을 수 있으니 막힘 상태를 다시 확인한 뒤 답하세요";
+  } else why = "답을 전하지 못했습니다";
+  const verb = code === "STUCK_DECISION_OUTCOME_UNKNOWN" ? "결과 불명"
+    : code === "ROBOT_UNREACHABLE" ? "전달 실패" : "거부";
+  const raw = code ? `${code}: ${message}` : message;
+  return `${robotId} ${DECISION_LABEL[decision] || decision} ${verb} — ${why}${raw ? ` (${raw})` : ""}`;
+}
+
+// 계약(D-359 §5.2)은 버튼마다 글자 kind 를 요구한다 — 변수 kind 헬퍼는 정적 검사가
+// 못 본다. 종류별 헬퍼가 리터럴을 담는다.
+function quietButton(text) {
+  const node = document.createElement("ui-button");
+  node.setAttribute("kind", "quiet");
+  node.type = "button";
+  node.textContent = text;
+  return node;
+}
+
+function primaryButton(text) {
+  const node = document.createElement("ui-button");
+  node.setAttribute("kind", "primary");
+  node.type = "button";
+  node.textContent = text;
+  return node;
+}
+
+function setReason(node, reason) {
+  node.disabled = Boolean(reason);
+  if (reason) node.setAttribute("reason", reason);
+  else node.removeAttribute("reason");
+}
+
+export function createLineStuckPanel({ el, view, call, log, isOperator }) {
+  // robot_id -> { stuck_id, decision } (확인 단계), { stuck_id, text, kind } (마지막 결과)
+  const confirming = new Map();
+  const results = new Map();
+  const busy = new Set();
+  const signatures = new Map();
+
+  async function send(robotId, stuckId, decision) {
+    if (busy.has(robotId)) return;   // one answer in flight per robot (no double submit)
+    confirming.delete(robotId);
+    busy.add(robotId);
+    render();
+    try {
+      const result = await call(`/api/fleet/robots/${encodeURIComponent(robotId)}/line-stuck/decision`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ stuck_id: stuckId, decision }),
+      });
+      const text = outcomeText(robotId, decision, result.result);
+      results.set(robotId, { stuck_id: stuckId, text, kind: "good" });
+      log(text, "good");
+    } catch (err) {
+      const text = refusalText(robotId, decision, err);
+      results.set(robotId, { stuck_id: stuckId, text, kind: "bad" });
+      log(text, "bad");
+    } finally {
+      busy.delete(robotId);
+      render();
+    }
+  }
+
+  function choose(robotId, stuckId, decision) {
+    if (needsConfirm(decision)) {
+      confirming.set(robotId, { stuck_id: stuckId, decision });
+      render("confirm-yes", robotId);
+      return;
+    }
+    send(robotId, stuckId, decision);
+  }
+
+  function cancelConfirm(robotId, decision) {
+    confirming.delete(robotId);
+    render(`decision-${decision}`, robotId);
+  }
+
+  function item(robotId, stuck) {
+    const li = document.createElement("li");
+    li.className = "stuck-item";
+    li.dataset.robotId = robotId;
+    li.dataset.stuckId = stuck.stuck_id;
+    if (stuck.robot_online === false) li.classList.add("offline");
+
+    const head = document.createElement("div");
+    head.className = "stuck-head";
+    const name = document.createElement("b");
+    name.textContent = robotId;
+    name.id = `stuck-name-${robotId}`;
+    const cause = document.createElement("ui-tag");
+    cause.setAttribute("status", "crit");
+    cause.textContent = CAUSE_LABEL[stuck.cause] || stuck.cause || "원인 미상";
+    cause.title = stuck.cause || "";
+    const phase = document.createElement("ui-tag");
+    phase.setAttribute("status", stuck.phase === "BACKING" || stuck.phase === "SETTLING" ? "warn" : "neutral");
+    phase.textContent = PHASE_LABEL[stuck.phase] || stuck.phase || "—";
+    phase.title = stuck.phase || "";
+    head.append(name, cause, phase);
+    if (stuck.robot_online === false) {
+      const offline = document.createElement("ui-tag");
+      offline.setAttribute("status", "warn");
+      offline.textContent = "연결 끊김 · 마지막 값";
+      head.append(offline);
+    }
+
+    const facts = document.createElement("dl");
+    facts.className = "stuck-facts";
+    for (const [key, label, value] of stuckFacts(stuck)) {
+      const cell = document.createElement("div");
+      cell.dataset.fact = key;
+      const dt = document.createElement("dt");
+      dt.textContent = label;
+      const dd = document.createElement("dd");
+      dd.textContent = value;
+      cell.append(dt, dd);
+      facts.append(cell);
+    }
+
+    // render() already dropped a confirm step whose stuck id is no longer the live one.
+    const pending = confirming.get(robotId);
+    const specs = decisionButtons(stuck, { operator: isOperator(), busy: busy.has(robotId) });
+    const actions = document.createElement("div");
+    actions.className = "stuck-actions";
+    actions.setAttribute("role", "group");
+    actions.setAttribute("aria-labelledby", name.id);
+    for (const spec of specs) {
+      const node = quietButton(spec.confirm ? `${spec.label}…` : spec.label);
+      node.dataset.decision = spec.decision;
+      node.dataset.focusKey = `decision-${spec.decision}`;
+      node.setAttribute("aria-label", `${robotId} ${spec.label} (${spec.decision})`);
+      setReason(node, spec.reason);
+      if (spec.confirm) {
+        node.setAttribute("aria-expanded", String(pending?.decision === spec.decision));
+      }
+      node.addEventListener("click", () => choose(robotId, stuck.stuck_id, spec.decision));
+      actions.append(node);
+    }
+    li.append(head, facts, actions);
+
+    if (pending) {
+      const box = document.createElement("div");
+      box.className = "stuck-confirm";
+      box.setAttribute("role", "group");
+      const text = document.createElement("p");
+      text.id = `stuck-confirm-${robotId}`;
+      text.textContent = confirmText(robotId, pending.decision);
+      box.setAttribute("aria-labelledby", text.id);
+      const yes = primaryButton(`${DECISION_LABEL[pending.decision]} 보내기`);
+      yes.dataset.focusKey = "confirm-yes";
+      // 보내기는 그 답 버튼과 같은 사유로 막힌다(권한·연결·전송 중·로컬 복구 꺼짐).
+      setReason(yes, specs.find((spec) => spec.decision === pending.decision)?.reason || "");
+      yes.addEventListener("click", () => send(robotId, stuck.stuck_id, pending.decision));
+      const no = quietButton("취소");
+      no.dataset.focusKey = "confirm-no";
+      no.addEventListener("click", () => cancelConfirm(robotId, pending.decision));
+      box.addEventListener("keydown", (event) => {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          cancelConfirm(robotId, pending.decision);
+        }
+      });
+      const row = document.createElement("div");
+      row.className = "stuck-confirm-actions";
+      row.append(yes, no);
+      box.append(text, row);
+      li.append(box);
+    }
+
+    const last = results.get(robotId);
+    if (last && last.stuck_id === stuck.stuck_id) {
+      const result = document.createElement("p");
+      result.className = "stuck-result";
+      result.dataset.kind = last.kind;
+      result.setAttribute("role", last.kind === "bad" ? "alert" : "status");
+      result.textContent = last.text;
+      li.append(result);
+    }
+    return li;
+  }
+
+  function render(focusKey = null, focusRobot = null) {
+    const panel = el("stuck-panel");
+    const list = el("stuck-list");
+    if (!panel || !list) return;
+    const stucks = view.stateUnavailable ? [] : pendingStucks(view.robots);
+    const live = new Map(stucks.map((robot) => [robot.robot_id, robot.line_stuck.stuck_id]));
+    // A confirm step belongs to one stuck id: a closed or replaced stuck drops it.
+    for (const [key, entry] of [...confirming]) {
+      if (live.get(key) !== entry.stuck_id) confirming.delete(key);
+    }
+    for (const key of [...signatures.keys()]) if (!live.has(key)) signatures.delete(key);
+
+    const active = document.activeElement;
+    const activeItem = active?.closest?.(".stuck-item");
+    const keepFocus = focusKey
+      ? { robot: focusRobot, key: focusKey }
+      : activeItem ? { robot: activeItem.dataset.robotId, key: active.dataset?.focusKey } : null;
+
+    const existing = new Map([...list.children].map((node) => [node.dataset.robotId, node]));
+    const ordered = [];
+    for (const robot of stucks) {
+      const stuck = robot.line_stuck;
+      // 시계처럼 매 폴링 바뀌는 값은 서명에서 뺀다.
+      const { held_s: _held, ask_remaining_s: _ask, observed_age_s: _age, ...stable } = stuck;
+      const signature = JSON.stringify([stable, confirming.get(robot.robot_id) || null,
+        results.get(robot.robot_id) || null, busy.has(robot.robot_id), isOperator()]);
+      let node = existing.get(robot.robot_id);
+      if (!node || signatures.get(robot.robot_id) !== signature) {
+        node = item(robot.robot_id, stuck);
+        signatures.set(robot.robot_id, signature);
+      } else {
+        // 멈춘 시간만 바뀌었다 — 항목을 다시 만들지 않는다(포커스·확인 단계 유지).
+        const held = node.querySelector('[data-fact="held"] dd');
+        if (held) held.textContent = stuckFacts(stuck).find(([key]) => key === "held")[2];
+      }
+      ordered.push(node);
+    }
+    const same = ordered.length === list.children.length
+      && ordered.every((node, index) => list.children[index] === node);
+    if (!same) list.replaceChildren(...ordered);
+    panel.hidden = ordered.length === 0;
+    const count = el("stuck-count");
+    if (count) count.textContent = ordered.length ? `${ordered.length}건` : "";
+
+    if (keepFocus?.robot && keepFocus.key) {
+      const owner = [...list.children].find((node) => node.dataset.robotId === keepFocus.robot);
+      // The focused control may be gone (confirm step dropped): land on the item's first answer.
+      const target = owner?.querySelector(`[data-focus-key="${keepFocus.key}"]`)
+        || owner?.querySelector("ui-button[data-decision]");
+      if (target && document.activeElement !== target) target.focus({ preventScroll: true });
+    }
+  }
+
+  return { render };
+}

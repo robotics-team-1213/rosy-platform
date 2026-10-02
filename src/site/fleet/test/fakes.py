@@ -131,6 +131,8 @@ class FakeRobot:
         #: What `GET /localization/mission` answers, and what it raises instead.
         self.mission_status: dict = {"kind": None, "state": "idle", "reason": None}
         self.mission_status_error: Optional[BaseException] = None
+        #: D-407: raised by `line_stuck_decision` (e.g. RobotApiError 409 STUCK_ID_MISMATCH).
+        self.stuck_decision_error: Optional[BaseException] = None
 
     def _record(self, *call) -> None:
         self.calls.append(call)
@@ -191,6 +193,12 @@ class FakeRobot:
     async def line_follow_mode(self, mode: str) -> dict:
         self._record("line_follow_mode", mode)
         return {"mode": mode, "state": "WAITING" if mode == "IR_LINE" else "OFF"}
+
+    async def line_stuck_decision(self, stuck_id: str, decision: str) -> dict:
+        self._record("line_stuck_decision", stuck_id, decision)
+        if self.stuck_decision_error is not None:
+            raise self.stuck_decision_error
+        return {"mode": "CAMERA_LINE", "state": "HOLD", "stuck": None, "outcome": "hold"}
 
     async def estop(self) -> dict:
         self._record("estop")

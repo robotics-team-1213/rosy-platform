@@ -11,7 +11,8 @@
 | [fleet](src/site/fleet/progress.md) | FLEET | bed604ef (2026-09-30) | GO | GO | HOLD | PARKED | PARKED | PARKED |
 | [games](src/site/games/progress.md) | GAMES | bed604ef (2026-09-30) | GO | GO | N/A | N/A | PARKED | PARKED |
 | [rosy_vision](src/site/vision/progress.md) | SITE | a8199fd9 (2026-09-30) | GO | GO | N/A | N/A | PARKED | PARKED |
-| [rosy_cell](src/site/cell/progress.md) | SITE | 13614bc0 (2026-10-01) | GO | N/A | HOLD | N/A | PARKED | PARKED |
+| [rosy_cell](src/site/cell/progress.md) | SITE | 9da93450 (2026-10-02) | GO | N/A | HOLD | N/A | PARKED | PARKED |
+| [palletizing](modules/processes/palletizing/progress.md) | PROCESS | d9e70f71 (2026-10-02) | GO | N/A | HOLD | HOLD | PARKED | PARKED |
 | [cam](src/site/cam/progress.md) | SITE | 2370b41b (2026-10-01) | GO | GO | N/A | N/A | PARKED | PARKED |
 | [gz_sim](src/sim/gz_sim/progress.md) | SIM | uncommitted (2026-09-21) | GO | GO | GO | N/A | N/A | N/A |
 | [navigation](src/runtime/navigation/progress.md) | NAV | dc89264 (2026-09-17) | GO | GO | HOLD | HOLD | HOLD | PARKED |
@@ -21,7 +22,7 @@
 | [imu_bno055](src/drivers/imu_bno055/progress.md) | 장치 | dc89264 (2026-09-17) | GO | GO | HOLD | HOLD | PARKED | PARKED |
 | [sensor_adc](src/products/pinky_pro/adc/progress.md) | 장치 | dc89264 (2026-09-17) | GO | GO | HOLD | HOLD | PARKED | PARKED |
 | [lamp_control](src/products/pinky_pro/lamp/progress.md) | 장치 | dc89264 (2026-09-17) | GO | GO | HOLD | HOLD | PARKED | PARKED |
-| [core_common](src/contracts/foundation/progress.md) | CORE | bed604ef (2026-09-30) | GO | GO | N/A | N/A | N/A | N/A |
+| [core_common](src/contracts/foundation/progress.md) | CORE | b587404b (2026-10-02) | GO | GO | N/A | N/A | N/A | N/A |
 | [core_events](src/runtime/events/progress.md) | CORE | bed604ef (2026-09-30) | GO | GO | N/A | N/A | N/A | N/A |
 | [core_features](src/runtime/services/progress.md) | CORE | bed604ef (2026-09-30) | GO | GO | N/A | N/A | N/A | N/A |
 | [core_api_web](src/runtime/api_web/progress.md) | CORE | bed604ef (2026-09-30) | GO | GO | N/A | N/A | N/A | N/A |
@@ -49,6 +50,8 @@
 - control DEVICE: Pi bench Device 설치와 device-readback.sh --json 증거 없음. Control sensor adapter 활성화는 Device 보정 generation에 묶인다(D-47)
 - fleet ROS-SIM: D-87: 현재 트리의 colcon install/setup.bash가 없다. 2026-09-17 WSL Task 14 로그는 설계 입력이며 GO가 아니다 (D-89)
 - rosy_cell ROS-SIM: needs roadmap P3/P4 (MoveIt OMX-F Gazebo, device Step API)
+- palletizing ROS-SIM: Task 8 must verify fixed-cell transfer execution and interrupted recovery in Gazebo
+- palletizing ARTIFACT: The wheel is locally built and installed for validation; a declared installation profile and release provenance are Task 6
 - navigation ROS-SIM: Nav2/SLAM Toolbox 실물 launch 미재실행. 현재는 ament_lint와 조합 계약 시험뿐 — ROS 2 Jazzy 환경에서 hardware.launch.py/gz_*.launch.xml 재실행 필요
 - navigation ARTIFACT: ARM64 로봇 이미지에 포함되나(Dockerfile/compose) 서명 manifest와 immutable digest 발행 전
 - navigation DEVICE: Pi bench Device 설치와 device-readback.sh --json 증거 없음
