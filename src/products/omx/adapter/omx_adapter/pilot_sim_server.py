@@ -16,15 +16,15 @@ from rclpy.node import Node
 from rclpy.parameter import Parameter
 import yaml
 
+from core_common.protocol.omx_sim import GRIPPER_GOAL_MAX_DURATION_S
+
 from .command_owner import ArmCommandConfig
 from .pilot_sim_api import create_pilot_sim_app
-from .pilot_sim_runtime import PilotSimRuntime, urdf_position_limits
+from .pilot_sim_runtime import PilotSimRuntime, sim_admission_limits, urdf_position_limits
 from .pilot_sim_capture import PilotSimCapture
 from .pilot_sim_camera import PilotSimCamera
+from .pose_plan import CellPlanningProfile
 from .ros_runtime import RosArmCommandRuntime
-
-
-JOINTS = ("joint1", "joint2", "joint3", "joint4", "joint5", "gripper_joint_1")
 
 
 def main() -> None:
@@ -37,11 +37,14 @@ def main() -> None:
     if not re.fullmatch(r"[0-9a-f]{40}", revision):
         raise RuntimeError("explicit ROSY_SIM_SOURCE_REVISION is required for demonstration provenance")
     world = repo / "src/sim/gz_sim/worlds/omx_pilot_workcell.sdf"
+    cell_path = repo / "deploy/robot/omx/sim/cell_profile.yaml"
+    cell = CellPlanningProfile.load(cell_path)
     source_hasher = hashlib.sha256()
     for file in sorted((repo / "src/products/omx/adapter/omx_adapter").glob("*.py")):
         source_hasher.update(file.name.encode() + b"\0" + file.read_bytes())
     source_hasher.update((repo / "src/contracts/foundation/core_common/protocol/omx_sim.py").read_bytes())
     source_hasher.update((repo / "src/contracts/foundation/core_common/protocol/controls.py").read_bytes())
+    source_hasher.update(cell_path.read_bytes())
     vendor_revision = yaml.safe_load((repo / "deploy/robot/omx/stack.lock.yaml").read_text())["vendor"]["revision"]
     source = {"source_revision": revision, "source_tree_sha256": source_hasher.hexdigest(),
               "vendor_revision": vendor_revision,
@@ -49,16 +52,17 @@ def main() -> None:
     record_root = Path(os.environ.get("ROSY_SIM_RECORD_ROOT", "/recordings")).resolve()
     if record_root.is_relative_to(repo.resolve()):
         raise RuntimeError("recordings must be outside the source checkout")
+    urdf_limits = urdf_position_limits()
     config = ArmCommandConfig(
         enabled=True, workcell_id="omx_pilot_sim", instance_id="omx_pilot_sim_01",
-        joint_names=JOINTS,
-        # Narrow SIM admission limits; these are not hardware calibration values.
-        # Follow-up (D-411 B review): build them from deploy/robot/omx/sim/cell_profile.yaml,
-        # the reviewed nominal SIM limits, instead of these literals (Part C2 starts with the gripper).
-        position_limits={name: ((-0.5, 0.5) if name == "gripper_joint_1" else (-3.0, 3.0))
-                         for name in JOINTS},
+        joint_names=cell.joint_names,
+        # SIM admission = the reviewed nominal cell profile ranges within the vendor URDF (D-411 C).
+        # These are not hardware calibration values.
+        position_limits=sim_admission_limits(cell.position_limits, urdf_limits),
         allowed_owners=("pilot_sim",), calibration_revision="omx-f-gazebo-only-v1",
-        max_joint_state_age_s=0.5, max_goal_duration_s=1.0, action_timeout_s=8.0,
+        # Gripper goals take up to 2.0 s; OmxSimJog stays <= 1.0 s by schema.
+        max_joint_state_age_s=cell.max_joint_state_age_s, max_goal_duration_s=GRIPPER_GOAL_MAX_DURATION_S,
+        action_timeout_s=8.0,
     )
     rclpy.init()
     node = Node("rosy_omx_pilot_sim", parameter_overrides=[Parameter("use_sim_time", value=True)])
@@ -80,8 +84,9 @@ def main() -> None:
         trajectory_action="/arm_controller/follow_joint_trajectory",
         on_goal_event=on_event,
     )
-    # Pilot is offered the vendor URDF range within the admission range above (D-411 B).
-    facade = PilotSimRuntime(arm, urdf_limits=urdf_position_limits())
+    # Pilot is offered the vendor URDF range within the admission range above (D-411 B, C).
+    facade = PilotSimRuntime(arm, urdf_limits=urdf_limits, gripper=cell.gripper_joint,
+                             gripper_open=cell.gripper_open, gripper_closed=cell.gripper_closed)
     facade.capture = PilotSimCapture(
         facade, record_root, source, sim_time_ns=lambda: node.get_clock().now().nanoseconds)
     camera = PilotSimCamera(node, facade.capture, source["world_sha256"])
