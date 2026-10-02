@@ -4441,3 +4441,9 @@
 - 변경: S1 세 번째 실행(호스트 과부하로 공정하지 않음, 거울 결정 0, 거울 탐지 1/1, 실제 주행 중 들어 옮김 2/2)의 결과를 기록. 닻 점프 기준의 dt를 1 s로 묶고 거울 서명은 dt와 무관하게 닻을 뺀다(안전). 호출 제한 2.5 s, 시간 초과 결정은 15 s 안 그 자세 도달 시 출처 인정. `needs_human`은 표시이고 중재는 계속된다. 다음 S1은 부하가 낮을 때.
 - 증거: `docs/plans/2026-10-02-d395-s1-bench-results.md` Run 3, 브랜치 fix/d395-anchor-jump-timing.
 - gate 변화: 없음(Proposed).
+
+## 2026-10-02 · 9da93450 · refactor(platform): extract palletizing process behind legacy imports
+
+- Change: D-413 Task 3. `modules/processes/palletizing` is the sole Recipe/Cell/Job implementation. Each adjacent pick/place pair maps to one versioned `pallet.transfer` PlanStep; `pallet_done` remains ordered Fleet-ledger metadata. Existing `rosy_cell` imports are compatibility re-exports.
+- Evidence: wheel SHA-256 `d915fae9793b46696954e4f7cc94a0fb8556ac3f47ffc921951c20360834c35a`; installed-wheel compatibility 11 passed, Cell 143 passed, API mapping 7 passed, architecture 81 passed/1 skipped; known-failure 0 new/0 known; final quick tier 95 passed/24 existing warnings. Missing-wheel failure/recovery, CI YAML parse, and unchanged D-18 schema verified.
+- Gate: palletizing SOURCE GO; ROS-SIM/ARTIFACT HOLD. Remote CI, Gazebo, and device execution remain unverified.

@@ -2,11 +2,11 @@
 module: rosy_cell
 logical_modules: []
 owner: SITE
-last_verified: { commit: "13614bc0", date: 2026-10-01 }
+last_verified: { commit: "9da93450", date: 2026-10-02 }
 gates:
   SOURCE:
     state: GO
-    evidence: "143 passed at 13614bc0 (2026-10-01 Windows); ROS-free; cell/2 + carry_z; no Motion Intent, IK or reachability"
+    evidence: "143 legacy Cell tests pass through installed rosy-palletizing wheel; compatibility facade and canonical module share types/functions; ROS-free"
     cmd: "python -m pytest src/site/cell/test -q"
   LOCAL:
     state: N/A
@@ -19,8 +19,9 @@ gates:
     state: PARKED
   FIELD:
     state: PARKED
-adrs: [D-399, D-401]
+adrs: [D-399, D-401, D-413]
 plans:
   - docs/plans/2026-10-01-rosy-layered-architecture-roadmap.md
   - docs/plans/2026-10-01-rosy-cell-pattern-core.md
+  - docs/plans/2026-10-02-platform-architecture-v02-migration.md
 ---

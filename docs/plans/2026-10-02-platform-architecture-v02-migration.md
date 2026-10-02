@@ -8,7 +8,7 @@
 
 **Tech Stack:** Python, 기존 FastAPI·SQLite·Pydantic, ROS 2 Jazzy, colcon/ament, namespace wheel, OMX Gazebo, 기존 pytest·harness. 새 빌드 도구·모델 SDK 도입은 이 계획의 전제가 아니다.
 
-**상태:** Task 0~2 완료 (2026-10-02, Windows source baseline/API wheels); Task 3~9 미실행. 아래 PASS 조건은 실행 지침이며 미완료 task의 결과를 뜻하지 않는다.
+**Status:** Tasks 0-3 complete (2026-10-02, Windows source baseline/API and process wheel); Tasks 4-9 not run. PASS conditions below are instructions and do not imply unfinished tasks passed.
 
 **설계:** [ROSY Platform Architecture v0.2](../reference/ROSY_Platform_Architecture_Design_v0.2.md) 3·5·6·15·16장.
 
@@ -55,8 +55,8 @@ Task 0 기준선 → 1 구조·설치 경계 → 2 최소 API → 3 공정 추�
 | 0~1 | 기존 실패·소유권·설치 집합 고정, 단계별 import/설치 검사 | SOURCE/LOCAL 준비 |
 | 2~5 | 변환·권한·phase·원장의 양 끝 시험, 기존 동작 회귀 없음 | SOURCE/LOCAL |
 | 6~7 | 저장소 없는 설치 실행, 최소 의존성, 재시작·UNKNOWN 재생 | LOCAL. 배포 가능한 ARTIFACT는 별도 |
-| 8 | 정식 Fleet→UDS→vendor Gazebo와 독립 물체/그리퍼 증거 | 해당 고정 셀 ROS-SIM |
-| 9 | 전환된 호출자·설치 증거로 해당 호환층만 제거 | 해당 이전 범위 완료 |
+| 8 | formal Fleet-to-UDS-to-vendor Gazebo plus independent object/gripper evidence | fixed-cell ROS-SIM |
+| 9 | remove only compatibility paths with migrated callers and install evidence | migration scope complete |
 
 ## Task 0: 현재 코드와 진행 중 작업의 기준선
 
@@ -154,6 +154,10 @@ python -B -m venv --system-site-packages $venv
 5. palletizing wheel을 Task 2의 CI 빌드·설치 목록에 추가하고 기존 Cell/Fleet 소비자보다 먼저 설치한다. 기존 `rosy_cell`만 설치한 환경에서 새 의존 누락이 드러나는지 확인한 뒤 정식 설치 경로로 회복시킨다. 이 커밋부터 기존 Cell suite가 CI의 설치된 wheel을 실제로 사용해야 한다.
 
 **검증:** 새 호환 시험과 기존 Cell suite를 별도 실행한다. 기대: 출력·오류 의미가 기준선과 같고 ROS/OMX import 없음. 커밋: `refactor: extract palletizing process with legacy imports`.
+
+**Task 3 completion evidence (2026-10-02, `9da93450`):** Recipe/Cell/Job calculations now have one implementation in `modules/processes/palletizing`; existing `rosy_cell` imports re-export the same types and functions. Each pick/place pair maps to one versioned `pallet.transfer` Skill step, while `pallet_done` remains ordered site-ledger metadata. Mapping recompiles the Job from the supplied Recipe/Cell and rejects changed steps, carry height, or source hashes. See palletizing and Cell progress/logs.
+
+**Validation:** Built and installed the actual wheel in an isolated X: venv. Wheel compatibility 11 passed, legacy Cell suite 143 passed, API mapping 7 passed, architecture 81 passed/1 skipped, known-failure comparison 0 new/0 known; final quick tier 95 passed/24 existing warnings and 0 new known failures. Confirmed legacy import failure without the wheel and recovery after installation. CI YAML parsed; remote CI and ROS/Gazebo were not run. D-18 wire schemas and Fleet dispatch remain unchanged.
 
 ## Task 4: Fleet 접수와 순서 있는 작업 원장
 
@@ -260,13 +264,13 @@ git diff --check
 
 | Task | 상태 | commit / 시험 / 증거 |
 |---|---|---|
-| 0 기준선 | TODO | 미실행 |
-| 1 구조 가드 | TODO | 미실행 |
-| 2 최소 API | TODO | 미실행 |
-| 3 공정 추출 | TODO | 미실행 |
-| 4 Fleet 연결 | TODO | 미실행 |
-| 5 로컬 Skill | TODO | 미실행 |
-| 6 앱·설치 | TODO | 미실행 |
-| 7 오류 재생 | TODO | 미실행 |
-| 8 Gazebo | TODO | 미실행 |
-| 9 호환층 정리 | TODO | 미실행 |
+| 0 Baseline | PASS | `7e577452`; Cell 143, Fleet 1336, OMX 268, architecture 76 passed/1 skipped; ownership manifest committed |
+| 1 Boundary guard | PASS | `59cd3bce`, main sync `d082bf18`; boundary suite 81 passed/1 skipped; quick 95 passed; no new known failures |
+| 2 Minimal APIs | PASS | `d502290b`, main sync `eb306385`; 3 installed wheels, mapping/boundary/protocol 29 passed, docs 80 passed |
+| 3 Process extraction | PASS | `9da93450`; wheel SHA-256 `d915fae9793b46696954e4f7cc94a0fb8556ac3f47ffc921951c20360834c35a`; wheel compatibility 11, Cell 143, mapping 7, architecture 81/1; 0 new known failures |
+| 4 Fleet connection | TODO | not run |
+| 5 Local Skill | TODO | not run |
+| 6 App and install | TODO | not run |
+| 7 Failure replay | TODO | not run |
+| 8 Gazebo | TODO | not run |
+| 9 Compatibility cleanup | TODO | not run |
