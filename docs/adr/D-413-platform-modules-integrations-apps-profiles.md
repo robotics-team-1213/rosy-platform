@@ -4,6 +4,8 @@
 
 ## 배경
 
+**Partially Superseded by D-425 (2026-10-03):** 1·6항의 실행 앱/화면 배치는 [D-425](D-425-app-surface-ownership-shared-boundaries-and-source-layout.md)의 `apps/site`·`apps/device`·`ui` 목표 분류와 명명으로 보완·부분 대체한다. modules·integrations·profiles, 사이트/장치 원장과 고정 셀 우선 단계적 이전은 유지한다. 현재 소스·설치 경로의 실제 이전을 이 표기로 완료 처리하지 않는다. 아래 본문은 당시 결정의 역사로 보존한다.
+
 [플랫폼 설계 v0.2](../reference/ROSY_Platform_Architecture_Design_v0.2.md)는 기능 규칙, 외부 기술 연결, 실행 조합, 설치 구성을 구별한다. 현재 저장소는 `src/{contracts,runtime,products,drivers,site,hmi,sim}`로 분류하지만 분류와 실제 책임이 일치하지 않는 곳이 있다.
 
 - `runtime/services/core_features`에는 실행 중재·안전·상태와 navigation·docking·decision이 함께 있다.
