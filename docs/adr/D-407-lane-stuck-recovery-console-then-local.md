@@ -64,3 +64,10 @@ Status 는 Proposed 그대로다. CORE 쪽만 구현했고 Fleet 콘솔 화면(�
   - 막힘 중 앞이 스스로 비면(`obstacle_ahead` 가 풀리면) 사건을 `cleared` 로 닫는다.
   - D-379 녹화 구간 표시는 아직 없다. 사건의 시각으로 구간을 찾을 수 있다.
 - 독립 검토 반영(2026-10-02): 막힘 원인을 보고 상태가 아니라 래치(`_escalated`·`_lost_latched`)로 판단(일시 HOLD 가 막힘을 `cleared` 로 닫고 시도를 되살리던 결함), 받아들인 답은 증거 개정을 올려 미리 계산된 후진을 막고, MANUAL·ABORT 는 관리자 잠금 안에서 차선 추종을 끈 뒤 `POST /mode` 와 같은 전이(보정 lease, navigation·swarm 취소)를 쓴다. 답 사건에 토큰 id, LiDAR 정지를 쓰는데 scan 이 없으면 RESUME 거부, 설정 형 검사, sector 모드의 몸 점은 막힘 근처에서만 계산.
+
+## 구현 메모 (2026-10-02, Fleet 쪽, feat/d407-console-stuck-decisions)
+
+- 관제 목록: Fleet 은 모은 상태의 `line_follow.stuck` 을 로봇별 판단 요청으로 들고, 같은 id 의 `nav.line_stuck_opened` 사건(FleetAgent)에서 여유·미리보기 순서번호를 붙인다. `GET /api/fleet/line-stuck`, 로봇 행 `line_stuck`(API Ref v1.76).
+- 답: `POST /api/fleet/robots/{robot_id}/line-stuck/decision`(사이트 operator) 를 로봇 자격으로 CORE `POST /api/v1/line-follow/stuck/decision` 에 그대로 넘긴다. id 일치·RESUME 거부는 CORE 만 판단하고, 409 는 code·message 그대로 운용자에게 간다. 누가 답했는지는 Fleet 답 기록과 API 감사에 남는다(CORE 사건의 `by` 는 로봇 자격의 역할이다).
+- 해석과 차이: §2 의 "FleetAgent 를 거쳐" 는 요청(사건) 쪽만 그렇다. 답은 FleetAgent 로 내려가지 않는다 — Fleet→로봇 명령은 모두 REST 이고 FleetAgent 에는 내려오는 명령 경로가 없어, 새 경로를 만들지 않았다. 로봇 카메라 영상은 Fleet 이 중계하지 않으므로(D-59) 화면은 미리보기 순서번호만 보인다.
+- 화면: 예외 큐 패널 안 `판단 요청`. RESUME·BACK_AND_RETRY 는 확인 단계를 거치고, 로봇이 로컬 복구 꺼짐 또는 시도 소진을 보고하면 BACK_AND_RETRY 를 사유와 함께 막는다.

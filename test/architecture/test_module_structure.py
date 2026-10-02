@@ -83,7 +83,7 @@ SIZE_VERDICTS = {
         "D-395 P2-7 added localization/mission.py (the mission executor, its own module under budget)",
     ),
     "fleet": (
-        24_945,
+        25_494,
         "split: server HTTP boundary, console, signals and the mission-control stores are separate owners "
         "today; group them into subpackages rather than one flat server/ tree (B2); owner fleet, unscheduled "
         "(re-judged 2026-09-29 at 11164 after mission_store joined the server tree; re-judged 2026-09-30 at "
@@ -129,6 +129,12 @@ SIZE_VERDICTS = {
         "Re-judged 2026-10-02 at 24945 when D-410 split the console into two documents "
         "(web/install.html + web/install.js entry now own device enrollment and camera "
         "calibration; index.html/console.js shed the install wiring); verdict unchanged. "
+        "Re-judged 2026-10-02 at 25494 (from 24587 on base 7e577452) when the D-407 Fleet side joined "
+        "as its own modules: server/line_stuck.py (stuck board + answer record), two routes in "
+        "console_routes.py, web/line-stuck.js (panel), the decision client in transport.py, and "
+        "tests (~175 prod + ~370 web + ~360 test lines); console.py did not grow. A parallel D-395 "
+        "branch reported 25011 against the older 24565 pin, so merging both needs one more re-judge; "
+        "neither adds a new owner to the flat server/ tree beyond its own module; verdict unchanged. "
         "Split remains unscheduled (docs/plans/2026-09-30-er2-mission-feedback-loop.md)",
     ),
     "site/fleet/fleet/server/proposal_store.py": (
