@@ -3,6 +3,7 @@
 import {readControls, fallbackOmxControls} from "../controls.js";
 import {composeControls} from "./compose.js";
 import {mountJointJog} from "../widgets/joint_jog.js";
+import {mountGripper} from "../widgets/gripper.js";
 
 const TERMINAL = ["SUCCEEDED", "REJECTED", "CANCELED", "UNKNOWN_HOLD"];
 const GOAL_POLL_MS = 250;   // a settled goal is seen before the 1 s heartbeat (sequential jog)
@@ -226,12 +227,46 @@ export function mountArm(root, target, driver) {
   // /joint_states can land between GET /state and POST /goals. That one refusal is retried once
   // with a fresh readback; every other refusal stops (D-411 B review).
   const RETRYABLE = /joint_state_sequence_mismatch|readback_not_recently_served/;
-  async function postJog(name, delta, durationS) {
-    return request("/goals", {method: "POST", body: JSON.stringify({
-      instance_id: target.instance_id, seat_id: seat, request_id: crypto.randomUUID(),
-      joint: name, delta_rad: delta, duration_s: durationS,
+  function postGoal(path, fields) {
+    return request(path, {method: "POST", body: JSON.stringify({
+      instance_id: target.instance_id, seat_id: seat, request_id: crypto.randomUUID(), ...fields,
       state_sequence: state.state_sequence, expires_at_ms: Date.now() + 5000,
     })});
+  }
+  // One goal at a time for every widget (jog and gripper share the owner and the receipts).
+  // Resolves to the accepted command id; null = not now (busy, readback not ready — retry on
+  // the next update); false = not sent or refused (stop).
+  async function submitGoal(path, fields) {
+    if (!seat || disposed) return false;
+    if (session.busy() || !state?.ready) return null;
+    submitting = true;
+    notify({state, settled: null, error: null});
+    try {
+      let goal;
+      try { goal = await postGoal(path, fields); }
+      catch (error) {
+        if (!RETRYABLE.test(error.message) || disposed || !seat) throw error;
+        state = await request("/state");
+        if (disposed || !seat) return false;
+        if (!state.ready) return null;
+        goal = await postGoal(path, fields);
+      }
+      if (disposed || !seat) return false;
+      if (goal.state === "REJECTED" || goal.state === "UNKNOWN_HOLD") {
+        setStatus(goalStatus(goal));
+        return false;
+      }
+      active = goal.command_id;
+      setStatus(goalStatus(goal));
+      return active;
+    } catch (error) { showError(error); return false; }
+    finally {
+      submitting = false;
+      if (!disposed) {
+        notify({state, settled: null, error: null});
+        if (!refreshing) schedulePoll();
+      }
+    }
   }
 
   // What widgets see: the latest readback, one goal at a time, and terminal states.
@@ -243,45 +278,19 @@ export function mountArm(root, target, driver) {
     onUpdate(listener) { listeners.add(listener); return () => listeners.delete(listener); },
     // A widget waiting to send (stick held while busy) asks for the next readback soon.
     requestPoll() { pollWanted = true; if (!refreshing) schedulePoll(); },
-    // Resolves to the accepted command id; null = not now (busy, readback not ready — retry on
-    // the next update); false = not sent or refused (stop).
+    // submitGoal's id/null/false contract.
     async submitJog(name, delta, durationS = 0.4) {
-      if (!seat || disposed) return false;
-      if (session.busy() || !state?.ready) return null;
-      if (!state.positions || !(name in state.positions)) return false;
-      submitting = true;
-      notify({state, settled: null, error: null});
-      try {
-        let goal;
-        try { goal = await postJog(name, delta, durationS); }
-        catch (error) {
-          if (!RETRYABLE.test(error.message) || disposed || !seat) throw error;
-          state = await request("/state");
-          if (disposed || !seat) return false;
-          if (!state.ready) return null;
-          goal = await postJog(name, delta, durationS);
-        }
-        if (disposed || !seat) return false;
-        if (goal.state === "REJECTED" || goal.state === "UNKNOWN_HOLD") {
-          setStatus(goalStatus(goal));
-          return false;
-        }
-        active = goal.command_id;
-        setStatus(goalStatus(goal));
-        return active;
-      } catch (error) { showError(error); return false; }
-      finally {
-        submitting = false;
-        if (!disposed) {
-          notify({state, settled: null, error: null});
-          if (!refreshing) schedulePoll();
-        }
-      }
+      if (state?.ready && !(name in (state.positions ?? {}))) return false;
+      return submitGoal("/goals", {joint: name, delta_rad: delta, duration_s: durationS});
     },
-    async submitGripper() { return null; },   // D-411 C
+    // D-411 C: one absolute gripper goal (POST /gripper), same seat/owner/HOLD rules.
+    async submitGripper(position, durationS) {
+      return submitGoal("/gripper", {position, duration_s: durationS});
+    },
   };
   const items = readControls(target.controls) ?? fallbackOmxControls(target);
-  const disposeWidgets = composeControls($("[data-sim-widgets]"), items, {joint_jog: mountJointJog}, session);
+  const disposeWidgets = composeControls($("[data-sim-widgets]"), items,
+                                        {joint_jog: mountJointJog, gripper: mountGripper}, session);
 
   $("[data-sim-connect]").addEventListener("click", connect);
   cancel.addEventListener("click", async () => {

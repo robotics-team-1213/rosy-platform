@@ -40,6 +40,7 @@ PILOT_ASSETS = {
     "screens/robot-recording.js": "application/javascript",
     "screens/arm.js": "application/javascript",
     "screens/compose.js": "application/javascript", "widgets/joint_jog.js": "application/javascript",
+    "widgets/gripper.js": "application/javascript",
     "manifest.webmanifest": "application/manifest+json",
     "sw.js": "application/javascript",
     "icons/icon-192.png": "image/png",

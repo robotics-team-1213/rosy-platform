@@ -1011,7 +1011,7 @@ def test_empty_controls_are_not_an_old_server(tablet_page):
 # state_sequence served by a ready readback; a second goal while one runs is refused.
 _ARM_HARNESS = """async (opts) => {
   const {mountArm} = await import('/pilot/assets/screens/arm.js');
-  Object.assign(window, {goals: [], cancels: 0, terminal: 'RUNNING', rejections: [], seq: 0, served: new Set(),
+  Object.assign(window, {goals: [], grips: [], gripperState: null, cancels: 0, terminal: 'RUNNING', rejections: [], seq: 0, served: new Set(),
     pos: {joint1: 0, joint2: 0, gripper_joint_1: 0}, seatLost: false, forgetGoals: false,
     mismatchOnce: Boolean(opts.mismatchOnce), started: {}});
   const TERMINAL = ['SUCCEEDED', 'REJECTED', 'CANCELED', 'UNKNOWN_HOLD'];
@@ -1020,11 +1020,18 @@ _ARM_HARNESS = """async (opts) => {
   const current = () => window.goals.at(-1)?.request_id;
   const running = () => Boolean(current()) && !TERMINAL.includes(goalState(current()));
   const refuse = (reason) => { window.rejections.push(reason); throw new Error(`409: {"error":{"message":"${reason}"}}`); };
+  // opts.gripper: a D-411 C server — the gripper leaves joint_jog and has its own control.
+  const gripper = {id: 'gripper', kind: 'gripper', label: '그리퍼', joint: 'gripper_joint_1', closed: 0, open: 1,
+    unit: 'rad', presets: {open: 1, half: 0.5, close: 0}, readback: ['position', 'grasp']};
   const target = {kind: 'omx_sim', simulation: true, instance_id: 'omx_01', joints: ['joint1', 'joint2'],
     gripper: 'gripper_joint_1', controls: {schema: 'rosy.controls/1', items: [{id: 'arm', kind: 'joint_jog',
     label: '팔', max_step_rad: 0.05, duration_s: 0.4, command: 'bounded_goal',
     joints: [{name: 'joint1', lower: -1, upper: 1}, {name: 'joint2', lower: -1, upper: 1},
-             {name: 'gripper_joint_1', lower: -0.01, upper: 0.019}]}, ...(opts.extra || [])]}};
+             ...(opts.gripper ? [] : [{name: 'gripper_joint_1', lower: -0.01, upper: 0.019}])]},
+    ...(opts.gripper ? [gripper] : []), ...(opts.extra || [])]}};
+  const gripperBlock = (busy) => ({joint: 'gripper_joint_1', position: window.pos.gripper_joint_1, open: 1, closed: 0,
+    state: window.gripperState ?? (busy && window.grips.at(-1)?.request_id === current() ? 'moving'
+           : Math.abs(window.pos.gripper_joint_1) <= 0.05 ? 'closed' : 'open')});
   const driver = {request: async (path, options = {}) => {
     if (path === '/pair') return {token: 't'};
     if (path === '/whoami') return {role: 'operator'};
@@ -1035,7 +1042,17 @@ _ARM_HARNESS = """async (opts) => {
       const busy = running(); window.seq += 1;
       if (!busy) window.served.add(window.seq);
       return {ready: !busy, state_sequence: window.seq, owner_state: busy ? 'active' : 'ready', joint_age_ms: 5,
-              active_goal: busy ? current() : null, positions: {...window.pos}};
+              active_goal: busy ? current() : null, positions: {...window.pos},
+              ...(opts.gripper ? {gripper: gripperBlock(busy)} : {})};
+    }
+    if (path === '/gripper') {
+      const body = JSON.parse(options.body);
+      if (running()) refuse('goal_active');
+      if (!window.served.has(body.state_sequence)) refuse('readback_not_recently_served');
+      if (body.position < -0.1 || body.position > 1.1) refuse('gripper_limit');
+      window.pos.gripper_joint_1 = body.position; window.grips.push(body); window.goals.push(body);
+      window.started[body.request_id] = performance.now();
+      return {command_id: body.request_id, state: 'LOCAL_ACCEPTED'};
     }
     if (path === '/goals') {
       const body = JSON.parse(options.body);
@@ -1214,6 +1231,68 @@ def test_arm_goal_unknown_to_the_server_is_settled(tablet_page):
     page.wait_for_function("document.querySelector('[data-sim-status]').textContent.includes('goal_unknown')")
     page.wait_for_function("document.querySelector('[data-sim-cancel]').disabled")
     assert errors == [], errors
+
+
+@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1", reason="ROSY_RUN_BROWSER_TESTS=1")
+def test_arm_gripper_presets_slider_and_badge(tablet_page):
+    """D-411 C: one absolute goal per preset or slider release; the badge reads the grasp state."""
+    base_url, page, errors = tablet_page
+    _mount_arm(page, base_url, gripper=True)
+    badge = page.locator("[data-gripper-state]")
+    assert badge.inner_text() == "닫힘" and badge.get_attribute("aria-live") == "polite"
+    assert "gripper_joint_1" not in page.locator("[data-sim-joint] option").all_inner_texts()
+    page.click("[data-gripper-preset='half']")
+    page.wait_for_function("window.grips.length === 1")
+    grip = page.evaluate("window.grips[0]")
+    assert grip["position"] == 0.5 and grip["duration_s"] == 1.0          # half a stroke = half of 2.0 s
+    page.wait_for_function("document.querySelector('[data-gripper-state]').textContent === '이동 중'")
+    assert page.locator("[data-gripper-preset='close']").is_disabled()     # one goal at a time
+    assert page.locator("[data-gripper-percent]").is_disabled()
+    page.evaluate("window.terminal = 'SUCCEEDED'")
+    page.wait_for_function("!document.querySelector('[data-gripper-percent]').disabled")
+    assert badge.inner_text() == "열림"
+    assert page.locator("[data-gripper-percent]").input_value() == "50"
+    page.evaluate("""() => { const s = document.querySelector('[data-gripper-percent]');
+      s.dispatchEvent(new PointerEvent('pointerdown', {bubbles: true})); s.value = '100';
+      s.dispatchEvent(new Event('input', {bubbles: true})); s.dispatchEvent(new Event('change', {bubbles: true})); }""")
+    page.wait_for_function("window.grips.length === 2")
+    grip = page.evaluate("window.grips[1]")
+    assert grip["position"] == 1.0 and grip["duration_s"] == 1.0
+    page.evaluate("window.pos.gripper_joint_1 = 0.3; window.gripperState = 'holding'")
+    page.wait_for_function("document.querySelector('[data-gripper-state]').textContent === '쥐고 있음'")
+    assert page.evaluate("window.rejections") == []
+    assert errors == [], errors
+
+
+@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1", reason="ROSY_RUN_BROWSER_TESTS=1")
+@pytest.mark.parametrize("viewport", [(2000, 1200), (390, 844)])
+def test_arm_gripper_sits_in_the_right_hand_slot(base_url, viewport):
+    shots = Path(os.environ.get("ROSY_SHOT_DIR", "X:/DevTemp/d411-c"))
+    with playwright_sync.sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        try:
+            page = browser.new_page(viewport={"width": viewport[0], "height": viewport[1]})
+            errors: list[str] = []
+            page.on("pageerror", lambda exc: errors.append(str(exc)))
+            _mount_arm(page, base_url, gripper=True)
+            jog = page.locator("[data-control='joint_jog']").bounding_box()
+            grip = page.locator("[data-control='gripper']").bounding_box()
+            overflow = page.evaluate("document.documentElement.scrollWidth - document.documentElement.clientWidth")
+            assert overflow <= 0, f"가로 넘침 {overflow}px"
+            if viewport[0] >= 1024:
+                assert grip["x"] >= jog["x"] + jog["width"] and abs(grip["y"] - jog["y"]) < 2, (jog, grip)
+                assert grip["width"] < jog["width"]
+            else:
+                assert grip["y"] >= jog["y"] + jog["height"], (jog, grip)
+            for name in ("open", "half", "close"):
+                box = page.locator(f"[data-gripper-preset='{name}']").bounding_box()
+                assert box["height"] >= 40 and box["x"] + box["width"] <= viewport[0], (name, box)
+            if shots.drive and Path(shots.drive + "/").exists():
+                shots.mkdir(parents=True, exist_ok=True)
+                page.screenshot(path=str(shots / f"pilot-arm-gripper-{viewport[0]}x{viewport[1]}.png"), full_page=True)
+            assert errors == [], errors
+        finally:
+            browser.close()
 
 
 @pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1", reason="ROSY_RUN_BROWSER_TESTS=1")

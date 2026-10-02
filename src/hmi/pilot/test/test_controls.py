@@ -92,3 +92,30 @@ def test_profile_carries_the_announced_manual_limits():
       m.profileFromBaseVelocity(m.fallbackPinkyControls({pivot: true, fine: true})[0])]))""")
     assert out[0]["max_linear"] == 0 and out[0]["max_angular"] == 0.6 and out[0]["fine"] is False
     assert out[1]["max_linear"] is None and out[1]["max_angular"] is None
+
+def test_gripper_percent_position_and_duration():
+    out = _run_js("""
+const g = {open: 1.0, closed: 0.0};
+const r = {open: 0.0, closed: 1.0};
+console.log(JSON.stringify([
+  m.gripperPercent(0.25, g), m.gripperPosition(25, g), m.gripperPercent(2, g), m.gripperPercent(-1, g),
+  m.gripperPercent(0.25, r), m.gripperPosition(100, r), m.gripperPosition('x', g), m.gripperPercent(NaN, g),
+  m.gripperDuration(0, 1, g), m.gripperDuration(0, 0.5, g), m.gripperDuration(0.5, 0.52, g),
+  m.gripperDuration(undefined, 0.5, g), m.gripperDuration(1, 0, r)]))""")
+    assert out == [25, 0.25, 100, 0, 75, 0, 0, None, 2.0, 1.0, 0.2, 2.0, 2.0]
+
+
+def test_gripper_state_labels():
+    out = _run_js("""console.log(JSON.stringify([
+  ['open', 'closed', 'holding', 'moving', 'unknown', 'squeezing', undefined].map(m.gripperStateLabel),
+  m.GRIPPER_GOAL_MIN_S, m.GRIPPER_GOAL_MAX_S]))""")
+    assert out == [["열림", "닫힘", "쥐고 있음", "이동 중", "알 수 없음", "알 수 없음", "알 수 없음"], 0.2, 2.0]
+
+
+def test_gripper_goal_bounds_match_the_sim_contract():
+    import re
+    contract = (MODULE.parents[2] / "contracts/foundation/core_common/protocol/omx_sim.py").read_text(encoding="utf-8")
+    bounds = [float(re.search(rf"^GRIPPER_GOAL_{edge}_DURATION_S = ([0-9.]+)$", contract, re.M).group(1))
+              for edge in ("MIN", "MAX")]
+    out = _run_js("console.log(JSON.stringify([m.GRIPPER_GOAL_MIN_S, m.GRIPPER_GOAL_MAX_S]))")
+    assert out == bounds

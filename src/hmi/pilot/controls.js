@@ -38,3 +38,33 @@ export function fallbackOmxControls(target) {
   return [{id: "arm", kind: "joint_jog", label: "팔", max_step_rad: 0.02, duration_s: 0.4,
            command: "bounded_goal", joints: names.map((name) => ({name, lower: null, upper: null}))}];
 }
+
+// D-411 C: gripper. 0 % = closed, 100 % = open, whichever way the joint turns.
+// A full stroke takes the longest goal (2.0 s, OmxSimGripperGoal), a shorter move
+// proportionally less, never under the 0.2 s goal minimum.
+export const GRIPPER_GOAL_MIN_S = 0.2;
+export const GRIPPER_GOAL_MAX_S = 2.0;
+export const GRIPPER_STATE_LABEL = Object.freeze({
+  open: "열림", closed: "닫힘", holding: "쥐고 있음", moving: "이동 중", unknown: "알 수 없음",
+});
+
+const clamp = (value, low, high) => Math.max(low, Math.min(high, value));
+
+export function gripperPercent(position, g) {
+  if (!Number.isFinite(position)) return null;
+  return Math.round(clamp((position - g.closed) / (g.open - g.closed), 0, 1) * 100);
+}
+
+export function gripperPosition(percent, g) {
+  const p = clamp(Number(percent) || 0, 0, 100) / 100;
+  return Math.round((g.closed + (g.open - g.closed) * p) * 1e4) / 1e4;
+}
+
+export function gripperDuration(from, to, g) {
+  const fraction = Number.isFinite(from) ? Math.abs(to - from) / Math.abs(g.open - g.closed) : 1;
+  return Math.round(clamp(fraction * GRIPPER_GOAL_MAX_S, GRIPPER_GOAL_MIN_S, GRIPPER_GOAL_MAX_S) * 100) / 100;
+}
+
+export function gripperStateLabel(state) {
+  return GRIPPER_STATE_LABEL[state] ?? GRIPPER_STATE_LABEL.unknown;
+}

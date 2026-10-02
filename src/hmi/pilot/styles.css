@@ -644,8 +644,8 @@ body[data-pilot-screen="drive"] ui-brand small { display: none; }
   border: 1px solid var(--line-10); border-radius: var(--radius-panel); }
 .arm-hint { margin: 0; font-size: var(--text-label); color: var(--ink-quiet); }
 
-/* D-411 B 팔 조작 콘솔: 위 작업 공간(영상·readback), 가운데 조작부 그리드(왼손 joint_jog,
-   오른손 gripper — Part C), 아래 취소·시연 기록. 좁은 화면은 한 줄로 쌓인다. */
+/* D-411 B·C 팔 조작 콘솔: 위 작업 공간(영상·readback), 가운데 조작부 그리드(왼손 joint_jog,
+   오른손 gripper), 아래 취소·시연 기록. 좁은 화면은 한 줄로 쌓인다. */
 .arm-console { display: grid; gap: var(--space-4); min-width: 0; }
 .arm-console[hidden] { display: none; }
 .arm-view { display: grid; gap: var(--space-3); grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr)); }
@@ -668,6 +668,17 @@ body[data-pilot-screen="drive"] ui-brand small { display: none; }
 [data-control-unsupported], [data-controls-empty] { margin: 0; color: var(--ink-quiet); }
 .arm-controls > section[data-control-unsupported] { border-style: dashed; }
 .arm-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-4); }
+
+/* D-411 C 그리퍼 — 오른손 칸: 상태 배지, 열기/반/닫기, 열림 % 슬라이더(놓을 때 한 번 보낸다). */
+.gripper-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2); }
+.gripper-presets { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-2); }
+[data-screen="arm"] .gripper-slider { display: grid; gap: var(--space-1); margin: 0; }
+[data-gripper-readout] { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+[data-screen="arm"] [data-gripper-percent] { min-height: 2.75rem; accent-color: var(--ink); }
+[data-gripper-percent]:disabled { opacity: var(--disabled-opacity); }
+@media (min-width: 40rem) {
+  .arm-controls:has(> [data-control="gripper"]) { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); }
+}
 
 /* 팔 조이스틱 — 주행 스틱과 같은 판. 포커스 파랑은 포커스·잡은 테두리에만, 손잡이는 중립색.
    축 끝 관절 이름은 손잡이 위에 떠서 가려지지 않는다. */

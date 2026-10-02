@@ -51,6 +51,7 @@ PILOT_MIME = {
     "screens/arm.js": "application/javascript",
     "screens/compose.js": "application/javascript",
     "widgets/joint_jog.js": "application/javascript",
+    "widgets/gripper.js": "application/javascript",
     "input-state.js": "application/javascript",
     "vision.js": "application/javascript",
     "manifest.webmanifest": "application/manifest+json",

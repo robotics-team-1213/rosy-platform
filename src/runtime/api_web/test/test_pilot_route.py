@@ -46,6 +46,7 @@ def test_pilot_assets_allowlist_blocks_the_rest():
     assert client.get("/pilot/assets/arm-stick.js").status_code == 200
     assert client.get("/pilot/assets/screens/compose.js").status_code == 200
     assert client.get("/pilot/assets/widgets/joint_jog.js").status_code == 200
+    assert client.get("/pilot/assets/widgets/gripper.js").status_code == 200
     assert client.get("/pilot/assets/manifest.webmanifest").status_code == 200
     assert client.get("/pilot/assets/sw.js").status_code == 200
     assert client.get("/pilot/assets/icons/icon-192.png").status_code == 200
