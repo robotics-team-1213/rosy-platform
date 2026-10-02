@@ -233,6 +233,12 @@
 - Evidence: Full OMX adapter suite 178 passed, 4 skipped; flake8, py_compile, and git diff checks passed. The in-process Jazzy test was skipped because rclpy was unavailable to the selected interpreter. Vendor retry remains unrun.
 - Gate: SOURCE GO; ROS-SIM HOLD; ARTIFACT HOLD; DEVICE/FIELD PARKED.
 
+## 2026-10-02 · 4e99d92e · fix(pilot-sim): D-411 A 새 Pilot 자산 서빙
+- 변경: `pilot_sim_api.PILOT_ASSETS` 에 `recording.js`·`screens/robot-recording.js` — `app.js` 가 `drive.js` 를 정적으로 부르므로 SIM 포트도 서빙해야 한다(구조 규칙 6).
+- 증거: `python -m pytest src/products/omx/adapter/test/test_pilot_sim_api.py -q` → 4 passed; `test_shell_assets.py` 자산 동치 시험 통과 (2026-10-02 Windows).
+- gate 변화: SOURCE 유지. ROS-SIM HOLD — 계획 Verification ROS-SIM 체크리스트(WSL Ubuntu) 미실행, DEVICE 증거 없음.
+- 결정: D-411 A.
+
 ## 2026-10-02 · uncommitted · feat(omx): admit tagged Fleet Cell Transfer grants
 - 변경: `ActionApi`와 digest 검증이 `FleetActionGrant`/`FleetCellTransferGrant`를 `action_kind`로 구분해 파싱한다. `CELL_TRANSFER`는 전용 phase runner가 등록되지 않으면 저널 전에 거부하고, 등록된 경우에도 capability callback의 셀 해시 확인을 통과해야 한다. camera-blind Cell Transfer의 `observation_id`는 로컬 저널에 빈 값으로 기록하며 기존 ActionStore 스키마와 PICK_PLACE 관측 필수 조건은 유지한다. 낡은 합성 test grant를 실제 tagged schema fixture로 바꿨다.
 - 증거: 전체 OMX adapter test 271 passed, 5 skipped; Cell Transfer API/runner, phase-runner 전용 실행, 해시 불일치 및 무관측 저널을 확인했다. `py_compile`, 허용된 기존 style 위반(E501/W503/W504/E704/E126) 제외 flake8, `git diff --check` 통과. Fleet UDS end-to-end invocation은 1 skipped. 전체 파일 flake8은 이 변경 전부터 있던 style 위반을 보고하므로 무오류로 기록하지 않는다.

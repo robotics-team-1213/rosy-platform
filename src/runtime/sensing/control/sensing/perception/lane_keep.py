@@ -90,6 +90,7 @@ from .lane_keep_lines import (  # noqa: F401 — re-exported for callers and tes
     WALL_CARPET_PERCENTILE,
     WALL_STEP_ROWS,
     _validate_positive,
+    clean_learned_mask,
     denoise_white_mask,
     extract_lines,
     floor_white_mask,

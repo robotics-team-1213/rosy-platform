@@ -76,8 +76,12 @@ CONTROL_SPLIT = "docs/plans/2026-09-22-control-package-split-design.md"
 #: P6 verdicts: path (relative to src/) or package name -> (lines at verdict, verdict).
 SIZE_VERDICTS = {
     "fleet": (
-        28_340,
+        28_734,
         "split: server HTTP boundary, console, signals and the mission-control stores are separate owners "
+        "today; re-judged 2026-10-03 at 28001 for D-413 internal Cell producer authentication: bounded "
+        "schema, environment credential registry and evidence service are separate modules; goal completion "
+        "retains its existing journal owner and atomically fences the verified terminal event. No new HTTP "
+        "or device owner is added. Existing split verdict and +150 growth allowance remain unchanged; "
         "today; group them into subpackages rather than one flat server/ tree (B2); owner fleet, unscheduled "
         "(re-judged 2026-09-29 at 11164 after mission_store joined the server tree; re-judged 2026-09-30 at "
         "12419 after the D-361 enrollment register, roster and service joined as their own modules, and "
@@ -147,14 +151,18 @@ SIZE_VERDICTS = {
         "These remain Fleet journal/admission responsibilities under the D-413 migration plan; "
         "CellJob dispatch/reconciliation composition remains open. Full Fleet regression 1425 "
         "passed/7 skipped; split verdict and the +150 growth allowance remain unchanged. "
-        "Re-judged 2026-10-02 at 27870 (C4b G3/G5, D-403 §3/§5/§7): the production Cell Job compiler "
+        "Main briefly carried a parallel opt-in CellJob dispatcher (27684); the 2026-10-03 C4b merge kept "
+        "the StepJobDispatcher design and removed it. Re-judged 2026-10-02 at 27870 (C4b G3/G5, D-403 §3/§5/§7): the production Cell Job compiler "
         "adapter (server/cell_compiler.py), the per-kind step dispatch table (server/step_action_kinds.py) "
         "and the step-ledger dispatcher (server/step_dispatcher.py) joined as their own modules, the "
         "deployment_profile gate in app.py; verdict unchanged. Re-judged 2026-10-03 at 28160 (C4b 1b): "
         "the Cell Job claim lifecycle (HELD phase, latch hook), GetAction readback with backoff and the "
         "operator recovery routes (server/cell_job_routes.py); verdict unchanged. Re-judged 2026-10-03 at "
         "28340 (C4b 1c): restart/stop/404 exits, release_before_send, receipt notes, bounded round-robin "
-        "ticks and the identity cache, all inside the existing ledger/dispatcher modules; verdict unchanged",
+        "ticks and the identity cache, all inside the existing ledger/dispatcher modules; verdict unchanged. "
+        "Re-judged 2026-10-03 at 28734 on merging main: main's parallel Cell dispatcher/readback/goal mixins were "
+        "removed and its public Cell goal ingress (registry, routes, service) kept and rewired to the "
+        "stored item_at_pose predicate; verdict unchanged",
     ),
     "site/fleet/fleet/server/cell_job_store.py": (
         824,
@@ -201,8 +209,12 @@ SIZE_VERDICTS = {
         "2026-10-01 at 887 after idempotent per-attempt phase projection joined the Mission event transaction",
     ),
     "contracts/foundation/core_common/protocol/schemas.py": (
-        1_239,
+        1_245,
         "accept: the D-18 single contract source — every envelope, event and capability model in one "
+        "importable place; re-judged 2026-10-03 at 1240 for the D-413 public CellGoalEvidenceSubmission "
+        "re-export, then at 1245 after combining main's D-422 body-stop fields with that one-line export. "
+        "re-export. Bounded Cell models live in protocol/cell_goal_evidence.py, with no runtime ownership "
+        "or new version pin; the existing zero-growth allowance remains unchanged. "
         "importable place; per-domain schema files would fork the version pin that "
         "test_protocol_version_alignment guards. Re-judged 2026-09-30 at 1000 lines after the bounded "
         "Mission feedback scope/context/tool-result contracts were added; re-judged 2026-09-30 at 1001 "
@@ -219,7 +231,10 @@ SIZE_VERDICTS = {
         "LineFollowStatus, v1.74) joined; the logic stays in line_follow/stuck_recovery.py; same verdict."
         " Re-judged 2026-10-02 at 1239 for D-413 Task 4's additive FleetCellTransferGrant, "
         "CellTransferPayload, and CellTransferPose wire contracts; the single protocol source remains "
-        "authoritative and this establishes a new zero-growth baseline.",
+        "authoritative and this establishes a new zero-growth baseline."
+        " Re-judged 2026-10-02 at 1244 for D-422's three optional LineFollowStatus fields "
+        "(body_gap_m, stop_gap_m, clearance_source); the logic stays in line_follow/body_stop.py; "
+        "same verdict.",
     ),
     "site/fleet/fleet/server/task_store.py": (
         1060,
@@ -291,7 +306,7 @@ SIZE_VERDICTS = {
         "accept: sim-only read-only viewer server (HTTP handler + ROS subscriptions); the pure logic already lives in live_view_model.py and the page in lane_live_view.html, covered by test_lane_live_view*.py and test_live_view_model.py (X5)",
     ),
     "core_features": (
-        11_061,
+        12_140,
         "accept: the ROS-free CORE feature managers (command, safety, docking, line_follow, "
         "traffic_policy, navigation, swarm, ...) are already one subpackage per feature, each "
         "under the file budget; the package total is a sum of independent owners, not one "
@@ -302,10 +317,17 @@ SIZE_VERDICTS = {
         "(core_features/localization) merged in beside D-407; same verdict, each feature still its "
         "own subpackage under the file budget. Re-judged 2026-10-02 at 11061 when the D-407 console "
         "re-run fixes landed (FleetAgent single receive loop, stuck event fields; main had reached "
-        "10977); same verdict",
+        "10977); same verdict. Re-judged 2026-10-02 at 11430 when D-422 body-referenced "
+        "obstacle stop joined as line_follow/body_stop.py (mixin) and clearance.py geometry; "
+        "same verdict. Re-judged 2026-10-02 at 11596 for the D-422 review fixes (near-point "
+        "memory, motion envelope, exact straight sweep) inside body_stop.py/clearance.py; same verdict. Re-judged 2026-10-03 at 12140 when D-419 "
+        "SAF-003 landed beside D-422 as its own module (safety/fleet_loss.py, the FleetLossMonitor), "
+        "the Fleet-goal hooks in navigation/manager.py, and FleetAgent's reply deadline, link "
+        "freshness and backoff merged into the D-407 single receive loop in "
+        "fleet_agent/agent.py; same verdict",
     ),
     "control": (
-        42_013,
+        42_888,
         f"split: deploy closure needs only sensing + safety provider (P1a); {CONTROL_SPLIT} "
         "(re-judged 2026-09-30 at 33090 after D-356 added the ROS-free learned perception backend "
         "(sensing/perception/learned), the shadow node and the recording CLI; the learned backend sits "
@@ -356,7 +378,16 @@ SIZE_VERDICTS = {
         "re-judged 2026-10-02 at 41833 on the D-395 Phase 2 integration branch with D-408 and loc_assist "
         "together — same subjects, verdict unchanged; re-judged 2026-10-02 at 42013 when D-395 S1 R1 "
         "made LOCALIZED robots report unmapped objects (control/loc_assist*.py) — same subjects, "
-        "verdict unchanged)",
+        "verdict unchanged; re-judged 2026-10-02 at 42225 when D-411 A added the ROS-free Pilot "
+        "recording session (control/pilot_recording.py) beside control/recording.py — evidence only, "
+        "it moves with the P1a sensing split, verdict unchanged; re-judged 2026-10-02 at 42346 with its "
+        "thin node (control/pilot_recorder_node.py) and the camera's on-demand JPEG switch — same "
+        "subjects, verdict unchanged; re-judged 2026-10-02 at 42540 after the D-411 A review hardening "
+        "(orphan-writer recovery, off-timer hashing, reserve and disk floor in control/pilot_recording.py, "
+        "the camera's dead-recorder check) — same subjects, verdict unchanged; re-judged 2026-10-03 at "
+        "42784 when D-411 A landed on main beside D-395 rev. 11 (reference-square NMS, lidar self-beam "
+        "drop, learned lane component filter) — same subjects, verdict unchanged;"
+        "re-judged 2026-10-03 at 42888 for the D-408 paint CPU follow-up (learned mask area filter, mask-only inference, paint cadence in learned/paint_worker.py) — same subjects inside sensing/perception, verdict unchanged)",
     ),
     # --- D-362 newly-covered files (web assets in src/ packages, ops roots). ---
     "runtime/sensing/web/diagnostic.html": (
@@ -391,6 +422,12 @@ SIZE_VERDICTS = {
         693,
         "accept: the harness gate itself (lint/generate) — one CLI owner pinned by "
         "test/test_harness_contracts.py (X5)",
+    ),
+    "tools/perception/rosy_ml.py": (
+        615,
+        "accept: the operator CLI is one argparse dispatcher over the wrapped tools (deliver, "
+        "harvest, fetch_http, intake), which own the behaviour; covered by "
+        "tools/perception/test/test_rosy_ml.py (X5, D-411 fetch --http)",
     ),
     "deploy/robot/pinky_pro/native/rosy-boot-display.py": (
         688,

@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+from pathlib import Path
 import time
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -59,6 +60,10 @@ class StepJobDispatcher:
                  on_step_action_succeeded: Callable[[Mapping[str, Any], int], object] | None = None,
                  monotonic: Callable[[], float] = time.monotonic,
                  ) -> None:
+        # From main 0a5b7e82b: the ledger and the dispatch control must be one database.
+        if (store is not None and task_store is not None
+                and Path(store.path).resolve() != Path(task_store.path).resolve()):
+            raise ValueError("Cell journal and dispatch control must share the same database")
         if not open_kinds(deployment_profile):
             raise ValueError(f"step-ledger dispatch is closed for profile {deployment_profile!r} (D-403 §7)")
         self.omx_instances = dict(omx_instances)
@@ -229,8 +234,11 @@ class StepJobDispatcher:
     def _reconcile(self, job: Mapping[str, Any]) -> dict[str, Any]:
         index = job["current_step_index"]
         try:
-            grant = step_action_kind(job["steps"][index]["action_kind"]).grant_model.model_validate(
-                job["steps"][index]["grant"])
+            step = job["steps"][index]
+            grant = step_action_kind(step["action_kind"]).grant_model.model_validate(step["grant"])
+            if (grant.mission_id, grant.step_id, grant.action_id, grant.attempt_id) != (
+                    job["mission_id"], step["step_id"], step["action_id"], step["attempt_id"]):
+                raise ValueError("persisted grant conflicts with its transfer attempt")  # main 0a5b7e82b
         except (KeyError, TypeError, ValueError):
             return self._outcome(job, index, None, "UNKNOWN", "PERSISTED_ACTION_GRANT_MISSING", {})
         try:
@@ -319,7 +327,11 @@ class StepJobDispatcher:
             _LOG.exception("Cell Job %s step %s result could not be recorded", job["mission_id"], index)
             return self._view(self.store.get(job["mission_id"]), index, "RESULT_CONFLICT", grant)
         if outcome == "SUCCEEDED" and self.on_step_action_succeeded is not None:
-            self.on_step_action_succeeded(recorded, index)
+            try:  # goal processing never rewrites the recorded device success (main 3ef12ca3e)
+                self.on_step_action_succeeded(recorded, index)
+                recorded = self.store.get(job["mission_id"]) or recorded
+            except Exception:
+                _LOG.exception("Cell step success callback failed for %s", job["mission_id"])
         return self._view(recorded, index, recorded["status"], grant)
 
     @staticmethod

@@ -19,6 +19,7 @@ from core_api_web.api.v1.map import map_router
 from core_api_web.api.v1.line_follow import line_follow_router
 from core_api_web.api.v1.localization import localization_router
 from core_api_web.api.v1.navigation import navigation_router, slam_router
+from core_api_web.api.v1.recordings import recordings_router
 from core_api_web.api.v1.observability import (
     diagnostics_router,
     events_router,
@@ -53,6 +54,7 @@ __all__ = [
     "navigation_router",
     "operator",
     "power_router",
+    "recordings_router",
     "robot_router",
     "safety_router",
     "sensors_router",

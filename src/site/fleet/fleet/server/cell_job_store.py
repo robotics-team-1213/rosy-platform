@@ -758,6 +758,19 @@ class CellJobStore:
         return None if job["current_step_index"] == 0 and submitted is None else "HELD"
 
     @staticmethod
+    def _durable_success(connection: sqlite3.Connection, mission_id: str, step_index: int,
+                         action_id: str, attempt_id: str) -> bool:
+        """The latest device outcome of the step is this exact attempt's SUCCEEDED (main 64b4b1faa)."""
+        row = connection.execute(
+            "SELECT event_type, detail_json FROM fleet_cell_events WHERE mission_id=? AND step_index=? "
+            "AND event_type LIKE 'CELL_STEP_ACTION_%' ORDER BY event_id DESC LIMIT 1",
+            (mission_id, step_index)).fetchone()
+        if row is None or row["event_type"] != "CELL_STEP_ACTION_SUCCEEDED":
+            return False
+        detail = json.loads(row["detail_json"])
+        return detail.get("action_id") == action_id and detail.get("attempt_id") == attempt_id
+
+    @staticmethod
     def _fence_current(connection: sqlite3.Connection, job: sqlite3.Row) -> bool:
         control = connection.execute("SELECT authority_epoch, generation, dispatch_enabled "
                                      "FROM fleet_dispatch_control WHERE control_id=1").fetchone()
@@ -859,6 +872,8 @@ class CellJobStore:
             raise MissionConflict("Cell step goal evidence does not match the current transfer attempt")
         if evidence["satisfied"] is not True:
             raise MissionConflict("unsatisfied Cell step goal evidence cannot advance the Job")
+        for field in ("producer_id", "evidence_id", "gripper_evidence_id"):  # from main 64b4b1faa
+            _nonempty(field, evidence[field], limit=192)
         evidence_json = _json(dict(evidence))
         event_id = f"goal:{step_index}:{_nonempty('evidence_id', evidence['evidence_id'])}"
         detail = {**json.loads(evidence_json), "event_id": event_id}
@@ -884,7 +899,9 @@ class CellJobStore:
                 connection.commit()
                 return result
             if (job["status"] != "ACTION_SUCCEEDED" or step["status"] != "ACTION_SUCCEEDED"
-                    or step["action_id"] != action_id or step["attempt_id"] != attempt_id):
+                    or job["current_step_index"] != step_index
+                    or step["action_id"] != action_id or step["attempt_id"] != attempt_id
+                    or not self._durable_success(connection, mission_id, step_index, action_id, attempt_id)):
                 raise MissionConflict("independent goal evidence requires this step's terminal Action success")
             now = _now()
             connection.execute(
@@ -898,15 +915,22 @@ class CellJobStore:
                 (mission_id, next_index),
             ).fetchone()
             if next_step is not None:
+                # From main 64b4b1faa: the next step opens only under the current fence; otherwise
+                # the Job waits for re-approval with its claims parked HELD (D-403 보강).
+                can_continue = self._fence_current(connection, job)
+                if can_continue:
+                    connection.execute(
+                        "UPDATE fleet_cell_steps SET status='READY', updated_at=? "
+                        "WHERE mission_id=? AND step_index=? AND status='WAITING'",
+                        (now, mission_id, next_index),
+                    )
+                else:
+                    self._set_claims(connection, job, "HELD", strict=False, context="goal-advance")
                 connection.execute(
-                    "UPDATE fleet_cell_steps SET status='READY', updated_at=? "
-                    "WHERE mission_id=? AND step_index=? AND status='WAITING'",
-                    (now, mission_id, next_index),
-                )
-                connection.execute(
-                    "UPDATE fleet_cell_jobs SET status='READY', current_step_index=?, "
-                    "reason=NULL, updated_at=? WHERE mission_id=?",
-                    (next_index, now, mission_id),
+                    "UPDATE fleet_cell_jobs SET status=?, current_step_index=?, "
+                    "reason=?, updated_at=? WHERE mission_id=?",
+                    ("READY" if can_continue else "HOLD", next_index,
+                     None if can_continue else "SITE_AUTHORITY_CHANGED", now, mission_id),
                 )
                 event_type = "CELL_STEP_GOAL_CONFIRMED"
             else:

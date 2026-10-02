@@ -362,6 +362,19 @@ def half_width(links, poses):
     return best
 
 
+def front_x(links, poses):
+    """Largest x from base_link's z axis of any collision point, every joint at zero: the
+    body front (D-422 body-referenced line-follow stop; the screen mount sticks out furthest)."""
+    base_inv = _invert(poses["base_link"])
+    best = -math.inf
+    for link in links:
+        for spec in link["collisions"]:
+            m = _mul(base_inv, _mul(poses[link["name"]], _matrix(spec["xyz"], spec["rpy"])))
+            for point in _shape_points(spec):
+                best = max(best, _apply(m, point)[0])
+    return best
+
+
 def _invert(m):
     rot = [[m[j][i] for j in range(3)] for i in range(3)]
     t = [-sum(rot[i][k] * m[k][3] for k in range(3)) for i in range(3)]
@@ -417,6 +430,7 @@ def nominal(args=None):
         "imu": {"x_m": imu_base[0], "y_m": imu_base[1], "z_base_link_m": imu_base[2], "height_m": imu[2]},
         "footprint": {"rotation_radius_m": rotation_radius(links, poses),
                       "half_width_m": half_width(links, poses),
+                      "front_x_m": front_x(links, poses),
                       "rotation_radius_sim_box_m": rotation_radius(sim_links, poses)},
     }
 

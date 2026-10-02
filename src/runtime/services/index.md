@@ -15,10 +15,12 @@
 | D-182 | 안전·명령·내비게이션 코드는 시뮬 파티션과 도메인 리터럴을 모른다 |
 | D-184 | 동작 시험은 그 패키지가 가지고, core 시험은 공개 계약만 본다 |
 | D-228 | 판단은 core_features/decision 이다 — 런타임 개명과 제품 이름 패키지는 만들지 않는다 |
+| D-411 | Pilot 로봇측 학습 녹화(카메라 유닛 소유, CORE는 시작·정지 요청, `teleop/intent` 원 입력·주체 기록, 1회 10분)와 정지 중에만 허용하는 HTTP 수신(목록·tar·sha256 manifest, `rosy_ml fetch --http`); 기기가 알리는 조작부 서술자 `rosy.controls/1`(base_velocity·joint_jog·gripper, 드라이버는 전송·위젯은 kind별, 팔 조이스틱은 이전 목표 종료 후 순차 제한 목표); OMX 그리퍼 전용 절대 목표·쥠 readback(시뮬레이션만, D-390 유지) |
 
 ## 계획·결과 문서
 
 - [2026-09-15-module-harness-design.md](../../../docs/plans/2026-09-15-module-harness-design.md)
+- [2026-10-02-d411-pilot-recording-controls-plan.md](../../../docs/plans/2026-10-02-d411-pilot-recording-controls-plan.md)
 
 ## 교훈 (docs/solutions)
 
@@ -31,11 +33,12 @@
 - `src/runtime/services/test/test_swarm.py`
 - `src/runtime/gateway/test/test_power.py`
 - `src/runtime/gateway/test/test_traffic_policy.py`
+- `src/runtime/services/test/test_teleop_intent.py`
 
 ## 최근 기록
 
-- 2026-10-02 · 4a5a65083 · fix(fleet_agent): 검토 반영 — WELCOME 뒤에만 연결, 사건 잃지 않기
-- 2026-10-02 · bcce15c9d · fix(fleet_agent): hub 답을 모두 읽는 수신 루프, 재연결 기록, 관제 grace
-- 2026-10-02 · 7e699e452 · fix(line_follow): D-407 지나온 길 유효 기간
-- 2026-10-02 · e83a955d · fix(line_follow): D-407 Gazebo 후속 — 재막힘 시도 이어 세기, 몸 폭 뒤 띠
-- 2026-10-02 · b9f1b277 · feat(localization): D-395 S1 R1 — LOCALIZED 물체를 스냅샷으로 넘긴다
+- 2026-10-03 · uncommitted · test(fleet_agent): D-419 시험 시간 여유 — 포화된 호스트
+- 2026-10-03 · uncommitted · fix(fleet_agent): D-419 착지 리뷰 — 이벤트 동시 전송 상한, 되돌림 중복, 하트비트 시한
+- 2026-10-02 · uncommitted · fix(fleet_agent): D-419 착지 — main 의 D-407 수신 루프와 병합
+- 2026-10-02 · uncommitted · fix(fleet_agent): D-419 최종 리뷰 LOW — 실패한 보내기의 `_awaiting` 항목 회수
+- 2026-10-02 · uncommitted · fix(fleet_agent): D-419 라운드 4 — 인코딩 불가 이벤트, EVENT 에 대한 오류

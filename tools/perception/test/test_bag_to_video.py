@@ -498,3 +498,11 @@ def test_sidecar_row_takes_the_camera_line_even_when_an_ir_line_is_logged_first(
     frames = [{"stamp_ns": frame_ns, "log_ns": frame_ns + 5_000}]
     row = next(b2v.sidecar_rows(frames, side, max_gap_s=0.5))
     assert row["side"]["line/observation"]["n"] == "cam"
+
+
+def test_teleop_intent_is_a_side_topic():
+    assert b2v._side_name("/rosy_01/teleop/intent") == "teleop/intent"
+    frames = [{"log_ns": 1_000_000_000, "stamp_ns": 1_000_000_000}]
+    side = {"teleop/intent": ([900_000_000], [{"accepted": True, "linear": 0.1}])}
+    (row,) = list(b2v.sidecar_rows(frames, side, 0.5))
+    assert row["side"]["teleop/intent"]["accepted"] is True

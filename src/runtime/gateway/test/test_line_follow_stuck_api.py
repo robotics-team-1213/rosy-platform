@@ -55,6 +55,22 @@ def test_core_binds_the_recovery_inputs(core_client):
     assert providers["linear_ceiling"]() == services.safety.limits.manual_linear
 
 
+def test_console_link_is_debounced_on_recent_hub_traffic(core_client):
+    """D-419: a reconnect blip (socket down, hub heard within one heartbeat period + reply
+    deadline + slack) still counts as linked, so it does not skip the operator wait."""
+    import time
+    _, services = core_client()
+    linked = services.line_follow._recovery_providers["console_linked"]
+    agent = services.fleet_agent
+    agent.connected = False
+    agent.last_rx = time.monotonic() - 1.0
+    assert linked() is True
+    agent.last_rx = time.monotonic() - agent.link_fresh_s - 0.5
+    assert linked() is False
+    agent.connected = True
+    assert linked() is True
+
+
 def test_stuck_is_in_the_line_follow_status(core_client):
     client, _, stuck_id = _stuck(core_client)
     body = client.get("/api/v1/line-follow", headers=VIEWER).json()

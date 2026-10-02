@@ -74,6 +74,8 @@ LockPersonality=true
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
 # Maps are written by slam_toolbox in rosy-navigation; CORE only reads them back.
 ReadWritePaths=/run/rosy
+# D-411: Pilot recordings are written by rosy-camera; CORE only lists and streams them.
+ReadOnlyPaths=/var/lib/rosy/pilot-recordings
 
 [Install]
 WantedBy=rosy-runtime.target

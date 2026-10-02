@@ -81,6 +81,7 @@ class CoreServicesLike(Protocol):
     control_adapter: Any
     docking: Any
     events: Any
+    fleet_loss: Any
     identity: Any
     inventory: Any
     maps: Any
@@ -88,6 +89,7 @@ class CoreServicesLike(Protocol):
     localization: Any
     modes: Any
     nav: Any
+    pilot_recording: Any
     power: Any
     readiness: Any
     runtime_probe: Any

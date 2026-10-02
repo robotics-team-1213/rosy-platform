@@ -1403,6 +1403,42 @@
 - Evidence: producer/consumer/legacy dispatcher/API contract suites 55 passed; architecture and dependency boundaries 38 passed; changed Python files pass flake8. Full Fleet regression 1431 passed/7 skipped; known-failure comparison 0 new/0 known. Log/generated contracts 6 passed; harness lint 0 errors/24 existing freshness warnings.
 - Gate: SOURCE/LOCAL only. CellJob dispatch/reconciliation composition and ROS-SIM acceptance remain open; transport changes do not enable dispatch.
 
+
+## 2026-10-03 · uncommitted · feat(fleet): dispatch admitted ordered Cell transfers
+- Change: compose the opt-in CellJob dispatcher in the existing single site worker with pinned cell configuration revisions. Persist the canonical grant and DISPATCHING claims before one local submission; reconcile/cancel the exact attempt without resubmission after lost replies or grant expiry. Readback atomically checks live authority/generation, duplicate receipt identity and durable phase history. Late success after HOLD retains claims and cannot start the next step. Re-judge Fleet size at 27684 after current-main integration; split verdict and +150 allowance remain unchanged.
+- Evidence: full Fleet regression 1451 passed/7 skipped, known-failure comparison 0 new/0 known before the final phase-history correction. Final dispatcher/API/store/legacy/app/replay suites 107 passed; integrated-main localization regression 54 passed; architecture/dependency boundary suites 38 passed. Independent review found and then verified fixes for in-process stop, phase-history conflicts and superseded phase-success evidence; final review 31 passed with no remaining Important/Critical checkpoint findings. Changed runtime and dispatcher/API test Python files pass flake8. Align the FastAPI contract description with API Reference v1.82 (3 protocol-version tests passed); harness lint reports 0 errors/24 existing freshness warnings.
+- Gate: SOURCE/LOCAL only. Default dispatch is disabled. Registered/fresh Cell goal production and held-success goal recovery, actual OMX owner/provider integration, Gazebo, device and field acceptance remain open; D-413 Tasks 4-5 and 7 stay IN PROGRESS.
+
+
+## 2026-10-03 · uncommitted · fix(fleet): require durable Cell success for goal recovery
+- Change: move Cell goal completion into its own journal module and require the latest terminal SUCCEEDED event for the exact step, Action and attempt inside the SQLite completion transaction. Permit independently confirmed held success, preserve next-step WAITING/HOLD after authority changes, reject rewritten goal evidence and empty provenance, and keep claims until every ordered goal is confirmed. Dispatch is not rearmed by goal confirmation.
+- Evidence: CellJob/Mission/phase-contract regression 89 passed; independent review 42 passed with no remaining Important/Critical checkpoint findings. Current-main platform contract checks pass 26 tests with explicit source paths (not installed-artifact proof). Quick tier 96 passed/24 existing freshness warnings. Changed Python files pass flake8. Full Fleet regression 1468 passed/7 skipped, known-failure comparison 0 new/0 known; final log/generated-record checks 3 passed and harness lint 0 errors/24 existing freshness warnings.
+- Gate: SOURCE/LOCAL only. Public registered/fresh Cell goal production, actual two-ledger Cell replay, real OMX owner/provider composition and ROS-SIM remain required. Tasks 4-5 and 7 remain IN PROGRESS.
+
+
+## 2026-10-03 · uncommitted · feat(fleet): validate registered Cell goal evidence
+- Change: add separate bounded evidence schema, pinned environment credential registry and internal submission service. Check exact saved grant identity, producer scope/expiry, initial observation, model/gripper freshness and post-terminal ordering; revalidate pending evidence on reconciliation. Reject available invalid evidence before persistence and atomically bind completion to the verified latest terminal event ID. Re-judge Fleet at 28001 lines with unchanged split verdict and +150 allowance.
+- Evidence: focused Cell service/store/dispatcher checks 48 passed; registry checks 10 passed; independent review 44 passed with no remaining Critical/Important checkpoint findings; changed Python files pass flake8. Full Fleet and final quick/harness results follow in a separate append-only row.
+- Gate: internal SOURCE/LOCAL only. HTTP/app callback, independent Gazebo evaluator, canonical two-ledger Cell replay and ROS-SIM remain open; Tasks 4-5 and 7 remain IN PROGRESS. Default dispatch remains disabled.
+
+
+## 2026-10-03 · uncommitted · verify(fleet): registered Cell evidence checkpoint
+- Change: verify the internal Cell evidence checkpoint before local integration; no gate promotion.
+- Evidence: quick tier 96 passed/24 existing freshness warnings; harness lint 0 errors/24 existing freshness warnings; focused Cell service/store/dispatcher 48 passed, registry 10 passed and independent review 44 passed. Full Fleet regression is still running at commit preparation and is not claimed as passed.
+- Gate: SOURCE/LOCAL only. Public ingress, app callback, independent evaluator and ROS-SIM remain open.
+
+
+## 2026-10-03 · uncommitted · feat(fleet): compose public Cell goal producer ingress
+- Change: Add opt-in pinned Cell registry and strict shared HTTP ingress; wire pending goal reconciliation into the existing Cell dispatcher. Preserve durable successful Action receipts when goal callback validation/storage fails. Isolate credentials, reject whitespace/control credentials, confirm ordered goals through the actual proposal/admission HTTP surface and release claims only after final completion. Move the evidence contract to foundation without a Fleet duplicate.
+- Evidence: App/service/registry/legacy checks 110 passed; final API/registry/legacy/version-document checks 64 passed; independent final review 25 passed; changed Python passes flake8. Prior 778f5029 full Fleet shards yielded 1498 passed/7 skipped with one Hub startup timeout, which passed isolated on unchanged main (1 passed in 9.25s); new public-composition full regression and quick tier are running.
+- Gate: SOURCE/LOCAL only. Actual OMX provider, independent Gazebo evaluator, canonical two-ledger Cell replay and ROS-SIM remain open. Default dispatch remains disabled.
+
+
+## 2026-10-03 · uncommitted · verify(fleet): public Cell ingress regression
+- Change: verify the final public Cell producer composition before local integration; no gate promotion.
+- Evidence: final full Fleet regression in four file shards 1514 passed/7 skipped, all four process exit codes 0, with no retries on the final public code. Foundation/protocol alignment 427 passed/1 skipped; app/service/registry/legacy checks 110 passed, final API/registry/legacy/version checks 64 passed, independent final review 25 passed. Quick tier 96 passed/24 existing freshness warnings; record contracts 3 passed; harness lint 0 errors/24 existing freshness warnings. Changed Python passes flake8.
+- Gate: SOURCE/LOCAL only. Canonical two-ledger Cell replay, actual OMX owner/provider composition, independent model/gripper evaluation and ROS-SIM remain open.
+
 ## 2026-10-03 · uncommitted · fix(fleet): C4b 1b — Cell Job claim 유지, HOLD 출구, 공정한 하달 (리뷰 M1/M2, rosy-a9)
 - 변경: (A1) 정지·시작 래치가 같은 트랜잭션에서 READY·ACTION_SUCCEEDED Cell Job을 HOLD(`site_stop`)로 두고 그 claim을 새 단계 `HELD`로 옮긴다(래치는 CLAIMED만 지운다). FAILED·REJECTED 결과도 `HELD`. rearm 조건은 그대로(DISPATCHING·UNKNOWN만 막음). (A2) `hold()`는 RUNNING에서 UNKNOWN/DISPATCHING만, 해제는 `not_submitted=True`일 때만. (A3) HOLD+UNKNOWN Job을 GetAction으로 계속 읽음(성공→ACTION_SUCCEEDED, 실패·404→HOLD+HELD), 일시 실패는 0.5/1/2/4 s 백오프 뒤 5회째에만 UNKNOWN. 운영자 `reconcile`/`resume`/`cancel` 경로(이름 있는 운영자). (A4) claim 행 수 확인, 빠진 claim → HOLD `FLEET_CLAIM_MISSING_BEFORE_SUBMISSION`. (A5) 제출 직전 HOLD 둘 다 해제. (B1) 모든 Job을 한 주기에 돌고 막힌 머리 Job은 건너뜀. (B2) hold 이벤트 키에 승인 횟수. (B3) start_step ValueError → `ACTION_GRANT_INVALID`. (B4) 시계 하나. (B5) 다이제스트 함수 하나. (B6) 결과 기록 충돌은 한 번 보고. (C1) item_at_pose 술어를 해석 때 Step에 저장, 중심 오프셋은 레시피에서. (C3) owner가 `GetOwnerIdentity`로 simulation임을 보고해야 하달. `GET /api/fleet/resource-claims`(claim 소유 Job·상태·단계).
 - 판단: CANCELLED 상태는 스키마 변경이라 1b에서는 HOLD+`CANCELLED_BY_OPERATOR`+claim 없음으로 둔다(D-420 v2). main의 missing-claim 시험(예외)은 A4에 맞춰 HOLD로 바꿨다.
@@ -1421,4 +1457,10 @@
 ## 2026-10-03 · uncommitted · fix(fleet,omx): C4b 1d — 전송 직전 세대 재확인, receipt 먼저 기록, owner journal 식별
 - 변경: (1) `_submit`이 `start_step` 뒤 세대를 다시 읽고, 바뀌면 `hold_unsent`(receipt·장치 결과가 없을 때만)로 HOLD+HELD. (2) 모든 200 응답의 receipt를 검증 전에 기록, `has_device_receipt`는 기록된 SUCCEEDED/FAILED도 셈, 반복 기록은 쓰기 트랜잭션 없이 건너뜀. (3) owner `journal_id`(SQLite에 한 번 생성)를 receipt·GetAction·GetOwnerIdentity에 싣고, NOT_FOUND는 같은 journal일 때만. (4) `CLAIM_SET_INCOMPLETE_AT_STOP`에 context·actor·세대·승인 횟수. (5) 사라진 Job의 KeyError는 그 Job만 건너뜀. (6) `NOT_FOUND_SKEW_S` 주석에 같은 호스트 시계 가정.
 - 증거: C4b 1d 보고.
+- gate 변화: 없음.
+
+## 2026-10-03 · uncommitted · merge(fleet): main에 들어온 병렬 Cell 하달기를 걷고 공개 목표 증거 입구를 C4b 설계로 옮김
+- 변경: 사용자 결정에 따라 이 가지의 `StepJobDispatcher`와 claim/HOLD 규칙(1b–1d)을 남기고, main의 `cell_job_dispatcher.py`·`cell_job_readback.py`·`cell_job_goal.py`·`cell_job_codec.py`·`cell_job_phase_history.py`와 그 시험(`test_cell_job_dispatcher.py`, `test_cell_job_goal_recovery.py`), `enable_cell_job_dispatcher`/`cell_job_config_revisions`를 지웠다. 옮긴 것: 목표 확인은 같은 attempt의 기록된 장치 SUCCEEDED를 요구(64b4b1faa), 다음 Step은 현재 세대일 때만 열고 아니면 HOLD+HELD, 증거 필드 비어 있음 거절; 공개 `/api/fleet/cell-goal-evidence`(생산자 등록·자격 격리·관측 시각·터미널 뒤 관측·미리 온 증거 보관)는 Step에 저장된 `item_at_pose` 술어로 Fleet이 판정하도록 고쳤고, `CellGoalEvidence.satisfied`를 없앴으며(생산자 자기 판정 금지), simulation 프로필에서만 연다. 하달기는 원장과 하달 제어가 같은 DB인지, 저장된 grant가 Step 시도와 같은지 확인한다. 성공 콜백 실패는 기록된 장치 성공을 바꾸지 않는다.
+- 판단: main의 HOLD에서 바로 목표 확인(`LATE_SUCCESS_REQUIRES_INDEPENDENT_GOAL_EVIDENCE`)은 1b 규칙(HOLD Job은 재승인 뒤에만)과 어긋나 옮기지 않았다. main의 Fleet 쪽 phase 이력 대조와 운영자 하달 취소(`cancel_current`)는 wave 2(G7)로 남긴다.
+- 증거: C4b merge 보고.
 - gate 변화: 없음.

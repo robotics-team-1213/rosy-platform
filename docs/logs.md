@@ -4553,3 +4553,75 @@
 - 변경: D-395에 개정 11을 더했다(수평선 위 사각형 코어 버림과 한 사각형 한 검출, Fleet `square_cue`가 거리 없는 목격을 세지 않음, LiDAR 자기 빔·붙은 로봇·중심 밀기, 후보 가드). 상태(Proposed)는 그대로다. API Ref `CandidateReport` 행 뒤에 거리 없는 목격 한 문장을 더했다(선로 계약 불변). 감사 3번 항목은 주행 경로라 `plans/2026-10-03-perception-postproc-proposals.md`에 lane keep 세션 몫 제안으로 적었다.
 - 증거: 가지 `fix/perception-postproc-nms`, 실제 프레임 506장 재스캔 거짓 20 → 0, `src/runtime/sensing/logs.md`·`src/site/fleet/logs.md`의 같은 날 항목.
 - gate 변화: 없음(Proposed).
+
+
+## 2026-10-02 · 8ab939265 · docs(adr): D-415 SAF-003 Fleet 링크 상실 정책, API Ref v1.80
+- 변경: ADR D-415(Accepted, 사용자 승인 범위 한정 구현)와 ADR Log 행. CORE SRS SAF-003 에 D-415 참조 한 줄. API Ref v1.80 — §5.5 `safety/state.fleet_link`·`safety/limits` 정책 값, §7.6 판정 규칙, §8 `safety.fleet_lost`·`safety.fleet_restored`, 변경 이력. 권고안과 다른 점: RETURN_HOME 은 `__home__` waypoint 로 정의할 수 있어 PUT 에서 거절하지 않고 적용 시 home 이 없으면 선 채로(`applied: STOP`); `fleet.enabled` 는 존중하면 기존 페어링 로봇의 Agent 가 꺼져 문서화만.
+- 증거: 구현 8dd300c52, `test_fleet_loss.py`·`test_fleet_loss_wiring.py`.
+- gate 변화: 없음.
+
+## 2026-10-02 · uncommitted · docs(adr): SAF-003 ADR 을 D-415 에서 D-419 로
+- 변경: ADR 파일 이름·ADR Log 행·SRS SAF-003·API Ref 언급을 D-419 로. 리뷰(758f9878e) 반영으로 ADR 판정 규칙(WELCOME 뒤 연결, 2 s 하트비트 답 시한, 마지막 수신부터 측정, `goal_changed`)과 Consequences(RETURN_HOME 공통 모드 위험, PUT 경고, HOLD==STOP 물리적)가 바뀌었다.
+- 번호: 앞 항목들의 D-415(SAF-003)는 **D-419** 로 바뀌었다 — main 에 다른 D-415(콘솔 운영 가시성)가 먼저 들어왔다. ADR 파일 `docs/adr/D-419-saf003-fleet-link-loss-policy.md`.
+- 증거: `git log --all` 의 D-415~D-418 점유 확인(2026-10-02), 번호 변경 뒤 리뷰 시험 묶음 통과.
+- gate 변화: 없음.
+
+## 2026-10-02 · uncommitted · docs(adr): D-419 재리뷰 — 판정 시간과 링크 신선도
+- 변경: ADR D-419 판정 규칙(신선도 분리, 리더 하나, 답 시한 설정, backoff 안정 조건, 판정 시간 기본 5 s·4–60)과 Consequences(답 하나 놓치면 마지막 수신 뒤 5 s, console_linked 디바운스), ADR Log 행, API Ref §5.5·§7.6·v1.80 행. `tools/harness/harness.yaml` 의 낡은 D-414 항목 삭제(조정자 지시; landing 때 main 병합으로 정리).
+- 증거: 재리뷰 지정 시험 묶음 250 passed.
+- gate 변화: 없음.
+
+## 2026-10-02 · uncommitted · docs(adr): D-419 라운드 3 — ERROR 답, 검증 범위
+- 변경: ADR D-419 판정 규칙에 '하트비트에 대한 ERROR 답도 답, 페어링 오류는 세션 종료, hello 시한', Consequences 에 검증 범위(Fleet 링크가 있는 로봇만 기동 실패). API Ref §5.5·§7.6, `rosy_default.yaml` 주석.
+- 증거: services+gateway+api_web 묶음, `test_console_hub_integration.py`, `test/architecture/test_module_structure.py`.
+- gate 변화: 없음.
+
+## 2026-10-02 · uncommitted · docs(adr): D-419 라운드 4 — 링크 생존 대 허브 건강
+- 변경: ADR D-419 에 'SAF-003 은 허브 건강이 아니라 링크 생존을 판정한다(ERROR 로 답하는 허브는 링크 유지, 배차 실패는 Fleet 쪽 D-330)', 치명 코드는 하트비트 답일 때만, 인코딩 불가 이벤트 버림. API Ref §7.6 같은 내용.
+- 증거: services+gateway+api_web 묶음, `test_console_hub_integration.py`, `test/architecture/test_module_structure.py`.
+- gate 변화: 없음.
+
+## 2026-10-02 · uncommitted · docs(adr): D-419 착지 — API Ref v1.86, ADR Log 행, harness 빈칸 삭제
+- 변경: main(0f997ef81) 위에 D-419 를 다시 얹었다. API Ref 헤더·변경 이력·§5.5/§7.6/§8 의 D-419 표기를 v1.86 로(v1.80 D-407, v1.81 D-421, v1.82 D-403 정리, v1.83 D-411 A, v1.84 D-422, v1.85 D-413 Cell 목표 증거 는 main 그대로), §7.6 에 hello 답 5 s·EVENT 오류 재전송 규칙. ADR D-419 의 계약 버전·hello 시한·console_linked 문장을 병합된 동작으로. ADR Log 에 D-419 행(D-417 과 D-420 사이). `tools/harness/harness.yaml` adr_gaps 의 D-419 예약 항목 삭제. `test/architecture/test_module_structure.py` core_features 크기 판정을 11564 로 재판정(main 11061, +503: SAF-003 모듈·navigation 훅·FleetAgent 병합) — 판정 그대로 accept.
+- 증거: harness generate/lint, services·gateway·api_web 묶음, `test_console_hub_integration.py`, `test/architecture`.
+- gate 변화: 없음(호스트 pytest 만, 실기·Gazebo 미확인).
+
+## 2026-10-03 · uncommitted · feat(fleet): dispatch admitted ordered Cell transfers
+- Change: compose the opt-in CellJob dispatcher in the existing single site worker with pinned cell configuration revisions. Persist the canonical grant and DISPATCHING claims before one local submission; reconcile/cancel the exact attempt without resubmission after lost replies or grant expiry. Readback atomically checks live authority/generation, duplicate receipt identity and durable phase history. Late success after HOLD retains claims and cannot start the next step. Re-judge Fleet size at 27684 after current-main integration; split verdict and +150 allowance remain unchanged.
+- Evidence: full Fleet regression 1451 passed/7 skipped, known-failure comparison 0 new/0 known before the final phase-history correction. Final dispatcher/API/store/legacy/app/replay suites 107 passed; integrated-main localization regression 54 passed; architecture/dependency boundary suites 38 passed. Independent review found and then verified fixes for in-process stop, phase-history conflicts and superseded phase-success evidence; final review 31 passed with no remaining Important/Critical checkpoint findings. Changed runtime and dispatcher/API test Python files pass flake8. Align the FastAPI contract description with API Reference v1.82 (3 protocol-version tests passed); harness lint reports 0 errors/24 existing freshness warnings.
+- Gate: SOURCE/LOCAL only. Default dispatch is disabled. Registered/fresh Cell goal production and held-success goal recovery, actual OMX owner/provider integration, Gazebo, device and field acceptance remain open; D-413 Tasks 4-5 and 7 stay IN PROGRESS.
+
+
+## 2026-10-03 · uncommitted · fix(fleet): require durable Cell success for goal recovery
+- Change: move Cell goal completion into its own journal module and require the latest terminal SUCCEEDED event for the exact step, Action and attempt inside the SQLite completion transaction. Permit independently confirmed held success, preserve next-step WAITING/HOLD after authority changes, reject rewritten goal evidence and empty provenance, and keep claims until every ordered goal is confirmed. Dispatch is not rearmed by goal confirmation.
+- Evidence: CellJob/Mission/phase-contract regression 89 passed; independent review 42 passed with no remaining Important/Critical checkpoint findings. Current-main platform contract checks pass 26 tests with explicit source paths (not installed-artifact proof). Quick tier 96 passed/24 existing freshness warnings. Changed Python files pass flake8. Full Fleet regression 1468 passed/7 skipped, known-failure comparison 0 new/0 known; final log/generated-record checks 3 passed and harness lint 0 errors/24 existing freshness warnings.
+- Gate: SOURCE/LOCAL only. Public registered/fresh Cell goal production, actual two-ledger Cell replay, real OMX owner/provider composition and ROS-SIM remain required. Tasks 4-5 and 7 remain IN PROGRESS.
+
+
+## 2026-10-03 · uncommitted · docs: record internal Cell evidence checkpoint
+- Change: append D-413 progress for pinned producer authentication, observation freshness, rejected-evidence persistence protection and atomic terminal identity fencing. Keep Tasks 4-5 and 7 IN PROGRESS and record public ingress/app callback/evaluator/ROS-SIM as remaining work.
+- Evidence: focused Cell service/store/dispatcher 48 passed, registry 10 passed; independent review 44 passed; quick tier 96 passed/24 existing freshness warnings, harness lint 0 errors/24 existing freshness warnings. Full Fleet regression is running and not claimed complete.
+- Gate: SOURCE/LOCAL only; no ROS-SIM, artifact, device or field promotion.
+
+
+## 2026-10-03 · uncommitted · docs: record public Cell evidence contract and progress
+- Change: Document strict CellGoalEvidenceSubmission, producer credential isolation, initial/final/gripper provenance, pending terminal callback reconciliation and atomic latest-terminal proof in API Reference v1.84. Append D-413 progress while retaining incomplete OMX/Gazebo/two-ledger gates.
+- Evidence: Final API/registry/legacy/version checks 64 passed; foundation/alignment 427 passed/1 skipped; independent review 25 passed. Full public-composition Fleet and quick checks are running.
+- Gate: SOURCE/LOCAL only. Tasks 4-5 and 7 remain IN PROGRESS.
+
+## 2026-10-03 · uncommitted · docs(plans): 학습 페인트 후처리 — 담당 세션 결정과 실측 (a)(b)(c)
+- 변경: 차선 유지 담당 세션이 학습 마스크 ≥40 px 필터를 직접 넣기로 했다(선 NMS 불필요). 그 세션의 재생 설정(8kcn 130842Z 842 프레임)에서 읽기 전용으로 재고 기록했다. (a) 권고: INT8, 1스레드, spinning 끔, 2프레임마다, lane_evidence 생략. 추론 전 자르기는 모델을 망친다. (b) 수평선 아래 반사는 keeper가 읽지 않는 행에 있어 절단 여유가 필요 없다. (c) steep_crossing은 굽은 길·회전교차로의 진짜 테이프를 130 프레임에서 거부하지만 둘째 쪽만 잃는다.
+- 증거: `X:\DevTemp\rosy-lane-meas\report.md`.
+- gate 변화: 없음(코드 변경 없음).
+
+
+## 2026-10-03 · uncommitted · fix: preserve live Cell phase cancellation through Skill adapter
+- Change: forward the existing OMX coordinator active_phase_id through both Skill integration layers so ActionRunner exact-phase cancel reaches the journaled goal. Reject a mismatched phase and retain separate phase cancel and parent terminal meanings.
+- Evidence: red reproduction on real ActionApi/ActionRunner/ActionStore before the fix; focused provider/Skill/API/Cell/PickPlaceRunner regression 68 passed. Independent review: 4 passed, no Critical/Important findings. Quick tier: 96 passed / 25 freshness warnings.
+- Gate: SOURCE/LOCAL only. Full runtime composition, Cell two-ledger replay and ROS-SIM remain unproven.
+
+
+## 2026-10-03 · uncommitted · feat: compose Cell Skill with actual OMX planner and phase runner
+- Change: construct existing PickPlaceRunner with Skill-bound analytic planning and accepted profile/state/geometry; preserve existing owner ports, grant-scoped phase gates, local stop fencing and exact cancellation. Advance remains an explicit local workflow operation.
+- Evidence: missing-factory red regression; focused actual planner/API/runner/journal/Skill/boundary tests 75 passed. Four phases and denied transfer covered; persisted local replay does not submit again, and unresolved parent blocks rearm. Full OMX adapter plus provider/Skill/boundaries: 353 passed / 5 skipped. Quick tier: 96 passed / 25 freshness warnings. Independent review: 6 passed, no Critical/Important findings.
+- Gate: SOURCE/LOCAL only; no second owner or ROS loop added. Parent terminal workflow, Fleet/OMX two-ledger replay and ROS-SIM remain open.

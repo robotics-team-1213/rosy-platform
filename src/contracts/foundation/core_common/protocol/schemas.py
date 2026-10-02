@@ -25,6 +25,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 from core_common.protocol.evidence import EvidenceState, ValueEvidence
 from core_common.protocol.localization import LocalizationStatus
+from core_common.protocol.cell_goal_evidence import CellGoalEvidenceSubmission  # noqa: F401
 
 PROTOCOL_VERSION = "1.0"
 
@@ -1024,6 +1025,11 @@ class LineFollowStatus(BaseModel):
     angular: float = 0.0
     reason: str = "mode_off"
     clearance_m: Optional[float] = None   # D-344 §11: 정면 LiDAR 최소 거리(없으면 None)
+    # D-422 몸 기준 정지(path + URDF 몸 기하): 의도 경로를 따라 몸이 닿기까지의 거리,
+    # 그 속도의 정지 간격, 가장 가까운 것을 본 센서("lidar" | "ultrasonic"). 아니면 None.
+    body_gap_m: Optional[float] = None
+    stop_gap_m: Optional[float] = None
+    clearance_source: Optional[str] = None
     stuck: Optional[LineStuckStatus] = None  # D-407: open stuck (None = not stuck)
 
 

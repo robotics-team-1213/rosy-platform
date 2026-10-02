@@ -23,6 +23,11 @@ line_follow:
   body_rear_x_m: -0.076
   body_rotation_radius_m: 0.08257
   body_half_width_m: 0.05655       # footprint.half_width_m (collision meshes)
+  # D-422 body-referenced obstacle stop (obstacle_mode path): the body front is
+  # footprint.front_x_m (collision meshes; the screen mount sticks out furthest),
+  # the ultrasonic sensor sits at ultrasonic.x_m and faces forward.
+  body_front_x_m: 0.04205
+  body_ultrasonic_x_m: 0.0267
 
 safety:
   # SAF-002 teleop watchdog (default 500 ms). D-311 G4 requires a command-loss stop

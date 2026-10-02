@@ -49,11 +49,16 @@ class InferResult:
 
 
 class _OrtSession:
-    def __init__(self, path: Path, threads: int):
+    def __init__(self, path: Path, threads: int, allow_spinning: bool = True):
         add_learned_site()
         import onnxruntime as ort  # lazy: optional on the device image
         opts = ort.SessionOptions()
         opts.intra_op_num_threads = threads
+        if not allow_spinning:
+            # Idle pool threads sleep instead of busy-waiting: ~15 % less CPU on the Pi (D-408).
+            opts.inter_op_num_threads = 1
+            opts.add_session_config_entry("session.intra_op.allow_spinning", "0")
+            opts.add_session_config_entry("session.inter_op.allow_spinning", "0")
         self._s = ort.InferenceSession(str(path), sess_options=opts,
                                        providers=["CPUExecutionProvider"])
         self._in = self._s.get_inputs()[0].name
@@ -73,10 +78,10 @@ class LaneSegModel:
 
     @classmethod
     def open(cls, folder, *, session_factory: Callable | None = None,
-             threads: int = 2) -> "LaneSegModel":
+             threads: int = 2, allow_spinning: bool = True) -> "LaneSegModel":
         manifest = load_manifest(folder)
         verify_files(manifest)
-        factory = session_factory or (lambda p, t: _OrtSession(p, t))
+        factory = session_factory or (lambda p, t: _OrtSession(p, t, allow_spinning))
         try:
             session = factory(manifest.onnx_file(), threads)
         except ManifestError:
@@ -99,6 +104,14 @@ class LaneSegModel:
         evidence = lane_evidence(logits, self.manifest.classes)
         return InferResult(evidence, (time.perf_counter() - t0) * 1000.0,
                            self.manifest.model_revision)
+
+    def infer_mask(self, bgr: np.ndarray) -> tuple[np.ndarray, float]:
+        """Only the lane_marking mask at the frame's size and the latency in ms: the D-408
+        paint path, which has no use for lane_evidence (8.7 ms on the Pi)."""
+        t0 = time.perf_counter()
+        logits = self._session.run(preprocess(bgr, self.manifest.input))
+        mask = lane_marking_mask(logits, self.manifest.classes, size=(bgr.shape[1], bgr.shape[0]))
+        return mask, (time.perf_counter() - t0) * 1000.0
 
     def infer_with_mask(self, bgr: np.ndarray) -> tuple[InferResult, np.ndarray]:
         """Shadow evidence plus the lane_marking mask at the frame's size, from one

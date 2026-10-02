@@ -5,6 +5,8 @@ from typing import Any, Optional
 
 from core_features.line_follow import LineFollowConfig
 from core_features.line_follow.clearance import self_mask_from_config
+from core_features.traffic_policy import TrafficPolicyMode
+from core_features.traffic_policy.manager import APPROACH_MIN_SCALE
 
 
 def _optional_float(value) -> Optional[float]:
@@ -42,8 +44,9 @@ def _line_follow_config(raw: dict[str, Any]) -> LineFollowConfig:
         stale_after_s=float(raw.get("stale_after_s", defaults.stale_after_s)),
         lost_after_s=float(raw.get("lost_after_s", defaults.lost_after_s)),
         ir_calibration_revision=raw.get("ir_calibration_revision") or None,
-        obstacle_stop_m=float(raw.get("obstacle_stop_m", defaults.obstacle_stop_m)),
-        obstacle_resume_m=float(raw.get("obstacle_resume_m", defaults.obstacle_resume_m)),
+        # D-422: unset = derived (path + URDF body) or the pre-D-422 LiDAR-origin defaults.
+        obstacle_stop_m=_optional_float(raw.get("obstacle_stop_m")),
+        obstacle_resume_m=_optional_float(raw.get("obstacle_resume_m")),
         obstacle_half_angle_deg=float(raw.get("obstacle_half_angle_deg", defaults.obstacle_half_angle_deg)),
         lidar_forward_deg=float(raw.get("lidar_forward_deg", defaults.lidar_forward_deg)),
         clearance_stale_s=float(raw.get("clearance_stale_s", defaults.clearance_stale_s)),
@@ -84,14 +87,41 @@ def _line_follow_config(raw: dict[str, Any]) -> LineFollowConfig:
         body_rear_x_m=_optional_float(raw.get("body_rear_x_m")),
         body_rotation_radius_m=_optional_float(raw.get("body_rotation_radius_m")),
         body_half_width_m=_optional_float(raw.get("body_half_width_m")),
+        body_front_x_m=_optional_float(raw.get("body_front_x_m")),
+        body_ultrasonic_x_m=_optional_float(raw.get("body_ultrasonic_x_m")),
+        obstacle_body_margin_m=float(raw.get("obstacle_body_margin_m", defaults.obstacle_body_margin_m)),
+        obstacle_latency_s=float(raw.get("obstacle_latency_s", defaults.obstacle_latency_s)),
+        obstacle_decel_mps2=float(raw.get("obstacle_decel_mps2", defaults.obstacle_decel_mps2)),
+        obstacle_resume_hysteresis_m=float(raw.get(
+            "obstacle_resume_hysteresis_m", defaults.obstacle_resume_hysteresis_m)),
+        obstacle_ultrasonic_half_angle_deg=float(raw.get(
+            "obstacle_ultrasonic_half_angle_deg", defaults.obstacle_ultrasonic_half_angle_deg)),
+        obstacle_ultrasonic_stale_s=float(raw.get(
+            "obstacle_ultrasonic_stale_s", defaults.obstacle_ultrasonic_stale_s)),
     )
+
+
+def bind_motion_envelope(line_follow, *, safety, traffic_policy) -> None:
+    """D-422 review M1: what the lane twist can still become downstream. The nav safety clip
+    limits each axis; an ENFORCED traffic gate scales linear (APPROACH down to
+    APPROACH_MIN_SCALE, PROCEED by proceed_speed_scale) but not angular."""
+    def envelope() -> tuple[float, float, float]:
+        floor = 1.0
+        if traffic_policy.mode is TrafficPolicyMode.ENFORCED:
+            proceed = float(traffic_policy.configuration()["active"]["proceed_speed_scale"])
+            floor = min(APPROACH_MIN_SCALE, proceed)
+        return float(safety.limits.max_linear), float(safety.limits.max_angular), floor
+
+    line_follow.bind_motion_envelope(envelope)
 
 
 def bind_stuck_recovery(line_follow, *, safety, calibration, fleet_agent, vision) -> None:
     """D-407 inputs: console link (FleetAgent), calibration lease, D-342 linear limit, preview seq."""
     line_follow.bind_recovery(
-        # A brief agent reconnect does not read as "no console" mid-ASKING (D-407 2026-10-02).
-        console_linked=lambda: fleet_agent.linked_within(line_follow.config.recovery_console_grace_s),
+        # A brief agent reconnect does not read as "no console" mid-ASKING (D-407 2026-10-02),
+        # nor does a hub heard within the D-419 link freshness (heartbeat + reply deadline).
+        console_linked=lambda: (fleet_agent.linked_within(line_follow.config.recovery_console_grace_s)
+                                or fleet_agent.recently_heard()),
         calibration_active=lambda: calibration.current() is not None,
         linear_ceiling=lambda: float(safety.limits.manual_linear),
         preview_seq=lambda: vision.status().get("sequence"),

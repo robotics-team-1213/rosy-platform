@@ -33,6 +33,7 @@ from fleet.server.cancel_all import DriveCancelFence
 from fleet.server.cell_job_store import CellJobStore
 from fleet.server.console import FleetConsole
 from fleet.server.goal_evidence_service import GoalEvidenceService
+from fleet.server.goal_evidence_store import GoalEvidenceStore
 from fleet.server.local_action_transport import UnixLocalActionTransport
 from fleet.server.local_stop_transport import UnixLocalStopTransport
 from fleet.server.mission_dispatcher import MissionDispatcher
@@ -113,7 +114,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                pairing=None, pairing_sync_token: Optional[str] = None,
                localization_service=None, deployment_profile: str = "production",
                omx_cell_grant_revisions: Optional[Mapping[str, Mapping[str, str]]] = None,
-               cell_item_pose_tolerance=None) -> FastAPI:
+               cell_item_pose_tolerance=None, cell_goal_registry=None) -> FastAPI:
     if deployment_profile not in DEPLOYMENT_PROFILES:
         raise ValueError(f"unsupported deployment_profile {deployment_profile!r}")
     mission_configured = mission_service is not None or proposal_store is not None
@@ -193,9 +194,32 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         )
         if enable_mission_dispatcher and dispatch_open(deployment_profile, "PICK_PLACE") else None
     )
+    # Public Cell goal ingress (ported from main 778f50294/3ef12ca3e): sim_model_pose evidence is
+    # accepted only in the simulation profile (D-403 §5) and judged against the stored predicate.
+    cell_goal_evidence_service = None
+    if cell_goal_registry is not None:
+        from fleet.server.cell_goal_evidence_registry import CellGoalRegistry
+        from fleet.server.cell_goal_evidence_service import CellGoalEvidenceService
+        if deployment_profile != "simulation":
+            raise ValueError("Cell goal evidence (sim_model_pose) is accepted only in the simulation profile")
+        if cell_job_compiler is None or cell_job_store is None or not isinstance(cell_goal_registry, CellGoalRegistry):
+            raise ValueError("Cell goal registry requires the persistent Cell Job API and compiler")
+        cell_goal_evidence_service = CellGoalEvidenceService(cell_job_store, cell_goal_registry, GoalEvidenceStore(
+            mission_service.store.path))
+
+    def on_step_action_succeeded(job, _index):
+        if cell_goal_evidence_service is None:
+            return None
+        try:  # a goal-processing failure never rewrites the recorded device success
+            return cell_goal_evidence_service.on_action_terminal(job["mission_id"])
+        except Exception:
+            _LOG.exception("stored Cell goal evidence could not be applied for %s", job["mission_id"])
+            return None
+
     cell_job_dispatcher = (
         StepJobDispatcher(cell_job_store, task_service.store, action_transport, configured_omx,
-                          omx_cell_grant_revisions or {}, deployment_profile=deployment_profile)
+                          omx_cell_grant_revisions or {}, deployment_profile=deployment_profile,
+                          on_step_action_succeeded=on_step_action_succeeded)
         if enable_mission_dispatcher else None
     )
     mission_progress = (
@@ -328,6 +352,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     app.state.post_action_observation_source = post_action_observation_source
     app.state.mission_dispatcher = mission_dispatcher
     app.state.cell_job_dispatcher = cell_job_dispatcher
+    app.state.cell_goal_evidence_service = cell_goal_evidence_service
     app.state.deployment_profile = deployment_profile
     app.state.proposal_store = proposal_store
     app.state.omx_instances = configured_omx
@@ -366,6 +391,17 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         install_hub_routes(app, hub, hub_token=console_token)
 
     principals = parse_site_principals(site_users, console)
+    if cell_goal_evidence_service is not None:
+        from fleet.server.cell_goal_evidence_routes import (
+            assert_cell_producer_credentials_isolated, install_cell_goal_evidence_routes)
+        other_tokens = (console_token, discovery_token, vision_lease_secret, robot_credential_key, pairing_sync_token)
+        if goal_evidence_service is not None:
+            other_tokens += tuple(item.token for item in goal_evidence_service.registry.producers)
+        assert_cell_producer_credentials_isolated(
+            cell_goal_registry, console=console, principals=principals,
+            other_tokens=other_tokens, other_services=(sightings, policy_evidence),
+        )
+        install_cell_goal_evidence_routes(app, cell_goal_evidence_service)
     if principals:
         assert_registry_credential_isolated(console_token, principals)
     if robot_credential_key is not None:

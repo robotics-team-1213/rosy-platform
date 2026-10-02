@@ -42,6 +42,7 @@
 | D-184 | 동작 시험은 그 패키지가 가지고, core 시험은 공개 계약만 본다 |
 | D-200 | 도킹은 DOCKING 모드와 전용 명령 슬롯을 쥔다 — 모든 도크 기종이 처음부터 끝까지 DOCKING에서 움직인다 |
 | D-205 | 실물 차선 미션으로의 전환: 시뮬레이션 현실화, 인식 재작업, 재합격 순서 |
+| D-411 | Pilot 로봇측 학습 녹화(카메라 유닛 소유, CORE는 시작·정지 요청, `teleop/intent` 원 입력·주체 기록, 1회 10분)와 정지 중에만 허용하는 HTTP 수신(목록·tar·sha256 manifest, `rosy_ml fetch --http`); 기기가 알리는 조작부 서술자 `rosy.controls/1`(base_velocity·joint_jog·gripper, 드라이버는 전송·위젯은 kind별, 팔 조이스틱은 이전 목표 종료 후 순차 제한 목표); OMX 그리퍼 전용 절대 목표·쥠 readback(시뮬레이션만, D-390 유지) |
 
 ## 계획·결과 문서
 
@@ -59,6 +60,7 @@
 - [2026-09-21-semantic-road-control.md](../../../docs/plans/2026-09-21-semantic-road-control.md)
 - [2026-09-22-scene-context-road-design.md](../../../docs/plans/2026-09-22-scene-context-road-design.md)
 - [2026-09-22-scene-context-road.md](../../../docs/plans/2026-09-22-scene-context-road.md)
+- [2026-10-02-d411-pilot-recording-controls-plan.md](../../../docs/plans/2026-10-02-d411-pilot-recording-controls-plan.md)
 
 ## 교훈 (docs/solutions)
 
@@ -70,8 +72,8 @@
 
 ## 최근 기록
 
-- 2026-10-02 · 94a8b833 · fix(fleet_agent): hub 작업을 API 루프에서 시작
-- 2026-10-02 · b9f1b277 · test(localization): D-395 S1 R1 — LOCALIZED 물체 세 갈래 왕복
-- 2026-10-02 · caa0d51d · fix(api): D-407 검토 반영 — MANUAL 답은 POST /mode 규칙, 답 감사에 토큰
-- 2026-10-02 · 7a44f39d · feat(core): D-407 막힘 답 API와 CORE 배선
-- 2026-10-02 · 00b806cb · fix(bridge): 지역화 시간을 로봇 노드 시계에 맞춤 (D-395 S1 finding 6)
+- 2026-10-02 · uncommitted · fix(core): D-419 착지 — console_linked 를 D-407 유예와 합침
+- 2026-10-02 · uncommitted · fix(core): D-419 라운드 4 — Fleet 링크 판정 함수 하나
+- 2026-10-02 · uncommitted · fix(core): D-419 라운드 3 — Fleet 없는 로봇의 SAF-003 검증
+- 2026-10-02 · uncommitted · fix(core): D-419 재리뷰 — 배선 타이밍, console_linked 디바운스
+- 2026-10-02 · 758f9878e · fix(core): D-419(구 D-415) 리뷰 반영 — 배선

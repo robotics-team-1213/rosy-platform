@@ -422,6 +422,8 @@ STOP | HOLD | RETURN_HOME | CONTINUE_CURRENT_NAVIGATION
 
 기본값은 `STOP`이다(설정 가능).
 
+판정 규칙(FleetAgent 링크, `safety.fleet_loss_timeout_s`, 진행 중이던 Fleet 주행 목표만 대상)과 정책별 의미는 ADR D-419가 정한다. 이벤트는 API Ref §8 `safety.fleet_lost`·`safety.fleet_restored`.
+
 ### SAF-004 Speed Limit
 
 다음 속도를 설정할 수 있어야 한다.

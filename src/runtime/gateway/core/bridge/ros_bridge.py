@@ -13,6 +13,7 @@ import json
 import math
 import os
 import time
+import traceback
 from typing import Optional
 
 import rclpy
@@ -27,7 +28,7 @@ from lifecycle_msgs.msg import TransitionEvent
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy, qos_profile_sensor_data
 from sensor_msgs.msg import BatteryState, CompressedImage, Imu, LaserScan, Range
 from std_msgs.msg import Bool, Float32, String
-from std_srvs.srv import Empty
+from std_srvs.srv import Empty, SetBool
 
 from core.bridge import (
     battery_policy,
@@ -61,6 +62,8 @@ from core_features.diagnostics.collector import (
 )
 from core_features.navigation.manager import NavGoalSpec, NavigationError
 from core_common.protocol.schemas import HealthState
+from core_common.protocol.recording import (
+    FETCHED_TOPIC, SET_ACTIVE_SERVICE, STATUS_TOPIC, TELEOP_INTENT_TOPIC, teleop_intent)
 
 # 늦게 뜬 노드도 현재 모드를 즉시 받도록 latch 한다 (PWR-003).
 _LATCHED = QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE,
@@ -133,6 +136,8 @@ class RosBridge:
         node.create_subscription(String, "localization/state", self._on_loc_state, _LATCHED)
         node.create_subscription(String, "localization/candidates", self._on_loc_candidates, _LATCHED)
         node.create_subscription(String, "localization/result", self._on_loc_result, 10)
+        # D-411 A: the camera unit's recorder status (1 Hz, latched); the guard judges on it.
+        node.create_subscription(String, STATUS_TOPIC, self._on_pilot_recorder_status, _LATCHED)
 
         self.power_mode_pub = node.create_publisher(String, "power/mode", _LATCHED)
         self.display_info_pub = node.create_publisher(String, "display/info", 10)
@@ -142,12 +147,16 @@ class RosBridge:
         self.loc_suspect_pub = node.create_publisher(String, "localization/suspect", 5)
         # D-395 P2-7: mission start/end; the sensing node searches again after an end.
         self.loc_mission_pub = node.create_publisher(String, "localization/mission", 5)
+        # D-411 A: teleop decisions as evidence for the Pilot recorder (never read by control).
+        self.intent_pub = node.create_publisher(String, TELEOP_INTENT_TOPIC, 10)
+        self.pilot_fetched_pub = node.create_publisher(String, FETCHED_TOPIC, 5)
         self._led_client = node.create_client(SetLed, "set_led")
         # D-385: 모드별 표정 — 정책은 core_features.command.emotion_map, 노드는 감정 서버.
         self._emotion_client = node.create_client(Emotion, "set_emotion")
         # sllidar_ros2가 제공하는 모터 제어 서비스 (PWR-005).
         self._lidar_start_client = node.create_client(Empty, "start_motor")
         self._lidar_stop_client = node.create_client(Empty, "stop_motor")
+        self._pilot_recorder_client = node.create_client(SetBool, SET_ACTIVE_SERVICE)  # D-411 A
 
         self._cmd_timer = node.create_timer(1.0 / 50.0, self._publish_cmd_vel)
         self._state_timer = node.create_timer(1.0 / self._state_hz, self._tick_state)
@@ -163,6 +172,7 @@ class RosBridge:
 
         self._last_odom_ts = 0.0
         self._last_odom_pose = None
+        self._wheels_warned_at = -1e9   # D-422 wheels_sent warning throttle (monotonic)
         # 최상단 임포트는 노드 기동 전체를 실패시킨다(core 에 없고 slam: false).
         # 여기서 시도하고, 클라이언트는 생성자에서 만들어야 DDS 엔드포인트 매칭에
         # 노드 수명만큼의 시간이 주어진다.
@@ -235,7 +245,45 @@ class RosBridge:
         loc.publish_suspect = lambda body: self.loc_suspect_pub.publish(String(data=json.dumps(body)))
         self._svc.loc_mission.publish = (
             lambda body: self.loc_mission_pub.publish(String(data=json.dumps(body))))
+        self._svc.command.intent_sink = lambda **fields: self.intent_pub.publish(
+            String(data=json.dumps(teleop_intent(**fields))))
+        guard = self._svc.pilot_recording
+        guard.request_active = self._request_pilot_recording
+        guard.publish_fetched = lambda rid: self.pilot_fetched_pub.publish(
+            String(data=json.dumps({"id": rid})))
         self._node.get_logger().info("ros_bridge ready (cmd_vel sole publisher @50Hz)")
+
+    def _on_pilot_recorder_status(self, msg: String) -> None:
+        try:
+            self._svc.pilot_recording.on_status(json.loads(msg.data))
+        except (ValueError, TypeError) as exc:
+            self._node.get_logger().warn(f"pilot recorder status ignored: {exc}",
+                                         throttle_duration_sec=10.0)
+
+    def _request_pilot_recording(self, on: bool, wait: bool) -> tuple[bool, str]:
+        """D-411: ask the camera unit's recorder. wait=False from executor callbacks."""
+        client = self._pilot_recorder_client
+        if not client.service_is_ready():
+            return False, ""
+        request = SetBool.Request()
+        request.data = on
+        future = client.call_async(request)
+        if not wait:
+            # The guard announces nothing until the recorder's status confirms; log a refusal.
+            future.add_done_callback(self._log_pilot_recording_refusal)
+            return True, ""
+        try:
+            response = save_map.await_call(future, timeout=3.0)
+        except RuntimeError:
+            return False, ""
+        return bool(response.success), str(response.message)
+
+    def _log_pilot_recording_refusal(self, future) -> None:
+        response = future.result() if not future.cancelled() and future.exception() is None else None
+        if response is None:
+            self._node.get_logger().warn("pilot recorder did not answer a guard stop")
+        elif not response.success:
+            self._node.get_logger().warn(f"pilot recorder refused a guard stop: {response.message}")
 
     def _on_odom(self, msg: Odometry) -> None:
         self._last_odom_ts = time.monotonic()
@@ -374,6 +422,15 @@ class RosBridge:
         msg.linear.x = out.linear
         msg.angular.z = out.angular
         self.cmd_vel_pub.publish(msg)
+        # D-422: line follow's near-point memory integrates exactly what reached the wheels.
+        # wheels_sent never raises; a failure erases the memory and holds line follow until
+        # its next scan, and is warned at most every 5 s here.
+        problem = observation.wheels_sent(self._svc, out)
+        if problem is not None:
+            now = time.monotonic()
+            if now - self._wheels_warned_at >= 5.0:
+                self._wheels_warned_at = now
+                self._node.get_logger().warning(problem)
 
     def _tick_state(self) -> None:
         try:
@@ -438,6 +495,11 @@ class RosBridge:
         # D-321 addendum: a lapsed calibration lease emits its expiry even when
         # no screen is reading /robot/state. Rides this timer; commands nothing.
         self._svc.calibration.expire_due()
+        if self._svc.fleet_loss is not None:  # SAF-003 (D-419): 5 Hz, off the 50 Hz cmd path
+            try:
+                self._svc.fleet_loss.tick()
+            except Exception:  # a monitor fault must not stop the power timer
+                self._node.get_logger().error(f"fleet_loss tick failed:\n{traceback.format_exc()}")
         status = power.status()
         self._svc.state.set_power(status)
 
