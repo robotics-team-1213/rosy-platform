@@ -82,16 +82,18 @@ python -B -X utf8 test/known_failures.py <ROSY_SCRATCH의 해당 실행 로그>
 
 ## Task 1: 새 책임 경로와 설치 검사의 허용 범위
 
-**Modify:** `test/architecture/test_target_layout.py`, `test/architecture/test_folder_layout.py`, `test/architecture/test_folder_package_names.py`, `test/architecture/test_module_structure.py`, `tools/harness/harness.yaml` — 실제 새 모듈 등록이 필요한 항목만.
+**검토 후 필요한 경우에만 수정:** `test/architecture/test_target_layout.py`, `test/architecture/test_folder_layout.py`, `test/architecture/test_folder_package_names.py`, `test/architecture/test_module_structure.py`, `tools/harness/harness.yaml`. 기존 `src` ROS package 목록은 이 task에서 달라지지 않아 exact-layout 예외나 새 harness module은 추가하지 않는다.
 
 **Create:** `test/architecture/test_platform_dependency_boundaries.py`, `tools/harness/platform_dependencies.yaml`.
 
-1. 이 회차에서 만드는 world API·skill API·execution API·palletizing 경로와 기존 colcon 경로를 함께 허용하는 규칙을 시험한다. `src` 밖 ROS 없는 wheel을 임의 ROS 패키지로 등록하지 않는다.
-2. `execution → 공정 구현`, `decision → 장치 SDK`, `Skill → execution 구현`의 금지 import를 주입해 실패를 확인한다. 경로 이름만 확인하는 검사를 통과 기준으로 삼지 않는다.
-3. 정적 import와 배포 의존성의 차이를 검사할 수 있게 책임/소유 패키지 표를 추가한다. 아직 만들지 않은 미래 모듈은 등록하지 않는다.
+1. 현재 실제 존재하는 `core_common`·`rosy_cell`·`fleet`·`omx_adapter`만 패키지 표에 등록하고 기존 colcon 경로와 함께 검사한다. 아직 만들지 않은 플랫폼 package path는 등록하지 않는다.
+2. execution→공정, decision→장치 SDK, Skill→execution의 금지 import를 절대/상대 fixture로 주입해 실패를 확인한다. 경로 이름만 확인하는 검사를 통과 기준으로 삼지 않는다.
+3. 정적 import와 배포 의존성의 차이를 검사할 수 있게 현재 존재하는 경로/소유 package 표와 독립 간선 정책을 추가한다. 새 package가 실제 생성될 때 그 같은 변경에서 경로를 등록한다.
 4. 기존 exact-layout 검사는 실제로 전환하는 항목만 좁게 고친다. 모든 루트·모든 패키지를 허용하는 예외를 만들지 않는다.
 
 **검증:** `python -B -X utf8 -m pytest test/architecture -q -p no:cacheprovider`. 기대: 기준선 대비 NEW 0, 잘못된 의존 주입 시 새 가드 실패. 커밋: `test: enforce incremental platform boundaries`.
+
+**완료 증거 (2026-10-02):** [platform dependency guard](../../test/architecture/test_platform_dependency_boundaries.py)와 `tools/harness/platform_dependencies.yaml`은 현재 네 Python root만 등록하고 future roots는 canary import fixture로만 확인한다. absolute·relative import prefix 우회도 잡는다. 전체 architecture suite 81 passed/1 skipped, commit 전 quick tier 95 passed/24 warnings, known-failure 비교 0 new, harness lint 0 errors/24 기존 progress warnings. 새 ROS package/root나 `harness.yaml` module은 만들지 않았다.
 
 ## Task 2: 첫 작업에 필요한 API와 호환 매핑
 
@@ -101,6 +103,8 @@ python -B -X utf8 test/known_failures.py <ROSY_SCRATCH의 해당 실행 로그>
 - `modules/skills/api/pyproject.toml`, `modules/skills/api/src/rosy/skills/api/contracts.py`
 - `modules/execution/pyproject.toml`, `modules/execution/src/rosy/execution/api/plan.py`
 - `test/test_platform_contract_mapping.py`
+
+**Also modify:** `tools/harness/platform_dependencies.yaml` and `test/architecture/test_platform_dependency_boundaries.py` to register only the three newly created API roots, pin their import prefixes, and exercise their forbidden edges. A created package must enter this guard in the same commit as its first consumer.
 
 **Reuse:** `src/contracts/foundation/core_common/protocol/schemas.py`, `src/site/cell/rosy_cell/compiler.py`, `src/site/fleet/fleet/server/mission_dispatcher.py`.
 
@@ -121,6 +125,8 @@ python -B -X utf8 test/known_failures.py <ROSY_SCRATCH의 해당 실행 로그>
 **Modify/Reuse:** `src/site/cell/setup.py`, `src/site/cell/package.xml`, `src/site/cell/rosy_cell/{cell,compiler,fields,geometry,load,pattern,recipe,sequence,stack}.py`, 기존 `src/site/cell/test`, `.github/workflows/ci.yml`.
 
 **Create:** `modules/processes/palletizing/pyproject.toml`, `modules/processes/palletizing/src/rosy/processes/palletizing/` 아래 위 동명 구현 파일 및 `plan_bundle.py`, `test/test_platform_palletizing_compat.py`.
+
+**Also modify:** `tools/harness/platform_dependencies.yaml` and `test/architecture/test_platform_dependency_boundaries.py` in this commit so the newly created process root is scanned immediately.
 
 1. 동일 recipe/cell fixture로 기존 Job·carry_z·해시·Step 순서를 기준값으로 잡는다. 새 네임스페이스와 기존 import가 같은 구현/타입으로 이어져야 한다.
 2. 공정 계산을 새 모듈로 옮기고 기존 `rosy_cell`은 필요한 재수출·진입점 위임만 남긴다. 두 컴파일러를 유지하지 않는다.

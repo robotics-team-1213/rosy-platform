@@ -4422,3 +4422,10 @@
 - gate 변화: 없음. S1 미통과 — 이 호스트 속도에서는 공정한 시험이 아니어서 조용한 호스트에서 다시 해야 한다.
 - 결정: 없음. 기본값·코드 변경 없음(T1 닻 점프 판정이 폴링 간격에 비례, T2 Fleet 1 s 호출 제한의 증거·출처 손실, T3 `needs_human` 뒤에도 결정 — 다른 갈래로 보고).
 - 교훈: 안전 판정에 dt 를 곱하는 허용치(0.25 m + 0.5 m/s·dt)는 관찰 간격이 늘면 스스로 무력해진다 — 느린 호스트가 거울 잠금 로봇을 닻으로 남겼다(T1).
+
+## 2026-10-02 · uncommitted · test(platform): 현재 import 소유권과 D-413 경계 간선 guard
+
+- 변경: `tools/harness/platform_dependencies.yaml`은 현재 core_common·rosy_cell·fleet·omx_adapter 경로만 등록한다. 새 architecture test는 해당 소스의 absolute import와 상대 import를 검사하고 execution→공정, decision→장치 SDK, Skill→execution의 잘못된 간선을 fixture로 검출한다. 아직 존재하지 않는 wheel이나 ROS package는 registry에 넣지 않았다.
+- 검증: RED에서 정책 파일 누락과 relative-import 우회를 각각 재현한 뒤 보완했다. focused guard 5 passed; 전체 architecture 81 passed/1 skipped; quick tier 95 passed/24 warnings; `known_failures.py` 0 new; harness lint 0 errors/24 기존 progress warnings.
+- 한계: Python AST는 동적 import/entry point가 아니라 정적 import만 다룬다. 새 API/process roots는 생성할 때 registry에 포함해야 한다.
+- gate 변화: 없음.
