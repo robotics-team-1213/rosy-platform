@@ -61,11 +61,12 @@ jobs:
           # Build actual wheels outside src/ and install before colcon/pytest. This catches
           # missing package metadata and namespace-wheel ownership instead of adding modules
           # to PYTHONPATH or treating them as ament packages.
-          # 2026-10-02 — python3 -m pip 는 컨테이너에서 --break-system-packages 가 없는
-          # 다른 pip 를 찾는다(위쪽 pip3 설치 줄은 성공). 같은 pip3 로 부른다.
+          # 2026-10-02 정정: --break-system-packages 는 install 계열에만 있는 옵션이다
+          # (pip wheel 은 환경에 설치하지 않으므로 PEP 668 우회가 필요 없다). wheel 줄에서
+          # 떼지 않으면 "no such option" 으로 40 초 만에 죽는다(실행 36967673107).
           wheelhouse=/tmp/rosy-platform-wheelhouse
           mkdir -p "$wheelhouse"
-          pip3 wheel --break-system-packages --no-deps --no-build-isolation \
+          pip3 wheel --no-deps --no-build-isolation \
             --wheel-dir "$wheelhouse" \
             modules/world modules/skills/api modules/execution
           pip3 install --break-system-packages --no-cache-dir --no-index \
