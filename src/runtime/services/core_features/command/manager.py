@@ -70,6 +70,10 @@ class CommandManager:
         self._pending_shadow: Optional[tuple] = None
         #: Failures swallowed in announce_pending (shadow judge or a publish).
         self.announce_errors = 0
+        #: D-411: evidence hook for every teleop decision (rosy.teleop.intent/1).
+        #: Set by the ROS bridge. It can never refuse or delay a command.
+        self.intent_sink = None
+        self.intent_errors = 0
         self._safety.estop_listeners.append(self._clear_for_stop)
         self._safety.policy_listeners.append(self._clear_for_stop)
 
@@ -85,6 +89,25 @@ class CommandManager:
                                  source="command_manager", data={"source": source, "reason": reason})
 
     def teleop(self, linear: float, angular: float, source: str = "manual") -> tuple[bool, str]:
+        accepted, code = self._teleop_decision(linear, angular, source)
+        held = self._manual_twist if accepted else None
+        self.note_intent(linear, angular, source, accepted, code,
+                         clipped=None if held is None else (held.linear, held.angular))
+        return accepted, code
+
+    def note_intent(self, linear: float, angular: float, source: str, accepted: bool, code: str,
+                    clipped: Optional[tuple[float, float]] = None) -> None:
+        """D-411: what the operator asked for and what CORE decided. Evidence only."""
+        if self.intent_sink is None:
+            return
+        try:
+            self.intent_sink(raw_linear=linear, raw_angular=angular, clipped=clipped, source=source,
+                             mode=self._modes.mode.value, accepted=accepted, code=code,
+                             t_mono_ns=time.monotonic_ns())
+        except Exception:  # noqa: BLE001 - evidence must never refuse a command
+            self.intent_errors += 1
+
+    def _teleop_decision(self, linear: float, angular: float, source: str) -> tuple[bool, str]:
         if not self._registry.is_active_source(source):
             self._reject(source, "unregistered source")
             return False, "VALIDATION_ERROR"

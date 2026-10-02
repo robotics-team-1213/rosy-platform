@@ -31,6 +31,7 @@
 - `src/runtime/services/test/test_swarm.py`
 - `src/runtime/gateway/test/test_power.py`
 - `src/runtime/gateway/test/test_traffic_policy.py`
+- `src/runtime/services/test/test_teleop_intent.py`
 
 ## 최근 기록
 

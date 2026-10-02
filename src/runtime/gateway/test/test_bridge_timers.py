@@ -254,6 +254,8 @@ EXPECTED_PUBLISHERS = [
     ("localization/suspect", 5),
     # D-395 P2-7: mission start/end for the sensing node's search-after-mission.
     ("localization/mission", 5),
+    # D-411 A: teleop decisions as evidence for the Pilot recorder.
+    ("teleop/intent", 10),
 ]
 
 #: Five, not four. The fourth is behind the optional `slam_toolbox` import and

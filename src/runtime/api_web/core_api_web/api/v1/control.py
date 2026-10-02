@@ -9,6 +9,7 @@ from core_api_web.api.v1.common import apply_mode, operator, require_calibration
 from core_api_web.api.deps import AuthContext, get_services, CoreServicesLike
 from core_api_web.api.errors import ApiError
 from core_api_web.api.deps import Mode
+from core_common.capability import CapabilityError
 from core_common.domain.tasks import TaskKind
 
 
@@ -35,9 +36,15 @@ def set_mode(body: ModeRequest, auth: AuthContext = Depends(operator),
 @control_router.post("/teleop")
 def teleop(body: TeleopRequest, auth: AuthContext = Depends(operator),
            svc: CoreServicesLike = Depends(get_services)):
-    TaskKind.MOVE.require(svc.capability)
-    require_calibration_owner(svc, auth, "teleop")
-    require_kept(svc, "teleop")
+    try:
+        TaskKind.MOVE.require(svc.capability)
+        require_calibration_owner(svc, auth, "teleop")
+        require_kept(svc, "teleop")
+    except (ApiError, CapabilityError) as exc:
+        # D-411: a refusal before the manager is still an operator intent.
+        code = exc.code if isinstance(exc, ApiError) else "CAPABILITY_NOT_SUPPORTED"
+        svc.command.note_intent(body.linear, body.angular, "manual", False, code)
+        raise
     accepted, code = svc.command.teleop(body.linear, body.angular, source="manual")
     if not accepted:
         raise ApiError(code, 409 if code in ("MODE_CONFLICT", "EMERGENCY_ACTIVE") else 400,

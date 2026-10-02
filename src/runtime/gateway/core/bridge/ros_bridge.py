@@ -61,6 +61,7 @@ from core_features.diagnostics.collector import (
 )
 from core_features.navigation.manager import NavGoalSpec, NavigationError
 from core_common.protocol.schemas import HealthState
+from core_common.protocol.recording import TELEOP_INTENT_TOPIC, teleop_intent
 
 # 늦게 뜬 노드도 현재 모드를 즉시 받도록 latch 한다 (PWR-003).
 _LATCHED = QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE,
@@ -142,6 +143,8 @@ class RosBridge:
         self.loc_suspect_pub = node.create_publisher(String, "localization/suspect", 5)
         # D-395 P2-7: mission start/end; the sensing node searches again after an end.
         self.loc_mission_pub = node.create_publisher(String, "localization/mission", 5)
+        # D-411 A: teleop decisions as evidence for the Pilot recorder (never read by control).
+        self.intent_pub = node.create_publisher(String, TELEOP_INTENT_TOPIC, 10)
         self._led_client = node.create_client(SetLed, "set_led")
         # D-385: 모드별 표정 — 정책은 core_features.command.emotion_map, 노드는 감정 서버.
         self._emotion_client = node.create_client(Emotion, "set_emotion")
@@ -235,6 +238,8 @@ class RosBridge:
         loc.publish_suspect = lambda body: self.loc_suspect_pub.publish(String(data=json.dumps(body)))
         self._svc.loc_mission.publish = (
             lambda body: self.loc_mission_pub.publish(String(data=json.dumps(body))))
+        self._svc.command.intent_sink = lambda **fields: self.intent_pub.publish(
+            String(data=json.dumps(teleop_intent(**fields))))
         self._node.get_logger().info("ros_bridge ready (cmd_vel sole publisher @50Hz)")
 
     def _on_odom(self, msg: Odometry) -> None:
