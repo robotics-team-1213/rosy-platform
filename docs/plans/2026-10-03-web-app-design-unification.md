@@ -31,8 +31,8 @@
 | 4 | 로봇 운용 7패널 | `src/hmi/dashboard/panels/console/`, `shell/` | 카메라·운용 확인 `da3021b64`, 지도·상태 후속 `59b3803fe`, 호환 확인·자격/페이지 소유권 `b1dce38fe` 완료 |
 | 5 | 작업 준비 5패널 | `src/hmi/dashboard/panels/setup/`, `shell/` | 교통 정책 `5b590cb37`, 나머지 수정·유지 판정 `59b3803fe` 완료 |
 | 6 | 설치·정비 7패널 | `src/hmi/dashboard/panels/{host,system}/`, `shell/` | 목적·결과·미확인 구분 및 개별 유지 판정 `59b3803fe` 완료 |
-| 7 | Fleet 관제 | `src/site/fleet/fleet/server/web/{index.html,console.js,styles.css}` | `21f5dd310` 완료; 최종 영향 회귀 진행 |
-| 8 | Fleet 기기 등록·카메라 설치 | `src/site/fleet/fleet/server/web/{install.html,install.js,enrollment.js,camera-pairing.js}` | `21f5dd310` 완료; 세 작업·재검색·보정 프리뷰 수명, SPEC/QUALITY 통과 |
+| 7 | Fleet 관제 | `src/site/fleet/fleet/server/web/{index.html,console.js,styles.css}` | `21f5dd310`와 후속 `b42bcb12a`; D-201 높이·compact 실제 DOM/초점/입력 보존 완료, 남은 확인은 Task6b |
+| 8 | Fleet 기기 등록·카메라 설치 | `src/site/fleet/fleet/server/web/{install.html,install.js,enrollment.js,camera-pairing.js}` | `21f5dd310`·`b42bcb12a` 완료; 세 작업·재검색·보정 프리뷰와 주소 힌트/대화 owner, SPEC/QUALITY 통과 |
 | 9 | 게임 보드 | `src/site/games/games/web/{index.html,board.js,styles.css}` | `e3f2bcd06` 완료; 관측 상태와 승인 구별·마커 상세, 독립 SPEC/QUALITY·직접 화면 확인 |
 | 10 | 진단·시뮬 도구·작성 틀과 Pilot 웹 실패 화면 | `src/runtime/sensing/web/diagnostic.html`, `src/sim/gz_sim/scripts/lane_live_view.html`, `src/hmi/dashboard/styleguide.html`, `src/hmi/web_common/template.html`, `src/hmi/pilot/` | `e3f2bcd06` 완료; 모바일 배치·실제 공용 선택·미확인 거리·Pilot 재시도, PARKED 유지 |
 | 11 | 전체 회귀·최신 main 통합·로컬 병합 | 영향받는 host/browser/node 계약과 quick tier | 진행; Fleet D-201 높이 회귀와 기존 확인/설치 task fixture 수정 후 최신 main 통합·로컬 병합 |

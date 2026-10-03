@@ -5010,3 +5010,10 @@
 - 변경: 프로젝트 dashboard-drive 안내를 실제 공용 확인·compatibility 준비 표시·task/disclosure 탐색에 맞췄다. 옛 native dialog 승인 지침은 현재 확인창을 조작하지 못하므로 교체했다.
 - 검증: 나머지 host 237통과/1옛 문구 실패, Pilot Node/자산 87통과, Games 14개 중 7통과/7CSP 대기 실패를 기록한다. Role 진단 2실패 뒤 실제 조작 묶음 9통과, Fleet 첫 높이 수정 3통과/4실패는 아직 최종 완료가 아니다. 입력 source의 별도 scan finding 0은 전체 tracked scan 통과를 대신하지 않는다.
 - gate 변화: 전체 목표는 viewport·설치 주소 hint·확인 후속 제품 및 최종 검증·main 착지가 남아 있다. 실제 장치·CI·배포 증거를 승격하지 않는다.
+
+## 2026-10-04 · uncommitted · docs(ui): Fleet 교정 커밋과 주소 대화 소유권 기록
+
+- 변경: 제품 `b42bcb12a`의 소유 19경로와 독립 SPEC→QUALITY, 주 담당자의 실제 최종 네 캡처를 계획/검증 기록에 연결한다. D-439 §19는 조회 힌트·시간 제한·모호함·새 대화 epoch와 기존 서버 신원/코드 검증을 구별한다.
+- 관측: D-201 desktop 높이 1080px·mobile 실제 light/목록 우선·입력/초점 보존을 확인했다. 이전 조회가 새 수동 대상과 코드를 덮는 독립 발견은 작업 epoch로 수정하고 실제 실패 변이와 원본 복원으로 검증했다.
+- 증거: 기존 Role/Games/주소/네트워크 조건은 완화하지 않았다. 다섯 실제 전달 변이와 복원 통과, raw source 네 hash 및 LF 전달 hash를 직접 대조했다. 초기 route 대역 오류·577/77/33px 실패·teardown 부수 오류는 최종 성공과 구별한다.
+- gate 변화: 교정 SOURCE/LOCAL 근거를 추가했다. 전체 목표는 남은 확인 열세 곳과 최종 검사·최신 main 통합·로컬 착지가 남아 있다. 물리 장치·CI·배포 증거 승격 없음.

@@ -578,3 +578,44 @@ Role 묶음은 9통과(195.34초)했다. Fleet 첫 수정 묶음은 3통과/4실
 전환이다. 실제 이벤트 연결과 기존 API를 확인했으며 D-439 §18의 별도 후속 묶음으로
 처리한다. 앞서 완료한 app의 일곱 확인 이관이나 현재 fixture 수정의 실패로 소급해
 표현하지 않는다. 현재 전체 목표는 이 후속 제품·검증과 최신 main 착지가 남아 있다.
+
+### Task6 교정 제품과 최종 화면·소유권 확인
+
+제품 커밋 `b42bcb12a`는 소유 19경로만 포함한다. 독립 SPEC에서 좁은 화면의 실제 DOM
+순서와 이전 주소 조회가 새 수동 등록 대상/코드를 덮는 결함을 발견했고 수정 후 최종
+SPEC→QUALITY를 모두 통과했다. desktop은 독립 두 칼럼으로 구성하고 compact에서는
+동일한 mounted 부품을 queue→roster→map→ops 순서로 옮긴다. resize 시 입력·선택·초점을
+보존하고 PageScope가 media listener와 복귀 처리를 소유한다. 제어를 감추거나 0크기로
+만들어 배치 계약을 피하지 않는다.
+
+주 담당자는 D-201의 실제 최종 test 캡처와 별도로 실행한 `fleet/root-fit-final`의
+1920 dark·390 실제 light 두 화면, `final-plan/move-captures/move-code-dialog-1920.png`를
+직접 보았다. desktop 문서 높이는 정확히 1080px, 두 화면의 가로 넘침·page error는 0이었다.
+mobile의 2228px 자연스러운 세로 문서는 desktop 높이 계약과 구별한다. 지도·영상·로봇
+목록·대형·신호·정지는 실제 크기로 보이고 영상 모서리는 유지된다. 이동 대화는 로봇 이름·
+조회로 확인한 새 주소·기존 화면 코드를 표시하며 같은 화면의 정지는 접근 가능하다.
+fixture의 실제 lease POST는 포함하지만 실제 장치를 조종하거나 물리 연결을 수용하지 않았다.
+
+주소 힌트는 기존 GET `/api/fleet/discovery/addresses`에서 현재 enrolled·movable·단일
+주소만 사용한다. 클릭 조회에 10초 제한을 두고 조회 실패/모호함은 새 주소 미확인으로
+표시한다. 신원·코드·move POST body는 기존 서버 검증을 따른다. 자격 교체·페이지 종료와
+새 등록/이동/취소의 작업 epoch가 이전 완료·finally를 차단하며 새 코드와 새 처리 상태를
+보존한다. 초기 source의 scope/credential 검사만으로는 새 수동 대화를 구별하지 못했다는
+독립 재현을 기록하고 D-439 §19에 결정 근거를 남겼다.
+
+최종 D-201·390/320 실제 순서/DOM/초점 묶음은 3통과(8.35초)였다. 정확한 기존 주소·
+코드 body 및 호환 네트워크 snapshot 대상은 2통과(16.16초), Games의 일곱 CSP 실패 대상은
+7통과(18.99초), 영향 source 예산/문구 host는 35통과(16.68초), Fleet 주소/등록 Node는
+20통과였다. Role 9통과(195.34초)와 주소 owner의 강화된 복원 1통과(16.06초)는 별도
+증거이며 이전 중복 실행과 합산하지 않는다. 초기 Fleet 577→77→33px 실패와 이후 0px
+성공을 구별한다. 모듈 journal과 `final-plan`의 실제 실행 로그가 정확한 selector를 소유한다.
+
+다섯 실제 전달 변이는 roster를 0크기로 숨김, 실제 DOM 이동 제거, 모호한 주소 추측,
+조회 제한 시간 제거, 새 대화 owner 무시였다. 각 변이는 실제 `/console/assets/*`로 전달돼
+계약 실패를 검출했고 이후 원본을 전달한 같은 대상이 통과했다. 처음 잘못된 route로
+변이가 닿지 않은 대역은 무효로 남긴다. `task6-mutation-report.json`, 실제 delivery
+영수증과 각 RED/original GREEN 로그를 직접 대조했고 주 담당자가 최종 source 네 파일의
+raw-byte hash 및 다섯 LF 정규화 전달 hash를 직접 계산해 일치를 확인했다.
+`root-task6-hash-check.json`과 `task6-source-unchanged.json`이 그 근거다. teardown
+CancelledError는 최초 행동 단언 실패와 구별한다. lint는 0오류·기존 경고 26건이며
+cached index는 정확한 소유 경로로 대조했다. native 확인 후속과 최신 main 통합은 남아 있다.
