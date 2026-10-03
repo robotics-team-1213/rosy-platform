@@ -68,9 +68,10 @@ def _pred(lane_cols=4):
     return p
 
 
-def _model(pred, revision="lane-seg-20261003-aaaa1111", val_iou=None):
+def _model(pred, revision="lane-seg-20261003-aaaa1111", val_iou=None, dataset_revision="a" * 40):
     manifest = SimpleNamespace(input=SPEC, classes=MODEL_CLASSES, model_revision=revision,
-                               files=(), raw={"metrics": {"val_iou": val_iou or {}}})
+                               files=(), raw={"metrics": {"val_iou": val_iou or {}}},
+                               dataset_revision=dataset_revision)
     return SimpleNamespace(manifest=manifest, _session=_Session(pred))
 
 
@@ -94,7 +95,7 @@ def test_evaluate_frame_cap(tmp_path):
     assert ev["frames"] == 2
 
 
-def _run(tmp_path, monkeypatch, model, gate_extra, folder_name="m"):
+def _run(tmp_path, monkeypatch, model, gate_extra, folder_name="m", store=None):
     folder = tmp_path / folder_name
     folder.mkdir(exist_ok=True)
     (folder / "model_manifest.json").write_text("{}", encoding="utf-8")
@@ -108,7 +109,8 @@ def _run(tmp_path, monkeypatch, model, gate_extra, folder_name="m"):
             "eval_max_frames": 400, "min_eval_miou": None, "max_eval_miou_drop": 0.01, **gate_extra}
     gate_path = tmp_path / "gate.yaml"
     gate_path.write_text(json.dumps(gate), encoding="utf-8")
-    return intake.run(str(folder), out=tmp_path / "out", gate_path=gate_path, root=tmp_path)
+    return intake.run(str(folder), out=tmp_path / "out", gate_path=gate_path, root=tmp_path,
+                      store=store)
 
 
 EVAL_REL = f"store/evalsets/ev/{SHA}"
@@ -244,3 +246,45 @@ def test_background_only_match_is_a_model_fail(tmp_path, monkeypatch):
     assert rc == 1 and report["transient"] is False
     assert report["eval"]["miou"] is None and report["eval"]["miou_all"] == 1.0
     assert any("non-background" in r for r in report["reasons"])
+
+
+DS_SHA = "e" * 64
+
+
+def _store_dataset(tmp_path, sessions):
+    d = tmp_path / "store" / "datasets" / "lanes" / DS_SHA
+    d.mkdir(parents=True)
+    (d / "manifest.json").write_text(json.dumps({"frames": [
+        {"image": "x", "mask": "y", "session": s, "split": "train"} for s in sessions]}), encoding="utf-8")
+
+
+def test_training_dataset_sharing_an_eval_session_fails(tmp_path, monkeypatch):
+    _eval_set(tmp_path)  # its frames are session "s"
+    _store_dataset(tmp_path, ["s", "t"])
+    rc, report = _run(tmp_path, monkeypatch, _model(_pred(), dataset_revision=DS_SHA),
+                      {"eval_set": EVAL_REL}, store=tmp_path / "store")
+    ev = report["eval"]
+    assert rc == 1 and report["transient"] is False
+    assert ev["disjoint"] is False and ev["shared_sessions"] == ["s"]
+    assert ev["training_dataset"] == f"lanes@{DS_SHA}"
+    assert any("must be disjoint" in r for r in report["reasons"])
+
+
+def test_disjoint_training_dataset_is_recorded(tmp_path, monkeypatch):
+    _eval_set(tmp_path)
+    _store_dataset(tmp_path, ["t", "u"])
+    rc, report = _run(tmp_path, monkeypatch, _model(_pred(), dataset_revision=DS_SHA),
+                      {"eval_set": EVAL_REL}, store=tmp_path / "store")
+    assert rc == 0, report["reasons"]
+    assert report["eval"]["disjoint"] is True and "warnings" not in report
+
+
+@pytest.mark.parametrize("store_given, revision", [(False, DS_SHA), (True, "a" * 40), (True, "f" * 64)])
+def test_unresolved_training_dataset_is_unverified_not_a_fail(tmp_path, monkeypatch, store_given, revision):
+    _eval_set(tmp_path)
+    _store_dataset(tmp_path, ["s"])
+    rc, report = _run(tmp_path, monkeypatch, _model(_pred(), dataset_revision=revision),
+                      {"eval_set": EVAL_REL}, store=(tmp_path / "store") if store_given else None)
+    assert rc == 0, report["reasons"]
+    assert report["eval"]["disjoint"] == "unverified"
+    assert any(w.startswith("disjoint: unverified") for w in report["warnings"])

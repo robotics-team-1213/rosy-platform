@@ -2,6 +2,7 @@
 
     build.py <cvat_export.zip | dir> --frames <frames_dir>... --classes classes.yaml
              --out data/perception/datasets/<name> [--delete INDEX|SESSION/INDEX ...]
+             [--exclude-eval <eval set version folder> ...]
 
 classes.yaml is the single source of truth for names and indices. Colours are
 NOT trusted from it: CVAT may recolour labels, so the export's labelmap.txt maps
@@ -216,8 +217,9 @@ def _normalise_deletes(entries, frames) -> set[tuple[str, int]]:
     return out
 
 
-def build_dataset(export, frame_dirs, classes, out, deleted_indexes=()) -> dict:
-    """deleted_indexes: "session__index" or "session/index" strings."""
+def build_dataset(export, frame_dirs, classes, out, deleted_indexes=(), exclude_eval=()) -> dict:
+    """deleted_indexes: "session__index" or "session/index" strings. exclude_eval: eval set
+    version folders the dataset must be disjoint from (D-379 d3)."""
     out, export = Path(out), Path(export)
     frames = _read_frames(frame_dirs)
     deleted = _normalise_deletes(deleted_indexes, frames)
@@ -238,6 +240,14 @@ def build_dataset(export, frame_dirs, classes, out, deleted_indexes=()) -> dict:
         if bgr is None:
             raise BuildError(f"{p.name}: unreadable PNG")
         kept.append(((session, index), colors_to_indices(bgr[..., ::-1], lut, p.name)))
+    disjoint = []
+    for folder in exclude_eval:
+        ref, held_out = read_eval_set(folder)
+        disjoint.append(ref)
+        clash = sorted({k[0] for k, _ in kept} & held_out)
+        if clash:
+            raise BuildError(f"sessions {clash} are in eval set {ref['name']}@{ref['content_sha']}: "
+                             "training and eval must be disjoint")
     splits = assign_splits(k[0] for k, _ in kept)
 
     entries, sources = [], []
@@ -258,6 +268,8 @@ def build_dataset(export, frame_dirs, classes, out, deleted_indexes=()) -> dict:
     manifest = {"schema": SCHEMA, "classes": classes, "frames": entries,
                 "deleted_indexes": sorted(f"{s}__{i:06d}" for s, i in deleted),
                 "sources": sources, "ignore_index": IGNORE_INDEX}
+    if disjoint:
+        manifest["disjoint_from"] = disjoint
     (out / "manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
     return manifest
 
@@ -434,8 +446,8 @@ def main(argv=None) -> int:
     ap.add_argument("--eval-set", action="store_true",
                     help="with --auto-labels: build a fixed eval set into <store>/evalsets/ (D-379 d3)")
     ap.add_argument("--exclude-eval", type=Path, action="append", default=[],
-                    help="with --auto-labels: an eval set version folder the dataset must be "
-                         "disjoint from (repeatable)")
+                    help="an eval set version folder the dataset must be disjoint from "
+                         "(repeatable; CVAT and --auto-labels training builds)")
     args = ap.parse_args(argv)
     if args.auto_labels:
         if not (args.store and args.name):
@@ -458,9 +470,11 @@ def main(argv=None) -> int:
         if args.export.is_file():
             with tempfile.TemporaryDirectory() as tmp, zipfile.ZipFile(args.export) as z:
                 z.extractall(tmp)
-                manifest = build_dataset(tmp, args.frames, classes, args.out, args.delete)
+                manifest = build_dataset(tmp, args.frames, classes, args.out, args.delete,
+                                         args.exclude_eval)
         else:
-            manifest = build_dataset(args.export, args.frames, classes, args.out, args.delete)
+            manifest = build_dataset(args.export, args.frames, classes, args.out, args.delete,
+                                     args.exclude_eval)
     except BuildError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1

@@ -290,6 +290,26 @@ def _read_eval_set(path: Path) -> dict:
     return manifest
 
 
+def _sessions(manifest: dict) -> set[str]:
+    """Sessions of a dataset/eval set manifest: frames[].session and labels[].session."""
+    return ({f["session"] for f in manifest.get("frames") or [] if isinstance(f, dict) and "session" in f}
+            | {v["session"] for v in manifest.get("labels") or [] if isinstance(v, dict) and "session" in v})
+
+
+def training_sessions(store, revision) -> tuple[str, set[str]] | None:
+    """The store dataset version the model was trained on ("<name>@<sha>", its sessions),
+    found as <store>/datasets/*/<revision>/manifest.json; None when it cannot be resolved
+    (no store, a revision that is not a 64-hex content sha, no such folder)."""
+    if not store or not isinstance(revision, str) or not re.fullmatch(r"[0-9a-f]{64}", revision):
+        return None
+    for mf in sorted(Path(store).glob(f"datasets/*/{revision}/manifest.json")):
+        try:
+            return f"{mf.parent.parent.name}@{revision}", _sessions(json.loads(mf.read_text(encoding="utf-8")))
+        except (OSError, ValueError):
+            continue
+    return None
+
+
 def evaluate(model, eval_dir, max_frames: int) -> dict:
     """Per-class IoU of the model on a fixed eval set (D-379 d3).
 
@@ -313,6 +333,7 @@ def evaluate(model, eval_dir, max_frames: int) -> dict:
     model_names = {c.name: c.index for c in model_classes}
     matched = sorted(set(set_classes) & set(model_names))
     result = {"set": {"path": str(eval_dir), "content_sha": eval_dir.name}, "frames": 0,
+              "sessions": sorted(_sessions(manifest)),
               "nonfinite_frames": 0, "iou": {}, "miou": None, "miou_all": None, "miou_classes": [],
               "matched_classes": matched,
               "unmatched": {"model_only": sorted(set(model_names) - set(set_classes)),
@@ -398,6 +419,9 @@ def compare_to_champion(ev: dict, champion: dict | None):
 
 
 def judge_eval(ev: dict, gate: dict) -> list[str]:
+    if ev.get("disjoint") is False:
+        return [f"eval: training dataset {ev['training_dataset']} shares sessions "
+                f"{ev['shared_sessions']} with the eval set (D-379 d3: must be disjoint)"]
     if not ev["matched_classes"]:
         return ["eval: no class name shared by the model and the eval set "
                 f"(model only {ev['unmatched']['model_only']}, eval only {ev['unmatched']['eval_only']})"]
@@ -488,6 +512,16 @@ def run(source: str, *, out, gate_path=DEFAULT_GATE, root=ROOT, max_frames=None,
                 if not eval_dir.is_dir():
                     raise EvalSetError(f"eval set {eval_dir} is not a folder (gate eval_set)")
                 ev = evaluate(model, eval_dir, gate.get("eval_max_frames") or 400)
+                trained = training_sessions(store, getattr(manifest, "dataset_revision", None))
+                if trained is None:
+                    ev["disjoint"] = "unverified"
+                    report.setdefault("warnings", []).append(
+                        "disjoint: unverified (dataset.revision is not a dataset version in the store)")
+                else:
+                    shared = sorted(trained[1] & set(ev["sessions"]))
+                    ev["training_dataset"], ev["disjoint"] = trained[0], not shared
+                    if shared:
+                        ev["shared_sessions"] = shared
                 champ = find_champion(out, ev["set"]["content_sha"], manifest.model_revision)
                 ev["champion_comparison"] = compare_to_champion(ev, champ)
                 ev["champion"] = None if champ is None else {

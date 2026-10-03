@@ -97,3 +97,20 @@ def test_cli_eval_set_and_exclude(tmp_path, capsys):
         build.main(["--auto-labels", str(a), "--store", str(st), "--name", "x", "--eval-set",
                     "--exclude-eval", str(ev)])
     assert sorted(p.name for p in st.iterdir()) == ["evalsets"]
+
+
+def test_cvat_build_refuses_an_eval_session(tmp_path):
+    from test_dataset_build import CLASSES, _export, _frames_dir, _mask
+    e = _labels_dir(tmp_path, "s1", [(L.FLOOR, False)])
+    _, ev = build.build_auto_dataset([e], tmp_path / "store", "ev", eval_set=True)
+    a = _frames_dir(tmp_path / "f", "s1", [0])
+    b = _frames_dir(tmp_path / "f", "s2", [0])
+    exp = _export(tmp_path, {"s1__000000": _mask(), "s2__000000": _mask()})
+    with pytest.raises(build.BuildError, match=r"\['s1'\].*training and eval must be disjoint"):
+        build.build_dataset(exp, [a, b], CLASSES, tmp_path / "ds", exclude_eval=[ev])
+    c = _frames_dir(tmp_path / "f", "s3", [0])
+    exp2 = tmp_path / "exp2"
+    exp.rename(exp2)
+    exp = _export(tmp_path, {"s2__000000": _mask(), "s3__000000": _mask()})
+    m = build.build_dataset(exp, [b, c], CLASSES, tmp_path / "ds2", exclude_eval=[ev])
+    assert m["disjoint_from"] == [{"name": "ev", "content_sha": ev.name}]
