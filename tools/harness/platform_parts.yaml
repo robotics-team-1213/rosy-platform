@@ -1,5 +1,11 @@
 schema: rosy.platform-parts.v1
 
+# D-427 wave 0 item 5: colcon source roots, relative to the repo root. Every
+# colcon, rosdep, payload and image consumer reads this one line through
+# tools/harness/colcon_roots.py (stdlib-only, so keep it a one-line flow list).
+# Checked by test/architecture/test_colcon_roots.py.
+colcon_roots: [src]
+
 # D-427 §6 "지금(C)" ownership manifest: every tracked source root maps to one
 # D-427 part. No folder moves; `d427_target` is where the root goes in step B.
 # Checked by test/architecture/test_platform_parts.py.
