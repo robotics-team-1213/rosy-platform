@@ -7,13 +7,15 @@ function setOff(control, off, reason = "") { control.disabled = Boolean(off); if
 function el(tag, cls, text) { const node = document.createElement(tag); if (cls) node.className = cls; if (text !== undefined) node.textContent = text; return node; }
 
 export function mount(root, ctx) {
+  let disposed = false; let expanding = false; let generation = 0; let closeRequested = false;
   const head = el("ui-head", "", "전방 카메라");
   const stage = el("div", "surface-camera-stage"); stage.id = "vision-stage"; stage.dataset.state = "waiting";
   const frame = el("img", "surface-camera-frame"); frame.id = "vision-frame"; frame.alt = "전방 카메라 실시간 영상"; frame.hidden = true;
   const empty = el("ui-empty", "surface-camera-empty", "카메라 프레임 수신 대기"); empty.id = "vision-empty";
   const closeExpanded = el("ui-button", "surface-camera-close", "확대 닫기");
   closeExpanded.type = "button"; closeExpanded.setAttribute("kind", "quiet");
-  stage.append(frame, empty, closeExpanded);
+  const toolbar = el("div", "surface-camera-toolbar");
+  toolbar.append(closeExpanded); stage.append(frame, empty, toolbar);
   const status = el("ui-tag", "", "수신 대기"); status.id = "vision-status";
   status.dataset.evidence = "unavailable"; status.title = "WAITING"; status.setAttribute("status", "neutral");
   const actions = el("ui-actions", "surface-actions surface-camera-actions");
@@ -37,7 +39,10 @@ export function mount(root, ctx) {
   saveVideo.type = "button"; saveVideo.setAttribute("kind", "quiet"); actions.append(saveVideo);
   const saveLog = el("ui-button", "", "조작 기록 저장"); saveLog.id = "vision-operations-save";
   saveLog.type = "button"; saveLog.setAttribute("kind", "quiet"); actions.append(saveLog);
+  const primaryActions = el("ui-actions", "surface-actions"); primaryActions.append(expand, stop);
   actions.prepend(storageLabel);
+  const tools = el("details", "surface-camera-tools");
+  tools.append(el("summary", "", "사진·녹화 저장 도구"), actions);
   const captureStatus = el("ui-status", "", "카메라 프레임 수신 대기");
   captureStatus.id = "vision-capture-status";
   const library = el("details", "surface-camera-library");
@@ -96,7 +101,7 @@ export function mount(root, ctx) {
     "OBJ UNKNOWN · DARK: 종류 미확인 전경 영역이며 차선 페인트도 포함될 수 있음. NEAR는 가까운 중앙 경로 영역에 걸침. 0.42m L은 카메라 앞 거리(L LiDAR, G 바닥 평면 추정). unranged는 거리 미확인.",
     "TAG: 영상에서 식별한 표식 번호. PRED STOP은 도로 예측 표시 중단.",
   ]) legend.append(el("p", "", text));
-  root.append(head, stage, status, actions, legend, captureStatus, library, facts);
+  root.append(head, stage, status, primaryActions, tools, legend, captureStatus, library, facts);
   const elements = {"vision-stage": stage, "vision-frame": frame, "vision-empty": empty,
     "vision-status": status, "vision-source": source, "vision-resolution": resolution,
     "vision-age": age, "vision-captured": captured};
@@ -116,7 +121,7 @@ export function mount(root, ctx) {
   }
   let capture;
   const updateCapture = (state) => {
-    setOff(expand, !state.ready || !stage.requestFullscreen,
+    setOff(expand, expanding || !state.ready || !stage.requestFullscreen,
       !state.ready ? "영상 수신 후 확대할 수 있습니다" : "이 브라우저는 전체 화면 확대 불가");
     storage.disabled = state.recording || state.uploading;
     // 올리는 중(uploading)은 짧은 잠금이라 사유 없이 끈다.
@@ -129,6 +134,7 @@ export function mount(root, ctx) {
     setOff(saveVideo, !state.saved || state.recording || state.uploading, saveReason);
     setOff(saveLog, !state.saved || state.recording || state.uploading, saveReason);
     captureStatus.textContent = state.message;
+    captureStatus.setAttribute("state", state.uploading ? "pending" : state.ready || state.saved ? "ready" : "unavailable");
     // D-359 US-009 — 프레임이 없을 때의 대기 문장은 무대(ui-empty)와 상태 태그가 이미 말한다.
     captureStatus.hidden = !state.ready && !state.recording && !state.saved && !state.uploading;
   };
@@ -139,15 +145,44 @@ export function mount(root, ctx) {
       await capture.saveVideo(location);
     }});
   updateCapture(capture.state());
+  let homes = [];
+  function relocate() {
+    if (homes.length) return;
+    for (const node of [document.getElementById("shell-estop"), document.getElementById("shell-notice"), stop, captureStatus].filter(Boolean)) {
+      const anchor = document.createComment("camera-fullscreen-home");
+      node.before(anchor); homes.push({node, anchor}); toolbar.append(node);
+    }
+  }
+  function restore(focus = true) {
+    const active = document.activeElement;
+    const returnFocus = closeRequested || active === document.body || active === closeExpanded || active === stage;
+    closeRequested = false;
+    for (const {node, anchor} of homes) { if (anchor.parentNode) anchor.replaceWith(node); }
+    homes = []; expanding = false;
+    if (!disposed) updateCapture(capture.state());
+    if (focus && returnFocus && expand.isConnected && expand.getClientRects().length && !expand.closest("[inert]")) expand.focus();
+  }
   expand.addEventListener("click", async () => {
-    try { await stage.requestFullscreen(); }
-    catch (_error) { captureStatus.hidden = false; captureStatus.textContent = "영상 확대를 열지 못했습니다."; }
+    if (disposed || expanding || expand.disabled) return;
+    const attempt = ++generation;
+    expanding = true; updateCapture(capture.state());
+    try {
+      await stage.requestFullscreen();
+      if (disposed) {
+        if (document.fullscreenElement === stage) await document.exitFullscreen().catch(() => {});
+        restore(false);
+      }
+    } catch (_error) {
+      if (!disposed && attempt !== generation) return;
+      restore();
+      if (!disposed) { captureStatus.hidden = false; captureStatus.setAttribute("state", "error"); captureStatus.textContent = "영상 확대를 열지 못했습니다."; }
+    }
   });
-  closeExpanded.addEventListener("click", () => document.exitFullscreen());
+  closeExpanded.addEventListener("click", () => { closeRequested = true; document.exitFullscreen().catch(() => { closeRequested = false; }); });
   let cameraExpanded = false;
   const fullscreenChanged = () => {
-    if (document.fullscreenElement === stage) { cameraExpanded = true; closeExpanded.focus(); }
-    else if (cameraExpanded) { cameraExpanded = false; expand.focus(); }
+    if (document.fullscreenElement === stage) { cameraExpanded = true; relocate(); closeExpanded.focus(); }
+    else if (cameraExpanded) { cameraExpanded = false; generation++; restore(); }
   };
   document.addEventListener("fullscreenchange", fullscreenChanged);
   shot.addEventListener("click", () => { capture.screenshot(storage.value); });
@@ -163,7 +198,7 @@ export function mount(root, ctx) {
   const visibility = () => { if (document.hidden) preview.stop("화면이 숨겨져 카메라를 중지했습니다."); else preview.start(); };
   document.addEventListener("visibilitychange", visibility);
   preview.start();
-  return () => { document.removeEventListener("visibilitychange", visibility);
+  return () => { disposed = true; generation++; restore(false); document.removeEventListener("visibilitychange", visibility);
     document.removeEventListener("fullscreenchange", fullscreenChanged);
     if (document.fullscreenElement === stage) document.exitFullscreen().catch(() => {});
     window.removeEventListener("rosy:operator-action", action);

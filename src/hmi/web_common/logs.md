@@ -517,3 +517,10 @@
 - gate 변화: 공용 라이브러리 SOURCE/LOCAL 증거이며 소비 표면의 DEVICE/FIELD를 대신하지 않는다.
 - 결정: D-439. 표시 이름만 공유하고 정책 가용성·정지 조건은 서버가 판단한다.
 - 최종 후속 증거: poll generation·실패 후 가용성·종료 회귀를 포함한 영향 묶음 29 passed (22.21s), 독립 SPEC·QUALITY 최종 검토 PASS. 이전 묶음과 합산하지 않는다. 실제로 사라진 allowlist만 제거했으며 guard를 X 제공 자산에서 지웠을 때 행동 회귀가 검토본 역전을 검출했다. 제품 소스는 변이하지 않았다.
+
+## 2026-10-04 · uncommitted · feat(ui): 생존 범위로 취소하는 공용 확인
+
+- 변경: confirmation.js의 builder를 ui.js에서 위임한다. 기존 confirmIrreversible API와 openLiveDialog의 단일 정지·inert·초점 정리는 유지하며 선택적 AbortSignal이 이미 취소됐으면 열지 않고, 열린 확인은 false로 취소한다. 닫힌 확인은 abort listener를 제거한다. 공유 자산 manifest/CMake를 등록하고 위험 실행 버튼의 단일 소유자 계약은 추출한 builder만 허용한다.
+- 증거: 패키지·자산·예산 host 62 passed (28.27s), 공유 상태·정지·manifest 44 passed (7.78s), 집중 browser 7 passed (231.73s)와 영향 browser 3 passed (164.63s), 최종 abort/정지 클릭 1 passed (59.84s). 대상은 중복될 수 있어 합산하지 않는다. 중단된 확인의 DOM·scrim·inert 정리, 사전 취소, 실제 fixture 정지의 취소 동작을 확인했다. 독립 SPEC·QUALITY 최종 검토 PASS.
+- gate 변화: SOURCE/LOCAL 라이브러리 증거이며 장치나 FIELD 증거를 대신하지 않는다. 임시 검증은 X:\DevTemp\rosy-ui-unify\console에 둔다.
+- 결정: D-439 §10. builder는 주입받은 openLiveDialog만 호출하며 ui.js로 역수입하지 않는다.

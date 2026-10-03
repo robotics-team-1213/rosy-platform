@@ -18,6 +18,9 @@ def _route_panel_test(page) -> None:
     page.route("http://rosy.test/common/ui.js", lambda route: route.fulfill(
         status=200, content_type="application/javascript", body=ui_source))
     logic_source = (ROOT / "src" / "hmi" / "web_common" / "core_ui_logic.js").read_text(encoding="utf-8")
+    confirmation_source = (ROOT / "src" / "hmi" / "web_common" / "confirmation.js").read_text(encoding="utf-8")
+    page.route("http://rosy.test/common/confirmation.js", lambda route: route.fulfill(
+        status=200, content_type="application/javascript", body=confirmation_source))
     page.route("http://rosy.test/common/core_ui_logic.js", lambda route: route.fulfill(
         status=200, content_type="application/javascript", body=logic_source))
     pose_source = (WEB / "panels" / "setup" / "pose-evidence.js").read_text(encoding="utf-8")
@@ -996,6 +999,7 @@ def test_console_mode_requires_navigation_capability_and_stops_held_motion():
           window.__capabilities({navigation:{goal_navigation:true}});
           window.__navButton.click();
         }""")
+        page.locator('dialog[open] ui-button[kind="irreversible"]').click()
         page.wait_for_timeout(30)
         assert page.evaluate("window.__calls") == [{"path":"/api/v1/mode","body":{"mode":"NAVIGATION"}}]
         assert page.evaluate("window.__stoppedMotion") == 1

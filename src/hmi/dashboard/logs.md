@@ -840,3 +840,13 @@
 - 최종 증거: 늦은 이전 poll·적용 후 이전 검토본·요청 중 종료 회귀를 추가했다. 첫 후속 5 passed/1 fixture failure (43.44s)는 함수 대입을 반환한 Playwright evaluate가 함수를 자동 호출한 오류였으며 void arrow로 수정했다. 최종 영향 묶음 29 passed (22.21s): 교통 행동 6개, 기존 원시 패널 1개, 공유 상태·비활성 2개와 패키지·예산이다. 독립 SPEC·QUALITY 최종 소스 검토를 통과했다. 이전 묶음과 합산하지 않는다.
 - 회귀 민감도: 제품을 바꾸지 않고 X의 제공 자산에서 poll generation guard만 제거했을 때 새 회귀가 new-review 대신 old-review로 바뀐 실제 입력을 검출했다.
 - 화면 증거: 실제 CORE fixture의 1366×768, 390×844, 1366×600을 dark/light로 캡처하고 모두 직접 확인했다. 6개 모두 가로 넘침·pageerror·누락 kind/state 0, 표시 작업 1개, 첫 화면 비상 정지 표시다. 임시 캡처·검증은 X:\DevTemp\rosy-ui-unify\traffic-policy에 있다. native 확인 modal 한계는 위와 같다.
+
+## 2026-10-04 · uncommitted · feat(ui): 카메라 전체화면과 운용 확인의 정지 접근 보존
+
+- 변경: 실제 fullscreen 진입 후 기존 셸 정지·피드백, 녹화 중지·녹화 피드백 노드를 placeholder로 옮기고 종료·거부·unmount 때 복구한다. 진입 대기 중에는 원래 정지가 계속 보인다. 늦은 확대 완료는 종료된 패널을 되살리지 않는다. 영상 가장자리는 contain으로 보존하며 저장 도구를 접어도 녹화 중지는 남는다. 일반 화면의 잘못 표시된 확대 닫기를 숨겼다.
+- 변경: 운전 모드·도킹·차선 추종 확인을 공용 비차단 확인으로 바꿨다. 중복 확인을 막고 확인 후 현재 기능·상태·대상·처리 중·생존을 다시 확인하며 종료는 확인을 취소한다. 기존 명령 경로와 서버 권한을 보존하고 상태 부품의 pending/ready/error/unavailable을 명시했다. 공유 역할 이름과 나머지 패널 확인 이관은 후속 Task3d 범위다.
+- 증거: 사전 RED 2 failed (119.18s)와 확인 이관 RED 1 failed (26.76s)를 재현했다. 최종 집중 묶음 7 passed (231.73s), 기존 영향 브라우저 3 passed (164.63s), SPEC 수정 후 카메라 2 passed (73.44s), 공용 확인 중 실제 fixture 정지 클릭 1 passed (59.84s). 초기 green 2 passed/4 failed (291.19s)는 닫기 초점과 fixture 함수 대입·cleanup 차이를 수정했고, 녹화 fixture의 상수 sequence는 신선한 연속 프레임으로 수정했다. 겹치는 대상은 합산하지 않는다.
+- 증거: 호스트 패키지·예산 62 passed (28.27s), 공유 상태·정지·manifest 44 passed (7.78s). X의 제공 자산에서 세 운용 패널의 확인 후 가용성 검사를 각각 지웠을 때 동일 회귀가 잘못된 fixture 명령을 검출했다. 제품 소스는 변이하지 않았다. 독립 SPEC·QUALITY 최종 검토 PASS.
+- 화면 증거: CORE fixture와 합성 네 모서리 프레임으로 desktop dark/mobile light의 일반·실제 fullscreen 4개를 직접 확인했다. 녹화 중이며 보조 도구를 접어도 정지·녹화 피드백이 보인다. GET만 허용했고 pageerror·가로 넘침 0이다. 캡처·임시는 `X:\DevTemp\rosy-ui-unify\console`에 둔다.
+- gate 변화: SOURCE/LOCAL 및 fixture 증거다. 실제 장치 명령·ARM 이미지·FIELD 수용을 확인하지 않았다.
+- 결정: D-439 §10. 새 정지 소유자나 복제 버튼을 만들지 않고 기존 셸 소유권을 유지한다.

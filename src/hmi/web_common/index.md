@@ -44,8 +44,8 @@
 
 ## 최근 기록
 
+- 2026-10-04 · uncommitted · feat(ui): 생존 범위로 취소하는 공용 확인
 - 2026-10-04 · uncommitted · fix(ui): 교통 정책 운용자 이름 공유
 - 2026-10-04 · uncommitted · feat(ui): 공용 역할 이름으로 기본 진입 정렬
 - 2026-10-04 · uncommitted · feat(ui): 재사용 가능한 절차 작업 선택기
 - 2026-10-03 · uncommitted · feat(ui): 공용 동작 아이콘과 생성형 native 토큰 계약
-- 2026-10-03 · uncommitted · feat(link): D-432 주소 없는 장비 접속

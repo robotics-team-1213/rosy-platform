@@ -12,6 +12,7 @@ install(FILES
   core_ui_logic.js
   hold-ticker.js
   ui.js
+  confirmation.js
   task-chooser.js
   task-chooser.css
   theme.js

@@ -339,6 +339,7 @@ def test_real_operation_panels_block_switch_during_start_and_while_active():
             page.wait_for_selector("#action-group-line_follow:not([hidden])")
             page.evaluate("window.__deferOps = true")
             page.locator("[data-panel='console.line_follow'] ui-button").filter(has_text="추종 시작").click()
+            page.locator('dialog[open] ui-button[kind="irreversible"]').click()
             page.wait_for_function("window.__deferred.some((item) => item.path === '/api/v1/line-follow/mode')")
             page.get_by_role("tab", name="도킹").click()
             page.wait_for_function("document.getElementById('shell-notice').textContent.includes('요청이 처리 중')")
@@ -356,6 +357,7 @@ def test_real_operation_panels_block_switch_during_start_and_while_active():
 
             page.evaluate("window.__deferOps = true")
             page.locator("[data-panel='console.docking'] ui-button").filter(has_text="도킹 시작").click()
+            page.locator('dialog[open] ui-button[kind="irreversible"]').click()
             page.wait_for_function("window.__deferred.some((item) => item.path === '/api/v1/docking/dock')")
             page.get_by_role("tab", name="운전").click()
             page.wait_for_function("document.getElementById('shell-notice').textContent.includes('요청이 처리 중')")

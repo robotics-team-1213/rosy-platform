@@ -1,4 +1,5 @@
 import { enumLabel } from "/common/core_ui_logic.js";
+import { confirmIrreversible } from "/common/ui.js";
 
 // D-359 US-009 — 추종 모드 열거값은 요청 본문과 title에만, 운용자 글은 한국어다.
 const LINE_MODE_LABEL = Object.freeze({ OFF: "꺼짐", IR_LINE: "적외선 센서", CAMERA_LINE: "카메라" });
@@ -8,10 +9,12 @@ function setOff(control, off, reason = "") { control.disabled = Boolean(off); if
 function el(tag, cls, text) { const node = document.createElement(tag); if (cls) node.className = cls; if (text !== undefined) node.textContent = text; return node; }
 
 export function mount(root, ctx) {
+  const lifetime = new AbortController(); let disposed = false; let confirming = false;
   const head = el("ui-head", "", "차선 추종");
   const modeStatus = el("ui-status", "", "차선 추종 상태를 읽는 중입니다.");
   const capabilityStatus = el("ui-status", "", "내비게이션 기능을 확인하는 중입니다.");
   const actionStatus = el("ui-status");
+  modeStatus.setAttribute("state", "pending"); capabilityStatus.setAttribute("state", "pending"); actionStatus.setAttribute("state", "ready");
   actionStatus.setAttribute("role", "status");
   actionStatus.setAttribute("aria-live", "polite");
   const facts = el("dl", "ui-readout");
@@ -51,9 +54,10 @@ export function mount(root, ctx) {
   const stopState = ctx.store.poll("/api/v1/line-follow", 1_000, (data) => {
     current = data && typeof data === "object" ? data : null;
     statusKnown = typeof current?.mode === "string";
+    modeStatus.setAttribute("state", statusKnown ? "ready" : "unavailable");
     setStatus(modeStatus, statusKnown ? `차선 추종 ${enumLabel(LINE_MODE_LABEL, current.mode || "OFF")}` : "차선 추종 상태 응답이 불완전합니다. 다시 확인 중입니다."); render();
   }, (error) => {
-    current = null; statusKnown = false;
+    current = null; statusKnown = false; modeStatus.setAttribute("state", "error");
     setStatus(modeStatus, `차선 추종 상태를 읽지 못했습니다: ${error.message}`); render();
   });
   const stopCapabilities = ctx.store.poll("/api/v1/system/capabilities", 5_000, (data) => {
@@ -69,17 +73,27 @@ export function mount(root, ctx) {
     capabilityStatus.setAttribute("state", "error"); render();
   });
   async function setMode(mode) {
-    if (pending || !statusKnown || (mode !== "OFF" && !navigationAvailable)) return;
-    if (mode !== "OFF" && !window.confirm("차선 추종을 시작할까요? 주변 안전을 확인하세요.")) return;
+    if (disposed || confirming || pending || !statusKnown || (mode !== "OFF" && (!navigationAvailable || current?.mode !== "OFF"))) return;
+    if (mode !== "OFF") {
+      confirming = true; render();
+      const confirmed = await confirmIrreversible({message: "차선 추종을 시작할까요? 주변 안전을 확인하세요.", action: "추종 시작", opener: start, signal: lifetime.signal});
+      confirming = false;
+      if (disposed) return;
+      render();
+      if (!confirmed || pending || !statusKnown || !navigationAvailable || current?.mode !== "OFF" || select.value !== mode) return;
+    }
     pending = true; render();
     setStatus(actionStatus, mode === "OFF" ? "차선 추종 중지 요청을 보내는 중입니다." : `${enumLabel(LINE_MODE_LABEL, mode)} 추종 시작 요청을 보내는 중입니다.`);
+    actionStatus.setAttribute("state", "pending");
     if (mode !== "OFF") window.dispatchEvent(new Event("rosy:stop-motion"));
     try {
       const result = await ctx.api("/api/v1/line-follow/mode", {method: "PUT", body: JSON.stringify({mode})});
+      if (disposed) return;
       if (result && typeof result.mode === "string") { current = result; statusKnown = true; }
+      actionStatus.setAttribute("state", "ready");
       setStatus(actionStatus, mode === "OFF" ? "차선 추종 중지 요청을 CORE가 받았습니다. 현재 상태로 완료 여부를 확인하세요." : `${enumLabel(LINE_MODE_LABEL, mode)} 추종 시작 요청을 CORE가 받았습니다. 현재 상태로 시작 여부를 확인하세요.`);
-    } catch (error) { setStatus(actionStatus, `차선 추종 요청 실패: ${error.message}`); }
-    finally { pending = false; render(); }
+    } catch (error) { if (!disposed) { actionStatus.setAttribute("state", "error"); setStatus(actionStatus, `차선 추종 요청 실패: ${error.message}`); } }
+    finally { if (!disposed) { pending = false; render(); } }
   }
   start.addEventListener("click", () => setMode(select.value));
   stop.addEventListener("click", () => setMode("OFF"));
@@ -91,6 +105,6 @@ export function mount(root, ctx) {
       if (current?.mode !== "OFF") return {message: "차선 추종을 중지한 뒤 조작 그룹을 바꾸세요."};
       return true;
     },
-    unmount() { stopState(); stopCapabilities(); },
+    unmount() { disposed = true; lifetime.abort(); stopState(); stopCapabilities(); },
   };
 }
