@@ -20,7 +20,6 @@ ROSY is a robot middleware and fleet-control platform (ROS 2 Jazzy, first hardwa
 | `STATUS.md` | Generated: per-module gate snapshot (SOURCE…FIELD) linking each module's `progress.md`. Edit progress/logs/ADRs, not this file |
 | `tools/fix_ament_resource.sh` | Recreate ament `resource/<pkg>` markers for Python packages under the domain groups |
 | `tools/run_fleet_sim.sh` | One-click multi-robot Gazebo + fleet orchestration launcher |
-| `operations/` | D-427 operations part (a `colcon_roots` entry): `world/` (wheel `rosy-world`). Wheel folders carry `COLCON_IGNORE`; see `tools/harness/platform_parts.yaml` |
 | `data/` | Local teleop checks (`teleop/`) and drive recordings (`drive/`). Session files are not committed |
 | `.gitignore` | Ignores colcon `build/` `install/` `log/`, `__pycache__`, `.omc/` |
 
@@ -33,6 +32,7 @@ ROSY is a robot middleware and fleet-control platform (ROS 2 Jazzy, first hardwa
 | `deploy/` | Image build, signed release, Pi runtime (see `deploy/AGENTS.md`) |
 | `tools/` | Developer commands. Not installed on the robot (see `tools/AGENTS.md`) |
 | `learning/` | D-427 learning part: `training/perception/` (D-356 learned-loop tooling), `envs/isaac/` (ROS package `isaac_sim`, a `colcon_roots` entry), `curation/omx/` (LeRobot export); see each `AGENTS.md`. Only `isaac_sim` reaches a device (native payload, D-427 Q8) |
+| `operations/` | D-427 operations part (a `colcon_roots` entry): `world/` (wheel `rosy-world`), `processes/palletizing/` (wheel `rosy-palletizing`, harness module `palletizing`). Wheel folders carry `COLCON_IGNORE`; see `tools/harness/platform_parts.yaml` |
 | `data/` | Local teleop checks and drive recordings. Session files stay untracked |
 | `firmware/` | Dock and signal firmware outside colcon (see `firmware/AGENTS.md`) |
 | `test/` | Host pytest for deploy/robot/pinky_pro/release/motor contracts (see `test/AGENTS.md`) |

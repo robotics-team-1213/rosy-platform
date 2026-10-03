@@ -331,9 +331,10 @@ roots:
     wave: "3a"
     import_prefix: [rosy.world]
     concern: other
-  - path: modules/processes/palletizing
+  - path: operations/processes/palletizing
     part: operations
     d427_target: operations/processes/palletizing
+    legacy: modules/processes/palletizing
     wave: "3a"
     import_prefix: [rosy.processes.palletizing]
     concern: other

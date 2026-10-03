@@ -5,7 +5,7 @@
 
 ## Purpose
 
-D-413 compatibility import facade for `modules/processes/palletizing`, whose implementation owns the following behavior. Do not restore process implementations here. Rosy Cell (D-399): parses `recipe.yaml` (`rosy_cell.recipe/1`) and `cell.yaml` (`rosy_cell.cell/2`), lays out pallet patterns, and compiles a hashed Job of `pick`/`place`/`pallet_done` Steps in the robot base frame. It plans no motion, solves no IK and judges no reachability; the device owner does (D-376, D-399).
+D-413 compatibility import facade for `operations/processes/palletizing`, whose implementation owns the following behavior. Do not restore process implementations here. Rosy Cell (D-399): parses `recipe.yaml` (`rosy_cell.recipe/1`) and `cell.yaml` (`rosy_cell.cell/2`), lays out pallet patterns, and compiles a hashed Job of `pick`/`place`/`pallet_done` Steps in the robot base frame. It plans no motion, solves no IK and judges no reachability; the device owner does (D-376, D-399).
 
 ## Key Files
 
@@ -47,7 +47,7 @@ Frozen dataclasses for value objects; loaders validate and fail with a precise f
 
 ### Internal
 
-- `modules/processes/palletizing` owns the process implementation. This package preserves legacy imports only.
+- `operations/processes/palletizing` owns the process implementation. This package preserves legacy imports only.
 
 ### External
 

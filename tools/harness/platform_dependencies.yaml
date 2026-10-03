@@ -9,7 +9,7 @@ components:
     path: src/site/cell/rosy_cell
     import_prefix: rosy_cell
   - name: palletizing_process
-    path: modules/processes/palletizing/src/rosy/processes/palletizing
+    path: operations/processes/palletizing/src/rosy/processes/palletizing
     import_prefix: rosy.processes.palletizing
   - name: fleet_site
     path: src/site/fleet/fleet
