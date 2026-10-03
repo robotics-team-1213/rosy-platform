@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 import json
 import math
 import os
+import secrets
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends
@@ -534,10 +535,28 @@ def write_face_inputs(svc: CoreServicesLike, content: dict[str, Any]) -> None:
     """
     cfg = (svc.config or {}).get("hardware_probe", {}) or {}
     path = str(cfg.get("face_inputs_path", face_screen.FACE_INPUTS_FILE))
-    _write_private(path, json.dumps(content, sort_keys=True) + "\n", 0o644, "face-inputs")
-    # rosy-core runs with UMask=0027, which turns the 0644 above into 0640; rosy-face
-    # (user rosy-display) must read it, so the mode is set explicitly.
-    os.chmod(path, 0o644)
+    payload = (json.dumps(content, sort_keys=True) + "\n").encode("utf-8")
+    temporary = os.path.join(os.path.dirname(path) or ".", f".face-inputs.{secrets.token_hex(6)}")
+    try:
+        descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0), 0o600)
+        try:
+            # rosy-core's UMask=0027 would leave 0640; rosy-face (rosy-display) must read it.
+            # Set the mode on the temporary file so the name never points at an unreadable one.
+            if hasattr(os, "fchmod"):
+                os.fchmod(descriptor, 0o644)
+            os.write(descriptor, payload)
+            os.fsync(descriptor)
+        finally:
+            os.close(descriptor)
+        if not hasattr(os, "fchmod"):
+            os.chmod(temporary, 0o644)
+        os.replace(temporary, path)
+    except OSError:
+        try:
+            os.unlink(temporary)
+        except OSError:
+            pass
+        raise
 
 
 def write_status_inputs(svc: CoreServicesLike) -> None:

@@ -614,6 +614,7 @@ class FaceDisplay:
         self._faces = faces
         self._strip = strip
         self._core_owner = core_owner
+        self._last_core: dict | None = None
         self._mode: str | None = None
         self._drive_since: float | None = None
         self._testing: str | None = None
@@ -686,8 +687,19 @@ class FaceDisplay:
         """CORE's face hand-over, strictly read; None when missing, stale or not CORE's."""
         if face_screen is None:
             return None
-        now = datetime.fromtimestamp(self._wall(), timezone.utc)
-        return face_screen.read_face_inputs(str(self.root / FACE_INPUTS), now, owner_uid=self._core_owner)
+        wall = self._wall()
+        now = datetime.fromtimestamp(wall, timezone.utc)
+        core = face_screen.read_face_inputs(str(self.root / FACE_INPUTS), now, owner_uid=self._core_owner)
+        if core is not None:
+            self._last_core = core
+            return core
+        # One unreadable poll (a write in flight, a short read) is not a dead CORE:
+        # keep the last good hand-over until it is FACE_INPUTS_FRESH_S old.
+        last = self._last_core
+        if last is not None and wall - last["written_ts"] <= face_screen.FACE_INPUTS_FRESH_S:
+            return last
+        self._last_core = None
+        return None
 
     def screen_of(self, view: dict, now: float) -> dict | None:
         """D-433: the situation table's answer for this poll (None on a release without it)."""

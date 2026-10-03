@@ -1583,6 +1583,26 @@ def test_a_stale_handover_brings_back_the_status_card(tmp_path):
     assert display.animating is None and display.tick() is False and lcd.panels == []
 
 
+def test_one_unreadable_poll_keeps_the_last_good_handover(tmp_path):
+    # Review MED4: a write in flight must not flash "CORE not responding" or restart the drive card.
+    module = _display()
+    _status(tmp_path, "CORE_READY", runtime_mode="hardware")
+    _face_inputs(tmp_path, robot_mode="MANUAL", face="interest", drive={"mode": "MANUAL"})
+    display, _lcd, clock, rendered, _opened, _lines = _face_loop(module, tmp_path)
+    display.step()
+    since = display._drive_since
+
+    (tmp_path / "run/rosy/face-inputs.json").write_text("{", encoding="utf-8")
+    clock.now += 1
+    display.step()
+    assert display.screen["row"] in ("drive", "face") and display._drive_since == since
+
+    display._wall = lambda: WALL + 4.0  # the kept hand-over is now older than three seconds
+    clock.now += 1
+    display.step()
+    assert _screen_row(rendered) == "core_missing"
+
+
 def test_a_handover_from_someone_else_is_no_handover(tmp_path):
     module = _display()
     _status(tmp_path, "CORE_READY", runtime_mode="hardware")

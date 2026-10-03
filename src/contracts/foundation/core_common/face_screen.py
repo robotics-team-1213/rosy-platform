@@ -152,6 +152,8 @@ def validate_face_inputs(data: Any, now: datetime) -> Optional[dict]:
     codes = [code for code in caution if code in CAUTION_TEXT] if isinstance(caution, list) else []
     wake = _card(data.get("wake"))
     return {
+        # When CORE wrote it: a reader may keep this hand-over until it is FACE_INPUTS_FRESH_S old.
+        "written_ts": written.timestamp(),
         "robot_mode": robot_state.valid_robot_mode(data.get("robot_mode")),
         "nav_state": robot_state.valid_nav_state(data.get("nav_state")),
         "estop": _flag(data.get("estop")),

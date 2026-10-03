@@ -54,7 +54,7 @@ def test_the_payload_is_what_the_reader_validates():
     assert read["drive"]["speed"] == 0.12 and "kind" not in read["drive"]
     assert read["battery_percent"] == 55.5
     # Every key the bridge writes is one the reader knows: nothing rides unread.
-    assert set(payload) - {"schema", "written_at"} == set(read)
+    assert set(payload) - {"schema", "written_at"} == set(read) - {"written_ts"}
 
 
 def test_idle_carries_no_drive_card():
@@ -111,6 +111,24 @@ def test_written_file_is_world_readable_under_cores_umask(tmp_path):
         os.umask(previous)
 
     assert (tmp_path / "run/rosy/face-inputs.json").stat().st_mode & 0o777 == 0o644
+
+
+def test_the_file_is_never_visible_with_cores_umask_mode(tmp_path, monkeypatch):
+    # Review MED4: the mode is set on the temporary file, before the rename.
+    svc = _svc(tmp_path)
+    seen = []
+    real_replace = os.replace
+
+    def replace(source, destination):
+        seen.append(os.stat(source).st_mode & 0o777)
+        real_replace(source, destination)
+
+    monkeypatch.setattr(host_api.os, "replace", replace)
+    host_api.write_face_inputs(svc, _payload())
+
+    if os.name == "posix":
+        assert seen == [0o644]
+    assert len(seen) == 1 and not list((tmp_path / "run/rosy").glob(".face-inputs.*"))
 
 
 def test_a_stale_file_sends_the_screen_back_to_the_status_card(tmp_path):
