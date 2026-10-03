@@ -1024,3 +1024,11 @@
 - 증거: docs/validation/pi-ncnn-2026-10-03/README.md. 실제 차선 20프레임 분류 일치 100%, 제품 adapter ARM64 재생 오류 0. NCNN 차선 p95 474.59ms, 동일 원본 ONNX FP32 252.22ms.
 - gate 변화: 없음. 운영 차선 전환 HOLD. 학습 YOLO·30분 동시 부하·배포/rollback·현장 수용은 남아 있다.
 - 결정: D-431 Accepted, 구현 및 조건부 lane 평가 기록.
+
+## 2026-10-03 · 051349b81 · feat(sensing): 관측 노드 운영자 덮어쓰기 파일 (D-344 §12 보강)
+
+- 변경: `ir_overlay.py` 에 `/etc/rosy/line_observer_overrides.yaml` 검사(허용 키 7개, 모드·바닥·형·D-397 범위, NOMINAL 두 번 켜기)를 더하고, `camera_preview.launch.py` 가 IR 교정 파일 뒤에 마지막으로 얹는다(잘못되면 경고 후 건너뜀, 없으면 지금과 같음). 콘솔 스크립트 `line_observer_overrides apply|clear|show` 가 같은 검사를 거친 파일만 원자적으로 쓰고 `rosy-camera` 만 다시 시작한다. 벤치 `lane_switch.sh` 의 릴리스 안 `line_follow.yaml` 직접 수정을 대신한다.
+- 증거: `test_ir_overlay.py`, `test_line_observer_overrides.py`, `test/test_native_systemd_contract.py`, `test/architecture/`.
+- gate 변화: 없음(패키지 기본값 그대로, 파일 없으면 동작 같음).
+- 결정: D-344 §12 보강 (2026-10-03)
+- 교훈: 릴리스 디렉터리 안 수정은 다음 업데이트(약 10 분 자동)에서 말없이 사라진다. 로봇별 설정은 `/etc/rosy/` 에 둔다.

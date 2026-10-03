@@ -226,6 +226,14 @@ published here.
   the buzzer defaults on.
 - **Dashboard CSP forbids `page.wait_for_function("<string>")`.** It fails with
   `unsafe-eval`. Poll locators from Python instead.
+- **Edits inside the release dir are lost on the next update.** A payload release
+  replaces `/opt/rosy/releases/<id>` and auto-update (D-412) runs every ~10 min, so a
+  hand edit of `/opt/rosy/current/install/share/...` (the old `lane_switch.sh` did this
+  to `line_follow.yaml`) silently disappears. Per-robot settings belong under
+  `/etc/rosy/` (never written by a release or `sync-image-layer.py`). For the camera
+  lane bench setting use `line_observer_overrides apply|clear|show` (D-344 §12 addendum
+  2026-10-03), which writes `/etc/rosy/line_observer_overrides.yaml` and restarts only
+  `rosy-camera`.
 
 ## Related
 
