@@ -80,6 +80,7 @@ ALLOWLIST: dict[str, CommandSpec] = {
         CommandSpec("release.clear_hold", Role.ADMINISTRATOR, True),
         CommandSpec("service.status", Role.VIEWER, False, frozenset({"unit"})),
         CommandSpec("system.reboot", Role.ADMINISTRATOR, True),
+        CommandSpec("ssh.register_key", Role.ADMINISTRATOR, True, frozenset({'public_key'})),
     )
 }
 
@@ -106,6 +107,7 @@ class HostCommands(Protocol):
     """The privileged actions, injected so refusals can be tested in isolation."""
 
     def network_status(self) -> dict: ...
+    def register_ssh_key(self, public_key: str) -> dict: ...
     def apply_network_profile(self, profile_id: str) -> dict: ...
     def set_network_mode(self, mode: str) -> dict: ...
     def connect_wifi(self, ssid: str, psk: str) -> dict: ...
@@ -176,8 +178,10 @@ class HostAgent:
         allowed_units: Sequence[str],
         recovery_hold: Callable[[], dict | None] = lambda: None,
         audit: Callable[[AuditRecord], None] | None = None,
+        allowed_commands: Sequence[str] | None = None,
     ) -> None:
         self._commands = commands
+        self._allowed_commands = frozenset(ALLOWLIST if allowed_commands is None else allowed_commands)
         self._allowed_profiles = frozenset(allowed_profiles)
         self._allowed_units = frozenset(allowed_units)
         self._recovery_hold = recovery_hold
@@ -244,6 +248,8 @@ class HostAgent:
             )
 
         spec = ALLOWLIST.get(command_name) if isinstance(command_name, str) else None
+        if not isinstance(command_name, str) or command_name not in self._allowed_commands:
+            spec = None
         if spec is None:
             # No fuzzy matching: a command this build does not implement is a
             # command it must not approximate.
@@ -345,6 +351,14 @@ class HostAgent:
             )
 
         for name, value in params.items():
+            if name == 'public_key':
+                from ssh_pairing import public_key
+                try:
+                    public_key(value)
+                except ValueError:
+                    return ('HOST_AGENT_PARAM_INVALID', 'invalid operator SSH public key',
+                            'only an ssh-ed25519 public key without options is accepted')
+                continue
             if name == "psk":
                 if not isinstance(value, str) or not 8 <= len(value) <= 63:
                     return (
@@ -404,6 +418,7 @@ class HostAgent:
             "release.clear_hold": self._commands.clear_recovery_hold,
             "service.status": lambda: self._commands.service_status(params["unit"]),
             "system.reboot": self._commands.reboot,
+            'ssh.register_key': lambda: self._commands.register_ssh_key(params['public_key']),
         }
 
         try:

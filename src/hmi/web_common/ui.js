@@ -566,3 +566,32 @@ const hangulObserver = new MutationObserver((records) => {
 });
 hangulObserver.observe(document.documentElement, { childList: true, characterData: true, subtree: true });
 markHangulTree(document.documentElement);
+
+// Shared labeled action icons. Keep handlers and button semantics on the original element.
+export function actionIcon(button, name) {
+  const paths = {
+    fit: "M4 4h16v16H4zM8 8h8v8H8z",
+    expand: "M9 3H3v6M15 3h6v6M3 15v6h6M21 15v6h-6",
+    tools: "M4 6h16M4 12h16M4 18h16M9 3v6M15 9v6M8 15v6",
+    back: "M15 5l-7 7 7 7",
+    refresh: "M20 7v5h-5M4 17v-5h5M6 7a7 7 0 0 1 12-1l2 2M18 17a7 7 0 0 1-12 1l-2-2",
+    download: "M12 3v12M7 10l5 5 5-5M4 17v4h16v-4",
+    close: "M6 6l12 12M18 6L6 18",
+    forward: "M12 20V4M5 11l7-7 7 7",
+    reverse: "M12 4v16M5 13l7 7 7-7",
+    left: "M4 8h9a7 7 0 0 1 7 7v4M9 3L4 8l5 5",
+    right: "M20 8h-9a7 7 0 0 0-7 7v4M15 3l5 5-5 5",
+  };
+  if (!paths[name]) throw new RangeError(`Unknown action icon: ${name}`);
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  for (const [key, value] of Object.entries({viewBox: "0 0 24 24", fill: "none", stroke: "currentColor",
+    "stroke-width": "2", "stroke-linecap": "round", "stroke-linejoin": "round", class: "ui-icon", "aria-hidden": "true", focusable: "false"})) svg.setAttribute(key, value);
+  const path = document.createElementNS(svg.namespaceURI, "path");
+  path.setAttribute("d", paths[name]); svg.append(path);
+  const label = document.createElement("span");
+  const details = [...button.querySelectorAll(":scope > small")];
+  label.textContent = [...button.childNodes].filter(node => node.nodeType === 3 ||
+    (node.nodeType === 1 && !node.matches(".ui-icon, small"))).map(node => node.textContent).join("");
+  button.replaceChildren(svg, label, ...details);
+  return button;
+}

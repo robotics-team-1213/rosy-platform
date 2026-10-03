@@ -16,6 +16,7 @@ from collections.abc import Callable
 from hashlib import sha256
 
 from core_common.protocol import pairing as pairing_protocol
+from core_common.protocol.schemas import CameraPairApprovalRequest as ApproveBody
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.responses import JSONResponse
 from starlette.concurrency import run_in_threadpool
@@ -25,13 +26,6 @@ from .pairing import PairingError, PairingService
 
 BASE = "/api/fleet/pairing/v1"
 NAMED_OPERATOR_MESSAGE = "named operator required (site-users.yaml)"
-
-
-class ApproveBody(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    code: str = Field(pattern=r"^[0-9]{6}$")
-    source_id: str = Field(min_length=1, max_length=32)
 
 
 class ConfirmBody(BaseModel):

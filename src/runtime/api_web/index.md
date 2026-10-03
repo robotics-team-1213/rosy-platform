@@ -31,7 +31,7 @@
 ## 최근 기록
 
 - 2026-10-04 · uncommitted · feat(api): D-438 `stuck_resolver` 역할과 `STUCK_DECIDE` 권한, API Ref v1.90
+- 2026-10-03 · uncommitted · fix(integration): D-418 SSH와 D-432 연결/UI 계약 통합
+- 2026-10-03 · uncommitted · fix(link): 현재 접속과 후속 코드 규약 구별
+- 2026-10-03 · uncommitted · feat(link): D-432 주소 없는 장비 접속
 - 2026-10-03 · 0e244456c · docs(api): D-418 재번호 항목의 커밋 기록 정정
-- 2026-10-03 · uncommitted · merge(main): D-418 SSH 접속 계약을 API Ref v1.89 로 재번호
-- 2026-10-03 · b84e72c55 · feat(api): D-423 `GET /api/v1/vision/models`(viewer, 읽기 전용), API Ref v1.83
-- 2026-10-03 · uncommitted · merge(main): D-411 B+C 계약을 API Ref v1.87 로 재번호

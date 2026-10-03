@@ -1490,6 +1490,22 @@
 - Final checks: quick tier 96 passed / 26 existing warnings; harness lint 0 errors / 26 warnings. Entry configuration regression guards the ROS import directly and passed.
 - Gate: SOURCE/LOCAL only. Host HTTP is real; ROS and UDS credential transport are substituted. Live ROS/UDS (a)-(i), seat exclusion, thin-sheet handling and full two-layer/two-pallet vendor Gazebo acceptance remain open. Socket timeout bounds inactivity, not an end-to-end stop deadline. No viewer credential registration, service deployment, physical enablement or push performed.
 
+
+## 2026-10-03 · uncommitted · feat(link): D-432 주소 없는 장비 접속
+
+- 변경: 신뢰된 CA·DNS 이름을 유지하면서 discovered SRV IP/port로 HTTP/WS를 전송한다. Cam 4자리 표시와 기존 코드가 한 시도 한도를 공유한다.
+- 증거: 관련 Python 계약 시험·실제 loopback TLS HTTP/WS 시험을 실행했다. Pilot Android 설치·화면과 실제 로봇 연결·현장 트래픽 수용은 서로 다른 증거다.
+- gate 변화: 실제 장비의 제어·FIELD 관문은 이동하지 않는다.
+- 결정: D-432 2026-10-03 추가 결정.
+
+
+## 2026-10-03 · uncommitted · fix(link): 현재 접속과 후속 코드 규약 구별
+
+- 변경: 사용자 보정으로 4자리 코드 발급·Cam 표시 별칭은 이번 적용에서 제외했다. 현재 로봇 8자·Cam 6자리 규약을 유지하며 D-432에 추후 통합을 기록했다. 실제 Pinky 접속 수정은 진행한다.
+- 증거: 영향받는 Python 2345 passed/84 skipped, quick tier 459 passed/2 skipped, Pilot PWA 87 passed/58 skipped. 코드 규약 보정 뒤 해당 인증·페어링 시험을 다시 실행한다. 공개 검증 기록은 docs/validation/discovery-link-2026-10-03/README.md.
+- gate 변화: Android 설치·실제 CORE 인증 확인은 실제 주행·Cam 화면 off 연속 송출·현장 트래픽 수용과 별개다. DEVICE/FIELD 이동 없음.
+- 결정: D-432 후속 결정: 접속은 지금, 짧은 코드 통합은 추후 적용.
+
 ## 2026-10-04 · uncommitted · feat(server): D-438 Fleet stuck resolver phase 1 (rules R1-R3 + human escalation)
 - Change: `fleet/server/stuck_resolver.py` (pure decision core), `stuck_resolver_loop.py` (1 s poll, hub-woken, records as `fleet-resolver`), `line_stuck.py` resolver note, `console_routes.py` claim endpoint (human decision claims first), `app.py` clients/lifespan/hub fan-out, `swarm/robots.py` `resolver_token`, `cli.py` `--stuck-resolver`, console `line-stuck.js` claim + resolver text; API Ref v1.90 version pins in two tests
 - Evidence: `python -m pytest src/site/fleet/test -q` 1658 passed, 7 skipped (2026-10-04 Windows; first run had 3 failures, all the API Ref version pin `v1.89` -> `v1.90`, fixed, re-run of those files 25 passed together with gateway version alignment); `node --test src/site/fleet/test/web/line-stuck.test.mjs` 12 pass; `python -m pytest test/test_harness_contracts.py -q` 59 passed

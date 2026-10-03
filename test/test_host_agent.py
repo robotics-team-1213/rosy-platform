@@ -130,6 +130,7 @@ def test_the_allowlist_matches_the_contract():
         "release.clear_hold",
         "service.status",
         "system.reboot",
+        'ssh.register_key',
     }
 
 
@@ -373,7 +374,7 @@ def test_the_whole_parameter_surface_is_enumerated():
     not an identifier; the agent still lists it so the surface stays closed.
     """
     every_param = {param for spec in ALLOWLIST.values() for param in spec.params}
-    assert every_param == {"profile_id", "release_id", "unit", "mode", "ssid", "psk"}
+    assert every_param == {"profile_id", "release_id", "unit", "mode", "ssid", "psk", 'public_key'}
 
 
 def test_a_missing_required_parameter_is_refused(agent, commands):

@@ -15,6 +15,7 @@
 | D-374 | 앱의 폴더·패키지·식별자·표시 이름은 역할 이름 하나에서 나온다 — 역할 id(kebab)·snake·compact·표시 네 표기; 와이어 계약 이름(mDNS 종류, `rosy-overhead/1`, `/api/fleet`·`/api/vision`, `rosyov://`, 웹 경로, 설정·저장소 키, compose 서비스)은 바꾸지 않는다 |
 | D-377 | 앱 이름 규칙: Rosy + 영어 한 단어 — 표시 이름 `Rosy <Word>`, id·폴더 끝 `<word>`, 패키지 `rosy_<word>`, Android `io.github.livsbittt.rosy.<word>`, Gradle `rosy-<word>`, 아이콘 `<word>.svg`; Rosy Cam·Vision·Console·Robot·Pilot |
 | D-391 | 앱은 사이트 연결을 같은 모양(이름·CA·자격, IP 없음)으로 저장하고, 기기 연결 서버는 Fleet "기기 연결"이 맡는다 |
+| D-432 | 모든 앱·장치는 공통 발견·연결 규약을 쓰고, 개발 모드에서는 코드 없이 연결한다 |
 
 ## 계획·결과 문서
 
@@ -32,8 +33,8 @@
 
 ## 최근 기록
 
+- 2026-10-03 · uncommitted · fix(health): 화면 냉각 latch 조회 공유
+- 2026-10-03 · uncommitted · feat(cam): 촬영 유지 화면 쉬기
+- 2026-10-03 · uncommitted · fix(link): 현재 접속과 후속 코드 규약 구별
+- 2026-10-03 · uncommitted · feat(link): D-432 주소 없는 장비 접속
 - 2026-10-01 · uncommitted · fix(cam): 비밀 스캔 — pollSecret 식별자와 긴 시험 이름
-- 2026-10-01 · 2370b41b · feat(cam): 응답 없는 confirm은 한 번만 다시 보낸다(S2 멱등 confirm, rosy-00 d5d4a2e4)
-- 2026-10-01 · 8fb4b1a8 · fix(cam): D-341 페어링 클라이언트 보안 리뷰 반영(APPROVE WITH FIXES)
-- 2026-10-01 · 05280213 · feat(cam): D-341 페어링 클라이언트 2단계 — HTTPS, 조회 간격, 설정 진입과 화면
-- 2026-10-01 · 9f4dd99a · feat(cam): D-341 페어링 클라이언트 1단계 — 순수 로직, 벡터, 상태 기계

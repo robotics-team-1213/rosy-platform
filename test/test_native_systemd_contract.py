@@ -333,6 +333,10 @@ ROOT_ONLY_STATE = (
 # What each ProtectSystem=strict unit's program writes, derived from the code.
 # "$HOME" is the unit's Environment=HOME. Keep this next to the code references.
 DECLARED_WRITES = {
+    "rosy-ssh-pairing.service": {
+        "/home/rosy/.ssh/authorized_keys", "/run/rosy-host/ssh-pairing.sock",
+        "/var/log/rosy-ssh-pairing/audit.jsonl",
+    },
     "rosy-release-recover.service": {
         # native_release.py NativeReleaseManager: self.lock is opened on every
         # recover, even without a journal; self.journal is rewritten/unlinked.
@@ -433,6 +437,8 @@ DECLARED_READS = {
     },
     "rosy-core.service": {
         "/var/lib/rosy",       # calibration data_root, runtime probe default
+        # D-432: connect to the root helper socket; CORE does not create it.
+        "/run/rosy-host/ssh-pairing.sock",
         "/var/lib/rosy/maps",  # save_map read-back; slam_toolbox is the writer
         # D-193: the root issuer's verifier, root:rosy-core 0640. CORE never writes there (D-161).
         "/run/rosy-boot/login-code.json",
@@ -479,6 +485,7 @@ DECLARED_READS = {
 
 # Program sources scanned for write roots, per unit.
 PROGRAM_SOURCES = {
+    "rosy-ssh-pairing.service": ["deploy/robot/pinky_pro/native/rosy-ssh-pairing.py"],
     "rosy-release-recover.service": ["deploy/robot/pinky_pro/native/native_release.py",
                                      "deploy/robot/pinky_pro/native/recover-release.sh"],
     "rosy-sd-provision.service": [],
@@ -719,6 +726,11 @@ def test_required_writable_paths_exist_when_the_unit_starts(unit):
     # image, or come from a unit this one requires.
     directives = _directives(unit)
     created = set(_managed(directives))
+    # Positive directory conditions prevent this unit from starting when
+    # its externally provisioned directory is absent. OR/negated conditions
+    # cannot establish that prerequisite.
+    created |= {path for path in _words(directives, "ConditionPathIsDirectory")
+                if path.startswith("/")}
     # tmpfiles runs in systemd-tmpfiles-setup.service; a DefaultDependencies=no
     # unit may start before it unless it orders itself after it.
     early = directives.get("DefaultDependencies") == ["no"]

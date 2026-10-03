@@ -140,3 +140,62 @@ Orchestration은 우선 작업 실행 책임 안의 단계·의존성·자원 �
 - D-435 제목·Proposed 상태·ADR Log 행 일치, 로컬 링크 16개 누락 0, 반례 9개 확인. git diff --check 통과.
 - 이전 전체 문서/구조 시험의 isaac_sim 기준선 실패는 별도 미해결이다. 이번 문서 계약 통과로 그 실패를 해결했다고 주장하지 않는다.
 - 테스트·임시 산출물은 X:/DevTemp/rosy-d435-doc-tests 및 rosy-d435-doc-cache에 두었다. 코드·배포·실기 검증은 수행하지 않았다.
+
+## 3차 검토 — 2026-10-03, 책임 연결과 실제 코드의 반례
+
+기준 HEAD: `0bdfaa34220dad224fa49945e8db07dc1c2572cc`. 앞선 검토와 수치는 각 당시 기록으로 유지한다.
+
+이번 검토의 핵심은 역할 이름을 더 늘리는 것이 아니라 역할 사이의 결정·권한 전달을 분명히 하는 것이다. D-435에 append-only 보강 후보 §8–§12를 추가했다. 같은 Proposed 초안 안에서 앞선 모호한 서술을 정정하며, 기존 Accepted 계약 변경은 아니다.
+
+- **실제 자원과의 불일치 정정:** 현재 `dispatch_admission.py`는 robot/workcell/object/pallet을 같은 claim 트랜잭션으로 관리한다. 비로봇 claim 전체를 미래 계약처럼 설명한 부분을 정정했다. 기존 저장을 유지하며 정책 책임과 저장소 이름을 구분한다.
+- **실행 순서 정정:** D-435 §4 간략 그림은 안전 후 스킬 실행처럼 오독될 수 있었다. 보강 §11은 스킬/수동 동작 의도 → Arbiter → Guard → 단일 writer의 목표 경로를 명시한다. 미구현 공통 Motion Intent schema와 실제 제품별 graph는 구분한다.
+- **배정과 발행 사이의 빈칸 보강:** Fleet 배정은 해당 조정 권한의 결정이고, 실행 허가·장치 수락과 동일하지 않다. 발행 요청은 현재 대상·자원·세대·revision에 결속되어야 하며, 이후 재배정은 기존 Action 대상 변경/중복 실행으로 처리하지 않는다. 현 고정 workcell에는 Fleet 선택을 억지로 넣지 않는다.
+- **Skill과 실행 identity 보강:** 현재 SkillInvocation은 skill_id/version/inputs이고, Action/attempt·grant·ROS goal은 별도이다. 정의·호출·장치 실행을 한 단위로 합치지 않는다. 현 1 Step→1 Action 범위와 미지원 복수/병렬 동작을 구분한다.
+- **해제의 과도한 일반화 정정:** 현재 CellJobStore.release_before_send는 최초 미발행 Job에만 해제를 허용하고 앞선 진행이 있으면 HELD를 유지한다. 발행 전 실패와 transport 후 UNKNOWN을 구분하고, 지금 Step의 미발행만으로 이전 물체/팔레트 효과가 사라졌다고 보지 않는다.
+- **검증의 의미 정정:** D-435 §12는 형식 검사와 아키텍처의 의미 검증을 분리한다. 현재 producer/consumer·권한·원장·실패 상태를 일곱 질문으로 검증해야 하며, 문서 시험 통과를 설계 확정으로 사용하지 않는다.
+
+평가: 논리 역할 분리 방향은 유지할 근거가 있다. 앞선 초안의 자원 범위·파이프라인 도식은 보강 없이 수용하기에 부족했다. 이번 보강은 그 구체 오류와 역할 연결의 공백을 줄인다. 현재 단계의 목표는 책임·명명 결정이며 중앙 서비스 신설·분산 런타임·재배정·실물 정책 활성화까지 확정하지 않는다.
+
+이전 isaac_sim 기준선 실패는 당시 기록이다. 현재 HEAD 이전 커밋 `8dda13eec`가 모든 colcon root 스캔으로 수정했으므로, 이번 회차에는 해당 단일 시험을 재실행해 현재 결과를 별도로 기록한다.
+
+### 공식 자료의 반례와 최종 보정
+
+2026-10-03 [Open-RMF task allocation](https://github.com/open-rmf/rmf_demos/blob/main/README.md), [rmf_task Usage](https://github.com/open-rmf/rmf_task#usage), [ROS 2 Actions 설계](https://design.ros2.org/articles/actions.html)를 읽었다. Open-RMF는 Dispatcher의 fleet 선택과 fleet adapter의 작업 실행을 구분한다. 따라서 Fleet 안의 실행 구현 자체가 잘못이라는 보편적 주장은 하지 않는다. ROSY의 추천은 전체 Mission 정본·로봇 집합 조정/범위 실행·장치 로컬 제어의 구분이며 구현 코드의 즉시 격리 명령이 아니다.
+
+D-435 §13에 이 근거와 설계 판단을 추가했다. 일반 인증된 SDK/대시보드의 기존 장치 직접 요청도 MANUAL만으로 좁히지 않는다. 반면 모델 credential에는 실행 경로를 주지 않는다. 이것이 앞선 과도한 일반화를 줄이는 최종 보정이다.
+
+### 3차 검증 결과
+
+- 문서 계약 두 파일과 기존 실패했던 모듈 기준선 단일 시험: 84 passed, 26 existing history warnings. full lint·generated record 검사 포함.
+- isaac_sim 기준선 단일 시험은 현재 통과한다. 수정은 기존 커밋 `8dda13eec`의 작업이며 이번 문서 변경의 효과로 주장하지 않는다.
+- 최종 제목/Proposed/ADR Log, 로컬 링크, diff whitespace와 기존 문서 prefix 보존은 별도 정적 확인한다. 외부 자료 대조와 문서 시험은 실기/운영 수용이 아니다.
+
+## 수용 전 최종 검토 — 2026-10-03
+
+기준 HEAD는 `0bdfaa34220dad224fa49945e8db07dc1c2572cc`이며 위 회차 기록을 유지한다. D-435 끝에 **최종 수용 후보 요약 S1–S7**을 추가했다. 이전 보강을 읽지 않아도 수용 범위·역할표·실행 흐름·권한·증거·기존 ADR 변경 범위·현재 구현 대응·완료 조건을 판단할 수 있도록 정리했다. Proposed 내부에서 상충하는 표현은 요약이 우선하고 기존 Accepted 계약은 계속 유효하다.
+
+이번 회차에서 보완한 마지막 반례는 **정형 공정의 역할과 service principal의 권한**이다. D-403은 Rosy Cell 서비스가 제안/resolve만 하고 이름 있는 사람 운영자가 Job admission을 하도록 정한다. D-435의 일반 요청자 설명을 승인 완화로 읽을 수 없도록 S3에 이 조건·simulation 한정·실물 hold를 명시했다. 같은 프로세스에서 역할을 구현하더라도 다른 principal의 credential을 공유해 권한을 얻지 않는다.
+
+최종 판단은 이름·역할 경계의 결정으로 충분한 범위가 되었으며, 새로운 중앙 실행기·분산 자원 서비스·개명·배포를 이 결론에 포함하면 안 된다는 것이다. 전체 Mission 정본과 Fleet 범위 실행은 구별하되 Fleet 코드 안의 실행 구현을 금지하지 않는다. 고정 셀·기존 직접 장치 요청·formation·UNKNOWN/claim·로컬 안전의 반례를 같은 모델로 설명할 수 있다. 물리 OMX·자동 재배정·복합 로봇·엔벌로프·위임 실행은 기존 미수용 상태로 남는다.
+
+이 기록은 추가 독립 리뷰나 현장 수용을 수행했다는 주장이 아니라 현재 ADR·코드의 정적 대조와 수용 후보의 정리다.
+
+최종 검증: network topology/harness 계약 검사 83 passed, 26 warnings. 경고는 기존 last_verified 이력이다. S1–S7·Proposed 상태·로컬 링크 21개와 git diff --check를 확인했다. 장치/물리 수용 증거는 아니다.
+
+## D-427 진행 중 이전과 함께 재검토 — 2026-10-03
+
+기준 HEAD `e23b8fe26e7d9f4d1ace6e3de80a6031e29f92d6`. 사용자 지정 D-427 계획과 매니페스트, D-425 앱/웹 계획, D-413 v0.2 계획, D-290/D-429/D-434 및 현재 execution/gateway 코드를 대조했다. 매니페스트는 71 root이며 누락 path는 0개다. 68개라는 설명과 “아직 이동 전” 상태는 이전 스냅샷이다. 경로 확인은 wave/artifact 수용 결과가 아니다.
+
+| 선택 | 이득 | 비용/문제 | 판단 |
+|---|---|---|---|
+| D-427 경로 유지 + 논리 역할 설명 정렬 | 진행 중 wave와 기존 설치·원자성을 보존, 혼합 책임을 드러냄 | 현재 Fleet 패키지의 책임 혼합은 남음 | 권고 |
+| 3c에서 범용 원장/dispatch를 새 orchestration 경로로 동시 추출 | 폴더명과 논리 역할이 가까워짐 | 상태·claim·호출자·설치·복구 변경을 경로 이전에 추가, 계획 재합의 필요 | 별도 이행 과제로 유예 |
+| Fleet 의미를 모든 작업·장치로 확대 | 당장 구현명과 일치 | 로봇 조정과 고정 셀·미래 사이트 장치의 의미를 다시 혼합 | 기각 |
+
+앞서 “수용 후보로 충분하다”는 판단은 책임 결정 범위에 한정한다. 진행 중 이전까지 설명하려면 제품/파트/역할/앱/호스트/소스/설치 구분과 혼합 구현 대응이 더 필요했으므로 D-435 S8을 추가했다. 현재 cell_submission은 PlanBundle 검증 데이터를 만들며 권한 부여나 장치 제출을 하지 않는다. rosy_gateway.compose는 기존 Fleet CLI/factory 조합이다. operations/execution과 operations/apps/fleet으로 옮겨도 범용 오케스트레이션 추출 완료는 아니다.
+
+concern은 D-429의 주 관심사 분류이며 모든 세부 책임을 표현하지 않는다. 새 manifest 필드·새 최상위 계층 대신 S8 대응표로 설명한다. ER2 carve는 D-429 예외이며 stop/proposal 트랜잭션과 사람 승인은 유지한다. learning 위치와 모델 PC 배치도 구분한다(D-434).
+
+D-427 부록에 결정 기록의 우선순위, 최신 상태 확인, D-425 기능/설치 gate와 목표 경로 관계를 보강했다. 목적지·Q1–Q9·wave·매니페스트는 변경하지 않았으며 D-435는 Proposed다.
+
+Verification: initial append encoding errors were corrected. Final network/harness/platform-parts/colcon-roots contracts: 107 passed, 26 existing last_verified warnings; 32 local links valid, manifest unchanged, git diff --check passed. No image/device acceptance was performed.

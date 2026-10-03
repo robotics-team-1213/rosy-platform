@@ -20,7 +20,7 @@ gates:
     state: PARKED
   FIELD:
     state: PARKED
-adrs: [D-261, D-341, D-370, D-374, D-377, D-391]
+adrs: [D-261, D-341, D-370, D-374, D-377, D-391, D-432]
 plans:
   - docs/plans/2026-09-26-overhead-camera-android-app-design.md
   - docs/plans/2026-09-30-app-identity-rename-plan.md
@@ -43,6 +43,10 @@ plans:
   4. lint `CustomX509TrustManager` 경고 1건(`FirstContactTrust`)은 D-341 3 첫 접촉 기록 때문에 의도된 것이다.
 
 ## 다음 gate
+
+2026-10-03 D-432: 공통 발견 상한과 소실/재발견 수명 정리, 촬영을 계속하면서 화면 쉬기·
+과열 보호 정책을 구현했다. 기존 Cam 승인 6자리 규약은 유지하며 4자리 통합은 추후 적용한다.
+호스트 JVM/빌드 검증과 실기 화면 off 중 연속 송출·실제 온도 하강은 구별한다. DEVICE/FIELD는 이동하지 않는다.
 
 1. 장치 절차(계획 단계 1 "장치"): 옛 앱 송출 중지·삭제(`adb uninstall io.github.livsbittt.rosy.overhead`), 새 APK 설치, 사이트 QR 또는 D-341 콘솔 승인으로 재페어링, 관제 카메라 패널에서 프레임과 sighting 확인.
 2. 옛 폰을 재사용하면 그 source의 폰 토큰을 교체한다.

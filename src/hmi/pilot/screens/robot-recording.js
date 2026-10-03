@@ -5,7 +5,7 @@
 // "받음"으로 표시하지 않게. 서버 글자로 HTML 을 만들지 않는다(textContent 만).
 
 import {api, apiBlob} from "../client.js";
-import {el} from "./drive-view.js";
+import {el, actionIcon} from "./drive-view.js";
 import {RECORDING_POLL_MS, errorText, recordingView, sheetNotice, sheetRows} from "../recording.js";
 
 const NOTICE_POLLS = 5;            // 거부 사유를 HUD 칩에 남겨 두는 폴링 횟수(약 5 s)
@@ -16,6 +16,7 @@ const FETCH_TIMEOUT_MS = 600_000;  // 받기 한 번의 시한(PILOT_FETCH_MAX_B
 const every = (fn, ms) => { const id = setInterval(fn, ms); return () => clearInterval(id); };
 
 export function mountRobotRecording({toggle, detail, openButton, sheetHost, anchor, save,
+                                     returnFocus = openButton,
                                      request = api, requestBlob = apiBlob, schedule = every} = {}) {
   let active = null;
   let pending = null;          // 진행 중인 시작·정지 요청(Promise)
@@ -111,7 +112,7 @@ export function mountRobotRecording({toggle, detail, openButton, sheetHost, anch
     sheet.remove();
     sheet = null;
     openButton.setAttribute("aria-pressed", "false");
-    if (!disposed) openButton.focus();
+    if (!disposed) returnFocus.focus();
   }
 
   function renderRows(listing, failure) {
@@ -137,12 +138,16 @@ export function mountRobotRecording({toggle, detail, openButton, sheetHost, anch
                                           "aria-live": "polite"}));
       let action;
       if (busy) {
-        const cancel = el("ui-button", "취소", {type: "button", "data-recording-cancel": ""});
+        const cancel = el("ui-button", "받기 취소", {type: "button", "data-recording-cancel": ""});
+        cancel.setAttribute("kind", "quiet");
+        actionIcon(cancel, "close");
         cancel.setAttribute("kind", "quiet");
         cancel.addEventListener("click", () => download?.controller.abort());
         action = cancel;
       } else {
-        const receive = el("ui-button", "받기", {type: "button", "data-recording-fetch": ""});
+        const receive = el("ui-button", "파일 받기", {type: "button", "data-recording-fetch": ""});
+        receive.setAttribute("kind", "quiet");
+        actionIcon(receive, "download");
         receive.setAttribute("kind", "quiet");
         receive.disabled = !row.canFetch || download !== null;
         receive.reason = receive.disabled && row.reason !== message ? row.reason : "";
@@ -204,14 +209,18 @@ export function mountRobotRecording({toggle, detail, openButton, sheetHost, anch
     noticeNode.hidden = true;
     const list = el("div", null, {"data-recordings-list": ""});
     const actions = el("ui-actions");
-    const refresh = el("ui-button", "새로고침", {type: "button", "data-recordings-refresh": ""});
+    const refresh = el("ui-button", "다시 불러오기", {type: "button", "data-recordings-refresh": ""});
+    refresh.setAttribute("kind", "quiet");
+    actionIcon(refresh, "refresh");
     refresh.setAttribute("kind", "quiet");
     refresh.addEventListener("click", () => refreshSheet());
     const close = el("ui-button", "닫기", {type: "button", "data-recordings-close": ""});
     close.setAttribute("kind", "quiet");
+    actionIcon(close, "close");
+    close.setAttribute("kind", "quiet");
     close.addEventListener("click", closeSheet);
     actions.append(refresh, close);
-    sheet.append(head, noticeNode, list, actions);
+    sheet.append(head, el("p", "로봇에 저장된 녹화 파일입니다. 파일 받기는 로봇이 멈춰 있을 때 가능합니다."), noticeNode, list, actions);
     sheetHost.append(sheet);
     shown = "";
     placeSheet();
@@ -233,6 +242,7 @@ export function mountRobotRecording({toggle, detail, openButton, sheetHost, anch
   const stopPolling = schedule(poll, RECORDING_POLL_MS);
 
   return {
+    closeSheet,
     // 나가기: 받는 중이면 끊고, 막 보낸 시작이 있으면 끝나기를 기다린 뒤, 이 기기가 시작한
     // 녹화만 멈춘다(남의 녹화는 그대로 — CORE 도 403 으로 막는다).
     async stopIfOwned() {

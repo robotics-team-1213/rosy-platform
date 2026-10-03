@@ -398,6 +398,29 @@
 - gate 변화: 없음
 - 결정: D-418
 
+
+## 2026-10-03 · uncommitted · feat(link): D-432 주소 없는 장비 접속
+
+- 변경: API Ref v1.89: connection/dev session LAN 진입, 기본 paired·명시적 개발 operator 세션·1h 만료·모드 종료 회수·Host/Origin 제한. SSH 관리자는 전용 Host Agent로 승인한다.
+- 증거: 관련 Python 계약 시험·실제 loopback TLS HTTP/WS 시험을 실행했다. Pilot Android 설치·화면과 실제 로봇 연결·현장 트래픽 수용은 서로 다른 증거다.
+- gate 변화: 실제 장비의 제어·FIELD 관문은 이동하지 않는다.
+- 결정: D-432 2026-10-03 추가 결정.
+
+
+## 2026-10-03 · uncommitted · fix(link): 현재 접속과 후속 코드 규약 구별
+
+- 변경: 사용자 보정으로 4자리 코드 발급·Cam 표시 별칭은 이번 적용에서 제외했다. 현재 로봇 8자·Cam 6자리 규약을 유지하며 D-432에 추후 통합을 기록했다. 실제 Pinky 접속 수정은 진행한다.
+- 증거: 영향받는 Python 2345 passed/84 skipped, quick tier 459 passed/2 skipped, Pilot PWA 87 passed/58 skipped. 코드 규약 보정 뒤 해당 인증·페어링 시험을 다시 실행한다. 공개 검증 기록은 docs/validation/discovery-link-2026-10-03/README.md.
+- gate 변화: Android 설치·실제 CORE 인증 확인은 실제 주행·Cam 화면 off 연속 송출·현장 트래픽 수용과 별개다. DEVICE/FIELD 이동 없음.
+- 결정: D-432 후속 결정: 접속은 지금, 짧은 코드 통합은 추후 적용.
+
+## 2026-10-03 · uncommitted · fix(integration): D-418 SSH와 D-432 연결/UI 계약 통합
+
+- 변경: API Ref는 D-418 v1.89 뒤 D-432 v1.90을 보존하고 app 설명과 문서 pin을 맞췄다. 배포 서비스 목록은 두 SSH 소유자를 모두 포함하면서 기존 1000줄 hard tier를 유지한다. sandbox 시험은 공개 키 helper의 실제 write/read IPC와 양의 디렉터리 시작 조건을 검사한다. 권한을 넓히지 않았다.
+- 증거: native systemd/버전 문서/구조 시험 199 passed/1 skipped. 최종 quick tier와 SSH 영향 범위는 별도 재실행한다.
+- gate 변화: 장치 활성화·물리 주행·FIELD 이동 없음.
+- 결정: D-418와 D-432를 각각의 경로/opt-in 소유권으로 보존한다.
+
 ## 2026-10-04 · uncommitted · feat(api): D-438 `stuck_resolver` 역할과 `STUCK_DECIDE` 권한, API Ref v1.90
 - 변경: `api/grants.py` `STUCK_DECIDE`, `api/deps.py` 역할 순위, `api/v1/line_follow.py` 막힘 답 경로가 `STUCK_DECIDE` 를 요구(`stuck_resolver` 의 `MANUAL` 은 403), `api/v1/auth.py`·`system.py` 역할 목록 문구, `api/app.py` 계약 표기 v1.90
 - 증거: `python -m pytest src/runtime/gateway/test -q` 2025 passed, 16 skipped (2026-10-04 Windows; 첫 실행의 1 failed 는 app.py 계약 표기를 v1.90 으로 올리기 전의 `test_protocol_version_alignment.py` 였고 표기 정정 뒤 통과); `python -m pytest test/test_harness_contracts.py -q` 59 passed

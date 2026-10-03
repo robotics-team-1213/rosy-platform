@@ -106,7 +106,7 @@ UNITS = (
     "rosy-auto-update.service",
     "rosy-auto-update.timer",
     # D-418: SSH access on CORE's request (expiry timer only while a temp login is on).
-    "rosy-ssh-access.service",
+    "rosy-ssh-access.service", "rosy-ssh-pairing.service",
     "rosy-ssh-access.path",
     "rosy-ssh-access-boot.service",
     "rosy-ssh-password-expire.service",

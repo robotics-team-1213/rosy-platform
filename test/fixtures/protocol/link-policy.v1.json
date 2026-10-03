@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "now": "2026-10-03T00:00:00Z",
+  "cases": [
+    {"id":"paired_default","policy":null,"expect":{"accepted":true,"mode":"paired"}},
+    {"id":"paired_explicit","policy":{"mode":"paired"},"expect":{"accepted":true,"mode":"paired"}},
+    {"id":"development_bound","policy":{"mode":"development","site_name":"lab","expires_at":"2026-10-03T01:00:00Z","devices":[{"device_id":"overhead-1","service_type":"_rosy-overhead._tcp","tls_host":"lab.local"},{"device_id":"rosy_01","service_type":"_rosy._tcp","tls_host":"robot-a.local"}]},"expect":{"accepted":true,"mode":"development"}},
+    {"id":"production_denied","deployment":"production","policy":{"mode":"development","site_name":"lab","expires_at":"2026-10-03T01:00:00Z","devices":[{"device_id":"rosy_01","service_type":"_rosy._tcp","tls_host":"robot-a.local"}]},"expect":{"accepted":false}},
+    {"id":"expiry_boundary","policy":{"mode":"development","site_name":"lab","expires_at":"2026-10-03T00:00:00Z","devices":[{"device_id":"rosy_01","service_type":"_rosy._tcp","tls_host":"robot-a.local"}]},"expect":{"accepted":false}},
+    {"id":"unscoped_denied","policy":{"mode":"development"},"expect":{"accepted":false}},
+    {"id":"empty_scope_denied","policy":{"mode":"development","site_name":"lab","expires_at":"2026-10-03T01:00:00Z","devices":[]},"expect":{"accepted":false}},
+    {"id":"ip_host_denied","policy":{"mode":"development","site_name":"lab","expires_at":"2026-10-03T01:00:00Z","devices":[{"device_id":"rosy_01","service_type":"_rosy._tcp","tls_host":"192.0.2.1"}]},"expect":{"accepted":false}},
+    {"id":"unknown_type_denied","policy":{"mode":"development","site_name":"lab","expires_at":"2026-10-03T01:00:00Z","devices":[{"device_id":"rosy_01","service_type":"_other._tcp","tls_host":"robot-a.local"}]},"expect":{"accepted":false}},
+    {"id":"paired_scope_denied","policy":{"mode":"paired","devices":[]},"expect":{"accepted":false}},
+    {"id":"duplicate_identity_denied","policy":{"mode":"development","site_name":"lab","expires_at":"2026-10-03T01:00:00Z","devices":[{"device_id":"rosy_01","service_type":"_rosy._tcp","tls_host":"robot-a.local"},{"device_id":"rosy_01","service_type":"_rosy._tcp","tls_host":"robot-b.local"}]},"expect":{"accepted":false}},
+    {"id":"duplicate_host_denied","policy":{"mode":"development","site_name":"lab","expires_at":"2026-10-03T01:00:00Z","devices":[{"device_id":"rosy_01","service_type":"_rosy._tcp","tls_host":"robot-a.local"},{"device_id":"rosy_02","service_type":"_rosy._tcp","tls_host":"robot-a.local"}]},"expect":{"accepted":false}}
+  ],
+  "permits": [
+    {"id":"trusted_robot","device_id":"rosy_01","service_type":"_rosy._tcp","tls_host":"robot-a.local","authenticated":true,"expected":true},
+    {"id":"untrusted_robot","device_id":"rosy_01","service_type":"_rosy._tcp","tls_host":"robot-a.local","authenticated":false,"expected":false},
+    {"id":"foreign_robot","device_id":"rosy_02","service_type":"_rosy._tcp","tls_host":"robot-a.local","authenticated":true,"expected":false},
+    {"id":"foreign_host","device_id":"rosy_01","service_type":"_rosy._tcp","tls_host":"robot-b.local","authenticated":true,"expected":false},
+    {"id":"expired_robot","device_id":"rosy_01","service_type":"_rosy._tcp","tls_host":"robot-a.local","authenticated":true,"now":"2026-10-03T01:00:00Z","expected":false}
+  ]
+}

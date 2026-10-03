@@ -4785,3 +4785,75 @@
 - 증거: D-290/D-298/D-369/D-399/D-413/D-429와 현재 PlanBundle·cell submission 대조. 단일 팔·수동 조작·운송·formation·미래 컨베이어·복합 로봇·stop 경쟁·불명 Action·독립 셀 반례를 초안에 기록했다.
 - gate 변화: 없음. Proposed만 추가했으며 기존 Accepted 계약과 공개 API·코드·정지 fence·원장·policy dispatch·장치 수용은 변경하지 않는다.
 - 검증: 문서 계약 83 passed/26 existing history warnings(full lint·generated records 포함), D-435 제목/상태/색인 일치·로컬 링크 16개 누락 0·반례 9개·diff whitespace 검사 통과. 이전 isaac_sim 구조 기준선 실패는 별도 미해결이며 이번 문서 검증의 통과 범위에 포함하지 않는다.
+
+## 2026-10-03 · uncommitted · docs: D-431 remote model PC and isolated Pi verification
+
+- 변경: 기존 원격 학습 PC로 실제 차선 TorchScript의 NCNN 변환·제품 intake를 실행하고 후속 증거와 계획 상태를 기록했다. Pi 임시 경로에서 서명 전달·손상 후보 거부·ONNX rollback을 검증했다.
+- 증거: 20프레임 pixel agreement 100%, PC NCNN/ONNX intake 각 380프레임 pass. 실기 격리 SignatureCheck/ModelSlot/rollback pass, 운영 pointer·manifest 전후 동일. 30분 동시 부하는 마지막 기록 표본 1,337.41초를 남긴 뒤 ROS 종료·cleanup 오류로 중단됐고 CPU 진단 ERROR, 마지막 p95 595.41ms였다. 정확한 종료 시간은 미확인이다. 잔여 임시 인증 1개는 API 회수와 readback 완료.
+- gate 변화: 없음. 학습 YOLO·라벨 IoU·provenance·30분 완료·정식 ARM64 release readback은 미완료이며 운영 전환과 ARTIFACT/DEVICE/FIELD 승격은 HOLD다.
+- 결정: D-431. 시스템 OpenCV와 기존 ONNX를 유지한다. 상세 범위는 `validation/pi-ncnn-remote-2026-10-03/README.md`.
+
+## 2026-10-03 · uncommitted · docs: D-435 authority handoff and device pipeline refinement
+
+- 변경: D-435 Proposed에 §8–§12 보강 후보와 검토 문서 3차 기록을 추가했다. 배정/발행/장치 수락·기존 claim 저장·SkillInvocation/Action identity·실행 출력의 Arbiter/Guard 순서·전체 진행 이력에 따른 자원 해제를 구체화했다. 형식 검사와 의미 검증도 구분했다.
+- 증거: dispatch_admission·MissionDispatcher·StepDispatcher·CellJobStore.release_before_send·SkillInvocation 정적 대조. 고정 OMX 대상, robot/workcell/object/pallet 공용 claim, 미발행과 UNKNOWN, 1 Step→1 Action 현재 범위를 확인했다.
+- gate 변화: 없음. Proposed 보강만이며 기존 Accepted 계약·코드·wire·원장·활성화·배포·장치 gate는 변경하지 않는다.
+- 추가 근거: Open-RMF 공식 task allocation/rmf_task Usage와 ROS 2 Actions 설계를 대조했다. Fleet 구현 안의 작업 실행 자체는 금지하지 않고 전체 Mission 정본과 위임 범위를 구분한다. 기존 SDK/대시보드 직접 장치 요청도 MANUAL에 한정하지 않도록 보강했다.
+- 검증: 문서 계약+모듈 기준선 단일 시험 84 passed/26 existing history warnings(full lint·generated records 포함). 기존 isaac_sim 기준선 시험은 상류 8dda13eec 수정 이후 현재 통과하며 이번 변경의 효과로 주장하지 않는다.
+
+## 2026-10-03 · uncommitted · docs: D-435 consolidated acceptance candidate
+
+- 변경: D-435 끝에 최종 수용 후보 요약 S1–S7과 검토 문서 최종 기록을 추가했다. 역할·권한·작업 흐름·원장/claim·증거·기존 ADR 부분 대체/유지·현재 구현 대응·완료 범위를 한 곳에 정리했다.
+- 증거: D-70/D-403·MissionService·목표 증거 경로를 추가 대조했다. 정형 공정 역할은 service principal의 admission 권한이 아니며 Rosy Cell 서비스는 제안/resolve, Job 승인은 이름 있는 사람 operator라는 현재 계약을 명시했다.
+- gate 변화: 없음. D-435는 Proposed이고 기존 Accepted 계약·실행 경로·API·원장·principal·simulation/실물 gate는 변경하지 않는다.
+
+- 최종 검증: network topology/harness 계약 검사 83 passed, 26 warnings(기존 last_verified 이력); S1–S7·Proposed 상태·로컬 링크 21개와 git diff --check 확인. 장치/물리 수용 증거는 아니다.
+
+## 2026-10-03 · uncommitted · docs: align D-435 roles with D-427 migration
+
+- 변경: D-435 S8에 제품/파트/논리 역할과 혼합 구현 대응을 추가했다. D-427 부록에 최신 경로 상태, 속도 우선 결정의 우선순위, D-425 기능/설치 gate 관계를 보강했다. 평가 문서에 세 선택과 권고 근거를 기록했다.
+- 근거: 기준 e23b8fe26, 매니페스트 71 root의 현재 path 누락 0개; execution submission/gateway composition 코드와 D-290/D-413/D-425/D-427/D-429/D-434 정적 대조.
+- gate 변화: 없음. D-435 Proposed 유지; 매니페스트·목표 경로·wave·원장·API·권한·배포 변경 없음. 경로 존재는 wave/artifact 수용 증거가 아니다.
+
+- Verification: initial run caught damaged UTF-8 append text; corrected those additions and regenerated the index. Final network/harness/platform-parts/colcon-roots run: 107 passed, 26 existing last_verified warnings. Local links: 32 valid; manifest unchanged; git diff --check passed.
+
+- Follow-up: added Codex review comments C1-C4 to the D-427 plan, with recommendations, concrete questions and an append-only response format for plan owners. Existing decisions, manifest and wave gates are unchanged.
+
+- Landing preparation: isolated docs/d435-review from main c67f05b5d. Regenerated docs/index.md to include the newer main log entry; initial isolated failures were both the same stale-index check. Existing document content and Proposed status remain unchanged.
+
+
+## 2026-10-03 · uncommitted · feat(link): D-432 주소 없는 장비 접속
+
+- 변경: D-432 구현 부록과 API Ref v1.89에 게임 장비 목록 접속, 내부 bootstrap과 운영 흐름의 차이, 로컬 HTTP 개발 예외·코드4·SSH opt-in을 고정했다.
+- 증거: 관련 Python 계약 시험·실제 loopback TLS HTTP/WS 시험을 실행했다. Pilot Android 설치·화면과 실제 로봇 연결·현장 트래픽 수용은 서로 다른 증거다.
+- gate 변화: 실제 장비의 제어·FIELD 관문은 이동하지 않는다.
+- 결정: D-432 2026-10-03 추가 결정.
+
+
+## 2026-10-03 · uncommitted · fix(link): 현재 접속과 후속 코드 규약 구별
+
+- 변경: 사용자 보정으로 4자리 코드 발급·Cam 표시 별칭은 이번 적용에서 제외했다. 현재 로봇 8자·Cam 6자리 규약을 유지하며 D-432에 추후 통합을 기록했다. 실제 Pinky 접속 수정은 진행한다.
+- 증거: 영향받는 Python 2345 passed/84 skipped, quick tier 459 passed/2 skipped, Pilot PWA 87 passed/58 skipped. 코드 규약 보정 뒤 해당 인증·페어링 시험을 다시 실행한다. 공개 검증 기록은 docs/validation/discovery-link-2026-10-03/README.md.
+- gate 변화: Android 설치·실제 CORE 인증 확인은 실제 주행·Cam 화면 off 연속 송출·현장 트래픽 수용과 별개다. DEVICE/FIELD 이동 없음.
+- 결정: D-432 후속 결정: 접속은 지금, 짧은 코드 통합은 추후 적용.
+
+## 2026-10-03 · uncommitted · docs(adr): Pilot 화면별 개선과 공용 디자인 소유권
+
+- 변경: D-432에 화면별 목적/주 동작/상태/복귀 기준, 조회 전용 카메라, 원본 320×240 경계, 공용 SVG 동작 버튼과 native 색 생성 결정을 추가했다.
+- 증거: 실제 태블릿 화면 직접 확인과 브라우저/JVM 시험은 docs/validation/discovery-link-2026-10-03에 따로 기록한다. 물리 주행/발열 하강/화면 off 연속 송출은 미판정이다.
+- gate 변화: DEVICE/FIELD 이동 없음.
+- 결정: 사용자 최신 지시로 지금 구현하며 4자리 코드 통합만 추후 적용한다.
+
+## 2026-10-03 · uncommitted · fix(integration): D-418 SSH와 D-432 연결/UI 계약 통합
+
+- 변경: API Ref는 D-418 v1.89 뒤 D-432 v1.90을 보존하고 app 설명과 문서 pin을 맞췄다. 배포 서비스 목록은 두 SSH 소유자를 모두 포함하면서 기존 1000줄 hard tier를 유지한다. sandbox 시험은 공개 키 helper의 실제 write/read IPC와 양의 디렉터리 시작 조건을 검사한다. 권한을 넓히지 않았다.
+- 증거: native systemd/버전 문서/구조 시험 199 passed/1 skipped. 최종 quick tier와 SSH 영향 범위는 별도 재실행한다.
+- gate 변화: 장치 활성화·물리 주행·FIELD 이동 없음.
+- 결정: D-418와 D-432를 각각의 경로/opt-in 소유권으로 보존한다.
+
+## 2026-10-03 · uncommitted · docs(ui): D-432 공용 디자인과 설치 검증 마무리
+
+- 변경: Pilot 화면별 점검, 웹 공용 동작 아이콘과 native canonical 색 생성, 실제 태블릿 설치 증거를 D-432/디자인 규칙/검증 기록으로 연결했다. 최신 D-435 문서는 기존 journal prefix를 보존하여 통합했다.
+- 증거: 실제 Pinky 인증·저장 자격 재접속·조회 전용 카메라, native Pilot 30/Cam 318 JVM 시험 통과. 브라우저 마지막 재조작 시험에서 완료 receipt를 목표 ID에 고정했다. 최종 브라우저·문서 검증 결과는 validation/discovery-link-2026-10-03/README.md에 기록한다.
+- gate 변화: 실제 주행·발열 하강·Cam 화면 off 연속 송출·FIELD 수용은 미판정이며 승격하지 않는다.
+- 결정: D-432. 4자리 페어링 통합은 후속 적용이다.

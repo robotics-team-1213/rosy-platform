@@ -101,6 +101,7 @@ def _as_event(frame) -> Optional[dict]:
 class ReferenceSink(Protocol):
     async def send(self, frame: str) -> None: ...
     async def close(self) -> None: ...
+
     async def wait_closed(self) -> BaseException:
         """Resolve when the robot closes the socket; return why (RobotApiError for 4401/4403)."""
         ...
@@ -180,9 +181,13 @@ class HttpRobotClient:
         self.robot_id = endpoint.robot_id
         self._ep = endpoint
         self._owns_http = http is None
+        from fleet.swarm.discovery_transport import DiscoveryTransport, tls_context
+        context = tls_context(endpoint)
+        options = ({'transport': DiscoveryTransport(endpoint)} if endpoint.discovery
+                   else {'verify': context} if context else {})
         # trust_env=False: an environment proxy must never see the Bearer (D-361 9).
         self._http = http or httpx.AsyncClient(base_url=endpoint.base_url, timeout=timeout_s,
-                                               trust_env=False)
+                                               trust_env=False, **options)
 
     # --- REST -----------------------------------------------------------------
 
@@ -323,7 +328,14 @@ class HttpRobotClient:
         import websockets
         from websockets.exceptions import ConnectionClosed
 
-        ws = await websockets.connect(url, proxy=None, logger=_ws_log)
+        from fleet.swarm.discovery_transport import resolve_robot, tls_context
+        context = tls_context(self._ep)
+        options = {'ssl': context} if context else {}
+        if self._ep.discovery:
+            address, port = await resolve_robot(self._ep)
+            from urllib.parse import urlsplit
+            options.update(host=address, port=port, server_hostname=urlsplit(url).hostname)
+        ws = await websockets.connect(url, proxy=None, logger=_ws_log, **options)
         try:
             await ws.send(json.dumps({"type": "auth", "token": self._ep.token}))
         except ConnectionClosed:

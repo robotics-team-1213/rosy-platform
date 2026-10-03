@@ -64,7 +64,7 @@ def test_omx_recording_retry_outcome_stale_camera_and_disposal(tablet_page):
     page.wait_for_timeout(1200)
     assert "기록 시작 실패" in page.inner_text("[data-sim-record-status]")
     page.click("[data-sim-record-start]")
-    page.wait_for_function("document.querySelector('[data-sim-record-status]').textContent.includes('recording')")
+    page.wait_for_function("document.querySelector('[data-sim-record-status]').dataset.state === 'recording'")
     page.select_option("[data-sim-outcome]", "success")
     page.click("[data-sim-record-stop]")
     page.wait_for_function("window.outcome === 'success'")
@@ -106,6 +106,52 @@ def test_omx_hidden_tab_releases_a_seat_acquired_after_visibility_changed(tablet
     assert errors == [], errors
 
 
+@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1", reason="browser opt-in")
+def test_input_preview_stays_live_after_settings_change_and_escape_closes(tablet_page):
+    base_url, page, errors = tablet_page
+    page.goto(f"{base_url}/pilot")
+    page.evaluate("""async () => {
+      const {mountInputs} = await import('/pilot/assets/screens/inputs.js');
+      const root = document.createElement('section'); document.body.replaceChildren(root);
+      window.padAxis = 0.1;
+      Object.defineProperty(navigator, 'getGamepads', {configurable:true,
+        value: () => [{axes:[window.padAxis, 0]}]});
+      mountInputs(root, {onClose: () => root.remove()});
+    }""")
+    page.wait_for_function("document.querySelector('[data-input-preview]').textContent.includes('0.10')")
+    page.get_by_role("button", name="빠름", exact=True).click()
+    page.evaluate("window.padAxis = 0.8")
+    page.wait_for_function("document.querySelector('[data-input-preview]').textContent.includes('0.80')")
+    page.get_by_role("button", name="닫기", exact=True).focus()
+    page.keyboard.press("Escape")
+    assert page.locator("[data-input-preview]").count() == 0
+    assert errors == [], errors
+
+
+@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1", reason="browser opt-in")
+def test_shared_action_icon_preserves_reason_and_button_behavior(tablet_page):
+    base_url, page, errors = tablet_page
+    page.goto(f"{base_url}/pilot")
+    page.evaluate("""async () => {
+      const {actionIcon} = await import('/common/ui.js');
+      const button = document.createElement('ui-button');
+      button.textContent = 'File'; button.setAttribute('kind', 'quiet');
+      button.setAttribute('reason', 'Wait'); button.disabled = true;
+      button.id = 'shared-icon-test'; document.body.append(button);
+      window.iconClicks = 0; button.addEventListener('click', () => window.iconClicks++);
+      actionIcon(button, 'download'); actionIcon(button, 'download');
+    }""")
+    button = page.get_by_role("button", name="File", exact=True)
+    assert button.is_disabled()
+    assert button.locator("svg").count() == 1
+    assert button.locator("small[data-reason]").inner_text() == "Wait"
+    page.evaluate("document.getElementById('shared-icon-test').disabled = false")
+    button.focus()
+    page.keyboard.press("Enter")
+    assert page.evaluate("window.iconClicks") == 1
+    assert errors == [], errors
+
+
 def _free_port() -> int:
     with socket.socket() as sock:
         sock.bind(("127.0.0.1", 0))
@@ -126,8 +172,41 @@ def base_url():
     thread.join(timeout=5)
 
 
+def _click_tool(page, selector):
+    if not page.locator(selector).is_visible():
+        page.click("[data-drive-tools]")
+    page.click(selector)
+
+
 def _gate_value(page) -> str:
-    return page.locator('dl[data-gate-readout] dd').first.inner_text()
+    readout = page.locator('dl[data-gate-readout]')
+    return readout.get_attribute("data-gate-state") or readout.locator("dd").first.inner_text()
+
+
+@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1", reason="browser opt-in")
+def test_camera_can_be_seen_in_emergency_without_engaging_motion(tablet_page):
+    base_url, page, errors = tablet_page
+    previous = dev_server.STATE["mode"]
+    dev_server.STATE["mode"] = "EMERGENCY"
+    before = len(dev_server.MODE_LOG)
+    try:
+        page.goto(f"{base_url}/pilot")
+        page.fill("form[data-pilot-token-form] ui-field input", "devtoken")
+        page.click("form[data-pilot-token-form] ui-button")
+        page.wait_for_selector("[data-camera-preview]")
+        assert page.locator("[data-drive-enter]").evaluate("e => e.disabled")
+        page.click("[data-camera-preview]")
+        page.wait_for_function("document.querySelector('[data-readonly-camera] img')?.naturalWidth > 0")
+        assert dev_server.STATE["mode"] == "EMERGENCY"
+        assert len(dev_server.MODE_LOG) == before
+        page.click("[data-drive-fill]")
+        page.click("[data-drive-fit]")
+        page.click("[data-camera-back]")
+        page.wait_for_selector("[data-camera-preview]")
+        assert len(dev_server.MODE_LOG) == before
+        assert errors == []
+    finally:
+        dev_server.STATE["mode"] = previous
 
 
 @pytest.fixture
@@ -296,7 +375,7 @@ def test_key_released_while_an_input_has_focus_still_stops(tablet_page):
     base_url, page, errors = tablet_page
     _enter_drive(page, base_url)
     log = f"{base_url}/__test__/teleop"
-    page.click("[data-drive-inputs]")
+    _click_tool(page, "[data-drive-inputs]")
     page.wait_for_selector("[data-inputs-panel] input[type=range]")
     page.keyboard.down("KeyW")
     page.wait_for_timeout(400)
@@ -379,6 +458,34 @@ CONTROL_BOXES = """(() => {
 })()"""
 
 
+@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1", reason="browser opt-in")
+@pytest.mark.parametrize("viewport", [(2000, 1200), (1200, 2000)])
+def test_camera_direct_views_pan_crop_and_restore_whole_frame(base_url, viewport):
+    with playwright_sync.sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        page = browser.new_page(viewport={"width": viewport[0], "height": viewport[1]})
+        try:
+            _enter_drive(page, base_url)
+            page.wait_for_function("document.querySelector('[data-drive-frame]').naturalWidth > 0")
+            page.click("[data-drive-fill]")
+            page.wait_for_function("document.querySelector('[data-screen=drive]').dataset.viewMode === 'full'")
+            assert "잘림" in page.inner_text("[data-drive-fact=zoom]")
+            before = page.locator("[data-drive-frame]").evaluate("e => e.style.objectPosition")
+            box = page.locator("[data-drive-view]").bounding_box()
+            page.mouse.move(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
+            page.mouse.down()
+            page.mouse.move(box["x"] + box["width"] / 2 + 100, box["y"] + box["height"] / 2 + 100)
+            page.mouse.up()
+            assert page.locator("[data-drive-frame]").evaluate("e => e.style.objectPosition") != before
+            page.click("[data-drive-fit]")
+            page.wait_for_function("getComputedStyle(document.querySelector('[data-drive-frame]')).objectFit === 'contain'")
+            assert page.locator("[data-drive-fact=zoom]").is_hidden()
+            assert page.locator("[data-drive-frame]").evaluate("e => e.style.objectPosition") == ""
+            assert page.locator("[data-drive-frame]").evaluate("e => e.style.transform") == ""
+        finally:
+            browser.close()
+
+
 @pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
                     reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
 @pytest.mark.parametrize("viewport", [(2000, 1200), (1200, 2000)])
@@ -403,7 +510,7 @@ def test_zoom_cycles_and_always_reports_crop(base_url, viewport):
                 seen.append((label, crop.inner_text() if crop.count() else ""))
                 boxes.append((label, page.evaluate(CONTROL_BOXES)))
                 if step < 5:
-                    page.click("[data-drive-zoom]")
+                    _click_tool(page, "[data-drive-zoom]")
                     page.wait_for_timeout(200)
             stored_zoom = page.evaluate("JSON.parse(localStorage.getItem('rosy.pilot.input')).zoom")
         finally:
@@ -740,7 +847,7 @@ def _settled_polls(page, base_url):
 
 
 def _open_sheet(page):
-    page.click("[data-recordings-open]")
+    _click_tool(page, "[data-recordings-open]")
     row = page.locator(f"[data-recordings-sheet] [data-recording-id='{ROBOT_RECORDING_ID}']")
     row.wait_for()
     return row
@@ -767,7 +874,7 @@ def test_robot_recording_toggle_and_sheet(base_url, viewport):
             _enter_recording_drive(page, base_url)
             assert page.locator("[data-evidence-record]").inner_text().strip() == "화면 녹화"
             assert page.evaluate("document.documentElement.scrollWidth - document.documentElement.clientWidth") <= 0
-            page.click("[data-robot-record]")
+            _click_tool(page, "[data-robot-record]")
             page.wait_for_function(ROBOT_RECORD_STOP)
             page.wait_for_selector("[data-drive-fact=recording]:not([hidden])")
             assert "녹화 0:01 / 10:00" in page.inner_text("[data-drive-fact=recording]")
@@ -782,8 +889,9 @@ def test_robot_recording_toggle_and_sheet(base_url, viewport):
             assert row.locator("[data-recording-fetch]").is_disabled()          # 녹화 중에는 받지 않는다
             assert "녹화 중에는" in page.inner_text("[data-recordings-notice]")
             assert page.get_attribute("[data-recordings-notice]", "aria-live") == "polite"
-            page.click("[data-robot-record]")
+            _click_tool(page, "[data-robot-record]")
             page.wait_for_function("document.querySelector('[data-robot-record]').textContent.trim() === '로봇 녹화'")
+            row = _open_sheet(page)
             _recordings(page, base_url, blocker="ROBOT_MOVING")
             page.click("[data-recordings-refresh]")
             page.wait_for_function("document.querySelector('[data-recordings-notice]').textContent.includes('멈춘 뒤')")
@@ -799,7 +907,7 @@ def test_robot_recording_toggle_and_sheet(base_url, viewport):
             assert _eventually(lambda: _recordings(page, base_url)["log"] == ["start", "stop", "archive", "archive_done"])
             page.keyboard.press("Escape")
             assert page.locator("[data-recordings-sheet]").count() == 0
-            assert page.evaluate("document.activeElement?.hasAttribute('data-recordings-open')")
+            assert page.evaluate("document.activeElement?.hasAttribute('data-drive-tools')")
         finally:
             browser.close()
     assert errors == [], errors
@@ -812,7 +920,7 @@ def test_robot_recording_shows_starting_until_the_writer_records(tablet_page):
     base_url, page, errors = tablet_page
     _enter_recording_drive(page, base_url, starting=True)
     toggle = "[data-robot-record]"
-    page.click(toggle)
+    _click_tool(page, toggle)
     page.wait_for_function(f"document.querySelector('{toggle}').dataset.state === 'starting'")
     assert page.inner_text(toggle).strip() == "녹화 준비 중…"
     assert page.get_attribute(toggle, "aria-pressed") == "true"
@@ -825,18 +933,18 @@ def test_robot_recording_shows_starting_until_the_writer_records(tablet_page):
     assert page.get_attribute(toggle, "kind") is not None
     fact = page.inner_text("[data-drive-fact=recording]")
     assert "아직 기록하지 않습니다" in fact and "0:0" not in fact
-    page.click(toggle)                                     # 준비 중 멈춤은 깨끗한 정지
+    _click_tool(page, toggle)                                     # 준비 중 멈춤은 깨끗한 정지
     page.wait_for_function(f"document.querySelector('{toggle}').textContent.trim() === '로봇 녹화'")
     assert _recordings(page, base_url)["log"] == ["start", "stop"]
-    page.click(toggle)
+    _click_tool(page, toggle)
     page.wait_for_function(f"document.querySelector('{toggle}').dataset.state === 'starting'")
     _recordings(page, base_url, ready=True)                # 기록기가 첫 파일을 열었다
     page.wait_for_function(ROBOT_RECORD_STOP)
     page.wait_for_function("document.querySelector('[data-drive-fact=recording]').textContent.includes('녹화 0:')")
     assert page.get_attribute(toggle, "aria-label") == "로봇 녹화 중지"
-    page.click(toggle)
+    _click_tool(page, toggle)
     page.wait_for_function(f"document.querySelector('{toggle}').dataset.state === 'idle'")
-    page.click(toggle)
+    _click_tool(page, toggle)
     page.wait_for_function(f"document.querySelector('{toggle}').dataset.state === 'starting'")
     page.click("[data-drive-exit]")                        # 준비 중에 나가도 이 기기 녹화는 멈춘다
     assert _eventually(lambda: _recordings(page, base_url)["log"] == ["start", "stop", "start", "stop",
@@ -849,7 +957,7 @@ def test_robot_recording_shows_starting_until_the_writer_records(tablet_page):
 def test_leaving_drive_stops_the_robot_recording_this_device_started(tablet_page):
     base_url, page, errors = tablet_page
     _enter_recording_drive(page, base_url)
-    page.click("[data-robot-record]")
+    _click_tool(page, "[data-robot-record]")
     page.wait_for_function(ROBOT_RECORD_STOP)
     page.click("[data-drive-exit]")
     assert _eventually(lambda: _recordings(page, base_url)["log"] == ["start", "stop"])
@@ -863,7 +971,7 @@ def test_another_devices_recording_is_neither_stopped_nor_stoppable_here(tablet_
     _recordings(page, base_url, reset=True, foreign=True)
     _enter_drive(page, base_url)
     page.wait_for_function(ROBOT_RECORD_STOP)
-    page.click("[data-robot-record]")
+    _click_tool(page, "[data-robot-record]")
     page.wait_for_function("document.querySelector('[data-drive-fact=recording]').textContent.includes('다른 기기가 시작한')")
     page.click("[data-drive-exit]")
     assert _settled_polls(page, base_url)
@@ -876,7 +984,7 @@ def test_another_devices_recording_is_neither_stopped_nor_stoppable_here(tablet_
 def test_a_viewer_is_told_it_needs_an_operator(tablet_page):
     base_url, page, errors = tablet_page
     _enter_recording_drive(page, base_url, role="viewer")
-    page.click("[data-robot-record]")
+    _click_tool(page, "[data-robot-record]")
     page.wait_for_function("document.querySelector('[data-drive-fact=recording]').textContent.includes('운전자(Operator)')")
     row = _open_sheet(page)
     row.locator("[data-recording-fetch]").click()
@@ -1006,10 +1114,10 @@ _ARM_HARNESS = """async (opts) => {
   const {mountArm} = await import('/pilot/assets/screens/arm.js');
   Object.assign(window, {goals: [], grips: [], gripperState: null, cancels: 0, terminal: 'RUNNING', rejections: [], seq: 0, served: new Set(),
     pos: {joint1: 0, joint2: 0, gripper_joint_1: 0}, seatLost: false, forgetGoals: false,
-    mismatchOnce: Boolean(opts.mismatchOnce), started: {}});
+    mismatchOnce: Boolean(opts.mismatchOnce), started: {}, finished: {}});
   const TERMINAL = ['SUCCEEDED', 'REJECTED', 'CANCELED', 'UNKNOWN_HOLD'];
-  const goalState = (id) => opts.settleMs ? (performance.now() - window.started[id] >= opts.settleMs ? 'SUCCEEDED' : 'RUNNING')
-                                          : window.terminal;
+  const goalState = (id) => window.finished[id] ?? (opts.settleMs ? (performance.now() - window.started[id] >= opts.settleMs ? 'SUCCEEDED' : 'RUNNING')
+                                          : window.terminal);
   const current = () => window.goals.at(-1)?.request_id;
   const running = () => Boolean(current()) && !TERMINAL.includes(goalState(current()));
   const refuse = (reason) => { window.rejections.push(reason); throw new Error(`409: {"error":{"message":"${reason}"}}`); };
@@ -1061,7 +1169,8 @@ _ARM_HARNESS = """async (opts) => {
     if (path.endsWith('/cancel')) { window.cancels++; return {state: 'CANCEL_REQUESTED'}; }
     if (path.startsWith('/goals/')) {
       if (window.forgetGoals) throw new Error('404: {"error":{"message":"goal unknown"}}');
-      if (window.settleOnPoll) { window.settleOnPoll = false; window.terminal = 'SUCCEEDED'; window.failNextState = true; }
+      // A receipt settles this goal only; later goals still start RUNNING.
+      if (window.settleOnPoll) { window.settleOnPoll = false; window.finished[decodeURIComponent(path.slice(7))] = 'SUCCEEDED'; window.failNextState = true; }
       return {state: goalState(decodeURIComponent(path.slice(7)))};
     }
     return {};

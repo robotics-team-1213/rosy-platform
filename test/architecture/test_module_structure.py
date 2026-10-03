@@ -216,10 +216,11 @@ SIZE_VERDICTS = {
         "2026-10-01 at 887 after idempotent per-attempt phase projection joined the Mission event transaction",
     ),
     "contracts/foundation/core_common/protocol/schemas.py": (
-        1_321,
+        1_324,
         "accept: the D-18 single contract source — every envelope, event and capability model in one "
         "importable place; re-judged 2026-10-03 at 1240 for the D-413 public CellGoalEvidenceSubmission "
         "re-export, then at 1245 after combining main's D-422 body-stop fields with that one-line export. "
+        "Re-judged 2026-10-03 at 1324 after retaining D-418 models and two bounded D-432 access-contract re-exports; models live in access.py. "
         "re-export. Bounded Cell models live in protocol/cell_goal_evidence.py, with no runtime ownership "
         "or new version pin; the existing zero-growth allowance remains unchanged. "
         "importable place; per-domain schema files would fork the version pin that "

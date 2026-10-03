@@ -92,7 +92,7 @@
     <string name="guide_robots_none">보이는 로봇 없음</string>
 
     <string name="settings_title">연결 설정</string>
-    <string name="settings_link">rosyov:// 링크 붙여넣기</string>
+    <string name="settings_link">연결 링크 또는 개발 연결 설정 붙여넣기</string>
     <string name="settings_link_apply">링크 적용</string>
     <string name="settings_host">현장 PC 주소</string>
     <string name="settings_port">포트</string>
@@ -175,4 +175,7 @@
     <string name="pairing_failed_revoke">콘솔에서 이 카메라 자격을 폐기한 뒤 다시 연결하세요</string>
     <string name="pairing_failed_unanswered">확인 응답을 받지 못했습니다. 콘솔 자격 목록에서 자격 번호 %1$s가 \'활성\'이면 폐기한 뒤 다시 연결하세요</string>
     <string name="pairing_failed_other">연결 요청이 거절됐습니다. (%1$s)</string>
+    <string name="settings_development_active">개발 연결 모드 · %1$s · 만료 %2$s</string>
+    <string name="settings_development_revoke">개발 연결 종료 및 자격 삭제</string>
+    <string name="invalid_development_bootstrap">개발 연결 설정을 확인하세요. 사이트·장치 범위·인증서·자격·만료가 일치해야 합니다.</string>
 </resources>

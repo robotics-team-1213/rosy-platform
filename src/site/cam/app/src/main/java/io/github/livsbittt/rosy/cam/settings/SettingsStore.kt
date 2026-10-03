@@ -12,6 +12,8 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import io.github.livsbittt.rosy.cam.camera.LensChoice
 import java.io.IOException
+import java.time.Instant
+import org.json.JSONObject
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
@@ -31,7 +33,39 @@ class SettingsStore(context: Context) {
     /** The stored record as read: the usable link, plus a salvaged or rejected host for the screen. */
     val stored: Flow<SiteLinkPrefs.Stored> = store.data
         .catch { e -> if (e is IOException) emit(emptyPreferences()) else throw e }
-        .map { prefs -> SiteLinkPrefs.read(values(prefs)) }
+        .map { prefs ->
+            val saved = SiteLinkPrefs.read(values(prefs))
+            val usable = prefs[DEVELOPMENT_POLICY] == null ||
+                (developmentPolicy(prefs) != null && saved.link?.expiresAt?.let { runCatching { Instant.parse(it) > Instant.now() }.getOrDefault(false) } == true)
+            if (usable) saved else SiteLinkPrefs.Stored(null)
+        }
+
+    // Keep the expired scope visible so the operator can revoke it; it is never returned by siteLink.
+    val development: Flow<LinkPolicy?> = store.data.map { prefs ->
+        prefs[DEVELOPMENT_POLICY]?.let { runCatching { LinkPolicy.parse(JSONObject(it), now = Instant.EPOCH) }.getOrNull() }
+    }
+
+    suspend fun importDevelopment(bootstrap: DevelopmentBootstrap) {
+        store.edit { prefs ->
+            // Validate again inside the write: an import preview may have outlived its deadline.
+            LinkPolicy.parse(JSONObject(bootstrap.policyJson))
+            require(Instant.parse(bootstrap.link.expiresAt) > Instant.now()) { "credential expired" }
+            write(prefs, bootstrap.link)
+            prefs[DEVELOPMENT_POLICY] = bootstrap.policyJson
+        }
+    }
+
+    suspend fun revokeDevelopment() {
+        store.edit { prefs ->
+            if (prefs[DEVELOPMENT_POLICY] == null) return@edit
+            decode(prefs)?.let { link -> SiteLinkPrefs.encode(link).keys.forEach { prefs.remove(stringPreferencesKey(it)) } }
+            prefs.remove(DEVELOPMENT_POLICY)
+        }
+    }
+
+    private fun developmentPolicy(prefs: Preferences): LinkPolicy? = prefs[DEVELOPMENT_POLICY]?.let {
+        runCatching { LinkPolicy.parse(JSONObject(it)) }.getOrNull()
+    }
 
     /** The saved site link, or null when nothing usable is saved yet. */
     val siteLink: Flow<SiteLink?> = stored.map { it.link }
@@ -52,10 +86,12 @@ class SettingsStore(context: Context) {
      */
     suspend fun save(pairing: PairingUri, siteName: String? = null, pairingSubnet: String? = null) {
         store.edit { prefs ->
+            require(prefs[DEVELOPMENT_POLICY] == null) { "revoke development link before editing" }
             val link = SiteLink.from(pairing, siteName, pairingSubnet, previous = decode(prefs))
             val reason = SiteLink.validate(link)
             require(reason == null) { "invalid site link field: $reason" }
             write(prefs, link)
+            prefs.remove(DEVELOPMENT_POLICY)
         }
     }
 
@@ -67,8 +103,10 @@ class SettingsStore(context: Context) {
         require(SiteLink.validate(link) == null) { "invalid site link" }
         var previous: SiteLink? = null
         store.edit { prefs ->
+            require(prefs[DEVELOPMENT_POLICY] == null) { "revoke development link before pairing" }
             previous = decode(prefs)
             write(prefs, link)
+            prefs.remove(DEVELOPMENT_POLICY)
         }
         return previous
     }
@@ -117,5 +155,6 @@ class SettingsStore(context: Context) {
 
     private companion object {
         val LENS = stringPreferencesKey("lens")
+        val DEVELOPMENT_POLICY = stringPreferencesKey("development_link_policy")
     }
 }

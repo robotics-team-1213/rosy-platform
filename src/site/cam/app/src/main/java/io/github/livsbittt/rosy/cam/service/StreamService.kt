@@ -50,6 +50,8 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
+import java.time.Instant
 
 /** Why streaming could not run, apart from link errors (those live in [LinkStatus.error]). */
 sealed interface StreamError {
@@ -145,6 +147,14 @@ class StreamService : LifecycleService() {
         sessionJob = lifecycleScope.launch {
             val store = SettingsStore(applicationContext)
             val siteLink = store.siteLink.first()
+            val development = store.development.first()
+            if (development != null && siteLink != null) {
+                val expiry = minOf(development.expiresAt, Instant.parse(siteLink.expiresAt))
+                launch {
+                    delay(java.time.Duration.between(Instant.now(), expiry).toMillis().coerceAtLeast(0))
+                    try { store.revokeDevelopment() } finally { endSession() }
+                }
+            }
             val pairing = siteLink?.toPairing()
             // D-391 1: the site's address is looked up on every (re)connect, never taken from the saved record.
             val resolver = siteLink?.let { SiteResolver(it, NsdSiteBrowser(applicationContext)) }

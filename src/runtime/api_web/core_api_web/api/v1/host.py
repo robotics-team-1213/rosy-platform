@@ -7,7 +7,7 @@ import json
 import math
 from typing import Any, Optional
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request, HTTPException
 from pydantic import BaseModel, Field
 
 from core_api_web.api.v1.common import admin, require_calibration_owner, viewer
@@ -15,7 +15,7 @@ from core_api_web.api.deps import AuthContext, get_services, CoreServicesLike
 from core_api_web.api.host_agent_client import HostAgentClient, TIMEOUT, UNAVAILABLE
 from core_common import robot_state
 from core_common.protocol.evidence import EvidenceState
-from core_common.protocol.schemas import HostStatusEvidence
+from core_common.protocol.schemas import HostStatusEvidence, SshPairRequest
 from . import host_hardware as _host_hardware
 from . import host_ssh as _host_ssh
 
@@ -31,6 +31,20 @@ host_router = APIRouter(prefix="/api/v1/host", tags=["host"])
 host_router.include_router(_host_hardware.hardware_router)
 # D-418: SSH access (administrator only), handed to the root rosy-ssh-access.
 host_router.include_router(_host_ssh.ssh_router)
+
+
+@host_router.post('/ssh/pair')
+def host_ssh_pair(body: SshPairRequest, request: Request, auth: AuthContext = Depends(admin),
+                  svc: CoreServicesLike = Depends(get_services)):
+    if request.url.scheme != 'https' or not (svc.config.get('network') or {}).get('tls'):
+        raise HTTPException(status_code=403, detail='SSH pairing requires authenticated HTTPS')
+    ssh_cfg = (svc.config or {}).get('ssh_pairing', {})
+    agent = HostAgentClient(socket_path=ssh_cfg.get('socket_path', '/run/rosy-host/ssh-pairing.sock'),
+                            timeout_s=5.0)
+    reply = agent.request('ssh.register_key', role='administrator', user_id=auth.token_id,
+                          confirmed=body.confirmed, params={'public_key': body.public_key})
+    return _relay(reply, absent_detail='Host Agent unavailable; SSH key was not registered.')
+
 
 # Keep the status summary built from the hardware module's validated readback.
 _read_small_json = _host_hardware._read_small_json

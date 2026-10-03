@@ -140,3 +140,25 @@ python tools/harness/rosy_harness.py lint
 | T7 | 변환 가능, 운영 HOLD | lane 픽셀 100% 일치. NCNN p95 474.59ms > ONNX 252.22ms, 운영 이전 보류 |
 
 [실행 증거](../validation/pi-ncnn-2026-10-03/README.md). 처음 발견한 기기 ONNX는 QDQ 110개(INT8)여서 별도 FP32 reference를 만들어 비교했다. 전체 ARTIFACT/DEVICE/FIELD gate는 승격하지 않는다.
+
+## 원격 학습 PC 후속 실행 · 2026-10-03
+
+기존 원격 학습 PC의 학습 venv로 실제 차선 TorchScript를 NCNN FP32로 변환했다.
+실제 영상 20프레임 분류 일치율 100%, 최대 logits 차이 0.00003242493이다.
+PC의 기존 녹화 영상 380프레임에서 제품 intake는 NCNN·동일 원본 ONNX 모두 pass였다.
+데이터셋·카메라 provenance와 라벨 IoU는 미확인이므로 운영 배포 자격은 아니다.
+
+Pi 실제 카메라와 CORE·camera·IO 동시 부하는 마지막 기록 표본 1,337.41초를 남긴 뒤
+중단돼 30분 완료에 실패했다. 정확한 종료 시간은 미확인이다. CPU 진단 ERROR,
+마지막 누적 p95 595.41ms, 표본 최고
+77.1°C이며 서비스 재시작은 없었다. ROS 종료 cleanup 오류 뒤 남은 임시 인증은
+별도 API로 회수하고 readback했다. T6는 완료로 표시하지 않는다.
+
+T4의 임시 shadow 실기 서명 전달·손상 후보 거부·ONNX rollback은 통과했다.
+정식 release key·운영 slot 배포 수용은 여전히 미완료다. T5의 이미지/payload
+readback은 추가하지 않았으며 T7의 차선 운영 HOLD도 유지한다.
+
+학습 YOLO는 원격 PC 검색에서도 미발견이다. 다음 순서는 실제 YOLO·평가 입력
+확인, CPU/처리 주기 개선, 30분 재검증, 정식 서명 ARM64 release readback이다.
+기존 ONNX와 OpenCV를 유지하고 ARTIFACT/DEVICE/FIELD gate는 승격하지 않는다.
+상세·격리 서명 전달/rollback 범위는 [후속 실행 증거](../validation/pi-ncnn-remote-2026-10-03/README.md)를 따른다.

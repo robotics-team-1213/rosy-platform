@@ -123,3 +123,33 @@
 - 변경: 페어링 코드의 Kotlin 식별자 `pollSecret`→`pollKey`(`pollSecretSha256`→`pollKeySha256`). 스캐너는 `secret`이 든 이름 뒤 `: String`을 할당으로 본다(Kotlin 타입은 예외 목록에 없음). 선 위 필드 이름 `poll_secret_sha256`는 프로토콜이라 그대로. 50자 넘는 시험 함수 이름은 고엔트로피 토큰으로 잡혀 줄였다(D-256: 호출 지점에서 고친다).
 - 증거: `test_release_boundary_guards.py -k secrets` 통과, `gradlew testDebugUnitTest` 통과.
 - gate 변화: 없음.
+
+
+## 2026-10-03 · uncommitted · feat(link): D-432 주소 없는 장비 접속
+
+- 변경: 자동 발견 큐의 소실/재발견 callback을 닫고 파일 import 비동기 오류를 처리했다. 4자리 표시·공유 fixture 및 316개 JVM 시험/assembleDebug 통과.
+- 증거: 관련 Python 계약 시험·실제 loopback TLS HTTP/WS 시험을 실행했다. Pilot Android 설치·화면과 실제 로봇 연결·현장 트래픽 수용은 서로 다른 증거다.
+- gate 변화: 실제 장비의 제어·FIELD 관문은 이동하지 않는다.
+- 결정: D-432 2026-10-03 추가 결정.
+
+
+## 2026-10-03 · uncommitted · fix(link): 현재 접속과 후속 코드 규약 구별
+
+- 변경: 사용자 보정으로 4자리 코드 발급·Cam 표시 별칭은 이번 적용에서 제외했다. 현재 로봇 8자·Cam 6자리 규약을 유지하며 D-432에 추후 통합을 기록했다. 실제 Pinky 접속 수정은 진행한다.
+- 증거: 영향받는 Python 2345 passed/84 skipped, quick tier 459 passed/2 skipped, Pilot PWA 87 passed/58 skipped. 코드 규약 보정 뒤 해당 인증·페어링 시험을 다시 실행한다. 공개 검증 기록은 docs/validation/discovery-link-2026-10-03/README.md.
+- gate 변화: Android 설치·실제 CORE 인증 확인은 실제 주행·Cam 화면 off 연속 송출·현장 트래픽 수용과 별개다. DEVICE/FIELD 이동 없음.
+- 결정: D-432 후속 결정: 접속은 지금, 짧은 코드 통합은 추후 적용.
+
+## 2026-10-03 · uncommitted · feat(cam): 촬영 유지 화면 쉬기
+
+- 변경: 화면 쉬기·OS severe 발열 보호·구형 기기 배터리 온도 보조 판정·재무장 latch를 추가했다. 미리보기만 내리며 서비스의 카메라·송출 소유권을 유지한다. 수동 force-lock 승인 하나를 사용하고 승인 없는 자동 보호는 OS 화면 대기를 허용한다.
+- 증거: 최종 기존 6자리 규약에서 JVM 318 passed, 0 failure/error/skip, assembleDebug 성공. 읽기 전용 검토 후 잠금 권한 예외를 안전하게 처리했다.
+- gate 변화: 실기 화면 off 중 프레임 지속·발열 감소는 확인하지 않았다. DEVICE/FIELD 유지.
+- 결정: D-432 앱 실행 기기의 발열과 화면 끄기.
+
+## 2026-10-03 · uncommitted · fix(health): 화면 냉각 latch 조회 공유
+
+- 변경: Pilot이 Cam의 공통 냉각 정책 latch를 읽어 과열 중 재접속을 보류한다. 기존 임계와 Cam 캡처/송출 소유권은 유지한다.
+- 증거: Cam testDebugUnitTest/assembleDebug 재실행 성공. 실제 소등/온도 하강은 미검증이다.
+- gate 변화: DEVICE/FIELD 이동 없음.
+- 결정: D-432 앱 실행 기기 발열과 화면 끄기.

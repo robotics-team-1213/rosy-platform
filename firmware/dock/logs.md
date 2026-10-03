@@ -32,3 +32,11 @@
 - gate 변화: 없음. 만충 HOLD·재시도 정책은 도크 실물 이후로 보류 (최소 구성 결정)
 - 결정: 자기 도크에서 자기 센서(리드스위치)는 자기 발등 — 리밋스위치 채택. NTC는 충전기 TS핀 요구 확인 전까지 보류
 - 교훈: 없음
+
+
+## 2026-10-03 · uncommitted · feat(link): D-432 주소 없는 장비 접속
+
+- 변경: ESPmDNS 광고에 공통 product=rosy·role=dock·proto=dock-v1·tls=none TXT를 추가했다. 장치 빌드/업로드/실측 증거는 아니다.
+- 증거: 관련 Python 계약 시험·실제 loopback TLS HTTP/WS 시험을 실행했다. Pilot Android 설치·화면과 실제 로봇 연결·현장 트래픽 수용은 서로 다른 증거다.
+- gate 변화: 실제 장비의 제어·FIELD 관문은 이동하지 않는다.
+- 결정: D-432 2026-10-03 추가 결정.

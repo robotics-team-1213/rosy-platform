@@ -304,3 +304,33 @@
 - 변경: `models.js`(5 s 폴링 `GET /api/v1/vision/models`, 작업·슬롯·판·마지막 오류), 주행 화면 HUD 에 접는 패널, 셸 캐시 키 `2026-10-03-1`, 설치 목록. promote/rollback 은 `rosy_ml` 에만.
 - 증거: `src/hmi/pilot/test` 53 passed, 24 skipped(브라우저 시험은 이 PC 에서 건너뜀).
 - gate 변화: 없음.
+
+
+## 2026-10-03 · uncommitted · feat(link): D-432 주소 없는 장비 접속
+
+- 변경: 태블릿 native shell은 같은 LAN 장비 목록→선택→개발 즉시 접속 또는 4자리 페어링 흐름이다. 설정 파일 UI는 사용자 보정으로 제거했다. 기존 Pilot PWA와 제어 owner를 재사용한다.
+- 증거: 관련 Python 계약 시험·실제 loopback TLS HTTP/WS 시험을 실행했다. Pilot Android 설치·화면과 실제 로봇 연결·현장 트래픽 수용은 서로 다른 증거다.
+- gate 변화: 실제 장비의 제어·FIELD 관문은 이동하지 않는다.
+- 결정: D-432 2026-10-03 추가 결정.
+
+
+## 2026-10-03 · uncommitted · fix(link): 현재 접속과 후속 코드 규약 구별
+
+- 변경: 사용자 보정으로 4자리 코드 발급·Cam 표시 별칭은 이번 적용에서 제외했다. 현재 로봇 8자·Cam 6자리 규약을 유지하며 D-432에 추후 통합을 기록했다. 실제 Pinky 접속 수정은 진행한다.
+- 증거: 영향받는 Python 2345 passed/84 skipped, quick tier 459 passed/2 skipped, Pilot PWA 87 passed/58 skipped. 코드 규약 보정 뒤 해당 인증·페어링 시험을 다시 실행한다. 공개 검증 기록은 docs/validation/discovery-link-2026-10-03/README.md.
+- gate 변화: Android 설치·실제 CORE 인증 확인은 실제 주행·Cam 화면 off 연속 송출·현장 트래픽 수용과 별개다. DEVICE/FIELD 이동 없음.
+- 결정: D-432 후속 결정: 접속은 지금, 짧은 코드 통합은 추후 적용.
+
+## 2026-10-03 · uncommitted · feat(pilot): 공용 규칙으로 화면별 작업 흐름 정리
+
+- 변경: 로봇 목록·연결·조회 전용 카메라·주행 도구·입력 설정·녹화본·OMX SIM을 같은 UI 규칙으로 정리했다. 전체 영상/채우기/잘림 드래그·읽기 쉬운 동작 이름·단일 열린 패널·닫기 초점 복귀를 적용했다. 설정 변경 후 게임패드 미리보기가 멈추는 결함과 실제 태블릿 카메라 높이 0 결함을 수정했다.
+- 증거: 실제 태블릿 목록에서 Pinky 인증/저장 자격 재접속/GET 카메라 전체 영상 확인. 녹화 브라우저 9 passed, 입력/OMX 기록 3 passed, 비상 정지 중 GET 영상 1 passed, 공용 아이콘 키보드/비활성 사유 1 passed. 남은 브라우저 시나리오는 최종 검증 기록에 구별한다.
+- gate 변화: 실제 양의 주행 명령·비상 정지 해제는 실행하지 않았다. DEVICE/FIELD 이동 없음.
+- 결정: D-432 화면별 순차 개선/공용 디자인 소유권.
+
+## 2026-10-03 · uncommitted · test(pilot): 재조작 시험의 새 목표 실행 상태 분리
+
+- 변경: OMX 오류 후 재조작 시험의 완료 receipt를 해당 목표 ID에만 적용한다. 전역 SUCCEEDED가 이후 목표까지 즉시 완료하여 누적 목표 수 2를 지나치던 fixture 결함을 제거했다. 단순 전역 RUNNING 재설정은 이전 목표도 실행 중으로 되살려 거절을 만들므로 사용하지 않는다. 제품 제어 코드는 변경하지 않았다.
+- 증거: 진단 브라우저에서 오류 뒤 조작 가능 복귀, 다음 목표 수락, 거절 없음 확인. 최종 재검증 결과는 docs/validation/discovery-link-2026-10-03/README.md에 기록한다.
+- gate 변화: DEVICE/FIELD 이동 없음.
+- 결정: D-432 공용 UI 최종 검증; 첫 실패와 재실행 결과를 구별한다.
