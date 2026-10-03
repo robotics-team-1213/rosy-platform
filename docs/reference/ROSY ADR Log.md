@@ -429,3 +429,4 @@
 | D-431 | 라즈베리파이 YOLO 추론은 NCNN을 목표로 하고 OpenCV 영상 처리와 학습 모델의 의미를 유지한다 | Accepted (2026-10-03; NCNN export and runtime implemented; device acceptance pending) |
 
 | D-432 | 모든 앱·장치는 공통 발견·연결 규약을 쓰고, 개발 모드에서는 코드 없이 연결한다 | Accepted (2026-10-03, 사용자 승인; 공통 발견·개발 연결 모드·운영 페어링 목표 계약, 문서만; 주소 자동 추종은 신원 검증 전환 후, 구현·DEVICE/FIELD 별도) |
+| D-434 | 모델 PC와 관제 PC를 나눈다 — 모델 PC가 학습 모델 처리와 시뮬레이션(Isaac Sim 5.1)을, 관제 PC는 사이트 스택만 맡는다 | Accepted (2026-10-03, 사용자 결정; 역할 분담·운용 규칙, 모델 PC GPU 학습·NCNN·Isaac 실행과 관제 PC 이전은 미수용) |

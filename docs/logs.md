@@ -4764,3 +4764,10 @@
 - 변경: 구 이미지의 missing state-directory 문제와 PID 1 transient bootstrap, exact d-rule 권한 경계, pending 재시도 및 rollback 녹화 보존을 실행 계획으로 기록했다.
 - 증거: implementation 및 host regression과 연계. 실제 새 payload 자동 적용 수락은 별도 장치 readback 단계다.
 - gate 변화: 없음.
+
+## 2026-10-03 · uncommitted · docs: D-434 model PC and site PC roles, Isaac Sim 5.1, low-memory rules
+- 변경: `docs/adr/D-434-model-pc-and-site-pc-roles.md` 추가(Accepted, 사용자 결정), ADR Log 행, D-322 버전 개정 부록(5.1 유지), `harness.yaml` adr_gaps에 D-433(다른 브랜치) 추가, 교훈 `docs/solutions/workflow-issues/cuda-wheel-install-over-wifi-times-out-on-the-model-pc-2026-10-03.md`
+- 증거: `python tools/harness/rosy_harness.py generate` 뒤 lint·`test/test_harness_contracts.py` 실행
+- gate 변화: 없음(문서만). 모델 PC GPU 학습·NCNN·Isaac 실행, 관제 PC 사이트 스택 이전은 미수용
+- 결정: D-434 Accepted, D-322 부록
+- 교훈: 큰 CUDA wheel 설치는 Wi-Fi에서 uv 기본 timeout으로 끊긴다 — `UV_HTTP_TIMEOUT=600`, 분리 실행, 완료 표식으로 확인
