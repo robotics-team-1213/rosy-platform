@@ -15,6 +15,8 @@ from __future__ import annotations
 import socket
 from typing import Any, Callable, Optional
 
+from core_common.face_screen import DRIVE_EVERY_S, DRIVE_HOLD_S, drive_due  # noqa: F401 - D-433
+
 #: Any routable address works — the probe never sends a packet, it only asks the
 #: OS which local interface would carry one. Google's resolver is a stable
 #: choice that does not have to be reachable.
@@ -23,9 +25,8 @@ _ROUTE_PROBE_TARGET = ("8.8.8.8", 80)
 #: 정보 창이 열려 있는 동안 display/info 재발행 간격 (s).
 REPUBLISH_S = 1.0
 
-#: D-394: 주행 카드 케이던스. 운용 중에만, 얼굴 위로 잠깐 — 20 s 마다 5 s 동안.
-DRIVE_EVERY_S = 20.0
-DRIVE_HOLD_S = 5.0
+#: D-394: 주행 카드 케이던스 — D-433 부터 core_common.face_screen 이 유일한 출처다
+#: (rosy-face·emotion_server 와 같은 값).
 
 
 def republish_due(visible: bool, was_visible: bool, now: float,
@@ -110,18 +111,6 @@ def resolve_api_address(port: Any, *, hostname: Callable[[], str] = socket.getho
 # --- D-394: drive card ------------------------------------------------------
 
 
-def drive_due(mode: Any, now: float, last_pub: Optional[float],
-              every_s: float = DRIVE_EVERY_S) -> bool:
-    """주행 카드를 이 틱에 띄울까 — 운용 중에만, 느리게.
-
-    IDLE 에는 얼굴이 주인이다(표정은 기분이다, 카드는 일이다). EMERGENCY 도
-    운용이다: 멈춰 있는 동안 무엇에 멈춰 있는지가 바로 읽혀야 한다.
-    """
-    if mode is None or mode == "IDLE":
-        return False
-    return last_pub is None or (now - last_pub) >= every_s
-
-
 def drive_payload(snapshot, *, hold_s: float = DRIVE_HOLD_S,
                   goal_x: float = None, goal_y: float = None) -> dict[str, Any]:
     """The `display/info` body of the drive card (`kind: "drive"`).
@@ -156,3 +145,61 @@ def drive_payload(snapshot, *, hold_s: float = DRIVE_HOLD_S,
         "goal_y": round(goal_y, 2) if goal_y is not None and navigating else None,
         "hold_s": round(hold_s, 1),
     }
+
+
+# --- D-433: the face hand-over (/run/rosy/face-inputs.json) ---------------------
+
+
+def face_cautions(snapshot) -> list[str]:
+    """Degradations only CORE knows, as ``face_screen.CAUTION_TEXT`` codes."""
+    codes = []
+    line_follow = getattr(snapshot, "line_follow", None)
+    if line_follow is not None and getattr(line_follow, "mode", "OFF") != "OFF" \
+            and getattr(line_follow, "state", None) == "HOLD":
+        codes.append("line_follow_hold")
+    if snapshot.docking.state.value == "DOCK_FAILED":
+        codes.append("dock_failed")
+    return codes
+
+
+def face_inputs_payload(snapshot, *, face: Optional[str], power_mode: Optional[str],
+                        wake: Optional[dict], written_at: str) -> dict[str, Any]:
+    """What rosy-face draws from (D-433 decision 3); ``face_screen.validate_face_inputs`` reads it.
+
+    The drive card body rides only in an operating mode (the face owns IDLE,
+    D-394) and the wake card only while CORE keeps its window open. Same
+    rounding contract as the cards: ``drive_payload``/``info_payload`` build them.
+    """
+    battery = snapshot.battery
+    mode = snapshot.mode.value
+    drive = None
+    if mode != "IDLE":
+        drive = {key: value for key, value in drive_payload(snapshot).items() if key != "kind"}
+    line_follow = getattr(snapshot, "line_follow", None)
+    return {
+        "schema": 1,
+        "written_at": written_at,
+        "robot_mode": mode,
+        "nav_state": snapshot.navigation.value,
+        "estop": snapshot.safety.estop,
+        "face": face,
+        "power_mode": power_mode.lower() if isinstance(power_mode, str) else None,
+        "activity_kind": snapshot.activity.kind if snapshot.activity is not None else None,
+        "docking_state": snapshot.docking.state.value,
+        "battery_percent": round(battery.percent, 1) if battery.percent is not None else None,
+        "battery_charging": snapshot.battery_status.charging,
+        "line_follow_mode": getattr(line_follow, "mode", None),
+        "line_follow_state": getattr(line_follow, "state", None),
+        "caution": face_cautions(snapshot),
+        "drive": drive,
+        "wake": wake,
+    }
+
+
+def face_inputs_due(content: dict, last_content: Optional[dict], now: float,
+                    last_write: Optional[float], period_s: float) -> bool:
+    """Write on every change, and at least every ``period_s`` so the reader sees CORE alive."""
+    if last_write is None or last_content is None:
+        return True
+    strip = lambda body: {key: value for key, value in body.items() if key != "written_at"}  # noqa: E731
+    return strip(content) != strip(last_content) or (now - last_write) >= period_s

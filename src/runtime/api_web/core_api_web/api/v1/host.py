@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 import json
 import math
+import os
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends
@@ -13,7 +14,7 @@ from pydantic import BaseModel, Field
 from core_api_web.api.v1.common import admin, require_calibration_owner, viewer
 from core_api_web.api.deps import AuthContext, get_services, CoreServicesLike
 from core_api_web.api.host_agent_client import HostAgentClient, TIMEOUT, UNAVAILABLE
-from core_common import robot_state
+from core_common import face_screen, robot_state
 from core_common.protocol.evidence import EvidenceState
 from core_common.protocol.schemas import HostStatusEvidence
 from . import host_hardware as _host_hardware
@@ -523,6 +524,20 @@ def status_inputs(svc: CoreServicesLike) -> dict[str, Any]:
             "battery_warning_percent": _warning_percent(svc), "devices": devices,
             "robot_mode": _robot_mode(snapshot), "nav_state": _nav_state(snapshot),
             "swarm_role": _swarm_role(snapshot), **_idleness_inputs(snapshot)}
+
+
+def write_face_inputs(svc: CoreServicesLike, content: dict[str, Any]) -> None:
+    """D-433: replace rosy-face's hand-over atomically (0644: nothing in it is secret).
+
+    ``content`` is ``core.bridge.display.face_inputs_payload``; rosy-face reads it
+    with ``core_common.face_screen.read_face_inputs`` (owner, size, freshness).
+    """
+    cfg = (svc.config or {}).get("hardware_probe", {}) or {}
+    path = str(cfg.get("face_inputs_path", face_screen.FACE_INPUTS_FILE))
+    _write_private(path, json.dumps(content, sort_keys=True) + "\n", 0o644, "face-inputs")
+    # rosy-core runs with UMask=0027, which turns the 0644 above into 0640; rosy-face
+    # (user rosy-display) must read it, so the mode is set explicitly.
+    os.chmod(path, 0o644)
 
 
 def write_status_inputs(svc: CoreServicesLike) -> None:
