@@ -1351,6 +1351,9 @@ Windows 등 다른 PC의 개인 키를 복사하지 않는다. `cam-screen.json.
 ```bash
 python3 deploy/site/rosy_cam_screen.py status --config /private/path/cam-screen.json
 python3 deploy/site/rosy_cam_screen.py wake --config /private/path/cam-screen.json
+python3 deploy/site/rosy_cam_screen.py light-status --config /private/path/cam-screen.json
+python3 deploy/site/rosy_cam_screen.py light-request --config /private/path/cam-screen.json
+python3 deploy/site/rosy_cam_screen.py light-cancel --config /private/path/cam-screen.json
 ```
 
 CLI는 이미 인증된 연결을 먼저 검사하고, 없으면 ADB mDNS 및 Avahi의
@@ -1367,3 +1370,15 @@ ADB 연결 목록을 확인한다. 발견된 오래된 포트가 응답하지 �
 증가하는 sequence·freshness를 별도로 확인한다. ADB가 끊기거나 무선 디버깅이
 꺼진 경우에는 공식 재연결·페어링 경로를 사용한다. 충전 중 화면 유지와 화면
 제한시간은 전화의 OS 설정이며, 앱의 화면 유지 해제만으로 설정을 덮어쓰지 않는다.
+
+조명은 기본 꺼짐이며 요청 없이 반복 점등하지 않는다. `light-request`는 실행 중인
+Rosy Cam의 공식 `촬영 조명 요청` 버튼만 조작한다. 그 요청 안에서만 저조도를
+판단하고, 요청부터 최대 30초 후 요청과 조명을 모두 종료한다. 이미 요청 중이면
+시간을 연장하지 않으며, `light-cancel`은 즉시 취소한다. 재시작·렌즈 교체·발열
+제한 시 취소하고, 어둡거나 온도가 회복돼도 새 요청 없이 재개하지 않는다.
+
+`light-status`는 화면을 깨우지 않고 서비스의 boolean 상태만 읽는다. 제어 결과의
+`light_requested`는 요청 수락 상태이며 실제 점등은 `torch_on`으로 따로 확인한다.
+조작은 검증된 장치·앱의 최신 UI를 확인하며, 잠긴 보안 화면·미지원 렌즈·발열
+제한·중복/변경 UI는 거절한다. 보안 잠금을 우회하거나 송출을 자동 시작하지 않는다.
+화면 방향 등 UI 배치가 인식 범위를 벗어나면 수동 조작이 필요하다.

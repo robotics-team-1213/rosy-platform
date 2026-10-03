@@ -140,7 +140,7 @@ class StreamService : LifecycleService() {
         val current = _state.value
         val light = current.lighting
         writer.println("rosy_cam_state={\"running\":${current.running},\"light_supported\":${light.supported}," +
-            "\"automatic_light\":${light.enabled},\"torch_on\":${light.torchOn},\"dark\":${light.dark}," +
+            "\"light_requested\":${light.requested},\"torch_on\":${light.torchOn},\"dark\":${light.dark}," +
             "\"light_limited\":${light.message != null},\"photo_saving\":${current.photoSaving}," +
             "\"photo_saved\":${current.photoName != null},\"photo_failed\":${current.photoFailed}}")
     }
@@ -322,7 +322,7 @@ class StreamService : LifecycleService() {
         healthMonitor = null
         _state.update { current ->
             current.copy(running = false, previewOnly = false, health = null, lens = null, lensSwitchFailed = false,
-                photoSaving = false, lighting = LightingStatus(enabled = current.lighting.enabled),
+                photoSaving = false, lighting = LightingStatus(),
                 link = lastLink?.status?.value ?: current.link)
         }
     }
@@ -414,8 +414,8 @@ class StreamService : LifecycleService() {
         private var activeService: StreamService? = null
 
         /** Local activity controls only; no exported command receiver. */
-        fun automaticLight(enabled: Boolean) {
-            activeService?.camera?.setAutomaticLight(enabled)
+        fun requestLight(requested: Boolean) {
+            activeService?.camera?.setLightRequested(requested)
         }
 
         fun savePhoto() {

@@ -54,6 +54,8 @@ class CameraController(
     private val adaptiveQuality = AdaptiveJpegQuality()
     private val main = Handler(Looper.getMainLooper())
     private val lightPolicy = AutoLightPolicy()
+    private val lightRequest = LightRequestWindow()
+    private var lightRequestDeadline: Runnable? = null
     private val photoStore = FramePhotoStore(java.io.File(context.filesDir, "photos"))
     private val photoExecutor = Executors.newSingleThreadExecutor { r -> Thread(r, "cam-photo") }
     private val photoBusy = AtomicBoolean(false)
@@ -145,13 +147,27 @@ class CameraController(
         preview.setSurfaceProvider(surfaceProvider)
     }
 
-    fun setAutomaticLight(enabled: Boolean) {
-        if (lighting.enabled == enabled) return
-        lighting = lighting.copy(enabled = enabled, message = null)
+    fun setLightRequested(requested: Boolean) {
+        if (lighting.requested == requested || stopped) return
+        if (requested && (!lighting.supported || thermalBlocked)) { emitLighting(); return }
+        lightRequestDeadline?.let(main::removeCallbacks)
+        lightRequestDeadline = null
+        lightRequest.cancel()
+        lighting = lighting.copy(requested = requested, message = null)
         torchFailure = false // An explicit operator toggle may retry a failed camera control.
         torchOffFailed = false
         lightPolicy.reset(SystemClock.elapsedRealtime())
-        if (!enabled) requestTorch(false, force = true) else evaluateLight()
+        if (!requested) requestTorch(false, force = true) else {
+            lightRequest.start(SystemClock.elapsedRealtime())
+            val epoch = generation
+            val deadline = Runnable {
+                lightRequestDeadline = null
+                if (!stopped && generation == epoch) setLightRequested(false)
+            }
+            lightRequestDeadline = deadline
+            main.postDelayed(deadline, LightRequestWindow.DURATION_MS)
+            evaluateLight()
+        }
         emitLighting()
     }
 
@@ -159,8 +175,7 @@ class CameraController(
         if (thermalBlocked == blocked) return
         thermalBlocked = blocked
         if (blocked) {
-            lightPolicy.update(-1, SystemClock.elapsedRealtime(), lighting.enabled,
-                lighting.supported, true, lighting.torchOn)
+            setLightRequested(false)
             requestTorch(false, force = true)
         } else evaluateLight()
         emitLighting()
@@ -248,7 +263,7 @@ class CameraController(
                     torchOffDeadline?.let(main::removeCallbacks)
                     torchOffDeadline = null
                 }
-                if (lighting.torchOn && (!lighting.enabled || thermalBlocked || torchFailure)) {
+                if (lighting.torchOn && (!lighting.requested || thermalBlocked || torchFailure)) {
                     requestTorch(false, force = true)
                 } else if (lighting.torchOn && requestedTorch != false) armTorchDeadline(epoch)
                 emitLighting()
@@ -359,9 +374,13 @@ class CameraController(
 
     private fun evaluateLight() {
         val now = SystemClock.elapsedRealtime()
+        if (lighting.requested && !lightRequest.active(now)) {
+            setLightRequested(false)
+            return
+        }
         val sample = latestLuma?.takeIf { it.generation == generation && now - it.atMs in 0..1000 }
         lighting = lighting.copy(dark = sample != null && sample.value <= 28)
-        val desired = lightPolicy.update(sample?.value ?: -1, now, lighting.enabled,
+        val desired = lightPolicy.update(sample?.value ?: -1, now, lighting.requested,
             lighting.supported, thermalBlocked, lighting.torchOn)
         if (!torchFailure) requestTorch(desired)
         emitLighting()
@@ -379,7 +398,7 @@ class CameraController(
     private fun requestTorch(on: Boolean, force: Boolean = false) {
         val bound = camera ?: return
         if (!on && torchOffFailed) return // Failed off commands require an explicit toggle/rebind, not a frame loop.
-        if (!lighting.supported || (on && (thermalBlocked || !lighting.enabled || torchFailure))) return
+        if (!lighting.supported || (on && (thermalBlocked || !lighting.requested || torchFailure))) return
         if (requestedTorch == on || (!force && requestedTorch == null && lighting.torchOn == on)) return
         if (!on) { torchDeadline?.let(main::removeCallbacks); torchDeadline = null }
         val epoch = generation
@@ -422,9 +441,8 @@ class CameraController(
         val task = Runnable {
             torchDeadline = null
             if (stopped || generation != epoch) return@Runnable
-            // Invalid ambient sample deliberately ends the latch and starts cooldown.
-            lightPolicy.update(-1, SystemClock.elapsedRealtime(), lighting.enabled,
-                lighting.supported, thermalBlocked, lighting.torchOn)
+            // A request ends completely; darkness cannot rearm it.
+            setLightRequested(false)
             requestTorch(false, force = true)
         }
         torchDeadline = task
@@ -446,6 +464,9 @@ class CameraController(
     }
 
     private fun releaseLighting() {
+        lightRequestDeadline?.let(main::removeCallbacks)
+        lightRequestDeadline = null
+        lightRequest.cancel()
         synchronized(photoStore) { generation++; photoStore.clear() }
         latestLuma = null
         lastLumaNs = 0L
@@ -471,7 +492,7 @@ class CameraController(
         camera = null
         torchObserver = null
         lightPolicy.reset(SystemClock.elapsedRealtime())
-        lighting = lighting.copy(supported = false, torchOn = false, dark = false, message = null)
+        lighting = lighting.copy(requested = false, supported = false, torchOn = false, dark = false, message = null)
         emitLighting()
     }
 
