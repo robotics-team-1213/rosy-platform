@@ -280,8 +280,8 @@
 
 ## 최근 기록
 
+- 2026-10-04 · uncommitted · docs(ui): 호환 확인·정지·세션 수명 검증과 후속 화면 규칙
 - 2026-10-04 · uncommitted · docs(ui): D-439 카메라 확대·운용 확인 검증과 준비·정비의 개별 판정
 - 2026-10-04 · uncommitted · docs(ui): 교통 정책 검증과 나머지 화면 판정
 - 2026-10-04 · uncommitted · docs(ui): 기본 진입 검증과 패널별 결함 기록
 - 2026-10-04 · uncommitted · docs(ui): D-439 공용 작업 선택 검증과 진입 범위
-- 2026-10-04 · uncommitted · site(D-441): automatic site stack updates

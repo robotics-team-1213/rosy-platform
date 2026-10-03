@@ -28,13 +28,13 @@
 | 1 | 현재 제품 웹 전체 기준선 | `src/hmi/web_common/surfaces.yaml`, `src/hmi/dashboard/panels.yaml` | 초기 기준선/전체 source 목록 확인; 기능별 추가 상태는 해당 작업에서 점검 |
 | 2 | 공용 작업 선택·상태·초점 규칙 | `src/hmi/web_common/{task-chooser.js,task-chooser.css}` | 구현·독립 검토 완료 `15e8742b4`; 전체 회귀는 최종 통합에서 확인 |
 | 3 | 로그인·역할 진입 | `src/hmi/dashboard/{index.html,surface.html,surface-navigation.js}` | 구현·독립 검토·집중 회귀 완료 `4e8cbe92d`; 전체 회귀는 최종 통합 |
-| 4 | 로봇 운용 7패널 | `src/hmi/dashboard/panels/console/`, `shell/` | 카메라·운용 확인 `da3021b64`, 지도·상태 후속 `59b3803fe` 완료; 호환 확인창 대기 |
+| 4 | 로봇 운용 7패널 | `src/hmi/dashboard/panels/console/`, `shell/` | 카메라·운용 확인 `da3021b64`, 지도·상태 후속 `59b3803fe`, 호환 확인·자격/페이지 소유권 `b1dce38fe` 완료 |
 | 5 | 작업 준비 5패널 | `src/hmi/dashboard/panels/setup/`, `shell/` | 교통 정책 `5b590cb37`, 나머지 수정·유지 판정 `59b3803fe` 완료 |
 | 6 | 설치·정비 7패널 | `src/hmi/dashboard/panels/{host,system}/`, `shell/` | 목적·결과·미확인 구분 및 개별 유지 판정 `59b3803fe` 완료 |
 | 7 | Fleet 관제 | `src/site/fleet/fleet/server/web/{index.html,console.js,styles.css}` | 대기 |
 | 8 | Fleet 기기 등록·카메라 설치 | `src/site/fleet/fleet/server/web/{install.html,install.js,enrollment.js,camera-pairing.js}` | 대기 |
 | 9 | 게임 보드 | `src/site/games/games/web/{index.html,board.js,styles.css}` | 대기 |
-| 10 | 진단·시뮬 도구와 공용 styleguide | `src/runtime/sensing/web/diagnostic.html`, `src/sim/gz_sim/scripts/lane_live_view.html`, `src/hmi/dashboard/styleguide.html` | 대기 |
+| 10 | 진단·시뮬 도구·작성 틀과 Pilot 웹 실패 화면 | `src/runtime/sensing/web/diagnostic.html`, `src/sim/gz_sim/scripts/lane_live_view.html`, `src/hmi/dashboard/styleguide.html`, `src/hmi/web_common/template.html`, `src/hmi/pilot/` | 대기 |
 | 11 | 전체 회귀·최신 main 통합·로컬 병합 | 영향받는 host/browser/node 계약과 quick tier | 대기 |
 
 ### Task 1: 전체 화면 기준선과 구현 우선순위
