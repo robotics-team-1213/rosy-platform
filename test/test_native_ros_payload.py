@@ -200,7 +200,9 @@ def test_required_source_resolver_rejects_a_name_duplicated_across_roots(tmp_pat
 
     assert result.returncode != 0
     assert "duplicate package name control" in result.stderr
-    assert _resolve(workspace, required, ["src", "../outside"]).returncode != 0
+    escaped = _resolve(workspace, required, ["src", "../outside"])
+    assert escaped.returncode != 0
+    assert "escapes the source root" in escaped.stderr
 
 
 def test_required_package_file_matches_the_locked_offline_payload():

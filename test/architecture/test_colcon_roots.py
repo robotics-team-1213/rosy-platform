@@ -15,6 +15,7 @@ import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
+import pytest
 import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -31,31 +32,47 @@ FROZEN_ROS_PACKAGES = frozenset({
     "rosy_cell", "rosy_vision", "sensor_adc", "web_common",
 })
 
-#: Every tracked file that runs colcon or rosdep over the ROSY sources reads the roots
-#: through the reader. Value: how its colcon/rosdep lines must name them.
-SHELL_CONSUMERS = {
-    ".github/workflows/ci.yml": "--base-paths $COLCON_ROOTS",
-    ".github/workflows/arm64-rehearsal.yml": "--base-paths $COLCON_ROOTS",
-    "tools/build_wsl.sh": "--base-paths $COLCON_ROOTS",
-    "tools/sync_api_restart.sh": "--base-paths $COLCON_ROOTS",
-    "tools/sync_rosy.sh": "--base-paths $COLCON_ROOTS",
-    "tools/sync_rosy_fast.sh": "--base-paths $COLCON_ROOTS",
-    "deploy/robot/pinky_pro/image/build-native-payload.sh": '--base-paths "${COLCON_ROOTS[@]}"',
-    "deploy/robot/pinky_pro/image/build-image.sh": '--colcon-roots "$COLCON_ROOTS"',
+#: Every tracked file whose colcon/rosdep lines run over the ROSY colcon roots. Value: a
+#: pattern each such (non-comment) line must carry, so a second, bare call cannot slip in.
+CONSUMERS = {
+    ".github/workflows/ci.yml": r"--base-paths \$COLCON_ROOTS\b",
+    ".github/workflows/arm64-rehearsal.yml": r"--base-paths \$COLCON_ROOTS\b",
+    "tools/build_wsl.sh": r"--base-paths \$COLCON_ROOTS\b",
+    "tools/sync_api_restart.sh": r"--base-paths \$COLCON_ROOTS\b",
+    "tools/sync_rosy.sh": r"--base-paths \$COLCON_ROOTS\b",
+    "tools/sync_rosy_fast.sh": r"--base-paths \$COLCON_ROOTS\b",
+    "deploy/robot/pinky_pro/image/build-native-payload.sh":
+        r'(--base-paths "\$\{COLCON_ROOTS\[@\]\}"|--from-paths "\$\{ROSDEP_ROOTS\[@\]\}")',
+    # The roots arrive from build-image.sh (--colcon-roots); rosdep runs over the resolver's
+    # closure of them. test_image_customization_contract.py runs the copy block.
+    "deploy/robot/pinky_pro/image/customize-rootfs.sh": r'--from-paths "\$\{ROSDEP_SOURCE_PATHS\[@\]\}"',
 }
-#: Files that run colcon/rosdep but not over the repo's colcon roots.
-NOT_ROOT_CONSUMERS = {
+#: Files with an invocation-looking line that does not run over the repo's colcon roots.
+EXEMPT = {
     # Container workspaces built from per-package COPY lines; moves edit those COPY sources.
-    "deploy/robot/pinky_pro/Dockerfile",
-    # Upstream OMX sources fetched into /opt/omx_ws; no ROSY package.
-    "deploy/robot/omx/Dockerfile",
-    # Receives the roots from build-image.sh (--colcon-roots); checked in
-    # test_image_customization_contract.py by running its copy block.
-    "deploy/robot/pinky_pro/image/customize-rootfs.sh",
-    # Documents the command in a comment; checked below.
-    "env.sh",
+    "deploy/robot/pinky_pro/Dockerfile": "per-package COPY into /opt/rosy_ws",
+    "deploy/robot/omx/Dockerfile": "upstream OMX sources in /opt/omx_ws",
+    "src/contracts/foundation/core_common/profile.py": "error-message text",
+    "src/runtime/sensing/control/web_node.py": "docstring",
+    "src/site/fleet/package.xml": "XML comment",
+    # Tests pin consumer text; none runs colcon or rosdep.
+    "test/architecture/test_colcon_roots.py": "this test",
+    "test/test_ci_dependencies.py": "asserts on ci.yml",
+    "test/test_image_customization_contract.py": "asserts on image scripts",
+    "test/test_native_ros_payload.py": "asserts on the payload script",
+    "test/test_native_systemd_contract.py": "asserts on the payload script",
+    "test/test_omx_workstation.py": "asserts on the OMX Dockerfile",
+    "test/test_payload_build_speed.py": "asserts on the payload script",
 }
-_INVOCATION = re.compile(r"colcon (build|list)|rosdep install --from-paths")
+_INVOCATION = re.compile(
+    r"\bcolcon\b.*\b(build|list|test)\b|rosdep\b.*--from-paths|[\"']colcon[\"']")
+_COMMENT = re.compile(r"^\s*(#|//|<!--|::|REM\b|rem\b)")
+
+
+def _is_evidence(name: str) -> bool:
+    """Recorded text that quotes commands but never runs them."""
+    return (name.endswith(".md") or name.startswith("docs/validation/")
+            or "/evidence/" in name or name.endswith((".log", ".txt", ".jsonl")))
 
 
 def _load(name: str, path: Path):
@@ -86,27 +103,50 @@ def test_reader_cli_prints_the_roots_space_separated():
     assert completed.stdout.split() == _manifest_roots()
 
 
+def _invocation_lines() -> dict[str, list[tuple[int, str]]]:
+    tracked = subprocess.run(["git", "ls-files", "-z"], cwd=ROOT, capture_output=True,
+                             check=True).stdout.decode("utf-8").split("\0")
+    hits: dict[str, list[tuple[int, str]]] = {}
+    for name in filter(None, tracked):
+        path = ROOT / name
+        if _is_evidence(name) or not path.is_file():
+            continue
+        data = path.read_bytes()
+        if b"\0" in data[:8192]:
+            continue  # binary
+        for number, line in enumerate(data.decode("utf-8", errors="replace").splitlines(), 1):
+            if _INVOCATION.search(line) and not _COMMENT.match(line):
+                hits.setdefault(name, []).append((number, line.strip()))
+    return hits
+
+
+def test_every_colcon_invocation_is_a_consumer_or_exempt():
+    hits = _invocation_lines()
+
+    unclassified = {name: lines for name, lines in hits.items() if name not in CONSUMERS and name not in EXEMPT}
+    assert unclassified == {}, "read the roots via tools/harness/colcon_roots.py or add an EXEMPT reason"
+    for name, pattern in CONSUMERS.items():
+        assert name in hits, f"{name} no longer invokes colcon/rosdep; drop it from CONSUMERS"
+        bare = [(number, line) for number, line in hits[name] if not re.search(pattern, line)]
+        assert bare == [], (name, bare)
+    assert sorted(set(EXEMPT) - set(hits)) == [], "stale EXEMPT entries"
+
+
 def test_every_colcon_consumer_reads_the_one_root_list():
     roots = _manifest_roots()
-    tracked = subprocess.run(["git", "ls-files", "--", ".github", "deploy", "tools", "env.sh"],
-                             cwd=ROOT, capture_output=True, text=True, check=True).stdout.split()
-    invoking = set()
-    for name in tracked:
-        if name.endswith(".md") or "/test/" in name:
-            continue
-        text = (ROOT / name).read_text(encoding="utf-8", errors="replace")
-        if any(_INVOCATION.search(line) and not line.lstrip().startswith("#") for line in text.splitlines()):
-            invoking.add(name)
 
-    assert invoking - set(SHELL_CONSUMERS) - NOT_ROOT_CONSUMERS == set()
-    for name, base_paths in SHELL_CONSUMERS.items():
+    for name in CONSUMERS:
         text = (ROOT / name).read_text(encoding="utf-8")
-        assert "harness/colcon_roots.py" in text, name
-        assert base_paths in text, name
         assert "--base-paths src" not in text and "cd src\n" not in text, name
         assert "src/install" not in text and "src/build" not in text, name
         # --log-base is a global option: `colcon build ... --log-base log` is an argparse error.
         assert not re.search(r"(?<!colcon )--log-base", text), name
+        if name.endswith("customize-rootfs.sh"):
+            assert '--colcon-roots) COLCON_ROOTS_ARG="${2:-}"' in text
+        else:
+            assert "harness/colcon_roots.py" in text, name
+    build = (ROOT / "deploy/robot/pinky_pro/image/build-image.sh").read_text(encoding="utf-8")
+    assert "harness/colcon_roots.py" in build and '--colcon-roots "$COLCON_ROOTS"' in build
     assert "colcon_roots.py" in (ROOT / "env.sh").read_text(encoding="utf-8")
 
     # Python consumers.
@@ -114,6 +154,17 @@ def test_every_colcon_consumer_reads_the_one_root_list():
     assert impact.COLCON_ROOT_PREFIXES == tuple(f"{root}/" for root in roots)
     contracts = _load("robot_contracts_roots", ROOT / "test" / "robot_contracts.py")
     assert contracts.COLCON_ROOTS == tuple(roots)
+
+
+def test_reader_rejects_nested_or_unsafe_roots(tmp_path):
+    reader = _load("colcon_roots_reader_cases", READER)
+    manifest = tmp_path / "platform_parts.yaml"
+    for bad in ("[src, src/x]", "[learning/envs, learning]", "[src, src]", "[]", "[../src]", "[build]"):
+        manifest.write_text(f"schema: x\ncolcon_roots: {bad}\n", encoding="utf-8")
+        with pytest.raises(ValueError):
+            reader.colcon_roots(manifest)
+    manifest.write_text("colcon_roots: [src, src_extra, learning]\n", encoding="utf-8")
+    assert reader.colcon_roots(manifest) == ("src", "src_extra", "learning")
 
 
 def _package_locations() -> dict[str, list[str]]:

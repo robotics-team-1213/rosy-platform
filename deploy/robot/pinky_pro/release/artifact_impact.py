@@ -18,7 +18,11 @@ from pathlib import Path
 
 
 def _colcon_roots() -> tuple[str, ...]:
-    """D-427: the native payload builds every colcon root in the platform manifest."""
+    """D-427: the native payload builds every colcon root in the platform manifest.
+
+    Loads tools/harness/colcon_roots.py from this file's own checkout, so the module
+    is not copy-portable: run it from a repository tree.
+    """
     reader = Path(__file__).resolve().parents[4] / "tools" / "harness" / "colcon_roots.py"
     spec = importlib.util.spec_from_file_location("rosy_colcon_roots", reader)
     module = importlib.util.module_from_spec(spec)

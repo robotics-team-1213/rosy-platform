@@ -34,6 +34,12 @@ def colcon_roots(manifest: Path = MANIFEST) -> tuple[str, ...]:
         if (path.is_absolute() or ".." in path.parts or path.as_posix() != root
                 or not re.fullmatch(r"[A-Za-z0-9_./-]+", root) or path.parts[0] in COLCON_OUTPUT):
             raise ValueError(f"colcon root must be a plain repo-relative directory: {root!r}")
+    # A root inside another would make colcon find its packages twice.
+    for outer in roots:
+        for inner in roots:
+            outer_parts, inner_parts = PurePosixPath(outer).parts, PurePosixPath(inner).parts
+            if outer != inner and inner_parts[:len(outer_parts)] == outer_parts:
+                raise ValueError(f"colcon root {inner!r} is nested in {outer!r}")
     return roots
 
 

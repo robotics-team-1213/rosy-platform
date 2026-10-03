@@ -28,7 +28,7 @@ COLCON_OUTPUT = {"build", "install", "log"}
 
 #: A walk that finds nothing would pass every closure check; refuse it. Today: 37
 #: non-test launch files (`*.launch.py`, `*_launch.xml`, ...) under the roots.
-MIN_LAUNCH_FILES = 37
+MIN_LAUNCH_FILES = 37  # update when a launch file is legitimately removed
 
 
 def _source_files(pattern: str):

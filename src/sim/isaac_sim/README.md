@@ -13,7 +13,7 @@
 ```bash
 source /opt/ros/jazzy/setup.bash
 export ROSY_REPO=/path/to/rosy-os
-source "$ROSY_REPO/src/install/setup.bash"
+source "$ROSY_REPO/install/setup.bash"
 export ROS_DOMAIN_ID=41
 export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp  # or use the same supported RMW as CORE
 python3 "$ROSY_REPO/src/sim/isaac_sim/prepare_urdf.py" --output /scratch/rosy-isaac/rosy.urdf

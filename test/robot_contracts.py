@@ -51,7 +51,7 @@ COLCON_ROOTS = tuple(yaml.safe_load(
 COLCON_OUTPUT = frozenset({"build", "install", "log"})
 
 #: A walk that finds nothing passes every "for each package" check; refuse it.
-MIN_SOURCE_MANIFESTS = 27
+MIN_SOURCE_MANIFESTS = 27  # update when a package is legitimately removed
 
 
 def source_manifests() -> list[Path]:
