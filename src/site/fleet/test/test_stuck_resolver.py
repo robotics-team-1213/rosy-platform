@@ -145,3 +145,67 @@ def test_offline_and_estop_robots_are_left_alone():
     assert r.step(0.0, [_row(stuck=_stuck(), online=False)]) == []
     assert r.step(0.0, [_row(stuck=_stuck(), estop=True)]) == [
         Escalate("rosy_01", "stuck-1", "estop")]
+
+
+def test_row_without_mode_keeps_the_chain():
+    r = StuckResolver(ResolverConfig(escalate_after_s=60.0))
+    me = _row("rosy_01", _stuck(), pose=(0.0, 0.0, 0.0))
+    peer = _row("rosy_02", None, pose=(0.20, 0.0, 3.14))
+    a = r.step(0.0, [me, peer])[0]
+    r.sent(a, 0.0)
+    r.result(a, code="STUCK_DECISION_REFUSED")
+    partial = _row("rosy_01", _stuck(), pose=(0.0, 0.0, 0.0))
+    del partial["state"]["line_follow"]["mode"]
+    r.step(1.0, [partial, peer])
+    assert r.step(2.0, [me, peer])[0].rule == "R2"                    # R1 stays retired
+    assert r.step(61.0, [me, peer]) == [Escalate("rosy_01", "stuck-1", "deadline")]
+
+
+def test_restuck_after_resume_without_a_closed_poll():
+    r = StuckResolver(ResolverConfig())
+    r.sent(Answer("rosy_01", "stuck-1", "RESUME", "R1"), 0.0)
+    assert r.step(1.0, [_row(stuck=_stuck("stuck-2"))]) == [
+        Escalate("rosy_01", "stuck-2", "restuck_after_resume")]
+
+
+def test_transport_resend_counts_once_against_the_budget():
+    r = StuckResolver(ResolverConfig(rule_budget=2))
+    a = r.step(0.0, [_row(stuck=_stuck())])[0]
+    r.sent(a, 0.0)
+    r.result(a, code="ROBOT_UNREACHABLE")
+    r.sent(a, 1.0)
+    r.result(a, code=None)
+    r.step(2.0, [_row(stuck=None)])
+    assert isinstance(r.step(3.0, [_row(stuck=_stuck("stuck-2"))])[0], Answer)
+
+
+def test_active_calibration_escalates():
+    r = StuckResolver(ResolverConfig())
+    row = _row(stuck=_stuck())
+    row["state"]["activity"] = {"kind": "CALIBRATING"}
+    assert r.step(0.0, [row]) == [Escalate("rosy_01", "stuck-1", "calibration")]
+
+
+def test_r1_reach_covers_the_peer_body():
+    r = StuckResolver(ResolverConfig())
+    me = _row("rosy_01", _stuck(), pose=(0.0, 0.0, 0.0))
+    peer = _row("rosy_02", None, pose=(0.35, 0.0, 3.14))
+    assert r.step(0.0, [me, peer]) == [Answer("rosy_01", "stuck-1", "WAIT", "R1")]
+
+
+def test_late_reply_from_an_older_chain_is_ignored():
+    r = StuckResolver(ResolverConfig(restuck_s=30.0))
+    old = r.step(0.0, [_row(stuck=_stuck("stuck-1"))])[0]
+    r.sent(old, 0.0)
+    r.step(1.0, [_row(stuck=None)])
+    r.step(40.0, [_row(stuck=_stuck("stuck-2"))])                    # new chain
+    assert r.result(old, code="CALIBRATION_ACTIVE") is None
+
+
+def test_claims_are_pruned_when_the_chain_ends():
+    r = StuckResolver(ResolverConfig(restuck_s=30.0))
+    r.claim("rosy_01", "stuck-1")
+    r.step(0.0, [_row(stuck=_stuck("stuck-1"))])
+    r.step(1.0, [_row(stuck=None)])
+    r.step(40.0, [_row(stuck=None)])
+    assert r._claims == set()

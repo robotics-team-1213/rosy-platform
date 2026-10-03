@@ -29,6 +29,7 @@ class ResolverConfig:
     # Own half width (Pinky 0.057 m) + a peer's rotation radius (0.083 m), rounded up.
     # ponytail: one body size for every robot; read per-robot geometry when kinds differ.
     peer_band_half_width_m: float = 0.15
+    peer_radius_m: float = 0.083          # reach is measured to the peer's body, not its centre
 
 
 @dataclass(frozen=True)
@@ -56,7 +57,7 @@ class _Chain:
     stuck_id: Optional[str] = None
     closed_at: Optional[float] = None
     rule_answers: int = 0
-    resumed: bool = False
+    resume_id: Optional[str] = None                  # stuck id the resolver answered RESUME
     retired: set = field(default_factory=set)
     answered: set = field(default_factory=set)       # stuck ids with an answer in flight/done
     retries: dict = field(default_factory=dict)      # stuck id -> transport resends
@@ -71,7 +72,7 @@ def _stuck_of(row: Mapping) -> Optional[dict]:
 
 
 def _mode_of(row: Mapping) -> str:
-    return str(((row.get("state") or {}).get("line_follow") or {}).get("mode") or "OFF")
+    return str(((row.get("state") or {}).get("line_follow") or {}).get("mode") or "")
 
 
 def _pose_of(row: Mapping) -> Optional[tuple[float, float, float]]:
@@ -99,16 +100,18 @@ class StuckResolver:
         if chain is None:
             chain = self._chains[answer.robot_id] = _Chain(started_at=now, mode="")
         chain.answered.add(answer.stuck_id)
-        if answer.rule.startswith("R"):
-            chain.rule_answers += 1
+        if answer.rule.startswith("R") and chain.retries.get(answer.stuck_id, 0) == 0:
+            chain.rule_answers += 1                   # a transport resend is the same answer
         if answer.decision == "RESUME":
-            chain.resumed = True
+            chain.resume_id = answer.stuck_id
 
     def result(self, answer: Answer, *, code: Optional[str]) -> Optional[Escalate]:
         """CORE's reply: None code = accepted. Returns an escalation when one is due."""
         chain = self._chains.get(answer.robot_id)
         if chain is None or code is None or code == MISMATCH:
             return None
+        if answer.stuck_id != chain.stuck_id and answer.stuck_id not in chain.answered:
+            return None                               # late reply from an older chain
         if code == REFUSED:
             chain.retired.add(answer.rule)
             chain.answered.discard(answer.stuck_id)
@@ -137,10 +140,11 @@ class StuckResolver:
             return None
         stuck, mode = _stuck_of(row), _mode_of(row)
         chain = self._chains.get(rid)
-        if chain is not None and (mode != chain.mode and chain.mode
+        if chain is not None and (mode and chain.mode and mode != chain.mode
                                   or (chain.closed_at is not None
                                       and now - chain.closed_at > self.config.restuck_s)):
-            chain = self._chains.pop(rid)          # mode changed or the window passed
+            del self._chains[rid]                  # mode changed or the window passed
+            self._claims = {c for c in self._claims if c[0] != rid}
             chain = None
         if stuck is None:
             if chain is not None and chain.closed_at is None:
@@ -152,14 +156,16 @@ class StuckResolver:
         elif not chain.mode:
             chain.mode = mode
         if chain.stuck_id != sid:
-            new = chain.stuck_id is None and chain.closed_at is not None
             chain.stuck_id, chain.closed_at = sid, None
-            if new and chain.resumed:
+            if chain.resume_id is not None and sid != chain.resume_id:
                 return self._escalate(chain, rid, sid, "restuck_after_resume")
         if (rid, sid) in self._claims or sid in chain.escalated:
             return None
-        if ((row.get("state") or {}).get("safety") or {}).get("estop"):
+        state = row.get("state") or {}
+        if (state.get("safety") or {}).get("estop"):
             return self._escalate(chain, rid, sid, "estop")
+        if state.get("activity"):                  # attended calibration lease (D-321)
+            return self._escalate(chain, rid, sid, "calibration")
         if now - chain.started_at > self.config.escalate_after_s:
             return self._escalate(chain, rid, sid, "deadline")
         if sid in chain.answered:
@@ -210,6 +216,6 @@ class StuckResolver:
                 continue
             dx, dy = pose[0] - x0, pose[1] - y0
             ahead, side = c * dx + s * dy, -s * dx + c * dy
-            if 0.0 < ahead <= self.config.peer_reach_m and abs(side) <= self.config.peer_band_half_width_m:
+            if 0.0 < ahead <= self.config.peer_reach_m + self.config.peer_radius_m and abs(side) <= self.config.peer_band_half_width_m:
                 return True
         return False
