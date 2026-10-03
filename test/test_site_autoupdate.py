@@ -404,3 +404,33 @@ def test_config_requires_https_health_and_known_keys(tmp_path):
         path.write_text(json.dumps({**good, **bad}), encoding="utf-8")
         with pytest.raises(upd.ConfigError, match=message):
             upd.load_config(path)
+
+
+ROOT = Path(__file__).resolve().parents[1]
+SITE = ROOT / "deploy" / "site"
+
+
+def test_units_run_the_installed_updater_on_a_persistent_randomized_timer():
+    service = (SITE / "rosy-site-autoupdate.service").read_text(encoding="utf-8")
+    timer = (SITE / "rosy-site-autoupdate.timer").read_text(encoding="utf-8")
+
+    assert ("ExecStart=/usr/bin/python3 -I /usr/local/lib/rosy-site/rosy_site_autoupdate.py run"
+            in service)
+    assert "/opt/rosy/candidate/" not in service  # never runs code from the candidate
+    assert "Type=oneshot" in service and "NoNewPrivileges=yes" in service
+    assert "ProtectSystem=full" in service
+    assert "ReadWritePaths=/etc/rosy/site /opt/rosy /var/lib/rosy /run/lock" in service
+    assert "OnCalendar=*:0/15" in timer and "RandomizedDelaySec=" in timer
+    assert "Persistent=true" in timer and "WantedBy=timers.target" in timer
+
+
+def test_runbook_explains_install_pause_and_manual_rollback():
+    readme = (SITE / "README.md").read_text(encoding="utf-8")
+    section = readme[readme.index("### Automatic updates (D-440)"):
+                     readme.index("### Backup and restore operations")]
+
+    for needle in ("register_auto_sign_task.ps1", "Disable-ScheduledTask",
+                   "systemctl disable --now rosy-site-autoupdate.timer", "forget-failed",
+                   "--source-ref refs/heads/main", "/usr/local/lib/rosy-site/",
+                   "ln -sfn /opt/rosy/candidates/<previous-commit>", "D-412"):
+        assert needle in section, needle
