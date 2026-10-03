@@ -4938,3 +4938,9 @@
 - 변경: peer D-441 사이트 후보 workflow의 새로 들어온 옛 경로를 manifest 대상 경로로 바꿨다. bench recorder의 일시 프로세스 가시성 실패는200ms뒤 재확인하고 확정 이유만 남기며 고정 startup deadline과 cleanup은 유지했다.
 - 증거: 기존 enforced push3 main3 failed/12381 passed, perception2836 passed이며 push는 거부됐다. deterministic transient startup RED 후 관련48 passed·NEW0, 독립 경로20/startup2 passed·APPROVE. docs/validation/d427-source-migration/push3-gate-corrections-2026-10-04.md.
 - gate 변화: 없음. 다음 SHA enforced gate·CI·artifact·device는 별도이며 이전 실패를 통과로 바꾸지 않는다.
+
+## 2026-10-04 · uncommitted · D-427 Pinky safety source integration
+
+- 변경: 검증된 계약 타입·실제 wheel 전달 source·Pinky 원본 single-use 래퍼와 push3 경로/recorder 수정 커밋을 Accepted ADR·U1/U3·신호/충전/POLICY 후보에 합쳤다. 기존 append 로그는 보존하고 이번 suffix만 LF로 정리했다.
+- 증거: 최종 관련255 passed, NEW0. docs/validation/d427-source-migration/pinky-safety-integration-2026-10-04.md에 승인된 원본/통합 커밋 대응을 고정했다. 이전 실패 push를 통과로 쓰지 않는다.
+- gate 변화: 없음. 최신 committed SHA enforced push·CI·ARM64/SD/033 parity·서명 release·DEVICE/FIELD는 계속 별도 gate다.

@@ -277,8 +277,8 @@
 
 ## 최근 기록
 
-- 2026-10-04 · uncommitted · D-427 immediate safety integration checkpoint
-- 2026-10-04 · uncommitted · D-442 U2 publisher identity static gate
-- 2026-10-04 · uncommitted · D-442 U3 owner 선점과 named 운영 복구
-- 2026-10-04 · uncommitted · D-442 POLICY 운영 설정 guard
-- 2026-10-04 · uncommitted · D-443 Q8 charging safety tag
+- 2026-10-04 · uncommitted · D-427 Pinky safety source integration
+- 2026-10-04 · uncommitted · D-427 push3 follow-up corrections
+- 2026-10-04 · uncommitted · D-442 U2 Pinky single-use binding
+- 2026-10-04 · uncommitted · D-442 release contract delivery source
+- 2026-10-04 · uncommitted · D-442 ROS-free motion contract wheel
