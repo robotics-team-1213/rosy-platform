@@ -56,6 +56,7 @@ class NsdSiteBrowser(context: Context) : SiteBrowser {
     private inner class Session(private val match: (SiteSighting) -> Boolean) {
         private val guard = Any()
         private val executor = Executors.newSingleThreadScheduledExecutor()
+        private val callbackExecutor = NsdCallbackExecutor(executor)
         private val byService = linkedMapOf<String, SiteSighting>()
         private val pending = ArrayDeque<NsdServiceInfo>()
         private val retried = mutableSetOf<String>()
@@ -128,9 +129,14 @@ class NsdSiteBrowser(context: Context) : SiteBrowser {
             synchronized(guard) {
                 if (stopped) return
                 callbacks += callback
+                // Registration and stop share a lock: stop cannot unregister
+                // this callback before Android has actually registered it.
+                runCatching { nsd.registerServiceInfoCallback(serviceInfo, callbackExecutor, callback) }
+                    .onFailure {
+                        callbacks.remove(callback)
+                        Log.w(TAG, "registerServiceInfoCallback failed", it)
+                    }
             }
-            runCatching { nsd.registerServiceInfoCallback(serviceInfo, executor, callback) }
-                .onFailure { Log.w(TAG, "registerServiceInfoCallback failed", it) }
         }
 
         private fun enqueue(serviceInfo: NsdServiceInfo) {

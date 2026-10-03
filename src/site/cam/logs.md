@@ -123,3 +123,10 @@
 - 변경: 페어링 코드의 Kotlin 식별자 `pollSecret`→`pollKey`(`pollSecretSha256`→`pollKeySha256`). 스캐너는 `secret`이 든 이름 뒤 `: String`을 할당으로 본다(Kotlin 타입은 예외 목록에 없음). 선 위 필드 이름 `poll_secret_sha256`는 프로토콜이라 그대로. 50자 넘는 시험 함수 이름은 고엔트로피 토큰으로 잡혀 줄였다(D-256: 호출 지점에서 고친다).
 - 증거: `test_release_boundary_guards.py -k secrets` 통과, `gradlew testDebugUnitTest` 통과.
 - gate 변화: 없음.
+
+## 2026-10-03 · uncommitted · fix(cam): NSD 탐색 종료 뒤 늦은 콜백이 앱을 중단하지 않는다
+
+- 원인: Galaxy S21(Android 15)의 NSD가 탐색 종료·콜백 해제 뒤에도 `ConnectivityThread`에서 이미 종료된 scheduler로 콜백을 전달해 `RejectedExecutionException`을 냈다.
+- 변경: NSD에 전달하는 순수 Kotlin executor가 종료된 scheduler의 거절을 흡수한다. 등록과 종료가 같은 잠금을 사용해 실제 등록 전에 해제가 먼저 실행되는 경쟁도 막는다. 인증서 고정·토큰·선 위 계약은 그대로다.
+- 증거: 늦은 콜백 JVM 시험이 수정 전 같은 예외로 실패했고, 수정 후 전체 JVM 309 passed 및 debug APK 빌드가 성공했다. 설치된 S21과 새 APK의 서명자 SHA-256이 같음을 확인한 뒤 `install -r` 했으며 저장된 설정은 바이트 단위로 동일했다. 공식 UI에서 송출 중지·시작을 3회 반복해 같은 프로세스가 유지됐고 FATAL 예외는 0건이었다. 마지막 재시작 뒤 실제 JPEG seq가 46에서 52로 증가했다. 실제 사이트 수신은 63초 동안 10/10 HTTP 200, 증가하는 seq, 1280×720 실제 JPEG, age 102–430 ms였다. 수신 JPEG의 CPU ArUco 진단은 마커 없음으로 나왔고 Fleet 위치 원장은 비어 있었다. 위치·현장 수용을 주장하지 않는다.
+- gate 변화: SOURCE/LOCAL GO 유지. 이 수정의 S21 송출 수신만 확인했으며 전체 D-341/D-391 DEVICE 행렬과 FIELD는 PARKED 유지. 실제 주소·토큰·상세 증거는 공개 문서에 적지 않고 X:에 두었다.

@@ -64,7 +64,7 @@ modules:
     functional_kind: pytest
     functional: [src/site/cell/test]
   - name: palletizing
-    path: modules/processes/palletizing
+    path: operations/processes/palletizing
     tests: [test/test_platform_palletizing_compat.py, test/architecture/test_platform_dependency_boundaries.py]
     functional_kind: pytest
     functional: [test/test_platform_palletizing_compat.py]

@@ -2172,3 +2172,15 @@
 - 증거: `test_image_layer_sync.py`(이주·롤백 5건, 변이 2종 빨강 확인), `test_rosy_auto_update.py`(표시·복원 5건), `test_release_push_entrypoint.py`, `test_native_systemd_contract.py`, `test_device_surface_contract.py`, `test_hw_test.py` 통과.
 - gate 변화: 없음. 페이로드 빌드·실기 미실행.
 - 결정: D-433 (Proposed)
+
+## 2026-10-03 · uncommitted · fix: publish readable public DNS-SD XML
+
+- Change: chmod public Fleet/overhead advertisement XML to 0644 before atomic rename. NamedTemporaryFile defaults to 0600; that hides the XML from unprivileged Avahi even though the metadata is public. Keep credentials and TLS trust out of the advertisement.
+- Evidence: the actual new POSIX regression ran against streamed source on a Linux host; before the fix it failed at the pre-rename 0644 assertion, after the fix both Fleet and overhead passed with umask 0077 and an existing 0600 file. Scratch files were automatically removed; no operational files changed.
+- Gate: SOURCE/LOCAL fix only. Parent coordinator owns persistent publisher installation, advertiser restart and device discovery/readback.
+## 2026-10-03 · uncommitted · fix(site): Fleet NSS mDNS resolver closure
+
+- 변경: Fleet 이미지에 libnss-mdns와 `.local` 우선 NSS 조회를 포함하고 실행 중인 호스트 Avahi 디렉터리를 읽기 전용으로 연결한다. 일반 Docker DNS는 유지하고 누락 경로는 자동 생성하지 않는다. 고정 IP 없이 hostname/TLS 검증을 보존한다.
+- 증거: 집중 배포 시험 61 passed, flake8/diff 검사 통과. 디렉터리를 단일 소켓 연결로 바꾼 mutation은 실패했고 원본 복구 후 2 passed. 실제 사이트 candidate의 UID 10001/read-only/cap-drop ALL 실행에서 두 로봇 hostname과 fleet/vision/proxy 조회를 확인했다. Avahi 연결 없는 negative control은 실패했고 가상 Avahi 소켓 교체 후 동일 이름의 새 주소 조회를 확인했다.
+- 범위: 현재 Fleet 앱 이미지에 NSS만 추가한 candidate를 만들었다. 운영 root 설정 설치와 Fleet 재생성, 인증된 장치 연결은 coordinator의 별도 단계이며 이 기록은 그 완료를 주장하지 않는다.
+- gate 변화: SOURCE/LOCAL 및 후보 컨테이너의 이름 조회 검증 완료. 운영 Fleet 등록과 로봇 연결은 관리자 적용 이후 별도 확인한다.

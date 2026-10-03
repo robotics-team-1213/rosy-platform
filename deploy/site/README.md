@@ -226,6 +226,43 @@ the last scan and logs the loss once, because new-robot discovery and
 AP advertisements are excluded. On a VLAN or Wi-Fi with multicast/client
 isolation, use the existing manual endpoint and outbound FleetAgent path.
 
+#### User discovery fallback without administrator access
+
+When the site account already has `Linger=yes`, a running user systemd manager,
+and access to the existing Avahi daemon, discovery can start at boot through
+user units. This opt-in fallback does not install Avahi, change the firewall,
+enable linger, or replace the system units above. Stop existing temporary user
+advertisers before installing; active system discovery services and readable
+system Avahi ROSY XML advertisements cause a refusal. The known broken
+root-owned `0600` XML files are left untouched and do not block this explicit
+fallback; Avahi cannot read them. Failed root services and an enabled timer
+without a working scanner also do not prevent the fallback.
+
+Copy `install-user-discovery.py`, `mdns-bridge.py`, and `fleet-mdns.py` to one
+directory readable by the site account. Select the same discovery secret that
+Fleet actually uses and its public site CA, then run as that account:
+
+```bash
+python3 install-user-discovery.py --enable-user-fallback \
+  --tls-host <certificate-hostname.local> --port 8443 \
+  --ca-file <site-ca.crt> --token-file <selected-discovery-secret>
+systemctl --user status rosy-user-mdns-bridge.service
+systemctl --user list-timers rosy-user-mdns-bridge.timer
+```
+
+The installer stores one token as `0600` and the public CA as `0644` under the
+user-owned `0700` directory `~/.local/share/rosy/site-discovery`. Advertisers
+`rosy-user-fleet-advertise.service` and `rosy-user-overhead-advertise.service`
+use the existing common TXT contracts and certificate hostname. The bridge
+timer runs every 15 seconds with `AccuracySec=1s` to stay within Fleet's 45-second
+scanner lease, and reuses the same strict TLS verification and
+loopback connection code. Secrets never appear in unit files or arguments.
+User units have the account's ordinary permissions; they do not inherit the
+root bridge's OS-level IP firewall restrictions. Loopback is enforced by the
+unchanged bridge implementation. Verify a fresh Fleet discovery scan and both
+DNS-SD records after reboot. Before returning to system discovery, disable the
+three user units with `systemctl --user disable --now` and their names above.
+
 For a 4–10 robot site, boot all cards on the same LAN and confirm one distinct
 row per device, no duplicate-name conflict, all configured devices eventually
 show **confirmed**, and newly initialized cards remain **registration pending**.
@@ -234,6 +271,15 @@ repeat the scan. A registered `.local` endpoint follows the changed address;
 an IP-pinned `robots.yaml` entry needs an operator update and is never
 silently rewritten from untrusted mDNS. The LAN test does not replace pairing, CORE health, or
 physical motion acceptance.
+
+Fleet 이미지에는 `libnss-mdns`가 포함된다. 컨테이너는 호스트의 실행 중인
+Avahi `/run/avahi-daemon` 디렉터리를 읽기 전용으로 연결하고 NSS로 `.local`
+주소를 조회한다. 디렉터리 연결은 Avahi 재시작으로 교체된 소켓도 따른다.
+호스트 Avahi와 소켓 접근 권한이 필요하며, 경로가 없으면 Compose가 시작을
+거부한다. 일반 Docker 서비스 이름은 계속 DNS로 조회한다. 이미지와 Compose를
+함께 갱신한 뒤 Fleet 실행 UID로 `socket.getaddrinfo` 또는 `getent hosts`를
+사용해 로봇 `.local` 이름과 `fleet`/`vision`/`proxy`를 확인한다. `nslookup`은
+NSS를 거치지 않는다. TLS CA와 원래 hostname 검증은 그대로 유지한다.
 
 All HTTPS hops verify the configured site CA. The same site certificate must
 contain these DNS SANs: the operator-facing FQDN, the stable Ubuntu host's
@@ -374,7 +420,14 @@ in the private `/etc/rosy/site/site.env`; Compose reads it there and the
 advertise units get it through `/run/rosy-site/site-public.env`. Set `ROSY_SITE_TLS_HOST` to the same `<hostname>.local` name in
 the site certificate SAN. Install `fleet-mdns.py` at `/opt/rosy/site/fleet-mdns.py`,
 copy `rosy-fleet-advertise.service` and `rosy-overhead-advertise.service` to
-`/etc/systemd/system/`, then run:
+`/etc/systemd/system/`.
+
+The publisher atomically installs public advertisement XML with mode `0644`
+so the unprivileged Avahi daemon can read it, even with a `0077` umask.
+After upgrading an older publisher, restart the advertise services to
+replace any existing `0600` advertisements with readable files.
+
+Then run:
 
 ```sh
 sudo systemctl daemon-reload

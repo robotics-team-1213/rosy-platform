@@ -108,3 +108,15 @@
 - D-387(개정 대상), D-388, D-225, D-145, D-197/D-198, D-389
 - `docs/solutions/runtime-errors/payload-activation-left-core-on-the-old-release-2026-10-01.md`
 - `docs/solutions/workflow-issues/release-cycle-time-one-release-per-deployment-2026-10-01.md`
+
+### 운영자 요청에 따른 대기시간 변경 (2026-10-03)
+
+운영자가 두 로봇의 자동 배포에서 불필요한 순차 대기를 제거하도록 요청했다.
+새로 발행하는 서명 rollout의 `wave_delay_s` 기본값은 600초에서 0초로 변경한다.
+카나리 성공 후 `canary_ok=true`가 되면 나머지 로봇은 추가 관찰 대기 없이 다음 updater 실행에서 적용한다.
+필요한 배포에는 `--wave-delay-s <seconds>`로 관찰 대기를 지정할 수 있다.
+
+이미 발행한 rollout은 `--resume --open-wave-now`로 지연 값만 0으로 다시 서명할 수 있다.
+이 명령은 서명 검증과 `canary_ok=true`를 요구하며 철회 상태, payload 해시, source revision,
+카나리 목록과 발행 시각을 유지한다. 동시 변경을 발견하면 덮어쓰지 않는다.
+로봇의 IDLE·정지·주행/도킹/교정 없음, hold, 배터리, claim 조건과 건강 판정은 그대로 적용한다.
