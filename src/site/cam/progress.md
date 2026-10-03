@@ -2,23 +2,23 @@
 module: cam
 logical_modules: []
 owner: SITE
-last_verified: { commit: "uncommitted", date: 2026-10-03 }
+last_verified: { commit: "uncommitted", date: 2026-10-04 }
 gates:
   SOURCE:
     state: GO
-    evidence: "2026-10-03 NSD late callback lifecycle fix: rejection-tolerant callback executor and serialized registration/stop. JVM 309 passed, 0 failures; late-callback regression first failed with RejectedExecutionException. Wire names and pinned CA trust unchanged."
+    evidence: "2026-10-04 bounded automatic torch and private stream snapshot/share; observed TorchState, frame-independent 30 s watchdog, thermal/off-failure session cleanup. JVM 326 passed, 0 failures/errors, independent source review approved. Wire names and pinned CA trust unchanged."
     cmd: "cd src/site/cam && gradlew testDebugUnitTest"
   LOCAL:
     state: GO
-    evidence: "2026-10-03 testDebugUnitTest and assembleDebug succeeded (Windows, JDK 21), JVM 309 passed. APK signer matched the installed Galaxy S21 app before install -r; app-private settings were preserved byte-for-byte. Build/cache/evidence outputs stayed on X:."
-    cmd: "cd src/site/cam && gradlew testDebugUnitTest assembleDebug"
+    evidence: "2026-10-04 testDebugUnitTest, assembleDebug and lintDebug succeeded on Windows/JDK 21; JVM 326 passed. Same-signer Galaxy S21 install -r preserved pairing settings byte-for-byte. Build/cache/private evidence outputs stayed on X:."
+    cmd: "cd src/site/cam && gradlew testDebugUnitTest assembleDebug lintDebug"
   ROS-SIM:
     state: N/A
   ARTIFACT:
     state: N/A
   DEVICE:
     state: PARKED
-    evidence: "2026-10-03 Galaxy S21 received pinned-site camera frames for 63 s: 10/10 HTTP 200, strictly increasing sequence, real 1280x720 JPEGs, age 102-430 ms; three stop/start cycles retained one process with no fatal crash. This closes this fix's live camera receipt only; the complete D-341/D-391 device matrix remains pending. No surveyed marker/position acceptance."
+    evidence: "2026-10-04 Galaxy S21 standard rear lens: actual automatic torch ON/OFF/re-ON while Dozing, real recognizable rotated snapshot saved. Pinned-site receipt for 63 s: 10/10 HTTP 200, sequence 361-539, 1280x720 JPEGs, age 222-453 ms. Wide lens correctly reported no flash support. Only this feature's live camera operation is verified; complete D-341/D-391 device matrix and surveyed marker/position acceptance remain pending."
   FIELD:
     state: PARKED
 adrs: [D-261, D-341, D-370, D-374, D-377, D-391]
