@@ -156,6 +156,9 @@
     로봇별 승인 레코드가 다듬는다(D-397): `--pitch-deg`/`--height-m` 를 주지 않으면 레코드나 NOMINAL 이
     쓰이고, 주면 운영자 덮어쓰기로 둘을 이긴다. 그래서 따로 만든 `/etc/rosy/camera_profile_bench.yaml`
     프로필 사본은 더 필요 없다 — 프로필 경로는 릴리스의 `camera_nominal.yaml` 을 가리킨다.
+    sudo 는 PYTHONPATH 를 지우므로 root 셸 안에서 환경을 불러 `ros2 run` 으로 돌린다(되돌리기는 `apply …`
+    대신 `clear`, 확인은 `show`):
+    `sudo -n bash -c 'source /opt/ros/jazzy/setup.bash && source /opt/rosy/current/install/setup.bash && ros2 run control line_observer_overrides apply --profile /opt/rosy/current/install/share/pinky_pro/config/camera_nominal.yaml --pitch-deg <deg> --height-m <m>'`
   - **바뀌지 않는 것:** 패키지 기본(`camera_lane_mode: line`, `PINKY`)과 CORE 설정. 관측 노드는 관측만
     한다(D-2). 운영 차선 모드를 로봇에 켜는 것은 지금처럼 사용자 승인 뒤의 벤치 결정이다.
   - **기각한 대안:** CORE 오버레이(`/var/lib/rosy/core/.rosy/rosy.yaml`)에 넣기 — CORE 는 관측 노드

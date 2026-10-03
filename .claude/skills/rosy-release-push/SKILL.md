@@ -233,7 +233,8 @@ published here.
   `/etc/rosy/` (never written by a release or `sync-image-layer.py`). For the camera
   lane bench setting use `line_observer_overrides apply|clear|show` (D-344 §12 addendum
   2026-10-03), which writes `/etc/rosy/line_observer_overrides.yaml` and restarts only
-  `rosy-camera`.
+  `rosy-camera`. sudo strips PYTHONPATH, so run it as (`clear` / `show` in place of `apply ...`):
+  `sudo -n bash -c 'source /opt/ros/jazzy/setup.bash && source /opt/rosy/current/install/setup.bash && ros2 run control line_observer_overrides apply --profile /opt/rosy/current/install/share/pinky_pro/config/camera_nominal.yaml --pitch-deg <deg> --height-m <m>'`
 
 ## Related
 

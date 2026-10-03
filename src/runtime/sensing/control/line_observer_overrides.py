@@ -5,11 +5,14 @@ payload update (a new /opt/rosy/releases/<id>) silently dropped it. This tool
 writes /etc/rosy/line_observer_overrides.yaml instead, which no release or
 image-layer sync replaces, and camera_preview.launch.py layers it last. It
 refuses anything the launch validator would skip, so a written file is a
-loaded file. Run as root on the robot; it restarts only rosy-camera.
+loaded file. Run as root on the robot; it restarts only rosy-camera. sudo
+drops PYTHONPATH, so source the ROS and release environments inside the root
+shell and start it with ros2 run:
 
-    line_observer_overrides apply --profile <camera_nominal.yaml> [--pitch-deg 11.2] [--height-m 0.059]
-    line_observer_overrides clear
-    line_observer_overrides show
+    sudo -n bash -c 'source /opt/ros/jazzy/setup.bash && source /opt/rosy/current/install/setup.bash && ros2 run control line_observer_overrides apply --profile <camera_nominal.yaml> [--pitch-deg 11.2] [--height-m 0.059]'
+
+with ``clear`` (remove, restart) or ``show`` (print, would launch load it) in
+place of ``apply ...``.
 
 Pitch and height are the D-397 operator layer: omit them and the robot's
 accepted camera_profile record, else the URDF nominal file, applies.
