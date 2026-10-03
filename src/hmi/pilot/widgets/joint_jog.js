@@ -16,7 +16,8 @@ function node(tag, attrs = {}, text = "") {
 }
 
 function jointSelect(attrs, names, selected, allowNone) {
-  const select = node("select", {class: "ui-field", ...attrs});
+  const select = node("select", attrs);
+  select.classList.add("ui-field");
   if (allowNone) select.add(new Option("없음", ""));
   for (const name of names) select.add(new Option(name, name));
   select.value = selected;
@@ -68,8 +69,10 @@ export function mountJointJog(slot, control, session) {
   const select = jointSelect({"data-sim-joint": ""}, names, joint, false);
   jointLabel.append(select);
   const jog = node("div", {class: "sim-jog"});
-  const minus = node("ui-button", {kind: "quiet", type: "button", "data-sim-delta": String(-buttonStep)}, `− ${buttonStep} rad`);
-  const plus = node("ui-button", {kind: "quiet", type: "button", "data-sim-delta": String(buttonStep)}, `+ ${buttonStep} rad`);
+  const minus = node("ui-button", {type: "button", "data-sim-delta": String(-buttonStep)}, `− ${buttonStep} rad`);
+  const plus = node("ui-button", {type: "button", "data-sim-delta": String(buttonStep)}, `+ ${buttonStep} rad`);
+  minus.setAttribute("kind", "quiet");
+  plus.setAttribute("kind", "quiet");
   jog.append(minus, plus);
   const readout = node("p", {"data-jog-readout": "", class: "arm-readout"});
   buttons.append(jointLabel, jog, readout);

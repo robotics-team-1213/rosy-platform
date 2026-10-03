@@ -26,8 +26,9 @@ export function mountGripper(slot, control, session) {
   head.append(node("h3", {}, control.label || "그리퍼"), badge);
   const row = node("div", {class: "gripper-presets"});
   const buttons = PRESETS.filter(([key]) => Number.isFinite(Number(presets[key]))).map(([key, text]) => {
-    const button = node("ui-button", {kind: key === "close" ? "primary" : "quiet", type: "button",
-                                      "data-gripper-preset": key}, text);
+    const button = node("ui-button", {type: "button", "data-gripper-preset": key}, text);
+    if (key === "close") button.setAttribute("kind", "primary");
+    else button.setAttribute("kind", "quiet");
     row.append(button);
     return button;
   });
@@ -37,6 +38,7 @@ export function mountGripper(slot, control, session) {
   caption.append(readout);
   const slider = node("input", {type: "range", min: "0", max: "100", step: "5", value: "0",
                                 "data-gripper-percent": "", "aria-describedby": `gripper-help-${control.id}`});
+  slider.classList.add("ui-field");
   sliderLabel.append(caption, slider);
   const help = node("p", {class: "arm-hint", id: `gripper-help-${control.id}`},
                     "놓으면 그 위치로 한 번 움직입니다. 쥐고 있음은 닫다가 물체에 걸려 멈춘 상태입니다(시뮬레이션 위치 판정, 힘 측정 아님).");
