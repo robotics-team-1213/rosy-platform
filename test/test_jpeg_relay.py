@@ -111,6 +111,23 @@ def test_decimator_caps_rate() -> None:
 needs_bash = pytest.mark.skipif(BASH is None, reason="bash is required for the recorder contract")
 
 
+@needs_bash
+@pytest.mark.parametrize("probe,expected", [("calls=$((calls+1)); [ \"$calls\" -ne 1 ]", 0),
+                                           ("return 1", 1)])
+def test_startup_confirms_death_before_reporting_failure(probe, expected):
+    source = (DEV / "rec_compact.sh").read_text(encoding="utf-8")
+    start = source.index('    deadline=$((SECONDS + ${REC_START_WAIT:-3}))')
+    end = source.index('    echo "FAILED ($why):"', start)
+    # Run the actual startup loop with a deterministic transient process
+    # visibility failure or a confirmed dead child, without launching ROS.
+    script = ('calls=0; REC_START_WAIT=0; bpid=1; rpid=2; folder=probe\n'
+              + 'alive() { ' + probe + '; }\n' + source[start:end] + '\nexit 1\n')
+    result = subprocess.run([BASH, "-c", script], capture_output=True, text=True, timeout=10)
+    assert result.returncode == expected, result.stdout + result.stderr
+    if expected == 0:
+        assert "recording: probe" in result.stdout
+
+
 def _posix(p: Path) -> str:
     s = p.as_posix()
     if os.name == "nt" and len(s) > 1 and s[1] == ":":

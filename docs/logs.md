@@ -4932,3 +4932,9 @@
 - 변경: cmd_vel_cycle에서 원본 GuardedMotion만 한 번 풀어 기존 send를 부르는 얇은 포트를 연결했다. private token·identity·불변 snapshot·300ms/주기 만료와 consume-before-send를 적용했고 생성 실패는ZERO다. bridge와 publish/D-422 순서는 유지했다.
 - 증거: RED11 및 독립리뷰RED2 보완 후 관련137 passed/1 ROS skip·NEW0, 구조76 passed, 실제설치Linux53 passed, 독립28 passed·APPROVE. docs/validation/d427-source-migration/pinky-twist-port-2026-10-04.md.
 - gate 변화: 없음. SOURCE/host만 검증했으며 ARM64/SD/Docker/CI/ROS-SIM/DEVICE/FIELD와 전체profile/OMX 타입admission은 pending이다.
+
+## 2026-10-04 · uncommitted · D-427 push3 follow-up corrections
+
+- 변경: peer D-441 사이트 후보 workflow의 새로 들어온 옛 경로를 manifest 대상 경로로 바꿨다. bench recorder의 일시 프로세스 가시성 실패는200ms뒤 재확인하고 확정 이유만 남기며 고정 startup deadline과 cleanup은 유지했다.
+- 증거: 기존 enforced push3 main3 failed/12381 passed, perception2836 passed이며 push는 거부됐다. deterministic transient startup RED 후 관련48 passed·NEW0, 독립 경로20/startup2 passed·APPROVE. docs/validation/d427-source-migration/push3-gate-corrections-2026-10-04.md.
+- gate 변화: 없음. 다음 SHA enforced gate·CI·artifact·device는 별도이며 이전 실패를 통과로 바꾸지 않는다.
