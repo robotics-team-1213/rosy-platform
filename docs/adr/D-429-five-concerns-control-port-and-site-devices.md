@@ -40,7 +40,7 @@ D-427은 최상위를 middleware·operations·learning 세 파트와 공용 cont
 | 숙고형 | deliberative | ER2·VLM 제안(`fleet/ai`) | `operations/decision`, provider는 `integrations/models/<provider>` | Mission·Task·replan 후보 | 없음(D-326, D-392) |
 | 조정 | coordination | Fleet admission(`dispatch_admission.py`), dispatch(`mission_dispatcher.py`, `step_dispatcher.py`), 교통(`traffic.py`), 양보 bay(`bays.py`), 신호 순서(`signals.py`) | `operations/fleet` | 승인된 Mission·Step, 점유·진입 grant, 신호 순서 | Fleet 원장 쓰기, 장치에는 semantic Device Action만 |
 | 장치 지역 규칙 | device local rules | `core_features/decision`(lane·router·contract), DOCKING 진입 판단 | `middleware/core` | 장치 모드·주행 결정 | 장치 안 Arbiter 입력까지 |
-| 중재·안전 | arbitration and safety | Command Arbiter, Safety Guard, CORE cmd_vel mux | `middleware/core` | 최종 명령 하나, HOLD·정지 | 단일 writer(D-2, D-38) |
+| 중재·안전 | arbitration and safety | Command Arbiter, Safety Guard, CORE cmd_vel mux | `middleware/core` | 최종 명령 하나, HOLD·정지 | 단일 writer(D-2, D-38) (안전 체인: D-430) |
 | 반응형 | reactive | line follow, 엔벌로프 스킬(ACT·Diffusion·RL) | `middleware/skills`, `middleware/perception` | 엔벌로프 안 Motion Intent | Arbiter 뒤에서만 |
 | 판정기 | verifiers | 성공 분류기, VLM 심판, GOAL_CONFIRMED | 산출은 learning, 온라인 판정은 operations(D-328 §4) | 성공·실패 증거 | 없음 |
 | 사람 | MANUAL | 운영자 원격 조작, Pilot, 리더 팔 | 입력은 middleware Arbiter의 MANUAL 우선순위 | Motion Intent(MANUAL) | Arbiter 우선순위 안에서(D-399 후속 5) |
@@ -75,14 +75,14 @@ D-427은 최상위를 middleware·operations·learning 세 파트와 공용 cont
 - **관측:** 신호등 관측기(`firmware/signal/observer`, D-163의 읽기 전용 평면)는 operations 관측 평면으로 옮긴다. 목적지 경로는 wave 3 계획에서 정한다(예: `operations/vision/signal_observer`). 실행 호스트는 D-163이 정하지 않았고 이 ADR도 정하지 않는다. 제어와 관측의 분리(D-163)는 그대로다.
 - **로봇 쪽 도킹:** DOCKING 모드(D-200)와 도크 상태 읽기(`core_features/docking/agent.py`, `charging.py`)는 middleware에 남는다. 도크 펌웨어는 사이트에 있고, 도크에 들어가는 로봇의 판단은 로봇에 있다. D-349·D-350·D-351의 단계·재시도 규칙은 그대로다.
 - **신호 순서:** 신호 순서의 유일한 소유자는 Fleet이다(D-337 §2). `site_devices/signal`의 driver는 Fleet이 정한 순서를 장치에 전달할 뿐 순서를 정하지 않는다.
-- **로봇의 소비:** 로봇은 사이트 장치를 fail-closed evidence로만 소비한다. 신호는 관측 서비스의 실측만 쓰고 접점 주장은 쓰지 않는다(D-337 §1·§3). 사이트 장치 상태만으로 로봇 안전 동작을 억제하거나 진입을 단독 허가하지 않는다.
+- **로봇의 소비:** 로봇은 사이트 장치를 fail-closed evidence로만 소비한다. 신호는 관측 서비스의 실측만 쓰고 접점 주장은 쓰지 않는다(D-337 §1·§3). 사이트 장치 상태만으로 로봇 안전 동작을 억제하거나 진입을 단독 허가하지 않는다. (안전 체인: D-430)
 
 #### 3. ER2는 사이트 장치 변경을 후보로만 제안할 수 있다 (사용자 결정 3)
 
 - ER2는 사이트 장치 변경(예: "정거장 2 신호를 녹색으로")을 **후보 제안**으로만 낼 수 있다. 자동 실행은 없다.
 - **승인자:** 승인자는 인증된 사람 Fleet 운영자뿐이다. 어떤 모델·자동화도 승인할 수 없다. 승인은 후보 기록과 별개 행위다. 근거: D-357 §4는 replan 후보가 기존 admission·사람 확인 규칙을 받는다고 정하고, D-332 §4는 확인을 actor·시각·대상·근거가 남는 감사 이벤트로, 운영 조정 권한을 `operator` 역할로 정하며 뷰어는 확인할 수 없게 한다. "모델·자동화 승인 불가"는 그 위에 이 ADR이 사이트 장치 후보에 대해 명시하는 규칙이다. D-332 §4는 재발의 승인(`policy-admin`)과 운영 조정(`operator`)을 나눌 뿐이며, 사이트 장치 후보 승인을 운영 조정(`operator`)으로 분류하는 것은 이 ADR의 결정이다.
 - **승인의 효과:** 승인된 후보는 Fleet 신호 순서·교통 로직(`signals.py`, `traffic.py`)의 **입력**일 뿐이다. 장치에 직접 내려가는 명령이 아니다. 실행 시점에 Fleet이 현재 점유와 세대를 다시 확인한다. 재확인에 실패하면 후보를 stale로 표시하고 재시도하지 않는다(사용자 결정, 2026-10-03). 운영자는 실패 사유를 본다. ER2는 새 턴에서 다시 제안할 수 있고, 그 제안은 새 승인이 필요하다. 승인은 나중에 발동하려고 대기하지 않는다. 조건이 풀리면 실행되는 "예약 승인"은 없다.
-- **인터록 우선:** 운영자 승인은 Fleet 인터록(교차로 점유, 진입 grant, all_red·e-stop scatter, stop latch)을 결코 넘어서지 않는다.
+- **인터록 우선:** 운영자 승인은 Fleet 인터록(교차로 점유, 진입 grant, all_red·e-stop scatter, stop latch)을 결코 넘어서지 않는다. (안전 체인: D-430)
 - **fence 범위:** 이 후보는 다른 제안과 같은 turn·stop 무효화를 받는다(D-357 §6, D-358 §4). 다만 사이트 장치 후보는 Mission에 묶이지 않을 수 있으므로, fence 범위는 site/signal-group 세대 또는 장치 `last_seq`(`signals.py:46`)다. D-358 §4의 공유 트랜잭션 확인을 이 범위로 넓힌다.
 - **밸브 유지:** `POLICY_DISPATCH_ENABLED=False`를 유지한다(D-392 §7, D-357 §7). 이 결정은 밸브를 열지 않는다.
 - **D-392 §4 확장:** 사이트 장치 직접 구동 도구는 금지 목록에 명시적으로 넣는다. 신호 점등·순서 변경, 문 열기·닫기, 컨베이어 기동·정지·속도, PLC 출력 쓰기다. 이 이름들은 **wave 0에서 지금** 도구 거부 시험에 넣는다(사용자 결정, 2026-10-03). 후보 제안을 여는 후속 ADR 3과는 별개 작업이다. 대상은 `src/site/fleet/test/test_model_tool_adapter_conformance.py:157`의 `test_sample_actuation_and_openapi_operations_stay_outside_catalog`이다. 이 시험은 `@pytest.mark.parametrize("name", [...])`의 문자열 목록(현재 `move`, `set_gripper_state`, `execute_action`, `cancel_action`, `stop`, `emergency_stop`, `rearm`, `post_actions_execute`)으로 이름을 열거하고, 각 이름이 `TOOL_NOT_ALLOWED`로 거부되며 `MODEL_TOOL_CATALOG`에 없음을 확인한다. 패턴 매칭은 없으므로 구체 이름을 더한다:
@@ -103,9 +103,9 @@ D-427은 최상위를 middleware·operations·learning 세 파트와 공용 cont
 - 상태: 측정값과 주장값을 구분한다(D-337의 measured vs claimed)
 - heartbeat
 - semantic 명령만 받는다. raw I/O(핀·레지스터·코일)는 contracts에 나오지 않는다
-- failsafe 의무: 감독이 끊기면 장치가 스스로 안전 상태로 간다
+- failsafe 의무: 감독이 끊기면 장치가 스스로 안전 상태로 간다 (의미·fail-closed 규칙은 D-430 §4)
 
-heartbeat·semantic 명령·감독 failsafe는 명령을 받는 장치의 의무다. 지금 도크처럼 상태만 내놓는 읽기 전용 장치는 식별과 상태만 진다.
+heartbeat·semantic 명령·감독 failsafe는 명령을 받는 장치의 의무다. 지금 도크처럼 상태만 내놓는 읽기 전용 장치는 식별과 상태만 진다. failsafe의 의미는 D-430 §4가 정본이다.
 
 **로봇.** Motion Intent와 DeviceControlPort를 둔다.
 
@@ -117,8 +117,8 @@ heartbeat·semantic 명령·감독 failsafe는 명령을 받는 장치의 의무
 **사이트 장치.** `rosy.site-device/1`을 둔다.
 
 - 공통 바탕에 kind별 semantic 명령(signal: mode·phase, conveyor: start/stop/speed class, door: open/close; dock은 지금 읽기 전용 `/status`뿐이며 명령은 별도 ADR 뒤의 미래 항목)을 더한다.
-- 장치 로컬 failsafe가 필수다. 예: 신호는 감독 상실 시 `mode=failsafe`, 전 기능 적색 점멸이다(펌웨어 계약 `firmware/signal/README.md` "하트비트와 페일세이프"; 명령된 `all_red` 점등과 구별된다. D-337 §3상 진입 불허), 문은 마지막 안전 상태 유지, 컨베이어는 정지.
-- 물리 E-stop과 safety PLC 회로는 ROSY와 독립이다. ROSY는 그 상태를 읽을 수 있으나 그 회로를 쓰거나 우회하지 않는다.
+- 장치 로컬 failsafe가 필수다. 예: 신호는 감독 상실 시 `mode=failsafe`, 전 기능 적색 점멸이다(펌웨어 계약 `firmware/signal/README.md` "하트비트와 페일세이프"; 명령된 `all_red` 점등과 구별된다. D-337 §3상 진입 불허), 문은 마지막 안전 상태 유지, 컨베이어는 정지. (안전 체인: D-430)
+- 물리 E-stop과 safety PLC 회로는 ROSY와 독립이다. ROSY는 그 상태를 읽을 수 있으나 그 회로를 쓰거나 우회하지 않는다. (D-430 §3 불변식 5)
 
 **integrations의 재정의.**
 
@@ -205,9 +205,9 @@ heartbeat·semantic 명령·감독 failsafe는 명령을 받는 장치의 의무
 **후속 ADR:**
 
 1. **Motion Intent + DeviceControlPort.** D-399 후속 5와 합친다. Motion Intent 공통 스키마, 장치별 Arbiter 우선순위표, MANUAL 선점, Pinky·OMX 구현 대응, `skills/manipulation`·`omx_adapter`의 포트를 `api`로 추출하는 범위.
-2. **`rosy.site-device/1`.** 공통 바탕(식별·상태·heartbeat·semantic 명령·failsafe), kind별 명령, 감독 상실 timeout, 측정/주장 구분, 물리 E-stop·safety PLC 독립.
+2. **`rosy.site-device/1`.** 공통 바탕(식별·상태·heartbeat·semantic 명령·failsafe), kind별 명령, 감독 상실 timeout, 측정/주장 구분, 물리 E-stop·safety PLC 독립. 물리 E-stop·safety PLC 독립은 D-430 §3 불변식 5를 따른다.
 3. **ER2 사이트 장치 후보 제안.** 후보 스키마, 감사 기록, 운영자 승인 UI, 무효화 규칙. 착지 전에는 catalog에 도구가 없다. 직접 구동 이름의 거부 시험은 이 ADR보다 먼저 wave 0에서 들어간다. 후보 도구 이름은 그 거부 목록과 겹치지 않게 정한다.
-4. **PLC 인터록.** PLC/Modbus 컨베이어를 첫 비-ROS 대상으로, ROSY 감독 신호와 safety PLC 회로의 경계.
+4. **PLC 인터록.** PLC/Modbus 컨베이어를 첫 비-ROS 대상으로, ROSY 감독 신호와 safety PLC 회로의 경계. 안전 영역 쓰기 금지 시험은 D-430 후속(wave 0 4항)과 함께 정한다.
 5. **로컬 VLA 배치(D-399 §2).** VLA를 반응형 정책으로 옮길 때의 호스트·엔벌로프·D-231 §4 개정 여부.
 
 **References:** [D-427](D-427-platform-three-parts-middleware-operations-learning.md), [D-326](D-326-agent-loop-boundary.md), [D-392](D-392-provider-neutral-model-tool-contract.md), [D-399](D-399-rosy-layered-architecture-site-plane-device-pipeline.md), [D-357](D-357-er2-mission-feedback-loop.md), [D-358](D-358-er2-feedback-outbox-and-replan-fencing.md), [D-163](D-163-signal-observation-readonly-plane.md), [D-337](D-337-robot-signal-source-measured-light.md), [D-200](D-200-docking-owns-the-docking-mode.md), [D-349](D-349-dock-auto-charge-code-readiness.md), [D-350](D-350-dock-hardware-phase-tiers.md), [D-351](D-351-docking-retry-by-failure-kind.md), [D-12](D-12-mission-fleet.md), [D-2](D-2-cmd-vel.md), [D-38](D-38-core.md), [D-413](D-413-platform-modules-integrations-apps-profiles.md), [D-231](D-231-layered-source-roots-keep-package-names.md), [D-427 이전 계획](../plans/2026-10-03-d427-source-migration.md), [소유 매니페스트](../../tools/harness/platform_parts.yaml)

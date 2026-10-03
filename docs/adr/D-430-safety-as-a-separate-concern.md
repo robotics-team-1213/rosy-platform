@@ -1,6 +1,6 @@
 ## D-430 안전은 판단·제어와 분리된 여섯째 관심사이며, 층별 안전 체인과 분리 불변식으로 지킨다
 
-**Status:** Proposed (2026-10-03, 사용자 요청 — 안전을 별도 관심사로). [D-429](D-429-five-concerns-control-port-and-site-devices.md)(Proposed)의 다섯 관심사 view에 `safety`를 더하고, D-429 §1 표의 "중재·안전" 층에서 안전을 떼어 별도 체인으로 기술한다. 독립 리뷰와 사용자 승인 뒤 Accepted로 올린다. 이번 변경은 문서뿐이다. 코드·폴더 이전·매니페스트 수정·wire 변경·실기 gate 변화는 없다. D-400 집행, 물리 E-stop, DEVICE/FIELD 수용을 승인하지 않는다.
+**Status:** Proposed (2026-10-03, 사용자 요청 — 안전을 별도 관심사로). [D-429](D-429-five-concerns-control-port-and-site-devices.md)(Accepted 2026-10-03)의 다섯 관심사 view에 `safety`를 더하고, D-429 §1 표의 "중재·안전" 층에서 안전을 떼어 별도 체인으로 기술한다. 독립 리뷰와 사용자 승인 뒤 Accepted로 올린다. 이번 변경은 문서뿐이다. 코드·폴더 이전·매니페스트 수정·wire 변경·실기 gate 변화는 없다. D-400 집행, 물리 E-stop, DEVICE/FIELD 수용을 승인하지 않는다.
 
 ### Context
 
@@ -101,7 +101,7 @@ safety 태그 코드(§1의 root와 모듈 목록)를 바꾸는 변경은 다음
 
 | 기록 | 처리 |
 |---|---|
-| D-429 (Proposed) | `concern:` 값에 `safety`를 더한다. §1 표의 "중재·안전" 층은 판단 층으로 남되, 안전 체인은 이 ADR이 정본이다. D-429 본문에 한 줄 포인터를 추가했다. DeviceControlPort(§4)에 불변식 3을 건다 |
+| D-429 (Accepted 2026-10-03) | `concern:` 값에 `safety`를 더한다. §1 표의 "중재·안전" 층은 판단 층으로 남되, 안전 체인은 이 ADR이 정본이다. D-429 본문의 안전 관련 자리(§1 중재·안전 행, §2 로봇의 소비·인터록 우선, §4 failsafe 의무·장치 로컬 failsafe·물리 E-stop/safety PLC 독립, 후속 2·4)에 D-430 포인터만 추가했다. 내용은 바꾸지 않았다. DeviceControlPort(§4)에 불변식 3을 건다 |
 | D-427 (Accepted) | 파트·폴더·import 규칙을 바꾸지 않는다. §5의 실물 RL 선행 조건(엔벌로프, MANUAL 선점, 독립 E-stop 실측)은 이 체인의 층 4·5·1 상태와 같은 목록이다 |
 | D-399 (Proposed) | §1 Safety Guard가 단일 writer 바로 앞이라는 배치와 "정지 계열이 모든 동작 출처보다 위"를 층 3·5로 계승한다. §2 엔벌로프를 층 4로 둔다. 후속 1·5가 이 ADR의 층 4·5를 채운다 |
 | D-400 (Proposed) | 층 3의 센서 정책이다. off·shadow·enforce 모드와 gate를 바꾸지 않는다. 집행은 여전히 로봇별 사용자 승인이다 |
