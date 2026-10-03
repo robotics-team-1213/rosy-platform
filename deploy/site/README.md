@@ -913,7 +913,7 @@ beside the reviewed verifier from a reviewed checkout, never from a candidate:
 sudo install -o root -g root -m 0755 deploy/site/rosy_site_autoupdate.py \
   /usr/local/lib/rosy-site/rosy_site_autoupdate.py
 sudo install -o root -g root -m 0644 deploy/site/verify_candidate.py \
-  deploy/site/candidate_signing.py /usr/local/lib/rosy-site/
+  deploy/site/candidate_signing.py deploy/site/site_update_io.py /usr/local/lib/rosy-site/
 sudo install -o root -g root -m 0644 deploy/site/rosy-site-autoupdate.service \
   deploy/site/rosy-site-autoupdate.timer /etc/systemd/system/
 sudoedit /etc/rosy/site/autoupdate.conf   # JSON below, mode 0644, owner root
@@ -935,7 +935,11 @@ sudo systemctl enable --now rosy-site-autoupdate.timer
 ```
 
 Each run (every 15 minutes, randomized by up to 5) picks the newest signed
-`site-*` release created after the installed one and:
+`site-*` release whose commit is a strict descendant of the running commit.
+Release creation time only orders eligible candidates; rebuilding an old
+commit cannot authorize a downgrade. The running signed manifest must match
+`site.env`, and a network error postpones the attempt without blacklisting it.
+Each eligible candidate:
 
 1. refuses without changing anything when `ROSY_SITE_PAIRING_COMPOSE` names a
    file other than the candidate's `compose.pairing.yaml`, when `site.env`
@@ -948,8 +952,10 @@ Each run (every 15 minutes, randomized by up to 5) picks the newest signed
    `fetch_candidate.sh`, and moves the result to
    `/opt/rosy/candidates/<commit>`;
 3. runs the installed verifier with the enrolled key (signature and hashes),
-   `docker image load`, then the full verifier (loaded image IDs);
-4. backs up `site.env` to `site.env.autoupdate-prev`, writes the new
+   `docker image load`, then the full verifier (loaded image IDs). The signed
+   `source_commit` must match the selected full commit before loading;
+4. backs up `site.env` to `site.env.autoupdate-prev`, durably records the
+   previous folder and commit in the state file, then writes the new
    `ROSY_SITE_IMAGE_TAG`, swaps the `/opt/rosy/candidate` symlink (an
    existing real directory there is moved once to
    `/opt/rosy/candidates/<its commit>`), and restarts
@@ -957,16 +963,21 @@ Each run (every 15 minutes, randomized by up to 5) picks the newest signed
 5. waits up to `health_timeout_s` for `healthz` 200 and all three containers
    running, healthy, and on the new image. Otherwise it restores the previous
    symlink and `site.env`, restarts, and records the tag as failed. A failed
-   tag is never retried automatically;
+   tag is never retried automatically. Any exception during switching also
+   triggers rollback. Restart failures and timeouts remain retryable. On the
+   next run an interrupted switch is undone before contacting GitHub. Failed
+   rollback keeps its recovery record and blocks updates and pruning;
 6. keeps the newest `keep` candidate folders (always the running and previous
-   ones) and removes older `rosy-site-*` images that no container uses.
+   ones) and removes older `rosy-site-*` images that no container uses. Commits
+   from retained manifests protect rollback images even in renamed folders.
+   Failed inventory commands defer pruning.
 
 Every step is one JSON line in `journalctl -u rosy-site-autoupdate`. The
 state is in `/var/lib/rosy/site-autoupdate.json`
 (`sudo python3 -I /usr/local/lib/rosy-site/rosy_site_autoupdate.py status`).
 After fixing the cause of a failed tag, allow it again with
 `sudo python3 -I /usr/local/lib/rosy-site/rosy_site_autoupdate.py forget-failed site-<sha12>`.
-When `verify_candidate.py` or `candidate_signing.py` change on `main`, the
+When `verify_candidate.py`, `candidate_signing.py`, or `site_update_io.py` change on `main`, the
 administrator reinstalls them by the same reviewed path; the updater never
 copies them from a candidate.
 

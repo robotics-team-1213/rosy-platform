@@ -6,6 +6,9 @@ import hashlib
 import io
 import json
 import os
+import shutil
+import subprocess
+import sys
 import tarfile
 import tempfile
 from pathlib import Path
@@ -19,12 +22,15 @@ REPO = "example-owner/example-repo"
 OLD = "1" * 40
 NEW = "2" * 40
 NEWER = "3" * 40
-UNIT = """[Service]
-EnvironmentFile=-/etc/rosy/site/site.env
-ExecStartPre=/usr/bin/python3 /opt/rosy/candidate/deploy/site/site-firewall.py check --compose-file /opt/rosy/candidate/deploy/site/compose.yaml
-ExecStart=/usr/bin/docker compose --project-name rosy-site --env-file /etc/rosy/site/site.env -f /opt/rosy/candidate/deploy/site/compose.yaml $ROSY_SITE_PAIRING_COMPOSE up -d --no-build
-ExecStop=/usr/bin/docker compose --project-name rosy-site --env-file /etc/rosy/site/site.env -f /opt/rosy/candidate/deploy/site/compose.yaml $ROSY_SITE_PAIRING_COMPOSE down
-"""
+UNIT = (
+    "[Service]\nEnvironmentFile=-/etc/rosy/site/site.env\n"
+    "ExecStartPre=/usr/bin/python3 /opt/rosy/candidate/deploy/site/site-firewall.py check "
+    "--compose-file /opt/rosy/candidate/deploy/site/compose.yaml\n"
+    "ExecStart=/usr/bin/docker compose --project-name rosy-site --env-file /etc/rosy/site/site.env "
+    "-f /opt/rosy/candidate/deploy/site/compose.yaml $ROSY_SITE_PAIRING_COMPOSE up -d --no-build\n"
+    "ExecStop=/usr/bin/docker compose --project-name rosy-site --env-file /etc/rosy/site/site.env "
+    "-f /opt/rosy/candidate/deploy/site/compose.yaml $ROSY_SITE_PAIRING_COMPOSE down\n"
+)
 
 
 def _symlinks_supported() -> bool:
@@ -86,6 +92,11 @@ class FakeHttp:
         return self.blobs[tag][name]
 
     def get(self, url: str, limit: int) -> bytes:
+        if '/compare/' in url:
+            base, head = url.rsplit('/', 1)[-1].split('...')
+            commit = next((c for c in (OLD, NEW, NEWER) if head == _tag(c)), head)
+            return json.dumps({'status': 'ahead' if commit > base else 'behind',
+                               'merge_base_commit': {'sha': base}}).encode()
         if "api.github.com" in url:
             return json.dumps(self.releases if url.endswith("page=1") else []).encode()
         return self._asset(url)
@@ -155,7 +166,7 @@ def _verifier(calls):
         calls.append((Path(folder).name, inspect_loaded_images))
         if not (Path(folder) / "release.json.sig").is_file():
             raise upd.CandidateVerificationError("release signature is missing or unsafe")
-        return {"source_commit": Path(folder).name}
+        return json.loads((Path(folder) / 'release.json').read_text())
     return verify
 
 
@@ -172,6 +183,7 @@ def host(tmp_path):
     old = paths.candidates / OLD
     (old / "deploy/site").mkdir(parents=True)
     (old / "release.json").write_text(json.dumps({"source_commit": OLD}), encoding="utf-8")
+    (old / 'release.json.sig').write_text('signed', encoding='utf-8')
     os.symlink(old, paths.link, target_is_directory=True)
     public = tmp_path / "site.pub.pem"
     public.write_text("pub", encoding="utf-8")
@@ -240,7 +252,7 @@ def test_success_switches_tag_link_and_state_then_prunes(host):
     assert "ROSY_SITE_CONFIG_DIR=/etc/x" in host.paths.site_env.read_text(encoding="utf-8")
     assert f"ROSY_SITE_IMAGE_TAG={OLD}" in host.paths.env_backup.read_text(encoding="utf-8")
     assert (target / "release.json.sig").is_file() and (target / "images.tar").is_file()
-    assert verify_calls == [(NEW, False), (NEW, True)]
+    assert verify_calls == [('candidate', True), (NEW, False), (NEW, True)]
     load = next(i for i, c in enumerate(fake.calls) if c[:3] == ["docker", "image", "load"])
     restart = next(i for i, c in enumerate(fake.calls) if c[:2] == ["systemctl", "restart"])
     assert load < restart
@@ -285,8 +297,9 @@ def test_healthz_failure_alone_also_rolls_back(host):
 
     assert _updater(host, http, fake).run() == upd.EXIT_FAILED
     assert upd.read_env(host.paths.site_env)["ROSY_SITE_IMAGE_TAG"] == OLD
-    assert "healthz returned 502" in json.loads(
-        host.paths.state.read_text())["failed"][_tag(NEW)]["reason"]
+    state = json.loads(host.paths.state.read_text())
+    assert state['switch']['current'] == OLD  # retry recovery until old stack is healthy
+    assert state['failed'] == {}
 
 
 @pytest.mark.parametrize("variant", ["config-image", "unit-file", "pairing", "compose-file"])
@@ -434,3 +447,150 @@ def test_runbook_explains_install_pause_and_manual_rollback():
                    "--source-ref refs/heads/main", "/usr/local/lib/rosy-site/",
                    "ln -sfn /opt/rosy/candidates/<previous-commit>", "D-412"):
         assert needle in section, needle
+
+
+def test_recent_rebuild_of_older_commit_is_not_selected(tmp_path):
+    releases, blobs = _world((OLD, '2099-01-01'), (NEWER, '2026-10-04'))
+    updater = upd.SiteUpdater({'repo': REPO}, paths=upd.Paths(tmp_path), http=FakeHttp(releases, blobs))
+    assert updater.select(releases, NEW, {'failed': {}})['tag_name'] == _tag(NEWER)
+
+
+def test_restart_timeout_restores_previous_stack(host):
+    import subprocess
+    releases, blobs = _world((NEW, '2026-10-04'))
+    fake = FakeHost(host.paths)
+
+    def runner(args, **kwargs):
+        if args[:2] == ['systemctl', 'restart'] and upd.read_env(host.paths.site_env)['ROSY_SITE_IMAGE_TAG'] == NEW:
+            raise subprocess.TimeoutExpired(args, 300)
+        return fake(args, **kwargs)
+    assert _updater(host, FakeHttp(releases, blobs), runner).run() == upd.EXIT_FAILED
+    assert upd.read_env(host.paths.site_env)['ROSY_SITE_IMAGE_TAG'] == OLD
+    assert host.paths.link.resolve() == host.paths.candidates / OLD
+    assert fake.running == OLD
+
+
+def test_interrupted_switch_is_undone_before_network_access(host):
+    import shutil
+    updater = _updater(host, FakeHttp([], {}), FakeHost(host.paths))
+    shutil.copy2(host.paths.site_env, host.paths.env_backup)
+    target = host.paths.candidates / NEW
+    target.mkdir()
+    upd.write_env_tag(host.paths.site_env, NEW)
+    upd.swap_link(host.paths.link, target)
+    updater.save_state({'failed': {}, 'switch': {'previous': str(host.paths.candidates / OLD),
+                        'current': OLD, 'commit': NEW, 'tag': _tag(NEW)}})
+    assert updater.run() == upd.EXIT_FAILED
+    assert host.paths.link.resolve() == host.paths.candidates / OLD
+    assert upd.read_env(host.paths.site_env)['ROSY_SITE_IMAGE_TAG'] == OLD
+    assert 'switch' not in updater.load_state()
+
+
+def test_verifier_commit_must_match_candidate_directory(host):
+    updater = _updater(host, FakeHttp([], {}), FakeHost(host.paths))
+    updater.verifier = lambda *args, **kwargs: {'source_commit': NEW}
+    with pytest.raises(upd.Rejected, match='commit'):
+        updater._verify(host.paths.candidates / OLD, loaded=False)
+
+
+def test_prune_does_not_remove_images_when_container_listing_fails(host):
+    fake = FakeHost(host.paths)
+
+    def runner(args, **kwargs):
+        if args[:2] == ['docker', 'ps']:
+            return fake._ok(code=1)
+        return fake(args, **kwargs)
+    updater = _updater(host, FakeHttp([], {}), runner)
+    with pytest.raises(upd.Transient):
+        updater.prune({host.paths.candidates / OLD})
+    assert not any(c[:3] == ['docker', 'image', 'rm'] for c in fake.calls)
+
+
+def test_http_body_timeout_is_transient():
+    class Response:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            pass
+
+        def read(self, *args):
+            raise TimeoutError('body stalled')
+    http = upd.Http()
+    http._open = lambda url: Response()
+    with pytest.raises(upd.Transient):
+        http.get('https://example.invalid', 100)
+
+
+def test_diverged_history_is_not_an_upgrade(tmp_path):
+    releases, blobs = _world((NEW, '2026-10-04'))
+    http = FakeHttp(releases, blobs)
+    http.get = lambda *args: json.dumps({'status': 'ahead', 'merge_base_commit': {'sha': '9' * 40}}).encode()
+    updater = upd.SiteUpdater({'repo': REPO}, http=http)
+    assert updater.select(releases, OLD, {'failed': {}}) is None
+
+
+def test_running_env_must_match_signed_manifest(host):
+    upd.write_env_tag(host.paths.site_env, NEW)
+    updater = _updater(host, FakeHttp([], {}), FakeHost(host.paths))
+    assert updater.run() == upd.EXIT_FAILED
+    assert updater.load_state()['last_run']['result'] == 'refused'
+
+
+def test_prune_preserves_images_for_renamed_rollback_folder(host):
+    prior_commit = '9' * 40
+    prior = host.paths.candidates / 'prev-migrated'
+    prior.mkdir()
+    (prior / 'release.json').write_text(json.dumps({'source_commit': prior_commit}))
+    fake = FakeHost(host.paths)
+    _updater(host, FakeHttp([], {}), fake).prune({host.paths.candidates / OLD, prior})
+    assert f'rosy-site-fleet:{prior_commit}' in fake.images
+
+
+def test_failed_rollback_is_retried_before_new_update(host):
+    releases, blobs = _world((NEW, '2026-10-04'))
+    fake = FakeHost(host.paths)
+
+    def unavailable(args, **kwargs):
+        if args[:2] == ['systemctl', 'restart']:
+            return fake._ok(code=1)
+        return fake(args, **kwargs)
+    updater = _updater(host, FakeHttp(releases, blobs), unavailable)
+    assert updater.run() == upd.EXIT_FAILED
+    assert updater.load_state()['switch']['current'] == OLD
+    recovered = _updater(host, FakeHttp([], {}), fake)
+    assert recovered.run() == upd.EXIT_FAILED
+    assert recovered.load_state()['last_run']['result'] == 'recovered'
+    assert 'switch' not in recovered.load_state()
+    assert fake.running == OLD
+
+
+def test_interrupted_directory_migration_is_recoverable(host, monkeypatch):
+    host.paths.link.unlink()
+    (host.paths.candidates / OLD).rename(host.paths.link)
+    releases, blobs = _world((NEW, '2026-10-04'))
+    fake = FakeHost(host.paths)
+    original = upd.swap_link
+
+    def fail_swap(*args):
+        raise OSError('migration interrupted')
+
+    monkeypatch.setattr(upd, 'swap_link', fail_swap)
+    updater = _updater(host, FakeHttp(releases, blobs), fake)
+    assert updater.run() == upd.EXIT_FAILED
+    assert updater.load_state()['switch']['current'] == OLD
+    monkeypatch.setattr(upd, 'swap_link', original)
+    assert _updater(host, FakeHttp([], {}), fake).run() == upd.EXIT_FAILED
+    assert host.paths.link.resolve() == host.paths.candidates / OLD
+
+
+def test_installed_cli_loads_only_its_reviewed_modules(tmp_path):
+    for name in ('rosy_site_autoupdate.py', 'site_update_io.py', 'verify_candidate.py',
+                 'candidate_signing.py'):
+        shutil.copy2(SITE / name, tmp_path / name)
+    command = [sys.executable, '-I', str(tmp_path / 'rosy_site_autoupdate.py'), '--help']
+    result = subprocess.run(command, capture_output=True, text=True, cwd=tmp_path)
+    assert result.returncode == 0, result.stderr
+    (tmp_path / 'site_update_io.py').unlink()
+    # Missing reviewed helper must fail; never fall back to checkout/candidate code.
+    assert subprocess.run(command, capture_output=True, cwd=tmp_path).returncode != 0

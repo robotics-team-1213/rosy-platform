@@ -203,14 +203,11 @@ class AutoSigner:
     # -- checks ---------------------------------------------------------
     def _attested_digest(self, manifest: Path, actual: str) -> str:
         workflow = f"{self.repo}/{WORKFLOW_PATH}"
-        try:
-            out = self._gh(
-                "attestation", "verify", str(manifest), "--repo", self.repo,
-                "--signer-workflow", workflow, "--source-ref", SOURCE_REF,
-                "--format", "json", timeout=180,
-            )
-        except RuntimeError as error:
-            raise Refused(f"provenance check failed: {error}") from None
+        out = self._gh(
+            "attestation", "verify", str(manifest), "--repo", self.repo,
+            "--signer-workflow", workflow, "--source-ref", SOURCE_REF,
+            "--format", "json", timeout=180,
+        )
         try:
             results = json.loads(out)
         except json.JSONDecodeError:
@@ -248,11 +245,8 @@ class AutoSigner:
         return actual
 
     def _require_on_main(self, commit: str) -> None:
-        try:
-            status = self._gh("api", f"repos/{self.repo}/compare/{commit}...main",
-                              "--jq", ".status").strip()
-        except RuntimeError as error:
-            raise Refused(f"main ancestry check failed: {error}") from None
+        status = self._gh("api", f"repos/{self.repo}/compare/{commit}...main",
+                          "--jq", ".status").strip()
         if status not in {"ahead", "identical"}:
             raise Refused(f"source commit is not on main (compare status {status or 'empty'})")
 

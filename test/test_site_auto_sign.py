@@ -163,7 +163,8 @@ def test_build_from_another_ref_is_refused(tmp_path, keys):
 
     assert auto.AutoSigner(_config(tmp_path, keys), runner=gh).run() == auto.EXIT_REFUSED
     assert gh.uploads == []
-    assert "provenance check failed" in _audit(tmp_path)[-1]["reason"]
+    assert "source ref mismatch" in _audit(tmp_path)[-1]["reason"]
+    assert _audit(tmp_path)[-1]['decision'] == 'error'
 
 
 @pytest.mark.parametrize("status", ["behind", "diverged", ""])
@@ -241,3 +242,18 @@ def test_a_second_run_does_not_wait_for_the_lock(tmp_path, keys):
         with pytest.raises(auto.ConfigError, match="holds the lock"):
             with auto._run_lock(config["state_dir"]):
                 pass
+
+
+@pytest.mark.parametrize('operation', ['attestation', 'compare'])
+def test_network_failure_is_retried_on_next_run(tmp_path, keys, operation):
+    gh = FakeGh()
+
+    def unavailable(argv, **kwargs):
+        if (operation == 'attestation' and argv[1] == 'attestation') or (
+                operation == 'compare' and '/compare/' in ' '.join(argv)):
+            raise subprocess.TimeoutExpired(argv, 120)
+        return gh(argv, **kwargs)
+    config = _config(tmp_path, keys)
+    assert auto.AutoSigner(config, runner=unavailable).run() == auto.EXIT_REFUSED
+    assert json.loads((tmp_path / 'state/auto-sign-state.json').read_text())['refused'] == []
+    assert auto.AutoSigner(config, runner=gh).run() == auto.EXIT_SIGNED

@@ -2196,3 +2196,12 @@
 - 변경: 기존 장치 신원 검증과 mDNS 재연결을 보존한 채 light-status/light-request/light-cancel을 추가했다. 공식 카메라 화면의 유일한 조명 버튼만 조작하며 화면 잠금·포커스·새 UI·라벨 영역과 부모 포함 관계를 검증한다. 요청 상태와 실제 torch 상태는 구분하고 이미 요청 중이면 갱신하지 않는다.
 - 증거: CLI 59 passed, 독립 리뷰 승인. 실제 관제 PC 사용자 영역에 원자적으로 배치하고 개인 설정 해시 보존을 확인했다. 실제 S21에서 request_confirmed, 중복 unchanged, cancel_confirmed와 torch 켜짐/꺼짐을 확인했다. 진단 조회는 화면을 깨우지 않으며 송출 시작·보안 잠금 우회는 추가하지 않았다.
 - gate 변화: 없음. 관제 카메라 기능 검증은 Pi 제품 이미지와 전체 현장 수용을 대신하지 않는다.
+
+## 2026-10-04 · uncommitted · fix(D-441): 자동 갱신 내부 검토 지적 보정
+
+- 변경: 생성 시각 대신 실행 중 커밋의 엄격한 후손 관계를 확인한다. 실행 중·새 후보의 커밋을 서명 manifest와 대조하고, 전환·최초 폴더 이주 전에 영속 복구 기록을 남긴다. 재시작 예외는 롤백하며, 다음 실행은 미완료 전환을 먼저 복구한다. 일시 서명/다운로드 오류는 영구 거절하지 않고, 보존 manifest의 커밋과 성공한 Docker 조회를 기준으로 롤백 이미지를 지킨다.
+- 구조: HTTP·파일 I/O를 `deploy/site/site_update_io.py`로 분리했다. 갱신기 579줄, 도우미 268줄로 D-362 한도를 지키며 설치 문서에 도우미를 포함했다.
+- 검증: Linux 갱신·서명·설치 CLI 44 passed, 기존 사이트 배포·문서 배치 331 passed/2 skipped, 모듈 구조 33 passed, flake8 통과. 기존 코드로 바꾼 검증 복사본에서 새 회귀 12개 모두 RED, 폴더 이주 중단도 RED로 재현 후 GREEN. 최초 quick tier는 458 passed/1 failed/2 skipped였고 유일한 실패인 크기 검사는 분리 후 구조 suite에서 해소했다. Harness lint는 0 errors/26 freshness warnings다.
+- 증거: `X:/DevTemp/rosy-update-review-linux.txt`. 임시 검증 복사본과 Linux 파일시스템은 X:에만 두었다.
+- 경계: 로컬 수정·검증이다. push, 서명 PC 예약 작업 등록, 사이트 호스트 설치와 최초 실제 갱신·롤백은 아직 실행하지 않았다. 독립 재검토 결과를 대신하지 않는다.
+- gate 변화: 기존 모듈 gate 유지. 이 보정의 소스·로컬 회귀만 검증했다.
