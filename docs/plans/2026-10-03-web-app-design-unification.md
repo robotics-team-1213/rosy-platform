@@ -27,7 +27,7 @@
 |---|---|---|---|
 | 1 | 현재 제품 웹 전체 기준선 | `src/hmi/web_common/surfaces.yaml`, `src/hmi/dashboard/panels.yaml` | 초기 기준선/전체 source 목록 확인; 기능별 추가 상태는 해당 작업에서 점검 |
 | 2 | 공용 작업 선택·상태·초점 규칙 | `src/hmi/web_common/{task-chooser.js,task-chooser.css}` | 구현·독립 검토 완료 `15e8742b4`; 전체 회귀는 최종 통합에서 확인 |
-| 3 | 로그인·역할 진입 | `src/hmi/dashboard/{index.html,surface.html,surface-navigation.js}` | 대기 |
+| 3 | 로그인·역할 진입 | `src/hmi/dashboard/{index.html,surface.html,surface-navigation.js}` | 구현·독립 검토·집중 회귀 완료 `4e8cbe92d`; 전체 회귀는 최종 통합 |
 | 4 | 로봇 운용 7패널 | `src/hmi/dashboard/panels/console/`, `shell/` | 대기 |
 | 5 | 작업 준비 5패널 | `src/hmi/dashboard/panels/setup/`, `shell/` | 대기 |
 | 6 | 설치·정비 7패널 | `src/hmi/dashboard/panels/{host,system}/`, `shell/` | 대기 |
@@ -69,11 +69,19 @@
 
 **Files:** 위 순서 3–6의 실제 패널, `panels/surface-panels.css`, `panels.yaml`(필요 시), dashboard tests.
 
-세부 묶음은 순서대로 진입 → 교통 정책의 재저장/결과/정보 없음 결함 → 나머지 패널이다.
+세부 묶음은 순서대로 진입 → 교통 정책의 재저장/결과/정보 없음 결함 → 카메라 확대와
+운용 7패널 → 준비·정비의 목적 구분과 나머지 패널이다.
 기본 `/dashboard` 진입에서는 인증과 허용된 역할 목적지만 활성화하고, 명시적으로
 선택한 `#compatibility` 경로에서 기존 종합 운용 화면을 유지한다. 인증과 토큰 보관은
 기존 client가 계속 소유하며 기본 진입 화면 때문에 영상·상태 socket·운용 polling을
 추가로 켜지 않는다. 등록된 자산과 CSP, 기존 호환 기능을 함께 검증한다.
+
+카메라 확대에서는 셸이 소유한 정지와 피드백이 실제 fullscreen 표시 트리 안에서
+접근 가능해야 한다. 영상 가장자리를 보존하고, 닫기·실패·unmount 때 셸과 초점이
+복구되어야 한다. 녹화 중지는 보조 도구를 접어도 접근 가능하게 유지한다.
+준비·정비에서는 위치 적용/맵 만들기, 접속 자격/안전 정책, 네트워크/릴리스/검수처럼
+독립 목적을 기존 disclosure/section 어휘로 나누고 입력·결과를 계속 보존한다.
+테마 아이콘 trio는 D-405를 유지하면서 시스템 테마 설명과 현재 선택을 정확하게 한다.
 
 1. 각 패널의 제목·주 동작·보류 사유·상태·세부 readback·완료 후 위치를 순서대로 점검한다.
 2. 실제로 발견한 기능 문제에는 재현 시험을 먼저 둔다. 단순 문구/간격 변경은 구현을 복제하는 시험을 만들지 않는다.
