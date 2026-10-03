@@ -274,3 +274,32 @@ def test_site_images_copy_only_public_repo_files():
         assert not [rule for rule in ignore if "secrets" in rule or ".env" in rule]
     proxy = (site / "Dockerfile.proxy").read_text(encoding="utf-8").splitlines()
     assert not [line for line in proxy if line.split(" ", 1)[0] in {"COPY", "ADD"}]
+
+
+def test_ignored_file_guard_covers_every_path_the_images_copy():
+    from deploy.site.build_candidate import _image_source_paths
+
+    root = Path(__file__).resolve().parents[1]
+    paths = _image_source_paths(root / "deploy" / "site")
+
+    for expected in ("deploy/site", "src/site/fleet", "src/site/vision/rosy_vision",
+                     "src/site/games/games", "src/hmi/web_common",
+                     "src/contracts/foundation/core_common", "apps/gateway/src",
+                     "src/runtime/sensing/map/map_v2_fleet/meshes/road_lines.stl"):
+        assert expected in paths, expected
+
+
+def test_site_candidate_refuses_ignored_files_under_an_image_source_path(tmp_path):
+    root = tmp_path / "repo"
+    _fixture_repo(root)
+    (root / "deploy/site/Dockerfile.fleet").write_text(
+        "FROM python\nCOPY --chown=0:0 src/site/fleet/ \\\n  /opt/rosy/src/site/fleet/\n",
+        encoding="utf-8")
+    calls: list = []
+    runner = _recording_runner(calls, ignored="src/site/fleet/robots.local.yaml\n")
+
+    with pytest.raises(ValueError, match="robots.local.yaml"):
+        build_candidate(root, tmp_path / "release", runner=runner, sbom_tool="syft")
+    ls_files = next(call for call in calls if call[:2] == ["git", "ls-files"])
+    assert ls_files[ls_files.index("--") + 1:] == ["deploy/site", "src/site/fleet"]
+    assert not any(call[:2] == ["docker", "build"] for call in calls)

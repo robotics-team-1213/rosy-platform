@@ -28,10 +28,28 @@ DEPLOY_FILES = (
 DOC_FILES = ("docs/reference/site-lan-discovery-profile.md",)
 _COMMIT = re.compile(r"^[0-9a-f]{40}$")
 SBOM_TOOLS = ("scout", "syft")
-# deploy/site is the proxy image build context, so ignored files there reach
-# the Docker daemon. Python caches from local test runs carry no secrets.
-_HARMLESS_IGNORED = ("__pycache__/", ".pytest_cache/")
+# deploy/site is the proxy image build context, and the Fleet/Vision COPY
+# sources are copied whole, so ignored files under any of them could reach the
+# Docker daemon or an image. Python caches and egg-info carry no secrets.
+_HARMLESS_IGNORED = ("__pycache__/", ".pytest_cache/", ".egg-info/")
+_COPIED_BY = ("Dockerfile.fleet", "Dockerfile.vision")
 Runner = Callable[..., subprocess.CompletedProcess]
+
+
+def _image_source_paths(site: Path) -> list[str]:
+    """deploy/site plus every build-context path the Fleet/Vision Dockerfiles copy."""
+    paths = {"deploy/site"}
+    for name in _COPIED_BY:
+        text = (site / name).read_text(encoding="utf-8").replace("\\\n", " ")
+        for line in text.splitlines():
+            words = line.split()
+            if not words or words[0].upper() not in {"COPY", "ADD"}:
+                continue
+            if any(word.startswith("--from") for word in words[1:]):
+                continue  # copies from another build stage, not the context
+            sources = [word for word in words[1:-1] if not word.startswith("--")]
+            paths.update(source.rstrip("/") for source in sources)
+    return sorted(paths)
 
 
 def _sha256(path: Path) -> str:
@@ -81,13 +99,13 @@ def build_candidate(root: Path, output_dir: Path, *, runner: Runner = subprocess
     if status.strip():
         raise ValueError("a clean Git worktree is required to build a candidate")
     ignored = runner(["git", "ls-files", "--others", "--ignored", "--exclude-standard",
-                      "--directory", "--", "deploy/site"],
+                      "--directory", "--", *_image_source_paths(site)],
                      cwd=root, check=True, capture_output=True, text=True).stdout
     unsafe = [line for line in ignored.splitlines()
               if line.strip() and not line.endswith(_HARMLESS_IGNORED)]
     if unsafe:
-        raise ValueError("ignored files under deploy/site (real secrets or config?) would "
-                         "enter the image build context; move them out first: "
+        raise ValueError("ignored files under deploy/site or an image source path (real "
+                         "secrets or config?) would enter the image build; move them out first: "
                          + ", ".join(sorted(unsafe)))
     commit = runner(["git", "rev-parse", "HEAD"], cwd=root, check=True,
                     capture_output=True, text=True).stdout.strip()
