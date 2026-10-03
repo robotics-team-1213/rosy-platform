@@ -54,6 +54,11 @@ class LineStuckDecisionRequest(BaseModel):
     decision: Literal["WAIT", "RESUME", "BACK_AND_RETRY", "MANUAL", "ABORT"]
 
 
+class LineStuckClaimRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    stuck_id: str = Field(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_.:-]+$")
+
+
 def transport_failure(exc: BaseException) -> tuple[str, str]:
     """A connect failure never reached CORE; anything later may have been applied."""
     if isinstance(exc, (httpx.ConnectError, httpx.ConnectTimeout, ConnectionRefusedError)):
@@ -130,6 +135,10 @@ def install_console_routes(app, *, console, sightings, require_viewer,
               tags=["line-stuck"])
     async def line_stuck_decision(robot_id: str, body: LineStuckDecisionRequest, request: Request,
                                   principal: SitePrincipal = Depends(require_operator)) -> dict:
+        # D-438 §1: claim before forwarding, so the resolver cannot answer in the gap.
+        resolver_loop = getattr(app.state, "stuck_resolver", None)
+        if resolver_loop is not None:
+            resolver_loop.claim(robot_id, body.stuck_id)
         client = console.clients().get(robot_id)
         if client is None:
             raise http_error(HubError("UNKNOWN_ROBOT", robot_id))
@@ -156,6 +165,17 @@ def install_console_routes(app, *, console, sightings, require_viewer,
         answer = record(accepted=True, outcome=result.get("outcome"))
         return {"robot_id": robot_id, "actor_id": principal.principal_id,
                 "answer": answer, "result": result}
+
+    @app.post("/api/fleet/robots/{robot_id}/line-stuck/claim", dependencies=operator_guard,
+              tags=["line-stuck"])
+    async def line_stuck_claim(robot_id: str, body: LineStuckClaimRequest,
+                               principal: SitePrincipal = Depends(require_operator)) -> dict:
+        """D-438 §1: a human opened this stuck; the resolver stops answering it."""
+        resolver_loop = getattr(app.state, "stuck_resolver", None)
+        if resolver_loop is not None:
+            resolver_loop.claim(robot_id, body.stuck_id)
+        return {"robot_id": robot_id, "stuck_id": body.stuck_id,
+                "claimed_by": principal.principal_id}
 
     @app.get("/api/fleet/formation", dependencies=read_guard, tags=["formation"])
     async def formation_state() -> dict:

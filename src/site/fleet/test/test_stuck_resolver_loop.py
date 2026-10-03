@@ -3,14 +3,19 @@
 from __future__ import annotations
 
 import asyncio
+from hashlib import sha256
 
 import httpx
 import pytest
+from fastapi.testclient import TestClient
 from fakes import FakeClock, FakeRobot
+from fleet.server.app import _fan_out_events, create_app
 from fleet.server.console import FleetConsole
 from fleet.server.line_stuck import LineStuckBoard
 from fleet.server.stuck_resolver import ResolverConfig, StuckResolver
 from fleet.server.stuck_resolver_loop import PRINCIPAL_ID, StuckResolverLoop
+from fleet.server.task_service import FleetTaskService
+from fleet.server.task_store import FleetTaskStore
 from fleet.swarm.robots import RobotEndpoint
 from fleet.swarm.transport import RobotApiError
 
@@ -119,7 +124,11 @@ def test_run_wakes_early_and_stops_on_cancel():
 
     async def scenario():
         task = asyncio.create_task(loop.run())
-        await asyncio.sleep(0.05)               # first pass
+        for _ in range(200):                    # first pass
+            if robot.calls:
+                break
+            await asyncio.sleep(0.01)
+        assert robot.calls
         passes = []
         orig = loop.run_once
 
@@ -128,9 +137,57 @@ def test_run_wakes_early_and_stops_on_cancel():
             await orig()
         loop.run_once = counted
         loop.wake.set()
-        await asyncio.sleep(0.05)
+        for _ in range(200):
+            if passes:
+                break
+            await asyncio.sleep(0.01)
         assert passes                           # woke well before poll_s
         task.cancel()
         with pytest.raises(asyncio.CancelledError):
             await task
     asyncio.run(asyncio.wait_for(scenario(), 5))
+
+
+OPERATOR = "operator-token"
+
+
+def _app(tmp_path, resolver_robot):
+    robot = FakeRobot("rosy_01", state=_state())
+    console = FleetConsole([RobotEndpoint("rosy_01", "http://127.0.0.1:8080", "rest-token")],
+                           [robot])
+    store = FleetTaskStore(tmp_path / "fleet.sqlite3")
+    return create_app(
+        console, task_service=FleetTaskService(store, robot_ids={"rosy_01"}),
+        start_task_dispatcher=False,
+        stuck_resolver_clients={"rosy_01": resolver_robot},
+        site_users={sha256(OPERATOR.encode()).hexdigest(): {"principal_id": "op-7",
+                                                            "role": "operator"}})
+
+
+# TestClient is used without `with`: the lifespan task never starts, so run_once() is
+# the only thing that can answer.
+def test_claim_route_silences_the_resolver(tmp_path):
+    resolver_robot = FakeRobot("rosy_01", state=_state())
+    app = _app(tmp_path, resolver_robot)
+    response = TestClient(app).post("/api/fleet/robots/rosy_01/line-stuck/claim",
+                                    json={"stuck_id": "stuck-abc"},
+                                    headers={"Authorization": f"Bearer {OPERATOR}"})
+    assert response.status_code == 200
+    asyncio.run(app.state.stuck_resolver.run_once())
+    assert not [c for c in resolver_robot.calls if c[0] == "line_stuck_decision"]
+
+
+def test_human_decision_claims_the_stuck(tmp_path):
+    app = _app(tmp_path, FakeRobot("rosy_01", state=_state()))
+    TestClient(app).post("/api/fleet/robots/rosy_01/line-stuck/decision",
+                         json={"stuck_id": "stuck-abc", "decision": "WAIT"},
+                         headers={"Authorization": f"Bearer {OPERATOR}"})
+    assert ("rosy_01", "stuck-abc") in app.state.stuck_resolver._resolver._claims
+
+
+def test_fan_out_feeds_the_task_projection_and_wakes_on_stuck_events():
+    seen, wake = [], asyncio.Event()
+    fan = _fan_out_events(lambda event: seen.append(event) or {"ok": True}, wake)
+    assert fan({"type": "nav.goal_reached"}) == {"ok": True} and not wake.is_set()
+    fan({"type": "nav.line_stuck_opened"})
+    assert wake.is_set() and len(seen) == 2

@@ -44,6 +44,8 @@ from fleet.server.mission_service import MissionService
 from fleet.server.policy_evidence import PolicyEvidenceStore
 from fleet.server.proposal_store import ProposalStore
 from fleet.server.step_action_kinds import dispatch_open
+from fleet.server.stuck_resolver import ResolverConfig, StuckResolver
+from fleet.server.stuck_resolver_loop import StuckResolverLoop
 from fleet.server.step_dispatcher import StepJobDispatcher
 from fleet.server.task_service import FleetTaskService
 
@@ -86,6 +88,17 @@ class VisionLeaseRequest(BaseModel):
         return PreviewRectification.from_mapping(value).as_dict()
 
 
+def _fan_out_events(project, wake: Optional[asyncio.Event]):
+    """D-438 §1: the hub has one event slot; the task projection keeps its return value,
+    and lane-stuck events wake the resolver (cheap, never raises into the hub)."""
+    def callback(event):
+        result = project(event) if project is not None else None
+        if wake is not None and str(event.get("type", "")).startswith("nav.line_stuck_"):
+            wake.set()
+        return result
+    return callback
+
+
 def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                web_common: Optional[Path] = None, hub=None, sightings=None,
                task_service: Optional[FleetTaskService] = None,
@@ -111,6 +124,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                mission_model_turn_worker=None,
                post_action_observation_source=None,
                site_lanes: Optional[Mapping] = None,
+               stuck_resolver_clients: Optional[Mapping[str, object]] = None,
                pairing=None, pairing_sync_token: Optional[str] = None,
                localization_service=None, deployment_profile: str = "production",
                omx_cell_grant_revisions: Optional[Mapping[str, Mapping[str, str]]] = None,
@@ -293,6 +307,9 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         mission_feedback_scheduler = None
         mission_model_turn_worker_task = None
         localization_task = None
+        resolver_task = None
+        if getattr(app.state, "stuck_resolver", None) is not None:
+            resolver_task = asyncio.create_task(app.state.stuck_resolver.run())
         if localization_service is not None:
             localization_task = asyncio.create_task(localization_service.run())
         if task_service is not None and start_task_dispatcher:
@@ -321,7 +338,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         finally:
             for background in (dispatcher, mission_worker, cell_job_worker, proposal_expiry,
                                goal_evidence_worker, mission_feedback_scheduler,
-                               mission_model_turn_worker_task, localization_task):
+                               mission_model_turn_worker_task, localization_task, resolver_task):
                 if background is not None:
                     background.cancel()
                     try:
@@ -358,8 +375,6 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     app.state.omx_instances = configured_omx
     app.state.localization_service = localization_service
     if task_service is not None:
-        if hub is not None:
-            hub.set_event_callback(task_service.project_core_event)
 
         async def release_traffic_task(mission: dict) -> None:
             task_service.traffic_queue_released(mission["task_id"])
@@ -452,6 +467,16 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                            operator_guard=operator_guard, site_lanes=site_lanes,
                            require_operator=require_operator,
                            answer_log_path=task_service.store.path if task_service else None)
+
+    if stuck_resolver_clients is not None:
+        app.state.stuck_resolver = StuckResolverLoop(
+            console, app.state.line_stuck, StuckResolver(ResolverConfig()),
+            clients=lambda: stuck_resolver_clients)
+    if hub is not None and (task_service is not None or stuck_resolver_clients is not None):
+        resolver = getattr(app.state, "stuck_resolver", None)
+        hub.set_event_callback(_fan_out_events(
+            task_service.project_core_event if task_service is not None else None,
+            resolver.wake if resolver is not None else None))
 
     install_task_dispatch_routes(app, console=console, task_service=task_service,
                                  configured_omx=configured_omx,
