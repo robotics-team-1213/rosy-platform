@@ -7,11 +7,13 @@ import importlib.metadata
 import json
 import shutil
 from pathlib import Path
+import sys
 
 import numpy as np
 from PIL import Image
 
-from omx_adapter.demonstration import validate_episode
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'contracts/learning/src'))
+from rosy.contracts.learning.omx import validate_demonstration as validate_episode  # noqa: E402
 
 
 LEROBOT_VERSION = "0.4.4"

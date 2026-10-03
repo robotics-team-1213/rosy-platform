@@ -33,3 +33,11 @@ object를 목록으로 오인해 받던 검증 오류를 수정했으며 정상 
 OMX 변환기는 `learning/curation/omx/common_episode.py`이다. 기존 시연의 profile
 검증과 원본 bytes를 보존한다. 기존 runtime recorder·LeRobot 파일 형식은 유지한다.
 Pinky/Pilot 변환기·Fleet join·학습 정책 실제 소비/승격·장치 loader는 아직 남아 있다.
+
+0.1.3의 `rosy.contracts.learning.omx.validate_demonstration(path)`는 완성 시연의
+rad 목표·시계·간격·skew·원본 해시·RGB PNG CRC와 압축 행을 검사한다.
+`validate_profile(doc, root=path)`는 공통 OMX Episode를 원본 manifest/stream에
+연결한다. 일반 `validate_episode`는 계속 구조·파일 검증만 수행한다.
+DatasetStore와 offline curation은 OMX profile 본문 검증을 호출한다.
+DatasetStore는 아직 본문 검증기가 없는 Pinky/Pilot profile을 등록하지 않는다.
+원본 task outcome은 operator 기록이며 독립 과제 성공의 인증은 아니다.

@@ -425,8 +425,8 @@ roots:
     legacy: src/products/omx/adapter/omx_adapter/lerobot_export.py
     wave: "1"
     note: >-
-      Offline LeRobot export of OMX demonstrations (D-427 1c, Q6). Imports
-      omx_adapter.demonstration until 2b moves that check to the Episode profile.
+      Offline LeRobot export of OMX demonstrations (D-427 1c, Q6).
+      OMX body validation belongs to contracts/learning; no middleware import.
     concern: learning
   - path: data
     part: learning

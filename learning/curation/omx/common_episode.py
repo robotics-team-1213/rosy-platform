@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "contracts/learning/src"))
 
 from rosy.contracts.learning import seal, validate_episode  # noqa: E402
-from lerobot_export import validate_episode as validate_omx  # noqa: E402
+from rosy.contracts.learning.omx import validate_demonstration as validate_omx  # noqa: E402
 
 
 def convert(source, output):

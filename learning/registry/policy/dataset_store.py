@@ -1,5 +1,6 @@
-"""Immutable DatasetManifest/Episode file closure; no sample-body or task certification."""
+"""Immutable DatasetManifest/Episode closure and OMX v1 body checks; no task certification."""
 import argparse
+from contextlib import closing
 import json
 import os
 from pathlib import Path
@@ -11,6 +12,7 @@ import tempfile
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / 'contracts/learning/src'))
 from rosy.contracts.learning import validate_dataset, validate_episode  # noqa: E402
+from rosy.contracts.learning.omx import validate_profile  # noqa: E402
 
 
 def closure(root):
@@ -33,6 +35,9 @@ def closure(root):
             name = (path.parent / ref['path']).relative_to(root).as_posix()
             if name not in files or any(files[name][key] != ref[key] for key in ('sha256', 'bytes')):
                 raise ValueError('Episode file is outside declared dataset closure')
+        if episode['profile'] != 'omx_demonstration_v1':
+            raise ValueError('Episode body profile validator not implemented')
+        validate_profile(episode, root=path.parent)
         episodes[episode['revision']] = episode
     if set(episodes) != set(doc['episodes']):
         raise ValueError('DatasetManifest Episode revisions differ from actual manifests')
@@ -45,11 +50,11 @@ class DatasetStore:
         if self.root.drive.upper() == 'F:':
             raise ValueError('dataset output belongs outside source drive F:')
         self.root.mkdir(parents=True, exist_ok=True)
-        with sqlite3.connect(self.root / 'datasets.sqlite3') as db:
+        with closing(sqlite3.connect(self.root / 'datasets.sqlite3')) as db:
             db.execute('CREATE TABLE IF NOT EXISTS datasets (revision TEXT PRIMARY KEY)')
 
     def require(self, revisions):
-        with sqlite3.connect(self.root / 'datasets.sqlite3') as db:
+        with closing(sqlite3.connect(self.root / 'datasets.sqlite3')) as db:
             registered = {row[0] for row in db.execute('SELECT revision FROM datasets')}
         for revision in revisions:
             if not isinstance(revision, str) or len(revision) != 64 or any(c not in '0123456789abcdef' for c in revision):

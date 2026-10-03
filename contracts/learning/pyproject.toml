@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "rosy-contracts-learning"
-version = "0.1.2"
+version = "0.1.3"
 description = "ROS-free learning artifact and owner binding contract drafts"
 requires-python = ">=3.12"
 
