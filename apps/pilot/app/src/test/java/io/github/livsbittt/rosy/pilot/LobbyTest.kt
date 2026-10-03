@@ -7,6 +7,11 @@ import okhttp3.mockwebserver.MockWebServer
 import java.util.concurrent.TimeUnit
 
 class LobbyTest {
+    @Test fun existingDisplayedCodeAcceptsItsHyphenWithoutTruncatingTheSecondGroup() {
+        assertEquals("AB123456", PairingCode.normalize("ab12-3456"))
+        assertEquals("AB123456", PairingCode.normalize("ab12 3456"))
+        assertThrows(IllegalArgumentException::class.java) { PairingCode.normalize("AB12") }
+    }
     @Test fun legacyServerRequiresCodeAndLearnsIdentityOnlyAfterAuthenticatedPairing() {
         MockWebServer().use { remote ->
             remote.start(); val candidate = row(remote).copy(robotId = ""); val store = store(candidate)

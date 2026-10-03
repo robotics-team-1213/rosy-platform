@@ -18,6 +18,9 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import java.util.concurrent.Executors
+import io.github.livsbittt.rosy.cam.health.DeviceHealth
+import io.github.livsbittt.rosy.cam.health.ScreenCoolingPolicy
+import io.github.livsbittt.rosy.cam.health.ScreenPower
 
 /** Discover, select, join. A code appears only when the selected server requires pairing. */
 class MainActivity : Activity() {
@@ -33,42 +36,59 @@ class MainActivity : Activity() {
     @Volatile private var attempt = 0L
     private var foreground = false
     private var opening = false
+    private var lastError: String? = null
+    private val screenSleep = PendingScreenSleep()
+    private val sleeping get() = screenSleep.active
+    private var pendingApprovedSleep = false
+    private val cooling = ScreenCoolingPolicy()
+    private val screenPower by lazy { ScreenPower(this) }
+    private val health by lazy { TabletHealth(this) { value -> showHealth(value) } }
+    private var lastHealth: DeviceHealth? = null
+    private lateinit var healthText: TextView
     private lateinit var root: LinearLayout
     private lateinit var status: TextView
     private lateinit var robots: LinearLayout
+    private var shownCandidates: List<Candidate>? = null
+    private var shownCooling = false
     private val refreshTick = object : Runnable {
         override fun run() { if (!foreground) return; refresh(); if (foreground) main.postDelayed(this, 5000) }
     }
     override fun onCreate(state: Bundle?) {
         super.onCreate(state); window.addFlags(WindowManager.LayoutParams.FLAG_SECURE); showLobby()
+        if (android.os.Build.VERSION.SDK_INT >= 33) onBackInvokedDispatcher.registerOnBackInvokedCallback(
+            android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT) { backToLobbyOrExit() }
     }
-    private fun label(text: String, size: Float = 18f) = TextView(this).apply {
-        this.text = text; textSize = size; setTextColor(PilotColors.foreground); setPadding(0, 12, 0, 12)
-    }
-    private fun button(text: String, action: () -> Unit) = Button(this).apply {
-        this.text = text; isAllCaps = false; textSize = 18f; setPadding(24, 12, 24, 12)
-        setTextColor(android.content.res.ColorStateList(arrayOf(intArrayOf(android.R.attr.state_enabled), intArrayOf()), intArrayOf(PilotColors.foreground, PilotColors.muted)))
-        fun fill(color: Int) = android.graphics.drawable.GradientDrawable().apply { setColor(color); cornerRadius = 12f; setStroke(1, PilotColors.muted) }
-        background = android.graphics.drawable.StateListDrawable().apply {
-            addState(intArrayOf(-android.R.attr.state_enabled), fill(PilotColors.disabled))
-            addState(intArrayOf(android.R.attr.state_pressed), fill(PilotColors.pressed))
-            addState(intArrayOf(), fill(PilotColors.card))
-        }
-        setOnClickListener { action() }
-    }
+    private val views by lazy { PilotViews(this) }
+    private fun label(text: String, size: Float = 16f) = views.label(text, size)
+    private fun button(text: String, action: () -> Unit) = views.button(text, action = action)
     private fun showLobby() {
-        root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(32, 16, 32, 16); setBackgroundColor(PilotColors.background) }
+        root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(PilotColors.background) }
         setContentView(root)
+        shownCandidates = null
         window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
-        root.addView(label("ROSY", 24f).apply { setTextColor(PilotColors.rose) })
-        root.addView(label("Pilot · 로봇 선택", 26f))
-        status = label("같은 Wi-Fi에서 켜진 로봇을 찾고 있습니다…"); root.addView(status)
-        root.addView(button("다시 찾기") { endSession(); startDiscovery() })
+        val columns = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        root.addView(columns, LinearLayout.LayoutParams(-1, -1))
+        val identity = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(views.dp(32), views.dp(40), views.dp(32), views.dp(24)) }
+        columns.addView(identity, LinearLayout.LayoutParams(views.dp(260), -1))
+        identity.addView(label("ROSY", 22f).apply { setTextColor(PilotColors.rose) })
+        identity.addView(label("Pilot", 32f).apply { setTypeface(typeface, android.graphics.Typeface.BOLD) })
+        identity.addView(views.label("로봇을 선택하고\n직접 조종하세요.", 16f, true).apply { setPadding(0, views.dp(24), 0, 0) })
+        identity.addView(View(this), LinearLayout.LayoutParams(1, 0, 1f))
+        healthText = views.label("태블릿 상태 확인 중", 14f, true); identity.addView(healthText)
+        lastHealth?.let { renderHealth(it) }
+        identity.addView(button("태블릿") { deviceDetails() })
+        val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(views.dp(24), views.dp(40), views.dp(40), views.dp(24)) }
+        columns.addView(list, LinearLayout.LayoutParams(0, -1, 1f))
+        val header = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL }
+        header.addView(label("로봇 선택", 28f).apply { typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL) }, LinearLayout.LayoutParams(0, -2, 1f))
+        header.addView(views.button("다시 찾기", primary = true) { lastError = null; endSession { opening = false; status.text = "같은 Wi-Fi에서 로봇을 다시 찾고 있습니다…"; startDiscovery() }; opening = true })
+        list.addView(header)
+        status = views.label("같은 Wi-Fi에서 켜진 로봇을 찾고 있습니다…", 16f, true).apply { setPadding(0, views.dp(16), 0, views.dp(28)) }; list.addView(status)
         robots = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        root.addView(ScrollView(this).apply { addView(robots) }, LinearLayout.LayoutParams(-1, 0, 1f))
+        list.addView(ScrollView(this).apply { addView(robots) }, LinearLayout.LayoutParams(-1, 0, 1f))
     }
     private fun startDiscovery() {
-        if (!foreground || discovery != null) return
+        if (!foreground || opening || sleeping || cooling.coolingRequired || discovery != null) return
         discovery = RobotDiscovery(this, candidates) { main.post { refresh() } }
         runCatching { discovery!!.start() }.onFailure { status.text = "Wi-Fi 연결을 확인한 뒤 다시 찾아주세요." }
         main.removeCallbacks(refreshTick); main.postDelayed(refreshTick, 5000)
@@ -76,22 +96,24 @@ class MainActivity : Activity() {
     private fun refresh() {
         val current = session
         if (current != null && !current.authorized()) {
-            endSession(); status.text = "연결이 끝났습니다. 로봇을 다시 선택하세요."; startDiscovery(); return
+            lastError = "연결이 끝났습니다. 로봇을 다시 선택하세요."
+            returnToLobby(); status.text = lastError; return
         }
         if (web != null || opening) return
-        robots.removeAllViews()
         val records = candidates.records()
-        if (records.isEmpty()) { robots.addView(label("로봇이 보이지 않습니다. 같은 Wi-Fi와 로봇 전원을 확인하세요.", 16f)); return }
-        status.text = "로봇을 눌러 연결하세요. 필요한 경우에만 로봇의 로그인 코드를 입력합니다."
+        status.text = lastError ?: if (cooling.coolingRequired) "태블릿 발열이 내려갈 때까지 조종 연결을 닫았습니다." else if (records.isEmpty()) "같은 Wi-Fi에서 로봇을 찾고 있습니다…" else "${records.size}대 발견 · 연결할 로봇을 선택하세요."
+        if (shownCandidates == records && shownCooling == cooling.coolingRequired) return
+        shownCandidates = records; shownCooling = cooling.coolingRequired; robots.removeAllViews()
+        if (records.isEmpty()) { robots.addView(label(if (cooling.coolingRequired) "태블릿이 식으면 다시 연결할 수 있습니다." else "로봇이 보이지 않으면 같은 Wi-Fi와 로봇 전원을 확인하세요.", 16f)); return }
         records.forEach { candidate ->
             val valid = runCatching { candidates.addresses(candidate.host, candidate.port) != null }.getOrDefault(false)
-            robots.addView(button("${candidate.name.ifBlank { candidate.robotId.ifBlank { "Rosy" } }} · ${if (valid) "연결" else "중복 광고 확인"}") {
-                select(candidate)
-            }.apply { isEnabled = valid })
+            robots.addView(views.robot(candidate, valid && !cooling.coolingRequired) { select(candidate) },
+                LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = views.dp(12) })
         }
     }
     private fun select(incoming: Candidate) {
-        if (opening || web != null) return
+        if (opening || sleeping || cooling.coolingRequired || web != null) return
+        lastError = null
         val addresses = runCatching { candidates.addresses(incoming.host, incoming.port) }.getOrNull() ?: return
         val candidate = incoming.copy(addresses = addresses)
         opening = true
@@ -119,7 +141,7 @@ class MainActivity : Activity() {
         val input = EditText(this).apply {
             hint = "8자리 로그인 코드"; textSize = 28f; setSingleLine(); setTextColor(PilotColors.foreground)
             inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS or android.text.InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
-            filters = arrayOf(android.text.InputFilter.LengthFilter(8))
+            filters = arrayOf(android.text.InputFilter.LengthFilter(9))
         }
         fun canceled() { if (version == attempt) { opening = false; refresh() } }
         val dialog = AlertDialog.Builder(this).setTitle("로봇 로그인 코드")
@@ -129,8 +151,8 @@ class MainActivity : Activity() {
         pairingDialog = dialog
         dialog.setOnDismissListener { if (pairingDialog === dialog) pairingDialog = null; if (web == null) window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE) }
         dialog.setOnShowListener { dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
-            val code = input.text.toString().trim().uppercase()
-            if (!Regex("[0-9A-Z]{8}").matches(code)) { input.error = "숫자·영문 8자리"; return@setOnClickListener }
+            val code = runCatching { PairingCode.normalize(input.text.toString()) }.getOrNull()
+            if (code == null) { input.error = "숫자·영문 8자리 (XXXX-XXXX)"; return@setOnClickListener }
             input.text.clear(); dialog.dismiss(); join(candidate, offer, store, version, code)
         } }
         dialog.show()
@@ -151,8 +173,14 @@ class MainActivity : Activity() {
                 main.post {
                     if (version != attempt || !foreground || web != null) { io.execute { ready.stop() }; return@post }
                     opening = false; session = approved; proxy = ready
-                    root.removeView(robots.parent as View)
-                    root.addView(button("로봇 목록으로") { endSession(); startDiscovery() })
+                    root.removeAllViews()
+                    val bar = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL; setPadding(views.dp(12), views.dp(4), views.dp(12), views.dp(4)) }
+                    bar.addView(button("로봇 목록") { returnToLobby() })
+                    status = label("${candidate.name} · ${approved.target.id}", 18f).apply { setPadding(views.dp(20), 0, views.dp(20), 0); typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL); maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END }
+                    bar.addView(status, LinearLayout.LayoutParams(0, -2, 1f))
+                    bar.addView(button("태블릿") { deviceDetails() })
+                    root.addView(bar)
+                    healthText = label("태블릿 상태 확인 중", 14f); lastHealth?.let { renderHealth(it) }
                     val view = WebView(this); web = view; view.setBackgroundColor(PilotColors.background)
                     view.webChromeClient = object : android.webkit.WebChromeClient() {
                         override fun onConsoleMessage(message: android.webkit.ConsoleMessage): Boolean {
@@ -160,7 +188,10 @@ class MainActivity : Activity() {
                             return true
                         }
                     }
-                    window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+                    // Private debug-device visual evidence is allowed after pairing; code dialogs
+                    // remain protected and release sessions always block captures.
+                    if (applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0) window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+                    else window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
                     view.settings.apply {
                         javaScriptEnabled = true; domStorageEnabled = true; allowFileAccess = false; allowContentAccess = false
                         mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_NEVER_ALLOW
@@ -177,33 +208,82 @@ class MainActivity : Activity() {
                             if (proxy === ready && web === view) view.loadUrl("${ready.origin}/pilot")
                         }
                     }
-                    status.text = "${candidate.name} · ${if (offer.mode == "development") "개발 모드" else "연결됨"}"
+                    status.text = "${candidate.name} · ${approved.target.id} · ${if (offer.mode == "development") "개발 연결" else "연결됨"}"
                 }
             } catch (error: Exception) {
                 // Exception messages and HTTP bodies can contain credentials; log class and locations only.
                 android.util.Log.e("RosyPilot", "Join failed: ${error.javaClass.simpleName}\n" + error.stackTrace.take(8).joinToString("\n"))
-                relay?.stop(); failed(version, "연결하지 못했습니다. 코드를 확인하거나 잠시 뒤 다시 선택하세요.")
+                relay?.stop(); failed(version, when {
+                    error is PairingRejected && error.status == 401 -> "로그인 코드가 유효하지 않습니다. 로봇에서 새 코드를 발급한 뒤 다시 연결하세요."
+                    error is PairingRejected && error.status == 429 -> "연결 요청이 많습니다. 잠시 뒤 다시 선택하세요."
+                    error is javax.net.ssl.SSLException -> "로봇의 HTTPS 인증을 확인할 수 없습니다. 설치 담당자에게 확인하세요."
+                    error is java.io.IOException -> "로봇에 닿지 못했습니다. 같은 Wi-Fi와 로봇 전원을 확인하세요."
+                    else -> "연결 승인을 확인하지 못했습니다. 로봇을 다시 선택하세요."
+                })
             }
         }
     }
     private fun failed(version: Long, message: String) { main.post {
         if (version != attempt || !foreground) return@post
-        opening = false; refresh(); status.text = message
+        opening = false; lastError = message; refresh(); status.text = message
     } }
-    private fun endSession() {
+    private fun endSession(afterClosed: (() -> Unit)? = null) {
         // Resource-owning completion callbacks must run their stale-attempt cleanup.
-        attempt++; opening = false; main.removeCallbacks(refreshTick)
+        attempt++; screenSleep.revoke(); opening = false; main.removeCallbacks(refreshTick)
+        val closingAttempt = attempt
         pairingDialog?.dismiss(); pairingDialog = null
         web?.evaluateJavascript("window.dispatchEvent(new Event('blur')); sessionStorage.clear();", null)
         web?.stopLoading(); web?.destroy(); web = null
         val oldRelay = proxy; proxy = null; session = null
         val oldCandidates = candidates; candidates = CandidateStore()
         discovery?.stop(clearCandidates = false); discovery = null
-        if (oldRelay != null) io.execute { oldRelay.stop(); oldCandidates.clear() } else oldCandidates.clear()
+        // Serialize the cooling completion behind startup/stale relay cleanup and native zero.
+        SessionShutdown.close(io, java.util.concurrent.Executor { main.post(it) },
+            { oldRelay?.stop(); oldCandidates.clear() }, afterClosed?.let { action -> { if (attempt == closingAttempt) action() } })
         CookieManager.getInstance().removeAllCookies(null); WebStorage.getInstance().deleteAllData(); showLobby()
     }
-    override fun onResume() { super.onResume(); foreground = true; startDiscovery() }
-    override fun onPause() { foreground = false; endSession(); super.onPause() }
+    private fun renderHealth(value: DeviceHealth) {
+        val temperature = value.temperatureC?.let { String.format(java.util.Locale.ROOT, "%.1f°C", it) } ?: "온도 확인 불가"
+        healthText.text = "배터리 ${value.batteryPct?.let { "$it%" } ?: "확인 불가"} · $temperature"
+    }
+    private fun showHealth(value: DeviceHealth) {
+        val wasCooling = cooling.coolingRequired
+        lastHealth = value; renderHealth(value)
+        if (foreground && cooling.requestSleep(value)) sleepScreen(askPermission = false)
+        else if (foreground && !sleeping && !cooling.coolingRequired) { if (wasCooling) screenPower.restore(); startDiscovery() }
+    }
+    private fun deviceDetails() {
+        val thermal = when (lastHealth?.thermalStatus) { 0 -> "정상"; 1 -> "가벼운 발열"; 2 -> "발열 주의"; 3, 4, 5, 6 -> "발열 보호"; else -> "상태 확인 불가" }
+        pairingDialog?.dismiss()
+        pairingDialog = AlertDialog.Builder(this).setTitle("태블릿 상태")
+            .setMessage("${healthText.text}\n발열: $thermal\n\n화면을 끄면 조종 연결을 닫습니다. 로봇은 다시 선택해 연결할 수 있습니다.")
+            .setPositiveButton("화면 끄기") { _, _ -> sleepScreen(true) }.setNegativeButton("닫기", null).create()
+        pairingDialog!!.show()
+    }
+    private fun returnToLobby() { endSession { opening = false; startDiscovery() }; opening = true }
+    private fun backToLobbyOrExit() { if (web != null) returnToLobby() else finish() }
+    @Deprecated("Handled by the platform back callback on API 33+")
+    override fun onBackPressed() { backToLobbyOrExit() }
+    private fun sleepScreen(askPermission: Boolean) {
+        if (sleeping) return
+        endSession {
+            if (!screenSleep.finish(attempt) || isDestroyed || !foreground) return@endSession
+            val locked = screenPower.sleep(askPermission)
+            if (!locked) status.text = "조종 연결을 닫았습니다. 화면 잠금 승인이 없으면 Android 절전 시간 뒤 화면이 꺼집니다."
+        }
+        screenSleep.begin(attempt)
+    }
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: android.content.Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == ScreenPower.REQUEST_SCREEN_LOCK && screenPower.approved()) pendingApprovedSleep = true
+    }
+    override fun onResume() {
+        super.onResume(); foreground = true
+        if (!cooling.coolingRequired) screenPower.restore()
+        health.start()
+        if (pendingApprovedSleep) { pendingApprovedSleep = false; sleepScreen(false) } else startDiscovery()
+    }
+    override fun onPause() { foreground = false; health.stop(); endSession(); super.onPause() }
     override fun onDestroy() { endSession(); io.execute { main.post { io.shutdown() } }; super.onDestroy() }
     companion object {
         fun readLimited(input: java.io.InputStream, maximum: Int): ByteArray {

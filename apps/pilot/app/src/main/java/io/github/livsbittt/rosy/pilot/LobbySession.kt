@@ -63,16 +63,16 @@ object LobbyPairing {
     }
     fun connect(candidate: Candidate, offer: LobbyOffer, store: CandidateStore, code: String? = null): LobbySession {
         val development = offer.mode == "development"
-        if (!development) require(code != null && Regex("[0-9A-Za-z]{8}").matches(code)) { "eight-character pairing code required" }
+        val normalizedCode = if (!development) PairingCode.normalize(requireNotNull(code)) else null
         check(store.matches(candidate, offer.robotId)) { "selected device changed" }
         val client = lobbyClient(candidate)
         try {
             val path = if (development) "/api/v1/auth/development-session" else "/api/v1/auth/pair"
-            val data = JSONObject().apply { if (!development) { put("code", code!!.uppercase()); put("label", "Rosy Pilot") } }
+            val data = JSONObject().apply { if (!development) { put("code", normalizedCode); put("label", "Rosy Pilot") } }
             client.newCall(Request.Builder().url(url(candidate, path)).post(data.toString().toRequestBody("application/json".toMediaType())).build())
                 .execute().use { response ->
                     android.util.Log.i("RosyPilot", "Pair approval HTTP ${response.code}; development=$development")
-                    check(response.isSuccessful) { "connection not approved" }
+                    if (!response.isSuccessful) throw PairingRejected(response.code)
                     val body = read(response); val credential = body.getString("token")
                     check(credential.length in 16..1024) { "invalid session credential" }
                     val expiry = if (body.isNull("expires_at")) { if (development) Instant.now().plusSeconds(3600) else Instant.MAX }

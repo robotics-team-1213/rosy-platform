@@ -48,7 +48,7 @@ class PilotProxy(private val connection: PilotConnection, private val assets: Bu
         return super.serve(session)
     }
     override fun serveHttp(session: IHTTPSession): Response {
-        if (session.uri == "/pilot/bootstrap.js") return reply(200, "application/javascript", "sessionStorage.setItem('rosy.pilot.token',${JSONObject.quote(target.credential)});".toByteArray())
+        if (session.uri == "/pilot/bootstrap.js") return reply(200, "application/javascript", "document.documentElement.dataset.pilotShell='android';sessionStorage.setItem('rosy.pilot.token',${JSONObject.quote(target.credential)});".toByteArray())
         if (session.uri.endsWith("/sw.js")) return reply(404, "text/plain", ByteArray(0))
         val asset = BundledPath.asset(session.uri)
         if (asset != null) {

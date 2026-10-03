@@ -33,6 +33,18 @@ HTML에는 CSP를 보낸다. 원본 JS는 복제 구현하지 않고 X:의 gener
 호출하고 off-main 400 ms zero 요청을 보낸 뒤 소켓을 닫는다. CORE deadman은 도달할
 수 없는 로봇의 최종 정지를 맡는다. 실제 로봇 정지는 APK/JVM 시험과 별도 수용이다.
 
+태블릿 선택 화면은 왼쪽 앱 정보·태블릿 상태와 오른쪽 검색·로봇 목록으로 나눈다.
+검색은 하나의 주 동작이고 로봇 행은 이름·설명·연결 동작을 읽는 순서대로 배치한다.
+네이티브 공통 `PilotViews`는 버튼·텍스트·로봇 행을 제공하고, 색은 공통 `tokens.css`의
+어두운 테마에서 빌드 시 생성한다. 별도의 수동 색상 사본을 유지하지 않는다.
+연결 중에는 목록 복귀·선택한 로봇·태블릿 메뉴를 작은 상단 줄에 모아 조종 화면의
+공간을 확보한다. 태블릿 메뉴의 배터리·온도·발열 상태는 로봇 상태와 구분한다.
+화면 끄기는 이 메뉴에 있다. Cam의 공통 화면 보호 규약을
+재사용하고 심각한 발열 때는 조종을 닫은 뒤 화면을 끈다. 직접 화면 끄기를 누를 때만
+Android의 force-lock 승인을 선택적으로 요청한다. 승인 없이는 밝기와 화면 깨움 유지를
+내리고 OS 절전 시간을 따른다. 자동 보호는 권한 팝업을 띄우지 않는다. 발열 회복 전에는
+재연결을 막는다. 원본 조종 UI의 주행 안전장치는 그대로 사용한다.
+
 Windows 빌드(F: 소스, X: 출력·캐시):
 
 ```powershell
@@ -49,3 +61,5 @@ package: `io.github.livsbittt.rosy.pilot`; activity: `.MainActivity`.
 
 [OkHttp](https://square.github.io/okhttp/)는 Apache-2.0,
 [NanoHTTPD/NanoWSD](https://github.com/NanoHttpd/nanohttpd)는 BSD-3-Clause다.
+[Lucide](https://github.com/lucide-icons/lucide)의 action icon은 ISC/일부 Feather MIT이며
+원문 라이선스를 APK의 `assets/licenses/lucide.txt`에 포함한다.

@@ -1,13 +1,13 @@
 <resources><style name="PilotTheme" parent="android:style/Theme.Material.NoActionBar">
     <item name="android:fontFamily">sans</item><item name="android:windowLightStatusBar">false</item>
-    <item name="android:statusBarColor">#101214</item><item name="android:navigationBarColor">#101214</item>
-    <item name="android:windowActionModeOverlay">true</item><item name="android:colorAccent">#D7DDD8</item>
-    <item name="android:windowBackground">#101214</item><item name="android:colorBackground">#101214</item>
-    <item name="android:textColorPrimary">#eeeeef</item><item name="android:textColorSecondary">#9499a0</item>
-    <item name="android:colorControlNormal">#9499a0</item><item name="android:colorControlActivated">#eeeeef</item>
+    <item name="android:statusBarColor">@color/rosy_background</item><item name="android:navigationBarColor">@color/rosy_background</item>
+    <item name="android:windowActionModeOverlay">true</item><item name="android:colorAccent">@color/rosy_foreground</item>
+    <item name="android:windowBackground">@color/rosy_background</item><item name="android:colorBackground">@color/rosy_background</item>
+    <item name="android:textColorPrimary">@color/rosy_foreground</item><item name="android:textColorSecondary">@color/rosy_muted</item>
+    <item name="android:colorControlNormal">@color/rosy_muted</item><item name="android:colorControlActivated">@color/rosy_foreground</item>
     <item name="android:alertDialogTheme">@style/PilotDialog</item>
 </style><style name="PilotDialog" parent="android:style/Theme.Material.Dialog.Alert">
-    <item name="android:windowBackground">#101214</item><item name="android:colorBackground">#101214</item>
-    <item name="android:textColorPrimary">#eeeeef</item><item name="android:textColorSecondary">#9499a0</item>
-    <item name="android:colorAccent">#eeeeef</item>
+    <item name="android:windowBackground">@color/rosy_background</item><item name="android:colorBackground">@color/rosy_background</item>
+    <item name="android:textColorPrimary">@color/rosy_foreground</item><item name="android:textColorSecondary">@color/rosy_muted</item>
+    <item name="android:colorAccent">@color/rosy_foreground</item>
 </style></resources>
