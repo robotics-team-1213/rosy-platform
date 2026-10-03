@@ -49,7 +49,7 @@ def _document():
 
 def test_kinematics_file_pins_the_locked_open_manipulator_revision():
     document = _document()
-    lock_path = DEFAULT_KINEMATICS_PATH.parents[5] / "deploy/robot/omx/stack.lock.yaml"
+    lock_path = DEFAULT_KINEMATICS_PATH.parents[6] / "deploy/robot/omx/stack.lock.yaml"
     with open(lock_path, encoding="utf-8") as handle:
         lock = yaml.safe_load(handle)
     assert document["source"]["revision"] == lock["vendor"]["revision"] == PINNED_REVISION

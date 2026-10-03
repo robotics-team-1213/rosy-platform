@@ -169,9 +169,10 @@ def test_gz_multi_seeds_map_initialpose_at_spawn():
 def test_non_composed_nav2_does_not_apply_namespace_twice():
     """The parent owns the namespace; child launch groups must receive an empty one."""
     bringup = (
-        (ROOT.parents[2] / "src")
-        # D-241 role dirs: navigation lives at middleware/core/navigation (no nesting).
-        / "runtime"
+        ROOT.parents[2]
+        # D-427 wave 4c: navigation lives at middleware/core/navigation.
+        / "middleware"
+        / "core"
         / "navigation"
         / "launch"
         / "bringup_launch.xml"

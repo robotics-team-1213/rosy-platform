@@ -111,7 +111,7 @@ def test_prefix_matching_does_not_reject_similar_unrelated_packages():
 def test_platform_python_roots_are_not_ament_packages():
     package_xml = [
         str(path.relative_to(ROOT))
-        for root in ("modules", "integrations", "apps", "profiles", "operations/world",
+        for root in ("modules", "integrations/robots", "apps", "profiles", "operations/world",
                      "operations/processes/palletizing", "operations/execution",
                      "operations/apps/fleet")
         for path in (ROOT / root).rglob("package.xml")

@@ -35,7 +35,7 @@ SRC = ROOT / "src"
 #: ``envs`` is the first folder under the ``learning`` colcon root (D-427 wave 1);
 #: ``apps``, ``vision`` and ``processes`` are under the ``operations`` root (D-427 wave 3b).
 DOMAINS = {"contracts", "runtime", "drivers", "products", "hmi", "site", "sim", "envs",
-           "apps", "vision", "processes", "fleet", "ui", "web"}
+           "apps", "vision", "processes", "fleet", "ui", "web", "core", "simulation"}
 
 #: P2 library/contract tier: no process of their own (runtime gates N/A).
 LIBRARY_PACKAGES = {"core_common", "core_events", "core_features", "core_api_web", "web_common"}
@@ -315,7 +315,7 @@ SIZE_VERDICTS = {
         "the D-337 measured-light fusion grew the dwell-complete branch (2026-09-29) and the observer transport "
         "already lives in traffic_policy/observer_source.py (X5)",
     ),
-    "sim/gz_sim/scripts/lane_live_view.py": (
+    "simulation/gazebo/scripts/lane_live_view.py": (
         709,
         "accept: sim-only read-only viewer server (HTTP handler + ROS subscriptions); the pure logic already lives in live_view_model.py and the page in lane_live_view.html, covered by test_lane_live_view*.py and test_live_view_model.py (X5)",
     ),
@@ -432,7 +432,7 @@ SIZE_VERDICTS = {
     # hmi/dashboard/app.js (1338 -> 745) and styles.css (1119 -> 492): the P1
     # extraction landed — telemetry/teleop/state-socket modules and the
     # console-detail.css tail split — so these entries left with it.
-    "sim/gz_sim/scripts/lane_live_view.html": (
+    "simulation/gazebo/scripts/lane_live_view.html": (
         856,
         "accept: same owner as the accepted lane_live_view.py — the pure logic already lives in "
         "live_view_model.py and this is the read-only page it renders, covered by test_lane_live_view*.py "
@@ -527,7 +527,7 @@ SIZE_VERDICTS = {
         "per-feature service builders (mission, pairing, localization) into a builder module "
         "before the next flag",
     ),
-    "products/omx/adapter/omx_adapter/action_store.py": (
+    "apps/device/omx/adapter/omx_adapter/action_store.py": (
         1_191,
         "accept: one owner for the durable local Action, per-attempt ROS phase journal, and semantic "
         "workflow terminal gate; they share SQLite transactions, identity fences, and restart-to-UNKNOWN "
@@ -540,14 +540,14 @@ SIZE_VERDICTS = {
         "completion is journaled per kind (PICK_PLACE names kept, CELL_TRANSFER its own) with "
         "net -3 lines. The hard-tier zero-growth rule prevents silent expansion",
     ),
-    "products/omx/adapter/omx_adapter/command_owner.py": (
+    "apps/device/omx/adapter/omx_adapter/command_owner.py": (
         621,
         "accept: one owner (2026-10-02, C3b review) for the single-writer arm command policy: "
         "config, joint-state intake, submit admission (limits, start window), poll timeouts on "
         "the owner and wall clocks, cancel and recovery share one lock and one HOLD latch; "
         "splitting admission from the watchdog would split that lock. ROS-free and host-testable",
     ),
-    "products/omx/adapter/omx_adapter/pose_plan.py": (
+    "apps/device/omx/adapter/omx_adapter/pose_plan.py": (
         714,
         "accept: one owner (2026-10-02, C3b) for the simulation cell profile and the analytic "
         "CELL_TRANSFER planner that reads it. C3b added the profile's width-matched jaw mapping, "
@@ -615,11 +615,30 @@ def _packages():
 PACKAGES = _packages()
 
 
+#: D-427: packages leave the D-310 src/ domains for the D-427 parts, but the P4 direction
+#: table still judges each package by the D-310 role it had there (name -> (domain, family)).
+#: Package names are frozen (D-231), so this table does not move with the folders.
+D310_ROLE = {
+    "core": ("runtime", None), "core_events": ("runtime", None), "core_features": ("runtime", None),
+    "core_api_web": ("runtime", None), "control": ("runtime", None), "navigation": ("runtime", None),
+    "core_common": ("contracts", None), "interfaces": ("contracts", None),
+    "web_common": ("hmi", None), "emotion": ("hmi", None), "dashboard": ("hmi", None), "pilot": ("hmi", None),
+    "pinky_pro": ("products", "pinky_pro"), "bringup": ("products", "pinky_pro"),
+    "sensor_adc": ("products", "pinky_pro"), "lamp_control": ("products", "pinky_pro"),
+    "led": ("products", "pinky_pro"), "omx": ("products", "omx"), "omx_adapter": ("products", "omx"),
+    "imu_bno055": ("drivers", None), "description": ("sim", None), "gz_sim": ("sim", None),
+}
+
+
 def _domain(name: str) -> str:
+    if name in D310_ROLE:
+        return D310_ROLE[name][0]
     return _rel(PACKAGES[name]["dir"]).parts[0]
 
 
 def _family(name: str):
+    if name in D310_ROLE:
+        return D310_ROLE[name][1]
     parts = _rel(PACKAGES[name]["dir"]).parts
     return parts[1] if len(parts) == 3 and parts[0] == "products" else None
 
@@ -635,14 +654,18 @@ ROLE_DIR = {
     "web_common": ("web",),  # shared/web (D-427 wave 4b)
     "emotion": ("ui", "face"),  # middleware/ui/face (D-427 wave 4b)
     "dashboard": ("ui", "robot"),  # middleware/ui/robot (D-427 wave 4b)
-    "pinky_pro": ("products", "pinky_pro", "profile"),
-    "bringup": ("products", "pinky_pro", "bringup"),
-    "sensor_adc": ("products", "pinky_pro", "adc"),
-    "lamp_control": ("products", "pinky_pro", "lamp"),
-    "led": ("products", "pinky_pro", "led"),
-    "omx": ("products", "omx", "profile"),
-    "omx_adapter": ("products", "omx", "adapter"),
+    # D-427 wave 4c: middleware/apps/device/<robot>/<role>, middleware/drivers/<robot>_<role>.
+    "pinky_pro": ("apps", "device", "pinky", "profile"),
+    "bringup": ("apps", "device", "pinky", "bringup"),
+    "description": ("apps", "device", "pinky", "description"),
+    "sensor_adc": ("drivers", "pinky_adc"),
+    "lamp_control": ("drivers", "pinky_lamp"),
+    "led": ("drivers", "pinky_led"),
+    "omx": ("apps", "device", "omx", "profile"),
+    "omx_adapter": ("apps", "device", "omx", "adapter"),
     "imu_bno055": ("drivers", "imu_bno055"),
+    "navigation": ("core", "navigation"),
+    "gz_sim": ("simulation", "gazebo"),
     "isaac_sim": ("envs", "isaac"),  # learning/envs/isaac (D-427 wave 1)
     "rosy_vision": ("vision",),  # operations/vision (D-427 wave 3b)
     "fleet": ("fleet",),  # operations/fleet (D-427 wave 3c)
@@ -930,9 +953,9 @@ def test_direction_table_rows_for_products_and_drivers(src_domain, src_family, d
 @pytest.mark.parametrize(
     "rel, name, ok",
     [
-        (("products", "pinky_pro", "bringup"), "bringup", True),
-        (("products", "pinky_pro", "profile"), "pinky_pro", True),
-        (("products", "omx", "adapter"), "omx_adapter", True),
+        (("apps", "device", "pinky", "bringup"), "bringup", True),
+        (("apps", "device", "pinky", "profile"), "pinky_pro", True),
+        (("apps", "device", "omx", "adapter"), "omx_adapter", True),
         (("drivers", "imu_bno055"), "imu_bno055", True),
         (("devices", "pinky_pro", "bringup"), "bringup", False),
         (("devices", "bringup"), "bringup", False),

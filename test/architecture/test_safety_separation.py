@@ -310,7 +310,7 @@ CMD_VEL_TOPICS = {"cmd_vel", "/cmd_vel"}
 CMD_VEL_PUBLISHER = "src/runtime/gateway/core/bridge/ros_bridge.py"
 #: ``declare_parameter`` defaults of "cmd_vel": the legacy D-208 standalone safety node only.
 CMD_VEL_PARAMETER_ALLOWLIST = {"src/runtime/sensing/control/safety/node.py"}
-OMX_SCOPE = ("src/products/omx/", "integrations/robots/omx/", "middleware/apps/device/omx/agent/")
+OMX_SCOPE = ("middleware/apps/device/omx/", "integrations/robots/omx/")
 
 
 def _is_cmd_vel(node: ast.AST | None, constants: dict) -> bool:

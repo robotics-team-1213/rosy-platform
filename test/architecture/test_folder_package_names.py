@@ -36,6 +36,8 @@ FOLDER_TO_PACKAGE = {
     "operations/vision": "rosy_vision",  # D-377 rosy_<word>; D-427 target folder is the word itself
     "operations/processes/cell": "rosy_cell",
     "learning/envs/isaac": "isaac_sim",
+    "middleware/drivers/pinky_led": "led",
+    "integrations/simulation/gazebo": "gz_sim",
 }
 
 

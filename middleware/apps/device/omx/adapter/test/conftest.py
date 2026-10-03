@@ -11,9 +11,9 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-SRC = (Path(__file__).resolve().parents[6] / "src" / "products" / "omx")
+REPO = Path(__file__).resolve().parents[6]
 
-for path in (SRC / "adapter", SRC.parents[1] / "contracts" / "foundation"):
+for path in (REPO / "middleware" / "apps" / "device" / "omx" / "adapter", REPO / "src" / "contracts" / "foundation"):
     entry = str(path)
     if entry not in sys.path:
         sys.path.insert(0, entry)
