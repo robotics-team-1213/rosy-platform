@@ -708,6 +708,68 @@ the loaded Fleet, Vision, and proxy image IDs and platforms. Do not treat this
 workstation-built candidate as field accepted until the target host's identity,
 loaded image IDs, GPU, phone, CORE robot, and recovery checks are recorded.
 
+### CI-built candidates (D-437)
+
+The normal path builds the candidate on a GitHub-hosted runner instead of a
+local PC. The runner output is unsigned, and no signing key is ever stored in
+GitHub. Placeholders below (`<owner>/<repository>`, `<commit>`, key paths) are
+filled from the operator's private records.
+
+1. Dispatch the build. It runs `build_candidate.py --sbom-tool syft` on
+   `ubuntu-24.04` and creates the prerelease `site-<first 12 hex of commit>`
+   with `release.json`, `SHA256SUMS`, and the split tar
+   (`rosy-site-candidate-<commit>.tar.partNN`, each under 2 GiB):
+
+   ```sh
+   gh workflow run build-site-candidate.yml --repo <owner>/<repository> -f ref=<commit>
+   ```
+
+2. On the offline signing station, download only `release.json`, check that
+   its commit and the workflow run are the ones you approved, sign the manifest
+   bytes, and attach the signature:
+
+   ```sh
+   gh release download site-<sha12> --repo <owner>/<repository> \
+     --pattern release.json --dir <station-dir>
+   python3 deploy/site/sign_candidate.py --manifest-only \
+     --manifest <station-dir>/release.json \
+     --expected-commit <commit> \
+     --signing-key-id "$SITE_SIGNING_KEY_ID" \
+     --private-key /secure/offline/site-release-ed25519.key \
+     --public-key /secure/offline/site-release-ed25519.pub.pem
+   gh release upload site-<sha12> --repo <owner>/<repository> \
+     <station-dir>/release.json.sig
+   ```
+
+   `--manifest-only` does not look at the candidate files. It refuses a
+   `source_commit` that is not 40 hex characters or differs from
+   `--expected-commit`. The signature says "this manifest from that commit is
+   approved"; the host verifier below still checks every file hash.
+
+3. On the site host, as the operator (no sudo), fetch and stage it. The script
+   checks `SHA256SUMS`, joins the parts, extracts into a fresh staging folder,
+   adds `release.json.sig`, and refuses a release that has no signature yet:
+
+   ```sh
+   /usr/local/lib/rosy-site/fetch_candidate.sh \
+     --repo <owner>/<repository> --commit <commit>
+   ```
+
+   Install `fetch_candidate.sh` once next to the reviewed verifier, by the same
+   administrator path. It is not part of the candidate, so adding it did not
+   change the file list that installed verifiers accept.
+
+   It prints the administrator commands that follow: copy the staged folder to
+   `/opt/rosy/candidate`, run the independently installed verifier with
+   `--signature-only`, `docker image load`, run the full verifier, set
+   `ROSY_SITE_IMAGE_TAG`, and restart `rosy-site-stack.service`. These are the
+   same D-301 checks as above; `SHA256SUMS` alone authenticates nothing.
+
+Delete old `site-*` prereleases once a newer candidate is accepted. Robots
+look for `payload-*` releases in the most recent releases list (D-412), so a
+long run of site prereleases must not push the newest payload release out of
+that list.
+
 Install the boot unit from that same verified candidate after its configuration
 and secrets are ready. For LAN access install `rosy-site-firewall.service`
 first ([LAN access](#lan-access)); the stack unit's `ExecStartPre` preflight

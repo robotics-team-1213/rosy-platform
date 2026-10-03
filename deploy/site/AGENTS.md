@@ -1,5 +1,5 @@
 <!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-10-02 | Updated: 2026-10-02 -->
+<!-- Generated: 2026-10-02 | Updated: 2026-10-03 -->
 
 # site
 
@@ -18,7 +18,8 @@ Ubuntu site-host stack: Caddy TLS proxy, Fleet console and task SQLite, and Visi
 | `site_preflight.py` | Stops cert, TXT host, or Caddy host mismatches before start |
 | `site-firewall.py`, `rosy-site-firewall*.service/.timer` | Interface firewall, fail-closed and periodic check units |
 | `fleet-mdns.py`, `mdns-bridge.py`, `rosy-*advertise.service`, `rosy-mdns-bridge.*` | LAN discovery advertising and bridge |
-| `build_candidate.py`, `sign_candidate.py`, `verify_candidate.py`, `candidate_signing.py` | Signed site candidate build, sign, verify |
+| `build_candidate.py`, `sign_candidate.py`, `verify_candidate.py`, `candidate_signing.py` | Signed site candidate build (`--sbom-tool scout` or `syft`), sign (full or `--manifest-only`, D-437), verify |
+| `fetch_candidate.sh` | Site host, no sudo: download a CI-built signed prerelease, check `SHA256SUMS`, join parts, stage, print the D-301 verify/load commands |
 | `site_db.py`, `secret_exec.py` | Site DB maintenance and secret-injecting exec wrapper |
 | `install-model-watch.sh`, `rosy-model-watch`, `rosy-model-watch.*`, `model-watch.yaml.example` | Model watch installer, stable entry-point wrapper (finds the watcher before or after the D-427 move), units and config template |
 | `rosy-site-stack.service` | systemd unit for the stack |
@@ -32,12 +33,14 @@ Ubuntu site-host stack: Caddy TLS proxy, Fleet console and task SQLite, and Visi
 - Bind the proxy with a wildcard plus the interface firewall, never a literal LAN IP. No hosts or addresses in tracked files (public repo).
 - Browser `/console` (site) and robot `/console` have different origins and credentials (D-275).
 - Keep this stack separate from the Pi image under `deploy/robot/pinky_pro/`.
+- D-437: candidates are built by `.github/workflows/build-site-candidate.yml`; signing stays on the offline station. The builder refuses git-ignored files under this folder (it is the proxy build context), so keep real secrets out of the checkout used for builds.
 
 ### Testing Requirements
 
 ```bash
 python3 -m pytest test/test_site_preflight.py test/test_site_firewall.py \
   test/test_site_candidate.py test/test_site_candidate_signing.py test/test_site_candidate_verifier.py \
+  test/test_site_candidate_workflow.py test/test_site_candidate_fetch.py \
   test/test_site_fleet_mdns.py test/test_site_mdns_bridge.py test/test_site_pairing_deploy.py \
   test/test_site_task_queue_deploy.py test/test_site_map_fit_deploy.py test/test_site_db_maintenance.py -q
 python3 -m pytest test/architecture/test_document_placement.py -q   # secret paths stay ignored, templates tracked

@@ -87,3 +87,14 @@ def test_release_job_creates_an_unsigned_prerelease_at_the_built_commit():
     assert "UNSIGNED until release.json.sig is attached" in run
     assert "test ! -e release.json.sig" in run
     assert "[[ \"$TAG\" == \"site-${COMMIT:0:12}\" ]]" in run
+
+
+def test_runbook_signs_manifest_only_and_fetches_before_verified_load():
+    readme = (ROOT / "deploy" / "site" / "README.md").read_text(encoding="utf-8")
+    section = readme[readme.index("### CI-built candidates (D-437)"):]
+
+    assert "gh workflow run build-site-candidate.yml" in section
+    assert section.index("--manifest-only") < section.index("gh release upload") < section.index(
+        "fetch_candidate.sh")
+    assert "--expected-commit <commit>" in section
+    assert "--pattern release.json" in section
