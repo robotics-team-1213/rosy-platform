@@ -1,4 +1,4 @@
-"""Automatic manifest-only signer on the signing PC (D-440), against a fake gh."""
+"""Automatic manifest-only signer on the signing PC (D-441), against a fake gh."""
 
 from __future__ import annotations
 

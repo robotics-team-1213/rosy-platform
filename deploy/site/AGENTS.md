@@ -20,8 +20,8 @@ Ubuntu site-host stack: Caddy TLS proxy, Fleet console and task SQLite, and Visi
 | `fleet-mdns.py`, `mdns-bridge.py`, `rosy-*advertise.service`, `rosy-mdns-bridge.*` | LAN discovery advertising and bridge |
 | `build_candidate.py`, `sign_candidate.py`, `verify_candidate.py`, `candidate_signing.py` | Signed site candidate build (`--sbom-tool scout` or `syft`), sign (full or `--manifest-only`, D-437), verify |
 | `fetch_candidate.sh` | Site host, no sudo: download a CI-built signed prerelease, check `SHA256SUMS`, join parts, stage, print the D-301 verify/load commands |
-| `auto_sign_candidates.py`, `register_auto_sign_task.ps1` | Signing PC (D-440): sign unsigned `site-*` releases after main-branch provenance and ancestry checks; Windows scheduled task registration |
-| `rosy_site_autoupdate.py`, `rosy-site-autoupdate.service`, `rosy-site-autoupdate.timer` | Site host (D-440), installed beside the verifier: install the newest signed candidate, health gate, rollback |
+| `auto_sign_candidates.py`, `register_auto_sign_task.ps1` | Signing PC (D-441): sign unsigned `site-*` releases after main-branch provenance and ancestry checks; Windows scheduled task registration |
+| `rosy_site_autoupdate.py`, `rosy-site-autoupdate.service`, `rosy-site-autoupdate.timer` | Site host (D-441), installed beside the verifier: install the newest signed candidate, health gate, rollback |
 | `site_db.py`, `secret_exec.py` | Site DB maintenance and secret-injecting exec wrapper |
 | `install-model-watch.sh`, `rosy-model-watch`, `rosy-model-watch.*`, `model-watch.yaml.example` | Model watch installer, stable entry-point wrapper (finds the watcher before or after the D-427 move), units and config template |
 | `rosy-site-stack.service` | systemd unit for the stack |

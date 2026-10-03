@@ -722,7 +722,7 @@ GitHub. Placeholders below (`<owner>/<repository>`, `<commit>`, key paths) are
 filled from the operator's private records.
 
 1. A push to `main` that touches an image source, the candidate's discovery
-   document, or the workflow builds automatically (D-440). To build another
+   document, or the workflow builds automatically (D-441). To build another
    commit, dispatch it. A short first job checks whether the release for that
    commit already exists: a dispatch then fails at once, a push succeeds
    without building. The build then runs `build_candidate.py --sbom-tool syft` on
@@ -851,9 +851,9 @@ image bundles a SQLite-aware online backup and guarded restore command at
 `/opt/rosy/site_db.py`. Do not copy only the live main DB file while WAL is
 active.
 
-### Automatic updates (D-440)
+### Automatic updates (D-441)
 
-Since D-440 the chain runs by itself: a push to `main` builds the candidate,
+Since D-441 the chain runs by itself: a push to `main` builds the candidate,
 the operator's signing PC signs it, and the site host installs it with a health
 check and rollback. Code merged to `main` becomes the site deployment within
 roughly half an hour. The trust anchors do not move: the private key stays on

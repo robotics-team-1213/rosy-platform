@@ -1,5 +1,5 @@
 [Unit]
-Description=Check for a signed ROSY site candidate every 15 minutes (D-440)
+Description=Check for a signed ROSY site candidate every 15 minutes (D-441)
 
 [Timer]
 OnCalendar=*:0/15
