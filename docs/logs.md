@@ -4830,3 +4830,9 @@
 - gate 변화: 없음(호스트 결과). containerd image store 사이트 호스트의 전체 검증 재실행이 남았다
 - 결정: D-437 Consequences 보강(manifest 형식 변경 없음)
 - 교훈: Docker image ID는 image store마다 다르다. 서명된 config digest에서 출발해 archive 안 blob 바이트로 다른 형태를 이어 붙여야 보안을 낮추지 않고 두 store를 모두 받을 수 있다
+
+## 2026-10-04 · uncommitted · cam: 실제 사진 공유와 저조도 촬영 검토안
+
+- 변경: `2026-10-04-cam-photo-lowlight-design.md`에 현재 JPEG 저장/별도 ImageCapture/연속 torch를 구분하고, 실제 렌즈의 플래시 지원과 원격 명령·송출·발열·사진 공유의 검증 조건을 기록했다. 방향 변경의 의미는 확인 중이며 앱 기능은 구현하지 않았다.
+- 증거: 실제 S21 JPEG 두 장의 증가하는 seq와 age 227–366 ms, 1280×720을 확인하고 사용자에게 현재 사진을 공유했다. 장치 조회상 활성 id 2의 플래시는 미지원, 기본 후면 id 0은 지원이었다. CameraX 1.4.0 앱에는 별도 ImageCapture/torch 제어가 없다. 실제 사진·장치별 증거는 X:에만 보관했다.
+- gate 변화: 없음. 사진 수신과 capability 조회만이며 조명 점등·고해상도 촬영·저조도 실기 수용을 주장하지 않는다.
