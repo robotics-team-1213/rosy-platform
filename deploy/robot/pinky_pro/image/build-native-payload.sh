@@ -214,6 +214,12 @@ cp "$NATIVE_RUNTIME_SOURCE/rosy-hw-test.path" "$OVERLAY/etc/systemd/system/"
 # D-412: the idle-time updater, started by its timer.
 cp "$NATIVE_RUNTIME_SOURCE/rosy-auto-update.service" "$OVERLAY/etc/systemd/system/"
 cp "$NATIVE_RUNTIME_SOURCE/rosy-auto-update.timer" "$OVERLAY/etc/systemd/system/"
+# D-418: SSH access on CORE's request (root helper), its expiry check and the boot cleanup.
+cp "$NATIVE_RUNTIME_SOURCE/rosy-ssh-access.service" "$OVERLAY/etc/systemd/system/"
+cp "$NATIVE_RUNTIME_SOURCE/rosy-ssh-access.path" "$OVERLAY/etc/systemd/system/"
+cp "$NATIVE_RUNTIME_SOURCE/rosy-ssh-access-boot.service" "$OVERLAY/etc/systemd/system/"
+cp "$NATIVE_RUNTIME_SOURCE/rosy-ssh-password-expire.service" "$OVERLAY/etc/systemd/system/"
+cp "$NATIVE_RUNTIME_SOURCE/rosy-ssh-password-expire.timer" "$OVERLAY/etc/systemd/system/"
 cp "$NATIVE_RUNTIME_SOURCE/defaults.yaml" "$OVERLAY/etc/rosy/defaults.yaml"
 mkdir -p "$OVERLAY/etc/systemd/journald.conf.d"
 cp "$NATIVE_RUNTIME_SOURCE/journald-60-rosy.conf" "$OVERLAY/etc/systemd/journald.conf.d/60-rosy.conf"

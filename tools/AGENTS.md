@@ -20,6 +20,8 @@ Commands a developer runs from the workspace. These are not installed on the rob
 | `hooks/` | D-346 pre-push fast gate (harness lint + contract suites, ~3 min) and its installer |
 | `release/download_artifact.py` | Download one GitHub Actions artifact (`--run` + `--name`, or `--artifact-id`) in parallel resumable byte ranges with MB/rate/ETA progress, an exact API-size check and optional `--extract DIR` (CRC check, no path traversal). Token from `GH_TOKEN` or `gh auth token`; neither it nor the signed URL is printed. Stdlib only; test `test/test_download_artifact.py` |
 | `release/prepare_payload_release.py` | One command from a `build-native-payload.yml` run to a signed payload tarball: download (via `download_artifact.py`) or `--artifact-dir`, required-package check, read-only per-robot ROS ABI check over SSH (`--robot`, `--skip-abi`), atomic extract (refuses an existing dir), sign, pack, then prints the `rosy-release-push.ps1` lines. Never pushes. Test `test/test_prepare_payload_release.py` |
+| `ssh/rosy_ssh_enroll.py` | D-418 1: give this PC its own ed25519 key on one robot via an administrator login code (`POST /api/v1/host/ssh/keys`, label `dev:<name>`), host keys into `~/.ssh/known_hosts_rosy`, an idempotent managed `Host` block in `~/.ssh/config`, token logged out in `finally` and never printed. Stdlib + OpenSSH; Windows/macOS/Linux. Fake CORE in test `test/test_rosy_ssh_enroll.py` |
+| `ssh/rosy_ssh_share.py` | D-418 3: `create` a passphrase-locked team key (OpenSSH bcrypt checked before anything is registered), register `team:<name>` on each `--robot`, build flat `rosy-<team>.zip` that unpacks to the `~/.ssh/rosy-<team>/` its config names (key, config, known_hosts, Korean README; never the passphrase) plus a non-secret `rosy-<team>.robots.txt` with the revoke command; `revoke --name|--label`, `list`; `--via-operator-key` reads the login code over ssh. Test `test/test_rosy_ssh_share.py`. Guide `docs/deployment/robot-ssh-access.md` |
 | `release/publish_payload_release.py` | D-412: publish a prepared signed tarball as GitHub Release `payload-<id>` with a signed `rollout.json` (sorted keys, LF), watch the canary's `rosy_auto_update.py status --json` over SSH, then re-sign with `canary_ok=true` or `withdrawn=true`; `--resume`, `--withdraw --reason`. Audit JSONL under `X:\DevTemp\rosy-rollout-evidence`. Fake `gh`/ssh/clock in test `test/test_publish_payload_release.py` |
 
 ## Subdirectories
@@ -45,7 +47,7 @@ Commands a developer runs from the workspace. These are not installed on the rob
 ### Testing Requirements
 
 ```bash
-python -m pytest test/architecture/test_folder_layout.py test/test_run_data.py test/test_download_artifact.py test/test_prepare_payload_release.py test/test_publish_payload_release.py -q
+python -m pytest test/architecture/test_folder_layout.py test/test_run_data.py test/test_download_artifact.py test/test_prepare_payload_release.py test/test_publish_payload_release.py test/test_rosy_ssh_enroll.py test/test_rosy_ssh_share.py -q
 ```
 
 ### Common Patterns

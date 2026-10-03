@@ -30,8 +30,8 @@
 
 ## 최근 기록
 
+- 2026-10-03 · 0e244456c · docs(api): D-418 재번호 항목의 커밋 기록 정정
+- 2026-10-03 · uncommitted · merge(main): D-418 SSH 접속 계약을 API Ref v1.89 로 재번호
 - 2026-10-03 · b84e72c55 · feat(api): D-423 `GET /api/v1/vision/models`(viewer, 읽기 전용), API Ref v1.83
 - 2026-10-03 · uncommitted · merge(main): D-411 B+C 계약을 API Ref v1.87 로 재번호
 - 2026-10-03 · uncommitted · docs(api): align contract description with v1.84
-- 2026-10-02 · uncommitted · feat(pilot): D-411 B 자산과 `autonomy` 문구
-- 2026-10-02 · uncommitted · docs(api): D-419 계약 버전 v1.86

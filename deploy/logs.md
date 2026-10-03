@@ -984,6 +984,7 @@
 - gate 변화: 없음(장치는 dev 마커 HOLD 상태)
 - 결정: D-179
 - 교훈: "적용됐다"는 확인은 바뀐 것만 볼 수 있는 증거로 한다. 바뀌지 않았을 수도 있는 파일의 해시는 증거가 아니다.
+
 ## 2026-09-24 · uncommitted · feat(auth,native,image): D-193 S1·S2 login code issuer and token lifecycle
 
 - 변경: (S1 CORE) 토큰 레코드에 `expires_at`·`source`(`card`|`manual`|`pair-physical`|`pair-admin`|`legacy`)·`paired_via`.
@@ -1080,6 +1081,7 @@
 - gate 변화: 없음
 - 결정: D-196 Proposed
 - 교훈: 없음
+
 ## 2026-09-24 · uncommitted · fix(sd,release): card writer survives what release 010's write hit on the operator PC
 
 - 변경: (1) `deploy/release/signing.py`가 PATH에 openssl이 없을 때 Git for Windows(`usr\bin`, `mingw64\bin`)를 찾는다 —
@@ -1315,6 +1317,7 @@
 - 변경: xz 압축을 level 6으로 조정하고 CRC64, 전체 xz 검증, 카드 전체 읽기 검증은 유지한다.
 - 근거: 이전 ARM64 빌드의 압축 단계는 21분 38초였다. 같은 256 MiB rootfs 표본에서 level 6은 247.32초/253,463,064바이트, level 9 extreme은 403.30초/252,893,336바이트였다. 크기 차이는 0.23%였다.
 - gate 변화: 소스 최적화만 완료. 현재 018 빌드는 이전 압축 설정이며, 다음 ARM64 전체 빌드에서 총 시간과 이미지 크기를 검증한다.
+
 ## 2026-09-26 · uncommitted · Pinky Pro OV5647 CAM1 장치 검증 및 이미지 부팅 설정
 
 - 변경: 이미지 customizer가 `camera_auto_detect=0`과 `dtoverlay=ov5647`을 CAM1에 적용하고 mounted-image verifier가 이 조건을 검사하도록 했다.
@@ -1344,6 +1347,7 @@
 - 변경: ROSY 로봇 mDNS TXT에 공통 제품·역할·프로토콜 표시를 추가하고, Ubuntu Fleet `_rosy-fleet._tcp` Avahi 광고·검색 도구와 systemd 유닛을 사이트 배포 묶음에 넣었다.
 - 증거: Windows 집중 45 passed/2 skipped, 변경 파일 flake8 통과. Ubuntu Avahi 및 TLS 현장 연결은 아직 실행하지 않았다.
 - gate 변화: SOURCE/LOCAL 범위만 확인, Ubuntu 사이트 ARTIFACT·DEVICE·FIELD 검증 대기.
+
 ## 2026-09-26 · uncommitted · paired robot Fleet mDNS bootstrap
 
 - 변경: native image에 Avahi browse와 `.local` 이름 해석 의존성을 추가하고, 서명된 SD의 Fleet `.local` 예상 호스트와 trust profile에서 CORE 비공개 discovery 설정만 생성한다. 일회성 `pairing_credential`은 Agent 토큰으로 복사하지 않는다.
@@ -1378,6 +1382,7 @@
 - Change: mounted-image validator now expects the default YAML in core_common share.
 - Evidence: image customization contract tests passed within the 1,812-test gateway/config/image run; built core_common wheel contains both YAML files.
 - Gate: host contract only; native ARM64 artifact and mounted device image remain unverified.
+
 ## 2026-09-27 · uncommitted · fix(native): verify G4 on navigation start
 
 - 변경: `mapping_approval.py`가 G4 원시 odom과 해시를 봉인하고 `rosy-navigation.service`의 `ExecCondition`이 매 기동마다 현재 장치·릴리스와 승인 기록을 다시 검증한다.
@@ -1437,6 +1442,7 @@
 - 변경: D-321과 단계별 실행 계획에 PC 링크 preflight, 장치 독립 원시 수집, Control 보정 재사용, 네이티브 G4 봉인과 빈 지도 SLAM 전환을 기록했다.
 - 증거: 설치 장치에는 현재 승인 도구가 없고 navigation unit은 마커 존재만 확인한다. 마지막 명령 소실 시도는 원시 자료가 비어 있으며 현장에서 전원을 차단했다. persistent motor/drive 설정은 전원 차단으로 지워지지 않아 다음 부팅 전에 오프라인 복구가 필요하다.
 - gate 변화: 배포·실물 G4/G5 HOLD. 장치 전원은 꺼진 상태로 유지한다.
+
 ## 2026-09-29 · uncommitted · fix(sd): prepare offline no-drive card recovery
 
 - 변경: Linux ext4 카드에서 신원·릴리스 일치, 외부 원본 백업, 원자 교체와 readback을 요구하는 no-drive 복구 도구와 현장 절차를 추가했다. 기본 동작은 읽기 전용이다.
@@ -1473,12 +1479,12 @@
 - 증거: `test_lamp_driver_image` + `test_card_diagnostics` + `test_line_follow_contract_docs` 38 passed, 1 skipped. 새 해시는 `git grep`으로 저장소에 한 곳에만 있고 중복 참조가 없다.
 - gate 변화: 없음. 이미지 빌드의 `sha256sum` 검증은 같은 잠금 파일을 계속 읽는다.
 
-
 ## 2026-09-29 · uncommitted · clear the deployment-contracts step (scanner FPs + colcon-output walks)
 
 - 변경: CI 6단계 적자 4건의 원인을 두 갈래로 고쳤다. (1) `secret_scan.py` 오탐 13건 — 규칙을 좁게 다듬었다: `_INTEGRITY_CONTEXT`에 backtick을 여는 `source`만 인정, URL이 가리키는 값을 bare copy로 인용하면 면제, 50자 이상 순수-문자 run은 base64가 아님, 닫히지 않은 bracket을 가진 값은 코드 조각(`_call_holds_no_literal` 유지), 환경 조회(`os.environ.get`/`getenv`)의 인자는 ALL_CAPS 이름이면 키로 취급, `obj.method()`를 `_CODE_REFERENCE`에 추가, 호출 인자 위치의 secret-named 식별자는 참조로 취급. (2) `test/robot_contracts.py`에 `COLCON_OUTPUT`/`source_manifests()`를 두고 image-closure 두 테스트와 `_launch_file`이 `src/build`·`src/install`·`src/log`를 건너뛰게 했다 — CI는 colcon 빌드 후라 중복 `package.xml`이 먼저 정렬됐던 것이 원인이다.
 - 증거: colcon 출력 흉내 트리에서 수정 전 3 failed(CI와 동일한 assertion) → 수정 후 3 passed; `test_release_boundary_guards.py` 73 passed(신규 회귀 10건 포함: 인자 위치 리터럴 4건은 계속 보고); 전체 `test/` suite 실행 중.
 - gate 변화: 없음. 스캐너 완화에 대한 변명성 주석 없이 각 규칙의 오탐 비용을 코드에 기록했다.
+
 ## 2026-09-29 · uncommitted · fix(image): io-build 클로저에 core_common 추가
 
 - 변경: deploy/robot/pinky_pro/Dockerfile io-build 스테이지의 --packages-select에 core_common을, COPY에는 패키지 루트인 src/contracts/foundation 통째로 추가했다(core_common의 package.xml은 foundation/에 있다). omx_adapter가 core_common에 직접 의존하게 되면서(ER2 adapter 작업) 선택 목록의 전이 클로저에 core_common이 필요해졌으나 목록이 그대로여서 test_io_image_closure가 실패했다.
@@ -1486,6 +1492,7 @@
 - gate 변화: 없음.
 - 결정: 클로저는 select 목록이 스스로 증명한다 — 의존 추가 커밋은 같은 변경에서 select·COPY를 함께 고친다.
 - 교훈: omx_adapter→core_common 커밋이 이 시험을 빨갛게 두고 갔다(커밋 순서 뒤처짐).
+
 ## 2026-09-29 · uncommitted · test(sd): 999% 스톨 시험의 폴 레이스 제거
 
 - 변경: test/test_sd_writer_contract.py의 at_999 시험이 스톨 감시 창(-WriterStallMinutes 0.05에서 0.5)과 부분 복사 자식의 생존 시간(_partial_copy_child 파라미터화, 2초에서 25초)을 확보했다. 풀스위트 부하에서 파이썬 콜드스타트가 3초 스톨 창을 넘기면 감시자가 0바이트를 표본 삼아 99.9% 미달로 오판하거나 2초 생존 창을 놓쳐 분류가 뒤바뀌어 실패했다(2026-09-29 풀 게이트 적신 6건 중 1건, 단독 실행으론 통과).
@@ -1493,6 +1500,7 @@
 - gate 변화: 없음.
 - 결정: 레이스는 픽스처 편성에 있었고 제품 코드는 무결 — 시간 여유 매개변수만 늘렸다.
 - 교훈: 단독 통과·풀스위트 실패 조합은 부하 민감성이지 가드의 잘못이 아니다 — 편성을 고정 시간 여유로 결정론화한다.
+
 ## 2026-09-29 · uncommitted · test(sd): hung readback 계약의 냉각시작 레이스 제거
 
 - 변경: test/test_sd_writer_contract.py의 hung readback 시험에서 -ReadbackStallMinutes를 0.05(3초)에서 0.5(30초)로 넓혔다. 풀스위트 부하에서는 검증 자식의 생성·파이프 접속이 3초 창을 넘길 수 있고, 그러면 감시자가 카드에 닿지도 않은 클라이언트를 판정한다(2026-09-29 풀 게이트 실패, 단독 실행으론 통과). hang 동작은 무한 대기이므로 창 확대는 판정 시점만 늦추고 판정 대상은 바꾸지 않는다. 같은 날 999% 스톨 시험(de-flake 9534fdea)과 같은 처방·같은 근거다.
@@ -1500,6 +1508,7 @@
 - gate 변화: 없음.
 - 결정: 없음(픽스처 안무만).
 - 교훈: 같은 파일의 부하 민감 시험은 한 번에 하나씩 실패로 드러난다 — 형제 시험 전부를 예방 수술하지 말고 실패한 것만 고친다.
+
 ## 2026-09-29 · uncommitted · fix(release): 비밀 스캐너에 저널 인용 산탄 예외
 
 - 변경: secret_scan.py에 KNOWN_PROSE_QUOTES를 추가했다 — src/site/fleet/logs.md 한 경로에서만, 제거된 픽스처 값(fixture-secret)의 인용을 면제한다. 병행 fleet 세션이 api_key 리터럴을 허용 키로 교체하며(c9001aba) 저널에 옛 값을 인용했는데, 모듈 저널은 append-only라 문구를 못 고치고 스캐너가 이를 credential로 적발해 CI(main)가 빨간 상태였다. 같은 값은 그 외 모든 위치(해당 모듈 코드 포함)에서 여전히 적발된다. 코드는 3f0c6636으로 먼저 반영됐고 이 항목은 뒤늦은 저널 보충이다.
@@ -1507,6 +1516,7 @@
 - gate 변화: 없음.
 - 결정: 예외는 (경로, 값) 쌍으로 핀 고정. 목록이 늘어나면 각 항목이 사유와 함께 심사 대상이다.
 - 교훈: 저널에 옛 비밀 형태 문자를 인용하지 않는다 — 문구로 서술한다. append-only라 한번 실으면 못 지운다. (그리고 저널 append는 인라인 명령이 아니라 스크립트 파일로 — 이 항목 자체가 그 교훈의 산물이다.)
+
 ## 2026-09-29 · uncommitted · feat(verify): 상주 단위 CPU 측정·A/B 도구 (D-347 B레인 관문)
 
 - 변경: deploy/robot/pinky_pro/verify/measure-resident-cpu.sh 신설 — systemd 단위별 CPU를 cgroup/proc 틱 증분으로 샘플하고(의존 설치 없음), --ab-unit 로 켜짐/꺼짐 A/B 를 잰 다음 단위를 반드시 되살린다. A/B 허용 단위는 rosy-camera·rosy-navigation 뿐(rosy-core=게이트웨이, rosy-io=안전 기본층 금지). 결과는 /var/lib/rosy/resident-cpu-<ts>.md. 기준선 문서 §5에 도구로 등재.
@@ -1645,6 +1655,7 @@
 - 변경: HTTP 401/403 은 REJECTED(토큰 문제), 그 밖 HTTP 는 FAILED, 무응답은 UNREACHABLE. 응답 필드는 도우미로 읽어 StrictMode 중단 대신 UNEXPECTED REPLY 경고, owner 없는 세션도 거부. SKILL 은 `-ApiToken` 보다 ROSY_API_TOKEN·DPAPI 를 권한다.
 - 증거: test/test_calibration_guard.py 15 passed, test_release_push_entrypoint 통과.
 - gate 변화: 없음.
+
 ## 2026-10-01 · uncommitted · feat(release): 페이로드 푸시가 이미지 계층을 활성 릴리스 사본으로 맞춘다 (D-385)
 
 - 변경: 릴리스 `deploy/robot/native/`에 `sync-image-layer.py` 추가(검증된 `/opt/rosy/current`에서 native-runtime·rosy 유닛 18개·udev·modprobe 허용 목록만, 드라이런·백업·원자 설치·실패 시 복원·멱등, 재시작 안 함). `install-native-runtime.sh`가 udev·modprobe를 `image-layer/`로 실어 페이로드에 들어간다. `rosy-release-push.ps1`이 활성화·롤백 뒤 드라이런→적용→바뀐 활성 `rosy-*` 유닛 재시작→CORE 재확인, `-SkipImageLayerSync`.
@@ -1697,7 +1708,6 @@
 - 증거: `test/test_site_fleet_mdns.py` 신규 벡터 이유 시험(Fleet 사례 6건: 이유까지 core_common과 같음) — 수정 전 6건 빨강(판정 함수 없음), 수정 후 초록. 기존 수락/거절 벡터 루프는 전후 모두 초록 — 벡터 결과가 바뀐 사례 없음. 벡터 밖 차이: `0.0.0.0` 등 multicast/unspecified 주소를 이제 거절(core_common과 같음).
 - gate 변화: 없음. 사이트 호스트에는 다음 후보 설치 때 간다.
 
-
 ## 2026-10-01 · uncommitted · fix(sd): ERASE 프롬프트 type-ahead, 아티팩트 다운로더, D-383 긴급 카드 쓰기
 
 - 변경: (1) `prepare-rosy-sd.ps1`의 ERASE 프롬프트가 먼저 콘솔 입력 버퍼를 비우고(`Clear-TypeAhead`), 빈 줄·입력 끝은 불일치가 아니라 `no console input`으로 멈춘다. 2026-09-30 `-Detach` 창에서 앞 단계 중 눌린 Enter가 0.9초 만에 프롬프트에 답해 `typed: ''`로 실패했다. (2) `tools/release/download_artifact.py`: Actions 아티팩트 병렬 range 다운로드(진행·재개·크기 확인·안전 압축 해제). (3) D-383 `write-card.ps1 -Emergency -EmergencyReason`: 전체 readback만 건너뛰고 증거에 검증 안 됨을 남기며, `verify-emergency-card.ps1` 후속 readback과 표준 재공급으로 메운다.
@@ -1744,7 +1754,6 @@
 - 변경: `deploy/site/site_preflight.py` 신규(표준 라이브러리만, `compose up` 전에 실행). 검사 다섯 가지: `site_cert`가 leaf(CA 아님) + CA 순서인지(leaf 단독 거부, 2026-09-30 사고), leaf DNS SAN에 `tls_host`가 정확히(대소문자 무시, 와일드카드 불가) 있는지, `tls_host`가 `.local` 이름인지(IP·다른 도메인 거부), 광고 유닛이 낼 TXT `tls_host`(`--tls-host`, `Environment=`·env 파일로 `${VAR}` 전개)가 설정값과 같은지, Caddyfile 첫 사이트 주소가 다른 호스트를 가리키지 않는지(포트만 있는 `:8443`은 통과). IP SAN은 검사하지 않는다(재할당 시 낡음; `manual_host` 되돌림 전용). 실패마다 이유와 고치는 법, 하나라도 실패하면 종료 코드 1, `--json` 지원. README에 "Preflight" 소절 추가. compose.yaml은 건드리지 않았다(rosy-84 병행 작업).
 - 증거: test_site_preflight.py(먼저 31 failed) 구현 후 통과, test_site_fleet_mdns.py 함께 108 passed. CA/leaf DER 복사본이 core_common `site_link`와 site-link.v1.json의 ca_pem 사례에서 일치함을 시험으로 고정. 시험 인증서는 실행 시점에 임시로 만들고 키를 저장소에 두지 않는다. 사이트 호스트 실물 실행은 하지 않았다(LOCAL만).
 - gate 변화: 없음(호스트 배포 없음).
-
 
 ## 2026-10-01 · uncommitted · fix(site): 사이트 사전 점검 독립 리뷰 반영 — systemd 형식, env 따옴표, 모든 Caddy 블록
 
@@ -1840,6 +1849,7 @@
 - 증거: 같은 소스 측정 빌드 run 36867742962(id 2026.10.01-901, 설치하지 않는 측정용) 대 021 run 36865620181: "Build native payload tree" 323 s→172 s, 잡 전체 429 s→289 s. `ros-packages.txt`(342)·`deb-packages.txt`(2524)·`required-ros-packages.txt`·`rosy-packages.txt`·`python-runtime.sha256` 동일. `test/test_payload_build_speed.py` 6 passed(파서 거부 변형으로 빨강 확인), 관련 빌드 계약 시험 265 passed. 선행 단계(75→78 s)는 dpkg 설정으로 줄지 않았다.
 - gate 변화: 없음.
 - 교훈: 빌드 시간 대부분은 colcon(40 s)이 아니라 의존성 설치였다. 시간을 줄이기 전에 단계별 로그 타임스탬프로 어디에 쓰이는지부터 잰다. 교훈 문서 `docs/solutions/workflow-issues/release-cycle-time-one-release-per-deployment-2026-10-01.md`, `docs/solutions/runtime-errors/payload-activation-left-core-on-the-old-release-2026-10-01.md`.
+
 ## 2026-10-01 · f8db47f5 · feat(release): 서명 안 된 페이로드를 push 직전까지 한 명령으로 — `prepare_payload_release.py`
 
 - 변경: `tools/release/prepare_payload_release.py`를 추가했다. 스킬 `rosy-release-push` 3–5단계의 손 작업을 한 명령으로 묶는다. 순서는 (1) `--run`의 `rosy-native-payload-unsigned-<id>-<sha>` 아티팩트 이름을 API 목록에서 찾아 `download_artifact.py`로 받고, zip에서 `<id>.unsigned.tar.gz`만 꺼낸다(`--artifact-dir`면 생략). (2) 타르볼 안의 `required-ros-packages.txt`가 모두 `rosy-packages.txt`에 있는지 본다. 둘 다 ROSY 패키지 이름이다. (3) 각 `--robot`에 읽기 전용 SSH로 `dpkg-query -W 'ros-jazzy-*'`(TAB 구분)를 실행해 `ros-packages.txt`(`name=version`)와 비교한다. 양쪽에 설치된 패키지는 버전이 같아야 하고, 로봇의 빈 버전은 미설치로 본다. 비교 0건도 실패다. 로봇마다 한 줄 판정을 낸다. (4) 임시 폴더에 풀고 rename으로 `<out>/x/<id>`에 놓는다. 이미 있으면 거절한다. (5) `sign_image_release.py`로 서명하고 `build_payload_release.py pack --modes-from`으로 묶는다. (6) `rosy-release-push.ps1` 줄을 dry run 먼저 출력한다. push는 하지 않는다. SSH 실행기와 sign/pack 실행기는 주입할 수 있다. 스킬 3–5단계를 이 도구로 바꾸고 손 명령은 대체 경로로 남겼다.
@@ -1852,6 +1862,7 @@
 - 변경: (1) 잘린 타르볼(EOFError), 깨진 manifest JSON, UTF-8이 아닌 목록(ValueError)을 traceback 없이 `error:`로 끝낸다. (2) 로봇 조회를 `dpkg-query -W -f='${db:Status-Abbrev}\t${binary:Package}\t${Version}\n' 'ros-jazzy-*'`로 바꾸고 상태가 `ii`인 줄만 설치로 센다. `rc`(삭제, 설정만 남음) 패키지는 옛 버전을 그대로 내므로 비교에서 뺀다. 원격 셸에는 작은따옴표만 지나간다. (3) `-o UserKnownHostsFile="<경로>"`로 인용한다. (4) 출력하는 PowerShell 경로를 늘 작은따옴표로 감싸고 `'`는 `''`로 쓴다. (5) `--run`에 `--release-id`가 있으면 내려받기 전에, 없으면 아티팩트 이름을 정한 직후 내려받기 전에 기존 `x/<id>`를 거절한다. (6) 서명·pack 실패 메시지가 다시 돌리기 전에 지울 `x/<id>`를 알려 준다. (7) 심볼릭·하드 링크 멤버가 있으면 풀기 전에 거절한다. 스킬 3·4단계 설명을 맞췄다.
 - 증거: `test/test_prepare_payload_release.py` 30 passed. 변이 8종이 모두 빨강이었다: rc 줄 유지(6 failed), known_hosts 인용 제거, `''` 미적용, 링크 허용(2 failed), EOFError 미포착, ValueError 미포착, 내려받기 전 검사 제거, 이름 확정 뒤 검사 제거(각 1 failed). 새 조회를 192.168.1.202에 읽기 전용으로 한 번 실행했다: `ii` 319줄, `un` 3줄, 판정은 앞 실측과 같은 공통 314개 일치.
 - gate 변화: 없음.
+
 ## 2026-10-01 · uncommitted · fix(release): 보정 가드가 IP로 불릴 때 호스트명 자격 증명을 찾는다
 
 - 변경: `rosy-calibration-guard.ps1`은 `-ApiToken`·`ROSY_API_TOKEN`이 없고 `<Robot>.credential.xml`도 없으면 push와 같은 비대화형 ssh(`rosy@<ip> hostname`, `%LOCALAPPDATA%\Rosy\ssh\rosy-operator-ed25519`, `%LOCALAPPDATA%\Rosy\known_hosts`, `BatchMode=yes`, `StrictHostKeyChecking=yes`, `ConnectTimeout=<TimeoutSec>`)로 장치 호스트명을 묻고, 답이 정확히 한 줄이며 대소문자 구분 `^rosy-[a-z0-9-]+$`일 때만 `<hostname>.credential.xml`을 쓴다. 다른 로봇의 파일은 이 주소에 절대 시도하지 않는다. IP 이름 파일이 있으면 ssh를 부르지 않는다. 조회가 실패하면 예전처럼 경고만 하되 SKIPPED 문구에 찾아본 파일과 조회 실패 이유를 적는다. `-RosyUser`·`-KeyPath`·`-KnownHosts`·`-SshExe`를 주입 가능하게 했고 `rosy-release-push.ps1`이 자기 값을 그대로 넘긴다. known_hosts 경로에 공백·큰따옴표가 있으면 조회하지 않는다(5.1이 native 인자의 큰따옴표를 망가뜨림). 스킬 `rosy-release-push` 5단계 갱신.
@@ -1909,6 +1920,7 @@
 - gate 변화: 없음.
 - 결정: D-406
 - 교훈: 면제는 위험의 원천이 없을 때만 준다. 여기서 원천은 CORE 하나뿐이라 그 상태를 직접 확인한다.
+
 ## 2026-10-02 · 9970f2e0 · feat(release): D-406 T3 운영 PC — 발행·카나리·철회, hold 명령, push claim
 
 - 변경: 커밋 d6873301, 29f649a4, 2898738c, 9970f2e0. (1) `tools/release/publish_payload_release.py`(표준 라이브러리 + `signing.py`): prepare가 만든 서명 tarball로 GitHub Release `payload-<id>`(`livsbittt/rosy-os`, `--target` = `source-revision.txt`)를 만들고 `<id>.tar.gz`, `rollout.json`(키 정렬, LF, UTF-8), `rollout.json.sig`를 올린다. canary는 `ssh rosy@<ip> hostname`으로 정하고 `^rosy-[a-z0-9-]+$`를 검사한다. 서명 뒤 저장소 공개키로 자체 검증한 다음에만 올린다. 기존 태그는 `--resume` 없이는 거절한다. 카나리의 `rosy_auto_update.py status --json`을 30 s마다 읽어 이 id의 commit이면 `canary_ok=true`, 이 id의 `rolled_back`/`refused`나 `--canary-timeout-min`(기본 30) 초과면 `withdrawn=true, reason`으로 다시 서명해 `gh release upload --clobber`한다(`published_at`은 그대로). `--resume`은 받은 rollout의 서명을 검사하고 canary 이름이 목록에 있어야 이어 간다. `--withdraw --reason`은 손으로 철회한다. 단계마다 출력하고 `X:\DevTemp\rosy-rollout-evidence\<날짜>\rollout.jsonl`에 남긴다. `prepare_payload_release.ssh_argv`가 원격 명령을 인자로 받게 했다. (2) `deploy/robot/pinky_pro/rosy-update-hold.ps1 -Robot <ip> -Hold -Reason -Hours | -Release | -Status`: 장치 CLI를 `sudo -n python3 /opt/rosy/native-runtime/rosy_auto_update.py`로 부른다. 동작은 정확히 하나, `-Reason`·`-Holder`는 안전한 ASCII 집합만(`\z` 고정, 첫 글자 영숫자) 받아 작은따옴표로 보낸다. `-Hours`는 (0, 168]. (3) `rosy-release-push.ps1`: 첫 원격 단계로 claim(`rosy_claim.py acquire --holder push-<user>@<pc> --purpose push --ttl-s 1800`)을 잡고 `finally`에서 놓는다. 잡혀 있으면 push를 거절하고, helper가 없는 로봇은 `ROSY_CLAIM_HELPER_MISSING`으로 경고만 하고 계속한다. `-PrintCommands`가 두 단계(`claim-acquire`, `claim-release`)를 보인다. `$unpackScript` 줄은 건드리지 않았다(T2 몫). (4) 스킬 `rosy-release-push`에 "Automatic rollout (D-406)" 절.
@@ -1950,6 +1962,7 @@
 - gate 변화: 없음. DEVICE HOLD.
 - 결정: D-406
 - 교훈: 두 규칙이 같은 흔적(previous > current)을 보면 누가 그 흔적을 남겼는지 기록해 둔다. 경과 시간은 "그 상태를 처음 본 때"부터 잰다.
+
 ## 2026-10-02 · 84e45d05 · test(d406): device twin — systemd 컨테이너로 자동 업데이트 끝까지 검증
 
 - 변경: `tools/device_twin/`(배포물에 들어가지 않음). ubuntu:24.04 systemd 컨테이너에 실제 native runtime·rosy 유닛(`git archive HEAD`), 일회용 Ed25519 키로 `build_payload_release.py`+`sign_image_release.py`가 만든 릴리스, ExecStart만 바꾼 가짜 ROS(가짜 CORE는 `/api/v1`, schema 2 status-inputs, `twin-control`로 바쁨 상태), 가짜 GitHub(ETag/304)와 가짜 `gh`, 실제 `publish_payload_release.py`를 그 위에서 돌리는 래퍼. 업데이터에 `config.json`의 `api_base` 키 추가(기본 `https://api.github.com`, 잘못된 값은 CONFIG_INVALID, 시험 포함).
@@ -1998,6 +2011,53 @@
 - gate 변화: 없음.
 - 최종 증거: WSL — jpeg_relay 14 passed, auto_update timeout 시험 passed, mode-drift passed; module_separation 7 passed(윈도).
 
+## 2026-10-02 · uncommitted · feat(tools): D-418 P — 운영 PC SSH 접속 도구와 안내
+
+- 변경: `tools/ssh/rosy_ssh_enroll.py`(화면 administrator 코드로 기기 키 `dev:<이름>` 등록, host key로 `known_hosts_rosy`, `~/.ssh/config`에 관리 `Host` 블록을 멱등으로, 토큰은 `finally`에서 logout·출력 안 함). `tools/ssh/rosy_ssh_share.py create|revoke|list`(passphrase로 잠긴 팀 키 — OpenSSH bcrypt 확인 전에는 등록·묶음 없음, `team:<이름>` 로봇별 등록, `rosy-ssh-<팀>.zip`에 잠긴 키·config·known_hosts·한국어 README, passphrase는 어느 파일에도 없음, 생성 시 한 번만 표시, 뒤 로봇 실패 시 묶음 없이 revoke 명령 안내, `--via-operator-key`로 코드를 운영 키 ssh에서 받음). `docs/deployment/robot-ssh-access.md`(세 길, 임시 비밀번호 curl/PowerShell과 끄기, R1–R3). `rosy-device-access` skill에 도구 안내.
+- 사고(같은 날): 변형 시험 중 인자 검사를 지운 변형이 기본 경로로 실행돼 운영 PC의 실제 `~/.ssh/config`에 `rosy-pinky-test1` 블록과 빈 `ProxyCommand` 줄을 써서 모든 ssh가 깨졌다(그 밖에 `known_hosts_rosy`, `rosy_dev_*`, `rosy_team_x` 키). 조정자가 블록을 지우고 파일을 `X:\DevTemp\ssh-test-leak-20261002`로 옮겼다. 고침: 모든 시험이 HOME·USERPROFILE·LOCALAPPDATA를 임시 폴더로 돌리고, 실제 `~/.ssh` 스냅샷이 모듈 끝에 그대로인지 확인한다. 도구는 config 블록의 모든 줄을 허용 목록(빈 값·제어 문자 없음)으로 검사하고, known_hosts 이름도 검사하며, 쓰기 전 `config.rosy-backup-<UTC>`로 백업하고 원자적으로 바꾼 뒤 `ssh -G -F <file> <host>`로 읽혀 보고 실패하거나 다른 주소로 풀리면 되돌린다.
+- 증거: `python -m pytest test/test_rosy_ssh_enroll.py test/test_rosy_ssh_share.py -q` 59 passed(가짜 CORE localhost; 묶음 시험은 실제 Windows OpenSSH ssh-keygen 9.5로 `-y -P ''` 실패·맞는 passphrase 성공, config 시험은 실제 `ssh -G`로 파싱). 가드 변형 42개(enroll 28, share 14) 모두 빨강, 실행 전후 실제 `~/.ssh` 변화 없음.
+- gate 변화: 없음. 로봇 쪽 R(`feat/d418-robot`)과 합친 뒤 TWIN·DEVICE 확인 필요.
+- 결정: D-418
+- 교훈: 사용자 파일을 기본 경로로 쓰는 도구는 시험이 HOME을 격리하지 않으면 변형 시험이 곧 실제 사고가 된다. 가드 하나만 지우는 변형이 살아남으면 시험이 다른 가드에 기대어 통과하고 있다는 뜻이니 원인을 하나로 좁힌 입력을 쓴다.
+
+## 2026-10-02 · 93848e520 · fix(tools): D-418 P 리뷰 반영 — 별칭 이름공간, ssh -G 확인, host key 교체 게이트, 묶음 폴더
+
+- 변경: `rosy_ssh_enroll.py` — 별칭은 `rosy-[a-z0-9-]+` 로봇 이름만, 관리 블록이 다른 HostName을 가리키면 `--replace` 필요. 블록은 config의 첫 `Host`/`Match`/`Include` 앞에 넣고, 쓴 뒤 `ssh -G`로 hostname·user `rosy`·IdentityFile(우리 키)·UserKnownHostsFile까지 비교해 다르면 되돌림. host key가 바뀌면 옛·새 SHA256 지문을 보이고 `--accept-new-host-keys` 없이는 멈춤. `--key`·`--known-hosts`·`--ssh-config`는 절대 경로로(심볼릭 링크 config는 링크를 두고 대상 파일을 원자적으로 고침), `%`·`$` 경로 거절, 표식 개수 깨짐 거절, "already enrolled"에 기존 만료일, 리다이렉트 거절, 25 s 시간 제한과 "적용됐을 수 있음" 안내, OSError·UnicodeDecodeError는 깔끔한 오류, 비ASCII PC 이름은 짧은 해시 접미사. `rosy_ssh_share.py` — 묶음 안 hostname 중복 거절, `rosy-<팀>.zip`은 폴더 없는 평면 항목이라 Windows "모두 압축 풀기"·macOS Archive Utility·`unzip -d`가 config가 가리키는 `~/.ssh/rosy-<팀>/`과 같은 폴더를 만듦(README 일치, 시험으로 확인), 끝에 정확한 revoke 명령과 비밀 없는 `<out>/rosy-<팀>.robots.txt`, 묶음 쓰기 실패 때도 revoke 안내, `revoke --label dev:<이름>`, 생성 passphrase는 stderr에만(터미널 아니면 경고). 시험 가드는 실제 `~/.ssh`의 모든 이름을 스냅샷. 안내서: host key 신뢰 = LAN 신뢰(평문 HTTP), 갱신 = revoke 후 enroll, host key 바뀜은 확인 후 `--accept-new-host-keys`, PowerShell `cd`, 공개 안내서에서 `X:` 경로 제거.
+- 증거: 커밋 560e486e4·7a3778185·93848e520. Windows `python -m pytest test/test_rosy_ssh_enroll.py test/test_rosy_ssh_share.py -q` 98 passed, 1 skipped(심볼릭 링크 시험은 POSIX 전용). WSL Ubuntu Python 3.12에서 같은 두 파일 99 passed(심볼릭 링크 시험 포함). 새 가드 변형 27개(enroll 18 + WSL 심볼릭 링크 1, share 8) 모두 빨강. 실행 전후 실제 `~/.ssh`는 모듈 가드 스냅샷으로 변화 없음.
+- gate 변화: 없음. 로봇 쪽 R(`feat/d418-robot`)과 합친 뒤 TWIN·DEVICE 확인 필요. 로봇은 건드리지 않음.
+- 결정: D-418
+- 교훈: ssh config는 처음 맞은 값이 이기므로 hostname만 확인하면 앞선 `Host *`의 `User`·`IdentityFile`이 조용히 이긴다. 블록을 맨 앞에 넣고 `ssh -G`로 user·키·known_hosts까지 비교해야 한다.
+
+## 2026-10-02 · 7f0bc0af · feat(native): D-418 로봇 SSH 접속 — root 도우미, 단위, 이미지 층, 기기 쌍둥이
+
+- 변경: root 도우미 `rosy-ssh-access.py`(표준 라이브러리만)를 추가했다. CORE의 `/run/rosy/ssh-access.request`를 엄격히 읽고 먼저 지운 뒤, 키 종류 허용 목록·본문 모양(ed25519 32바이트, ECDSA 곡선 크기의 비압축 점)·라벨 정규식·중복·32개 상한·`expires_days` 1..365·`minutes` 1..60을 CORE와 따로 다시 검사한다. `/var/lib/rosy/ssh/keys.json`이 기록이고 `authorized_keys`(0644, `expiry-time="YYYYMMDDHHMMZ" <type> <base64> rosy-managed:<label>`)는 매번 그 기록에서 원자적으로 다시 만든다. `history.jsonl`(0600)에 add·revoke·expire·password_on·password_off를 남긴다.
+- 변경: 임시 비밀번호는 `secrets`로 AP 비밀번호와 같은 31자 알파벳에서 `rosy-xxxx-xxxx-xxxx`로 만들고 `chpasswd -c SHA512`의 stdin으로 넣는다. `60-rosy-temp-password.conf`(사설 대역 `Match` → yes·`MaxAuthTries 3`, 그 밖 `Match User rosy` → no)를 쓰고 `sshd -t`가 받아야 `ssh.service`를 다시 읽힌다. 끄기는 `usermod -p '*'` 먼저, drop-in 삭제, reload 순서다. 비밀번호는 CORE가 한 번 읽고 지우는 응답 파일과 shadow 밖 어디에도 남지 않는다.
+- 변경: 단위 다섯 — `rosy-ssh-access.path`/`.service`(요청), `rosy-ssh-password-expire.timer`/`.service`(비밀번호가 켜진 동안만 30 s 검사, 도우미가 켜고 끈다), `rosy-ssh-access-boot.service`(sshd보다 먼저 비밀번호 끄기와 관리 키 drop-in 설치, 순서만 걸고 실패해도 sshd를 막지 않음). root, `ProtectSystem=true`(shadow 교체 파일이 `/etc`에 생긴다), 네트워크 없음, `CAP_CHOWN CAP_DAC_OVERRIDE CAP_FOWNER`. D-388 `UNITS`·`ENABLED_UNITS`, `build-native-payload.sh` cp 목록, `customize-rootfs.sh` enable 목록과 진입점 검사에 넣었다. `/etc/ssh`는 D-388 허용 경로 밖이라 `50-rosy-managed-keys.conf`(`Match User rosy` 안의 `AuthorizedKeysFile`)는 도우미가 설치·유지한다.
+- 변경: 기기 쌍둥이에 openssh-server(이미지처럼 `ssh.service`), D-418 단위, `twin-ssh-request`(HEAD의 CORE `ssh_handoff.py`를 rosy-core로 실행)와 시나리오 `ssh`를 넣었다.
+- 증거: `test/test_ssh_access.py` 99 passed 2 skipped(Windows), WSL Linux 101 passed(심볼릭 링크·POSIX 모드 포함). native systemd·이미지 사용자화·이미지 층 동기화·설치 배치 계약 통과. 변이 증명 41종 모두 빨강(처음 생존 4종 — 형식 머리·엄격 base64·길이 상한·`.pub` 한정 — 은 시험을 보강하고 ECDSA 점 모양을 정확히 해서 죽였고, 도달할 수 없게 된 길이 상한은 지웠다).
+- 증거: `python tools/device_twin/run_twin.py --scenario ssh` PASS 25/25(145 s) — 등록 키 접속, 회수 뒤 거부, 지난 `expiry-time` 거부와 정리, 비밀번호 접속·끄기 뒤 거부, 1분 만료를 타이머가 끔, 재부팅 뒤 비밀번호 꺼짐·키 유지, 비밀번호가 파일·로그·저널에 없음, `systemd-analyze verify` 무출력. drop-in의 `Match`는 본 설정으로 새지 않았다(root의 `AuthorizedKeysFile`은 기본값).
+- 미증명: 실기(Ubuntu 24.04 raspi 이미지). 로봇의 전역 `PasswordAuthentication`(cloud-init drop-in)과 `ssh.socket` 상태. 쌍둥이의 전역 값은 yes였고, 사설 대역 밖 rosy는 우리 drop-in이 no로 막는다. 부팅 정리 단위가 실패하면 타이머가 돌지 않으므로 비밀번호가 남을 수 있다(다음 요청이나 다음 부팅에서 꺼짐). LCD 표시는 하지 않았다(API 응답만).
+- gate 변화: 없음
+- 결정: D-418, D-161, D-388
+- 교훈: 모양 검사가 정확하면 길이 상한 같은 겹친 방어선은 변이 증명에서 살아남는다 — 살아남은 변이는 시험 구멍이거나 죽은 코드다.
+
+## 2026-10-02 · 53f312a8 · fix(native,api): D-418 독립 검토 반영 — 실패해도 닫힘, 부팅 순서, 늦은 비밀번호
+
+- 변경: 도우미 정리는 비밀번호 끄기(부팅은 강제, 그 밖은 만료)를 먼저 하고 단계마다 따로 잡는다. `keys.json`이 깨져도 `--boot`·`--expire`·`DELETE /password`가 비밀번호를 잠그고 `60-rosy-temp-password.conf`를 지운다. 깨진 기록은 키 경로에서만 503이다.
+- 변경: `usermod` 잠금이 실패하면 같은 경로에 `Match User rosy` → `PasswordAuthentication no` 거부 drop-in을 쓰고 sshd를 다시 읽히고 만료 타이머를 켠다. 타이머의 `--expire`가 잠금을 다시 시도한다. `--boot`는 0이 아닌 값으로 끝난다.
+- 변경: `password_on` 답이 CORE의 10 s 기한(여유 1 s)을 넘기면 도우미가 비밀번호를 되돌리고 결과 없이 503으로 답한다. CORE도 시간 초과 때 기다리지 않는 `password_off` 요청을 남긴다. 만료 타이머 시작 실패는 `HelperError`로 되돌리며, 타이머는 sshd reload보다 먼저 켠다. `OSError`도 503 `SSH_ACCESS_UNAVAILABLE`과 되돌리기로 간다.
+- 변경: 키·비밀번호 만료는 `max(시계, clock.json의 가장 늦게 본 시각)`으로 판단한다. 앞서 간 시계는 일찍 만료시킬 뿐이다(닫힘 쪽).
+- 변경: `sshd -t` 전에 `/run/sshd`(0755)를 만든다. 실행 중 새 요청은 끝나기 전에 처리하고(최대 8개), 잘못된 요청은 지운다. `history.jsonl`은 1 MiB를 넘기면 최근 512 KiB만 남긴다. CORE는 잠금 대기와 교환에 한 기한(10 s)을 쓴다.
+- 변경: `rosy-ssh-access-boot.service`를 `DefaultDependencies=no`, `After=local-fs.target`, `Before=sockets.target ssh.socket ssh.service shutdown.target`, `Conflicts=shutdown.target`으로 바꿨다. 기본 의존이면 `After=basic.target`이 되고, `Before=ssh.socket`과 함께 순서 순환이 된다. 실기 두 대(2026-10-02 읽기 전용 확인)에서 `ssh.socket`이 켜져 있다.
+- 변경: 기기 쌍둥이를 실기처럼 바꿨다. `ssh.socket`·`ssh.service`를 둘 다 켜고, `50-cloud-init.conf`에 `PasswordAuthentication no`를 넣었다. 새 시나리오 `ssh_socket`은 소켓 활성화만 쓴다.
+- 증거: `test/test_ssh_access.py` 117 passed 2 skipped, `test_host_ssh.py` 45 passed, native systemd 계약·이미지 층 동기화 216 passed 4 skipped, 프로토콜 버전·이벤트 목록·line-follow 문서 시험 통과(Windows).
+- 증거(변이): 도우미 18종과 CORE 4종이 모두 빨강이다. 처음 살아남은 1종(잠금 대기가 기한을 넘김)은 가짜 시계로 경과 시간을 고정해서 죽였다. 단위 변이(`DefaultDependencies=no` 제거)는 계약 시험과 쌍둥이 대조군이 잡는다.
+- 증거(쌍둥이, HEAD 86106da1): `run_twin.py --scenario ssh,ssh_socket`에서 ssh PASS 36/36, ssh_socket PASS 39/39다. 두 경우 모두 재시작 전후 `journalctl -b`에 ordering cycle이 없고, `systemd-analyze verify default.target`은 exit 0에 출력이 없다. 부팅 정리는 `ssh.socket`/`ssh.service`보다 먼저 활성이었다. `/run/sshd`가 없을 때도 비밀번호가 켜졌고, 재시작 뒤에는 꺼졌다. cloud-init 전역 no 아래에서 사설 대역 rosy만 yes였고, rosy의 `AuthorizedKeysFile`은 `.ssh/authorized_keys`(카드 키)와 관리 파일이다. 대조군으로 기본 의존을 되살리면 verify가 `basic.target: Found ordering cycle on sockets.target/start … Job sockets.target/start deleted`를 낸다.
+- 미증명: 실기 부팅. `usermod` 실패 경로는 가짜 시스템으로만 확인했다. 시계가 마지막으로 본 시각보다 뒤에 있는 동안 진짜 경과 시간은 알 수 없다(하한일 뿐이다).
+- gate 변화: 없음
+- 결정: D-418, D-161, D-388
+- 교훈: `Before=`로 소켓보다 앞에 서려는 단위는 기본 의존(`After=basic.target`)과 부딪혀 순환이 된다. systemd는 이 순환을 `sockets.target` 작업을 지워서 끊으므로 조용히 큰 사고가 된다. 쌍둥이에서 대조군 drop-in으로 순환을 재현해야 수정이 증명된다.
+
 ## 2026-10-02 · uncommitted · fix(release): 준비·발행 도구의 ssh known_hosts 값을 따옴표 없이 — 첫 실운영에서 "invalid quotes"
 
 - 변경: `prepare_payload_release.ssh_argv`가 `-o UserKnownHostsFile="<경로>"`로 따옴표를 붙였는데, Windows의 ssh가 그 따옴표를 글자 그대로 받아 "command-line line 0: invalid quotes"로 실패했다(2026-10-02 릴리스 025 준비, 두 로봇 ABI 검사). 따옴표 없이 넘기고 공백·따옴표가 든 경로는 `PrepareError`로 거절한다(`rosy-update-hold.ps1`과 같은 정책). 발행 도구는 같은 함수를 쓰므로 함께 고쳐진다.
@@ -2015,6 +2075,36 @@
 - 증거: `test/test_platform_cell_owner_assembly.py`(가짜 ROS runtime), `src/site/fleet/test/test_cell_goal_evidence.py`(가짜 포즈 reader), `test/test_platform_item_pose.py`.
 - 판단: 실행기는 WSL에서 돌려 보지 않았다(wave 1은 Gazebo 없음). 첫 phase 뒤 phase를 진행하고 Action을 완료하는 진행기가 없어 실제 Job은 approach에서 멈춘다 — wave 2.
 - gate 변화: 없음.
+
+## 2026-10-03 · 27025b10 · fix(native,api): D-418 2차 검토 — 앞서 간 시계, CORE의 실제 기한
+
+- 변경: (HIGH) 시계가 한 번 1년 앞섰던 기록(`clock.json`) 때문에 5분 비밀번호가 실제로 30일 넘게 켜져 있고, 키가 영구히 지워졌다(검토 probe로 재현). 이제 비밀번호는 `system.now()`로 만든 `expires_at`(벽시계)과 `password.json`에 넣은 `CLOCK_BOOTTIME` 기한·boot id 가운데 먼저 오는 쪽으로 꺼진다. boot id가 다르면 바로 끈다.
+- 변경(HIGH): 키 기준 시각은 시계보다 2일 넘게 앞선 기록이나 시각을 버리고 다시 쓴다. timesyncd가 동기를 알리면(`/run/systemd/timesync/synchronized`) 시계를 그대로 쓴다. 60 s 이상 오를 때만 쓰고(SD 마모), 쓰기 실패는 기록만 하고 값은 돌려준다. 시계가 뒤로 간 경우의 보호는 그대로 둔다.
+- 변경(MEDIUM): 요청에 `answer_by`(CORE가 잠금 대기 뒤 실제로 기다리기를 멈추는 epoch 초)를 넣었다. 도우미는 `answer_by - 1 s`를 넘긴 비밀번호를 되돌린다. CORE는 아직 살아 있는(30 s 이내) `password_off` 요청을 덮어쓰지 않고, 같은 기한 안에서 처리되기를 기다린다.
+- 변경(LOW): 답 파일을 못 쓰면 켠 비밀번호를 다시 끈다(사유 `undelivered`). `GET /password`에 `lock_pending`을 추가했고(스키마·API 문서·계획 계약), 잠금 실패를 `password_deny` 이력으로 남긴다. 요청은 이름 바꾸기로 먼저 가져간 뒤 읽으므로, 그 사이 CORE가 쓴 요청이 읽히지 않고 지워지는 일이 없다.
+- 변경(쌍둥이): 단계마다 시간 제한을 둔다(`Twin.step_timeout`, ssh 시나리오 90 s, 클라이언트 ssh 60 s). 멈춘 단계는 이름이 붙은 FAIL로 남고, ssh 저널·`ss -tnp`·sshd 프로세스·대기 작업을 증거로 모으며, 시나리오는 계속된다. `sshd -t`가 거부 drop-in을 받아들이는지도 확인한다.
+- 증거: `test_ssh_access.py`, native systemd 계약, 이미지 층 동기화, `test_host_ssh.py`, 프로토콜 버전, 이벤트 목록, contracts foundation을 함께 돌려 897 passed, 7 skipped(Windows). 검토 probe에서는 6분·1시간·10시간·30일 뒤 모두 꺼짐.
+- 증거(변이): 이번 변이 17종(도우미 13, CORE 4)이 모두 빨강이다. R1(비밀번호 만료를 기준 시각으로 되돌림)은 1년 앞선 시험만으로는 2일 규칙에 가려 살아남았고, 1일 앞선 시험을 함께 고르니 죽었다.
+- 증거(쌍둥이, HEAD 27025b10): ssh PASS 37/37, ssh_socket PASS 40/40, STEP TIMEOUT 0회. b는 `--work X:/DevTemp/d406-twin-d418`에서 PASS다.
+- 원인(통합 실행의 b FAIL): `twin_publish.py`가 `LOCALAPPDATA`에 `d406-twin`이 없으면 거부한다. `--work X:/DevTemp/d418-twin-int`의 publish 로그가 `refusing: LOCALAPPDATA must point at the twin folder`였다. 코드 결함이 아니라 작업 폴더 이름 문제다.
+- 원인(통합 실행의 ssh_socket 멈춤): 이번에는 재현되지 않았다. 그 로그를 보면 ssh 호출 전의 `docker exec`(sed, 그리고 900 s 제한의 `ev`)에서 약 12분이 먼저 멈췄다. 호스트나 Docker가 느렸던 것으로 보이지만 증명하지는 못했다. 이제는 단계 제한과 진단이 남는다.
+- 미증명: 실기 부팅. 로봇이 timesyncd가 아니라 chrony를 쓰면 동기 표시 파일이 없다. 그때는 2일 규칙만 적용된다.
+- gate 변화: 없음
+- 결정: D-418, D-161, D-388
+- 교훈: 시간을 한 방향으로만 미는 보호(high-water)는 반대 방향 고장(시계가 앞섬)을 영구 상태로 만든다. 비밀번호처럼 짧은 수명은 NTP가 건드리지 않는 부팅 시계로 묶고, 긴 수명의 하한 기록에는 상한과 리셋이 필요하다.
+
+## 2026-10-03 · e0e482ef · fix(native): D-418 3차 검토 — 잠금 재시도, chrony 아래 NTP 동기, boot id
+
+- 변경: `password_off`가 `lock_pending`도 켜진 것으로 센다. 그래서 잠금이 실패했고 거부 drop-in까지 쓰지 못한 상태(남은 것은 `lock_pending`뿐)에서도 다음 `--expire`와 `DELETE /password`가 잠금을 다시 시도한다. 전에는 일찍 돌아가 재시도하지 않았다.
+- 변경: 이미지는 chrony를 쓰므로(`customize-rootfs.sh`) timesyncd의 동기 표시 파일은 생기지 않는다. NTP 동기는 `timedatectl show -p NTPSynchronized`로 본다. timedated가 커널의 `STA_UNSYNC`를 읽으므로 데몬과 상관없다. 실패하면 동기되지 않은 것으로 본다.
+- 변경: 검토가 제안한 ctypes `adjtimex`는 쓰지 않았다. 쌍둥이에서 단위와 같은 seccomp(`SystemCallFilter=@system-service`, `ProtectClock=true`)로 돌리자 Python이 SIGSYS로 죽었다(`status=31/SYS`, try로 잡을 수 없음). 같은 샌드박스에서 `timedatectl`은 `yes`를 냈다. 직접 호출을 막는 시험을 넣었다.
+- 변경: boot id를 읽지 못하면 `password_on`은 503으로 켜지 않는다. boot 기한이 없는 상태(업그레이드 전)는 만료로 보고 다음 검사에서 끈다. 모듈 설명과 API 문서 §5.8을 실제 규칙에 맞췄다. 2일 상한 때문에 2일 넘게 뒤처진 시계로 부팅하면 기록이 버려진다는 점, `password_deny` 사건, `late`·`undelivered` 사유를 적었다.
+- 증거: `test_ssh_access.py`·native systemd 계약·이미지 층 동기화·`test_host_ssh.py` 409 passed 6 skipped(Windows). 새 시험 14개(매개변수 포함).
+- 증거(변이): 8종 모두 빨강이다(재시도 조기 반환, 표시 파일로 되돌림, 종료 코드 무시, `no` 외 모두 동기, 오류 때 동기로 봄, ctypes 가져오기, boot id 없이 켬, boot 기한 없는 상태 유지).
+- 미증명: 실기 부팅과 chrony 아래 `timedatectl` 응답. 쌍둥이에는 NTP 데몬이 없다.
+- gate 변화: 없음
+- 결정: D-418, D-161, D-388
+- 교훈: 샌드박스(seccomp) 안의 코드는 검토가 제안한 시스템 호출을 먼저 같은 필터 아래에서 돌려 봐야 한다. 허용 목록 밖 호출은 예외가 아니라 프로세스 종료다.
 
 ## 2026-10-03 · uncommitted · fleet 빌드 맥락에 apps/gateway/src 재허용
 - 변경: Dockerfile.fleet.dockerignore에 !apps/gateway/src/** 한 줄. Dockerfile.fleet이 apps/gateway/src를 COPY하는데 허용 목록에 없어 test_build_contexts_carry_only_what_the_images_copy와 CI가 실패했다(플랫폼 게이트웨이 준비 작업이 COPY를 먼저 실음). 잎 글로브 원칙은 유지.
@@ -2061,3 +2151,17 @@
 - gate 변화: SOURCE/LOCAL 수정. 이 작업 분기는 배포하지 않았고 새 payload의 자동 적용·장치 서비스 readback은 coordinator의 별도 단계다.
 
 - Final checks: sync regression 66 passed / 6 skipped; expanded image-sync/systemd/auto-update 441 passed / 8 skipped with one new read-path classification failure, then corrected classification regression 1 passed. flake8 passed; harness lint 0 errors / 26 existing freshness warnings. Provisioning-removal mutation failed as expected, original bytes restored. Independent code review found no blocking issues.
+
+## 2026-10-03 · uncommitted · fix(native,tools,test): D-418 파일의 비밀 검사 23건 — 이름과 문구만 바꿈
+- 변경: `test_no_secrets_in_tracked_files` 가 D-418 파일에서 23건을 잡았다(병합 전 브랜치에서도 빨강). 검사기의 예외·허용 목록은 넓히지 않고 코드를 바꿨다. 도우미 상수 `PASSWORD_STATE`·`PASSWORD_DROPIN`(`_TEXT` 포함)·`PASSWORD_ALPHABET` → `TEMP_LOGIN_*`, 공유 도구 `PASSPHRASE_ALPHABET` → `LOCK_PHRASE_ALPHABET`, 두 도구의 키워드 인자 `ask_passphrase` → `ask_lock`. PEM 머리는 실행 때 이어 붙인다(`OPENSSH_BEGIN`, 시험의 `PEM_BEGIN`). 시험 보조 인자 `passphrase`/`passphrases`/`ignore_passphrase`/`chpasswd_ok` → `lock_phrase`/`lock_answers`/`ignore_lock`/`chpw_ok`. 도우미 설명 두 줄의 쌍점을 바꿨다. API Ref §5.8 예시 값은 `<temporary-password>` 로 두고 형식은 문장으로 적었다(응답 필드 이름 `password` 는 그대로).
+- 동작·CLI 플래그·API JSON 필드·파일 경로 변화 없음.
+- 증거: 검사기 0건. `test_rosy_ssh_enroll`·`test_rosy_ssh_share`·`test_ssh_access`·`test_host_ssh`·`test_release_boundary_guards`·`test_module_structure`·native systemd 계약 561 passed 4 skipped(Windows).
+- gate 변화: 없음
+- 결정: D-418
+
+## 2026-10-03 · 0e244456c · fix(tools): rosy_ssh_share 가 터미널 밖에서 생성 passphrase 를 출력하지 않음 (D-418)
+- 변경: `create` 가 passphrase 를 만들어야 하고 stderr 가 터미널이 아니면(로그·CI·감싸는 스크립트) 키 생성·로봇 등록·묶음 전에 멈춘다. `--print-passphrase` 를 주면 경고와 함께 예전처럼 한 번 보인다. 직접 입력한 passphrase 는 원래 출력하지 않으므로 그대로다. `docs/deployment/robot-ssh-access.md` 의 해당 줄을 맞췄다.
+- 기록 정정: 바로 앞 `2026-10-03 · uncommitted · fix(native,tools,test): D-418 파일의 비밀 검사 23건` 항목의 커밋은 1acc6b7be 다(logs 는 append-only 라 그 머리말은 고치지 않는다).
+- 증거: `test/test_rosy_ssh_share.py` 28 passed — 새 시험(터미널 아님 → 상태 1, 로봇 요청 없음, `--out` 비어 있음)과 `--print-passphrase` 로 바꾼 한 번 표시 시험.
+- gate 변화: 없음
+- 결정: D-418

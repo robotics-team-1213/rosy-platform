@@ -216,7 +216,7 @@ SIZE_VERDICTS = {
         "2026-10-01 at 887 after idempotent per-attempt phase projection joined the Mission event transaction",
     ),
     "contracts/foundation/core_common/protocol/schemas.py": (
-        1_245,
+        1_321,
         "accept: the D-18 single contract source — every envelope, event and capability model in one "
         "importable place; re-judged 2026-10-03 at 1240 for the D-413 public CellGoalEvidenceSubmission "
         "re-export, then at 1245 after combining main's D-422 body-stop fields with that one-line export. "
@@ -241,7 +241,9 @@ SIZE_VERDICTS = {
         "authoritative and this establishes a new zero-growth baseline."
         " Re-judged 2026-10-02 at 1244 for D-422's three optional LineFollowStatus fields "
         "(body_gap_m, stop_gap_m, clearance_source); the logic stays in line_follow/body_stop.py; "
-        "same verdict.",
+        "same verdict."
+        " Re-judged 2026-10-03 at 1321 after merging main: the D-418 robot SSH access models (host keys, "
+        "managed keys, temporary password status with lock_pending; API v1.89) on top of D-422; same verdict.",
     ),
     "site/fleet/fleet/server/task_store.py": (
         1060,
@@ -472,6 +474,18 @@ SIZE_VERDICTS = {
         "Re-judged at 1505 (+33): second verification review (self-rollback vs operator rollback, "
         "bounded tail loop, rollback_failed acknowledgement); 1515 (+10) after the final batch "
         "(release-hold under the run lock, refused rollback is sticky); verdict unchanged",
+    ),
+    "deploy/robot/pinky_pro/native/rosy-ssh-access.py": (
+        862,
+        "accept: D-418 root SSH helper — one stdlib-only privileged entry point whose request parsing, "
+        "managed authorized_keys, temporary password (wall + boot clock, boot id) and boot cleanup share "
+        "one lock and one audit trail; splitting would spread the root trust boundary over several files "
+        "the image layer must install and the twin must cover. Split the password half out if it grows further",
+    ),
+    "tools/device_twin/scenarios.py": (
+        703,
+        "split: device twin scenarios — the D-412 update scenarios and the D-418 ssh/ssh_socket scenarios "
+        "are independent tables; move the ssh scenarios into their own module when the next scenario lands",
     ),
     "tools/release/publish_payload_release.py": (
         655,

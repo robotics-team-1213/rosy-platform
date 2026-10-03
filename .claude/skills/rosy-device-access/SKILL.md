@@ -82,6 +82,21 @@ rssh 'sudo -n rosy-login-code --role administrator --minutes 10'   # prints "Log
 - Every paired token is listed and revocable. When done: `POST /api/v1/auth/logout` with that token (204). Card tokens cannot log out (409).
 - Never print, commit or log the code or token; keep it in a variable or a file under `X:\DevTemp`.
 
+## Giving SSH access to another PC or person (D-418)
+
+The operator key stays on the operator PC. To give access, use one of these instead (guide:
+`docs/deployment/robot-ssh-access.md`). Each one starts from an administrator login code (above).
+
+| Way | Command |
+|---|---|
+| Own key for a new PC (preferred) | `python tools/ssh/rosy_ssh_enroll.py <robot-ip> --label dev:<name>`: makes `~/.ssh/rosy_dev_<name>`, registers it, writes `~/.ssh/known_hosts_rosy` and a `Host rosy-pinky-xxxx` block, logs the token out |
+| Temporary password (≤60 min, private LAN, off after reboot) | `POST /api/v1/host/ssh/password {"minutes": N}`, then `DELETE` the same path to turn it off now |
+| Team bundle (passphrase-locked key, revocable) | `python tools/ssh/rosy_ssh_share.py create --name <team> --robot <robot-ip> ... --out <dir-outside-repo>`; `revoke --name <team> --robot ...` (or `--label dev:<name>`); `list --robot ...` |
+
+- `--via-operator-key` on `rosy_ssh_share.py` reads the login code over this skill's SSH (key-only, `BatchMode`), so no one types it.
+- Managed keys live in `/var/lib/rosy/ssh/authorized_keys` (labels `dev:*`, `team:*`), separate from the card key. Never put the operator key into a bundle.
+- A team passphrase is shown once and goes by a different channel than the zip.
+
 ## Never do
 
 - `dtoverlay -r` without a name. It removes whichever overlay was loaded last (it once took out the LED overlay). Runtime `dtoverlay` does not work on the Ubuntu raspi kernel anyway — overlays go in `config.txt` plus a reboot.

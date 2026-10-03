@@ -2,7 +2,7 @@
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.88
+**Version:** v1.89
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -155,6 +155,10 @@ Fleet 의 로봇 토큰은 operator 토큰이다(`robots.yaml` 의 `token`, 또�
 | `HW_TEST_UNAVAILABLE` | 503 | 부저·램프 시험 요청 파일을 쓰지 못함 (`POST /host/hardware/test`, v1.23) | 로봇 |
 | `HW_CONFIRM_UNAVAILABLE` | 503 | 들림·보임 기록을 쓰지 못함 (`POST /host/hardware/confirm`, v1.23) | 로봇 |
 | `HW_CONFIRM_NO_TEST` | 409 | 그 장치를 `done`으로 5분 안에 끝낸 시험이 없는데 들림·보임을 답함 — 시험 없음·`busy`·`unavailable`·`failed`·다른 장치·5분 초과 (`POST /host/hardware/confirm`, v1.23) | 로봇 |
+| `SSH_INVALID` | 422 | D-418 공개키(허용 종류·한 줄·base64)·라벨(`^[a-z0-9][a-z0-9._:-]{0,47}$`)·`expires_days`(1..365)·`minutes`(1..60)가 계약과 맞지 않음. `detail.fields`. root 도우미도 같은 규칙으로 다시 검사한다 (`/host/ssh/...`, v1.89) | 로봇 |
+| `SSH_LABEL_EXISTS` · `SSH_KEY_EXISTS` · `SSH_KEYS_FULL` | 409 | D-418 같은 라벨이나 같은 공개키가 이미 있음, 또는 관리 키가 이미 32개 (`POST /host/ssh/keys`, v1.89) | 로봇 |
+| `SSH_KEY_NOT_FOUND` | 404 | D-418 그 라벨의 관리 키가 없음 (`DELETE /host/ssh/keys/{label}`, v1.89) | 로봇 |
+| `SSH_ACCESS_UNAVAILABLE` | 503 | D-418 root `rosy-ssh-access`가 10 s 안에 답하지 않았거나(요청은 거둬들인다), 요청 파일을 못 썼거나, 적용에 실패함(`chpasswd`·`sshd -t`·만료 타이머·파일 쓰기 실패, `keys.json` 손상 — 비밀번호는 켜지지 않은 채로 되돌린다) (`/host/ssh/...`, v1.89) | 로봇 |
 | `COMMAND_TIMEOUT` | 504 | 명령 추적 타임아웃 (PRT-004) | Fleet |
 | `PAIRING_INVALID` | 401 | 페어링 토큰 무효/만료 | Fleet |
 | `IDEMPOTENCY_CONFLICT` | 409 | 동일 key·다른 내용 | Fleet |
@@ -344,6 +348,26 @@ v1.42: `GET /api/v1/host/network`와 `/release`는 기존 `{available,ok?,code,d
 | POST | `/api/v1/host/hardware/refresh` | Admin | D-247 — `/run/rosy/hw-probe.request`를 써서 `rosy-hw-probe.path`가 probe를 다시 돌리게 한다. 10초 안의 재요청은 `{accepted:false}`. 요청 파일을 못 쓰면 503 `HW_PROBE_UNAVAILABLE` |
 | POST | `/api/v1/host/hardware/test` | Admin | D-247 6 (v1.23, payload: `{device: "buzzer"\|"lamp"}`, 다른 키 거부) — `/run/rosy/hw-test.request` `{action, request_id, requested_at, by}`를 써서 root `rosy-hw-test`가 부저를 150 ms×3 울리거나 램프를 빨강·초록·파랑 1 s씩 켜게 한다. subprocess 없음. 200 `{accepted:true, request_id, device, detail}`. 10초 안 재요청은 429 `HW_TEST_COOLDOWN`, 요청 파일을 못 쓰면 503 `HW_TEST_UNAVAILABLE`. 결과는 `GET /host/hardware`의 `test` |
 | POST | `/api/v1/host/hardware/confirm` | Admin | D-247 6 (v1.23, payload: `{device: "buzzer"\|"lamp", observed: bool}`, 엄격한 bool) — 사람의 답을 `{observed, by(토큰 id), label, at}`로 CORE 상태 디렉터리 `~/.rosy/hw-confirmations.json`(0600, 원자적 교체)에 기록한다. `rosy-hw-test`의 마지막 결과가 같은 장치·`state:"done"`·5분 안에 끝난 것이어야 하며, 아니면 409 `HW_CONFIRM_NO_TEST`. 기록에는 그 시험의 `request_id`가 함께 남는다(파일에만, 응답·카드에는 싣지 않음). 장치마다 마지막 답 하나. 200 `{recorded:true, device, observed, by, label, at}`. 쓰지 못하면 503 `HW_CONFIRM_UNAVAILABLE` |
+
+---
+
+## 5.8 로봇 SSH 접속 (D-418, v1.89)
+
+관리자가 로봇에 SSH로 들어갈 길을 연다. 모든 경로는 **Admin** 전용이다. CORE는 비특권이라(D-161) 직접 적용하지 않는다: `/run/rosy/ssh-access.request`(`{schema:1, request_id, action, requested_at, answer_by, by, ...}`; `answer_by`는 CORE가 기다리기를 멈추는 epoch 초)를 쓰면 root `rosy-ssh-access.path`가 도우미를 깨우고, 도우미가 형식·개수·만료를 **따로 다시 검사**한 뒤 적용하고 `/run/rosy/ssh-access.response`(root:rosy-core 0640)에 답한다. CORE는 그 답을 **최대 10 s** 기다리고(다른 요청의 잠금 대기까지 합한 한 기한), 읽자마자 지운다. 답이 없으면 503 `SSH_ACCESS_UNAVAILABLE`이고 요청 파일은 거둬들인다. `POST /password`가 시간 초과면 CORE가 기다리지 않는 `password_off` 요청을 남기고, 도우미도 `answer_by` 1 s 전을 넘긴 비밀번호는 답에 싣지 않고 되돌린다. 아직 처리되지 않은 그 `password_off`는 덮어쓰지 않고 기한 안에서 처리되기를 기다린다. 답 파일을 못 쓰면 켠 비밀번호를 다시 끈다. 본문이 JSON이 아니면 400 오류 봉투이고 도우미까지 가지 않는다. 시각은 모두 UTC `YYYY-MM-DDTHH:MM:SSZ`. 스키마: `core_common.protocol.schemas`의 `Ssh*` 모델.
+
+| Method | Path | Role | 요구사항 |
+|---|---|---|---|
+| GET | `/api/v1/host/ssh/host-keys` | Admin | `{hostname, host_keys:["<type> <base64>", ...]}` — `/etc/ssh/ssh_host_*_key.pub`의 공개키(주석 제외). 등록 도구가 첫 접속 전에 `known_hosts`를 쓴다(TOFU 없음). CORE가 직접 읽는다 |
+| GET | `/api/v1/host/ssh/keys` | Admin | `{keys:[{label, type, fingerprint("SHA256:…"), added_at, expires_at, added_by}]}` — 관리 키 목록. 만료가 지난 키는 도우미가 정리하며 `history.jsonl`에 `expire`로 남긴다 |
+| POST | `/api/v1/host/ssh/keys` | Admin | payload `{public_key:"<type> <base64> [comment]", label, expires_days:1..365}`, 다른 키 거부. 허용 종류 `ssh-ed25519`·`sk-ssh-ed25519@openssh.com`·`ecdsa-sha2-nistp256\|384\|521`. 라벨 `^[a-z0-9][a-z0-9._:-]{0,47}$`(팀 키 `team:<name>`, 기기 `dev:<name>`). **201** `{label, fingerprint, expires_at}`(만료는 분 단위로 내림). 422 `SSH_INVALID`, 409 `SSH_LABEL_EXISTS`·`SSH_KEY_EXISTS`·`SSH_KEYS_FULL`(32개). `added_by`는 요청한 토큰의 라벨(없으면 토큰 id) |
+| DELETE | `/api/v1/host/ssh/keys/{label}` | Admin | **204**. 없는 라벨 404 `SSH_KEY_NOT_FOUND` |
+| POST | `/api/v1/host/ssh/password` | Admin | payload `{minutes:1..60}`. **200** `{user:"rosy", password:"<temporary-password>", expires_at}`, `Cache-Control: no-store`. 값의 형식은 접두어 `rosy-` 뒤에 하이픈으로 나눈 4자 세 묶음이다. 비밀번호는 AP 비밀번호와 같은 헷갈리지 않는 31자(`abcdefghjkmnpqrstuvwxyz23456789`)로 `secrets`가 만들고 `chpasswd`(stdin)로 적용한다. 이 응답과 shadow 밖 어디에도(기록·로그·상태 파일) 남지 않는다. 다시 부르면 새 비밀번호·새 만료. LCD에는 아직 보이지 않는다(후속) |
+| GET | `/api/v1/host/ssh/password` | Admin | `{enabled: bool, expires_at: "<Z>"\|null, lock_pending: bool}` — 비밀번호는 싣지 않는다. `lock_pending`은 `usermod` 잠금이 실패해 거부 drop-in이 막고 있고 재시도를 기다리는 중 |
+| DELETE | `/api/v1/host/ssh/password` | Admin | **204** — 지금 끈다 |
+
+- **관리 키 파일:** `/var/lib/rosy/ssh/authorized_keys`(0644, `keys.json`에서 매번 다시 만든다). 줄 형식 `expiry-time="YYYYMMDDHHMMZ" <type> <base64> rosy-managed:<label>` — 만료는 sshd가 직접 강제한다. sshd는 drop-in `/etc/ssh/sshd_config.d/50-rosy-managed-keys.conf`(`Match User rosy` 안의 `AuthorizedKeysFile .ssh/authorized_keys /var/lib/rosy/ssh/authorized_keys`)로 `rosy` 계정에만 이 파일을 읽는다. `/etc/ssh`는 D-388 이미지 층 밖이라 도우미가 설치·유지한다.
+- **메타데이터·감사:** `/var/lib/rosy/ssh/keys.json`·`password.json`·`history.jsonl`(root 0600). 사건: `add`, `revoke`, `expire`, `password_on`, `password_off`(`reason: requested|expired|boot|late|undelivered` — `late`는 `answer_by` 안에 답하지 못해 되돌림, `undelivered`는 답 파일을 못 써서 되돌림), `password_deny`(`usermod` 잠금 실패: 거부 drop-in과 재시도).
+- **임시 비밀번호:** 켜면 `/etc/ssh/sshd_config.d/60-rosy-temp-password.conf`에 `Match User rosy Address 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16` → `PasswordAuthentication yes`, `MaxAuthTries 3`, 이어서 `Match User rosy` → `PasswordAuthentication no`(사설 대역 밖은 전역 설정과 상관없이 거부). `sshd -t`가 거부하면 되돌리고 503. 끄기(요청·만료·부팅)는 shadow 필드를 `*`로 먼저 잠그고, drop-in을 지우고, 실행 중인 `ssh.service`를 다시 읽힌다. 만료 검사는 비밀번호가 켜진 동안만 도는 `rosy-ssh-password-expire.timer`(30 s)이고(타이머가 안 켜지면 비밀번호도 켜지 않는다), 부팅 때마다 `rosy-ssh-access-boot.service`가 `sockets.target`·`ssh.socket`·`ssh.service`보다 먼저 끈다(`DefaultDependencies=no`; `ssh.socket`이 켜진 Ubuntu 24.04에서 순서 순환이 없다). 끄기는 다른 정리(키 기록 손상 등)보다 먼저, 따로 돈다. `usermod`가 잠그지 못하면 `Match User rosy` → `PasswordAuthentication no` drop-in으로 sshd가 거부하게 하고 타이머가 잠금을 다시 시도한다. 비밀번호 만료는 벽시계(`expires_at`)나 부팅 시계(`CLOCK_BOOTTIME` 기한과 boot id) 중 먼저 오는 쪽이다. 키 만료는 시계와 지금까지 본 가장 늦은 시각(`clock.json`) 중 늦은 쪽으로 판단한다(RTC 없는 Pi가 과거 시각으로 부팅해도 만료가 되돌아가지 않는다). 시계보다 2일 넘게 앞선 기록은 앞서 간 시계로 보고 버린다. 그래서 시계가 마지막 기록보다 2일 넘게 뒤처진 채로 부팅하면 기록도 버려지고, NTP가 맞출 때까지 키 만료는 뒤처진 시계로 센다(sshd의 `expiry-time`도 같은 시계를 쓴다). NTP 동기는 `timedatectl show -p NTPSynchronized`로 본다. timedated가 커널의 `STA_UNSYNC`를 읽으므로 이미지의 chrony에서도 맞다. 도우미가 직접 `adjtimex`를 부르지 않는 까닭은 단위의 seccomp 필터(`@system-service`, `ProtectClock=true`)가 그 호출을 SIGSYS로 죽이기 때문이다. 동기되면 기록은 시계로 맞춘다. 비밀번호는 boot id를 읽지 못하면 켜지 않는다(503).
 
 ---
 
@@ -1987,6 +2011,7 @@ and field acceptance require their own evidence.
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.89 | 2026-10-03 | Additive (D-418, feat/d418-ssh-access): 로봇 SSH 접속 §5.8 — Admin 전용 `GET /host/ssh/host-keys`, `GET\|POST /host/ssh/keys`, `DELETE /host/ssh/keys/{label}`, `GET\|POST\|DELETE /host/ssh/password` 신설. 오류 코드 `SSH_INVALID`(422)·`SSH_LABEL_EXISTS`·`SSH_KEY_EXISTS`·`SSH_KEYS_FULL`(409)·`SSH_KEY_NOT_FOUND`(404)·`SSH_ACCESS_UNAVAILABLE`(503). 스키마 `Ssh*`(`schemas.py`). 기존 경로·필드 변화 없음. 브랜치에서 v1.84 로 적었으나 main 이 v1.84(D-422)–v1.88(D-423)을 먼저 써서 v1.89 로 재번호 |
 | v1.88 | 2026-10-03 | Additive (D-423, feat/d423-object-range-detection): `GET /api/v1/vision/models`(viewer, 읽기 전용) — 로봇 학습 모델 상태를 작업별로(`lane_seg` shadow, `object_det` active). §6.1.1 에 ROS `vision/detections`(DetectionEvidence 필드 + 추가 `ranges`)를 적음 — CORE 는 구독하지 않음. 카메라 관측 영역의 `s`(`L`/`G`)·`ground_source` 는 control 내부 증거(`camera/observation`)라 이 계약 밖. 쓰기 API·이벤트·FleetAgent 변경 없음. v1.82 는 main 의 D-403/D-413 행 |
 | v1.87 | 2026-10-03 | Additive (D-411 B+C, feat/d411bc-pilot-controls-gripper; A 는 v1.83 에서 먼저 들어감): B: capabilities `controls`(`rosy.controls/1`, §9.1), OMX SIM `GET /sim/omx/target` `controls`; Pilot 이 `controls` 로 주행·팔 조작부를 조립(필드 없음 = 구 서버 대체, 빈 `items` = 조작부 없음, 팔 조이스틱은 순차 제한 목표·떼면 새 목표만 멈춤). C: OMX SIM `POST /sim/omx/gripper`(`OmxSimGripperGoal`, 절대 위치·0.2–2.0 s), `/state` `gripper` readback(`open`·`closed`·`holding`·`moving`·`unknown`), `/target` `controls` 의 `gripper` 항목(그리퍼는 `joint_jog` 에서 빠짐, 선택 `max_velocity`(`GripperControl.max_velocity`), 409 `gripper_velocity_limit`), SIM 허용 범위 = 셀 프로필 ∩ URDF·알리는 범위는 0.02 rad 안쪽·목표 길이 상한 2.0 s, 쥔 채 팔 조그는 멈춘 위치 + preload, 시연 기록 `action.gripper` 열과 LeRobot 특성(선택, 이전 에피소드 유효). 기존 필드 변화 없음 |
 | v1.86 | 2026-10-03 | Additive (D-419, feat/d419-saf003-fleet-loss): SAF-003 이 처음으로 동작한다. 이벤트 `safety.fleet_lost`(warning)·`safety.fleet_restored`(info), `GET /safety/state` 선택 필드 `fleet_link`, 설정 `safety.fleet_loss_timeout_s`(기본 5.0, 4–60 s)·`fleet.heartbeat_reply_timeout_s`(기본 2.0, 0.5–10 s), 판정 시간 ≥ 1 + 답 시한 + 1 (어기면 기동 실패). §7.6 판정 규칙. `PUT /safety/limits` 의 받는 값은 그대로(`RETURN_HOME` 포함), `RETURN_HOME` 이면 응답 선택 필드 `warning`. 기동 때 저장된 모르는 정책은 `STOP` 으로 읽는다. envelope `protocol_version` 1.0 유지 |
