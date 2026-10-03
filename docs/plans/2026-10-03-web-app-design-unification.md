@@ -1,0 +1,105 @@
+# ROSY 웹 앱 공용 디자인과 작업 흐름 개선 Implementation Plan
+
+> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
+
+**Goal:** 남은 웹 화면을 실제로 열어 점검하고 공용 디자인·작업 선택·진행/복귀가 분명하도록 화면별 개선, 검증, 커밋과 로컬 main 병합을 완료한다.
+
+**Architecture:** D-359/D-432의 토큰과 공용 컨트롤을 유지하며 D-439의 작업 중심 구성을 적용한다. 웹 공용 라이브러리는 배치·입력 표현만 소유하고 서버 권한과 로봇 명령은 기존 표면/CORE가 소유한다. 같은 세션에서 subagent-driven-development의 구현→요구사항 검토→품질 검토 순서를 적용한다.
+
+**Tech Stack:** Vanilla ES modules, HTML/CSS, FastAPI, pytest, Chromium/Playwright, Fleet 순수 JS의 node:test.
+
+---
+
+## 진행 규칙
+
+- 작업 브랜치: `feat/hmi-task-layout`; worktree: 저장소 `.worktrees/ui-unify`.
+- 임시 코드·로그·화면 캡처는 `X:\DevTemp\rosy-ui-unify`에 둔다.
+- 실제 변경 전에 현재 route/패널/주 동작과 화면 증거를 확인한다.
+- 장치의 양의 주행, 비상 정지 해제, PARKED 기능 활성화는 실행하지 않는다.
+- 기능을 임의로 제거하지 않는다. 목적별 선택과 세부 정보 공개 단계로 정리한다.
+- 같은 종류의 변경은 한 묶음으로 적용하고 화면 점검은 수정 전/후의 제한된 회차로 한다.
+- 독립 작업을 동시에 수정하지 않는다. 요구사항 검토 통과 뒤 품질 검토를 진행한다.
+- 각 완료 행에는 원인·수정·검증·커밋을 기록한다. 실패도 재실행과 구별한다.
+
+## 화면 목록과 순서
+
+| 순서 | 화면/구성 | 기준 파일 | 진행 |
+|---|---|---|---|
+| 1 | 현재 제품 웹 전체 기준선 | `src/hmi/web_common/surfaces.yaml`, `src/hmi/dashboard/panels.yaml` | 점검 중 |
+| 2 | 공용 작업 선택·상태·초점 규칙 | `src/hmi/web_common/{ui.js,components.css,tokens.css}` | 대기 |
+| 3 | 로그인·역할 진입 | `src/hmi/dashboard/{index.html,surface.html,surface-navigation.js}` | 대기 |
+| 4 | 로봇 운용 7패널 | `src/hmi/dashboard/panels/console/`, `shell/` | 대기 |
+| 5 | 작업 준비 5패널 | `src/hmi/dashboard/panels/setup/`, `shell/` | 대기 |
+| 6 | 설치·정비 7패널 | `src/hmi/dashboard/panels/{host,system}/`, `shell/` | 대기 |
+| 7 | Fleet 관제 | `src/site/fleet/fleet/server/web/{index.html,console.js,styles.css}` | 대기 |
+| 8 | Fleet 기기 등록·카메라 설치 | `src/site/fleet/fleet/server/web/{install.html,install.js,enrollment.js,camera-pairing.js}` | 대기 |
+| 9 | 게임 보드 | `src/site/games/games/web/{index.html,board.js,styles.css}` | 대기 |
+| 10 | 진단·시뮬 도구와 공용 styleguide | `src/runtime/sensing/web/diagnostic.html`, `src/sim/gz_sim/scripts/lane_live_view.html`, `src/hmi/dashboard/styleguide.html` | 대기 |
+| 11 | 전체 회귀·최신 main 통합·로컬 병합 | 영향받는 host/browser/node 계약과 quick tier | 대기 |
+
+### Task 1: 전체 화면 기준선과 구현 우선순위
+
+**Files:**
+- Read: 위 화면 목록의 source, `PRODUCT.md`, `DESIGN.md`, 각 모듈 `AGENTS.md`/progress/index.
+- Create/Update: `docs/validation/web-app-design-2026-10-03/README.md`.
+- Scratch: `X:\DevTemp\rosy-ui-unify\capture_baseline.py`, `baseline/`.
+
+1. registry와 route·패널·확장 도구를 대조하여 누락된 화면을 목록에 추가한다.
+2. 기존 브라우저 fixture로 데스크톱/모바일과 권한·빈 상태를 연다. 없는 API를 정상으로 꾸미지 않는다.
+3. 직접 캡처를 보고 현재 목적, 반복/분산 UI, 가로 넘침과 작업 도달을 기록한다.
+4. 화면별 개선과 그대로 둘 이유를 구체적으로 확정한다.
+5. ADR/계획과 기준선 기록을 exact path로 커밋한다.
+
+### Task 2: 공용 작업 선택과 절차 화면 구성
+
+**Files:**
+- Modify as required: `src/hmi/web_common/ui.js`, `components.css`.
+- Modify: `src/hmi/dashboard/shell/mount.js`, `shell.css`, 필요 시 `shell.js`.
+- Test: `src/hmi/dashboard/test/test_surface_layout_browser.py`, `test_surface_entry_browser.py`, `test_action_groups_browser.py`, 공용 컨트롤 브라우저 시험.
+
+1. 기준선에서 확인된 작업 선택 문제를 재현하는 행동 시험을 추가한다. 선택/키보드/복귀/권한/정지 접근을 검증한다.
+2. `ROSY_RUN_BROWSER_TESTS=1 python -m pytest <추가한 시험> -q -p no:cacheprovider`로 수정 전 실패를 확인한다.
+3. 공용 규칙을 기존 컨트롤로 구성한다. 같은 작업 화면의 입력 상태를 유지하고, 숨기기/해제 hook을 존중한다.
+4. 표면 manifest에서 허용한 패널만 표시한다. URL 입력만으로 권한 없는 패널을 추가하지 않는다.
+5. 해당 시험과 `python -m pytest src/hmi/web_common/test/ src/hmi/dashboard/test/ -q -p no:cacheprovider`를 실행한다. 브라우저는 영향받는 시나리오를 opt-in으로 별도 실행한다.
+6. 요구사항 검토→품질 검토와 exact path 커밋을 완료한다.
+
+### Task 3: 로봇 진입·운용·작업 준비·설치·정비를 패널별 개선
+
+**Files:** 위 순서 3–6의 실제 패널, `panels/surface-panels.css`, `panels.yaml`(필요 시), dashboard tests.
+
+1. 각 패널의 제목·주 동작·보류 사유·상태·세부 readback·완료 후 위치를 순서대로 점검한다.
+2. 실제로 발견한 기능 문제에는 재현 시험을 먼저 둔다. 단순 문구/간격 변경은 구현을 복제하는 시험을 만들지 않는다.
+3. 공용 helper와 토큰을 적용하고 독립된 목적에 따라 정보를 묶는다. 운용의 지도·영상·정지는 유지한다.
+4. 비지원/권한 제한/오류/재시도와 키보드, 좁은 폭, 낮은 높이를 검증한다.
+5. `src/runtime/api_web/test/test_ui_manifest.py`, dashboard host suites와 영향받는 browser 시나리오를 실행한다.
+6. 패널별 판정·이유·확인 범위를 기록하고 독립 검토 뒤 커밋한다.
+
+### Task 4: Fleet 관제와 설치 작업 분리·개선
+
+**Files:** 위 순서 7–8, `src/site/fleet/test/web/`, `test/test_fleet_console_browser.py`, 설치 browser 계약.
+
+1. 주의 로봇→대상 선택→현재 상태→개입/완료 흐름, 영상과 지도 읽힘을 확인한다.
+2. 등록/보정은 설치 화면의 작업 흐름으로 정리한다. 접속·빈 목록·권한·비지원 안내를 점검한다.
+3. 같은 동작 아이콘/문구와 공용 부품을 적용한다. Fleet는 CORE 자격을 보유하거나 직접 요청하지 않는다.
+4. `node --test src/site/fleet/test/web/`와 Fleet palette/disabled/server host suites, 영향 browser 시나리오를 실행한다.
+5. 요구사항·품질 검토 후 변경과 증거를 기록하고 커밋한다.
+
+### Task 5: 게임·도구·공용 부품 검토
+
+**Files:** 위 순서 9–10, `test/test_games_board_browser.py`, `src/sim/gz_sim/test/test_lane_live_view_browser.py`, web_common tests.
+
+1. 게임 단계·점수·중단·정보 지연과 경기 영상의 정보 순서를 확인한다.
+2. 도구는 개발/진단 목적을 명확하게 표시하고 정보 묶음·터치·넘침을 개선한다. PARKED 진단은 활성화하지 않는다.
+3. styleguide에 실제 새 공용 구성을 필요할 때 추가한다. 기존 의미 없는 variation은 늘리지 않는다.
+4. 관련 host와 browser 시험, dark/light를 따르는 표면의 두 테마를 확인한다.
+5. 수정하지 않은 표면도 이유와 검증 범위를 기록하고 독립 검토 뒤 커밋한다.
+
+### Task 6: 최종 검증과 착지
+
+1. 화면 목록의 모든 행에 결과/증거/커밋 또는 유지 이유가 있는지 대조한다.
+2. 영향받는 host/browser/node 및 root AGENTS의 quick tier를 완료한다. 첫 실패와 재실행을 구별한다.
+3. `python tools/harness/rosy_harness.py generate`와 lint, `git diff --check`를 확인한다.
+4. 최신 main을 feature에 통합하고 변화에 맞는 검증을 다시 실행한다.
+5. exact path 커밋 후 main에서 `git merge --ff-only feat/hmi-task-layout`를 실행한다. 다른 세션 WIP를 건드리지 않는다.
+6. main/브랜치 커밋 일치와 실제 확인 범위를 보고한 뒤 goal을 완료한다. 완료되지 않은 화면이 있으면 goal은 active를 유지한다.
