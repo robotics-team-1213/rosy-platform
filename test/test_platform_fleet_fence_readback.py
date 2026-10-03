@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from hashlib import sha256
 from http.client import HTTPConnection
 import json
+import os
 from pathlib import Path
 import socket
 import sys
@@ -69,15 +70,54 @@ def _post(port, token, path, body):
         connection.close()
 
 
-def test_real_fleet_reverse_readback_during_owner_rearm_does_not_deadlock(tmp_path):
+@contextmanager
+def _owner_socket(owner, enabled):
+    if not enabled:
+        yield
+        return
+    path = owner.uds_server.socket_path
+    from fleet.server.local_action_transport import LocalActionUnavailable, UnixLocalActionTransport
+    transport = UnixLocalActionTransport(path.parent.parent, timeout_s=.2)
+    path.parent.mkdir(parents=True)
+    server = threading.Thread(target=owner.uds_server.serve_forever, daemon=True)
+    server.start()
+    try:
+        deadline = time.monotonic() + 3
+        ready = False
+        while server.is_alive() and time.monotonic() < deadline:
+            if path.exists() and path.stat().st_mode & 0o777 == 0o660:
+                try:
+                    identity = transport.owner_identity(path.parent.name)
+                    assert identity["instance_id"] == path.parent.name
+                    ready = True
+                    break
+                except LocalActionUnavailable:
+                    pass
+            time.sleep(.01)
+        assert ready and path.is_socket(), "owner UDS did not become ready at its provisioned path"
+        assert path.stat().st_mode & 0o777 == 0o660
+        yield
+    finally:
+        owner.uds_server.stop()
+        server.join(3)
+        assert not server.is_alive()
+
+
+@pytest.mark.parametrize("real_uds", [False, pytest.param(True, marks=pytest.mark.skipif(
+    not hasattr(socket, "SO_PEERCRED"), reason="requires Linux kernel peer credentials"))])
+def test_real_fleet_reverse_readback_during_owner_rearm_does_not_deadlock(tmp_path, monkeypatch, real_uds):
     from rosy_agent.fleet_fence import HttpFleetFenceReadback
     from test_platform_cell_owner_assembly import _build
+    import test_platform_cell_owner_assembly as owner_assembly
+    from fleet.server.local_stop_transport import UnixLocalStopTransport
     from fleet.server.app import create_app
     from fleet.server.console import FleetConsole
     from fleet.server.task_store import FleetTaskStore
     from fleet.server.task_service import FleetTaskService
     store = FleetTaskStore(tmp_path / "fleet.sqlite3")
     holder = {}
+    if real_uds:
+        monkeypatch.setattr(owner_assembly, "FLEET_UID", os.getuid())
     class OwnerTransport:
         def rearm(self, **identity):
             response = holder["owner"].action_api.dispatch(
@@ -90,31 +130,69 @@ def test_real_fleet_reverse_readback_during_owner_rearm_does_not_deadlock(tmp_pa
             return {"state": response.get("snapshot", {}).get("state", "UNKNOWN")}
     app = create_app(FleetConsole([], []), task_service=FleetTaskService(store, robot_ids=set()),
         start_task_dispatcher=False, omx_instances={"omx_cell_sim": "omx_cell_sim_01"},
-        omx_stop_transport=OwnerTransport(), deployment_profile="simulation", site_users={
+        omx_stop_transport=(UnixLocalStopTransport(tmp_path / "o/run", timeout_s=.75)
+                            if real_uds else OwnerTransport()), deployment_profile="simulation", site_users={
             sha256(b"private-viewer").hexdigest(): {"principal_id": "cell-fence-reader", "role": "viewer"},
             sha256(b"named-operator").hexdigest(): {"principal_id": "operator-1", "role": "operator"}})
     with _serve(app) as port:
         url = f"http://127.0.0.1:{port}/api/fleet/dispatch-control"
         fence = HttpFleetFenceReadback(url, "private-viewer", timeout_s=.5)
-        owner, _ = _build(tmp_path / "owner", fleet_fence_current=fence)
+        owner, _ = _build(tmp_path / "o", fleet_fence_current=fence)
         holder["owner"] = owner
-        assert not fence(0, 0)
-        rearm = {"expected_generation": store.dispatch_control()["generation"]}
-        assert _post(port, "private-viewer", "/api/fleet/dispatch/rearm", rearm)[0] == 403
-        status, control = _post(port, "named-operator", "/api/fleet/dispatch/rearm", rearm)
-        assert status == 200, control
-        epoch, generation = control["authority_epoch"], control["generation"]
-        assert fence(epoch, generation)
-        assert not fence(epoch, generation + 1)
-        assert owner.stop.is_open(authority_epoch=epoch, dispatch_generation=generation)
-        assert not HttpFleetFenceReadback(url, "wrong-credential")(epoch, generation)
-        status, stopped = _post(port, "named-operator", "/api/fleet/estop", {})
-        assert status == 200 and stopped["omx_local_stop"]["state"] == "LOCAL_LATCHED"
-        assert not fence(epoch, generation)
-        assert not owner.stop.is_open(authority_epoch=epoch, dispatch_generation=generation)
-        store.close_dispatch_for_startup()
-        assert not fence(epoch, generation)
+        with _owner_socket(owner, real_uds):
+            epoch, generation = _exercise_stop_rearm(port, fence, owner, store, url)
     assert not fence(epoch, generation)
+
+
+def _exercise_stop_rearm(port, fence, owner, store, url):
+    from rosy_agent.fleet_fence import HttpFleetFenceReadback
+    assert not fence(0, 0)
+    rearm = {"expected_generation": store.dispatch_control()["generation"]}
+    assert _post(port, "private-viewer", "/api/fleet/dispatch/rearm", rearm)[0] == 403
+    status, control = _post(port, "named-operator", "/api/fleet/dispatch/rearm", rearm)
+    assert status == 200, control
+    epoch, generation = control["authority_epoch"], control["generation"]
+    assert fence(epoch, generation)
+    assert not fence(epoch, generation + 1)
+    assert owner.stop.is_open(authority_epoch=epoch, dispatch_generation=generation)
+    assert not HttpFleetFenceReadback(url, "wrong-credential")(epoch, generation)
+    status, stopped = _post(port, "named-operator", "/api/fleet/estop", {})
+    assert status == 200 and stopped["omx_local_stop"]["state"] == "LOCAL_LATCHED"
+    assert not fence(epoch, generation)
+    assert not owner.stop.is_open(authority_epoch=epoch, dispatch_generation=generation)
+    store.close_dispatch_for_startup()
+    assert not fence(epoch, generation)
+    return epoch, generation
+
+
+@pytest.mark.skipif(not hasattr(socket, "SO_PEERCRED"), reason="requires Linux kernel peer credentials")
+def test_owner_uds_survives_a_client_disconnect_before_the_reply(tmp_path, monkeypatch):
+    import test_platform_cell_owner_assembly as owner_assembly
+    from fleet.server.local_action_transport import UnixLocalActionTransport
+    monkeypatch.setattr(owner_assembly, "FLEET_UID", os.getuid())
+    owner, _ = owner_assembly._build(tmp_path / "o")
+    entered, release = threading.Event(), threading.Event()
+    original = owner.action_api.dispatch
+
+    def delayed_dispatch(request, *, peer_uid):
+        entered.set()
+        assert release.wait(3)
+        return original(request, peer_uid=peer_uid)
+
+    with _owner_socket(owner, True):
+        monkeypatch.setattr(owner.action_api, "dispatch", delayed_dispatch)
+        try:
+            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:
+                client.connect(str(owner.uds_server.socket_path))
+                client.sendall(b'{"version":2,"operation":"GetOwnerIdentity"}\n')
+                assert entered.wait(3)
+                client.shutdown(socket.SHUT_RDWR)
+        finally:
+            release.set()
+        transport = UnixLocalActionTransport(tmp_path / "o/run", timeout_s=.75)
+        identity = transport.owner_identity("omx_cell_sim_01")
+        assert identity["instance_id"] == "omx_cell_sim_01"
+        assert not owner.stop.is_open(authority_epoch=0, dispatch_generation=0)
 
 
 @pytest.mark.parametrize("document", [

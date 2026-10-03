@@ -322,7 +322,9 @@ class UnixActionServer:
                     connection.settimeout(2.0)
                     try:
                         self.api.handle_connection(connection)
-                    except TimeoutError:
+                    except (TimeoutError, ConnectionError):
+                        # A timed-out caller can close before the durable reply.
+                        # Keep the owner and journal alive; never replay the request.
                         continue
         finally:
             listener.close()
