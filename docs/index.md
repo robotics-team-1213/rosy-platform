@@ -189,6 +189,7 @@
 | D-426 | Fleet–Gazebo 실제 REST/WS·Task/attempt·CORE 결과와 독립 운동/접촉 관측을 함께 검증; 두 로봇/한 Fleet부터 run별 GZ_PARTITION 격리, 진입 경계 grant 재검사·점유 해제 증거·재시작 이전 실행 대조·CORE 독립 base 명령 만료, M01–M08 반복 수용 및 증거 등급 분리 |
 | D-431 | 라즈베리파이 YOLO 추론은 NCNN을 목표로 하고 OpenCV 영상 처리와 학습 모델의 의미를 유지한다 |
 | D-432 | 모든 앱·장치는 공통 발견·연결 규약을 쓰고, 개발 모드에서는 코드 없이 연결한다 |
+| D-435 | 작업 오케스트레이션·Fleet·장치 실행을 역할과 권한으로 구분한다 |
 
 ## 계획·결과 문서
 
@@ -278,4 +279,4 @@
 - 2026-10-03 · uncommitted · docs(adr): Pilot 화면별 개선과 공용 디자인 소유권
 - 2026-10-03 · uncommitted · fix(link): 현재 접속과 후속 코드 규약 구별
 - 2026-10-03 · uncommitted · feat(link): D-432 주소 없는 장비 접속
-- 2026-10-03 · uncommitted · docs: D-431 remote model PC and isolated Pi verification
+- 2026-10-03 · uncommitted · docs: align D-435 roles with D-427 migration

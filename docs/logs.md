@@ -4793,6 +4793,34 @@
 - gate 변화: 없음. 학습 YOLO·라벨 IoU·provenance·30분 완료·정식 ARM64 release readback은 미완료이며 운영 전환과 ARTIFACT/DEVICE/FIELD 승격은 HOLD다.
 - 결정: D-431. 시스템 OpenCV와 기존 ONNX를 유지한다. 상세 범위는 `validation/pi-ncnn-remote-2026-10-03/README.md`.
 
+## 2026-10-03 · uncommitted · docs: D-435 authority handoff and device pipeline refinement
+
+- 변경: D-435 Proposed에 §8–§12 보강 후보와 검토 문서 3차 기록을 추가했다. 배정/발행/장치 수락·기존 claim 저장·SkillInvocation/Action identity·실행 출력의 Arbiter/Guard 순서·전체 진행 이력에 따른 자원 해제를 구체화했다. 형식 검사와 의미 검증도 구분했다.
+- 증거: dispatch_admission·MissionDispatcher·StepDispatcher·CellJobStore.release_before_send·SkillInvocation 정적 대조. 고정 OMX 대상, robot/workcell/object/pallet 공용 claim, 미발행과 UNKNOWN, 1 Step→1 Action 현재 범위를 확인했다.
+- gate 변화: 없음. Proposed 보강만이며 기존 Accepted 계약·코드·wire·원장·활성화·배포·장치 gate는 변경하지 않는다.
+- 추가 근거: Open-RMF 공식 task allocation/rmf_task Usage와 ROS 2 Actions 설계를 대조했다. Fleet 구현 안의 작업 실행 자체는 금지하지 않고 전체 Mission 정본과 위임 범위를 구분한다. 기존 SDK/대시보드 직접 장치 요청도 MANUAL에 한정하지 않도록 보강했다.
+- 검증: 문서 계약+모듈 기준선 단일 시험 84 passed/26 existing history warnings(full lint·generated records 포함). 기존 isaac_sim 기준선 시험은 상류 8dda13eec 수정 이후 현재 통과하며 이번 변경의 효과로 주장하지 않는다.
+
+## 2026-10-03 · uncommitted · docs: D-435 consolidated acceptance candidate
+
+- 변경: D-435 끝에 최종 수용 후보 요약 S1–S7과 검토 문서 최종 기록을 추가했다. 역할·권한·작업 흐름·원장/claim·증거·기존 ADR 부분 대체/유지·현재 구현 대응·완료 범위를 한 곳에 정리했다.
+- 증거: D-70/D-403·MissionService·목표 증거 경로를 추가 대조했다. 정형 공정 역할은 service principal의 admission 권한이 아니며 Rosy Cell 서비스는 제안/resolve, Job 승인은 이름 있는 사람 operator라는 현재 계약을 명시했다.
+- gate 변화: 없음. D-435는 Proposed이고 기존 Accepted 계약·실행 경로·API·원장·principal·simulation/실물 gate는 변경하지 않는다.
+
+- 최종 검증: network topology/harness 계약 검사 83 passed, 26 warnings(기존 last_verified 이력); S1–S7·Proposed 상태·로컬 링크 21개와 git diff --check 확인. 장치/물리 수용 증거는 아니다.
+
+## 2026-10-03 · uncommitted · docs: align D-435 roles with D-427 migration
+
+- 변경: D-435 S8에 제품/파트/논리 역할과 혼합 구현 대응을 추가했다. D-427 부록에 최신 경로 상태, 속도 우선 결정의 우선순위, D-425 기능/설치 gate 관계를 보강했다. 평가 문서에 세 선택과 권고 근거를 기록했다.
+- 근거: 기준 e23b8fe26, 매니페스트 71 root의 현재 path 누락 0개; execution submission/gateway composition 코드와 D-290/D-413/D-425/D-427/D-429/D-434 정적 대조.
+- gate 변화: 없음. D-435 Proposed 유지; 매니페스트·목표 경로·wave·원장·API·권한·배포 변경 없음. 경로 존재는 wave/artifact 수용 증거가 아니다.
+
+- Verification: initial run caught damaged UTF-8 append text; corrected those additions and regenerated the index. Final network/harness/platform-parts/colcon-roots run: 107 passed, 26 existing last_verified warnings. Local links: 32 valid; manifest unchanged; git diff --check passed.
+
+- Follow-up: added Codex review comments C1-C4 to the D-427 plan, with recommendations, concrete questions and an append-only response format for plan owners. Existing decisions, manifest and wave gates are unchanged.
+
+- Landing preparation: isolated docs/d435-review from main c67f05b5d. Regenerated docs/index.md to include the newer main log entry; initial isolated failures were both the same stale-index check. Existing document content and Proposed status remain unchanged.
+
 
 ## 2026-10-03 · uncommitted · feat(link): D-432 주소 없는 장비 접속
 
