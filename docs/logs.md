@@ -4974,3 +4974,9 @@
 - 변경: perception-model-comparison-2026-10-04.md에 동일 데이터·고정 평가의 3개 모델 비교를 추가했다. 외부 recipe의 부분 라벨 의미는 가져오지 않고 현행 클래스 의미를 유지했다.
 - 증거: 실제 GPU 30에폭, base16 개선 lane IoU 0.79448/mIoU 0.51486, base8 0.76222/0.50522. 두 후보 intake pass. 별도 순차 CPU 평가 p95 51.22/18.91ms, ONNX 7773729/1952379bytes. 원본 JSON/log/config는 X와 모델 PC에 보존했다.
 - gate 변화: 인식 shadow 후보의 고정 평가 선별 통과. drivable IoU 약 0.00042/0.00241와 신호/물체 정답 공백은 남는다. READY watcher→accepted→로봇 전달·rollback, 시스템 timer, 실제 주행, DEVICE/FIELD는 미완료다.
+
+## 2026-10-04 · uncommitted · verify(learning): prepare recorded-video labels and accept READY candidate
+
+- 변경: 기존 영상 19개 목록과 샘플을 확인하고 5개 영상의 76프레임 도로 mask/CVAT 초안 및 4프레임 물체 box 7개 검수 패키지를 만들었다. 동일 녹화 part를 capture group으로 묶고 기존 평가 세션은 제외했다. 통과 소형 후보의 실제 canonical accepted 이동과 9dfk 기존 manual hold를 확인했다.
+- 증거: 76 JPEG SHA/CVAT mask·7 box 경계·group 비겹침 검증. bundle SHA e1b245a7cfd1969923e42de32c029153d62ebf1ce461f0e5a681231725b2f365. READY f21a7a97 intake pass/attempt1/accepted ONNX SHA 확인. 8kcn DNS exit77·push0; 9dfk 기존 pin/hostname 검증 후 같은 키의 alias 추가, watcher held/push0. 상세 recorded-video-review-2026-10-04.md 및 model-store-accepted-2026-10-04.md.
+- gate 변화: 실제 라벨 초안/접수/hold 존중 증거. 검수 완료 ground truth·물체/신호 학습·장치 shadow 교체/rollback·system timer·DEVICE/FIELD는 미완료. 401 robot state를 idle 증거로 사용하지 않는다.
