@@ -362,7 +362,9 @@ def intake_result(sha: str, prev: dict | None, robots: list[str], intake_fn,
     if rc != 0 or report.get("verdict") != "pass" or not report.get("model_revision"):
         print(f"{_short(sha)}: intake FAIL {'; '.join(reasons)}", file=sys.stderr)
         return {**base, "intake": "fail", "reasons": reasons}
-    print(f"{_short(sha)}: intake PASS {report['model_revision']}")
+    miou = (report.get("eval") or {}).get("miou")
+    print(f"{_short(sha)}: intake PASS {report['model_revision']}"
+          + ("" if miou is None else f" (eval mIoU {miou:.3f})"))
     return {**base, "intake": "pass", "reasons": reasons,
             "robots": {r: {"status": "pending", "attempts": 0} for r in robots}}
 

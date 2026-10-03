@@ -4,6 +4,13 @@ max_nan_frames: 0
 min_visible_fraction: 0.30        # of replay frames with visible lane evidence
 replay_sources: ["data/teleop/learning/*.mp4"]
 max_frames_per_source: 200
+# D-379 d3 fixed eval set (lane_seg only). eval_set: path under --root to an eval set
+# version folder, e.g. data/perception/store/evalsets/<name>/<content_sha>; null = no eval.
+# Thresholds stay null until a baseline model has been scored on that set.
+eval_set: null
+eval_max_frames: 400
+min_eval_miou: null
+max_eval_miou_drop: 0.01          # fail below the best earlier pass on the same set minus this
 # D-423: object_det overrides; no rule-based reference, so no visibility check.
 object_det:
   max_host_latency_ms_p50: 400

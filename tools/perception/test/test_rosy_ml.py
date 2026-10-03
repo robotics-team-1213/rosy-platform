@@ -484,3 +484,19 @@ def test_fetch_http_needs_an_operator_token(tmp_path, monkeypatch, capsys):
     _init(tmp_path, "--core-token-file", str(tmp_path / "core.token"), monkeypatch=monkeypatch)
     assert rosy_ml.main(["fetch", "pinky-a", "--http"]) == 2
     assert "--core-operator-token-file" in capsys.readouterr().out
+
+
+def test_doctor_checks_the_gate_eval_set_when_one_is_set(tmp_path, monkeypatch, capsys):
+    _store_with(tmp_path)
+    ev = tmp_path / "evalsets" / "ev" / ("c" * 64)
+    monkeypatch.setattr(rosy_ml, "_gate_eval_set", lambda cfg: ev)
+    assert _doctor(tmp_path, monkeypatch, Robot(), "--store", str(tmp_path / "store")) == 1
+    assert "eval set" in capsys.readouterr().out
+    ev.mkdir(parents=True)
+    (ev / "manifest.json").write_text("{}")
+    assert _doctor(tmp_path, monkeypatch, Robot(), "--store", str(tmp_path / "store")) == 0
+
+
+def test_gate_eval_set_is_none_with_the_default_gate(tmp_path):
+    pytest.importorskip("cv2")
+    assert rosy_ml._gate_eval_set({}) is None

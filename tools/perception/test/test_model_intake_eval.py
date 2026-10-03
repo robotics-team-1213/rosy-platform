@@ -1,0 +1,172 @@
+"""D-379 decision 3: intake scores a lane_seg model on a fixed eval set."""
+import json
+import sys
+from pathlib import Path
+from types import SimpleNamespace
+
+import numpy as np
+import pytest
+
+cv2 = pytest.importorskip("cv2")
+
+ROOT = Path(__file__).resolve().parents[3]
+_MODEL = str(ROOT / "tools" / "perception" / "model")
+if _MODEL not in sys.path:
+    sys.path.insert(0, _MODEL)
+
+import intake  # noqa: E402
+
+SHA = "c" * 64
+H, W = 4, 8  # model input; eval frames are 8x16, so the masks are resized (nearest)
+SPEC = SimpleNamespace(height=H, width=W, color="rgb", scale=1 / 255, mean=(0, 0, 0), std=(1, 1, 1))
+MODEL_CLASSES = (SimpleNamespace(index=0, name="floor", role="background"),
+                 SimpleNamespace(index=1, name="lane", role="lane_marking"),
+                 SimpleNamespace(index=2, name="extra", role="drivable"))
+GOOD = {"frames": 10, "latency_ms": {"p50": 5.0, "p95": 6.0}, "nan_frames": 0, "error_frames": 0,
+        "visible_fraction": 1.0}
+
+
+def _truth():
+    """Eval label at 8x16: left half floor (0), right half lane (1), top row ignored."""
+    m = np.zeros((8, 16), np.uint8)
+    m[:, 8:] = 1
+    m[0] = 255
+    return m
+
+
+def _eval_set(root, classes=(("floor", "background"), ("lane", "lane_marking"), ("wall", "ignore")),
+              n=3):
+    d = root / "store" / "evalsets" / "ev" / SHA
+    frames = []
+    for i in range(n):
+        img, mask = f"images/s/s__{i:06d}.jpg", f"masks/s/s__{i:06d}.png"
+        for rel in (img, mask):
+            (d / rel).parent.mkdir(parents=True, exist_ok=True)
+        cv2.imwrite(str(d / img), np.full((8, 16, 3), 50, np.uint8))
+        cv2.imwrite(str(d / mask), _truth())
+        frames.append({"image": img, "mask": mask, "session": "s", "split": "eval"})
+    manifest = {"schema": "rosy.perception.dataset/1", "purpose": "eval", "ignore_index": 255,
+                "classes": [{"index": i, "name": n_, "role": r} for i, (n_, r) in enumerate(classes)],
+                "frames": frames}
+    (d / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+    return d
+
+
+class _Session:
+    def __init__(self, pred):
+        self.pred = pred
+
+    def run(self, x):
+        assert x.shape == (1, 3, H, W)
+        return np.eye(len(MODEL_CLASSES), dtype=np.float32)[self.pred].transpose(2, 0, 1)[None] * 5
+
+
+def _pred(lane_cols=4):
+    """Prediction at 4x8: floor, lane on the right lane_cols columns."""
+    p = np.zeros((H, W), np.int64)
+    p[:, W - lane_cols:] = 1
+    return p
+
+
+def _model(pred, revision="lane-seg-20261003-aaaa1111", val_iou=None):
+    manifest = SimpleNamespace(input=SPEC, classes=MODEL_CLASSES, model_revision=revision,
+                               files=(), raw={"metrics": {"val_iou": val_iou or {}}})
+    return SimpleNamespace(manifest=manifest, _session=_Session(pred))
+
+
+def test_evaluate_matches_classes_by_name_and_ignores_255(tmp_path):
+    ev = intake.evaluate(_model(_pred()), _eval_set(tmp_path), 400)
+    assert ev["frames"] == 3 and ev["set"]["content_sha"] == SHA
+    assert ev["matched_classes"] == ["floor", "lane"]
+    assert ev["unmatched"] == {"model_only": ["extra"], "eval_only": ["wall"]}
+    assert ev["iou"] == {"floor": 1.0, "lane": 1.0} and ev["miou"] == 1.0
+    assert ev["lane_marking_iou"] == {"lane": 1.0}
+    # lane too wide by two columns: lane 4/6 per row, floor 2/4 per row
+    ev = intake.evaluate(_model(_pred(6)), _eval_set(tmp_path / "b"), 400)
+    assert ev["iou"] == {"floor": pytest.approx(0.5), "lane": pytest.approx(4 / 6)}
+    assert ev["miou"] == pytest.approx((0.5 + 4 / 6) / 2)
+
+
+def test_evaluate_frame_cap(tmp_path):
+    ev = intake.evaluate(_model(_pred()), _eval_set(tmp_path, n=5), 2)
+    assert ev["frames"] == 2
+
+
+def _run(tmp_path, monkeypatch, model, gate_extra, folder_name="m"):
+    folder = tmp_path / folder_name
+    folder.mkdir(exist_ok=True)
+    (folder / "model_manifest.json").write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(intake, "load_manifest", lambda f: model.manifest)
+    monkeypatch.setattr(intake, "verify_files", lambda m: None)
+    monkeypatch.setattr(intake, "check_precision", lambda m: None)
+    monkeypatch.setattr(intake.LaneSegModel, "open", classmethod(lambda cls, f: model))
+    monkeypatch.setattr(intake, "replay", lambda m, v, n: dict(GOOD))
+    gate = {"max_host_latency_ms_p50": 400, "max_nan_frames": 0, "min_visible_fraction": 0.3,
+            "replay_sources": ["*.mp4"], "max_frames_per_source": 10, "eval_set": None,
+            "eval_max_frames": 400, "min_eval_miou": None, "max_eval_miou_drop": 0.01, **gate_extra}
+    gate_path = tmp_path / "gate.yaml"
+    gate_path.write_text(json.dumps(gate), encoding="utf-8")
+    return intake.run(str(folder), out=tmp_path / "out", gate_path=gate_path, root=tmp_path)
+
+
+EVAL_REL = f"store/evalsets/ev/{SHA}"
+
+
+def test_eval_set_null_keeps_the_old_report(tmp_path, monkeypatch):
+    rc, report = _run(tmp_path, monkeypatch, _model(_pred()), {})
+    assert rc == 0 and report["verdict"] == "pass" and report["eval"] is None
+    assert "trainer_val_iou" not in report
+
+
+def test_eval_pass_then_regression_against_the_champion_fails(tmp_path, monkeypatch):
+    _eval_set(tmp_path)
+    rc, first = _run(tmp_path, monkeypatch, _model(_pred(), val_iou={"lane": 0.9}),
+                     {"eval_set": EVAL_REL, "min_eval_miou": 0.5})
+    assert rc == 0, first["reasons"]
+    assert first["eval"]["miou"] == 1.0 and first["eval"]["champion"] is None
+    assert first["trainer_val_iou"] == {"lane": 0.9}
+    saved = json.loads((tmp_path / "out" / "lane-seg-20261003-aaaa1111" / intake.REPORT_NAME)
+                       .read_text(encoding="utf-8"))
+    assert saved["eval"]["set"]["content_sha"] == SHA
+    # a worse model (mIoU 0.58) on the same set: below the champion's 1.0 - 0.01
+    rc, second = _run(tmp_path, monkeypatch, _model(_pred(6), revision="lane-seg-20261003-bbbb2222"),
+                      {"eval_set": EVAL_REL, "min_eval_miou": 0.5}, folder_name="m2")
+    assert rc == 1 and second["verdict"] == "fail" and second["transient"] is False
+    assert second["eval"]["champion"] == {"model_revision": "lane-seg-20261003-aaaa1111", "miou": 1.0}
+    assert any("champion" in r for r in second["reasons"])
+    # the model under test is never its own champion
+    assert intake.find_champion(tmp_path / "out", SHA, "lane-seg-20261003-aaaa1111") is None
+
+
+def test_min_eval_miou_fails(tmp_path, monkeypatch):
+    _eval_set(tmp_path)
+    rc, report = _run(tmp_path, monkeypatch, _model(_pred(6)),
+                      {"eval_set": EVAL_REL, "min_eval_miou": 0.9})
+    assert rc == 1 and any("min_eval_miou" in r for r in report["reasons"])
+
+
+def test_no_matched_class_fails(tmp_path, monkeypatch):
+    _eval_set(tmp_path, classes=(("bg", "background"), ("paint", "lane_marking")))
+    rc, report = _run(tmp_path, monkeypatch, _model(_pred()), {"eval_set": EVAL_REL})
+    assert rc == 1 and report["transient"] is False
+    assert report["eval"]["matched_classes"] == []
+    assert any("no class name shared" in r for r in report["reasons"])
+
+
+@pytest.mark.parametrize("broken", ["missing", "not_eval"])
+def test_missing_or_wrong_eval_set_is_a_transient_setup_error(tmp_path, monkeypatch, broken):
+    if broken == "not_eval":
+        d = _eval_set(tmp_path)
+        doc = json.loads((d / "manifest.json").read_text(encoding="utf-8"))
+        doc.pop("purpose")
+        (d / "manifest.json").write_text(json.dumps(doc), encoding="utf-8")
+    rc, report = _run(tmp_path, monkeypatch, _model(_pred()), {"eval_set": EVAL_REL})
+    assert rc == 1 and report["verdict"] == "fail" and report["transient"] is True
+    assert "eval set" in report["reasons"][0]
+
+
+def test_object_det_gate_drops_the_eval_keys():
+    gate = intake.load_gate(intake.DEFAULT_GATE)
+    assert gate["eval_set"] is None and gate["max_eval_miou_drop"] == 0.01
+    assert not set(intake.EVAL_KEYS) & set(intake.task_gate(gate, "object_det"))
+    assert set(intake.EVAL_KEYS) <= set(intake.task_gate(gate, "lane_seg"))
