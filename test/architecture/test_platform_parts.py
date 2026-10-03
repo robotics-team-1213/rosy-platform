@@ -301,6 +301,20 @@ def test_root_states_follow_path_target_and_deferred():
     assert _state({**moved_child, "path": "y/web"}, [moved_parent, {**moved_child, "path": "y/web"}]) == "moved"
 
 
+def test_learning_ros_packages_record_their_device_install_exception():
+    """D-427 §2: learning is not installed on devices. A learning root with a
+    ``package.xml`` still lands in the native payload, which builds every colcon
+    root (Q8), so it must say so; the field may not linger anywhere else."""
+    roots = _manifest()["roots"]
+    ros_learning = [root for root in roots
+                    if root["part"] == "learning" and (ROOT / root["path"] / "package.xml").is_file()]
+    assert ros_learning, "isaac_sim is a learning ROS package until the payload scope change"
+    missing = [root["path"] for root in ros_learning if not str(root.get("device_install_exception", "")).strip()]
+    assert missing == [], f"add device_install_exception to: {missing}"
+    stray = [root["path"] for root in roots if "device_install_exception" in root and root not in ros_learning]
+    assert stray == [], f"device_install_exception only on learning roots with package.xml: {stray}"
+
+
 def test_every_tracked_file_has_exactly_one_owner():
     roots = _manifest()["roots"]
     orphans = []

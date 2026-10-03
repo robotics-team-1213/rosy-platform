@@ -255,6 +255,7 @@ roots:
     part: learning
     d427_target: learning/envs/isaac
     wave: "1"
+    device_install_exception: "native payload builds every colcon root (Q8); remove with the payload scope change"
     note: Isaac assets and scripts (D-322 holds Isaac Lab training); could also be integrations/simulation/isaac.
   - path: data
     part: learning
