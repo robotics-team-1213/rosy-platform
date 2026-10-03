@@ -508,6 +508,13 @@ SIZE_VERDICTS = {
         "accept: D-412 operator publish tool; rollout signing, the GitHub release I/O and the "
         "canary watch are one short sequential flow; split the canary watch out if it grows further",
     ),
+    "deploy/site/rosy_site_autoupdate.py": (
+        755,
+        "accept: D-441 site-host update transaction keeps candidate selection, trusted verification, "
+        "atomic switch, health gate and rollback in one reviewed host entry point; owner deploy, "
+        "covered by test/test_site_autoupdate.py. Split transport or retention into siblings if they "
+        "grow independently; the updater must never import executable code from a candidate",
+    ),
     "deploy/robot/pinky_pro/native/sync-image-layer.py": (
         1018,
         "split: D-388 image-layer sync — the allowlist/plan, the backup-record history (records, "
