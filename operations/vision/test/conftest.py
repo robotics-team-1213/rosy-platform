@@ -5,15 +5,15 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-SITE = Path(__file__).resolve().parents[2]
-SRC = Path(__file__).resolve().parents[3]
+REPO = Path(__file__).resolve().parents[3]
+SRC = REPO / "src"
 TEST = Path(__file__).resolve().parent
 for path in (
-    SITE / "vision",
-    SITE / "fleet",
+    REPO / "operations" / "vision",
+    SRC / "site" / "fleet",
     SRC / "runtime" / "services",
     SRC / "contracts" / "foundation",
-    SRC.parent / "operations" / "apps" / "games",
+    REPO / "operations" / "apps" / "games",
 ):
     entry = str(path)
     if entry not in sys.path:

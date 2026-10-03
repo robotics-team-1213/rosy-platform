@@ -31,7 +31,7 @@ All Rosy Cam app code: capture, encode, and push latest-only JPEG frames to the 
 
 - Keep frames latest-only: `LatestOnlyPolicy` drops stale frames instead of queueing. Do not add a send queue.
 - `FirstContactTrust` (pairing) must never be reused for the frame link, which trusts the pinned site CA via `PinnedTrust` (D-341 3, 8, 9).
-- Keep wire constants (`rosy-overhead/1`, `/overhead/v1/frames`, `ROF1`, `_rosy-overhead._tcp`) identical to `src/site/vision/rosy_vision/protocol.py`; change both against the shared vectors.
+- Keep wire constants (`rosy-overhead/1`, `/overhead/v1/frames`, `ROF1`, `_rosy-overhead._tcp`) identical to `operations/vision/rosy_vision/protocol.py`; change both against the shared vectors.
 - Put non-Android logic in plain Kotlin classes so tests run on the JVM.
 
 ### Testing Requirements
@@ -46,7 +46,7 @@ Each subpackage has `<Name>Test.kt` beside the class's name; vector-driven tests
 
 ### Internal
 
-- Peer receiver `src/site/vision/rosy_vision` (wire format), `core_common` pairing/failure/site-link readers (shared vectors)
+- Peer receiver `operations/vision/rosy_vision` (wire format), `core_common` pairing/failure/site-link readers (shared vectors)
 
 ### External
 

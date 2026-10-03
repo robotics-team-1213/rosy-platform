@@ -348,9 +348,10 @@ roots:
     wave: "3b"
     import_prefix: [rosy_cell]
     concern: other
-  - path: src/site/vision
+  - path: operations/vision
     part: operations
     d427_target: operations/vision
+    legacy: src/site/vision
     wave: "3b"
     import_prefix: [rosy_vision]
     concern: other

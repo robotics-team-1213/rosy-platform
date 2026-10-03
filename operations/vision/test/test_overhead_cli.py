@@ -12,7 +12,7 @@ from rosy_vision import protocol
 from rosy_vision.cli import _detect_advertise_host, _receive_pin, _server_ssl_context, main, parse_args
 
 VECTORS = json.loads(
-    (Path(__file__).resolve().parents[4] / "test" / "fixtures" / "protocol" / "overhead-ingest.v1.json")
+    (Path(__file__).resolve().parents[3] / "test" / "fixtures" / "protocol" / "overhead-ingest.v1.json")
     .read_text(encoding="utf-8")
 )
 

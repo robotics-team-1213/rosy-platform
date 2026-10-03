@@ -5,7 +5,7 @@ from pathlib import Path
 from fleet.server.sightings_config import load_sighting_sources
 from rosy_vision.vision_config import load_vision_sources
 
-EXAMPLE = Path(__file__).resolve().parents[4] / "deploy/site/site-cameras.yaml.example"
+EXAMPLE = Path(__file__).resolve().parents[3] / "deploy/site/site-cameras.yaml.example"
 ENV = {"ROSY_PHONE_CEILING_NORTH": "phone-north", "ROSY_FLEET_CEILING_NORTH_TOKEN": "fleet-north",
        "ROSY_FLEET_CEILING_SOUTH_TOKEN": "fleet-south"}
 

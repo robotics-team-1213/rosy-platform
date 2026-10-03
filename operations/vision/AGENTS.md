@@ -36,5 +36,5 @@ The Rosy Cam phone app (Kotlin/CameraX) lives in its own module `src/site/cam` (
 ### Testing Requirements
 
 ```bash
-python -m pytest src/site/vision/test -q
+python -m pytest operations/vision/test -q
 ```

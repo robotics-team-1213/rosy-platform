@@ -12,7 +12,7 @@ are read as ``/`` first, so every form below also covers ``src\site\fleet``.
   or plain spaces, optionally closing a call first: ``"src" / "site" / "fleet"``,
   ``os.path.join("src", "site", ...)``, ``Path("src/site") / "fleet"``,
   ``"src" + "/site/fleet"``, PowerShell ``Join-Path $r "src" "site" "fleet"``.
-- brace: shell brace expansion ``src/site/{fleet,vision}``.
+- brace: shell brace expansion ``src/old/{fleet,web}``.
 - relative: ``../`` strings resolved from the file's folder and from each ancestor
   up to the repository root (covers gradle ``rootProject.file``).
 

@@ -8,7 +8,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-STL = (Path(__file__).resolve().parents[4] / "src" / "runtime" / "sensing" / "map"
+STL = (Path(__file__).resolve().parents[3] / "src" / "runtime" / "sensing" / "map"
        / "map_v2_fleet" / "meshes" / "road_lines.stl")
 
 

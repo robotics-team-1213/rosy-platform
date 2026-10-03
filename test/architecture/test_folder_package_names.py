@@ -13,7 +13,8 @@ ROOT = Path(__file__).resolve().parents[2]
 SRC = ROOT / "src"
 SKIP_DIRS = {"build", "install", "log", ".worktrees", ".git", "node_modules", "__pycache__"}
 
-# Relative folder under src/ -> ROS package name. Mirrored in src/AGENTS.md.
+# Relative folder under src/ (repo-relative for the operations/ root, D-427 wave 3b)
+# -> ROS package name. Mirrored in src/AGENTS.md.
 FOLDER_TO_PACKAGE = {
     "contracts/foundation": "core_common",
     "hmi/face": "emotion",
@@ -27,15 +28,16 @@ FOLDER_TO_PACKAGE = {
     "runtime/gateway": "core",
     "runtime/sensing": "control",
     "runtime/services": "core_features",
-    "site/vision": "rosy_vision",  # D-377: app package rosy_<word> in folder <word>
+    "operations/vision": "rosy_vision",  # D-377 rosy_<word>; D-427 target folder is the word itself
     "site/cell": "rosy_cell",
 }
 
 
 def _packages():
-    """folder (relative to src/) -> package name, skipping build trees and COLCON_IGNORE."""
+    """folder (relative to src/, or to the repo under operations/) -> package name,
+    skipping build trees and COLCON_IGNORE."""
     found = {}
-    for dirpath, dirnames, filenames in os.walk(SRC):
+    for dirpath, dirnames, filenames in (step for top in (SRC, ROOT / "operations") for step in os.walk(top)):
         if "COLCON_IGNORE" in filenames:
             dirnames[:] = []
             continue
@@ -43,7 +45,7 @@ def _packages():
         if "package.xml" in filenames:
             folder = Path(dirpath)
             name = ET.parse(folder / "package.xml").getroot().findtext("name", "").strip()
-            found[folder.relative_to(SRC).as_posix()] = name
+            found[folder.relative_to(SRC if folder.is_relative_to(SRC) else ROOT).as_posix()] = name
     return found
 
 

@@ -12,7 +12,7 @@ import pytest
 from rosy_vision import cli, protocol
 
 VECTORS = json.loads(
-    (Path(__file__).resolve().parents[4] / "test" / "fixtures" / "protocol" / "overhead-ingest.v1.json")
+    (Path(__file__).resolve().parents[3] / "test" / "fixtures" / "protocol" / "overhead-ingest.v1.json")
     .read_text(encoding="utf-8")
 )
 

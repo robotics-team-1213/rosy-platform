@@ -2,7 +2,7 @@
 
 Rosy Cam (D-377 id `cam`; 천장 카메라 앱): the Android phone app that streams ceiling-camera JPEG frames to Rosy Vision over `rosy-overhead/1`. Kotlin + CameraX + OkHttp. Not a ROS package (`COLCON_IGNORE`); Gradle only.
 
-Moved out of `src/site/overhead/android` on 2026-09-30 (D-374 stage 1), then renamed from `src/site/ceiling_camera` the same day (D-377). History before the split lives in `src/site/vision/logs.md`.
+Moved out of `src/site/overhead/android` on 2026-09-30 (D-374 stage 1), then renamed from `src/site/ceiling_camera` the same day (D-377). History before the split lives in `operations/vision/logs.md`.
 
 ## Key Files
 
@@ -27,7 +27,7 @@ Moved out of `src/site/overhead/android` on 2026-09-30 (D-374 stage 1), then ren
 ### Working In This Directory
 
 - Wire names follow the wire, not the app (D-374 3항, D-377 4항): keep `OverheadLink`, `OverheadServiceRecord`, `OverheadServerDiscovery`, `rosy-overhead/1`, `/overhead/v1/frames`, `ROF1`, `_rosy-overhead._tcp`, `rosyov://` and the `rosy.overhead.vectors` test property unchanged.
-- Shared vectors: `test/fixtures/protocol/overhead-ingest.v1.json` (also read by `src/site/vision/test/test_protocol.py`) `test/fixtures/protocol/discovery-txt.v1.json`, and the D-391 `failure-classes.v1.json` / `site-link.v1.json` (also read by `core_common` `failure_class.py` / `site_link.py`), and the D-341 `pairing.v1.json` (property `rosy.pairing.vectors`; also read by `core_common` `pairing.py`). Do not edit one side only.
+- Shared vectors: `test/fixtures/protocol/overhead-ingest.v1.json` (also read by `operations/vision/test/test_protocol.py`) `test/fixtures/protocol/discovery-txt.v1.json`, and the D-391 `failure-classes.v1.json` / `site-link.v1.json` (also read by `core_common` `failure_class.py` / `site_link.py`), and the D-341 `pairing.v1.json` (property `rosy.pairing.vectors`; also read by `core_common` `pairing.py`). Do not edit one side only.
 - Pairing trust (D-341 3, 8, 9): `FirstContactTrust` records the first leaf unvalidated and then accepts only that leaf, for the pairing calls only. Never reuse it for the frame link, which trusts the pinned site CA (`PinnedTrustManager`).
 - The launcher icon is a copy of `src/hmi/web_common/icons/cam.svg` (D-370 3항); `LauncherIconParityTest` checks it.
 - Harness (D-61): read `progress.md` and `index.md` first. After a change, append `logs.md`, overwrite `progress.md` if a gate moved, then run `python tools/harness/rosy_harness.py generate` from the repo root.

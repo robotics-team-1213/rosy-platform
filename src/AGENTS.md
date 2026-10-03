@@ -22,7 +22,7 @@ No files at this level. Each package directory has its own `AGENTS.md` (e.g. `ru
 | `hmi/` | `face/` (package `emotion`, robot LCD), `web_common/` (package `web_common`, shared browser assets), `dashboard/` (operator screens served by `core_api_web`), `pilot/` (package `pilot`, Rosy Pilot teleop surface served by `core_api_web`, D-323) |
 | `sim/` | Simulation: `description` (URDF/xacro, meshes, RViz), `gz_sim` (Gazebo worlds; CMake no-ops on aarch64) |
 | `../learning/envs/isaac` | Not under `src/` since D-427 wave 1: ROS package `isaac_sim` (Isaac Sim integration area), found through the `colcon_roots` list in `tools/harness/platform_parts.yaml` |
-| `site/` | `fleet/` (site mission/task ledger and console), `vision/` (Rosy Vision, package `rosy_vision`: camera-derived sighting input), and `cam/` (Rosy Cam ceiling camera Android app, not a ROS package). The game host moved to `../operations/apps/games` (D-427 wave 3b) |
+| `site/` | `fleet/` (site mission/task ledger and console), and `cam/` (Rosy Cam ceiling camera Android app, not a ROS package). The game host and Rosy Vision (package `rosy_vision`) moved to `../operations/apps/games` and `../operations/vision` (D-427 wave 3b) |
 
 ## For AI Agents
 
@@ -44,7 +44,7 @@ Folders carry the role name; ROS package names stay (D-231). Where they differ, 
 | `runtime/gateway` | `core` |
 | `runtime/sensing` | `control` |
 | `runtime/services` | `core_features` |
-| `site/vision` | `rosy_vision` (D-377 app rule `rosy_<word>`) |
+| `../operations/vision` | `rosy_vision` (D-377 app rule `rosy_<word>`) |
 | `site/cell` | `rosy_cell` (D-377 app rule `rosy_<word>`) |
 
 ### Placement Rules

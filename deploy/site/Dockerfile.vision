@@ -16,8 +16,8 @@ RUN apt-get update \
 
 COPY deploy/site/requirements-vision.txt /opt/rosy/requirements.txt
 COPY deploy/site/secret_exec.py /opt/rosy/secret_exec.py
-COPY src/site/vision/rosy_vision/ /opt/rosy/src/site/vision/rosy_vision/
-COPY src/site/vision/setup.py /opt/rosy/src/site/vision/setup.py
+COPY operations/vision/rosy_vision/ /opt/rosy/src/site/vision/rosy_vision/
+COPY operations/vision/setup.py /opt/rosy/src/site/vision/setup.py
 COPY operations/apps/games/games/ /opt/rosy/src/site/games/games/
 COPY operations/apps/games/setup.py /opt/rosy/src/site/games/setup.py
 COPY src/contracts/foundation/core_common/ /opt/rosy/src/contracts/foundation/core_common/

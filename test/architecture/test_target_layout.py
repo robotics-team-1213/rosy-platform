@@ -29,7 +29,6 @@ TARGET = {
     "hmi/dashboard": "hmi/dashboard",
     "hmi/pilot": "hmi/pilot",
     "site/fleet": "site/fleet",
-    "site/vision": "site/vision",
     "site/cell": "site/cell",
     "sim/description": "sim/description",
     "sim/gz_sim": "sim/gz_sim",

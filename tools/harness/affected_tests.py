@@ -87,7 +87,7 @@ CI_FULL_MATRIX = (
     {"name": "sensing", "invocations": [["src/runtime/sensing/test"]], "ros": "none", "gating": False},
     {"name": "fleet", "invocations": [["src/site/fleet/test"]], "ros": "none"},
     {"name": "site-vision-cell", "invocations": [
-        ["src/site/vision/test"], ["src/site/cell/test"],
+        ["operations/vision/test"], ["src/site/cell/test"],
         ["test/test_platform_palletizing_compat.py", "test/test_platform_cell_submission.py",
          "test/architecture/test_platform_dependency_boundaries.py"]], "ros": "none"},
     {"name": "gz-sim", "invocations": [["src/sim/gz_sim/test"]], "ros": "overlay"},

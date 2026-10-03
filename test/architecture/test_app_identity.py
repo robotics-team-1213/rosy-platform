@@ -41,7 +41,7 @@ PACKAGE_KEPT = {
 
 #: Participants that are not surfaces (no `app_name`, no icon) but still take a D-377 word.
 NON_SURFACE_PARTICIPANTS = [
-    {"id": "vision", "path": "src/site/vision", "console_script": True},
+    {"id": "vision", "path": "operations/vision", "console_script": True},
 ]
 
 
@@ -137,10 +137,10 @@ def test_rule_catches_each_mismatch(tmp_path):
     assert any("icon" in p for p in problems)
     assert any("app_name" in p for p in problems)
 
-    ros = tmp_path / "src/site/vision"
+    ros = tmp_path / "operations/vision"
     ros.mkdir(parents=True)
     (ros / "package.xml").write_text("<package><name>site_vision</name></package>", encoding="utf-8")
-    row = {"id": "vision", "path": "src/site/vision", "icon": "icons/vision.svg"}
+    row = {"id": "vision", "path": "operations/vision", "icon": "icons/vision.svg"}
     assert identity_problems(row, tmp_path) == ["package.xml <name> 'site_vision' should be 'rosy_vision'"]
     assert identity_problems({"id": "site-vision", "path": "x", "icon": None}, tmp_path)
     assert identity_problems({"id": "Pilot", "path": "x", "icon": None}, tmp_path)

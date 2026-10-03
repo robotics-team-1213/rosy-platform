@@ -57,10 +57,10 @@ modules:
     functional_kind: pytest
     functional: [operations/apps/games/test]
   - name: rosy_vision
-    path: src/site/vision
-    tests: [src/site/vision/test]
+    path: operations/vision
+    tests: [operations/vision/test]
     functional_kind: pytest
-    functional: [src/site/vision/test]
+    functional: [operations/vision/test]
   - name: rosy_cell
     path: src/site/cell
     tests: [src/site/cell/test]

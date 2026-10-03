@@ -1,6 +1,6 @@
 **
-!src/site/vision/rosy_vision/**
-!src/site/vision/setup.py
+!operations/vision/rosy_vision/**
+!operations/vision/setup.py
 !operations/apps/games/games/**
 !operations/apps/games/setup.py
 !src/contracts/foundation/core_common/**

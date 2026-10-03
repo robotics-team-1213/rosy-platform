@@ -5,7 +5,7 @@
 
 ## 결정 (ADR)
 
-출처와 Status: [ROSY ADR Log](../../../docs/reference/ROSY%20ADR%20Log.md). 목록은 `progress.md`의 `adrs`다.
+출처와 Status: [ROSY ADR Log](../../docs/reference/ROSY%20ADR%20Log.md). 목록은 `progress.md`의 `adrs`다.
 
 | ID | 제목 |
 |---|---|
@@ -19,10 +19,10 @@
 
 ## 계획·결과 문서
 
-- [2026-09-26-middleware-device-server-contract-integration.md](../../../docs/plans/2026-09-26-middleware-device-server-contract-integration.md)
-- [2026-09-26-overhead-camera-android-app-design.md](../../../docs/plans/2026-09-26-overhead-camera-android-app-design.md)
-- [2026-09-28-site-camera-preview-rectification.md](../../../docs/plans/2026-09-28-site-camera-preview-rectification.md)
-- [2026-09-30-app-identity-rename-plan.md](../../../docs/plans/2026-09-30-app-identity-rename-plan.md)
+- [2026-09-26-middleware-device-server-contract-integration.md](../../docs/plans/2026-09-26-middleware-device-server-contract-integration.md)
+- [2026-09-26-overhead-camera-android-app-design.md](../../docs/plans/2026-09-26-overhead-camera-android-app-design.md)
+- [2026-09-28-site-camera-preview-rectification.md](../../docs/plans/2026-09-28-site-camera-preview-rectification.md)
+- [2026-09-30-app-identity-rename-plan.md](../../docs/plans/2026-09-30-app-identity-rename-plan.md)
 
 ## 교훈 (docs/solutions)
 
@@ -30,7 +30,7 @@
 
 ## 시험
 
-- `src/site/vision/test`
+- `operations/vision/test`
 
 ## 최근 기록
 

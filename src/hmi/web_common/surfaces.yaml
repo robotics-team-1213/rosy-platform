@@ -237,7 +237,7 @@ surfaces:
     surface: site
     medium: native
     ports:
-      - {port: 8095, source: src/site/vision/rosy_vision/cli.py}
+      - {port: 8095, source: operations/vision/rosy_vision/cli.py}
     audience: 천장 카메라 설치자 — 사이트 휴대폰·태블릿 앱 (D-261)
     role: 카메라 캡처·프레임 송신·설치 위치 안내만 — 로봇 명령·정지·CORE 연결이 없다 (D-370 1항)
     owns: [camera-physical-install]

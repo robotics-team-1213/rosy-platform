@@ -202,7 +202,7 @@ SIZE_VERDICTS = {
         "re-judged 2026-10-01 at 664 when move-address became a screen-code re-pairing on the same "
         "exchange and binding check",
     ),
-    "site/vision/rosy_vision/ingest.py": (
+    "vision/rosy_vision/ingest.py": (
         671,
         "accept: one owner (the rosy-overhead/1 receive endpoint — handshake, per-source connection "
         "lifecycle, latest-frame store and the direct preview/proposal reads share one connection map); "
@@ -642,6 +642,7 @@ ROLE_DIR = {
     "omx_adapter": ("products", "omx", "adapter"),
     "imu_bno055": ("drivers", "imu_bno055"),
     "isaac_sim": ("envs", "isaac"),  # learning/envs/isaac (D-427 wave 1)
+    "rosy_vision": ("vision",),  # operations/vision (D-427 wave 3b)
 }
 
 
