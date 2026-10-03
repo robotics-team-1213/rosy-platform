@@ -1519,3 +1519,16 @@
 - Gate: none. SOURCE/LOCAL only; Gazebo two-robot validation and real-robot tokens still open.
 - Decision: D-438
 - Lesson: a shared cached snapshot must be enriched per response on copies, never mutated in place.
+
+## 2026-10-04 · uncommitted · feat(web): D-439 Fleet 작업 탐색과 보정 미리보기 수명
+
+- 변경: 설치를 로봇 등록·카메라 연결 승인·카메라 설치/보정의 공용 task chooser로 구분한다. 모든 작업 DOM과 입력·credentials·source·corners는 유지하고 viewer/401에서도 읽기 탐색과 발견 재시도를 허용한다. 관제의 예외·로스터·지도를 우선 배치하고 대형·신호·기록을 후속 작업으로 묶는다. 발견 실패는 이전 행을 지우고 empty/offline/expired/unsupported 상태와 재시도를 표시한다.
+- 수명: 숨겨진 보정은 lease/frame 요청을 시작하지 않는다. 작업을 숨기면 preview epoch를 취소하고 frame owner만 해제한다. 이전 응답·finally는 새 owner를 바꾸지 않는다. 양수 크기의 scoped ResizeObserver가 복귀 후 corner geometry를 갱신하며 console의 기본 preview 동작은 유지한다.
+- 증거: baseline chooser RED 1 failed. 변경 후 workflow 최종 batch는 4 passed/1 failed(198.22s). 실패는 닫힌 보정 details에 입력하려던 fixture였으며 실제 summary 클릭을 추가한 동일 rapid test는 1 passed(38.10s)로 재검증했다. 이를 전체 5 GREEN 실행으로 합산하지 않는다. 기존 선택 회귀는 10 passed/5 failed였고, 실패 5 cases를 새 작업 선택·안내 DOM·bounded poll 조건으로 수정해 5 passed/62 deselected(167.08s)로 재검증했다. 관련 host 70 passed/1 heading fixture failed 후 heading 1 passed; Fleet web .test.js Node 145 passed; 최종 source budget 2 passed. 로그: X:/DevTemp/rosy-ui-unify/fleet/.
+- 변이: X 전용 실제 served bytes로 chooser role exemption 제거·geometry observer 제거·hidden preview guard 제거·rapid pausePreview 제거가 각각 해당 행동 검증을 실패시켰다. 마지막 rapid 변이는 leaseRequests가 2가 되지 않아 RED 1 failed(57.23s); teardown CancelledError는 부수 출력이다. manifests와 delivery SHA-256은 fleet/mutations 각 디렉터리에 있다. 제품 bytes는 변경하지 않았다.
+- 변이 bytes 보완: 앞선 세 manifest는 LF 정규화 text의 hash였고 실제 파일/전달은 CRLF였다. newline-delivery-proof.json은 원래 증거를 보존하며 raw 파일 hash=delivery hash, CRLF→LF 정규화 hash=기존 manifest hash가 세 건 모두 일치함을 기록한다. rapid manifest는 raw bytes hash로 직접 일치한다.
+- 독립 증거: SPEC의 abort 무시 lease 재현에서 새 owner 시작·old frame/finally 차단·source/draft 보존 PASS. X:/DevTemp/rosy-ui-unify/fleet-spec/rapid_visibility_fixed_report.json. Root는 desktop/phone 및 실제 밝은 테마 captures를 직접 확인했으며 overflow/pageerrors 0. Fixture preview lease POST는 포함하며 operational command는 실행하지 않았다.
+- 최종 확인: 독립 SPEC 및 QUALITY PASS. preview epoch 최종 변경 후 vision-view 소비 Node 두 파일 12 passed(477.58ms); 이는 lens/profile/badge 계약이며 비동기 수명은 현재 browser/SPEC 증거로 확인한다. rapid GREEN과 served RED는 같은 최종 source/test이며 manifest/delivery/source hash 대조가 일치했다. generate는 Fleet index만 변경했고 lint 0 errors/26 기존 warnings, diff check PASS.
+- Gate: SOURCE/LOCAL 범위. Fleet 전체 suite·배포·실장비·ROS-SIM·FIELD 수용을 주장하지 않는다. 기존 서버 역할·인증·source proof·CORE motion authority는 유지한다. source commit SHA는 Git 기록을 따른다.
+- 결정: D-439 Task 4 및 작업별 preview 독립 수명.
+- 교훈: visible predicate만으로 hide→reshow를 구분할 수 없다. frame 작업에는 작업별 epoch와 finally owner 비교가 함께 필요하다.

@@ -88,71 +88,7 @@
         <div id="roster" class="roster"><p class="hint" role="status">로봇 목록 불러오는 중</p></div>
       </div>
 
-      <div class="ops-block">
-        <div class="formation" aria-labelledby="formation-heading" data-role-lock>
-          <div class="robot-head">
-            <h3 id="formation-heading">대형</h3>
-            <span class="spacer"></span>
-            <ui-tag id="formation-state" status="neutral" title="IDLE">대기</ui-tag>
-          </div>
-          <ui-status id="formation-role-lock" class="role-lock-note" state="forbidden" hidden>운용자 권한이 필요합니다</ui-status>
-          <details class="formation-form-wrap"><summary>대형 설정</summary><div class="formation-form">
-            <label for="formation-leader">리더</label>
-            <select class="ui-field" id="formation-leader"></select>
-            <label for="formation-shape">모양</label>
-            <select class="ui-field" id="formation-shape">
-              <option value="COLUMN">COLUMN 종대</option>
-              <option value="LINE">LINE 횡대</option>
-              <option value="V">V</option>
-              <option value="GRID">GRID</option>
-              <option value="CIRCLE">CIRCLE</option>
-              <option value="FOLLOW">FOLLOW</option>
-            </select>
-            <label for="formation-spacing">간격 m</label>
-            <input class="ui-field" id="formation-spacing" type="number" min="0.2" max="3" step="0.1" value="0.6">
-            <span class="member-label" id="formation-members-label">포함 로봇</span>
-            <div id="formation-members" class="member-list" role="group" aria-labelledby="formation-members-label"></div>
-          </div></details>
-          <div class="robot-actions formation-actions">
-            <ui-button kind="quiet" id="formation-start" type="button">무장</ui-button>
-            <ui-button kind="quiet" id="formation-reform" type="button">대형 변경</ui-button>
-            <ui-button kind="quiet" id="formation-resume" type="button">재개</ui-button>
-            <ui-button kind="quiet" id="formation-stop" type="button">해제</ui-button>
-          </div>
-          <p class="hint" id="formation-detail" title="리더를 고르고 무장하면 나머지가 슬롯으로 따라붙습니다"></p>
-        </div>
 
-        <div class="signals" aria-labelledby="signals-heading">
-          <div class="robot-head">
-            <h3 id="signals-heading" title="장치가 관제 접촉을 잃으면 스스로 적색 점멸(failsafe)로 들어가고, 콘솔이 마지막 명령을 한 번 다시 내립니다">신호등</h3>
-            <span class="spacer"></span>
-            <ui-tag id="signals-state" status="neutral">—</ui-tag>
-          </div>
-          <div id="signal-cards" class="signal-cards"></div>
-          <p class="hint" id="signals-hint" hidden></p>
-        </div>
-
-        <h3 id="log-heading" class="sr-only">기록</h3>
-
-<section class="discovery device-link" aria-labelledby="device-link-heading">
-          <h3 id="device-link-heading" class="sr-only">기기 연결</h3>
-          <!-- D-409 — 등록·승인은 설치 일이다. 운용 흐름에서는 접힌 서랍으로 간다
-               (알림 문장은 role=alert/aria-live로 여전히 소리 난다). -->
-                    <!-- D-410 — 등록·승인은 설치 화면으로 갔다. 운용 화면은 안내만 남긴다. -->
-          <p class="hint install-link">기기 등록·카메라 연결 승인은 <a href="/console/install">설치·보정 화면</a>에서 합니다.</p>
-
-        </section>
-
-        <details id="console-diagnostics" class="console-diagnostics">
-          <summary>진단</summary>
-          <dl class="diag-readout">
-            <dt>상태 갱신</dt><dd id="diag-state">—</dd>
-            <dt>발견 검색기</dt><dd id="diag-scanner">—</dd>
-            <dt>로봇 오류</dt><dd id="diag-robots">—</dd>
-            <dt>카메라</dt><dd id="diag-vision">—</dd>
-          </dl>
-        </details>
-      </div>
     </section>
 
     <section class="panel" aria-labelledby="map-heading">
@@ -222,21 +158,89 @@
         <p class="hint install-link">경기장 찾기·맵 맞춤·왜곡 보정은 <a href="/console/install">설치·보정 화면</a>에서 합니다.</p>
 
       </section>
-      <details id="log-panel" class="log-panel" open>
-          <summary>기록</summary>
-          <div class="log-toolbar">
-            <ui-button kind="quiet" id="log-clear" type="button" title="화면의 기록을 지웁니다">지우기</ui-button>
-          </div>
-          <div id="log" class="log" role="status" aria-live="polite" aria-labelledby="log-heading">
-            <ui-empty>최근 이벤트가 없습니다 — 관제 요청과 연결 상태 변화가 여기에 표시됩니다.</ui-empty>
-          </div>
-        </details>
+
 
       <details class="note">
         <summary>관제 범위 안내</summary>
         <p>이 화면은 사이트 관제입니다. 로봇 한 대의 현장 화면·수동 조작·비상정지는 그 로봇의 대시보드에 있고, 관제 PC가 꺼져도 살아 있습니다. 여기서는 목표·취소·정지 같은 원자 액션을 내리며 바퀴 속도는 로봇 안에서만 만들어집니다.</p>
       </details>
     </section>
+      <section class="panel ops-block" aria-labelledby="fleet-operations-heading">
+        <h2 id="fleet-operations-heading">대형·신호·기록</h2>
+        <div class="formation" aria-labelledby="formation-heading" data-role-lock>
+          <div class="robot-head">
+            <h3 id="formation-heading">대형</h3>
+            <span class="spacer"></span>
+            <ui-tag id="formation-state" status="neutral" title="IDLE">대기</ui-tag>
+          </div>
+          <ui-status id="formation-role-lock" class="role-lock-note" state="forbidden" hidden>운용자 권한이 필요합니다</ui-status>
+          <details class="formation-form-wrap"><summary>대형 설정</summary><div class="formation-form">
+            <label for="formation-leader">리더</label>
+            <select class="ui-field" id="formation-leader"></select>
+            <label for="formation-shape">모양</label>
+            <select class="ui-field" id="formation-shape">
+              <option value="COLUMN">COLUMN 종대</option>
+              <option value="LINE">LINE 횡대</option>
+              <option value="V">V</option>
+              <option value="GRID">GRID</option>
+              <option value="CIRCLE">CIRCLE</option>
+              <option value="FOLLOW">FOLLOW</option>
+            </select>
+            <label for="formation-spacing">간격 m</label>
+            <input class="ui-field" id="formation-spacing" type="number" min="0.2" max="3" step="0.1" value="0.6">
+            <span class="member-label" id="formation-members-label">포함 로봇</span>
+            <div id="formation-members" class="member-list" role="group" aria-labelledby="formation-members-label"></div>
+          </div></details>
+          <div class="robot-actions formation-actions">
+            <ui-button kind="quiet" id="formation-start" type="button">무장</ui-button>
+            <ui-button kind="quiet" id="formation-reform" type="button">대형 변경</ui-button>
+            <ui-button kind="quiet" id="formation-resume" type="button">재개</ui-button>
+            <ui-button kind="quiet" id="formation-stop" type="button">해제</ui-button>
+          </div>
+          <p class="hint" id="formation-detail" title="리더를 고르고 무장하면 나머지가 슬롯으로 따라붙습니다"></p>
+        </div>
+
+        <div class="signals" aria-labelledby="signals-heading">
+          <div class="robot-head">
+            <h3 id="signals-heading" title="장치가 관제 접촉을 잃으면 스스로 적색 점멸(failsafe)로 들어가고, 콘솔이 마지막 명령을 한 번 다시 내립니다">신호등</h3>
+            <span class="spacer"></span>
+            <ui-tag id="signals-state" status="neutral">—</ui-tag>
+          </div>
+          <div id="signal-cards" class="signal-cards"></div>
+          <p class="hint" id="signals-hint" hidden></p>
+        </div>
+
+
+
+
+
+        <details id="console-diagnostics" class="console-diagnostics">
+          <summary>진단</summary>
+          <dl class="diag-readout">
+            <dt>상태 갱신</dt><dd id="diag-state">—</dd>
+            <dt>발견 검색기</dt><dd id="diag-scanner">—</dd>
+            <dt>로봇 오류</dt><dd id="diag-robots">—</dd>
+            <dt>카메라</dt><dd id="diag-vision">—</dd>
+          </dl>
+        </details>
+      <details id="log-panel" class="log-panel" open>
+          <summary>기록</summary>
+          <div class="log-toolbar">
+            <ui-button kind="quiet" id="log-clear" type="button" title="화면의 기록을 지웁니다">지우기</ui-button>
+          </div>
+          <div id="log" class="log" role="status" aria-live="polite" aria-label="최근 관제 이벤트">
+            <ui-empty>최근 이벤트가 없습니다 — 관제 요청과 연결 상태 변화가 여기에 표시됩니다.</ui-empty>
+          </div>
+        </details>
+        <section class="discovery device-link" aria-labelledby="device-link-heading">
+          <h3 id="device-link-heading" class="sr-only">기기 연결</h3>
+          <!-- D-409 — 등록·승인은 설치 일이다. 운용 흐름에서는 접힌 서랍으로 간다
+               (알림 문장은 role=alert/aria-live로 여전히 소리 난다). -->
+                    <!-- D-410 — 등록·승인은 설치 화면으로 갔다. 운용 화면은 안내만 남긴다. -->
+          <p class="hint install-link">기기 등록·카메라 연결 승인은 <a href="/console/install">설치·보정 화면</a>에서 합니다.</p>
+
+        </section>
+      </section>
   </main>
 
   </ui-shell>

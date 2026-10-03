@@ -169,7 +169,7 @@ def test_the_camera_section_sits_in_device_link_beside_robot_enrollment_with_a_r
     assert page.ids["camera-role-lock"]["attrs"].get("class") == "role-lock-note"
     assert page.order.index("robot-enrollment") < page.order.index("camera-link")
     heading = (WEB / "install.html").read_text(encoding="utf-8")
-    assert '<h4 id="camera-link-heading">카메라 연결 승인</h4>' in heading
+    assert '<h2 id="camera-link-heading">카메라 연결 승인</h2>' in heading
     for name in ("camera-approve-source", "camera-approve-code"):
         assert "ui-field" in page.ids[name]["attrs"].get("class", ""), name
     assert page.ids["camera-approve-dialog"]["tag"] == "dialog"

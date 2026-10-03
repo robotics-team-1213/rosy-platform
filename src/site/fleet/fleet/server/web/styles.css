@@ -1,5 +1,24 @@
 * { box-sizing: border-box; }
 
+/* Fleet task owners remain mounted; visibility is navigation-owned. */
+#install-main { grid-template-columns: minmax(0, 1fr); }
+.install-tasks { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-4); }
+.install-workspace, .install-task { min-width: 0; }
+.install-task[hidden], #discovery-list[hidden], #discovery-empty[hidden] { display: none; }
+.install-task > h2 { margin-top: 0; }
+#camera-calibration .vision-preview { margin-top: var(--space-3); }
+#discovery-retry { margin-top: var(--space-2); }
+.roster-block { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--space-3); }
+.roster-block > #roster, .roster-block > .address-drift { grid-column: 1 / -1; }
+.ops-block { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-4); }
+.ops-block > h2, .ops-block > .discovery, .ops-block > .console-diagnostics, .ops-block > .log-panel { grid-column: 1 / -1; margin: 0; }
+.ops-block > .formation, .ops-block > .signals { margin: 0; }
+@media (width >= 64rem) {
+  .install-tasks { grid-template-columns: minmax(12rem, .22fr) minmax(0, 1fr); }
+  #install-chooser { position: sticky; top: var(--space-4); }
+  .ops-block { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
 html { min-width: 320px; background: var(--ground); }
 
 body {
@@ -151,30 +170,10 @@ main {
   /* 2026-10-02 회차 계측 — 큐가 채워지는 순간 지도 아래 칸은 '예외가 먼저'(D-201)를
      위반한다(1920에서 큐 상단 963px). 예외 큐는 첫 행, 지도는 그 아래. */
   .queues-panel { grid-column: 1; grid-row: 1; }
-  main > .panel[aria-labelledby="roster-heading"] {
-    grid-column: 2;
-    grid-row: 1 / span 2;
-    display: grid;
-    grid-template-columns: minmax(0, 0.46fr) minmax(0, 0.54fr);
-    grid-template-rows: auto auto auto auto auto auto;
-    column-gap: var(--space-4);
-    align-items: start;
-    min-height: 0;
-    height: auto;
-  }
-  /* 2026-09-30 태블릿(1333px): 목록 칸이 로봇 목록 아래로 비고 대형·신호등·이벤트가
-     오른쪽 좁은 칸에 쌓여 패널 밖으로 넘쳤다. 왼쪽은 목록 → 대형, 오른쪽은 발견 →
-     신호등 → 이벤트로 나눠 두 칸을 모두 채운다. 패널 max-height 는 넘침만 만들어 뺐다. */
-  #roster-heading { grid-column: 1; grid-row: 1; }
-  #roster-toggle { grid-column: 2; grid-row: 1; justify-self: start; }
-  /* 사이트 망이 바뀐 경보는 두 칸을 가로지른다. 숨으면 그 행은 높이가 없다. */
-  .address-drift { grid-column: 1 / -1; grid-row: 2; }
-  #roster { grid-column: 1; grid-row: 3; min-height: 0; max-height: min(42dvh, 30rem); overflow-y: auto; }
-  .discovery { grid-column: 2; grid-row: 3; margin-top: 0; }
-  .formation { grid-column: 1; grid-row: 4 / span 2; margin-top: var(--space-3); }
-  /* 기기 연결 묶음의 마지막 줄과 신호등 머리 사이에 숨을 둔다(붙어 겹쳐 보였다). */
-  .signals { grid-column: 2; grid-row: 4; margin-top: var(--space-4); }
-  #log { grid-column: 2; grid-row: 5; }
+  main > .panel[aria-labelledby="roster-heading"] { grid-column: 2; grid-row: 1 / span 2; }
+  #roster { min-height: 0; max-height: min(60dvh, 40rem); overflow-y: auto; }
+  .ops-block { grid-column: 1 / -1; }
+
 }
 
 
@@ -478,24 +477,8 @@ main {
 .note p { margin: var(--space-2) 0 0; }
 
 /* D-359 US-009 — 로봇 패널의 두 묶음. 넓은 창에서는 상자가 없어 자식이 위 격자에 선다. */
-.roster-block, .ops-block { display: contents; }
-
 @media (width < 64rem) {
   main { grid-template-columns: minmax(0, 1fr); }
-  /* 한 열 단 순서: 예외(주의·로봇) → 지도 → 관제 카메라 → 대형·신호등·기록 → 기기 연결.
-     로봇 패널의 상자를 풀고 두 묶음이 각자 패널이 된다. 대형 묶음만 order로 지도 뒤로 간다
-     (지도 패널보다 DOM이 앞이라 키보드 순서는 로봇 → 대형 묶음 → 지도로 남는다; 넓은 창의
-     로봇 패널 안 격자가 두 묶음을 한 부모에 두기를 요구해 DOM 이동은 넓은 배치를 깬다). */
-  main > .panel[aria-labelledby="roster-heading"] { display: contents; }
-  .roster-block, .ops-block {
-    display: block;
-    background: var(--panel-fill);
-    border: 1px solid var(--line-10);
-    border-radius: var(--radius-panel);
-    padding: var(--space-4);
-  }
-  .ops-block { order: 1; }
-  .ops-block > .formation { margin-top: 0; }
   /* 접힌 머리가 좁아지면 부제와 정지 범위를 숨긴다. 정지의 이름(aria-label)은 그대로다. */
   ui-topbar ui-brand small { display: none; }
   #estop small { display: none; }

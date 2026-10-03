@@ -11,6 +11,7 @@ import { createMapFitView } from "./map-fit-view.js";
 import { createPollGate } from "./poll-gate.js";
 import { createFleetClient } from "/common/fleet-client.js";
 import { createPageScope } from "/common/scope.js";
+import { createTaskChooser } from "/common/task-chooser.js";
 import { confirmIrreversible, openLiveDialog } from "/common/ui.js";
 
 const pageScope = createPageScope();
@@ -41,8 +42,10 @@ function authHeaders() {
 
 function operatorControls() {
   // 화면 테마(data-theme-choice)와 머리 토글은 권한과 무관다(D-359 §2.5·§6.4).
-  return document.querySelectorAll(
-    "ui-button:not(#token-save):not(#topbar-more):not(#vision-refresh):not([data-theme-choice]), main input, main select:not(#vision-source)");
+  return [...document.querySelectorAll(
+    "ui-button:not(#token-save):not(#topbar-more):not(#vision-refresh):not([data-theme-choice]), main input, main select:not(#vision-source)")]
+    .filter(control => !control.closest(".ui-task-chooser")
+      && !["discovery-retry", "camera-confirm-close", "enroll-cancel", "camera-approve-cancel"].includes(control.id));
 }
 
 function applyRole() {
@@ -100,6 +103,22 @@ async function call(path, options = {}) {
   }
 }
 
+// Task navigation preserves mounted owners and drafts across auth/page epochs.
+const taskChooser = createTaskChooser({beforeSelect: from => {
+  if (from === "calibration") visionView.pausePreview();
+  return true;
+}, tasks: [
+  {id: "robots", title: "로봇 등록", panel: el("robot-enrollment")},
+  {id: "cameras", title: "카메라 연결 승인", panel: el("camera-link")},
+  {id: "calibration", title: "카메라 설치·보정", panel: el("camera-calibration")},
+]});
+el("install-chooser").append(taskChooser.element);
+taskChooser.setReady();
+pageScope.subscribe(() => {
+  taskChooser.resume();
+  return () => { void taskChooser.pause().then(() => { if (pageScope.capture().current()) taskChooser.resume(); }); };
+});
+
 // 설치 전용 얇은 view — 카메라 관측·사이트 사각형만 있다(D-257).
 const view = { siteMap: null, sightings: [], robots: [], addresses: {} };
 
@@ -120,7 +139,8 @@ const cameraPairing = createCameraPairingPanel({ scope: pageScope,
 });
 
 // 카메라 설치·보정 체인 (D-360/D-375). 지도가 없으니 레이어 변경은 맵 맞춤 뷰만 다시 그린다.
-const visionView = createVisionView({ scope: pageScope, el, call, auth, authHeaders });
+const visionView = createVisionView({ scope: pageScope, el, call, auth, authHeaders,
+  isActive: () => !el("camera-calibration").hidden });
 let mapFit = null;
 const fieldView = createFieldView({ scope: pageScope, el, view, visionView,
   onLayersChanged: () => { mapFit?.render(); } });
@@ -170,20 +190,38 @@ pageScope.listen(el("estop"), "click", async () => {
   }
 });
 
+let discoveryPending = false;
+let scannerLost = false;
+function discoveryState(label, message, tone = "neutral") {
+  const status = el("discovery-status");
+  status.textContent = label; status.setAttribute("status", tone);
+  el("discovery-list").replaceChildren(); el("discovery-list").hidden = true;
+  el("discovery-empty").textContent = message; el("discovery-empty").hidden = false;
+}
+pageScope.onDispose(() => { discoveryPending = false; });
 async function refreshDiscovery() {
   const life = pageScope.capture();
   life.check();
-  if (auth.locked) return;
-  await enrollment.refresh();
-  life.check();
-  if (!discoveryGate.due()) return;
+  if (auth.locked || discoveryPending) return;
+  discoveryPending = true;
   try {
+    await enrollment.refresh(); life.check();
+    if (!discoveryGate.due()) return;
     const snapshot = await call("/api/fleet/discovery");
     life.check();
     discoveryGate.ok();
-    const status = el("discovery-status");
-    status.textContent = snapshot.scanner_online
-      ? `${snapshot.devices.length}대 발견` : "검색기 연결 대기";
+    if (!snapshot.scanner_online) {
+      const expired = snapshot.scanner_state === "expired";
+      if (expired && !scannerLost) log("발견 검색기 끊김 — 로봇 발견·주소 이동 안내 불가", "bad");
+      scannerLost = expired;
+      discoveryState(expired ? "검색기 끊김" : "검색기 연결 대기",
+        expired ? `마지막 스캔 ${snapshot.scanner_age_s ?? "?"}초 전 · 검색기 연결을 확인하고 다시 시도하세요. 새 주소로 옮기기는 검색기가 돌아온 뒤 가능합니다.`
+          : "검색기가 아직 연결되지 않았습니다. 검색기 연결을 확인한 뒤 다시 시도하세요.", expired ? "crit" : "warn");
+      return;
+    }
+    if (scannerLost) log("발견 검색기 다시 연결됨", "good");
+    scannerLost = false;
+    discoveryState(`${snapshot.devices.length}대 발견`, "아직 발견된 로봇이 없습니다. 로봇 전원과 같은 현장 네트워크인지 확인하고 다시 시도하세요.");
     // D-413 — 발견(mDNS) 장치는 이 화면의 주인공이다: 이름·주소·단계·상태와
     // 곧바로 누르는 등록 버튼(enrollment.decorateDiscoveryRow).
     const rows = snapshot.devices.map((device) => {
@@ -200,15 +238,17 @@ async function refreshDiscovery() {
       return item;
     });
     el("discovery-list").replaceChildren(...rows);
+    el("discovery-list").hidden = !rows.length; el("discovery-empty").hidden = !!rows.length;
   } catch (err) {
-    if (err.name === "AbortError") return;
-    if (discoveryGate.fail(err.status, err.code) === "absent") {
-      const status = el("discovery-status");
-      status.textContent = "발견 미설정";
-      status.setAttribute("status", "neutral");
-    }
-  }
+    if (err.name === "AbortError" || !life.current()) return;
+    const absent = discoveryGate.fail(err.status, err.code) === "absent";
+    discoveryState(auth.locked ? "인증 필요" : absent ? "발견 미설정" : "발견 상태 확인 불가",
+      auth.locked ? "관제 토큰으로 다시 접속한 뒤 발견 목록을 확인하세요."
+        : absent ? "이 Fleet에는 발견 검색이 설정되지 않았습니다. 설정 후 다시 확인하세요."
+          : "발견 목록을 확인할 수 없습니다. 검색기와 연결을 확인한 뒤 다시 시도하세요.", auth.locked ? "crit" : absent ? "neutral" : "warn");
+  } finally { if (life.current()) discoveryPending = false; }
 }
+pageScope.listen(el("discovery-retry"), "click", () => { discoveryGate.reset(); return refreshDiscovery(); });
 
 async function refreshAuthorization() {
   const life = pageScope.capture();

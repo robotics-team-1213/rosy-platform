@@ -734,14 +734,15 @@ def test_discovery_read_loss_removes_old_device_addresses_and_recovers(console_u
     }
     with sync_playwright() as playwright:
         browser, page, errors = _open_console(playwright, api)
-        page.goto(console_url, wait_until="networkidle")
+        page.goto(console_url.rsplit("/", 1)[0] + "/install.html", wait_until="networkidle")
         page.wait_for_function("() => document.querySelector('#discovery-list')?.textContent.includes('192.0.2.10')")
 
         api["/api/fleet/discovery"] = (503, {"detail": {"code": "SCANNER_UNAVAILABLE"}})
         page.wait_for_function("() => document.querySelector('#discovery-status')?.textContent === '발견 상태 확인 불가'",
-                               timeout=7000)
+                               timeout=12000)
         assert "192.0.2.10" not in page.inner_text("#discovery-list")
-        assert "발견 목록을 확인할 수 없습니다" in page.inner_text("#discovery-list")
+        assert page.locator("#discovery-list").is_hidden()
+        assert "발견 목록을 확인할 수 없습니다" in page.inner_text("#discovery-empty")
 
         api["/api/fleet/discovery"] = {"scanner_online": True, "devices": [{
             "name": "rosy-new", "address": "192.0.2.11", "port": 8000,
@@ -780,7 +781,7 @@ def test_expired_scanner_lease_raises_an_alarm_and_clears_on_return(console_url)
     }
     with sync_playwright() as playwright:
         browser, page, errors = _open_console(playwright, api)
-        page.goto(console_url, wait_until="networkidle")
+        page.goto(console_url.rsplit("/", 1)[0] + "/install.html", wait_until="networkidle")
         page.wait_for_function("() => document.querySelector('#discovery-status')?.textContent === '검색기 연결 대기'")
         assert page.get_attribute("#discovery-status", "status") == "warn"
 
@@ -789,8 +790,9 @@ def test_expired_scanner_lease_raises_an_alarm_and_clears_on_return(console_url)
         page.wait_for_function("() => document.querySelector('#discovery-status')?.textContent === '검색기 끊김'",
                                timeout=7000)
         assert page.get_attribute("#discovery-status", "status") == "crit"
-        assert "마지막 스캔 61초 전" in page.inner_text("#discovery-list")
-        assert "새 주소로 옮기기" in page.inner_text("#discovery-list")
+        assert page.locator("#discovery-list").is_hidden()
+        assert "마지막 스캔 61초 전" in page.inner_text("#discovery-empty")
+        assert "새 주소로 옮기기" in page.inner_text("#discovery-empty")
         assert page.inner_text("#log").count("발견 검색기 끊김") == 1
 
         api["/api/fleet/discovery"] = online
@@ -1148,7 +1150,7 @@ def test_robot_enrollment_panel_enrolls_by_screen_code(console_url):
             route.fulfill(status=201, json=enrolled)
 
         page.route("**/api/fleet/enrollment/robots", enroll)
-        page.goto(console_url, wait_until="networkidle")
+        page.goto(console_url.rsplit("/", 1)[0] + "/install.html", wait_until="networkidle")
         page.get_by_role("heading", name="로봇 등록", exact=True).wait_for()
         page.locator("#discovery-list ui-button", has_text="등록").first.click()
         assert not page.locator("#enroll-move-check").is_visible()
@@ -1188,7 +1190,7 @@ def test_enrollment_dialog_leaves_the_fleet_stop_live(console_url):
     with sync_playwright() as playwright:
         browser, page, errors = _open_console(playwright, _enrollment_api(listing), posts)
         page.on("dialog", lambda dialog: dialog.accept())  # 전체 정지의 window.confirm
-        page.goto(console_url, wait_until="networkidle")
+        page.goto(console_url.rsplit("/", 1)[0] + "/install.html", wait_until="networkidle")
         page.get_by_role("heading", name="로봇 등록", exact=True).wait_for()
         opener = page.locator("#discovery-list ui-button", has_text="등록").first
         opener.click()
@@ -1285,7 +1287,8 @@ def test_camera_rectification_controls_are_accessible_source_scoped_and_reset(co
         )
         page.on("request", lambda request: lease_payloads.append(json.loads(request.post_data))
                 if request.url.endswith("/api/fleet/vision/lease") and request.post_data else None)
-        page.goto(console_url, wait_until="networkidle")
+        page.goto(console_url.rsplit("/", 1)[0] + "/install.html", wait_until="networkidle")
+        page.get_by_role("tab", name="카메라 설치·보정", exact=True).click()
         page.get_by_text("왜곡 및 사각 보정", exact=True).click()
         page.get_by_label("왼쪽 위 X (%)").fill("10")
         page.get_by_label("출력 비율").select_option("1")
@@ -1343,7 +1346,8 @@ def test_camera_rectification_direct_manipulation(console_url):
             )
 
         page.route("**/api/vision/**", serve_frame)
-        page.goto(console_url, wait_until="networkidle")
+        page.goto(console_url.rsplit("/", 1)[0] + "/install.html", wait_until="networkidle")
+        page.get_by_role("tab", name="카메라 설치·보정", exact=True).click()
         page.get_by_text("왜곡 및 사각 보정", exact=True).click()
         page.get_by_role("button", name="원본에서 영역 조정").click()
         page.wait_for_timeout(500)
@@ -1414,6 +1418,7 @@ def test_camera_rectification_direct_manipulation(console_url):
         assert lease_payloads[-1]["rectification"]["corners"][1][1] > 0.2
         assert not errors
         page.reload(wait_until="networkidle")
+        page.get_by_role("combobox", name="작업 선택").select_option('calibration')
         page.get_by_text("왜곡 및 사각 보정", exact=True).click()
         assert page.get_by_label("오른쪽 위 X (%)").input_value() == preserved_x
         browser.close()
@@ -1902,13 +1907,13 @@ def test_single_column_tier_puts_exceptions_before_the_map_and_formation_last(co
         assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
         page.set_viewport_size({"width": 1366, "height": 768})
         wide = page.evaluate(probe)
-        # wide: map column left, roster column right, both starting on the first row. Inside the
-        # roster column, 대형 stacks under the list and 기기 연결 stands beside the list.
+        # D-439: primary map/roster remain side by side; secondary tasks follow both in DOM and layout.
         left = page.evaluate("""() => Object.fromEntries(['#map-stage', '#roster', '.formation', '.device-link']
           .map((sel) => [sel, document.querySelector(sel).getBoundingClientRect().left]))""")
-        assert left["#map-stage"] < left["#roster"] < left[".device-link"], left
-        assert abs(left[".formation"] - left["#roster"]) < 1 and wide["#roster"] < wide[".formation"], (left, wide)
-        assert wide["#roster"] <= wide[".device-link"] < wide[".formation"], wide
+        assert left["#map-stage"] < left["#roster"], left
+        assert wide[".formation"] > max(wide["#roster"], wide["#map-stage"]), wide
+        assert wide["#log"] < wide[".device-link"], wide
+        assert page.evaluate("document.querySelector('[aria-labelledby=map-heading]').compareDocumentPosition(document.querySelector('.ops-block')) & Node.DOCUMENT_POSITION_FOLLOWING")
         assert wide["#roster"] < wide["#map-stage"] + 200, wide
         assert not errors
         browser.close()
@@ -2022,7 +2027,8 @@ def test_camera_approval_takes_the_phone_code_and_shows_the_mutual_check(console
                 "confirm_within_s": 120})
 
         page.route("**/api/fleet/pairing/v1/requests/req-7f3a/approve", approve)
-        page.goto(console_url, wait_until="networkidle")
+        page.goto(console_url.rsplit("/", 1)[0] + "/install.html", wait_until="networkidle")
+        page.get_by_role("tab", name="카메라 연결 승인", exact=True).click()
         page.get_by_role("heading", name="카메라 연결 승인", exact=True).wait_for()
         ready = page.locator('#camera-requests li[data-request-id="req-7f3a"] ui-button[data-action="approve"]')
         ready.wait_for()
@@ -2096,7 +2102,8 @@ def test_camera_reject_and_revoke_are_quiet_row_actions_confirmed_by_name(consol
                    answer({"request_id": "req-81bc", "state": "rejected"}))
         page.route("**/api/fleet/pairing/v1/credentials/cred-4be1a09c3d2f/revoke",
                    answer({"credential_id": "cred-4be1a09c3d2f", "state": "revoked"}))
-        page.goto(console_url, wait_until="networkidle")
+        page.goto(console_url.rsplit("/", 1)[0] + "/install.html", wait_until="networkidle")
+        page.get_by_role("tab", name="카메라 연결 승인", exact=True).click()
         revoke = page.locator('#camera-credentials li[data-credential-id="cred-4be1a09c3d2f"] '
                               'ui-button[data-action="revoke"]')
         revoke.wait_for()
@@ -2138,7 +2145,8 @@ def test_camera_lists_without_actions_for_viewers_and_the_shared_token(console_u
 
     with sync_playwright() as playwright:
         browser, page, errors = _open_console(playwright, _camera_api(principal, role))
-        page.goto(console_url, wait_until="networkidle")
+        page.goto(console_url.rsplit("/", 1)[0] + "/install.html", wait_until="networkidle")
+        page.get_by_role("tab", name="카메라 연결 승인", exact=True).click()
         page.locator('#camera-requests li[data-request-id="req-7f3a"]').wait_for()
         page.locator('#camera-credentials li[data-credential-id="cred-4be1a09c3d2f"]').wait_for()
         assert page.locator("#camera-requests ui-button, #camera-credentials ui-button").count() == 0
@@ -2162,7 +2170,8 @@ def test_camera_section_is_calm_when_fleet_has_no_pairing(console_url):
     posts = []
     with sync_playwright() as playwright:
         browser, page, errors = _open_console(playwright, api, posts)
-        page.goto(console_url, wait_until="networkidle")
+        page.goto(console_url.rsplit("/", 1)[0] + "/install.html", wait_until="networkidle")
+        page.get_by_role("tab", name="카메라 연결 승인", exact=True).click()
         calm = page.locator("#camera-link-unavailable")
         calm.wait_for()
         assert calm.inner_text() == "이 Fleet에는 카메라 연결 승인이 설정되지 않았습니다."

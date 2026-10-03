@@ -22,7 +22,7 @@ gates:
     state: PARKED
   FIELD:
     state: PARKED
-adrs: [D-5, D-10, D-12, D-18, D-20, D-21, D-30, D-31, D-59, D-60, D-90, D-93, D-106, D-114, D-116, D-157, D-159, D-269, D-288, D-289, D-290, D-291, D-293, D-300, D-306, D-316, D-318, D-331, D-333, D-334, D-336, D-268, D-392, D-407, D-413]
+adrs: [D-5, D-10, D-12, D-18, D-20, D-21, D-30, D-31, D-59, D-60, D-90, D-93, D-106, D-114, D-116, D-157, D-159, D-269, D-288, D-289, D-290, D-291, D-293, D-300, D-306, D-316, D-318, D-331, D-333, D-334, D-336, D-268, D-392, D-407, D-413, D-439]
 plans:
   - docs/plans/2026-09-29-er2-mission-action-contract-closure.md
   - docs/plans/2026-09-29-fleet-mission-control-arbitration-implementation.md
@@ -41,6 +41,12 @@ plans:
   - docs/plans/2026-09-29-er2-semantic-actions-mission-implementation.md
   - docs/plans/2026-10-01-model-tool-contract-implementation.md
 ---
+## D-439 Task 4 web checkpoint (2026-10-04)
+
+- 설치의 세 작업은 공용 chooser로 탐색하며 mounted DOM·사용자 입력·등록 결과·credentials·camera source·corners를 보존한다. 서버 role lock과 읽기 탐색은 분리한다. 관제는 예외·로스터·지도를 우선 배치한다.
+- 보정 preview는 작업별 취소 epoch/owner를 사용한다. 숨겨진 작업은 frame/lease를 시작하지 않고, 빠른 복귀 시 이전 응답이나 finally가 새 작업을 덮지 않는다. scoped positive-size ResizeObserver는 복귀 후 handles를 갱신한다.
+- 검증은 변경 범위 SOURCE/LOCAL이다. 최종 workflow batch 4 passed/1 fixture failure 후 같은 rapid node 1 passed; 기존 실패 5 cases 재검증 5 passed; X served guard mutations 4 RED; 독립 SPEC rapid ownership PASS. 정확한 실행별 수치·증거·한계는 logs.md의 2026-10-04 D-439 기록을 따른다. 전체 Fleet 재실행이나 실장비 수용으로 합산하지 않는다. 기존 gate는 변경하지 않는다.
+
 ## 현재 상태 (2026-09-27)
 
 - D-306의 Fleet 목표 지정 개선으로 지도에 키보드 좌표 선택, 대상·좌표 확인, 취소 후 포커스 복귀를 추가했다. 브라우저 회귀 18건과 확인 계약 3건을 LOCAL에서 검증했다. 지도 1920/390/320 상태별 G2 판정과 실물 이동은 아직 별도다.
