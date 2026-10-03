@@ -281,9 +281,34 @@ def default_observer(cfg: dict):
 
 # --- one run --------------------------------------------------------------------------------
 
-def finish_inbox(st, state: dict, name: str) -> tuple[dict, bool]:
+INTAKE_REPORT = "intake_report.json"  # == intake.REPORT_NAME (intake is imported lazily)
+
+
+def demote_report(out, revision: str, reason: str) -> None:
+    """Turn <out>/<revision>/intake_report.json from pass into fail, so a pass the store
+    refused never becomes the eval champion (intake.find_champion reads only passes)."""
+    path = Path(out) / revision / INTAKE_REPORT
+    try:
+        report = json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return
+    except (OSError, ValueError) as exc:
+        print(f"{revision}: cannot read {path} to mark it failed ({exc})", file=sys.stderr)
+        return
+    if not isinstance(report, dict):
+        return
+    report["verdict"] = "fail"
+    report["reasons"] = [*(report.get("reasons") or []), f"store refused the pass: {reason}"]
+    try:
+        path.write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    except OSError as exc:
+        print(f"{revision}: cannot mark {path} failed ({exc})", file=sys.stderr)
+
+
+def finish_inbox(st, state: dict, name: str, out=None) -> tuple[dict, bool]:
     """Move a folder with a verdict out of the inbox: (state, moved). A clash with an
-    accepted revision of other files turns the pass into a fail (nothing delivered)."""
+    accepted revision of other files turns the pass into a fail (nothing delivered);
+    with out (intake_out) the pass report there is rewritten as a fail too."""
     rec = state["commits"][name]
     try:
         if rec["intake"] == "pass":
@@ -292,6 +317,8 @@ def finish_inbox(st, state: dict, name: str) -> tuple[dict, bool]:
                 print(f"{name}: accepted as {rec['model_revision']}")
                 return state, True
             except store.StoreError as exc:
+                if out is not None:
+                    demote_report(out, rec["model_revision"], str(exc))
                 rec = {k: v for k, v in rec.items() if k != "robots"}
                 rec.update(intake="fail", reasons=[*(rec.get("reasons") or []), str(exc)])
                 state = apply_result(state, name, rec)
@@ -304,7 +331,7 @@ def finish_inbox(st, state: dict, name: str) -> tuple[dict, bool]:
         return state, False
 
 
-def settle_inbox(st, state: dict, listed: list[str]) -> tuple[dict, list[str], bool]:
+def settle_inbox(st, state: dict, listed: list[str], out=None) -> tuple[dict, list[str], bool]:
     """Listed folders that already have a verdict are moved now; a name reused with
     other content is rejected. Returns (state, folders left to plan, all moved)."""
     all_ok, left = True, []
@@ -323,7 +350,7 @@ def settle_inbox(st, state: dict, listed: list[str]) -> tuple[dict, list[str], b
             print(f"{name}: {exc}", file=sys.stderr)
             all_ok = False
             continue
-        state, ok = finish_inbox(st, state, name)
+        state, ok = finish_inbox(st, state, name, out)
         all_ok &= ok
     return state, left, all_ok
 
@@ -398,7 +425,7 @@ def main(argv=None, *, list_commits=hf_list_commits, intake_fn=None, deliver_fn=
         except OSError as exc:
             print(f"model-watch: cannot list the store inbox: {exc}", file=sys.stderr)
             return LIST_FAILED_EXIT
-        state, commits, moved_ok = settle_inbox(st, state, commits)
+        state, commits, moved_ok = settle_inbox(st, state, commits, cfg["intake_out"])
         retry_later |= not moved_ok
     else:
         try:
@@ -437,7 +464,7 @@ def main(argv=None, *, list_commits=hf_list_commits, intake_fn=None, deliver_fn=
         state = apply_result(state, sha, result)
         save_state(cfg["state_file"], state)
         if inbox and result["intake"] in ("pass", "fail"):
-            state, ok = finish_inbox(st, state, sha)
+            state, ok = finish_inbox(st, state, sha, cfg["intake_out"])
             retry_later |= not ok
             save_state(cfg["state_file"], state)
 
