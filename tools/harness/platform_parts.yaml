@@ -525,9 +525,12 @@ safety_modules:
 
 # D-430 §1 drift anchors and §3 public entry points. `symbol` is the dotted module
 # path plus the (possibly nested) definition; each must resolve to a safety file.
-# `string` anchors are operation literals that must sit inside `in`.
+# `string` anchors are operation literals compared with `==` inside `in`.
 # `public: true` marks what decision/learning code may import (D-430 §3); a class
 # or function that holds a public anchor is importable as its owner.
+# D-430 §4 approval record (validated on tracked YAML only, not on the runtime
+# PUT or device overlays): a robot config whose safety.fleet_loss_policy is not
+# STOP/HOLD carries safety.fleet_loss_policy_approval {robot, approver, evidence}.
 safety_anchors:
   - {symbol: core_features.safety.manager.SafetyManager}
   - {symbol: core_features.safety.manager.SafetyManager.trigger_estop, public: true}
@@ -551,8 +554,8 @@ safety_anchors:
   - {symbol: omx_adapter.command_owner.ArmCommandOwner}
   - {symbol: omx_adapter.local_stop.LocalStopController, public: true}
   - {symbol: omx_adapter.action_api.LocalStopApi.dispatch}
-  - {string: StopLocal, in: omx_adapter.action_api.LocalStopApi, public: true}
-  - {string: RearmLocal, in: omx_adapter.action_api.LocalStopApi, public: true}
+  - {string: StopLocal, in: omx_adapter.action_api.LocalStopApi.dispatch, public: true}
+  - {string: RearmLocal, in: omx_adapter.action_api.LocalStopApi.dispatch, public: true}
   - {symbol: fleet.server.dispatch_admission.reserve, public: true}
   - {symbol: fleet.server.dispatch_admission.release, public: true}
   - {symbol: fleet.server.cancel_all.cancel_all_driving, public: true}

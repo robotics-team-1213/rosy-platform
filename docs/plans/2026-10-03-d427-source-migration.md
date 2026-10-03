@@ -85,16 +85,16 @@ python -c "import yaml;[print(r.get('wave','-'),r['path'],'->',r['d427_target'])
 | 1 | `refactor/d427-w1-learning` | 1-pre model-watch 진입점, `tools/perception`(75) + `prototype`(24), `src/sim/isaac_sim`(37), `lerobot_export.py`+시험(2) | 138 | IO·native에서 `omx_adapter.lerobot_export` 모듈 하나 빠짐 | 1 (`omx adapter → external:lerobot`), 1건 교체(Q6) |
 | 2 | `refactor/d427-w2-contracts` | 2a 타입 추출, 2b 학습 계약 자리, 2c `rosy-execution-local` 분리(`execution/local` 2파일 → `middleware/execution/local`) | 새 파일 ~12, 이동 2 | 없음 | 3 (execution api→skills api, palletizing→skills api, execution api→local) |
 | 3a | `refactor/d427-w3a-ops-modules` | `modules/world`(3), `modules/processes/palletizing`(16), `apps/gateway`(4), execution `api`(2)+`site`(3)+metadata(1) | 29 | Fleet 사이트 이미지 `COPY` | 0 |
-| 3b | `refactor/d427-w3b-site-apps` | `src/site/vision`(47), `src/site/games`(57), `src/site/cell`(33), `src/site/cam`(111) | 248 | Vision 사이트 이미지, native inventory(이름 동일) | 0 |
-| 3c | `refactor/d427-w3c-fleet` | `src/site/fleet`(232) + `fleet/server/web`(25, 패키지 안에 그대로, `deferred`) | 257 | Fleet 사이트 이미지, native inventory | 0 |
-| 4a | `refactor/d427-w4a-mw-modules` | `modules/skills/api`(3), `modules/skills/manipulation`(3), `apps/agent`(6), `firmware/dock`(8), `firmware/signal`(15) | 35 | 없음 | 0 |
+| 3b | `refactor/d427-w3b-site-apps` | `src/site/vision`(47), `src/site/games`(57), `src/site/cell`(33), `src/site/cam`(111), 사이트 장치(D-429 §2): `firmware/dock`(5)+`firmware`(3), `firmware/signal`(5)+`firmware`(3), `firmware/signal/observer`(7) | 271 | Vision 사이트 이미지, native inventory(이름 동일) | 0 |
+| 3c | `refactor/d427-w3c-fleet` | `src/site/fleet`(232, `fleet/ai` 포함) + `fleet/server/web`(25, 패키지 안에 그대로, `deferred`) + `fleet/ai` carve(→ `operations/decision`, D-429 §5) | 257 | Fleet 사이트 이미지, native inventory | 0 |
+| 4a | `refactor/d427-w4a-mw-modules` | `modules/skills/api`(3), `modules/skills/manipulation`(3), `apps/agent`(6) | 12 | 없음 | 0 |
 | 4b | `refactor/d427-w4b-ui` | `src/hmi/web_common`(53), `src/hmi/dashboard`(75), `src/hmi/pilot`(53), `src/hmi/face`(34) | 215 | CORE·IO·native·SD, Fleet 이미지(`web-common`) | 0 |
 | 4c | `refactor/d427-w4c-device` | `src/drivers/imu_bno055`(20), `src/products/pinky_pro/{adc,lamp,led,bringup,profile}`(96), `src/products/omx/{adapter,profile}`(82), `src/sim/description`(38), `src/sim/gz_sim` 전체(86), `src/runtime/navigation`(49) | 371 | IO·native·SD | 0 |
-| 4d | `refactor/d427-w4d-core` | `src/contracts/foundation`(70), `src/contracts/interfaces`(12), `src/runtime/{gateway,services,events,api_web}`(345) | 427 | CORE·IO·native·SD, Fleet·Vision 이미지(`core_common`) | 0 |
+| 4d | `refactor/d427-w4d-core` | `src/contracts/foundation`(70), `src/contracts/interfaces`(12), `src/runtime/{gateway,services,events,api_web}`(345, 하위 root `core_features/safety`·`core_features/decision` 포함) | 427 | CORE·IO·native·SD, Fleet·Vision 이미지(`core_common`) | 0 |
 | 4e | `refactor/d427-w4e-sensing` | `src/runtime/sensing`(621) | 621 | IO·native·SD, Fleet 이미지(map 자산 `COPY`) | 0 |
 | 5 | `refactor/d427-w5-cleanup` | 빈 `src/`, `modules/`, `apps/` 삭제, `colcon_roots`에서 `src` 제거 | — | native payload·SD 스크립트(`src` 검사 제거) | 0 |
 
-모든 wave 뒤에도 위반 5건이 남는다. `apps/agent → palletizing`, `integrations/robots/omx → {skills/api, skills/manipulation, omx adapter}`(3건), `learning perception → middleware perception`(Q7). 이동 커밋은 key 이름만 바꾸며 집합 크기를 늘리지 않는다.
+모든 wave 뒤에도 위반 4건이 남는다. `apps/agent → palletizing`, `integrations/robots/omx → {skills/manipulation, omx adapter}`(2건), `learning perception → middleware perception`(Q7). `integrations/robots/omx → skills/api`는 wave 0 후속의 D-429 §4 api 규칙으로 허용됐다(9 → 8건). 이동 커밋은 key 이름만 바꾸며 집합 크기를 늘리지 않는다.
 
 `profiles/`(2), `integrations/robots/omx`(4), `data`(11, Q3)는 옮기지 않는다. 최상위 `modules/`·`apps/` 43파일은 2c·3a·4a에서 파트 안으로 옮긴다.
 
@@ -151,6 +151,7 @@ python -c "import yaml;[print(r.get('wave','-'),r['path'],'->',r['d427_target'])
 3. 같은 커밋에서 고친다: 매니페스트 `path`·`legacy`(필요하면 `deferred`), `tools/harness/harness.yaml`의 module `path`·`tests`·`functional`, `.github/workflows/ci.yml`(wheel 목록·flake8·pytest 경로)과 `android.yml` path filter, Dockerfile `COPY` 원본(목적지는 그대로), `.dockerignore`·`deploy/site/*.dockerignore` 허용 목록, `.gitattributes`, `deploy/` 스크립트의 저장소 경로, 시험의 경로 상수, `test/architecture/test_platform_dependency_boundaries.py`의 경로 표, `AGENTS.md`(폴더 지도, 루트 `AGENTS.md`의 pytest 줄), 현재 README.
 4. `python tools/harness/rosy_harness.py generate` 후 lint.
 5. 게이트(아래 wave별)를 돌리고 커밋한다. 메시지: `refactor(d427): move <root> to <target>`.
+6. **safety 경로를 옮기는 커밋은 `Safety-Review:` trailer가 필요하다(D-430 §5).** `git mv`는 옛 경로와 새 경로를 모두 건드린 것으로 센다(`tools/harness/safety_review.py`, CI가 강제). 대상: 3b `firmware/{dock,signal}/firmware`, 3c `console.py`·`task_dispatch_routes.py`·`cancel_all*.py`·`dispatch_admission.py`·`local_stop_transport.py`, 4c `omx_adapter`의 `command_owner.py`·`local_stop.py`·`action_api.py`, 4d `core_features/safety`·`command/{manager,arbitration}.py`·`line_follow/{body_stop,clearance}.py`·`core/bridge/cmd_vel.py`·`core/fleet_loss_wiring.py`·`core_api_web/api/v1/safety.py`·`core_common/robot_body.py`. 정본 목록은 매니페스트의 `concern: safety` root와 `safety_modules`다.
 
 ## Wave 1: learning
 
@@ -192,7 +193,7 @@ python -c "import yaml;[print(r.get('wave','-'),r['path'],'->',r['d427_target'])
 
 ### 3b 사이트 앱
 
-`src/site/vision` → `operations/vision`, `src/site/games` → `operations/apps/games`, `src/site/cell` → `operations/processes/cell`, `src/site/cam` → `operations/ui/cam`. 영역마다 한 커밋.
+`src/site/vision` → `operations/vision`, `src/site/games` → `operations/apps/games`, `src/site/cell` → `operations/processes/cell`, `src/site/cam` → `operations/ui/cam`. 사이트 장치(D-429 §2): `firmware/dock` → `operations/site_devices/dock`, `firmware/signal` → `operations/site_devices/signal`(각 `firmware/` 하위 root는 `concern: safety`라 trailer 필요), 신호 관측기 `firmware/signal/observer` → `operations/vision/signal_observer`(D-163 읽기 전용 평면, 실행 호스트 미정). 영역마다 한 커밋.
 
 - 소비자: `deploy/site/Dockerfile.vision:19-22` `COPY` 원본, `Dockerfile.vision.dockerignore`, `.github/workflows/android.yml:10,16`(cam path filter), cam `COLCON_IGNORE`, `src/site/cam/app/build.gradle.kts:64`의 `../../hmi/web_common/icons`(3b에서는 저장소 root 기준 `src/hmi/web_common/icons`로 다시 계산, 4b에서 다시 고친다), `test/architecture/test_app_identity.py`. 이 커밋이 D-425 Task 10의 cam 항목을 대신하며 목적지만 다르다.
 - 게이트: 영역별 pytest(`operations/vision/test`, `operations/apps/games/test`, `operations/processes/cell/test`), Vision 이미지 빌드, cam 단위시험·APK assemble(아이콘 디렉터리 해석 확인), WSL `colcon list`·`colcon build --packages-select rosy_vision games rosy_cell`.
@@ -202,7 +203,7 @@ python -c "import yaml;[print(r.get('wave','-'),r['path'],'->',r['d427_target'])
 
 **진입 조건:** 아래 Fleet 브랜치가 모두 착지했거나 `archive/<branch>` tag로 보관됐다. 하나라도 남아 있으면 3c를 시작하지 않는다.
 
-`src/site/fleet` → `operations/fleet`, 패키지 전체. `fleet/server/web` root는 패키지 안에 남아 `operations/fleet/fleet/server/web`이 되고 `deferred: D-425 Task 9`(partly moved)다. `operations/ui/console`로 떼는 일은 D-425 Task 9(설치 wrapper 유지)이며 D-425 Task 6(설치·정적 서빙 계약)이 먼저다.
+`src/site/fleet` → `operations/fleet`, 패키지 전체. 이어서 이름 붙은 carve 커밋 `refactor(d427): carve fleet.ai to rosy.decision`이 `fleet/ai`(매니페스트 `deferred` 하위 root)를 `operations/decision`(import `rosy.decision`)으로 옮긴다. 호출자·시험·`proposal_store` 양방향 import와 설치 단위를 같은 커밋에서 고치고 shim은 두지 않는다(D-429 §5). `fleet/server/web` root는 패키지 안에 남아 `operations/fleet/fleet/server/web`이 되고 `deferred: D-425 Task 9`(partly moved)다. `operations/ui/console`로 떼는 일은 D-425 Task 9(설치 wrapper 유지)이며 D-425 Task 6(설치·정적 서빙 계약)이 먼저다.
 
 - 소비자: `Dockerfile.fleet:20`의 `COPY src/site/fleet/`(목적지 `/opt/rosy/src/site/fleet/` 유지), `deploy/robot/omx/probe_fleet_ros_vendor_sim.sh:33`의 `/repo/src/site/fleet` PYTHONPATH(저장소 mount이므로 고친다), 조각 결합(`ROOT / "src" / "site" / "fleet"` 형태의 시험), `parents[N]` 32, sys.path 5, 루트 `AGENTS.md` pytest 줄, 하위 AGENTS.
 - 게이트: `python -m pytest operations/fleet/test -q`(기준 1336 passed/7 skipped), Fleet 브라우저 suite(기존 실패 목록과 비교), Fleet 이미지 빌드, architecture, lint, WSL colcon.
@@ -217,9 +218,9 @@ python -c "import yaml;[print(r.get('wave','-'),r['path'],'->',r['d427_target'])
 
 ### 4a 작은 middleware root
 
-`modules/skills/{api,manipulation}` → `middleware/skills/*`, `apps/agent` → `middleware/apps/device/omx/agent`, `firmware/{dock,signal}` → `middleware/firmware/*`. 끝나면 최상위 `modules/`·`apps/`가 빈다.
+`modules/skills/{api,manipulation}` → `middleware/skills/*`, `apps/agent` → `middleware/apps/device/omx/agent`. 끝나면 최상위 `modules/`·`apps/`가 빈다. `firmware/{dock,signal}`은 D-429 §2에 따라 3b로 옮겼다.
 
-- 소비자: `ci.yml` wheel 목록, `test_platform_dependency_boundaries.py:113`의 root tuple `("modules", "integrations", "apps", "profiles")`, firmware 시험 3개, `colcon_roots`에 `middleware` 추가(필요하면 wheel 폴더 `COLCON_IGNORE`).
+- 소비자: `ci.yml` wheel 목록, `test_platform_dependency_boundaries.py:113`의 root tuple `("modules", "integrations", "apps", "profiles")`, `colcon_roots`에 `middleware` 추가(필요하면 wheel 폴더 `COLCON_IGNORE`).
 - 게이트: wheel 설치 검사, `omx_cell_sim` 프로파일 fake lifecycle, architecture, lint, WSL `colcon list`.
 
 ### 4b UI (D-425 Tasks 7·8·10의 목적지 변경)
@@ -240,7 +241,7 @@ python -c "import yaml;[print(r.get('wave','-'),r['path'],'->',r['d427_target'])
 
 ### 4d Pinky CORE와 contracts
 
-`src/contracts/foundation` → `contracts/foundation`, `src/contracts/interfaces` → `contracts/ros_idl`, `src/runtime/{gateway,services,events,api_web}` → `middleware/core/*`. `colcon_roots`에 `contracts` 추가. contracts 두 root는 D-427 순서상 contracts 파트지만 CORE 이미지 입력이라 여기서 옮긴다.
+`src/contracts/foundation` → `contracts/foundation`, `src/contracts/interfaces` → `contracts/ros_idl`, `src/runtime/{gateway,services,events,api_web}` → `middleware/core/*`. `colcon_roots`에 `contracts` 추가. 하위 root `core_features/safety`(concern safety)와 `core_features/decision`(concern decision, D-429 §1 장치 지역 규칙)은 services와 함께 움직이며 목적지는 `middleware/core/services/core_features/{safety,decision}`이다. contracts 두 root는 D-427 순서상 contracts 파트지만 CORE 이미지 입력이라 여기서 옮긴다.
 
 - 소비자: Pinky `Dockerfile` `COPY` 8줄, `Dockerfile.fleet:21`·`Dockerfile.vision:23`의 `COPY src/contracts/foundation/core_common/`(목적지 유지), `deploy/robot/pinky_pro/dev/core_dev_overlay.py:410-414`, `tools/calibration/analyze_session.py:37`, `ci.yml` flake8·pytest 경로, `deploy/robot/omx/run_pilot_sim.sh:7` PYTHONPATH, `parents[N]` 108(gateway 75), sys.path 10, 루트 `AGENTS.md` pytest 줄.
 - 게이트: 루트 `AGENTS.md`의 분리 pytest 두 줄(새 경로), architecture, lint, WSL `colcon build`와 `ros2 pkg executables core`, CORE·IO·native 설치 closure 비교, **SD 이미지 1회(`build-pinky-image.yml`)**, Fleet·Vision 이미지 빌드, `core_dev_overlay.py` 묶음 생성 스모크.
@@ -291,6 +292,18 @@ python -c "import yaml;[print(r.get('wave','-'),r['path'],'->',r['d427_target'])
 | Q8 | native payload의 비장치 패키지를 이동 때 빼나 | 빼지 않는다. `isaac_sim`에는 `device_install_exception`을 적는다. 빼는 일은 별도 ARTIFACT 변경 |
 | Q9 | 2a의 새 배포 이름 `rosy-contracts-skill`(import `rosy.contracts.skill`)을 쓰나 | 쓴다(2026-10-03 승인). 기존 `core_common`(ament 패키지)에 넣으면 pip wheel이 ament 패키지에 의존하게 되고, 새 배포 없이 두면 위반 3건이 남는다 |
 
+## D-429·D-430 wave 0 후속: 알려진 빈틈
+
+`refactor/d427-w0-concerns-safety`의 시험이 일부러 다루지 않는 것이다. ADR이 아니라 이 계획에 적는다.
+
+- **3b 행동 시험의 층 구분.** `test_estop_zeroes_every_source_and_clip_applies`는 "출력이 0"을 증명하지 어느 층이 0으로 만들었는지는 증명하지 않는다. `select_output`의 stop 검사를 지워도 E-stop 리스너의 슬롯 비우기, 입력 setter의 거부, EMERGENCY에서의 `else: return ZERO`(`command/manager.py`)가 여전히 0을 낸다.
+- **fleet·swarm 출처.** 둘 다 `set_nav_twist`로 nav 슬롯에 들어가므로 행동 시험에서 navigation과 같은 한 경우로 묶었다. 출처별 코드가 생기면 나눈다.
+- **소유자 규칙.** 공개 앵커를 가진 클래스·함수(`FleetConsole`, `SafetyManager` 등)는 통째로 import할 수 있다. 어떤 메서드를 부르는지는 검사하지 않는다.
+- **문자열 앵커.** `StopLocal`·`RearmLocal`은 `LocalStopApi.dispatch` 안의 `operation ==` 비교로만 센다. 문자열을 계산해 비교하면 보이지 않는다.
+- **규칙 2 범위.** decision·learning importer만 본다. control·other 코드가 safety 내부를 import하는 것은 검사하지 않는다.
+- **승인 기록.** `safety.fleet_loss_policy_approval {robot, approver, evidence}`는 tracked YAML만 검증한다. 런타임 PUT(`/api/v1/safety/limits`)과 장치 overlay는 대상이 아니다.
+- **trailer 검사.** 병합 커밋은 모든 부모와 다른 경로(`diff-tree --cc`, 충돌 해결)만 본다. 병합으로 들어온 변경은 그 커밋 자체에서 본다.
+
 ## 열린 질문
 
 없음. Q9(`rosy-contracts-skill` 배포 이름)는 2026-10-03 사용자가 승인했다(위 결정 표).
@@ -300,6 +313,6 @@ python -c "import yaml;[print(r.get('wave','-'),r['path'],'->',r['d427_target'])
 - 모든 root가 moved(`path == d427_target`) 또는 partly moved(`deferred`와 후속 작업 이름)다. pending root가 없다.
 - `legacy` 아래 tracked 파일이 없고, wave 5의 한 release 유예 뒤 `legacy` 필드가 지워졌다.
 - `colcon_roots`에서 찾은 ROS 패키지 이름 집합이 27개 기준과 같고 `src`가 목록에 없다.
-- `KNOWN_VIOLATIONS`가 9건에서 5건으로 줄었다.
+- `KNOWN_VIOLATIONS`가 8건에서 4건으로 줄었다(wave 0 후속 전 9건).
 - 각 image wave와 그 사이 release마다 CORE·IO·native 설치 closure 비교와 SD 이미지 패키지 목록 비교가 커밋 SHA와 함께 `docs/validation/d427-source-migration/`에 있다. 돌리지 못한 항목은 `NOT_RUN`으로 적고 `ARTIFACT_EQUIVALENT`를 주장하지 않는다.
 - 장치 수용은 이 계획의 출구가 아니다.

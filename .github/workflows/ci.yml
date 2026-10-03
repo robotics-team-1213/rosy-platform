@@ -57,12 +57,15 @@ jobs:
             flake8 httpx pyyaml jsonschema ext4
 
       # D-430 §5: a commit that touches a safety-tagged path (platform_parts.yaml
-      # `concern: safety` roots and `safety_modules`) needs a `Safety-Review:` trailer.
-      # Only commits after the script's BASELINE are checked, so older history passes.
-      # Relies on the full-history checkout above (fetch-depth: 0).
+      # `concern: safety` roots, `safety_modules`, `safety_anchors`) needs a
+      # `Safety-Review:` trailer. Only the event's own range is checked: the PR's
+      # commits, or a push's before..after (the tip alone for a new branch or a
+      # force push). Scheduled/called runs skip it, so one old commit cannot keep CI
+      # red. Relies on the full-history checkout above (fetch-depth: 0).
       - name: Safety-Review trailer (D-430)
+        if: github.event_name == 'push' || github.event_name == 'pull_request'
         env:
-          SAFETY_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          SAFETY_BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
         run: python3 tools/harness/safety_review.py "$SAFETY_BASE" HEAD
 
       - name: Build and install ROS-free platform API wheels

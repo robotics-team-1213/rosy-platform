@@ -16,15 +16,16 @@ from core_features.safety.manager import BatteryPolicy, PersonAdvisoryFeed, Safe
 NOW = 10.0
 FAST = Twist(5.0, 5.0)  # far above every limit, so clip is visible
 
-#: Every registered command source and the slot it reaches the wheels through:
-#: teleop for MANUAL, the nav slot for navigation/fleet/swarm goals, the docking slot.
+#: One case per output slot: teleop (MANUAL), the nav slot, the docking slot.
+#: ``fleet`` and ``swarm`` goals reach the wheels only through ``set_nav_twist``,
+#: the same code as ``navigation``, so they share its case; give them their own
+#: when source-specific output code appears.
 SOURCE_MODES = {
     "manual": Mode.MANUAL,
     "navigation": Mode.NAVIGATION,
-    "fleet": Mode.NAVIGATION,
-    "swarm": Mode.NAVIGATION,
     "docking": Mode.DOCKING,
 }
+NAV_SLOT_SOURCES = {"fleet", "swarm"}
 
 
 def _rig(mode):
@@ -49,7 +50,7 @@ def _feed(command, source, twist, now=NOW):
 
 
 def test_every_registered_source_is_covered():
-    assert set(SOURCE_MODES) == set(DEFAULT_SOURCES)
+    assert set(SOURCE_MODES) | NAV_SLOT_SOURCES == set(DEFAULT_SOURCES)
 
 
 def _stop(safety, modes, how):
@@ -73,7 +74,11 @@ def test_estop_zeroes_every_source_and_clip_applies(source, how):
     """Behavioural. D-430 §3 invariant 3b: without a stop the output is the clipped
     command. With the E-stop latch, EMERGENCY mode, or both (the API path) every
     source yields zero and new input stays zero. After a latched stop, release
-    alone does not resume the held command; only a fresh command moves."""
+    alone does not resume the held command; only a fresh command moves.
+
+    Known gap: this proves the output is zero, not which layer zeroed it. The stop
+    check in ``select_output``, the E-stop listener, the input setters and the
+    EMERGENCY ``else: return ZERO`` overlap, so removing one alone stays green."""
     mode = SOURCE_MODES[source]
     command, safety, modes = _rig(mode)
     manual = source == "manual"

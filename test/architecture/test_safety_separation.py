@@ -11,7 +11,11 @@ KNOWN_SAFETY_VIOLATIONS is checked by set equality like ``KNOWN_VIOLATIONS`` in
 fails, so the list only shrinks. The Fleet stop-path carve (D-430 Validation wave 0
 item 2) removes the mixed-file entries.
 
-Honest holes, not oversights:
+Honest holes, not oversights (also listed in the D-427 migration plan):
+- Rule 2 checks decision and learning importers only; control/other code importing
+  a safety internal is not checked.
+- A class or function owning a public anchor (``FleetConsole``, ``SafetyManager``)
+  is importable whole; which of its methods a caller uses is not checked.
 - Only static ``import`` / ``from`` statements are seen, as in test_platform_parts.
 - A module counts only when it lies under a root's ``import_prefix``; script
   folders without one are invisible to the import rules.
@@ -112,7 +116,8 @@ def _safety_files() -> list[str]:
 def test_safety_anchors_live_in_safety_tagged_files():
     """Structural. D-430 §1 drift guard: every symbol anchor (module-qualified, nested
     definitions included) and string anchor resolves inside a safety-tagged file, and
-    every safety module and Python safety root holds at least one anchor."""
+    every safety module and Python safety root holds at least one anchor. A string
+    anchor counts only as an ``==`` comparison operand, not any constant in the scope."""
     manifest = _manifest()
     tracked = set(_tracked())
     problems = [f"safety_modules entry is not a tracked .py file: {path}"
@@ -122,8 +127,11 @@ def test_safety_anchors_live_in_safety_tagged_files():
         if "string" in anchor:
             path, node = _resolve_symbol(anchor["in"])
             found = node is not None and any(
-                isinstance(child, ast.Constant) and child.value == anchor["string"] for child in ast.walk(node))
-            label = f"string {anchor['string']!r} in {anchor['in']}"
+                isinstance(child, ast.Compare) and any(isinstance(op, ast.Eq) for op in child.ops)
+                and any(isinstance(side, ast.Constant) and side.value == anchor["string"]
+                        for side in (child.left, *child.comparators))
+                for child in ast.walk(node))
+            label = f"string {anchor['string']!r} compared in {anchor['in']}"
         else:
             path, node = _resolve_symbol(anchor["symbol"])
             found = node is not None

@@ -191,12 +191,24 @@ def test_sample_actuation_and_openapi_operations_stay_outside_catalog(profile, n
                for definition in MODEL_TOOL_CATALOG.values())
 
 
+_ACTUATION_VERBS = ("set_", "start_", "stop_", "open_", "close_", "write_", "post_", "toggle_")
+_SITE_DEVICE_WORDS = ("signal", "door", "conveyor", "plc", "coil", "register", "site_device")
+
+
+def _actuates_site_device(name: str) -> bool:
+    """A verb-led or ``*_command`` name about a site device; read-only names pass."""
+    about_device = any(word in name for word in _SITE_DEVICE_WORDS)
+    return about_device and (name.startswith(_ACTUATION_VERBS) or name.endswith(("_command", "_all_red")))
+
+
 def test_catalog_has_no_site_device_tool_or_effect_class():
     """D-429 §3: until the follow-up candidate ADR lands, no catalog tool and no
-    effect class may touch a site device; candidates are the only future path."""
+    effect class may actuate a site device; candidates are the only future path.
+    Read-only names such as ``get_signal_state`` stay possible."""
     assert {member.value for member in ToolEffectClass} == {"read_only", "candidate_writing"}
-    words = ("signal", "door", "conveyor", "plc", "coil", "register", "site_device")
-    assert [name for name in MODEL_TOOL_CATALOG if any(word in name for word in words)] == []
+    assert all(_actuates_site_device(name) for name in SITE_DEVICE_ACTUATION_NAMES)
+    assert not any(map(_actuates_site_device, ("get_signal_state", "registered_robots", "list_doors")))
+    assert [name for name in MODEL_TOOL_CATALOG if _actuates_site_device(name)] == []
     assert not set(SITE_DEVICE_ACTUATION_NAMES) & set(MODEL_TOOL_CATALOG)
     assert all(definition.effect_class in (ToolEffectClass.READ_ONLY, ToolEffectClass.CANDIDATE_WRITING)
                for definition in MODEL_TOOL_CATALOG.values())
