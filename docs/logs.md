@@ -4924,6 +4924,18 @@
 - gate 변화: 없음. 측정 전 합격선 고정 문서.
 - 결정: D-444 §2의 "계량 문서" 요건 충족.
 
+## 2026-10-04 · uncommitted · cam: 실제 사진 공유와 저조도 촬영 검토안
+
+- 변경: `2026-10-04-cam-photo-lowlight-design.md`에 현재 JPEG 저장/별도 ImageCapture/연속 torch를 구분하고, 실제 렌즈의 플래시 지원과 원격 명령·송출·발열·사진 공유의 검증 조건을 기록했다. 방향 변경의 의미는 확인 중이며 앱 기능은 구현하지 않았다.
+- 증거: 실제 S21 JPEG 두 장의 증가하는 seq와 age 227–366 ms, 1280×720을 확인하고 사용자에게 현재 사진을 공유했다. 장치 조회상 활성 id 2의 플래시는 미지원, 기본 후면 id 0은 지원이었다. CameraX 1.4.0 앱에는 별도 ImageCapture/torch 제어가 없다. 실제 사진·장치별 증거는 X:에만 보관했다.
+- gate 변화: 없음. 사진 수신과 capability 조회만이며 조명 점등·고해상도 촬영·저조도 실기 수용을 주장하지 않는다.
+
+## 2026-10-04 · uncommitted · cam: 승인한 자동 조명과 사진 저장 구현
+
+- 변경: 검토안을 사용자 승인한 구현 범위로 갱신하고 cam 운용 문서에 자동 조명 시간·발열 제한, 실제 상태 표시, 사진 저장·공유, 렌즈 변경 시 보정 확인을 기록했다. 고해상도 ImageCapture·Night/Boost·원격 촬영 API·물리적 회전은 후속 범위로 남긴다.
+- 증거: JVM 326 passed, 최종 debug APK 및 lint 성공, 독립 리뷰 승인. 기존 서명자 APK 덮어 설치 후 페어링 설정 바이트 동일. 실제 S21 기본 후면의 자동 점등과 저장한 회전 적용 사진에서 촬영 영역을 식별했다. 화면 절전 중 63초간 10/10 최신 JPEG와 자동 꺼짐·재점등을 확인했다. 개인 사진·장치 식별자·상세 증거는 X:에만 둔다.
+- gate 변화: 없음. SOURCE/LOCAL GO, 전체 DEVICE/FIELD PARKED 유지.
+
 ## 2026-10-04 · uncommitted · site(D-441): automatic site stack updates
 - 변경: D-441 ADR·ADR Log 행(D-440은 device-power 브랜치가 써서 다음 번호, `adr_gaps`에 D-438·D-439·D-440). `build-site-candidate.yml`에 main push 트리거와 이미지 원본 경로 필터, push는 기존 릴리스에서 빌드 없이 성공, push 빌드만 취소하는 job concurrency와 비취소 릴리스 그룹. 서명 PC용 `deploy/site/auto_sign_candidates.py`(출처 증명 digest·main 조상·태그 확인 뒤 `sign_manifest_only`, 감사 로그)와 `register_auto_sign_task.ps1`. 사이트 호스트용 `rosy_site_autoupdate.py`·`rosy-site-autoupdate.service`·`.timer`(override 거부, SHA256SUMS·tar 검사, 설치된 검증기, 원자적 site.env·symlink 전환, 건강 확인과 롤백, 정리). D-437·D-301 부록, `deploy/site/README.md` "Automatic updates (D-441)"
 - 증거: 사이트 후보·workflow·fetch·검증기·서명 시험과 새 자동 서명·호스트 갱신 시험(symlink 시험은 Linux 컨테이너에서), `test_no_secrets_in_tracked_files`, harness 계약·lint, actionlint 1.7.7(Docker)

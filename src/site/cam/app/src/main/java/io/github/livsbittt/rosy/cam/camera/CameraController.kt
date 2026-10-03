@@ -3,6 +3,8 @@ package io.github.livsbittt.rosy.cam.camera
 import android.content.Context
 import android.hardware.camera2.CameraCharacteristics
 import android.os.SystemClock
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import android.util.Size
 import androidx.annotation.OptIn
@@ -13,6 +15,7 @@ import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageProxy
 import androidx.camera.core.Preview
+import androidx.camera.core.TorchState
 import androidx.camera.core.resolutionselector.AspectRatioStrategy
 import androidx.camera.core.resolutionselector.ResolutionFilter
 import androidx.camera.core.resolutionselector.ResolutionSelector
@@ -20,11 +23,14 @@ import androidx.camera.core.resolutionselector.ResolutionStrategy
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.Observer
 import io.github.livsbittt.rosy.cam.link.OverheadConfig
 import io.github.livsbittt.rosy.cam.link.OverheadLink
 import io.github.livsbittt.rosy.cam.link.SensorInfo
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+import java.util.concurrent.RejectedExecutionException
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.abs
 import kotlin.math.max
 
@@ -39,12 +45,33 @@ class CameraController(
     private val lifecycleOwner: LifecycleOwner,
     private val link: OverheadLink?,
     private val onError: (Throwable) -> Unit,
+    private val onLighting: (LightingStatus) -> Unit = {},
 ) {
     private val analysisExecutor: ExecutorService = Executors.newSingleThreadExecutor { r ->
         Thread(r, "overhead-analysis")
     }
     private val encoder = JpegEncoder()
     private val adaptiveQuality = AdaptiveJpegQuality()
+    private val main = Handler(Looper.getMainLooper())
+    private val lightPolicy = AutoLightPolicy()
+    private val photoStore = FramePhotoStore(java.io.File(context.filesDir, "photos"))
+    private val photoExecutor = Executors.newSingleThreadExecutor { r -> Thread(r, "cam-photo") }
+    private val photoBusy = AtomicBoolean(false)
+    private val lightPending = AtomicBoolean(false)
+    private data class LumaSample(val value: Int, val generation: Int, val atMs: Long)
+    @Volatile private var latestLuma: LumaSample? = null
+    @Volatile private var lastLumaNs = 0L
+    @Volatile private var generation = 0
+    private var camera: Camera? = null
+    private var torchObserver: Observer<Int>? = null
+    private var lighting = LightingStatus()
+    private var thermalBlocked = false
+    private var torchFailure = false
+    private var torchOffFailed = false
+    private var torchRequest = 0
+    private var requestedTorch: Boolean? = null
+    private var torchDeadline: Runnable? = null
+    private var torchOffDeadline: Runnable? = null
 
     /** Set on main when the camera is rebound or quality/width change; consumed on the analysis thread. */
     @Volatile
@@ -118,12 +145,56 @@ class CameraController(
         preview.setSurfaceProvider(surfaceProvider)
     }
 
+    fun setAutomaticLight(enabled: Boolean) {
+        if (lighting.enabled == enabled) return
+        lighting = lighting.copy(enabled = enabled, message = null)
+        torchFailure = false // An explicit operator toggle may retry a failed camera control.
+        torchOffFailed = false
+        lightPolicy.reset(SystemClock.elapsedRealtime())
+        if (!enabled) requestTorch(false, force = true) else evaluateLight()
+        emitLighting()
+    }
+
+    fun setThermalBlocked(blocked: Boolean) {
+        if (thermalBlocked == blocked) return
+        thermalBlocked = blocked
+        if (blocked) {
+            lightPolicy.update(-1, SystemClock.elapsedRealtime(), lighting.enabled,
+                lighting.supported, true, lighting.torchOn)
+            requestTorch(false, force = true)
+        } else evaluateLight()
+        emitLighting()
+    }
+
+    /** Saves the current transmitted stream frame, not a separate high-resolution capture. */
+    fun savePhoto(onResult: (String?) -> Unit) {
+        if (stopped || !photoBusy.compareAndSet(false, true)) { onResult(null); return }
+        val epoch = generation
+        try {
+            photoExecutor.execute {
+                val filename = try { photoStore.save(SystemClock.elapsedRealtime()) } catch (error: Exception) {
+                    Log.w(TAG, "stream photo save failed", error)
+                    null
+                }
+                main.post {
+                    photoBusy.set(false)
+                    onResult(if (!stopped && generation == epoch) filename else null)
+                }
+            }
+        } catch (_: RejectedExecutionException) {
+            photoBusy.set(false)
+            onResult(null)
+        }
+    }
+
     fun stop() {
         stopped = true
+        releaseLighting()
         preview.setSurfaceProvider(null)
         provider?.unbindAll()
         provider = null
         analysisExecutor.shutdown()
+        photoExecutor.shutdown()
     }
 
     private fun applyValues(newConfig: OverheadConfig) {
@@ -148,13 +219,15 @@ class CameraController(
         val target = config
         val selector = selectorForCamera(cameraId)
         run {
+            releaseLighting()
             cameraProvider.unbindAll()
+            val epoch = generation
             val analysis = if (link == null) null else ImageAnalysis.Builder()
                 .setResolutionSelector(selectorFor(target.width))
                 .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                 .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_YUV_420_888)
                 .build()
-            analysis?.setAnalyzer(analysisExecutor, ::analyze)
+            analysis?.setAnalyzer(analysisExecutor) { image -> analyze(image, epoch) }
             val camera = if (analysis == null) {
                 cameraProvider.bindToLifecycle(lifecycleOwner, selector, preview)
             } else {
@@ -165,6 +238,24 @@ class CameraController(
                     analysis,
                 )
             }
+            this.camera = camera
+            lighting = lighting.copy(supported = camera.cameraInfo.hasFlashUnit(), torchOn = false,
+                dark = false, message = null)
+            val observer = Observer<Int> { state ->
+                if (stopped || generation != epoch || this.camera !== camera) return@Observer
+                lighting = lighting.copy(torchOn = state == TorchState.ON)
+                if (state == TorchState.OFF) {
+                    torchOffDeadline?.let(main::removeCallbacks)
+                    torchOffDeadline = null
+                }
+                if (lighting.torchOn && (!lighting.enabled || thermalBlocked || torchFailure)) {
+                    requestTorch(false, force = true)
+                } else if (lighting.torchOn && requestedTorch != false) armTorchDeadline(epoch)
+                emitLighting()
+            }
+            torchObserver = observer
+            camera.cameraInfo.torchState.observe(lifecycleOwner, observer)
+            emitLighting()
             timestampSource = readTimestampSource(camera)
             boundWidth = target.width
             qualityResetPending = true
@@ -200,8 +291,10 @@ class CameraController(
         CaptureClock.Source.UNAVAILABLE
     }
 
-    private fun analyze(image: ImageProxy) {
+    private fun analyze(image: ImageProxy, epoch: Int) {
         try {
+            if (stopped || epoch != generation) return
+            measureLight(image, epoch)
             val frameLink = link ?: return
             val arrivalMono = System.nanoTime()
             if (!limiter.tryAdmit(arrivalMono)) return
@@ -229,6 +322,10 @@ class CameraController(
                         }
                     }
                     is JpegEncoder.Result.Encoded -> {
+                        synchronized(photoStore) {
+                            if (epoch == generation) photoStore.update(result.bytes, result.length,
+                                result.width, result.height, rotation, SystemClock.elapsedRealtime())
+                        }
                         adaptiveQuality.encoded()
                         frameLink.sentQuality = adaptiveQuality.lastFit
                         frameLink.sensor = SensorInfo(result.width, result.height, rotation)
@@ -242,6 +339,140 @@ class CameraController(
         } finally {
             image.close()
         }
+    }
+
+    private fun measureLight(image: ImageProxy, epoch: Int) {
+        val now = System.nanoTime()
+        if (now - lastLumaNs < 250_000_000L) return
+        lastLumaNs = now
+        val plane = image.planes.firstOrNull() ?: return
+        val crop = image.cropRect
+        val luma = YPlaneLuma.mean(plane.buffer, plane.rowStride, plane.pixelStride,
+            crop.left, crop.top, crop.right, crop.bottom) ?: return
+        latestLuma = LumaSample(luma, epoch, SystemClock.elapsedRealtime())
+        if (!lightPending.compareAndSet(false, true)) return
+        main.post {
+            lightPending.set(false)
+            if (!stopped && epoch == generation) evaluateLight()
+        }
+    }
+
+    private fun evaluateLight() {
+        val now = SystemClock.elapsedRealtime()
+        val sample = latestLuma?.takeIf { it.generation == generation && now - it.atMs in 0..1000 }
+        lighting = lighting.copy(dark = sample != null && sample.value <= 28)
+        val desired = lightPolicy.update(sample?.value ?: -1, now, lighting.enabled,
+            lighting.supported, thermalBlocked, lighting.torchOn)
+        if (!torchFailure) requestTorch(desired)
+        emitLighting()
+    }
+
+    private fun emitLighting() {
+        onLighting(lighting.copy(message = when {
+            torchFailure -> lighting.message ?: "Camera light control failed"
+            thermalBlocked -> "Camera light paused while the phone is hot"
+            !lighting.supported -> "This camera has no controllable flash"
+            else -> null
+        }))
+    }
+
+    private fun requestTorch(on: Boolean, force: Boolean = false) {
+        val bound = camera ?: return
+        if (!on && torchOffFailed) return // Failed off commands require an explicit toggle/rebind, not a frame loop.
+        if (!lighting.supported || (on && (thermalBlocked || !lighting.enabled || torchFailure))) return
+        if (requestedTorch == on || (!force && requestedTorch == null && lighting.torchOn == on)) return
+        if (!on) { torchDeadline?.let(main::removeCallbacks); torchDeadline = null }
+        val epoch = generation
+        val request = ++torchRequest
+        requestedTorch = on
+        if (on) armTorchDeadline(epoch) // Also bounds a stalled control future/analyzer.
+        else armTorchOffDeadline(epoch, bound)
+        try {
+            val future = bound.cameraControl.enableTorch(on)
+            future.addListener({
+                if (stopped || generation != epoch || camera !== bound || request != torchRequest) return@addListener
+                requestedTorch = null
+                try { future.get() } catch (error: Exception) {
+                    torchFailure = true
+                    if (!on) torchOffFailed = true
+                    lighting = lighting.copy(message = "Camera light control failed")
+                    Log.w(TAG, "torch command failed", error)
+                    if (on) requestTorch(false, force = true) else onError(error)
+                }
+                if (!on && bound.cameraInfo.torchState.value == TorchState.OFF) {
+                    torchOffDeadline?.let(main::removeCallbacks)
+                    torchOffDeadline = null
+                }
+                // Actual LED state comes only from cameraInfo.torchState's observer.
+                emitLighting()
+            }, ContextCompat.getMainExecutor(context))
+        } catch (error: Exception) {
+            requestedTorch = null
+            torchFailure = true
+            if (!on) torchOffFailed = true
+            lighting = lighting.copy(message = "Camera light control failed")
+            Log.w(TAG, "torch control unavailable", error)
+            if (on) requestTorch(false, force = true) else onError(error)
+            emitLighting()
+        }
+    }
+
+    private fun armTorchDeadline(epoch: Int) {
+        if (torchDeadline != null) return
+        val task = Runnable {
+            torchDeadline = null
+            if (stopped || generation != epoch) return@Runnable
+            // Invalid ambient sample deliberately ends the latch and starts cooldown.
+            lightPolicy.update(-1, SystemClock.elapsedRealtime(), lighting.enabled,
+                lighting.supported, thermalBlocked, lighting.torchOn)
+            requestTorch(false, force = true)
+        }
+        torchDeadline = task
+        main.postDelayed(task, 30_000L)
+    }
+
+    private fun armTorchOffDeadline(epoch: Int, bound: Camera) {
+        torchOffDeadline?.let(main::removeCallbacks)
+        val task = Runnable {
+            torchOffDeadline = null
+            if (stopped || generation != epoch || camera !== bound) return@Runnable
+            if (bound.cameraInfo.torchState.value != TorchState.OFF) {
+                // A stalled off future must not leave the light on indefinitely.
+                onError(IllegalStateException("Camera light did not turn off"))
+            }
+        }
+        torchOffDeadline = task
+        main.postDelayed(task, 3000L)
+    }
+
+    private fun releaseLighting() {
+        synchronized(photoStore) { generation++; photoStore.clear() }
+        latestLuma = null
+        lastLumaNs = 0L
+        torchDeadline?.let(main::removeCallbacks)
+        torchDeadline = null
+        torchOffDeadline?.let(main::removeCallbacks)
+        torchOffDeadline = null
+        torchRequest++
+        requestedTorch = null
+        torchFailure = false
+        torchOffFailed = false
+        camera?.let { old ->
+            torchObserver?.let { old.cameraInfo.torchState.removeObserver(it) }
+            if (old.cameraInfo.hasFlashUnit()) {
+                try {
+                    val off = old.cameraControl.enableTorch(false)
+                    off.addListener({
+                        try { off.get() } catch (error: Exception) { Log.w(TAG, "unbind torch off failed", error) }
+                    }, ContextCompat.getMainExecutor(context))
+                } catch (error: Exception) { Log.w(TAG, "unbind torch control unavailable", error) }
+            }
+        }
+        camera = null
+        torchObserver = null
+        lightPolicy.reset(SystemClock.elapsedRealtime())
+        lighting = lighting.copy(supported = false, torchOn = false, dark = false, message = null)
+        emitLighting()
     }
 
     private companion object {
