@@ -10,6 +10,8 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urlencode
+from urllib.parse import urlsplit
+from core_common.protocol.discovery_txt import HOSTNAME
 
 import yaml
 
@@ -24,13 +26,16 @@ class RobotEndpoint:
     base_url: str   # 끝 슬래시 없음
     token: str   # CORE REST operator token
     fleet_pairing_token: str | None = None  # CORE FleetAgent → SiteHub only
+    tls_ca_file: str | None = None
+    discovery: bool = False
+    link_policy_file: str | None = None
 
 
 _REQUIRED = ("robot_id", "base_url", "token")
 
 
 def _endpoint(robot_id, base_url, token, where: str,
-              fleet_pairing_token=None) -> RobotEndpoint:
+              fleet_pairing_token=None, tls_ca_file=None, discovery=False, link_policy_file=None) -> RobotEndpoint:
     """load_robots 와 write_robots 가 같은 규칙을 통과시킨다."""
     if not robot_id or not base_url or not token:
         raise RobotsFileError(f"{where}: robot_id, base_url and token are all required")
@@ -50,7 +55,29 @@ def _endpoint(robot_id, base_url, token, where: str,
         # 스킴이 없으면 ws_url 이 호스트를 잃고 `ws:///...` 를 만든다 — 연결 시점이 아니라
         # 여기서 거절한다.
         raise RobotsFileError(f"{where}: base_url needs an http:// or https:// scheme")
-    return RobotEndpoint(str(robot_id), base_url, token, fleet_pairing_token)
+    if not isinstance(discovery, bool):
+        raise RobotsFileError(f"{where}: discovery must be a boolean")
+    parsed = urlsplit(base_url)
+    if tls_ca_file is not None and (not isinstance(tls_ca_file, str) or not tls_ca_file):
+        raise RobotsFileError(f"{where}: tls_ca_file must be a non-empty string")
+    if tls_ca_file is not None and parsed.scheme != 'https':
+        raise RobotsFileError(f"{where}: a pinned TLS CA requires HTTPS")
+    if discovery and (parsed.scheme != 'https' or not tls_ca_file
+                      or not HOSTNAME.fullmatch(parsed.hostname or '')
+                      or parsed.username or parsed.password or parsed.path
+                      or parsed.query or parsed.fragment):
+        raise RobotsFileError(f"{where}: discovery requires HTTPS .local origin and pinned tls_ca_file")
+    if link_policy_file is not None:
+        from core_common.protocol.link_policy import LinkPolicy
+        try:
+            policy = LinkPolicy.from_file(link_policy_file)
+        except (OSError, ValueError, TypeError) as exc:
+            raise RobotsFileError(f'{where}: invalid development link policy') from exc
+        if not discovery or not policy.permits(str(robot_id), '_rosy._tcp', parsed.hostname,
+                                               authenticated=bool(tls_ca_file)):
+            raise RobotsFileError(f'{where}: device outside development link policy')
+    return RobotEndpoint(str(robot_id), base_url, token, fleet_pairing_token, tls_ca_file, discovery,
+                         link_policy_file)
 
 
 def load_robots(path: Path, *, allow_empty: bool = False) -> list[RobotEndpoint]:
@@ -78,7 +105,8 @@ def load_robots(path: Path, *, allow_empty: bool = False) -> list[RobotEndpoint]
             if not row.get(key):
                 raise RobotsFileError(f"{path}: robots[{i}] is missing '{key}'")
         endpoint = _endpoint(row["robot_id"], row["base_url"], row["token"],
-                             f"{path}: robots[{i}]", row.get("fleet_pairing_token"))
+                             f"{path}: robots[{i}]", row.get("fleet_pairing_token"),
+                             row.get('tls_ca_file'), row.get('discovery', False), row.get('link_policy_file'))
         if endpoint.robot_id in seen:
             raise RobotsFileError(f"{path}: duplicate robot_id {endpoint.robot_id!r}")
         seen.add(endpoint.robot_id)
@@ -97,13 +125,20 @@ def write_robots(path: Path, robots: list[RobotEndpoint]) -> None:
     if not robots:
         raise RobotsFileError("every robot needs robot_id, base_url and token")
     normalized = [_endpoint(r.robot_id, r.base_url, r.token, f"robots[{i}]",
-                            r.fleet_pairing_token) for i, r in enumerate(robots)]
+                            r.fleet_pairing_token, r.tls_ca_file, r.discovery,
+                            r.link_policy_file) for i, r in enumerate(robots)]
     ids = [r.robot_id for r in normalized]
     if len(set(ids)) != len(ids):
         raise RobotsFileError(f"duplicate robot_id in {ids}")
     rows = []
     for r in normalized:
         row = {"robot_id": r.robot_id, "base_url": r.base_url, "token": r.token}
+        if r.tls_ca_file is not None:
+            row['tls_ca_file'] = r.tls_ca_file
+        if r.discovery:
+            row['discovery'] = True
+        if r.link_policy_file is not None:
+            row['link_policy_file'] = r.link_policy_file
         if r.fleet_pairing_token is not None:
             row["fleet_pairing_token"] = r.fleet_pairing_token
         rows.append(row)

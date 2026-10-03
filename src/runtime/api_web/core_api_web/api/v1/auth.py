@@ -30,7 +30,7 @@ from typing import Any, Callable, Optional
 from fastapi import APIRouter, Depends, Request
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse, Response
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from core_api_web.api.deps import (
     PAIRED_SOURCES,
@@ -49,6 +49,7 @@ from core_api_web.api.deps import (
 )
 from core_api_web.api.errors import ApiError, error_body
 from core_api_web.api.v1.common import admin, viewer
+from core_common.protocol.schemas import LoginPairRequest as PairRequest
 
 auth_router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 
@@ -395,11 +396,6 @@ def _match(state: PairingState, code: str,
                      "source": "pair-physical", "paired_via": physical["code_id"],
                      "issuer_expires_at": None}, candidates)
     return None, candidates
-
-
-class PairRequest(BaseModel):
-    code: str = Field(min_length=1, max_length=32)
-    label: str = Field(default="", max_length=64)
 
 
 @auth_router.post("/pair", status_code=201)

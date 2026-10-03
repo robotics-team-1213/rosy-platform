@@ -1,4 +1,4 @@
-﻿"""Bounded DNS-SD adapters and shared change-driven discovery cache (D-432).
+"""Bounded DNS-SD adapters and shared change-driven discovery cache (D-432).
 
 Advertisements are untrusted endpoint hints, never connection authorization.
 """

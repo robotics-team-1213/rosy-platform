@@ -14,6 +14,7 @@
 | D-366 | Rosy Pilot 조종 대상 확장은 기기 종류별 드라이버 레지스트리로 수용하며, 장치별 조종 컨트롤(그리퍼·팔 위치 등)은 그 장치의 계약이 열 때 프런트에 반영한다 |
 | D-390 | Pilot의 OMX-AI 연습은 시뮬레이션 전용 장치 API를 거쳐 로컬 팔 명령 소유자에 연결한다 |
 | D-411 | Pilot 로봇측 학습 녹화(카메라 유닛 소유, CORE는 시작·정지 요청, `teleop/intent` 원 입력·주체 기록, 1회 10분)와 정지 중에만 허용하는 HTTP 수신(목록·tar·sha256 manifest, `rosy_ml fetch --http`); 기기가 알리는 조작부 서술자 `rosy.controls/1`(base_velocity·joint_jog·gripper, 드라이버는 전송·위젯은 kind별, 팔 조이스틱은 이전 목표 종료 후 순차 제한 목표); OMX 그리퍼 전용 절대 목표·쥠 readback(시뮬레이션만, D-390 유지) |
+| D-432 | 모든 앱·장치는 공통 발견·연결 규약을 쓰고, 개발 모드에서는 코드 없이 연결한다 |
 
 ## 계획·결과 문서
 
@@ -33,8 +34,8 @@
 
 ## 최근 기록
 
+- 2026-10-03 · uncommitted · fix(link): 현재 접속과 후속 코드 규약 구별
+- 2026-10-03 · uncommitted · feat(link): D-432 주소 없는 장비 접속
 - 2026-10-03 · 09553e730 · feat(pilot): D-423 "모델" 패널(읽기 전용)
 - 2026-10-03 · uncommitted · fix(pilot): D-411 C 관문 뒤 — 그리퍼 목표를 0.9 × max_velocity 로
 - 2026-10-03 · uncommitted · fix(pilot): D-411 C 검토 — 그리퍼 목표를 알린 속도로
-- 2026-10-03 · uncommitted · feat(pilot): D-411 C 그리퍼 위젯, 주행 링 위쪽 잘림
-- 2026-10-03 · uncommitted · fix(pilot): D-411 B 재리뷰 — 종결 뒤 readback 실패, 떠 있는 스틱 원점

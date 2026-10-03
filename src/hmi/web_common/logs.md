@@ -480,3 +480,11 @@
 - 변경: caller/page signal composition과 page epoch를 추가. interval·listener·subscription·one-shot timeout/wait 정리, 늦은 async 결과와 이전 동적 handler 거절. 복귀 조회는 문서가 제공하며 공통 계층에 명령 replay·권한/storage 정책을 넣지 않음.
 - 증거: request/scope/page-scope/Fleet/authorization/poll gate Node 56 passed. 현재 자산 bytes를 확인한 X: 사본 Chromium 14 passed; disposal 변이 8 red, raw camera/Vision guard 변이 4 red, bytes 복원 후 14 green.
 - gate 변화: SOURCE/LOCAL 수명 계약 강화. installed-only·DEVICE/FIELD는 consumer 단위의 후속 gate.
+
+
+## 2026-10-03 · uncommitted · feat(link): D-432 주소 없는 장비 접속
+
+- 변경: 기존 Pilot의 native wrapper를 parent_app으로 등록한다. wrapper는 listen port를 소유하지 않고 기존 조종 화면을 사용한다.
+- 증거: 관련 Python 계약 시험·실제 loopback TLS HTTP/WS 시험을 실행했다. Pilot Android 설치·화면과 실제 로봇 연결·현장 트래픽 수용은 서로 다른 증거다.
+- gate 변화: 실제 장비의 제어·FIELD 관문은 이동하지 않는다.
+- 결정: D-432 2026-10-03 추가 결정.

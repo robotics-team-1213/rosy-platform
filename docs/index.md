@@ -272,8 +272,8 @@
 
 ## 최근 기록
 
+- 2026-10-03 · uncommitted · fix(link): 현재 접속과 후속 코드 규약 구별
+- 2026-10-03 · uncommitted · feat(link): D-432 주소 없는 장비 접속
 - 2026-10-03 · uncommitted · docs: D-432 common discovery and development link mode
 - 2026-10-03 · uncommitted · fix: retain the UDS owner after a caller disconnects
 - 2026-10-03 · uncommitted · feat: read live Fleet fence on the simulation Cell owner
-- 2026-10-03 · uncommitted · refactor: D-425 Task 3 lifetime acceptance
-- 2026-10-03 · uncommitted · fix: fence Cell owner progression and terminal completion

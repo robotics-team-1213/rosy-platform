@@ -56,6 +56,8 @@ class RosyCoreNode(Node):
     def __init__(self, config: dict[str, Any]) -> None:
         super().__init__("core")
         self._config = config
+        from core.api_tls import server_tls_options
+        self._tls_options = server_tls_options(config)
         self._api_thread: Optional[threading.Thread] = None
         self._api_server = None
 
@@ -174,7 +176,7 @@ class RosyCoreNode(Node):
         # or let X-Forwarded-For pick the pairing rate-limit key.
         server_config = uvicorn.Config(app, host=host, port=port, log_level="warning",
                                        timeout_graceful_shutdown=API_GRACEFUL_TIMEOUT_S,
-                                       proxy_headers=False)
+                                       proxy_headers=False, **self._tls_options)
         self._api_server = uvicorn.Server(server_config)
         self._api_thread = threading.Thread(target=self._api_server.run, daemon=True,
                                             name="rosy-api")
@@ -211,6 +213,8 @@ class RosyCoreNode(Node):
                 self.get_logger().warning(
                     f"api thread still alive after {API_JOIN_TIMEOUT_S:.1f}s; "
                     "the API port is still held")
+        from core_common.discover import close_shared_cache
+        close_shared_cache()
 
 
 def _stop_executor(executor: Any, timeout_s: float, logger: Any = None) -> bool:

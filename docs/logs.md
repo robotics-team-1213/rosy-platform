@@ -4737,3 +4737,19 @@
 - 변경: 모든 앱·장치의 발견/호환성/승인/세션/재연결 책임을 공통 계약으로 기록. 개발 모드 코드 생략, 운영 코드 승인 확장, Fleet→CORE 인증 전환과 현 pin 예외, 트래픽/자원 제한, 역할별 이행 순서·실 AP 수용 기준을 명시. D-431은 다른 브랜치의 미착지 ADR로 gap 등록.
 - 증거: 현재 mDNS/NSD·FleetAgent·주소 변경·개발 인증 소스 대조와 기존 ADR 교차 검토. 검증 명령: harness generate/lint, test_network_topology_contracts.py 및 test_harness_contracts.py. 최초 검색·DHCP 변경·실 AP 트래픽 수용은 후속 단계.
 - gate 변화: 구조 결정만 Accepted. 개발 모드·wire·runtime·credential 설치는 변경하지 않음. ARTIFACT/DEVICE/FIELD 수용 없음.
+
+
+## 2026-10-03 · uncommitted · feat(link): D-432 주소 없는 장비 접속
+
+- 변경: D-432 구현 부록과 API Ref v1.89에 게임 장비 목록 접속, 내부 bootstrap과 운영 흐름의 차이, 로컬 HTTP 개발 예외·코드4·SSH opt-in을 고정했다.
+- 증거: 관련 Python 계약 시험·실제 loopback TLS HTTP/WS 시험을 실행했다. Pilot Android 설치·화면과 실제 로봇 연결·현장 트래픽 수용은 서로 다른 증거다.
+- gate 변화: 실제 장비의 제어·FIELD 관문은 이동하지 않는다.
+- 결정: D-432 2026-10-03 추가 결정.
+
+
+## 2026-10-03 · uncommitted · fix(link): 현재 접속과 후속 코드 규약 구별
+
+- 변경: 사용자 보정으로 4자리 코드 발급·Cam 표시 별칭은 이번 적용에서 제외했다. 현재 로봇 8자·Cam 6자리 규약을 유지하며 D-432에 추후 통합을 기록했다. 실제 Pinky 접속 수정은 진행한다.
+- 증거: 영향받는 Python 2345 passed/84 skipped, quick tier 459 passed/2 skipped, Pilot PWA 87 passed/58 skipped. 코드 규약 보정 뒤 해당 인증·페어링 시험을 다시 실행한다. 공개 검증 기록은 docs/validation/discovery-link-2026-10-03/README.md.
+- gate 변화: Android 설치·실제 CORE 인증 확인은 실제 주행·Cam 화면 off 연속 송출·현장 트래픽 수용과 별개다. DEVICE/FIELD 이동 없음.
+- 결정: D-432 후속 결정: 접속은 지금, 짧은 코드 통합은 추후 적용.

@@ -21,6 +21,15 @@ def candidate(host='fleet-a.local', tls='required'):
                             (('product', 'rosy'), ('role', 'fleet'), ('proto', 'site-v1'), ('tls', tls)))
 
 
+def test_one_multinic_peer_retains_discovered_tcp_address(tmp_path):
+    from dataclasses import replace
+    ca = tmp_path / 'ca.pem'
+    ca.write_text('fixture')
+    record = replace(candidate(), addresses=('192.168.1.20', '192.168.2.20'))
+    url = locate_fleet('fleet-a.local', ca, cache=Cache([record]), probe=lambda *args: None)
+    assert url.address == '192.168.1.20' and url.port == 9443
+
+
 def test_live_cache_never_returns_url_before_pinned_probe(tmp_path):
     ca = tmp_path / 'ca.crt'
     ca.write_text('fixture')

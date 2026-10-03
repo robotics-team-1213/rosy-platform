@@ -2045,3 +2045,19 @@
 - 변경: `native/learned-perception.env.example` 에 `ROSY_OBJECT_DET=false`(+ `ROSY_OBJECT_DET_MAX_HZ` 설명). 서비스·권한 변화 없음. 모델은 `/var/lib/rosy/models/object_det/` 아래이고 deliver 가 root:rosy-camera 0750 으로 만든다.
 - 증거: `test_native_systemd_contract.py` env 예시 시험.
 - gate 변화: 없음. 켜는 것은 사용자 승인 뒤.
+
+
+## 2026-10-03 · uncommitted · feat(link): D-432 주소 없는 장비 접속
+
+- 변경: CORE TLS readiness/Avahi 표기, 4자리 root 로그인 코드, opt-in SSH-only Host Agent unit·native helper·image/sync closure를 추가했다.
+- 증거: 관련 Python 계약 시험·실제 loopback TLS HTTP/WS 시험을 실행했다. Pilot Android 설치·화면과 실제 로봇 연결·현장 트래픽 수용은 서로 다른 증거다.
+- gate 변화: 실제 장비의 제어·FIELD 관문은 이동하지 않는다.
+- 결정: D-432 2026-10-03 추가 결정.
+
+
+## 2026-10-03 · uncommitted · fix(link): 현재 접속과 후속 코드 규약 구별
+
+- 변경: 사용자 보정으로 4자리 코드 발급·Cam 표시 별칭은 이번 적용에서 제외했다. 현재 로봇 8자·Cam 6자리 규약을 유지하며 D-432에 추후 통합을 기록했다. 실제 Pinky 접속 수정은 진행한다.
+- 증거: 영향받는 Python 2345 passed/84 skipped, quick tier 459 passed/2 skipped, Pilot PWA 87 passed/58 skipped. 코드 규약 보정 뒤 해당 인증·페어링 시험을 다시 실행한다. 공개 검증 기록은 docs/validation/discovery-link-2026-10-03/README.md.
+- gate 변화: Android 설치·실제 CORE 인증 확인은 실제 주행·Cam 화면 off 연속 송출·현장 트래픽 수용과 별개다. DEVICE/FIELD 이동 없음.
+- 결정: D-432 후속 결정: 접속은 지금, 짧은 코드 통합은 추후 적용.

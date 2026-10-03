@@ -440,3 +440,11 @@
 - 변경: `core_features/vision/models.py` `ModelStatusStore` — `perception/learned/status`(lane_seg shadow)·`perception/learned/object_det/status`(object_det active) 상태를 작업별로 보관, 나이·stale. `VisionFrameStore.models` 로 붙인다. 교체·선택 기능 없음.
 - 증거: `test_vision_models.py` 8 passed; `src/runtime/services/test` 포함 묶음 739 passed, 37 skipped.
 - gate 변화: 없음.
+
+
+## 2026-10-03 · uncommitted · feat(link): D-432 주소 없는 장비 접속
+
+- 변경: FleetAgent가 실제 SRV 주소·port·TLS DNS 이름을 보존한다. 인증/신원 충돌은 종료하고 일시 발견 실패는 jitter로 재시도한다.
+- 증거: 관련 Python 계약 시험·실제 loopback TLS HTTP/WS 시험을 실행했다. Pilot Android 설치·화면과 실제 로봇 연결·현장 트래픽 수용은 서로 다른 증거다.
+- gate 변화: 실제 장비의 제어·FIELD 관문은 이동하지 않는다.
+- 결정: D-432 2026-10-03 추가 결정.

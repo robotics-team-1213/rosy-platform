@@ -72,8 +72,8 @@
 
 ## 최근 기록
 
+- 2026-10-03 · uncommitted · fix(link): 현재 접속과 후속 코드 규약 구별
+- 2026-10-03 · uncommitted · feat(link): D-432 주소 없는 장비 접속
 - 2026-10-03 · f4c311569 · feat(bridge): D-423 모델 상태 두 토픽 latched 구독
 - 2026-10-03 · uncommitted · test(console): 지도 도구는 격자 밖에 둔다
 - 2026-10-02 · uncommitted · fix(core): D-419 착지 — console_linked 를 D-407 유예와 합침
-- 2026-10-02 · uncommitted · fix(core): D-419 라운드 4 — Fleet 링크 판정 함수 하나
-- 2026-10-02 · uncommitted · fix(core): D-419 라운드 3 — Fleet 없는 로봇의 SAF-003 검증

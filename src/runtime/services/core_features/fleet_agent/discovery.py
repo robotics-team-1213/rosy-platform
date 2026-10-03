@@ -17,6 +17,22 @@ from core_common.protocol.discovery_txt import (
 HEALTH_MAX_BYTES = 1024
 
 
+class DiscoveryConflict(ValueError):
+    """A competing identity requires an operator, rather than automatic retries."""
+
+
+class DiscoveryUnavailable(ValueError):
+    """The approved peer is temporarily absent."""
+
+
+class FleetLocation(str):
+    def __new__(cls, hostname, address, port):
+        value = str.__new__(cls, f'https://{hostname}:{port}')
+        value.address = address
+        value.port = port
+        return value
+
+
 def check_health_body(body: bytes) -> None:
     """Accept {"status":"ok"} and the D-370 extended shape; ignore unknown keys.
 
@@ -80,7 +96,11 @@ def locate_fleet(expected_hostname: str, ca_file: Path, *,
         candidates = parse_avahi(result.stdout)
     else:
         candidates = []
-        for item in (cache or get_shared_cache()).wait(SERVICE_TYPE, timeout_s=3):
+        records = (cache or get_shared_cache()).wait(SERVICE_TYPE, timeout_s=3)
+        same_host = [r for r in records if r.host.lower().rstrip('.') == hostname and r.addresses]
+        if any(set(a.addresses).isdisjoint(b.addresses) for a in same_host for b in same_host):
+            raise DiscoveryConflict('ambiguous Fleet host advertisement')
+        for item in records:
             for address in item.addresses:
                 result = classify(SERVICE_TYPE, item.host, address, item.port, list(item.txt))
                 if isinstance(result, Accepted):
@@ -89,9 +109,9 @@ def locate_fleet(expected_hostname: str, ca_file: Path, *,
                         candidates.append(row)
     matches = [item for item in candidates if item["hostname"] == hostname]
     if not matches:
-        raise ValueError("expected Fleet host not found")
-    if len(matches) != 1:
-        raise ValueError("ambiguous Fleet host advertisement")
-    candidate = matches[0]
+        raise DiscoveryUnavailable("expected Fleet host not found")
+    if (runner is not None and len(matches) != 1) or len({row['port'] for row in matches}) != 1:
+        raise DiscoveryConflict("ambiguous Fleet host advertisement")
+    candidate = min(matches, key=lambda row: row['address'])
     probe(candidate, hostname, ca_file)
-    return f"https://{hostname}:{candidate['port']}"
+    return FleetLocation(hostname, candidate['address'], candidate['port'])

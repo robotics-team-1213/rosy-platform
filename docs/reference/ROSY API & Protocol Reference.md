@@ -2,7 +2,7 @@
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.88
+**Version:** v1.89
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -1987,6 +1987,7 @@ and field acceptance require their own evidence.
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.89 | 2026-10-03 | Additive (D-432): LAN 장비 목록 접속, auth/connection·auth/development-session, 선택적 CORE TLS·발견 전송과 SSH 공개 키 등록. 기존 코드 규약·envelope 1.0 유지. |
 | v1.88 | 2026-10-03 | Additive (D-423, feat/d423-object-range-detection): `GET /api/v1/vision/models`(viewer, 읽기 전용) — 로봇 학습 모델 상태를 작업별로(`lane_seg` shadow, `object_det` active). §6.1.1 에 ROS `vision/detections`(DetectionEvidence 필드 + 추가 `ranges`)를 적음 — CORE 는 구독하지 않음. 카메라 관측 영역의 `s`(`L`/`G`)·`ground_source` 는 control 내부 증거(`camera/observation`)라 이 계약 밖. 쓰기 API·이벤트·FleetAgent 변경 없음. v1.82 는 main 의 D-403/D-413 행 |
 | v1.87 | 2026-10-03 | Additive (D-411 B+C, feat/d411bc-pilot-controls-gripper; A 는 v1.83 에서 먼저 들어감): B: capabilities `controls`(`rosy.controls/1`, §9.1), OMX SIM `GET /sim/omx/target` `controls`; Pilot 이 `controls` 로 주행·팔 조작부를 조립(필드 없음 = 구 서버 대체, 빈 `items` = 조작부 없음, 팔 조이스틱은 순차 제한 목표·떼면 새 목표만 멈춤). C: OMX SIM `POST /sim/omx/gripper`(`OmxSimGripperGoal`, 절대 위치·0.2–2.0 s), `/state` `gripper` readback(`open`·`closed`·`holding`·`moving`·`unknown`), `/target` `controls` 의 `gripper` 항목(그리퍼는 `joint_jog` 에서 빠짐, 선택 `max_velocity`(`GripperControl.max_velocity`), 409 `gripper_velocity_limit`), SIM 허용 범위 = 셀 프로필 ∩ URDF·알리는 범위는 0.02 rad 안쪽·목표 길이 상한 2.0 s, 쥔 채 팔 조그는 멈춘 위치 + preload, 시연 기록 `action.gripper` 열과 LeRobot 특성(선택, 이전 에피소드 유효). 기존 필드 변화 없음 |
 | v1.86 | 2026-10-03 | Additive (D-419, feat/d419-saf003-fleet-loss): SAF-003 이 처음으로 동작한다. 이벤트 `safety.fleet_lost`(warning)·`safety.fleet_restored`(info), `GET /safety/state` 선택 필드 `fleet_link`, 설정 `safety.fleet_loss_timeout_s`(기본 5.0, 4–60 s)·`fleet.heartbeat_reply_timeout_s`(기본 2.0, 0.5–10 s), 판정 시간 ≥ 1 + 답 시한 + 1 (어기면 기동 실패). §7.6 판정 규칙. `PUT /safety/limits` 의 받는 값은 그대로(`RETURN_HOME` 포함), `RETURN_HOME` 이면 응답 선택 필드 `warning`. 기동 때 저장된 모르는 정책은 `STOP` 으로 읽는다. envelope `protocol_version` 1.0 유지 |
@@ -2077,3 +2078,33 @@ and field acceptance require their own evidence.
 | v1.2 | 2026-08-29 | Additive: `swarm/follow`에 `source` 필드(fleet 기본, peer 예약 — D-21 분산 진화 훅), SWM-007 |
 | v1.1 | 2026-08-29 | Additive: swarm 인터페이스 — `swarm/follow·cancel·state` REST, envelope `pose` 스트림(§7.8), 이벤트 `swarm.*`, capability `swarm` 필드 (D-20) |
 | v1.0 | 2026-08-29 | 최초 작성. PKY-CORE-SRS-001 v0.1의 API 산재 정의를 통합·확장 (버전·폐기 정책, 에러코드, 이벤트 카탈로그, Fleet↔Robot 프로토콜, 데이터 스키마, Fleet API 신설) |
+
+
+### D-432 구현 보충 — 발견과 승인 (2026-10-03)
+
+CORE `network.tls = {cert_file, key_file}`는 읽을 수 있는 절대 경로의 인증서·키를 시작 전에 검증하며 실패하면 HTTP로 대체하지 않는다. `network.connection_mode` 기본값은 `paired`; `development`는 `link_policy_file`의 사이트·장치·예상 `.local` 호스트·UTC 만료와 TLS를 모두 요구한다. Fleet 로스터의 `tls_ca_file`, `discovery: true`, `link_policy_file`은 인증된 HTTPS/WSS에서만 주소 갱신을 허용한다. 공개 HTTP 로스터는 기존 등록 주소를 유지한다. 개발 모드는 운전 모드가 아니다.
+
+현재 로봇 로그인·등록은 기존 8자 코드, Cam 승인은 기존 6자리 숫자 코드다. 4자 숫자·영문 통합은 D-432의 추후 적용 사항이며 이번 API 계약에 활성화하지 않는다. 기존 TLS leaf·양쪽 nonce 결합, 지문 확인, 권한별 자격 및 감사 규칙을 유지한다.
+
+`POST /api/v1/host/ssh/pair` (administrator, HTTPS 전용): `SshPairRequest {public_key, confirmed:false}`. `public_key`는 옵션 없는 Ed25519 공개키이며 최대 512자다. `confirmed:true`에서만 Host Agent `ssh.register_key`로 릴레이한다. 기존 host 릴레이 응답 `{available, ok, code, detail, recovery, data}`를 사용한다. 성공 data는 `{account:"rosy", port:22, public_key_fingerprint, host_public_key, host_key_fingerprint, already_registered}`이며 개인키·암호는 반환하지 않는다. TLS 없는 요청은 403, 권한 부족은 기존 admin 검사, Host Agent 부재·거부는 `available/ok`로 구분한다. 원시 화면 코드·API 토큰은 응답 로그에 남기지 않는다.
+
+
+### v1.89 — D-432 장비 목록 자동 접속 추가 결정 (2026-10-03)
+
+Pilot은 같은 LAN에서 발견한 장비 목록으로 시작한다. 설정 파일 가져오기·주소 입력은 필수 단계가 아니다.
+앞 D-432 절의 개발 연결 정책 파일·TLS 필수 조건은 다음 명시적 로컬 개발 경로에 한해 개정한다.
+
+| Method/path | Admission | Response |
+|---|---|---|
+| `GET /api/v1/auth/connection` | LAN peer, 인증 불필요, `no-store` | 200 `{mode: paired|development, robot_id: string, transport: http|https}` (`ConnectionInfo`) |
+| `POST /api/v1/auth/development-session` | 아래 개발 조건, LAN peer, 허용 Host와 같은 Origin 또는 Origin 없음 | 201 `{id, token, role: operator, label, source: pair-development, expires_at}` |
+
+개발 자동 접속은 장비의 `network.connection_mode=development`와 `ROSY_DEPLOYMENT=development`가
+동시에 지정된 경우만 허용한다. 기본 `paired`, `device`·생산·미지정 배포는 403이다. 기존 LAN HTTP API는
+개발 예외로 사용할 수 있다. TLS 광고는 HTTPS 필수이며 인증서 오류 시 HTTP로 재시도하지 않는다.
+개발 세션은 1시간, 살아 있는 세션 최대 8개, IP별 분당 5회·전체 분당 30회 제한이다. 만료 세션은 다음 발급 시
+정리하고 모드·배포가 바뀌면 기존 개발 자격도 즉시 거부한다. token 원문은 응답에서만 전달하며 저장은 digest다.
+`POST /api/v1/auth/logout`으로 자기 개발 세션을 회수할 수 있다. 관리자 코드 발급·SSH 등록 권한은 주지 않는다.
+외부 Host·Origin은 거부한다. HTTP 자격을 DHCP의 새 주소로 자동 전달하지 않고 연결을 닫아 다시 입장한다.
+기존 `POST /api/v1/auth/pair`는 8자리 코드로 일반 모드에 연결한다. 새 접속 API가 없는 기존 로봇도 이 경로로 연결한다.
+envelope `protocol_version`은 1.0이다. 발견은 신뢰·안전 승인·액추에이터 허용의 증거가 아니다.

@@ -69,8 +69,8 @@
 
 ## 최근 기록
 
+- 2026-10-03 · uncommitted · fix(link): 현재 접속과 후속 코드 규약 구별
+- 2026-10-03 · uncommitted · feat(link): D-432 주소 없는 장비 접속
 - 2026-10-03 · 119382fe6 · docs(native): D-423 `ROSY_OBJECT_DET=false` 를 learned-perception.env 예시에
 - 2026-10-03 · uncommitted · feat: read live Fleet fence on the simulation Cell owner
 - 2026-10-03 · uncommitted · feat: tick local Cell workflow on the existing simulation owner node
-- 2026-10-03 · uncommitted · fix(omx-sim): C4b 1b — 그리퍼 폭은 grant의 레시피, HTTP는 루프백 (C2, C4)
-- 2026-10-03 · uncommitted · fleet 빌드 맥락에 apps/gateway/src 재허용

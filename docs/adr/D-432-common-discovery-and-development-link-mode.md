@@ -145,3 +145,66 @@ Pilot·대시보드는 same-origin을 유지한다. 자동 발견 디렉터리�
 - [Apple Bonjour Concepts](https://developer.apple.com/library/archive/documentation/Cocoa/Conceptual/NetServices/Articles/about.html).
 - [Android NSD](https://developer.android.com/develop/connectivity/wifi/use-nsd) — OS 기반 서비스 광고·발견.
 - D-18, D-33, D-193, D-341, D-352, D-354, D-361, D-370, D-382, D-391, D-427, D-429, D-430.
+
+### 2026-10-03 추가 결정: 장비 목록에서 바로 접속
+
+사용자 확인으로 앱의 필수 설정 파일 가져오기 흐름을 폐기한다. Pilot은 실행 즉시 같은 LAN의
+켜진 장비를 DNS-SD로 발견하고 목록에 표시한다. 사용자는 장비를 선택한다. 주소·고정 IP·CA 파일·
+JSON을 입력하지 않는다. 연결 설정 생성 도구는 설치 담당자의 내부 도구이며 앱의 선행 조건이 아니다.
+
+Pilot은 독립 실행 Android APK다. 화면·JS·스타일·아이콘은 APK에 포함하고 로봇에서 화면을 내려받지 않는다.
+기존 Pilot JS 소스를 build 시 패키징하여 UI 원본을 하나로 유지한다. Android shell은 발견·자격 보관·
+로컬 화면 실행을 맡고, 선택한 CORE에는 API와 WebSocket만 전송한다. 앱의 로비는 로봇 없이도 실행된다.
+
+장비의 기본 연결 모드는 `paired`다. `/api/v1/auth/connection`으로 모드와 로봇 ID·전송을 확인한 뒤,
+필요할 때만 장비 화면의 기존 8자리 로그인 코드를 `/api/v1/auth/pair`로 교환한다.
+4자리 숫자·영문 통합과 Cam의 짧은 표시는 아래 후속 결정에 따라 추후 적용한다.
+
+개발 장비는 `network.connection_mode: development`와 `ROSY_DEPLOYMENT=development`를 함께
+지정한 경우에만 `/api/v1/auth/development-session`으로 코드 없는 1시간 operator 세션을 발급한다.
+이 경로는 기존 로컬 HTTP CORE도 지원하는 명시적 개발 예외이며, 앞 본문의 개발 연결 TLS·정책 파일
+필수 조건을 이 범위에서 개정한다. 생산·기본·device 배포에서는 자동 발급을 허용하지 않는다.
+LAN peer·Host·Origin 제한, IP별 시도 제한, 최대 8개의 살아 있는 세션, 모드 종료 즉시 자격 거부를 적용한다.
+자동 접속이 administrator 권한이나 액추에이터 허용·안전 승인 조건을 변경하지 않는다.
+
+TLS로 광고한 장비는 HTTPS로만 접속한다. 신뢰되지 않은 인증서는 연결 오류이며 HTTP로 내려가지 않는다.
+HTTP 세션은 선택한 발견 주소에 묶고 주소 변경·서비스 소실 시 제어 연결을 닫는다. 이전 자격을 새 주소로
+자동 전달하지 않는다. 설치·인증서 배포 자동화와 운영 TLS 최초 신뢰 수립은 별도 장치 검증이 필요하다.
+
+SSH는 로봇의 관리자 코드를 기존 페어링 경로로 교환하고, HTTPS 관리자 승인으로 Ed25519 공개 키를
+고정 운영 계정에 등록한다. 전용 opt-in 서비스는 SSH 등록 명령만 실행하며 CORE는 root 권한을 갖지 않는다.
+ADB의 무선 디버깅 페어링은 Android 시스템의 규약을 따른다. 앱의 후속 4자리 규칙으로 시스템 ADB 코드를 바꾸지 않는다.
+
+### 2026-10-03 추가 결정: 앱 실행 기기의 발열과 화면 끄기
+
+앱이 실행되는 Android 기기의 열 상태와 배터리 온도를 로봇 온도와 구별한다. Cam은 촬영 시작 후
+화면 끄기를 제공하고 OS thermal severe 이상에서 화면 보호를 자동 요청한다. thermal API가 없는
+구형 기기는 배터리 45°C를 화면 보호의 보조 기준으로 쓰며 41°C 이하에서 재무장한다. OS 열 상태는
+severe 이상에서 보호, light 이하에서 재무장한다. 알 수 없는 값은 온도 0이나 정상으로 표시하지 않는다.
+이 기준은 화면 전력 절감을 위한 앱 정책이고 제조사의 안전 온도나 로봇 안전 임계값이 아니다.
+
+Cam의 카메라·전송은 기존 foreground camera service가 계속 소유한다. 화면 보호에서는 미리보기를
+제거하고 display keep-awake를 해제한다. 화면을 꺼도 전송 세션을 종료하거나 카메라를 activity로 재바인딩하지 않는다.
+Pilot은 화면 끄기 전에 조작을 해제하고 bounded zero와 연결 종료를 수행한다. 숨겨진 화면에서 제어를 계속하지 않는다.
+
+즉시 실제 화면 잠금은 Android의 force-lock 권한을 사용하며 수동 버튼에서만 시스템 승인을 요청한다.
+receiver에는 force-lock 하나만 선언한다. 자동 발열 보호는 승인 화면을 띄우지 않는다. 승인이 없으면
+최소 밝기·미리보기 제거·keep-awake 해제로 OS 자동 꺼짐을 허용하며 이 상태를 실제 패널 off로 주장하지 않는다.
+사용자는 화면을 다시 볼 수 있고, 충분히 식기 전 반복 자동 잠금을 막는 latch를 적용한다.
+
+근거: [Android Thermal API](https://developer.android.com/games/optimize/adpf/thermal),
+[foreground camera service](https://developer.android.com/develop/background-work/services/fgs/service-types),
+[DevicePolicyManager.lockNow](https://developer.android.com/reference/android/app/admin/DevicePolicyManager#lockNow()).
+host/JVM 시험은 실제 기기의 화면 off 중 프레임 수신·온도 하강 증거를 대체하지 않는다.
+
+### 2026-10-03 후속 결정: 접속은 지금, 4자리 통합은 추후 적용
+
+사용자 보정에 따라 실제 Rosy Pinky의 앱 접속 수정·검증은 지금 진행한다. 4자리 숫자·영문 코드로
+로봇·Cam·SSH 승인을 통일하는 규약 변경은 이 ADR에 기록하고 추후 적용한다. 기존 로봇 로그인
+8자와 Cam 승인 6자리의 발급·검증·표시를 이번 구현에서 유지한다. 구형 로봇에 새 서버 API나
+짧은 코드 발급자를 덮어쓰지 않는다. 새 접속 API의 404는 기존 코드 페어링으로 처리하고,
+인증된 `/system/info`의 실제 로봇 ID를 확인한 다음 화면을 연다.
+
+4자리 적용 시에는 제한된 수명·한 번 사용·장비와 역할 결합·시도 한도·감사 기록을 같이 검증하고,
+로봇 화면·앱·Fleet·Cam·SSH 도구의 표시와 입력을 같은 릴리스에서 변경한다. ADB 시스템 페어링
+코드와 SSH 호스트 키 확인 규칙은 그대로 유지한다. 미래 규약 기록은 현재 장치 적용의 증거가 아니다.

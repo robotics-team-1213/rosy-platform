@@ -76,6 +76,7 @@ DEFAULT_PUBLIC_KEY = "etc/rosy/trusted-release-keys/rosy-release-2026-01.pem"
 # into the image's /etc/systemd/system. The first-boot units come from
 # image/first-boot, which no release carries, so they stay image-only.
 UNITS = (
+    "rosy-ssh-pairing.service",
     "rosy-release-recover.service",
     "rosy-sd-provision.service",
     "rosy-core.service",

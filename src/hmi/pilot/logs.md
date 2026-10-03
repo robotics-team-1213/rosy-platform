@@ -304,3 +304,19 @@
 - 변경: `models.js`(5 s 폴링 `GET /api/v1/vision/models`, 작업·슬롯·판·마지막 오류), 주행 화면 HUD 에 접는 패널, 셸 캐시 키 `2026-10-03-1`, 설치 목록. promote/rollback 은 `rosy_ml` 에만.
 - 증거: `src/hmi/pilot/test` 53 passed, 24 skipped(브라우저 시험은 이 PC 에서 건너뜀).
 - gate 변화: 없음.
+
+
+## 2026-10-03 · uncommitted · feat(link): D-432 주소 없는 장비 접속
+
+- 변경: 태블릿 native shell은 같은 LAN 장비 목록→선택→개발 즉시 접속 또는 4자리 페어링 흐름이다. 설정 파일 UI는 사용자 보정으로 제거했다. 기존 Pilot PWA와 제어 owner를 재사용한다.
+- 증거: 관련 Python 계약 시험·실제 loopback TLS HTTP/WS 시험을 실행했다. Pilot Android 설치·화면과 실제 로봇 연결·현장 트래픽 수용은 서로 다른 증거다.
+- gate 변화: 실제 장비의 제어·FIELD 관문은 이동하지 않는다.
+- 결정: D-432 2026-10-03 추가 결정.
+
+
+## 2026-10-03 · uncommitted · fix(link): 현재 접속과 후속 코드 규약 구별
+
+- 변경: 사용자 보정으로 4자리 코드 발급·Cam 표시 별칭은 이번 적용에서 제외했다. 현재 로봇 8자·Cam 6자리 규약을 유지하며 D-432에 추후 통합을 기록했다. 실제 Pinky 접속 수정은 진행한다.
+- 증거: 영향받는 Python 2345 passed/84 skipped, quick tier 459 passed/2 skipped, Pilot PWA 87 passed/58 skipped. 코드 규약 보정 뒤 해당 인증·페어링 시험을 다시 실행한다. 공개 검증 기록은 docs/validation/discovery-link-2026-10-03/README.md.
+- gate 변화: Android 설치·실제 CORE 인증 확인은 실제 주행·Cam 화면 off 연속 송출·현장 트래픽 수용과 별개다. DEVICE/FIELD 이동 없음.
+- 결정: D-432 후속 결정: 접속은 지금, 짧은 코드 통합은 추후 적용.
