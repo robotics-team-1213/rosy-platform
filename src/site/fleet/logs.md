@@ -1519,3 +1519,10 @@
 - Gate: none. SOURCE/LOCAL only; Gazebo two-robot validation and real-robot tokens still open.
 - Decision: D-438
 - Lesson: a shared cached snapshot must be enriched per response on copies, never mutated in place.
+
+## 2026-10-04 · uncommitted · feat(server): D-447 (a) gather reads fresh hub snapshots first
+- Change: `hub/registry.py` `RobotRecord.last_heartbeat_monotonic` + read-only `find()` (gather must not create records); `hub/hub.py` `_heartbeat` stamps arrival (`time.monotonic()`); `server/console.py` `snapshot()` gathers per-robot via `_gather_state()` — a hub record that is online, has a snapshot, and whose heartbeat arrived within `hub_state_max_age_s` (new ctor param, default 3.0 s) answers from the registry `StateSnapshot` and skips the REST GET; stale/offline/unknown robots fall back to REST as before. Rows gain additive `gather_source: "hub"|"rest"|null`. No schema, endpoint, or wire change; `SharedGather` 1 s reuse untouched.
+- Evidence: new `test/test_server_gather_source.py` 6 passed (fresh-skips-REST, stale falls back, offline falls back, REST-failure row shape unchanged, no record creation, heartbeat stamp); `python -m pytest src/site/fleet/test -q` 1683 passed, 7 skipped (2026-10-04 Windows, run.txt compared via `test/known_failures.py`: 0 new); flake8 findings on touched files are pre-existing on main (noqa line offset, hub.py W293) and CI flake8 is non-gating.
+- Gate: none. SOURCE/LOCAL only; no robot, no hub socket in this run.
+- Decision: D-447 (a). (b) robot shell `store.js` `/ws/state` subscription is the next pass under the same ADR.
+- Lesson: none
