@@ -4976,3 +4976,9 @@
 - 변경: 사용자 지시에 따라 Gazebo 호스트를 모델 PC로 정했다. 같은 호스트 UDS·loopback fence를 유지하기 위해 모델 PC에 검증용 Fleet·Cell·OMX·Gazebo를 격리 배치하고, 운영 관제 PC의 원장·등록 로봇과 분리하는 계획을 D-446과 보고서에 반영했다.
 - 증거: D-434/D-336과 실제 apps/agent의 literal-loopback fence를 대조했다. 문서 검사 127 passed/1 skipped, D-438 예약 보완 뒤 실패했던 ADR 검사 2 passed, 최종 lint 0 errors/26 기존 warnings, 상대 링크·diff 검사 통과. 모델 PC 접근과 Gazebo 준비·실행은 아직 검증하지 않았다.
 - gate 변화: 없음. 원격 실행 목표·토폴로지 문서만 갱신했다.
+
+## 2026-10-04 · uncommitted · docs(cell): Isaac 주행 연계와 전체 완료 경계
+
+- 변경: D-446과 현황 보고서에 Isaac 추가 검토를 연결했다. 모델 PC 한 대 주행→Nav2→두 대 Fleet→이동 후 적재를 분리하고, 고정 Cell 좌표를 이동 작업에 그대로 쓰지 않도록 검증 항목을 기록했다. 전체 앱·Gazebo·Isaac 개발은 아직 미완료임을 명시했다.
+- 증거: Isaac helper 10 passed/1 skipped, 소스의 6.1 importer·단일 로봇 그래프와 D-434의 5.1 기록, 기존 CORE/Nav2 명령 경계 및 NVIDIA 5.1 Navigation/Clock 공식 문서를 대조했다. 실제 모델 PC 접속·주행 결과는 없다.
+- gate 변화: 없음. 추가 검토·목표 문서이며 구현·runtime 승격·실물 구동은 진행하지 않았다.

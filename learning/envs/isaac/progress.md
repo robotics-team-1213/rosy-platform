@@ -9,15 +9,16 @@ gates:
     evidence: "structure scan sees the package; D-73 functional surface declared (3 host tests)"
   LOCAL:
     state: GO
-    cmd: "python -m pytest src/sim/isaac_sim/test -q"
+    cmd: "python -m pytest learning/envs/isaac/test -q"
     evidence: "test_graph_contract·test_model_checks·test_prepare_urdf 통과 (2026-09-30 Windows)"
   ROS-SIM:
     state: HOLD
-    blocker: "Isaac Sim 6.1 실행·USD import·ROS graph는 GPU 호스트에서 미실행. 명령 신선도 watchdog 부재로 장시간 주행·Nav2 수용 전 (D-322)"
+    blocker: "Model-PC Isaac 5.1 installation is historical D-434 evidence; current runner uses 6.1 import APIs. Actual remote import/ROS graph, command freshness stop, sensors/Nav2 and two-robot Fleet acceptance remain unverified. Host 10 passed/1 skipped on 2026-10-04 does not promote runtime (D-322/D-434)."
   ARTIFACT: { state: N/A }
   DEVICE: { state: N/A }
   FIELD: { state: N/A }
-plans: []
+plans:
+  - docs/plans/2026-10-04-isaac-navigation-integration-review.md
 ---
 ## 2026-09-30 initial marker
 

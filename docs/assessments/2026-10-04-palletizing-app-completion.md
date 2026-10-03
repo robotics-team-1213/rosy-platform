@@ -86,3 +86,7 @@ X:의 별도 venv에 기준 SHA로 빌드한 skill/execution/palletizing wheel �
 3. 기존 Cell 앱 이름·계약을 유지하면서 D-427 목표 경로에 앱을 둘 구체적인 설치 조합. 조사에서는 새 포트·프로토콜 필드를 정하지 않는다.
 
 위 항목은 ADR 초안의 제안이다. 이 보고서는 개발 우선순위를 검토하는 문서이며, 구현·운영 배포·실물 구동을 진행한 결과가 아니다.
+
+## Isaac 주행 추가 검토
+
+모델 PC에서 Isaac 주행을 더하는 목표는 [추가 검토 문서](../plans/2026-10-04-isaac-navigation-integration-review.md)에 분리했다. 먼저 단일 로봇의 CORE 주행·정지를 검증하고 Nav2·두 로봇 Fleet·이동 후 적재 순으로 확대한다. 현재는 검토 문서와 host helper 시험만 완료됐으며 앱·Gazebo·Isaac 전체 개발을 완료한 상태가 아니다.

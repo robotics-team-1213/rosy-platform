@@ -278,8 +278,8 @@
 
 ## 최근 기록
 
+- 2026-10-04 · uncommitted · docs(cell): Isaac 주행 연계와 전체 완료 경계
 - 2026-10-04 · uncommitted · docs(cell): 모델 PC에서 Gazebo 수용
 - 2026-10-04 · uncommitted · docs(cell): 팔레타이징 앱 현황과 완료 목표
 - 2026-10-04 · uncommitted · fix: Windows SSH timeout 종료 경합
 - 2026-10-04 · uncommitted · fix: D-427 push5 통합 게이트 정합성
-- 2026-10-04 · uncommitted · D-427 push4 fast gate follow-up
