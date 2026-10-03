@@ -50,7 +50,7 @@ def test_unknown_model_warns_once_naming_model_and_path(monkeypatch, robot_share
     warnings = [r for r in caplog.records if r.name == "core_common.config"]
     assert len(warnings) == 1
     message = warnings[0].getMessage()
-    assert "no_such_robot" in message and "products" in message
+    assert "no_such_robot" in message and "device" in message
 
 
 @pytest.mark.parametrize("text, words", [

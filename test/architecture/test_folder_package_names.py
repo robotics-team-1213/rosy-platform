@@ -38,6 +38,7 @@ FOLDER_TO_PACKAGE = {
     "learning/envs/isaac": "isaac_sim",
     "middleware/drivers/pinky_led": "led",
     "integrations/simulation/gazebo": "gz_sim",
+    "contracts/ros_idl": "interfaces",
 }
 
 

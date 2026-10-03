@@ -21,10 +21,11 @@ import yaml
 # 그 파일들의 ImportError 가 collection 을 중단시켜 core 스위트 전체가 실행되지 않는다.
 # 이 경로는 테스트 전용이다. 생산 코드 경계(core 는 control 을 import 하지 않는다)는
 # `test/test_module_separation.py` 가 따로 고정한다.
-SRC = (Path(__file__).resolve().parents[4] / "src" / "runtime")
+REPO = Path(__file__).resolve().parents[4]
+CORE = REPO / "middleware" / "core"
 
-for _path in (SRC / "gateway", SRC.parent / "contracts" / "foundation", SRC / "events",
-              SRC / "services", SRC / "api_web", SRC / "sensing"):
+for _path in (CORE / "gateway", REPO / "contracts" / "foundation", CORE / "events",
+              CORE / "services", CORE / "api_web", REPO / "src" / "runtime" / "sensing"):
     _entry = str(_path)
     if _entry not in sys.path:
         sys.path.insert(0, _entry)

@@ -329,12 +329,17 @@ def test_only_main_shuts_rclpy_down_in_core_production_code():
     """
     import re
     from pathlib import Path
-    src_core = (Path(__file__).resolve().parents[4] / "src" / "runtime")
+    repo = Path(__file__).resolve().parents[4]
+    # D-427: CORE packages left src/runtime; keys stay "<role>/..." as before.
+    roles = {role: repo / "middleware" / "core" / role for role in ("gateway", "services", "events", "api_web", "navigation")}
+    roles["sensing"] = repo / "src" / "runtime" / "sensing"
     pattern = re.compile(
         r"rclpy\.(try_)?shutdown\b|\btry_shutdown\(|from rclpy(\.utilities)? import[^\n]*\bshutdown\b")
     offenders = []
-    for path in src_core.rglob("*.py"):
-        rel = path.relative_to(src_core).as_posix()
+    for role, base in roles.items():
+        assert base.is_dir(), base
+    for role, path in ((role, path) for role, base in roles.items() for path in base.rglob("*.py")):
+        rel = f"{role}/{path.relative_to(roles[role]).as_posix()}"
         if "/test/" in f"/{rel}" or rel == "gateway/core/main.py" or rel.startswith("sensing/tools/"):
             continue
         source = path.read_text(encoding="utf-8-sig")

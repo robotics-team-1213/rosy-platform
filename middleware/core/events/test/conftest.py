@@ -7,8 +7,8 @@ Same pattern as core/test/conftest.py: the source dirs go on sys.path so
 from pathlib import Path
 import sys
 
-SRC = (Path(__file__).resolve().parents[4] / "src" / "runtime")
-for _name in ("core_events", "core_common"):
-    _path = str(SRC / _name)
+REPO = Path(__file__).resolve().parents[4]
+for _dir in (REPO / "middleware" / "core" / "events", REPO / "contracts" / "foundation"):
+    _path = str(_dir)
     if _path not in sys.path:
         sys.path.insert(0, _path)

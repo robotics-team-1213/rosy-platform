@@ -8,11 +8,11 @@ core_features code never imports control — tests are not coupling, D-168 P3).
 from pathlib import Path
 import sys
 
-SRC = (Path(__file__).resolve().parents[4] / "src" / "runtime")
+REPO = Path(__file__).resolve().parents[4]
 for _path in (
-    SRC / "services",
-    SRC.parent / "contracts" / "foundation",
-    SRC / "sensing",
+    REPO / "middleware" / "core" / "services",
+    REPO / "contracts" / "foundation",
+    REPO / "src" / "runtime" / "sensing",
 ):
     _entry = str(_path)
     if _entry not in sys.path:

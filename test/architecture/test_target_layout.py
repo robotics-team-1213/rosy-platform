@@ -17,15 +17,9 @@ SRC = ROOT / "src"
 COLCON_ROOTS = yaml.safe_load(
     (ROOT / "tools" / "harness" / "platform_parts.yaml").read_text(encoding="utf-8"))["colcon_roots"]
 
-# Packages still under src/ (folder relative to src/). D-427 waves 4d and 4e empty it.
+# Packages still under src/ (folder relative to src/). D-427 wave 4e empties it.
 TARGET = {
-    "contracts/interfaces",
-    "contracts/foundation",
-    "runtime/gateway",
-    "runtime/services",
-    "runtime/events",
     "runtime/sensing",
-    "runtime/api_web",
 }
 
 # D-231 decision 4: places the owner's sketch had that this repo does not take.
