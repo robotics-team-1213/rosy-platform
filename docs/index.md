@@ -274,8 +274,8 @@
 
 ## 최근 기록
 
+- 2026-10-04 · uncommitted · docs(D-441): 실제 실행 이미지와 복구 기록 보정
+- 2026-10-04 · uncommitted · docs(D-441): 내부 검토 보정과 설치 도우미 기록
+- 2026-10-04 · uncommitted · site(D-441): automatic site stack updates
 - 2026-10-04 · uncommitted · cam: 촬영 조명을 명시적 요청으로 제한
 - 2026-10-04 · uncommitted · cam: 승인한 자동 조명과 사진 저장 구현
-- 2026-10-04 · uncommitted · cam: 실제 사진 공유와 저조도 촬영 검토안
-- 2026-10-04 · uncommitted · site(D-437): verifier accepts the containerd image ID form
-- 2026-10-03 · uncommitted · docs: D-436 change-scoped host test tiers

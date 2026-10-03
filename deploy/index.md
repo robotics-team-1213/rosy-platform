@@ -70,8 +70,8 @@
 
 ## 최근 기록
 
-- 2026-10-04 · uncommitted · fix(site): 관제 PC의 요청형 카메라 조명
-- 2026-10-03 · uncommitted · fix(site): order Avahi before the Fleet stack
-- 2026-10-03 · uncommitted · fix(site): Fleet NSS mDNS resolver closure
-- 2026-10-03 · uncommitted · fix: publish readable public DNS-SD XML
-- 2026-10-03 · fcda72b78 · feat(deploy): D-433 rosy-boot-display → rosy-face 이주
+- 2026-10-04 · uncommitted · verify(D-441): 최종 Linux 관련 suite 확인
+- 2026-10-04 · uncommitted · fix(D-441): 상대 symlink의 롤백 경로 보정
+- 2026-10-04 · uncommitted · verify(D-441): 추가 보정 Linux 회귀 확인
+- 2026-10-04 · uncommitted · fix(D-441): 독립 재검토 추가 결함 보정
+- 2026-10-04 · uncommitted · fix(D-441): 자동 갱신 내부 검토 지적 보정
