@@ -337,7 +337,6 @@
 - 증거: test_host_status_summary.py 64 passed 1 skipped. gateway 1622 passed 1 failed(C6, 기존). api_web 73 passed, 루트 boot·systemd·architecture 363 passed. 변이 증명 14종(신규 6: 속도 무게이트, 증거 없음 통과, 유한 검사 제거, 충전 분리, 길이 상한 제거·off-by-one; 기존 7 재확인; 숫자 형 검사 제거) 모두 빨강.
 - gate 변화: 없음.
 
-
 ## 2026-10-02 · 8dd300c52 · feat(safety): `GET /safety/state` 에 `fleet_link` (D-415, API v1.80)
 - 변경: `_safety_payload` 가 `svc.fleet_loss.status()` 를 `fleet_link` 로 싣는다(없으면 null). `CoreServicesLike` 에 `fleet_loss`. PUT 이 받는 정책 값은 그대로. 계약 버전 v1.80(app.py).
 - 증거: `src/runtime/gateway/test/test_fleet_loss_wiring.py`, `test_api.py` 안전 경로 통과.
@@ -354,7 +353,19 @@
 - 증거: `test_line_follow_contract_docs.py`, `test_task_contract_docs.py`, `test_mission_progress.py` 의 버전 고정을 v1.86 로.
 - gate 변화: 없음.
 
+## 2026-10-02 · uncommitted · feat(pilot): D-411 B 자산과 `autonomy` 문구
+- 변경: `pilot_assets` 에 `controls.js`·`arm-stick.js`·`screens/compose.js`·`widgets/joint_jog.js`. capabilities `controls` 주석 — `autonomy: ["line"]` 은 CORE 가 line-follow 서비스를 가질 때 낸다(런타임 준비 증거 아님, API Ref §9.1).
+- 증거: `python -m pytest src/runtime/api_web/test/test_pilot_route.py src/runtime/gateway/test/test_capabilities_controls.py -q` (2026-10-02 Windows).
+- gate 변화: 없음.
+- 결정: D-411 B, 구현 부록 5.
+
 ## 2026-10-03 · uncommitted · docs(api): align contract description with v1.84
 - Change: Update the existing API app contract description to API Reference v1.84 for the additive site Fleet Cell evidence route. The route belongs to the site Fleet app.
 - Evidence: Protocol alignment is included in foundation/alignment 427 passed/1 skipped; final legacy and contract-document checks 64 passed.
 - Gate: SOURCE/LOCAL version alignment only; no deployment or device claim.
+
+## 2026-10-03 · uncommitted · merge(main): D-411 B+C 계약을 API Ref v1.87 로 재번호
+- 변경: main(D-411 A 는 v1.83 으로 먼저 착지, 현재 v1.86)을 `feat/d411bc-pilot-controls-gripper` 에 병합. 브랜치의 B·C 문구(`controls`, `/sim/omx/gripper`, `OmxSimGripperGoal`, `/state` `gripper`, 시연 `action.gripper`)를 v1.76 에서 v1.87 로 다시 매기고 새 §11 행을 더했다. `app.py` 계약 문자열과 버전 핀(`test/test_line_follow_contract_docs.py`, `test_task_contract_docs.py`, `test_mission_progress.py`)을 v1.87 로.
+- 증거: 병합 커밋의 host pytest 묶음(보고서), `rosy_harness.py lint` 0 errors.
+- gate 변화: 없음.
+- 결정: D-411 구현 부록 15.

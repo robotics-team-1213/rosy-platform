@@ -76,7 +76,7 @@ CONTROL_SPLIT = "docs/plans/2026-09-22-control-package-split-design.md"
 #: P6 verdicts: path (relative to src/) or package name -> (lines at verdict, verdict).
 SIZE_VERDICTS = {
     "fleet": (
-        28_734,
+        29_017,
         "split: server HTTP boundary, console, signals and the mission-control stores are separate owners "
         "today; re-judged 2026-10-03 at 28001 for D-413 internal Cell producer authentication: bounded "
         "schema, environment credential registry and evidence service are separate modules; goal completion "
@@ -162,7 +162,13 @@ SIZE_VERDICTS = {
         "ticks and the identity cache, all inside the existing ledger/dispatcher modules; verdict unchanged. "
         "Re-judged 2026-10-03 at 28734 on merging main: main's parallel Cell dispatcher/readback/goal mixins were "
         "removed and its public Cell goal ingress (registry, routes, service) kept and rewired to the "
-        "stored item_at_pose predicate; verdict unchanged",
+        "stored item_at_pose predicate; verdict unchanged. Re-judged 2026-10-03 at 29017 for D-425 "
+        "Task 3: both Console documents and their existing panels bind cancellation, timers, handlers "
+        "and frame subscriptions to web_common page scopes. No Fleet backend or command policy is "
+        "added. UI assets temporarily still count under fleet; Task 9 in "
+        "docs/plans/2026-10-03-app-ownership-shared-transport-and-layout-migration.md moves their "
+        "source ownership into ui/console with installed-resource acceptance. The server subpackage "
+        "split remains open and the existing +150 package allowance stays unchanged",
     ),
     "site/fleet/fleet/server/cell_job_store.py": (
         824,

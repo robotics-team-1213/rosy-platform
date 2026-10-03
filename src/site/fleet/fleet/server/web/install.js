@@ -10,9 +10,15 @@ import { createFieldView } from "./field-view.js";
 import { createMapFitView } from "./map-fit-view.js";
 import { createPollGate } from "./poll-gate.js";
 import { createFleetClient } from "/common/fleet-client.js";
+import { createPageScope } from "/common/scope.js";
 import { confirmIrreversible, openLiveDialog } from "/common/ui.js";
 
+const pageScope = createPageScope();
+
 const el = (id) => document.getElementById(id);
+pageScope.onDispose(() => {
+  document.querySelectorAll("dialog[open]").forEach(dialog => dialog.close("cancel"));
+});
 
 const STATE_MS = 1000;
 const MAP_MS = 5000;
@@ -80,11 +86,15 @@ function log(text, kind) {
 const fleetClient = createFleetClient({ credential: () => auth.token });
 
 async function call(path, options = {}) {
+  const task = pageScope.capture();
+  task.check();
   try {
-    const body = await fleetClient(path, options);
+    const body = await fleetClient(path, {...options, signals: [...(options.signals || []), task.signal]});
+    task.check();
     markUnlocked();
     return body;
   } catch (error) {
+    task.check();
     if (error.status === 401) markLocked();
     throw error;
   }
@@ -94,14 +104,14 @@ async function call(path, options = {}) {
 const view = { siteMap: null, sightings: [], robots: [], addresses: {} };
 
 // 기기 등록·카메라 연결 승인 (D-341). 주소 이동 안내는 운용 화면 로스터가 가진다.
-const enrollment = createEnrollmentPanel({
+const enrollment = createEnrollmentPanel({ scope: pageScope,
   headers: authHeaders,
   identity: () => ({ role: auth.role, principal_id: auth.principal }),
   log,
   dialogs: { confirmIrreversible, openLiveDialog },
   onMoved: () => { enrollment.refresh(); },
 });
-const cameraPairing = createCameraPairingPanel({
+const cameraPairing = createCameraPairingPanel({ scope: pageScope,
   headers: authHeaders,
   identity: () => ({ role: auth.role, principal_id: auth.principal }),
   locked: () => auth.locked,
@@ -110,13 +120,13 @@ const cameraPairing = createCameraPairingPanel({
 });
 
 // 카메라 설치·보정 체인 (D-360/D-375). 지도가 없으니 레이어 변경은 맵 맞춤 뷰만 다시 그린다.
-const visionView = createVisionView({ el, call, auth, authHeaders });
+const visionView = createVisionView({ scope: pageScope, el, call, auth, authHeaders });
 let mapFit = null;
-const fieldView = createFieldView({ el, view, visionView,
+const fieldView = createFieldView({ scope: pageScope, el, view, visionView,
   onLayersChanged: () => { mapFit?.render(); } });
-mapFit = createMapFitView({ el, view, call, visionView, onChanged: () => fieldView.render() });
+mapFit = createMapFitView({ scope: pageScope, el, view, call, visionView, onChanged: () => fieldView.render() });
 
-el("topbar-more").addEventListener("click", () => {
+pageScope.listen(el("topbar-more"), "click", () => {
   setTopbarOpen(el("topbar-more").getAttribute("aria-expanded") !== "true");
 });
 
@@ -126,6 +136,7 @@ function tickClock() {
 
 el("console-token").value = auth.token;
 function saveToken() {
+  pageScope.invalidate();
   auth.token = el("console-token").value.trim();
   auth.role = null;
   applyRole();
@@ -139,28 +150,36 @@ function saveToken() {
   refreshAuthorization();
   visionView.refreshSources();
 }
-el("token-save").addEventListener("click", saveToken);
-el("console-token").addEventListener("keydown", (event) => {
+pageScope.listen(el("token-save"), "click", saveToken);
+pageScope.listen(el("console-token"), "keydown", (event) => {
   if (event.key === "Enter") saveToken();
 });
 
 // 전체 정지는 한 번의 누름으로 즉시 실행된다(D-414 — 비상 정지는 확인 없는
 // 비상 출구다. D-371이 대화상자 위에서 살아 있게 했던 이유를 끝까지 밀었다).
-el("estop").addEventListener("click", async () => {
+pageScope.listen(el("estop"), "click", async () => {
+  const life = pageScope.capture();
+  life.check();
   try {
     const result = await call("/api/fleet/estop", { method: "POST" });
+    life.check();
     log(`정지 요청 응답: ${result.stopped}/${result.total} · 물리 정지 미확인`, "bad");
   } catch (err) {
+    if (err.name === "AbortError") return;
     log(`전체 정지 실패 — ${err.message}`, "bad");
   }
 });
 
 async function refreshDiscovery() {
+  const life = pageScope.capture();
+  life.check();
   if (auth.locked) return;
   await enrollment.refresh();
+  life.check();
   if (!discoveryGate.due()) return;
   try {
     const snapshot = await call("/api/fleet/discovery");
+    life.check();
     discoveryGate.ok();
     const status = el("discovery-status");
     status.textContent = snapshot.scanner_online
@@ -182,6 +201,7 @@ async function refreshDiscovery() {
     });
     el("discovery-list").replaceChildren(...rows);
   } catch (err) {
+    if (err.name === "AbortError") return;
     if (discoveryGate.fail(err.status, err.code) === "absent") {
       const status = el("discovery-status");
       status.textContent = "발견 미설정";
@@ -191,11 +211,14 @@ async function refreshDiscovery() {
 }
 
 async function refreshAuthorization() {
+  const life = pageScope.capture();
+  life.check();
   discoveryGate.reset();
   enrollment.resetPolling();
   cameraPairing.resetPolling();
   try {
     const identity = await call("/api/fleet/session");
+    life.check();
     auth.role = identity.role;
     auth.principal = identity.principal_id;
     const roleName = identity.role === "operator" ? "운영자" :
@@ -214,15 +237,24 @@ async function refreshAuthorization() {
       cameraPairing.refresh({ credentials: true }),
       refreshDiscovery(),
     ]);
+    life.check();
   } catch (_err) {
+    if (_err.name === "AbortError") return;
     if (!auth.locked) markLocked();
   }
 }
 
 tickClock();
-setInterval(tickClock, 1000);
+pageScope.interval(tickClock, 1000);
 applyRole();
 refreshAuthorization();
 visionView.refreshSources();
-setInterval(refreshDiscovery, MAP_MS);
-setInterval(() => { if (!auth.locked) visionView.refreshFrame(); }, STATE_MS + 500);
+pageScope.interval(refreshDiscovery, MAP_MS);
+pageScope.interval(() => { if (!auth.locked) visionView.refreshFrame(); }, STATE_MS + 500);
+
+pageScope.onResume(() => {
+  visionView.reset();
+  mapFit.reset();
+  refreshAuthorization();
+  visionView.refreshSources();
+});

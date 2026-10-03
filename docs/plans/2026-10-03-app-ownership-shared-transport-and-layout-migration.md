@@ -10,7 +10,7 @@
 
 ---
 
-**Status:** Tasks 0–2 SOURCE/LOCAL contract complete (2026-10-03); Task 3 IN PROGRESS (Fleet HTTP adapter/두 문서 전환, 종료·토큰 교체 scope는 미완료); Tasks 4–13 NOT STARTED. 실행 브랜치 `refactor/ui-ownership`, 기준 `d10c77e89`. 아래 시험과 완료 조건은 실행 지침이며 통과 기록이 아니다. 계획 작성 기준은 local main `3bb18bd59`; 각 작업 시작 시 HEAD와 진행 중 브랜치를 다시 확인한다.
+**Status:** Tasks 0–3 SOURCE/LOCAL contract complete (2026-10-03); Tasks 4–13 NOT STARTED. Task 3의 수명·인증 계약은 실제 Chromium으로 검증했으며 전체 browser의 기존 실패 20개는 Task 5/11에 남는다. 실행 브랜치 `refactor/ui-ownership`, 기준 `d10c77e89`. 아래 시험과 완료 조건은 실행 지침이며 통과 기록이 아니다. 계획 작성 기준은 local main `3bb18bd59`; 각 작업 시작 시 HEAD와 진행 중 브랜치를 다시 확인한다.
 
 ## 범위와 의존 작업
 
@@ -171,6 +171,8 @@ test('credential scopes stay separate and writes are sent once', async () => {
 **출구:** 두 Console 문서가 같은 계약 adapter를 사용하고 기존 인증·오류·선택 기능 의미를 유지함.
 
 **HTTP 전환 체크포인트 (2026-10-03, Task 3 미완료):** [Fleet client·세션 증거](../validation/app-ownership-migration-2026-10-03/task3-fleet-client-checkpoint.md). 두 문서의 JSON 요청이 같은 Fleet adapter를 사용한다. token storage/잠금 UI/404 gate는 화면 소유다. Task 2 scope를 연결해 토큰 교체·문서 종료 시 JSON/영상 요청·timer·handler와 늦은 repaint를 정리하는 작업은 다음 체크포인트이며 아직 수용하지 않았다.
+
+**수명 계약 수용 (2026-10-03, SOURCE/LOCAL):** [Console lifetime 증거](../validation/app-ownership-migration-2026-10-03/task3-console-lifetime.md). 두 문서와 직접 fetch를 쓰는 카메라/등록/Vision 경로, panel callback·finally·구독을 같은 page/token epoch에 연결했다. Node 56 passed, Chromium 14 passed, 종료/늦은 repaint 변이 red 및 복원 green. 복귀는 새 조회만 시작하며 이전 명령과 확인 대기는 이어 실행하지 않는다. 전체 browser 실패 20개, 설치 산출물·DEVICE·FIELD는 이 출구로 수용하지 않는다.
 
 ## Task 4: Robot·Pilot의 CORE client와 연결 수명주기
 

@@ -16,7 +16,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse, Response
 from pydantic import BaseModel, Field
 
-from core_common.protocol.omx_sim import OmxSimGoal, OmxSimJog, OmxSimTarget
+from core_common.protocol.omx_sim import OmxSimGoal, OmxSimGripperGoal, OmxSimJog, OmxSimTarget
 from core_common.protocol.omx_sim import OmxSimRecordStart, OmxSimRecordStop, OmxSimRecording
 
 
@@ -28,6 +28,7 @@ PILOT_ASSETS = {
     "link.js": "application/javascript", "autonomy.js": "application/javascript",
     "input-state.js": "application/javascript", "vision.js": "application/javascript",
     "calibration.js": "application/javascript", "recording.js": "application/javascript",
+    "controls.js": "application/javascript", "arm-stick.js": "application/javascript",
     "drivers/registry.js": "application/javascript",
     "drivers/pinky_core.js": "application/javascript",
     "drivers/omx_sim.js": "application/javascript",
@@ -38,6 +39,8 @@ PILOT_ASSETS = {
     "screens/inputs.js": "application/javascript",
     "screens/robot-recording.js": "application/javascript",
     "screens/arm.js": "application/javascript",
+    "screens/compose.js": "application/javascript", "widgets/joint_jog.js": "application/javascript",
+    "widgets/gripper.js": "application/javascript",
     "manifest.webmanifest": "application/manifest+json",
     "sw.js": "application/javascript",
     "icons/icon-192.png": "image/png",
@@ -150,7 +153,8 @@ def create_pilot_sim_app(*, runtime: Any, pilot_root: Path, common_root: Path,
                             content={"error": {"code": "VALIDATION_ERROR",
                                                "message": "request validation failed",
                                                "detail": {"fields": fields}}})
-    receipts: dict[str, tuple[OmxSimJog, dict[str, Any]]] = {}
+    # Jog and gripper goals share one receipt namespace: a request id names one goal (D-411 C).
+    receipts: dict[str, tuple[BaseModel, dict[str, Any]]] = {}
     receipt_lock = threading.RLock()
 
     def auth(authorization: str | None) -> str:
@@ -186,7 +190,8 @@ def create_pilot_sim_app(*, runtime: Any, pilot_root: Path, common_root: Path,
                             joints=tuple(j for j in runtime.joint_names if j != runtime.gripper),
                             gripper=runtime.gripper,
                             camera=bool(getattr(runtime, "camera_available", False)),
-                            recording=getattr(runtime, "capture", None) is not None)
+                            recording=getattr(runtime, "capture", None) is not None,
+                            controls=runtime.controls())
 
     @app.post(f"{PREFIX}/pair", status_code=201)
     def pair(request: PairRequest) -> dict[str, str]:
@@ -274,26 +279,33 @@ def create_pilot_sim_app(*, runtime: Any, pilot_root: Path, common_root: Path,
         except (ValueError, FileNotFoundError) as exc:
             raise HTTPException(404, "episode unknown") from exc
 
-    @app.post(f"{PREFIX}/goals", status_code=202)
-    def submit(jog: OmxSimJog, authorization: str | None = Header(None)) -> dict[str, Any]:
+    def _submit(request: OmxSimJog | OmxSimGripperGoal, authorization: str | None, call) -> dict[str, Any]:
         token = auth(authorization)
-        sessions.check_seat(token, jog.seat_id)
-        if jog.instance_id != runtime.instance_id:
+        sessions.check_seat(token, request.seat_id)
+        if request.instance_id != runtime.instance_id:
             raise HTTPException(409, "instance mismatch")
         now_ms = int(time.time() * 1000)
-        if not now_ms < jog.expires_at_ms <= now_ms + 6000:
+        if not now_ms < request.expires_at_ms <= now_ms + 6000:
             raise HTTPException(409, "request expired or expiry too distant")
         with receipt_lock:
-            previous = receipts.get(jog.request_id)
+            previous = receipts.get(request.request_id)
             if previous is not None:
-                if previous[0] != jog:
+                if previous[0] != request:
                     raise HTTPException(409, "request id reused")
                 return previous[1]
-            result = OmxSimGoal.model_validate(runtime.submit(jog)).model_dump()
-            receipts[jog.request_id] = (jog, result)
+            result = OmxSimGoal.model_validate(call(request)).model_dump()
+            receipts[request.request_id] = (request, result)
             if result["state"] in {"REJECTED", "UNKNOWN_HOLD"}:
                 raise HTTPException(409, result["reason"])
             return result
+
+    @app.post(f"{PREFIX}/goals", status_code=202)
+    def submit(jog: OmxSimJog, authorization: str | None = Header(None)) -> dict[str, Any]:
+        return _submit(jog, authorization, runtime.submit)
+
+    @app.post(f"{PREFIX}/gripper", status_code=202)
+    def submit_gripper(goal: OmxSimGripperGoal, authorization: str | None = Header(None)) -> dict[str, Any]:
+        return _submit(goal, authorization, runtime.submit_gripper)
 
     @app.get(f"{PREFIX}/goals/{{command_id}}")
     def goal(command_id: str, authorization: str | None = Header(None)) -> dict[str, Any]:

@@ -12,6 +12,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from core_common.protocol.controls import BOUNDED_JOG_MAX_STEP_RAD, ControlsDescriptor
+
 
 class _Wire(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -25,6 +27,7 @@ class OmxSimTarget(_Wire):
     gripper: str = Field(min_length=1, max_length=64)
     camera: bool = False
     recording: bool = False
+    controls: ControlsDescriptor | None = None
 
 
 class OmxSimRecordStart(_Wire):
@@ -58,8 +61,31 @@ class OmxSimJog(_Wire):
 
     @model_validator(mode="after")
     def bounded_delta(self) -> "OmxSimJog":
-        if not math.isfinite(self.delta_rad) or not 0 < abs(self.delta_rad) <= 0.05:
-            raise ValueError("delta_rad must be finite, nonzero and within 0.05 rad")
+        if not math.isfinite(self.delta_rad) or not 0 < abs(self.delta_rad) <= BOUNDED_JOG_MAX_STEP_RAD:
+            raise ValueError(f"delta_rad must be finite, nonzero and within {BOUNDED_JOG_MAX_STEP_RAD} rad")
+        return self
+
+
+#: D-411 C: a gripper stroke (open <-> closed) is one absolute goal of 0.2-2.0 s.
+GRIPPER_GOAL_MIN_DURATION_S = 0.2
+GRIPPER_GOAL_MAX_DURATION_S = 2.0
+
+
+class OmxSimGripperGoal(_Wire):
+    """D-411 C: absolute gripper target. Limits are the workcell's; the runtime rejects outside them."""
+
+    instance_id: str = Field(min_length=1, max_length=64)
+    seat_id: str = Field(min_length=1, max_length=64)
+    request_id: str = Field(min_length=1, max_length=64)
+    position: float
+    duration_s: float = Field(ge=GRIPPER_GOAL_MIN_DURATION_S, le=GRIPPER_GOAL_MAX_DURATION_S)
+    state_sequence: int = Field(ge=0)
+    expires_at_ms: int = Field(gt=0)
+
+    @model_validator(mode="after")
+    def finite_position(self) -> "OmxSimGripperGoal":
+        if not math.isfinite(self.position):
+            raise ValueError("position must be finite")
         return self
 
 

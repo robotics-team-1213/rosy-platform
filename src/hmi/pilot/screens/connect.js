@@ -207,7 +207,7 @@ async function check(root, onReady, onEnter) {
   notice("조종 준비 완료");
   const enter = el("ui-button", "주행 시작", {type: "button", "data-drive-enter": ""});
   enter.setAttribute("kind", "primary");
-  enter.addEventListener("click", () => onEnter?.({role: me.body?.role}));
+  enter.addEventListener("click", () => onEnter?.({role: me.body?.role, capabilities: caps.body ?? {}}));
   root.replaceChildren(
     el("ui-head", "접속", {id: "pilot-gate-heading"}),
     readoutPair([["게이트", "READY"], ["역할", me.body?.role ?? "operator"]]),

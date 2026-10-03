@@ -9,7 +9,7 @@ import pytest
 HERE = Path(__file__).resolve().parent
 
 
-@pytest.mark.parametrize("name", ["request.test.mjs", "scope.test.mjs"])
+@pytest.mark.parametrize("name", ["request.test.mjs", "scope.test.mjs", "page-scope.test.mjs"])
 def test_transport_contracts(name, tmp_path):
     node = shutil.which("node")
     if node is None:

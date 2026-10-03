@@ -272,6 +272,6 @@
 
 - 2026-10-03 · uncommitted · fix: retain the UDS owner after a caller disconnects
 - 2026-10-03 · uncommitted · feat: read live Fleet fence on the simulation Cell owner
+- 2026-10-03 · uncommitted · refactor: D-425 Task 3 lifetime acceptance
 - 2026-10-03 · uncommitted · fix: fence Cell owner progression and terminal completion
 - 2026-10-03 · uncommitted · test: D-425 browser baseline and safety evidence
-- 2026-10-03 · uncommitted · fix: install canonical OMX geometry for Cell owner composition

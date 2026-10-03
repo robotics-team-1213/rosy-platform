@@ -28,3 +28,7 @@ HTTP와 UDS는 실제 전송이지만 서버는 같은 Python 프로세스의 �
 - 느린 ROS feedback 시험은 처음 feedback 미수신, 수정 후 `joint_state_stale` HOLD로 실패했다. 같은 환경 main의 단독 비교에서는 통과했으므로 아직 안정성과 원인이 확정되지 않았다. 최신성 보호를 제거하거나 성공으로 바꾸지 않았다.
 
 넓은 Linux suite는 통과하지 않았다. 실제 ROS ActionServer·camera fixture의 통과 항목은 vendor Gazebo나 전체 Cell owner 경로의 증거가 아니다. G7 전체 장애 (a)–(i), G9 seat exclusion, 2 mm 슬립시트 접촉, 전체 18개 transfer와 독립 goal evaluator, 설치·배포·실물 수용은 계속 열려 있다.
+
+## 최신 main 통합
+
+`289d2c828`을 통합하고 생성 index 충돌을 재생성으로 해결했다. OMX adapter/owner/readback **438 passed / 7 skipped**, quick·문서·focused 계약 **170 passed / 2 skipped**, Linux 집중 **20 passed**. lint **0 errors / 25 warnings**. 독립 리뷰는 Linux **20 passed**, Windows **40 passed / 2 skipped**, Critical/Important 지적 없음. 이 통합 검증도 위의 넓은 Linux 실패 2개나 전체 수용 미완료를 해소한 것으로 기록하지 않는다.

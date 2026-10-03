@@ -5,6 +5,7 @@ import stat
 from pathlib import Path
 
 import pytest
+import yaml
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -205,6 +206,39 @@ def test_ai_simulation_patch_selects_supported_mimic_engine_and_sync_hardware():
     assert "is_async=\"${'false' if str(use_sim).lower() == 'true' else 'true'}\"" in patch
     assert "enforce_command_limits: true" in patch
     assert "omx_f_follower_ai/hardware_controller_manager.yaml" in patch
+
+
+def _patched_files(patch: str) -> dict[str, list[str]]:
+    files: dict[str, list[str]] = {}
+    current = None
+    for line in patch.splitlines():
+        if line.startswith("+++ b/"):
+            current = files.setdefault(line[6:], [])
+        elif current is not None and line.startswith("+") and not line.startswith("+++"):
+            current.append(line[1:].strip())
+    return files
+
+
+def test_ai_simulation_patch_bounds_trajectory_goals_but_lets_a_gripper_stall_succeed():
+    """D-411 C review: Jazzy JTC defaults wait forever (goal_time 0) and check no goal position.
+
+    The constraints live in a Gazebo-only file passed by the Gazebo launch's arm_controller spawner;
+    hardware_controller_manager.yaml is also read by the native launch, so it carries none (M2).
+    """
+    files = _patched_files((OMX / "patches" / "omx-ai-sim-gates.patch").read_text(encoding="utf-8"))
+    sim_file = "open_manipulator_bringup/config/omx_f_follower_ai/gazebo_arm_controller_constraints.yaml"
+    added = files[sim_file]
+    assert "constraints:" in added and "goal_time: 1.0" in added and "stopped_velocity_tolerance: 0.05" in added
+    tolerance = yaml.safe_load((OMX / "sim" / "cell_profile.yaml").read_text(encoding="utf-8"))["start_state_tolerance_rad"]
+    for joint in ("joint1", "joint2", "joint3", "joint4", "joint5"):
+        assert f"{joint}: {{goal: {tolerance}}}" in added
+    assert "gripper_joint_1: {goal: 0.0}" in added      # unchecked: a close may stop on an object
+    shared = files["open_manipulator_bringup/config/omx_f_follower_ai/hardware_controller_manager.yaml"]
+    assert not [line for line in shared if "constraints" in line or "goal" in line]
+    gazebo = files["open_manipulator_bringup/launch/omx_f_follower_ai_gazebo.launch.py"]
+    assert "'--param-file'," in gazebo and "'gazebo_arm_controller_constraints.yaml')," in gazebo
+    # The native launch is not patched, so it cannot read the Gazebo-only file.
+    assert not [name for name in files if name.endswith("omx_f_follower_ai.launch.py")]
 
 
 def test_vendor_patches_keep_lf_endings_in_windows_build_context():

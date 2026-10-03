@@ -91,6 +91,7 @@ class CellPlanningProfile:
     acceleration_limits: Mapping[str, float]
     gripper_open: float
     gripper_closed: float
+    gripper_preload_rad: float
     # Width-matched close (C3b B2): jaw gap(q) = 2 (o + x sin q + y cos q), o = half the
     # finger-pivot separation, (x, y) = inner fingertip contact point in the finger frame.
     jaw_pivot_half_separation_m: float
@@ -159,6 +160,9 @@ class CellPlanningProfile:
             raise ValueError("gripper open/closed targets must lie within gripper limits")
         if gripper_open == gripper_closed:
             raise ValueError("gripper open and closed targets must differ")
+        gripper_preload = _finite("gripper.preload", gripper.get("preload"), positive=True)
+        if gripper_preload >= abs(gripper_open - gripper_closed):
+            raise ValueError("gripper preload must be shorter than the open-closed stroke")
         jaw = gripper.get("jaw")
         if not isinstance(jaw, Mapping):
             raise ValueError("gripper.jaw geometry is required (width-matched close)")
@@ -240,7 +244,7 @@ class CellPlanningProfile:
             position_limits=MappingProxyType(position),
             velocity_limits=MappingProxyType(velocity),
             acceleration_limits=MappingProxyType(acceleration),
-            gripper_open=gripper_open, gripper_closed=gripper_closed,
+            gripper_open=gripper_open, gripper_closed=gripper_closed, gripper_preload_rad=gripper_preload,
             jaw_pivot_half_separation_m=(pivot_a - pivot_b) / 2,
             jaw_contact_point_m=(contact_x, contact_y), gripper_squeeze_m=squeeze,
             min_grasp_width_m=min_width, max_grasp_width_m=max_width,

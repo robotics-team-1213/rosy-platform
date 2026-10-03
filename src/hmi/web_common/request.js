@@ -11,14 +11,18 @@ export function createRequest({origin = globalThis.location?.origin, credential 
     if (target.origin !== base.origin || target.username || target.password) {
       throw new Error('request destination must match its origin and omit URL credentials');
     }
-    const {timeoutMs = 0, signal: parent, headers: supplied, ...init} = options;
+    const {timeoutMs = 0, signal: parent, signals = [], headers: supplied, ...init} = options;
     if (!Number.isFinite(timeoutMs) || timeoutMs < 0) {
       throw new RangeError('request timeout must be a finite nonnegative number');
     }
-    parent?.throwIfAborted();
+    const parents = [...new Set([parent, ...signals].filter(Boolean))];
+    for (const signal of parents) signal.throwIfAborted();
     const controller = new AbortController();
-    const abort = () => controller.abort(parent.reason);
-    parent?.addEventListener('abort', abort, {once: true});
+    const subscriptions = parents.map(signal => {
+      const abort = () => controller.abort(signal.reason);
+      signal.addEventListener('abort', abort, {once: true});
+      return () => signal.removeEventListener('abort', abort);
+    });
     const timer = timeoutMs > 0
       ? setTimeout(() => controller.abort(new DOMException('Request timed out', 'AbortError')), timeoutMs)
       : undefined;
@@ -38,7 +42,7 @@ export function createRequest({origin = globalThis.location?.origin, credential 
       return {status: response.status, ok: response.ok, body};
     } finally {
       if (timer !== undefined) clearTimeout(timer);
-      parent?.removeEventListener('abort', abort);
+      for (const unsubscribe of subscriptions) unsubscribe();
     }
   };
 }

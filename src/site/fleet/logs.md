@@ -1477,6 +1477,12 @@
 - 증거: baseline 45 passed/22 failed, HTTP adapter 48 passed/22 failed, new 0. 안전 상태 시험 2 green·guard mutation 2 red·원본 bytes 복원 후 2 green.
 - gate 변화: 전체 browser는 HOLD. 20개 기존 실패와 문서/token scope 정리가 남음.
 
+## 2026-10-03 · uncommitted · refactor: D-425 Console document lifetime
+- 변경: 운용·설치 문서와 기존 panel의 JSON/직접 fetch·본문 decode·timer·handler·frame/observer 구독을 page/token epoch에 연결. 종료 때 미전송 목표·확인 대기를 취소하고 복귀는 새 조회만 시작. 기존 명령·권한·404 gate·poll cadence 유지.
+- 증거: Chromium lifetime/session/origin 14 passed; disposal 변이 8 failed, 카메라/Vision late repaint 변이 4 failed, bytes 복원 후 14 passed. 공유/static/ownership/quick 351 passed/24 skipped/26 warnings. 최초 Fleet 전체 1584 passed/7 skipped/1 failed의 옛 map-fit wiring 문자열 검사를 scope 연결로 갱신해 재검사.
+- gate 변화: Task 3 SOURCE/LOCAL 수명 계약 완료. 전체 browser 20개 OPEN·installed-only·DEVICE/FIELD는 유지. 상세: docs/validation/app-ownership-migration-2026-10-03/task3-console-lifetime.md.
+- 추가 증거: map-fit wiring 검사 수정 후 Fleet 전체 1585 passed/7 skipped. lint 0 errors/26 warnings. 선택 운용 browser 11 passed/1 기존 OPEN 실패/55 deselected이며 전체 무실패로 표현하지 않음.
+
 
 ## 2026-10-03 · uncommitted · feat: read live Fleet fence on the simulation Cell owner
 - Change: replace the entrypoint unconditional Fleet-current callback with uncached authenticated GET /api/fleet/dispatch-control on an explicitly configured literal loopback endpoint. Require a separately provisioned viewer secret before ROS loads. Direct HTTP avoids proxies/redirects; status, 8 KiB body, strict generation types and finite JSON checks refuse on uncertainty. Existing Action/stop/rearm stays on UDS. Offload async Fleet rearm I/O so the event loop can answer the owner's reverse readback; preserve operator guard and rollback.

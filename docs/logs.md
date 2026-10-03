@@ -4706,6 +4706,12 @@
 - Final checks: OMX/provider/owner/boundary regression 396 passed / 5 skipped. Quick tier 96 passed / 26 existing warnings; harness lint 0 errors / 26 warnings. Removing Fleet validation and terminal completion fences separately defeats the corresponding regressions; sources restored byte-for-byte.
 - Gate: SOURCE/LOCAL only. Live ROS/UDS stop and restart acceptance remains open. The simulation process still has a placeholder Fleet-current callback; this checkpoint closes composition/semantic consumption, not the cross-process G7 producer. Seat exclusion, thin sheets and full two-layer/two-pallet vendor Gazebo acceptance remain open.
 
+## 2026-10-03 · uncommitted · refactor: D-425 Task 3 lifetime acceptance
+- 변경: D-425 Task 3의 Console 문서/token 수명 경계를 공통 page scope에 연결하고 계획·HTTP 체크포인트·browser inventory의 현재 범위를 기록. Fleet size 29017에서 수명 경계 증가를 재판단했으며 Task 9 UI source 이전과 server 분해·기존 +150 allowance 유지.
+- 증거: Node 56 passed, 실제 문서 Chromium 14 passed. X: 사본 disposal 변이 8 red, camera/Vision guard 변이 4 red, source bytes 복원 후 14 green. 공유/static/ownership/quick 351 passed/24 skipped/26 warnings.
+- gate 변화: Tasks 0–3 SOURCE/LOCAL 완료. 전체 목표는 계속 실행하며 Tasks 4–13, 기존 browser 20개 실패, D-413 의존/DEVICE gate를 남김. 폴더 이동은 아직 실제 디스크에 없으며 사용자가 당분간 기존 경로 작업을 지정함.
+- 추가 증거: map-fit wiring 검사 수정 후 Fleet 전체 1585 passed/7 skipped. lint 0 errors/26 warnings. 선택 운용 browser 11 passed/1 기존 OPEN 실패/55 deselected이며 전체 무실패로 표현하지 않음.
+
 
 ## 2026-10-03 · uncommitted · feat: read live Fleet fence on the simulation Cell owner
 - Change: replace the entrypoint unconditional Fleet-current callback with uncached authenticated GET /api/fleet/dispatch-control on an explicitly configured literal loopback endpoint. Require a separately provisioned viewer secret before ROS loads. Direct HTTP avoids proxies/redirects; status, 8 KiB body, strict generation types and finite JSON checks refuse on uncertainty. Existing Action/stop/rearm stays on UDS. Offload async Fleet rearm I/O so the event loop can answer the owner's reverse readback; preserve operator guard and rollback.

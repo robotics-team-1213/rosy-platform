@@ -168,14 +168,21 @@ function setReason(node, reason) {
   else node.removeAttribute("reason");
 }
 
-export function createLineStuckPanel({ el, view, call, log, isOperator }) {
+export function createLineStuckPanel({ scope, el, view, call, log, isOperator }) {
   // robot_id -> { stuck_id, decision } (확인 단계), { stuck_id, text, kind } (마지막 결과)
   const confirming = new Map();
   const results = new Map();
   const busy = new Set();
   const signatures = new Map();
+  scope.onDispose(() => {
+    confirming.clear();
+    busy.clear();
+    signatures.clear();
+  });
 
   async function send(robotId, stuckId, decision) {
+    const life = scope.capture();
+    life.check();
     if (busy.has(robotId)) return;   // one answer in flight per robot (no double submit)
     confirming.delete(robotId);
     busy.add(robotId);
@@ -185,16 +192,20 @@ export function createLineStuckPanel({ el, view, call, log, isOperator }) {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ stuck_id: stuckId, decision }),
       });
+      life.check();
       const text = outcomeText(robotId, decision, result.result);
       results.set(robotId, { stuck_id: stuckId, text, kind: "good" });
       log(text, "good");
     } catch (err) {
+      if (err.name === "AbortError") return;
       const text = refusalText(robotId, decision, err);
       results.set(robotId, { stuck_id: stuckId, text, kind: "bad" });
       log(text, "bad");
     } finally {
-      busy.delete(robotId);
-      render();
+      if (life.current()) {
+        busy.delete(robotId);
+        render();
+      }
     }
   }
 
@@ -270,7 +281,7 @@ export function createLineStuckPanel({ el, view, call, log, isOperator }) {
       if (spec.confirm) {
         node.setAttribute("aria-expanded", String(pending?.decision === spec.decision));
       }
-      node.addEventListener("click", () => choose(robotId, stuck.stuck_id, spec.decision));
+      node.addEventListener("click", scope.guard(() => choose(robotId, stuck.stuck_id, spec.decision)));
       actions.append(node);
     }
     li.append(head, facts, actions);
@@ -287,16 +298,16 @@ export function createLineStuckPanel({ el, view, call, log, isOperator }) {
       yes.dataset.focusKey = "confirm-yes";
       // 보내기는 그 답 버튼과 같은 사유로 막힌다(권한·연결·전송 중·로컬 복구 꺼짐).
       setReason(yes, specs.find((spec) => spec.decision === pending.decision)?.reason || "");
-      yes.addEventListener("click", () => send(robotId, stuck.stuck_id, pending.decision));
+      yes.addEventListener("click", scope.guard(() => send(robotId, stuck.stuck_id, pending.decision)));
       const no = quietButton("취소");
       no.dataset.focusKey = "confirm-no";
-      no.addEventListener("click", () => cancelConfirm(robotId, pending.decision));
-      box.addEventListener("keydown", (event) => {
+      no.addEventListener("click", scope.guard(() => cancelConfirm(robotId, pending.decision)));
+      box.addEventListener("keydown", scope.guard((event) => {
         if (event.key === "Escape") {
           event.preventDefault();
           cancelConfirm(robotId, pending.decision);
         }
-      });
+      }));
       const row = document.createElement("div");
       row.className = "stuck-confirm-actions";
       row.append(yes, no);

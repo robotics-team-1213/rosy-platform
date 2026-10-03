@@ -218,12 +218,12 @@
 - 결정: D-359 §5.1·§5.3·§5.5.
 - 교훈: 없음.
 
-
 ## 2026-10-01 · uncommitted · D-398 장미색 범위·정지·어휘 정리
 
 - 변경: 드라이브 스틱 활성/knob을 --brand-rose → --focus-ring으로(인터랙션 색, D-277). transition 2건(프레임 opacity·intent left) 제거로 D-220 회복. '대기'를 MODE_LABEL.IDLE로(screens/drive·drive-view·drive-auto), sw.js SHELL에 /common/core_ui_logic.js 추가(test_shell_assets가 따라감). vision.js '프레임 지연(STALE)' → '카메라 프레임 지연'(영어 열거값 노출 제거).
 - 근거: D-398. pilot 시험 통과.
 - gate 변화: 없음(LOCAL HOLD 그대로).
+
 ## 2026-10-01 · uncommitted · feat(omx): record SIM demonstrations and export LeRobot v3
 - 변경: D-390 부록·API v1.69·Pilot 기록 패널·SIM 카메라·원본 recorder·오프라인 exporter. ROS 수락 전에 목표를 등록하고, recording I/O는 별도 writer로 분리.
 - 증거: adapter/Pilot/network 259 passed, 28 skipped; quick tier 95 passed; Chromium recording retry/outcome/stale/dispose 1 passed; 실제 LeRobot 0.4.4 reader 3 passed. Gazebo 원본 15프레임 및 동일 원본 export 재독출 PASS. docs/validation/omx-demonstration-lerobot-2026-10-01/README.md 참조.
@@ -257,8 +257,44 @@
 - gate 변화: SOURCE 유지. ROS-SIM HOLD — 계획 Verification ROS-SIM 체크리스트(WSL Ubuntu) 미실행, DEVICE 증거 없음.
 - 결정: D-411 A.
 
+## 2026-10-02 · 10daaae5 · feat(pilot): D-411 B 서술자로 조작부 조립, 팔 조이스틱
+- 변경: 순수 `controls.js`(`rosy.controls/1` 읽기, 위젯 계획, 필드 없음 = 기존 프로필 대체, 빈 `items` = 조작부 없음, 모르는 autonomy 무시)와 `arm-stick.js`(축·데드존·우세 축 단계, 순차 조거 — 이전 목표 종결 뒤에만 다음, 실패·거절이면 멈춤, 남의 명령 종결은 무시). `screens/compose.js`(kind→위젯, 미지원 표시), `widgets/joint_jog.js`(2축 패드·축별 관절 선택·방향키·± 버튼·readout). `screens/arm.js` 를 세션 컨텍스트(`submitJog`·`onUpdate`·활성 목표 250 ms 폴링)로 재구성 — 떼면 새 목표만 멈추고 취소하지 않는다, 취소 버튼은 활성 목표가 있을 때만. 태블릿 가로는 왼쪽 작업 공간·오른쪽 조작부. 주행은 capabilities `controls` 의 `base_velocity` 로 프로필(차선 자동 토글은 `autonomy`), 미지원 조작부는 영상 왼쪽 위 표시. 자산 다섯 곳 등록, SW 캐시 `2026-10-02-4`. dev_server `/__test__/controls`.
+- 증거: `python -m pytest src/hmi/pilot/test src/runtime/api_web/test/test_pilot_route.py src/products/omx/adapter/test -q` → 351 passed, 49 skipped; `ROSY_RUN_BROWSER_TESTS=1` `test_pilot_browser.py` + `test_pilot_sim_browser.py` → 45 passed (2026-10-02 Windows, Chromium; 새 시험: 미지 kind, 구 CORE 대체, autonomy 토글, 빈 목록, 조이스틱 순차·떼면 취소 없음, 축 재지정·방향키·버튼 대기, 390×844 가로 넘침 없음).
+- gate 변화: SOURCE 유지. ROS-SIM HOLD — OMX Gazebo 에서 조이스틱 미실행.
+- 결정: D-411 B, D-411 구현 부록 1·2·6.
+
+## 2026-10-02 · uncommitted · fix(pilot): D-411 B 리뷰 — 실제 SIM 소유자, 순차 조이스틱, 한계, 자리 잃음, 큰 스틱 잡기 구역
+- 변경: 실제 SIM 은 목표 실행 중 `ready:false`·`owner_state:"active"` 라 첫 목표 뒤 조이스틱이 막혔다 → "active" 는 바쁨(기다림)이지 보류가 아니고, 목표가 끝나면 `/state` 를 다시 읽어 준비된 새 sequence 로 다음 목표. 세션 단일 비행(`submitting`), 스틱을 잡는 동안 ± 비활성. 단계는 관절 한계 안으로 잘리고 남은 여유가 0.001 rad 미만이면 보내지 않는다(409 대신 "관절 한계"). 409 `joint_state_sequence_mismatch`(GET /state 와 POST 사이 새 /joint_states — Gazebo 17개 중 1개)는 새 readback 으로 한 번만 다시 보낸다. 자리 반납·잃음·숨김은 진행 목표를 UNKNOWN_HOLD 로 놓고 폴링을 멈추며, 자리를 잃으면 페어링을 다시 보인다; `/goals/{id}` 404 는 종결. 위젯이 던지면 "그릴 수 없는 조작부". 주행: `fine:false` 면 정밀 없음·저장값 무시, `pivot:false` 면 Q/E·LB/RB 도 끔, 알린 `max_linear/max_angular` 로 상한, 0 이면 "정지로 제한됨"(stick.js 가 0 을 기본값으로 바꾸던 결함 수정). aria id 정리, 상태 live region 은 바뀔 때만 씀. 휴대폰: 작은 영상 → 스틱 → readback. 손잡이 중립색, 라벨이 손잡이 위. 주행 스틱: 보이는 링은 그대로, 보이지 않는 잡기 구역(링 반지름 ~1.8 배, 오른쪽 칸 안으로 잘림 — 왼쪽 버튼·영상은 훔치지 않음, 가로 태블릿은 오른쪽 띠에서 스틱 위로 칸을 키움). SW 캐시 `2026-10-02-6`.
+- 증거: 아래 커밋 메시지와 보고의 실행 기록(2026-10-02 Windows, Chromium).
+- gate 변화: SOURCE 유지. ROS-SIM HOLD — 수정 뒤 OMX Gazebo 조이스틱 재실행 필요. DEVICE: 실 태블릿에서 잡기 구역 확인 필요.
+- 결정: D-411 B, 구현 부록 1.
+
 ## 2026-10-03 · uncommitted · D-411 녹화 버튼 kind 명시 + 표면 재칠 규칙 제거
 - 변경: robot-recording.js 시트 행 버튼(취소·받기)을 const+setAttribute("kind","quiet") 정준형(settings.js 패턴)으로 만들고, styles.css의 ui-button[data-robot-record][data-state=starting] color·border 표면 규칙을 지웠다 — 준비 상태는 HUD 칩(data-drive-fact=recording)과 토글 눌림이 이미 말한다. drive.js 로봇 녹화 버튼은 기존 quiet 유지.
 - 근거: D-194/D-359 공용 부품 계약. CI 실행 37041646414의 실패 2건(test_helper_created_buttons_name_their_kind, test_surfaces_do_not_repaint_shared_controls) 치유.
 - gate 변화: 없음.
 - 최종 증거: test_shared_controls + pilot test + pilot_route 86 passed 37 skipped.
+
+## 2026-10-03 · uncommitted · fix(pilot): D-411 B 재리뷰 — 종결 뒤 readback 실패, 떠 있는 스틱 원점
+- 변경: 팔 화면이 목표 종결을 `/state` 다시 읽기 **전에** 알린다 — 다시 읽기가 실패해도 조이스틱이 영원히 기다리지 않는다. 위젯은 마지막 오류를 다음 갱신까지 유지(stop/press 가 보류를 풀지 않음). 주행 스틱: 링 밖(잡기 구역 안)에서 누르면 그 자리가 0 — 닿자마자 최대 편향으로 출발하지 않는다; 링이 손가락 밑으로 옮겨와 원점을 보이고 놓으면 돌아간다. 링 안에서 누르면 링 중심이 0(그대로). 오른쪽 칸은 `overflow: clip` + 여백으로 손잡이 그림자·테두리를 자르지 않는다. 주행 화면이 수동 한도를 읽을 때 capabilities `controls` 도 다시 읽어 알린 최대값이 낡지 않는다. SW 캐시 `2026-10-03-1`.
+- 증거: 보고의 실행 기록(2026-10-03 Windows, Chromium). 새 시험 두 개는 고치기 전 코드에서 실패, 고친 뒤 통과.
+- gate 변화: SOURCE 유지. ROS-SIM HOLD, DEVICE: 실 태블릿에서 떠 있는 원점 확인 필요.
+- 결정: D-411 B.
+
+## 2026-10-03 · uncommitted · feat(pilot): D-411 C 그리퍼 위젯, 주행 링 위쪽 잘림
+- 변경: `widgets/gripper.js` — 열기/반/닫기 버튼, 열림 % 슬라이더(손을 뗄 때 목표 하나), 상태 배지(열림·닫힘·쥐고 있음·이동 중·알 수 없음, `role=status` `aria-live=polite`). `controls.js` 순수 `gripperPercent`·`gripperPosition`·`gripperDuration`(전체 행정 2.0 s 비례, 최소 0.2 s)·`gripperStateLabel`. `screens/arm.js` 공통 `submitGoal` 로 `submitJog`·`submitGripper`(`POST /gripper`) — 같은 하나씩·재시도 1회·id/null/false 계약, 위젯 표에 `gripper`. 태블릿은 조작부 칸 2:1(오른손 그리퍼), 휴대폰은 아래로 쌓인다. 자산 다섯 곳 등록, SW 캐시 `2026-10-03-2`. Part B 후속: 링 밖에서 누를 때 링의 그림 이동만 `[data-drive-right]` 안으로 잘라(휴대폰 위쪽 잘림), 0 점은 손가락 위치 그대로.
+- 증거: `python -m pytest src/hmi/pilot/test src/runtime/api_web/test/test_pilot_route.py -q` → 85 passed, 58 skipped; `ROSY_RUN_BROWSER_TESTS=1` `test_pilot_browser.py -k "arm or gripper or zone or grabs"` → 13 passed(그 전 한 번은 13개 모두 실패 후 단독·재실행 통과 — 같은 시각 기계 부하/다른 에이전트의 브라우저 시험으로 보이며 원인은 확인하지 못함; 새: 프리셋·슬라이더·배지, 오른손 칸 2000×1200·390×844, 링이 칸 안 — 고치기 전 코드로는 실패 확인), `test_pilot_sim_browser.py` 3 passed (2026-10-03 Windows, Chromium). 화면 `X:\DevTemp\d411-c\pilot-arm-gripper-*.png`, `pilot-drive-zone-top-390x844.png`.
+- gate 변화: SOURCE 유지. ROS-SIM HOLD — OMX Gazebo 에서 그리퍼 위젯 미실행.
+- 결정: D-411 C, 구현 부록 10.
+
+## 2026-10-03 · uncommitted · fix(pilot): D-411 C 검토 — 그리퍼 목표를 알린 속도로
+- 변경: `controls.js` `gripperGoal(from, to, g)` — `max_velocity` 가 있으면 길이 = 거리/속도 올림(0.2–2.0 s), 2.0 s 로 못 가는 거리는 닿는 곳까지; 없으면 행정 비례. `widgets/gripper.js` 가 이를 쓴다. SW 캐시 `2026-10-03-3`.
+- 증거: `python -m pytest src/hmi/pilot/test src/runtime/api_web/test/test_pilot_route.py -q` 통과, `ROSY_RUN_BROWSER_TESTS=1 ... -k gripper` 4 passed (2026-10-03 Windows).
+- gate 변화: 없음. ROS-SIM HOLD.
+- 결정: D-411 구현 부록 10.
+
+## 2026-10-03 · uncommitted · fix(pilot): D-411 C 관문 뒤 — 그리퍼 목표를 0.9 × max_velocity 로
+- 변경: `controls.js` `GRIPPER_PACE` 0.9 — readback 흔들림 여유. 전체 1.0 rad 행정은 두 목표(한 번에 0.9 rad). SW 캐시 `2026-10-03-4`.
+- 증거: `test_controls.py`·Pilot 시험 통과, `ROSY_RUN_BROWSER_TESTS=1 ... -k gripper` 4 passed (2026-10-03 Windows).
+- gate 변화: 없음.
+- 결정: D-411 구현 부록 14.
