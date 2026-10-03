@@ -24,7 +24,7 @@ internal class NsdDiscoverySession(
     private val executor = Executor { task -> main.post(task) }
     private val budget = DiscoveryBudget()
     private val listeners = mutableListOf<NsdManager.DiscoveryListener>()
-    private val callbacks = mutableListOf<NsdManager.ServiceInfoCallback>()
+    private val callbacks = mutableMapOf<String, NsdManager.ServiceInfoCallback>()
     private val pending = ArrayDeque<NsdServiceInfo>()
     private var lock: WifiManager.MulticastLock? = null
     @Volatile private var stopped = false
@@ -49,7 +49,7 @@ internal class NsdDiscoverySession(
                     if (Build.VERSION.SDK_INT >= 34) watch(info) else { pending.addLast(info); resolveNext() }
                 }
                 override fun onServiceLost(info: NsdServiceInfo) = dispatch {
-                    if (!stopped) onLost(normalizeServiceType(type), info.serviceName)
+                    if (!stopped) withdraw(info)
                 }
             }
             listeners += listener
@@ -78,7 +78,7 @@ internal class NsdDiscoverySession(
         resolveGeneration++
         listeners.forEach { runCatching { nsd.stopServiceDiscovery(it) } }
         listeners.clear()
-        if (Build.VERSION.SDK_INT >= 34) callbacks.forEach { runCatching { nsd.unregisterServiceInfoCallback(it) } }
+        if (Build.VERSION.SDK_INT >= 34) callbacks.values.forEach { runCatching { nsd.unregisterServiceInfoCallback(it) } }
         callbacks.clear()
         runCatching { lock?.let { if (it.isHeld) it.release() } }
         lock = null
@@ -86,13 +86,15 @@ internal class NsdDiscoverySession(
 
     private fun watch(info: NsdServiceInfo) {
         if (Build.VERSION.SDK_INT < 34 || stopped) return
+        val key = key(info)
+        val version = budget.generation(key)
         val callback = object : NsdManager.ServiceInfoCallback {
             override fun onServiceInfoCallbackRegistrationFailed(errorCode: Int) = Unit
             override fun onServiceInfoCallbackUnregistered() = Unit
-            override fun onServiceLost() { if (!stopped) onLost(normalizeServiceType(info.serviceType), info.serviceName) }
-            override fun onServiceUpdated(serviceInfo: NsdServiceInfo) { if (!stopped) onRecord(serviceInfo, serviceInfo.hostAddresses) }
+            override fun onServiceLost() { if (budget.current(key, version)) withdraw(info) }
+            override fun onServiceUpdated(serviceInfo: NsdServiceInfo) { if (budget.current(key, version)) onRecord(serviceInfo, serviceInfo.hostAddresses) }
         }
-        callbacks += callback
+        callbacks[key] = callback
         runCatching { nsd.registerServiceInfoCallback(info, executor, callback) }
     }
 
@@ -100,6 +102,8 @@ internal class NsdDiscoverySession(
     private fun resolveNext() {
         if (stopped || resolving) return
         val next = pending.removeFirstOrNull() ?: return
+        val key = key(next)
+        val version = budget.generation(key)
         resolving = true
         val generation = ++resolveGeneration
         fun done() {
@@ -110,19 +114,32 @@ internal class NsdDiscoverySession(
         val listener = object : NsdManager.ResolveListener {
             override fun onResolveFailed(info: NsdServiceInfo, errorCode: Int) = dispatch {
                 if (stopped || generation != resolveGeneration) return@dispatch
-                if (errorCode == NsdManager.FAILURE_ALREADY_ACTIVE && retried.add("${next.serviceType}|${next.serviceName}")) {
+                if (budget.current(key, version) && errorCode == NsdManager.FAILURE_ALREADY_ACTIVE && retried.add("${next.serviceType}|${next.serviceName}")) {
                     main.postDelayed({
                         if (!stopped && generation == resolveGeneration) { pending.addFirst(next); done() }
                     }, 200)
                 } else done()
             }
             override fun onServiceResolved(info: NsdServiceInfo) = dispatch {
-                if (!stopped && generation == resolveGeneration) { onRecord(info, listOfNotNull(info.host)); done() }
+                if (!stopped && generation == resolveGeneration) {
+                    if (budget.current(key, version)) onRecord(info, listOfNotNull(info.host))
+                    done()
+                }
             }
         }
         runCatching { nsd.resolveService(next, listener) }.onFailure { done() }
         // A platform resolve without a callback cannot retain the only queue slot indefinitely.
         main.postDelayed({ done() }, 2_000)
+    }
+
+    private fun key(info: NsdServiceInfo) = "${normalizeServiceType(info.serviceType)}|${info.serviceName}"
+
+    private fun withdraw(info: NsdServiceInfo) {
+        val key = key(info)
+        budget.lost(key)
+        pending.removeAll { key(it) == key }
+        callbacks.remove(key)?.let { if (Build.VERSION.SDK_INT >= 34) runCatching { nsd.unregisterServiceInfoCallback(it) } }
+        onLost(normalizeServiceType(info.serviceType), info.serviceName)
     }
 
     private fun dispatch(action: () -> Unit) { if (Looper.myLooper() == Looper.getMainLooper()) action() else main.post { action() } }

@@ -64,6 +64,7 @@ fun StreamScreen(
     onStart: () -> Unit,
     onStop: () -> Unit,
     onOpenSettings: () -> Unit,
+    onScreenOff: () -> Unit = {},
 ) {
     val pairing = siteLink?.toPairing()
     // Keep the screen on while streaming (design section 5).
@@ -100,6 +101,8 @@ fun StreamScreen(
         }
 
         StatusPanel(state, siteLink, rejectedHost, droppedTlsHost, lan, localError, onStop, onOpenSettings)
+
+        if (state.running) OutlinedButton(onClick = onScreenOff) { Text("화면 끄기 · 촬영 유지") }
 
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
             // Opens read-only while the camera runs; the settings screen says how to unlock it.

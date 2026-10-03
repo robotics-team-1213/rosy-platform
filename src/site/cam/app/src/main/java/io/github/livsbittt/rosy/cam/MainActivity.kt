@@ -18,6 +18,14 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.background
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.res.stringResource
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -39,6 +47,8 @@ import io.github.livsbittt.rosy.cam.ui.StreamScreen
 import io.github.livsbittt.rosy.cam.ui.invalidText
 import io.github.livsbittt.rosy.cam.ui.rememberLan
 import kotlinx.coroutines.launch
+import io.github.livsbittt.rosy.cam.health.ScreenPower
+import io.github.livsbittt.rosy.cam.health.ScreenCoolingPolicy
 
 /**
  * Single activity: stream screen + settings screen, runtime permissions, and the
@@ -50,9 +60,13 @@ class MainActivity : ComponentActivity() {
     private val deepLinkInvalid = mutableStateOf<String?>(null)
     private lateinit var settings: SettingsStore
     private val pairingModel: PairingViewModel by viewModels()
+    private val screenCooling = ScreenCoolingPolicy()
+    private val screenResting = mutableStateOf(false)
+    private lateinit var screenPower: ScreenPower
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        screenPower = ScreenPower(this)
         settings = SettingsStore(applicationContext)
         if (savedInstanceState == null) {
             handlePairingIntent(intent)
@@ -107,9 +121,32 @@ class MainActivity : ComponentActivity() {
     private fun hasCamera(): Boolean =
         ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
 
+    private fun sleepScreen(askPermission: Boolean) {
+        screenResting.value = true
+        screenPower.sleep(askPermission)
+    }
+
+    @Deprecated("Device-admin activation requires the platform result")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == ScreenPower.REQUEST_SCREEN_LOCK && screenPower.approved()) screenPower.sleep()
+    }
+
     @Composable
     private fun OverheadApp() {
         val state by StreamService.state.collectAsStateWithLifecycle()
+        LaunchedEffect(state.health, state.running) {
+            if (state.running && screenCooling.requestSleep(state.health)) sleepScreen(false)
+        }
+        if (screenResting.value) {
+            Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).padding(24.dp)) {
+                Text("화면 보호 · 촬영과 전송은 계속됩니다", color = MaterialTheme.colorScheme.onBackground)
+                Text("화면 잠금이 허용되지 않았다면 기기의 자동 꺼짐 시간에 맞춰 화면이 꺼집니다.",
+                     color = MaterialTheme.colorScheme.onSurfaceVariant)
+                TextButton(onClick = { screenResting.value = false; screenPower.restore() }) { Text("화면 다시 보기") }
+            }
+            return
+        }
         val stored by settings.stored.collectAsStateWithLifecycle(initialValue = SiteLinkPrefs.Stored(null))
         val siteLink = stored.link
         val development by settings.development.collectAsStateWithLifecycle(initialValue = null)
@@ -178,7 +215,11 @@ class MainActivity : ComponentActivity() {
                 },
                 onBack = { showSettings = false },
                 development = development,
-                onDevelopmentImport = { bootstrap -> scope.launch { settings.importDevelopment(bootstrap) } },
+                onDevelopmentImport = { bootstrap, result ->
+                    scope.launch {
+                        result(runCatching { settings.importDevelopment(bootstrap) }.isSuccess)
+                    }
+                },
                 onDevelopmentRevoke = { scope.launch { settings.revokeDevelopment() } },
                 onPairRequest = { record ->
                     pairingModel.open(PairableSite(record.name, record.tlsHost, record.port, record.address), deviceLabel(), BuildConfig.VERSION_NAME)
@@ -194,6 +235,7 @@ class MainActivity : ComponentActivity() {
                 localError = localError,
                 onStart = onStart,
                 onStop = { StreamService.stop(this) },
+                onScreenOff = { sleepScreen(true) },
                 onOpenSettings = { showSettings = true },
             )
         }

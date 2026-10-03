@@ -66,13 +66,14 @@ fun SettingsScreen(
     /** D-341: a receiver that advertises `pair=rosy-pair/1` was picked for a console-approved request. */
     onPairRequest: (OverheadServiceRecord) -> Unit = {},
     development: LinkPolicy? = null,
-    onDevelopmentImport: (DevelopmentBootstrap) -> Unit = {},
+    onDevelopmentImport: (DevelopmentBootstrap, (Boolean) -> Unit) -> Unit = { _, result -> result(false) },
     onDevelopmentRevoke: () -> Unit = {},
 ) {
     val current = remember(currentLink) { currentLink?.toPairing() }
     var siteName by remember(currentLink) { mutableStateOf(currentLink?.siteName) }
     var freshPairing by remember(currentLink) { mutableStateOf(false) }
     var link by remember { mutableStateOf("") }
+    var importingDevelopment by remember { mutableStateOf(false) }
     var host by remember(current) { mutableStateOf(current?.host ?: "") }
     var port by remember(current) { mutableStateOf(current?.port?.toString() ?: "") }
     var token by remember(current) { mutableStateOf(current?.token ?: "") }
@@ -223,7 +224,13 @@ fun SettingsScreen(
             onClick = {
                 if (link.trimStart().startsWith("{")) {
                     runCatching { DevelopmentBootstrap.parse(link) }
-                        .onSuccess { onDevelopmentImport(it); link = ""; invalid = null }
+                        .onSuccess { bootstrap ->
+                            importingDevelopment = true
+                            onDevelopmentImport(bootstrap) { success ->
+                                importingDevelopment = false
+                                if (success) { link = ""; invalid = null } else invalid = "bootstrap"
+                            }
+                        }
                         .onFailure { invalid = "bootstrap" }
                     return@OutlinedButton
                 }
@@ -244,7 +251,7 @@ fun SettingsScreen(
                 }
                 saved = false
             },
-            enabled = link.isNotBlank() && !locked && development == null,
+            enabled = link.isNotBlank() && !locked && development == null && !importingDevelopment,
         ) {
             Text(stringResource(R.string.settings_link_apply))
         }
