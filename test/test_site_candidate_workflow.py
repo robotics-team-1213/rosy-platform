@@ -1,9 +1,11 @@
-"""Contracts for the GitHub-hosted, unsigned site candidate workflow (D-437)."""
+"""Contracts for the GitHub-hosted, unsigned site candidate workflow (D-437, D-440)."""
 
 import re
 from pathlib import Path
 
 import yaml
+
+from deploy.site.build_candidate import DOC_FILES, _image_source_paths
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -18,16 +20,23 @@ def _run_text(job):
     return "\n".join(step.get("run", "") for step in job["steps"])
 
 
-def test_site_candidate_workflow_is_manual_and_uses_no_secrets():
+def _triggers():
+    workflow = _workflow()
+    return workflow.get("on", workflow.get(True))
+
+
+def test_site_candidate_workflow_runs_on_dispatch_or_main_push_and_uses_no_secrets():
     workflow = _workflow()
     text = WORKFLOW.read_text(encoding="utf-8")
-    triggers = workflow.get("on", workflow.get(True))
+    triggers = _triggers()
 
-    assert set(triggers) == {"workflow_dispatch"}
+    assert set(triggers) == {"workflow_dispatch", "push"}
+    assert triggers["push"]["branches"] == ["main"]
+    assert set(triggers["push"]) == {"branches", "paths"}
     assert workflow["permissions"] == {"contents": "read"}
     assert "secrets." not in text
     assert set(re.findall(r"\$\{\{\s*github\.(\w+)", text)) <= {
-        "sha", "repository", "server_url", "run_id", "token"}
+        "sha", "repository", "server_url", "run_id", "token", "event_name"}
     # The summary may tell the operator what to run; the workflow never signs.
     assert "private-key" not in text and "python3 deploy/site/sign_candidate.py" not in text
     assert workflow["concurrency"]["cancel-in-progress"] is False
@@ -200,3 +209,56 @@ def test_tool_output_cannot_issue_workflow_commands_before_the_hash_is_published
     readme = (ROOT / "deploy" / "site" / "README.md").read_text(encoding="utf-8")
     assert "job summary table" in readme
     assert "gh attestation verify" in readme and "--format json" in readme
+
+
+def _covered(path: str, patterns: list[str]) -> bool:
+    for pattern in patterns:
+        if pattern.endswith("/**"):
+            if path == pattern[:-3] or path.startswith(pattern[:-2]):
+                return True
+        elif "*" not in pattern and path == pattern:
+            return True
+    return False
+
+
+def test_push_paths_cover_every_image_source_and_candidate_doc():
+    patterns = _triggers()["push"]["paths"]
+    sources = _image_source_paths(ROOT / "deploy" / "site")
+
+    assert all("*" not in p or (p.endswith("/**") and "*" not in p[:-3]) for p in patterns)
+    for path in [*sources, *DOC_FILES, ".github/workflows/build-site-candidate.yml"]:
+        assert _covered(path, patterns), path
+    # No dead pattern: each one names something that exists.
+    for pattern in patterns:
+        assert (ROOT / pattern.removesuffix("/**")).exists(), pattern
+
+
+def test_push_skips_an_existing_release_but_dispatch_still_fails_fast():
+    jobs = _workflow()["jobs"]
+    check = jobs["check-release-free"]
+    run = _run_text(check)
+    build = jobs["build-unsigned-candidate"]
+
+    assert check["outputs"]["build"] == "${{ steps.free.outputs.build }}"
+    push_branch = run[run.index('if [[ "$EVENT_NAME" == "push" ]]'):run.index("already exists; delete it")]
+    assert 'echo "build=false" >>"$GITHUB_OUTPUT"' in push_branch
+    assert "exit 0" in push_branch and "::notice::" in push_branch
+    after = run[run.index("already exists; delete it"):]
+    assert after.index("exit 1") < after.index('echo "build=true" >>"$GITHUB_OUTPUT"')
+    assert build["if"] == "needs.check-release-free.outputs.build == 'true'"
+    assert jobs["attest-provenance"]["needs"] == "build-unsigned-candidate"
+
+
+def test_newest_push_cancels_only_builds_never_a_running_publish():
+    workflow = _workflow()
+    jobs = workflow["jobs"]
+    build = jobs["build-unsigned-candidate"]["concurrency"]
+    publish = jobs["publish-unsigned-prerelease"]["concurrency"]
+
+    assert workflow["concurrency"]["cancel-in-progress"] is False
+    assert build["cancel-in-progress"] == "${{ github.event_name == 'push' }}"
+    # Pushes share one build group; each dispatch has its own (never cancelled).
+    assert "github.event_name == 'push' && 'main-push' || github.run_id" in build["group"]
+    assert publish == {"group": "rosy-site-candidate-publish", "cancel-in-progress": False}
+    for name in ("check-release-free", "attest-provenance"):
+        assert "concurrency" not in jobs[name], name
