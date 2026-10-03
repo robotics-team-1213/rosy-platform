@@ -2211,3 +2211,9 @@
 - 변경: 실행 컨테이너의 태그·불변 이미지 ID를 서명 archive와 대조한 뒤 후보를 선택한다. 손상·읽기 실패·잘못된 복구 기록을 보존하고 갱신을 중단하며, 복구 전에 백업 환경과 이전 서명 후보를 검증한다. forget-failed를 동일 실행 잠금으로 보호하고, Content-Length에 못 미친 HTTP 수신을 재시도 오류로 처리한다.
 - 증거: 기존 코드에서 실행 스택 불일치 2건 Linux RED, 손상 기록·동시 잠금·불완전 HTTP 7건 Windows RED, 검증기 이미지 ID 노출 RED를 확인했다. 수정 후 Windows 관련 suite 51 passed/23 skipped, 모듈 구조 33 passed. 독립 기준 검토 보고서는 X:/DevTemp/rosy-d441-independent-review.md다. Linux 전체 관련 재실행과 수정 후 독립 검토는 진행 중이다.
 - gate 변화: 기존 gate 유지. 현장 sudo는 대화형 인증이 필요하며, 호스트 설치와 자동 갱신 수용은 별도 확인한다.
+
+## 2026-10-04 · uncommitted · verify(D-441): 추가 보정 Linux 회귀 확인
+
+- 변경: origin/main의 동시 작업을 보존하며 자동 갱신 브랜치를 rebase했다. 생성된 문서 index를 갱신했다.
+- 증거: 갱신·자동 서명·서명 후보 검증기 관련 Linux suite 76 passed, 0 skipped. 실행 중 컨테이너 불일치, 손상 상태, 잠금, 불완전 HTTP와 복구 증거 불일치를 포함한다. X:/DevTemp/rosy-rereview-linux-green.txt.
+- gate 변화: 기존 gate 유지. 수정 후 독립 재검토와 push 전 검사는 진행 중이며 운영 설치는 아직 수행하지 않았다.
