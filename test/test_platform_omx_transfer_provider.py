@@ -10,8 +10,8 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 for package_root in (
     ROOT / "contracts/skill/src",
-    ROOT / "modules/skills/api/src",
-    ROOT / "modules/skills/manipulation/src",
+    ROOT / "middleware/skills/api/src",
+    ROOT / "middleware/skills/manipulation/src",
     ROOT / "src/contracts/foundation",
     ROOT / "src/products/omx/adapter",
     ROOT / "integrations/robots/omx/src",

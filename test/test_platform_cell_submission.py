@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 for relative in (
     "contracts/skill/src",
     "operations/execution/src",
-    "modules/skills/api/src",
+    "middleware/skills/api/src",
 ):
     path = str(ROOT / relative)
     if path not in sys.path:

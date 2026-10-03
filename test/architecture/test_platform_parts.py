@@ -210,7 +210,7 @@ def test_api_roots_are_flagged_and_named_api():
         root["api"] is not True or not root.get("import_prefix")
         or not all(prefix.endswith(".api") for prefix in root["import_prefix"]))]
     assert bad == [], f"api: true needs every import_prefix to end in .api: {bad}"
-    assert [root["path"] for root in roots if root.get("api")] == ["modules/skills/api"]
+    assert [root["path"] for root in roots if root.get("api")] == ["middleware/skills/api"]
 
 
 CONCERNS = ["learning", "decision", "control", "safety", "contracts", "other"]

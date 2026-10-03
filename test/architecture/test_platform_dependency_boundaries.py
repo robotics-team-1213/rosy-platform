@@ -21,14 +21,14 @@ CURRENT_COMPONENTS = {
     "omx_device_adapter": ("src/products/omx/adapter/omx_adapter", "omx_adapter"),
     "world_api": ("operations/world/src/rosy/world/api", "rosy.world.api"),
     "skill_contracts": ("contracts/skill/src/rosy/contracts/skill", "rosy.contracts.skill"),
-    "skill_api": ("modules/skills/api/src/rosy/skills/api", "rosy.skills.api"),
+    "skill_api": ("middleware/skills/api/src/rosy/skills/api", "rosy.skills.api"),
     "execution_api": ("operations/execution/src/rosy/execution/api", "rosy.execution.api"),
     "omx_transfer_integration": (
         "integrations/robots/omx/src/rosy/integrations/robots/omx",
         "rosy.integrations.robots.omx",
     ),
     "gateway_app": ("operations/apps/fleet/src/rosy_gateway", "rosy_gateway"),
-    "agent_app": ("apps/agent/src/rosy_agent", "rosy_agent"),
+    "agent_app": ("middleware/apps/device/omx/agent/src/rosy_agent", "rosy_agent"),
 }
 
 

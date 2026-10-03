@@ -9,7 +9,7 @@ import pytest
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
-for relative in ("contracts/skill/src", "modules/skills/api/src", "modules/skills/manipulation/src",
+for relative in ("contracts/skill/src", "middleware/skills/api/src", "middleware/skills/manipulation/src",
                  "integrations/robots/omx/src", "src/products/omx/adapter",
                  "src/products/omx/adapter/test", "operations/fleet/test", "operations/execution/src"):
     sys.path.insert(0, str(ROOT / relative))

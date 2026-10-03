@@ -188,23 +188,26 @@ roots:
     wave: "4c"
     note: Pinky URDF used by both the real robot and Gazebo; could also be integrations/robots/pinky.
     concern: control
-  - path: apps/agent
+  - path: middleware/apps/device/omx/agent
     part: middleware
     d427_target: middleware/apps/device/omx/agent
+    legacy: apps/agent
     wave: "4a"
     import_prefix: [rosy_agent]
     note: OMX cell local Action owner composition (device side of the D-401 cell).
     concern: control
-  - path: modules/skills/api
+  - path: middleware/skills/api
     part: middleware
     d427_target: middleware/skills/api
+    legacy: modules/skills/api
     wave: "4a"
     import_prefix: [rosy.skills.api]
     concern: control
     api: true
-  - path: modules/skills/manipulation
+  - path: middleware/skills/manipulation
     part: middleware
     d427_target: middleware/skills/manipulation
+    legacy: modules/skills/manipulation
     wave: "4a"
     import_prefix: [rosy.skills.manipulation]
     concern: control

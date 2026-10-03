@@ -17,9 +17,9 @@ import threading
 from pathlib import Path
 
 REPO = Path(os.environ.get("ROSY_SIM_REPO", "/repo"))
-for _part in ("src/contracts/foundation", "contracts/skill/src", "src/products/omx/adapter", "apps/agent/src",
-              "operations/execution/src", "operations/processes/palletizing/src", "modules/skills/api/src",
-              "modules/skills/manipulation/src", "integrations/robots/omx/src", "deploy/robot/omx"):
+for _part in ("src/contracts/foundation", "contracts/skill/src", "src/products/omx/adapter", "middleware/apps/device/omx/agent/src",
+              "operations/execution/src", "operations/processes/palletizing/src", "middleware/skills/api/src",
+              "middleware/skills/manipulation/src", "integrations/robots/omx/src", "deploy/robot/omx"):
     sys.path.append(str(REPO / _part))
 
 from cell_sim_tools import refuse_second_owner  # noqa: E402

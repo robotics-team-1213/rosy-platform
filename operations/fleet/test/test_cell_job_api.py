@@ -5,7 +5,7 @@ import sys
 from fastapi.testclient import TestClient
 
 ROOT = Path(__file__).resolve().parents[3]
-for relative in ("contracts/skill/src", "operations/execution/src", "modules/skills/api/src"):
+for relative in ("contracts/skill/src", "operations/execution/src", "middleware/skills/api/src"):
     path = str(ROOT / relative)
     if path not in sys.path:
         sys.path.insert(0, path)

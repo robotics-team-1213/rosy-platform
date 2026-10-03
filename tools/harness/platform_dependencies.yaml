@@ -24,7 +24,7 @@ components:
     path: contracts/skill/src/rosy/contracts/skill
     import_prefix: rosy.contracts.skill
   - name: skill_api
-    path: modules/skills/api/src/rosy/skills/api
+    path: middleware/skills/api/src/rosy/skills/api
     import_prefix: rosy.skills.api
   - name: execution_api
     path: operations/execution/src/rosy/execution/api
@@ -36,7 +36,7 @@ components:
     path: operations/apps/fleet/src/rosy_gateway
     import_prefix: rosy_gateway
   - name: agent_app
-    path: apps/agent/src/rosy_agent
+    path: middleware/apps/device/omx/agent/src/rosy_agent
     import_prefix: rosy_agent
 
 # Static absolute imports and relative imports resolved from their package path.
