@@ -46,9 +46,9 @@ MANIFEST = ROOT / "tools" / "harness" / "platform_parts.yaml"
 
 #: Roots (by target) whose folder is itself a package dir, so their dotted package starts at the prefix.
 PACKAGE_DIR_ROOTS = {
-    "operations/execution/api",
-    "middleware/execution/local",
-    "operations/execution/site",
+    "operations/execution/src/rosy/execution/api",
+    "middleware/execution/local",  # until 2c turns it into a wheel root; 2c removes this line
+    "operations/execution/src/rosy/execution/site",
 }
 
 #: Frozen §2 violations as (importer target, imported target or "external:<name>") -> reason.
@@ -65,10 +65,10 @@ KNOWN_VIOLATIONS = {
     ("integrations/robots/omx", "middleware/apps/device/omx/adapter"): (
         "integrations -> middleware: cell_workflow reuses the adapter pick-place journal"
     ),
-    ("operations/execution/api", "middleware/execution/local"): (
+    ("operations/execution/src/rosy/execution/api", "middleware/execution/local"): (
         "operations -> middleware: PlanBundle embeds local receipt identity types"
     ),
-    ("operations/execution/api", "middleware/skills/api"): (
+    ("operations/execution/src/rosy/execution/api", "middleware/skills/api"): (
         "operations -> middleware: PlanBundle steps carry SkillInvocation (Skill envelope belongs in contracts)"
     ),
     ("operations/processes/palletizing", "middleware/skills/api"): (
