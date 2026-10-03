@@ -2,6 +2,8 @@
 
 The installed controller is outside the candidate. No pip, apt, git pull,
 training cancellation, credential replacement or driving-model selection.
+Uncommitted perception edits hold the switch and stay on disk. exec does not
+run a work-tree script that differs from the signed release.
 """
 from __future__ import annotations
 
@@ -106,6 +108,42 @@ def gpu_busy(*, runner=subprocess.run):
     return None
 
 
+def perception_edits(roots):
+    """Uncommitted perception files in an enrolled checkout. None when clean.
+
+    Non-git legacy roots are ignored. A git failure holds the switch: an
+    unreadable checkout is not treated as idle.
+    """
+    for root in roots:
+        root = Path(root)
+        if not (root / ".git").exists():
+            continue
+        result = subprocess.run(
+            ["git", "-C", str(root), "status", "--porcelain", "--", "learning/training/perception"],
+            capture_output=True, text=True)
+        if result.returncode != 0:
+            return "checkout observation failed"
+        if result.stdout.strip():
+            return "uncommitted perception edits"
+    return None
+
+
+def checkout_script_conflict(source, work_dir, script):
+    """The work tree copy is not what exec runs. Differing bytes must stop."""
+    local = Path(work_dir) / script
+    if local.is_symlink() or not local.is_file():
+        return None
+    signed = Path(source) / script
+    try:
+        local_bytes = local.read_bytes()
+        signed_bytes = signed.read_bytes() if signed.is_file() and not signed.is_symlink() else None
+    except OSError:
+        return "checkout script unreadable"
+    if signed_bytes != local_bytes:
+        return "work checkout script differs from the signed release"
+    return None
+
+
 def legacy_busy(roots, *, proc=Path("/proc")):
     """Observe legacy Python/Isaac jobs without logging their secret-bearing argv."""
     for entry in proc.iterdir():
@@ -183,16 +221,18 @@ def replace_link(root, target):
 
 
 class Updater:
-    def __init__(self, root, key_id, public_key, python, *, environment=None, busy=None, health=None, legacy_roots=(), data_root=None):
+    def __init__(self, root, key_id, public_key, python, *, environment=None, busy=None, health=None, legacy_roots=(), data_root=None, checkouts=()):
         self.root = Path(root)
         self.root.mkdir(parents=True, exist_ok=True)
         self.key_id, self.public_key, self.python = key_id, Path(public_key), str(python)
+        self.legacy_roots = tuple(legacy_roots)
+        self.checkouts = tuple(checkouts) if checkouts else self.legacy_roots
         self.data_root = Path(data_root).resolve(strict=True) if data_root is not None else None
         if self.data_root is not None and (not self.data_root.is_dir()
                 or self.data_root.is_relative_to((self.root / "releases").resolve())):
             raise ValueError("persistent data must be an existing directory outside releases")
         self.environment = environment or self.probe_environment
-        self.busy = busy or (lambda: legacy_busy(legacy_roots) or gpu_busy())
+        self.busy = busy or (lambda: legacy_busy(self.legacy_roots) or gpu_busy())
         self.health = health or self.check_health
 
     def probe_environment(self):
@@ -271,6 +311,8 @@ class Updater:
         if (self.root / "HOLD").exists(): return self.record(state, "held", reason="operator hold")
         busy = self.busy()
         if busy: return self.record(state, "held", reason=busy)
+        edits = perception_edits(self.checkouts)
+        if edits: return self.record(state, "held", reason=edits)
         candidates, rejected = [], False
         inbox = self.root / "inbox"
         inbox.mkdir(exist_ok=True)
@@ -376,6 +418,8 @@ def execute(config, script, args):
         file = (perception / script).resolve(strict=True)
         file.relative_to(perception)
         if file.suffix != ".py": raise ValueError("job entry point must be a Python script")
+        conflict = checkout_script_conflict(perception, Path(config["work_dir"]) / PREFIX, script)
+        if conflict: raise ValueError(conflict)
         env_hash = Updater(root, config["key_id"], config["public_key"], config["python"]).probe_environment()
         if env_hash != state.get("environment_sha256"):
             raise ValueError("job environment differs from the activated candidate")
@@ -416,7 +460,9 @@ def main():
             config = load_config(a.config)
             if a.command == "exec": return execute(config, a.script, a.args)
             u = Updater(config["root"], config["key_id"], config["public_key"], config["python"],
-                        legacy_roots=config["legacy_roots"], data_root=Path(config["work_dir"]) / "data")
+                        legacy_roots=config["legacy_roots"],
+                        checkouts=(config["work_dir"], *config["legacy_roots"]),
+                        data_root=Path(config["work_dir"]) / "data")
             result = u.run() if a.command == "run" else u.state()
             print(json.dumps(result, sort_keys=True))
             return int(result.get("result") in {"rejected", "rolled-back"})

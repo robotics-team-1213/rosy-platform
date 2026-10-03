@@ -280,8 +280,8 @@
 
 ## 최근 기록
 
+- 2026-10-04 · uncommitted · 모델 PC 코드 갱신은 커밋하지 않은 perception 수정을 덮지 않는다
 - 2026-10-04 · uncommitted · D-446 모델 PC도 서명 코드 자동 업데이트에 포함하고 작업·GPU 환경·모델 승격을 분리한다
 - 2026-10-04 · uncommitted · docs(adr): D-447 웹 실시간 구독 재사용 계약
 - 2026-10-04 · uncommitted · cam: 촬영 조명을 명시적 요청으로 제한
 - 2026-10-04 · uncommitted · site(D-441): automatic site stack updates
-- 2026-10-04 · uncommitted · cam: 승인한 자동 조명과 사진 저장 구현

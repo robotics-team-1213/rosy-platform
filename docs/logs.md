@@ -4963,3 +4963,9 @@
 - 변경: D-446 모델 PC의 서명 코드 후보·작업 잠금·환경 지문·유휴 source 전환·실패 복귀를 구현했다. perception과 control/core_common은 같은 commit과 상대 경로로 묶고 고정 bootstrap을 사용한다. 기존 data는 외부 디렉터리로 연결한다.
 - 증거: 실제 모델 PC의 격리 Linux 시험 30 passed. 서명과 작업 환경 guard는 변이에서 실패를 확인했다. 사용자 updater timer 설치·enabled/active와 linger를 확인했다. 리뷰에서 발견한 import closure와 unmanaged 작업 admission을 보완했다.
 - gate 변화: 없음. 코드 updater 설치와 첫 후보 전환·model-watch doctor·학습 모델 품질·주행 수용은 별도 증거로 판정한다. push·CI는 수행하지 않았다.
+
+## 2026-10-04 · uncommitted · 모델 PC 코드 갱신은 커밋하지 않은 perception 수정을 덮지 않는다
+
+- 변경: D-446. 등록한 checkout의 `learning/training/perception`에 커밋하지 않은 수정이 있으면 전환을 보류하고 그 파일은 그대로 둔다. exec는 작업 디렉터리의 같은 스크립트가 서명 릴리스와 바이트가 다르면 실행하지 않는다.
+- 증거: `test/test_model_pc_autoupdate.py` 12 passed, 21 skipped (Windows). 보류 통합 시험은 Linux symlink/flock이라 건너뛰었다. 모델 PC 설치와 자동 전환은 하지 않았다.
+- gate 변화: 없음. 설치·자동 전환·장기 운용 수용은 미검증.
