@@ -5,14 +5,9 @@
 그 파일에 스며들면 경계가 무너진다.
 
 장치 쪽 규칙은 장치가 지킨다: 부팅·감독자 침묵 → 적색 점멸. 여기서 하는 일은
-(1) 상태를 모으고, (2) 명령을 내리고, (3) `mode=failsafe` 를 보면 **운영자의 마지막
-의도를 한 번만 다시 내려보내는 것**이다. 무한 재시도는 명령 스톰이고, 스톰은 장치의
-하트비트 예산을 잡아먹는다.
-
-폴링은 상시 루프가 아니라 **요청 시 갱신**이다 — `refresh()` 가 주기 제한(2 s)을 두고
-한 틱을 돌리고, 관제 UI 가 `/api/fleet/state` 를 계속 당기는 것이 그 주기를 만든다.
-관제가 보지 않으면 장치는 스스로 페일세이프로 간다. 그것은 고장이 아니라 장치 계약의
-뜻대로다: 아무도 감독하지 않는 신호는 신뢰할 수 없음을 보여야 한다.
+(1) 상태를 모으고, (2) 명령을 내리고, (3) Fleet lifespan에서 상시 감독한다(D-443).
+수동 점등은 인증된 운영자의 presence가 있을 때만 유지한다. 감독 공백 뒤의 의도는
+새 운영자 명령 전까지 stale이다. 연속 감독 중 failsafe만 한 번 재단언할 수 있다.
 """
 
 from __future__ import annotations
@@ -31,6 +26,8 @@ from fleet.server.signal_config import SignalsFileError, load_signals, write_sig
 POLL_INTERVAL_S = 2.0     # 장치 하트비트 타임아웃(10 s)의 5 배 밀도
 HTTP_TIMEOUT_S = 1.5      # 폴링이 로봇 gather 를 지연시키지 않게 짧게
 REASSERT_LIMIT = 1        # failsafe 재단언은 실패해도 한 번 — 나머지는 운영자 몫
+SUPERVISION_TIMEOUT_S = 10.0
+SAFE_MODES = frozenset({"all_red", "flash_red"})
 
 
 class SignalApiError(Exception):
@@ -116,7 +113,7 @@ def cross_check(intent_lamps: Optional[dict], status_lamps: dict,
         if disagree:
             return "controller_mismatch", [f"cmd_vs_device:{lamp}" for lamp in disagree]
     if observed is None:
-        return "agree", []
+        return "absent", []
     if not isinstance(observed, dict) or not isinstance(observed.get("stable"), dict):
         return "bad_response", ["obs_shape"]
     if observed.get("frozen"):
@@ -125,6 +122,9 @@ def cross_check(intent_lamps: Optional[dict], status_lamps: dict,
     if not mapping:
         return "unmapped", []
     stable = observed["stable"]
+    if any(isinstance(stable.get(roi), dict) and stable[roi].get("pending")
+           for roi in mapping.values()):
+        return "pending", []
     faults: list[str] = []
     for lamp, roi in mapping.items():
         expected = EXPECTED_GROUPS.get(lamp)
@@ -136,6 +136,8 @@ def cross_check(intent_lamps: Optional[dict], status_lamps: dict,
             continue
         if row.get("pending"):
             continue                     # debounce 확정 전 — 불일치를 말할 수 없다
+        if not isinstance(row.get("lit"), bool):
+            return "unknown", []
         lit = bool(row.get("lit"))
         if _on(status_lamps, lamp) and not lit:
             faults.append(f"obs_dark:{lamp}")
@@ -294,6 +296,15 @@ class SignalConsole:
         self._seq: dict[str, int] = {sid: 0 for sid in self._order}
         self._reasserts: dict[str, int] = {sid: 0 for sid in self._order}
         self._mismatch: dict[str, Optional[str]] = {sid: None for sid in self._order}
+        self._locks = {sid: asyncio.Lock() for sid in self._order}
+        self._contact_at: dict[str, Optional[float]] = {sid: None for sid in self._order}
+        self._intent_at: dict[str, float] = {}
+        self._intent_stale: set[str] = set()
+        self._link = {sid: "unreachable" for sid in self._order}
+        self._presence: dict[str, float] = {}
+        self._intent_actor: dict[str, Optional[str]] = {}
+        self._generation = {sid: 0 for sid in self._order}
+        self._poll_lock = asyncio.Lock()
         self._last_poll = float("-inf")
 
     @property
@@ -308,30 +319,58 @@ class SignalConsole:
 
     # --- scatter ---------------------------------------------------------------
 
-    async def command(self, signal_id: str, body: dict, *, _is_reassert: bool = False) -> dict:
+    def operator_presence(self, actor: str) -> None:
+        self._presence[actor] = self._clock()
+
+    def _manual_present(self, signal_id: str) -> bool:
+        actor = self._intent_actor.get(signal_id)
+        last = self._presence.get(actor) if actor else None
+        return last is not None and self._clock() - last < SUPERVISION_TIMEOUT_S
+
+    async def command(self, signal_id: str, body: dict, *, actor: Optional[str] = None,
+                      _is_reassert: bool = False, _expected_generation: Optional[int] = None,
+                      _restore_intent: bool = False) -> dict:
         """운영자 명령 한 건. `seq` 는 콘솔이 채운다 — 장치의 단조 검사는 장치 몫이다."""
         client = self._client(signal_id)
-        seq = self._seq.get(signal_id, 0) + 1
-        full = {"seq": seq, **body}
-        try:
-            status = await client.command(full)
-        except SignalApiError as exc:
-            if exc.code == "stale_seq":
-                # 장치의 장부가 우리 것보다 앞서 있다(다른 클라이언트의 흔적, 또는
-                # 우리가 놓친 재시작). 장치 진실을 채택하고 불일치로 남긴다 — 조용히
-                # 밀어 붙이면 운영자는 왜 명령이 안 먹는지 영영 모른다.
-                if exc.last_seq is not None:
-                    self._seq[signal_id] = exc.last_seq
-                self._mismatch[signal_id] = "stale_seq"
+        async with self._locks[signal_id]:
+            if _expected_generation is not None and self._generation[signal_id] != _expected_generation:
                 return self._row(signal_id)
-            raise
-        self._seq[signal_id] = seq
-        self._intent[signal_id] = {k: v for k, v in body.items() if k != "seq"}
-        if not _is_reassert:
-            self._reasserts[signal_id] = 0
-        self._mismatch[signal_id] = None
-        self._record(signal_id, status)
-        return self._row(signal_id)
+            self._invalidate_gap(signal_id)
+            if _restore_intent and (signal_id in self._intent_stale
+                                    or self._mismatch[signal_id] == "stale_seq"
+                                    or body.get("mode") == "manual" and not self._manual_present(signal_id)):
+                return self._row(signal_id)
+            if not _is_reassert and body.get("mode") == "manual" and not actor:
+                raise HubError("OPERATOR_PRESENCE_REQUIRED", "manual aspect requires an operator")
+            for attempt in range(2):
+                seq = self._seq[signal_id] + 1
+                full = {**body, "seq": seq}
+                try:
+                    status = await client.command(full)
+                except SignalApiError as exc:
+                    if exc.code != "stale_seq":
+                        raise
+                    if exc.last_seq is not None:
+                        self._seq[signal_id] = max(self._seq[signal_id], exc.last_seq)
+                    self._mismatch[signal_id] = "stale_seq"
+                    if attempt == 0 and body.get("mode") in SAFE_MODES:
+                        continue
+                    return self._row(signal_id)
+                self._seq[signal_id] = seq
+                if not _is_reassert:
+                    self._mismatch[signal_id] = None
+                self._record(signal_id, status)
+                if not _is_reassert:
+                    self._intent[signal_id] = {k: v for k, v in body.items() if k != "seq"}
+                    self._intent_at[signal_id] = self._clock()
+                    self._intent_stale.discard(signal_id)
+                    self._reasserts[signal_id] = 0
+                    self._generation[signal_id] += 1
+                    self._intent_actor[signal_id] = actor
+                    if actor is not None:
+                        self.operator_presence(actor)
+                    self._recompute_mismatch(signal_id, status)
+                return self._row(signal_id)
 
     async def all_red(self) -> dict:
         """전 기기 `all_red`. e-stop 의 신호등 반쪽이다 — 한 기가 죽어도 나머지에
@@ -363,18 +402,44 @@ class SignalConsole:
 
     async def poll_once(self) -> None:
         """모든 기기를 한 번씩 본다. 한 기가 죽어도 나머지는 갱신된다."""
-        results = await asyncio.gather(
-            *(self._client(sid).status() for sid in self._order),
-            return_exceptions=True,
-        )
-        for signal_id, result in zip(self._order, results):
-            if isinstance(result, BaseException):
+        async with self._poll_lock:
+            await asyncio.gather(*(self._poll_one(sid) for sid in self._order))
+            await self._observe_all()
+            await self._enforce_manual_presence()
+            await self._reassert_failsafes()
+
+    async def _poll_one(self, signal_id: str) -> None:
+        async with self._locks[signal_id]:
+            try:
+                self._record(signal_id, await self._client(signal_id).status())
+            except Exception as result:
                 self._online[signal_id] = False
                 self._error[signal_id] = _error_of(result)
-            else:
-                self._record(signal_id, result)
-        await self._observe_all()          # 3자 교차 검증의 3 번째 증거(관측 실측)
-        await self._reassert_failsafes()
+                self._link[signal_id] = ("timeout" if isinstance(result, httpx.TimeoutException)
+                                         else "bad_response" if isinstance(result, SignalApiError)
+                                         else "unreachable")
+                self._invalidate_gap(signal_id)
+
+    async def run(self) -> None:
+        """Fleet-owned heartbeat loop; cancellation stops supervision on shutdown."""
+        while True:
+            await self.refresh()
+            await asyncio.sleep(self._poll_interval_s)
+
+    async def _enforce_manual_presence(self) -> None:
+        for sid in self._order:
+            status = self._status[sid]
+            if not self._online[sid] or status is None:
+                continue
+            intent = self._intent.get(sid) or {}
+            if (intent.get("mode") == "manual" or status.mode == "manual") and not self._manual_present(sid):
+                self._intent_stale.add(sid)
+                if status.mode not in {"failsafe", "flash_red"}:
+                    try:
+                        await self.command(sid, {"mode": "flash_red"}, _is_reassert=True,
+                                           _expected_generation=self._generation[sid])
+                    except Exception:
+                        pass  # Polling keeps checking; no unsafe intent is replayed.
 
     async def _observe_all(self) -> None:
         """관측 폴링 — 한 기의 침묵이 다른 기의 실측을 지우지 않게 개별 실패를 흡수한다."""
@@ -409,17 +474,29 @@ class SignalConsole:
                 self._reasserts[signal_id] = 0
                 continue
             intent = self._intent.get(signal_id)
-            if not intent or self._reasserts[signal_id] >= REASSERT_LIMIT:
+            if (not intent or signal_id in self._intent_stale or "fence" in intent
+                    or self._mismatch[signal_id] == "stale_seq"
+                    or self._reasserts[signal_id] >= REASSERT_LIMIT):
                 continue
             self._reasserts[signal_id] += 1
             try:
-                await self.command(signal_id, dict(intent), _is_reassert=True)
+                await self.command(signal_id, dict(intent), _is_reassert=True,
+                                   _expected_generation=self._generation[signal_id], _restore_intent=True)
             except Exception:
                 pass  # 재단언 실패는 다음 폴링의 상태로 보인다 — 여기서 소리치지 않는다
 
     # --- 상태 -------------------------------------------------------------------
 
+    def _invalidate_gap(self, signal_id: str) -> None:
+        last = self._contact_at[signal_id]
+        if last is not None and self._clock() - last >= SUPERVISION_TIMEOUT_S:
+            self._intent_stale.add(signal_id)
+
     def _record(self, signal_id: str, status: SignalStatus) -> None:
+        self._invalidate_gap(signal_id)
+        self._contact_at[signal_id] = self._clock()
+        self._seq[signal_id] = max(self._seq[signal_id], status.seq)
+        self._link[signal_id] = "ok"
         self._status[signal_id] = status
         self._online[signal_id] = True
         self._error[signal_id] = None
@@ -436,7 +513,7 @@ class SignalConsole:
             self._mismatch[signal_id] = None
             return
         state, _ = cross_check(lamps, status.lamps)
-        self._mismatch[signal_id] = state if state != "agree" else None
+        self._mismatch[signal_id] = state if state == "controller_mismatch" else None
 
     def _verify_row(self, signal_id: str) -> dict:
         """3자 교차 검증의 현재 상태. 관측이 없으면 `absent` — 지어낸 답은 없다."""
@@ -468,6 +545,12 @@ class SignalConsole:
             "intent": self._intent.get(signal_id),
             "mismatch": self._mismatch[signal_id],
             "verify": self._verify_row(signal_id),
+            "link": self._link[signal_id],
+            "age_s": (None if self._contact_at[signal_id] is None
+                      else max(0.0, self._clock() - self._contact_at[signal_id])),
+            "intent_age_s": (None if signal_id not in self._intent_at
+                             else max(0.0, self._clock() - self._intent_at[signal_id])),
+            "requires_command": signal_id in self._intent_stale,
         }
         if status is not None:
             row.update(status.as_row())

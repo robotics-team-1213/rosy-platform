@@ -38,3 +38,9 @@ D-443 Accepted 및 인계 문서의 이전 직후 첫 안전 작업 승인을 �
 - 독립 리뷰는 재단언 래치와 presence/seq 경합, 전체 정지 safe retry의 실패 처리, 감독 loop의 시작·종료를 확인한다. 발견한 결함은 RED 재현 뒤 고친다.
 - `python tools/harness/rosy_harness.py generate`, lint 0 error, 관련 pytest/known_failures NEW 0, Safety-Review trailer를 확인하고 커밋한다. 커밋한 깨끗한 checkout에서 대표 회귀를 재검증한다.
 - main 반영은 마이그레이션 푸시 완료 후 fetch/rebase/generate/pre-push 순서를 따른다. 호스트 시험은 ROS-SIM·ARM64·기기·FIELD 증거가 아니다.
+
+## 구현 중 리뷰 보완 (2026-10-04)
+
+`signal_routes.py`를 신호 API의 단일 owner 라우트로 둔다. `console_routes.py`와 Console의 얇은 신호 위임은 그곳으로 옮긴다. Console의 기존 600라인 초과 판정은 추가 성장 허용이 없으므로 판정을 느슨하게 하지 않는다. API 경로와 신호 장치 writer는 그대로다.
+
+독립 리뷰에서 재현한 대기 중 재단언의 409 경합은 command 잠금 내부에서 `stale_seq`를 다시 검사해 막는다. 익명 loopback operator fallback은 수동 명령과 presence에서 거부한다. 두 결함은 먼저 실패하는 회귀 시험으로 고정한다.

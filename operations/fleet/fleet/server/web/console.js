@@ -692,7 +692,8 @@ function refreshDiagnostics() {
 }
 
 // D-262: 신호등 카드는 signals.js 팩토리가 그린다.
-const signals = createSignals({ scope: pageScope, el, view, log, call, refreshState });
+const signals = createSignals({ scope: pageScope, el, view, log, call, refreshState,
+  isOperator: () => auth.role === "operator" && !auth.locked });
 // D-410 — 운용 화면의 카메라는 영상 프리뷰만 띄운다. 경기장/맵 보정 뷰는 설치 화면이 가진다.
 const visionView = createVisionView({ scope: pageScope, el, call, auth, authHeaders });
 
@@ -741,6 +742,7 @@ visionView.refreshSources();
 mapView.refresh();
 pageScope.interval(() => { if (!auth.locked) formation.refreshFormation(); }, MAP_MS);
 pageScope.interval(refreshState, STATE_MS);
+pageScope.interval(() => signals.presence(), STATE_MS);
 pageScope.interval(() => { if (!auth.locked) refreshDispatchControl(); }, STATE_MS);
 pageScope.interval(refreshDiscovery, MAP_MS);
 pageScope.interval(() => mapView.refresh(), MAP_MS);

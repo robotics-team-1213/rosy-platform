@@ -3,7 +3,26 @@
 // all_red 는 "명령된 정지"다 — 둘을 같은 색으로 뭉뜽그리면 운영자는 장비 고장을
 // 정지 성공으로 읽어 버린다.
 
-export function createSignals({ scope, el, view, log, call, refreshState }) {
+export async function sendSignalPresence({ operator, visible, configured, call }) {
+  if (operator && visible && configured) {
+    await call("/api/fleet/signals/presence", { method: "POST" });
+  }
+}
+
+export function createSignals({ scope, el, view, log, call, refreshState, isOperator = () => false }) {
+  let presenceInFlight = false;
+  async function presence() {
+    if (presenceInFlight) return;
+    presenceInFlight = true;
+    try {
+      await sendSignalPresence({ operator: isOperator(), visible: !document.hidden,
+        configured: Object.keys(view.signals || {}).length > 0, call });
+    } catch (_) {
+      // A failed heartbeat expires server-side; a later tick can renew presence.
+    } finally {
+      presenceInFlight = false;
+    }
+  }
   const SIGNAL_MODE_TAG = {
     failsafe: { text: "failsafe", cls: "crit" },
     manual: { text: "manual", cls: "" },
@@ -66,9 +85,17 @@ export function createSignals({ scope, el, view, log, call, refreshState }) {
     const faults = row.faults && row.faults.length ? ` · ${row.faults.join(", ")}` : "";
     meta.textContent = row.online
       ? `접촉 ${row.secs_since_contact ?? "—"}s 전${faults}`
-      : "닿지 않음";
+      : `마지막으로 본 값 · ${row.age_s == null ? "시각 모름" : `${Math.floor(row.age_s)}s 전`}`;
     body.appendChild(meta);
     node.appendChild(body);
+
+    if (row.requires_command) {
+      const stale = document.createElement("p");
+      stale.className = "hint";
+      const age = row.intent_age_s == null ? "" : ` · ${Math.floor(row.intent_age_s)}s 전`;
+      stale.textContent = `재명령 필요 — 마지막 의도 ${row.intent?.mode || "없음"}${age}`;
+      node.appendChild(stale);
+    }
 
     if (row.mismatch) {
       // 장치의 seq 장부와 우리 것이 어긋났다(다른 클라이언트, 재시작). 자동 재시도로
@@ -119,5 +146,5 @@ export function createSignals({ scope, el, view, log, call, refreshState }) {
     }
   }
 
-  return { render };
+  return { render, presence };
 }

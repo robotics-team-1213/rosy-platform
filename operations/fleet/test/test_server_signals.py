@@ -199,7 +199,7 @@ def test_cross_check_pending_observation_is_not_yet_evidence():
     status = {"red": True, "yellow": False, "green": False}
     state, faults = cross_check(None, status, _observed(red=False, pending=True),
                                 lamp_to_roi={"red": "left"})
-    assert (state, faults) == ("agree", [])       # debounce 확정 전 — 침묵이 증거다
+    assert (state, faults) == ("pending", [])     # debounce is not measured agreement
 
 
 def test_cross_check_without_a_cycle_map_says_unmapped():
@@ -217,7 +217,7 @@ def test_poll_marks_the_dead_one_without_losing_the_live_one():
     asyncio.run(console.poll_once())
     snap = console.snapshot()
     assert snap["signal_1"]["online"] is True
-    assert snap["signal_1"]["mode"] == "manual"
+    assert snap["signal_1"]["mode"] == "flash_red"  # an unowned manual aspect is made safe
     assert snap["signal_2"]["online"] is False
     assert snap["signal_2"]["error"]["code"] == "ConnectionError"
 
@@ -226,7 +226,7 @@ def test_failsafe_reasserts_the_last_intent_exactly_once():
     sig = FakeSignal("signal_1")
     console = _console(sig)
     asyncio.run(console.command("signal_1", {
-        "mode": "manual", "lamps": {"red": False, "yellow": False, "green": True}}))
+        "mode": "manual", "lamps": {"red": False, "yellow": False, "green": True}}, actor="test-op"))
     assert len(sig.commands) == 1
     sig.mode = "failsafe"          # 감독자 침묵을 흉내 낸다
     asyncio.run(console.poll_once())
@@ -271,7 +271,7 @@ def test_stale_seq_is_reported_not_retried():
     sig = FakeSignal("signal_1")
     sig.last_seq = 99                             # 장치가 더 앞서 있다 — 다른 클라이언트의 흔적
     console = _console(sig)
-    row = asyncio.run(console.command("signal_1", {"mode": "all_red"}))
+    row = asyncio.run(console.command("signal_1", {"mode": "cycle"}))
     assert row["mismatch"] == "stale_seq"
     assert len(sig.commands) == 0                 # 아무것도 안 들어갔다
 
@@ -290,13 +290,13 @@ def test_all_red_scatter_reports_partial_failure():
     assert result["signals"][1]["all_red"] is False
 
 
-def test_all_red_does_not_report_stale_seq_as_applied():
+def test_all_red_resyncs_stale_seq_before_reporting_applied():
     sig = FakeSignal("signal_1")
     sig.last_seq = 99
     result = asyncio.run(_console(sig).all_red())
-    assert result["all_red"] == 0
-    assert result["signals"][0]["all_red"] is False
-    assert result["signals"][0]["error"]["code"] == "stale_seq"
+    assert result["all_red"] == 1
+    assert result["signals"][0]["all_red"] is True
+    assert sig.commands == [{"mode": "all_red", "seq": 100}]
 
 
 def test_unknown_signal_is_a_site_error_not_a_crash():
@@ -307,6 +307,7 @@ def test_unknown_signal_is_a_site_error_not_a_crash():
 
 def test_refresh_is_throttled_by_the_injected_clock():
     sig = FakeSignal("signal_1")
+    sig.mode = "all_red"
     now = [0.0]
     console = _console(sig, clock=lambda: now[0])
     asyncio.run(console.refresh())
@@ -377,7 +378,7 @@ def test_status_poll_recomputes_the_intent_mismatch():
     sig = FakeSignal("signal_1")
     console = _console(sig)
     asyncio.run(console.command("signal_1", {
-        "mode": "manual", "lamps": {"red": False, "yellow": False, "green": True}}))
+        "mode": "manual", "lamps": {"red": False, "yellow": False, "green": True}}, actor="test-op"))
     sig.lamps = {"red": True, "yellow": False, "green": False}   # 장치가 안 따라왔다
     asyncio.run(console.poll_once())
     assert console.snapshot()["signal_1"]["mismatch"] == "controller_mismatch"
@@ -388,7 +389,7 @@ def test_a_poll_does_not_erase_the_stale_seq_ledger():
     sig = FakeSignal("signal_1")
     sig.last_seq = 99
     console = _console(sig)
-    row = asyncio.run(console.command("signal_1", {"mode": "all_red"}))
+    row = asyncio.run(console.command("signal_1", {"mode": "cycle"}))
     assert row["mismatch"] == "stale_seq"
     asyncio.run(console.poll_once())
     assert console.snapshot()["signal_1"]["mismatch"] == "stale_seq"
@@ -408,7 +409,7 @@ def test_signals_endpoint_returns_detail_and_404_without_a_console():
     signals = _console(FakeSignal("signal_1"))
     asyncio.run(signals.poll_once())
     body = _client(signals=signals).get("/api/fleet/signals").json()
-    assert body["signals"]["signal_1"]["mode"] == "manual"
+    assert body["signals"]["signal_1"]["mode"] == "flash_red"
 
 
 def test_verify_is_visible_on_the_signals_endpoint():
@@ -422,8 +423,9 @@ def test_verify_is_visible_on_the_signals_endpoint():
 def test_signal_command_endpoint_posts_and_answers_the_row():
     sig = FakeSignal("signal_1")
     signals = _console(sig)
-    resp = _client(signals=signals).post(
+    resp = _client(signals=signals, token="signal-operator").post(
         "/api/fleet/signals/signal_1/command",
+        headers={"Authorization": "Bearer signal-operator"},
         json={"mode": "manual", "lamps": {"red": False, "yellow": False, "green": True}})
     assert resp.status_code == 200
     assert resp.json()["lamps"]["green"] is True
@@ -446,8 +448,9 @@ def test_a_refusing_signal_comes_back_as_502_with_the_device_code():
 
     sig.command = refuse
     signals = _console(sig)
-    resp = _client(signals=signals).post(
+    resp = _client(signals=signals, token="signal-operator").post(
         "/api/fleet/signals/signal_1/command",
+        headers={"Authorization": "Bearer signal-operator"},
         json={"mode": "manual", "lamps": {"red": True, "yellow": False, "green": True}})
     assert resp.status_code == 502
     assert resp.json()["detail"]["code"] == "conflict"

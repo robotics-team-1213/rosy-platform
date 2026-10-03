@@ -18,7 +18,6 @@ from __future__ import annotations
 import asyncio
 import hmac
 import logging
-import sqlite3
 from contextlib import asynccontextmanager
 from functools import partial
 from hashlib import sha256
@@ -48,6 +47,8 @@ from fleet.server.step_dispatcher import StepJobDispatcher
 from fleet.server.task_service import FleetTaskService
 
 from fleet.server.console_routes import install_console_routes
+from fleet.server.background_workers import proposal_expiry_loop as _proposal_expiry_loop
+from fleet.server.signal_routes import install_signal_routes
 from fleet.server.ingest_routes import install_discovery_routes, install_ingest_routes
 from fleet.server.intent_routes import install_intent_routes
 from fleet.server.mission_routes import install_mission_routes
@@ -293,13 +294,17 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         mission_feedback_scheduler = None
         mission_model_turn_worker_task = None
         localization_task = None
+        signal_task = None
+        if console._signals is not None:
+            signal_task = asyncio.create_task(console._signals.run())
+        app.state.signal_supervision = signal_task
         if localization_service is not None:
             localization_task = asyncio.create_task(localization_service.run())
         if task_service is not None and start_task_dispatcher:
             dispatcher = asyncio.create_task(
                 _task_dispatch_loop(console, task_service, drive_cancel))
         if proposal_store is not None:
-            proposal_expiry = asyncio.create_task(_proposal_expiry_loop(proposal_store))
+            proposal_expiry = asyncio.create_task(_proposal_expiry_loop(proposal_store, _LOG))
         if mission_dispatcher is not None:
             mission_worker = asyncio.create_task(_mission_dispatch_loop(mission_dispatcher))
         if cell_job_dispatcher is not None:
@@ -321,7 +326,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         finally:
             for background in (dispatcher, mission_worker, cell_job_worker, proposal_expiry,
                                goal_evidence_worker, mission_feedback_scheduler,
-                               mission_model_turn_worker_task, localization_task):
+                               mission_model_turn_worker_task, localization_task, signal_task):
                 if background is not None:
                     background.cancel()
                     try:
@@ -452,6 +457,8 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                            operator_guard=operator_guard, site_lanes=site_lanes,
                            require_operator=require_operator,
                            answer_log_path=task_service.store.path if task_service else None)
+    install_signal_routes(app, signals=console._signals, require_viewer=require_viewer,
+                          require_operator=require_operator, auth_configured=bool(principals or console_token))
 
     install_task_dispatch_routes(app, console=console, task_service=task_service,
                                  configured_omx=configured_omx,
@@ -538,15 +545,6 @@ async def _task_dispatch_loop(console: FleetConsole, task_service: FleetTaskServ
             # A status read failure cannot establish availability. Leave work queued.
             pass
         await asyncio.sleep(0.25)
-
-
-async def _proposal_expiry_loop(proposal_store: ProposalStore) -> None:
-    while True:
-        try:
-            proposal_store.purge_expired()
-        except (OSError, sqlite3.Error):
-            _LOG.exception("expired Fleet proposal cleanup failed")
-        await asyncio.sleep(3600)
 
 
 async def _goal_evidence_expiry_loop(service: GoalEvidenceService) -> None:

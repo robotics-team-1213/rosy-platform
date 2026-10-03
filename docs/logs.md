@@ -4878,3 +4878,9 @@
 - 변경: 사용자가 수용한 두 ADR의 최종 본문과 Accepted 행을 새 소스 배치에 반영했다. 예약된 D-438~D-441 번호는 그 브랜치가 착지할 때까지 gap으로 유지한다. 다른 세션의 커밋·WIP는 변경하지 않았다.
 - 증거: 최종 설계 커밋 155a26258, 독립 재리뷰와 원본 lint 0 errors. 새 배치의 lint·구조 검증은 별도로 실행한다.
 - gate 변화: 없음. 설계 수용이며 안전 구현·릴리스 검증은 후속 단계다.
+
+## 2026-10-04 · uncommitted · D-443 신호 감독 안전 수정
+
+- 변경: Fleet lifespan 상시 감독, operator presence에 묶인 수동 점등, 감독 공백 뒤 의도 래치, 안전 방향 seq 재시도, absent·pending non-agree, 오프라인 나이와 재명령 표시를 구현했다. 기존 wire·펌웨어는 유지한다. 장치별 명령과 폴링은 잠금으로 직렬화하고 재단언은 의도 세대를 다시 확인한다.
+- 증거: 수정 전 신호 회귀 9 failed, presence·loop 추가 회귀 6 failed를 확인했다. 관련 Python·구조 176 passed, Node 107 passed. 독립 안전 리뷰 APPROVE(대기 재단언/409 경합, 익명 presence, 측정 unknown 및 구조 예산 포함). 최종 증거는 docs/validation/d427-source-migration/signal-supervision-2026-10-04.md. 계획은 docs/plans/2026-10-04-d443-signal-supervision.md이며 운영 API는 operations/fleet/docs/signals.md에 기록했다.
+- gate 변화: 없음. SOURCE/호스트 후보 검증이며 CI·ARM64·DEVICE·FIELD를 주장하지 않는다. 펌웨어 S7은 다음 개정이다.

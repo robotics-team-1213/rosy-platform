@@ -1494,3 +1494,9 @@
 - Change: Validate both installed share/web_common and source shared/web with the asset manifest, CSS and JS.
 - Evidence: X:/DevTemp/rosy-d427/resume/fixed.txt: 12 passed; known_failures NEW 0.
 - gate 변화: none. Host tests do not establish device or field acceptance.
+
+## 2026-10-04 · uncommitted · D-443 신호 감독 안전 수정
+
+- 변경: Fleet lifespan 상시 감독, operator presence에 묶인 수동 점등, 감독 공백 뒤 의도 래치, 안전 방향 seq 재시도, absent·pending non-agree, 오프라인 나이와 재명령 표시를 구현했다. 기존 wire·펌웨어는 유지한다. 장치별 명령과 폴링은 잠금으로 직렬화하고 재단언은 의도 세대를 다시 확인한다.
+- 증거: 수정 전 신호 회귀 9 failed, presence·loop 추가 회귀 6 failed를 확인했다. 관련 Python·구조 176 passed, Node 107 passed. 독립 안전 리뷰 APPROVE(대기 재단언/409 경합, 익명 presence, 측정 unknown 및 구조 예산 포함). 최종 증거는 docs/validation/d427-source-migration/signal-supervision-2026-10-04.md. 계획은 docs/plans/2026-10-04-d443-signal-supervision.md이며 운영 API는 operations/fleet/docs/signals.md에 기록했다.
+- gate 변화: 없음. SOURCE/호스트 후보 검증이며 CI·ARM64·DEVICE·FIELD를 주장하지 않는다. 펌웨어 S7은 다음 개정이다.

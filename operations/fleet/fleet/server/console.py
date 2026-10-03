@@ -944,21 +944,6 @@ class FleetConsole:
 
     # --- 신호등 (ROSY-SIGNAL-001) -------------------------------------------------
 
-    async def signals_detail(self) -> dict:
-        """신호별 상세. 캐시가 나갸 있으면 한 틱 돌려서 채운다(주기 제한은 콘솔 안에)."""
-        if self._signals is None:
-            raise HubError("NO_SIGNALS", "signals are not configured")
-        try:
-            await self._signals.refresh()
-        except Exception:
-            pass
-        return {"signals": self._signals.snapshot()}
-
-    async def signal_command(self, signal_id: str, body: dict) -> dict:
-        if self._signals is None:
-            raise HubError("NO_SIGNALS", "signals are not configured")
-        return await self._signals.command(signal_id, body)
-
     # --- 대형 (FOR-004) --------------------------------------------------------
 
     def _formation_members(self) -> set:
