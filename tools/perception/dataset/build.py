@@ -18,7 +18,17 @@ Split is by session so neighbouring frames never straddle it; see assign_splits
     build.py --auto-labels <labels_dir>... --store <store> --name <name>
 
 builds the same schema from autolabel.py outputs (D-379) into the D-373 store
-layout <store>/datasets/<name>/<content_sha>/; classes come from the labels."""
+layout <store>/datasets/<name>/<content_sha>/; classes come from the labels.
+--exclude-eval <evalsets/<name>/<content_sha>> (repeatable) refuses a label
+folder whose session is in that eval set and records the set in the manifest
+("disjoint_from").
+
+    build.py --auto-labels <labels_dir>... --store <store> --name <name> --eval-set
+
+builds a fixed evaluation set (D-379 decision 3) into
+<store>/evalsets/<name>/<content_sha>/: every frame has split "eval", the manifest
+has "purpose": "eval", and only frames labelled by a trusted source (LiDAR or
+trajectory, TRUSTED_SOURCES) are kept."""
 from __future__ import annotations
 
 import argparse
@@ -44,6 +54,9 @@ from control.sensing.perception.learned.manifest import ROLES  # noqa: E402  the
 # loss, never a class. D-379 addendum 2026-10-01.
 IGNORE_INDEX = 255
 MIN_SESSIONS_MSG = "need at least 2 sessions for a session-level split"
+# D-379 d3: eval labels come only from the most trusted label sources (labels.py
+# record "sources"); the rule masks are never a source.
+TRUSTED_SOURCES = ("lidar", "trajectory")
 
 
 class BuildError(ValueError):
@@ -266,13 +279,39 @@ def content_sha(folder) -> str:
     return hashlib.sha256("".join(sorted(lines)).encode("utf-8")).hexdigest()
 
 
-def build_auto_dataset(label_dirs, store, name, min_labelled: float = 0.05) -> tuple[dict, Path]:
+def read_eval_set(folder) -> tuple[dict, set[str]]:
+    """An eval set version folder -> (ref {"name", "content_sha"}, its sessions)."""
+    folder = Path(folder)
+    try:
+        manifest = json.loads((folder / "manifest.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise BuildError(f"--exclude-eval {folder}: no readable manifest.json ({exc})") from exc
+    if manifest.get("purpose") != "eval":
+        raise BuildError(f"--exclude-eval {folder}: not an eval set (purpose != 'eval')")
+    sessions = ({f["session"] for f in manifest.get("frames", [])}
+                | {v["session"] for v in manifest.get("labels", [])})
+    return {"name": folder.parent.name, "content_sha": folder.name}, sessions
+
+
+def build_auto_dataset(label_dirs, store, name, min_labelled: float = 0.05, *,
+                       eval_set: bool = False, exclude_eval=()) -> tuple[dict, Path]:
     """D-379: dataset from autolabel.py outputs, in the same schema, into
     <store>/datasets/<name>/<content_sha>/ (a version folder is never rewritten).
 
     Frames whose sources disagree (label record "conflict") are left out and listed in
     deleted_indexes and excluded[]; frames with less than min_labelled of their
-    pixels labelled (not the ignore class) are left out too."""
+    pixels labelled (not the ignore class) are left out too.
+
+    eval_set=True builds a fixed eval set into <store>/evalsets/<name>/<content_sha>/
+    instead: one session is enough, every frame is split "eval", and frames with no
+    TRUSTED_SOURCES source are left out. exclude_eval: eval set version folders; a
+    label folder whose session is in one of them is refused (D-379 d3 disjointness)."""
+    disjoint, held_out = [], {}
+    for folder in exclude_eval:
+        ref, sessions = read_eval_set(folder)
+        disjoint.append(ref)
+        for sess in sessions:
+            held_out.setdefault(sess, ref)
     metas, entries, sources, excluded, versions = [], [], [], [], []
     classes = None
     for d in map(Path, label_dirs):
@@ -291,6 +330,10 @@ def build_auto_dataset(label_dirs, store, name, min_labelled: float = 0.05) -> t
             raise BuildError(f"session {meta['session']!r} is in both {seen[meta['session']]} and {d}: "
                              "one label folder per session")
         seen[meta["session"]] = d
+        if meta["session"] in held_out:
+            ref = held_out[meta["session"]]
+            raise BuildError(f"session {meta['session']!r} ({d}) is in eval set "
+                             f"{ref['name']}@{ref['content_sha']}: training and eval must be disjoint")
     # ignore_index: mask value for unlabelled pixels, masked out of the loss; it is
     # not a class (a class with role "ignore" is an output channel nobody reads).
     ignore = metas[0][1].get("ignore_index", IGNORE_INDEX)
@@ -301,8 +344,11 @@ def build_auto_dataset(label_dirs, store, name, min_labelled: float = 0.05) -> t
     allowed = {c["index"] for c in classes} | {ignore}
     # Argument order must not change the manifest, hence the content sha.
     metas.sort(key=lambda dm: dm[1]["session"])
-    splits = assign_splits(m["session"] for _, m in metas)
-    tmp = Path(store) / "datasets" / name / f".staging-{os.getpid()}"
+    if eval_set:
+        splits = {m["session"]: "eval" for _, m in metas}
+    else:
+        splits = assign_splits(m["session"] for _, m in metas)
+    tmp = Path(store) / ("evalsets" if eval_set else "datasets") / name / f".staging-{os.getpid()}"
     if tmp.exists():
         shutil.rmtree(tmp)
     try:
@@ -336,6 +382,10 @@ def build_auto_dataset(label_dirs, store, name, min_labelled: float = 0.05) -> t
                 if labelled < min_labelled:
                     excluded.append({"frame": key, "reason": f"labelled {labelled:.3f} < {min_labelled}"})
                     continue
+                if eval_set and not set(rec.get("sources", [])) & set(TRUSTED_SOURCES):
+                    excluded.append({"frame": key, "reason": "no trusted label source "
+                                     f"(sources {rec.get('sources', [])}, need one of {list(TRUSTED_SOURCES)})"})
+                    continue
                 rel = {"image": f"images/{session}/{key}.jpg", "mask": f"masks/{session}/{key}.png",
                        "conf": f"conf/{session}/{key}.png"}
                 for kind, src in (("image", d / "frames" / f"{idx:06d}.jpg"),
@@ -345,10 +395,18 @@ def build_auto_dataset(label_dirs, store, name, min_labelled: float = 0.05) -> t
                     shutil.copyfile(src, tmp / rel[kind])
                 entries.append({**rel, "session": session, "split": splits[session],
                                 "sources": rec.get("sources", []), "version": rec.get("version")})
+        if eval_set and not entries:
+            raise BuildError("eval set: no frame left after the filters (see the label records' sources)")
         manifest = {"schema": SCHEMA, "classes": classes, "frames": entries,
                     "deleted_indexes": sorted(e["frame"] for e in excluded if e["reason"] == "sources disagree"),
                     "sources": sources, "ignore_index": ignore, "labels": versions,
                     "excluded": excluded, "builder": "build.py --auto-labels (D-379)"}
+        if eval_set:
+            manifest["purpose"] = "eval"
+            manifest["builder"] = "build.py --auto-labels --eval-set (D-379)"
+            manifest["trusted_sources"] = list(TRUSTED_SOURCES)
+        if disjoint:
+            manifest["disjoint_from"] = disjoint
         (tmp / "manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
         final = tmp.parent / content_sha(tmp)
         if final.exists():
@@ -373,13 +431,21 @@ def main(argv=None) -> int:
     ap.add_argument("--store", type=Path, help="with --auto-labels: store root (D-373 decision 8)")
     ap.add_argument("--name", help="with --auto-labels: dataset name")
     ap.add_argument("--min-labelled", type=float, default=0.05)
+    ap.add_argument("--eval-set", action="store_true",
+                    help="with --auto-labels: build a fixed eval set into <store>/evalsets/ (D-379 d3)")
+    ap.add_argument("--exclude-eval", type=Path, action="append", default=[],
+                    help="with --auto-labels: an eval set version folder the dataset must be "
+                         "disjoint from (repeatable)")
     args = ap.parse_args(argv)
     if args.auto_labels:
         if not (args.store and args.name):
             ap.error("--auto-labels needs --store and --name")
+        if args.eval_set and args.exclude_eval:
+            ap.error("--exclude-eval applies to a training build, not --eval-set")
         try:
             manifest, final = build_auto_dataset(args.auto_labels, args.store, args.name,
-                                                 args.min_labelled)
+                                                 args.min_labelled, eval_set=args.eval_set,
+                                                 exclude_eval=args.exclude_eval)
         except BuildError as exc:
             print(f"error: {exc}", file=sys.stderr)
             return 1

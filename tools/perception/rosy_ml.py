@@ -474,6 +474,9 @@ def _store_status(cfg: dict, init: bool) -> int:
     for name, shas in s["datasets"].items():
         for sha in shas:
             print(f"  store:{name}@{sha}")
+    for name, shas in s["evalsets"].items():
+        for sha in shas:
+            print(f"  evalset {name}@{sha}")
     print(f"inbox: {s['inbox_ready']} ready, {s['inbox_waiting']} waiting (no matching READY)")
     print(f"accepted: {s['accepted']}")
     print(f"rejected: {s['rejected']}")
