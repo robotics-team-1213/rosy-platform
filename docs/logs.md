@@ -5003,3 +5003,10 @@
 - gate 변화: 게임·도구·Pilot 웹 SOURCE/LOCAL 근거를 추가했다. 전체 목표는 후속 실패 수정·검증·최신 main 통합과 로컬 착지가 남아 있다. push·배포·실제 장치·현장 승격 없음.
 - 결정: D-439; 화면별 작업 구분과 기존 안전·권한의 소유권을 함께 유지한다.
 - 검증: root quick 첫 실행은 458통과/1실패/2skip/기존 경고 26건(132.01초), 문서 network는 24통과(0.55초)였다. secret guard의 Git SHA 문구 오탐은 동일 커밋의 짧은 hash로 고쳤고 UI 입력 선언은 후속 제품 수정으로 연결한다. scan·허용 목록을 완화하지 않는다.
+
+## 2026-10-04 · uncommitted · docs(ui): viewport 계약 보존과 남은 live 확인 이관 계획
+
+- 결정: D-439 §17–18은 D-201 viewport·실제 크기·작은 화면의 작업 순서 및 남은 호환/Fleet 확인 열세 곳의 공용 확인·대상 신선도·정지 접근을 명시한다. 실제 caller를 대조한 후속 계획이며 하위 모듈의 app 역 import나 서버 권한 변경을 추가하지 않는다.
+- 변경: 프로젝트 dashboard-drive 안내를 실제 공용 확인·compatibility 준비 표시·task/disclosure 탐색에 맞췄다. 옛 native dialog 승인 지침은 현재 확인창을 조작하지 못하므로 교체했다.
+- 검증: 나머지 host 237통과/1옛 문구 실패, Pilot Node/자산 87통과, Games 14개 중 7통과/7CSP 대기 실패를 기록한다. Role 진단 2실패 뒤 실제 조작 묶음 9통과, Fleet 첫 높이 수정 3통과/4실패는 아직 최종 완료가 아니다. 입력 source의 별도 scan finding 0은 전체 tracked scan 통과를 대신하지 않는다.
+- gate 변화: 전체 목표는 viewport·설치 주소 hint·확인 후속 제품 및 최종 검증·main 착지가 남아 있다. 실제 장치·CI·배포 증거를 승격하지 않는다.

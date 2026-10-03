@@ -128,6 +128,14 @@ POST 처리·포트·런치와 배포 제외 계약은 그대로 유지하고 GE
 
 ### Task 6: 최종 검증과 착지
 
+최종 대조에서 Fleet D-201 높이 회귀와 남은 fixture의 소유권·준비 대기 결함이 발견되었다.
+이 수정 묶음을 먼저 검증·커밋한다. 별도 후속 묶음으로 실제 연결된 compatibility
+`settings.js`의 확인 8곳·`telemetry.js`의 교통 적용과 Fleet `console.js`의 확인 3곳·
+`roster.js`의 IR 요청을 공용 확인으로 바꾼다. 기존 app 확인 hook과 factory hook을 재사용하고
+서버 권한·대상 신선도·취소·정지 접근·페이지 종료를 검증한다. native 확인의 차단을 실제
+재현한 행동 검사부터 시작하며 총 source 예산을 올리지 않는다. 각 묶음의 독립 SPEC→QUALITY와
+주 담당자 화면 확인 후 최신 main을 통합한다.
+
 1. 화면 목록의 모든 행에 결과/증거/커밋 또는 유지 이유가 있는지 대조한다.
 2. 영향받는 host/browser/node 및 root AGENTS의 quick tier를 완료한다. 첫 실패와 재실행을 구별한다.
 3. `python tools/harness/rosy_harness.py generate`와 lint, `git diff --check`를 확인한다.

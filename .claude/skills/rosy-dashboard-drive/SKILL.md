@@ -14,11 +14,18 @@ cover, and then copy its patterns. Four dashboard facts break naive scripts:
 |---|---|
 | The token lives in `sessionStorage['rosy.dashboard.token']` | Inject it with `page.add_init_script` **before** `goto`, not by typing into `#token-input` |
 | The page polls and streams forever | `goto(..., wait_until="load")`. `networkidle` never settles and times out |
-| Mode changes (and Cyclone apply) go through `window.confirm` | Register `page.on("dialog", lambda d: d.accept())`, or the click is silently cancelled |
+| Mode changes and Cyclone apply use the shared nonblocking confirmation | Click the actual confirmation action or Cancel and keep the same page's Stop reachable. Native `page.on("dialog")` handlers do not approve this UI |
 | Teleop is hold-to-drive on `pointerdown`/`pointerup` | `click()` sends one tick and a stop. Use `hover()` + `mouse.down()` … `mouse.up()` |
 
 Get a token first: **rosy-device-access** (`sudo rosy-login-code --role administrator`, pair,
 log out afterwards). Keep the token in a file under `X:\DevTemp`, never in the repo.
+
+For a fixture that opens the compatibility screen, wait for
+`#compatibility-shell[data-ready="true"]` before clicking its view navigation. Procedure
+surfaces retain all panels but show one selected task: wait for the task chooser to finish
+assembly, select the visible rail or native selector, then open the actual details summary
+containing the control. Do not force a hidden control or approve a confirmation by invoking
+its handler. Check cancellation and command bodies using the shipped controls (D-439).
 
 ## The tool
 
