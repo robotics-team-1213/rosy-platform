@@ -70,3 +70,21 @@ python tools/perception/model/bench_backends.py <bundle> --frames <camera-frames
 `bench_backends.py`는 녹화 이미지 재생 도구다. 라이브 카메라·CORE 동시 부하는 별도 실행한다.
 원본 모델/영상과 상세 로그는 git에 넣지 않았다. 호스트 스크래치·export bundle·raw readback은
 `X:/DevTemp/rosy-ncnn-20261003/`에 있다. 공개 기록에서 기기 주소·계정을 제외했다.
+
+## 자동 검사 기록
+
+- learned manifest/session/detector/runner/slot/signature/mask: 138 passed, 1 skipped
+  (Windows symlink 권한). OpenCV host 시험은 1 thread로 실행했다.
+- 도구 전체: 679 passed, 20 skipped, 녹화 sidecar 2 failed.
+  두 실패는 같은 환경의 수정 전 main에서도 재현됐다. NCNN 실패가 아니며 전체 도구 suite를
+  green으로 기록하지 않는다. 학습·실제 ROS 등 미설치 의존성이 있는 skip은 수용 증거가 아니다.
+- 마지막 helper 분리·intake·parity·bench·설치·크기 계약: 68 passed, 1 skipped.
+- 최신 main 통합 후 quick tier: 458 passed, 2 skipped, hash 표기의 secret-scan 오탐 1 failed.
+  공개 프레임 목록에 각 `sha256`를 명시하고, 합쳐진 safety-review 도구의 baseline 상수에도
+  git commit revision을 명시했다. scanner 허용 규칙은 변경하지 않았다. 재검사 79 passed.
+- 최신 main 통합 후 배포·이미지·문서 배치·network·robot literal 계약: 169 passed, 4 skipped.
+- harness lint: 0 errors, 기존 검증 시점 경고 26건. 변경 Python flake8 통과.
+
+최종 lane bundle은 `lane-seg-ncnn-20261003-25f08bc1aa0d`이며 `check_manifest.py`로
+다시 열었다. YOLO fixture 최종 export도 20프레임 parity를 통과했다
+(`object-det-ncnn-20261003-cfe0db4b4836`, 미학습 모델).
