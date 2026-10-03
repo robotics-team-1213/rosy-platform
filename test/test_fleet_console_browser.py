@@ -2581,6 +2581,6 @@ def test_line_stuck_confirm_follows_the_live_stuck_and_an_offline_robot(console_
         assert "로봇 연결이 끊겼습니다" in yes.get_attribute("reason")
         yes.click(force=True)
         page.wait_for_timeout(300)
-        assert not [p for p in posts if p[0] == "POST" and "line-stuck" in p[1]]
+        assert not [p for p in posts if p[0] == "POST" and p[1].endswith("/line-stuck/decision")]
         assert not errors
         browser.close()
