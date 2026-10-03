@@ -108,7 +108,8 @@ def add_token(body: TokenRequest, auth: AuthContext = Depends(admin),
         raise ApiError("FORBIDDEN", 403, "a paired session cannot create non-expiring tokens")
     role = body.role.strip()
     if role not in ROLE_RANK:
-        raise ApiError("VALIDATION_ERROR", 400, "role must be viewer, stuck_resolver, operator or administrator")
+        raise ApiError("VALIDATION_ERROR", 400,
+                       "role must be viewer, stuck_resolver, operator or administrator")
     generated = body.token is None
     token = generate_token() if generated else body.token.strip()
     if len(token) < MIN_TOKEN_LENGTH:

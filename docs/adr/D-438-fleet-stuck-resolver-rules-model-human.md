@@ -68,3 +68,15 @@
 ## 잇는 결정
 
 D-2(단일 cmd_vel), D-18(API 계약), D-59(영상 중계, §3 에서 고침), D-257(천장 카메라), D-321 부록(보정 세션), D-379(학습 자료), D-395(Fleet 보조 위치추정), D-399(Fleet 과 장치 파이프라인), D-407(막힘 질문, 이 ADR 이 §2 의 답하는 주체와 Fleet 쪽 영상 해석을 고친다), D-419(Fleet 연결 상실), D-422·D-424(몸 기준 정지), D-430(안전 분리), D-435(Fleet 조정 규칙의 실행 범위, Proposed).
+
+## 구현 메모 (2026-10-03, 1단계: 규칙·사람, docs/d438-fleet-stuck-resolver)
+
+- CORE: `stuck_resolver` 역할(순위 viewer)과 `STUCK_DECIDE` 권한. 막힘 답 경로는 역할 대신 이 권한을 본다(operator·administrator 도 가진다). `stuck_resolver` 가 `MANUAL` 을 고르면 403 `FORBIDDEN`("MANUAL is a human decision (D-438)")이고 막힘은 열려 있다.
+- Fleet: `fleet/server/stuck_resolver.py`(순수 판단), `stuck_resolver_loop.py`(1 s 폴링 + `nav.line_stuck_*` 사건으로 깨움, 보드 갱신, `fleet-resolver` 로 기록). 콘솔 버튼을 누르면 `.../line-stuck/claim` 으로 사람이 맡는다. 사람 답 경로도 먼저 맡고, CORE 전달이 실패해도 맡음을 유지한다.
+- 설정: robots.yaml `resolver_token`(로봇마다 CORE `stuck_resolver` 토큰, 비어 있지 않은 따옴표 문자열, `token`·`fleet_pairing_token` 과 달라야 함), `fleet console --stuck-resolver`. 토큰이 없는 로봇의 막힘은 `no_resolver_token` 으로 바로 사람에게 간다.
+- 올리는 사유: `no_rule`, `rule_budget`, `deadline`, `restuck_after_resume`, `estop`, `calibration`, `no_resolver_token`, `human_claimed`, `core:<CODE>`. 기본값: 폴링 1 s, 재막힘 창 30 s, 규칙 예산 2, 기한 60 s.
+- 전송 실패는 `ROBOT_UNREACHABLE` 이면 `accepted=False`, 그 밖에는 null 로 기록한다.
+- 2단계(비전 모델)는 아직 없다. 규칙이 못 풀면 `no_rule` 로 사람에게 올린다.
+- 해석: R1 의 "앞 경로 띠"는 기지 대 기지 0.30 m, 옆 ±0.15 m(자기 반폭 + 상대 회전반경 0.083 m)로 잰다. 로봇 종류별 몸 크기는 아직 읽지 않는다.
+- 등록(D-361)으로 들어온 로봇은 아직 판단기 클라이언트가 없다. robots.yaml 로봇만 갖는다.
+- 판단기 클라이언트 연결은 닫지 않는다(콘솔 클라이언트는 `console.aclose()` 가 닫지만 이쪽은 프로세스 종료에 맡긴다).
