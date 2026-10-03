@@ -29,7 +29,7 @@
 | 2 | 공용 작업 선택·상태·초점 규칙 | `src/hmi/web_common/{task-chooser.js,task-chooser.css}` | 구현·독립 검토 완료 `15e8742b4`; 전체 회귀는 최종 통합에서 확인 |
 | 3 | 로그인·역할 진입 | `src/hmi/dashboard/{index.html,surface.html,surface-navigation.js}` | 구현·독립 검토·집중 회귀 완료 `4e8cbe92d`; 전체 회귀는 최종 통합 |
 | 4 | 로봇 운용 7패널 | `src/hmi/dashboard/panels/console/`, `shell/` | 대기 |
-| 5 | 작업 준비 5패널 | `src/hmi/dashboard/panels/setup/`, `shell/` | 대기 |
+| 5 | 작업 준비 5패널 | `src/hmi/dashboard/panels/setup/`, `shell/` | 교통 정책 완료 `5b590cb37`; 나머지 패널 대기 |
 | 6 | 설치·정비 7패널 | `src/hmi/dashboard/panels/{host,system}/`, `shell/` | 대기 |
 | 7 | Fleet 관제 | `src/site/fleet/fleet/server/web/{index.html,console.js,styles.css}` | 대기 |
 | 8 | Fleet 기기 등록·카메라 설치 | `src/site/fleet/fleet/server/web/{install.html,install.js,enrollment.js,camera-pairing.js}` | 대기 |
