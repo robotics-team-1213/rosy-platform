@@ -502,6 +502,12 @@ roots:
     wave: none
     note: Sim benches and scenario scripts.
     concern: other
+  - path: tools/ssh
+    part: tools
+    d427_target: tools/ssh
+    wave: none
+    note: D-418 operator SSH enrollment and team-key share CLIs (run on the operator PC); not shipped.
+    concern: other
   - path: .github
     part: tools
     d427_target: .github

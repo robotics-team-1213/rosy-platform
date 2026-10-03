@@ -71,6 +71,6 @@
 
 - 2026-10-03 · uncommitted · fix(link): 현재 접속과 후속 코드 규약 구별
 - 2026-10-03 · uncommitted · feat(link): D-432 주소 없는 장비 접속
+- 2026-10-03 · 0e244456c · fix(tools): rosy_ssh_share 가 터미널 밖에서 생성 passphrase 를 출력하지 않음 (D-418)
+- 2026-10-03 · uncommitted · fix(native,tools,test): D-418 파일의 비밀 검사 23건 — 이름과 문구만 바꿈
 - 2026-10-03 · uncommitted · fix: bootstrap automatic-update state directories
-- 2026-10-03 · uncommitted · feat(perception): D-431 NCNN/OpenCV 구현과 실제 차선 Pi 재생
-- 2026-10-03 · 119382fe6 · docs(native): D-423 `ROSY_OBJECT_DET=false` 를 learned-perception.env 예시에

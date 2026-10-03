@@ -1,0 +1,23 @@
+#!/usr/bin/env python3
+"""twin-ssh-request ACTION [JSON]: CORE's SSH hand-over, run as rosy-core (D-418, twin only).
+
+The fake CORE has no /api/v1/host/ssh routes, so this runs the exact module the
+routes use (core_api_web/api/v1/ssh_handoff.py from HEAD): it writes
+/run/rosy/ssh-access.request, waits at most 10 s for rosy-ssh-access, and prints
+the validated answer as one JSON line.
+"""
+
+import json
+import sys
+
+sys.path.insert(0, "/opt/twin")
+import ssh_handoff  # noqa: E402
+
+action = sys.argv[1]
+params = json.loads(sys.argv[2]) if len(sys.argv) > 2 else {}
+try:
+    answer = ssh_handoff.exchange(action, "twin admin", params)
+except ssh_handoff.HandoffUnavailable as exc:
+    print(json.dumps({"unavailable": str(exc)}, ensure_ascii=False))
+    raise SystemExit(3)
+print(json.dumps(answer, ensure_ascii=False))
