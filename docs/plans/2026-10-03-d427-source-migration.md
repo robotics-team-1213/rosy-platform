@@ -17,6 +17,57 @@
 - `KNOWN_VIOLATIONS`: 9 → 8(wave 0 후속, D-429 §4 api 규칙) → 5(2a). 1c는 1건을 교체해 수를 유지했다(Q6).
 - `colcon_roots`: 3a 뒤 `[src, learning, operations]`.
 
+## 인계 체크리스트 (2026-10-04)
+
+이 세션이 멈춰도 다른 세션이 이동을 끝낼 수 있게 남긴다. 아래 상태는 `git log origin/main..refactor/d427-bulk`로 확인한 값이다(origin/main `0b277ae38` 위로 rebase한 뒤라 SHA가 처음 계획과 다르다). 다시 쓰기 전에 같은 명령으로 다시 확인한다.
+
+### 작업이 있는 곳
+
+브랜치 `refactor/d427-bulk`, worktree `.worktrees/d427-bulk`, **push 안 됨**. worktree는 깨끗하고 HEAD는 `ed2b24c7d`다. 4a–4e가 모두 커밋되어 있다.
+
+| 단계 | 커밋 |
+|---|---|
+| 3b | `57c694912` games, `16d1ef38a` vision, `525ee5c00` cell, `53ec11e02` cam, `e668d49ef` signal observer, `4a53b5be8` signal, `6616e4c3a` dock, `c50124aab` 루트 AGENTS 운영 행 |
+| 스크립트 | `155cdff30` `tools/harness/d427_move.py` |
+| 3c | 이동 `e9f19b687`, residue 수정 `9e1147027` |
+| 4a | 이동 `e60dc3da7`, residue 수정 `f5e9d3340` |
+| 4b | 이동 `3c4372d58`, residue 수정 `188d6af6f` |
+| 4c | 이동 `4075c26b1`, residue 수정 `379eb39fb` |
+| 4d | 이동 `62fdf79c0`, residue 수정 `040707cda` |
+| 4e (`src/runtime/sensing` → `middleware/perception`) | 이동 `805011387`, residue 수정 `caaa2a586` |
+| rebase residue | `ed2b24c7d` (origin/main `0b277ae38` 기준) |
+
+### 끝내는 순서
+
+1. ~~4d residue 수정 커밋~~ 완료(`040707cda`).
+2. ~~4e 이동과 residue 수정~~ 완료(`805011387`, `caaa2a586`). 새 residue를 찾을 때는 legacy guard `pytest test/architecture -q`를 돌려 실패를 읽는다.
+3. origin/main 위로 rebase하고 `python tools/harness/rosy_harness.py generate`를 돌린다. 바뀌면 커밋한다. `ed2b24c7d`는 `0b277ae38` 위로 rebase한 결과이고, 생성 문서를 다시 만들었는지는 확인하지 못했다. push 직전에 다시 한다.
+4. 모든 gate를 돌린다.
+   - `pytest test/architecture -q`
+   - `python tools/harness/rosy_harness.py lint`
+   - `python tools/harness/safety_review.py origin/main HEAD`
+   - pre-push 시험 묶음
+   - `test/` 전체
+   - 옮긴 패키지 자체 시험(`.github/workflows/ci.yml`의 호출 방식 그대로)
+   - WSL에서 `colcon list`와 CI 빌드. `git archive`로 `/tmp`에 풀어서 돌린다(`/mnt/x`에서 돌리지 않는다)
+5. worktree에서 `git push origin HEAD:main`. main checkout에서는 push하지 않는다.
+6. `gh workflow run build-native-payload.yml`, `gh workflow run build-pinky-image.yml`을 돌린다. `rosy-packages.txt`와 SD 패키지 목록을 직전 release와 비교하고, 결과를 `docs/validation/d427-source-migration/`에 적는다.
+7. 안전 경로 커밋의 독립 rename 리뷰. trailer `Safety-Review: path-only move ... review pending`을 단 커밋이 대상이다: 3b firmware(`4a53b5be8`, `6616e4c3a`), 3c `e9f19b687`, 4c `4075c26b1`, 4d `62fdf79c0`, 그리고 4e `805011387`·`caaa2a586`. 100% rename인지와 경로만 바뀐 편집인지를 본다.
+8. Wave 5: 빈 `src/`, `modules/`, `apps/` 삭제, `colcon_roots`에서 `src` 제거.
+9. `AGENTS.md` "D-427 이동 기간 규칙"의 규칙 2와 5 삭제.
+10. peer rebase 공지(`docs/plans/2026-10-04-d427-post-migration-follow-ups.md` P1-6).
+11. 사이트 PC model-watch 1회 재설치(`deploy/site/install-model-watch.sh`).
+
+### 알려진 함정
+
+아래 "이행 중 발견한 계획 오류와 교훈"을 본다. 한 줄 요약만 적는다.
+
+- 에이전트는 긴 명령에서 멈춘다. 전체 pytest와 WSL 빌드는 background로 돌리고 출력을 파일(`X:\DevTemp\`)에 쓴다. (교훈 절에 아직 항목이 없다)
+- CRLF `autocrlf`: "줄 끝".
+- peer가 origin에 계속 push한다. push 직전마다 다시 fetch하고 rebase한다: "peer가 main에 계속 push한다".
+- 생성 문서(`docs/index.md`, `STATUS.md`)는 rebase 뒤 낡는다: "main checkout의 생성 문서".
+- 로컬 `main`은 낡았다(origin/main보다 뒤). 작업은 origin/main 기준으로 한다. (교훈 절에 아직 항목이 없다)
+
 **Status (rev 3, 역사):** PLAN rev 3 (2026-10-03). 아직 아무 파일도 옮기지 않았다. 기준 main `f41716e55`(`integrate/commit-merge-20261003` 착지 뒤). rev 1에 대한 독립 critic의 REVISE 지적과 사용자 결정(아래 "결정 기록")을 반영했다. 파일 수와 겹치는 브랜치 목록은 이 기준으로 다시 셌다. 겹치는 브랜치는 `git cherry main <branch>`에서 main에 없는 커밋(`+`)이 바꾼 파일만 센다. 각 wave를 시작할 때 HEAD, 매니페스트, 진행 중 브랜치를 다시 센다.
 
 **Goal:** [D-427](../adr/D-427-platform-three-parts-middleware-operations-learning.md) §6 "이후(B)"를 실행한다. `tools/harness/platform_parts.yaml`의 각 root를 `path`에서 `d427_target`으로 옮긴다. 순서는 §6을 따른다: learning → contracts → operations → middleware, Pinky CORE는 마지막.
