@@ -2184,3 +2184,9 @@
 - 증거: 집중 배포 시험 61 passed, flake8/diff 검사 통과. 디렉터리를 단일 소켓 연결로 바꾼 mutation은 실패했고 원본 복구 후 2 passed. 실제 사이트 candidate의 UID 10001/read-only/cap-drop ALL 실행에서 두 로봇 hostname과 fleet/vision/proxy 조회를 확인했다. Avahi 연결 없는 negative control은 실패했고 가상 Avahi 소켓 교체 후 동일 이름의 새 주소 조회를 확인했다.
 - 범위: 현재 Fleet 앱 이미지에 NSS만 추가한 candidate를 만들었다. 운영 root 설정 설치와 Fleet 재생성, 인증된 장치 연결은 coordinator의 별도 단계이며 이 기록은 그 완료를 주장하지 않는다.
 - gate 변화: SOURCE/LOCAL 및 후보 컨테이너의 이름 조회 검증 완료. 운영 Fleet 등록과 로봇 연결은 관리자 적용 이후 별도 확인한다.
+
+## 2026-10-03 · uncommitted · fix(site): order Avahi before the Fleet stack
+
+- Change: add avahi-daemon.service to both Requires and After for the host Avahi socket used by Fleet NSS. Existing Docker, network and firewall dependencies remain.
+- Evidence: baseline dependency regression RED; focused deployment tests 19 passed. Removing only Avahi ordering while preserving Requires was RED; restored tests 2 passed.
+- Gate: SOURCE/LOCAL verified. Separate on-site administrator installation and actual PC boot acceptance remain pending. No robot motion, CORE or camera configuration changes.
