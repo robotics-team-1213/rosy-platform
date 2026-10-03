@@ -22,7 +22,7 @@ CURRENT_COMPONENTS = {
     "world_api": ("operations/world/src/rosy/world/api", "rosy.world.api"),
     "skill_contracts": ("contracts/skill/src/rosy/contracts/skill", "rosy.contracts.skill"),
     "skill_api": ("modules/skills/api/src/rosy/skills/api", "rosy.skills.api"),
-    "execution_api": ("modules/execution/src/rosy/execution/api", "rosy.execution.api"),
+    "execution_api": ("operations/execution/src/rosy/execution/api", "rosy.execution.api"),
     "omx_transfer_integration": (
         "integrations/robots/omx/src/rosy/integrations/robots/omx",
         "rosy.integrations.robots.omx",
@@ -112,7 +112,7 @@ def test_platform_python_roots_are_not_ament_packages():
     package_xml = [
         str(path.relative_to(ROOT))
         for root in ("modules", "integrations", "apps", "profiles", "operations/world",
-                     "operations/processes/palletizing")
+                     "operations/processes/palletizing", "operations/execution")
         for path in (ROOT / root).rglob("package.xml")
     ]
     assert package_xml == []

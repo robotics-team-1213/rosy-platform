@@ -208,9 +208,10 @@ roots:
     wave: "4a"
     import_prefix: [rosy.skills.manipulation]
     concern: control
-  - path: modules/execution
+  - path: operations/execution
     part: operations
     d427_target: operations/execution
+    legacy: modules/execution
     wave: "3a"
     note: >-
       Package metadata only; the api and site source subtrees below are mapped on
@@ -226,18 +227,20 @@ roots:
       Wheel rosy-execution-local (2c, Q4); the import name rosy.execution.local is
       unchanged. rosy-execution no longer packages it.
     concern: control
-  - path: modules/execution/src/rosy/execution/api
+  - path: operations/execution/src/rosy/execution/api
     part: operations
     d427_target: operations/execution/src/rosy/execution/api
+    legacy: modules/execution/src/rosy/execution/api
     wave: "3a"
     import_prefix: [rosy.execution.api]
     note: >-
       PlanBundle API is internal to the execution module (D-413 §3), not contracts;
       placed with its site producer. Re-decide when execution splits in step B.
     concern: contracts
-  - path: modules/execution/src/rosy/execution/site
+  - path: operations/execution/src/rosy/execution/site
     part: operations
     d427_target: operations/execution/src/rosy/execution/site
+    legacy: modules/execution/src/rosy/execution/site
     wave: "3a"
     import_prefix: [rosy.execution.site]
     concern: other

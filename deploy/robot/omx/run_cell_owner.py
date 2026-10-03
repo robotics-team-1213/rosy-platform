@@ -18,7 +18,7 @@ from pathlib import Path
 
 REPO = Path(os.environ.get("ROSY_SIM_REPO", "/repo"))
 for _part in ("src/contracts/foundation", "contracts/skill/src", "src/products/omx/adapter", "apps/agent/src",
-              "modules/execution/src", "operations/processes/palletizing/src", "modules/skills/api/src",
+              "operations/execution/src", "operations/processes/palletizing/src", "modules/skills/api/src",
               "modules/skills/manipulation/src", "integrations/robots/omx/src", "deploy/robot/omx"):
     sys.path.append(str(REPO / _part))
 
