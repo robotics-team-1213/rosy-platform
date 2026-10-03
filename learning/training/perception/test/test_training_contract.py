@@ -227,3 +227,21 @@ def test_write_manifest_records_only_the_experiment_link(tmp_path):
     (tmp_path / "b").mkdir()
     _, plain = _write(tmp_path / "b", val_iou={"lane": 0.5})
     assert "experiment" not in plain["metrics"]
+
+
+def test_write_manifest_records_a_local_experiment(tmp_path):
+    exp = {"tracker": "local", "run_id": "20261003T010203Z-ana", "path": "runs/20261003T010203Z-ana",
+           "url": "https://must-not-be-stored", "api_key": "must-not-be-stored"}
+    out, doc = _write(tmp_path, val_iou={"lane": 0.5}, experiment=exp)
+    want = {"tracker": "local", "run_id": exp["run_id"], "path": exp["path"]}
+    assert doc["metrics"]["experiment"] == want
+    m = load_manifest(out)  # the robot-side loader accepts the local form
+    verify_files(m)
+    assert m.raw["metrics"]["experiment"] == want
+    text = (out / "model_manifest.json").read_text(encoding="utf-8")
+    assert "must-not-be-stored" not in text
+
+
+def test_write_manifest_rejects_an_unknown_tracker(tmp_path):
+    with pytest.raises(ValueError, match="tracker"):
+        _write(tmp_path, experiment={"tracker": "mlflow", "run_id": "x"})

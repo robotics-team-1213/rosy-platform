@@ -17,7 +17,10 @@ ONNX_NAME = "model.onnx"
 PRECISIONS = ("fp32", "int8")  # == control...learned.manifest.PRECISIONS
 ROLES = ("background", "lane_marking", "drivable", "stop_line", "ignore", "wall")  # = manifest.ROLES
 COLORS = ("rgb", "bgr")
-EXPERIMENT_KEYS = ("tracker", "run_id", "url", "project")  # metrics.experiment, nothing else
+EXPERIMENT_KEYS = {  # metrics.experiment, per tracker, nothing else
+    "wandb": ("tracker", "run_id", "url", "project"),
+    "local": ("tracker", "run_id", "path"),
+}
 
 
 def _class_entries(classes) -> list[dict]:
@@ -52,8 +55,9 @@ def write_manifest(out_dir, *, onnx_path, classes, color, scale, mean, std,
                    val_iou=None, date=None, precision="fp32", experiment=None) -> dict:
     """precision: "fp32", or "int8" for a QDQ graph (onnxruntime quantize_static);
     intake.py refuses a label the graph contradicts. experiment: optional tracker link
-    {"tracker": "wandb", "run_id", "url", "project"}, stored as metrics.experiment
-    (only those keys; never a key or token)."""
+    {"tracker": "wandb", "run_id", "url", "project"} or {"tracker": "local", "run_id", "path"}
+    (a missing tracker means wandb), stored as metrics.experiment (only those keys; never a
+    key or token)."""
     entries = _class_entries(classes)
     _validate(entries, color, mean, std, scale)
     if precision not in PRECISIONS:
@@ -81,7 +85,11 @@ def write_manifest(out_dir, *, onnx_path, classes, color, scale, mean, std,
         "trainer": trainer,
     }
     if experiment is not None:
-        doc["metrics"]["experiment"] = {k: experiment.get(k) for k in EXPERIMENT_KEYS}
+        tracker = experiment.get("tracker", "wandb")
+        if tracker not in EXPERIMENT_KEYS:
+            raise ValueError(f"experiment.tracker must be one of {tuple(EXPERIMENT_KEYS)}")
+        doc["metrics"]["experiment"] = {k: experiment.get(k) for k in EXPERIMENT_KEYS[tracker]}
+        doc["metrics"]["experiment"]["tracker"] = tracker  # same position; a missing tracker means wandb
     (out_dir / "model_manifest.json").write_text(
         json.dumps(doc, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     # Fail here rather than at intake: validate with the robot-side loader when importable.
