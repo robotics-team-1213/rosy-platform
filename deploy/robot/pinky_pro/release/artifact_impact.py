@@ -9,6 +9,7 @@ device-readback gates remain owned by their existing release procedures.
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import subprocess
 import sys
@@ -16,6 +17,16 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 
 
+def _colcon_roots() -> tuple[str, ...]:
+    """D-427: the native payload builds every colcon root in the platform manifest."""
+    reader = Path(__file__).resolve().parents[4] / "tools" / "harness" / "colcon_roots.py"
+    spec = importlib.util.spec_from_file_location("rosy_colcon_roots", reader)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module.colcon_roots()
+
+
+COLCON_ROOT_PREFIXES = tuple(f"{root}/" for root in _colcon_roots())
 IMAGE_PREFIXES = (
     "deploy/robot/pinky_pro/image/",
     "deploy/robot/pinky_pro/native/",
@@ -72,7 +83,7 @@ def _classify_path(path: str) -> PathImpact:
         return PathImpact(path, "none", "repository guidance or deployment harness record")
     if normalized.startswith(NO_PINKY_PREFIXES):
         return PathImpact(path, "none", "documentation, tests, CI, or a separate product/site surface")
-    if normalized.startswith("src/"):
+    if normalized.startswith(COLCON_ROOT_PREFIXES):
         return PathImpact(path, "native-payload", "workspace source is built into the native payload")
     if normalized.startswith(IMAGE_PREFIXES):
         return PathImpact(path, "flashable-image", "Pinky image, host-service, or board configuration input")
