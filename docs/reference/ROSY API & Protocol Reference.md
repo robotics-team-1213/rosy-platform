@@ -674,7 +674,7 @@ Camera preview transfer rules (v1.12, D-152):
 - `quality_age_ms`는 source image age + monotonic 수신 나이이며 얼굴 조명 보조 handover도 이 나이에 파일 전달 나이를 더해 만료한다. source clock이 없거나 잘못되거나 image age가 0..2초 밖이면 조도는 null이고 raw pair로 채택하지 않는다. 기존 주석 JPEG 표시 경로는 유지한다.
 - 브라우저 video evidence는 optional `preview_mode`(raw/annotated)와 `pair_group_id`(소문자 32 hex)를 함께 제공한다. annotated 저장은 같은 group·started_at·stopped_at·frame_count의 raw가 먼저 저장돼야 한다. 두 파일은 별도로 보존하며 서버가 `annotation_origin=none` 또는 `model_unreviewed`를 붙인다. 모델 주석은 사람이 검토한 라벨이 아니다. legacy 영상의 출처가 없으면 새 provenance 필드는 null이다.
 
-- v1.90 `quality`는 원본 픽셀의 조도 관측 `{valid:false, reason:"low_light"}` 또는 `{valid:true, reason:"usable"}`이며 물체·차선 판정이나 이동 허가가 아니다. legacy·잘못된 metadata·2초를 넘긴 JPEG 수신은 null이다. 저조도에서도 JPEG는 보이며 CAMERA_LINE 관측은 visible=false/confidence=0으로 무효화되어 즉시 정지, 지속 시 기존 LOST 재선택을 요구한다. LiDAR·IR 안전 기준은 유지한다.
+- v1.90 `quality`는 원본 픽셀의 조도 관측 `{valid:false, reason:"low_light"|"overexposed"}` 또는 `{valid:true, reason:"usable"}`이며 물체·차선 판정이나 이동 허가가 아니다. legacy·잘못된 metadata·2초를 넘긴 원본 촬영·수신은 null이다. 저조도·과다 노출에서도 JPEG는 보이며 CAMERA_LINE 관측은 visible=false/confidence=0으로 무효화되어 즉시 정지, 지속 시 기존 LOST 재선택을 요구한다. 저조도 조명 보조는 `low_light`에만 허용하며 `overexposed`에서는 해제한다. LiDAR·IR 안전 기준은 유지한다.
 
 - Both `status` and `frame` responses are `Cache-Control: no-store`.
 - A client MUST request

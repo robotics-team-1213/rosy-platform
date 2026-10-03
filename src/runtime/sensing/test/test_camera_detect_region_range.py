@@ -58,7 +58,8 @@ def fake_node(scan, ground):
         get_parameter=lambda name: types.SimpleNamespace(value=PARAMS[name]))
 
 
-def test_low_light_tick_keeps_raw_frame_and_invalid_evidence_fresh(node_module, monkeypatch):
+@pytest.mark.parametrize('colour,reason', [((30, 15, 55), 'low_light'), ((255, 255, 255), 'overexposed')])
+def test_invalid_exposure_tick_keeps_raw_frame_and_evidence_fresh(node_module, monkeypatch, colour, reason):
     import json
     import numpy as np
     from control.sensing.perception.camera_worker import (
@@ -67,7 +68,7 @@ def test_low_light_tick_keeps_raw_frame_and_invalid_evidence_fresh(node_module, 
     output, raw, holds = [], [], []
     monkeypatch.setattr(node_module, 'String', lambda **kw: types.SimpleNamespace(**kw))
     monkeypatch.setattr(node_module, 'Bool', lambda **kw: types.SimpleNamespace(**kw))
-    pixels = np.full((240, 320, 3), (30, 15, 55), dtype=np.uint8)
+    pixels = np.full((240, 320, 3), colour, dtype=np.uint8)
     node = types.SimpleNamespace(
         _cam=types.SimpleNamespace(capture_array=lambda _: pixels),
         _worker=CameraPreprocessWorker(CameraPreprocessProfile(rotate_deg=0)),
@@ -81,7 +82,7 @@ def test_low_light_tick_keeps_raw_frame_and_invalid_evidence_fresh(node_module, 
     node_module.CameraDetectNode.tick(node)
     assert len(raw) == 1 and np.array_equal(raw[0][0], pixels)
     assert holds == [True]
-    assert output[0]['quality'] == {'valid': False, 'reason': 'low_light'}
+    assert output[0]['quality'] == {'valid': False, 'reason': reason}
     assert output[0]['blocked'] is True and output[0]['regions'] == []
     assert output[0]['stamp'] == raw[0][1] == 1.0
 

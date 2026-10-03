@@ -4838,3 +4838,11 @@
 - 증거: `docs/plans/2026-10-04-learned-lane-driving-modes.md`, `docs/validation/learned-lane-modes-2026-10-04/README.md`, 같은 회차 `low-light.md`; source·host·browser 회귀 및 독립 안전 검토.
 - gate 변화: 없음. ARM64 설치·실제 조명·주행을 host 검사나 명령 반환값으로 주장하지 않는다.
 - 교훈: 모델 사용 여부, 시야, 실제 조명 효과와 물리 주행은 각각 확인해야 한다.
+
+## 2026-10-04 · uncommitted · docs: 원본/표시 녹화와 밝기 양극단 추가 검증
+
+- 변경: 기기·브라우저 녹화의 원본 보존 및 별도 미검수 표시본, raw road ROI 과노출/저조도 분리, 조명 해제와 CORE 복구 차단의 추가 회차를 기록한다.
+- 검증: 단계별 source/host 결과만 기록하며 실제 LED·회전교차로·주행 합격을 주장하지 않는다.
+- 증거: `docs/validation/learned-lane-modes-2026-10-04/recording.md`, `docs/validation/learned-lane-modes-2026-10-04/exposure.md`.
+
+- gate 변화: SOURCE/LOCAL. 실기 노출·조명·주행은 별도 검증이다.

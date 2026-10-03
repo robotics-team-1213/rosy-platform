@@ -45,9 +45,9 @@ def line_observation(services, raw: str, *, source_now: float,
             if not isinstance(quality, dict) or type(quality.get('valid')) is not bool:
                 raise ValueError('invalid camera quality')
             if quality['valid'] is False:
-                if quality.get('reason') != 'low_light':
+                if quality.get('reason') not in ('low_light', 'overexposed'):
                     raise ValueError('unknown invalid camera quality')
-                quality_reason = 'low_light'
+                quality_reason = quality['reason']
         calibrated = data.get("ir_calibrated", False)
         revision = data.get("calibration_revision")
         if source is LineFollowMode.IR_LINE and type(calibrated) is not bool:

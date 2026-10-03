@@ -454,7 +454,7 @@ class CameraDetectNode(RegionRangeMixin, Node):
             data=json.dumps(processed.telemetry.as_dict(), sort_keys=True)))
         if not processed.telemetry.quality_valid:
             self.block_pub.publish(Bool(data=True))
-            if processed.telemetry.quality_reason in ('low_light', 'underexposed'):
+            if processed.telemetry.quality_reason in ('low_light', 'underexposed', 'overexposed'):
                 # Preserve fresh raw evidence while holding on blindness. Without
                 # it the dashboard freezes on the last lit frame and keeper loss
                 # waits for staleness instead of seeing the lights go out now.

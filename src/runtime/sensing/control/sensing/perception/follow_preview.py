@@ -190,8 +190,9 @@ def draw_follow_evidence(image, *, scale, keep=None, objects=None, road_state=No
     if (isinstance(objects, dict) and objects.get('image_size') == original_size
             and isinstance(objects.get('quality'), dict)
             and objects['quality'].get('valid') is False
-            and objects['quality'].get('reason') in ('low_light', 'underexposed')):
-        object_status = 'LOW LIGHT: visibility unavailable'
+            and objects['quality'].get('reason') in ('low_light', 'underexposed', 'overexposed')):
+        label = 'OVEREXPOSED' if objects['quality']['reason'] == 'overexposed' else 'LOW LIGHT'
+        object_status = label + ': visibility unavailable'
     found = []
     if (isinstance(detections, dict) and [detections.get('input_width'), detections.get('input_height')]
             == original_size):

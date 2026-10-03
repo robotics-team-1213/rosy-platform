@@ -247,8 +247,9 @@ def test_a_good_handover_validates():
 
 
 @pytest.mark.parametrize("file_age,quality_age,fresh", [(0, 0, True), (1, 1, True), (1.1, 1, False), (-1, 0, False), (0, True, False)])
-def test_camera_quality_includes_handover_age(file_age, quality_age, fresh):
-    result = fs.validate_face_inputs(handover(camera_quality={"valid": False, "reason": "low_light"},
+@pytest.mark.parametrize("reason", ["low_light", "overexposed"])
+def test_camera_quality_includes_handover_age(file_age, quality_age, fresh, reason):
+    result = fs.validate_face_inputs(handover(camera_quality={"valid": False, "reason": reason},
                                               camera_quality_age_s=quality_age), NOW + timedelta(seconds=file_age))
     assert (result["camera_quality"] is not None) is fresh
 

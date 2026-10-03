@@ -388,3 +388,10 @@
 - 변경: 중앙 schemas import에 closed RecordingStartRequest를 re-export한다. VisionPreviewStatus에는 pair availability/sequence와 effective quality_age_ms, VisionEvidenceRecord에는 optional raw/annotated group 및 model_unreviewed 출처를 추가한다. body 없는 legacy start는 raw이며 envelope protocol_version1.0은 유지한다.
 - 증거: protocol version alignment와 Guard 실제 옵션 확인·실시간 capability·타입 검증·CORE 통합 포함162 passed,1 skipped.
 - gate 변화: SOURCE/LOCAL. annotations는 human-reviewed ground truth가 아니다.
+
+## 2026-10-04 · uncommitted · fix(vision): preserve fresh overexposed quality
+- 변경: 원본 조도 invalid reason overexposed를 preview store, API protocol, face handover sanitizer에 전달한다. low_light 조명 허용 범위와 2초 촬영·수신·handover 신선도는 유지한다.
+- 검증: 과다 노출 관측을 버리는 RED 3 failed; API·handover·stale 회귀 포함 GREEN은 X:/DevTemp/rosy-lane-device-20261004/overexposed-api-green.txt. 배포·실주행 미검증, 명령 전송 없음.
+- 추가 검증: face handover integration RED 1 failed로 display whitelist 누락을 확인·수정. 최종 focused 129 passed, 3 skipped (overexposed-api-green.txt).
+
+- gate 변화: SOURCE/LOCAL. 실기 노출·조명·주행은 별도 검증이다.

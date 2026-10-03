@@ -170,7 +170,11 @@ export function mount(root, ctx) {
   const preview = createVisionPreview({elements, setText: (id, value) => { elements[id].textContent = value ?? "—"; },
     previewMode: () => capture.state().previewMode,
     api: ctx.api, authHeaders, hasToken: () => Boolean(session.token), isHidden: () => document.hidden,
-    onQuality: (quality) => { qualityIndicator.hidden = !(quality?.valid === false && quality?.reason === "low_light"); },
+    onQuality: (quality) => {
+      qualityIndicator.hidden = !(quality?.valid === false && ["low_light", "overexposed"].includes(quality?.reason));
+      qualityIndicator.textContent = quality?.reason === "overexposed"
+        ? "과노출 · 차선 정보 확인 불가" : "조도가 낮아 차선·물체를 판정할 수 없습니다";
+    },
     onFrame: (frame) => capture.acceptFrame(frame), onUnavailable: (message) => capture.unavailable(message)});
   browserMode.addEventListener("change", () => {
     if (!capture.setPreviewMode(browserMode.value)) browserMode.value = capture.state().previewMode;

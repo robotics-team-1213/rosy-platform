@@ -723,7 +723,7 @@ class FaceDisplay:
         quality = core.get("camera_quality") if core else None
         expires = core.get("camera_quality_until") if core else None
         fresh = quality is not None and expires is not None and self._wall() <= expires
-        if not self._low_light_enabled or not fresh:
+        if not self._low_light_enabled or not fresh or quality.get("reason") == "overexposed":
             self._light_session = False
         elif quality.get("valid") is False and quality.get("reason") == "low_light":
             self._light_session = True

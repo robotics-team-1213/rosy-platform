@@ -811,3 +811,9 @@
 - 변경: 카메라 패널에서 원본 또는 원본+표시본을 선택한다. 같은 촬영 시점의 두 프레임을 확인하고 원본부터 저장한다. 원본 누락·구형 서버 응답·촬영 시점 불일치는 녹화를 막는다.
 - 증거: 브라우저 표시본+원본 저장/원본 누락/저조도/확대 3 passed.
 - gate 변화: SOURCE/LOCAL. ARM64/device/field evidence remains separate.
+
+## 2026-10-04 · uncommitted · fix: 과노출 판정 불가 안내
+
+- 변경: 기존 카메라 품질 경고에 과노출 안내를 추가했다. JPEG 수신 상태와 차선 판정 가능 여부는 별도로 표시하며 원본 픽셀은 바꾸지 않는다.
+- 증거: Pilot/Dashboard bright-dark browser 2 passed; native quality/alarm 9 passed.
+- gate 변화: SOURCE/LOCAL. No device writes or motion.

@@ -156,7 +156,7 @@ def validate_face_inputs(data: Any, now: datetime) -> Optional[dict]:
     quality_until = None
     if (isinstance(quality, Mapping) and type(quality.get("valid")) is bool
             and ((quality.get("valid") is True and quality.get("reason") == "usable")
-                 or (quality.get("valid") is False and quality.get("reason") == "low_light"))
+                 or (quality.get("valid") is False and quality.get("reason") in ("low_light", "overexposed")))
             and quality_age is not None and quality_age >= 0 and age >= 0
             and quality_age + age <= 2.0):
         quality = {"valid": quality["valid"], "reason": quality["reason"]}

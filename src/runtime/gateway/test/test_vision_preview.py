@@ -113,8 +113,9 @@ def test_frame_pull_is_sequence_bound_and_rate_limited_per_viewer():
         "viewer-b", expected_sequence=stored.sequence, now=20.1) == stored
 
 
+@pytest.mark.parametrize('quality_reason', ['low_light', 'overexposed'])
 def test_camera_preview_api_requires_auth_and_returns_jpeg(
-        core_client, monkeypatch):
+        core_client, monkeypatch, quality_reason):
     client, services = core_client()
 
     assert client.get("/api/v1/vision/front/status").status_code == 401
@@ -129,7 +130,7 @@ def test_camera_preview_api_requires_auth_and_returns_jpeg(
     services.vision.publish(
         jpeg(b"dashboard"), captured_at=42.25,
         frame_id="front_camera_link", source="GAZEBO",
-        width=640, height=360, overlay="semantic-road-v1", quality=dict(valid=False, reason='low_light'))
+        width=640, height=360, overlay="semantic-road-v1", quality=dict(valid=False, reason=quality_reason))
 
     status = client.get("/api/v1/vision/front/status", headers=VIEWER)
     frame = client.get(
@@ -141,7 +142,7 @@ def test_camera_preview_api_requires_auth_and_returns_jpeg(
     assert status.json()["available"] is True
     assert status.json()["source"] == "GAZEBO"
     assert status.json()["width"] == 640
-    assert status.json()['quality'] == dict(valid=False, reason='low_light')
+    assert status.json()['quality'] == dict(valid=False, reason=quality_reason)
     assert status.headers["cache-control"] == "no-store"
     assert frame.status_code == 200
     assert frame.headers["content-type"] == "image/jpeg"

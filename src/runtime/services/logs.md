@@ -460,3 +460,10 @@
 - 변경: source image age와 monotonic 수신 나이를 합쳐 조도와 raw freshness를 제한한다. 얼굴 handover도 effective quality_age_ms를 전달해 지연된 사진이 추가2초 조명 권한을 받지 않는다. 이동 경로로 사용하지 않는다.
 - 증거: pair/malformed/dimension/stale/admission/capture-age와 API/Guard/Bridge/schema 포함162 passed,1 skipped.
 - gate 변화: SOURCE/LOCAL. 실제 기기의 capture pair 수신은 별도 증거다.
+
+## 2026-10-04 · uncommitted · fix(vision): preserve fresh overexposed quality
+- 변경: 원본 조도 invalid reason overexposed를 preview store, API protocol, face handover sanitizer에 전달한다. low_light 조명 허용 범위와 2초 촬영·수신·handover 신선도는 유지한다.
+- 검증: 과다 노출 관측을 버리는 RED 3 failed; API·handover·stale 회귀 포함 GREEN은 X:/DevTemp/rosy-lane-device-20261004/overexposed-api-green.txt. 배포·실주행 미검증, 명령 전송 없음.
+- 추가 검증: face handover integration RED 1 failed로 display whitelist 누락을 확인·수정. 최종 focused 129 passed, 3 skipped (overexposed-api-green.txt).
+
+- gate 변화: SOURCE/LOCAL. 실기 노출·조명·주행은 별도 검증이다.

@@ -137,3 +137,22 @@ class CameraNearObstacleTest(unittest.TestCase):
         frame[160:230, 110:210] = 30
         self.assertTrue(self.classify(frame)['quality']['valid'])
         self.assertTrue(self.classify(frame)['blocked'])
+
+    def test_clipped_road_remains_invalid_with_dark_ceiling(self):
+        frame = np.full((240, 320, 3), 255, dtype=np.uint8)
+        frame[:70] = 80
+        result = self.classify(frame)
+        self.assertEqual(result['quality']['reason'], 'overexposed')
+        self.assertFalse(result['quality']['valid'])
+        self.assertEqual(result['regions'], [])
+
+    def test_white_paint_and_small_glare_on_lit_road_remain_usable(self):
+        frame = self.frame()
+        frame[:, 60:75] = 255
+        frame[:, 245:260] = 255
+        frame[100:120, 130:150] = 255
+        self.assertTrue(self.classify(frame)['quality']['valid'])
+
+    def test_saturated_red_is_not_white_clipping(self):
+        frame = np.full((240, 320, 3), (0, 0, 255), dtype=np.uint8)
+        self.assertTrue(self.classify(frame)['quality']['valid'])

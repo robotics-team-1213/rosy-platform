@@ -376,8 +376,8 @@ class LineFollowManager(BodyStopMixin, StuckRecoveryMixin):
             try:
                 decision = self._tick_locked(current)
                 if (self._mode is LineFollowMode.CAMERA_LINE and self._observation is not None
-                        and self._observation.quality_reason == 'low_light'):
-                    self._recovery_reset('camera_low_light', current)
+                        and self._observation.quality_reason in ('low_light', 'overexposed')):
+                    self._recovery_reset('camera_' + self._observation.quality_reason, current)
                     return decision  # LOST must also bypass recovery's autonomous back-off.
                 return self._apply_recovery(current, decision)
             finally:
@@ -410,12 +410,12 @@ class LineFollowManager(BodyStopMixin, StuckRecoveryMixin):
             # 차선 자동은 수동 한도 L1 이상에서만(D-344 §13, 사용자 결정).
             return self._stop_decision("HOLD", "limit_level_too_low")
         if (self._mode is LineFollowMode.CAMERA_LINE and self._observation is not None
-                and self._observation.quality_reason == 'low_light'):
+                and self._observation.quality_reason in ('low_light', 'overexposed')):
             # Invalid vision cannot authorize obstacle back-off or remembered steering.
             age = None if self._received_at is None else current - self._received_at
             if self._lost_latched:
                 return self._stop_decision("LOST", "camera_reselection_required", age)
-            return self._loss_or_stop(current, "HOLD", "low_light", age)
+            return self._loss_or_stop(current, "HOLD", self._observation.quality_reason, age)
         guard = None
         if self._mode is LineFollowMode.CAMERA_LINE and self._config.ir_guard_enabled:
             guard = self._ir_guard(current)

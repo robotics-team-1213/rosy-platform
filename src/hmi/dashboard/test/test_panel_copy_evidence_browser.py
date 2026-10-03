@@ -425,6 +425,9 @@ def test_camera_low_light_is_visibility_failure_with_live_raw_frame(panel):
     page.locator('#vision-frame').wait_for(state='visible')
     assert '차선·물체를 판정할 수 없습니다' in page.inner_text('#vision-quality')
     assert page.locator('#vision-status').inner_text() == '실시간'
+    page.evaluate("window.cameraQuality={valid:false,reason:'overexposed'}")
+    page.wait_for_function("document.querySelector('#vision-quality').textContent.includes('과노출')")
+    assert page.inner_text('#vision-quality') == '과노출 · 차선 정보 확인 불가'
     page.evaluate("window.cameraQuality={valid:true,reason:'ok'}")
     page.locator('#vision-quality').wait_for(state='hidden')
     page.evaluate("window.cameraQuality={valid:false,reason:'low_light'}")

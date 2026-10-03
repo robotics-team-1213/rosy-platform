@@ -202,7 +202,8 @@ def face_camera_quality(preview: dict) -> dict:
     quality, age_ms = preview.get('quality'), preview.get('quality_age_ms', preview.get('age_ms'))
     fresh = (preview.get('available') is True and preview.get('stale') is False
              and type(age_ms) in (int, float) and 0 <= age_ms <= 2000
-             and quality in (dict(valid=False, reason='low_light'), dict(valid=True, reason='usable')))
+             and quality in (dict(valid=False, reason='low_light'), dict(valid=False, reason='overexposed'),
+                             dict(valid=True, reason='usable')))
     return dict(camera_quality=quality if fresh else None,
                 camera_quality_age_s=age_ms / 1000.0 if fresh else None)
 

@@ -322,3 +322,9 @@
 - 변경: 기기 기록은 원본/표시본 선택을 분리하고 서버 지원·실제 readback을 따른다. 브라우저는 원본을 항상 보존하며 표시본을 별도 저장한다. 녹화 종료 시 원본부터 다운로드하고 다시 받기 동작을 제공한다.
 - 증거: 기기 옵션·실제 readback 1 passed; 저조도 회귀 1 passed; 기존 로봇 기록·hold/takeover 4 passed.
 - gate 변화: SOURCE/LOCAL. ARM64/device/field evidence remains separate.
+
+## 2026-10-04 · uncommitted · fix: 과노출 판정 불가 안내
+
+- 변경: 원본 영상 위에 덧씌우지 않고 기존 품질 경고에서 과노출 · 차선 정보 확인 불가를 표시한다. 저조도·과노출·회복·구형 응답을 각각 구분한다.
+- 증거: Pilot/Dashboard bright-dark browser 2 passed; native quality/alarm 9 passed.
+- gate 변화: SOURCE/LOCAL. No device writes or motion.

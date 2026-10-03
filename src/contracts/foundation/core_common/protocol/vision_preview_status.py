@@ -6,7 +6,7 @@ from pydantic import BaseModel, ConfigDict
 class VisionPreviewQuality(BaseModel):
     model_config = ConfigDict(extra='forbid', strict=True)
     valid: bool
-    reason: Literal['low_light', 'usable']
+    reason: Literal['low_light', 'overexposed', 'usable']
 
 
 class VisionPreviewStatus(BaseModel):

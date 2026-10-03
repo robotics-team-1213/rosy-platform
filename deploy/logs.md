@@ -2208,3 +2208,9 @@
 - 변경: 비상·고장·주의 램프와 소리부터 적용한 뒤 하드웨어 시험을 처리한다. CORE handover가 없어도 현재 경보 패턴 중에는 queued 시험을 보류한다. 명시적 저조도 조명 opt-in은 IDLE와 MANUAL에서 사용할 수 있다.
 - 증거: native/face table/PIL 299 passed, 3 skipped; queued emergency 시험 회귀 포함.
 - gate 변화: SOURCE/LOCAL. ARM64/device/field evidence remains separate.
+
+## 2026-10-04 · uncommitted · fix: 과노출 보조 조명 해제
+
+- 변경: 신선한 overexposed 품질이면 기존 저조도 조명 세션을 즉시 해제한다. usable 상태의 점멸 방지 유지와 경보 우선순위는 유지한다.
+- 증거: Pilot/Dashboard bright-dark browser 2 passed; native quality/alarm 9 passed.
+- gate 변화: SOURCE/LOCAL. No device writes or motion.

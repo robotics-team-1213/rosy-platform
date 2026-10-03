@@ -40,8 +40,8 @@ class LineObservation:
 
     def __post_init__(self) -> None:
         if self.quality_reason is not None and (self.source is not LineFollowMode.CAMERA_LINE
-                or self.quality_reason != 'low_light' or self.visible or self.confidence != 0):
-            raise ValueError('low_light requires invisible camera evidence with zero confidence')
+                or self.quality_reason not in ('low_light', 'overexposed') or self.visible or self.confidence != 0):
+            raise ValueError('invalid camera quality requires invisible evidence with zero confidence')
         if self.ground is not None and (self.source is not LineFollowMode.CAMERA_LINE
                                         or self.ground != "NOMINAL"):
             raise ValueError("only camera evidence may carry the NOMINAL ground label")

@@ -42,6 +42,9 @@ def test_camera_low_light_warning_keeps_raw_preview_and_clears_on_recovery(table
     page.locator("[data-drive-visibility]").wait_for(state="visible")
     page.locator("[data-drive-frame]").wait_for(state="visible")
     assert "차선·물체를 판정할 수 없습니다" in page.inner_text("[data-drive-visibility]")
+    state["quality"] = {"valid": False, "reason": "overexposed"}
+    page.wait_for_function("document.querySelector('[data-drive-visibility]').textContent.includes('과노출')")
+    assert page.inner_text("[data-drive-visibility]") == "과노출 · 차선 정보 확인 불가"
     state["quality"] = {"valid": True, "reason": "ok"}
     page.locator("[data-drive-visibility]").wait_for(state="hidden")
     state["quality"] = {"valid": False, "reason": "low_light"}

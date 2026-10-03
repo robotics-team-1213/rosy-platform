@@ -1586,6 +1586,12 @@ def test_low_light_opt_in_holds_recovery_and_clears_stale_or_alarm(tmp_path):
     _face_inputs(tmp_path, power_mode="standby", camera_quality={"valid": True, "reason": "usable"}, camera_quality_age_s=0)
     display.step()
     assert display.screen["kind"] == "light"  # own illumination must not oscillate
+    _face_inputs(tmp_path, power_mode="standby", camera_quality={"valid": False, "reason": "overexposed"}, camera_quality_age_s=0)
+    display.step()
+    assert display.screen["kind"] == "sleep" and display._lamp.pattern != "illumination"
+    _face_inputs(tmp_path, power_mode="standby", camera_quality={"valid": False, "reason": "low_light"}, camera_quality_age_s=0)
+    display.step()
+    assert display.screen["kind"] == "light"
     (tmp_path / "run/rosy/face-inputs.json").write_text("{", encoding="utf-8")
     display._wall = lambda: WALL + 2.1
     display.step()

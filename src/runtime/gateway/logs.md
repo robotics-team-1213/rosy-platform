@@ -796,3 +796,10 @@
 - 변경: pilot_recorder/start typed service에 RAW0/ANNOTATED1만 전달하며 legacy SetBool 정지는 유지한다. camera/preview/raw/compressed를 별도 read-only 구독하고 ROS capture clock을 검증한다. 오래된 원본은 거절, 기존 JPEG는 조도만 unknown으로 표시한다. final cmd_vel 소유권은 변경하지 않는다.
 - 증거: 실제 Bridge wiring registry와 typed0/1 transport, CORE API readback·원본/주석 header 및 source age 검증 포함162 passed,1 skipped.
 - gate 변화: SOURCE/LOCAL. ROS service 설치/실기 녹화 확인은 root 배포 단계에서 수행한다.
+
+## 2026-10-04 · uncommitted · fix(vision): preserve fresh overexposed quality
+- 변경: 원본 조도 invalid reason overexposed를 preview store, API protocol, face handover sanitizer에 전달한다. low_light 조명 허용 범위와 2초 촬영·수신·handover 신선도는 유지한다.
+- 검증: 과다 노출 관측을 버리는 RED 3 failed; API·handover·stale 회귀 포함 GREEN은 X:/DevTemp/rosy-lane-device-20261004/overexposed-api-green.txt. 배포·실주행 미검증, 명령 전송 없음.
+- 추가 검증: face handover integration RED 1 failed로 display whitelist 누락을 확인·수정. 최종 focused 129 passed, 3 skipped (overexposed-api-green.txt).
+
+- gate 변화: SOURCE/LOCAL. 실기 노출·조명·주행은 별도 검증이다.

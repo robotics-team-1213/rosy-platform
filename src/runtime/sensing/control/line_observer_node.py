@@ -24,7 +24,7 @@ from . import executor_choice
 from .calibrated_values import calibrated
 from .sensing.perception.camera_ground import nominal_ground_plane, simulation_ground_plane
 from .sensing.perception.image_frame import image_msg_to_frame
-from .sensing.perception.camera_visibility import is_low_light
+from .sensing.perception.camera_visibility import visibility_reason
 from .sensing.perception.lane import (
     IRLineCalibration,
     LaneBetweenKeeper,
@@ -397,7 +397,8 @@ class LineObserverNode(Node):
             return
         try:
             frame = image_msg_to_frame(msg)
-            if is_low_light(frame):
+            reason = visibility_reason(frame)
+            if reason != 'usable':
                 self._lane_keeper.reset()
                 self._between_keeper.reset()
                 self._keep_last_stamp = None
@@ -405,7 +406,7 @@ class LineObserverNode(Node):
                     self._paint_worker.reset()
                 source_stamp = float(msg.header.stamp.sec) + float(msg.header.stamp.nanosec) * 1e-9
                 self._publish('CAMERA_LINE', None, stamp=source_stamp,
-                              quality=dict(valid=False, reason='low_light'))
+                              quality=dict(valid=False, reason=reason))
                 self._publish_debug(msg, frame, None)
                 return
             mode = str(self.get_parameter('camera_lane_mode').value)

@@ -1052,3 +1052,11 @@
 - 변경: 기본 raw 녹화는 기존 원본 카메라 topics를 유지한다. annotated 옵션은 같은 bag에 별도 표시 영상과 frame별 검출/keeper/learned 근거를 추가하며 원본을 바꾸지 않는다. session/manifest/readback에 선택과 model_unreviewed 출처를 기록한다. 브라우저 원본 preview는 표시본과 동일 촬영 header를 유지한다.
 - 증거: unknown 옵션 거부·SetBool 호환·원본 topic 보존·typed start/readback·manifest 회귀 53 passed. 새 rosidl 및 raw/표시 쌍은 CI와 runtime에서 추가 확인한다.
 - gate 변화: 없음. 자동 표시는 사람이 확인한 학습 라벨이 아니다.
+
+## 2026-10-04 · uncommitted · fix(perception): 밝기 양극단의 원본 관측
+
+- 변경: 도로 ROI grayscale clipping과 저조도를 구분하고 두 경우 최신 원본 전달·keeper/mask reset·품질 표시를 유지한다. HSV 단일 채널 포화를 흰색 과노출로 판정하지 않는다.
+- 검증: camera/worker/node/preview 98 passed, ROI 경계·색 포화 5 passed, raw JPEG 양극단 2 passed. 실기 노출 조정·조명 효과는 별도이다.
+- 증거: `docs/validation/learned-lane-modes-2026-10-04/exposure.md`.
+
+- gate 변화: SOURCE/LOCAL. 실기 노출·조명·주행은 별도 검증이다.

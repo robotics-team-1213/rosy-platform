@@ -303,7 +303,9 @@ export function mountBrowserRecording({element, apiGet, authHeaders}) {
     apiGet,
     previewMode: () => capture.state().previewMode,
     onQuality: (quality) => {
-      element.visibility.hidden = !(quality?.valid === false && quality?.reason === "low_light");
+      element.visibility.hidden = !(quality?.valid === false && ["low_light", "overexposed"].includes(quality?.reason));
+      element.visibility.textContent = quality?.reason === "overexposed"
+        ? "과노출 · 차선 정보 확인 불가" : "조도가 낮아 차선·물체를 판정할 수 없습니다";
     },
     fetchFrame: async (path) => {
       const response = await fetch(path, {headers: authHeaders(), cache: "no-store"});

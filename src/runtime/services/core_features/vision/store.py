@@ -47,8 +47,8 @@ def parse_preview_format(value: str) -> Optional[dict]:
         "height": dimension("height"),
         "overlay": fields.get("overlay", "none")[:80] or "none",
     }
-    if fields.get('quality_valid') == 'false' and fields.get('quality_reason') == 'low_light':
-        metadata['quality'] = dict(valid=False, reason='low_light')
+    if fields.get('quality_valid') == 'false' and fields.get('quality_reason') in ('low_light', 'overexposed'):
+        metadata['quality'] = dict(valid=False, reason=fields['quality_reason'])
     elif fields.get('quality_valid') == 'true' and fields.get('quality_reason') == 'usable':
         metadata['quality'] = dict(valid=True, reason='usable')
     return metadata
@@ -144,7 +144,8 @@ class VisionFrameStore:
         if raw and clean_overlay != 'none':
             raise ValueError('raw preview cannot carry an overlay')
         clean_quality = (dict(quality) if isinstance(quality, dict) and type(quality.get('valid')) is bool and quality in (
-            dict(valid=False, reason='low_light'), dict(valid=True, reason='usable')) else None)
+            dict(valid=False, reason='low_light'), dict(valid=False, reason='overexposed'),
+            dict(valid=True, reason='usable')) else None)
         if type(source_age_s) not in (float, int) or not math.isfinite(source_age_s) or source_age_s < 0:
             raise ValueError('source image age must be finite and nonnegative')
 

@@ -62,13 +62,14 @@ def test_idle_carries_no_drive_card():
     assert _payload(_snapshot(mode="IDLE", navigation="IDLE"), face="basic")["drive"] is None
 
 
-def test_face_quality_handover_preserves_camera_age_and_clears_stale_or_missing():
+@pytest.mark.parametrize('reason', ['low_light', 'overexposed'])
+def test_face_quality_handover_preserves_camera_age_and_clears_stale_or_missing(reason):
     from core_features.vision import VisionFrameStore
     store = VisionFrameStore()
     store.publish(b'\xff\xd8\xff\xd9', captured_at=100., received_at=10., frame_id='front',
-                  source='front', quality=dict(valid=False, reason='low_light'))
+                  source='front', quality=dict(valid=False, reason=reason))
     assert display.face_camera_quality(store.status(now=11.)) == dict(
-        camera_quality=dict(valid=False, reason='low_light'), camera_quality_age_s=1.)
+        camera_quality=dict(valid=False, reason=reason), camera_quality_age_s=1.)
     assert display.face_camera_quality(store.status(now=12.1)) == dict(
         camera_quality=None, camera_quality_age_s=None)
     assert display.face_camera_quality({})['camera_quality'] is None
