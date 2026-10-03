@@ -79,6 +79,14 @@ roots:
       (D-429 §4 rule 1 needs an .api prefix); contracts are importable by every part.
     concern: contracts
 
+  - path: contracts/motion
+    part: contracts
+    d427_target: contracts/motion
+    wave: none
+    import_prefix: [rosy.contracts.motion]
+    concern: contracts
+    note: D-442(a) ROS-free Motion Intent and DeviceControlPort shapes; no operating consumer yet.
+
   # --- middleware: Pinky/OMX device code, skills, drivers, device UI ---------
   - path: middleware/core/gateway
     part: middleware

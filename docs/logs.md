@@ -4914,3 +4914,9 @@
 - 변경: 최신 remote 기준 migration worktree에 승인 ADR와 MANUAL·신호·충전 태그·POLICY 설정·OMX복구·U2 static gate를 통합했다. Cam 및 D-441 Accepted 행을 보존했다. 현재 remote에 D-441은 이미 있어 gap에 재추가하지 않았다. 기존 root log의 당시 pending 설명은 역사 기록으로 유지한다.
 - 증거: 통합 관련191 passed(53.37 s), NEW0; lint0 errors11 evidence warnings. docs/validation/d427-source-migration/immediate-safety-integration-2026-10-04.md. 생성 문서는 재생성했고 source 충돌 수정은 없었다.
 - gate 변화: 없음. U2 contracts/binding과 wave5·enforced push·CI·artifact·release·실기는 계속 pending. shared main/WIP와 기기 자격은 보존한다.
+
+## 2026-10-04 · uncommitted · D-442 ROS-free motion contract wheel
+
+- 변경: §4(a) semantic 타입·불변 payload·공통 identity/validity와 포트 결과/Protocol을 namespace wheel로 추가했다. skill 의존성·contracts manifest·CI 실제 wheel 설치를 등록했다. 운영 import는 Task3이다.
+- 증거: FLEET/IDLE 리뷰 누락 RED2 보완, fresh 설치 wheel52 passed, 관련 구조121 passed·NEW0, 독립 설치 wheel52 passed·APPROVE Task2. docs/validation/d427-source-migration/motion-contract-wheel-2026-10-04.md.
+- gate 변화: 없음. SOURCE/host/wheel만 검증했고 binding·native/SD/core Docker·CI·ARM64·DEVICE·FIELD는 pending이다.
