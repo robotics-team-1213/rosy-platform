@@ -118,3 +118,18 @@ def test_build_job_publishes_manifest_hash_and_provenance_for_the_signer():
     names = [step.get("name", "") for step in build["steps"]]
     assert names.index("Package candidate into release-sized parts") < names.index(
         attest["name"])
+
+
+def test_release_job_prunes_only_older_site_releases_after_creating_the_new_one():
+    release = _workflow()["jobs"]["publish-unsigned-prerelease"]
+    names = [step.get("name", "") for step in release["steps"]]
+    prune = next(step for step in release["steps"] if step.get("name", "").startswith("Prune"))
+    run = prune["run"]
+
+    assert names.index("Create unsigned prerelease") < names.index(prune["name"])
+    assert "test(\"^site-[0-9a-f]{12}$\")" in run  # jq selection
+    assert "[[ \"$old\" =~ ^site-[0-9a-f]{12}$ ]]" in run  # per-tag guard
+    assert ".[3:]" in run and "sort_by(.createdAt) | reverse" in run
+    assert 'gh release delete "$old" --cleanup-tag --yes' in run
+    assert '[[ "$old" != "$TAG" ]]' in run
+    assert "payload" not in run.replace("payload-*", "")

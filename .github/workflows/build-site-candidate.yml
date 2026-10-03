@@ -213,3 +213,23 @@ jobs:
             --title "Site candidate ${TAG} (unsigned)" \
             --notes "$notes" \
             candidate-assets/*
+
+      - name: Prune older site candidate releases (keep the newest 3)
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          # Robots look for payload-* among the most recent releases (D-412),
+          # prereleases included, so site-* candidates must not pile up. Only
+          # tags that match ^site-[0-9a-f]{12}$ exactly are ever deleted.
+          gh release list --limit 200 --json tagName,createdAt \
+            --jq 'map(select(.tagName | test("^site-[0-9a-f]{12}$")))
+                  | sort_by(.createdAt) | reverse | .[3:] | .[].tagName' \
+            >"$RUNNER_TEMP/site-releases-to-prune"
+          while read -r old; do
+            [[ "$old" =~ ^site-[0-9a-f]{12}$ ]] || { echo "refusing to prune: $old" >&2; exit 1; }
+            [[ "$old" != "$TAG" ]] || { echo "refusing to prune the new release" >&2; exit 1; }
+            gh release delete "$old" --cleanup-tag --yes
+            echo "pruned $old"
+          done <"$RUNNER_TEMP/site-releases-to-prune"

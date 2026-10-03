@@ -777,10 +777,12 @@ filled from the operator's private records.
    `ROSY_SITE_IMAGE_TAG`, and restart `rosy-site-stack.service`. These are the
    same D-301 checks as above; `SHA256SUMS` alone authenticates nothing.
 
-Delete old `site-*` prereleases once a newer candidate is accepted. Robots
-look for `payload-*` releases in the most recent releases list (D-412), so a
-long run of site prereleases must not push the newest payload release out of
-that list.
+The release job keeps only the newest three `site-*` releases: after creating
+the new prerelease it deletes older ones and their tags (exact
+`^site-[0-9a-f]{12}$` names only). Robots look for `payload-*` releases in the
+first page of 20 recent releases, prereleases included (D-412), so site
+candidates must not push the newest payload release off that page. Stage a
+candidate on the host before three newer ones are built, or rebuild it.
 
 Install the boot unit from that same verified candidate after its configuration
 and secrets are ready. For LAN access install `rosy-site-firewall.service`
