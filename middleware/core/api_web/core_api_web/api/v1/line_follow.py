@@ -14,6 +14,7 @@ from core_api_web.api.v1.common import (
     enter_navigation_mode,
     operator,
     require_calibration_owner,
+    require_manual_released,
     localized_start,
     viewer,
 )
@@ -71,6 +72,7 @@ def set_line_follow_mode(body: LineFollowModeRequest,
         return _status(svc)
 
     # Turning line-follow OFF above only stops motion, so it stays open to all.
+    require_manual_released(svc)
     require_calibration_owner(svc, auth, "line-follow mode change")
     if svc.safety.estop or svc.modes.is_emergency:
         raise ApiError("EMERGENCY_ACTIVE", 409, "release emergency stop first")

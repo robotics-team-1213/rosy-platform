@@ -440,3 +440,9 @@
 - 변경: `core_features/vision/models.py` `ModelStatusStore` — `perception/learned/status`(lane_seg shadow)·`perception/learned/object_det/status`(object_det active) 상태를 작업별로 보관, 나이·stale. `VisionFrameStore.models` 로 붙인다. 교체·선택 기능 없음.
 - 증거: `test_vision_models.py` 8 passed; `src/runtime/services/test` 포함 묶음 739 passed, 37 skipped.
 - gate 변화: 없음.
+
+## 2026-10-04 · uncommitted · D-442 U1 MANUAL 보호
+
+- 변경: 살아 있는 수동 세션의 NAVIGATION 전환을 ModeMachine에서 거부한다. teleop 입력과 watchdog 갱신은 같은 모드 잠금 안에서 다시 확인한 뒤 반영한다. API의 자율 진입은 부작용 전에 409 MODE_CONFLICT로 거부한다. 정지와 만료된 세션은 기존 전환을 유지한다.
+- 증거: 신규 회귀 시험에서 탈취 5 failed, 경합 1 failed, line-follow 취소 부작용 1 failed를 수정 전에 재현했다. 관련 시험 167 passed, known_failures 비교 NEW 0, lint 0 errors. 독립 재리뷰에서 경합 양방향과 교착 부재를 확인했고 코드 차단 사항 없이 승인했다. 근거는 docs/validation/d427-source-migration/manual-ownership-review-2026-10-04.md.
+- gate 변화: 없음. 호스트 검증이며 sim·장치·실주행 수용은 미실행이다.

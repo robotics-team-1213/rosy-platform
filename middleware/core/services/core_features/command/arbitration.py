@@ -9,7 +9,7 @@ import enum
 import logging
 import threading
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Callable, Optional
 
 log = logging.getLogger(__name__)
 
@@ -96,9 +96,25 @@ class ModeMachine:
         # docking listener takes the docking lock, and docking calls in here
         # while holding it (docking lock -> mode lock, never the reverse).
         self._lock = threading.Lock()
+        self.manual_active: Callable[[], bool] = lambda: False
 
     def can_transition(self, new: Mode) -> bool:
+        # D-442 U1: a live teleop session owns MANUAL until it stops or expires.
+        if self.mode is Mode.MANUAL and new is Mode.NAVIGATION and self.manual_active():
+            return False
         return new in _ALLOWED[self.mode]
+
+    def commit_manual(self, update: Callable[[], None]) -> bool:
+        """Commit input and watchdog renewal against the same mode lock.
+
+        The callback only stores command data; it must not emit events or call
+        a mode transition. Validation and clipping happen before this boundary.
+        """
+        with self._lock:
+            if self.mode is not Mode.MANUAL:
+                return False
+            update()
+            return True
 
     def transition(self, new: Mode, expect: Optional[Mode] = None) -> tuple[bool, str]:
         """Change the mode. With `expect`, only from that mode — a caller that

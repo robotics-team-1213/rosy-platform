@@ -9,6 +9,7 @@ from core_api_web.api.v1.common import (
     enter_navigation_mode,
     operator,
     require_calibration_owner,
+    require_manual_released,
     require_kept,
     localized_start,
     viewer,
@@ -34,6 +35,7 @@ class GoalRequest(BaseModel):
 @navigation_router.post("/navigation/goal")
 def navigation_goal(body: GoalRequest, auth: AuthContext = Depends(operator),
                     svc: CoreServicesLike = Depends(get_services)):
+    require_manual_released(svc)
     if svc.line_follow.active:
         raise ApiError("LINE_FOLLOW_ACTIVE", 409,
                        "stop the selected line-follow mode before accepting a navigation goal")
@@ -60,6 +62,7 @@ def navigation_cancel(auth: AuthContext = Depends(operator),
 @navigation_router.post("/navigation/home")
 def navigation_home(auth: AuthContext = Depends(operator),
                     svc: CoreServicesLike = Depends(get_services)):
+    require_manual_released(svc)
     if svc.line_follow.active:
         raise ApiError("LINE_FOLLOW_ACTIVE", 409,
                        "stop the selected line-follow mode before accepting a return-home request")

@@ -42,6 +42,7 @@ class CommandManager:
         # SAF-002: default 500 ms, configurable (safety.teleop_timeout_ms).
         self.watchdog = TeleopWatchdog(timeout_ms=teleop_timeout_ms)
         self._manual_twist: Optional[Twist] = None
+        self._modes.manual_active = lambda: self.manual_active
         self._manual_source = 'manual'
         #: teleop 세션 번호. 만료 알림(SAF-002)은 세션당 한 번이다.
         #:
@@ -127,12 +128,17 @@ class CommandManager:
         linear, angular = self._safety.clip(linear, angular, scope="manual")
         # 명령을 먼저 놓고 워치독을 나중에 되살린다. 거꾸로면 그 사이의 틱이
         # 되살아난 워치독과 만료된 **옛** 명령을 함께 읽어 바퀴로 다시 보낸다.
-        self._manual_twist = Twist(linear, angular)
-        self._manual_source = source
-        self._input_epoch += 1
-        self.watchdog.refresh()
-        # 새 명령이 왔으니 다음 끊김은 다시 알릴 일이다.
-        self._session += 1
+        def commit() -> None:
+            self._manual_twist = Twist(linear, angular)
+            self._manual_source = source
+            self._input_epoch += 1
+            self.watchdog.refresh()
+            # A new command starts a new watchdog episode.
+            self._session += 1
+
+        if not self._modes.commit_manual(commit):
+            self._reject(source, "mode changed before manual input commit")
+            return False, "MODE_CONFLICT", None
         return True, "", (linear, angular)
 
     @property

@@ -80,6 +80,8 @@ def require_calibration_owner(svc: CoreServicesLike, auth: AuthContext, action: 
 
 def apply_mode(svc: CoreServicesLike, auth: AuthContext, new_mode: Mode) -> None:
     """`POST /mode` semantics, shared with the D-407 MANUAL / ABORT stuck answers."""
+    if new_mode is Mode.NAVIGATION:
+        require_manual_released(svc)
     if new_mode is not Mode.IDLE:
         # IDLE only stops the robot, so like e-stop it stays open to everyone.
         require_calibration_owner(svc, auth, "mode change")
@@ -104,9 +106,16 @@ def apply_mode(svc: CoreServicesLike, auth: AuthContext, new_mode: Mode) -> None
                        data={"from": "api", "to": new_mode.value, "by": auth.role})
 
 
+def require_manual_released(svc: CoreServicesLike) -> None:
+    """D-442 U1: refuse autonomy before changing any live manual state."""
+    if svc.modes.mode is Mode.MANUAL and svc.command.manual_active:
+        raise ApiError("MODE_CONFLICT", 409, "manual control is active")
+
+
 def enter_navigation_mode(svc: CoreServicesLike, auth: AuthContext) -> None:
     """D-2: Nav2 velocity only reaches the wheels in NAVIGATION."""
     # Nav goal, return-home, swarm follow and line-follow all drive through here.
+    require_manual_released(svc)
     require_calibration_owner(svc, auth, "navigation")
     if svc.line_follow.active:
         status = svc.line_follow.stop()
