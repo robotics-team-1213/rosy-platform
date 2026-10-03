@@ -1,16 +1,28 @@
-"""Old-path scan for D-427 step B moves (wave 0 item 4 of the migration plan).
+r"""Old-path scan for D-427 step B moves (wave 0 item 4 of the migration plan).
 
 A moved root records its old location as ``legacy``. ``LegacyScan`` finds text
-that still points there in four forms:
+that still points there. Backslashes (PowerShell, .bat, raw or escaped strings)
+are read as ``/`` first, so every form below also covers ``src\site\fleet``.
 
 - slash: ``src/site/fleet`` starting at a path-segment boundary, also after ``/``
   (``$WORKSPACE/src/...``, ``/repo/src/...``). Install paths are exempt: the token
   around the match (split on whitespace, quotes, ``= : , ; ( ) [ ] { }``) starts
   with ``/opt/``, ``/usr/`` or ``/etc/``.
-- join: the segments as separate strings, ``"src" / "site" / "fleet"``,
-  ``os.path.join("src", "site", ...)``, ``Path("src/site", "fleet")``.
+- join: the segments as separate string literals, joined by ``/``, ``,``, ``+``
+  or plain spaces, optionally closing a call first: ``"src" / "site" / "fleet"``,
+  ``os.path.join("src", "site", ...)``, ``Path("src/site") / "fleet"``,
+  ``"src" + "/site/fleet"``, PowerShell ``Join-Path $r "src" "site" "fleet"``.
+- brace: shell brace expansion ``src/site/{fleet,vision}``.
 - relative: ``../`` strings resolved from the file's folder and from each ancestor
   up to the repository root (covers gradle ``rootProject.file``).
+
+Honest holes:
+- A variable segment is invisible: ``base / NAME`` with ``NAME = "fleet"``, or an
+  f-string ``f"src/site/{name}"``. Review the consumer list (plan, common move
+  procedure step 1) for these.
+- Only ``/opt/``, ``/usr/`` and ``/etc/`` are exempt. A device checkout path such
+  as ``/home/pinky/rosy/src/...`` is still reported; fix it in the move commit or
+  allowlist the line.
 """
 
 import posixpath
@@ -30,7 +42,9 @@ INSTALL_PREFIXES = ("/opt/", "/usr/", "/etc/")
 
 _TOKEN_BREAK = re.compile(r"""[\s'"`=:,;()\[\]{}]""")
 _RELATIVE = re.compile(r"(?:\.\./)+[\w./-]+")
-_SEPARATOR = r"""(?:/|["']\s*[/,]\s*["'])"""
+_SEPARATOR = r"""(?:/|/?["']\)?(?:\s*[/,+]\s*|\s+)["']/?)"""
+_BRACE = re.compile(r"([\w$./-]*/)\{([\w./-]+(?:,[\w./-]+)+)\}")
+_BACKSLASHES = re.compile(r"\\+")
 _START = r"(?<![\w.-])"
 _END = r"(?![\w-]|\.\w)"
 
@@ -43,7 +57,9 @@ def in_scope(path: str) -> bool:
         return False
     if len(pure.parts) == 1:
         return path in ROOT_FILES or path.endswith(".dockerignore")
-    return pure.suffix.lower() != ".md" or pure.name in CURRENT_NOTES
+    if pure.suffix.lower() != ".md" or pure.name in CURRENT_NOTES:
+        return True
+    return path.startswith(".claude/skills/") and pure.name == "SKILL.md"
 
 
 def under(path: str, root: str) -> bool:
@@ -77,6 +93,8 @@ class LegacyScan:
         # already reported as left behind.
         if not any(legacy.rsplit("/", 1)[-1] in text for legacy in self.legacies):
             return []
+        if "\\" in text:
+            text = _BACKSLASHES.sub("/", text)
         found, starts = [], set()
         for legacy, pattern in self._slash:
             at = text.find(legacy)
@@ -97,6 +115,17 @@ class LegacyScan:
             for match in pattern.finditer(text):
                 if "'" in match.group(0) or '"' in match.group(0):
                     found.append(("join", match.group(0), legacy))
+        if "/{" in text:
+            for match in _BRACE.finditer(text):
+                prefix = match.group(1)
+                if prefix.startswith(INSTALL_PREFIXES):
+                    continue
+                for alternative in match.group(2).split(","):
+                    candidate = prefix + alternative
+                    legacy = next((legacy for legacy, pattern in self._slash if pattern.search(candidate)), None)
+                    if legacy is not None:
+                        found.append(("brace", match.group(0), legacy))
+                        break
         if "../" in text:
             folders = PurePosixPath(path).parent.parts
             bases = ["/".join(folders[:depth]) for depth in range(len(folders), -1, -1)]

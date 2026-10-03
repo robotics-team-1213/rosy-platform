@@ -446,6 +446,13 @@ def test_legacy_scan_catches_every_form_and_respects_exemptions():
         "deploy/notes.md": "src/old/fleet\n",
         "deploy/AGENTS.md": "See `src/old/fleet/`.\n",
         "src/old/fleet/new.py": "",
+        "tools/console.ps1": '(Join-Path $repo "src\\old\\fleet")\nJoin-Path $r "src" "old" "fleet"\n',
+        "tools/go.bat": "cd src\\old\\fleet\n",
+        "test/raw.py": 'r"..\\..\\src\\old\\fleet"\n',
+        "test/path_ops.py": 'Path("src/old") / "fleet"\nPath("src") / "old" / "fleet"\n"src" + "/old/fleet"\n',
+        "deploy/brace.sh": "cp -r src/old/{fleet,vision} /tmp\ncp -r /opt/rosy/src/old/{fleet,vision} /tmp\n",
+        ".claude/skills/drive/SKILL.md": "Serve src/old/fleet/web.\n",
+        ".claude/skills/drive/notes.md": "src/old/fleet\n",
     }
     allow = {("test/traversal.py", "../../src/old/fleet/passwd"), ("test/gone.py", "../x")}
     problems = _legacy_report(roots, list(files), files.get, allow)
@@ -460,6 +467,15 @@ def test_legacy_scan_catches_every_form_and_respects_exemptions():
         "test/join_call.py: join " + repr("src', 'old', 'fleet") + tail,
         "test/join_call.py: join " + repr("src/old', 'fleet") + tail,
         "test/join_div.py: join " + repr('src" / "old" / "fleet') + tail,
+        ".claude/skills/drive/SKILL.md: slash 'src/old/fleet/web.'" + tail,
+        "deploy/brace.sh: brace 'src/old/{fleet,vision}'" + tail,
+        "test/path_ops.py: join " + repr('src" + "/old/fleet') + tail,
+        "test/path_ops.py: join " + repr('src") / "old" / "fleet') + tail,
+        "test/path_ops.py: join " + repr('src/old") / "fleet') + tail,
+        "test/raw.py: slash '../../src/old/fleet'" + tail,
+        "tools/console.ps1: join " + repr('src" "old" "fleet') + tail,
+        "tools/console.ps1: slash 'src/old/fleet'" + tail,
+        "tools/go.bat: slash 'src/old/fleet'" + tail,
     ])
     pending = [{**roots[0], "path": "src/old/x"}, roots[1]]
     assert _legacy_report(pending, [], files.get, set()) == [
