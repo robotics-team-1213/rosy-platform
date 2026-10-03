@@ -40,6 +40,10 @@ def test_customizer_installs_native_ros_and_never_product_docker():
     assert "systemctl --root" in source
     assert "docker" not in source.lower()
     assert "--source-tree" in build and "--lock" in build
+    # D-427: the customizer gets the workspace plus the manifest's colcon roots.
+    assert 'COLCON_ROOTS="$(python3 "$WORKSPACE/tools/harness/colcon_roots.py")"' in build
+    assert '--source-tree "$WORKSPACE" \\\n        --colcon-roots "$COLCON_ROOTS"' in build
+    assert '"$WORKSPACE/src"' not in build
     assert "motion_profiles.yaml" in payload and "cyclonedds.xml" in payload
 
 
@@ -59,11 +63,40 @@ def test_customizer_installs_only_required_product_package_dependency_closure():
     assert "resolve-required-source-paths.py" in source
     assert "ROSDEP_SOURCE_PATHS" in source
     assert '--source-root "$ROOT/tmp/rosy-src"' in source
+    assert '"${RESOLVE_ROOT_ARGS[@]}"' in source
     assert "--chroot-prefix /tmp/rosy-src" in source
-    assert '"$ROOT/tmp/rosy-src/src"' not in source
+    assert 'cp -a "$SOURCE_TREE" "$ROOT/tmp/rosy-src"' not in source
     assert 'rosdep install --from-paths "${ROSDEP_SOURCE_PATHS[@]}"' in source
     assert "rosdep install --from-paths /tmp/rosy-src" not in source
     assert 'chroot "$ROOT" apt-get clean' in source
+
+
+def test_customizer_copies_each_manifest_colcon_root_under_tmp_rosy_src(tmp_path):
+    # D-427 wave 0 item 5: run the customizer's root check and copy against the manifest roots.
+    if _BASH is None:
+        pytest.skip("bash runs the customizer snippet")
+    source = CUSTOMIZER.read_text(encoding="utf-8")
+    roots = yaml.safe_load((ROOT / "tools/harness/platform_parts.yaml").read_text(encoding="utf-8"))["colcon_roots"]
+    workspace, image = tmp_path / "ws", tmp_path / "image"
+    for root in roots:
+        (workspace / root / "pkg").mkdir(parents=True)
+        (workspace / root / "pkg" / "package.xml").write_text("<package/>\n", encoding="utf-8")
+    image.mkdir()
+    check = source[source.index("# D-427: --colcon-roots"):source.index('[[ -f "$LOCK" ]]')]
+    copy = source[source.index("RESOLVE_ROOT_ARGS=()"):source.index("if [[ ! -f \"$ROOT/etc/ros/rosdep")]
+    script = ('set -euo pipefail\nfail() { echo "FAIL $*" >&2; exit 1; }\n'
+              f'SOURCE_TREE="{_posix(workspace)}"; ROOT="{_posix(image)}"; COLCON_ROOTS_ARG="{" ".join(roots)}"\n'
+              + check + copy + 'printf "%s\\n" "${RESOLVE_ROOT_ARGS[@]}"\n')
+
+    completed = subprocess.run([_BASH, "-c", script], capture_output=True, text=True, check=False)
+
+    assert completed.returncode == 0, completed.stderr
+    assert completed.stdout.split() == [arg for root in roots for arg in ("--colcon-root", root)]
+    for root in roots:
+        assert (image / "tmp" / "rosy-src" / root / "pkg" / "package.xml").is_file(), root
+    no_roots = script.replace(f'COLCON_ROOTS_ARG="{" ".join(roots)}"', 'COLCON_ROOTS_ARG=""')
+    empty = subprocess.run([_BASH, "-c", no_roots], capture_output=True, text=True, check=False)
+    assert empty.returncode != 0 and "--colcon-roots is required" in empty.stderr
 
 
 def test_customizer_installs_wiringpi_runtime_from_the_verified_lock():
