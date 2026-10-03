@@ -53,6 +53,9 @@ class LineStuckBoard:
             "tier": tier, "rule": rule, "decision": decision, "escalated": escalated,
             "at": self._clock()}
 
+    def resolver_note(self, robot_id: str, stuck_id: str) -> Optional[dict]:
+        return self._resolver.get((robot_id, stuck_id))
+
     def _drop_notes(self, robot_id: str, keep: Optional[str] = None) -> None:
         for key in [k for k in self._resolver if k[0] == robot_id and k[1] != keep]:
             del self._resolver[key]

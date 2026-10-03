@@ -97,6 +97,7 @@ def test_without_the_agent_event_the_stuck_still_shows_with_unknown_clearances(t
 def test_a_closed_stuck_leaves_the_list_and_an_unreachable_robot_keeps_it_marked(tmp_path):
     robot = FakeRobot("rosy_01", state=_state())
     client, _ = _named_app(_console(robot), tmp_path)
+    client.app.state.fleet_gather.max_age_s = 0.0    # every read below is a fresh gather
     _row(client)
 
     robot.state_error = ConnectionError("down")

@@ -472,7 +472,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
 
     if stuck_resolver_clients is not None:
         app.state.stuck_resolver = StuckResolverLoop(
-            console, app.state.line_stuck, StuckResolver(ResolverConfig()),
+            app.state.fleet_gather, app.state.line_stuck, StuckResolver(ResolverConfig()),
             clients=lambda: stuck_resolver_clients)
     if hub is not None and (task_service is not None or stuck_resolver_clients is not None):
         resolver = getattr(app.state, "stuck_resolver", None)

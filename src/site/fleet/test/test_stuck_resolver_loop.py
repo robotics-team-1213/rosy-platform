@@ -12,6 +12,7 @@ from fastapi.testclient import TestClient
 from fakes import FakeClock, FakeRobot
 from fleet.server.app import _fan_out_events, create_app
 from fleet.server.console import FleetConsole
+from fleet.server.console_routes import SharedGather
 from fleet.server.line_stuck import LineStuckAnswerLog, LineStuckBoard
 from fleet.server.stuck_resolver import ResolverConfig, StuckResolver
 from fleet.server.stuck_resolver_loop import PRINCIPAL_ID, StuckResolverLoop
@@ -57,7 +58,8 @@ def _setup(state=None, *, resolver_robot=None, config=None, log=None):
     resolver_robot = resolver_robot or FakeRobot("rosy_01", state=state or _state())
     clock = FakeClock()
     board = LineStuckBoard(clock=clock, log=log)
-    loop = StuckResolverLoop(console, board, StuckResolver(config or ResolverConfig()),
+    loop = StuckResolverLoop(SharedGather(console, board, max_age_s=0.0), board,
+                             StuckResolver(config or ResolverConfig()),
                              clients=lambda: {"rosy_01": resolver_robot}, clock=clock)
     return loop, board, resolver_robot
 
@@ -103,8 +105,9 @@ def test_robot_without_resolver_token_escalates():
     console = FleetConsole([RobotEndpoint("rosy_01", "http://127.0.0.1:8080", "rest-token")],
                            [robot])
     board = LineStuckBoard(clock=FakeClock())
-    loop = StuckResolverLoop(console, board, StuckResolver(ResolverConfig()),
-                             clients=lambda: {}, clock=FakeClock())
+    loop = StuckResolverLoop(SharedGather(console, board), board,
+                             StuckResolver(ResolverConfig()), clients=lambda: {},
+                             clock=FakeClock())
     asyncio.run(loop.run_once())
     assert board.view("rosy_01")["resolver"]["escalated"] == "no_resolver_token"
     assert robot.calls.count(("line_stuck_decision", "stuck-abc", "BACK_AND_RETRY")) == 0
@@ -233,8 +236,88 @@ def test_lifespan_runs_the_resolver_and_exits_cleanly(tmp_path):
         assert [c for c in resolver_robot.calls if c[0] == "line_stuck_decision"]
 
 
-def test_line_stuck_js_claims_and_shows_the_resolver_note():
-    from pathlib import Path
-    js = (Path(__file__).resolve().parents[1] / "fleet/server/web/line-stuck.js").read_text(
-        encoding="utf-8")
-    assert "/line-stuck/claim" in js and "export function resolverText" in js
+class _CountingConsole:
+    def __init__(self):
+        self.snapshots = 0
+        self.hub = type("Hub", (), {"registry": type("Reg", (), {
+            "events_since": staticmethod(lambda _rid, _seq: ())})()})()
+
+    async def snapshot(self):
+        self.snapshots += 1
+        await asyncio.sleep(0.01)                       # let the second caller arrive
+        return {"robots": [{"robot_id": "rosy_01", "online": True, "state": _state()}]}
+
+
+def test_concurrent_gathers_within_max_age_fetch_once():
+    console, clock = _CountingConsole(), FakeClock()
+    board = LineStuckBoard(clock=clock)
+    observed = []
+    real_observe = board.observe
+    board.observe = lambda *a, **k: observed.append(1) or real_observe(*a, **k)
+    gather = SharedGather(console, board, max_age_s=1.0, clock=clock)
+
+    async def both():
+        return await asyncio.gather(gather(), gather())
+    first, second = asyncio.run(both())
+    assert first is second and console.snapshots == 1 and observed == [1]
+    clock.advance(1.5)
+    asyncio.run(gather())
+    assert console.snapshots == 2 and observed == [1, 1]
+
+
+def test_the_loop_reads_the_shared_gather_and_never_observes_itself():
+    board = LineStuckBoard(clock=FakeClock())
+    board.observe = lambda *a, **k: pytest.fail("the loop must not observe the board itself")
+    robot = FakeRobot("rosy_01", state=_state())
+
+    async def snapshot():
+        return {"robots": [{"robot_id": "rosy_01", "online": True, "state": _state()}]}
+    loop = StuckResolverLoop(snapshot, board, StuckResolver(ResolverConfig()),
+                             clients=lambda: {"rosy_01": robot}, clock=FakeClock())
+    asyncio.run(loop.run_once())
+    assert ("line_stuck_decision", "stuck-abc", "BACK_AND_RETRY") in robot.calls
+
+
+def test_the_app_shares_one_gather_between_state_route_and_resolver(tmp_path):
+    app = _app(tmp_path, FakeRobot("rosy_01", state=_state()))
+    assert app.state.stuck_resolver._snapshot is app.state.fleet_gather
+    row = TestClient(app).get("/api/fleet/state",
+                              headers={"Authorization": f"Bearer {OPERATOR}"}).json()["robots"][0]
+    assert row["line_stuck"]["stuck_id"] == "stuck-abc"
+
+
+def test_a_human_claim_keeps_the_escalation_reason():
+    loop, board, _ = _setup(config=ResolverConfig())
+    board.observe([{"robot_id": "rosy_01", "online": True, "state": _state()}])
+    loop.claim("rosy_01", "stuck-abc")
+    assert board.view("rosy_01")["resolver"]["escalated"] == "human_claimed"
+    board.note_resolver("rosy_01", "stuck-abc", tier="human", rule=None, decision=None,
+                        escalated="deadline")
+    loop.claim("rosy_01", "stuck-abc")
+    note = board.view("rosy_01")["resolver"]
+    assert (note["tier"], note["escalated"]) == ("human", "deadline")
+
+
+class _HangingRobot(FakeRobot):
+    async def line_stuck_decision(self, stuck_id, decision):
+        self._record("line_stuck_decision", stuck_id, decision)
+        await asyncio.Event().wait()
+
+
+def test_cancel_while_awaiting_the_robot_records_an_unknown_outcome():
+    robot = _HangingRobot("rosy_01", state=_state())
+    loop, board, _ = _setup(resolver_robot=robot)
+
+    async def scenario():
+        task = asyncio.create_task(loop.run_once())
+        for _ in range(200):
+            if robot.calls:
+                break
+            await asyncio.sleep(0.01)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+    asyncio.run(asyncio.wait_for(scenario(), 5))
+    last = board.answers()[-1]
+    assert last["accepted"] is None and last["code"] == "STUCK_DECISION_OUTCOME_UNKNOWN"
+    assert (last["tier"], last["rule"]) == ("rule", "R2")

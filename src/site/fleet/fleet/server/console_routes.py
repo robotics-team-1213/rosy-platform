@@ -6,10 +6,12 @@ console.py 의 gather/scatter 를 그대로 드러내는 읽기와 위임이다.
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
+import time
 from functools import partial
-from typing import Literal, Optional
+from typing import Callable, Literal, Optional
 
 import httpx
 from fastapi import Depends, HTTPException, Request, Response
@@ -68,6 +70,29 @@ def transport_failure(exc: BaseException) -> tuple[str, str]:
             "Re-read the stuck before answering again")
 
 
+class SharedGather:
+    """D-438: one ``console.snapshot()`` + ``board.observe`` for every reader within
+    ``max_age_s``. The snapshot also runs traffic, hand-off and swarm-speed logic and GETs
+    every robot, so the state route and the resolver must not each run it. Callers treat
+    the returned snapshot as read-only: it is shared."""
+
+    def __init__(self, console, board: LineStuckBoard, *, max_age_s: float = 1.0,
+                 clock: Callable[[], float] = time.monotonic) -> None:
+        self._console, self._board, self._clock = console, board, clock
+        self.max_age_s = max_age_s
+        self._lock = asyncio.Lock()
+        self._snapshot: Optional[dict] = None
+        self._at = 0.0
+
+    async def __call__(self) -> dict:
+        async with self._lock:
+            if self._snapshot is None or self._clock() - self._at >= self.max_age_s:
+                snapshot = await self._console.snapshot()
+                self._board.observe(snapshot["robots"], self._console.hub.registry.events_since)
+                self._snapshot, self._at = snapshot, self._clock()
+            return self._snapshot
+
+
 def install_console_routes(app, *, console, sightings, require_viewer,
                            read_guard, operator_guard, require_operator,
                            site_lanes=None, answer_log_path=None) -> None:
@@ -75,12 +100,13 @@ def install_console_routes(app, *, console, sightings, require_viewer,
     board = app.state.line_stuck = LineStuckBoard(
         log=LineStuckAnswerLog(answer_log_path) if answer_log_path is not None else None)
 
+    gather = app.state.fleet_gather = SharedGather(console, board)
+
     async def gathered() -> dict:
-        snapshot = await console.snapshot()
-        board.observe(snapshot["robots"], console.hub.registry.events_since)
-        for row in snapshot["robots"]:
-            row["line_stuck"] = board.view(row["robot_id"])
-        return snapshot
+        snapshot = await gather()
+        # Per response, on copies: the cached snapshot is shared with the resolver.
+        return {**snapshot, "robots": [{**row, "line_stuck": board.view(row["robot_id"])}
+                                       for row in snapshot["robots"]]}
 
     @app.get("/api/fleet/state", dependencies=read_guard, tags=["fleet"])
     async def fleet_state() -> dict:
@@ -126,8 +152,9 @@ def install_console_routes(app, *, console, sightings, require_viewer,
 
     @app.get("/api/fleet/line-stuck", dependencies=read_guard, tags=["line-stuck"])
     async def line_stuck_pending() -> dict:
-        # The board as of the last /state gather (the console polls it every second); this
-        # read does not fan out to every robot. `observed_age_s` says how old it is.
+        # The board as of the last shared gather (the resolver and the console's /state
+        # poll refresh it about every second); this read does not fan out to every robot.
+        # `observed_age_s` says how old it is.
         return {"pending": board.pending(), "answers": board.answers(),
                 "observed_age_s": board.observed_age_s()}
 
