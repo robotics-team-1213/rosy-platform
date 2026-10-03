@@ -374,7 +374,14 @@ in the private `/etc/rosy/site/site.env`; Compose reads it there and the
 advertise units get it through `/run/rosy-site/site-public.env`. Set `ROSY_SITE_TLS_HOST` to the same `<hostname>.local` name in
 the site certificate SAN. Install `fleet-mdns.py` at `/opt/rosy/site/fleet-mdns.py`,
 copy `rosy-fleet-advertise.service` and `rosy-overhead-advertise.service` to
-`/etc/systemd/system/`, then run:
+`/etc/systemd/system/`.
+
+The publisher atomically installs public advertisement XML with mode `0644`
+so the unprivileged Avahi daemon can read it, even with a `0077` umask.
+After upgrading an older publisher, restart the advertise services to
+replace any existing `0600` advertisements with readable files.
+
+Then run:
 
 ```sh
 sudo systemctl daemon-reload
