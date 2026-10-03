@@ -37,8 +37,8 @@
 
 ## 최근 기록
 
+- 2026-10-04 · uncommitted · test(web): 실제 작업 준비와 확인 대화상자 회귀 보완
 - 2026-10-04 · uncommitted · feat(ui): 실제 작업 선택 견본과 좁은 어휘 갤러리
 - 2026-10-04 · uncommitted · feat(ui): 호환 운용 확인과 인증·페이지 수명 보호
 - 2026-10-04 · uncommitted · feat(ui): 준비·장치 작업의 결과와 확인 수명 보존
 - 2026-10-04 · uncommitted · feat(ui): 카메라 전체화면과 운용 확인의 정지 접근 보존
-- 2026-10-04 · uncommitted · fix(ui): 교통 정책 검토와 적용 흐름 유지

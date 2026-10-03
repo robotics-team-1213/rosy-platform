@@ -204,6 +204,7 @@ def test_console_line_follow_readback_failure_and_action_feedback_are_independen
           window.confirm=()=>true;
           document.querySelector('main:last-of-type ui-button').click();
         }""")
+        page.locator('dialog.ui-confirm ui-button[kind="irreversible"]').click()
         page.wait_for_function("window.__calls.length === 1")
         action = panel.locator('ui-status[role="status"]').last
         page.evaluate("""() => {
@@ -259,6 +260,7 @@ def test_console_docking_locks_pending_commands_and_preserves_selected_dock():
         }""")
         panel = page.locator("main").last
         assert panel.locator("select").input_value() == "dock-b"
+        page.locator('dialog.ui-confirm ui-button[kind="irreversible"]').click()
         assert page.evaluate("window.__calls") == [{"path":"/api/v1/docking/dock","method":"POST"}]
         assert panel.locator("select").is_disabled()
         assert panel.locator("ui-button").evaluate_all("nodes=>nodes.every(node=>node.disabled)")
@@ -508,6 +510,7 @@ def test_console_mode_feedback_survives_state_and_capability_polling():
         assert "대기" in status.nth(0).inner_text()
         assert "내비게이션" in status.nth(1).inner_text()
         page.locator('[data-mode="MANUAL"]').click()
+        page.locator('dialog.ui-confirm ui-button[kind="irreversible"]').click()
         page.wait_for_function("window.__calls.length === 1")
         pending_feedback = status.nth(2).inner_text()
         page.evaluate("window.__callbacks['/api/v1/robot/state'].onData({mode:'IDLE'})")

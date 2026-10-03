@@ -115,7 +115,7 @@ export function createSignals({ scope, el, view, log, call, refreshState }) {
     const empty = el("signals-hint");
     if (empty) {
       empty.hidden = rows.length > 0;
-      if (!rows.length) empty.textContent = "설정된 신호등이 없습니다 — signals.yaml 등록은 설치 화면에서 합니다.";
+      if (!rows.length) empty.textContent = "설정된 신호등이 없습니다. 장치 연결과 현장 설치 상태를 확인하세요.";
     }
   }
 

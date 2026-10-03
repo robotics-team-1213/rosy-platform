@@ -10,6 +10,7 @@
 #discovery-retry { margin-top: var(--space-2); }
 .roster-block { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--space-3); }
 .roster-block > #roster, .roster-block > .address-drift { grid-column: 1 / -1; }
+.console-primary, .console-secondary { min-width: 0; display: grid; gap: var(--space-4); }
 .ops-block { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-4); }
 .ops-block > h2, .ops-block > .discovery, .ops-block > .console-diagnostics, .ops-block > .log-panel { grid-column: 1 / -1; margin: 0; }
 .ops-block > .formation, .ops-block > .signals { margin: 0; }
@@ -162,7 +163,7 @@ main {
   /* 지도 칸은 main 폭의 43%뿐이다. 그 안을 다시 둘로 나누면 카메라가 좁아져
      제목이 줄바꿈되고 영상이 작아진다(1440px에서 약 240px). 그래서 카메라를
      지도 아래에 쌓고, 지도 칸이 충분히 넓은 110rem 이상에서만 옆에 둔다. */
-  main > .panel[aria-labelledby="map-heading"] {
+  .console-primary > .panel[aria-labelledby="map-heading"] {
     grid-column: 1;
     grid-row: 2;
   }
@@ -170,15 +171,20 @@ main {
   /* 2026-10-02 회차 계측 — 큐가 채워지는 순간 지도 아래 칸은 '예외가 먼저'(D-201)를
      위반한다(1920에서 큐 상단 963px). 예외 큐는 첫 행, 지도는 그 아래. */
   .queues-panel { grid-column: 1; grid-row: 1; }
-  main > .panel[aria-labelledby="roster-heading"] { grid-column: 2; grid-row: 1 / span 2; }
+  .console-primary { grid-column: 1; }
+  .console-secondary { grid-column: 2; }
   #roster { min-height: 0; max-height: min(60dvh, 40rem); overflow-y: auto; }
-  .ops-block { grid-column: 1 / -1; }
+  .ops-block { grid-column: 1 / -1; gap: var(--space-2); }
+  .ops-block > h2, .ops-block .install-link { margin: 0; }
+  .ops-block > .log-panel { grid-column: 1; grid-row: 3 / span 2; }
+  .ops-block > .console-diagnostics { grid-column: 2; grid-row: 3; }
+  .ops-block > .discovery { grid-column: 2; grid-row: 4; }
 
 }
 
 
 @media (width >= 110rem) {
-  main > .panel[aria-labelledby="map-heading"] {
+  .console-primary > .panel[aria-labelledby="map-heading"] {
     display: grid;
     /* 2026-10-02 회차 — 1fr:1fr에서는 1920 관제 PC에서 지도가 374px(로스터 1058px)로
        목표를 찍는 표면이 폰 폭이 된다. 지도가 카메라보다 크게 균형을 잡는다. */
@@ -187,39 +193,39 @@ main {
     align-items: start;
   }
   /* D-417 디자인 — 카메라가 컴팩트(39px)면 칼럼을 반납하고 지도가 전체 폭을 쓴다. */
-  main > .panel[aria-labelledby="map-heading"]:has(> .vision-preview .vision-frame[data-state="waiting"]),
-  main > .panel[aria-labelledby="map-heading"]:has(> .vision-preview .vision-frame[data-state="warn"]) {
+  .console-primary > .panel[aria-labelledby="map-heading"]:has(> .vision-preview .vision-frame[data-state="waiting"]),
+  .console-primary > .panel[aria-labelledby="map-heading"]:has(> .vision-preview .vision-frame[data-state="warn"]) {
     grid-template-columns: minmax(0, 1fr);
   }
-  main > .panel[aria-labelledby="map-heading"]:has(> .vision-preview .vision-frame[data-state="waiting"]) > .vision-preview,
-  main > .panel[aria-labelledby="map-heading"]:has(> .vision-preview .vision-frame[data-state="warn"]) > .vision-preview {
+  .console-primary > .panel[aria-labelledby="map-heading"]:has(> .vision-preview .vision-frame[data-state="waiting"]) > .vision-preview,
+  .console-primary > .panel[aria-labelledby="map-heading"]:has(> .vision-preview .vision-frame[data-state="warn"]) > .vision-preview {
     grid-column: 1;
     grid-row: auto;
   }
-  main > .panel[aria-labelledby="map-heading"] > .map-head { grid-column: 1 / -1; }
-  main > .panel[aria-labelledby="map-heading"] > .map-stage { grid-column: 1; grid-row: 2; }
-  main > .panel[aria-labelledby="map-heading"] > .vision-preview {
+  .console-primary > .panel[aria-labelledby="map-heading"] > .map-head { grid-column: 1 / -1; }
+  .console-primary > .panel[aria-labelledby="map-heading"] > .map-stage { grid-column: 1; grid-row: 2; }
+  .console-primary > .panel[aria-labelledby="map-heading"] > .vision-preview {
     grid-column: 2;
     grid-row: 2 / span 3;
     margin-top: 0;
   }
-  main > .panel[aria-labelledby="map-heading"] > .legend { grid-column: 1; }
-  main > .panel[aria-labelledby="map-heading"] > #hint { grid-column: 1; }
-  main > .panel[aria-labelledby="map-heading"] > .note { grid-column: 1 / -1; }
-  main > .panel[aria-labelledby="map-heading"]:has(#vision-adjustments[open]) {
+  .console-primary > .panel[aria-labelledby="map-heading"] > .legend { grid-column: 1; }
+  .console-primary > .panel[aria-labelledby="map-heading"] > #hint { grid-column: 1; }
+  .console-primary > .panel[aria-labelledby="map-heading"] > .note { grid-column: 1 / -1; }
+  .console-primary > .panel[aria-labelledby="map-heading"]:has(#vision-adjustments[open]) {
     grid-template-columns: minmax(0, 1fr);
   }
-  main > .panel[aria-labelledby="map-heading"]:has(#vision-adjustments[open]) > .map-stage {
+  .console-primary > .panel[aria-labelledby="map-heading"]:has(#vision-adjustments[open]) > .map-stage {
     grid-column: 1;
     grid-row: 2;
   }
-  main > .panel[aria-labelledby="map-heading"]:has(#vision-adjustments[open]) > .vision-preview {
+  .console-primary > .panel[aria-labelledby="map-heading"]:has(#vision-adjustments[open]) > .vision-preview {
     grid-column: 1;
     grid-row: 3;
   }
   /* D-201: 원본과 보정 경기장을 위아래로 쌓으면 1920×1080에서 문서가 스크롤된다.
      카메라 칸 안에서 둘을 나란히 둔다(보정 조정을 열면 위 규칙이 한 칸으로 되돌린다). */
-  main > .panel[aria-labelledby="map-heading"]:not(:has(#vision-adjustments[open])) > .vision-preview:has(> #field-rectified:not([hidden])):has(> #vision-frame:not([hidden])) {
+  .console-primary > .panel[aria-labelledby="map-heading"]:not(:has(#vision-adjustments[open])) > .vision-preview:has(> #field-rectified:not([hidden])):has(> #vision-frame:not([hidden])) {
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     column-gap: var(--space-3);
@@ -479,6 +485,11 @@ main {
 /* D-359 US-009 — 로봇 패널의 두 묶음. 넓은 창에서는 상자가 없어 자식이 위 격자에 선다. */
 @media (width < 64rem) {
   main { grid-template-columns: minmax(0, 1fr); }
+  .console-primary, .console-secondary { display: contents; }
+  .queues-panel { order: 0; }
+  .panel[aria-labelledby="roster-heading"] { order: 1; }
+  .panel[aria-labelledby="map-heading"] { order: 2; }
+  .ops-block { order: 3; }
   /* 접힌 머리가 좁아지면 부제와 정지 범위를 숨긴다. 정지의 이름(aria-label)은 그대로다. */
   ui-topbar ui-brand small { display: none; }
   #estop small { display: none; }

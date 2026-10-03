@@ -34,6 +34,8 @@ SCENARIOS = {
 
 def _select_task(page, panel_id):
     """Select through the shipped navigation at either responsive tier."""
+    page.locator('.ui-task-chooser[aria-busy="false"]').wait_for()
+    page.wait_for_function("() => [...document.styleSheets].some(sheet => sheet.href?.endsWith('/common/task-chooser.css'))")
     chooser = page.get_by_role("combobox", name="작업 선택", exact=True)
     if chooser.is_visible():
         chooser.select_option(panel_id)
@@ -172,12 +174,9 @@ def test_role_procedure_g2_local_matrix(tmp_path):
                         assert page.locator("#safety-mode-status").is_visible()
                         assert "물리 상태는 별도로" in page.locator("#safety-mode-status").inner_text()
                     if scenario == "confirm_cancel":
-                        def dismiss(dialog):
-                            dialogs.append(dialog.message)
-                            dialog.dismiss()
-                        page.on("dialog", dismiss)
                         if surface == "setup":
                             _select_task(page, "setup.localization")
+                            page.get_by_text("SLAM 맵 준비", exact=True).click()
                             button = page.locator('[data-panel="setup.localization"] ui-button').filter(has_text="맵핑 시작")
                         else:
                             _select_task(page, "host.operations")
@@ -192,6 +191,10 @@ def test_role_procedure_g2_local_matrix(tmp_path):
                             }""")
                         assert button.is_enabled(), (role, surface, scenario)
                         button.click()
+                        dialog = page.locator('dialog.ui-confirm')
+                        dialog.wait_for()
+                        dialogs.append(dialog.locator('p').inner_text())
+                        dialog.get_by_role('button', name='취소', exact=True).click()
                         page.wait_for_timeout(100)
                     filename = f"{role}-{surface}-{scenario}-{width}x{height}.png"
                     page.screenshot(path=str(CAPTURES / filename), full_page=True)
@@ -291,6 +294,7 @@ def test_existing_dock_type_ignores_hidden_new_type_fields(tmp_path):
           form.querySelector('[name="tag_size_m"]').value = '';
         }""")
         form.locator('ui-button[type="submit"]').click()
+        page.locator('dialog.ui-confirm ui-button[kind="irreversible"]').click()
         page.wait_for_function("document.querySelector('[data-panel=\"setup.dock_admin\"] ui-status')?.textContent.includes('등록했습니다')")
         assert [write["path"] for write in writes] == ["/api/v1/docking/docks"]
         assert writes[0]["body"]["type"] == "known"
@@ -543,6 +547,7 @@ def test_console_mode_feedback_full_shell_captures(tmp_path):
             )?.disabled === false""")
             with page.expect_response(lambda response: response.url.endswith("/api/v1/mode") and response.request.method == "POST"):
                 button.click()
+                page.locator('dialog.ui-confirm ui-button[kind="irreversible"]').click()
             page.wait_for_function("""document.querySelector(
               '[data-panel="console.mode"] [role="status"]:last-of-type'
             )?.textContent.length > 0""")
@@ -756,6 +761,7 @@ def test_console_line_follow_and_docking_feedback_full_shell_captures(tmp_path):
             page.wait_for_selector('[data-panel="console.line_follow"] ui-button')
             page.wait_for_function("document.querySelector('[data-panel=\"console.line_follow\"] ui-button')?.disabled === false")
             line_panel.locator("ui-button").first.click()
+            page.locator('dialog.ui-confirm ui-button[kind="irreversible"]').click()
             page.wait_for_function("document.querySelector('[data-panel=\"console.line_follow\"] ui-status[role=status]:last-of-type')?.textContent.includes('CORE')")
             page.wait_for_function("document.querySelector('[data-panel=\"console.line_follow\"] ui-status')?.textContent.includes('fixture line status unavailable')")
             line_filename = f"operator-console-line-follow-{width}x{height}.png"
@@ -779,6 +785,7 @@ def test_console_line_follow_and_docking_feedback_full_shell_captures(tmp_path):
             page.wait_for_selector('[data-panel="console.docking"] ui-button')
             dock_panel.locator("select").select_option("dock-b")
             dock_panel.locator("ui-button").first.click()
+            page.locator('dialog.ui-confirm ui-button[kind="irreversible"]').click()
             page.wait_for_function("document.querySelector('[data-panel=\"console.docking\"] ui-status[role=status]:last-of-type')?.textContent.includes('CORE')")
             page.wait_for_function("document.querySelector('[data-panel=\"console.docking\"] ui-status')?.textContent.includes('fixture docking status unavailable')")
             assert dock_panel.locator("select").input_value() == "dock-b"

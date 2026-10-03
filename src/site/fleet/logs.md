@@ -1532,3 +1532,13 @@
 - Gate: SOURCE/LOCAL 범위. Fleet 전체 suite·배포·실장비·ROS-SIM·FIELD 수용을 주장하지 않는다. 기존 서버 역할·인증·source proof·CORE motion authority는 유지한다. source commit SHA는 Git 기록을 따른다.
 - 결정: D-439 Task 4 및 작업별 preview 독립 수명.
 - 교훈: visible predicate만으로 hide→reshow를 구분할 수 없다. frame 작업에는 작업별 epoch와 finally owner 비교가 함께 필요하다.
+
+## 2026-10-04 · uncommitted · fix(web): 관제 뷰포트와 주소 확인의 작업 소유권
+
+- 변경: 데스크톱의 지도·카메라와 로봇·운용 영역을 각각 묶어 선언 뷰포트의 문서 스크롤을 없앴다. 좁은 화면에서는 같은 네 영역을 주의·로봇·지도·운용 순서로 실제 DOM에 옮기고 입력과 초점을 보존한다. PageScope가 미디어 listener 정리와 복귀를 소유한다. 기록은 기본 8줄을 유지하고 진단·설치 안내와 나란히 배치한다. 신호등이 없을 때 파일 편집을 지시하지 않는다.
+- 주소 확인: 설치의 로봇별 옮기기가 기존 discovery/addresses에서 서버가 movable로 판단한 단일 주소만 안내한다. 실패·모호함·10초 만료는 새 주소 미확인으로 표시하고 화면 코드의 서버 검증을 유지한다. 후보 조회는 페이지·자격·작업 epoch를 확인하여 새 대화상자와 코드, 새 조회 잠금을 덮어쓰지 않는다. 실제 POST 본문은 코드만 보낸다.
+- 검증: 최초 Fleet 재검증 3 passed/4 failed(47.72s)는 77px 스크롤과 옛 설치·테마 fixture를 드러냈다. 다음 3 passed/3 failed(19.31s), 2 passed/1 failed(7.99s)를 보존한다. 최종 뷰포트·390/320 순서·동일 DOM/입력/초점 3 passed(8.35s); 테마·서버 코드·viewer·조회 만료 4 passed(24.38s). 강화된 후보 작업 소유권 최종 원본 1 passed(16.06s). 기존 주소 옮김과 compatibility 네트워크 2 passed(16.16s). 주소·등록 Node 20 passed, palette/disabled host 19 passed(1.80s). 지나간 성공을 중복 합산하지 않는다.
+- 변이: X 전용으로 실제 전달한 roster 숨김, DOM 복제, 모호한 후보 허용, 만료 제거, 새 대화상자 소유권 제거가 각각 RED이고 원본은 GREEN이다. delivery/source 해시와 sourceUnchanged를 final-plan/task6-mutation-report.json 및 task6-source-unchanged.json에 기록했다. 첫 경로가 자산 URL과 달라 변이가 전달되지 않은 시도는 유효 증거에서 제외한다. 소유권 변이는 실제 새 수동 대상이 옛 로봇 대상으로 바뀌는 단언에서 실패했다.
+- 화면: 부모 검증자가 실제 dark 1920의 문서 높이 1080과 light 390의 자연스러운 세로 흐름을 직접 확인했다. 가로 넘침·페이지 오류는 0이며 같은 정지·대형·신호·로봇·지도·카메라의 양수 크기를 유지한다. 근거는 X:/DevTemp/rosy-ui-unify/final-plan/ 및 fleet/root-fit-final/.
+- gate 변화: SOURCE/LOCAL 검증이며 배포·실제 장치·FIELD 승인을 주장하지 않는다. API 권한과 최종 동작 판단은 서버가 소유한다.
+- 결정: D-439 §17. 같은 DOM을 옮기는 배치는 시각 순서뿐 아니라 키보드 순서와 draft 소유권도 보존해야 한다.

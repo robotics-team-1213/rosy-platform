@@ -9,6 +9,7 @@ import { createVisionView } from "./vision-view.js";
 import { createFieldView } from "./field-view.js";
 import { createMapFitView } from "./map-fit-view.js";
 import { createPollGate } from "./poll-gate.js";
+import { addressMap, movableRobots } from "./address-drift.js";
 import { createFleetClient } from "/common/fleet-client.js";
 import { createPageScope } from "/common/scope.js";
 import { createTaskChooser } from "/common/task-chooser.js";
@@ -128,6 +129,14 @@ const enrollment = createEnrollmentPanel({ scope: pageScope,
   identity: () => ({ role: auth.role, principal_id: auth.principal }),
   log,
   dialogs: { confirmIrreversible, openLiveDialog },
+  candidateAddress: async robotId => {
+    const life = pageScope.capture(), token = auth.token, role = auth.role;
+    const snapshot = await call("/api/fleet/discovery/addresses", {signals: [AbortSignal.timeout(10000)]});
+    life.check();
+    if (token !== auth.token || role !== auth.role || auth.locked) throw new DOMException("Address context changed", "AbortError");
+    const entry = addressMap(snapshot)[robotId];
+    return movableRobots(snapshot).includes(entry) && entry.seen_addresses?.length === 1 ? entry.seen_addresses[0] : null;
+  },
   onMoved: () => { enrollment.refresh(); },
 });
 const cameraPairing = createCameraPairingPanel({ scope: pageScope,

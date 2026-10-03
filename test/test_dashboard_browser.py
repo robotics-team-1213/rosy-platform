@@ -649,6 +649,7 @@ def test_traffic_policy_is_staged_before_stopped_only_apply():
             timeout=5_000,
         )
         # D-201 — 정책 편집은 점검 뷰(절차 문법)의 현장 설정 카드에 산다.
+        page.wait_for_selector('#compatibility-shell[data-ready="true"]')
         page.locator("#view-inspect").click()
         page.locator("#traffic-policy-revision-input").fill(
             "traffic-policy-v2")

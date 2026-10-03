@@ -794,10 +794,10 @@ for (const [id, mode, prompt] of [
   `${enumLabel(NETWORK_MODE_LABEL, mode)} 모드를 적용했습니다.`, "네트워크 모드 변경 실패"));
 
 pageScope.listen(elements["network-connect"], "click", () => {
-  const ssid = elements["network-ssid-input"]?.value.trim(), psk = elements["network-psk-input"]?.value || "";
-  if (!ssid || psk.length < 8) { setText("network-note", !ssid ? "SSID를 입력하세요." : "암호는 8자 이상이어야 합니다."); return; }
-  runNetwork(elements["network-connect"], "/api/v1/host/network/connect", {ssid, psk}, `${ssid} 에 연결할까요? 연결이 잠깐 끊길 수 있습니다.`, `${ssid} 에 연결했습니다.`, "Wi-Fi 연결 실패",
-    () => ssid === elements["network-ssid-input"].value.trim() && psk === elements["network-psk-input"].value);
+  const ssid = elements["network-ssid-input"]?.value.trim(), joinCredential = {value: elements["network-psk-input"]?.value || ""};
+  if (!ssid || joinCredential.value.length < 8) { setText("network-note", !ssid ? "SSID를 입력하세요." : "암호는 8자 이상이어야 합니다."); return; }
+  runNetwork(elements["network-connect"], "/api/v1/host/network/connect", {ssid, psk: joinCredential.value}, `${ssid} 에 연결할까요? 연결이 잠깐 끊길 수 있습니다.`, `${ssid} 에 연결했습니다.`, "Wi-Fi 연결 실패",
+    () => ssid === elements["network-ssid-input"].value.trim() && joinCredential.value === elements["network-psk-input"].value);
 });
 
 pageScope.listen(elements["network-apply"], "click", () => {

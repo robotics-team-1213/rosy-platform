@@ -79,9 +79,9 @@ def test_host_track_is_closed_until_field_evidence():
     assert not (games / "policy" / "neural.py").is_file()
     html = (games / "web" / "index.html").read_text(encoding="utf-8")
     js = (games / "web" / "board.js").read_text(encoding="utf-8")
-    # D-359 US-009 — the board says it in operator words (경기장 준비 전 = not FIELD GO).
-    assert "경기장 준비 전" in html
-    assert "경기장 준비 전" in js
+    # Observation completeness never grants field approval.
+    assert "운용 승인 아님" in html
+    assert "운용 승인 아님" in js
     assert "스페이스 키로도 두 로봇을 세웁니다" in html
 
 

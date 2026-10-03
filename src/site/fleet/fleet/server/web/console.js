@@ -19,6 +19,23 @@ const pageScope = createPageScope();
 
 
 const el = (id) => document.getElementById(id);
+const layoutMedia = matchMedia("(min-width: 64rem)");
+const layoutPanels = [document.querySelector('.queues-panel'), document.querySelector('[aria-labelledby="roster-heading"]'),
+  document.querySelector('[aria-labelledby="map-heading"]'), document.querySelector('.ops-block')];
+function layoutConsole() {
+  const main = el("fleet-main"), primary = main.querySelector('.console-primary'), secondary = main.querySelector('.console-secondary');
+  const focused = document.activeElement;
+  layoutPanels.forEach((node, index) => {
+    const parent = layoutMedia.matches ? (index === 0 || index === 2 ? primary : secondary) : main;
+    const before = layoutMedia.matches ? null : primary;
+    if (parent.moveBefore) parent.moveBefore(node, before);
+    else parent.insertBefore(node, before);
+  });
+  if (focused?.isConnected && document.activeElement !== focused) focused.focus({preventScroll: true});
+}
+layoutConsole();
+pageScope.listen(layoutMedia, "change", layoutConsole);
+pageScope.onResume(layoutConsole);
 
 // 셸 폴링 운율과 로그 상한은 셸이 가진다. 지도 격자·오버레이 임계는 map-view.js에 있다.
 const STATE_MS = 1000;

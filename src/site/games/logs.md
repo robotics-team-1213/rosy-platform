@@ -299,3 +299,10 @@
 - 증거: phone 320/390 실제 열린 chip 폭과 Pilot 수정 대상 3 passed (29.79s). 최종 실제 readback unknown/false/true 수명 1 passed (2.59s), 기존 게시 경기/뷰어 키보드 2 passed (4.54s). X 제공 unknown→false 변이가 실제 readback 단언 RED, 원본 제공 GREEN·소스 불변을 확인했다. 첫 unknown 시험은 backend 기본 false를 빠뜨려 정적 문구에서 먼저 통과한 결함이 있어 payload에서 visibility를 명시적으로 빼고 실제 phase readback 뒤 확인하도록 고쳤다.
 - gate 변화: SOURCE/LOCAL 경기 관측이며 ready는 FIELD GO나 게임 운용 허가가 아니다.
 - 결정: D-439 Task5. chip 측정은 실제 details를 열고 보이는 항목에 수행한다.
+
+## 2026-10-04 · uncommitted · test(web): CSP 아래 경기 보드 조건 검증 복구
+
+- 변경: 최종 회귀의 7개 실패 노드에서 wait_for_function의 raw expression을 같은 조건의 함수로 바꿨다. 실제 self CSP와 조건은 유지한다. host 계약의 옛 경기장 준비 문구만 현재 운용 승인 아님으로 맞추고 FIELD/DEVICE PARKED·정지·onboard 금지 조건을 보존했다. 제품 HTML/JS/CSS는 바꾸지 않았다.
+- 검증: 최초 remaining batch는 7 passed/7 failed(38.36s)였고 실패 모두 CSP EvalError로 실제 조건 전에 멈췄다. 정확한 실패 7개만 재실행하여 7 passed(18.99s). host 문구와 실제 구조 예산은 합동 35 passed(16.68s). 근거 X:/DevTemp/rosy-ui-unify/final/games_remaining.log 및 final-plan/games-csp.log, task6-host.log.
+- gate 변화: SOURCE/LOCAL 검증 복구이며 관측 완전성을 게임 운용 승인으로 해석하지 않는다.
+- 결정: D-439 Task6. 실제 CSP를 풀거나 실패 조건을 약화하지 않고 실행 가능한 함수로 검증한다.

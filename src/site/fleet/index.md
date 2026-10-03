@@ -75,8 +75,8 @@
 
 ## 최근 기록
 
+- 2026-10-04 · uncommitted · fix(web): 관제 뷰포트와 주소 확인의 작업 소유권
 - 2026-10-04 · uncommitted · feat(web): D-439 Fleet 작업 탐색과 보정 미리보기 수명
 - 2026-10-04 · uncommitted · fix(server): D-438 phase 1 final-review findings
 - 2026-10-04 · uncommitted · feat(server): D-438 Fleet stuck resolver phase 1 (rules R1-R3 + human escalation)
 - 2026-10-03 · uncommitted · fix(link): 현재 접속과 후속 코드 규약 구별
-- 2026-10-03 · uncommitted · feat(link): D-432 주소 없는 장비 접속

@@ -54,6 +54,7 @@
   <main id="fleet-main" tabindex="-1">
     <h1 class="sr-only">Rosy Fleet — 사이트 관제</h1>
     <!-- ADR-1000: Warning / Critical State Queues (MON-002) -->
+    <div class="console-primary">
     <section class="panel queues-panel" aria-labelledby="queues-heading">
       <h2 id="queues-heading">주의 및 개입 요망</h2>
       <div class="queues-container">
@@ -72,23 +73,6 @@
         <p class="hint">차선 추종이 막힌 로봇이 다음 동작을 묻습니다. 답이 없으면 로봇은 정해진 시간 뒤 짧게 물러나 다시 보거나(로컬 복구가 켜진 로봇), 멈춘 채 답을 기다립니다.</p>
         <ul id="stuck-list" class="stuck-list" aria-labelledby="stuck-heading"></ul>
       </section>
-    </section>
-
-    <section class="panel" aria-labelledby="roster-heading">
-      <!-- D-359 US-009 — 넓은 창에서 두 묶음은 상자가 없다(display: contents). 한 열 단에서는
-           각자 패널이 되고 대형·신호등·기록 묶음이 지도·관제 카메라 뒤로 간다. 기기 연결(등록·카메라
-           연결)은 설정 일이라 대형 묶음 맨 끝에 둔다. 넓은 창의 자리는 styles.css 격자가 정한다. -->
-      <div class="roster-block">
-        <h2 id="roster-heading">등록 로봇</h2>
-        <ui-button id="roster-toggle" kind="quiet" type="button" aria-expanded="false" aria-controls="roster">전체 로봇 보기</ui-button>
-        <div id="address-drift" class="address-drift" hidden>
-          <p id="address-banner" class="enroll-alarm" role="alert" hidden></p>
-          <ul id="address-movable" class="address-movable" aria-label="새 주소로 옮길 수 있는 로봇"></ul>
-        </div>
-        <div id="roster" class="roster"><p class="hint" role="status">로봇 목록 불러오는 중</p></div>
-      </div>
-
-
     </section>
 
     <section class="panel" aria-labelledby="map-heading">
@@ -165,6 +149,19 @@
         <p>이 화면은 사이트 관제입니다. 로봇 한 대의 현장 화면·수동 조작·비상정지는 그 로봇의 대시보드에 있고, 관제 PC가 꺼져도 살아 있습니다. 여기서는 목표·취소·정지 같은 원자 액션을 내리며 바퀴 속도는 로봇 안에서만 만들어집니다.</p>
       </details>
     </section>
+    </div>
+    <div class="console-secondary">
+      <section class="panel" aria-labelledby="roster-heading">
+        <div class="roster-block">
+          <h2 id="roster-heading">등록 로봇</h2>
+          <ui-button id="roster-toggle" kind="quiet" type="button" aria-expanded="false" aria-controls="roster">전체 로봇 보기</ui-button>
+          <div id="address-drift" class="address-drift" hidden>
+            <p id="address-banner" class="enroll-alarm" role="alert" hidden></p>
+            <ul id="address-movable" class="address-movable" aria-label="새 주소로 옮길 수 있는 로봇"></ul>
+          </div>
+          <div id="roster" class="roster"><p class="hint" role="status">로봇 목록 불러오는 중</p></div>
+        </div>
+      </section>
       <section class="panel ops-block" aria-labelledby="fleet-operations-heading">
         <h2 id="fleet-operations-heading">대형·신호·기록</h2>
         <div class="formation" aria-labelledby="formation-heading" data-role-lock>
@@ -241,6 +238,7 @@
 
         </section>
       </section>
+    </div>
   </main>
 
   </ui-shell>

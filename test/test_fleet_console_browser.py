@@ -1042,17 +1042,18 @@ FLEET_FIT_PROBE = """() => {
     const n = document.querySelector(sel);
     if (!n) return null;
     const b = n.getBoundingClientRect();
-    return { top: Math.round(b.top), bottom: Math.round(b.bottom), height: Math.round(b.height) };
+    return { top: Math.round(b.top), bottom: Math.round(b.bottom), height: Math.round(b.height), width: Math.round(b.width) };
   };
   return {
     docOverflow: document.documentElement.scrollHeight - window.innerHeight,
-    mapPanel: inside('main > .panel[aria-labelledby="map-heading"]'),
+    mapPanel: inside('.panel[aria-labelledby="map-heading"]'),
     mapCanvas: inside('#map-canvas'),
     visionFrame: inside('#vision-frame'),
     visionPreview: inside('.vision-preview'),
     signals: inside('.signals'),
     formation: inside('.formation'),
-    rosterPanel: inside('main > .panel[aria-labelledby="roster-heading"]'),
+    rosterPanel: inside('.panel[aria-labelledby="roster-heading"]'),
+    stop: inside('#estop'),
     roster: inside('#roster'),
     rosterHeading: inside('#roster-heading'),
     vh: window.innerHeight,
@@ -1088,6 +1089,10 @@ def test_console_fits_the_declared_viewport(console_url):
         assert box is not None and box["bottom"] <= fit["vh"] and box["top"] >= 0, (
             f"{name} 이(가) 뷰포트 밖이다(D-201): {box}"
         )
+    for name in ("mapCanvas", "visionFrame", "visionPreview", "signals", "formation", "roster", "rosterPanel", "stop"):
+        assert fit[name]["width"] > 0 and fit[name]["height"] > 0, fit
+    assert fit["stop"]["width"] >= 58 and fit["stop"]["height"] >= 58, fit
+    assert fit["stop"]["top"] >= 0 and fit["stop"]["bottom"] <= fit["vh"], fit
     assert fit["roster"]["top"] - fit["rosterHeading"]["bottom"] <= 24, fit
     assert fit["rosterPanel"]["height"] <= 0.75 * fit["vh"], fit
 
@@ -1108,12 +1113,14 @@ def test_fleet_control_groups_are_semantic_subheadings(console_url):
         )
         headings = [
             "기기 연결",
-            "로봇 등록",
             "대형",
             "신호등",
         ]
         for name in headings:
             assert page.get_by_role("heading", name=name, exact=True).count() == 1
+        assert page.locator('.device-link a[href="/console/install"]').count() == 1
+        page.goto(console_url.rsplit("/", 1)[0] + "/install.html", wait_until="networkidle")
+        assert page.get_by_role("heading", name="로봇 등록", exact=True).count() == 1
         assert not errors
         browser.close()
 
@@ -1241,7 +1248,7 @@ def test_unenroll_is_a_quiet_row_action_confirmed_by_name(console_url):
             route.fulfill(status=200, json={"state": "removed"})
 
         page.route("**/api/fleet/enrollment/robots/rosy_09", remove)
-        page.goto(console_url, wait_until="networkidle")
+        page.goto(console_url.rsplit("/", 1)[0] + "/install.html", wait_until="networkidle")
         row_button = page.locator('#enrolled-list li[data-robot-id="rosy_09"] ui-button[data-action="unenroll"]')
         row_button.wait_for()
         assert row_button.inner_text() == "등록 해제…"
@@ -1598,6 +1605,12 @@ def test_wide_header_keeps_every_item_on_one_line(console_url):
         for width, height in ((1920, 1080), (1366, 768), (1280, 800)):
             page.set_viewport_size({"width": width, "height": height})
             page.goto(console_url, wait_until="networkidle")
+            if page.locator('#topbar-more').is_visible():
+                page.locator('#topbar-more').click()
+                assert page.get_by_role('group', name='화면 테마', exact=True).count() == 1
+                page.locator('#topbar-more').click()
+            else:
+                assert page.get_by_role('group', name='화면 테마', exact=True).count() == 1
             results[width] = page.evaluate("""() => {
               const label = document.querySelector('#theme-choice-label');
               const line = parseFloat(getComputedStyle(label).lineHeight) || 20;
@@ -1610,7 +1623,7 @@ def test_wide_header_keeps_every_item_on_one_line(console_url):
         browser.close()
 
     assert errors == []
-    assert results[1920]["labelLines"] == 1 and not results[1920]["moreShown"], results
+    assert results[1920]["labelLines"] == 0 and not results[1920]["moreShown"], results
     for width in (1366, 1280):
         assert results[width]["moreShown"] and results[width]["labelLines"] == 0, results
     for width, result in results.items():
@@ -1905,7 +1918,16 @@ def test_single_column_tier_puts_exceptions_before_the_map_and_formation_last(co
         assert (top["#roster"] < top["#map-stage"] < top[".vision-preview"] < top[".formation"]
                 < top["#log"] < top[".device-link"]), top
         assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
+        page.evaluate("""() => {
+          window.retainedPanels = ['.queues-panel', '[aria-labelledby=roster-heading]',
+            '[aria-labelledby=map-heading]', '.ops-block'].map(sel => document.querySelector(sel));
+          document.querySelector('.formation-form-wrap').open = true;
+          const input = document.querySelector('#formation-spacing');
+          input.value = '1.7'; input.focus();
+        }""")
         page.set_viewport_size({"width": 1366, "height": 768})
+        page.wait_for_function("() => document.querySelector('.console-primary').contains(document.querySelector('#map-stage'))")
+        assert page.evaluate("() => ['.queues-panel', '[aria-labelledby=roster-heading]', '[aria-labelledby=map-heading]', '.ops-block'].every((sel, i) => document.querySelector(sel) === window.retainedPanels[i])")
         wide = page.evaluate(probe)
         # D-439: primary map/roster remain side by side; secondary tasks follow both in DOM and layout.
         left = page.evaluate("""() => Object.fromEntries(['#map-stage', '#roster', '.formation', '.device-link']
@@ -1915,6 +1937,16 @@ def test_single_column_tier_puts_exceptions_before_the_map_and_formation_last(co
         assert wide["#log"] < wide[".device-link"], wide
         assert page.evaluate("document.querySelector('[aria-labelledby=map-heading]').compareDocumentPosition(document.querySelector('.ops-block')) & Node.DOCUMENT_POSITION_FOLLOWING")
         assert wide["#roster"] < wide["#map-stage"] + 200, wide
+        page.set_viewport_size({"width": width, "height": height})
+        page.wait_for_function("() => document.querySelector('[aria-labelledby=roster-heading]').parentElement.id === 'fleet-main'")
+        assert page.evaluate("""() => {
+          const panels = ['.queues-panel', '[aria-labelledby=roster-heading]',
+            '[aria-labelledby=map-heading]', '.ops-block'].map(sel => document.querySelector(sel));
+          return panels.every((node, i) => node === window.retainedPanels[i])
+            && panels[1].compareDocumentPosition(panels[2]) & Node.DOCUMENT_POSITION_FOLLOWING;
+        }""")
+        assert page.locator('#formation-spacing').input_value() == '1.7'
+        assert page.locator('#formation-spacing').evaluate('(node) => node === document.activeElement')
         assert not errors
         browser.close()
 
@@ -2251,26 +2283,24 @@ def test_offline_robots_say_why_and_each_move_asks_for_the_screen_code(console_u
         assert "같은 로봇이 10.16.36.20:8080에 보입니다 — 새 주소로 옮기기…" in card.inner_text()
         static = page.locator('#roster article[data-robot-id="rosy_01"]').inner_text()
         assert "고정 주소 192.0.2.10:8443이(가) 지금 망에 없을 수 있습니다" in static
-        # Cards keep their content height; the roster column scrolls (D-201 fits the viewport),
-        # and scrolling brings a card's reason line and its move shortcut fully into view.
+        # Cards retain readable reasons; address actions belong to the install owner.
         assert page.evaluate("""() => [...document.querySelectorAll('#roster article')]
             .every((card) => card.scrollHeight <= card.clientHeight + 1)""")
         assert page.evaluate("""() => {
-            const button = document.querySelector('#roster ui-button[data-move-robot-id="rosy_10"]');
-            button.scrollIntoView({block: 'nearest'});
-            const r = button.getBoundingClientRect();
+            const reason = document.querySelector('#roster article[data-robot-id="rosy_10"] [data-address-reason]');
+            reason.scrollIntoView({block: 'nearest'});
+            const r = reason.getBoundingClientRect();
             const box = document.querySelector('#roster').getBoundingClientRect();
             return r.top >= box.top - 1 && r.bottom <= box.bottom + 1; }""")
-        # The camera section's last line keeps clear of the next heading (it read as overlapping).
-        assert page.evaluate("""() => {
-            const line = document.querySelector('#camera-link-unavailable').getBoundingClientRect();
-            const head = document.querySelector('#signals-heading').getBoundingClientRect();
-            return line.bottom + 8 <= head.top; }""")
+        assert page.locator('#roster ui-button[data-move-robot-id]').count() == 0
+        assert page.locator('.device-link a[href="/console/install"]').is_visible()
         page.evaluate("document.querySelector('#roster').scrollTop = 0")
         _shot(page, "roster-renumbered-1920.png")
         assert not page.locator("text=(전체)").count()
 
-        listed.nth(0).locator("ui-button").click()
+        page.goto(console_url.rsplit("/", 1)[0] + "/install.html", wait_until="networkidle")
+        page.wait_for_function("() => document.querySelectorAll('#enrolled-list ui-button[data-action=move]').length === 2")
+        page.locator('#enrolled-list li[data-robot-id="rosy_09"] ui-button[data-action="move"]').click()
         dialog = page.locator("#enroll-dialog")
         dialog.wait_for()
         assert "rosy_09 → 10.16.36.20:8080" in page.locator("#enroll-target").inner_text()
@@ -2307,6 +2337,71 @@ def test_offline_robots_say_why_and_each_move_asks_for_the_screen_code(console_u
         browser.close()
 
 
+def test_move_candidate_timeout_and_pagehide_keep_server_code_flow_owned(console_url):
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as playwright:
+        api = _address_api()
+        api['/api/fleet/discovery/addresses']['robots'][1]['seen_addresses'].append('10.16.36.99:8080')
+        browser, page, errors = _open_console(playwright, api)
+        held = []
+        page.goto(console_url.rsplit('/', 1)[0] + '/install.html', wait_until='networkidle')
+        move = page.locator('#enrolled-list li[data-robot-id="rosy_09"] ui-button[data-action="move"]')
+        move.wait_for()
+        move.click()
+        page.locator('#enroll-dialog').wait_for()
+        assert page.locator('#enroll-move-address').inner_text() == '새 주소 미확인'
+        page.locator('#enroll-cancel').click()
+        page.route('**/api/fleet/discovery/addresses', lambda route: held.append(route))
+        move.click()
+        page.wait_for_function('() => document.querySelector("#enroll-result").textContent.includes("확인")')
+        move.click()
+        assert len(held) == 1
+        assert page.locator('#estop').is_enabled()
+        page.locator('#enroll-dialog').wait_for(timeout=15000)
+        assert page.locator('#enroll-move-address').inner_text() == '새 주소 미확인'
+        assert page.locator('#enroll-submit').is_enabled()
+        page.locator('#enroll-cancel').click()
+        move.click()
+        page.wait_for_timeout(100)
+        assert len(held) == 2
+        page.locator('#enroll-address').fill('10.16.36.88:8080')
+        page.locator('#enroll-address-add').click()
+        page.locator('#enroll-code').fill('7KXM-' + 'P3QA')
+        held[-1].fulfill(status=200, json=_address_api()['/api/fleet/discovery/addresses'])
+        page.wait_for_timeout(100)
+        assert page.locator('#enroll-target').inner_text() == '10.16.36.88:8080'
+        assert page.locator('#enroll-code').input_value() == '7KXM-' + 'P3QA'
+        page.locator('#enroll-cancel').click()
+        move.click()
+        page.wait_for_timeout(100)
+        assert len(held) == 3
+        page.locator('#enroll-address-add').click()
+        page.locator('#enroll-cancel').click()
+        move.click()
+        page.wait_for_timeout(100)
+        assert len(held) == 4
+        held[-2].fulfill(status=200, json=_address_api()['/api/fleet/discovery/addresses'])
+        page.wait_for_timeout(100)
+        move.click()
+        assert len(held) == 4  # An old finally cannot release the newer lookup.
+        page.locator('#console-token').fill('replacement-fixture-token')
+        page.locator('#token-save').click()
+        page.wait_for_function('() => !document.querySelector("#enroll-address-add").disabled')
+        held[-1].fulfill(status=200, json=_address_api()['/api/fleet/discovery/addresses'])
+        page.wait_for_timeout(100)
+        assert page.locator('#enroll-dialog').is_hidden()
+        move.click()
+        page.wait_for_timeout(100)
+        assert len(held) == 5
+        page.evaluate('() => dispatchEvent(new PageTransitionEvent("pagehide"))')
+        held[-1].fulfill(status=200, json=_address_api()['/api/fleet/discovery/addresses'])
+        page.wait_for_timeout(100)
+        assert page.locator('#enroll-dialog').is_hidden()
+        assert not errors
+        browser.close()
+
+
 def test_viewer_sees_reasons_but_no_live_move_buttons(console_url):
     from playwright.sync_api import sync_playwright
 
@@ -2317,10 +2412,13 @@ def test_viewer_sees_reasons_but_no_live_move_buttons(console_url):
         page.locator("#address-banner").wait_for()
         page.wait_for_function(
             "() => document.querySelectorAll('#roster p[data-address-reason]').length === 3")
-        for selector in ('#address-movable ui-button', 'ui-button[data-move-robot-id="rosy_09"]'):
-            button = page.locator(selector).first
-            assert button.is_disabled(), selector
-            assert button.get_attribute("reason") == "운용자 권한이 필요합니다", selector
+        assert page.locator('#roster ui-button[data-move-robot-id]').count() == 0
+        page.goto(console_url.rsplit("/", 1)[0] + "/install.html", wait_until="networkidle")
+        page.wait_for_function("() => document.querySelectorAll('#enrolled-list li[data-robot-id]').length > 0")
+        assert page.locator('#enrolled-list ui-button[data-action="move"]').count() == 0
+        button = page.locator('#enroll-address-add')
+        assert button.is_disabled()
+        assert button.get_attribute("reason") == "운용자 권한이 필요합니다"
         assert not errors
         browser.close()
 

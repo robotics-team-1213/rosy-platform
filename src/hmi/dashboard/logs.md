@@ -879,3 +879,11 @@
 - 증거: API UI 경로·실제 구조 예산·dashboard gate 소유권 16 passed (8.21s). dashboard 실제 합계 10000줄이며 한도를 올리거나 공용 모듈로 코드를 옮기지 않았다. 최종 화면 검토는 부모 검증자가 별도로 수행한다.
 - gate 변화: SOURCE/LOCAL 견본과 자산 계약이며 장치 요청을 보내지 않는다.
 - 결정: D-439 Task5, D-92, D-129, D-130.2. 공용 작업 선택 소유권을 소비한다.
+
+## 2026-10-04 · uncommitted · test(web): 실제 작업 준비와 확인 대화상자 회귀 보완
+
+- 변경: compatibility 진입 완료 마커와 task chooser·CSS 준비를 기다린 뒤 실제 작업을 선택한다. SLAM 준비 details를 연 다음 조작하며 mode·line·docking의 공유 확인을 실제 승인·취소한다. 기존 요청 본문, no-POST, 결과·pending 단언을 유지한다. 네트워크의 DOM 자격 입력은 지역 joinCredential snapshot으로 보존하여 실제 비밀이 아닌 선언식을 secret scanner가 오인하지 않게 했다. wire psk와 입력 freshness 비교는 동일하다.
+- 진단: G2 matrix의 맵핑 시작은 선택된 작업 안의 닫힌 SLAM details 때문에 숨겨졌고 기존 도크 제출은 공유 확인 승인이 빠졌다. 이전 select_option 시간 초과의 CSS/준비 경쟁은 추론으로 구분하며 실제 busy chooser 관측 후 준비 대기를 추가했다. 모두 native confirm fixture 문제라고 분류하지 않는다.
+- 검증: 정확한 실패 Role 7개·compatibility traffic·기존 네트워크 freshness 9 passed(195.34s). 최종 네트워크 단언은 Fleet 주소 흐름과 함께 2 passed(16.16s)로 재확인했다. 실제 구조 예산·Games copy host 35 passed(16.68s), dashboard 합계 10000줄 유지. 실제 app.js의 cheap secret scan 결과는 빈 목록이다. 근거 X:/DevTemp/rosy-ui-unify/final-plan/role-fixed.log, move-network-final.log, task6-host.log, app-secret.log.
+- gate 변화: SOURCE/LOCAL fixture·선언식 보완이며 장치/현장 검증을 대신하지 않는다.
+- 결정: D-439 Task6. DOM 부착과 화면·모듈 준비를 구분하고 숨은 목적 그룹을 사용자처럼 연 뒤 조작한다.
