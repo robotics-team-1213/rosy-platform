@@ -54,7 +54,7 @@ class LineStuckDecisionRequest(BaseModel):
     decision: Literal["WAIT", "RESUME", "BACK_AND_RETRY", "MANUAL", "ABORT"]
 
 
-def _transport_failure(exc: BaseException) -> tuple[str, str]:
+def transport_failure(exc: BaseException) -> tuple[str, str]:
     """A connect failure never reached CORE; anything later may have been applied."""
     if isinstance(exc, (httpx.ConnectError, httpx.ConnectTimeout, ConnectionRefusedError)):
         return "ROBOT_UNREACHABLE", "answer not delivered: the robot could not be reached"
@@ -147,7 +147,7 @@ def install_console_routes(app, *, console, sightings, require_viewer,
                 "code": exc.code, "message": exc.message, "robot_id": robot_id,
                 "robot_status": exc.status}) from exc
         except (httpx.HTTPError, OSError) as exc:
-            code, message = _transport_failure(exc)
+            code, message = transport_failure(exc)
             record(accepted=False if code == "ROBOT_UNREACHABLE" else None,
                    code=code, message=f"{message} ({type(exc).__name__})")
             raise HTTPException(status_code=502, detail={

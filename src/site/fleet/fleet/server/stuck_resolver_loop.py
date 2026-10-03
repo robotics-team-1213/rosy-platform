@@ -14,7 +14,7 @@ from typing import Callable, Mapping, Optional
 
 import httpx
 
-from fleet.server.console_routes import _transport_failure
+from fleet.server.console_routes import transport_failure
 from fleet.server.line_stuck import LineStuckBoard
 from fleet.server.stuck_resolver import Answer, Escalate, StuckResolver
 from fleet.swarm.transport import RobotApiError
@@ -41,6 +41,7 @@ class StuckResolverLoop:
         robots = snapshot["robots"]
         self._board.observe(robots, self._console.hub.registry.events_since)
         now = self._clock()
+        # ponytail: sequential awaits; asyncio.gather per robot when a hung robot delays others
         for action in self._resolver.step(now, robots):
             if isinstance(action, Escalate):
                 self._escalated(action)
@@ -48,13 +49,19 @@ class StuckResolverLoop:
                 await self._answer(action, now)
 
     async def run(self) -> None:
+        last_error = None
         while True:
             try:
                 await self.run_once()
+                last_error = None
             except asyncio.CancelledError:
                 raise
-            except Exception:  # noqa: BLE001 - one bad pass must not stop the resolver
-                log.exception("stuck resolver pass failed")
+            except Exception as exc:  # noqa: BLE001 - one bad pass must not stop the resolver
+                if str(exc) != last_error:
+                    log.exception("stuck resolver pass failed")
+                else:
+                    log.debug("stuck resolver pass failed again: %s", exc)
+                last_error = str(exc)
             try:
                 await asyncio.wait_for(self.wake.wait(), timeout=self._resolver.config.poll_s)
             except asyncio.TimeoutError:
@@ -83,9 +90,13 @@ class StuckResolverLoop:
             code = exc.code
             self._board.record(**record, accepted=False, code=exc.code, message=exc.message)
         except (httpx.HTTPError, OSError) as exc:
-            code, message = _transport_failure(exc)
+            code, message = transport_failure(exc)
+            self._board.record(**record, accepted=False if code == "ROBOT_UNREACHABLE" else None,
+                               code=code, message=f"{message} ({type(exc).__name__})")
+        except Exception as exc:  # noqa: BLE001 - a broken client must not stop the other robots
+            code = "STUCK_DECISION_OUTCOME_UNKNOWN"
             self._board.record(**record, accepted=None, code=code,
-                               message=f"{message} ({type(exc).__name__})")
+                               message=f"unexpected client error ({type(exc).__name__})")
         else:
             self._board.record(**record, accepted=True, outcome=result.get("outcome"))
         self._board.note_resolver(answer.robot_id, answer.stuck_id, tier="rule",
