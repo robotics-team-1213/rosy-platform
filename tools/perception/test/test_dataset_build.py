@@ -266,8 +266,42 @@ def test_six_session_split(tmp_path):
     exp = _export(tmp_path, _names(*sessions, indexes=(0,)))
     m = build.build_dataset(exp, dirs, CLASSES, tmp_path / "ds")
     split = {f["session"]: f["split"] for f in m["frames"]}
-    assert {s for s, v in split.items() if v == "val"} == {"s0", "s5"}
-    assert sum(v == "train" for v in split.values()) == 4
+    # no s0..s5 hashes to 0 mod 5, so the smallest hash (s5) is the fallback val
+    assert all(build.session_hash(s) % 5 for s in sessions)
+    assert {s for s, v in split.items() if v == "val"} == {"s5"}
+    assert sum(v == "train" for v in split.values()) == 5
+
+
+def test_split_is_the_session_hash_rule():
+    sessions = [f"rec{n:03d}" for n in range(60)]
+    split = build.assign_splits(sessions)
+    want = {s: ("val" if build.session_hash(s) % 5 == 0 else "train") for s in sessions}
+    assert "val" in want.values() and "train" in want.values()  # no fallback in play
+    assert split == want
+    assert build.session_hash("s0") == int(hashlib.sha256(b"s0").hexdigest()[:8], 16)
+
+
+def test_adding_a_session_never_moves_existing_sessions():
+    sessions = [f"rec{n:03d}" for n in range(40)]
+    for k in range(2, len(sessions)):
+        before = build.assign_splits(sessions[:k])
+        after = build.assign_splits(sessions[:k + 1])
+        hashed = {s: ("val" if build.session_hash(s) % 5 == 0 else "train") for s in sessions[:k]}
+        fallback = {s for s in sessions[:k] if before[s] != hashed[s]}
+        moved = {s for s in sessions[:k] if before[s] != after[s]}
+        # only a session that was placed by the >=1 val / >=1 train fallback may move
+        assert moved <= fallback, (k, moved, fallback)
+        assert set(after.values()) == {"train", "val"}
+
+
+def test_split_fallbacks_keep_both_splits():
+    no_val = ["s0", "s1", "s2"]  # none hashes to 0 mod 5
+    assert all(build.session_hash(s) % 5 for s in no_val)
+    split = build.assign_splits(no_val)
+    assert [s for s, v in split.items() if v == "val"] == [min(no_val, key=build.session_hash)]
+    all_val = [s for s in (f"v{n}" for n in range(200)) if build.session_hash(s) % 5 == 0][:3]
+    split = build.assign_splits(all_val)
+    assert [s for s, v in split.items() if v == "train"] == [max(all_val, key=build.session_hash)]
 
 
 def test_index_is_not_position(tmp_path):

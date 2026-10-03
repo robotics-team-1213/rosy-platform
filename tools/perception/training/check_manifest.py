@@ -8,6 +8,7 @@ import sys
 
 REPO = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", ".."))
 sys.path.insert(0, REPO + "/src/runtime/sensing")
+sys.path.insert(0, REPO + "/src/contracts/foundation")  # core_common, imported by control (D-424)
 
 from control.sensing.perception.learned.manifest import (  # noqa: E402
     ManifestError, load_manifest, verify_files)

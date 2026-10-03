@@ -17,6 +17,7 @@ from __future__ import annotations
 import copy
 import json
 import os
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -170,10 +171,11 @@ def _mean_iou(val_iou: dict) -> float:
 
 
 def train(model, train_ds, val_ds, *, epochs, lr, batch_size, device, ignore_index=None,
-          num_workers=None, log=print) -> dict:
+          num_workers=None, log=print, on_epoch: Callable[[dict], None] | None = None) -> dict:
     """Adam + cross-entropy; the model ends with the best epoch's weights (mean non-None val IoU).
     ignore_index defaults to the dataset's (manifest ignore_index): those pixels count in
-    neither the loss nor the IoU.
+    neither the loss nor the IoU. on_epoch (e.g. an experiment tracker) gets each history
+    row plus "mean_val_iou" (None when no class has an IoU yet).
 
     Returns {history: [{epoch, train_loss, val_loss, val_iou{name: iou}}], best_epoch, val_iou}."""
     if ignore_index is None:
@@ -215,6 +217,10 @@ def train(model, train_ds, val_ds, *, epochs, lr, batch_size, device, ignore_ind
                "val_loss": vtotal / max(vcount, 1),
                "val_iou": dict(zip(names, _ratios(inter, union)))}
         history.append(row)
+        if on_epoch is not None:
+            mean = _mean_iou(row["val_iou"])
+            on_epoch({**row, "val_iou": dict(row["val_iou"]),
+                      "mean_val_iou": None if mean < 0 else mean})
         if best is None or _mean_iou(row["val_iou"]) > _mean_iou(best["val_iou"]):
             best, best_state = row, copy.deepcopy(model.state_dict())
         if log:
