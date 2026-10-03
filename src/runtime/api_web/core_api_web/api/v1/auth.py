@@ -531,7 +531,7 @@ def create_enrollment_code(body: EnrollmentRequest, request: Request,
     """관리자가 자기 화면에서 다른 기기용 코드를 받는다. 5분, CORE 메모리에만."""
     role = body.role.strip()
     if role not in ROLE_RANK:
-        raise ApiError("VALIDATION_ERROR", 400, "role must be viewer, operator or administrator")
+        raise ApiError("VALIDATION_ERROR", 400, "role must be viewer, stuck_resolver, operator or administrator")
     if ROLE_RANK[role] > auth.rank:
         raise ApiError("FORBIDDEN", 403, "an enrollment code cannot exceed the issuer's role")
     code = "".join(secrets.choice(ALPHABET) for _ in range(CODE_LENGTH))

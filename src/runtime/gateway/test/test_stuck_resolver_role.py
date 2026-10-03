@@ -19,9 +19,21 @@ def _resolver(client) -> dict:
 @pytest.mark.parametrize("who,expected", [("viewer", 403), ("operator", 200), ("resolver", 200)])
 def test_stuck_decision_needs_stuck_decide(core_client, who, expected):
     client, _, stuck_id = _stuck(core_client)
-    headers = {"viewer": VIEWER, "operator": OPERATOR}.get(who) or _resolver(client)
+    if who == "resolver":
+        headers = _resolver(client)
+    else:
+        headers = {"viewer": VIEWER, "operator": OPERATOR}[who]
     response = client.post(URL, json={"stuck_id": stuck_id, "decision": "WAIT"}, headers=headers)
     assert response.status_code == expected, response.text
+
+
+def test_resolver_cannot_choose_manual_and_stuck_stays_open(core_client):
+    client, _, stuck_id = _stuck(core_client)
+    headers = _resolver(client)
+    refused = client.post(URL, json={"stuck_id": stuck_id, "decision": "MANUAL"}, headers=headers)
+    assert refused.status_code == 403, refused.text
+    still_open = client.post(URL, json={"stuck_id": stuck_id, "decision": "WAIT"}, headers=headers)
+    assert still_open.status_code == 200, still_open.text
 
 
 def test_resolver_reads_but_cannot_drive_or_release(core_client):
@@ -34,3 +46,6 @@ def test_resolver_reads_but_cannot_drive_or_release(core_client):
     assert client.post("/api/v1/safety/release", headers=headers).status_code == 403
     assert client.post("/api/v1/teleop", json={"linear": 0.0, "angular": 0.0},
                        headers=headers).status_code == 403
+    assert client.post("/api/v1/calibration/session", json={"kind": "camera"},
+                       headers=headers).status_code == 403
+    assert client.put("/api/v1/safety/limits", json={}, headers=headers).status_code == 403
