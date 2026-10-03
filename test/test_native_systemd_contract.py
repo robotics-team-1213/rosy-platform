@@ -505,17 +505,17 @@ PROGRAM_SOURCES = {
         "middleware/core/services",
         "middleware/core/api_web",
         "contracts/foundation",
-        "imported-by:middleware/core/gateway:control:src/runtime/sensing",
+        "imported-by:middleware/core/gateway:control:middleware/perception",
     ],
     "rosy-io.service": ["middleware/apps/device/pinky/bringup"],
-    "rosy-camera.service": ["src/runtime/sensing/launch/camera_preview.launch.py",
-                            "src/runtime/sensing/control/camera_detect_node.py",
-                            "src/runtime/sensing/control/road_observer_node.py",
+    "rosy-camera.service": ["middleware/perception/launch/camera_preview.launch.py",
+                            "middleware/perception/control/camera_detect_node.py",
+                            "middleware/perception/control/road_observer_node.py",
                             # D-344 §12: the IR calibration overlay the launch validates.
-                            "src/runtime/sensing/control/ir_overlay.py",
+                            "middleware/perception/control/ir_overlay.py",
                             # D-411: the Pilot recorder and its session state machine.
-                            "src/runtime/sensing/control/pilot_recorder_node.py",
-                            "src/runtime/sensing/control/pilot_recording.py"],
+                            "middleware/perception/control/pilot_recorder_node.py",
+                            "middleware/perception/control/pilot_recording.py"],
     "rosy-navigation.service": ["middleware/core/navigation", "middleware/apps/device/pinky/bringup"],
     # D-190 / D-433: the face loop, the emotion cards and LCD driver, rosylib.Battery.
     "rosy-face.service": ["deploy/robot/pinky_pro/native/rosy-face.py",
@@ -629,7 +629,7 @@ def _imported_modules(importer: str, package: str, package_root: str) -> list[Pa
 
 # Trees inside a directory source that are not part of that unit's program.
 PROGRAM_EXCLUDES = {
-    "rosy-core.service": ("src/runtime/sensing",),
+    "rosy-core.service": ("middleware/perception",),
 }
 
 
@@ -1022,11 +1022,11 @@ def test_contract_helpers_treat_dynamic_users_as_non_root():
 def test_core_program_scan_follows_imports_into_the_control_package():
     # CORE's production modules import no control module today (only its tests
     # do), so the scan adds nothing now; it picks them up the moment one does.
-    assert "imported-by:middleware/core/gateway:control:src/runtime/sensing" in PROGRAM_SOURCES["rosy-core.service"]
+    assert "imported-by:middleware/core/gateway:control:middleware/perception" in PROGRAM_SOURCES["rosy-core.service"]
     resolved = {path.relative_to(ROOT).as_posix()
-                for path in _imported_modules("middleware/core/gateway/test", "control", "src/runtime/sensing")}
-    assert "src/runtime/sensing/control/sensor_provider.py" in resolved
-    assert "src/runtime/sensing/control/calibration_storage.py" in resolved
+                for path in _imported_modules("middleware/core/gateway/test", "control", "middleware/perception")}
+    assert "middleware/perception/control/sensor_provider.py" in resolved
+    assert "middleware/perception/control/calibration_storage.py" in resolved
 
 
 # D-373: the operator's on-device switch for camera_preview.launch.py learned_shadow/capture.
@@ -1071,7 +1071,7 @@ def test_learned_perception_env_example_ships_both_switches_off():
     settings = [line for line in example.splitlines() if line and not line.startswith("#")]
     assert settings == ["ROSY_LEARNED_SHADOW=false", "ROSY_CAPTURE=false", "ROSY_OBJECT_DET=false"]
     assert "/etc/rosy/learned-perception.env" in example
-    launch = (ROOT / "src/runtime/sensing/launch/camera_preview.launch.py").read_text(encoding="utf-8")
+    launch = (ROOT / "middleware/perception/launch/camera_preview.launch.py").read_text(encoding="utf-8")
     assert "'ROSY_LEARNED_SHADOW'" in launch and "'ROSY_CAPTURE'" in launch
 
 

@@ -42,10 +42,10 @@ modules:
     functional_kind: host-contract
     functional: [test/test_robot_runtime.py]
   - name: control
-    path: src/runtime/sensing
-    tests: [src/runtime/sensing/test, test/test_control_absorption_package.py]
+    path: middleware/perception
+    tests: [middleware/perception/test, test/test_control_absorption_package.py]
     functional_kind: pytest
-    functional: [src/runtime/sensing/test]
+    functional: [middleware/perception/test]
   - name: fleet
     path: operations/fleet
     tests: [operations/fleet/test]

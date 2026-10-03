@@ -151,7 +151,7 @@ def test_core_image_does_not_ship_the_absorbed_sensor_worker_runtime():
     dockerfile = (DEPLOY / "Dockerfile").read_text(encoding="utf-8")
     core = dockerfile.split("FROM runtime-common AS io-runtime")[0]
 
-    assert "COPY src/runtime/sensing ./src/runtime/sensing" not in core
+    assert "COPY middleware/perception ./middleware/perception" not in core
     assert "python3-opencv" not in core
     assert "ros-jazzy-visualization-msgs" in core
     assert "ros-jazzy-tf2-ros" in core

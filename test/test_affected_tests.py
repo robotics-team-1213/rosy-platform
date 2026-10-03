@@ -27,8 +27,8 @@ modules:
     path: middleware/core/gateway
     tests: [middleware/core/gateway/test]
   - name: control
-    path: src/runtime/sensing
-    tests: [src/runtime/sensing/test]
+    path: middleware/perception
+    tests: [middleware/perception/test]
   - name: core_common
     path: contracts/foundation
     tests: [contracts/foundation/test]
@@ -50,7 +50,7 @@ roots:
     import_prefix: [core_common]
   - path: middleware/core/gateway
     import_prefix: [core]
-  - path: src/runtime/sensing
+  - path: middleware/perception
     import_prefix: [control]
   - path: middleware/core/api_web
     import_prefix: [core_api_web]
@@ -63,8 +63,8 @@ FILES = {
     "tools/harness/platform_parts.yaml": PARTS_YAML,
     "contracts/foundation/core_common/schemas.py": "X = 1\n",
     "contracts/foundation/test/test_schemas.py": "import core_common\n",
-    "src/runtime/sensing/control/battery.py": "from core_common import schemas\n",
-    "src/runtime/sensing/test/test_battery.py": "from control import battery\n",
+    "middleware/perception/control/battery.py": "from core_common import schemas\n",
+    "middleware/perception/test/test_battery.py": "from control import battery\n",
     "middleware/core/gateway/core/node.py": "from control.battery import read\n",
     "middleware/core/gateway/test/test_battery.py": "import core\n",
     "middleware/core/gateway/test/conftest.py": "",
@@ -123,16 +123,16 @@ CASES = [
     ("core_common -> full", ["contracts/foundation/core_common/schemas.py"], "full", None),
     ("unmapped file -> full (unknown never means nothing)", ["tools/mystery/run.sh"], "full", None),
     ("sensing -> sensing suite + direct reverse dependent gateway (api_web is two hops: not pulled)",
-     ["src/runtime/sensing/control/battery.py"], "affected",
-     {"src/runtime/sensing/test", "middleware/core/gateway/test"}),
+     ["middleware/perception/control/battery.py"], "affected",
+     {"middleware/perception/test", "middleware/core/gateway/test"}),
     ("ADR only -> docs module contracts (guards cover the ADR index)",
      ["docs/adr/D-1-sample.md"], "affected", {"test/test_network_topology_contracts.py"}),
     ("doc read by a contract test -> that test too",
      ["docs/reference/line-follow.md"], "affected",
      {"test/test_network_topology_contracts.py", "test/test_line_follow_contract_docs.py"}),
     ("Markdown note outside modules -> guards only", ["tools/AGENTS.md"], "affected", set()),
-    ("changed test file -> only that file", ["src/runtime/sensing/test/test_battery.py"], "affected",
-     {"src/runtime/sensing/test/test_battery.py"}),
+    ("changed test file -> only that file", ["middleware/perception/test/test_battery.py"], "affected",
+     {"middleware/perception/test/test_battery.py"}),
     ("test helper -> the tests importing it", ["test/fake_core_ssh.py"], "affected", {"test/test_ssh_access.py"}),
     ("deploy file named by path parts -> that test + deploy functional, not the whole root test/",
      ["deploy/robot/pinky_pro/udev/99-rosy.rules"], "affected",
@@ -164,9 +164,9 @@ def test_selection_table(sample, case, changed, mode, extra):
 
 
 def test_duplicate_basenames_run_in_separate_invocations(sample):
-    sel = _select(sample, "src/runtime/sensing/control/battery.py")
+    sel = _select(sample, "middleware/perception/control/battery.py")
     owners = {path: i for i, inv in enumerate(sel.invocations) for path in inv}
-    assert owners["src/runtime/sensing/test"] != owners["middleware/core/gateway/test"]
+    assert owners["middleware/perception/test"] != owners["middleware/core/gateway/test"]
     repo = affected.Repo.load(sample)
     for inv in sel.invocations:
         names = [PurePosixPath(t).name for p in inv for t in repo.test_files_under(p)]
@@ -174,7 +174,7 @@ def test_duplicate_basenames_run_in_separate_invocations(sample):
 
 
 def test_reasons_name_the_reverse_dependency(sample):
-    sel = _select(sample, "src/runtime/sensing/control/battery.py")
+    sel = _select(sample, "middleware/perception/control/battery.py")
     assert any("reverse dependent core" in why for why in sel.reasons["middleware/core/gateway/test"])
 
 
@@ -234,13 +234,13 @@ def test_ci_full_matrix_runs_every_root_test_once_with_the_overlay(sample):
 def test_ci_full_matrix_keeps_gateway_and_sensing_on_separate_runners():
     owner = {path: entry["name"] for entry in affected.CI_FULL_MATRIX
              for inv in entry["invocations"] for path in inv}
-    assert owner["middleware/core/gateway/test"] != owner["src/runtime/sensing/test"]
+    assert owner["middleware/core/gateway/test"] != owner["middleware/perception/test"]
     for entry in affected.CI_FULL_MATRIX:
         assert entry["ros"] in {"none", "base", "overlay"}, entry["name"]
 
 
 def test_ci_affected_matrix_is_one_runner_per_invocation(sample):
-    sel = _select(sample, "src/runtime/sensing/control/battery.py")
+    sel = _select(sample, "middleware/perception/control/battery.py")
     matrix = affected.ci_matrix(affected.Repo.load(sample), sel)["include"]
     pytest_entries = [e for e in matrix if e["kind"] == "pytest"]
     assert [e["invocations"][0] for e in pytest_entries] == sel.invocations
@@ -267,7 +267,7 @@ def test_local_run_of_a_full_selection_runs_only_guards_and_direct_suites(sample
     # core_common's own suite and its direct reverse dependent (sensing imports core_common)
     # run locally; the rest of the full tier stays on GitHub.
     assert local == GUARDS | {"test/test_rosy_ssh_enroll.py", "contracts/foundation/test",
-                              "src/runtime/sensing/test"}, "FULL stays on GitHub by default"
+                              "middleware/perception/test"}, "FULL stays on GitHub by default"
     assert "test" not in local and "middleware/core/gateway/test" not in local
     ran.clear()
     affected.run(sample, sel, allow_full=True)

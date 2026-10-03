@@ -285,7 +285,7 @@ def test_ignored_file_guard_covers_every_path_the_images_copy():
     for expected in ("deploy/site", "operations/fleet", "operations/vision/rosy_vision",
                      "operations/apps/games/games", "shared/web",
                      "contracts/foundation/core_common", "operations/apps/fleet/src",
-                     "src/runtime/sensing/map/map_v2_fleet/meshes/road_lines.stl"):
+                     "middleware/perception/map/map_v2_fleet/meshes/road_lines.stl"):
         assert expected in paths, expected
 
 

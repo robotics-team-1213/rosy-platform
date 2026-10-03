@@ -149,7 +149,7 @@ def test_required_source_resolver_ignores_colcon_output_roots(tmp_path):
     )
 
     assert result.returncode == 0, result.stderr
-    assert result.stdout.splitlines() == ["/tmp/rosy-src/src/runtime/sensing"]
+    assert result.stdout.splitlines() == ["/tmp/rosy-src/middleware/perception"]
 
 
 def _package(directory: Path, name: str, depends: tuple[str, ...] = ()) -> None:
@@ -191,7 +191,7 @@ def test_required_source_resolver_spans_every_colcon_root(tmp_path):
 
 def test_required_source_resolver_rejects_a_name_duplicated_across_roots(tmp_path):
     workspace = tmp_path / "ws"
-    _package(workspace / "src" / "runtime" / "sensing", "control")
+    _package(workspace / "middleware" / "perception", "control")
     _package(workspace / "learning" / "sensing", "control")
     required = tmp_path / "required.txt"
     required.write_text("control\n", encoding="utf-8")

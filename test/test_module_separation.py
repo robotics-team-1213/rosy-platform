@@ -22,7 +22,7 @@ from colcon_roots import colcon_roots  # noqa: E402
 CODE_ROOTS = tuple(ROOT / root for root in colcon_roots())
 
 CORE = SRC / "gateway"
-CONTROL_PKG = SRC / "runtime" / "sensing" / "control"
+CONTROL_PKG = SRC.parent / "middleware" / "perception" / "control"
 FLEET = SRC.parent / "operations" / "fleet"
 
 #: Other-domain tops that core production code must never import (S1).
@@ -109,10 +109,10 @@ def _import_tops(path: Path):
 def test_core_imports_no_slice_code():
     """Guard 1 (S1): no slice imports in core production code.
 
-    ``control`` sits at ``src/runtime/sensing`` and imports itself. That package
+    ``control`` sits at ``middleware/perception`` and imports itself. That package
     is not the core gateway importing a slice.
     """
-    control_root = (SRC / "runtime" / "sensing").resolve()
+    control_root = (SRC.parent / "middleware" / "perception").resolve()
     violations = []
     for path in _prod_py_files(CORE):
         if control_root in path.resolve().parents:

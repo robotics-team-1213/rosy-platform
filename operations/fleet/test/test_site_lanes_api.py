@@ -17,8 +17,8 @@ from fleet.server.site_lanes import (
 from fleet.swarm.robots import RobotEndpoint
 
 REPO = Path(__file__).resolve().parents[3]
-LANE_GRAPH = REPO / "src/runtime/sensing/map/map_v2_fleet/lane_graph.yaml"
-ROAD_LINES = REPO / "src/runtime/sensing/map/map_v2_fleet/meshes/road_lines.stl"
+LANE_GRAPH = REPO / "middleware/perception/map/map_v2_fleet/lane_graph.yaml"
+ROAD_LINES = REPO / "middleware/perception/map/map_v2_fleet/meshes/road_lines.stl"
 OPERATOR_TOKEN = "operator-secret"
 SOURCE_TOKEN = "source-camera-secret"
 

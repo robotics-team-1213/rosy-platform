@@ -33,7 +33,7 @@ import yaml
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
 sys.path.insert(0, str(REPO / "learning" / "training" / "perception" / "dataset"))
-sys.path.insert(0, str(REPO / "src" / "runtime" / "sensing"))
+sys.path.insert(0, str(REPO / "middleware" / "perception"))
 sys.path.insert(0, str(REPO / "contracts" / "foundation"))
 
 import autolabel as A  # noqa: E402

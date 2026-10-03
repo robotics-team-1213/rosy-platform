@@ -18,7 +18,7 @@ Unreviewed D-205 prototypes from the 2026-09-24 session: estimating the real cam
 | Directory | Purpose |
 |-----------|---------|
 | `camcal/` | Camera estimation from video. Shared: `common.py`, `getframes.py`, `cammodel.py`. Ordered chain writing intermediates to the current folder: `findcw.py` -> `cwcorners.py` -> `calib.py` (crosswalk corners, focal length, pose); `horizon.py` -> `vpstats.py` (vanishing point, horizon, tilt); `wallh.py`, `ring.py`, `distort.py` (lens height, focal cross-check, distortion); `bevfinal.py`, `annotate.py` (BEV and overlays). Side statistics: `hazards.py`, `hazsum.py`, `samefr.py` |
-| `realrun/` | Replays video through the current `src/runtime/sensing` perception, read-only: `replay.py` (modes `centre`, `line`, `lane`, `road`), `analyze.py` (aggregate the seven part files), `whatif.py` (threshold sensitivity), `stills.py`, `geom.py` (BEV range of real vs sim camera), `vo_test.py` (stand-in visual odometry check on synthetic floor) |
+| `realrun/` | Replays video through the current `middleware/perception` perception, read-only: `replay.py` (modes `centre`, `line`, `lane`, `road`), `analyze.py` (aggregate the seven part files), `whatif.py` (threshold sensitivity), `stills.py`, `geom.py` (BEV range of real vs sim camera), `vo_test.py` (stand-in visual odometry check on synthetic floor) |
 
 ## For AI Agents
 
@@ -43,7 +43,7 @@ None. `learning/training/perception/test` does not cover this folder.
 
 ### Internal
 
-- `src/runtime/sensing` perception code (imported by `realrun/`), `data/teleop/learning/`, `docs/validation/perception-real-video/2026-09-24/`
+- `middleware/perception` perception code (imported by `realrun/`), `data/teleop/learning/`, `docs/validation/perception-real-video/2026-09-24/`
 
 ### External
 

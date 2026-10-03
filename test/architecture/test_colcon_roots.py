@@ -53,7 +53,7 @@ EXEMPT = {
     "deploy/robot/pinky_pro/Dockerfile": "per-package COPY into /opt/rosy_ws",
     "deploy/robot/omx/Dockerfile": "upstream OMX sources in /opt/omx_ws",
     "contracts/foundation/core_common/profile.py": "error-message text",
-    "src/runtime/sensing/control/web_node.py": "docstring",
+    "middleware/perception/control/web_node.py": "docstring",
     "operations/fleet/package.xml": "XML comment",
     # Tests pin consumer text; none runs colcon or rosdep.
     "test/architecture/test_colcon_roots.py": "this test",

@@ -35,7 +35,7 @@ import cv2
 import numpy as np
 
 ROOT = Path(__file__).resolve().parents[4]
-_SENSING = ROOT / "src" / "runtime" / "sensing"
+_SENSING = ROOT / "middleware" / "perception"
 _FOUNDATION = ROOT / "contracts" / "foundation"  # core_common (D-424)
 for _p in (_SENSING, _FOUNDATION):
     if str(_p) not in sys.path:

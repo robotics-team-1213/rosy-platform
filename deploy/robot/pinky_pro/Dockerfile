@@ -133,7 +133,7 @@ COPY middleware/apps/device/pinky/bringup /opt/rosy_ws/src/products/pinky_pro/br
 COPY middleware/core/navigation /opt/rosy_ws/src/runtime/navigation
 COPY middleware/apps/device/omx/adapter /opt/rosy_ws/src/products/omx/adapter
 COPY middleware/apps/device/omx/profile /opt/rosy_ws/src/products/omx/profile
-COPY src/runtime/sensing /opt/rosy_ws/src/runtime/sensing
+COPY middleware/perception /opt/rosy_ws/src/runtime/sensing
 COPY shared/web /opt/rosy_ws/src/hmi/web_common
 RUN mkdir -p middleware/apps/device/pinky/description/meshes
 RUN set -eo pipefail \

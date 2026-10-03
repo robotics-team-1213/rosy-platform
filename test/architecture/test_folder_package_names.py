@@ -31,7 +31,7 @@ FOLDER_TO_PACKAGE = {
     "middleware/core/api_web": "core_api_web",
     "middleware/core/events": "core_events",
     "middleware/core/gateway": "core",
-    "src/runtime/sensing": "control",
+    "middleware/perception": "control",
     "middleware/core/services": "core_features",
     "operations/vision": "rosy_vision",  # D-377 rosy_<word>; D-427 target folder is the word itself
     "operations/processes/cell": "rosy_cell",

@@ -29,7 +29,7 @@ import numpy as np
 
 REPO = Path(__file__).resolve().parents[4]
 PROFILE_PATH = REPO / "middleware" / "apps" / "device" / "pinky" / "profile" / "config" / "camera_nominal.yaml"
-ROBOT_YAML = REPO / "src" / "runtime" / "sensing" / "config" / "robot.yaml"
+ROBOT_YAML = REPO / "middleware" / "perception" / "config" / "robot.yaml"
 CALIBRATION_STORE = REPO / "data" / "calibration"
 LIDAR_FORWARD_DEG = 180.0
 

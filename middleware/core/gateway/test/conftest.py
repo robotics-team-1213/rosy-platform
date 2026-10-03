@@ -25,7 +25,7 @@ REPO = Path(__file__).resolve().parents[4]
 CORE = REPO / "middleware" / "core"
 
 for _path in (CORE / "gateway", REPO / "contracts" / "foundation", CORE / "events",
-              CORE / "services", CORE / "api_web", REPO / "src" / "runtime" / "sensing"):
+              CORE / "services", CORE / "api_web", REPO / "middleware" / "perception"):
     _entry = str(_path)
     if _entry not in sys.path:
         sys.path.insert(0, _entry)

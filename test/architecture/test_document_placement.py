@@ -56,7 +56,7 @@ ROOT_FILES = {
 }
 MODULE_ROOT_DOCS = {"README.md", "AGENTS.md", "CLAUDE.md", "progress.md", "logs.md", "index.md"}
 # Accepted ADRs that name a module-root file keep it there until superseded.
-MODULE_ROOT_EXCEPTIONS = {"src/runtime/sensing/STEPS.txt"}
+MODULE_ROOT_EXCEPTIONS = {"middleware/perception/STEPS.txt"}
 
 
 def _git(*args: str) -> str:

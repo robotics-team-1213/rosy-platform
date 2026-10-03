@@ -5,7 +5,7 @@
 
 ## Purpose
 
-ROSY is a robot middleware and fleet-control platform (ROS 2 Jazzy, first hardware Pinky Pro). This repository is the robot-side workspace: CORE (middleware/core/gateway) is the external API gateway, supported by shared contracts, events, services, web API, hardware bringup, Nav2/SLAM, Gazebo, Raspberry Pi deploy/robot/pinky_pro/release tooling, and charging-dock ESP32 firmware. src/runtime/sensing contains the absorbed Control package; its legacy final publisher must not run beside CORE. operations/fleet contains formation/relay/CLI and the v1 Fleet console seed; the full central Fleet platform remains unimplemented. Current source roles are contracts, runtime, products, drivers, site, hmi, and sim. Folder role does not establish writer authority, host placement, or image closure (D-315). License: Apache-2.0.
+ROSY is a robot middleware and fleet-control platform (ROS 2 Jazzy, first hardware Pinky Pro). This repository is the robot-side workspace: CORE (middleware/core/gateway) is the external API gateway, supported by shared contracts, events, services, web API, hardware bringup, Nav2/SLAM, Gazebo, Raspberry Pi deploy/robot/pinky_pro/release tooling, and charging-dock ESP32 firmware. middleware/perception contains the absorbed Control package; its legacy final publisher must not run beside CORE. operations/fleet contains formation/relay/CLI and the v1 Fleet console seed; the full central Fleet platform remains unimplemented. Current source roles are contracts, runtime, products, drivers, site, hmi, and sim. Folder role does not establish writer authority, host placement, or image closure (D-315). License: Apache-2.0.
 
 ## Key Files
 

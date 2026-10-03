@@ -12,7 +12,7 @@ REPO = Path(__file__).resolve().parents[4]
 for _path in (
     REPO / "middleware" / "core" / "services",
     REPO / "contracts" / "foundation",
-    REPO / "src" / "runtime" / "sensing",
+    REPO / "middleware" / "perception",
 ):
     _entry = str(_path)
     if _entry not in sys.path:

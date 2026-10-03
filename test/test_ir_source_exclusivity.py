@@ -18,9 +18,9 @@ SRC = ROOT / "src"
 #: an operator would wire the graph.
 EXCLUSIVITY_MARKER = "ir_sensor/range single-publisher rule"
 
-LINE_FOLLOW = SRC / "runtime" / "sensing" / "launch" / "line_follow.launch.py"
+LINE_FOLLOW = SRC.parent / "middleware" / "perception" / "launch" / "line_follow.launch.py"
 HARDWARE = SRC.parent / "middleware" / "core" / "navigation" / "launch" / "hardware.launch.py"
-CALIB_NODE = SRC / "runtime" / "sensing" / "control" / "calib_node.py"
+CALIB_NODE = SRC.parent / "middleware" / "perception" / "control" / "calib_node.py"
 
 
 def _launch_files():

@@ -76,7 +76,7 @@ def load_lane_rules(path: Optional[Path]) -> dict:
 
 def default_lane_rules() -> Optional[Path]:
     """map_v2_fleet's lane_rules.yaml when Fleet runs from a source checkout, else None."""
-    path = ((Path(__file__).resolve().parents[4] / "src") / "runtime" / "sensing" / "map" / "map_v2_fleet"
+    path = ((Path(__file__).resolve().parents[4] / "middleware") / "perception" / "map" / "map_v2_fleet"
             / "lane_rules.yaml")
     return path if path.is_file() else None
 

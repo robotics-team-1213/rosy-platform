@@ -17,7 +17,7 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / "scripts"
-GRAPH = (ROOT.parents[2] / "src") / "runtime" / "sensing" / "map" / "map_v2_fleet" / "lane_graph.yaml"
+GRAPH = (ROOT.parents[2] / "middleware") / "perception" / "map" / "map_v2_fleet" / "lane_graph.yaml"
 VIEWER_FILES = ["lane_live_view.py", "live_view_model.py", "live_view_demo.py",
                 "lane_live_view.html"]
 

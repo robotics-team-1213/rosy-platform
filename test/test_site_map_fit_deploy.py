@@ -4,7 +4,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SITE = ROOT / "deploy/site"
-MAP = "src/runtime/sensing/map/map_v2_fleet"
+MAP = "middleware/perception/map/map_v2_fleet"
 
 
 def _service(compose: str, name: str, following: str) -> str:

@@ -258,7 +258,7 @@ def test_seed_initialpose_false_leaves_amcl_unseeded():
 
 
 # --- D-395 S2 rerun: sim-only physics step and GPU rendering --------------------------------
-FLEET_WORLD = (LAUNCH.parents[4] / "src") / "runtime" / "sensing" / "map" / "map_v2_fleet" / "worlds" / "map_v2_fleet.world"
+FLEET_WORLD = (LAUNCH.parents[4] / "middleware") / "perception" / "map" / "map_v2_fleet" / "worlds" / "map_v2_fleet.world"
 FACTORY_WORLD = LAUNCH.parents[1] / "worlds" / "rosy_factory.world"
 
 

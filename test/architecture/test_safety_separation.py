@@ -303,13 +303,13 @@ def test_decision_and_learning_use_only_safety_public_api():
 #: new exception cannot appear silently. ``test``/``tests`` folders are out as well:
 #: they build fake graphs (e.g. gateway test_absorption_output_graph.py).
 CMD_VEL_SCOPE_EXCLUDED = {
-    "src/runtime/sensing/tools/gz/": "Gazebo bench driver; drives the sim robot, never a device run path",
+    "middleware/perception/tools/gz/": "Gazebo bench driver; drives the sim robot, never a device run path",
 }
 CMD_VEL_TOPICS = {"cmd_vel", "/cmd_vel"}
 #: The single writer (D-2, D-38).
 CMD_VEL_PUBLISHER = "middleware/core/gateway/core/bridge/ros_bridge.py"
 #: ``declare_parameter`` defaults of "cmd_vel": the legacy D-208 standalone safety node only.
-CMD_VEL_PARAMETER_ALLOWLIST = {"src/runtime/sensing/control/safety/node.py"}
+CMD_VEL_PARAMETER_ALLOWLIST = {"middleware/perception/control/safety/node.py"}
 OMX_SCOPE = ("middleware/apps/device/omx/", "integrations/robots/omx/")
 
 

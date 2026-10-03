@@ -9,7 +9,7 @@ import math
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-GRAPH = (ROOT.parents[2] / "src") / "runtime" / "sensing" / "map" / "map_v2_fleet" / "lane_graph.yaml"
+GRAPH = (ROOT.parents[2] / "middleware") / "perception" / "map" / "map_v2_fleet" / "lane_graph.yaml"
 
 
 def _mod():

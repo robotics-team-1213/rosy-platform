@@ -6,7 +6,7 @@ from the parking junction on west back to it), driven by one route
 follower in ONE launch. Usage (WSL, sourced overlay):
 
   python3 coverage_harness.py --out /rosy_mapv2_ws/evidence/tour_<id> \
-      --graph src/runtime/sensing/map/map_v2_fleet/lane_graph.yaml [--mode route_ab]
+      --graph middleware/perception/map/map_v2_fleet/lane_graph.yaml [--mode route_ab]
 
 Launch map_v2_fleet_lane once at the tour start with the whole route in the
 existing `route` / `route_start` launch args, wait for readiness
@@ -48,13 +48,13 @@ import junction_score  # noqa: E402
 # (mirrors live_view_model._control_sensing)
 # --------------------------------------------------------------------------
 
-_WORKTREE_CONTROL = (Path(__file__).resolve().parents[4] / "src") / "runtime" / "sensing"
+_WORKTREE_CONTROL = (Path(__file__).resolve().parents[4] / "middleware") / "perception"
 
 
 def _lane_coverage():
     """lane_coverage from the sourced install; when it is not sourced (a
     host pytest run) or lacks the module, the worktree's own
-    src/runtime/sensing is used so the plan stage imports without ROS 2."""
+    middleware/perception is used so the plan stage imports without ROS 2."""
     try:
         from control.sensing.perception import lane_coverage
         return lane_coverage

@@ -23,7 +23,7 @@ COPY contracts/foundation/core_common/ /opt/rosy/src/contracts/foundation/core_c
 COPY operations/apps/fleet/src/ /opt/rosy/apps/gateway/src/
 COPY shared/web/ /opt/rosy/web-common/
 # D-375 console map-fit overlay: site lane geometry, display only (--site-lane-graph/--site-lane-paint).
-COPY src/runtime/sensing/map/map_v2_fleet/lane_graph.yaml src/runtime/sensing/map/map_v2_fleet/meshes/road_lines.stl /opt/rosy/maps/map_v2_fleet/
+COPY middleware/perception/map/map_v2_fleet/lane_graph.yaml middleware/perception/map/map_v2_fleet/meshes/road_lines.stl /opt/rosy/maps/map_v2_fleet/
 
 RUN python3 -m venv /opt/rosy-venv \
     && /opt/rosy-venv/bin/pip install --no-cache-dir -r /opt/rosy/requirements.txt \

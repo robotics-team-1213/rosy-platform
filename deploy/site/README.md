@@ -1181,7 +1181,7 @@ processed once:
 ### Install
 
 The watcher needs a reviewed source checkout (it imports the manifest contract
-and runner from `src/runtime/sensing`) and a Python venv with `onnxruntime`,
+and runner from `middleware/perception`) and a Python venv with `onnxruntime`,
 `onnx` (intake reads the graph's precision with it), `opencv-python-headless`,
 `numpy` and `PyYAML`; NCNN intake additionally needs `ncnn==1.0.20260526`
 (D-431; CPython 3.12 ARM64/x86_64 wheel hashes are pinned in

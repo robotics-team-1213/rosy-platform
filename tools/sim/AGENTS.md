@@ -34,7 +34,7 @@ Developer-side simulation helpers that compose several packages: ROS-free host s
 ### Testing Requirements
 
 ```bash
-python -m pytest src/runtime/sensing/test/test_line_follow_simulation.py src/runtime/sensing/test/test_semantic_road_simulation.py test/test_d395_s1_truth.py -q
+python -m pytest middleware/perception/test/test_line_follow_simulation.py middleware/perception/test/test_semantic_road_simulation.py test/test_d395_s1_truth.py -q
 ```
 
 Host-only. The Gazebo bench and `sim_verify.sh` are run by hand in WSL.
@@ -48,7 +48,7 @@ Host-only. The Gazebo bench and `sim_verify.sh` are run by hand in WSL.
 
 ### Internal
 
-- `src/runtime/sensing`, `middleware/core/gateway`, `middleware/core/events`, `middleware/core/services/core_features`, `integrations/simulation/gazebo` (`gz_multi.launch.py`), `operations/fleet` (console on port 8090)
+- `middleware/perception`, `middleware/core/gateway`, `middleware/core/events`, `middleware/core/services/core_features`, `integrations/simulation/gazebo` (`gz_multi.launch.py`), `operations/fleet` (console on port 8090)
 
 ### External
 

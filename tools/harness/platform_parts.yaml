@@ -134,9 +134,10 @@ roots:
     wave: "4c"
     import_prefix: [navigation]
     concern: control
-  - path: src/runtime/sensing
+  - path: middleware/perception
     part: middleware
     d427_target: middleware/perception
+    legacy: src/runtime/sensing
     wave: "4e"
     import_prefix: [control]
     note: >-

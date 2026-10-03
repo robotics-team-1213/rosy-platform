@@ -13,7 +13,7 @@ from core_features.vision.transport import PROVIDERS, select
 
 ROOT = (Path(__file__).resolve().parents[4] / "src")
 BRIDGE = ROOT.parent / "middleware" / "core" / "gateway" / "core" / "bridge" / "ros_bridge.py"
-ROAD = ROOT / "runtime" / "sensing" / "control" / "road_observer_node.py"
+ROAD = ROOT.parent / "middleware" / "perception" / "control" / "road_observer_node.py"
 CORE_PKG = ROOT.parent / "middleware" / "core" / "gateway" / "package.xml"
 
 

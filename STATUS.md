@@ -7,7 +7,7 @@
 |---|---|---|---|---|---|---|---|---|
 | [core](middleware/core/gateway/progress.md) | CORE | 4e99d92e (2026-10-02) | GO | GO | GO | HOLD | HOLD | PARKED |
 | [deploy](deploy/progress.md) | 릴리스·플랫폼 | 4e99d92e (2026-10-02) | GO | GO | N/A | HOLD | HOLD | N/A |
-| [control](src/runtime/sensing/progress.md) | CONTROL | 4e99d92e (2026-10-02) | GO | GO | HOLD | HOLD | HOLD | PARKED |
+| [control](middleware/perception/progress.md) | CONTROL | 4e99d92e (2026-10-02) | GO | GO | HOLD | HOLD | HOLD | PARKED |
 | [fleet](operations/fleet/progress.md) | FLEET | bed604ef (2026-09-30) | GO | GO | HOLD | PARKED | PARKED | PARKED |
 | [games](operations/apps/games/progress.md) | GAMES | bed604ef (2026-09-30) | GO | GO | N/A | N/A | PARKED | PARKED |
 | [rosy_vision](operations/vision/progress.md) | SITE | a8199fd9 (2026-09-30) | GO | GO | N/A | N/A | PARKED | PARKED |

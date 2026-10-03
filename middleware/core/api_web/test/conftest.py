@@ -6,6 +6,6 @@ from pathlib import Path
 SRC = (Path(__file__).resolve().parents[4] / "src")
 for path in (SRC.parent / "middleware" / "core" / "api_web", SRC.parent / "middleware" / "core" / "gateway",
              SRC.parent / "contracts" / "foundation", SRC.parent / "middleware" / "core" / "events",
-             SRC.parent / "middleware" / "core" / "services", SRC / "runtime" / "sensing"):
+             SRC.parent / "middleware" / "core" / "services", SRC.parent / "middleware" / "perception"):
     if str(path) not in sys.path:
         sys.path.insert(0, str(path))

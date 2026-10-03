@@ -11,7 +11,7 @@ from test_map_v2_fleet_launch import _urdf_camera_on_base_footprint
 ROOT = (Path(__file__).resolve().parents[4] / "src")
 LAUNCH = ROOT.parent / "integrations" / "simulation" / "gazebo" / "launch" / "map_v2_fleet_real.launch.py"
 NOMINAL = ROOT.parent / "middleware" / "apps" / "device" / "pinky" / "profile" / "config" / "camera_nominal.yaml"
-BUNDLE = ROOT / "runtime" / "sensing" / "map" / "map_v2_fleet"
+BUNDLE = ROOT.parent / "middleware" / "perception" / "map" / "map_v2_fleet"
 
 
 def _constants():

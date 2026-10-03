@@ -17,8 +17,8 @@
 !middleware/core/services/**
 !middleware/core/api_web/
 !middleware/core/api_web/**
-!src/runtime/sensing/
-!src/runtime/sensing/**
+!middleware/perception/
+!middleware/perception/**
 !shared/
 !middleware/
 !middleware/ui/

@@ -321,7 +321,7 @@ def _entry_point_spans(source: str) -> list[tuple[int, int]]:
 def test_only_main_shuts_rclpy_down_in_core_production_code():
     """main 의 context-무효 판정은 다른 코드가 context 를 내리지 않는다는 불변식에 기댄다.
 
-    `control` 은 src/core 아래로 옮겨졌고(a93d5188) 지금은 src/runtime/sensing 아래다.
+    `control` 은 src/core 아래로 옮겨졌고(a93d5188) 지금은 middleware/perception 아래다.
     노드마다 자기 프로세스로 뜬다.
     그 노드의 `main()` 은 CORE 프로세스에서 불리지 않으므로 자기 context 를 내려도 된다.
     CORE 가 `control.sensor_provider` 로 import 하는 모듈 본문은 여전히 막는다.
@@ -332,7 +332,7 @@ def test_only_main_shuts_rclpy_down_in_core_production_code():
     repo = Path(__file__).resolve().parents[4]
     # D-427: CORE packages left src/runtime; keys stay "<role>/..." as before.
     roles = {role: repo / "middleware" / "core" / role for role in ("gateway", "services", "events", "api_web", "navigation")}
-    roles["sensing"] = repo / "src" / "runtime" / "sensing"
+    roles["sensing"] = repo / "middleware" / "perception"
     pattern = re.compile(
         r"rclpy\.(try_)?shutdown\b|\btry_shutdown\(|from rclpy(\.utilities)? import[^\n]*\bshutdown\b")
     offenders = []

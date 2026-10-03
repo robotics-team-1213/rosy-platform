@@ -6,7 +6,7 @@
 !deploy/site/requirements-fleet.txt
 !deploy/site/secret_exec.py
 !deploy/site/site_db.py
-!src/runtime/sensing/map/map_v2_fleet/lane_graph.yaml
-!src/runtime/sensing/map/map_v2_fleet/meshes/road_lines.stl
+!middleware/perception/map/map_v2_fleet/lane_graph.yaml
+!middleware/perception/map/map_v2_fleet/meshes/road_lines.stl
 **/__pycache__
 **/.pytest_cache

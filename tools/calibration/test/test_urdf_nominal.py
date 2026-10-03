@@ -89,7 +89,7 @@ def test_unsupported_xacro_fails_loudly():
 
 G = GEOMETRY
 SRC = REPO / "src"
-SENSING = SRC / "runtime" / "sensing"
+SENSING = SRC.parent / "middleware" / "perception"
 BRINGUP = SRC.parent / "middleware" / "apps" / "device" / "pinky" / "bringup"
 PROFILE = SRC.parent / "middleware" / "apps" / "device" / "pinky" / "profile" / "config"
 

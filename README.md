@@ -19,7 +19,7 @@ Pinky 주행은 CORE가, OMX 팔은 장치 수용을 마친 OMX 로컬 제어기
 - **CORE 단일 게이트웨이** — 외부 클라이언트는 ROS를 직접 쓰지 않고 CORE API로만
   말한다(CORE SRS §1.3). `core`(`middleware/core/gateway`)가 유일한 외부 접점이다.
 - **유일한 `cmd_vel` publisher** — Command Manager(`core_features.command`)만 최종
-  주행 명령을 발행한다(D-2). `control`(`src/runtime/sensing`)의 legacy 최종
+  주행 명령을 발행한다(D-2). `control`(`middleware/perception`)의 legacy 최종
   publisher는 CORE와 병행하지 않는다.
 - **단일 프로세스** — CORE는 한 프로세스에서 메인 스레드 rclpy `MultiThreadedExecutor`,
   워커 스레드 uvicorn+FastAPI로 돈다(D-1). 진입점은 `ros2 run core core`.

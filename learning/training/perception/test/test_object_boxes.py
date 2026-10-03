@@ -7,7 +7,7 @@ import numpy as np
 import pytest
 
 ROOT = Path(__file__).resolve().parents[4]
-for _p in (ROOT / "learning" / "training" / "perception" / "dataset", ROOT / "src" / "runtime" / "sensing"):
+for _p in (ROOT / "learning" / "training" / "perception" / "dataset", ROOT / "middleware" / "perception"):
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
 

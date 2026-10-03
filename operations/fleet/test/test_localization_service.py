@@ -18,7 +18,7 @@ from fleet.localization.service_logic import Ladder, Monitor
 from fleet.server.localization_service import CALL_TIMEOUT_S, LocalizationService, load_lane_rules
 from fleet.swarm.transport import RobotApiError
 
-LANE_RULES = ((Path(__file__).resolve().parents[3] / "src") / "runtime" / "sensing" / "map" / "map_v2_fleet"
+LANE_RULES = ((Path(__file__).resolve().parents[3] / "middleware") / "perception" / "map" / "map_v2_fleet"
               / "lane_rules.yaml")
 A, B = (-1.26, 0.49), (0.86, -0.52)
 SLOTS = [cues.Slot(*A, math.pi / 2), cues.Slot(*B, 0.0)]

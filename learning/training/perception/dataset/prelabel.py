@@ -29,7 +29,7 @@ import numpy as np
 import build
 
 ROOT = Path(__file__).resolve().parents[4]
-_SENSING = str(ROOT / "src" / "runtime" / "sensing")
+_SENSING = str(ROOT / "middleware" / "perception")
 _FOUNDATION = str(ROOT / "contracts" / "foundation")  # core_common (D-424)
 for _p in (_SENSING, _FOUNDATION):
     if _p not in sys.path:

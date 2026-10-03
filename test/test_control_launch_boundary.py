@@ -25,7 +25,7 @@ def test_operational_compose_does_not_serve_the_control_console():
     assert "web_node" not in text
     assert "diagnostic.html" not in text
     assert "dashboard.html" not in text
-    html = (ROOT / "src" / "runtime" / "sensing" / "web" / "diagnostic.html").read_text(encoding="utf-8")
+    html = (ROOT / "middleware" / "perception" / "web" / "diagnostic.html").read_text(encoding="utf-8")
     assert "<title>pinky console</title>" not in html
     assert "<title>Rosy 로봇 — 제어 진단</title>" in html
 

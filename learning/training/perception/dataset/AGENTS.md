@@ -52,7 +52,7 @@ Relevant files: `test_dataset_build.py`, `test_dataset_extract.py`, `test_datase
 
 ### Internal
 
-- `../store.py`, `../operator_ssh.py`, `src/runtime/sensing/control/sensing/perception/learned/` (manifest contract), `middleware/apps/device/pinky/description` (URDF geometry)
+- `../store.py`, `../operator_ssh.py`, `middleware/perception/control/sensing/perception/learned/` (manifest contract), `middleware/apps/device/pinky/description` (URDF geometry)
 
 ### External
 

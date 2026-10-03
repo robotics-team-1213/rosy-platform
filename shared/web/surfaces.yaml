@@ -103,14 +103,14 @@ surfaces:
     baseline: docs/validation/uiux-surfaces-2026-09-26/captures/games-play-1280x800.png
 
   - id: control-diagnostic
-    path: src/runtime/sensing/web/diagnostic.html
+    path: middleware/perception/web/diagnostic.html
     themes: [dark]
     theme_reason: PARKED(D-266) 진단 한 파일 — 해제 회차 전까지 테마 도입 대상이 아니다(D-359 §3.3)
     surface: robot
     medium: web
     ports:
-      - {port: 28181, source: src/runtime/sensing/config/web.yaml}
-      - {port: 28182, source: src/runtime/sensing/config/web.yaml}
+      - {port: 28181, source: middleware/perception/config/web.yaml}
+      - {port: 28182, source: middleware/perception/config/web.yaml}
     audience: 제어 진단 (D-153 §7 — PARKED D-266)
     role: 제어 진단 — PARKED(D-266), D-370 역할 표 밖이다
     owns: []

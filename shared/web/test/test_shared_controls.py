@@ -389,7 +389,7 @@ def test_measure_comes_from_the_scale():
 
 def test_diagnostic_palette_matches_the_token_hex():
     tokens = _dark_tokens()
-    page = (ROOT / "src" / "runtime" / "sensing" / "web" / "diagnostic.html").read_text(encoding="utf-8")
+    page = (ROOT / "middleware" / "perception" / "web" / "diagnostic.html").read_text(encoding="utf-8")
     declared = dict(re.findall(r"--([a-z0-9-]+):\s*#([0-9a-fA-F]{6})", page))
     mismatch = []
     for local, token in _DIAGNOSTIC_TWINS.items():
