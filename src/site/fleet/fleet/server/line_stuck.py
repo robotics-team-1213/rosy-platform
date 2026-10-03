@@ -44,6 +44,18 @@ class LineStuckBoard:
         self._answers: deque = deque(maxlen=history)
         self._log = log
         self._observed_at: Optional[float] = None
+        self._resolver: dict[tuple[str, str], dict] = {}
+
+    def note_resolver(self, robot_id: str, stuck_id: str, *, tier: str, rule: Optional[str],
+                      decision: Optional[str], escalated: Optional[str]) -> None:
+        """D-438: what the resolver did for this stuck (shown on the console row)."""
+        self._resolver[(robot_id, stuck_id)] = {
+            "tier": tier, "rule": rule, "decision": decision, "escalated": escalated,
+            "at": self._clock()}
+
+    def _drop_notes(self, robot_id: str) -> None:
+        for key in [k for k in self._resolver if k[0] == robot_id]:
+            del self._resolver[key]
 
     def observed_age_s(self) -> Optional[float]:
         """Seconds since the last gather (None = never gathered since start)."""
@@ -68,6 +80,7 @@ class LineStuckBoard:
             stuck = (state.get("line_follow") or {}).get("stuck")
             if not isinstance(stuck, dict) or not stuck.get("stuck_id"):
                 self._open.pop(robot_id, None)
+                self._drop_notes(robot_id)
                 continue
             previous = self._open.get(robot_id)
             entry = {"robot_id": robot_id, **{k: stuck.get(k) for k in _STATUS_KEYS},
@@ -76,6 +89,7 @@ class LineStuckBoard:
             self._open[robot_id] = entry
         for robot_id in set(self._open) - seen:
             del self._open[robot_id]   # left the roster
+            self._drop_notes(robot_id)
 
     @staticmethod
     def _opened(robot_id: str, stuck_id: str, previous: Optional[dict], events_of) -> dict:
@@ -105,6 +119,7 @@ class LineStuckBoard:
         last = next((a for a in reversed(self._answers)
                      if a["robot_id"] == robot_id and a["stuck_id"] == entry["stuck_id"]), None)
         shown["fleet_answer"] = last
+        shown["resolver"] = self._resolver.get((robot_id, entry["stuck_id"]))
         return shown
 
     def pending(self) -> list[dict]:
