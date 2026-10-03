@@ -48,8 +48,10 @@ import numpy as np
 
 SCHEMA = "rosy.perception.dataset/1"
 _SENSING = str(Path(__file__).resolve().parents[3] / "src" / "runtime" / "sensing")
-if _SENSING not in sys.path:
-    sys.path.insert(0, _SENSING)
+_FOUNDATION = str(Path(__file__).resolve().parents[3] / "src" / "contracts" / "foundation")  # core_common (D-424)
+for _p in (_SENSING, _FOUNDATION):
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
 from control.sensing.perception.learned.manifest import ROLES  # noqa: E402  the closed list
 # Mask value for unlabelled pixels (manifest "ignore_index"): excluded from the
 # loss, never a class. D-379 addendum 2026-10-01.
