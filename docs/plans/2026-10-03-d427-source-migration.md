@@ -18,6 +18,10 @@ python -c "import yaml;[print(r.get('wave','-'),r['path'],'->',r['d427_target'])
 - `rosy-execution-local` wheel 분리를 허용한다. 커밋 `2c`로 2a 뒤, 3a 앞에 넣는다.
 - 오래된 미병합 브랜치 정리: snapshot tag `archive/<branch>` 17개를 달았고(`refactor/web-transport`는 `archive/refactor/web-transport-midmerge`), 해당 worktree와 detached worktree를 지웠다. 브랜치 자체는 남겨 두었다. wave 0의 선행 조건은 "tag 완료, worktree 제거, 브랜치 유지"다.
 - 새 배포 이름 `rosy-contracts-skill`(2a, Q9)을 승인했다. 남은 열린 질문은 없다.
+- **속도 우선 (2026-10-03 오후, 사용자 결정):** 진입 조건 두 개를 아래로 바꾼다.
+  1. **미병합 브랜치는 더 이상 wave를 막지 않는다.** 3b·3c·4의 "착지 또는 보관" 조건 대신, 옮길 경로를 건드리는 미병합 브랜치에 snapshot tag `archive/<branch>`를 남기고(브랜치는 유지) 이동을 진행한다. 브랜치 주인은 이동 뒤 rebase한다(git rename 추적). 2026-10-03에 d362 p0-1·p0-2·p1, codex/pinky-integrated-current, fix/hardware-runtime-truth, d414, d415, d407, d416, d395-plan에 tag를 추가했다. 작업 중인 worktree 브랜치(d418-*, d400-plan2, gz-learned-lane-drive, overhead-markerless-tracking 등)는 tag 없이 주인이 rebase한다.
+  2. **image wave(4b–4e)는 이미지 릴리스 창을 기다리지 않는다.** 대신 wave마다 push 뒤 `build-native-payload.yml`과 `build-pinky-image.yml`을 실행해 `rosy-packages.txt`와 SD 패키지 목록·rosdep 범위가 직전 빌드와 같음을 비교 증거로 남긴다. 실제 로봇 배포는 이전이 끝난 뒤 다음 릴리스에서 한다(D-191의 취지: 이동과 릴리스를 섞지 않는다).
+  3. wave는 계속 하나씩 순서대로 main에 들어간다.
 
 ## 범위와 비목표
 
