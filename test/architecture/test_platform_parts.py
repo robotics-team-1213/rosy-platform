@@ -199,6 +199,25 @@ def test_nested_roots_change_part_or_target():
             )
 
 
+def _is_package_root(root: dict) -> bool:
+    folder = ROOT / root["path"]
+    return (folder / "package.xml").is_file() or (folder / "pyproject.toml").is_file()
+
+
+def test_package_targets_are_leaf_unique():
+    """A package folder cannot hold another package (D-310 ``profile/``), so two
+    package roots may not share a target or nest one target in the other.
+    Container targets such as ``middleware/core`` are not packages and may hold them."""
+    packages = [root for root in _manifest()["roots"] if _is_package_root(root)]
+    assert len(packages) > 30, "package root scan found too few package.xml/pyproject.toml roots"
+    clashes = [
+        f"{a['path']} -> {a['d427_target']} vs {b['path']} -> {b['d427_target']}"
+        for a in packages for b in packages
+        if a is not b and _under(b["d427_target"], a["d427_target"])
+    ]
+    assert clashes == [], f"package targets must be one folder per package: {clashes}"
+
+
 def test_every_tracked_file_has_exactly_one_owner():
     roots = _manifest()["roots"]
     orphans = []

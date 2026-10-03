@@ -48,19 +48,19 @@ roots:
   # --- middleware: Pinky/OMX device code, skills, drivers, device UI ---------
   - path: src/runtime/gateway
     part: middleware
-    d427_target: middleware/core
+    d427_target: middleware/core/gateway
     import_prefix: [core]
   - path: src/runtime/services
     part: middleware
-    d427_target: middleware/core
+    d427_target: middleware/core/services
     import_prefix: [core_features]
   - path: src/runtime/events
     part: middleware
-    d427_target: middleware/core
+    d427_target: middleware/core/events
     import_prefix: [core_events]
   - path: src/runtime/api_web
     part: middleware
-    d427_target: middleware/core
+    d427_target: middleware/core/api_web
     import_prefix: [core_api_web]
     note: Pinky Device API web layer and host-agent client.
   - path: src/runtime/navigation
@@ -89,21 +89,21 @@ roots:
     import_prefix: [led]
   - path: src/products/pinky_pro/bringup
     part: middleware
-    d427_target: middleware/apps/device/pinky
+    d427_target: middleware/apps/device/pinky/bringup
     import_prefix: [bringup, rosylib]
   - path: src/products/pinky_pro/profile
     part: middleware
-    d427_target: middleware/apps/device/pinky
+    d427_target: middleware/apps/device/pinky/profile
   - path: src/products/omx/adapter
     part: middleware
-    d427_target: middleware/apps/device/omx
+    d427_target: middleware/apps/device/omx/adapter
     import_prefix: [omx_adapter]
     note: >-
       demonstration.py and lerobot_export.py are learning-flavoured (future
       learning/curation); kept at package granularity until the B move.
   - path: src/products/omx/profile
     part: middleware
-    d427_target: middleware/apps/device/omx
+    d427_target: middleware/apps/device/omx/profile
     note: OMX composition config the adapter validates, not an installation pin (profiles/).
   - path: src/sim/description
     part: middleware
@@ -111,7 +111,7 @@ roots:
     note: Pinky URDF used by both the real robot and Gazebo; could also be integrations/robots/pinky.
   - path: apps/agent
     part: middleware
-    d427_target: middleware/apps/device/omx
+    d427_target: middleware/apps/device/omx/agent
     import_prefix: [rosy_agent]
     note: OMX cell local Action owner composition (device side of the D-401 cell).
   - path: modules/skills/api
@@ -123,9 +123,11 @@ roots:
     d427_target: middleware/skills/manipulation
     import_prefix: [rosy.skills.manipulation]
   - path: modules/execution
-    part: middleware
-    d427_target: middleware/execution
-    note: Package metadata only; the three source subtrees below are mapped on their own.
+    part: operations
+    d427_target: operations/execution
+    note: >-
+      Package metadata only; the three source subtrees below are mapped on their own.
+      Goes with api/site (3a); local splits into its own wheel first (2c).
   - path: modules/execution/src/rosy/execution/local
     part: middleware
     d427_target: middleware/execution/local
@@ -213,8 +215,8 @@ roots:
     note: Isaac assets and scripts (D-322 holds Isaac Lab training); could also be integrations/simulation/isaac.
   - path: data
     part: learning
-    d427_target: learning/datasets
-    note: Teleop recordings and the drive data drop folder.
+    d427_target: data
+    note: Teleop recordings and the drive data drop folder; stays in place (D-427 plan Q3).
 
   # --- integrations ---------------------------------------------------------
   - path: integrations/robots/omx
