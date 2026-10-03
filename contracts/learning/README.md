@@ -23,6 +23,10 @@ normalization·device/camera/envelope/controller binding은 loader가 실제 설
 실행하지 않는다. promotion report의 pass와 approval 참조도 진위·권한 수용을
 증명하지 않으며 owner admission은 후속 구현이다.
 
+0.1.1 초안은 `cameras`에 identity/calibration fingerprint, source/model RGB shape와
+scale을 명시한다. camera_profile_revision의 null을 보존할 수 있지만, 카메라를
+사용하는 정책의 L1 이상 승격 기록은 실제 CameraProfile binding 없이 거절한다.
+
 샘플 wire 입력과 거절 예는 `test/test_learning_artifact_contracts.py`에서 검증한다.
 OMX 변환기는 `learning/curation/omx/common_episode.py`이다. 기존 시연의 profile
 검증과 원본 bytes를 보존한다. 기존 runtime recorder·LeRobot 파일 형식은 유지한다.

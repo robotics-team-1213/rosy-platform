@@ -143,10 +143,31 @@ def _names(names):
 
 def validate_policy(doc, *, root=None):
     value = _base(doc, "rosy.policy-artifact/1", "profile robot_type environment files "
-                  "device_profile_revision camera_profile_revision joint_names normalization observation action "
+                  "device_profile_revision camera_profile_revision cameras joint_names normalization observation action "
                   "owner timing failure_mode reset_events dataset_revisions evaluations tool_revision")
-    for field in ("robot_type", "device_profile_revision", "camera_profile_revision", "tool_revision"):
+    for field in ("robot_type", "device_profile_revision", "tool_revision"):
         _text(value[field])
+    if value["camera_profile_revision"] is not None:
+        _text(value["camera_profile_revision"])
+    if not isinstance(value["cameras"], list):
+        raise ValueError("explicit camera rig list required")
+    camera_names = []
+    for camera in value["cameras"]:
+        _fields(camera, "name identity calibration_sha256 source_shape model_shape color scale")
+        _text(camera["name"])
+        _text(camera["identity"])
+        _hash(camera["calibration_sha256"])
+        for key in ("source_shape", "model_shape"):
+            dims = camera[key]
+            if (not isinstance(dims, list) or len(dims) != 3 or dims[0] != 3
+                    or any(type(n) is not int or not 1 <= n <= 4096 for n in dims)):
+                raise ValueError("explicit RGB camera dimensions required")
+        if (camera["color"] != "rgb" or type(camera["scale"]) not in (int, float)
+                or not math.isfinite(camera["scale"]) or camera["scale"] <= 0):
+            raise ValueError("explicit RGB scale required")
+        camera_names.append(camera["name"])
+    if len(set(camera_names)) != len(camera_names):
+        raise ValueError("duplicate camera rig identity")
     if value["environment"] not in {"sim", "real"}:
         raise ValueError("explicit policy environment required")
     _refs(value["files"], root)
@@ -211,6 +232,8 @@ def validate_promotion(doc, policy, *, root=None):
         raise ValueError("promotion must advance one stage")
     required = {"offline_eval", "sim_eval", "owner_contract", "independent_task_outcome"}
     level = stages.index(value["to_stage"])
+    if level >= 2 and policy["cameras"] and policy["camera_profile_revision"] is None:
+        raise ValueError("physical shadow promotion requires known camera profile binding")
     if level >= 2:
         required |= {"shadow_eval", "stop_readback"}
     if level >= 3:

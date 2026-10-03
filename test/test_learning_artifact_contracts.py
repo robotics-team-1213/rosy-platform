@@ -28,7 +28,7 @@ def policy():
     return seal({"schema": "rosy.policy-artifact/1", "profile": "omx_joint_target_v1",
                  "robot_type": "omx_sim_ros", "environment": "sim", "files": [REF],
                  "device_profile_revision": "profile-1", "camera_profile_revision": "camera-1",
-                 "joint_names": ["j1", "j2"], "normalization": REF,
+                 "joint_names": ["j1", "j2"], "normalization": REF, "cameras": [],
                  "observation": {"names": ["j1", "j2"], "units": ["rad", "rad"], "shape": [2]},
                  "action": {"names": ["j1", "j2"], "units": ["rad", "rad"],
                             "semantics": "absolute_joint_position_target_rad",
@@ -94,6 +94,23 @@ def test_stage_jump_and_different_policy_cannot_use_promotion_evidence():
     doc.update(policy_revision=candidate["revision"], to_stage="L3")
     with pytest.raises(ValueError, match="stage"):
         validate_promotion(seal(doc), candidate)
+
+
+def test_policy_can_preserve_unknown_camera_profile_with_explicit_rig():
+    doc = policy()
+    doc["camera_profile_revision"] = None
+    doc["cameras"] = [{"name": "front", "identity": "gazebo:front", "calibration_sha256": "c" * 64,
+                      "source_shape": [3, 240, 320], "model_shape": [3, 64, 64],
+                      "color": "rgb", "scale": 1 / 255}]
+    assert validate_policy(seal(doc))["camera_profile_revision"] is None
+    doc["environment"] = "real"
+    candidate = seal(doc)
+    checks = [{"kind": k, "verdict": "pass", "report": REF} for k in
+              ("offline_eval", "sim_eval", "owner_contract", "independent_task_outcome", "shadow_eval", "stop_readback")]
+    promotion = seal({"schema": "rosy.promotion-record/1", "policy_revision": candidate["revision"],
+                      "from_stage": "L0", "to_stage": "L1", "checks": checks, "authority": None})
+    with pytest.raises(ValueError, match="camera"):
+        validate_promotion(promotion, candidate)
 
 
 @pytest.mark.parametrize("field,value", [

@@ -63,3 +63,13 @@ owner/단위/순서 불일치, stage 도약, unknown/failed 평가를 거절한�
 SOURCE/LOCAL 검증은 runtime enforcement·GPU 정책 학습·SIM/장치 결과가 아니다.
 후속: OMX/Pinky/Pilot 변환, LeRobot 학습과 실제 offline/SIM 평가, registry 원장,
 owner candidate admission/stop/reset, Fleet export join과 replay. 전체 목표는 active다.
+
+### 구현 보강 — 2026-10-04 실제 OMX 시연 연결
+
+초안 0.1.1은 PolicyArtifact cameras에 source/model RGB 크기·scale·camera identity와
+CameraInfo SHA를 둔다. camera_profile_revision은 없으면 null을 유지하며, 카메라
+정책의 L1 이상 기록에는 알려진 CameraProfile binding을 요구한다.
+실제 보존된 LeRobot export를 snapshot/reader로 읽는 learning/training/omx ACT
+연구 경로를 추가했다. owner/envelope가 미등록이면 연구 artifact로 명시하고,
+실제 평가 부족·SIM/independent task 미확인에서 승격을 만들지 않는다.
+실행 근거: docs/validation/omx-act-offline-2026-10-04.md.

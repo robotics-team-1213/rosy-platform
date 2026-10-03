@@ -4998,3 +4998,8 @@
 - 변경: D-449 Proposed와 stdlib contracts/learning wheel에 Episode/DatasetManifest/PolicyArtifact/PromotionRecord 초안을 구현했다. OMX validated 시연 원본 bytes를 공통 Episode로 감싸고 clock/rad/unknown·operator 과제 표시를 보존했다. owner final command와 runtime 승격은 별도다.
 - 증거: 공통 계약16pass, OMX 변환+export 관련22pass1skip. 소유/import/문서/harness108pass1skip·26기존warn. X에서wheel빌드 SHA8ab5c517. learning-contracts-2026-10-04.md에 검증 범위와 잔여 gate를 기록했다.
 - gate 변화: SOURCE/LOCAL 계약·테스트 시연 변환 증거. 기존 middleware validator 의존/Q6, 정책학습·registry/owner enforcement·OMX/Pinky/Fleet·SIM/DEVICE/FIELD는 미완료. SSH 추가 인증 대기와 기존 operator hold를 유지하며 전체목표active다.
+
+## 2026-10-04 · uncommitted · feat(learning): execute ACT on stored OMX demonstrations
+- 변경: OMX ACT 연구 학습 CLI, export snapshot/DatasetManifest/PolicyArtifact, 카메라 rig 계약 0.1.1과 미확인 camera profile의 L1 승격 거절을 추가했다. D-449는 Proposed다.
+- 증거: 저장된 Gazebo 시연 26 train/12 eval 프레임으로 CPU ACT 40 steps와 저장·재로딩 추론 완료. 영향 검사 78 passed/1 skipped. 상세는 `validation/omx-act-offline-2026-10-04.md`.
+- gate 변화: ACT MAE 0.01621 rad > 상수 기준 0.000081 rad, 목표 cluster 2로 연구 승격 거절. owner 실행·새 SIM·DEVICE/FIELD 검증 없음. 전체 목표 active.
