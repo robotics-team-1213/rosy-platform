@@ -646,7 +646,10 @@ def test_rollback_starts_the_retired_display_only_without_rosy_face():
     args = step["arguments"]
     assert args[-5:-1] == ["sudo", "-n", "sh", "-c"]
     script = args[-1]
-    assert script.startswith("test -e /etc/systemd/system/rosy-face.service || ")
-    assert script.endswith("|| systemctl start rosy-boot-display.service")
+    # One shell word for the remote sh -c (ssh joins its arguments with spaces):
+    # unquoted, sudo would run `sh -c test` and the rest without privilege.
+    assert script.startswith("'") and script.endswith("'") and script.count("'") == 2
+    assert script.startswith("'test -e /etc/systemd/system/rosy-face.service || ")
+    assert script.endswith("|| systemctl start rosy-boot-display.service'")
     assert "is-enabled --quiet rosy-boot-display.service" in script
     assert '"' not in script
