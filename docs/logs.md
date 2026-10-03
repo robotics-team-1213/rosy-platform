@@ -4731,3 +4731,10 @@
 - Change: real Linux Fleet HTTP-to-UDS tests derive peer UID from SO_PEERCRED, assert 0660 and wait for identity readback. A closed caller now ends only its connection; the owner and durable journal remain live without replay.
 - Evidence: deterministic disconnect regression failed with BrokenPipeError before fix 6fab54172. Windows focused 44 passed / 2 skipped; adapter/owner/readback 377 passed / 7 skipped; production flake8 passed. Broad Linux ROS 28 passed / 2 failed, no server thread exception. Existing UDS .5 s timeout also failed on main; slow ROS feedback freshness remains unresolved.
 - Gate: partial Linux transport proof only; broad Linux suite is not green. See docs/validation/cell-fleet-uds-2026-10-03/README.md. G7/G9, ROS Cell composition, thin sheets and full two-layer/two-pallet Gazebo acceptance remain open. No deploy, credential registration, physical enablement or push.
+
+
+## 2026-10-03 · uncommitted · docs(adr): propose D-431 NCNN inference with OpenCV
+- Change: target NCNN for Pi YOLO object_det, keep OpenCV/NumPy processing, distinguish weight reuse from numerical identity, require backend/manifest/delivery/device gates; lane_seg has a separate migration gate. D-430 is reserved by the existing safety ADR worktree.
+- Evidence: official Ultralytics NCNN/Pi and Tencent OpenCV interoperability references; current ONNX-only exporter/loader and cv2 source inspected.
+- Gate: documentation only. No actual trained-model NCNN conversion, ARM64 installation or device inference performed.
+- Validation: network/harness contracts 82 passed, 1 history-lint test deselected; standalone full harness lint 0 errors / 26 existing staleness warnings. Initial new-record encoding failure corrected and regenerated before final checks.
