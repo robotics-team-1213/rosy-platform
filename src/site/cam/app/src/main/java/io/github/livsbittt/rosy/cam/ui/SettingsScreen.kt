@@ -46,6 +46,8 @@ import io.github.livsbittt.rosy.cam.settings.OverheadServerDiscovery
 import io.github.livsbittt.rosy.cam.settings.OverheadServiceRecord
 import io.github.livsbittt.rosy.cam.settings.RobotCoreServiceRecord
 import io.github.livsbittt.rosy.cam.settings.SiteLink
+import io.github.livsbittt.rosy.cam.settings.DevelopmentBootstrap
+import io.github.livsbittt.rosy.cam.settings.LinkPolicy
 
 /** Manual pairing entry, validated with the same rules as the rosyov:// deep link. */
 @Composable
@@ -63,6 +65,9 @@ fun SettingsScreen(
     onBack: () -> Unit,
     /** D-341: a receiver that advertises `pair=rosy-pair/1` was picked for a console-approved request. */
     onPairRequest: (OverheadServiceRecord) -> Unit = {},
+    development: LinkPolicy? = null,
+    onDevelopmentImport: (DevelopmentBootstrap) -> Unit = {},
+    onDevelopmentRevoke: () -> Unit = {},
 ) {
     val current = remember(currentLink) { currentLink?.toPairing() }
     var siteName by remember(currentLink) { mutableStateOf(currentLink?.siteName) }
@@ -115,6 +120,12 @@ fun SettingsScreen(
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Text(stringResource(R.string.settings_title), style = MaterialTheme.typography.headlineSmall)
+        if (development != null) {
+            Text(stringResource(R.string.settings_development_active, development.siteName, development.expiresAt.toString()))
+            OutlinedButton(onClick = onDevelopmentRevoke, enabled = !locked) {
+                Text(stringResource(R.string.settings_development_revoke))
+            }
+        }
         // First line while the camera runs, so the disabled Save button is explained before it is seen.
         if (locked) {
             Text(stringResource(R.string.settings_locked), style = MaterialTheme.typography.bodyLarge)
@@ -180,7 +191,7 @@ fun SettingsScreen(
                 }
             } else {
                 pairable.forEach { service ->
-                    Button(onClick = { onPairRequest(service) }, modifier = Modifier.fillMaxWidth()) {
+                    Button(onClick = { onPairRequest(service) }, enabled = development == null, modifier = Modifier.fillMaxWidth()) {
                         Text(stringResource(R.string.pairing_request_site, service.name))
                     }
                 }
@@ -210,6 +221,12 @@ fun SettingsScreen(
         )
         OutlinedButton(
             onClick = {
+                if (link.trimStart().startsWith("{")) {
+                    runCatching { DevelopmentBootstrap.parse(link) }
+                        .onSuccess { onDevelopmentImport(it); link = ""; invalid = null }
+                        .onFailure { invalid = "bootstrap" }
+                    return@OutlinedButton
+                }
                 when (val parsed = PairingUri.parse(link)) {
                     is PairingUri.Parsed.Valid -> {
                         if (parsed.pairing.host != host) siteName = null
@@ -227,7 +244,7 @@ fun SettingsScreen(
                 }
                 saved = false
             },
-            enabled = link.isNotBlank(),
+            enabled = link.isNotBlank() && !locked && development == null,
         ) {
             Text(stringResource(R.string.settings_link_apply))
         }
@@ -284,7 +301,7 @@ fun SettingsScreen(
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             OutlinedButton(onClick = onBack) { Text(stringResource(R.string.settings_back)) }
             Button(
-                enabled = !locked,
+                enabled = !locked && development == null,
                 onClick = {
                     val trimmedHost = host.trim()
                     val portNumber = port.trim().toIntOrNull() ?: -1
@@ -371,6 +388,7 @@ fun invalidText(reason: String): String = stringResource(
         "tls" -> R.string.invalid_tls
         "pin" -> R.string.invalid_pin
         "tls_host" -> R.string.invalid_tls_host
+        "bootstrap" -> R.string.invalid_development_bootstrap
         else -> R.string.invalid_source
     },
 )

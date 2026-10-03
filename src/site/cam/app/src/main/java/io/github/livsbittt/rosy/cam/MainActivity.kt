@@ -112,6 +112,7 @@ class MainActivity : ComponentActivity() {
         val state by StreamService.state.collectAsStateWithLifecycle()
         val stored by settings.stored.collectAsStateWithLifecycle(initialValue = SiteLinkPrefs.Stored(null))
         val siteLink = stored.link
+        val development by settings.development.collectAsStateWithLifecycle(initialValue = null)
         val pairing = siteLink?.toPairing()
         // The Wi-Fi now: "not connected" check, and the pairing-time subnet saved for diagnosis only.
         val lan = rememberLan()
@@ -176,6 +177,9 @@ class MainActivity : ComponentActivity() {
                     scope.launch { settings.save(p, siteName, subnet) }
                 },
                 onBack = { showSettings = false },
+                development = development,
+                onDevelopmentImport = { bootstrap -> scope.launch { settings.importDevelopment(bootstrap) } },
+                onDevelopmentRevoke = { scope.launch { settings.revokeDevelopment() } },
                 onPairRequest = { record ->
                     pairingModel.open(PairableSite(record.name, record.tlsHost, record.port, record.address), deviceLabel(), BuildConfig.VERSION_NAME)
                 },
@@ -212,7 +216,7 @@ class MainActivity : ComponentActivity() {
                 },
                 confirmButton = {
                     TextButton(
-                        enabled = !state.running,
+                        enabled = !state.running && development == null,
                         onClick = {
                             pendingPairing.value = null
                             val subnet = lan?.subnet
