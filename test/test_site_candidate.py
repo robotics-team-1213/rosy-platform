@@ -303,3 +303,24 @@ def test_site_candidate_refuses_ignored_files_under_an_image_source_path(tmp_pat
     ls_files = next(call for call in calls if call[:2] == ["git", "ls-files"])
     assert ls_files[ls_files.index("--") + 1:] == ["deploy/site", "src/site/fleet"]
     assert not any(call[:2] == ["docker", "build"] for call in calls)
+
+
+@pytest.mark.parametrize("copy_line", [
+    'COPY ["src/site/fleet/", "/opt/rosy/src/site/fleet/"]',
+    "COPY --from=builder /out /opt/rosy/out",
+    "ADD --link src/site/fleet/ /opt/rosy/src/site/fleet/",
+    "COPY <<EOF /opt/rosy/config.txt",
+    "COPY /opt/only-destination",
+])
+def test_site_candidate_refuses_copy_forms_the_guard_cannot_parse(tmp_path, copy_line):
+    root = tmp_path / "repo"
+    _fixture_repo(root)
+    (root / "deploy/site/Dockerfile.vision").write_text(
+        f"FROM python\n{copy_line}\n", encoding="utf-8")
+    calls: list = []
+
+    with pytest.raises(ValueError, match="Dockerfile.vision: "):
+        build_candidate(root, tmp_path / "release", runner=_recording_runner(calls),
+                        sbom_tool="syft")
+    assert not any(call[:2] == ["git", "ls-files"] for call in calls)
+    assert not any(call[:2] == ["docker", "build"] for call in calls)

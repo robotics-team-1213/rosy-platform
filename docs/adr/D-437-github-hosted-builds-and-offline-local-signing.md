@@ -48,7 +48,7 @@
    - Fleet·Vision 이미지는 `.dockerignore` 허용 목록에 있는 추적 파일만 복사한다. 프록시 이미지는 파일을 복사하지 않는다.
    - 빌더는 git이 무시하는 파일(예: `secrets/` 아래 실제 토큰, `.env`, `*.local.yaml`)이 아래 경로에 있으면 빌드를 거부한다.
      - `deploy/site/`. 프록시 이미지의 빌드 컨텍스트라서 그런 파일이 Docker 데몬으로 보내진다.
-     - Fleet·Vision Dockerfile이 COPY·ADD로 복사하는 모든 원본 경로(예: `src/site/fleet`, `src/site/vision/rosy_vision`, `src/hmi/web_common`, 지도 파일). 빌더가 Dockerfile에서 직접 읽으므로 COPY가 늘면 검사도 따라간다. 디렉터리째 복사하므로 무시된 파일이 이미지에 들어갈 수 있다.
+     - Fleet·Vision Dockerfile이 COPY·ADD로 복사하는 모든 원본 경로(예: `src/site/fleet`, `src/site/vision/rosy_vision`, `src/hmi/web_common`, 지도 파일). 빌더가 Dockerfile에서 직접 읽으므로 COPY가 늘면 검사도 따라간다. 빌더가 해석하지 못하는 COPY·ADD 형식(JSON 배열, heredoc, `--chown`·`--chmod` 외의 플래그)은 건너뛰지 않고 빌드를 거부한다. 디렉터리째 복사하므로 무시된 파일이 이미지에 들어갈 수 있다.
      - 파이썬 캐시(`__pycache__`, `.pytest_cache`)와 `.egg-info`는 예외다.
    - 시험이 이 규칙을 강제한다. Dockerfile의 COPY·ADD 원본에는 `secrets`나 `.env`가 없어야 하고, 위 경로에 무시된 파일이 있으면 빌더가 거부해야 한다.
 7. **SBOM은 runner에서 syft(anchore)로 만든다.**

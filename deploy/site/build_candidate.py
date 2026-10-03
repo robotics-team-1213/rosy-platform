@@ -33,6 +33,7 @@ SBOM_TOOLS = ("scout", "syft")
 # Docker daemon or an image. Python caches and egg-info carry no secrets.
 _HARMLESS_IGNORED = ("__pycache__/", ".pytest_cache/", ".egg-info/")
 _COPIED_BY = ("Dockerfile.fleet", "Dockerfile.vision")
+_PARSED_COPY_FLAGS = ("--chown=", "--chmod=")
 Runner = Callable[..., subprocess.CompletedProcess]
 
 
@@ -45,9 +46,19 @@ def _image_source_paths(site: Path) -> list[str]:
             words = line.split()
             if not words or words[0].upper() not in {"COPY", "ADD"}:
                 continue
-            if any(word.startswith("--from") for word in words[1:]):
-                continue  # copies from another build stage, not the context
+            # Fail closed on any form this parser does not understand (JSON
+            # array, heredoc, --from/--link/... flags): a skipped COPY would
+            # leave its source path out of the ignored-file guard.
+            if len(words) < 3 or any(word.startswith(("[", "<<")) for word in words[1:]):
+                raise ValueError(f"{name}: unsupported {words[0]} form for the ignored-file "
+                                 f"guard: {line.strip()}")
+            flags = [word for word in words[1:] if word.startswith("--")]
+            if any(not flag.startswith(_PARSED_COPY_FLAGS) for flag in flags):
+                raise ValueError(f"{name}: unsupported {words[0]} flag for the ignored-file "
+                                 f"guard: {line.strip()}")
             sources = [word for word in words[1:-1] if not word.startswith("--")]
+            if not sources:
+                raise ValueError(f"{name}: {words[0]} without a source: {line.strip()}")
             paths.update(source.rstrip("/") for source in sources)
     return sorted(paths)
 
