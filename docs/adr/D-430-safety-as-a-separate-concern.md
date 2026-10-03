@@ -37,18 +37,18 @@ D-429의 매니페스트 root는 디렉터리 단위이고 가장 깊은 root가
 
 현재 대응(wave 0 매니페스트 리뷰에서 확정). part는 **현재 매니페스트 값**이다. `firmware/dock`·`firmware/signal`은 지금 part `middleware`(`tools/harness/platform_parts.yaml`의 두 항목, `d427_target: middleware/firmware/{dock,signal}`)이고, D-429 §2의 operations 재지정은 wave 0 매니페스트 변경에서 일어난다.
 
-| 대상 | 방식 | part (현재) | 심볼 앵커 |
+| 대상 | 방식 | part (현재) | 심볼 앵커 (모듈 경로로 한정) |
 |---|---|---|---|
-| `src/runtime/services/core_features/safety/` (`manager.py`, `fleet_loss.py`, `shadow.py`) | 하위 root, `import_prefix: [core_features.safety]` | middleware | `SafetyManager`, `FleetLossMonitor`, `ShadowLog` |
+| `src/runtime/services/core_features/safety/` (`manager.py`, `fleet_loss.py`, `shadow.py`) | 하위 root, `import_prefix: [core_features.safety]` | middleware | `core_features.safety.manager.SafetyManager`, `core_features.safety.fleet_loss.FleetLossMonitor`, `core_features.safety.shadow.ShadowLog` |
 | `src/runtime/gateway/core/fleet_loss_wiring.py` | 모듈 목록 | middleware | (모듈 수준 배선 함수) |
-| `core_features/command/manager.py` (출력 선택에서 E-stop·EMERGENCY 차단과 clip 적용) | 모듈 목록 (U1: safety) | middleware | `CommandManager` |
-| `core_features/command/arbitration.py` | 모듈 목록 (U1: 섞인 파일. EMERGENCY 전이는 safety, 출처 우선순위 등록은 control) | middleware | safety 앵커: `ModeMachine`, `_ALLOWED`. control 심볼 `Priority`·`DEFAULT_SOURCES`·`SourceRegistry`는 앵커가 아니다 |
-| `core_features/line_follow/body_stop.py`, `core_features/line_follow/clearance.py` | 모듈 목록 | middleware | `BodyStopMixin` |
-| `src/runtime/gateway/core/bridge/cmd_vel.py` (`cmd_vel_cycle`, 단일 writer 직전 경로) | 모듈 목록 | middleware | `cmd_vel_cycle` |
-| `src/runtime/api_web/core_api_web/api/v1/safety.py` (E-stop·release `:33-38`, PUT limits `:124`) | 모듈 목록 | middleware | `safety_release`, `safety_limits` |
-| `src/contracts/foundation/core_common/robot_body.py` (D-424 몸) | 모듈 목록 | contracts | `RobotBody` |
-| `src/products/omx/adapter/omx_adapter/command_owner.py`, `local_stop.py` | 모듈 목록 | middleware | `ArmCommandOwner` |
-| `src/site/fleet/fleet/server/{dispatch_admission,cancel_all,cancel_all_store,local_stop_transport}.py`, `task_dispatch_routes.py`의 rearm(`:120`), `console.py`의 `estop_all` | 모듈 목록. `console.py`·`task_dispatch_routes.py`는 섞인 파일이므로 앵커만 태그하고, 정지 경로는 하위 root로 떼는 carve를 계획한다(§3, Validation) | operations | `estop_all`, `dispatch_rearm` |
+| `core_features/command/manager.py` (출력 선택에서 E-stop·EMERGENCY 차단과 clip 적용) | 모듈 목록 (U1: safety) | middleware | `core_features.command.manager.CommandManager` |
+| `core_features/command/arbitration.py` | 모듈 목록 (U1: 섞인 파일. EMERGENCY 전이는 safety, 출처 우선순위 등록은 control) | middleware | safety 앵커: `core_features.command.arbitration.ModeMachine`, `core_features.command.arbitration._ALLOWED`. 이름만으로는 안 된다. `_ALLOWED`는 `fleet/server/policy_evidence_config.py:17`·`sightings_config.py:19`에도 있다. control 심볼 `Priority`·`DEFAULT_SOURCES`·`SourceRegistry`는 앵커가 아니다 |
+| `core_features/line_follow/body_stop.py`, `core_features/line_follow/clearance.py` | 모듈 목록 | middleware | `core_features.line_follow.body_stop.BodyStopMixin` |
+| `src/runtime/gateway/core/bridge/cmd_vel.py` (`cmd_vel_cycle`, 단일 writer 직전 경로) | 모듈 목록 | middleware | `core.bridge.cmd_vel.cmd_vel_cycle` |
+| `src/runtime/api_web/core_api_web/api/v1/safety.py` (E-stop·release `:33-38`, PUT limits `:124`) | 모듈 목록 | middleware | `core_api_web.api.v1.safety.safety_release`, `core_api_web.api.v1.safety.safety_limits` |
+| `src/contracts/foundation/core_common/robot_body.py` (D-424 몸) | 모듈 목록 | contracts | `core_common.robot_body.RobotBody` |
+| `src/products/omx/adapter/omx_adapter/command_owner.py`, `local_stop.py`, `action_api.py`의 `LocalStopApi` | 모듈 목록 (`action_api.py`는 섞인 파일) | middleware | `omx_adapter.command_owner.ArmCommandOwner`, `omx_adapter.local_stop.LocalStopController`, `omx_adapter.action_api.LocalStopApi`(`.dispatch`가 처리기). `StopLocal`·`RearmLocal`은 심볼이 아니라 UDS 연산 문자열(`action_api.py:206,228`)이므로 **문자열 앵커**로 따로 적고, 시험은 그 리터럴이 `LocalStopApi` 안에 있는지 본다 |
+| `src/site/fleet/fleet/server/{dispatch_admission,cancel_all,cancel_all_store,local_stop_transport}.py`, `task_dispatch_routes.py`의 rearm 처리기, `console.py`의 `estop_all` | 모듈 목록. `console.py`·`task_dispatch_routes.py`는 섞인 파일이다. 파일 전체가 태그되므로 그 파일의 decision import는 §3 동결 목록에 들어가고, 정지 경로를 하위 root로 떼는 carve로 줄인다(Validation) | operations | `fleet.server.console.FleetConsole.estop_all`(`console.py:897`), `fleet.server.task_dispatch_routes.dispatch_rearm` — 라우트 팩토리 안의 **중첩 함수**다(`task_dispatch_routes.py:122`). 앵커 탐색은 모듈 최상위만이 아니라 중첩 정의까지 AST로 걷는다 |
 | `firmware/signal/firmware`, `firmware/dock/firmware` | 하위 root (펌웨어 전체가 failsafe 소유자다) | middleware (D-429 §2 재지정 대기) | — (펌웨어, Python 앵커 없음) |
 | `src/runtime/sensing`의 레거시 `safety_node` | 태그하지 않는다. D-208의 단독 모드 예외이며 운영 경로가 아니다 | middleware | — |
 
@@ -78,16 +78,36 @@ D-105의 호스트 정지(스페이스·보드 `/stop`)는 층 3의 E-stop 래�
 
 다음 불변식은 시험으로 강제한다. 시험이 들어오기 전에는 규칙이 발효되지 않는다(D-429 §4의 원칙과 같다). 대상은 `concern: safety` root와 `safety_modules:` 목록이다.
 
-**safety 공개 API와 내부.** 다른 코드는 safety의 **공개 진입점**만 부를 수 있다. 공개 진입점은 매니페스트의 앵커 목록에 `public: true`로 표시한다. 시작 목록: CORE `SafetyManager`의 `trigger_estop`·`release`·`clip`·`set_session_speed`·`set_person_advisory`, `ModeMachine.release_emergency`·`is_emergency`, `FleetLossMonitor.tick`, Fleet `estop_all`·`cancel_all` 진입·dispatch admission 판정·rearm, OMX `StopLocal`·`RearmLocal`. 내부(래치 필드, 정책 바인딩, 그림자 기록, 저장소 행 쓰기)는 safety 코드끼리만 쓴다.
+**safety 공개 API와 내부.** 다른 코드는 safety의 **공개 진입점**만 부를 수 있다. 공개 진입점은 매니페스트의 앵커 목록에 `public: true`로 표시한다. 판정 기준: 호출자가 부르거나 처리해야 하는 진입점·예외·fence 타입·사유 상수는 공개다. 스키마 생성·입력 정규화 같은 구현 보조는 내부다. 시작 목록:
 
-**현재 위반의 동결.** D-429는 `src/site/fleet` 전체를 `decision`으로 태그한다. 그래서 첫날부터 edge가 있다. `task_service.py`·`mission_store.py`·`task_dispatch_routes.py`가 `dispatch_admission`·`cancel_all`을 import하는 것은 공개 진입점 호출이므로 허용이다. 반대로 `cancel_all.py:28-29`는 `fleet.server.console_view`와 `fleet.swarm.transport`(decision 태그)를 import한다. 이런 edge는 `KNOWN_SAFETY_VIOLATIONS`에 고정한다. `test_platform_parts.py`의 `KNOWN_VIOLATIONS`와 같은 방식(집합 동등, 줄이기만)이다. 근본 해소는 Fleet 정지 경로를 자기 하위 root로 떼는 carve다(Validation wave 0 2).
+- CORE: `SafetyManager`의 `trigger_estop`·`release`·`clip`·`set_session_speed`·`set_person_advisory`, `ModeMachine.release_emergency`·`is_emergency`, `FleetLossMonitor.tick`
+- Fleet `dispatch_admission`: `reserve`, `release`(admission claim 진입점)
+- Fleet `cancel_all`: `cancel_all_driving`, `DriveCancelFence`(fence 타입), `DispatchCanceled`·`DispatchWithdrawn`(호출자가 처리할 예외)
+- Fleet `cancel_all_store`: `CANCEL_ALL_REASON`(사유 상수), `matching_tag`(fence 표시 일치 판정, D-421 HOLD 투영이 부름)
+- Fleet `local_stop_transport`: `UnixLocalStopTransport`(앱 조립이 만드는 전송)
+- Fleet `console.estop_all`, rearm 처리기
+- OMX: `LocalStopController`, `LocalStopApi`의 `StopLocal`·`RearmLocal`
+
+내부(래치 필드, 정책 바인딩, 그림자 기록, 저장소 행 쓰기, `cancel_all_store.ensure_schema`, `dispatch_admission.normalize_resources`)는 safety 코드끼리만 쓴다.
+
+**현재 위반의 동결.** D-429는 `src/site/fleet` 전체를 `decision`으로 태그한다. 그래서 첫날부터 edge가 있다. 2026-10-03 이 브랜치 기준 grep 결과다(edge = importer 파일 → import 대상 모듈).
+
+- **허용(공개 진입점):** `app.py:32,38`(`DriveCancelFence`, `UnixLocalStopTransport`), `task_dispatch_routes.py:22`(`DriveCancelFence`, `cancel_all_driving`), `task_results.py:11-13`(`CANCEL_ALL_REASON`, `matching_tag`, `release`), `task_service.py:12-13`(`DispatchCanceled`, `DispatchWithdrawn`, `CANCEL_ALL_REASON`), `task_store.py:16-17`(`release`, `reserve`), `mission_store.py:21-22`(`release`, `reserve`), `cell_job_store.py:15-16`(`release`, `reserve`).
+- **`KNOWN_SAFETY_VIOLATIONS`에 고정(18건):**
+  - decision → safety 내부 (2): `task_store.py:15` → `cancel_all_store.ensure_schema`; `cell_job_store.py:17` → `dispatch_admission.normalize_resources`
+  - safety → decision, `cancel_all.py` (2): `:28` → `fleet.server.console_view`; `:29` → `fleet.swarm.transport`
+  - 섞인 파일 `console.py` → decision (9): `:31` `fleet.formation.geometry`, `:32` `fleet.hub.hub`, `:33` `fleet.localization`, `:34` `fleet.server.bays`, `:34` `fleet.server.traffic`, `:35` `fleet.server.console_view`, `:38` `fleet.swarm.session`, `:44` `fleet.swarm.robots`, `:45` `fleet.swarm.transport`
+  - 섞인 파일 `task_dispatch_routes.py` → decision (5): `:21` `fleet.hub.hub`, `:23` `fleet.server.http_errors`, `:24` `fleet.server.site_auth`, `:25` `fleet.server.task_store`, `:26` `fleet.swarm.transport`
+- 로봇 쪽 safety 태그 파일은 지금 decision 태그 코드를 import하지 않는다(0건).
+
+목록은 `test_platform_parts.py`의 `KNOWN_VIOLATIONS`와 같은 방식(집합 동등, 줄이기만)으로 검사한다. 그래서 wave 0 시험은 첫날 녹색이고 줄어들기만 한다. 섞인 파일 14건과 `cancel_all.py` 2건은 Fleet 정지 경로를 자기 하위 root로 떼는 carve로 줄인다(Validation wave 0 2). 내부 edge 2건은 공개 진입점 뒤로 옮겨 줄인다.
 
 **로봇 쪽 대상.** 지금 `core_features` 안에는 decision 태그 root가 없어서 불변식 2가 아무것도 검사하지 않는다. wave 0에서 `core_features/decision`(D-429 §1의 "장치 지역 규칙")에 `concern: decision`을 달아 로봇 쪽 검사 대상을 만든다. 각 불변식 시험은 검사한 importer가 하나 이상인지도 단정한다(공허한 통과 방지).
 
 1. **안전은 판단·학습에 기대지 않는다.** safety 코드는 `decision`·`learning` 태그 코드, 모델 SDK(`google.genai`, `anthropic`, `openai`, `lerobot`, `torch`, `onnxruntime` 등), `integrations/models`를 import하지 않는다(`KNOWN_SAFETY_VIOLATIONS` 제외). 계약(`core_common.protocol.detections` 같은 contracts)은 import할 수 있다. 그 입력은 상한을 낮추거나 정지를 더하는 쪽으로만 쓴다(SAF-006, §4 인식 규칙).
 2. **판단·학습은 안전을 우회하지 않는다.** `decision`·`learning` 코드는 safety의 공개 진입점만 부른다. 정지·rearm·한도 변경은 소유자의 공개 경로(CORE API, Fleet API, OMX UDS)로만 요청한다. 단일 writer 직접 호출, `cmd_vel` 발행, 래치 상태 쓰기 경로가 없어야 한다.
 3. **모든 DeviceControlPort binding(D-429 §4)은 그 장치의 Safety Guard와 Arbiter 뒤에 있다.** 호출 그래프 AST로 "뒤에 있음"을 증명하려 하지 않는다. 그런 시험은 거짓 안심을 준다. 대신 둘로 나눈다.
-   - (a) **구조:** 저장소 전체 AST에서 `"cmd_vel"` 문자열로 publisher를 만드는 곳이 `ros_bridge.py` 하나이고, `cmd_vel_pub`을 만지는 함수가 `_send_twist`(`ros_bridge.py:431-435`) 하나다. 레거시 `src/runtime/sensing/control/safety/node.py:89`(`cmd_out` 기본 `cmd_vel`, D-208 단독 모드 예외)는 allowlist에 둔다. OMX는 `ActionPort.send_goal` 호출자가 `ArmCommandOwner` 하나다.
+   - (a) **구조:** 대상은 **운영 소스**다. `test/` 디렉터리(가짜 그래프를 만드는 시험, 예: `src/runtime/gateway/test/test_absorption_output_graph.py:81`)와 Gazebo 벤치 도구 `src/runtime/sensing/tools/gz/`(예: `driver.py:91`)는 경로로 명시해 뺀다. 둘 다 장치 운영 경로에서 최종 명령을 내지 않기 때문이고, 패턴이 아니라 경로 목록으로 빼서 새 예외가 조용히 생기지 않게 한다. 그 범위에서 `"cmd_vel"` 문자열로 publisher를 만드는 곳이 `ros_bridge.py` 하나이고, `cmd_vel_pub`을 만지는 함수가 `_send_twist`(`ros_bridge.py:431-435`) 하나다. 리터럴 검사만으로는 파라미터 기본값을 못 본다. 그래서 검사를 **`declare_parameter(..., "cmd_vel")`처럼 기본값이 `"cmd_vel"`인 선언까지 넓힌다.** 그러면 레거시 `src/runtime/sensing/control/safety/node.py:89`(`cmd_out` 기본 `cmd_vel`, D-208 단독 모드 예외)가 잡히고, 그것만 allowlist에 둔다. OMX는 `ActionPort.send_goal` 호출자가 `ArmCommandOwner` 하나다.
    - (b) **행동:** E-stop이 걸리면 모든 출처(MANUAL·NAVIGATION·DOCKING·FLEET·swarm)의 출력이 0이고, 래치 해제 전 어떤 출처도 0이 아닌 값을 못 낸다. E-stop이 없으면 clip이 적용된다.
    - **리뷰 전용 규칙(기계 검사 아님):** 파라미터·launch remap으로 다른 노드의 출력 토픽을 `cmd_vel`로 바꾸는 변경은 safety 변경으로 보고 §5 리뷰를 받는다.
 4. **학습 정책(ACT·RL·VLA)과 모델 출력은 안전 기능으로 인정하지 않는다.** 안전 기능에 의해 제한될 수만 있다. 학습 인식 evidence가 안전 층에 들어오는 것은 더 조이는 입력일 때뿐이다. 학습 출력이 정지를 해제하거나 기본 프로필보다 상한을 올리지 않는다(시험 가능, Validation wave 0 4). 학습 출력이 결정적 판정(D-422 몸 기준 정지 등)을 **대신하지 않는다**는 부분은 리뷰 전용 규칙이다.
@@ -117,7 +137,10 @@ Fleet·네트워크·모델·감독 중 무엇을 잃어도 장치는 안전 상
 
 safety 태그 코드(§1의 root, 모듈 목록, 앵커 파일)를 바꾸는 변경은 다음을 지킨다. 지금 저장소 관행에 맞춘 가벼운 규칙이다.
 
-- **독립 리뷰 + 강제 trailer:** 작성 세션이 아닌 리뷰어(code-reviewer 또는 verifier 레인, D-172의 독립 리뷰와 같은 방식)가 승인한다. safety 태그 경로를 건드린 커밋은 `Safety-Review: <리뷰어·레인> <근거 링크>` trailer를 가져야 한다. 기존 `tools/hooks/pre-push`가 push 범위의 커밋을 매니페스트의 safety 경로와 대조해 trailer가 없으면 push를 거부한다(Validation wave 0 5). 같은 세션의 자기 승인을 trailer 근거로 쓰지 않는 것은 리뷰 판단이며 기계 검사가 아니다.
+- **독립 리뷰 + `Safety-Review:` trailer:** 작성 세션이 아닌 리뷰어(code-reviewer 또는 verifier 레인, D-172의 독립 리뷰와 같은 방식)가 승인한다. safety 태그 경로를 건드린 커밋은 `Safety-Review: <리뷰어·레인> <근거 링크>` trailer를 가져야 한다.
+  - **강제는 CI다.** CI 작업이 PR·push 범위의 커밋을 매니페스트의 safety 경로와 대조해 trailer가 없으면 실패한다(Validation wave 0 5).
+  - **`tools/hooks/pre-push`는 선택형 로컬 조기 경고다.** `tools/hooks/install.sh`로 설치해야 돌고 `--no-verify`로 건너뛸 수 있으므로 강제 수단이 아니다.
+  - 같은 세션의 자기 승인을 trailer 근거로 쓰지 않는 것은 리뷰 판단이며 기계 검사가 아니다.
 - **gate 증거:** 해당 층의 기존 gate를 trailer 근거에 붙인다. 예: D-400 G-sim/G-dev/G-enforce, D-419 호스트 시험, Fleet 정지 래치 시험(`test_dispatch_stop_latch.py`·`test_cancel_all.py`), 펌웨어 계약 시험. 호스트 pytest 통과는 장치·실주행 수용이 아니다.
 - **교훈 기록:** 리뷰가 안전 결함 종류를 잡으면 `docs/solutions/design-patterns/`에 `ce-compound` 노트를 남긴다.
 - 매니페스트에서 safety 태그·앵커를 빼는 변경도 같은 trailer가 필요하다.
@@ -165,16 +188,16 @@ safety 태그 코드(§1의 root, 모듈 목록, 앵커 파일)를 바꾸는 변
 1. **매니페스트.** `concern: safety` 하위 root(각자 `d427_target`)와 `safety_modules:` 목록(파일 경로 + 심볼 앵커)을 넣는다(§1). `core_features/decision`에 `concern: decision`을 단다(불변식 2의 로봇 쪽 대상).
 2. **Fleet 정지 경로 carve 계획.** `dispatch_admission`·`cancel_all`·`cancel_all_store`·`local_stop_transport`와 `console.py`의 `estop_all`, `task_dispatch_routes.py`의 rearm 경로를 Fleet 안 하위 root(예: `fleet/server/stop/`)로 떼는 계획을 쓴다. 이동은 D-427 wave 3 순서를 따른다. 그 전까지 이 파일들은 `safety_modules:`로만 태그된다.
 3. `test/architecture/test_safety_separation.py`
-   - `KNOWN_SAFETY_VIOLATIONS`: wave 0 시점 위반 edge를 고정한다. `test_platform_parts.py`의 `KNOWN_VIOLATIONS`와 같이 집합 동등으로 검사하고 줄이기만 한다. 예상 항목: `cancel_all.py:28-29` → `fleet.server.console_view`, `fleet.swarm.transport`(safety → decision 태그 root)
+   - `KNOWN_SAFETY_VIOLATIONS`: §3의 18건을 그대로 고정한다. `test_platform_parts.py`의 `KNOWN_VIOLATIONS`와 같이 집합 동등으로 검사하고 줄이기만 한다
    - `test_safety_does_not_import_decision_learning_or_model_sdks` — 불변식 1
    - `test_decision_and_learning_use_only_safety_public_api` — 불변식 2. 공개 진입점 목록(§3) 밖의 safety 심볼 import 금지
    - `test_each_separation_rule_checks_at_least_one_importer` — 불변식 1·2·3a가 실제 import edge·파일을 하나 이상 검사했는지 단정한다. 대상이 비면 실패한다(공허한 통과 방지)
-   - `test_cmd_vel_publisher_is_single_and_only_send_twist_touches_it` — 불변식 3a. 레거시 `src/runtime/sensing/control/safety/node.py:89`는 allowlist
-   - `test_safety_anchors_live_in_safety_tagged_files` — §1 심볼 앵커마다 정의 파일을 찾아(root 기준 상대 경로) 그 파일이 safety로 태그됐는지 단정한다. 파일이 쪼개져 앵커가 옮겨가면 실패한다
+   - `test_cmd_vel_publisher_is_single_and_only_send_twist_touches_it` — 불변식 3a. 운영 소스 범위(`test/`·`sensing/tools/gz/` 경로 제외), 리터럴과 `declare_parameter` 기본값 `"cmd_vel"`을 함께 검사, allowlist는 `src/runtime/sensing/control/safety/node.py:89` 하나
+   - `test_safety_anchors_live_in_safety_tagged_files` — §1 심볼 앵커(모듈 경로로 한정, 중첩 정의 포함)와 문자열 앵커마다 정의 파일을 찾아(root 기준 상대 경로) 그 파일이 safety로 태그됐는지 단정한다. 파일이 쪼개져 앵커가 옮겨가면 실패한다
 4. `src/runtime/services/test/test_safety_behaviour.py`(이름 제안)
    - `test_estop_zeroes_every_source_and_clip_applies` — 불변식 3b
    - `test_learned_inputs_only_tighten_limits` — 불변식 4·§4. 사람 자문이 있으면 상한이 기본 프로필 이하이고, 자문이 stale·무효·없음이면 상한이 정확히 기본 프로필로 돌아가며, 어떤 자문도 기본 프로필보다 높이지 못하고 래치를 풀지 못함
-5. **`tools/hooks/pre-push` 확장** — §5의 `Safety-Review:` trailer 검사.
+5. **CI의 `Safety-Review:` trailer 검사**(`.github/workflows/ci.yml`에 작업 추가)와 같은 검사의 `tools/hooks/pre-push` 로컬 조기 경고 — §5.
 6. **프로필 검증 시험** `test_non_stop_fleet_loss_policy_requires_approval_record` — `safety.fleet_loss_policy`가 `STOP`이 아닌 프로필·overlay에 승인 기록(승인자, G-dev 증거 참조)이 없으면 거부한다(§4, 사용자 결정 U2).
 7. D-429 wave 0의 사이트 장치 도구 거부 이름 추가(층 7)를 그대로 한다.
 
