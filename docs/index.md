@@ -275,8 +275,8 @@
 
 ## 최근 기록
 
+- 2026-10-03 · uncommitted · docs(ui): D-432 공용 디자인과 설치 검증 마무리
 - 2026-10-03 · uncommitted · fix(integration): D-418 SSH와 D-432 연결/UI 계약 통합
 - 2026-10-03 · uncommitted · docs(adr): Pilot 화면별 개선과 공용 디자인 소유권
 - 2026-10-03 · uncommitted · fix(link): 현재 접속과 후속 코드 규약 구별
 - 2026-10-03 · uncommitted · feat(link): D-432 주소 없는 장비 접속
-- 2026-10-03 · uncommitted · docs: align D-435 roles with D-427 migration

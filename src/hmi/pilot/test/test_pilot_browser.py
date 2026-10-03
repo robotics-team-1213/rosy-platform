@@ -1114,10 +1114,10 @@ _ARM_HARNESS = """async (opts) => {
   const {mountArm} = await import('/pilot/assets/screens/arm.js');
   Object.assign(window, {goals: [], grips: [], gripperState: null, cancels: 0, terminal: 'RUNNING', rejections: [], seq: 0, served: new Set(),
     pos: {joint1: 0, joint2: 0, gripper_joint_1: 0}, seatLost: false, forgetGoals: false,
-    mismatchOnce: Boolean(opts.mismatchOnce), started: {}});
+    mismatchOnce: Boolean(opts.mismatchOnce), started: {}, finished: {}});
   const TERMINAL = ['SUCCEEDED', 'REJECTED', 'CANCELED', 'UNKNOWN_HOLD'];
-  const goalState = (id) => opts.settleMs ? (performance.now() - window.started[id] >= opts.settleMs ? 'SUCCEEDED' : 'RUNNING')
-                                          : window.terminal;
+  const goalState = (id) => window.finished[id] ?? (opts.settleMs ? (performance.now() - window.started[id] >= opts.settleMs ? 'SUCCEEDED' : 'RUNNING')
+                                          : window.terminal);
   const current = () => window.goals.at(-1)?.request_id;
   const running = () => Boolean(current()) && !TERMINAL.includes(goalState(current()));
   const refuse = (reason) => { window.rejections.push(reason); throw new Error(`409: {"error":{"message":"${reason}"}}`); };
@@ -1169,7 +1169,8 @@ _ARM_HARNESS = """async (opts) => {
     if (path.endsWith('/cancel')) { window.cancels++; return {state: 'CANCEL_REQUESTED'}; }
     if (path.startsWith('/goals/')) {
       if (window.forgetGoals) throw new Error('404: {"error":{"message":"goal unknown"}}');
-      if (window.settleOnPoll) { window.settleOnPoll = false; window.terminal = 'SUCCEEDED'; window.failNextState = true; }
+      // A receipt settles this goal only; later goals still start RUNNING.
+      if (window.settleOnPoll) { window.settleOnPoll = false; window.finished[decodeURIComponent(path.slice(7))] = 'SUCCEEDED'; window.failNextState = true; }
       return {state: goalState(decodeURIComponent(path.slice(7)))};
     }
     return {};
