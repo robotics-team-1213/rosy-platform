@@ -36,8 +36,10 @@ import numpy as np
 
 ROOT = Path(__file__).resolve().parents[3]
 _SENSING = ROOT / "src" / "runtime" / "sensing"
-if str(_SENSING) not in sys.path:
-    sys.path.insert(0, str(_SENSING))
+_FOUNDATION = ROOT / "src" / "contracts" / "foundation"  # core_common (D-424)
+for _p in (_SENSING, _FOUNDATION):
+    if str(_p) not in sys.path:
+        sys.path.insert(0, str(_p))
 
 from control.sensing.perception.lane import detect_lane_error  # noqa: E402
 from control.sensing.perception.learned.lane_mask import NonFiniteLogits, preprocess  # noqa: E402

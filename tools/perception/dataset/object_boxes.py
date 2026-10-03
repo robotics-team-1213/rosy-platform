@@ -26,7 +26,8 @@ import numpy as np
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
-for _p in (HERE, ROOT / "src" / "runtime" / "sensing"):
+for _p in (HERE, ROOT / "src" / "runtime" / "sensing",
+           ROOT / "src" / "contracts" / "foundation"):
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
 
