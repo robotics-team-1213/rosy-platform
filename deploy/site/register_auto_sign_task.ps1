@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-Registers the D-440 automatic site-candidate signer as a Windows scheduled task.
+Registers the D-441 automatic site-candidate signer as a Windows scheduled task.
 
 .DESCRIPTION
 Runs `python auto_sign_candidates.py --config <ConfigPath>` every 10 minutes as
@@ -59,7 +59,7 @@ $principal = New-ScheduledTaskPrincipal -UserId ([System.Security.Principal.Wind
 
 Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $trigger `
     -Settings $settings -Principal $principal `
-    -Description "ROSY D-440: sign CI-built site candidates (manifest-only) after provenance and main checks" |
+    -Description "ROSY D-441: sign CI-built site candidates (manifest-only) after provenance and main checks" |
     Out-Null
 
 Write-Host "Registered scheduled task '$TaskName' (every $IntervalMinutes min, current user, while logged on)."

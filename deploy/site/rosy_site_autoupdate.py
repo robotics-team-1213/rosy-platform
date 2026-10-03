@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Site host automatic updater for signed site candidates (D-440).
+"""Site host automatic updater for signed site candidates (D-441).
 
 Runs from rosy-site-autoupdate.timer as root. It is installed by the operator
 into /usr/local/lib/rosy-site next to the reviewed verify_candidate.py and

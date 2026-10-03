@@ -3,11 +3,11 @@ name: Build unsigned site candidate
 # D-437: the site candidate (Fleet, Vision, proxy; linux/amd64) is built on a
 # GitHub-hosted runner and published as an UNSIGNED prerelease. The operator's
 # signing PC signs release.json (sign_candidate.py --manifest-only, D-301;
-# automatically through auto_sign_candidates.py since D-440) and attaches
+# automatically through auto_sign_candidates.py since D-441) and attaches
 # release.json.sig. No secret except GITHUB_TOKEN is used; signing keys never
 # reach GitHub.
 #
-# D-440: a push to main that touches anything the images or the candidate
+# D-441: a push to main that touches anything the images or the candidate
 # contain builds automatically. The paths below are the build_candidate.py
 # image source paths (deploy/site plus every Fleet/Vision Dockerfile COPY
 # source), its DOC_FILES, and this file; test_site_candidate_workflow.py keeps
@@ -79,7 +79,7 @@ jobs:
           # Only a 404 means "free"; any other API failure stops the run.
           if response="$(gh api "repos/${GH_REPO}/releases/tags/${tag}" 2>&1)"; then
             if [[ "$EVENT_NAME" == "push" ]]; then
-              # D-440: a push (e.g. a re-run) for a commit that already has its
+              # D-441: a push (e.g. a re-run) for a commit that already has its
               # release succeeds without building; dispatch still fails fast.
               echo "::notice::release ${tag} already exists; nothing to build"
               echo "build=false" >>"$GITHUB_OUTPUT"
@@ -96,7 +96,7 @@ jobs:
   build-unsigned-candidate:
     needs: check-release-free
     if: needs.check-release-free.outputs.build == 'true'
-    # D-440: the newest push to main wins. A newer push cancels an older push's
+    # D-441: the newest push to main wins. A newer push cancels an older push's
     # build (its attest/publish jobs are then skipped); a dispatch gets its own
     # group and is never cancelled. Only this job is cancellable.
     concurrency:
@@ -341,9 +341,9 @@ jobs:
 
           Site candidate (Fleet, Vision, proxy; linux/amd64) built from commit ${COMMIT} by ${RUN_URL}.
           The operator's signing PC signs release.json (sign_candidate.py --manifest-only, run by
-          auto_sign_candidates.py after the provenance and main-ancestry checks, D-440) and uploads
+          auto_sign_candidates.py after the provenance and main-ancestry checks, D-441) and uploads
           release.json.sig. The site host verifies it before docker image load
-          (deploy/site/README.md, CI-built candidates (D-437), Automatic updates (D-440))."
+          (deploy/site/README.md, CI-built candidates (D-437), Automatic updates (D-441))."
           gh release create "$TAG" \
             --prerelease \
             --target "$COMMIT" \

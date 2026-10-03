@@ -1,4 +1,4 @@
-"""Contracts for the GitHub-hosted, unsigned site candidate workflow (D-437, D-440)."""
+"""Contracts for the GitHub-hosted, unsigned site candidate workflow (D-437, D-441)."""
 
 import re
 from pathlib import Path

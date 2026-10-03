@@ -1,4 +1,4 @@
-"""Site host automatic updater (D-440) with fake HTTP, Docker and systemd."""
+"""Site host automatic updater (D-441) with fake HTTP, Docker and systemd."""
 
 from __future__ import annotations
 
@@ -327,7 +327,7 @@ def test_pairing_overlay_from_the_candidate_is_allowed(host):
 def test_real_candidate_directory_is_migrated_once_to_a_symlink(host):
     host.paths.link.unlink()
     old = host.paths.candidates / OLD
-    old.rename(host.paths.link)  # the pre-D-440 layout: a real directory
+    old.rename(host.paths.link)  # the pre-D-441 layout: a real directory
     releases, blobs = _world((NEW, "2026-10-04T02:00:00Z"))
     fake = FakeHost(host.paths, healthy_tags={OLD})
 
@@ -426,7 +426,7 @@ def test_units_run_the_installed_updater_on_a_persistent_randomized_timer():
 
 def test_runbook_explains_install_pause_and_manual_rollback():
     readme = (SITE / "README.md").read_text(encoding="utf-8")
-    section = readme[readme.index("### Automatic updates (D-440)"):
+    section = readme[readme.index("### Automatic updates (D-441)"):
                      readme.index("### Backup and restore operations")]
 
     for needle in ("register_auto_sign_task.ps1", "Disable-ScheduledTask",

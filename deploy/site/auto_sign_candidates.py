@@ -1,4 +1,4 @@
-"""Automatic manifest-only signer for CI-built site candidates (D-440).
+"""Automatic manifest-only signer for CI-built site candidates (D-441).
 
 Runs on the operator's signing PC (Windows or Linux) from a scheduled task.
 The private key stays on that PC; nothing here sends it anywhere. One
