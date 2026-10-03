@@ -21,6 +21,7 @@ The D-346 pre-push fast gate (under 2 minutes). Git does not version hooks, so e
 - The installed copy in `.git/hooks` does not follow edits here; re-run `install.sh` after changing `pre-push`.
 - Keep it fast. A new check belongs here only if it is cheap and has already failed CI; everything else stays in CI.
 - Never bypass the hook with `--no-verify`; fix the failure.
+- The `Safety-Review:` step (D-430 §5) runs `tools/harness/safety_review.py --warn-only` against `origin/main`. It is an opt-in early warning only: it never blocks a push, the hook is not installed by default, and `--no-verify` skips it. The CI step in `.github/workflows/ci.yml` is the enforcement.
 
 ### Testing Requirements
 
