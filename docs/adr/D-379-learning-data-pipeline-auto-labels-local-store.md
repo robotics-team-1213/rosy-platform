@@ -142,7 +142,9 @@ main 14.4 %·keep v2 14.0 %, 깊은 벽 위 8.5 %·3.8 %·3.5 %. 데이터셋 `d
 1. **split 고정.** `build.py`의 세션 split 은 정렬 순서가 아니라 세션 이름의 해시로 정한다:
    `int(sha256(세션)[:8], 16) % 5 == 0` 이면 val, 아니면 train. 세션 하나의 split 은 자기 이름에만 달려 있으므로 세션을 더해도
    기존 세션이 옮겨 가지 않는다. 세션이 2개 이상인데 val 이 하나도 없으면 해시가 가장 작은 세션을 val 로, 모두 val 이면 해시가
-   가장 큰 세션을 train 으로 둔다. 세션이 더해질 때 split 이 바뀔 수 있는 것은 이 두 예외로 놓인 세션뿐이다. 이 규칙 이전에 만든
+   가장 큰 세션을 train 으로 둔다. 세션이 더해질 때 split 이 바뀔 수 있는 것은 이 두 예외로 놓인 세션뿐이다. 예외는 드물지
+   않다: 세션 N 개가 모두 val 이 아닐 확률은 0.8^N(N=5 에서 약 33 %, N=10 에서 약 11 %)이다. 그 경우 예외로 val 이 된
+   세션은, 해시가 더 작은 세션이 들어오거나 해시 규칙으로 val 인 세션이 들어오면 train 으로 돌아간다. 이 규칙 이전에 만든
    데이터셋 버전은 그대로 두고, 다시 빌드하면 새 내용 해시가 생긴다.
 2. **평가 세트 저장.** `build.py --auto-labels <라벨 폴더>... --store S --name N --eval-set` 은 같은
    `rosy.perception.dataset/1` 스키마로 `<store>/evalsets/<이름>/<내용 해시>/` 에 쓴다. 모든 프레임의 split 은 `eval`,
@@ -154,10 +156,16 @@ main 14.4 %·keep v2 14.0 %, 깊은 벽 위 8.5 %·3.8 %·3.5 %. 데이터셋 `d
    가장 믿는 출처다. 규칙 마스크는 애초에 출처가 아니다. 믿을 출처가 없는 프레임은 `excluded[]` 에 이유와 함께 남기고,
    남는 프레임이 없으면 빌드를 거부한다. 출처 불일치(`conflict`)·라벨 비율 미달 제외는 학습 빌드와 같다. 지도 투영이 생기면
    `TRUSTED_SOURCES` 에 더한다.
-4. **겹침 검사.** 학습 빌드는 `--exclude-eval <평가 세트 버전 폴더>`(여러 번 가능)를 받는다. 평가 세트 매니페스트의 세션
-   (`frames[].session` 과 `labels[].session`)에 든 세션이 학습 입력에 있으면 그 세션 이름과 평가 세트를 적고 빌드를 거부한다.
-   통과하면 학습 매니페스트에 `"disjoint_from": [{"name", "content_sha"}]` 를 적는다. 이 옵션을 주지 않은 빌드의 매니페스트는
-   전과 같다(겹침을 강제하지는 않는다. 운영 절차에서 늘 준다).
+4. **겹침 검사.** 두 곳에서 한다.
+   - 빌드: 학습 빌드(`--auto-labels` 와 CVAT 경로 모두)는 `--exclude-eval <평가 세트 버전 폴더>`(여러 번 가능)를 받는다.
+     평가 세트 매니페스트의 세션(`frames[].session` 과 `labels[].session`)에 든 세션이 학습 입력에 있으면 그 세션 이름과 평가
+     세트를 적고 빌드를 거부한다. 통과하면 학습 매니페스트에 `"disjoint_from": [{"name", "content_sha"}]` 를 적는다. 이 옵션을
+     주지 않은 빌드의 매니페스트는 전과 같다.
+   - 인수: 빌드 옵션은 빠뜨릴 수 있으므로 intake 가 다시 본다. store 가 설정돼 있고 모델 매니페스트의 `dataset.revision` 이
+     `<store>/datasets/*/<revision>/manifest.json` 으로 찾아지면, 그 세션과 평가 세트 세션이 겹칠 때 **모델 실패**다
+     (`eval.disjoint: false`, `shared_sessions`, `training_dataset`). 찾을 수 없으면(store 없음, 64자 내용 해시가 아님,
+     폴더 없음 — 외부에서 만든 0930 모델이 그렇다) 실패시키지 않고 `eval.disjoint: "unverified"` 와 보고서 `warnings` 를
+     남긴다. 겹치지 않으면 `true`.
 5. **인수 게이트(`model/intake.py`, `intake_gate.yaml`).** lane_seg 전용 키:
    `eval_set`(`--root` 기준 평가 세트 버전 폴더 경로, 기본 `null`), `eval_max_frames`(400), `min_eval_miou`(`null`),
    `max_eval_miou_drop`(0.01). object_det 게이트에서는 빠진다. `eval_set` 이 `null` 이면 평가하지 않고 보고서에 `"eval": null`
@@ -166,23 +174,37 @@ main 14.4 %·keep v2 14.0 %, 깊은 벽 위 8.5 %·3.8 %·3.5 %. 데이터셋 `d
      예측으로 한다. 라벨 마스크는 그 크기로 최근접 보간해 맞춘다(전처리가 프레임을 같은 방식으로 줄이므로 화소가 맞고 새 클래스
      값이 생기지 않는다). `ignore_index` 화소는 뺀다.
    - 클래스는 **이름으로** 맞춘다. 한쪽에만 있는 클래스는 `unmatched`(`model_only`, `eval_only`)에 적고 뺀다. 맞는 클래스가
-     없으면 실패다. 클래스별 IoU 와, 합집합이 0보다 큰 클래스들의 평균 mIoU, lane_marking role 클래스의 IoU 를 따로 적는다.
+     없으면 실패다. 클래스별 IoU 를 모두 적는다.
+   - **게이트에 쓰는 mIoU 는 배경을 뺀다.** 평가 세트에서 role 이 `background` 인 클래스(넓은 바닥이라 쉽게 높다)를 빼고,
+     합집합이 0보다 큰 나머지 클래스의 평균을 `miou` 로(`miou_classes` 에 그 목록), 배경을 넣은 평균을 `miou_all` 로 적는다.
+     배경 말고 맞는 클래스가 없으면 실패다. 선택 키 `min_lane_marking_iou`(기본 `null`)가 있으면 lane_marking role
+     클래스마다 그 값 이상이어야 한다(lane_marking 클래스가 맞지 않아도 실패).
    - **챔피언**: `--out` 아래 `*/intake_report.json` 중 판정이 pass 이고 같은 평가 세트 내용 해시로 잰 보고서의 최고 mIoU
-     (검사 중인 모델 자신의 revision 은 뺀다). mIoU < 챔피언 − `max_eval_miou_drop` 이면 실패. `min_eval_miou` 가 있으면
-     그보다 낮아도 실패.
-   - 평가 세트 폴더가 없거나 매니페스트를 못 읽거나 `purpose` 가 `eval` 이 아니면 모델 탓이 아닌 설정 오류로 보고
-     `transient: true` 다(watch 가 다시 시도한다). `rosy_ml doctor` 는 게이트에 `eval_set` 이 있으면 그 폴더를 확인한다.
-   - 보고서: `"eval": {"set": {"path", "content_sha"}, "frames", "iou", "miou", "matched_classes", "unmatched",
-     "lane_marking_iou", "nonfinite_frames", "champion"}`. 모델 매니페스트의 `metrics.val_iou` 는 비교용으로
-     `trainer_val_iou` 에 옮겨 적고 게이트에는 쓰지 않는다.
-6. **처음 값.** `eval_set` 과 `min_eval_miou` 는 기준 모델 하나를 평가 세트로 잰 뒤에 정한다. 그때까지 `null` 이다.
+     (검사 중인 모델 자신의 revision 은 뺀다. dict 가 아니거나 mIoU 가 숫자가 아닌 보고서는 건너뛴다). 두 모델의 클래스가 다를
+     수 있으므로 회귀 검사는 후보의 `miou_classes` 와 챔피언의 클래스별 IoU 의 **공통 클래스**에서 두 평균을 다시 계산해 비교한다
+     (`champion_comparison`: `classes`, `miou`, `champion_miou`). 후보 < 챔피언 − `max_eval_miou_drop` 이면 실패. 공통
+     클래스가 없으면 비교하지 않고 `champion_comparison: "no shared classes"` 를 적는다. `min_eval_miou` 가 있으면 `miou` 가
+     그보다 낮아도 실패. 챔피언은 평가 세트 내용 해시마다 따로라서, 평가 세트를 바꾸면 **챔피언이 없는 상태에서 다시 시작한다**
+     (의도한 동작). watch 가 pass 한 폴더를 store 가 받지 않으면(같은 revision 이 다른 파일로 이미 있음) `--out` 의 그 보고서를
+     fail 로 고쳐 써서 챔피언이 되지 않게 한다.
+   - 평가 세트 폴더가 없거나 매니페스트를 못 읽거나 `purpose` 가 `eval` 이 아니거나 **프레임이 하나도 없으면** 모델 탓이 아닌
+     설정 오류로 보고 `transient: true` 다(watch 가 다시 시도한다). `rosy_ml doctor` 는 게이트에 `eval_set` 이 있으면 그
+     폴더를 확인한다.
+   - 보고서: `"eval": {"set": {"path", "content_sha"}, "sessions", "frames", "iou", "miou", "miou_all", "miou_classes",
+     "matched_classes", "unmatched", "lane_marking_iou", "nonfinite_frames", "disjoint", "champion",
+     "champion_comparison"}`(겹칠 때 `training_dataset`, `shared_sessions`). 모델 매니페스트의 `metrics.val_iou` 는
+     비교용으로 `trainer_val_iou` 에 옮겨 적고 게이트에는 쓰지 않는다.
+6. **처음 값.** `eval_set`, `min_eval_miou`, `min_lane_marking_iou` 는 기준 모델 하나를 평가 세트로 잰 뒤에 정한다.
+   그때까지 `null` 이다.
    `max_eval_miou_drop` 0.01 은 챔피언이 생긴 뒤에만 작동한다.
 7. **사람이 하는 일로 남는 것:** 어떤 세션을 평가 세트로 둘지 고르기(장면 태그가 고루 들어가게), 평가 세트 버전을 게이트에
    적기, 첫 기준 측정 뒤 `min_eval_miou` 정하기, 평가 세트를 바꿀 때 챔피언이 새 세트에서 다시 정해진다는 점의 확인.
    이 게이트도 섀도 배포 자격일 뿐이고 주행 활성화(D-205 P3)를 대신하지 않는다.
 
 **Validation:** `tools/perception/test/test_dataset_build.py`(해시 split, 세션 추가 시 비이동, 예외 두 가지),
-`test_d379_evalset.py`(평가 세트 위치·split·purpose·믿을 출처 필터, 빈 세트 거부, 겹침 거부와 `disjoint_from`, CLI),
-`test_model_intake_eval.py`(이름 매칭과 255 제외, 프레임 상한, `eval_set: null` 하위 호환, 챔피언 대비 회귀 실패,
-`min_eval_miou`, 맞는 클래스 없음, 평가 세트 없음/잘못됨 = transient), `test_rosy_ml.py`(doctor 평가 세트 확인).
+`test_d379_evalset.py`(평가 세트 위치·split·purpose·믿을 출처 필터, 빈 세트 거부, 겹침 거부와 `disjoint_from`, CVAT
+경로 겹침 거부, CLI), `test_model_intake_eval.py`(이름 매칭과 255 제외, 배경 뺀 mIoU, 프레임 상한, `eval_set: null` 하위
+호환, 챔피언 대비 회귀 실패, 공통 클래스 비교와 "no shared classes", 깨진 보고서 건너뛰기, `min_eval_miou`,
+`min_lane_marking_iou`, 맞는 클래스 없음, 평가 세트 없음/잘못됨/프레임 없음 = transient, 학습 데이터셋 겹침 실패·
+`unverified`), `test_model_watch_inbox.py`(store 가 거부한 pass 보고서는 fail 로), `test_rosy_ml.py`(doctor 평가 세트 확인).
 호스트 테스트이고 실물 평가 세트로 잰 값은 아직 없다.
