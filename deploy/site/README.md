@@ -226,6 +226,42 @@ the last scan and logs the loss once, because new-robot discovery and
 AP advertisements are excluded. On a VLAN or Wi-Fi with multicast/client
 isolation, use the existing manual endpoint and outbound FleetAgent path.
 
+#### User discovery fallback without administrator access
+
+When the site account already has `Linger=yes`, a running user systemd manager,
+and access to the existing Avahi daemon, discovery can start at boot through
+user units. This opt-in fallback does not install Avahi, change the firewall,
+enable linger, or replace the system units above. Stop existing temporary user
+advertisers before installing; active system discovery services and readable
+system Avahi ROSY XML advertisements cause a refusal. The known broken
+root-owned `0600` XML files are left untouched and do not block this explicit
+fallback; Avahi cannot read them. Failed root services and an enabled timer
+without a working scanner also do not prevent the fallback.
+
+Copy `install-user-discovery.py`, `mdns-bridge.py`, and `fleet-mdns.py` to one
+directory readable by the site account. Select the same discovery secret that
+Fleet actually uses and its public site CA, then run as that account:
+
+```bash
+python3 install-user-discovery.py --enable-user-fallback \
+  --tls-host <certificate-hostname.local> --port 8443 \
+  --ca-file <site-ca.crt> --token-file <selected-discovery-secret>
+systemctl --user status rosy-user-mdns-bridge.service
+systemctl --user list-timers rosy-user-mdns-bridge.timer
+```
+
+The installer stores one token as `0600` and the public CA as `0644` under the
+user-owned `0700` directory `~/.local/share/rosy/site-discovery`. Advertisers
+`rosy-user-fleet-advertise.service` and `rosy-user-overhead-advertise.service`
+use the existing common TXT contracts and certificate hostname. The bridge
+timer runs every 15 seconds and reuses the same strict TLS verification and
+loopback connection code. Secrets never appear in unit files or arguments.
+User units have the account's ordinary permissions; they do not inherit the
+root bridge's OS-level IP firewall restrictions. Loopback is enforced by the
+unchanged bridge implementation. Verify a fresh Fleet discovery scan and both
+DNS-SD records after reboot. Before returning to system discovery, disable the
+three user units with `systemctl --user disable --now` and their names above.
+
 For a 4–10 robot site, boot all cards on the same LAN and confirm one distinct
 row per device, no duplicate-name conflict, all configured devices eventually
 show **confirmed**, and newly initialized cards remain **registration pending**.
