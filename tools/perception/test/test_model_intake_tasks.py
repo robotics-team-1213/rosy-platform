@@ -52,7 +52,8 @@ def test_run_routes_an_object_det_manifest_to_the_detector(tmp_path, monkeypatch
     folder = tmp_path / "m"
     folder.mkdir()
     (folder / "model.onnx").write_bytes(b"x")
-    fake = type("M", (), {"model_revision": "object-det-r1", "files": (), "task": "object_det"})()
+    fake = type("M", (), {
+        "model_revision": "object-det-r1", "files": (), "task": "object_det", "backend": "onnx"})()
     monkeypatch.setattr(intake, "load_manifest", lambda f: fake)
     monkeypatch.setattr(intake, "verify_files", lambda m: None)
     monkeypatch.setattr(intake.ObjectDetModel, "open", classmethod(lambda cls, f: _Detector()))

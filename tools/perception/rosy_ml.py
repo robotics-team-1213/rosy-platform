@@ -72,6 +72,8 @@ def _hold_age_h(hold: dict) -> float | None:
     except (KeyError, TypeError, ValueError):
         return None
     return (_utcnow() - ts).total_seconds() / 3600
+
+
 LEARNED_SITE = "/opt/rosy/learned-perception/site-packages"  # == learned/runner.py
 MODELS_DIR, MODELS_OWNER = "/var/lib/rosy/models", "root:rosy-camera 750"
 
@@ -310,7 +312,7 @@ class _Report:
         return ok
 
 
-def _doctor(cfg, robots, runner, connect, find_spec, resolve=socket.getaddrinfo) -> int:
+def _doctor(cfg, robots, runner, connect, find_spec, resolve=socket.getaddrinfo, backend="onnx") -> int:
     rep = _Report()
     rep.line(True, f"config readable (operator {cfg['operator']})")
     key, kh = Path(cfg["ssh"]["identity"]), cfg["ssh"]["known_hosts"]
@@ -380,9 +382,9 @@ def _doctor(cfg, robots, runner, connect, find_spec, resolve=socket.getaddrinfo)
              "robot, or use an image with D-373"),
             # The learned backend appends its own prefix (learned/runner.py
             # LEARNED_SITE, D-373 decision 1); a plain import would miss it.
-            ("robot python3 imports onnxruntime",
+            (f"robot python3 imports {'ncnn' if backend == 'ncnn' else 'onnxruntime'}",
              "cd / && PYTHONNOUSERSITE=1 python3 -c 'import sys; "
-             f"sys.path.append(\"{LEARNED_SITE}\"); import onnxruntime'",
+             f"sys.path.append(\"{LEARNED_SITE}\"); import {'ncnn' if backend == 'ncnn' else 'onnxruntime'}'",
              lambda r: r.returncode == 0,
              "install the pinned onnxruntime (install-learned-perception.sh) or reflash"),
         ]
@@ -436,7 +438,7 @@ def _doctor(cfg, robots, runner, connect, find_spec, resolve=socket.getaddrinfo)
     # The site watcher's intake needs both (onnx reads the graph's precision);
     # without them every inbox model stops with a config error (watch exit 6).
     site = str(cfg.get("operator", "")).startswith("site:")
-    for module in ("onnxruntime", "onnx"):
+    for module in (("ncnn",) if backend == "ncnn" else ("onnxruntime", "onnx")):
         rep.check(f"local {module} importable", lambda m=module: find_spec(m) is not None,
                   ("the site watcher's intake needs it: install it in /opt/rosy/model-watch/venv "
                    "(deploy/site/README.md)") if site else
@@ -526,6 +528,7 @@ def main(argv=None, *, runner=subprocess.run, connect=socket.create_connection,
     p.add_argument("--replay-root")
     p.add_argument("--force", action="store_true")
     p = sub.add_parser("doctor")
+    p.add_argument("--backend", choices=("onnx", "ncnn"), default="onnx")
     p.add_argument("robot", nargs="?")
     p.add_argument("--watch-config", help="check the site watcher's config instead")
     p = sub.add_parser("status")
@@ -571,7 +574,7 @@ def main(argv=None, *, runner=subprocess.run, connect=socket.create_connection,
         print(f"✗ config — fix: {exc}")
         return 2
     if args.cmd == "doctor":
-        return _doctor(cfg, robots, runner, connect, find_spec, resolve)
+        return _doctor(cfg, robots, runner, connect, find_spec, resolve, backend=args.backend)
     if args.cmd == "repin":
         return _repin(cfg, args.robot, runner)
     if args.cmd == "store-status":

@@ -4745,3 +4745,10 @@
 - Evidence: D-431 and current exporter/loader/intake/deploy readers inspected; document contract checks and harness lint run before commit.
 - Gate: plan only; implementation and device/field validation remain pending. Existing OpenCV processing and ONNX rollback remain part of the plan.
 - Validation: final document contracts 82 passed / 1 history-lint test deselected; standalone full harness lint 0 errors / 26 existing warnings.
+
+## 2026-10-03 · uncommitted · feat(perception): D-431 NCNN/OpenCV 구현과 실제 차선 Pi 재생
+
+- 변경: NCNN schema /2·CPU session·YOLO/TorchScript lane export·실제 프레임 parity·intake 증거 검사·hash 고정 설치·doctor·재생 bench. 기존 OpenCV 전처리를 사용한다.
+- 증거: docs/validation/pi-ncnn-2026-10-03/README.md. 실제 차선 20프레임 분류 일치 100%, 제품 adapter ARM64 재생 오류 0. NCNN 차선 p95 474.59ms, 동일 원본 ONNX FP32 252.22ms.
+- gate 변화: 없음. 운영 차선 전환 HOLD. 학습 YOLO·30분 동시 부하·배포/rollback·현장 수용은 남아 있다.
+- 결정: D-431 Accepted, 구현 및 조건부 lane 평가 기록.

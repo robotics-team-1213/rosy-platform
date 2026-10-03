@@ -42,3 +42,7 @@ OpenCV는 `detector.py:letterbox()`의 크기 조정, `lane_mask.py:preprocess()
 - [Ultralytics Raspberry Pi guide](https://docs.ultralytics.com/guides/raspberry-pi): ARM 기기의 NCNN 권장과 성능 비교; Rosy 실측을 대체하지 않는다.
 - [Tencent NCNN: use ncnn with OpenCV](https://github.com/Tencent/ncnn/wiki/use-ncnn-with-opencv): OpenCV/NCNN 이미지 변환과 색상 순서. C++ 예시는 상호 운용 근거이며 Rosy Python binding 검증 완료를 의미하지 않는다.
 - 현재 Rosy `convert.py`, `learned/{manifest,runner,detector,lane_mask}.py`를 2026-10-03 확인했다. 실제 학습 `.pt`의 NCNN export 및 라즈베리파이 추론은 이번 문서 작업에서 실행하지 않았다.
+
+### 2026-10-03 실행 기록
+
+NCNN schema /2, CPU adapter, YOLO exporter와 독립 TorchScript lane exporter, 실제 프레임 parity, intake 검사, 고정 wheel 설치 경로를 구현했다. 실제 차선 `.pt`와 ARM64 기기에서 20프레임 분류가 100% 일치했고 시스템 OpenCV 4.6.0을 유지했다. 다만 해당 차선 모델의 NCNN FP32 p95 474.59ms는 동일 원본 ONNX FP32 252.22ms보다 느렸다. T7의 변환 가능성은 확인됐지만 차선 운영 이전은 보류한다. 학습 YOLO checkpoint·장시간 동시 부하·실제 배포/rollback 수용은 미완료다. 상세 증거: [Pi NCNN 검증](../validation/pi-ncnn-2026-10-03/README.md).

@@ -77,6 +77,10 @@ def graph_precision(path) -> str:
 
 def check_precision(manifest) -> None:
     """Refuse a manifest whose declared precision the graph contradicts."""
+    if manifest.backend == "ncnn":
+        from compare_backends import check_ncnn_evidence
+        check_ncnn_evidence(manifest)
+        return
     for f in manifest.files:
         if f.name.endswith(".onnx"):
             found = graph_precision(manifest.folder / f.name)

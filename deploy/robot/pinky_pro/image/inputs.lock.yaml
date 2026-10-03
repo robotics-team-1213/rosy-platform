@@ -156,11 +156,13 @@ camera_runtime:
 
 learned_perception_runtime:
   requirements: learned-perception-requirements.txt
-  requirements_sha256: dfee19470266b21ef19603f5fae3c2d46e3e2c7e7c15492d59916a7f3d74f256
+  requirements_sha256: 23d1c0a5c1f6d3b40e202a825981cc2eec99562ba4430e4e68b40fb7f89ebb88
   target: /opt/rosy/learned-perception/site-packages
   verified: true
   note: >-
-    D-373 decision 1. onnxruntime 1.30.0 with flatbuffers 25.12.19,
+    D-431 adds ncnn 1.0.20260526; cp312 ARM64/x86_64 wheel hashes checked
+      on 2026-10-03. System OpenCV/numpy stay outside this prefix.
+      D-373 decision 1. onnxruntime 1.30.0 with flatbuffers 25.12.19,
     packaging 26.3 and protobuf 7.36.2 (cp312 aarch64 and x86_64), hash-locked;
     hashes were checked on 2026-09-30 by a --require-hashes download for both
     platforms. Installed with pip --target into its own prefix, which only the

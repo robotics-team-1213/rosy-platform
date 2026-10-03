@@ -1,0 +1,22 @@
+{
+  "kind": "trained-lane-fp32-recorded-replay",
+  "frames": 20,
+  "shape": [
+    1,
+    4,
+    240,
+    320
+  ],
+  "ok": true,
+  "source_sha256": "19050e80754720a7f4b9e4a4724d5f53a145370668d3a5850544e1ed7339c782",
+  "ncnn_param_sha256": "5e072e7f7d088705f75c1ce042c478d4a3aeb004601c22ad58dcd78fa5197c07",
+  "max_abs_diff": 4.363059997558594e-05,
+  "min_pixel_agreement": 1.0,
+  "ncnn_p50_ms": 461.5441680002732,
+  "ncnn_p95_ms": 474.5872217495162,
+  "onnx_p50_ms": 239.68763499942725,
+  "onnx_p95_ms": 252.22045825053104,
+  "cv2": "4.6.0",
+  "numpy": "1.26.4",
+  "operational_model_changed": false
+}

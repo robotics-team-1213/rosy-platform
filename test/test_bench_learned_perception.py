@@ -28,7 +28,8 @@ DEVICE_REQUIREMENTS = PINKY / "image" / "device-python-requirements.txt"
 STATE_RULES = PINKY / "native" / "tmpfiles-rosy-state.conf"
 LOCK = PINKY / "image" / "inputs.lock.yaml"
 RUNNER = ROOT / "src" / "runtime" / "sensing" / "control" / "sensing" / "perception" / "learned" / "runner.py"
-PINS = {"onnxruntime": "1.30.0", "flatbuffers": "25.12.19", "packaging": "26.3", "protobuf": "7.36.2"}
+PINS = {"onnxruntime": "1.30.0", "ncnn": "1.0.20260526", "flatbuffers": "25.12.19",
+        "packaging": "26.3", "protobuf": "7.36.2"}
 TARGET = "/opt/rosy/learned-perception/site-packages"
 MODELS_RULE = "d /var/lib/rosy/models 0750 root rosy-camera -"
 PIP_FLAGS = ("--require-hashes", "--no-deps", "--only-binary=:all:", "--no-cache-dir")
@@ -84,7 +85,7 @@ def test_the_learned_file_pins_exactly_the_runtime_with_hashes():
             entries[name.strip()] = (rest.split()[0], re.findall(r"--hash=sha256:([0-9a-f]{64})", rest))
     assert {k: v[0] for k, v in entries.items()} == PINS
     for name, (_, hashes) in entries.items():
-        assert len(hashes) == (2 if name in {"onnxruntime", "protobuf"} else 1), name
+        assert len(hashes) == (2 if name in {"onnxruntime", "protobuf", "ncnn"} else 1), name
     assert "numpy" not in entries
 
 
@@ -104,6 +105,15 @@ def test_image_and_bench_install_into_the_same_prefix_with_the_same_flags():
     assert "lock_value learned_perception_runtime target" in customizer
     assert "learned-perception-requirements.txt" not in _source()  # named by the lock only
     assert "learned_perception_runtime" in _source()
+
+
+def test_ncnn_is_probed_without_replacing_system_opencv():
+    for source in (CUSTOMIZER.read_text(encoding="utf-8"), _source()):
+        assert "import ncnn" in source
+        assert "import cv2" in source
+    requirements = LEARNED.read_text(encoding="utf-8")
+    assert "ultralytics==" not in requirements and "torch==" not in requirements
+    assert "opencv-python==" not in requirements
 
 
 def test_the_runner_and_the_doctor_use_the_same_prefix():

@@ -872,9 +872,12 @@ processed once:
 The watcher needs a reviewed source checkout (it imports the manifest contract
 and runner from `src/runtime/sensing`) and a Python venv with `onnxruntime`,
 `onnx` (intake reads the graph's precision with it), `opencv-python-headless`,
-`numpy` and `PyYAML` (add `huggingface_hub` only for `backend: hf`). A missing
+`numpy` and `PyYAML`; NCNN intake additionally needs `ncnn==1.0.20260526`
+(D-431; CPython 3.12 ARM64/x86_64 wheel hashes are pinned in
+`deploy/robot/pinky_pro/image/learned-perception-requirements.txt`).
+Add `huggingface_hub` only for `backend: hf`. A missing
 package is a configuration error: the watcher exits 6 every run and records
-nothing until the venv is fixed; `rosy_ml doctor --watch-config` names it. It is not part of the signed site candidate (follow-up: add
+nothing until the venv is fixed; `rosy_ml doctor --backend ncnn --watch-config` names the NCNN dependencies. It is not part of the signed site candidate (follow-up: add
 the units and a pinned watcher bundle to `build_candidate.py`). Prepare both,
 then run the install script from that checkout:
 
@@ -884,6 +887,7 @@ sudo git clone --no-checkout <reviewed-remote> /opt/rosy/model-watch/src
 sudo git -C /opt/rosy/model-watch/src checkout --detach <reviewed-commit>
 sudo python3 -m venv /opt/rosy/model-watch/venv
 sudo /opt/rosy/model-watch/venv/bin/pip install onnxruntime onnx==1.23.1 opencv-python-headless numpy PyYAML
+sudo /opt/rosy/model-watch/venv/bin/pip install ncnn==1.0.20260526  # NCNN intake only
 sudo /opt/rosy/model-watch/src/deploy/site/install-model-watch.sh --dry-run   # what it would do
 sudo /opt/rosy/model-watch/src/deploy/site/install-model-watch.sh
 ```

@@ -198,7 +198,7 @@ def test_no_replay_frames_is_a_transient_setup_error(tmp_path, monkeypatch):
     """An empty or wrong replay_root is the site's problem, not the model's."""
     folder = tmp_path / "m"
     folder.mkdir()
-    fake = type("M", (), {"model_revision": "lane-seg-20260930-abcd1234", "files": ()})()
+    fake = type("M", (), {"model_revision": "lane-seg-20260930-abcd1234", "files": (), "backend": "onnx"})()
     monkeypatch.setattr(intake, "load_manifest", lambda f: fake)
     monkeypatch.setattr(intake, "verify_files", lambda m: None)
     monkeypatch.setattr(intake.LaneSegModel, "open", classmethod(lambda cls, f: object()))

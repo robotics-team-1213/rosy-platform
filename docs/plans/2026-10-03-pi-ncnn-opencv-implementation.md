@@ -127,3 +127,16 @@ python tools/harness/rosy_harness.py lint
 ```
 
 `<run-id>`는 실행마다 고유한 영숫자로 바꾼다. 서로 다른 suite의 임시 디렉터리를 공유하지 않는다. 위 명령은 구현 후 검증 절차이며 이번 작업의 실행 결과가 아니다. 기기 검증 전 source quick tier와 변경 배포 경로의 계약 시험도 통과시킨다. 릴리스 발행·실기 설치·활성화는 계획 등록으로 자동 실행되지 않는다.
+
+## 2026-10-03 실행 상태
+
+| 작업 | 상태 | 근거/남은 조건 |
+|---|---|---|
+| T0 | 부분 완료 | 실제 lane TorchScript·영상·Pi 발견. 학습 YOLO 미발견, dataset/camera provenance 미확인 |
+| T1–T3 | 구현 완료 | schema /2, CPU adapter, YOLO 및 독립 lane exporter, 실패/동일성 검사 |
+| T4 | 구현·로컬 검사 | NCNN parity intake 및 파일 목록 기반 서명/전송/슬롯 경로. 기기 교체·rollback 실측 미완료 |
+| T5 | 구현·임시 ARM64 실행 | hash 고정 wheel, system cv2 유지. 새 이미지/payload 배포 readback 미완료 |
+| T6 | 부분 검증 | 20프레임 동일 원본 비교·제품 재생. 학습 물체 검출·30분 동시 부하·현장 수용 미완료 |
+| T7 | 변환 가능, 운영 HOLD | lane 픽셀 100% 일치. NCNN p95 474.59ms > ONNX 252.22ms, 운영 이전 보류 |
+
+[실행 증거](../validation/pi-ncnn-2026-10-03/README.md). 처음 발견한 기기 ONNX는 QDQ 110개(INT8)여서 별도 FP32 reference를 만들어 비교했다. 전체 ARTIFACT/DEVICE/FIELD gate는 승격하지 않는다.

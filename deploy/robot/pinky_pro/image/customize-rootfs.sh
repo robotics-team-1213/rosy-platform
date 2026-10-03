@@ -258,6 +258,9 @@ cp "$LEARNED_REQUIREMENTS" "$ROOT/tmp/rosy-core-probe/learned-perception-require
 chroot "$ROOT" env PYTHONNOUSERSITE=1 python3 -B -c \
     "import sys; sys.path.append('$LEARNED_TARGET'); import onnxruntime" \
     || fail "onnxruntime does not import from $LEARNED_TARGET"
+chroot "$ROOT" env PYTHONNOUSERSITE=1 python3 -B -c \
+    "import sys; sys.path.append('$LEARNED_TARGET'); import ncnn; import cv2; import numpy" \
+    || fail "ncnn or system OpenCV/NumPy does not import from the image"
 printf '%s\n' "$LEARNED_REQUIREMENTS_SHA" > "$ROOT/usr/local/share/rosy/learned-perception-runtime.sha256"
 chmod 0644 "$ROOT/usr/local/share/rosy/learned-perception-runtime.sha256"
 

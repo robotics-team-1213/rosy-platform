@@ -200,6 +200,12 @@ def _arguments():
     ap.add_argument("--kind", choices=("torchscript", "state_dict", "ultralytics"), required=True)
     ap.add_argument("--task", choices=TASKS, required=True)
     ap.add_argument("--out", required=True)
+    ap.add_argument("--backend", choices=("onnx", "ncnn"), default="onnx")
+    ap.add_argument("--frames", help="ncnn: held-out camera images (.png/.jpg/.jpeg) for real-frame parity")
+    ap.add_argument("--min-eval-frames", type=int, default=20)
+    ap.add_argument("--box-iou", type=float, default=0.95)
+    ap.add_argument("--confidence-tolerance", type=float, default=0.01)
+    ap.add_argument("--min-pixel-agreement", type=float, default=0.999)
     ap.add_argument("--model-class", help=f"state_dict only; one of {sorted(MODEL_REGISTRY)}")
     ap.add_argument("--input", type=int, nargs=2, metavar=("H", "W"))
     ap.add_argument("--classes", help="lane_seg: classes.yaml (roles cannot be guessed)")
@@ -214,6 +220,21 @@ def _arguments():
 
 
 def _refusal(args):
+    if args.backend == "ncnn":
+        if (args.kind, args.task) not in (("ultralytics", "object_det"), ("torchscript", "lane_seg")):
+            return "ncnn supports ultralytics object_det or independently verified torchscript lane_seg"
+        if args.int8:
+            return "ncnn int8 is not supported; --int8 is ONNX QDQ only"
+        if not args.frames:
+            return "ncnn needs --frames for real-camera parity"
+        if args.kind == "ultralytics" and args.color != "rgb":
+            return "ultralytics ncnn needs rgb input"
+        if args.min_eval_frames < 1 or not 0.95 <= args.box_iou <= 1 or not 0 <= args.confidence_tolerance <= 0.01:
+            return "invalid ncnn frame/detection parity limits"
+        if not 0.999 <= args.min_pixel_agreement <= 1:
+            return "min-pixel-agreement must be in [0.999, 1]"
+    if not all(np.isfinite(v) and v >= 0 for v in (args.tolerance, args.rtol)):
+        return "parity tolerance and rtol must be finite and nonnegative"
     if args.kind == "state_dict" and not args.model_class:
         return "state_dict needs --model-class (the model's code is not in a state_dict)"
     if args.kind == "ultralytics" and args.task != "object_det":
@@ -276,6 +297,12 @@ def main(argv=None) -> int:
         return 2
     hw = tuple(args.input) if args.input else (OBJECT_INPUT if args.task == "object_det" else LANE_INPUT)
     out = Path(args.out)
+    if args.backend == "ncnn":
+        if args.task == "lane_seg":
+            from export_ncnn_lane import convert_lane_ncnn
+            return convert_lane_ncnn(args, hw, out)
+        from export_ncnn import convert_ncnn
+        return convert_ncnn(args, hw, out)
     out.mkdir(parents=True, exist_ok=True)
     staged, staged_int8 = out / f".{ONNX_NAME}.fp32", out / f".{ONNX_NAME}.int8"
     try:

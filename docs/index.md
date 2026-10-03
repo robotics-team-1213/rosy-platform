@@ -273,8 +273,8 @@
 
 ## 최근 기록
 
+- 2026-10-03 · uncommitted · feat(perception): D-431 NCNN/OpenCV 구현과 실제 차선 Pi 재생
 - 2026-10-03 · uncommitted · docs(plan): schedule D-431 NCNN migration
 - 2026-10-03 · uncommitted · docs(adr): propose D-431 NCNN inference with OpenCV
 - 2026-10-03 · uncommitted · fix: retain the UDS owner after a caller disconnects
 - 2026-10-03 · uncommitted · feat: read live Fleet fence on the simulation Cell owner
-- 2026-10-03 · uncommitted · refactor: D-425 Task 3 lifetime acceptance

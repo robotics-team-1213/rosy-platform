@@ -88,7 +88,11 @@ class LaneSegModel:
         verify_files(manifest)
         factory = session_factory or (lambda p, t: _OrtSession(p, t, allow_spinning))
         try:
-            session = factory(manifest.onnx_file(), threads)
+            if session_factory is None and manifest.backend == "ncnn":
+                from .ncnn_session import NcnnSession
+                session = NcnnSession(manifest, threads)
+            else:
+                session = factory(manifest.onnx_file(), threads)
         except ManifestError:
             raise
         except Exception as exc:

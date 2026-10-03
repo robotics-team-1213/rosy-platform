@@ -35,6 +35,7 @@
 | D-356 | 인식 학습 루프 — 학습은 저장소 밖, manifest 약속·접수·데이터 세대 전달·섀도 추론은 안 |
 | D-373 | 학습 인식 두 번째 바퀴 — onnxruntime·모델 디렉터리는 Pinky 이미지 계층, 섀도·캡처는 기본 꺼진 페이로드, 불일치 60 s 스냅샷, 사이트 PC가 새 모델을 섀도까지 자동 반영; 정본은 store 폴더(로컬→NAS·Drive), HF는 선택 |
 | D-411 | Pilot 로봇측 학습 녹화(카메라 유닛 소유, CORE는 시작·정지 요청, `teleop/intent` 원 입력·주체 기록, 1회 10분)와 정지 중에만 허용하는 HTTP 수신(목록·tar·sha256 manifest, `rosy_ml fetch --http`); 기기가 알리는 조작부 서술자 `rosy.controls/1`(base_velocity·joint_jog·gripper, 드라이버는 전송·위젯은 kind별, 팔 조이스틱은 이전 목표 종료 후 순차 제한 목표); OMX 그리퍼 전용 절대 목표·쥠 readback(시뮬레이션만, D-390 유지) |
+| D-431 | 라즈베리파이 YOLO 추론은 NCNN을 목표로 하고 OpenCV 영상 처리와 학습 모델의 의미를 유지한다 |
 
 ## 계획·결과 문서
 
@@ -54,6 +55,7 @@
 - [2026-09-22-scene-context-road-design.md](../../../docs/plans/2026-09-22-scene-context-road-design.md)
 - [2026-09-22-scene-context-road.md](../../../docs/plans/2026-09-22-scene-context-road.md)
 - [2026-10-02-d411-pilot-recording-controls-plan.md](../../../docs/plans/2026-10-02-d411-pilot-recording-controls-plan.md)
+- [2026-10-03-pi-ncnn-opencv-implementation.md](../../../docs/plans/2026-10-03-pi-ncnn-opencv-implementation.md)
 
 ## 교훈 (docs/solutions)
 
@@ -66,8 +68,8 @@
 
 ## 최근 기록
 
+- 2026-10-03 · uncommitted · feat(perception): D-431 NCNN/OpenCV 구현과 실제 차선 Pi 재생
 - 2026-10-03 · 820444c49 · fix(perception): D-423 2·3단계 리뷰 반영
 - 2026-10-03 · uncommitted · fix(perception): D-423 조정자 결정 — 차선 서명 경고만, 서명 우회는 환경 변수로만
 - 2026-10-03 · 66c83863d · feat(perception): D-423 2·3단계 — 물체 검출 백엔드·노드·화면·작업별 슬롯·서명
 - 2026-10-03 · uncommitted · fix(sensing): D-423 리뷰 반영 — 운영자 덮어쓰기, 시뮬 스캔, 구독 조건
-- 2026-10-02 · 071acb65c · feat(sensing): D-423 카메라 영역 거리 — LiDAR 우선, 바닥 평면 예비

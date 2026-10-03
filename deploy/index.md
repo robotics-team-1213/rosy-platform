@@ -69,8 +69,8 @@
 
 ## 최근 기록
 
+- 2026-10-03 · uncommitted · feat(perception): D-431 NCNN/OpenCV 구현과 실제 차선 Pi 재생
 - 2026-10-03 · 119382fe6 · docs(native): D-423 `ROSY_OBJECT_DET=false` 를 learned-perception.env 예시에
 - 2026-10-03 · uncommitted · feat: read live Fleet fence on the simulation Cell owner
 - 2026-10-03 · uncommitted · feat: tick local Cell workflow on the existing simulation owner node
 - 2026-10-03 · uncommitted · fix(omx-sim): C4b 1b — 그리퍼 폭은 grant의 레시피, HTTP는 루프백 (C2, C4)
-- 2026-10-03 · uncommitted · fleet 빌드 맥락에 apps/gateway/src 재허용
