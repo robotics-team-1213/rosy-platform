@@ -2223,3 +2223,9 @@
 - 변경: 이전 후보와 활성 후보 비교에 canonical 경로를 사용한다. 상대 symlink 대상이 프로세스 작업 폴더 기준으로 기록되지 않도록 했다.
 - 증거: Linux 상대 symlink 회귀는 기존 코드에서 새 후보의 건강 실패 후 롤백 커밋 불일치로 RED였다. 보정 후 이전 폴더·실행 커밋 복원이 확인됐다. 검증 코드의 분리 위치 오류를 바로잡고 최종 관련 suite를 다시 실행 중이다. X:/DevTemp/rosy-rereview-linux-relative-red.txt.
 - gate 변화: 기존 gate 유지. 독립 재검토 승인과 운영 설치 증거는 별도로 확인한다.
+
+## 2026-10-04 · uncommitted · verify(D-441): 최종 Linux 관련 suite 확인
+
+- 변경: 상대 symlink 회귀를 포함한 최종 검증을 실행하고 코드 스타일을 확인했다.
+- 증거: Linux 갱신·자동 서명·서명 후보 검증기 77 passed/0 skipped. X:/DevTemp/rosy-rereview-linux-final.txt. flake8 통과. 독립 재검토는 최종 커밋을 확인 중이다.
+- gate 변화: 기존 gate 유지. push 전 검사와 운영 최초 설치는 별도 단계다.

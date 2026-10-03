@@ -255,6 +255,7 @@ def containers_reason(rows, commit: str, accepted: dict, run) -> str:
             return f'{service} running image identity differs from signed candidate'
     return ''
 
+
 def _sha256(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as stream:
