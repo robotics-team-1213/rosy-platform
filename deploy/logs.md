@@ -2063,7 +2063,7 @@
 - Final checks: sync regression 66 passed / 6 skipped; expanded image-sync/systemd/auto-update 441 passed / 8 skipped with one new read-path classification failure, then corrected classification regression 1 passed. flake8 passed; harness lint 0 errors / 26 existing freshness warnings. Provisioning-removal mutation failed as expected, original bytes restored. Independent code review found no blocking issues.
 
 
-## 2026-10-03 - uncommitted - fix: publish readable public DNS-SD XML
+## 2026-10-03 · uncommitted · fix: publish readable public DNS-SD XML
 
 - Change: chmod public Fleet/overhead advertisement XML to 0644 before atomic rename. NamedTemporaryFile defaults to 0600; that hides the XML from unprivileged Avahi even though the metadata is public. Keep credentials and TLS trust out of the advertisement.
 - Evidence: the actual new POSIX regression ran against streamed source on a Linux host; before the fix it failed at the pre-rename 0644 assertion, after the fix both Fleet and overhead passed with umask 0077 and an existing 0600 file. Scratch files were automatically removed; no operational files changed.
