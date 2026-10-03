@@ -5,7 +5,7 @@ import asyncio
 import pytest
 
 from core_common.protocol.schemas import ER2_TOOL_ARGUMENT_MAX_BYTES
-from fleet.ai.model_tool_catalog import MODEL_TOOL_CATALOG, provider_tool_schemas
+from fleet.ai.model_tool_catalog import MODEL_TOOL_CATALOG, ToolEffectClass, provider_tool_schemas
 from fleet.ai.model_tool_contract import ModelToolCall, ModelToolResult
 from test_er2_tool_dispatch import _dispatcher, _running_mission, _scope
 
@@ -149,10 +149,24 @@ def test_native_provider_calls_converge_on_fleet_read_and_candidate_contract(pro
     assert MODEL_TOOL_CATALOG["propose_replan"].device_action_api is False
 
 
+#: D-429 §3 / D-392 §4: direct site-device actuation names (signal, door, conveyor,
+#: PLC, generic). Examples of a regression boundary; the closed catalog rejects any
+#: other name too.
+SITE_DEVICE_ACTUATION_NAMES = [
+    "set_signal", "set_signal_mode", "set_signal_phase", "signal_command", "signal_all_red",
+    "post_signal_command",
+    "open_door", "close_door", "set_door_state",
+    "start_conveyor", "stop_conveyor", "set_conveyor_speed",
+    "write_plc_output", "write_coil", "write_register",
+    "set_site_device_state", "site_device_command",
+]
+
+
 @pytest.mark.parametrize("profile", ["interactions", "live"])
 @pytest.mark.parametrize("name", [
     "move", "set_gripper_state", "execute_action", "cancel_action", "stop",
     "emergency_stop", "rearm", "post_actions_execute",
+    *SITE_DEVICE_ACTUATION_NAMES,
 ])
 def test_sample_actuation_and_openapi_operations_stay_outside_catalog(profile, name, tmp_path):
     client, mission_id = _running_mission(tmp_path)
@@ -174,6 +188,17 @@ def test_sample_actuation_and_openapi_operations_stay_outside_catalog(profile, n
     assert result.reason_code == "TOOL_NOT_ALLOWED"
     assert name not in MODEL_TOOL_CATALOG
     assert all(not definition.device_action_api
+               for definition in MODEL_TOOL_CATALOG.values())
+
+
+def test_catalog_has_no_site_device_tool_or_effect_class():
+    """D-429 §3: until the follow-up candidate ADR lands, no catalog tool and no
+    effect class may touch a site device; candidates are the only future path."""
+    assert {member.value for member in ToolEffectClass} == {"read_only", "candidate_writing"}
+    words = ("signal", "door", "conveyor", "plc", "coil", "register", "site_device")
+    assert [name for name in MODEL_TOOL_CATALOG if any(word in name for word in words)] == []
+    assert not set(SITE_DEVICE_ACTUATION_NAMES) & set(MODEL_TOOL_CATALOG)
+    assert all(definition.effect_class in (ToolEffectClass.READ_ONLY, ToolEffectClass.CANDIDATE_WRITING)
                for definition in MODEL_TOOL_CATALOG.values())
 
 
