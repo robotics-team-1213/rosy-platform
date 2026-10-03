@@ -19,7 +19,8 @@
 - `pagehide/pageshow`의 persisted 이벤트는 시험이 주입한다. 브라우저가 실제 뒤로 가기에서 BFCache를 선택한다는 증거와 구별한다. API는 통제된 fixture이며 실제 현장·장치 수용은 아니다.
 - X: 사본의 자산 43개가 현재 product bytes와 같은지 먼저 확인했다. 종료 시 epoch disposal을 제거하면 **8 failed**, 카메라/Vision의 현재 작업 검사를 제거하면 종료 후 HTML 변화로 **4 failed**였다. 사본 bytes 복원과 현재 source 대조 후 Chromium **14 passed**. 제품 worktree에서 변이하지 않았다.
 - 공유 UI·ownership·Fleet site-lanes/static·quick 검사 **351 passed, 24 skipped, 26 warnings**. 새 비활성 사유 누락과 기존 설치 wiring 문자열 검사 실패를 수정한 뒤 재검사했다. 최초 Fleet 전체는 **1584 passed, 7 skipped, 1 failed**였으며 무실패 실행으로 표현하지 않는다.
-- 수정 후 Fleet 전체를 다시 실행해 **1585 passed, 7 skipped**를 확인했다. harness lint는 **0 errors, 26 warnings**였다. 선택한 운용 browser 검사에서는 **11 passed, 1 failed, 55 deselected**였고 실패한 등록 dialog 사례는 위 전체 inventory의 기존 OPEN 항목과 같다. 전체 browser 무실패 결과로 표현하지 않는다.
+- 수정 후 병합 전 Fleet 전체를 다시 실행해 **1585 passed, 7 skipped**를 확인했다. harness lint는 **0 errors, 26 warnings**였다. 선택한 운용 browser 검사에서는 **11 passed, 1 failed, 55 deselected**였고 실패한 등록 dialog 사례는 위 전체 inventory의 기존 OPEN 항목과 같다. 전체 browser 무실패 결과로 표현하지 않는다.
+- 최신 main `e25705e7e`의 변경을 병합한 뒤 quick/ownership/transport/static 검사 **164 passed, 25 warnings**, 실제 문서 Chromium **14 passed**를 확인했다. 변경 경로가 겹친 작업 로그는 양쪽 기록을 보존하고 생성 index를 다시 만들었다. 다른 worktree나 shared main의 미커밋 파일을 수정하지 않았다.
 - Fleet production 합계 증가를 **29017 lines**에서 다시 판단했다. 증가분은 기존 Console panel의 취소/정리 경계이며 backend owner나 명령 정책을 추가하지 않는다. D-425 Task 9가 UI source를 `ui/console`로 옮기며 Fleet server 분해와 기존 +150 package allowance는 계속 유효하다.
 
 임시 시험·변이 로그는 `X:/DevTemp/rosy-ui-ownership/task3-lifetime-*.txt`, `task3-mutant-*.txt`, `task3-lifetime-mutations/`에 있다.

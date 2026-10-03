@@ -72,6 +72,7 @@ class CoreServicesLike(Protocol):
     touch, not their types — behavior is unchanged.
     """
 
+    adapter_registry: Any
     audit: Any
     battery: Any
     calibration: Any

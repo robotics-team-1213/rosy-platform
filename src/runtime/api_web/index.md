@@ -30,8 +30,8 @@
 
 ## 최근 기록
 
+- 2026-10-03 · uncommitted · merge(main): D-411 B+C 계약을 API Ref v1.87 로 재번호
 - 2026-10-03 · uncommitted · docs(api): align contract description with v1.84
+- 2026-10-02 · uncommitted · feat(pilot): D-411 B 자산과 `autonomy` 문구
 - 2026-10-02 · uncommitted · docs(api): D-419 계약 버전 v1.86
 - 2026-10-02 · 758f9878e · feat(safety): `PUT /safety/limits` RETURN_HOME 경고 (D-419, 구 D-415)
-- 2026-10-02 · 8dd300c52 · feat(safety): `GET /safety/state` 에 `fleet_link` (D-415, API v1.80)
-- 2026-10-02 · 7322d1e2 · fix(host): D-406 T1 리뷰 반영 — 속도 신선도, 유한수, 충전 플래그

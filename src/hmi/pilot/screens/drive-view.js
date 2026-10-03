@@ -184,13 +184,15 @@ export function buildControls(profile) {
   // 좌: 속도·정밀 / 페달 / 제자리 회전   우: 2축 주행 스틱
   const left = el("div", null, {"data-drive-left": ""});
   const tune = el("div", null, {"data-drive-presets": ""});
-  const fine = el("ui-button", "정밀", {type: "button", "data-drive-fine": "", "aria-pressed": "false"});
-  fine.setAttribute("kind", "segment");
   tune.append(
     el("ui-text", "속도", {scale: "label"}),
     el("ui-actions", null, {"data-drive-preset-row": ""}),
-    fine,
   );
+  if (profile.fine !== false) {
+    const fine = el("ui-button", "정밀", {type: "button", "data-drive-fine": "", "aria-pressed": "false"});
+    fine.setAttribute("kind", "segment");
+    tune.append(fine);
+  }
   const pedals = el("div", null, {"data-drive-pedals": ""});
   const forward = el("ui-button", "전진 ▲", {type: "button", size: "primary", "data-drive-pedal": "forward"});
   forward.setAttribute("kind", "toggle");

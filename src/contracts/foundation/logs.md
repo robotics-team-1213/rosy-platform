@@ -61,6 +61,7 @@
 - gate 변화: 없음 (DEVICE 재검증 필요 — 무동작 `rosy-io` 에서 overlay 로 확인).
 - 결정: D-32, D-192, D-161. API Ref v1.21. 신규 ADR 없음.
 - 교훈: 네이티브 이미지에서 `runtime.mode` 는 unit 을 켜고 끄지 않는다(D-192) — 설정 문자열로 하드웨어 존재를 추론하면 운용자가 손으로 켠 런타임을 못 본다.
+
 ## 2026-09-25 · uncommitted · refactor(contracts): move core_common under src/contracts (D-231)
 
 - 변경: `src/contracts/core_common`로 이동, 동작 변경 없음 (D-231)
@@ -140,6 +141,7 @@
 - Change: additive `signal_source_kind: str = "camera"`, `signal_head_age_s: Optional[float]`, `signal_head_frozen: bool = False` on `TrafficPolicyStatus` — the D-337 measured-light fusion's observability (fused only while the observed head is usable). `rosy_default.yaml` documents the empty `traffic_policy.signal_observer` binding (overlay-only). API Reference v1.56 with example, prose, the `nav.traffic_policy_signal_source_stale` §8 row, and history entry in the same change (D-18).
 - Evidence: foundation suite green within the T3 combined run (501 passed); event catalogue green against the new emit site.
 - Gate: SOURCE/LOCAL contract only; no live observer, device, or FIELD acceptance.
+
 ## 2026-09-29 · uncommitted · feat(domain): capability lifecycle 단일 어휘 (D-347)
 
 - 변경: core_common/domain/capabilities.py에 CapabilityLifecycle(ready/unavailable/activating[예약]) enum과 lifecycle_from(advertised, runtime_reasons)을 추가했다. 판정은 새로 만들지 않는다 — 모드 마스킹의 withheld 사유(선과 같은 값이므로 우선)와 runtime_truth 사유, 플래그 참/거짓을 한 어휘로 합칠 뿐. §7 위반 없음: 프로파일과 런타임 어느 쪽도 true로 말하지 않는 플래그는 결과에 없다.
@@ -156,7 +158,6 @@
 - 결정: D-358 5.1.
 - 교훈: 없음.
 
-
 ## 2026-09-30 · uncommitted · docs(adr): D-358 앱 역할 ADR을 D-370으로 재번호
 
 - 변경: 이 모듈의 D-358 앱 역할·이름·아이콘 주석과 시험 문서 문자열을 D-370으로 바꿨다. 동작 변경 없음.
@@ -164,6 +165,7 @@
 - gate 변화: 없음.
 - 결정: 이 항목 앞의 "D-358 S1/S2/S3"·"D-358 N항"은 D-370을 가리킨다(main의 D-358 ER2 피드백 outbox와 다름). 옛 항목은 고치지 않는다.
 - 교훈: 없음.
+
 ## 2026-09-30 · uncommitted · docs(protocol): DeviceActionLookup 의미를 실제 사용에 맞춤
 
 - 변경: DeviceActionLookup은 attempt 범위 연산(현재 취소)의 identity pair라는 docstring으로 정정했다. OMX UDS v1 GetAction의 요청은 action_id만이며 응답에서 Fleet이 attempt/grant를 검증한다. API Reference §10.12를 함께 정정했다.
@@ -317,7 +319,6 @@
 - 증거: `test_device_action_contracts.py`에서 새 grant 왕복 및 잘못된 kind/hash/frame/높이/비유한 pose 거부를 추가했다. 전체 core_common SOURCE suite 424 passed/1 skipped; API Reference를 v1.78로 함께 올렸다.
 - gate 변화: 없음. 새 grant schema는 아직 producer/consumer dispatch 경로에서 사용되지 않는다.
 
-
 ## 2026-10-02 · 8dd300c52 · config: `safety.fleet_loss_timeout_s` (D-415)
 - 변경: `rosy_default.yaml` 에 `fleet_loss_timeout_s: 3.0`(1–60 s), `fleet_loss_policy` 주석에 네 값, `fleet.enabled` 주석을 "읽히지 않는다"로 정정. 스키마 변경 없음(`safety/state` 는 dict 응답).
 - 증거: `src/runtime/gateway/test/test_fleet_loss_wiring.py`(범위 밖 값은 빌드 실패).
@@ -334,7 +335,25 @@
 - 증거: `src/runtime/gateway/test/test_fleet_loss_wiring.py`(어기면 빌드 실패).
 - gate 변화: 없음.
 
+## 2026-10-02 · uncommitted · docs(controls): D-411 B `autonomy` 는 "제공함"이다
+- 변경: `BaseVelocityControl`·`pinky_controls` docstring — `autonomy` 는 기기가 제공하는 모드이고 지금 시작할 수 있다는 증거가 아니다(쉬는 동안 차선 준비를 보이는 신호가 없다).
+- 증거: 문서만. `test_controls_contract.py` 변화 없음.
+- gate 변화: 없음.
+- 결정: D-411 구현 부록 5.
+
 ## 2026-10-03 · uncommitted · feat(protocol): publish strict Cell goal submission contract
 - Change: Move the bounded Cell goal envelope to protocol/cell_goal_evidence.py and re-export CellGoalEvidenceSubmission from schemas.py. Keep envelope protocol_version 1.0 and record additive API Reference v1.84. Re-judge the one-line schemas export at 1240 with unchanged zero-growth allowance.
 - Evidence: Foundation and protocol alignment 427 passed/1 skipped; final HTTP producer/consumer and legacy/version checks 64 passed; changed contract Python passes flake8.
 - Gate: SOURCE/LOCAL contract evidence; no installed artifact or physical acceptance.
+
+## 2026-10-03 · uncommitted · feat(core_common): D-411 C `OmxSimGripperGoal`
+- 변경: `protocol/omx_sim.py` `OmxSimGripperGoal{instance_id, seat_id, request_id, position, duration_s, state_sequence, expires_at_ms}` — 유한한 절대 위치, 길이 `GRIPPER_GOAL_MIN_DURATION_S`–`GRIPPER_GOAL_MAX_DURATION_S`(0.2–2.0 s), 다른 필드 거부. 위치 한계는 런타임(셀 프로필)이 판정한다.
+- 증거: `python -m pytest src/contracts/foundation/test/ -q` → 498 passed, 3 skipped (2026-10-03 Windows).
+- gate 변화: 없음.
+- 결정: D-411 C 결정 12.
+
+## 2026-10-03 · uncommitted · feat(controls): D-411 C 검토 — `GripperControl.max_velocity`
+- 변경: 선택 필드 `max_velocity`(rad/s, >0, 유한). 이보다 빠른 그리퍼 목표는 기기가 거절한다.
+- 증거: `python -m pytest src/contracts/foundation/test/ -q` 통과 (2026-10-03 Windows).
+- gate 변화: 없음.
+- 결정: D-411 구현 부록 10.

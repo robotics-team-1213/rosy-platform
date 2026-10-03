@@ -4,7 +4,7 @@ One process: the ROS runtime (one ArmCommandOwner), the D-336 UDS socket in a th
 Pilot simulation HTTP app on the main thread, assembled by rosy_agent.omx_cell_owner. It refuses
 to start beside pilot_sim_server or the C3 probe. Simulation only; not a device entrypoint.
 Wave 1 gaps (see C4b logs): the Pilot HTTP app has no /cell routes or seat<->Action exclusion yet
-(G9), the Fleet stop chain (G7) still has to replace the Fleet-fence callable below, while phase
+(G9), the Fleet stop chain (G7) still needs live ROS/UDS fault acceptance, while phase
 progression uses the existing locally gated Cell workflow.
 """
 
@@ -33,6 +33,8 @@ def main() -> None:
     if Path("/dev/serial/by-id").exists() or list(Path("/dev").glob("video*")):
         raise RuntimeError("the simulation cell owner refuses hardware device grants")
     fleet_uid = int(os.environ["ROSY_FLEET_PEER_UID"])
+    from rosy_agent.fleet_fence import fleet_fence_from_environment
+    fleet_fence = fleet_fence_from_environment()
     refuse_second_owner()
 
     import rclpy
@@ -70,8 +72,7 @@ def main() -> None:
             common_root=REPO / "src/hmi/web_common", pairing_code=secrets.token_urlsafe(12)),
         refuse_second_owner=lambda: None,  # checked above, before rclpy
         gripper_readback=gripper_readback,
-        # Wave 1: an authenticated Fleet RearmLocal is taken as Fleet-current. G7 replaces this.
-        fleet_fence_current=lambda epoch, generation: True,
+        fleet_fence_current=fleet_fence,
     )
     holder["owner"] = owner
     workflow_timer = node.create_timer(0.05, owner.advance_pending)
