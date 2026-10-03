@@ -1,10 +1,17 @@
 name: Build unsigned site candidate
 
 # D-437: the site candidate (Fleet, Vision, proxy; linux/amd64) is built on a
-# GitHub-hosted runner and published as an UNSIGNED prerelease. The operator
-# signs release.json on the offline signing station (sign_candidate.py
-# --manifest-only, D-301) and attaches release.json.sig. No secret except
-# GITHUB_TOKEN is used; signing keys never reach GitHub.
+# GitHub-hosted runner and published as an UNSIGNED prerelease. The operator's
+# signing PC signs release.json (sign_candidate.py --manifest-only, D-301;
+# automatically through auto_sign_candidates.py since D-440) and attaches
+# release.json.sig. No secret except GITHUB_TOKEN is used; signing keys never
+# reach GitHub.
+#
+# D-440: a push to main that touches anything the images or the candidate
+# contain builds automatically. The paths below are the build_candidate.py
+# image source paths (deploy/site plus every Fleet/Vision Dockerfile COPY
+# source), its DOC_FILES, and this file; test_site_candidate_workflow.py keeps
+# them in step.
 
 on:
   workflow_dispatch:
@@ -14,10 +21,28 @@ on:
         required: false
         default: ""
         type: string
+  push:
+    branches: [main]
+    paths:
+      - deploy/site/**
+      - src/site/fleet/**
+      - src/site/vision/**
+      - src/site/games/**
+      - src/contracts/foundation/core_common/**
+      - operations/apps/fleet/**
+      - src/hmi/web_common/**
+      - src/runtime/sensing/map/map_v2_fleet/lane_graph.yaml
+      - src/runtime/sensing/map/map_v2_fleet/meshes/road_lines.stl
+      - docs/reference/site-lan-discovery-profile.md
+      - .github/workflows/build-site-candidate.yml
 
 permissions:
   contents: read
 
+# One run per built commit (a second dispatch of the same commit waits, then
+# stops in check-release-free). Newer pushes cancel older push *builds* via the
+# job-level group on build-unsigned-candidate; publishing is never cancelled
+# mid-way (publish-unsigned-prerelease has its own non-cancelling group).
 concurrency:
   group: rosy-site-candidate-${{ inputs.ref || github.sha }}
   cancel-in-progress: false
@@ -30,6 +55,7 @@ jobs:
       contents: read
     outputs:
       commit: ${{ steps.free.outputs.commit }}
+      build: ${{ steps.free.outputs.build }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0 (pinned commit)
         with:
@@ -43,23 +69,39 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
+          EVENT_NAME: ${{ github.event_name }}
         run: |
           set -euo pipefail
           commit="$(git rev-parse HEAD)"
           [[ "$commit" =~ ^[0-9a-f]{40}$ ]]
           tag="site-${commit:0:12}"
+          echo "commit=$commit" >>"$GITHUB_OUTPUT"
           # Only a 404 means "free"; any other API failure stops the run.
           if response="$(gh api "repos/${GH_REPO}/releases/tags/${tag}" 2>&1)"; then
+            if [[ "$EVENT_NAME" == "push" ]]; then
+              # D-440: a push (e.g. a re-run) for a commit that already has its
+              # release succeeds without building; dispatch still fails fast.
+              echo "::notice::release ${tag} already exists; nothing to build"
+              echo "build=false" >>"$GITHUB_OUTPUT"
+              exit 0
+            fi
             echo "::error::release ${tag} already exists; delete it or build another commit"
             exit 1
           elif ! grep -q "HTTP 404" <<<"$response"; then
             echo "$response" >&2
             exit 1
           fi
-          echo "commit=$commit" >>"$GITHUB_OUTPUT"
+          echo "build=true" >>"$GITHUB_OUTPUT"
 
   build-unsigned-candidate:
     needs: check-release-free
+    if: needs.check-release-free.outputs.build == 'true'
+    # D-440: the newest push to main wins. A newer push cancels an older push's
+    # build (its attest/publish jobs are then skipped); a dispatch gets its own
+    # group and is never cancelled. Only this job is cancellable.
+    concurrency:
+      group: rosy-site-candidate-build-${{ github.event_name == 'push' && 'main-push' || github.run_id }}
+      cancel-in-progress: ${{ github.event_name == 'push' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     permissions:
@@ -258,6 +300,12 @@ jobs:
 
   publish-unsigned-prerelease:
     needs: [build-unsigned-candidate, attest-provenance]
+    # Publishing (create, then prune) is serialized and never cancelled once
+    # running, so a release is never left half-published and two prunes never
+    # race. A publish still waiting is replaced by a newer one (newest wins).
+    concurrency:
+      group: rosy-site-candidate-publish
+      cancel-in-progress: false
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     permissions:
@@ -292,9 +340,10 @@ jobs:
           notes="UNSIGNED until release.json.sig is attached.
 
           Site candidate (Fleet, Vision, proxy; linux/amd64) built from commit ${COMMIT} by ${RUN_URL}.
-          Sign release.json on the offline signing station with sign_candidate.py --manifest-only,
-          upload release.json.sig to this release, then fetch and verify on the site host before
-          docker image load (deploy/site/README.md, CI-built candidates (D-437))."
+          The operator's signing PC signs release.json (sign_candidate.py --manifest-only, run by
+          auto_sign_candidates.py after the provenance and main-ancestry checks, D-440) and uploads
+          release.json.sig. The site host verifies it before docker image load
+          (deploy/site/README.md, CI-built candidates (D-437), Automatic updates (D-440))."
           gh release create "$TAG" \
             --prerelease \
             --target "$COMMIT" \
