@@ -585,6 +585,7 @@ safety_modules:
   - middleware/core/gateway/core/bridge/cmd_vel.py
   - middleware/core/services/core_features/command/manager.py
   - middleware/core/services/core_features/command/arbitration.py
+  - middleware/core/services/core_features/docking/charging.py
   - middleware/core/services/core_features/line_follow/body_stop.py
   - middleware/core/services/core_features/line_follow/clearance.py
   - middleware/core/api_web/core_api_web/api/v1/safety.py
@@ -619,6 +620,7 @@ safety_anchors:
   - {symbol: core.fleet_loss_wiring.build_fleet_loss}
   - {symbol: core.bridge.cmd_vel.cmd_vel_cycle}
   - {symbol: core_features.command.manager.CommandManager}
+  - {symbol: core_features.docking.charging.ChargingConfirmation}
   - {symbol: core_features.command.arbitration.ModeMachine.release_emergency, public: true}
   - {symbol: core_features.command.arbitration.ModeMachine.is_emergency, public: true}
   - {symbol: core_features.command.arbitration._ALLOWED}

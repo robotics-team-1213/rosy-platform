@@ -33,6 +33,13 @@ from test_platform_parts import _manifest as _read_manifest
 
 SAFETY = "safety"
 
+
+def test_charging_confirmation_is_safety_tagged():
+    """D-443 Q8: charging evidence controls D-27 discharge-stop suppression."""
+    path = "middleware/core/services/core_features/docking/charging.py"
+    assert path in _manifest()["safety_modules"]
+    assert _concern_of(path) == SAFETY
+
 #: One parse per session; the tests below only read it.
 _manifest = functools.lru_cache(maxsize=1)(_read_manifest)
 
