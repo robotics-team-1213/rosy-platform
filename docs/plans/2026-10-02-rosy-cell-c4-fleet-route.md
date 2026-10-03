@@ -167,7 +167,7 @@ from core_common.protocol.schemas import FleetActionGrant, FleetCellTransferGran
 
 T0 = datetime(2026, 10, 2, 0, 0, 0, tzinfo=timezone.utc)
 T1 = datetime(2026, 10, 2, 0, 0, 15, tzinfo=timezone.utc)
-PICK_PLACE_GOLDEN = "c847300c318ada2b16e49833603f499ccf6fcd2a4d70f18f2bd2c2e8d7014db8"
+PICK_PLACE_GOLDEN = "c847300c318ada2b16e49833603f499ccf6fcd2a4d70f18f2bd2c2e8d7014db8"  # sha256 request digest (public, not a credential)
 
 def _evidence(**o):
     v = {"object_id": "red-block-01", "observation_id": "camera-frame-44", "frame_sha256": "b" * 64,
