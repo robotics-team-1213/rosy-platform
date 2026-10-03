@@ -252,8 +252,9 @@ md("""
 ### 5c. 실험 기록 (로컬 + TensorBoard)
 
 기본 기록이다. `RUNS_DIR/<UTC 시각>-<TRAINER>/`에 `config.json`(학습 설정), `history.json`(에폭마다 갱신, 중간에 멈춰도 남는다),
-`summary.json`(7단계 끝에 가장 좋은 에폭과 `model_revision`)을 쓰고, `tensorboard`가 설치돼 있으면 TensorBoard 이벤트 파일도 같은 폴더에 쓴다
-(없으면 TensorBoard만 건너뛰고 `history.json`에 `"tensorboard": "unavailable"`로 남긴다). 토큰·키가 들어간 설정 항목은 기록에서 빠진다.
+`summary.json`(7단계 끝에 가장 좋은 에폭, `model_revision`, 내보낸 폴더의 상대 경로)을 쓰고, `tensorboard`가 설치돼 있으면 TensorBoard 이벤트 파일도 같은 폴더에 쓴다
+(없으면 TensorBoard만 건너뛰고 `history.json`에 `"tensorboard": "unavailable"`로 남긴다). 토큰·키가 들어간 설정 항목은 기록에서 빠진다(키 이름만 본다. 설정에 비밀 문장을 적지 않는다). 기록 중 오류(TensorBoard, 디스크)는 기록만 멈추고 학습은 멈추지 않는다.
+manifest에는 호스트 경로 없이 고정 형태 `runs/<run_id>`만 들어간다.
 이 폴더는 모델 폴더(`out/lane_model`)와 따로이므로 store inbox로 넘어가지 않는다.
 """)
 code('''
@@ -261,7 +262,10 @@ code('''
 import datetime, re
 from run_log import RunLog, chain
 
-RUN_ID = f"{datetime.datetime.now(datetime.timezone.utc):%Y%m%dT%H%M%SZ}-{re.sub(r'[^A-Za-z0-9_.-]', '_', TRAINER)}"
+if globals().get("RUN_LOG") is not None:   # 이 셀을 다시 실행: 앞 기록을 먼저 닫는다
+    RUN_LOG.close()
+_slug = re.sub(r"[^A-Za-z0-9._-]", "_", TRAINER)[:64]
+RUN_ID = f"{datetime.datetime.now(datetime.timezone.utc):%Y%m%dT%H%M%SZ}-{_slug}"
 RUN_DIR = os.path.join(RUNS_DIR, RUN_ID)
 RUN_CONFIG = {
     "epochs": EPOCHS, "lr": LR, "batch": BATCH, "classes": EXPORT_CLASSES,
@@ -270,7 +274,7 @@ RUN_CONFIG = {
     "trainer": TRAINER, "trainer_note": TRAINER_NOTE}
 RUN_LOG = RunLog(RUN_DIR)
 RUN_LOG.write_config(RUN_CONFIG)
-LOCAL_EXPERIMENT = {"tracker": "local", "run_id": RUN_ID, "path": f"{os.path.basename(RUNS_DIR)}/{RUN_ID}"}
+LOCAL_EXPERIMENT = {"tracker": "local", "run_id": RUN_ID, "path": f"runs/{RUN_ID}"}
 print("실험 기록 폴더:", RUN_DIR, "| TensorBoard:", RUN_LOG.tensorboard)
 ''')
 
@@ -358,7 +362,7 @@ md("""
 `export()`가 opset 17 ONNX와 `model_manifest.json`을 만든다. 전처리 값은 2단계의 `PRE`에서 그대로 가져온다.
 manifest의 `dataset`에는 `store:<이름>`과 내용 해시가 들어간다.
 `metrics.experiment`에는 W&B run이 있으면 그 링크, 없으면 로컬 기록 폴더(`tracker: local`)가 들어간다.
-로컬 `summary.json`에 가장 좋은 에폭, 검증 IoU, `model_revision`, 내보낸 경로를 적고(W&B가 있으면 그 요약에도), run을 닫는다.
+로컬 `summary.json`에 가장 좋은 에폭, 검증 IoU, `model_revision`, 내보낸 폴더(상대 경로)를 적고(W&B가 있으면 그 요약에도), run을 닫는다.
 끝에 TensorBoard 실행 명령을 출력한다.
 """)
 code('''
@@ -375,7 +379,7 @@ MODEL_REVISION = doc["model_revision"]
 print(MODEL_REVISION)
 print("trainer:", TRAINER_ID)
 RUN_LOG.finish({"best_epoch": best_epoch, "val_iou": VAL_IOU, "model_revision": MODEL_REVISION,
-                "export_path": os.path.abspath(OUT_DIR), "trainer": TRAINER_ID,
+                "export_dir": OUT_DIR, "trainer": TRAINER_ID,
                 "experiment": WANDB_EXPERIMENT or LOCAL_EXPERIMENT})
 print("실험 기록 폴더:", RUN_DIR)
 print("TensorBoard 보기:  tensorboard --logdir", RUNS_DIR)

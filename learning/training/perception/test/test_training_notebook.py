@@ -156,7 +156,10 @@ def test_local_run_log_is_the_default_record():
     for needle in ('"dataset_content_sha": DS_SHA', '"camera_profile_revision"', '"repo_commit": REPO_COMMIT',
                    '"trainer_note": TRAINER_NOTE', '"preprocessing"', '"classes"', '"lr": LR'):
         assert needle in loc, needle
-    assert '"tracker": "local"' in loc
+    assert '"tracker": "local"' in loc and '"path": f"runs/{RUN_ID}"' in loc and "basename" not in loc
+    assert "[^A-Za-z0-9._-]" in loc and "RUN_LOG.close()" in loc
+    assert cells.index(loc) < cells.index(_cell("#@title 6."))
+    assert "export_path" not in _cell("#@title 7.") and "abspath" not in _cell("#@title 7.")
     assert "config=RUN_CONFIG" in _cell("#@title 5d.")   # W&B gets the same dict
     export = _cell("#@title 7.")
     assert "experiment=WANDB_EXPERIMENT or LOCAL_EXPERIMENT" in export
