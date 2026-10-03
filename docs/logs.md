@@ -4785,7 +4785,13 @@
 - 증거: D-290/D-298/D-369/D-399/D-413/D-429와 현재 PlanBundle·cell submission 대조. 단일 팔·수동 조작·운송·formation·미래 컨베이어·복합 로봇·stop 경쟁·불명 Action·독립 셀 반례를 초안에 기록했다.
 - gate 변화: 없음. Proposed만 추가했으며 기존 Accepted 계약과 공개 API·코드·정지 fence·원장·policy dispatch·장치 수용은 변경하지 않는다.
 - 검증: 문서 계약 83 passed/26 existing history warnings(full lint·generated records 포함), D-435 제목/상태/색인 일치·로컬 링크 16개 누락 0·반례 9개·diff whitespace 검사 통과. 이전 isaac_sim 구조 기준선 실패는 별도 미해결이며 이번 문서 검증의 통과 범위에 포함하지 않는다.
-<<<<<<< HEAD
+
+## 2026-10-03 · uncommitted · docs: D-431 remote model PC and isolated Pi verification
+
+- 변경: 기존 원격 학습 PC로 실제 차선 TorchScript의 NCNN 변환·제품 intake를 실행하고 후속 증거와 계획 상태를 기록했다. Pi 임시 경로에서 서명 전달·손상 후보 거부·ONNX rollback을 검증했다.
+- 증거: 20프레임 pixel agreement 100%, PC NCNN/ONNX intake 각 380프레임 pass. 실기 격리 SignatureCheck/ModelSlot/rollback pass, 운영 pointer·manifest 전후 동일. 30분 동시 부하는 마지막 기록 표본 1,337.41초를 남긴 뒤 ROS 종료·cleanup 오류로 중단됐고 CPU 진단 ERROR, 마지막 p95 595.41ms였다. 정확한 종료 시간은 미확인이다. 잔여 임시 인증 1개는 API 회수와 readback 완료.
+- gate 변화: 없음. 학습 YOLO·라벨 IoU·provenance·30분 완료·정식 ARM64 release readback은 미완료이며 운영 전환과 ARTIFACT/DEVICE/FIELD 승격은 HOLD다.
+- 결정: D-431. 시스템 OpenCV와 기존 ONNX를 유지한다. 상세 범위는 `validation/pi-ncnn-remote-2026-10-03/README.md`.
 
 
 ## 2026-10-03 · uncommitted · feat(link): D-432 주소 없는 장비 접속
@@ -4816,12 +4822,3 @@
 - 증거: native systemd/버전 문서/구조 시험 199 passed/1 skipped. 최종 quick tier와 SSH 영향 범위는 별도 재실행한다.
 - gate 변화: 장치 활성화·물리 주행·FIELD 이동 없음.
 - 결정: D-418와 D-432를 각각의 경로/opt-in 소유권으로 보존한다.
-=======
-
-## 2026-10-03 · uncommitted · docs: D-431 remote model PC and isolated Pi verification
-
-- 변경: 기존 원격 학습 PC로 실제 차선 TorchScript의 NCNN 변환·제품 intake를 실행하고 후속 증거와 계획 상태를 기록했다. Pi 임시 경로에서 서명 전달·손상 후보 거부·ONNX rollback을 검증했다.
-- 증거: 20프레임 pixel agreement 100%, PC NCNN/ONNX intake 각 380프레임 pass. 실기 격리 SignatureCheck/ModelSlot/rollback pass, 운영 pointer·manifest 전후 동일. 30분 동시 부하는 마지막 기록 표본 1,337.41초를 남긴 뒤 ROS 종료·cleanup 오류로 중단됐고 CPU 진단 ERROR, 마지막 p95 595.41ms였다. 정확한 종료 시간은 미확인이다. 잔여 임시 인증 1개는 API 회수와 readback 완료.
-- gate 변화: 없음. 학습 YOLO·라벨 IoU·provenance·30분 완료·정식 ARM64 release readback은 미완료이며 운영 전환과 ARTIFACT/DEVICE/FIELD 승격은 HOLD다.
-- 결정: D-431. 시스템 OpenCV와 기존 ONNX를 유지한다. 상세 범위는 `validation/pi-ncnn-remote-2026-10-03/README.md`.
->>>>>>> main
