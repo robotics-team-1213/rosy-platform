@@ -274,8 +274,8 @@
 
 ## 최근 기록
 
+- 2026-10-04 · uncommitted · cam: 승인한 자동 조명과 사진 저장 구현
 - 2026-10-04 · uncommitted · cam: 실제 사진 공유와 저조도 촬영 검토안
 - 2026-10-04 · uncommitted · site(D-437): verifier accepts the containerd image ID form
 - 2026-10-03 · uncommitted · docs: D-436 change-scoped host test tiers
 - 2026-10-03 · uncommitted · docs: Fleet deployment preflight lessons
-- 2026-10-03 · uncommitted · site(D-437): security review fixes for CI-built site candidates
