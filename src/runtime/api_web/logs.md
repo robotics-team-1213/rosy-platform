@@ -391,3 +391,9 @@
 - 증거: 병합 커밋의 host pytest 묶음(보고서), `rosy_harness.py lint`.
 - gate 변화: 없음.
 - 결정: D-418.
+
+## 2026-10-03 · 0e244456c · docs(api): D-418 재번호 항목의 커밋 기록 정정
+- 변경: 앞의 `2026-10-03 · uncommitted · merge(main): D-418 SSH 접속 계약을 API Ref v1.89 로 재번호` 항목은 병합 커밋 96a7d57b6 에 들어갔다. logs 는 append-only 라 머리말은 그대로 두고 여기 적는다. API·코드 변화 없음.
+- 증거: `git log --oneline` (feat/d418-ssh-access).
+- gate 변화: 없음
+- 결정: D-418

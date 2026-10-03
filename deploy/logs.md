@@ -2151,3 +2151,10 @@
 - 증거: 검사기 0건. `test_rosy_ssh_enroll`·`test_rosy_ssh_share`·`test_ssh_access`·`test_host_ssh`·`test_release_boundary_guards`·`test_module_structure`·native systemd 계약 561 passed 4 skipped(Windows).
 - gate 변화: 없음
 - 결정: D-418
+
+## 2026-10-03 · 0e244456c · fix(tools): rosy_ssh_share 가 터미널 밖에서 생성 passphrase 를 출력하지 않음 (D-418)
+- 변경: `create` 가 passphrase 를 만들어야 하고 stderr 가 터미널이 아니면(로그·CI·감싸는 스크립트) 키 생성·로봇 등록·묶음 전에 멈춘다. `--print-passphrase` 를 주면 경고와 함께 예전처럼 한 번 보인다. 직접 입력한 passphrase 는 원래 출력하지 않으므로 그대로다. `docs/deployment/robot-ssh-access.md` 의 해당 줄을 맞췄다.
+- 기록 정정: 바로 앞 `2026-10-03 · uncommitted · fix(native,tools,test): D-418 파일의 비밀 검사 23건` 항목의 커밋은 1acc6b7be 다(logs 는 append-only 라 그 머리말은 고치지 않는다).
+- 증거: `test/test_rosy_ssh_share.py` 28 passed — 새 시험(터미널 아님 → 상태 1, 로봇 요청 없음, `--out` 비어 있음)과 `--print-passphrase` 로 바꾼 한 번 표시 시험.
+- gate 변화: 없음
+- 결정: D-418
