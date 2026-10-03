@@ -4,7 +4,7 @@ Safety-tagged files are the Python files under a ``concern: safety`` root plus t
 ``safety_modules`` list in ``tools/harness/platform_parts.yaml``. Each test says
 whether it is structural (static AST over tracked files) or behavioural. The
 behavioural invariants 3b and 4 need ``core_features`` on ``sys.path`` and live in
-``src/runtime/services/test/test_safety_behaviour.py``.
+``middleware/core/services/test/test_safety_behaviour.py``.
 
 KNOWN_SAFETY_VIOLATIONS is checked by set equality like ``KNOWN_VIOLATIONS`` in
 ``test_platform_parts.py``: a new edge fails, a listed edge that no longer occurs
@@ -307,7 +307,7 @@ CMD_VEL_SCOPE_EXCLUDED = {
 }
 CMD_VEL_TOPICS = {"cmd_vel", "/cmd_vel"}
 #: The single writer (D-2, D-38).
-CMD_VEL_PUBLISHER = "src/runtime/gateway/core/bridge/ros_bridge.py"
+CMD_VEL_PUBLISHER = "middleware/core/gateway/core/bridge/ros_bridge.py"
 #: ``declare_parameter`` defaults of "cmd_vel": the legacy D-208 standalone safety node only.
 CMD_VEL_PARAMETER_ALLOWLIST = {"src/runtime/sensing/control/safety/node.py"}
 OMX_SCOPE = ("middleware/apps/device/omx/", "integrations/robots/omx/")
@@ -389,7 +389,7 @@ def test_each_separation_rule_checks_at_least_one_importer():
 #: else is a recorded exception that needs a per-robot approval record.
 FLEET_LOSS_FAIL_CLOSED = {"STOP", "HOLD"}
 APPROVAL_FIELDS = ("robot", "approver", "evidence")
-DEFAULT_CONFIG = "src/contracts/foundation/config/rosy_default.yaml"
+DEFAULT_CONFIG = "contracts/foundation/config/rosy_default.yaml"
 
 
 def _fleet_loss_problems(safety: dict) -> list[str]:

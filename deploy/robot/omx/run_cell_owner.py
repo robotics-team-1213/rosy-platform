@@ -17,7 +17,7 @@ import threading
 from pathlib import Path
 
 REPO = Path(os.environ.get("ROSY_SIM_REPO", "/repo"))
-for _part in ("src/contracts/foundation", "contracts/skill/src", "middleware/apps/device/omx/adapter", "middleware/apps/device/omx/agent/src",
+for _part in ("contracts/foundation", "contracts/skill/src", "middleware/apps/device/omx/adapter", "middleware/apps/device/omx/agent/src",
               "operations/execution/src", "operations/processes/palletizing/src", "middleware/skills/api/src",
               "middleware/skills/manipulation/src", "integrations/robots/omx/src", "deploy/robot/omx"):
     sys.path.append(str(REPO / _part))

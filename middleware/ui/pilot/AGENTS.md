@@ -50,7 +50,7 @@ Rosy Pilot 원격 조종 표면(D-323). 정적 파일이며 `core_api_web`이 `/
 ### Testing Requirements
 
 ```bash
-python -m pytest middleware/ui/pilot/test src/runtime/api_web/test/test_pilot_route.py -q
+python -m pytest middleware/ui/pilot/test middleware/core/api_web/test/test_pilot_route.py -q
 ```
 
 ### Common Patterns

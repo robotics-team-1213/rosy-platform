@@ -17,7 +17,7 @@ ROOT = Path(__file__).resolve().parents[1]
 for path in (
     ROOT / "deploy" / "robot" / "pinky_pro" / "release",
     ROOT / "tools" / "harness",
-    ROOT / "src" / "contracts" / "foundation",
+    ROOT / "contracts" / "foundation",
     ROOT / "operations" / "fleet",
 ):
     entry = str(path)

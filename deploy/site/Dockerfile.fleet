@@ -19,7 +19,7 @@ COPY deploy/site/requirements-fleet.txt /opt/rosy/requirements.txt
 COPY deploy/site/secret_exec.py /opt/rosy/secret_exec.py
 COPY deploy/site/site_db.py /opt/rosy/site_db.py
 COPY operations/fleet/ /opt/rosy/src/site/fleet/
-COPY src/contracts/foundation/core_common/ /opt/rosy/src/contracts/foundation/core_common/
+COPY contracts/foundation/core_common/ /opt/rosy/src/contracts/foundation/core_common/
 COPY operations/apps/fleet/src/ /opt/rosy/apps/gateway/src/
 COPY shared/web/ /opt/rosy/web-common/
 # D-375 console map-fit overlay: site lane geometry, display only (--site-lane-graph/--site-lane-paint).

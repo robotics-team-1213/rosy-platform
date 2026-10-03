@@ -32,10 +32,10 @@ stale_after_commits: 5
 # shipped-code surface. Shared compose/Nav2 slice files are contracts only.
 modules:
   - name: core
-    path: src/runtime/gateway
-    tests: [src/runtime/gateway/test]
+    path: middleware/core/gateway
+    tests: [middleware/core/gateway/test]
     functional_kind: pytest
-    functional: [src/runtime/gateway/test]
+    functional: [middleware/core/gateway/test]
   - name: deploy
     path: deploy
     tests: [test]
@@ -119,25 +119,25 @@ modules:
     functional_kind: host-contract
     functional: [middleware/drivers/pinky_lamp/test/test_lamp_package_contract.py]
   - name: core_common
-    path: src/contracts/foundation
-    tests: [src/contracts/foundation/test]
+    path: contracts/foundation
+    tests: [contracts/foundation/test]
     functional_kind: pytest
-    functional: [src/contracts/foundation/test]
+    functional: [contracts/foundation/test]
   - name: core_events
-    path: src/runtime/events
-    tests: [src/runtime/events/test/test_audit.py, src/runtime/gateway/test/test_core_logic.py]
+    path: middleware/core/events
+    tests: [middleware/core/events/test/test_audit.py, middleware/core/gateway/test/test_core_logic.py]
     functional_kind: pytest
-    functional: [src/runtime/events/test/test_audit.py]
+    functional: [middleware/core/events/test/test_audit.py]
   - name: core_features
-    path: src/runtime/services
-    tests: [src/runtime/gateway/test/test_core_logic.py, src/runtime/services/test/test_docking.py, src/runtime/services/test/test_swarm.py, src/runtime/gateway/test/test_power.py, src/runtime/gateway/test/test_traffic_policy.py, src/runtime/services/test/test_teleop_intent.py]
+    path: middleware/core/services
+    tests: [middleware/core/gateway/test/test_core_logic.py, middleware/core/services/test/test_docking.py, middleware/core/services/test/test_swarm.py, middleware/core/gateway/test/test_power.py, middleware/core/gateway/test/test_traffic_policy.py, middleware/core/services/test/test_teleop_intent.py]
     functional_kind: pytest
-    functional: [src/runtime/gateway/test/test_core_logic.py, src/runtime/services/test/test_docking.py]
+    functional: [middleware/core/gateway/test/test_core_logic.py, middleware/core/services/test/test_docking.py]
   - name: core_api_web
-    path: src/runtime/api_web
-    tests: [src/runtime/api_web/test]
+    path: middleware/core/api_web
+    tests: [middleware/core/api_web/test]
     functional_kind: pytest
-    functional: [src/runtime/api_web/test]
+    functional: [middleware/core/api_web/test]
   - name: web_common
     path: shared/web
     tests: [shared/web/test/test_ui_token_contracts.py, shared/web/test/test_palette_gates.py, shared/web/test/test_headless_state.py]
@@ -159,11 +159,11 @@ modules:
     functional_kind: pytest
     functional: [middleware/apps/device/omx/adapter/test]
   - name: interfaces
-    path: src/contracts/interfaces
-    tests: [src/contracts/interfaces/test/test_srv_surface.py]
+    path: contracts/ros_idl
+    tests: [contracts/ros_idl/test/test_srv_surface.py]
     functional_kind: interface-only
-    functional: [src/contracts/interfaces/test/test_srv_surface.py]
-    artifacts: [src/contracts/interfaces/srv/SetLed.srv, src/contracts/interfaces/srv/SetLamp.srv, src/contracts/interfaces/srv/SetBrightness.srv, src/contracts/interfaces/srv/Emotion.srv]
+    functional: [contracts/ros_idl/test/test_srv_surface.py]
+    artifacts: [contracts/ros_idl/srv/SetLed.srv, contracts/ros_idl/srv/SetLamp.srv, contracts/ros_idl/srv/SetBrightness.srv, contracts/ros_idl/srv/Emotion.srv]
   - name: pinky_pro
     path: middleware/apps/device/pinky/profile
     tests: [middleware/apps/device/pinky/profile/test]
@@ -181,7 +181,7 @@ modules:
     functional: [middleware/apps/device/pinky/description/test/test_urdf_surface.py]
   - name: dock
     path: operations/site_devices/dock
-    tests: [test/test_dock_contract.py, src/runtime/services/test/test_docking.py]
+    tests: [test/test_dock_contract.py, middleware/core/services/test/test_docking.py]
     functional_kind: host-contract
     functional: [test/test_dock_contract.py]
   - name: signal

@@ -12,7 +12,7 @@ for package_root in (
     ROOT / "contracts/skill/src",
     ROOT / "middleware/skills/api/src",
     ROOT / "middleware/skills/manipulation/src",
-    ROOT / "src/contracts/foundation",
+    ROOT / "contracts/foundation",
     ROOT / "middleware/apps/device/omx/adapter",
     ROOT / "integrations/robots/omx/src",
     ROOT / "middleware/apps/device/omx/adapter/test",

@@ -19,7 +19,7 @@ ROOT = Path(__file__).resolve().parents[1]
 NATIVE = ROOT / "deploy/robot/pinky_pro/native"
 IMAGE = ROOT / "deploy/robot/pinky_pro/image"
 UNIT = NATIVE / "rosy-face.service"
-FOUNDATION = ROOT / "src/contracts/foundation"
+FOUNDATION = ROOT / "contracts/foundation"
 PW = "pass" + "word"  # assembled so the tracked-file secret scanner sees no literal
 AP_VALUE = "Kx7" + "mQ2vR9tLpZq"
 

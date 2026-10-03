@@ -172,7 +172,7 @@ def _resolve(workspace: Path, required: Path, roots: list[str]) -> subprocess.Co
 def test_required_source_resolver_spans_every_colcon_root(tmp_path):
     # D-427: packages in one root may depend on packages in another; paths keep the root.
     workspace = tmp_path / "ws"
-    _package(workspace / "src" / "runtime" / "gateway", "core", ("core_common",))
+    _package(workspace / "middleware" / "core" / "gateway", "core", ("core_common",))
     _package(workspace / "middleware" / "contracts" / "foundation", "core_common")
     _package(workspace / "unlisted" / "games", "games")
     _package(workspace / "src" / "build" / "core", "core")  # colcon output inside a root
@@ -183,10 +183,10 @@ def test_required_source_resolver_spans_every_colcon_root(tmp_path):
 
     assert result.returncode == 0, result.stderr
     assert sorted(result.stdout.splitlines()) == [
-        "/tmp/rosy-src/middleware/contracts/foundation", "/tmp/rosy-src/src/runtime/gateway",
+        "/tmp/rosy-src/middleware/contracts/foundation", "/tmp/rosy-src/middleware/core/gateway",
     ]
     # Outside the listed roots core_common is an external key, as any rosdep key is.
-    assert _resolve(workspace, required, ["src"]).stdout.splitlines() == ["/tmp/rosy-src/src/runtime/gateway"]
+    assert _resolve(workspace, required, ["src"]).stdout.splitlines() == ["/tmp/rosy-src/middleware/core/gateway"]
 
 
 def test_required_source_resolver_rejects_a_name_duplicated_across_roots(tmp_path):

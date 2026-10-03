@@ -4,7 +4,7 @@ schema: rosy.platform-parts.v1
 # colcon, rosdep, payload and image consumer reads this one line through
 # tools/harness/colcon_roots.py (stdlib-only, so keep it a one-line flow list).
 # Checked by test/architecture/test_colcon_roots.py.
-colcon_roots: [src, learning, operations, middleware, integrations, shared]
+colcon_roots: [src, learning, operations, middleware, contracts, integrations, shared]
 
 # D-427 §6 "지금(C)" ownership manifest: every tracked source root maps to one
 # D-427 part. No folder moves; `d427_target` is where the root goes in step B.
@@ -53,15 +53,17 @@ concerns: [learning, decision, control, safety, contracts, other]
 
 roots:
   # --- contracts -----------------------------------------------------------
-  - path: src/contracts/foundation
+  - path: contracts/foundation
     part: contracts
     d427_target: contracts/foundation
+    legacy: src/contracts/foundation
     wave: "4d"
     import_prefix: [core_common]
     concern: contracts
-  - path: src/contracts/interfaces
+  - path: contracts/ros_idl
     part: contracts
     d427_target: contracts/ros_idl
+    legacy: src/contracts/interfaces
     wave: "4d"
     import_prefix: [interfaces]
     concern: contracts
@@ -78,43 +80,49 @@ roots:
     concern: contracts
 
   # --- middleware: Pinky/OMX device code, skills, drivers, device UI ---------
-  - path: src/runtime/gateway
+  - path: middleware/core/gateway
     part: middleware
     d427_target: middleware/core/gateway
+    legacy: src/runtime/gateway
     wave: "4d"
     import_prefix: [core]
     concern: control
-  - path: src/runtime/services
+  - path: middleware/core/services
     part: middleware
     d427_target: middleware/core/services
+    legacy: src/runtime/services
     wave: "4d"
     import_prefix: [core_features]
     concern: control
-  - path: src/runtime/services/core_features/safety
+  - path: middleware/core/services/core_features/safety
     part: middleware
     d427_target: middleware/core/services/core_features/safety
+    legacy: src/runtime/services/core_features/safety
     wave: "4d"
     import_prefix: [core_features.safety]
     note: D-430 §1 CORE Safety Guard (SAF-001/003/004/005/006, D-400 shadow); moves with CORE.
     concern: safety
-  - path: src/runtime/services/core_features/decision
+  - path: middleware/core/services/core_features/decision
     part: middleware
     d427_target: middleware/core/services/core_features/decision
+    legacy: src/runtime/services/core_features/decision
     wave: "4d"
     import_prefix: [core_features.decision]
     note: >-
       D-429 §1 "device local rules" (lane, router, contract), not deliberative decision.
       Tagged so D-430 invariant 2 has a robot-side importer to check.
     concern: decision
-  - path: src/runtime/events
+  - path: middleware/core/events
     part: middleware
     d427_target: middleware/core/events
+    legacy: src/runtime/events
     wave: "4d"
     import_prefix: [core_events]
     concern: control
-  - path: src/runtime/api_web
+  - path: middleware/core/api_web
     part: middleware
     d427_target: middleware/core/api_web
+    legacy: src/runtime/api_web
     wave: "4d"
     import_prefix: [core_api_web]
     note: Pinky Device API web layer and host-agent client.
@@ -572,14 +580,14 @@ roots:
 # split. A mixed file is safety as a whole (§5 change control); `concern: safety`
 # roots above are the directory form.
 safety_modules:
-  - src/runtime/gateway/core/fleet_loss_wiring.py
-  - src/runtime/gateway/core/bridge/cmd_vel.py
-  - src/runtime/services/core_features/command/manager.py
-  - src/runtime/services/core_features/command/arbitration.py
-  - src/runtime/services/core_features/line_follow/body_stop.py
-  - src/runtime/services/core_features/line_follow/clearance.py
-  - src/runtime/api_web/core_api_web/api/v1/safety.py
-  - src/contracts/foundation/core_common/robot_body.py
+  - middleware/core/gateway/core/fleet_loss_wiring.py
+  - middleware/core/gateway/core/bridge/cmd_vel.py
+  - middleware/core/services/core_features/command/manager.py
+  - middleware/core/services/core_features/command/arbitration.py
+  - middleware/core/services/core_features/line_follow/body_stop.py
+  - middleware/core/services/core_features/line_follow/clearance.py
+  - middleware/core/api_web/core_api_web/api/v1/safety.py
+  - contracts/foundation/core_common/robot_body.py
   - middleware/apps/device/omx/adapter/omx_adapter/command_owner.py
   - middleware/apps/device/omx/adapter/omx_adapter/local_stop.py
   - middleware/apps/device/omx/adapter/omx_adapter/action_api.py

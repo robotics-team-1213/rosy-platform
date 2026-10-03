@@ -8,7 +8,7 @@ ROOT = Path(__file__).resolve().parents[4]
 ADAPTER = ROOT / "middleware" / "apps" / "device" / "omx" / "adapter"
 # omx_adapter and its demonstration fixtures stay in the adapter until D-427 wave 2b/4c.
 for _p in (Path(__file__).resolve().parents[1], ADAPTER, ADAPTER / "test",
-           ROOT / "src" / "contracts" / "foundation"):
+           ROOT / "contracts" / "foundation"):
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
 

@@ -40,7 +40,7 @@ Operator dashboard screens (D-23, D-243). FastAPI in `core_api_web` serves this 
 
 ### Testing Requirements
 
-`middleware/ui/robot/test`, `src/runtime/gateway/test/test_dashboard.py`, `test_host_cards.py`; browser: `test/test_dashboard_browser.py`.
+`middleware/ui/robot/test`, `middleware/core/gateway/test/test_dashboard.py`, `test_host_cards.py`; browser: `test/test_dashboard_browser.py`.
 
 ### Common Patterns
 

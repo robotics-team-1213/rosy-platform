@@ -15,7 +15,7 @@ from pathlib import Path
 PILOT = Path(__file__).resolve().parents[1]
 REPO = PILOT.parents[2]
 COMMON = REPO / "shared" / "web"
-APP = REPO / "src/runtime/api_web/core_api_web/api/app.py"
+APP = REPO / "middleware/core/api_web/core_api_web/api/app.py"
 
 IMPORT = re.compile(
     r"""(?:^|[;\s])(?:import|export)\s+(?:[\w*{}\s,$]+?\s+from\s+)?["']([^"']+)["']"""

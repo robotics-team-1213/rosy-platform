@@ -30,7 +30,7 @@ Shell of the role surfaces (D-204). It fetches the panel manifest, assembles pan
 
 ### Testing Requirements
 
-`middleware/ui/robot/test` (`test_surface_layout_browser.py`, `test_surface_entry_browser.py`, `test_surface_viewport_budget_browser.py`, `test_action_groups_browser.py`, `test_role_g2_browser.py`, `test_surface_bridge.py`), `shared/web/test/test_stop_always_live.py`, and `src/runtime/api_web/test/test_ui_manifest.py`.
+`middleware/ui/robot/test` (`test_surface_layout_browser.py`, `test_surface_entry_browser.py`, `test_surface_viewport_budget_browser.py`, `test_action_groups_browser.py`, `test_role_g2_browser.py`, `test_surface_bridge.py`), `shared/web/test/test_stop_always_live.py`, and `middleware/core/api_web/test/test_ui_manifest.py`.
 
 ### Common Patterns
 

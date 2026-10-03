@@ -52,10 +52,10 @@ RUN apt-get -o Acquire::Retries=5 update \
     && rm -f /tmp/restore-hollow-toolchain.sh \
     && rm -rf /var/lib/apt/lists/*
 
-COPY src/contracts/foundation /opt/rosy_ws/src/contracts/foundation
-COPY src/runtime/events /opt/rosy_ws/src/runtime/events
-COPY src/runtime/services /opt/rosy_ws/src/runtime/services
-COPY src/runtime/api_web /opt/rosy_ws/src/runtime/api_web
+COPY contracts/foundation /opt/rosy_ws/src/contracts/foundation
+COPY middleware/core/events /opt/rosy_ws/src/runtime/events
+COPY middleware/core/services /opt/rosy_ws/src/runtime/services
+COPY middleware/core/api_web /opt/rosy_ws/src/runtime/api_web
 COPY shared/web /opt/rosy_ws/src/hmi/web_common
 COPY middleware/ui/robot /opt/rosy_ws/src/hmi/dashboard
 # D-323: CORE serves the Rosy Pilot teleop surface at /pilot (core_api_web exec_depends pilot).
@@ -63,8 +63,8 @@ COPY middleware/ui/pilot /opt/rosy_ws/src/hmi/pilot
 
 WORKDIR /opt/rosy_ws
 # omx/imu/vision/control belong to optional slices, not this core image.
-COPY src/contracts/interfaces /opt/rosy_ws/src/contracts/interfaces
-COPY src/runtime/gateway /opt/rosy_ws/src/runtime/gateway
+COPY contracts/ros_idl /opt/rosy_ws/src/contracts/interfaces
+COPY middleware/core/gateway /opt/rosy_ws/src/runtime/gateway
 # D-196: CORE reads the robot profile from share/<robot.model>/config.
 COPY middleware/apps/device/pinky/profile /opt/rosy_ws/src/products/pinky_pro/profile
 RUN set -eo pipefail \
@@ -126,8 +126,8 @@ RUN git clone https://github.com/Slamtec/sllidar_ros2.git src/sllidar_ros2 \
     && cd src/sllidar_ros2 \
     && git checkout --detach ${SLLIDAR_COMMIT} \
     && rm -rf .git
-COPY src/contracts/interfaces /opt/rosy_ws/src/contracts/interfaces
-COPY src/contracts/foundation /opt/rosy_ws/src/contracts/foundation
+COPY contracts/ros_idl /opt/rosy_ws/src/contracts/interfaces
+COPY contracts/foundation /opt/rosy_ws/src/contracts/foundation
 COPY middleware/apps/device/pinky/description /opt/rosy_ws/src/sim/description
 COPY middleware/apps/device/pinky/bringup /opt/rosy_ws/src/products/pinky_pro/bringup
 COPY middleware/core/navigation /opt/rosy_ws/src/runtime/navigation

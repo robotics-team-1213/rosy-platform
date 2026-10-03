@@ -3,7 +3,7 @@
 import sys
 from pathlib import Path
 
-sys.path.append(str((Path(__file__).resolve().parents[6] / "src") / 'contracts' / 'foundation'))
+sys.path.append(str((Path(__file__).resolve().parents[6] / "contracts") / 'foundation'))
 
 from bringup.wheel_calibration import calibrated_wheels  # noqa: E402
 from core_common.calibration_store import CalibrationStore  # noqa: E402

@@ -15,10 +15,10 @@ REPO_ROOT = ROOT.parents[2]
 
 def _module():
     roots = {
-        "core": "src/runtime/gateway",
-        "core_common": "src/contracts/foundation",
-        "core_events": "src/runtime/events",
-        "core_features": "src/runtime/services",
+        "core": "middleware/core/gateway",
+        "core_common": "contracts/foundation",
+        "core_events": "middleware/core/events",
+        "core_features": "middleware/core/services",
     }
     for package in roots:
         path = str(REPO_ROOT / roots[package])

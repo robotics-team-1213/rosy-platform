@@ -30,7 +30,7 @@ import numpy as np
 
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "src" / "runtime" / "sensing"))
-sys.path.insert(0, str(REPO / "src" / "contracts" / "foundation"))  # core_common (D-424)
+sys.path.insert(0, str(REPO / "contracts" / "foundation"))  # core_common (D-424)
 
 from control.sensing.perception import lane as lane_mod  # noqa: E402
 from control.sensing.perception.camera_ground import nominal_ground_plane  # noqa: E402

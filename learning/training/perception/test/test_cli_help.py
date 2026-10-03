@@ -1,6 +1,6 @@
 """Each site CLI must start with only its own sys.path edits.
 
-conftest.py adds src/runtime/sensing and src/contracts/foundation for every
+conftest.py adds src/runtime/sensing and contracts/foundation for every
 test, which masked the D-424 break (control imports core_common). These tests
 run the CLIs in a subprocess with a clean PYTHONPATH instead.
 """

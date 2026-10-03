@@ -250,7 +250,7 @@ def test_pair_counts():
 def test_manifest_schema_matches_the_robot_contract():
     import sys
     from pathlib import Path
-    sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "src" / "contracts" / "foundation"))
+    sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "contracts" / "foundation"))
     from core_common.protocol.recording import MANIFEST_SCHEMA, RECORDING_ID, TELEOP_INTENT_TOPIC
     assert fetch_http.MANIFEST_SCHEMA == MANIFEST_SCHEMA and fetch_http.INTENT_TOPIC == TELEOP_INTENT_TOPIC
     assert fetch_http.RECORDING_ID.pattern == RECORDING_ID.pattern

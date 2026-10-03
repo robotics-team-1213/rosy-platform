@@ -262,7 +262,7 @@ def test_shipped_unit_uses_the_env_name_the_preflight_reads():
 
 
 def test_vendored_ca_check_agrees_with_core_common_on_site_link_vectors():
-    sys.path.insert(0, str(ROOT / "src/contracts/foundation"))
+    sys.path.insert(0, str(ROOT / "contracts/foundation"))
     try:
         from core_common.protocol import site_link
     finally:

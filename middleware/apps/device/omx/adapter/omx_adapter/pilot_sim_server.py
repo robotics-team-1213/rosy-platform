@@ -43,8 +43,8 @@ def main() -> None:
     source_hasher = hashlib.sha256()
     for file in sorted((repo / "middleware/apps/device/omx/adapter/omx_adapter").glob("*.py")):
         source_hasher.update(file.name.encode() + b"\0" + file.read_bytes())
-    source_hasher.update((repo / "src/contracts/foundation/core_common/protocol/omx_sim.py").read_bytes())
-    source_hasher.update((repo / "src/contracts/foundation/core_common/protocol/controls.py").read_bytes())
+    source_hasher.update((repo / "contracts/foundation/core_common/protocol/omx_sim.py").read_bytes())
+    source_hasher.update((repo / "contracts/foundation/core_common/protocol/controls.py").read_bytes())
     source_hasher.update(cell_path.read_bytes())
     vendor_revision = yaml.safe_load((repo / "deploy/robot/omx/stack.lock.yaml").read_text())["vendor"]["revision"]
     source = {"source_revision": revision, "source_tree_sha256": source_hasher.hexdigest(),

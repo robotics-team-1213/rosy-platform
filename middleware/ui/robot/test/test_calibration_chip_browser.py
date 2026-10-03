@@ -35,7 +35,7 @@ def _core_client(tmp_path):
     from core_common.profile import RobotProfile, robot_config_dir
     from core.services import CoreServices
 
-    config_dir = SRC / "contracts/foundation/config"
+    config_dir = SRC.parent / "contracts/foundation/config"
     config = yaml.safe_load((config_dir / "rosy_default.yaml").read_text(encoding="utf-8"))
     config["auth"] = {**config["auth"], **yaml.safe_load(
         (config_dir / "rosy_dev_auth.yaml").read_text(encoding="utf-8"))["auth"]}

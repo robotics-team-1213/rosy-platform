@@ -11,9 +11,9 @@ import sys
 
 SRC = (Path(__file__).resolve().parents[3] / "src")
 _ROOTS = {
-    "core_api_web": SRC / "runtime" / "api_web",
-    "core_features": SRC / "runtime" / "services",
-    "core_common": SRC / "contracts" / "foundation",
+    "core_api_web": SRC.parent / "middleware" / "core" / "api_web",
+    "core_features": SRC.parent / "middleware" / "core" / "services",
+    "core_common": SRC.parent / "contracts" / "foundation",
 }
 for _name in _ROOTS:
     _path = str(_ROOTS[_name])

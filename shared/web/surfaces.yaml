@@ -45,7 +45,7 @@ surfaces:
     surface: robot
     medium: web
     ports:
-      - {port: 8080, source: src/contracts/foundation/config/rosy_default.yaml}
+      - {port: 8080, source: contracts/foundation/config/rosy_default.yaml}
     audience: 운용자·장비 운용 (D-153 §7 — /dashboard·/console·/setup·/device)
     role: 한 로봇의 상세 상태·작업 준비·설치·정비와 로봇 쪽 자격 관리 (D-370 1항)
     owns:

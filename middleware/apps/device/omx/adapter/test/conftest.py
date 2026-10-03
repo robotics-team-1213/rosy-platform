@@ -13,7 +13,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[6]
 
-for path in (REPO / "middleware" / "apps" / "device" / "omx" / "adapter", REPO / "src" / "contracts" / "foundation"):
+for path in (REPO / "middleware" / "apps" / "device" / "omx" / "adapter", REPO / "contracts" / "foundation"):
     entry = str(path)
     if entry not in sys.path:
         sys.path.insert(0, entry)

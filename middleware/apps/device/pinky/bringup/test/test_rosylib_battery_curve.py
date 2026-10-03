@@ -13,8 +13,8 @@ import sys
 import pytest
 
 ROOT = Path(__file__).resolve().parents[6]  # repository root
-for path in (ROOT / "middleware/apps/device/pinky/bringup", ROOT / "src/runtime/services",
-             ROOT / "src/contracts/foundation", ROOT / "src/runtime/events"):
+for path in (ROOT / "middleware/apps/device/pinky/bringup", ROOT / "middleware/core/services",
+             ROOT / "contracts/foundation", ROOT / "middleware/core/events"):
     if str(path) not in sys.path:
         sys.path.insert(0, str(path))
 

@@ -48,7 +48,7 @@ import numpy as np
 
 SCHEMA = "rosy.perception.dataset/1"
 _SENSING = str(Path(__file__).resolve().parents[4] / "src" / "runtime" / "sensing")
-_FOUNDATION = str(Path(__file__).resolve().parents[4] / "src" / "contracts" / "foundation")  # core_common (D-424)
+_FOUNDATION = str(Path(__file__).resolve().parents[4] / "contracts" / "foundation")  # core_common (D-424)
 for _p in (_SENSING, _FOUNDATION):
     if _p not in sys.path:
         sys.path.insert(0, _p)

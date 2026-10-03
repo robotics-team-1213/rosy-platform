@@ -4,7 +4,7 @@ source /opt/ros/jazzy/setup.bash
 source /opt/omx_ws/install/setup.bash
 set -u
 test -r /repo/middleware/apps/device/omx/adapter/omx_adapter/pilot_sim_server.py
-export PYTHONPATH="/repo/src/contracts/foundation:/repo/middleware/apps/device/omx/adapter:${PYTHONPATH:-}"
+export PYTHONPATH="/repo/contracts/foundation:/repo/middleware/apps/device/omx/adapter:${PYTHONPATH:-}"
 export ROS_DOMAIN_ID="${OMX_PILOT_DOMAIN_ID:-75}"
 export ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST
 export GZ_SIM_PHYSICS_ENGINE_PATH=/opt/ros/jazzy/opt/gz_physics_vendor/lib

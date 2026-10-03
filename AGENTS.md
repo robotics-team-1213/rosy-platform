@@ -5,7 +5,7 @@
 
 ## Purpose
 
-ROSY is a robot middleware and fleet-control platform (ROS 2 Jazzy, first hardware Pinky Pro). This repository is the robot-side workspace: CORE (src/runtime/gateway) is the external API gateway, supported by shared contracts, events, services, web API, hardware bringup, Nav2/SLAM, Gazebo, Raspberry Pi deploy/robot/pinky_pro/release tooling, and charging-dock ESP32 firmware. src/runtime/sensing contains the absorbed Control package; its legacy final publisher must not run beside CORE. operations/fleet contains formation/relay/CLI and the v1 Fleet console seed; the full central Fleet platform remains unimplemented. Current source roles are contracts, runtime, products, drivers, site, hmi, and sim. Folder role does not establish writer authority, host placement, or image closure (D-315). License: Apache-2.0.
+ROSY is a robot middleware and fleet-control platform (ROS 2 Jazzy, first hardware Pinky Pro). This repository is the robot-side workspace: CORE (middleware/core/gateway) is the external API gateway, supported by shared contracts, events, services, web API, hardware bringup, Nav2/SLAM, Gazebo, Raspberry Pi deploy/robot/pinky_pro/release tooling, and charging-dock ESP32 firmware. src/runtime/sensing contains the absorbed Control package; its legacy final publisher must not run beside CORE. operations/fleet contains formation/relay/CLI and the v1 Fleet console seed; the full central Fleet platform remains unimplemented. Current source roles are contracts, runtime, products, drivers, site, hmi, and sim. Folder role does not establish writer authority, host placement, or image closure (D-315). License: Apache-2.0.
 
 ## Key Files
 
@@ -57,11 +57,11 @@ ROSY is a robot middleware and fleet-control platform (ROS 2 Jazzy, first hardwa
 
 ### Working In This Directory
 
-- Treat `docs/spec/ROSY CORE SRS.md`, `docs/reference/ROSY API & Protocol Reference.md`, and `docs/reference/ROSY ADR Log.md` as contracts. Do not invent REST paths, modes, or protocol fields that are not in the API ref or `core_common.protocol.schemas` (`src/contracts/foundation/core_common/protocol/schemas.py`).
+- Treat `docs/spec/ROSY CORE SRS.md`, `docs/reference/ROSY API & Protocol Reference.md`, and `docs/reference/ROSY ADR Log.md` as contracts. Do not invent REST paths, modes, or protocol fields that are not in the API ref or `core_common.protocol.schemas` (`contracts/foundation/core_common/protocol/schemas.py`).
 - External clients must not speak ROS. `core` is the only gateway (CORE SRS §1.3). Command Manager (`core_features.command`) is the only `cmd_vel` publisher (D-2).
 - Single process: main thread rclpy `MultiThreadedExecutor`, worker thread uvicorn+FastAPI (D-1). Entry point is `core=core.main:main` — `ros2 run core core`. Do not split into two processes.
 - `slam_toolbox` is optional. `ros_bridge` must import it inside try/except, never at module top (`package.xml` comment). CI boots the node without it.
-- Config merge order: `src/contracts/foundation/config/rosy_default.yaml` → `~/.rosy/rosy.yaml` → `ROSY_CONFIG`.
+- Config merge order: `contracts/foundation/config/rosy_default.yaml` → `~/.rosy/rosy.yaml` → `ROSY_CONFIG`.
 - Do not commit colcon `build/`, `install/`, `log/`, or `__pycache__/`.
 - This repo is PUBLIC. Place every new file by D-226: internal material, real device addresses/accounts and filled device config go in the gitignored `private/` (write `<robot-ip>` in public docs); data code or tests read stays beside the reader; dated evidence goes in `docs/validation/<topic>-<YYYY-MM-DD>/`; module how-to goes in the module's one `docs/`. A new secret kind needs its ignore rule and its tracked template added to `test/architecture/test_document_placement.py` in the same change.
 - Hardware profile is YAML. In-tree Pinky full spec is `middleware/apps/device/pinky/profile/config/profile.yaml`. The robot advertises `deploy/robot/pinky_pro/config/{profile,capabilities}.${ROSY_RUNTIME_MODE}.yaml` (`core` / `motor` / `hardware`).
@@ -99,13 +99,13 @@ python3 -m pytest test/test_harness_contracts.py test/architecture/test_module_s
   test/test_io_image_closure.py test/test_line_follow_contract_docs.py \
   test/test_behavior_test_ownership.py test/test_module_scorecard.py \
   test/test_release_boundary_guards.py test/test_robot_literals.py \
-  src/runtime/gateway/test/test_protocol_version_alignment.py \
-  src/runtime/gateway/test/test_event_catalogue.py \
-  src/runtime/gateway/test/test_console_layout.py \
-  src/runtime/gateway/test/test_host_cards.py \
-  src/runtime/gateway/test/test_host_hardware.py \
-  src/runtime/gateway/test/test_triage_contract.py \
-  src/runtime/gateway/test/test_host_status_summary.py -q
+  middleware/core/gateway/test/test_protocol_version_alignment.py \
+  middleware/core/gateway/test/test_event_catalogue.py \
+  middleware/core/gateway/test/test_console_layout.py \
+  middleware/core/gateway/test/test_host_cards.py \
+  middleware/core/gateway/test/test_host_hardware.py \
+  middleware/core/gateway/test/test_triage_contract.py \
+  middleware/core/gateway/test/test_host_status_summary.py -q
 python3 tools/harness/rosy_harness.py lint   # ADR duplicates, mojibake, append-only
 
 # Full tier: runs on GitHub runners (see above), not here. The commands below are what a
@@ -115,7 +115,7 @@ source env.sh
 colcon --log-base log build --symlink-install --base-paths $(python3 tools/harness/colcon_roots.py) --build-base build --install-base install
 
 # core unit tests (no live ROS required for most)
-python3 -m pytest src/runtime/gateway/test/ src/runtime/events/test/ src/runtime/services/test/ shared/web/test/ -v
+python3 -m pytest middleware/core/gateway/test/ middleware/core/events/test/ middleware/core/services/test/ shared/web/test/ -v
 
 # Fleet formation/relay/session/console (no ROS)
 python3 -m pytest operations/fleet/test/ -v
@@ -142,7 +142,7 @@ CI (`.github/workflows/ci.yml`) on `main` / PRs: colcon build in `ros:jazzy-ros-
 
 ### Internal
 
-- `src/runtime/gateway` depends on `src/contracts/foundation`, `src/runtime/events`, `src/runtime/services`, `src/runtime/api_web`, and `src/contracts/interfaces` (plus, at runtime, bringup/Nav2 topics).
+- `middleware/core/gateway` depends on `contracts/foundation`, `middleware/core/events`, `middleware/core/services`, `middleware/core/api_web`, and `contracts/ros_idl` (plus, at runtime, bringup/Nav2 topics).
 - `deploy/` consumes `src/` via `deploy/robot/pinky_pro/Dockerfile`.
 - `test/` imports `deploy/robot/pinky_pro/release` via `test/conftest.py` `sys.path`.
 

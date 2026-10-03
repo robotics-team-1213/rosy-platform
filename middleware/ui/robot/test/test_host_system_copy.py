@@ -50,7 +50,7 @@ def test_every_source_missing_is_one_plain_sentence():
 
 
 def test_the_label_map_covers_every_key_core_can_name():
-    source = ((SYSTEM.parents[5] / "src") / "runtime" / "gateway" / "core" / "system" / "runtime.py").read_text(encoding="utf-8")
+    source = ((SYSTEM.parents[5] / "middleware") / "core" / "gateway" / "core" / "system" / "runtime.py").read_text(encoding="utf-8")
     import re
     named = set(re.findall(r'unavailable\.append\("([a-z_]+)"\)', source))
     assert named == set(ALL_KEYS) | {"ros_graph"}

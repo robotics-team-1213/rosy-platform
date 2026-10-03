@@ -11,8 +11,8 @@ TEST = Path(__file__).resolve().parent
 for path in (
     REPO / "operations" / "vision",
     SRC.parent / "operations" / "fleet",
-    SRC / "runtime" / "services",
-    SRC / "contracts" / "foundation",
+    SRC.parent / "middleware" / "core" / "services",
+    SRC.parent / "contracts" / "foundation",
     REPO / "operations" / "apps" / "games",
 ):
     entry = str(path)

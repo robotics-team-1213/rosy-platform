@@ -10,7 +10,7 @@ line_follow:
   # angle. rplidar_link is yaw pi on base_link (URDF), so scan 0 is the robot's
   # rear and forward is 180. URDF nominal (D-397: geometry.yaml lidar.forward_deg,
   # drift-tested): an operator-accepted lidar_mount record in the calibration
-  # store (D-47 addendum 2026-10-01, src/runtime/gateway/core/lidar_mount.py)
+  # store (D-47 addendum 2026-10-01, middleware/core/gateway/core/lidar_mount.py)
   # refines it at CORE start once accepted (motion and camera measure ~181-182
   # deg); a line_follow.lidar_forward_deg in the operator's local overlay wins
   # over both. The plausibility window (150-210 deg, or +-15 deg of this value)

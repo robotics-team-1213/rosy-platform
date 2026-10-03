@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[2]
 POLICY = ROOT / "tools" / "harness" / "platform_dependencies.yaml"
 
 CURRENT_COMPONENTS = {
-    "contracts": ("src/contracts/foundation/core_common", "core_common"),
+    "contracts": ("contracts/foundation/core_common", "core_common"),
     "cell_process_compat": ("operations/processes/cell/rosy_cell", "rosy_cell"),
     "palletizing_process": (
         "operations/processes/palletizing/src/rosy/processes/palletizing",

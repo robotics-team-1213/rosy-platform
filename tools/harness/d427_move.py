@@ -25,7 +25,7 @@ What one run does (docs/plans/2026-10-03-d427-source-migration.md, common proced
        location keeps, or ``(<repo root> / "src" / ...)`` for one it lost;
    (a) slash paths (also after ``/``, ``$VAR/``, ``/repo/`` and in backslash form); a path
        token starting with ``/opt/``, ``/usr/`` or ``/etc/`` is an install path and kept;
-   (b) joined literal segments (``"src" / "runtime" / "gateway"``, ``os.path.join``,
+   (b) joined literal segments (``"middleware" / "core" / "gateway"``, ``os.path.join``,
        ``Path(a, b)``, PowerShell ``Join-Path``), keeping closing parentheses;
    (e) ``SRC / "site" / "fleet"`` where ``SRC`` denotes src/ (``--srcvars`` re-applies it).
    A rewritten ``.py`` that no longer compiles is left alone and reported.

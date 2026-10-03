@@ -13,7 +13,7 @@ from pathlib import Path
 import numpy as np
 
 ROOT = Path(__file__).resolve().parents[4]
-for path in (ROOT / "src/runtime/sensing", ROOT / "src/contracts/foundation"):
+for path in (ROOT / "src/runtime/sensing", ROOT / "contracts/foundation"):
     if str(path) not in sys.path:
         sys.path.insert(0, str(path))
 

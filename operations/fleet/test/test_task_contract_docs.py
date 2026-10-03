@@ -161,7 +161,7 @@ def test_site_camera_rectification_contract_keeps_preview_and_sightings_separate
 def test_policy_evidence_contract_is_governed_together():
     reference = (ROOT / "docs/reference/ROSY API & Protocol Reference.md").read_text(
         encoding="utf-8")
-    schema = (ROOT / "src/contracts/foundation/core_common/protocol/policy_evidence.py").read_text(
+    schema = (ROOT / "contracts/foundation/core_common/protocol/policy_evidence.py").read_text(
         encoding="utf-8")
     task_service = (ROOT / "operations/fleet/fleet/server/task_service.py").read_text(
         encoding="utf-8")

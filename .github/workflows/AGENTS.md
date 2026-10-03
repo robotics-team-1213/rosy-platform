@@ -47,7 +47,7 @@ Edit `ci.yml` only with a matching local command. Do not drop the root `test/` s
 
 ### Internal
 
-- `src/`, `src/runtime/gateway/test/`, `src/runtime/events/test/`, `src/runtime/services/test/`, `shared/web/test/`, `operations/fleet/test/`, `integrations/simulation/gazebo/test/`, `test/`
+- `src/`, `middleware/core/gateway/test/`, `middleware/core/events/test/`, `middleware/core/services/test/`, `shared/web/test/`, `operations/fleet/test/`, `integrations/simulation/gazebo/test/`, `test/`
 
 ### External
 

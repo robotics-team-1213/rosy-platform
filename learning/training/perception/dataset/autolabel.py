@@ -32,7 +32,7 @@ import numpy as np
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parents[3] / "src" / "runtime" / "sensing"))
-sys.path.insert(0, str(HERE.parents[3] / "src" / "contracts" / "foundation"))  # core_common, imported by control (D-424)
+sys.path.insert(0, str(HERE.parents[3] / "contracts" / "foundation"))  # core_common, imported by control (D-424)
 
 import labels as L  # noqa: E402
 from frames import FrameSelector  # noqa: E402

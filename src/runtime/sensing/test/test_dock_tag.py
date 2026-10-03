@@ -249,7 +249,7 @@ def test_the_module_imports_in_a_fresh_interpreter():
 
     package_root = str(Path(__file__).resolve().parents[1])
     # core_common is a declared exec_depend of control (D-424 body, calibration store).
-    foundation = str(Path(__file__).resolve().parents[3] / "contracts" / "foundation")
+    foundation = str(Path(__file__).resolve().parents[4] / "contracts" / "foundation")
     env = dict(os.environ)
     env["PYTHONPATH"] = os.pathsep.join(
         [package_root, foundation] + [p for p in env.get("PYTHONPATH", "").split(os.pathsep) if p])

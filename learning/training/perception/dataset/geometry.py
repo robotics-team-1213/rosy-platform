@@ -52,7 +52,7 @@ def labeller_lidar_yaw_deg(device=None, store_root=str(CALIBRATION_STORE)):
     Cached: one store read per device per process."""
     if device:
         import sys
-        sys.path.insert(0, str(REPO / "src" / "contracts" / "foundation"))
+        sys.path.insert(0, str(REPO / "contracts" / "foundation"))
         from core_common.calibration_store import resolve
         values, source = resolve("lidar_mount", {"lidar_yaw_offset": math.radians(LIDAR_FORWARD_DEG)},
                                  fallback_source="180 deg default", robot=device, root=store_root,

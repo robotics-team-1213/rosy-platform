@@ -185,7 +185,7 @@ def test_every_module_the_shell_imports_is_installed_and_served():
 
     imported = set(re.findall(r'from "\./([a-z-]+\.js)"', (ROOT / "app.js").read_text(encoding="utf-8")))
     cmake = (ROOT / "CMakeLists.txt").read_text(encoding="utf-8-sig")
-    served = (ROOT.parents[2] / "src/runtime/api_web/core_api_web/api/app.py").read_text(encoding="utf-8")
+    served = (ROOT.parents[2] / "middleware/core/api_web/core_api_web/api/app.py").read_text(encoding="utf-8")
     assert "status-summary.js" in imported
     for name in imported:
         assert f"  {name}" in cmake, name

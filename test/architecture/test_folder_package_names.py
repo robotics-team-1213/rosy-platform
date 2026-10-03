@@ -19,7 +19,7 @@ SKIP_DIRS = {"build", "install", "log", ".worktrees", ".git", "node_modules", "_
 # Repo-relative folder (D-427: every colcon root, so moves rewrite these as plain paths)
 # -> ROS package name. Mirrored in src/AGENTS.md.
 FOLDER_TO_PACKAGE = {
-    "src/contracts/foundation": "core_common",
+    "contracts/foundation": "core_common",
     "middleware/ui/face": "emotion",
     "middleware/ui/robot": "dashboard",
     "shared/web": "web_common",
@@ -28,11 +28,11 @@ FOLDER_TO_PACKAGE = {
     "middleware/drivers/pinky_adc": "sensor_adc",
     "middleware/drivers/pinky_lamp": "lamp_control",
     "middleware/apps/device/pinky/profile": "pinky_pro",
-    "src/runtime/api_web": "core_api_web",
-    "src/runtime/events": "core_events",
-    "src/runtime/gateway": "core",
+    "middleware/core/api_web": "core_api_web",
+    "middleware/core/events": "core_events",
+    "middleware/core/gateway": "core",
     "src/runtime/sensing": "control",
-    "src/runtime/services": "core_features",
+    "middleware/core/services": "core_features",
     "operations/vision": "rosy_vision",  # D-377 rosy_<word>; D-427 target folder is the word itself
     "operations/processes/cell": "rosy_cell",
     "learning/envs/isaac": "isaac_sim",

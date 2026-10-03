@@ -32,7 +32,7 @@ Pilot screens (D-323): connect, drive, input settings, and the OMX sim arm pract
 ### Testing Requirements
 
 ```bash
-python -m pytest middleware/ui/pilot/test src/runtime/api_web/test/test_pilot_route.py -q
+python -m pytest middleware/ui/pilot/test middleware/core/api_web/test/test_pilot_route.py -q
 ```
 
 `test_pilot_browser.py` covers the screens; `test_autonomy.py`, `test_calibration_view.py`, `test_stick.py` cover their pure helpers. Shared UI gates are in `shared/web/test`.

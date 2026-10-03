@@ -32,7 +32,7 @@ def test_signal_firmware_advertises_mdns():
 def test_discover_utility_falls_back_gracefully():
     """발견 도구가 없어도 예외 없이 빈 목록을 반환한다."""
     import sys
-    sys.path.insert(0, str(ROOT / "src" / "contracts" / "foundation"))
+    sys.path.insert(0, str(ROOT / "contracts" / "foundation"))
     from core_common.discover import discover_devices, DiscoveredDevice
 
     # 이 테스트 환경에서는 zeroconf도 avahi도 없을 수 있다 — 빈 목록이면 족하다
@@ -45,7 +45,7 @@ def test_discover_utility_falls_back_gracefully():
 
 def test_discovered_device_shape():
     import sys
-    sys.path.insert(0, str(ROOT / "src" / "contracts" / "foundation"))
+    sys.path.insert(0, str(ROOT / "contracts" / "foundation"))
     from core_common.discover import DiscoveredDevice
 
     d = DiscoveredDevice(

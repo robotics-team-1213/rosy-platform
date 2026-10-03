@@ -297,7 +297,7 @@ SIZE_VERDICTS = {
     ),
     "runtime/events/core_events/events/audit.py": (
         745,
-        "accept: one owner (svc.audit / FileAuditLog), ROS-free, covered by src/runtime/events/test/test_audit.py; "
+        "accept: one owner (svc.audit / FileAuditLog), ROS-free, covered by middleware/core/events/test/test_audit.py; "
         "about half the lines are the rationale comments the append/compaction/quarantine rules rest on (X5)",
     ),
     "runtime/services/core_features/docking/manager.py": (

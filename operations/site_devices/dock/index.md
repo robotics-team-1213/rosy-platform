@@ -24,7 +24,7 @@
 ## 시험
 
 - `test/test_dock_contract.py`
-- `src/runtime/services/test/test_docking.py`
+- `middleware/core/services/test/test_docking.py`
 
 ## 최근 기록
 

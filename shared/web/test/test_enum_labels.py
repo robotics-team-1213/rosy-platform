@@ -16,7 +16,7 @@ import pytest
 
 WEB_COMMON = Path(__file__).resolve().parents[1]
 SRC = (WEB_COMMON.parents[1] / "src")
-sys.path.insert(0, str(SRC / "contracts" / "foundation" / "core_common"))
+sys.path.insert(0, str(SRC.parent / "contracts" / "foundation" / "core_common"))
 
 
 def _run(expression: str):

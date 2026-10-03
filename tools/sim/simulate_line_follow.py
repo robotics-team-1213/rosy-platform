@@ -15,9 +15,9 @@ import numpy as np
 REPO_ROOT = Path(__file__).resolve().parents[2]
 for _path in (
     REPO_ROOT / "src/runtime/sensing",
-    REPO_ROOT / "src/contracts/foundation",
-    REPO_ROOT / "src/runtime/events",
-    REPO_ROOT / "src/runtime/services",
+    REPO_ROOT / "contracts/foundation",
+    REPO_ROOT / "middleware/core/events",
+    REPO_ROOT / "middleware/core/services",
 ):
     if str(_path) not in sys.path:
         sys.path.insert(0, str(_path))

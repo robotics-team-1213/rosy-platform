@@ -4,7 +4,7 @@ set -e
 SRC="/mnt/f/Dev/Control/Robot/ROS/Rosy/Rosy OS/.worktrees/pilot-teleop"
 DST="$HOME/rosy"
 [ -d "$DST" ] || { echo "migrate first"; exit 1; }
-for rel in src/hmi src/runtime/api_web; do
+for rel in src/hmi middleware/core/api_web; do
   rm -rf "$DST/$rel"
   tar -C "$SRC" -cf - "$rel" | tar -C "$DST" -xf -
 done

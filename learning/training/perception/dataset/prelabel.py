@@ -30,7 +30,7 @@ import build
 
 ROOT = Path(__file__).resolve().parents[4]
 _SENSING = str(ROOT / "src" / "runtime" / "sensing")
-_FOUNDATION = str(ROOT / "src" / "contracts" / "foundation")  # core_common (D-424)
+_FOUNDATION = str(ROOT / "contracts" / "foundation")  # core_common (D-424)
 for _p in (_SENSING, _FOUNDATION):
     if _p not in sys.path:
         sys.path.insert(0, _p)

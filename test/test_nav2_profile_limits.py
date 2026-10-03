@@ -76,7 +76,7 @@ def test_pinky_profile_files_share_the_hardware_motion_ceilings():
         ROOT / "middleware" / "apps" / "device" / "pinky" / "profile" / "config" / "profile.yaml",
         ROOT / "deploy" / "robot" / "pinky_pro" / "config" / "profile.core.yaml",
         ROOT / "deploy" / "robot" / "pinky_pro" / "config" / "profile.motor.yaml",
-        ROOT / "src" / "contracts" / "foundation" / "config" / "rosy_default.yaml",
+        ROOT / "contracts" / "foundation" / "config" / "rosy_default.yaml",
     )
     for path in paths:
         if path.name == "rosy_default.yaml":

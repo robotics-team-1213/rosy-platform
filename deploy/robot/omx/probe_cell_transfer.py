@@ -36,7 +36,7 @@ from pathlib import Path
 
 REPO = Path(os.environ.get("ROSY_SIM_REPO", "/repo"))
 # Appended, not prepended: every other import would otherwise stat the (slow) bind mount first.
-for _part in ("src/contracts/foundation", "middleware/apps/device/omx/adapter", "operations/processes/cell"):
+for _part in ("contracts/foundation", "middleware/apps/device/omx/adapter", "operations/processes/cell"):
     sys.path.append(str(REPO / _part))
 
 WORKCELL_ID, INSTANCE_ID = "omx_cell_sim", "omx_cell_sim_01"

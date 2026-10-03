@@ -3,7 +3,7 @@ schema: rosy.platform-dependencies.v1
 # Existing Python components only. Add new paths in the same change that creates them.
 components:
   - name: contracts
-    path: src/contracts/foundation/core_common
+    path: contracts/foundation/core_common
     import_prefix: core_common
   - name: cell_process_compat
     path: operations/processes/cell/rosy_cell

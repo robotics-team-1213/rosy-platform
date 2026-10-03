@@ -16,7 +16,7 @@ import numpy as np
 
 REPO = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", ".."))
 sys.path.insert(0, REPO + "/src/runtime/sensing")
-sys.path.insert(0, REPO + "/src/contracts/foundation")  # core_common (D-424)
+sys.path.insert(0, REPO + "/contracts/foundation")  # core_common (D-424)
 
 from control.sensing.perception.camera_ground import simulation_ground_plane  # noqa: E402
 from control.sensing.perception.lane import detect_lane_error, detect_lane_centre, LANE_LINE_WIDTH_M  # noqa: E402

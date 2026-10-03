@@ -24,7 +24,7 @@ import sys
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[3]
-for name in ("operations/fleet", "src/contracts/foundation", "src/runtime/events", "src/runtime/services"):
+for name in ("operations/fleet", "contracts/foundation", "middleware/core/events", "middleware/core/services"):
     path = REPO / name
     if str(path) not in sys.path:
         sys.path.insert(0, str(path))

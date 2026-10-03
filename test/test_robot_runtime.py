@@ -342,7 +342,7 @@ def test_core_reads_only_bounded_host_telemetry_paths():
 
 def test_core_image_prepares_dashboard_and_host_mount_directories():
     dockerfile = (DEPLOY / "Dockerfile").read_text(encoding="utf-8")
-    setup = (ROOT / "src" / "runtime" / "gateway" / "setup.py").read_text(encoding="utf-8")
+    setup = (ROOT / "middleware" / "core" / "gateway" / "setup.py").read_text(encoding="utf-8")
 
     assert (
         "mkdir -p /host/proc/net /host/etc /host/sys/class/thermal "
@@ -364,7 +364,7 @@ def test_systemd_unit_delegates_to_runtime_mode_wrapper():
 
 
 def test_teleop_watchdog_lives_in_safety_manager_not_a_stub():
-    safety = ROOT / "src" / "runtime" / "services" / "core_features" / "safety"
+    safety = ROOT / "middleware" / "core" / "services" / "core_features" / "safety"
     assert not (safety / "watchdog.py").is_file()
     assert "class TeleopWatchdog" in (safety / "manager.py").read_text(encoding="utf-8")
 

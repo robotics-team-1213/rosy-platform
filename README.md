@@ -17,7 +17,7 @@ Pinky 주행은 CORE가, OMX 팔은 장치 수용을 마친 OMX 로컬 제어기
 먼저 읽는다.
 
 - **CORE 단일 게이트웨이** — 외부 클라이언트는 ROS를 직접 쓰지 않고 CORE API로만
-  말한다(CORE SRS §1.3). `core`(`src/runtime/gateway`)가 유일한 외부 접점이다.
+  말한다(CORE SRS §1.3). `core`(`middleware/core/gateway`)가 유일한 외부 접점이다.
 - **유일한 `cmd_vel` publisher** — Command Manager(`core_features.command`)만 최종
   주행 명령을 발행한다(D-2). `control`(`src/runtime/sensing`)의 legacy 최종
   publisher는 CORE와 병행하지 않는다.
@@ -55,7 +55,7 @@ site/·hmi/ 경로만으로 PC 배치를 추론하지 않는다. 실행과 후�
 
 | 질문 | 배치 기준 | 현재 예 |
 |---|---|---|
-| 계약·타입인가? | ROS 인터페이스는 `src/contracts/interfaces`, 공통 Python 계약 모듈은 의미에 따라 `src/contracts/foundation`에 둔다. 계약은 동작을 실행하지 않는다. | `interfaces`, `core_common` |
+| 계약·타입인가? | ROS 인터페이스는 `contracts/ros_idl`, 공통 Python 계약 모듈은 의미에 따라 `contracts/foundation`에 둔다. 계약은 동작을 실행하지 않는다. | `interfaces`, `core_common` |
 | 로봇 실행 구성요소인가? | ROS 실행 패키지는 `src/runtime/<role>`에 둔다. `runtime/`은 모든 제품이 공유하는 단일 엔진을 뜻하지 않는다. | `runtime/gateway`의 `core`는 Pinky 장치 미들웨어다. `runtime/sensing`의 `control`은 별도 ROS 패키지다. |
 | 제품별 소스·번역기인가? | 실제 제품 전용 프로필·bringup·ROS/vendor API adapter는 `src/products/<model>`에 둔다. adapter 경로만으로 최종 writer나 운용 수용을 선언하지 않는다. | `products/pinky_pro`, `products/omx/adapter` |
 | 현장 서버 기능인가? | 중앙 현장 서비스는 `src/site/<service>`에 둔다. Fleet은 작업 원장을 소유하고 장치 actuator를 쓰지 않는다. | `site/fleet`, `operations/vision` |
@@ -163,13 +163,13 @@ python3 -m pytest test/test_harness_contracts.py test/architecture/test_module_s
   test/test_io_image_closure.py test/test_line_follow_contract_docs.py \
   test/test_behavior_test_ownership.py test/test_module_scorecard.py \
   test/test_release_boundary_guards.py test/test_robot_literals.py \
-  src/runtime/gateway/test/test_protocol_version_alignment.py \
-  src/runtime/gateway/test/test_event_catalogue.py \
-  src/runtime/gateway/test/test_console_layout.py \
-  src/runtime/gateway/test/test_host_cards.py \
-  src/runtime/gateway/test/test_host_hardware.py \
-  src/runtime/gateway/test/test_triage_contract.py \
-  src/runtime/gateway/test/test_host_status_summary.py -q
+  middleware/core/gateway/test/test_protocol_version_alignment.py \
+  middleware/core/gateway/test/test_event_catalogue.py \
+  middleware/core/gateway/test/test_console_layout.py \
+  middleware/core/gateway/test/test_host_cards.py \
+  middleware/core/gateway/test/test_host_hardware.py \
+  middleware/core/gateway/test/test_triage_contract.py \
+  middleware/core/gateway/test/test_host_status_summary.py -q
 python3 tools/harness/rosy_harness.py lint   # ADR 중복·mojibake·append-only·staleness
 
 # Full tier: 릴리스·현장 푸시 전, 또는 quick tier에 없는 묶음을 건드렸을 때.
@@ -177,7 +177,7 @@ source env.sh
 colcon --log-base log build --symlink-install --base-paths $(python3 tools/harness/colcon_roots.py) --build-base build --install-base install
 
 # core 단위 시험 (대부분 라이브 ROS 불필요)
-python3 -m pytest src/runtime/gateway/test/ src/runtime/events/test/ src/runtime/services/test/ shared/web/test/ -v
+python3 -m pytest middleware/core/gateway/test/ middleware/core/events/test/ middleware/core/services/test/ shared/web/test/ -v
 
 # Fleet formation/relay/session/console (ROS 불필요)
 python3 -m pytest operations/fleet/test/ -v

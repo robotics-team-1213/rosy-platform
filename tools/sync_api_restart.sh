@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -e
 SRC="/mnt/f/Dev/Control/Robot/ROS/Rosy/Rosy OS/.worktrees/pilot-teleop"
-rm -rf /rosy/src/runtime/api_web
-tar -C "$SRC" -cf - src/runtime/api_web | tar -C /rosy -xf -
+rm -rf /rosy/middleware/core/api_web
+tar -C "$SRC" -cf - middleware/core/api_web | tar -C /rosy -xf -
 # D-427: the source roots come from tools/harness/platform_parts.yaml.
 COLCON_ROOTS="$(python3 "$(dirname "$0")/harness/colcon_roots.py")"
 cd /rosy

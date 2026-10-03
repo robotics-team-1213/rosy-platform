@@ -37,15 +37,15 @@ GUARD_SET = (
     "test/test_release_boundary_guards.py",
     "test/architecture/test_module_structure.py",
     "test/test_harness_contracts.py",
-    "src/runtime/gateway/test/test_protocol_version_alignment.py",
+    "middleware/core/gateway/test/test_protocol_version_alignment.py",
     "test/test_robot_literals.py",
     "test/architecture/test_platform_parts.py",
 )
 
 # D-436 §2: a change here can break any suite, so the full tier runs.
 FULL_TRIGGERS = (
-    ("src/contracts/foundation/**", "shared foundation (core_common)"),
-    ("src/contracts/interfaces/**", "shared ROS interfaces"),
+    ("contracts/foundation/**", "shared foundation (core_common)"),
+    ("contracts/ros_idl/**", "shared ROS interfaces"),
     ("tools/harness/**", "harness configuration or the selector itself"),
     (".github/workflows/**", "CI workflow"),
     ("**/conftest.py", "pytest conftest"),
@@ -66,10 +66,10 @@ FULL_TRIGGERS = (
 # Whole suites the CI full run (.github/workflows/ci.yml) executes beyond the
 # registered module `tests`; the printed full tier is their union.
 FULL_SUITES = (
-    "src/runtime/events/test",
-    "src/runtime/services/test",
+    "middleware/core/events/test",
+    "middleware/core/services/test",
     "shared/web/test",
-    "src/contracts/foundation/test",
+    "contracts/foundation/test",
 )
 
 # D-436 4: the GitHub full run as parallel matrix entries. Each entry is one
@@ -80,8 +80,8 @@ FULL_SUITES = (
 ROOT_SHARDS = 3
 CI_FULL_MATRIX = (
     {"name": "core-domain", "invocations": [[
-        "src/runtime/gateway/test", "src/runtime/events/test", "src/runtime/services/test",
-        "shared/web/test", "src/contracts/foundation/test",
+        "middleware/core/gateway/test", "middleware/core/events/test", "middleware/core/services/test",
+        "shared/web/test", "contracts/foundation/test",
         "middleware/apps/device/pinky/profile/test", "middleware/apps/device/omx/profile/test"]], "ros": "none"},
     # Never ran in CI before D-436 (D-191 follow-up); reports until its first green run.
     {"name": "sensing", "invocations": [["src/runtime/sensing/test"]], "ros": "none", "gating": False},

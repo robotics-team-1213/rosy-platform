@@ -218,7 +218,7 @@ def test_cmd_vel_single_publisher():
                 line = text[: text.index(call)].count("\n") + 1
                 publishers.append(f"{path.relative_to(ROOT).as_posix()}:{line}")
     assert len(publishers) == 1, publishers
-    assert publishers[0].startswith("src/runtime/gateway/core/bridge/ros_bridge.py:"), publishers
+    assert publishers[0].startswith("middleware/core/gateway/core/bridge/ros_bridge.py:"), publishers
 
 
 def test_fleet_prod_only_core_common():
