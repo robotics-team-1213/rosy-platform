@@ -155,10 +155,11 @@ val_ds   = RosyLaneDataset(ds_dir, "val")
 기본 기록이다. 계정도 키도 필요 없고, 노트북 5c단계가 학습 전에 알아서 만든다.
 
 - 위치: 2단계 입력 칸 `RUNS_DIR`. 비우면 환경 변수 `ROSY_RUNS_DIR`, 없으면 Colab은 `/content/rosy-runs`(런타임이 닫히면 사라지니 남기려면 Drive 경로를 적는다), GPU PC는 `~/rosy-ml/runs`.
-- 한 번 학습하면 `<RUNS_DIR>/<UTC 시각>-<trainer>/` 폴더가 하나 생긴다: `config.json`(설정, 토큰·키 항목은 빠진다), `history.json`(에폭마다 갱신, 중간에 멈춰도 남는다), `summary.json`(가장 좋은 에폭, 검증 IoU, `model_revision`, 내보낸 경로), TensorBoard 이벤트 파일. 모델 폴더와 따로라서 store inbox로 넘어가지 않는다.
+- 한 번 학습하면 `<RUNS_DIR>/<UTC 시각>-<trainer>/` 폴더가 하나 생긴다: `config.json`(설정, 토큰·키 항목은 빠진다), `history.json`(에폭마다 갱신, 중간에 멈춰도 남는다), `summary.json`(가장 좋은 에폭, 검증 IoU, `model_revision`, 내보낸 폴더의 상대 경로), TensorBoard 이벤트 파일. 모델 폴더와 따로라서 store inbox로 넘어가지 않는다.
 - TensorBoard는 `pip install tensorboard`가 되어 있으면 쓴다. 없으면 `history.json`에 `"tensorboard": "unavailable"`만 남기고 학습은 그대로 진행한다.
 - 보기(모델 PC): `tensorboard --logdir ~/rosy-ml/runs --host <tailscale-ip> --port 6006` 를 띄우고 다른 PC 브라우저에서 `http://<tailscale-ip>:6006` 으로 연다. `<tailscale-ip>`는 자리 표시자다. 실제 주소는 이 저장소(공개)에 적지 않는다.
-- manifest의 `metrics.experiment`에는 W&B run이 없으면 `{"tracker": "local", "run_id", "path"}`가 들어간다.
+- manifest의 `metrics.experiment`에는 W&B run이 없으면 `{"tracker": "local", "run_id", "path": "runs/<run_id>"}`가 들어간다(호스트 경로 없음).
+- 기록 중 오류(TensorBoard, 디스크)는 학습을 멈추지 않는다. 설정에서 키 이름에 token/secret/key/password 등이 든 항목은 빠지지만 값은 검사하지 않으니 설정에 비밀 문장을 적지 않는다.
 - 자기 노트북에서는 `from run_log import RunLog, chain`으로 `RunLog(run_dir)`를 만들고 `train(..., on_epoch=chain(log.on_epoch, 다른_훅))`, 끝에 `log.finish({...})`를 부른다.
 
 ### (선택) 실험 기록: Weights & Biases

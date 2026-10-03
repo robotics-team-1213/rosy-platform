@@ -4777,3 +4777,8 @@
 - 증거: `python -m pytest learning/training/perception/test -q -p no:cacheprovider`(ML venv), `python tools/harness/rosy_harness.py generate` 뒤 lint·`test/test_harness_contracts.py`
 - gate 변화: 없음(호스트 결과). 모델 PC나 실제 Colab 런타임에서 돌려 본 것은 아님
 - 결정: 사용자 결정 2026-10-03, 기본은 로컬 기록 + TensorBoard, W&B 선택
+
+## 2026-10-03 · uncommitted · perception(D-356): review fixes for the local run log
+- 변경: `run_log.py` 기록 오류가 학습을 멈추지 않음(`chain`은 예외 후 계속, `close()` 추가), 비밀 키 단어 확대, `export_cell`의 로컬 experiment 검증(`run_id`, 상대 `path`), 노트북 5c 고정 `runs/<run_id>`·상대 summary 경로·재실행 시 앞 기록 닫기, D-356 부록 동기화
+- 증거: 훈련 테스트와 `learning/training/perception/test` 전체, harness generate·lint·`test/test_harness_contracts.py`
+- gate 변화: 없음(호스트 결과)

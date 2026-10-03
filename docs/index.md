@@ -274,8 +274,8 @@
 
 ## 최근 기록
 
+- 2026-10-03 · uncommitted · perception(D-356): review fixes for the local run log
 - 2026-10-03 · uncommitted · perception(D-356): experiment tracking defaults to local run log + TensorBoard
 - 2026-10-03 · uncommitted · docs: D-434 model PC and site PC roles, Isaac Sim 5.1, low-memory rules
 - 2026-10-03 · uncommitted · docs: automatic-update state bootstrap plan
 - 2026-10-03 · uncommitted · docs: D-432 common discovery and development link mode
-- 2026-10-03 · uncommitted · feat(perception): D-431 NCNN/OpenCV 구현과 실제 차선 Pi 재생
