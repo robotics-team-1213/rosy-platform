@@ -39,40 +39,43 @@ from _ast_imports import _imports, _matches
 ROOT = Path(__file__).resolve().parents[2]
 MANIFEST = ROOT / "tools" / "harness" / "platform_parts.yaml"
 
-#: Roots whose path is itself a package dir, so their dotted package starts at the prefix.
+# Both tables are keyed by ``d427_target``, which a move commit does not change,
+# so moving a root only edits its manifest ``path``.
+
+#: Roots (by target) whose folder is itself a package dir, so their dotted package starts at the prefix.
 PACKAGE_DIR_ROOTS = {
-    "modules/execution/src/rosy/execution/api",
-    "modules/execution/src/rosy/execution/local",
-    "modules/execution/src/rosy/execution/site",
+    "operations/execution/api",
+    "middleware/execution/local",
+    "operations/execution/site",
 }
 
-#: Frozen §2 violations as (importer root, imported root or "external:<name>") -> reason.
+#: Frozen §2 violations as (importer target, imported target or "external:<name>") -> reason.
 KNOWN_VIOLATIONS = {
-    ("apps/agent", "modules/processes/palletizing"): (
+    ("middleware/apps/device/omx/agent", "operations/processes/palletizing"): (
         "middleware -> operations: the OMX cell owner loads palletizing cell documents and the compiler"
     ),
-    ("integrations/robots/omx", "modules/skills/api"): (
+    ("integrations/robots/omx", "middleware/skills/api"): (
         "integrations -> middleware: the OMX transfer provider implements the Skill API in place"
     ),
-    ("integrations/robots/omx", "modules/skills/manipulation"): (
+    ("integrations/robots/omx", "middleware/skills/manipulation"): (
         "integrations -> middleware: the OMX transfer provider binds the manipulation transfer Skill"
     ),
-    ("integrations/robots/omx", "src/products/omx/adapter"): (
+    ("integrations/robots/omx", "middleware/apps/device/omx/adapter"): (
         "integrations -> middleware: cell_workflow reuses the adapter pick-place journal"
     ),
-    ("modules/execution/src/rosy/execution/api", "modules/execution/src/rosy/execution/local"): (
+    ("operations/execution/api", "middleware/execution/local"): (
         "operations -> middleware: PlanBundle embeds local receipt identity types"
     ),
-    ("modules/execution/src/rosy/execution/api", "modules/skills/api"): (
+    ("operations/execution/api", "middleware/skills/api"): (
         "operations -> middleware: PlanBundle steps carry SkillInvocation (Skill envelope belongs in contracts)"
     ),
-    ("modules/processes/palletizing", "modules/skills/api"): (
+    ("operations/processes/palletizing", "middleware/skills/api"): (
         "operations -> middleware: palletizing builds SkillInvocation steps (Skill envelope belongs in contracts)"
     ),
-    ("src/products/omx/adapter", "external:lerobot"): (
+    ("middleware/apps/device/omx/adapter", "external:lerobot"): (
         "middleware -> lerobot training stack: lerobot_export.py is learning/curation code still in the adapter"
     ),
-    ("tools/perception", "src/runtime/sensing"): (
+    ("learning/training/perception", "middleware/perception"): (
         "learning -> middleware: dataset tools reuse control.recording topics and perception helpers"
     ),
 }
@@ -110,7 +113,7 @@ def _is_test_file(path: str) -> bool:
 def _package_of(path: str, root: dict) -> str:
     """Dotted package of ``path``, used to resolve relative imports."""
     relative = PurePosixPath(path).relative_to(root["path"])
-    if root["path"] in PACKAGE_DIR_ROOTS:
+    if root["d427_target"] in PACKAGE_DIR_ROOTS:
         (prefix,) = root["import_prefix"]
         return ".".join([prefix, *relative.parent.parts])
     parts = relative.parent.parts
@@ -166,9 +169,9 @@ def _edges(manifest: dict, tracked: list[str]) -> dict[tuple[str, str], list[str
             if target is not None:
                 if _allowed(importer, target, rules):
                     continue
-                key = (importer["path"], target["path"])
+                key = (importer["d427_target"], target["d427_target"])
             elif name.split(".")[0] in forbidden_external:
-                key = (importer["path"], "external:" + name.split(".")[0])
+                key = (importer["d427_target"], "external:" + name.split(".")[0])
             else:
                 continue
             found = f"{path} imports {name}"
@@ -338,6 +341,13 @@ def test_roots_with_python_packages_declare_their_import_prefix():
         if not any(_matches(package, prefix) for prefix in root.get("import_prefix") or ()):
             missing.append(f"{root['path']}: {package}")
     assert missing == [], f"declare import_prefix for: {missing}"
+
+
+def test_violation_and_package_dir_keys_name_one_root_each():
+    targets = [root["d427_target"] for root in _manifest()["roots"]]
+    keys = {name for pair in KNOWN_VIOLATIONS for name in pair if not name.startswith("external:")}
+    keys |= PACKAGE_DIR_ROOTS
+    assert sorted(key for key in keys if targets.count(key) != 1) == []
 
 
 def test_import_rules_only_shrink():
