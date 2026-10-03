@@ -14,6 +14,9 @@ install(FILES
   ui.js
   theme.js
   evidence.js
+  request.js
+  scope.js
+  fleet-client.js
   DESTINATION share/${PROJECT_NAME}
 )
 
