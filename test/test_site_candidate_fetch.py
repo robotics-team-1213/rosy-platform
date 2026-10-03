@@ -37,7 +37,7 @@ def _posix(path: Path) -> str:
 
 
 def _release(assets: Path, *, members: dict[str, bytes] | None = None, signed: bool = True,
-             extra: str | None = None) -> None:
+             extra: str | None = None, special: tuple[tarfile.TarInfo, ...] = ()) -> None:
     assets.mkdir()
     manifest = b'{"source_commit": "' + COMMIT.encode() + b'"}\n'
     members = members or {
@@ -51,6 +51,8 @@ def _release(assets: Path, *, members: dict[str, bytes] | None = None, signed: b
             info = tarfile.TarInfo(name)
             info.size = len(data)
             archive.addfile(info, io.BytesIO(data))
+        for info in special:
+            archive.addfile(info)
     blob = buffer.getvalue()
     half = len(blob) // 2
     names = []
@@ -86,6 +88,11 @@ def _run(tmp_path: Path, assets: Path) -> subprocess.CompletedProcess:
         "cp \"$src\" \"$out\"\n",
         encoding="utf-8", newline="\n")
     curl.chmod(0o755)
+    python3 = fake_bin / "python3"
+    python3.write_text(
+        f"#!/usr/bin/env bash\nexec '{_posix(Path(sys.executable))}' \"$@\"\n",
+        encoding="utf-8", newline="\n")
+    python3.chmod(0o755)
     return subprocess.run(
         [BASH, "-c", f'PATH="{_posix(fake_bin)}:$PATH" exec bash "$0" "$@"',
          _posix(SCRIPT), "--repo", "example/rosy", "--commit", COMMIT,
@@ -150,3 +157,44 @@ def test_fetch_refuses_a_tampered_part(tmp_path):
 
     assert result.returncode != 0
     assert not (tmp_path / "staging" / TAG / "candidate" / COMMIT).exists()
+
+
+def _link(name: str, kind: bytes, target: str) -> tarfile.TarInfo:
+    info = tarfile.TarInfo(f"{COMMIT}/{name}")
+    info.type = kind
+    info.linkname = target
+    return info
+
+
+def test_fetch_refuses_symlinks_hardlinks_and_devices_before_extracting(tmp_path):
+    fifo = tarfile.TarInfo(f"{COMMIT}/pipe")
+    fifo.type = tarfile.FIFOTYPE
+    cases = {
+        "symlink": _link("deploy/site/compose.yaml.link", tarfile.SYMTYPE, "/etc/shadow"),
+        "hardlink": _link("evil", tarfile.LNKTYPE, f"{COMMIT}/release.json"),
+        "fifo": fifo,
+    }
+    for label, member in cases.items():
+        case = tmp_path / label
+        case.mkdir()
+        _release(case / "assets", special=(member,))
+
+        result = _run(case, case / "assets")
+
+        assert result.returncode != 0, label
+        assert "refusing non-regular archive member" in result.stderr, label
+        assert not (case / "staging" / TAG / "candidate" / COMMIT).exists(), label
+
+
+def test_fetch_refuses_absolute_and_parent_paths(tmp_path):
+    for label, name in {"absolute": "/etc/rosy-evil", "parent": f"{COMMIT}/../escape"}.items():
+        case = tmp_path / label
+        case.mkdir()
+        _release(case / "assets", members={name: b"x", f"{COMMIT}/release.json": b"{}"})
+
+        result = _run(case, case / "assets")
+
+        assert result.returncode != 0, label
+        assert "unexpected archive member" in result.stderr, label
+        assert not (case / "staging" / TAG / "candidate" / COMMIT).exists(), label
+        assert not (case / "staging" / TAG / "escape").exists(), label

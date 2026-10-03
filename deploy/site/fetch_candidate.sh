@@ -10,6 +10,7 @@
 # NOT authenticate the candidate: SHA256SUMS is unsigned. The independently
 # installed verify_candidate.py does that (D-301); the commands to run next are
 # printed at the end. Refuses a release without release.json.sig (unsigned).
+# Needs curl, sha256sum and python3 >= 3.12 (safe tar extraction).
 set -euo pipefail
 
 REPO=
@@ -20,7 +21,7 @@ while [ $# -gt 0 ]; do
     --repo) REPO=$2; shift ;;
     --commit) COMMIT=$2; shift ;;
     --staging) STAGING=$2; shift ;;
-    -h|--help) sed -n '2,13p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,14p' "$0"; exit 0 ;;
     *) echo "unknown option: $1" >&2; exit 2 ;;
   esac
   shift
@@ -68,22 +69,36 @@ while read -r digest name; do
 done <"${DOWNLOAD}/SHA256SUMS"
 (cd "$DOWNLOAD" && sha256sum --check --strict SHA256SUMS)
 
-# Every archive member must sit under <commit>/ with no absolute or .. path.
-cat "${DOWNLOAD}/${PARTS}"[0-9][0-9] | tar -tf - | while read -r member; do
-  case "$member" in
-    "${COMMIT}"/*) ;;
-    *) echo "unexpected archive member: $member" >&2; exit 1 ;;
-  esac
-  case "/$member/" in
-    */../*) echo "unsafe archive member: $member" >&2; exit 1 ;;
-  esac
-done
-cat "${DOWNLOAD}/${PARTS}"[0-9][0-9] | tar -xf - --no-same-owner -C "$CANDIDATE"
+ARCHIVE="${DOWNLOAD}/rosy-site-candidate-${COMMIT}.tar"
+cat "${DOWNLOAD}/${PARTS}"[0-9][0-9] >"$ARCHIVE"
+rm -f "${DOWNLOAD}/${PARTS}"[0-9][0-9]
+
+# Check every member before extracting anything: only regular files and
+# directories under <commit>/ (no symlink, hardlink, device, fifo, absolute
+# path or ..), then extract with tarfile's "data" filter as a second guard.
+python3 - "$ARCHIVE" "$CANDIDATE" "$COMMIT" <<'PY'
+import sys
+import tarfile
+
+if sys.version_info < (3, 12):
+    sys.exit("python3 >= 3.12 is required (tarfile data extraction filter)")
+archive, destination, commit = sys.argv[1:]
+with tarfile.open(archive, "r:") as bundle:
+    members = bundle.getmembers()
+    for member in members:
+        name = member.name
+        if not (member.isfile() or member.isdir()):
+            sys.exit(f"refusing non-regular archive member: {name}")
+        if (name.startswith("/") or ".." in name.split("/")
+                or not (name == commit or name.startswith(commit + "/"))):
+            sys.exit(f"unexpected archive member: {name}")
+    bundle.extractall(destination, members=members, filter="data")
+PY
+rm -f "$ARCHIVE"
 
 DIR="${CANDIDATE}/${COMMIT}"
 cmp "${DOWNLOAD}/release.json" "${DIR}/release.json"
 cp "${DOWNLOAD}/release.json.sig" "${DIR}/release.json.sig"
-rm -f "${DOWNLOAD}/${PARTS}"[0-9][0-9]
 
 cat <<EOF
 Staged ${TAG} (UNVERIFIED) at:

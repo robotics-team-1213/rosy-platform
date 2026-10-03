@@ -760,7 +760,11 @@ filled from the operator's private records.
 
 3. On the site host, as the operator (no sudo), fetch and stage it. The script
    checks `SHA256SUMS`, joins the parts, extracts into a fresh staging folder,
-   adds `release.json.sig`, and refuses a release that has no signature yet:
+   adds `release.json.sig`, and refuses a release that has no signature yet.
+   Before extracting it rejects any archive member that is not a regular file
+   or directory (symlink, hardlink, device, fifo) or lies outside
+   `<commit>/`, then extracts with Python's tarfile `data` filter (needs
+   python3 3.12 or newer):
 
    ```sh
    /usr/local/lib/rosy-site/fetch_candidate.sh \
