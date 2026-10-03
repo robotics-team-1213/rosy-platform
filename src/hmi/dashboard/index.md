@@ -41,4 +41,4 @@
 - 2026-10-04 · uncommitted · feat: 브라우저 원본·표시본 확인 영상
 - 2026-10-04 · uncommitted · feat: 저조도 카메라 판정 불가 표시
 - 2026-10-04 · uncommitted · feat(dashboard): 차선 인식 선택
-- 2026-10-03 · uncommitted · fix(console): 점유 격자를 가리지 않고 즉시 정지는 버튼이 확인이다
+- 2026-10-03 · uncommitted · fix(link): 현재 접속과 후속 코드 규약 구별

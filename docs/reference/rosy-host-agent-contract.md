@@ -172,6 +172,7 @@ Host Agent는 아래 명령만 안다. 임의 명령, 임의 경로, 임의 인�
 | `release.clear_hold` | — | administrator | 필요 |
 | `service.status` | `unit` (고정 목록 내에서만) | viewer | 불필요 |
 | `system.reboot` | — | administrator | 필요 |
+| `ssh.register_key` | `public_key` (옵션 없는 Ed25519 공개키, 512자 이하) | administrator | 필요 |
 
 **`system.shutdown`은 이 표에 없고, 앞으로도 추가하지 않는다.** 저배터리 셧다운은
 사람이 없는 상태에서 발화하므로 인증할 administrator도 확인해 줄 operator도 없다.
@@ -294,3 +295,22 @@ install 거부, idempotency, 요청 크기·스키마, 감사 redaction — 은
 ## 2026-09-08 delivery integration status
 
 `rosy-release` is now a separate root maintenance CLI for signed staging, installation, rollback and boot recovery. The systemd timer only checks/downloads/stages. This does not implement or change the socket API above: wiring the host-agent server or dashboard to this CLI requires a separate authorization/integration change. See `docs/deployment/github-updates.md`.
+
+## D-432 SSH 승인 보충 (2026-10-03)
+
+`POST /api/v1/host/ssh/pair`는 실제 HTTPS와 CORE TLS 구성, 관리자 세션, `confirmed: true`를 모두 요구한다. 사용자는 로봇 화면의 4자 관리자 코드로 임시 API 세션을 만든 뒤 자신의 공개키만 제출한다. Host Agent가 고정 계정 `rosy`의 `.ssh/authorized_keys`에 추가하며 기존 키를 보존한다. 옵션·암호·개인키·임의 계정·경로·명령은 받지 않는다. 최대 8개 키, 심볼릭 링크·하드 링크·비정규 파일·64 KiB 초과 저장소를 거부한다. 반환된 호스트 공개키와 SHA256 지문은 TLS로 확인한 뒤 클라이언트 known_hosts에 고정한다. 기존 호스트 키와 다르면 중단한다. 임시 API 세션은 작업 직후 로그아웃하며 SSH 암호 인증은 켜지 않는다. 실제 로봇 키 등록·SSH 접속은 별도 장치 증거가 필요하다.
+
+
+#### D-432 SSH 서비스 설치 경로
+
+`rosy-ssh-pairing.service`는 `/etc/rosy/ssh-pairing.enabled`가 있을 때만 실행한다.
+전용 `/run/rosy-host/ssh-pairing.sock`은 root:rosy-core 0660이며 kernel peer UID를 확인한다.
+이 서비스의 allowlist는 `ssh.register_key` 하나다. 기존 네트워크·릴리스·재부팅 명령은 열지 않는다.
+native payload는 Host Agent의 stdlib helper를 같이 설치하고 systemd unit을 image layer에 포함한다.
+기본 unit은 조건 미충족으로 실행하지 않는다. 실제 장비 키 등록·SSH 접속 증거는 별도다.
+
+
+SSH opt-in 설치 전제: 기존 SD/first-boot의 key-only 운영 계정 `rosy`가 `/home/rosy`와 로그인 shell을
+갖고 `/home/rosy/.ssh`가 rosy 소유 0700으로 존재해야 한다. 계정이 없는 장비는 SD 운영 계정
+provisioning을 먼저 수행한다. 전용 unit의 디렉터리 조건은 이 전제가 없으면 실행을 건너뛴다.
+이 서비스는 계정·sudo 권한·SSH 비밀번호 정책을 생성하거나 확대하지 않는다.

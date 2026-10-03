@@ -721,8 +721,11 @@ local PC. The runner output is unsigned, and no signing key is ever stored in
 GitHub. Placeholders below (`<owner>/<repository>`, `<commit>`, key paths) are
 filled from the operator's private records.
 
-1. Dispatch the build. A short first job fails at once if the release for
-   that commit already exists. The build then runs `build_candidate.py --sbom-tool syft` on
+1. A push to `main` that touches an image source, the candidate's discovery
+   document, or the workflow builds automatically (D-441). To build another
+   commit, dispatch it. A short first job checks whether the release for that
+   commit already exists: a dispatch then fails at once, a push succeeds
+   without building. The build then runs `build_candidate.py --sbom-tool syft` on
    `ubuntu-24.04` and creates the prerelease `site-<first 12 hex of commit>`
    with `release.json`, `SHA256SUMS`, and the split tar
    (`rosy-site-candidate-<commit>.tar.partNN`, each under 2 GiB):
@@ -847,6 +850,150 @@ audit through the authenticated `GET /api/fleet/events` cursor API. The Fleet
 image bundles a SQLite-aware online backup and guarded restore command at
 `/opt/rosy/site_db.py`. Do not copy only the live main DB file while WAL is
 active.
+
+### Automatic updates (D-441)
+
+Since D-441 the chain runs by itself: a push to `main` builds the candidate,
+the operator's signing PC signs it, and the site host installs it with a health
+check and rollback. Code merged to `main` becomes the site deployment within
+roughly half an hour. The trust anchors do not move: the private key stays on
+the signing PC, and the host verifies with the verifier and public key it got
+by hand (D-301). Placeholders below are filled from private records.
+
+**Signing PC (Windows or Linux).** `auto_sign_candidates.py` runs every 10
+minutes. It needs Python 3.10+, OpenSSL, and `gh` logged in with a token that
+can upload release assets to this repository only (a fine-grained token with
+Contents read/write on that repository). Keep the config outside the
+repository, for example `C:\RosySigning\auto-sign.json`:
+
+```json
+{
+  "repo": "<owner>/<repository>",
+  "key_id": "<site-signing-key-id>",
+  "private_key": "C:\\RosySigning\\site-release-ed25519.key",
+  "public_key": "C:\\RosySigning\\site-release-ed25519.pub.pem",
+  "state_dir": "C:\\RosySigning\\state",
+  "keep": 10,
+  "max_per_run": 3
+}
+```
+
+```powershell
+python deploy\site\auto_sign_candidates.py --config C:\RosySigning\auto-sign.json --dry-run
+powershell -ExecutionPolicy Bypass -File deploy\site\register_auto_sign_task.ps1 `
+  -ConfigPath C:\RosySigning\auto-sign.json
+```
+
+For each unsigned `site-<12 hex>` release (newest first, at most
+`max_per_run`) it downloads only `release.json` and signs only when all of
+these hold. Otherwise it records a refusal and does not check the same bytes
+again:
+
+- `gh attestation verify` passes for this repository's
+  `build-site-candidate.yml` with `--source-ref refs/heads/main`, and the
+  attested `release.json` subject digest equals the SHA-256 of the downloaded
+  bytes. That digest becomes `--expected-manifest-sha256`.
+- The manifest `source_commit` is on `main` (GitHub compare status `ahead` or
+  `identical`) and the tag is `site-<source_commit[:12]>`.
+- `sign_candidate.sign_manifest_only` accepts it (commit, image tag, platform,
+  digest), and no `release.json.sig` exists yet. It never uses `--clobber`.
+
+Every decision is one JSON line in `<state_dir>/audit.jsonl`. Exit codes: 0
+nothing to do, 10 signed, 20 refused or failed, 2 configuration or lock. The
+task runs only while that user is logged on. Pause with
+`Disable-ScheduledTask -TaskName RosySiteAutoSign`; remove with
+`Unregister-ScheduledTask -TaskName RosySiteAutoSign -Confirm:$false`. On
+Linux run the same command from a systemd user timer or cron.
+
+**Site host (once, as the administrator).** Install the first candidate by
+hand as above; the updater only replaces a running one. Install the updater
+beside the reviewed verifier from a reviewed checkout, never from a candidate:
+
+```sh
+sudo install -o root -g root -m 0755 deploy/site/rosy_site_autoupdate.py \
+  /usr/local/lib/rosy-site/rosy_site_autoupdate.py
+sudo install -o root -g root -m 0644 deploy/site/verify_candidate.py \
+  deploy/site/candidate_signing.py /usr/local/lib/rosy-site/
+sudo install -o root -g root -m 0644 deploy/site/rosy-site-autoupdate.service \
+  deploy/site/rosy-site-autoupdate.timer /etc/systemd/system/
+sudoedit /etc/rosy/site/autoupdate.conf   # JSON below, mode 0644, owner root
+sudo systemctl daemon-reload
+sudo /usr/bin/python3 -I /usr/local/lib/rosy-site/rosy_site_autoupdate.py run --dry-run
+sudo systemctl enable --now rosy-site-autoupdate.timer
+```
+
+```json
+{
+  "repo": "<owner>/<repository>",
+  "key_id": "<site-signing-key-id>",
+  "public_key": "/etc/rosy/site/trust/site-release-ed25519.pub.pem",
+  "health_url": "https://<site-fqdn>:8443/healthz",
+  "health_ca": "/etc/rosy/site/secrets/<site-ca-file>",
+  "health_timeout_s": 300,
+  "keep": 3
+}
+```
+
+Each run (every 15 minutes, randomized by up to 5) picks the newest signed
+`site-*` release created after the installed one and:
+
+1. refuses without changing anything when `ROSY_SITE_PAIRING_COMPOSE` names a
+   file other than the candidate's `compose.pairing.yaml`, when `site.env`
+   sets `COMPOSE_FILE`, when the stack unit (drop-ins included, read through
+   `systemctl cat`) adds a Compose file, or when `docker compose config` with
+   the new tag does not resolve every site service to
+   `rosy-site-<service>:<commit>`. Remove the override, then let it run;
+2. downloads into `/opt/rosy/candidates/.staging-<tag>`, checks
+   `SHA256SUMS`, joins the parts, applies the same tar member rules as
+   `fetch_candidate.sh`, and moves the result to
+   `/opt/rosy/candidates/<commit>`;
+3. runs the installed verifier with the enrolled key (signature and hashes),
+   `docker image load`, then the full verifier (loaded image IDs);
+4. backs up `site.env` to `site.env.autoupdate-prev`, writes the new
+   `ROSY_SITE_IMAGE_TAG`, swaps the `/opt/rosy/candidate` symlink (an
+   existing real directory there is moved once to
+   `/opt/rosy/candidates/<its commit>`), and restarts
+   `rosy-site-stack.service`;
+5. waits up to `health_timeout_s` for `healthz` 200 and all three containers
+   running, healthy, and on the new image. Otherwise it restores the previous
+   symlink and `site.env`, restarts, and records the tag as failed. A failed
+   tag is never retried automatically;
+6. keeps the newest `keep` candidate folders (always the running and previous
+   ones) and removes older `rosy-site-*` images that no container uses.
+
+Every step is one JSON line in `journalctl -u rosy-site-autoupdate`. The
+state is in `/var/lib/rosy/site-autoupdate.json`
+(`sudo python3 -I /usr/local/lib/rosy-site/rosy_site_autoupdate.py status`).
+After fixing the cause of a failed tag, allow it again with
+`sudo python3 -I /usr/local/lib/rosy-site/rosy_site_autoupdate.py forget-failed site-<sha12>`.
+When `verify_candidate.py` or `candidate_signing.py` change on `main`, the
+administrator reinstalls them by the same reviewed path; the updater never
+copies them from a candidate.
+
+**Pause.** Host: `sudo systemctl disable --now rosy-site-autoupdate.timer`.
+Signing PC: `Disable-ScheduledTask -TaskName RosySiteAutoSign`. Either one
+stops new deployments; builds on push keep running and are harmless.
+
+**Roll back by hand.** Pause the host timer first, then point the symlink and
+tag back at a kept folder and restart:
+
+```sh
+sudo systemctl disable --now rosy-site-autoupdate.timer
+ls -lt /opt/rosy/candidates/
+sudo ln -sfn /opt/rosy/candidates/<previous-commit> /opt/rosy/candidate.new
+sudo mv -T /opt/rosy/candidate.new /opt/rosy/candidate
+sudoedit /etc/rosy/site/site.env   # ROSY_SITE_IMAGE_TAG=<previous-commit>
+sudo systemctl restart rosy-site-stack.service
+```
+
+The previous images stay loaded unless that folder was pruned. Re-enable the
+timer only after `forget-failed` or once a newer fix is on `main`: while the
+timer is on, a newer signed candidate replaces a manual rollback.
+
+**Release count.** The build workflow keeps only the newest three `site-*`
+releases, so pushes do not crowd the robots' release scan (D-412 reads the
+first page of 20 releases, prereleases included). A host that was offline
+through more than three builds installs the newest one.
 
 ### Backup and restore operations
 
@@ -1204,6 +1351,9 @@ Windows 등 다른 PC의 개인 키를 복사하지 않는다. `cam-screen.json.
 ```bash
 python3 deploy/site/rosy_cam_screen.py status --config /private/path/cam-screen.json
 python3 deploy/site/rosy_cam_screen.py wake --config /private/path/cam-screen.json
+python3 deploy/site/rosy_cam_screen.py light-status --config /private/path/cam-screen.json
+python3 deploy/site/rosy_cam_screen.py light-request --config /private/path/cam-screen.json
+python3 deploy/site/rosy_cam_screen.py light-cancel --config /private/path/cam-screen.json
 ```
 
 CLI는 이미 인증된 연결을 먼저 검사하고, 없으면 ADB mDNS 및 Avahi의
@@ -1220,3 +1370,15 @@ ADB 연결 목록을 확인한다. 발견된 오래된 포트가 응답하지 �
 증가하는 sequence·freshness를 별도로 확인한다. ADB가 끊기거나 무선 디버깅이
 꺼진 경우에는 공식 재연결·페어링 경로를 사용한다. 충전 중 화면 유지와 화면
 제한시간은 전화의 OS 설정이며, 앱의 화면 유지 해제만으로 설정을 덮어쓰지 않는다.
+
+조명은 기본 꺼짐이며 요청 없이 반복 점등하지 않는다. `light-request`는 실행 중인
+Rosy Cam의 공식 `촬영 조명 요청` 버튼만 조작한다. 그 요청 안에서만 저조도를
+판단하고, 요청부터 최대 30초 후 요청과 조명을 모두 종료한다. 이미 요청 중이면
+시간을 연장하지 않으며, `light-cancel`은 즉시 취소한다. 재시작·렌즈 교체·발열
+제한 시 취소하고, 어둡거나 온도가 회복돼도 새 요청 없이 재개하지 않는다.
+
+`light-status`는 화면을 깨우지 않고 서비스의 boolean 상태만 읽는다. 제어 결과의
+`light_requested`는 요청 수락 상태이며 실제 점등은 `torch_on`으로 따로 확인한다.
+조작은 검증된 장치·앱의 최신 UI를 확인하며, 잠긴 보안 화면·미지원 렌즈·발열
+제한·중복/변경 UI는 거절한다. 보안 잠금을 우회하거나 송출을 자동 시작하지 않는다.
+화면 방향 등 UI 배치가 인식 범위를 벗어나면 수동 조작이 필요하다.

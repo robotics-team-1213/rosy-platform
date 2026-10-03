@@ -34,4 +34,4 @@
 - 2026-10-04 · uncommitted · feat(api): fresh keeper source readback
 - 2026-10-04 · uncommitted · fix(api): serialize calibration and perception admission
 - 2026-10-04 · uncommitted · feat(api): stationary lane perception selection
-- 2026-10-03 · 0e244456c · docs(api): D-418 재번호 항목의 커밋 기록 정정
+- 2026-10-04 · uncommitted · feat(api): D-438 `stuck_resolver` 역할과 `STUCK_DECIDE` 권한, API Ref v1.90

@@ -178,6 +178,16 @@ The line-follow state a robot enters after going without fresh lane evidence for
 
 Stale evidence on its own only holds the robot while the evidence stays stale; lost is latched, so a robot that regains its view of the lane still does not move. Freshness is judged on the clock the evidence arrives on — in simulation that is simulated time, because a slow simulator would otherwise age every frame past the window by wall time and latch a robot that sees the lane perfectly well.
 
+### Lane stuck
+A question a line-following robot opens when it has been held by an obstacle for too long or has lost the lane (see Lane lost): it stays held and asks for one of a fixed set of answers — wait, resume, back off and retry, hand to manual, or abort.
+
+The robot re-checks every answer against its own sensors and may refuse it; an answer only applies to the stuck it names, so a late answer cannot act on the next one. Re-sticking soon after a recovery continues the same stuck's attempt count rather than starting fresh.
+
+### Stuck resolver
+The site-side answerer for lane stucks: deterministic rules answer first, then (optionally) a vision model, and anything they cannot settle goes to a person, whose answer always wins once they take the stuck.
+
+Its budgets and deadline count per chain of stucks on the same robot rather than per stuck, so a robot that keeps re-sticking reaches a person instead of looping; it can never choose manual control, release an emergency stop, or widen the robot's own recovery limits.
+
 ## Flagged ambiguities
 
 - "Robot id" had been used for both the Robot number and the namespace derived from it — these are distinct, and only the number is supplied by a person.

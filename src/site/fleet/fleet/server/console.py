@@ -67,6 +67,7 @@ class FleetConsole:
         relay_factory=None,
         signal_console=None,
         event_store=None,
+        hub_state_max_age_s: float = 3.0,
     ) -> None:
         if len(endpoints) != len(clients):
             raise ValueError("endpoints and clients must line up one for one")
@@ -82,6 +83,7 @@ class FleetConsole:
         self._map_ttl_s = map_ttl_s
         self._map: Optional[dict] = None
         self._map_at = 0.0
+        self._hub_state_max_age_s = hub_state_max_age_s
         # 하달한 목표는 Fleet 이 기억한다. 로봇 상태 스냅샷에는 목표가 없고, 있어서도 안 된다
         # — 미션은 Fleet 쪽 개념이고 로봇은 원자 액션만 받는다 (D-12). 화면의 목표 표시는
         # "내가 무엇을 시켰는가"이지 로봇이 되돌려 준 값이 아니다.
@@ -220,11 +222,23 @@ class FleetConsole:
 
     # --- gather ---------------------------------------------------------------
 
+    async def _gather_state(self, robot_id: str) -> tuple[dict, str]:
+        """D-447: 이미 열린 소켓이 먼저다. hub heartbeat(1 Hz, PRT-003)가 신선하면
+        registry 의 ``StateSnapshot`` 으로 답하고 REST GET 은 미연결·stale 로봇의
+        폴백이다. 응답 모양은 REST 와 같다(스키마 불변)."""
+        row = self._hub.registry.find(robot_id)
+        if (row is not None and row.online and row.snapshot is not None
+                and row.last_heartbeat_monotonic is not None
+                and self._clock() - row.last_heartbeat_monotonic
+                < self._hub_state_max_age_s):
+            return row.snapshot.model_dump(mode="json"), "hub"
+        return await self._client(robot_id).state(), "rest"
+
     async def snapshot(self) -> dict:
         """N대 상태를 한 번에 모은다. 한 대가 죽어도 나머지는 그대로 온다."""
         order = list(self._order)
         results = await asyncio.gather(
-            *(self._client(rid).state() for rid in order),
+            *(self._gather_state(rid) for rid in order),
             return_exceptions=True,
         )
         robots = []
@@ -234,10 +248,12 @@ class FleetConsole:
             if isinstance(result, BaseException):
                 robots.append({"robot_id": robot_id, "online": False, "goal": goal,
                                "queued": _shown(queued), "error": _error_of(result),
-                               "state": None})
+                               "state": None, "gather_source": None})
             else:
+                state, source = result
                 robots.append({"robot_id": robot_id, "online": True, "goal": goal,
-                               "queued": _shown(queued), "error": None, "state": result})
+                               "queued": _shown(queued), "error": None,
+                               "state": state, "gather_source": source})
         self._remember(robots)
         await self._handoff_dead_leader(robots)
         await self._run_traffic(robots)

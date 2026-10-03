@@ -441,6 +441,14 @@
 - 증거: `test_vision_models.py` 8 passed; `src/runtime/services/test` 포함 묶음 739 passed, 37 skipped.
 - gate 변화: 없음.
 
+
+## 2026-10-03 · uncommitted · feat(link): D-432 주소 없는 장비 접속
+
+- 변경: FleetAgent가 실제 SRV 주소·port·TLS DNS 이름을 보존한다. 인증/신원 충돌은 종료하고 일시 발견 실패는 jitter로 재시도한다.
+- 증거: 관련 Python 계약 시험·실제 loopback TLS HTTP/WS 시험을 실행했다. Pilot Android 설치·화면과 실제 로봇 연결·현장 트래픽 수용은 서로 다른 증거다.
+- gate 변화: 실제 장비의 제어·FIELD 관문은 이동하지 않는다.
+- 결정: D-432 2026-10-03 추가 결정.
+
 ## 2026-10-04 · uncommitted · feat(vision): 차선 입력의 실제 출처와 정지 설정 예약
 
 - 변경: 읽기 전용 keeper paint 증거는 별도 vision store에서 camera stamp·requested source·실제 모델 판·receipt freshness를 검사한다. stale·잘못된 packet·다른 설정·다른 모델은 unknown이다. Motion 입력으로 소비하지 않는다.

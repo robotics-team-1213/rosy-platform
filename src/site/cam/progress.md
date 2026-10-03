@@ -2,26 +2,26 @@
 module: cam
 logical_modules: []
 owner: SITE
-last_verified: { commit: "uncommitted", date: 2026-10-03 }
+last_verified: { commit: "uncommitted", date: 2026-10-04 }
 gates:
   SOURCE:
     state: GO
-    evidence: "2026-10-03 NSD late callback lifecycle fix: rejection-tolerant callback executor and serialized registration/stop. JVM 309 passed, 0 failures; late-callback regression first failed with RejectedExecutionException. Wire names and pinned CA trust unchanged."
+    evidence: "2026-10-04 corrected to default-OFF explicit light request: non-renewing 30 s request window, no rearm from darkness, thermal recovery or restart. Observed TorchState, independent expiry, thermal/off-failure cleanup. JVM 330 passed, 0 failures/errors; operator ADB CLI 59 passed; independent reviews approved. Wire names and pinned CA trust unchanged."
     cmd: "cd src/site/cam && gradlew testDebugUnitTest"
   LOCAL:
     state: GO
-    evidence: "2026-10-03 testDebugUnitTest and assembleDebug succeeded (Windows, JDK 21), JVM 309 passed. APK signer matched the installed Galaxy S21 app before install -r; app-private settings were preserved byte-for-byte. Build/cache/evidence outputs stayed on X:."
-    cmd: "cd src/site/cam && gradlew testDebugUnitTest assembleDebug"
+    evidence: "2026-10-04 testDebugUnitTest, assembleDebug and lintDebug succeeded on Windows/JDK 21; JVM 330 passed. Same-signer Galaxy S21 install -r preserved pairing settings byte-for-byte. Operator PC CLI updated without changing private pairing configuration. Build/cache/private evidence outputs stayed on X:."
+    cmd: "cd src/site/cam && gradlew testDebugUnitTest assembleDebug lintDebug"
   ROS-SIM:
     state: N/A
   ARTIFACT:
     state: N/A
   DEVICE:
     state: PARKED
-    evidence: "2026-10-03 Galaxy S21 received pinned-site camera frames for 63 s: 10/10 HTTP 200, strictly increasing sequence, real 1280x720 JPEGs, age 102-430 ms; three stop/start cycles retained one process with no fatal crash. This closes this fix's live camera receipt only; the complete D-341/D-391 device matrix remains pending. No surveyed marker/position acceptance."
+    evidence: "2026-10-04 Galaxy S21 correction installed with unchanged signer and pairing settings: dark while Dozing stays request false / torch false. Explicit request lit actual torch, expiry ended the request and stayed OFF in darkness beyond the former cooldown; camera stop/start restored default OFF. Actual operator PC request, duplicate no-renewal and cancel confirmed. Pinned-site fresh 1280x720 JPEGs continued with increasing sequences. Only these feature operations are verified; complete D-341/D-391 device matrix and surveyed marker/position acceptance remain pending."
   FIELD:
     state: PARKED
-adrs: [D-261, D-341, D-370, D-374, D-377, D-391]
+adrs: [D-261, D-341, D-370, D-374, D-377, D-391, D-432]
 plans:
   - docs/plans/2026-09-26-overhead-camera-android-app-design.md
   - docs/plans/2026-09-30-app-identity-rename-plan.md
@@ -44,6 +44,10 @@ plans:
   4. lint `CustomX509TrustManager` 경고 1건(`FirstContactTrust`)은 D-341 3 첫 접촉 기록 때문에 의도된 것이다.
 
 ## 다음 gate
+
+2026-10-03 D-432: 공통 발견 상한과 소실/재발견 수명 정리, 촬영을 계속하면서 화면 쉬기·
+과열 보호 정책을 구현했다. 기존 Cam 승인 6자리 규약은 유지하며 4자리 통합은 추후 적용한다.
+호스트 JVM/빌드 검증과 실기 화면 off 중 연속 송출·실제 온도 하강은 구별한다. DEVICE/FIELD는 이동하지 않는다.
 
 1. 장치 절차(계획 단계 1 "장치"): 옛 앱 송출 중지·삭제(`adb uninstall io.github.livsbittt.rosy.overhead`), 새 APK 설치, 사이트 QR 또는 D-341 콘솔 승인으로 재페어링, 관제 카메라 패널에서 프레임과 sighting 확인.
 2. 옛 폰을 재사용하면 그 source의 폰 토큰을 교체한다.

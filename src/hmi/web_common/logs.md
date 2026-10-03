@@ -481,6 +481,21 @@
 - 증거: request/scope/page-scope/Fleet/authorization/poll gate Node 56 passed. 현재 자산 bytes를 확인한 X: 사본 Chromium 14 passed; disposal 변이 8 red, raw camera/Vision guard 변이 4 red, bytes 복원 후 14 green.
 - gate 변화: SOURCE/LOCAL 수명 계약 강화. installed-only·DEVICE/FIELD는 consumer 단위의 후속 gate.
 
+
+## 2026-10-03 · uncommitted · feat(link): D-432 주소 없는 장비 접속
+
+- 변경: 기존 Pilot의 native wrapper를 parent_app으로 등록한다. wrapper는 listen port를 소유하지 않고 기존 조종 화면을 사용한다.
+- 증거: 관련 Python 계약 시험·실제 loopback TLS HTTP/WS 시험을 실행했다. Pilot Android 설치·화면과 실제 로봇 연결·현장 트래픽 수용은 서로 다른 증거다.
+- gate 변화: 실제 장비의 제어·FIELD 관문은 이동하지 않는다.
+- 결정: D-432 2026-10-03 추가 결정.
+
+## 2026-10-03 · uncommitted · feat(ui): 공용 동작 아이콘과 생성형 native 토큰 계약
+
+- 변경: actionIcon이 SVG/currentColor/글자/disabled 사유를 공용 구성한다. 기존 팔레트·터치·글자·아이콘 크기 토큰을 재사용하며 소비 화면은 배치만 소유한다. Native Pilot은 tokens.css에서 색을 생성하고 registry는 source/generator/runtime verification을 요구한다.
+- 증거: 공용 컨트롤 26 passed, 표면 registry/토큰 parity 18 passed, 아이콘 재적용·비활성 사유·Enter 동작 브라우저 1 passed. Android 실제 생성값 비교는 PilotColorsTest가 담당한다.
+- gate 변화: 공용 라이브러리의 DEVICE/FIELD는 N/A; 소비 앱 장치 증거와 구별한다.
+- 결정: D-432 공용 디자인 규칙의 소유권.
+
 ## 2026-10-04 · uncommitted · feat: 원본 픽셀 보존과 같은 촬영 시점의 표시본
 
 - 변경: fetchCameraPair가 variant·sequence·captured_at·frame_id를 검증한다. 원본 canvas에는 drawImage만 사용하고 조작 문구는 표시본에만 넣는다. 원본/표시본 녹화기와 파일·공통 pair_group_id를 분리하고 종료 시 두 stream을 해제한다. PC sidecar에서 표시본을 model_unreviewed로 구분한다.

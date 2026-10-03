@@ -189,6 +189,10 @@
 | D-426 | Fleet–Gazebo 실제 REST/WS·Task/attempt·CORE 결과와 독립 운동/접촉 관측을 함께 검증; 두 로봇/한 Fleet부터 run별 GZ_PARTITION 격리, 진입 경계 grant 재검사·점유 해제 증거·재시작 이전 실행 대조·CORE 독립 base 명령 만료, M01–M08 반복 수용 및 증거 등급 분리 |
 | D-431 | 라즈베리파이 YOLO 추론은 NCNN을 목표로 하고 OpenCV 영상 처리와 학습 모델의 의미를 유지한다 |
 | D-432 | 모든 앱·장치는 공통 발견·연결 규약을 쓰고, 개발 모드에서는 코드 없이 연결한다 |
+| D-435 | 작업 오케스트레이션·Fleet·장치 실행을 역할과 권한으로 구분한다 |
+| D-444 | 웹 표면 게이트는 release 이미지를 탄다 — dashboard·pilot ARTIFACT는 서명 release 안 share/ 설치 관측, pilot DEVICE는 실기 페달·e-stop 정지 계약 측정 |
+| D-445 | Fleet 승격 경로(ROS-SIM D-426 → ARTIFACT D-437 첫 실행·D-301 서명 → DEVICE 사이트 PC·2대)와 중앙 Fleet(8081) 착수 전제 3개를 고정한다. 착수 자체는 별도 ADR |
+| D-447 | 웹 표면의 실시간 상태는 이미 열린 소켓을 재사용한다 — Fleet gather는 hub-fresh 로봇을 registry 스냅샷으로 먼저 읽고(신선도 `hub_state_max_age_s`, REST 폴백), 로봇 셸 `store.js`의 `/ws/state` 전환이 그 뒤를 잇는다. 새 전송 계약 없음, 응답 스키마 불변, 행마다 `gather_source` |
 
 ## 계획·결과 문서
 
@@ -262,6 +266,8 @@
 - [2026-10-02-platform-architecture-v02-migration.md](plans/2026-10-02-platform-architecture-v02-migration.md)
 - [2026-10-03-app-ownership-shared-transport-and-layout-migration.md](plans/2026-10-03-app-ownership-shared-transport-and-layout-migration.md)
 - [2026-10-03-pi-ncnn-opencv-implementation.md](plans/2026-10-03-pi-ncnn-opencv-implementation.md)
+- [2026-10-04-pilot-device-stop-contract-measurement.md](plans/2026-10-04-pilot-device-stop-contract-measurement.md)
+- [2026-10-04-web-gate-ladder-fleet-readiness-adr-plan.md](plans/2026-10-04-web-gate-ladder-fleet-readiness-adr-plan.md)
 
 ## 교훈 (docs/solutions)
 
@@ -274,8 +280,8 @@
 
 ## 최근 기록
 
+- 2026-10-04 · uncommitted · docs: 암실 IR 활용 조사와 병렬 변경 통합
 - 2026-10-04 · uncommitted · fix: 확장 검사에서 드러난 릴리스 종료 경계
 - 2026-10-04 · uncommitted · docs: 원본/표시 녹화와 밝기 양극단 추가 검증
 - 2026-10-04 · uncommitted · docs: learned lane selection and low-light evidence
-- 2026-10-04 · uncommitted · site(D-437): verifier accepts the containerd image ID form
-- 2026-10-03 · uncommitted · docs: D-436 change-scoped host test tiers
+- 2026-10-04 · uncommitted · 모델 PC 코드 갱신은 커밋하지 않은 perception 수정을 덮지 않는다

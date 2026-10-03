@@ -79,6 +79,13 @@ def test_every_token_copy_matches_tokens_css():
     assert rows, "token_parity를 받는 표면이 레지스트리에 없다"
     problems = []
     for row in rows:
+        if row.get("token_source"):
+            # Generated native tokens are verified by the native build and its
+            # runtime parity test, rather than a checked-in palette copy.
+            assert row["token_source"] == "src/hmi/web_common/tokens.css"
+            assert (registry.REPO / row["token_generator"]).is_file()
+            assert (registry.REPO / row["token_verification"]).is_file()
+            continue
         path = registry.REPO / row["token_copy"]
         problems += parity_problems(tokens, row["token_copy"], path.read_text(encoding="utf-8"))
     assert problems == []

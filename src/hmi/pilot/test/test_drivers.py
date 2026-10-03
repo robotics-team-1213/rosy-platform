@@ -107,11 +107,11 @@ def test_driver_paths_for_engage_disengage_and_stop():
 def test_reason_codes_map_to_operator_korean():
     assert _run_js("""
     console.log(JSON.stringify([
-      pinky.describeReason('role:viewer'),
-      pinky.describeReason('teleop_withheld:drive_disabled:no_motion'),
-      pinky.describeReason('teleop_withheld'),
-      pinky.describeReason('drive_disabled'),
-      pinky.describeReason('anything_else'),
+      registry.driverFor('pinky_core').describeReason('role:viewer'),
+      registry.driverFor('pinky_core').describeReason('teleop_withheld:drive_disabled:no_motion'),
+      registry.driverFor('pinky_core').describeReason('teleop_withheld'),
+      registry.driverFor('pinky_core').describeReason('drive_disabled'),
+      registry.driverFor('pinky_core').describeReason('anything_else'),
     ]));
     """) == [
         "운전 권한이 없습니다 (현재 역할: viewer)",

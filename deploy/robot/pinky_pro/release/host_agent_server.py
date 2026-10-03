@@ -240,6 +240,10 @@ class SubprocessCommands:
     release_cli: str = "rosy-release"
     runner: Runner = _run
 
+    def register_ssh_key(self, key: str) -> dict:
+        from ssh_pairing import register_operator_key
+        return register_operator_key(key)
+
     def _json_or_text(self, result: subprocess.CompletedProcess, argv: Sequence[str]) -> dict:
         if result.returncode != 0:
             raise RuntimeError(f"{argv[0]} exited {result.returncode}: {result.stderr.strip()}")

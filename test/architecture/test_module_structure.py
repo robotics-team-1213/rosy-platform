@@ -77,7 +77,7 @@ CONTROL_SPLIT = "docs/plans/2026-09-22-control-package-split-design.md"
 #: P6 verdicts: path (relative to src/) or package name -> (lines at verdict, verdict).
 SIZE_VERDICTS = {
     "fleet": (
-        29_017,
+        29_657,
         "split: server HTTP boundary, console, signals and the mission-control stores are separate owners "
         "today; re-judged 2026-10-03 at 28001 for D-413 internal Cell producer authentication: bounded "
         "schema, environment credential registry and evidence service are separate modules; goal completion "
@@ -169,7 +169,8 @@ SIZE_VERDICTS = {
         "added. UI assets temporarily still count under fleet; Task 9 in "
         "docs/plans/2026-10-03-app-ownership-shared-transport-and-layout-migration.md moves their "
         "source ownership into ui/console with installed-resource acceptance. The server subpackage "
-        "split remains open and the existing +150 package allowance stays unchanged",
+        "split remains open and the existing +150 package allowance stays unchanged"
+        "; re-judged 2026-10-04 at 29657 for D-438 phase 1: the stuck resolver is two new focused modules (stuck_resolver.py pure core, stuck_resolver_loop.py async loop) and the shared gather lives with the console routes it serves — verdict unchanged",
     ),
     "site/fleet/fleet/server/cell_job_store.py": (
         824,
@@ -216,10 +217,11 @@ SIZE_VERDICTS = {
         "2026-10-01 at 887 after idempotent per-attempt phase projection joined the Mission event transaction",
     ),
     "contracts/foundation/core_common/protocol/schemas.py": (
-        1_322,
+        1_324,
         "accept: the D-18 single contract source — every envelope, event and capability model in one "
         "importable place; re-judged 2026-10-03 at 1240 for the D-413 public CellGoalEvidenceSubmission "
         "re-export, then at 1245 after combining main's D-422 body-stop fields with that one-line export. "
+        "Re-judged 2026-10-03 at 1324 after retaining D-418 models and two bounded D-432 access-contract re-exports; models live in access.py. "
         "re-export. Bounded Cell models live in protocol/cell_goal_evidence.py, with no runtime ownership "
         "or new version pin; the existing zero-growth allowance remains unchanged. "
         "importable place; per-domain schema files would fork the version pin that "
@@ -259,8 +261,12 @@ SIZE_VERDICTS = {
         795,
         "accept: legacy comparison-graph publisher pinned by test_module_separation; no new work (X3)",
     ),
+    "site/fleet/fleet/server/app.py": (
+        627,
+        "accept: the FastAPI factory and lifespan own every background task and route install; D-438 added the resolver task, hub event fan-out and shared-gather wiring (2026-10-04) — the resolver logic itself lives in stuck_resolver*.py",
+    ),
     "site/fleet/fleet/server/console.py": (
-        1138,
+        1154,
         "accept: one owner (FleetConsole gather/scatter), host-testable (X5). Re-judged 2026-09-30 at 1013: "
         "D-361 roster mutation and pinned-address holds change the gather/traffic tables in place, so they "
         "stay with their owner; the roster policy itself lives in roster.py; re-judged 2026-09-30 at 1021 "
@@ -274,7 +280,10 @@ SIZE_VERDICTS = {
         "2026-10-02 at 1111 when the P2-7 review made the hold also cancel crossing yields "
         "(_yielding) and stop a formation near the mover — same tables, verdict unchanged; re-judged "
         "2026-10-02 at 1138 for D-395 S2 Finding 1: the lapsed-robot null grace (_loc_null_since) is "
-        "kept beside _seen/_trusted, which it updates in the same gather — verdict unchanged",
+        "kept beside _seen/_trusted, which it updates in the same gather — verdict unchanged. "
+        "Re-judged 2026-10-04 at 1154: D-447 selects a fresh hub snapshot before REST in the "
+        "same gather owner and records source provenance; test_server_gather_source.py checks "
+        "fresh/stale/disconnected fallback. The zero-growth allowance remains unchanged.",
     ),
     "runtime/sensing/control/sensing/perception/lane.py": (
         765,
@@ -326,7 +335,7 @@ SIZE_VERDICTS = {
         "accept: sim-only read-only viewer server (HTTP handler + ROS subscriptions); the pure logic already lives in live_view_model.py and the page in lane_live_view.html, covered by test_lane_live_view*.py and test_live_view_model.py (X5)",
     ),
     "core_features": (
-        12_479,
+        12_536,
         "accept: the ROS-free CORE feature managers (command, safety, docking, line_follow, "
         "traffic_policy, navigation, swarm, ...) are already one subpackage per feature, each "
         "under the file budget; the package total is a sum of independent owners, not one "
@@ -350,7 +359,9 @@ SIZE_VERDICTS = {
         "localization/mission.py); same verdict. Re-judged 2026-10-04 at 12479: bounded "
         "read-only keeper evidence lives separately in vision/lane_perception.py; motion admission "
         "uses the existing ModeMachine and its separate lock. No new deploy unit or file-budget "
-        "exception; independent safety review recorded in docs/validation/learned-lane-modes-2026-10-04/README.md.",
+        "exception; independent safety review recorded in docs/validation/learned-lane-modes-2026-10-04/README.md. "
+        "Concurrent merge adds the main branch's 57 reviewed FleetAgent/discovery lines to this "
+        "12479 baseline, yielding 12536; the existing 150 allowance is unchanged.",
     ),
     "control": (
         44_469,
@@ -519,6 +530,13 @@ SIZE_VERDICTS = {
         655,
         "accept: D-412 operator publish tool; rollout signing, the GitHub release I/O and the "
         "canary watch are one short sequential flow; split the canary watch out if it grows further",
+    ),
+    "deploy/site/rosy_site_autoupdate.py": (
+        755,
+        "accept: D-441 site-host update transaction keeps candidate selection, trusted verification, "
+        "atomic switch, health gate and rollback in one reviewed host entry point; owner deploy, "
+        "covered by test/test_site_autoupdate.py. Split transport or retention into siblings if they "
+        "grow independently; the updater must never import executable code from a candidate",
     ),
     "deploy/robot/pinky_pro/native/sync-image-layer.py": (
         1020,

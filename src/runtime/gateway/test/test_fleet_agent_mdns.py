@@ -6,7 +6,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from core_features.fleet_agent.discovery import locate_fleet, parse_avahi
+from core_features.fleet_agent.discovery import locate_fleet, parse_avahi, FleetLocation
 from core_features.fleet_agent.agent import FleetAgent
 
 
@@ -106,7 +106,7 @@ def test_agent_reaches_verified_mdns_url_with_site_ca(tmp_path, monkeypatch):
 
     def locate(hostname, ca_file):
         seen.append((hostname, ca_file))
-        return "https://fleet-a.local:8443"
+        return FleetLocation('fleet-a.local', '192.168.1.20', 8443)
 
     def connect(url, **options):
         seen.append((url, options))
@@ -134,4 +134,5 @@ def test_agent_reaches_verified_mdns_url_with_site_ca(tmp_path, monkeypatch):
     asyncio.run(exercise())
     assert seen[0] == ("fleet-a.local", ca)
     assert seen[1] == ("wss://fleet-a.local:8443/ws/robots",
-                       {"ssl": tls_context, "proxy": None})
+                       {"ssl": tls_context, "proxy": None, "host": '192.168.1.20',
+                        "port": 8443, "server_hostname": 'fleet-a.local'})

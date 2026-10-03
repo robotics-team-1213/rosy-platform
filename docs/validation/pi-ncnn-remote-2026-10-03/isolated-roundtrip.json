@@ -1,0 +1,13 @@
+{
+  "candidate_revision": "lane-seg-ncnn-20261003-e3f612b32f0a",
+  "signature_verified": true,
+  "failed_hash_swap_preserved_previous": true,
+  "failed_hash_reason": "source.ncnn.param: sha256 mismatch",
+  "failed_signature_swap_preserved_previous": true,
+  "failed_signature_reason": "model_manifest.json.sig: expected 64 bytes, got 12",
+  "rollback_revision": "lane-seg-20261003-6e2e5640",
+  "rollback_signature_verified": true,
+  "production_pointers_and_manifests_unchanged": true,
+  "scope": "isolated temporary lane shadow; ephemeral bench trust, not production release",
+  "ok": true
+}

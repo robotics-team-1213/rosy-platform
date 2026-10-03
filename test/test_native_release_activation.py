@@ -338,15 +338,15 @@ def test_stopping_the_runtime_waits_for_every_unit_that_is_part_of_it(monkeypatc
 
 
 def test_the_runtime_part_of_units_are_core_io_and_camera():
-    # Host Agent also executes the current release and must stop before its link changes.
+    # Host Agent and SSH pairing execute the current release and must stop before its link changes.
     # CORE is the required runtime owner; camera/I/O/Host Agent are optional evidence
     # and maintenance services, so starting the target alone is not their readiness proof.
     assert _part_of_runtime_units() == {"rosy-core.service", "rosy-io.service", "rosy-camera.service",
-                                       "rosy-host-agent.service"}
+                                       "rosy-host-agent.service", "rosy-ssh-pairing.service"}
     target = (NATIVE_DIR / "rosy-runtime.target").read_text(encoding="utf-8").splitlines()
     assert "Requires=rosy-core.service" in target
     wants = {unit for line in target if line.startswith("Wants=") for unit in line[6:].split()}
-    assert {"rosy-io.service", "rosy-camera.service", "rosy-host-agent.service"} <= wants
+    assert {"rosy-io.service", "rosy-camera.service", "rosy-host-agent.service", "rosy-ssh-pairing.service"} <= wants
     agent = (NATIVE_DIR / "rosy-host-agent.service").read_text(encoding="utf-8").splitlines()
     assert "After=rosy-core.service" in agent
     assert "WantedBy=rosy-runtime.target" in agent

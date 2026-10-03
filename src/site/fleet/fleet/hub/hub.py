@@ -5,6 +5,7 @@ from __future__ import annotations
 import hmac
 import logging
 import sqlite3
+import time
 from typing import Optional, Sequence
 from collections.abc import Callable, Mapping
 
@@ -215,6 +216,8 @@ class SiteHub:
             return _error("TASK_PROJECTION_UNAVAILABLE", "durable event projection is pending")
         row = self.registry.record(robot_id)
         row.snapshot = payload.state_snapshot
+        # D-447: gather freshness reads this stamp — heartbeat arrival, hub-side clock.
+        row.last_heartbeat_monotonic = time.monotonic()
         return Envelope(type=EnvelopeType.HEARTBEAT, payload={})
 
     def _event(self, envelope: Envelope, session: HubSession | None) -> Envelope:

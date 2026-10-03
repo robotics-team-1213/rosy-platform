@@ -124,6 +124,35 @@
 - 증거: `test_release_boundary_guards.py -k secrets` 통과, `gradlew testDebugUnitTest` 통과.
 - gate 변화: 없음.
 
+
+## 2026-10-03 · uncommitted · feat(link): D-432 주소 없는 장비 접속
+
+- 변경: 자동 발견 큐의 소실/재발견 callback을 닫고 파일 import 비동기 오류를 처리했다. 4자리 표시·공유 fixture 및 316개 JVM 시험/assembleDebug 통과.
+- 증거: 관련 Python 계약 시험·실제 loopback TLS HTTP/WS 시험을 실행했다. Pilot Android 설치·화면과 실제 로봇 연결·현장 트래픽 수용은 서로 다른 증거다.
+- gate 변화: 실제 장비의 제어·FIELD 관문은 이동하지 않는다.
+- 결정: D-432 2026-10-03 추가 결정.
+
+
+## 2026-10-03 · uncommitted · fix(link): 현재 접속과 후속 코드 규약 구별
+
+- 변경: 사용자 보정으로 4자리 코드 발급·Cam 표시 별칭은 이번 적용에서 제외했다. 현재 로봇 8자·Cam 6자리 규약을 유지하며 D-432에 추후 통합을 기록했다. 실제 Pinky 접속 수정은 진행한다.
+- 증거: 영향받는 Python 2345 passed/84 skipped, quick tier 459 passed/2 skipped, Pilot PWA 87 passed/58 skipped. 코드 규약 보정 뒤 해당 인증·페어링 시험을 다시 실행한다. 공개 검증 기록은 docs/validation/discovery-link-2026-10-03/README.md.
+- gate 변화: Android 설치·실제 CORE 인증 확인은 실제 주행·Cam 화면 off 연속 송출·현장 트래픽 수용과 별개다. DEVICE/FIELD 이동 없음.
+- 결정: D-432 후속 결정: 접속은 지금, 짧은 코드 통합은 추후 적용.
+
+## 2026-10-03 · uncommitted · feat(cam): 촬영 유지 화면 쉬기
+
+- 변경: 화면 쉬기·OS severe 발열 보호·구형 기기 배터리 온도 보조 판정·재무장 latch를 추가했다. 미리보기만 내리며 서비스의 카메라·송출 소유권을 유지한다. 수동 force-lock 승인 하나를 사용하고 승인 없는 자동 보호는 OS 화면 대기를 허용한다.
+- 증거: 최종 기존 6자리 규약에서 JVM 318 passed, 0 failure/error/skip, assembleDebug 성공. 읽기 전용 검토 후 잠금 권한 예외를 안전하게 처리했다.
+- gate 변화: 실기 화면 off 중 프레임 지속·발열 감소는 확인하지 않았다. DEVICE/FIELD 유지.
+- 결정: D-432 앱 실행 기기의 발열과 화면 끄기.
+
+## 2026-10-03 · uncommitted · fix(health): 화면 냉각 latch 조회 공유
+
+- 변경: Pilot이 Cam의 공통 냉각 정책 latch를 읽어 과열 중 재접속을 보류한다. 기존 임계와 Cam 캡처/송출 소유권은 유지한다.
+- 증거: Cam testDebugUnitTest/assembleDebug 재실행 성공. 실제 소등/온도 하강은 미검증이다.
+- gate 변화: DEVICE/FIELD 이동 없음.
+- 결정: D-432 앱 실행 기기 발열과 화면 끄기.
 ## 2026-10-03 · uncommitted · fix(cam): NSD 탐색 종료 뒤 늦은 콜백이 앱을 중단하지 않는다
 
 - 원인: Galaxy S21(Android 15)의 NSD가 탐색 종료·콜백 해제 뒤에도 `ConnectivityThread`에서 이미 종료된 scheduler로 콜백을 전달해 `RejectedExecutionException`을 냈다.
@@ -144,3 +173,23 @@
 - 증거: 실제 관제 PC에서 `Dozing → Awake` 및 같은 앱 PID를 확인했다. 깨운 뒤 새 JPEG 2장을 수신했고, 화면 끄기 명령 없이 다시 `Dozing`으로 돌아갔다. 그 뒤 63초간 JPEG 10/10 HTTP 200, seq 7800→7977, 1280×720, age 126–502 ms, 서로 다른 이미지 해시를 확인했다. CLI·문서 배치 시험 20 passed 및 독립 소스 리뷰 승인. 앞 항목의 관제 PC 깨우기 검증은 닫혔다. 전체 DEVICE/FIELD 판정 범위는 그대로다.
 - 운용: 설치된 관제 PC에서 `~/.local/bin/rosy-cam-screen wake`, 상태는 `~/.local/bin/rosy-cam-screen status`. 화면 깨우기는 잠금 해제나 송출 재시작이 아니다. 공식 무선 ADB 페어링이 유지되고 같은 망에서 전화에 닿아야 한다.
 - gate 변화: 없음. 이 기능의 실제 관제 PC 깨우기·송출만 확인했으며 전체 DEVICE/FIELD PARKED 유지.
+
+## 2026-10-04 · uncommitted · feat(cam): 시간 제한 자동 조명과 송출 사진 저장·공유
+
+- 변경: 지속 저조도를 실제 Y 평면에서 판단하고 렌즈 지원·실제 TorchState·발열 상태에 따라 자동 조명을 제어한다. 독립 30초 상한, 10초 재점등 제한, 끄기 실패 시 송출 종료를 적용한다. 현재 JPEG의 3초 신선도·2 MiB 복사 제한, 회전 적용, 앱 내부 사진 20장 보존, 사용자 클릭 공유 창과 photos 전용 FileProvider를 추가했다. 읽기 전용 서비스 dump는 상태 boolean만 제공한다. 자동 렌즈 변경이나 고해상도 ImageCapture는 추가하지 않는다.
+- 증거: 수정 전 정책 시험과 시간 상한·사진 신선도 변이가 각각 실패했고 복구 후 통과했다. 최종 testDebugUnitTest assembleDebug lintDebug 성공, JVM 326 passed, 0 failures/errors. 독립 소스 리뷰 승인. 기존 앱 서명자와 같은 APK를 install -r 했으며 페어링 설정은 바이트 단위로 유지됐다. 빌드·개인 장치 증거는 X:에 둔다. 실제 저조도·절전 검증은 다음 운용 기록에 따로 남긴다.
+- gate 변화: SOURCE/LOCAL GO 유지. 전체 DEVICE/FIELD PARKED 유지.
+
+## 2026-10-04 · uncommitted · feat(cam): 자동 조명·사진 공유의 실제 S21 운용 확인
+
+- 변경: 사용자 요청에 따라 조명을 지원하는 기본 후면 렌즈를 선택하고 자동 조명을 활성화한 상태로 송출을 복구했다. 자동 렌즈 변경은 없다. 시야가 달라졌으므로 설치 보정·마커 위치는 별도 확인 대상이다.
+- 증거: 초광각은 조명 미지원·실제 꺼짐, 기본 후면은 실제 자동 켜짐을 확인했다. 저장한 사진은 송출 JPEG에서 회전을 적용한 720×1280이며 촬영 영역과 로봇이 보인다. Android 공유 창이 열렸고 외부 대상을 선택하지 않고 닫았다. 자동 조명 해제 시 실제 꺼짐과 송출 유지, 재활성화 시 실제 켜짐을 확인했다. 송출을 한 번 중지·재시작해 같은 프로세스에서 기본 렌즈·자동 조명이 복구됐다. 화면 Dozing 상태의 14회 관측에서 자동 꺼짐 2회·재점등 1회를 확인했다. 같은 기본 렌즈의 조명 주기 중 수신 JPEG 평균 회색값은 꺼짐 1.2, 켜짐 84.6–85.4였다. 절전 상태의 사이트 수신 63초는 10/10 HTTP 200, seq 361→539, 실제 1280×720 JPEG, age 222–453 ms였다. 실제 사진과 상세 식별 정보는 X:에만 보관했다.
+- 경계: 고해상도 ImageCapture·Night/Boost는 미구현이다. 실제 발열을 인위적으로 만들거나 모든 밝기·역광·가림 환경을 수용한 것은 아니다. 서비스 중지 관측은 카메라 세션 종료 증거이며 별도 외부 광센서로 LED를 측정하지 않았다. 로봇 동작·정지·E-Stop 해제는 보내지 않았다.
+- gate 변화: SOURCE/LOCAL GO 유지. 이 기능의 S21 실운용만 확인했으며 전체 D-341/D-391 DEVICE 행렬과 FIELD는 PARKED 유지.
+
+## 2026-10-04 · uncommitted · fix(cam): 필요할 때만 요청하는 촬영 조명
+
+- 변경: 상시 자동 조명을 기본 꺼짐으로 수정했다. 앱 또는 관제 PC의 명시적 요청 안에서만 저조도를 판단하며, 요청 시작 후 최대 30초에 완전히 종료한다. 중복 요청은 연장하지 않고 취소·발열·카메라 재시작 이후 자동 재요청하지 않는다. 관제 PC는 검증된 휴대폰의 공식 화면에서 요청·취소만 수행하며 송출을 자동 시작하지 않는다.
+- 증거: JVM 330 passed, debug APK와 lint 성공, 같은 서명 덮어쓰기 후 페어링 설정 바이트 동일. CLI 59 passed 및 독립 리뷰 승인. 실제 S21에서 요청 후 torch 켜짐, 만료 후 어두운 Dozing 상태에서도 계속 꺼짐, 카메라 껐다 켜기 후 기본 꺼짐을 확인했다. 실제 관제 PC 요청·중복 요청 무변경·취소를 확인했고 최신 JPEG 두 장은 HTTP 200, seq 136→142, age 447–478 ms였다. 상세 장치 정보·사진·검증 파일은 X:에만 보관했다.
+- 교훈: 필요할 때 자동 판단한다는 요구는 상시 자동 작동을 뜻하지 않는다. 요청 경계·기본 꺼짐·만료·중복 요청·재시작 상태를 먼저 명확히 하고 실기에서 확인한다. 화면에 일부만 보이는 버튼은 신뢰된 부모를 검증하되 보이는 라벨 안을 눌러야 한다.
+- gate 변화: SOURCE/LOCAL GO 유지. 이 기능의 실기 동작만 검증했으며 전체 DEVICE/FIELD는 PARKED 유지.

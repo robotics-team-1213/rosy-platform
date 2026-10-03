@@ -127,3 +127,7 @@ Thumbs.db
 
 # Linked checkouts. Not part of this branch.
 .worktrees/
+
+# D-432 filled development trust/credential envelopes (templates remain tracked).
+**/pilot-development.json
+**/cam-development.json

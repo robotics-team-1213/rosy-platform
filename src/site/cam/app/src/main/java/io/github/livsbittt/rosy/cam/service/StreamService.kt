@@ -21,6 +21,7 @@ import io.github.livsbittt.rosy.cam.BuildConfig
 import io.github.livsbittt.rosy.cam.MainActivity
 import io.github.livsbittt.rosy.cam.R
 import io.github.livsbittt.rosy.cam.camera.CameraController
+import io.github.livsbittt.rosy.cam.camera.LightingStatus
 import io.github.livsbittt.rosy.cam.camera.LensChoice
 import io.github.livsbittt.rosy.cam.camera.LensPick
 import io.github.livsbittt.rosy.cam.camera.LensProbe
@@ -50,6 +51,10 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
+import java.time.Instant
+import java.io.FileDescriptor
+import java.io.PrintWriter
 
 /** Why streaming could not run, apart from link errors (those live in [LinkStatus.error]). */
 sealed interface StreamError {
@@ -75,6 +80,10 @@ data class StreamState(
     val lensSwitchFailed: Boolean = false,
     /** How the last connect reached the site (mDNS, "수동 주소", not found); null before the first lookup. */
     val route: SiteRoute? = null,
+    val lighting: LightingStatus = LightingStatus(),
+    val photoSaving: Boolean = false,
+    val photoName: String? = null,
+    val photoFailed: Boolean = false,
 )
 
 /**
@@ -93,6 +102,11 @@ class StreamService : LifecycleService() {
     private var wifiLock: WifiManager.WifiLock? = null
     private var healthMonitor: DeviceHealthMonitor? = null
     private var sessionActive = false
+
+    override fun onCreate() {
+        super.onCreate()
+        activeService = this
+    }
 
     /** Parent of every collector of one session; cancelled when the session is released. */
     private var sessionJob: Job? = null
@@ -117,7 +131,18 @@ class StreamService : LifecycleService() {
 
     override fun onDestroy() {
         releaseSession()
+        if (activeService === this) activeService = null
         super.onDestroy()
+    }
+
+    /** Shell diagnostics expose observed camera state, never the site link or credentials. */
+    override fun dump(fd: FileDescriptor, writer: PrintWriter, args: Array<out String>) {
+        val current = _state.value
+        val light = current.lighting
+        writer.println("rosy_cam_state={\"running\":${current.running},\"light_supported\":${light.supported}," +
+            "\"light_requested\":${light.requested},\"torch_on\":${light.torchOn},\"dark\":${light.dark}," +
+            "\"light_limited\":${light.message != null},\"photo_saving\":${current.photoSaving}," +
+            "\"photo_saved\":${current.photoName != null},\"photo_failed\":${current.photoFailed}}")
     }
 
     private fun enterForeground(): Boolean {
@@ -145,6 +170,14 @@ class StreamService : LifecycleService() {
         sessionJob = lifecycleScope.launch {
             val store = SettingsStore(applicationContext)
             val siteLink = store.siteLink.first()
+            val development = store.development.first()
+            if (development != null && siteLink != null) {
+                val expiry = minOf(development.expiresAt, Instant.parse(siteLink.expiresAt))
+                launch {
+                    delay(java.time.Duration.between(Instant.now(), expiry).toMillis().coerceAtLeast(0))
+                    try { store.revokeDevelopment() } finally { endSession() }
+                }
+            }
             val pairing = siteLink?.toPairing()
             // D-391 1: the site's address is looked up on every (re)connect, never taken from the saved record.
             val resolver = siteLink?.let { SiteResolver(it, NsdSiteBrowser(applicationContext)) }
@@ -189,12 +222,24 @@ class StreamService : LifecycleService() {
                     }
                 }
             }
-            val newCamera = CameraController(this@StreamService, this@StreamService, newLink) { e ->
-                _state.update { it.copy(error = StreamError.Camera(e.message ?: e.javaClass.simpleName)) }
-                endSession()
-            }
+            val newCamera = CameraController(
+                this@StreamService, this@StreamService, newLink,
+                onError = { e ->
+                    _state.update { it.copy(error = StreamError.Camera(e.message ?: e.javaClass.simpleName)) }
+                    endSession()
+                },
+                onLighting = { status -> if (sessionActive) _state.update { it.copy(lighting = status) } },
+            )
             link = newLink
             camera = newCamera
+            launch {
+                monitor.health.collect { health ->
+                    newCamera.setThermalBlocked(
+                        (health?.thermalStatus ?: -1) >= 3 ||
+                            (health?.temperatureC ?: 0.0) >= DeviceHealth.HOT_BATTERY_C,
+                    )
+                }
+            }
             _state.update {
                 it.copy(
                     target = pairing?.let { p -> "${p.host}:${p.port} · ${p.source}" },
@@ -276,7 +321,9 @@ class StreamService : LifecycleService() {
         healthMonitor?.stop()
         healthMonitor = null
         _state.update { current ->
-            current.copy(running = false, previewOnly = false, health = null, lens = null, lensSwitchFailed = false, link = lastLink?.status?.value ?: current.link)
+            current.copy(running = false, previewOnly = false, health = null, lens = null, lensSwitchFailed = false,
+                photoSaving = false, lighting = LightingStatus(),
+                link = lastLink?.status?.value ?: current.link)
         }
     }
 
@@ -364,6 +411,25 @@ class StreamService : LifecycleService() {
         const val ACTION_STOP = "io.github.livsbittt.rosy.cam.action.STOP"
 
         private val _state = MutableStateFlow(StreamState())
+        private var activeService: StreamService? = null
+
+        /** Local activity controls only; no exported command receiver. */
+        fun requestLight(requested: Boolean) {
+            activeService?.camera?.setLightRequested(requested)
+        }
+
+        fun savePhoto() {
+            val service = activeService ?: return
+            val controller = service.camera ?: return
+            if (!service.sessionActive || _state.value.photoSaving) return
+            _state.update { it.copy(photoSaving = true, photoFailed = false) }
+            controller.savePhoto { name ->
+                if (service.camera === controller && service.sessionActive) {
+                    _state.update { it.copy(photoSaving = false, photoFailed = name == null,
+                        photoName = name ?: it.photoName) }
+                }
+            }
+        }
 
         /** Process-wide session state for the UI. */
         val state: StateFlow<StreamState> = _state.asStateFlow()

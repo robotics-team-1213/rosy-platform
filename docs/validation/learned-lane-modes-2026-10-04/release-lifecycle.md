@@ -13,3 +13,9 @@ SOURCE/LOCAL 증거다. ARM64 빌드, installed helper readback, 실제 서비�
 독립 Safety Review `lowlight_research`: native activation/image-layer 95 passed, 6 skipped. activate와 rollback 모두 링크 전환 전 같은 동기 종료 장벽을 사용함을 확인했다. image-layer 동기화의 서명·허용 목록·백업·install→daemon-reload→enable 경계는 유지하며, 설치 helper와 unit 선행 조건 및 실제 PID/current 확인을 조건으로 이 수정의 안전 검토를 승인했다. Windows skip은 실기 증거가 아니다.
 
 통합 재검증: 수정된 7개 실패를 포함하는 Dashboard/role/Fleet/native 계약 256 passed, 1 skipped. 이전 확장 검사 실패 결과를 합격으로 대체하는 주장이 아니라 수정 후보의 집중 검증 결과다.
+# Concurrent main integration
+
+The local merge preserves both the lane Host Agent and the main branch's opt-in SSH pairing service. Both installed helpers and target dependencies remain present, and both `PartOf=rosy-runtime.target` services are named in the synchronous stop list before the release links change. The two native command allowlists, CORE peer credentials, audit trails and socket paths remain separate. Independent scoped merge review passed 191 tests; coordinator native/API checks passed 162 with 7 platform skips. These are SOURCE/LOCAL results.
+
+The signed ARM64 candidate `2026.10.04-034` was built from `c3d2a37d614cbf8e87f6dce8af47bc892edb71be`, before this integration. Its build, signature and ABI evidence do not certify the merged revision. No merged runtime or illumination/IR motion trial was installed or activated during integration.
+

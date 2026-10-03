@@ -15,6 +15,7 @@
 | D-374 | 앱의 폴더·패키지·식별자·표시 이름은 역할 이름 하나에서 나온다 — 역할 id(kebab)·snake·compact·표시 네 표기; 와이어 계약 이름(mDNS 종류, `rosy-overhead/1`, `/api/fleet`·`/api/vision`, `rosyov://`, 웹 경로, 설정·저장소 키, compose 서비스)은 바꾸지 않는다 |
 | D-377 | 앱 이름 규칙: Rosy + 영어 한 단어 — 표시 이름 `Rosy <Word>`, id·폴더 끝 `<word>`, 패키지 `rosy_<word>`, Android `io.github.livsbittt.rosy.<word>`, Gradle `rosy-<word>`, 아이콘 `<word>.svg`; Rosy Cam·Vision·Console·Robot·Pilot |
 | D-391 | 앱은 사이트 연결을 같은 모양(이름·CA·자격, IP 없음)으로 저장하고, 기기 연결 서버는 Fleet "기기 연결"이 맡는다 |
+| D-432 | 모든 앱·장치는 공통 발견·연결 규약을 쓰고, 개발 모드에서는 코드 없이 연결한다 |
 
 ## 계획·결과 문서
 
@@ -32,8 +33,8 @@
 
 ## 최근 기록
 
+- 2026-10-04 · uncommitted · fix(cam): 필요할 때만 요청하는 촬영 조명
+- 2026-10-04 · uncommitted · feat(cam): 자동 조명·사진 공유의 실제 S21 운용 확인
+- 2026-10-04 · uncommitted · feat(cam): 시간 제한 자동 조명과 송출 사진 저장·공유
 - 2026-10-04 · 03ea9b522 · fix(cam): 실제 관제 PC의 자체 키로 원격 깨우기 확인
 - 2026-10-04 · 956755f38 · fix(cam): 화면 자동 절전 중에도 송출 유지
-- 2026-10-03 · uncommitted · fix(cam): NSD 탐색 종료 뒤 늦은 콜백이 앱을 중단하지 않는다
-- 2026-10-01 · uncommitted · fix(cam): 비밀 스캔 — pollSecret 식별자와 긴 시험 이름
-- 2026-10-01 · 2370b41b · feat(cam): 응답 없는 confirm은 한 번만 다시 보낸다(S2 멱등 confirm, rosy-00 d5d4a2e4)

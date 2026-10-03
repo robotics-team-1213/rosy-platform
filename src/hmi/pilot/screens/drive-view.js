@@ -18,12 +18,57 @@ export function el(tag, text, attrs = {}) {
   return node;
 }
 
+export {actionIcon} from "/common/ui.js";
+import {actionIcon} from "/common/ui.js";
+
 function frameRatio(frame) {
   return (frame.naturalWidth && frame.naturalHeight) ? frame.naturalWidth / frame.naturalHeight : 4 / 3;
 }
 
 // --- 배치(D-363): 영상은 원본 비율 그대로, 조작부는 영상 밖 --------------------
 export function mountDriveView(drive, element) {
+  let pan = {x: 0, y: 0};
+  let dragging = null;
+  let scale = 1;
+
+  function applyPan() {
+    const box = element.view.getBoundingClientRect();
+    const ratio = frameRatio(element.frame);
+    const cover = getComputedStyle(element.frame).objectFit === "cover";
+    const width = cover ? Math.max(box.width, box.height * ratio)
+      : Math.min(box.width, box.height * ratio) * scale;
+    const height = width / ratio;
+    const xLimit = Math.max(0, (width - box.width) / 2);
+    const yLimit = Math.max(0, (height - box.height) / 2);
+    pan.x = Math.max(-xLimit, Math.min(xLimit, pan.x));
+    pan.y = Math.max(-yLimit, Math.min(yLimit, pan.y));
+    if (cover) {
+      const x = xLimit ? 50 - pan.x / (2 * xLimit) * 100 : 50;
+      const y = yLimit ? 50 - pan.y / (2 * yLimit) * 100 : 50;
+      element.frame.style.objectPosition = `${x}% ${y}%`;
+    } else {
+      element.frame.style.objectPosition = "";
+      element.frame.style.transform = scale > 1.001 ? `translate(${pan.x}px, ${pan.y}px) scale(${scale})` : "";
+    }
+    return xLimit > 0 || yLimit > 0;
+  }
+
+  const panStart = (event) => {
+    if (event.button !== 0 || event.target.closest("ui-button, input, select") || !applyPan()) return;
+    dragging = {id: event.pointerId, x: event.clientX, y: event.clientY, initial: {...pan}};
+    element.view.setPointerCapture(event.pointerId);
+    event.preventDefault();
+  };
+  const panMove = (event) => {
+    if (dragging?.id !== event.pointerId) return;
+    pan = {x: dragging.initial.x + event.clientX - dragging.x, y: dragging.initial.y + event.clientY - dragging.y};
+    applyPan();
+  };
+  const panEnd = () => { dragging = null; };
+  for (const [name, callback] of [["pointerdown", panStart], ["pointermove", panMove],
+    ["pointerup", panEnd], ["pointercancel", panEnd], ["lostpointercapture", panEnd]]) {
+    element.view.addEventListener(name, callback);
+  }
   function applyLayout() {
     const width = drive.clientWidth;
     const height = drive.clientHeight;
@@ -57,6 +102,7 @@ export function mountDriveView(drive, element) {
       : {axis: "좌우", percent: Math.round((1 - boxRatio / ratio) * 100)};
   }
   function applyZoom() {
+    scale = 1;
     const step = inputConfig().zoom ?? 1;
     const full = step === "full";
     const below = drive.dataset.driveLayout === "below";
@@ -79,16 +125,20 @@ export function mountDriveView(drive, element) {
     } else {
       element.frame.style.objectFit = "";
       const z = full ? 1 : zoomValue(step);
+      scale = z;
       element.frame.style.transform = z > 1.001 ? `scale(${z.toFixed(3)})` : "";
       drive.dataset.zoomed = String(full || z > 1.001);
       crop = full ? {...coverCrop(), z: 1} : {axis: "위아래", percent: Math.round((1 - 1 / z) * 100), z};
     }
     element.zoomFact.hidden = crop.percent <= 0;
-    element.zoomFact.textContent = crop.percent > 0 ? `${crop.axis} ${crop.percent}% 잘림` : "";
+    element.zoomFact.textContent = crop.percent > 0 ? `${crop.axis} ${crop.percent}% 잘림 · 드래그하여 보기` : "";
     if (element.zoomButton) {
       element.zoomButton.textContent = full ? "전체화면"
         : step === "fill" ? "확대 가득" : crop.z > 1.001 ? `확대 ${crop.z.toFixed(1)}×` : "확대 맞춤";
     }
+    element.fitButton?.setAttribute("aria-pressed", String(step === 1));
+    element.fillButton?.setAttribute("aria-pressed", String(full));
+    applyPan();
   }
   // 설치 앱에서는 전체화면 API 로 상태 표시줄까지 숨긴다. 지원이 없으면 화면 안에서만 채운다.
   function syncFullscreen(full) {
@@ -97,25 +147,37 @@ export function mountDriveView(drive, element) {
       if (!full && document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
     } catch (error) { /* 지원 없음 */ }
   }
-  function cycleZoom() {
-    const current = inputConfig().zoom ?? 1;
-    const index = ZOOM_STEPS.findIndex((stepValue) => stepValue === current);
-    const next = ZOOM_STEPS[(index + 1) % ZOOM_STEPS.length];
+  function setZoom(next) {
+    pan = {x: 0, y: 0};
+    dragging = null;
     saveInputConfig({zoom: next});
     syncFullscreen(next === "full");
     applyZoom();
   }
+  function cycleZoom() {
+    const current = inputConfig().zoom ?? 1;
+    const index = ZOOM_STEPS.findIndex((stepValue) => stepValue === current);
+    const next = ZOOM_STEPS[(index + 1) % ZOOM_STEPS.length];
+    setZoom(next);
+  }
 
   const layoutObserver = new ResizeObserver(() => { applyLayout(); applyZoom(); });
   layoutObserver.observe(drive);
-  element.frame.addEventListener("load", () => { applyLayout(); applyZoom(); });
+  const onFrame = () => { applyLayout(); applyZoom(); };
+  element.frame.addEventListener("load", onFrame);
   applyLayout();
 
   return {
     applyZoom,
     cycleZoom,
+    setZoom,
     close() {
       layoutObserver.disconnect();
+      element.frame.removeEventListener("load", onFrame);
+      for (const [name, callback] of [["pointerdown", panStart], ["pointermove", panMove],
+        ["pointerup", panEnd], ["pointercancel", panEnd], ["lostpointercapture", panEnd]]) {
+        element.view.removeEventListener(name, callback);
+      }
       syncFullscreen(false);
       // 같은 section 에 다시 마운트된다 — 지난 배치·배율 표시를 남기지 않는다.
       for (const key of ["driveLayout", "viewMode", "zoomed"]) delete drive.dataset[key];
@@ -196,9 +258,13 @@ export function buildControls(profile) {
     tune.append(fine);
   }
   const pedals = el("div", null, {"data-drive-pedals": ""});
-  const forward = el("ui-button", "전진 ▲", {type: "button", size: "primary", "data-drive-pedal": "forward"});
+  const forward = el("ui-button", "전진", {type: "button", size: "primary", "data-drive-pedal": "forward"});
   forward.setAttribute("kind", "toggle");
-  const reverse = el("ui-button", "후진 ▼", {type: "button", size: "primary", "data-drive-pedal": "reverse"});
+  actionIcon(forward, "forward");
+  forward.setAttribute("kind", "toggle");
+  const reverse = el("ui-button", "후진", {type: "button", size: "primary", "data-drive-pedal": "reverse"});
+  reverse.setAttribute("kind", "toggle");
+  actionIcon(reverse, "reverse");
   reverse.setAttribute("kind", "toggle");
   pedals.append(forward, reverse);
   left.append(tune);
@@ -226,11 +292,15 @@ export function buildControls(profile) {
   }
   if (profile.pivot !== false) {
     const pivots = el("div", null, {"data-drive-pivots": ""});
-    const pivotLeft = el("ui-button", "↺ 제자리", {type: "button", size: "primary", "data-drive-pivot": "left",
+    const pivotLeft = el("ui-button", "좌회전", {type: "button", size: "primary", "data-drive-pivot": "left",
                                                   "aria-label": "제자리 좌회전(누르는 동안)"});
     pivotLeft.setAttribute("kind", "toggle");
-    const pivotRight = el("ui-button", "제자리 ↻", {type: "button", size: "primary", "data-drive-pivot": "right",
+    actionIcon(pivotLeft, "left");
+    pivotLeft.setAttribute("kind", "toggle");
+    const pivotRight = el("ui-button", "우회전", {type: "button", size: "primary", "data-drive-pivot": "right",
                                                    "aria-label": "제자리 우회전(누르는 동안)"});
+    pivotRight.setAttribute("kind", "toggle");
+    actionIcon(pivotRight, "right");
     pivotRight.setAttribute("kind", "toggle");
     pivots.append(pivotLeft, pivotRight);
     left.append(pivots);

@@ -1,0 +1,5 @@
+<network-security-config>
+    <!-- Existing CORE HTTP is supported only for a user-selected, session-bound LAN robot. -->
+    <base-config cleartextTrafficPermitted="true" />
+    <domain-config cleartextTrafficPermitted="true"><domain>127.0.0.1</domain></domain-config>
+</network-security-config>

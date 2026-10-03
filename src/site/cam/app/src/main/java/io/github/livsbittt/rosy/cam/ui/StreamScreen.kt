@@ -13,6 +13,8 @@ import androidx.compose.ui.draw.clip
 import io.github.livsbittt.rosy.cam.health.DeviceHealth
 import io.github.livsbittt.rosy.cam.health.HealthText
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -49,6 +51,11 @@ import io.github.livsbittt.rosy.cam.service.StreamService
 import io.github.livsbittt.rosy.cam.link.SiteRoute
 import io.github.livsbittt.rosy.cam.service.StreamState
 import io.github.livsbittt.rosy.cam.settings.SiteLink
+import android.content.ClipData
+import android.content.Intent
+import androidx.core.content.FileProvider
+import java.io.File
+import android.widget.Toast
 
 @Composable
 fun StreamScreen(
@@ -63,6 +70,7 @@ fun StreamScreen(
     onStart: () -> Unit,
     onStop: () -> Unit,
     onOpenSettings: () -> Unit,
+    onScreenOff: () -> Unit = {},
 ) {
     val pairing = siteLink?.toPairing()
     Column(
@@ -91,7 +99,56 @@ fun StreamScreen(
             }
         }
 
-        StatusPanel(state, siteLink, rejectedHost, droppedTlsHost, lan, localError, onStop, onOpenSettings)
+        Column(
+            modifier = Modifier.fillMaxWidth().weight(1f, fill = false).verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            StatusPanel(state, siteLink, rejectedHost, droppedTlsHost, lan, localError, onStop, onOpenSettings)
+
+            if (state.running) {
+                val light = state.lighting
+                Text(stringResource(when {
+                    !light.supported -> R.string.light_unsupported
+                    light.message != null -> R.string.light_error
+                    !light.requested -> R.string.light_disabled
+                    light.torchOn -> R.string.light_on
+                    light.dark -> R.string.light_dark
+                    else -> R.string.light_ready
+                }), style = MaterialTheme.typography.bodySmall)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                    OutlinedButton(onClick = { StreamService.requestLight(!light.requested) }) {
+                        Text(stringResource(if (light.requested) R.string.light_disable else R.string.light_enable))
+                    }
+                    Button(onClick = { StreamService.savePhoto() },
+                        enabled = !state.previewOnly && !state.photoSaving) {
+                        Text(stringResource(if (state.photoSaving) R.string.photo_saving else R.string.photo_save))
+                    }
+                }
+            }
+            if (state.photoFailed) Text(stringResource(R.string.photo_failed), color = RosyColors.StatusWarn)
+            state.photoName?.let { name ->
+                val context = LocalContext.current
+                OutlinedButton(onClick = {
+                    try {
+                        val file = File(context.filesDir, "photos/$name")
+                        require(File(name).name == name && file.isFile)
+                        val uri = FileProvider.getUriForFile(context, "${context.packageName}.photos", file)
+                        val intent = Intent(Intent.ACTION_SEND).apply {
+                            type = "image/jpeg"
+                            putExtra(Intent.EXTRA_STREAM, uri)
+                            clipData = ClipData.newRawUri("Rosy Cam photo", uri)
+                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        }
+                        context.startActivity(Intent.createChooser(intent, context.getString(R.string.photo_share)))
+                    } catch (_: Exception) {
+                        Toast.makeText(context, R.string.photo_share_failed, Toast.LENGTH_LONG).show()
+                    }
+                }) { Text(stringResource(R.string.photo_share)) }
+            }
+
+        }
+
+        if (state.running) OutlinedButton(onClick = onScreenOff) { Text("화면 끄기 · 촬영 유지") }
 
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
             // Opens read-only while the camera runs; the settings screen says how to unlock it.

@@ -215,6 +215,7 @@ def gather(root: Path, run: Runner) -> dict:
         "ipv4": ipv4,
         "boot_id": boot_id,
         "api_port": _api_port(root),
+        "api_tls": 'required' if _runtime_env(root, 'ROSY_API_TLS') == 'required' else 'none',
         "runtime_mode": _runtime_mode(root),
         # D-260 M1: CORE's inputs win while it keeps them fresh; otherwise the probe's rows
         # and the SAF-005 default (the display's), e.g. when CORE is down.
@@ -238,6 +239,7 @@ def status_record(facts: dict, stage: Stage, now: datetime) -> dict:
         "ipv4": facts.get("ipv4") or [],
         "boot_id": facts.get("boot_id"),
         "api_port": facts.get("api_port", DEFAULT_API_PORT),
+        "api_tls": facts.get("api_tls", 'none'),
         "network": facts.get("network") or {},
         # D-260: the boot display's other two inputs, which it cannot read itself.
         "runtime_mode": facts.get("runtime_mode"),
@@ -281,7 +283,7 @@ def render_avahi(record: dict) -> str:
         "product": "rosy",
         "role": "robot",
         "proto": "core-v1",
-        "tls": "none",
+        "tls": 'required' if record.get('api_tls') == 'required' else 'none',
         "stage": str(record["stage"]),
         "release": str(record.get("release_id") or ""),
         "name": str(record.get("device_name") or ""),

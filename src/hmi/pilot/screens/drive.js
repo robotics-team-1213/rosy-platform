@@ -19,14 +19,14 @@ import {mountAutoMode, mountLanePerception} from "./drive-auto.js";
 import {mountRobotRecording, mountBrowserRecording} from "./robot-recording.js";
 import {readControls, profileFromBaseVelocity} from "../controls.js";
 import {calibrationView} from "../calibration.js";
-import {el, mountDriveView, buildStage, buildControls} from "./drive-view.js";
+import {el, mountDriveView, buildStage, buildControls, actionIcon} from "./drive-view.js";
 import {classifyOperation, saveCameraFile} from "/common/evidence.js";
 import {MODE_LABEL} from "/common/core_ui_logic.js";
 
 const LOOP_MS = 100;
 const STATE_POLL_MS = 500;
 const DEG = 180 / Math.PI;
-const PRESET_LABEL = {low: "저", mid: "중", high: "고"};
+const PRESET_LABEL = {low: "저속", mid: "보통", high: "빠름"};
 
 // `profile` comes from the device's base_velocity control (D-411 B); `unsupported` lists the
 // controls this screen cannot draw — shown, never fatal.
@@ -477,6 +477,18 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
   zoomButton.setAttribute("kind", "quiet");
   zoomButton.addEventListener("click", () => view.cycleZoom());
   element.zoomButton = zoomButton;
+  const fitButton = el("ui-button", "전체 영상", {type: "button", "data-drive-fit": "", "aria-label": "전체 영상 · 잘림 없이 보기"});
+  fitButton.setAttribute("kind", "segment");
+  actionIcon(fitButton, "fit");
+  fitButton.setAttribute("kind", "segment");
+  element.fitButton = fitButton;
+  fitButton.addEventListener("click", () => view.setZoom(1));
+  const fillButton = el("ui-button", "화면 채우기", {type: "button", "data-drive-fill": "", "aria-label": "화면 채우기 · 확대 후 드래그하여 보기"});
+  fillButton.setAttribute("kind", "segment");
+  actionIcon(fillButton, "expand");
+  fillButton.setAttribute("kind", "segment");
+  element.fillButton = fillButton;
+  fillButton.addEventListener("click", () => view.setZoom("full"));
   const inputsButton = el("ui-button", "입력", {type: "button", "data-drive-inputs": ""});
   inputsButton.setAttribute("kind", "quiet");
   let inputsPanel = null;
@@ -486,6 +498,7 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
       closeInputs();
       return;
     }
+    hideTools();
     inputsPanel = el("div", null, {"data-inputs-panel": ""});
     root.querySelector("[data-drive-stage]").append(inputsPanel);
     closeInputs = mountInputs(inputsPanel, {onClose: () => {
@@ -493,9 +506,10 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
       inputsPanel = null;
       closeInputs = null;
       renderInputs();
+      toolsButton.focus();
     }, onChange: renderInputs});
   });
-  const exit = el("ui-button", "나가기", {type: "button", "data-drive-exit": ""});
+  const exit = el("ui-button", "조종 종료", {type: "button", "data-drive-exit": ""});
   exit.setAttribute("kind", "quiet");
   exit.addEventListener("click", () => teardown());
   // D-411 A: 로봇 학습 녹화(카메라 유닛 bag) — 위의 "화면 녹화"(이 기기 브라우저)와 다르다.
@@ -504,11 +518,38 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
   const recordingsButton = el("ui-button", "녹화본", {type: "button", "data-recordings-open": ""});
   recordingsButton.setAttribute("kind", "quiet");
   const recordingFact = el("span", null, {"data-drive-fact": "recording", hidden: ""});
-  actions.append(zoomButton, browserLabel, shotButton, recordButton, saveVideo, robotRecordButton, recordingsButton, inputsButton, exit);
+  const toolsButton = el("ui-button", "도구", {type: "button", "data-drive-tools": "", "aria-expanded": "false", "aria-controls": "pilot-drive-tools"});
+  toolsButton.setAttribute("kind", "quiet");
+  actionIcon(toolsButton, "tools");
+  toolsButton.setAttribute("kind", "quiet");
+  const tools = el("section", null, {id: "pilot-drive-tools", "data-drive-tools-panel": "", "aria-label": "영상과 조종 도구", hidden: ""});
+  const toolsActions = el("ui-actions");
+  toolsActions.append(zoomButton, browserLabel, shotButton, recordButton, saveVideo, robotRecordButton, recordingsButton, inputsButton);
+  tools.append(el("ui-text", "영상·녹화·조종 설정", {scale: "label"}), toolsActions);
+  const closeTools = el("ui-button", "닫기", {kind: "quiet", type: "button"});
+  closeTools.setAttribute("kind", "quiet");
+  function hideTools() {
+    tools.hidden = true; toolsButton.setAttribute("aria-expanded", "false");
+  }
+  closeTools.addEventListener("click", () => {
+    tools.hidden = true; toolsButton.setAttribute("aria-expanded", "false"); toolsButton.focus();
+  });
+  toolsActions.append(closeTools);
+  toolsButton.addEventListener("click", () => {
+    robotRecording.closeSheet();
+    closeInputs?.();
+    tools.hidden = !tools.hidden;
+    toolsButton.setAttribute("aria-expanded", String(!tools.hidden));
+  });
+  root.querySelector("[data-drive-stage]").append(tools);
+  recordingsButton.addEventListener("click", hideTools);
+  actionIcon(exit, "back");
+  actions.append(fitButton, fillButton, toolsButton, exit);
   element.hud.append(recordingFact, actions);
   const robotRecording = mountRobotRecording({
     toggle: robotRecordButton, detail: recordingFact, openButton: recordingsButton,
     sheetHost: root.querySelector("[data-drive-stage]"), anchor: element.hud, save: saveCameraFile,
+    returnFocus: toolsButton,
   });
   view.applyZoom();
 

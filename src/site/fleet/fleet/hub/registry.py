@@ -17,6 +17,8 @@ class RobotRecord:
     model: str = ""
     hardware_serial: str = ""
     snapshot: Optional[StateSnapshot] = None
+    #: D-447: 마지막 heartbeat 도착 시각(time.monotonic). gather 신선도 판정만 쓴다.
+    last_heartbeat_monotonic: Optional[float] = None
     last_event_seq: int = 0
     events: list[EventMessage] = field(default_factory=list)
 
@@ -31,6 +33,10 @@ class RobotRegistry:
             row = RobotRecord(robot_id=robot_id)
             self._robots[robot_id] = row
         return row
+
+    def find(self, robot_id: str) -> Optional[RobotRecord]:
+        """읽기 전용 조회 — gather 가 기록을 새로 만들지 않게 한다 (D-447)."""
+        return self._robots.get(robot_id)
 
     def online_ids(self) -> list[str]:
         return sorted(r.robot_id for r in self._robots.values() if r.online)

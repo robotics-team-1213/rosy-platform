@@ -25,6 +25,8 @@ REASONS = (
 ROBOT = "_rosy._tcp"
 FLEET = "_rosy-fleet._tcp"
 OVERHEAD = "_rosy-overhead._tcp"
+DOCK = "_rosy-dock._tcp"
+SIGNAL = "_rosy-signal._tcp"
 
 COMMON_KEYS = ("product", "role", "proto", "tls")
 REQUIRED: dict[str, dict[str, str]] = {
@@ -32,6 +34,8 @@ REQUIRED: dict[str, dict[str, str]] = {
     FLEET: {"product": "rosy", "role": "fleet", "proto": "site-v1", "tls": "required"},
     OVERHEAD: {"product": "rosy", "role": "overhead-camera", "proto": "rosy-overhead/1",
                "tls": "required"},
+    DOCK: {"product": "rosy", "role": "dock", "proto": "rosy-dock/1", "tls": "none"},
+    SIGNAL: {"product": "rosy", "role": "signal", "proto": "rosy-signal/1", "tls": "none"},
 }
 # Old robot images advertise stage/release/name/network only (profile, line 26).
 LEGACY_ALLOWED = frozenset({ROBOT})
@@ -103,6 +107,8 @@ def classify(service_type: str, host: str | None, address: str | None, port: obj
         for key, expected in REQUIRED[kind].items():
             if key not in values:
                 return Rejected("missing_key")
+            if kind == ROBOT and key == 'tls' and values[key] in ('none', 'required'):
+                continue
             if values[key] != expected:
                 return Rejected("value_mismatch")
     if kind == OVERHEAD:

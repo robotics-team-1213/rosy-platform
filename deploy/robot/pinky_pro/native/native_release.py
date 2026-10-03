@@ -52,7 +52,7 @@ RUNTIME_ID = re.compile(r"^[0-9a-f]{64}$")
 RUNTIME_TARGET = "rosy-runtime.target"
 # Every unit with PartOf=rosy-runtime.target (pinned by a test).
 RUNTIME_STOP_UNITS = (RUNTIME_TARGET, "rosy-core.service", "rosy-io.service", "rosy-camera.service",
-                      "rosy-host-agent.service")
+                      "rosy-host-agent.service", "rosy-ssh-pairing.service")
 
 
 def _runtime_id(path: Path) -> str | None:

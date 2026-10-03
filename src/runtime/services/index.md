@@ -41,4 +41,4 @@
 - 2026-10-04 · uncommitted · feat(vision): 같은 capture의 bounded raw/annotation pair
 - 2026-10-04 · uncommitted · fix(line-follow): 저조도 정지와 recovery 차단
 - 2026-10-04 · uncommitted · feat(vision): 차선 입력의 실제 출처와 정지 설정 예약
-- 2026-10-03 · b84e72c55 · feat(vision): D-423 학습 모델 상태 저장소(읽기 전용)
+- 2026-10-03 · uncommitted · feat(link): D-432 주소 없는 장비 접속

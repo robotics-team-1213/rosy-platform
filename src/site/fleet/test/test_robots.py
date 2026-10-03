@@ -157,3 +157,25 @@ def test_allow_empty_still_refuses_malformed_rows(tmp_path):
     p.write_text("robots:\n  - robot_id: rosy_01\n    token: t\n", encoding="utf-8")
     with pytest.raises(RobotsFileError):
         load_robots(p, allow_empty=True)
+
+
+def test_resolver_token_is_optional_and_must_differ(tmp_path):
+    path = tmp_path / "robots.yaml"
+    path.write_text('robots:\n  - robot_id: rosy_01\n    base_url: "http://10.0.0.5:8080"\n'
+                    '    token: "rest-token"\n    resolver_token: "resolver-token"\n',
+                    encoding="utf-8")
+    assert load_robots(path)[0].resolver_token == "resolver-token"
+    for same in ("rest-token", "pairing"):
+        path.write_text('robots:\n  - robot_id: rosy_01\n    base_url: "http://10.0.0.5:8080"\n'
+                        '    token: "rest-token"\n    fleet_pairing_token: "pairing"\n'
+                        f'    resolver_token: "{same}"\n', encoding="utf-8")
+        with pytest.raises(RobotsFileError):
+            load_robots(path)
+
+
+def test_resolver_token_round_trips(tmp_path):
+    p = tmp_path / "robots.yaml"
+    endpoint = RobotEndpoint("rosy_01", "https://robot.local", "rest",
+                             fleet_pairing_token="pair", resolver_token="res")
+    write_robots(p, [endpoint])
+    assert load_robots(p) == [endpoint]

@@ -40,6 +40,29 @@ export const REFUSAL_REASON = Object.freeze({
   linear_limit_zero: "수동 속도 한도가 0입니다",
 });
 
+// D-438: why the Fleet resolver handed a stuck to a human.
+const ESCALATION_REASON = Object.freeze({
+  no_rule: "맞는 규칙 없음",
+  rule_budget: "자동 판단 횟수 소진",
+  deadline: "60초 안에 풀리지 않음",
+  restuck_after_resume: "자동 재개 뒤 다시 막힘",
+  estop: "비상정지",
+  calibration: "보정 중",
+  no_resolver_token: "자동 판단 토큰 없음",
+});
+
+/** One line about what the Fleet resolver did for this stuck. */
+export function resolverText(note) {
+  if (!note) return "";
+  if (note.escalated) {
+    if (note.escalated === "human_claimed") return "운영자가 맡음";
+    const code = note.escalated.startsWith("core:") ? note.escalated.slice(5) : "";
+    const why = code ? `CORE 응답 ${code}` : ESCALATION_REASON[note.escalated] || note.escalated;
+    return `자동 판단 불가 — 사람 확인 필요 (${why})`;
+  }
+  return `자동 판단 ${note.rule}: ${DECISION_LABEL[note.decision] || note.decision}`;
+}
+
 const OUTCOME_TEXT = Object.freeze({
   hold: "대기로 답했습니다 — 다음 요청까지 멈춰 있습니다",
   back: "후진 후 재시도를 시작했습니다",
@@ -210,6 +233,11 @@ export function createLineStuckPanel({ scope, el, view, call, log, isOperator })
   }
 
   function choose(robotId, stuckId, decision) {
+    // D-438: a human decision claims the stuck so the resolver stays silent. Fire and forget.
+    call(`/api/fleet/robots/${encodeURIComponent(robotId)}/line-stuck/claim`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ stuck_id: stuckId }),
+    }).catch(() => {});
     if (needsConfirm(decision)) {
       confirming.set(robotId, { stuck_id: stuckId, decision });
       render("confirm-yes", robotId);
@@ -284,7 +312,15 @@ export function createLineStuckPanel({ scope, el, view, call, log, isOperator })
       node.addEventListener("click", scope.guard(() => choose(robotId, stuck.stuck_id, spec.decision)));
       actions.append(node);
     }
-    li.append(head, facts, actions);
+    li.append(head, facts);
+    const note = resolverText(stuck.resolver);
+    if (note) {
+      const line = document.createElement("p");
+      line.className = "stuck-resolver";
+      line.textContent = note;
+      li.append(line);
+    }
+    li.append(actions);
 
     if (pending) {
       const box = document.createElement("div");

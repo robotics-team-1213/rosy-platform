@@ -75,7 +75,7 @@
 ## 최근 기록
 
 - 2026-10-04 · uncommitted · test: API v1.91 문서 계약 유지
-- 2026-10-03 · uncommitted · feat: read live Fleet fence on the simulation Cell owner
-- 2026-10-03 · uncommitted · refactor: D-425 Console document lifetime
-- 2026-10-03 · uncommitted · test: D-425 browser baseline and safety facts
-- 2026-10-03 · uncommitted · refactor: D-425 Console HTTP adapter checkpoint
+- 2026-10-04 · uncommitted · feat(server): D-447 (a) gather reads fresh hub snapshots first
+- 2026-10-04 · uncommitted · fix(server): D-438 phase 1 final-review findings
+- 2026-10-04 · uncommitted · feat(server): D-438 Fleet stuck resolver phase 1 (rules R1-R3 + human escalation)
+- 2026-10-03 · uncommitted · fix(link): 현재 접속과 후속 코드 규약 구별
