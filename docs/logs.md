@@ -4926,3 +4926,9 @@
 - 변경: 실제 wheel을 native payload·SD 공통 builder·CORE Docker의 복사되는 install에 포함하고 두 ARM64 workflow의 빌드 의존성을 명시했다. source build 찌꺼기는 TMPDIR에만 둔다.
 - 증거: RED3 후 관련48 passed. 실제 Ubuntu3.12 wheel 설치/import와 기존 namespace 반복 설치 거부를 확인했다. 독립 리뷰의 stale pip target 문제를 hard reject로 막았다. docs/validation/d427-source-migration/motion-contract-delivery-2026-10-04.md.
 - gate 변화: 없음. SOURCE/host Linux 검증이며 실제 native ARM64·SD·Docker build·CI·DEVICE·FIELD는 pending이다.
+
+## 2026-10-04 · uncommitted · D-442 U2 Pinky single-use binding
+
+- 변경: cmd_vel_cycle에서 원본 GuardedMotion만 한 번 풀어 기존 send를 부르는 얇은 포트를 연결했다. private token·identity·불변 snapshot·300ms/주기 만료와 consume-before-send를 적용했고 생성 실패는ZERO다. bridge와 publish/D-422 순서는 유지했다.
+- 증거: RED11 및 독립리뷰RED2 보완 후 관련137 passed/1 ROS skip·NEW0, 구조76 passed, 실제설치Linux53 passed, 독립28 passed·APPROVE. docs/validation/d427-source-migration/pinky-twist-port-2026-10-04.md.
+- gate 변화: 없음. SOURCE/host만 검증했으며 ARM64/SD/Docker/CI/ROS-SIM/DEVICE/FIELD와 전체profile/OMX 타입admission은 pending이다.

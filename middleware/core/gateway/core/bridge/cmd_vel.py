@@ -15,9 +15,88 @@ SAF-002 정지가 늦어지지 않게 하는 규칙 두 가지:
 
 from __future__ import annotations
 
+from threading import RLock
+import time
 from typing import Any, Callable, Optional, Protocol
 
-from core_features.command.manager import ZERO
+from core_features.command.manager import ZERO, Twist
+from rosy.contracts.motion import (BaseTwist, EstopStatus, GuardedMotion, MotionKind,
+                                   PortCapabilities, PortDecision, PortState)
+
+
+# Stage (b) records the existing clip implementation; Arbiter admission is (c).
+GUARD_REVISION = "pinky-command-manager-b-v1"
+GUARD_LIFETIME_S = 0.3
+_BINDING_TOKEN = object()
+
+
+class PinkyTwistPort:
+    """Cycle-local identity gate around the existing final writer callback.
+
+    This private Python capability is a trusted-process invariant, not a
+    security boundary against code inspecting private attributes. It never
+    grants producer authority, reads physical E-stop or releases any stop.
+    """
+
+    def __init__(self, send: Callable[[Any], None], *, clock=time.monotonic):
+        self._send = send
+        self._clock = clock
+        self._lock = RLock()
+        self._original = None
+        self._issued_at = None
+        self._closed = False
+        self._state = "ready"
+
+    def _bind(self, cmd: GuardedMotion) -> None:
+        with self._lock:
+            if (self._closed or self._issued_at is not None or type(cmd) is not GuardedMotion
+                    or type(cmd.payload) is not BaseTwist or cmd._token is not _BINDING_TOKEN
+                    or cmd.guard_revision != GUARD_REVISION):
+                raise ValueError("invalid cycle grant")
+            self._issued_at = self._clock()
+            self._original = cmd
+
+    def submit(self, cmd: GuardedMotion) -> PortDecision:
+        with self._lock:
+            if (self._closed or type(cmd) is not GuardedMotion or cmd is not self._original
+                    or cmd._token is not _BINDING_TOKEN):
+                return PortDecision(False, self._state, "invalid_cycle_grant")
+            now = self._clock()
+            if not self._issued_at <= now < self._issued_at + GUARD_LIFETIME_S:
+                self._original = None
+                self._state = "hold"
+                return PortDecision(False, "hold", "cycle_grant_expired")
+            # Consume under the same lock before entering the writer. A lost
+            # ACK or exception never makes this original replayable.
+            self._original = None
+            self._state = "active"
+        try:
+            self._send(Twist(cmd.payload.linear_mps, cmd.payload.angular_radps))
+        except Exception:
+            with self._lock:
+                self._state = "hold"
+            raise
+        return PortDecision(True, "active", "written")
+
+    def close(self) -> None:
+        with self._lock:
+            self._original = None
+            self._closed = True
+            self._state = "disabled"
+
+    def capabilities(self) -> PortCapabilities:
+        return PortCapabilities((MotionKind.BASE_TWIST,), frames=("base_link",), supports_stream=True)
+
+    def cancel(self, intent_id: str) -> PortDecision:
+        # Stage (b) has no intent header/identity and cannot cancel by id.
+        return PortDecision(False, self.state().state, "intent_identity_unavailable")
+
+    def state(self) -> PortState:
+        with self._lock:
+            return PortState(self._state)
+
+    def estop_status(self) -> EstopStatus:
+        return EstopStatus(None)
 
 
 class _Output(Protocol):
@@ -64,7 +143,27 @@ def cmd_vel_cycle(command: _Command, power: _Power, send: Callable[[Any], None],
         return
     if readiness is not None and not readiness.is_ready():
         out = ZERO
-    send(out)
-    if out.linear != 0.0 or out.angular != 0.0:
+    port = None
+    try:
+        port = PinkyTwistPort(send)
+        guarded = GuardedMotion(BaseTwist(out.linear, out.angular), GUARD_REVISION, _BINDING_TOKEN)
+        port._bind(guarded)
+    except Exception as exc:
+        if port is not None:
+            port.close()
+        send(ZERO)
+        if warn is not None:
+            warn(f"cmd_vel guard failed: {exc}")
+        return
+    try:
+        decision = port.submit(guarded)
+        if not decision.accepted:
+            send(ZERO)
+            if warn is not None:
+                warn(f"cmd_vel guard refused: {decision.reason}")
+            return
+    finally:
+        port.close()
+    if guarded.payload.linear_mps != 0.0 or guarded.payload.angular_radps != 0.0:
         power.on_activity("cmd_vel")
     command.announce_pending()

@@ -784,3 +784,9 @@
 - 증거: `python -m pytest src/runtime/gateway/test/test_face_inputs.py src/runtime/gateway/test/test_bridge_display.py -q` 통과. ros_bridge.py는 rclpy 없이 import할 수 없어 py_compile만.
 - gate 변화: 없음. 실기 확인 전.
 - 결정: D-433 (Proposed)
+
+## 2026-10-04 · uncommitted · D-442 U2 Pinky single-use binding
+
+- 변경: cmd_vel_cycle에서 원본 GuardedMotion만 한 번 풀어 기존 send를 부르는 얇은 포트를 연결했다. private token·identity·불변 snapshot·300ms/주기 만료와 consume-before-send를 적용했고 생성 실패는ZERO다. bridge와 publish/D-422 순서는 유지했다.
+- 증거: RED11 및 독립리뷰RED2 보완 후 관련137 passed/1 ROS skip·NEW0, 구조76 passed, 실제설치Linux53 passed, 독립28 passed·APPROVE. docs/validation/d427-source-migration/pinky-twist-port-2026-10-04.md.
+- gate 변화: 없음. SOURCE/host만 검증했으며 ARM64/SD/Docker/CI/ROS-SIM/DEVICE/FIELD와 전체profile/OMX 타입admission은 pending이다.

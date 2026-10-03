@@ -630,6 +630,7 @@ safety_anchors:
   - {symbol: core_features.safety.shadow.ShadowLog}
   - {symbol: core.fleet_loss_wiring.build_fleet_loss}
   - {symbol: core.bridge.cmd_vel.cmd_vel_cycle}
+  - {symbol: core.bridge.cmd_vel.PinkyTwistPort}
   - {symbol: core_features.command.manager.CommandManager}
   - {symbol: core_features.docking.charging.ChargingConfirmation}
   - {symbol: core_features.command.arbitration.ModeMachine.release_emergency, public: true}

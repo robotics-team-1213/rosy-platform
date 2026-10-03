@@ -71,3 +71,7 @@ plans:
 
 - Viewer 인증 status/JPEG API는 최대 512000 bytes의 최신 1장만 제공하고 2초 stale이면 404다. JPEG는 CORE에서 디코딩·재인코딩하지 않는다(D-152).
 - 대시보드는 지도 위에서 source·해상도·지연과 overlay frame을 표시한다. HOST-SIM Chromium 증거는 통과했지만 실제 Gazebo/Pinky frame readback은 각각 ROS-SIM/DEVICE HOLD다.
+
+## 2026-10-04 D-442 U2 Pinky binding source/host
+
+기존 bridge publish와 호출을 보존한 single-use 래퍼를 독립 리뷰했다. 관련137 passed/1 ROS skip, 구조76 passed, 실제설치Ubuntu3.12 53 passed. docs/validation/d427-source-migration/pinky-twist-port-2026-10-04.md. 최신 변경의 ROS-SIM·ARTIFACT·DEVICE·FIELD는 pending이며 기존 과거 증거를 최신 수용으로 쓰지 않는다.
