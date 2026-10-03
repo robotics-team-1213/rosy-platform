@@ -69,8 +69,8 @@
 
 ## 최근 기록
 
+- 2026-10-03 · uncommitted · fix(integration): D-418 SSH와 D-432 연결/UI 계약 통합
 - 2026-10-03 · uncommitted · fix(link): 현재 접속과 후속 코드 규약 구별
 - 2026-10-03 · uncommitted · feat(link): D-432 주소 없는 장비 접속
 - 2026-10-03 · 0e244456c · fix(tools): rosy_ssh_share 가 터미널 밖에서 생성 passphrase 를 출력하지 않음 (D-418)
 - 2026-10-03 · uncommitted · fix(native,tools,test): D-418 파일의 비밀 검사 23건 — 이름과 문구만 바꿈
-- 2026-10-03 · uncommitted · fix: bootstrap automatic-update state directories

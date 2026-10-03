@@ -84,7 +84,6 @@ STATE_CONFIG = BACKUP_ROOT + "/state-directories.conf"
 # into the image's /etc/systemd/system. The first-boot units come from
 # image/first-boot, which no release carries, so they stay image-only.
 UNITS = (
-    "rosy-ssh-pairing.service",
     "rosy-release-recover.service",
     "rosy-sd-provision.service",
     "rosy-core.service",
@@ -107,7 +106,7 @@ UNITS = (
     "rosy-auto-update.service",
     "rosy-auto-update.timer",
     # D-418: SSH access on CORE's request (expiry timer only while a temp login is on).
-    "rosy-ssh-access.service",
+    "rosy-ssh-access.service", "rosy-ssh-pairing.service",
     "rosy-ssh-access.path",
     "rosy-ssh-access-boot.service",
     "rosy-ssh-password-expire.service",

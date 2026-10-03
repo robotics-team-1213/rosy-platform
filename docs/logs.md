@@ -4808,3 +4808,10 @@
 - 증거: 실제 태블릿 화면 직접 확인과 브라우저/JVM 시험은 docs/validation/discovery-link-2026-10-03에 따로 기록한다. 물리 주행/발열 하강/화면 off 연속 송출은 미판정이다.
 - gate 변화: DEVICE/FIELD 이동 없음.
 - 결정: 사용자 최신 지시로 지금 구현하며 4자리 코드 통합만 추후 적용한다.
+
+## 2026-10-03 · uncommitted · fix(integration): D-418 SSH와 D-432 연결/UI 계약 통합
+
+- 변경: API Ref는 D-418 v1.89 뒤 D-432 v1.90을 보존하고 app 설명과 문서 pin을 맞췄다. 배포 서비스 목록은 두 SSH 소유자를 모두 포함하면서 기존 1000줄 hard tier를 유지한다. sandbox 시험은 공개 키 helper의 실제 write/read IPC와 양의 디렉터리 시작 조건을 검사한다. 권한을 넓히지 않았다.
+- 증거: native systemd/버전 문서/구조 시험 199 passed/1 skipped. 최종 quick tier와 SSH 영향 범위는 별도 재실행한다.
+- gate 변화: 장치 활성화·물리 주행·FIELD 이동 없음.
+- 결정: D-418와 D-432를 각각의 경로/opt-in 소유권으로 보존한다.
