@@ -4,7 +4,7 @@ schema: rosy.platform-parts.v1
 # colcon, rosdep, payload and image consumer reads this one line through
 # tools/harness/colcon_roots.py (stdlib-only, so keep it a one-line flow list).
 # Checked by test/architecture/test_colcon_roots.py.
-colcon_roots: [src]
+colcon_roots: [src, learning]
 
 # D-427 §6 "지금(C)" ownership manifest: every tracked source root maps to one
 # D-427 part. No folder moves; `d427_target` is where the root goes in step B.
@@ -367,9 +367,10 @@ roots:
     wave: "1"
     note: Camera-calibration and real-run prototypes, not part of the learning loop.
     concern: other
-  - path: src/sim/isaac_sim
+  - path: learning/envs/isaac
     part: learning
     d427_target: learning/envs/isaac
+    legacy: src/sim/isaac_sim
     wave: "1"
     device_install_exception: "native payload builds every colcon root (Q8); remove with the payload scope change"
     note: Isaac assets and scripts (D-322 holds Isaac Lab training); could also be integrations/simulation/isaac.

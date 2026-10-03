@@ -196,7 +196,7 @@ def test_wheel_consumers():
     gz = _text(SRC / "sim" / "description" / "urdf" / "rosy_gz.urdf.xacro")
     assert f"<wheel_separation>{separation}</wheel_separation>" in gz
     assert f"<wheel_radius>{radius}</wheel_radius>" in gz
-    isaac = _load("isaac_graph_contract", SRC / "sim" / "isaac_sim" / "graph_contract.py").robot_contract("rosy_01")
+    isaac = _load("isaac_graph_contract", REPO / "learning" / "envs" / "isaac" / "graph_contract.py").robot_contract("rosy_01")
     assert (isaac["wheel_radius"], isaac["wheel_distance"]) == (radius, separation)
 
 

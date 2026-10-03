@@ -16,9 +16,9 @@ export ROSY_REPO=/path/to/rosy-os
 source "$ROSY_REPO/install/setup.bash"
 export ROS_DOMAIN_ID=41
 export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp  # or use the same supported RMW as CORE
-python3 "$ROSY_REPO/src/sim/isaac_sim/prepare_urdf.py" --output /scratch/rosy-isaac/rosy.urdf
+python3 "$ROSY_REPO/learning/envs/isaac/prepare_urdf.py" --output /scratch/rosy-isaac/rosy.urdf
 cd /path/to/isaac-sim
-./python.sh "$ROSY_REPO/src/sim/isaac_sim/run_rosy.py" \
+./python.sh "$ROSY_REPO/learning/envs/isaac/run_rosy.py" \
   --urdf /scratch/rosy-isaac/rosy.urdf \
   --output-dir /scratch/rosy-isaac/usd --namespace rosy_01 --headless
 ```
@@ -31,20 +31,20 @@ The soccer training environment deferred by D-98 belongs to `src/site/games/game
 
 ## Robot model assets
 
-- **Pinky Pro:** The checked in URDF/xacro and 19 meshes live in [`../description/`](../description/). `prepare_urdf.py` resolves these files for Isaac Sim. The official `pinklab-art/pinky_pro` model was checked at commit `014a09f289e6988894fbffde2624fdb1e257815b`; 13 meshes match byte for byte and six Collada visuals differ. Keep the ROSY model as the executable source until those visual differences are reviewed. See [`assets/README.md`](assets/README.md).
+- **Pinky Pro:** The checked in URDF/xacro and 19 meshes live in [`src/sim/description/`](../../../src/sim/description/). `prepare_urdf.py` resolves these files for Isaac Sim. The official `pinklab-art/pinky_pro` model was checked at commit `014a09f289e6988894fbffde2624fdb1e257815b`; 13 meshes match byte for byte and six Collada visuals differ. Keep the ROSY model as the executable source until those visual differences are reviewed. See [`assets/README.md`](assets/README.md).
 - **OMX-AI:** [`assets/open_manipulator_description/`](assets/open_manipulator_description/) contains the official ROBOTIS OMX-F follower and OMX-L leader URDFs and their referenced STL meshes. The snapshot is pinned to the same `open_manipulator` revision as `deploy/robot/omx/stack.lock.yaml`, with SHA-256 hashes in `manifest.json` and Apache-2.0 license text.
 
 To prepare one OMX model for the Isaac URDF importer, resolve its local mesh paths into a generated file outside the checkout:
 
 ```bash
-python3 "$ROSY_REPO/src/sim/isaac_sim/prepare_omx_urdf.py" \
+python3 "$ROSY_REPO/learning/envs/isaac/prepare_omx_urdf.py" \
   --model omx_f --output /scratch/rosy-isaac/omx_f.urdf
 ```
 
 Use `--model omx_l` for the leader. Before opening Isaac, check the pinned file hashes, vendor URDF references, and the prepared Pinky URDF:
 
 ```bash
-python3 "$ROSY_REPO/src/sim/isaac_sim/model_checks.py" \
+python3 "$ROSY_REPO/learning/envs/isaac/model_checks.py" \
   --pinky-urdf /scratch/rosy-isaac/rosy.urdf
 ```
 
@@ -52,7 +52,7 @@ Import and inspect one OMX model with Isaac Sim's own Python. This checks for ex
 
 ```bash
 cd /path/to/isaac-sim
-./python.sh "$ROSY_REPO/src/sim/isaac_sim/import_omx.py" \
+./python.sh "$ROSY_REPO/learning/envs/isaac/import_omx.py" \
   --model omx_f --urdf /scratch/rosy-isaac/omx_f.urdf \
   --output-dir /scratch/rosy-isaac/omx-f-usd --headless
 ```

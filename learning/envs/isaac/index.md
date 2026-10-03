@@ -20,7 +20,7 @@
 
 ## 시험
 
-- `src/sim/isaac_sim/test`
+- `learning/envs/isaac/test`
 
 ## 최근 기록
 

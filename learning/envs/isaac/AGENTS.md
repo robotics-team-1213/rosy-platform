@@ -1,4 +1,4 @@
-<!-- Parent: ../AGENTS.md -->
+<!-- Parent: ../../../AGENTS.md -->
 <!-- Generated: 2026-09-30 | Updated: 2026-09-30 -->
 
 # isaac_sim
@@ -39,7 +39,7 @@ None.
 ### Testing Requirements
 
 ```bash
-python -m pytest src/sim/isaac_sim/test -q
+python -m pytest learning/envs/isaac/test -q
 ```
 
 Host-only: `test_graph_contract.py` (cmd_vel/odom/joint_states namespace and initial-wheel contracts), `test_model_checks.py` (OMX/Pinky asset hashes and URDF mesh/joint preflight), `test_prepare_urdf.py` (URDF generation). The Isaac Sim 6.1 runtime is not exercised here — that is the ROS-SIM HOLD of D-322.
