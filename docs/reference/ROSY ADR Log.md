@@ -432,3 +432,4 @@
 | D-433 | 로봇 몸의 화면·소리·빛(LCD·부저·램프)은 ROS 밖 한 프로세스 `rosy-face`(구 `rosy-boot-display`)가 평생 소유하고, 상황표 순수 함수 하나(`core_common`)가 그릴 것을 정한다; CORE는 1 s `face-inputs.json` 핸드오버로 얼굴·주행 카드 내용을 넘기고 신선하지 않으면 상태 카드로 돌아간다; 026 이주·롤백 경로 포함, Q1–Q5 사용자 결정(권고안) | Proposed (2026-10-03) |
 | D-434 | 모델 PC와 관제 PC를 나눈다 — 모델 PC가 학습 모델 처리와 시뮬레이션(Isaac Sim 5.1)을, 관제 PC는 사이트 스택만 맡는다 | Accepted (2026-10-03, 사용자 결정; 역할 분담·운용 규칙, 모델 PC GPU 학습·NCNN·Isaac 실행과 관제 PC 이전은 미수용) |
 | D-435 | 작업 오케스트레이션·Fleet·장치 실행을 역할과 권한으로 구분한다 | Proposed (2026-10-03, 책임 모델 재검토 초안; 기존 Accepted 계약·API·코드·실행 gate 변경 없음) |
+| D-437 | 공개 저장소의 빌드는 GitHub Actions hosted runner에서 하고, 서명만 로컬 오프라인 키로 한다 | Accepted (2026-10-03, 사용자 결정; 사이트 후보 workflow 첫 실행은 push 승인 뒤, 사이트 키 미준비) |

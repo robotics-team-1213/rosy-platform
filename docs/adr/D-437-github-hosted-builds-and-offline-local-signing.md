@@ -1,0 +1,72 @@
+## D-437 공개 저장소의 빌드는 GitHub Actions hosted runner에서 하고, 서명만 로컬 오프라인 키로 한다
+
+**Status:** Accepted (2026-10-03, 사용자 결정). 빌드 위치·서명 경계·배포 경로의 결정이다. 사이트 후보 workflow(`build-site-candidate.yml`)의 첫 실제 실행은 사용자가 승인하는 push 뒤에만 가능하므로 아직 검증되지 않았다. 사이트 서명 키는 D-301대로 아직 준비되지 않았다.
+
+**Connects:** D-145, D-225, D-301, D-412, D-434.
+
+### Context
+
+- 사이트 후보(`deploy/site/build_candidate.py`)를 Windows Docker Desktop 호스트에서 빌드하는 일이 너무 느렸다.
+  - WSL2의 `docker save`가 수 GB짜리 `images.tar`를 Windows 디스크에 쓰는 데 오래 걸렸다.
+  - Docker Scout의 SBOM 색인이 이미지마다 10분을 넘었다.
+  - 결과물 수 GB를 Wi-Fi로 사이트 호스트에 옮겨야 했다.
+- 저장소는 공개다. GitHub Actions hosted runner는 공개 저장소에서 무료이고, 디스크·네트워크가 빠르며, 매번 깨끗한 환경에서 시작한다.
+- 로봇 payload·이미지 빌드는 이미 GitHub arm64 runner에서 unsigned 결과만 만든다(`build-arm64-payload.yml`, `build-native-payload.yml`, `build-pinky-image.yml`; D-145, D-225). 서명은 PC의 오프라인 키로 하고, 배포는 GitHub Release로 한다(D-412).
+- D-301은 사이트 후보 `release.json`을 오프라인 Ed25519 키로 서명하고, 사이트 호스트가 따로 설치한 검증기와 공개 키로 확인하게 한다. 지금 서명기는 서명 전에 manifest가 적은 모든 파일을 로컬에서 검사한다. 그래서 서명하려면 수 GB `images.tar`를 서명 스테이션까지 내려받아야 한다.
+- 학습·NCNN 변환·intake·store는 GPU와 비공개 데이터·모델이 필요해 모델 PC에 있다(D-434).
+
+### Decision
+
+1. **저장소 산출물의 빌드는 GitHub hosted runner에서 한다.**
+   - 사이트 후보(amd64)는 `ubuntu-24.04`에서, 로봇 payload·이미지(arm64)는 기존처럼 `ubuntu-24.04-arm`에서, CI는 기존 `ci.yml`에서 한다.
+   - workflow는 수동 실행(`workflow_dispatch`)이다. main push만으로는 후보나 릴리스가 생기지 않는다.
+2. **runner 결과물은 서명되지 않는다.**
+   - 사이트 키(D-301)와 Pinky 릴리스 키는 운영자의 서명 스테이션에만 둔다. GitHub secret으로 올리지 않는다.
+   - workflow는 `GITHUB_TOKEN` 말고 어떤 secret도 쓰지 않는다. 빌드 job은 읽기 권한만 갖고, Release를 만드는 job만 `contents: write`를 갖는다.
+3. **사이트 후보의 배포 경로는 공개 저장소의 GitHub Release(prerelease)다.**
+   - 태그는 `site-<짧은 커밋>`이다. 후보 묶음은 tar로 묶어 2 GiB 아래 조각(`.partNN`)으로 나누고 `SHA256SUMS`를 붙인다. GitHub Release 자산은 파일당 2 GiB 한도가 있다.
+   - `release.json`은 따로 자산으로도 올린다. 서명 스테이션은 이 파일만 내려받는다.
+   - 릴리스 설명은 "`release.json.sig`가 붙기 전에는 UNSIGNED"라고 적는다.
+   - 사이트 호스트는 자산을 받아 조각을 잇고, `SHA256SUMS`를 확인하고, 풀고, `release.json.sig`를 넣은 뒤 `docker load` 전에 서명과 파일 해시를 검증한다.
+   - D-301의 나머지 규칙은 그대로다. 검증기와 공개 키는 후보와 다른 경로로 호스트에 먼저 설치하고, 후보 안의 검증기로 그 후보를 인증하지 않는다.
+4. **manifest만 서명한다.**
+   - 서명 스테이션은 `sign_candidate.py --manifest-only`로 `release.json` 바이트만 서명한다. 파일 존재 검사는 하지 않는다.
+   - 서명이 증명하는 내용은 "커밋 `<sha>`에서 CI가 만든 이 manifest를 운영자가 승인했다"이다. 운영자는 기대 커밋을 인자로 넘기고, 서명기는 manifest의 `source_commit`이 40자리 16진수이고 그 값과 같을 때만 서명한다.
+   - 무결성은 그대로 지켜진다. 사이트 호스트의 `verify_candidate.py`가 서명된 manifest를 기준으로 배포 파일·SBOM·`images.tar` 해시를 모두 다시 확인한 뒤에 `docker load`를 허락한다.
+5. **로컬에 남는 것.**
+   - 학습·NCNN 변환·intake·store(모델 PC, D-434).
+   - 서명 키 전부(사이트 키, Pinky 릴리스 키).
+   - 사이트 설정·비밀(사이트 호스트의 `/etc/rosy`).
+6. **이미지에는 공개 저장소 코드만 들어간다.** 설정·비밀은 이미지에 굽지 않는다.
+   - Fleet·Vision 이미지는 `.dockerignore` 허용 목록에 있는 추적 파일만 복사한다. 프록시 이미지는 파일을 복사하지 않는다.
+   - 빌더는 `deploy/site/` 아래에 git이 무시하는 파일(예: `secrets/` 아래 실제 토큰, `.env`)이 있으면 빌드를 거부한다. `deploy/site/`는 프록시 이미지의 빌드 컨텍스트라서 그런 파일이 Docker 데몬으로 보내진다. 파이썬 캐시(`__pycache__`, `.pytest_cache`)는 예외다.
+   - 시험이 이 규칙을 강제한다. Dockerfile의 COPY·ADD 원본에는 `secrets`나 `.env`가 없어야 하고, 무시된 파일이 있으면 빌더가 거부해야 한다.
+7. **SBOM은 runner에서 syft(anchore)로 만든다.**
+   - Docker Scout는 runner에서 Docker Hub 로그인이 필요하다. 그러면 secret이 하나 늘어난다.
+   - `build_candidate.py --sbom-tool syft`는 SPDX JSON을 같은 파일 이름(`sbom/<service>.spdx`)으로 쓴다. 그래서 manifest 형식과 검증기는 바뀌지 않는다.
+   - syft는 버전을 고정하고, 내려받은 파일의 SHA-256을 확인한 뒤에 쓴다.
+   - 로컬 빌드의 기본값은 지금처럼 `scout`이다.
+
+### Alternatives
+
+| 대안 | 판단 |
+|---|---|
+| 로컬 Windows(Docker Desktop)에서 빌드 | WSL2 `docker save`와 Scout 색인이 느리고, 결과를 Wi-Fi로 옮겨야 한다. 기각(로컬 수동 경로로는 남긴다) |
+| 사이트 호스트에서 빌드 | 관제 PC는 8스레드·14 GB RAM이고 사이트 스택만 맡는다(D-434). 빌드 도구와 소스 체크아웃이 운영 호스트에 생기고, 빌드 부하가 관제를 흔든다. 기각 |
+| GitHub hosted runner에서 빌드, 서명은 로컬 | 공개 저장소라 무료이고 빠르며, 매번 깨끗하다. 키가 GitHub에 가지 않는다. 채택 |
+| runner에서 서명(키를 GitHub secret으로) | 저장소 쓰기 권한이나 workflow 변경 한 번이 발행 권한이 된다. D-145·D-301·D-412와 충돌. 기각 |
+
+### Consequences
+
+- 서명 스테이션은 수 GB 대신 몇 KB짜리 `release.json`만 받는다. 서명기는 묶음 내용을 보지 않으므로, 내용 확인은 사이트 호스트의 검증으로 넘어간다. 운영자는 서명하기 전에 커밋과 CI 실행이 맞는지 확인해야 한다.
+- 공개 Release 자산은 누구나 받을 수 있다. 이미지에는 공개 코드만 있으므로 새로 드러나는 것은 없다. 설정·비밀은 호스트에만 있다.
+- 사이트 호스트는 GitHub에 닿아야 한다. 닿지 않으면 같은 자산을 다른 기계에서 받아 옮긴다. 검증 절차는 같다.
+- GitHub 쓰기 권한만 가진 사람은 서명 없는 후보만 올릴 수 있다. 호스트는 서명 없는 후보를 거부한다.
+
+### Validation
+
+- 호스트 시험: `--sbom-tool syft` 호출과 결과 파일, 무시된 비밀 파일 거부, manifest-only 서명(커밋 형식·기대 커밋 불일치 거부, 덮어쓰기 거부, 서명 뒤 호스트 검증기 통과), workflow 계약(수동 실행, secret 없음, 빌드 job 읽기 전용, release job만 쓰기, syft 버전·해시 고정, prerelease, 조각 나누기).
+- 아직 안 된 것: workflow의 첫 실제 실행. 사용자가 승인한 push 뒤 `gh workflow run build-site-candidate.yml`로 확인한다. 사이트 키 준비와 호스트 수용은 D-301대로 별도 gate다.
+- 이 ADR은 로봇 이동이나 정책 실행을 허락하지 않는다.
+
+**Related:** [D-301](D-301-site-candidate-signatures.md), [D-412](D-412-robots-self-update-from-signed-github-releases-when-idle.md), [D-225](D-225-update-without-reflash-and-faster-card-writes.md), [D-434](D-434-model-pc-and-site-pc-roles.md).

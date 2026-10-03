@@ -4796,3 +4796,10 @@
 - 변경: `run_log.py` 기록 오류가 학습을 멈추지 않음(`chain`은 예외 후 계속, `close()` 추가), 비밀 키 단어 확대, `export_cell`의 로컬 experiment 검증(`run_id`, 상대 `path`), 노트북 5c 고정 `runs/<run_id>`·상대 summary 경로·재실행 시 앞 기록 닫기, D-356 부록 동기화
 - 증거: 훈련 테스트와 `learning/training/perception/test` 전체, harness generate·lint·`test/test_harness_contracts.py`
 - gate 변화: 없음(호스트 결과)
+
+## 2026-10-03 · uncommitted · docs: D-437 GitHub-hosted builds, offline local signing
+- 변경: `docs/adr/D-437-github-hosted-builds-and-offline-local-signing.md` 추가(Accepted, 사용자 결정), ADR Log 행, D-301 부록 "2026-10-03 — CI 빌드·로컬 서명 (D-437)"(manifest-only 서명), `harness.yaml` adr_gaps에 D-436(다른 브랜치) 추가
+- 증거: `python tools/harness/rosy_harness.py generate` 뒤 lint·`test/test_harness_contracts.py` 실행
+- gate 변화: 없음(문서만). 사이트 후보 workflow 첫 실행은 사용자가 승인한 push 뒤, 사이트 서명 키는 D-301대로 미준비
+- 결정: D-437 Accepted, D-301 부록
+- 교훈: 없음

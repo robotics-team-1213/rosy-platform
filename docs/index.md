@@ -274,8 +274,8 @@
 
 ## 최근 기록
 
+- 2026-10-03 · uncommitted · docs: D-437 GitHub-hosted builds, offline local signing
 - 2026-10-03 · uncommitted · perception(D-356): review fixes for the local run log
 - 2026-10-03 · uncommitted · perception(D-356): experiment tracking defaults to local run log + TensorBoard
 - 2026-10-03 · uncommitted · docs: D-435 work orchestration and Fleet authority proposal
 - 2026-10-03 · uncommitted · docs: ADR role and Fleet terminology review
-- 2026-10-03 · uncommitted · docs: D-434 model PC and site PC roles, Isaac Sim 5.1, low-memory rules
