@@ -4971,3 +4971,9 @@
 - 변경: CI colcon 빌드에서만 만든 Gazebo `COLCON_IGNORE`는 성공·실패 종료 때 제거한다. 기존 제외 파일은 보존하여 빌드 뒤 소스 구조 검사가 실제 패키지를 계속 볼 수 있게 했다.
 - 증거: main bcf1010b의 CI 37174760531에서 구조 시험 두 건이 임시 제외 파일 때문에 실패했다. 실제 Bash 빌드 단계 회귀는 수정 전 2 failed/2 passed, 수정 후 관련 시험 12 passed다. 성공·종료 코드 42에서 빌드 중 제외와 종료 뒤 복원, 기존 파일 bytes 보존을 검증했다.
 - gate 변화: SOURCE/LOCAL 증거만 추가한다. 원격 CI 재검증과 서명 후보의 실제 제어 PC 설치·HTTPS·타이머 수락은 아직 남아 있다.
+
+## 2026-10-04 · uncommitted · D-446 모델 PC도 서명 코드 자동 업데이트에 포함하고 작업·GPU 환경·모델 승격을 분리한다
+
+- 변경: D-446 모델 PC의 서명 코드 후보·작업 잠금·환경 지문·유휴 source 전환·실패 복귀를 구현했다. perception과 control/core_common은 같은 commit과 상대 경로로 묶고 고정 bootstrap을 사용한다. 기존 data는 외부 디렉터리로 연결한다.
+- 증거: 실제 모델 PC의 격리 Linux 시험 30 passed. 서명과 작업 환경 guard는 변이에서 실패를 확인했다. 사용자 updater timer 설치·enabled/active와 linger를 확인했다. 리뷰에서 발견한 import closure와 unmanaged 작업 admission을 보완했다.
+- gate 변화: 없음. 코드 updater 설치와 첫 후보 전환·model-watch doctor·학습 모델 품질·주행 수용은 별도 증거로 판정한다. push·CI는 수행하지 않았다.

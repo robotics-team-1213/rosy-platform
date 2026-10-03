@@ -277,8 +277,8 @@
 
 ## 최근 기록
 
+- 2026-10-04 · uncommitted · D-446 모델 PC도 서명 코드 자동 업데이트에 포함하고 작업·GPU 환경·모델 승격을 분리한다
 - 2026-10-04 · uncommitted · fix: CI Gazebo 제외 파일의 수명
 - 2026-10-04 · uncommitted · fix: Windows SSH timeout 종료 경합
 - 2026-10-04 · uncommitted · fix: D-427 push5 통합 게이트 정합성
 - 2026-10-04 · uncommitted · D-427 push4 fast gate follow-up
-- 2026-10-04 · uncommitted · D-427 Pinky safety source integration
