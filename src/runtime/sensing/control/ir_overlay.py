@@ -112,6 +112,10 @@ def operator_overlay_problem(data) -> Optional[str]:
     if params.get("camera_ground_source") == "NOMINAL" and not (
             params.get("allow_nominal_ground") is True and params.get("nominal_camera_profile_path")):
         return "NOMINAL ground needs allow_nominal_ground: true and nominal_camera_profile_path"
+    if params.get("allow_nominal_ground") is True and params.get("camera_ground_source") != "NOMINAL":
+        # Arming NOMINAL here while the ground source comes from elsewhere would leave a
+        # half-switched observer that a later edit of another layer silently completes.
+        return "allow_nominal_ground: true needs camera_ground_source: NOMINAL in the same file"
     return None
 
 

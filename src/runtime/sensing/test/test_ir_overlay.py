@@ -105,6 +105,9 @@ def test_valid_operator_overlay_is_loaded(tmp_path):
     (OPERATOR.replace("0.059", "0.59"), "camera_height_m_override"),       # outside range
     (OPERATOR.replace("0.19547687622336488", ".nan"), "camera_pitch_rad_override"),
     (OPERATOR.replace("    allow_nominal_ground: true\n", ""), "NOMINAL ground needs"),
+    (OPERATOR.replace("camera_ground_source: NOMINAL", "camera_ground_source: PINKY"),
+     "needs camera_ground_source: NOMINAL"),
+    (OPERATOR.replace("    camera_ground_source: NOMINAL\n", ""), "needs camera_ground_source: NOMINAL"),
     (OPERATOR + "/**/road_observer_node:\n  ros__parameters:\n    debug_overlay: true\n", "top level"),
     (OPERATOR.replace("ros__parameters:", "params:"), "ros__parameters"),
 ])
