@@ -1192,3 +1192,31 @@ result. If the GPU/model is unavailable, mark GPU-dependent evidence `DEGRADED`
 and do not silently substitute CPU ArUco results. These measurements do not
 enable automatic movement; D-257/D-268 and the separate freshness and
 false-trigger gates still apply.
+
+## Rosy Cam 화면 상태 확인·깨우기
+
+관제 PC의 자체 ADB 키로 공식 Android 무선 디버깅 페어링을 먼저 완료한다.
+Windows 등 다른 PC의 개인 키를 복사하지 않는다. `cam-screen.json.example`을
+저장소 밖의 개인 JSON 설정으로 복사하고 설치된 ADB 절대 경로, 실제 전화의
+`ro.serialno`, `ro.product.model`을 입력한다. 실제 식별자·주소는 공개 파일에
+기록하지 않는다.
+
+```bash
+python3 deploy/site/rosy_cam_screen.py status --config /private/path/cam-screen.json
+python3 deploy/site/rosy_cam_screen.py wake --config /private/path/cam-screen.json
+```
+
+CLI는 이미 인증된 연결을 먼저 검사하고, 없으면 ADB mDNS 및 Avahi의
+`_adb-tls-connect._tcp`에서 예상 serial의 후보를 찾아 변경된 포트로 재연결한다.
+발견 이름만 믿지 않고 실제 serial과 model을 모두 확인한 단일 연결에만
+`KEYCODE_WAKEUP`을 보낸다. 미인증·오프라인 연결, 식별 불가·불일치·다중 연결은
+거절한다. 페어링이나 ADB 권한 변경은 이 CLI가 수행하지 않는다.
+목록에 다른 기기의 오프라인·미인증 연결이 있어도 보수적으로 거절하므로 먼저
+ADB 연결 목록을 확인한다. 발견된 오래된 포트가 응답하지 않으면 다음 후보를
+시도하지만, 다른 실제 식별자가 응답하면 즉시 거절한다.
+
+`status`도 필요한 경우 기존 페어링으로 재연결한다. `wake_sent`는 깨우기 명령
+전달 결과이며 잠금 해제나 영상 수신 증거가 아니다. OS 화면 상태와 실제 JPEG의
+증가하는 sequence·freshness를 별도로 확인한다. ADB가 끊기거나 무선 디버깅이
+꺼진 경우에는 공식 재연결·페어링 경로를 사용한다. 충전 중 화면 유지와 화면
+제한시간은 전화의 OS 설정이며, 앱의 화면 유지 해제만으로 설정을 덮어쓰지 않는다.
