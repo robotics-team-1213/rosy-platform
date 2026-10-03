@@ -803,3 +803,9 @@
 - 추가 검증: face handover integration RED 1 failed로 display whitelist 누락을 확인·수정. 최종 focused 129 passed, 3 skipped (overexposed-api-green.txt).
 
 - gate 변화: SOURCE/LOCAL. 실기 노출·조명·주행은 별도 검증이다.
+
+## 2026-10-04 · uncommitted · test: 카메라 프레임 모듈의 실제 제공 경로
+
+- 변경: Dashboard 카메라 계약을 분리된 shared frame 모듈의 import와 실제 제공 bytes, 인증·취소·late frame guard에 연결했다.
+- 증거: Dashboard·role surface·paired camera 회귀 47 passed. 기존 API·동작·권한 검사를 약화하지 않았다.
+- gate 변화: SOURCE/LOCAL. 실기 화면 검증은 별도다.

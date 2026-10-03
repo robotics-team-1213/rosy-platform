@@ -2214,3 +2214,9 @@
 - 변경: 신선한 overexposed 품질이면 기존 저조도 조명 세션을 즉시 해제한다. usable 상태의 점멸 방지 유지와 경보 우선순위는 유지한다.
 - 증거: Pilot/Dashboard bright-dark browser 2 passed; native quality/alarm 9 passed.
 - gate 변화: SOURCE/LOCAL. No device writes or motion.
+
+## 2026-10-04 · uncommitted · fix: 릴리스 전환에서 Host Agent 종료 대기
+
+- 변경: runtime PartOf인 Host Agent를 명시적 동기 종료 목록에 포함한다. 종료 실패 시 후보 시작과 릴리스 링크 전환을 하지 않는 회귀 검사를 추가했다.
+- 증거: native activation/systemd 195 passed, 1 skipped. 종료 목록 누락을 메모리에서 재주입하면 계약 검사가 실패한다. 독립 검토와 설치 helper 경계는 docs/validation/learned-lane-modes-2026-10-04/release-lifecycle.md.
+- gate 변화: SOURCE/LOCAL. 설치된 helper·unit·PID 확인과 ARM64/DEVICE/FIELD는 별도다.

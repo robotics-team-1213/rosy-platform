@@ -4846,3 +4846,9 @@
 - 증거: `docs/validation/learned-lane-modes-2026-10-04/recording.md`, `docs/validation/learned-lane-modes-2026-10-04/exposure.md`.
 
 - gate 변화: SOURCE/LOCAL. 실기 노출·조명·주행은 별도 검증이다.
+
+## 2026-10-04 · uncommitted · fix: 확장 검사에서 드러난 릴리스 종료 경계
+
+- 변경: Host Agent 종료 대기 누락을 수정하고, 프레임 모듈 분리 및 API v1.91에 맞춰 기존 계약 검사를 갱신했다.
+- 증거: 수정 전 확장 검사 11455 passed, 449 skipped, 7 failed. 수정 후 native 195 passed/1 skipped, frame 계약 47 passed, Fleet 문서 22 passed. docs/validation/learned-lane-modes-2026-10-04/release-lifecycle.md.
+- gate 변화: SOURCE/LOCAL. 이전 push 반환값으로 확장 검사 합격을 주장하지 않으며, 수정 후보의 필수 검사·CI·ARM64·실기는 별도로 확인한다.

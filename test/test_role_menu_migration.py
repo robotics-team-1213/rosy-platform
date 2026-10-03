@@ -1,6 +1,7 @@
 """D-263 migration inventory stays attached to role-owned surfaces."""
 
 from pathlib import Path
+import re
 
 import yaml
 
@@ -147,8 +148,19 @@ def test_console_surface_contains_a_stoppable_live_camera_panel():
     source = (WEB / panel["module"]).read_text(encoding="utf-8")
     vision = (WEB / "vision.js").read_text(encoding="utf-8")
     assert "createVisionPreview" in source and "preview.stop" in source
+    assert 'import { createVisionPreview } from "/assets/vision.js"' in source
     assert "/api/v1/vision/front/status" in vision
-    assert "/api/v1/vision/front/frame" in vision
+    assert re.search(r'import\s*\{\s*fetchCameraPair\s*\}\s*from\s*"/common/evidence.js"', vision)
+    frames = (WEB.parent / "web_common" / "evidence.js").read_text(encoding="utf-8")
+    assert "export async function fetchCameraPair" in frames
+    assert "/api/v1/vision/front/frame?sequence=" in frames
+    assert "await fetchFrame(" in frames
+    assert "fetchFrame: (path) => fetch(path, {headers: authHeaders(), cache: \"no-store\", signal: controller.signal})" in vision
+    # Unmount/stop must cancel the request and discard an already-decoded frame.
+    assert "aborter?.abort()" in vision
+    assert "generation += 1" in vision
+    assert "gen !== generation || !hasToken()" in vision
+    assert "URL.revokeObjectURL" in vision
 
 
 def test_console_surface_contains_operator_docking_actions():

@@ -1489,3 +1489,9 @@
 - Evidence: actual loopback Fleet server plus persistent Fleet/owner stores reproduced LOCAL_WORKCELL_REARM_FAILED before offload and passed after. Offload-removal mutation fails again; original bytes restored. Final readback suite 18 passed; combined Fleet stop/rearm, owner/provider/replay/boundaries regression 96 passed before the additional finite-JSON case. Independent review 48 passed / 1 skipped and final readback 18 passed, no Critical/Important findings. Production flake8 passes. Final agent wheel rebuilt and force-installed from X: copy; site-packages adapter reads changed loopback state without caching, pip check passes.
 - Final checks: quick tier 96 passed / 26 existing warnings; harness lint 0 errors / 26 warnings. Entry configuration regression guards the ROS import directly and passed.
 - Gate: SOURCE/LOCAL only. Host HTTP is real; ROS and UDS credential transport are substituted. Live ROS/UDS (a)-(i), seat exclusion, thin-sheet handling and full two-layer/two-pallet vendor Gazebo acceptance remain open. Socket timeout bounds inactivity, not an end-to-end stop deadline. No viewer credential registration, service deployment, physical enablement or push performed.
+
+## 2026-10-04 · uncommitted · test: API v1.91 문서 계약 유지
+
+- 변경: API 문서 개정에 맞춰 Fleet 문서 버전 pin 세 곳을 v1.91로 갱신한다. task·intent·물리 상태·cursor 본문 검사는 유지한다.
+- 증거: mission progress 및 task contract 문서 회귀 22 passed.
+- gate 변화: SOURCE/LOCAL. Fleet 배포와 물리 제출 검증은 포함하지 않는다.

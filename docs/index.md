@@ -274,8 +274,8 @@
 
 ## 최근 기록
 
+- 2026-10-04 · uncommitted · fix: 확장 검사에서 드러난 릴리스 종료 경계
 - 2026-10-04 · uncommitted · docs: 원본/표시 녹화와 밝기 양극단 추가 검증
 - 2026-10-04 · uncommitted · docs: learned lane selection and low-light evidence
 - 2026-10-04 · uncommitted · site(D-437): verifier accepts the containerd image ID form
 - 2026-10-03 · uncommitted · docs: D-436 change-scoped host test tiers
-- 2026-10-03 · uncommitted · docs: Fleet deployment preflight lessons

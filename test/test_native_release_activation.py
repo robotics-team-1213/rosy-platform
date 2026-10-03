@@ -323,20 +323,54 @@ def test_stopping_the_runtime_waits_for_every_unit_that_is_part_of_it(monkeypatc
 
     calls = []
     monkeypatch.setattr(native_release.subprocess, "run",
-                        lambda argv, **kwargs: calls.append(argv))
+                        lambda argv, **kwargs: calls.append((argv, kwargs)))
 
     native_release.NativeReleaseManager._systemctl("stop")
     native_release.NativeReleaseManager._systemctl("start")
 
-    stop, start = calls
+    (stop, stop_options), (start, start_options) = calls
     assert stop[:2] == ["systemctl", "stop"]
     assert set(stop[2:]) == {"rosy-runtime.target", *_part_of_runtime_units()}
     assert start == ["systemctl", "start", "rosy-runtime.target"]
+    # Explicit synchronous jobs must finish before activation can switch symlinks.
+    assert stop_options == start_options == {"check": True, "timeout": 120}
+    assert "--no-block" not in stop
 
 
 def test_the_runtime_part_of_units_are_core_io_and_camera():
-    # Guards the helper above against reading an empty directory.
-    assert _part_of_runtime_units() == {"rosy-core.service", "rosy-io.service", "rosy-camera.service"}
+    # Host Agent also executes the current release and must stop before its link changes.
+    # CORE is the required runtime owner; camera/I/O/Host Agent are optional evidence
+    # and maintenance services, so starting the target alone is not their readiness proof.
+    assert _part_of_runtime_units() == {"rosy-core.service", "rosy-io.service", "rosy-camera.service",
+                                       "rosy-host-agent.service"}
+    target = (NATIVE_DIR / "rosy-runtime.target").read_text(encoding="utf-8").splitlines()
+    assert "Requires=rosy-core.service" in target
+    wants = {unit for line in target if line.startswith("Wants=") for unit in line[6:].split()}
+    assert {"rosy-io.service", "rosy-camera.service", "rosy-host-agent.service"} <= wants
+    agent = (NATIVE_DIR / "rosy-host-agent.service").read_text(encoding="utf-8").splitlines()
+    assert "After=rosy-core.service" in agent
+    assert "WantedBy=rosy-runtime.target" in agent
+    assert "User=root" in agent
+
+
+@pytest.mark.parametrize("failure", [subprocess.TimeoutExpired("systemctl", 120),
+                                      subprocess.CalledProcessError(1, "systemctl")])
+def test_failed_runtime_stop_never_switches_release_or_starts_candidate(native_case, failure):
+    manager_type, root, key, _private, first, second, links = native_case
+    manager_type(root=root, public_key=key, runtime=RuntimeRecorder(), links=links).activate(first.name)
+    calls = []
+
+    def runtime(action):
+        calls.append(action)
+        raise failure
+
+    manager = manager_type(root=root, public_key=key, runtime=runtime, links=links)
+    with pytest.raises(type(failure)):
+        manager.activate(second.name)
+    assert calls == ["stop"]
+    assert links.values == {"current": first.name, "previous": None}
+    journal = json.loads(manager.journal.read_text(encoding="utf-8"))
+    assert journal["phase"] == "prepared"  # retained for boot recovery, never "switched"
 
 
 # --- D-412 review N1: a precondition the activator runs right before stopping --------------
