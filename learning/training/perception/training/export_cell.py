@@ -9,6 +9,7 @@ import datetime
 import hashlib
 import inspect
 import json
+import re
 from pathlib import Path
 
 SCHEMA = "rosy.perception.model/1"
@@ -50,16 +51,38 @@ def _validate(entries, color, mean, std, scale) -> None:
         raise ValueError("mean/std need 3 values, std and scale must be > 0")
 
 
+RUN_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+
+
+def _experiment_doc(experiment: dict) -> dict:
+    """metrics.experiment: known keys per tracker only; a local run is validated (no host paths)."""
+    tracker = experiment.get("tracker", "wandb")
+    if tracker not in EXPERIMENT_KEYS:
+        raise ValueError(f"experiment.tracker must be one of {tuple(EXPERIMENT_KEYS)}")
+    if tracker == "local":
+        run_id, path = experiment.get("run_id"), experiment.get("path")
+        if not isinstance(run_id, str) or not RUN_ID_RE.match(run_id):
+            raise ValueError("experiment.run_id must match [A-Za-z0-9][A-Za-z0-9._-]{0,127}")
+        if (not isinstance(path, str) or not path or path[0] in "/\\" or "\\" in path
+                or re.match(r"^[A-Za-z]:", path) or ".." in path.split("/")):
+            raise ValueError("experiment.path must be relative with forward slashes: no leading slash, "
+                             "no drive letter, no '..'")
+    doc = {k: experiment.get(k) for k in EXPERIMENT_KEYS[tracker]}
+    doc["tracker"] = tracker  # same position as before; a missing tracker means wandb
+    return doc
+
+
 def write_manifest(out_dir, *, onnx_path, classes, color, scale, mean, std,
                    dataset_repo, dataset_revision, camera_profile_revision, trainer,
                    val_iou=None, date=None, precision="fp32", experiment=None) -> dict:
     """precision: "fp32", or "int8" for a QDQ graph (onnxruntime quantize_static);
     intake.py refuses a label the graph contradicts. experiment: optional tracker link
-    {"tracker": "wandb", "run_id", "url", "project"} or {"tracker": "local", "run_id", "path"}
+    {"tracker": "wandb", "run_id", "url", "project"} or {"tracker": "local", "run_id", "path"} (path relative, e.g. runs/<run_id>)
     (a missing tracker means wandb), stored as metrics.experiment (only those keys; never a
     key or token)."""
     entries = _class_entries(classes)
     _validate(entries, color, mean, std, scale)
+    exp_doc = _experiment_doc(experiment) if experiment is not None else None
     if precision not in PRECISIONS:
         raise ValueError(f"precision must be one of {PRECISIONS}, not {precision!r}")
     out_dir = Path(out_dir)
@@ -84,12 +107,8 @@ def write_manifest(out_dir, *, onnx_path, classes, color, scale, mean, std,
         "metrics": {"val_iou": val_iou or {}},
         "trainer": trainer,
     }
-    if experiment is not None:
-        tracker = experiment.get("tracker", "wandb")
-        if tracker not in EXPERIMENT_KEYS:
-            raise ValueError(f"experiment.tracker must be one of {tuple(EXPERIMENT_KEYS)}")
-        doc["metrics"]["experiment"] = {k: experiment.get(k) for k in EXPERIMENT_KEYS[tracker]}
-        doc["metrics"]["experiment"]["tracker"] = tracker  # same position; a missing tracker means wandb
+    if exp_doc is not None:
+        doc["metrics"]["experiment"] = exp_doc
     (out_dir / "model_manifest.json").write_text(
         json.dumps(doc, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     # Fail here rather than at intake: validate with the robot-side loader when importable.
