@@ -23,9 +23,10 @@ def _event(seq: int, ts: str, type_: str = "mode.changed") -> EventMessage:
 
 
 def test_audit_log_survives_a_new_process(tmp_path):
+    now = datetime(2026, 9, 3, 12, tzinfo=timezone.utc)
     path = tmp_path / "audit.jsonl"
-    FileAuditLog(path).record(_event(1, "2026-09-03T12:00:00+00:00"))
-    events = FileAuditLog(path).history()
+    FileAuditLog(path, now=lambda: now).record(_event(1, now.isoformat()))
+    events = FileAuditLog(path, now=lambda: now).history()
     assert len(events) == 1
     assert events[0].type == "mode.changed"
     assert events[0].seq == 1
@@ -42,10 +43,11 @@ def test_audit_log_drops_records_older_than_retention(tmp_path):
 
 
 def test_audit_log_skips_a_corrupt_line(tmp_path):
+    now = datetime(2026, 9, 3, 12, tzinfo=timezone.utc)
     path = tmp_path / "audit.jsonl"
     path.write_text("not-json\n", encoding="utf-8")
-    FileAuditLog(path).record(_event(3, "2026-09-03T12:00:00+00:00"))
-    events = FileAuditLog(path).history()
+    FileAuditLog(path, now=lambda: now).record(_event(3, now.isoformat()))
+    events = FileAuditLog(path, now=lambda: now).history()
     assert [e.seq for e in events] == [3]
 
 
@@ -955,14 +957,17 @@ def test_the_writer_asks_for_no_newline_translation(tmp_path, monkeypatch):
     """
     seen: list[object] = []
     real_open = Path.open
+    path = tmp_path / "audit.jsonl"
+    # Expired input exercises compaction's binary append as well as the writer.
+    now = datetime(2026, 10, 4, tzinfo=timezone.utc)
 
     def note(self, mode="r", *args, **kwargs):
-        if "a" in mode and self.parent == tmp_path:     # 이 시험의 파일만
+        if mode == "a" and self == path:
             seen.append(kwargs.get("newline", "<missing>"))
         return real_open(self, mode, *args, **kwargs)
 
     monkeypatch.setattr(Path, "open", note)
-    log = FileAuditLog(tmp_path / "audit.jsonl")
+    log = FileAuditLog(path, now=lambda: now)
     log.record(_event(1, "2026-09-03T12:00:00+00:00"))
     assert log.settle()
 
