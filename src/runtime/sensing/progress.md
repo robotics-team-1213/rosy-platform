@@ -23,8 +23,9 @@ gates:
     blocker: "Pi bench Device 설치와 device-readback.sh --json 증거 없음. Control sensor adapter 활성화는 Device 보정 generation에 묶인다(D-47)"
   FIELD:
     state: PARKED
-adrs: [D-37, D-38, D-40, D-42, D-47, D-50, D-57, D-58, D-77, D-118, D-119, D-143, D-151, D-152, D-149, D-155, D-156, D-162, D-168, D-183, D-199, D-205, D-206, D-356, D-373, D-411]
+adrs: [D-37, D-38, D-40, D-42, D-47, D-50, D-57, D-58, D-77, D-118, D-119, D-143, D-151, D-152, D-149, D-155, D-156, D-162, D-168, D-183, D-199, D-205, D-206, D-356, D-373, D-411, D-431]
 plans:
+  - docs/plans/2026-10-03-pi-ncnn-opencv-implementation.md
   - docs/plans/2026-09-06-module-split-criteria.md
   - docs/plans/2026-09-12-rosy-control-absorption-plan.md
   - docs/plans/2026-09-12-control-absorption-results.md

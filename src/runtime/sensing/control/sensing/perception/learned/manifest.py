@@ -14,6 +14,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 SCHEMA = "rosy.perception.model/1"
+NCNN_SCHEMA = "rosy.perception.model/2"  # old readers must refuse NCNN bundles
+NCNN_FAMILIES = ("yolov8", "yolo11")  # raw detection heads, not end-to-end/NMS outputs
 TASKS = ("lane_seg", "object_det")
 ROLES = ("background", "lane_marking", "drivable", "stop_line", "ignore", "wall")  # D-373 d9
 OBJECT_ROLE = "object"  # D-423: the one role of every object_det class (lane ROLES stay closed)
@@ -77,12 +79,21 @@ class ModelManifest:
     camera_profile_revision: str
     raw: dict
     output_layout: str = "nchw_logits"
+    backend: str = "onnx"
+
+    def ncnn_files(self) -> tuple[Path, Path]:
+        if self.backend != "ncnn":
+            raise ManifestError("backend: expected ncnn")
+        runtime = self.raw["runtime"]
+        return self.folder / runtime["param"], self.folder / runtime["bin"]
 
     def role_indices(self, role: str) -> tuple[int, ...]:
         return tuple(c.index for c in self.classes if c.role == role)
 
     def onnx_file(self, precision: str | None = None) -> Path:
         """The onnx file of that precision; None: the only onnx file, else the fp32 one."""
+        if self.backend != "onnx":
+            raise ManifestError("backend: expected onnx")
         onnx = [f for f in self.files if f.name.endswith(".onnx")]
         if precision is None:
             if len(onnx) == 1:
@@ -184,7 +195,7 @@ def _parse_files(items) -> tuple[ModelFile, ...]:
         if name in seen:
             raise ManifestError(f"files: duplicate name {name!r}")
         seen.add(name)
-        if Path(name).name != name or name in ("", ".", ".."):
+        if Path(name).name != name or name in ("", ".", "..") or "/" in name or "\\" in name:
             raise ManifestError(f"files: bad name {name!r}")
         sha = _req(item, "sha256", str).lower()
         if len(sha) != 64 or any(ch not in "0123456789abcdef" for ch in sha):
@@ -203,6 +214,28 @@ def _req_text(doc: dict, key: str) -> str:
     return value
 
 
+def _backend(doc: dict, files: tuple[ModelFile, ...], task: str) -> str:
+    backend = doc.get("backend", "onnx" if doc["schema"] == SCHEMA else None)
+    if backend not in ("onnx", "ncnn"):
+        raise ManifestError("backend: expected onnx or ncnn")
+    if backend == "onnx":
+        return backend
+    if doc["schema"] != NCNN_SCHEMA:
+        raise ManifestError("backend: ncnn needs schema 2")
+    runtime = _req(doc, "runtime", dict)
+    named = {f.name: f for f in files}
+    for key, suffix in (("param", ".param"), ("bin", ".bin")):
+        name = _req_text(runtime, key)
+        if name not in named or not name.endswith(suffix) or named[name].precision != "fp32":
+            raise ManifestError(f"runtime.{key}: requires a named fp32 {suffix} file")
+    for key in ("input_blob", "output_blob", "model_family", "model_version", "exporter_version", "runtime_version"):
+        _req_text(runtime, key)
+    families = NCNN_FAMILIES if task == "object_det" else ("lane_torchscript",)
+    if runtime["model_family"] not in families:
+        raise ManifestError(f"runtime.model_family: {task} needs {families}")
+    return backend
+
+
 def load_manifest(path: str | Path) -> ModelManifest:
     """Parse and validate. `path` is the manifest file or its folder."""
     path = Path(path)
@@ -212,8 +245,8 @@ def load_manifest(path: str | Path) -> ModelManifest:
         doc = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         raise ManifestError(f"cannot read manifest: {exc}") from exc
-    if not isinstance(doc, dict) or doc.get("schema") != SCHEMA:
-        raise ManifestError(f"schema: expected {SCHEMA}")
+    if not isinstance(doc, dict) or doc.get("schema") not in (SCHEMA, NCNN_SCHEMA):
+        raise ManifestError(f"schema: expected {SCHEMA} or {NCNN_SCHEMA}")
     revision = check_revision(doc.get("model_revision"))
     task = doc.get("task")
     if task not in TASKS:
@@ -222,11 +255,13 @@ def load_manifest(path: str | Path) -> ModelManifest:
     spec = _parse_input(_req(doc, "input", dict))
     if task == "object_det" and (spec.height % 32 or spec.width % 32):
         raise ManifestError("input.shape: object_det H and W must be a multiple of 32 (stride)")
+    files = _parse_files(doc.get("files"))
+    backend = _backend(doc, files, task)
     return ModelManifest(
         folder=path.parent,
         model_revision=revision,
         task=task,
-        files=_parse_files(doc.get("files")),
+        files=files,
         input=spec,
         classes=_parse_classes(_req(doc, "output", dict), task),
         dataset_repo=_req_text(dataset, "repo"),
@@ -234,6 +269,7 @@ def load_manifest(path: str | Path) -> ModelManifest:
         camera_profile_revision=_req_text(doc, "camera_profile_revision"),
         raw=doc,
         output_layout=LAYOUTS[task],
+        backend=backend,
     )
 
 

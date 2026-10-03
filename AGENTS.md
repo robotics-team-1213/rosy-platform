@@ -31,6 +31,7 @@ ROSY is a robot middleware and fleet-control platform (ROS 2 Jazzy, first hardwa
 | `docs/` | Governance docs: spec, live API contract, ADR, plans (see `docs/AGENTS.md`) |
 | `deploy/` | Image build, signed release, Pi runtime (see `deploy/AGENTS.md`) |
 | `tools/` | Developer commands. Not installed on the robot (see `tools/AGENTS.md`) |
+| `learning/` | D-427 learning part: `training/perception/` (D-356 learned-loop tooling), `envs/isaac/` (ROS package `isaac_sim`, a `colcon_roots` entry), `curation/omx/` (LeRobot export); see each `AGENTS.md`. Only `isaac_sim` reaches a device (native payload, D-427 Q8) |
 | `data/` | Local teleop checks and drive recordings. Session files stay untracked |
 | `firmware/` | Dock and signal firmware outside colcon (see `firmware/AGENTS.md`) |
 | `test/` | Host pytest for deploy/robot/pinky_pro/release/motor contracts (see `test/AGENTS.md`) |

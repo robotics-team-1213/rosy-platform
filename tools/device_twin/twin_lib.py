@@ -42,6 +42,8 @@ RELEASES = {  # name: (release id, fake CORE variant, carries an image-layer cha
 R = {name: value[0] for name, value in RELEASES.items()}
 UPDATER = "/opt/rosy/native-runtime/rosy_auto_update.py"
 UPDATES = "/var/lib/rosy/updates"
+#: D-418: CORE's own hand-over code (stdlib), run in the twin as rosy-core by twin-ssh-request.
+SSH_HANDOFF = "src/runtime/api_web/core_api_web/api/v1/ssh_handoff.py"
 
 
 def log(message: str) -> None:
@@ -82,7 +84,7 @@ class Build:
             log("WARNING: deploy/robot/pinky_pro has uncommitted changes; the twin uses HEAD only")
         # LF product content from the commit, never the CRLF working tree.
         with (self.ctx / "repo.tar").open("wb") as handle:
-            subprocess.run(["git", "archive", "--format=tar", "HEAD", "deploy/robot/pinky_pro"],
+            subprocess.run(["git", "archive", "--format=tar", "HEAD", "deploy/robot/pinky_pro", SSH_HANDOFF],
                            cwd=ROOT, stdout=handle, check=True)
         requirements = subprocess.run(
             ["git", "show", "HEAD:deploy/robot/pinky_pro/image/device-python-requirements.txt"],
@@ -186,6 +188,8 @@ class Build:
 class Twin:
     def __init__(self, build: Build) -> None:
         self.build = build
+        #: A scenario may lower the default per-step timeout (the D-418 ssh steps use 90 s).
+        self.step_timeout: float | None = None
 
     def start(self) -> None:
         run(["docker", "rm", "-f", TWIN], check=False)
@@ -215,10 +219,20 @@ class Twin:
                            + self.x("systemctl --no-pager status rosy-core.service rosy-runtime.target "
                                     "| tail -40", check=False).stdout)
 
-    def x(self, command: str, *, user: str | None = None, timeout: float = 900,
+    def x(self, command: str, *, user: str | None = None, timeout: float | None = None,
           check: bool = True) -> subprocess.CompletedProcess:
+        """docker exec in the twin. A step that hangs past its timeout (the call's, else
+        `step_timeout`, else 900 s) is logged by name; with check=False it returns exit 124 so
+        the scenario records a FAIL for that step and goes on, with check=True it raises."""
+        limit = timeout if timeout is not None else (self.step_timeout or 900)
         argv = ["docker", "exec", *(["-u", user] if user else []), TWIN, "bash", "-c", command]
-        return run(argv, timeout=timeout, check=check)
+        try:
+            return run(argv, timeout=limit, check=check)
+        except subprocess.TimeoutExpired:
+            log(f"  STEP TIMEOUT after {limit:.0f} s: {command[:200]}")
+            if check:
+                raise RuntimeError(f"step timed out after {limit:.0f} s: {command[:300]}") from None
+            return subprocess.CompletedProcess(argv, 124, "", f"STEP TIMEOUT after {limit:.0f} s")
 
     def out(self, command: str, **kwargs) -> str:
         return self.x(command, **kwargs).stdout.strip()

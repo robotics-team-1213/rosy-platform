@@ -43,14 +43,14 @@ Needs numpy, PyYAML and `mcap` for the analysis path; tests inject fakes for COR
 
 ### Common Patterns
 
-- Scripts put `src/contracts/foundation`, `src/runtime/sensing` and `tools/perception/dataset` on `sys.path` instead of installing packages.
+- Scripts put `src/contracts/foundation`, `src/runtime/sensing` and `learning/training/perception/dataset` on `sys.path` instead of installing packages.
 - Candidate and record JSON go through `json_safe` so NaN/inf do not break the store.
 
 ## Dependencies
 
 ### Internal
 
-- `src/contracts/foundation/core_common/calibration_store.py`, `src/runtime/sensing` (`odometry_fit`, `camera_extrinsic`), `tools/perception/dataset/autolabel.py`, `src/sim/description`, `docs/adr/D-47-core-sensor-adapter-calibration-binding.md`
+- `src/contracts/foundation/core_common/calibration_store.py`, `src/runtime/sensing` (`odometry_fit`, `camera_extrinsic`), `learning/training/perception/dataset/autolabel.py`, `src/sim/description`, `docs/adr/D-47-core-sensor-adapter-calibration-binding.md`
 
 ### External
 

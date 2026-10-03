@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# Stable entry point for the D-373 site model watcher (D-427 wave 1, commit 1-pre).
+#
+#   rosy-model-watch watch --config FILE           # model/watch.py, run by the unit
+#   rosy-model-watch doctor --watch-config FILE    # rosy_ml.py doctor
+#   rosy-model-watch locate                        # print the perception folder used
+#
+# install-model-watch.sh installs this file to /opt/rosy/model-watch/bin. The
+# source copy (ROSY_MODEL_WATCH_SRC, default /opt/rosy/model-watch/src) may be
+# checked out before or after the D-427 move of the perception tools to
+# learning/training/perception: the new folder wins and the pre-move folder is
+# the fallback, so the unit keeps working across the move without a reinstall.
+set -euo pipefail
+
+SRC=${ROSY_MODEL_WATCH_SRC:-/opt/rosy/model-watch/src}
+VENV=${ROSY_MODEL_WATCH_VENV:-/opt/rosy/model-watch/venv}
+
+DIR=
+for candidate in "$SRC/learning/training/perception" "$SRC/tools/perception"; do
+  if [ -f "$candidate/model/watch.py" ]; then DIR=$candidate; break; fi
+done
+if [ -z "$DIR" ]; then
+  echo "rosy-model-watch: no perception tools (model/watch.py) in the checkout $SRC" >&2
+  exit 1
+fi
+
+case "${1:-}" in
+  watch) shift; exec "$VENV/bin/python" "$DIR/model/watch.py" "$@" ;;
+  doctor) shift; exec "$VENV/bin/python" "$DIR/rosy_ml.py" doctor "$@" ;;
+  locate) printf '%s\n' "$DIR" ;;
+  *) echo "usage: rosy-model-watch watch|doctor|locate [args...]" >&2; exit 2 ;;
+esac

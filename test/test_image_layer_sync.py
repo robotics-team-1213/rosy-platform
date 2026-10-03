@@ -56,6 +56,14 @@ class Runner:
         code = 0
         if argv[:2] == ["systemctl", "is-active"]:
             code = 0 if argv[-1] in self.active else 3
+        if argv[0] == "systemd-run":
+            config = Path(argv[-1])
+            device = config.parents[4]
+            for rule in config.read_text(encoding="utf-8").splitlines():
+                _, relative, mode, _, _, _ = rule.split()
+                directory = device / relative.lstrip("/")
+                directory.mkdir(parents=True, exist_ok=True)
+                directory.chmod(int(mode, 8))
         return subprocess.CompletedProcess(argv, code, "", "")
 
     def mutating(self) -> list[list[str]]:
@@ -86,6 +94,12 @@ def _install(destination: Path) -> None:
 def _fresh_image_layer(device: Path, native: Path) -> None:
     """What customize-rootfs.sh leaves outside the release, from one native copy."""
     shutil.copytree(native, device / "opt/rosy/native-runtime")
+    # A fresh image has applied its tmpfiles directory rules already.
+    for relative, mode in (("/var/lib/rosy/maps", "2750"), ("/var/lib/rosy/models", "0750"),
+                           ("/var/lib/rosy/pilot-recordings", "2750")):
+        directory = device / relative.lstrip("/")
+        directory.mkdir(parents=True, exist_ok=True)
+        directory.chmod(int(mode, 8))
     units = device / "etc/systemd/system"
     units.mkdir(parents=True)
     for unit in sync_mod.UNITS:
@@ -149,6 +163,125 @@ def device(tmp_path: Path) -> Path:
 
 
 # --- the allowlist is what a fresh image installs --------------------------------
+
+
+def test_old_image_missing_state_directory_is_provisioned_before_enables(device):
+    missing = device / "var/lib/rosy/pilot-recordings"
+    missing.rmdir()
+    runner = Runner()
+    result = _sync(device, NEW_ID, runner, dry_run=False)
+    command = next(call for call in runner.calls if call[0] == "systemd-run")
+    assert command[-2] == "--create"
+    assert "--property=ReadWritePaths=/var/lib/rosy" in command
+    assert "--property=ProtectSystem=strict" in command
+    assert "--property=CapabilityBoundingSet=CAP_CHOWN CAP_FOWNER CAP_FSETID CAP_DAC_OVERRIDE" in command
+    rules = Path(command[-1]).read_text(encoding="utf-8")
+    assert rules == "d /var/lib/rosy/pilot-recordings 2750 rosy-camera rosy-core -\n"
+    assert runner.calls.index(command) < next(i for i, call in enumerate(runner.calls) if call[1:2] == ["enable"])
+    assert result["state_directories"] == ["/var/lib/rosy/pilot-recordings"]
+    assert missing.is_dir()
+
+
+def test_missing_directory_is_retried_even_when_all_image_files_are_unchanged(device):
+    _sync(device, NEW_ID, Runner(), dry_run=False)
+    (device / "var/lib/rosy/pilot-recordings").rmdir()
+
+    class Failing(Runner):
+        def __call__(self, argv):
+            if argv[0] == "systemd-run":
+                return subprocess.CompletedProcess(argv, 1, "", "read-only filesystem")
+            return super().__call__(argv)
+
+    with pytest.raises(sync_mod.SyncError, match="read-only filesystem"):
+        _sync(device, NEW_ID, Failing(), dry_run=False)
+    assert (device / sync_mod.PENDING_FILE).is_file()
+    runner = Runner()
+    result = _sync(device, NEW_ID, runner, dry_run=False)
+    assert result["changed"] == result["new"] == []
+    assert any(call[0] == "systemd-run" for call in runner.calls)
+    assert not (device / sync_mod.PENDING_FILE).exists()
+
+
+def test_state_provisioning_rejects_unsafe_signed_rules(device):
+    native = device / "opt/rosy/releases" / NEW_ID / "deploy/robot/native"
+    rules = native / "tmpfiles-rosy-state.conf"
+    rules.write_text("d /var/lib/rosy/pilot-recordings 0777 root root -\n", encoding="utf-8")
+    with pytest.raises(sync_mod.SyncError, match="STATE_RULE"):
+        _sync(device, NEW_ID, Runner(), dry_run=False)
+
+
+def test_missing_directory_dry_run_only_reports_plan(device):
+    missing = device / "var/lib/rosy/pilot-recordings"
+    missing.rmdir()
+    before = _tree(device)
+    runner = Runner()
+    result = _sync(device, NEW_ID, runner, dry_run=True)
+    assert result["state_directories"] == ["/var/lib/rosy/pilot-recordings"]
+    assert runner.mutating() == []
+    assert _tree(device) == before
+
+
+def test_helper_success_without_creating_directory_refuses_enables(device):
+    (device / "var/lib/rosy/pilot-recordings").rmdir()
+
+    class NoEffect(Runner):
+        def __call__(self, argv):
+            if argv[0] == "systemd-run":
+                self.calls.append(list(argv))
+                return subprocess.CompletedProcess(argv, 0, "", "")
+            return super().__call__(argv)
+
+    runner = NoEffect()
+    with pytest.raises(sync_mod.SyncError, match="was not created"):
+        _sync(device, NEW_ID, runner, dry_run=False)
+    assert not any(call[1:2] == ["enable"] for call in runner.calls)
+    assert (device / sync_mod.PENDING_FILE).is_file()
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX chmod semantics")
+def test_directory_mode_drift_is_repaired(device):
+    directory = device / "var/lib/rosy/pilot-recordings"
+    directory.chmod(0o777)
+    result = _sync(device, NEW_ID, Runner(), dry_run=False)
+    assert result["state_directories"] == ["/var/lib/rosy/pilot-recordings"]
+    assert directory.stat().st_mode & 0o7777 == 0o2750
+
+
+def test_older_release_without_state_rules_does_not_provision_directories(device):
+    native = device / "opt/rosy/releases" / NEW_ID / "deploy/robot/native"
+    (native / "tmpfiles-rosy-state.conf").unlink()
+    (device / "var/lib/rosy/pilot-recordings").rmdir()
+    runner = Runner()
+    result = _sync(device, NEW_ID, runner, dry_run=False)
+    assert result["state_directories"] == []
+    assert not any(call[0] == "systemd-run" for call in runner.calls)
+
+
+def test_rollback_keeps_recordings_and_state_directories(device):
+    _sync(device, NEW_ID, Runner(), dry_run=False)
+    recording = device / "var/lib/rosy/pilot-recordings/session.mcap"
+    recording.write_bytes(b"operator recording")
+    old = device / "opt/rosy/releases" / OLD_ID / "deploy/robot/native"
+    shutil.copytree(device / "opt/rosy/releases" / NEW_ID / "deploy/robot/native", old)
+    (old / "tmpfiles-rosy-state.conf").unlink()
+    _sync(device, OLD_ID, Runner(), dry_run=False)
+    assert recording.read_bytes() == b"operator recording"
+
+
+@pytest.mark.parametrize("relative", ["var/lib/rosy/pilot-recordings", "var/lib/rosy/image-layer-backup"])
+def test_state_provisioning_refuses_symlink_destination_and_config_parent(device, relative):
+    directory = device / relative
+    directory.rmdir() if directory.exists() else directory.parent.mkdir(parents=True, exist_ok=True)
+    elsewhere = device / "elsewhere"
+    elsewhere.mkdir()
+    try:
+        directory.symlink_to(elsewhere, target_is_directory=True)
+    except OSError:
+        pytest.skip("host cannot create symlinks")
+    if relative.endswith("image-layer-backup"):
+        (device / "var/lib/rosy/pilot-recordings").rmdir()
+    with pytest.raises(sync_mod.SyncError, match="symlink"):
+        _sync(device, NEW_ID, Runner(), dry_run=False)
 
 
 def test_unit_allowlist_is_what_build_native_payload_puts_in_systemd():

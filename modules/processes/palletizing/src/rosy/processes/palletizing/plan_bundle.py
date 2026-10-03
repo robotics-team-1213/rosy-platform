@@ -5,8 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 import math
 
+from rosy.contracts.skill import SkillInvocation
 from rosy.execution.api import PlanBundle, PlanStep
-from rosy.skills.api import SkillInvocation
 
 from .cell import CellConfig, Pose
 from .compiler import Job, compile_job

@@ -19,6 +19,7 @@ from core_common import face_screen, robot_state
 from core_common.protocol.evidence import EvidenceState
 from core_common.protocol.schemas import HostStatusEvidence
 from . import host_hardware as _host_hardware
+from . import host_ssh as _host_ssh
 
 
 # --- Network / Release / Commissioning (WP-5, 설계 §10.2/§10.3) --------------
@@ -30,6 +31,8 @@ from . import host_hardware as _host_hardware
 
 host_router = APIRouter(prefix="/api/v1/host", tags=["host"])
 host_router.include_router(_host_hardware.hardware_router)
+# D-418: SSH access (administrator only), handed to the root rosy-ssh-access.
+host_router.include_router(_host_ssh.ssh_router)
 
 # Keep the status summary built from the hardware module's validated readback.
 _read_small_json = _host_hardware._read_small_json

@@ -52,7 +52,7 @@ HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(REPO / "src" / "contracts" / "foundation"))
-sys.path.insert(0, str(REPO / "tools" / "perception" / "dataset"))
+sys.path.insert(0, str(REPO / "learning" / "training" / "perception" / "dataset"))
 
 from core_common.robot_body import PINKY_PRO  # noqa: E402
 

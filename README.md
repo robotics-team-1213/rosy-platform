@@ -98,8 +98,10 @@ ROS/vendor 표현 사이의 변환에 두며, 그 자체로 별도 동작 owner�
     │   └── web/                   # package: web_common 공유 웹 자산
     └── sim/
         ├── description/
-        ├── gz_sim/
-        └── isaac_sim/             # Isaac Sim 6.1 standalone integration; GPU runtime validation pending
+        └── gz_sim/
+    learning/
+    ├── envs/isaac/                # package: isaac_sim — Isaac Sim 6.1 standalone integration; GPU runtime validation pending
+    └── training/perception/       # D-356 학습 루프 도구(데이터셋·학습 인계·모델 배달)
 
 폴더명과 ROS 패키지 이름은 항상 같지 않다(예: `runtime/gateway`는 `core`). site 앱은
 D-377에 따라 폴더 끝 이름이 `<word>`, 패키지 이름이 `rosy_<word>`다(`site/vision`은

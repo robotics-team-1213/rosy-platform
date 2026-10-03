@@ -1,0 +1,51 @@
+[Unit]
+Description=ROSY SSH access boot cleanup (D-418)
+# Every boot starts with the temporary password off (shadow field *, no Match
+# drop-in) and the managed-keys drop-in in place, before sshd accepts anyone.
+# Ordering only: a failed cleanup must not keep sshd, the way in, from starting.
+# Early boot: Ubuntu 24.04 enables ssh.socket, which is Before=sockets.target.
+# Default dependencies would put this unit After=basic.target (after
+# sockets.target), and Before=ssh.socket would close an ordering cycle.
+DefaultDependencies=no
+After=local-fs.target
+Before=sockets.target ssh.socket ssh.service shutdown.target
+Conflicts=shutdown.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/bin/python3 -I -B /opt/rosy/native-runtime/rosy-ssh-access.py --boot
+TimeoutStartSec=30
+Environment=PYTHONNOUSERSITE=1 PYTHONDONTWRITEBYTECODE=1
+UMask=0022
+
+# Root, but only for /etc (shadow and the sshd drop-ins), /var/lib/rosy/ssh
+# and CORE's /run/rosy hand-over. chpasswd and usermod replace /etc/shadow
+# through lock and temporary files beside it, so /etc stays writable
+# (ProtectSystem=true); /usr and /boot are read-only.
+ProtectSystem=true
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+# systemctl and sshd -t need no network; AF_UNIX reaches systemd. shadow's
+# audit socket (AF_NETLINK) is refused with EAFNOSUPPORT, which it tolerates.
+PrivateNetwork=true
+RestrictAddressFamilies=AF_UNIX
+NoNewPrivileges=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+# chown the response to rosy-core and shadow's new file to root:shadow; consume
+# CORE's request and write the response in /run/rosy (rosy-core's directory).
+CapabilityBoundingSet=CAP_CHOWN CAP_DAC_OVERRIDE CAP_FOWNER
+
+[Install]
+WantedBy=multi-user.target

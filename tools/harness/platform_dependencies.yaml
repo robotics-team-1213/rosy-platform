@@ -20,6 +20,9 @@ components:
   - name: world_api
     path: modules/world/src/rosy/world/api
     import_prefix: rosy.world.api
+  - name: skill_contracts
+    path: contracts/skill/src/rosy/contracts/skill
+    import_prefix: rosy.contracts.skill
   - name: skill_api
     path: modules/skills/api/src/rosy/skills/api
     import_prefix: rosy.skills.api

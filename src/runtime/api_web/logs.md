@@ -337,6 +337,16 @@
 - 증거: test_host_status_summary.py 64 passed 1 skipped. gateway 1622 passed 1 failed(C6, 기존). api_web 73 passed, 루트 boot·systemd·architecture 363 passed. 변이 증명 14종(신규 6: 속도 무게이트, 증거 없음 통과, 유한 검사 제거, 충전 분리, 길이 상한 제거·off-by-one; 기존 7 재확인; 숫자 형 검사 제거) 모두 빨강.
 - gate 변화: 없음.
 
+## 2026-10-02 · 7f0bc0af · feat(api): D-418 로봇 SSH 접속 API, 계약 v1.80
+
+- 변경: `api/v1/host_ssh.py` — administrator 전용 `GET /host/ssh/host-keys`, `GET|POST /host/ssh/keys`, `DELETE /host/ssh/keys/{label}`, `GET|POST|DELETE /host/ssh/password`. 본문은 `schemas.py`의 `Ssh*`로 검사하고 어긋나면 422 `SSH_INVALID`(CORE 기본 400 `VALIDATION_ERROR`가 아니라 계약대로). `added_by`는 요청 토큰의 라벨(없으면 id). host key는 `/etc/ssh/ssh_host_*_key.pub`만 직접 읽는다.
+- 변경: `api/v1/ssh_handoff.py`(표준 라이브러리만) — 요청 파일을 쓰고 root `rosy-ssh-access`의 답을 최대 10 s 기다린다(설정으로 늘릴 수 없음). 답은 링크·FIFO 없이, 크기 상한, 같은 `request_id`, 허용 status·code일 때만 받고 읽자마자 지운다. 시간 안에 답이 없으면 요청을 거둬들이고 503 `SSH_ACCESS_UNAVAILABLE`. 요청 파일이 하나라 교환은 잠금으로 한 번에 하나.
+- 변경: `errors.py`에 `SSH_*` 여섯. API Reference §5.8과 ERR-102 행, v1.79 → v1.80(문서 머리, `app.py` 두 곳, `test_line_follow_contract_docs.py`). native systemd 계약의 CORE 쓰기·읽기 선언에 `/run/rosy/ssh-access.request`·`.response`, `/etc/ssh`.
+- 증거: `src/runtime/gateway/test/test_host_ssh.py` 36 passed — 실제 `rosy-ssh-access.py`(명령만 가짜)를 요청 파일이 생길 때마다 돌려 두 프로그램을 함께 지난다. 버전 정렬 시험 통과. 기기 쌍둥이 `ssh` 시나리오가 HEAD의 `ssh_handoff.py`를 rosy-core로 돌려 PASS.
+- gate 변화: 없음
+- 결정: D-418, D-18, D-347
+- 교훈: 없음
+
 ## 2026-10-02 · 8dd300c52 · feat(safety): `GET /safety/state` 에 `fleet_link` (D-415, API v1.80)
 - 변경: `_safety_payload` 가 `svc.fleet_loss.status()` 를 `fleet_link` 로 싣는다(없으면 null). `CoreServicesLike` 에 `fleet_loss`. PUT 이 받는 정책 값은 그대로. 계약 버전 v1.80(app.py).
 - 증거: `src/runtime/gateway/test/test_fleet_loss_wiring.py`, `test_api.py` 안전 경로 통과.
@@ -375,3 +385,15 @@
 - 변경: `api/v1/vision.py` 경로, `app.py` pilot 자산 `models.js`(09553e730), 설명의 계약 판 v1.83(714e0f90c). 쓰기 API 없음.
 - 증거: `test_vision_preview.py`(API·405), api_web 묶음 739 passed(services·pilot 포함).
 - gate 변화: 없음.
+
+## 2026-10-03 · uncommitted · merge(main): D-418 SSH 접속 계약을 API Ref v1.89 로 재번호
+- 변경: main(v1.84 D-422 … v1.88 D-423)을 `feat/d418-ssh-access` 에 병합. 브랜치가 v1.84 로 적은 D-418 §5.8·ERR-102 `SSH_*` 행·변경 이력·`schemas.py` 주석을 v1.89 로. `app.py` 계약 문자열과 버전 핀(`test/test_line_follow_contract_docs.py`, `test_task_contract_docs.py`, `test_mission_progress.py`)을 v1.89 로.
+- 증거: 병합 커밋의 host pytest 묶음(보고서), `rosy_harness.py lint`.
+- gate 변화: 없음.
+- 결정: D-418.
+
+## 2026-10-03 · 0e244456c · docs(api): D-418 재번호 항목의 커밋 기록 정정
+- 변경: 앞의 `2026-10-03 · uncommitted · merge(main): D-418 SSH 접속 계약을 API Ref v1.89 로 재번호` 항목은 병합 커밋 96a7d57b6 에 들어갔다. logs 는 append-only 라 머리말은 그대로 두고 여기 적는다. API·코드 변화 없음.
+- 증거: `git log --oneline` (feat/d418-ssh-access).
+- gate 변화: 없음
+- 결정: D-418

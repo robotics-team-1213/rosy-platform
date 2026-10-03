@@ -225,8 +225,8 @@ docker run --rm --name rosy-omx-pilot-sim --network bridge `
 PowerShell 실행 예:
 
 ```powershell
-$env:PYTHONPATH = (Get-Location).Path + '/src/products/omx/adapter'
-X:/DevTemp/rosy-omx-lerobot-044/Scripts/python.exe -m omx_adapter.lerobot_export `
+$env:PYTHONPATH = (Get-Location).Path + '/src/products/omx/adapter;' + (Get-Location).Path + '/src/contracts/foundation'
+X:/DevTemp/rosy-omx-lerobot-044/Scripts/python.exe learning/curation/omx/lerobot_export.py `
   X:/DevTemp/rosy-omx-recordings/<episode-id> X:/DevTemp/rosy-omx-export/<new-output> `
   --repo-id rosy-local/omx-sim
 ```

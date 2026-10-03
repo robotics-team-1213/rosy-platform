@@ -7,12 +7,12 @@ name = "rosy-execution"
 version = "0.1.0"
 description = "ROS-free ROSY PlanBundle and existing authority projections"
 requires-python = ">=3.12"
-dependencies = ["rosy-skill-api==0.1.0"]
+dependencies = ["rosy-contracts-skill==0.1.0"]
 
 [tool.setuptools]
 package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["rosy.execution.api*", "rosy.execution.local*", "rosy.execution.site*"]
+include = ["rosy.execution.api*", "rosy.execution.site*"]
 namespaces = true

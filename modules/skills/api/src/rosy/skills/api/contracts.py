@@ -1,12 +1,10 @@
-"""Versioned Skill metadata and immutable JSON inputs."""
+"""Versioned Skill metadata; ``SkillInvocation`` lives in ``rosy.contracts.skill`` (D-427 2a)."""
 
 from __future__ import annotations
 
-from collections.abc import Mapping
 from dataclasses import dataclass
-import math
-from types import MappingProxyType
-from typing import Any
+
+from rosy.contracts.skill import SkillInvocation
 
 
 def _identifier(value: str, field: str) -> None:
@@ -21,24 +19,6 @@ def _unique_identifiers(values: tuple[str, ...], field: str, *, allow_empty: boo
         _identifier(value, field)
     if len(values) != len(set(values)):
         raise ValueError(f"{field} values must be unique")
-
-
-def _freeze_json(value: Any, field: str) -> Any:
-    if value is None or isinstance(value, (bool, int, str)):
-        return value
-    if isinstance(value, float):
-        if not math.isfinite(value):
-            raise ValueError(f"{field} must contain only finite JSON numbers")
-        return value
-    if isinstance(value, Mapping):
-        frozen = {}
-        for key, item in value.items():
-            _identifier(key, f"{field} key")
-            frozen[key] = _freeze_json(item, field)
-        return MappingProxyType(frozen)
-    if isinstance(value, (list, tuple)):
-        return tuple(_freeze_json(item, field) for item in value)
-    raise ValueError(f"{field} must contain JSON-compatible values")
 
 
 @dataclass(frozen=True)
@@ -63,18 +43,3 @@ class SkillContract:
     def validate_invocation(self, invocation: SkillInvocation) -> None:
         if (invocation.skill_id, invocation.version) != (self.skill_id, self.version):
             raise ValueError("SkillInvocation ID/version does not match the SkillContract")
-
-
-@dataclass(frozen=True)
-class SkillInvocation:
-    skill_id: str
-    version: str
-    inputs: Mapping[str, Any]
-
-    def __post_init__(self) -> None:
-        _identifier(self.skill_id, "skill_id")
-        _identifier(self.version, "version")
-        if not isinstance(self.inputs, Mapping):
-            raise ValueError("inputs must be a JSON object")
-        frozen = _freeze_json(self.inputs, "inputs")
-        object.__setattr__(self, "inputs", frozen)

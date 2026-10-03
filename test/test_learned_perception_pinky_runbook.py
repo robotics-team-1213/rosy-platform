@@ -1,6 +1,6 @@
 """D-373: the Pinky first-deploy runbook points at things that exist and leaks nothing.
 
-Same checks as the operator guide's (tools/perception/test/test_operator_doc.py),
+Same checks as the operator guide's (learning/training/perception/test/test_operator_doc.py),
 plus every repository path the runbook names in backticks must exist, and the
 switch, topics and commands it tells an operator to use must match the code.
 """
@@ -73,7 +73,7 @@ def test_topics_and_commands_match_the_code():
     assert "--qos-durability transient_local" in text
     for key in ("skip_ratio", "latency_ms_p50", "model_revision", "last_error"):
         assert f'"{key}"' in status and key in text
-    rosy_ml = (ROOT / "tools/perception/rosy_ml.py").read_text(encoding="utf-8")
+    rosy_ml = (ROOT / "learning/training/perception/rosy_ml.py").read_text(encoding="utf-8")
     for cmd in ("doctor", "deliver", "rollback", "release-hold", "harvest", "intake", "status"):
         assert f"rosy_ml {cmd}" in text, cmd
         assert f'"{cmd}"' in rosy_ml, cmd
