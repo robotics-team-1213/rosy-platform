@@ -1,6 +1,8 @@
 ## D-427 ROSY Platform은 middleware·operations·learning 세 파트와 공용 contracts·integrations로 최상위를 나눈다
 
-**Status:** Proposed (2026-10-03, 사용자 방향 선택 — "B 목표 + C로 시작"). 구조·의존 규칙의 제안이며 코드 이전·패키지 개명·설치 변경·실기 gate 변화는 없다. 이번 변경은 문서뿐이다.
+**Status:** Accepted (2026-10-03, 사용자 승인 — "B 목표 + C로 시작"). 구조·의존 규칙의 수용이며 코드 이전·패키지 개명·설치 변경·실기 gate 변화는 없다. 이번 변경은 문서뿐이다.
+
+**이전 동결 (2026-10-03):** 수용 시점부터 D-413 §1의 최상위 `modules/`, D-425 §4의 최상위 `apps/`·`ui/`로 **새** 소스 이전을 시작하지 않는다. 이미 그 경로에 있는 파일(main 기준 49개)과 진행 중 브랜치는 착지 후 §6 B 순서에 맞춰 D-427 경로로 옮긴다. 새 이전은 §2 import 규칙 시험(후속 1)이 main에 들어온 뒤 시작한다.
 
 ### Context
 
@@ -146,7 +148,7 @@ ER2는 Skill 이름(capability)만 고른다. 정책 버전은 고르지 않는�
 | D-322 | Isaac Lab 학습 보류를 유지한다(Isaac Lab 3.0은 2026-10-03 기준 Early Access) |
 | D-290·D-296·D-326·D-331·D-392 | 이름·역할·ER2 제안 전용·도구 allowlist를 유지한다 |
 
-이 ADR이 Accepted가 되면 D-209·D-413·D-425 본문에 Partially superseded 표기를 추가한다. Proposed인 동안에는 기존 결정이 유효하다.
+D-209·D-413·D-425 본문에 부분 대체 표기를 추가했다(2026-10-03 수용).
 
 ### Alternatives
 

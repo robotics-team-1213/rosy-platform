@@ -1,6 +1,9 @@
 ## D-209 인식과 학습 백엔드의 자리
 
 **Status:** Accepted (2026-09-25). 이 문서에서 디렉터리를 만들지 않는다. 자리가 정해진 것이다.
+
+**부분 대체 (2026-10-03):** [D-427](D-427-platform-three-parts-middleware-operations-learning.md)이 §4의 "`learning/` 패키지는 만들지 않는다"를 대체한다. 학습·채점이 로봇 이미지 밖이라는 취지는 유지한다. learning은 장치 설치에 들어가지 않는다.
+
 잇는 결정:
 
 - [D-199](D-199-camera-perception-contracts-and-backends.md)(Proposed): 계약은 `perception/evidence`와 `perception/frame`이다. 백엔드는 `rule`, `learned_seg`, `learned_det`다.

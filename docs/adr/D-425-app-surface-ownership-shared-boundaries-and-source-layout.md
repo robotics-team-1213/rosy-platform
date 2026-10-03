@@ -2,6 +2,8 @@
 
 **Status:** Accepted (2026-10-03, 사용자 승인 — 역할·공유 범위·목표 폴더 구조를 ADR로 먼저 기록). 구조 결정의 수용이며 코드 이전·설치·브라우저·장치 수용 완료를 뜻하지 않는다. 이번 변경은 문서뿐이다.
 
+**부분 대체 (2026-10-03):** [D-427](D-427-platform-three-parts-middleware-operations-learning.md)이 §4의 최상위 `apps/`·`ui/`를 각 파트 안(`middleware/apps/device`, `operations/apps`, `middleware/ui`, `operations/ui`)으로, `ui/shared/web`을 최상위 `shared/web/`으로 대체한다. §1~§3의 화면 소유·공유 경계는 유지한다. 최상위 `apps/`·`ui/`로의 새 이전은 동결한다(D-427 이전 동결).
+
 ### Context
 
 사용자는 각 앱·웹의 역할을 명확히 하고, 공유할 것은 공유하되 책임을 나누며, 폴더명 변경까지 고려한 구조를 요청했다. 현재 main의 코드·배포 설정과 D-370·D-410·D-413을 대조했다.
