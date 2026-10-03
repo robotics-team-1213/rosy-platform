@@ -11,7 +11,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
-from .demonstration import validate_episode
+from omx_adapter.demonstration import validate_episode
 
 
 LEROBOT_VERSION = "0.4.4"

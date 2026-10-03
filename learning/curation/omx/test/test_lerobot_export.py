@@ -1,9 +1,20 @@
+import sys
+from pathlib import Path
+
 import numpy as np
 import pytest
 
-from test_demonstration import complete_episode
-from omx_adapter.lerobot_export import dataset_features, export_episode, iter_dataset_frames
-from omx_adapter.demonstration import validate_episode
+ROOT = Path(__file__).resolve().parents[4]
+ADAPTER = ROOT / "src" / "products" / "omx" / "adapter"
+# omx_adapter and its demonstration fixtures stay in the adapter until D-427 wave 2b/4c.
+for _p in (Path(__file__).resolve().parents[1], ADAPTER, ADAPTER / "test",
+           ROOT / "src" / "contracts" / "foundation"):
+    if str(_p) not in sys.path:
+        sys.path.insert(0, str(_p))
+
+from test_demonstration import complete_episode  # noqa: E402
+from lerobot_export import dataset_features, export_episode, iter_dataset_frames  # noqa: E402
+from omx_adapter.demonstration import validate_episode  # noqa: E402
 
 
 def test_export_schema_keeps_radians_and_source_clocks(tmp_path):

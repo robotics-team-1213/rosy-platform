@@ -74,8 +74,10 @@ KNOWN_VIOLATIONS = {
     ("operations/processes/palletizing", "middleware/skills/api"): (
         "operations -> middleware: palletizing builds SkillInvocation steps (Skill envelope belongs in contracts)"
     ),
-    ("middleware/apps/device/omx/adapter", "external:lerobot"): (
-        "middleware -> lerobot training stack: lerobot_export.py is learning/curation code still in the adapter"
+    ("learning/curation/omx", "middleware/apps/device/omx/adapter"): (
+        "learning -> middleware: lerobot_export validates episodes with omx_adapter.demonstration "
+        "(D-427 Q6: replaces the adapter -> external:lerobot edge 1c removed; 2b moves the check "
+        "to the Episode profile and deletes this entry)"
     ),
     ("learning/training/perception", "middleware/perception"): (
         "learning -> middleware: dataset tools reuse control.recording topics and perception helpers"

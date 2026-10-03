@@ -375,6 +375,15 @@ roots:
     device_install_exception: "native payload builds every colcon root (Q8); remove with the payload scope change"
     note: Isaac assets and scripts (D-322 holds Isaac Lab training); could also be integrations/simulation/isaac.
     concern: learning
+  - path: learning/curation/omx
+    part: learning
+    d427_target: learning/curation/omx
+    legacy: src/products/omx/adapter/omx_adapter/lerobot_export.py
+    wave: "1"
+    note: >-
+      Offline LeRobot export of OMX demonstrations (D-427 1c, Q6). Imports
+      omx_adapter.demonstration until 2b moves that check to the Episode profile.
+    concern: learning
   - path: data
     part: learning
     d427_target: data
