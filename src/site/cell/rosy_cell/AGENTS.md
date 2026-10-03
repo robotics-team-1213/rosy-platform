@@ -5,7 +5,7 @@
 
 ## Purpose
 
-ROS-free Python package behind Rosy Cell (D-399): parses `recipe.yaml` (`rosy_cell.recipe/1`) and `cell.yaml` (`rosy_cell.cell/2`), lays out pallet patterns, and compiles a hashed Job of `pick`/`place`/`pallet_done` Steps in the robot base frame. It plans no motion, solves no IK and judges no reachability; the device owner does (D-376, D-399).
+D-413 compatibility import facade for `modules/processes/palletizing`, whose implementation owns the following behavior. Do not restore process implementations here. Rosy Cell (D-399): parses `recipe.yaml` (`rosy_cell.recipe/1`) and `cell.yaml` (`rosy_cell.cell/2`), lays out pallet patterns, and compiles a hashed Job of `pick`/`place`/`pallet_done` Steps in the robot base frame. It plans no motion, solves no IK and judges no reachability; the device owner does (D-376, D-399).
 
 ## Key Files
 
@@ -26,7 +26,7 @@ ROS-free Python package behind Rosy Cell (D-399): parses `recipe.yaml` (`rosy_ce
 
 ### Working In This Directory
 
-- `carry_z` is computed only in `compiler.carry_z`; Fleet calls it and must not re-implement it.
+- `carry_z` is owned by `rosy.processes.palletizing.compiler.carry_z`; this package only re-exports it. Fleet calls it and must not re-implement it.
 - Thresholds (`tol_m` etc.) are passed in; do not add physical defaults. Units are SI.
 - Reject unknown schema versions (`cell/1` is invalid); loaders raise via `fields.py` with the field name.
 - No `rclpy`, no network, no I/O beyond YAML loading.
@@ -47,7 +47,7 @@ Frozen dataclasses for value objects; loaders validate and fail with a precise f
 
 ### Internal
 
-- None. Consumed by Fleet mission code.
+- `modules/processes/palletizing` owns the process implementation. This package preserves legacy imports only.
 
 ### External
 
