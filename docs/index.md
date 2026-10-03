@@ -279,8 +279,8 @@
 
 ## 최근 기록
 
+- 2026-10-04 · uncommitted · verify(learning): fixed evaluation and actual model PC inbox rejection
 - 2026-10-04 · uncommitted · feat(learning): require verified fixed evaluation for deployment gates
 - 2026-10-04 · uncommitted · fix(learning): preserve wall role in automatic datasets
 - 2026-10-04 · uncommitted · site(D-441): automatic site stack updates
 - 2026-10-04 · uncommitted · cam: 승인한 자동 조명과 사진 저장 구현
-- 2026-10-04 · uncommitted · cam: 실제 사진 공유와 저조도 촬영 검토안

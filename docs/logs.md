@@ -4956,3 +4956,9 @@
 - 변경: intake require_eval 옵션으로 고정 평가·유효한 차선 IoU 하한·확인된 학습 세션 비겹침·클래스 역할 일치를 요구한다. 기본 연구 접수는 유지한다. 평가 판정 순수 함수를 intake_eval_gate.py로 분리해 intake를 540줄로 유지했다.
 - 증거: 신규 7시험 RED 후 관련 intake/watch와 파일 예산 시험 137 passed, 6 skipped(Windows symlink·torch/onnx/onnxruntime 부재). 모델 PC의 실제 126프레임 평가에서 기존 모델 lane IoU 0.25607, mIoU 0.10458, 학습 세션 비겹침을 확인했다.
 - gate 변화: SOURCE/LOCAL만. 실제 정확도 하한을 비워 둔 pass를 배포 수용으로 사용하지 않는다. model-watch 서비스·새 정책 실행·DEVICE/FIELD는 미완료다.
+
+## 2026-10-04 · uncommitted · verify(learning): fixed evaluation and actual model PC inbox rejection
+
+- 변경: docs/validation/learning-pipeline-2026-10-04/result.md에 실제 고정 평가·READY 거부·재실행 증거를 기록했다. 모델 PC 기존 store에 신규 126프레임 평가 세트를 추가했고 기존 학습 버전·원본은 보존했다.
+- 증거: d78be8339 archive, 모델 PC 실제 관련 suite 142 passed/0 skipped. lane IoU 0.25607·mIoU 0.10458, 학습과 공유 세션 0. wall role 불일치 후보 rejected, accepted 0, 2회 watcher state 해시 동일.
+- gate 변화: LOCAL의 실제 데이터 평가·거부 경로 증거만. 통과 후보·로봇 shadow 전달·rollback·서비스 설치·DEVICE/FIELD는 미완료. LiDAR yaw 승인 기록과 원본 CameraProfile revision 미확인.
