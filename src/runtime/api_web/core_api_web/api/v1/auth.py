@@ -83,7 +83,8 @@ RATE_WINDOW_S = 60.0
 MAX_WRONG_ATTEMPTS = 5
 ENROLLMENT_TTL_S = 300.0
 MAX_ENROLLMENT_CODES = 8
-DEFAULT_LIFETIME_HOURS = {"viewer": 168.0, "operator": 168.0, "administrator": 24.0}
+DEFAULT_LIFETIME_HOURS = {"viewer": 168.0, "stuck_resolver": 168.0, "operator": 168.0,
+                          "administrator": 24.0}
 MAX_LIFETIME_HOURS = 168.0
 
 #: D-193 4: 사설·AP 대역과 루프백만 받는다. AP(10.42.0.0/24)는 10/8 안에 있다.

@@ -103,7 +103,7 @@ class CoreServicesLike(Protocol):
     waypoints: Any
 
 
-ROLE_RANK = {"viewer": 0, "operator": 1, "administrator": 2}
+ROLE_RANK = {"viewer": 0, "stuck_resolver": 0, "operator": 1, "administrator": 2}
 
 #: 운영자가 직접 고른 토큰의 하한. 생성 토큰은 이보다 훨씬 길다.
 MIN_TOKEN_LENGTH = 16
