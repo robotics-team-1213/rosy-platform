@@ -7,7 +7,7 @@
     "files":  [
                   {
                       "path":  "LICENSE",
-                      "sha256":  "1eb85fc97224598dad1852b5d6483bbcf0aa8608790dcc657a5a2a761ae9c8c6"
+                      "sha256":  "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
                   },
                   {
                       "path":  "meshes/omx_f/follower_01_base.stl",
@@ -71,11 +71,11 @@
                   },
                   {
                       "path":  "urdf/omx_f/omx_f.urdf",
-                      "sha256":  "aa6df17685103f03ee9804c37e21d012fa6b5561b80fedb63fc3ff87cb4b4163"
+                      "sha256":  "d06720f50c71b380daa91f6cf52ae089725bc588617e5f42ed2433b6e665b809"
                   },
                   {
                       "path":  "urdf/omx_l/omx_l.urdf",
-                      "sha256":  "8b8d81086be9827538137f0b334f407eaaebbbec04bf98bed6728ae86608e5aa"
+                      "sha256":  "cd2298d03adb3fd430cc9f15a08480281cb0a169c963c077c318568dadeeed43"
                   }
               ]
 }
