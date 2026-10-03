@@ -12,7 +12,8 @@ one required) is matched by that label; every other label is matched by class na
 Mask PNGs (any depth under SegmentationClass/) are named "<session>__<index:06d>"
 (prelabel.py) or by bare frame index when that is unambiguous. Frames without a
 mask, or listed with --delete (SESSION__NNNNNN or SESSION/N), are left out.
-Split is by session so neighbouring frames never straddle it.
+Split is by session so neighbouring frames never straddle it; see assign_splits
+(a stable per-session hash, so adding a session does not reshuffle the others).
 
     build.py --auto-labels <labels_dir>... --store <store> --name <name>
 
@@ -130,11 +131,29 @@ def colors_to_indices(rgb: np.ndarray, lut, source: str) -> np.ndarray:
     return out
 
 
+def session_hash(session: str) -> int:
+    """First 32 bits of sha256(session name): the stable split key."""
+    return int(hashlib.sha256(session.encode("utf-8")).hexdigest()[:8], 16)
+
+
 def assign_splits(sessions) -> dict[str, str]:
+    """Session-level split that does not move when sessions are added (D-379 d3).
+
+    A session is "val" iff session_hash(session) % 5 == 0, so its split depends on
+    its own name only. Two fallbacks keep both splits non-empty (>= 2 sessions):
+    no session hashes to val -> the session with the smallest hash is val; every
+    session hashes to val -> the one with the largest hash is train. Only those
+    fallback sessions can change split when a session is added."""
     ordered = sorted(set(sessions))
     if len(ordered) < 2:
         raise BuildError(MIN_SESSIONS_MSG)
-    return {s: ("val" if i % 5 == 0 else "train") for i, s in enumerate(ordered)}
+    keys = {s: session_hash(s) for s in ordered}
+    out = {s: ("val" if keys[s] % 5 == 0 else "train") for s in ordered}
+    if "val" not in out.values():
+        out[min(ordered, key=lambda s: (keys[s], s))] = "val"
+    elif "train" not in out.values():
+        out[max(ordered, key=lambda s: (keys[s], s))] = "train"
+    return out
 
 
 def _read_frames(dirs) -> dict[tuple[str, int], tuple[Path, dict | None]]:
