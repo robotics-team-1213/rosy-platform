@@ -51,7 +51,8 @@ def test_web_only_relays_bounded_enable_disable_and_renders_node_checks():
 
 def test_camera_node_offers_nominal_ground_and_lidar_region_range_off_by_default():
     """D-423: opt-in NOMINAL plane + LiDAR region range; the device default stays unranged."""
-    node = source('control/camera_detect_node.py')
+    # The region-range methods live in the node's mixin (camera_region_range.py).
+    node = source('control/camera_detect_node.py') + source('control/camera_region_range.py')
     config = source('config/camera.yaml')
     for token in ('nominal_camera_profile_path', 'allow_nominal_ground', 'region_lidar_range',
                   'region_lidar_max_age_s', 'region_lidar_tolerance_m', 'region_lidar_tolerance_ratio',
