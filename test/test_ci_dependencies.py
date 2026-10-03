@@ -38,3 +38,16 @@ def test_ci_installs_the_ext4_reader_for_the_card_diagnostics_test():
     # Without it test_card_diagnostics.py skips its real-ext4 case (D-174 F8).
     workflow = WORKFLOW.read_text(encoding="utf-8")
     assert "jsonschema ext4" in workflow
+
+
+def test_ci_result_aggregates_the_matrix_for_branch_protection():
+    """D-436: a stable `ci-result` check fails unless scope and every gating entry passed."""
+    import yaml
+
+    jobs = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))["jobs"]
+    result = jobs["ci-result"]
+    assert result["name"] == "ci-result"
+    assert set(result["needs"]) == {"scope", "test"}
+    assert result["if"] == "always()", "must run (and fail) when a needed job fails or is cancelled"
+    script = result["steps"][-1]["run"]
+    assert 'test "$SCOPE_RESULT" = success' in script and 'test "$TEST_RESULT" = success' in script

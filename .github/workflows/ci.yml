@@ -263,3 +263,21 @@ jobs:
           assert serialize_message(request)
           print('SaveMap guard OK')
           PY
+
+  # D-436: one stable check name for branch protection. The matrix job names change
+  # with the selection (test (affected-3), test (root-test-2of3)), so protection points
+  # here. Fails unless scope and every gating matrix entry succeeded; a cancelled or
+  # skipped job is a failure. Non-gating entries (continue-on-error) do not fail it.
+  ci-result:
+    name: ci-result
+    needs: [scope, test]
+    if: always()
+    runs-on: ${{ inputs.runs_on || 'ubuntu-26.04' }}
+    steps:
+      - name: All gating jobs passed
+        env:
+          SCOPE_RESULT: ${{ needs.scope.result }}
+          TEST_RESULT: ${{ needs.test.result }}
+        run: |
+          echo "scope=$SCOPE_RESULT test=$TEST_RESULT"
+          test "$SCOPE_RESULT" = success && test "$TEST_RESULT" = success
