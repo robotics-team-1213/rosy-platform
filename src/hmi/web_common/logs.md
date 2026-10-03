@@ -502,3 +502,10 @@
 - 증거: 작업 선택 및 셸 종료 Chromium 회귀 6 passed와 독립 품질 회귀 3 passed. 기존 공유/콘솔 묶음 246 passed와 역할 팔레트 1개 실패 후, D-277 역할 위치 표식을 유지하고 해당 계약을 포함한 4개 대상 회귀를 통과했다. 공유 asset/install 대장 검증은 앞 묶음에 포함한다.
 - gate 변화: 라이브러리 SOURCE/LOCAL 호스트 검증을 보완하며 소비 표면의 DEVICE/FIELD를 대신하지 않는다.
 - 결정: D-439. 공용 helper는 패널을 만들거나 제거하지 않고 전달받은 작업의 가시성과 조작 상태만 관리한다.
+
+## 2026-10-04 · uncommitted · feat(ui): 공용 역할 이름으로 기본 진입 정렬
+
+- 변경: `core_ui_logic.js`에 동결된 ROLE_LABEL을 추가하여 viewer/operator/administrator 표시 이름을 공유한다. 새 dashboard 진입은 받은 역할을 검증하고 알려지지 않은 문자열 역할은 원문으로 표시한다. 새 디자인 토큰은 추가하지 않았다.
+- 증거: 공유·dashboard 영향 host 묶음 342 passed/95 skipped (591.46s), 후속 인증·구조 묶음 64 passed/2 skipped (31.08s). 기본 진입 실제 CORE fixture 브라우저 회귀와 독립 SPEC·QUALITY 검토를 통과했다. host 묶음과 브라우저 대상은 중복될 수 있어 합산하지 않는다.
+- gate 변화: SOURCE/LOCAL 증거만 보완하며 DEVICE/FIELD를 대신하지 않는다.
+- 결정: D-439. 공용 규칙은 표시 이름만 소유하고 서버 역할 권한을 추론하지 않는다.

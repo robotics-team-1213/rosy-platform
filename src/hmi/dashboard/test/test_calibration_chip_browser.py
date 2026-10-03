@@ -90,7 +90,7 @@ def test_console_robot_card_and_dashboard_hero_show_the_calibration_chip(tmp_pat
         assert chip.get_attribute("status") == "warn"
         page.screenshot(path=str(SHOTS / "dashboard-console-calibration-chip.png"))
 
-        page.goto("http://rosy.test/dashboard", wait_until="domcontentloaded")
+        page.goto("http://rosy.test/dashboard#compatibility", wait_until="domcontentloaded")
         hero = page.locator("#calibration-chip")
         page.wait_for_function(
             "document.querySelector('#calibration-chip')?.hidden === false", timeout=10_000)

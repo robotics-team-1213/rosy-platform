@@ -50,7 +50,7 @@ def open_dashboard(playwright, base_url: str, token: str, width: int = 1366, hei
     page.on("dialog", lambda dialog: dialog.accept())
     # "load", never "networkidle": the dashboard polls and streams, so the
     # network is never idle and networkidle waits until the timeout.
-    page.goto(base_url.rstrip("/") + "/dashboard", wait_until="load")
+    page.goto(base_url.rstrip("/") + "/dashboard#compatibility", wait_until="load")
     mode = page.locator("#robot-mode")
     mode.wait_for(state="visible")
     deadline = time.monotonic() + 5.0

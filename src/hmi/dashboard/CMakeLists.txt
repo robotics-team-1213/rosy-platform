@@ -10,6 +10,9 @@ install(FILES
   styleguide.html
   styleguide.css
   app.js
+  entry-router.js
+  dashboard-entry.js
+  dashboard-entry.css
   telemetry.js
   teleop.js
   state-socket.js

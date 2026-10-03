@@ -378,6 +378,10 @@ def _launch_page(playwright, extra_init="", width=390, height=844, real_map=Fals
         "http://rosy.test/dashboard",
         lambda route: route.fulfill(status=200, content_type="text/html", body=html),
     )
+    page.route(
+        "http://rosy.test/dashboard?*",
+        lambda route: route.fulfill(status=200, content_type="text/html", body=html),
+    )
 
     def _serve_style(route):
         name = Path(urlparse(route.request.url).path).name
@@ -454,7 +458,7 @@ def test_delayed_positive_request_cannot_arrive_after_release_zero():
             browser, page = _launch_page(playwright)
         except Exception as error:
             pytest.skip(f"Playwright Chromium unavailable: {error}")
-        page.goto("http://rosy.test/dashboard", wait_until="domcontentloaded", timeout=5_000)
+        page.goto("http://rosy.test/dashboard#compatibility", wait_until="domcontentloaded", timeout=5_000)
         page.wait_for_function(
             "document.getElementById('robot-mode')?.textContent === '수동'"
         )
@@ -510,7 +514,7 @@ def test_field_settings_save_limits_waypoint_and_dock_without_navigation():
             browser, page = _launch_page(playwright)
         except Exception as error:
             pytest.skip(f"Playwright Chromium unavailable: {error}")
-        page.goto("http://rosy.test/dashboard", wait_until="domcontentloaded", timeout=5_000)
+        page.goto("http://rosy.test/dashboard#compatibility", wait_until="domcontentloaded", timeout=5_000)
         page.wait_for_function(
             "document.getElementById('robot-mode')?.textContent === '수동'"
         )
@@ -604,7 +608,7 @@ def test_waypoint_delete_dialog_keeps_the_estop_out_of_the_inert_region():
             browser, page = _launch_page(playwright, extra_init=WAYPOINT_ROW_INIT, width=1366, height=768)
         except Exception as error:
             pytest.skip(f"Playwright Chromium unavailable: {error}")
-        page.goto("http://rosy.test/dashboard", wait_until="domcontentloaded", timeout=5_000)
+        page.goto("http://rosy.test/dashboard#compatibility", wait_until="domcontentloaded", timeout=5_000)
         page.wait_for_function("document.getElementById('robot-mode')?.textContent === '수동'")
         page.locator("#view-inspect").click()
         delete = page.locator('li[data-name="zone_a"] [data-waypoint-action="delete"]')
@@ -640,7 +644,7 @@ def test_traffic_policy_is_staged_before_stopped_only_apply():
         except Exception as error:
             pytest.skip(f"Playwright Chromium unavailable: {error}")
         page.goto(
-            "http://rosy.test/dashboard",
+            "http://rosy.test/dashboard#compatibility",
             wait_until="domcontentloaded",
             timeout=5_000,
         )
@@ -688,7 +692,7 @@ def test_live_camera_preview_is_visible_beside_the_map():
         except Exception as error:
             pytest.skip(f"Playwright Chromium unavailable: {error}")
         page.goto(
-            "http://rosy.test/dashboard",
+            "http://rosy.test/dashboard#compatibility",
             wait_until="domcontentloaded",
             timeout=5_000,
         )
@@ -730,7 +734,7 @@ def test_unavailable_camera_keeps_missing_timestamps_missing():
             )
         except Exception as error:
             pytest.skip(f"Playwright Chromium unavailable: {error}")
-        page.goto("http://rosy.test/dashboard", wait_until="domcontentloaded", timeout=5_000)
+        page.goto("http://rosy.test/dashboard#compatibility", wait_until="domcontentloaded", timeout=5_000)
         page.wait_for_function(
             "window.__apiCalls?.some((call) => call.path === '/api/v1/vision/front/status')"
         )
@@ -750,7 +754,7 @@ def test_camera_preview_is_cleared_when_reauthentication_fails():
         except Exception as error:
             pytest.skip(f"Playwright Chromium unavailable: {error}")
         page.goto(
-            "http://rosy.test/dashboard",
+            "http://rosy.test/dashboard#compatibility",
             wait_until="domcontentloaded",
             timeout=5_000,
         )
@@ -788,7 +792,7 @@ def test_rate_limited_camera_never_leaves_an_old_frame_live():
         except Exception as error:
             pytest.skip(f"Playwright Chromium unavailable: {error}")
         page.goto(
-            "http://rosy.test/dashboard",
+            "http://rosy.test/dashboard#compatibility",
             wait_until="domcontentloaded",
             timeout=5_000,
         )
@@ -900,7 +904,7 @@ def test_console_state_matrix_renders_each_state(state):
         except Exception as error:
             pytest.skip(f"Playwright Chromium unavailable: {error}")
         page.goto(
-            "http://rosy.test/dashboard",
+            "http://rosy.test/dashboard#compatibility",
             wait_until="domcontentloaded",
             timeout=5_000,
         )
@@ -1018,7 +1022,7 @@ def test_irreversible_mode_change_needs_confirm_and_decline_blocks_it():
         except Exception as error:
             pytest.skip(f"Playwright Chromium unavailable: {error}")
         page.goto(
-            "http://rosy.test/dashboard",
+            "http://rosy.test/dashboard#compatibility",
             wait_until="domcontentloaded",
             timeout=5_000,
         )
@@ -1055,7 +1059,7 @@ def test_irreversible_cyclone_apply_needs_confirm_and_decline_blocks_it():
         except Exception as error:
             pytest.skip(f"Playwright Chromium unavailable: {error}")
         page.goto(
-            "http://rosy.test/dashboard",
+            "http://rosy.test/dashboard#compatibility",
             wait_until="domcontentloaded",
             timeout=5_000,
         )
@@ -1130,7 +1134,7 @@ def test_core_only_viewer_sees_the_truth_and_probes_nothing_forbidden():
             browser, page = _launch_page(playwright, extra_init=CORE_ONLY_VIEWER_INIT)
         except Exception as error:
             pytest.skip(f"Playwright Chromium unavailable: {error}")
-        page.goto("http://rosy.test/dashboard", wait_until="domcontentloaded", timeout=5_000)
+        page.goto("http://rosy.test/dashboard#compatibility", wait_until="domcontentloaded", timeout=5_000)
         page.wait_for_function(
             "document.getElementById('safety-label')?.textContent === 'HW OFF'"
         )
@@ -1187,7 +1191,7 @@ def test_hardware_runtime_with_a_silent_safety_source_never_claims_ready():
             browser, page = _launch_page(playwright, extra_init=init)
         except Exception as error:
             pytest.skip(f"Playwright Chromium unavailable: {error}")
-        page.goto("http://rosy.test/dashboard", wait_until="domcontentloaded", timeout=5_000)
+        page.goto("http://rosy.test/dashboard#compatibility", wait_until="domcontentloaded", timeout=5_000)
         page.wait_for_function(
             "document.getElementById('triage-title')?.textContent === '안전 회로 수신 끊김'"
         )
@@ -1245,7 +1249,7 @@ def test_no_motion_hardware_runtime_is_on_and_says_the_drive_is_off():
             browser, page = _launch_page(playwright, extra_init=NO_MOTION_INIT, real_map=True)
         except Exception as error:
             pytest.skip(f"Playwright Chromium unavailable: {error}")
-        page.goto("http://rosy.test/dashboard", wait_until="domcontentloaded", timeout=5_000)
+        page.goto("http://rosy.test/dashboard#compatibility", wait_until="domcontentloaded", timeout=5_000)
         page.wait_for_function(
             "document.getElementById('safety-label')?.textContent === 'NO DRIVE'"
         )
@@ -1289,7 +1293,7 @@ def test_map_snapshots_are_asked_for_when_the_server_has_them():
             browser, page = _launch_page(playwright, extra_init=init, real_map=True)
         except Exception as error:
             pytest.skip(f"Playwright Chromium unavailable: {error}")
-        page.goto("http://rosy.test/dashboard", wait_until="domcontentloaded", timeout=5_000)
+        page.goto("http://rosy.test/dashboard#compatibility", wait_until="domcontentloaded", timeout=5_000)
         page.wait_for_function(
             "window.__apiCalls.some((call) => call.path === '/api/v1/map/costmap')"
         )
@@ -1316,7 +1320,7 @@ def test_fault_after_configured_reason_still_raises_a_blocked_fault():
             browser, page = _launch_page(playwright, extra_init=init)
         except Exception as error:
             pytest.skip(f"Playwright Chromium unavailable: {error}")
-        page.goto("http://rosy.test/dashboard", wait_until="domcontentloaded", timeout=5_000)
+        page.goto("http://rosy.test/dashboard#compatibility", wait_until="domcontentloaded", timeout=5_000)
         page.wait_for_function("document.getElementById('triage')?.dataset.category === 'blocked' && document.getElementById('triage-context')?.textContent.includes('하드웨어 런타임 켜짐')")
         assert "고장" in page.locator("#triage-detail").inner_text()
         assert "하드웨어 런타임 켜짐 · 구동 꺼짐 (무동작)" in page.locator("#triage-context").text_content()
@@ -1345,7 +1349,7 @@ def test_api_estop_does_not_claim_a_motor_power_cut():
             browser, page = _launch_page(playwright, extra_init=init)
         except Exception as error:
             pytest.skip(f"Playwright Chromium unavailable: {error}")
-        page.goto("http://rosy.test/dashboard", wait_until="domcontentloaded", timeout=5_000)
+        page.goto("http://rosy.test/dashboard#compatibility", wait_until="domcontentloaded", timeout=5_000)
         page.wait_for_function(
             "document.getElementById('triage-title')?.textContent === 'API 비상정지 (operator)'"
         )
@@ -1401,7 +1405,7 @@ def test_operate_view_fits_and_does_not_crush(viewport, state):
         except Exception as error:
             pytest.skip(f"Playwright Chromium unavailable: {error}")
         page.goto(
-            "http://rosy.test/dashboard",
+            "http://rosy.test/dashboard#compatibility",
             wait_until="domcontentloaded",
             timeout=5_000,
         )
@@ -1433,7 +1437,7 @@ def test_wide_but_short_operate_view_keeps_three_columns():
 
     with sync_playwright() as playwright:
         browser, page = _launch_page(playwright, width=1366, height=600)
-        page.goto("http://rosy.test/dashboard", wait_until="domcontentloaded", timeout=5_000)
+        page.goto("http://rosy.test/dashboard#compatibility", wait_until="domcontentloaded", timeout=5_000)
         page.wait_for_function("document.getElementById('robot-mode')?.textContent !== undefined")
         page.wait_for_timeout(700)
         probe = page.evaluate("""() => {
@@ -1484,7 +1488,7 @@ def test_visible_type_scale_is_closed(state_init):
         except Exception as error:
             pytest.skip(f"Playwright Chromium unavailable: {error}")
         page.goto(
-            "http://rosy.test/dashboard",
+            "http://rosy.test/dashboard#compatibility",
             wait_until="domcontentloaded",
             timeout=5_000,
         )
@@ -1562,7 +1566,7 @@ def test_visible_text_meets_the_contrast_floor(state_init):
         except Exception as error:
             pytest.skip(f"Playwright Chromium unavailable: {error}")
         page.goto(
-            "http://rosy.test/dashboard",
+            "http://rosy.test/dashboard#compatibility",
             wait_until="domcontentloaded",
             timeout=5_000,
         )
@@ -1610,7 +1614,7 @@ def test_no_visible_element_moves():
         except Exception as error:
             pytest.skip(f"Playwright Chromium unavailable: {error}")
         page.goto(
-            "http://rosy.test/dashboard",
+            "http://rosy.test/dashboard#compatibility",
             wait_until="domcontentloaded",
             timeout=5_000,
         )
@@ -1629,7 +1633,8 @@ def test_no_visible_element_moves():
 
 def _open_dashboard(playwright, extra_init=""):
     browser, page = _launch_page(playwright, extra_init=extra_init)
-    page.goto("http://rosy.test/dashboard", wait_until="domcontentloaded", timeout=5_000)
+    page.goto("http://rosy.test/dashboard#compatibility", wait_until="domcontentloaded", timeout=5_000)
+    page.wait_for_selector('#compatibility-shell[data-ready="true"]')
     return browser, page
 
 
@@ -1651,12 +1656,31 @@ def test_legacy_dashboard_refresh_and_back_keep_the_tab_token():
         except Exception as error:
             pytest.skip(f"Playwright Chromium unavailable: {error}")
         assert page.evaluate("sessionStorage.getItem('rosy.dashboard.token')") == "operator-test-token"
-        page.goto("http://rosy.test/dashboard#compatibility", wait_until="domcontentloaded", timeout=5_000)
+        page.goto("http://rosy.test/dashboard", wait_until="domcontentloaded", timeout=5_000)
         page.reload(wait_until="domcontentloaded", timeout=5_000)
         page.go_back(wait_until="domcontentloaded", timeout=5_000)
-        assert page.url == "http://rosy.test/dashboard"
+        assert page.url == "http://rosy.test/dashboard?view=compatibility#compatibility"
         assert page.evaluate("sessionStorage.getItem('rosy.dashboard.token')") == "operator-test-token"
         browser.close()
+
+def test_legacy_dashboard_skip_link_keeps_owner_after_fragment_and_refresh():
+    from playwright.sync_api import sync_playwright
+    with sync_playwright() as playwright:
+        browser, page = _open_dashboard(playwright)
+        try:
+            page.keyboard.press("Tab")
+            assert page.locator(":focus").get_attribute("href") == "#dashboard-main"
+            page.keyboard.press("Enter")
+            assert page.locator(":focus").get_attribute("id") == "dashboard-main"
+            assert page.url.endswith("?view=compatibility#dashboard-main")
+            assert page.locator("#compatibility-shell").is_visible()
+            page.reload(wait_until="domcontentloaded")
+            page.wait_for_selector('#compatibility-shell[data-ready="true"]')
+            assert page.locator("#compatibility-shell").is_visible()
+            assert page.locator("#entry-shell").is_hidden()
+        finally:
+            browser.close()
+
 
 def test_login_code_pairs_this_tab_and_shows_who_is_logged_in():
     pytest.importorskip("playwright.sync_api")
@@ -2005,7 +2029,7 @@ def test_inspect_view_lists_every_device_with_its_state_and_bench_tag():
             browser, page = _launch_page(playwright, extra_init=HARDWARE_INIT, width=1366, height=768)
         except Exception as error:
             pytest.skip(f"Playwright Chromium unavailable: {error}")
-        page.goto("http://rosy.test/dashboard", wait_until="domcontentloaded", timeout=5_000)
+        page.goto("http://rosy.test/dashboard#compatibility", wait_until="domcontentloaded", timeout=5_000)
         page.locator("#view-inspect").click()
         page.wait_for_function("document.querySelectorAll('#hardware-list .device-row').length === 6")
         rows = page.evaluate(
@@ -2061,7 +2085,7 @@ def test_a_viewer_sees_the_device_card_but_cannot_rerun_the_probe():
             browser, page = _launch_page(playwright, extra_init=CORE_ONLY_VIEWER_INIT + HARDWARE_INIT)
         except Exception as error:
             pytest.skip(f"Playwright Chromium unavailable: {error}")
-        page.goto("http://rosy.test/dashboard", wait_until="domcontentloaded", timeout=5_000)
+        page.goto("http://rosy.test/dashboard#compatibility", wait_until="domcontentloaded", timeout=5_000)
         page.locator("#view-inspect").click()
         page.wait_for_function("document.querySelectorAll('#hardware-list .device-row').length === 6")
         assert page.locator("#hardware-refresh").is_disabled()
@@ -2077,7 +2101,7 @@ def test_no_probe_result_yet_is_said_not_blanked():
             browser, page = _launch_page(playwright)
         except Exception as error:
             pytest.skip(f"Playwright Chromium unavailable: {error}")
-        page.goto("http://rosy.test/dashboard", wait_until="domcontentloaded", timeout=5_000)
+        page.goto("http://rosy.test/dashboard#compatibility", wait_until="domcontentloaded", timeout=5_000)
         page.locator("#view-inspect").click()
         page.wait_for_function(
             "document.getElementById('hardware-card')?.dataset.available === 'false'")
@@ -2096,7 +2120,7 @@ def test_an_administrator_tests_the_buzzer_and_records_what_was_heard():
             browser, page = _launch_page(playwright, extra_init=HARDWARE_INIT, width=1366, height=768)
         except Exception as error:
             pytest.skip(f"Playwright Chromium unavailable: {error}")
-        page.goto("http://rosy.test/dashboard", wait_until="domcontentloaded", timeout=5_000)
+        page.goto("http://rosy.test/dashboard#compatibility", wait_until="domcontentloaded", timeout=5_000)
         page.locator("#view-inspect").click()
         page.wait_for_function("document.querySelectorAll('#hardware-list .device-row').length === 6")
         # Only the buzzer and the lamp have a test, and the lamp without a driver cannot start one.
@@ -2154,7 +2178,7 @@ def test_a_viewer_gets_no_buzzer_or_lamp_test():
             browser, page = _launch_page(playwright, extra_init=CORE_ONLY_VIEWER_INIT + HARDWARE_INIT)
         except Exception as error:
             pytest.skip(f"Playwright Chromium unavailable: {error}")
-        page.goto("http://rosy.test/dashboard", wait_until="domcontentloaded", timeout=5_000)
+        page.goto("http://rosy.test/dashboard#compatibility", wait_until="domcontentloaded", timeout=5_000)
         page.locator("#view-inspect").click()
         page.wait_for_function("document.querySelectorAll('#hardware-list .device-row').length === 6")
         assert page.locator("#hardware-list .device-actions").count() == 0
@@ -2178,7 +2202,7 @@ def test_the_test_buttons_keep_the_inspect_view_inside_the_screen_width(viewport
             browser, page = _launch_page(playwright, extra_init=outcome, width=viewport[0], height=viewport[1])
         except Exception as error:
             pytest.skip(f"Playwright Chromium unavailable: {error}")
-        page.goto("http://rosy.test/dashboard", wait_until="domcontentloaded", timeout=5_000)
+        page.goto("http://rosy.test/dashboard#compatibility", wait_until="domcontentloaded", timeout=5_000)
         page.locator("#view-inspect").click()
         page.wait_for_function(
             "document.querySelectorAll(\"#hardware-list [data-hw-action='observed']\").length === 1")
@@ -2213,7 +2237,7 @@ def test_core_only_operate_view_says_why_it_cannot_move_and_still_fits(viewport)
                 browser, page = _launch_page(playwright, extra_init=init, width=viewport[0], height=viewport[1])
             except Exception as error:
                 pytest.skip(f"Playwright Chromium unavailable: {error}")
-            page.goto("http://rosy.test/dashboard", wait_until="domcontentloaded", timeout=5_000)
+            page.goto("http://rosy.test/dashboard#compatibility", wait_until="domcontentloaded", timeout=5_000)
             page.wait_for_function(
                 "document.getElementById('capability-count')?.textContent === '0 / 5'")
             if label == "reason":
@@ -2252,7 +2276,7 @@ def test_map_keyboard_crosshair_posts_a_goal_with_the_same_confirm():
         )
         errors = []
         page.on("pageerror", lambda exc: errors.append(str(exc)))
-        page.goto("http://rosy.test/dashboard", wait_until="domcontentloaded",
+        page.goto("http://rosy.test/dashboard#compatibility", wait_until="domcontentloaded",
                   timeout=5_000)
         page.wait_for_function(
             "document.getElementById('robot-mode')?.textContent === '수동'")
@@ -2312,7 +2336,7 @@ SUMMARY_PROBE = """() => {
 
 def _summary_page(playwright, extra_init, width=1366, height=768):
     browser, page = _launch_page(playwright, extra_init=extra_init, width=width, height=height)
-    page.goto("http://rosy.test/dashboard", wait_until="domcontentloaded", timeout=5_000)
+    page.goto("http://rosy.test/dashboard#compatibility", wait_until="domcontentloaded", timeout=5_000)
     page.wait_for_function("document.getElementById('status-summary')?.dataset.state !== 'unknown'")
     return browser, page
 
@@ -2468,7 +2492,7 @@ def test_the_home_bridge_offers_the_caller_role_surfaces(role, expected):
         page.route("http://rosy.test/console", lambda route: route.fulfill(
             status=200, content_type="text/html",
             body="<!doctype html><html lang=ko><body data-console=1></body></html>"))
-        page.goto("http://rosy.test/dashboard", wait_until="domcontentloaded", timeout=5000)
+        page.goto("http://rosy.test/dashboard#compatibility", wait_until="domcontentloaded", timeout=5000)
         page.wait_for_function(
             "() => document.querySelectorAll('#surface-bridge a').length === " + str(len(expected)))
         drawn = page.evaluate(

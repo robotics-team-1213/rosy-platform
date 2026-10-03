@@ -420,3 +420,10 @@
 - 증거: native systemd/버전 문서/구조 시험 199 passed/1 skipped. 최종 quick tier와 SSH 영향 범위는 별도 재실행한다.
 - gate 변화: 장치 활성화·물리 주행·FIELD 이동 없음.
 - 결정: D-418와 D-432를 각각의 경로/opt-in 소유권으로 보존한다.
+
+## 2026-10-04 · uncommitted · feat(ui): 기본 dashboard 진입 자산 허용
+
+- 변경: dashboard 정적 허용 목록에 entry-router.js, dashboard-entry.js, dashboard-entry.css 세 자산만 추가했다. CMake 설치 목록과 맞추며 인증·안전 API의 서버 권한 계약은 변경하지 않았다.
+- 증거: API·구조 묶음 106 passed/13 skipped (38.42s), 후속 인증·구조 묶음 64 passed/2 skipped (31.08s). CORE TestClient의 실제 정적 경로·CSP로 새 진입 브라우저를 검증했고 운용 요청은 fixture로만 응답했다. 두 묶음은 중복 대상이 있어 합산하지 않는다.
+- gate 변화: SOURCE/LOCAL 자산 계약만 보완했다. 실제 안전 명령이나 장치 배포 증거는 없다.
+- 결정: D-439. 기본 진입의 역할 링크는 기존 서버 manifest와 로컬 경로 허용 목록을 함께 따른다.

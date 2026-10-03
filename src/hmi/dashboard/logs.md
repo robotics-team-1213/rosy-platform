@@ -817,3 +817,13 @@
 - gate 변화: SOURCE/LOCAL의 호스트 증거를 보완한다. 이미지 설치·실제 장치·현장 수용은 확인하지 않았다.
 - 결정: D-439. 캡처·pytest 임시는 X:\DevTemp\rosy-ui-unify\task-navigation 에 둔다.
 - 추가 검증: 최종 작업 선택 회귀 6 passed (261.20s), 독립 품질 3 passed (182.47s), 기존 네 대상을 4 passed (180.26s)로 확인했다. 이전 fixture로 시작한 전체 dashboard 실행은 알려진 숨겨진 토큰 패널 2개 실패가 있는 채로 CtrlC 중단했다. 전체 PASS 판정은 없다. 중첩 G2 캡처는 장치 정체성·보드 갱신·운용자 접근 거부까지 생성되었다.
+
+## 2026-10-04 · uncommitted · feat(ui): 인증과 역할 진입을 분리한 기본 dashboard
+
+- 변경: 기본 `/dashboard`는 기존 단일 인증 폼과 client 자격 증명 저장 규칙을 사용하고, 서버 manifest가 허용한 역할 화면만 안내한다. 명시적 `#compatibility` 진입은 `view=compatibility`로 소유권을 보존하여 기존 skip link와 새로고침에서도 운용 화면을 유지한다. 기본 화면은 운용 socket·카메라·주기 조회를 시작하지 않는다. 정지는 확인된 사용자만 직접 요청하며 이전 세션 응답은 새 자격 증명으로 상태를 읽지 않는다.
+- 변경: 10초 요청 제한, 잘못된 identity/manifest와 권한 없음의 구별, 재시도, 만료·로그아웃·코드 페어링을 기존 client에 연결했다. 선택적인 abort signal은 실제 중단 사유를 보존하며 중단된 페어링 응답은 토큰을 저장하지 않는다. 기존 app.js 운용 동작은 변경하지 않았다.
+- 증거: 영향 host 묶음 342 passed/95 skipped (591.46s), API 묶음 106 passed/13 skipped (38.42s), 후속 인증·구조 묶음 64 passed/2 skipped (31.08s). 브라우저 후속 묶음은 6 passed (2667.49s), 최종 진입 회귀 3 passed (218.53s), 실제 abort·legacy skip/새로고침·history 3 passed (168.84s), malformed identity 1 passed (65.74s), 새 자격 증명으로 재인증한 이전 정지 응답 1 passed (59.38s)이다. 묶음은 중복 대상이 있어 합산하지 않는다. 초기 fixture 압축 헤더·준비 시점 실패는 수정 후 해당 대상으로 재검증했다. 전체 dashboard 브라우저 PASS를 주장하지 않는다.
+- 증거: CORE fixture의 desktop login과 최종 compact 320 dark/390 light 캡처를 직접 확인했다. overflow/pageerror는 없으며 캡처와 임시 검증은 `X:\DevTemp\rosy-ui-unify\entry`에 둔다. SPEC·QUALITY 독립 검토를 통과했다.
+- gate 변화: SOURCE/LOCAL 증거만 보완했다. 모든 명령 API는 브라우저 fixture이며 실제 장치·ARM 이미지·FIELD 수용 증거가 아니다.
+- 결정: D-439. 인증 저장의 단일 소유자는 client.js이고 운용 화면은 명시적인 호환 진입에만 유지한다.
+- 회귀 민감도: X 드라이브의 브라우저 자산 대체로 identity 검증·manifest 검증·정지 응답 generation 검사를 각각 제거했을 때 해당 테스트가 실제 잘못된 동작을 검출했다. 3개 변이 모두 검출했고 pageerror는 없었다. 초기 대체 handler 서명 오류는 수정 후 재실행했으며 증거에 포함하지 않는다. 제품 소스는 변이하지 않았다.

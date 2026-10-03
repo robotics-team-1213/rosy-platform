@@ -53,6 +53,10 @@ export const MODE_LABEL = Object.freeze({
   EMERGENCY: "비상 정지",
 });
 
+export const ROLE_LABEL = Object.freeze({
+  viewer: "관찰자", operator: "운용자", administrator: "관리자",
+});
+
 export const NAVIGATION_LABEL = Object.freeze({
   IDLE: "대기",
   PLANNING: "경로 계획 중",
