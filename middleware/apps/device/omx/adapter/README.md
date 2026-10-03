@@ -82,3 +82,25 @@ enabled capability. Keep ARTIFACT, DEVICE, and FIELD gates closed until
 immutable artifact provenance, target-host timing, selected-device identity,
 physical stop/recovery, and measured camera format/FPS/drop/latency evidence
 exist.
+
+## D-442 owner HOLD recovery
+
+Simulation CellOwner optionally exposes GetOwnerState and RecoverOwner on the existing
+Fleet-only local UDS ActionApi. This additive interface sends no motion and cannot rearm
+LocalStop. Arbiter-only `preempt(reason)` exact-cancels the current goal once and latches
+HOLD; it is not exposed remotely. Pilot/leader automatic arbitration remains a later step.
+
+A named Fleet operator first reads GET `/api/fleet/workcells/{workcell_id}/owner` and the
+current dispatch generation. After resolving the HOLD cause and checking fresh joint
+readback, the operator posts `/api/fleet/workcells/{workcell_id}/owner/recover` with
+`operator_confirmed: true`, that exact `observed_sequence`, and `expected_generation`.
+Viewer credentials can read but cannot recover; anonymous operator fallback is refused.
+Fleet journals INTENT before the UDS call and RESULT after it. Exact device identity,
+current authority/generation, open local stop, fresh post-HOLD feedback, calibration and
+no unresolved local Action (including PREPARED) are required. Any refusal preserves HOLD.
+A journal commit error restores HOLD before releasing its lock. If the reply is lost,
+read back state and audit before deciding on another explicit request; no automatic replay.
+Recovery only makes the owner ready. A new separately admitted command is needed to move.
+
+Host regression and its limits: docs/validation/d427-source-migration/omx-preempt-recovery-2026-10-04.md.
+No real operator, ROS transport, physical standstill or device recovery is claimed here.

@@ -4895,3 +4895,10 @@
 - 변경: tracked OMX 운영 코드·YAML의 allowed_owners 선언과 기본값에서 learned_policy를 금지하는 구조 시험을 추가했다. KNOWN_OWNERS 이름 예약은 유지한다.
 - 증거: 실제 pilot owner 목록, ArmCommandConfig annotated 기본값, 셀 annotated 상수에 금지 값을 주입하면 각각 실패했다. 원본 복원 후 1 passed, 독립 리뷰 APPROVE. docs/validation/d427-source-migration/omx-policy-config-2026-10-04.md.
 - gate 변화: 없음. 정적 선언만 검사하며 동적 overlay·런타임 엔벌로프 admission은 후속이다.
+
+
+## 2026-10-04 · uncommitted · D-442 U3 owner 선점과 named 운영 복구
+
+- 변경: Arbiter 전용 선점은 exact-goal cancel 후 HOLD를 유지한다. Fleet named operator 인증·감사와 bounded UDS recovery를 CellOwner owner/local-stop/journal에 연결했다. fresh post-HOLD readback과 PREPARED 포함 미해결 Action을 검사하고 잠금으로 stop·claim 경합을 직렬화한다. commit 실패는 HOLD 복원, ACK 유실은 자동 재전송 금지다.
+- 증거: RED 회귀 후 최종 관련 API/transport/owner/store/Cell/안전 구조 152 passed(43.14 s). 실제 호스트 HTTP→UDS frame→owner 연결과 SQLite commit 실패·claim/stop 경합 회귀 포함. X:/DevTemp/rosy-d427/resume/recovery-final.txt 및 docs/validation/d427-source-migration/omx-preempt-recovery-2026-10-04.md. Fleet 구조는 독립 재판정 29,264 줄이며 split·예산·+150은 유지했다.
+- gate 변화: 없음. SOURCE/호스트 후보 검증이다. 실제 UDS·ROS-SIM·CI·ARM64·DEVICE·FIELD는 NOT_RUN, motion/reset/profile enable은 실행하지 않았다.

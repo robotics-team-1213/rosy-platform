@@ -376,3 +376,9 @@
 - Change: real Linux Fleet HTTP-to-UDS tests derive peer UID from SO_PEERCRED, assert 0660 and wait for identity readback. A closed caller now ends only its connection; the owner and durable journal remain live without replay.
 - Evidence: deterministic disconnect regression failed with BrokenPipeError before fix 6fab54172. Windows focused 44 passed / 2 skipped; adapter/owner/readback 377 passed / 7 skipped; production flake8 passed. Broad Linux ROS 28 passed / 2 failed, no server thread exception. Existing UDS .5 s timeout also failed on main; slow ROS feedback freshness remains unresolved.
 - Gate: partial Linux transport proof only; broad Linux suite is not green. See docs/validation/cell-fleet-uds-2026-10-03/README.md. G7/G9, ROS Cell composition, thin sheets and full two-layer/two-pallet Gazebo acceptance remain open. No deploy, credential registration, physical enablement or push.
+
+## 2026-10-04 · uncommitted · D-442 U3 owner 선점과 named 운영 복구
+
+- 변경: Arbiter 전용 선점은 exact-goal cancel 후 HOLD를 유지한다. Fleet named operator 인증·감사와 bounded UDS recovery를 CellOwner owner/local-stop/journal에 연결했다. fresh post-HOLD readback과 PREPARED 포함 미해결 Action을 검사하고 잠금으로 stop·claim 경합을 직렬화한다. commit 실패는 HOLD 복원, ACK 유실은 자동 재전송 금지다.
+- 증거: RED 회귀 후 최종 관련 API/transport/owner/store/Cell/안전 구조 152 passed(43.14 s). 실제 호스트 HTTP→UDS frame→owner 연결과 SQLite commit 실패·claim/stop 경합 회귀 포함. X:/DevTemp/rosy-d427/resume/recovery-final.txt 및 docs/validation/d427-source-migration/omx-preempt-recovery-2026-10-04.md. Fleet 구조는 독립 재판정 29,264 줄이며 split·예산·+150은 유지했다.
+- gate 변화: 없음. SOURCE/호스트 후보 검증이다. 실제 UDS·ROS-SIM·CI·ARM64·DEVICE·FIELD는 NOT_RUN, motion/reset/profile enable은 실행하지 않았다.

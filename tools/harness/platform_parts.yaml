@@ -593,11 +593,14 @@ safety_modules:
   - middleware/apps/device/omx/adapter/omx_adapter/command_owner.py
   - middleware/apps/device/omx/adapter/omx_adapter/local_stop.py
   - middleware/apps/device/omx/adapter/omx_adapter/action_api.py
+  - middleware/apps/device/omx/adapter/omx_adapter/owner_recovery_api.py
+  - middleware/apps/device/omx/adapter/omx_adapter/action_store_readback.py
   - operations/fleet/fleet/server/dispatch_admission.py
   - operations/fleet/fleet/server/cancel_all.py
   - operations/fleet/fleet/server/cancel_all_store.py
   - operations/fleet/fleet/server/local_stop_transport.py
   - operations/fleet/fleet/server/task_dispatch_routes.py
+  - operations/fleet/fleet/server/owner_recovery_routes.py
   - operations/fleet/fleet/server/console.py
 
 # D-430 §1 drift anchors and §3 public entry points. `symbol` is the dotted module
@@ -632,6 +635,8 @@ safety_anchors:
   - {symbol: omx_adapter.command_owner.ArmCommandOwner}
   - {symbol: omx_adapter.local_stop.LocalStopController, public: true}
   - {symbol: omx_adapter.action_api.LocalStopApi.dispatch}
+  - {symbol: omx_adapter.owner_recovery_api.OwnerRecoveryApi.dispatch}
+  - {symbol: omx_adapter.action_store_readback.ActionStoreReadback.run_if_no_unresolved}
   - {string: StopLocal, in: omx_adapter.action_api.LocalStopApi.dispatch, public: true}
   - {string: RearmLocal, in: omx_adapter.action_api.LocalStopApi.dispatch, public: true}
   - {symbol: fleet.server.dispatch_admission.reserve, public: true}
@@ -645,3 +650,4 @@ safety_anchors:
   - {symbol: fleet.server.local_stop_transport.UnixLocalStopTransport, public: true}
   - {symbol: fleet.server.console.FleetConsole.estop_all, public: true}
   - {symbol: fleet.server.task_dispatch_routes.install_task_dispatch_routes.dispatch_rearm, public: true}
+  - {symbol: fleet.server.owner_recovery_routes.install_owner_recovery_routes.recover_owner, public: true}

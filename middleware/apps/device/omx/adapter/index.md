@@ -34,6 +34,7 @@
 - [2026-10-01-pilot-omx-gazebo-practice.md](../../../../../docs/plans/2026-10-01-pilot-omx-gazebo-practice.md)
 - [2026-10-02-d411-pilot-recording-controls-plan.md](../../../../../docs/plans/2026-10-02-d411-pilot-recording-controls-plan.md)
 - [2026-10-02-rosy-cell-c3-gazebo.md](../../../../../docs/plans/2026-10-02-rosy-cell-c3-gazebo.md)
+- [2026-10-04-d442-omx-preempt-recovery.md](../../../../../docs/plans/2026-10-04-d442-omx-preempt-recovery.md)
 
 ## 교훈 (docs/solutions)
 
@@ -45,8 +46,8 @@
 
 ## 최근 기록
 
+- 2026-10-04 · uncommitted · D-442 U3 owner 선점과 named 운영 복구
 - 2026-10-03 · uncommitted · fix: retain the UDS owner after a caller disconnects
 - 2026-10-03 · uncommitted · fix: install canonical OMX geometry for Cell owner composition
 - 2026-10-03 · uncommitted · fix(omx-sim): D-411 C 관문 수용 — probe 경합 두 개, 쥠 drift 보고
 - 2026-10-03 · uncommitted · fix(omx_adapter): D-411 C Gazebo 관문 뒤 — 조임 재발행·속도 여유·probe·Gazebo 전용 제약
-- 2026-10-03 · uncommitted · fix(omx_adapter): D-411 C 검토 — 속도 제한·제한 조임·안쪽 범위·stall probe

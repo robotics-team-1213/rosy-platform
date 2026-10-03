@@ -464,7 +464,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                                  configured_omx=configured_omx,
                                  stop_transport=stop_transport,
                                  require_viewer=require_viewer,
-                                 require_operator=require_operator,
+                                 require_operator=require_operator, require_named_operator=require_named_operator,
                                  read_guard=read_guard, operator_guard=operator_guard,
                                  drive_cancel=drive_cancel)
 

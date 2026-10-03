@@ -22,6 +22,7 @@ from fleet.hub.hub import HubError
 from fleet.server.cancel_all import DriveCancelFence, cancel_all_driving
 from fleet.server.http_errors import http_error
 from fleet.server.site_auth import SitePrincipal
+from fleet.server.owner_recovery_routes import install_owner_recovery_routes
 from fleet.server.task_store import IdempotencyConflict, InvalidTaskTransition
 from fleet.swarm.transport import RobotApiError
 
@@ -107,9 +108,13 @@ def cancel_pending_task_queue(task_service, console, robot_id: Optional[str] = N
 def install_task_dispatch_routes(
     app, *, console, task_service, configured_omx,
     stop_transport, require_viewer, require_operator,
-    read_guard, operator_guard, drive_cancel: DriveCancelFence | None = None,
+    read_guard, operator_guard, drive_cancel: DriveCancelFence | None = None, require_named_operator=None,
 ) -> None:
     drive_cancel = drive_cancel or DriveCancelFence()
+    if require_named_operator is not None:
+        install_owner_recovery_routes(app, configured_omx=configured_omx, stop_transport=stop_transport,
+                                      task_service=task_service, require_viewer=require_viewer,
+                                      require_named_operator=require_named_operator)
 
     if task_service is not None:
         @app.get("/api/fleet/dispatch-control", dependencies=read_guard,

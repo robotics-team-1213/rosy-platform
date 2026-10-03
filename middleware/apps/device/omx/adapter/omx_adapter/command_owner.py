@@ -599,6 +599,26 @@ class ArmCommandOwner:
             self._enter_hold("action_failed")
             return self._decision(False, "action_failed", command.command_id)
 
+    def preempt(self, reason: str) -> CommandDecision:
+        """Arbiter-only cross-owner stop (D-442 U3); never dispatch a new goal.
+
+        Arbiter and guard currently share this owner. Producers retain the
+        owner-matched cancel API; neither HTTP nor Action IPC exposes preempt.
+        Cancellation acknowledgement is not standstill evidence. Only recover
+        with explicit confirmation and post-HOLD feedback can clear this latch.
+        """
+        if not isinstance(reason, str) or not reason.strip() or len(reason) > 128:
+            raise ValueError("preempt reason must be a nonempty bounded string")
+        with self._lock:
+            if self._state == "disabled":
+                return self._decision(False, "disabled")
+            if self._state == "hold":
+                return self._decision(False, self._hold_reason)
+            command_id = self._active[0].command_id if self._active is not None else None
+            hold_reason = f"preempt:{reason}"
+            cancel_outcome = self._enter_hold(hold_reason)
+            return self._decision(False, hold_reason, command_id, cancel_outcome)
+
     def cancel(self, *, command_id: str, owner: str) -> CommandDecision:
         with self._lock:
             if self._state != "active" or self._active is None:
@@ -610,7 +630,14 @@ class ArmCommandOwner:
             reason = "cancel_call_failed" if cancel_outcome == "call_failed" else "cancel_requested"
             return self._decision(False, reason, command_id, cancel_outcome)
 
-    def recover(self, *, operator_confirmed: bool, observed_sequence: int) -> CommandDecision:
+    def recovery_state(self) -> dict:
+        """Atomic, read-only owner feedback for operator recovery, without motion."""
+        with self._lock:
+            return {"state": self._state, "reason": self._hold_reason,
+                    "observed_sequence": self._joint_state.sequence if self._joint_state else None}
+
+    def recover(self, *, operator_confirmed: bool, observed_sequence: int,
+                recovery_fence: Callable | None = None) -> CommandDecision:
         with self._lock:
             if self._state != "hold":
                 return self._decision(False, "not_in_hold")
@@ -626,6 +653,19 @@ class ArmCommandOwner:
                 or snapshot.calibration_revision != self.config.calibration_revision
             ):
                 return self._decision(False, "fresh_readback_required")
-            self._hold_reason = ""
-            self._state = "ready"
-            return self._decision(True, "recovered")
+
+            def clear_hold() -> CommandDecision:
+                self._hold_reason = ""
+                self._state = "ready"
+                return self._decision(True, "recovered")
+            # Transport fencing runs under the owner lock, preserving the
+            # stop -> owner -> journal lock order and feedback identity.
+            original_reason = self._hold_reason
+            try:
+                return clear_hold() if recovery_fence is None else recovery_fence(clear_hold)
+            except Exception:
+                # A failed journal commit cannot leave the failed recovery
+                # ready. Restore under the same lock without cancel or motion.
+                self._hold_reason = original_reason
+                self._state = "hold"
+                raise

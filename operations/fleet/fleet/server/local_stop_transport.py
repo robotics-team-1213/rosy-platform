@@ -89,6 +89,46 @@ class UnixLocalStopTransport:
         return {"state": snapshot.get("state") if snapshot.get("state") == "OPEN"
                 else "UNKNOWN", "reason": snapshot.get("reason", "REARM_UNCONFIRMED")}
 
+    def owner_state(self, *, workcell_id: str, instance_id: str) -> dict:
+        payload = self._exchange(instance_id, {"version": 1, "operation": "GetOwnerState",
+                                               "workcell_id": workcell_id, "instance_id": instance_id})
+        if (payload is None or type(payload.get("version")) is not int or payload["version"] != 1
+                or type(payload.get("status")) is not int or payload["status"] != 200
+                or payload.get("workcell_id") != workcell_id
+                or payload.get("instance_id") != instance_id or not isinstance(payload.get("owner"), Mapping)):
+            return {"status": 503, "error": {"code": "OWNER_READBACK_UNAVAILABLE"}}
+        state = payload["owner"]
+        if (state.get("state") not in {"disabled", "ready", "active", "hold"}
+                or (state.get("observed_sequence") is not None
+                    and (type(state["observed_sequence"]) is not int or state["observed_sequence"] < 0))):
+            return {"status": 503, "error": {"code": "OWNER_READBACK_INVALID"}}
+        return dict(payload)
+
+    def recover_owner(self, *, workcell_id: str, instance_id: str, actor_id: str,
+                      authority_epoch: int, dispatch_generation: int,
+                      operator_confirmed: bool, observed_sequence: int) -> dict:
+        """One request, no automatic replay after a lost recovery acknowledgement."""
+        payload = self._exchange(instance_id, {
+            "version": 1, "operation": "RecoverOwner",
+            "workcell_id": workcell_id, "instance_id": instance_id, "actor_id": actor_id,
+            "authority_epoch": authority_epoch, "dispatch_generation": dispatch_generation,
+            "operator_confirmed": operator_confirmed, "observed_sequence": observed_sequence})
+        if (payload is None or type(payload.get("version")) is not int or payload["version"] != 1
+                or type(payload.get("status")) is not int):
+            return {"status": 503, "error": {"code": "RECOVERY_REPLY_UNAVAILABLE"}}
+        if payload.get("status") != 200:
+            if type(payload.get("status")) is int and payload["status"] in {400, 403, 404, 409, 503}:
+                return dict(payload)
+            return {"status": 503, "error": {"code": "RECOVERY_REPLY_INVALID"}}
+        decision = payload.get("decision")
+        if (payload.get("workcell_id") != workcell_id or payload.get("instance_id") != instance_id
+                or payload.get("actor_id") != actor_id or type(payload.get("observed_sequence")) is not int
+                or payload["observed_sequence"] != observed_sequence or not isinstance(decision, Mapping)
+                or decision.get("accepted") is not True or decision.get("state") != "ready"
+                or decision.get("reason") != "recovered"):
+            return {"status": 503, "error": {"code": "RECOVERY_REPLY_IDENTITY_MISMATCH"}}
+        return dict(payload)
+
     def _exchange(self, instance_id: str, document: Mapping[str, Any]) -> Mapping[str, Any] | None:
         if (not isinstance(instance_id, str) or not _INSTANCE_ID.fullmatch(instance_id)
                 or instance_id in {".", ".."}):

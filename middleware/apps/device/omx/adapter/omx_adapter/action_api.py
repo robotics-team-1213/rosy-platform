@@ -33,9 +33,11 @@ class ActionApi:
     MAX_FRAME_BYTES = 64 * 1024
 
     def __init__(self, runner: ActionRunner, *, stop_api: Any | None = None,
+                 recovery_api: Any | None = None,
                  identity: Mapping[str, Any] | None = None) -> None:
         self.runner = runner
         self.stop_api = stop_api
+        self.recovery_api = recovery_api
         # Read-only owner identity (D-390 §5): the simulation composition reports simulation=True;
         # an owner without one answers UNKNOWN_OPERATION, so Fleet never opens dispatch to it.
         self.identity = dict(identity) if identity is not None else None
@@ -112,6 +114,11 @@ class ActionApi:
                 if set(request) != {"version", "operation"}:
                     raise ValueError("GetOwnerIdentity contains unsupported fields")
                 return {"version": version, "status": 200, "identity": dict(self.identity)}
+            if operation in {"GetOwnerState", "RecoverOwner"}:
+                if self.recovery_api is None:
+                    return self._error("RECOVERY_API_NOT_CONFIGURED",
+                                       "owner recovery adapter is unavailable", status=503, version=version)
+                return self.recovery_api.dispatch(request, peer_uid=peer_uid)
             if operation in {"StopLocal", "GetStopState", "RearmLocal"}:
                 if version != 1:
                     return self._error("UNSUPPORTED_VERSION",

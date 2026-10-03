@@ -33,6 +33,7 @@ from omx_adapter.gripper_contract import GripperObservation
 from omx_adapter.journal_identity import journal_identity
 from omx_adapter.kinematics import OmxKinematics
 from omx_adapter.local_stop import LocalStopController
+from omx_adapter.owner_recovery_api import OwnerRecoveryApi
 from omx_adapter.manipulation_plan import ExecutionStateSnapshot
 from omx_adapter.pose_plan import AnalyticCellTransferPlanner, CellPlanningProfile
 from rosy.integrations.robots.omx.transfer_provider import create_omx_cell_transfer_phase_factory
@@ -189,7 +190,10 @@ def build_cell_owner(settings: CellOwnerSettings, *,
     stop_api = LocalStopApi(stop, source_by_peer_uid={settings.fleet_peer_uid: StopRequestSource.FLEET},
                             cancel_active=lambda uid: runner.cancel_unresolved(peer_uid=uid),
                             fleet_fence_current=fleet_fence_current)
-    action_api = ActionApi(runner, stop_api=stop_api, identity={
+    recovery_api = OwnerRecoveryApi(runtime.owner, stop, store,
+                                    allowed_peer_uids={settings.fleet_peer_uid},
+                                    current_fence=current_fence)
+    action_api = ActionApi(runner, stop_api=stop_api, recovery_api=recovery_api, identity={
         "workcell_id": settings.workcell_id, "instance_id": settings.instance_id,
         "simulation": True, "profile": "omx-cell-sim", "journal_id": journal_identity(store.path)})
     uds_server = UnixActionServer(
