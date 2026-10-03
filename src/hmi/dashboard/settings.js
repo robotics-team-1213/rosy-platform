@@ -25,10 +25,27 @@ const hooks = {
   onIdentityChanged: () => {},
   // 도킹·SLAM·웨이포인트 명령 뒤에는 로봇 상태를 다시 읽는다.
   refreshRobotState: async () => {},
+  runConfirmed: async () => {},
+  captureLifetime: () => ({current: () => false}),
 };
 
 export function initSettings(overrides) {
   Object.assign(hooks, overrides);
+}
+
+async function settingsRequest({path, body, method = "POST", message, opener, eligible = () => true, statusId, successText, readback, actionText}) {
+  const run = async (active, owner) => {
+    const payload = await api(path, {method, body: body ? JSON.stringify(body) : undefined, signal: owner.signal});
+    if (!active()) return;
+    setFieldMessage(statusId, successText);
+    if (payload?.map_id) setText("map-id", `map ${payload.map_id}`);
+    if (readback) await readback(owner);
+  };
+  const fail = error => setFieldMessage(statusId, error.message);
+  if (message) return hooks.runConfirmed(message, opener, () => !opener.disabled && eligible(), run, fail, undefined, "", actionText);
+  const owner = hooks.captureLifetime();
+  if (!owner.current() || !eligible()) return;
+  try { await run(owner.current, owner); } catch (error) { if (owner.current()) fail(error); }
 }
 
 /** 안전 정책 카드의 입력값. 히어로의 E-Stop 표시는 셸이 그린다. */
@@ -179,11 +196,13 @@ export function renderDocks(payload) {
   });
 }
 
-export async function refreshDocks() {
+export async function refreshDocks(owner = hooks.captureLifetime()) {
+  if (!owner.current()) return;
   const [status, docks] = await Promise.all([
-    api("/api/v1/docking/status"),
-    api("/api/v1/docking/docks"),
+    api("/api/v1/docking/status", {signal: owner.signal}),
+    api("/api/v1/docking/docks", {signal: owner.signal}),
   ]);
+  if (!owner.current()) return;
   renderDockingStatus(status);
   renderDocks(docks);
 }
@@ -227,8 +246,10 @@ export function renderWaypoints(payload) {
   });
 }
 
-export async function refreshWaypoints() {
-  renderWaypoints(await api("/api/v1/waypoints"));
+export async function refreshWaypoints(owner = hooks.captureLifetime()) {
+  if (!owner.current()) return;
+  const payload = await api("/api/v1/waypoints", {signal: owner.signal});
+  if (owner.current()) renderWaypoints(payload);
 }
 
 elements["waypoint-save"]?.addEventListener("click", async () => {
@@ -251,21 +272,13 @@ elements["waypoint-save"]?.addEventListener("click", async () => {
     metadata: {},
   };
   const exists = (session.waypoints || []).some((waypoint) => waypoint.name === name);
-  try {
-    if (exists) {
-      if (!window.confirm(`${name} 웨이포인트를 현재 위치로 덮어쓸까요?`)) return;
-      await api(`/api/v1/waypoints/${encodeURIComponent(name)}`, {
-        method: "PUT",
-        body: JSON.stringify(body),
-      });
-    } else {
-      await api("/api/v1/waypoints", { method: "POST", body: JSON.stringify(body) });
-    }
-    setFieldMessage("waypoint-message", `${name} 을(를) 저장했습니다.`);
-    await refreshWaypoints();
-  } catch (error) {
-    setFieldMessage("waypoint-message", `저장 실패: ${error.message}`);
-  }
+  const poseSnapshot = JSON.stringify({pose, map: session.robotState?.map_id});
+  await settingsRequest({path: exists ? `/api/v1/waypoints/${encodeURIComponent(name)}` : "/api/v1/waypoints",
+    method: exists ? "PUT" : "POST", body, opener: elements["waypoint-save"],
+    message: exists ? `"${name}" 웨이포인트를 현재 위치로 덮어쓸까요?` : null,
+    eligible: () => name === elements["waypoint-name"].value.trim() && poseSnapshot === JSON.stringify({pose: session.robotState?.pose, map: session.robotState?.map_id})
+      && exists === (session.waypoints || []).some(waypoint => waypoint.name === name),
+    statusId: "waypoint-message", successText: `${name} 을(를) 저장했습니다.`, readback: refreshWaypoints});
 });
 
 elements["waypoint-list"]?.addEventListener("click", async (event) => {
@@ -274,31 +287,13 @@ elements["waypoint-list"]?.addEventListener("click", async (event) => {
   if (!button || !row) return;
   const name = row.dataset.name;
   const action = button.dataset.waypointAction;
-  try {
-    if (action === "delete") {
-      if (!await confirmIrreversible({message: `"${name}" 웨이포인트를 삭제할까요?`, action: "웨이포인트 삭제", opener: button})) return;
-      await api(`/api/v1/waypoints/${encodeURIComponent(name)}`, { method: "DELETE" });
-      setFieldMessage("waypoint-message", `${name} 을(를) 삭제했습니다.`);
-      await refreshWaypoints();
-      return;
-    }
-    if (action === "home") {
-      if (!window.confirm("Home으로 복귀할까요? 내비게이션 모드로 들어갑니다.")) return;
-      await api("/api/v1/navigation/home", { method: "POST" });
-      setFieldMessage("waypoint-message", "Home 복귀를 요청했습니다.");
-      await hooks.refreshRobotState();
-      return;
-    }
-    if (!window.confirm(`${name} 으로 이동할까요? 내비게이션 모드로 들어갑니다.`)) return;
-    await api("/api/v1/navigation/goal", {
-      method: "POST",
-      body: JSON.stringify({ waypoint: name }),
-    });
-    setFieldMessage("waypoint-message", `${name} 목표를 전송했습니다.`);
-    await hooks.refreshRobotState();
-  } catch (error) {
-    setFieldMessage("waypoint-message", `웨이포인트 동작 실패: ${error.message}`);
-  }
+  const remove = action === "delete", home = action === "home";
+  await settingsRequest({path: remove ? `/api/v1/waypoints/${encodeURIComponent(name)}` : `/api/v1/navigation/${home ? "home" : "goal"}`,
+    method: remove ? "DELETE" : "POST", body: !remove && !home ? {waypoint: name} : null, opener: button,
+    message: remove ? `"${name}" 웨이포인트를 삭제할까요?` : home ? "Home으로 복귀할까요? 내비게이션 모드로 들어갑니다." : `${name} 으로 이동할까요? 내비게이션 모드로 들어갑니다.`,
+    eligible: () => (session.waypoints || []).some(waypoint => waypoint.name === name) && (remove || session.capabilities?.navigation?.goal_navigation === true),
+    statusId: "waypoint-message", successText: remove ? `${name} 을(를) 삭제했습니다.` : home ? "Home 복귀를 요청했습니다." : `${name} 목표를 전송했습니다.`,
+    readback: remove ? refreshWaypoints : hooks.refreshRobotState, actionText: remove ? "웨이포인트 삭제" : undefined});
 });
 
 elements["limits-save"]?.addEventListener("click", async () => {
@@ -339,31 +334,12 @@ elements["limits-save"]?.addEventListener("click", async () => {
   }
 });
 
-async function runSlam(path, body, successText) {
-  try {
-    const payload = await api(path, {
-      method: "POST",
-      body: body ? JSON.stringify(body) : undefined,
-    });
-    setFieldMessage("slam-message", successText);
-    if (payload?.map_id) setText("map-id", `map ${payload.map_id}`);
-    await hooks.refreshRobotState();
-  } catch (error) {
-    setFieldMessage("slam-message", error.message);
-  }
-}
-
-elements["slam-start"]?.addEventListener("click", () => {
-  if (!window.confirm("맵핑 세션을 시작할까요? 세션 중에는 목표 주행이 거부됩니다.")) return;
-  runSlam("/api/v1/slam/start", null, "맵핑을 시작했습니다.");
-});
-elements["slam-stop"]?.addEventListener("click", () => {
-  runSlam("/api/v1/slam/stop", null, "맵핑을 중지했습니다.");
-});
-elements["slam-save"]?.addEventListener("click", () => {
+for (const action of ["start", "stop", "save"]) elements[`slam-${action}`]?.addEventListener("click", () => {
   const name = elements["slam-map-name"]?.value.trim() || "rosy_map";
-  if (!window.confirm(`${name} 이름으로 맵을 저장할까요?`)) return;
-  runSlam("/api/v1/slam/save", { name }, `${name} 맵을 저장했습니다.`);
+  settingsRequest({path: `/api/v1/slam/${action}`, body: action === "save" ? {name} : null, opener: elements[`slam-${action}`],
+    message: action === "start" ? "맵핑 세션을 시작할까요? 세션 중에는 목표 주행이 거부됩니다." : action === "save" ? `${name} 이름으로 맵을 저장할까요?` : null,
+    eligible: () => session.capabilities?.slam === true && (action !== "save" || name === (elements["slam-map-name"]?.value.trim() || "rosy_map")),
+    statusId: "slam-message", successText: action === "save" ? `${name} 맵을 저장했습니다.` : `맵핑을 ${action === "start" ? "시작" : "중지"}했습니다.`, readback: hooks.refreshRobotState});
 });
 
 elements["dock-register"]?.addEventListener("click", async () => {
@@ -402,44 +378,22 @@ elements["dock-list"]?.addEventListener("click", async (event) => {
   if (!button || !row) return;
   const id = row.dataset.id;
   const action = button.dataset.dockAction;
-  try {
-    if (action === "delete") {
-      if (!await confirmIrreversible({message: `"${id}" 도크를 삭제할까요?`, action: "도크 삭제", opener: button})) return;
-      await api(`/api/v1/docking/docks/${encodeURIComponent(id)}`, { method: "DELETE" });
-      setFieldMessage("dock-message", `${id} 을(를) 삭제했습니다.`);
-      await refreshDocks();
-      return;
-    }
-    if (action === "teach") {
-      if (!window.confirm("지금 선 자리를 이 도크 포즈로 기록할까요?")) return;
-      await api(`/api/v1/docking/docks/${encodeURIComponent(id)}/teach`, { method: "POST" });
-      setFieldMessage("dock-message", `${id} 포즈를 현재 자리로 기록했습니다.`);
-      await refreshDocks();
-      return;
-    }
-    if (!window.confirm(`${id} 로 도킹을 시작할까요?`)) return;
-    await api("/api/v1/docking/dock", {
-      method: "POST",
-      body: JSON.stringify({ dock: id }),
-    });
-    setFieldMessage("dock-message", `${id} 도킹을 요청했습니다.`);
-    await refreshDocks();
-    await hooks.refreshRobotState();
-  } catch (error) {
-    setFieldMessage("dock-message", `도크 동작 실패: ${error.message}`);
-  }
+  const remove = action === "delete", teach = action === "teach";
+  const poseSnapshot = JSON.stringify({pose: session.robotState?.pose, map: session.robotState?.map_id});
+  await settingsRequest({path: remove || teach ? `/api/v1/docking/docks/${encodeURIComponent(id)}${teach ? "/teach" : ""}` : "/api/v1/docking/dock",
+    method: remove ? "DELETE" : "POST", body: !remove && !teach ? {dock: id} : null, opener: button,
+    message: remove ? `"${id}" 도크를 삭제할까요?` : teach ? "지금 선 자리를 이 도크 포즈로 기록할까요?" : `${id} 로 도킹을 시작할까요?`,
+    eligible: () => (session.docks || []).some(dock => dock.id === id) && (remove || teach || session.dockingSupported)
+      && (!teach || poseSnapshot === JSON.stringify({pose: session.robotState?.pose, map: session.robotState?.map_id})),
+    statusId: "dock-message", successText: remove ? `${id} 을(를) 삭제했습니다.` : teach ? `${id} 포즈를 현재 자리로 기록했습니다.` : `${id} 도킹을 요청했습니다.`,
+    actionText: remove ? "도크 삭제" : undefined,
+    readback: async owner => { await refreshDocks(owner); if (!remove && !teach && owner.current()) await hooks.refreshRobotState(owner); }});
 });
 
 elements["dock-undock"]?.addEventListener("click", async () => {
-  if (!window.confirm("언도크할까요?")) return;
-  try {
-    await api("/api/v1/docking/undock", { method: "POST" });
-    setFieldMessage("dock-message", "언도크를 요청했습니다.");
-    await refreshDocks();
-    await hooks.refreshRobotState();
-  } catch (error) {
-    setFieldMessage("dock-message", `언도크 실패: ${error.message}`);
-  }
+  await settingsRequest({path: "/api/v1/docking/undock", message: "언도크할까요?", opener: elements["dock-undock"],
+    eligible: () => session.dockingSupported, statusId: "dock-message", successText: "언도크를 요청했습니다.",
+    readback: async owner => { await refreshDocks(owner); if (owner.current()) await hooks.refreshRobotState(owner); }});
 });
 
 elements["dock-cancel"]?.addEventListener("click", async () => {

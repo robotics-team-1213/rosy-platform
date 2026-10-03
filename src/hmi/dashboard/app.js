@@ -55,6 +55,7 @@ import {
   renderLineFollow,
   renderRobotInfo,
   renderRuntime,
+  initTelemetry,
   renderSafetyHero,
   renderTrafficPolicy,
   renderTrafficStatus,
@@ -86,17 +87,20 @@ function updateLegacyLineControls() {
   const off = document.querySelector('[data-line-mode="OFF"]');
   if (off) { off.disabled = !session.token || !["operator", "administrator"].includes(session.role); if (off.disabled) off.setAttribute("reason", "운용자 권한 필요"); else off.removeAttribute("reason"); }
 }
-async function runConfirmed(message, opener, eligible, run, fail, pending = () => {}, kind = "") {
+async function runConfirmed(message, opener, eligible, run, fail, pending = () => {}, kind = "", action = "요청 전송") {
   if (commandOwner || !session.token || !eligible()) return;
   const owner = authTicket(), role = session.role;
   const active = () => commandOwner === owner && owner.current() && role === session.role;
   owner.kind = kind;
   commandOwner = owner;
+  let started = false;
+  const clearPending = () => { if (started && commandOwner === owner) { started = false; pending(false); } };
+  owner.signal.addEventListener("abort", clearPending, {once: true});
   try {
-    if (!await confirmIrreversible({message, action: "요청 전송", opener, signal: owner.signal}) || !active() || !eligible()) return;
-    pending(true); await run(active, {...owner, current: active});
+    if (!await confirmIrreversible({message, action, opener, signal: owner.signal}) || !active() || !eligible()) return;
+    started = true; pending(true); await run(active, {...owner, current: active});
   } catch (error) { if (active()) fail(error); }
-  finally { if (commandOwner === owner) { pending(false); commandOwner = null; } }
+  finally { clearPending(); owner.signal.removeEventListener("abort", clearPending); if (commandOwner === owner) commandOwner = null; }
 }
 
 const fieldMap = createFieldMap({
@@ -812,8 +816,10 @@ bindFormSave("network-apply-form", "network-apply");
 
 initSettings({
   onIdentityChanged: renderRobotInfo,
-  refreshRobotState: () => refreshRobotState(),
+  refreshRobotState,
+  runConfirmed, captureLifetime: authTicket,
 });
+initTelemetry({runConfirmed, captureLifetime: authTicket});
 
 pageScope.interval(() => setText("clock", new Date().toLocaleTimeString("ko-KR", { hour12: false })), 1000);
 setText("clock", new Date().toLocaleTimeString("ko-KR", { hour12: false }));

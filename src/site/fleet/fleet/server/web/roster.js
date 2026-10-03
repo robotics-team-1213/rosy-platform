@@ -41,7 +41,7 @@ function blockWith(button, reason) {
 }
 
 export function createRoster({ scope, el, view, log, call, render, streamEvidence, isOperator,
-  moveAddress = null, moveAddressBlocked = () => "" }) {
+  moveAddress = null, moveAddressBlocked = () => "", confirmedAction }) {
   function needsAttention(robot) {
     const state = robot.state;
     const evidence = streamEvidence(view.formation, robot.robot_id);
@@ -318,18 +318,25 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
         const life = scope.capture();
         life.check();
         const mode = lineFollow.mode === "IR_LINE" ? "OFF" : "IR_LINE";
-        if (mode === "IR_LINE" && !window.confirm(`${robot.robot_id}의 카메라 고장이 확인되었습니다. CORE 안전 조건을 다시 확인하고 IR 추적을 요청할까요?`)) return;
-        try {
+        const kind = `IR:${robot.robot_id}`;
+        const send = async owner => {
           const result = await call(`/api/fleet/robots/${encodeURIComponent(robot.robot_id)}/line-follow`, {
             method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ mode }),
+            body: JSON.stringify({ mode }), signals: [owner.signal],
           });
-          life.check();
+          owner.check();
           log(`${robot.robot_id} ${mode === "IR_LINE" ? "IR 추적 요청" : "IR 추적 중지"} · ${result.result?.state || "CORE 응답 확인"}`, "good");
-        } catch (err) {
-          if (err.name === "AbortError") return;
-          log(`${robot.robot_id} IR 추적 거부 · ${err.message}`, "bad");
+        };
+        const fail = err => log(`${robot.robot_id} IR 추적 거부 · ${err.message}`, "bad");
+        if (mode === "OFF") {
+          confirmedAction.cancel(kind);
+          try { await send(life); } catch (err) { if (life.current() && err.name !== "AbortError") fail(err); }
+          return;
         }
+        await confirmedAction.run({kind, message: `${robot.robot_id}의 카메라 고장이 확인되었습니다. CORE 안전 조건을 다시 확인하고 IR 추적을 요청할까요?`, opener: fallback,
+          eligible: () => !view.stateUnavailable && isOperator() && view.robots.some(current => current.robot_id === robot.robot_id && current.online
+            && current.state?.line_follow?.mode === "CAMERA_LINE" && current.state.line_follow.state === "LOST" && current.state.line_follow.reason === "camera_reselection_required"),
+          request: send, onError: fail});
       }));
       actions.append(fallback);
     }

@@ -448,6 +448,86 @@ def test_fleet_estop_fires_on_one_click_without_any_dialog(console_url):
         browser.close()
 
 
+def test_fleet_confirmation_keeps_stop_live_and_rechecks_dispatch_generation(console_url):
+    from playwright.sync_api import sync_playwright, expect
+
+    api = {**API, '/api/fleet/dispatch-control': {'generation': 7, 'dispatch_enabled': False,
+           'rearm_available': True, 'queued_tasks': 2, 'unresolved_actions': 0},
+           '/api/fleet/estop': {'stopped': 3, 'total': 3},
+           '/api/fleet/dispatch/rearm': {'generation': 7, 'dispatch_enabled': True}}
+    calls = []
+    api['/api/fleet/state'] = json.loads(json.dumps(SNAPSHOT))
+    robot = api['/api/fleet/state']['robots'][0]
+    robot['state']['line_follow'] = {'mode': 'CAMERA_LINE', 'state': 'LOST', 'reason': 'camera_reselection_required'}
+    with sync_playwright() as playwright:
+        browser, page, errors = _open_console(playwright, api, calls,
+            init_script="sessionStorage.setItem('rosy-console-token','fixture-token');")
+        page.goto(console_url, wait_until='networkidle')
+        page.locator('#dispatch-rearm').click()
+        dialog = page.locator('dialog.ui-confirm')
+        expect(dialog).to_have_count(1, timeout=3000)
+        page.locator('#estop').click()
+        assert ('POST', '/api/fleet/estop') in calls
+        expect(dialog).to_have_count(0)
+        page.locator('#dispatch-rearm').click()
+        api['/api/fleet/dispatch-control']['generation'] = 8
+        page.wait_for_function('() => document.querySelector("#dispatch-control-detail").textContent.includes("8")')
+        dialog.locator('ui-button[kind=irreversible]').click()
+        page.wait_for_timeout(100)
+        assert ('POST', '/api/fleet/dispatch/rearm') not in calls
+        robot['state']['line_follow']['mode'] = 'OFF'
+        page.locator('#roster-toggle').click()
+        page.wait_for_function('() => !document.querySelector("ui-button[data-goal-robot-id=rosy_01]").disabled')
+        page.locator('ui-button[data-goal-robot-id="rosy_01"]').click()
+        page.locator('#map-canvas').press('Enter')
+        dialog.wait_for()
+        robot['state']['safety']['estop'] = True
+        page.wait_for_function('() => !document.querySelector("#roster article.selected")')
+        dialog.locator('ui-button[kind=irreversible]').click()
+        page.wait_for_timeout(100)
+        assert ('POST', '/api/fleet/robots/rosy_01/goal') not in calls
+        robot['state']['safety']['estop'] = False
+        robot['state']['line_follow']['mode'] = 'CAMERA_LINE'
+        fallback = page.get_by_role('button', name='IR 추적 선택', exact=True)
+        fallback.wait_for()
+        fallback.click()
+        robot['state']['line_follow']['mode'] = 'OFF'
+        page.wait_for_function('() => ![...document.querySelectorAll("#roster ui-button")].some(node=>node.textContent==="IR 추적 선택")')
+        dialog.locator('ui-button[kind=irreversible]').click()
+        page.wait_for_timeout(100)
+        assert ('POST', '/api/fleet/robots/rosy_01/line-follow') not in calls
+        held = []
+        page.evaluate("""() => {const previous=fetch;window.fetch=(url,options={})=>{if(String(url).endsWith('/api/fleet/dispatch/rearm')){options={...options};delete options.signal;}return previous(url,options);};}""")
+        page.route('**/api/fleet/dispatch/rearm', lambda route: held.append(route))
+        page.locator('#dispatch-rearm').click()
+        dialog.locator('ui-button[kind=irreversible]').click()
+        page.wait_for_timeout(100)
+        assert len(held) == 1
+        page.locator('#cancel-all').click()
+        expect(dialog).to_have_count(0)
+        assert ('POST', '/api/fleet/cancel-all') not in calls
+        page.locator('#console-token').fill('replacement-fixture-token')
+        page.locator('#token-save').click()
+        page.wait_for_function('() => !document.querySelector("#dispatch-rearm").disabled')
+        page.locator('#dispatch-rearm').click()
+        dialog.locator('ui-button[kind=irreversible]').click()
+        page.wait_for_timeout(100)
+        assert len(held) == 2
+        held[0].fulfill(status=200, json={'generation': 8, 'dispatch_enabled': True})
+        page.wait_for_timeout(100)
+        page.locator('#cancel-all').click()
+        expect(dialog).to_have_count(0)
+        page.evaluate('() => dispatchEvent(new PageTransitionEvent("pagehide"))')
+        snapshot = page.locator('#log').inner_html()
+        held[1].fulfill(status=200, json={'generation': 8, 'dispatch_enabled': True})
+        page.wait_for_timeout(100)
+        expect(dialog).to_have_count(0)
+        assert page.locator('#log').inner_html() == snapshot
+        assert ('POST', '/api/fleet/dispatch/rearm') not in calls
+        assert not errors
+        browser.close()
+
+
 def test_fleet_cancel_all_requires_confirm_and_logs_each_robot_honestly(console_url):
     """D-421 — 전체 주행 취소는 confirm을 지나고, 로봇별 결과와 물리 정지 미확인을 쓴다."""
     from playwright.sync_api import sync_playwright
@@ -491,15 +571,17 @@ def test_fleet_cancel_all_requires_confirm_and_logs_each_robot_honestly(console_
             p, api, posts=posts, init_script=DECLINE_CONFIRM)
         page.goto(console_url, wait_until="networkidle")
         page.locator("#cancel-all").click()
-        page.wait_for_function("() => window.__confirms.length === 1")
+        dialog = page.locator('dialog.ui-confirm')
+        dialog.wait_for()
+        confirms = [dialog.inner_text()]
+        dialog.locator('ui-button[kind=quiet]').click()
         declined = [post for post in posts if post[1] == "/api/fleet/cancel-all"]
-        accept_confirm(page)
         page.locator("#cancel-all").click()
+        dialog.locator('ui-button[kind=irreversible]').click()
         page.get_by_text("주행 취소 요청 응답: 1/3 · 물리 정지 미확인").wait_for()
         page.get_by_text("rosy_02 주행 취소 응답 없음 — 대형 추종 ConnectError · 내비게이션 ConnectError · 차선 추종 ConnectError").wait_for()
         page.get_by_text("rosy_03 주행 취소 실패 — 주소 미확인 — 차선 추종 끄기 미전송").wait_for()
         page.get_by_text("대기 작업 2개 취소 · 로봇 취소 확인 대기 작업 1개").wait_for()
-        confirms = page.evaluate("window.__confirms")
         save_temp_screenshot(page, "fleet_cancel_all_result.png")
         assert not errors, f"페이지 오류: {errors}"
         browser.close()
@@ -921,16 +1003,18 @@ def test_fleet_map_keyboard_goal_requires_confirmation_and_can_cancel(console_ur
         assert "Enter" in page.inner_text("#hint")
         save_temp_screenshot(page, "fleet_goal_preconfirm.png")
         page.keyboard.press("Enter")
-        assert page.evaluate("window.__confirms.length") == 1
-        assert "rosy_02" in page.evaluate("window.__confirms[0]")
+        dialog = page.locator('dialog.ui-confirm')
+        dialog.wait_for()
+        assert "rosy_02" in dialog.inner_text()
+        dialog.locator('ui-button[kind=quiet]').click()
         assert not any(method == "POST" and path == goal_path for method, path in posts)
         page.keyboard.press("Escape")
         assert page.locator(".robot.selected").count() == 0
         assert page.evaluate("document.activeElement?.dataset.goalRobotId") == "rosy_02"
 
         aim.click()
-        accept_confirm(page)
         page.keyboard.press("Enter")
+        dialog.locator('ui-button[kind=irreversible]').click()
         page.wait_for_function("() => document.querySelector('#log')?.textContent.includes('미션 하달')")
         assert sum(method == "POST" and path == goal_path for method, path in posts) == 1
         assert page.locator("#log ui-empty").count() == 0
@@ -966,6 +1050,7 @@ def test_queued_navigation_is_successful_and_cancel_targets_task(console_url):
         assert canvas_box
         page.mouse.click(canvas_box["x"] + canvas_box["width"] / 2,
                          canvas_box["y"] + canvas_box["height"] / 2)
+        page.locator('dialog.ui-confirm ui-button[kind=irreversible]').click()
         page.wait_for_function("() => document.querySelector('#log')?.textContent.includes('task-queued-123')")
         assert "QUEUED" in page.inner_text("#log")
         assert "#1" in page.inner_text("#log")
@@ -1456,8 +1541,10 @@ def test_camera_fault_ir_fallback_decline_sends_no_request(console_url):
         fallback = page.get_by_role("button", name="IR 추적 선택", exact=True)
         fallback.wait_for(state="visible")
         fallback.click()
-        page.wait_for_function("() => window.__confirms?.length === 1")
-        confirm = page.evaluate("window.__confirms[0]")
+        dialog = page.locator('dialog.ui-confirm')
+        dialog.wait_for()
+        confirm = dialog.inner_text()
+        dialog.locator('ui-button[kind=quiet]').click()
         browser.close()
 
     assert "rosy_01" in confirm and "IR 추적" in confirm and "요청할까요?" in confirm

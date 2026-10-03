@@ -1542,3 +1542,13 @@
 - 화면: 부모 검증자가 실제 dark 1920의 문서 높이 1080과 light 390의 자연스러운 세로 흐름을 직접 확인했다. 가로 넘침·페이지 오류는 0이며 같은 정지·대형·신호·로봇·지도·카메라의 양수 크기를 유지한다. 근거는 X:/DevTemp/rosy-ui-unify/final-plan/ 및 fleet/root-fit-final/.
 - gate 변화: SOURCE/LOCAL 검증이며 배포·실제 장치·FIELD 승인을 주장하지 않는다. API 권한과 최종 동작 판단은 서버가 소유한다.
 - 결정: D-439 §17. 같은 DOM을 옮기는 배치는 시각 순서뿐 아니라 키보드 순서와 draft 소유권도 보존해야 한다.
+
+## 2026-10-04 · uncommitted · fix(web): 관제 확인과 명령의 공통 소유권
+
+- 변경: console과 roster가 private confirmed-action factory를 함께 사용하여 발행 재허가·맵 목표·전체 주행 취소·양수 IR 선택을 공용 비모달 확인으로 처리한다. 한 owner가 확인부터 요청/readback까지 유지되며 자격·역할·PageScope 교체 시 취소한다. 재허가 세대/availability, 맵 geometry·선택 로봇·온라인·정지 상태, IR 재선택 사유/모드의 현재 eligibility를 다시 확인한다. 같은 Fleet API·본문·idempotency와 기존 서버 권한은 유지한다. IR OFF는 즉시 보내며 해당 양수 owner를 취소한다.
+- 검증: 초기 통합 RED 3 failed(18.04s) 후 기존 payload/취소 계약 10 passed(25.19s), 자산·예산 14 passed(1.40s). 강화 시나리오의 2 passed/1 failed(23.51s)는 CAMERA_LINE 상태에서 맵 목표를 누른 fixture 오류였다. 맵 OFF·IR CAMERA_LINE 상태를 실제 계약대로 분리하고 이전 자격 응답을 abort 무시 adapter로 유지한 최종 Fleet owner 검사 1 passed(10.21s). 최종 eligibility 변이 복원에서도 같은 강화 node가 통과했다. 최종 공용 제어·자산·예산 39 passed(1.83s).
+- 변이: X 실제 전달 private module의 확인 후 eligibility 제거는 generation 변경 뒤 dispatch/rearm POST 단언에서 RED 1 failed(3.74s); owner finally 비교 제거는 옛 A 완료가 새 B를 풀어 취소 확인창이 생기는 단언에서 RED였다. 원본 제공은 각각 GREEN. 초기 EStop의 닫히는 확인창에 취소를 누른 두 무효 시도는 제외하고 실제 count 0을 기다려 재증명했다. dashboard 포함 6개 receipts/source raw hash는 final-plan/task6b-mutation-report.json, task6b-source-unchanged.json, task6b-delivery.jsonl.
+- 화면: rearm desktop dark, map/IR phone light의 실제 확인창 viewport 3개는 Stop visible/center-hit·inert false, 가로 넘침·pageerror 0. fake API만 사용했으며 실제 로봇 명령은 실행하지 않았다. 근거 X:/DevTemp/rosy-ui-unify/final-plan/task6b-captures/report.json 및 *-viewport.png.
+- gate 변화: SOURCE/LOCAL. 물리 정지·장치·배포·FIELD 수용을 주장하지 않는다. 최종 SPEC/QUALITY 및 부모 직접 화면 판단은 별도 기록한다.
+- 결정: D-439 §18. shell 자격 수명과 한 작업 소유권을 조합하고 오래된 finally가 새 작업을 해제하지 않는다.
+- 최종 수용: 독립 SPEC 및 QUALITY PASS, 부모의 실제 5개 viewport와 변이 hash 검증 PASS. 구조 예산 2 passed(0.96s), lint 0 errors/26 기존 warnings, diff check PASS. 배포/장치 수용은 포함하지 않는다.

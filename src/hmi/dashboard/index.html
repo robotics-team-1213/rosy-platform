@@ -64,6 +64,11 @@
       <ui-button kind="quiet" id="logout" class="quiet-button" type="button" hidden>로그아웃</ui-button>
       <ui-button kind="quiet" id="open-auth" class="quiet-button" type="button">접속 키</ui-button>
     </div>
+    <div class="compatibility-safety">
+      <ui-button kind="irreversible" id="emergency-stop" data-always-live class="stop-button" type="button" aria-keyshortcuts="Escape">
+        <span>즉시 정지</span><small>모든 역할 · Esc</small>
+      </ui-button>
+    </div>
   </ui-topbar>
 
   <div id="connection-banner" class="connection-banner" role="alert" hidden>
@@ -298,9 +303,6 @@
             </div>
           </div>
           <div class="safety-actions">
-            <ui-button kind="irreversible" id="emergency-stop" data-always-live class="stop-button" type="button" aria-keyshortcuts="Escape">
-              <span>즉시 정지</span><small>모든 역할 · Esc</small>
-            </ui-button>
             <ui-button kind="quiet" id="release-stop" class="release-button" type="button">
               <span>정지 해제</span><small>관리자 권한 필요</small>
             </ui-button>

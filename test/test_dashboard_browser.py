@@ -660,6 +660,7 @@ def test_traffic_policy_is_staged_before_stopped_only_apply():
             " && !document.getElementById('traffic-policy-apply').disabled"
         )
         page.locator("#traffic-policy-apply").click()
+        page.locator('dialog.ui-confirm ui-button[kind=irreversible]').click()
         page.wait_for_function(
             "document.getElementById('traffic-policy-message')"
             "?.textContent === '정지 상태에서 정책을 적용했습니다.'"
@@ -1009,6 +1010,67 @@ def test_console_state_matrix_renders_each_state(state):
         browser.close()
 
 
+def test_compatibility_settings_confirmation_preserves_stop_and_rechecks_named_targets():
+    from playwright.sync_api import sync_playwright, expect
+
+    with sync_playwright() as playwright:
+        browser, page = _launch_page(playwright, extra_init=WAYPOINT_ROW_INIT)
+        page.goto('http://rosy.test/dashboard#compatibility')
+        page.wait_for_selector('#compatibility-shell[data-ready="true"]')
+        page.locator('#view-inspect').click()
+        page.locator('li[data-name="zone_a"]').wait_for()
+        page.evaluate("async()=>{const {session}=await import('/dashboard/assets/client.js');clearInterval(session.refreshTimer);session.refreshTimer=null;}")
+        page.locator('#waypoint-name').fill('zone_a')
+        page.locator('#waypoint-save').click()
+        dialog = page.locator('dialog.ui-confirm')
+        expect(dialog).to_have_count(1, timeout=3000)
+        assert '"zone_a"' in dialog.inner_text()
+        page.locator('#emergency-stop').click()
+        assert page.evaluate("__apiCalls.some(c=>c.path==='/api/v1/safety/stop')")
+        if dialog.count():
+            dialog.locator('ui-button[kind=quiet]').click()
+        page.locator('#view-inspect').click()
+        page.locator('#waypoint-save').click()
+        page.evaluate("async()=>{const {session}=await import('/dashboard/assets/client.js');session.robotState.pose.x=9;session.robotState.map_id='changed-map';}")
+        dialog.locator('ui-button[kind=irreversible]').click()
+        assert page.evaluate("__apiCalls.filter(c=>c.method==='PUT'&&c.path.includes('/waypoints/')).length") == 0
+        page.locator('li[data-name="zone_a"] [data-waypoint-action=go]').click()
+        page.evaluate("async()=>{const {session}=await import('/dashboard/assets/client.js');session.waypoints=[];}")
+        dialog.locator('ui-button[kind=irreversible]').click()
+        assert page.evaluate("__apiCalls.filter(c=>c.path==='/api/v1/navigation/goal').length") == 0
+        browser.close()
+
+
+def test_compatibility_traffic_confirmation_abort_releases_new_owner_without_old_readback():
+    from playwright.sync_api import sync_playwright, expect
+
+    with sync_playwright() as playwright:
+        browser, page = _launch_page(playwright)
+        page.goto('http://rosy.test/dashboard#compatibility')
+        page.wait_for_selector('#compatibility-shell[data-ready="true"]')
+        page.locator('#view-inspect').click()
+        page.locator('#traffic-policy-revision-input').fill('guarded-policy-a')
+        page.locator('#traffic-policy-stage').click()
+        page.wait_for_function('() => !document.querySelector("#traffic-policy-apply").disabled')
+        page.evaluate("""() => {const previous=fetch;window.fetch=(url,options={})=>String(url).endsWith('/api/v1/traffic/policy/apply')?new Promise(resolve=>window.finishOldPolicy=()=>resolve(new Response(JSON.stringify(__trafficReadback)))):previous(url,options);}""")
+        page.locator('#traffic-policy-apply').click()
+        dialog = page.locator('dialog.ui-confirm')
+        expect(dialog).to_have_count(1, timeout=3000)
+        dialog.locator('ui-button[kind=irreversible]').click()
+        page.wait_for_function('() => typeof finishOldPolicy === "function"')
+        page.evaluate('() => dispatchEvent(new PageTransitionEvent("pagehide"))')
+        page.evaluate('() => dispatchEvent(new PageTransitionEvent("pageshow", {persisted:true}))')
+        page.wait_for_function('() => !document.querySelector("#traffic-policy-stage").disabled', timeout=3000)
+        page.locator('#traffic-policy-revision-input').fill('guarded-policy-b')
+        page.locator('#traffic-policy-stage').click()
+        page.wait_for_function('() => document.querySelector("#traffic-policy-message").textContent.includes("guarded-policy-b")')
+        message = page.locator('#traffic-policy-message').inner_text()
+        page.evaluate('() => finishOldPolicy()')
+        page.wait_for_timeout(100)
+        assert page.locator('#traffic-policy-message').inner_text() == message
+        browser.close()
+
+
 def test_compatibility_confirmation_keeps_stop_live_and_owns_command_completion():
     from playwright.sync_api import sync_playwright, expect
 
@@ -1048,15 +1110,18 @@ def test_compatibility_confirmation_keeps_stop_live_and_owns_command_completion(
         page.locator('[data-line-mode=OFF]').click()
         expect(dialog).to_have_count(0)
         page.wait_for_function("__apiCalls.some(c=>c.path==='/api/v1/line-follow/mode' && c.body.mode==='OFF')")
-        page.evaluate("""() => {const prior=fetch;window.fetch=(url,options={})=>String(url).endsWith('/api/v1/line-follow/mode')&&JSON.parse(options.body).mode!=='OFF'?new Promise(resolve=>window.finishLine=()=>resolve(new Response('{"mode":"IR_LINE","state":"FOLLOW"}'))):prior(url,options);}""")
+        page.evaluate("""() => {const prior=fetch;window.fetch=(url,options={})=>String(url).endsWith('/api/v1/line-follow/mode')?new Promise(resolve=>{const finish=()=>resolve(new Response(JSON.stringify({mode:JSON.parse(options.body).mode,state:'FOLLOW'})));if(JSON.parse(options.body).mode==='OFF')window.finishOff=finish;else window.finishLine=finish;}):prior(url,options);}""")
         page.locator('[data-line-mode=IR_LINE]').click()
         dialog.locator('ui-button[kind=irreversible]').click()
         page.wait_for_function("typeof finishLine==='function'")
         expect(page.locator('[data-line-mode=OFF]')).to_be_enabled()
         page.locator('[data-line-mode=OFF]').click()
-        page.wait_for_function("__apiCalls.filter(c=>c.path==='/api/v1/line-follow/mode' && c.body.mode==='OFF').length===2")
+        page.wait_for_function("typeof finishOff==='function'")
         page.evaluate('finishLine()')
         page.wait_for_timeout(80)
+        expect(page.locator('[data-line-mode=IR_LINE]')).to_be_disabled()
+        page.evaluate('finishOff()')
+        page.wait_for_function("!document.querySelector('[data-line-mode=IR_LINE]').disabled")
         expect(page.locator('[data-line-mode=OFF]')).to_have_attribute('aria-pressed','true')
         browser.close()
 

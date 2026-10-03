@@ -887,3 +887,15 @@
 - 검증: 정확한 실패 Role 7개·compatibility traffic·기존 네트워크 freshness 9 passed(195.34s). 최종 네트워크 단언은 Fleet 주소 흐름과 함께 2 passed(16.16s)로 재확인했다. 실제 구조 예산·Games copy host 35 passed(16.68s), dashboard 합계 10000줄 유지. 실제 app.js의 cheap secret scan 결과는 빈 목록이다. 근거 X:/DevTemp/rosy-ui-unify/final-plan/role-fixed.log, move-network-final.log, task6-host.log, app-secret.log.
 - gate 변화: SOURCE/LOCAL fixture·선언식 보완이며 장치/현장 검증을 대신하지 않는다.
 - 결정: D-439 Task6. DOM 부착과 화면·모듈 준비를 구분하고 숨은 목적 그룹을 사용자처럼 연 뒤 조작한다.
+
+## 2026-10-04 · uncommitted · fix(web): 호환 설정의 확인과 요청 소유권
+
+- 변경: 웨이포인트 덮어쓰기·이동·Home, SLAM 시작·저장, 도크 teach·dock·undock, 교통 정책 적용의 native 확인을 공용 비모달 확인으로 바꿨다. 기존 웨이포인트·도크 삭제도 같은 요청/readback 소유권을 사용한다. app이 자격·페이지·진행 중 요청을 소유하고 settings/telemetry는 전달된 hook을 사용하여 역방향 import 없이 현재 대상·입력·위치·맵·검토 revision을 다시 확인한다. 서버 API·본문·권한과 SLAM 중지의 즉시 동작은 유지한다.
+- 정지: 같은 #emergency-stop을 호환 화면의 영구 안전 위치로 옮겨 점검 화면에서도 확인 중 접근할 수 있게 했다. 기존 handler·키보드·정지 해제 위치는 유지한다. 실제 390px 점검의 network-card 최소 콘텐츠 폭으로 생긴 8px 넘침은 카드의 min-width: 0으로 해결했다.
+- 요청 수명: 자격/페이지 취소가 현재 요청의 transient pending을 복구하며 이전 finally는 새 요청의 잠금을 해제하지 않는다. 양수 차선 요청 뒤 OFF가 진행 중일 때 옛 양수 응답이 새 OFF 잠금을 풀던 독립 SPEC 경합은 실제 held 요청 RED 1 failed(8.92s) 뒤 owner 비교로 수정했다. OFF·페이지 취소·Fleet 강화 검사의 교차 확인은 3 passed(17.58s)이다.
+- 검증: 최초 새 통합 시나리오 3 failed(18.04s). 첫 구현은 2 passed/1 failed(22.74s)로 숨은 정지 버튼을 실제 드러냈고 영구 안전 위치 적용 후 3 passed(8.72s). 기존 설정·삭제·교통 정책과 Fleet 관련 payload/취소 검사 10 passed(25.19s); 자산·예산 14 passed(1.40s), 최종 공용 제어·자산·예산 39 passed(1.83s). 중복된 성공을 전체 suite 성공으로 합산하지 않는다.
+- 변이: X 전용 실제 전달 JS의 위치/맵 freshness, 취소 pending 복구, 늦은 정책 readback, OFF 잠금, Fleet eligibility/owner 6개가 각각 동작 단언에서 RED이고 원본은 GREEN이다. source raw hash 전후 일치 및 전달 hash는 final-plan/task6b-mutation-report.json, task6b-source-unchanged.json, task6b-delivery.jsonl에 기록했다. 초기 Fleet 두 시도의 EStop 취소/클릭 경합과 restored 실패는 유효 변이 증거에서 제외하며 초기 aggregate 로그를 보존한다. 개별 로그는 최종 corrected 결과로 교체되었다.
+- 화면: settings desktop dark 및 traffic phone light의 실제 확인창 viewport를 캡처했다. 정지 visible/center-hit·inert false, 가로 넘침·pageerror 0. 근거 X:/DevTemp/rosy-ui-unify/final-plan/task6b-captures/report.json 및 *-viewport.png. 부모의 직접 시각 판단과 독립 최종 검토는 별도 기록한다.
+- gate 변화: SOURCE/LOCAL. 배포·실제 장치·물리 정지·FIELD 수용을 주장하지 않는다.
+- 결정: D-439 §18·§20. 확인창부터 명령·readback 완료까지 한 작업 owner를 유지하고 즉시 OFF의 새 잠금을 옛 요청이 해제하지 않는다.
+- 최종 수용: 독립 SPEC 및 QUALITY PASS, 부모가 5개 실제 viewport와 6개 delivered/source hash를 직접 확인하여 PASS. 마지막 scoped CSS 후 구조 예산 2 passed(0.96s), lint 0 errors/26 기존 warnings, diff check PASS. source/장치 gate 구분은 유지하며 소스 commit은 Git 기록을 따른다.
