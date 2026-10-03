@@ -667,7 +667,7 @@
 
 ## 2026-09-20 · uncommitted · chore(fleet): relay diagnosis fields exposed; live iteration deferred to D-83 (environment)
 
-- 변경: formation_status의 relay에 follower_last_error·follower_tx 노출(0 Hz의 이유가 화면과 API에 오르지 않던 관측 공백 — 릴레이가 팔로워 소켓에 기록해 둔 마지막 오류). console.js 상세 패널에 팔로워 오류 줄 추가. 
+- 변경: formation_status의 relay에 follower_last_error·follower_tx 노출(0 Hz의 이유가 화면과 API에 오르지 않던 관측 공백 — 릴레이가 팔로워 소켓에 기록해 둔 마지막 오류). console.js 상세 패널에 팔로워 오류 줄 추가.
 - 증거(LOCAL 실측): 시뮬 완주 1회 성공 — 2/2 online, T6 무장 RUNNING, 릴레이 리더 9.95 Hz, 리더 목표 수납, FOR-004 HOLD 작동. 반복 시도에서는 환경 불안정 확인 — Nav2 component_container SIGSEGV(-11), joint_state_publisher 등 -9 리핑. 2로봇 풀 스택이 이 공유 WSL 박스 자원을 넘는다
 - gate 변화: 없음. SOURCE/LOCAL GO 유지. ARTIFACT/DEVICE/FIELD HOLD·PARKED
 - 결정: 릴레이 follower_tx 0 진단과 실 로봇 오버레이 검증은 D-83 세션의 절차(안정 세션·자원 튜닝 후 sim_verify 절차 재실행)로 귀속한다 — 검증 스크립트는 Rosy/sim_verify.sh에 남긴다. 이 환경에서의 반복 시도는 무효 숫자를 낳는다(D-79 정신)
@@ -4893,22 +4893,14 @@
 - 증거: native systemd/버전 문서/구조 시험 199 passed/1 skipped. 최종 quick tier와 SSH 영향 범위는 별도 재실행한다.
 - gate 변화: 장치 활성화·물리 주행·FIELD 이동 없음.
 - 결정: D-418와 D-432를 각각의 경로/opt-in 소유권으로 보존한다.
-<<<<<<< HEAD
 
 ## 2026-10-04 · uncommitted · docs(ui): D-432 공용 디자인과 설치 검증 마무리
 
 - 변경: Pilot 화면별 점검, 웹 공용 동작 아이콘과 native canonical 색 생성, 실제 태블릿 설치 증거를 D-432/디자인 규칙/검증 기록으로 연결했다. 최신 D-435 문서는 기존 journal prefix를 보존하여 통합했다.
-=======
-
-## 2026-10-03 · uncommitted · docs(ui): D-432 공용 디자인과 설치 검증 마무리
-
-- 변경: Pilot 화면별 점검, 웹 공용 동작 아이콘과 native canonical 색 생성, 실제 태블릿 설치 증거를 D-432/디자인 규칙/검증 기록으로 연결했다. 최신 D-435 문서는 기존 journal prefix를 보존하여 통합했다.
->>>>>>> main
 - 증거: 실제 Pinky 인증·저장 자격 재접속·조회 전용 카메라, native Pilot 30/Cam 318 JVM 시험 통과. 브라우저 마지막 재조작 시험에서 완료 receipt를 목표 ID에 고정했다. 최종 브라우저·문서 검증 결과는 validation/discovery-link-2026-10-03/README.md에 기록한다.
 - gate 변화: 실제 주행·발열 하강·Cam 화면 off 연속 송출·FIELD 수용은 미판정이며 승격하지 않는다.
 - 결정: D-432. 4자리 페어링 통합은 후속 적용이다.
 
-<<<<<<< HEAD
 ## 2026-10-04 · uncommitted · site(D-441): automatic site stack updates
 - 변경: D-441 ADR·ADR Log 행(D-440은 device-power 브랜치가 써서 다음 번호, `adr_gaps`에 D-438·D-439·D-440). `build-site-candidate.yml`에 main push 트리거와 이미지 원본 경로 필터, push는 기존 릴리스에서 빌드 없이 성공, push 빌드만 취소하는 job concurrency와 비취소 릴리스 그룹. 서명 PC용 `deploy/site/auto_sign_candidates.py`(출처 증명 digest·main 조상·태그 확인 뒤 `sign_manifest_only`, 감사 로그)와 `register_auto_sign_task.ps1`. 사이트 호스트용 `rosy_site_autoupdate.py`·`rosy-site-autoupdate.service`·`.timer`(override 거부, SHA256SUMS·tar 검사, 설치된 검증기, 원자적 site.env·symlink 전환, 건강 확인과 롤백, 정리). D-437·D-301 부록, `deploy/site/README.md` "Automatic updates (D-441)"
 - 증거: 사이트 후보·workflow·fetch·검증기·서명 시험과 새 자동 서명·호스트 갱신 시험(symlink 시험은 Linux 컨테이너에서), `test_no_secrets_in_tracked_files`, harness 계약·lint, actionlint 1.7.7(Docker)
@@ -4916,11 +4908,9 @@
 - 결정: D-441 Accepted, D-437·D-301 개정 부록
 - 교훈: 자동 서명기가 지키는 것은 자산 쓰기 권한과 main 아닌 빌드다. 서명 PC 계정과 main 보호 규칙이 이제 사이트 배포의 문이다
 
-=======
 ## 2026-10-04 · uncommitted · docs(plan): 웹 게이트 사다리·Fleet 승격 ADR 계획
 
 - 변경: `docs/plans/2026-10-04-web-gate-ladder-fleet-readiness-adr-plan.md` 추가. dashboard/pilot ARTIFACT·pilot DEVICE(페달 정지 계약)·fleet ROS-SIM(D-87→D-426)의 게이트를 release 이미지 관측 → 실기 증거 사다리로 묶고, Fleet 사이트 시드 승격과 중앙(8081) 착수 전제, 수용됨-미구현(D-368·D-361·WS 전환) 순서를 정했다. 신규 ADR D-439(웹 표면 게이트는 release 이미지를 탄다)·D-440(Fleet 승격 경로와 중앙 착수 전제) 배정표를 포함하되 착지는 이 계획 승인 뒤로 미뤘다. origin/main과의 분기(ahead 45/behind 91)와 D-427 이동(follow-ups P1)을 선행으로 명시했다.
 - 증거: STATUS.md blockers 원문과 D-437·D-426·d427-post-migration-follow-ups(origin) 대조. 코드·게이트 변화 없음.
 - gate 변화: 없음. 문서만.
 - 결정: 새 결정 없음(D-439/D-440은 이 계획 승인 뒤 Proposed 착지).
->>>>>>> main
