@@ -509,3 +509,11 @@
 - 증거: 공유·dashboard 영향 host 묶음 342 passed/95 skipped (591.46s), 후속 인증·구조 묶음 64 passed/2 skipped (31.08s). 기본 진입 실제 CORE fixture 브라우저 회귀와 독립 SPEC·QUALITY 검토를 통과했다. host 묶음과 브라우저 대상은 중복될 수 있어 합산하지 않는다.
 - gate 변화: SOURCE/LOCAL 증거만 보완하며 DEVICE/FIELD를 대신하지 않는다.
 - 결정: D-439. 공용 규칙은 표시 이름만 소유하고 서버 역할 권한을 추론하지 않는다.
+
+## 2026-10-04 · uncommitted · fix(ui): 교통 정책 운용자 이름 공유
+
+- 변경: core_ui_logic.js에 CORE의 교통 정책 모드·판정·사유·신호·신호원·정지선 규칙 이름을 동결한 공용 표로 추가했다. enumLabel의 모르는 값 원문 표시와 없는 값 — 계약을 유지한다. 토큰·권한 판정은 추가하지 않았다. 교통 패널이 단일 비활성 사유 helper로 이동하면서 사라진 기존 예외 5개를 닫힌 allowlist에서 제거했다.
+- 증거: 최종 교통 행동 Chromium 6 passed (147.22s), 공유·패키지·예산·교통 API 호스트 240 passed/24 skipped 뒤 사라진 예외 1 failure를 정리하고 해당 상태·비활성 계약 2 passed (0.36s). 알려진 한국어 이름, 원문 미래 enum, null/누락 readback은 브라우저에서 확인했다. 묶음 대상은 중복될 수 있어 합산하지 않는다.
+- gate 변화: 공용 라이브러리 SOURCE/LOCAL 증거이며 소비 표면의 DEVICE/FIELD를 대신하지 않는다.
+- 결정: D-439. 표시 이름만 공유하고 정책 가용성·정지 조건은 서버가 판단한다.
+- 최종 후속 증거: poll generation·실패 후 가용성·종료 회귀를 포함한 영향 묶음 29 passed (22.21s), 독립 SPEC·QUALITY 최종 검토 PASS. 이전 묶음과 합산하지 않는다. 실제로 사라진 allowlist만 제거했으며 guard를 X 제공 자산에서 지웠을 때 행동 회귀가 검토본 역전을 검출했다. 제품 소스는 변이하지 않았다.

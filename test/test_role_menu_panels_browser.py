@@ -1111,7 +1111,7 @@ def test_setup_traffic_policy_stages_before_confirmed_apply():
             if(path.endsWith('/apply'))return {active:{policy_revision:'candidate'},status:{state:'ENFORCED'}};
             return {};
           }});
-          callbacks['/api/v1/traffic']({active:{policy_revision:'old',mode:'ADVISORY',approach_distance_m:1,stop_distance_m:.3,stop_dwell_s:1,min_confidence:.8},simulation_signal:{available:false},status:{state:'DISABLED'}});
+          callbacks['/api/v1/traffic']({active:{policy_revision:'old',mode:'MONITOR_ONLY',approach_distance_m:1,stop_distance_m:.3,stop_dwell_s:1,min_confidence:.8},simulation_signal:{available:false},status:{state:'DISABLED'}});
           window.confirm=()=>true;
         }""")
         page.locator('[name="policy_revision"]').fill("candidate")

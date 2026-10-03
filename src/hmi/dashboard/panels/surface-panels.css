@@ -84,3 +84,8 @@ body[data-surface="console"] #vision-stage:fullscreen .surface-camera-frame,
 .traffic-policy-facts > div { min-width: 0; }
 .traffic-policy-facts dt { color: var(--nominal-quiet); }
 .traffic-policy-facts dd { margin: 0; overflow-wrap: anywhere; }
+.traffic-policy-draft > h3,
+.traffic-policy-draft > ui-actions,
+.traffic-policy-draft > ui-status { flex-basis: 100%; margin: 0; }
+.traffic-policy-review p { margin: 0; overflow-wrap: anywhere; }
+[data-panel="setup.traffic_policy"] { gap: var(--space-5); }
