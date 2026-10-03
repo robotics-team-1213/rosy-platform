@@ -2,6 +2,7 @@
 
 import json
 import re
+import time
 
 from fastapi import APIRouter, Depends, Query, Request, Response
 from fastapi.responses import FileResponse
@@ -31,6 +32,16 @@ def get_front_camera_status(
         svc: CoreServicesLike = Depends(get_services)):
     response.headers["Cache-Control"] = "no-store"
     return svc.vision.status()
+
+
+@vision_router.get("/models")
+def get_model_status(
+        response: Response,
+        _: AuthContext = Depends(viewer),
+        svc: CoreServicesLike = Depends(get_services)):
+    """D-423 §3.6: per-task learned-model status the robot reports; read-only."""
+    response.headers["Cache-Control"] = "no-store"
+    return svc.vision.models.snapshot(now=time.monotonic())
 
 
 @vision_router.get("/front/frame")

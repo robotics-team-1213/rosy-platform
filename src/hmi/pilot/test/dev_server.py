@@ -54,6 +54,7 @@ PILOT_MIME = {
     "widgets/gripper.js": "application/javascript",
     "input-state.js": "application/javascript",
     "vision.js": "application/javascript",
+    "models.js": "application/javascript",
     "manifest.webmanifest": "application/manifest+json",
     "sw.js": "text/javascript",
     "icons/icon-192.png": "image/png",

@@ -336,7 +336,7 @@ SIZE_VERDICTS = {
         "localization/mission.py); same verdict",
     ),
     "control": (
-        43_055,
+        43_998,
         f"split: deploy closure needs only sensing + safety provider (P1a); {CONTROL_SPLIT} "
         "(re-judged 2026-09-30 at 33090 after D-356 added the ROS-free learned perception backend "
         "(sensing/perception/learned), the shadow node and the recording CLI; the learned backend sits "
@@ -399,7 +399,14 @@ SIZE_VERDICTS = {
         "re-judged 2026-10-03 at 42888 for the D-408 paint CPU follow-up (learned mask area filter, mask-only inference, paint cadence in learned/paint_worker.py) — same subjects inside sensing/perception, verdict unchanged; "
         "re-judged 2026-10-03 at 43055 with D-424 (the bumper's pure scan_geometry "
         "and strip_ranges in control/lidar_guard.py, the shared-body delegation in sensing/body.py, "
-        "legacy-envelope lifting in calibration_profile.py) — same subjects, verdict unchanged)",
+        "legacy-envelope lifting in calibration_profile.py) — same subjects, verdict unchanged; "
+        "re-judged 2026-10-03 at 43998 when D-423 merged onto main: the ROS-free region range "
+        "(sensing/perception/region_range.py: LiDAR bearing-span association with ground-plane fallback), "
+        "the NOMINAL-profile and lidar-mount store readers (calibrated_values.py), the opt-in wiring in "
+        "camera_detect_node, the ROS-free object_det backend, signature check and slot layout "
+        "(sensing/perception/learned/detector.py, signature.py, slots.py), the detector core and its thin "
+        "node (control/object_detector*.py) and the overlay pairing in follow_preview -- advisory evidence "
+        "beside the learned lane shadow, each its own module, moves with the P1a split, verdict unchanged)",
     ),
     # --- D-362 newly-covered files (web assets in src/ packages, ops roots). ---
     "runtime/sensing/web/diagnostic.html": (

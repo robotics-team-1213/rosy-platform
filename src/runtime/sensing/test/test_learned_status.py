@@ -208,3 +208,11 @@ def test_node_declares_rate_and_threads_and_passes_threads_to_the_model():
     assert "declare_parameter('threads', 2)" in src
     assert "LaneSegModel.open(folder, threads=threads)" in src
     assert src.index("frame_skipped()") < src.index("rate_limited(") < src.index("self._busy = True")
+
+
+def test_status_carries_signed_only_when_the_node_checked_it():
+    """D-423 2026-10-03: lane_seg is warn-only, so its status says whether the model is signed."""
+    from control.sensing.perception.learned.status import LearnedStatus
+    status = LearnedStatus()
+    assert "signed" not in status.payload(model_revision="r", last_error=None)
+    assert status.payload(model_revision="r", last_error=None, signed=False)["signed"] is False

@@ -247,7 +247,7 @@ def test_even_indices():
 
 def test_gate_file_parses():
     gate = intake.load_gate(ROOT / "tools" / "perception" / "model" / "intake_gate.yaml")
-    assert gate == GATE
+    assert intake.task_gate(gate, "lane_seg") == GATE  # D-423: plus an object_det section
 
 
 def test_bad_folder_fails_with_report(tmp_path, capsys):

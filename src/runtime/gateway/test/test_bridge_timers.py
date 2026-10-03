@@ -218,6 +218,9 @@ EXPECTED_SUBSCRIPTIONS = [
     ("road/observation", "_on_road_observation", 10),
     ("dock/observation", "_on_dock_observation", 10),
     ("camera/preview/compressed", "_on_camera_preview", "PREVIEW"),
+    # D-423 §3.6: learned-model status per task, latched by the model nodes; display only.
+    ("perception/learned/status", "_on_lane_model_status", "LATCHED"),
+    ("perception/learned/object_det/status", "_on_object_det_model_status", "LATCHED"),
     ("amcl/transition_event", "_on_amcl_transition", 10),
     ("map_server/transition_event", "_on_map_server_transition", 10),
     ("slam_toolbox/transition_event", "_on_slam_transition", 10),
@@ -304,7 +307,9 @@ def test_the_three_latched_endpoints_stay_latched(registered):
     latched |= {t for t, _cb, qos in registered.node.subscriptions if qos == "LATCHED"}
 
     assert latched == {"map", "power/mode", "docking/collision_exemption", "motor/ready",
-                       "localization/state", "localization/candidates", "pilot_recorder/status"}
+                       "localization/state", "localization/candidates", "pilot_recorder/status",
+                       # D-423: model status (late joiners need the current model at once)
+                       "perception/learned/status", "perception/learned/object_det/status"}
 
 
 def test_the_bridge_opens_the_same_service_clients(registered):

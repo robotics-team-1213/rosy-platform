@@ -47,3 +47,31 @@ def test_web_only_relays_bounded_enable_disable_and_renders_node_checks():
                   'independent_validation', 'physical_validation'):
         assert 'camera_ground_check_' + check in page
     assert 'cameraGroundCalibration' in page
+
+
+def test_camera_node_offers_nominal_ground_and_lidar_region_range_off_by_default():
+    """D-423: opt-in NOMINAL plane + LiDAR region range; the device default stays unranged."""
+    node = source('control/camera_detect_node.py')
+    config = source('config/camera.yaml')
+    for token in ('nominal_camera_profile_path', 'allow_nominal_ground', 'region_lidar_range',
+                  'region_lidar_max_age_s', 'region_lidar_tolerance_m', 'region_lidar_tolerance_ratio',
+                  'accept_simulation_scans'):
+        assert f"'{token}'" in node
+        assert f'{token}:' in config
+    assert "camera_ground_mode: pinhole" in config
+    assert 'allow_nominal_ground: false' in config
+    assert 'region_lidar_range: false' in config
+    assert "nominal_camera_profile_path: ''" in config
+    assert 'accept_simulation_scans: false' in config
+    # Overrides rely on the node's declared NaN default: no '.nan' in a ROS params file,
+    # since rcl_yaml_param_parser support is unverified on the device. Named in a comment.
+    assert '.nan' not in config
+    for token in ('camera_pitch_rad_override', 'camera_height_m_override', 'lidar_yaw_offset_override'):
+        assert f"'{token}'" in node and token in config and f'{token}:' not in config
+    adr = next((ROOT.parents[2] / 'docs' / 'adr').glob('D-423-*.md')).read_text(encoding='utf-8')
+    assert '/opt/rosy/current/install/share/pinky_pro/config/camera_nominal.yaml' in adr
+    # The same store path as line_observer: URDF nominal < accepted record.
+    assert 'nominal_camera_profile(' in node and 'lidar_nose_rad(' in node
+    assert "LaserScan, 'scan'" in node and 'qos_profile_sensor_data' in node
+    assert 'is_robot_scan(' in node and 'range_regions(' in node
+    assert 'ground_source=' in node

@@ -49,7 +49,8 @@ class InferResult:
 
 
 class _OrtSession:
-    def __init__(self, path: Path, threads: int, allow_spinning: bool = True):
+    def __init__(self, path: Path, threads: int, allow_spinning: bool = True, *,
+                 inter_op: int | None = None, config: dict | None = None):
         add_learned_site()
         import onnxruntime as ort  # lazy: optional on the device image
         opts = ort.SessionOptions()
@@ -59,6 +60,10 @@ class _OrtSession:
             opts.inter_op_num_threads = 1
             opts.add_session_config_entry("session.intra_op.allow_spinning", "0")
             opts.add_session_config_entry("session.inter_op.allow_spinning", "0")
+        if inter_op is not None:
+            opts.inter_op_num_threads = inter_op
+        for key, value in (config or {}).items():
+            opts.add_session_config_entry(key, value)
         self._s = ort.InferenceSession(str(path), sess_options=opts,
                                        providers=["CPUExecutionProvider"])
         self._in = self._s.get_inputs()[0].name

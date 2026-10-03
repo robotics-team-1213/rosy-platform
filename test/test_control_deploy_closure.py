@@ -54,6 +54,9 @@ DEPLOYED_CONTROL_EXECUTABLES = {
     # D-411 A: Pilot learning recording, always started by camera_preview.launch.py and
     # idle until CORE asks. Evidence only; it publishes no velocity command.
     "pilot_recorder_node",
+    # D-423: advisory object detection on vision/detections, in camera_preview.launch.py
+    # behind object_det (ROSY_OBJECT_DET, default off). CORE does not read it (D-137).
+    "object_detector_node",
 }
 
 #: Control executables that can own the final command (D-149 standalone exception).

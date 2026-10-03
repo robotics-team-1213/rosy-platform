@@ -434,3 +434,9 @@
 - 변경: 시험만. 100 % CPU 호스트에서 시간 여유가 모자라 떨어지던 시험을 넓혔다(논리 실패는 없었다). `test_fleet_loss.py` `_agent_rig` 기본값을 주기 0.1·답 시한 0.8·여유 0.1(신선도 1.0)·판정 1.5 s 로(주기 < 답 시한 < 신선도 < 판정 순서 유지), 느린 허브 2.0 s·degraded 1.5 s 관찰, 침묵 허브 발화 구간 1.5 ≤ t < 2.1 s. `test_fleet_agent_link.py`: degraded 허브 답 시한 1.0 s·`answered >= STABLE_HEARTBEATS`, 밀린 이벤트 시험 답 시한 1.0 s(상한 최악 ~0.23 s, 상한 없으면 200×0.025 = 5 s — 상한을 풀면 여전히 실패함을 확인), `timeouts` → `within_cap`.
 - 증거: 아래 커밋 메시지·보고의 3 회 실행.
 - gate 변화: 없음.
+
+## 2026-10-03 · b84e72c55 · feat(vision): D-423 학습 모델 상태 저장소(읽기 전용)
+
+- 변경: `core_features/vision/models.py` `ModelStatusStore` — `perception/learned/status`(lane_seg shadow)·`perception/learned/object_det/status`(object_det active) 상태를 작업별로 보관, 나이·stale. `VisionFrameStore.models` 로 붙인다. 교체·선택 기능 없음.
+- 증거: `test_vision_models.py` 8 passed; `src/runtime/services/test` 포함 묶음 739 passed, 37 skipped.
+- gate 변화: 없음.

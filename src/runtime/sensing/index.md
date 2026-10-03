@@ -66,8 +66,8 @@
 
 ## 최근 기록
 
-- 2026-10-02 · uncommitted · fix(localization): 후보 미세 단계 뒤 분리 재검사 가드, 180° 쌍둥이 시험
-- 2026-10-02 · uncommitted · fix(localization): D-395 rev. 11 — LiDAR 물체: 자기 빔은 묶기 전에, 붙은 로봇은 나누고, 중심은 밀어 낸다
-- 2026-10-02 · uncommitted · fix(learned): 그림자 차선 근거 — 연결 성분 면적 문턱과 visible 히스테리시스
-- 2026-10-02 · uncommitted · fix(perception): D-395 rev. 11 — 기준 사각형 수평선 문턱과 한 사각형 한 검출(NMS)
-- 2026-10-02 · 410c6832 · feat(control): D-411 A pilot_recorder_node 와 녹화 상태기계
+- 2026-10-03 · 820444c49 · fix(perception): D-423 2·3단계 리뷰 반영
+- 2026-10-03 · uncommitted · fix(perception): D-423 조정자 결정 — 차선 서명 경고만, 서명 우회는 환경 변수로만
+- 2026-10-03 · 66c83863d · feat(perception): D-423 2·3단계 — 물체 검출 백엔드·노드·화면·작업별 슬롯·서명
+- 2026-10-03 · uncommitted · fix(sensing): D-423 리뷰 반영 — 운영자 덮어쓰기, 시뮬 스캔, 구독 조건
+- 2026-10-02 · 071acb65c · feat(sensing): D-423 카메라 영역 거리 — LiDAR 우선, 바닥 평면 예비
