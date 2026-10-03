@@ -4848,3 +4848,10 @@
 - 변경: 사용자의 정정에 따라 조명을 기본 꺼짐으로 수정하고 앱·관제 PC 요청당 최대 30초로 제한했다. 어둠·발열 회복·재시작으로 다시 켜지지 않으며 중복 요청은 시간을 연장하지 않는다. 설계와 사용 문서에 요청형 자동 판단의 경계를 기록했다.
 - 증거: JVM 330 passed, APK/lint 성공, CLI 59 passed, 독립 리뷰 승인. 같은 서명 설치와 설정 보존, 실제 S21 만료 후 꺼짐 유지와 송출 재시작 기본 꺼짐, 실제 관제 PC 요청·취소 및 최신 JPEG 수신을 확인했다.
 - gate 변화: 없음. SOURCE/LOCAL GO, 전체 DEVICE/FIELD PARKED 유지.
+
+## 2026-10-04 · uncommitted · site(D-441): automatic site stack updates
+- 변경: D-441 ADR·ADR Log 행(D-440은 device-power 브랜치가 써서 다음 번호, `adr_gaps`에 D-438·D-439·D-440). `build-site-candidate.yml`에 main push 트리거와 이미지 원본 경로 필터, push는 기존 릴리스에서 빌드 없이 성공, push 빌드만 취소하는 job concurrency와 비취소 릴리스 그룹. 서명 PC용 `deploy/site/auto_sign_candidates.py`(출처 증명 digest·main 조상·태그 확인 뒤 `sign_manifest_only`, 감사 로그)와 `register_auto_sign_task.ps1`. 사이트 호스트용 `rosy_site_autoupdate.py`·`rosy-site-autoupdate.service`·`.timer`(override 거부, SHA256SUMS·tar 검사, 설치된 검증기, 원자적 site.env·symlink 전환, 건강 확인과 롤백, 정리). D-437·D-301 부록, `deploy/site/README.md` "Automatic updates (D-441)"
+- 증거: 사이트 후보·workflow·fetch·검증기·서명 시험과 새 자동 서명·호스트 갱신 시험(symlink 시험은 Linux 컨테이너에서), `test_no_secrets_in_tracked_files`, harness 계약·lint, actionlint 1.7.7(Docker)
+- gate 변화: 없음. workflow push 실행, 서명 PC 예약 작업, 사이트 호스트 설치와 첫 자동 갱신·롤백은 미검증. 사이트 키 미준비(D-301)
+- 결정: D-441 Accepted, D-437·D-301 개정 부록
+- 교훈: 자동 서명기가 지키는 것은 자산 쓰기 권한과 main 아닌 빌드다. 서명 PC 계정과 main 보호 규칙이 이제 사이트 배포의 문이다
