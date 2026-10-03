@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "site" / "fleet"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "operations" / "fleet"))
 
 from core_common.protocol.localization import CandidateReport, DecisionSource  # noqa: E402
 from fleet.localization import cues  # noqa: E402

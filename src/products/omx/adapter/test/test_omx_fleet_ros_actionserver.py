@@ -14,7 +14,7 @@ import pytest
 rclpy = pytest.importorskip("rclpy", reason="requires the ROS 2 Jazzy runtime")
 pytest.importorskip("fcntl", reason="requires Linux Unix peer credentials")
 
-FLEET_ROOT = Path(__file__).resolve().parents[4] / "site" / "fleet"
+FLEET_ROOT = Path(__file__).resolve().parents[5] / "operations" / "fleet"
 FLEET_TEST_ROOT = FLEET_ROOT / "test"
 for entry in (str(FLEET_ROOT), str(FLEET_TEST_ROOT)):
     if entry not in sys.path:

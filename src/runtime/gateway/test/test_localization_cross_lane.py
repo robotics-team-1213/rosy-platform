@@ -25,7 +25,7 @@ from types import SimpleNamespace
 
 import pytest
 
-_FLEET = Path(__file__).resolve().parents[3] / "site" / "fleet"
+_FLEET = Path(__file__).resolve().parents[4] / "operations" / "fleet"
 if str(_FLEET) not in sys.path:
     sys.path.insert(0, str(_FLEET))
 

@@ -180,12 +180,40 @@ _SRC_VAR = re.compile(
     r"""^[ \t]*([A-Z_][A-Z0-9_]*)[ \t]*(?::[^=\n]+)?=[ \t]*.*["']src["'][ \t]*\)?[ \t]*(?:#.*)?$""", re.M)
 
 
-def rewrite_srcvar(text: str, mapping: dict[str, str]) -> tuple[str, int]:
-    """(e) ``SRC / "site" / "fleet"`` where ``SRC`` names the repo's ``src/`` folder
-    (a constant assigned ``... "src"``, or named SRC/SRC_ROOT/SRC_DIR) becomes
-    ``SRC.parent / "operations" / "fleet"``. The legacy scanner cannot see this form."""
+_FILE_EXPR = re.compile(
+    r"(?:pathlib\.)?Path\(__file__\)(?:\.resolve\(\)|\.absolute\(\))*((?:\.parent\b(?!s))*)(?:\.parents\[(\d+)\])?")
+
+
+def _src_names(text: str, path: str) -> set[str]:
+    """Names and ``Path(__file__)`` expressions in ``text`` that denote the repo's src/."""
     names = {m.group(1) for m in _SRC_VAR.finditer(text)}
     names |= {n for n in ("SRC", "SRC_ROOT", "SRC_DIR") if re.search(rf"^[ \t]*{n}[ \t]*=", text, re.M)}
+    parts = PurePosixPath(path).parts
+    if parts and parts[0] == "src":
+        for m in _FILE_EXPR.finditer(text):
+            level = _level(m.group(1), m.group(2))
+            if level and len(parts) - level == 1:
+                names.add(m.group(0))
+        for m in _VAR_DEF.finditer(text):
+            level = _level(m.group(3), m.group(4))
+            if level and len(parts) - level == 1:
+                names.add(m.group(1))
+    return names
+
+
+def _parent_of(name: str) -> str:
+    m = re.search(r"\.parents\[(\d+)\]$", name)
+    if m:
+        return f"{name[:m.start()]}.parents[{int(m.group(1)) + 1}]"
+    return f"{name}.parent"
+
+
+def rewrite_srcvar(text: str, mapping: dict[str, str], path: str = "") -> tuple[str, int]:
+    """(e) ``SRC / "site" / "fleet"`` where ``SRC`` names the repo's ``src/`` folder (a
+    constant assigned ``... "src"``, named SRC/SRC_ROOT/SRC_DIR, or a ``Path(__file__)``
+    chain or variable that reaches src/) becomes ``SRC.parent / "operations" / "fleet"``.
+    The legacy scanner cannot see this form."""
+    names = _src_names(text, path)
     if not names:
         return text, 0
     count = 0
@@ -195,7 +223,7 @@ def rewrite_srcvar(text: str, mapping: dict[str, str]) -> tuple[str, int]:
         segs = old.split("/")[1:]
         if not all(seg in text for seg in segs):
             continue
-        body = "(" + "|".join(map(re.escape, sorted(names))) + r")(\s*/\s*)([\"'])"
+        body = "(" + "|".join(map(re.escape, sorted(names, key=len, reverse=True))) + r")(\s*/\s*)([\"'])"
         body += f"({_SEPARATOR})".join(map(re.escape, segs))
         pattern = re.compile(r"(?<![\w.])" + body + _END)
 
@@ -209,7 +237,7 @@ def rewrite_srcvar(text: str, mapping: dict[str, str]) -> tuple[str, int]:
                 seps = [f"{quote}{op}{quote}"]
             new_seps = seps[len(seps) - need:] if need <= len(seps) else [seps[0]] * (need - len(seps)) + seps
             count += 1
-            return f"{name}.parent{op}{quote}" + new[0] + "".join(s + g for s, g in zip(new_seps, new[1:]))
+            return f"{_parent_of(name)}{op}{quote}" + new[0] + "".join(s + g for s, g in zip(new_seps, new[1:]))
         text = pattern.sub(repl, text)
     return text, count
 
@@ -500,7 +528,7 @@ def run(wave: str, dry_run: bool) -> None:
             stats["slash"] += n
             new, n = rewrite_join(new, joins, new_path)
             stats["join"] += n
-            new, n = rewrite_srcvar(new, new_path)
+            new, n = rewrite_srcvar(new, new_path, path)
             stats["srcvar"] = stats.get("srcvar", 0) + n
         if moved and path.endswith(".py"):
             top = next(o for o in tops if under(old_file, o))
@@ -538,7 +566,7 @@ def main() -> None:
             text = read(ROOT / path)
             if text is None:
                 continue
-            new, n = rewrite_srcvar(text, mapping)
+            new, n = rewrite_srcvar(text, mapping, path)
             if n:
                 (ROOT / path).write_bytes(new.encode("utf-8"))
                 changed.append(path)
