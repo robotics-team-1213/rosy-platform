@@ -45,7 +45,9 @@ BENCH_ONLY_FRAGMENTS = ("spidev", "i2c-0", "gpiomem", "pwm", "gpiochip",
 NATIVE = ROOT / "deploy" / "robot" / "pinky_pro" / "native"
 #: D-190: the one unit that may hold display devices, and exactly these.
 #: D-260 3 adds the lamp node (group rosy-display, 99-rosy-lamp.rules).
-DISPLAY_UNIT = "rosy-boot-display.service"
+DISPLAY_UNIT = "rosy-face.service"
+#: D-433: the retired unit ships only to replace an old robot's copy; same devices, never beside rosy-face.
+RETIRED_DISPLAY_UNIT = "rosy-boot-display.service"
 DISPLAY_DEVICES = ("/dev/spidev0.0", "/dev/gpiochip4", "/dev/i2c-1", "/dev/ws281x_pwm")
 #: D-247: the read-only probe; the lamp and LCD nodes are only checked for existence.
 PROBE_UNIT = "rosy-hw-probe.service"
@@ -109,7 +111,7 @@ def surface_violations(units: dict[str, str]) -> list[str]:
         if (_non_root(directives) and groups & {"gpio", "spi"} and policy != "closed"
                 and (directives.get("PrivateDevices") or ["false"])[-1] != "true"):
             found.append(f"{name} has {sorted(groups & {'gpio', 'spi'})} without a closed device policy")
-        if name == DISPLAY_UNIT:
+        if name in (DISPLAY_UNIT, RETIRED_DISPLAY_UNIT):
             devices = sorted(line.split("=", 1)[1].split()[0] for line in allows)
             if devices != sorted(DISPLAY_DEVICES):
                 found.append(f"{name} devices {devices} != {sorted(DISPLAY_DEVICES)}")

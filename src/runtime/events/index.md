@@ -28,8 +28,8 @@
 
 ## 최근 기록
 
+- 2026-10-03 · uncommitted · fix(events): 감사 시험 시계를 고정하고 텍스트 writer만 검사한다
 - 2026-09-25 · uncommitted · refactor(runtime): move core_events under src/runtime (D-231)
 - 2026-09-24 · uncommitted · test(core): LOG-001 audit 계약을 자체 `test/`로 이전
 - 2026-09-23 · uncommitted · fix(core_events): the splice check also looks at the head, and the quarantine marker records our own end
 - 2026-09-23 · uncommitted · fix(core_events): a reused inode no longer passes as the same audit file
-- 2026-09-23 · uncommitted · fix(core_events): the quarantine dedupe re-checks that the quarantine file still holds the bytes

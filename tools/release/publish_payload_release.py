@@ -21,6 +21,8 @@ Takes the signed tarball prepare_payload_release.py made and does what the robot
    ("error" is transient and keeps the watch going), or the timeout sets withdrawn=true. Before re-uploading, the remote rollout is downloaded again:
    one withdrawn meanwhile stays withdrawn, and one that changed otherwise is never overwritten.
 
+New releases add no wave delay after canary success; --wave-delay-s opts into a delay.
+--resume --open-wave-now removes only the delay from an already approved signed rollout.
 --resume re-attaches to an existing release (its rollout.json, signature checked). --withdraw withdraws
 one by hand. One process per release id (a lock file in the work folder). Every phase is printed and
 appended to <evidence-dir>/<YYYY-MM-DD>/rollout.jsonl. Standard library plus the repo's signing.py.
@@ -417,6 +419,32 @@ class Publisher:
         self.log("withdrawn", f"{reason}; rollout.json withdrawn=true uploaded", reason=reason)
         return 3
 
+    def open_wave_now(self, robots: list[str], out_dir: Path) -> int:
+        """Re-sign only the delay after canary approval, checking for concurrent edits."""
+        remote, data = self.download()
+        if remote["withdrawn"]:
+            self.log("withdrawn", f"{self.tag} is withdrawn; left unchanged")
+            return 3
+        if data != self.last_uploaded:
+            raise PublishError(f"{self.tag} rollout.json changed since resume; not overwriting it")
+        if remote.get("canary_ok") is not True:
+            raise PublishError("--open-wave-now requires canary_ok=true")
+        if remote["wave_delay_s"] == 0:
+            self.show_others(remote, robots)
+            return 0
+        target = {**remote, "wave_delay_s": 0}
+        uploaded = self.upload_or_explain(target, out_dir)
+        after, after_data = self.download()
+        if after["withdrawn"]:
+            self.log("withdrawn", f"{self.tag} was withdrawn during upload; left withdrawn")
+            return 3
+        if after_data != uploaded:
+            raise PublishError(f"{self.tag} rollout.json changed during upload; left unchanged")
+        self.last_uploaded = uploaded
+        self.log("wave-open", f"{self.tag} wave_delay_s=0 uploaded; all other rollout fields preserved")
+        self.show_others(target, robots)
+        return 0
+
     def show_others(self, rollout: dict, robots: list[str]) -> None:
         published = dt.datetime.strptime(rollout["published_at"], "%Y-%m-%dT%H:%M:%SZ")
         opens = published + dt.timedelta(seconds=int(rollout["wave_delay_s"]))
@@ -483,10 +511,10 @@ def take_lock(work_dir: Path) -> Path:
 
 # --- main ------------------------------------------------------------------------
 
-def _positive_wave(text: str) -> int:
+def _nonnegative_wave(text: str) -> int:
     value = int(text)
-    if value < 60:
-        raise argparse.ArgumentTypeError("must be at least 60")
+    if value < 0:
+        raise argparse.ArgumentTypeError("must be at least 0")
     return value
 
 
@@ -521,15 +549,19 @@ def main(argv: list[str] | None = None, *, gh_runner: Runner = run_gh, ssh_runne
     parser.add_argument("--canary", help="IP or host of the canary robot")
     parser.add_argument("--robot", action="append", default=[], help="other robots, only shown after canary_ok")
     parser.add_argument("--resume", action="store_true", help="re-attach to an existing release")
+    parser.add_argument("--open-wave-now", action="store_true",
+                        help="with --resume, remove the wave delay after canary approval")
     parser.add_argument("--withdraw", action="store_true", help="withdraw an existing release (needs --reason)")
     parser.add_argument("--reason", help="why, for --withdraw")
     parser.add_argument("--repo", type=_matching(REPO_NAME, "OWNER/NAME"), default=REPO)
     parser.add_argument("--key-name", type=_matching(KEY_NAME, "a key name"), default="rosy-release-2026-01")
     parser.add_argument("--public-key", type=Path, help="default deploy/robot/pinky_pro/release/public-keys/<key>.pem")
-    parser.add_argument("--wave-delay-s", type=_positive_wave, default=600)
+    parser.add_argument("--wave-delay-s", type=_nonnegative_wave, default=0)
     parser.add_argument("--canary-timeout-min", type=_positive_minutes, default=30)
     parser.add_argument("--evidence-dir", type=Path, default=DEFAULT_EVIDENCE)
     args = parser.parse_args(argv)
+    if args.open_wave_now and (not args.resume or args.withdraw):
+        parser.error("--open-wave-now requires --resume and cannot be combined with --withdraw")
 
     if args.withdraw:
         if not args.reason or not args.reason.strip() or "\n" in args.reason or len(args.reason) > 300:
@@ -580,6 +612,8 @@ def main(argv: list[str] | None = None, *, gh_runner: Runner = run_gh, ssh_runne
                 print(f"error: {publisher.tag} is withdrawn ({rollout['reason']}); publish a new release",
                       file=sys.stderr)
                 return 3
+            if args.open_wave_now:
+                return publisher.open_wave_now(args.robot, out_dir)
             if rollout["canary_ok"]:
                 publisher.show_others(rollout, args.robot)
                 return 0

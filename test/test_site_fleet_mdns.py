@@ -1,6 +1,7 @@
 """The site locator treats mDNS as a hint, never as a trust decision."""
 
 import importlib.util
+import os
 from pathlib import Path
 from xml.etree import ElementTree
 
@@ -52,6 +53,35 @@ def test_publish_replaces_service_file_with_configured_port(tmp_path):
     module.publish_service(output, 9443)
     assert ElementTree.fromstring(output.read_text(encoding="utf-8")).findtext(
         "service/port") == "9443"
+    assert list(tmp_path.iterdir()) == [output]
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX file modes are required")
+@pytest.mark.parametrize("role", ["fleet", "overhead"])
+def test_public_advertisement_is_readable_before_atomic_replace(tmp_path, monkeypatch, role):
+    module = _module()
+    output = tmp_path / "rosy.service"
+    output.write_text("old advertisement", encoding="utf-8")
+    output.chmod(0o600)
+    original_replace = Path.replace
+    replaced = []
+
+    def replace(source, destination):
+        # The new XML must already be readable when Avahi observes the rename.
+        assert source.stat().st_mode & 0o777 == 0o644
+        assert output.read_text(encoding="utf-8") == "old advertisement"
+        replaced.append(source)
+        return original_replace(source, destination)
+
+    monkeypatch.setattr(Path, "replace", replace)
+    old_umask = os.umask(0o077)
+    try:
+        module.publish_service(output, 8443, role=role, tls_host="fleet-a.local")
+    finally:
+        os.umask(old_umask)
+    assert replaced
+    assert output.stat().st_mode & 0o777 == 0o644
+    assert ElementTree.fromstring(output.read_text(encoding="utf-8")).findtext("service/port") == "8443"
     assert list(tmp_path.iterdir()) == [output]
 
 

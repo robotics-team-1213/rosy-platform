@@ -4,6 +4,8 @@ Usage (from the repository root)::
 
     python tools/harness/rosy_harness.py generate   # rewrite index.md files and STATUS.md
     python tools/harness/rosy_harness.py lint       # errors exit 1; staleness is a warning
+    python tools/harness/rosy_harness.py affected [--base main] [--print|--run] [--json]
+                                                    # D-436 change-scoped pytest selection
 
 Design: ``docs/plans/2026-09-15-module-harness-design.md`` (ADR D-61).
 ROS-free: standard library plus PyYAML, so it runs on Windows hosts and in CI.
@@ -752,13 +754,33 @@ def lint(repo: Path) -> tuple[list[str], list[str]]:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("command", choices=("generate", "lint", "brief"))
+    parser.add_argument("command", choices=("generate", "lint", "brief", "affected"))
     parser.add_argument("--repo", type=Path, default=Path(__file__).resolve().parents[2])
+    # D-436 `affected`: change-scoped test selection (tools/harness/affected_tests.py).
+    parser.add_argument("--base", default="main", help="affected: diff base ref (merge base with HEAD)")
+    action = parser.add_mutually_exclusive_group()
+    action.add_argument("--print", dest="action", action="store_const", const="print",
+                        help="affected: print the selection (default)")
+    action.add_argument("--run", dest="action", action="store_const", const="run",
+                        help="affected: run the selected pytest invocations")
+    parser.add_argument("--json", action="store_true", help="affected: machine-readable selection")
+    parser.add_argument("--ci-matrix", action="store_true",
+                        help="affected: one-line JSON {mode, matrix} for the GitHub job matrix (ci.yml)")
+    parser.add_argument("--skip", action="append", default=[], metavar="PATH",
+                        help="affected --run: drop this selected path (already run by the caller); repeatable")
+    parser.add_argument("--full", action="store_true",
+                        help="affected --run: also run a FULL selection locally (default: GitHub runs it)")
     args = parser.parse_args(argv)
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
 
     repo = args.repo.resolve()
+    if args.command == "affected":
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        import affected_tests  # noqa: E402 — sibling module, loaded on demand
+
+        return affected_tests.main(repo, args.base, args.action or "print", args.json,
+                                   matrix=args.ci_matrix, allow_full=args.full, skip=tuple(args.skip))
     if args.command == "brief":
         print(render_brief(repo), end="")
         return 0

@@ -27,7 +27,40 @@ DEPLOY_FILES = (
 )
 DOC_FILES = ("docs/reference/site-lan-discovery-profile.md",)
 _COMMIT = re.compile(r"^[0-9a-f]{40}$")
+SBOM_TOOLS = ("scout", "syft")
+# deploy/site is the proxy image build context, and the Fleet/Vision COPY
+# sources are copied whole, so ignored files under any of them could reach the
+# Docker daemon or an image. Python caches and egg-info carry no secrets.
+_HARMLESS_IGNORED = ("__pycache__/", ".pytest_cache/", ".egg-info/")
+_COPIED_BY = ("Dockerfile.fleet", "Dockerfile.vision")
+_PARSED_COPY_FLAGS = ("--chown=", "--chmod=")
 Runner = Callable[..., subprocess.CompletedProcess]
+
+
+def _image_source_paths(site: Path) -> list[str]:
+    """deploy/site plus every build-context path the Fleet/Vision Dockerfiles copy."""
+    paths = {"deploy/site"}
+    for name in _COPIED_BY:
+        text = (site / name).read_text(encoding="utf-8").replace("\\\n", " ")
+        for line in text.splitlines():
+            words = line.split()
+            if not words or words[0].upper() not in {"COPY", "ADD"}:
+                continue
+            # Fail closed on any form this parser does not understand (JSON
+            # array, heredoc, --from/--link/... flags): a skipped COPY would
+            # leave its source path out of the ignored-file guard.
+            if len(words) < 3 or any(word.startswith(("[", "<<")) for word in words[1:]):
+                raise ValueError(f"{name}: unsupported {words[0]} form for the ignored-file "
+                                 f"guard: {line.strip()}")
+            flags = [word for word in words[1:] if word.startswith("--")]
+            if any(not flag.startswith(_PARSED_COPY_FLAGS) for flag in flags):
+                raise ValueError(f"{name}: unsupported {words[0]} flag for the ignored-file "
+                                 f"guard: {line.strip()}")
+            sources = [word for word in words[1:-1] if not word.startswith("--")]
+            if not sources:
+                raise ValueError(f"{name}: {words[0]} without a source: {line.strip()}")
+            paths.update(source.rstrip("/") for source in sources)
+    return sorted(paths)
 
 
 def _sha256(path: Path) -> str:
@@ -52,8 +85,23 @@ def _candidate_output(root: Path, output_dir: Path) -> Path:
     return output
 
 
+def _sbom_command(tool: str, reference: str, sbom_path: Path) -> list[str]:
+    # Both tools write SPDX JSON to the same sbom/<service>.spdx path, so the
+    # manifest and the host verifier do not depend on which one ran (D-437).
+    if tool == "scout":
+        return ["docker", "scout", "sbom", "--format", "spdx", "--output",
+                str(sbom_path), f"local://{reference}"]
+    if tool == "syft":
+        return ["syft", "scan", f"docker:{reference}", "--output",
+                f"spdx-json={sbom_path}"]
+    raise ValueError(f"unsupported SBOM tool: {tool}")
+
+
 def build_candidate(root: Path, output_dir: Path, *, runner: Runner = subprocess.run,
-                    clock: Callable[[], datetime] = lambda: datetime.now(timezone.utc)) -> dict:
+                    clock: Callable[[], datetime] = lambda: datetime.now(timezone.utc),
+                    sbom_tool: str = "scout") -> dict:
+    if sbom_tool not in SBOM_TOOLS:
+        raise ValueError(f"unsupported SBOM tool: {sbom_tool}")
     root = root.resolve()
     site = root / "deploy" / "site"
     output = _candidate_output(root, output_dir)
@@ -61,6 +109,15 @@ def build_candidate(root: Path, output_dir: Path, *, runner: Runner = subprocess
                     cwd=root, check=True, capture_output=True, text=True).stdout
     if status.strip():
         raise ValueError("a clean Git worktree is required to build a candidate")
+    ignored = runner(["git", "ls-files", "--others", "--ignored", "--exclude-standard",
+                      "--directory", "--", *_image_source_paths(site)],
+                     cwd=root, check=True, capture_output=True, text=True).stdout
+    unsafe = [line for line in ignored.splitlines()
+              if line.strip() and not line.endswith(_HARMLESS_IGNORED)]
+    if unsafe:
+        raise ValueError("ignored files under deploy/site or an image source path (real "
+                         "secrets or config?) would enter the image build; move them out first: "
+                         + ", ".join(sorted(unsafe)))
     commit = runner(["git", "rev-parse", "HEAD"], cwd=root, check=True,
                     capture_output=True, text=True).stdout.strip()
     if not _COMMIT.fullmatch(commit):
@@ -110,10 +167,9 @@ def build_candidate(root: Path, output_dir: Path, *, runner: Runner = subprocess
             raise RuntimeError(f"{service} image is {image_os}/{architecture}, expected linux/amd64")
 
         sbom_path = sbom_dir / f"{service}.spdx"
-        runner(["docker", "scout", "sbom", "--format", "spdx", "--output",
-                str(sbom_path), f"local://{reference}"], cwd=root, check=True)
+        runner(_sbom_command(sbom_tool, reference, sbom_path), cwd=root, check=True)
         if not sbom_path.is_file() or sbom_path.stat().st_size == 0:
-            raise RuntimeError(f"Docker Scout did not produce the {service} SBOM")
+            raise RuntimeError(f"{sbom_tool} did not produce the {service} SBOM")
         images[service] = {
             "reference": reference,
             "image_id": image_id,
@@ -156,9 +212,12 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output-dir", required=True, type=Path,
                         help="empty destination outside the source checkout")
+    parser.add_argument("--sbom-tool", choices=SBOM_TOOLS, default="scout",
+                        help="SPDX JSON SBOM generator: Docker Scout (local default) "
+                             "or anchore syft (CI runners, no Docker Hub login)")
     args = parser.parse_args(argv)
     try:
-        manifest = build_candidate(ROOT, args.output_dir)
+        manifest = build_candidate(ROOT, args.output_dir, sbom_tool=args.sbom_tool)
     except (OSError, RuntimeError, ValueError, subprocess.CalledProcessError) as exc:
         parser.error(str(exc))
     print(f"site candidate: {manifest['source_commit']} -> {args.output_dir.resolve()}")

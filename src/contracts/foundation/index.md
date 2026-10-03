@@ -16,6 +16,7 @@
 | D-268 | Fleet 자동 작업은 sighting이 아닌 별도 수용된 정책 증거만 사용한다 |
 | D-283 | 운용 콘솔은 고정 3영역을 유지하고 조작 그룹을 선택한다 |
 | D-411 | Pilot 로봇측 학습 녹화(카메라 유닛 소유, CORE는 시작·정지 요청, `teleop/intent` 원 입력·주체 기록, 1회 10분)와 정지 중에만 허용하는 HTTP 수신(목록·tar·sha256 manifest, `rosy_ml fetch --http`); 기기가 알리는 조작부 서술자 `rosy.controls/1`(base_velocity·joint_jog·gripper, 드라이버는 전송·위젯은 kind별, 팔 조이스틱은 이전 목표 종료 후 순차 제한 목표); OMX 그리퍼 전용 절대 목표·쥠 readback(시뮬레이션만, D-390 유지) |
+| D-433 | 로봇 몸의 화면·소리·빛(LCD·부저·램프)은 ROS 밖 한 프로세스 `rosy-face`(구 `rosy-boot-display`)가 평생 소유하고, 상황표 순수 함수 하나(`core_common`)가 그릴 것을 정한다; CORE는 1 s `face-inputs.json` 핸드오버로 얼굴·주행 카드 내용을 넘기고 신선하지 않으면 상태 카드로 돌아간다; 026 이주·롤백 경로 포함, Q1–Q5 사용자 결정(권고안) |
 
 ## 계획·결과 문서
 
@@ -35,8 +36,8 @@
 
 ## 최근 기록
 
+- 2026-10-03 · e021264e6 · feat(face): D-433 상황표 `core_common.face_screen`
 - 2026-10-03 · uncommitted · fix(link): 현재 접속과 후속 코드 규약 구별
 - 2026-10-03 · uncommitted · feat(link): D-432 주소 없는 장비 접속
 - 2026-10-03 · uncommitted · feat(controls): D-411 C 검토 — `GripperControl.max_velocity`
 - 2026-10-03 · uncommitted · feat(core_common): D-411 C `OmxSimGripperGoal`
-- 2026-10-03 · uncommitted · feat(protocol): publish strict Cell goal submission contract

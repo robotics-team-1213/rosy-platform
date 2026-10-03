@@ -64,7 +64,9 @@ LAMP_CHANNEL = "sys/module/rp1_ws281x_pwm/parameters/pwm_channel"
 LAMP_PWM_CHANNEL = "3"
 LAMP_HELPER = "opt/rosy/current/install/lib/lamp_control/lamp_selftest"
 LAMP_TIMEOUT_S = 10.0
-DISPLAY_UNIT = "rosy-boot-display.service"
+#: D-433: rosy-face owns the buzzer and lamp; a robot rolled back to an older
+#: release still runs rosy-boot-display. Whichever is active takes the hand-over.
+DISPLAY_UNITS = ("rosy-face.service", "rosy-boot-display.service")
 CORE_GROUP = "rosy-core"
 DISPLAY_GROUP = "rosy-display"
 #: D-260: the hand-over to rosy-boot-display (its TEST_REQUEST / TEST_RESULT).
@@ -278,7 +280,7 @@ def _display_takes_it(system: System) -> bool:
     the device is driven here as before (review M2). Without the rosy-display
     group the display could not read the request (review L4): said once, driven here.
     """
-    if system.unit_state(DISPLAY_UNIT) != "active":
+    if not any(system.unit_state(unit) == "active" for unit in DISPLAY_UNITS):
         return False
     if system.display_group() is None:
         print(f"rosy-hw-test: no {DISPLAY_GROUP} group; the boot display cannot read a hand-over, "

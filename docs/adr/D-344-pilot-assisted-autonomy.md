@@ -131,6 +131,41 @@
   `max_angular_follows_manual: false`(각속도 상한 덮어쓰기)는 문턱을 우회하지 않는다. L1 이상에서는 위
   상한이 그대로 걸린다.
 
+### 보강 (2026-10-03, 벤치 차선 설정이 업데이트마다 사라짐)
+
+- **§12 보강 — 관측 노드의 운영자 덮어쓰기 파일.** 실물 벤치 스크립트 `~/lane_switch.sh` 는
+  `line_observer_node` 를 keep/NOMINAL 로 돌리려고 릴리스 안의
+  `/opt/rosy/current/install/share/control/config/line_follow.yaml` 을 그 자리에서 고쳤다. 페이로드
+  릴리스는 `/opt/rosy/releases/<id>` 를 통째로 바꾸고 자동 업데이트(D-412)는 약 10 분마다 돌므로, 이
+  설정은 말없이 사라졌다. **릴리스 디렉터리 안의 수정은 업데이트에서 살아남지 못한다.**
+  - **파일:** `/etc/rosy/line_observer_overrides.yaml`(root 0644). `/etc/rosy/` 는 릴리스가 쓰지 않고
+    이미지 층 동기화(D-388)가 금지 경로로 거부한다. IR 교정 파일과 같은 길을 쓴다: `camera_preview.launch.py`
+    가 패키지 `line_follow.yaml` → `/etc/rosy/ir_calibration.yaml` → 이 파일 순으로 관측 노드에 넘기고
+    (ROS 파라미터 파일은 뒤가 이긴다), 없으면 지금과 같다.
+  - **허용 키(이 밖은 파일 전체를 건너뛴다):** `camera_lane_mode`(line·between·lane·edge_left·centre·keep —
+    route_* 는 차선 그래프·경로 키가 필요해 뺐다), `camera_ground_source`(PINKY·NOMINAL — 로봇에 GAZEBO 는
+    없다), `allow_nominal_ground`·`debug_overlay`(참/거짓), `nominal_camera_profile_path`(절대 경로 `.yaml`),
+    `camera_pitch_rad_override`(−0.2..0.6 rad)·`camera_height_m_override`(0.02..0.2 m). 마지막 둘은 D-397
+    운영자 층이고 범위는 `calibration_store.check_values` 의 `camera_profile` 범위와 같다. NOMINAL 바닥은
+    `allow_nominal_ground: true` 와 프로필 경로가 함께 있어야 한다(D-364 §3 의 두 번 켜기).
+  - **검사:** launch 가 모양·키·형·범위를 먼저 보고, 어긋나면 경고 로그를 남기고 파일을 건너뛴다(관측
+    노드가 재시작 반복에 빠지지 않게, IR 파일과 같다).
+  - **도구:** 파일은 손으로 고치지 않고 `control` 패키지의 콘솔 스크립트 `line_observer_overrides`
+    (`apply`/`clear`/`show`)로 쓴다. 도구는 launch 와 같은 검사를 통과한 파일만 원자적으로 쓰고
+    `rosy-camera` 만 다시 시작한다(CORE·모터는 건드리지 않는다). 기하는 URDF NOMINAL 이 기본이고
+    로봇별 승인 레코드가 다듬는다(D-397): `--pitch-deg`/`--height-m` 를 주지 않으면 레코드나 NOMINAL 이
+    쓰이고, 주면 운영자 덮어쓰기로 둘을 이긴다. 그래서 따로 만든 `/etc/rosy/camera_profile_bench.yaml`
+    프로필 사본은 더 필요 없다 — 프로필 경로는 릴리스의 `camera_nominal.yaml` 을 가리킨다.
+    sudo 는 PYTHONPATH 를 지우므로 root 셸 안에서 환경을 불러 `ros2 run` 으로 돌린다(되돌리기는 `apply …`
+    대신 `clear`, 확인은 `show`):
+    `sudo -n bash -c 'source /opt/ros/jazzy/setup.bash && source /opt/rosy/current/install/setup.bash && ros2 run control line_observer_overrides apply --profile /opt/rosy/current/install/share/pinky_pro/config/camera_nominal.yaml --pitch-deg <deg> --height-m <m>'`
+  - **바뀌지 않는 것:** 패키지 기본(`camera_lane_mode: line`, `PINKY`)과 CORE 설정. 관측 노드는 관측만
+    한다(D-2). 운영 차선 모드를 로봇에 켜는 것은 지금처럼 사용자 승인 뒤의 벤치 결정이다.
+  - **기각한 대안:** CORE 오버레이(`/var/lib/rosy/core/.rosy/rosy.yaml`)에 넣기 — CORE 는 관측 노드
+    파라미터를 소유하지 않는다. `/etc/rosy/ir_calibration.yaml` 허용 키 넓히기 — 그 파일은 교정 도구가
+    찍는 IR 전용 파일이라 뜻이 섞인다. 캘리브레이션 저장소 레코드 — 모드·디버그 같은 운영 선택은 측정이
+    아니다.
+
 ### Alternatives
 
 - **자동 모드를 켜 두고 손을 떼도 계속 간다.** 거부. 원격 화면은 지연·끊김이 있고(D-368) 무인 주행의

@@ -429,6 +429,9 @@
 | D-431 | 라즈베리파이 YOLO 추론은 NCNN을 목표로 하고 OpenCV 영상 처리와 학습 모델의 의미를 유지한다 | Accepted (2026-10-03; NCNN export and runtime implemented; device acceptance pending) |
 
 | D-432 | 모든 앱·장치는 공통 발견·연결 규약을 쓰고, 개발 모드에서는 코드 없이 연결한다 | Accepted (2026-10-03, 사용자 승인; 공통 발견·개발 연결 모드·운영 페어링 목표 계약, 문서만; 주소 자동 추종은 신원 검증 전환 후, 구현·DEVICE/FIELD 별도) |
+| D-433 | 로봇 몸의 화면·소리·빛(LCD·부저·램프)은 ROS 밖 한 프로세스 `rosy-face`(구 `rosy-boot-display`)가 평생 소유하고, 상황표 순수 함수 하나(`core_common`)가 그릴 것을 정한다; CORE는 1 s `face-inputs.json` 핸드오버로 얼굴·주행 카드 내용을 넘기고 신선하지 않으면 상태 카드로 돌아간다; 026 이주·롤백 경로 포함, Q1–Q5 사용자 결정(권고안) | Proposed (2026-10-03) |
 | D-434 | 모델 PC와 관제 PC를 나눈다 — 모델 PC가 학습 모델 처리와 시뮬레이션(Isaac Sim 5.1)을, 관제 PC는 사이트 스택만 맡는다 | Accepted (2026-10-03, 사용자 결정; 역할 분담·운용 규칙, 모델 PC GPU 학습·NCNN·Isaac 실행과 관제 PC 이전은 미수용) |
 | D-435 | 작업 오케스트레이션·Fleet·장치 실행을 역할과 권한으로 구분한다 | Proposed (2026-10-03, 책임 모델 재검토 초안; 기존 Accepted 계약·API·코드·실행 gate 변경 없음) |
+| D-436 | 호스트 시험은 변경 범위로 고른다 — 반복과 PR CI는 affected 티어, 공용 기반·미분류 변경과 main·야간·릴리스는 풀 | Accepted (2026-10-03, 사용자 요청; 저장소 도구·CI·작업 규칙만) |
+| D-437 | 공개 저장소의 빌드는 GitHub Actions hosted runner에서 하고, 서명만 로컬 오프라인 키로 한다 | Accepted (2026-10-03, 사용자 결정; 사이트 후보 workflow 첫 실행은 push 승인 뒤, 사이트 키 미준비) |
 | D-438 | 막힌 로봇의 판단은 Fleet 판단기가 규칙 → 비전 모델 → 사람 순으로 내린다 | Accepted (2026-10-03, 사용자 승인; D-407 §2 의 답하는 주체와 Fleet 쪽 영상 해석을 고침, 사전 주의점은 다음 ADR, 문서만) |

@@ -2,15 +2,15 @@
 module: cam
 logical_modules: []
 owner: SITE
-last_verified: { commit: "2370b41b", date: 2026-10-01 }
+last_verified: { commit: "uncommitted", date: 2026-10-03 }
 gates:
   SOURCE:
     state: GO
-    evidence: "D-374 stage 1 moved it from src/site/overhead/android; D-377 renamed src/site/ceiling_camera -> src/site/cam: applicationId/namespace io.github.livsbittt.rosy.cam, DataStore cam_settings, Gradle root rosy-cam, app_name Rosy Cam. Wire names (rosy-overhead/1, /overhead/v1/frames, _rosy-overhead._tcp, rosyov://, Overhead* classes) unchanged. JVM unit tests 130 passed at a8199fd9 (2026-09-30 Windows, JDK 21)"
+    evidence: "2026-10-03 NSD late callback lifecycle fix: rejection-tolerant callback executor and serialized registration/stop. JVM 309 passed, 0 failures; late-callback regression first failed with RejectedExecutionException. Wire names and pinned CA trust unchanged."
     cmd: "cd src/site/cam && gradlew testDebugUnitTest"
   LOCAL:
     state: GO
-    evidence: "testDebugUnitTest --rerun 130 passed and assembleDebug built app-debug.apk with applicationId io.github.livsbittt.rosy.cam at a8199fd9 (2026-09-30 Windows). Host contract: test_app_roles.py, test_surface_icons.py green. No phone install on this change"
+    evidence: "2026-10-03 testDebugUnitTest and assembleDebug succeeded (Windows, JDK 21), JVM 309 passed. APK signer matched the installed Galaxy S21 app before install -r; app-private settings were preserved byte-for-byte. Build/cache/evidence outputs stayed on X:."
     cmd: "cd src/site/cam && gradlew testDebugUnitTest assembleDebug"
   ROS-SIM:
     state: N/A
@@ -18,6 +18,7 @@ gates:
     state: N/A
   DEVICE:
     state: PARKED
+    evidence: "2026-10-03 Galaxy S21 received pinned-site camera frames for 63 s: 10/10 HTTP 200, strictly increasing sequence, real 1280x720 JPEGs, age 102-430 ms; three stop/start cycles retained one process with no fatal crash. This closes this fix's live camera receipt only; the complete D-341/D-391 device matrix remains pending. No surveyed marker/position acceptance."
   FIELD:
     state: PARKED
 adrs: [D-261, D-341, D-370, D-374, D-377, D-391, D-432]

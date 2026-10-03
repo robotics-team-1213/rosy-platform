@@ -9,7 +9,7 @@ components:
     path: src/site/cell/rosy_cell
     import_prefix: rosy_cell
   - name: palletizing_process
-    path: modules/processes/palletizing/src/rosy/processes/palletizing
+    path: operations/processes/palletizing/src/rosy/processes/palletizing
     import_prefix: rosy.processes.palletizing
   - name: fleet_site
     path: src/site/fleet/fleet
@@ -18,7 +18,7 @@ components:
     path: src/products/omx/adapter/omx_adapter
     import_prefix: omx_adapter
   - name: world_api
-    path: modules/world/src/rosy/world/api
+    path: operations/world/src/rosy/world/api
     import_prefix: rosy.world.api
   - name: skill_contracts
     path: contracts/skill/src/rosy/contracts/skill
@@ -27,13 +27,13 @@ components:
     path: modules/skills/api/src/rosy/skills/api
     import_prefix: rosy.skills.api
   - name: execution_api
-    path: modules/execution/src/rosy/execution/api
+    path: operations/execution/src/rosy/execution/api
     import_prefix: rosy.execution.api
   - name: omx_transfer_integration
     path: integrations/robots/omx/src/rosy/integrations/robots/omx
     import_prefix: rosy.integrations.robots.omx
   - name: gateway_app
-    path: apps/gateway/src/rosy_gateway
+    path: operations/apps/fleet/src/rosy_gateway
     import_prefix: rosy_gateway
   - name: agent_app
     path: apps/agent/src/rosy_agent

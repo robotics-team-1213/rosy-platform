@@ -103,6 +103,8 @@ def _fresh_image_layer(device: Path, native: Path) -> None:
     units = device / "etc/systemd/system"
     units.mkdir(parents=True)
     for unit in sync_mod.UNITS:
+        if unit in sync_mod.RETIRED_UNITS:
+            continue  # D-433: a new image never installs a retired unit
         shutil.copy2(native / unit, units / unit)
     for folder, destination in (("udev", "etc/udev/rules.d"), ("modprobe", "etc/modprobe.d")):
         (device / destination).mkdir(parents=True)
@@ -287,7 +289,8 @@ def test_unit_allowlist_is_what_build_native_payload_puts_in_systemd():
     copied = re.findall(r'cp "\$NATIVE_RUNTIME_SOURCE/([^"]+)" "\$OVERLAY/etc/systemd/system/"', text)
 
     assert copied
-    assert sorted(copied) == sorted(sync_mod.UNITS)
+    # D-433: a retired unit ships in the release (to replace an old robot's copy) but not in a new image.
+    assert sorted(copied) == sorted(set(sync_mod.UNITS) - sync_mod.RETIRED_UNITS)
 
 
 def test_units_the_sync_enables_are_the_ones_customize_rootfs_enables():
@@ -1207,3 +1210,115 @@ def test_payload_release_carries_udev_and_modprobe_and_old_verify_accepts_it(tmp
     # The robot's image-resident native_release.py hashes every non-metadata file.
     key = device / sync_mod.DEFAULT_PUBLIC_KEY
     NativeReleaseManager(root=device, public_key=key).verify(NEW_ID)
+
+
+# --- D-433: rosy-boot-display -> rosy-face on a robot updating from 026 ---------------
+
+FACE_UNIT = "rosy-face.service"
+OLD_DISPLAY = "rosy-boot-display.service"
+
+
+def _pre_face_unit(native: Path) -> str:
+    """The display unit as release 026 shipped it: no retirement condition."""
+    text = (native / OLD_DISPLAY).read_text(encoding="utf-8")
+    return "".join(line for line in text.splitlines(keepends=True)
+                   if not line.startswith("ConditionPathExists=!/etc/systemd/system/rosy-face"))
+
+
+def _as_026(device: Path) -> str:
+    """The device as a 026 robot has it: rosy-boot-display installed and enabled, no rosy-face."""
+    native = device / "opt/rosy/releases" / NEW_ID / "deploy/robot/native"
+    old_unit = _pre_face_unit(native)
+    units = device / "etc/systemd/system"
+    (units / FACE_UNIT).unlink()
+    (units / OLD_DISPLAY).write_text(old_unit, encoding="utf-8")
+    (device / "opt/rosy/native-runtime/rosy-face.py").unlink()
+    return old_unit
+
+
+def test_a_026_robot_gets_rosy_face_enabled_but_the_sync_never_swaps(device):
+    # D-433 review HIGH2: on a 026 robot this sync runs under 026's updater, whose
+    # rollback cannot restart the retired unit; so the sync leaves it running.
+    _as_026(device)
+    runner = Runner(active={OLD_DISPLAY, "rosy-io.service"})
+
+    result = _sync(device, NEW_ID, runner, dry_run=False)
+
+    calls = runner.mutating()
+    assert ["systemctl", "enable", FACE_UNIT] in calls
+    assert ["systemctl", "enable", "--now", FACE_UNIT] not in calls
+    assert not any(OLD_DISPLAY in call for call in calls)
+    assert "/etc/systemd/system/rosy-face.service" in result["new"]
+    # The old unit is replaced, not removed: its condition keeps it off from the next boot on.
+    replaced = (device / "etc/systemd/system" / OLD_DISPLAY).read_text(encoding="utf-8")
+    assert "ConditionPathExists=!/etc/systemd/system/rosy-face.service" in replaced
+    # Restarting it now would meet the condition and stop it: a dark screen.
+    assert OLD_DISPLAY not in result["restart_units"]
+
+
+def test_the_dry_run_names_only_the_enable(device):
+    _as_026(device)
+
+    result = _sync(device, NEW_ID, Runner(active={OLD_DISPLAY}), dry_run=True)
+
+    assert "systemctl enable rosy-face.service" in result["commands"]
+    assert not any("rosy-boot-display" in command for command in result["commands"])
+
+
+def test_a_new_image_never_gets_the_retired_unit(tmp_path):
+    device = tmp_path / "device"
+    native = device / "opt/rosy/releases" / NEW_ID / "deploy/robot/native"
+    _install(native)
+    _fresh_image_layer(device, native)
+    runner = Runner(active={FACE_UNIT})
+
+    result = _sync(device, NEW_ID, runner, dry_run=False)
+
+    assert not (device / "etc/systemd/system" / OLD_DISPLAY).exists()
+    assert {"path": "/etc/systemd/system/rosy-boot-display.service",
+            "reason": "retired unit, not installed here (D-433)"} in result["skipped"]
+    assert runner.mutating() == []
+
+
+def test_the_026_updater_path_never_darkens_the_screen(device):
+    """026's updater: N's sync, a failed health check, then the rollback's sync.
+
+    026's updater has no _restore_display; the display must therefore never be
+    stopped, disabled or restarted along the way, whatever the outcome.
+    """
+    old_unit = _as_026(device)
+    old = device / "opt/rosy/releases" / OLD_ID / "deploy/robot/native"
+    shutil.copytree(device / "opt/rosy/releases" / NEW_ID / "deploy/robot/native", old)
+    (old / FACE_UNIT).unlink()
+    (old / "rosy-face.py").unlink()
+    (old / OLD_DISPLAY).write_text(old_unit, encoding="utf-8")
+    runner = Runner(active={OLD_DISPLAY, "rosy-io.service"})
+
+    apply = _sync(device, NEW_ID, runner, dry_run=False)
+    back = _sync(device, OLD_ID, runner, dry_run=False)
+
+    touched = [call for call in runner.mutating() if OLD_DISPLAY in call]
+    assert touched == []
+    assert OLD_DISPLAY not in apply["restart_units"]
+    assert (device / "etc/systemd/system" / OLD_DISPLAY).read_text(encoding="utf-8") == old_unit
+    assert "/etc/systemd/system/rosy-face.service" in back["removed"]
+
+
+def test_a_rollback_to_026_restores_the_old_display_unit(device):
+    old_unit = _as_026(device)
+    _sync(device, NEW_ID, Runner(active={OLD_DISPLAY}), dry_run=False)
+    # The D-433 updater swapped live (rosy_auto_update._face_swap) before this rollback.
+    old = device / "opt/rosy/releases" / OLD_ID / "deploy/robot/native"
+    shutil.copytree(device / "opt/rosy/releases" / NEW_ID / "deploy/robot/native", old)
+    (old / FACE_UNIT).unlink()
+    (old / "rosy-face.py").unlink()
+    (old / OLD_DISPLAY).write_text(old_unit, encoding="utf-8")
+    runner = Runner(active={FACE_UNIT})
+
+    result = _sync(device, OLD_ID, runner, dry_run=False)
+
+    assert "/etc/systemd/system/rosy-face.service" in result["removed"]
+    assert runner.mutating()[0] == ["systemctl", "disable", "--now", FACE_UNIT]
+    assert (device / "etc/systemd/system" / OLD_DISPLAY).read_text(encoding="utf-8") == old_unit
+    # The restored unit is enabled but not running: the updater starts it (D-433 Q5).
+    assert OLD_DISPLAY not in result["restart_units"]

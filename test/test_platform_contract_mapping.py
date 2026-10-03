@@ -38,10 +38,10 @@ from rosy_cell.compiler import Job, Step  # noqa: E402
 
 def test_platform_api_packages_have_declared_build_metadata():
     package_files = (
-        ROOT / "modules/world/pyproject.toml",
+        ROOT / "operations/world/pyproject.toml",
         ROOT / "modules/skills/api/pyproject.toml",
         ROOT / "modules/skills/manipulation/pyproject.toml",
-        ROOT / "modules/execution/pyproject.toml",
+        ROOT / "operations/execution/pyproject.toml",
     )
     assert all(path.is_file() for path in package_files)
 

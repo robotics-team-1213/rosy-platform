@@ -4858,9 +4858,54 @@
 - gate 변화: 실제 주행·발열 하강·Cam 화면 off 연속 송출·FIELD 수용은 미판정이며 승격하지 않는다.
 - 결정: D-432. 4자리 페어링 통합은 후속 적용이다.
 
+## 2026-10-03 · uncommitted · perception(D-356): experiment tracking defaults to local run log + TensorBoard
+- 변경: `learning/training/perception/training/run_log.py` 추가(`RunLog`, `chain`), `export_cell.py`가 `metrics.experiment`의 `local` 형태를 트래커별 허용 키로 받는다, 노트북 5c(로컬 기록)·5d(W&B) 분리와 `RUNS_DIR` 입력 칸, COLAB.md/README.md 절 추가, D-356 부록
+- 증거: `python -m pytest learning/training/perception/test -q -p no:cacheprovider`(ML venv), `python tools/harness/rosy_harness.py generate` 뒤 lint·`test/test_harness_contracts.py`
+- gate 변화: 없음(호스트 결과). 모델 PC나 실제 Colab 런타임에서 돌려 본 것은 아님
+- 결정: 사용자 결정 2026-10-03, 기본은 로컬 기록 + TensorBoard, W&B 선택
+
+## 2026-10-03 · uncommitted · perception(D-356): review fixes for the local run log
+- 변경: `run_log.py` 기록 오류가 학습을 멈추지 않음(`chain`은 예외 후 계속, `close()` 추가), 비밀 키 단어 확대, `export_cell`의 로컬 experiment 검증(`run_id`, 상대 `path`), 노트북 5c 고정 `runs/<run_id>`·상대 summary 경로·재실행 시 앞 기록 닫기, D-356 부록 동기화
+- 증거: 훈련 테스트와 `learning/training/perception/test` 전체, harness generate·lint·`test/test_harness_contracts.py`
+- gate 변화: 없음(호스트 결과)
+
+## 2026-10-03 · uncommitted · docs: D-437 GitHub-hosted builds, offline local signing
+- 변경: `docs/adr/D-437-github-hosted-builds-and-offline-local-signing.md` 추가(Accepted, 사용자 결정), ADR Log 행, D-301 부록 "2026-10-03 — CI 빌드·로컬 서명 (D-437)"(manifest-only 서명), `harness.yaml` adr_gaps에 D-436(다른 브랜치) 추가
+- 증거: `python tools/harness/rosy_harness.py generate` 뒤 lint·`test/test_harness_contracts.py` 실행
+- gate 변화: 없음(문서만). 사이트 후보 workflow 첫 실행은 사용자가 승인한 push 뒤, 사이트 서명 키는 D-301대로 미준비
+- 결정: D-437 Accepted, D-301 부록
+- 교훈: 없음
+
+## 2026-10-03 · uncommitted · site(D-437): security review fixes for CI-built site candidates
+- 변경: manifest-only 서명에 `--expected-manifest-sha256` 필수(CI 실행 summary의 해시), 빌드 job의 `release.json`·`SHA256SUMS` 출처 증명과 서명 전 `gh attestation verify` 절차, 옛 `site-*` 릴리스 정리(최신 3개), fetch 스크립트의 링크·장치 거부와 tarfile `data` 필터, action SHA 고정, 이미지 원본 경로 전체의 무시된 파일 거부, 릴리스 존재 사전 검사. D-437·D-301 부록·README 갱신. 로봇 쪽 릴리스 쪽 넘김은 후속 작업
+- 증거: 사이트 후보·서명·검증·workflow·fetch 시험, harness lint, actionlint 1.7.7(Docker)
+- gate 변화: 없음. workflow 첫 실행은 사용자 승인 push 뒤
+- 결정: D-437 Accepted 본문 보강
+- 교훈: 공개 Release 자산은 저장소 쓰기 권한으로 바꿀 수 있다. 서명 대상은 쓰기 권한으로 고칠 수 없는 기록(실행 summary·출처 증명)에 묶어야 한다
+
+## 2026-10-03 · uncommitted · docs: Fleet deployment preflight lessons
+
+- 변경: 사용자 요청으로 `docs/solutions/workflow-issues/site-fleet-deploy-checks-the-whole-configuration.md`에 정적/동적 등록 충돌, Fleet/Vision 대상 계약, 컨테이너 NSS와 Avahi, OS/앱 권한, 최신 정지 증거와 설치 readback을 하나의 배포 일관성 교훈으로 기록했다.
+- 증거: 현재 parser·CLI·roster·NSS/Compose·user discovery 소스, 운영 NSS-only 설치 receipt, Fleet 재시작 후 S21 JPEG readback. 실제 주소·자격 비밀은 기록하지 않았다.
+- gate 변화: 없음. 레거시 발견 conflict 정리·관제 PC 재부팅·outbound FleetAgent·물리 marker commissioning 완료를 이 문서로 주장하지 않는다.
+- 검증: frontmatter/claims validator와 독립 문서 grounding, 문서 계약·harness 검사로 기록 내용과 탐색 가능성을 확인한다.
+
+## 2026-10-03 · uncommitted · docs: D-436 change-scoped host test tiers
+
+- 변경: D-436(호스트 시험은 변경 범위로 고른다) ADR·ADR Log 행을 추가하고, `rosy_harness.py affected` 선택기·시험, pre-push affected 티어, ci.yml PR affected / main·야간·수동 풀 분기, 루트·harness·hooks·workflows AGENTS 시험 안내를 같은 브랜치(`feat/ci-affected-tests`)에 맞췄다.
+- 증거: `test/test_affected_tests.py` 표 시험(tools/ssh·core_common·미분류·sensing 역의존·문서·보조 모듈·deploy 축소·conftest/workflow/설정 escalation·base 부재)과 변이 증명 2건; D-418 브랜치 diff 선택 결과(core_common·platform_parts·tools/device_twin 미분류로 FULL).
+- gate 변화: 없음. 저장소 도구·CI·작업 규칙만이며 장치·이미지·현장 수용과 무관하다.
+
 ## 2026-10-04 · uncommitted · docs(plan): 웹 게이트 사다리·Fleet 승격 ADR 계획
 
 - 변경: `docs/plans/2026-10-04-web-gate-ladder-fleet-readiness-adr-plan.md` 추가. dashboard/pilot ARTIFACT·pilot DEVICE(페달 정지 계약)·fleet ROS-SIM(D-87→D-426)의 게이트를 release 이미지 관측 → 실기 증거 사다리로 묶고, Fleet 사이트 시드 승격과 중앙(8081) 착수 전제, 수용됨-미구현(D-368·D-361·WS 전환) 순서를 정했다. 신규 ADR D-439(웹 표면 게이트는 release 이미지를 탄다)·D-440(Fleet 승격 경로와 중앙 착수 전제) 배정표를 포함하되 착지는 이 계획 승인 뒤로 미뤘다. origin/main과의 분기(ahead 45/behind 91)와 D-427 이동(follow-ups P1)을 선행으로 명시했다.
 - 증거: STATUS.md blockers 원문과 D-437·D-426·d427-post-migration-follow-ups(origin) 대조. 코드·게이트 변화 없음.
 - gate 변화: 없음. 문서만.
 - 결정: 새 결정 없음(D-439/D-440은 이 계획 승인 뒤 Proposed 착지).
+
+## 2026-10-04 · uncommitted · site(D-437): verifier accepts the containerd image ID form
+- 변경: `deploy/site/verify_candidate.py` 전체 검증이 해시 확인을 마친 `images.tar`에서 서비스별 config blob과 `index.json`이 가리키는 OCI manifest blob을 읽어(링크 거부, 디스크 추출 없음) 바이트 해시를 다시 계산하고, manifest의 `config.digest`가 서명된 `image_id`와 같을 때만 manifest digest도 받는다. summary에 `id_form`(`config`/`oci-manifest`). `index.json`이 없는 archive는 config 형태만. 검증기·서명 시험의 가짜 archive를 실제 tar로 바꾸고 containerd·위조 경우 시험 추가. D-437 Consequences, `deploy/site/README.md` 검증 절
+- 증거: 사이트 후보·검증·서명·fetch·workflow 시험과 `test_no_secrets_in_tracked_files`, harness lint. 현장 호스트에서 다시 돌린 것은 아님
+- gate 변화: 없음(호스트 결과). containerd image store 사이트 호스트의 전체 검증 재실행이 남았다
+- 결정: D-437 Consequences 보강(manifest 형식 변경 없음)
+- 교훈: Docker image ID는 image store마다 다르다. 서명된 config digest에서 출발해 archive 안 blob 바이트로 다른 형태를 이어 붙여야 보안을 낮추지 않고 두 store를 모두 받을 수 있다

@@ -14,6 +14,7 @@ import math
 import os
 import time
 import traceback
+from datetime import datetime, timezone
 from typing import Optional
 
 import rclpy
@@ -52,6 +53,7 @@ from interfaces.srv import Emotion, SetLed
 import tf2_ros
 from tf2_ros import Buffer, TransformListener
 
+from core_features.command.emotion_map import emotion_for
 from core_features.command.manager import Twist as CoreTwist
 from core_features.diagnostics.collector import (
     CpuLoadProvider,
@@ -199,6 +201,12 @@ class RosBridge:
         #: D-385 확장: CORE 기동 직후 10초간 인사한다. 첫 인상은 hello 다.
         self._hello_until: Optional[float] = None
         self._drive_last_pub: Optional[float] = None
+        #: D-433: the face rosy-face draws (whatever the set_emotion service did) and
+        #: the last face-inputs.json written, for change-or-1 s writes.
+        self._face_desired: Optional[str] = None
+        self._face_inputs_last: Optional[dict] = None
+        self._face_inputs_at: Optional[float] = None
+        self._face_inputs_failed = False
         self._info_last_pub = 0.0
         self._voltage_topic_seen = False
         self._api_address: Optional[str] = None
@@ -530,6 +538,40 @@ class RosBridge:
         self._reconcile_led(status.info_visible, now)
         self._reconcile_emotion()
         self._maybe_publish_drive(now)
+        self._maybe_write_face_inputs(status, now)
+
+    def _maybe_write_face_inputs(self, status, now: float) -> None:
+        """D-433: hand rosy-face the face, the drive/wake cards and the power mode.
+
+        File-only and best effort: a failed write is logged once and the screen
+        falls back to the status card when the file goes stale (3 s).
+        """
+        from core_common.face_screen import FACE_INPUTS_PERIOD_S
+
+        snapshot = self._svc.state.snapshot()
+        wake = None
+        if status.info_visible:
+            wake = display.info_payload(
+                snapshot, status, health=self.diagnostics.summary_health().value,
+                address=self._api_endpoint(), hold_s=self._svc.power.info_hold_s)
+        content = display.face_inputs_payload(
+            snapshot, face=self._face_desired, power_mode=status.mode.value, wake=wake,
+            written_at=datetime.now(timezone.utc).isoformat(timespec="milliseconds"))
+        if not display.face_inputs_due(content, self._face_inputs_last, now,
+                                       self._face_inputs_at, FACE_INPUTS_PERIOD_S):
+            return
+        try:
+            # Inside the try: an import failure must not stop the bridge tick either.
+            from core_api_web.api.v1.host import write_face_inputs
+
+            write_face_inputs(self._svc, content)
+        except Exception as exc:  # noqa: BLE001 - an indicator input must never stop the bridge
+            if not self._face_inputs_failed:
+                self._node.get_logger().warning(f"face inputs not written: {type(exc).__name__}: {exc}")
+            self._face_inputs_failed = True
+            return
+        self._face_inputs_failed = False
+        self._face_inputs_last, self._face_inputs_at = content, now
 
     def _publish_display_info(self, status) -> None:
         payload = display.info_payload(
@@ -587,9 +629,13 @@ class RosBridge:
         idle_seconds = 0.0 if self._idle_since is None else current - self._idle_since
         if current < self._hello_until and self._emotion_shown is None:
             desired = "hello"
+            self._face_desired = desired
             if self._call_emotion(desired):
                 self._emotion_shown = desired
             return
+        # D-433: rosy-face draws CORE's choice from the hand-over; no service needed.
+        self._face_desired = emotion_for(mode, snapshot.navigation.value,
+                                         idle_seconds=idle_seconds) or self._face_desired
         self._emotion_shown = reconcile.emotion(
             mode,
             snapshot.navigation.value,

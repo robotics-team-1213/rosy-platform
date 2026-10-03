@@ -247,7 +247,7 @@ READY_UNITS = {unit: "active" for unit in ("rosy-release-recover.service", "rosy
 def _root_side(tmp_path: Path, battery_percent):
     """rosy-boot-status (root) copies CORE's hand-over; the display evaluates boot-status.json."""
     status = _native("rosy_boot_status_m1", "rosy-boot-status.py")
-    display = _native("rosy_boot_display_m1", "rosy-boot-display.py")
+    display = _native("rosy_boot_display_m1", "rosy-face.py")
     (tmp_path / "etc/rosy").mkdir(parents=True, exist_ok=True)
     (tmp_path / "etc/rosy/runtime.env").write_text("ROSY_RUNTIME_MODE=hardware\n", encoding="utf-8")
     (tmp_path / "var/lib/rosy/provisioning").mkdir(parents=True, exist_ok=True)

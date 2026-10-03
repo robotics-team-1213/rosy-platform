@@ -286,11 +286,13 @@ SIZE_VERDICTS = {
         "the ground-geometry lane keeper already lives apart in lane_keep.py (D-364)",
     ),
     "runtime/gateway/core/bridge/ros_bridge.py": (
-        606,
+        799,
         "accept: one CORE ROS executor integration point for publishers, subscriptions, lifecycle wiring, and "
         "service/action clients; extracted policy and callback logic lives in core/bridge modules, and "
         "timer/bridge behavior is covered by test_bridge_timers.py and test_bridge_reconcile.py. Re-judged "
-        "2026-10-01 at 606 after D-385 mode-to-emotion handoff wiring",
+        "2026-10-01 at 606 after D-385 mode-to-emotion handoff wiring; 2026-10-03 at 799 after D-433 "
+        "(face-inputs hand-over on the 5 Hz power tick; payload and cadence live in bridge/display.py "
+        "and core_common.face_screen, covered by test_face_inputs.py)",
     ),
     "runtime/sensing/control/sensing/perception/lane_bev.py": (
         611,
@@ -345,7 +347,7 @@ SIZE_VERDICTS = {
         "localization/mission.py); same verdict",
     ),
     "control": (
-        43_998,
+        44_301,
         f"split: deploy closure needs only sensing + safety provider (P1a); {CONTROL_SPLIT} "
         "(re-judged 2026-09-30 at 33090 after D-356 added the ROS-free learned perception backend "
         "(sensing/perception/learned), the shadow node and the recording CLI; the learned backend sits "
@@ -415,7 +417,10 @@ SIZE_VERDICTS = {
         "camera_detect_node, the ROS-free object_det backend, signature check and slot layout "
         "(sensing/perception/learned/detector.py, signature.py, slots.py), the detector core and its thin "
         "node (control/object_detector*.py) and the overlay pairing in follow_preview -- advisory evidence "
-        "beside the learned lane shadow, each its own module, moves with the P1a split, verdict unchanged)",
+        "beside the learned lane shadow, each its own module, moves with the P1a split, verdict unchanged; "
+        "re-judged 2026-10-03 at 44301 for the D-344 §12 addendum: the operator override overlay validator "
+        "beside the IR one (control/ir_overlay.py) and its root-run bench CLI (control/line_observer_overrides.py) "
+        "-- launch-side config, no node logic, moves with the P1a split, verdict unchanged)",
     ),
     # --- D-362 newly-covered files (web assets in src/ packages, ops roots). ---
     "runtime/sensing/web/diagnostic.html": (
@@ -457,10 +462,12 @@ SIZE_VERDICTS = {
         "harvest, fetch_http, intake), which own the behaviour; covered by "
         "learning/training/perception/test/test_rosy_ml.py (X5, D-411 fetch --http)",
     ),
-    "deploy/robot/pinky_pro/native/rosy-boot-display.py": (
-        688,
-        "accept: single-entry boot status display (T0 indicator) — one render loop, covered by "
-        "test/test_boot_display.py (X5)",
+    "deploy/robot/pinky_pro/native/rosy-face.py": (
+        1048,
+        "accept: the one owner of LCD, buzzer and lamp (D-433, was rosy-boot-display.py) — one poll "
+        "and one frame tick; the situation table lives in core_common.face_screen; covered by "
+        "test/test_rosy_face.py (X5). 1048 after the review fixes (last good hand-over, "
+        "shutdown-only poll)",
     ),
     "deploy/robot/pinky_pro/release/updater.py": (
         686,
@@ -472,14 +479,17 @@ SIZE_VERDICTS = {
         "accept: one scan entry over the release tree — the rules and the walker are the same concern (X5)",
     ),
     "deploy/robot/pinky_pro/native/rosy_auto_update.py": (
-        1517,
+        1591,
         "split: D-412 robot-side updater — the GitHub/rollout fetch and staging, the eligibility "
         "reader (status-inputs, hold, seals, claim), and the apply/resume/rollback transaction with "
         "its journal are separate seams; move fetch+staging and eligibility into sibling modules in "
         "deploy/robot/pinky_pro/native after the first two-robot device validation (D-412 Validation). "
         "Re-judged at 1505 (+33): second verification review (self-rollback vs operator rollback, "
         "bounded tail loop, rollback_failed acknowledgement); 1515 (+10) after the final batch "
-        "(release-hold under the run lock, refused rollback is sticky); verdict unchanged",
+        "(release-hold under the run lock, refused rollback is sticky); verdict unchanged. "
+        "1559 (+42) for D-433: the Updating marker for rosy-face and the one-time start of the "
+        "retired display unit after a rollback (Q5); 1591 (+32) for the D-433 review "
+        "(live display swap moved here from the sync, marker only during this run's steps); verdict unchanged",
     ),
     "deploy/robot/pinky_pro/native/rosy-ssh-access.py": (
         862,
@@ -499,12 +509,13 @@ SIZE_VERDICTS = {
         "canary watch are one short sequential flow; split the canary watch out if it grows further",
     ),
     "deploy/robot/pinky_pro/native/sync-image-layer.py": (
-        876,
+        1018,
         "split: D-388 image-layer sync — the allowlist/plan, the backup-record history (records, "
         "cleanup, crash reconcile) and the apply/pending transaction are separate seams; move the "
         "record history into a sibling module in deploy/robot/pinky_pro/native once the 2026-10-02 bench "
         "run has exercised it on a robot, so the split does not land untested on device; owner deploy, "
-        "covered by test/test_image_layer_sync.py",
+        "covered by test/test_image_layer_sync.py. Re-judged 2026-10-03 at 1018: main reached 1000 "
+        "(state-directory bootstrap) without a re-judgement, D-433 adds 18 (retired units); verdict unchanged",
     ),
     "deploy/robot/pinky_pro/native/rosy-hw-probe.py": (
         641,

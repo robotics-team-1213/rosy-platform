@@ -4,6 +4,8 @@ import RPi.GPIO as GPIO
 import numpy as np
 from PIL import Image
 
+from .info_screen import to_panel
+
 RST_PIN  = 27
 DC_PIN   = 25
 BL_PIN   = 18
@@ -110,21 +112,14 @@ class LCD():
         self._write_cmd(0x2C) # Memory Write
 
     def img_show(self, img):
-        img = img.transpose(Image.FLIP_LEFT_RIGHT).transpose(Image.ROTATE_270)
-        img = img.resize((self.w, self.h), Image.LANCZOS)
-        
-        image = np.asarray(img.convert('RGB'))
-        
-        pixel = np.zeros((self.h, self.w, 2), dtype=np.uint8)
-        pixel[..., [0]] = np.add(np.bitwise_and(image[..., [0]], 0xF8), np.right_shift(image[..., [1]], 5))
-        pixel[..., [1]] = np.add(np.bitwise_and(np.left_shift(image[..., [1]], 3), 0xE0), np.right_shift(image[..., [2]], 3))
-        
-        pixel_bytes = pixel.tobytes()
-        
+        self.show_panel(to_panel(img, (self.w, self.h)))
+
+    def show_panel(self, pixel):
+        """D-433: draw bytes ``info_screen.to_panel`` already made (rosy-face's frame cache)."""
         self._write_cmd(0x36)
         self._write_data(0x08)
         self._set_windows(0, 0, self.w, self.h)
-        
+
         self._write_data_buffer(pixel)
 
     def clear(self, color=0x0000):

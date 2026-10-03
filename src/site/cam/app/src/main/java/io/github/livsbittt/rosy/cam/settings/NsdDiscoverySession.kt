@@ -22,6 +22,8 @@ internal class NsdDiscoverySession(
     private val wifi = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
     private val main = Handler(Looper.getMainLooper())
     private val executor = Executor { task -> main.post(task) }
+    /** Late NSD callbacks after stop must not crash (origin fix c025660ef "tolerate late NSD callbacks"); the main looper never rejects, the wrapper keeps that true by contract. */
+    private val callbackExecutor = NsdCallbackExecutor(executor)
     private val budget = DiscoveryBudget()
     private val listeners = mutableListOf<NsdManager.DiscoveryListener>()
     private val callbacks = mutableMapOf<String, NsdManager.ServiceInfoCallback>()
@@ -95,7 +97,8 @@ internal class NsdDiscoverySession(
             override fun onServiceUpdated(serviceInfo: NsdServiceInfo) { if (budget.current(key, version)) onRecord(serviceInfo, serviceInfo.hostAddresses) }
         }
         callbacks[key] = callback
-        runCatching { nsd.registerServiceInfoCallback(info, executor, callback) }
+        runCatching { nsd.registerServiceInfoCallback(info, callbackExecutor, callback) }
+            .onFailure { callbacks.remove(key) }
     }
 
     @Suppress("DEPRECATION")

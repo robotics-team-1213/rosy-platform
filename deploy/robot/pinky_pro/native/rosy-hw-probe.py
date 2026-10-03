@@ -69,7 +69,7 @@ FREE_STATES = ("inactive", "failed")
 #: How /proc/<pid>/fd shows the two UARTs (the motor alias resolves to ttyAMA4).
 MOTOR_NODES = ("/dev/rosy-motor", "/dev/ttyAMA4")
 LIDAR_NODES = ("/dev/ttyAMA0",)
-DISPLAY_UNIT = "rosy-boot-display.service"
+DISPLAY_UNIT = "rosy-face.service"  # D-433 (was rosy-boot-display.service)
 
 MOTOR_DEV = "dev/rosy-motor"
 MOTOR_BAUD = 1_000_000
@@ -492,8 +492,8 @@ class Probe:
         if not self.io.exists(LCD_SPI):
             return Row("lcd", BUS_MISSING, "/dev/spidev0.0 없음 (dtparam=spi=on)")
         if self.io.unit_state(DISPLAY_UNIT) == "active":
-            return Row("lcd", OK, "rosy-boot-display 실행 중 · 화면 내용은 사람이 봐야 함")
-        return Row("lcd", NEEDS_HUMAN, "rosy-boot-display 멈춤 · 화면을 사람이 확인")
+            return Row("lcd", OK, "rosy-face 실행 중 · 화면 내용은 사람이 봐야 함")
+        return Row("lcd", NEEDS_HUMAN, "rosy-face 멈춤 · 화면을 사람이 확인")
 
     def buzzer(self) -> Row:
         # D-260 2: the boot display's switch, read as the display reads it (rosy_display_env).

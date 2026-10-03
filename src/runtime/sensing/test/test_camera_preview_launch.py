@@ -233,3 +233,30 @@ def test_env_true_turns_object_det_on(no_switch_env):
 def test_object_det_gets_its_pointer_and_rate():
     assert "'pointer': LaunchConfiguration('object_det_pointer')" in SRC
     assert "'max_rate_hz': ParameterValue(LaunchConfiguration('object_det_max_rate_hz')" in SRC
+
+
+def _line_observer_params(monkeypatch, ir, operator):
+    """line_observer_node's parameter files, with the two /etc/rosy overlays stubbed (D-344 §12)."""
+    pytest.importorskip("launch.launch_context")
+    la = pytest.importorskip("launch_ros.actions")
+    import control.ir_overlay as overlays
+    monkeypatch.setattr(overlays, "usable_overlay", lambda: (ir, "stub"))
+    monkeypatch.setattr(overlays, "usable_operator_overlay", lambda: (operator, "stub"))
+    seen = {}
+    real = la.Node
+
+    def node(**kwargs):
+        seen[kwargs.get("executable")] = kwargs.get("parameters")
+        return real(**kwargs)
+
+    monkeypatch.setattr(la, "Node", node)
+    _load().generate_launch_description()
+    return seen["line_observer_node"]
+
+
+def test_line_observer_layers_release_then_ir_then_operator_overlay(monkeypatch):
+    release = "/opt/share/control/config/line_follow.yaml"
+    ir, operator = "/etc/rosy/ir_calibration.yaml", "/etc/rosy/line_observer_overrides.yaml"
+    assert _line_observer_params(monkeypatch, ir, operator) == [release, ir, operator]
+    assert _line_observer_params(monkeypatch, None, operator) == [release, operator]
+    assert _line_observer_params(monkeypatch, None, None) == [release]

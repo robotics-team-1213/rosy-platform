@@ -1,5 +1,20 @@
 #!/usr/bin/env python3
-"""Show the ROSY boot stage on the Pinky Pro LCD and buzzer (D-190, D-174 T1/T2).
+"""rosy-face: the robot's screen, sound and light for its whole life (D-433; D-190, D-260).
+
+D-433: one process outside ROS owns the LCD panel and backlight, the buzzer and
+the lamp from power-on to shutdown (formerly rosy-boot-display, which drew only
+the boot card). What the LCD draws comes from one rule table,
+``core_common.face_screen.screen_for``: status cards (failure, update, e-stop,
+AP, booting, CORE not responding, unused login code) hide the face; otherwise
+the emotion GIF CORE chose plays, with the D-394 drive card, the PWR-003 wake
+card or a strip (caution, test, calibration, charging) over it. CORE hands its
+part over in /run/rosy/face-inputs.json (rosy-core's runtime directory, 0644,
+rewritten every second); older than three seconds is no hand-over, so a dead
+CORE sends the screen back to the status card. GIF frames are converted to the
+panel's bytes once, lazily, and replayed (D-185 budget). The buzzer and lamp
+behaviour below is unchanged.
+
+Show the ROSY boot stage on the Pinky Pro LCD and buzzer (D-190, D-174 T1/T2).
 
 A long-running process, outside CORE (D-161), as the unprivileged user
 rosy-display. The ST7789 backlight is a software PWM on GPIO18 that lives only
@@ -61,6 +76,7 @@ the stage and the battery into one state:
 from __future__ import annotations
 
 import argparse
+from datetime import datetime, timezone
 import json
 import os
 from pathlib import Path
@@ -81,11 +97,29 @@ try:  # the release's rule table (D-260); an older release has none
     from core_common import robot_state
 except ImportError:
     robot_state = None
+try:  # D-433: the screen's situation table and CORE's hand-over reader
+    from core_common import face_screen
+except ImportError:
+    face_screen = None
 
 STATUS_DIR = "run/rosy-boot"
 LOGIN_CODE = re.compile(r"^[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$")
 LOGIN_ROLES = frozenset({"viewer", "operator", "administrator"})
-POLL_S = 1.0
+POLL_S = 0.5  # D-433: the files and the situation table; face frames tick faster
+TICK_S = 0.1  # face frames, 10 fps (5 fps at the idle backlight)
+#: D-433: CORE's hand-over (rosy-core's /run/rosy, 0644) and its writer's account.
+FACE_INPUTS = "run/rosy/face-inputs.json"
+CORE_USER = "rosy-core"
+#: The emotion GIFs the running release ships (share/emotion/emotion/<name>.gif).
+FACE_DIR = "opt/rosy/current/install/share/emotion/emotion"
+FACE_LOAD_SKIP = 2  # every second GIF frame, as emotion_server's load_frame_skip
+FACE_SIZE = (320, 240)
+#: D-433 row 3: the updater (root) writes two lines, step and release id, while it applies.
+UPDATE_DISPLAY = "run/rosy-boot/update-display.txt"
+UPDATE_MAX_AGE_S = 1800.0  # a marker an updater crash left behind stops counting
+RELEASE_ID = re.compile(r"[0-9]{4}\.[0-9]{2}\.[0-9]{2}-[0-9]{3}")
+#: systemd-user-sessions writes it when the system goes down: SIGTERM then is a shutdown.
+SHUTDOWN_MARK = "run/nologin"
 BATTERY_INTERVAL_S = 15.0
 LCD_ATTEMPTS = 6  # udev may still be applying the device groups at start
 LCD_RETRY_S = 5.0
@@ -147,7 +181,7 @@ class Log:
     def once(self, key: str, message: str) -> None:
         if key not in self._seen:
             self._seen.add(key)
-            self._write(f"rosy-boot-display: {message}")
+            self._write(f"rosy-face: {message}")
 
 
 def _read_json(path: Path) -> dict:
@@ -479,13 +513,88 @@ def lamp_enabled(environ: dict[str, str], log: Log) -> bool:
     return enabled
 
 
-class BootDisplay:
-    """One poll: read the view, redraw the LCD when it changed, sound and light a new state."""
+def read_update(root: Path, wall: float) -> dict | None:
+    """D-433 row 3: the update marker the updater (root) writes while it applies, or None.
+
+    Two lines, ``<step>`` and the candidate release id; nothing secret. A marker
+    older than UPDATE_MAX_AGE_S is ignored, so a crashed updater cannot pin the screen.
+    """
+    path = root / UPDATE_DISPLAY
+    try:
+        if path.is_symlink() or not path.is_file() or wall - path.stat().st_mtime > UPDATE_MAX_AGE_S:
+            return None
+        lines = path.read_text(encoding="utf-8")[:256].splitlines()
+    except (OSError, UnicodeDecodeError):
+        return None
+    if not lines or not re.fullmatch(r"[a-z-]{1,32}", lines[0]):
+        return None
+    release = lines[1] if len(lines) > 1 and RELEASE_ID.fullmatch(lines[1]) else None
+    return {"step": lines[0], "release": release}
+
+
+class FaceFrames:
+    """The emotion GIFs as panel bytes, converted once and lazily (D-433 decision 4).
+
+    A face's frames are converted one per call while it first plays (every
+    FACE_LOAD_SKIP-th GIF frame), so no single tick pays for a whole GIF and a
+    face that is never shown is never loaded. Afterwards the bytes replay.
+    """
+
+    def __init__(self, directory: Path, *, opener: Callable[[Path], object],
+                 convert: Callable[[object], object], log: Log, skip: int = FACE_LOAD_SKIP) -> None:
+        self._directory = directory
+        self._open = opener
+        self._convert = convert
+        self._log = log
+        self._skip = skip
+        self._faces: dict[str, dict] = {}
+
+    def frame_count(self, name: str) -> int:
+        return len(self._faces.get(name, {}).get("frames", []))
+
+    def next(self, name: str):
+        """The next panel frame of ``name``, or None when that GIF cannot be read."""
+        entry = self._faces.get(name)
+        if entry is None:
+            entry = {"frames": [], "image": None, "done": False, "source": 0, "position": -1}
+            try:
+                entry["image"] = self._open(self._directory / f"{name}.gif")
+            except (OSError, ValueError) as exc:
+                self._log.once(f"face-{name}", f"face {name!r} unavailable ({type(exc).__name__})")
+                entry["done"] = True
+            self._faces[name] = entry
+        if not entry["done"]:
+            image = entry["image"]
+            try:
+                image.seek(entry["source"])
+                entry["frames"].append(self._convert(image))
+                entry["source"] += self._skip
+                entry["position"] = len(entry["frames"]) - 1
+                return entry["frames"][-1]
+            except EOFError:
+                pass
+            except (OSError, ValueError) as exc:
+                self._log.once(f"face-{name}-frame", f"face {name!r} frame unreadable ({type(exc).__name__})")
+            entry["done"] = True
+            entry["image"] = None
+            if hasattr(image, "close"):
+                image.close()
+        if not entry["frames"]:
+            return None
+        entry["position"] = (entry["position"] + 1) % len(entry["frames"])
+        return entry["frames"][entry["position"]]
+
+
+class FaceDisplay:
+    """One poll: read the view, decide the screen, sound and light a new state; tick the face."""
 
     def __init__(self, root: Path, *, lcd, render: Callable[[dict], object], battery: BatteryReader,
                  buzzer: Buzzer, clock: Callable[[], float], lamp: Lamp | None = None,
                  wall: Callable[[], float] = time.time,
-                 battery_interval: float = BATTERY_INTERVAL_S) -> None:
+                 battery_interval: float = BATTERY_INTERVAL_S,
+                 faces: FaceFrames | None = None,
+                 strip: Callable[[object, str, str], object] | None = None,
+                 core_owner: int | None = None) -> None:
         self.root = root
         self.lcd = lcd
         self._render = render
@@ -502,7 +611,22 @@ class BootDisplay:
         self._sounded: dict[str, float] = {}
         self._sound: str | None = None
         self._tested: str | None = None
+        self._faces = faces
+        self._strip = strip
+        self._core_owner = core_owner
+        self._last_core: dict | None = None
+        self._mode: str | None = None
+        self._drive_since: float | None = None
+        self._testing: str | None = None
+        self._testing_until = 0.0
+        self._awake = True
+        self._backlight = 100
+        self._ticks = 0
+        self.shutting_down = False
+        self.animating: tuple | None = None
+        self.screen: dict | None = None
         self.draws = 0
+        self.frames = 0
         self.battery_reads = 0
 
     @staticmethod
@@ -546,6 +670,8 @@ class BootDisplay:
         if request is None or request["request_id"] == self._tested:
             return None
         self._tested = request["request_id"]
+        # D-433 row 10: the strip names the test while it plays.
+        self._testing, self._testing_until = request["action"], self._clock() + LAMP_TEST_S
         if request["action"] == "buzzer":
             state, detail = self._buzzer.test()
         elif self._lamp is not None:
@@ -557,9 +683,68 @@ class BootDisplay:
              "state": state, "detail": detail}, ensure_ascii=False, sort_keys=True) + "\n")
         return state
 
+    def _core(self) -> dict | None:
+        """CORE's face hand-over, strictly read; None when missing, stale or not CORE's."""
+        if face_screen is None:
+            return None
+        wall = self._wall()
+        now = datetime.fromtimestamp(wall, timezone.utc)
+        core = face_screen.read_face_inputs(str(self.root / FACE_INPUTS), now, owner_uid=self._core_owner)
+        if core is not None:
+            self._last_core = core
+            return core
+        # One unreadable poll (a write in flight, a short read) is not a dead CORE:
+        # keep the last good hand-over until it is FACE_INPUTS_FRESH_S old.
+        last = self._last_core
+        if last is not None and wall - last["written_ts"] <= face_screen.FACE_INPUTS_FRESH_S:
+            return last
+        self._last_core = None
+        return None
+
+    def screen_of(self, view: dict, now: float) -> dict | None:
+        """D-433: the situation table's answer for this poll (None on a release without it)."""
+        if face_screen is None or robot_state is None:
+            return None
+        core = self._core()
+        mode = core.get("robot_mode") if core else None
+        if mode != self._mode:  # the drive card's cadence starts with each operating mode
+            self._mode = mode
+            self._drive_since = now if mode in robot_state.OPERATING_MODES else None
+        login = "code" if view.get("login_code") else ("burned" if view.get("login_burned") else None)
+        return face_screen.screen_for(
+            stage=view["stage"], state=self.robot_state_of(view), todo=view.get("todo"),
+            ap_mode=(view.get("network") or {}).get("mode") == "ap", login=login, core=core,
+            update=read_update(self.root, self._wall()),
+            test=self._testing if now < self._testing_until else None,
+            shutting_down=self.shutting_down, drive_since=self._drive_since, now=now)
+
+    def _lcd_call(self, name: str, *args) -> None:
+        action = getattr(self.lcd, name, None)
+        if action is not None:
+            action(*args)
+
+    def _power(self, screen: dict | None) -> None:
+        """Panel sleep and backlight follow the table (D-385 4: standby is dark)."""
+        if self.lcd is None:
+            return
+        awake = screen["awake"] if screen else True
+        backlight = screen["backlight"] if screen else 100
+        if awake != self._awake:
+            self._lcd_call("wake" if awake else "sleep")
+            self._awake = awake
+            if awake:
+                self._drawn = None  # redraw what the sleeping panel stopped showing
+        if backlight != self._backlight:
+            self._lcd_call("set_backlight", backlight)
+            self._backlight = backlight
+
     def step(self) -> bool:
         """True when the LCD was redrawn."""
         now = self._clock()
+        if self.shutting_down:
+            # Review LOW: the last poll only draws the shutdown card — no battery read,
+            # no sound, no lamp, no handed-over test on the way out.
+            return self._draw_shutdown(now)
         if self._battery_due is None or now >= self._battery_due:
             self._battery_value = self._battery.read()
             self.battery_reads += 1
@@ -579,12 +764,62 @@ class BootDisplay:
             self._lamp.show(pattern)
             self._lamp.poll()
         self.handle_test()
-        key = json.dumps(view, sort_keys=True)
+        screen = self.screen = self.screen_of(view, now)
+        self._power(screen)
+        kind = screen["kind"] if screen else "status"
+        if kind == "face" and screen["overlay"] is None:
+            # The face plays from tick(); a strip rides every frame.
+            self.animating = (screen["face"], screen["strip"], screen["strip_tone"])
+            self._drawn = None
+            return False
+        self.animating = None
+        if kind == "sleep":
+            self._drawn = "sleep"
+            return False
+        card = dict(view)
+        if screen is not None:
+            card["screen"] = screen
+            if screen.get("line"):
+                card["state_line"] = screen["line"]  # D-433 row 7: CORE not responding
+            if kind == "update":
+                card["frame"] = int(now) % 2
+        key = json.dumps(card, sort_keys=True)
         if key == self._drawn or self.lcd is None:
             return False
-        self.lcd.img_show(self._render(view))
+        self.lcd.img_show(self._render(card))
         self._drawn = key
         self.draws += 1
+        return True
+
+    def _draw_shutdown(self, now: float) -> bool:
+        view = read_view(self.root, self._battery_value)
+        screen = face_screen.screen_for(shutting_down=True) if face_screen is not None else None
+        self.animating = None
+        if screen is None or self.lcd is None:
+            return False
+        self._power(screen)
+        card = {**view, "screen": screen,
+                "shutdown_title": ("Shutting down" if (self.root / SHUTDOWN_MARK).exists()
+                                   else "Display restarting")}
+        self.lcd.img_show(self._render(card))
+        self.draws += 1
+        return True
+
+    def tick(self) -> bool:
+        """Push the next face frame while the face owns the screen. True when one was drawn."""
+        if self.animating is None or self.lcd is None or self._faces is None:
+            return False
+        self._ticks += 1
+        if self._backlight < 100 and self._ticks % 2:
+            return False  # D-185: the dimmed (idle) face plays at half rate
+        face, strip, tone = self.animating
+        frame = self._faces.next(face)
+        if frame is None:
+            return False
+        if strip and self._strip is not None:
+            frame = self._strip(frame, strip, tone)
+        self.lcd.show_panel(frame)
+        self.frames += 1
         return True
 
 
@@ -654,6 +889,79 @@ def _lcd_factory():
     return LCD
 
 
+def card_renderer(info_screen) -> Callable[[dict], object]:
+    """D-433: one entry for every card the table can ask for; a release image each.
+
+    ``card["screen"]`` is ``face_screen.screen_for``'s answer (absent on a release
+    without it: the boot card, as before).
+    """
+
+    def render(card: dict):
+        screen = card.get("screen") or {}
+        kind = screen.get("kind")
+        frame = int(card.get("frame") or 0)
+        if kind == "stopped":
+            image = info_screen.render_stopped({"device_name": card.get("device_name"),
+                                                "cause": screen.get("cause"), "release": screen.get("release")})
+        elif kind == "update":
+            image = info_screen.render_notice("Updating", [f"to {screen.get('release') or '?'}",
+                                                           f"now {card.get('release_id') or '?'}"], frame=frame)
+        elif kind == "shutdown":
+            image = info_screen.render_notice(str(card.get("shutdown_title") or "Shutting down"),
+                                              [str(card.get("device_name") or "")])
+        elif kind == "face" and screen.get("overlay"):
+            image = info_screen.render_card(screen["overlay"]["payload"])
+        else:
+            image = info_screen.render_boot(card, frame=frame)
+        if kind == "face" and screen.get("strip"):
+            band, mask = info_screen.render_strip(screen["strip"], screen.get("strip_tone") or "info")
+            image.paste(band, (0, 0), mask)
+        return image
+
+    return render
+
+
+def face_converter(info_screen) -> Callable[[object], object]:
+    """A GIF frame (any size) -> panel bytes, the reduction done once per frame (D-185)."""
+    from PIL import Image
+
+    def convert(frame):
+        landscape = frame.convert("RGB").resize(FACE_SIZE, Image.LANCZOS, reducing_gap=3.0)
+        return info_screen.to_panel(landscape)
+
+    return convert
+
+
+def strip_painter(info_screen) -> Callable[[object, str, str], object]:
+    """Lay the strip over a panel frame; the band and its mask are made once per text."""
+    from PIL import Image
+
+    cache: dict[tuple[str, str], tuple] = {}
+
+    def paint(frame, text: str, tone: str):
+        if (text, tone) not in cache:
+            band, mask = info_screen.render_strip(text, tone)
+            cache.clear()  # one strip at a time
+            cache[(text, tone)] = (info_screen.to_panel(band),
+                                   info_screen.to_panel(Image.merge("RGB", (mask, mask, mask)))[..., 0] != 0)
+        panel, where = cache[(text, tone)]
+        out = frame.copy()
+        out[where] = panel[where]
+        return out
+
+    return paint
+
+
+def core_owner(log: Log) -> int | None:
+    """rosy-core's uid: face-inputs.json from anyone else is not CORE's (D-433 decision 3)."""
+    try:
+        import pwd
+        return pwd.getpwnam(CORE_USER).pw_uid
+    except (ImportError, KeyError):
+        log.once("core-user", f"no {CORE_USER} account; face-inputs.json owner not checked")
+        return None
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--root", type=Path, default=Path("/"))
@@ -703,16 +1011,31 @@ def main(argv: list[str] | None = None) -> int:
         log.once("idle", "no LCD, the buzzer is off and no lamp; nothing to show")
         return 0
 
-    display = BootDisplay(args.root, lcd=lcd, render=info_screen.render_boot, battery=battery,
-                          buzzer=buzzer, clock=time.monotonic, lamp=lamp)
+    from PIL import Image
+
+    faces = FaceFrames(args.root / FACE_DIR, opener=Image.open, convert=face_converter(info_screen), log=log)
+    display = FaceDisplay(args.root, lcd=lcd, render=card_renderer(info_screen), battery=battery,
+                          buzzer=buzzer, clock=time.monotonic, lamp=lamp, faces=faces,
+                          strip=strip_painter(info_screen), core_owner=core_owner(log))
+    polls_per_step = max(1, round(POLL_S / TICK_S))
+    tick = 0
     try:
         while not stop["now"]:
             try:
-                display.step()
+                if tick % polls_per_step == 0:
+                    display.step()
+                display.tick()
             except Exception as exc:  # noqa: BLE001 - one bad poll must not end the display
                 # The type only: a message could quote what was on the card (the AP key).
                 log.once(f"step-{type(exc).__name__}", f"poll failed: {type(exc).__name__}")
-            time.sleep(POLL_S)
+            tick += 1
+            time.sleep(TICK_S)
+        # D-433 row 1: say so before the backlight goes with the process.
+        display.shutting_down = True
+        try:
+            display.step()
+        except Exception as exc:  # noqa: BLE001
+            log.once(f"stop-{type(exc).__name__}", f"last card failed: {type(exc).__name__}")
     finally:
         battery.close()
         lamp.stop()  # the helper leaves the lamp dark on SIGTERM

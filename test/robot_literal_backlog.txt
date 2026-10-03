@@ -15,6 +15,8 @@ runtime/sensing/config/line_follow.yaml
 runtime/sensing/config/robot.yaml
 runtime/sensing/control/calibration_relocation.py
 runtime/sensing/control/dock_observer_node.py
+runtime/sensing/control/ir_overlay.py
+runtime/sensing/control/line_observer_overrides.py
 runtime/sensing/control/goal_escape.py
 runtime/sensing/control/ir_adc_node.py
 runtime/sensing/control/line_observer_node.py
