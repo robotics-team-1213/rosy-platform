@@ -27,7 +27,16 @@ fail() { echo "FAIL: $*" >&2; exit 1; }
 [[ "$(uname -m)" == "aarch64" ]] \
     || fail "native ROSY payloads must be built on aarch64"
 [[ "$ROS_DISTRO" == "jazzy" ]] || fail "product ROS distribution must be jazzy"
-[[ -d "$WORKSPACE/src" ]] || fail "workspace has no src directory: $WORKSPACE"
+[[ -n "$WORKSPACE" && -d "$WORKSPACE" ]] || fail "--workspace is required: $WORKSPACE"
+# D-427: the colcon source roots come from tools/harness/platform_parts.yaml.
+COLCON_ROOTS_TEXT="$(python3 "$WORKSPACE/tools/harness/colcon_roots.py")" \
+    || fail "workspace has no readable colcon_roots: $WORKSPACE"
+read -r -a COLCON_ROOTS <<< "$COLCON_ROOTS_TEXT"
+((${#COLCON_ROOTS[@]})) || fail "colcon_roots is empty"
+for root in "${COLCON_ROOTS[@]}"; do
+    [[ -d "$WORKSPACE/$root" ]] || fail "workspace has no colcon root $root: $WORKSPACE"
+done
+ROSDEP_ROOTS=("${COLCON_ROOTS[@]/#/$WORKSPACE/}")
 [[ -n "$RELEASE_ROOT" ]] || fail "--release-root is required"
 [[ "$SOURCE_REVISION" =~ ^[0-9a-f]{40}$ ]] \
     || fail "--source-revision must be a full lowercase Git commit"
@@ -109,20 +118,21 @@ set -u
 # One apt transaction instead of one per rosdep key (22 runs, ~4.5 of the 6.5
 # runner minutes on 2026-10-01). Same flags as rosdep, so the installed set is
 # unchanged; rosdep then confirms nothing is missing and handles non-apt keys.
-ROSDEP_PLAN="$(rosdep install --from-paths "$WORKSPACE/src" "$SLLIDAR_SRC" --ignore-src -r -y \
+ROSDEP_PLAN="$(rosdep install --from-paths "${ROSDEP_ROOTS[@]}" "$SLLIDAR_SRC" --ignore-src -r -y \
     --rosdistro "$ROS_DISTRO" --simulate)"
 mapfile -t ROSDEP_APT < <(printf '%s\n' "$ROSDEP_PLAN" | python3 "$SCRIPT_DIR/rosdep_apt_batch.py")
 if ((${#ROSDEP_APT[@]})); then
     apt-get install -y "${ROSDEP_APT[@]}"
 fi
-rosdep install --from-paths "$WORKSPACE/src" "$SLLIDAR_SRC" --ignore-src -r -y \
+rosdep install --from-paths "${ROSDEP_ROOTS[@]}" "$SLLIDAR_SRC" --ignore-src -r -y \
     --rosdistro "$ROS_DISTRO"
 
 (
     cd "$WORKSPACE"
-    colcon build --base-paths src "$SLLIDAR_SRC" --merge-install \
-        --install-base "$INSTALL_ROOT" --event-handlers console_direct+
-    colcon list --base-paths src "$SLLIDAR_SRC" --names-only | LC_ALL=C sort -u > "$INVENTORY.tmp"
+    colcon build --base-paths "${COLCON_ROOTS[@]}" "$SLLIDAR_SRC" --merge-install \
+        --build-base build --install-base "$INSTALL_ROOT" --log-base log \
+        --event-handlers console_direct+
+    colcon list --base-paths "${COLCON_ROOTS[@]}" "$SLLIDAR_SRC" --names-only | LC_ALL=C sort -u > "$INVENTORY.tmp"
 )
 mv -f -- "$INVENTORY.tmp" "$INVENTORY"
 # D-225: build_payload_release.py pack sets every member's mtime to

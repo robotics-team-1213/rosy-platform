@@ -838,10 +838,11 @@ def test_sllidar_is_fetched_like_rpi_ws281x_and_rechecked_at_build_time():
     assert 'VENDOR_WORK="$(mktemp -d)"' in payload
     assert '"$SCRIPT_DIR/prepare-vendor-source.sh" --lock "$LOCK"' in payload
     assert payload.index("prepare-vendor-source.sh") < payload.index("rosdep install")
-    assert 'rosdep install --from-paths "$WORKSPACE/src" "$SLLIDAR_SRC" --ignore-src' in payload
-    assert 'colcon build --base-paths src "$SLLIDAR_SRC" --merge-install' in payload
-    assert 'colcon list --base-paths src "$SLLIDAR_SRC" --names-only' in payload
-    assert "rosy-vendor\" --" not in payload and '--base-paths src "$VENDOR' not in payload
+    # D-427: every colcon root from the manifest, plus the one vendor package.
+    assert 'rosdep install --from-paths "${ROSDEP_ROOTS[@]}" "$SLLIDAR_SRC" --ignore-src' in payload
+    assert 'colcon build --base-paths "${COLCON_ROOTS[@]}" "$SLLIDAR_SRC" --merge-install' in payload
+    assert 'colcon list --base-paths "${COLCON_ROOTS[@]}" "$SLLIDAR_SRC" --names-only' in payload
+    assert "rosy-vendor\" --" not in payload and '"${COLCON_ROOTS[@]}" "$VENDOR' not in payload
     # The release proves it resolves sllidar_ros2 inside its own prefix.
     assert '--required "$SCRIPT_DIR/vendor-ros-packages.txt"' in payload
     vendor = (IMAGE / "vendor-ros-packages.txt").read_text(encoding="utf-8").split()
@@ -1089,6 +1090,27 @@ def test_io_probe_reports_missing_modules_without_touching_a_device(monkeypatch)
     monkeypatch.setattr(probe, "HARDWARE_MODULES", ("rosy_no_such_module",))
     failures = probe.check_modules("/usr/local")
     assert any("import rosy_no_such_module" in f for f in failures)
+
+
+@_needs_bash
+def test_payload_reads_its_colcon_roots_from_the_manifest():
+    # D-427 wave 0 item 5: run the payload's root-reading block against this checkout.
+    payload = (IMAGE / "build-native-payload.sh").read_text(encoding="utf-8")
+    start = payload.index("# D-427: the colcon source roots")
+    end = payload.index("\n", payload.index("ROSDEP_ROOTS=(", start)) + 1
+    script = ('fail() { echo "FAIL $*" >&2; exit 1; }\n'
+              f'python3() {{ "{_posix(Path(sys.executable))}" "$@"; }}\n'
+              f'WORKSPACE="{_posix(ROOT)}"\n' + payload[start:end]
+              + 'printf "%s\\n" "${COLCON_ROOTS[*]}" "${ROSDEP_ROOTS[*]}"\n')
+
+    completed = subprocess.run([_BASH, "-c", script], capture_output=True, text=True, check=False)
+
+    assert completed.returncode == 0, completed.stderr
+    roots = yaml.safe_load((ROOT / "tools/harness/platform_parts.yaml").read_text(encoding="utf-8"))["colcon_roots"]
+    colcon, rosdep = completed.stdout.splitlines()
+    assert colcon.split() == roots
+    assert rosdep.split() == [f"{_posix(ROOT)}/{root}" for root in roots]
+    assert '[[ -d "$WORKSPACE/src" ]]' not in payload
 
 
 @_needs_bash
