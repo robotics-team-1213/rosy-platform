@@ -170,3 +170,48 @@ def test_object_det_gate_drops_the_eval_keys():
     assert gate["eval_set"] is None and gate["max_eval_miou_drop"] == 0.01
     assert not set(intake.EVAL_KEYS) & set(intake.task_gate(gate, "object_det"))
     assert set(intake.EVAL_KEYS) <= set(intake.task_gate(gate, "lane_seg"))
+
+
+def _champion_report(out, rev, iou, miou, sha=SHA, verdict="pass"):
+    d = out / rev
+    d.mkdir(parents=True, exist_ok=True)
+    (d / intake.REPORT_NAME).write_text(json.dumps({
+        "model_revision": rev, "verdict": verdict,
+        "eval": {"set": {"content_sha": sha}, "iou": iou, "miou": miou}}), encoding="utf-8")
+
+
+def test_champion_is_compared_over_the_shared_classes_only(tmp_path, monkeypatch):
+    _eval_set(tmp_path)
+    # the champion scored lane 0.9 and a class this model does not have; its mIoU 0.5 alone
+    # would let a candidate with lane 0.667 through
+    _champion_report(tmp_path / "out", "lane-seg-20261001-cccc3333", {"lane": 0.9, "wall": 0.1}, 0.5)
+    rc, report = _run(tmp_path, monkeypatch, _model(_pred(6)), {"eval_set": EVAL_REL})
+    cmp = report["eval"]["champion_comparison"]
+    assert cmp == {"classes": ["lane"], "miou": pytest.approx(4 / 6), "champion_miou": 0.9}
+    assert rc == 1 and any("champion" in r and "['lane']" in r for r in report["reasons"])
+
+
+def test_no_shared_classes_skips_the_champion_check(tmp_path, monkeypatch):
+    _eval_set(tmp_path)
+    _champion_report(tmp_path / "out", "lane-seg-20261001-cccc3333", {"zebra": 1.0}, 1.0)
+    rc, report = _run(tmp_path, monkeypatch, _model(_pred(6)), {"eval_set": EVAL_REL})
+    assert report["eval"]["champion_comparison"] == "no shared classes"
+    assert rc == 0, report["reasons"]
+
+
+def test_find_champion_skips_malformed_reports(tmp_path):
+    out = tmp_path / "out"
+    for rev, body in (("a", "[1, 2]"), ("b", '"text"'), ("c", "{not json")):
+        (out / rev).mkdir(parents=True)
+        (out / rev / intake.REPORT_NAME).write_text(body, encoding="utf-8")
+    _champion_report(out, "d", {"lane": 1.0}, "high")
+    _champion_report(out, "e", {"lane": 1.0}, True)
+    _champion_report(out, "f", {"lane": 1.0}, 0.9, verdict="fail")
+    _champion_report(out, "g", {"lane": 1.0}, 0.9, sha="d" * 64)
+    (out / "h").mkdir()
+    (out / "h" / intake.REPORT_NAME).write_text(json.dumps(
+        {"verdict": "pass", "eval": {"set": "x", "miou": 0.9}}), encoding="utf-8")
+    assert intake.find_champion(out, SHA, None) is None
+    _champion_report(out, "ok", {"lane": 0.7, "bad": "x"}, 0.7)
+    assert intake.find_champion(out, SHA, None) == {"model_revision": "ok", "miou": 0.7,
+                                                    "iou": {"lane": 0.7}}

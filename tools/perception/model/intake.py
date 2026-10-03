@@ -344,23 +344,47 @@ def evaluate(model, eval_dir, max_frames: int) -> dict:
     return result
 
 
+def _number(v) -> bool:
+    return isinstance(v, (int, float)) and not isinstance(v, bool) and np.isfinite(v)
+
+
 def find_champion(out, content_sha: str, exclude_revision: str | None) -> dict | None:
-    """The best earlier pass on the same eval set: {"model_revision", "miou"} or None."""
+    """The best earlier pass on the same eval set: {"model_revision", "miou", "iou"} or None.
+    Reports that are not well-formed (not a dict, non-numeric mIoU) are skipped."""
     best = None
     for path in Path(out).glob(f"*/{REPORT_NAME}"):
         try:
             rep = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             continue
-        ev = rep.get("eval") if isinstance(rep, dict) else None
+        if not isinstance(rep, dict):
+            continue
+        ev = rep.get("eval")
         if (rep.get("verdict") != "pass" or not isinstance(ev, dict)
                 or rep.get("model_revision") == exclude_revision
-                or (ev.get("set") or {}).get("content_sha") != content_sha
-                or not isinstance(ev.get("miou"), (int, float))):
+                or not isinstance(ev.get("set"), dict)
+                or ev["set"].get("content_sha") != content_sha
+                or not _number(ev.get("miou"))):
             continue
+        iou = ev.get("iou") if isinstance(ev.get("iou"), dict) else {}
         if best is None or ev["miou"] > best["miou"]:
-            best = {"model_revision": rep["model_revision"], "miou": float(ev["miou"])}
+            best = {"model_revision": rep.get("model_revision"), "miou": float(ev["miou"]),
+                    "iou": {k: float(v) for k, v in iou.items() if _number(v)}}
     return best
+
+
+def compare_to_champion(ev: dict, champion: dict | None):
+    """Both means over the classes both reports scored (champion and candidate may
+    differ in classes): {"classes", "miou", "champion_miou"}, "no shared classes",
+    or None without a champion."""
+    if champion is None:
+        return None
+    classes = sorted(set(ev["iou"]) & set(champion["iou"]))
+    if not classes:
+        return "no shared classes"
+    return {"classes": classes,
+            "miou": float(np.mean([ev["iou"][c] for c in classes])),
+            "champion_miou": float(np.mean([champion["iou"][c] for c in classes]))}
 
 
 def judge_eval(ev: dict, gate: dict) -> list[str]:
@@ -373,11 +397,11 @@ def judge_eval(ev: dict, gate: dict) -> list[str]:
     floor = gate.get("min_eval_miou")
     if floor is not None and ev["miou"] < floor:
         reasons.append(f"eval mIoU {ev['miou']:.4f} < min_eval_miou {floor}")
-    champ = ev.get("champion")
+    champ, cmp = ev.get("champion"), ev.get("champion_comparison")
     drop = gate.get("max_eval_miou_drop") or 0.0
-    if champ is not None and ev["miou"] < champ["miou"] - drop:
-        reasons.append(f"eval mIoU {ev['miou']:.4f} < champion {champ['model_revision']} "
-                       f"{champ['miou']:.4f} - {drop}")
+    if isinstance(cmp, dict) and cmp["miou"] < cmp["champion_miou"] - drop:
+        reasons.append(f"eval mIoU {cmp['miou']:.4f} < champion {champ['model_revision']} "
+                       f"{cmp['champion_miou']:.4f} - {drop} (over {cmp['classes']})")
     return reasons
 
 
@@ -446,7 +470,10 @@ def run(source: str, *, out, gate_path=DEFAULT_GATE, root=ROOT, max_frames=None,
                 if not eval_dir.is_dir():
                     raise EvalSetError(f"eval set {eval_dir} is not a folder (gate eval_set)")
                 ev = evaluate(model, eval_dir, gate.get("eval_max_frames") or 400)
-                ev["champion"] = find_champion(out, ev["set"]["content_sha"], manifest.model_revision)
+                champ = find_champion(out, ev["set"]["content_sha"], manifest.model_revision)
+                ev["champion_comparison"] = compare_to_champion(ev, champ)
+                ev["champion"] = None if champ is None else {
+                    "model_revision": champ["model_revision"], "miou": champ["miou"]}
                 report["eval"] = ev
         report.update(stats)
         report["sources"] = [str(v) for v in videos]
