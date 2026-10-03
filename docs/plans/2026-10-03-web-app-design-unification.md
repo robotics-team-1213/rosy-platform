@@ -33,9 +33,9 @@
 | 6 | 설치·정비 7패널 | `src/hmi/dashboard/panels/{host,system}/`, `shell/` | 목적·결과·미확인 구분 및 개별 유지 판정 `59b3803fe` 완료 |
 | 7 | Fleet 관제 | `src/site/fleet/fleet/server/web/{index.html,console.js,styles.css}` | `21f5dd310` 완료; 최종 영향 회귀 진행 |
 | 8 | Fleet 기기 등록·카메라 설치 | `src/site/fleet/fleet/server/web/{install.html,install.js,enrollment.js,camera-pairing.js}` | `21f5dd310` 완료; 세 작업·재검색·보정 프리뷰 수명, SPEC/QUALITY 통과 |
-| 9 | 게임 보드 | `src/site/games/games/web/{index.html,board.js,styles.css}` | 대기 |
-| 10 | 진단·시뮬 도구·작성 틀과 Pilot 웹 실패 화면 | `src/runtime/sensing/web/diagnostic.html`, `src/sim/gz_sim/scripts/lane_live_view.html`, `src/hmi/dashboard/styleguide.html`, `src/hmi/web_common/template.html`, `src/hmi/pilot/` | 대기 |
-| 11 | 전체 회귀·최신 main 통합·로컬 병합 | 영향받는 host/browser/node 계약과 quick tier | 대기 |
+| 9 | 게임 보드 | `src/site/games/games/web/{index.html,board.js,styles.css}` | `e3f2bcd06` 완료; 관측 상태와 승인 구별·마커 상세, 독립 SPEC/QUALITY·직접 화면 확인 |
+| 10 | 진단·시뮬 도구·작성 틀과 Pilot 웹 실패 화면 | `src/runtime/sensing/web/diagnostic.html`, `src/sim/gz_sim/scripts/lane_live_view.html`, `src/hmi/dashboard/styleguide.html`, `src/hmi/web_common/template.html`, `src/hmi/pilot/` | `e3f2bcd06` 완료; 모바일 배치·실제 공용 선택·미확인 거리·Pilot 재시도, PARKED 유지 |
+| 11 | 전체 회귀·최신 main 통합·로컬 병합 | 영향받는 host/browser/node 계약과 quick tier | 진행; Fleet D-201 높이 회귀와 기존 확인/설치 task fixture 수정 후 최신 main 통합·로컬 병합 |
 
 ### Task 1: 전체 화면 기준선과 구현 우선순위
 
