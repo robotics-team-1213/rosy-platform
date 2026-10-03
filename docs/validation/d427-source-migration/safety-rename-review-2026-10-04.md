@@ -2,16 +2,16 @@
 
 - 날짜: 2026-10-04
 - 리뷰어: 별도 `d427_safety_review` 에이전트. 이동 커밋 작성자와 다른 세션이며 읽기 전용으로 검토했다.
-- 범위: `c402cc45efe3878b48861e93b1c2639fb1cc9631..6820c2dc5`의 22개 커밋. 브랜치 `fix/d427-resume`.
+- 범위: `c402cc45e..6820c2dc5`의 22개 커밋. 브랜치 `fix/d427-resume`.
 - 판정: 안전 실행 코드의 동작 변경을 발견하지 않았다. 이 판정은 소스 이동 리뷰이며 장치·현장 수용을 뜻하지 않는다.
 
 | 이동 | 검토 커밋 | 결과 |
 |---|---|---|
-| signal firmware | `dd6238b082e09224c3489b31ef12a0077b966b47` | 실행 코드 R100; 폴더 노트의 링크만 변경 |
-| dock firmware | `6ea10c14b34bede485328bc931a41851f81ab528` | 실행 코드 R100; 폴더 노트의 링크만 변경 |
-| Fleet 안전 경로 | `040ef50ff0966981b965f657e1f016a9c1cd7631` | 실행 코드 R100; `console.py` 문서 링크만 변경 |
-| OMX owner·stop | `6b0bb9f02e2d4de7ddca9fca3cf1075b184a47f8` | 안전 실행 코드 R100 |
-| CORE safety·command·bridge | `21de6b5787fca670078cb7ce91683d5f17bdf0d0` | 안전 실행 코드 R100 |
+| signal firmware | `dd6238b08` | 실행 코드 R100; 폴더 노트의 링크만 변경 |
+| dock firmware | `6ea10c14b` | 실행 코드 R100; 폴더 노트의 링크만 변경 |
+| Fleet 안전 경로 | `040ef50ff` | 실행 코드 R100; `console.py` 문서 링크만 변경 |
+| OMX owner·stop | `6b0bb9f02` | 안전 실행 코드 R100 |
+| CORE safety·command·bridge | `21de6b578` | 안전 실행 코드 R100 |
 | sensing 안전 subtree | 범위 전체의 perception 이동·잔여 수정 | 안전 subtree R100; 나머지 실행 변경은 `shared/web` source fallback 경로 |
 
 안전 모듈은 17→17, 앵커는 35→35, 안전 root는 3→3으로 보존되었다. 앵커 값은 동일하며 모듈과 root는 새 경로로 대응한다. `KNOWN_SAFETY_VIOLATIONS`는 경로 대응 뒤 동일하고 21→21이다. `python tools/harness/safety_review.py origin/main HEAD`는 22개 커밋을 검사해 exit 0이었다.
