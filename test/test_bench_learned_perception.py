@@ -118,7 +118,7 @@ def test_ncnn_is_probed_without_replacing_system_opencv():
 
 def test_the_runner_and_the_doctor_use_the_same_prefix():
     assert f'LEARNED_SITE = "{TARGET}"' in RUNNER.read_text(encoding="utf-8")
-    rosy_ml = (ROOT / "tools" / "perception" / "rosy_ml.py").read_text(encoding="utf-8")
+    rosy_ml = (ROOT / "learning" / "training" / "perception" / "rosy_ml.py").read_text(encoding="utf-8")
     assert f'LEARNED_SITE = "{TARGET}"' in rosy_ml
 
 

@@ -68,7 +68,7 @@ REGROWTH_ALLOWANCE = 150
 FILE_BUDGET_WEB = 800
 WEB_SUFFIXES = {".js", ".html", ".css"}
 OPS_SUFFIXES = {".py", ".sh"}
-OPS_ROOTS = ("deploy", "tools", "firmware")
+OPS_ROOTS = ("deploy", "tools", "firmware", "learning")  # learning: moved perception tooling (D-427 wave 1)
 HARD_TIER = 1_000  # a file above this gets zero growth allowance
 
 CONTROL_SPLIT = "docs/plans/2026-09-22-control-package-split-design.md"
@@ -442,11 +442,11 @@ SIZE_VERDICTS = {
         "accept: the harness gate itself (lint/generate) — one CLI owner pinned by "
         "test/test_harness_contracts.py (X5)",
     ),
-    "tools/perception/rosy_ml.py": (
+    "learning/training/perception/rosy_ml.py": (
         615,
         "accept: the operator CLI is one argparse dispatcher over the wrapped tools (deliver, "
         "harvest, fetch_http, intake), which own the behaviour; covered by "
-        "tools/perception/test/test_rosy_ml.py (X5, D-411 fetch --http)",
+        "learning/training/perception/test/test_rosy_ml.py (X5, D-411 fetch --http)",
     ),
     "deploy/robot/pinky_pro/native/rosy-boot-display.py": (
         688,

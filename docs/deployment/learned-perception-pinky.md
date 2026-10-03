@@ -235,14 +235,14 @@ sudo -n bash deploy/robot/pinky_pro/dev/install-learned-perception.sh
 4. **프레임 추출과 초벌 라벨.** 운영 PC에서 (`data/perception/`은 gitignore다):
 
    ```bash
-   python tools/perception/dataset/extract.py data/perception/raw/<robot>/<session> --out data/perception/frames/<name>
-   python tools/perception/dataset/prelabel.py data/perception/frames/<name> \
+   python learning/training/perception/dataset/extract.py data/perception/raw/<robot>/<session> --out data/perception/frames/<name>
+   python learning/training/perception/dataset/prelabel.py data/perception/frames/<name> \
      --model data/perception/models/<model_revision> --classes <classes.yaml> --out data/perception/prelabel/<name>
    ```
 
    `extract.py`는 세션에 압축 토픽이 있으면 그것을 쓰고, 섀도 결과와 규칙 판단을 프레임에 붙인다.
    `prelabel.py`의 출력(`cvat_import.zip`, `images/`, `ranking.csv`)을 CVAT에 올린다. 이후 학습은
-   [Colab 안내](../../tools/perception/training/COLAB.md)를 따른다.
+   [Colab 안내](../../learning/training/perception/training/COLAB.md)를 따른다.
 
 ## G. 되돌리기
 

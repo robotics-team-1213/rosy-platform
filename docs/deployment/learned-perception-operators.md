@@ -4,8 +4,8 @@
 넣고 빼는 일, 로봇에서 녹화를 가져오는 일을 다룬다. 섀도 모델은 주행에 쓰이지 않는다.
 주행 선택은 D-205 P3 게이트 뒤의 별도 결정이다.
 
-명령은 `rosy_ml` 하나다(`tools/perception/rosy_ml.py`). 아래 예시는 저장소 루트에서
-`python tools/perception/rosy_ml.py ...`로 실행하고, 편의상 `rosy_ml`로 줄여 쓴다.
+명령은 `rosy_ml` 하나다(`learning/training/perception/rosy_ml.py`). 아래 예시는 저장소 루트에서
+`python learning/training/perception/rosy_ml.py ...`로 실행하고, 편의상 `rosy_ml`로 줄여 쓴다.
 로봇은 이름(`pinky-005`)으로 부른다. 주소는 각자의 설정 파일에만 있고 저장소에는 없다.
 
 ## 처음 한 번
@@ -92,7 +92,7 @@
 - **데이터셋 올리기.** 만든 데이터셋을 store에 넣고, 출력된 ref를 학습자에게 준다.
 
   ```bash
-  python tools/perception/dataset/publish.py data/perception/datasets/<name>   # --store 기본값은 설정의 store
+  python learning/training/perception/dataset/publish.py data/perception/datasets/<name>   # --store 기본값은 설정의 store
   # dataset: store:<name>@<content_sha>   ← 이 줄을 학습자에게 전달
   ```
 

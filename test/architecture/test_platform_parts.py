@@ -416,7 +416,15 @@ def test_import_rules_only_shrink():
 
 #: (file, matched text) pairs the old-path scan reports that are not paths, e.g. a
 #: path-traversal rejection case like "../../etc/passwd". Stale entries fail.
-LEGACY_SCAN_ALLOWLIST: set[tuple[str, str]] = set()
+LEGACY_SCAN_ALLOWLIST: set[tuple[str, str]] = {
+    # D-427 1-pre: the site model-watch wrapper falls back to the pre-move checkout
+    # layout on purpose, so a site source copy older than wave 1 keeps working.
+    ("deploy/site/rosy-model-watch", "$SRC/tools/perception"),
+    ("learning/training/perception/test/test_site_install_model_watch.py", "tools/perception"),
+    # ... and the two entries above name those strings themselves.
+    ("test/architecture/test_platform_parts.py", "$SRC/tools/perception"),
+    ("test/architecture/test_platform_parts.py", "tools/perception"),
+}
 
 
 def _read_text(path: str) -> str | None:

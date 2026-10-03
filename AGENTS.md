@@ -31,6 +31,7 @@ ROSY is a robot middleware and fleet-control platform (ROS 2 Jazzy, first hardwa
 | `docs/` | Governance docs: spec, live API contract, ADR, plans (see `docs/AGENTS.md`) |
 | `deploy/` | Image build, signed release, Pi runtime (see `deploy/AGENTS.md`) |
 | `tools/` | Developer commands. Not installed on the robot (see `tools/AGENTS.md`) |
+| `learning/` | D-427 learning part: `training/perception/` (D-356 learned-loop tooling, see its `AGENTS.md`). Not installed on the robot |
 | `data/` | Local teleop checks and drive recordings. Session files stay untracked |
 | `firmware/` | Dock and signal firmware outside colcon (see `firmware/AGENTS.md`) |
 | `test/` | Host pytest for deploy/robot/pinky_pro/release/motor contracts (see `test/AGENTS.md`) |
