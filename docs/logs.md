@@ -4771,3 +4771,17 @@
 - gate 변화: 없음(문서만). 모델 PC GPU 학습·NCNN·Isaac 실행, 관제 PC 사이트 스택 이전은 미수용
 - 결정: D-434 Accepted, D-322 부록
 - 교훈: 큰 CUDA wheel 설치는 Wi-Fi에서 uv 기본 timeout으로 끊긴다 — `UV_HTTP_TIMEOUT=600`, 분리 실행, 완료 표식으로 확인
+
+## 2026-10-03 · uncommitted · docs: ADR role and Fleet terminology review
+
+- 변경: `docs/assessments/2026-10-03-adr-role-and-terminology-review.md`에 Fleet 서비스/다중 로봇 조정/범용 작업 실행의 혼합, D-290 선택지 처분, 역할과 계층 분류, 로컬 트랜잭션, ER2 후보 fence, 작업 용어의 정합화 검토를 기록했다. 세 대안과 단일 팔·두 로봇·이동 조작·stop 경쟁·링크 상실 사례로 후속 ADR 결정 범위를 정리했다.
+- 증거: D-12/D-21/D-55/D-290/D-296/D-298/D-326/D-333/D-358/D-369/D-392/D-399/D-413/D-427/D-429/D-430, CONCEPTS.md, 설계 v0.2와 현재 proposal store 정적 검토.
+- gate 변화: 없음. 검토·추천만이며 Accepted ADR, 공개 API, 코드·폴더 배치, policy dispatch, ARTIFACT/DEVICE/FIELD 상태는 변경하지 않는다.
+- 검증: harness lint 0 errors/26 warnings, 문서 링크 14개 누락 0, diff whitespace 검사 통과. 문서·구조 계약은 128 passed/1 skipped/1 failed. 실패는 src만 스캔하는 모듈 기준선 시험과 learning/envs/isaac으로 이동된 isaac_sim의 불일치이며 이번 검토의 수정 대상이 아니다.
+
+## 2026-10-03 · uncommitted · docs: D-435 work orchestration and Fleet authority proposal
+
+- 변경: D-435 Proposed 초안·ADR Log·docs ADR 목록과 1차 검토의 2차 보강을 기록했다. 단일 정본의 범위, 비로봇 공유 자원, 수동/정지 경로, 숙고형 모델과 기타 판단의 권한 차이, 로컬 Action과 작업 오케스트레이션, UNKNOWN과 점유 해제의 경계를 명시했다.
+- 증거: D-290/D-298/D-369/D-399/D-413/D-429와 현재 PlanBundle·cell submission 대조. 단일 팔·수동 조작·운송·formation·미래 컨베이어·복합 로봇·stop 경쟁·불명 Action·독립 셀 반례를 초안에 기록했다.
+- gate 변화: 없음. Proposed만 추가했으며 기존 Accepted 계약과 공개 API·코드·정지 fence·원장·policy dispatch·장치 수용은 변경하지 않는다.
+- 검증: 문서 계약 83 passed/26 existing history warnings(full lint·generated records 포함), D-435 제목/상태/색인 일치·로컬 링크 16개 누락 0·반례 9개·diff whitespace 검사 통과. 이전 isaac_sim 구조 기준선 실패는 별도 미해결이며 이번 문서 검증의 통과 범위에 포함하지 않는다.
