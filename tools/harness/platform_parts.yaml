@@ -352,6 +352,11 @@ roots:
     d427_target: tools/sim
     wave: none
     note: Sim benches and scenario scripts.
+  - path: tools/ssh
+    part: tools
+    d427_target: tools/ssh
+    wave: none
+    note: D-418 operator SSH enrollment and team-key share CLIs (run on the operator PC); not shipped.
   - path: .github
     part: tools
     d427_target: .github
