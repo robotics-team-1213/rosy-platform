@@ -1,6 +1,6 @@
 ## D-433 로봇 몸의 화면·소리·빛은 ROS 밖 한 프로세스 `rosy-face`가 평생 소유하고, 무엇을 그릴지는 상황표 함수 하나가 정한다
 
-**Status:** Proposed (2026-10-03, 사용자 결정 "한 프로세스가 LCD·부저·램프를 계속 소유" 반영 초안). 열린 질문 Q1–Q5는 사용자 결정이 남아 있다. 구현은 결정 뒤에 한다.
+**Status:** Proposed (2026-10-03, 사용자 결정 "한 프로세스가 LCD·부저·램프를 계속 소유" 반영 초안). Q1–Q5는 2026-10-03 사용자가 모두 권고안으로 답했다(아래 "사용자 결정"). 독립 리뷰 전까지 Proposed로 둔다.
 
 잇는 결정: [D-190](D-190-vendor-parity-boot-display.md) · [D-260](D-260-robot-shows-its-state-by-sound-light-screen-and-summary.md) · [D-380](D-380-lamp-mode-patterns-from-core-status-inputs.md) · [D-381](D-381-blocked-navigation-and-emergency-entry-sound.md) · [D-385](D-385-rosy-expresses-itself-mode-faces-and-breathing-boot.md) · [D-394](D-394-display-cards-are-a-contract-devices-are-profiles.md) · [D-388](D-388-payload-push-syncs-image-layer.md) · [D-412](D-412-robots-self-update-from-signed-github-releases-when-idle.md) · [D-185](D-185-runtime-cpu-budget-order.md) · [D-427](D-427-platform-three-parts-middleware-operations-learning.md)
 
@@ -54,12 +54,12 @@
 | 1 | 종료·재부팅 (SIGTERM, `systemctl is-system-running`=stopping) | `shutdown` | "Shutting down" 카드 한 장. 프로세스가 끝나면 백라이트도 꺼진다 | 얼굴 없음 | rosy-face 신호 처리 |
 | 2 | 부팅 실패·unit 실패 (`stage` FAILED, `robot_state`=failed) | `status` (실패) | 부팅 카드의 빨강 `FAILED`·실패 unit·할 일 줄(D-190·D-260) | 얼굴 없음 | boot-status → 상황표 |
 | 3 | 페이로드 업데이트·활성화 진행 (D-412 `applying`, push 활성화) | `update` | "Updating to <release>" 카드, 현재 릴리스, 숨쉼(D-385 문법) | 얼굴 없음 | 결정 5 파일 → 상황표 |
-| 4 | 비상정지·EMERGENCY 래치 (`estop` 또는 `robot_mode`=EMERGENCY, 핸드오버 신선) | **Q1** | 권고: 전체 경고 카드(빨강 "STOPPED", 해제 방법 한 줄). 대안: `sad` 얼굴 + 주행 카드 주기 | Q1 | 핸드오버 → 상황표 |
+| 4 | 비상정지·EMERGENCY 래치 (`estop` 또는 `robot_mode`=EMERGENCY, 핸드오버 신선) | `stopped` | 전체 빨강 "STOPPED" 카드: 원인 한 줄, 해제 방법 한 줄(Q1) | 얼굴 없음 | 핸드오버 → 상황표 |
 | 5 | AP 대체 모드 (`network.mode`=ap) | `status` (AP) | 부팅 카드 + SSID·PW·Wi-Fi QR(D-190·D-272). 로그인 코드 줄도 같은 카드에 | 얼굴 없음 | network.json·ap-display → 상황표 |
 | 6 | 부팅 중 (BOOTING·PROVISIONED·SETUP) | `status` (부팅) | 부팅 카드, 단계 제목 숨쉼(D-385 결정 3) | 얼굴 없음 | boot-status → 상황표 |
 | 7 | CORE 정지·충돌·응답 없음 (`stage` CORE_READY인데 핸드오버 없음·오래됨·형식 위반) | `status` (CORE 없음) | 부팅 카드 + 상태 줄 "CORE not responding"(LCD 영어) | 얼굴 없음, 자동 복귀 | 핸드오버 신선도 → 상황표 |
-| 8 | CORE_READY, 로그인 코드가 아직 안 쓰임 | **Q2** | 권고: 부팅 카드(이름·IP·코드·역할) 전체를 코드가 쓰이거나 BURNED될 때까지. 대안: 얼굴 아래 띠 `Login XXXX-XXXX` | Q2 | login-display → 상황표 |
-| 9 | 주의 (저배터리, 제품 장치 응답 없음, 핸드오버가 넘기는 열화 사유 — 예 라인 추종 NOMINAL 상실) | **Q3** | 권고: 얼굴 아래 주황 띠(D-260 할 일 줄 문구). 대안: 진입 시 5 s 주의 카드 후 얼굴 | Q3 | robot_state + 핸드오버 → 상황표 |
+| 8 | CORE_READY, 로그인 코드가 아직 안 쓰임 | `status` (로그인) | 부팅 카드 전체(이름·IP·코드·역할)를 코드가 쓰이거나 BURNED될 때까지(Q2) | 얼굴 없음 | login-display → 상황표 |
+| 9 | 주의 (저배터리, 제품 장치 응답 없음, 핸드오버가 넘기는 열화 사유 — 예 라인 추종 NOMINAL 상실) | 아래 줄의 화면 + 띠 | 얼굴(또는 그 순간의 화면) 아래 주황 띠, D-260 할 일 문구(Q3) | 얼굴 유지 | robot_state + 핸드오버 → 상황표 |
 | 10 | 하드웨어 시험 (D-247 부저·램프 넘김 요청 처리 중) | 현재 화면 유지 + 띠 | 띠 "Testing buzzer"/"Testing lamp"(최대 `LAMP_TEST_S`) | 얼굴 유지 | 시험 요청 → 상황표 |
 | 11 | 캘리브레이션 (`activity_kind`=CALIBRATING) | `face` + 띠 | `interest` 얼굴 + 띠 "CALIBRATING - keep clear" | 얼굴 유지 | 핸드오버 → 상황표 |
 | 12 | 웨이크 카드 (PWR-003 근접·배터리 웨이크, 핸드오버 `wake` 블록) | `face` + 카드 | `render_card`(kind 없음) `hold_s` 동안, 끝나면 얼굴 | 카드가 잠시 이김 | CORE가 내용, 상황표가 시간 |
@@ -96,7 +96,7 @@
 
 | 항목 | 값 | 이유 |
 |---|---|---|
-| 사용자 | **Q4** — 권고: 시스템 계정은 `rosy-display` 그대로 | Context 5: 페이로드로 계정을 만들 수 없고 그룹 이름이 다섯 곳에 박혀 있다 |
+| 사용자 | `rosy-display` 그대로(Q4) | Context 5: 페이로드로 계정을 만들 수 없고 그룹 이름이 다섯 곳에 박혀 있다 |
 | 그룹 | `SupplementaryGroups=dialout spi gpio` | 지금과 같다(i2c-1, spidev0.0, gpiochip4) |
 | 장치 | `DevicePolicy=closed`, `DeviceAllow` spidev0.0·gpiochip4·i2c-1·ws281x_pwm만 | D-190·D-260과 같다. 늘리지 않는다 |
 | ROS 환경 | 없음. `PYTHONPATH`는 현재 릴리스 site-packages, GIF는 `/opt/rosy/current/install/share/emotion/emotion` | ROS 없이 동작한다. namespace(예 `/rosy_60`)도 필요 없다 |
@@ -148,15 +148,17 @@
 - **status-inputs의 주기를 1 s로 줄인다.** 거부. 장치 행 전체를 매초 다시 계산하고, 자동 업데이트의 유휴 판정이 그 주기를 전제한다(결정 3).
 - **CORE가 LCD를 직접 그린다.** 거부. CORE는 비특권이고 네트워크에 노출된다(D-161). 장치 허용을 CORE에 줄 수 없다.
 
-### 열린 질문 (사용자 결정 필요)
+### 사용자 결정 (2026-10-03)
 
-- **Q1. 비상정지 화면.** (a) 전체 경고 카드: 빨강 "STOPPED", 원인(사람 정지 / 감시 정지), 해제 방법 한 줄. (b) `sad` 얼굴 + 주행 카드 20 s 주기(D-394가 EMERGENCY를 포함한다). **권고 (a).** 로봇이 스스로 멈춘 경우(D-381 Context) 옆 사람이 1 m 밖에서 "왜, 어떻게 풀지"를 읽어야 하고, 슬픈 얼굴은 그 말을 하지 못한다. 램프 빨강 4 Hz·진입음과 같은 무게로 맞춘다.
-- **Q2. 쓰이지 않은 로그인 코드.** (a) 코드가 쓰이거나 BURNED될 때까지 부팅 카드 전체. (b) 얼굴 아래 띠 `Login XXXX-XXXX operator`. **권고 (a).** 코드는 처음 한 번 읽히면 되는 일회용이고, 그 전에는 아무도 로그인하지 않았으니 얼굴을 볼 사람도 없다. 카드에는 IP도 함께 있어 첫 접속에 둘 다 필요하다. 쓰인 뒤 얼굴로 넘어간다.
-- **Q3. 주의.** (a) 얼굴 아래 주황 띠(할 일 문구). (b) 진입 시 5 s 주의 카드 뒤 얼굴. **권고 (a).** 주의는 해결될 때까지 계속되는 상태라 띠가 계속 말해야 한다. 진입은 이미 낮은음 두 번과 주황 램프가 알린다(D-260). 카드는 사라지면 사실도 같이 사라진다.
-- **Q4. 시스템 계정 이름.** (a) `rosy-display` 유지, unit·프로그램만 `rosy-face`. (b) `rosy-face`로 개명: D-388 금지 목록을 넓혀 `sysusers.d` 단계를 동기화에 더하고, udev 규칙 둘·`rosy-network`·`rosy-login-code`·`rosy-hw-test`의 그룹 이름을 같은 릴리스에서 바꾼다. **권고 (a).** 계정은 장치 접근 그룹이지 프로세스 역할이 아니다. (b)는 페이로드가 계정을 만들게 하는 새 권한이고, 실패하면 화면·소리·빛이 한꺼번에 사라진다.
-- **Q5. 롤백 공백.** 결정 6의 "롤백 뒤 옛 표시 unit 한 번 시작"으로 충분한가, 아니면 자동 업데이트 롤백을 재부팅으로 끝낼 것인가. **권고: 한 번 시작**(재부팅은 실패한 업데이트를 두 번 흔든다).
+다섯 질문 모두 권고안으로 정했다. 아래는 질문과 근거의 기록이다.
 
-추가로 구현 때 정할 작은 것(사용자 결정 불필요, 기본값 제안): 캘리브레이션 띠 문구, 라인 추종 주행 카드 한 줄, 충전 중 띠, 시험 띠 길이.
+- **Q1. 비상정지 화면.** (a) 전체 경고 카드: 빨강 "STOPPED", 원인(사람 정지 / 감시 정지), 해제 방법 한 줄. (b) `sad` 얼굴 + 주행 카드 20 s 주기(D-394가 EMERGENCY를 포함한다). **결정 (a).** 로봇이 스스로 멈춘 경우(D-381 Context) 옆 사람이 1 m 밖에서 "왜, 어떻게 풀지"를 읽어야 하고, 슬픈 얼굴은 그 말을 하지 못한다. 램프 빨강 4 Hz·진입음과 같은 무게로 맞춘다.
+- **Q2. 쓰이지 않은 로그인 코드.** (a) 코드가 쓰이거나 BURNED될 때까지 부팅 카드 전체. (b) 얼굴 아래 띠 `Login XXXX-XXXX operator`. **결정 (a).** 코드는 처음 한 번 읽히면 되는 일회용이고, 그 전에는 아무도 로그인하지 않았으니 얼굴을 볼 사람도 없다. 카드에는 IP도 함께 있어 첫 접속에 둘 다 필요하다. 쓰인 뒤 얼굴로 넘어간다.
+- **Q3. 주의.** (a) 얼굴 아래 주황 띠(할 일 문구). (b) 진입 시 5 s 주의 카드 뒤 얼굴. **결정 (a).** 주의는 해결될 때까지 계속되는 상태라 띠가 계속 말해야 한다. 진입은 이미 낮은음 두 번과 주황 램프가 알린다(D-260). 카드는 사라지면 사실도 같이 사라진다.
+- **Q4. 시스템 계정 이름.** (a) `rosy-display` 유지, unit·프로그램만 `rosy-face`. (b) `rosy-face`로 개명: D-388 금지 목록을 넓혀 `sysusers.d` 단계를 동기화에 더하고, udev 규칙 둘·`rosy-network`·`rosy-login-code`·`rosy-hw-test`의 그룹 이름을 같은 릴리스에서 바꾼다. **결정 (a).** 계정은 장치 접근 그룹이지 프로세스 역할이 아니다. (b)는 페이로드가 계정을 만들게 하는 새 권한이고, 실패하면 화면·소리·빛이 한꺼번에 사라진다.
+- **Q5. 롤백 공백.** 결정 6의 "롤백 뒤 옛 표시 unit 한 번 시작"으로 충분한가, 아니면 자동 업데이트 롤백을 재부팅으로 끝낼 것인가. **결정: 한 번 시작**(재부팅은 실패한 업데이트를 두 번 흔든다).
+
+구현이 정한 작은 것(사용자 결정 불필요): 캘리브레이션 띠 문구, 라인 추종 주행 카드 한 줄, 충전 중 띠, 시험 띠 길이.
 
 ### Consequences
 
