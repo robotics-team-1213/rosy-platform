@@ -49,6 +49,9 @@ PACKAGE_DIR_ROOTS = {
     "operations/execution/src/rosy/execution/api",
     "middleware/execution/local",  # until 2c turns it into a wheel root; 2c removes this line
     "operations/execution/src/rosy/execution/site",
+    "middleware/core/services/core_features/safety",  # D-430 §1 sub-root inside the services package
+    "middleware/core/services/core_features/decision",  # D-429 §1 device local rules sub-root
+    "operations/decision",  # D-429 §5 fleet.ai until the carve
 }
 
 #: Frozen §2 violations as (importer target, imported target or "external:<name>") -> reason.
@@ -198,6 +201,20 @@ def test_manifest_shape_and_paths():
         assert (root["part"] == "integrations") == ("integration" in root), root
     prefixes = [prefix for root in manifest["roots"] for prefix in root.get("import_prefix") or ()]
     assert len(prefixes) == len(set(prefixes)), "an import_prefix names one owner"
+
+
+CONCERNS = ["learning", "decision", "control", "safety", "contracts", "other"]
+
+
+def test_every_root_has_a_valid_concern():
+    """D-429 §1 five concerns plus D-430 §1 ``safety``; one value per root."""
+    manifest = _manifest()
+    assert manifest["concerns"] == CONCERNS
+    bad = [f"{root['path']}: {root.get('concern')!r}" for root in manifest["roots"]
+           if root.get("concern") not in CONCERNS]
+    assert bad == [], f"concern must be one of {CONCERNS}: {bad}"
+    used = {root["concern"] for root in manifest["roots"]}
+    assert used == set(CONCERNS), f"every concern names at least one root: {set(CONCERNS) - used}"
 
 
 def test_nested_roots_change_part_or_target():
