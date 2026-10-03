@@ -4935,3 +4935,10 @@
 - 변경: 검토안을 사용자 승인한 구현 범위로 갱신하고 cam 운용 문서에 자동 조명 시간·발열 제한, 실제 상태 표시, 사진 저장·공유, 렌즈 변경 시 보정 확인을 기록했다. 고해상도 ImageCapture·Night/Boost·원격 촬영 API·물리적 회전은 후속 범위로 남긴다.
 - 증거: JVM 326 passed, 최종 debug APK 및 lint 성공, 독립 리뷰 승인. 기존 서명자 APK 덮어 설치 후 페어링 설정 바이트 동일. 실제 S21 기본 후면의 자동 점등과 저장한 회전 적용 사진에서 촬영 영역을 식별했다. 화면 절전 중 63초간 10/10 최신 JPEG와 자동 꺼짐·재점등을 확인했다. 개인 사진·장치 식별자·상세 증거는 X:에만 둔다.
 - gate 변화: 없음. SOURCE/LOCAL GO, 전체 DEVICE/FIELD PARKED 유지.
+
+## 2026-10-04 · uncommitted · site(D-441): automatic site stack updates
+- 변경: D-441 ADR·ADR Log 행(D-440은 device-power 브랜치가 써서 다음 번호, `adr_gaps`에 D-438·D-439·D-440). `build-site-candidate.yml`에 main push 트리거와 이미지 원본 경로 필터, push는 기존 릴리스에서 빌드 없이 성공, push 빌드만 취소하는 job concurrency와 비취소 릴리스 그룹. 서명 PC용 `deploy/site/auto_sign_candidates.py`(출처 증명 digest·main 조상·태그 확인 뒤 `sign_manifest_only`, 감사 로그)와 `register_auto_sign_task.ps1`. 사이트 호스트용 `rosy_site_autoupdate.py`·`rosy-site-autoupdate.service`·`.timer`(override 거부, SHA256SUMS·tar 검사, 설치된 검증기, 원자적 site.env·symlink 전환, 건강 확인과 롤백, 정리). D-437·D-301 부록, `deploy/site/README.md` "Automatic updates (D-441)"
+- 증거: 사이트 후보·workflow·fetch·검증기·서명 시험과 새 자동 서명·호스트 갱신 시험(symlink 시험은 Linux 컨테이너에서), `test_no_secrets_in_tracked_files`, harness 계약·lint, actionlint 1.7.7(Docker)
+- gate 변화: 없음. workflow push 실행, 서명 PC 예약 작업, 사이트 호스트 설치와 첫 자동 갱신·롤백은 미검증. 사이트 키 미준비(D-301)
+- 결정: D-441 Accepted, D-437·D-301 개정 부록
+- 교훈: 자동 서명기가 지키는 것은 자산 쓰기 권한과 main 아닌 빌드다. 서명 PC 계정과 main 보호 규칙이 이제 사이트 배포의 문이다
