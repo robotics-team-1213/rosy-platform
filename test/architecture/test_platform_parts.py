@@ -26,6 +26,7 @@ Honest holes, not oversights:
 - Edges are per root pair, so a second import along a listed edge is not new.
 """
 
+import functools
 import os
 import shutil
 import subprocess
@@ -35,6 +36,7 @@ import pytest
 import yaml
 
 from _ast_imports import _imports, _matches
+from _legacy_paths import LegacyScan, in_scope
 
 ROOT = Path(__file__).resolve().parents[2]
 MANIFEST = ROOT / "tools" / "harness" / "platform_parts.yaml"
@@ -85,6 +87,7 @@ def _manifest() -> dict:
     return yaml.safe_load(MANIFEST.read_text(encoding="utf-8"))
 
 
+@functools.lru_cache(maxsize=1)
 def _tracked() -> list[str]:
     if shutil.which("git") is None or not (ROOT / ".git").exists():
         if os.environ.get("CI"):
@@ -360,6 +363,94 @@ def test_import_rules_only_shrink():
         + "; ".join(f"{key}: {edges[key][:3]}" for key in new)
         + f" | stale KNOWN_VIOLATIONS (remove them): {stale}"
     )
+
+
+#: (file, matched text) pairs the old-path scan reports that are not paths, e.g. a
+#: path-traversal rejection case like "../../etc/passwd". Stale entries fail.
+LEGACY_SCAN_ALLOWLIST: set[tuple[str, str]] = set()
+
+
+def _read_text(path: str) -> str | None:
+    data = (ROOT / path).read_bytes()
+    return None if b"\0" in data[:8192] else data.decode("utf-8", "replace")
+
+
+def _legacy_report(roots, tracked, read, allowlist) -> list[str]:
+    """Problems left by moved roots: files under ``legacy``, old-path references
+    in the scan scope (see ``_legacy_paths``), and stale allowlist entries."""
+    legacies = {root["legacy"]: root["path"] for root in roots if root.get("legacy")}
+    problems = [
+        f"{root['path']}: legacy only on moved or partly moved roots, not {_state(root, roots)}"
+        for root in roots if root.get("legacy") and _state(root, roots) == "pending"
+    ]
+    problems += [f"{path}: tracked file under legacy root" for path in tracked
+                 if any(_under(path, legacy) for legacy in legacies)]
+    scan = LegacyScan(legacies)
+    seen = set()
+    for path in tracked if legacies else ():
+        if not in_scope(path):
+            continue
+        text = read(path)
+        for form, matched, legacy in scan.findings(path, text) if text is not None else ():
+            if (path, matched) in allowlist:
+                seen.add((path, matched))
+            else:
+                problems.append(f"{path}: {form} {matched!r} points into {legacy} (now {legacies[legacy]})")
+    problems += [f"stale LEGACY_SCAN_ALLOWLIST entry: {entry}" for entry in sorted(allowlist - seen)]
+    return sorted(set(problems))
+
+
+def test_moved_roots_leave_nothing_behind():
+    """Each move commit records ``legacy: <old path>``; a branch rebased past the
+    move that recreates or references the old path fails here."""
+    tracked = _tracked()
+    assert sum(map(in_scope, tracked)) > 1000, "old-path scan scope shrank; check in_scope"
+    problems = _legacy_report(_manifest()["roots"], tracked, _read_text, LEGACY_SCAN_ALLOWLIST)
+    assert problems == [], problems
+
+
+def test_legacy_scan_catches_every_form_and_respects_exemptions():
+    roots = [
+        {"path": "ops/fleet", "part": "operations", "d427_target": "ops/fleet", "legacy": "src/old/fleet"},
+        {"path": "src/other", "part": "operations", "d427_target": "ops/other"},
+    ]
+    files = {
+        "deploy/var.sh": 'cp -r "$WORKSPACE/src/old/fleet/x" .\n',
+        "deploy/repo.sh": "PYTHONPATH=/repo/src/old/fleet:/opt/rosy/src/old/fleet python\n",
+        "deploy/install.sh": 'install -d /opt/rosy/src/old/fleet/ "/usr/share/src/old/fleet" /etc/src/old/fleet\n',
+        "deploy/near.sh": "ls src/old/fleetwood src/old/fleet_x\n",
+        "test/join_div.py": 'HERE.parents[2] / "src" / "old" / "fleet" / "web"\n',
+        "test/join_call.py": "os.path.join('src', 'old', 'fleet')\nPath('src/old', 'fleet')\n",
+        "src/other/app/x/build.gradle.kts": 'rootProject.file("../../old/fleet/icons")\n',
+        "test/traversal.py": 'reject("../../src/old/fleet/passwd")\n',
+        "test/ok_relative.py": 'open("../fixtures/data.json")\n',
+        "docs/adr/D-1-x.md": "src/old/fleet\n",
+        "docs/plans/p.md": "src/old/fleet\n",
+        "ops/fleet/logs.md": "src/old/fleet\n",
+        "deploy/robot/pinky_pro/image/device-python-requirements.txt": "# src/old/fleet\n",
+        "tools/harness/platform_parts.yaml": "legacy: src/old/fleet\n",
+        "deploy/notes.md": "src/old/fleet\n",
+        "deploy/AGENTS.md": "See `src/old/fleet/`.\n",
+        "src/old/fleet/new.py": "",
+    }
+    allow = {("test/traversal.py", "../../src/old/fleet/passwd"), ("test/gone.py", "../x")}
+    problems = _legacy_report(roots, list(files), files.get, allow)
+    tail = " points into src/old/fleet (now ops/fleet)"
+    assert problems == sorted([
+        "deploy/AGENTS.md: slash 'src/old/fleet/'" + tail,
+        "deploy/repo.sh: slash '/repo/src/old/fleet'" + tail,
+        "deploy/var.sh: slash '$WORKSPACE/src/old/fleet/x'" + tail,
+        "src/old/fleet/new.py: tracked file under legacy root",
+        "src/other/app/x/build.gradle.kts: relative '../../old/fleet/icons'" + tail,
+        "stale LEGACY_SCAN_ALLOWLIST entry: ('test/gone.py', '../x')",
+        "test/join_call.py: join " + repr("src', 'old', 'fleet") + tail,
+        "test/join_call.py: join " + repr("src/old', 'fleet") + tail,
+        "test/join_div.py: join " + repr('src" / "old" / "fleet') + tail,
+    ])
+    pending = [{**roots[0], "path": "src/old/x"}, roots[1]]
+    assert _legacy_report(pending, [], files.get, set()) == [
+        "src/old/x: legacy only on moved or partly moved roots, not pending",
+    ]
 
 
 def _root(path: str, part: str, **extra) -> dict:
