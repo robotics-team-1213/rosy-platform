@@ -63,6 +63,7 @@ def test_latest_frame_store_is_monotonic_and_fail_closed_when_stale():
         "height": 360,
         "overlay": "semantic-road-v1",
         "sequence": 1,
+        "quality": None,
     }
     assert store.frame(now=20.5).data == jpeg(b"first")
 
@@ -124,7 +125,7 @@ def test_camera_preview_api_requires_auth_and_returns_jpeg(
     services.vision.publish(
         jpeg(b"dashboard"), captured_at=42.25,
         frame_id="front_camera_link", source="GAZEBO",
-        width=640, height=360, overlay="semantic-road-v1")
+        width=640, height=360, overlay="semantic-road-v1", quality=dict(valid=False, reason='low_light'))
 
     status = client.get("/api/v1/vision/front/status", headers=VIEWER)
     frame = client.get(
@@ -136,6 +137,7 @@ def test_camera_preview_api_requires_auth_and_returns_jpeg(
     assert status.json()["available"] is True
     assert status.json()["source"] == "GAZEBO"
     assert status.json()["width"] == 640
+    assert status.json()['quality'] == dict(valid=False, reason='low_light')
     assert status.headers["cache-control"] == "no-store"
     assert frame.status_code == 200
     assert frame.headers["content-type"] == "image/jpeg"

@@ -71,6 +71,8 @@ ALLOWLIST: dict[str, CommandSpec] = {
     spec.name: spec
     for spec in (
         CommandSpec("network.status", Role.VIEWER, False),
+        CommandSpec("lane_perception.status", Role.VIEWER, False),
+        CommandSpec("lane_perception.set", Role.ADMINISTRATOR, False, frozenset({"paint_source"})),
         CommandSpec("network.apply_profile", Role.ADMINISTRATOR, True, frozenset({"profile_id"})),
         CommandSpec("network.set_mode", Role.ADMINISTRATOR, True, frozenset({"mode"})),
         CommandSpec("network.connect", Role.ADMINISTRATOR, True, frozenset({"ssid", "psk"})),
@@ -106,6 +108,8 @@ class HostCommands(Protocol):
     """The privileged actions, injected so refusals can be tested in isolation."""
 
     def network_status(self) -> dict: ...
+    def lane_perception_status(self) -> dict: ...
+    def set_lane_perception(self, paint_source: str) -> dict: ...
     def apply_network_profile(self, profile_id: str) -> dict: ...
     def set_network_mode(self, mode: str) -> dict: ...
     def connect_wifi(self, ssid: str, psk: str) -> dict: ...
@@ -176,6 +180,7 @@ class HostAgent:
         allowed_units: Sequence[str],
         recovery_hold: Callable[[], dict | None] = lambda: None,
         audit: Callable[[AuditRecord], None] | None = None,
+        allowed_commands: Sequence[str] | None = None,
     ) -> None:
         self._commands = commands
         self._allowed_profiles = frozenset(allowed_profiles)
@@ -183,6 +188,7 @@ class HostAgent:
         self._recovery_hold = recovery_hold
         self._audit = audit or (lambda _record: None)
         self._idempotency = _Idempotency()
+        self._allowed_commands = frozenset(allowed_commands) if allowed_commands is not None else frozenset(ALLOWLIST)
 
     # --- the wire ---------------------------------------------------------
 
@@ -244,7 +250,7 @@ class HostAgent:
             )
 
         spec = ALLOWLIST.get(command_name) if isinstance(command_name, str) else None
-        if spec is None:
+        if spec is None or spec.name not in self._allowed_commands:
             # No fuzzy matching: a command this build does not implement is a
             # command it must not approximate.
             return refuse(
@@ -345,6 +351,10 @@ class HostAgent:
             )
 
         for name, value in params.items():
+            if name == "paint_source":
+                if not isinstance(value, str) or value not in {"threshold", "denoise", "learned"}:
+                    return ("HOST_AGENT_PARAM_INVALID", "unknown paint_source", "threshold, denoise, learned 중 선택하십시오.")
+                continue
             if name == "psk":
                 if not isinstance(value, str) or not 8 <= len(value) <= 63:
                     return (
@@ -394,6 +404,8 @@ class HostAgent:
 
     def _execute(self, request_id: str, spec: CommandSpec, params: dict, actor: dict) -> dict:
         actions: dict[str, Callable[[], dict]] = {
+            "lane_perception.status": lambda: self._commands.lane_perception_status(),
+            "lane_perception.set": lambda: self._commands.set_lane_perception(params["paint_source"]),
             "network.status": self._commands.network_status,
             "network.apply_profile": lambda: self._commands.apply_network_profile(params["profile_id"]),
             "network.set_mode": lambda: self._commands.set_network_mode(params["mode"]),

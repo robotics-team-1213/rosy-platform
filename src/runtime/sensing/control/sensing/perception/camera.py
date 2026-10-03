@@ -2,6 +2,7 @@
 import numpy as np
 from .camera_evidence import REGION_CAP
 from .camera_regions import foreground_regions
+from .camera_visibility import is_low_light
 
 
 def classify_frame(
@@ -37,6 +38,11 @@ def classify_frame(
     quality = dict(valid=True, reason='usable', reference='previous' if floor_hsv is not None else 'bootstrap')
     if np.mean(v_ch < 8) > .95 or np.mean(v_ch > 247) > .95:
         return _empty_result('underexposed' if np.mean(v_ch < 8) > .95 else 'overexposed')
+    # A frozen daylight exposure can remain far above digital black after the
+    # lights go out. Judge raw luminance before consulting the previous floor:
+    # darkness is unavailable evidence, not a full-frame semantic obstacle.
+    if is_low_light(bgr):
+        return _empty_result('low_light')
 
     y_lo0, y_lo1 = int(0.70 * h), int(0.92 * h)
     x_lo0, x_lo1 = int(0.15 * w), int(0.85 * w)

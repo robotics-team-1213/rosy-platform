@@ -374,7 +374,12 @@ class LineFollowManager(BodyStopMixin, StuckRecoveryMixin):
         with self._lock:
             self._path_evaluated = False
             try:
-                return self._apply_recovery(current, self._tick_locked(current))
+                decision = self._tick_locked(current)
+                if (self._mode is LineFollowMode.CAMERA_LINE and self._observation is not None
+                        and self._observation.quality_reason == 'low_light'):
+                    self._recovery_reset('camera_low_light', current)
+                    return decision  # LOST must also bypass recovery's autonomous back-off.
+                return self._apply_recovery(current, decision)
             finally:
                 if not self._path_evaluated:
                     # 풀림 지연은 연속으로 잰 틱만 센다 — LiDAR 끊김·계단 정지·OFF 틱이 끼면 처음부터.
@@ -404,6 +409,13 @@ class LineFollowManager(BodyStopMixin, StuckRecoveryMixin):
         if self._below_lane_auto_level():
             # 차선 자동은 수동 한도 L1 이상에서만(D-344 §13, 사용자 결정).
             return self._stop_decision("HOLD", "limit_level_too_low")
+        if (self._mode is LineFollowMode.CAMERA_LINE and self._observation is not None
+                and self._observation.quality_reason == 'low_light'):
+            # Invalid vision cannot authorize obstacle back-off or remembered steering.
+            age = None if self._received_at is None else current - self._received_at
+            if self._lost_latched:
+                return self._stop_decision("LOST", "camera_reselection_required", age)
+            return self._loss_or_stop(current, "HOLD", "low_light", age)
         guard = None
         if self._mode is LineFollowMode.CAMERA_LINE and self._config.ir_guard_enabled:
             guard = self._ir_guard(current)

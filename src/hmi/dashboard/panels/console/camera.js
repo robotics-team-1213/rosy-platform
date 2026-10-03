@@ -16,6 +16,9 @@ export function mount(root, ctx) {
   stage.append(frame, empty, closeExpanded);
   const status = el("ui-tag", "", "수신 대기"); status.id = "vision-status";
   status.dataset.evidence = "unavailable"; status.title = "WAITING"; status.setAttribute("status", "neutral");
+  const qualityIndicator = el("ui-status", "", "조도가 낮아 차선·물체를 판정할 수 없습니다");
+  qualityIndicator.id = "vision-quality"; qualityIndicator.hidden = true; qualityIndicator.setAttribute("state", "warning");
+  qualityIndicator.setAttribute("role", "status"); qualityIndicator.setAttribute("aria-live", "polite");
   const actions = el("ui-actions", "surface-actions surface-camera-actions");
   const expand = el("ui-button", "", "영상 확대"); expand.id = "vision-expand";
   expand.type = "button"; expand.setAttribute("kind", "quiet"); actions.append(expand);
@@ -93,10 +96,10 @@ export function mount(root, ctx) {
     "LEFT LANE · RIGHT LANE: 추종에 선택한 왼쪽·오른쪽 경계. UNSEEN은 선택한 경계가 없음.",
     "FOLLOW PATH: 따라갈 목표 방향. 점선은 주행 궤적이나 객체의 미래 이동이 아님.",
     "CURRENT LANE: 선택한 차로. CANDIDATE: 추가 차로 후보이며 자동 차선 변경 대상이 아님.",
-    "OBJ UNKNOWN · DARK: 종류 미확인 전경 영역이며 차선 페인트도 포함될 수 있음. NEAR는 가까운 중앙 경로 영역에 걸침. 0.42m L은 카메라 앞 거리(L LiDAR, G 바닥 평면 추정). unranged는 거리 미확인.",
+    "REGION UNCLASSIFIED · DARK: 바닥 색과 다른 미분류 영역이며 벽·차선 페인트도 포함될 수 있음. 장애물 종류를 알아본 결과가 아님. DET는 객체 모델 검출. NEAR는 가까운 중앙 경로 영역에 걸침. 0.42m L은 카메라 앞 거리(L LiDAR, G 바닥 평면 추정). unranged는 거리 미확인.",
     "TAG: 영상에서 식별한 표식 번호. PRED STOP은 도로 예측 표시 중단.",
   ]) legend.append(el("p", "", text));
-  root.append(head, stage, status, actions, legend, captureStatus, library, facts);
+  root.append(head, stage, status, qualityIndicator, actions, legend, captureStatus, library, facts);
   const elements = {"vision-stage": stage, "vision-frame": frame, "vision-empty": empty,
     "vision-status": status, "vision-source": source, "vision-resolution": resolution,
     "vision-age": age, "vision-captured": captured};
@@ -159,6 +162,7 @@ export function mount(root, ctx) {
   window.addEventListener("rosy:operator-action", action);
   const preview = createVisionPreview({elements, setText: (id, value) => { elements[id].textContent = value ?? "—"; },
     api: ctx.api, authHeaders, hasToken: () => Boolean(session.token), isHidden: () => document.hidden,
+    onQuality: (quality) => { qualityIndicator.hidden = !(quality?.valid === false && quality?.reason === "low_light"); },
     onFrame: (frame) => capture.acceptFrame(frame), onUnavailable: (message) => capture.unavailable(message)});
   const visibility = () => { if (document.hidden) preview.stop("화면이 숨겨져 카메라를 중지했습니다."); else preview.start(); };
   document.addEventListener("visibilitychange", visibility);

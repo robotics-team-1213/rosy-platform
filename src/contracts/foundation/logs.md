@@ -364,3 +364,15 @@
 - 증거: `python -m pytest src/contracts/foundation/test/test_face_screen.py -q` 77 passed 2 skipped(POSIX 전용 링크·FIFO).
 - gate 변화: 없음.
 - 결정: D-433 (Proposed)
+
+## 2026-10-04 · uncommitted · feat(protocol): lane perception selection v1.90
+- 변경: `LanePerceptionRequest`(closed paint_source enum), `LanePerceptionStatus`(configured selection, signed model integrity, applied service state, nullable live source) 추가. API ref v1.90; WS envelope protocol_version 1.0 유지.
+- 증거: protocol version alignment 및 lane perception API 7 passed; API/import/calibration/command 관련 53 passed (Windows).
+- gate 변화: SOURCE/LOCAL. 실제 모델 추론·주행은 별도 DEVICE/FIELD 증거.
+- 결정: `docs/plans/2026-10-04-learned-lane-driving-modes.md`
+
+## 2026-10-04 · uncommitted · feat: 저조도 face handover 신선도
+
+- 변경: 카메라 수신 나이와 face 파일 나이를 합산해 2초까지만 조명 근거를 신뢰한다. IDLE standby 조명은 명시 opt-in이며 경보·보정·시험·충전·저전압이 우선한다.
+- 증거: face table/native loop/PIL/lamp/package/CORE face handover 317 passed, 4 skipped (Windows).
+- gate 변화: SOURCE/LOCAL. ARM64/device/field verification pending.

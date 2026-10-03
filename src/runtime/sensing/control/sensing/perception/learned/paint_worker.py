@@ -32,6 +32,7 @@ class LearnedPaintWorker:
         self._period: float | None = None   # EMA of the frame stamp interval
         self._clean_cache = None
         self.last_error: str | None = None
+        self.used_model_revision: str | None = None
         self._thread = threading.Thread(target=self._run, name="learned-paint", daemon=True) if start else None
         if self._thread:
             self._thread.start()
@@ -63,6 +64,7 @@ class LearnedPaintWorker:
         periods (x1.5) old by frame stamps, and no older than stale_s; otherwise None and the
         caller falls back for this frame. `clean` post-processes a mask once per new mask (the
         result is cached), so a reused mask costs no connected-components pass."""
+        self.used_model_revision = None
         stamp = self._clock() if stamp is None else float(stamp)
         if self._last_stamp is not None and stamp > self._last_stamp:
             dt = stamp - self._last_stamp
@@ -76,16 +78,21 @@ class LearnedPaintWorker:
             self.submit(frame, tag=index, stamp=stamp)
         with self._lock:
             result = self._result
-        mask, summary = self.latest(frame.shape[:2])
-        if mask is None or summary["tag"] is None or index - summary["tag"] > every_n:
+        if result is None:
+            return None
+        submitted_at, mask, summary = result
+        if (self._clock() - submitted_at > self._stale_s or mask.shape != frame.shape[:2]
+                or summary["tag"] is None or index - summary["tag"] > every_n):
             return None
         age_s = stamp - summary["stamp"]
         if age_s < 0 or (self._period is not None and age_s > 1.5 * every_n * self._period):
             return None
         if clean is None:
+            self.used_model_revision = summary['model_revision']
             return mask
         if self._clean_cache is None or self._clean_cache[0] is not result:
             self._clean_cache = (result, clean(mask))
+        self.used_model_revision = summary['model_revision']
         return self._clean_cache[1]
 
     def reset(self) -> None:
@@ -95,6 +102,7 @@ class LearnedPaintWorker:
             self._generation += 1
             self._pending = self._result = None
         self._clean_cache = None
+        self.used_model_revision = None
         self._frames, self._last_stamp, self._period = 0, None, None
 
     def step(self) -> None:

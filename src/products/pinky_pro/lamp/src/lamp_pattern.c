@@ -14,6 +14,7 @@
  *   failed   red, 1 Hz blink, until stopped
  *   caution  orange, 0.5 Hz blink, until stopped
  *   manual   white, breathing, 3 s period, at most 25 % brightness (D-380)
+ *   illumination  steady white, full brightness; opt-in fresh-camera assist
  *   navigating  cyan, breathing, 4 s period, at most 25 % brightness (D-380)
  *   blocked  cyan, 2 Hz blink, until stopped — navigating's colour at failed's
  *            urgency: the goal cannot proceed (D-381)
@@ -103,6 +104,11 @@ static int frame(const char *pattern, long elapsed_ms, ws2811_led_t *color)
         *color = rgb(level, level, level);
         return 0;
     }
+    if (strcmp(pattern, "illumination") == 0) {
+        /* Opt-in low-light assist; the sole face owner stops/preempts this. */
+        *color = rgb(PEAK, PEAK, PEAK);
+        return 0;
+    }
     if (strcmp(pattern, "navigating") == 0) {
         /* D-380: cyan breathing, slower than booting's blue 2 s. */
         double phase = (double)(elapsed_ms % 4000) / 4000.0;
@@ -141,7 +147,7 @@ static int frame(const char *pattern, long elapsed_ms, ws2811_led_t *color)
 
 static int known(const char *pattern)
 {
-    static const char *names[] = {"booting", "ready", "failed", "caution", "manual",
+    static const char *names[] = {"booting", "ready", "failed", "caution", "manual", "illumination",
                                   "navigating", "blocked", "docking", "emergency", "test", "off"};
     for (size_t i = 0; i < sizeof(names) / sizeof(names[0]); i++) {
         if (strcmp(pattern, names[i]) == 0) {
@@ -154,7 +160,7 @@ static int known(const char *pattern)
 int main(int argc, char **argv)
 {
     if (argc != 2 || !known(argv[1])) {
-        fprintf(stderr, "usage: lamp_pattern booting|ready|failed|caution|manual|navigating|blocked|docking|emergency|test|off\n");
+        fprintf(stderr, "usage: lamp_pattern booting|ready|failed|caution|manual|illumination|navigating|blocked|docking|emergency|test|off\n");
         return 64;
     }
     const char *pattern = argv[1];

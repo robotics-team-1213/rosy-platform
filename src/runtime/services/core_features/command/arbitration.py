@@ -96,6 +96,28 @@ class ModeMachine:
         # docking listener takes the docking lock, and docking calls in here
         # while holding it (docking lock -> mode lock, never the reverse).
         self._lock = threading.Lock()
+        self._motion_reserved = False
+        # Calibration admission and host configuration admission are one decision.
+        # Separate from _lock: calibration publishes events, whose listeners must
+        # not run under the mode lock (see docking lock ordering above).
+        self.idle_admission = threading.RLock()
+
+    @property
+    def motion_reserved(self) -> bool:
+        with self._lock:
+            return self._motion_reserved
+
+    def reserve_idle_motion(self) -> bool:
+        """Atomically keep IDLE while an admitted host setting is applied."""
+        with self._lock:
+            if self._motion_reserved or self.mode is not Mode.IDLE:
+                return False
+            self._motion_reserved = True
+            return True
+
+    def release_idle_motion(self) -> None:
+        with self._lock:
+            self._motion_reserved = False
 
     def can_transition(self, new: Mode) -> bool:
         return new in _ALLOWED[self.mode]
@@ -105,6 +127,8 @@ class ModeMachine:
         checked the mode, then did something else, must not commit over a mode
         another thread set meanwhile."""
         with self._lock:
+            if self._motion_reserved and new not in (Mode.IDLE, Mode.EMERGENCY):
+                return False, "lane perception configuration is being applied"
             if expect is not None and self.mode is not expect:
                 return False, (f"mode changed ({self.mode.value}, "
                                f"expected {expect.value})")

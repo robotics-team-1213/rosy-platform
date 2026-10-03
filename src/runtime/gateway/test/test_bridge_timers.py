@@ -214,6 +214,7 @@ EXPECTED_SUBSCRIPTIONS = [
     ("battery/voltage", "_on_battery", 10),
     ("nav_cmd_vel", "_on_nav_cmd_vel", 10),
     ("line/observation", "_on_line_observation", 10),
+    ("line/keep_debug", "_on_lane_perception", 1),
     ("detection_evidence", "_on_detection_evidence", 10),
     ("road/observation", "_on_road_observation", 10),
     ("dock/observation", "_on_dock_observation", 10),

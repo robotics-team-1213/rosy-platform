@@ -425,7 +425,7 @@ def host_status_summary(auth: AuthContext = Depends(viewer), svc: CoreServicesLi
 # CORE hands them over in its own runtime directory; root rosy-boot-status reads
 # the file strictly and copies the values into boot-status.json.
 STATUS_INPUTS_FILE = "/run/rosy/status-inputs.json"
-STATUS_INPUTS_PERIOD_S = 10.0
+STATUS_INPUTS_PERIOD_S = 1.0
 
 
 def _warning_percent(svc: CoreServicesLike) -> float:
@@ -527,7 +527,9 @@ def status_inputs(svc: CoreServicesLike) -> dict[str, Any]:
     return {"schema": 2, "written_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "battery_warning_percent": _warning_percent(svc), "devices": devices,
             "robot_mode": _robot_mode(snapshot), "nav_state": _nav_state(snapshot),
-            "swarm_role": _swarm_role(snapshot), **_idleness_inputs(snapshot)}
+            "swarm_role": _swarm_role(snapshot), **_idleness_inputs(snapshot),
+            "calibration_active": (svc.calibration.current() is not None
+                                   if getattr(svc, "calibration", None) is not None else None)}
 
 
 def write_face_inputs(svc: CoreServicesLike, content: dict[str, Any]) -> None:

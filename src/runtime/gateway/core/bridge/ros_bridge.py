@@ -95,6 +95,7 @@ class RosBridge:
         node.create_subscription(Float32, "battery/voltage", self._on_battery, 10)
         node.create_subscription(Twist, "nav_cmd_vel", self._on_nav_cmd_vel, 10)
         node.create_subscription(String, "line/observation", self._on_line_observation, 10)
+        node.create_subscription(String, "line/keep_debug", self._on_lane_perception, 1)
         # D-137 T4: 검출 증거는 boxes 토픽과 분리된 evidence 채널로 들어온다
         # (D-136 §2). 판정은 ROS-free 피드가 하고, 이 파일은 적응만 한다.
         node.create_subscription(String, "detection_evidence",
@@ -314,6 +315,11 @@ class RosBridge:
 
     def _on_lane_model_status(self, msg: String) -> None:
         self._svc.vision.models.accept("perception/learned/status", msg.data, now=time.monotonic())
+
+    def _on_lane_perception(self, msg: String) -> None:
+        self._svc.vision.lane_perception.accept(
+            msg.data, now=time.monotonic(),
+            source_now=self._node.get_clock().now().nanoseconds / 1e9)
 
     def _on_object_det_model_status(self, msg: String) -> None:
         self._svc.vision.models.accept("perception/learned/object_det/status", msg.data,
@@ -557,6 +563,8 @@ class RosBridge:
         content = display.face_inputs_payload(
             snapshot, face=self._face_desired, power_mode=status.mode.value, wake=wake,
             written_at=datetime.now(timezone.utc).isoformat(timespec="milliseconds"))
+        preview = self._svc.vision.status(now=time.monotonic())
+        content.update(display.face_camera_quality(preview))
         if not display.face_inputs_due(content, self._face_inputs_last, now,
                                        self._face_inputs_at, FACE_INPUTS_PERIOD_S):
             return

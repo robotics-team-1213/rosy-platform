@@ -137,6 +137,20 @@ def test_a_string_visible_is_rejected_not_coerced():
     assert _calls(calls, "command.clear_navigation") == []
 
 
+def test_camera_low_light_marker_reaches_stop_evidence_and_rejects_visible_claim():
+    svc, calls = _services()
+    quality = dict(valid=False, reason='low_light')
+    obs.line_observation(svc, _line_payload(source='CAMERA_LINE', visible=False, error=None,
+                         confidence=0., quality=quality), source_now=12.5, received_at=50.)
+    observation = _calls(calls, 'line_follow.observe')[0][1][0]
+    assert observation.quality_reason == 'low_light' and not observation.visible
+    svc, calls = _services()
+    obs.line_observation(svc, _line_payload(source='CAMERA_LINE', quality=quality),
+                         source_now=12.5, received_at=50.)
+    assert not _calls(calls, 'line_follow.observe')
+    assert _calls(calls, 'line_follow.invalidate')
+
+
 def test_a_rejection_that_is_already_handled_does_not_clear_again():
     """`invalidate` returning False means nothing was driving, so nothing to stop."""
     svc, calls = _services()

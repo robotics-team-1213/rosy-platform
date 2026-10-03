@@ -39,6 +39,15 @@ def line_observation(services, raw: str, *, source_now: float,
         if type(data.get("visible")) is not bool:
             raise ValueError("visible must be a boolean")
         visible = data["visible"]
+        quality_reason = None
+        if source is LineFollowMode.CAMERA_LINE and data.get('quality') is not None:
+            quality = data['quality']
+            if not isinstance(quality, dict) or type(quality.get('valid')) is not bool:
+                raise ValueError('invalid camera quality')
+            if quality['valid'] is False:
+                if quality.get('reason') != 'low_light':
+                    raise ValueError('unknown invalid camera quality')
+                quality_reason = 'low_light'
         calibrated = data.get("ir_calibrated", False)
         revision = data.get("calibration_revision")
         if source is LineFollowMode.IR_LINE and type(calibrated) is not bool:
@@ -52,6 +61,7 @@ def line_observation(services, raw: str, *, source_now: float,
             ir_calibrated=calibrated if source is LineFollowMode.IR_LINE else False,
             calibration_revision=revision if source is LineFollowMode.IR_LINE else None,
             ground=data.get("ground"),
+            quality_reason=quality_reason,
         )
         accepted = services.line_follow.observe(
             observation, received_at=received_at, source_now=source_now)

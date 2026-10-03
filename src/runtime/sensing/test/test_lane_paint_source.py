@@ -170,6 +170,22 @@ def test_every_n_refuses_a_mask_older_than_n_frames_and_a_stale_one():
     assert worker.mask_for(frame, every_n=4) is None         # within n frames but past stale_s
 
 
+def test_reported_revision_belongs_only_to_the_served_fresh_mask():
+    now = [100.0]
+    worker = LearnedPaintWorker(_Slot(_Model()), stale_s=0.6, clock=lambda: now[0], start=False)
+    frame = np.zeros((240, 320, 3), np.uint8)
+    assert worker.mask_for(frame, every_n=2) is None
+    assert worker.used_model_revision is None
+    worker.step()
+    assert worker.mask_for(frame, every_n=2) is not None
+    assert worker.used_model_revision == 'm1'
+    now[0] += 0.7
+    assert worker.mask_for(frame, every_n=2) is None
+    assert worker.used_model_revision is None
+    worker.reset()
+    assert worker.used_model_revision is None
+
+
 def test_paint_path_does_not_compute_lane_evidence(monkeypatch):
     from control.sensing.perception.learned import runner
     from test_learned_runner import _factory, _model_dir
@@ -281,6 +297,24 @@ def test_a_reused_mask_is_cleaned_once_per_new_mask():
     got = _stamped(worker, 4, 2, t, clean=clean)             # submits at frames 0 and 2 -> 2 masks
     assert [g is not None for g in got] == [False, True, True, True]
     assert len(cleaned) == 2
+
+
+def test_mask_cache_and_revision_share_one_atomic_result_snapshot():
+    worker = LearnedPaintWorker(None, clock=lambda: 10.0, start=False)
+    frame = np.zeros((8, 8, 3), np.uint8)
+    old = (10.0, np.ones((8, 8), np.uint8), dict(tag=0, stamp=10.0, model_revision='old'))
+    new = (10.0, np.zeros((8, 8), np.uint8), dict(tag=1, stamp=10.0, model_revision='new'))
+    worker._result = old
+    worker._clean_cache = (old, old[1])
+    # Complete inference exactly between the old implementation's two reads.
+    original_latest = worker.latest
+    def interleaved_latest(shape):
+        worker._result = new
+        return original_latest(shape)
+    worker.latest = interleaved_latest
+    mask = worker.mask_for(frame, every_n=2, stamp=10.0, clean=lambda m: m.copy())
+    assert mask.all()  # one snapshot: either old/old or new/new, never old mask/new revision
+    assert worker.used_model_revision == 'old'
 
 
 def test_cadence_one_while_turning_infers_every_frame():

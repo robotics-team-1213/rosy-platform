@@ -81,7 +81,9 @@ OPERATOR_GROUND_SOURCES = ("PINKY", "NOMINAL")
 OPERATOR_RANGES = {"camera_pitch_rad_override": (-0.2, 0.6),
                    "camera_height_m_override": (0.02, 0.2)}
 OPERATOR_KEYS = frozenset(("camera_lane_mode", "camera_ground_source", "allow_nominal_ground",
-                           "nominal_camera_profile_path", "debug_overlay") + tuple(OPERATOR_RANGES))
+                           "nominal_camera_profile_path", "debug_overlay", "paint_source",
+                           "learned_lane_pointer", "learned_paint_every_n", "learned_paint_threads")
+                          + tuple(OPERATOR_RANGES))
 
 
 def operator_overlay_problem(data) -> Optional[str]:
@@ -116,6 +118,22 @@ def operator_overlay_problem(data) -> Optional[str]:
         # Arming NOMINAL here while the ground source comes from elsewhere would leave a
         # half-switched observer that a later edit of another layer silently completes.
         return "allow_nominal_ground: true needs camera_ground_source: NOMINAL in the same file"
+    if "paint_source" in params:
+        if params["paint_source"] not in ("threshold", "denoise", "learned"):
+            return "paint_source must be threshold, denoise or learned"
+        if params["paint_source"] != "threshold" and params.get("camera_lane_mode") != "keep":
+            return "denoise/learned paint requires camera_lane_mode: keep"
+    if "learned_lane_pointer" in params:
+        value = params["learned_lane_pointer"]
+        if not isinstance(value, str) or not value.startswith("/"):
+            return "learned_lane_pointer must be an absolute path"
+    if params.get("paint_source") == "learned" and not params.get("learned_lane_pointer"):
+        return "learned paint needs learned_lane_pointer in the same file"
+    # D-408 measured cadence is at most two frames; a Pi has four cores and
+    # CORE/IO must retain capacity. Do not expose unbounded thread counts here.
+    for key in ("learned_paint_every_n", "learned_paint_threads"):
+        if key in params and (type(params[key]) is not int or not 1 <= params[key] <= 2):
+            return f"{key} must be an integer in [1, 2]"
     return None
 
 

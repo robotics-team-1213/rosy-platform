@@ -16,7 +16,7 @@ import {
 } from "../input-state.js";
 import {mountInputs} from "./inputs.js";
 import {slewCommand} from "../stick.js";
-import {mountAutoMode} from "./drive-auto.js";
+import {mountAutoMode, mountLanePerception} from "./drive-auto.js";
 import {mountRobotRecording} from "./robot-recording.js";
 import {readControls, profileFromBaseVelocity} from "../controls.js";
 import {calibrationView} from "../calibration.js";
@@ -40,6 +40,7 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
   // 이 화면이 실제로 MANUAL 을 잡았는가(engage 가 200). 잡은 적 없는 화면이 나가면서
   // IDLE 을 보내면 남(보정 주인)의 주행을 끊는다.
   let modeHeld = false;
+  let perceptionPending = false;
 
   const drive = root;
   root.replaceChildren(buildStage(), buildControls(profile));
@@ -59,10 +60,12 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
     battery: "[data-drive-fact=battery]", speed: "[data-drive-fact=speed]",
     turn: "[data-drive-fact=turn]", state: "[data-drive-fact=link]",
     latency: "[data-drive-fact=latency]", cap: "[data-drive-fact=cap]",
+    visibility: "[data-drive-visibility]",
     motion: "[data-drive-motion]", blocked: "[data-drive-blocked]",
     blockedReason: "[data-drive-blocked-reason]", retake: "[data-drive-retake]",
     view: "[data-drive-view]", zoomFact: "[data-drive-fact=zoom]",
     go: "[data-drive-go]", autoToggle: "[data-drive-auto]",
+    manual: "[data-drive-manual]", goal: "[data-drive-goal]",
     intent: "[data-drive-intent]", intentTarget: "[data-intent-target]",
     intentSteer: "[data-intent-steer]", controls: "[data-drive-controls]",
     calibration: "[data-drive-calibration]", calibrationTitle: "[data-drive-calibration-title]",
@@ -164,6 +167,9 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
 
   const vision = createVisionPreview({
     apiGet,
+    onQuality: (quality) => {
+      element.visibility.hidden = !(quality?.valid === false && quality?.reason === "low_light");
+    },
     fetchFrame: async (path) => {
       const response = await fetch(path, {headers: authHeaders(), cache: "no-store"});
       // 409·429 본문(JSON)을 이미지로 띄우지 않는다 — 거부하면 다음 틱에 다시 당긴다.
@@ -295,7 +301,34 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
     renderCap();             // 수동 상한으로 되돌린다
     session.resume();        // 자동이 끝나면 수동 명령 경로를 다시 연다
     lastCommand = {linear: 0, angular: 0, pivot: false};
-  }});
+  }, blocked: () => perceptionPending || calibrationLocked || !engaged});
+  const perception = mountLanePerception(element.hud, {apiGet,
+    onPending(value) {
+      perceptionPending = value;
+      if (element.go) {
+        element.go.disabled = value || calibrationLocked;
+        if (value) element.go.setAttribute("reason", "인식 적용 중"); else element.go.removeAttribute("reason");
+      }
+    },
+    blocked: () => calibrationLocked || auto.active(),
+  });
+  // The stop action is explicit; choosing perception never takes motion ownership.
+  const idleButton = el("ui-button", "정지 · 설정", {type: "button", kind: "quiet", "data-drive-idle": ""});
+  idleButton.setAttribute("kind", "quiet");
+  element.hud.append(idleButton);
+  idleButton.addEventListener("click", async () => {
+    if (perceptionPending || calibrationLocked || auto.active()) return;
+    engaged = false;
+    releaseAll(); clearKeys(); releaseStick();
+    await postJson("/api/v1/teleop", {linear: 0, angular: 0}).catch(() => null);
+    session.hidden();
+    const response = await gate.disengage(postJson).catch(() => null);
+    showBlocked(response?.status === 200 ? "정지 · 설정 중 — 다시 잡으면 수동 운전" : "정지 모드 확인 실패 — 상태를 확인하세요");
+    perception.refresh();
+  });
+  element.goal.addEventListener("click", () => {
+    if (!element.goal.disabled && !perceptionPending) teardown(() => location.assign("/console"));
+  });
   function takeover() {
     auto.takeover();
   }
@@ -312,7 +345,7 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
       keys[key] = false;         // 떼기는 어디서 일어나도 받는다 — 걸러내면 키가 눌린 채 남는다
       return;
     }
-    if (event.target?.closest?.("input, textarea")) return;
+    if (event.target?.closest?.("input, textarea, select, summary")) return;
     keys[key] = true;
     event.preventDefault();
   };
@@ -322,7 +355,7 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
     for (const key of Object.keys(keys)) keys[key] = false;
   };
   const onFocusIn = (event) => {
-    if (event.target?.closest?.("input, textarea")) clearKeys();
+    if (event.target?.closest?.("input, textarea, select, summary")) clearKeys();
   };
   window.addEventListener("focusin", onFocusIn);
   const onBlur = () => {
@@ -358,7 +391,7 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
     const tickAt = performance.now();
     const dt = (tickAt - lastTickAt) / 1000;
     lastTickAt = tickAt;
-    if (!engaged || calibrationLocked) return;
+    if (!engaged || calibrationLocked || perceptionPending) return;
     const source = currentCommandSource() ?? keySource() ?? gamepadSource();
     if (source && auto.active()) takeover();   // 키·게임패드 개입도 자동을 끈다
     if (auto.active()) return;                  // 자동 중에는 수동 명령을 보내지 않는다(CORE 모드 충돌 방지)
@@ -415,6 +448,10 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
       const fresh = profileFromBaseVelocity(base);
       announced = {max_linear: fresh.max_linear, max_angular: fresh.max_angular};
     }
+    const goalReady = caps?.body?.navigation?.goal_navigation === true;
+    element.goal.disabled = !goalReady;
+    if (goalReady) element.goal.removeAttribute("reason");
+    else element.goal.setAttribute("reason", caps?.body?.navigation?.reason || "이 기기는 목표 내비게이션을 지원하지 않습니다");
     const limits = response?.status === 200 ? response.body?.limits : null;
     if (limits || base) setServerLimits(withProfileLimits(limits));
     renderCap();
@@ -531,6 +568,7 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
   // --- 진입: 수동 모드를 잡은 뒤에만 명령을 보낸다 ------------------------------
   // 먼저 보내면 IDLE 상태의 첫 teleop 이 409 MODE_CONFLICT 로 세션을 막는다.
   async function engage() {
+    if (perceptionPending) return;
     hideBlocked();
     const response = await gate.engage(postJson).catch(() => null);
     if (response?.status === 200) {
@@ -553,7 +591,7 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
   element.retake.addEventListener("click", () => engage());
   engage();
 
-  function teardown() {
+  function teardown(after) {
     engaged = false;
     auto.release("exit");
     clearInterval(loop);
@@ -571,6 +609,7 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
     clearTimeout(whoamiTimer);
     vision.stop();
     models.stop();
+    perception.dispose();
     window.removeEventListener("keydown", onKey);
     window.removeEventListener("keyup", onKey);
     window.removeEventListener("blur", onBlur);
@@ -581,5 +620,6 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
     wakeLock?.release().catch(() => {});
     wakeLock = null;
     onExit?.();
+    if (typeof after === "function") after();
   }
 }

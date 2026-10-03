@@ -12,6 +12,7 @@ export function createVisionPreview({
   intervalMs = MIN_PULL_INTERVAL_MS,
   onFrame,              // (blobUrl, meta) => void
   onUnavailable,        // (message) => void
+  onQuality,            // optional raw observation quality; JPEG freshness is separate
   now = () => Date.now(),
 }) {
   let running = false;
@@ -35,6 +36,7 @@ export function createVisionPreview({
     try {
       const status = await apiGet("/api/v1/vision/front/status");
       if (gen !== generation) return;
+      onQuality?.(status.status === 200 && status.body?.available === true ? status.body?.quality ?? null : null);
       if (status.status !== 200 || status.body?.available !== true) {
         seq = null;
         release();
@@ -65,6 +67,7 @@ export function createVisionPreview({
       if (gen === generation && !hasFrame) {
         onUnavailable("카메라 프레임 수신 대기");
       }
+      if (gen === generation) onQuality?.(null);
     } finally {
       pending = false;
     }
@@ -85,6 +88,7 @@ export function createVisionPreview({
       generation += 1;
       release();
       hasFrame = false;
+      onQuality?.(null);
       onUnavailable("카메라 중지");
     },
   };

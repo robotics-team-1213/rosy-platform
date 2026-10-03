@@ -4,7 +4,7 @@
 import { EVIDENCE_LABEL, evidenceAgeText } from "/common/core_ui_logic.js";
 
 export function createVisionPreview({
-  elements, setText, api, authHeaders, hasToken, isHidden, onFrame, onUnavailable,
+  elements, setText, api, authHeaders, hasToken, isHidden, onFrame, onUnavailable, onQuality,
 }) {
   const hasNumber = (value) => typeof value === "number" && Number.isFinite(value);
   let pending = false;
@@ -29,6 +29,7 @@ export function createVisionPreview({
   }
 
   function renderUnavailable(status = {}, message = "카메라 프레임 수신 대기") {
+    onQuality?.(null);
     onUnavailable?.(message);
     const stale = status.stale === true;
     elements["vision-stage"].dataset.state = stale ? "stale" : "waiting";
@@ -59,6 +60,7 @@ export function createVisionPreview({
         signal: controller.signal, cache: "no-store",
       });
       if (gen !== generation || !hasToken()) return;
+      onQuality?.(status.available === true ? status.quality ?? null : null);
       if (!status.available) {
         visionSequence = null;
         releaseObjectUrl();
@@ -124,6 +126,7 @@ export function createVisionPreview({
       renderEvidence("fresh", "실시간", "LIVE");
     } catch (error) {
       if (error.name === "AbortError" || gen !== generation) return;
+      onQuality?.(null);
       visionSequence = null;
       releaseObjectUrl();
       renderUnavailable({}, `카메라 연결 확인 · ${error.message}`);
@@ -143,6 +146,7 @@ export function createVisionPreview({
     timer = null;
     pending = false;
     visionSequence = null;
+    onQuality?.(null);
     releaseObjectUrl();
     renderUnavailable({}, message);
   }

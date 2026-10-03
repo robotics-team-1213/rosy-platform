@@ -4830,3 +4830,11 @@
 - gate 변화: 없음(호스트 결과). containerd image store 사이트 호스트의 전체 검증 재실행이 남았다
 - 결정: D-437 Consequences 보강(manifest 형식 변경 없음)
 - 교훈: Docker image ID는 image store마다 다르다. 서명된 config digest에서 출발해 archive 안 blob 바이트로 다른 형태를 이어 붙여야 보안을 낮추지 않고 두 store를 모두 받을 수 있다
+
+
+## 2026-10-04 · uncommitted · docs: learned lane selection and low-light evidence
+
+- 변경: 운전 모드와 paint source 선택, 실제 learned/fallback readback, 정지 중 Host 적용, 저조도 판정·흰 LCD/LED opt-in 및 자동 복구 차단의 계획과 검증 경계를 기록했다.
+- 증거: `docs/plans/2026-10-04-learned-lane-driving-modes.md`, `docs/validation/learned-lane-modes-2026-10-04/README.md`, 같은 회차 `low-light.md`; source·host·browser 회귀 및 독립 안전 검토.
+- gate 변화: 없음. ARM64 설치·실제 조명·주행을 host 검사나 명령 반환값으로 주장하지 않는다.
+- 교훈: 모델 사용 여부, 시야, 실제 조명 효과와 물리 주행은 각각 확인해야 한다.

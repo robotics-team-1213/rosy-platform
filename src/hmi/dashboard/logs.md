@@ -793,3 +793,15 @@
 - 증거: 2026-10-03 Windows. 대화 계약, 콘솔 배치, enum, 운용 카피, dashboard 패키지, host copy, shared controls, token, ui route, dashboard browser, drive를 ROSY_RUN_BROWSER_TESTS=1로 한 번에 실행해 240 passed, 2 failed. 실패 둘은 Page.goto 5000ms 초과였고 같은 둘만 다시 실행하면 2 passed(4.04s). Escape의 session.token과 화면 모드 수동을 고친 뒤 키보드 목표 확인과 상태 읽기 시험은 2 passed(6.07s). 1366에서 도구와 범례는 캔버스를 가리지 않고 문서 스크롤은 0이다. 캔버스 높이는 112px이다(비전 스테이지 238px, 도구 줄 72px). 390에서 즉시 정지는 뷰포트 바닥에 고정된다.
 - gate 변화: 없음.
 - 미증명: 실기 텔레옵. 비전 신선도 판정은 바꾸지 않았다.
+
+## 2026-10-04 · uncommitted · feat(dashboard): 차선 인식 선택
+
+- 변경: 차선 추종 패널에 인식 방식 선택과 설정/실제 추론 출처 표시. 관리자·신선한 정지 IDLE·추종 OFF에서만 적용. 적용 중 추종 시작 잠금, 실패는 실패로 표시하고 PUT 뒤 GET readback을 확인한다.
+- 증거: 인식 적용 실패·pending·readback 브라우저 2 passed, 기존 패널 브라우저 13 passed. 실제 입력의 최신 출처와 모델 판을 별도로 표시하며 지연·누락은 확인 대기로 둔다.
+- gate 변화: 없음. 실제 추론 출처 없는 응답은 확인 대기로 표시한다.
+
+## 2026-10-04 · uncommitted · feat: 저조도 카메라 판정 불가 표시
+
+- 변경: 기존 카메라 패널에 저조도 경고를 추가했다. 실시간 JPEG 수신과 차선·물체 판정 가능 여부를 별도로 표시한다.
+- 증거: Pilot·Dashboard 저조도 브라우저 회귀 각각 1 passed; shared controls + shell 30 passed.
+- gate 변화: SOURCE/LOCAL. ARM64/device/field verification pending.

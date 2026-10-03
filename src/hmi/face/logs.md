@@ -214,3 +214,9 @@
 - 증거: `python -m pytest test/test_rosy_face.py -q` 149 passed 1 skipped (카드 6종 320×240, 띠 마스크, GIF 축소). `to_panel`이 예전 `img_show` 수식과 바이트 동일함을 일회 대조.
 - gate 변화: 없음. 실물 LCD 확인 전 DEVICE는 PARKED.
 - 결정: D-433 (Proposed)
+
+## 2026-10-04 · uncommitted · feat: 저조도 흰 화면 보조 조명
+
+- 변경: 흰 화면·전구 도형·ASCII LIGHT ASSIST 안내를 기존 렌더러에 추가했다. 카메라 판정 성공을 주장하지 않는다.
+- 증거: face table/native loop/PIL/lamp/package/CORE face handover 317 passed, 4 skipped (Windows).
+- gate 변화: SOURCE/LOCAL. ARM64/device/field verification pending.

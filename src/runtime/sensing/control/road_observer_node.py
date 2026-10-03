@@ -26,6 +26,7 @@ from .sensing.perception.camera_homography import (
 from .sensing.perception.camera_ground import simulation_ground_plane
 from .object_detector import TOPIC as DETECTIONS_TOPIC
 from .sensing.perception.follow_preview import FrameEvidence
+from .sensing.perception.camera_visibility import is_low_light
 
 # D-423: detections arrive at about 2 Hz, so the overlay takes the newest one up to
 # this old instead of an exact capture-stamp match (display only, never a verdict).
@@ -365,9 +366,12 @@ class RoadObserverNode(Node):
         output = CompressedImage()
         output.header = msg.header
         source = self._preview_config.source.upper()
+        low_light = is_low_light(frame)  # raw pixels, never the bright rendered overlay
         output.format = (
             f'jpeg; source={source}; width={preview.shape[1]}; '
-            f'height={preview.shape[0]}; overlay=follow-road-v2'
+            f'height={preview.shape[0]}; overlay=follow-road-v2; '
+            f'quality_valid={"false" if low_light else "true"}; '
+            f'quality_reason={"low_light" if low_light else "usable"}'
         )
         output.data = encoded.tobytes()
         self.preview_pub.publish(output)

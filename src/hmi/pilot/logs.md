@@ -304,3 +304,15 @@
 - 변경: `models.js`(5 s 폴링 `GET /api/v1/vision/models`, 작업·슬롯·판·마지막 오류), 주행 화면 HUD 에 접는 패널, 셸 캐시 키 `2026-10-03-1`, 설치 목록. promote/rollback 은 `rosy_ml` 에만.
 - 증거: `src/hmi/pilot/test` 53 passed, 24 skipped(브라우저 시험은 이 PC 에서 건너뜀).
 - gate 변화: 없음.
+
+## 2026-10-04 · uncommitted · feat(pilot): 운전 모드와 차선 인식 분리
+
+- 변경: 수동·차선 자동·지도 목표 선택과 독립 인식 선택(학습 모델/반사 제거/기존 검출). 정지·설정은 명시적 조작이며 인식 선택은 주행 모드를 바꾸지 않는다. 관리자·신선한 정지 IDLE·차선 OFF에서만 적용하고 적용 중 진행을 막는다. 성공 응답과 설정 readback을 확인하며 실제 추론 출처가 없으면 확인 대기로 표시한다. Pilot 셸 캐시 갱신.
+- 증거: Pilot host 87 passed, 59 skipped. 기존 자동·hold·수동 takeover 브라우저 4 passed. 인식 적용 실패·pending·readback·구 서버 브라우저 1 passed.
+- gate 변화: 없음. 실기 주행 수용 증거는 아직 없다.
+
+## 2026-10-04 · uncommitted · feat: 저조도 카메라 판정 불가 표시
+
+- 변경: 기존 front/status quality를 읽어 저조도에서는 차선·물체를 판정할 수 없다고 표시한다. JPEG 표시를 유지하고 회복·누락·오래된 상태에서는 경고를 해제한다.
+- 증거: Pilot·Dashboard 저조도 브라우저 회귀 각각 1 passed; shared controls + shell 30 passed.
+- gate 변화: SOURCE/LOCAL. ARM64/device/field verification pending.

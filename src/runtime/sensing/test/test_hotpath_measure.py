@@ -86,7 +86,7 @@ def test_node_names_match_the_installed_entry_points():
 
 
 # record_session is a CLI wrapper around `ros2 bag record`, not a node: nothing to watch.
-NON_NODE_SCRIPTS = {'record_session'}
+NON_NODE_SCRIPTS = {'record_session', 'line_observer_overrides'}
 
 
 def test_watch_samples_fake_proc(tmp_path):

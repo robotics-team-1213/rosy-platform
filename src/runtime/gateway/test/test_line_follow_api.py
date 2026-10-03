@@ -150,6 +150,7 @@ def test_ir_fallback_refuses_missing_or_mismatched_line_calibration(core_client)
     client, services = core_client(config_overrides={
         "line_follow": {"ir_calibration_revision": revision},
     })
+    services.line_follow.bind_clock(lambda: 1.0)  # isolate revision refusal from HTTP scheduling age
     services.line_follow.set_mode(LineFollowMode.CAMERA_LINE)
     services.line_follow._status = services.line_follow.status().model_copy(
         update={"state": "LOST", "reason": "camera_reselection_required"}

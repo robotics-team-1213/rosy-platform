@@ -27,6 +27,9 @@ KNOWN_EXTERNAL_BEHAVIOR_TESTS = frozenset({
     "src/runtime/gateway/test/test_initial_pose.py",
     "src/runtime/gateway/test/test_line_follow.py",
     "src/runtime/gateway/test/test_line_follow_api.py",
+    # CORE HTTP-to-Host seam and atomic mode/calibration admission integration;
+    # the pure mask, observer and Host configuration tests stay with their owners.
+    "src/runtime/gateway/test/test_lane_perception_api.py",
     "src/runtime/gateway/test/test_line_follow_body_stop.py",
     "src/runtime/gateway/test/test_line_follow_ir_guard.py",
     "src/runtime/gateway/test/test_line_follow_obstacle.py",

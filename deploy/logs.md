@@ -2190,3 +2190,15 @@
 - Change: add avahi-daemon.service to both Requires and After for the host Avahi socket used by Fleet NSS. Existing Docker, network and firewall dependencies remain.
 - Evidence: baseline dependency regression RED; focused deployment tests 19 passed. Removing only Avahi ordering while preserving Requires was RED; restored tests 2 passed.
 - Gate: SOURCE/LOCAL verified. Separate on-site administrator installation and actual PC boot acceptance remain pending. No robot motion, CORE or camera configuration changes.
+
+## 2026-10-04 · uncommitted · feat(host): 차선 인식 설정의 native 설치 경로
+
+- 변경: 고정 observer overlay·서명된 lane model만 다루는 Host 명령과 lane-only native Host service를 연결했다. 전용 CORE peer UID와 닫힌 command allowlist를 사용한다. 설치 helper·runtime target·payload/image unit·image-layer sync allowlist를 함께 등록한다. 임의 경로·shell·기기 접근을 허용하지 않는다.
+- 증거: host/API/systemd/status/line-follow 관련 395 passed, 2 skipped 및 installed-layout import 포함 18 passed. 실제 배포·서비스 실행은 별도 검증한다.
+- gate 변화: 없음. 서명된 ARM64 release와 실제 device readback 없이 DEVICE/FIELD 완료로 주장하지 않는다.
+
+## 2026-10-04 · uncommitted · feat: 기존 rosy-face 조명 소유권 유지
+
+- 변경: ROSY_LOW_LIGHT_ASSIST=true에서만 기존 LCD·Lamp 소유자가 흰 조명을 켠다. 신선한 usable 상태에서도 유지해 피드백 점멸을 막고 오래된 근거·우선 경보는 해제한다.
+- 증거: face table/native loop/PIL/lamp/package/CORE face handover 317 passed, 4 skipped (Windows).
+- gate 변화: SOURCE/LOCAL. ARM64/device/field verification pending.

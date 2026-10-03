@@ -87,6 +87,7 @@ UNITS = (
     "rosy-release-recover.service",
     "rosy-sd-provision.service",
     "rosy-core.service",
+    "rosy-host-agent.service",
     "rosy-runtime.target",
     "rosy-io.service",
     "rosy-camera.service",
@@ -117,6 +118,7 @@ UNITS = (
 # Of those, the ones customize-rootfs.sh enables. A unit the sync adds is
 # enabled only if it is here, as a fresh image would have it.
 ENABLED_UNITS = frozenset({
+    "rosy-host-agent.service",
     "rosy-release-recover.service",
     "rosy-runtime.target",
     "rosy-boot-status.service",

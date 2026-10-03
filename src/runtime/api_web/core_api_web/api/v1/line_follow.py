@@ -2,15 +2,18 @@
 
 from __future__ import annotations
 
+import time
+
 from fastapi import APIRouter, Depends
 from typing import Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 
 from core_api_web.api.deps import AuthContext, CoreServicesLike, get_services
 from core_api_web.api.errors import ApiError
 from core_api_web.api.v1.common import (
     apply_mode,
+    admin,
     enter_navigation_mode,
     operator,
     require_calibration_owner,
@@ -18,12 +21,64 @@ from core_api_web.api.v1.common import (
     viewer,
 )
 from core_common.domain.tasks import TaskKind
-from core_common.protocol.schemas import DockState, RobotMode
+from core_common.protocol.schemas import DockState, LanePerceptionRequest, LanePerceptionStatus, RobotMode
 from core_api_web.api.deps import Mode
 from core_api_web.api.deps import LineFollowMode, LineStuckRefused
 
 
 line_follow_router = APIRouter(prefix="/api/v1/line-follow", tags=["line-follow"])
+
+
+def _perception_reply(svc, command: str, auth=None, params=None) -> dict:
+    from core_api_web.api.v1.host import _agent
+    agent = _agent(svc)
+    # A camera restart may await its bounded systemd startup; status stays short.
+    if command == "lane_perception.set":
+        agent.timeout_s = 75.0
+    reply = agent.request(command, role="administrator" if auth else "viewer",
+                          user_id=auth.token_id if auth else "", params=params)
+    if not reply.ok:
+        raise ApiError(reply.code, 409 if reply.reachable else 503,
+                       reply.detail or "lane perception configuration unavailable")
+    if not isinstance(reply.data, dict):
+        raise ApiError("HOST_AGENT_UNREADABLE_RESPONSE", 503, "invalid lane perception response")
+    try:
+        result = LanePerceptionStatus.model_validate(reply.data).model_dump()
+        cache = svc.vision.lane_perception
+        if command == "lane_perception.set":
+            cache.clear()  # discard every sample received before camera restart completed
+        actual = cache.snapshot(paint_source=result["paint_source"],
+                                model_revision=result["model_revision"], now=time.monotonic())
+        result.update(actual)
+        if actual["applied_paint_source"] is not None:
+            result["reason"] = ("recent keeper receipt reports " + actual["applied_paint_source"]
+                                + "; lane validity and permission to move are separate")
+        return result
+    except ValidationError as exc:
+        raise ApiError("HOST_AGENT_UNREADABLE_RESPONSE", 503, "invalid lane perception response") from exc
+
+
+@line_follow_router.get("/perception")
+def get_lane_perception(_: AuthContext = Depends(viewer), svc: CoreServicesLike = Depends(get_services)):
+    return _perception_reply(svc, "lane_perception.status")
+
+
+@line_follow_router.put("/perception")
+def set_lane_perception(body: LanePerceptionRequest, auth: AuthContext = Depends(admin),
+                        svc: CoreServicesLike = Depends(get_services)):
+    # Caller checks prevent a knowingly unsafe request; Host Agent independently
+    # rechecks the fresh, sensor-gated status file immediately before writing.
+    with svc.modes.idle_admission:
+        if svc.modes.mode is not Mode.IDLE or svc.line_follow.active:
+            raise ApiError("ROBOT_MUST_BE_STOPPED", 409, "select IDLE and line-follow OFF first")
+        if svc.calibration.current() is not None:
+            raise ApiError("CALIBRATION_ACTIVE", 409, "finish calibration before changing perception")
+        if not svc.modes.reserve_idle_motion():
+            raise ApiError("MODE_CONFLICT", 409, "motion or another configuration update is active")
+    try:
+        return _perception_reply(svc, "lane_perception.set", auth, {"paint_source": body.paint_source})
+    finally:
+        svc.modes.release_idle_motion()
 
 
 class LineFollowModeRequest(BaseModel):

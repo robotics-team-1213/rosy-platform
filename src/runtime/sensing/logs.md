@@ -1032,3 +1032,16 @@
 - gate 변화: 없음(패키지 기본값 그대로, 파일 없으면 동작 같음).
 - 결정: D-344 §12 보강 (2026-10-03)
 - 교훈: 릴리스 디렉터리 안 수정은 다음 업데이트(약 10 분 자동)에서 말없이 사라진다. 로봇별 설정은 `/etc/rosy/` 에 둔다.
+
+## 2026-10-04 · uncommitted · fix(perception): 운영자 차선 모델 선택과 관측 출처 표시
+
+- 변경: 관측 노드 운영자 overlay에 threshold/denoise/learned 선택·고정 모델 pointer·추론 cadence와 threads 검사를 추가했다. optional `ROSY_CAMERA_FPS`는 기본 8 Hz를 유지하고 4..8 Hz만 허용한다. 추론 지연을 줄이려고 마스크 신선도 검사를 완화하지 않는다.
+- 변경: 바닥색 규칙의 전경·어둠 영역은 `REGION UNCLASSIFIED/DARK`, 실제 객체 모델이 연결한 클래스만 `DET`로 표시한다. 바닥과 다른 페인트를 장애물 종류로 단정하지 않는다. 차단 판정·거리 안전 기준은 그대로다.
+- 증거: observer overlay/CLI/preview/capture rate 집중 시험 83 passed, 23 skipped; camera/classifier 회귀 63 passed. 실제 정지 프레임 비교는 학습 keeper 양쪽 경계 confidence 0.9, 밝기 규칙 왼쪽 경계 confidence 0.6. 실시간 적용 및 주행 수용은 별도 검증한다.
+- gate 변화: 없음. 모델 intake·ARM64 배포·실시간 관측·실제 이동을 구분한다.
+
+## 2026-10-04 · uncommitted · fix(lane): 저조도 keeper 무효화와 mask 원자성
+
+- 변경: 저조도 raw frame은 keeper·between keeper·paint worker를 reset하고 차선 관측을 즉시 무효화한다. preview quality는 밝게 렌더링한 화면이 아닌 원본에서 판정한다. learned mask·freshness·cache key·revision은 하나의 결과 snapshot만 사용한다.
+- 증거: sensing paint source·callback·camera·preview 93 passed, 1 skipped. async result 교체 시 다른 mask와 revision이 섞이는 회귀를 추가했다.
+- gate 변화: SOURCE/LOCAL. 실주행은 수행하지 않았다.

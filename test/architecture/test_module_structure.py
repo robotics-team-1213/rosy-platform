@@ -216,7 +216,7 @@ SIZE_VERDICTS = {
         "2026-10-01 at 887 after idempotent per-attempt phase projection joined the Mission event transaction",
     ),
     "contracts/foundation/core_common/protocol/schemas.py": (
-        1_321,
+        1_322,
         "accept: the D-18 single contract source — every envelope, event and capability model in one "
         "importable place; re-judged 2026-10-03 at 1240 for the D-413 public CellGoalEvidenceSubmission "
         "re-export, then at 1245 after combining main's D-422 body-stop fields with that one-line export. "
@@ -243,7 +243,9 @@ SIZE_VERDICTS = {
         "(body_gap_m, stop_gap_m, clearance_source); the logic stays in line_follow/body_stop.py; "
         "same verdict."
         " Re-judged 2026-10-03 at 1321 after merging main: the D-418 robot SSH access models (host keys, "
-        "managed keys, temporary password status with lock_pending; API v1.89) on top of D-422; same verdict.",
+        "managed keys, temporary password status with lock_pending; API v1.89) on top of D-422; same verdict."
+        " Re-judged 2026-10-04 at 1322: bounded lane selection/readback models were split into "
+        "protocol/lane_perception.py; one re-export preserves the single public schema import point.",
     ),
     "site/fleet/fleet/server/task_store.py": (
         1060,
@@ -317,7 +319,7 @@ SIZE_VERDICTS = {
         "accept: sim-only read-only viewer server (HTTP handler + ROS subscriptions); the pure logic already lives in live_view_model.py and the page in lane_live_view.html, covered by test_lane_live_view*.py and test_live_view_model.py (X5)",
     ),
     "core_features": (
-        12_297,
+        12_479,
         "accept: the ROS-free CORE feature managers (command, safety, docking, line_follow, "
         "traffic_policy, navigation, swarm, ...) are already one subpackage per feature, each "
         "under the file budget; the package total is a sum of independent owners, not one "
@@ -338,7 +340,10 @@ SIZE_VERDICTS = {
         "fleet_agent/agent.py; same verdict. D-424 merged on top (within the allowance) "
         "(localization/mission.py body-referenced rotate and nudge checks, watched turn, "
         "mission_config); same verdict. Re-judged 2026-10-03 at 12297 for the D-424 follow-up (debounced turn evidence gaps in "
-        "localization/mission.py); same verdict",
+        "localization/mission.py); same verdict. Re-judged 2026-10-04 at 12479: bounded "
+        "read-only keeper evidence lives separately in vision/lane_perception.py; motion admission "
+        "uses the existing ModeMachine and its separate lock. No new deploy unit or file-budget "
+        "exception; independent safety review recorded in docs/validation/learned-lane-modes-2026-10-04/README.md.",
     ),
     "control": (
         44_301,
@@ -503,13 +508,15 @@ SIZE_VERDICTS = {
         "canary watch are one short sequential flow; split the canary watch out if it grows further",
     ),
     "deploy/robot/pinky_pro/native/sync-image-layer.py": (
-        1018,
+        1020,
         "split: D-388 image-layer sync — the allowlist/plan, the backup-record history (records, "
         "cleanup, crash reconcile) and the apply/pending transaction are separate seams; move the "
         "record history into a sibling module in deploy/robot/pinky_pro/native once the 2026-10-02 bench "
         "run has exercised it on a robot, so the split does not land untested on device; owner deploy, "
         "covered by test/test_image_layer_sync.py. Re-judged 2026-10-03 at 1018: main reached 1000 "
-        "(state-directory bootstrap) without a re-judgement, D-433 adds 18 (retired units); verdict unchanged",
+        "(state-directory bootstrap) without a re-judgement, D-433 adds 18 (retired units); verdict unchanged. "
+        "Re-judged 2026-10-04 at 1020: two lane-only Host unit allowlist entries, no new sync logic; "
+        "record-history split remains required after device exercise.",
     ),
     "deploy/robot/pinky_pro/native/rosy-hw-probe.py": (
         641,

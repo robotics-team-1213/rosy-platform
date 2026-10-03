@@ -106,3 +106,34 @@ class CameraNearObstacleTest(unittest.TestCase):
     def test_small_brightness_change_can_adapt_when_allowed(self):
         result = classify_frame(self.frame()+10, floor_hsv=(0., 0., 100.))
         self.assertGreater(result['floor_hsv'][2], 100.)
+
+    def test_lights_off_is_unavailable_not_a_full_frame_obstacle(self):
+        # A frozen daylight exposure produced a purple frame, gray p99=39.
+        frame = np.full((240, 320, 3), (30, 15, 55), dtype=np.uint8)
+        result = self.classify(frame)
+        self.assertEqual(result['quality'], {'valid': False, 'reason': 'low_light'})
+        self.assertEqual(result['regions'], [])
+        self.assertFalse(result['blocked'])  # CameraPolicy owns the blindness hold.
+        self.assertIsNone(result['floor_hsv'])
+
+    def test_small_bright_lamp_does_not_make_dark_road_usable(self):
+        frame = np.full((240, 320, 3), 30, dtype=np.uint8)
+        frame[5:15, 5:15] = 255
+        self.assertEqual(self.classify(frame)['quality']['reason'], 'low_light')
+
+    def test_bright_ceiling_does_not_make_dark_road_usable(self):
+        frame = np.full((240, 320, 3), 30, dtype=np.uint8)
+        frame[:20, :100] = 255  # >1% of frame; road is still invisible.
+        self.assertEqual(self.classify(frame)['quality']['reason'], 'low_light')
+
+    def test_dim_road_with_visible_paint_is_not_discarded_as_blackout(self):
+        frame = np.full((240, 320, 3), 35, dtype=np.uint8)
+        frame[:, 60:75] = 100
+        frame[:, 245:260] = 100
+        self.assertTrue(self.classify(frame)['quality']['valid'])
+
+    def test_local_dark_obstacle_on_lit_floor_remains_an_obstacle(self):
+        frame = self.frame()
+        frame[160:230, 110:210] = 30
+        self.assertTrue(self.classify(frame)['quality']['valid'])
+        self.assertTrue(self.classify(frame)['blocked'])

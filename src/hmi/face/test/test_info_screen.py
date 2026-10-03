@@ -13,6 +13,15 @@ from emotion.info_screen import DisplayProfile, PINKY_ST7789
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def test_low_light_assist_is_white_with_visible_bulb_and_ascii_caption():
+    from emotion.info_screen import render_light_assist
+    image = render_light_assist()
+    assert image.size == DEFAULT_SIZE
+    counts = {color: count for count, color in image.getcolors(image.width * image.height)}
+    assert counts[(255, 255, 255)] > image.width * image.height * 0.9
+    assert image.getpixel((160, 66)) == _BG
+
+
 @pytest.mark.parametrize("raw,expected", [
     (12.3, 12.3), ("3.5", 3.5), (None, 15.0), (0, 15.0),
     ("bad", 15.0), (True, 15.0), (-2, 15.0), (float("nan"), 15.0), (float("inf"), 15.0),

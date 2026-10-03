@@ -118,9 +118,11 @@ def _request(command: str, *, role: str = "administrator", confirmed: bool = Tru
 
 
 def test_the_allowlist_matches_the_contract():
-    """Ten commands, no more. Adding one is a contract change."""
+    """Every supported command is explicit. Adding one is a contract change."""
     assert set(ALLOWLIST) == {
         "network.status",
+        "lane_perception.status",
+        "lane_perception.set",
         "network.apply_profile",
         "network.set_mode",
         "network.connect",
@@ -373,7 +375,7 @@ def test_the_whole_parameter_surface_is_enumerated():
     not an identifier; the agent still lists it so the surface stays closed.
     """
     every_param = {param for spec in ALLOWLIST.values() for param in spec.params}
-    assert every_param == {"profile_id", "release_id", "unit", "mode", "ssid", "psk"}
+    assert every_param == {"profile_id", "release_id", "unit", "mode", "ssid", "psk", "paint_source"}
 
 
 def test_a_missing_required_parameter_is_refused(agent, commands):

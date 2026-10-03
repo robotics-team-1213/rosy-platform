@@ -440,3 +440,16 @@
 - 변경: `core_features/vision/models.py` `ModelStatusStore` — `perception/learned/status`(lane_seg shadow)·`perception/learned/object_det/status`(object_det active) 상태를 작업별로 보관, 나이·stale. `VisionFrameStore.models` 로 붙인다. 교체·선택 기능 없음.
 - 증거: `test_vision_models.py` 8 passed; `src/runtime/services/test` 포함 묶음 739 passed, 37 skipped.
 - gate 변화: 없음.
+
+## 2026-10-04 · uncommitted · feat(vision): 차선 입력의 실제 출처와 정지 설정 예약
+
+- 변경: 읽기 전용 keeper paint 증거는 별도 vision store에서 camera stamp·requested source·실제 모델 판·receipt freshness를 검사한다. stale·잘못된 packet·다른 설정·다른 모델은 unknown이다. Motion 입력으로 소비하지 않는다.
+- 변경: ModeMachine의 원자 IDLE 예약은 설정 변경 동안 이동 모드 전환을 막고 정지·비상정지를 유지한다. 보정 admission과 설정 admission은 별도 RLock으로 묶고 내부 mode/docking lock 순서를 유지한다.
+- 증거: Host 요청이 정지해 있는 동안 주행 API·최종 전환 거절 및 finally 해제, 보정 admission 경합의 red/green을 포함한 82 passed. 독립 검토: docs/validation/learned-lane-modes-2026-10-04/README.md.
+- gate 변화: 없음. SOURCE/LOCAL 관측·admission 검증이며 실제 구동 수용은 별도다.
+
+## 2026-10-04 · uncommitted · fix(line-follow): 저조도 정지와 recovery 차단
+
+- 변경: CAMERA_LINE low_light 관측은 visible=false/confidence=0으로 검증하고 즉시 정지한다. LOST 이후에도 public tick에서 local recovery를 우회하고 기존 back-off를 취소한다. IR·LiDAR 한도는 변경하지 않는다.
+- 증거: 모든 후진 조건을 만족한 저조도 LOST에서 -0.03 m/s가 발생하는 RED를 재현한 뒤 차단했다. 이미 BACKING일 때 어두운 관측을 받으면 이전 command decision도 evidence revision으로 거절한다. focused CORE/preview/protocol 143 passed, 1 skipped; recovery API/active-backoff 55 passed. 로그는 X:/DevTemp/rosy-lane-device-20261004/lowlight-*.txt.
+- gate 변화: SOURCE/LOCAL. 사용자가 기기 곁에 없으므로 실제 이동은 시험하지 않았다.

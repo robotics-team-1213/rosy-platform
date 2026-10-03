@@ -33,8 +33,8 @@
 
 ## 최근 기록
 
+- 2026-10-04 · uncommitted · feat: 저조도 카메라 판정 불가 표시
+- 2026-10-04 · uncommitted · feat(pilot): 운전 모드와 차선 인식 분리
 - 2026-10-03 · 09553e730 · feat(pilot): D-423 "모델" 패널(읽기 전용)
 - 2026-10-03 · uncommitted · fix(pilot): D-411 C 관문 뒤 — 그리퍼 목표를 0.9 × max_velocity 로
 - 2026-10-03 · uncommitted · fix(pilot): D-411 C 검토 — 그리퍼 목표를 알린 속도로
-- 2026-10-03 · uncommitted · feat(pilot): D-411 C 그리퍼 위젯, 주행 링 위쪽 잘림
-- 2026-10-03 · uncommitted · fix(pilot): D-411 B 재리뷰 — 종결 뒤 readback 실패, 떠 있는 스틱 원점

@@ -151,9 +151,23 @@ def validate_face_inputs(data: Any, now: datetime) -> Optional[dict]:
     caution = data.get("caution")
     codes = [code for code in caution if code in CAUTION_TEXT] if isinstance(caution, list) else []
     wake = _card(data.get("wake"))
+    quality = data.get("camera_quality")
+    quality_age = _number(data.get("camera_quality_age_s"))
+    quality_until = None
+    if (isinstance(quality, Mapping) and type(quality.get("valid")) is bool
+            and ((quality.get("valid") is True and quality.get("reason") == "usable")
+                 or (quality.get("valid") is False and quality.get("reason") == "low_light"))
+            and quality_age is not None and quality_age >= 0 and age >= 0
+            and quality_age + age <= 2.0):
+        quality = {"valid": quality["valid"], "reason": quality["reason"]}
+        quality_until = written.timestamp() + 2.0 - quality_age
+    else:
+        quality = None
     return {
         # When CORE wrote it: a reader may keep this hand-over until it is FACE_INPUTS_FRESH_S old.
         "written_ts": written.timestamp(),
+        "camera_quality": quality,
+        "camera_quality_until": quality_until,
         "robot_mode": robot_state.valid_robot_mode(data.get("robot_mode")),
         "nav_state": robot_state.valid_nav_state(data.get("nav_state")),
         "estop": _flag(data.get("estop")),
@@ -211,7 +225,8 @@ UPDATE = "update"
 STOPPED = "stopped"
 FACE = "face"
 SLEEP = "sleep"
-KINDS = (SHUTDOWN, STATUS, UPDATE, STOPPED, FACE, SLEEP)
+LIGHT = "light"
+KINDS = (SHUTDOWN, STATUS, UPDATE, STOPPED, FACE, SLEEP, LIGHT)
 
 #: D-433 table rows by the ``row`` the answer carries (tests walk every one).
 ROWS = {
@@ -236,7 +251,8 @@ def screen_for(*, stage: Any = None, state: Any = None, todo: Optional[str] = No
                ap_mode: bool = False, login: Optional[str] = None,
                core: Optional[Mapping[str, Any]] = None, update: Optional[Mapping[str, Any]] = None,
                test: Optional[str] = None, shutting_down: bool = False,
-               drive_since: Optional[float] = None, now: float = 0.0) -> dict:
+               drive_since: Optional[float] = None, now: float = 0.0,
+               light_assist: bool = False) -> dict:
     """The one answer for the LCD (D-433 decision 2). Higher rows win.
 
     ``stage``: boot-status stage; ``state``: ``robot_state.evaluate``'s state;
@@ -296,6 +312,12 @@ def screen_for(*, stage: Any = None, state: Any = None, todo: Optional[str] = No
     mode = core.get("robot_mode")
     wake = core.get("wake")
     power = core.get("power_mode") or "active"
+    # Explicit illumination never activates driving, and never hides alerts/tests.
+    percent = core.get("battery_percent")
+    if (light_assist and strip is None and wake is None
+            and mode == "IDLE" and not core.get("battery_charging")
+            and (percent is None or percent >= 20)):
+        return {**answer, "kind": LIGHT, "row": "light", "backlight": 100}
     # Row 18: standby sleeps the panel unless a wake card or a caution must be seen.
     if power == "standby" and wake is None and tone != "caution":
         return {**answer, "kind": SLEEP, "row": "standby", "backlight": BACKLIGHT["standby"], "awake": False}

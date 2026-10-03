@@ -784,3 +784,9 @@
 - 증거: `python -m pytest src/runtime/gateway/test/test_face_inputs.py src/runtime/gateway/test/test_bridge_display.py -q` 통과. ros_bridge.py는 rclpy 없이 import할 수 없어 py_compile만.
 - gate 변화: 없음. 실기 확인 전.
 - 결정: D-433 (Proposed)
+
+## 2026-10-04 · uncommitted · feat(vision): 원본 조도와 얼굴 handover
+
+- 변경: JPEG metadata의 원본 low_light quality를 기존 front/status에 전달한다. legacy·malformed·stale는 null이며 JPEG는 유지한다. face-inputs에 camera_quality와 JPEG 수신 나이를 전달하고 reader가 handover 나이를 더해 만료한다. read-only 표시로서 이동 권한은 아니다.
+- 증거: preview·bridge·schema·face handover·CORE focused 143 passed, 1 skipped; 회귀 55 passed.
+- gate 변화: SOURCE/LOCAL. 실제 조명 보조 동작은 별도 기기 증거다.

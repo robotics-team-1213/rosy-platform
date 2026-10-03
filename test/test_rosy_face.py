@@ -1274,7 +1274,7 @@ def test_the_helper_knows_every_pattern_the_table_can_ask_for():
                for mode in [*module.robot_state.ROBOT_MODES, None]
                for nav in [*module.robot_state.NAV_STATES, None]}
 
-    assert askable <= known, sorted(askable - known)
+    assert askable | {"illumination"} <= known, sorted(askable - known)
 
 
 @pytest.mark.parametrize("tree,message", [
@@ -1554,6 +1554,35 @@ def _face_loop(module, root, *, gifs=None, logs=None):
 
 def _screen_row(rendered):
     return rendered[-1]["screen"]["row"]
+
+
+def test_low_light_opt_in_holds_recovery_and_clears_stale_or_alarm(tmp_path):
+    module = _display()
+    _status(tmp_path, "CORE_READY", runtime_mode="hardware")
+    _face_inputs(tmp_path, power_mode="standby", camera_quality={"valid": False, "reason": "low_light"}, camera_quality_age_s=0)
+    display, lcd, clock, rendered, _opened, _lines = _face_loop(module, tmp_path)
+    _lamp_tree(tmp_path)
+    spawn = FakeSpawn()
+    display._lamp = module.Lamp(tmp_path, True, module.Log(lambda _message: None), spawn=spawn)
+    display.step()
+    assert display.screen["kind"] == "sleep"  # opt-in is off by default
+    display._low_light_enabled = True
+    display.step()
+    assert display.screen["kind"] == "light" and display.screen["backlight"] == 100
+    assert spawn.patterns[-1] == "illumination"
+    _face_inputs(tmp_path, power_mode="standby", camera_quality={"valid": True, "reason": "usable"}, camera_quality_age_s=0)
+    display.step()
+    assert display.screen["kind"] == "light"  # own illumination must not oscillate
+    (tmp_path / "run/rosy/face-inputs.json").write_text("{", encoding="utf-8")
+    display._wall = lambda: WALL + 2.1
+    display.step()
+    assert display.screen["kind"] == "sleep"  # cached quality expires before CORE envelope
+    assert display._lamp.pattern != "illumination"
+    display._wall = lambda: WALL
+    _face_inputs(tmp_path, estop=True, camera_quality={"valid": False, "reason": "low_light"}, camera_quality_age_s=0)
+    display.step()
+    assert display.screen["kind"] == "stopped" and not display._light_session
+    assert display._lamp.pattern != "illumination"
 
 
 def test_face_owns_the_screen_with_a_fresh_handover(tmp_path):

@@ -42,6 +42,45 @@ MOUNT = """async ([module, role]) => {
 }"""
 
 
+def test_lane_perception_admin_idle_gate_pending_failure_and_readback(panel):
+    page = panel("console/line-follow.js", role="administrator")
+    page.evaluate("""() => {
+      window.__callbacks['/api/v1/line-follow'].onData({mode:'OFF'});
+      window.__callbacks['/api/v1/robot/state'].onData({mode:'MANUAL',velocity:{linear:0,angular:0}});
+      window.__callbacks['/api/v1/line-follow/perception'].onData({paint_source:'denoise',applied_paint_source:null});
+    }""")
+    apply = page.locator("ui-button", has_text="인식 적용")
+    assert apply.evaluate("e=>e.disabled")
+    page.evaluate("""() => {
+      window.__callbacks['/api/v1/robot/state'].onData({mode:'IDLE',velocity:{linear:0,angular:0}});
+      window.__api = async (path, options) => {
+        if (options?.method === 'PUT') return new Promise((resolve,reject)=>{window.failApply=()=>reject(new Error('restart failed'));});
+        return {paint_source:'learned',applied_paint_source:null};
+      };
+    }""")
+    page.select_option("select[aria-label='차선 인식 방식']", "learned")
+    apply.evaluate("button=>{window.__callbacks['/api/v1/robot/state'].onData({mode:'IDLE',velocity:{linear:0,angular:0}}); button.click();}")
+    assert apply.evaluate("e=>e.disabled")
+    assert page.locator("ui-button", has_text="추종 시작").evaluate("e=>e.disabled")
+    page.evaluate("window.failApply()")
+    page.wait_for_function("document.body.textContent.includes('인식 적용 실패')")
+    assert "설정 적용: 학습 모델" not in page.inner_text("body")
+    page.evaluate("""() => {
+      window.__callbacks['/api/v1/line-follow/perception'].onData({paint_source:'denoise'});
+      window.__api=async (path,options)=>options?.method==='PUT' ? {applied:true} : {paint_source:'learned',applied_paint_source:null};
+    }""")
+    page.select_option("select[aria-label='차선 인식 방식']", "learned")
+    apply.evaluate("button=>{window.__callbacks['/api/v1/robot/state'].onData({mode:'IDLE',velocity:{linear:0,angular:0}}); button.click();}")
+    page.wait_for_function("document.body.textContent.includes('설정 적용: 학습 모델')")
+    assert "실제 추론: 확인 대기" in page.inner_text("body")
+    page.evaluate("window.__callbacks['/api/v1/line-follow/perception'].onData({paint_source:'learned',applied_paint_source:'denoise_fallback',applied_source_age_s:0.3})")
+    assert "학습 미사용 · 전처리 대체" in page.inner_text("body")
+    page.evaluate("window.__callbacks['/api/v1/line-follow/perception'].onData({paint_source:'learned',applied_paint_source:'learned',applied_source_age_s:0.3,applied_model_revision:'lane-test-r2'})")
+    assert "모델 lane-test-r2" in page.inner_text("body")
+    page.evaluate("window.__callbacks['/api/v1/line-follow/perception'].onData({paint_source:'learned',applied_paint_source:'learned',applied_source_age_s:3})")
+    assert "실제 추론: 확인 대기" in page.inner_text("body")
+
+
 class _Handler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(ROOT), **kwargs)
@@ -286,7 +325,7 @@ def test_camera_explains_lane_object_labels_and_disables_expansion_without_a_fra
     assert expand.get_attribute('reason') == '영상 수신 후 확대할 수 있습니다'
     page.locator('.surface-camera-legend summary').click()
     assert 'LEFT LANE' in page.locator('.surface-camera-legend').inner_text()
-    assert 'UNKNOWN' in page.locator('.surface-camera-legend').inner_text()
+    assert 'UNCLASSIFIED' in page.locator('.surface-camera-legend').inner_text()
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
 
 
@@ -314,4 +353,35 @@ def test_camera_can_expand_live_image_and_return_focus_after_exit(panel):
     page.locator('.surface-camera-close').click()
     page.wait_for_function('document.fullscreenElement === null')
     assert page.evaluate("document.activeElement.id === 'vision-expand'")
+    page.evaluate('__unmount()')
+
+
+def test_camera_low_light_is_visibility_failure_with_live_raw_frame(panel):
+    import cv2
+    import numpy as np
+    image = cv2.imencode('.jpg', np.zeros((120, 160, 3), np.uint8))[1].tobytes()
+    page = panel('console/camera.js', role='viewer')
+    page.route('**/api/v1/vision/front/frame?sequence=1',
+               lambda route: route.fulfill(body=image, content_type='image/jpeg',
+                                          headers={'X-Rosy-Camera-Sequence': '1'}))
+    page.evaluate("""async () => {
+      __unmount();
+      const {session} = await import('/assets/client.js'); session.token = 'rosy-dev-viewer';
+      const {mount} = await import('/assets/panels/console/camera.js');
+      document.querySelector('#root').replaceChildren();
+      window.cameraQuality={valid:false,reason:'low_light'};
+      __unmount = mount(document.querySelector('#root'), {role:'viewer', api:async () => ({
+        available:true, stale:false, sequence:1, source:'CAMERA', width:160, height:120,
+        captured_at:5, age_ms:20, quality:window.cameraQuality}), store:{poll(){return () => {};}}});
+    }""")
+    page.locator('#vision-quality').wait_for(state='visible')
+    page.locator('#vision-frame').wait_for(state='visible')
+    assert '차선·물체를 판정할 수 없습니다' in page.inner_text('#vision-quality')
+    assert page.locator('#vision-status').inner_text() == '실시간'
+    page.evaluate("window.cameraQuality={valid:true,reason:'ok'}")
+    page.locator('#vision-quality').wait_for(state='hidden')
+    page.evaluate("window.cameraQuality={valid:false,reason:'low_light'}")
+    page.locator('#vision-quality').wait_for(state='visible')
+    page.evaluate("window.cameraQuality=undefined")
+    page.locator('#vision-quality').wait_for(state='hidden')
     page.evaluate('__unmount()')

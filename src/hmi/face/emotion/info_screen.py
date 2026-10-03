@@ -543,6 +543,22 @@ def render_stopped(payload: dict, size: tuple[int, int] = DEFAULT_SIZE) -> Image
     return image
 
 
+def render_light_assist(size: tuple[int, int] = DEFAULT_SIZE) -> Image.Image:
+    """White illumination with a small bulb symbol; no claim of camera recognition."""
+    width, height = size
+    image = Image.new("RGB", size, (255, 255, 255))
+    draw = ImageDraw.Draw(image)
+    cx, cy = width // 2, height // 2 - 24
+    draw.ellipse((cx - 25, cy - 30, cx + 25, cy + 20), outline=_BG, width=4)
+    draw.rectangle((cx - 12, cy + 18, cx + 12, cy + 36), outline=_BG, width=3)
+    for dx, dy in ((-42, 0), (42, 0), (0, -47)):
+        draw.line((cx + dx, cy + dy, cx + dx * 1.2, cy + dy * 1.2), fill=_BG, width=3)
+    font, text = _fit(draw, "LIGHT ASSIST", 22, width - 32)
+    box = draw.textbbox((0, 0), text, font=font)
+    draw.text(((width - box[2]) // 2, height - 52), text, font=font, fill=_BG)
+    return image
+
+
 def render_notice(title: str, lines: list[str], size: tuple[int, int] = DEFAULT_SIZE,
                   frame: int = 0) -> Image.Image:
     """An update in progress or a shutdown: one title that breathes (D-385), quiet lines below."""

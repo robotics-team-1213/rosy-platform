@@ -14,6 +14,7 @@ import time
 from typing import Optional
 
 from .models import ModelStatusStore
+from .lane_perception import LanePerceptionStore
 
 
 def _source_label(value: object) -> str:
@@ -39,12 +40,17 @@ def parse_preview_format(value: str) -> Optional[dict]:
             return 0
         return result if 0 <= result <= 4096 else 0
 
-    return {
+    metadata = {
         "source": _source_label(fields.get("source", "UNKNOWN")),
         "width": dimension("width"),
         "height": dimension("height"),
         "overlay": fields.get("overlay", "none")[:80] or "none",
     }
+    if fields.get('quality_valid') == 'false' and fields.get('quality_reason') == 'low_light':
+        metadata['quality'] = dict(valid=False, reason='low_light')
+    elif fields.get('quality_valid') == 'true' and fields.get('quality_reason') == 'usable':
+        metadata['quality'] = dict(valid=True, reason='usable')
+    return metadata
 
 
 @dataclass(frozen=True)
@@ -58,6 +64,7 @@ class VisionFrame:
     height: int
     overlay: str
     sequence: int
+    quality: Optional[dict] = None
 
 
 class VisionFrameAdvanced(RuntimeError):
@@ -104,10 +111,12 @@ class VisionFrameStore:
         self._last_pull_by_viewer: dict[str, float] = {}
         # D-423 §3.6: the robot's learned-model status per task, read-only display data.
         self.models = ModelStatusStore()
+        self.lane_perception = LanePerceptionStore()
 
     def publish(self, data: bytes, *, captured_at: float,
                 frame_id: str, source: str, width: int = 0,
                 height: int = 0, overlay: str = "none",
+                quality: Optional[dict] = None,
                 received_at: Optional[float] = None) -> VisionFrame:
         payload = bytes(data)
         if len(payload) < 4 or not (
@@ -127,6 +136,8 @@ class VisionFrameStore:
         clean_frame_id = str(frame_id).strip()[:160]
         clean_source = _source_label(source)
         clean_overlay = str(overlay).strip()[:80] or "none"
+        clean_quality = (dict(quality) if isinstance(quality, dict) and type(quality.get('valid')) is bool and quality in (
+            dict(valid=False, reason='low_light'), dict(valid=True, reason='usable')) else None)
 
         with self._lock:
             if (self._frame is not None
@@ -145,6 +156,7 @@ class VisionFrameStore:
                 height=clean_height,
                 overlay=clean_overlay,
                 sequence=self._sequence,
+                quality=clean_quality,
             )
             self._frame = frame
             return frame
@@ -209,6 +221,7 @@ class VisionFrameStore:
                 "height": 0,
                 "overlay": "none",
                 "sequence": 0,
+                "quality": None,
             }
         current = time.monotonic() if now is None else float(now)
         age_s = max(0.0, current - frame.received_at)
@@ -224,4 +237,5 @@ class VisionFrameStore:
             "height": frame.height,
             "overlay": frame.overlay,
             "sequence": frame.sequence,
+            "quality": dict(frame.quality) if frame.quality is not None and not stale else None,
         }

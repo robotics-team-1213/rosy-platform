@@ -2,7 +2,7 @@
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.89
+**Version:** v1.90
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -251,6 +251,8 @@ config `control.sensor_adapter.mode` 와 같은 문자열이다(D-400). 일반 �
 | POST | `/api/v1/navigation/home` | Operator | NAV-003. 기능 보류 시 409 `CAPABILITY_WITHHELD`. D-395 로봇이 `LOCALIZED` 가 아니면 409 `NOT_LOCALIZED` (v1.72) |
 | GET | `/api/v1/navigation/state` | Viewer | NAV-004 |
 | GET | `/api/v1/navigation/path` | Viewer | MAP-003 |
+| GET | `/api/v1/line-follow/perception` | Viewer | 저장된 `paint_source`(threshold / denoise / learned), `camera_lane_mode`, 서명·해시 확인 `model_ready`와 `model_revision`. 별도 `applied_paint_source`는 실제 최신 keeper 프레임의 threshold / denoise / learned / denoise_fallback 또는 null; `applied_source_age_s`는 monotonic 수신 나이(2초 이내), `applied_model_revision`은 실제 사용한 learned mask의 producer revision(없으면 null). stale·malformed·설정 불일치·재시작 전 증거는 null. 운전 모드와 독립이며 물체 검출이나 주행 허가가 아니다. |
+| PUT | `/api/v1/line-follow/perception` | Administrator | `{paint_source: threshold\|denoise\|learned}`만 허용. IDLE·line-follow OFF·보정 비활성, Host Agent가 fresh 정지 및 active mission 부재를 재확인. 기존 기하 보존, learned는 고정 signed model pointer 검증, camera만 재시작·실패 복구. `applied: true`는 설정/서비스 적용이며 live 추론이나 실제 주행 성공이 아니다. |
 | GET | `/api/v1/line-follow` | Viewer | D-143 — 선택 모드, 상태, 증거 신뢰도·나이, 최종 선속도·각속도와 사유. `clearance_m`(정면 LiDAR 최소 거리, 없으면 null)과 정지 사유 `obstacle_ahead`·`obstacle_sensor_stale`·`driver_released` (D-344, v1.63). IR 이탈 감시(`line_follow.ir_guard_enabled`)가 켜지면 추종 사유 `lane_edge_left`·`lane_edge_right`(경계 반대로 비킴)와 정지 사유 `lane_departure`·`lane_guard_stale` (D-344 §12, v1.63). 공칭 지면(`ground: NOMINAL`) 카메라 증거는 `hold_s` 세션이 없으면 `nominal_ground_requires_driver` 로 멈춘다 (D-364 §3, v1.63). 정지 사유 `limit_level_too_low`(수동 한도 L1 미만)·`angular_limit_zero`(각속도 한도를 읽을 수 없음) (D-344 §13, feat/device-prep, v1.64). 몸 기준 정지(D-422, v1.84: `obstacle_mode: path` + 로봇 패키지 URDF 몸 기하)에서는 `body_gap_m`(의도한 차선 호를 따라 몸 윤곽이 닿기까지의 거리, 없으면 null)·`stop_gap_m`(그 속도의 정지 간격)·`clearance_source`(`lidar`·`memory`(LiDAR `range_min` 아래로 사라져 기억한 반환)·`ultrasonic`·`odometry_lost`(바퀴 값 적분 실패 — 다음 스캔까지 정지), 아무것도 없으면 null)가 오고 `clearance_m` 은 `body_gap_m` 과 같은 몸 간격이다. 그 밖에는 세 필드 모두 null |
 | PUT | `/api/v1/line-follow/mode` | Operator | D-143 — `{mode: OFF\|IR_LINE\|CAMERA_LINE, hold_s?}`. 소스는 상호 배타적이며 변경 즉시 이전 증거와 명령을 폐기. 도킹/언도킹 중에는 409 `DOCKING_ACTIVE` (v1.18). 요구 능력은 구동(`mobility.move`)이다 — Nav2 가 없는 `motor` 런타임에서도 켜진다(D-344 §7, v1.63). `hold_s`(0 < s ≤ 2)를 주면 운전자 확인 세션이다: `POST /line-follow/hold` 가 그 안에 계속 와야 하고, 끊기면 CORE 가 스스로 OFF(`reason: driver_released`)로 내리고 바퀴 명령을 지운다(D-344 §8, v1.63). OFF 가 아닌 모드는 D-395 로봇이 `LOCALIZED` 가 아니면 409 `NOT_LOCALIZED` (v1.72) |
 | POST | `/api/v1/line-follow/hold` | Operator | D-344 §8 — 운전자가 "진행"을 누르고 있다. 활성 `hold_s` 세션의 만료를 `hold_s` 만큼 미룬다. 세션이 없으면 409 `LINE_FOLLOW_NOT_HELD` (v1.63) |
@@ -657,7 +659,8 @@ debounce 미확정·stale)은 카메라 단독으로 강등되며 그 전환마�
   "width": 640,
   "height": 360,
   "overlay": "semantic-road-v1",
-  "sequence": 7
+  "sequence": 7,
+  "quality": null
 }
 ```
 
@@ -666,6 +669,8 @@ CORE-only 런타임(`runtime_mode: core`, D-161)에서 한 번도 값이 오지 
 `evidence` 는 v1.8 additive 다. 채널별 `{received_at, evidence, stale_after_s}` 이며, `evidence` 는 서버가 판정한 `fresh` | `delayed` | `disconnected` | `unavailable` 이다. 판정에 쓴 임계값(`stale_after_s`)도 같이 실는다. 클라이언트는 임계값을 다시 계산하지 않고 이 문자열을 그대로 표시·게이트한다. 알 수 없는 채널 키는 무시한다(API-002). `PROTOCOL_VERSION`(envelope 1.0)은 바꾸지 않는다.
 
 Camera preview transfer rules (v1.12, D-152):
+
+- v1.90 `quality`는 원본 픽셀의 조도 관측 `{valid:false, reason:"low_light"}` 또는 `{valid:true, reason:"usable"}`이며 물체·차선 판정이나 이동 허가가 아니다. legacy·잘못된 metadata·2초를 넘긴 JPEG 수신은 null이다. 저조도에서도 JPEG는 보이며 CAMERA_LINE 관측은 visible=false/confidence=0으로 무효화되어 즉시 정지, 지속 시 기존 LOST 재선택을 요구한다. LiDAR·IR 안전 기준은 유지한다.
 
 - Both `status` and `frame` responses are `Cache-Control: no-store`.
 - A client MUST request
@@ -2012,6 +2017,7 @@ and field acceptance require their own evidence.
 | 버전 | 일자 | 내용 |
 |---|---|---|
 | v1.89 | 2026-10-03 | Additive (D-418, feat/d418-ssh-access): 로봇 SSH 접속 §5.8 — Admin 전용 `GET /host/ssh/host-keys`, `GET\|POST /host/ssh/keys`, `DELETE /host/ssh/keys/{label}`, `GET\|POST\|DELETE /host/ssh/password` 신설. 오류 코드 `SSH_INVALID`(422)·`SSH_LABEL_EXISTS`·`SSH_KEY_EXISTS`·`SSH_KEYS_FULL`(409)·`SSH_KEY_NOT_FOUND`(404)·`SSH_ACCESS_UNAVAILABLE`(503). 스키마 `Ssh*`(`schemas.py`). 기존 경로·필드 변화 없음. 브랜치에서 v1.84 로 적었으나 main 이 v1.84(D-422)–v1.88(D-423)을 먼저 써서 v1.89 로 재번호 |
+| v1.90 | 2026-10-04 | Additive: `GET/PUT /line-follow/perception` 신설. Viewer 설정·signed model integrity 조회, Administrator `paint_source`만 선택. `LanePerceptionRequest/Status` 스키마, Host Agent 정지 재검사·기하 보존·원자 적용/실패 복구와 CORE IDLE motion reservation. live source 미확인은 null로 구분한다. 운전 모드·물체 검출·envelope protocol_version 1.0은 유지. |
 | v1.88 | 2026-10-03 | Additive (D-423, feat/d423-object-range-detection): `GET /api/v1/vision/models`(viewer, 읽기 전용) — 로봇 학습 모델 상태를 작업별로(`lane_seg` shadow, `object_det` active). §6.1.1 에 ROS `vision/detections`(DetectionEvidence 필드 + 추가 `ranges`)를 적음 — CORE 는 구독하지 않음. 카메라 관측 영역의 `s`(`L`/`G`)·`ground_source` 는 control 내부 증거(`camera/observation`)라 이 계약 밖. 쓰기 API·이벤트·FleetAgent 변경 없음. v1.82 는 main 의 D-403/D-413 행 |
 | v1.87 | 2026-10-03 | Additive (D-411 B+C, feat/d411bc-pilot-controls-gripper; A 는 v1.83 에서 먼저 들어감): B: capabilities `controls`(`rosy.controls/1`, §9.1), OMX SIM `GET /sim/omx/target` `controls`; Pilot 이 `controls` 로 주행·팔 조작부를 조립(필드 없음 = 구 서버 대체, 빈 `items` = 조작부 없음, 팔 조이스틱은 순차 제한 목표·떼면 새 목표만 멈춤). C: OMX SIM `POST /sim/omx/gripper`(`OmxSimGripperGoal`, 절대 위치·0.2–2.0 s), `/state` `gripper` readback(`open`·`closed`·`holding`·`moving`·`unknown`), `/target` `controls` 의 `gripper` 항목(그리퍼는 `joint_jog` 에서 빠짐, 선택 `max_velocity`(`GripperControl.max_velocity`), 409 `gripper_velocity_limit`), SIM 허용 범위 = 셀 프로필 ∩ URDF·알리는 범위는 0.02 rad 안쪽·목표 길이 상한 2.0 s, 쥔 채 팔 조그는 멈춘 위치 + preload, 시연 기록 `action.gripper` 열과 LeRobot 특성(선택, 이전 에피소드 유효). 기존 필드 변화 없음 |
 | v1.86 | 2026-10-03 | Additive (D-419, feat/d419-saf003-fleet-loss): SAF-003 이 처음으로 동작한다. 이벤트 `safety.fleet_lost`(warning)·`safety.fleet_restored`(info), `GET /safety/state` 선택 필드 `fleet_link`, 설정 `safety.fleet_loss_timeout_s`(기본 5.0, 4–60 s)·`fleet.heartbeat_reply_timeout_s`(기본 2.0, 0.5–10 s), 판정 시간 ≥ 1 + 답 시한 + 1 (어기면 기동 실패). §7.6 판정 규칙. `PUT /safety/limits` 의 받는 값은 그대로(`RETURN_HOME` 포함), `RETURN_HOME` 이면 응답 선택 필드 `warning`. 기동 때 저장된 모르는 정책은 `STOP` 으로 읽는다. envelope `protocol_version` 1.0 유지 |

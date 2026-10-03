@@ -26,6 +26,8 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from core_common.protocol.evidence import EvidenceState, ValueEvidence
 from core_common.protocol.localization import LocalizationStatus
 from core_common.protocol.cell_goal_evidence import CellGoalEvidenceSubmission  # noqa: F401
+from core_common.protocol.lane_perception import LanePerceptionRequest, LanePerceptionStatus  # noqa: F401
+from core_common.protocol.vision_preview_status import VisionPreviewStatus  # noqa: F401
 
 PROTOCOL_VERSION = "1.0"
 
@@ -1056,21 +1058,6 @@ class TrafficPolicyStatus(BaseModel):
     signal_head_age_s: Optional[float] = None
     signal_head_frozen: bool = False
     linear_scale: float = 0.0
-
-
-class VisionPreviewStatus(BaseModel):
-    """Latest bounded front-camera preview available through CORE (v1.12)."""
-
-    available: bool = False
-    stale: bool = False
-    source: Optional[str] = None
-    frame_id: Optional[str] = None
-    captured_at: Optional[float] = None
-    age_ms: Optional[int] = None
-    width: int = 0
-    height: int = 0
-    overlay: str = "none"
-    sequence: int = 0
 
 
 class VisionEvidenceRecord(BaseModel):
