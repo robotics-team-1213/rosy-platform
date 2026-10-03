@@ -122,8 +122,8 @@ class Runtime:
 
 @contextlib.contextmanager
 def _paired_page(runtime):
-    app = create_pilot_sim_app(runtime=runtime, pilot_root=ROOT / "src/hmi/pilot",
-                               common_root=ROOT / "src/hmi/web_common", pairing_code="ABCD-EFGH")
+    app = create_pilot_sim_app(runtime=runtime, pilot_root=ROOT / "middleware/ui/pilot",
+                               common_root=ROOT / "shared/web", pairing_code="ABCD-EFGH")
     with socket.socket() as sock:
         sock.bind(("127.0.0.1", 0))
         port = sock.getsockname()[1]

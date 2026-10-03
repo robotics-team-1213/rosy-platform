@@ -15,7 +15,7 @@ import yaml
 ROOT = Path(__file__).resolve().parents[2]
 CAMERA_APP = ROOT / "operations/ui/cam/app/src/main/java"
 VISION = ROOT / "operations/vision/rosy_vision"
-REGISTRY = ROOT / "src/hmi/web_common/surfaces.yaml"
+REGISTRY = ROOT / "shared/web/surfaces.yaml"
 
 # 1. Rosy Cam (ceiling camera app): no CORE API, no Fleet user API (D-341 pairing/v1 excepted),
 #    no robot motion or stop (the user decided on 2026-09-30: no stop credential).
@@ -109,7 +109,7 @@ def test_fleet_vision_routes_only_issue_leases_without_bytes():
 
 def test_pilot_stays_a_one_robot_surface():
     """D-370 1항: Pilot never calls Fleet — it drives one robot through that robot's CORE."""
-    pilot = ROOT / "src/hmi/pilot"
+    pilot = ROOT / "middleware/ui/pilot"
     assert pilot.is_dir()
     calls = [path.relative_to(ROOT).as_posix() for path in pilot.rglob("*")
              if path.suffix in {".js", ".html"} and "test" not in path.parts
@@ -119,7 +119,7 @@ def test_pilot_stays_a_one_robot_surface():
 
 def test_shared_transport_and_controls_do_not_choose_operational_endpoints():
     """D-425: service adapters can name their contract; transport/UI cannot choose one."""
-    shared = ROOT / "src/hmi/web_common"
+    shared = ROOT / "shared/web"
     adapters = {"core-client.js", "fleet-client.js"}
     # Evidence labels can name a route without issuing a request to it.
     dispatch = re.compile(r"\b(?:fetch|api|postJson|request)\s*\(\s*['\"`]/api/(?:v1|fleet)/")

@@ -5,7 +5,7 @@
 
 ## Purpose
 
-FastAPI app, `/api/v1` routers, and the host-agent client. Operator screens are `src/hmi/dashboard`.
+FastAPI app, `/api/v1` routers, and the host-agent client. Operator screens are `middleware/ui/robot`.
 
 Library/contract tier (D-168 P2): no process of its own. ROS-SIM/ARTIFACT/DEVICE/FIELD are judged on the runtime module that ships it (`core`, and `fleet` where it consumes it).
 
@@ -17,7 +17,7 @@ Library/contract tier (D-168 P2): no process of its own. ROS-SIM/ARTIFACT/DEVICE
 | `progress.md` | Current gate snapshot (SOURCE…FIELD). Overwrite; state of record over this file |
 | `logs.md` | Append-only work journal, one entry per change |
 | `index.md` | Generated: ADRs, plans, solutions, tests, recent logs. Do not edit |
-| `core_api_web/api/` | `app.py`, `deps.py` facade (v1 routers import features only through it), `v1/`. Screens are `src/hmi/dashboard`; tokens are `src/hmi/web_common` |
+| `core_api_web/api/` | `app.py`, `deps.py` facade (v1 routers import features only through it), `v1/`. Screens are `middleware/ui/robot`; tokens are `shared/web` |
 
 ## Subdirectories
 

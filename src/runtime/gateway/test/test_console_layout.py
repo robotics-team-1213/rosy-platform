@@ -9,7 +9,7 @@ CI에 브라우저가 없으므로 배치 자체는 잴 수 없다 — 대신 �
 from pathlib import Path
 import re
 
-WEB_ROOT = Path(__file__).resolve().parents[3] / "hmi" / "dashboard"
+WEB_ROOT = Path(__file__).resolve().parents[4] / "middleware" / "ui" / "robot"
 INDEX = WEB_ROOT / "index.html"
 STYLES = WEB_ROOT / "styles.css"
 DETAIL = WEB_ROOT / "console-detail.css"

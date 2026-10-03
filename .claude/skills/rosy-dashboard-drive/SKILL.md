@@ -1,6 +1,6 @@
 ---
 name: rosy-dashboard-drive
-description: Use when an agent must operate, verify, or screenshot the Rosy CORE dashboard (/dashboard on a robot, or the local tree's src/hmi/dashboard) with Playwright — changing mode, hold-to-drive teleop, measuring stop latency, reading safety/commissioning/hardware state, checking the device card — or when a Playwright script hangs on page.goto, a mode click does nothing, or teleop buttons stay disabled.
+description: Use when an agent must operate, verify, or screenshot the Rosy CORE dashboard (/dashboard on a robot, or the local tree's middleware/ui/robot) with Playwright — changing mode, hold-to-drive teleop, measuring stop latency, reading safety/commissioning/hardware state, checking the device card — or when a Playwright script hangs on page.goto, a mode click does nothing, or teleop buttons stay disabled.
 ---
 
 # Driving the CORE dashboard with Playwright
@@ -59,7 +59,7 @@ enough. `POST /api/v1/host/hardware/refresh` is administrator-only.
 ## Render the local tree without a robot
 
 `test/test_dashboard_browser.py::_launch_page(playwright, extra_init=...)` serves
-`src/hmi/dashboard` at `http://rosy.test/dashboard` with a mocked API. Override the mock in
+`middleware/ui/robot` at `http://rosy.test/dashboard` with a mocked API. Override the mock in
 `extra_init`, for example a recorded device result:
 
 ```python

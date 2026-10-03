@@ -19,8 +19,8 @@ def _surface_client(role=None):
     app = FastAPI()
     register_exception_handlers(app)
     app.state.ui_registry = load_registry(
-        Path(__file__).resolve().parents[3] / "hmi" / "dashboard" / "panels.yaml",
-        Path(__file__).resolve().parents[3] / "hmi" / "dashboard",
+        Path(__file__).resolve().parents[4] / "middleware" / "ui" / "robot" / "panels.yaml",
+        Path(__file__).resolve().parents[4] / "middleware" / "ui" / "robot",
     )
     app.state.core = SimpleNamespace(
         config={"runtime": {"mode": "full"}},

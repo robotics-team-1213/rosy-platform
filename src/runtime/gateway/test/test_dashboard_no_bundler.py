@@ -3,7 +3,7 @@
 from pathlib import Path
 
 API = Path(__file__).resolve().parents[2] / "api_web"
-WEB = Path(__file__).resolve().parents[3] / "hmi" / "dashboard"
+WEB = Path(__file__).resolve().parents[4] / "middleware" / "ui" / "robot"
 
 
 def test_core_has_no_frontend_bundler():

@@ -10,13 +10,13 @@ on:
       - "operations/ui/cam/**"
       - ".github/workflows/android.yml"
       - "test/fixtures/protocol/**"
-      - "src/hmi/web_common/icons/**"
+      - "shared/web/icons/**"
   pull_request:
     paths:
       - "operations/ui/cam/**"
       - ".github/workflows/android.yml"
       - "test/fixtures/protocol/**"
-      - "src/hmi/web_common/icons/**"
+      - "shared/web/icons/**"
 
 jobs:
   android-unit:

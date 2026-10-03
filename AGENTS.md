@@ -66,7 +66,7 @@ ROSY is a robot middleware and fleet-control platform (ROS 2 Jazzy, first hardwa
 - This repo is PUBLIC. Place every new file by D-226: internal material, real device addresses/accounts and filled device config go in the gitignored `private/` (write `<robot-ip>` in public docs); data code or tests read stays beside the reader; dated evidence goes in `docs/validation/<topic>-<YYYY-MM-DD>/`; module how-to goes in the module's one `docs/`. A new secret kind needs its ignore rule and its tracked template added to `test/architecture/test_document_placement.py` in the same change.
 - Hardware profile is YAML. In-tree Pinky full spec is `src/products/pinky_pro/profile/config/profile.yaml`. The robot advertises `deploy/robot/pinky_pro/config/{profile,capabilities}.${ROSY_RUNTIME_MODE}.yaml` (`core` / `motor` / `hardware`).
 - Package names are grouped by source role under `src/{contracts,runtime,products,drivers,hmi,sim,site}`. Do not reintroduce `rosy_*` or `pinky_*` package names. The CORE launch file still carries its legacy filename `rosy_core.launch.py`.
-- Dashboard screens are static files in `src/hmi/dashboard`, served in-process by FastAPI (`core_api_web`). Not a Node server (D-23). D-7 (React+Vite) is not the current dashboard.
+- Dashboard screens are static files in `middleware/ui/robot`, served in-process by FastAPI (`core_api_web`). Not a Node server (D-23). D-7 (React+Vite) is not the current dashboard.
 - Project skills in `.claude/skills/`: `rosy-device-access` (SSH to a robot), `rosy-hw-bringup` (board devices), `rosy-land-on-main` (shared checkout, ADR numbers, `test/known_failures.txt`), `rosy-dashboard-drive` (Playwright, `tools/dashboard_drive.py`), `rosy-release-push` (payload release to an existing robot).
 
 ### Testing Requirements
@@ -115,7 +115,7 @@ source env.sh
 colcon --log-base log build --symlink-install --base-paths $(python3 tools/harness/colcon_roots.py) --build-base build --install-base install
 
 # core unit tests (no live ROS required for most)
-python3 -m pytest src/runtime/gateway/test/ src/runtime/events/test/ src/runtime/services/test/ src/hmi/web_common/test/ -v
+python3 -m pytest src/runtime/gateway/test/ src/runtime/events/test/ src/runtime/services/test/ shared/web/test/ -v
 
 # Fleet formation/relay/session/console (no ROS)
 python3 -m pytest operations/fleet/test/ -v
@@ -136,7 +136,7 @@ CI (`.github/workflows/ci.yml`) on `main` / PRs: colcon build in `ros:jazzy-ros-
   `ROS_DOMAIN_ID` = 40 + N and `ROSY_NAMESPACE` = `rosy_%02d` are derived from
   `ROSY_ROBOT_NUMBER` at install, and a missing identity stops the runtime (D-33).
   A default here is what once shipped every unit as 42/`rosy_01`.
-- Dashboard screens are static files in `src/hmi/dashboard`, served in-process by FastAPI (`core_api_web`). Not a Node server (D-23). D-7 (React+Vite) is not the current dashboard.
+- Dashboard screens are static files in `middleware/ui/robot`, served in-process by FastAPI (`core_api_web`). Not a Node server (D-23). D-7 (React+Vite) is not the current dashboard.
 
 ## Dependencies
 

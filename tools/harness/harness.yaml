@@ -75,9 +75,9 @@ modules:
   # registry/icon/role contract tests; `gradlew testDebugUnitTest` runs in android.yml.
   - name: cam
     path: operations/ui/cam
-    tests: [test/architecture/test_app_roles.py, src/hmi/web_common/test/test_surface_icons.py]
+    tests: [test/architecture/test_app_roles.py, shared/web/test/test_surface_icons.py]
     functional_kind: host-contract
-    functional: [test/architecture/test_app_roles.py, src/hmi/web_common/test/test_surface_icons.py]
+    functional: [test/architecture/test_app_roles.py, shared/web/test/test_surface_icons.py]
   - name: gz_sim
     path: src/sim/gz_sim
     tests: [src/sim/gz_sim/test]
@@ -94,10 +94,10 @@ modules:
     functional_kind: pytest
     functional: [src/products/pinky_pro/bringup/test/test_command_deadman.py, test/test_motor_control.py]
   - name: emotion
-    path: src/hmi/face
-    tests: [src/hmi/face/test/test_info_screen.py, src/hmi/face/test/test_info_screen_boot.py, src/hmi/face/test/test_wifi_qr.py, test/test_nav2_hardware_slice.py]
+    path: middleware/ui/face
+    tests: [middleware/ui/face/test/test_info_screen.py, middleware/ui/face/test/test_info_screen_boot.py, middleware/ui/face/test/test_wifi_qr.py, test/test_nav2_hardware_slice.py]
     functional_kind: pytest
-    functional: [src/hmi/face/test/test_info_screen.py]
+    functional: [middleware/ui/face/test/test_info_screen.py]
   - name: led
     path: src/products/pinky_pro/led
     tests: [src/products/pinky_pro/led/test/test_led_package_contract.py, test/test_nav2_hardware_slice.py]
@@ -139,20 +139,20 @@ modules:
     functional_kind: pytest
     functional: [src/runtime/api_web/test]
   - name: web_common
-    path: src/hmi/web_common
-    tests: [src/hmi/web_common/test/test_ui_token_contracts.py, src/hmi/web_common/test/test_palette_gates.py, src/hmi/web_common/test/test_headless_state.py]
+    path: shared/web
+    tests: [shared/web/test/test_ui_token_contracts.py, shared/web/test/test_palette_gates.py, shared/web/test/test_headless_state.py]
     functional_kind: host-contract
-    functional: [src/hmi/web_common/test/test_ui_token_contracts.py]
+    functional: [shared/web/test/test_ui_token_contracts.py]
   - name: dashboard
-    path: src/hmi/dashboard
-    tests: [src/hmi/dashboard/test]
+    path: middleware/ui/robot
+    tests: [middleware/ui/robot/test]
     functional_kind: host-contract
-    functional: [src/hmi/dashboard/test/test_dashboard_package.py]
+    functional: [middleware/ui/robot/test/test_dashboard_package.py]
   - name: pilot
-    path: src/hmi/pilot
-    tests: [src/hmi/pilot/test]
+    path: middleware/ui/pilot
+    tests: [middleware/ui/pilot/test]
     functional_kind: host-contract
-    functional: [src/hmi/pilot/test/test_stick.py]
+    functional: [middleware/ui/pilot/test/test_stick.py]
   - name: omx_adapter
     path: src/products/omx/adapter
     tests: [src/products/omx/adapter/test]

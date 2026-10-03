@@ -523,13 +523,13 @@ PROGRAM_SOURCES = {
                           "src/contracts/foundation/core_common/robot_state.py",
                           # D-433: the situation table and the face-inputs reader.
                           "src/contracts/foundation/core_common/face_screen.py",
-                          "src/hmi/face/emotion/info_screen.py",
-                          "src/hmi/face/emotion/rosy_lcd.py",
+                          "middleware/ui/face/emotion/info_screen.py",
+                          "middleware/ui/face/emotion/rosy_lcd.py",
                           "src/products/pinky_pro/bringup/rosylib"],
     # D-433: the retired unit runs the pre-D-433 program an old image still holds;
     # what it may touch is a subset of rosy-face's.
     "rosy-boot-display.service": ["src/contracts/foundation/core_common/robot_state.py",
-                                  "src/hmi/face/emotion/rosy_lcd.py",
+                                  "middleware/ui/face/emotion/rosy_lcd.py",
                                   "src/products/pinky_pro/bringup/rosylib"],
     # D-193: the issuer and the policy loader it imports.
     "rosy-login-code.service": ["deploy/robot/pinky_pro/native/rosy-login-code.py",

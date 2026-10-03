@@ -8,7 +8,7 @@ import org.junit.Test
 import org.w3c.dom.Element
 
 /**
- * D-370 3항: the adaptive launcher icon is a copy of src/hmi/web_common/icons/cam.svg.
+ * D-370 3항: the adaptive launcher icon is a copy of shared/web/icons/cam.svg.
  * Paths, stroke widths and colours must stay equal; the monochrome layer is the same geometry in one colour.
  */
 class LauncherIconParityTest {

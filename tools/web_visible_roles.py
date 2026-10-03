@@ -36,7 +36,7 @@ for _entry in (
     "src/contracts/foundation",
     "src/runtime/events",
     "src/runtime/services",
-    "src/hmi/web_common",
+    "shared/web",
     "src/contracts/interfaces",
 ):
     _path = str(ROOT / _entry)

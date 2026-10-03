@@ -21,7 +21,7 @@ COPY deploy/site/site_db.py /opt/rosy/site_db.py
 COPY operations/fleet/ /opt/rosy/src/site/fleet/
 COPY src/contracts/foundation/core_common/ /opt/rosy/src/contracts/foundation/core_common/
 COPY operations/apps/fleet/src/ /opt/rosy/apps/gateway/src/
-COPY src/hmi/web_common/ /opt/rosy/web-common/
+COPY shared/web/ /opt/rosy/web-common/
 # D-375 console map-fit overlay: site lane geometry, display only (--site-lane-graph/--site-lane-paint).
 COPY src/runtime/sensing/map/map_v2_fleet/lane_graph.yaml src/runtime/sensing/map/map_v2_fleet/meshes/road_lines.stl /opt/rosy/maps/map_v2_fleet/
 

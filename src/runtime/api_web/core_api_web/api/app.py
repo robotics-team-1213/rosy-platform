@@ -71,7 +71,7 @@ def _web_common_root() -> Path:
             return share
     except (ImportError, LookupError):
         pass
-    return Path(__file__).resolve().parents[4] / "hmi" / "web_common"
+    return Path(__file__).resolve().parents[5] / "shared" / "web"
 
 
 def _shared_assets(web_common: Path) -> dict[str, str]:
@@ -90,7 +90,7 @@ def _dashboard_root() -> Path:
             return share
     except (ImportError, LookupError):
         pass
-    return Path(__file__).resolve().parents[4] / "hmi" / "dashboard"
+    return Path(__file__).resolve().parents[5] / "middleware" / "ui" / "robot"
 
 
 def _pilot_root() -> Path:
@@ -103,7 +103,7 @@ def _pilot_root() -> Path:
             return share
     except (ImportError, LookupError):
         pass
-    return Path(__file__).resolve().parents[4] / "hmi" / "pilot"
+    return Path(__file__).resolve().parents[5] / "middleware" / "ui" / "pilot"
 
 
 def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:

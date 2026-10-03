@@ -52,7 +52,7 @@ Factory functions (`createMapView`, `createFormation`, ...) return handlers the 
 
 ### Internal
 
-- `../static_routes.py` (allowlist, CSP), `../app.py`, `src/hmi/web_common` (`/common/` assets)
+- `../static_routes.py` (allowlist, CSP), `../app.py`, `shared/web` (`/common/` assets)
 
 ### External
 

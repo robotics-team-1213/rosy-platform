@@ -4,7 +4,7 @@ schema: rosy.platform-parts.v1
 # colcon, rosdep, payload and image consumer reads this one line through
 # tools/harness/colcon_roots.py (stdlib-only, so keep it a one-line flow list).
 # Checked by test/architecture/test_colcon_roots.py.
-colcon_roots: [src, learning, operations]
+colcon_roots: [src, learning, operations, middleware, shared]
 
 # D-427 §6 "지금(C)" ownership manifest: every tracked source root maps to one
 # D-427 part. No folder moves; `d427_target` is where the root goes in step B.
@@ -247,20 +247,23 @@ roots:
     wave: "3a"
     import_prefix: [rosy.execution.site]
     concern: other
-  - path: src/hmi/dashboard
+  - path: middleware/ui/robot
     part: middleware
     d427_target: middleware/ui/robot
+    legacy: src/hmi/dashboard
     wave: "4b"
     note: Robot dashboard screens served by core_api_web on the device.
     concern: other
-  - path: src/hmi/pilot
+  - path: middleware/ui/pilot
     part: middleware
     d427_target: middleware/ui/pilot
+    legacy: src/hmi/pilot
     wave: "4b"
     concern: other
-  - path: src/hmi/face
+  - path: middleware/ui/face
     part: middleware
     d427_target: middleware/ui/face
+    legacy: src/hmi/face
     wave: "4b"
     import_prefix: [emotion]
     concern: other
@@ -456,9 +459,10 @@ roots:
     concern: other
 
   # --- shared web -----------------------------------------------------------
-  - path: src/hmi/web_common
+  - path: shared/web
     part: shared_web
     d427_target: shared/web
+    legacy: src/hmi/web_common
     wave: "4b"
     concern: other
 

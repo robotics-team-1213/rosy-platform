@@ -29,7 +29,7 @@ The single Gradle module `:app` of Rosy Cam (Kotlin, Jetpack Compose, CameraX, O
 - Wire names stay as they are (`OverheadLink`, `rosy-overhead/1`, `rosyov://`, `rosy.overhead.vectors`); see `../AGENTS.md` (D-374 3항, D-377 4항).
 - Changing a shared vector means changing both sides: Kotlin tests here and the Python readers (`operations/vision/test`, `core_common`). Vector files live in `test/fixtures/protocol/` at the repo root; `build.gradle.kts` resolves them with `rootProject.file("../../../test/fixtures/protocol/...")`, so keep the module at this depth.
 - `network_security_config.xml` permits cleartext app-wide (documented in its comment); do not rely on it for new endpoints, and never operate over public networks.
-- The launcher icon is a copy of `src/hmi/web_common/icons/cam.svg`; `ui/LauncherIconParityTest` fails if they drift.
+- The launcher icon is a copy of `shared/web/icons/cam.svg`; `ui/LauncherIconParityTest` fails if they drift.
 
 ### Testing Requirements
 
@@ -48,7 +48,7 @@ Unit tests need no emulator or device. A green unit run is not device or field a
 
 ### Internal
 
-- Shared JSON vectors in `test/fixtures/protocol/`; `src/hmi/web_common/icons/cam.svg`
+- Shared JSON vectors in `test/fixtures/protocol/`; `shared/web/icons/cam.svg`
 
 ### External
 

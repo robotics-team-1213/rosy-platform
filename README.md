@@ -177,7 +177,7 @@ source env.sh
 colcon --log-base log build --symlink-install --base-paths $(python3 tools/harness/colcon_roots.py) --build-base build --install-base install
 
 # core 단위 시험 (대부분 라이브 ROS 불필요)
-python3 -m pytest src/runtime/gateway/test/ src/runtime/events/test/ src/runtime/services/test/ src/hmi/web_common/test/ -v
+python3 -m pytest src/runtime/gateway/test/ src/runtime/events/test/ src/runtime/services/test/ shared/web/test/ -v
 
 # Fleet formation/relay/session/console (ROS 불필요)
 python3 -m pytest operations/fleet/test/ -v

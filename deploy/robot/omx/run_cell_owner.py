@@ -68,8 +68,8 @@ def main() -> None:
                           "gz-world-is-link0-v1", 0.001),
         runtime_factory=runtime_factory, goal_port_factory=RosArmPhaseGoalPort,
         http_app_factory=lambda runtime: create_pilot_sim_app(
-            runtime=PilotSimRuntime(runtime), pilot_root=REPO / "src/hmi/pilot",
-            common_root=REPO / "src/hmi/web_common", pairing_code=secrets.token_urlsafe(12)),
+            runtime=PilotSimRuntime(runtime), pilot_root=REPO / "middleware/ui/pilot",
+            common_root=REPO / "shared/web", pairing_code=secrets.token_urlsafe(12)),
         refuse_second_owner=lambda: None,  # checked above, before rclpy
         gripper_readback=gripper_readback,
         fleet_fence_current=fleet_fence,

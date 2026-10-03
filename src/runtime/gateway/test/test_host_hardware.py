@@ -617,7 +617,7 @@ def test_the_default_answer_file_is_beside_cores_other_state():
 
 # --- the dashboard wiring (the Chromium checks are optional; these always run) -----
 
-WEB = Path(__file__).resolve().parents[3] / "hmi" / "dashboard"
+WEB = Path(__file__).resolve().parents[4] / "middleware" / "ui" / "robot"
 
 
 def test_the_inspect_view_has_the_device_card_after_commissioning():

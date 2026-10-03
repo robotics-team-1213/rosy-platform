@@ -1,0 +1,143 @@
+"""Waypoint capture follows server-judged pose evidence through state changes."""
+
+from __future__ import annotations
+
+import os
+from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+from threading import Thread
+
+import pytest
+from playwright.sync_api import sync_playwright
+
+
+REPO = Path(__file__).resolve().parents[4]
+pytestmark = pytest.mark.skipif(
+    os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+    reason="set ROSY_RUN_BROWSER_TESTS=1 to run Chromium regression",
+)
+
+
+class _Handler(SimpleHTTPRequestHandler):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, directory=str(REPO), **kwargs)
+
+    def translate_path(self, path):
+        if path.startswith("/common/"):
+            return str(REPO / "shared/web" / path.removeprefix("/common/"))
+        return super().translate_path(path)
+
+    def log_message(self, _format, *_args):
+        pass
+
+
+def test_waypoint_save_tracks_fresh_pose_and_stays_blocked_after_disconnect():
+    server = ThreadingHTTPServer(("127.0.0.1", 0), _Handler)
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch(headless=True)
+            page = browser.new_page()
+            errors = []
+            page.on("pageerror", lambda error: errors.append(str(error)))
+            page.goto(f"http://127.0.0.1:{server.server_port}/")
+            page.evaluate("""async () => {
+              await import('/common/ui.js');
+              const {mount} = await import('/middleware/ui/robot/panels/setup/waypoints.js');
+              const root = document.createElement('main'); document.body.append(root);
+              const callbacks = {}; window.__callbacks = callbacks;
+              const store = {poll(path, _interval, onData, onError) {
+                callbacks[path] = {onData, onError}; return () => {};
+              }};
+              window.__calls = [];
+              window.__resolve = null;
+              window.__unmount = mount(root, {role:'operator', store, api: async (path, options) => {
+                window.__calls.push({path, method:options.method});
+                return await new Promise(resolve => { window.__resolve = resolve; });
+              }});
+              root.querySelector('input[name="name"]').value = 'dock approach';
+            }""")
+            save = page.locator("ui-button").filter(has_text="현재 위치 저장")
+            assert save.is_disabled()
+            # D-359 US-007 capture: the name field and the save button wrapped onto two lines with
+            # no gap at 390/320. The form is the shared ui-form so wrapping keeps --gap-form.
+            page.add_style_tag(path=str(REPO / "shared/web/tokens.css"))
+            page.add_style_tag(path=str(REPO / "shared/web/components.css"))
+            assert page.locator("form").evaluate(
+                "form => form.classList.contains('ui-form') && getComputedStyle(form).rowGap"
+            ) == "8px"
+            page.evaluate("""() => window.__callbacks['/api/v1/robot/state'].onData({
+              pose:{x:1.2,y:0.4,yaw:0},evidence:{pose:{evidence:'fresh'}}
+            })""")
+            assert save.is_enabled()
+            page.evaluate("""() => window.__callbacks['/api/v1/robot/state'].onData({
+              pose:{x:1.2,y:0.4,yaw:0},evidence:{pose:{evidence:'delayed',received_at:new Date(Date.now()-22000).toISOString()}}
+            })""")
+            assert save.is_disabled()
+            assert "지연" in page.locator('[role="status"]').filter(has_text="지연").first.inner_text()
+            page.locator("form").evaluate("form => form.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}))")
+            assert page.evaluate("window.__calls") == []
+            page.evaluate("""() => window.__callbacks['/api/v1/robot/state'].onData({
+              pose:{x:1.2,y:0.4,yaw:0},evidence:{pose:{evidence:'fresh'}}
+            })""")
+            page.locator("form").evaluate("form => form.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}))")
+            assert page.evaluate("window.__calls.length") == 1
+            assert save.is_disabled()
+            page.locator("form").evaluate("form => form.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}))")
+            assert page.evaluate("window.__calls.length") == 1
+            page.evaluate("""() => window.__callbacks['/api/v1/robot/state'].onError(new Error('link down'))""")
+            page.evaluate("window.__resolve({})")
+            page.wait_for_timeout(50)
+            assert save.is_disabled()
+            assert page.evaluate("window.__calls.length") == 1
+            assert errors == []
+            page.evaluate("window.__unmount()")
+            browser.close()
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+
+def test_short_waypoint_list_sits_under_the_status_line():
+    """D-359 US-008 /setup capture: with no saved waypoints the panel kept a large empty area
+    between the status line and the list — the empty save/list status lines each took a section
+    gap (plus its margins). The list follows the last visible line by one gap and its margins."""
+    server = ThreadingHTTPServer(("127.0.0.1", 0), _Handler)
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch(headless=True)
+            page = browser.new_page(viewport={"width": 1366, "height": 768})
+            page.goto(f"http://127.0.0.1:{server.server_port}/")
+            page.add_style_tag(path=str(REPO / "shared/web/tokens.css"))
+            page.add_style_tag(path=str(REPO / "shared/web/components.css"))
+            gaps = page.evaluate("""async () => {
+              await import('/common/ui.js');
+              const {mount} = await import('/middleware/ui/robot/panels/setup/waypoints.js');
+              const root = document.createElement('ui-section'); document.body.append(root);
+              const callbacks = {};
+              const store = {poll(path, _interval, onData) { callbacks[path] = onData; return () => {}; }};
+              mount(root, {role: 'operator', store, api: async () => ({})});
+              callbacks['/api/v1/robot/state']({pose: {x: 1, y: 2, yaw: 0}, evidence: {pose: {evidence: 'fresh'}}});
+              callbacks['/api/v1/waypoints']({waypoints: []});
+              await new Promise(requestAnimationFrame);
+              const visible = [...root.children].filter((n) => n.getClientRects().length && n.tagName !== 'H2');
+              // US-009: an empty list is the ui-empty line outside the (hidden) list.
+              const list = root.querySelector(':scope > ui-empty:not([hidden])');
+              const above = visible[visible.indexOf(list) - 1];
+              const margins = parseFloat(getComputedStyle(above).marginBottom) + parseFloat(getComputedStyle(list).marginTop);
+              return {gap: parseFloat(getComputedStyle(root).rowGap) + margins,
+                      between: list.getBoundingClientRect().top - above.getBoundingClientRect().bottom,
+                      above: above.textContent};
+            }""")
+            browser.close()
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+    assert "현재 위치를 읽었습니다" in gaps["above"], gaps
+    assert gaps["between"] <= gaps["gap"] + 1, gaps

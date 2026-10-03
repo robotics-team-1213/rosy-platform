@@ -28,7 +28,7 @@ from fleet.server.task_service import FleetTaskService  # noqa: E402
 from fleet.server.task_store import FleetTaskStore  # noqa: E402
 
 
-REGISTRY = ROOT / "src/hmi/web_common/surfaces.yaml"
+REGISTRY = ROOT / "shared/web/surfaces.yaml"
 
 
 def _rows():
@@ -176,8 +176,8 @@ def test_console_documents_have_one_api_and_session_owner(fleet):
 
 
 @pytest.mark.parametrize("surface,source,function,path", [
-    ("robot", "src/hmi/dashboard/client.js", "api", "/api/v1/auth/whoami"),
-    ("pilot", "src/hmi/pilot/client.js", "api", "/api/v1/auth/whoami"),
+    ("robot", "middleware/ui/robot/client.js", "api", "/api/v1/auth/whoami"),
+    ("pilot", "middleware/ui/pilot/client.js", "api", "/api/v1/auth/whoami"),
     ("console", "operations/fleet/fleet/server/web/console.js", "call", "/api/fleet/state"),
     ("console", "operations/fleet/fleet/server/web/install.js", "call", "/api/fleet/discovery"),
 ])
@@ -216,7 +216,7 @@ pageScope.dispose();
 console.log(JSON.stringify(calls));
 """
     data = json.dumps([str(ROOT / source), function, path, owner,
-                       str(ROOT / "src/hmi/web_common/fleet-client.js")])
+                       str(ROOT / "shared/web/fleet-client.js")])
     result = subprocess.run([node, "--input-type=module", "--eval", script, data],
                             capture_output=True, text=True, encoding="utf-8")
     assert result.returncode == 0, result.stderr

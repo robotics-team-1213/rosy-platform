@@ -28,7 +28,7 @@
 ## 시험
 
 - `test/architecture/test_app_roles.py`
-- `src/hmi/web_common/test/test_surface_icons.py`
+- `shared/web/test/test_surface_icons.py`
 
 ## 최근 기록
 

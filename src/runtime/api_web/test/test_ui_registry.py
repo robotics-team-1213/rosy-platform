@@ -8,7 +8,7 @@ import pytest
 
 from core_api_web.api.ui_registry import RegistryError, load_registry
 
-WEB_ROOT = Path(__file__).resolve().parents[3] / "hmi" / "dashboard"
+WEB_ROOT = Path(__file__).resolve().parents[4] / "middleware" / "ui" / "robot"
 
 SURFACES = """
 version: 1

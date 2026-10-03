@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 from fleet.server.app import create_app
 from fleet.server.console import FleetConsole
 
-WEB_COMMON = (Path(__file__).resolve().parents[3] / "src") / "hmi" / "web_common"
+WEB_COMMON = (Path(__file__).resolve().parents[3] / "shared") / "web"
 
 
 def test_listed_icons_are_served_and_the_folder_is_not():

@@ -107,8 +107,8 @@ def main() -> None:
         output.write(code)
     print("OMX Pilot pairing code is available via the local container CLI", flush=True)
     app = create_pilot_sim_app(
-        runtime=facade, pilot_root=repo / "src/hmi/pilot",
-        common_root=repo / "src/hmi/web_common", pairing_code=code,
+        runtime=facade, pilot_root=repo / "middleware/ui/pilot",
+        common_root=repo / "shared/web", pairing_code=code,
     )
     try:
         uvicorn.run(app, host="0.0.0.0", port=8088, access_log=False)

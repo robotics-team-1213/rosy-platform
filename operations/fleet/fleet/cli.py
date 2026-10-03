@@ -38,7 +38,7 @@ def default_web_common() -> Path:
             return share
     except (ImportError, LookupError):
         pass
-    return (Path(__file__).resolve().parents[3] / "src") / "hmi" / "web_common"
+    return (Path(__file__).resolve().parents[3] / "shared") / "web"
 
 
 def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:

@@ -68,7 +68,7 @@ FULL_TRIGGERS = (
 FULL_SUITES = (
     "src/runtime/events/test",
     "src/runtime/services/test",
-    "src/hmi/web_common/test",
+    "shared/web/test",
     "src/contracts/foundation/test",
 )
 
@@ -81,7 +81,7 @@ ROOT_SHARDS = 3
 CI_FULL_MATRIX = (
     {"name": "core-domain", "invocations": [[
         "src/runtime/gateway/test", "src/runtime/events/test", "src/runtime/services/test",
-        "src/hmi/web_common/test", "src/contracts/foundation/test",
+        "shared/web/test", "src/contracts/foundation/test",
         "src/products/pinky_pro/profile/test", "src/products/omx/profile/test"]], "ros": "none"},
     # Never ran in CI before D-436 (D-191 follow-up); reports until its first green run.
     {"name": "sensing", "invocations": [["src/runtime/sensing/test"]], "ros": "none", "gating": False},

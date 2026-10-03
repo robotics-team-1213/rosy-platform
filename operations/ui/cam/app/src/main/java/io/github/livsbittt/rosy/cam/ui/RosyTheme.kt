@@ -16,7 +16,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 
 /**
- * Colour values copied from src/hmi/web_common/tokens.css, the only source of colour
+ * Colour values copied from shared/web/tokens.css, the only source of colour
  * values (D-129, D-292). Every token colour is written on one line as
  * `Color(0xFFRRGGBB) // --<css-custom-property-name>` so the web_common-owned parity
  * test can parse it; keep that exact form. tokens.css defines a single dark `:root`

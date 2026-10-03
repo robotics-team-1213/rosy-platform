@@ -81,7 +81,7 @@ def test_only_groups_from_visible_capability_panels_are_returned():
 
 
 def test_console_manifest_uses_the_ordered_action_group_catalog_from_panels_yaml():
-    root = Path(__file__).resolve().parents[3] / "hmi" / "dashboard"
+    root = Path(__file__).resolve().parents[4] / "middleware" / "ui" / "robot"
     registry = load_registry(root / "panels.yaml", root)
     manifest = build_manifest(registry, "console", "operator", {
         "teleop": True,

@@ -7,7 +7,7 @@ import pytest
 from core_api_web.api.app import create_app
 
 
-WEB_ROOT = Path(__file__).resolve().parents[3] / "hmi" / "dashboard"
+WEB_ROOT = Path(__file__).resolve().parents[4] / "middleware" / "ui" / "robot"
 
 
 def dashboard_js(*, without: tuple[str, ...] = ()) -> str:

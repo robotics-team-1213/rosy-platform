@@ -17,7 +17,7 @@
 | [gz_sim](src/sim/gz_sim/progress.md) | SIM | uncommitted (2026-09-21) | GO | GO | GO | N/A | N/A | N/A |
 | [navigation](src/runtime/navigation/progress.md) | NAV | dc89264 (2026-09-17) | GO | GO | HOLD | HOLD | HOLD | PARKED |
 | [bringup](src/products/pinky_pro/bringup/progress.md) | BRINGUP | dc89264 (2026-09-17) | GO | GO | HOLD | HOLD | HOLD | PARKED |
-| [emotion](src/hmi/face/progress.md) | 장치 | 47d3e6ec (2026-09-29) | GO | GO | HOLD | HOLD | PARKED | PARKED |
+| [emotion](middleware/ui/face/progress.md) | 장치 | 47d3e6ec (2026-09-29) | GO | GO | HOLD | HOLD | PARKED | PARKED |
 | [led](src/products/pinky_pro/led/progress.md) | 장치 | dc89264 (2026-09-17) | GO | GO | HOLD | HOLD | PARKED | PARKED |
 | [imu_bno055](src/drivers/imu_bno055/progress.md) | 장치 | dc89264 (2026-09-17) | GO | GO | HOLD | HOLD | PARKED | PARKED |
 | [sensor_adc](src/products/pinky_pro/adc/progress.md) | 장치 | dc89264 (2026-09-17) | GO | GO | HOLD | HOLD | PARKED | PARKED |
@@ -26,9 +26,9 @@
 | [core_events](src/runtime/events/progress.md) | CORE | bed604ef (2026-09-30) | GO | GO | N/A | N/A | N/A | N/A |
 | [core_features](src/runtime/services/progress.md) | CORE | 4e99d92e (2026-10-02) | GO | GO | N/A | N/A | N/A | N/A |
 | [core_api_web](src/runtime/api_web/progress.md) | CORE | 4e99d92e (2026-10-02) | GO | GO | N/A | N/A | N/A | N/A |
-| [web_common](src/hmi/web_common/progress.md) | CORE | 0409c371 (2026-09-30) | GO | GO | N/A | N/A | N/A | N/A |
-| [dashboard](src/hmi/dashboard/progress.md) | 화면 | e7cdf490 (2026-09-29) | GO | GO | N/A | HOLD | N/A | N/A |
-| [pilot](src/hmi/pilot/progress.md) | 화면 | 10daaae5 (2026-10-02) | GO | HOLD | HOLD | HOLD | HOLD | N/A |
+| [web_common](shared/web/progress.md) | CORE | 0409c371 (2026-09-30) | GO | GO | N/A | N/A | N/A | N/A |
+| [dashboard](middleware/ui/robot/progress.md) | 화면 | e7cdf490 (2026-09-29) | GO | GO | N/A | HOLD | N/A | N/A |
+| [pilot](middleware/ui/pilot/progress.md) | 화면 | 10daaae5 (2026-10-02) | GO | HOLD | HOLD | HOLD | HOLD | N/A |
 | [omx_adapter](src/products/omx/adapter/progress.md) | OMX workcell | 7ae0f65c (2026-10-02) | GO | GO | HOLD | HOLD | PARKED | PARKED |
 | [interfaces](src/contracts/interfaces/progress.md) | 장치 | dc89264 (2026-09-17) | GO | GO | N/A | HOLD | HOLD | PARKED |
 | [pinky_pro](src/products/pinky_pro/profile/progress.md) | 로봇 통합 | uncommitted (2026-09-24) | GO | GO | GO | HOLD | HOLD | PARKED |
