@@ -4968,3 +4968,9 @@
 - 변경: 외부 pinky-lane-segmentation 443f63f의 조명 증강·CE+Dice·AdamW 접근을 현행 6-class manifest에 맞췄다. 기본 trainer는 유지하고 선택적 loss/optimizer hook을 추가했다. 벽·신호등·장애물 라벨과 현재 고정 object_det 계약의 차이를 설계에 기록했다.
 - 증거: 모델 PC 원본 외부 suite 17 passed(torch 2.11, 외부 pin 2.9.1 환경과 다름). 새 recipe 5 passed, 기존 training_model 19 passed. Windows 문서·학습 계약 57 passed, 3 skipped. 실제 GPU 기준 2회 학습의 고정 평가 fail을 learning-gpu-2026-10-04.md에 기록했다. 개선 recipe base16/base8 GPU 비교는 진행 중이다.
 - gate 변화: SOURCE/LOCAL 학습 recipe 및 실제 GPU 거절 증거. 고정 평가 lane IoU는 보강 기준 모델도 0.21407로 부족하다. 신규 물체/신호 상태 학습·장치 전달·주행·DEVICE/FIELD 승격 없음.
+
+## 2026-10-04 · uncommitted · verify(learning): compare baseline and lighting Dice model candidates
+
+- 변경: perception-model-comparison-2026-10-04.md에 동일 데이터·고정 평가의 3개 모델 비교를 추가했다. 외부 recipe의 부분 라벨 의미는 가져오지 않고 현행 클래스 의미를 유지했다.
+- 증거: 실제 GPU 30에폭, base16 개선 lane IoU 0.79448/mIoU 0.51486, base8 0.76222/0.50522. 두 후보 intake pass. 별도 순차 CPU 평가 p95 51.22/18.91ms, ONNX 7773729/1952379bytes. 원본 JSON/log/config는 X와 모델 PC에 보존했다.
+- gate 변화: 인식 shadow 후보의 고정 평가 선별 통과. drivable IoU 약 0.00042/0.00241와 신호/물체 정답 공백은 남는다. READY watcher→accepted→로봇 전달·rollback, 시스템 timer, 실제 주행, DEVICE/FIELD는 미완료다.
