@@ -4,8 +4,8 @@ Default experiment tracking: history.json / config.json / summary.json in a run 
 TensorBoard event files. No torch import at module level; tensorboard is optional.
 Logging never stops training: TensorBoard and file errors are recorded, not raised.
 
-Secrets: config/summary keys containing a secret-looking word are dropped. Only key NAMES are
-checked, values are not scanned, so config must not carry free-text secrets."""
+Sensitive keys are dropped from config and summary when their NAME looks sensitive
+(see SECRET_WORDS). Values are not scanned, so config must not carry free-text credentials."""
 
 from __future__ import annotations
 

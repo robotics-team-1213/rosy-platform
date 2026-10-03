@@ -158,7 +158,8 @@ def test_every_action_is_pinned_to_a_full_commit_sha():
     assert len(uses) == 7
     for ref in uses:
         assert re.fullmatch(r"[\w.-]+/[\w.-]+@[0-9a-f]{40}", ref), ref
-        assert re.search(re.escape(ref) + r" # v\d+\.\d+\.\d+\n", text), ref
+        # "(pinned commit)" lets the release secret scan read the 40-hex pin as a revision
+        assert re.search(re.escape(ref) + r" # v\d+\.\d+\.\d+ \(pinned commit\)\r?\n", text), ref
 
 
 def test_pre_job_fails_fast_when_the_site_release_exists():
