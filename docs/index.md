@@ -274,8 +274,8 @@
 
 ## 최근 기록
 
+- 2026-10-04 · uncommitted · D-427 enforced push gate path corrections
 - 2026-10-04 · uncommitted · docs(D-441): 실제 실행 이미지와 복구 기록 보정
 - 2026-10-04 · uncommitted · docs(D-441): 내부 검토 보정과 설치 도우미 기록
 - 2026-10-04 · uncommitted · site(D-441): automatic site stack updates
 - 2026-10-04 · uncommitted · cam: 촬영 조명을 명시적 요청으로 제한
-- 2026-10-04 · uncommitted · cam: 승인한 자동 조명과 사진 저장 구현
