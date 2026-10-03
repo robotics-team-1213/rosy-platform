@@ -2445,15 +2445,22 @@ def test_line_stuck_panel_confirms_resume_and_shows_cores_refusal_verbatim(conso
     api = {"/api/fleet/state": snapshot, "/api/fleet/map": MAP_GRID,
            "/api/fleet/formation": {"active": False, "state": "IDLE"}}
     bodies = []
+    order = []
     with sync_playwright() as playwright:
         browser, page, errors = _open_console(playwright, api)
 
+        def claim(route):
+            order.append("claim")
+            route.fulfill(status=200, json={"ok": True})
+
         def decision(route):
+            order.append("decision")
             bodies.append(json.loads(route.request.post_data or "{}"))
             route.fulfill(status=409, json={"detail": {
                 "code": "STUCK_DECISION_REFUSED", "robot_id": "rosy_01", "robot_status": 409,
                 "message": "RESUME refused: object_within_stop_distance"}})
 
+        page.route("**/api/fleet/robots/rosy_01/line-stuck/claim", claim)
         page.route("**/api/fleet/robots/rosy_01/line-stuck/decision", decision)
         page.goto(console_url, wait_until="networkidle")
         panel = page.locator("#stuck-panel")
@@ -2473,6 +2480,7 @@ def test_line_stuck_panel_confirms_resume_and_shows_cores_refusal_verbatim(conso
         page.keyboard.press("Escape")
         confirm.wait_for(state="detached")
         assert bodies == []
+        assert order == ["claim"]   # D-438: the click claims; cancelling sends no decision
 
         # Keyboard: open the confirm step, survive a poll, then send.
         item.locator('ui-button[data-decision="RESUME"]').focus()
@@ -2488,6 +2496,7 @@ def test_line_stuck_panel_confirms_resume_and_shows_cores_refusal_verbatim(conso
         result.wait_for(state="visible")
         text = result.text_content()
         assert bodies == [{"stuck_id": "stuck-abc", "decision": "RESUME"}]
+        assert order == ["claim", "claim", "decision"]   # claim always precedes the decision
         assert "정지 거리 안에 아직 물체가 있습니다" in text
         assert "STUCK_DECISION_REFUSED: RESUME refused: object_within_stop_distance" in text
         assert result.get_attribute("data-kind") == "bad"
