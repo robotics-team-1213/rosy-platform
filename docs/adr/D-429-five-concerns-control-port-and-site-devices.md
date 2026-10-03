@@ -45,6 +45,8 @@ D-427은 최상위를 middleware·operations·learning 세 파트와 공용 cont
 | 판정기 | verifiers | 성공 분류기, VLM 심판, GOAL_CONFIRMED | 산출은 learning, 온라인 판정은 operations(D-328 §4) | 성공·실패 증거 | 없음 |
 | 사람 | MANUAL | 운영자 원격 조작, Pilot, 리더 팔 | 입력은 middleware Arbiter의 MANUAL 우선순위 | Motion Intent(MANUAL) | Arbiter 우선순위 안에서(D-399 후속 5) |
 
+안전 체인은 [D-430](D-430-safety-as-a-separate-concern.md)이다(중재·안전 층의 안전 부분).
+
 이 표는 D-427 §3 표(숙고형·반응형·판정기·인식)를 대체하지 않고 확장한다. 인식은 판단이 아니라 관측 evidence이므로 이 표에 넣지 않는다.
 
 이름 규칙은 다음과 같다.
