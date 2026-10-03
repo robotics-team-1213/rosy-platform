@@ -68,7 +68,9 @@ def test_console_defaults_to_the_installable_web_common_assets(tmp_path):
     p = _write(tmp_path)
     args = cli.parse_args(["console", "--robots", str(p)])
 
-    assert args.web_common.name == "web_common"
+    # ament installs share/web_common; the D-427 source fallback is shared/web.
+    assert args.web_common.name in {"web_common", "web"}
+    assert (args.web_common / "shared-assets.json").is_file()
     assert (args.web_common / "tokens.css").is_file()
     assert (args.web_common / "core_ui_logic.js").is_file()
 

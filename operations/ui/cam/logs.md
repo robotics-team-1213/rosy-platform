@@ -164,3 +164,8 @@
 - 증거: JVM 330 passed, debug APK와 lint 성공, 같은 서명 덮어쓰기 후 페어링 설정 바이트 동일. CLI 59 passed 및 독립 리뷰 승인. 실제 S21에서 요청 후 torch 켜짐, 만료 후 어두운 Dozing 상태에서도 계속 꺼짐, 카메라 껐다 켜기 후 기본 꺼짐을 확인했다. 실제 관제 PC 요청·중복 요청 무변경·취소를 확인했고 최신 JPEG 두 장은 HTTP 200, seq 136→142, age 447–478 ms였다. 상세 장치 정보·사진·검증 파일은 X:에만 보관했다.
 - 교훈: 필요할 때 자동 판단한다는 요구는 상시 자동 작동을 뜻하지 않는다. 요청 경계·기본 꺼짐·만료·중복 요청·재시작 상태를 먼저 명확히 하고 실기에서 확인한다. 화면에 일부만 보이는 버튼은 신뢰된 부모를 검증하되 보이는 라벨 안을 눌러야 한다.
 - gate 변화: SOURCE/LOCAL GO 유지. 이 기능의 실기 동작만 검증했으며 전체 DEVICE/FIELD는 PARKED 유지.
+
+## 2026-10-04 · uncommitted · D-427 preserve remote Cam changes
+- Change: Retain origin/main c402cc45e automatic lighting and photo files at the new path; move the remaining documentation and update executable progress commands.
+- Evidence: Rebase completed; Android build and device checks NOT_RUN.
+- gate 변화: none. Host tests do not establish device or field acceptance.

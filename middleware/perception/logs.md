@@ -1032,3 +1032,8 @@
 - gate 변화: 없음(패키지 기본값 그대로, 파일 없으면 동작 같음).
 - 결정: D-344 §12 보강 (2026-10-03)
 - 교훈: 릴리스 디렉터리 안 수정은 다음 업데이트(약 10 분 자동)에서 말없이 사라진다. 로봇별 설정은 `/etc/rosy/` 에 둔다.
+
+## 2026-10-04 · uncommitted · D-427 hotpath command classification
+- Change: Classify line_observer_overrides as a one-shot overlay CLI, not a resident ROS node. Keep the monitored node set unchanged.
+- Evidence: X:/DevTemp/rosy-d427/resume/fixed.txt: 12 passed; known_failures NEW 0.
+- gate 변화: none. Host tests do not establish device or field acceptance.

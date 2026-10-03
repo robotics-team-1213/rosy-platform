@@ -7,11 +7,11 @@ gates:
   SOURCE:
     state: GO
     evidence: "2026-10-04 corrected to default-OFF explicit light request: non-renewing 30 s request window, no rearm from darkness, thermal recovery or restart. Observed TorchState, independent expiry, thermal/off-failure cleanup. JVM 330 passed, 0 failures/errors; operator ADB CLI 59 passed; independent reviews approved. Wire names and pinned CA trust unchanged."
-    cmd: "cd src/site/cam && gradlew testDebugUnitTest"
+    cmd: "cd operations/ui/cam && gradlew testDebugUnitTest"
   LOCAL:
     state: GO
     evidence: "2026-10-04 testDebugUnitTest, assembleDebug and lintDebug succeeded on Windows/JDK 21; JVM 330 passed. Same-signer Galaxy S21 install -r preserved pairing settings byte-for-byte. Operator PC CLI updated without changing private pairing configuration. Build/cache/private evidence outputs stayed on X:."
-    cmd: "cd src/site/cam && gradlew testDebugUnitTest assembleDebug lintDebug"
+    cmd: "cd operations/ui/cam && gradlew testDebugUnitTest assembleDebug lintDebug"
   ROS-SIM:
     state: N/A
   ARTIFACT:

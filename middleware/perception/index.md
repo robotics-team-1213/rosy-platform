@@ -68,8 +68,8 @@
 
 ## 최근 기록
 
+- 2026-10-04 · uncommitted · D-427 hotpath command classification
 - 2026-10-03 · 051349b81 · feat(sensing): 관측 노드 운영자 덮어쓰기 파일 (D-344 §12 보강)
 - 2026-10-03 · uncommitted · feat(perception): D-431 NCNN/OpenCV 구현과 실제 차선 Pi 재생
 - 2026-10-03 · 820444c49 · fix(perception): D-423 2·3단계 리뷰 반영
 - 2026-10-03 · uncommitted · fix(perception): D-423 조정자 결정 — 차선 서명 경고만, 서명 우회는 환경 변수로만
-- 2026-10-03 · 66c83863d · feat(perception): D-423 2·3단계 — 물체 검출 백엔드·노드·화면·작업별 슬롯·서명
