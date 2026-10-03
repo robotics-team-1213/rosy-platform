@@ -310,7 +310,9 @@ def select(repo: Repo, changed: list[str]) -> Selection:
 
 
 def pytest_command(paths: list[str], python: str = "python") -> list[str]:
-    return [python, "-m", "pytest", *paths, "-q"]
+    # One suite that cannot import (a wheel missing on this host) must not hide
+    # the rest of a packed invocation; the collection error still fails the run.
+    return [python, "-m", "pytest", *paths, "-q", "--continue-on-collection-errors"]
 
 
 def render(sel: Selection) -> str:

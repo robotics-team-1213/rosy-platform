@@ -220,7 +220,7 @@ jobs:
           status = 0
           for paths in selection["invocations"]:
               print("::group::pytest " + " ".join(paths), flush=True)
-              code = subprocess.run([sys.executable, "-m", "pytest", *paths, "-v"]).returncode
+              code = subprocess.run([sys.executable, "-m", "pytest", *paths, "-v", "--continue-on-collection-errors"]).returncode
               print("::endgroup::", flush=True)
               if code not in (0, 5):
                   print(f"::error::pytest {' '.join(paths)} exited {code}", flush=True)
