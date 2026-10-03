@@ -31,12 +31,12 @@
 !src/products/pinky_pro/**
 !src/products/omx/
 !src/products/omx/**
-!src/runtime/navigation/
-!src/runtime/navigation/**
+!middleware/core/navigation/
+!middleware/core/navigation/**
 !src/sim/
-!src/sim/description/
-!src/sim/description/**
+!middleware/apps/device/pinky/description/
+!middleware/apps/device/pinky/description/**
 **/__pycache__/
 **/*.pyc
 **/.pytest_cache/
-src/sim/description/meshes/**
+middleware/apps/device/pinky/description/meshes/**

@@ -17,7 +17,7 @@ from robot_contracts import (
     hardware_packages,
 )
 
-_PKG = str(ROOT / "src" / "runtime" / "navigation")
+_PKG = str(ROOT / "middleware" / "core" / "navigation")
 if _PKG not in sys.path:
     sys.path.append(_PKG)
 
@@ -94,7 +94,7 @@ def test_io_image_packages_nav2_and_slam_without_aux_drivers():
     dockerfile = (DEPLOY / "Dockerfile").read_text(encoding="utf-8")
     dockerignore = (ROOT / ".dockerignore").read_text(encoding="utf-8")
 
-    assert "COPY src/runtime/navigation" in dockerfile
+    assert "COPY middleware/core/navigation" in dockerfile
     assert "navigation" in dockerfile
     assert "ros-jazzy-navigation2" in dockerfile
     assert "ros-jazzy-nav2-bringup" in dockerfile
@@ -102,7 +102,7 @@ def test_io_image_packages_nav2_and_slam_without_aux_drivers():
     assert "ros-jazzy-slam-toolbox" in dockerfile
     for package in hardware_packages():
         assert package not in dockerfile, package
-    assert "!src/runtime/navigation/" in dockerignore
+    assert "!middleware/core/navigation/" in dockerignore
 
 
 def test_hardware_launch_composes_bringup_and_imports_nav_policy():

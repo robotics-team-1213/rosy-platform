@@ -15,7 +15,7 @@ components:
     path: operations/fleet/fleet
     import_prefix: fleet
   - name: omx_device_adapter
-    path: src/products/omx/adapter/omx_adapter
+    path: middleware/apps/device/omx/adapter/omx_adapter
     import_prefix: omx_adapter
   - name: world_api
     path: operations/world/src/rosy/world/api

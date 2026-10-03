@@ -12,7 +12,7 @@ from control.sensing.lidar import NOSE_YAW
 from control.sensing.perception.camera_ground import nominal_ground_plane
 from control.sensing.perception.learned.detector import DetectResult
 
-PROFILE = yaml.safe_load((Path(__file__).resolve().parents[3] / "products" / "pinky_pro" / "profile"
+PROFILE = yaml.safe_load((Path(__file__).resolve().parents[4] / "middleware" / "apps" / "device" / "pinky" / "profile"
                           / "config" / "camera_nominal.yaml").read_text(encoding="utf-8"))
 FRAME = np.zeros((240, 320, 3), np.uint8)
 CONE = dict(label='cone', x=140 / 320, y=20 / 240, w=40 / 320, h=55 / 240, confidence=0.9,

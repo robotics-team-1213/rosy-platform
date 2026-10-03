@@ -4,7 +4,7 @@ schema: rosy.platform-parts.v1
 # colcon, rosdep, payload and image consumer reads this one line through
 # tools/harness/colcon_roots.py (stdlib-only, so keep it a one-line flow list).
 # Checked by test/architecture/test_colcon_roots.py.
-colcon_roots: [src, learning, operations, middleware, shared]
+colcon_roots: [src, learning, operations, middleware, integrations, shared]
 
 # D-427 §6 "지금(C)" ownership manifest: every tracked source root maps to one
 # D-427 part. No folder moves; `d427_target` is where the root goes in step B.
@@ -119,9 +119,10 @@ roots:
     import_prefix: [core_api_web]
     note: Pinky Device API web layer and host-agent client.
     concern: control
-  - path: src/runtime/navigation
+  - path: middleware/core/navigation
     part: middleware
     d427_target: middleware/core/navigation
+    legacy: src/runtime/navigation
     wave: "4c"
     import_prefix: [navigation]
     concern: control
@@ -135,56 +136,65 @@ roots:
       sim tooling (tools/gz) and map assets the Fleet image copies. They move with the
       package in 4e and their split is deferred (D-427 plan Q2); not separate roots yet.
     concern: control
-  - path: src/drivers/imu_bno055
+  - path: middleware/drivers/imu_bno055
     part: middleware
     d427_target: middleware/drivers/imu_bno055
+    legacy: src/drivers/imu_bno055
     wave: "4c"
     concern: control
-  - path: src/products/pinky_pro/adc
+  - path: middleware/drivers/pinky_adc
     part: middleware
     d427_target: middleware/drivers/pinky_adc
+    legacy: src/products/pinky_pro/adc
     wave: "4c"
     concern: control
-  - path: src/products/pinky_pro/lamp
+  - path: middleware/drivers/pinky_lamp
     part: middleware
     d427_target: middleware/drivers/pinky_lamp
+    legacy: src/products/pinky_pro/lamp
     wave: "4c"
     concern: control
-  - path: src/products/pinky_pro/led
+  - path: middleware/drivers/pinky_led
     part: middleware
     d427_target: middleware/drivers/pinky_led
+    legacy: src/products/pinky_pro/led
     wave: "4c"
     import_prefix: [led]
     concern: control
-  - path: src/products/pinky_pro/bringup
+  - path: middleware/apps/device/pinky/bringup
     part: middleware
     d427_target: middleware/apps/device/pinky/bringup
+    legacy: src/products/pinky_pro/bringup
     wave: "4c"
     import_prefix: [bringup, rosylib]
     concern: control
-  - path: src/products/pinky_pro/profile
+  - path: middleware/apps/device/pinky/profile
     part: middleware
     d427_target: middleware/apps/device/pinky/profile
+    legacy: src/products/pinky_pro/profile
     wave: "4c"
     concern: control
-  - path: src/products/omx/adapter
+  - path: middleware/apps/device/omx/adapter
     part: middleware
     d427_target: middleware/apps/device/omx/adapter
+    legacy: src/products/omx/adapter
     wave: "4c"
     import_prefix: [omx_adapter]
     note: >-
       demonstration.py and lerobot_export.py are learning-flavoured (future
       learning/curation); kept at package granularity until the B move.
     concern: control
-  - path: src/products/omx/profile
+  - path: middleware/apps/device/omx/profile
     part: middleware
     d427_target: middleware/apps/device/omx/profile
+    legacy: src/products/omx/profile
     wave: "4c"
     note: OMX composition config the adapter validates, not an installation pin (profiles/).
     concern: control
-  - path: src/sim/description
+  - path: middleware/apps/device/pinky/description
     part: middleware
     d427_target: middleware/apps/device/pinky/description
+    legacy: src/sim/description
     wave: "4c"
     note: Pinky URDF used by both the real robot and Gazebo; could also be integrations/robots/pinky.
     concern: control
@@ -434,25 +444,28 @@ roots:
     wave: none
     import_prefix: [rosy.integrations.robots.omx]
     concern: control
-  - path: src/sim/gz_sim
+  - path: integrations/simulation/gazebo
     part: integrations
     integration: simulation
     d427_target: integrations/simulation/gazebo
+    legacy: src/sim/gz_sim
     wave: "4c"
     note: Worlds, models, plugins and Gazebo params; launch/ and scripts/ are mapped on their own.
     concern: other
-  - path: src/sim/gz_sim/launch
+  - path: integrations/simulation/gazebo/launch
     part: middleware
     d427_target: middleware/apps/device/sim
+    legacy: src/sim/gz_sim/launch
     wave: "4c"
     deferred: gz_sim split follow-up
     note: Launch files start the sim device owner on the same middleware pipeline (D-427 §5).
     concern: control
   # Same target as the tools/sim root below: when the gz_sim split lands, the
   # scripts move into tools/sim and this root is removed (not given a path).
-  - path: src/sim/gz_sim/scripts
+  - path: integrations/simulation/gazebo/scripts
     part: tools
     d427_target: tools/sim
+    legacy: src/sim/gz_sim/scripts
     wave: "4c"
     deferred: gz_sim split follow-up
     note: Sim benches, acceptance harnesses and world/map converters (swarm_bench drives Fleet).
@@ -567,9 +580,9 @@ safety_modules:
   - src/runtime/services/core_features/line_follow/clearance.py
   - src/runtime/api_web/core_api_web/api/v1/safety.py
   - src/contracts/foundation/core_common/robot_body.py
-  - src/products/omx/adapter/omx_adapter/command_owner.py
-  - src/products/omx/adapter/omx_adapter/local_stop.py
-  - src/products/omx/adapter/omx_adapter/action_api.py
+  - middleware/apps/device/omx/adapter/omx_adapter/command_owner.py
+  - middleware/apps/device/omx/adapter/omx_adapter/local_stop.py
+  - middleware/apps/device/omx/adapter/omx_adapter/action_api.py
   - operations/fleet/fleet/server/dispatch_admission.py
   - operations/fleet/fleet/server/cancel_all.py
   - operations/fleet/fleet/server/cancel_all_store.py

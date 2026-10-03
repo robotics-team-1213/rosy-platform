@@ -15,7 +15,7 @@ VIEWER = {"Authorization": "Bearer rosy-dev-viewer"}
 OPERATOR = {"Authorization": "Bearer rosy-dev-operator"}
 REPO = Path(__file__).resolve().parents[4]
 DEFAULT = REPO / "src" / "contracts" / "foundation" / "config" / "rosy_default.yaml"
-PINKY = REPO / "src" / "products" / "pinky_pro" / "profile" / "config" / "core.yaml"
+PINKY = REPO / "middleware" / "apps" / "device" / "pinky" / "profile" / "config" / "core.yaml"
 URL = "/api/v1/line-follow/stuck/decision"
 
 

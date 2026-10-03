@@ -1,6 +1,6 @@
 # Rosy Cell demo cell for the OMX-F Gazebo workcell (C3, D-402 simulation only).
 # Robot base frame = link0 = Gazebo world origin (vendor spawn at 0,0,0; URDF world_fixed is identity).
-# Table top is z = 0. Gazebo world: src/sim/gz_sim/worlds/omx_cell_workcell.sdf (same numbers).
+# Table top is z = 0. Gazebo world: integrations/simulation/gazebo/worlds/omx_cell_workcell.sdf (same numbers).
 #
 # Reach (host sweep 2026-10-02, analytic top-down IK under deploy/robot/omx/sim/cell_profile.yaml,
 # every heading and yaw 0/90 deg): TCP radius 0.058-0.269 m at z 0.005, 0.058-0.261 m at z 0.05,
@@ -22,7 +22,7 @@ stations:
   sheets: {frame: base, x: 0.0, y: -0.17, z: 0.03, yaw: 0.0}
 # Tool-down TCP home above the gap between the pallets.
 home: {x: 0.12, y: 0.0, z: 0.12, yaw: 0.0}
-# OmxKinematics.revision of src/products/omx/adapter/config/omx_f_kinematics.yaml (= cell_profile.yaml).
+# OmxKinematics.revision of middleware/apps/device/omx/adapter/config/omx_f_kinematics.yaml (= cell_profile.yaml).
 kinematics_revision: 27cd572830f931b57eedec55081b77749f65dcd059d11e34199bdcb1bb6db04d
 approach_clearance_m: 0.03
 # Tool: OMX-F fingertips reach this far below the TCP (= deploy/robot/omx/sim/cell_profile.yaml

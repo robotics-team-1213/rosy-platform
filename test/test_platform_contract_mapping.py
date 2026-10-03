@@ -28,7 +28,7 @@ ROOT = Path(__file__).resolve().parents[1]
 CELL_ROOT = ROOT / "operations" / "processes" / "cell"
 if str(CELL_ROOT) not in sys.path:
     sys.path.insert(0, str(CELL_ROOT))
-OMX_ADAPTER_ROOT = ROOT / "src" / "products" / "omx" / "adapter"
+OMX_ADAPTER_ROOT = ROOT / "middleware" / "apps" / "device" / "omx" / "adapter"
 if str(OMX_ADAPTER_ROOT) not in sys.path:
     sys.path.insert(0, str(OMX_ADAPTER_ROOT))
 

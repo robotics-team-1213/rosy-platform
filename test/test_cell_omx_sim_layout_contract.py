@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-for _path in (ROOT / "src/products/omx/adapter", ROOT / "operations/processes/cell"):
+for _path in (ROOT / "middleware/apps/device/omx/adapter", ROOT / "operations/processes/cell"):
     if str(_path) not in sys.path:
         sys.path.insert(0, str(_path))
 
@@ -84,7 +84,7 @@ def test_demo_is_two_pallets_two_layers_with_slip_sheets(demo):
 def _world_models(name):
     import xml.etree.ElementTree as ET
 
-    world = ET.parse(ROOT / "src/sim/gz_sim/worlds" / name).getroot().find("world")
+    world = ET.parse(ROOT / "integrations/simulation/gazebo/worlds" / name).getroot().find("world")
     models = {}
     for model in world.findall("model"):
         pose = [float(v) for v in model.findtext("pose").split()]

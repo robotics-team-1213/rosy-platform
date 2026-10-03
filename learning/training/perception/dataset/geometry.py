@@ -7,8 +7,8 @@ Frames (all metres, radians):
          image column grows to the right (-y), image row grows downwards.
 
 The camera numbers come from the NOMINAL profile (D-364 section 3,
-src/products/pinky_pro/profile/config/camera_nominal.yaml). The LiDAR mount comes
-from the sim URDF (src/sim/description/urdf/rosy.urdf.xacro): base_footprint ->
+middleware/apps/device/pinky/profile/config/camera_nominal.yaml). The LiDAR mount comes
+from the sim URDF (middleware/apps/device/pinky/description/urdf/rosy.urdf.xacro): base_footprint ->
 base_link z 0.028, base_link -> rplidar_mount xyz (-0.017, 0, 0.067),
 rplidar_mount -> rplidar_link z 0.030, so the scan plane is 0.125 m above the
 floor and 0.017 m behind base. The height is the URDF value, not a tape
@@ -28,7 +28,7 @@ from pathlib import Path
 import numpy as np
 
 REPO = Path(__file__).resolve().parents[4]
-PROFILE_PATH = REPO / "src" / "products" / "pinky_pro" / "profile" / "config" / "camera_nominal.yaml"
+PROFILE_PATH = REPO / "middleware" / "apps" / "device" / "pinky" / "profile" / "config" / "camera_nominal.yaml"
 ROBOT_YAML = REPO / "src" / "runtime" / "sensing" / "config" / "robot.yaml"
 CALIBRATION_STORE = REPO / "data" / "calibration"
 LIDAR_FORWARD_DEG = 180.0

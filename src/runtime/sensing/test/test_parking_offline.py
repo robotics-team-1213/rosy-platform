@@ -39,7 +39,7 @@ from core_features.docking.manager import DockingManager, DockPhase  # noqa: E40
 from control.sensing.dock_observer import DockTagObserver  # noqa: E402
 from control.sensing.dock_tag import CameraMount  # noqa: E402
 
-OVERLAY = REPO_ROOT / "src/sim/gz_sim/config/map_v2_fleet_core.yaml"
+OVERLAY = REPO_ROOT / "integrations/simulation/gazebo/config/map_v2_fleet_core.yaml"
 DT = 0.05
 LATENCY_TICKS = 2
 LOOKING = (DockPhase.ACQUIRING, DockPhase.APPROACHING, DockPhase.ALIGNING, DockPhase.SETTLING)

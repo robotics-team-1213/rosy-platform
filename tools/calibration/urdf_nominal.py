@@ -1,8 +1,8 @@
 """Pinky Pro NOMINAL geometry from the URDF, without ROS (D-397).
 
-Evaluates the fixed-joint chain of src/sim/description/urdf/rosy.urdf.xacro
+Evaluates the fixed-joint chain of middleware/apps/device/pinky/description/urdf/rosy.urdf.xacro
 (Pinky Pro upstream import 6455b1a9, D-16) with the arg defaults of
-robot.urdf.xacro, and writes src/products/pinky_pro/profile/config/geometry.yaml.
+robot.urdf.xacro, and writes middleware/apps/device/pinky/profile/config/geometry.yaml.
 Every Pinky Pro geometric default in the repo is that file's value: URDF
 nominal, refined per robot by an accepted calibration record (D-47 addendum
 store). test_urdf_nominal.py regenerates the file and fails on any drift.
@@ -31,10 +31,10 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
-DESCRIPTION = REPO / "src" / "sim" / "description"
+DESCRIPTION = REPO / "middleware" / "apps" / "device" / "pinky" / "description"
 URDF = DESCRIPTION / "urdf" / "rosy.urdf.xacro"
 ROBOT_URDF = DESCRIPTION / "urdf" / "robot.urdf.xacro"
-OUTPUT = REPO / "src" / "products" / "pinky_pro" / "profile" / "config" / "geometry.yaml"
+OUTPUT = REPO / "middleware" / "apps" / "device" / "pinky" / "profile" / "config" / "geometry.yaml"
 XACRO = "{http://www.ros.org/wiki/xacro}"
 XACRO_ALT = "{http://ros.org/wiki/xacro}"
 UPSTREAM_IMPORT = "6455b1a9"

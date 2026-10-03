@@ -50,7 +50,7 @@ def test_every_manifest_colcon_root_chooses_native_payload():
 def test_image_or_host_foundation_changes_choose_flashable_image():
     report = classify_paths(
         [
-            "src/products/pinky_pro/bringup/launch/robot.launch.py",
+            "middleware/apps/device/pinky/bringup/launch/robot.launch.py",
             "deploy/robot/pinky_pro/image/inputs.lock.yaml",
         ]
     )

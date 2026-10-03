@@ -18,8 +18,8 @@ Offline export of recorded OMX SIM demonstrations to a LeRobot v3 dataset (D-427
 
 ### Working In This Directory
 
-- Episode validation comes from `omx_adapter.demonstration` (`src/products/omx/adapter`). That learning -> middleware import is a frozen `KNOWN_VIOLATIONS` entry (D-427 Q6) until 2b moves the check to the Episode profile.
-- Put `src/products/omx/adapter` and `src/contracts/foundation` on `PYTHONPATH` to run it; the export venv and its pins are in `deploy/robot/omx/README.md` and `deploy/robot/omx/requirements-lerobot-export.txt`. Never install LeRobot into a ROS runtime.
+- Episode validation comes from `omx_adapter.demonstration` (`middleware/apps/device/omx/adapter`). That learning -> middleware import is a frozen `KNOWN_VIOLATIONS` entry (D-427 Q6) until 2b moves the check to the Episode profile.
+- Put `middleware/apps/device/omx/adapter` and `src/contracts/foundation` on `PYTHONPATH` to run it; the export venv and its pins are in `deploy/robot/omx/README.md` and `deploy/robot/omx/requirements-lerobot-export.txt`. Never install LeRobot into a ROS runtime.
 
 ### Testing Requirements
 
@@ -31,7 +31,7 @@ python -m pytest learning/curation/omx -q -p no:cacheprovider
 
 ### Internal
 
-- `src/products/omx/adapter` (`omx_adapter.demonstration`, test fixtures in its `test/test_demonstration.py`)
+- `middleware/apps/device/omx/adapter` (`omx_adapter.demonstration`, test fixtures in its `test/test_demonstration.py`)
 
 ### External
 

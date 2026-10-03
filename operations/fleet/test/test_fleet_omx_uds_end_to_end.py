@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-ADAPTER_ROOT = (Path(__file__).resolve().parents[3] / "src") / "products" / "omx" / "adapter"
+ADAPTER_ROOT = (Path(__file__).resolve().parents[3] / "middleware" / "apps") / "device" / "omx" / "adapter"
 if str(ADAPTER_ROOT) not in sys.path:
     sys.path.insert(0, str(ADAPTER_ROOT))
 

@@ -56,7 +56,7 @@ Full sim runs need Gazebo and ROS 2 on Linux (`gz_sim` launch).
 
 ### Internal
 
-`src/sim/gz_sim` (launch, `world_to_map.py`, core config), `../../test` (sensing tests), `docs/validation/map-v2-fleet-gazebo-2026-09-22/`
+`integrations/simulation/gazebo` (launch, `world_to_map.py`, core config), `../../test` (sensing tests), `docs/validation/map-v2-fleet-gazebo-2026-09-22/`
 
 ### External
 

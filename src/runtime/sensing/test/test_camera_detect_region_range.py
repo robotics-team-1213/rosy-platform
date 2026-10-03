@@ -18,7 +18,7 @@ from control.sensing.body import LIDAR_X
 from control.sensing.lidar import NOSE_YAW
 from control.sensing.perception.camera_ground import nominal_ground_plane
 
-PROFILE = yaml.safe_load((Path(__file__).resolve().parents[3] / "products" / "pinky_pro" / "profile"
+PROFILE = yaml.safe_load((Path(__file__).resolve().parents[4] / "middleware" / "apps" / "device" / "pinky" / "profile"
                           / "config" / "camera_nominal.yaml").read_text(encoding="utf-8"))
 PARAMS = {'region_lidar_max_age_s': 0.3, 'region_lidar_tolerance_m': 0.05,
           'region_lidar_tolerance_ratio': 0.2}

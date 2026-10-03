@@ -507,7 +507,7 @@ PROGRAM_SOURCES = {
         "src/contracts/foundation",
         "imported-by:src/runtime/gateway:control:src/runtime/sensing",
     ],
-    "rosy-io.service": ["src/products/pinky_pro/bringup"],
+    "rosy-io.service": ["middleware/apps/device/pinky/bringup"],
     "rosy-camera.service": ["src/runtime/sensing/launch/camera_preview.launch.py",
                             "src/runtime/sensing/control/camera_detect_node.py",
                             "src/runtime/sensing/control/road_observer_node.py",
@@ -516,7 +516,7 @@ PROGRAM_SOURCES = {
                             # D-411: the Pilot recorder and its session state machine.
                             "src/runtime/sensing/control/pilot_recorder_node.py",
                             "src/runtime/sensing/control/pilot_recording.py"],
-    "rosy-navigation.service": ["src/runtime/navigation", "src/products/pinky_pro/bringup"],
+    "rosy-navigation.service": ["middleware/core/navigation", "middleware/apps/device/pinky/bringup"],
     # D-190 / D-433: the face loop, the emotion cards and LCD driver, rosylib.Battery.
     "rosy-face.service": ["deploy/robot/pinky_pro/native/rosy-face.py",
                           # D-260: the rule table it imports from the release.
@@ -525,12 +525,12 @@ PROGRAM_SOURCES = {
                           "src/contracts/foundation/core_common/face_screen.py",
                           "middleware/ui/face/emotion/info_screen.py",
                           "middleware/ui/face/emotion/rosy_lcd.py",
-                          "src/products/pinky_pro/bringup/rosylib"],
+                          "middleware/apps/device/pinky/bringup/rosylib"],
     # D-433: the retired unit runs the pre-D-433 program an old image still holds;
     # what it may touch is a subset of rosy-face's.
     "rosy-boot-display.service": ["src/contracts/foundation/core_common/robot_state.py",
                                   "middleware/ui/face/emotion/rosy_lcd.py",
-                                  "src/products/pinky_pro/bringup/rosylib"],
+                                  "middleware/apps/device/pinky/bringup/rosylib"],
     # D-193: the issuer and the policy loader it imports.
     "rosy-login-code.service": ["deploy/robot/pinky_pro/native/rosy-login-code.py",
                                 "deploy/robot/pinky_pro/native/rosy_config.py"],

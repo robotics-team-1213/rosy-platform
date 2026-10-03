@@ -10,7 +10,7 @@ def test_robot_and_dev_envs_pin_cyclonedds():
     compose = (ROOT / "deploy" / "robot" / "pinky_pro" / "compose.yaml").read_text(encoding="utf-8")
     env_sh = (ROOT / "env.sh").read_text(encoding="utf-8")
     rosy_env = (
-        ROOT / "src" / "products" / "pinky_pro" / "bringup" / "scripts" / "rosy_env.sh"
+        ROOT / "middleware" / "apps" / "device" / "pinky" / "bringup" / "scripts" / "rosy_env.sh"
     ).read_text(encoding="utf-8")
     dockerfile = (ROOT / "deploy" / "robot" / "pinky_pro" / "Dockerfile").read_text(encoding="utf-8")
     assert "RMW_IMPLEMENTATION: rmw_cyclonedds_cpp" in compose
@@ -24,7 +24,7 @@ def test_robot_and_dev_envs_pin_cyclonedds():
 def test_gz_multi_pins_cyclone_and_localhost_discovery():
     """D-117 / D-120: 시뮬도 Cyclone. ROS_LOCALHOST_ONLY 는 쓰지 않는다."""
     launch = (
-        ROOT / "src" / "sim" / "gz_sim" / "launch" / "gz_multi.launch.py"
+        ROOT / "integrations" / "simulation" / "gazebo" / "launch" / "gz_multi.launch.py"
     ).read_text(encoding="utf-8")
     assert "rmw_cyclonedds_cpp" in launch
     assert "ROS_AUTOMATIC_DISCOVERY_RANGE" in launch
@@ -43,13 +43,13 @@ def test_env_sh_sets_localhost_discovery_range():
 def test_gz_bridges_do_not_carry_raw_images():
     """D-118: 생 Image 는 parameter_bridge / 기본 image_bridge 에 없다."""
     template = (
-        ROOT / "src" / "sim" / "gz_sim" / "launch" / "gz_multi.launch.py"
+        ROOT / "integrations" / "simulation" / "gazebo" / "launch" / "gz_multi.launch.py"
     ).read_text(encoding="utf-8")
     yaml_bridge = (
-        ROOT / "src" / "sim" / "gz_sim" / "params" / "rosy_bridge.yaml"
+        ROOT / "integrations" / "simulation" / "gazebo" / "params" / "rosy_bridge.yaml"
     ).read_text(encoding="utf-8")
     single = (
-        ROOT / "src" / "sim" / "gz_sim" / "launch" / "launch_sim.launch.xml"
+        ROOT / "integrations" / "simulation" / "gazebo" / "launch" / "launch_sim.launch.xml"
     ).read_text(encoding="utf-8")
     assert "sensor_msgs/msg/Image" not in template
     assert "image_bridge" not in template

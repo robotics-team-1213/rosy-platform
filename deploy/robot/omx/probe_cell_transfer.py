@@ -36,7 +36,7 @@ from pathlib import Path
 
 REPO = Path(os.environ.get("ROSY_SIM_REPO", "/repo"))
 # Appended, not prepended: every other import would otherwise stat the (slow) bind mount first.
-for _part in ("src/contracts/foundation", "src/products/omx/adapter", "operations/processes/cell"):
+for _part in ("src/contracts/foundation", "middleware/apps/device/omx/adapter", "operations/processes/cell"):
     sys.path.append(str(REPO / _part))
 
 WORKCELL_ID, INSTANCE_ID = "omx_cell_sim", "omx_cell_sim_01"
@@ -57,7 +57,7 @@ def main() -> int:
     parser.add_argument("--cell", default=str(REPO / "operations/processes/cell/examples/omx_sim/cell.yaml"))
     parser.add_argument("--recipe", default=str(REPO / "operations/processes/cell/examples/omx_sim/recipe.yaml"))
     parser.add_argument("--profile", default=str(REPO / "deploy/robot/omx/sim/cell_profile.yaml"))
-    parser.add_argument("--world", default=str(REPO / "src/sim/gz_sim/worlds/omx_cell_workcell_sim_aid.sdf"))
+    parser.add_argument("--world", default=str(REPO / "integrations/simulation/gazebo/worlds/omx_cell_workcell_sim_aid.sdf"))
     parser.add_argument("--transfers", default="3",
                         help="comma-separated Job transfer indices, run in this order")
     parser.add_argument("--journal-dir", default="/tmp/rosy-cell-c3b",

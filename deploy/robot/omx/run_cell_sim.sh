@@ -7,7 +7,7 @@ source /opt/ros/jazzy/setup.bash
 source /opt/omx_ws/install/setup.bash
 set -u
 # Path without ".sdf" (the vendor launch appends it). Override only for a recorded variant.
-world="${OMX_CELL_WORLD:-/repo/src/sim/gz_sim/worlds/omx_cell_workcell}"
+world="${OMX_CELL_WORLD:-/repo/integrations/simulation/gazebo/worlds/omx_cell_workcell}"
 test -r "$world.sdf"
 export ROS_DOMAIN_ID="${OMX_CELL_DOMAIN_ID:-77}"
 export ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST

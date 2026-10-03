@@ -73,7 +73,7 @@ def test_pinky_pro_device_core_line_follow_watches_the_front(monkeypatch, tmp_pa
     _device_env(monkeypatch)
     monkeypatch.setattr(config_module, "LOCAL_CONFIG_PATH", _first_boot_overlay(tmp_path))
     assert config_module._find_default_config() == DEFAULT
-    assert robot_config_dir("pinky_pro") == REPO / "src" / "products" / "pinky_pro" / "profile" / "config"
+    assert robot_config_dir("pinky_pro") == REPO / "middleware" / "apps" / "device" / "pinky" / "profile" / "config"
     config = load_config()
     assert config["robot"]["model"] == "pinky_pro"
     assert config["runtime"]["deployment"] == "device"

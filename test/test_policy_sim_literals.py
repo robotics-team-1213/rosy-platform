@@ -3,11 +3,11 @@
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-PROFILE = ROOT / "src" / "sim" / "gz_sim" / "config" / "simulation_actuation.yaml"
+PROFILE = ROOT / "integrations" / "simulation" / "gazebo" / "config" / "simulation_actuation.yaml"
 TREES = (
     ROOT / "src" / "runtime" / "services" / "core_features" / "safety",
     ROOT / "src" / "runtime" / "gateway" / "core" / "bridge",
-    ROOT / "src" / "runtime" / "navigation",
+    ROOT / "middleware" / "core" / "navigation",
 )
 FORBIDDEN = ("pinky_calmap227", "'227'", '"227"')
 

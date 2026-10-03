@@ -38,7 +38,7 @@ def test_mesh_lookup_rejects_escape_and_unknown_scheme():
 
 
 def test_pinky_preflight_requires_resolved_mesh_and_excludes_gazebo(monkeypatch):
-    mesh = (MODULE.parents[3] / "src/sim/description/meshes/visual/base_link.dae").resolve().as_uri()
+    mesh = (MODULE.parents[3] / "middleware/apps/device/pinky/description/meshes/visual/base_link.dae").resolve().as_uri()
     root = ET.fromstring(
         f'<robot><mesh filename="{mesh}"/><joint name="l_wheel_joint"/>'
         '<joint name="r_wheel_joint"/></robot>'

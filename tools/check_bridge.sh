@@ -7,4 +7,4 @@ timeout 8 gz topic -l 2>/dev/null | grep -iE "camera|image" | head -8
 echo "==image_bridge process=="
 ps aux | grep -E "image_bridge|parameter_bridge" | grep -v grep | head -4 || echo "none running"
 echo "==launch bridge args=="
-grep -n -A6 "image_bridge" /rosy/src/sim/gz_sim/launch/gz_multi.launch.py | head -30
+grep -n -A6 "image_bridge" /rosy/integrations/simulation/gazebo/launch/gz_multi.launch.py | head -30

@@ -13,7 +13,7 @@ from control.sensing.perception.region_range import (
     GROUND, LIDAR, choose_range, floor_distance_unbounded, pixel_bearing, range_regions,
     region_span, scan_in_camera)
 
-PROFILE = yaml.safe_load((Path(__file__).resolve().parents[3] / "products" / "pinky_pro" / "profile"
+PROFILE = yaml.safe_load((Path(__file__).resolve().parents[4] / "middleware" / "apps" / "device" / "pinky" / "profile"
                           / "config" / "camera_nominal.yaml").read_text(encoding="utf-8"))
 CAMERA_X = PROFILE["x_offset_m"]
 

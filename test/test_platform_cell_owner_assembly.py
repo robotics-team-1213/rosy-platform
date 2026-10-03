@@ -12,7 +12,7 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 for relative in ("contracts/skill/src", "middleware/apps/device/omx/agent/src", "operations/processes/palletizing/src", "operations/execution/src",
                  "middleware/skills/api/src", "middleware/skills/manipulation/src",
-                 "integrations/robots/omx/src", "src/products/omx/adapter", "deploy/robot/omx"):
+                 "integrations/robots/omx/src", "middleware/apps/device/omx/adapter", "deploy/robot/omx"):
     if str(ROOT / relative) not in sys.path:
         sys.path.insert(0, str(ROOT / relative))
 

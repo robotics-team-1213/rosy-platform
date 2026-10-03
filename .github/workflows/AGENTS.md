@@ -11,7 +11,7 @@ CI job definitions for this repository.
 
 | File | Description |
 |------|-------------|
-| `ci.yml` | `ci` workflow (D-436: `scope` + parallel `test` matrix; the step list below now lives in `CI_FULL_MATRIX`): colcon build (domain-tree paths), flake8 (max 120, non-gating), pytest the core-domain suites (`runtime/gateway/test`, `runtime/events/test`, `runtime/services/test`, `hmi/web_common/test`, `contracts/foundation/test`) and `products/pinky_pro/test` (D-196), `operations/fleet/test`, `operations/vision/test` (own invocation), `src/sim/gz_sim/test`, repo `test/`, `core` boot smoke, slam_toolbox SaveMap type guard. D-134 rehearsal workflows re-run the same procedure on other runners |
+| `ci.yml` | `ci` workflow (D-436: `scope` + parallel `test` matrix; the step list below now lives in `CI_FULL_MATRIX`): colcon build (domain-tree paths), flake8 (max 120, non-gating), pytest the core-domain suites (`runtime/gateway/test`, `runtime/events/test`, `runtime/services/test`, `hmi/web_common/test`, `contracts/foundation/test`) and `products/pinky_pro/test` (D-196), `operations/fleet/test`, `operations/vision/test` (own invocation), `integrations/simulation/gazebo/test`, repo `test/`, `core` boot smoke, slam_toolbox SaveMap type guard. D-134 rehearsal workflows re-run the same procedure on other runners |
 | `android.yml` | `android-unit`: Rosy Cam (ceiling camera phone app) JVM unit tests (`./gradlew testDebugUnitTest`, Temurin 17), only when `operations/ui/cam/**` changes |
 | `build-arm64-payload.yml` | Manual native arm64 build of the unsigned core/io OCI payload; uploads a checksum-bound artifact for offline signing, never a release |
 | `build-pinky-image.yml` | Manual native arm64 `.img.xz` build; uploads an unsigned image handoff for offline signing |
@@ -47,7 +47,7 @@ Edit `ci.yml` only with a matching local command. Do not drop the root `test/` s
 
 ### Internal
 
-- `src/`, `src/runtime/gateway/test/`, `src/runtime/events/test/`, `src/runtime/services/test/`, `shared/web/test/`, `operations/fleet/test/`, `src/sim/gz_sim/test/`, `test/`
+- `src/`, `src/runtime/gateway/test/`, `src/runtime/events/test/`, `src/runtime/services/test/`, `shared/web/test/`, `operations/fleet/test/`, `integrations/simulation/gazebo/test/`, `test/`
 
 ### External
 

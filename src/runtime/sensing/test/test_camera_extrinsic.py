@@ -23,7 +23,7 @@ from control.calibration_camera import CalibrationCamera
 from control.sensing.perception import camera_extrinsic as ce
 from control.sensing.perception.camera_ground import nominal_ground_plane
 
-PROFILE_PATH = (Path(__file__).resolve().parents[3] / 'products' / 'pinky_pro' / 'profile'
+PROFILE_PATH = (Path(__file__).resolve().parents[4] / 'middleware' / 'apps' / 'device' / 'pinky' / 'profile'
                 / 'config' / 'camera_nominal.yaml')
 PROFILE = yaml.safe_load(PROFILE_PATH.read_text(encoding='utf-8'))
 TRUE_PITCH_DEG, TRUE_ROLL_DEG = 11.0, 1.5

@@ -290,7 +290,7 @@ class Probe:
         raise RuntimeError("grasp pose not reached")
 
     def stall(self, spawn, *, cube_size: float, grasp_z: float, x: float = 0.18, y: float = 0.0) -> dict:
-        sys.path[:0] = [str(REPO / "src/products/omx/adapter"), str(REPO / "src/contracts/foundation")]
+        sys.path[:0] = [str(REPO / "middleware/apps/device/omx/adapter"), str(REPO / "src/contracts/foundation")]
         from omx_adapter.kinematics import OmxKinematics, TopDownPose
         from omx_adapter.pose_plan import CellPlanningProfile
 

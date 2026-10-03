@@ -84,7 +84,7 @@ python3 -m pytest test/test_motor_control.py test/test_host_agent.py -v
 
 ### Internal
 
-- `src/products/pinky_pro/bringup/bringup/motor_control.py`, `dynamixel_driver.py`
+- `middleware/apps/device/pinky/bringup/bringup/motor_control.py`, `dynamixel_driver.py`
 - `deploy/robot/pinky_pro/release/*`, `deploy/robot/pinky_pro/*`, `deploy/robot/pinky_pro/image/*`
 
 ### External

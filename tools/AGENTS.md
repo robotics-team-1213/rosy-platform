@@ -58,7 +58,7 @@ Shell scripts compute the repo root from their own path. They do not embed a mac
 
 ### Internal
 
-- `src/sim/gz_sim` for `run_fleet_sim.sh`
+- `integrations/simulation/gazebo` for `run_fleet_sim.sh`
 - `data/` for `run_data.py`
 
 ### External

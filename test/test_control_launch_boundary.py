@@ -31,7 +31,7 @@ def test_operational_compose_does_not_serve_the_control_console():
 
 
 def test_hardware_launch_does_not_start_safety_as_final_publisher():
-    nav = ROOT / "src" / "runtime" / "navigation" / "launch" / "hardware.launch.py"
+    nav = ROOT / "middleware" / "core" / "navigation" / "launch" / "hardware.launch.py"
     text = nav.read_text(encoding="utf-8")
     assert "runtime/sensing" not in text
     assert "safety_node" not in text

@@ -369,7 +369,7 @@ def test_cmd_vel_publisher_is_single_and_only_send_twist_touches_it():
     assert found["parameters"] == CMD_VEL_PARAMETER_ALLOWLIST
     assert found["pub_users"] == {(CMD_VEL_PUBLISHER, "__init__"), (CMD_VEL_PUBLISHER, "_send_twist")}
     assert {entry for entry in found["send_goal"] if entry[1] != "<module>"} == {
-        ("src/products/omx/adapter/omx_adapter/command_owner.py", "ArmCommandOwner")}
+        ("middleware/apps/device/omx/adapter/omx_adapter/command_owner.py", "ArmCommandOwner")}
 
 
 def test_each_separation_rule_checks_at_least_one_importer():

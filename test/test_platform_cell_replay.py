@@ -19,7 +19,7 @@ from fleet.server.task_store import FleetTaskStore, InvalidTaskTransition
 
 FIXTURES = Path(__file__).parent / "fixtures" / "platform_cell_replay"
 ROOT = Path(__file__).resolve().parents[1]
-OMX_ADAPTER = ROOT / "src" / "products" / "omx" / "adapter"
+OMX_ADAPTER = ROOT / "middleware" / "apps" / "device" / "omx" / "adapter"
 if str(OMX_ADAPTER) not in sys.path:
     sys.path.insert(0, str(OMX_ADAPTER))
 

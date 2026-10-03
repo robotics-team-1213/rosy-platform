@@ -1265,7 +1265,7 @@ def test_the_helper_knows_every_pattern_the_table_can_ask_for():
     import re
 
     module = _display()
-    source = (ROOT / "src/products/pinky_pro/lamp/src/lamp_pattern.c").read_text(encoding="utf-8")
+    source = (ROOT / "middleware/drivers/pinky_lamp/src/lamp_pattern.c").read_text(encoding="utf-8")
     names_block = source.split("static const char *names[]")[1].split("};")[0]
     known = set(re.findall(r'"([a-z]+)"', names_block))
 

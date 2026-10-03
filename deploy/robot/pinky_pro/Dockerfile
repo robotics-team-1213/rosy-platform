@@ -22,7 +22,7 @@ RUN apt-get -o Acquire::Retries=5 update \
         ros-jazzy-rmw-cyclonedds-cpp \
     && rm -rf /var/lib/apt/lists/*
 
-COPY src/products/pinky_pro/bringup/config/cyclonedds_localhost.xml /etc/rosy/cyclonedds.xml
+COPY middleware/apps/device/pinky/bringup/config/cyclonedds_localhost.xml /etc/rosy/cyclonedds.xml
 
 FROM runtime-common AS core-runtime
 
@@ -66,7 +66,7 @@ WORKDIR /opt/rosy_ws
 COPY src/contracts/interfaces /opt/rosy_ws/src/contracts/interfaces
 COPY src/runtime/gateway /opt/rosy_ws/src/runtime/gateway
 # D-196: CORE reads the robot profile from share/<robot.model>/config.
-COPY src/products/pinky_pro/profile /opt/rosy_ws/src/products/pinky_pro/profile
+COPY middleware/apps/device/pinky/profile /opt/rosy_ws/src/products/pinky_pro/profile
 RUN set -eo pipefail \
     && source /opt/ros/jazzy/setup.bash \
     && colcon build --merge-install --packages-up-to core pinky_pro web_common dashboard pilot \
@@ -128,14 +128,14 @@ RUN git clone https://github.com/Slamtec/sllidar_ros2.git src/sllidar_ros2 \
     && rm -rf .git
 COPY src/contracts/interfaces /opt/rosy_ws/src/contracts/interfaces
 COPY src/contracts/foundation /opt/rosy_ws/src/contracts/foundation
-COPY src/sim/description /opt/rosy_ws/src/sim/description
-COPY src/products/pinky_pro/bringup /opt/rosy_ws/src/products/pinky_pro/bringup
-COPY src/runtime/navigation /opt/rosy_ws/src/runtime/navigation
-COPY src/products/omx/adapter /opt/rosy_ws/src/products/omx/adapter
-COPY src/products/omx/profile /opt/rosy_ws/src/products/omx/profile
+COPY middleware/apps/device/pinky/description /opt/rosy_ws/src/sim/description
+COPY middleware/apps/device/pinky/bringup /opt/rosy_ws/src/products/pinky_pro/bringup
+COPY middleware/core/navigation /opt/rosy_ws/src/runtime/navigation
+COPY middleware/apps/device/omx/adapter /opt/rosy_ws/src/products/omx/adapter
+COPY middleware/apps/device/omx/profile /opt/rosy_ws/src/products/omx/profile
 COPY src/runtime/sensing /opt/rosy_ws/src/runtime/sensing
 COPY shared/web /opt/rosy_ws/src/hmi/web_common
-RUN mkdir -p src/sim/description/meshes
+RUN mkdir -p middleware/apps/device/pinky/description/meshes
 RUN set -eo pipefail \
     && source /opt/ros/jazzy/setup.bash \
     && colcon build --merge-install \

@@ -12,8 +12,8 @@ import pytest
 SENSING = Path(__file__).resolve().parents[1]
 SRC = SENSING.parents[1]
 LAUNCH = SENSING / 'launch' / 'loc_assist.launch.py'
-HARDWARE = SRC / 'runtime' / 'navigation' / 'launch' / 'hardware.launch.py'
-GZ_MULTI = SRC / 'sim' / 'gz_sim' / 'launch' / 'gz_multi.launch.py'
+HARDWARE = SRC.parent / 'middleware' / 'core' / 'navigation' / 'launch' / 'hardware.launch.py'
+GZ_MULTI = SRC.parent / 'integrations' / 'simulation' / 'gazebo' / 'launch' / 'gz_multi.launch.py'
 LEGACY = SENSING / 'launch' / 'localization.launch.py'
 
 
@@ -56,7 +56,7 @@ def test_the_legacy_localization_launch_brings_the_node_its_readiness_waits_for(
 
 def test_nav2_keeps_its_initial_pose_setting():
     """The user decides set_initial_pose separately; P2-3 leaves it as it is."""
-    params = text(SRC / 'runtime' / 'navigation' / 'params' / 'nav2_params.yaml')
+    params = text(SRC.parent / 'middleware' / 'core' / 'navigation' / 'params' / 'nav2_params.yaml')
     assert 'set_initial_pose: true' in params
 
 

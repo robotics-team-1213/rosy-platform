@@ -12,7 +12,7 @@ from control.sensing.perception.lane_keep import SIDE_X_M
 from control.sensing.perception.lane_keep_pairs import pair_conflicts
 
 PKG = Path(__file__).resolve().parents[1]
-PROFILE = yaml.safe_load((Path(__file__).resolve().parents[3] / "products" / "pinky_pro" / "profile" / "config" / "camera_nominal.yaml").read_text(encoding="utf-8"))
+PROFILE = yaml.safe_load((Path(__file__).resolve().parents[4] / "middleware" / "apps" / "device" / "pinky" / "profile" / "config" / "camera_nominal.yaml").read_text(encoding="utf-8"))
 GROUND = nominal_ground_plane(source="NOMINAL", allowed=True, width_px=320, height_px=240,
                               profile=PROFILE)
 X_OFFSET = float(PROFILE["x_offset_m"])

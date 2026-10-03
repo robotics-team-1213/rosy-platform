@@ -5,7 +5,7 @@ import numpy as np
 import pytest
 
 ROOT = Path(__file__).resolve().parents[4]
-ADAPTER = ROOT / "src" / "products" / "omx" / "adapter"
+ADAPTER = ROOT / "middleware" / "apps" / "device" / "omx" / "adapter"
 # omx_adapter and its demonstration fixtures stay in the adapter until D-427 wave 2b/4c.
 for _p in (Path(__file__).resolve().parents[1], ADAPTER, ADAPTER / "test",
            ROOT / "src" / "contracts" / "foundation"):

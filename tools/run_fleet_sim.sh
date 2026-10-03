@@ -30,7 +30,7 @@ killall -9 ruby gz python3 parameter_bridge create 2>/dev/null || true
 
 # 3. Start gz_multi.launch.py in the background
 echo "[1/3] Starting Gazebo Multi-Robot Environment (core+nav2)..."
-ros2 launch src/sim/gz_sim/launch/gz_multi.launch.py robots:=$ROBOTS world_name:=/tmp/map_260905.world map:="$MAP_YAML" mode:=nav core:=true headless:=true spawn_x:=-0.5 spawn_spacing:=1.0 > /tmp/rosy_gz.log 2>&1 &
+ros2 launch integrations/simulation/gazebo/launch/gz_multi.launch.py robots:=$ROBOTS world_name:=/tmp/map_260905.world map:="$MAP_YAML" mode:=nav core:=true headless:=true spawn_x:=-0.5 spawn_spacing:=1.0 > /tmp/rosy_gz.log 2>&1 &
 GZ_PID=$!
 
 echo "Waiting for robots.yaml to be generated..."

@@ -145,7 +145,7 @@ surfaces:
     surface: robot
     medium: web
     ports:
-      - {port: 8088, source: src/products/omx/adapter/omx_adapter/pilot_sim_server.py}
+      - {port: 8088, source: middleware/apps/device/omx/adapter/omx_adapter/pilot_sim_server.py}
     audience: 현장 운전자 한 사람 (D-323 원격 조종 PWA — Pinky는 CORE /pilot, OMX 연습은 격리된 Gazebo 호스트 8088)
     role: 한 로봇 직접 수동 운전·운전석 영상·누르는 동안만 가는 운전 보조 (D-370 1항, D-323·D-344)
     owns: [manual-drive, driver-video, drive-assist, sim-arm-practice, estop]
@@ -187,13 +187,13 @@ surfaces:
     baseline_reason: 렌더링되는 화면이 아니므로 기준선 셀이 없다.
 
   - id: lane-live-view
-    path: src/sim/gz_sim/scripts/lane_live_view.html
+    path: integrations/simulation/gazebo/scripts/lane_live_view.html
     themes: [dark]
     theme_reason: 개발 도구(제품 표면 아님, D-359 §3.3) — 바탕이 곧 시뮬 영상이다
     surface: sim
     medium: web
     ports:
-      - {port: 28183, source: src/sim/gz_sim/scripts/lane_live_view.py}
+      - {port: 28183, source: integrations/simulation/gazebo/scripts/lane_live_view.py}
     audience: Gazebo 레인 뷰어 — 제품 브라우저 표면이 아니다
     role: 시뮬 레인 뷰어 — 제품 표면이 아니다(D-370 8항)
     owns: []

@@ -42,8 +42,8 @@ from geometry import Lidar, PoseSeries, robot_lidar_yaw_deg  # noqa: E402
 from control.sensing import odometry_fit as OF  # noqa: E402
 from control.sensing.perception import camera_extrinsic as CE  # noqa: E402
 
-PROFILE_PATH = REPO / "src" / "products" / "pinky_pro" / "profile" / "config" / "camera_nominal.yaml"
-BRINGUP_PARAMS = REPO / "src" / "products" / "pinky_pro" / "bringup" / "config" / "rosy_params.yaml"
+PROFILE_PATH = REPO / "middleware" / "apps" / "device" / "pinky" / "profile" / "config" / "camera_nominal.yaml"
+BRINGUP_PARAMS = REPO / "middleware" / "apps" / "device" / "pinky" / "bringup" / "config" / "rosy_params.yaml"
 LIDAR_X_M = CE.LIDAR_X_OFFSET_M
 METHOD = "tools/calibration/analyze_session.py/1 (ICP point-to-line, wheel LS, wall-edge camera fit)"
 WHEEL_SIGNS = (1.0, -1.0)      # Pinky Pro: the right encoder counts backwards (bringup.py)

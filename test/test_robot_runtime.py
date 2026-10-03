@@ -15,7 +15,7 @@ from robot_contracts import (
     runtime_launch_closure,
 )
 
-sys.path.insert(0, str(ROOT / "src" / "runtime" / "navigation"))
+sys.path.insert(0, str(ROOT / "middleware" / "core" / "navigation"))
 from navigation.profile_limits import load_motion_limits
 
 
@@ -97,9 +97,9 @@ def test_runtime_builds_distinct_targets_from_shared_dockerfile():
     assert "COPY --from=core-build /opt/rosy_ws/install" in dockerfile
     assert "COPY --from=io-build /opt/rosy_ws/install" in dockerfile
     dockerignore = (ROOT / ".dockerignore").read_text(encoding="utf-8")
-    assert "src/sim/description/meshes/**" in dockerignore
+    assert "middleware/apps/device/pinky/description/meshes/**" in dockerignore
     # D-196: the core stage copies the robot package CORE reads its profile from.
-    assert "COPY src/products/pinky_pro/profile ./src/products/pinky_pro/profile" in dockerfile
+    assert "COPY middleware/apps/device/pinky/profile ./middleware/apps/device/pinky/profile" in dockerfile
     assert "COPY src/products/pinky_pro ./src/products/pinky_pro" not in dockerfile
     for allowed in ("!src/products/", "!src/products/pinky_pro/", "!src/products/pinky_pro/**"):
         assert allowed in dockerignore.splitlines(), allowed
@@ -163,10 +163,10 @@ def test_io_image_contains_the_disabled_omx_adapter_contract():
     """The Device image ships the model-neutral OMX boundary without enabling hardware."""
     dockerfile = (DEPLOY / "Dockerfile").read_text(encoding="utf-8")
 
-    assert "COPY src/products/omx/adapter ./src/products/omx/adapter" in dockerfile
+    assert "COPY middleware/apps/device/omx/adapter ./middleware/apps/device/omx/adapter" in dockerfile
     assert "omx_adapter" in dockerfile
     disabled = (
-        ROOT / "src" / "products" / "omx" / "profile" / "config" / "omx.disabled.yaml"
+        ROOT / "middleware" / "apps" / "device" / "omx" / "profile" / "config" / "omx.disabled.yaml"
     ).read_text(encoding="utf-8")
     assert "enabled: false" in disabled
     assert "hardware_plugin: \"\"" in disabled
@@ -175,7 +175,7 @@ def test_io_image_contains_the_disabled_omx_adapter_contract():
 def test_initial_io_slice_disables_unavailable_adc_battery_driver():
     compose_command = compose()["services"]["rosy-io"]["command"]
     launch = (
-        ROOT / "src" / "products" / "pinky_pro" / "bringup" / "launch" / "bringup_robot.launch.py"
+        ROOT / "middleware" / "apps" / "device" / "pinky" / "bringup" / "launch" / "bringup_robot.launch.py"
     ).read_text(encoding="utf-8")
 
     assert "enable_battery:=false" in compose_command
@@ -512,5 +512,5 @@ def test_launch_closure_walks_the_deployed_launch_tree():
 
 def test_launch_resolver_includes_nested_product_bringup():
     assert _launch_file("bringup_robot.launch.py") == (
-        ROOT / "src" / "products" / "pinky_pro" / "bringup" / "launch" / "bringup_robot.launch.py"
+        ROOT / "middleware" / "apps" / "device" / "pinky" / "bringup" / "launch" / "bringup_robot.launch.py"
     )

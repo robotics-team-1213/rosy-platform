@@ -1,6 +1,6 @@
 .gitattributes text eol=lf
 *.sh text eol=lf
-src/sim/gz_sim/scripts/*.py text eol=lf
+integrations/simulation/gazebo/scripts/*.py text eol=lf
 
 # map_v2_fleet generated outputs must be byte-deterministic across checkouts
 # (test_map_v2_fleet_scene.py compares them byte for byte). core.autocrlf=true

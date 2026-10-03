@@ -14,7 +14,7 @@ except ImportError as error:  # pragma: no cover - packaging fault, fail loudly 
     raise ImportError('control needs core_common (exec_depend) for the D-424 robot body '
                       '(core_common.robot_body); install/source the core_common package') from error
 
-# URDF nominal (D-397: src/products/pinky_pro/profile/config/geometry.yaml, from
+# URDF nominal (D-397: middleware/apps/device/pinky/profile/config/geometry.yaml, from
 # rosy.urdf.xacro; drift-tested), metres, base_link origin. A calibrated
 # robot_radius refines the radius below (use_radius), never under ROTATION_RADIUS for turns.
 WHEEL_Y = 0.04055                 # wheels.joint_y_m

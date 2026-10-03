@@ -38,7 +38,7 @@ PICK_PLACE_DIGEST = "0d96bce8d8c0d4cd97daef79d8d3b2bfed1e26e0c8da7de983275558d28
 
 @pytest.fixture
 def owner_digest(monkeypatch):
-    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[1] / "src/products/omx/adapter"))
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[1] / "middleware/apps/device/omx/adapter"))
     from omx_adapter.action_runner import action_grant_digest
     return action_grant_digest
 

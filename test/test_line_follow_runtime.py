@@ -19,7 +19,7 @@ def test_io_image_contains_line_follow_runtime_without_polluting_core():
 
 
 def test_hardware_launch_reaches_sensing_only_line_follow_launch():
-    launch = (ROOT / "src/runtime/navigation/launch/hardware.launch.py").read_text(
+    launch = (ROOT / "middleware/core/navigation/launch/hardware.launch.py").read_text(
         encoding="utf-8")
     assert 'get_package_share_directory("control")' in launch
     assert '"line_follow.launch.py"' in launch
@@ -71,11 +71,11 @@ def test_bridge_checks_original_sensor_age_not_only_receipt_age():
 
 def test_semantic_road_launch_connects_real_gazebo_camera_to_dashboard():
     launch = (
-        ROOT / "src/sim/gz_sim/launch/semantic_road_dashboard.launch.py"
+        ROOT / "integrations/simulation/gazebo/launch/semantic_road_dashboard.launch.py"
     ).read_text(encoding="utf-8")
-    package = (ROOT / "src/sim/gz_sim/package.xml").read_text(encoding="utf-8")
+    package = (ROOT / "integrations/simulation/gazebo/package.xml").read_text(encoding="utf-8")
     config = yaml.safe_load((
-        ROOT / "src/sim/gz_sim/config/semantic_road_core.yaml"
+        ROOT / "integrations/simulation/gazebo/config/semantic_road_core.yaml"
     ).read_text(encoding="utf-8"))
 
     assert "map_260905_traffic.world" in launch

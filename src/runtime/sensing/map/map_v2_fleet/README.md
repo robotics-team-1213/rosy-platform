@@ -13,7 +13,7 @@
 
 ```bash
 python src/runtime/sensing/map/map_v2_fleet/scripts/build_world.py
-python src/sim/gz_sim/scripts/world_to_map.py src/runtime/sensing/map/map_v2_fleet/worlds/map_v2_fleet.world \
+python integrations/simulation/gazebo/scripts/world_to_map.py src/runtime/sensing/map/map_v2_fleet/worlds/map_v2_fleet.world \
   -o src/runtime/sensing/map/map_v2_fleet/maps/map_v2_fleet --resolution 0.005 --seed -1.26955,0.24255
 ```
 

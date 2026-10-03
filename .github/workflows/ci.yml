@@ -105,7 +105,7 @@ jobs:
           apt-get update -qq
           # openssl: the release signing contract requires OpenSSL 3 raw Ed25519.
           # Installed explicitly so a slimmer base image cannot silently remove it.
-          # python3-opencv: the lane live viewer (src/sim/gz_sim/scripts/lane_live_view.py)
+          # python3-opencv: the lane live viewer (integrations/simulation/gazebo/scripts/lane_live_view.py)
           # imports cv2 at module top; without the package the gz_sim step dies at
           # collection and masks every later gate (main red since 650fad89, 2026-09-24).
           apt-get install -y -qq nodejs python3-colcon-common-extensions python3-pip python3-wheel openssl zstd python3-opencv python3-pil ros-jazzy-xacro ros-jazzy-realtime-tools ros-jazzy-rmw-cyclonedds-cpp ros-jazzy-nav2-msgs
@@ -152,7 +152,7 @@ jobs:
           . /opt/ros/jazzy/setup.sh
           # 러너에는 Gazebo/ros_gz가 없다 — gz_sim은 aarch64처럼 CI에서도 제외한다.
           # gz_sim 테스트 스텝은 ros_gz_sim share 부재 시 스스로 skip 한다.
-          touch src/sim/gz_sim/COLCON_IGNORE
+          touch integrations/simulation/gazebo/COLCON_IGNORE
           # D-427: colcon runs from the repo root over the manifest's colcon_roots;
           # build/install/log land at the repo root, never inside a source root.
           COLCON_ROOTS="$(python3 tools/harness/colcon_roots.py)"
@@ -163,7 +163,7 @@ jobs:
       - name: Lint (flake8)
         if: matrix.kind == 'smoke'
         run: |
-          flake8 src/runtime/gateway/core src/contracts/foundation/core_common src/runtime/events/core_events src/runtime/services/core_features src/runtime/api_web/core_api_web operations/fleet/fleet operations/fleet/test src/sim/gz_sim/launch src/sim/gz_sim/scripts src/sim/gz_sim/test --count --max-line-length=120 --show-source --statistics || true
+          flake8 src/runtime/gateway/core src/contracts/foundation/core_common src/runtime/events/core_events src/runtime/services/core_features src/runtime/api_web/core_api_web operations/fleet/fleet operations/fleet/test integrations/simulation/gazebo/launch integrations/simulation/gazebo/scripts integrations/simulation/gazebo/test --count --max-line-length=120 --show-source --statistics || true
 
       # 항목의 pytest 호출을 차례로 돈다. 기본 이름이 겹치는 스위트는 이미 다른 호출로
       # 나뉘어 있다(gateway·sensing 의 test_battery.py). ros: none 은 ROS 환경 없이(호스트와

@@ -366,7 +366,7 @@ def _merged(*overlays):
     return _line_follow_config(config["line_follow"])
 
 
-PINKY_LAYER = _yaml(REPO / "src" / "products" / "pinky_pro" / "profile" / "config" / "core.yaml")
+PINKY_LAYER = _yaml(REPO / "middleware" / "apps" / "device" / "pinky" / "profile" / "config" / "core.yaml")
 
 
 def test_packaged_layers_leave_the_stop_unset_and_know_the_body():

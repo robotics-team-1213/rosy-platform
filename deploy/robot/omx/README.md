@@ -225,7 +225,7 @@ docker run --rm --name rosy-omx-pilot-sim --network bridge `
 PowerShell 실행 예:
 
 ```powershell
-$env:PYTHONPATH = (Get-Location).Path + '/src/products/omx/adapter;' + (Get-Location).Path + '/src/contracts/foundation'
+$env:PYTHONPATH = (Get-Location).Path + '/middleware/apps/device/omx/adapter;' + (Get-Location).Path + '/src/contracts/foundation'
 X:/DevTemp/rosy-omx-lerobot-044/Scripts/python.exe learning/curation/omx/lerobot_export.py `
   X:/DevTemp/rosy-omx-recordings/<episode-id> X:/DevTemp/rosy-omx-export/<new-output> `
   --repo-id rosy-local/omx-sim
@@ -235,7 +235,7 @@ export 결과가 verified이고 실제 reader가 모든 frame을 재독출한 �
 
 ## Rosy Cell C3: one CELL_TRANSFER in Gazebo (D-402)
 
-`run_cell_sim.sh` starts the locked follower in `src/sim/gz_sim/worlds/omx_cell_workcell.sdf`
+`run_cell_sim.sh` starts the locked follower in `integrations/simulation/gazebo/worlds/omx_cell_workcell.sdf`
 (or `OMX_CELL_WORLD=<path without .sdf>`) with no command owner. `probe_cell_transfer.py`,
 run with `docker exec` in that container, is the single owner process for the run: profile-built
 `ArmCommandOwner`, analytic planner, `PickPlaceRunner`, gripper readback and `gz model -p`
