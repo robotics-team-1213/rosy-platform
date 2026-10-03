@@ -59,9 +59,6 @@ KNOWN_VIOLATIONS = {
     ("middleware/apps/device/omx/agent", "operations/processes/palletizing"): (
         "middleware -> operations: the OMX cell owner loads palletizing cell documents and the compiler"
     ),
-    ("integrations/robots/omx", "middleware/skills/api"): (
-        "integrations -> middleware: the OMX transfer provider implements the Skill API in place"
-    ),
     ("integrations/robots/omx", "middleware/skills/manipulation"): (
         "integrations -> middleware: the OMX transfer provider binds the manipulation transfer Skill"
     ),
@@ -137,14 +134,25 @@ def _target_of(name: str, owners: list[tuple[str, dict]]) -> dict | None:
     return next((root for prefix, root in owners if _matches(name, prefix)), None)
 
 
+def _kind_parts(kind: str, rules: dict) -> set[str]:
+    """Parts whose ``integrations:`` list admits ``kind`` (D-429 §4 rule 3)."""
+    return {part for part, rule in rules.items()
+            if any(_under(kind, allowed) for allowed in rule.get("integrations", ()))}
+
+
 def _allowed(importer: dict, target: dict, rules: dict) -> bool:
     if target is importer:
         return True
     source_part, target_part = importer["part"], target["part"]
+    if importer.get("api") and target_part != "contracts" and not target.get("api"):
+        return False  # D-429 §4 rule 2: an api must not pull in an implementation
     if source_part == "integrations":
         # Deliberately stricter than the other parts: an adapter may not reach
-        # tools/test/deploy either, only contracts.
-        return target_part == "contracts"
+        # tools/test/deploy either, only contracts and (D-429 §4 rule 3) the api
+        # of a part its kind may be imported by.
+        if target_part == "contracts":
+            return True
+        return bool(target.get("api")) and target_part in _kind_parts(importer.get("integration", ""), rules)
     if target_part == source_part:
         return True
     if target_part not in rules:
@@ -201,6 +209,16 @@ def test_manifest_shape_and_paths():
         assert (root["part"] == "integrations") == ("integration" in root), root
     prefixes = [prefix for root in manifest["roots"] for prefix in root.get("import_prefix") or ()]
     assert len(prefixes) == len(set(prefixes)), "an import_prefix names one owner"
+
+
+def test_api_roots_are_flagged_and_named_api():
+    """D-429 §4 rule 1: ``api: true`` plus an ``.api`` prefix; neither alone makes an api root."""
+    roots = _manifest()["roots"]
+    bad = [root["path"] for root in roots if "api" in root and (
+        root["api"] is not True or not root.get("import_prefix")
+        or not all(prefix.endswith(".api") for prefix in root["import_prefix"]))]
+    assert bad == [], f"api: true needs every import_prefix to end in .api: {bad}"
+    assert [root["path"] for root in roots if root.get("api")] == ["modules/skills/api"]
 
 
 CONCERNS = ["learning", "decision", "control", "safety", "contracts", "other"]
@@ -531,3 +549,30 @@ def test_rules_reject_injected_edges_and_accept_allowed_ones():
     assert _allowed(robots, contracts, rules)
     assert _allowed(operations, tools, rules)
     assert _allowed(middleware, _root("m2", "middleware"), rules)
+
+
+
+def test_api_rule_admits_only_api_targets_for_integrations_and_api_roots():
+    """D-429 §4 rules 2 and 3 on injected roots."""
+    rules = _manifest()["import_rules"]
+    contracts = _root("c", "contracts")
+    middleware = _root("m", "middleware")
+    middleware_api = _root("ma", "middleware", api=True)
+    operations_api = _root("oa", "operations", api=True)
+    learning_api = _root("la", "learning", api=True)
+    robots = _root("ir", "integrations", integration="robots")
+    models = _root("im", "integrations", integration="models")
+    gazebo = _root("ig", "integrations", integration="simulation/gazebo")
+    assert _allowed(robots, middleware_api, rules)
+    assert not _allowed(robots, middleware, rules)
+    assert not _allowed(robots, operations_api, rules)  # no middleware -> operations detour
+    assert not _allowed(robots, learning_api, rules)
+    assert _allowed(models, operations_api, rules)
+    assert _allowed(models, learning_api, rules)
+    assert not _allowed(models, middleware_api, rules)
+    assert _allowed(gazebo, middleware_api, rules) and _allowed(gazebo, learning_api, rules)
+    assert not _allowed(robots, _root("ir2", "integrations", integration="robots", api=True), rules)
+    assert _allowed(middleware_api, contracts, rules)
+    assert _allowed(middleware_api, _root("ma2", "middleware", api=True), rules)
+    assert not _allowed(middleware_api, middleware, rules)  # same part, but an implementation
+    assert not _allowed(middleware_api, operations_api, rules)  # the part table still applies

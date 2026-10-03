@@ -22,6 +22,11 @@ parts: [middleware, operations, learning, contracts, integrations, shared_web, p
 
 # D-427 §2. Same-part imports are always allowed. Parts not listed here
 # (profiles, deploy, tools, test, docs) are outside the import rules.
+#
+# D-429 §4 api rule, on top of the table: a root is an api root only when it sets
+# `api: true` and every import_prefix ends in `.api`. An api root imports only
+# contracts and other api roots. An integration imports contracts and the api roots
+# of the parts whose `integrations:` list admits its kind.
 import_rules:
   contracts:
     allow: []
@@ -185,6 +190,7 @@ roots:
     wave: "4a"
     import_prefix: [rosy.skills.api]
     concern: control
+    api: true
   - path: modules/skills/manipulation
     part: middleware
     d427_target: middleware/skills/manipulation
