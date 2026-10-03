@@ -47,10 +47,10 @@ modules:
     functional_kind: pytest
     functional: [src/runtime/sensing/test]
   - name: fleet
-    path: src/site/fleet
-    tests: [src/site/fleet/test]
+    path: operations/fleet
+    tests: [operations/fleet/test]
     functional_kind: pytest
-    functional: [src/site/fleet/test]
+    functional: [operations/fleet/test]
   - name: games
     path: operations/apps/games
     tests: [operations/apps/games/test, test/test_rosy_games_surface.py]

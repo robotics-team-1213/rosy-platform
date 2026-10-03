@@ -69,8 +69,8 @@ def test_the_raw_colour_scan_reads_every_web_file():
         "src/hmi/dashboard/shell/shell.css", "src/hmi/dashboard/shell/shell.js",
         "src/hmi/dashboard/panels/surface-panels.css", "src/hmi/dashboard/panels/setup/waypoints.js",
         "src/hmi/web_common/components.css", "src/hmi/web_common/ui.js", "src/hmi/web_common/tokens.css",
-        "src/site/fleet/fleet/server/web/styles.css", "src/site/fleet/fleet/server/web/map-view.js",
-        "src/site/fleet/fleet/server/web/index.html",
+        "operations/fleet/fleet/server/web/styles.css", "operations/fleet/fleet/server/web/map-view.js",
+        "operations/fleet/fleet/server/web/index.html",
         "operations/apps/games/games/web/styles.css", "operations/apps/games/games/web/board.js",
         "operations/apps/games/games/web/index.html",
     ):

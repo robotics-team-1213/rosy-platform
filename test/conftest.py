@@ -18,7 +18,7 @@ for path in (
     ROOT / "deploy" / "robot" / "pinky_pro" / "release",
     ROOT / "tools" / "harness",
     ROOT / "src" / "contracts" / "foundation",
-    ROOT / "src" / "site" / "fleet",
+    ROOT / "operations" / "fleet",
 ):
     entry = str(path)
     if entry not in sys.path:

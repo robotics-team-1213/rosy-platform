@@ -69,9 +69,9 @@ def test_build_contexts_carry_only_what_the_images_copy():
             probe = source if (ROOT / source).is_file() else f"{source}/__init__.py"
             assert not _ignored(patterns, probe), f"{name}: COPY source {source} is ignored"
         for outside in ("src/runtime/gateway/setup.py", f"{MAP}/lane_rules.yaml", "deploy/robot/README.md",
-                        "private/x.jpg", "src/site/fleet/fleet/__pycache__/a.pyc"):
+                        "private/x.jpg", "operations/fleet/fleet/__pycache__/a.pyc"):
             assert _ignored(patterns, outside), f"{name}: {outside} leaks into the build context"
-    assert _ignored(["**", "!src/site/fleet/**"], "src/other/x.py")
+    assert _ignored(["**", "!operations/fleet/**"], "src/other/x.py")
     assert not _ignored(["**", "!src"], "src/other/x.py")  # why bare dirs are banned
 
 

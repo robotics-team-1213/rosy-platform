@@ -12,7 +12,7 @@ components:
     path: operations/processes/palletizing/src/rosy/processes/palletizing
     import_prefix: rosy.processes.palletizing
   - name: fleet_site
-    path: src/site/fleet/fleet
+    path: operations/fleet/fleet
     import_prefix: fleet
   - name: omx_device_adapter
     path: src/products/omx/adapter/omx_adapter

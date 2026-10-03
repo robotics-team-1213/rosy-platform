@@ -180,7 +180,7 @@ colcon --log-base log build --symlink-install --base-paths $(python3 tools/harne
 python3 -m pytest src/runtime/gateway/test/ src/runtime/events/test/ src/runtime/services/test/ src/hmi/web_common/test/ -v
 
 # Fleet formation/relay/session/console (ROS 불필요)
-python3 -m pytest src/site/fleet/test/ -v
+python3 -m pytest operations/fleet/test/ -v
 
 # deploy·release·motor·Wi-Fi·호스트 계약
 python3 -m pytest test/ -v

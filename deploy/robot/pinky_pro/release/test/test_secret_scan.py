@@ -34,7 +34,7 @@ def test_psk_field_can_forward_a_form_value_without_a_literal_finding():
 def test_a_journal_quote_of_a_removed_fixture_is_excused_on_its_one_path(tmp_path):
     """D-347 회차(2026-09-29): 저널은 append-only라 문구를 못 고친다 —
     경로에 핀으로 고정된 인용만 면제다."""
-    pinned = tmp_path / "src/site/fleet/logs.md"
+    pinned = tmp_path / "operations/fleet/logs.md"
     pinned.parent.mkdir(parents=True)
     # Assemble at runtime: this test file lives under a test tree, but the
     # scanner must never see the literal as a plain string either.
@@ -47,7 +47,7 @@ def test_a_journal_quote_of_a_removed_fixture_is_excused_on_its_one_path(tmp_pat
 
 def test_the_same_quote_anywhere_else_is_still_a_secret(tmp_path):
     """산탄 증명: 한 경로의 면제는 같은 값의 다른 위치를 풀어주지 않는다."""
-    code = tmp_path / "src/site/fleet/fleet/server/app.py"
+    code = tmp_path / "operations/fleet/fleet/server/app.py"
     code.parent.mkdir(parents=True)
     literal = 'api_key="' + "fixture-" + 'secret"'
     code.write_text(f"client = Client({literal})\n", encoding="utf-8")

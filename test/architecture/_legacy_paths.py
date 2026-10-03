@@ -2,16 +2,16 @@ r"""Old-path scan for D-427 step B moves (wave 0 item 4 of the migration plan).
 
 A moved root records its old location as ``legacy``. ``LegacyScan`` finds text
 that still points there. Backslashes (PowerShell, .bat, raw or escaped strings)
-are read as ``/`` first, so every form below also covers ``src\site\fleet``.
+are read as ``/`` first, so every form below also covers ``operations\fleet``.
 
-- slash: ``src/site/fleet`` starting at a path-segment boundary, also after ``/``
+- slash: ``operations/fleet`` starting at a path-segment boundary, also after ``/``
   (``$WORKSPACE/src/...``, ``/repo/src/...``). Install paths are exempt: the token
   around the match (split on whitespace, quotes, ``= : , ; ( ) [ ] { }``) starts
   with ``/opt/``, ``/usr/`` or ``/etc/``.
 - join: the segments as separate string literals, joined by ``/``, ``,``, ``+``
-  or plain spaces, optionally closing a call first: ``"src" / "site" / "fleet"``,
-  ``os.path.join("src", "site", ...)``, ``Path("src/site") / "fleet"``,
-  ``"src" + "/site/fleet"``, PowerShell ``Join-Path $r "src" "site" "fleet"``.
+  or plain spaces, optionally closing a call first: ``"operations" / "fleet"``,
+  ``os.path.join("src", "site", ...)``, ``Path("operations") / "fleet"``,
+  ``"operations/fleet"``, PowerShell ``Join-Path $r "operations" "fleet"``.
 - brace: shell brace expansion ``src/old/{fleet,web}``.
 - relative: ``../`` strings resolved from the file's folder and from each ancestor
   up to the repository root (covers gradle ``rootProject.file``).

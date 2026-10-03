@@ -163,7 +163,7 @@ jobs:
       - name: Lint (flake8)
         if: matrix.kind == 'smoke'
         run: |
-          flake8 src/runtime/gateway/core src/contracts/foundation/core_common src/runtime/events/core_events src/runtime/services/core_features src/runtime/api_web/core_api_web src/site/fleet/fleet src/site/fleet/test src/sim/gz_sim/launch src/sim/gz_sim/scripts src/sim/gz_sim/test --count --max-line-length=120 --show-source --statistics || true
+          flake8 src/runtime/gateway/core src/contracts/foundation/core_common src/runtime/events/core_events src/runtime/services/core_features src/runtime/api_web/core_api_web operations/fleet/fleet operations/fleet/test src/sim/gz_sim/launch src/sim/gz_sim/scripts src/sim/gz_sim/test --count --max-line-length=120 --show-source --statistics || true
 
       # 항목의 pytest 호출을 차례로 돈다. 기본 이름이 겹치는 스위트는 이미 다른 호출로
       # 나뉘어 있다(gateway·sensing 의 test_battery.py). ros: none 은 ROS 환경 없이(호스트와

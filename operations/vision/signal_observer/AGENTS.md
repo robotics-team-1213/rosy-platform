@@ -33,7 +33,7 @@ so it cannot become a control surface. Design:
   (4) `group` 은 색상군이지 stop/go 의미가 아니다 — 해석은 사이클 지도(Fleet/운영자).
 - `conftest.py` 는 `signal/observer/` 만 sys.path 에 올린다 — `signal/` 자체를 올리면
   표준 라이브러리 `signal` 을 가린다.
-- Fleet 교차 검증(의도 vs 접점 vs 실측)은 `src/site/fleet` 쪽 소비자다 — 여기서
+- Fleet 교차 검증(의도 vs 접점 vs 실측)은 `operations/fleet` 쪽 소비자다 — 여기서
   Fleet 를 import 하지 않는다.
 
 ### Testing Requirements

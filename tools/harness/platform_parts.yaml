@@ -306,23 +306,26 @@ roots:
     concern: other
 
   # --- operations: Fleet, world, processes, vision, Console/Cam -------------
-  - path: src/site/fleet
+  - path: operations/fleet
     part: operations
     d427_target: operations/fleet
+    legacy: src/site/fleet
     wave: "3c"
     import_prefix: [fleet]
     concern: decision
-  - path: src/site/fleet/fleet/ai
+  - path: operations/fleet/fleet/ai
     part: operations
     d427_target: operations/decision
+    legacy: src/site/fleet/fleet/ai
     wave: "3c"
     deferred: D-429 §5 carve fleet.ai to rosy.decision
     import_prefix: [fleet.ai]
     note: ER2/VLM deliberative decision (D-429 §1); the carve renames it to rosy.decision.
     concern: decision
-  - path: src/site/fleet/fleet/server/web
+  - path: operations/fleet/fleet/server/web
     part: operations
     d427_target: operations/ui/console
+    legacy: src/site/fleet/fleet/server/web
     wave: "3c"
     deferred: D-425 Task 9
     concern: other
@@ -560,12 +563,12 @@ safety_modules:
   - src/products/omx/adapter/omx_adapter/command_owner.py
   - src/products/omx/adapter/omx_adapter/local_stop.py
   - src/products/omx/adapter/omx_adapter/action_api.py
-  - src/site/fleet/fleet/server/dispatch_admission.py
-  - src/site/fleet/fleet/server/cancel_all.py
-  - src/site/fleet/fleet/server/cancel_all_store.py
-  - src/site/fleet/fleet/server/local_stop_transport.py
-  - src/site/fleet/fleet/server/task_dispatch_routes.py
-  - src/site/fleet/fleet/server/console.py
+  - operations/fleet/fleet/server/dispatch_admission.py
+  - operations/fleet/fleet/server/cancel_all.py
+  - operations/fleet/fleet/server/cancel_all_store.py
+  - operations/fleet/fleet/server/local_stop_transport.py
+  - operations/fleet/fleet/server/task_dispatch_routes.py
+  - operations/fleet/fleet/server/console.py
 
 # D-430 §1 drift anchors and §3 public entry points. `symbol` is the dotted module
 # path plus the (possibly nested) definition; each must resolve to a safety file.

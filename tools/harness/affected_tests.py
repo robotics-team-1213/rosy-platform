@@ -85,7 +85,7 @@ CI_FULL_MATRIX = (
         "src/products/pinky_pro/profile/test", "src/products/omx/profile/test"]], "ros": "none"},
     # Never ran in CI before D-436 (D-191 follow-up); reports until its first green run.
     {"name": "sensing", "invocations": [["src/runtime/sensing/test"]], "ros": "none", "gating": False},
-    {"name": "fleet", "invocations": [["src/site/fleet/test"]], "ros": "none"},
+    {"name": "fleet", "invocations": [["operations/fleet/test"]], "ros": "none"},
     {"name": "site-vision-cell", "invocations": [
         ["operations/vision/test"], ["operations/processes/cell/test"],
         ["test/test_platform_palletizing_compat.py", "test/test_platform_cell_submission.py",

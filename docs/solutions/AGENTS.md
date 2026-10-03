@@ -38,7 +38,7 @@ One problem per file. Title is the invariant, not the ticket. Korean or English 
 
 ### Internal
 
-- Code these notes constrain: `src/site/fleet`, deploy/test gates, and whatever `module:` names
+- Code these notes constrain: `operations/fleet`, deploy/test gates, and whatever `module:` names
 
 ### External
 

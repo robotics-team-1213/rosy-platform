@@ -42,6 +42,7 @@ import argparse
 import os
 import posixpath
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path, PurePosixPath
@@ -250,6 +251,8 @@ def rewrite_parents(text: str, old_file: str, new_file: str, moved_old: str, mov
         if not chain and index is None:
             continue
         base_level = 0 if base.startswith(("Path", "pathlib")) else levels[base]
+        if base_level and len(old_parts) - base_level < root_depth:
+            continue  # the variable itself is rewritten to keep naming the same folder
         level = base_level + _level(chain, index)
         keep = len(old_parts) - level  # number of leading parts of the old ancestor
         if keep < 0:
@@ -257,16 +260,26 @@ def rewrite_parents(text: str, old_file: str, new_file: str, moved_old: str, mov
         if keep >= root_depth and old_parts[:root_depth] == PurePosixPath(moved_old).parts:
             continue  # inside the moved root: same relative depth
         ancestor = old_parts[:keep]
+        suffix = ""
         if keep == 0:
             new_keep = 0
         elif tuple(new_parts[:keep]) == tuple(ancestor):
             new_keep = keep
         else:
-            residue.append(f"{new_file}: {m.group(0)!r} reached {'/'.join(ancestor)}, not an ancestor any more")
-            continue
+            # An ancestor such as src/ that the new location no longer has: reach the
+            # repository root and name the folder from there.
+            new_keep = 0
+            suffix = "".join(f' / "{part}"' for part in ancestor)
         new_level = len(new_parts) - new_keep
         delta = new_level - level
-        if delta == 0:
+        if delta == 0 and not suffix:
+            continue
+        if suffix:
+            k = new_level - base_level - 1
+            if k < 0:
+                residue.append(f"{new_file}: {m.group(0)!r} cannot reach the repository root")
+                continue
+            edits.append((m.start(), m.end(), f"({base}.parents[{k}]{suffix})"))
             continue
         if index is not None:
             new_index = int(index) + delta
@@ -404,7 +417,9 @@ def run(wave: str, dry_run: bool) -> None:
         print(f"  git mv {src} {dst}")
     if dry_run:
         return
-    if git("status", "--porcelain", "--untracked-files=no").strip():
+    dirty = [line for line in git("status", "--porcelain", "--untracked-files=no").splitlines()
+             if not line.endswith("tools/harness/d427_move.py")]
+    if dirty:
         raise SystemExit("worktree not clean")
 
     before = tracked()
@@ -416,6 +431,8 @@ def run(wave: str, dry_run: bool) -> None:
     moved_files = 0
     for src, dst in moves:
         (ROOT / dst).parent.mkdir(parents=True, exist_ok=True)
+        if (ROOT / dst).exists() and not git("ls-files", "--", dst).strip():
+            shutil.rmtree(ROOT / dst)  # untracked leftovers only (__pycache__ of an earlier run)
         git("mv", src, dst)
     old_of = {mapf(f): f for f in before}
     moved_files = sum(1 for f in before if mapf(f) != f)

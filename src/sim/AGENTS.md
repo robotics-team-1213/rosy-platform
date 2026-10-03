@@ -38,7 +38,7 @@ python3 -m pytest sim/gz_sim/test -v
 
 ### Internal
 
-- `description`, `navigation`, and exec_depend on `src/site/fleet`.
+- `description`, `navigation`, and exec_depend on `operations/fleet`.
 
 ### External
 

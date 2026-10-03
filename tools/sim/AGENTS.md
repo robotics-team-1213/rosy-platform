@@ -48,7 +48,7 @@ Host-only. The Gazebo bench and `sim_verify.sh` are run by hand in WSL.
 
 ### Internal
 
-- `src/runtime/sensing`, `src/runtime/gateway`, `src/runtime/events`, `src/runtime/services/core_features`, `src/sim/gz_sim` (`gz_multi.launch.py`), `src/site/fleet` (console on port 8090)
+- `src/runtime/sensing`, `src/runtime/gateway`, `src/runtime/events`, `src/runtime/services/core_features`, `src/sim/gz_sim` (`gz_multi.launch.py`), `operations/fleet` (console on port 8090)
 
 ### External
 

@@ -7,7 +7,7 @@ overwrite, oversize drop counted, bad header counted without disconnect,
 captured_at derived from age_ms.
 
 Synchronous tests + ``asyncio.run()`` — no pytest-asyncio in this repo (see
-src/site/fleet/test/test_server_signals.py).
+operations/fleet/test/test_server_signals.py).
 """
 
 from __future__ import annotations

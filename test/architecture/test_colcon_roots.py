@@ -54,7 +54,7 @@ EXEMPT = {
     "deploy/robot/omx/Dockerfile": "upstream OMX sources in /opt/omx_ws",
     "src/contracts/foundation/core_common/profile.py": "error-message text",
     "src/runtime/sensing/control/web_node.py": "docstring",
-    "src/site/fleet/package.xml": "XML comment",
+    "operations/fleet/package.xml": "XML comment",
     # Tests pin consumer text; none runs colcon or rosdep.
     "test/architecture/test_colcon_roots.py": "this test",
     "test/test_ci_dependencies.py": "asserts on ci.yml",

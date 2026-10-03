@@ -1,5 +1,5 @@
 **
-!src/site/fleet/**
+!operations/fleet/**
 !src/contracts/foundation/core_common/**
 !operations/apps/fleet/src/**
 !src/hmi/web_common/**

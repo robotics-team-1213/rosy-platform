@@ -62,7 +62,7 @@ def test_gz_bridges_do_not_carry_raw_images():
 def test_fleet_and_games_do_not_import_sensor_image():
     """D-118: 관제·게임 호스트는 Image 를 import 하지 않는다."""
     games = ROOT / "operations" / "apps" / "games" / "games"
-    fleet = ROOT / "src" / "site" / "fleet" / "fleet"
+    fleet = ROOT / "operations" / "fleet" / "fleet"
     for folder in (games, fleet):
         for path in folder.rglob("*.py"):
             text = path.read_text(encoding="utf-8")

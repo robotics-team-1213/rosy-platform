@@ -14,7 +14,7 @@ from typing import Optional
 import pytest
 import yaml
 
-# colcon install 없이 pytest 를 돌린다 (Windows/CI) — `src/site/fleet/test/conftest.py`
+# colcon install 없이 pytest 를 돌린다 (Windows/CI) — `operations/fleet/test/conftest.py`
 # 와 같은 방식이다. `control` 이 필요한 이유는 D-126 이 남긴 유일한 시험 이음새 때문이다:
 # `test_control_sensor_adapter.py` 가 core 어댑터와 control provider
 # (`control.sensor_provider:PROVIDER`) 가 맞물리는 자리를 검사한다. 이것이 없으면

@@ -244,36 +244,36 @@ def _under_kind(root: dict, kind: str) -> bool:
 #: safety internal. Shrink-only; the Fleet stop-path carve removes the mixed files.
 KNOWN_SAFETY_VIOLATIONS = {
     # safety -> decision, cancel_all.py
-    ("1", "src/site/fleet/fleet/server/cancel_all.py", "fleet.server.console_view"): "error text helper",
-    ("1", "src/site/fleet/fleet/server/cancel_all.py", "fleet.swarm.transport"): "RobotApiError",
+    ("1", "operations/fleet/fleet/server/cancel_all.py", "fleet.server.console_view"): "error text helper",
+    ("1", "operations/fleet/fleet/server/cancel_all.py", "fleet.swarm.transport"): "RobotApiError",
     # mixed file console.py (estop_all) -> decision
-    ("1", "src/site/fleet/fleet/server/console.py", "fleet.formation.geometry"): "mixed file",
-    ("1", "src/site/fleet/fleet/server/console.py", "fleet.hub.hub"): "mixed file",
-    ("1", "src/site/fleet/fleet/server/console.py", "fleet.localization.trust"): "mixed file",
-    ("1", "src/site/fleet/fleet/server/console.py", "fleet.server.bays"): "mixed file",
-    ("1", "src/site/fleet/fleet/server/console.py", "fleet.server.console_view"): "mixed file",
-    ("1", "src/site/fleet/fleet/server/console.py", "fleet.server.traffic"): "mixed file",
-    ("1", "src/site/fleet/fleet/server/console.py", "fleet.swarm.robots"): "mixed file",
-    ("1", "src/site/fleet/fleet/server/console.py", "fleet.swarm.session"): "mixed file",
-    ("1", "src/site/fleet/fleet/server/console.py", "fleet.swarm.transport"): "mixed file",
+    ("1", "operations/fleet/fleet/server/console.py", "fleet.formation.geometry"): "mixed file",
+    ("1", "operations/fleet/fleet/server/console.py", "fleet.hub.hub"): "mixed file",
+    ("1", "operations/fleet/fleet/server/console.py", "fleet.localization.trust"): "mixed file",
+    ("1", "operations/fleet/fleet/server/console.py", "fleet.server.bays"): "mixed file",
+    ("1", "operations/fleet/fleet/server/console.py", "fleet.server.console_view"): "mixed file",
+    ("1", "operations/fleet/fleet/server/console.py", "fleet.server.traffic"): "mixed file",
+    ("1", "operations/fleet/fleet/server/console.py", "fleet.swarm.robots"): "mixed file",
+    ("1", "operations/fleet/fleet/server/console.py", "fleet.swarm.session"): "mixed file",
+    ("1", "operations/fleet/fleet/server/console.py", "fleet.swarm.transport"): "mixed file",
     # mixed file task_dispatch_routes.py (rearm handler) -> decision
-    ("1", "src/site/fleet/fleet/server/task_dispatch_routes.py", "fleet.hub.hub"): "mixed file",
-    ("1", "src/site/fleet/fleet/server/task_dispatch_routes.py", "fleet.server.http_errors"): "mixed file",
-    ("1", "src/site/fleet/fleet/server/task_dispatch_routes.py", "fleet.server.site_auth"): "mixed file",
-    ("1", "src/site/fleet/fleet/server/task_dispatch_routes.py", "fleet.server.task_store"): "mixed file",
-    ("1", "src/site/fleet/fleet/server/task_dispatch_routes.py", "fleet.swarm.transport"): "mixed file",
+    ("1", "operations/fleet/fleet/server/task_dispatch_routes.py", "fleet.hub.hub"): "mixed file",
+    ("1", "operations/fleet/fleet/server/task_dispatch_routes.py", "fleet.server.http_errors"): "mixed file",
+    ("1", "operations/fleet/fleet/server/task_dispatch_routes.py", "fleet.server.site_auth"): "mixed file",
+    ("1", "operations/fleet/fleet/server/task_dispatch_routes.py", "fleet.server.task_store"): "mixed file",
+    ("1", "operations/fleet/fleet/server/task_dispatch_routes.py", "fleet.swarm.transport"): "mixed file",
     # decision -> safety internals
-    ("2", "src/site/fleet/fleet/server/task_store.py", "fleet.server.cancel_all_store.ensure_schema"): (
+    ("2", "operations/fleet/fleet/server/task_store.py", "fleet.server.cancel_all_store.ensure_schema"): (
         "schema setup behind the store"),
-    ("2", "src/site/fleet/fleet/server/cell_job_store.py", "fleet.server.dispatch_admission.normalize_resources"): (
+    ("2", "operations/fleet/fleet/server/cell_job_store.py", "fleet.server.dispatch_admission.normalize_resources"): (
         "resource normalisation before reserve"),
     # app assembly imports non-anchor names of the mixed task_dispatch_routes.py
     # (missing from the D-430 §3 grep)
-    ("2", "src/site/fleet/fleet/server/app.py", "fleet.server.task_dispatch_routes.GoalRequest"): (
+    ("2", "operations/fleet/fleet/server/app.py", "fleet.server.task_dispatch_routes.GoalRequest"): (
         "request model re-export"),
-    ("2", "src/site/fleet/fleet/server/app.py", "fleet.server.task_dispatch_routes.cancel_pending_task_queue"): (
+    ("2", "operations/fleet/fleet/server/app.py", "fleet.server.task_dispatch_routes.cancel_pending_task_queue"): (
         "queue cancel helper"),
-    ("2", "src/site/fleet/fleet/server/app.py", "fleet.server.task_dispatch_routes.fanout_local_omx_stops"): (
+    ("2", "operations/fleet/fleet/server/app.py", "fleet.server.task_dispatch_routes.fanout_local_omx_stops"): (
         "OMX local stop fan-out; a public entry point once the stop path is carved"),
 }
 

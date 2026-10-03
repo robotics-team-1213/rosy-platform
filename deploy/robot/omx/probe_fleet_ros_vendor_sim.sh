@@ -30,7 +30,7 @@ if [[ -d /dev/serial/by-id ]] \
   exit 2
 fi
 
-export PYTHONPATH="/repo/src/contracts/foundation:/repo/src/site/fleet:/repo/src/site/fleet/test:/repo/src/products/omx/adapter:${PYTHONPATH:-}"
+export PYTHONPATH="/repo/src/contracts/foundation:/repo/operations/fleet:/repo/operations/fleet/test:/repo/src/products/omx/adapter:${PYTHONPATH:-}"
 export PYTHONDONTWRITEBYTECODE=1
 export OMX_FLEET_VENDOR_SIM_ACTION=/arm_controller/follow_joint_trajectory
 export OMX_FLEET_VENDOR_SIM_JOINT_STATES=/joint_states

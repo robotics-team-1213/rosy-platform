@@ -18,7 +18,7 @@ RUN apt-get update \
 COPY deploy/site/requirements-fleet.txt /opt/rosy/requirements.txt
 COPY deploy/site/secret_exec.py /opt/rosy/secret_exec.py
 COPY deploy/site/site_db.py /opt/rosy/site_db.py
-COPY src/site/fleet/ /opt/rosy/src/site/fleet/
+COPY operations/fleet/ /opt/rosy/src/site/fleet/
 COPY src/contracts/foundation/core_common/ /opt/rosy/src/contracts/foundation/core_common/
 COPY operations/apps/fleet/src/ /opt/rosy/apps/gateway/src/
 COPY src/hmi/web_common/ /opt/rosy/web-common/

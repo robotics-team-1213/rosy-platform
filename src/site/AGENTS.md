@@ -32,7 +32,7 @@ None at this level. See each package AGENTS.md.
 
 ### Testing Requirements
 
-    python3 -m pytest src/site/fleet/test/ -v
+    python3 -m pytest operations/fleet/test/ -v
 
 ## Dependencies
 

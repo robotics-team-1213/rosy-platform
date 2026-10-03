@@ -11,7 +11,7 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 for relative in ("contracts/skill/src", "modules/skills/api/src", "modules/skills/manipulation/src",
                  "integrations/robots/omx/src", "src/products/omx/adapter",
-                 "src/products/omx/adapter/test", "src/site/fleet/test", "operations/execution/src"):
+                 "src/products/omx/adapter/test", "operations/fleet/test", "operations/execution/src"):
     sys.path.insert(0, str(ROOT / relative))
 
 from fleet.server.cell_job_store import CellJobStore

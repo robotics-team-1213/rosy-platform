@@ -234,7 +234,7 @@ def test_answer_audit_records_the_token(core_client):
 def test_answered_event_passes_the_fleet_audit_filter(core_client):
     """D-407 re-run B: Fleet's event store refused `token_id` as a credential key."""
     import sys
-    fleet_root = str(REPO / "src" / "site" / "fleet")
+    fleet_root = str(REPO / "operations" / "fleet")
     if fleet_root not in sys.path:
         sys.path.insert(0, fleet_root)
     module = pytest.importorskip("fleet.server.core_event_store")

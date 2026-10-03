@@ -65,12 +65,12 @@ surfaces:
     app_name_en: Rosy Console
     short_name: Rosy Console
     icon: src/hmi/web_common/icons/console.svg
-    path: src/site/fleet/fleet/server/web
+    path: operations/fleet/fleet/server/web
     themes: [dark, light]
     surface: site
     medium: web
     ports:
-      - {port: 8090, source: src/site/fleet/fleet/cli.py}
+      - {port: 8090, source: operations/fleet/fleet/cli.py}
     audience: 사이트 관제자 (D-153 §7 — Fleet /console) · 설치자 (D-410 — /console/install 기기 등록·카메라 보정)
     role: 사이트 로스터·여러 로봇 모니터링·Mission·사이트 정지 요청·기기 연결 승인 (D-370 1항)
     owns: [site-monitoring, mission, overhead-camera-view, device-link-site, estop]

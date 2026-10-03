@@ -43,7 +43,7 @@ def test_core_has_no_soccer_robot_mode():
 
 def test_fleet_does_not_own_the_match_and_games_has_no_fleet_start():
     """D-106: 매치 시작 버튼은 지금 없다. fleet↛games, 보드는 Fleet UI가 아니다."""
-    fleet = ROOT / "src" / "site" / "fleet" / "fleet"
+    fleet = ROOT / "operations" / "fleet" / "fleet"
     for path in fleet.rglob("*.py"):
         text = path.read_text(encoding="utf-8")
         assert "rosy_games" not in text and "import games" not in text, path

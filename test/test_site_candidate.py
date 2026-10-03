@@ -282,7 +282,7 @@ def test_ignored_file_guard_covers_every_path_the_images_copy():
     root = Path(__file__).resolve().parents[1]
     paths = _image_source_paths(root / "deploy" / "site")
 
-    for expected in ("deploy/site", "src/site/fleet", "operations/vision/rosy_vision",
+    for expected in ("deploy/site", "operations/fleet", "operations/vision/rosy_vision",
                      "operations/apps/games/games", "src/hmi/web_common",
                      "src/contracts/foundation/core_common", "operations/apps/fleet/src",
                      "src/runtime/sensing/map/map_v2_fleet/meshes/road_lines.stl"):
@@ -293,22 +293,22 @@ def test_site_candidate_refuses_ignored_files_under_an_image_source_path(tmp_pat
     root = tmp_path / "repo"
     _fixture_repo(root)
     (root / "deploy/site/Dockerfile.fleet").write_text(
-        "FROM python\nCOPY --chown=0:0 src/site/fleet/ \\\n  /opt/rosy/src/site/fleet/\n",
+        "FROM python\nCOPY --chown=0:0 operations/fleet/ \\\n  /opt/rosy/src/site/fleet/\n",
         encoding="utf-8")
     calls: list = []
-    runner = _recording_runner(calls, ignored="src/site/fleet/robots.local.yaml\n")
+    runner = _recording_runner(calls, ignored="operations/fleet/robots.local.yaml\n")
 
     with pytest.raises(ValueError, match="robots.local.yaml"):
         build_candidate(root, tmp_path / "release", runner=runner, sbom_tool="syft")
     ls_files = next(call for call in calls if call[:2] == ["git", "ls-files"])
-    assert ls_files[ls_files.index("--") + 1:] == ["deploy/site", "src/site/fleet"]
+    assert ls_files[ls_files.index("--") + 1:] == ["deploy/site", "operations/fleet"]
     assert not any(call[:2] == ["docker", "build"] for call in calls)
 
 
 @pytest.mark.parametrize("copy_line", [
-    'COPY ["src/site/fleet/", "/opt/rosy/src/site/fleet/"]',
+    'COPY ["operations/fleet/", "/opt/rosy/src/site/fleet/"]',
     "COPY --from=builder /out /opt/rosy/out",
-    "ADD --link src/site/fleet/ /opt/rosy/src/site/fleet/",
+    "ADD --link operations/fleet/ /opt/rosy/src/site/fleet/",
     "COPY <<EOF /opt/rosy/config.txt",
     "COPY /opt/only-destination",
 ])

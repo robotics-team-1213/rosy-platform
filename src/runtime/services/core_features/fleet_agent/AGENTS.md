@@ -32,7 +32,7 @@ None.
   허브의 `DUPLICATE_IDENTITY`/`IDENTITY_DRIFT` 방어가 이 값으로 산다.
 - Teleop·navigation·safety는 이 에이전트를 import하거나 기다리지 않는다.
 - Commissioning은 `fleet_hold: true`, 로봇 오버레이 `swarm.follow`/`swarm.lead`는 false 유지.
-- 실제 대형(fleet-less)은 `src/site/fleet`이 CORE의 **외부 클라이언트**로
+- 실제 대형(fleet-less)은 `operations/fleet`이 CORE의 **외부 클라이언트**로
   연다 — 이 아웃바운드 소켓이 아니다.
 
 ### Testing Requirements

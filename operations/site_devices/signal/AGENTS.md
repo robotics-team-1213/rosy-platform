@@ -36,7 +36,7 @@ FLASH RED until a fresh authenticated command arrives. Site 장비라 ROS import
 - 신호등은 표시 장치지 안전 인터록이 아니다. 로봇 CORE 가 신호등을 제어하거나 신호등 보고를 안전 근거로 삼는 설계는 만들지 않는다.
 - 여러 신호기 사이의 순서는 Fleet 이 정한다(D-12) — 장치 안 `cycle` 은 시연·벤치용 반복 패턴이다.
 - Wi-Fi credentials and the command token must not appear in sources; `test/test_signal_contract.py` fails the build if they do.
-- Fleet G-S3 클라이언트·엔드포인트·UI는 `src/site/fleet`에 있다. 장치 계약을 바꿀 때는 Fleet 파서와 `test/test_signal_contract.py`를 함께 검증한다.
+- Fleet G-S3 클라이언트·엔드포인트·UI는 `operations/fleet`에 있다. 장치 계약을 바꿀 때는 Fleet 파서와 `test/test_signal_contract.py`를 함께 검증한다.
 
 ### Testing Requirements
 
@@ -49,7 +49,7 @@ Host pytest (Windows OK) — README↔펌웨어 대조는 소스 스캔이다. �
 
 ### Common Patterns
 
-Contract in README; implementation in `firmware/rosy_signal/rosy_signal.ino`; client in `src/site/fleet/fleet/server/signals.py` (G-S3).
+Contract in README; implementation in `firmware/rosy_signal/rosy_signal.ino`; client in `operations/fleet/fleet/server/signals.py` (G-S3).
 
 ## Dependencies
 
