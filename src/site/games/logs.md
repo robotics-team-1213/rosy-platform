@@ -292,3 +292,10 @@
 - 변경: `web/index.html` `#halt`에 `data-always-live`(`test_stop_always_live.py` 계약).
 - 증거: `python -m pytest src/hmi/web_common/test src/hmi/dashboard/test src/site/fleet/test src/site/games/test -q` 1089 passed, 84 skipped; `test/test_web_dialog_contract.py` 3 passed
 - gate 변화: 없음.
+
+## 2026-10-04 · uncommitted · fix(ui): 경기 보드 관측 상태와 마커 상세
+
+- 변경: 구현 단계 이름 대신 마커·공 관측 대기/미완료/완료를 말하고 운용 승인이 아님을 함께 표시한다. future/missing ready를 false로 만들지 않는다. 보조 마커 ID는 실제 열 수 있는 details 안에 모두 마운트하고 초점 경기장·점수·정지 헤더를 보존한다.
+- 증거: phone 320/390 실제 열린 chip 폭과 Pilot 수정 대상 3 passed (29.79s). 최종 실제 readback unknown/false/true 수명 1 passed (2.59s), 기존 게시 경기/뷰어 키보드 2 passed (4.54s). X 제공 unknown→false 변이가 실제 readback 단언 RED, 원본 제공 GREEN·소스 불변을 확인했다. 첫 unknown 시험은 backend 기본 false를 빠뜨려 정적 문구에서 먼저 통과한 결함이 있어 payload에서 visibility를 명시적으로 빼고 실제 phase readback 뒤 확인하도록 고쳤다.
+- gate 변화: SOURCE/LOCAL 경기 관측이며 ready는 FIELD GO나 게임 운용 허가가 아니다.
+- 결정: D-439 Task5. chip 측정은 실제 details를 열고 보이는 항목에 수행한다.

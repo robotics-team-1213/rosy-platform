@@ -30,8 +30,8 @@
 
 ## 최근 기록
 
+- 2026-10-04 · uncommitted · feat(ui): 어휘 갤러리 작업 선택 자산 허용
 - 2026-10-04 · uncommitted · feat(ui): 기본 dashboard 진입 자산 허용
 - 2026-10-04 · uncommitted · feat(api): D-438 `stuck_resolver` 역할과 `STUCK_DECIDE` 권한, API Ref v1.90
 - 2026-10-03 · uncommitted · fix(integration): D-418 SSH와 D-432 연결/UI 계약 통합
 - 2026-10-03 · uncommitted · fix(link): 현재 접속과 후속 코드 규약 구별
-- 2026-10-03 · uncommitted · feat(link): D-432 주소 없는 장비 접속

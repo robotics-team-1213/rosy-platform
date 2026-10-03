@@ -421,9 +421,6 @@ body[data-pilot-screen="drive"] ui-topbar ui-button { white-space: nowrap; }
 
 /* 휴대폰 세로: 게이트 안내문·속도 라벨은 뺀다(상태는 HUD 가 말한다) */
 @media (width < 30rem) {
-  body[data-pilot-screen="drive"] #pilot-notice,
-  body[data-pilot-screen="drive"] [data-gate-state],
-  body[data-pilot-screen="drive"] ui-brand small,
   [data-drive-presets] > ui-text { display: none; }
   [data-drive-controls] { padding-left: var(--space-3); padding-right: var(--space-3); gap: var(--space-2); }
   [data-drive-presets] ui-button { min-width: 2.5rem; padding: 0 var(--space-1); }
@@ -794,4 +791,10 @@ body[data-pilot-screen="drive"] ui-brand small { display: none; }
 [data-drive-controls][data-locked] {
   pointer-events: none;
   opacity: var(--disabled-opacity);
+}
+@media (width < 40rem) {
+  body[data-pilot-screen="connect"] ui-topbar { flex-wrap: wrap; gap: var(--space-2); }
+  body[data-pilot-screen="connect"] ui-brand { flex: 1 1 100%; min-width: 0; }
+  body[data-pilot-screen="connect"] #pilot-notice { flex: 1 1 100%; overflow-wrap: anywhere; }
+  body[data-pilot-screen="connect"] ui-topbar [data-spacer] { display: none; }
 }

@@ -75,7 +75,7 @@ def test_match_board_renders_published_play_state():
             assert page.locator("#phase").inner_text() == "경기 진행"
             assert page.locator("#away-score").inner_text() == "1"
             assert page.locator("#lost").is_hidden()
-            assert "아직" in page.locator("#stair1").inner_text()
+            assert "필수 마커·공 관측 미완료" in page.locator("#stair1").inner_text()
             assert page.locator("#markers li.on").count() == 4
             assert not errors, f"페이지 오류: {errors}"
             save_temp_screenshot(page, "games_board_play.png")
@@ -613,7 +613,9 @@ def test_compact_board_keeps_header_budget_stop_and_chips_in_view(width, height)
         with sync_playwright() as playwright:
             browser, page, errors = open_page(playwright, width, height)
             page.goto(url, wait_until="domcontentloaded")
-            page.wait_for_function("document.querySelectorAll('#markers li').length === 8")
+            page.wait_for_function("() => document.querySelectorAll('#markers li').length === 8")
+            page.get_by_text('마커 ID 자세히', exact=True).click()
+            assert page.locator('#markers li').first.is_visible()
             fit = page.evaluate("""() => ({
               overflow: document.documentElement.scrollWidth - innerWidth,
               topbar: document.querySelector('ui-topbar').getBoundingClientRect().height,
@@ -631,3 +633,28 @@ def test_compact_board_keeps_header_budget_stop_and_chips_in_view(width, height)
     halt = fit["halt"]
     assert halt["top"] >= 0 and halt["bottom"] <= height and halt["right"] <= width, fit
     assert fit["chips"] == [], fit
+def test_visibility_observations_are_not_operational_approval():
+    from playwright.sync_api import sync_playwright, expect
+    board = PreviewBoard(clock=lambda: 100.0)
+    payload = _play_payload()
+    payload.pop('visibility')
+    board.publish(payload, jpeg=None)
+    server = PreviewServer(board, port=0)
+    url = server.start()
+    try:
+        with sync_playwright() as playwright:
+            browser, page, errors = open_page(playwright, 390, 844)
+            page.goto(url)
+            expect(page.locator('#phase')).to_have_text('경기 진행')
+            expect(page.locator('#stair1')).to_have_text('마커·공 관측 정보 대기 · 운용 승인 아님')
+            for ready, word in [(False, '미완료'), (True, '완료')]:
+                payload['visibility'] = {'ready': ready, 'ball': ready}
+                board.publish(payload, jpeg=None)
+                expect(page.locator('#stair1')).to_have_text(f'필수 마커·공 관측 {word} · 운용 승인 아님')
+            disclosure = page.get_by_text('마커 ID 자세히', exact=True)
+            disclosure.click()
+            assert page.locator('#markers li').first.is_visible()
+            assert errors == []
+            browser.close()
+    finally:
+        server.close()

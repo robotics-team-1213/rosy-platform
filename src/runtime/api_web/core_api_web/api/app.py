@@ -349,7 +349,7 @@ def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
             },
         )
 
-    styleguide_assets = {"styleguide.css": "text/css"}
+    styleguide_assets = {"styleguide.css": "text/css", "styleguide.js": "text/javascript"}
 
     @app.get("/styleguide/assets/{asset_name:path}", include_in_schema=False)
     def styleguide_asset(asset_name: str):

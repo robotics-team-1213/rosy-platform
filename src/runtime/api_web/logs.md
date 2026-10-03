@@ -434,3 +434,10 @@
 - 증거: API·구조 묶음 106 passed/13 skipped (38.42s), 후속 인증·구조 묶음 64 passed/2 skipped (31.08s). CORE TestClient의 실제 정적 경로·CSP로 새 진입 브라우저를 검증했고 운용 요청은 fixture로만 응답했다. 두 묶음은 중복 대상이 있어 합산하지 않는다.
 - gate 변화: SOURCE/LOCAL 자산 계약만 보완했다. 실제 안전 명령이나 장치 배포 증거는 없다.
 - 결정: D-439. 기본 진입의 역할 링크는 기존 서버 manifest와 로컬 경로 허용 목록을 함께 따른다.
+
+## 2026-10-04 · uncommitted · feat(ui): 어휘 갤러리 작업 선택 자산 허용
+
+- 변경: styleguide_assets에 실제 공용 작업 선택 견본 styleguide.js 한 자산과 JavaScript MIME을 등록해 CMake 설치 목록과 맞췄다. API 권한과 안전 명령은 바꾸지 않았다.
+- 증거: 실제 UI 경로·CSP와 구조 예산 16 passed (8.21s). 공용 템플릿 CSS는 기존 shared-assets.json 소비 경로를 따른다.
+- gate 변화: SOURCE/LOCAL 정적 자산 계약만 보완했다.
+- 결정: D-439 Task5. 동작 소유자는 공용 작업 선택이며 서버 요청을 보내는 견본이 아니다.

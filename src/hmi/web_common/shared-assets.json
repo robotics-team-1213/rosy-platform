@@ -4,6 +4,7 @@
     "tokens.css": "text/css",
     "components.css": "text/css",
     "template.html": "text/html",
+    "template.css": "text/css",
     "core_ui_logic.js": "text/javascript",
     "hold-ticker.js": "text/javascript",
     "ui.js": "text/javascript",

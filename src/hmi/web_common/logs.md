@@ -540,3 +540,10 @@
 - gate 변화: SOURCE/LOCAL 라이브러리와 fixture 근거이며 물리적 정지·DEVICE/FIELD 수용은 아니다. 임시 근거: X:\DevTemp\rosy-ui-unify\compatibility.
 - 결정: D-439 §13. 사용자에게 노출된 모든 즉시 정지 hit 영역을 공용 확인에서도 보존한다.
 - 단위 검출력 증거: 부모 검증자가 X의 동일 test 사본에서 helper를 원래 겹친 사각형 반환으로 바꿔 실제 단언 RED, 실제 helper 복원 GREEN을 직접 실행했다 (5.18s). test 동일·변이 반영·다른 SHA256·제품 불변을 report로 확인했다. 최초 X 사본 pytest 수집은 30s timeout이며 RED로 세지 않는다.
+
+## 2026-10-04 · uncommitted · fix(ui): 공용 템플릿 작은 상단 행
+
+- 변경: 템플릿에만 적용하는 CSS를 manifest/CMake에 등록하고 작은 상단의 브랜드 설명이 자연스럽게 감싸지도록 했다. D-277 브랜드 rose·기존 부품·토큰은 유지한다. Task3e 인증/페이지 취소 뒤 code-submit 잠금 복구는 긴 정확한 닫힌 항목으로 구별하고 기존 generic 두 위치 수를 유지했다.
+- 증거: 비활성 사유·복사 위치 검출·SW·예산 8 passed (2.48s), API UI 경로/구조 16 passed (8.21s). 공용 UI/helper 동작은 변경하지 않았다.
+- gate 변화: SOURCE/LOCAL 라이브러리 자산만 보완한다. DEVICE/FIELD 수용은 소비 런타임에 남긴다.
+- 결정: D-439 Task5, D-359. 일반 허용 수를 넓히지 않고 실제 위치를 구별한다.

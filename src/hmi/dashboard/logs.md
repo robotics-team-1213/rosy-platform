@@ -872,3 +872,10 @@
 - fixture 증거: 영향 자산 smoke 1 passed/1 failed (60.80s)의 기존 호스트 fixture가 /common/ui.js alias를 빠뜨린 것을 보완하고 실패한 대상만 1 passed (58.51s)로 확인했다. 새 geometry import는 두 명시적 역할 fixture에 등록했다.
 - gate 변화: SOURCE/LOCAL 및 fixture 근거이며 실제 장치·ARM 이미지·FIELD 수용을 대체하지 않는다. 레거시 구조와 CORE 최종 명령 소유권을 보존한다.
 - 결정: D-439 §13–14. 기존 공용 확인과 페이지 소유권을 사용하며 app 및 dashboard 전체 소스 예산을 유지한다.
+
+## 2026-10-04 · uncommitted · feat(ui): 실제 작업 선택 견본과 좁은 어휘 갤러리
+
+- 변경: styleguide가 공용 createTaskChooser를 실제 실행하며 두 작업을 모두 마운트해 입력을 유지한다. 작은 화면의 긴 gate 코드와 demo 행을 감싼다. 기존 어휘·ADR·소유권을 보존하면서 역사 나열을 현재 사용 규칙으로 정리하고 공통 demo에 이미 적용한 flex/wrap 중복 규칙을 제거했다. 새 JS는 API/CMake 허용 목록에 함께 등록했다.
+- 증거: API UI 경로·실제 구조 예산·dashboard gate 소유권 16 passed (8.21s). dashboard 실제 합계 10000줄이며 한도를 올리거나 공용 모듈로 코드를 옮기지 않았다. 최종 화면 검토는 부모 검증자가 별도로 수행한다.
+- gate 변화: SOURCE/LOCAL 견본과 자산 계약이며 장치 요청을 보내지 않는다.
+- 결정: D-439 Task5, D-92, D-129, D-130.2. 공용 작업 선택 소유권을 소비한다.

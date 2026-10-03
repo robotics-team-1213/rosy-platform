@@ -9,6 +9,7 @@ install(FILES
   tokens.css
   components.css
   template.html
+  template.css
   core_ui_logic.js
   hold-ticker.js
   ui.js

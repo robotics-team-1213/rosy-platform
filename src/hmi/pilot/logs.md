@@ -334,3 +334,10 @@
 - 증거: 진단 브라우저에서 오류 뒤 조작 가능 복귀, 다음 목표 수락, 거절 없음 확인. 최종 재검증 결과는 docs/validation/discovery-link-2026-10-03/README.md에 기록한다.
 - gate 변화: DEVICE/FIELD 이동 없음.
 - 결정: D-432 공용 UI 최종 검증; 첫 실패와 재실행 결과를 구별한다.
+
+## 2026-10-04 · uncommitted · fix(pilot): 시작 대상 확인 실패와 재시도
+
+- 변경: 대상 발견 실패·잘못된 응답은 빈 본문 대신 대상 미확인 안내와 같은 발견 재시도를 제공한다. 짧은 pending 잠금으로 중복 발견을 막고 실제 404만 기존 Pinky 연결로 간다. 성공·실패 응답은 시작 안내를 아직 소유할 때만 상단 문구를 바꿔 더 늦은 정지 안내를 보존한다. 연결 화면의 작은 상단 행을 감싸고 이미 전체 주행 폭에서 숨기는 세 중복 selector를 제거해 styles.css 800줄을 유지한다. SW CACHE를 올리고 실제 공용 import 두 자산을 셸·개발 fixture에 등록했다.
+- 증거: 영향 Pilot 브라우저 7 passed/57 deselected (37.06s), 최종 시작 수명 1 passed (4.80s). SW·예산·비활성 닫힌 목록 8 passed (2.48s), API/예산 16 passed (8.21s). 최초 GREEN의 import fixture 실패와 호스트 SW/예산 실패는 수정 후 해당 대상으로 재검증했다. X 제공 pending 잠금·새 안내 소유권 변이가 실제 단언 RED이며 원본 제공 GREEN, 제품 소스 SHA256 불변을 확인했다.
+- gate 변화: SOURCE/LOCAL·대역 발견 증거이다. 실제 이동·정지 해제·장치 수용을 실행하지 않았다.
+- 결정: D-439 Task5. 기존 drive/arm/HUD/인증과 같은 출처 계약을 보존한다. 근거 X:\DevTemp\rosy-ui-unify\tools.

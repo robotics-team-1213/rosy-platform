@@ -68,6 +68,8 @@ COMMON_MIME = {
     "core_ui_logic.js": "application/javascript",
     "hold-ticker.js": "application/javascript",
     "ui.js": "application/javascript",
+    "confirmation.js": "application/javascript",
+    "live-dialog-geometry.js": "application/javascript",
     "evidence.js": "application/javascript",
 }
 

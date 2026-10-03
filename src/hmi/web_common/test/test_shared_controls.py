@@ -595,6 +595,8 @@ NATIVE = "네이티브 option/select/fieldset/checkbox — 사유를 그릴 자�
 NOTE = "공용 보이는 안내(ui-status/p)가 aria-describedby로 이 버튼들에 이어져 사유를 말한다"
 DISABLED_WITHOUT_REASON = {
     ("hmi/dashboard/app.js", 'elements["code-submit"].disabled = true;'): TRANSIENT,
+    ("hmi/dashboard/app.js", 'clearTimeout(codeRetryTimer); clearTimeout(actionMessageTimer); elements["code-submit"].disabled = false;'):
+        TRANSIENT + " (자격·페이지 수명 취소 뒤 잠금 복구)",
     ("hmi/dashboard/app.js", 'elements["code-submit"].disabled = false;'): TRANSIENT,
     ("hmi/dashboard/telemetry.js", 'setEnabled("traffic-policy-stage", !trafficPolicyPending);'): TRANSIENT,
     ("hmi/dashboard/app.js", 'setEnabled("hardware-refresh", false);'): TRANSIENT + " (장치 점검 요청)",

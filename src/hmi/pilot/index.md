@@ -34,8 +34,8 @@
 
 ## 최근 기록
 
+- 2026-10-04 · uncommitted · fix(pilot): 시작 대상 확인 실패와 재시도
 - 2026-10-03 · uncommitted · test(pilot): 재조작 시험의 새 목표 실행 상태 분리
 - 2026-10-03 · uncommitted · feat(pilot): 공용 규칙으로 화면별 작업 흐름 정리
 - 2026-10-03 · uncommitted · fix(link): 현재 접속과 후속 코드 규약 구별
 - 2026-10-03 · uncommitted · feat(link): D-432 주소 없는 장비 접속
-- 2026-10-03 · 09553e730 · feat(pilot): D-423 "모델" 패널(읽기 전용)

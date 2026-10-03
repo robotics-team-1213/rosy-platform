@@ -1578,3 +1578,56 @@ def test_a_settle_survives_a_failed_readback_right_after_it(tablet_page):
     page.evaluate("document.querySelector('[data-arm-pad]').dispatchEvent(new PointerEvent('pointerup', {pointerId: 2, bubbles: true}))")
     assert page.evaluate("window.rejections") == []
     assert errors == [], errors
+@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1", reason="browser opt-in")
+def test_startup_target_failure_retries_without_pinky_fallback(tablet_page):
+    from playwright.sync_api import expect
+    base_url, page, errors = tablet_page
+    page.set_viewport_size({"width": 390, "height": 844})
+    state = {"status": 503, "body": {}, "held": []}
+    def target(route):
+        if state["status"] is None: state["held"].append(route)
+        else: route.fulfill(status=state["status"], json=state["body"])
+    page.route('**/api/v1/sim/omx/target', target)
+    page.goto(base_url + '/pilot')
+    retry = page.get_by_role('button', name='대상 다시 확인', exact=True)
+    expect(retry).to_be_visible()
+    expect(page.locator('[data-screen=connect]')).to_contain_text('조종 대상을 확인하지 못했습니다')
+    assert not page.locator('[data-pilot-token-form]').count()
+    state.update(status=200, body={"kind": "invalid"})
+    retry.click()
+    expect(page.locator('[data-screen=connect]')).to_contain_text('invalid simulation target')
+    state['status'] = None
+    retry.click()
+    page.wait_for_function("document.querySelector('[data-discovery-retry]').disabled")
+    retry.dispatch_event('click')
+    assert len(state['held']) == 1
+    state['held'][0].fulfill(status=404, json={})
+    expect(page.locator('[data-pilot-token-form]')).to_be_visible()
+    expect(page.locator('#pilot-notice')).to_have_text('')
+    state.update(status=503, held=[])
+    page.reload()
+    expect(retry).to_be_visible()
+    state['status'] = None
+    retry.click()
+    page.wait_for_function("document.querySelector('[data-discovery-retry]').disabled")
+    page.locator('#pilot-notice').evaluate("node => node.textContent = '정지 요청을 보냈습니다'")
+    page.wait_for_timeout(50)
+    assert len(state['held']) == 1
+    state['held'][0].fulfill(status=404, json={})
+    expect(page.locator('[data-pilot-token-form]')).to_be_visible()
+    expect(page.locator('#pilot-notice')).to_have_text('정지 요청을 보냈습니다')
+    state.update(status=503, held=[])
+    page.reload()
+    expect(retry).to_be_visible()
+    state['status'] = None
+    retry.click()
+    page.wait_for_function("document.querySelector('[data-discovery-retry]').disabled")
+    page.locator('#pilot-notice').evaluate("node => node.textContent = '정지 요청을 보냈습니다'")
+    page.wait_for_timeout(50)
+    assert len(state['held']) == 1
+    state['held'][0].fulfill(status=503, json={})
+    expect(retry).to_be_enabled()
+    expect(page.locator('[data-screen=connect]')).to_contain_text('조종 대상을 확인하지 못했습니다')
+    expect(page.locator('#pilot-notice')).to_have_text('정지 요청을 보냈습니다')
+    assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')
+    assert errors == []
