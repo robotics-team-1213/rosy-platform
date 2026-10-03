@@ -4889,3 +4889,9 @@
 - 변경: charging.py를 safety_modules에 넣고 ChargingConfirmation 비공개 anchor를 연결했다. D-27 과방전 정지 억제 입력의 변경 통제이며 충전 동작은 바꾸지 않는다.
 - 증거: 누락 회귀 RED 1 failed, safety separation·trailer 검사 12 passed. 독립 리뷰에서 소스 차단 사항 없음. docs/validation/d427-source-migration/charging-safety-tag-2026-10-04.md.
 - gate 변화: 없음. safety 분류만 강화했으며 실기·FIELD 수용은 별도다.
+
+
+## 2026-10-04 · uncommitted · D-442 POLICY 운영 설정 guard
+- 변경: tracked OMX 운영 코드·YAML의 allowed_owners 선언과 기본값에서 learned_policy를 금지하는 구조 시험을 추가했다. KNOWN_OWNERS 이름 예약은 유지한다.
+- 증거: 실제 pilot owner 목록, ArmCommandConfig annotated 기본값, 셀 annotated 상수에 금지 값을 주입하면 각각 실패했다. 원본 복원 후 1 passed, 독립 리뷰 APPROVE. docs/validation/d427-source-migration/omx-policy-config-2026-10-04.md.
+- gate 변화: 없음. 정적 선언만 검사하며 동적 overlay·런타임 엔벌로프 admission은 후속이다.
