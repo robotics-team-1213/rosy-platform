@@ -25,7 +25,7 @@
 ## 시험
 
 - `test/test_signal_contract.py`
-- `firmware/signal/observer/test`
+- `operations/vision/signal_observer/test`
 
 ## 최근 기록
 

@@ -25,7 +25,7 @@ FLASH RED until a fresh authenticated command arrives. Site 장비라 ROS import
 | Directory | Purpose |
 |-----------|---------|
 | `firmware/` | ESP32 Arduino sketch (see `firmware/AGENTS.md`) |
-| `observer/` | 호스트 관측 서비스 — 카메라로 램프 상태를 실측하는 **읽기 전용** 컴포넌트 (명령 경로 없음, see `observer/README.md`) |
+| (moved) | 호스트 관측 서비스(읽기 전용)는 `operations/vision/signal_observer`로 옮겼다(D-429 §2, D-427 wave 3b) |
 
 ## For AI Agents
 
