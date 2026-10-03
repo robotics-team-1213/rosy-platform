@@ -275,8 +275,8 @@
 
 ## 최근 기록
 
+- 2026-10-04 · uncommitted · site(D-441): automatic site stack updates
 - 2026-10-04 · uncommitted · site(D-437): verifier accepts the containerd image ID form
 - 2026-10-03 · uncommitted · docs: D-436 change-scoped host test tiers
 - 2026-10-03 · uncommitted · docs: Fleet deployment preflight lessons
 - 2026-10-03 · uncommitted · site(D-437): security review fixes for CI-built site candidates
-- 2026-10-03 · uncommitted · docs: D-437 GitHub-hosted builds, offline local signing

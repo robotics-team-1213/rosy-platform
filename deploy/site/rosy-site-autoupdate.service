@@ -1,0 +1,33 @@
+[Unit]
+Description=ROSY site stack automatic update from signed candidates (D-441)
+Wants=network-online.target
+After=network-online.target docker.service
+Requires=docker.service
+ConditionPathExists=/etc/rosy/site/autoupdate.conf
+
+[Service]
+Type=oneshot
+# Root: it loads images, rewrites site.env and restarts rosy-site-stack.service.
+# The script and the verifier it imports are the reviewed copies installed in
+# /usr/local/lib/rosy-site, never the candidate being verified (D-301 3).
+# A non-zero exit (refused, rejected, rolled back) stays visible as failed.
+ExecStart=/usr/bin/python3 -I /usr/local/lib/rosy-site/rosy_site_autoupdate.py run
+TimeoutStartSec=60min
+Nice=10
+IOSchedulingClass=idle
+UMask=0022
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=full
+ReadWritePaths=/etc/rosy/site /opt/rosy /var/lib/rosy /run/lock
+ProtectHome=read-only
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6

@@ -4903,3 +4903,89 @@
 - gate 변화: 없음(호스트 결과). containerd image store 사이트 호스트의 전체 검증 재실행이 남았다
 - 결정: D-437 Consequences 보강(manifest 형식 변경 없음)
 - 교훈: Docker image ID는 image store마다 다르다. 서명된 config digest에서 출발해 archive 안 blob 바이트로 다른 형태를 이어 붙여야 보안을 낮추지 않고 두 store를 모두 받을 수 있다
+
+
+## 2026-10-03 · uncommitted · docs: D-432 common discovery and development link mode
+- 변경: 모든 앱·장치의 발견/호환성/승인/세션/재연결 책임을 공통 계약으로 기록. 개발 모드 코드 생략, 운영 코드 승인 확장, Fleet→CORE 인증 전환과 현 pin 예외, 트래픽/자원 제한, 역할별 이행 순서·실 AP 수용 기준을 명시. D-431은 다른 브랜치의 미착지 ADR로 gap 등록.
+- 증거: 현재 mDNS/NSD·FleetAgent·주소 변경·개발 인증 소스 대조와 기존 ADR 교차 검토. 검증 명령: harness generate/lint, test_network_topology_contracts.py 및 test_harness_contracts.py. 최초 검색·DHCP 변경·실 AP 트래픽 수용은 후속 단계.
+- gate 변화: 구조 결정만 Accepted. 개발 모드·wire·runtime·credential 설치는 변경하지 않음. ARTIFACT/DEVICE/FIELD 수용 없음.
+
+
+## 2026-10-03 · uncommitted · docs: automatic-update state bootstrap plan
+
+- 변경: 구 이미지의 missing state-directory 문제와 PID 1 transient bootstrap, exact d-rule 권한 경계, pending 재시도 및 rollback 녹화 보존을 실행 계획으로 기록했다.
+- 증거: implementation 및 host regression과 연계. 실제 새 payload 자동 적용 수락은 별도 장치 readback 단계다.
+- gate 변화: 없음.
+
+## 2026-10-03 · uncommitted · docs: D-434 model PC and site PC roles, Isaac Sim 5.1, low-memory rules
+- 변경: `docs/adr/D-434-model-pc-and-site-pc-roles.md` 추가(Accepted, 사용자 결정), ADR Log 행, D-322 버전 개정 부록(5.1 유지), `harness.yaml` adr_gaps에 D-433(다른 브랜치) 추가, 교훈 `docs/solutions/workflow-issues/cuda-wheel-install-over-wifi-times-out-on-the-model-pc-2026-10-03.md`
+- 증거: `python tools/harness/rosy_harness.py generate` 뒤 lint·`test/test_harness_contracts.py` 실행
+- gate 변화: 없음(문서만). 모델 PC GPU 학습·NCNN·Isaac 실행, 관제 PC 사이트 스택 이전은 미수용
+- 결정: D-434 Accepted, D-322 부록
+- 교훈: 큰 CUDA wheel 설치는 Wi-Fi에서 uv 기본 timeout으로 끊긴다 — `UV_HTTP_TIMEOUT=600`, 분리 실행, 완료 표식으로 확인
+
+## 2026-10-03 · uncommitted · docs: ADR role and Fleet terminology review
+
+- 변경: `docs/assessments/2026-10-03-adr-role-and-terminology-review.md`에 Fleet 서비스/다중 로봇 조정/범용 작업 실행의 혼합, D-290 선택지 처분, 역할과 계층 분류, 로컬 트랜잭션, ER2 후보 fence, 작업 용어의 정합화 검토를 기록했다. 세 대안과 단일 팔·두 로봇·이동 조작·stop 경쟁·링크 상실 사례로 후속 ADR 결정 범위를 정리했다.
+- 증거: D-12/D-21/D-55/D-290/D-296/D-298/D-326/D-333/D-358/D-369/D-392/D-399/D-413/D-427/D-429/D-430, CONCEPTS.md, 설계 v0.2와 현재 proposal store 정적 검토.
+- gate 변화: 없음. 검토·추천만이며 Accepted ADR, 공개 API, 코드·폴더 배치, policy dispatch, ARTIFACT/DEVICE/FIELD 상태는 변경하지 않는다.
+- 검증: harness lint 0 errors/26 warnings, 문서 링크 14개 누락 0, diff whitespace 검사 통과. 문서·구조 계약은 128 passed/1 skipped/1 failed. 실패는 src만 스캔하는 모듈 기준선 시험과 learning/envs/isaac으로 이동된 isaac_sim의 불일치이며 이번 검토의 수정 대상이 아니다.
+
+## 2026-10-03 · uncommitted · docs: D-435 work orchestration and Fleet authority proposal
+
+- 변경: D-435 Proposed 초안·ADR Log·docs ADR 목록과 1차 검토의 2차 보강을 기록했다. 단일 정본의 범위, 비로봇 공유 자원, 수동/정지 경로, 숙고형 모델과 기타 판단의 권한 차이, 로컬 Action과 작업 오케스트레이션, UNKNOWN과 점유 해제의 경계를 명시했다.
+- 증거: D-290/D-298/D-369/D-399/D-413/D-429와 현재 PlanBundle·cell submission 대조. 단일 팔·수동 조작·운송·formation·미래 컨베이어·복합 로봇·stop 경쟁·불명 Action·독립 셀 반례를 초안에 기록했다.
+- gate 변화: 없음. Proposed만 추가했으며 기존 Accepted 계약과 공개 API·코드·정지 fence·원장·policy dispatch·장치 수용은 변경하지 않는다.
+- 검증: 문서 계약 83 passed/26 existing history warnings(full lint·generated records 포함), D-435 제목/상태/색인 일치·로컬 링크 16개 누락 0·반례 9개·diff whitespace 검사 통과. 이전 isaac_sim 구조 기준선 실패는 별도 미해결이며 이번 문서 검증의 통과 범위에 포함하지 않는다.
+
+## 2026-10-03 · uncommitted · perception(D-356): experiment tracking defaults to local run log + TensorBoard
+- 변경: `learning/training/perception/training/run_log.py` 추가(`RunLog`, `chain`), `export_cell.py`가 `metrics.experiment`의 `local` 형태를 트래커별 허용 키로 받는다, 노트북 5c(로컬 기록)·5d(W&B) 분리와 `RUNS_DIR` 입력 칸, COLAB.md/README.md 절 추가, D-356 부록
+- 증거: `python -m pytest learning/training/perception/test -q -p no:cacheprovider`(ML venv), `python tools/harness/rosy_harness.py generate` 뒤 lint·`test/test_harness_contracts.py`
+- gate 변화: 없음(호스트 결과). 모델 PC나 실제 Colab 런타임에서 돌려 본 것은 아님
+- 결정: 사용자 결정 2026-10-03, 기본은 로컬 기록 + TensorBoard, W&B 선택
+
+## 2026-10-03 · uncommitted · perception(D-356): review fixes for the local run log
+- 변경: `run_log.py` 기록 오류가 학습을 멈추지 않음(`chain`은 예외 후 계속, `close()` 추가), 비밀 키 단어 확대, `export_cell`의 로컬 experiment 검증(`run_id`, 상대 `path`), 노트북 5c 고정 `runs/<run_id>`·상대 summary 경로·재실행 시 앞 기록 닫기, D-356 부록 동기화
+- 증거: 훈련 테스트와 `learning/training/perception/test` 전체, harness generate·lint·`test/test_harness_contracts.py`
+- gate 변화: 없음(호스트 결과)
+
+## 2026-10-03 · uncommitted · docs: D-437 GitHub-hosted builds, offline local signing
+- 변경: `docs/adr/D-437-github-hosted-builds-and-offline-local-signing.md` 추가(Accepted, 사용자 결정), ADR Log 행, D-301 부록 "2026-10-03 — CI 빌드·로컬 서명 (D-437)"(manifest-only 서명), `harness.yaml` adr_gaps에 D-436(다른 브랜치) 추가
+- 증거: `python tools/harness/rosy_harness.py generate` 뒤 lint·`test/test_harness_contracts.py` 실행
+- gate 변화: 없음(문서만). 사이트 후보 workflow 첫 실행은 사용자가 승인한 push 뒤, 사이트 서명 키는 D-301대로 미준비
+- 결정: D-437 Accepted, D-301 부록
+- 교훈: 없음
+
+## 2026-10-03 · uncommitted · site(D-437): security review fixes for CI-built site candidates
+- 변경: manifest-only 서명에 `--expected-manifest-sha256` 필수(CI 실행 summary의 해시), 빌드 job의 `release.json`·`SHA256SUMS` 출처 증명과 서명 전 `gh attestation verify` 절차, 옛 `site-*` 릴리스 정리(최신 3개), fetch 스크립트의 링크·장치 거부와 tarfile `data` 필터, action SHA 고정, 이미지 원본 경로 전체의 무시된 파일 거부, 릴리스 존재 사전 검사. D-437·D-301 부록·README 갱신. 로봇 쪽 릴리스 쪽 넘김은 후속 작업
+- 증거: 사이트 후보·서명·검증·workflow·fetch 시험, harness lint, actionlint 1.7.7(Docker)
+- gate 변화: 없음. workflow 첫 실행은 사용자 승인 push 뒤
+- 결정: D-437 Accepted 본문 보강
+- 교훈: 공개 Release 자산은 저장소 쓰기 권한으로 바꿀 수 있다. 서명 대상은 쓰기 권한으로 고칠 수 없는 기록(실행 summary·출처 증명)에 묶어야 한다
+
+## 2026-10-03 · uncommitted · docs: Fleet deployment preflight lessons
+
+- 변경: 사용자 요청으로 `docs/solutions/workflow-issues/site-fleet-deploy-checks-the-whole-configuration.md`에 정적/동적 등록 충돌, Fleet/Vision 대상 계약, 컨테이너 NSS와 Avahi, OS/앱 권한, 최신 정지 증거와 설치 readback을 하나의 배포 일관성 교훈으로 기록했다.
+- 증거: 현재 parser·CLI·roster·NSS/Compose·user discovery 소스, 운영 NSS-only 설치 receipt, Fleet 재시작 후 S21 JPEG readback. 실제 주소·자격 비밀은 기록하지 않았다.
+- gate 변화: 없음. 레거시 발견 conflict 정리·관제 PC 재부팅·outbound FleetAgent·물리 marker commissioning 완료를 이 문서로 주장하지 않는다.
+- 검증: frontmatter/claims validator와 독립 문서 grounding, 문서 계약·harness 검사로 기록 내용과 탐색 가능성을 확인한다.
+
+## 2026-10-03 · uncommitted · docs: D-436 change-scoped host test tiers
+
+- 변경: D-436(호스트 시험은 변경 범위로 고른다) ADR·ADR Log 행을 추가하고, `rosy_harness.py affected` 선택기·시험, pre-push affected 티어, ci.yml PR affected / main·야간·수동 풀 분기, 루트·harness·hooks·workflows AGENTS 시험 안내를 같은 브랜치(`feat/ci-affected-tests`)에 맞췄다.
+- 증거: `test/test_affected_tests.py` 표 시험(tools/ssh·core_common·미분류·sensing 역의존·문서·보조 모듈·deploy 축소·conftest/workflow/설정 escalation·base 부재)과 변이 증명 2건; D-418 브랜치 diff 선택 결과(core_common·platform_parts·tools/device_twin 미분류로 FULL).
+- gate 변화: 없음. 저장소 도구·CI·작업 규칙만이며 장치·이미지·현장 수용과 무관하다.
+
+## 2026-10-04 · uncommitted · site(D-437): verifier accepts the containerd image ID form
+- 변경: `deploy/site/verify_candidate.py` 전체 검증이 해시 확인을 마친 `images.tar`에서 서비스별 config blob과 `index.json`이 가리키는 OCI manifest blob을 읽어(링크 거부, 디스크 추출 없음) 바이트 해시를 다시 계산하고, manifest의 `config.digest`가 서명된 `image_id`와 같을 때만 manifest digest도 받는다. summary에 `id_form`(`config`/`oci-manifest`). `index.json`이 없는 archive는 config 형태만. 검증기·서명 시험의 가짜 archive를 실제 tar로 바꾸고 containerd·위조 경우 시험 추가. D-437 Consequences, `deploy/site/README.md` 검증 절
+- 증거: 사이트 후보·검증·서명·fetch·workflow 시험과 `test_no_secrets_in_tracked_files`, harness lint. 현장 호스트에서 다시 돌린 것은 아님
+- gate 변화: 없음(호스트 결과). containerd image store 사이트 호스트의 전체 검증 재실행이 남았다
+- 결정: D-437 Consequences 보강(manifest 형식 변경 없음)
+- 교훈: Docker image ID는 image store마다 다르다. 서명된 config digest에서 출발해 archive 안 blob 바이트로 다른 형태를 이어 붙여야 보안을 낮추지 않고 두 store를 모두 받을 수 있다
+
+## 2026-10-04 · uncommitted · site(D-441): automatic site stack updates
+- 변경: D-441 ADR·ADR Log 행(D-440은 device-power 브랜치가 써서 다음 번호, `adr_gaps`에 D-438·D-439·D-440). `build-site-candidate.yml`에 main push 트리거와 이미지 원본 경로 필터, push는 기존 릴리스에서 빌드 없이 성공, push 빌드만 취소하는 job concurrency와 비취소 릴리스 그룹. 서명 PC용 `deploy/site/auto_sign_candidates.py`(출처 증명 digest·main 조상·태그 확인 뒤 `sign_manifest_only`, 감사 로그)와 `register_auto_sign_task.ps1`. 사이트 호스트용 `rosy_site_autoupdate.py`·`rosy-site-autoupdate.service`·`.timer`(override 거부, SHA256SUMS·tar 검사, 설치된 검증기, 원자적 site.env·symlink 전환, 건강 확인과 롤백, 정리). D-437·D-301 부록, `deploy/site/README.md` "Automatic updates (D-441)"
+- 증거: 사이트 후보·workflow·fetch·검증기·서명 시험과 새 자동 서명·호스트 갱신 시험(symlink 시험은 Linux 컨테이너에서), `test_no_secrets_in_tracked_files`, harness 계약·lint, actionlint 1.7.7(Docker)
+- gate 변화: 없음. workflow push 실행, 서명 PC 예약 작업, 사이트 호스트 설치와 첫 자동 갱신·롤백은 미검증. 사이트 키 미준비(D-301)
+- 결정: D-441 Accepted, D-437·D-301 개정 부록
+- 교훈: 자동 서명기가 지키는 것은 자산 쓰기 권한과 main 아닌 빌드다. 서명 PC 계정과 main 보호 규칙이 이제 사이트 배포의 문이다
