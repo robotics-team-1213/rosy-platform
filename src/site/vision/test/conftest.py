@@ -13,7 +13,7 @@ for path in (
     SITE / "fleet",
     SRC / "runtime" / "services",
     SRC / "contracts" / "foundation",
-    SRC / "site" / "games",
+    SRC.parent / "operations" / "apps" / "games",
 ):
     entry = str(path)
     if entry not in sys.path:

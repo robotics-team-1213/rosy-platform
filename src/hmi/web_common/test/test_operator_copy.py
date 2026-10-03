@@ -30,12 +30,19 @@ Two shapes carry no Hangul in the literal itself and are judged apart:
 from __future__ import annotations
 
 from html.parser import HTMLParser
+import os
 from pathlib import Path
 import re
 
 import pytest
 
 SRC = Path(__file__).resolve().parents[3]
+
+
+def _rel(path: Path) -> str:
+    """Path relative to src/; Rosy Games left src/ for operations/ (D-427 wave 3b)."""
+    return Path(os.path.relpath(path, SRC)).as_posix()
+
 
 SURFACES = (
     ("hmi/dashboard", "*.js"),
@@ -44,8 +51,8 @@ SURFACES = (
     ("hmi/dashboard", "surface.html"),
     ("site/fleet/fleet/server/web", "*.js"),
     ("site/fleet/fleet/server/web", "*.html"),
-    ("site/games/games/web", "*.js"),
-    ("site/games/games/web", "*.html"),
+    ("../operations/apps/games/games/web", "*.js"),
+    ("../operations/apps/games/games/web", "*.html"),
 )
 
 HANGUL = re.compile(r"[가-힣]")
@@ -198,7 +205,7 @@ def problems(allowlist=None) -> list[tuple[str, int, str, str]]:
     allowlist = ALLOWLIST if allowlist is None else allowlist
     out = []
     for path in surface_files():
-        rel = path.relative_to(SRC).as_posix()
+        rel = _rel(path)
         for line, literal, why in _judge(_copy(path)):
             if any(key[0] == rel and key[1] in literal for key in allowlist):
                 continue
@@ -395,10 +402,10 @@ def _enum_text_unallowed(rel: str, source: str) -> list[tuple[int, str, str]]:
 
 
 def test_no_bare_enum_reaches_operator_text():
-    found = [(path.relative_to(SRC).as_posix(), line, literal, why)
+    found = [(_rel(path), line, literal, why)
              for path in surface_files() if path.suffix == ".js"
              for line, literal, why in _enum_text_unallowed(
-                 path.relative_to(SRC).as_posix(), path.read_text(encoding="utf-8-sig"))]
+                 _rel(path), path.read_text(encoding="utf-8-sig"))]
     assert found == [], "\n".join(f"{rel}:{line}: {why}: {literal}" for rel, line, literal, why in found)
 
 
@@ -410,10 +417,10 @@ def test_every_enum_text_allowlist_entry_still_matches():
 
 
 def test_the_lint_sees_every_surface():
-    rels = {path.relative_to(SRC).as_posix() for path in surface_files()}
+    rels = {_rel(path) for path in surface_files()}
     for expected in ("hmi/dashboard/panels/console/mode.js", "hmi/dashboard/app.js",
                      "site/fleet/fleet/server/web/roster.js", "site/fleet/fleet/server/web/index.html",
-                     "site/games/games/web/board.js", "site/games/games/web/index.html"):
+                     "../operations/apps/games/games/web/board.js", "../operations/apps/games/games/web/index.html"):
         assert expected in rels
 
 
@@ -462,7 +469,7 @@ def test_reverting_a_fixed_string_fails_the_lint(rel, fixed, regressed):
 
 
 def test_every_allowlist_entry_still_matches():
-    rels = {path.relative_to(SRC).as_posix(): path for path in surface_files()}
+    rels = {_rel(path): path for path in surface_files()}
     for (rel, needle), reason in ALLOWLIST.items():
         assert reason.strip(), (rel, needle)
         assert rel in rels, rel

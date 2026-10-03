@@ -90,8 +90,7 @@ ROS/vendor 표현 사이의 변환에 두며, 그 자체로 별도 동작 owner�
     ├── site/
     │   ├── fleet/                 # 현장 미션·작업 원장·콘솔 서버
     │   ├── vision/                # Rosy Vision: 천장 카메라 입력·sighting 처리(패키지 rosy_vision)
-    │   ├── cam/                   # Rosy Cam: 천장 카메라 폰 앱(Android, ROS 패키지 아님)
-    │   └── games/                 # 게임 호스트
+    │   └── cam/                   # Rosy Cam: 천장 카메라 폰 앱(Android, ROS 패키지 아님)
     ├── hmi/
     │   ├── dashboard/             # CORE API가 제공하는 operator 화면
     │   ├── face/                  # package: emotion
@@ -102,6 +101,8 @@ ROS/vendor 표현 사이의 변환에 두며, 그 자체로 별도 동작 owner�
     learning/
     ├── envs/isaac/                # package: isaac_sim — Isaac Sim 6.1 standalone integration; GPU runtime validation pending
     └── training/perception/       # D-356 학습 루프 도구(데이터셋·학습 인계·모델 배달)
+    operations/
+    └── apps/games/                # package: games — 게임 호스트(D-427 wave 3b)
 
 폴더명과 ROS 패키지 이름은 항상 같지 않다(예: `runtime/gateway`는 `core`). site 앱은
 D-377에 따라 폴더 끝 이름이 `<word>`, 패키지 이름이 `rosy_<word>`다(`site/vision`은

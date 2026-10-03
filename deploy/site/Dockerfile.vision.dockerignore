@@ -1,8 +1,8 @@
 **
 !src/site/vision/rosy_vision/**
 !src/site/vision/setup.py
-!src/site/games/games/**
-!src/site/games/setup.py
+!operations/apps/games/games/**
+!operations/apps/games/setup.py
 !src/contracts/foundation/core_common/**
 !deploy/site/requirements-vision.txt
 !deploy/site/secret_exec.py

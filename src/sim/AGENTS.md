@@ -24,7 +24,7 @@ None at this level. Each package directory has its own `AGENTS.md`.
 
 - `gz_sim` includes `description` and `navigation` launches.
 - Isaac Sim scenes and adapters live in `learning/envs/isaac/` (D-427 wave 1, ROS package `isaac_sim`); they reuse `description/` as the robot model source where practical. Do not copy Gazebo-specific plugins into Isaac Sim.
-- D-98's deferred `src/site/games/games/isaac/` soccer training environment is a separate scope. This directory does not enable that environment.
+- D-98's deferred `operations/apps/games/games/isaac/` soccer training environment is a separate scope. This directory does not enable that environment.
 - Multi-instance launch tests self-skip when `ros_gz_sim` share is absent (CI shows them as skip).
 
 ### Testing Requirements

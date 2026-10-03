@@ -7,10 +7,17 @@ inert로 만든다. 그러니 ui.js를 싣는 모든 페이지는 마크업의 �
 """
 
 from html.parser import HTMLParser
+import os
 import re
 from pathlib import Path
 
 SRC = Path(__file__).resolve().parents[3]
+#: D-427 wave 3b: Rosy Games left src/ for operations/; scan both.
+PAGE_ROOTS = (SRC, SRC.parent / "operations")
+
+
+def _rel(path: Path) -> str:
+    return Path(os.path.relpath(path, SRC)).as_posix()
 UI_SCRIPT = 'src="/common/ui.js"'
 
 
@@ -46,8 +53,8 @@ def stops_in(text):
 
 
 def ui_pages():
-    for path in sorted(SRC.rglob("*.html")):
-        parts = path.relative_to(SRC).parts
+    for path in sorted(path for root in PAGE_ROOTS for path in root.rglob("*.html")):
+        parts = Path(_rel(path)).parts
         if "test" in parts or "node_modules" in parts or {"build", "install"} & set(parts):
             continue
         text = path.read_text(encoding="utf-8")
@@ -62,9 +69,9 @@ def test_every_stop_on_a_ui_js_page_is_always_live():
         for line, live in stops_in(text):
             stops += 1
             if not live:
-                offenders.append(f"{path.relative_to(SRC)}:{line}")
+                offenders.append(f"{_rel(path)}:{line}")
     assert offenders == [], f"정지 컨트롤에 data-always-live가 없다(대화상자가 열리면 막힌다): {offenders}"
-    names = {path.relative_to(SRC).as_posix() for path, _ in pages}
+    names = {_rel(path) for path, _ in pages}
     for page in ("hmi/dashboard/surface.html", "hmi/dashboard/index.html", "site/fleet/fleet/server/web/index.html"):
         assert page in names, f"스캔이 {page}를 놓쳤다"
     assert stops >= 6, "셸·옛 대시보드·Fleet·게임·진단 정지를 모두 센다"
@@ -88,7 +95,7 @@ WEB_SCRIPT_ROOTS = (
     SRC / "hmi" / "web_common",
     SRC / "hmi" / "pilot",
     SRC / "site" / "fleet" / "fleet" / "server" / "web",
-    SRC / "site" / "games" / "games" / "web",
+    SRC.parent / "operations" / "apps" / "games" / "games" / "web",
 )
 
 
@@ -103,15 +110,15 @@ def surface_scripts():
 
 def test_no_surface_script_opens_a_modal_dialog():
     scripts = list(surface_scripts())
-    offenders = [f"{path.relative_to(SRC)}:{text.count(chr(10), 0, match.start()) + 1}"
+    offenders = [f"{_rel(path)}:{text.count(chr(10), 0, match.start()) + 1}"
                  for path in scripts
                  for text in [path.read_text(encoding="utf-8")]
                  for match in SHOW_MODAL.finditer(text)]
     assert offenders == [], f"showModal()은 정지를 inert로 만든다 — ui.js openLiveDialog를 쓴다: {offenders}"
-    names = {path.relative_to(SRC).as_posix() for path in scripts}
+    names = {_rel(path) for path in scripts}
     for script in ("site/fleet/fleet/server/web/enrollment.js", "site/fleet/fleet/server/web/camera-pairing.js",
                    "hmi/web_common/ui.js", "hmi/pilot/app.js",
-                   "hmi/dashboard/settings.js", "site/games/games/web/board.js"):
+                   "hmi/dashboard/settings.js", "../operations/apps/games/games/web/board.js"):
         assert script in names, f"스캔이 {script}를 놓쳤다"
 
 

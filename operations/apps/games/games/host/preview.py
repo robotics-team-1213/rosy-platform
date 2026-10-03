@@ -29,7 +29,7 @@ def web_common_dir() -> Path:
             return share
     except (ImportError, LookupError):
         pass
-    return Path(__file__).resolve().parents[4] / "hmi" / "web_common"
+    return Path(__file__).resolve().parents[5] / "src" / "hmi" / "web_common"
 
 
 COMMON = web_common_dir()

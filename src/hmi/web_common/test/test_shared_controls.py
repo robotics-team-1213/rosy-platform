@@ -19,7 +19,7 @@ COMPONENTS = COMMON / "components.css"
 UI = COMMON / "ui.js"
 TOKENS = COMMON / "tokens.css"
 FACE = ROOT / "hmi" / "face" / "emotion" / "info_screen.py"
-PITCH = ROOT / "site" / "games" / "games" / "web" / "styles.css"
+PITCH = ROOT.parent / "operations" / "apps" / "games" / "games" / "web" / "styles.css"
 
 # 표면 목록은 src/hmi/web_common/surfaces.yaml 한 곳에서만 읽는다 (D-329 Decision 1).
 STYLE_SUFFIXES = {".css", ".html", ".js"}

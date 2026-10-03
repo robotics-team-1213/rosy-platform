@@ -1,5 +1,6 @@
 """순수 로직 단위 테스트 — 중재/워치독/안전/웨이포인트/이벤트/네비 (ROS 무의존)."""
 
+import os
 import time
 from pathlib import Path
 
@@ -15,6 +16,8 @@ from core_features.waypoints.manager import Waypoint, WaypointManager
 
 #: src/ 트리 루트 — 이 파일은 <root>/src/runtime/gateway/test/ 에 있다.
 SRC_ROOT = Path(__file__).resolve().parents[3]
+#: D-427 wave 3b: site apps (Rosy Vision, Cell, Games) left src/ for operations/.
+SCAN_ROOTS = (SRC_ROOT, SRC_ROOT.parent / "operations")
 
 
 @pytest.fixture
@@ -414,13 +417,13 @@ class TestD137SequenceContract:
                 "D-423 object_detector_node: the single advisory publisher (Pi CPU int8 ONNX)",
         }
         offenders = {}
-        for path in SRC_ROOT.rglob("*.py"):
+        for path in (path for root in SCAN_ROOTS for path in root.rglob("*.py")):
             parts = {p.lower() for p in path.parts}
             if "test" in parts or "__pycache__" in parts:
                 continue
             text = path.read_text(encoding="utf-8", errors="replace")
             if "vision/detections" in text:
-                offenders[str(path.relative_to(SRC_ROOT))] = text
+                offenders[os.path.relpath(path, SRC_ROOT)] = text
         unexpected = sorted(set(offenders) - set(allowed))
         assert not unexpected, f"vision/detections 발행 후보 발견: {unexpected}"
 
@@ -431,7 +434,7 @@ class TestD137SequenceContract:
         another name); subscribers such as road_observer_node do not count."""
         import ast
         publishers = set()
-        for path in SRC_ROOT.rglob("*.py"):
+        for path in (path for root in SCAN_ROOTS for path in root.rglob("*.py")):
             parts = {p.lower() for p in path.parts}
             if "test" in parts or "__pycache__" in parts:
                 continue
@@ -447,7 +450,7 @@ class TestD137SequenceContract:
                     literal = isinstance(topic, ast.Constant) and topic.value == "vision/detections"
                     named = isinstance(topic, ast.Name) and topic.id in names
                     if literal or named:
-                        publishers.add(path.relative_to(SRC_ROOT).as_posix())
+                        publishers.add(Path(os.path.relpath(path, SRC_ROOT)).as_posix())
         assert publishers == {"runtime/sensing/control/object_detector_node.py"}, publishers
 
 

@@ -32,8 +32,10 @@ import yaml
 ROOT = Path(__file__).resolve().parents[2]
 SRC = ROOT / "src"
 
-#: ``envs`` is the first folder under the ``learning`` colcon root (D-427 wave 1).
-DOMAINS = {"contracts", "runtime", "drivers", "products", "hmi", "site", "sim", "envs"}
+#: ``envs`` is the first folder under the ``learning`` colcon root (D-427 wave 1);
+#: ``apps``, ``vision`` and ``processes`` are under the ``operations`` root (D-427 wave 3b).
+DOMAINS = {"contracts", "runtime", "drivers", "products", "hmi", "site", "sim", "envs",
+           "apps", "vision", "processes"}
 
 #: P2 library/contract tier: no process of their own (runtime gates N/A).
 LIBRARY_PACKAGES = {"core_common", "core_events", "core_features", "core_api_web", "web_common"}
@@ -589,7 +591,7 @@ MIN_PACKAGES = 27
 
 
 def _rel(path: Path) -> Path:
-    """``path`` relative to the colcon root that holds it (``src`` or ``learning``)."""
+    """``path`` relative to the colcon root that holds it (``src``, ``learning`` or ``operations``)."""
     return path.relative_to(next(root for root in COLCON_ROOTS if path.is_relative_to(root)))
 
 

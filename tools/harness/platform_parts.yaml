@@ -359,9 +359,10 @@ roots:
     d427_target: operations/ui/cam
     wave: "3b"
     concern: other
-  - path: src/site/games
+  - path: operations/apps/games
     part: operations
     d427_target: operations/apps/games
+    legacy: src/site/games
     wave: "3b"
     import_prefix: [games]
     note: Laptop game host (D-90) with an overhead camera; a site app, not a process.

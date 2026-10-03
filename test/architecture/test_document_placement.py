@@ -17,7 +17,7 @@ MUST_IGNORE = [
     "deploy/robot/pinky_pro/.env",
     "deploy/robot/pinky_pro/.env.site",
     "deploy/robot/pinky_pro/site.local.env",
-    "src/site/games/config/match.local.yaml",
+    "operations/apps/games/config/match.local.yaml",
     "deploy/robot/pinky_pro/sd/provision.json",
     "deploy/robot/pinky_pro/sd/rosy-config.yaml",
     "id_ed25519",

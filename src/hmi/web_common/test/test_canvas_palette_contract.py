@@ -19,7 +19,7 @@ SRC = Path(__file__).resolve().parents[3]
 COMMON = SRC / "hmi" / "web_common"
 DASHBOARD = SRC / "hmi" / "dashboard"
 FLEET = SRC / "site" / "fleet" / "fleet" / "server" / "web"
-GAMES = SRC / "site" / "games" / "games" / "web"
+GAMES = SRC.parent / "operations" / "apps" / "games" / "games" / "web"
 
 CANVAS_FILES = [
     DASHBOARD / "map.js",
@@ -38,7 +38,7 @@ FONT_SOURCES = re.compile(r"^(window\.RosyPalette\.canvasFont\(|font\(|labelFont
 
 
 def _ids(path: Path) -> str:
-    return path.relative_to(SRC).as_posix()
+    return path.relative_to(SRC.parent).as_posix()
 
 
 @pytest.mark.parametrize("path", CANVAS_FILES, ids=_ids)
@@ -112,7 +112,7 @@ def test_every_canvas_script_on_a_web_surface_is_under_the_contract():
                 if DRAWS.search(page.read_text(encoding="utf-8")):
                     drawing.append(here)
     unlisted = [here for here in drawing
-                if here.removeprefix("src/") not in listed and here not in CANVAS_EXEMPT]
+                if here not in listed and here not in CANVAS_EXEMPT]
     stale = [here for here in CANVAS_EXEMPT if here not in drawing]
     assert unlisted == [], f"캔버스 판정 밖의 그리는 파일: {unlisted}"
     assert stale == [], f"더 그리지 않는 예외는 지운다: {stale}"

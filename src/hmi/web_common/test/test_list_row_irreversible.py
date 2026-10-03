@@ -28,7 +28,7 @@ WEB_ROOTS = (
     ROOT / "hmi" / "dashboard",
     COMMON,
     ROOT / "site" / "fleet" / "fleet" / "server" / "web",
-    ROOT / "site" / "games" / "games" / "web",
+    ROOT.parent / "operations" / "apps" / "games" / "games" / "web",
 )
 ROW_TAGS = {"li", "tr", "ul", "ol", "table"}
 VOID = {"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "source", "track", "wbr"}

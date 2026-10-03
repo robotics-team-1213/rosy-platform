@@ -9,7 +9,7 @@
 | [deploy](deploy/progress.md) | 릴리스·플랫폼 | 4e99d92e (2026-10-02) | GO | GO | N/A | HOLD | HOLD | N/A |
 | [control](src/runtime/sensing/progress.md) | CONTROL | 4e99d92e (2026-10-02) | GO | GO | HOLD | HOLD | HOLD | PARKED |
 | [fleet](src/site/fleet/progress.md) | FLEET | bed604ef (2026-09-30) | GO | GO | HOLD | PARKED | PARKED | PARKED |
-| [games](src/site/games/progress.md) | GAMES | bed604ef (2026-09-30) | GO | GO | N/A | N/A | PARKED | PARKED |
+| [games](operations/apps/games/progress.md) | GAMES | bed604ef (2026-09-30) | GO | GO | N/A | N/A | PARKED | PARKED |
 | [rosy_vision](src/site/vision/progress.md) | SITE | a8199fd9 (2026-09-30) | GO | GO | N/A | N/A | PARKED | PARKED |
 | [rosy_cell](src/site/cell/progress.md) | SITE | 9da93450 (2026-10-02) | GO | N/A | HOLD | N/A | PARKED | PARKED |
 | [palletizing](operations/processes/palletizing/progress.md) | PROCESS | d9e70f71 (2026-10-02) | GO | N/A | HOLD | HOLD | PARKED | PARKED |

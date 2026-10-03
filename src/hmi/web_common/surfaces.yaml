@@ -84,13 +84,13 @@ surfaces:
     baseline: docs/validation/uiux-surfaces-2026-09-26/captures/fleet-normal-1920x1080.png
 
   - id: game-board
-    path: src/site/games/games/web
+    path: operations/apps/games/games/web
     themes: [dark]
     theme_reason: 경기장 녹색이 곧 바탕이다(D-359 §3.3)
     surface: site
     medium: web
     ports:
-      - {port: 8765, source: src/site/games/games/cli.py}
+      - {port: 8765, source: operations/apps/games/games/cli.py}
     audience: 게임 호스트 노트북 (D-153 §7 — /board)
     role: 게임 호스트 보드 — D-370 역할 표 밖이다(8항)
     owns: []

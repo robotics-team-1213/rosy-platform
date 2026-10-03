@@ -27,7 +27,7 @@ Set `ROSY_REPO` to the real ROSY checkout path and build its Jazzy `src` overlay
 
 Run a single CORE instance in the same namespace and domain. Verify `/clock`, `/rosy_01/odom`, `/tf`, `/rosy_01/joint_states`, the wheel joint names, and the number of `/rosy_01/cmd_vel` publishers before enabling motion. Configure external ROS nodes with `use_sim_time=true`. Record motion and zero-command behavior from the live simulation, not just the graph declaration. The initial integration has no LiDAR, camera, Nav2, or timeout evidence and has not been run on an Isaac Sim host.
 
-The soccer training environment deferred by D-98 belongs to `src/site/games/games/isaac/` and is not enabled here. See [D-322](../../../docs/adr/D-322-isaac-sim-rosy-integration.md) and the [research note](../../../docs/reference/isaac-sim-integration-research.md).
+The soccer training environment deferred by D-98 belongs to `operations/apps/games/games/isaac/` and is not enabled here. See [D-322](../../../docs/adr/D-322-isaac-sim-rosy-integration.md) and the [research note](../../../docs/reference/isaac-sim-integration-research.md).
 
 ## Robot model assets
 

@@ -71,8 +71,8 @@ def test_the_raw_colour_scan_reads_every_web_file():
         "src/hmi/web_common/components.css", "src/hmi/web_common/ui.js", "src/hmi/web_common/tokens.css",
         "src/site/fleet/fleet/server/web/styles.css", "src/site/fleet/fleet/server/web/map-view.js",
         "src/site/fleet/fleet/server/web/index.html",
-        "src/site/games/games/web/styles.css", "src/site/games/games/web/board.js",
-        "src/site/games/games/web/index.html",
+        "operations/apps/games/games/web/styles.css", "operations/apps/games/games/web/board.js",
+        "operations/apps/games/games/web/index.html",
     ):
         assert expected in seen, f"원시 색 스캔이 {expected}를 읽지 않는다"
     assert not any("/test/" in here for here in seen), "시험 파일은 표면이 아니다"

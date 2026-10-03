@@ -20,10 +20,11 @@ HOME_PREFIXES = ("products/pinky_pro/",)
 
 def hits() -> set:
     found = set()
-    for path in SRC.rglob("*"):
+    # D-427 wave 3b: site apps left src/ for operations/; their keys are repo-relative.
+    for path in [*SRC.rglob("*"), *(ROOT / "operations").rglob("*")]:
         if not path.is_file() or path.suffix not in SUFFIXES:
             continue
-        rel = path.relative_to(SRC)
+        rel = path.relative_to(SRC if path.is_relative_to(SRC) else ROOT)
         if any(part in SKIP_PARTS or part.startswith(".") for part in rel.parts):
             continue
         key = rel.as_posix()

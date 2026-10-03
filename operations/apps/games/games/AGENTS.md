@@ -29,7 +29,7 @@ Laptop game host (D-90): match loop that observes, referees, applies a policy, c
 
 ### Working In This Directory
 
-- Import rules, enforced by `src/site/games/test/test_games_boundaries.py`: `field`, `game`, `policy` import none of `cv2`, `httpx`, `rclpy`, `core`, `fleet`. OpenCV only in `host/overhead.py`; `host/loop.py` and `host/transport.py` never import it. Do not add `isaac/`.
+- Import rules, enforced by `operations/apps/games/test/test_games_boundaries.py`: `field`, `game`, `policy` import none of `cv2`, `httpx`, `rclpy`, `core`, `fleet`. OpenCV only in `host/overhead.py`; `host/loop.py` and `host/transport.py` never import it. Do not add `isaac/`.
 - Referee `step()` never sees policy twists; policy output always passes through `game/gate.py` before transport.
 - `session.py` must always send estop on exit, including on error.
 - `visibility.ready` is not FIELD GO.
@@ -38,7 +38,7 @@ Laptop game host (D-90): match loop that observes, referees, applies a policy, c
 ### Testing Requirements
 
 ```bash
-python -m pytest src/site/games/test test/test_rosy_games_surface.py -q
+python -m pytest operations/apps/games/test test/test_rosy_games_surface.py -q
 ```
 
 Coverage by area: `test_field.py`, `test_homography.py` (field); `test_soccer_game.py`, `test_gate.py` (game); `test_loop.py`, `test_host_session.py`, `test_host_transport.py`, `test_overhead.py`, `test_project.py`, `test_visibility.py`, `test_preview.py` (host); `test_heuristic_policy.py` (policy); `test_catalog.py`, `test_games_cli.py`. `test/fake_host.py` is the shared fake.

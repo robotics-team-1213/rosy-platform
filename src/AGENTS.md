@@ -22,7 +22,7 @@ No files at this level. Each package directory has its own `AGENTS.md` (e.g. `ru
 | `hmi/` | `face/` (package `emotion`, robot LCD), `web_common/` (package `web_common`, shared browser assets), `dashboard/` (operator screens served by `core_api_web`), `pilot/` (package `pilot`, Rosy Pilot teleop surface served by `core_api_web`, D-323) |
 | `sim/` | Simulation: `description` (URDF/xacro, meshes, RViz), `gz_sim` (Gazebo worlds; CMake no-ops on aarch64) |
 | `../learning/envs/isaac` | Not under `src/` since D-427 wave 1: ROS package `isaac_sim` (Isaac Sim integration area), found through the `colcon_roots` list in `tools/harness/platform_parts.yaml` |
-| `site/` | `fleet/` (site mission/task ledger and console), `vision/` (Rosy Vision, package `rosy_vision`: camera-derived sighting input), `cam/` (Rosy Cam ceiling camera Android app, not a ROS package), and `games/` (game host) |
+| `site/` | `fleet/` (site mission/task ledger and console), `vision/` (Rosy Vision, package `rosy_vision`: camera-derived sighting input), and `cam/` (Rosy Cam ceiling camera Android app, not a ROS package). The game host moved to `../operations/apps/games` (D-427 wave 3b) |
 
 ## For AI Agents
 
@@ -86,7 +86,7 @@ authority. Follow D-317 for any proposed source split or package move.
 
 ```bash
 cd src && colcon build --symlink-install --event-handlers console_direct+
-python3 -m pytest contracts/foundation/test/ runtime/gateway/test/ runtime/events/test/ runtime/services/test/ hmi/web_common/test/ hmi/dashboard/test/ runtime/sensing/test/ site/fleet/test products/omx/adapter/test site/games/test ../learning/envs/isaac/test -q
+python3 -m pytest contracts/foundation/test/ runtime/gateway/test/ runtime/events/test/ runtime/services/test/ hmi/web_common/test/ hmi/dashboard/test/ runtime/sensing/test/ site/fleet/test products/omx/adapter/test ../learning/envs/isaac/test ../operations/apps/games/test -q
 # ament linters live in each Python package's test/ (copyright, flake8, pep257)
 ```
 
