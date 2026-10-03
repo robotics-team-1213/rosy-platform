@@ -4483,8 +4483,7 @@
 
 ## 2026-10-02 · uncommitted · docs(adr): D-395 개정 9 — S1 Gazebo 통과
 - 변경: 다른 세션과 조율한 조용한 시간대(13:54–16:09 KST)의 S1 네 번째 실행 15회를 기록하고 S1을 닫았다. 확정 오차 ≤1.2 cm / 1.2°, 거울 결정 0/35, 강제 거울 탐지 6/6(3.1–4.1 sim s), 실제 주행 중 들어 옮김 4회 완전 통과. 남은 단계는 S2(4대 sim), 실기(개정 5)·S3, D-257·D-393 개정 수락(사용자 승인).
-- 증거: `docs/plans/2026-10-02-d395-s1-bench-results.md` Run 4, `X:\DevTemp
-osy-d395-s1d\`.
+- 증거: `docs/plans/2026-10-02-d395-s1-bench-results.md` Run 4, `X:\DevTemposy-d395-s1d\`.
 - gate 변화: 없음(Proposed). ROS-SIM S1 통과.
 
 ## 2026-10-02 · uncommitted · docs(logs): D-395 개정 9 항목의 증거 경로 정정
@@ -4626,13 +4625,14 @@ osy-d395-s1d\`.
 - Change: construct existing PickPlaceRunner with Skill-bound analytic planning and accepted profile/state/geometry; preserve existing owner ports, grant-scoped phase gates, local stop fencing and exact cancellation. Advance remains an explicit local workflow operation.
 - Evidence: missing-factory red regression; focused actual planner/API/runner/journal/Skill/boundary tests 75 passed. Four phases and denied transfer covered; persisted local replay does not submit again, and unresolved parent blocks rearm. Full OMX adapter plus provider/Skill/boundaries: 353 passed / 5 skipped. Quick tier: 96 passed / 25 freshness warnings. Independent review: 6 passed, no Critical/Important findings.
 - Gate: SOURCE/LOCAL only; no second owner or ROS loop added. Parent terminal workflow, Fleet/OMX two-ledger replay and ROS-SIM remain open.
+
+
 ## 2026-10-03 · uncommitted · docs: D-426 Fleet–Gazebo 실제 통신·주행 수용 설계
 
 - 요청: 실제 관제/로봇 요구를 Fleet–Gazebo 구현 목표와 ADR로 구체화.
 - 변경: D-426 Proposed, T1–T6 구현 계획, M01–M08 반복 수용 행렬. 일관성·실행 가능성·장애 가정·통신 경계 검토 반영: Agent launch 설정, contact 계측, ideal odometry 한계, base watchdog 부재, 진입 시한 재검사, 이전 실행 정지 대조, 부정 시험 판정 분리, GZ_PARTITION 격리.
 - 증거: 문서 검토와 계약 검사 결과는 별도 검토 문서에 기록. 실제 Gazebo/DEVICE/FIELD 합격으로 승격하지 않음.
 - gate 변화: 없음 — 문서/구현 목표 설정만. 실제 회차 미실행.
-
 
 ## 2026-10-03 · uncommitted · feat: journal Cell hold release and local Action completion
 - Change: reuse physical gripper transaction rules with canonical Cell grant provenance; optionally compose durable workflow gates with the real Skill phase runner. Require matching scoped fresh hold/release readback before local terminal success. Provider/clock/cancel errors and snapshot recovery stay HOLD.

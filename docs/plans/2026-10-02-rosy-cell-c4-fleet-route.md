@@ -236,7 +236,7 @@ def test_kinds_do_not_cross_validate():
   2. `compile_job(recipe, cell, tol_m=...)`.
   3. `carry_z(recipe, cell, tol_m=...)`를 부르고 `job.carry_z`와 같은지 단언한다. 계산은 다시 구현하지 않는다(D-403 §2).
   4. `plan_bundle.compile_plan_bundle(job, recipe, cell, process_artifact_digest=..., tol_m=...)` → `CellJobCompilation`.
-  
+
   `fleet`이 `rosy.processes.palletizing`을 import하는 곳은 이 파일 하나로 둔다. `src/site/fleet/test/test_boundaries.py`에 그 규칙을 더한다.
 - `tools/harness/platform_dependencies.yaml`:
   - component `execution_site`: path `modules/execution/src/rosy/execution/site`, prefix `rosy.execution.site`.
