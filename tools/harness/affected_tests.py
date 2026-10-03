@@ -277,27 +277,23 @@ def select(repo: Repo, changed: list[str]) -> Selection:
             continue  # D-436 2: a Markdown note outside every module runs the guards only.
         sel.escalations.append(f"{path}: maps to no module, import root or test (unknown -> full)")
 
-    # Reverse dependents, transitively, through static imports of owned prefixes.
-    seen: set[str] = set()
-    queue = list(touched_modules.values())
-    while queue:
-        module = queue.pop()
-        if module["name"] in seen:
-            continue
-        seen.add(module["name"])
+    # Direct reverse dependents (D-436 1): modules whose shipped (non-test) code
+    # imports a touched module's prefix, plus any test file importing it. One
+    # level only: the transitive closure of core_features or control is nearly
+    # the whole tree, and the main-push full run is the net for deeper paths.
+    for module in touched_modules.values():
         prefixes = repo.prefixes_under(module["path"])
         if not prefixes:
             continue
         for other in repo.modules:
-            if other["name"] in seen or other["name"] == module["name"]:
+            if other["name"] == module["name"]:
                 continue
-            sources = [t for t in repo.tracked if t.endswith(".py") and _under(t, other["path"])
-                       and repo.module_for(t) is other]
+            sources = [t for t in repo.tracked if t.endswith(".py") and not TEST_FILE.search(t)
+                       and _under(t, other["path"]) and repo.module_for(t) is other]
             if any(repo.imports_prefix(s, prefixes) for s in sources):
                 for test in other.get("tests") or []:
                     if test not in BROAD_TESTS:
                         add(test, f"reverse dependent {other['name']} imports {'/'.join(prefixes)}")
-                queue.append(other)
         for test in repo.test_files:
             if not _under(test, module["path"]) and repo.imports_prefix(test, prefixes):
                 add(test, f"imports {'/'.join(prefixes)} (module {module['name']})")

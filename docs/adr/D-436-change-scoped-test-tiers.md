@@ -13,7 +13,7 @@
 
 1. **affected 티어(로컬 에이전트 반복, PR CI).** `python tools/harness/rosy_harness.py affected [--base main]`이 `git diff --name-only --no-renames base...HEAD`와 작업 트리 변경(스테이지·비스테이지·추적 안 된 파일)을 합쳐 다음을 고른다.
    - 바뀐 파일이 속한 harness 모듈(가장 긴 `path` 접두)의 `tests`.
-   - 그 모듈의 역의존: `platform_parts.yaml`의 `import_prefix`를 import하는 다른 모듈(전이 폐포)의 `tests`와, 그 접두를 import하는 시험 파일.
+   - 그 모듈의 직접 역의존: 출하 코드(시험 파일 제외)가 `platform_parts.yaml`의 `import_prefix`를 import하는 다른 모듈의 `tests`와, 그 접두를 import하는 시험 파일. 한 단계만 본다 — `control`이나 `core_features`에서 전이 폐포를 따라가면 거의 전체 트리가 되어(2026-10-03 측정: sensing 파일 하나가 시험 파일 약 70개·디렉터리 8개를 끌어옴) 티어를 둘 이유가 사라진다. 더 깊은 경로는 main push 풀 실행이 그물이다.
    - 바뀐 경로를 직접 가리키는 시험 파일(저장소 경로 문자열, 저장소에서 유일한 파일 이름, 시험 보조 모듈의 import). 문서 계약 시험(`test_line_follow_contract_docs`, `test_task_contract_docs` 등)은 이 규칙으로 따라온다.
    - 바뀐 파일이 시험 파일이면 그 파일만(모듈 전체나 역의존을 끌어오지 않는다).
    - 모듈 `tests`가 루트 `test/` 전체인 경우(`deploy`)는 너무 넓어서 그 모듈의 `functional`과 위의 직접 참조 시험으로 좁힌다. 둘 다 비면 `test/` 전체로 돌아간다.

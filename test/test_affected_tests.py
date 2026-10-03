@@ -32,6 +32,9 @@ modules:
   - name: core_common
     path: src/contracts/foundation
     tests: [src/contracts/foundation/test]
+  - name: core_api_web
+    path: src/runtime/api_web
+    tests: [src/runtime/api_web/test]
   - name: deploy
     path: deploy
     tests: [test]
@@ -49,6 +52,8 @@ roots:
     import_prefix: [core]
   - path: src/runtime/sensing
     import_prefix: [control]
+  - path: src/runtime/api_web
+    import_prefix: [core_api_web]
   - path: tools
   - path: docs
 """
@@ -63,6 +68,8 @@ FILES = {
     "src/runtime/gateway/core/node.py": "from control.battery import read\n",
     "src/runtime/gateway/test/test_battery.py": "import core\n",
     "src/runtime/gateway/test/conftest.py": "",
+    "src/runtime/api_web/core_api_web/app.py": "import core\n",
+    "src/runtime/api_web/test/test_app.py": "import core_api_web\n",
     "deploy/robot/run.sh": "echo run\n",
     "docs/adr/D-1-sample.md": "## D-1 sample\n",
     "docs/reference/line-follow.md": "# line follow\n",
@@ -110,7 +117,7 @@ CASES = [
      ["tools/ssh/rosy_ssh_enroll.py"], "affected", {"test/test_rosy_ssh_enroll.py"}),
     ("core_common -> full", ["src/contracts/foundation/core_common/schemas.py"], "full", None),
     ("unmapped file -> full (unknown never means nothing)", ["tools/mystery/run.sh"], "full", None),
-    ("sensing -> sensing suite + reverse dependent gateway",
+    ("sensing -> sensing suite + direct reverse dependent gateway (api_web is two hops: not pulled)",
      ["src/runtime/sensing/control/battery.py"], "affected",
      {"src/runtime/sensing/test", "src/runtime/gateway/test"}),
     ("ADR only -> docs module contracts (guards cover the ADR index)",
