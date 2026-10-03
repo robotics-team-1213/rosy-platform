@@ -551,7 +551,6 @@ def test_rules_reject_injected_edges_and_accept_allowed_ones():
     assert _allowed(middleware, _root("m2", "middleware"), rules)
 
 
-
 def test_api_rule_admits_only_api_targets_for_integrations_and_api_roots():
     """D-429 §4 rules 2 and 3 on injected roots."""
     rules = _manifest()["import_rules"]
