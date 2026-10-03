@@ -447,3 +447,31 @@
 - 근거: D-410. 사용자 지시 2026-10-02.
 - gate 변화: 없음.
 - 최종 증거: web_common 209 passed 24 skipped.
+
+## 2026-10-02 · uncommitted · DESIGN.md Components 절 어휘 보충 — chip·triage·evidence/empty·icon
+- 변경: DESIGN.md Components에 ui-chip(오버레이 칩)·ui-triage(분류 머리)·ui-evidence/ui-empty·.ui-icon 절을 추가했다. 견본(styleguide.html) 패리티 항목은 dashboard 로그 참조. 토큰·부품 코드(components.css·ui.js)는 건드리지 않았다.
+- 근거: D-92, D-359, D-405.
+- gate 변화: 없음.
+- 최종 증거: web_common+dashboard 286 passed 82 skipped.
+
+## 2026-10-03 · uncommitted · test: D-425 API owner와 공통 호출 경계
+- 변경: 실제 소비자 6개에 api_owners 명시. 공통 UI/transport는 운용 endpoint를 직접 선택하지 않으며 계약별 client는 별도 책임으로 구분. evidence의 경로 이름표는 발행으로 취급하지 않음.
+- 증거: CORE/Fleet 실제 권한·owner·JS caller 및 역할 가드 33 passed; 선언/권한/공유 발행 변이 4개 red 후 bytes 복원. 관련 등록부 회귀를 함께 실행.
+- gate 변화: SOURCE/LOCAL 계약 강화; 설치/DEVICE/FIELD 수용은 이 증거로 승격하지 않음.
+
+## 2026-10-03 · uncommitted · refactor: scoped HTTP request와 화면 scope
+- 변경: request.js/scope.js, shared manifest/CMake 설치 목록, Node source 계약 27개와 pytest wrapper를 추가. credential/origin과 scope 인스턴스를 분리하며 자동 명령 재전송을 넣지 않음.
+- 증거: Node 27 passed; wrapper/manifest/role 15 passed. origin/late-abort/handler/CMake 변이가 실제 실패하고 원본 bytes를 복원. 기존 소비자 JSON/error/audit 의미는 client 연결 때 별도 유지.
+- gate 변화: SOURCE/LOCAL 계약 강화. 실제 설치·장치 수용은 consumer runtime에서 별도 검증.
+
+## 2026-10-03 · uncommitted · refactor: D-425 Fleet response adapter
+
+- 변경: request 위에 Fleet body/error/status 해석을 분리하고 Console 두 문서에 연결. shared manifest/CMake가 fleet-client.js를 함께 설치. DOM/storage/명령 replay는 adapter에 없음.
+- 증거: Fleet/authorization/poll gate Node 18 passed; 오류 status 변이가 실패하고 source 사본 bytes 복원.
+- gate 변화: SOURCE/LOCAL HTTP 계약 강화. 실제 문서 scope와 installed-only 검증은 후속 Task 범위.
+
+## 2026-10-03 · uncommitted · fix(web): SAFE_STOP 운용 말은 RobotMode 표 밖에 둔다
+- 변경: `operatorModeLabel`이 DeviceState 문자열 SAFE_STOP을 "안전 정지"로 보이고, 나머지 모드는 MODE_LABEL을 그대로 쓴다. MODE_LABEL 키는 RobotMode와 같다.
+- 근거: D-359 US-009. protocol RobotMode에 SAFE_STOP이 없다.
+- 증거: 2026-10-03 Windows. test_enum_labels.py와 test_operator_copy.py가 콘솔 묶음 240 passed 안에 포함된다. SAFE_STOP은 MODE_LABEL 키가 아니다.
+- gate 변화: 없음.

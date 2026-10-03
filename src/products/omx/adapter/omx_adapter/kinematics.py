@@ -24,6 +24,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Mapping, Sequence
@@ -33,6 +34,24 @@ import yaml
 
 ARM_JOINTS = ("joint1", "joint2", "joint3", "joint4", "joint5")
 DEFAULT_KINEMATICS_PATH = Path(__file__).resolve().parents[1] / "config" / "omx_f_kinematics.yaml"
+
+
+def _default_kinematics_path() -> Path:
+    """Find the canonical asset in a source checkout, wheel or ROS overlay."""
+    if DEFAULT_KINEMATICS_PATH.is_file():
+        return DEFAULT_KINEMATICS_PATH
+    installed = Path(sys.prefix) / "share" / "omx_adapter" / "config" / "omx_f_kinematics.yaml"
+    if installed.is_file():
+        return installed
+    try:
+        from ament_index_python.packages import PackageNotFoundError, get_package_share_directory
+    except ImportError:
+        return installed
+    try:
+        return Path(get_package_share_directory("omx_adapter")) / "config" / "omx_f_kinematics.yaml"
+    except PackageNotFoundError:
+        return installed
+
 
 IK_OK = "OK"
 IK_OUTSIDE_WORKSPACE = "OUTSIDE_WORKSPACE"
@@ -202,7 +221,9 @@ class OmxKinematics:
         self._derive_closed_form()
 
     @classmethod
-    def load(cls, path: Path | str = DEFAULT_KINEMATICS_PATH) -> "OmxKinematics":
+    def load(cls, path: Path | str | None = None) -> "OmxKinematics":
+        if path is None:
+            path = _default_kinematics_path()
         with open(path, encoding="utf-8") as handle:
             document = yaml.safe_load(handle)
         if not isinstance(document, Mapping):

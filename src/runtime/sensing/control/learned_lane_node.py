@@ -5,8 +5,11 @@ CAMERA_LINE error for comparison). Publishes perception/learned/shadow
 (std_msgs/String JSON) and, at 1 Hz, perception/learned/status (model,
 last error, frame counters, latency p50; D-373, D-62). No consumer in the control path reads it; this node
 never publishes cmd_vel (D-2, D-209). The model comes from the pointer file
-/var/lib/rosy/models/shadow (parameter `pointer`) and swaps without restart."""
+/var/lib/rosy/models/shadow (parameter `pointer`) and swaps without restart.
+`visible` is latched per stream (VisibleHysteresis, on 0.35 / off below 0.25;
+2026-10-02 audit); a swapped model starts a fresh latch."""
 
+import dataclasses
 import json
 import time
 
@@ -20,6 +23,7 @@ from std_msgs.msg import String
 
 from . import executor_choice
 from .sensing.perception.image_frame import image_msg_to_frame
+from .sensing.perception.learned.lane_mask import VisibleHysteresis
 from .sensing.perception.learned.runner import LaneSegModel, ModelSlot
 from .sensing.perception.learned.shadow import TOPIC, RuleRing, shadow_payload
 from .sensing.perception.learned.signature import TRUSTED_KEYS, SignatureCheck
@@ -50,6 +54,7 @@ class LearnedLaneNode(Node):
         self._busy = False  # only matters under a MultiThreadedExecutor
         # Rule answers keyed by image stamp: compared per frame, not newest-wins.
         self._rules = RuleRing()
+        self._visible = VisibleHysteresis()
         self._logged_error = None
         self._logged_revision = None
         self._pub = self.create_publisher(String, TOPIC, 10)
@@ -118,6 +123,7 @@ class LearnedLaneNode(Node):
             return
         if model.model_revision != self._logged_revision:
             self._logged_revision = model.model_revision
+            self._visible = VisibleHysteresis()
             self.get_logger().info(f'shadow model {model.model_revision}')
             if self._signature.signed is False:
                 self.get_logger().warn(f'shadow model {model.model_revision} is not release-signed '
@@ -128,6 +134,7 @@ class LearnedLaneNode(Node):
             bgr = _image_to_bgr(msg)
             result = model.infer(bgr)
             self._status.frame_inferred(result.latency_ms)
+            result = dataclasses.replace(result, evidence=self._visible.update(result.evidence))
             stamp = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
             rule_visible, rule_error = self._rules.match(stamp)
             payload = shadow_payload(result, stamp=stamp, rule_error=rule_error,

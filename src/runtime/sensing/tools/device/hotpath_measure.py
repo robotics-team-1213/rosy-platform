@@ -68,7 +68,7 @@ NODE_NAMES = (
     'camera_detect_node', 'ir_adc_node', 'line_observer_node', 'road_observer_node',
     'obstacle_observer_node', 'watch_node', 'goal_node', 'localization_node', 'web_node',
     'dock_observer_node', 'learned_lane_node', 'capture_trigger_node', 'road_state_node',
-    'loc_assist_node', 'object_detector_node',
+    'loc_assist_node', 'pilot_recorder_node', 'object_detector_node',
 )
 
 

@@ -15,6 +15,12 @@ Rosy Pilot 원격 조종 표면(D-323). 정적 파일이며 `core_api_web`이 `/
 | `index.html` | web_common `template.html` 기반 `ui-shell`(grammar `spatial`) |
 | `styles.css` | 표면 규칙만 — 색·타이포는 `tokens.css`(D-130.3) |
 | `stick.js` | 입력 → `{linear, angular}` 순수 매핑(데드존·감도 곡선·프리셋·반전) |
+| `recording.js` | D-411 로봇 녹화 순수 표시 판정(경과·크기 서식, 토글, 거부 코드, "녹화본" 시트 행·차단 사유) |
+| `screens/robot-recording.js` | D-411 로봇 녹화 HUD 토글·"녹화본" 시트 DOM(폴링, 시작/정지, 받기 — 정지 중에만, 짧은 본문은 실패) |
+| `controls.js` | D-411 B `rosy.controls/1` 순수 읽기(스키마 확인, 위젯 계획, 필드 없음 = 구 서버 대체, Pinky 프로필 변환), C 그리퍼 %·위치·목표 길이·배지 문구 |
+| `arm-stick.js` | D-411 B 팔 조이스틱 순수 논리(축·데드존·우세 축 단계, 이전 목표가 끝난 뒤에만 다음 목표, 떼면 새 목표만 멈춤) |
+| `screens/compose.js` | 서술자 → kind별 위젯 조립. 모르는 kind 는 "지원하지 않는 조작부", 빈 목록은 "조작부 없음" |
+| `screens/arm.js` | OMX SIM 화면: 페어링·seat·readback·세션 컨텍스트(`submitJog`·`submitGripper`, `onUpdate`), 조립, 취소, 시연 기록 |
 | `progress.md` | Current gate snapshot (SOURCE→FIELD). Overwrite; state of record over this file |
 | `logs.md` | Append-only work journal, one entry per change |
 | `index.md` | Generated. Do not edit |
@@ -23,7 +29,9 @@ Rosy Pilot 원격 조종 표면(D-323). 정적 파일이며 `core_api_web`이 `/
 
 | Directory | Purpose |
 |-----------|---------|
-| `test/` | Node 서브프로세스 순수 시험(`test_stick.py`)과 브라우저 시험(예정) |
+| `test/` | Node 서브프로세스 순수 시험(`test_stick.py`·`test_controls.py`·`test_arm_stick.py` 등)과 Playwright 브라우저 시험(`ROSY_RUN_BROWSER_TESTS=1`, `dev_server.py` 가짜 CORE) |
+| `widgets/` | D-411 kind별 DOM 위젯(`joint_jog.js`: 2축 패드·관절 버튼; `gripper.js`: 열기/반/닫기·열림 %·쥠 배지) |
+| `drivers/`, `screens/` | 전송 드라이버(전송만), 화면 |
 
 ## For AI Agents
 
@@ -31,7 +39,9 @@ Rosy Pilot 원격 조종 표면(D-323). 정적 파일이며 `core_api_web`이 `/
 
 - Harness (D-61): 변경 뒤 `logs.md` 추가, gate 가 움직이면 `progress.md` 갱신, 루트에서 `python tools/harness/rosy_harness.py generate`.
 - CSP 인라인 스크립트·스타일 금지. 같은 출처의 `/api/v1`·`/ws/*` 만 호출한다.
-- 새 JS 모듈은 `api/app.py`의 `pilot_assets` 와 `CMakeLists.txt` 에 함께 등록한다(빠뜨리면 404).
+- 새 JS 모듈은 다섯 곳에 함께 등록한다: `api/app.py` `pilot_assets`, OMX `pilot_sim_api.py` `PILOT_ASSETS`, `sw.js` `SHELL`(+`CACHE` 이름 올림), `test/dev_server.py` `PILOT_MIME`, `CMakeLists.txt`(빠뜨리면 404, `test_shell_assets.py` 가 잡는다).
+- 순수 모듈(`stick.js`·`recording.js`·`controls.js`·`arm-stick.js`)은 import 없이 자족한다(Node 시험이 data: URL 로 읽는다).
+- 팔은 100 ms 스트림을 쓰지 않는다(D-390 §2): 제한 목표 하나씩, 이전 목표가 끝난 뒤에만. 떼면 취소하지 않는다(취소 = HOLD, D-411 구현 부록).
 - **hold-to-drive**: 손을 떼면·탭이 화면을 벗어나면·게임패드가 끊기면 즉시 0 을 발행한다.
 - 토큰은 D-193 저장 규칙(sessionStorage 기본). URL·쿠키·콘솔에 두지 않는다. 실기 주소·계정은 `private/`(D-226).
 - 1차 기기는 현장 태블릿(Lenovo 1200×2000, 가로 기준).

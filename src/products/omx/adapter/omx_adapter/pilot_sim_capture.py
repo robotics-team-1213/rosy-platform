@@ -82,6 +82,8 @@ class PilotSimCapture:
             provenance = {**self.source, "simulation": True, "clock_domain": "gazebo_sim", "fps": 10,
                           "instance_id": self.runtime.instance_id, "joint_names": list(config.joint_names),
                           "position_limits_rad": dict(config.position_limits),
+                          # D-411 C: the gripper takes absolute goals, recorded as action.gripper.
+                          "gripper_joint": getattr(self.runtime, "gripper_joint_for_goals", None),
                           "calibration_revision": config.calibration_revision,
                           "camera": {"name": "front", "identity": metadata.camera_identity,
                                      "width": metadata.width, "height": metadata.height,

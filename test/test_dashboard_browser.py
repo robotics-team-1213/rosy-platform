@@ -456,7 +456,7 @@ def test_delayed_positive_request_cannot_arrive_after_release_zero():
             pytest.skip(f"Playwright Chromium unavailable: {error}")
         page.goto("http://rosy.test/dashboard", wait_until="domcontentloaded", timeout=5_000)
         page.wait_for_function(
-            "document.getElementById('robot-mode')?.textContent === 'MANUAL'"
+            "document.getElementById('robot-mode')?.textContent === '수동'"
         )
         # F-09 — 정상(MANUAL, fresh) 상태에서 보이는 따뜻한 색은 E-Stop 채움
         # 하나뿐이다(Law 3/D-82 "위험은 채움이다"). 실투 스캔 실측(회차 9).
@@ -512,7 +512,7 @@ def test_field_settings_save_limits_waypoint_and_dock_without_navigation():
             pytest.skip(f"Playwright Chromium unavailable: {error}")
         page.goto("http://rosy.test/dashboard", wait_until="domcontentloaded", timeout=5_000)
         page.wait_for_function(
-            "document.getElementById('robot-mode')?.textContent === 'MANUAL'"
+            "document.getElementById('robot-mode')?.textContent === '수동'"
         )
         page.locator("#view-inspect").click()
         page.locator("#field-settings-panel").scroll_into_view_if_needed()
@@ -605,7 +605,7 @@ def test_waypoint_delete_dialog_keeps_the_estop_out_of_the_inert_region():
         except Exception as error:
             pytest.skip(f"Playwright Chromium unavailable: {error}")
         page.goto("http://rosy.test/dashboard", wait_until="domcontentloaded", timeout=5_000)
-        page.wait_for_function("document.getElementById('robot-mode')?.textContent === 'MANUAL'")
+        page.wait_for_function("document.getElementById('robot-mode')?.textContent === '수동'")
         page.locator("#view-inspect").click()
         delete = page.locator('li[data-name="zone_a"] [data-waypoint-action="delete"]')
         delete.wait_for()
@@ -920,7 +920,7 @@ def test_console_state_matrix_renders_each_state(state):
             )
         elif state == "safe-stop":
             page.wait_for_function(
-                "document.getElementById('robot-mode')?.textContent === 'SAFE_STOP'"
+                "document.getElementById('robot-mode')?.textContent === '안전 정지'"
             )
         elif state == "vision-unavailable":
             page.wait_for_function(
@@ -1023,7 +1023,7 @@ def test_irreversible_mode_change_needs_confirm_and_decline_blocks_it():
             timeout=5_000,
         )
         page.wait_for_function(
-            "document.getElementById('robot-mode')?.textContent === 'MANUAL'"
+            "document.getElementById('robot-mode')?.textContent === '수동'"
         )
         page.locator('[data-mode="IDLE"]').click()
         page.wait_for_function("window.__confirms.length === 1")
@@ -1060,7 +1060,7 @@ def test_irreversible_cyclone_apply_needs_confirm_and_decline_blocks_it():
             timeout=5_000,
         )
         page.wait_for_function(
-            "document.getElementById('robot-mode')?.textContent === 'MANUAL'"
+            "document.getElementById('robot-mode')?.textContent === '수동'"
         )
         page.locator("#view-inspect").click()
         page.locator("#dds-cyclone-apply").click()
@@ -2255,7 +2255,7 @@ def test_map_keyboard_crosshair_posts_a_goal_with_the_same_confirm():
         page.goto("http://rosy.test/dashboard", wait_until="domcontentloaded",
                   timeout=5_000)
         page.wait_for_function(
-            "document.getElementById('robot-mode')?.textContent === 'MANUAL'")
+            "document.getElementById('robot-mode')?.textContent === '수동'")
         page.wait_for_timeout(800)
         canvas = page.locator("#map-canvas")
         assert canvas.get_attribute("tabindex") == "0"

@@ -222,9 +222,9 @@
 /* CORE-only은 설정이지 고장이 아니다 — 차단이어도 색을 쓰지 않는다(D-161, D-82). */
 .capability-item[data-cause="runtime"] b { color: var(--ink-quiet); }
 
-/* ---- 관측 — 지도가 영역을 전부 쓴다 ---------------------------------------
-   보조 요소는 전부 지도 위로 올린다. 흐름에 두면 툴바 두 줄·범례·안내가
-   264px을 먼저 가져가고 지도는 남는 것을 받는다 — 순서가 거꾸로다. */
+/* ---- 관측 — 격자가 먼저다 -------------------------------------------------
+   도구는 제목 줄의 한 행이고 범례는 캔버스 아래 한 줄이다. 격자 위에
+   절대 위치로 올리면 지도를 가리고, 흐름에 두 덩어리로 쌓으면 높이를 먹는다. */
 .field-map-panel { flex: 1; min-height: 0; }
 .vision-panel { flex: none; gap: var(--space-2); }
 .vision-heading { align-items: center; }
@@ -286,28 +286,16 @@
   pointer-events: none;
 }
 
-/* 지도 위에 얹는 것은 전부 같은 칩이다 — 장막 바탕에 실선 테두리. 점유 격자가
-   밝든 어둡든 그 위에서 읽힌다. */
-.map-controls { position: absolute; z-index: 2; top: var(--space-2); left: var(--space-2); display: flex; flex-direction: column; gap: var(--space-2); align-items: flex-start; }
-.map-toolbar, .map-hint, .map-legend {
-  border: 1px solid var(--surface-line);
-  border-radius: var(--radius-button);
-  background: var(--scrim);
-}
-.map-toolbar { display: flex; gap: var(--space-1); margin: 0; padding: var(--space-1); }
-/* 안내는 클릭 모드 툴바를 설명하는 글이다 — 그 아래 붙여 둔다. */
-.map-hint { max-width: 28ch; margin: 0; padding: var(--space-2); color: var(--ink); font-size: var(--text-label); line-height: var(--leading-body); }
-/* 범례는 지도의 색을 설명한다 — 지도 위가 제자리다. */
+.panel-heading > .map-tools { flex: 0 1 auto; min-width: 0; }
+.map-tools { display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; gap: var(--space-2); min-width: 0; }
+.map-toolbar { display: flex; gap: var(--space-1); margin: 0; padding: 0; }
+.map-hint { margin: 0; min-width: 0; color: var(--ink-quiet); font-size: var(--text-label); line-height: var(--leading-body); }
 .map-legend {
-  position: absolute;
-  z-index: 2;
-  left: var(--space-2);
-  bottom: var(--space-2);
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-1) var(--space-3);
   margin: 0;
-  padding: var(--space-1) var(--space-2);
+  padding: 0;
   list-style: none;
   color: var(--ink-quiet);
   font: var(--weight-regular) var(--text-micro)/var(--leading-body) var(--mono);
@@ -648,7 +636,7 @@
   /* console은 이 폭에서 height:auto다 — 상단 바가 늘어나도 뷰 계약은 깨지지
      않는다. 좁은 폭에서는 목적지 줄이 아래로 내려온다. */
   .topbar-status { flex-wrap: wrap; justify-content: flex-end; }
-  .clock, #connection-badge > span, .whoami-badge span { display: none; }
+  .clock, .whoami-badge span { display: none; }
   #connection-badge { justify-content: center; }
   .hero-strip { flex-wrap: wrap; padding: 0 var(--space-4); }
   .status-summary { flex: 1 0 100%; flex-wrap: wrap; padding: var(--space-2) 0; border-left: 0; }
@@ -656,7 +644,19 @@
   .hero-copy { flex: 1 0 100%; max-width: none; }
   .hero-state, .hero-safety { flex: 1 1 100%; min-width: 0; border-left: 0; padding-left: 0; }
   .hero-safety { flex-wrap: wrap; }
-  .hero-safety > span:last-child { min-width: 0; overflow-wrap: anywhere; }
+  .hero-safety > span:last-child { min-width: 0; overflow-wrap: break-word; }
+  /* 열을 쌓으면 즉시 정지가 지도 아래로 내려간다. 뷰포트 바닥에 고정한다. */
+  body[data-view="operate"] #emergency-stop {
+    position: fixed;
+    z-index: 30;
+    left: var(--space-3);
+    right: var(--space-3);
+    bottom: max(var(--space-3), env(safe-area-inset-bottom));
+    width: auto;
+  }
+  body[data-view="operate"] .console {
+    padding-bottom: calc(var(--target-irreversible) + var(--space-6) + env(safe-area-inset-bottom));
+  }
   .triage { grid-template-columns: minmax(0, 1fr); gap: var(--space-2); padding-inline: var(--space-4); }
   .triage-context { min-width: 0; flex-wrap: wrap; }
   .triage-context li { max-width: 100%; }

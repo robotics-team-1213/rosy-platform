@@ -4,6 +4,8 @@
 
 ### Context
 
+**Partially Superseded by D-425 (2026-10-03):** 3·4항의 설치형 셸/사용자 앱 위치와 6항의 공유 JS 위치는 [D-425](D-425-app-surface-ownership-shared-boundaries-and-source-layout.md)의 `ui/<앱>`·`ui/shared/web` 목표 배치로 대체한다. 단일 화면·PWA 우선·origin/자격 검토는 유지하며 실제 이전은 후속 작업이다. 아래 본문은 당시 결정의 역사로 보존한다.
+
 브라우저로 여는 표면은 다섯 곳이다. 로봇 화면(`src/hmi/dashboard`, CORE same-origin), 사이트 관제(`src/site/fleet/fleet/server/web`), 경기 보드(`src/site/games/games/web`), PARKED 제어 진단(`src/runtime/sensing/web`), 공용 자산(`src/hmi/web`, 패키지 `web_common`)이다. 모두 손으로 쓴 정적 HTML과 ES 모듈이고 빌드 단계가 없다(D-75). 휴대폰용 원격 조종은 D-323이 CORE가 same-origin으로 서빙하는 PWA(`src/hmi/pilot`)로 정했다. 네이티브 앱은 천장 카메라용 Kotlin 앱 하나다(`src/site/overhead/android`, D-261). 이 앱은 CameraX가 필요하고 수신기와 wire 형식(`protocol/vectors.json`)을 공유한다.
 
 앞으로 운용자 앱을 스토어로 배포하거나, PWA가 못 하는 기기 기능(백그라운드 유지, 푸시, 로컬 네트워크 탐색, 기기 등록용 BLE·Wi-Fi)을 쓰고 싶어질 수 있다. 그때 화면을 새 프레임워크로 다시 쓰면 표면이 둘로 갈라진다. Capacitor는 기존 정적 웹 자산을 그대로 네이티브 WebView에 담는 셸이다. 다만 셸 프로젝트 자체는 npm과 Node 도구를 쓴다.

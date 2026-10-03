@@ -1,3 +1,60 @@
+diff --git a/open_manipulator_bringup/config/omx_f_follower_ai/gazebo_arm_controller_constraints.yaml b/open_manipulator_bringup/config/omx_f_follower_ai/gazebo_arm_controller_constraints.yaml
+new file mode 100644
+--- /dev/null
++++ b/open_manipulator_bringup/config/omx_f_follower_ai/gazebo_arm_controller_constraints.yaml
+@@ -0,0 +1,19 @@
++# Rosy D-411 C, Gazebo ONLY: passed by omx_f_follower_ai_gazebo.launch.py to the arm_controller
++# spawner (--param-file). The native launch (omx_f_follower_ai.launch.py) never reads this file.
++# Jazzy JTC defaults are goal_time 0 (wait forever), stopped_velocity_tolerance 0.01 and per-joint
++# goal 0 (unchecked). Arm joints must end within the owner's start-state tolerance
++# (cell_profile.yaml 0.02 rad); the gripper position stays unchecked (goal 0.0) so a close that
++# stalls on an object ends SUCCEEDED once it stops moving. goal_time and
++# stopped_velocity_tolerance are nominal; tune them from probe_pilot_sim_http.py --stall
++# (time to terminal, peak speed over the last 0.5 s).
++arm_controller:
++  ros__parameters:
++    constraints:
++      goal_time: 1.0
++      stopped_velocity_tolerance: 0.05
++      joint1: {goal: 0.02}
++      joint2: {goal: 0.02}
++      joint3: {goal: 0.02}
++      joint4: {goal: 0.02}
++      joint5: {goal: 0.02}
++      gripper_joint_1: {goal: 0.0}
+diff --git a/open_manipulator_bringup/config/omx_f_follower_ai/hardware_controller_manager.yaml b/open_manipulator_bringup/config/omx_f_follower_ai/hardware_controller_manager.yaml
+--- a/open_manipulator_bringup/config/omx_f_follower_ai/hardware_controller_manager.yaml
++++ b/open_manipulator_bringup/config/omx_f_follower_ai/hardware_controller_manager.yaml
+@@ -2,6 +2,7 @@
+   controller_manager:
+     ros__parameters:
+       update_rate: 100  # Hz
++      enforce_command_limits: true
+ 
+       joint_state_broadcaster:
+         type: joint_state_broadcaster/JointStateBroadcaster
+diff --git a/open_manipulator_bringup/launch/omx_f_follower_ai_gazebo.launch.py b/open_manipulator_bringup/launch/omx_f_follower_ai_gazebo.launch.py
+--- a/open_manipulator_bringup/launch/omx_f_follower_ai_gazebo.launch.py
++++ b/open_manipulator_bringup/launch/omx_f_follower_ai_gazebo.launch.py
+@@ -63,7 +63,7 @@ def generate_launch_description():
+                     ('gz_args', [
+                         world,
+                         '.sdf',
+-                        ' -v 1',
++                        ' -v 1 -s --physics-engine gz-physics-bullet-featherstone-plugin',
+                         ' -r'
+                     ])
+                 ]
+@@ -123,6 +123,9 @@ def generate_launch_description():
+             'arm_controller',
+             '--controller-ros-args',
+             '-r /arm_controller/joint_trajectory:=/leader/joint_trajectory',
++            '--param-file',
++            os.path.join(open_manipulator_bringup_path, 'config', 'omx_f_follower_ai',
++                         'gazebo_arm_controller_constraints.yaml'),
+         ],
+         parameters=[robot_description],
+     )
 diff --git a/open_manipulator_description/ros2_control/omx_f.ros2_control.xacro b/open_manipulator_description/ros2_control/omx_f.ros2_control.xacro
 --- a/open_manipulator_description/ros2_control/omx_f.ros2_control.xacro
 +++ b/open_manipulator_description/ros2_control/omx_f.ros2_control.xacro
@@ -10,26 +67,3 @@ diff --git a/open_manipulator_description/ros2_control/omx_f.ros2_control.xacro 
        <xacro:if value="$(arg use_sim)">
          <hardware>
            <plugin>gz_ros2_control/GazeboSimSystem</plugin>
-diff --git a/open_manipulator_bringup/launch/omx_f_follower_ai_gazebo.launch.py b/open_manipulator_bringup/launch/omx_f_follower_ai_gazebo.launch.py
---- a/open_manipulator_bringup/launch/omx_f_follower_ai_gazebo.launch.py
-+++ b/open_manipulator_bringup/launch/omx_f_follower_ai_gazebo.launch.py
-@@ -61,7 +61,7 @@ def generate_launch_description():
-                     ('gz_args', [
-                         world,
-                         '.sdf',
--                        ' -v 1',
-+                        ' -v 1 -s --physics-engine gz-physics-bullet-featherstone-plugin',
-                         ' -r'
-                     ])
-                 ]
-diff --git a/open_manipulator_bringup/config/omx_f_follower_ai/hardware_controller_manager.yaml b/open_manipulator_bringup/config/omx_f_follower_ai/hardware_controller_manager.yaml
---- a/open_manipulator_bringup/config/omx_f_follower_ai/hardware_controller_manager.yaml
-+++ b/open_manipulator_bringup/config/omx_f_follower_ai/hardware_controller_manager.yaml
-@@ -2,6 +2,7 @@
-   controller_manager:
-     ros__parameters:
-       update_rate: 100  # Hz
-+      enforce_command_limits: true
- 
-       joint_state_broadcaster:
-         type: joint_state_broadcaster/JointStateBroadcaster

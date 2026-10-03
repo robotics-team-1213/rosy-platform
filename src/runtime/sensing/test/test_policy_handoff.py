@@ -75,3 +75,36 @@ class ControlPolicyProducerTests(unittest.TestCase):
         self.assertFalse(self.producer.publish(GateInputs(), now=10.02,
                                                linear_limit=float('nan')))
         self.assertIsNone(self.policy.evaluate(.01, 0., 10.03))
+
+
+def _pair(evaluated):
+    return evaluated[1].linear, evaluated[1].angular
+
+
+class CameraEvidenceTests(unittest.TestCase):
+    """D-424 J/K + review H2: camera evidence never stops a turn or a reverse; an unranged
+    camera obstacle stops forward motion, an unusable camera only limits it."""
+
+    def _policy(self, camera):
+        observations = Observations(max_age=.5)
+        observations.add('lidar', 10.0, source=100.0, source_now=100.0)
+        policy = CommandPolicy('rev')
+        producer = ControlPolicyProducer(policy, observations, ('lidar',), 'rev')
+        evidence = TrackedEvidence.capture({'stamp': 100., 'frame': 'odom', 'tracks': []}, camera,
+                                           (0., 0., 0.), 100., source_now=100., received_at=10.,
+                                           radius=.08, margin=.02)
+        self.assertTrue(producer.publish(GateInputs(), now=10.01, tracking=evidence))
+        return policy
+
+    def test_unranged_camera_obstacle_stops_forward_only(self):
+        policy = self._policy({'stamp': 100., 'blocked': True})
+        self.assertEqual(_pair(policy.evaluate(.01, .1, 10.02)), (0., .1))
+        self.assertEqual(_pair(policy.evaluate(-.01, 0., 10.02)), (-.01, 0.))
+        self.assertEqual(_pair(policy.evaluate(0., .2, 10.02)), (0., .2))
+
+    def test_unusable_camera_limits_forward_and_never_stops_a_turn(self):
+        policy = self._policy({'stamp': 100., 'blocked': False, 'quality': {'valid': False}})
+        linear, angular = _pair(policy.evaluate(.01, .1, 10.02))
+        self.assertAlmostEqual(linear, .005)
+        self.assertEqual(angular, .1)
+        self.assertEqual(_pair(policy.evaluate(0., .2, 10.02)), (0., .2))

@@ -57,6 +57,8 @@ class NavigationManager:
         self.executor: Optional[NavExecutor] = None
         self._nav_state = NavigationState.IDLE
         self._active_correlation_id: str | None = None
+        #: The goal that `goal()` sent last; read only while a correlation id is active (D-419).
+        self._active_spec: Optional[NavGoalSpec] = None
         self.mapping_active = False
         self._stuck_timeout = stuck_timeout_s
         self._stuck_min_progress = stuck_min_progress
@@ -147,6 +149,7 @@ class NavigationManager:
                 executor.send_goal(spec, correlation_id=correlation_id)
             self._set_state(NavigationState.PLANNING)
             self._active_correlation_id = correlation_id
+            self._active_spec = spec
         self._events.publish("nav.started", source="navigation_manager",
                              data={"goal": {"x": spec.x, "y": spec.y, "yaw": spec.yaw},
                                    "by": source, "correlation_id": correlation_id})
@@ -160,6 +163,17 @@ class NavigationManager:
         with self._lock:
             self._set_state(NavigationState.PLANNING)
             self._active_correlation_id = None
+
+    def fleet_goal(self) -> Optional[tuple[str, NavGoalSpec]]:
+        """`(correlation_id, spec)` of the Fleet goal in progress, else None (SAF-003, D-419).
+
+        A goal is Fleet's when it carries a dispatch-attempt correlation id (D-316); local
+        dashboard goals, docking staging and moving-goal sessions carry none."""
+        with self._lock:
+            if (self._active_correlation_id is None or self._active_spec is None
+                    or self._nav_state in _IDLE_STATES):
+                return None
+            return self._active_correlation_id, self._active_spec
 
     def _refuse_while_docking(self) -> None:
         if self.docking_active_provider():
@@ -282,7 +296,8 @@ class NavigationManager:
                              data={"by": source, "reset": True})
 
     def cancel(self, source: str = "api", close_session: bool = True,
-               session: Optional[int] = None) -> None:
+               session: Optional[int] = None,
+               correlation_id: Optional[str] = None) -> bool:
         """진행 중 목표를 거둔다.
 
         moving goal 세션에서는 상태가 IDLE 계열이어도 취소를 보낸다. 선점된
@@ -295,16 +310,23 @@ class NavigationManager:
         `session` 을 주면 그 세션의 임자일 때만 취소한다. 임자가 자기 락을
         놓은 사이에 새 세션이 열렸다면, 그 취소는 남의 것을 닫는 셈이 된다 —
         `moving_goal` 이 뒤늦은 목표를 거르는 것과 같은 규칙이다.
+
+        `correlation_id` 를 주면 그 Fleet 목표가 아직 진행 중일 때만 취소한다 (SAF-003,
+        D-419) — 판정과 취소 사이에 들어온 다른 목표를 거두지 않는다. 취소를 보냈으면 True.
         """
         with self._lock:
             if session is not None and self._moving_session != session:
-                return
+                return False
+            if correlation_id is not None and (
+                    self._active_correlation_id != correlation_id
+                    or self._nav_state in _IDLE_STATES):
+                return False
             session = self._moving_session
             closed = close_session and session is not None
             if close_session:
                 self._moving_session = None
             if self._nav_state in _IDLE_STATES and session is None:
-                return
+                return False
             if self.executor is not None:
                 self.executor.cancel_goal()
             self._set_state(NavigationState.CANCELED)
@@ -318,6 +340,7 @@ class NavigationManager:
                              data={"source": source, "correlation_id": correlation_id})
         if closed:
             self._notify_session_closed(source)
+        return True
 
     def _notify_session_closed(self, source: str) -> None:
         listener = self.session_closed_listener

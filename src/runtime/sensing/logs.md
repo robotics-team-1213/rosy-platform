@@ -941,6 +941,41 @@
 - 증거: `test_loc_assist.py` +4(LOCALIZED 에서 실림·16개 제한·주기, 1 s 넘은 물체 빠짐, LOCALIZED 밖·검사 중·SUSPECT 에서 없음, 전체 스캔·차체 반경 필터).
 - gate 변화: 없음. Gazebo 재실행 전.
 
+## 2026-10-02 · 410c6832 · feat(control): D-411 A pilot_recorder_node 와 녹화 상태기계
+- 변경: `control/pilot_recording.py`(ROS-free 상태기계: 1개·600 s 상한, 전용 쿼터·디스크 바닥, rosbag2 종료 감지·고아 writer 정리, 복구, 작업 스레드 manifest sha256, fetched 표시)와 얇은 `pilot_recorder_node.py`(SetBool `pilot_recorder/set_active`, 래치 상태·활성 토픽, `fetched` 구독, 1 Hz 틱, boot_id·seq). `camera_detect_node` 는 녹화 중에만 `camera/front/compressed` 를 낸다. `camera_preview.launch.py` 가 녹화 노드를 상시 기동, `setup.py` entry point, 노드 레지스트리 등록.
+- 증거: `python -m pytest src/runtime/sensing/test/test_pilot_recorder.py src/runtime/sensing/test/test_pilot_recorder_node.py src/runtime/sensing/test/test_camera_preview_launch.py -q` → 38 passed, 20 skipped (2026-10-02 Windows, rclpy 없음 — 노드는 소스 텍스트 단언).
+- gate 변화: SOURCE 유지. ROS-SIM HOLD — 계획 Verification ROS-SIM 체크리스트(WSL Ubuntu) 미실행, DEVICE 증거 없음.
+- 결정: D-411 A.
+
+## 2026-10-02 · uncommitted · fix(perception): D-395 rev. 11 — 기준 사각형 수평선 문턱과 한 사각형 한 검출(NMS)
+
+- 원인: 후처리 감사(2026-10-02, 실제 프레임 506장). 거짓 검출 20건이 13장(2.6 %)에 있었고 모두 거리 없음이었다. 133221Z/000068 처럼 벽의 파란 테이프 앞에 빨간 케이블이 걸리면 링과 코어가 갖춰진다. 합성 사각형은 코어를 가르는 1 px 줄무늬 하나로 4개 중 4개가 신뢰도 1.0 검출 둘로 갈라졌다.
+- 변경: `HsvSquareDetector` 는 코어 무게중심이 지면 수평선 위(또는 위)에 있으면 버린다(바닥 점이 아니다). 같은 사각형의 조각은 신뢰도(같으면 코어 면적) 순으로 하나만 남긴다: 더 센 검출의 링 상자 안에 무게중심이 들거나 바닥에서 `MERGE_M`(0.1 m, 외곽 0.13 m 보다 작음) 안이면 같은 사각형이다. 수평선 아래 신뢰 거리 밖의 방위만 검출은 그대로 낸다(`range_m=None` 이 표시). 로봇(`loc_assist`)은 그대로 보고하고, Fleet `square_cue` 가 근거에서 뺀다.
+- 증거: `test_reference_square.py` +15(줄무늬 1–3 px × 위치 4 → 1건, 수평선 위 링+코어 → 0건, 실제 000068 → 실제 사각형 1건 23.9°/0.368 m, 000078 → 1건 0.385 m). 실제 프레임 시험은 gitignored `data/perception` 을 이 checkout, worktree 뒤 main checkout, `ROSY_PERCEPTION_DATA` 순으로 찾고 없으면 `REAL-FRAME CHECK NOT RUN` 으로 건너뛴다. 506장 재스캔: 거짓 20 → 0, 실제 거리 있는 검출 42 → 42.
+- gate 변화: 없음. 장치 재확인 전.
+
+## 2026-10-02 · uncommitted · fix(learned): 그림자 차선 근거 — 연결 성분 면적 문턱과 visible 히스테리시스
+
+- 원인: 후처리 감사(2026-10-02, 133221Z 260장, D-379 자동 라벨을 모델 출력 대신 씀). 반점 잡음에 `visible` 이 0.896 → 1.000(10 % 거짓 "차선 보임"), 오프셋 흔들림이 0.078 → 0.103(+31 %).
+- 변경: `lane_mask.lane_evidence` 가 목표(drivable 또는 lane_marking) 픽셀의 8-연결 성분 중 `MIN_COMPONENT_PX`(40 px, 320x240 기준, 인자 `min_component_px` 로 바꿀 수 있음) 미만을 버린 뒤 visible·오프셋·신뢰도를 낸다. `VisibleHysteresis`(켜짐 0.35, 0.25 미만이면 꺼짐)는 모듈이 상태를 들지 않으므로 스트림별 상태가 있는 `learned_lane_node` 가 하나 들고, 발행 전 근거에 적용한다. 모델이 바뀌면 새 래치로 시작한다. 꺼진 근거는 error 가 None 이다.
+- 증거: `test_learned_lane_mask.py` +7(반점만 → 안 보임, 반점이 실제 차선 오프셋을 못 옮김, 문턱 설정, 133221Z/000120 실제 라벨 → 보임·반점 뒤 오프셋 ±0.02, 히스테리시스 순서, 문턱 역전 거부), `test_learned_shadow.py` +1(노드가 발행 전 래치, 교체 시 새 래치). 대역 softmax 동치 시험은 이 필터와 무관한 지름길을 고정하므로 `min_component_px=0` 으로 돈다. 실제 데이터 위치는 `test/perception_data.py` 하나로 모았다(`ROSY_PERCEPTION_DATA` → 이 checkout → worktree 뒤 main checkout).
+- 결정: D-356 그림자 전용이다. `road_state` 융합(시그마 0.03)과 캡처 트리거가 이 값을 읽으므로 수치가 바뀐다. D-205 승격은 이 단위 시험이 아니라 replay bench 를 거쳐야 한다.
+- gate 변화: 없음.
+
+## 2026-10-02 · uncommitted · fix(localization): D-395 rev. 11 — LiDAR 물체: 자기 빔은 묶기 전에, 붙은 로봇은 나누고, 중심은 밀어 낸다
+
+- 원인: 후처리 감사(2026-10-02). S2 q1(rosy_02, LOCALIZED)의 물체 4개 중 1개가 base_link 에서 0.158 m(뒤 왼쪽 약 123°)의 유령이었다. 나머지 3개는 동료와 맞았지만 관측자 쪽으로 3.7–7 cm 치우쳤다. 가장자리 간격 6 cm 미만의 두 동료는 합성 12건 모두 한 물체로 합쳐졌다.
+- 변경: `loc_objects.unmapped_objects(..., radius=)` 가 반경을 받으면 (1) 빔 거리 < radius + `SELF_MARGIN_M`(0.03 m) 인 빔을 묶기 **전에** 버리고, (2) 끝에서 끝까지 `SPLIT_DIAMETERS`(1.6) × 지름보다 넓은 묶음을 가장 큰 내부 간격에서 재귀적으로 자르고, (3) 무게중심을 라이다에서의 광선을 따라 반경 × 2/π 만큼 밀어 원판 중심으로 옮긴다. 반원 호의 무게중심이 중심에서 2R/π 앞에 있으므로 R 만큼 밀면 loc_world 에서 1.5 cm 지나치고 2R/π 는 0.7 cm 다. 반경은 노드의 `robot_radius`(URDF 0.076, 보정이 다듬음)이고 동료도 같은 Pinky 라 같은 값을 쓴다. `loc_assist.localized_objects` 는 사후 무게중심 반경 필터를 버리고 이 경로를 쓴다. 반경 없이 부르면 예전 묶기 그대로다.
+- 증거: `test_loc_objects.py` +13(S2 유령 기제: 몸 안 빔 + 떨어진 반환 1개 → 예전 1개·이제 0개, 5 cm 떨어진 두 로봇 4배치 → 예전 1개·이제 2개 각 4 cm 안, 중심 치우침 0.3/0.8/1.8 m 에서 예전 >3.5 cm·이제 <1.5 cm, 한 로봇은 0.3–2 m 에서 안 쪼개짐). S2 원 스캔은 기록되지 않아 유령 시험은 정확한 스캔이 아니라 기제를 재현한다. `test_loc_assist.py`·`test_loc_e2e.py` 73 passed.
+- gate 변화: 없음. Fleet `peers` 단서(가중치 2.0) 입력이 바뀌므로 Gazebo S2 재실행 때 확인한다.
+
+## 2026-10-02 · uncommitted · fix(localization): 후보 미세 단계 뒤 분리 재검사 가드, 180° 쌍둥이 시험
+
+- 원인: 후처리 감사(2026-10-02)는 후보 쪽 결함을 찾지 못했다(모의 261/261 탐색이 후보 2개, 합성 12/12 자세가 오차 ≤ 1.7 cm/0.5°, 미세 단계 뒤 중복 0). 다만 `_fine` 은 각 후보를 ±3 cm/±3° 움직이고 `apart()` 를 다시 보지 않는다.
+- 변경: 알고리즘·반경(0.18 m/0.3 rad)은 그대로다. `global_candidates` 가 미세 단계 뒤 앞선 후보와 `apart()` 가 아닌 후보를 버린다.
+- 증거: `test_loc_candidates.py` +9(미세 단계가 두 시드를 한 자세로 모으면 1개만 남음, 제자리·거울 180° 쌍둥이가 가까운 흐린 세 번째가 있어도 `distinct()` 를 늘 통과 × 4 자세). 30 passed.
+- gate 변화: 없음.
+
 ## 2026-10-02 · 071acb65c · feat(sensing): D-423 카메라 영역 거리 — LiDAR 우선, 바닥 평면 예비
 
 - 원인: 화면이 "OBJ n UNKNOWN unranged" 만 보였다. 실기 `camera.yaml` 의 핀홀 여섯 값은 일부러 0 이라 영역 거리가 늘 없었다.

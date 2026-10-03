@@ -11,6 +11,10 @@ from typing import Callable, Optional
 
 from core_common.protocol.schemas import TrafficPolicyStatus
 
+#: Slowest APPROACH linear scale (angular is not scaled): line follow's D-422 body sweep
+#: reads it to cover the tighter arc this gate can make of a lane command.
+APPROACH_MIN_SCALE = 0.15
+
 
 class TrafficPolicyMode(str, enum.Enum):
     DISABLED = "DISABLED"
@@ -496,7 +500,7 @@ class TrafficPolicyManager:
                 - self._config.stop_distance_m
             )
             progress = (distance - self._config.stop_distance_m) / span
-            scale = max(0.15, min(1.0, progress))
+            scale = max(APPROACH_MIN_SCALE, min(1.0, progress))
             return "APPROACH", "stop_line_approach", age, scale
         if self._stopped_at is None:
             self._stopped_at = now

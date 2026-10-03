@@ -30,6 +30,31 @@ import { fillIdentityForm } from "./settings.js";
 import { createRosNetwork } from "./ros-network.js";
 import { HeadlessState, EVIDENCE_LABEL } from "/common/core_ui_logic.js";
 
+const CAPABILITY_LABEL = Object.freeze({
+  "mobility.move": "이동",
+  "mobility.navigate": "목표 주행",
+  "mobility.follow": "따라가기",
+  "mobility.lead": "선도",
+  "mobility.dock": "도킹",
+  "perception.localize": "위치 추정",
+});
+const PRESENTATION_LABEL = Object.freeze({
+  available: "쓸 수 있음",
+  constrained: "제한",
+  degraded_fallback: "대체 동작",
+  blocked: "막힘",
+  not_provided: "없음",
+});
+const LINE_WORD = Object.freeze({
+  OFF: "꺼짐",
+  mode_off: "꺼짐",
+  policy_disabled: "정책 꺼짐",
+});
+
+function knownWord(table, value) {
+  return Object.hasOwn(table, value) ? table[value] : String(value ?? "");
+}
+
 export const TELEMETRY_CHANNELS = Object.freeze({
   "pose-x": "pose",
   "pose-y": "pose",
@@ -85,13 +110,13 @@ export function updateLineFollowButtons() {
 
 export function renderLineFollow(status = {}) {
   const mode = status.mode || "OFF";
-  setText("line-follow-state", status.state || "OFF");
+  setText("line-follow-state", knownWord(LINE_WORD, status.state || "OFF"));
   setText("line-follow-source", status.source || "없음");
   setText("line-follow-error", Number.isFinite(Number(status.error)) ? number(status.error, 3) : "—");
   setText("line-follow-confidence", percent((Number(status.confidence) || 0) * 100));
   setText("line-follow-linear", `${number(status.linear || 0, 3)} m/s`);
   setText("line-follow-angular", `${number(status.angular || 0, 3)} rad/s`);
-  setText("line-follow-reason", status.reason || "mode_off");
+  setText("line-follow-reason", knownWord(LINE_WORD, status.reason || "mode_off"));
   document.querySelectorAll("[data-line-mode]").forEach((button) => {
     button.setAttribute("aria-pressed", String(button.dataset.lineMode === mode));
   });
@@ -100,7 +125,7 @@ export function renderLineFollow(status = {}) {
 
 export function renderTrafficStatus(status = {}) {
   setText("traffic-policy-state", status.state || "DISABLED");
-  setText("traffic-policy-reason", status.reason || "policy_disabled");
+  setText("traffic-policy-reason", knownWord(LINE_WORD, status.reason || "policy_disabled"));
   setText("traffic-policy-signal", status.signal_conflict ? "CONFLICT" : (status.signal_colour || "—"));
   setText(
     "traffic-policy-stop-distance",
@@ -275,9 +300,11 @@ export function renderInventory(inventory) {
     item.dataset.state = row.state;
     if (CONFIGURED_REASONS[row.reason]) item.dataset.cause = "runtime";
     const label = document.createElement("span");
-    label.textContent = row.id;
+    label.textContent = knownWord(CAPABILITY_LABEL, row.id);
+    label.title = row.id;
     const state = document.createElement("b");
-    state.textContent = row.state;
+    state.textContent = knownWord(PRESENTATION_LABEL, row.state);
+    state.title = row.state;
     item.append(label, state);
     if (row.reason) {
       const reason = document.createElement("small");

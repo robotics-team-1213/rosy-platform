@@ -10,6 +10,7 @@ import { applyRoleToControls } from "./authorization.js";
 // D-410 — 기기 등록·카메라 연결 승인·경기장/맵 보정은 설치 화면(install.js)이 가진다.
 import { addressMap, movableRobots, renumberBanner } from "./address-drift.js";
 import { createPollGate } from "./poll-gate.js";
+import { createFleetClient } from "/common/fleet-client.js";
 // 좌표계: 로봇 pose 는 CORE 가 TF `map → <ns>base_footprint` 로 읽어 주는 map 프레임
 // 값이다(ros_bridge `_map_frame = "map"`). 그래서 N대를 한 격자 위에 그대로 겹쳐
 // 그릴 수 있다. 격자는 행 0 이 아래쪽(y 최소)이고 캔버스는 위가 0 이라 y 를 뒤집는다.
@@ -105,30 +106,17 @@ function log(text, kind) {
   while (box.childElementCount > LOG_MAX) box.lastElementChild.remove();
 }
 
+const fleetClient = createFleetClient({ credential: () => auth.token });
+
 async function call(path, options = {}) {
-  const headers = { ...(options.headers || {}), ...authHeaders() };
-  const resp = await fetch(path, { ...options, headers });
-  let body = null;
   try {
-    body = await resp.json();
-  } catch (err) {
-    body = null;
-  }
-  if (resp.status === 401) {
-    // 토큰 없이(또는 틀린 토큰으로) 왔다 — 폴링이 계속 401 을 두드리기 전에
-    // 화면에 이유를 남긴다. 다음 refreshState 가 성공하면 markUnlocked 로 풀린다.
-    markLocked();
-    throw new Error("관제 토큰이 필요합니다 — 상단에 입력하고 접속을 누르세요");
-  }
-  if (!resp.ok) {
-    const detail = body && body.detail ? body.detail : {};
-    const error = new Error(detail.message || detail.code || `HTTP ${resp.status}`);
-    error.status = resp.status;
-    error.code = detail.code;
+    const body = await fleetClient(path, options);
+    markUnlocked();
+    return body;
+  } catch (error) {
+    if (error.status === 401) markLocked();
     throw error;
   }
-  markUnlocked();
-  return body;
 }
 
 async function refreshDispatchControl() {

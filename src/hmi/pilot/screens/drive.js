@@ -12,11 +12,13 @@ import {createModelStatus, renderModels} from "../models.js";
 import {driverFor} from "../drivers/registry.js";
 import {
   setStickInput, setPedal, setPivot, releaseAll, currentCommandSource, stickMap,
-  inputConfig, saveInputConfig, setServerLimits, currentLimits,
+  inputConfig, saveInputConfig, setServerLimits, currentLimits, setFineAllowed,
 } from "../input-state.js";
 import {mountInputs} from "./inputs.js";
 import {slewCommand} from "../stick.js";
 import {mountAutoMode} from "./drive-auto.js";
+import {mountRobotRecording} from "./robot-recording.js";
+import {readControls, profileFromBaseVelocity} from "../controls.js";
 import {calibrationView} from "../calibration.js";
 import {el, mountDriveView, buildStage, buildControls} from "./drive-view.js";
 import {createCameraCapture, classifyOperation, saveCameraFile} from "/common/evidence.js";
@@ -27,9 +29,12 @@ const STATE_POLL_MS = 500;
 const DEG = 180 / Math.PI;
 const PRESET_LABEL = {low: "저", mid: "중", high: "고"};
 
-export function mountDrive(root, {onExit} = {}) {
+// `profile` comes from the device's base_velocity control (D-411 B); `unsupported` lists the
+// controls this screen cannot draw — shown, never fatal.
+export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}) {
   const gate = driverFor("pinky_core");
-  const profile = gate.profile ?? {};
+  const profile = given ?? gate.profile ?? {};
+  setFineAllowed(profile.fine);
   const element = {};
   let engaged = false;
   // 이 화면이 실제로 MANUAL 을 잡았는가(engage 가 200). 잡은 적 없는 화면이 나가면서
@@ -38,6 +43,13 @@ export function mountDrive(root, {onExit} = {}) {
 
   const drive = root;
   root.replaceChildren(buildStage(), buildControls(profile));
+  if (unsupported.length) {
+    const notes = el("div", null, {"data-drive-unsupported": ""});
+    for (const control of unsupported) {
+      notes.append(el("p", `지원하지 않는 조작부 · ${control.label || control.kind}`, {"data-control-unsupported": ""}));
+    }
+    root.querySelector("[data-drive-stage]").append(notes);
+  }
   for (const [key, selector] of Object.entries({
     stage: "[data-drive-stage]", frame: "[data-drive-frame]", empty: "[data-drive-empty]",
     hud: "[data-drive-hud]", stick: "[data-drive-stick]", knob: "[data-drive-stick-knob]",
@@ -145,7 +157,7 @@ export function mountDrive(root, {onExit} = {}) {
       if (element.shotButton) element.shotButton.disabled = !state.ready;
       if (element.recordButton) {
         element.recordButton.disabled = !state.supported;
-        element.recordButton.textContent = state.recording ? "녹화 중지" : "녹화";
+        element.recordButton.textContent = state.recording ? "화면 녹화 중지" : "화면 녹화";
       }
     },
   });
@@ -200,13 +212,16 @@ export function mountDrive(root, {onExit} = {}) {
   const view = mountDriveView(drive, element);
 
   // --- 입력: 2축 스틱(노브가 손가락을 따라간다) -------------------------------
+  // 잡기 구역(styles.css)은 링보다 넓다. 링 안에서 누르면 링 중심이 0, 링 밖(구역 안)에서
+  // 누르면 그 자리가 0 이다(떠 있는 원점 — 닿자마자 최대 편향으로 출발하지 않는다). 그때 링이
+  // 손가락 밑으로 옮겨와 원점을 보이고, 놓으면 제자리로 돌아간다.
   const stick = element.stick;
   let stickPointer = null;
+  let origin = null;               // {x, y, r}: 이번 누름의 0 점(화면 좌표)과 링 반지름
   function applyStick(event) {
-    const rect = stick.getBoundingClientRect();
-    const radius = rect.width / 2;
-    let dx = (event.clientX - (rect.left + radius)) / radius;
-    let dy = (event.clientY - (rect.top + radius)) / radius;
+    const radius = origin.r;
+    let dx = (event.clientX - origin.x) / radius;
+    let dy = (event.clientY - origin.y) / radius;
     const mag = Math.hypot(dx, dy);
     if (mag > 1) { dx /= mag; dy /= mag; }
     setStickInput(dx, -dy);        // 화면 y 는 아래가 + — 위로 밀면 전진
@@ -215,9 +230,11 @@ export function mountDrive(root, {onExit} = {}) {
   }
   function releaseStick() {
     stickPointer = null;
+    origin = null;
     setStickInput(0, 0);
     element.knob.style.transform = "translate(-50%, -50%)";
-    stick.classList.remove("active");
+    stick.style.translate = "";
+    stick.classList.remove("active", "floating");
   }
   stick.addEventListener("pointerdown", (event) => {
     if (calibrationLocked) return;
@@ -225,6 +242,20 @@ export function mountDrive(root, {onExit} = {}) {
     stickPointer = event.pointerId;
     stick.setPointerCapture(event.pointerId);
     stick.classList.add("active");
+    const rect = stick.getBoundingClientRect();
+    const centre = {x: rect.left + rect.width / 2, y: rect.top + rect.height / 2, r: rect.width / 2};
+    const outside = Math.hypot(event.clientX - centre.x, event.clientY - centre.y) > centre.r;
+    origin = outside ? {x: event.clientX, y: event.clientY, r: centre.r} : centre;
+    if (outside) {
+      // Only the drawing is clamped: the ring stays inside its column (phone: no clipped top),
+      // while the zero point stays under the finger.
+      const column = (stick.closest("[data-drive-right]") ?? stick.parentElement).getBoundingClientRect();
+      const clamp = (value, low, high) => Math.min(Math.max(value, low), high);
+      const tx = clamp(event.clientX - centre.x, column.left - rect.left, column.right - rect.right);
+      const ty = clamp(event.clientY - centre.y, column.top - rect.top, column.bottom - rect.bottom);
+      stick.classList.add("floating");
+      stick.style.translate = `${tx}px ${ty}px`;
+    }
     applyStick(event);
   });
   stick.addEventListener("pointermove", (event) => {
@@ -273,7 +304,7 @@ export function mountDrive(root, {onExit} = {}) {
   const keys = {up: false, down: false, left: false, right: false, pivotLeft: false, pivotRight: false};
   const KEY_MAP = {ArrowUp: "up", KeyW: "up", ArrowDown: "down", KeyS: "down",
                    ArrowLeft: "left", KeyA: "left", ArrowRight: "right", KeyD: "right",
-                   KeyQ: "pivotLeft", KeyE: "pivotRight"};
+                   ...(profile.pivot !== false ? {KeyQ: "pivotLeft", KeyE: "pivotRight"} : {})};
   const onKey = (event) => {
     const key = KEY_MAP[event.code];
     if (!key) return;
@@ -308,7 +339,7 @@ export function mountDrive(root, {onExit} = {}) {
     if (!pad) return null;
     const lb = pad.buttons[4]?.pressed;
     const rb = pad.buttons[5]?.pressed;
-    if (lb !== rb) return {kind: "pivot", dir: lb ? 1 : -1};
+    if (profile.pivot !== false && lb !== rb) return {kind: "pivot", dir: lb ? 1 : -1};
     const x = pad.axes[0] ?? 0;
     const y = -(pad.axes[1] ?? 0);
     return x !== 0 || y !== 0 ? {kind: "pad", x, y} : null;
@@ -369,16 +400,39 @@ export function mountDrive(root, {onExit} = {}) {
   document.addEventListener("visibilitychange", onVisibility);
 
   // --- CORE 수동 한도(프리셋의 기준) ------------------------------------------
+  // D-411 B: the device's base_velocity carries the live manual limits; they cap the CORE
+  // safety limits (0 = drive announced but held at standstill — shown as such). Both are read
+  // together here so a limit changed between the gate and this screen is not stale.
+  let announced = {max_linear: profile.max_linear ?? null, max_angular: profile.max_angular ?? null};
   async function loadLimits() {
-    const response = await apiGet("/api/v1/safety/state").catch(() => null);
-    if (response?.status === 200 && response.body?.limits) setServerLimits(response.body.limits);
+    const [response, caps] = await Promise.all([
+      apiGet("/api/v1/safety/state").catch(() => null),
+      apiGet("/api/v1/system/capabilities").catch(() => null),
+    ]);
+    const base = caps?.status === 200
+      ? readControls(caps.body?.controls)?.find((control) => control.kind === "base_velocity") : null;
+    if (base) {
+      const fresh = profileFromBaseVelocity(base);
+      announced = {max_linear: fresh.max_linear, max_angular: fresh.max_angular};
+    }
+    const limits = response?.status === 200 ? response.body?.limits : null;
+    if (limits || base) setServerLimits(withProfileLimits(limits));
     renderCap();
+  }
+  function withProfileLimits(limits) {
+    const capped = {...(limits ?? {})};
+    if (announced.max_linear != null) capped.manual_linear = Math.min(announced.max_linear, capped.manual_linear ?? Infinity);
+    if (announced.max_angular != null) capped.manual_angular = Math.min(announced.max_angular, capped.manual_angular ?? Infinity);
+    return capped;
   }
   function renderCap() {
     const limits = currentLimits();
-    element.cap.textContent =
-      `상한 ${limits.linear.toFixed(2)} m/s · ${Math.round(limits.angular * DEG)}°/s`;
+    const standstill = limits.linear === 0 && limits.angular === 0;
+    element.cap.dataset.standstill = String(standstill);
+    element.cap.textContent = standstill ? "정지로 제한됨 · 상한 0"
+      : `상한 ${limits.linear.toFixed(2)} m/s · ${Math.round(limits.angular * DEG)}°/s`;
   }
+  if (announced.max_linear != null || announced.max_angular != null) setServerLimits(withProfileLimits(null));
   loadLimits();
 
   // --- 로봇 상태 폴링: 실측 속도·회전율 ---------------------------------------
@@ -402,7 +456,7 @@ export function mountDrive(root, {onExit} = {}) {
   const shotButton = el("ui-button", "촬영", {type: "button", "data-evidence-shot": ""});
   shotButton.setAttribute("kind", "quiet");
   shotButton.addEventListener("click", () => capture.screenshot("pc"));
-  const recordButton = el("ui-button", "녹화", {type: "button", "data-evidence-record": ""});
+  const recordButton = el("ui-button", "화면 녹화", {type: "button", "data-evidence-record": ""});
   recordButton.setAttribute("kind", "quiet");
   recordButton.addEventListener("click", () => {
     if (capture.state().recording) capture.stop();
@@ -435,8 +489,18 @@ export function mountDrive(root, {onExit} = {}) {
   const exit = el("ui-button", "나가기", {type: "button", "data-drive-exit": ""});
   exit.setAttribute("kind", "quiet");
   exit.addEventListener("click", () => teardown());
-  actions.append(zoomButton, shotButton, recordButton, inputsButton, exit);
-  element.hud.append(actions);
+  // D-411 A: 로봇 학습 녹화(카메라 유닛 bag) — 위의 "화면 녹화"(이 기기 브라우저)와 다르다.
+  const robotRecordButton = el("ui-button", "로봇 녹화", {type: "button", "data-robot-record": ""});
+  robotRecordButton.setAttribute("kind", "quiet");
+  const recordingsButton = el("ui-button", "녹화본", {type: "button", "data-recordings-open": ""});
+  recordingsButton.setAttribute("kind", "quiet");
+  const recordingFact = el("span", null, {"data-drive-fact": "recording", hidden: ""});
+  actions.append(zoomButton, shotButton, recordButton, robotRecordButton, recordingsButton, inputsButton, exit);
+  element.hud.append(recordingFact, actions);
+  const robotRecording = mountRobotRecording({
+    toggle: robotRecordButton, detail: recordingFact, openButton: recordingsButton,
+    sheetHost: root.querySelector("[data-drive-stage]"), anchor: element.hud, save: saveCameraFile,
+  });
   view.applyZoom();
 
   // --- 프리셋·정밀 --------------------------------------------------------
@@ -455,10 +519,10 @@ export function mountDrive(root, {onExit} = {}) {
       });
       row.append(button);
     }
-    element.fine.setAttribute("aria-pressed", String(Boolean(config.fine)));
+    element.fine?.setAttribute("aria-pressed", String(Boolean(config.fine)));
     renderCap();
   }
-  element.fine.addEventListener("click", () => {
+  element.fine?.addEventListener("click", () => {
     saveInputConfig({fine: !inputConfig().fine});
     renderInputs();
   });
@@ -496,6 +560,7 @@ export function mountDrive(root, {onExit} = {}) {
     clearInterval(stateTimer);
     closeInputs?.();
     if (capture.state().recording) capture.stop();
+    robotRecording.stopIfOwned().finally(() => robotRecording.dispose());
     releaseAll();
     session.hidden();
     session.close?.();

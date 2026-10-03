@@ -72,6 +72,7 @@ class CoreServicesLike(Protocol):
     touch, not their types — behavior is unchanged.
     """
 
+    adapter_registry: Any
     audit: Any
     battery: Any
     calibration: Any
@@ -81,6 +82,7 @@ class CoreServicesLike(Protocol):
     control_adapter: Any
     docking: Any
     events: Any
+    fleet_loss: Any
     identity: Any
     inventory: Any
     maps: Any
@@ -88,6 +90,7 @@ class CoreServicesLike(Protocol):
     localization: Any
     modes: Any
     nav: Any
+    pilot_recording: Any
     power: Any
     readiness: Any
     runtime_probe: Any

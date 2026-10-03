@@ -21,6 +21,7 @@
 | D-390 | Pilot의 OMX-AI 연습은 시뮬레이션 전용 장치 API를 거쳐 로컬 팔 명령 소유자에 연결한다 |
 | D-402 | OMX 모션 플래너 v1: 장치 로컬 해석 5축 수직하향 IK(고정 open_manipulator URDF), `CELL_TRANSFER`·simulation 한정으로 D-376 §2·§3 HOLD를 좁게 개방, 충돌 장면 없음, owner만 제출, MoveIt은 같은 Protocol의 두 번째 구현 |
 | D-403 | Fleet Cell Job 경로: Rosy Cell Job → Fleet 제안(재컴파일 검증)·승인 → Step마다 `CELL_TRANSFER` Action 하나, 정지 세대 의미, D-330 §2 하달 보류는 simulation에서만 ROS-SIM 정지 세대 시험 후 개방, 셀 해시 검사는 OMX owner |
+| D-411 | Pilot 로봇측 학습 녹화(카메라 유닛 소유, CORE는 시작·정지 요청, `teleop/intent` 원 입력·주체 기록, 1회 10분)와 정지 중에만 허용하는 HTTP 수신(목록·tar·sha256 manifest, `rosy_ml fetch --http`); 기기가 알리는 조작부 서술자 `rosy.controls/1`(base_velocity·joint_jog·gripper, 드라이버는 전송·위젯은 kind별, 팔 조이스틱은 이전 목표 종료 후 순차 제한 목표); OMX 그리퍼 전용 절대 목표·쥠 readback(시뮬레이션만, D-390 유지) |
 
 ## 계획·결과 문서
 
@@ -31,6 +32,7 @@
 - [2026-10-01-model-tool-contract-implementation.md](../../../../docs/plans/2026-10-01-model-tool-contract-implementation.md)
 - [2026-10-01-omx-demonstration-lerobot-design.md](../../../../docs/plans/2026-10-01-omx-demonstration-lerobot-design.md)
 - [2026-10-01-pilot-omx-gazebo-practice.md](../../../../docs/plans/2026-10-01-pilot-omx-gazebo-practice.md)
+- [2026-10-02-d411-pilot-recording-controls-plan.md](../../../../docs/plans/2026-10-02-d411-pilot-recording-controls-plan.md)
 - [2026-10-02-rosy-cell-c3-gazebo.md](../../../../docs/plans/2026-10-02-rosy-cell-c3-gazebo.md)
 
 ## 교훈 (docs/solutions)
@@ -43,8 +45,8 @@
 
 ## 최근 기록
 
-- 2026-10-02 · c07896af · merge: main (D-413, pl3 dispatch safety) into feat/rosy-cell-c3-gazebo
-- 2026-10-02 · aa77cb9c · test(omx): WSL rclpy loop under nice -n 19 during another session's Gazebo
-- 2026-10-02 · 0380d789 · fix(omx): re-review fixes N1 and minor 4
-- 2026-10-02 · e40d182c · fix(omx): C3b 독립 리뷰 수정 (FIX REQUIRED)
-- 2026-10-02 · f63bb564 · fix(omx): C3b — C3 결함 수정, 대역 없는 Gazebo 단일 배치
+- 2026-10-03 · uncommitted · fix: install canonical OMX geometry for Cell owner composition
+- 2026-10-03 · uncommitted · fix(omx-sim): D-411 C 관문 수용 — probe 경합 두 개, 쥠 drift 보고
+- 2026-10-03 · uncommitted · fix(omx_adapter): D-411 C Gazebo 관문 뒤 — 조임 재발행·속도 여유·probe·Gazebo 전용 제약
+- 2026-10-03 · uncommitted · fix(omx_adapter): D-411 C 검토 — 속도 제한·제한 조임·안쪽 범위·stall probe
+- 2026-10-03 · uncommitted · feat(omx_adapter): D-411 C 그리퍼 절대 목표·쥠 readback·시연 `action.gripper`

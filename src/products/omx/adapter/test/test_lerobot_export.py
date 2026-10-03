@@ -38,3 +38,23 @@ def test_real_lerobot_v3_export_reopens_state_action_and_video(tmp_path):
     assert result["lerobot_version"] == "0.4.4"
     assert list(output.glob("videos/**/*.mp4"))
     assert (output / "rosy_provenance" / manifest["episode_id"] / "manifest.json").is_file()
+
+
+def test_gripper_feature_and_frame_when_the_episode_names_a_gripper(tmp_path):
+    from test_demonstration import complete_episode_with, gripper_provenance
+    manifest = complete_episode_with(tmp_path, gripper_provenance())
+    features = dataset_features(manifest)
+    assert features["action.gripper"] == {"dtype": "float32", "shape": (1,), "names": ["position_rad"]}
+    episode = tmp_path / manifest["episode_id"]
+    frames = list(iter_dataset_frames(episode, validate_episode(episode)))
+    np.testing.assert_allclose(frames[0]["action.gripper"], [-0.1])
+    assert frames[0]["action.gripper"].dtype == np.float32
+    assert "action.gripper" not in dataset_features(
+        {"provenance": {**manifest["provenance"], "gripper_joint": None}})
+
+
+def test_old_episodes_export_without_a_gripper_feature(tmp_path):
+    manifest = complete_episode(tmp_path)
+    episode = tmp_path / manifest["episode_id"]
+    assert "action.gripper" not in dataset_features(manifest)
+    assert "action.gripper" not in next(iter_dataset_frames(episode, validate_episode(episode)))

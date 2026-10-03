@@ -110,3 +110,69 @@ def test_native_normalized_units_or_hardware_provenance_cannot_enter_sim_recorde
     wrong["simulation"] = False
     with pytest.raises(ValueError, match="simulation"):
         DemonstrationRecorder(tmp_path, wrong)
+
+
+# --- D-411 C: action.gripper -----------------------------------------------------------
+
+def gripper_provenance():
+    return {**provenance(), "gripper_joint": "gripper_joint_1"}
+
+
+def test_gripper_column_is_written_validated_and_exported(tmp_path):
+    recorder = DemonstrationRecorder(tmp_path, gripper_provenance())
+    recorder.start("grip")
+    sample(recorder)
+    sample(recorder, 1_100_000_000, target={"joint1": 0.02, "gripper_joint_1": 0.3})
+    manifest = recorder.stop("success")
+    assert manifest["status"] == "complete", manifest["issues"]
+    rows = validate_episode(tmp_path / manifest["episode_id"])["samples"]
+    assert [row["action.gripper"] for row in rows] == [-0.1, 0.3]
+    assert all(row["action.gripper"] == row["action"][-1] for row in rows)
+
+
+def test_gripper_column_must_match_the_action(tmp_path):
+    manifest = complete_episode_with(tmp_path, gripper_provenance())
+    path = tmp_path / manifest["episode_id"]
+    lines = (path / "samples.jsonl").read_text(encoding="utf-8").splitlines()
+    row = json.loads(lines[0])
+    row["action.gripper"] = 0.4
+    lines[0] = json.dumps(row, sort_keys=True)
+    payload = ("\n".join(lines) + "\n").encode("utf-8")
+    (path / "samples.jsonl").write_bytes(payload)
+    stored = json.loads((path / "manifest.json").read_text(encoding="utf-8"))
+    stored["samples_sha256"] = hashlib.sha256(payload).hexdigest()
+    (path / "manifest.json").write_text(json.dumps(stored), encoding="utf-8")
+    with pytest.raises(ValueError, match="gripper_action"):
+        validate_episode(path)
+
+
+def test_gripper_joint_must_be_a_recorded_joint(tmp_path):
+    with pytest.raises(ValueError, match="gripper joint"):
+        DemonstrationRecorder(tmp_path, {**provenance(), "gripper_joint": "finger"})
+
+
+def test_gripper_goals_may_take_up_to_two_seconds(tmp_path):
+    from core_common.protocol.omx_sim import GRIPPER_GOAL_MAX_DURATION_S
+    from omx_adapter.demonstration import MAX_GOAL_DURATION_S
+    assert MAX_GOAL_DURATION_S == GRIPPER_GOAL_MAX_DURATION_S
+    recorder = DemonstrationRecorder(tmp_path, provenance())
+    recorder.start("slow grip")
+    sample(recorder, duration_s=1.6)
+    sample(recorder, 1_100_000_000, duration_s=2.5)
+    assert recorder.status()["issues"] == ["goal_duration"]
+
+
+def test_episodes_without_gripper_joint_still_validate(tmp_path):
+    manifest = complete_episode(tmp_path)
+    path = tmp_path / manifest["episode_id"]
+    assert "action.gripper" not in (path / "samples.jsonl").read_text(encoding="utf-8")
+    assert "gripper_joint" not in manifest["provenance"]
+    validate_episode(path)
+
+
+def complete_episode_with(root, source):
+    recorder = DemonstrationRecorder(root, source)
+    recorder.start("move the joint")
+    sample(recorder)
+    sample(recorder, 1_100_000_000)
+    return recorder.stop("success")

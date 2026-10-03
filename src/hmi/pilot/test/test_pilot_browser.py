@@ -10,6 +10,7 @@ import os
 import socket
 import sys
 import threading
+import time
 from pathlib import Path
 
 import pytest
@@ -139,6 +140,14 @@ def tablet_page(base_url):
         page.set_default_timeout(10_000)
         yield base_url, page, errors
         browser.close()
+
+
+@pytest.fixture(autouse=True)
+def _default_controls():
+    """D-411 B: every test starts and ends with the default rosy.controls/1 descriptor."""
+    dev_server.CONTROLS.update(items=[dev_server._BASE_CONTROL], omit=False)
+    yield
+    dev_server.CONTROLS.update(items=[dev_server._BASE_CONTROL], omit=False)
 
 
 @pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
@@ -693,4 +702,770 @@ def test_exit_after_a_failed_engage_posts_no_idle(tablet_page):
         assert page.request.get(f"{base_url}/__test__/mode-log").json()[before:] == []
     finally:
         dev_server.MODE_REFUSALS["remaining"] = 0
+    assert errors == [], errors
+
+
+ROBOT_RECORDING_ID = "20261002T101500Z_rosy_dev"
+ROBOT_RECORD_STOP = "document.querySelector('[data-robot-record]').textContent.includes('중지')"
+
+
+def _recordings(page, base_url, **body):
+    if body:
+        page.request.post(f"{base_url}/__test__/recordings", data=body)
+    return page.request.get(f"{base_url}/__test__/recordings").json()
+
+
+def _eventually(probe, timeout_s=10.0):
+    """Polls probe() until it is truthy; returns its value (no fixed sleeps in the test body)."""
+    deadline = time.monotonic() + timeout_s
+    while True:
+        value = probe()
+        if value or time.monotonic() > deadline:
+            return value
+        time.sleep(0.1)
+
+
+def _settled_polls(page, base_url):
+    """True once GET /recordings/active stops arriving: the recording view was disposed."""
+    last = [-1]
+
+    def probe():
+        polls = _recordings(page, base_url)["polls"]
+        if polls == last[0]:
+            return True
+        last[0] = polls
+        time.sleep(1.3)         # one poll period (1 s) plus slack between the two reads
+        return False
+    return _eventually(probe, 15.0)
+
+
+def _open_sheet(page):
+    page.click("[data-recordings-open]")
+    row = page.locator(f"[data-recordings-sheet] [data-recording-id='{ROBOT_RECORDING_ID}']")
+    row.wait_for()
+    return row
+
+
+def _enter_recording_drive(page, base_url, **scenario):
+    _recordings(page, base_url, reset=True, **scenario)
+    _enter_drive(page, base_url)
+    page.wait_for_function("!document.querySelector('[data-robot-record]').disabled")
+
+
+@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+                    reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
+@pytest.mark.parametrize("viewport", [(2000, 1200), (1200, 2000), (390, 844)])
+def test_robot_recording_toggle_and_sheet(base_url, viewport):
+    """D-411 A: 로봇 녹화 토글(화면 녹화와 따로)과 녹화본 시트 — 받기는 CORE 의 차단 사유를 따른다."""
+    with playwright_sync.sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        page = browser.new_page(viewport={"width": viewport[0], "height": viewport[1]}, accept_downloads=True)
+        errors: list[str] = []
+        page.on("pageerror", lambda exc: errors.append(str(exc)))
+        page.set_default_timeout(10_000)
+        try:
+            _enter_recording_drive(page, base_url)
+            assert page.locator("[data-evidence-record]").inner_text().strip() == "화면 녹화"
+            assert page.evaluate("document.documentElement.scrollWidth - document.documentElement.clientWidth") <= 0
+            page.click("[data-robot-record]")
+            page.wait_for_function(ROBOT_RECORD_STOP)
+            page.wait_for_selector("[data-drive-fact=recording]:not([hidden])")
+            assert "녹화 0:01 / 10:00" in page.inner_text("[data-drive-fact=recording]")
+            assert _recordings(page, base_url)["log"] == ["start"]
+            row = _open_sheet(page)
+            assert page.evaluate("!!document.activeElement.closest('[data-recordings-sheet]')"), "열면 시트로 초점"
+            box = page.evaluate("""(() => { const s = document.querySelector('[data-recordings-sheet]').getBoundingClientRect();
+              const h = document.querySelector('[data-drive-hud]').getBoundingClientRect();
+              return {top: s.top, bottom: s.bottom, left: s.left, right: s.right, hud: h.bottom, vh: innerHeight}; })()""")
+            assert box["top"] >= box["hud"], f"시트가 HUD 를 덮는다 {box}"
+            assert box["left"] >= 0 and box["right"] <= viewport[0] + 1 and box["bottom"] <= box["vh"] + 1, box
+            assert row.locator("[data-recording-fetch]").is_disabled()          # 녹화 중에는 받지 않는다
+            assert "녹화 중에는" in page.inner_text("[data-recordings-notice]")
+            assert page.get_attribute("[data-recordings-notice]", "aria-live") == "polite"
+            page.click("[data-robot-record]")
+            page.wait_for_function("document.querySelector('[data-robot-record]').textContent.trim() === '로봇 녹화'")
+            _recordings(page, base_url, blocker="ROBOT_MOVING")
+            page.click("[data-recordings-refresh]")
+            page.wait_for_function("document.querySelector('[data-recordings-notice]').textContent.includes('멈춘 뒤')")
+            assert row.locator("[data-recording-fetch]").is_disabled()
+            _recordings(page, base_url, blocker=None)
+            # no click: the open sheet refreshes itself every few seconds
+            page.wait_for_function("!document.querySelector('[data-recording-fetch]').disabled")
+            with page.expect_download() as download:
+                row.locator("[data-recording-fetch]").click()
+            assert download.value.suggested_filename == f"{ROBOT_RECORDING_ID}.tar"
+            row.locator("[data-recording-status]").wait_for()
+            assert "받음" in row.locator("[data-recording-status]").inner_text()
+            assert _eventually(lambda: _recordings(page, base_url)["log"] == ["start", "stop", "archive", "archive_done"])
+            page.keyboard.press("Escape")
+            assert page.locator("[data-recordings-sheet]").count() == 0
+            assert page.evaluate("document.activeElement?.hasAttribute('data-recordings-open')")
+        finally:
+            browser.close()
+    assert errors == [], errors
+
+
+@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+                    reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
+def test_robot_recording_shows_starting_until_the_writer_records(tablet_page):
+    """'녹화 중'은 로봇이 실제로 기록할 때부터다. 준비 중에는 타이머 없이 멈출 수만 있다."""
+    base_url, page, errors = tablet_page
+    _enter_recording_drive(page, base_url, starting=True)
+    toggle = "[data-robot-record]"
+    page.click(toggle)
+    page.wait_for_function(f"document.querySelector('{toggle}').dataset.state === 'starting'")
+    assert page.inner_text(toggle).strip() == "녹화 준비 중…"
+    assert page.get_attribute(toggle, "aria-pressed") == "true"
+    assert page.get_attribute(toggle, "aria-label") == "로봇 녹화 준비 중, 누르면 취소"
+    assert not page.locator(toggle).is_disabled()
+    # 켜진 버튼을 흐리게(opacity) 하지 않고, 표면이 공용 버튼을 다시 칠하지도 않는다(D-411):
+    # 준비 중은 라벨·눌림·HUD 칩이 말한다.
+    opacity = page.evaluate(f"getComputedStyle(document.querySelector('{toggle}')).opacity")
+    assert opacity == "1", opacity
+    assert page.get_attribute(toggle, "kind") is not None
+    fact = page.inner_text("[data-drive-fact=recording]")
+    assert "아직 기록하지 않습니다" in fact and "0:0" not in fact
+    page.click(toggle)                                     # 준비 중 멈춤은 깨끗한 정지
+    page.wait_for_function(f"document.querySelector('{toggle}').textContent.trim() === '로봇 녹화'")
+    assert _recordings(page, base_url)["log"] == ["start", "stop"]
+    page.click(toggle)
+    page.wait_for_function(f"document.querySelector('{toggle}').dataset.state === 'starting'")
+    _recordings(page, base_url, ready=True)                # 기록기가 첫 파일을 열었다
+    page.wait_for_function(ROBOT_RECORD_STOP)
+    page.wait_for_function("document.querySelector('[data-drive-fact=recording]').textContent.includes('녹화 0:')")
+    assert page.get_attribute(toggle, "aria-label") == "로봇 녹화 중지"
+    page.click(toggle)
+    page.wait_for_function(f"document.querySelector('{toggle}').dataset.state === 'idle'")
+    page.click(toggle)
+    page.wait_for_function(f"document.querySelector('{toggle}').dataset.state === 'starting'")
+    page.click("[data-drive-exit]")                        # 준비 중에 나가도 이 기기 녹화는 멈춘다
+    assert _eventually(lambda: _recordings(page, base_url)["log"] == ["start", "stop", "start", "stop",
+                                                                      "start", "stop"])
+    assert errors == [], errors
+
+
+@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+                    reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
+def test_leaving_drive_stops_the_robot_recording_this_device_started(tablet_page):
+    base_url, page, errors = tablet_page
+    _enter_recording_drive(page, base_url)
+    page.click("[data-robot-record]")
+    page.wait_for_function(ROBOT_RECORD_STOP)
+    page.click("[data-drive-exit]")
+    assert _eventually(lambda: _recordings(page, base_url)["log"] == ["start", "stop"])
+    assert errors == [], errors
+
+
+@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+                    reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
+def test_another_devices_recording_is_neither_stopped_nor_stoppable_here(tablet_page):
+    base_url, page, errors = tablet_page
+    _recordings(page, base_url, reset=True, foreign=True)
+    _enter_drive(page, base_url)
+    page.wait_for_function(ROBOT_RECORD_STOP)
+    page.click("[data-robot-record]")
+    page.wait_for_function("document.querySelector('[data-drive-fact=recording]').textContent.includes('다른 기기가 시작한')")
+    page.click("[data-drive-exit]")
+    assert _settled_polls(page, base_url)
+    assert _recordings(page, base_url)["log"] == []
+    assert errors == [], errors
+
+
+@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+                    reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
+def test_a_viewer_is_told_it_needs_an_operator(tablet_page):
+    base_url, page, errors = tablet_page
+    _enter_recording_drive(page, base_url, role="viewer")
+    page.click("[data-robot-record]")
+    page.wait_for_function("document.querySelector('[data-drive-fact=recording]').textContent.includes('운전자(Operator)')")
+    row = _open_sheet(page)
+    row.locator("[data-recording-fetch]").click()
+    page.wait_for_function("document.querySelector('[data-recording-status]')?.textContent.includes('운전자(Operator)')")
+    assert _recordings(page, base_url)["log"] == []
+    assert errors == [], errors
+
+
+@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+                    reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
+@pytest.mark.parametrize("mode, text", [("short", "끊겼습니다"), ("conflict", "멈춘 뒤에")])
+def test_a_cut_or_refused_download_saves_nothing(tablet_page, mode, text):
+    base_url, page, errors = tablet_page
+    _enter_recording_drive(page, base_url, archive=mode)
+    downloads = []
+    page.on("download", lambda item: downloads.append(item))
+    row = _open_sheet(page)
+    row.locator("[data-recording-fetch]").click()
+    page.wait_for_function(f"document.querySelector('[data-recording-status]')?.textContent.includes('{text}')")
+    assert downloads == []
+    assert errors == [], errors
+
+
+@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+                    reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
+@pytest.mark.parametrize("how", ["cancel", "exit"])
+def test_an_in_flight_download_is_aborted_by_cancel_or_leaving(tablet_page, how):
+    """받는 중에 취소하거나 화면을 나가면 요청을 끊는다 — CORE 가 fetched 로 표시하지 않게."""
+    base_url, page, errors = tablet_page
+    _enter_recording_drive(page, base_url, archive="slow")
+    try:
+        row = _open_sheet(page)
+        row.locator("[data-recording-fetch]").click()
+        row.locator("[data-recording-cancel]").wait_for()
+        assert _eventually(lambda: "archive" in _recordings(page, base_url)["log"])
+        page.click("[data-recording-cancel]" if how == "cancel" else "[data-drive-exit]")
+        assert _eventually(lambda: "archive_aborted" in _recordings(page, base_url)["log"]), \
+            _recordings(page, base_url)
+        if how == "cancel":
+            page.wait_for_function("document.querySelector('[data-recording-status]')?.textContent.includes('취소')")
+    finally:
+        _recordings(page, base_url, release=True)
+    assert "archive_done" not in _recordings(page, base_url)["log"]
+    assert errors == [], errors
+
+
+@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+                    reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
+def test_a_large_recording_points_to_the_pc_tool(tablet_page):
+    base_url, page, errors = tablet_page
+    _enter_recording_drive(page, base_url, big=True)
+    row = _open_sheet(page)
+    button = row.locator("[data-recording-fetch]")
+    assert button.is_disabled()
+    assert "rosy_ml fetch" in button.inner_text()
+    assert errors == [], errors
+
+
+@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+                    reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
+def test_recordings_sheet_refresh_keeps_keyboard_focus(tablet_page):
+    """3 s 새로 읽기가 같은 목록을 가져오면 행을 다시 만들지 않는다 — 초점·live region 그대로."""
+    base_url, page, errors = tablet_page
+    _enter_recording_drive(page, base_url)
+    row = _open_sheet(page)
+    page.wait_for_function("!document.querySelector('[data-recording-fetch]').disabled")
+    row.locator("[data-recording-fetch]").focus()
+    page.evaluate("window.__focused = document.activeElement")
+    lists = _recordings(page, base_url)["lists"]
+    assert _eventually(lambda: _recordings(page, base_url)["lists"] >= lists + 2)
+    assert page.evaluate("document.activeElement === window.__focused && window.__focused.isConnected")
+    assert errors == [], errors
+
+
+# --- D-411 B: rosy.controls/1 — 기기가 알리는 조작부로 화면을 조립한다 ---------------------------
+
+@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1", reason="ROSY_RUN_BROWSER_TESTS=1")
+def test_unknown_control_kind_is_shown_not_fatal(tablet_page):
+    base_url, page, errors = tablet_page
+    page.request.post(f"{base_url}/__test__/controls", data={"extra": {"id": "laser", "kind": "laser", "label": "레이저"}})
+    _enter_drive(page, base_url)
+    assert page.locator("[data-control-unsupported]").inner_text().strip() == "지원하지 않는 조작부 · 레이저"
+    assert page.locator("[data-drive-auto]").count() == 1          # base_velocity autonomy ["line"]
+    assert errors == [], errors
+
+
+@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1", reason="ROSY_RUN_BROWSER_TESTS=1")
+def test_old_core_without_controls_falls_back_to_the_pinky_profile(tablet_page):
+    base_url, page, errors = tablet_page
+    page.request.post(f"{base_url}/__test__/controls", data={"omit": True})
+    _enter_drive(page, base_url)
+    assert page.locator("[data-drive-stage]").count() == 1
+    assert page.locator("[data-drive-auto]").count() == 1          # legacy PROFILE autonomy ["line"]
+    assert page.locator("[data-control-unsupported]").count() == 0
+    assert errors == [], errors
+
+
+@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1", reason="ROSY_RUN_BROWSER_TESTS=1")
+def test_announced_autonomy_decides_the_line_toggle(tablet_page):
+    base_url, page, errors = tablet_page
+    page.request.post(f"{base_url}/__test__/controls",
+                      data={"items": [{**dev_server._BASE_CONTROL, "autonomy": []}]})
+    _enter_drive(page, base_url)
+    assert page.locator("[data-drive-auto]").count() == 0
+    assert errors == [], errors
+
+
+@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1", reason="ROSY_RUN_BROWSER_TESTS=1")
+def test_empty_controls_are_not_an_old_server(tablet_page):
+    base_url, page, errors = tablet_page
+    page.request.post(f"{base_url}/__test__/controls", data={"items": []})
+    page.goto(f"{base_url}/pilot")
+    page.fill("form[data-pilot-token-form] ui-field input", "devtoken")
+    page.click("form[data-pilot-token-form] ui-button")
+    page.click("[data-drive-enter]")
+    page.wait_for_selector("text=이 기기는 지금 주행 조작부를 알리지 않습니다")
+    assert page.locator("[data-drive-stick]").count() == 0
+    page.click("text=접속 화면으로")
+    page.wait_for_selector("[data-drive-enter]")
+    assert errors == [], errors
+
+
+# The fake follows the real SIM runtime (pilot_sim_runtime.snapshot/submit, command_owner):
+# while a goal runs /state says ready:false, owner_state "active", active_goal; a goal needs a
+# state_sequence served by a ready readback; a second goal while one runs is refused.
+_ARM_HARNESS = """async (opts) => {
+  const {mountArm} = await import('/pilot/assets/screens/arm.js');
+  Object.assign(window, {goals: [], grips: [], gripperState: null, cancels: 0, terminal: 'RUNNING', rejections: [], seq: 0, served: new Set(),
+    pos: {joint1: 0, joint2: 0, gripper_joint_1: 0}, seatLost: false, forgetGoals: false,
+    mismatchOnce: Boolean(opts.mismatchOnce), started: {}});
+  const TERMINAL = ['SUCCEEDED', 'REJECTED', 'CANCELED', 'UNKNOWN_HOLD'];
+  const goalState = (id) => opts.settleMs ? (performance.now() - window.started[id] >= opts.settleMs ? 'SUCCEEDED' : 'RUNNING')
+                                          : window.terminal;
+  const current = () => window.goals.at(-1)?.request_id;
+  const running = () => Boolean(current()) && !TERMINAL.includes(goalState(current()));
+  const refuse = (reason) => { window.rejections.push(reason); throw new Error(`409: {"error":{"message":"${reason}"}}`); };
+  // opts.gripper: a D-411 C server — the gripper leaves joint_jog and has its own control.
+  const gripper = {id: 'gripper', kind: 'gripper', label: '그리퍼', joint: 'gripper_joint_1', closed: 0, open: 1,
+    unit: 'rad', presets: {open: 1, half: 0.5, close: 0}, readback: ['position', 'grasp'], max_velocity: 0.5};
+  const target = {kind: 'omx_sim', simulation: true, instance_id: 'omx_01', joints: ['joint1', 'joint2'],
+    gripper: 'gripper_joint_1', controls: {schema: 'rosy.controls/1', items: [{id: 'arm', kind: 'joint_jog',
+    label: '팔', max_step_rad: 0.05, duration_s: 0.4, command: 'bounded_goal',
+    joints: [{name: 'joint1', lower: -1, upper: 1}, {name: 'joint2', lower: -1, upper: 1},
+             ...(opts.gripper ? [] : [{name: 'gripper_joint_1', lower: -0.01, upper: 0.019}])]},
+    ...(opts.gripper ? [gripper] : []), ...(opts.extra || [])]}};
+  const gripperBlock = (busy) => ({joint: 'gripper_joint_1', position: window.pos.gripper_joint_1, open: 1, closed: 0,
+    state: window.gripperState ?? (busy && window.grips.at(-1)?.request_id === current() ? 'moving'
+           : Math.abs(window.pos.gripper_joint_1) <= 0.05 ? 'closed' : 'open')});
+  const driver = {request: async (path, options = {}) => {
+    if (path === '/pair') return {token: 't'};
+    if (path === '/whoami') return {role: 'operator'};
+    if (path === '/seat') return {seat_id: 's'};
+    if (path.startsWith('/seat/')) { if (window.seatLost && options.method === 'PUT') throw new Error('409: seat expired'); return {seat_id: 's'}; }
+    if (path === '/state') {
+      if (window.failNextState) { window.failNextState = false; throw new Error('503: {"error":{"message":"busy"}}'); }
+      const busy = running(); window.seq += 1;
+      if (!busy) window.served.add(window.seq);
+      return {ready: !busy, state_sequence: window.seq, owner_state: busy ? 'active' : 'ready', joint_age_ms: 5,
+              active_goal: busy ? current() : null, positions: {...window.pos},
+              ...(opts.gripper ? {gripper: gripperBlock(busy)} : {})};
+    }
+    if (path === '/gripper') {
+      const body = JSON.parse(options.body);
+      if (running()) refuse('goal_active');
+      if (!window.served.has(body.state_sequence)) refuse('readback_not_recently_served');
+      if (body.position < -0.1 || body.position > 1.1) refuse('gripper_limit');
+      window.pos.gripper_joint_1 = body.position; window.grips.push(body); window.goals.push(body);
+      window.started[body.request_id] = performance.now();
+      return {command_id: body.request_id, state: 'LOCAL_ACCEPTED'};
+    }
+    if (path === '/goals') {
+      const body = JSON.parse(options.body);
+      if (running()) refuse('goal_active');
+      if (!window.served.has(body.state_sequence)) refuse('readback_not_recently_served');
+      if (window.mismatchOnce) { window.mismatchOnce = false; refuse('joint_state_sequence_mismatch'); }
+      const range = target.controls.items[0].joints.find((j) => j.name === body.joint);
+      const next = window.pos[body.joint] + body.delta_rad;
+      if (next < range.lower || next > range.upper) refuse('joint_limit');
+      window.pos[body.joint] = next; window.goals.push(body); window.started[body.request_id] = performance.now();
+      return {command_id: body.request_id, state: 'LOCAL_ACCEPTED'};
+    }
+    if (path.endsWith('/cancel')) { window.cancels++; return {state: 'CANCEL_REQUESTED'}; }
+    if (path.startsWith('/goals/')) {
+      if (window.forgetGoals) throw new Error('404: {"error":{"message":"goal unknown"}}');
+      if (window.settleOnPoll) { window.settleOnPoll = false; window.terminal = 'SUCCEEDED'; window.failNextState = true; }
+      return {state: goalState(decodeURIComponent(path.slice(7)))};
+    }
+    return {};
+  }};
+  const root = document.querySelector('[data-screen="arm"]');
+  document.body.dataset.pilotScreen = 'arm';
+  document.querySelector('[data-screen="connect"]').hidden = true;
+  root.hidden = false;
+  sessionStorage.setItem(`rosy.pilot.omx-sim.${location.origin}`, 't');
+  window.disposeArm = mountArm(root, target, driver);
+}"""
+
+
+def _mount_arm(page, base_url, **opts):
+    page.goto(f"{base_url}/pilot")
+    page.wait_for_selector("form[data-pilot-token-form]")
+    page.evaluate(_ARM_HARNESS, opts)
+    page.wait_for_function("document.querySelector('[data-sim-status]').textContent === '조작 가능'")
+
+
+@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1", reason="ROSY_RUN_BROWSER_TESTS=1")
+def test_arm_joystick_sends_bounded_goals_one_at_a_time(tablet_page):
+    base_url, page, errors = tablet_page
+    _mount_arm(page, base_url)
+    result = page.evaluate("""async () => {
+      const pad = document.querySelector('[data-arm-pad]');
+      const box = pad.getBoundingClientRect();
+      pad.dispatchEvent(new PointerEvent('pointerdown', {clientX: box.right, clientY: box.top + box.height / 2, pointerId: 1, bubbles: true}));
+      await new Promise((r) => setTimeout(r, 300));
+      const whileRunning = window.goals.length;
+      window.terminal = 'SUCCEEDED';
+      await new Promise((r) => setTimeout(r, 1300));
+      pad.dispatchEvent(new PointerEvent('pointerup', {pointerId: 1, bubbles: true}));
+      const atRelease = window.goals.length;
+      await new Promise((r) => setTimeout(r, 1300));
+      return {whileRunning, atRelease, after: window.goals.length, cancels: window.cancels, rejections: window.rejections,
+              deltas: window.goals.map((g) => g.delta_rad), joints: [...new Set(window.goals.map((g) => g.joint))],
+              durations: [...new Set(window.goals.map((g) => g.duration_s))]};
+    }""")
+    assert result["whileRunning"] == 1
+    assert result["atRelease"] >= 2 and result["after"] == result["atRelease"]
+    assert all(0 < d <= 0.05 for d in result["deltas"]) and result["joints"] == ["joint1"]
+    assert result["durations"] == [0.4]
+    assert result["cancels"] == 0 and result["rejections"] == []    # release never cancels (D-411 부록)
+    assert errors == [], errors
+
+
+@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1", reason="ROSY_RUN_BROWSER_TESTS=1")
+def test_arm_axes_are_remappable_and_buttons_wait_for_the_goal(tablet_page):
+    base_url, page, errors = tablet_page
+    _mount_arm(page, base_url, extra=[{"id": "beam", "kind": "beam", "label": "빔"}])
+    assert page.locator("[data-control-unsupported]").inner_text().strip() == "지원하지 않는 조작부 · 빔"
+    assert page.locator("[data-arm-pad-label=up]").inner_text() == "joint2 +"
+    page.select_option("[data-arm-axis=y]", "gripper_joint_1")
+    assert page.locator("[data-arm-pad-label=up]").inner_text() == "gripper_joint_1 +"
+    page.click("[data-sim-delta='0.02']")
+    page.wait_for_function("window.goals.length === 1")
+    page.wait_for_function("document.querySelector(\"[data-sim-delta='0.02']\").disabled")
+    assert page.locator("[data-sim-cancel]").is_enabled()
+    page.evaluate("window.terminal = 'SUCCEEDED'")
+    page.wait_for_function("!document.querySelector(\"[data-sim-delta='0.02']\").disabled")
+    page.focus("[data-arm-pad]")
+    page.keyboard.down("ArrowUp")
+    page.wait_for_function("window.goals.length >= 2")
+    page.keyboard.up("ArrowUp")
+    goal = page.evaluate("window.goals[1]")
+    assert goal["joint"] == "gripper_joint_1" and 0 < goal["delta_rad"] <= 0.019
+    assert page.evaluate("window.rejections") == []
+    assert errors == [], errors
+
+
+@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1", reason="ROSY_RUN_BROWSER_TESTS=1")
+def test_arm_screen_fits_phone_width(base_url):
+    with playwright_sync.sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        try:
+            page = browser.new_page(viewport={"width": 390, "height": 844})
+            errors: list[str] = []
+            page.on("pageerror", lambda exc: errors.append(str(exc)))
+            _mount_arm(page, base_url)
+            overflow = page.evaluate("document.documentElement.scrollWidth - document.documentElement.clientWidth")
+            assert overflow <= 0, f"가로 넘침 {overflow}px"
+            assert page.locator("[data-arm-pad]").is_visible()
+            assert errors == [], errors
+        finally:
+            browser.close()
+
+_HOLD_PAD = """async (ms) => {
+  const pad = document.querySelector('[data-arm-pad]');
+  const box = pad.getBoundingClientRect();
+  pad.dispatchEvent(new PointerEvent('pointerdown', {clientX: box.right, clientY: box.top + box.height / 2, pointerId: 1, bubbles: true}));
+  await new Promise((r) => setTimeout(r, ms));
+  const held = {status: document.querySelector('[data-arm-pad-status]').textContent,
+                button: document.querySelector("[data-sim-delta='0.02']").getAttribute('reason')};
+  pad.dispatchEvent(new PointerEvent('pointerup', {pointerId: 1, bubbles: true}));
+  return held;
+}"""
+
+
+@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1", reason="ROSY_RUN_BROWSER_TESTS=1")
+def test_arm_stick_held_keeps_going_across_goals_while_the_owner_is_active(tablet_page):
+    """Review C1: the real owner says ready:false/"active" while a goal runs — that is busy, not blocked."""
+    base_url, page, errors = tablet_page
+    _mount_arm(page, base_url, settleMs=300)
+    held = page.evaluate(_HOLD_PAD, 2600)
+    page.wait_for_timeout(800)
+    count = page.evaluate("window.goals.length")
+    assert count >= 3, count
+    assert page.evaluate("window.rejections") == []                 # never overlapping, never a stale sequence
+    assert held["button"] == "조이스틱 사용 중"                          # ± wait while the stick is held (I2)
+    assert page.evaluate("window.goals.length") == count             # release stops new goals
+    assert errors == [], errors
+
+
+@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1", reason="ROSY_RUN_BROWSER_TESTS=1")
+def test_arm_sequence_mismatch_is_retried_once_not_a_release(tablet_page):
+    """Gazebo run: a new /joint_states between GET /state and POST → 409 joint_state_sequence_mismatch."""
+    base_url, page, errors = tablet_page
+    _mount_arm(page, base_url, settleMs=300, mismatchOnce=True)
+    page.evaluate(_HOLD_PAD, 1500)
+    assert page.evaluate("window.rejections") == ["joint_state_sequence_mismatch"]
+    assert page.evaluate("window.goals.length") >= 2
+    assert errors == [], errors
+
+
+@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1", reason="ROSY_RUN_BROWSER_TESTS=1")
+def test_arm_stick_stops_at_the_joint_limit_without_a_refused_goal(tablet_page):
+    base_url, page, errors = tablet_page
+    _mount_arm(page, base_url, settleMs=150)
+    page.evaluate("window.pos.joint1 = 0.98")
+    page.wait_for_timeout(1200)                                     # a readback with the new position
+    held = page.evaluate(_HOLD_PAD, 1500)
+    assert [g["delta_rad"] for g in page.evaluate("window.goals")] == [0.02]
+    assert page.evaluate("window.rejections") == []
+    assert held["status"].startswith("관절 한계")
+    assert errors == [], errors
+
+
+@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1", reason="ROSY_RUN_BROWSER_TESTS=1")
+def test_arm_seat_loss_drops_the_goal_and_offers_pairing(tablet_page):
+    base_url, page, errors = tablet_page
+    _mount_arm(page, base_url)
+    page.click("[data-sim-delta='0.02']")
+    page.wait_for_function("!document.querySelector('[data-sim-cancel]').disabled")
+    page.evaluate("window.seatLost = true")
+    page.wait_for_selector("[data-sim-pair]", state="visible")
+    assert page.locator("[data-sim-cancel]").is_disabled()
+    assert page.inner_text("[data-sim-status]").startswith("조작 보류")
+    assert page.locator("[data-arm-pad]").get_attribute("aria-disabled") == "true"
+    assert errors == [], errors
+
+
+@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1", reason="ROSY_RUN_BROWSER_TESTS=1")
+def test_arm_goal_unknown_to_the_server_is_settled(tablet_page):
+    base_url, page, errors = tablet_page
+    _mount_arm(page, base_url)
+    page.click("[data-sim-delta='0.02']")
+    page.wait_for_function("!document.querySelector('[data-sim-cancel]').disabled")
+    page.evaluate("window.forgetGoals = true")
+    page.wait_for_function("document.querySelector('[data-sim-status]').textContent.includes('goal_unknown')")
+    page.wait_for_function("document.querySelector('[data-sim-cancel]').disabled")
+    assert errors == [], errors
+
+
+@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1", reason="ROSY_RUN_BROWSER_TESTS=1")
+def test_arm_gripper_presets_slider_and_badge(tablet_page):
+    """D-411 C: one absolute goal per preset or slider release; the badge reads the grasp state."""
+    base_url, page, errors = tablet_page
+    _mount_arm(page, base_url, gripper=True)
+    badge = page.locator("[data-gripper-state]")
+    assert badge.inner_text() == "닫힘" and badge.get_attribute("aria-live") == "polite"
+    assert "gripper_joint_1" not in page.locator("[data-sim-joint] option").all_inner_texts()
+    page.click("[data-gripper-preset='half']")
+    page.wait_for_function("window.grips.length === 1")
+    grip = page.evaluate("window.grips[0]")
+    assert grip["position"] == 0.5 and grip["duration_s"] == 1.12         # 0.5 rad at 0.9 x 0.5 rad/s, rounded up
+    page.wait_for_function("document.querySelector('[data-gripper-state]').textContent === '이동 중'")
+    assert page.locator("[data-gripper-preset='close']").is_disabled()     # one goal at a time
+    assert page.locator("[data-gripper-percent]").is_disabled()
+    page.evaluate("window.terminal = 'SUCCEEDED'")
+    page.wait_for_function("!document.querySelector('[data-gripper-percent]').disabled")
+    assert badge.inner_text() == "열림"
+    assert page.locator("[data-gripper-percent]").input_value() == "50"
+    page.evaluate("""() => { const s = document.querySelector('[data-gripper-percent]');
+      s.dispatchEvent(new PointerEvent('pointerdown', {bubbles: true})); s.value = '100';
+      s.dispatchEvent(new Event('input', {bubbles: true})); s.dispatchEvent(new Event('change', {bubbles: true})); }""")
+    page.wait_for_function("window.grips.length === 2")
+    grip = page.evaluate("window.grips[1]")
+    assert grip["position"] == 1.0 and grip["duration_s"] == 1.12
+    page.evaluate("window.pos.gripper_joint_1 = 0.3; window.gripperState = 'holding'")
+    page.wait_for_function("document.querySelector('[data-gripper-state]').textContent === '쥐고 있음'")
+    assert page.evaluate("window.rejections") == []
+    assert errors == [], errors
+
+
+@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1", reason="ROSY_RUN_BROWSER_TESTS=1")
+@pytest.mark.parametrize("viewport", [(2000, 1200), (390, 844)])
+def test_arm_gripper_sits_in_the_right_hand_slot(base_url, viewport):
+    shots = Path(os.environ.get("ROSY_SHOT_DIR", "X:/DevTemp/d411-c"))
+    with playwright_sync.sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        try:
+            page = browser.new_page(viewport={"width": viewport[0], "height": viewport[1]})
+            errors: list[str] = []
+            page.on("pageerror", lambda exc: errors.append(str(exc)))
+            _mount_arm(page, base_url, gripper=True)
+            jog = page.locator("[data-control='joint_jog']").bounding_box()
+            grip = page.locator("[data-control='gripper']").bounding_box()
+            overflow = page.evaluate("document.documentElement.scrollWidth - document.documentElement.clientWidth")
+            assert overflow <= 0, f"가로 넘침 {overflow}px"
+            if viewport[0] >= 1024:
+                assert grip["x"] >= jog["x"] + jog["width"] and abs(grip["y"] - jog["y"]) < 2, (jog, grip)
+                assert grip["width"] < jog["width"]
+            else:
+                assert grip["y"] >= jog["y"] + jog["height"], (jog, grip)
+            for name in ("open", "half", "close"):
+                box = page.locator(f"[data-gripper-preset='{name}']").bounding_box()
+                assert box["height"] >= 40 and box["x"] + box["width"] <= viewport[0], (name, box)
+            if shots.drive and Path(shots.drive + "/").exists():
+                shots.mkdir(parents=True, exist_ok=True)
+                page.screenshot(path=str(shots / f"pilot-arm-gripper-{viewport[0]}x{viewport[1]}.png"), full_page=True)
+            assert errors == [], errors
+        finally:
+            browser.close()
+
+
+@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1", reason="ROSY_RUN_BROWSER_TESTS=1")
+def test_a_widget_that_throws_is_shown_not_fatal(tablet_page):
+    base_url, page, errors = tablet_page
+    page.goto(f"{base_url}/pilot")
+    text = page.evaluate("""async () => {
+      const {composeControls} = await import('/pilot/assets/screens/compose.js');
+      const root = document.createElement('div'); document.body.append(root);
+      composeControls(root, [{id: 'a', kind: 'joint_jog', label: '팔'}, {id: 'b', kind: 'ok', label: '확인'}],
+        {joint_jog: () => { throw new Error('bad joints'); }, ok: (slot) => { slot.textContent = 'fine'; }}, {});
+      return [...root.children].map((slot) => slot.textContent);
+    }""")
+    assert text == ["그릴 수 없는 조작부 · 팔", "fine"]
+    assert errors == [], errors
+
+
+def _enter_drive_with(page, base_url, items):
+    page.request.post(f"{base_url}/__test__/controls", data={"items": items})
+    page.goto(f"{base_url}/pilot")
+    page.fill("form[data-pilot-token-form] ui-field input", "devtoken")
+    page.click("form[data-pilot-token-form] ui-button")
+    page.click("[data-drive-enter]")
+    page.wait_for_selector("[data-drive-stick]")
+
+
+@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1", reason="ROSY_RUN_BROWSER_TESTS=1")
+def test_zero_announced_limits_show_standstill(tablet_page):
+    base_url, page, errors = tablet_page
+    _enter_drive_with(page, base_url, [{**dev_server._BASE_CONTROL, "max_linear": 0, "max_angular": 0}])
+    page.wait_for_function("document.querySelector('[data-drive-fact=cap]').textContent.includes('정지로 제한됨')")
+    assert errors == [], errors
+
+
+@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1", reason="ROSY_RUN_BROWSER_TESTS=1")
+def test_a_base_without_pivot_or_fine_draws_neither_and_ignores_q_e(tablet_page):
+    base_url, page, errors = tablet_page
+    _enter_drive_with(page, base_url, [{**dev_server._BASE_CONTROL, "pivot": False, "fine": False}])
+    assert page.locator("[data-drive-pivot]").count() == 0
+    assert page.locator("[data-drive-fine]").count() == 0
+    page.wait_for_function("document.querySelector('[data-drive-fact=cap]')?.textContent.includes('0.10')")
+    dev_server.TELEOP_LOG.clear()
+    page.keyboard.down("KeyQ")
+    page.wait_for_timeout(600)
+    page.keyboard.up("KeyQ")
+    assert all(entry["angular"] == 0 for entry in dev_server.TELEOP_LOG)
+    assert errors == [], errors
+
+# A zone point straight above the ring, as high as the column allows (top edge + 4 px).
+_ZONE_TOP = """() => {
+  const stick = document.querySelector('[data-drive-stick]').getBoundingClientRect();
+  const column = document.querySelector('[data-drive-right]').getBoundingClientRect();
+  const cx = stick.left + stick.width / 2, cy = stick.top + stick.height / 2, r = stick.width / 2;
+  for (let k = 1.75; k > 1.05; k -= 0.05) {
+    const y = Math.max(column.top + 4, cy - k * r);
+    if (cy - y > r && document.elementFromPoint(cx, y)?.closest('[data-drive-stick]')) {
+      return {x: cx, y, r, clamped: y - r < column.top};
+    }
+  }
+  return null;
+}"""
+_RING_IN_COLUMN = """() => {
+  const el = document.querySelector('[data-drive-stick]');
+  const ring = el.getBoundingClientRect();
+  const column = document.querySelector('[data-drive-right]').getBoundingClientRect();
+  return {inside: ring.top >= column.top - 0.5 && ring.bottom <= column.bottom + 0.5
+                  && ring.left >= column.left - 0.5 && ring.right <= column.right + 0.5,
+          ring: [ring.left, ring.top, ring.right, ring.bottom], column: [column.left, column.top, column.right, column.bottom]};
+}"""
+
+
+def _zone_point(page):
+    """A point 1.5 ring radii from the stick centre, outside the ring but inside its column."""
+    return page.evaluate("""() => {
+      const stick = document.querySelector('[data-drive-stick]').getBoundingClientRect();
+      const column = document.querySelector('[data-drive-right]').getBoundingClientRect();
+      const cx = stick.left + stick.width / 2, cy = stick.top + stick.height / 2, r = stick.width / 2;
+      for (const [name, dx, dy] of [['up', 0, -1], ['right', 1, 0], ['left', -1, 0], ['down', 0, 1]]) {
+        const x = cx + dx * 1.5 * r, y = cy + dy * 1.5 * r;
+        if (x > column.left + 2 && x < column.right - 2 && y > column.top + 2 && y < column.bottom - 2
+            && document.elementFromPoint(x, y)?.closest('[data-drive-stick]')) return {name, x, y, r};
+      }
+      return null;
+    }""")
+
+
+@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1", reason="ROSY_RUN_BROWSER_TESTS=1")
+@pytest.mark.parametrize("viewport", [(2000, 1200), (390, 844)])
+def test_stick_grabs_a_touch_outside_the_ring_but_not_a_neighbour_button(base_url, viewport):
+    """Tablet field report 2026-10-02: the ring is too small. An invisible zone around it grabs the
+    stick; deflection is measured from the ring centre and clamped at the ring edge."""
+    log = f"{base_url}/__test__/teleop"
+    with playwright_sync.sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        try:
+            page = browser.new_page(viewport={"width": viewport[0], "height": viewport[1]})
+            errors: list[str] = []
+            page.on("pageerror", lambda exc: errors.append(str(exc)))
+            _enter_drive(page, base_url)
+            point = _zone_point(page)
+            assert point, "no room for the zone around the ring"
+            # Floating origin (re-review I-B): a touch outside the ring is zero, not full deflection.
+            before = len(page.request.get(log).json())
+            page.mouse.move(point["x"], point["y"])
+            page.mouse.down()
+            page.wait_for_timeout(600)
+            assert page.locator("[data-drive-stick].active").count() == 1
+            landed = page.request.get(log).json()[before:]
+            assert all(c["linear"] == 0 and c["angular"] == 0 for c in landed), landed   # no motion (zeros or nothing)
+            cap = float(page.inner_text("[data-drive-fact=cap]").split()[1])
+            page.mouse.move(point["x"], point["y"] - point["r"], steps=4)       # up by one ring radius
+            page.wait_for_timeout(800)
+            page.mouse.up()
+            page.wait_for_timeout(400)
+            sent = page.request.get(log).json()
+            moved = sent[before + len(landed):]
+            peak = max(c["linear"] for c in moved)
+            # the HUD shows the cap to 2 decimals (0.105 → "0.10"); full deflection reaches it.
+            assert abs(peak - cap) <= 0.0051 and all(c["angular"] == 0 for c in moved), (cap, moved)
+            assert page.evaluate("getComputedStyle(document.querySelector('[data-drive-stick]')).translate") in ("none", "")
+            assert sent[-1]["linear"] == 0 and sent[-1]["angular"] == 0      # release ends the hold
+            # D-411 B follow-up (phone): a touch at the top of the zone must not push the drawn ring
+            # out of its column (it was clipped); only the drawing is clamped, zero stays under the finger.
+            top = page.evaluate(_ZONE_TOP)
+            assert top, "no zone point near the top of the column"
+            before = len(page.request.get(log).json())
+            page.mouse.move(top["x"], top["y"])
+            page.mouse.down()
+            page.wait_for_timeout(400)
+            ring = page.evaluate(_RING_IN_COLUMN)
+            assert ring["inside"], ring
+            if viewport[0] < 600:
+                assert top["clamped"], top           # phone: unclamped, the ring would leave the column
+            if viewport[0] < 600:
+                shots = Path(os.environ.get("ROSY_SHOT_DIR", "X:/DevTemp/d411-c"))
+                if shots.drive and Path(shots.drive + "/").exists():
+                    shots.mkdir(parents=True, exist_ok=True)
+                    page.screenshot(path=str(shots / f"pilot-drive-zone-top-{viewport[0]}x{viewport[1]}.png"))
+            landed = page.request.get(log).json()[before:]
+            assert all(c["linear"] == 0 and c["angular"] == 0 for c in landed), landed
+            page.mouse.move(top["x"], top["y"] - top["r"], steps=4)          # up one radius from the touch
+            page.wait_for_timeout(600)
+            page.mouse.up()
+            page.wait_for_timeout(300)
+            moved = page.request.get(log).json()[before + len(landed):]
+            assert abs(max(c["linear"] for c in moved) - cap) <= 0.0051, (cap, moved)
+            for selector in ("[data-drive-pedal=forward]", "[data-drive-pivot=right]"):
+                box = page.locator(selector).bounding_box()
+                page.mouse.move(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
+                page.mouse.down()
+                page.wait_for_timeout(150)
+                assert page.locator("[data-drive-stick].active").count() == 0, selector
+                page.mouse.up()
+            view = page.locator("[data-drive-view]").bounding_box()
+            hit = page.evaluate("([x, y]) => Boolean(document.elementFromPoint(x, y)?.closest('[data-drive-stick]'))",
+                                [view["x"] + view["width"] / 2, view["y"] + view["height"] / 2])
+            assert not hit, "the zone must not cover the camera view"
+            assert errors == [], errors
+        finally:
+            browser.close()
+
+@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1", reason="ROSY_RUN_BROWSER_TESTS=1")
+def test_a_settle_survives_a_failed_readback_right_after_it(tablet_page):
+    """Re-review I-A: /state fails once right after SUCCEEDED — the stick must not wait forever."""
+    base_url, page, errors = tablet_page
+    _mount_arm(page, base_url)
+    page.evaluate("""() => {
+      const pad = document.querySelector('[data-arm-pad]'); const box = pad.getBoundingClientRect();
+      pad.dispatchEvent(new PointerEvent('pointerdown', {clientX: box.right, clientY: box.top + box.height / 2, pointerId: 1, bubbles: true}));
+    }""")
+    page.wait_for_function("window.goals.length === 1")
+    page.evaluate("window.terminal = 'RUNNING'; window.settleOnPoll = true")
+    page.wait_for_function("document.querySelector('[data-sim-status]').textContent.startsWith('조작 보류')")
+    page.evaluate("document.querySelector('[data-arm-pad]').dispatchEvent(new PointerEvent('pointerup', {pointerId: 1, bubbles: true}))")
+    page.wait_for_function("document.querySelector('[data-sim-status]').textContent === '조작 가능'")
+    page.evaluate("""() => {
+      const pad = document.querySelector('[data-arm-pad]'); const box = pad.getBoundingClientRect();
+      pad.dispatchEvent(new PointerEvent('pointerdown', {clientX: box.right, clientY: box.top + box.height / 2, pointerId: 2, bubbles: true}));
+    }""")
+    page.wait_for_function("window.goals.length === 2", timeout=5000)
+    page.evaluate("document.querySelector('[data-arm-pad]').dispatchEvent(new PointerEvent('pointerup', {pointerId: 2, bubbles: true}))")
+    assert page.evaluate("window.rejections") == []
     assert errors == [], errors

@@ -22,24 +22,26 @@ import numpy as np
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy, qos_profile_sensor_data
-from sensor_msgs.msg import CompressedImage, Image, LaserScan
+from sensor_msgs.msg import CompressedImage, Image
 from std_msgs.msg import Bool, Float32, String
 
+from core_common.protocol.recording import ACTIVE_TOPIC
 from . import executor_choice
-from .calibrated_values import finite_overrides, lidar_nose_rad, nominal_camera_profile
-from .sensing.body import LIDAR_X
-from .sensing.lidar import enable_simulation_scans, is_robot_scan
+from .camera_region_range import RegionRangeMixin
 from .sensing.perception.camera import classify_frame
 from .sensing.perception.camera_controls import (
     lock_action, lock_controls, lock_summary, static_controls)
 from .sensing.perception.camera_evidence import observation_payload
-from .sensing.perception.camera_ground import ground_plane, nominal_ground_plane
-from .sensing.perception.region_range import range_regions, scan_in_camera
+from .sensing.perception.camera_ground import ground_plane
 from .sensing.perception.camera_homography import CalibrationThresholds, load_homography_profile
 from .sensing.perception.camera_policy import CameraPolicy
 from .sensing.perception.camera_worker import CameraFrame, CameraPreprocessProfile, CameraPreprocessWorker
 from .sensing.perception.jpeg_frame import DEFAULT_QUALITY, encode_jpeg
 from .sensing.perception.v4l2_controls import freeze_v4l2_controls, v4l2_lock_summary
+
+# D-411: the Pilot recorder's latched active flag (pilot_recorder_node).
+_RECORDER_QOS = QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE,
+                           durability=DurabilityPolicy.TRANSIENT_LOCAL)
 
 
 class _OpenCVCamera:
@@ -79,7 +81,7 @@ class _OpenCVCamera:
         return freeze_v4l2_controls(self._capture, self._cv2)
 
 
-class CameraDetectNode(Node):
+class CameraDetectNode(RegionRangeMixin, Node):
     def __init__(self):
         super().__init__('camera_detect_node')
         self.declare_parameter('width', 320)
@@ -152,12 +154,16 @@ class CameraDetectNode(Node):
         self.dbg_pub = self.create_publisher(String, 'camera/debug', 10)
         self.img_pub = self.create_publisher(Image, 'camera/front', qos_profile_sensor_data)
         self._jpeg_quality = int(self.get_parameter('compressed_quality').value)
+        self._publish_compressed = bool(self.get_parameter('publish_compressed').value)
+        self._recorder_active = False
+        self._jpeg_pub_created = None
         self.jpeg_pub = None
-        if bool(self.get_parameter('publish_compressed').value):
-            # Best effort, depth 1 (D-185): only the latest frame matters.
-            self.jpeg_pub = self.create_publisher(CompressedImage, 'camera/front/compressed',
-                                                  QoSProfile(depth=1, reliability=ReliabilityPolicy.BEST_EFFORT))
-            self.get_logger().info(f'camera/front/compressed on (quality {self._jpeg_quality})')
+        if self._publish_compressed:
+            self.jpeg_pub = self._compressed_publisher()
+        # D-411: the Pilot recorder needs the JPEG copy only while it records.
+        self.create_subscription(Bool, ACTIVE_TOPIC, self._on_recorder_active, _RECORDER_QOS)
+        # A recorder that died while active never sends False: watch its publisher instead.
+        self.create_timer(1.0, self._check_recorder_alive)
         self.observation_pub = self.create_publisher(String, 'camera/observation', 10)
         self.telemetry_pub = self.create_publisher(String, 'camera/telemetry', 10)
         calibration_qos = QoSProfile(
@@ -256,61 +262,6 @@ class CameraDetectNode(Node):
             self._ground = self._nominal_ground
         else:
             self._ground = None
-
-    def _load_nominal_ground(self):
-        """(plane, camera x offset) for mode 'nominal', else (None, None)."""
-        if self._ground_mode != 'nominal':
-            return None, None
-        profile, source = nominal_camera_profile(
-            str(self.get_parameter('nominal_camera_profile_path').value),
-            override=finite_overrides({key: self.get_parameter(f'camera_{key}_override').value
-                                       for key in ('pitch_rad', 'height_m')}))
-        self.get_logger().info(f'camera profile from {source}')
-        plane = nominal_ground_plane(
-            source='NOMINAL', allowed=bool(self.get_parameter('allow_nominal_ground').value),
-            width_px=int(self.get_parameter('width').value),
-            height_px=int(self.get_parameter('height').value), profile=profile)
-        if plane is None:
-            self.get_logger().warn('NOMINAL ground refused (allow_nominal_ground false or '
-                                   'profile incomplete); regions stay unranged')
-        return plane, profile.get('x_offset_m')
-
-    def _start_region_lidar(self):
-        """Subscribe scan for region range only with the NOMINAL plane (read once, at start)."""
-        if not bool(self.get_parameter('region_lidar_range').value):
-            return
-        if self._nominal_ground is None:
-            self.get_logger().warn('region_lidar_range needs camera_ground_mode nominal with a '
-                                   'NOMINAL plane; scan not subscribed')
-            return
-        if bool(self.get_parameter('accept_simulation_scans').value):
-            enable_simulation_scans(True)  # process-wide: every is_robot_scan caller in this process
-        self._lidar_nose, source = lidar_nose_rad(override=finite_overrides(
-            {'lidar_yaw_offset': self.get_parameter('lidar_yaw_offset_override').value}))
-        self.get_logger().info(f'region LiDAR range on; lidar forward from {source}')
-        self.create_subscription(LaserScan, 'scan', self._on_scan, qos_profile_sensor_data)
-
-    def _on_scan(self, msg):
-        if is_robot_scan(msg):
-            self._scan = msg
-        elif self._scan is None and not self._scan_rejected_logged:
-            self._scan_rejected_logged = True
-            self.get_logger().warn('scan arrives but is not from the onboard C1 (is_robot_scan); '
-                                   'Gazebo needs accept_simulation_scans')
-
-    def _lidar_ranged(self, regions, capture_stamp):
-        """D-423: LiDAR range per region; unchanged without a fresh scan or the NOMINAL plane."""
-        scan, value = self._scan, lambda name: float(self.get_parameter(name).value)
-        if (scan is None or self._lidar_nose is None or self._camera_x_m is None or self._ground is None
-                or self._ground is not self._nominal_ground
-                or abs(scan.header.stamp.sec + scan.header.stamp.nanosec * 1e-9 - capture_stamp)
-                > value('region_lidar_max_age_s')):
-            return regions
-        points = scan_in_camera(scan.ranges, scan.angle_min, scan.angle_increment, scan.range_min,
-                                scan.range_max, nose_rad=self._lidar_nose, lidar_x_m=LIDAR_X,
-                                camera_x_m=float(self._camera_x_m))
-        return range_regions(regions, self._ground, points, tolerance_m=value('region_lidar_tolerance_m'),
-                             tolerance_ratio=value('region_lidar_tolerance_ratio'))
 
     def _ground_calibration_status(self):
         status = self._homography.status(
@@ -565,7 +516,8 @@ class CameraDetectNode(Node):
         msg.step = msg.width * 3
         msg.data = np.ascontiguousarray(bgr).tobytes()
         self.img_pub.publish(msg)
-        if self.jpeg_pub is not None:
+        pub = self.jpeg_pub  # read once: the recorder callback may switch it
+        if pub is not None:
             try:
                 data, fmt = encode_jpeg(bgr, self._jpeg_quality)
             except (ValueError, RuntimeError) as exc:
@@ -576,7 +528,31 @@ class CameraDetectNode(Node):
             jpeg.header = msg.header
             jpeg.format = fmt
             jpeg.data = data
-            self.jpeg_pub.publish(jpeg)
+            pub.publish(jpeg)
+
+    def _compressed_publisher(self):
+        if self._jpeg_pub_created is None:
+            # Best effort, depth 1 (D-185): only the latest frame matters.
+            self._jpeg_pub_created = self.create_publisher(
+                CompressedImage, 'camera/front/compressed',
+                QoSProfile(depth=1, reliability=ReliabilityPolicy.BEST_EFFORT))
+            self.get_logger().info(f'camera/front/compressed on (quality {self._jpeg_quality})')
+        return self._jpeg_pub_created
+
+    def _on_recorder_active(self, msg):
+        # The publisher is never destroyed (no teardown while a frame publishes);
+        # while idle it simply carries no messages.
+        self._set_recorder_active(bool(msg.data))
+
+    def _check_recorder_alive(self):
+        if self._recorder_active and self.count_publishers(ACTIVE_TOPIC) == 0:
+            self.get_logger().warn('pilot recorder gone while active; JPEG copy off')
+            self._set_recorder_active(False)
+
+    def _set_recorder_active(self, active):
+        self._recorder_active = active
+        wanted = self._publish_compressed or self._recorder_active
+        self.jpeg_pub = self._compressed_publisher() if wanted else None
 
     def destroy_node(self):
         self._stop_cam()

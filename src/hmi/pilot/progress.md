@@ -2,7 +2,7 @@
 module: pilot
 logical_modules: []
 owner: 화면
-last_verified: { commit: "434ceb0b", date: 2026-09-29 }
+last_verified: { commit: "10daaae5", date: 2026-10-02 }
 gates:
   SOURCE:
     state: GO
@@ -23,12 +23,13 @@ gates:
     blocker: "실기 Pinky 에서 페달 hold-해제가 실제 정지로 이어지는 확인 전"
   FIELD:
     state: N/A
-adrs: [D-323, D-365, D-366, D-390]
+adrs: [D-323, D-365, D-366, D-390, D-411]
 plans:
   - docs/plans/2026-10-01-omx-demonstration-lerobot-design.md
   - docs/plans/2026-09-29-rosy-pilot-teleop-app-design.md
   - docs/plans/2026-09-29-rosy-pilot-teleop-app.md
   - docs/plans/2026-10-01-pilot-omx-gazebo-practice.md
+  - docs/plans/2026-10-02-d411-pilot-recording-controls-plan.md
 ---
 
 ## 지금 상태
@@ -38,6 +39,7 @@ plans:
 - 1차 기기는 현장 태블릿(Lenovo 1200×2000) — 가로 모드 기준 레이아웃.
 
 - 2026-09-29 가제보 실조종 교정: 부호 규약(REP-103)·2 축 스틱·제자리 회전·CORE 한도 비율 프리셋·송신 타이밍. 팔은 조작 프로필 `arm` 설계만(계약 대기).
+- 2026-10-02 D-411 B: 화면은 기기가 알리는 `rosy.controls/1` 로 조립된다(주행 `base_velocity`, OMX SIM `joint_jog` 조이스틱). 브라우저 시험 통과, OMX Gazebo 에서 조이스틱은 아직 미실행(ROS-SIM HOLD).
 
 ## 다음 gate
 

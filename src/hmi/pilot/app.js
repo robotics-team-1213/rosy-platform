@@ -8,6 +8,7 @@ import {mountConnect} from "./screens/connect.js";
 import {mountDrive} from "./screens/drive.js";
 import {postJson} from "./client.js";
 import {mountArm} from "./screens/arm.js";
+import {readControls, widgetPlan, fallbackPinkyControls, profileFromBaseVelocity} from "./controls.js";
 
 registerDriver(pinkyCore.kind, pinkyCore);
 registerDriver(omxSim.kind, omxSim);
@@ -24,15 +25,33 @@ function showConnect() {
   mountConnect(connectRoot, {onEnter: showDrive});
 }
 
-function showDrive() {
+// D-411 B: the device's rosy.controls/1 decides the drive profile. No `controls` field = an
+// old CORE → the legacy Pinky profile; an empty list = no drive control right now.
+function showDrive({capabilities} = {}) {
   document.body.dataset.pilotScreen = "drive";
   connectRoot.hidden = true;
   driveRoot.hidden = false;
+  const exit = () => { driveRoot.hidden = true; showConnect(); };
+  const items = readControls(capabilities?.controls) ?? fallbackPinkyControls(pinkyCore.profile);
+  const plan = widgetPlan(items, ["base_velocity"]);
+  const base = plan.find((entry) => entry.supported)?.control;
+  if (!base) {
+    const back = document.createElement("ui-button");
+    back.setAttribute("type", "button");
+    back.setAttribute("kind", "quiet");
+    back.textContent = "접속 화면으로";
+    back.addEventListener("click", exit);
+    driveRoot.replaceChildren(
+      Object.assign(document.createElement("ui-empty"), {textContent: "이 기기는 지금 주행 조작부를 알리지 않습니다"}),
+      ...plan.map(({control}) => Object.assign(document.createElement("p"), {
+        textContent: `지원하지 않는 조작부 · ${control.label || control.kind}`})),
+      back);
+    return;
+  }
   mountDrive(driveRoot, {
-    onExit: () => {
-      driveRoot.hidden = true;
-      showConnect();
-    },
+    profile: profileFromBaseVelocity(base),
+    unsupported: plan.filter((entry) => !entry.supported).map((entry) => entry.control),
+    onExit: exit,
   });
 }
 

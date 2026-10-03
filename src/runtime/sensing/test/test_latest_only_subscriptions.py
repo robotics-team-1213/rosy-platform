@@ -49,6 +49,10 @@ UNRESOLVED = {
     ('road_observer_node.py', 'self._on_detection_preview'),
     *(('safety/node.py', f'self.{name}') for name in
       ('on_scan', 'on_us', 'on_ir', 'on_cam_cliff', 'on_cam_block', 'on_imu', 'on_cmd')),
+    # D-411: pilot_recorder/active and pilot_recorder/fetched, named by constants from
+    # core_common.protocol.recording; neither is a freshness topic.
+    ('camera_detect_node.py', 'self._on_recorder_active'),
+    ('pilot_recorder_node.py', 'self._on_fetched'),
 }
 
 

@@ -33,6 +33,7 @@ from fleet.server.cancel_all import DriveCancelFence
 from fleet.server.cell_job_store import CellJobStore
 from fleet.server.console import FleetConsole
 from fleet.server.goal_evidence_service import GoalEvidenceService
+from fleet.server.goal_evidence_store import GoalEvidenceStore
 from fleet.server.local_action_transport import UnixLocalActionTransport
 from fleet.server.local_stop_transport import UnixLocalStopTransport
 from fleet.server.mission_dispatcher import MissionDispatcher
@@ -42,6 +43,8 @@ from fleet.server.mission_progress import MissionProgressService
 from fleet.server.mission_service import MissionService
 from fleet.server.policy_evidence import PolicyEvidenceStore
 from fleet.server.proposal_store import ProposalStore
+from fleet.server.step_action_kinds import dispatch_open
+from fleet.server.step_dispatcher import StepJobDispatcher
 from fleet.server.task_service import FleetTaskService
 
 from fleet.server.console_routes import install_console_routes
@@ -66,6 +69,7 @@ from fleet.server.task_dispatch_routes import (  # noqa: F401 — GoalRequest �
 )
 
 _LOG = logging.getLogger(__name__)
+DEPLOYMENT_PROFILES = frozenset({"production", "simulation"})
 
 
 class VisionLeaseRequest(BaseModel):
@@ -108,7 +112,11 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                post_action_observation_source=None,
                site_lanes: Optional[Mapping] = None,
                pairing=None, pairing_sync_token: Optional[str] = None,
-               localization_service=None) -> FastAPI:
+               localization_service=None, deployment_profile: str = "production",
+               omx_cell_grant_revisions: Optional[Mapping[str, Mapping[str, str]]] = None,
+               cell_item_pose_tolerance=None, cell_goal_registry=None) -> FastAPI:
+    if deployment_profile not in DEPLOYMENT_PROFILES:
+        raise ValueError(f"unsupported deployment_profile {deployment_profile!r}")
     mission_configured = mission_service is not None or proposal_store is not None
     if (mission_service is None) != (proposal_store is None):
         raise ValueError("Mission API requires both MissionService and ProposalStore")
@@ -136,16 +144,23 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         if len(database_paths) != 1:
             raise ValueError("Mission, proposal, audit, and resource claims must share one SQLite database")
     cell_job_store = CellJobStore(mission_service.store.path) if mission_configured else None
+    if cell_job_store is not None:
+        cell_job_store.recover_after_startup()
     cell_job_resolver = None
     if cell_job_compiler is not None:
         from rosy.execution.site.cell_submission import compile_cell_submission
+        from fleet.server.cell_goal_evidence import attach_goal_predicates
 
         def compile_cell_job(candidate, *, workcell_id, instance_id):
             submission = compile_cell_submission(
                 candidate, compiler=cell_job_compiler,
                 workcell_id=workcell_id, instance_id=instance_id,
             )
-            return submission.as_store_document()
+            document = submission.as_store_document()
+            if cell_item_pose_tolerance is not None:
+                attach_goal_predicates(document, cell_job_compiler.item_geometry(candidate["recipe"]),
+                                       cell_item_pose_tolerance)
+            return document
         cell_job_resolver = compile_cell_job
     if site_users is not None and task_service is None:
         raise ValueError("per-user site authorization requires persistent task/audit storage")
@@ -161,19 +176,50 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     stop_transport = omx_stop_transport
     if configured_omx and stop_transport is None:
         stop_transport = UnixLocalStopTransport(omx_socket_root)
-    if enable_mission_dispatcher and (not mission_configured or candidate_resolver is None):
-        raise ValueError("Mission dispatcher requires the complete Mission API and candidate resolver")
+    if enable_mission_dispatcher and not mission_configured:
+        raise ValueError("Mission dispatcher requires the complete Mission API")
     if enable_mission_dispatcher and not configured_omx:
         raise ValueError("Mission dispatcher requires configured OMX workcells")
     action_transport = omx_action_transport
     if enable_mission_dispatcher and action_transport is None:
         action_transport = UnixLocalActionTransport(omx_socket_root)
+    # D-403 §7: dispatch opens per (deployment profile, Action kind). PICK_PLACE has no open
+    # profile; CELL_TRANSFER opens only in `simulation`, where StepJobDispatcher refuses any
+    # other profile and any OMX instance without declared simulation grant revisions.
     mission_dispatcher = (
         MissionDispatcher(
             mission_service, task_service.store, action_transport, configured_omx,
             on_action_terminal=(goal_evidence_service.on_action_terminal
                                 if goal_evidence_service is not None else None),
         )
+        if enable_mission_dispatcher and dispatch_open(deployment_profile, "PICK_PLACE") else None
+    )
+    # Public Cell goal ingress (ported from main 778f50294/3ef12ca3e): sim_model_pose evidence is
+    # accepted only in the simulation profile (D-403 §5) and judged against the stored predicate.
+    cell_goal_evidence_service = None
+    if cell_goal_registry is not None:
+        from fleet.server.cell_goal_evidence_registry import CellGoalRegistry
+        from fleet.server.cell_goal_evidence_service import CellGoalEvidenceService
+        if deployment_profile != "simulation":
+            raise ValueError("Cell goal evidence (sim_model_pose) is accepted only in the simulation profile")
+        if cell_job_compiler is None or cell_job_store is None or not isinstance(cell_goal_registry, CellGoalRegistry):
+            raise ValueError("Cell goal registry requires the persistent Cell Job API and compiler")
+        cell_goal_evidence_service = CellGoalEvidenceService(cell_job_store, cell_goal_registry, GoalEvidenceStore(
+            mission_service.store.path))
+
+    def on_step_action_succeeded(job, _index):
+        if cell_goal_evidence_service is None:
+            return None
+        try:  # a goal-processing failure never rewrites the recorded device success
+            return cell_goal_evidence_service.on_action_terminal(job["mission_id"])
+        except Exception:
+            _LOG.exception("stored Cell goal evidence could not be applied for %s", job["mission_id"])
+            return None
+
+    cell_job_dispatcher = (
+        StepJobDispatcher(cell_job_store, task_service.store, action_transport, configured_omx,
+                          omx_cell_grant_revisions or {}, deployment_profile=deployment_profile,
+                          on_step_action_succeeded=on_step_action_succeeded)
         if enable_mission_dispatcher else None
     )
     mission_progress = (
@@ -241,6 +287,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     async def lifespan(app):
         dispatcher = None
         mission_worker = None
+        cell_job_worker = None
         proposal_expiry = None
         goal_evidence_worker = None
         mission_feedback_scheduler = None
@@ -255,6 +302,8 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
             proposal_expiry = asyncio.create_task(_proposal_expiry_loop(proposal_store))
         if mission_dispatcher is not None:
             mission_worker = asyncio.create_task(_mission_dispatch_loop(mission_dispatcher))
+        if cell_job_dispatcher is not None:
+            cell_job_worker = asyncio.create_task(_mission_dispatch_loop(cell_job_dispatcher))
         if goal_evidence_service is not None:
             goal_evidence_worker = asyncio.create_task(
                 _goal_evidence_expiry_loop(goal_evidence_service)
@@ -270,7 +319,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         try:
             yield
         finally:
-            for background in (dispatcher, mission_worker, proposal_expiry,
+            for background in (dispatcher, mission_worker, cell_job_worker, proposal_expiry,
                                goal_evidence_worker, mission_feedback_scheduler,
                                mission_model_turn_worker_task, localization_task):
                 if background is not None:
@@ -302,6 +351,9 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     app.state.mission_model_turn_worker = mission_model_turn_worker
     app.state.post_action_observation_source = post_action_observation_source
     app.state.mission_dispatcher = mission_dispatcher
+    app.state.cell_job_dispatcher = cell_job_dispatcher
+    app.state.cell_goal_evidence_service = cell_goal_evidence_service
+    app.state.deployment_profile = deployment_profile
     app.state.proposal_store = proposal_store
     app.state.omx_instances = configured_omx
     app.state.localization_service = localization_service
@@ -339,6 +391,17 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         install_hub_routes(app, hub, hub_token=console_token)
 
     principals = parse_site_principals(site_users, console)
+    if cell_goal_evidence_service is not None:
+        from fleet.server.cell_goal_evidence_routes import (
+            assert_cell_producer_credentials_isolated, install_cell_goal_evidence_routes)
+        other_tokens = (console_token, discovery_token, vision_lease_secret, robot_credential_key, pairing_sync_token)
+        if goal_evidence_service is not None:
+            other_tokens += tuple(item.token for item in goal_evidence_service.registry.producers)
+        assert_cell_producer_credentials_isolated(
+            cell_goal_registry, console=console, principals=principals,
+            other_tokens=other_tokens, other_services=(sightings, policy_evidence),
+        )
+        install_cell_goal_evidence_routes(app, cell_goal_evidence_service)
     if principals:
         assert_registry_credential_isolated(console_token, principals)
     if robot_credential_key is not None:
@@ -411,6 +474,11 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                                require_named_operator=require_named_operator,
                                require_proposer=require_proposer,
                                read_guard=read_guard, operator_guard=operator_guard)
+        from fleet.server.cell_job_routes import install_cell_job_routes
+
+        install_cell_job_routes(app, cell_job_store=cell_job_store,
+                                require_named_operator=require_named_operator,
+                                operator_guard=operator_guard, read_guard=read_guard)
 
     install_intent_routes(app, console=console, task_service=task_service,
                           require_operator=require_operator,
@@ -520,7 +588,7 @@ async def _mission_model_turn_worker_loop(worker) -> None:
         await asyncio.sleep(0.25)
 
 
-async def _mission_dispatch_loop(dispatcher: MissionDispatcher) -> None:
+async def _mission_dispatch_loop(dispatcher: MissionDispatcher | StepJobDispatcher) -> None:
     """Run the explicit, disabled-by-default Mission to OMX bridge off request handlers."""
     while True:
         try:

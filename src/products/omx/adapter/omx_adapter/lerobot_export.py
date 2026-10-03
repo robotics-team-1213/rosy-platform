@@ -30,6 +30,8 @@ def dataset_features(manifest: dict) -> dict:
         "names": ["channels", "height", "width"],
     }
     features["action.duration_s"] = {"dtype": "float32", "shape": (1,), "names": ["seconds"]}
+    if source.get("gripper_joint") is not None:
+        features["action.gripper"] = {"dtype": "float32", "shape": (1,), "names": ["position_rad"]}
     for name in ("capture_time_ns", "state_time_ns", "received_wall_time_ns", "state_sequence"):
         features[f"source.{name}"] = {"dtype": "int64", "shape": (1,), "names": [name]}
     features["task.success"] = {"dtype": "int64", "shape": (1,), "names": ["operator_success"]}
@@ -56,6 +58,8 @@ def iter_dataset_frames(episode: Path, validated: dict):
                                       ("received_wall_time_ns", "received_at_ns"),
                                       ("state_sequence", "state_sequence")):
             frame[f"source.{destination}"] = np.array([row[original]], dtype=np.int64)
+        if manifest["provenance"].get("gripper_joint") is not None:
+            frame["action.gripper"] = np.array([row["action.gripper"]], dtype=np.float32)
         yield frame
 
 

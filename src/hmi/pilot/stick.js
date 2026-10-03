@@ -38,9 +38,12 @@ function clampUnit(value) {
   return Math.min(1, Math.max(-1, n));
 }
 
+// A CORE limit: finite and >= 0, else unknown (null). 0 is real — the drive is announced but
+// limited to standstill (D-411 B, PUT /safety/limits accepts 0) — so it never falls back.
 function positive(value) {
+  if (value === null || value === undefined || value === "") return null;
   const n = Number(value);
-  return Number.isFinite(n) && n > 0 ? n : null;
+  return Number.isFinite(n) && n >= 0 ? n : null;
 }
 
 function curveOf(value, config) {

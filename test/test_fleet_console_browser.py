@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import os
 import json
+import socket
 import threading
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -101,7 +102,7 @@ def console_url():
         def translate_path(self, path: str) -> str:
             if path.startswith("/common/"):
                 name = path.removeprefix("/common/")
-                if name in {"tokens.css", "theme.js", "components.css", "ui.js", "core_ui_logic.js"}:
+                if name in json.loads((WEB_COMMON / "shared-assets.json").read_text(encoding="utf-8"))["shared_assets"]:
                     return str(WEB_COMMON / name)
             if path.startswith("/console/assets/"):
                 path = "/" + path[len("/console/assets/"):]
@@ -110,10 +111,20 @@ def console_url():
         def log_message(self, *args):  # 시험 출력을 조용히
             pass
 
+    class ConsoleServer(ThreadingHTTPServer):
+        # Windows SO_REUSEADDR permits concurrent servers on the same endpoint.
+        # Each browser must receive this fixture's files, including mutations.
+        allow_reuse_address = os.name != "nt"
+
+        def server_bind(self):
+            if os.name == "nt":
+                self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+            super().server_bind()
+
     # Windows may assign Chromium-blocked ports (for example 10080) for port 0.
-    for port in range(40000, 40100):
+    for port in range(40000, 41000):
         try:
-            server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
+            server = ConsoleServer(("127.0.0.1", port), Handler)
         except OSError:
             continue
         else:
@@ -122,8 +133,12 @@ def console_url():
         raise RuntimeError("could not allocate a browser-safe local port")
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
-    yield f"http://127.0.0.1:{server.server_address[1]}/index.html"
-    server.shutdown()
+    try:
+        yield f"http://127.0.0.1:{server.server_address[1]}/index.html"
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
 
 
 def test_the_console_renders_what_swarm_control_says(console_url):
@@ -330,7 +345,7 @@ def test_slow_initial_gather_does_not_spawn_overlapping_polls(console_url):
       const originalFetch = window.fetch.bind(window);
       window.__stateCalls = 0;
       window.fetch = (input, options) => {
-        if (String(input) === '/api/fleet/state') {
+        if (new URL(String(input), location.origin).pathname === '/api/fleet/state') {
           window.__stateCalls += 1;
           if (window.__stateCalls === 1) {
             return new Promise(resolve => {
@@ -581,7 +596,7 @@ def test_unreachable_robot_is_never_drawn_healthy(console_url):
 
 @pytest.mark.parametrize("safety, expected, reason", [
     (None, "정보 없음", "안전 상태를 확인할 수 없어"),
-    ({"estop": True}, "E-STOP", "비상정지가 활성화되어"),
+    ({"estop": True}, "비상 정지", "비상정지가 활성화되어"),
 ])
 def test_goal_is_unavailable_when_safety_is_unknown_or_stopped(console_url, safety, expected, reason):
     from playwright.sync_api import sync_playwright
@@ -599,9 +614,9 @@ def test_goal_is_unavailable_when_safety_is_unknown_or_stopped(console_url, safe
         page.goto(console_url, wait_until="networkidle")
         card = page.locator("#roster article").filter(has_text="rosy_01")
         card.wait_for()
-        safety_row = card.locator(".facts div").filter(has_text="SAFETY")
-        # E-STOP은 값이 아니라 crit 태그로 렌더된다(D-202) — 요소 타입이 아니라
-        # 행의 값으로 단정한다.
+        safety_row = card.locator('[data-fact="safety"]')
+        # Stable fact identity survives translated/icon labels; stop remains a
+        # visible value and goal dispatch remains disabled.
         assert expected in safety_row.inner_text()
         assert reason in card.inner_text()
         assert card.locator("ui-button[data-goal-robot-id]").evaluate("node => node.disabled")
@@ -2313,8 +2328,8 @@ def test_login_unlocks_operator_controls_before_a_slow_state_gather(console_url)
       const originalFetch = window.fetch.bind(window);
       window.__holdState = true;
       window.fetch = (input, options) => {
-        const url = String(input);
-        const auth = options && options.headers && (options.headers.Authorization || options.headers.authorization);
+        const url = new URL(String(input), location.origin).pathname;
+        const auth = new Headers(options?.headers).get('Authorization');
         if (url === '/api/fleet/session' && !auth) {
           return Promise.resolve(new Response(JSON.stringify({detail: {code: 'TOKEN_REQUIRED'}}),
             {status: 401, headers: {'Content-Type': 'application/json'}}));

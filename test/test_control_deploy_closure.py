@@ -51,6 +51,9 @@ DEPLOYED_CONTROL_EXECUTABLES = {
     # closure through hardware.launch.py behind enable_loc_assist (default off on
     # the device). It publishes no velocity command.
     "loc_assist_node",
+    # D-411 A: Pilot learning recording, always started by camera_preview.launch.py and
+    # idle until CORE asks. Evidence only; it publishes no velocity command.
+    "pilot_recorder_node",
     # D-423: advisory object detection on vision/detections, in camera_preview.launch.py
     # behind object_det (ROSY_OBJECT_DET, default off). CORE does not read it (D-137).
     "object_detector_node",

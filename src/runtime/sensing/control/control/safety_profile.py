@@ -4,7 +4,7 @@ import hashlib
 import json
 import math
 
-from ..sensing.body import LIDAR_X, URDF_RADIUS
+from ..sensing.body import BODY, LIDAR_X, URDF_RADIUS, rotation_radius
 
 
 @dataclass(frozen=True)
@@ -28,14 +28,22 @@ class SafetyProfile:
               lidar_yaw_rad=math.radians(190), linear_sign=1., imu_unit='rad_s',
               lidar_x_m=LIDAR_X, lidar_y_m=0.):
         mount_offset = math.hypot(lidar_x_m, lidar_y_m)
-        physical_floor = radius+mount_offset+.018
+        # D-424: the floor is the URDF body strip gap at max_linear, from the LiDAR (Pinky
+        # ~0.081), not the old circumradius + offset + 18 mm (0.111) applied forward.
+        try:
+            body = BODY.with_lidar(x_m=lidar_x_m, y_m=lidar_y_m)
+            # A calibrated radius beyond the URDF rotation radius grows the body that much.
+            physical_floor = (max(body.lidar_stop_m(max_linear), body.lidar_stop_m(max_linear, reverse=True))
+                              + max(0., radius-BODY.rotation_radius_m))
+        except (ValueError, TypeError):
+            physical_floor = math.nan
         # Defaults fill absent fields only. Supplied values are validated,
         # never silently replaced with a bootstrap constant.
         if stop is None:
-            stop = max(.12, physical_floor, stop_floor)
+            stop = max(physical_floor, stop_floor)
         if clear is None:
-            clear = max(.14, stop+.010, clear_floor)
-        values = (radius, stop, clear, half_width_deg, stop_floor, clear_floor, max_linear, max_angular,
+            clear = max(stop+BODY.hysteresis_m, stop+.010, clear_floor)
+        values = (radius, stop, clear, physical_floor, half_width_deg, stop_floor, clear_floor, max_linear, max_angular,
                   lidar_yaw_rad, linear_sign, lidar_x_m, lidar_y_m)
         if not all(math.isfinite(v) for v in values):
             raise ValueError('Non-finite safety profile')
@@ -48,7 +56,7 @@ class SafetyProfile:
             raise ValueError('Configured profile violates geometry or explicit safety constraints')
         if linear_sign not in (-1., 1.) or imu_unit not in ('rad_s', 'deg_s'):
             raise ValueError('Invalid sensor or drive convention')
-        return cls(radius, stop, clear, radius+mount_offset+.010, half_width_deg, max_linear, max_angular,
+        return cls(radius, stop, clear, rotation_radius(radius)+mount_offset+BODY.sweep_pad_m, half_width_deg, max_linear, max_angular,
                    round(math.atan2(math.sin(lidar_yaw_rad), math.cos(lidar_yaw_rad)), 6), linear_sign, imu_unit,
                    lidar_x_m, lidar_y_m)
 

@@ -30,8 +30,11 @@ def node_module(monkeypatch):
         stubs = {
             'rclpy': types.ModuleType('rclpy'),
             'rclpy.node': types.SimpleNamespace(Node=object),
-            'rclpy.qos': types.SimpleNamespace(DurabilityPolicy=None, QoSProfile=None,
-                                               ReliabilityPolicy=None, qos_profile_sensor_data=None),
+            # QoSProfile is built at import (D-411 recorder flag), so it must be callable.
+            'rclpy.qos': types.SimpleNamespace(
+                DurabilityPolicy=types.SimpleNamespace(TRANSIENT_LOCAL=None), QoSProfile=lambda **_: None,
+                ReliabilityPolicy=types.SimpleNamespace(RELIABLE=None, BEST_EFFORT=None),
+                qos_profile_sensor_data=None),
             'sensor_msgs': types.ModuleType('sensor_msgs'),
             'sensor_msgs.msg': types.SimpleNamespace(CompressedImage=None, Image=None, LaserScan=None),
             'std_msgs': types.ModuleType('std_msgs'),
@@ -40,7 +43,7 @@ def node_module(monkeypatch):
         for name, module in stubs.items():
             monkeypatch.setitem(sys.modules, name, module)
     # Import fresh against the stubs and leave no stub-bound module behind for other tests.
-    loaded = ('control.camera_detect_node', 'control.executor_choice')
+    loaded = ('control.camera_detect_node', 'control.camera_region_range', 'control.executor_choice')
     saved = {name: sys.modules.pop(name) for name in loaded if name in sys.modules}
     yield importlib.import_module('control.camera_detect_node')
     for name in loaded:

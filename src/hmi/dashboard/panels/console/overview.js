@@ -1,4 +1,4 @@
-import { HeadlessState, MODE_LABEL, NAVIGATION_LABEL, enumLabel, EVIDENCE_LABEL, evidenceAgeText } from "/common/core_ui_logic.js";
+import { HeadlessState, NAVIGATION_LABEL, enumLabel, operatorModeLabel, EVIDENCE_LABEL, evidenceAgeText } from "/common/core_ui_logic.js";
 
 function readout(state, channel, label, freshValue) {
   const evidence = new HeadlessState(state).evidenceOf(channel);
@@ -38,7 +38,7 @@ export function mount(el, ctx) {
     // D-359 US-009 — 모드는 CORE 자신의 값이라 채널이 없다: 이 응답이 곧 증거(부모 증거)다.
     // 내비게이션은 자기 채널이 있어 지연·끊김을 다른 값처럼 readout()이 말한다.
     const values = {
-      mode: state.mode ? {evidence: "fresh", text: enumLabel(MODE_LABEL, state.mode), title: state.mode} : null,
+      mode: state.mode ? {evidence: "fresh", text: operatorModeLabel(state.mode), title: state.mode} : null,
       navigation: {...readout(state, "navigation", "내비게이션",
         state.navigation ? enumLabel(NAVIGATION_LABEL, state.navigation) : null), title: state.navigation},
       pose: readout(state, "pose", "위치",

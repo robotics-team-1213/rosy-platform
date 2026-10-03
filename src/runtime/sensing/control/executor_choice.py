@@ -11,6 +11,9 @@ run in arrival order rather than wait-set order, a context shut down from anothe
 ExternalShutdownException, and a callback that raises (watch_node --once exits through
 SystemExit) is also logged as FATAL by the native executor before it propagates.
 Callers pass their ``rclpy`` module; nothing here imports ROS.
+Both kinds run callbacks on the spinning thread. Do not add a MultiThreadedExecutor without
+revisiting control/pilot_recording.py: its rosbag2 child uses pdeathsig, which fires when the
+*thread* that started it exits, so a pool thread retiring would stop a recording (D-411).
 """
 import importlib
 import os

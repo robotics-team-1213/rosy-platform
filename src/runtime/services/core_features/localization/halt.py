@@ -15,7 +15,7 @@ from typing import Callable, Optional
 from core_common.protocol.schemas import NavigationState, RobotMode
 from core_features.command.arbitration import Mode
 from core_features.localization.assist import LocalizationAssist
-from core_features.localization.mission import LocalizationMission
+from core_features.localization.mission import LocalizationMission, MissionConfig
 
 SOURCE = "localization"
 
@@ -37,7 +37,8 @@ def autonomy_halt(*, nav, line_follow, command, state, modes, swarm, docking) ->
 
 
 def wire_assist(events, robot_id: Callable[[], str], *, nav, line_follow, command, state,
-                modes, swarm, docking, safety, traffic_policy) -> tuple[LocalizationAssist,
+                modes, swarm, docking, safety, traffic_policy,
+                mission_config: Optional[MissionConfig] = None) -> tuple[LocalizationAssist,
                                                                         LocalizationMission]:
     """CORE's composition: LOCALIZED cancels Nav2 (re-plan) and ends a P2-7 mission,
     leaving it halts autonomy, and the snapshot reads the status live."""
@@ -68,5 +69,5 @@ def wire_assist(events, robot_id: Callable[[], str], *, nav, line_follow, comman
 
     mission = LocalizationMission(events, command=command, modes=modes, state=state, safety=safety,
                                   line_follow=line_follow, traffic_policy=traffic_policy,
-                                  localization=assist, busy=busy)
+                                  localization=assist, busy=busy, config=mission_config)
     return assist, mission

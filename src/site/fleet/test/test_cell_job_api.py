@@ -1,4 +1,3 @@
-from datetime import datetime, timezone
 from hashlib import sha256
 from pathlib import Path
 import sys
@@ -13,7 +12,6 @@ for relative in ("modules/execution/src", "modules/skills/api/src"):
 
 from fakes import FakeRobot
 from fleet.server.app import create_app
-from fleet.server.cell_job_store import CellJobStore
 from fleet.server.console import FleetConsole
 from fleet.server.mission_service import MissionService
 from fleet.server.mission_store import MissionStore
@@ -34,6 +32,10 @@ class FixedCellCompiler:
     def __init__(self):
         self.calls = 0
         self.destination_x = 0.4
+
+    def item_geometry(self, recipe):
+        box = recipe["box"]
+        return {"box": {"grasp_depth_m": box["grasp_depth"], "height_m": box["height"]}}
 
     def compile(self, recipe, cell):
         self.calls += 1
@@ -62,7 +64,7 @@ class FixedCellCompiler:
         )
 
 
-def _setup(tmp_path):
+def _setup(tmp_path, **app_options):
     db = tmp_path / "fleet.sqlite3"
     task_service = FleetTaskService(FleetTaskStore(db), robot_ids=("rosy_01",))
     users = {
@@ -81,7 +83,7 @@ def _setup(tmp_path):
         ),
         task_service=task_service, site_users=users,
         mission_service=MissionService(MissionStore(db)),
-        proposal_store=ProposalStore(db), cell_job_compiler=compiler,
+        proposal_store=ProposalStore(db), cell_job_compiler=compiler, **app_options,
     )
     return TestClient(app), task_service, compiler
 
@@ -162,6 +164,18 @@ def test_cell_service_proposes_and_resolves_but_named_operator_alone_admits(tmp_
     assert read.json()["job"]["events"]
     assert client.app.state.mission_service.get(proposal_id) is None
 
+    restarted, _, restarted_compiler = _setup(tmp_path)
+    restarted_read = restarted.get(
+        f"/api/fleet/cell-jobs/{proposal_id}",
+        headers={"Authorization": "Bearer operator-secret"},
+    )
+    assert restarted_read.status_code == 200
+    held = restarted_read.json()["job"]
+    assert held["status"] == held["steps"][0]["status"] == "HOLD"
+    assert held["steps"][1]["status"] == "WAITING"
+    assert held["events"][-1]["event_type"] == "CELL_JOB_STARTUP_HOLD"
+    assert restarted_compiler.calls == 0
+
 
 def test_cell_proposal_does_not_admit_when_service_and_operator_identity_match(tmp_path):
     client, _, _ = _setup(tmp_path)
@@ -185,3 +199,20 @@ def test_cell_proposal_does_not_admit_when_service_and_operator_identity_match(t
 
     assert response.status_code == 403
     assert response.json()["detail"]["code"] == "CELL_JOB_APPROVER_MUST_DIFFER_FROM_PROPOSER"
+
+
+def test_resolution_fixes_each_step_goal_predicate_from_the_recipe(tmp_path):
+    """C4b 1b C1: the item_at_pose predicate is stored per step at resolution."""
+    import yaml
+    from rosy.execution.site.item_pose import ItemPoseTolerance
+    document = yaml.safe_load((ROOT / "deploy/robot/omx/sim/item_pose_goal.yaml").read_text(encoding="utf-8"))
+    client, _, _ = _setup(tmp_path, cell_item_pose_tolerance=ItemPoseTolerance.from_mapping(document))
+    candidate = _candidate()
+    candidate["recipe"] = {"schema": "rosy_cell.recipe/1", "box": {"height": 0.03, "grasp_depth": 0.025}}
+    request = {"request_key": "cell-job-1", "workcell_id": "omx_01",
+               "instance_id": "omx_01_control", "candidate": candidate}
+    proposal_id = _post(client, "/api/fleet/proposals", "cell-secret", request).json()["proposal"]["proposal_id"]
+    steps = _post(client, f"/api/fleet/proposals/{proposal_id}/resolve", "cell-secret").json()["mission"]["steps"]
+    predicate = steps[0]["step"]["goal_predicate"]
+    assert predicate["frame"] == "robot_base" and predicate["tolerance"]["xy_m"] == 0.005
+    assert abs(predicate["target"]["z"] - (0.3 + 0.025 - 0.015)) < 1e-12

@@ -374,9 +374,9 @@ def search(field, clear, squares, ranges, angles, radius, mount, minimum_fit=.9,
 def localized_objects(field, sensor_pose, ranges, angles, mount, radius):
     """Unmapped objects (base_link) seen from a map-frame sensor pose; pass the full scan.
 
-    Every beam also keeps chassis returns: no peer is inside this robot's own radius."""
-    objects = unmapped_objects(field, sensor_pose, ranges, angles, mount)
-    return [o for o in objects if math.hypot(*o) > radius]
+    Chassis returns (beams inside `radius` + 3 cm) are dropped before clustering, merged
+    peers are split and centres pushed back by the radius (loc_objects, 2026-10-02 audit)."""
+    return unmapped_objects(field, sensor_pose, ranges, angles, mount, radius=radius)
 
 
 def pooled_grid(grid, resolution, target):

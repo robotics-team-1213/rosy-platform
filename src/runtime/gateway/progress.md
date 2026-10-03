@@ -2,7 +2,7 @@
 module: core
 logical_modules: [M03, M04, M06, M07, M11, M12, M13]
 owner: CORE
-last_verified: { commit: "bed604ef", date: 2026-09-30 }
+last_verified: { commit: "4e99d92e", date: 2026-10-02 }
 gates:
   SOURCE:
     state: GO
@@ -24,7 +24,7 @@ gates:
     blocker: "Pi bench Device 설치와 device-readback.sh --json 증거 없음. G4 viewport·보정 상태기계 미실행"
   FIELD:
     state: PARKED
-adrs: [D-1, D-2, D-8, D-18, D-23, D-32, D-38, D-42, D-47, D-58, D-60, D-72, D-75, D-77, D-82, D-119, D-121, D-122, D-123, D-124, D-144, D-151, D-152, D-155, D-156, D-157, D-158, D-159, D-162, D-182, D-184, D-200, D-205]
+adrs: [D-1, D-2, D-8, D-18, D-23, D-32, D-38, D-42, D-47, D-58, D-60, D-72, D-75, D-77, D-82, D-119, D-121, D-122, D-123, D-124, D-144, D-151, D-152, D-155, D-156, D-157, D-158, D-159, D-162, D-182, D-184, D-200, D-205, D-411]
 plans:
   - docs/plans/2026-09-06-module-split-criteria.md
   - docs/plans/2026-09-13-control-safety-boundary.md
@@ -40,6 +40,7 @@ plans:
   - docs/plans/2026-09-21-camera-preview-dashboard.md
   - docs/plans/2026-09-22-scene-context-road-design.md
   - docs/plans/2026-09-22-scene-context-road.md
+  - docs/plans/2026-10-02-d411-pilot-recording-controls-plan.md
 ---
 ## 지금 상태
 

@@ -12,6 +12,9 @@ install(FILES
   client.js
   autonomy.js
   calibration.js
+  recording.js
+  controls.js
+  arm-stick.js
   input-state.js
   vision.js
   models.js
@@ -23,6 +26,7 @@ install(FILES
 install(DIRECTORY
   drivers
   screens
+  widgets
   icons
   DESTINATION share/${PROJECT_NAME}
 )
