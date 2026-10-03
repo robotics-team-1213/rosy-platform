@@ -93,6 +93,17 @@ body[data-pilot-screen="drive"] .pilot-main {
   gap: 0;
   overflow: hidden;
 }
+body[data-pilot-screen="preview"] ui-shell { display: flex; flex-direction: column; height: 100dvh; overflow: hidden; }
+body[data-pilot-screen="preview"] ui-topbar { position: static; flex: none; }
+body[data-pilot-screen="preview"] .pilot-main {
+  display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0;
+  max-width: none; width: 100%; padding: 0; gap: 0; overflow: hidden;
+}
+body[data-pilot-screen="preview"] [data-screen="connect"] {
+  display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0;
+}
+.pilot-drive[data-readonly-camera] { min-height: 0; height: 100%; }
+.pilot-drive[data-readonly-camera] [data-drive-stage] { position: absolute; inset: 0; height: 100%; }
 
 .pilot-drive {
   position: relative;
@@ -211,7 +222,24 @@ body[data-pilot-screen="drive"] .pilot-main {
 [data-drive-fact=activity][hidden] { display: none; }
 
 /* HUD 액션은 공용 quiet 버튼 그대로(표적 --target-secondary). 자리만 오른쪽 끝. */
-[data-drive-hud] ui-actions { flex-wrap: nowrap; align-items: center; gap: var(--space-1); margin-left: auto; }
+[data-drive-hud] ui-actions { flex-wrap: wrap; align-items: center; gap: var(--space-1); margin-left: auto; }
+[data-drive-hud] ui-actions ui-button { white-space: nowrap; }
+.pilot-drive[data-zoomed="true"] [data-drive-view] { touch-action: none; cursor: grab; }
+.pilot-drive[data-zoomed="true"] [data-drive-view]:active { cursor: grabbing; }
+html[data-pilot-shell="android"] ui-topbar [data-goto] { display: none; }
+html[data-pilot-shell="android"] ui-topbar ui-brand { display: none; }
+[data-drive-tools-panel] {
+  position: absolute;
+  top: calc(var(--topbar-height) + var(--space-3));
+  right: var(--space-3);
+  z-index: 24;
+  width: min(25rem, calc(100% - var(--space-3) * 2));
+  padding: var(--space-4);
+  background: var(--ground-raise);
+  border: 1px solid var(--surface-line);
+  border-radius: var(--radius-panel);
+}
+[data-drive-tools-panel] ui-actions { margin-top: var(--space-3); flex-wrap: wrap; }
 
 /* ---- 차단 안내 — 카메라 위 중앙 ---- */
 [data-drive-blocked] {
@@ -442,11 +470,12 @@ body[data-pilot-screen="drive"] ui-topbar ui-button { white-space: nowrap; }
 /* below: 세로 태블릿·휴대폰. 영상은 위(원본 비율), 조작부는 그 아래 남는 공간. */
 .pilot-drive[data-drive-layout="below"] {
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) auto;
 }
 .pilot-drive[data-drive-layout="below"] [data-drive-stage] {
   position: relative;
   inset: auto;
+  min-height: 0;
 }
 
 .pilot-drive[data-drive-layout="below"] [data-drive-controls] {
@@ -481,8 +510,8 @@ body[data-pilot-screen="drive"] ui-brand small { display: none; }
 }
 /* below 배치에서는 영상 틀이 비율 상자를 갖는다 */
 .pilot-drive[data-drive-layout="below"] [data-drive-view] {
-  aspect-ratio: var(--video-ratio, 4 / 3);
-  max-height: 72dvh;
+  aspect-ratio: auto;
+  max-height: none;
 }
 /* 세로 확대: drive.js 가 높이를 정하므로 비율 고정을 푼다 */
 .pilot-drive[data-drive-layout="below"][data-zoomed="true"] [data-drive-view] {
@@ -524,6 +553,7 @@ body[data-pilot-screen="drive"] ui-brand small { display: none; }
   min-height: 0;
   gap: var(--space-3);
   container-type: size;
+  height: clamp(18rem, 30dvh, 28rem);
 }
 .pilot-drive[data-drive-layout="below"] [data-drive-left] {
   display: flex;

@@ -14,10 +14,12 @@ class ScreenCoolingPolicyTest {
         val policy = ScreenCoolingPolicy()
         assertFalse(policy.requestSleep(health(2, 60.0)))
         assertTrue(policy.requestSleep(health(3)))
+        assertTrue(policy.coolingRequired)
         assertFalse(policy.requestSleep(health(4)))
         assertFalse(policy.requestSleep(health(2)))
         assertFalse(policy.requestSleep(health(3)))
         assertFalse(policy.requestSleep(health(1)))
+        assertFalse(policy.coolingRequired)
         assertTrue(policy.requestSleep(health(3)))
     }
     @Test fun oldDevicesUseBatteryTemperatureWithRecoveryHysteresis() {

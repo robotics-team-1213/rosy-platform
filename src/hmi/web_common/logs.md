@@ -488,3 +488,10 @@
 - 증거: 관련 Python 계약 시험·실제 loopback TLS HTTP/WS 시험을 실행했다. Pilot Android 설치·화면과 실제 로봇 연결·현장 트래픽 수용은 서로 다른 증거다.
 - gate 변화: 실제 장비의 제어·FIELD 관문은 이동하지 않는다.
 - 결정: D-432 2026-10-03 추가 결정.
+
+## 2026-10-03 · uncommitted · feat(ui): 공용 동작 아이콘과 생성형 native 토큰 계약
+
+- 변경: actionIcon이 SVG/currentColor/글자/disabled 사유를 공용 구성한다. 기존 팔레트·터치·글자·아이콘 크기 토큰을 재사용하며 소비 화면은 배치만 소유한다. Native Pilot은 tokens.css에서 색을 생성하고 registry는 source/generator/runtime verification을 요구한다.
+- 증거: 공용 컨트롤 26 passed, 표면 registry/토큰 parity 18 passed, 아이콘 재적용·비활성 사유·Enter 동작 브라우저 1 passed. Android 실제 생성값 비교는 PilotColorsTest가 담당한다.
+- gate 변화: 공용 라이브러리의 DEVICE/FIELD는 N/A; 소비 앱 장치 증거와 구별한다.
+- 결정: D-432 공용 디자인 규칙의 소유권.

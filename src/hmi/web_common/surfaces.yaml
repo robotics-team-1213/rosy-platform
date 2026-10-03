@@ -238,7 +238,9 @@ surfaces:
     role: Pilot의 신뢰된 대상 발견·연결만 소유하며 조종 화면과 명령은 기존 Pilot PWA를 사용한다
     owns: [pilot-device-lobby]
     contracts: [token_parity]
-    token_copy: apps/pilot/app/src/main/java/io/github/livsbittt/rosy/pilot/PilotColors.kt
+    token_source: src/hmi/web_common/tokens.css
+    token_generator: apps/pilot/app/build.gradle.kts
+    token_verification: apps/pilot/app/src/test/java/io/github/livsbittt/rosy/pilot/PilotColorsTest.kt
     baseline_reason: 실제 태블릿 설치·렌더링은 D-432 장치 검증으로 기록한다; 조종 화면은 Pilot PWA 기준선을 재사용한다.
 
   - id: cam

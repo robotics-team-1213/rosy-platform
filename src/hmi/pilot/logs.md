@@ -320,3 +320,10 @@
 - 증거: 영향받는 Python 2345 passed/84 skipped, quick tier 459 passed/2 skipped, Pilot PWA 87 passed/58 skipped. 코드 규약 보정 뒤 해당 인증·페어링 시험을 다시 실행한다. 공개 검증 기록은 docs/validation/discovery-link-2026-10-03/README.md.
 - gate 변화: Android 설치·실제 CORE 인증 확인은 실제 주행·Cam 화면 off 연속 송출·현장 트래픽 수용과 별개다. DEVICE/FIELD 이동 없음.
 - 결정: D-432 후속 결정: 접속은 지금, 짧은 코드 통합은 추후 적용.
+
+## 2026-10-03 · uncommitted · feat(pilot): 공용 규칙으로 화면별 작업 흐름 정리
+
+- 변경: 로봇 목록·연결·조회 전용 카메라·주행 도구·입력 설정·녹화본·OMX SIM을 같은 UI 규칙으로 정리했다. 전체 영상/채우기/잘림 드래그·읽기 쉬운 동작 이름·단일 열린 패널·닫기 초점 복귀를 적용했다. 설정 변경 후 게임패드 미리보기가 멈추는 결함과 실제 태블릿 카메라 높이 0 결함을 수정했다.
+- 증거: 실제 태블릿 목록에서 Pinky 인증/저장 자격 재접속/GET 카메라 전체 영상 확인. 녹화 브라우저 9 passed, 입력/OMX 기록 3 passed, 비상 정지 중 GET 영상 1 passed, 공용 아이콘 키보드/비활성 사유 1 passed. 남은 브라우저 시나리오는 최종 검증 기록에 구별한다.
+- gate 변화: 실제 양의 주행 명령·비상 정지 해제는 실행하지 않았다. DEVICE/FIELD 이동 없음.
+- 결정: D-432 화면별 순차 개선/공용 디자인 소유권.

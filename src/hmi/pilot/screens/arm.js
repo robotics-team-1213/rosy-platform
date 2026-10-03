@@ -36,7 +36,9 @@ export function mountArm(root, target, driver) {
           <img data-sim-camera alt="Gazebo 작업 공간" width="320" height="240" hidden>
           <figcaption data-sim-camera-status role="status">영상 확인 중</figcaption>
         </figure>
-        <pre data-sim-readback aria-label="관절 readback"></pre>
+        <details class="arm-state-details"><summary>관절 상태 상세</summary>
+          <pre data-sim-readback aria-label="관절 상태 상세"></pre>
+        </details>
       </section>
       <div class="arm-controls" data-sim-widgets></div>
       <div class="arm-actions">
@@ -168,7 +170,10 @@ export function mountArm(root, target, driver) {
   async function refreshRecording() {
     recording = await request("/recordings");
     if (disposed) return;
-    $("[data-sim-record-status]").textContent = recordingError || `${recording.status} · ${recording.frame_count} 프레임${recording.issues.length ? ` · ${recording.issues.join(", ")}` : ""}`;
+    const recordStatus = $("[data-sim-record-status]");
+    recordStatus.dataset.state = recording.status;
+    const recordLabel = {idle: "기록 대기", recording: "기록 중", complete: "기록 완료", error: "기록 오류"};
+    recordStatus.textContent = recordingError || `${recordLabel[recording.status] ?? "기록 상태 확인 필요"} · ${recording.frame_count} 프레임${recording.issues.length ? ` · ${recording.issues.join(", ")}` : ""}`;
     $("[data-sim-record-start]").disabled = recording.status === "recording" || !state?.ready;
     $("[data-sim-record-stop]").disabled = recording.status !== "recording";
     const camera = await request("/camera");

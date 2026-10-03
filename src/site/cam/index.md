@@ -33,8 +33,8 @@
 
 ## 최근 기록
 
+- 2026-10-03 · uncommitted · fix(health): 화면 냉각 latch 조회 공유
+- 2026-10-03 · uncommitted · feat(cam): 촬영 유지 화면 쉬기
 - 2026-10-03 · uncommitted · fix(link): 현재 접속과 후속 코드 규약 구별
 - 2026-10-03 · uncommitted · feat(link): D-432 주소 없는 장비 접속
 - 2026-10-01 · uncommitted · fix(cam): 비밀 스캔 — pollSecret 식별자와 긴 시험 이름
-- 2026-10-01 · 2370b41b · feat(cam): 응답 없는 confirm은 한 번만 다시 보낸다(S2 멱등 confirm, rosy-00 d5d4a2e4)
-- 2026-10-01 · 8fb4b1a8 · fix(cam): D-341 페어링 클라이언트 보안 리뷰 반영(APPROVE WITH FIXES)

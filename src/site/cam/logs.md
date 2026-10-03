@@ -146,3 +146,10 @@
 - 증거: 최종 기존 6자리 규약에서 JVM 318 passed, 0 failure/error/skip, assembleDebug 성공. 읽기 전용 검토 후 잠금 권한 예외를 안전하게 처리했다.
 - gate 변화: 실기 화면 off 중 프레임 지속·발열 감소는 확인하지 않았다. DEVICE/FIELD 유지.
 - 결정: D-432 앱 실행 기기의 발열과 화면 끄기.
+
+## 2026-10-03 · uncommitted · fix(health): 화면 냉각 latch 조회 공유
+
+- 변경: Pilot이 Cam의 공통 냉각 정책 latch를 읽어 과열 중 재접속을 보류한다. 기존 임계와 Cam 캡처/송출 소유권은 유지한다.
+- 증거: Cam testDebugUnitTest/assembleDebug 재실행 성공. 실제 소등/온도 하강은 미검증이다.
+- gate 변화: DEVICE/FIELD 이동 없음.
+- 결정: D-432 앱 실행 기기 발열과 화면 끄기.
