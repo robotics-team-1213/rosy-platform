@@ -64,8 +64,6 @@ jobs:
     timeout-minutes: 90
     permissions:
       contents: read
-      id-token: write      # build provenance attestation (OIDC), no repository write
-      attestations: write
     outputs:
       commit: ${{ steps.source.outputs.commit }}
       tag: ${{ steps.source.outputs.tag }}
@@ -192,12 +190,15 @@ jobs:
             echo "\`sign_candidate.py --manifest-only --expected-commit ${COMMIT} --expected-manifest-sha256 ${digest}\`"
           } >>"$GITHUB_STEP_SUMMARY"
 
-      - name: Attest build provenance of release.json and SHA256SUMS
-        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+      - name: Upload manifest and checksums for the provenance job
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          subject-path: |
+          name: rosy-site-candidate-manifest-${{ steps.source.outputs.commit }}
+          path: |
             /mnt/rosy-site-upload/release.json
             /mnt/rosy-site-upload/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 1
 
       - name: Upload unsigned candidate for the release job
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -208,8 +209,40 @@ jobs:
           retention-days: 1
           compression-level: 0
 
-  publish-unsigned-prerelease:
+  attest-provenance:
+    # The only job with OIDC and attestation write; it never runs build
+    # tools and sees only release.json and SHA256SUMS.
     needs: build-unsigned-candidate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: rosy-site-candidate-manifest-${{ needs.build-unsigned-candidate.outputs.commit }}
+          path: provenance-subjects
+
+      - name: Check the subjects match each other
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd provenance-subjects
+          test "$(find . -mindepth 1 -maxdepth 1 -printf '%f\n' | LC_ALL=C sort | paste -sd' ')" \
+            = "SHA256SUMS release.json"
+          grep -E '^[0-9a-f]{64}  release\.json$' SHA256SUMS | sha256sum --check --strict
+
+      - name: Attest build provenance of release.json and SHA256SUMS
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: |
+            provenance-subjects/release.json
+            provenance-subjects/SHA256SUMS
+
+  publish-unsigned-prerelease:
+    needs: [build-unsigned-candidate, attest-provenance]
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     permissions:

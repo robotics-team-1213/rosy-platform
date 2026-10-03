@@ -22,7 +22,7 @@
    - workflow는 수동 실행(`workflow_dispatch`)이다. main push만으로는 후보나 릴리스가 생기지 않는다.
 2. **runner 결과물은 서명되지 않는다.**
    - 사이트 키(D-301)와 Pinky 릴리스 키는 운영자의 서명 스테이션에만 둔다. GitHub secret으로 올리지 않는다.
-   - workflow는 `GITHUB_TOKEN` 말고 어떤 secret도 쓰지 않는다. 빌드 job은 저장소 읽기 권한과 출처 증명용 `id-token: write`·`attestations: write`만 갖고, Release를 만드는 job만 `contents: write`를 갖는다.
+   - workflow는 `GITHUB_TOKEN` 말고 어떤 secret도 쓰지 않는다. 빌드 job은 저장소 읽기 권한만 갖는다. 출처 증명은 빌드 도구를 돌리지 않는 별도의 작은 job이 하고, 그 job만 `id-token: write`·`attestations: write`를 갖는다. Release를 만드는 job만 `contents: write`를 갖는다.
    - 사이트 후보 workflow의 action은 모두 전체 커밋 SHA로 고정하고 태그를 주석으로 단다. 이동하는 태그가 바뀌어도 실행 코드가 바뀌지 않는다.
 3. **사이트 후보의 배포 경로는 공개 저장소의 GitHub Release(prerelease)다.**
    - 태그는 `site-<짧은 커밋>`이다. 긴 빌드 전에 짧은 사전 job이 같은 태그의 릴리스가 이미 있는지 보고, 있으면 바로 실패한다. 후보 묶음은 tar로 묶어 2 GiB 아래 조각(`.partNN`)으로 나누고 `SHA256SUMS`를 붙인다. GitHub Release 자산은 파일당 2 GiB 한도가 있다.
@@ -36,7 +36,7 @@
    - 서명이 증명하는 내용은 "커밋 `<sha>`에서 CI 실행이 만든 이 manifest를 운영자가 승인했다"이다.
    - Release 자산은 저장소 쓰기 권한이 있으면 바꿀 수 있다. 그래서 서명 전에 `release.json`을 CI 실행에 묶는다. 두 가지 모두 필수다.
      - **기대 해시.** 빌드 job은 `release.json`의 SHA-256을 로그(notice)와 job summary에 쓴다. 실행 기록은 자산 쓰기 권한으로 고칠 수 없다. 운영자는 실행 페이지에서 이 값을 옮겨 `--expected-manifest-sha256`으로 넘긴다. 서명기는 정확한 바이트의 SHA-256이 이 값과 다르면 거부한다.
-     - **빌드 출처(provenance).** 빌드 job은 `actions/attest-build-provenance`로 `release.json`과 `SHA256SUMS`의 출처 증명을 남긴다. 이 job에는 `id-token: write`와 `attestations: write`만 더한다. 운영자는 서명 전에 `gh attestation verify release.json --repo <owner>/<repo> --signer-workflow <owner>/<repo>/.github/workflows/build-site-candidate.yml --source-ref refs/heads/main`을 통과시킨다. 이 단계는 서명기 플래그가 아니라 문서화된 운영자 절차다.
+     - **빌드 출처(provenance).** 빌드가 끝나면 별도의 `attest-provenance` job이 `release.json`과 `SHA256SUMS`만 받아 `actions/attest-build-provenance`로 출처 증명을 남긴다. 이 job의 권한은 `contents: read`, `id-token: write`, `attestations: write`뿐이다. 빌드 job에는 OIDC·증명 권한이 없다. Release는 증명이 끝난 뒤에만 만들어진다. 운영자는 서명 전에 `gh attestation verify release.json --repo <owner>/<repo> --signer-workflow <owner>/<repo>/.github/workflows/build-site-candidate.yml --source-ref refs/heads/main`을 통과시킨다. 이 단계는 서명기 플래그가 아니라 문서화된 운영자 절차다.
    - 출처 증명은 dispatch한 ref(main)를 적는다. 그래서 workflow는 빌드할 커밋이 dispatch한 커밋의 조상일 때만 빌드한다. main에서 dispatch하면 main 이력에 있는 커밋만 빌드된다.
    - 기대 커밋도 그대로 받는다. 서명기는 manifest의 `source_commit`이 40자리 16진수이고 기대 커밋과 같을 때만 서명한다.
    - 무결성은 그대로 지켜진다. 사이트 호스트의 `verify_candidate.py`가 서명된 manifest를 기준으로 배포 파일·SBOM·`images.tar` 해시를 모두 다시 확인한 뒤에 `docker load`를 허락한다.

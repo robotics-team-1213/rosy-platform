@@ -38,15 +38,13 @@ def test_build_job_is_read_only_and_release_job_alone_can_write():
     build = jobs["build-unsigned-candidate"]
     release = jobs["publish-unsigned-prerelease"]
 
-    assert set(jobs) == {
-        "check-release-free", "build-unsigned-candidate", "publish-unsigned-prerelease"}
+    assert set(jobs) == {"check-release-free", "build-unsigned-candidate",
+                         "attest-provenance", "publish-unsigned-prerelease"}
     assert jobs["check-release-free"]["permissions"] == {"contents": "read"}
     assert build["runs-on"] == "ubuntu-24.04"
-    # Read-only for the repository; OIDC + attestations only for provenance.
-    assert build["permissions"] == {
-        "contents": "read", "id-token": "write", "attestations": "write"}
+    assert build["permissions"] == {"contents": "read"}
     assert release["permissions"] == {"contents": "write"}
-    assert release["needs"] == "build-unsigned-candidate"
+    assert release["needs"] == ["build-unsigned-candidate", "attest-provenance"]
     assert all(job["timeout-minutes"] <= 120 for job in jobs.values())
     assert not any("GH_TOKEN" in step.get("env", {}) for step in build["steps"])
     assert build["needs"] == "check-release-free"
@@ -107,20 +105,34 @@ def test_runbook_signs_manifest_only_and_fetches_before_verified_load():
 
 
 def test_build_job_publishes_manifest_hash_and_provenance_for_the_signer():
-    build = _workflow()["jobs"]["build-unsigned-candidate"]
+    jobs = _workflow()["jobs"]
+    build = jobs["build-unsigned-candidate"]
     run = _run_text(build)
-    attest = next(step for step in build["steps"]
-                  if step.get("uses", "").startswith("actions/attest-build-provenance@"))
 
     assert 'sha256sum "$UPLOAD_DIR/release.json"' in run
     assert '>>"$GITHUB_STEP_SUMMARY"' in run
     assert "::notice title=release.json SHA-256::" in run
     assert "--expected-manifest-sha256" in run
+
+    # Provenance lives in its own job: the only one with OIDC/attestation write.
+    writers = {name for name, job in jobs.items()
+               if {"id-token", "attestations"} & set(job["permissions"])}
+    assert writers == {"attest-provenance"}
+    attest_job = jobs["attest-provenance"]
+    assert attest_job["permissions"] == {
+        "contents": "read", "id-token": "write", "attestations": "write"}
+    assert attest_job["needs"] == "build-unsigned-candidate"
+    assert not any("run" in step and "build_candidate" in step["run"]
+                   for step in attest_job["steps"])
+    attest = next(step for step in attest_job["steps"]
+                  if step.get("uses", "").startswith("actions/attest-build-provenance@"))
     assert attest["with"]["subject-path"].split() == [
-        "/mnt/rosy-site-upload/release.json", "/mnt/rosy-site-upload/SHA256SUMS"]
-    names = [step.get("name", "") for step in build["steps"]]
-    assert names.index("Package candidate into release-sized parts") < names.index(
-        attest["name"])
+        "provenance-subjects/release.json", "provenance-subjects/SHA256SUMS"]
+    download = attest_job["steps"][0]
+    assert download["uses"].startswith("actions/download-artifact@")
+    assert download["with"]["name"].startswith("rosy-site-candidate-manifest-")
+    assert not any(step.get("uses", "").startswith("actions/attest-build-provenance@")
+                   for step in build["steps"])
 
 
 def test_release_job_prunes_only_older_site_releases_after_creating_the_new_one():
@@ -143,7 +155,7 @@ def test_every_action_is_pinned_to_a_full_commit_sha():
             for step in job["steps"] if "uses" in step]
     text = WORKFLOW.read_text(encoding="utf-8")
 
-    assert len(uses) == 5
+    assert len(uses) == 7
     for ref in uses:
         assert re.fullmatch(r"[\w.-]+/[\w.-]+@[0-9a-f]{40}", ref), ref
         assert re.search(re.escape(ref) + r" # v\d+\.\d+\.\d+\n", text), ref
