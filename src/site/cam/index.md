@@ -33,8 +33,8 @@
 
 ## 최근 기록
 
+- 2026-10-04 · uncommitted · feat(cam): 자동 조명·사진 공유의 실제 S21 운용 확인
+- 2026-10-04 · uncommitted · feat(cam): 시간 제한 자동 조명과 송출 사진 저장·공유
 - 2026-10-04 · 03ea9b522 · fix(cam): 실제 관제 PC의 자체 키로 원격 깨우기 확인
 - 2026-10-04 · 956755f38 · fix(cam): 화면 자동 절전 중에도 송출 유지
 - 2026-10-03 · uncommitted · fix(cam): NSD 탐색 종료 뒤 늦은 콜백이 앱을 중단하지 않는다
-- 2026-10-03 · uncommitted · fix(health): 화면 냉각 latch 조회 공유
-- 2026-10-03 · uncommitted · feat(cam): 촬영 유지 화면 쉬기

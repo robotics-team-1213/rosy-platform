@@ -178,4 +178,17 @@
     <string name="settings_development_active">개발 연결 모드 · %1$s · 만료 %2$s</string>
     <string name="settings_development_revoke">개발 연결 종료 및 자격 삭제</string>
     <string name="invalid_development_bootstrap">개발 연결 설정을 확인하세요. 사이트·장치 범위·인증서·자격·만료가 일치해야 합니다.</string>
+    <string name="light_ready">자동 조명 대기 · 어두움이 2초 지속되면 켜집니다</string>
+    <string name="light_dark">저조도 감지 · 자동 조명 대기</string>
+    <string name="light_on">자동 조명 켜짐 · 최대 30초, 이후 10초 쉬고 재측정</string>
+    <string name="light_disabled">자동 조명 꺼짐</string>
+    <string name="light_unsupported">이 렌즈는 조명 미지원 · 플래시가 필요하면 설정에서 기본 후면을 선택하세요. 촬영 범위가 달라집니다.</string>
+    <string name="light_error">조명이 제한되거나 켜지지 않았습니다 · 렌즈·발열 상태를 확인하세요</string>
+    <string name="light_enable">자동 조명 사용</string>
+    <string name="light_disable">자동 조명 끄기</string>
+    <string name="photo_save">현재 사진 저장</string>
+    <string name="photo_saving">사진 저장 중…</string>
+    <string name="photo_share">저장한 사진 공유</string>
+    <string name="photo_failed">최근 영상을 저장하지 못했습니다. 송출 상태를 확인한 뒤 다시 시도하세요.</string>
+    <string name="photo_share_failed">저장한 사진을 공유하지 못했습니다.</string>
 </resources>
