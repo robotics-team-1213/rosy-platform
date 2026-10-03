@@ -1,6 +1,6 @@
 ## D-430 안전은 판단·제어와 분리된 여섯째 관심사이며, 층별 안전 체인과 분리 불변식으로 지킨다
 
-**Status:** Proposed (2026-10-03, 사용자 요청 — 안전을 별도 관심사로). [D-429](D-429-five-concerns-control-port-and-site-devices.md)(Accepted 2026-10-03)의 다섯 관심사 view에 `safety`를 더하고, D-429 §1 표의 "중재·안전" 층에서 안전을 떼어 별도 체인으로 기술한다. 독립 리뷰와 사용자 승인 뒤 Accepted로 올린다. 이번 변경은 문서뿐이다. 코드·폴더 이전·매니페스트 수정·wire 변경·실기 gate 변화는 없다. D-400 집행, 물리 E-stop, DEVICE/FIELD 수용을 승인하지 않는다.
+**Status:** Accepted (2026-10-03, 사용자 승인 — 안전을 별도 관심사로; 독립 리뷰 3회). [D-429](D-429-five-concerns-control-port-and-site-devices.md)(Accepted 2026-10-03)의 다섯 관심사 view에 `safety`를 더하고, D-429 §1 표의 "중재·안전" 층에서 안전을 떼어 별도 체인으로 기술한다. 독립 리뷰와 사용자 승인 뒤 Accepted로 올린다. 이번 변경은 문서뿐이다. 코드·폴더 이전·매니페스트 수정·wire 변경·실기 gate 변화는 없다. D-400 집행, 물리 E-stop, DEVICE/FIELD 수용을 승인하지 않는다.
 
 ### Context
 
