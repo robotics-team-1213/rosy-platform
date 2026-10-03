@@ -1,14 +1,23 @@
 """D-344 §12 addendum 2026-10-03: the bench tool writes an overlay launch will load, outside the release."""
 
 import math
+import os
 from types import SimpleNamespace
 
+import pytest
 import yaml
 
 from control.ir_overlay import NODE_KEY, usable_operator_overlay
 from control.line_observer_overrides import main
 
 PROFILE = "/opt/rosy/current/install/share/pinky_pro/config/camera_nominal.yaml"
+
+
+@pytest.fixture(autouse=True)
+def profile_installed(monkeypatch):
+    """PROFILE is the robot path; pretend the release installed it on this host."""
+    real = os.path.isfile
+    monkeypatch.setattr(os.path, "isfile", lambda path: path == PROFILE or real(path))
 
 
 def _run_log():
@@ -69,3 +78,10 @@ def test_show_reports_whether_launch_would_load_it(tmp_path, capsys):
     capsys.readouterr()
     main(["--path", str(target), "show"])
     assert "loaded" in capsys.readouterr().out
+
+
+def test_apply_refuses_a_profile_that_is_not_an_existing_file(tmp_path, capsys):
+    target = tmp_path / "o.yaml"
+    missing = "/opt/rosy/current/install/share/pinky_pro/config/missing.yaml"
+    assert main(["--path", str(target), "apply", "--profile", missing, "--no-restart"]) == 1
+    assert not target.exists() and "not an existing file" in capsys.readouterr().err

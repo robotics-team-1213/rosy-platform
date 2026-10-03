@@ -89,6 +89,9 @@ def main(argv=None, run=subprocess.run) -> int:
         return 0
     try:
         if args.command == "apply":
+            if args.profile is not None and not os.path.isfile(args.profile):
+                # The node would only log "unreadable" and keep NOMINAL ground off.
+                raise ValueError(f"--profile {args.profile} is not an existing file")
             write_overlay(args.path, overlay_for(args))
             print(f"wrote {args.path}")
         elif os.path.exists(args.path):
