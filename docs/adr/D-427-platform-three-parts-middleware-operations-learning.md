@@ -173,6 +173,7 @@ D-209·D-413·D-425 본문에 부분 대체 표기를 추가했다(2026-10-03 �
 후속:
 
 1. 소유 매니페스트와 import 규칙 시험(C). 현재 경로를 세 파트·공용층에 대응시키고, 위반을 현 상태 목록으로 고정한 뒤 줄여 간다. operations에서 비-LLM 판정기(성공 분류기 등)를 추론하는 경로(onnxruntime 등)는 별도 결정으로 남긴다.
+   - 착지(2026-10-03, `test/d427-ownership-manifest`): 매니페스트 `tools/harness/platform_parts.yaml`, 시험 `test/architecture/test_platform_parts.py`. 현 위반 9건을 `KNOWN_VIOLATIONS`에 고정했다.
 2. contracts의 Episode·DatasetManifest·PolicyArtifact 초안과 세 녹화 형식 변환기.
 3. D-399 후속 1(엔벌로프 스킬) ADR.
 4. learning 이전 계획(`tools/perception/*`, OMX export, `src/sim/isaac_sim`).
