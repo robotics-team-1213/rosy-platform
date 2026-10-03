@@ -4916,3 +4916,10 @@
 - 증거: merge 뒤 `rosy_harness.py lint` 0 errors, `test_harness_contracts.py`·`test_network_topology_contracts.py` 83+59 passed. 번호 점유는 전 370 refs·전역 이력 검사로 확인(D-444/D-445 무점유). 백업 브랜치 backup/main-pre-origin-merge.
 - gate 변화: 없음. ARTIFACT/DEVICE 관측·측정은 별도 실행.
 - 결정: D-444·D-445 Proposed(사다리 계획 §2 승인 기반). P0(트리 정렬) 완료 — main ahead 48, behind 0.
+
+## 2026-10-04 · uncommitted · docs(plan): Pilot 실기 정지 계약 측정 계획 (D-444 §2)
+
+- 변경: `docs/plans/2026-10-04-pilot-device-stop-contract-measurement.md` 추가. 페달 해제(PC-1 ≤300/500 ms·0.05 m)·클라이언트 소실(PC-2 ≤700/900 ms·SAF-002 watchdog)·e-stop(PC-3 ≤300/500 ms)의 합격선을 D-250(100 ms zero-keepalive)·D-367(100 ms 명령 루프)·SAF-002(500 ms)·D-110(0.10 m/s)에서 유도해 고정했다. 정지 판정은 `tools/dashboard_drive.py`의 `_moving()` 정의(linear ≤ 0.002 m/s)를 그대로 쓰고, 회차·환경·실패 처리 절차를 정했다.
+- 증거: 기존 계약 인용만으로 구성(새 숫자 발명 없음). 측정 자체는 사다리 P2, 사용자 입회 아래.
+- gate 변화: 없음. 측정 전 합격선 고정 문서.
+- 결정: D-444 §2의 "계량 문서" 요건 충족.

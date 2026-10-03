@@ -265,6 +265,7 @@
 - [2026-10-02-platform-architecture-v02-migration.md](plans/2026-10-02-platform-architecture-v02-migration.md)
 - [2026-10-03-app-ownership-shared-transport-and-layout-migration.md](plans/2026-10-03-app-ownership-shared-transport-and-layout-migration.md)
 - [2026-10-03-pi-ncnn-opencv-implementation.md](plans/2026-10-03-pi-ncnn-opencv-implementation.md)
+- [2026-10-04-pilot-device-stop-contract-measurement.md](plans/2026-10-04-pilot-device-stop-contract-measurement.md)
 - [2026-10-04-web-gate-ladder-fleet-readiness-adr-plan.md](plans/2026-10-04-web-gate-ladder-fleet-readiness-adr-plan.md)
 
 ## 교훈 (docs/solutions)
@@ -278,8 +279,8 @@
 
 ## 최근 기록
 
+- 2026-10-04 · uncommitted · docs(plan): Pilot 실기 정지 계약 측정 계획 (D-444 §2)
 - 2026-10-04 · uncommitted · docs(adr): D-444·D-445 착지와 main↔origin 정렬
 - 2026-10-04 · uncommitted · site(D-437): verifier accepts the containerd image ID form
 - 2026-10-04 · uncommitted · docs(plan): 웹 게이트 사다리·Fleet 승격 ADR 계획
 - 2026-10-03 · uncommitted · docs: D-436 change-scoped host test tiers
-- 2026-10-03 · uncommitted · docs: Fleet deployment preflight lessons
