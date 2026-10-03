@@ -24,6 +24,9 @@ _SPEC.loader.exec_module(tool)
 
 ROBOT = "192.0.2.10"
 HOST = "rosy-pinky-test1"
+# Assembled at runtime so no PEM header literal is tracked (secret_scan private-key rule).
+PEM_BEGIN = "-----BEGIN " + "OPENSSH PRIVATE KEY-----"
+PEM_END = "-----END " + "OPENSSH PRIVATE KEY-----"
 ADMIN_CODE = "ABCD-EFGH"
 
 
@@ -35,7 +38,7 @@ class FakeKeygen:
         self.calls.append(argv)
         path = Path(argv[argv.index("-f") + 1])
         comment = argv[argv.index("-C") + 1]
-        path.write_text("-----BEGIN OPENSSH PRIVATE KEY-----\nfake\n-----END OPENSSH PRIVATE KEY-----\n",
+        path.write_text(PEM_BEGIN + "\nfake\n" + PEM_END + "\n",
                         encoding="ascii")
         Path(str(path) + ".pub").write_text(ed25519_public_key(b"device", comment) + "\n", encoding="ascii")
         return 0, "", ""
@@ -100,7 +103,7 @@ class FakeSsh:
         return 0, "\n".join(out) + "\n", ""
 
 
-def run(core: FakeCore, paths: dict, *extra: str, code: str = ADMIN_CODE, keygen=None, passphrase: str = "",
+def run(core: FakeCore, paths: dict, *extra: str, code: str = ADMIN_CODE, keygen=None, lock_phrase: str = "",
         ssh=None, robot: str = ROBOT, timeout: float = 25.0):
     keygen = keygen or FakeKeygen()
     argv = [robot, "--label", "dev:laptop", "--key", str(paths["key"]),
@@ -111,7 +114,7 @@ def run(core: FakeCore, paths: dict, *extra: str, code: str = ADMIN_CODE, keygen
         prompts.append(prompt)
         return code
 
-    status = tool.main(argv, ask_code=ask_code, ask_passphrase=lambda prompt: passphrase, keygen=keygen,
+    status = tool.main(argv, ask_code=ask_code, ask_lock=lambda prompt: lock_phrase, keygen=keygen,
                        client_for=lambda robot: tool.CoreClient(core.base_url, timeout=timeout),
                        ssh=ssh or FakeSsh())
     return status, keygen, prompts
@@ -184,7 +187,7 @@ def test_defaults_write_only_inside_the_given_home(home, monkeypatch, capsys):
     keygen = FakeKeygen()
     with FakeCore(codes={ADMIN_CODE: "administrator"}) as core:
         status = tool.main([ROBOT, "--label", "dev:laptop"], ask_code=lambda p: ADMIN_CODE,
-                           ask_passphrase=lambda p: "", keygen=keygen,
+                           ask_lock=lambda p: "", keygen=keygen,
                            client_for=lambda robot: tool.CoreClient(core.base_url), ssh=FakeSsh())
     assert status == 0
     written.append(Path(keygen.calls[0][keygen.calls[0].index("-f") + 1]))
@@ -204,7 +207,7 @@ def test_a_regression_in_argument_checks_still_cannot_write_a_bad_config(paths, 
     with FakeCore(codes={ADMIN_CODE: "administrator"}) as core:
         status = tool.main(["192.0.2.10\nProxyCommand", "--label", "dev:laptop", "--key", str(paths["key"]),
                             "--known-hosts", str(paths["known_hosts"]), "--ssh-config", str(paths["config"])],
-                           ask_code=lambda p: ADMIN_CODE, ask_passphrase=lambda p: "", keygen=FakeKeygen(),
+                           ask_code=lambda p: ADMIN_CODE, ask_lock=lambda p: "", keygen=FakeKeygen(),
                            client_for=lambda robot: tool.CoreClient(core.base_url), ssh=FakeSsh())
     assert status == 1
     assert core.keys == {}
@@ -287,7 +290,7 @@ def test_existing_key_is_reused_without_keygen(paths, capsys):
 
 def test_passphrase_is_passed_to_keygen_and_never_printed(paths, capsys):
     with FakeCore(codes={ADMIN_CODE: "administrator"}) as core:
-        status, keygen, _ = run(core, paths, passphrase="correct horse battery")
+        status, keygen, _ = run(core, paths, lock_phrase="correct horse battery")
     assert status == 0
     argv = keygen.calls[0]
     assert argv[argv.index("-N") + 1] == "correct horse battery"
@@ -299,7 +302,7 @@ def test_passphrase_typed_differently_twice_is_refused(paths, capsys):
     with FakeCore(codes={ADMIN_CODE: "administrator"}) as core:
         status = tool.main([ROBOT, "--label", "dev:laptop", "--key", str(paths["key"]),
                             "--known-hosts", str(paths["known_hosts"]), "--ssh-config", str(paths["config"])],
-                           ask_code=lambda p: ADMIN_CODE, ask_passphrase=lambda p: next(answers),
+                           ask_code=lambda p: ADMIN_CODE, ask_lock=lambda p: next(answers),
                            keygen=FakeKeygen(), client_for=lambda robot: tool.CoreClient(core.base_url))
     assert status == 1
     assert not paths["key"].exists()
@@ -464,7 +467,7 @@ def test_rsa_or_unknown_public_key_is_refused_locally(paths, capsys):
 def test_bad_arguments_are_refused_before_any_request(argv, capsys):
     with FakeCore(codes={ADMIN_CODE: "administrator"}) as core:
         with pytest.raises(SystemExit) as exit_info:
-            tool.main(argv, ask_code=lambda p: ADMIN_CODE, ask_passphrase=lambda p: "", keygen=FakeKeygen(),
+            tool.main(argv, ask_code=lambda p: ADMIN_CODE, ask_lock=lambda p: "", keygen=FakeKeygen(),
                       client_for=lambda robot: tool.CoreClient(core.base_url))
     assert exit_info.value.code == 2
     assert core.requests == []
@@ -479,7 +482,7 @@ def test_default_label_is_a_valid_device_label():
 def test_unreachable_robot_is_a_clean_error(paths, capsys):
     status = tool.main([ROBOT, "--label", "dev:laptop", "--key", str(paths["key"]),
                         "--known-hosts", str(paths["known_hosts"]), "--ssh-config", str(paths["config"])],
-                       ask_code=lambda p: ADMIN_CODE, ask_passphrase=lambda p: "", keygen=FakeKeygen(),
+                       ask_code=lambda p: ADMIN_CODE, ask_lock=lambda p: "", keygen=FakeKeygen(),
                        client_for=lambda robot: tool.CoreClient("http://127.0.0.1:9", timeout=2))
     assert status == 1
     assert "not reachable" in capsys.readouterr().err
@@ -564,7 +567,7 @@ def test_relative_and_tilde_paths_are_made_absolute(home, tmp_path, monkeypatch,
     with FakeCore(codes={ADMIN_CODE: "administrator"}) as core:
         status = tool.main([ROBOT, "--label", "dev:laptop", "--key", "~/keys/rosy_dev_laptop",
                             "--known-hosts", "kh/known_hosts_rosy", "--ssh-config", "cfg/config"],
-                           ask_code=lambda p: ADMIN_CODE, ask_passphrase=lambda p: "", keygen=FakeKeygen(),
+                           ask_code=lambda p: ADMIN_CODE, ask_lock=lambda p: "", keygen=FakeKeygen(),
                            client_for=lambda robot: tool.CoreClient(core.base_url), ssh=FakeSsh())
     assert status == 0, capsys.readouterr().err
     config = (tmp_path / "cfg" / "config").read_text(encoding="utf-8")

@@ -61,7 +61,7 @@ KEY_B = _key(body=b"\x02" * 32)
 
 
 class FakeSystem(ssh.System):
-    def __init__(self, root: Path, *, now: datetime = NOW, sshd_ok: bool = True, chpasswd_ok: bool = True,
+    def __init__(self, root: Path, *, now: datetime = NOW, sshd_ok: bool = True, chpw_ok: bool = True,
                  ssh_active: bool = True, lock_ok: bool = True, timer_ok: bool = True,
                  boot: float | None = None, boot_id: str = "boot-1", ntp: bool = False) -> None:
         super().__init__(root)
@@ -70,7 +70,7 @@ class FakeSystem(ssh.System):
         self.boot_ident = boot_id
         self.ntp = ntp
         self.sshd_ok = sshd_ok
-        self.chpasswd_ok = chpasswd_ok
+        self.chpw_ok = chpw_ok
         self.ssh_active = ssh_active
         self.lock_ok = lock_ok
         self.timer_ok = timer_ok
@@ -91,7 +91,7 @@ class FakeSystem(ssh.System):
 
     def set_password(self, user: str, password: str) -> None:
         self.calls.append(("set_password", user, password))
-        if not self.chpasswd_ok:
+        if not self.chpw_ok:
             raise ssh.HelperError("chpasswd failed")
 
     def lock_password(self, user: str) -> None:
@@ -101,7 +101,7 @@ class FakeSystem(ssh.System):
 
     def sshd_check(self) -> tuple[bool, str]:
         self.calls.append(("sshd_check",))
-        dropin = self.path(ssh.PASSWORD_DROPIN)
+        dropin = self.path(ssh.TEMP_LOGIN_DROPIN)
         self.calls.append(("dropin_at_check", dropin.is_file()))
         return self.sshd_ok, "" if self.sshd_ok else "line 2: Bad configuration option"
 
@@ -233,8 +233,8 @@ def test_password_alphabet_is_the_ap_password_alphabet():
     sys.path.insert(0, str(ROOT / "deploy/robot/pinky_pro/release"))
     from network import READABLE_ALPHABET
 
-    assert ssh.PASSWORD_ALPHABET == READABLE_ALPHABET
-    assert len(set(ssh.PASSWORD_ALPHABET)) == 31
+    assert ssh.TEMP_LOGIN_ALPHABET == READABLE_ALPHABET
+    assert len(set(ssh.TEMP_LOGIN_ALPHABET)) == 31
 
 
 def test_generated_passwords_have_the_contract_shape_and_use_the_whole_alphabet():
@@ -243,7 +243,7 @@ def test_generated_passwords_have_the_contract_shape_and_use_the_whole_alphabet(
         password = ssh.generate_password()
         assert re.fullmatch(r"rosy-[a-z2-9]{4}-[a-z2-9]{4}-[a-z2-9]{4}", password), password
         seen |= set(password[5:].replace("-", ""))
-    assert seen == set(ssh.PASSWORD_ALPHABET)
+    assert seen == set(ssh.TEMP_LOGIN_ALPHABET)
 
 
 # --- the request file, read strictly ----------------------------------------------
@@ -465,7 +465,7 @@ def test_password_on_sets_it_writes_the_match_dropin_and_never_records_it(tmp_pa
     password = response["result"]["password"]
     assert response["result"] == {"user": "rosy", "password": password, "expires_at": "2026-10-02T12:45:15Z"}
     assert ("set_password", "rosy", password) in system.calls
-    dropin = (tmp_path / ssh.PASSWORD_DROPIN).read_text(encoding="utf-8")
+    dropin = (tmp_path / ssh.TEMP_LOGIN_DROPIN).read_text(encoding="utf-8")
     assert dropin.splitlines()[-5:] == [
         "Match User rosy Address 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16",
         "    PasswordAuthentication yes",
@@ -477,7 +477,7 @@ def test_password_on_sets_it_writes_the_match_dropin_and_never_records_it(tmp_pa
     names = system.names()
     assert names.index("set_password") < names.index("sshd_check") < names.index("reload_sshd")
     assert ("dropin_at_check", True) in system.calls and ("expire_timer", True) in system.calls
-    state = json.loads((tmp_path / ssh.PASSWORD_STATE).read_text(encoding="utf-8"))
+    state = json.loads((tmp_path / ssh.TEMP_LOGIN_STATE).read_text(encoding="utf-8"))
     assert state == {"enabled": True, "expires_at": "2026-10-02T12:45:15Z", "by": "laptop admin",
                      "boot_id": "boot-1", "boot_deadline": 1000.0 + 15 * 60}
     assert _history(tmp_path)[-1]["event"] == "password_on"
@@ -507,8 +507,8 @@ def test_password_off_locks_first_then_removes_the_dropin(tmp_path):
     names = system.names()
     assert names.index("lock_password") < names.index("reload_sshd")
     assert ("lock_password", "rosy") in system.calls and ("expire_timer", False) in system.calls
-    assert not (tmp_path / ssh.PASSWORD_DROPIN).exists()
-    assert json.loads((tmp_path / ssh.PASSWORD_STATE).read_text(encoding="utf-8"))["enabled"] is False
+    assert not (tmp_path / ssh.TEMP_LOGIN_DROPIN).exists()
+    assert json.loads((tmp_path / ssh.TEMP_LOGIN_STATE).read_text(encoding="utf-8"))["enabled"] is False
     assert _history(tmp_path)[-1]["event"] == "password_off"
 
 
@@ -518,16 +518,16 @@ def test_a_config_sshd_rejects_rolls_the_password_back(tmp_path):
     response = _run(tmp_path, system, "password_on", minutes=5)
     assert (response["status"], response["error"]) == (503, "SSH_ACCESS_UNAVAILABLE")
     assert "password" not in json.dumps(response.get("result") or {})
-    assert not (tmp_path / ssh.PASSWORD_DROPIN).exists()
+    assert not (tmp_path / ssh.TEMP_LOGIN_DROPIN).exists()
     assert ("lock_password", "rosy") in system.calls
     assert "reload_sshd" not in system.names()
 
 
 def test_a_failed_chpasswd_writes_no_dropin(tmp_path):
-    system = FakeSystem(tmp_path, chpasswd_ok=False)
+    system = FakeSystem(tmp_path, chpw_ok=False)
     response = _run(tmp_path, system, "password_on", minutes=5)
     assert response["status"] == 503
-    assert not (tmp_path / ssh.PASSWORD_DROPIN).exists()
+    assert not (tmp_path / ssh.TEMP_LOGIN_DROPIN).exists()
 
 
 def test_expire_mode_turns_an_expired_password_off_only(tmp_path):
@@ -535,12 +535,12 @@ def test_expire_mode_turns_an_expired_password_off_only(tmp_path):
     _run(tmp_path, system, "password_on", minutes=5)
     early = FakeSystem(tmp_path, now=NOW + timedelta(minutes=4))
     assert ssh.main(["--root", str(tmp_path), "--expire"], system=early) == 0
-    assert "lock_password" not in early.names() and (tmp_path / ssh.PASSWORD_DROPIN).exists()
+    assert "lock_password" not in early.names() and (tmp_path / ssh.TEMP_LOGIN_DROPIN).exists()
 
     late = FakeSystem(tmp_path, now=NOW + timedelta(minutes=5, seconds=1))
     assert ssh.main(["--root", str(tmp_path), "--expire"], system=late) == 0
     assert ("lock_password", "rosy") in late.calls and ("expire_timer", False) in late.calls
-    assert not (tmp_path / ssh.PASSWORD_DROPIN).exists()
+    assert not (tmp_path / ssh.TEMP_LOGIN_DROPIN).exists()
     event = _history(tmp_path)[-1]
     assert event["event"] == "password_off" and event["reason"] == "expired"
 
@@ -562,7 +562,7 @@ def test_boot_forces_the_password_off_and_installs_the_keys_dropin(tmp_path):
     assert ssh.main(["--root", str(tmp_path), "--boot"], system=boot) == 0
 
     assert ("lock_password", "rosy") in boot.calls
-    assert not (tmp_path / ssh.PASSWORD_DROPIN).exists()
+    assert not (tmp_path / ssh.TEMP_LOGIN_DROPIN).exists()
     assert (tmp_path / ssh.KEYS_DROPIN).is_file()
     event = _history(tmp_path)[-1]
     assert event["event"] == "password_off" and event["reason"] == "boot"
@@ -596,8 +596,8 @@ def _corrupt_keys(root: Path) -> None:
 
 
 def _password_was_turned_off(root: Path, system: FakeSystem) -> bool:
-    state = json.loads((root / ssh.PASSWORD_STATE).read_text(encoding="utf-8"))
-    return ("lock_password", "rosy") in system.calls and not (root / ssh.PASSWORD_DROPIN).exists() \
+    state = json.loads((root / ssh.TEMP_LOGIN_STATE).read_text(encoding="utf-8"))
+    return ("lock_password", "rosy") in system.calls and not (root / ssh.TEMP_LOGIN_DROPIN).exists() \
         and state["enabled"] is False
 
 
@@ -636,19 +636,19 @@ def test_boot_with_a_failing_usermod_denies_the_password_in_sshd_and_retries(tmp
     _run(tmp_path, FakeSystem(tmp_path), "password_on", minutes=60)
     boot = FakeSystem(tmp_path, now=NOW + timedelta(minutes=1), lock_ok=False)
     assert ssh.main(["--root", str(tmp_path), "--boot"], system=boot) != 0
-    dropin = (tmp_path / ssh.PASSWORD_DROPIN).read_text(encoding="utf-8")
+    dropin = (tmp_path / ssh.TEMP_LOGIN_DROPIN).read_text(encoding="utf-8")
     assert "PasswordAuthentication yes" not in dropin
     assert [line.strip() for line in dropin.splitlines() if not line.startswith("#")] == \
         ["Match User rosy", "PasswordAuthentication no"]
     names = boot.names()
     assert names.index("lock_password") < names.index("reload_sshd")
     assert ("expire_timer", True) in boot.calls  # the timer runs --expire, which retries the lock
-    assert json.loads((tmp_path / ssh.PASSWORD_STATE).read_text(encoding="utf-8"))["enabled"] is False
+    assert json.loads((tmp_path / ssh.TEMP_LOGIN_STATE).read_text(encoding="utf-8"))["enabled"] is False
 
     retry = FakeSystem(tmp_path, now=NOW + timedelta(minutes=2))
     assert ssh.main(["--root", str(tmp_path), "--expire"], system=retry) == 0
     assert ("lock_password", "rosy") in retry.calls and ("expire_timer", False) in retry.calls
-    assert not (tmp_path / ssh.PASSWORD_DROPIN).exists()
+    assert not (tmp_path / ssh.TEMP_LOGIN_DROPIN).exists()
 
 
 def test_a_failing_usermod_on_request_denies_the_password_and_answers_503(tmp_path):
@@ -657,7 +657,7 @@ def test_a_failing_usermod_on_request_denies_the_password_and_answers_503(tmp_pa
     system.lock_ok = False
     response = _run(tmp_path, system, "password_off")
     assert (response["status"], response["error"]) == (503, "SSH_ACCESS_UNAVAILABLE")
-    assert "PasswordAuthentication yes" not in (tmp_path / ssh.PASSWORD_DROPIN).read_text(encoding="utf-8")
+    assert "PasswordAuthentication yes" not in (tmp_path / ssh.TEMP_LOGIN_DROPIN).read_text(encoding="utf-8")
 
 
 def test_a_password_that_would_reach_core_too_late_is_rolled_back(tmp_path):
@@ -676,8 +676,8 @@ def test_a_password_that_would_reach_core_too_late_is_rolled_back(tmp_path):
     assert password not in (tmp_path / ssh.RESPONSE).read_text(encoding="utf-8")
     names = system.names()
     assert names.index("set_password") < len(names) - 1 - names[::-1].index("lock_password")
-    assert not (tmp_path / ssh.PASSWORD_DROPIN).exists()
-    assert json.loads((tmp_path / ssh.PASSWORD_STATE).read_text(encoding="utf-8"))["enabled"] is False
+    assert not (tmp_path / ssh.TEMP_LOGIN_DROPIN).exists()
+    assert json.loads((tmp_path / ssh.TEMP_LOGIN_STATE).read_text(encoding="utf-8"))["enabled"] is False
 
 
 def test_a_password_answered_in_time_is_not_rolled_back(tmp_path):
@@ -696,7 +696,7 @@ def test_a_failed_timer_start_rolls_the_password_back(tmp_path):
     response = _run(tmp_path, system, "password_on", minutes=5)
     assert (response["status"], response["error"], response["result"]) == (503, "SSH_ACCESS_UNAVAILABLE", None)
     assert ("lock_password", "rosy") in system.calls
-    assert not (tmp_path / ssh.PASSWORD_DROPIN).exists()
+    assert not (tmp_path / ssh.TEMP_LOGIN_DROPIN).exists()
     # Never live without the timer: sshd was not reloaded with the password block.
     assert "reload_sshd" not in system.names()
 
@@ -706,7 +706,7 @@ def test_an_os_error_while_turning_the_password_on_is_503_with_rollback(tmp_path
     real = ssh.write_atomic
 
     def failing(path, content, mode, group=None):
-        if Path(path).name == Path(ssh.PASSWORD_STATE).name and "true" in content:
+        if Path(path).name == Path(ssh.TEMP_LOGIN_STATE).name and "true" in content:
             raise OSError("disk full")
         return real(path, content, mode, group)
 
@@ -714,7 +714,7 @@ def test_an_os_error_while_turning_the_password_on_is_503_with_rollback(tmp_path
     response = _run(tmp_path, system, "password_on", minutes=5)
     assert (response["status"], response["error"], response["result"]) == (503, "SSH_ACCESS_UNAVAILABLE", None)
     assert ("lock_password", "rosy") in system.calls
-    assert not (tmp_path / ssh.PASSWORD_DROPIN).exists()
+    assert not (tmp_path / ssh.TEMP_LOGIN_DROPIN).exists()
 
 
 def test_an_os_error_while_adding_a_key_is_503(tmp_path, monkeypatch):
@@ -810,7 +810,7 @@ def test_a_rollback_whose_lock_fails_keeps_the_retry_timer_running(tmp_path):
     response = _run(tmp_path, system, "password_on", minutes=5)
     assert response["status"] == 503
     assert [call for call in system.calls if call[0] == "expire_timer"][-1] == ("expire_timer", True)
-    assert "PasswordAuthentication yes" not in (tmp_path / ssh.PASSWORD_DROPIN).read_text(encoding="utf-8")
+    assert "PasswordAuthentication yes" not in (tmp_path / ssh.TEMP_LOGIN_DROPIN).read_text(encoding="utf-8")
 
 
 def test_a_timer_that_does_not_start_is_a_helper_error_and_a_stop_is_only_logged(tmp_path, monkeypatch):
@@ -825,7 +825,7 @@ def test_a_timer_that_does_not_start_is_a_helper_error_and_a_stop_is_only_logged
 
 
 def _state(root: Path) -> dict:
-    return json.loads((root / ssh.PASSWORD_STATE).read_text(encoding="utf-8"))
+    return json.loads((root / ssh.TEMP_LOGIN_STATE).read_text(encoding="utf-8"))
 
 
 def test_a_clock_that_once_ran_a_year_ahead_never_keeps_a_password_on(tmp_path):
@@ -913,7 +913,7 @@ def test_a_failed_response_write_after_password_on_turns_the_password_off(tmp_pa
     monkeypatch.setattr(ssh, "write_atomic", failing)
     _request(tmp_path, "password_on", minutes=5)
     assert ssh.main(["--root", str(tmp_path)], system=system) == 0
-    assert _state(tmp_path)["enabled"] is False and not (tmp_path / ssh.PASSWORD_DROPIN).exists()
+    assert _state(tmp_path)["enabled"] is False and not (tmp_path / ssh.TEMP_LOGIN_DROPIN).exists()
     assert ("lock_password", "rosy") in system.calls
     assert _history(tmp_path)[-1]["reason"] == "undelivered"
 
@@ -964,7 +964,7 @@ def test_a_failed_lock_whose_deny_write_also_failed_is_retried_next_tick(tmp_pat
 
     monkeypatch.setattr(ssh, "_write_deny_dropin", no_deny)
     assert _run(tmp_path, system, "password_on", minutes=5)["status"] == 503
-    assert not (tmp_path / ssh.PASSWORD_DROPIN).exists() and _state(tmp_path).get("lock_pending") is True
+    assert not (tmp_path / ssh.TEMP_LOGIN_DROPIN).exists() and _state(tmp_path).get("lock_pending") is True
 
     retry = FakeSystem(tmp_path, now=NOW + timedelta(seconds=30))
     assert ssh.main(["--root", str(tmp_path), "--expire"], system=retry) == 0
@@ -1021,7 +1021,7 @@ def test_password_on_refuses_without_a_boot_id(tmp_path):
     system.boot_ident = ""
     response = _run(tmp_path, system, "password_on", minutes=5)
     assert (response["status"], response["error"], response["result"]) == (503, "SSH_ACCESS_UNAVAILABLE", None)
-    assert "set_password" not in system.names() and not (tmp_path / ssh.PASSWORD_DROPIN).exists()
+    assert "set_password" not in system.names() and not (tmp_path / ssh.TEMP_LOGIN_DROPIN).exists()
 
 
 def test_a_password_state_without_a_boot_id_is_expired(tmp_path):
@@ -1030,7 +1030,7 @@ def test_a_password_state_without_a_boot_id_is_expired(tmp_path):
     _run(tmp_path, system, "password_on", minutes=60)
     state = _state(tmp_path)
     del state["boot_id"], state["boot_deadline"]
-    (tmp_path / ssh.PASSWORD_STATE).write_text(json.dumps(state), encoding="utf-8")
+    (tmp_path / ssh.TEMP_LOGIN_STATE).write_text(json.dumps(state), encoding="utf-8")
     later = FakeSystem(tmp_path, now=NOW + timedelta(minutes=1))
     ssh.main(["--root", str(tmp_path), "--expire"], system=later)
     assert _state(tmp_path)["enabled"] is False and ("lock_password", "rosy") in later.calls

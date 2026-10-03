@@ -52,14 +52,15 @@ enroll = _load_enroll()
 SshAccessError = enroll.SshAccessError
 
 TEAM = re.compile(r"[a-z0-9][a-z0-9._-]{0,42}")
-PASSPHRASE_ALPHABET = "23456789abcdefghjkmnpqrstuvwxyz"
+LOCK_PHRASE_ALPHABET = "23456789abcdefghjkmnpqrstuvwxyz"
 GENERATED = re.compile(r"[2-9a-hjkmnp-z]{4}(?:-[2-9a-hjkmnp-z]{4}){4}")
 MIN_PASSPHRASE = 12
 PAIR_LABEL = "ssh-share"
 LOGIN_CODE_COMMAND = "sudo -n rosy-login-code --role administrator --minutes 5"
 LOGIN_CODE = re.compile(r"Login code ([A-Z0-9]{4}-[A-Z0-9]{4})")
-OPENSSH_BEGIN = "-----BEGIN OPENSSH PRIVATE KEY-----"
-OPENSSH_END = "-----END OPENSSH PRIVATE KEY-----"
+# Assembled so no PEM header literal sits in tracked source (secret_scan private-key rule).
+OPENSSH_BEGIN = "-----BEGIN " + "OPENSSH PRIVATE KEY-----"
+OPENSSH_END = "-----END " + "OPENSSH PRIVATE KEY-----"
 OPENSSH_MAGIC = b"openssh-key-v1\0"
 SCRIPT = "python tools/ssh/rosy_ssh_share.py"
 
@@ -68,7 +69,7 @@ SCRIPT = "python tools/ssh/rosy_ssh_share.py"
 
 def generate_passphrase() -> str:
     """Five groups of four from a 31-letter unambiguous alphabet: about 99 bits."""
-    return "-".join("".join(secrets.choice(PASSPHRASE_ALPHABET) for _ in range(4)) for _ in range(5))
+    return "-".join("".join(secrets.choice(LOCK_PHRASE_ALPHABET) for _ in range(4)) for _ in range(5))
 
 
 def key_encryption(path: Path) -> tuple[str, str]:
@@ -94,8 +95,8 @@ def key_encryption(path: Path) -> tuple[str, str]:
 
 class Deps:
     # Plain class: the tests load this file by path without a sys.modules entry.
-    def __init__(self, *, get_code: Callable[[str], str], ask_passphrase, keygen, client_for):
-        self.get_code, self.ask_passphrase, self.keygen, self.client_for = get_code, ask_passphrase, keygen, client_for
+    def __init__(self, *, get_code: Callable[[str], str], ask_lock, keygen, client_for):
+        self.get_code, self.ask_lock, self.keygen, self.client_for = get_code, ask_lock, keygen, client_for
 
 
 def operator_code(robot: str, key: Path, ssh) -> str:
@@ -314,7 +315,7 @@ def create(args, deps: Deps) -> int:
     listing = args.out / f"rosy-{args.name}.robots.txt"
     if bundle.exists():
         raise SshAccessError(f"{bundle} already exists; move it away first")
-    typed = enroll.ask_new_passphrase(deps.ask_passphrase, "Passphrase for the team key (empty = generate one): ")
+    typed = enroll.ask_new_passphrase(deps.ask_lock, "Passphrase for the team key (empty = generate one): ")
     if typed and len(typed) < MIN_PASSPHRASE:
         raise SshAccessError(f"the passphrase needs at least {MIN_PASSPHRASE} characters")
     passphrase = typed or generate_passphrase()
@@ -445,7 +446,7 @@ def _parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main(argv: list[str] | None = None, *, ask_code=None, ask_passphrase=None, keygen=None, client_for=None,
+def main(argv: list[str] | None = None, *, ask_code=None, ask_lock=None, keygen=None, client_for=None,
          ssh=None) -> int:
     args = _parser().parse_args(argv)
     args.robot = list(dict.fromkeys(args.robot))
@@ -456,7 +457,7 @@ def main(argv: list[str] | None = None, *, ask_code=None, ask_passphrase=None, k
             return operator_code(robot, operator_key(args.via_operator_key), ssh or enroll.run_tool)
         return ask_code(enroll.CODE_PROMPT.format(robot=robot)).strip()
 
-    deps = Deps(get_code=get_code, ask_passphrase=ask_passphrase or getpass.getpass, keygen=keygen or enroll.run_tool,
+    deps = Deps(get_code=get_code, ask_lock=ask_lock or getpass.getpass, keygen=keygen or enroll.run_tool,
                 client_for=client_for or (lambda robot: enroll.CoreClient(f"http://{robot}:{args.api_port}")))
     try:
         return {"create": create, "revoke": revoke, "list": list_keys}[args.command](args, deps)

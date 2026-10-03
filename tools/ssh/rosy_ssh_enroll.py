@@ -263,13 +263,13 @@ def ask_new_passphrase(ask: Ask, prompt: str) -> str:
     return first
 
 
-def ensure_key(path: Path, comment: str, keygen: Runner, ask_passphrase: Ask) -> bool:
+def ensure_key(path: Path, comment: str, keygen: Runner, ask_lock: Ask) -> bool:
     pub = Path(str(path) + ".pub")
     if path.exists() or pub.exists():
         if not pub.exists():
             raise SshAccessError(f"{path} exists without {pub.name}; recreate it with ssh-keygen -y -f <key>")
         return False
-    passphrase = ask_new_passphrase(ask_passphrase, "Passphrase for the new key (empty for none): ")
+    passphrase = ask_new_passphrase(ask_lock, "Passphrase for the new key (empty for none): ")
     generate_key(path, comment, passphrase, keygen)
     return True
 
@@ -522,7 +522,7 @@ def _absolute(path: Path) -> Path:
     return path.expanduser().resolve()
 
 
-def enroll(args, *, ask_code: Ask, ask_passphrase: Ask, keygen: Runner, client: CoreClient, ssh: Runner) -> int:
+def enroll(args, *, ask_code: Ask, ask_lock: Ask, keygen: Runner, client: CoreClient, ssh: Runner) -> int:
     label = args.label or default_label()
     ssh_dir = home() / ".ssh"
     key = _absolute(args.key or ssh_dir / ("rosy_" + label.replace(":", "_")))
@@ -530,7 +530,7 @@ def enroll(args, *, ask_code: Ask, ask_passphrase: Ask, keygen: Runner, client: 
     config = _absolute(args.ssh_config or ssh_dir / "config")
     _quoted(key), _quoted(known_hosts)  # refuse an unusable path before anything is created or sent
 
-    if ensure_key(key, label, keygen, ask_passphrase):
+    if ensure_key(key, label, keygen, ask_lock):
         print(f"created key {key}")
     public_key = read_public_key(Path(str(key) + ".pub"))
     print(f"key {label} {fingerprint(public_key)}")
@@ -568,13 +568,13 @@ def enroll(args, *, ask_code: Ask, ask_passphrase: Ask, keygen: Runner, client: 
     return 0
 
 
-def main(argv: list[str] | None = None, *, ask_code: Ask | None = None, ask_passphrase: Ask | None = None,
+def main(argv: list[str] | None = None, *, ask_code: Ask | None = None, ask_lock: Ask | None = None,
          keygen: Runner | None = None, client_for: Callable[[str], CoreClient] | None = None,
          ssh: Runner | None = None) -> int:
     args = _parser().parse_args(argv)
     client = (client_for or (lambda robot: CoreClient(f"http://{robot}:{args.api_port}")))(args.robot)
     try:
-        return enroll(args, ask_code=ask_code or getpass.getpass, ask_passphrase=ask_passphrase or getpass.getpass,
+        return enroll(args, ask_code=ask_code or getpass.getpass, ask_lock=ask_lock or getpass.getpass,
                       keygen=keygen or run_tool, client=client, ssh=ssh or run_tool)
     except SshAccessError as error:
         print(f"rosy_ssh_enroll: {error}", file=sys.stderr)

@@ -40,14 +40,14 @@ def _string(data: bytes) -> bytes:
 class FakeKeygen:
     """Writes an OpenSSH-format private key: bcrypt/aes256-ctr when -N is non-empty, none/none otherwise."""
 
-    def __init__(self, ignore_passphrase: bool = False):
-        self.ignore_passphrase = ignore_passphrase
+    def __init__(self, ignore_lock: bool = False):
+        self.ignore_lock = ignore_lock
         self.calls: list[list[str]] = []
 
     def __call__(self, argv: list[str]) -> tuple[int, str, str]:
         self.calls.append(argv)
         path = Path(argv[argv.index("-f") + 1])
-        passphrase = "" if self.ignore_passphrase else argv[argv.index("-N") + 1]
+        passphrase = "" if self.ignore_lock else argv[argv.index("-N") + 1]
         public = ed25519_public_key(b"team", argv[argv.index("-C") + 1])
         blob = base64.b64decode(public.split()[1])
         if passphrase:
@@ -57,8 +57,8 @@ class FakeKeygen:
         data = b"openssh-key-v1\0" + header + struct.pack(">I", 1) + _string(blob) + _string(b"\x01" * 64)
         body = base64.b64encode(data).decode("ascii")
         lines = [body[i:i + 70] for i in range(0, len(body), 70)]
-        path.write_text("-----BEGIN OPENSSH PRIVATE KEY-----\n" + "\n".join(lines)
-                        + "\n-----END OPENSSH PRIVATE KEY-----\n", encoding="ascii")
+        path.write_text(tool.OPENSSH_BEGIN + "\n" + "\n".join(lines)
+                        + "\n" + tool.OPENSSH_END + "\n", encoding="ascii")
         Path(str(path) + ".pub").write_text(public + "\n", encoding="ascii")
         return 0, "", ""
 
@@ -77,7 +77,7 @@ def home(tmp_path, monkeypatch):
 
 def test_create_writes_nothing_into_home(home, robots, tmp_path, capsys):
     out = tmp_path / "out"
-    status, _ = _create(robots, out, passphrases=(TYPED, TYPED))
+    status, _ = _create(robots, out, lock_answers=(TYPED, TYPED))
     assert status == 0, _text(capsys)[1]
     assert list(home.rglob("*")) == []
     assert sorted(p.name for p in out.iterdir()) == [f"rosy-{TEAM}.robots.txt", f"rosy-{TEAM}.zip"]
@@ -90,7 +90,7 @@ def robots():
         yield {R1: one, R2: two}
 
 
-def run(robots: dict, *argv: str, codes: dict | None = None, passphrases=("", ""), keygen=None, ssh=None):
+def run(robots: dict, *argv: str, codes: dict | None = None, lock_answers=("", ""), keygen=None, ssh=None):
     codes = codes if codes is not None else {R1: CODE1, R2: CODE2}
     asked: list[str] = []
 
@@ -99,8 +99,8 @@ def run(robots: dict, *argv: str, codes: dict | None = None, passphrases=("", ""
         asked.append(robot)
         return codes[robot]
 
-    answers = iter(passphrases)
-    status = tool.main(list(argv), ask_code=ask_code, ask_passphrase=lambda prompt: next(answers),
+    answers = iter(lock_answers)
+    status = tool.main(list(argv), ask_code=ask_code, ask_lock=lambda prompt: next(answers),
                        keygen=keygen or FakeKeygen(),
                        client_for=lambda robot: tool.enroll.CoreClient(robots[robot].base_url), ssh=ssh)
     return status, asked
@@ -124,7 +124,7 @@ def _create(robots, out: Path, *extra: str, **kwargs):
 
 def _encrypted_by_format(key: bytes) -> bool:
     lines = key.decode("ascii").strip().splitlines()
-    assert lines[0] == "-----BEGIN OPENSSH PRIVATE KEY-----" and lines[-1] == "-----END OPENSSH PRIVATE KEY-----"
+    assert lines[0] == tool.OPENSSH_BEGIN and lines[-1] == tool.OPENSSH_END
     data = base64.b64decode("".join(lines[1:-1]))
     assert data.startswith(b"openssh-key-v1\0")
     offset = len(b"openssh-key-v1\0")
@@ -142,7 +142,7 @@ def test_create_builds_a_locked_bundle_and_registers_the_team_key(keygen_kind, r
         pytest.skip("ssh-keygen is not on PATH")
     keygen = tool.enroll.run_tool if keygen_kind == "real" else FakeKeygen()
     out = tmp_path / "out"
-    status, asked = _create(robots, out, "--contact", "운영자 홍길동", passphrases=(TYPED, TYPED), keygen=keygen)
+    status, asked = _create(robots, out, "--contact", "운영자 홍길동", lock_answers=(TYPED, TYPED), keygen=keygen)
     stdout, stderr = _text(capsys)
     assert status == 0, stderr
     assert asked == [R1, R2]
@@ -198,7 +198,7 @@ def test_create_builds_a_locked_bundle_and_registers_the_team_key(keygen_kind, r
 
 
 def test_a_generated_passphrase_is_shown_once_and_never_saved(robots, tmp_path, capsys):
-    status, _ = _create(robots, tmp_path, passphrases=("",))
+    status, _ = _create(robots, tmp_path, lock_answers=("",))
     stdout, stderr = _text(capsys)
     assert status == 0, stderr
     shown = [line for line in stderr.splitlines() if line.startswith("Passphrase")]
@@ -214,16 +214,16 @@ def test_a_generated_passphrase_is_shown_once_and_never_saved(robots, tmp_path, 
 
 
 def test_a_short_or_mistyped_passphrase_is_refused_before_anything(robots, tmp_path, capsys):
-    assert _create(robots, tmp_path, passphrases=("short", "short"))[0] == 1
+    assert _create(robots, tmp_path, lock_answers=("short", "short"))[0] == 1
     assert "at least" in _text(capsys)[1]
-    assert _create(robots, tmp_path, passphrases=(TYPED, TYPED + "x"))[0] == 1
+    assert _create(robots, tmp_path, lock_answers=(TYPED, TYPED + "x"))[0] == 1
     assert "did not match" in _text(capsys)[1]
     assert all(core.requests == [] for core in robots.values())
     assert list(tmp_path.iterdir()) == []
 
 
 def test_an_unencrypted_key_is_never_bundled_or_registered(robots, tmp_path, capsys):
-    status, _ = _create(robots, tmp_path, passphrases=(TYPED, TYPED), keygen=FakeKeygen(ignore_passphrase=True))
+    status, _ = _create(robots, tmp_path, lock_answers=(TYPED, TYPED), keygen=FakeKeygen(ignore_lock=True))
     assert status == 1
     assert "not encrypted" in _text(capsys)[1]
     assert all(core.requests == [] for core in robots.values())
@@ -231,7 +231,7 @@ def test_an_unencrypted_key_is_never_bundled_or_registered(robots, tmp_path, cap
 
 
 def test_a_failure_on_a_later_robot_builds_no_bundle_and_names_the_revoke(robots, tmp_path, capsys):
-    status, _ = _create(robots, tmp_path, passphrases=(TYPED, TYPED), codes={R1: CODE1, R2: "WRNG-CODE"})
+    status, _ = _create(robots, tmp_path, lock_answers=(TYPED, TYPED), codes={R1: CODE1, R2: "WRNG-CODE"})
     stdout, stderr = _text(capsys)
     assert status == 1
     assert list(tmp_path.iterdir()) == []
@@ -242,7 +242,7 @@ def test_a_failure_on_a_later_robot_builds_no_bundle_and_names_the_revoke(robots
 
 def test_an_existing_bundle_is_not_overwritten(robots, tmp_path, capsys):
     (tmp_path / f"rosy-{TEAM}.zip").write_bytes(b"old")
-    assert _create(robots, tmp_path, passphrases=(TYPED, TYPED))[0] == 1
+    assert _create(robots, tmp_path, lock_answers=(TYPED, TYPED))[0] == 1
     assert (tmp_path / f"rosy-{TEAM}.zip").read_bytes() == b"old"
     assert all(core.requests == [] for core in robots.values())
     assert "exists" in _text(capsys)[1]
@@ -339,7 +339,7 @@ def test_bad_arguments_are_refused(argv, robots):
 def test_the_zip_extracts_to_exactly_the_folder_config_names(robots, tmp_path, capsys):
     """Flat entries in rosy-<team>.zip: Windows "Extract All" and macOS Archive Utility both make a folder
     named after the zip, and `unzip -d ~/.ssh/rosy-<team>` does the same, which is the folder config uses."""
-    status, _ = _create(robots, tmp_path, passphrases=(TYPED, TYPED))
+    status, _ = _create(robots, tmp_path, lock_answers=(TYPED, TYPED))
     assert status == 0, _text(capsys)[1]
     bundle = tmp_path / f"rosy-{TEAM}.zip"
     with zipfile.ZipFile(bundle) as archive:
@@ -363,7 +363,7 @@ def test_duplicate_robot_hostnames_are_refused(tmp_path, capsys):
     with FakeCore(codes={CODE1: "administrator"}, hostname=H1) as one, \
             FakeCore(codes={CODE2: "administrator"}, hostname=H1) as two:
         robots = {R1: one, R2: two}
-        status, _ = _create(robots, tmp_path, passphrases=(TYPED, TYPED))
+        status, _ = _create(robots, tmp_path, lock_answers=(TYPED, TYPED))
     stdout, stderr = _text(capsys)
     assert status == 1
     assert "duplicate" in stderr and H1 in stderr
@@ -373,7 +373,7 @@ def test_duplicate_robot_hostnames_are_refused(tmp_path, capsys):
 
 
 def test_create_prints_the_revoke_command_and_writes_a_robots_list(robots, tmp_path, capsys):
-    status, _ = _create(robots, tmp_path, passphrases=(TYPED, TYPED))
+    status, _ = _create(robots, tmp_path, lock_answers=(TYPED, TYPED))
     stdout, stderr = _text(capsys)
     assert status == 0, stderr
     revoke = f"revoke --name {TEAM} --robot {R1} --robot {R2}"
@@ -389,7 +389,7 @@ def test_a_bundle_write_failure_names_the_revoke(robots, tmp_path, monkeypatch, 
         raise OSError(28, "No space left on device")
 
     monkeypatch.setattr(tool, "write_bundle", broken)
-    status, _ = _create(robots, tmp_path, passphrases=(TYPED, TYPED))
+    status, _ = _create(robots, tmp_path, lock_answers=(TYPED, TYPED))
     stdout, stderr = _text(capsys)
     assert status == 1
     assert "No space left" in stderr

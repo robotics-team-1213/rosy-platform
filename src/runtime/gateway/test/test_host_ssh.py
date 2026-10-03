@@ -311,7 +311,7 @@ def test_turning_the_password_off_works_with_a_corrupt_keys_record(robot):
     gone = robot.client.delete("/api/v1/host/ssh/password", headers=_admin())
     assert gone.status_code == 204, gone.text
     assert ("lock_password", "rosy") in robot.helper.system.calls
-    assert not (robot.root / helper.PASSWORD_DROPIN).exists()
+    assert not (robot.root / helper.TEMP_LOGIN_DROPIN).exists()
 
 
 def test_a_password_exchange_that_times_out_asks_the_helper_to_turn_it_off(tmp_path):

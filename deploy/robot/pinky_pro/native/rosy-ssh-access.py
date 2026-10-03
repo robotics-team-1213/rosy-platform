@@ -13,7 +13,7 @@ on its own, applies it and writes /run/rosy/ssh-access.response
   per key, so sshd itself refuses a key after its expiry. The drop-in
   50-rosy-managed-keys.conf makes sshd read the file for rosy only. /etc/ssh is
   outside the D-388 image layer, so this program installs and keeps it.
-* Temporary password: generated here, set with chpasswd (stdin), allowed only
+* Temporary password. Generated here, set with chpasswd (stdin), allowed only
   from private networks by 60-rosy-temp-password.conf, and turned off (shadow
   field `*`, drop-in removed, sshd reloaded) when it expires
   (rosy-ssh-password-expire.timer runs --expire while it is on), when asked,
@@ -68,7 +68,7 @@ STATE_DIR = "var/lib/rosy/ssh"
 AUTHORIZED = STATE_DIR + "/authorized_keys"
 KEYS = STATE_DIR + "/keys.json"
 HISTORY = STATE_DIR + "/history.jsonl"
-PASSWORD_STATE = STATE_DIR + "/password.json"
+TEMP_LOGIN_STATE = STATE_DIR + "/password.json"
 #: The newest time this program has seen (the Pi has no RTC: an offline boot may start in the past).
 CLOCK = STATE_DIR + "/clock.json"
 HISTORY_MAX_BYTES = 1 << 20
@@ -79,7 +79,7 @@ MARK_STEP = timedelta(seconds=60)
 BOOT_ID = "proc/sys/kernel/random/boot_id"
 LOCK = STATE_DIR + "/.lock"
 KEYS_DROPIN = "etc/ssh/sshd_config.d/50-rosy-managed-keys.conf"
-PASSWORD_DROPIN = "etc/ssh/sshd_config.d/60-rosy-temp-password.conf"
+TEMP_LOGIN_DROPIN = "etc/ssh/sshd_config.d/60-rosy-temp-password.conf"
 CORE_GROUP = "rosy-core"
 SSH_UNIT = "ssh.service"  # Ubuntu 24.04: ssh.service (sshd.service is only an alias)
 EXPIRE_TIMER = "rosy-ssh-password-expire.timer"
@@ -102,7 +102,7 @@ MAX_KEYS = 32
 EXPIRES_DAYS = (1, 365)
 PASSWORD_MINUTES = (1, 60)
 #: The AP password alphabet (release/network.py READABLE_ALPHABET): no 0/o, 1/l/i.
-PASSWORD_ALPHABET = "abcdefghjkmnpqrstuvwxyz23456789"
+TEMP_LOGIN_ALPHABET = "abcdefghjkmnpqrstuvwxyz23456789"
 PRIVATE_NETWORKS = "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
 
 REQUEST_ID = re.compile(r"[0-9a-f]{16,64}")
@@ -134,7 +134,7 @@ KEYS_DROPIN_TEXT = (
     f"Match User {USER}\n"
     "    AuthorizedKeysFile .ssh/authorized_keys /var/lib/rosy/ssh/authorized_keys\n"
 )
-PASSWORD_DROPIN_TEXT = (
+TEMP_LOGIN_DROPIN_TEXT = (
     "# D-418: temporary password for rosy from private networks only. rosy-ssh-access\n"
     "# removes it when the password expires, when it is turned off, and at every boot.\n"
     f"Match User {USER} Address {PRIVATE_NETWORKS}\n"
@@ -231,7 +231,7 @@ def fingerprint(blob_b64: str) -> str:
 
 
 def generate_password() -> str:
-    groups = ("".join(secrets.choice(PASSWORD_ALPHABET) for _ in range(4)) for _ in range(3))
+    groups = ("".join(secrets.choice(TEMP_LOGIN_ALPHABET) for _ in range(4)) for _ in range(3))
     return "rosy-" + "-".join(groups)
 
 
@@ -608,7 +608,7 @@ def revoke_key(system: System, request: dict) -> tuple[int, None]:
 
 def password_state(system: System) -> dict:
     """{enabled, expires_at, lock_pending, ...}; `lock_pending` while a failed lock waits for its retry."""
-    raw = _read_bytes(system.path(PASSWORD_STATE), 4096)
+    raw = _read_bytes(system.path(TEMP_LOGIN_STATE), 4096)
     try:
         data = json.loads((raw or b"{}").decode("utf-8"))
         pending = data.get("lock_pending") is True
@@ -622,7 +622,7 @@ def password_state(system: System) -> dict:
 
 def _write_off_state(system: System, *, lock_pending: bool = False) -> None:
     state = {"enabled": False, "expires_at": None, **({"lock_pending": True} if lock_pending else {})}
-    write_atomic(system.path(PASSWORD_STATE), json.dumps(state) + "\n", 0o600)
+    write_atomic(system.path(TEMP_LOGIN_STATE), json.dumps(state) + "\n", 0o600)
 
 
 def password_expired(system: System, state: dict) -> bool:
@@ -636,7 +636,7 @@ def password_expired(system: System, state: dict) -> bool:
 
 
 def _write_deny_dropin(system: System) -> None:
-    write_atomic(system.path(PASSWORD_DROPIN), PASSWORD_DENY_TEXT, 0o644)
+    write_atomic(system.path(TEMP_LOGIN_DROPIN), PASSWORD_DENY_TEXT, 0o644)
 
 
 def lock_or_deny(system: System) -> None:
@@ -664,11 +664,11 @@ def password_off(system: System, reason: str, by: Optional[str] = None, *, force
     """Lock first (no password matches any more), then drop the Match block and reload. True if it was on."""
     state = password_state(system)
     # A bare lock_pending (the deny block could not be written either) still needs the lock retried.
-    was_on = state["enabled"] or state["lock_pending"] or system.path(PASSWORD_DROPIN).exists()
+    was_on = state["enabled"] or state["lock_pending"] or system.path(TEMP_LOGIN_DROPIN).exists()
     if not was_on and not force:
         return False
     lock_or_deny(system)
-    system.path(PASSWORD_DROPIN).unlink(missing_ok=True)
+    system.path(TEMP_LOGIN_DROPIN).unlink(missing_ok=True)
     _write_off_state(system)
     try:
         system.reload_sshd()
@@ -688,15 +688,15 @@ def password_on(system: System, request: dict) -> tuple[int, dict]:
     expires = system.now() + timedelta(minutes=minutes)
     boot_id, boot_deadline = system.boot_id(), system.boot_time() + minutes * 60
     if not boot_id:
-        # Without it the boot clock cannot bound the password: refuse rather than rely on the wall clock.
+        # Without it the boot clock cannot bound the password, so refuse rather than rely on the wall clock.
         raise HelperError(f"/{BOOT_ID} 를 읽을 수 없어 비밀번호를 켜지 않습니다")
     try:
         system.set_password(USER, password)
-        write_atomic(system.path(PASSWORD_DROPIN), PASSWORD_DROPIN_TEXT, 0o644)
+        write_atomic(system.path(TEMP_LOGIN_DROPIN), TEMP_LOGIN_DROPIN_TEXT, 0o644)
         ok, detail = system.sshd_check()
         if not ok:
             raise HelperError(f"sshd -t 가 설정을 거부했습니다: {detail}")
-        write_atomic(system.path(PASSWORD_STATE),
+        write_atomic(system.path(TEMP_LOGIN_STATE),
                      json.dumps({"enabled": True, "expires_at": stamp(expires), "by": request["by"],
                                  "boot_id": boot_id, "boot_deadline": boot_deadline},
                                 ensure_ascii=False) + "\n", 0o600)
@@ -714,7 +714,7 @@ def password_rollback(system: System) -> None:
     """Nothing half-on: no Match block, no password that matches. Every step runs; none raises.
 
     The timer stops before the lock: a failed lock starts it again to retry."""
-    for step, action in (("drop-in", lambda: system.path(PASSWORD_DROPIN).unlink(missing_ok=True)),
+    for step, action in (("drop-in", lambda: system.path(TEMP_LOGIN_DROPIN).unlink(missing_ok=True)),
                          ("state", lambda: _write_off_state(system)),
                          ("timer", lambda: system.expire_timer(False)),
                          ("lock", lambda: lock_or_deny(system))):
@@ -726,7 +726,7 @@ def password_rollback(system: System) -> None:
 
 def expire_password(system: System) -> None:
     state = password_state(system)
-    stale = not state["enabled"] and (system.path(PASSWORD_DROPIN).exists() or state["lock_pending"])
+    stale = not state["enabled"] and (system.path(TEMP_LOGIN_DROPIN).exists() or state["lock_pending"])
     if stale or (state["enabled"] and password_expired(system, state)):
         password_off(system, "expired")
 

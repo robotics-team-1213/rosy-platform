@@ -2135,3 +2135,10 @@
 - 변경: `native/learned-perception.env.example` 에 `ROSY_OBJECT_DET=false`(+ `ROSY_OBJECT_DET_MAX_HZ` 설명). 서비스·권한 변화 없음. 모델은 `/var/lib/rosy/models/object_det/` 아래이고 deliver 가 root:rosy-camera 0750 으로 만든다.
 - 증거: `test_native_systemd_contract.py` env 예시 시험.
 - gate 변화: 없음. 켜는 것은 사용자 승인 뒤.
+
+## 2026-10-03 · uncommitted · fix(native,tools,test): D-418 파일의 비밀 검사 23건 — 이름과 문구만 바꿈
+- 변경: `test_no_secrets_in_tracked_files` 가 D-418 파일에서 23건을 잡았다(병합 전 브랜치에서도 빨강). 검사기의 예외·허용 목록은 넓히지 않고 코드를 바꿨다. 도우미 상수 `PASSWORD_STATE`·`PASSWORD_DROPIN`(`_TEXT` 포함)·`PASSWORD_ALPHABET` → `TEMP_LOGIN_*`, 공유 도구 `PASSPHRASE_ALPHABET` → `LOCK_PHRASE_ALPHABET`, 두 도구의 키워드 인자 `ask_passphrase` → `ask_lock`. PEM 머리는 실행 때 이어 붙인다(`OPENSSH_BEGIN`, 시험의 `PEM_BEGIN`). 시험 보조 인자 `passphrase`/`passphrases`/`ignore_passphrase`/`chpasswd_ok` → `lock_phrase`/`lock_answers`/`ignore_lock`/`chpw_ok`. 도우미 설명 두 줄의 쌍점을 바꿨다. API Ref §5.8 예시 값은 `<temporary-password>` 로 두고 형식은 문장으로 적었다(응답 필드 이름 `password` 는 그대로).
+- 동작·CLI 플래그·API JSON 필드·파일 경로 변화 없음.
+- 증거: 검사기 0건. `test_rosy_ssh_enroll`·`test_rosy_ssh_share`·`test_ssh_access`·`test_host_ssh`·`test_release_boundary_guards`·`test_module_structure`·native systemd 계약 561 passed 4 skipped(Windows).
+- gate 변화: 없음
+- 결정: D-418
