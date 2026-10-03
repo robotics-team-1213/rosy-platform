@@ -276,7 +276,7 @@
 ## 최근 기록
 
 - 2026-10-04 · uncommitted · site(D-441): automatic site stack updates
-- 2026-10-04 · uncommitted · site(D-437): verifier accepts the containerd image ID form
-- 2026-10-03 · uncommitted · docs: D-436 change-scoped host test tiers
-- 2026-10-03 · uncommitted · docs: Fleet deployment preflight lessons
-- 2026-10-03 · uncommitted · site(D-437): security review fixes for CI-built site candidates
+- 2026-10-04 · uncommitted · docs(ui): D-432 공용 디자인과 설치 검증 마무리
+- 2026-10-04 · uncommitted · fix(integration): D-418 SSH와 D-432 연결/UI 계약 통합
+- 2026-10-04 · uncommitted · docs(adr): Pilot 화면별 개선과 공용 디자인 소유권
+- 2026-10-04 · uncommitted · fix(link): 현재 접속과 후속 코드 규약 구별
