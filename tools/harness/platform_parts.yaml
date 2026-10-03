@@ -4,7 +4,7 @@ schema: rosy.platform-parts.v1
 # colcon, rosdep, payload and image consumer reads this one line through
 # tools/harness/colcon_roots.py (stdlib-only, so keep it a one-line flow list).
 # Checked by test/architecture/test_colcon_roots.py.
-colcon_roots: [src, learning]
+colcon_roots: [src, learning, operations]
 
 # D-427 §6 "지금(C)" ownership manifest: every tracked source root maps to one
 # D-427 part. No folder moves; `d427_target` is where the root goes in step B.
@@ -324,9 +324,10 @@ roots:
     wave: "3a"
     import_prefix: [rosy_gateway]
     concern: other
-  - path: modules/world
+  - path: operations/world
     part: operations
     d427_target: operations/world
+    legacy: modules/world
     wave: "3a"
     import_prefix: [rosy.world]
     concern: other

@@ -18,7 +18,7 @@ components:
     path: src/products/omx/adapter/omx_adapter
     import_prefix: omx_adapter
   - name: world_api
-    path: modules/world/src/rosy/world/api
+    path: operations/world/src/rosy/world/api
     import_prefix: rosy.world.api
   - name: skill_contracts
     path: contracts/skill/src/rosy/contracts/skill
