@@ -4986,3 +4986,9 @@
 - 변경: train_job.py/job_state.py로 immutable 데이터→GPU→ONNX→strict intake→READY 단계를 연결했다. 입력·소스·단계 파일 SHA, 단일 작성자/GPU 잠금, 재시도 이력, terminal 품질 거절, 부분 복사와 accepted 이동 회복을 구현했다. 수집/검수/build와 watcher·로봇 전달은 별도다.
 - 증거: 신규 상태/READY 시험 Windows/native 10 passed, Windows handover 합계18 passed. 실제 모델 PC GPU 잠금 거절/재시도, seed42707 base8 mIoU0.4917 terminal reject 및 재실행 횟수 불변. seed42705 base16 ed0f9e71 lane0.724265/wall0.829824/mIoU0.518525 pass, canonical READY와 ONNX SHA 확인. 동일 job 재실행 각 attempt1 유지. 상세 training-job-2026-10-04.md.
 - gate 변화: SOURCE/LOCAL 실제 GPU→고정 평가→READY 및 재개 증거. 새 영상은 검수 초안이며 확장 클래스 추가 학습 아님. system timer·harvest부터의 자동 연결·새 후보 accepted/device shadow·rollback·OMX/SIM/Fleet·DEVICE/FIELD는 미완료.
+
+## 2026-10-04 · uncommitted · feat(learning): connect recording curation to resumable model jobs
+
+- 변경: recording_job.py가 선택적 harvest→출처 catalog→autolabel→store build→train_job을 연결한다. 평가 session 제외, SHA 재개 검사, 부분 라벨 attempt, parent/child job 결과를 기록한다. idle 우회 옵션을 받지 않고 기존 원본/catalog를 보존한다.
+- 증거: TDD로 중단/변조/heldout/identity/harvest CLI·재시도/parent READY를 검증하고 실제 합성 MP4→autolabel CLI→build 왕복을 실행했다. 필터 후 train1/val1, dataset15c6bd04. 상세 recording-job-2026-10-04.md. 모델 PC SSH 추가 인증이 필요해 실제 녹화의 전체 재실행은 대기한다.
+- gate 변화: SOURCE/LOCAL 앞단 연결 증거. 실제 장치 harvest·실데이터 전체 job·shadow/rollback·system timer·Episode/PolicyArtifact/OMX/Pinky/Fleet·DEVICE/FIELD는 미완료이며 목표active다.

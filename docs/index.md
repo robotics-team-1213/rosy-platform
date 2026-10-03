@@ -279,8 +279,8 @@
 
 ## 최근 기록
 
+- 2026-10-04 · uncommitted · feat(learning): connect recording curation to resumable model jobs
 - 2026-10-04 · uncommitted · feat(learning): resume GPU training through qualified READY
 - 2026-10-04 · uncommitted · verify(learning): prepare recorded-video labels and accept READY candidate
 - 2026-10-04 · uncommitted · verify(learning): compare baseline and lighting Dice model candidates
 - 2026-10-04 · uncommitted · feat(learning): compare supervised recipes and plan perception classes
-- 2026-10-04 · uncommitted · verify(learning): fixed evaluation and actual model PC inbox rejection
