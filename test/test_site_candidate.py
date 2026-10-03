@@ -190,3 +190,87 @@ def test_host_runbook_verifies_site_signature_before_docker_load():
     assert "/etc/rosy/site/trust/site-release-ed25519.pub.pem" in readme
     assert "separate from the Pinky runtime release key" in adr
     assert "| D-301 |" in adr_log
+
+
+def _fixture_repo(root: Path) -> None:
+    site = root / "deploy" / "site"
+    site.mkdir(parents=True)
+    for name in (*DEPLOY_FILES, "Dockerfile.fleet", "Dockerfile.vision", "Dockerfile.proxy"):
+        (site / name).write_text(f"fixture:{name}", encoding="utf-8")
+    (site / ".env.example").write_text("ROSY_SITE_IMAGE_TAG=local\n", encoding="utf-8")
+    for name in DOC_FILES:
+        (root / name).parent.mkdir(parents=True, exist_ok=True)
+        (root / name).write_text("fixture", encoding="utf-8")
+
+
+def _recording_runner(calls: list, *, ignored: str = ""):
+    def runner(args, **kwargs):
+        calls.append(list(args))
+        if args[:2] == ["git", "ls-files"]:
+            return SimpleNamespace(stdout=ignored)
+        if args[:3] == ["git", "rev-parse", "HEAD"]:
+            return SimpleNamespace(stdout=f"{COMMIT}\n")
+        if args[1:3] == ["image", "inspect"]:
+            return SimpleNamespace(stdout="sha256:" + "c" * 64 + "|linux|amd64\n")
+        if args[:2] == ["syft", "scan"]:
+            target = args[args.index("--output") + 1]
+            assert target.startswith("spdx-json=")
+            Path(target.removeprefix("spdx-json=")).write_text(
+                '{"spdxVersion": "SPDX-2.3"}', encoding="utf-8")
+        if args[1:3] == ["image", "save"]:
+            Path(args[args.index("--output") + 1]).write_bytes(b"docker-save-fixture")
+        return SimpleNamespace(stdout="")
+    return runner
+
+
+def test_site_candidate_syft_sbom_keeps_the_scout_file_layout(tmp_path):
+    root = tmp_path / "repo"
+    _fixture_repo(root)
+    calls: list = []
+
+    manifest = build_candidate(root, tmp_path / "release", runner=_recording_runner(calls),
+                               sbom_tool="syft")
+
+    syft_calls = [call for call in calls if call[0] == "syft"]
+    assert [call[2] for call in syft_calls] == [
+        f"docker:rosy-site-{service}:{COMMIT}" for service in ("fleet", "vision", "proxy")]
+    assert not any(call[1:2] == ["scout"] for call in calls)
+    for service, row in manifest["images"].items():
+        assert row["sbom"] == f"sbom/{service}.spdx"
+        assert (tmp_path / "release" / row["sbom"]).read_text(encoding="utf-8").startswith(
+            '{"spdxVersion"')
+
+
+def test_site_candidate_rejects_unknown_sbom_tool(tmp_path):
+    with pytest.raises(ValueError, match="unsupported SBOM tool"):
+        build_candidate(tmp_path / "repo", tmp_path / "release", runner=_recording_runner([]),
+                        sbom_tool="trivy")
+
+
+def test_site_candidate_refuses_ignored_secret_files_in_the_proxy_build_context(tmp_path):
+    root = tmp_path / "repo"
+    _fixture_repo(root)
+    calls: list = []
+    runner = _recording_runner(
+        calls, ignored="deploy/site/__pycache__/\ndeploy/site/secrets/discovery_token\n")
+
+    with pytest.raises(ValueError, match="secrets/discovery_token"):
+        build_candidate(root, tmp_path / "release", runner=runner)
+    assert not any(call[:2] == ["docker", "build"] for call in calls)
+
+    harmless = _recording_runner([], ignored="deploy/site/__pycache__/\n")
+    build_candidate(root, tmp_path / "release-ok", runner=harmless, sbom_tool="syft")
+
+
+def test_site_images_copy_only_public_repo_files():
+    root = Path(__file__).resolve().parents[1]
+    site = root / "deploy" / "site"
+    for name in ("Dockerfile.fleet", "Dockerfile.vision"):
+        for line in (site / name).read_text(encoding="utf-8").splitlines():
+            if line.split(" ", 1)[0] in {"COPY", "ADD"}:
+                assert "secrets" not in line and ".env" not in line, line
+        ignore = (site / f"{name}.dockerignore").read_text(encoding="utf-8").splitlines()
+        assert ignore[0] == "**"
+        assert not [rule for rule in ignore if "secrets" in rule or ".env" in rule]
+    proxy = (site / "Dockerfile.proxy").read_text(encoding="utf-8").splitlines()
+    assert not [line for line in proxy if line.split(" ", 1)[0] in {"COPY", "ADD"}]
