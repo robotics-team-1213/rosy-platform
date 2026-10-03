@@ -246,8 +246,12 @@ md("""
 """)
 code('''
 #@title 5c. (선택) W&B 실험 기록
+if globals().get("WANDB_RUN") is not None:   # 이 셀을 다시 실행: 앞 run을 먼저 닫는다
+    WANDB_RUN.finish()
 WANDB_RUN = WANDB_EXPERIMENT = None
 _key = None
+_skip = "USE_WANDB가 꺼져 있거나 Colab Secret WANDB_API_KEY가 없습니다"
+_env_key = "WANDB_API_KEY" in os.environ   # GPU PC에서 사용자가 둔 환경 변수는 지우지 않는다
 if USE_WANDB:
     try:
         from google.colab import userdata
@@ -261,18 +265,27 @@ if USE_WANDB:
 if _key:
     subprocess.run([sys.executable, "-m", "pip", "install", "-q", "wandb"], check=True)
     import wandb
-    os.environ["WANDB_API_KEY"] = _key   # 이 프로세스 안에서만; wandb.login()은 ~/.netrc에 키를 쓴다
+    # 키는 wandb.init 동안만 이 프로세스의 환경 변수에 둔다(wandb.login()은 ~/.netrc에 키를 쓴다).
+    # init이 끝나면(실패해도) 바로 지우므로, 뒤 셀에서 학습이나 내보내기가 멈춰도 키가 남지 않는다.
+    os.environ["WANDB_API_KEY"] = _key
     del _key
-    WANDB_RUN = wandb.init(project=WANDB_PROJECT, job_type="train", config={
-        "epochs": EPOCHS, "lr": LR, "batch": BATCH, "classes": EXPORT_CLASSES,
-        "preprocessing": PRE.manifest_kwargs(), "dataset": f"store:{DS_NAME}", "dataset_content_sha": DS_SHA,
-        "camera_profile_revision": CAMERA_PROFILE_REVISION, "repo_commit": REPO_COMMIT,
-        "trainer": TRAINER, "trainer_note": TRAINER_NOTE})
+    try:
+        WANDB_RUN = wandb.init(project=WANDB_PROJECT, job_type="train", config={
+            "epochs": EPOCHS, "lr": LR, "batch": BATCH, "classes": EXPORT_CLASSES,
+            "preprocessing": PRE.manifest_kwargs(), "dataset": f"store:{DS_NAME}", "dataset_content_sha": DS_SHA,
+            "camera_profile_revision": CAMERA_PROFILE_REVISION, "repo_commit": REPO_COMMIT,
+            "trainer": TRAINER, "trainer_note": TRAINER_NOTE})
+    except Exception as _exc:   # 네트워크, 잘못된 키 등: 기록 없이 학습한다
+        WANDB_RUN, _skip = None, f"wandb.init 실패: {type(_exc).__name__}"   # 메시지 본문은 출력하지 않는다
+    finally:
+        if not _env_key:
+            os.environ.pop("WANDB_API_KEY", None)
+if WANDB_RUN is not None:
     WANDB_EXPERIMENT = {"tracker": "wandb", "run_id": WANDB_RUN.id, "url": WANDB_RUN.url,
                         "project": WANDB_PROJECT}
     print("W&B run:", WANDB_RUN.url)
 else:
-    print("W&B 기록을 건너뜁니다 (USE_WANDB가 꺼져 있거나 Colab Secret WANDB_API_KEY가 없습니다). 학습은 그대로 진행합니다.")
+    print(f"W&B 기록을 건너뜁니다 ({_skip}). 학습은 그대로 진행합니다.")
 ''')
 
 md("""
@@ -333,7 +346,6 @@ if WANDB_RUN is not None:
         WANDB_RUN.summary[f"best_val_iou/{_k}"] = _v
     WANDB_RUN.finish()
     WANDB_RUN = None
-    os.environ.pop("WANDB_API_KEY", None)
 ''')
 
 md("""

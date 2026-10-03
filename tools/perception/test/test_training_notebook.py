@@ -125,6 +125,12 @@ def test_wandb_is_optional_and_the_key_stays_secret():
     assert "NotebookAccessError" in wb and "except ImportError" in wb
     assert 'os.environ.get("WANDB_API_KEY")' in wb and "wandb.init(" in wb
     assert "WANDB_RUN = WANDB_EXPERIMENT = None" in wb and "건너뜁니다" in wb
+    # a re-run closes the previous run; a failed init skips W&B; the key leaves the env after init
+    assert wb.index("WANDB_RUN.finish()") < wb.index("wandb.init(")
+    assert "except Exception as _exc" in wb and "type(_exc).__name__" in wb
+    assert "finally:" in wb and 'os.environ.pop("WANDB_API_KEY", None)' in wb
+    assert wb.index("finally:") > wb.index("wandb.init(")
+    assert not re.search(r"print\([^)]*_exc\)", wb) and "str(_exc)" not in wb
     assert "del _key" in wb and "wandb.login" not in wb.replace("wandb.login()은", "")
     for src in cells:  # the key is never printed or written out
         assert not re.search(r"print\([^)]*_key", src)

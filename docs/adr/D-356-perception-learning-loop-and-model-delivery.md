@@ -106,7 +106,9 @@ moving은 명령(|v| > 0.01 m/s 또는 |ω| > 0.05 rad/s)이 있거나, 프레�
 - 2단계 입력 칸에 `USE_WANDB`(기본 켜짐)와 `WANDB_PROJECT`(기본 `rosy-perception`)를 둔다. 5c단계가 Colab Secret
   `WANDB_API_KEY`(Colab 밖에서는 환경 변수)를 읽는다. 키가 없거나 꺼져 있으면 기록을 건너뛰고 학습은 그대로 진행한다.
 - 키는 Colab Secret 에만 둔다. 셀에 붙여 넣지 않는다(공개 저장소). 노트북은 키를 출력하지 않고 어떤 파일에도 쓰지 않는다:
-  `wandb.login()` 은 `~/.netrc` 에 키를 쓰므로 쓰지 않고, 그 런타임 프로세스의 환경 변수로만 넘긴 뒤 run 을 닫을 때 지운다.
+  `wandb.login()` 은 `~/.netrc` 에 키를 쓰므로 쓰지 않고, `wandb.init` 동안만 그 런타임 프로세스의 환경 변수에 두었다가
+  init 이 끝나면(실패해도) 바로 지운다(GPU PC 에서 사용자가 미리 둔 환경 변수는 그대로 둔다). init 이 실패하면 기록 없이
+  학습한다. 5c 를 다시 실행하면 앞 run 을 먼저 닫는다.
 - run 설정에는 에폭·학습률·배치·클래스·전처리, 데이터셋 이름과 내용 해시, `camera_profile_revision`, 저장소 commit, trainer,
   trainer 메모를 적는다. `train()` 의 `on_epoch` 훅(`rosy_lane_model.py`, wandb 를 import 하지 않는다)이 에폭마다 손실과
   클래스별 검증 IoU 를 넘긴다. 내보낸 뒤 run 요약에 가장 좋은 에폭·검증 IoU·`model_revision` 을 적고 run 을 닫는다.
