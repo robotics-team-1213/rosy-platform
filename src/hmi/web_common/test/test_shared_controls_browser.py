@@ -19,7 +19,7 @@ pytestmark = pytest.mark.skipif(
 SRC = Path(__file__).resolve().parents[3]
 COMMON = SRC / "hmi" / "web_common"
 DASHBOARD = SRC / "hmi" / "dashboard"
-FLEET = SRC / "site" / "fleet" / "fleet" / "server" / "web"
+FLEET = SRC.parent / "operations" / "fleet" / "fleet" / "server" / "web"
 HOST = "http://rosy.test"
 TYPES = {".css": "text/css", ".js": "application/javascript", ".html": "text/html"}
 BUTTON_PAGE = """<!doctype html><html lang="ko"><head><meta charset="utf-8">

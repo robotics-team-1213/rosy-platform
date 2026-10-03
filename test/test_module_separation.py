@@ -23,7 +23,7 @@ CODE_ROOTS = tuple(ROOT / root for root in colcon_roots())
 
 CORE = SRC / "gateway"
 CONTROL_PKG = SRC / "runtime" / "sensing" / "control"
-FLEET = SRC / "site" / "fleet"
+FLEET = SRC.parent / "operations" / "fleet"
 
 #: Other-domain tops that core production code must never import (S1).
 SLICE_TOPS = (

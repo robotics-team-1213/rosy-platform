@@ -176,6 +176,44 @@ def rewrite_join(text: str, patterns, mapping: dict[str, str]) -> tuple[str, int
     return text, count
 
 
+_SRC_VAR = re.compile(
+    r"""^[ \t]*([A-Z_][A-Z0-9_]*)[ \t]*(?::[^=\n]+)?=[ \t]*.*["']src["'][ \t]*\)?[ \t]*(?:#.*)?$""", re.M)
+
+
+def rewrite_srcvar(text: str, mapping: dict[str, str]) -> tuple[str, int]:
+    """(e) ``SRC / "site" / "fleet"`` where ``SRC`` names the repo's ``src/`` folder
+    (a constant assigned ``... "src"``, or named SRC/SRC_ROOT/SRC_DIR) becomes
+    ``SRC.parent / "operations" / "fleet"``. The legacy scanner cannot see this form."""
+    names = {m.group(1) for m in _SRC_VAR.finditer(text)}
+    names |= {n for n in ("SRC", "SRC_ROOT", "SRC_DIR") if re.search(rf"^[ \t]*{n}[ \t]*=", text, re.M)}
+    if not names:
+        return text, 0
+    count = 0
+    for old in sorted(mapping, key=len, reverse=True):
+        if not old.startswith("src/"):
+            continue
+        segs = old.split("/")[1:]
+        if not all(seg in text for seg in segs):
+            continue
+        body = "(" + "|".join(map(re.escape, sorted(names))) + r")(\s*/\s*)([\"'])"
+        body += f"({_SEPARATOR})".join(map(re.escape, segs))
+        pattern = re.compile(r"(?<![\w.])" + body + _END)
+
+        def repl(match: re.Match) -> str:
+            nonlocal count
+            name, op, quote = match.group(1), match.group(2), match.group(3)
+            seps = [g for g in match.groups()[3:]]
+            new = mapping[old].split("/")
+            need = len(new) - 1
+            if not seps:
+                seps = [f"{quote}{op}{quote}"]
+            new_seps = seps[len(seps) - need:] if need <= len(seps) else [seps[0]] * (need - len(seps)) + seps
+            count += 1
+            return f"{name}.parent{op}{quote}" + new[0] + "".join(s + g for s, g in zip(new_seps, new[1:]))
+        text = pattern.sub(repl, text)
+    return text, count
+
+
 def rewrite_relative(text: str, old_file: str, new_file: str, mapf, old_paths: set[str],
                      residue: list[str]) -> tuple[str, int]:
     if "../" not in text:
@@ -462,6 +500,8 @@ def run(wave: str, dry_run: bool) -> None:
             stats["slash"] += n
             new, n = rewrite_join(new, joins, new_path)
             stats["join"] += n
+            new, n = rewrite_srcvar(new, new_path)
+            stats["srcvar"] = stats.get("srcvar", 0) + n
         if moved and path.endswith(".py"):
             top = next(o for o in tops if under(old_file, o))
             new, n = rewrite_parents(new, old_file, path, top, new_path[top], residue)
@@ -486,7 +526,24 @@ def main() -> None:
     parser.add_argument("wave", nargs="?")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--report", action="store_true")
+    parser.add_argument("--srcvars", action="store_true",
+                        help="re-apply only the SRC-variable rewrite (e) for an already moved wave")
     args = parser.parse_args()
+    if args.srcvars:
+        mapping = {r["legacy"]: r["path"] for r in load_roots() if r.get("wave") == args.wave and r.get("legacy")}
+        changed = []
+        for path in tracked():
+            if not eligible(path, False):
+                continue
+            text = read(ROOT / path)
+            if text is None:
+                continue
+            new, n = rewrite_srcvar(text, mapping)
+            if n:
+                (ROOT / path).write_bytes(new.encode("utf-8"))
+                changed.append(path)
+                print(f"  srcvar x{n}: {path}")
+        return
     if args.report or not args.wave:
         report = residue_report()
         print(f"legacy residue: {len(report)}")

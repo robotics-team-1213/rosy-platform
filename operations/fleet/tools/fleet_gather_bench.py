@@ -23,9 +23,9 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import sys
 from pathlib import Path
 
-SRC = (Path(__file__).resolve().parents[3] / "src")
-for name in ("site/fleet", "contracts/foundation", "runtime/events", "runtime/services"):
-    path = SRC / name
+REPO = Path(__file__).resolve().parents[3]
+for name in ("operations/fleet", "src/contracts/foundation", "src/runtime/events", "src/runtime/services"):
+    path = REPO / name
     if str(path) not in sys.path:
         sys.path.insert(0, str(path))
 

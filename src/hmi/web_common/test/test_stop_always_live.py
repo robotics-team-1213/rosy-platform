@@ -11,13 +11,13 @@ import os
 import re
 from pathlib import Path
 
-SRC = Path(__file__).resolve().parents[3]
-#: D-427 wave 3b: Rosy Games left src/ for operations/; scan both.
-PAGE_ROOTS = (SRC, SRC.parent / "operations")
+REPO = Path(__file__).resolve().parents[4]  # repository root (D-427: keys are repo-relative)
+#: D-427: product pages live under these part roots while src/ empties.
+PAGE_ROOTS = tuple(REPO / name for name in ("src", "operations", "middleware", "shared") if (REPO / name).is_dir())
 
 
 def _rel(path: Path) -> str:
-    return Path(os.path.relpath(path, SRC)).as_posix()
+    return Path(os.path.relpath(path, REPO)).as_posix()
 UI_SCRIPT = 'src="/common/ui.js"'
 
 
@@ -72,14 +72,14 @@ def test_every_stop_on_a_ui_js_page_is_always_live():
                 offenders.append(f"{_rel(path)}:{line}")
     assert offenders == [], f"정지 컨트롤에 data-always-live가 없다(대화상자가 열리면 막힌다): {offenders}"
     names = {_rel(path) for path, _ in pages}
-    for page in ("hmi/dashboard/surface.html", "hmi/dashboard/index.html", "site/fleet/fleet/server/web/index.html"):
+    for page in ("src/hmi/dashboard/surface.html", "src/hmi/dashboard/index.html", "operations/fleet/fleet/server/web/index.html"):
         assert page in names, f"스캔이 {page}를 놓쳤다"
     assert stops >= 6, "셸·옛 대시보드·Fleet·게임·진단 정지를 모두 센다"
 
 
 def test_the_scan_fires_when_the_attribute_is_removed():
     """Mutation proof on the real shell markup."""
-    shell = (SRC / "hmi" / "dashboard" / "surface.html").read_text(encoding="utf-8")
+    shell = (REPO / "src" / "hmi" / "dashboard" / "surface.html").read_text(encoding="utf-8")
     assert stops_in(shell) == [(25, True)]
     stripped = shell.replace(" data-always-live", "")
     assert stops_in(stripped) == [(25, False)]
@@ -91,11 +91,11 @@ def test_the_scan_fires_when_the_attribute_is_removed():
 # (2026-09-30 US-010, 2026-10-01 Fleet 등록 대화상자). 대화상자는 ui.js openLiveDialog로 연다.
 SHOW_MODAL = re.compile(r"""\.\s*showModal\s*\(|\[\s*["']showModal["']\s*\]""")
 WEB_SCRIPT_ROOTS = (
-    SRC / "hmi" / "dashboard",
-    SRC / "hmi" / "web_common",
-    SRC / "hmi" / "pilot",
-    SRC / "site" / "fleet" / "fleet" / "server" / "web",
-    SRC.parent / "operations" / "apps" / "games" / "games" / "web",
+    REPO / "src" / "hmi" / "dashboard",
+    REPO / "src" / "hmi" / "web_common",
+    REPO / "src" / "hmi" / "pilot",
+    REPO / "operations" / "fleet" / "fleet" / "server" / "web",
+    REPO / "operations" / "apps" / "games" / "games" / "web",
 )
 
 
@@ -116,9 +116,9 @@ def test_no_surface_script_opens_a_modal_dialog():
                  for match in SHOW_MODAL.finditer(text)]
     assert offenders == [], f"showModal()은 정지를 inert로 만든다 — ui.js openLiveDialog를 쓴다: {offenders}"
     names = {_rel(path) for path in scripts}
-    for script in ("site/fleet/fleet/server/web/enrollment.js", "site/fleet/fleet/server/web/camera-pairing.js",
-                   "hmi/web_common/ui.js", "hmi/pilot/app.js",
-                   "hmi/dashboard/settings.js", "../operations/apps/games/games/web/board.js"):
+    for script in ("operations/fleet/fleet/server/web/enrollment.js", "operations/fleet/fleet/server/web/camera-pairing.js",
+                   "src/hmi/web_common/ui.js", "src/hmi/pilot/app.js",
+                   "src/hmi/dashboard/settings.js", "operations/apps/games/games/web/board.js"):
         assert script in names, f"스캔이 {script}를 놓쳤다"
 
 

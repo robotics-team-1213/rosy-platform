@@ -10,22 +10,26 @@ import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-SRC = ROOT / "src"
+
 BACKLOG = Path(__file__).with_name("robot_literal_backlog.txt")
 PATTERN = re.compile(r"pinky", re.IGNORECASE)
 SUFFIXES = {".py", ".yaml", ".yml", ".xml", ".xacro", ".urdf", ".sdf", ".world", ".cpp", ".hpp", ".json"}
 SKIP_PARTS = {"test", "tests", "build", "install", "log", "__pycache__"}
-HOME_PREFIXES = ("products/pinky_pro/",)
+#: D-427: repo-relative. The Pinky family before (src/products/pinky_pro) and after wave 4c.
+HOME_PREFIXES = ("src/products/pinky_pro/", "middleware/apps/device/pinky/bringup/",
+                 "middleware/apps/device/pinky/profile/", "middleware/drivers/pinky_adc/",
+                 "middleware/drivers/pinky_lamp/", "middleware/drivers/pinky_led/")
+#: D-427: product code leaves src/ for these part roots (learning is out of scope).
+SCAN_ROOTS = ("src", "operations", "middleware", "contracts", "shared", "integrations")
 
 
 def hits() -> set:
     found = set()
-    # D-427 wave 3b: site apps left src/ for operations/; their keys are repo-relative.
-    for path in [*SRC.rglob("*"), *(ROOT / "operations").rglob("*")]:
+    for path in (path for root in SCAN_ROOTS for path in (ROOT / root).rglob("*")):
         if not path.is_file() or path.suffix not in SUFFIXES:
             continue
-        rel = path.relative_to(SRC if path.is_relative_to(SRC) else ROOT)
-        if any(part in SKIP_PARTS or part.startswith(".") for part in rel.parts):
+        rel = path.relative_to(ROOT)
+        if any(part in SKIP_PARTS or part.startswith(".") for part in rel.parts[1:]):
             continue
         key = rel.as_posix()
         if key.startswith(HOME_PREFIXES):

@@ -13,13 +13,13 @@ import pytest
 import surface_registry as registry
 import token_themes
 
-ROOT = Path(__file__).resolve().parents[3]
+ROOT = Path(__file__).resolve().parents[4]  # repository root (D-427: keys are repo-relative)
 COMMON = Path(__file__).parent.parent
 COMPONENTS = COMMON / "components.css"
 UI = COMMON / "ui.js"
 TOKENS = COMMON / "tokens.css"
-FACE = ROOT / "hmi" / "face" / "emotion" / "info_screen.py"
-PITCH = ROOT.parent / "operations" / "apps" / "games" / "games" / "web" / "styles.css"
+FACE = ROOT / "src" / "hmi" / "face" / "emotion" / "info_screen.py"
+PITCH = ROOT / "operations" / "apps" / "games" / "games" / "web" / "styles.css"
 
 # 표면 목록은 src/hmi/web_common/surfaces.yaml 한 곳에서만 읽는다 (D-329 Decision 1).
 STYLE_SUFFIXES = {".css", ".html", ".js"}
@@ -101,14 +101,14 @@ def test_shared_status_component_owns_accessibility_and_palette_states():
 
 
 def test_role_recovery_panels_use_shared_status_component():
-    console_map = (ROOT / "hmi" / "dashboard" / "panels" / "console" / "map.js").read_text(encoding="utf-8")
-    host_operations = (ROOT / "hmi" / "dashboard" / "panels" / "host" / "operations.js").read_text(encoding="utf-8")
+    console_map = (ROOT / "src" / "hmi" / "dashboard" / "panels" / "console" / "map.js").read_text(encoding="utf-8")
+    host_operations = (ROOT / "src" / "hmi" / "dashboard" / "panels" / "host" / "operations.js").read_text(encoding="utf-8")
     assert 'el("ui-status"' in console_map
     assert 'el("ui-status"' in host_operations
 
 
 def test_role_live_announcements_use_shared_status_component():
-    panels = ROOT / "hmi" / "dashboard" / "panels"
+    panels = ROOT / "src" / "hmi" / "dashboard" / "panels"
     owners = (
         "console/camera.js", "console/docking.js", "console/line-follow.js",
         "console/mode.js", "console/teleop.js", "host/system.js",
@@ -123,7 +123,7 @@ def test_role_live_announcements_use_shared_status_component():
 
 def test_selected_action_tabs_use_shared_segment_palette():
     css = COMPONENTS.read_text(encoding="utf-8")
-    shell_css = (ROOT / "hmi" / "dashboard" / "shell" / "shell.css").read_text(encoding="utf-8")
+    shell_css = (ROOT / "src" / "hmi" / "dashboard" / "shell" / "shell.css").read_text(encoding="utf-8")
     assert 'ui-button[kind="segment"][aria-selected="true"]' in css
     assert ".action-group-tabs ui-button[aria-selected" not in shell_css
 
@@ -138,7 +138,7 @@ def test_buttons_and_action_groups_use_shared_size_and_layout_tokens():
         assert f"min-height: var(--{token})" in css
     assert "ui-actions" in script and "ui-actions" in css
     assert "gap: var(--gap-actions)" in css[css.index("ui-actions {"):]
-    dashboard = ROOT / "hmi" / "dashboard" / "panels"
+    dashboard = ROOT / "src" / "hmi" / "dashboard" / "panels"
     owners = ("console/docking.js", "console/mode.js", "console/map.js", "host/operations.js", "setup/localization.js")
     for owner in owners:
         source = (dashboard / owner).read_text(encoding="utf-8")
@@ -152,7 +152,7 @@ def test_buttons_and_action_groups_use_shared_size_and_layout_tokens():
 
 def test_role_forms_use_shared_responsive_layout_and_field_labels():
     css = COMPONENTS.read_text(encoding="utf-8")
-    panel_css = (ROOT / "hmi" / "dashboard" / "panels" / "surface-panels.css").read_text(encoding="utf-8")
+    panel_css = (ROOT / "src" / "hmi" / "dashboard" / "panels" / "surface-panels.css").read_text(encoding="utf-8")
     layout = re.search(r"\.ui-form\s*\{([^}]*)\}", css)
     field = re.search(r"\.ui-field-label\s*\{([^}]*)\}", css)
     assert layout and "display: flex" in layout.group(1)
@@ -166,7 +166,7 @@ def test_role_forms_use_shared_responsive_layout_and_field_labels():
     assert ".surface-inline-form" not in panel_css
     assert ".surface-field" not in panel_css
 
-    panels = ROOT / "hmi" / "dashboard" / "panels"
+    panels = ROOT / "src" / "hmi" / "dashboard" / "panels"
     sources = [path.read_text(encoding="utf-8") for path in panels.rglob("*.js")]
     role_forms = "\n".join(sources)
     assert 'el("form", "ui-form")' in role_forms
@@ -178,7 +178,7 @@ def test_role_forms_use_shared_responsive_layout_and_field_labels():
 
 def test_role_readouts_use_a_shared_semantic_definition_list_layout():
     css = COMPONENTS.read_text(encoding="utf-8")
-    panel_css = (ROOT / "hmi" / "dashboard" / "panels" / "surface-panels.css").read_text(encoding="utf-8")
+    panel_css = (ROOT / "src" / "hmi" / "dashboard" / "panels" / "surface-panels.css").read_text(encoding="utf-8")
     readout = re.search(r"\.ui-readout\s*\{([^}]*)\}", css)
     assert readout and "display: grid" in readout.group(1)
     assert "grid-template-columns: minmax(7rem, 1fr) 2fr" in readout.group(1)
@@ -188,13 +188,13 @@ def test_role_readouts_use_a_shared_semantic_definition_list_layout():
     assert ".surface-readout" not in panel_css
     assert ".surface-readout" not in "\n".join(
         path.read_text(encoding="utf-8")
-        for path in (ROOT / "hmi" / "dashboard" / "panels").rglob("*.js")
+        for path in (ROOT / "src" / "hmi" / "dashboard" / "panels").rglob("*.js")
     )
 
 
 def test_role_readback_sections_use_shared_layout_primitives():
     css = COMPONENTS.read_text(encoding="utf-8")
-    panel_css = (ROOT / "hmi" / "dashboard" / "panels" / "surface-panels.css").read_text(encoding="utf-8")
+    panel_css = (ROOT / "src" / "hmi" / "dashboard" / "panels" / "surface-panels.css").read_text(encoding="utf-8")
     section = re.search(r"\.ui-readback\s*\{([^}]*)\}", css)
     assert section and "min-width: 0" in section.group(1)
     assert "display: grid" in section.group(1)
@@ -206,7 +206,7 @@ def test_role_readback_sections_use_shared_layout_primitives():
     assert ".surface-readback" not in panel_css
     panel_source = "\n".join(
         path.read_text(encoding="utf-8")
-        for path in (ROOT / "hmi" / "dashboard" / "panels").rglob("*.js")
+        for path in (ROOT / "src" / "hmi" / "dashboard" / "panels").rglob("*.js")
     )
     assert ".surface-readback" not in panel_source
     assert 'el("section", "ui-readback")' in panel_source
@@ -389,7 +389,7 @@ def test_measure_comes_from_the_scale():
 
 def test_diagnostic_palette_matches_the_token_hex():
     tokens = _dark_tokens()
-    page = (ROOT / "runtime" / "sensing" / "web" / "diagnostic.html").read_text(encoding="utf-8")
+    page = (ROOT / "src" / "runtime" / "sensing" / "web" / "diagnostic.html").read_text(encoding="utf-8")
     declared = dict(re.findall(r"--([a-z0-9-]+):\s*#([0-9a-fA-F]{6})", page))
     mismatch = []
     for local, token in _DIAGNOSTIC_TWINS.items():
@@ -584,8 +584,8 @@ DISABLE_SITE = re.compile(
 REASON_WRITE = re.compile(r"""(?:set|remove)Attribute\(\s*["']reason["']""")
 REASON_HELPER = re.compile(r"\b(setOff|setEnabled)\(")
 DISABLE_ROOTS = (
-    ROOT / "hmi" / "dashboard",
-    ROOT / "site" / "fleet" / "fleet" / "server" / "web",
+    ROOT / "src" / "hmi" / "dashboard",
+    ROOT / "operations" / "fleet" / "fleet" / "server" / "web",
 )
 # D-359 §5.3 — 사유 없이 끄는 곳의 닫힌 목록. (src/ 기준 경로, 줄 조각) → 이유. 새 항목은 이유를 적는다.
 # 키는 경로로 파일을 가리키고(같은 이름 파일이 여러 폴더에 있다), 조각 하나는 한 곳만 덮는다(DISABLED_SITE_COUNT).
@@ -594,55 +594,55 @@ INITIAL = "첫 readback 전 초기값 — 같은 파일의 sync 함수가 첫 �
 NATIVE = "네이티브 option/select/fieldset/checkbox — 사유를 그릴 자리가 없고, 곁의 상태 문구·태그가 까닭을 말한다"
 NOTE = "공용 보이는 안내(ui-status/p)가 aria-describedby로 이 버튼들에 이어져 사유를 말한다"
 DISABLED_WITHOUT_REASON = {
-    ("hmi/dashboard/app.js", 'elements["code-submit"].disabled = true;'): TRANSIENT,
-    ("hmi/dashboard/app.js", 'elements["code-submit"].disabled = false;'): TRANSIENT,
-    ("hmi/dashboard/telemetry.js", 'setEnabled("traffic-policy-stage", !trafficPolicyPending);'): TRANSIENT,
-    ("hmi/dashboard/app.js", 'setEnabled("hardware-refresh", false);'): TRANSIENT + " (장치 점검 요청)",
-    ("hmi/dashboard/app.js", "button.disabled = true;"): TRANSIENT + " (장치 시험 요청)",
-    ("hmi/dashboard/app.js", "button.disabled = false;"): TRANSIENT + " (장치 시험 실패 뒤 복구)",
-    ("hmi/dashboard/panels/console/camera.js", "button.disabled = true;"): TRANSIENT,
-    ("hmi/dashboard/panels/console/camera.js", "finally { button.disabled = false; }"): TRANSIENT,
-    ("hmi/dashboard/panels/console/camera.js", "option.disabled = true;"): NATIVE,
-    ("hmi/dashboard/panels/console/camera.js", "storage.disabled = state.recording || state.uploading;"): NATIVE,
-    ("hmi/dashboard/panels/console/docking.js", 'dock.type = "button"; dock.disabled = true;'): INITIAL,
-    ("hmi/dashboard/panels/console/docking.js", "select.disabled = locked || !hasDocks;"): NATIVE,
-    ("hmi/dashboard/panels/console/map.js", "button.disabled = !enabled;"): NOTE + " (#map-action-reason)",
-    ("hmi/dashboard/panels/console/mode.js", "button.dataset.mode = mode.id; button.disabled = true;"): INITIAL,
-    ("hmi/dashboard/panels/console/teleop.js", "button.disabled = true;"): INITIAL,
-    ("hmi/dashboard/panels/console/teleop.js", "button.disabled = !can && button !== activeButton;"): NOTE + " (readinessStatus)",
-    ("hmi/dashboard/panels/console/teleop.js", "button.disabled = !eligible();"): NOTE + " (readinessStatus)",
-    ("hmi/dashboard/panels/host/hardware.js", "refresh.disabled = true;"): TRANSIENT,
-    ("hmi/dashboard/panels/host/operations.js", "rollback.disabled = clearHold.disabled = true;"): INITIAL,
-    ("hmi/dashboard/panels/host/system.js", "identitySave.disabled = true;"): TRANSIENT,
-    ("hmi/dashboard/panels/host/system.js", "identityInput.disabled = true;"): TRANSIENT,
-    ("hmi/dashboard/panels/host/system.js", "identitySave.disabled = false;"): TRANSIENT,
-    ("hmi/dashboard/panels/host/system.js", "identityInput.disabled = false;"): TRANSIENT,
-    ("hmi/dashboard/panels/setup/dock-admin.js", "add.disabled = true;"): INITIAL,
-    ("hmi/dashboard/panels/setup/dock-admin.js", "add.disabled = pending || blockers.length > 0;"): NOTE + " (gate — 막는 까닭 목록)",
-    ("hmi/dashboard/panels/setup/dock-admin.js", "remove.disabled = deleting;"): TRANSIENT + " (글자가 '삭제 중…')",
-    ("hmi/dashboard/panels/setup/traffic-policy.js", 'apply.type = "button"; apply.disabled = true;'): INITIAL,
-    ("hmi/dashboard/panels/setup/traffic-policy.js", "button.dataset.signal = colour; button.disabled = true;"): INITIAL,
-    ("hmi/dashboard/panels/setup/traffic-policy.js", "pending = true; stage.disabled = true;"): TRANSIENT,
-    ("hmi/dashboard/panels/setup/traffic-policy.js", "pending = true; apply.disabled = true;"): TRANSIENT,
-    ("hmi/dashboard/panels/setup/traffic-policy.js", "pending = true; button.disabled = true;"): TRANSIENT,
-    ("hmi/dashboard/panels/setup/waypoints.js", "save.disabled = true;"): INITIAL + " / " + TRANSIENT,
-    ("hmi/dashboard/panels/system/security.js", "add.disabled = tokenMutationPending;"): TRANSIENT,
-    ("hmi/dashboard/panels/system/security.js", "control.disabled = safetyPending;"): TRANSIENT,
-    ("hmi/dashboard/shell/mount.js", "tab.disabled = true;"): TRANSIENT + " (조작 묶음 전환 중)",
-    ("hmi/dashboard/shell/mount.js", "tab.disabled = false;"): TRANSIENT + " (전환 끝 복구)",
-    ("hmi/dashboard/status-summary.js", "toggle.disabled = items.length === 0;"): "버튼 글자가 이미 '할 일 0'이라고 말한다",
-    ("site/fleet/fleet/server/web/enrollment.js", 'el("enroll-submit").disabled = true;'): TRANSIENT + " (등록 요청)",
-    ("site/fleet/fleet/server/web/formation.js", 'querySelectorAll("input").forEach((i) => { i.disabled = status.active; });'):
+    ("src/hmi/dashboard/app.js", 'elements["code-submit"].disabled = true;'): TRANSIENT,
+    ("src/hmi/dashboard/app.js", 'elements["code-submit"].disabled = false;'): TRANSIENT,
+    ("src/hmi/dashboard/telemetry.js", 'setEnabled("traffic-policy-stage", !trafficPolicyPending);'): TRANSIENT,
+    ("src/hmi/dashboard/app.js", 'setEnabled("hardware-refresh", false);'): TRANSIENT + " (장치 점검 요청)",
+    ("src/hmi/dashboard/app.js", "button.disabled = true;"): TRANSIENT + " (장치 시험 요청)",
+    ("src/hmi/dashboard/app.js", "button.disabled = false;"): TRANSIENT + " (장치 시험 실패 뒤 복구)",
+    ("src/hmi/dashboard/panels/console/camera.js", "button.disabled = true;"): TRANSIENT,
+    ("src/hmi/dashboard/panels/console/camera.js", "finally { button.disabled = false; }"): TRANSIENT,
+    ("src/hmi/dashboard/panels/console/camera.js", "option.disabled = true;"): NATIVE,
+    ("src/hmi/dashboard/panels/console/camera.js", "storage.disabled = state.recording || state.uploading;"): NATIVE,
+    ("src/hmi/dashboard/panels/console/docking.js", 'dock.type = "button"; dock.disabled = true;'): INITIAL,
+    ("src/hmi/dashboard/panels/console/docking.js", "select.disabled = locked || !hasDocks;"): NATIVE,
+    ("src/hmi/dashboard/panels/console/map.js", "button.disabled = !enabled;"): NOTE + " (#map-action-reason)",
+    ("src/hmi/dashboard/panels/console/mode.js", "button.dataset.mode = mode.id; button.disabled = true;"): INITIAL,
+    ("src/hmi/dashboard/panels/console/teleop.js", "button.disabled = true;"): INITIAL,
+    ("src/hmi/dashboard/panels/console/teleop.js", "button.disabled = !can && button !== activeButton;"): NOTE + " (readinessStatus)",
+    ("src/hmi/dashboard/panels/console/teleop.js", "button.disabled = !eligible();"): NOTE + " (readinessStatus)",
+    ("src/hmi/dashboard/panels/host/hardware.js", "refresh.disabled = true;"): TRANSIENT,
+    ("src/hmi/dashboard/panels/host/operations.js", "rollback.disabled = clearHold.disabled = true;"): INITIAL,
+    ("src/hmi/dashboard/panels/host/system.js", "identitySave.disabled = true;"): TRANSIENT,
+    ("src/hmi/dashboard/panels/host/system.js", "identityInput.disabled = true;"): TRANSIENT,
+    ("src/hmi/dashboard/panels/host/system.js", "identitySave.disabled = false;"): TRANSIENT,
+    ("src/hmi/dashboard/panels/host/system.js", "identityInput.disabled = false;"): TRANSIENT,
+    ("src/hmi/dashboard/panels/setup/dock-admin.js", "add.disabled = true;"): INITIAL,
+    ("src/hmi/dashboard/panels/setup/dock-admin.js", "add.disabled = pending || blockers.length > 0;"): NOTE + " (gate — 막는 까닭 목록)",
+    ("src/hmi/dashboard/panels/setup/dock-admin.js", "remove.disabled = deleting;"): TRANSIENT + " (글자가 '삭제 중…')",
+    ("src/hmi/dashboard/panels/setup/traffic-policy.js", 'apply.type = "button"; apply.disabled = true;'): INITIAL,
+    ("src/hmi/dashboard/panels/setup/traffic-policy.js", "button.dataset.signal = colour; button.disabled = true;"): INITIAL,
+    ("src/hmi/dashboard/panels/setup/traffic-policy.js", "pending = true; stage.disabled = true;"): TRANSIENT,
+    ("src/hmi/dashboard/panels/setup/traffic-policy.js", "pending = true; apply.disabled = true;"): TRANSIENT,
+    ("src/hmi/dashboard/panels/setup/traffic-policy.js", "pending = true; button.disabled = true;"): TRANSIENT,
+    ("src/hmi/dashboard/panels/setup/waypoints.js", "save.disabled = true;"): INITIAL + " / " + TRANSIENT,
+    ("src/hmi/dashboard/panels/system/security.js", "add.disabled = tokenMutationPending;"): TRANSIENT,
+    ("src/hmi/dashboard/panels/system/security.js", "control.disabled = safetyPending;"): TRANSIENT,
+    ("src/hmi/dashboard/shell/mount.js", "tab.disabled = true;"): TRANSIENT + " (조작 묶음 전환 중)",
+    ("src/hmi/dashboard/shell/mount.js", "tab.disabled = false;"): TRANSIENT + " (전환 끝 복구)",
+    ("src/hmi/dashboard/status-summary.js", "toggle.disabled = items.length === 0;"): "버튼 글자가 이미 '할 일 0'이라고 말한다",
+    ("operations/fleet/fleet/server/web/enrollment.js", 'el("enroll-submit").disabled = true;'): TRANSIENT + " (등록 요청)",
+    ("operations/fleet/fleet/server/web/formation.js", 'querySelectorAll("input").forEach((i) => { i.disabled = status.active; });'):
         NATIVE + " (대형 상태 태그 RUNNING/HOLDING — 해제 뒤 바꾼다)",
-    ("site/fleet/fleet/server/web/vision-view.js", "fieldset.disabled = !source;"): NATIVE + " (vision-state 태그)",
-    ("site/fleet/fleet/server/web/vision-view.js", "select.disabled = result.sources.length === 0;"): NATIVE + " (vision-state 태그)",
-    ("site/fleet/fleet/server/web/vision-view.js", "select.disabled = true;"): NATIVE + " (vision-state 태그)",
+    ("operations/fleet/fleet/server/web/vision-view.js", "fieldset.disabled = !source;"): NATIVE + " (vision-state 태그)",
+    ("operations/fleet/fleet/server/web/vision-view.js", "select.disabled = result.sources.length === 0;"): NATIVE + " (vision-state 태그)",
+    ("operations/fleet/fleet/server/web/vision-view.js", "select.disabled = true;"): NATIVE + " (vision-state 태그)",
 }
 #: Keys that cover more than one site on purpose. Every other key covers exactly one,
 #: so an identical line added elsewhere in the same file is a new unexplained site.
 DISABLED_SITE_COUNT = {
-    ("hmi/dashboard/app.js", 'elements["code-submit"].disabled = false;'): 2,  # 성공·실패 두 갈래의 복구
-    ("hmi/dashboard/panels/setup/waypoints.js", "save.disabled = true;"): 2,  # 초기값과 요청 중 잠금
+    ("src/hmi/dashboard/app.js", 'elements["code-submit"].disabled = false;'): 2,  # 성공·실패 두 갈래의 복구
+    ("src/hmi/dashboard/panels/setup/waypoints.js", "save.disabled = true;"): 2,  # 초기값과 요청 중 잠금
 }
 
 
@@ -709,7 +709,7 @@ def test_every_disabled_control_states_its_reason_or_is_listed():
     """D-359 §5.3 — 끄는 곳은 reason을 쓰거나(직접·setOff·setEnabled), 닫힌 목록에 이유와 함께 있다."""
     missing, used, widened = scan_disabled(disabled_scripts())
     # Fleet 역할 잠금: 공용 버튼은 reason, 네이티브 입력은 묶음의 보이는 안내에 잇는다.
-    fleet = ROOT / "site" / "fleet" / "fleet" / "server" / "web"
+    fleet = ROOT / "operations" / "fleet" / "fleet" / "server" / "web"
     lock = (fleet / "authorization.js").read_text(encoding="utf-8")
     assert 'setAttribute("reason", OPERATOR_REASON)' in lock
     assert ".role-lock-note" in lock and "aria-describedby" in lock
@@ -730,13 +730,13 @@ def test_every_disabled_control_states_its_reason_or_is_listed():
 def test_a_copied_disabled_line_needs_its_own_entry():
     """Mutation proof (P2-4 review): an identical unexplained line elsewhere no longer rides an old key."""
     scripts = dict(disabled_scripts())
-    rel = "hmi/dashboard/panels/host/hardware.js"
+    rel = "src/hmi/dashboard/panels/host/hardware.js"
     assert "refresh.disabled = true;" in scripts[rel]
     assert scan_disabled([(rel, scripts[rel])])[2] == {}
     copied = scripts[rel] + "\nfunction later(refresh) {\n  refresh.disabled = true;\n}\n"
     assert scan_disabled([(rel, copied)])[2] == {(rel, "refresh.disabled = true;"): 2}
     # same file name in another folder does not borrow the key either
-    other = "hmi/dashboard/panels/setup/hardware.js"
+    other = "src/hmi/dashboard/panels/setup/hardware.js"
     assert scan_disabled([(other, "refresh.disabled = true;\n")])[0] == ["hardware.js:1 refresh.disabled = true;"]
 
 

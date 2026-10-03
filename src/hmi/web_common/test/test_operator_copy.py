@@ -36,23 +36,23 @@ import re
 
 import pytest
 
-SRC = Path(__file__).resolve().parents[3]
+REPO = Path(__file__).resolve().parents[4]  # repository root (D-427: keys are repo-relative)
 
 
 def _rel(path: Path) -> str:
     """Path relative to src/; Rosy Games left src/ for operations/ (D-427 wave 3b)."""
-    return Path(os.path.relpath(path, SRC)).as_posix()
+    return Path(os.path.relpath(path, REPO)).as_posix()
 
 
 SURFACES = (
-    ("hmi/dashboard", "*.js"),
-    ("hmi/dashboard/panels", "**/*.js"),
-    ("hmi/dashboard", "index.html"),
-    ("hmi/dashboard", "surface.html"),
-    ("site/fleet/fleet/server/web", "*.js"),
-    ("site/fleet/fleet/server/web", "*.html"),
-    ("../operations/apps/games/games/web", "*.js"),
-    ("../operations/apps/games/games/web", "*.html"),
+    ("src/hmi/dashboard", "*.js"),
+    ("src/hmi/dashboard/panels", "**/*.js"),
+    ("src/hmi/dashboard", "index.html"),
+    ("src/hmi/dashboard", "surface.html"),
+    ("operations/fleet/fleet/server/web", "*.js"),
+    ("operations/fleet/fleet/server/web", "*.html"),
+    ("operations/apps/games/games/web", "*.js"),
+    ("operations/apps/games/games/web", "*.html"),
 )
 
 HANGUL = re.compile(r"[가-힣]")
@@ -197,7 +197,7 @@ def _copy(path: Path) -> list[tuple[int, str]]:
 def surface_files() -> list[Path]:
     files: set[Path] = set()
     for folder, pattern in SURFACES:
-        files.update(path for path in (SRC / folder).glob(pattern) if path.is_file())
+        files.update(path for path in (REPO / folder).glob(pattern) if path.is_file())
     return sorted(files)
 
 
@@ -368,15 +368,15 @@ def test_the_lint_catches_bare_enums_flowing_to_text():
 
 
 @pytest.mark.parametrize(("rel", "fixed", "regressed"), [
-    ("site/fleet/fleet/server/web/roster.js", ': "오프라인",', ': "OFFLINE",'),
-    ("hmi/dashboard/app.js", "`${enumLabel(MODE_LABEL, requestedMode)} 모드로", "`${requestedMode} 모드로"),
-    ("hmi/dashboard/settings.js", "상태 ${enumLabel(DOCK_STATE_LABEL, state)}", "상태 ${state}"),
-    ("hmi/dashboard/panels/console/line-follow.js",
+    ("operations/fleet/fleet/server/web/roster.js", ': "오프라인",', ': "OFFLINE",'),
+    ("src/hmi/dashboard/app.js", "`${enumLabel(MODE_LABEL, requestedMode)} 모드로", "`${requestedMode} 모드로"),
+    ("src/hmi/dashboard/settings.js", "상태 ${enumLabel(DOCK_STATE_LABEL, state)}", "상태 ${state}"),
+    ("src/hmi/dashboard/panels/console/line-follow.js",
      '`차선 추종 ${enumLabel(LINE_MODE_LABEL, current.mode || "OFF")}`', '`차선 추종 ${current.mode || "OFF"}`'),
 ])
 def test_reverting_an_enum_text_fix_fails_the_lint(rel, fixed, regressed):
     """Mutation proof on the real files: undo one P1-1/P2-2 fix and the lint sees it."""
-    source = (SRC / rel).read_text(encoding="utf-8-sig")
+    source = (REPO / rel).read_text(encoding="utf-8-sig")
     assert fixed in source
     assert _enum_text_unallowed(rel, source) == []
     assert _enum_text_unallowed(rel, source.replace(fixed, regressed, 1)) != []
@@ -384,15 +384,15 @@ def test_reverting_an_enum_text_fix_fails_the_lint(rel, fixed, regressed):
 
 #: (path relative to src/, exact flagged hole or literal) -> reason. Stale entries fail.
 ENUM_TEXT_ALLOWLIST: dict[tuple[str, str], str] = {
-    ("hmi/dashboard/panels/console/teleop.js", "${readErrors.state}"):
+    ("src/hmi/dashboard/panels/console/teleop.js", "${readErrors.state}"):
         "an error message keyed by the state endpoint, not a state value",
-    ("hmi/dashboard/panels/host/operations.js", '${data.runtime_mode || "실행 모드 미확인"}'):
+    ("src/hmi/dashboard/panels/host/operations.js", '${data.runtime_mode || "실행 모드 미확인"}'):
         "runtime mode names core/motor/hardware are the CONCEPTS.md glossary preset names",
-    ("hmi/dashboard/panels/host/system.js", '${data.runtime_mode || "확인 불가"}'):
+    ("src/hmi/dashboard/panels/host/system.js", '${data.runtime_mode || "확인 불가"}'):
         "runtime mode names core/motor/hardware are the CONCEPTS.md glossary preset names",
-    ("hmi/dashboard/panels/host/operations.js", '${data.state || "상태 미확인"}'):
+    ("src/hmi/dashboard/panels/host/operations.js", '${data.state || "상태 미확인"}'):
         "Host Agent release state is shown as received; no sanctioned Korean map exists yet",
-    ("site/fleet/fleet/server/web/roster.js", '${result.result?.state || "CORE 응답 확인"}'):
+    ("operations/fleet/fleet/server/web/roster.js", '${result.result?.state || "CORE 응답 확인"}'):
         "CORE line-follow result state in the event log, shown as received; no Korean map exists yet",
 }
 
@@ -412,15 +412,15 @@ def test_no_bare_enum_reaches_operator_text():
 def test_every_enum_text_allowlist_entry_still_matches():
     for (rel, flagged), reason in ENUM_TEXT_ALLOWLIST.items():
         assert reason.strip(), (rel, flagged)
-        rows = enum_text_problems((SRC / rel).read_text(encoding="utf-8-sig"))
+        rows = enum_text_problems((REPO / rel).read_text(encoding="utf-8-sig"))
         assert any(row[1] == flagged for row in rows), (rel, flagged)
 
 
 def test_the_lint_sees_every_surface():
     rels = {_rel(path) for path in surface_files()}
-    for expected in ("hmi/dashboard/panels/console/mode.js", "hmi/dashboard/app.js",
-                     "site/fleet/fleet/server/web/roster.js", "site/fleet/fleet/server/web/index.html",
-                     "../operations/apps/games/games/web/board.js", "../operations/apps/games/games/web/index.html"):
+    for expected in ("src/hmi/dashboard/panels/console/mode.js", "src/hmi/dashboard/app.js",
+                     "operations/fleet/fleet/server/web/roster.js", "operations/fleet/fleet/server/web/index.html",
+                     "operations/apps/games/games/web/board.js", "operations/apps/games/games/web/index.html"):
         assert expected in rels
 
 
@@ -454,15 +454,15 @@ def test_the_lint_catches_what_it_is_meant_to_catch():
 
 
 @pytest.mark.parametrize(("rel", "fixed", "regressed"), [
-    ("hmi/dashboard/panels/console/mode.js", '"내비게이션 기능을 쓸 수 있습니다."', '"Navigation 기능을 사용할 수 있습니다."'),
-    ("hmi/dashboard/panels/console/map.js", "승인된 하드웨어 실행 모드에서만", "승인된 hardware 모드에서만"),
-    ("hmi/dashboard/panels/setup/localization.js", '"내비게이션 기능 없음"', '"Navigation capability 미제공"'),
-    ("hmi/dashboard/panels/host/system.js", "`내비게이션 ${navigation", "`Navigation ${navigation"),
-    ("site/fleet/fleet/server/web/formation.js", '"대형 유지 중일 때만"', '"HOLDING일 때만"'),
+    ("src/hmi/dashboard/panels/console/mode.js", '"내비게이션 기능을 쓸 수 있습니다."', '"Navigation 기능을 사용할 수 있습니다."'),
+    ("src/hmi/dashboard/panels/console/map.js", "승인된 하드웨어 실행 모드에서만", "승인된 hardware 모드에서만"),
+    ("src/hmi/dashboard/panels/setup/localization.js", '"내비게이션 기능 없음"', '"Navigation capability 미제공"'),
+    ("src/hmi/dashboard/panels/host/system.js", "`내비게이션 ${navigation", "`Navigation ${navigation"),
+    ("operations/fleet/fleet/server/web/formation.js", '"대형 유지 중일 때만"', '"HOLDING일 때만"'),
 ])
 def test_reverting_a_fixed_string_fails_the_lint(rel, fixed, regressed):
     """Mutation proof on the real files: undo one US-009 fix and the lint sees it."""
-    source = (SRC / rel).read_text(encoding="utf-8-sig")
+    source = (REPO / rel).read_text(encoding="utf-8-sig")
     assert fixed in source
     assert list(_judge(_js_literals(source))) == []
     assert list(_judge(_js_literals(source.replace(fixed, regressed, 1)))) != []

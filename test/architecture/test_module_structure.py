@@ -35,7 +35,7 @@ SRC = ROOT / "src"
 #: ``envs`` is the first folder under the ``learning`` colcon root (D-427 wave 1);
 #: ``apps``, ``vision`` and ``processes`` are under the ``operations`` root (D-427 wave 3b).
 DOMAINS = {"contracts", "runtime", "drivers", "products", "hmi", "site", "sim", "envs",
-           "apps", "vision", "processes"}
+           "apps", "vision", "processes", "fleet"}
 
 #: P2 library/contract tier: no process of their own (runtime gates N/A).
 LIBRARY_PACKAGES = {"core_common", "core_events", "core_features", "core_api_web", "web_common"}
@@ -174,7 +174,7 @@ SIZE_VERDICTS = {
         "source ownership into ui/console with installed-resource acceptance. The server subpackage "
         "split remains open and the existing +150 package allowance stays unchanged",
     ),
-    "site/fleet/fleet/server/cell_job_store.py": (
+    "fleet/fleet/server/cell_job_store.py": (
         824,
         "accept: one owner (2026-10-02, C4b G3) for the ordered step ledger: Job, step, claim phase and "
         "event rows change in one SQLite transaction (submit promotes claims, outcomes return or pin "
@@ -185,7 +185,7 @@ SIZE_VERDICTS = {
         "one transaction. Split: move resume/cancel/hold_for_site_stop into a recovery module when "
         "D-420 v2 adds the CANCELLED status (schema change), before any further growth",
     ),
-    "site/fleet/fleet/server/proposal_store.py": (
+    "fleet/fleet/server/proposal_store.py": (
         730,
         "accept: one owner (the durable non-executable candidate ledger — proposal create, the fenced ER2 "
         "feedback replan candidate, recoverable resolution and the model tool-call result journal share one "
@@ -196,7 +196,7 @@ SIZE_VERDICTS = {
         "begin/complete/mark_unknown) is the only separable seam, so revisit it as a split if the store "
         "grows past 800",
     ),
-    "site/fleet/fleet/server/enrollment.py": (
+    "fleet/fleet/server/enrollment.py": (
         664,
         "accept: one owner (D-361 robot enrollment — exchange, binding, pinned-address gate, unenroll and "
         "pending logout share one state machine over the register), ROS-free, host-testable (X5); "
@@ -211,7 +211,7 @@ SIZE_VERDICTS = {
         "same handshake and connection map (the digest store and sync thread live in pairing_sync.py). "
         "ROS-free, host-testable (X5)",
     ),
-    "site/fleet/fleet/server/mission_store.py": (
+    "fleet/fleet/server/mission_store.py": (
         887,
         "accept: one owner (the Fleet Mission SQLite ledger — missions, attempts, progress snapshots, "
         "fenced device phase snapshots, and their transitions in one transactional store), ROS-free, "
@@ -248,7 +248,7 @@ SIZE_VERDICTS = {
         " Re-judged 2026-10-03 at 1321 after merging main: the D-418 robot SSH access models (host keys, "
         "managed keys, temporary password status with lock_pending; API v1.89) on top of D-422; same verdict.",
     ),
-    "site/fleet/fleet/server/task_store.py": (
+    "fleet/fleet/server/task_store.py": (
         1060,
         "accept: keep SQLite task, history, lease, reservation, and dispatch-claim transactions together; "
         "correlated CORE event projection lives in task_results.py. Re-judged 2026-09-29 at 1014 lines after "
@@ -260,7 +260,7 @@ SIZE_VERDICTS = {
         795,
         "accept: legacy comparison-graph publisher pinned by test_module_separation; no new work (X3)",
     ),
-    "site/fleet/fleet/server/console.py": (
+    "fleet/fleet/server/console.py": (
         1138,
         "accept: one owner (FleetConsole gather/scatter), host-testable (X5). Re-judged 2026-09-30 at 1013: "
         "D-361 roster mutation and pinned-address holds change the gather/traffic tables in place, so they "
@@ -519,7 +519,7 @@ SIZE_VERDICTS = {
         "accept: single-entry hardware probe CLI the commissioning runbook drives top-to-bottom — "
         "splitting probe sequence from reporting would sever one diagnostic narrative (X5)",
     ),
-    "site/fleet/fleet/cli.py": (
+    "fleet/fleet/cli.py": (
         604,
         "accept: the Fleet composition root (2026-10-02, C4b G5) parses every console flag and "
         "assembles create_app once; the Cell Job compiler flag added 10 lines and the palletizing "
@@ -644,6 +644,7 @@ ROLE_DIR = {
     "imu_bno055": ("drivers", "imu_bno055"),
     "isaac_sim": ("envs", "isaac"),  # learning/envs/isaac (D-427 wave 1)
     "rosy_vision": ("vision",),  # operations/vision (D-427 wave 3b)
+    "fleet": ("fleet",),  # operations/fleet (D-427 wave 3c)
 }
 
 

@@ -21,14 +21,14 @@ from html.parser import HTMLParser
 from pathlib import Path
 import re
 
-ROOT = Path(__file__).resolve().parents[3]
-COMMON = ROOT / "hmi" / "web_common"
+ROOT = Path(__file__).resolve().parents[4]  # repository root (D-427: keys are repo-relative)
+COMMON = ROOT / "src" / "hmi" / "web_common"
 UI = COMMON / "ui.js"
 WEB_ROOTS = (
-    ROOT / "hmi" / "dashboard",
+    ROOT / "src" / "hmi" / "dashboard",
     COMMON,
-    ROOT / "site" / "fleet" / "fleet" / "server" / "web",
-    ROOT.parent / "operations" / "apps" / "games" / "games" / "web",
+    ROOT / "operations" / "fleet" / "fleet" / "server" / "web",
+    ROOT / "operations" / "apps" / "games" / "games" / "web",
 )
 ROW_TAGS = {"li", "tr", "ul", "ol", "table"}
 VOID = {"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "source", "track", "wbr"}
@@ -138,6 +138,6 @@ def test_the_structural_scans_catch_what_they_forbid():
         assert not BARE_VERB.search(f'el("ui-button", "", "{verb}…")'), verb
         assert not BARE_VERB.search(f'confirmIrreversible({{message: m, action: "{verb}"}})'), verb
     # the real regression: Fleet enrollment's quiet row button loses its ellipsis
-    fleet = (ROOT / "site" / "fleet" / "fleet" / "server" / "web" / "enrollment.js").read_text(encoding="utf-8")
+    fleet = (ROOT / "operations" / "fleet" / "fleet" / "server" / "web" / "enrollment.js").read_text(encoding="utf-8")
     assert '"등록 해제…"' in fleet and not BARE_VERB.search(fleet)
     assert BARE_VERB.search(fleet.replace('"등록 해제…"', '"등록 해제"', 1))

@@ -16,7 +16,7 @@ import re
 SRC = Path(__file__).resolve().parents[3]
 THEME_JS = SRC / "hmi" / "web_common" / "theme.js"
 DISPLAY_JS = SRC / "hmi" / "dashboard" / "panels" / "system" / "display.js"
-FLEET_HTML = SRC / "site" / "fleet" / "fleet" / "server" / "web" / "index.html"
+FLEET_HTML = SRC.parent / "operations" / "fleet" / "fleet" / "server" / "web" / "index.html"
 
 CHOICE = re.compile(r"""\{\s*value:\s*"([\w-]+)",\s*label:\s*"([^"]+)"(?:,\s*icon:\s*ICONS\.\w+)?\s*\}""")
 
