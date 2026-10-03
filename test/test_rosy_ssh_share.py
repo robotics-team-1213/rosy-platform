@@ -197,8 +197,17 @@ def test_create_builds_a_locked_bundle_and_registers_the_team_key(keygen_kind, r
     _assert_clean(robots, stdout, stderr, *(data.decode("utf-8", "replace") for data in entries.values()))
 
 
+def test_a_generated_passphrase_is_refused_when_stderr_is_not_a_terminal(robots, tmp_path, capsys):
+    status, _ = _create(robots, tmp_path, lock_answers=("",))  # pytest captures stderr: not a terminal
+    stdout, stderr = _text(capsys)
+    assert status == 1
+    assert "--print-passphrase" in stderr and "Passphrase (" not in stdout + stderr
+    assert all(core.requests == [] for core in robots.values())
+    assert list(tmp_path.iterdir()) == []
+
+
 def test_a_generated_passphrase_is_shown_once_and_never_saved(robots, tmp_path, capsys):
-    status, _ = _create(robots, tmp_path, lock_answers=("",))
+    status, _ = _create(robots, tmp_path, "--print-passphrase", lock_answers=("",))
     stdout, stderr = _text(capsys)
     assert status == 0, stderr
     shown = [line for line in stderr.splitlines() if line.startswith("Passphrase")]

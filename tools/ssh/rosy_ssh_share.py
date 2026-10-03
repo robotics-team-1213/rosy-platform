@@ -303,9 +303,13 @@ def robots_listing(name: str, label: str, public_key: str, robots: list[Robot], 
 
 
 def show_passphrase(passphrase: str) -> None:
-    """On stderr (the terminal), never on stdout that might be piped into a file."""
+    """On stderr (the terminal), never on stdout that might be piped into a file.
+
+    create() refuses a non-terminal stderr before anything is registered unless --print-passphrase.
+    """
     if not sys.stderr.isatty():
-        print("warning: stderr is not a terminal; the passphrase below may be captured in a log", file=sys.stderr)
+        print("warning: stderr is not a terminal (--print-passphrase); the passphrase below may be "
+              "captured in a log", file=sys.stderr)
     print(f"Passphrase (shown once, saved nowhere): {passphrase}", file=sys.stderr)
 
 
@@ -318,6 +322,10 @@ def create(args, deps: Deps) -> int:
     typed = enroll.ask_new_passphrase(deps.ask_lock, "Passphrase for the team key (empty = generate one): ")
     if typed and len(typed) < MIN_PASSPHRASE:
         raise SshAccessError(f"the passphrase needs at least {MIN_PASSPHRASE} characters")
+    if not typed and not sys.stderr.isatty() and not args.print_passphrase:
+        raise SshAccessError("stderr is not a terminal, so a generated passphrase could end up in a log; "
+                             "run it in a terminal, type your own passphrase, or pass --print-passphrase. "
+                             "Nothing was registered or bundled")
     passphrase = typed or generate_passphrase()
 
     args.out.mkdir(parents=True, exist_ok=True)
@@ -437,6 +445,8 @@ def _parser() -> argparse.ArgumentParser:
     make.add_argument("--days", type=enroll.expiry_days, default=90, help="expiry, 1-365 (default 90)")
     make.add_argument("--out", type=Path, required=True, help="folder for rosy-<team>.zip and rosy-<team>.robots.txt (not the repo)")
     make.add_argument("--contact", default="이 묶음을 준 운영자", help="who recipients ask for revocation")
+    make.add_argument("--print-passphrase", action="store_true",
+                      help="show a generated passphrase even when stderr is not a terminal (it may be logged)")
     gone = sub.add_parser("revoke", parents=[common], help="delete team:<name> (or one dev:/team: label) on each robot")
     target = gone.add_mutually_exclusive_group(required=True)
     target.add_argument("--name", type=team_name, help="team name: revokes team:<name>")

@@ -152,7 +152,7 @@ python tools/ssh/rosy_ssh_share.py create --name <팀이름> --robot <robot-ip> 
 - 함께 `<out>/rosy-<팀이름>.robots.txt`가 생긴다. 비밀이 없는 기록(로봇, host key 지문, 회수 명령)이며 운영자가 보관한다.
   끝에 정확한 `revoke` 명령도 출력된다.
 - 같은 이름(hostname)을 내놓는 로봇이 둘이면 멈춘다(별칭이 겹치면 ssh는 첫 블록만 쓴다).
-- 생성된 passphrase는 표준 오류(stderr, 터미널)에만 한 번 나온다. 출력이 터미널이 아니면 경고한다.
+- 생성된 passphrase는 표준 오류(stderr, 터미널)에만 한 번 나온다. stderr가 터미널이 아니면(로그로 넘기는 경우 등) 아무것도 등록하기 전에 멈춘다. 그때는 터미널에서 다시 돌리거나, passphrase를 직접 입력하거나, 로그에 남을 수 있음을 알고 `--print-passphrase`를 붙인다(붙이면 경고와 함께 보인다).
 - `--out`은 저장소 밖으로 둔다. 묶음과 키를 저장소에 넣지 않는다.
 
 ### 넘겨주기
