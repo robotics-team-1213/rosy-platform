@@ -1,0 +1,11 @@
+[Unit]
+Description=Check for a signed ROSY site candidate every 15 minutes (D-440)
+
+[Timer]
+OnCalendar=*:0/15
+RandomizedDelaySec=5min
+Persistent=true
+Unit=rosy-site-autoupdate.service
+
+[Install]
+WantedBy=timers.target
