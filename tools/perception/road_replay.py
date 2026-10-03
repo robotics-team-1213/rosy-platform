@@ -41,7 +41,8 @@ import cv2
 import numpy as np
 
 REPO = Path(__file__).resolve().parents[2]
-for _p in (REPO / "src" / "runtime" / "sensing", REPO / "tools", REPO / "tools" / "perception" / "dataset"):
+for _p in (REPO / "src" / "runtime" / "sensing",
+           REPO / "src" / "contracts" / "foundation", REPO / "tools", REPO / "tools" / "perception" / "dataset"):
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
 

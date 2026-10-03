@@ -3665,7 +3665,7 @@ const g = {open: 1.0, closed: 0.0};
 const r = {open: 0.0, closed: 1.0};
 console.log(JSON.stringify([m.gripperPercent(0.25, g), m.gripperPosition(25, g), m.gripperPercent(2, g),
   m.gripperPercent(0.25, r), m.gripperPosition(100, r), m.GRIPPER_STATE_LABEL.holding, m.GRIPPER_DURATION_S]))""")
-    assert out == [25, 0.25, 100, 75, 0, "쥐는 중", 0.8]
+    assert out == [25, 0.25, 100, 75, 0, "쥐고 있음", 0.8]
 ```
 
 `test_pilot_sim_browser.py`(기존 가짜 런타임 패턴, `/state`에 `gripper` 블록, `/target`에 `controls` 두 항목, 그리고 `submit_gripper` 기록):
@@ -3683,7 +3683,7 @@ def test_gripper_presets_slider_and_badge(sim_page):
     assert runtime.gripper_goals[-1].position == pytest.approx(1.0)
     runtime.gripper_state = "holding"
     page.wait_for_timeout(1200)
-    assert page.inner_text("[data-gripper-state]") == "쥐는 중"
+    assert page.inner_text("[data-gripper-state]") == "쥐고 있음"
     assert page.locator("[data-sim-gripper]").count() == 0      # the ±0.02 rad buttons are gone
     assert errors == [], errors
 ```
@@ -3699,7 +3699,7 @@ def test_gripper_presets_slider_and_badge(sim_page):
 ```js
 export const GRIPPER_DURATION_S = 0.8;
 export const GRIPPER_STATE_LABEL = Object.freeze({
-  open: "열림", closed: "닫힘", holding: "쥐는 중", moving: "움직이는 중", unknown: "알 수 없음",
+  open: "열림", closed: "닫힘", holding: "쥐고 있음", moving: "이동 중", unknown: "알 수 없음",
 });
 
 export function gripperPercent(position, g) {
@@ -3827,7 +3827,9 @@ D-411 수용 범위의 ROS-SIM이다. 결과는 `docs/validation/d411-pilot-reco
 - [ ] `deploy/robot/omx/run_pilot_sim.sh`로 OMX 컨테이너 기동(`ROSY_SIM_SOURCE_REVISION`은 이 브랜치 HEAD), 페어링 코드로 `/pilot` 연결.
 - [ ] `/api/v1/sim/omx/target`의 `controls`에 `joint_jog`(그리퍼 제외)와 `gripper`(open 1.0, closed 0.0)가 있는지.
 - [ ] 열기 → 배지 "열림", 닫기(빈 손) → "닫힘", 반 → "열림"(위치 ≈0.5). 매 목표 `SUCCEEDED`.
-- [ ] 작업대 물체를 집게 사이에 두고 닫기 → 배지 "쥐는 중"(위치가 닫힘에서 0.05 rad 넘게 떨어져 멈춤). 이때 목표가 `SUCCEEDED`가 아니라 HOLD로 끝나면(컨트롤러 goal tolerance) 그 사실과 `owner_reason`을 기록하고 `holding` 판정 수용을 보류한다.
+- [ ] 작업대 물체를 집게 사이에 두고 닫기 → 배지 "쥐고 있음"(위치가 닫힘에서 0.05 rad 넘게 떨어져 멈춤). 이때 목표가 `SUCCEEDED`가 아니라 HOLD로 끝나면(컨트롤러 goal tolerance) 그 사실과 `owner_reason`을 기록하고 `holding` 판정 수용을 보류한다.
+- [ ] **차단 관문(D-411 C 검토, 구현 부록 13):** `python deploy/robot/omx/probe_pilot_sim_http.py rosy-omx-pilot-sim` 통과(그리퍼는 `POST /gripper` 절대 목표, 닫기 뒤 열기), 이어서 새 컨테이너에서 `--stall` 통과 — `stall_probe=` JSON 의 `terminal_state` SUCCEEDED·`status` 4·`result_code` 0·`gripper_state` holding·`holding_jogs` 세 개 모두 SUCCEEDED/holding. JSON 전체(끝까지 걸린 시간, readback, 마지막 0.5 s 최고 속도)를 검증 기록에 남기고, 실패하면 `goal_time`·`stopped_velocity_tolerance`(SIM 패치)·`gripper.preload`·정육면체 크기·집기 높이를 조정한 값과 함께 다시 돌린다. 이 관문 전에는 `holding` 을 수용하지 않는다. 2026-10-03 1회차는 harness 우회·bind-mount 로 핵심 동작 통과, 조그마다 풀림(0.359→0.416 rad)이 보여 고쳤다(구현 부록 14) — **다시 빌드한 이미지와 고친 probe 로 우회 없이 재실행**하고 `hold_target`·조그별 readback 이 멈춘 위치 근처에 머무는지 본다.
+  - 2026-10-03 2회차 **통과·수용**(`rosy-omx-pilot:d411c2` `sha256:5c905d91b62269c57f1be7e7ded03f34e5ddb9855b9e4e118158f4075b81052b`, workstation `sha256:326a62d04e765675a1438e75c037f60ba086b302692f3037ea20bd5fe196fe0a`; `X:\DevTemp\d411-simC2`): 빌드·제약·기본·`/target` 통과, `--stall` 세 번째 시도 통과(닫기 2.29 s, 0.352 rad, holding, `hold-` 목표, 조그 세 번 SUCCEEDED·holding). 후속: 쥔 채 조그 동안 +0.037 rad 열림(0.352→0.389, `hold_target` 0.295) — `gripper.preload`·미끄러짐 조사, probe `holding_drift_rad` 는 보고만(판정 없음). probe 경합 두 개(이른 SUCCEEDED 뒤 위치 확인, sequence 불일치 한 번 재시도)는 고쳤다(재실행 불필요).
 - [ ] 팔 조이스틱: 패드를 누른 채 관절이 0.05 rad 단위로 이어서 움직이고, 떼면 다음 목표가 나가지 않는지(`/goals` 수 증가 멈춤).
 - [ ] 시연 기록 시작 → 조그·그리퍼 조작 → 결과 "성공"으로 종료 → `samples.jsonl` 행에 `action.gripper` 존재, `validate_episode` 통과 → `python -m omx_adapter.lerobot_export <episode> --out X:\DevTemp\d411\lerobot`(F: 거부) 성공, 특성에 `action.gripper`.
 

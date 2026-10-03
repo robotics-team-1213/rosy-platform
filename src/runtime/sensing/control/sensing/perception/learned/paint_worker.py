@@ -23,18 +23,24 @@ class LearnedPaintWorker:
         self._slot, self._stale_s, self._warn, self._clock = slot, float(stale_s), warn, clock
         self._lock = threading.Lock()
         self._wake = threading.Event()
-        self._pending: tuple[float, np.ndarray] | None = None   # (submitted_at, frame)
+        self._pending: tuple[float, np.ndarray, int | None, float | None, int] | None = None   # (submitted_at, frame, tag, stamp, generation)
         self._result: tuple[float, np.ndarray, dict] | None = None   # (done_at, mask, summary)
         self._closed = False
+        self._frames = 0
+        self._generation = 0
+        self._last_stamp: float | None = None
+        self._period: float | None = None   # EMA of the frame stamp interval
+        self._clean_cache = None
         self.last_error: str | None = None
         self._thread = threading.Thread(target=self._run, name="learned-paint", daemon=True) if start else None
         if self._thread:
             self._thread.start()
 
-    def submit(self, frame: np.ndarray) -> None:
-        """Offer the newest frame; an older frame still waiting is replaced."""
+    def submit(self, frame: np.ndarray, tag: int | None = None, stamp: float | None = None) -> None:
+        """Offer the newest frame; an older frame still waiting is replaced. `tag` (the
+        caller's frame counter) comes back in the summary of the mask made from this frame."""
         with self._lock:
-            self._pending = (self._clock(), frame)
+            self._pending = (self._clock(), frame, tag, stamp, self._generation)
         self._wake.set()
 
     def latest(self, shape: tuple[int, int]) -> tuple[np.ndarray | None, dict | None]:
@@ -49,27 +55,70 @@ class LearnedPaintWorker:
             return None, None
         return mask, summary
 
+    def mask_for(self, frame: np.ndarray, every_n: int = 1, stamp: float | None = None,
+                 clean: Callable[[np.ndarray], np.ndarray] | None = None) -> np.ndarray | None:
+        """The keeper's per-frame entry: submit every `every_n`-th frame and serve the newest
+        mask in between. `stamp` is the frame's time (default: the worker clock). A mask is
+        served only while it is at most `every_n` frames old, at most `every_n` observed frame
+        periods (x1.5) old by frame stamps, and no older than stale_s; otherwise None and the
+        caller falls back for this frame. `clean` post-processes a mask once per new mask (the
+        result is cached), so a reused mask costs no connected-components pass."""
+        stamp = self._clock() if stamp is None else float(stamp)
+        if self._last_stamp is not None and stamp > self._last_stamp:
+            dt = stamp - self._last_stamp
+            if self._period is None:
+                self._period = dt
+            elif dt <= 2.0 * self._period:   # a pause is a gap, not a slower camera
+                self._period = 0.8 * self._period + 0.2 * dt
+        self._last_stamp = stamp
+        index, self._frames = self._frames, self._frames + 1
+        if index % every_n == 0:
+            self.submit(frame, tag=index, stamp=stamp)
+        with self._lock:
+            result = self._result
+        mask, summary = self.latest(frame.shape[:2])
+        if mask is None or summary["tag"] is None or index - summary["tag"] > every_n:
+            return None
+        age_s = stamp - summary["stamp"]
+        if age_s < 0 or (self._period is not None and age_s > 1.5 * every_n * self._period):
+            return None
+        if clean is None:
+            return mask
+        if self._clean_cache is None or self._clean_cache[0] is not result:
+            self._clean_cache = (result, clean(mask))
+        return self._clean_cache[1]
+
+    def reset(self) -> None:
+        """Forget the cached mask, the pending frame and the frame counter (the keeper restarted:
+        a gap, no ground, another mode). An inference already running is discarded."""
+        with self._lock:
+            self._generation += 1
+            self._pending = self._result = None
+        self._clean_cache = None
+        self._frames, self._last_stamp, self._period = 0, None, None
+
     def step(self) -> None:
         """Run one pending inference now (the worker loop body; tests call it directly)."""
         with self._lock:
             pending, self._pending = self._pending, None
         if pending is None:
             return
-        submitted_at, frame = pending
+        submitted_at, frame, tag, stamp, generation = pending
         model = self._slot.poll() if self._slot is not None else None
         if model is None:
             self.last_error = f"no model ({getattr(self._slot, 'last_error', None)})"
             return
         try:
-            result, mask = model.infer_with_mask(frame)
+            mask, latency_ms = model.infer_mask(frame)
         except Exception as exc:  # noqa: BLE001 - a failed inference is no paint, never a crash.
             self.last_error = f"inference failed: {exc}"
             self._warn(f"learned paint: {self.last_error}")
             return
         self.last_error = None
-        summary = {"model_revision": result.model_revision, "latency_ms": round(result.latency_ms, 1)}
+        summary = {"model_revision": model.model_revision, "latency_ms": round(latency_ms, 1), "tag": tag, "stamp": stamp}
         with self._lock:
-            self._result = (submitted_at, mask, summary)
+            if generation == self._generation:   # a reset during the inference drops its mask
+                self._result = (submitted_at, mask, summary)
 
     def close(self, timeout: float = 1.0) -> None:
         self._closed = True

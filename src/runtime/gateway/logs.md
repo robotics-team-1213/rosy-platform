@@ -734,3 +734,46 @@
 - 변경: `fleet.hub_url`+`pairing_token` 이 있으면 `CoreServices.build` 의 `fleet_agent.start()` 가 루프 없이 `asyncio.create_task` 를 불러 CORE 가 죽었다(D-407 Gazebo 2026-10-02). `create_app` 이 라우터 lifespan 을 감싸 uvicorn 루프에서 `start_on_loop()` 를 부른다. e-stop 리스너는 `line_follow.stop(reason="estop")`.
 - 증거: `test_fleet_agent_startup.py`(core_client, hub_url 설정으로 build 후 startup 에서 작업 생성), `test_line_follow_stuck.py` 초록.
 - gate 변화: 없음.
+
+## 2026-10-02 · 8dd300c52 · feat(core): D-415 SAF-003 배선
+- 변경: `core/fleet_loss_wiring.py` — `safety.fleet_loss_timeout_s` 검증(1–60 s, 기본 3), 저장된 정책 정규화(모르는 값→STOP, `CONTINUE_CURRENT_NAVIGATION`→`CONTINUE`), RETURN_HOME 을 SAF-005 와 같은 지역화 문으로. `services.py` 에 `fleet_loss` 필드, `ros_bridge._tick_power`(5 Hz)가 `tick()`. `fleet.enabled` 는 고치지 않고 읽히지 않음으로 문서화(D-415 결정 7).
+- 증거: `test/test_fleet_loss_wiring.py` 10 passed(빌드 실패·정규화·PUT·REST Fleet 목표 정지·`safety/state.fleet_link`). test_event_catalogue·test_protocol_version_alignment·test_module_criteria·test/architecture 통과(core_features 크기 판정 11160 재판정). gateway+services+api_web 2537 passed 29 skipped 1 failed — `test_host_hardware.py::test_rows_rosy_io_holds_are_judged_from_fresh_topics`, 깨끗한 main(13e6d5e45)에서도 실패, known_failures.txt 에 없음(이 브랜치 무관).
+- gate 변화: 없음.
+
+## 2026-10-02 · 758f9878e · fix(core): D-419(구 D-415) 리뷰 반영 — 배선
+- 변경: `fleet_loss_wiring` 이 '설정됨'을 빌드 때 한 번 정하고(`enabled` 가 뒤에 꺼져도 끊긴 링크), `last_rx` 를 넘긴다. `ros_bridge._tick_power` 의 `fleet_loss.tick()` 을 try/except 로 감쌌다. `services.py` import 순서.
+- 증거: `test_fleet_loss_wiring.py` 14 passed(wiring RETURN_HOME 지역화 거절, 빌드 시 고정된 설정, PUT RETURN_HOME 경고, `_tick_power` 가드 구조 시험). 리뷰 지정 묶음 205 passed.
+- 번호: 앞 항목들의 D-415(SAF-003)는 **D-419** 로 바뀌었다 — main 에 다른 D-415(콘솔 운영 가시성)가 먼저 들어왔다. ADR 파일 `docs/adr/D-419-saf003-fleet-link-loss-policy.md`.
+- gate 변화: 없음.
+
+## 2026-10-02 · uncommitted · fix(core): D-419 재리뷰 — 배선 타이밍, console_linked 디바운스
+- 변경: `fleet_loss_wiring` 이 판정 시간과 답 시한의 관계를 검증(어기면 기동 실패)하고 Agent 의 `link_fresh_s` 를 모니터 신선도로 넘긴다. `line_follow_wiring` 의 D-407 `console_linked` 는 `connected` 이거나 허브를 링크 신선도 안에 들었으면 이어진 것으로 본다(재접속 깜빡임이 관제 대기를 건너뛰지 않게).
+- 증거: `test_fleet_loss_wiring.py`(범위·관계·답 시한 빌드 실패, 기본 5 s 판정), `test_line_follow_stuck_api.py::test_console_link_is_debounced_on_recent_hub_traffic`. 재리뷰 지정 묶음 + line-follow 막힘 시험 250 passed.
+- gate 변화: 없음.
+
+## 2026-10-02 · uncommitted · fix(core): D-419 라운드 3 — Fleet 없는 로봇의 SAF-003 검증
+- 변경: `fleet_loss_wiring` 이 판정 시간·관계 검증을 Fleet 링크가 설정된 로봇에서만 기동 실패로 하고, 아니면 경고 한 줄 뒤 기본 5 s.
+- 증거: `test_fleet_loss_wiring.py` 21 passed(Fleet 있는 로봇 실패 6+2건, Fleet 없는 로봇 부팅 3건).
+- gate 변화: 없음.
+
+## 2026-10-02 · uncommitted · fix(core): D-419 라운드 4 — Fleet 링크 판정 함수 하나
+- 변경: `fleet_loss_wiring` 이 Fleet 없는 로봇 판정과 모니터의 '설정됨'을 Agent 와 같은 `fleet_link_configured(config['fleet'])` 로 정한다.
+- 증거: `test_fleet_loss_wiring.py` 21 passed.
+- gate 변화: 없음.
+
+## 2026-10-02 · uncommitted · fix(core): D-419 착지 — console_linked 를 D-407 유예와 합침
+- 변경: `bind_stuck_recovery` 의 `console_linked` 는 main 의 `linked_within(line_follow.recovery_console_grace_s)` **또는** D-419 `recently_heard()`(마지막 허브 수신이 링크 신선도 이내). 둘 다 재접속 깜빡임을 덮고, 앞은 끊긴 시각부터, 뒤는 마지막 수신부터 잰다.
+- 증거: `test_line_follow_stuck_api.py`(D-419 디바운스 시험 포함), `test_fleet_loss_wiring.py`.
+- gate 변화: 없음.
+
+## 2026-10-03 · uncommitted · test(console): 지도 도구는 격자 밖에 둔다
+- 변경: `test_the_map_tools_stay_off_the_raster`가 툴바를 무대 밖 한 행으로, 범례를 캔버스 아래로 고정한다. 절대 위치 겹침 게이트는 뺐다.
+- 근거: D-77 운용 화면. 격자를 가리던 배치를 계약으로 되돌리지 않기 위해서.
+- 증거: 2026-10-03 Windows. test_the_map_tools_stay_off_the_raster가 콘솔 묶음 240 passed 안에 포함된다.
+- gate 변화: 없음.
+
+## 2026-10-03 · f4c311569 · feat(bridge): D-423 모델 상태 두 토픽 latched 구독
+
+- 변경: `ros_bridge.py` `_on_lane_model_status`·`_on_object_det_model_status`(TRANSIENT_LOCAL) → `svc.vision.models`. 구독 목록·latched 시험 갱신. `test_core_logic` D-137 단일 발행자에 `runtime/sensing/control/object_detector.py`.
+- 증거: gateway 두 묶음 1141+715 passed; 실패 `test_core_node_teardown::test_run_drains_executor_workers_before_returning` 1건은 부하 아래에서만(단독 8 passed).
+- gate 변화: 없음.

@@ -214,8 +214,21 @@ def denoise_white_mask(bgr: np.ndarray, horizon_row: float) -> np.ndarray:
     mask = floor_white_mask(img, horizon_row).astype(np.uint8)
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (DENOISE_OPEN_PX, DENOISE_OPEN_PX))
     mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
-    count, labels, stats, _ = cv2.connectedComponentsWithStats(mask, connectivity=8)
+    return drop_small_components(mask)
+
+
+def drop_small_components(mask: np.ndarray) -> np.ndarray:
+    """uint8 0/1 mask without 8-connected blobs smaller than DENOISE_MIN_AREA_PX (shared by the
+    denoise fallback and the learned paint mask)."""
+    count, labels, stats, _ = cv2.connectedComponentsWithStats(mask.astype(np.uint8), connectivity=8)
     keep = np.zeros(count, bool)
     keep[1:] = stats[1:, cv2.CC_STAT_AREA] >= DENOISE_MIN_AREA_PX
     return keep[labels].astype(np.uint8)
 
+
+def clean_learned_mask(mask: np.ndarray, horizon_row: float) -> np.ndarray:
+    """A learned paint mask the way the keeper reads it: binary, cut above the horizon (same
+    margin as floor_white_mask), then blobs smaller than a tape fragment dropped (D-408)."""
+    out = (mask > 0).astype(np.uint8)
+    out[:max(0, min(out.shape[0], int(math.ceil(horizon_row)) + HORIZON_MARGIN_PX))] = 0
+    return drop_small_components(out)

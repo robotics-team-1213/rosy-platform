@@ -1,5 +1,11 @@
 #!/usr/bin/env python3
-"""Resolve required ROS package paths plus their in-tree dependency closure."""
+"""Resolve required ROS package paths plus their in-tree dependency closure.
+
+``--source-root`` is the copied workspace and ``--chroot-prefix`` is where that
+same directory sits inside the image. Each ``--colcon-root`` (repeatable, D-427
+``colcon_roots``) is scanned below it; without one the whole source root is
+scanned. Package names must be unique across every scanned root.
+"""
 
 from __future__ import annotations
 
@@ -19,12 +25,22 @@ DEPENDENCY_TAGS = {
 COLCON_OUTPUT_ROOTS = {"build", "install", "log"}
 
 
-def package_catalog(source_root: Path) -> dict[str, tuple[Path, set[str]]]:
+def package_catalog(
+    source_root: Path, colcon_roots: list[str] | None = None
+) -> dict[str, tuple[Path, set[str]]]:
     catalog: dict[str, tuple[Path, set[str]]] = {}
-    for manifest in sorted(source_root.rglob("package.xml")):
-        relative = manifest.relative_to(source_root)
-        if relative.parts[0] in COLCON_OUTPUT_ROOTS:
-            continue
+    scan_roots = [source_root / root for root in colcon_roots] if colcon_roots else [source_root]
+    manifests = []
+    for scan_root in scan_roots:
+        if not scan_root.resolve().is_relative_to(source_root):
+            raise ValueError(f"colcon root escapes the source root: {scan_root}")
+        if not scan_root.is_dir():
+            raise ValueError(f"colcon root is missing: {scan_root}")
+        manifests.extend(
+            manifest for manifest in sorted(scan_root.rglob("package.xml"))
+            if manifest.relative_to(scan_root).parts[0] not in COLCON_OUTPUT_ROOTS
+        )
+    for manifest in manifests:
         root = ET.parse(manifest).getroot()
         name_node = root.find("name")
         if name_node is None or not (name_node.text or "").strip():
@@ -70,12 +86,14 @@ def resolve(catalog: dict[str, tuple[Path, set[str]]], roots: list[str]) -> set[
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source-root", type=Path, required=True)
+    parser.add_argument("--colcon-root", action="append", default=[],
+                        help="a colcon root relative to --source-root (repeatable)")
     parser.add_argument("--required", type=Path, required=True)
     parser.add_argument("--chroot-prefix", required=True)
     args = parser.parse_args()
 
     source_root = args.source_root.resolve(strict=True)
-    catalog = package_catalog(source_root)
+    catalog = package_catalog(source_root, args.colcon_root)
     selected = resolve(catalog, required_names(args.required))
     prefix = PurePosixPath(args.chroot_prefix)
     for name in sorted(selected):

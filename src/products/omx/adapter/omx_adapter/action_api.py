@@ -21,6 +21,10 @@ from core_common.protocol.schemas import (
 from .action_runner import ActionRunner, action_grant_digest, parse_action_grant
 from .local_stop import LocalStopBlocked, LocalStopController
 
+# A phase-runner-only kind is never journaled from a v1 frame, whose reply drops the
+# ordered phase summaries Fleet needs to reconcile it (D-403 §2).
+MIN_SUBMIT_VERSION_BY_KIND = {"CELL_TRANSFER": 2}
+
 
 class ActionApi:
     """Dispatch requests after deriving the caller identity from Unix peer UID."""
@@ -28,9 +32,13 @@ class ActionApi:
     VERSION = 1
     MAX_FRAME_BYTES = 64 * 1024
 
-    def __init__(self, runner: ActionRunner, *, stop_api: Any | None = None) -> None:
+    def __init__(self, runner: ActionRunner, *, stop_api: Any | None = None,
+                 identity: Mapping[str, Any] | None = None) -> None:
         self.runner = runner
         self.stop_api = stop_api
+        # Read-only owner identity (D-390 §5): the simulation composition reports simulation=True;
+        # an owner without one answers UNKNOWN_OPERATION, so Fleet never opens dispatch to it.
+        self.identity = dict(identity) if identity is not None else None
 
     @staticmethod
     def _encode(document: Mapping[str, Any]) -> bytes:
@@ -46,9 +54,10 @@ class ActionApi:
         return {"version": version, "status": status,
                 "error": {"code": code, "message": message}}
 
-    @staticmethod
-    def _success(version: int, receipt: Mapping[str, Any]) -> dict[str, Any]:
+    def _success(self, version: int, receipt: Mapping[str, Any]) -> dict[str, Any]:
         payload = dict(receipt)
+        if self.identity and self.identity.get("journal_id"):
+            payload["journal_id"] = self.identity["journal_id"]
         if version == 1:
             payload.pop("phase_summaries", None)
         return {"version": version, "status": 200, "receipt": payload}
@@ -70,6 +79,10 @@ class ActionApi:
                 if set(request) != {"version", "operation", "grant"}:
                     raise ValueError("SubmitAction contains unsupported fields")
                 grant = parse_action_grant(request["grant"])
+                if version < MIN_SUBMIT_VERSION_BY_KIND.get(grant.action_kind, 1):
+                    return self._error("UNSUPPORTED_VERSION",
+                                       f"{grant.action_kind} requires protocol version 2",
+                                       status=400, version=version)
                 receipt = self.runner.submit(grant, peer_uid=peer_uid)
                 return self._success(version, receipt)
             if operation == "GetAction":
@@ -77,8 +90,11 @@ class ActionApi:
                     raise ValueError("GetAction contains unsupported fields")
                 receipt = self.runner.get(request["action_id"], peer_uid=peer_uid)
                 if receipt is None:
-                    return self._error("ACTION_NOT_FOUND", "Action is unavailable",
-                                       status=404, version=version)
+                    missing = self._error("ACTION_NOT_FOUND", "Action is unavailable",
+                                          status=404, version=version)
+                    if self.identity and self.identity.get("journal_id"):
+                        missing["journal_id"] = self.identity["journal_id"]
+                    return missing
                 return self._success(version, receipt)
             if operation == "CancelAction":
                 expected = {"version", "operation", "action_id", "attempt_id",
@@ -92,6 +108,10 @@ class ActionApi:
                     cancel.action_id, cancel.attempt_id, peer_uid=peer_uid,
                 )
                 return self._success(version, receipt)
+            if operation == "GetOwnerIdentity" and self.identity is not None:
+                if set(request) != {"version", "operation"}:
+                    raise ValueError("GetOwnerIdentity contains unsupported fields")
+                return {"version": version, "status": 200, "identity": dict(self.identity)}
             if operation in {"StopLocal", "GetStopState", "RearmLocal"}:
                 if version != 1:
                     return self._error("UNSUPPORTED_VERSION",
@@ -302,7 +322,9 @@ class UnixActionServer:
                     connection.settimeout(2.0)
                     try:
                         self.api.handle_connection(connection)
-                    except TimeoutError:
+                    except (TimeoutError, ConnectionError):
+                        # A timed-out caller can close before the durable reply.
+                        # Keep the owner and journal alive; never replay the request.
                         continue
         finally:
             listener.close()

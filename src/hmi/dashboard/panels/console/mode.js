@@ -1,4 +1,4 @@
-import { MODE_LABEL, enumLabel } from "/common/core_ui_logic.js";
+import { MODE_LABEL, operatorModeLabel } from "/common/core_ui_logic.js";
 
 function el(tag, cls, text) { const node = document.createElement(tag); if (cls) node.className = cls; if (text !== undefined) node.textContent = text; return node; }
 // D-359 US-009 — 운용자 글은 공용 MODE_LABEL이다. 열거값은 data-mode와 title에만 남는다.
@@ -41,7 +41,7 @@ export function mount(root, ctx) {
     }
   }
   const stopState = ctx.store.poll("/api/v1/robot/state", 1_000, (state) => {
-    current = state.mode || ""; setStatus(modeStatus, `현재 모드: ${enumLabel(MODE_LABEL, current, "확인 중")}`);
+    current = state.mode || ""; setStatus(modeStatus, `현재 모드: ${operatorModeLabel(current, "확인 중")}`);
     if (current) modeStatus.title = current; else modeStatus.removeAttribute("title"); update();
   }, (error) => { current = ""; setStatus(modeStatus, `현재 모드를 읽지 못했습니다: ${error.message}`); update(); });
   const stopCapabilities = ctx.store.poll("/api/v1/system/capabilities", 5_000, (caps) => {

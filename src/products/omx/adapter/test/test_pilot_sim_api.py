@@ -31,6 +31,12 @@ class FakeRuntime:
         self.calls.append(jog)
         return {"command_id": jog.request_id, "state": "LOCAL_ACCEPTED"}
 
+    def submit_gripper(self, goal):
+        self.calls.append(goal)
+        if goal.position > 1.1:
+            return {"command_id": goal.request_id, "state": "REJECTED", "reason": "gripper_limit"}
+        return {"command_id": goal.request_id, "state": "LOCAL_ACCEPTED"}
+
     def goal(self, command_id):
         return {"command_id": command_id, "state": "LOCAL_ACCEPTED"}
 
@@ -42,6 +48,9 @@ class FakeRuntime:
 
     def on_watchdog(self):
         pass
+
+    def controls(self):
+        return {"schema": "rosy.controls/1", "items": []}
 
 
 class FakeCapture:
@@ -92,6 +101,8 @@ def test_serves_pilot_and_only_allowlisted_assets():
     assert client.get("/pilot").status_code == 200
     assert client.get("/pilot/assets/app.js").status_code == 200
     assert client.get("/pilot/assets/screens/arm.js").status_code == 200
+    for asset in ("controls.js", "arm-stick.js", "screens/compose.js", "widgets/joint_jog.js"):  # D-411 B
+        assert client.get(f"/pilot/assets/{asset}").status_code == 200, asset
     assert client.get("/pilot/assets/secret.env").status_code == 404
     assert client.get("/common/tokens.css").status_code == 200
     assert client.get(f"{PREFIX}/target").json()["kind"] == "omx_sim"
@@ -153,3 +164,81 @@ def test_recording_needs_own_seat_and_cannot_select_server_output_path():
                           json={"seat_id": seat, "outcome": "success"})
     assert stopped.json()["status"] == "incomplete"
     assert stopped.json()["task_outcome"] == "success"
+
+
+def test_target_carries_the_runtime_controls():
+    client, _ = _client()
+    body = client.get(f"{PREFIX}/target").json()
+    assert body["controls"] == {"schema": "rosy.controls/1", "items": []}
+    assert body["joints"] == ["joint1", "joint2"] and body["gripper"] == "gripper_joint_1"
+
+
+def test_target_serializes_every_control_kind_with_the_schema_alias():
+    class Runtime(FakeRuntime):
+        def controls(self):
+            return {"schema": "rosy.controls/1", "items": [
+                {"id": "arm", "kind": "joint_jog", "label": "팔", "max_step_rad": 0.05, "duration_s": 0.4,
+                 "joints": [{"name": "joint1", "lower": -1.0, "upper": 1.0}]},
+                {"id": "gripper", "kind": "gripper", "label": "그리퍼", "joint": "gripper_joint_1",
+                 "closed": 0.0, "open": 1.0, "presets": {"open": 1.0, "half": 0.5, "close": 0.0}},
+                {"id": "base", "kind": "base_velocity", "label": "주행", "max_linear": 0.1,
+                 "max_angular": 0.5, "pivot": False, "fine": False}]}
+
+    app = create_pilot_sim_app(runtime=Runtime(), pilot_root=PILOT, common_root=COMMON,
+                               pairing_code="ABCD-EFGH")
+    controls = TestClient(app).get(f"{PREFIX}/target").json()["controls"]
+    assert controls["schema"] == "rosy.controls/1" and "schema_id" not in controls
+    assert [item["kind"] for item in controls["items"]] == ["joint_jog", "gripper", "base_velocity"]
+    assert controls["items"][0]["command"] == "bounded_goal"
+    assert controls["items"][1]["readback"] == ["position", "grasp"]
+
+
+def _grip(seat_id, **changes):
+    return {"instance_id": "omx_01", "seat_id": seat_id, "request_id": "grip-1", "position": 0.5,
+            "duration_s": 0.8, "state_sequence": 8, "expires_at_ms": int(time.time() * 1000) + 1000, **changes}
+
+
+def _seated():
+    client, runtime = _client()
+    token = client.post(f"{PREFIX}/pair", json={"code": "ABCD-EFGH"}).json()["token"]
+    headers = {"Authorization": f"Bearer {token}"}
+    seat = client.post(f"{PREFIX}/seat", headers=headers).json()["seat_id"]
+    return client, runtime, headers, seat
+
+
+def test_gripper_goal_needs_the_seat_and_is_idempotent():
+    client, runtime, headers, seat = _seated()
+    assert client.post(f"{PREFIX}/gripper", json=_grip(seat)).status_code == 401
+    assert client.post(f"{PREFIX}/gripper", json=_grip("other"), headers=headers).status_code == 409
+    body = _grip(seat)
+    first = client.post(f"{PREFIX}/gripper", json=body, headers=headers)
+    again = client.post(f"{PREFIX}/gripper", json=body, headers=headers)
+    assert first.status_code == again.status_code == 202 and first.json() == again.json()
+    assert len(runtime.calls) == 1 and runtime.calls[0].position == 0.5
+    assert client.post(f"{PREFIX}/gripper", json=_grip(seat, position=0.1), headers=headers).status_code == 409
+    assert client.get(f"{PREFIX}/goals/grip-1", headers=headers).json()["state"] == "LOCAL_ACCEPTED"
+
+
+def test_gripper_and_jog_share_request_ids():
+    client, runtime, headers, seat = _seated()
+    assert client.post(f"{PREFIX}/goals", json=_jog(seat, request_id="same"), headers=headers).status_code == 202
+    reused = client.post(f"{PREFIX}/gripper", json=_grip(seat, request_id="same"), headers=headers)
+    assert reused.status_code == 409 and reused.json()["error"]["message"] == "request id reused"
+    # and the other way round: a gripper request id cannot be reused by a jog
+    assert client.post(f"{PREFIX}/gripper", json=_grip(seat, request_id="g"), headers=headers).status_code == 202
+    reused = client.post(f"{PREFIX}/goals", json=_jog(seat, request_id="g"), headers=headers)
+    assert reused.status_code == 409 and reused.json()["error"]["message"] == "request id reused"
+    assert len(runtime.calls) == 2
+
+
+def test_gripper_limit_rejection_is_a_conflict():
+    client, _, headers, seat = _seated()
+    response = client.post(f"{PREFIX}/gripper", json=_grip(seat, position=2.0), headers=headers)
+    assert response.status_code == 409 and response.json()["error"]["message"] == "gripper_limit"
+
+
+def test_gripper_duration_out_of_range_is_validation_error():
+    client, _, headers, seat = _seated()
+    for duration in (0.1, 3.0):
+        response = client.post(f"{PREFIX}/gripper", json=_grip(seat, duration_s=duration), headers=headers)
+        assert response.status_code == 400 and response.json()["error"]["code"] == "VALIDATION_ERROR"

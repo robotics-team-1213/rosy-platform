@@ -115,7 +115,16 @@ def test_run_drains_executor_workers_before_returning(node_module, monkeypatch):
     monkeypatch.setattr(node_module, "MultiThreadedExecutor", lambda: executor)
     node = _bare_node(node_module, calls)
 
-    threading.Timer(0.05, executor.release.set).start()
+    shutdown = executor._executor.shutdown
+
+    def release_after_cancellation(wait=True, *, cancel_futures=False):
+        # Keep callbacks blocked until shutdown has cancelled the queued work.
+        # A timer can release them before run() reaches shutdown on a busy host.
+        shutdown(wait=False, cancel_futures=cancel_futures)
+        executor.release.set()
+        shutdown(wait=wait, cancel_futures=cancel_futures)
+
+    monkeypatch.setattr(executor._executor, "shutdown", release_after_cancellation)
     node.run()
 
     # run() 이 돌아올 때 이미 돌던 콜백은 끝났고, 대기열의 콜백은 버려졌다.

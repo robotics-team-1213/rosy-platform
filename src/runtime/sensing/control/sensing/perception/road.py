@@ -102,7 +102,8 @@ class RoadObservation:
 
 def render_road_preview(bgr: np.ndarray, observation: RoadObservation, *,
                         source: str, max_width: int = 640,
-                        keep=None, objects=None, road_state=None, line=None, tags=None) -> np.ndarray:
+                        keep=None, objects=None, road_state=None, line=None, tags=None,
+                        detections=None) -> np.ndarray:
     """Render an observation-only preview; never feed this back to detection."""
     if not isinstance(bgr, np.ndarray) or bgr.ndim != 3 or bgr.shape[2] != 3:
         raise ValueError("road preview requires a BGR frame")
@@ -144,7 +145,7 @@ def render_road_preview(bgr: np.ndarray, observation: RoadObservation, *,
                     cv2.LINE_AA)
 
     draw_follow_evidence(preview, scale=scale, keep=keep, objects=objects,
-                         road_state=road_state, line=line, tags=tags)
+                         road_state=road_state, line=line, tags=tags, detections=detections)
 
     signal = "CONFLICT" if observation.signal_conflict else (
         observation.signal.colour if observation.signal is not None else "NONE")

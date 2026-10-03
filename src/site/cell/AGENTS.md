@@ -19,7 +19,7 @@ Rosy Cell (D-377 id `cell`, package `rosy_cell`) is the D-399 Application for pa
 
 | Directory | Purpose |
 |-----------|---------|
-| `rosy_cell/` | One-way re-exports to `modules/processes/palletizing`; no process implementation |
+| `rosy_cell/` | One-way re-exports to `modules/processes/palletizing`; no process implementation (see `rosy_cell/AGENTS.md`) |
 | `test/` | ROS-free pytest; `conftest.py` puts the package on `sys.path` |
 | `examples/omx_sim/` | C3 demo `cell.yaml`/`recipe.yaml` for the OMX-F Gazebo world `omx_cell_workcell.sdf`; `test/test_cell_omx_sim_layout_contract.py` (repo root) proves every transfer plans and the world matches |
 

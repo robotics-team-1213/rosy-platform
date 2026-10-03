@@ -50,7 +50,11 @@ Host-side pytest for deploy/robot/pinky_pro/release/motor/network contracts. The
 
 ## Subdirectories
 
-None (ignore `__pycache__/`).
+| Directory | Purpose |
+|-----------|---------|
+| `architecture/` | Repo-structure tests: folder layout, package names, document placement, layer and app boundaries (see `architecture/AGENTS.md`) |
+
+Ignore `__pycache__/`.
 
 ## For AI Agents
 

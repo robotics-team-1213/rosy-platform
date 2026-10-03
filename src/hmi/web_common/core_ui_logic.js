@@ -104,3 +104,11 @@ export function enumLabel(labels, value, fallback = "—") {
   if (value === undefined || value === null || value === "") return fallback;
   return Object.hasOwn(labels, value) ? labels[value] : String(value);
 }
+
+// SAFE_STOP is a DeviceState string on state.mode, not a RobotMode member.
+const MODE_ALIAS = Object.freeze({ SAFE_STOP: "안전 정지" });
+
+export function operatorModeLabel(value, fallback = "—") {
+  if (Object.hasOwn(MODE_ALIAS, value)) return MODE_ALIAS[value];
+  return enumLabel(MODE_LABEL, value, fallback);
+}

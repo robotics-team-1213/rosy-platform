@@ -61,7 +61,7 @@ def test_auto_build_lands_in_the_store_by_content_sha(tmp_path):
     kept = [(f["session"], f["image"]) for f in manifest["frames"]]
     assert kept == [("20260930T124745Z_d", "images/20260930T124745Z_d/20260930T124745Z_d__000000.jpg"),
                     ("20260930T133221Z_d", "images/20260930T133221Z_d/20260930T133221Z_d__000000.jpg")]
-    # every 5th sorted session is val, and a session never spans splits
+    # stable hash split (124745Z hashes to 0 mod 5), and a session never spans splits
     assert {f["session"]: f["split"] for f in manifest["frames"]} == {
         "20260930T124745Z_d": "val", "20260930T133221Z_d": "train"}
     assert manifest["deleted_indexes"] == ["20260930T124745Z_d__000001"]
@@ -128,7 +128,8 @@ def test_catalog_scan_finds_artefacts_and_keeps_hand_fields(tmp_path):
     (video,) = row["derived"]["video"]
     assert set(video) == {"video", "sidecar", "meta", "scan", "sha256"}
     assert row["derived"]["labels"][0]["version"] == L.LABEL_VERSION
-    assert row["derived"]["datasets"] == [{"name": "lanes", "version": final.name, "split": "train"}]
+    # neither session hashes to val; the smaller hash (this one) is the fallback val
+    assert row["derived"]["datasets"] == [{"name": "lanes", "version": final.name, "split": "val"}]
     assert catalog.main(["--root", str(root), "update-tags", name, "--add", "intersection,wall",
                          "--driver", "human", "--error", "D-378/E2"]) == 0
     assert catalog.main(args) == 0  # rescan keeps what a person set

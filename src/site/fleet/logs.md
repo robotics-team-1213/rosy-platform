@@ -1390,6 +1390,14 @@
 - 증거: `test_localization_cues.py` 사각형 표 갱신(+2), `test_localization_arbiter.py` +1(거리 없는 목격만으로는 결정 없음). fleet localization 176 passed.
 - gate 변화: 없음.
 
+## 2026-10-02 · uncommitted · feat(fleet): C4b wave 1 — Cell Job 하달 경로 (G4, G5, G3, G6)
+- 변경: (G4) `local_action_transport.py`가 `FleetActionGrant | FleetCellTransferGrant`를 받고, 종류별 표로 wire 버전을 고른다(PICK_PLACE 2, CELL_TRANSFER 2). 모르는 종류는 I/O 전에 거절. (G5) `server/cell_compiler.py` `PalletizingCellJobCompiler(tol_m)` — palletizing 로더·`compile_job`·`carry_z()`(불일치면 거절)·`compile_plan_bundle`, `cli.py --cell-job-stack-tol-m`(지연 import). (G3) `server/step_action_kinds.py`(종류별 규칙: 열린 프로필, grant 본문, phase, 거절 사유), `server/step_dispatcher.py` `StepJobDispatcher`(Step마다 Action 하나, k−1 GOAL_CONFIRMED 뒤에만, RUNNING은 GetAction으로만 대조, 거절·실패·불명은 Job HOLD+사유), `create_app(deployment_profile, omx_cell_grant_revisions)` — (simulation, CELL_TRANSFER)만 열리고 PICK_PLACE 하달기는 모든 프로필에서 닫힘. `cell_job_store.py`에 rosy-a9(D-420) 요청 1–8: 제출 때 claim DISPATCHING 승격, 결과 SUCCEEDED/FAILED/REJECTED/UNKNOWN+호출자 사유, 펜스 변경 시 HOLD 기록(예외 아님), 범용 `hold()`, 이벤트 키로 재생 먼저 판정, SUBMITTING 이벤트에 epoch·generation. (G6) `goal_evidence_registry` `sim_model_pose`는 simulation 프로필에서만, `server/cell_goal_evidence.py`가 생산자 토큰·workcell·attempt 확인 뒤 Fleet이 `item_at_pose`를 판정하고 만족할 때만 `confirm_step_goal`.
+- 판단: `test_mission_api`의 하달기 시험은 D-403 §7에 맞게 바꿨다(production 거절, simulation은 셀 하달기만). `test_cell_job_store`의 펜스 변경 시험은 예외 대신 HOLD를 본다(D-420 항목 3).
+- 증거: C4b 보고(fleet·omx·test 전체, known_failures).
+- 크기: fleet 27811 재판정(main 27134), `cell_job_store.py` 617 accept, `cli.py` 604 accept.
+- 남음(wave 2): G7 정지 사슬과 (a)–(i), G9 pilot_sim /cell·seat 배제, goal-evidence HTTP 경로, UNKNOWN 대조(reconcile) 경로, 재시작 직후 다음 Step 자동 제출 여부(e).
+- gate 변화: 없음.
+
 ## 2026-10-03 · uncommitted · fix(fleet): preserve Cell transfer phase receipts over UDS v2
 - Change: accept the separate CELL_TRANSFER grant in the Fleet Action transport and select existing UDS v2 for submission, lookup and exact-attempt cancel. Missing phase summaries fail closed. Record the shared phased contract in API Reference v1.82 and update the current-version document checks.
 - Evidence: producer/consumer/legacy dispatcher/API contract suites 55 passed; architecture and dependency boundaries 38 passed; changed Python files pass flake8. Full Fleet regression 1431 passed/7 skipped; known-failure comparison 0 new/0 known. Log/generated contracts 6 passed; harness lint 0 errors/24 existing freshness warnings.
@@ -1418,3 +1426,66 @@
 - Change: verify the internal Cell evidence checkpoint before local integration; no gate promotion.
 - Evidence: quick tier 96 passed/24 existing freshness warnings; harness lint 0 errors/24 existing freshness warnings; focused Cell service/store/dispatcher 48 passed, registry 10 passed and independent review 44 passed. Full Fleet regression is still running at commit preparation and is not claimed as passed.
 - Gate: SOURCE/LOCAL only. Public ingress, app callback, independent evaluator and ROS-SIM remain open.
+
+
+## 2026-10-03 · uncommitted · feat(fleet): compose public Cell goal producer ingress
+- Change: Add opt-in pinned Cell registry and strict shared HTTP ingress; wire pending goal reconciliation into the existing Cell dispatcher. Preserve durable successful Action receipts when goal callback validation/storage fails. Isolate credentials, reject whitespace/control credentials, confirm ordered goals through the actual proposal/admission HTTP surface and release claims only after final completion. Move the evidence contract to foundation without a Fleet duplicate.
+- Evidence: App/service/registry/legacy checks 110 passed; final API/registry/legacy/version-document checks 64 passed; independent final review 25 passed; changed Python passes flake8. Prior 778f5029 full Fleet shards yielded 1498 passed/7 skipped with one Hub startup timeout, which passed isolated on unchanged main (1 passed in 9.25s); new public-composition full regression and quick tier are running.
+- Gate: SOURCE/LOCAL only. Actual OMX provider, independent Gazebo evaluator, canonical two-ledger Cell replay and ROS-SIM remain open. Default dispatch remains disabled.
+
+
+## 2026-10-03 · uncommitted · verify(fleet): public Cell ingress regression
+- Change: verify the final public Cell producer composition before local integration; no gate promotion.
+- Evidence: final full Fleet regression in four file shards 1514 passed/7 skipped, all four process exit codes 0, with no retries on the final public code. Foundation/protocol alignment 427 passed/1 skipped; app/service/registry/legacy checks 110 passed, final API/registry/legacy/version checks 64 passed, independent final review 25 passed. Quick tier 96 passed/24 existing freshness warnings; record contracts 3 passed; harness lint 0 errors/24 existing freshness warnings. Changed Python passes flake8.
+- Gate: SOURCE/LOCAL only. Canonical two-ledger Cell replay, actual OMX owner/provider composition, independent model/gripper evaluation and ROS-SIM remain open.
+
+## 2026-10-03 · uncommitted · fix(fleet): C4b 1b — Cell Job claim 유지, HOLD 출구, 공정한 하달 (리뷰 M1/M2, rosy-a9)
+- 변경: (A1) 정지·시작 래치가 같은 트랜잭션에서 READY·ACTION_SUCCEEDED Cell Job을 HOLD(`site_stop`)로 두고 그 claim을 새 단계 `HELD`로 옮긴다(래치는 CLAIMED만 지운다). FAILED·REJECTED 결과도 `HELD`. rearm 조건은 그대로(DISPATCHING·UNKNOWN만 막음). (A2) `hold()`는 RUNNING에서 UNKNOWN/DISPATCHING만, 해제는 `not_submitted=True`일 때만. (A3) HOLD+UNKNOWN Job을 GetAction으로 계속 읽음(성공→ACTION_SUCCEEDED, 실패·404→HOLD+HELD), 일시 실패는 0.5/1/2/4 s 백오프 뒤 5회째에만 UNKNOWN. 운영자 `reconcile`/`resume`/`cancel` 경로(이름 있는 운영자). (A4) claim 행 수 확인, 빠진 claim → HOLD `FLEET_CLAIM_MISSING_BEFORE_SUBMISSION`. (A5) 제출 직전 HOLD 둘 다 해제. (B1) 모든 Job을 한 주기에 돌고 막힌 머리 Job은 건너뜀. (B2) hold 이벤트 키에 승인 횟수. (B3) start_step ValueError → `ACTION_GRANT_INVALID`. (B4) 시계 하나. (B5) 다이제스트 함수 하나. (B6) 결과 기록 충돌은 한 번 보고. (C1) item_at_pose 술어를 해석 때 Step에 저장, 중심 오프셋은 레시피에서. (C3) owner가 `GetOwnerIdentity`로 simulation임을 보고해야 하달. `GET /api/fleet/resource-claims`(claim 소유 Job·상태·단계).
+- 판단: CANCELLED 상태는 스키마 변경이라 1b에서는 HOLD+`CANCELLED_BY_OPERATOR`+claim 없음으로 둔다(D-420 v2). main의 missing-claim 시험(예외)은 A4에 맞춰 HOLD로 바꿨다.
+- 증거: C4b 1b 보고.
+- 후속: console: show held-job claim owner (콘솔 UI는 다른 세션 소유라 이번에 손대지 않음). wave 2: `fleet_fence_current=True` 자리표시(G7), G9 `/cell`·seat 배제, phase 진행기와 CELL_TRANSFER 완료, 슬립시트 파지, 사이트 프로필의 palletizing wheel.
+- 크기: fleet 28160 재판정, `cell_job_store.py` 824(분할 조건 기록).
+- gate 변화: 없음.
+
+## 2026-10-03 · uncommitted · fix(fleet): C4b 1c — 재시작·정지·404 경로의 출구 (재검토 N1–N3, rosy-a9)
+- 변경: (N1) 시작 복구가 RUNNING Job의 DISPATCHING claim을 UNKNOWN으로, readback은 HOLD+DISPATCHING도 받음, hold()는 RUNNING에서 UNKNOWN만. (N2) 정지 래치는 claim 수 불일치로 실패하지 않고 `CLAIM_SET_INCOMPLETE_AT_STOP`을 남김. (P1·2) hold()는 claim을 놓지 않음, `release_before_send`만 진행 없는 READY Job의 claim을 놓음, 래치 뒤 성공은 HOLD(site_stop)+HELD, 진행 있는 Job의 제출 직전 HOLD는 HELD. (N3·3) 404는 ACTION_NOT_FOUND+만료+5 s+receipt 없음일 때만 NOT_FOUND, transport는 다른 404를 오류로, owner `get`은 다른 principal에 PEER_NOT_ALLOWED. (5·6) 틱당 I/O 8회 상한과 round-robin, owner 식별 캐시 TTL(양 10 s·음 5 s), 전송 오류 때 버림. (P3) 목표 술어의 파지 깊이는 검증된 레시피에서.
+- 판단: dca0f6715(`MissionStore.confirm_goal` HOLD 사유 확장)는 main 커밋이 병합으로 들어온 것이고 1c는 필요로 하지 않아 이 가지에서 되돌리지 않았다. owner journal 식별은 넣지 않음.
+- 증거: C4b 1c 보고.
+- 후속(wave 2): 운영자 증언 해결(owner 영구 상실 시 UNKNOWN), 그 밖의 wave 2 목록은 1b 기록 그대로.
+- gate 변화: 없음.
+
+## 2026-10-03 · uncommitted · fix(fleet,omx): C4b 1d — 전송 직전 세대 재확인, receipt 먼저 기록, owner journal 식별
+- 변경: (1) `_submit`이 `start_step` 뒤 세대를 다시 읽고, 바뀌면 `hold_unsent`(receipt·장치 결과가 없을 때만)로 HOLD+HELD. (2) 모든 200 응답의 receipt를 검증 전에 기록, `has_device_receipt`는 기록된 SUCCEEDED/FAILED도 셈, 반복 기록은 쓰기 트랜잭션 없이 건너뜀. (3) owner `journal_id`(SQLite에 한 번 생성)를 receipt·GetAction·GetOwnerIdentity에 싣고, NOT_FOUND는 같은 journal일 때만. (4) `CLAIM_SET_INCOMPLETE_AT_STOP`에 context·actor·세대·승인 횟수. (5) 사라진 Job의 KeyError는 그 Job만 건너뜀. (6) `NOT_FOUND_SKEW_S` 주석에 같은 호스트 시계 가정.
+- 증거: C4b 1d 보고.
+- gate 변화: 없음.
+
+## 2026-10-03 · uncommitted · merge(fleet): main에 들어온 병렬 Cell 하달기를 걷고 공개 목표 증거 입구를 C4b 설계로 옮김
+- 변경: 사용자 결정에 따라 이 가지의 `StepJobDispatcher`와 claim/HOLD 규칙(1b–1d)을 남기고, main의 `cell_job_dispatcher.py`·`cell_job_readback.py`·`cell_job_goal.py`·`cell_job_codec.py`·`cell_job_phase_history.py`와 그 시험(`test_cell_job_dispatcher.py`, `test_cell_job_goal_recovery.py`), `enable_cell_job_dispatcher`/`cell_job_config_revisions`를 지웠다. 옮긴 것: 목표 확인은 같은 attempt의 기록된 장치 SUCCEEDED를 요구(64b4b1faa), 다음 Step은 현재 세대일 때만 열고 아니면 HOLD+HELD, 증거 필드 비어 있음 거절; 공개 `/api/fleet/cell-goal-evidence`(생산자 등록·자격 격리·관측 시각·터미널 뒤 관측·미리 온 증거 보관)는 Step에 저장된 `item_at_pose` 술어로 Fleet이 판정하도록 고쳤고, `CellGoalEvidence.satisfied`를 없앴으며(생산자 자기 판정 금지), simulation 프로필에서만 연다. 하달기는 원장과 하달 제어가 같은 DB인지, 저장된 grant가 Step 시도와 같은지 확인한다. 성공 콜백 실패는 기록된 장치 성공을 바꾸지 않는다.
+- 판단: main의 HOLD에서 바로 목표 확인(`LATE_SUCCESS_REQUIRES_INDEPENDENT_GOAL_EVIDENCE`)은 1b 규칙(HOLD Job은 재승인 뒤에만)과 어긋나 옮기지 않았다. main의 Fleet 쪽 phase 이력 대조와 운영자 하달 취소(`cancel_current`)는 wave 2(G7)로 남긴다.
+- 증거: C4b merge 보고.
+- gate 변화: 없음.
+
+## 2026-10-03 · uncommitted · refactor: D-425 Console HTTP adapter checkpoint
+
+- 변경: 운용·설치 call 중복을 Fleet adapter로 전환하고 session token·잠금·poll gate는 문서에 유지. Windows fixture 포트 공유를 독점 bind로 차단.
+- 증거: Node 18 passed; static/ownership/manifest 재검사 53 passed. 오류 status/문서 잠금 변이 red 후 bytes 복원, 실제 source 사본 Chromium session/origin 3 passed.
+- gate 변화: HTTP·인증 체크포인트. 문서 종료·token 교체 scope는 Task 3 미완료.
+
+## 2026-10-03 · uncommitted · test: D-425 browser baseline and safety facts
+
+- 변경: Console 전환 전/후 전체 browser 비교 및 안전 행 renderer 계약 복구. durable 실패 목록은 docs/validation/app-ownership-migration-2026-10-03/task3-browser-regressions.md.
+- 증거: baseline 45 passed/22 failed, HTTP adapter 48 passed/22 failed, new 0. 안전 상태 시험 2 green·guard mutation 2 red·원본 bytes 복원 후 2 green.
+- gate 변화: 전체 browser는 HOLD. 20개 기존 실패와 문서/token scope 정리가 남음.
+
+## 2026-10-03 · uncommitted · refactor: D-425 Console document lifetime
+- 변경: 운용·설치 문서와 기존 panel의 JSON/직접 fetch·본문 decode·timer·handler·frame/observer 구독을 page/token epoch에 연결. 종료 때 미전송 목표·확인 대기를 취소하고 복귀는 새 조회만 시작. 기존 명령·권한·404 gate·poll cadence 유지.
+- 증거: Chromium lifetime/session/origin 14 passed; disposal 변이 8 failed, 카메라/Vision late repaint 변이 4 failed, bytes 복원 후 14 passed. 공유/static/ownership/quick 351 passed/24 skipped/26 warnings. 최초 Fleet 전체 1584 passed/7 skipped/1 failed의 옛 map-fit wiring 문자열 검사를 scope 연결로 갱신해 재검사.
+- gate 변화: Task 3 SOURCE/LOCAL 수명 계약 완료. 전체 browser 20개 OPEN·installed-only·DEVICE/FIELD는 유지. 상세: docs/validation/app-ownership-migration-2026-10-03/task3-console-lifetime.md.
+- 추가 증거: map-fit wiring 검사 수정 후 Fleet 전체 1585 passed/7 skipped. lint 0 errors/26 warnings. 선택 운용 browser 11 passed/1 기존 OPEN 실패/55 deselected이며 전체 무실패로 표현하지 않음.
+
+
+## 2026-10-03 · uncommitted · feat: read live Fleet fence on the simulation Cell owner
+- Change: replace the entrypoint unconditional Fleet-current callback with uncached authenticated GET /api/fleet/dispatch-control on an explicitly configured literal loopback endpoint. Require a separately provisioned viewer secret before ROS loads. Direct HTTP avoids proxies/redirects; status, 8 KiB body, strict generation types and finite JSON checks refuse on uncertainty. Existing Action/stop/rearm stays on UDS. Offload async Fleet rearm I/O so the event loop can answer the owner's reverse readback; preserve operator guard and rollback.
+- Evidence: actual loopback Fleet server plus persistent Fleet/owner stores reproduced LOCAL_WORKCELL_REARM_FAILED before offload and passed after. Offload-removal mutation fails again; original bytes restored. Final readback suite 18 passed; combined Fleet stop/rearm, owner/provider/replay/boundaries regression 96 passed before the additional finite-JSON case. Independent review 48 passed / 1 skipped and final readback 18 passed, no Critical/Important findings. Production flake8 passes. Final agent wheel rebuilt and force-installed from X: copy; site-packages adapter reads changed loopback state without caching, pip check passes.
+- Final checks: quick tier 96 passed / 26 existing warnings; harness lint 0 errors / 26 warnings. Entry configuration regression guards the ROS import directly and passed.
+- Gate: SOURCE/LOCAL only. Host HTTP is real; ROS and UDS credential transport are substituted. Live ROS/UDS (a)-(i), seat exclusion, thin-sheet handling and full two-layer/two-pallet vendor Gazebo acceptance remain open. Socket timeout bounds inactivity, not an end-to-end stop deadline. No viewer credential registration, service deployment, physical enablement or push performed.

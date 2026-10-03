@@ -1,7 +1,8 @@
-"""core_api_web.api.v1.safety — SAF-001 E-Stop, SAF-004 속도 한계, SAF-005 배터리 정책."""
+"""core_api_web.api.v1.safety — SAF-001 E-Stop, SAF-003 Fleet 상실, SAF-004 속도 한계, SAF-005 배터리 정책."""
 
 from __future__ import annotations
 
+import logging
 import math
 
 from fastapi import APIRouter, Depends
@@ -13,6 +14,8 @@ from core_api_web.api.errors import ApiError
 from core_api_web.api.deps import Mode
 from core_common.config import ConfigError, patch_local_config
 
+
+logger = logging.getLogger(__name__)
 
 safety_router = APIRouter(prefix="/api/v1/safety", tags=["safety"])
 
@@ -38,16 +41,23 @@ def safety_release(auth: AuthContext = Depends(admin), svc: CoreServicesLike = D
 
 
 _FLEET_LOSS_POLICIES = {"STOP", "HOLD", "RETURN_HOME", "CONTINUE"}
+RETURN_HOME_WARNING = (
+    "RETURN_HOME on Fleet loss: every robot with this policy drives to __home__ at the same "
+    "time when the site Fleet goes down, without Fleet traffic control (D-419). STOP is the "
+    "safe default.")
 _CRITICAL_POLICIES = {"RETURN_HOME", "STOP"}
 
 
 def _safety_payload(svc: CoreServicesLike) -> dict:
     battery = svc.safety.battery_policy
     deep = getattr(getattr(svc.battery, "_cfg", None), "deep_percent", 5.0)
+    fleet_loss = svc.fleet_loss
     return {
         "estop": svc.safety.estop,
         "source": svc.safety.estop_source,
         "fleet_loss_policy": svc.safety.fleet_loss_policy,
+        # SAF-003 (D-419, v1.86): FleetAgent link and the policy applied in this outage.
+        "fleet_link": fleet_loss.status() if fleet_loss is not None else None,
         "limits": {
             # 활동 상한이 걸려 있으면 지금 실제로 적용되는 값이 이것이다.
             "session_linear": svc.safety.session_linear,
@@ -159,4 +169,11 @@ def safety_limits(body: LimitsRequest, auth: AuthContext = Depends(admin),
     svc.config.setdefault("safety", {}).update(patch_safety)
     svc.events.publish("config.changed", severity="warning", source="api",
                        data={"key": "safety.limits"})
-    return _safety_payload(svc)
+    payload = _safety_payload(svc)
+    if patch_safety.get("fleet_loss_policy") == "RETURN_HOME":
+        # D-419: accepted, but every paired robot on this policy drives home at once when
+        # the site Fleet goes down, with no Fleet traffic control. Say so; do not refuse.
+        logger.warning("fleet_loss_policy set to RETURN_HOME by %s: %s", auth.role,
+                       RETURN_HOME_WARNING)
+        payload["warning"] = RETURN_HOME_WARNING
+    return payload

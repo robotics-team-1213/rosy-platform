@@ -385,3 +385,58 @@
 - 변경: `connected` 는 WELCOME~세션 끝, backoff 는 WELCOME 뒤에만 재설정, HELLO 답 5 s. 보낸 envelope 순서 기억(전송 잠금)과 답 짝짓기, 일시 오류 재전송(3 회), 영구 거부는 seq·종류 기록 후 버림, 미응답·전송 중 취소 사건 재버퍼. `principal_ref` 키 HMAC(0c56f3d6f).
 - 증거: `test_fleet_agent_link.py` 12 passed, `test_line_follow_stuck*.py` 46 passed, `test_hub_server.py` 9 passed.
 - gate 변화: 없음.
+
+## 2026-10-02 · 8dd300c52 · feat(safety): D-415 SAF-003 Fleet 링크 상실 정책
+- 변경: 새 `core_features/safety/fleet_loss.py` `FleetLossMonitor`(ROS 무의존) — FleetAgent 링크가 끊긴 순간 진행 중이던 Fleet 주행 목표(correlation_id)가 `fleet_loss_timeout_s` 동안 그대로면 STOP/HOLD/RETURN_HOME/CONTINUE 를 한 번 적용하고 `safety.fleet_lost`, 재접속 때 `safety.fleet_restored`. `navigation/manager.py` 에 `fleet_goal()` 과 `cancel(correlation_id=…)`(판정 뒤 바뀐 목표는 취소하지 않음, 반환 bool).
+- 증거: `test/test_fleet_loss.py` 18 passed(정책별·범위·경쟁·실패 경로). gateway+services+api_web 2537 passed 29 skipped 1 failed — `test_host_hardware.py::test_rows_rosy_io_holds_are_judged_from_fresh_topics`, 깨끗한 main(13e6d5e45)에서도 실패, known_failures.txt 에 없음(이 브랜치 무관).
+- gate 변화: 없음(호스트 pytest만, 실기·Gazebo 미확인).
+
+## 2026-10-02 · 758f9878e · fix(safety): D-419(구 D-415) 리뷰 반영 — 링크 진실, goal_changed
+- 변경: FleetAgent 는 WELCOME 뒤에만 `connected=True`, 허브 수신마다 `last_rx`(monotonic), 하트비트 답이 `HEARTBEAT_REPLY_TIMEOUT_S`(2 s) 안에 없으면 소켓을 닫는다. `FleetLossMonitor` 는 오래된 `last_rx` 를 끊김으로 보고 단절을 마지막 허브 수신부터 잰다(깜빡이는 링크가 타이머를 되돌리지 않음), 상실 중 설정이 꺼져도 reset 하지 않는다, 취소가 목표를 못 찾으면 `applied: NONE`·`goal_changed`(귀환·HOLD 기록 없음), tick·status 가 락 하나를 쓴다.
+- 증거: `test_fleet_loss.py` 25 passed, 새 `test_fleet_agent_link.py` 4 passed(WELCOME 전 미연결, 답 없는 하트비트가 소켓 닫음).
+- 번호: 앞 항목들의 D-415(SAF-003)는 **D-419** 로 바뀌었다 — main 에 다른 D-415(콘솔 운영 가시성)가 먼저 들어왔다. ADR 파일 `docs/adr/D-419-saf003-fleet-link-loss-policy.md`.
+- gate 변화: 없음.
+
+## 2026-10-02 · uncommitted · fix(safety): D-419 재리뷰 — 링크 신선도 분리, 리더 하나, backoff
+- 변경: `FleetLossMonitor` 의 링크 신선도(`freshness_s` = 하트비트 1 s + 답 시한 + 0.5 s)를 판정 시간과 분리(짧은 판정 시간에서 건강한 링크가 STOP 나던 결함). 판정 시간 기본 5 s·범위 4–60 s, `validate_link_timing`(≥ 1 + 답 시한 + 1). FleetAgent: `fleet.heartbeat_reply_timeout_s`(기본 2 s, 0.5–10 검증), 세션마다 리더 태스크 하나가 모든 허브 메시지를 받아 `last_rx` 를 갱신하고 하트비트 답만 하트비트를 깨운다(EVENT ack 소진), 시한을 넘기면 transport 를 즉시 abort, backoff 는 답 3 개를 받은 세션 뒤에만 1 s 로. `recently_heard()`/`link_fresh_s`. `_apply` 는 모니터 락 아래에서 행동한다 — 안전한 이유를 주석으로.
+- 증거: `test_fleet_loss.py` 28 passed(실제 1 Hz 박자로 하한 4 s 에서 발화 없음, 답 하나 놓친 기본 설정에서 마지막 수신 뒤 5 s 에 발화), `test_fleet_agent_link.py` 7 passed(WELCOME 전 미연결, EVENT ack 섞인 반쯤 열린 링크 abort, 느린 허브 backoff 1→2→4→8, 안정 세션 뒤 1 s 복귀, 답 시한 검증).
+- gate 변화: 없음.
+
+## 2026-10-02 · uncommitted · fix(fleet_agent): D-419 라운드 3 — ERROR 답은 살아 있음, Fleet 없는 로봇 부팅
+- 변경: 허브는 메시지마다 한 번 순서대로 답하므로 Agent 가 보낸 요청 종류를 큐에 두고 답을 맞춘다. 하트비트에 대한 ERROR 답(예: 이벤트 행 하나가 상한 허브의 TASK_PROJECTION_UNAVAILABLE)은 답으로 세어 링크를 유지하고 60 s 에 한 번 경고, PAIRING_INVALID·SESSION_NOT_PAIRED·DUPLICATE_IDENTITY·IDENTITY_DRIFT·PROTOCOL_UNSUPPORTED 는 세션을 즉시 끝낸다. EVENT ACK 는 여전히 시한을 채우지 못한다(HEARTBEAT 답에서 큐 재동기). hello 답 시한, WELCOME 확인 뒤에만 last_rx, 이벤트는 보낸 뒤에 꺼냄(취소·오류 시 유지). Fleet 링크가 없는 로봇은 잘못된 답 시한에 경고 후 기본값. 하트비트 주기·여유를 인스턴스 값으로(시험 주입). `fleet_loss.py`: 판정 시간 하한과 기본 신선도를 Agent 상수·`link_timing_floor_s` 한 식에서 유도.
+- 증거: `test_fleet_agent_link.py` 16 passed(ERROR 답 유지·안정·경고 1회, 오류 허브 뒤 backoff 1 s 복귀, 페어링 오류 즉시 종료, hello 시한, 이벤트 보존 2건, Fleet 없는 로봇 경고), `test_fleet_loss.py` 31 passed(실제 `_serve`+FakeHub+실제 모니터: 느린 건강 허브 무발화, 침묵 허브 last_rx+timeout 발화, ERROR 허브 무발화). 새 도우미 `test/fleet_hub_fake.py`.
+- gate 변화: 없음.
+
+## 2026-10-02 · uncommitted · fix(fleet_agent): D-419 라운드 4 — 인코딩 불가 이벤트, EVENT 에 대한 오류
+- 변경: 이벤트는 보내기 전에 인코딩하고, 인코딩할 수 없으면(JSON 밖 데이터) 로그 후 버린다 — 맨 앞에 남으면 모든 세션이 죽었다. 전송 실패(WebSocketException·OSError)와 취소만 이벤트를 남기고, 다른 보내기 오류는 그 이벤트를 버리고 계속한다. 인코딩 뒤에만 `_awaiting` 에 넣는다. 치명 코드는 하트비트에 대한 답일 때만 세션을 끝낸다(PAIRING_INVALID 는 언제나) — 허브가 검증 못 한 EVENT 에 SESSION_NOT_PAIRED 로 답하기 때문. 경고 억제는 (코드, 답한 요청) 별. 시험용 FakeHub 는 하나의 순서 큐로 답하고 EVENT 에 EVENT `{accepted}` 로 답한다.
+- 증거: `test_fleet_agent_link.py` 21 passed(인코딩 불가 이벤트 버림·세션 유지·뒤 이벤트 전달, 전송 실패 시 보존, 비전송 오류 시 버리고 계속, EVENT 에 대한 ERROR 는 하트비트를 깨우지 않음, EVENT 에 대한 SESSION_NOT_PAIRED·EVENT_NOT_AUDITABLE 로 세션 유지 + 로그 분리).
+- gate 변화: 없음.
+
+## 2026-10-02 · uncommitted · fix(fleet_agent): D-419 최종 리뷰 LOW — 실패한 보내기의 `_awaiting` 항목 회수
+- 변경: `_send_text` 는 `ws.send` 가 전송 밖 예외(WebSocketException·OSError 아님)로 실패하면 방금 넣은 `_awaiting` 꼬리 항목을 빼고 다시 던진다. 이전에는 `_event_loop` 가 이벤트를 버리고 세션을 유지하면서 낡은 EVENT 항목이 남아, 뒤 답(하트비트 ERROR 등)이 그 항목에 잘못 맞춰져 살아 있는 허브에서 세션이 끊기고 SAF-003 가 발화할 수 있었다.
+- 증거: `test_fleet_agent_link.py::test_non_transport_send_error_drops_that_event_and_goes_on` 가 남은 `_awaiting == [EVENT]`(전달된 이벤트 하나)를 확인. `test_fleet_agent_link.py`+`test_fleet_loss.py` 52 passed.
+- gate 변화: 없음.
+
+## 2026-10-02 · uncommitted · fix(fleet_agent): D-419 착지 — main 의 D-407 수신 루프와 병합
+- 변경: main 이 따로 바꾼 FleetAgent(D-407 A: `_session`·`_receive_loop`·`_inflight`, `linked_within(grace)`, 이벤트 재전송 3 회·`EVENT_NOT_AUDITABLE` 버림, 세션 끝에 답 없는 이벤트 되돌림, HELLO 답 5 s)와 D-419 FleetAgent(답 시한·`last_rx`·안정 세션 backoff·치명 코드)를 하나로 합쳤다. 리더는 D-419 `_reader_loop` 하나, `_awaiting` 항목은 `(종류, 이벤트)` 라 EVENT 에 대한 ERROR 는 D-407 규칙(`_refuse_event`)으로, 하트비트에 대한 ERROR 는 D-419 규칙(치명 코드·60 s 경고)으로 간다. `_session` 이 hello 를 맡고 `HELLO_TIMEOUT_S`(5 s)를 쓴다, `_serve` 는 끝낸 루프와 이유를 `_end_reason` 에 남겨 `Fleet agent link lost (…)` 로 기록, backoff 는 D-419 대로 답 3 개를 받은 세션 뒤에만 1 s. 실패·취소된 보내기는 어떤 예외든 `_awaiting` 에서 뺀다(되돌림이 맨 앞에 남은 이벤트를 두 번 넣지 않게).
+- 시험: `test_fleet_agent_link.py` 를 두 쪽 합본으로 — D-419 의 hello 무응답·취소 보존 시험은 같은 것을 보는 D-407 시험으로 대체, `_awaiting` 튜플, EVENT 오류 로그는 이벤트마다(`event seq`)·하트비트 degraded 경고와 분리. D-407 `Closing` 은 `recv` 로 끊긴다(리더가 `async for` 대신 `recv()`).
+- 증거: `test_fleet_agent_link.py`+`test_fleet_loss.py` 62 passed.
+- gate 변화: 없음.
+
+## 2026-10-03 · uncommitted · fix(fleet_agent): D-419 착지 리뷰 — 이벤트 동시 전송 상한, 되돌림 중복, 하트비트 시한
+- 변경: 답을 기다리는 EVENT 를 `MAX_EVENTS_IN_FLIGHT`(8)개로 묶는다(리더가 EVENT 항목을 뺄 때마다 `_event_slot` 을 깨움) — 긴 단절 뒤 최대 1000 개를 연달아 보내면 이벤트마다 한 번 커밋하는 허브가 그 뒤의 하트비트를 2 s 시한 밖에서 답해 세션이 끊기고 backoff 가 늘며 SAF-003 가 살아 있는 허브에서 STOP 할 수 있었다(MEDIUM). `_requeue` 는 버퍼에 아직 있는 이벤트(같은 객체)를 건너뛴다 — drain 에 걸린 보내기의 항목이 꼬리가 아니면 남아 버퍼가 [1, 1] 이 되던 것(LOW-1). 하트비트의 보내기와 답 대기를 한 `wait_for(reply_timeout_s)` 로(LOW-2). HEARTBEAT 재동기가 건너뛴 EVENT 항목은 버리지 않고 버퍼로 되돌린다. `recently_heard`·`last_rx` 는 `self._clock`. main 의 `reconnecting in N s` 로그 복원. agent.py ruff 지적 17→8(`X | None`, 파싱 `except ValueError`, TRY004 noqa; 남은 것은 main 에도 있는 import 순서·광범위 except).
+- 시험: `test_event_backlog_does_not_starve_the_heartbeat`(상한을 풀면 실패 확인), `test_requeue_does_not_duplicate_an_event_held_in_send`, `test_heartbeat_send_held_in_drain_aborts_at_the_deadline`, `test_heartbeat_resync_puts_skipped_events_back`; `test_backoff_keeps_doubling_without_a_stable_session`(이름·설명을 답 3 개 규칙으로), 취소 시험에서 죽은 `_send_lock` 제거·`_awaiting` 비었음 확인. `fleet_hub_fake.FakeHub(service_s=…)` 는 한 번에 하나씩 처리하는 허브.
+- 증거: `test_fleet_agent_link.py` 35 passed ×3.
+- 열린 D-407 후속(고치지 않음): 일시 오류로 거부되어 `_refuse_event` 가 버퍼 앞에 다시 넣은 이벤트는, 그 사이 세션이 끊기고 재접속 WELCOME 의 `last_event_seq` 가 그보다 큰 seq 를 가리키면(뒤 이벤트는 저장됨) `_session` 의 seq 필터(`e.seq > last_event_seq`)에 걸려 조용히 사라진다. 제안: 재전송 대기 이벤트를 seq 필터에서 면제되는 별도 재시도 목록에 두기(허브는 event_id 로 중복을 걸러 다시 보내도 안전).
+- gate 변화: 없음.
+
+## 2026-10-03 · uncommitted · test(fleet_agent): D-419 시험 시간 여유 — 포화된 호스트
+- 변경: 시험만. 100 % CPU 호스트에서 시간 여유가 모자라 떨어지던 시험을 넓혔다(논리 실패는 없었다). `test_fleet_loss.py` `_agent_rig` 기본값을 주기 0.1·답 시한 0.8·여유 0.1(신선도 1.0)·판정 1.5 s 로(주기 < 답 시한 < 신선도 < 판정 순서 유지), 느린 허브 2.0 s·degraded 1.5 s 관찰, 침묵 허브 발화 구간 1.5 ≤ t < 2.1 s. `test_fleet_agent_link.py`: degraded 허브 답 시한 1.0 s·`answered >= STABLE_HEARTBEATS`, 밀린 이벤트 시험 답 시한 1.0 s(상한 최악 ~0.23 s, 상한 없으면 200×0.025 = 5 s — 상한을 풀면 여전히 실패함을 확인), `timeouts` → `within_cap`.
+- 증거: 아래 커밋 메시지·보고의 3 회 실행.
+- gate 변화: 없음.
+
+## 2026-10-03 · b84e72c55 · feat(vision): D-423 학습 모델 상태 저장소(읽기 전용)
+
+- 변경: `core_features/vision/models.py` `ModelStatusStore` — `perception/learned/status`(lane_seg shadow)·`perception/learned/object_det/status`(object_det active) 상태를 작업별로 보관, 나이·stale. `VisionFrameStore.models` 로 붙인다. 교체·선택 기능 없음.
+- 증거: `test_vision_models.py` 8 passed; `src/runtime/services/test` 포함 묶음 739 passed, 37 skipped.
+- gate 변화: 없음.

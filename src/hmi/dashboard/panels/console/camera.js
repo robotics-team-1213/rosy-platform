@@ -93,7 +93,7 @@ export function mount(root, ctx) {
     "LEFT LANE · RIGHT LANE: 추종에 선택한 왼쪽·오른쪽 경계. UNSEEN은 선택한 경계가 없음.",
     "FOLLOW PATH: 따라갈 목표 방향. 점선은 주행 궤적이나 객체의 미래 이동이 아님.",
     "CURRENT LANE: 선택한 차로. CANDIDATE: 추가 차로 후보이며 자동 차선 변경 대상이 아님.",
-    "OBJ UNKNOWN · DARK: 종류 미확인 전경 영역이며 차선 페인트도 포함될 수 있음. NEAR는 가까운 중앙 경로 영역에 걸침. unranged는 거리 미확인.",
+    "OBJ UNKNOWN · DARK: 종류 미확인 전경 영역이며 차선 페인트도 포함될 수 있음. NEAR는 가까운 중앙 경로 영역에 걸침. 0.42m L은 카메라 앞 거리(L LiDAR, G 바닥 평면 추정). unranged는 거리 미확인.",
     "TAG: 영상에서 식별한 표식 번호. PRED STOP은 도로 예측 표시 중단.",
   ]) legend.append(el("p", "", text));
   root.append(head, stage, status, actions, legend, captureStatus, library, facts);

@@ -17,7 +17,7 @@ Commands a developer runs from the workspace. These are not installed on the rob
 | `dashboard_drive.py` | Headless Playwright driver for the CORE dashboard: `status`, `mode`, `teleop` (stop latency), `screenshot` (skill `rosy-dashboard-drive`) |
 | `web_visible_roles.py` | Role-surface measurement harness: real CORE TestClient + headless Chromium across roles, surfaces, and viewports; exit 1 on missing button kinds, page errors, horizontal overflow, or a failed first response |
 | `harness/` | Module index generator (`rosy_harness.py`) |
-| `hooks/` | D-346 pre-push fast gate (harness lint + contract suites, ~2 min) and its installer |
+| `hooks/` | D-346 pre-push fast gate (harness lint + contract suites, ~3 min) and its installer |
 | `release/download_artifact.py` | Download one GitHub Actions artifact (`--run` + `--name`, or `--artifact-id`) in parallel resumable byte ranges with MB/rate/ETA progress, an exact API-size check and optional `--extract DIR` (CRC check, no path traversal). Token from `GH_TOKEN` or `gh auth token`; neither it nor the signed URL is printed. Stdlib only; test `test/test_download_artifact.py` |
 | `release/prepare_payload_release.py` | One command from a `build-native-payload.yml` run to a signed payload tarball: download (via `download_artifact.py`) or `--artifact-dir`, required-package check, read-only per-robot ROS ABI check over SSH (`--robot`, `--skip-abi`), atomic extract (refuses an existing dir), sign, pack, then prints the `rosy-release-push.ps1` lines. Never pushes. Test `test/test_prepare_payload_release.py` |
 | `ssh/rosy_ssh_enroll.py` | D-418 1: give this PC its own ed25519 key on one robot via an administrator login code (`POST /api/v1/host/ssh/keys`, label `dev:<name>`), host keys into `~/.ssh/known_hosts_rosy`, an idempotent managed `Host` block in `~/.ssh/config`, token logged out in `finally` and never printed. Stdlib + OpenSSH; Windows/macOS/Linux. Fake CORE in test `test/test_rosy_ssh_enroll.py` |
@@ -28,11 +28,13 @@ Commands a developer runs from the workspace. These are not installed on the rob
 
 | Directory | Purpose |
 |-----------|---------|
-| `harness/` | Reads each module's `progress.md` and `logs.md` |
-| `sim/` | Local sim probes, `sim_verify.sh`, and host simulations that compose several packages (`simulate_line_follow.py`, `simulate_semantic_road.py`). Not a second product tree |
+| `harness/` | Reads each module's `progress.md` and `logs.md` (see `harness/AGENTS.md`) |
+| `hooks/` | D-346 pre-push fast gate and its installer (see `hooks/AGENTS.md`) |
+| `release/` | Artifact download and signed payload preparation (see `release/AGENTS.md`) |
+| `sim/` | Local sim probes, `sim_verify.sh`, and host simulations that compose several packages (`simulate_line_follow.py`, `simulate_semantic_road.py`). Not a second product tree (see `sim/AGENTS.md`) |
 | `perception/` | D-356 learned-loop tooling: `dataset/`, `model/`, `training/`, `test/` (see `perception/AGENTS.md`) |
-| `calibration/` | D-47 addendum 2026-10-01: `run_calibration.py` (protocol v1, one command, `--dry-run`/`--offline`), `analyze_session.py` (wheel/LiDAR-yaw/camera fits from recordings), `store_cli.py` (list/accept/reject/pin), `test/` |
-| `perception/prototype/` | Unreviewed camera-estimation and real-video replay prototypes (D-205). Replaced by the reviewed P2 replay tool |
+| `calibration/` | D-47 addendum 2026-10-01: `run_calibration.py` (protocol v1, one command, `--dry-run`/`--offline`), `analyze_session.py` (wheel/LiDAR-yaw/camera fits from recordings), `store_cli.py` (list/accept/reject/pin), `test/` (see `calibration/AGENTS.md`) |
+| `perception/prototype/` | Unreviewed camera-estimation and real-video replay prototypes (D-205). Replaced by the reviewed P2 replay tool (see `perception/prototype/AGENTS.md`) |
 
 ## For AI Agents
 

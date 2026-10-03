@@ -84,11 +84,12 @@ const absentPanel = () => ({
   textContent: "",
   querySelectorAll: () => [],
   addEventListener: () => {},
+  removeEventListener: () => {},
   toggleAttribute: () => {},
   setAttribute: () => {},
 });
 
-export function createVisionView({ el, call, auth }) {
+export function createVisionView({ scope, el, call, auth }) {
   const select = el("vision-source");
   const frame = el("vision-frame");
   const stage = el("vision-image-stage");
@@ -119,6 +120,16 @@ export function createVisionView({ el, call, auth }) {
   let currentLens = null;
   const proposalPolygon = el("vision-proposal-polygon");
   const frameListeners = [];
+  scope.onDispose(() => {
+    busy = false;
+    refreshTimer?.();
+    refreshTimer = null;
+    lease = null;
+    leaseExpiresAt = 0;
+    draggingPointerId = null;
+    if (objectUrl) URL.revokeObjectURL(objectUrl);
+    objectUrl = null;
+  });
 
   function showState(label, kind = "neutral", detail = label) {
     status.textContent = label;
@@ -240,6 +251,8 @@ export function createVisionView({ el, call, auth }) {
   }
 
   async function refreshSources() {
+    const life = scope.capture();
+    life.check();
     // 다른 요청이 진행 중이면 그대로 둔다. 예전에는 여기서 "인증 대기"를 그려
     // 보이던 영상을 지우고 인증과 무관한 배지를 남겼다.
     if (busy) return;
@@ -250,6 +263,7 @@ export function createVisionView({ el, call, auth }) {
     busy = true;
     try {
       const result = await call("/api/fleet/vision/sources");
+      life.check();
       const selected = select.value;
       select.replaceChildren(...result.sources.map((source) => {
         const option = document.createElement("option");
@@ -268,13 +282,16 @@ export function createVisionView({ el, call, auth }) {
         showState("카메라 없음", "warn", "Vision에 등록된 카메라가 없습니다.");
       }
     } catch (error) {
+      if (error.name === "AbortError") return;
       showState("영상 연결 불가", "warn", error.message);
     } finally {
-      busy = false;
+      if (life.current()) busy = false;
     }
   }
 
   async function refreshFrame() {
+    const life = scope.capture();
+    life.check();
     if (busy) return;
     if (auth.locked || !auth.token) {
       // D-415 — 인증 안 됐으면 로그인 안내로 바로 연결한다.
@@ -284,6 +301,7 @@ export function createVisionView({ el, call, auth }) {
       return;
     }
     if (Date.now() - lastSourcesAt > 30000) await refreshSources();
+    life.check();
     const source = select.value;
     if (!source) return;
     busy = true;
@@ -297,13 +315,16 @@ export function createVisionView({ el, call, auth }) {
             rectification: viewMode === "raw" ? DEFAULT_RECTIFICATION : readProfile(),
           }),
         });
+        life.check();
         lease = issued;
         leaseExpiresAt = Date.now() + 45000;
       }
       const response = await fetch(lease.frame_path, {
+        signal: life.signal, credentials: "omit", redirect: "error",
         headers: { Authorization: `Bearer ${lease.lease}` },
         cache: "no-store",
       });
+      life.check();
       if (source !== select.value) return;
       const lens = parseLensHeader(response.headers.get("X-Source-Lens"));
       if (response.ok && (lens?.kind ?? null) !== currentLens) {
@@ -324,6 +345,7 @@ export function createVisionView({ el, call, auth }) {
         return;
       }
       const blob = await response.blob();
+      life.check();
       if (source !== select.value) return;
       const nextUrl = URL.createObjectURL(blob);
       if (objectUrl) URL.revokeObjectURL(objectUrl);
@@ -336,6 +358,7 @@ export function createVisionView({ el, call, auth }) {
       image.hidden = false;
       stage.hidden = false;
       await image.decode().catch(() => {});
+      life.check();
       updateCornerOverlay();
       frame.dataset.state = "online";
       frame.dataset.editing = String(viewMode === "raw");
@@ -344,10 +367,11 @@ export function createVisionView({ el, call, auth }) {
       const seq = response.headers.get("X-Frame-Seq");
       for (const listener of frameListeners) listener({ image, rectified, source, seq, url: nextUrl });
     } catch (error) {
+      if (error.name === "AbortError") return;
       lease = null;
       showState("영상 정지", "warn", error.message || "Vision에 연결할 수 없습니다.");
     } finally {
-      busy = false;
+      if (life.current()) busy = false;
     }
   }
 
@@ -363,7 +387,7 @@ export function createVisionView({ el, call, auth }) {
     showState("인증 대기", "neutral", NO_SOURCE);
   }
 
-  select.addEventListener("change", () => {
+  scope.listen(select, "change", () => {
     lease = null;
     proposalCorners = null;
     currentLens = null;
@@ -371,14 +395,14 @@ export function createVisionView({ el, call, auth }) {
     showState("카메라 전환", "neutral", "선택한 영상의 최신 프레임을 기다립니다.");
     refreshFrame();
   });
-  adjustments.addEventListener("toggle", () => {
+  scope.listen(adjustments, "toggle", () => {
     cornerModes.hidden = !adjustments.open || !select.value;
   });
-  window.addEventListener("resize", updateCornerOverlay);
-  el("vision-edit-corners")?.addEventListener("click", () => selectViewMode("raw"));
-  el("vision-preview-adjusted")?.addEventListener("click", () => selectViewMode("adjusted"));
+  scope.listen(window, "resize", updateCornerOverlay);
+  scope.listen(el("vision-edit-corners"), "click", () => selectViewMode("raw"));
+  scope.listen(el("vision-preview-adjusted"), "click", () => selectViewMode("adjusted"));
   for (const handle of cornerHandles) {
-    handle.addEventListener("pointerdown", (event) => {
+    scope.listen(handle, "pointerdown", (event) => {
       if (viewMode !== "raw" || !event.isPrimary) return;
       event.preventDefault();
       draggingPointerId = event.pointerId;
@@ -389,7 +413,7 @@ export function createVisionView({ el, call, auth }) {
           (event.clientX - box.left) / box.width, (event.clientY - box.top) / box.height);
       }
     });
-    handle.addEventListener("pointermove", (event) => {
+    scope.listen(handle, "pointermove", (event) => {
       if (viewMode !== "raw" || event.pointerId !== draggingPointerId) return;
       const box = stage.getBoundingClientRect();
       if (box.width && box.height) {
@@ -402,9 +426,9 @@ export function createVisionView({ el, call, auth }) {
       draggingPointerId = null;
       saveDraft();
     };
-    handle.addEventListener("pointerup", stopDrag);
-    handle.addEventListener("pointercancel", stopDrag);
-    handle.addEventListener("keydown", (event) => {
+    scope.listen(handle, "pointerup", stopDrag);
+    scope.listen(handle, "pointercancel", stopDrag);
+    scope.listen(handle, "keydown", (event) => {
       if (viewMode !== "raw") return;
       const movement = {
         ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1],
@@ -419,7 +443,7 @@ export function createVisionView({ el, call, auth }) {
     });
   }
   for (const field of [...profileFields, ...cornerFields]) {
-    field.addEventListener("input", () => {
+    scope.listen(field, "input", () => {
       if (!field.reportValidity()) return;
       const source = select.value;
       if (!source) return;
@@ -432,16 +456,16 @@ export function createVisionView({ el, call, auth }) {
         adjustmentState.textContent = "브라우저 저장을 사용할 수 없습니다. 이 화면에서만 적용됩니다.";
       }
       lease = null;
-      if (refreshTimer) clearTimeout(refreshTimer);
+      refreshTimer?.();
       if (viewMode === "raw") {
         adjustmentState.textContent = "원본에서 영역을 조정 중입니다. 끝나면 보정 결과를 확인하세요.";
       } else {
         adjustmentState.textContent += " 미리보기를 갱신합니다.";
-        refreshTimer = setTimeout(() => refreshFrame(), 450);
+        refreshTimer = scope.timeout(() => refreshFrame(), 450);
       }
     });
   }
-  el("vision-reset-adjustments")?.addEventListener("click", () => {
+  scope.listen(el("vision-reset-adjustments"), "click", () => {
     const source = select.value;
     if (source) localStorage.removeItem(rectificationKey(source, currentLens));
     loadProfile(source);
@@ -449,17 +473,20 @@ export function createVisionView({ el, call, auth }) {
     lease = null;
     refreshFrame();
   });
-  el("vision-refresh").addEventListener("click", () => {
+  scope.listen(el("vision-refresh"), "click", () => {
     lease = null;
-    refreshSources().then(refreshFrame);
+    const life = scope.capture();
+    return refreshSources().then(() => { life.check(); return refreshFrame(); });
   });
   // D-360: Vision 제안은 frame 과 같은 lease 로 same-origin 에서 읽는다. Fleet 은 중계하지 않는다.
   // D-375 지도 맞춤(map-proposal)도 같은 lease·같은 규칙이다.
   async function fetchFieldProposal(view = "field-proposal") {
+    const life = scope.capture();
+    life.check();
     const source = select.value;
     if (!source || auth.locked || !auth.token) throw new Error("카메라를 먼저 선택하세요.");
     if (!lease || Date.now() >= leaseExpiresAt) {
-      lease = await call("/api/fleet/vision/lease", {
+      const issued = await call("/api/fleet/vision/lease", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -467,14 +494,19 @@ export function createVisionView({ el, call, auth }) {
           rectification: viewMode === "raw" ? DEFAULT_RECTIFICATION : readProfile(),
         }),
       });
+      life.check();
+      lease = issued;
       leaseExpiresAt = Date.now() + 45000;
     }
     const path = lease.frame_path.replace(/\/frame$/, `/${view}`);
     const response = await fetch(path, {
+      signal: life.signal, credentials: "omit", redirect: "error",
       headers: { Authorization: `Bearer ${lease.lease}` }, cache: "no-store",
     });
+    life.check();
     if (response.status === 404 && view === "map-proposal" && !response.headers.get("X-Frame-State")) {
       const text = await response.text().catch(() => "");
+      life.check();
       if (text.includes("not configured")) {
         throw new Error("Vision에 차선 페인트 지도가 설정되지 않았습니다(vision --map-paint).");
       }
@@ -493,7 +525,9 @@ export function createVisionView({ el, call, auth }) {
         ? "최신 프레임이 없어 찾을 수 없습니다." : `Vision 응답 ${response.status}`);
     }
     // D-375: "previous" 는 계산 중이라 돌려준 지난 결과다. 지도 맞춤은 이것을 수락하게 하지 않는다.
-    return { source, body: await response.json(), proposalState: response.headers.get("X-Proposal-State") };
+    const body = await response.json();
+    life.check();
+    return { source, body, proposalState: response.headers.get("X-Proposal-State") };
   }
 
   // 제안을 원본 위 점선 사각형으로 보여 준다. 검토하려면 원본 조정 화면으로 바꾼다.
@@ -518,6 +552,12 @@ export function createVisionView({ el, call, auth }) {
     showRaw: () => { if (viewMode !== "raw") selectViewMode("raw"); },
     currentSource: () => select.value,
     currentCorners: () => readProfile().corners,
-    onFrame: (listener) => frameListeners.push(listener),
+    onFrame(listener) {
+      frameListeners.push(listener);
+      return () => {
+        const index = frameListeners.indexOf(listener);
+        if (index >= 0) frameListeners.splice(index, 1);
+      };
+    },
   };
 }

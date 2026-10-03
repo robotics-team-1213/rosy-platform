@@ -205,6 +205,7 @@ def test_classify_frame_reports_unranged_until_a_calibration_is_supplied():
     uncalibrated = classify_frame(frame, floor_hsv=(0., 0., 100.))
     assert uncalibrated['regions']
     assert all(r['distance_m'] is None for r in uncalibrated['regions'])
+    assert all(r['range_source'] is None for r in uncalibrated['regions'])
 
     calibrated = classify_frame(frame, floor_hsv=(0., 0., 100.), ground=plane())
     ranged = [r for r in calibrated['regions'] if r['distance_m'] is not None]
@@ -213,3 +214,4 @@ def test_classify_frame_reports_unranged_until_a_calibration_is_supplied():
         # Measured at the bottom edge, and never past the trustworthy range.
         assert region['distance_m'] == pytest.approx(plane().distance(region['bbox_xyxy'][3]))
         assert 0 < region['distance_m'] <= MAX_RANGE
+        assert region['range_source'] == 'G'  # D-423: the floor plane measured it

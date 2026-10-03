@@ -2,7 +2,7 @@
 // /api/*·/ws/* 는 절대 캐시하지 않는다 — 명령과 상태는 네트워크 전용이고,
 // 오프라인에서 조종 경로를 열지 않는 것이 이 앱의 안전 계약이다(D-323 §7).
 
-const CACHE = "rosy-pilot-shell-2026-10-02-a5";   // 캐시 키 = 이미지 버전. 바뀌면 이 이름을 올린다.
+const CACHE = "rosy-pilot-shell-2026-10-03-d423";   // 캐시 키 = 이미지 버전. 바뀌면 이 이름을 올린다.
 const SHELL = [
   "/pilot",
   "/pilot/assets/styles.css",
@@ -11,10 +11,13 @@ const SHELL = [
   "/pilot/assets/autonomy.js",
   "/pilot/assets/calibration.js",
   "/pilot/assets/recording.js",
+  "/pilot/assets/controls.js",
+  "/pilot/assets/arm-stick.js",
   "/pilot/assets/stick.js",
   "/pilot/assets/link.js",
   "/pilot/assets/input-state.js",
   "/pilot/assets/vision.js",
+  "/pilot/assets/models.js",
   "/pilot/assets/drivers/registry.js",
   "/pilot/assets/drivers/pinky_core.js",
   "/pilot/assets/drivers/omx_sim.js",
@@ -25,6 +28,9 @@ const SHELL = [
   "/pilot/assets/screens/inputs.js",
   "/pilot/assets/screens/robot-recording.js",
   "/pilot/assets/screens/arm.js",
+  "/pilot/assets/screens/compose.js",
+  "/pilot/assets/widgets/joint_jog.js",
+  "/pilot/assets/widgets/gripper.js",
   "/common/tokens.css",
   "/common/components.css",
   "/common/ui.js",

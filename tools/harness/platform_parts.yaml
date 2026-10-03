@@ -1,0 +1,376 @@
+schema: rosy.platform-parts.v1
+
+# D-427 wave 0 item 5: colcon source roots, relative to the repo root. Every
+# colcon, rosdep, payload and image consumer reads this one line through
+# tools/harness/colcon_roots.py (stdlib-only, so keep it a one-line flow list).
+# Checked by test/architecture/test_colcon_roots.py.
+colcon_roots: [src]
+
+# D-427 §6 "지금(C)" ownership manifest: every tracked source root maps to one
+# D-427 part. No folder moves; `d427_target` is where the root goes in step B.
+# Checked by test/architecture/test_platform_parts.py.
+#
+# Coverage: each tracked file resolves to its deepest matching entry, so a
+# nested entry carves a subtree out of its parent. Exempt: files at the repo
+# root and Markdown folder notes in directories no entry covers (src/AGENTS.md).
+#
+# `import_prefix` lists the Python top-level names a root installs, so an
+# imported module can be traced back to its owner. Script folders that put
+# themselves on sys.path have none.
+
+parts: [middleware, operations, learning, contracts, integrations, shared_web, profiles, deploy, tools, test, docs]
+
+# D-427 §2. Same-part imports are always allowed. Parts not listed here
+# (profiles, deploy, tools, test, docs) are outside the import rules.
+import_rules:
+  contracts:
+    allow: []
+  integrations:
+    allow: [contracts]          # and its own entry only; another adapter is forbidden
+  shared_web:
+    allow: [contracts]
+  middleware:
+    allow: [contracts, shared_web]   # shared_web is for ui roots only (not enforced in Python)
+    integrations: [robots, policies/lerobot_inference, simulation]
+    forbidden_external: [lerobot, torch]   # training stack; devices ship onnxruntime only (D-356)
+  operations:
+    allow: [contracts, shared_web]
+    integrations: [models, storage]
+  learning:
+    allow: [contracts]
+    integrations: [models, policies/lerobot_training, simulation, storage]
+
+roots:
+  # --- contracts -----------------------------------------------------------
+  - path: src/contracts/foundation
+    part: contracts
+    d427_target: contracts/foundation
+    wave: "4d"
+    import_prefix: [core_common]
+  - path: src/contracts/interfaces
+    part: contracts
+    d427_target: contracts/ros_idl
+    wave: "4d"
+    import_prefix: [interfaces]
+
+  # --- middleware: Pinky/OMX device code, skills, drivers, device UI ---------
+  - path: src/runtime/gateway
+    part: middleware
+    d427_target: middleware/core/gateway
+    wave: "4d"
+    import_prefix: [core]
+  - path: src/runtime/services
+    part: middleware
+    d427_target: middleware/core/services
+    wave: "4d"
+    import_prefix: [core_features]
+  - path: src/runtime/events
+    part: middleware
+    d427_target: middleware/core/events
+    wave: "4d"
+    import_prefix: [core_events]
+  - path: src/runtime/api_web
+    part: middleware
+    d427_target: middleware/core/api_web
+    wave: "4d"
+    import_prefix: [core_api_web]
+    note: Pinky Device API web layer and host-agent client.
+  - path: src/runtime/navigation
+    part: middleware
+    d427_target: middleware/core/navigation
+    wave: "4c"
+    import_prefix: [navigation]
+  - path: src/runtime/sensing
+    part: middleware
+    d427_target: middleware/perception
+    wave: "4e"
+    import_prefix: [control]
+    note: >-
+      Package `control` also holds the recorder (middleware/recorder), line follow,
+      sim tooling (tools/gz) and map assets the Fleet image copies. They move with the
+      package in 4e and their split is deferred (D-427 plan Q2); not separate roots yet.
+  - path: src/drivers/imu_bno055
+    part: middleware
+    d427_target: middleware/drivers/imu_bno055
+    wave: "4c"
+  - path: src/products/pinky_pro/adc
+    part: middleware
+    d427_target: middleware/drivers/pinky_adc
+    wave: "4c"
+  - path: src/products/pinky_pro/lamp
+    part: middleware
+    d427_target: middleware/drivers/pinky_lamp
+    wave: "4c"
+  - path: src/products/pinky_pro/led
+    part: middleware
+    d427_target: middleware/drivers/pinky_led
+    wave: "4c"
+    import_prefix: [led]
+  - path: src/products/pinky_pro/bringup
+    part: middleware
+    d427_target: middleware/apps/device/pinky/bringup
+    wave: "4c"
+    import_prefix: [bringup, rosylib]
+  - path: src/products/pinky_pro/profile
+    part: middleware
+    d427_target: middleware/apps/device/pinky/profile
+    wave: "4c"
+  - path: src/products/omx/adapter
+    part: middleware
+    d427_target: middleware/apps/device/omx/adapter
+    wave: "4c"
+    import_prefix: [omx_adapter]
+    note: >-
+      demonstration.py and lerobot_export.py are learning-flavoured (future
+      learning/curation); kept at package granularity until the B move.
+  - path: src/products/omx/profile
+    part: middleware
+    d427_target: middleware/apps/device/omx/profile
+    wave: "4c"
+    note: OMX composition config the adapter validates, not an installation pin (profiles/).
+  - path: src/sim/description
+    part: middleware
+    d427_target: middleware/apps/device/pinky/description
+    wave: "4c"
+    note: Pinky URDF used by both the real robot and Gazebo; could also be integrations/robots/pinky.
+  - path: apps/agent
+    part: middleware
+    d427_target: middleware/apps/device/omx/agent
+    wave: "4a"
+    import_prefix: [rosy_agent]
+    note: OMX cell local Action owner composition (device side of the D-401 cell).
+  - path: modules/skills/api
+    part: middleware
+    d427_target: middleware/skills/api
+    wave: "4a"
+    import_prefix: [rosy.skills.api]
+  - path: modules/skills/manipulation
+    part: middleware
+    d427_target: middleware/skills/manipulation
+    wave: "4a"
+    import_prefix: [rosy.skills.manipulation]
+  - path: modules/execution
+    part: operations
+    d427_target: operations/execution
+    wave: "3a"
+    note: >-
+      Package metadata only; the three source subtrees below are mapped on their own.
+      Goes with api/site (3a); local splits into its own wheel first (2c).
+  - path: modules/execution/src/rosy/execution/local
+    part: middleware
+    d427_target: middleware/execution/local
+    wave: "2c"
+    import_prefix: [rosy.execution.local]
+    note: >-
+      2c makes this the root of the new rosy-execution-local wheel (pyproject.toml
+      here, package under src/rosy/execution/local), so 2c also drops it from
+      PACKAGE_DIR_ROOTS in test_platform_parts.py.
+  - path: modules/execution/src/rosy/execution/api
+    part: operations
+    d427_target: operations/execution/src/rosy/execution/api
+    wave: "3a"
+    import_prefix: [rosy.execution.api]
+    note: >-
+      PlanBundle API is internal to the execution module (D-413 §3), not contracts;
+      placed with its site producer. Re-decide when execution splits in step B.
+  - path: modules/execution/src/rosy/execution/site
+    part: operations
+    d427_target: operations/execution/src/rosy/execution/site
+    wave: "3a"
+    import_prefix: [rosy.execution.site]
+  - path: src/hmi/dashboard
+    part: middleware
+    d427_target: middleware/ui/robot
+    wave: "4b"
+    note: Robot dashboard screens served by core_api_web on the device.
+  - path: src/hmi/pilot
+    part: middleware
+    d427_target: middleware/ui/pilot
+    wave: "4b"
+  - path: src/hmi/face
+    part: middleware
+    d427_target: middleware/ui/face
+    wave: "4b"
+    import_prefix: [emotion]
+  - path: firmware/dock
+    part: middleware
+    d427_target: middleware/firmware/dock
+    wave: "4a"
+  - path: firmware/signal
+    part: middleware
+    d427_target: middleware/firmware/signal
+    wave: "4a"
+
+  # --- operations: Fleet, world, processes, vision, Console/Cam -------------
+  - path: src/site/fleet
+    part: operations
+    d427_target: operations/fleet
+    wave: "3c"
+    import_prefix: [fleet]
+  - path: src/site/fleet/fleet/server/web
+    part: operations
+    d427_target: operations/ui/console
+    wave: "3c"
+    deferred: D-425 Task 9
+  - path: apps/gateway
+    part: operations
+    d427_target: operations/apps/fleet
+    wave: "3a"
+    import_prefix: [rosy_gateway]
+  - path: modules/world
+    part: operations
+    d427_target: operations/world
+    wave: "3a"
+    import_prefix: [rosy.world]
+  - path: modules/processes/palletizing
+    part: operations
+    d427_target: operations/processes/palletizing
+    wave: "3a"
+    import_prefix: [rosy.processes.palletizing]
+  - path: src/site/cell
+    part: operations
+    d427_target: operations/processes/cell
+    wave: "3b"
+    import_prefix: [rosy_cell]
+  - path: src/site/vision
+    part: operations
+    d427_target: operations/vision
+    wave: "3b"
+    import_prefix: [rosy_vision]
+  - path: src/site/cam
+    part: operations
+    d427_target: operations/ui/cam
+    wave: "3b"
+  - path: src/site/games
+    part: operations
+    d427_target: operations/apps/games
+    wave: "3b"
+    import_prefix: [games]
+    note: Laptop game host (D-90) with an overhead camera; a site app, not a process.
+
+  # --- learning -------------------------------------------------------------
+  - path: tools/perception
+    part: learning
+    d427_target: learning/training/perception
+    wave: "1"
+    note: >-
+      dataset/ -> learning/datasets, model/ + store.py -> learning/registry,
+      training/ -> learning/training; replay and helper scripts follow them.
+  - path: tools/perception/prototype
+    part: tools
+    d427_target: tools/perception_prototype
+    wave: "1"
+    note: Camera-calibration and real-run prototypes, not part of the learning loop.
+  - path: src/sim/isaac_sim
+    part: learning
+    d427_target: learning/envs/isaac
+    wave: "1"
+    device_install_exception: "native payload builds every colcon root (Q8); remove with the payload scope change"
+    note: Isaac assets and scripts (D-322 holds Isaac Lab training); could also be integrations/simulation/isaac.
+  - path: data
+    part: learning
+    d427_target: data
+    wave: none
+    note: Teleop recordings and the drive data drop folder; stays in place (D-427 plan Q3).
+
+  # --- integrations ---------------------------------------------------------
+  - path: integrations/robots/omx
+    part: integrations
+    integration: robots
+    d427_target: integrations/robots/omx
+    wave: none
+    import_prefix: [rosy.integrations.robots.omx]
+  - path: src/sim/gz_sim
+    part: integrations
+    integration: simulation
+    d427_target: integrations/simulation/gazebo
+    wave: "4c"
+    note: Worlds, models, plugins and Gazebo params; launch/ and scripts/ are mapped on their own.
+  - path: src/sim/gz_sim/launch
+    part: middleware
+    d427_target: middleware/apps/device/sim
+    wave: "4c"
+    deferred: gz_sim split follow-up
+    note: Launch files start the sim device owner on the same middleware pipeline (D-427 §5).
+  # Same target as the tools/sim root below: when the gz_sim split lands, the
+  # scripts move into tools/sim and this root is removed (not given a path).
+  - path: src/sim/gz_sim/scripts
+    part: tools
+    d427_target: tools/sim
+    wave: "4c"
+    deferred: gz_sim split follow-up
+    note: Sim benches, acceptance harnesses and world/map converters (swarm_bench drives Fleet).
+
+  # --- shared web -----------------------------------------------------------
+  - path: src/hmi/web_common
+    part: shared_web
+    d427_target: shared/web
+    wave: "4b"
+
+  # --- top-level non-part roots ----------------------------------------------
+  - path: profiles
+    part: profiles
+    d427_target: profiles
+    wave: none
+  - path: deploy
+    part: deploy
+    d427_target: deploy
+    wave: none
+  - path: tools
+    part: tools
+    d427_target: tools
+    wave: none
+    note: Loose scripts directly in tools/ only; every tools/<subfolder> needs its own root.
+  - path: tools/calibration
+    part: tools
+    d427_target: tools/calibration
+    wave: none
+    note: Offline per-robot calibration fit and store CLI (never run on a robot).
+  - path: tools/device_twin
+    part: tools
+    d427_target: tools/device_twin
+    wave: none
+    note: D-412 device twin test tool; not shipped.
+  - path: tools/harness
+    part: tools
+    d427_target: tools/harness
+    wave: none
+  - path: tools/hooks
+    part: tools
+    d427_target: tools/hooks
+    wave: none
+  - path: tools/icons
+    part: tools
+    d427_target: tools/icons
+    wave: none
+  - path: tools/release
+    part: tools
+    d427_target: tools/release
+    wave: none
+  - path: tools/sim
+    part: tools
+    d427_target: tools/sim
+    wave: none
+    note: Sim benches and scenario scripts.
+  - path: .github
+    part: tools
+    d427_target: .github
+    wave: none
+    note: CI workflows.
+  - path: .claude
+    part: tools
+    d427_target: .claude
+    wave: none
+    note: Project agent skills and settings.
+  - path: test
+    part: test
+    d427_target: test
+    wave: none
+  - path: docs
+    part: docs
+    d427_target: docs
+    wave: none
+  - path: reference
+    part: docs
+    d427_target: reference
+    wave: none

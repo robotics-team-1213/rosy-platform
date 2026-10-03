@@ -37,8 +37,8 @@
 
 ## 최근 기록
 
+- 2026-10-03 · uncommitted · fix(console): 점유 격자를 가리지 않고 즉시 정지는 버튼이 확인이다
+- 2026-10-02 · uncommitted · D-423 카메라 범례에 거리 출처
 - 2026-10-02 · uncommitted · 스타일 가이드 어휘 패리티 — status·empty·actions·readout·icon + "아직 없는 넷" 현행화
 - 2026-10-02 · uncommitted · D-409 잔존 높이 함수 dvh 교정
 - 2026-10-02 · uncommitted · D-405 /device 테마 버튼 아이콘 렌더 + fullscreen 100dvh 게이트 수리
-- 2026-10-02 · uncommitted · fix(console): fullscreen uses dynamic viewport height
-- 2026-10-02 · uncommitted · feat(console): camera fullscreen and lane/object legend

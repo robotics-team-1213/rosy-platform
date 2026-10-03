@@ -4,6 +4,7 @@ set -euo pipefail
 
 PAYLOAD=""
 SOURCE_TREE=""
+COLCON_ROOTS_ARG=""
 LOCK=""
 RELEASE_ID=""
 SOURCE_REVISION=""
@@ -11,6 +12,7 @@ while [[ $# -gt 0 ]]; do
     case "$1" in
         --payload) PAYLOAD="${2:-}"; shift 2 ;;
         --source-tree) SOURCE_TREE="${2:-}"; shift 2 ;;
+        --colcon-roots) COLCON_ROOTS_ARG="${2:-}"; shift 2 ;;
         --lock) LOCK="${2:-}"; shift 2 ;;
         --release-id) RELEASE_ID="${2:-}"; shift 2 ;;
         --source-revision) SOURCE_REVISION="${2:-}"; shift 2 ;;
@@ -28,6 +30,12 @@ fail() { echo "FAIL: $*" >&2; exit 1; }
 FACTORY_EXPORT="$PAYLOAD/factory-release"
 [[ ! -e "$FACTORY_EXPORT" ]] || fail "payload already holds a factory release export: $FACTORY_EXPORT"
 [[ -d "$SOURCE_TREE" ]] || fail "ROSY source tree is missing"
+# D-427: --colcon-roots is the space-separated manifest list (tools/harness/colcon_roots.py).
+read -r -a COLCON_ROOTS <<< "$COLCON_ROOTS_ARG"
+((${#COLCON_ROOTS[@]})) || fail "--colcon-roots is required"
+for root in "${COLCON_ROOTS[@]}"; do
+    [[ -d "$SOURCE_TREE/$root" ]] || fail "ROSY colcon root is missing: $root"
+done
 [[ -f "$LOCK" ]] || fail "input lock is missing"
 [[ "$RELEASE_ID" =~ ^[0-9]{4}\.[0-9]{2}\.[0-9]{2}-[0-9]{3}$ ]] || fail "release id is invalid"
 [[ "$SOURCE_REVISION" =~ ^[0-9a-f]{40}$ ]] || fail "source revision is invalid"
@@ -186,7 +194,12 @@ chroot "$ROOT" env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-instal
 chroot "$ROOT" env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
     python3-spidev python3-rpi-lgpio python3-numpy python3-pil fonts-dejavu-core
 
-cp -a "$SOURCE_TREE" "$ROOT/tmp/rosy-src"
+RESOLVE_ROOT_ARGS=()
+for root in "${COLCON_ROOTS[@]}"; do
+    mkdir -p -- "$(dirname -- "$ROOT/tmp/rosy-src/$root")"
+    cp -a -- "$SOURCE_TREE/$root" "$ROOT/tmp/rosy-src/$root"
+    RESOLVE_ROOT_ARGS+=(--colcon-root "$root")
+done
 if [[ ! -f "$ROOT/etc/ros/rosdep/sources.list.d/20-default.list" ]]; then
     chroot "$ROOT" rosdep init
 fi
@@ -194,6 +207,7 @@ chroot "$ROOT" rosdep update --rosdistro jazzy
 ROSDEP_PATH_OUTPUT="$(
     python3 "$(dirname "$0")/resolve-required-source-paths.py" \
         --source-root "$ROOT/tmp/rosy-src" \
+        "${RESOLVE_ROOT_ARGS[@]}" \
         --required "$PAYLOAD/required-ros-packages.txt" \
         --chroot-prefix /tmp/rosy-src
 )" || fail "could not resolve required ROSY package dependency closure"

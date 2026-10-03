@@ -11,7 +11,7 @@ from std_msgs.msg import String
 from ..control.safety_profile import SafetyProfile
 from ..control.calibration_profile import ProfileLease
 from ..sensing.observation import Observations
-from ..sensing.body import LIDAR_X, ROTATION_RADIUS
+from ..sensing.body import LIDAR_X, rotation_radius
 from ..control.rotation_envelope import RotationEnvelope
 
 
@@ -72,8 +72,7 @@ class Evidence:
         self._refresh_distances()
         try:
             mount = getattr(self, 'lidar_mount', None)
-            radius = (max(self.robot_r, ROTATION_RADIUS) if self.get_parameter('footprint_guard_enabled').value
-                      else self.robot_r)
+            radius = rotation_radius(self.robot_r)       # D-424: never below the URDF radius
             flat = self.get_parameter('rotation_footprint_xy').value or []
             if len(flat) % 2:
                 raise ValueError('Odd footprint coordinate count')

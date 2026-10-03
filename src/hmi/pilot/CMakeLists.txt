@@ -13,8 +13,11 @@ install(FILES
   autonomy.js
   calibration.js
   recording.js
+  controls.js
+  arm-stick.js
   input-state.js
   vision.js
+  models.js
   manifest.webmanifest
   sw.js
   DESTINATION share/${PROJECT_NAME}
@@ -23,6 +26,7 @@ install(FILES
 install(DIRECTORY
   drivers
   screens
+  widgets
   icons
   DESTINATION share/${PROJECT_NAME}
 )

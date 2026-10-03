@@ -1042,7 +1042,7 @@ def test_learned_perception_env_example_ships_both_switches_off():
     example = (NATIVE / "learned-perception.env.example").read_text(encoding="utf-8")
     assert "\r" not in example
     settings = [line for line in example.splitlines() if line and not line.startswith("#")]
-    assert settings == ["ROSY_LEARNED_SHADOW=false", "ROSY_CAPTURE=false"]
+    assert settings == ["ROSY_LEARNED_SHADOW=false", "ROSY_CAPTURE=false", "ROSY_OBJECT_DET=false"]
     assert "/etc/rosy/learned-perception.env" in example
     launch = (ROOT / "src/runtime/sensing/launch/camera_preview.launch.py").read_text(encoding="utf-8")
     assert "'ROSY_LEARNED_SHADOW'" in launch and "'ROSY_CAPTURE'" in launch

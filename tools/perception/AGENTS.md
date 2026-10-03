@@ -13,7 +13,7 @@ Developer-side half of the D-356 perception learning loop: turn robot recordings
 |------|-------------|
 | `dataset/` | `harvest.py` pulls sessions off a robot, `extract.py`/`frames.py` cut frames, `bag_to_video.py` turns a session into an H.265/H.264 mp4 plus per-frame sidecar in `data/teleop/learning/` (gitignored), `prelabel.py` pre-labels, `build.py` builds a session-split dataset, `publish.py` publishes it for the trainer |
 | `dataset/stuck_markers.py` (D-407 §6) | At harvest, pairs CORE `nav.line_stuck_opened/closed` (event history, wall-clock `ts`) and writes `stuck_markers.json` beside each overlapping session (5 s pad); match frames by `log_ns` |
-| `dataset/` (D-379) | `catalog.py` keeps `data/perception/catalog.jsonl` (one row per session); `autolabel.py` + `labels.py` + `geometry.py` label frames automatically (LiDAR walls, driven floor); `build.py --auto-labels` builds them into `<store>/datasets/<name>/<content_sha>/` |
+| `dataset/` (D-379) | `catalog.py` keeps `data/perception/catalog.jsonl` (one row per session); `autolabel.py` + `labels.py` + `geometry.py` label frames automatically (LiDAR walls, driven floor); `build.py --auto-labels` builds them into `<store>/datasets/<name>/<content_sha>/`, `--eval-set` into `<store>/evalsets/<name>/<content_sha>/` (intake scores lane models on it) |
 | `model/` | `export_onnx.py` exports ONNX, `intake.py` + `intake_gate.yaml` verify a returned model, `deliver.py` ships it to the shadow slot (and rolls back), `watch.py` does intake + shadow push for each READY folder in the store inbox (or, with `backend: hf`, each new HF commit) on the site host (D-373) |
 | `store.py` | The store folder (D-373 decision 8): `content_sha`, `datasets/<name>/<content_sha>/`, `models/{inbox,accepted,rejected}`, the READY rule. Stdlib only |
 | `rosy_ml.py` | The operator CLI (D-373 decision 7): `init`, `doctor`, `status`, `store-status`, `deliver`, `rollback`, `release-hold`, `harvest`, `intake`; guide in `docs/deployment/learned-perception-operators.md` |
@@ -26,11 +26,11 @@ Developer-side half of the D-356 perception learning loop: turn robot recordings
 
 | Directory | Purpose |
 |-----------|---------|
-| `dataset/` | Recordings to datasets |
-| `model/` | Export, intake, delivery |
-| `training/` | Trainer contract |
+| `dataset/` | Recordings to datasets (see `dataset/AGENTS.md`) |
+| `model/` | Export, intake, delivery (see `model/AGENTS.md`) |
+| `training/` | Trainer contract (see `training/AGENTS.md`) |
 | `test/` | Tests |
-| `prototype/` | D-205 prototypes, not the learned loop |
+| `prototype/` | D-205 prototypes, not the learned loop (see `prototype/AGENTS.md`) |
 
 ## For AI Agents
 

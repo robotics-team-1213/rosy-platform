@@ -33,8 +33,8 @@
 
 ## 최근 기록
 
-- 2026-10-02 · 58b01802 · fix(pilot): D-411 A 로봇 녹화 리뷰 반영 — 크기 상한, 끊을 수 있는 받기, 낡은 폴링
-- 2026-10-02 · 4e99d92e · feat(pilot): D-411 A 로봇 녹화 토글과 "녹화본" 시트
-- 2026-10-01 · uncommitted · fix(pilot): preserve recording errors and reconcile API minor
-- 2026-10-01 · uncommitted · fix(omx): fence recording closure and isolate storage faults
-- 2026-10-01 · uncommitted · feat(omx): record SIM demonstrations and export LeRobot v3
+- 2026-10-03 · 09553e730 · feat(pilot): D-423 "모델" 패널(읽기 전용)
+- 2026-10-03 · uncommitted · fix(pilot): D-411 C 관문 뒤 — 그리퍼 목표를 0.9 × max_velocity 로
+- 2026-10-03 · uncommitted · fix(pilot): D-411 C 검토 — 그리퍼 목표를 알린 속도로
+- 2026-10-03 · uncommitted · feat(pilot): D-411 C 그리퍼 위젯, 주행 링 위쪽 잘림
+- 2026-10-03 · uncommitted · fix(pilot): D-411 B 재리뷰 — 종결 뒤 readback 실패, 떠 있는 스틱 원점

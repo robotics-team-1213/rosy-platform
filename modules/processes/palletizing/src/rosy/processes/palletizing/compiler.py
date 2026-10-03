@@ -7,7 +7,7 @@ module never does.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 
 from .cell import CellConfig, Pose
 from .geometry import Frame
@@ -38,6 +38,13 @@ class Job:
     cell_hash: str
     carry_z: float  # base-frame height every horizontal move is flown at
     steps: tuple[Step, ...]
+
+
+def job_document(job: Job) -> dict:
+    """The canonical JSON form of a Job. A Rosy Cell proposal and Fleet's recompilation both use
+    it, so their comparison is byte-exact (D-403 §3)."""
+    return {"recipe_hash": job.recipe_hash, "cell_hash": job.cell_hash, "carry_z": job.carry_z,
+            "steps": [asdict(step) for step in job.steps]}
 
 
 def _on_pallet(frame: Frame, x: float, y: float, z: float, yaw: float) -> Pose:

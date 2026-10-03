@@ -1,10 +1,15 @@
 """Deliver an intake-passed model to a robot's shadow slot (D-356, D-373).
 
 deliver.py push <host> <model_revision> [--models data/perception/models]
-deliver.py rollback <host>
+deliver.py rollback <host> [--slot shadow|active]
+deliver.py promote <host>        (D-423: active <- shadow, the old active -> previous;
+                                  a no-op when shadow is already active; not for lane_seg)
+push: [--allow-unsigned] [--check KEYS_DIR]  object_det must be signed (sign_model.py)
 deliver.py release-hold <host>   (removes the hold file; the pointer is not changed)
 deliver.py status <host>
-common: [--user rosy] [--identity KEY] [--known-hosts FILE] [--root /var/lib/rosy/models]
+common: [--task lane_seg|object_det] [--user rosy] [--identity KEY] [--known-hosts FILE]
+        [--root /var/lib/rosy/models]  (the task's pointers live under learned/slots.task_root:
+        lane_seg keeps the flat D-373 root, object_det uses <root>/object_det)
         [--timeout S]  (per ssh/scp step; 600 for push, 60 for rollback/status)
 push/rollback: [--operator NAME] (default: the OS user; recorded in history.jsonl)
 status: [--history N] (last N history.jsonl lines, default 5)
@@ -56,13 +61,20 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
-for _p in (ROOT / "src" / "runtime" / "sensing", ROOT / "tools" / "perception"):
+for _p in (ROOT / "src" / "runtime" / "sensing",
+           ROOT / "src" / "contracts" / "foundation", ROOT / "tools" / "perception"):
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
 
 import operator_ssh  # noqa: E402
 from control.sensing.perception.learned.manifest import (  # noqa: E402
-    MANIFEST_NAME, ManifestError, check_revision, load_manifest, verify_files)
+    MANIFEST_NAME, TASKS, ManifestError, check_revision, load_manifest, verify_files)
+from control.sensing.perception.learned.slots import FLAT_TASKS, task_root  # noqa: E402
+from control.sensing.perception.learned.signature import (  # noqa: E402
+    SIGNATURE_NAME, SignatureError, verify_manifest_signature)
+
+#: Tasks whose robot node refuses unsigned bundles (D-423; lane_seg is warn-only for now).
+SIGNED_TASKS = ("object_det",)
 
 REMOTE_ROOT = "/var/lib/rosy/models"
 REPORT_NAME = "intake_report.json"
@@ -150,6 +162,7 @@ def remote_script(action: str, rev: str | None, root: str = REMOTE_ROOT, *,
     own = f" -o {OWNER} -g {GROUP}" if privileged else ""
     dmode, fmode = (" -m 0750", " -m 0640") if privileged else ("", "")
     ptr, prev, tmp = q(f"{root}/shadow"), q(f"{root}/shadow.previous"), q(f"{root}/shadow.tmp")
+    act, act_prev = q(f"{root}/active"), q(f"{root}/previous")  # D-423 slots
     lock, hist = q(f"{root}/{LOCK_NAME}"), q(f"{root}/{HISTORY_NAME}")
     hold, hold_tmp = q(f"{root}/{HOLD_NAME}"), q(f"{root}/{HOLD_NAME}.tmp")
     ts = '"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'
@@ -279,6 +292,38 @@ def remote_script(action: str, rev: str | None, root: str = REMOTE_ROOT, *,
                 *history_line("rollback", '"${new##*/}"', '"${cur##*/}"'),
             ]),
         ])
+    if action == "promote":  # D-423: active <- shadow; the old active -> previous
+        return "\n".join([
+            "set -e",
+            *locked([
+                f"test -s {ptr} || {{ echo 'no shadow model to promote' >&2; exit 1; }}",
+                f"new=$(cat {ptr})",
+                f"cur=$(cat {act} 2>/dev/null || true)",
+                # nothing to do: no hold, no previous, no history line
+                'if [ "$new" = "$cur" ]; then echo "shadow is already active; nothing changed"; exit 0; fi',
+                *history_ready(),
+                *write_hold("promote", '"${new##*/}"'),
+                f"if test -f {act}; then install{own}{fmode} {act} {act_prev}.tmp; mv {act_prev}.tmp {act_prev}; fi",
+                f"install{own}{fmode} {ptr} {act}.tmp",
+                f"mv {act}.tmp {act}",
+                "sync",
+                *history_line("promote", '"${new##*/}"', '"${cur##*/}"'),
+            ]),
+        ])
+    if action == "rollback-active":  # D-423: active <- previous
+        return "\n".join([
+            "set -e",
+            *locked([
+                f"test -f {act_prev} || {{ echo 'no previous active model to roll back to' >&2; exit 1; }}",
+                f"cur=$(cat {act} 2>/dev/null || true)",
+                f"new=$(cat {act_prev})",
+                *history_ready(),
+                *write_hold("rollback-active", '"${new##*/}"'),
+                f"mv {act_prev} {act}",
+                "sync",
+                *history_line("rollback-active", '"${new##*/}"', '"${cur##*/}"'),
+            ]),
+        ])
     if action == "release-hold":  # removes the hold; the pointer is not changed
         return "\n".join([
             "set -e",
@@ -300,6 +345,8 @@ def remote_script(action: str, rev: str | None, root: str = REMOTE_ROOT, *,
         return "\n".join([
             f"echo \"shadow: $({s}cat {ptr} 2>/dev/null)\"",
             f"echo \"previous: $({s}cat {prev} 2>/dev/null)\"",
+            f"echo \"active: $({s}cat {act} 2>/dev/null)\"",
+            f"echo \"active previous: $({s}cat {act_prev} 2>/dev/null)\"",
             f"echo \"hold: $({s}cat {hold} 2>/dev/null || echo none)\"",
             f"{s}ls -1 {q(root)} 2>/dev/null || true",
             f"echo 'history (last {int(history)}):'",
@@ -371,12 +418,28 @@ def _push(args, ssh, scp, runner) -> int:
     if manifest.model_revision != rev:
         print(f"refused: manifest revision {manifest.model_revision} != {rev}", file=sys.stderr)
         return 2
+    if manifest.task != args.task:
+        print(f"refused: {rev} is a {manifest.task} model, not {args.task}", file=sys.stderr)
+        return 2
+    if manifest.task in SIGNED_TASKS:
+        if not (folder / SIGNATURE_NAME).is_file() and not args.allow_unsigned:
+            print(f"refused: {rev} is unsigned and the robot refuses unsigned {manifest.task} bundles; "
+                  f"sign it (sign_model.py) or pass --allow-unsigned for a dev robot", file=sys.stderr)
+            return 2
+        if args.check:
+            try:
+                print(f"signature verified with {verify_manifest_signature(folder, args.check)}")
+            except SignatureError as exc:
+                print(f"refused: {exc}", file=sys.stderr)
+                return 2
     if report.get("files") != [{"name": f.name, "sha256": f.sha256} for f in manifest.files]:
         print(f"refused: intake report files differ from the manifest of {rev}", file=sys.stderr)
         return 2
     target = f"{args.user}@{args.host}"
     checks = [(f.sha256, f.name) for f in manifest.files]
     checks.append((_sha256(folder / MANIFEST_NAME), MANIFEST_NAME))
+    if (folder / SIGNATURE_NAME).is_file():  # D-423: the robot verifies it before opening
+        checks.append((_sha256(folder / SIGNATURE_NAME), SIGNATURE_NAME))
     report_check = (_sha256(folder / REPORT_NAME), REPORT_NAME)
     t = args.timeout
     r = _run(runner, [*ssh, target, remote_script("prepare", rev)], t)
@@ -419,19 +482,27 @@ def _audit(args) -> dict:
 def main(argv=None, runner=subprocess.run) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="action", required=True)
-    for name in ("push", "rollback", "release-hold", "status"):
+    for name in ("push", "rollback", "promote", "release-hold", "status"):
         p = sub.add_parser(name)
         p.add_argument("host")
+        p.add_argument("--task", choices=TASKS, default="lane_seg")
+        if name == "rollback":
+            p.add_argument("--slot", choices=("shadow", "active"), default="shadow",
+                           help="active: back to the model before the last promote (D-423)")
         if name == "push":
             p.add_argument("revision")
             p.add_argument("--models", default=str(ROOT / "data" / "perception" / "models"))
+            p.add_argument("--allow-unsigned", action="store_true",
+                           help="push an unsigned object_det bundle (the robot also needs "
+                                "ROSY_ALLOW_UNSIGNED_MODELS=true)")
+            p.add_argument("--check", help="verify the signature against this trusted-keys folder first")
             p.add_argument("--unless-held", action="store_true",
                            help="site watcher: exit 76 without changes if the robot is held; "
                                 "without it a push is manual and holds the robot")
         p.add_argument("--user", default=operator_ssh.USER)
         p.add_argument("--root", default=REMOTE_ROOT)
         operator_ssh.add_arguments(p)
-        if name in ("push", "rollback", "release-hold"):
+        if name in ("push", "rollback", "promote", "release-hold"):
             p.add_argument("--operator", default=getpass.getuser(),
                            help="who is recorded in the robot's history.jsonl")
         else:
@@ -449,6 +520,11 @@ def main(argv=None, runner=subprocess.run) -> int:
         print(f"refused: --root must be an absolute plain path, got {args.root!r}",
               file=sys.stderr)
         return 2
+    if args.task in FLAT_TASKS and (args.action == "promote" or getattr(args, "slot", "shadow") == "active"):
+        print(f"refused: {args.task} keeps the flat D-373 layout (shadow only); promote and "
+              f"rollback --slot active are for per-task slots such as object_det", file=sys.stderr)
+        return 2
+    args.root = task_root(args.task, args.root)
     try:
         opts = operator_ssh.options(*operator_ssh.resolve(args.identity, args.known_hosts),
                                     args.host_key_alias)
@@ -460,8 +536,9 @@ def main(argv=None, runner=subprocess.run) -> int:
         return _push(args, ssh, scp, runner)
     extra = ({"history": max(args.history, 0)} if args.action == "status"
              else {"audit": _audit(args)})
+    action = "rollback-active" if getattr(args, "slot", "shadow") == "active" else args.action
     r = _run(runner, [*ssh, f"{args.user}@{args.host}",
-                      remote_script(args.action, None, args.root, **extra)], args.timeout)
+                      remote_script(action, None, args.root, **extra)], args.timeout)
     if r.returncode != 0:
         return _remote_rc(r)
     print(r.stdout or "", end="")

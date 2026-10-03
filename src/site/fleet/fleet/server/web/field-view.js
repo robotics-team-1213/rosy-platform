@@ -50,7 +50,7 @@ export function warpImage(ctx, image, h, width, height, scratch) {
   return out;
 }
 
-export function createFieldView({ el, view, visionView, onLayersChanged }) {
+export function createFieldView({ scope, el, view, visionView, onLayersChanged }) {
   const canvas = el("field-canvas");
   const figure = el("field-rectified");
   const caption = el("field-rectified-caption");
@@ -81,7 +81,7 @@ export function createFieldView({ el, view, visionView, onLayersChanged }) {
   }
 
   for (const input of toggles) {
-    input.addEventListener("change", () => {
+    scope.listen(input, "change", () => {
       if (!LAYER_KEYS.includes(input.dataset.layer)) return;
       view.layers = { ...view.layers, [input.dataset.layer]: input.checked };
       storageNotice(storageSet(LAYER_STORAGE_KEY, JSON.stringify(view.layers)));
@@ -107,7 +107,7 @@ export function createFieldView({ el, view, visionView, onLayersChanged }) {
   }
 
   for (const input of [widthInput, heightInput]) {
-    input.addEventListener("input", () => {
+    scope.listen(input, "input", () => {
       const source = visionView.currentSource();
       const size = operatorSize();
       if (source && size) storageNotice(storageSet(`${FIELD_SIZE_PREFIX}${source}`, JSON.stringify(size)));
@@ -254,10 +254,13 @@ export function createFieldView({ el, view, visionView, onLayersChanged }) {
     renderRectified();
   }
 
-  el("field-detect").addEventListener("click", async () => {
+  scope.listen(el("field-detect"), "click", async () => {
+    const life = scope.capture();
+    life.check();
     state.textContent = "Vision에서 경기장 윤곽을 찾는 중입니다…";
     try {
       const { source, body } = await visionView.fetchFieldProposal();
+      life.check();
       const found = normalizeProposal(body);
       if (!found) {
         setProposal(null);
@@ -272,22 +275,23 @@ export function createFieldView({ el, view, visionView, onLayersChanged }) {
         + `${found.shape === "square" ? "정사각형" : "직사각형"} · 프레임 ${body.frame_seq} `
         + `(${body.detector?.elapsed_ms ?? "?"} ms). 점선 사각형을 확인하고 수락하세요. 자동 적용하지 않습니다.`;
     } catch (error) {
+      if (error.name === "AbortError") return;
       state.textContent = error.message || "제안을 받지 못했습니다.";
     }
   });
-  acceptButton.addEventListener("click", () => {
+  scope.listen(acceptButton, "click", () => {
     if (!proposal) return;
     visionView.acceptCorners(proposal.corners);
     setProposal(null);
     state.textContent = "제안을 이 브라우저의 모서리 조정값으로 옮겼습니다. 손으로 더 고칠 수 있습니다. 관측 좌표와 주행에는 쓰지 않습니다.";
   });
-  dismissButton.addEventListener("click", () => {
+  scope.listen(dismissButton, "click", () => {
     setProposal(null);
     state.textContent = "제안을 버렸습니다. 조정값은 그대로입니다.";
   });
 
   let sizeSource = null;
-  visionView.onFrame((frame) => {
+  scope.subscribe(() => visionView.onFrame(scope.guard((frame) => {
     lastFrame = frame;
     if (frame.source !== sizeSource) {
       sizeSource = frame.source;
@@ -295,6 +299,13 @@ export function createFieldView({ el, view, visionView, onLayersChanged }) {
       if (proposal && proposal.source !== frame.source) setProposal(null);
     }
     renderRectified();
+  })));
+  scope.onDispose(() => {
+    proposal = null;
+    lastFrame = null;
+    sizeSource = null;
+    acceptButton.hidden = true;
+    dismissButton.hidden = true;
   });
 
   applyLayers();

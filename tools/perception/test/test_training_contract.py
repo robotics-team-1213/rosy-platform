@@ -212,3 +212,18 @@ def test_write_manifest_records_the_given_precision(tmp_path):
     assert _write(tmp_path / "d")[1]["files"][0]["precision"] == "fp32"  # default
     with pytest.raises(ValueError, match="precision"):
         _write(tmp_path / "bad", precision="fp16")
+
+
+def test_write_manifest_records_only_the_experiment_link(tmp_path):
+    exp = {"tracker": "wandb", "run_id": "abc123", "url": "https://wandb.ai/team/rosy-perception/runs/abc123",
+           "project": "rosy-perception", "api_key": "must-not-be-stored"}
+    out, doc = _write(tmp_path, val_iou={"lane": 0.5}, experiment=exp)
+    want = {k: exp[k] for k in ("tracker", "run_id", "url", "project")}
+    assert doc["metrics"] == {"val_iou": {"lane": 0.5}, "experiment": want}
+    m = load_manifest(out)  # the robot-side loader keeps the extra key in raw
+    verify_files(m)
+    assert m.raw["metrics"]["experiment"] == want
+    assert "must-not-be-stored" not in (out / "model_manifest.json").read_text(encoding="utf-8")
+    (tmp_path / "b").mkdir()
+    _, plain = _write(tmp_path / "b", val_iou={"lane": 0.5})
+    assert "experiment" not in plain["metrics"]

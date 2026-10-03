@@ -17,6 +17,7 @@ ONNX_NAME = "model.onnx"
 PRECISIONS = ("fp32", "int8")  # == control...learned.manifest.PRECISIONS
 ROLES = ("background", "lane_marking", "drivable", "stop_line", "ignore", "wall")  # = manifest.ROLES
 COLORS = ("rgb", "bgr")
+EXPERIMENT_KEYS = ("tracker", "run_id", "url", "project")  # metrics.experiment, nothing else
 
 
 def _class_entries(classes) -> list[dict]:
@@ -48,9 +49,11 @@ def _validate(entries, color, mean, std, scale) -> None:
 
 def write_manifest(out_dir, *, onnx_path, classes, color, scale, mean, std,
                    dataset_repo, dataset_revision, camera_profile_revision, trainer,
-                   val_iou=None, date=None, precision="fp32") -> dict:
+                   val_iou=None, date=None, precision="fp32", experiment=None) -> dict:
     """precision: "fp32", or "int8" for a QDQ graph (onnxruntime quantize_static);
-    intake.py refuses a label the graph contradicts."""
+    intake.py refuses a label the graph contradicts. experiment: optional tracker link
+    {"tracker": "wandb", "run_id", "url", "project"}, stored as metrics.experiment
+    (only those keys; never a key or token)."""
     entries = _class_entries(classes)
     _validate(entries, color, mean, std, scale)
     if precision not in PRECISIONS:
@@ -77,6 +80,8 @@ def write_manifest(out_dir, *, onnx_path, classes, color, scale, mean, std,
         "metrics": {"val_iou": val_iou or {}},
         "trainer": trainer,
     }
+    if experiment is not None:
+        doc["metrics"]["experiment"] = {k: experiment.get(k) for k in EXPERIMENT_KEYS}
     (out_dir / "model_manifest.json").write_text(
         json.dumps(doc, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     # Fail here rather than at intake: validate with the robot-side loader when importable.

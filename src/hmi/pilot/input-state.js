@@ -49,12 +49,21 @@ export function setServerLimits(limits) {
   serverLimits = limits && typeof limits === "object" ? {...limits} : null;
 }
 
+// D-411 B: a device whose base_velocity says `fine: false` has no fine scale; a stored
+// preference stays stored but does not apply to it.
+let fineAllowed = true;
+export function setFineAllowed(allowed) {
+  fineAllowed = allowed !== false;
+}
+
 export function inputConfig() {
+  let config;
   try {
-    return {...DEFAULT_CONFIG, ...JSON.parse(localStorage.getItem(CONFIG_KEY) ?? "{}")};
+    config = {...DEFAULT_CONFIG, ...JSON.parse(localStorage.getItem(CONFIG_KEY) ?? "{}")};
   } catch (error) {
-    return {...DEFAULT_CONFIG};
+    config = {...DEFAULT_CONFIG};
   }
+  return fineAllowed ? config : {...config, fine: false};
 }
 
 export function saveInputConfig(patch) {

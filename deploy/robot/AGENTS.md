@@ -14,7 +14,7 @@ robot behavior, ROS interfaces, or final device commands; those remain in
 | Directory | Purpose | Acceptance boundary |
 |-----------|---------|---------------------|
 | `pinky_pro/` | Pinky Pro runtime, image, release, SD media, and development compatibility files | Product image and physical device gates are tracked separately |
-| `omx/` | OMX workstation development and simulation preparation | No field runtime or actuator authority is accepted by this directory move |
+| `omx/` | OMX workstation development and simulation preparation (see `omx/AGENTS.md`) | No field runtime or actuator authority is accepted by this directory move |
 
 ## Rules
 

@@ -13,6 +13,8 @@ import threading
 import time
 from typing import Optional
 
+from .models import ModelStatusStore
+
 
 def _source_label(value: object) -> str:
     clean = re.sub(r"[^A-Z0-9_-]+", "_", str(value).strip().upper())
@@ -100,6 +102,8 @@ class VisionFrameStore:
         self._frame: Optional[VisionFrame] = None
         self._sequence = 0
         self._last_pull_by_viewer: dict[str, float] = {}
+        # D-423 §3.6: the robot's learned-model status per task, read-only display data.
+        self.models = ModelStatusStore()
 
     def publish(self, data: bytes, *, captured_at: float,
                 frame_id: str, source: str, width: int = 0,

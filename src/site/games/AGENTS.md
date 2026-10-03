@@ -18,6 +18,7 @@ Laptop game host (D-90). CORE does not import this package. Final `cmd_vel` stay
 
 | Directory | Purpose |
 |-----------|---------|
+| `games/` | Python package root: `catalog.py`, `cli.py` and the subpackages below (see `games/AGENTS.md`) |
 | `games/field/` | Pitch numbers and homography. No OpenCV, no HTTP |
 | `games/game/` | Referee. No policy HTTP |
 | `games/policy/` | Heuristic now, neural later |

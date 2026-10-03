@@ -1,5 +1,7 @@
 # 앱 역할·이름·아이콘·화면 소유와 공유 연결 조각 실행 계획
 
+> **후속 실행 기준 (2026-10-03):** [D-425](../adr/D-425-app-surface-ownership-shared-boundaries-and-source-layout.md)와 [앱·웹 책임/통신/배치 이전 계획](2026-10-03-app-ownership-shared-transport-and-layout-migration.md)을 따른다. 아래 상태·경로는 작성 당시 기록이다. 이미 구현된 discovery·공유 fixture·Pilot 연결은 새 계획 Task 0에서 현재 코드와 대조하고 재구현하지 않는다.
+
 **결정:** [D-370](../adr/D-370-site-app-roles-names-and-shared-link.md) Proposed.
 
 **현재 상태:** 문서만 있다(2026-09-30). 각 단계는 따로 커밋할 수 있다. 단계마다 **실패하는 시험을 먼저** 쓰고, 적신을 확인한 뒤 구현한다(TDD). 새 검사는 변이 증명으로 믿는다(test/AGENTS 규약). 한 번 일부러 어기고 적신을 본 뒤 되돌린다.

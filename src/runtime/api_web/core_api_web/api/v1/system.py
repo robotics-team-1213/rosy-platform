@@ -37,6 +37,7 @@ from core_common.domain.capabilities import (
     withhold_hardware_flags,
 )
 from core_common.identity import validate_robot_id, validate_robot_name
+from core_common.protocol.controls import pinky_controls
 
 
 system_router = APIRouter(prefix="/api/v1/system", tags=["system"])
@@ -204,7 +205,25 @@ def capabilities(_: AuthContext = Depends(viewer), svc: CoreServicesLike = Depen
     # not failed". The inventory descriptors' presentation states map to
     # these in the D-347 table, not in code.
     data["lifecycle"] = lifecycle_from(svc.capability.to_dict(), truth.reasons)
+    # `controls` (v1.87 additive, D-411 B): rosy.controls/1, what Pilot may draw.
+    # Line autonomy is announced when CORE has the line-follow service. No honest
+    # idle signal says a line can be followed now (observations arrive only after
+    # the mode is on), so readiness stays with PUT /line-follow/mode and its status.
+    # It drives the same base, so it is never announced without the drive control.
+    data["controls"] = pinky_controls(provides=_drive_provides(svc, data),
+                                      max_linear=svc.safety.limits.manual_linear,
+                                      max_angular=svc.safety.limits.manual_angular,
+                                      autonomy=("line",) if svc.line_follow is not None else ())
     return data
+
+
+def _drive_provides(svc: CoreServicesLike, data: dict) -> set[str]:
+    enabled = svc.adapter_registry.enabled()
+    provides = ({p for item in enabled for p in item.provides} if enabled
+                else ({"drive"} if data.get("teleop") is True else set()))
+    if data.get("teleop") is not True:
+        provides.discard("drive")
+    return provides
 
 
 def _jsonable(value: Any) -> Any:

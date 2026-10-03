@@ -2070,6 +2070,12 @@
 - 증거: 2026-10-02 실제 로봇. 025 수동 push로 두 로봇에 업데이터 설치(기본 꺼짐). 9dfk config 켬. 이 PC에서 `payload-2026.10.02-026` 발행(카나리 9dfk). 12:11 GitHub 시간 초과는 error로 처리되고 철회되지 않음. 12:26 staged, 12:26 applying, 12:27 committed(CORE·io·camera 026, 옛 릴리스 3개 정리), 발행 도구가 `canary_ok=true`를 올림. 8kcn은 사용자 지시로 수동 push(026)했고 config는 켰으며 rosy-c5 hold 중. 업데이터 시험 238 passed 1 skipped(기본 켜짐 시험 2개는 바꾸기 전 빨강 확인).
 - gate 변화: D-412 DEVICE(카나리 단계) 통과. 카나리 다음 로봇 순서는 기기 쌍둥이만.
 
+## 2026-10-02 · uncommitted · feat(omx-sim): 셀 owner 실행기와 sim_model_pose 생산자 (C4b G2b, G6)
+- 변경: `robot/omx/run_cell_owner.py`(UDS 스레드 + uvicorn, `rosy_agent.omx_cell_owner` 조립), `cell_sim_tools.refuse_second_owner`가 `run_cell_owner`도 보고 `proc_root`를 받는다, `robot/omx/sim_item_pose_producer.py`(생산자 interface + Gazebo 포즈 reader), `robot/omx/sim/item_pose_goal.yaml`(허용오차 5 mm / 2 mm / 0.05 rad / 기울기 0.05, 근거 C3b).
+- 증거: `test/test_platform_cell_owner_assembly.py`(가짜 ROS runtime), `src/site/fleet/test/test_cell_goal_evidence.py`(가짜 포즈 reader), `test/test_platform_item_pose.py`.
+- 판단: 실행기는 WSL에서 돌려 보지 않았다(wave 1은 Gazebo 없음). 첫 phase 뒤 phase를 진행하고 Action을 완료하는 진행기가 없어 실제 Job은 approach에서 멈춘다 — wave 2.
+- gate 변화: 없음.
+
 ## 2026-10-03 · 27025b10 · fix(native,api): D-418 2차 검토 — 앞서 간 시계, CORE의 실제 기한
 
 - 변경: (HIGH) 시계가 한 번 1년 앞섰던 기록(`clock.json`) 때문에 5분 비밀번호가 실제로 30일 넘게 켜져 있고, 키가 영구히 지워졌다(검토 probe로 재현). 이제 비밀번호는 `system.now()`로 만든 `expires_at`(벽시계)과 `password.json`에 넣은 `CLOCK_BOOTTIME` 기한·boot id 가운데 먼저 오는 쪽으로 꺼진다. boot id가 다르면 바로 끈다.
@@ -2105,3 +2111,27 @@
 - 근거: test/test_site_map_fit_deploy.py.
 - gate 변화: 없음.
 - 최종 증거: test_site_map_fit_deploy.py 4 passed.
+
+## 2026-10-03 · uncommitted · fix(omx-sim): C4b 1b — 그리퍼 폭은 grant의 레시피, HTTP는 루프백 (C2, C4)
+- 변경: `run_cell_owner.py`는 `rosy_agent.omx_cell_owner.sim_gripper_observation`으로 grant의 `recipe_sha256`·item 폭을 쓴다(첫 레시피 아님). HTTP는 기본 127.0.0.1(`ROSY_CELL_OWNER_HTTP_HOST`로만 바꿈; 이 포트를 게시하는 compose·실행 스크립트가 없다). owner HTTP 앱은 아직 수락 저장소를 공유하지 않는다 — G9. `sim_item_pose_producer.py`는 `frame: robot_base`를 싣는다.
+- 증거: `test/test_platform_cell_owner_assembly.py`(스파이로 폭 확인).
+- gate 변화: 없음.
+
+
+## 2026-10-03 · uncommitted · feat: tick local Cell workflow on the existing simulation owner node
+- Change: bind a 50 ms timer on the existing ROS node to owner.advance_pending and destroy it at shutdown. The accepted owner uses the durable workflow for phase/gripper gates; no new owner, thread, grant or retry path is created.
+- Evidence: actual owner host regression 38 passed; integrated owner/compiler/boundaries 23 passed; independent review 38 passed plus updated restart suite 5 passed. Semantic removal mutation fails ACCEPTED versus SUCCEEDED and is restored. Production flake8 and quick96 pass; harness lint0errors/26 existing freshness warnings. Installed owner/workflow wheel imports and pip check pass.
+- Gate: SOURCE/LOCAL only. ROS runtime/timer and Gazebo were not executed; Fleet fence/seat integration and full recipe acceptance remain open.
+
+
+## 2026-10-03 · uncommitted · feat: read live Fleet fence on the simulation Cell owner
+- Change: replace the entrypoint unconditional Fleet-current callback with uncached authenticated GET /api/fleet/dispatch-control on an explicitly configured literal loopback endpoint. Require a separately provisioned viewer secret before ROS loads. Direct HTTP avoids proxies/redirects; status, 8 KiB body, strict generation types and finite JSON checks refuse on uncertainty. Existing Action/stop/rearm stays on UDS. Offload async Fleet rearm I/O so the event loop can answer the owner's reverse readback; preserve operator guard and rollback.
+- Evidence: actual loopback Fleet server plus persistent Fleet/owner stores reproduced LOCAL_WORKCELL_REARM_FAILED before offload and passed after. Offload-removal mutation fails again; original bytes restored. Final readback suite 18 passed; combined Fleet stop/rearm, owner/provider/replay/boundaries regression 96 passed before the additional finite-JSON case. Independent review 48 passed / 1 skipped and final readback 18 passed, no Critical/Important findings. Production flake8 passes. Final agent wheel rebuilt and force-installed from X: copy; site-packages adapter reads changed loopback state without caching, pip check passes.
+- Final checks: quick tier 96 passed / 26 existing warnings; harness lint 0 errors / 26 warnings. Entry configuration regression guards the ROS import directly and passed.
+- Gate: SOURCE/LOCAL only. Host HTTP is real; ROS and UDS credential transport are substituted. Live ROS/UDS (a)-(i), seat exclusion, thin-sheet handling and full two-layer/two-pallet vendor Gazebo acceptance remain open. Socket timeout bounds inactivity, not an end-to-end stop deadline. No viewer credential registration, service deployment, physical enablement or push performed.
+
+## 2026-10-03 · 119382fe6 · docs(native): D-423 `ROSY_OBJECT_DET=false` 를 learned-perception.env 예시에
+
+- 변경: `native/learned-perception.env.example` 에 `ROSY_OBJECT_DET=false`(+ `ROSY_OBJECT_DET_MAX_HZ` 설명). 서비스·권한 변화 없음. 모델은 `/var/lib/rosy/models/object_det/` 아래이고 deliver 가 root:rosy-camera 0750 으로 만든다.
+- 증거: `test_native_systemd_contract.py` env 예시 시험.
+- gate 변화: 없음. 켜는 것은 사용자 승인 뒤.

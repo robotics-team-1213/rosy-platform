@@ -87,6 +87,9 @@ EXPAND_MIB="$(awk '
 RAW_IMAGE="$OUT/rosy-os-pinky-pro-$RELEASE_ID-arm64.img"
 CUSTOMIZER="$SCRIPT_DIR/customize-rootfs.sh"
 
+# D-427: the image rosdep scope covers every colcon root in the manifest.
+COLCON_ROOTS="$(python3 "$WORKSPACE/tools/harness/colcon_roots.py")" \
+    || fail "workspace has no readable colcon_roots: $WORKSPACE"
 [[ -x "$CUSTOMIZER" ]] || fail "rootfs customizer is not implemented; Task 3 workspace \
 is ready but no raw product image may be published before Task 4"
 
@@ -97,7 +100,8 @@ is ready but no raw product image may be published before Task 4"
     --expand-mib "$EXPAND_MIB" \
     -- "$CUSTOMIZER" \
         --payload "$PAYLOAD_ROOT" \
-        --source-tree "$WORKSPACE/src" \
+        --source-tree "$WORKSPACE" \
+        --colcon-roots "$COLCON_ROOTS" \
         --lock "$LOCK" \
         --release-id "$RELEASE_ID" \
         --source-revision "$SOURCE_REVISION"

@@ -136,7 +136,10 @@ def install_task_dispatch_routes(
                 local_rearm = []
                 for workcell_id, instance_id in configured_omx.items():
                     try:
-                        result = stop_transport.rearm(
+                        # The owner reads Fleet's live fence while rearming. Keep the
+                        # event loop available to serve that authenticated readback.
+                        result = await asyncio.to_thread(
+                            stop_transport.rearm,
                             workcell_id=workcell_id, instance_id=instance_id,
                             authority_epoch=control["authority_epoch"],
                             dispatch_generation=control["generation"],

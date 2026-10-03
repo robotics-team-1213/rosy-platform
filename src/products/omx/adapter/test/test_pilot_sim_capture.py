@@ -130,3 +130,25 @@ def test_interrupt_arriving_during_stop_storage_drain_is_in_manifest(tmp_path):
     assert closed["frame_count"] == 2
     assert closed["status"] == "incomplete"
     assert "control_released" in closed["issues"]
+
+
+def test_gripper_mode_records_the_gripper_joint_and_action_column(tmp_path):
+    import json
+    capture = create_capture(tmp_path)
+    assert capture.start("legacy")["provenance"]["gripper_joint"] is None
+    capture.stop(capture.status()["episode_id"], "failure")
+    capture = create_capture(tmp_path)
+    capture.runtime.gripper_joint_for_goals = "gripper_joint_1"
+    episode = capture.start("grip")
+    assert episode["provenance"]["gripper_joint"] == "gripper_joint_1"
+    capture.prepare(NS(command_id="command", positions={"joint1": 0.0, "gripper_joint_1": 0.3},
+                       duration_s=1.6))
+    capture.on_goal_event(RosGoalEvent(kind="GOAL_ACCEPTED", command_id="command", phase_id=None,
+                                      goal_id="11111111-1111-4111-8111-111111111111",
+                                      observed_at_monotonic_s=time.monotonic(), sequence=1))
+    capture.observe_joint_state(state(1_090_000_000, 0.01))
+    capture.camera.latest_frame[0].sequence = 2
+    capture.tick()
+    assert capture.status()["issues"] == []
+    row = json.loads((tmp_path / episode["episode_id"] / "samples.jsonl").read_text().splitlines()[0])
+    assert row["action.gripper"] == 0.3 and row["duration_s"] == 1.6

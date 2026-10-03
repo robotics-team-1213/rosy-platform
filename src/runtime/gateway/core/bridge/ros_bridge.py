@@ -13,6 +13,7 @@ import json
 import math
 import os
 import time
+import traceback
 from typing import Optional
 
 import rclpy
@@ -45,7 +46,7 @@ from core.bridge.cmd_vel import cmd_vel_cycle
 from core.bridge.docking_executor import BridgeDockingExecutor
 from core.bridge.goal_tracker import GoalTracker
 from core_features.maps import occupancy_map_id
-from core_features.vision import PREVIEW_TOPIC
+from core_features.vision import MODEL_STATUS_TOPICS, PREVIEW_TOPIC
 from core_features.navigation.initial_pose import amcl_pose_covariance
 from interfaces.srv import Emotion, SetLed
 import tf2_ros
@@ -104,6 +105,10 @@ class RosBridge:
         node.create_subscription(
             CompressedImage, PREVIEW_TOPIC,
             self._on_camera_preview, preview_qos)
+        # D-423 §3.6: learned-model status per task (latched by the model nodes); display only.
+        lane_topic, object_topic = MODEL_STATUS_TOPICS
+        node.create_subscription(String, lane_topic, self._on_lane_model_status, _LATCHED)
+        node.create_subscription(String, object_topic, self._on_object_det_model_status, _LATCHED)
         # Nav2 lifecycle nodes announce their authoritative goal state on
         # transition_event.  CORE never infers readiness from node discovery;
         # it requires these active transitions plus the motor adapter lease.
@@ -171,6 +176,7 @@ class RosBridge:
 
         self._last_odom_ts = 0.0
         self._last_odom_pose = None
+        self._wheels_warned_at = -1e9   # D-422 wheels_sent warning throttle (monotonic)
         # 최상단 임포트는 노드 기동 전체를 실패시킨다(core 에 없고 slam: false).
         # 여기서 시도하고, 클라이언트는 생성자에서 만들어야 DDS 엔드포인트 매칭에
         # 노드 수명만큼의 시간이 주어진다.
@@ -298,6 +304,13 @@ class RosBridge:
         self._voltage_topic_seen = True
         battery_policy.apply_voltage(self._svc, float(msg.data))
 
+    def _on_lane_model_status(self, msg: String) -> None:
+        self._svc.vision.models.accept("perception/learned/status", msg.data, now=time.monotonic())
+
+    def _on_object_det_model_status(self, msg: String) -> None:
+        self._svc.vision.models.accept("perception/learned/object_det/status", msg.data,
+                                       now=time.monotonic())
+
     def _on_detection_evidence(self, msg: String) -> None:
         observation.detection_evidence(self._svc, msg.data)
 
@@ -420,6 +433,15 @@ class RosBridge:
         msg.linear.x = out.linear
         msg.angular.z = out.angular
         self.cmd_vel_pub.publish(msg)
+        # D-422: line follow's near-point memory integrates exactly what reached the wheels.
+        # wheels_sent never raises; a failure erases the memory and holds line follow until
+        # its next scan, and is warned at most every 5 s here.
+        problem = observation.wheels_sent(self._svc, out)
+        if problem is not None:
+            now = time.monotonic()
+            if now - self._wheels_warned_at >= 5.0:
+                self._wheels_warned_at = now
+                self._node.get_logger().warning(problem)
 
     def _tick_state(self) -> None:
         try:
@@ -484,6 +506,11 @@ class RosBridge:
         # D-321 addendum: a lapsed calibration lease emits its expiry even when
         # no screen is reading /robot/state. Rides this timer; commands nothing.
         self._svc.calibration.expire_due()
+        if self._svc.fleet_loss is not None:  # SAF-003 (D-419): 5 Hz, off the 50 Hz cmd path
+            try:
+                self._svc.fleet_loss.tick()
+            except Exception:  # a monitor fault must not stop the power timer
+                self._node.get_logger().error(f"fleet_loss tick failed:\n{traceback.format_exc()}")
         status = power.status()
         self._svc.state.set_power(status)
 

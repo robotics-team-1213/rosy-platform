@@ -81,18 +81,20 @@ jobs:
           # 러너에는 Gazebo/ros_gz가 없다 — gz_sim은 aarch64처럼 CI에서도 제외한다.
           # gz_sim 테스트 스텝은 ros_gz_sim share 부재 시 스스로 skip 한다.
           touch src/sim/gz_sim/COLCON_IGNORE
-          cd src
-          colcon build --symlink-install --event-handlers console_direct+
+          # D-427: colcon runs from the repo root over the manifest's colcon_roots;
+          # build/install/log land at the repo root, never inside a source root.
+          COLCON_ROOTS="$(python3 tools/harness/colcon_roots.py)"
+          colcon --log-base log build --symlink-install --base-paths $COLCON_ROOTS \
+            --build-base build --install-base install \
+            --event-handlers console_direct+
 
       - name: Lint (flake8)
         run: |
-          cd src
-          flake8 runtime/gateway/core contracts/foundation/core_common runtime/events/core_events runtime/services/core_features runtime/api_web/core_api_web site/fleet/fleet site/fleet/test sim/gz_sim/launch sim/gz_sim/scripts sim/gz_sim/test --count --max-line-length=120 --show-source --statistics || true
+          flake8 src/runtime/gateway/core src/contracts/foundation/core_common src/runtime/events/core_events src/runtime/services/core_features src/runtime/api_web/core_api_web src/site/fleet/fleet src/site/fleet/test src/sim/gz_sim/launch src/sim/gz_sim/scripts src/sim/gz_sim/test --count --max-line-length=120 --show-source --statistics || true
 
       - name: Test (core domain suites, protocol schemas P1-19)
         run: |
-          cd src
-          python3 -m pytest runtime/gateway/test runtime/events/test runtime/services/test hmi/web_common/test contracts/foundation/test products/pinky_pro/profile/test products/omx/profile/test -v
+          python3 -m pytest src/runtime/gateway/test src/runtime/events/test src/runtime/services/test src/hmi/web_common/test src/contracts/foundation/test src/products/pinky_pro/profile/test src/products/omx/profile/test -v
 
       # fleet 은 ROS 를 import 하지 않는다. conftest 가 src/contracts/foundation 과
       # src/runtime/services 를 sys.path 에 얹으므로 colcon 오버레이 없이도
@@ -122,7 +124,7 @@ jobs:
           # ROS setup.sh 는 미정의 변수를 참조하므로 -u 를 쓰지 않는다.
           set -eo pipefail
           . /opt/ros/jazzy/setup.sh
-          . src/install/setup.sh
+          . install/setup.sh
           python3 -m pytest src/sim/gz_sim/test -v
 
       # D-192: 패키지 안의 하드웨어 안전 시험은 지금까지 CI 에서 한 번도 돌지 않았다
@@ -149,7 +151,7 @@ jobs:
           HARNESS_BASE_REF: ${{ github.event.pull_request.base.sha || github.event.before }}
         run: |
           . /opt/ros/jazzy/setup.sh
-          . src/install/setup.sh
+          . install/setup.sh
           python3 -m pytest test/ -v
 
       # 호스트 테스트는 ros_bridge 를 임포트하지 않으므로, 모듈 최상단의 ROS
@@ -161,7 +163,7 @@ jobs:
           # ROS setup.sh 는 미정의 변수를 참조하므로 -u 를 쓰지 않는다.
           set -eo pipefail
           . /opt/ros/jazzy/setup.sh
-          . src/install/setup.sh
+          . install/setup.sh
           export HOME=/tmp ROS_LOG_DIR=/tmp/ros-logs
           timeout 60 ros2 run core core > /tmp/boot.log 2>&1 &
           node_pid=$!

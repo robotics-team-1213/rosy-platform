@@ -24,9 +24,13 @@ from pathlib import Path
 WORLD = "omx_cell_workcell"
 
 
-def refuse_second_owner() -> None:
+_ARM_OWNERS = ("pilot_sim_server", "probe_cell_transfer", "run_cell_owner")
+
+
+def refuse_second_owner(proc_root: Path | str = "/proc") -> None:
+    """Refuse to start next to another /arm_controller writer (D-390 §3, D-403 §8)."""
     mine = {os.getpid(), os.getppid()}
-    for proc in Path("/proc").iterdir():
+    for proc in Path(proc_root).iterdir():
         if not proc.name.isdigit() or int(proc.name) in mine:
             continue
         try:
@@ -34,7 +38,7 @@ def refuse_second_owner() -> None:
         except OSError:
             continue
         cmd = b" ".join(argv).decode(errors="ignore")
-        if b"python" in argv[0] and ("pilot_sim_server" in cmd or "probe_cell_transfer" in cmd):
+        if b"python" in argv[0] and any(owner in cmd for owner in _ARM_OWNERS):
             raise RuntimeError(f"another arm owner process is running (pid {proc.name}): {cmd[:80]}")
 
 

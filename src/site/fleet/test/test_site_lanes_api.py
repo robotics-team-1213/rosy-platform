@@ -175,7 +175,7 @@ def test_console_serves_the_map_fit_view_wired_to_vision_and_fleet():
     assert 'import { warpImage } from "./field-view.js"' in fit_view
     # Vision serves the proposal on the same lease; Fleet never relays it.
     assert 'fetchFieldProposal("map-proposal")' in vision_view
-    assert "createMapFitView({ el, view, call, visionView, onChanged: () => fieldView.render() })" in client.get("/console/assets/install.js").text
+    assert "createMapFitView({ scope: pageScope, el, view, call, visionView, onChanged: () => fieldView.render() })" in client.get("/console/assets/install.js").text
     # D-360 fallback: the field view warps through the full map homography, never the clamped corners.
     field_view = client.get("/console/assets/field-view.js").text
     assert "view.mapFieldFallback?.(frame)" in field_view

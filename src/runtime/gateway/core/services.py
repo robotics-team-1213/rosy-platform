@@ -14,7 +14,9 @@ from core_features.calibration import CalibrationSessionManager
 from core_features.command.arbitration import Mode, ModeMachine, SourceRegistry
 from core_features.command.manager import CommandManager
 from core.teleop_config import teleop_timeout_ms
-from core.line_follow_wiring import _line_follow_config, bind_stuck_recovery  # noqa: F401 (tests import the parser here)
+from core.fleet_loss_wiring import build_fleet_loss
+from core.line_follow_wiring import (  # noqa: F401 (tests import the parser here)
+    _line_follow_config, bind_motion_envelope, bind_stuck_recovery)
 from core_features.docking.agent import DockAgent
 from core_features.docking.database import DockDatabase, DockError, DockInstance, DockType
 from core_features.docking.detector import select_detector
@@ -22,6 +24,7 @@ from core_features.docking.feed import DockObservationFeed
 from core_features.docking.manager import DockingConfig, DockingManager
 from core_features.fleet_agent.agent import FleetAgent
 from core_features.localization import LocalizationAssist, LocalizationMission, wire_assist
+from core_features.localization.mission import mission_config
 from core_common.domain.adapters import AdapterRegistry
 from core_common.domain.pilot_recording import PilotRecordingGuard
 
@@ -64,6 +67,7 @@ from core_features.safety.manager import (
     SafetyManager,
     SpeedLimits,
 )
+from core_features.safety.fleet_loss import FleetLossMonitor
 from core_common.protocol.evidence import CHANNEL_STALE_AFTER_S
 from core_features.state.manager import StateManager
 from core.system.runtime import HostRuntimeProbe
@@ -260,6 +264,7 @@ class CoreServices:
     dock_feed: DockObservationFeed = field(default_factory=DockObservationFeed)
     localization: Optional[LocalizationAssist] = None  # D-395 P2-1 (ros_bridge ingests)
     loc_mission: Optional[LocalizationMission] = None  # D-395 P2-7 (ros_bridge ticks)
+    fleet_loss: Optional[FleetLossMonitor] = None  # SAF-003 D-419 (ros_bridge ticks)
 
     @classmethod
     def build(cls, config: dict[str, Any], profile: RobotProfile,
@@ -525,11 +530,15 @@ class CoreServices:
             data_path=waypoints_path.parent,
         )
         localization, loc_mission = wire_assist(events, lambda: identity.robot_id, nav=nav, line_follow=line_follow,
-            command=command, state=state, modes=modes, swarm=swarm, docking=docking, safety=safety, traffic_policy=traffic_policy)
+            command=command, state=state, modes=modes, swarm=swarm, docking=docking, safety=safety, traffic_policy=traffic_policy,
+            mission_config=mission_config(config.get("localization_mission")))
         fleet_agent = FleetAgent(state, events, config, identity)
         fleet_agent.start()
         bind_stuck_recovery(line_follow, safety=safety, calibration=calibration,
                             fleet_agent=fleet_agent, vision=vision)
+        bind_motion_envelope(line_follow, safety=safety, traffic_policy=traffic_policy)
+        fleet_loss = build_fleet_loss(config, events=events, fleet_agent=fleet_agent, nav=nav,
+                                      safety=safety, localization=localization)
 
         return cls(config=config, identity=identity, profile=profile, capability=capability, fleet_agent=fleet_agent,
                    events=events, state=state, registry=registry, modes=modes,
@@ -544,7 +553,8 @@ class CoreServices:
                    runtime_probe=runtime_probe, maps=MapSnapshotStore(),
                    audit=audit, calibration=calibration,
                    adapter_registry=adapter_registry, pilot_recording=PilotRecordingGuard(events=events),
-                   dock_feed=dock_feed, localization=localization, loc_mission=loc_mission)
+                   dock_feed=dock_feed, localization=localization, loc_mission=loc_mission,
+                   fleet_loss=fleet_loss)
 
     def inventory(self) -> dict[str, Any]:
         cap001 = self.capability.to_dict()

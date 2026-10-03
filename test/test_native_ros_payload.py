@@ -152,6 +152,59 @@ def test_required_source_resolver_ignores_colcon_output_roots(tmp_path):
     assert result.stdout.splitlines() == ["/tmp/rosy-src/src/runtime/sensing"]
 
 
+def _package(directory: Path, name: str, depends: tuple[str, ...] = ()) -> None:
+    directory.mkdir(parents=True)
+    tags = "".join(f"<depend>{item}</depend>" for item in depends)
+    (directory / "package.xml").write_text(
+        f'<package format="3"><name>{name}</name>{tags}</package>', encoding="utf-8"
+    )
+
+
+def _resolve(workspace: Path, required: Path, roots: list[str]) -> subprocess.CompletedProcess:
+    root_args = [arg for root in roots for arg in ("--colcon-root", root)]
+    return subprocess.run(
+        [sys.executable, str(RESOLVE_SOURCE_PATHS), "--source-root", str(workspace), *root_args,
+         "--required", str(required), "--chroot-prefix", "/tmp/rosy-src"],
+        capture_output=True, text=True, check=False,
+    )
+
+
+def test_required_source_resolver_spans_every_colcon_root(tmp_path):
+    # D-427: packages in one root may depend on packages in another; paths keep the root.
+    workspace = tmp_path / "ws"
+    _package(workspace / "src" / "runtime" / "gateway", "core", ("core_common",))
+    _package(workspace / "middleware" / "contracts" / "foundation", "core_common")
+    _package(workspace / "unlisted" / "games", "games")
+    _package(workspace / "src" / "build" / "core", "core")  # colcon output inside a root
+    required = tmp_path / "required.txt"
+    required.write_text("core\n", encoding="utf-8")
+
+    result = _resolve(workspace, required, ["src", "middleware"])
+
+    assert result.returncode == 0, result.stderr
+    assert sorted(result.stdout.splitlines()) == [
+        "/tmp/rosy-src/middleware/contracts/foundation", "/tmp/rosy-src/src/runtime/gateway",
+    ]
+    # Outside the listed roots core_common is an external key, as any rosdep key is.
+    assert _resolve(workspace, required, ["src"]).stdout.splitlines() == ["/tmp/rosy-src/src/runtime/gateway"]
+
+
+def test_required_source_resolver_rejects_a_name_duplicated_across_roots(tmp_path):
+    workspace = tmp_path / "ws"
+    _package(workspace / "src" / "runtime" / "sensing", "control")
+    _package(workspace / "learning" / "sensing", "control")
+    required = tmp_path / "required.txt"
+    required.write_text("control\n", encoding="utf-8")
+
+    result = _resolve(workspace, required, ["src", "learning"])
+
+    assert result.returncode != 0
+    assert "duplicate package name control" in result.stderr
+    escaped = _resolve(workspace, required, ["src", "../outside"])
+    assert escaped.returncode != 0
+    assert "escapes the source root" in escaped.stderr
+
+
 def test_required_package_file_matches_the_locked_offline_payload():
     lock = yaml.safe_load(LOCK.read_text(encoding="utf-8"))
     packages = [

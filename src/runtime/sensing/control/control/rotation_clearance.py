@@ -9,5 +9,6 @@ def rotation_clearance_allowed(conservative, fully_observed, fresh, pivot_margin
         # The conservative check already uses the learned swept radius,
         # configured margin, nearest return and all required range sectors.
         return bool(conservative)
-    return (pivot_margin is not None and math.isfinite(pivot_margin) and pivot_margin > .010
-            and all(math.isfinite(v) and v > 0 for v in ranges))
+    # D-424: the exact pivot margin over a fully observed scan decides; an empty bumper
+    # sector (no return beyond the chassis cut) is not a reason to refuse a turn.
+    return pivot_margin is not None and math.isfinite(pivot_margin) and pivot_margin > .010

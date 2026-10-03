@@ -35,6 +35,7 @@ EDGE_ADAPTERS = {
     "control.tf_buffer": "wraps tf2_ros.Buffer for every node",
     "control.web_map_control": "slam_toolbox reset/pause service client for web_node",
     "control.sensor_provider": "D-126 entry point core loads; it constructs the sensor-only ROS worker",
+    "control.camera_region_range": "D-423 mixin of camera_detect_node: owns the LaserScan subscription; the geometry is ROS-free in sensing.perception.region_range",
 }
 
 #: Ratchet: library modules that build ROS messages themselves (D-171 track 1).

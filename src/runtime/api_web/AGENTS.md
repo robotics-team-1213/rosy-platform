@@ -19,6 +19,12 @@ Library/contract tier (D-168 P2): no process of its own. ROS-SIM/ARTIFACT/DEVICE
 | `index.md` | Generated: ADRs, plans, solutions, tests, recent logs. Do not edit |
 | `core_api_web/api/` | `app.py`, `deps.py` facade (v1 routers import features only through it), `v1/`. Screens are `src/hmi/dashboard`; tokens are `src/hmi/web_common` |
 
+## Subdirectories
+
+| Directory | Purpose |
+|-----------|---------|
+| `core_api_web/` | Python package: FastAPI app, `/api/v1` routers, auth, Host Agent client (see `core_api_web/AGENTS.md`) |
+
 ## For AI Agents
 
 ### Working In This Directory

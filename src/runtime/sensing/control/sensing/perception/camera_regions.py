@@ -23,10 +23,11 @@ def foreground_regions(mask, dark, near_y0, near_y1, min_area_fraction=.0005,
         # Ranged at the bottom edge, where the region meets the floor, and only
         # when a measured calibration exists. Without one this stays None: an
         # uncalibrated camera reports "unranged", never a plausible-looking guess.
+        distance = ground.region_distance(bbox) if ground is not None else None
         regions.append(dict(bbox_xyxy=bbox, area_px=area,
             area_fraction=area/(h*w), near_path=bool(near_counts[identity] >= minimum),
             kind='dark_region' if darkness > .5 else 'foreground_region',
-            distance_m=ground.region_distance(bbox) if ground is not None else None,
+            distance_m=distance, range_source='G' if distance is not None else None,
             motion='unknown'))
     regions.sort(key=lambda r: (r['near_path'], r['area_px']), reverse=True)
     return regions

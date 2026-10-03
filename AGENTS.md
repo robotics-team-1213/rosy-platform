@@ -1,5 +1,5 @@
 <!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-02 | Updated: 2026-09-24 -->
+<!-- Generated: 2026-09-02 | Updated: 2026-10-01 -->
 
 # ROSY
 
@@ -58,18 +58,28 @@ ROSY is a robot middleware and fleet-control platform (ROS 2 Jazzy, first hardwa
 ### Testing Requirements
 
 ```bash
-# Quick tier (D-346): the <2-minute gate to run right before a commit/push.
-# Same suite as the pre-push hook (tools/hooks/install.sh).
+# Quick tier (D-346): the pre-commit/push gate (~3 min).
+# Same suite as the pre-push hook (tools/hooks/install.sh). 2026-10-01: dashboard
+# contract + root contract suites added after the D-362 split and secret-scan/
+# scorecard classes landed red through the old tier.
 python3 -m pytest test/test_harness_contracts.py test/architecture/test_module_structure.py \
   test/test_io_image_closure.py test/test_line_follow_contract_docs.py \
-  src/runtime/gateway/test/test_protocol_version_alignment.py -q
+  test/test_behavior_test_ownership.py test/test_module_scorecard.py \
+  test/test_release_boundary_guards.py test/test_robot_literals.py \
+  src/runtime/gateway/test/test_protocol_version_alignment.py \
+  src/runtime/gateway/test/test_event_catalogue.py \
+  src/runtime/gateway/test/test_console_layout.py \
+  src/runtime/gateway/test/test_host_cards.py \
+  src/runtime/gateway/test/test_host_hardware.py \
+  src/runtime/gateway/test/test_triage_contract.py \
+  src/runtime/gateway/test/test_host_status_summary.py -q
 python3 tools/harness/rosy_harness.py lint   # ADR duplicates, mojibake, append-only
 
 # Full tier: before a release, a field push, or when the touched suite is not
 # in the quick tier above.
 # ROS 2 overlay (Linux / Pi). On Windows, run Python tests that do not need rclpy.
 source env.sh
-cd src && colcon build --symlink-install
+colcon --log-base log build --symlink-install --base-paths $(python3 tools/harness/colcon_roots.py) --build-base build --install-base install
 
 # core unit tests (no live ROS required for most)
 python3 -m pytest src/runtime/gateway/test/ src/runtime/events/test/ src/runtime/services/test/ src/hmi/web_common/test/ -v

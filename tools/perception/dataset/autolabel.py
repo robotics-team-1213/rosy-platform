@@ -32,10 +32,12 @@ import numpy as np
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parents[2] / "src" / "runtime" / "sensing"))
+sys.path.insert(0, str(HERE.parents[2] / "src" / "contracts" / "foundation"))  # core_common, imported by control (D-424)
 
 import labels as L  # noqa: E402
 from frames import FrameSelector  # noqa: E402
 from geometry import Camera, Lidar, PoseSeries, labeller_lidar_yaw_deg, to_frame  # noqa: E402
+from object_boxes import lidar_object_boxes  # noqa: E402  (D-423 candidate object boxes)
 
 DATA = HERE.parents[2] / "data" / "perception"
 MAX_SCAN_DT_S = 0.2
@@ -290,7 +292,7 @@ def calibrate_pitch(frames, odom: PoseSeries, scans: Scans, lidar=Lidar(), every
 def label_session(frames, odom: PoseSeries, scans: Scans | None, out: Path, *, session: str,
                   cam: Camera | None = None, lidar=Lidar(), rules=None, overlays: Path | None = None,
                   overlay_every: int = 5, min_interval=0.5, max_hamming=4, max_range=4.0,
-                  traj_window_s=40.0, max_frames=None, pitch_rad=None):
+                  traj_window_s=40.0, max_frames=None, pitch_rad=None, object_boxes=False):
     rules = rules or {}
     for sub in ("frames", "masks", "conf"):
         (out / sub).mkdir(parents=True, exist_ok=True)
@@ -322,6 +324,9 @@ def label_session(frames, odom: PoseSeries, scans: Scans | None, out: Path, *, s
                         xy = scan_points_at(lidar, odom, (scans.t[j], scans.msgs[j]), pose, max_range)
                         wall, floor, _contact, dist = L.wall_label(cam, xy)
                         rec["lidar"] = {"scan_dt_s": round(dt, 4), "returns": int(len(xy))}
+                        if object_boxes:  # D-423: unlabelled candidates for the review queue
+                            rec["objects"] = lidar_object_boxes(cam, xy, lidar_height_m=lidar.height_m,
+                                                                frame_size=(bgr.shape[1], bgr.shape[0]))
                     else:
                         rec["lidar"] = {"skipped": "no scan at or before the frame"}
                 ft = odom.window(t, t + traj_window_s)
@@ -393,6 +398,8 @@ def main(argv=None) -> int:
     ap.add_argument("--lidar-yaw-deg", type=float, default=None,
                     help="LiDAR mount yaw (scan angle of the nose); default: the device's accepted lidar_mount record in data/calibration/, else 180")
     ap.add_argument("--max-frames", type=int)
+    ap.add_argument("--object-boxes", action="store_true",
+                    help="D-423: add LiDAR-cluster candidate object boxes (no class) to each row")
     ap.add_argument("--pitch-deg", type=float,
                     help="camera pitch; default: fit to the session's LiDAR walls, else the profile")
     args = ap.parse_args(argv)
@@ -443,7 +450,8 @@ def main(argv=None) -> int:
     totals = label_session(make_frames(), odom, scans, out, session=session, pitch_rad=pitch,
                            lidar=lidar, rules=rules,
                            overlays=args.overlays, overlay_every=args.overlay_every,
-                           min_interval=args.min_interval, max_frames=args.max_frames)
+                           min_interval=args.min_interval, max_frames=args.max_frames,
+                           object_boxes=args.object_boxes)
     meta = {"schema": "rosy.perception.autolabel/1", "version": L.LABEL_VERSION, "session": session,
             "source": source, "camera": camera, "classes": L.CLASSES, "ignore_index": L.IGNORE_INDEX,
             "odom_samples": len(odom), "scans": 0 if scans is None else len(scans.t),

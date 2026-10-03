@@ -16,6 +16,8 @@
 # role은 D-370 1항 역할 표의 한 줄 요약, owns는 그 표면이 소유하는 조작(D-370 4항)이다. 한 조작은
 # 한 표면만 소유한다 — 겹침은 estop(모든 운용 표면)과 transitional 사유가 붙은 이행기 항목만
 # 허용한다(test/architecture/test_app_roles.py). 소유가 없으면 owns: []로 적는다.
+# api_owners는 D-425의 실제 API 제공자다. 화면 소유나 API 자격이 최종 writer를
+# 바꾸지 않는다. 이 선언은 test/test_app_ownership_contracts.py의 서버 거절/쓰기와 함께 검증한다.
 # ports는 표면을 서빙하거나(웹) 표면이 접속하는(네이티브) 기본 포트다. source 파일에 그 숫자가
 # 있어야 하고 두 표면이 같은 포트를 쓰면 안 된다 — 새 표면은 빈 포트를 여기서 고른다. 이유 없는 빈 칸은 등록되지 않는다.
 # themes는 그 표면이 따르는 테마다(D-359 §2·§3.3). 첫 값은 dark다. [dark, light] 웹 표면의
@@ -33,6 +35,7 @@
 # 가리는 원시 색이 없는 항목은 적지 않는다. 테마를 따르는 표면의 색은 tokens.css에서만 온다.
 surfaces:
   - id: robot
+    api_owners: [CORE]
     app_name: Rosy Robot
     app_name_en: Rosy Robot
     short_name: Rosy Robot
@@ -57,6 +60,7 @@ surfaces:
     baseline: docs/validation/uiux-surfaces-2026-09-26/captures/console-operate-fresh-1366x768.png
 
   - id: console
+    api_owners: [Fleet]
     app_name: Rosy Console
     app_name_en: Rosy Console
     short_name: Rosy Console
@@ -128,6 +132,7 @@ surfaces:
       해제 회차가 첫 셀을 남기면 이 문장을 baseline 경로로 바꾼다.
 
   - id: pilot
+    api_owners: [CORE]
     app_name: Rosy Pilot
     app_name_en: Rosy Pilot
     short_name: Rosy Pilot
@@ -163,6 +168,7 @@ surfaces:
       저장소용 합성 캡처를 남기는 회차에 이 문장을 baseline 경로로 바꾼다.
 
   - id: web-common
+    api_owners: []
     path: src/hmi/web_common
     themes: [dark, light]
     surface: robot
@@ -206,6 +212,7 @@ surfaces:
     baseline_reason: 제품 표면이 아니므로 G2 기준선이 없다.
 
   - id: robot-face
+    api_owners: []
     path: src/hmi/face
     themes: [dark]
     surface: robot
@@ -220,6 +227,7 @@ surfaces:
       test_info_screen_capture가 호스트에서 만들고 저장소에 기준선을 두지 않는다.
 
   - id: cam
+    api_owners: [Fleet-pairing, Vision-ingest]
     app_name: Rosy Cam
     app_name_en: Rosy Cam
     short_name: Rosy Cam

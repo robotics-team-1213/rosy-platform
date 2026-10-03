@@ -4,6 +4,8 @@ import json
 from dataclasses import dataclass
 
 TRACK_UNCERTAINTY = .03
+#: D-424 (J/K): camera-only holds limit forward speed; never a full stop on their own.
+CAMERA_LIMIT_REASONS = ('camera_obstacle_unranged', 'camera_observation_unavailable')
 
 
 @dataclass(frozen=True)
@@ -52,7 +54,9 @@ class TrackedEvidence:
             return dict(action='stop', reason='invalid_tracking_evidence')
         hold = camera_hold(camera, now)
         if hold:
-            return dict(action='limit' if hold == 'camera_obstacle_unranged' else 'stop', reason=hold)
+            # D-424: an invalid, missing, stale or warming-up camera (or an unranged camera
+            # obstacle) limits forward speed only; a hard stop needs LiDAR/ultrasonic evidence.
+            return dict(action='limit', reason=hold)
         if not 0 <= now - self.pose_observed_at <= .3:
             return dict(action='stop', reason='obstacle_pose_unavailable')
         result = observation_risk(tracks, now, self.pose, speed, self.radius, self.margin)

@@ -84,11 +84,8 @@ def test_every_package_has_a_declared_target():
     assert sorted(_packages() - set(TARGET.values())) == []
 
 
-def test_xml_package_names_are_unique():
-    duplicates = {name: paths for name, paths in _package_locations().items() if len(paths) != 1}
-    assert duplicates == {}
-
-
+# Name uniqueness and the frozen name set across every colcon root (D-427) are
+# test_colcon_roots.py::test_ros_package_names_are_frozen. This file keeps the D-310 paths.
 def test_moved_packages_keep_their_name_at_the_exact_target():
     locations = _package_locations()
     for current, name in MOVED_PACKAGE_NAMES.items():

@@ -7,7 +7,7 @@ name = "rosy-app-agent"
 version = "0.1.0"
 description = "ROSY agent application compositions"
 requires-python = ">=3.12"
-dependencies = ["rosy-integration-robot-omx==0.1.0", "PyYAML>=6"]
+dependencies = ["rosy-integration-robot-omx==0.1.0", "rosy-palletizing==0.1.0", "PyYAML>=6"]
 
 [tool.setuptools]
 package-dir = {"" = "src"}

@@ -35,6 +35,18 @@ def test_ros_workspace_changes_choose_native_payload():
     assert report.paths[0].impact == "native-payload"
 
 
+def test_every_manifest_colcon_root_chooses_native_payload():
+    # D-427 wave 0 item 5: the payload builds every colcon root, so each one is native-payload.
+    import yaml
+
+    manifest = ROOT / "tools" / "harness" / "platform_parts.yaml"
+    roots = yaml.safe_load(manifest.read_text(encoding="utf-8"))["colcon_roots"]
+    report = classify_paths([f"{root}/some_package/module.py" for root in roots])
+
+    assert roots and [item.impact for item in report.paths] == ["native-payload"] * len(roots)
+    assert classify_paths([f"{roots[0]}x/module.py"]).impact == "review"
+
+
 def test_image_or_host_foundation_changes_choose_flashable_image():
     report = classify_paths(
         [

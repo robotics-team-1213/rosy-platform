@@ -69,8 +69,8 @@
 
 ## 최근 기록
 
+- 2026-10-03 · 119382fe6 · docs(native): D-423 `ROSY_OBJECT_DET=false` 를 learned-perception.env 예시에
+- 2026-10-03 · uncommitted · feat: read live Fleet fence on the simulation Cell owner
+- 2026-10-03 · uncommitted · feat: tick local Cell workflow on the existing simulation owner node
+- 2026-10-03 · uncommitted · fix(omx-sim): C4b 1b — 그리퍼 폭은 grant의 레시피, HTTP는 루프백 (C2, C4)
 - 2026-10-03 · uncommitted · fleet 빌드 맥락에 apps/gateway/src 재허용
-- 2026-10-03 · e0e482ef · fix(native): D-418 3차 검토 — 잠금 재시도, chrony 아래 NTP 동기, boot id
-- 2026-10-03 · 27025b10 · fix(native,api): D-418 2차 검토 — 앞서 간 시계, CORE의 실제 기한
-- 2026-10-02 · uncommitted · feat(native): D-412 업데이터 기본 켜짐 — 첫 실제 카나리 성공 뒤
-- 2026-10-02 · uncommitted · fix(release): 준비·발행 도구의 ssh known_hosts 값을 따옴표 없이 — 첫 실운영에서 "invalid quotes"

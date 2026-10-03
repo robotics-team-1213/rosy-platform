@@ -1,4 +1,4 @@
-"""core_api_web.api.app — FastAPI 팩토리 (P1-9, API-101). 계약: ROSY-API-REF-001 v1.84."""
+"""core_api_web.api.app — FastAPI 팩토리 (P1-9, API-101). 계약: ROSY-API-REF-001 v1.89."""
 
 from __future__ import annotations
 
@@ -110,7 +110,7 @@ def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
     app = FastAPI(
         title="ROSY CORE API",
         version="1.20.0",
-        description="로봇 미들웨어 API — 계약: ROSY-API-REF-001 (v1.84)",
+        description="로봇 미들웨어 API — 계약: ROSY-API-REF-001 (v1.89)",
     )
     app.state.core = services
     agent = getattr(services, "fleet_agent", None)
@@ -242,6 +242,8 @@ def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
         "autonomy.js": "application/javascript",
         "calibration.js": "application/javascript",
         "recording.js": "application/javascript",
+        "controls.js": "application/javascript",
+        "arm-stick.js": "application/javascript",
         "screens/connect.js": "application/javascript",
         "screens/drive.js": "application/javascript",
         "screens/drive-auto.js": "application/javascript",
@@ -249,8 +251,12 @@ def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
         "screens/inputs.js": "application/javascript",
         "screens/robot-recording.js": "application/javascript",
         "screens/arm.js": "application/javascript",
+        "screens/compose.js": "application/javascript",
+        "widgets/joint_jog.js": "application/javascript",
+        "widgets/gripper.js": "application/javascript",
         "input-state.js": "application/javascript",
         "vision.js": "application/javascript",
+        "models.js": "application/javascript",
         "manifest.webmanifest": "application/manifest+json",
         "sw.js": "application/javascript",
         "icons/icon-192.png": "image/png",

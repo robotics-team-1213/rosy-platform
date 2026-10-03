@@ -156,3 +156,15 @@ def test_slew_ramps_up_but_stops_and_reverses_immediately():
     """) == {"firstStep": True, "reachesTarget": True, "monotonic": True,
              "releaseIsImmediate": True, "reverseRestartsFromZero": True,
              "decelIsImmediate": True, "dtCapped": True}
+
+
+def test_a_zero_core_limit_is_standstill_not_the_fallback():
+    """D-411 B: manual 0 = 구동은 있으나 정지로 제한(PUT /safety/limits 가 0 을 받는다). 기본값으로 바꾸지 않는다."""
+    out = _run_js(PRELUDE + """
+    const zero = stick.resolveLimits({...core, manual_linear: 0, manual_angular: 0}, cfg);
+    const missing = stick.resolveLimits({}, cfg);
+    const full = stick.mapInput({kind: 'stick', x: 1, y: 1}, cfg, zero);
+    console.log(JSON.stringify({zero: [zero.linear, zero.angular], missing: [missing.linearCap, missing.angularCap],
+                                full: [full.linear, full.angular]}));
+    """)
+    assert out == {"zero": [0, 0], "missing": [0.15, 0.6], "full": [0, 0]}

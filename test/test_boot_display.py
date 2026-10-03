@@ -788,9 +788,13 @@ def test_emotion_is_bench_only_so_nothing_needs_a_conflict():
         text = unit.read_text(encoding="utf-8")
         if "emotion" in "".join(line for line in text.splitlines() if line.startswith("Exec")):
             assert "rosy-boot-display.service" in text, unit.name
-    for launch in (ROOT / "src").rglob("*.launch.py"):
-        if "src/hmi/face" in launch.as_posix():
-            continue
+    from robot_contracts import COLCON_ROOTS
+
+    launches = [launch for root in COLCON_ROOTS for launch in (ROOT / root).rglob("*.launch.py")
+                if "src/hmi/face" not in launch.as_posix()]
+    # D-427: an empty walk would pass; today the roots hold 25 *.launch.py outside the face.
+    assert len(launches) >= 25, launches  # update when a launch file is legitimately removed
+    for launch in launches:
         text = launch.read_text(encoding="utf-8")
         assert "package='emotion'" not in text and 'package="emotion"' not in text, launch
 

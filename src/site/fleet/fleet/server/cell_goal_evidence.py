@@ -1,50 +1,24 @@
-"""Bounded attestation from an independent, registered simulation evaluator."""
+"""Per-step item_at_pose predicates fixed at resolution (D-403 §5, C4b 1b C1).
 
-from typing import Annotated, Literal
+Judging and the public ingress live in cell_goal_evidence_service (ported from main); this module
+only stores each step's predicate, so a later config change cannot move it.
+"""
 
-from pydantic import BaseModel, ConfigDict, Field
+from __future__ import annotations
 
-Text = Annotated[str, Field(min_length=1, max_length=192, pattern=r"^[^\s\x00-\x1f\x7f]+$")]
-Digest = Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
-Timestamp = Annotated[float, Field(ge=0, allow_inf_nan=False)]
+from typing import Mapping
 
-
-class CellModelPose(BaseModel):
-    model_config = ConfigDict(extra="forbid", strict=True, allow_inf_nan=False)
-    x_m: float
-    y_m: float
-    z_m: float
-    roll_rad: float
-    pitch_rad: float
-    yaw_rad: float
+from rosy.execution.site.item_pose import ItemPoseTolerance, centre_above_tcp_m, step_goal_predicate
 
 
-class CellGoalEvidence(BaseModel):
-    model_config = ConfigDict(extra="forbid", strict=True, allow_inf_nan=False)
-    producer_id: Text
-    evidence_id: Text
-    evidence_source: Literal["sim_model_pose"]
-    evaluator_revision: Text
-    job_id: Text
-    step_id: Text
-    step_index: Annotated[int, Field(ge=0)]
-    action_id: Text
-    attempt_id: Text
-    request_digest: Digest
-    recipe_sha256: Digest
-    cell_sha256: Digest
-    model_id: Text
-    observation_id: Text
-    observation_digest: Digest
-    evidence_revision: Text
-    observed_at: Timestamp
-    model_pose_base: CellModelPose
-    initial_observation_id: Text
-    initial_observation_digest: Digest
-    initial_observed_at: Timestamp
-    initial_model_pose_base: CellModelPose
-    gripper_state: Literal["OPEN"]
-    gripper_evidence_id: Text
-    gripper_evidence_revision: Text
-    gripper_observed_at: Timestamp
-    satisfied: bool
+def attach_goal_predicates(document: dict, item_geometry: Mapping[str, Mapping[str, float]],
+                           tolerance: ItemPoseTolerance) -> None:
+    """Fix each step's item_at_pose predicate at resolution. ``item_geometry`` comes from the
+    validated recipe (the compiler's item_geometry); nothing is defaulted here (1c P3)."""
+    offsets = {item: centre_above_tcp_m(grasp_depth_m=values["grasp_depth_m"], height_m=values["height_m"])
+               for item, values in item_geometry.items()}
+    for step in document["steps"]:
+        step["goal_predicate"] = step_goal_predicate(step["inputs"], tolerance, offsets[step["inputs"]["item"]])
+
+
+__all__ = ["attach_goal_predicates"]

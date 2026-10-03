@@ -74,8 +74,8 @@
 
 ## 최근 기록
 
-- 2026-10-03 · uncommitted · verify(fleet): registered Cell evidence checkpoint
-- 2026-10-03 · uncommitted · feat(fleet): validate registered Cell goal evidence
-- 2026-10-03 · uncommitted · fix(fleet): require durable Cell success for goal recovery
-- 2026-10-03 · uncommitted · feat(fleet): dispatch admitted ordered Cell transfers
-- 2026-10-03 · uncommitted · fix(fleet): preserve Cell transfer phase receipts over UDS v2
+- 2026-10-03 · uncommitted · feat: read live Fleet fence on the simulation Cell owner
+- 2026-10-03 · uncommitted · refactor: D-425 Console document lifetime
+- 2026-10-03 · uncommitted · test: D-425 browser baseline and safety facts
+- 2026-10-03 · uncommitted · refactor: D-425 Console HTTP adapter checkpoint
+- 2026-10-03 · uncommitted · merge(fleet): main에 들어온 병렬 Cell 하달기를 걷고 공개 목표 증거 입구를 C4b 설계로 옮김

@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
-# D-346 pre-push fast gate: the <2-minute tier that catches what landed red on
+# D-346 pre-push fast gate: the tier that catches what landed red on
 # 2026-09-29 (ADR body gaps, io closure, version pins, size verdicts).
+# 2026-10-01: + dashboard contract suites (gateway) and root contract suites.
+#   The D-362 P1 dashboard split landed red (runs 36741368088, 36742855223)
+#   and the secret-scan/scorecard/robot-literal classes followed (36743819104)
+#   because this tier never read those files. Measured cost: ~3 min on Windows.
 # Install: tools/hooks/install.sh   Uninstall: rm .git/hooks/pre-push
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
@@ -53,7 +57,17 @@ echo "[pre-push] fast contract suites"
   test/architecture/test_module_structure.py \
   test/test_io_image_closure.py \
   test/test_line_follow_contract_docs.py \
+  test/test_behavior_test_ownership.py \
+  test/test_module_scorecard.py \
+  test/test_release_boundary_guards.py \
+  test/test_robot_literals.py \
   src/runtime/gateway/test/test_protocol_version_alignment.py \
+  src/runtime/gateway/test/test_event_catalogue.py \
+  src/runtime/gateway/test/test_console_layout.py \
+  src/runtime/gateway/test/test_host_cards.py \
+  src/runtime/gateway/test/test_host_hardware.py \
+  src/runtime/gateway/test/test_triage_contract.py \
+  src/runtime/gateway/test/test_host_status_summary.py \
   -q
 
 echo "[pre-push] fast gate green"
