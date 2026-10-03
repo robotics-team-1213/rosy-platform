@@ -2218,3 +2218,9 @@
 - 변경: 기존 장치 신원 검증과 mDNS 재연결을 보존한 채 light-status/light-request/light-cancel을 추가했다. 공식 카메라 화면의 유일한 조명 버튼만 조작하며 화면 잠금·포커스·새 UI·라벨 영역과 부모 포함 관계를 검증한다. 요청 상태와 실제 torch 상태는 구분하고 이미 요청 중이면 갱신하지 않는다.
 - 증거: CLI 59 passed, 독립 리뷰 승인. 실제 관제 PC 사용자 영역에 원자적으로 배치하고 개인 설정 해시 보존을 확인했다. 실제 S21에서 request_confirmed, 중복 unchanged, cancel_confirmed와 torch 켜짐/꺼짐을 확인했다. 진단 조회는 화면을 깨우지 않으며 송출 시작·보안 잠금 우회는 추가하지 않았다.
 - gate 변화: 없음. 관제 카메라 기능 검증은 Pi 제품 이미지와 전체 현장 수용을 대신하지 않는다.
+
+## 2026-10-04 · uncommitted · D-446 모델 PC도 서명 코드 자동 업데이트에 포함하고 작업·GPU 환경·모델 승격을 분리한다
+
+- 변경: D-446 모델 PC의 서명 코드 후보·작업 잠금·환경 지문·유휴 source 전환·실패 복귀를 구현했다. perception과 control/core_common은 같은 commit과 상대 경로로 묶고 고정 bootstrap을 사용한다. 기존 data는 외부 디렉터리로 연결한다.
+- 증거: 실제 모델 PC의 격리 Linux 시험 30 passed. 서명과 작업 환경 guard는 변이에서 실패를 확인했다. 사용자 updater timer 설치·enabled/active와 linger를 확인했다. 리뷰에서 발견한 import closure와 unmanaged 작업 admission을 보완했다.
+- gate 변화: 없음. 코드 updater 설치와 첫 후보 전환·model-watch doctor·학습 모델 품질·주행 수용은 별도 증거로 판정한다. push·CI는 수행하지 않았다.

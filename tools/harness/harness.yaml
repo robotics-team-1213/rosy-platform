@@ -12,7 +12,6 @@ adr_gaps:
   D-440: "ADR on branch feat/device-power-policy (per-device power policy), not yet on main; remove when it lands"
   D-442: "ADR on branch docs/d442-motion-intent-port (Motion Intent + DeviceControlPort), not yet on main; remove when it lands"
   D-443: "ADR on branch docs/d440-site-device-contract (rosy.site-device/1), not yet on main; remove when it lands"
-  D-446: "ADR on branch docs/palletizing-completion-review-20261004 (palletizing app completion goals), not yet on main; remove when it lands"
   D-29: "unused; the vision accelerator shield design only proposed the number"
   D-324: "unused; the Pinky artifact-selection ADR was first written as D-324 and renumbered to D-325 to avoid a same-day collision (commit 45f9470b, 2026-09-29). Remove if another session lands an ADR as D-324"
   D-35: "reserved for the swarm formation HOLD decision pending the sim bench"

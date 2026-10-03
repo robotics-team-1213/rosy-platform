@@ -70,8 +70,8 @@
 
 ## 최근 기록
 
+- 2026-10-04 · uncommitted · D-446 모델 PC도 서명 코드 자동 업데이트에 포함하고 작업·GPU 환경·모델 승격을 분리한다
 - 2026-10-04 · uncommitted · fix(site): 관제 PC의 요청형 카메라 조명
 - 2026-10-03 · uncommitted · fix(site): order Avahi before the Fleet stack
 - 2026-10-03 · uncommitted · fix(site): Fleet NSS mDNS resolver closure
 - 2026-10-03 · uncommitted · fix: publish readable public DNS-SD XML
-- 2026-10-03 · fcda72b78 · feat(deploy): D-433 rosy-boot-display → rosy-face 이주
