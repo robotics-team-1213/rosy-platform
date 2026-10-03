@@ -12,14 +12,17 @@
 - 사이트 장치: 신호등 펌웨어의 부팅·감독 상실 failsafe(`firmware/signal/firmware/rosy_signal/rosy_signal.ino:66,118`), 도크 리밋스위치 인터록과 부팅 시 0 V(`firmware/dock/firmware/rosy_dock/rosy_dock.ino:58-65,117,172`, D-349).
 - 물리 E-stop은 원칙만 있다(D-369 §5, D-399 §1).
 
-D-429는 이것을 "로봇 제어" 관심사와 "중재·안전" 판단 층으로 묶었다. 그러면 안전이 판단(Arbiter)과 제어(단일 writer) 사이의 한 칸으로 읽힌다. 사용자는 안전을 판단과 제어 양쪽에서 떼어 별도 ADR로 세우는 쪽을 골랐다.
+D-429는 이것을 "로봇 제어" 관심사와 "중재·안전" 판단 층으로 묶었다. 그러면 안전이 판단(Arbiter)과 제어(단일 writer) 사이의 한 칸으로 읽힌다. 실제로 Arbiter 안에도 두 성격이 섞여 있다. EMERGENCY 전이 표와 출력 선택 때의 E-stop·clip은 안전이고, 출처 우선순위 등록(teleop·nav·line follow 순서)은 제어다. 사용자는 안전을 판단과 제어 양쪽에서 떼어 별도 ADR로 세우는 쪽을 골랐다.
 
 외부 근거(2026-10-03 조사 정리. 표준 원문은 유료라 이번에 직접 대조하지 못했다. 아래 1·2는 **미확인(2차 출처)**이다):
 
 1. IEC 61508은 안전 기능과 비안전 기능 사이의 독립성을 물리적 또는 논리적 분리로 요구한다. *(미확인 — 2차 출처)*
 2. ISO/IEC TR 5469는 기능 안전에서 AI를 쓰는 지침이다. AI 요소가 실패해도 안전 기능이 유지되도록 AI와 안전 기능을 분리하는 구성을 권한다. *(미확인 — 2차 출처)*
-3. 학습 정책을 안전 기능으로 인정하는 표준 근거는 찾지 못했다(D-427 Context와 같은 결론).
-4. Gemini Robotics-ER 문서는 안전 책임을 통합자(integrator)에 둔다. 모델은 사용자 정의 함수를 부르는 오케스트레이터다(https://ai.google.dev/gemini-api/docs/robotics-overview, D-429 외부 근거와 같은 출처).
+3. 더 구체적인 제품 표준: 이동 로봇은 ISO 3691-4(무인 산업 트럭)·ISO 13482(개인 돌봄 로봇), 팔은 ISO 10218(산업용 로봇). *(미확인 — 이번에 내용을 대조하지 않았다)*
+4. 학습 정책을 안전 기능으로 인정하는 표준 근거는 찾지 못했다(D-427 Context와 같은 결론).
+5. Gemini Robotics-ER 문서는 안전 책임을 통합자(integrator)에 둔다. 모델은 사용자 정의 함수를 부르는 오케스트레이터다(https://ai.google.dev/gemini-api/docs/robotics-overview, D-429 외부 근거와 같은 출처).
+
+표준 인용은 설계 방향의 **맥락**이다. ROSY가 어떤 표준을 준수한다는 주장이 아니며, 이 ADR은 인증·적합성 평가를 하지 않는다.
 
 ### Decision
 
@@ -32,19 +35,26 @@ D-429의 매니페스트 root는 디렉터리 단위이고 가장 깊은 root가
 - **디렉터리 root(하위 carve-out):** 안전만 담은 디렉터리는 하위 root로 떼어 `concern: safety`를 단다. part는 부모와 같다.
 - **모듈 목록(`safety_modules:`):** 섞인 디렉터리 안의 안전 파일은 매니페스트의 모듈 경로 목록으로 태그한다. 폴더를 쪼개지 않기 위해서다. 시험(§3)은 이 목록을 safety로 본다.
 
-현재 대응(wave 0 매니페스트 리뷰에서 확정):
+현재 대응(wave 0 매니페스트 리뷰에서 확정). part는 **현재 매니페스트 값**이다. `firmware/dock`·`firmware/signal`은 지금 part `middleware`(`tools/harness/platform_parts.yaml`의 두 항목, `d427_target: middleware/firmware/{dock,signal}`)이고, D-429 §2의 operations 재지정은 wave 0 매니페스트 변경에서 일어난다.
 
-| 대상 | 방식 | part (변경 없음) |
-|---|---|---|
-| `src/runtime/services/core_features/safety/` (`manager.py`, `fleet_loss.py`, `shadow.py`) | 하위 root, `import_prefix: [core_features.safety]` | middleware |
-| `core_features/command/arbitration.py`, `core_features/command/manager.py` (E-stop·EMERGENCY 차단과 clip을 출력 선택에 거는 자리) | 모듈 목록 | middleware |
-| `core_features/line_follow/body_stop.py`, `core_features/line_follow/clearance.py` | 모듈 목록 | middleware |
-| `src/runtime/gateway/core/bridge/cmd_vel.py` (`cmd_vel_cycle`, 단일 writer 직전 경로) | 모듈 목록 | middleware |
-| `src/contracts/foundation/core_common/robot_body.py` (D-424 몸) | 모듈 목록 | contracts |
-| `src/products/omx/adapter/omx_adapter/command_owner.py`, `local_stop.py` | 모듈 목록 | middleware |
-| `src/site/fleet/fleet/server/{dispatch_admission,cancel_all,cancel_all_store,local_stop_transport}.py`와 `console.py`의 정지 경로 | 모듈 목록. `console.py`는 섞인 파일이므로 wave 0에서 정지 경로를 떼어 낼지 리뷰한다(떼기 전에는 목록에 넣지 않는다) | operations |
-| `firmware/signal/firmware`, `firmware/dock/firmware` | 하위 root (펌웨어 전체가 failsafe 소유자다) | operations (D-429 §2) |
-| `src/runtime/sensing`의 레거시 `safety_node` | 태그하지 않는다. D-208의 단독 모드 예외이며 운영 경로가 아니다 | middleware |
+| 대상 | 방식 | part (현재) | 심볼 앵커 |
+|---|---|---|---|
+| `src/runtime/services/core_features/safety/` (`manager.py`, `fleet_loss.py`, `shadow.py`) | 하위 root, `import_prefix: [core_features.safety]` | middleware | `SafetyManager`, `FleetLossMonitor`, `ShadowLog` |
+| `src/runtime/gateway/core/fleet_loss_wiring.py` | 모듈 목록 | middleware | (모듈 수준 배선 함수) |
+| `core_features/command/manager.py` (출력 선택에서 E-stop·EMERGENCY 차단과 clip 적용) | 모듈 목록 (U1: safety) | middleware | `CommandManager` |
+| `core_features/command/arbitration.py` | 모듈 목록 (U1: 섞인 파일. EMERGENCY 전이는 safety, 출처 우선순위 등록은 control) | middleware | safety 앵커: `ModeMachine`, `_ALLOWED`. control 심볼 `Priority`·`DEFAULT_SOURCES`·`SourceRegistry`는 앵커가 아니다 |
+| `core_features/line_follow/body_stop.py`, `core_features/line_follow/clearance.py` | 모듈 목록 | middleware | `BodyStopMixin` |
+| `src/runtime/gateway/core/bridge/cmd_vel.py` (`cmd_vel_cycle`, 단일 writer 직전 경로) | 모듈 목록 | middleware | `cmd_vel_cycle` |
+| `src/runtime/api_web/core_api_web/api/v1/safety.py` (E-stop·release `:33-38`, PUT limits `:124`) | 모듈 목록 | middleware | `safety_release`, `safety_limits` |
+| `src/contracts/foundation/core_common/robot_body.py` (D-424 몸) | 모듈 목록 | contracts | `RobotBody` |
+| `src/products/omx/adapter/omx_adapter/command_owner.py`, `local_stop.py` | 모듈 목록 | middleware | `ArmCommandOwner` |
+| `src/site/fleet/fleet/server/{dispatch_admission,cancel_all,cancel_all_store,local_stop_transport}.py`, `task_dispatch_routes.py`의 rearm(`:120`), `console.py`의 `estop_all` | 모듈 목록. `console.py`·`task_dispatch_routes.py`는 섞인 파일이므로 앵커만 태그하고, 정지 경로는 하위 root로 떼는 carve를 계획한다(§3, Validation) | operations | `estop_all`, `dispatch_rearm` |
+| `firmware/signal/firmware`, `firmware/dock/firmware` | 하위 root (펌웨어 전체가 failsafe 소유자다) | middleware (D-429 §2 재지정 대기) | — (펌웨어, Python 앵커 없음) |
+| `src/runtime/sensing`의 레거시 `safety_node` | 태그하지 않는다. D-208의 단독 모드 예외이며 운영 경로가 아니다 | middleware | — |
+
+- **섞인 파일.** 모듈 목록은 파일 단위이므로 섞인 파일은 파일 전체가 §5 변경 통제를 받는다. 앵커는 그 파일이 safety인 이유가 되는 심볼만 적는다.
+- **하위 root의 `d427_target`.** 부모와 같은 part·`d427_target`을 가진 하위 root는 `test_nested_roots_change_part_or_target`(`test/architecture/test_platform_parts.py`)에 걸린다. 그래서 safety 하위 root는 부모와 다른 자기 `d427_target`을 가진다(예: `middleware/core/safety`, `middleware/firmware/signal/firmware`).
+- **드리프트 방지.** `safety_modules:`는 파일 경로라서 파일이 쪼개지거나 이름이 바뀌면 조용히 낡는다. 매니페스트는 레거시 경로 스캔에서도 빠져 있다. 그래서 각 항목에 심볼 앵커(위 표)를 둔다. wave 0 시험이 앵커마다 정의 파일을 찾아(root 기준 상대 경로) 그 파일이 safety로 태그됐는지 단정한다.
 
 `concern: safety`는 D-429의 다른 concern과 달리 **읽기 전용 view가 아니다.** §3의 분리 불변식과 §5의 변경 통제가 이 태그에 걸린다.
 
@@ -56,9 +66,9 @@ D-429의 매니페스트 root는 디렉터리 단위이고 가장 깊은 root가
 |---|---|---|---|---|---|---|
 | 7. 모델 도구 제한 | 모델이 움직임·정지·rearm·사이트 장치를 직접 일으키는 것 | 닫힌 도구 catalog(D-392 §3), 구동·안전 도구 금지(§4), `POLICY_DISPATCH_ENABLED=False`(§7) | Fleet (`operations/decision`) | 예. 제한은 모델 행동에 기대지 않는다. 모델이 끊기면 제안이 없을 뿐이다 | D-392, D-326, D-429 §3 · `src/site/fleet/fleet/server/task_service.py:24`, `src/site/fleet/test/test_model_tool_adapter_conformance.py:157` | 로봇 구동 이름 8개는 거부 시험에 있다. 사이트 장치 구동 이름(D-429 §3)은 아직 시험에 없다(D-429 wave 0) |
 | 6. Fleet 정지·래치·fence·admission | 사이트 전체의 새 발행과 진행 중 동작, 늦은 모델 결과 | 단조 증가 stop generation 래치(D-330 §2), 발행 직전 세대 재확인, 후보 가시화와 stop 확인의 공유 SQLite 트랜잭션(D-358 §4), 래치 없는 취소와 래치형 비상 정지의 분리(D-421), 명시 rearm(`/api/fleet/dispatch/rearm`) | Fleet | AI 상실: 예. 네트워크 상실: **아니오**. Fleet 정지는 링크가 있어야 장치에 닿는다. 링크가 끊긴 장치는 층 3·4가 맡는다 | D-330, D-358, D-421, D-105, D-369 §5, D-298 · `console.py:897` `estop_all`, `cancel_all.py`, `dispatch_admission.py`, `local_stop_transport.py`, `test_dispatch_stop_latch.py`, `test_cancel_all.py` | SOURCE·호스트 시험. 응답(HTTP 200·`stopped` 수)은 물리 정지 증거가 아니다(D-298, D-369 §5). D-421은 Proposed |
-| 5. Arbiter + MANUAL 선점 | 여러 명령 출처가 한 장치에서 다투는 것 | 장치당 Arbiter 하나, EMERGENCY > SAFETY > MANUAL > DOCKING > NAVIGATION > FLEET > IDLE, 모드 전이 표(EMERGENCY에서는 IDLE로만), 단일 최종 writer, 감지 프로파일은 속도를 내지 않음 | 장치 middleware (Pinky CORE, OMX 로컬 owner) | 예. 장치 위 순수 로직이다 | D-2, D-38, D-208, D-399 §1, D-104 · `arbitration.py:17-24,44-50`, `ros_bridge.py:3,84` | Pinky는 동작 중. OMX의 우선순위 표와 MANUAL phase 선점, Motion Intent 공통 스키마는 없다(D-399 후속 5, D-429 후속 1) |
+| 5. Arbiter + MANUAL 선점 | 여러 명령 출처가 한 장치에서 다투는 것 | safety 부분: EMERGENCY 전이 표(어디서든 진입, 해제는 `release_emergency`로만 IDLE; `ModeMachine`, `_ALLOWED`)와 출력 선택 시 E-stop·clip 적용(`CommandManager`). control 부분: 출처 우선순위 등록 EMERGENCY > SAFETY > MANUAL > DOCKING > NAVIGATION > FLEET > IDLE(`Priority`, `DEFAULT_SOURCES`, `SourceRegistry`). 단일 최종 writer, 감지 프로파일은 속도를 내지 않음 (사용자 결정 U1) | 장치 middleware (Pinky CORE, OMX 로컬 owner) | 예. 장치 위 순수 로직이다 | D-2, D-38, D-208, D-399 §1, D-104 · `arbitration.py:17-24,44-50`, `ModeMachine`·`release_emergency`, `command/manager.py`, `ros_bridge.py:3,84` | Pinky는 동작 중. OMX의 우선순위 표와 MANUAL phase 선점, Motion Intent 공통 스키마는 없다(D-399 후속 5, D-429 후속 1) |
 | 4. 반응형 정책 엔벌로프 | 학습 정책(ACT·Diffusion·RL)과 미래 로컬 VLA의 출력 | 작업 영역·시간·속도·스텝 상한, 이탈·시간 초과는 HOLD, RL에서는 `terminated=True`(D-427 §5) | 장치 middleware (`middleware/skills`) | 예(같은 호스트 추론, D-399 §2) | D-399 §2, D-427 §5 | **없다.** 엔벌로프 스킬 계약(D-399 후속 1)이 쓰이지 않았다. 지금 장치에서 도는 학습 행동 정책도 없다. 이 층이 생기기 전에는 학습 정책을 실물에 연결하지 않는다 |
-| 3. 장치 Safety Guard + D-400 정책 | 단일 writer로 나가는 모든 명령 | Pinky: E-stop 래치(SAF-001, 관리자 release), 속도 clip(SAF-004), teleop watchdog, 배터리(SAF-005), Fleet 상실 STOP/HOLD(SAF-003, D-419), 사람 자문은 상한을 **낮추기만**(SAF-006), 몸 기준 근접 정지(D-422·D-424), D-400 센서 정책(off·shadow·enforce). OMX: owner HOLD 래치, `StopLocal`·`RearmLocal`, 불명 결과 자동 재발행 금지(D-369 §3) | 장치 middleware | 예. ROS 무의존 결정적 코드이고 Fleet·모델 없이 돈다. Fleet 상실 자체가 이 층의 입력이다(D-419) | D-400, D-419, D-422, D-424, D-105, D-104, D-369 §3, D-336 · `safety/manager.py:278,421,479`, `safety/fleet_loss.py`, `safety/shadow.py`, `bridge/cmd_vel.py`, `command_owner.py:415,464`, `local_stop.py:177` | E-stop 래치·clip·watchdog·SAF-003(D-419 Accepted)은 동작 중. **D-400 센서 정책은 어느 로봇에서도 off이고, 구현은 그림자(계획 1)까지다. 집행은 켜지지 않았다.** G-sim은 호스트 부하로 미결이다. D-422·D-424는 Proposed. OMX 로컬 owner 수용(D-299)은 Proposed이고 실물 정지 수용은 없다 |
+| 3. 장치 Safety Guard + D-400 정책 | 단일 writer로 나가는 명령. 단, 항목마다 적용 범위가 다르다 | Pinky, 모든 출처: E-stop 래치(SAF-001, 관리자 release), 속도 clip(SAF-004), 배터리(SAF-005). MANUAL: teleop watchdog(SAF-002). Fleet 주행 목표: Fleet 상실 정책(SAF-003, D-419; 기본 STOP, `RETURN_HOME`·`CONTINUE`는 §4의 기록된 예외이며 로봇별 승인 필요). 상한 조이기: 사람 자문(SAF-006, 낮추기만). **라인 추종만:** 몸 기준 근접 정지(D-422 `BodyStopMixin`은 `LineFollowManager` mixin이다, `body_stop.py:1`, `line_follow/manager.py:12`. teleop·Nav2 주행은 막지 않는다. D-424의 몸은 다른 근접 판정과 공유). 집행 시 모든 출처: D-400 센서 정책(off·shadow·enforce). OMX: owner HOLD 래치, `StopLocal`·`RearmLocal`, 불명 결과 자동 재발행 금지(D-369 §3) | 장치 middleware | 예. ROS 무의존 결정적 코드이고 Fleet·모델 없이 돈다. Fleet 상실 자체가 이 층의 입력이다(D-419) | D-400, D-419, D-422, D-424, D-105, D-104, D-369 §3, D-336 · `safety/manager.py:278,421,479`, `safety/fleet_loss.py:29`, `safety/shadow.py`, `core/fleet_loss_wiring.py`, `command/manager.py`, `bridge/cmd_vel.py`, `core_api_web/api/v1/safety.py`, `command_owner.py:415,464`, `local_stop.py:177` | E-stop 래치·clip·watchdog·SAF-003(D-419 Accepted)은 동작 중. **D-400 센서 정책은 어느 로봇에서도 off이고, 구현은 그림자(계획 1)까지다. 집행은 켜지지 않았다.** G-sim은 호스트 부하로 미결이다. D-422·D-424는 Proposed. Nav2·teleop 경로에는 몸 기준 근접 정지가 없다(D-400 집행 전까지 센서 기반 정지 없음). OMX 로컬 owner 수용(D-299)은 Proposed이고 실물 정지 수용은 없다 |
 | 2. 사이트 장치 로컬 failsafe | 감독(Fleet)이 끊기거나 장치가 막 켜졌을 때의 사이트 장치 출력 | 신호등: 부팅 상태가 `failsafe`, 감독 상실 시 `failsafe`로 복귀, 토큰 없는 장치는 어떤 명령도 받지 않음. 도크: 리밋스위치가 안 눌리면 0 V(단일 개폐점 `setOutput`), 부팅 시 무전원, 폴트 래치는 부하 제거까지 | 사이트 장치 펌웨어 (`operations/site_devices/<kind>`) | 예. 펌웨어가 스스로 한다 | D-337 §3, D-349, D-350, D-351, D-429 §2·§4 · `rosy_signal.ino:45,66,118`, `firmware/signal/README.md`, `rosy_dock.ino:58-65,117,124,172` | 신호·도크 펌웨어는 계약 시험 수준이다. 현장 수용은 없다. 컨베이어·문·PLC는 아직 없다(D-429 후속 2·4) |
 | 1. 물리 E-stop · 안전 회로 | 모든 동작 에너지 | 하드웨어 E-stop, 안전 relay·drive enable, safety PLC 회로. 소프트웨어와 무관 | 장치 하드웨어와 통합자 | 예(설계 의도). 소프트웨어 무관 | D-369 §5, D-399 §1, D-429 §4, D-427 §5 · (코드 없음, 의도) | **원칙만 있다.** Pinky·OMX의 독립 E-stop 회로가 저장소 증거로 확인되지 않았고 독립 E-stop 실측도 없다(D-427 §5 선행 조건 6). safety PLC는 없다 |
 
@@ -68,34 +78,49 @@ D-105의 호스트 정지(스페이스·보드 `/stop`)는 층 3의 E-stop 래�
 
 다음 불변식은 시험으로 강제한다. 시험이 들어오기 전에는 규칙이 발효되지 않는다(D-429 §4의 원칙과 같다). 대상은 `concern: safety` root와 `safety_modules:` 목록이다.
 
-1. **안전은 판단·학습에 기대지 않는다.** safety 코드는 `decision`·`learning` 태그 코드, 모델 SDK(`google.genai`, `anthropic`, `openai`, `lerobot`, `torch`, `onnxruntime` 등), `integrations/models`를 import하지 않는다. 계약(`core_common.protocol.detections` 같은 contracts)은 import할 수 있다. 그 입력은 상한을 낮추거나 정지를 더하는 쪽으로만 쓴다(지금 SAF-006 사람 자문이 그렇다).
-2. **판단·학습은 안전을 우회하지 않는다.** `decision`·`learning` 코드는 safety 내부를 import하지 않는다. 정지·rearm·한도 변경은 소유자의 공개 경로(CORE API, Fleet API, OMX UDS)로만 요청한다. 우회 경로(단일 writer 직접 호출, `cmd_vel` 발행, 래치 상태 쓰기)가 없어야 한다.
-3. **모든 DeviceControlPort binding(D-429 §4)은 그 장치의 Safety Guard와 Arbiter 뒤에 있다.** 새 백엔드는 둘 없이 배선될 수 없다. 시험은 binding의 호출 사슬을 단정한다. Pinky는 `cmd_vel` publisher를 부르는 곳이 `ros_bridge.py`의 `_send_twist` 하나(`:431-435`)이고, 그것은 `cmd_vel_cycle`이 `CommandManager.select_output`(Arbiter 모드와 `SafetyManager`의 E-stop·clip·정책을 거친 값) 뒤에만 부른다. OMX는 `ActionPort.send_goal`을 부르는 곳이 `ArmCommandOwner`의 래치 확인 뒤 하나다.
-4. **학습 정책(ACT·RL·VLA)과 모델 출력은 안전 기능으로 인정하지 않는다.** 안전 기능에 의해 제한될 수만 있다. 학습 인식(LaneUNet·YOLO 등)의 evidence가 안전 층에 들어오는 것은 더 보수적으로 만드는 입력일 때뿐이다. 학습 출력이 정지를 해제하거나, 상한을 올리거나, 결정적 판정(D-422 몸 기준 정지 등)을 대신하지 않는다.
-5. **물리 E-stop은 소프트웨어에 기대지 않는다. ROSY는 안전 코일에 쓰지 않는다.** ROSY는 E-stop·safety PLC 상태를 읽을 수 있으나, 그 회로나 안전 코일·레지스터에 쓰거나 우회하지 않는다(D-429 §4와 같다). 미래 Modbus/PLC 어댑터는 안전 영역 주소를 쓰기 대상으로 갖지 않는다.
+**safety 공개 API와 내부.** 다른 코드는 safety의 **공개 진입점**만 부를 수 있다. 공개 진입점은 매니페스트의 앵커 목록에 `public: true`로 표시한다. 시작 목록: CORE `SafetyManager`의 `trigger_estop`·`release`·`clip`·`set_session_speed`·`set_person_advisory`, `ModeMachine.release_emergency`·`is_emergency`, `FleetLossMonitor.tick`, Fleet `estop_all`·`cancel_all` 진입·dispatch admission 판정·rearm, OMX `StopLocal`·`RearmLocal`. 내부(래치 필드, 정책 바인딩, 그림자 기록, 저장소 행 쓰기)는 safety 코드끼리만 쓴다.
+
+**현재 위반의 동결.** D-429는 `src/site/fleet` 전체를 `decision`으로 태그한다. 그래서 첫날부터 edge가 있다. `task_service.py`·`mission_store.py`·`task_dispatch_routes.py`가 `dispatch_admission`·`cancel_all`을 import하는 것은 공개 진입점 호출이므로 허용이다. 반대로 `cancel_all.py:28-29`는 `fleet.server.console_view`와 `fleet.swarm.transport`(decision 태그)를 import한다. 이런 edge는 `KNOWN_SAFETY_VIOLATIONS`에 고정한다. `test_platform_parts.py`의 `KNOWN_VIOLATIONS`와 같은 방식(집합 동등, 줄이기만)이다. 근본 해소는 Fleet 정지 경로를 자기 하위 root로 떼는 carve다(Validation wave 0 2).
+
+**로봇 쪽 대상.** 지금 `core_features` 안에는 decision 태그 root가 없어서 불변식 2가 아무것도 검사하지 않는다. wave 0에서 `core_features/decision`(D-429 §1의 "장치 지역 규칙")에 `concern: decision`을 달아 로봇 쪽 검사 대상을 만든다. 각 불변식 시험은 검사한 importer가 하나 이상인지도 단정한다(공허한 통과 방지).
+
+1. **안전은 판단·학습에 기대지 않는다.** safety 코드는 `decision`·`learning` 태그 코드, 모델 SDK(`google.genai`, `anthropic`, `openai`, `lerobot`, `torch`, `onnxruntime` 등), `integrations/models`를 import하지 않는다(`KNOWN_SAFETY_VIOLATIONS` 제외). 계약(`core_common.protocol.detections` 같은 contracts)은 import할 수 있다. 그 입력은 상한을 낮추거나 정지를 더하는 쪽으로만 쓴다(SAF-006, §4 인식 규칙).
+2. **판단·학습은 안전을 우회하지 않는다.** `decision`·`learning` 코드는 safety의 공개 진입점만 부른다. 정지·rearm·한도 변경은 소유자의 공개 경로(CORE API, Fleet API, OMX UDS)로만 요청한다. 단일 writer 직접 호출, `cmd_vel` 발행, 래치 상태 쓰기 경로가 없어야 한다.
+3. **모든 DeviceControlPort binding(D-429 §4)은 그 장치의 Safety Guard와 Arbiter 뒤에 있다.** 호출 그래프 AST로 "뒤에 있음"을 증명하려 하지 않는다. 그런 시험은 거짓 안심을 준다. 대신 둘로 나눈다.
+   - (a) **구조:** 저장소 전체 AST에서 `"cmd_vel"` 문자열로 publisher를 만드는 곳이 `ros_bridge.py` 하나이고, `cmd_vel_pub`을 만지는 함수가 `_send_twist`(`ros_bridge.py:431-435`) 하나다. 레거시 `src/runtime/sensing/control/safety/node.py:89`(`cmd_out` 기본 `cmd_vel`, D-208 단독 모드 예외)는 allowlist에 둔다. OMX는 `ActionPort.send_goal` 호출자가 `ArmCommandOwner` 하나다.
+   - (b) **행동:** E-stop이 걸리면 모든 출처(MANUAL·NAVIGATION·DOCKING·FLEET·swarm)의 출력이 0이고, 래치 해제 전 어떤 출처도 0이 아닌 값을 못 낸다. E-stop이 없으면 clip이 적용된다.
+   - **리뷰 전용 규칙(기계 검사 아님):** 파라미터·launch remap으로 다른 노드의 출력 토픽을 `cmd_vel`로 바꾸는 변경은 safety 변경으로 보고 §5 리뷰를 받는다.
+4. **학습 정책(ACT·RL·VLA)과 모델 출력은 안전 기능으로 인정하지 않는다.** 안전 기능에 의해 제한될 수만 있다. 학습 인식 evidence가 안전 층에 들어오는 것은 더 조이는 입력일 때뿐이다. 학습 출력이 정지를 해제하거나 기본 프로필보다 상한을 올리지 않는다(시험 가능, Validation wave 0 4). 학습 출력이 결정적 판정(D-422 몸 기준 정지 등)을 **대신하지 않는다**는 부분은 리뷰 전용 규칙이다.
+5. **물리 E-stop은 소프트웨어에 기대지 않는다. ROSY는 안전 코일에 쓰지 않는다.** ROSY는 E-stop·safety PLC 상태를 읽을 수 있으나, 그 회로나 안전 코일·레지스터에 쓰거나 우회하지 않는다(D-429 §4와 같다). 미래 Modbus/PLC 어댑터는 안전 영역 주소를 쓰기 대상으로 갖지 않는다. 이 시험은 이 ADR이 소유한다(Validation).
 
 #### 4. fail-closed 규칙
 
-Fleet·네트워크·모델·감독 중 무엇을 잃어도 장치는 안전 상태로 내려간다.
+Fleet·네트워크·모델·감독 중 무엇을 잃어도 장치는 안전 상태로 내려간다. 예외는 아래에 기록한 것뿐이다.
 
 | 잃는 것 | 로봇 | 신호등 | 도크 |
 |---|---|---|---|
-| Fleet·네트워크 | D-419 SAF-003: 진행 중 Fleet 주행 목표를 취소(STOP 기본, HOLD는 물리적으로 같고 기록만 다름). 래치 없음 | 감독 상실 → `failsafe`(전 기능 적색 점멸, 진입 불허, D-337 §3) | 해당 없음. 도크에는 감독 링크가 없다(D-429 §2). 인터록은 국소다 |
+| Fleet·네트워크 | D-419 SAF-003: 정책은 `STOP`(기본)·`HOLD`·`RETURN_HOME`·`CONTINUE`(`fleet_loss.py:29` `POLICIES`). STOP·HOLD는 진행 중 Fleet 주행 목표를 취소한다(물리적으로 같고 기록만 다름). 래치 없음. `RETURN_HOME`·`CONTINUE`는 아래 기록된 예외 | 감독 상실 → `failsafe`(전 기능 적색 점멸, 진입 불허, D-337 §3) | 해당 없음. 도크에는 감독 링크가 없다(D-429 §2). 인터록은 국소다 |
 | 모델 | 영향 없음. 모델은 동작 권한이 없다(층 7). 진행 중 턴은 stale | 영향 없음 | 영향 없음 |
-| 장치 센서·정책 평가 | D-400 집행 시 HOLD(첫 판정 전, `stale_hold_s` 미만) → 그 이상은 E-stop 래치. 집행 전에는 이 규칙이 없다(층 3 상태) | — | 리밋 미눌림·폴트 → 0 V, 폴트 래치 |
+| 인식(사람 자문 등) | 자문을 버리고 상한이 **기본 프로필로 돌아간다**(`PersonAdvisoryFeed`, `manager.py:218-274`). fail-closed가 아니다. 아래 인식 규칙 | 해당 없음 | 해당 없음 |
+| 장치 센서·정책 평가 | D-400 집행 시: 첫 판정 전과 `stale_hold_s` 미만은 HOLD(자동 재개), 그 이상은 E-stop 래치. **D-400이 off인 지금은 규칙 없음**(층 3 상태) | 해당 없음 | 리밋 미눌림·폴트 → 0 V, 폴트 래치 |
 | 장치 재부팅 | 정지 상태로 시작 | `failsafe`로 시작 | 0 V로 시작 |
 
-- **자동 재개 없음.** 복귀는 기존 rearm 규칙만 쓴다. CORE E-stop은 관리자 `POST /api/v1/safety/release`, Fleet 래치는 `POST /api/fleet/dispatch/rearm`, OMX는 `RearmLocal`, SAF-003 뒤는 새 명령(D-419 §3)이다. 신호등은 인증된 감독의 명시 명령으로만 failsafe를 벗어난다. 도크 폴트는 부하 제거로만 풀린다. 링크가 돌아왔다는 사실만으로 동작이 재개되지 않는다.
-- **`CONTINUE_CURRENT_NAVIGATION`.** D-419는 운영자가 고를 수 있는 이 정책을 둔다. 기본값(STOP)은 바꾸지 않는다. 이 값은 현재 목표를 끝내는 것뿐이며 새 목표·재개를 허용하지 않는다. 그래도 엄격한 fail-closed는 아니다. 이 ADR은 이를 예외로 기록하고, 사이트 프로필에서 쓸지 여부는 G-dev 증거와 함께 별도로 정한다.
+- **래치된 정지는 자동으로 풀리지 않는다.** 대상은 래치 정지다: CORE E-stop(관리자 `POST /api/v1/safety/release`), Fleet 발행 래치(`POST /api/fleet/dispatch/rearm`), 사이트 정지(D-330·D-421 `estop`), OMX owner HOLD 래치(`RearmLocal`), 신호등 failsafe(인증된 감독의 명시 명령), 도크 폴트(부하 제거). 링크가 돌아왔다는 사실만으로 이것들이 풀리지 않는다.
+- **래치 없는 HOLD는 자기 조건이 풀리면 스스로 풀릴 수 있다.** 예: D-400 stale HOLD(`stale_hold_s` 미만), `cmd_vel.py:65`의 준비 전 0 출력, teleop watchdog(SAF-002). 이것은 래치가 아니며 이 규칙의 위반이 아니다. SAF-003 STOP·HOLD 뒤의 재출발은 새 명령뿐이다(D-419 §3).
+- **인식 규칙.** (1) 기본 프로필은 인식 없이도 안전해야 한다. 상한·E-stop은 인식 없이 성립한다. (2) 인식을 잃으면 기본 프로필로 돌아간다. 이것은 fail-closed가 아니라 "더 조이지 않음"이다. (3) SAF-006 사람 자문은 안전 기능이 아니라 조이기다. 기본 프로필을 대체하지 않는다.
+- **Fleet 상실 기본은 `STOP`이다(사용자 결정 U2, 2026-10-03).** 아래 두 값은 fail-closed의 기록된 예외다. D-419 정의를 그대로 옮긴다.
+  - **예외 1 — `CONTINUE`(`CONTINUE_CURRENT_NAVIGATION`):** 목표를 그대로 두고 이벤트만 낸다. 끊긴 동안 들어오는 새 Fleet 목표도 막지 않는다(D-419 §3, 결정 1과 같은 이유). 로봇은 Fleet 교통정리 없이 계속 달린다.
+  - **예외 2 — `RETURN_HOME`:** Fleet 목표를 취소하고 `nav.home(source="fleet_loss")`로 `__home__`에 간다. `__home__`이 없거나 지역화가 안 됐거나 목표가 거부되면 선 채로 남는다(D-419 §3). 사이트 Fleet 하나가 죽으면 이 정책의 로봇이 모두 동시에 교통정리 없이 home으로 달리는 공통 모드 위험이다(D-419 Consequences).
+  - **켜는 조건:** 어느 한 로봇에서 `STOP`이 아닌 값을 쓰려면 그 로봇 단위의 승인이 필요하다. 근거는 그 로봇의 G-dev 증거다. 승인은 로봇 프로필(또는 로봇별 overlay)에 승인자와 증거 참조를 함께 기록한다. 승인 기록이 없는 비-STOP 값은 프로필 검증에서 거부한다(Validation wave 0 6). 지금 D-419의 PUT 경고 동작은 그 시험이 들어올 때까지 그대로다. `HOLD`는 물리적으로 STOP과 같으므로 이 승인 대상이 아니다.
 
 #### 5. 변경 통제
 
-safety 태그 코드(§1의 root와 모듈 목록)를 바꾸는 변경은 다음을 지킨다. 지금 저장소 관행에 맞춘 가벼운 규칙이다. 새 절차를 만들지 않는다.
+safety 태그 코드(§1의 root, 모듈 목록, 앵커 파일)를 바꾸는 변경은 다음을 지킨다. 지금 저장소 관행에 맞춘 가벼운 규칙이다.
 
-- **독립 리뷰:** 작성 세션이 아닌 리뷰어(code-reviewer 또는 verifier 레인, D-172의 독립 리뷰와 같은 방식)가 승인한다. 같은 세션의 자기 승인은 인정하지 않는다.
-- **gate 증거:** 해당 층의 기존 gate를 붙인다. 예: D-400 G-sim/G-dev/G-enforce, D-419 호스트 시험, Fleet 정지 래치 시험(`test_dispatch_stop_latch.py`·`test_cancel_all.py`), 펌웨어 계약 시험. 호스트 pytest 통과는 장치·실주행 수용이 아니다.
-- **교훈 기록:** 리뷰가 안전 결함 종류를 잡으면 `docs/solutions/`에 `ce-compound` 노트를 남긴다(`design-patterns/`).
-- **시험 표시:** §3 시험이 들어온 뒤에는 safety 태그 파일을 바꾸는 커밋이 그 시험을 통과해야 한다. 매니페스트에서 safety 태그를 빼는 변경도 같은 리뷰를 받는다.
+- **독립 리뷰 + 강제 trailer:** 작성 세션이 아닌 리뷰어(code-reviewer 또는 verifier 레인, D-172의 독립 리뷰와 같은 방식)가 승인한다. safety 태그 경로를 건드린 커밋은 `Safety-Review: <리뷰어·레인> <근거 링크>` trailer를 가져야 한다. 기존 `tools/hooks/pre-push`가 push 범위의 커밋을 매니페스트의 safety 경로와 대조해 trailer가 없으면 push를 거부한다(Validation wave 0 5). 같은 세션의 자기 승인을 trailer 근거로 쓰지 않는 것은 리뷰 판단이며 기계 검사가 아니다.
+- **gate 증거:** 해당 층의 기존 gate를 trailer 근거에 붙인다. 예: D-400 G-sim/G-dev/G-enforce, D-419 호스트 시험, Fleet 정지 래치 시험(`test_dispatch_stop_latch.py`·`test_cancel_all.py`), 펌웨어 계약 시험. 호스트 pytest 통과는 장치·실주행 수용이 아니다.
+- **교훈 기록:** 리뷰가 안전 결함 종류를 잡으면 `docs/solutions/design-patterns/`에 `ce-compound` 노트를 남긴다.
+- 매니페스트에서 safety 태그·앵커를 빼는 변경도 같은 trailer가 필요하다.
 
 ### 기존 결정과의 관계
 
@@ -107,7 +132,7 @@ safety 태그 코드(§1의 root와 모듈 목록)를 바꾸는 변경은 다음
 | D-400 (Proposed) | 층 3의 센서 정책이다. off·shadow·enforce 모드와 gate를 바꾸지 않는다. 집행은 여전히 로봇별 사용자 승인이다 |
 | D-369 (Accepted) | 역할 분리와 §5 물리 E-stop 독립을 층 1·3·6으로 계승한다. 응답이 정지 증거가 아니라는 규칙을 유지한다 |
 | D-330, D-358, D-421 | 층 6이다. 유지한다 |
-| D-419 (Accepted) | 로봇의 Fleet 상실 fail-closed 규칙이다. `CONTINUE_CURRENT_NAVIGATION`은 §4의 기록된 예외다 |
+| D-419 (Accepted) | 로봇의 Fleet 상실 규칙이다. 기본 STOP과 HOLD는 fail-closed, `CONTINUE`와 `RETURN_HOME`은 §4의 기록된 예외다. 비-STOP 값에 로봇별 승인 기록(승인자, G-dev 증거)을 요구하는 것은 이 ADR이 더한다(사용자 결정 U2). 승인 검증 시험 전까지 D-419 동작은 바꾸지 않는다 |
 | D-392 (Accepted), D-326 | 층 7이다. 금지 목록과 밸브를 유지한다 |
 | D-2, D-38, D-208 | 단일 writer와 감지 프로파일 무속도를 층 5로 유지한다 |
 | D-104, D-105 | 호스트 arm의 한도 설정과 호스트 정지 입력을 층 3의 입력으로 둔다 |
@@ -137,21 +162,29 @@ safety 태그 코드(§1의 root와 모듈 목록)를 바꾸는 변경은 다음
 
 **Wave 0 (D-429 wave 0과 함께, 시험 이름은 제안):**
 
-1. 매니페스트에 `concern: safety` 하위 root와 `safety_modules:` 목록을 넣는다(§1 표). `console.py` 정지 경로 분리 여부를 리뷰한다.
-2. `test/architecture/test_safety_separation.py`
+1. **매니페스트.** `concern: safety` 하위 root(각자 `d427_target`)와 `safety_modules:` 목록(파일 경로 + 심볼 앵커)을 넣는다(§1). `core_features/decision`에 `concern: decision`을 단다(불변식 2의 로봇 쪽 대상).
+2. **Fleet 정지 경로 carve 계획.** `dispatch_admission`·`cancel_all`·`cancel_all_store`·`local_stop_transport`와 `console.py`의 `estop_all`, `task_dispatch_routes.py`의 rearm 경로를 Fleet 안 하위 root(예: `fleet/server/stop/`)로 떼는 계획을 쓴다. 이동은 D-427 wave 3 순서를 따른다. 그 전까지 이 파일들은 `safety_modules:`로만 태그된다.
+3. `test/architecture/test_safety_separation.py`
+   - `KNOWN_SAFETY_VIOLATIONS`: wave 0 시점 위반 edge를 고정한다. `test_platform_parts.py`의 `KNOWN_VIOLATIONS`와 같이 집합 동등으로 검사하고 줄이기만 한다. 예상 항목: `cancel_all.py:28-29` → `fleet.server.console_view`, `fleet.swarm.transport`(safety → decision 태그 root)
    - `test_safety_does_not_import_decision_learning_or_model_sdks` — 불변식 1
-   - `test_decision_and_learning_do_not_import_safety_internals` — 불변식 2
-   - `test_device_control_port_bindings_sit_behind_arbiter_and_safety_guard` — 불변식 3. Pinky `cmd_vel` publisher 호출자가 `_send_twist` 하나이고 그 호출자가 `cmd_vel_cycle` 하나, OMX `send_goal` 호출자가 `ArmCommandOwner` 하나임을 AST로 단정
-   - `test_safety_manifest_tags_cover_named_modules` — §1 표의 경로가 모두 태그되어 있고 실재함
-3. `src/runtime/services/test/` 또는 해당 시험 폴더의 `test_learned_inputs_only_tighten_limits` — 불변식 4. 사람 자문·인식 evidence가 상한을 올리거나 래치를 풀지 못함
-4. 불변식 5는 지금 쓸 코드가 없다. PLC/Modbus 어댑터 ADR(D-429 후속 4)이 `test_plc_adapter_never_writes_safety_addresses`를 함께 정한다.
-5. D-429 wave 0의 사이트 장치 도구 거부 이름 추가(층 7)를 그대로 한다.
+   - `test_decision_and_learning_use_only_safety_public_api` — 불변식 2. 공개 진입점 목록(§3) 밖의 safety 심볼 import 금지
+   - `test_each_separation_rule_checks_at_least_one_importer` — 불변식 1·2·3a가 실제 import edge·파일을 하나 이상 검사했는지 단정한다. 대상이 비면 실패한다(공허한 통과 방지)
+   - `test_cmd_vel_publisher_is_single_and_only_send_twist_touches_it` — 불변식 3a. 레거시 `src/runtime/sensing/control/safety/node.py:89`는 allowlist
+   - `test_safety_anchors_live_in_safety_tagged_files` — §1 심볼 앵커마다 정의 파일을 찾아(root 기준 상대 경로) 그 파일이 safety로 태그됐는지 단정한다. 파일이 쪼개져 앵커가 옮겨가면 실패한다
+4. `src/runtime/services/test/test_safety_behaviour.py`(이름 제안)
+   - `test_estop_zeroes_every_source_and_clip_applies` — 불변식 3b
+   - `test_learned_inputs_only_tighten_limits` — 불변식 4·§4. 사람 자문이 있으면 상한이 기본 프로필 이하이고, 자문이 stale·무효·없음이면 상한이 정확히 기본 프로필로 돌아가며, 어떤 자문도 기본 프로필보다 높이지 못하고 래치를 풀지 못함
+5. **`tools/hooks/pre-push` 확장** — §5의 `Safety-Review:` trailer 검사.
+6. **프로필 검증 시험** `test_non_stop_fleet_loss_policy_requires_approval_record` — `safety.fleet_loss_policy`가 `STOP`이 아닌 프로필·overlay에 승인 기록(승인자, G-dev 증거 참조)이 없으면 거부한다(§4, 사용자 결정 U2).
+7. D-429 wave 0의 사이트 장치 도구 거부 이름 추가(층 7)를 그대로 한다.
+
+불변식 5의 시험 `test_plc_adapter_never_writes_safety_addresses`는 **이 ADR이 소유한다.** 지금은 쓸 코드가 없으므로 첫 PLC/Modbus 어댑터와 같은 변경에서 들어온다. D-429 후속 4(PLC 인터록 ADR)는 이 시험을 참조할 뿐 다시 정의하지 않는다.
 
 **후속:**
 
 1. 물리 E-stop 실측: Pinky·OMX 회로 확인과 독립 E-stop 시험(D-427 §5 선행 조건 6). 결과에 따라 층 1 상태를 갱신한다.
 2. D-400 계획 2·3: G-sim 재실행(유휴 호스트), G-dev, 로봇별 G-enforce.
 3. D-399 후속 1(엔벌로프 스킬 계약)과 후속 5(Motion Intent·Arbiter·MANUAL 선점, D-429 후속 1과 합침).
-4. `CONTINUE_CURRENT_NAVIGATION`을 사이트 프로필에서 허용할지(§4).
+4. `arbitration.py`를 safety 심볼(`ModeMachine`, `_ALLOWED`)과 control 심볼(`Priority`, `DEFAULT_SOURCES`, `SourceRegistry`)로 나눌지는 파일 크기 예산과 함께 나중에 정한다. 나누기 전에는 파일 전체가 safety 변경 통제를 받는다(§1).
 
 **References:** [D-429](D-429-five-concerns-control-port-and-site-devices.md), [D-427](D-427-platform-three-parts-middleware-operations-learning.md), [D-399](D-399-rosy-layered-architecture-site-plane-device-pipeline.md), [D-400](D-400-core-safety-policy-off-shadow-enforce.md), [D-369](D-369-control-authority-and-stop-evidence.md), [D-105](D-105-stop-safety-stop.md), [D-330](D-330-fleet-action-admission-stop-and-recovery.md), [D-358](D-358-er2-feedback-outbox-and-replan-fencing.md), [D-421](D-421-fleet-cancel-all-driving-separate-from-latched-estop.md), [D-422](D-422-line-follow-body-referenced-obstacle-stop.md), [D-424](D-424-one-robot-body-for-every-near-check.md), [D-104](D-104-arm-manual-put-safety-limits.md), [D-2](D-2-cmd-vel.md), [D-38](D-38-core.md), [D-392](D-392-provider-neutral-model-tool-contract.md), [D-326](D-326-agent-loop-boundary.md), [D-337](D-337-robot-signal-source-measured-light.md), [D-349](D-349-dock-auto-charge-code-readiness.md), [D-351](D-351-docking-retry-by-failure-kind.md), [D-200](D-200-docking-owns-the-docking-mode.md), [D-419](D-419-saf003-fleet-link-loss-policy.md), [D-208](D-208-sensing-profile-publishes-no-velocity.md), [D-298](D-298-mission-action-and-stop-evidence-terminology.md), [D-336](D-336-fleet-omx-local-ipc-boundary.md), [D-299](D-299-omx-lerobot-development-and-command-ownership.md), [D-172](D-172-archived-branch-port-closure.md), [소유 매니페스트](../../tools/harness/platform_parts.yaml)

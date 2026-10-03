@@ -103,9 +103,9 @@ D-427은 최상위를 middleware·operations·learning 세 파트와 공용 cont
 - 상태: 측정값과 주장값을 구분한다(D-337의 measured vs claimed)
 - heartbeat
 - semantic 명령만 받는다. raw I/O(핀·레지스터·코일)는 contracts에 나오지 않는다
-- failsafe 의무: 감독이 끊기면 장치가 스스로 안전 상태로 간다 (의미·fail-closed 규칙은 D-430 §4)
+- failsafe 의무: 감독이 끊기면 장치가 스스로 안전 상태로 간다 (제안: D-430 §4)
 
-heartbeat·semantic 명령·감독 failsafe는 명령을 받는 장치의 의무다. 지금 도크처럼 상태만 내놓는 읽기 전용 장치는 식별과 상태만 진다. failsafe의 의미는 D-430 §4가 정본이다.
+heartbeat·semantic 명령·감독 failsafe는 명령을 받는 장치의 의무다. 지금 도크처럼 상태만 내놓는 읽기 전용 장치는 식별과 상태만 진다. (제안: D-430 §4)
 
 **로봇.** Motion Intent와 DeviceControlPort를 둔다.
 
@@ -118,7 +118,7 @@ heartbeat·semantic 명령·감독 failsafe는 명령을 받는 장치의 의무
 
 - 공통 바탕에 kind별 semantic 명령(signal: mode·phase, conveyor: start/stop/speed class, door: open/close; dock은 지금 읽기 전용 `/status`뿐이며 명령은 별도 ADR 뒤의 미래 항목)을 더한다.
 - 장치 로컬 failsafe가 필수다. 예: 신호는 감독 상실 시 `mode=failsafe`, 전 기능 적색 점멸이다(펌웨어 계약 `firmware/signal/README.md` "하트비트와 페일세이프"; 명령된 `all_red` 점등과 구별된다. D-337 §3상 진입 불허), 문은 마지막 안전 상태 유지, 컨베이어는 정지. (안전 체인: D-430)
-- 물리 E-stop과 safety PLC 회로는 ROSY와 독립이다. ROSY는 그 상태를 읽을 수 있으나 그 회로를 쓰거나 우회하지 않는다. (D-430 §3 불변식 5)
+- 물리 E-stop과 safety PLC 회로는 ROSY와 독립이다. ROSY는 그 상태를 읽을 수 있으나 그 회로를 쓰거나 우회하지 않는다. (제안: D-430 §3 불변식 5)
 
 **integrations의 재정의.**
 
@@ -205,9 +205,9 @@ heartbeat·semantic 명령·감독 failsafe는 명령을 받는 장치의 의무
 **후속 ADR:**
 
 1. **Motion Intent + DeviceControlPort.** D-399 후속 5와 합친다. Motion Intent 공통 스키마, 장치별 Arbiter 우선순위표, MANUAL 선점, Pinky·OMX 구현 대응, `skills/manipulation`·`omx_adapter`의 포트를 `api`로 추출하는 범위.
-2. **`rosy.site-device/1`.** 공통 바탕(식별·상태·heartbeat·semantic 명령·failsafe), kind별 명령, 감독 상실 timeout, 측정/주장 구분, 물리 E-stop·safety PLC 독립. 물리 E-stop·safety PLC 독립은 D-430 §3 불변식 5를 따른다.
+2. **`rosy.site-device/1`.** 공통 바탕(식별·상태·heartbeat·semantic 명령·failsafe), kind별 명령, 감독 상실 timeout, 측정/주장 구분, 물리 E-stop·safety PLC 독립. (제안: D-430 §3 불변식 5)
 3. **ER2 사이트 장치 후보 제안.** 후보 스키마, 감사 기록, 운영자 승인 UI, 무효화 규칙. 착지 전에는 catalog에 도구가 없다. 직접 구동 이름의 거부 시험은 이 ADR보다 먼저 wave 0에서 들어간다. 후보 도구 이름은 그 거부 목록과 겹치지 않게 정한다.
-4. **PLC 인터록.** PLC/Modbus 컨베이어를 첫 비-ROS 대상으로, ROSY 감독 신호와 safety PLC 회로의 경계. 안전 영역 쓰기 금지 시험은 D-430 후속(wave 0 4항)과 함께 정한다.
+4. **PLC 인터록.** PLC/Modbus 컨베이어를 첫 비-ROS 대상으로, ROSY 감독 신호와 safety PLC 회로의 경계. 안전 영역 쓰기 금지 시험은 D-430이 소유하며 이 후속은 참조만 한다(제안: D-430 §3 불변식 5).
 5. **로컬 VLA 배치(D-399 §2).** VLA를 반응형 정책으로 옮길 때의 호스트·엔벌로프·D-231 §4 개정 여부.
 
 **References:** [D-427](D-427-platform-three-parts-middleware-operations-learning.md), [D-326](D-326-agent-loop-boundary.md), [D-392](D-392-provider-neutral-model-tool-contract.md), [D-399](D-399-rosy-layered-architecture-site-plane-device-pipeline.md), [D-357](D-357-er2-mission-feedback-loop.md), [D-358](D-358-er2-feedback-outbox-and-replan-fencing.md), [D-163](D-163-signal-observation-readonly-plane.md), [D-337](D-337-robot-signal-source-measured-light.md), [D-200](D-200-docking-owns-the-docking-mode.md), [D-349](D-349-dock-auto-charge-code-readiness.md), [D-350](D-350-dock-hardware-phase-tiers.md), [D-351](D-351-docking-retry-by-failure-kind.md), [D-12](D-12-mission-fleet.md), [D-2](D-2-cmd-vel.md), [D-38](D-38-core.md), [D-413](D-413-platform-modules-integrations-apps-profiles.md), [D-231](D-231-layered-source-roots-keep-package-names.md), [D-427 이전 계획](../plans/2026-10-03-d427-source-migration.md), [소유 매니페스트](../../tools/harness/platform_parts.yaml)
