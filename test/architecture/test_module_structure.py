@@ -451,10 +451,11 @@ SIZE_VERDICTS = {
         "tools/perception/test/test_rosy_ml.py (X5, D-411 fetch --http)",
     ),
     "deploy/robot/pinky_pro/native/rosy-face.py": (
-        1021,
+        1048,
         "accept: the one owner of LCD, buzzer and lamp (D-433, was rosy-boot-display.py) — one poll "
         "and one frame tick; the situation table lives in core_common.face_screen; covered by "
-        "test/test_rosy_face.py (X5)",
+        "test/test_rosy_face.py (X5). 1048 after the review fixes (last good hand-over, "
+        "shutdown-only poll)",
     ),
     "deploy/robot/pinky_pro/release/updater.py": (
         686,
@@ -466,7 +467,7 @@ SIZE_VERDICTS = {
         "accept: one scan entry over the release tree — the rules and the walker are the same concern (X5)",
     ),
     "deploy/robot/pinky_pro/native/rosy_auto_update.py": (
-        1559,
+        1591,
         "split: D-412 robot-side updater — the GitHub/rollout fetch and staging, the eligibility "
         "reader (status-inputs, hold, seals, claim), and the apply/resume/rollback transaction with "
         "its journal are separate seams; move fetch+staging and eligibility into sibling modules in "
@@ -475,7 +476,8 @@ SIZE_VERDICTS = {
         "bounded tail loop, rollback_failed acknowledgement); 1515 (+10) after the final batch "
         "(release-hold under the run lock, refused rollback is sticky); verdict unchanged. "
         "1559 (+42) for D-433: the Updating marker for rosy-face and the one-time start of the "
-        "retired display unit after a rollback (Q5); verdict unchanged",
+        "retired display unit after a rollback (Q5); 1591 (+32) for the D-433 review "
+        "(live display swap moved here from the sync, marker only during this run's steps); verdict unchanged",
     ),
     "tools/release/publish_payload_release.py": (
         655,

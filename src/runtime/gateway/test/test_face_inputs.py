@@ -83,6 +83,27 @@ def test_due_on_change_or_every_period():
     assert display.face_inputs_due(later, first, 1.0, 0.0, 1.0)
 
 
+def test_measurement_noise_waits_for_the_one_second_write():
+    # Review LOW: speed and battery move every tick while driving; that alone is not a change.
+    first = _payload()
+    jitter = _payload(_snapshot(), at=NOW)
+    jitter["drive"] = {**jitter["drive"], "speed": 0.13, "battery_percent": 55.6}
+    jitter["battery_percent"] = 55.6
+    moved = _payload(at=NOW)
+    moved["drive"] = {**moved["drive"], "speed": 0.31}
+
+    assert not display.face_inputs_due(jitter, first, 0.2, 0.0, 1.0)
+    assert display.face_inputs_due(moved, first, 0.2, 0.0, 1.0)
+    assert display.face_inputs_due(jitter, first, 1.0, 0.0, 1.0)
+
+
+def test_the_goal_rides_the_drive_card_while_navigating():
+    payload = display.face_inputs_payload(_snapshot(), face="happy", power_mode="ACTIVE", wake=None,
+                                          written_at=NOW.isoformat(), goal_x=1.234, goal_y=-2.0)
+
+    assert (payload["drive"]["goal_x"], payload["drive"]["goal_y"]) == (1.23, -2.0)
+
+
 def _svc(tmp_path):
     (tmp_path / "run/rosy").mkdir(parents=True)
     return SimpleNamespace(config={"hardware_probe": {

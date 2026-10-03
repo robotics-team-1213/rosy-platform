@@ -546,7 +546,6 @@ class RosBridge:
         File-only and best effort: a failed write is logged once and the screen
         falls back to the status card when the file goes stale (3 s).
         """
-        from core_api_web.api.v1.host import write_face_inputs
         from core_common.face_screen import FACE_INPUTS_PERIOD_S
 
         snapshot = self._svc.state.snapshot()
@@ -562,6 +561,9 @@ class RosBridge:
                                        self._face_inputs_at, FACE_INPUTS_PERIOD_S):
             return
         try:
+            # Inside the try: an import failure must not stop the bridge tick either.
+            from core_api_web.api.v1.host import write_face_inputs
+
             write_face_inputs(self._svc, content)
         except Exception as exc:  # noqa: BLE001 - an indicator input must never stop the bridge
             if not self._face_inputs_failed:

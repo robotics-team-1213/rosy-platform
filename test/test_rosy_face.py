@@ -1777,6 +1777,19 @@ def test_the_idle_backlight_halves_the_frame_rate(tmp_path):
     assert drawn.count(True) == 3 and ("backlight", 30) in lcd.calls
 
 
+def test_the_shutdown_poll_only_draws(tmp_path):
+    module = _display()
+    _status(tmp_path, "CORE_READY", runtime_mode="hardware")
+    _face_inputs(tmp_path)
+    display, _lcd, _clock, rendered, _opened, _lines = _face_loop(module, tmp_path)
+    reads = display.battery_reads
+    display.shutting_down = True
+    display.handle_test = lambda: pytest.fail("no test is played on the way out")
+
+    assert display.step() is True
+    assert display.battery_reads == reads and rendered[-1]["screen"]["kind"] == "shutdown"
+
+
 @pytest.mark.parametrize("nologin,title", [(True, "Shutting down"), (False, "Display restarting")])
 def test_sigterm_draws_one_last_card(tmp_path, nologin, title):
     module = _display()

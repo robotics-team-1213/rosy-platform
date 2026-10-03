@@ -741,6 +741,10 @@ class FaceDisplay:
     def step(self) -> bool:
         """True when the LCD was redrawn."""
         now = self._clock()
+        if self.shutting_down:
+            # Review LOW: the last poll only draws the shutdown card — no battery read,
+            # no sound, no lamp, no handed-over test on the way out.
+            return self._draw_shutdown(now)
         if self._battery_due is None or now >= self._battery_due:
             self._battery_value = self._battery.read()
             self.battery_reads += 1
@@ -779,14 +783,25 @@ class FaceDisplay:
                 card["state_line"] = screen["line"]  # D-433 row 7: CORE not responding
             if kind == "update":
                 card["frame"] = int(now) % 2
-            if kind == "shutdown":
-                card["shutdown_title"] = ("Shutting down" if (self.root / SHUTDOWN_MARK).exists()
-                                          else "Display restarting")
         key = json.dumps(card, sort_keys=True)
         if key == self._drawn or self.lcd is None:
             return False
         self.lcd.img_show(self._render(card))
         self._drawn = key
+        self.draws += 1
+        return True
+
+    def _draw_shutdown(self, now: float) -> bool:
+        view = read_view(self.root, self._battery_value)
+        screen = face_screen.screen_for(shutting_down=True) if face_screen is not None else None
+        self.animating = None
+        if screen is None or self.lcd is None:
+            return False
+        self._power(screen)
+        card = {**view, "screen": screen,
+                "shutdown_title": ("Shutting down" if (self.root / SHUTDOWN_MARK).exists()
+                                   else "Display restarting")}
+        self.lcd.img_show(self._render(card))
         self.draws += 1
         return True
 

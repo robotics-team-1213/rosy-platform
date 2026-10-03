@@ -163,7 +163,8 @@ def face_cautions(snapshot) -> list[str]:
 
 
 def face_inputs_payload(snapshot, *, face: Optional[str], power_mode: Optional[str],
-                        wake: Optional[dict], written_at: str) -> dict[str, Any]:
+                        wake: Optional[dict], written_at: str,
+                        goal_x: Optional[float] = None, goal_y: Optional[float] = None) -> dict[str, Any]:
     """What rosy-face draws from (D-433 decision 3); ``face_screen.validate_face_inputs`` reads it.
 
     The drive card body rides only in an operating mode (the face owns IDLE,
@@ -174,7 +175,8 @@ def face_inputs_payload(snapshot, *, face: Optional[str], power_mode: Optional[s
     mode = snapshot.mode.value
     drive = None
     if mode != "IDLE":
-        drive = {key: value for key, value in drive_payload(snapshot).items() if key != "kind"}
+        drive = {key: value for key, value in drive_payload(snapshot, goal_x=goal_x, goal_y=goal_y).items()
+                 if key != "kind"}
     line_follow = getattr(snapshot, "line_follow", None)
     return {
         "schema": 1,
@@ -201,5 +203,27 @@ def face_inputs_due(content: dict, last_content: Optional[dict], now: float,
     """Write on every change, and at least every ``period_s`` so the reader sees CORE alive."""
     if last_write is None or last_content is None:
         return True
-    strip = lambda body: {key: value for key, value in body.items() if key != "written_at"}  # noqa: E731
-    return strip(content) != strip(last_content) or (now - last_write) >= period_s
+    return _coarse(content) != _coarse(last_content) or (now - last_write) >= period_s
+
+
+def _coarse(body: dict) -> dict:
+    """What counts as a change for an early write: not the clock, not measurement noise.
+
+    Speed, battery and the wake card's countdown move every tick while driving;
+    compared at full precision they would rewrite the file at 5 Hz. Coarsened,
+    an early write happens only when what the card shows changes visibly; the
+    1 s write carries the exact values anyway.
+    """
+    def rounded(value, digits):
+        return round(value, digits) if isinstance(value, (int, float)) and not isinstance(value, bool) else value
+
+    coarse = {key: value for key, value in body.items() if key != "written_at"}
+    coarse["battery_percent"] = rounded(coarse.get("battery_percent"), 0)
+    for key in ("drive", "wake"):
+        card = coarse.get(key)
+        if isinstance(card, dict):
+            card = {name: value for name, value in card.items() if name != "hold_s"}
+            for name, digits in (("speed", 1), ("battery_percent", 0), ("battery_voltage", 1)):
+                card[name] = rounded(card.get(name), digits)
+            coarse[key] = card
+    return coarse
