@@ -276,8 +276,8 @@
 
 ## 최근 기록
 
+- 2026-10-04 · uncommitted · docs(ui): D-439 카메라 확대·운용 확인 검증과 준비·정비의 개별 판정
 - 2026-10-04 · uncommitted · docs(ui): 교통 정책 검증과 나머지 화면 판정
 - 2026-10-04 · uncommitted · docs(ui): 기본 진입 검증과 패널별 결함 기록
 - 2026-10-04 · uncommitted · docs(ui): D-439 공용 작업 선택 검증과 진입 범위
 - 2026-10-03 · uncommitted · docs(ui): D-439 전체 웹 앱 순차 개선 목표
-- 2026-10-03 · uncommitted · docs(ui): D-432 공용 디자인과 설치 검증 마무리

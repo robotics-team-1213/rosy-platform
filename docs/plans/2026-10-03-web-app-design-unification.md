@@ -1,4 +1,4 @@
-# ROSY 웹 앱 공용 디자인과 작업 흐름 개선 Implementation Plan
+﻿# ROSY 웹 앱 공용 디자인과 작업 흐름 개선 Implementation Plan
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
@@ -28,9 +28,9 @@
 | 1 | 현재 제품 웹 전체 기준선 | `src/hmi/web_common/surfaces.yaml`, `src/hmi/dashboard/panels.yaml` | 초기 기준선/전체 source 목록 확인; 기능별 추가 상태는 해당 작업에서 점검 |
 | 2 | 공용 작업 선택·상태·초점 규칙 | `src/hmi/web_common/{task-chooser.js,task-chooser.css}` | 구현·독립 검토 완료 `15e8742b4`; 전체 회귀는 최종 통합에서 확인 |
 | 3 | 로그인·역할 진입 | `src/hmi/dashboard/{index.html,surface.html,surface-navigation.js}` | 구현·독립 검토·집중 회귀 완료 `4e8cbe92d`; 전체 회귀는 최종 통합 |
-| 4 | 로봇 운용 7패널 | `src/hmi/dashboard/panels/console/`, `shell/` | 대기 |
-| 5 | 작업 준비 5패널 | `src/hmi/dashboard/panels/setup/`, `shell/` | 교통 정책 완료 `5b590cb37`; 나머지 패널 대기 |
-| 6 | 설치·정비 7패널 | `src/hmi/dashboard/panels/{host,system}/`, `shell/` | 대기 |
+| 4 | 로봇 운용 7패널 | `src/hmi/dashboard/panels/console/`, `shell/` | 카메라·운용 확인 `da3021b64`, 지도·상태 후속 `59b3803fe` 완료; 호환 확인창 대기 |
+| 5 | 작업 준비 5패널 | `src/hmi/dashboard/panels/setup/`, `shell/` | 교통 정책 `5b590cb37`, 나머지 수정·유지 판정 `59b3803fe` 완료 |
+| 6 | 설치·정비 7패널 | `src/hmi/dashboard/panels/{host,system}/`, `shell/` | 목적·결과·미확인 구분 및 개별 유지 판정 `59b3803fe` 완료 |
 | 7 | Fleet 관제 | `src/site/fleet/fleet/server/web/{index.html,console.js,styles.css}` | 대기 |
 | 8 | Fleet 기기 등록·카메라 설치 | `src/site/fleet/fleet/server/web/{install.html,install.js,enrollment.js,camera-pairing.js}` | 대기 |
 | 9 | 게임 보드 | `src/site/games/games/web/{index.html,board.js,styles.css}` | 대기 |
@@ -83,6 +83,11 @@
 독립 목적을 기존 disclosure/section 어휘로 나누고 입력·결과를 계속 보존한다.
 테마 아이콘 trio는 D-405를 유지하면서 시스템 테마 설명과 현재 선택을 정확하게 한다.
 
+명시적 호환 화면의 `app.js`에도 모드·차선·정지 해제·DDS 재부팅·네트워크 변경의 native
+확인 7곳이 남아 있다. 이 화면을 선택한 경우에도 같은 정지를 사용할 수 있게 공용 비차단
+확인을 적용한다. 기존 화면 구성·기능·API를 유지하고, 확인 뒤 자격·대상·현 상태와 페이지
+생존을 재판정한다. 페이지 종료는 확인을 취소하며 같은 요청을 중복하지 않는다.
+
 1. 각 패널의 제목·주 동작·보류 사유·상태·세부 readback·완료 후 위치를 순서대로 점검한다.
 2. 실제로 발견한 기능 문제에는 재현 시험을 먼저 둔다. 단순 문구/간격 변경은 구현을 복제하는 시험을 만들지 않는다.
 3. 공용 helper와 토큰을 적용하고 독립된 목적에 따라 정보를 묶는다. 운용의 지도·영상·정지는 유지한다.
@@ -105,6 +110,15 @@
 ### Task 5: 게임·도구·공용 부품 검토
 
 **Files:** 위 순서 9–10, `test/test_games_board_browser.py`, `src/sim/gz_sim/test/test_lane_live_view_browser.py`, web_common tests.
+
+직접 확인한 변경 대상은 게임의 구현 단계 문구와 마커 보조 정보, styleguide의 모바일
+46px 넘침과 실제 공용 작업 선택 예제, template의 좁은 상단 배치다. 게임 마커 상세를
+접으면 기존 칩 넘침 시험은 상세를 실제 열고 측정하여 검사 의미를 유지한다.
+독립 레인 뷰어는 공용 자산 경로를 추가하지 않는다. 다만 첫 데이터 전의 ‘0개 완료’와
+‘0.0 / 0.0 m’는 정보 없음으로 바꾸고, 경로 없음 응답은 이전 거리 표시를 남기지 않게 한다.
+실제 측정된 0은 계속 0으로 표시한다. Pilot 웹의 대상 확인 실패에서는 빈 본문 대신 실패·재시도를 표시하고 접속 상단의 모바일 배치를 개선한다. 대상 미확인을 운전 허용으로 바꾸지 않고 기존 native/drive/arm·정지·자격·서비스 워커 계약을 유지한다. PARKED 진단은 활성화하지 않는다. 직접 관측한
+모바일 지도 도구의 내부 잘림은 표시 배치만 줄바꿈하여 고친다. 세 영역·지도 계산·IIFE·
+POST 처리·포트·런치와 배포 제외 계약은 그대로 유지하고 GET 전용 대역에서 확인한다.
 
 1. 게임 단계·점수·중단·정보 지연과 경기 영상의 정보 순서를 확인한다.
 2. 도구는 개발/진단 목적을 명확하게 표시하고 정보 묶음·터치·넘침을 개선한다. PARKED 진단은 활성화하지 않는다.
