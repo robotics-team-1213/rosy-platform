@@ -6,6 +6,8 @@ The subsequent safety-selector repair ran only the two affected cases: **2 passe
 
 Raw comparison and baseline output: `X:/DevTemp/rosy-ui-ownership/task3-browser-comparison.json`, `task3-browser-baseline/baseline-full.txt`. Candidate IDs: `task3-browser-candidate.json`. Mutations: `task3-mutations/`. Those are temporary evidence; this inventory is the durable follow-up list.
 
+The subsequent [Console lifetime checkpoint](task3-console-lifetime.md) accepts the Task 3 lifetime contract with dedicated Node/Chromium and mutation tests. It does not close this full-browser inventory or claim an aggregate clean browser run. All 20 OPEN items remain Task 5/11 work.
+
 | Exact node ID at HTTP checkpoint | Follow-up |
 |---|---|
 | `test/test_fleet_console_browser.py::test_goal_is_unavailable_when_safety_is_unknown_or_stopped[None-\uc815\ubcf4 \uc5c6\uc74c-\uc548\uc804 \uc0c1\ud0dc\ub97c \ud655\uc778\ud560 \uc218 \uc5c6\uc5b4]` | FIXED: stable safety fact/translated value; 2 green, guard mutation red |

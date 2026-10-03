@@ -8,7 +8,7 @@ export const FORMATION_STATE_LABEL = {
 };
 const stateLabel = (state) => FORMATION_STATE_LABEL[state] || state || "—";
 
-export function createFormation({ el, view, log, call, render }) {
+export function createFormation({ scope, el, view, log, call, render }) {
   function setOff(id, off, reason) {
     const button = el(id);
     button.disabled = off;
@@ -130,9 +130,14 @@ export function createFormation({ el, view, log, call, render }) {
   }
 
   async function refreshFormation() {
+    const life = scope.capture();
+    life.check();
     try {
-      applyFormation(await call("/api/fleet/formation"));
+      const status = await call("/api/fleet/formation");
+      life.check();
+      applyFormation(status);
     } catch (err) {
+      if (err.name === "AbortError") return;
       const wasActive = view.formation?.active === true;
       view.formation = null;
       view.formationUnavailable = true;
@@ -151,15 +156,19 @@ export function createFormation({ el, view, log, call, render }) {
   }
 
   async function formationCall(path, body, label) {
+    const life = scope.capture();
+    life.check();
     try {
       const status = await call(path, body ? {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       } : { method: "POST" });
+      life.check();
       applyFormation(status);
       log(`대형 ${label} — ${stateLabel(status.state)}`, "good");
     } catch (err) {
+      if (err.name === "AbortError") return;
       log(`대형 ${label} 거절 — ${err.message}`, "bad");
       refreshFormation();
     }
@@ -176,7 +185,7 @@ export function createFormation({ el, view, log, call, render }) {
   }
 
   function bind() {
-    el("formation-start").addEventListener("click", () => {
+    scope.listen(el("formation-start"), "click", () => {
       const body = {
         leader: el("formation-leader").value,
         formation: el("formation-shape").value,
@@ -187,21 +196,21 @@ export function createFormation({ el, view, log, call, render }) {
       formationCall("/api/fleet/formation/start", body, "무장");
     });
 
-    el("formation-reform").addEventListener("click", () => formationCall(
+    scope.listen(el("formation-reform"), "click", () => formationCall(
       "/api/fleet/formation/reform",
       { formation: el("formation-shape").value, spacing: Number(el("formation-spacing").value) },
       "변경"));
 
-    el("formation-resume").addEventListener("click", () =>
+    scope.listen(el("formation-resume"), "click", () =>
       formationCall("/api/fleet/formation/resume", null, "재개"));
 
-    el("formation-stop").addEventListener("click", () =>
+    scope.listen(el("formation-stop"), "click", () =>
       formationCall("/api/fleet/formation/stop", null, "해제"));
 
     // D-252: 폼이 바뀌면 대기 요약을 갱신한다. 무장 중에는 서버 상태가 주인이므로 건드리지 않는다.
     for (const id of ["formation-leader", "formation-shape", "formation-spacing", "formation-members"]) {
-      el(id).addEventListener("change", syncPendingSummary);
-      el(id).addEventListener("input", syncPendingSummary);
+      scope.listen(el(id), "change", syncPendingSummary);
+      scope.listen(el(id), "input", syncPendingSummary);
     }
   }
 

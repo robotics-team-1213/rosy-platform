@@ -2,6 +2,24 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createRequest} from '../../request.js';
 
+for (const abortParent of [false, true]) {
+  test(`page and caller cancellation compose: ${abortParent ? 'caller' : 'page'}`, async () => {
+    const parent = new AbortController();
+    const page = new AbortController();
+    let release;
+    let sentSignal;
+    const request = createRequest({origin: 'https://fleet.test', fetchImpl: (_url, options) => {
+      sentSignal = options.signal;
+      return new Promise(resolve => { release = resolve; });
+    }});
+    const pending = request('/read', {signal: parent.signal, signals: [page.signal]});
+    (abortParent ? parent : page).abort();
+    assert.equal(sentSignal.aborted, true);
+    release(new Response('{}'));
+    await assert.rejects(pending, {name: 'AbortError'});
+  });
+}
+
 const origin = 'https://robot.test';
 const json = (body, status = 200) => new Response(JSON.stringify(body), {status});
 

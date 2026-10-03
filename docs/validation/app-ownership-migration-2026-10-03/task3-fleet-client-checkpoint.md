@@ -23,6 +23,6 @@
 
 ## 남은 Task 3 범위
 
-화면 종료·토큰 교체에 Task 2 scope를 연결하는 작업은 아직 하지 않았다. JSON façade만 취소하는 것으로 완료를 선언하지 않는다. map/formation/roster/등록/카메라 callback의 catch/finally와 lease/blob·image decode까지 조사하고, 종료 후 요청·timer·늦은 repaint가 0인지 실제 브라우저로 검증해야 한다. BFCache 복귀에서도 읽기 연결만 다시 세우고 이전 명령을 재전송하지 않는다.
+이 HTTP 체크포인트 당시에는 화면 종료·토큰 교체 scope가 미완료였다. 후속 [Console lifetime 증거](task3-console-lifetime.md)에서 JSON/직접 fetch·panel callback·finally·구독을 함께 연결하고 Node·Chromium·변이 검증을 완료했다. 이전 HTTP 체크포인트의 시험 결과는 당시 범위의 기록으로 보존한다.
 
 이 체크포인트는 SOURCE/LOCAL HTTP·세션 수용이며 Task 3 전체 출구, 설치 산출물, DEVICE/FIELD 수용이 아니다. Tasks 4–13과 D-413 의존 gate는 계속 남는다.

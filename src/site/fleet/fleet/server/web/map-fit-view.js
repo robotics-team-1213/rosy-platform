@@ -26,7 +26,7 @@ const KIND_LABEL = {
   rejected: "거부된 최선 적합(참고용)", draft: "수락한 맞춤(이 브라우저)",
 };
 
-export function createMapFitView({ el, view, call, visionView, onChanged = () => {} }) {
+export function createMapFitView({ scope, el, view, call, visionView, onChanged = () => {} }) {
   const overlay = el("vision-lane-overlay");
   const figure = el("map-fit-figure");
   const canvas = el("map-fit-canvas");
@@ -45,13 +45,18 @@ export function createMapFitView({ el, view, call, visionView, onChanged = () =>
   let warped = null;         // { key, data }
 
   async function ensureLanes({ force = false } = {}) {
+    const life = scope.capture();
+    life.check();
     if (lanes && !force) return lanes;
     if (!force && Date.now() - lanesAt < 30000) return null; // 실패 뒤 30 s 는 다시 묻지 않는다
     lanesAt = Date.now();
     try {
-      lanes = await call("/api/fleet/site-lanes");
+      const result = await call("/api/fleet/site-lanes");
+      life.check();
+      lanes = result;
       lanesError = null;
     } catch (error) {
+      if (error.name === "AbortError") throw error;
       lanes = null;
       lanesError = error.status === 404
         ? "Fleet에 사이트 차선 지도가 설정되지 않았습니다(fleet console --site-lane-graph / --site-lane-paint)."
@@ -207,13 +212,17 @@ export function createMapFitView({ el, view, call, visionView, onChanged = () =>
 
   // 한 번 맞추는 데 1–10 s 라 Vision 이 429(계산 중·초당 1회)나 "previous"(지난 결과)를 줄 수 있다.
   // 둘 다 오류가 아니라 "맞추는 중"이다. previous 는 보여 주되 수락은 못 하게 하고 최신 결과까지 다시 묻는다.
-  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  const sleep = (ms) => scope.sleep(ms);
   async function fetchUntilCurrent(generation) {
+    const life = scope.capture();
+    life.check();
     for (let attempt = 0; ; attempt += 1) {
       let reply;
       try {
         reply = await visionView.fetchMapProposal();
+        life.check();
       } catch (error) {
+        if (error.name === "AbortError") throw error;
         const wait = retryDelay(error, attempt);
         if (wait == null) {
           if (error.busy) error.message = "Vision이 아직 맞추는 중입니다. 잠시 뒤 다시 누르세요.";
@@ -222,12 +231,14 @@ export function createMapFitView({ el, view, call, visionView, onChanged = () =>
         if (generation !== fitGeneration) return null;
         state.textContent = `맞추는 중… (${attempt + 1}/${MAP_FIT_MAX_TRIES})`;
         await sleep(wait);
+        life.check();
         continue;
       }
       if (reply.proposalState !== "previous" || attempt + 1 >= MAP_FIT_MAX_TRIES) return reply;
       if (generation !== fitGeneration) return null;
       showPending(reply, generation); // 이전 결과를 표시만 한다
       await sleep(1000);
+      life.check();
     }
   }
 
@@ -244,7 +255,9 @@ export function createMapFitView({ el, view, call, visionView, onChanged = () =>
 
   const detectButton = el("map-fit-detect");
   let fitGeneration = 0;
-  detectButton.addEventListener("click", async () => {
+  scope.listen(detectButton, "click", async () => {
+    const life = scope.capture();
+    life.check();
     const generation = ++fitGeneration;
     pending = null; // 지난 제안이 실패한 새 맞춤 뒤에 남지 않게
     detectButton.setAttribute("disabled", "");
@@ -256,21 +269,23 @@ export function createMapFitView({ el, view, call, visionView, onChanged = () =>
     visionView.showRaw();
     try {
       const [reply] = await Promise.all([fetchUntilCurrent(generation), ensureLanes({ force: !lanes })]);
+      life.check();
       if (reply) showPending(reply, generation);
     } catch (error) {
+      if (error.name === "AbortError") return;
       if (generation === fitGeneration) {
         state.textContent = error.message || "맞춤 제안을 받지 못했습니다.";
         state.dataset.tone = "warn";
       }
     } finally {
-      if (generation === fitGeneration) {
+      if (life.current() && generation === fitGeneration) {
         detectButton.removeAttribute("disabled");
         detectButton.removeAttribute("reason");
       }
     }
     render();
   });
-  acceptButton.addEventListener("click", () => {
+  scope.listen(acceptButton, "click", () => {
     const source = visionView.currentSource();
     if (!canAccept(pending, source)) return;
     const saved = storageSet(`${MAP_FIT_PREFIX}${source}`, draftFrom(pending.norm, pending.stamp));
@@ -281,24 +296,31 @@ export function createMapFitView({ el, view, call, visionView, onChanged = () =>
     render();
     onChanged();
   });
-  dismissButton.addEventListener("click", () => {
+  scope.listen(dismissButton, "click", () => {
     pending = null;
     showSummary({ tone: "neutral", guidance: null, headline: "제안을 버렸습니다. 저장한 맞춤은 그대로입니다." });
     render();
   });
-  clearButton.addEventListener("click", () => {
+  scope.listen(clearButton, "click", () => {
     storageRemove(`${MAP_FIT_PREFIX}${visionView.currentSource()}`);
     showSummary({ tone: "neutral", guidance: null, headline: "이 카메라의 저장한 맞춤을 지웠습니다." });
     render();
     onChanged();
   });
 
-  visionView.onFrame((frame) => {
+  scope.subscribe(() => visionView.onFrame(scope.guard((frame) => {
     if (lastFrame?.source !== frame.source && pending && pending.source !== frame.source) pending = null;
     lastFrame = frame;
-    if (!lanes && draftFor(frame.source)) ensureLanes().then(() => { render(); onChanged(); });
+    if (!lanes && draftFor(frame.source)) {
+      const life = scope.capture();
+      ensureLanes().then(() => {
+      life.check();
+        render();
+        onChanged();
+      }).catch(error => { if (error.name !== "AbortError") throw error; });
+    }
     render();
-  });
+  })));
 
   // D-360 경기장 뷰 대체 경로: 운용자가 수락한 지도 맞춤이 있을 때만, 지도 사각형을 그 homography 로 편다.
   view.mapFieldFallback = (frame) => {
@@ -320,6 +342,15 @@ export function createMapFitView({ el, view, call, visionView, onChanged = () =>
     warped = null;
     render();
   }
+  scope.onDispose(() => {
+    fitGeneration++;
+    lanesAt = 0;
+    pending = null;
+    lastFrame = null;
+    warped = null;
+    detectButton.removeAttribute("disabled");
+    detectButton.removeAttribute("reason");
+  });
 
   return { render, reset };
 }

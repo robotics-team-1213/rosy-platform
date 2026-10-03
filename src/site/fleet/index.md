@@ -74,8 +74,8 @@
 
 ## 최근 기록
 
+- 2026-10-03 · uncommitted · refactor: D-425 Console document lifetime
 - 2026-10-03 · uncommitted · test: D-425 browser baseline and safety facts
 - 2026-10-03 · uncommitted · refactor: D-425 Console HTTP adapter checkpoint
 - 2026-10-03 · uncommitted · merge(fleet): main에 들어온 병렬 Cell 하달기를 걷고 공개 목표 증거 입구를 C4b 설계로 옮김
 - 2026-10-03 · uncommitted · fix(fleet,omx): C4b 1d — 전송 직전 세대 재확인, receipt 먼저 기록, owner journal 식별
-- 2026-10-03 · uncommitted · fix(fleet): C4b 1c — 재시작·정지·404 경로의 출구 (재검토 N1–N3, rosy-a9)

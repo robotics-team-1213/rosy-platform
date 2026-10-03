@@ -3,7 +3,7 @@
 // all_red 는 "명령된 정지"다 — 둘을 같은 색으로 뭉뜽그리면 운영자는 장비 고장을
 // 정지 성공으로 읽어 버린다.
 
-export function createSignals({ el, view, log, call, refreshState }) {
+export function createSignals({ scope, el, view, log, call, refreshState }) {
   const SIGNAL_MODE_TAG = {
     failsafe: { text: "failsafe", cls: "crit" },
     manual: { text: "manual", cls: "" },
@@ -14,14 +14,18 @@ export function createSignals({ el, view, log, call, refreshState }) {
   };
 
   function command(signalId, body, label) {
+    const life = scope.capture();
+    life.check();
     return call(`/api/fleet/signals/${encodeURIComponent(signalId)}/command`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     }).then(() => {
+      life.check();
       log(`${signalId} 명령 하달 (${label})`, "good");
       refreshState();
     }).catch((err) => {
+      if (!life.current() || err.name === "AbortError") return;
       log(`${signalId} 명령 거절 — ${err.message}`, "bad");
       refreshState();
     });
@@ -85,7 +89,7 @@ export function createSignals({ el, view, log, call, refreshState }) {
       button.disabled = !row.online;
       if (!row.online) button.setAttribute("reason", "오프라인");
       if (kind) button.classList.add(kind);
-      button.addEventListener("click", () => command(row.signal_id, body_, label));
+      button.addEventListener("click", scope.guard(() => command(row.signal_id, body_, label)));
       return button;
     };
     actions.append(
