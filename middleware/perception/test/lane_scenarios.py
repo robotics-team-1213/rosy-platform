@@ -33,7 +33,7 @@ import lane_sim
 
 ROOT = Path(__file__).resolve().parents[1]
 GRAPH_PATH = ROOT / "map" / "map_v2_fleet" / "lane_graph.yaml"
-SCORE_PATH = (ROOT.parents[1] / "integrations") / "simulation" / "gazebo" / "scripts" / "junction_score.py"
+SCORE_PATH = ROOT.parents[1] / "integrations" / "simulation" / "gazebo" / "scripts" / "junction_score.py"
 
 
 def _junction_score():

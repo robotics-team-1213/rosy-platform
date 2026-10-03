@@ -35,7 +35,8 @@ SRC = ROOT / "src"
 #: ``envs`` is the first folder under the ``learning`` colcon root (D-427 wave 1);
 #: ``apps``, ``vision`` and ``processes`` are under the ``operations`` root (D-427 wave 3b).
 DOMAINS = {"contracts", "runtime", "drivers", "products", "hmi", "site", "sim", "envs",
-           "apps", "vision", "processes", "fleet", "ui", "web", "core", "simulation"}
+           "apps", "vision", "processes", "fleet", "ui", "web", "core", "simulation",
+           "foundation", "ros_idl", "perception"}
 
 #: P2 library/contract tier: no process of their own (runtime gates N/A).
 LIBRARY_PACKAGES = {"core_common", "core_events", "core_features", "core_api_web", "web_common"}
@@ -218,7 +219,7 @@ SIZE_VERDICTS = {
         "host-testable; correlated task evidence stays in task_store/task_results (X5). Re-judged "
         "2026-10-01 at 887 after idempotent per-attempt phase projection joined the Mission event transaction",
     ),
-    "contracts/foundation/core_common/protocol/schemas.py": (
+    "foundation/core_common/protocol/schemas.py": (
         1_321,
         "accept: the D-18 single contract source — every envelope, event and capability model in one "
         "importable place; re-judged 2026-10-03 at 1240 for the D-413 public CellGoalEvidenceSubmission "
@@ -256,7 +257,7 @@ SIZE_VERDICTS = {
         "2026-09-29-fleet-mission-control-arbitration-implementation.md); re-judged 2026-09-30 at 1060 "
         "under the D-362 zero-allowance tier — verdict unchanged",
     ),
-    "runtime/sensing/control/safety/node.py": (
+    "perception/control/safety/node.py": (
         795,
         "accept: legacy comparison-graph publisher pinned by test_module_separation; no new work (X3)",
     ),
@@ -277,12 +278,12 @@ SIZE_VERDICTS = {
         "2026-10-02 at 1138 for D-395 S2 Finding 1: the lapsed-robot null grace (_loc_null_since) is "
         "kept beside _seen/_trusted, which it updates in the same gather — verdict unchanged",
     ),
-    "runtime/sensing/control/sensing/perception/lane.py": (
+    "perception/control/sensing/perception/lane.py": (
         765,
         "accept: one concern (lane/IR line detection), ROS-free pure functions and trackers, host-testable (X5); "
         "the ground-geometry lane keeper already lives apart in lane_keep.py (D-364)",
     ),
-    "runtime/gateway/core/bridge/ros_bridge.py": (
+    "core/gateway/core/bridge/ros_bridge.py": (
         799,
         "accept: one CORE ROS executor integration point for publishers, subscriptions, lifecycle wiring, and "
         "service/action clients; extracted policy and callback logic lives in core/bridge modules, and "
@@ -291,16 +292,16 @@ SIZE_VERDICTS = {
         "(face-inputs hand-over on the 5 Hz power tick; payload and cadence live in bridge/display.py "
         "and core_common.face_screen, covered by test_face_inputs.py)",
     ),
-    "runtime/sensing/control/sensing/perception/lane_bev.py": (
+    "perception/control/sensing/perception/lane_bev.py": (
         611,
         "accept: one owner (LaneEdgeFollower + its bird's-eye helpers), ROS-free, host-testable (X5)",
     ),
-    "runtime/events/core_events/events/audit.py": (
+    "core/events/core_events/events/audit.py": (
         745,
         "accept: one owner (svc.audit / FileAuditLog), ROS-free, covered by middleware/core/events/test/test_audit.py; "
         "about half the lines are the rationale comments the append/compaction/quarantine rules rest on (X5)",
     ),
-    "runtime/services/core_features/docking/manager.py": (
+    "core/services/core_features/docking/manager.py": (
         663,
         "accept: 930 -> 663 after the parking-only phases moved to docking/parking_phases.py and the phase/"
         "executor/config definitions to docking/model.py (user decision 2026-09-24: split, not a size exception); "
@@ -308,7 +309,7 @@ SIZE_VERDICTS = {
         "default-dock phases, battery return, public API), ROS-free, covered by core_features/test/test_docking*.py "
         "and core/test/test_docking_*.py (X5)",
     ),
-    "runtime/services/core_features/traffic_policy/manager.py": (
+    "core/services/core_features/traffic_policy/manager.py": (
         609,
         "accept: one owner (the TrafficPolicyManager verdict state machine with its evidence contracts "
         "RoadEvidence/SignalHeadEvidence/config/decision), ROS-free, host-testable via core/test/test_traffic_policy.py; "
@@ -420,7 +421,7 @@ SIZE_VERDICTS = {
         "-- launch-side config, no node logic, moves with the P1a split, verdict unchanged)",
     ),
     # --- D-362 newly-covered files (web assets in src/ packages, ops roots). ---
-    "runtime/sensing/web/diagnostic.html": (
+    "perception/web/diagnostic.html": (
         1857,
         "accept: re-judged 2026-09-30 (D-362 P1) — the single HTML file with one IIFE is the "
         "recorded design, not an accident (web/AGENTS.md: dependency-free on purpose, no build "
@@ -645,12 +646,14 @@ def _family(name: str):
 
 # D-241 and D-242: the ROS package name stays. These directories use the role name.
 ROLE_DIR = {
-    "core": ("runtime", "gateway"),
-    "core_events": ("runtime", "events"),
-    "core_features": ("runtime", "services"),
-    "core_api_web": ("runtime", "api_web"),
-    "core_common": ("contracts", "foundation"),
-    "control": ("runtime", "sensing"),
+    # D-427 wave 4d: middleware/core/<role>, contracts/foundation, contracts/ros_idl.
+    "core": ("core", "gateway"),
+    "core_events": ("core", "events"),
+    "core_features": ("core", "services"),
+    "core_api_web": ("core", "api_web"),
+    "core_common": ("foundation",),
+    "interfaces": ("ros_idl",),
+    "control": ("perception",),  # middleware/perception (D-427 wave 4e)
     "web_common": ("web",),  # shared/web (D-427 wave 4b)
     "emotion": ("ui", "face"),  # middleware/ui/face (D-427 wave 4b)
     "dashboard": ("ui", "robot"),  # middleware/ui/robot (D-427 wave 4b)
@@ -961,7 +964,7 @@ def test_direction_table_rows_for_products_and_drivers(src_domain, src_family, d
         (("devices", "bringup"), "bringup", False),
         (("products", "pinky_pro"), "pinky_pro", False),
         (("products", "omx", "bringup"), "bringup", False),
-        (("runtime", "sensing"), "control", True),
+        (("perception",), "control", True),
         (("runtime", "control"), "control", False),
         (("core", "control"), "control", False),
         (("apps", "x", "control"), "control", False),

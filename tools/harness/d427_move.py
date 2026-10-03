@@ -25,7 +25,7 @@ What one run does (docs/plans/2026-10-03-d427-source-migration.md, common proced
        location keeps, or ``(<repo root> / "src" / ...)`` for one it lost;
    (a) slash paths (also after ``/``, ``$VAR/``, ``/repo/`` and in backslash form); a path
        token starting with ``/opt/``, ``/usr/`` or ``/etc/`` is an install path and kept;
-   (b) joined literal segments (``"middleware" / "core" / "gateway"``, ``os.path.join``,
+   (b) joined literal segments (``"src" / "old" / "pkg"``, ``os.path.join``,
        ``Path(a, b)``, PowerShell ``Join-Path``), keeping closing parentheses;
    (e) ``SRC / "site" / "fleet"`` where ``SRC`` denotes src/ (``--srcvars`` re-applies it).
    A rewritten ``.py`` that no longer compiles is left alone and reported.
@@ -49,6 +49,7 @@ import yaml
 ROOT = Path(__file__).resolve().parents[2]
 MANIFEST = ROOT / "tools" / "harness" / "platform_parts.yaml"
 MANIFEST_REL = "tools/harness/platform_parts.yaml"
+SELF = "tools/harness/d427_move.py"  # its own examples are not references
 sys.path.insert(0, str(ROOT / "test" / "architecture"))
 from _legacy_paths import (  # noqa: E402
     _END, _RELATIVE, _SEPARATOR, _START, _TOKEN_BREAK, FROZEN_BYTES, HISTORY_DIRS,
@@ -399,7 +400,7 @@ def rewrite_parents(text: str, old_file: str, new_file: str, moved_old: str, mov
 
 def eligible(path: str, moved: bool) -> bool:
     pure = PurePosixPath(path)
-    if path in FROZEN_BYTES or path == MANIFEST_REL or pure.name in HISTORY_NAMES:
+    if path in FROZEN_BYTES or path in (MANIFEST_REL, SELF) or pure.name in HISTORY_NAMES:
         return False
     if path.startswith(HISTORY_DIRS):
         return False
@@ -519,8 +520,9 @@ def run(wave: str, dry_run: bool) -> None:
     edit_manifest(new_path, mapf)
     tops = [old for old in new_path if not any(under(old, o) and old != o for o in new_path)]
     slash = slash_pattern(sorted(new_path, key=len, reverse=True))
-    joins = join_patterns(new_path)
-    last_segs = {old.rsplit("/", 1)[-1] for old in new_path}
+    join_map = {**{r["legacy"]: r["path"] for r in roots if r.get("legacy")}, **new_path}  # parents[N] may re-spell
+    joins = join_patterns(join_map)
+    last_segs = {old.rsplit("/", 1)[-1] for old in join_map}
     residue: list[str] = []
     changed, stats = [], {"relative": 0, "slash": 0, "join": 0, "parents": 0}
     after = tracked()
@@ -543,7 +545,7 @@ def run(wave: str, dry_run: bool) -> None:
         if any(seg in new for seg in last_segs):
             new, n = rewrite_slash(new, slash, new_path, "Dockerfile" in PurePosixPath(path).name)
             stats["slash"] += n
-            new, n = rewrite_join(new, joins, new_path)
+            new, n = rewrite_join(new, joins, join_map)
             stats["join"] += n
             new, n = rewrite_srcvar(new, new_path, path)
             stats["srcvar"] = stats.get("srcvar", 0) + n
