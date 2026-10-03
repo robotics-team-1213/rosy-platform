@@ -73,6 +73,9 @@ class StuckResolverLoop:
                     action.stuck_id, action.robot_id, action.reason)
         self._board.note_resolver(action.robot_id, action.stuck_id, tier="human", rule=None,
                                   decision=None, escalated=action.reason)
+        self._board.record(robot_id=action.robot_id, stuck_id=action.stuck_id,
+                           decision="ESCALATE", principal_id=PRINCIPAL_ID, accepted=None,
+                           tier="human", escalated=action.reason)
 
     async def _answer(self, answer: Answer, now: float) -> None:
         client = self._clients().get(answer.robot_id)
@@ -82,7 +85,8 @@ class StuckResolverLoop:
             return
         self._resolver.sent(answer, now)
         record = dict(robot_id=answer.robot_id, stuck_id=answer.stuck_id,
-                      decision=answer.decision, principal_id=PRINCIPAL_ID)
+                      decision=answer.decision, principal_id=PRINCIPAL_ID, tier="rule",
+                      rule=answer.rule)
         code: Optional[str] = None
         try:
             result = await client.line_stuck_decision(answer.stuck_id, answer.decision)

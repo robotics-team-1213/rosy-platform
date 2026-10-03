@@ -12,7 +12,7 @@ from fastapi.testclient import TestClient
 from fakes import FakeClock, FakeRobot
 from fleet.server.app import _fan_out_events, create_app
 from fleet.server.console import FleetConsole
-from fleet.server.line_stuck import LineStuckBoard
+from fleet.server.line_stuck import LineStuckAnswerLog, LineStuckBoard
 from fleet.server.stuck_resolver import ResolverConfig, StuckResolver
 from fleet.server.stuck_resolver_loop import PRINCIPAL_ID, StuckResolverLoop
 from fleet.server.task_service import FleetTaskService
@@ -50,13 +50,13 @@ def test_board_view_carries_the_resolver_note():
     assert board.view("rosy_01") is None
 
 
-def _setup(state=None, *, resolver_robot=None, config=None):
+def _setup(state=None, *, resolver_robot=None, config=None, log=None):
     robot = FakeRobot("rosy_01", state=state or _state())
     console = FleetConsole([RobotEndpoint("rosy_01", "http://127.0.0.1:8080", "rest-token")],
                            [robot])
     resolver_robot = resolver_robot or FakeRobot("rosy_01", state=state or _state())
     clock = FakeClock()
-    board = LineStuckBoard(clock=clock)
+    board = LineStuckBoard(clock=clock, log=log)
     loop = StuckResolverLoop(console, board, StuckResolver(config or ResolverConfig()),
                              clients=lambda: {"rosy_01": resolver_robot}, clock=clock)
     return loop, board, resolver_robot
@@ -71,6 +71,21 @@ def test_one_pass_answers_and_records_as_the_resolver():
     assert board.view("rosy_01")["resolver"]["rule"] == "R2"
 
 
+def test_durable_rows_carry_the_tier_rule_and_every_escalation(tmp_path):
+    log = LineStuckAnswerLog(tmp_path / "fleet.sqlite3")
+    robot = _failing(RobotApiError("rosy_01", 409, "CALIBRATION_ACTIVE", "calibrating"))
+    loop, board, _ = _setup(resolver_robot=robot, log=log)
+    asyncio.run(loop.run_once())
+    escalation, answer = log.rows()                     # newest first
+    assert (answer["tier"], answer["rule"], answer["decision"]) == ("rule", "R2", "BACK_AND_RETRY")
+    assert answer["escalated"] is None and answer["principal_id"] == PRINCIPAL_ID
+    assert {k: escalation[k] for k in ("decision", "accepted", "escalated", "principal_id",
+                                       "tier")} == {
+        "decision": "ESCALATE", "accepted": None, "escalated": "core:CALIBRATION_ACTIVE",
+        "principal_id": PRINCIPAL_ID, "tier": "human"}
+    assert board.view("rosy_01")["fleet_answer"]["decision"] == "BACK_AND_RETRY"
+
+
 def test_refusal_is_recorded_and_escalates_when_nothing_is_left():
     resolver_robot = FakeRobot("rosy_01", state=_state())
     resolver_robot.stuck_decision_error = RobotApiError(
@@ -78,7 +93,8 @@ def test_refusal_is_recorded_and_escalates_when_nothing_is_left():
     loop, board, _ = _setup(resolver_robot=resolver_robot)
     asyncio.run(loop.run_once())
     asyncio.run(loop.run_once())
-    assert board.answers()[-1]["code"] == "STUCK_DECISION_REFUSED"
+    refused, escalated = board.answers()[-2:]
+    assert refused["code"] == "STUCK_DECISION_REFUSED" and escalated["decision"] == "ESCALATE"
     assert board.view("rosy_01")["resolver"]["escalated"] == "no_rule"
 
 

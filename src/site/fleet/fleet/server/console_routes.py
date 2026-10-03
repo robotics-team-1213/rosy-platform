@@ -144,7 +144,7 @@ def install_console_routes(app, *, console, sightings, require_viewer,
         if resolver_loop is not None:
             resolver_loop.claim(robot_id, body.stuck_id)
         record = partial(board.record, robot_id=robot_id, stuck_id=body.stuck_id,
-                         decision=body.decision, principal_id=principal.principal_id,
+                         decision=body.decision, principal_id=principal.principal_id, tier="human",
                          audit_id=getattr(request.state, "site_api_audit_id", None))
         try:
             # Forwarded unchanged with the robot credential; CORE alone judges the answer.
