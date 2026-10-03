@@ -202,7 +202,9 @@ def test_missing_base_escalates_to_full(sample, capsys):
 
 
 def test_real_registry_guard_set_exists():
-    missing = [p for p in affected.GUARD_SET + affected.FULL_SUITES if not (ROOT / p).exists()]
+    matrix = [p for e in affected.CI_FULL_MATRIX for inv in e["invocations"] for p in inv
+              if not p.startswith("-")]
+    missing = [p for p in (*affected.GUARD_SET, *affected.FULL_SUITES, *matrix) if not (ROOT / p).exists()]
     assert not missing, f"D-436 guard/full paths moved: {missing}"
 
 
