@@ -1,5 +1,5 @@
 <!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-02 | Updated: 2026-09-24 -->
+<!-- Generated: 2026-09-02 | Updated: 2026-10-03 -->
 
 # workflows
 
@@ -15,6 +15,7 @@ CI job definitions for this repository.
 | `android.yml` | `android-unit`: Rosy Cam (ceiling camera phone app) JVM unit tests (`./gradlew testDebugUnitTest`, Temurin 17), only when `src/site/cam/**` changes |
 | `build-arm64-payload.yml` | Manual native arm64 build of the unsigned core/io OCI payload; uploads a checksum-bound artifact for offline signing, never a release |
 | `build-pinky-image.yml` | Manual native arm64 `.img.xz` build; uploads an unsigned image handoff for offline signing |
+| `build-site-candidate.yml` | D-437: manual amd64 site candidate build (syft SBOM); read-only build job, separate `contents: write` job publishes an UNSIGNED prerelease `site-<sha12>` (tar split into `.partNN` + `SHA256SUMS`, `release.json` as its own asset). Signing stays offline (`sign_candidate.py --manifest-only`) |
 
 ## Subdirectories
 
@@ -29,6 +30,7 @@ None.
 - SaveMap guard unpacks the slam_toolbox deb and asserts `SaveMap.Request.name` is `std_msgs/String` and `RESULT_SUCCESS == 0`.
 - pip installs: flake8, pydantic, fastapi, uvicorn, httpx, websockets, pyyaml, jsonschema, ext4 (pure-Python ext4 reader for `test/test_card_diagnostics.py`; the test skips without it).
 - D-145: the ARM64 payload workflow must stay manual, native, read-only, and unsigned. Never add a private key or publication step to it.
+- D-437: builds run on GitHub-hosted runners, signing never does. No workflow may use a secret other than `GITHUB_TOKEN`; only a dedicated publish job gets `contents: write`. Contracts: `test/test_site_candidate_workflow.py`.
 
 ### Testing Requirements
 
