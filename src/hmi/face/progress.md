@@ -22,7 +22,7 @@ gates:
     state: PARKED
   FIELD:
     state: PARKED
-adrs: [D-57, D-153, D-306]
+adrs: [D-57, D-153, D-306, D-433]
 plans:
   - docs/plans/2026-09-12-rosy-os-module-evaluation-maintenance-design.md
   - docs/plans/2026-09-15-module-harness-design.md

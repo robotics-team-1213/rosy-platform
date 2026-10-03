@@ -793,3 +793,9 @@
 - 증거: 영향받는 Python 2345 passed/84 skipped, quick tier 459 passed/2 skipped, Pilot PWA 87 passed/58 skipped. 코드 규약 보정 뒤 해당 인증·페어링 시험을 다시 실행한다. 공개 검증 기록은 docs/validation/discovery-link-2026-10-03/README.md.
 - gate 변화: Android 설치·실제 CORE 인증 확인은 실제 주행·Cam 화면 off 연속 송출·현장 트래픽 수용과 별개다. DEVICE/FIELD 이동 없음.
 - 결정: D-432 후속 결정: 접속은 지금, 짧은 코드 통합은 추후 적용.
+## 2026-10-03 · e021264e6 · feat(face): D-433 CORE가 rosy-face에 얼굴 핸드오버를 쓴다
+
+- 변경: 브리지 5 Hz 전원 틱에서 `/run/rosy/face-inputs.json`을 바뀔 때와 1 s마다 쓴다(`display.face_inputs_payload`·`face_inputs_due`, `host.write_face_inputs` 0644 강제). 얼굴 이름은 `set_emotion` 서비스 유무와 무관하게 `emotion_for`로 정한다. `display.drive_due`는 `core_common.face_screen`을 다시 내보낸다.
+- 증거: `python -m pytest src/runtime/gateway/test/test_face_inputs.py src/runtime/gateway/test/test_bridge_display.py -q` 통과. ros_bridge.py는 rclpy 없이 import할 수 없어 py_compile만.
+- gate 변화: 없음. 실기 확인 전.
+- 결정: D-433 (Proposed)

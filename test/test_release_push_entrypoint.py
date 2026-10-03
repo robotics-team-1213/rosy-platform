@@ -140,7 +140,8 @@ def test_rollback_plan_skips_the_release_and_only_rolls_back_and_waits(release):
     assert result["rollback"] is True
     assert result["verification"] is None
     plan = _without_claim(result["plan"])
-    assert len(plan) == 1 + 3 + 1 + 1  # rollback, D-388 image-layer sync, core-release check, readiness
+    # rollback, D-388 image-layer sync, D-433 display restore, core-release check, readiness
+    assert len(plan) == 1 + 3 + 1 + 1 + 1
     assert plan[0]["arguments"][-1] == "/opt/rosy/native-runtime/rollback-release.sh"
     assert "sudo" in plan[0]["arguments"] and "-n" in plan[0]["arguments"]
     ready_args = plan[-1]["arguments"]
@@ -314,7 +315,8 @@ def test_rollback_plan_resyncs_the_image_layer_from_the_release_that_becomes_cur
     plan = _without_claim(json.loads(completed.stdout)["plan"])
     # The sync runs BEFORE the readiness check: if the newer release's units do
     # not work with the older one, CORE only becomes ready after the sync.
-    assert [step["role"] for step in plan] == ["", *IMAGE_LAYER_ROLES[:3], "core-release-check", ""]
+    assert [step["role"] for step in plan] == ["", *IMAGE_LAYER_ROLES[:3], "display-restore",
+                                               "core-release-check", ""]
     assert "rollback-release.sh" in plan[0]["arguments"][-1]
     assert "wait-core-ready.py" in plan[-1]["arguments"][-1]
     assert not any("wait-core-ready.py" in " ".join(step["arguments"]) for step in plan[:-1])
@@ -512,7 +514,7 @@ def test_core_is_checked_against_the_new_release_right_after_the_switch(release,
     if rollback:
         # After the image-layer sync: CORE restarted into the older release
         # before its units are back may not start.
-        assert roles[check - 3:check] == IMAGE_LAYER_ROLES[:3]
+        assert roles[check - 4:check - 1] == IMAGE_LAYER_ROLES[:3] and roles[check - 1] == "display-restore"
     else:
         # Right after the switch, before the readiness check it protects.
         assert plan[check - 1]["arguments"][-2] == "/opt/rosy/native-runtime/activate-release.sh"
@@ -631,3 +633,23 @@ def test_the_remote_check_script_decides_from_the_core_process_cwd(
     assert log.exists() == (expected == "CORE_RESTARTED")
     if not expected.startswith("CORE_RELEASE_OK"):
         assert lines[0].startswith("CORE_RELEASE_STALE"), completed.stdout
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+def test_rollback_starts_the_retired_display_only_without_rosy_face():
+    # D-433 Q5: the rolled-back sync restores rosy-boot-display enabled but stopped.
+    completed = _run(["-Robot", "rosy-e4us.local", "-Rollback", "-PrintCommands"])
+
+    assert completed.returncode == 0, completed.stderr
+    plan = _without_claim(json.loads(completed.stdout)["plan"])
+    step = [item for item in plan if item["role"] == "display-restore"][0]
+    args = step["arguments"]
+    assert args[-5:-1] == ["sudo", "-n", "sh", "-c"]
+    script = args[-1]
+    # One shell word for the remote sh -c (ssh joins its arguments with spaces):
+    # unquoted, sudo would run `sh -c test` and the rest without privilege.
+    assert script.startswith("'") and script.endswith("'") and script.count("'") == 2
+    assert script.startswith("'test -e /etc/systemd/system/rosy-face.service || ")
+    assert script.endswith("|| systemctl start rosy-boot-display.service'")
+    assert "is-enabled --quiet rosy-boot-display.service" in script
+    assert '"' not in script

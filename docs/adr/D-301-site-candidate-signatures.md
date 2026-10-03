@@ -19,3 +19,18 @@
 **Alternatives:** A hash-only manifest cannot authenticate the producer. Reusing the Pinky runtime key would couple trust domains. Embedding a public key in the candidate would let an attacker replace both the artifact and its trust anchor.
 
 **Validation / Transition:** Tests cover missing, malformed, wrong-key, and tampered signatures, key-ID binding, refusal to overwrite, signature-only verification before Docker load, and loaded-image checks after load. The target's expected key ID, public key, and reviewed verifier must be installed independently; only then can signed candidate verification authorize service activation. This ADR does not authorize robot motion or automatic policy execution.
+
+### 2026-10-03 — CI 빌드·로컬 서명 (D-437)
+
+- 사이트 후보는 이제 GitHub hosted runner(`build-site-candidate.yml`)에서 빌드되고, 서명되지 않은 GitHub prerelease `site-<짧은 커밋>`으로 올라간다. 키는 GitHub에 가지 않는다(결정 2·5 유지).
+- 결정 2를 보강한다. 서명 스테이션은 `sign_candidate.py --manifest-only --manifest <release.json> --expected-commit <sha> --expected-manifest-sha256 <hash>`로 `release.json` 바이트만 서명할 수 있다. 이때 manifest가 적은 파일을 로컬에서 검사하지 않는다. 그래서 수 GB `images.tar`를 서명 스테이션에 받을 필요가 없다. 덮어쓰기 거부와 공개 키 자가 검증은 그대로다.
+- Release 자산은 저장소 쓰기 권한으로 바꿀 수 있으므로, 서명 전에 `release.json`을 CI 실행에 묶는다. 둘 다 필수다.
+  - 서명기는 정확한 바이트의 SHA-256이 `--expected-manifest-sha256`과 다르면 거부한다. 이 값은 운영자가 CI 실행 페이지(job summary, 빌드 로그 notice)에서 옮긴다. 실행 기록은 자산 쓰기 권한으로 고칠 수 없다. `source_commit`도 40자리 16진수이고 기대 커밋과 같아야 한다.
+  - 운영자는 서명 전에 `gh attestation verify release.json --repo <owner>/<repo> --signer-workflow <owner>/<repo>/.github/workflows/build-site-candidate.yml --source-ref refs/heads/main`을 통과시킨다(별도 `attest-provenance` job의 `actions/attest-build-provenance`). 서명기 플래그가 아니라 문서화된 운영자 절차다.
+- 이 서명이 증명하는 것은 "그 커밋에서 이 CI 실행이 만든 이 manifest를 운영자가 승인했다"이다. 묶음 내용의 일치는 결정 3·4대로 사이트 호스트가 확인한다. 따로 설치한 검증기가 `docker load` 전에 배포 파일·SBOM·`images.tar` 해시를 서명된 manifest와 대조한다. 후보 전체를 받는 기존 서명 경로(`--candidate-dir`)도 남는다.
+- SBOM은 runner에서 syft가 SPDX JSON으로 만든다(같은 `sbom/<service>.spdx` 경로). manifest 형식과 검증기는 바뀌지 않는다.
+
+### 2026-10-04 — 자동 서명 (D-441)
+
+- 결정 2의 "운영자가 승인한 manifest"를 D-441이 바꾼다. 서명 PC의 자동 서명기가 다음을 모두 확인한 main 빌드의 manifest만 서명한다. 이 저장소 `build-site-candidate.yml`의 `refs/heads/main` 출처 증명, 그 `release.json` subject digest와 받은 바이트의 SHA-256 일치, `source_commit`이 main에 있음, 태그와 커밋 일치, 기존 `sign_manifest_only`의 형식·기대 커밋·기대 해시 검사, 서명 덮어쓰기 없음. 사람이 커밋 내용을 본다는 뜻은 더 이상 없고, main에 합치는 리뷰가 그 자리를 맡는다.
+- 결정 2의 나머지(키는 서명 PC에만, 덮어쓰기 거부, 공개 키 자가 검증, 키 비포함)와 결정 3·4는 그대로다. 사이트 호스트의 자동 갱신기는 따로 설치한 검증기와 신뢰 키로 같은 순서(서명 → 해시 → `docker load` → 이미지 ID)를 거친 뒤에만 전환한다.

@@ -1,7 +1,7 @@
 [Unit]
 Description=ROSY Site Fleet, Vision, and HTTPS proxy stack
-Requires=docker.service
-After=docker.service network-online.target
+Requires=docker.service avahi-daemon.service
+After=docker.service avahi-daemon.service network-online.target
 Wants=network-online.target
 Wants=rosy-site-firewall.service
 After=rosy-site-firewall.service

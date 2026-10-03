@@ -511,3 +511,87 @@ def render_boot(payload: dict, size: tuple[int, int] = DEFAULT_SIZE,
         else:
             draw.text((16, y), text, font=font, fill=color)
     return image
+
+
+# --- D-433: the rest of rosy-face's screens -----------------------------------
+#
+# rosy-face (one process for LCD, buzzer and lamp, outside ROS) draws these
+# when core_common.face_screen.screen_for says so. Landscape like every card;
+# ``to_panel`` turns any of them, or a GIF frame, into the panel's RGB565 bytes.
+
+#: The strip under the face (D-433 rows 9-11): a band at the bottom.
+STRIP_HEIGHT = 34
+
+
+def render_stopped(payload: dict, size: tuple[int, int] = DEFAULT_SIZE) -> Image.Image:
+    """Q1: the e-stop card. The whole ground is the alarm colour; ink on it.
+
+    ``device_name``, ``cause`` and ``release`` (how to clear it). A person 1 m
+    away must read "it stopped, why, and how to let it go" - a face cannot.
+    """
+    width, height = size
+    image = Image.new("RGB", size, _CRIT)
+    draw = ImageDraw.Draw(image)
+    name_font, name = _fit(draw, str(payload.get("device_name") or "rosy"), 18, width - 32)
+    draw.text((16, 12), name, font=name_font, fill=_FG)
+    title_font, title = _fit(draw, "STOPPED", 64, width - 32)
+    draw.text((16, 48), title, font=title_font, fill=_FG)
+    cause_font, cause = _fit(draw, str(payload.get("cause") or "Emergency stop"), 22, width - 32)
+    draw.text((16, 136), cause, font=cause_font, fill=_FG)
+    release_font, release = _fit(draw, str(payload.get("release") or ""), 16, width - 32)
+    draw.text((16, height - 40), release, font=release_font, fill=_FG)
+    return image
+
+
+def render_notice(title: str, lines: list[str], size: tuple[int, int] = DEFAULT_SIZE,
+                  frame: int = 0) -> Image.Image:
+    """An update in progress or a shutdown: one title that breathes (D-385), quiet lines below."""
+    width, _height = size
+    image = Image.new("RGB", size, _BG)
+    draw = ImageDraw.Draw(image)
+    title_font, title = _fit(draw, title, 34, width - 32)
+    draw.text((16, 40), title, font=title_font, fill=_dim(_FG) if frame % 2 else _FG)
+    y = 100
+    for line in lines:
+        font, text = _fit(draw, str(line), 18, width - 32)
+        draw.text((16, y), text, font=font, fill=_MUTED)
+        y += 28
+    return image
+
+
+def render_strip(text: str, tone: str, size: tuple[int, int] = DEFAULT_SIZE) -> tuple[Image.Image, Image.Image]:
+    """(image, mask): a band at the bottom to lay over every face frame.
+
+    Caution is the warn fill with ground ink (Q3, the same chip vocabulary as
+    ``_draw_caution``); anything else is a quiet ground band with ink.
+    """
+    width, height = size
+    image = Image.new("RGB", size, _BG)
+    mask = Image.new("L", size, 0)
+    top = height - STRIP_HEIGHT
+    fill, ink = (_WARN, _BG) if tone == "caution" else (_BG, _FG)
+    draw = ImageDraw.Draw(image)
+    draw.rectangle((0, top, width, height), fill=fill)
+    font, text = _fit(draw, text, 18, width - 24)
+    draw.text((12, top + STRIP_HEIGHT // 2), text, font=font, fill=ink, anchor="lm")
+    ImageDraw.Draw(mask).rectangle((0, top, width, height), fill=255)
+    return image, mask
+
+
+def to_panel(image: Image.Image, panel: tuple[int, int] = (240, 320)):
+    """The ST7789's bytes for a landscape image: the same flip, rotation and RGB565
+    packing ``rosy_lcd.LCD.img_show`` always did, as a (h, w, 2) uint8 array.
+
+    rosy-face converts each GIF frame once with this and replays the bytes.
+    """
+    import numpy as np
+
+    width, height = panel
+    image = image.transpose(Image.FLIP_LEFT_RIGHT).transpose(Image.ROTATE_270)
+    if image.size != (width, height):
+        image = image.resize((width, height), Image.LANCZOS)
+    rgb = np.asarray(image.convert("RGB"))
+    pixel = np.empty((height, width, 2), dtype=np.uint8)
+    pixel[..., 0] = (rgb[..., 0] & 0xF8) + (rgb[..., 1] >> 5)
+    pixel[..., 1] = ((rgb[..., 1] << 3) & 0xE0) + (rgb[..., 2] >> 3)
+    return pixel

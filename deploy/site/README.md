@@ -226,6 +226,43 @@ the last scan and logs the loss once, because new-robot discovery and
 AP advertisements are excluded. On a VLAN or Wi-Fi with multicast/client
 isolation, use the existing manual endpoint and outbound FleetAgent path.
 
+#### User discovery fallback without administrator access
+
+When the site account already has `Linger=yes`, a running user systemd manager,
+and access to the existing Avahi daemon, discovery can start at boot through
+user units. This opt-in fallback does not install Avahi, change the firewall,
+enable linger, or replace the system units above. Stop existing temporary user
+advertisers before installing; active system discovery services and readable
+system Avahi ROSY XML advertisements cause a refusal. The known broken
+root-owned `0600` XML files are left untouched and do not block this explicit
+fallback; Avahi cannot read them. Failed root services and an enabled timer
+without a working scanner also do not prevent the fallback.
+
+Copy `install-user-discovery.py`, `mdns-bridge.py`, and `fleet-mdns.py` to one
+directory readable by the site account. Select the same discovery secret that
+Fleet actually uses and its public site CA, then run as that account:
+
+```bash
+python3 install-user-discovery.py --enable-user-fallback \
+  --tls-host <certificate-hostname.local> --port 8443 \
+  --ca-file <site-ca.crt> --token-file <selected-discovery-secret>
+systemctl --user status rosy-user-mdns-bridge.service
+systemctl --user list-timers rosy-user-mdns-bridge.timer
+```
+
+The installer stores one token as `0600` and the public CA as `0644` under the
+user-owned `0700` directory `~/.local/share/rosy/site-discovery`. Advertisers
+`rosy-user-fleet-advertise.service` and `rosy-user-overhead-advertise.service`
+use the existing common TXT contracts and certificate hostname. The bridge
+timer runs every 15 seconds with `AccuracySec=1s` to stay within Fleet's 45-second
+scanner lease, and reuses the same strict TLS verification and
+loopback connection code. Secrets never appear in unit files or arguments.
+User units have the account's ordinary permissions; they do not inherit the
+root bridge's OS-level IP firewall restrictions. Loopback is enforced by the
+unchanged bridge implementation. Verify a fresh Fleet discovery scan and both
+DNS-SD records after reboot. Before returning to system discovery, disable the
+three user units with `systemctl --user disable --now` and their names above.
+
 For a 4–10 robot site, boot all cards on the same LAN and confirm one distinct
 row per device, no duplicate-name conflict, all configured devices eventually
 show **confirmed**, and newly initialized cards remain **registration pending**.
@@ -234,6 +271,15 @@ repeat the scan. A registered `.local` endpoint follows the changed address;
 an IP-pinned `robots.yaml` entry needs an operator update and is never
 silently rewritten from untrusted mDNS. The LAN test does not replace pairing, CORE health, or
 physical motion acceptance.
+
+Fleet 이미지에는 `libnss-mdns`가 포함된다. 컨테이너는 호스트의 실행 중인
+Avahi `/run/avahi-daemon` 디렉터리를 읽기 전용으로 연결하고 NSS로 `.local`
+주소를 조회한다. 디렉터리 연결은 Avahi 재시작으로 교체된 소켓도 따른다.
+호스트 Avahi와 소켓 접근 권한이 필요하며, 경로가 없으면 Compose가 시작을
+거부한다. 일반 Docker 서비스 이름은 계속 DNS로 조회한다. 이미지와 Compose를
+함께 갱신한 뒤 Fleet 실행 UID로 `socket.getaddrinfo` 또는 `getent hosts`를
+사용해 로봇 `.local` 이름과 `fleet`/`vision`/`proxy`를 확인한다. `nslookup`은
+NSS를 거치지 않는다. TLS CA와 원래 hostname 검증은 그대로 유지한다.
 
 All HTTPS hops verify the configured site CA. The same site certificate must
 contain these DNS SANs: the operator-facing FQDN, the stable Ubuntu host's
@@ -374,7 +420,14 @@ in the private `/etc/rosy/site/site.env`; Compose reads it there and the
 advertise units get it through `/run/rosy-site/site-public.env`. Set `ROSY_SITE_TLS_HOST` to the same `<hostname>.local` name in
 the site certificate SAN. Install `fleet-mdns.py` at `/opt/rosy/site/fleet-mdns.py`,
 copy `rosy-fleet-advertise.service` and `rosy-overhead-advertise.service` to
-`/etc/systemd/system/`, then run:
+`/etc/systemd/system/`.
+
+The publisher atomically installs public advertisement XML with mode `0644`
+so the unprivileged Avahi daemon can read it, even with a `0077` umask.
+After upgrading an older publisher, restart the advertise services to
+replace any existing `0600` advertisements with readable files.
+
+Then run:
 
 ```sh
 sudo systemctl daemon-reload
@@ -651,9 +704,102 @@ Set the image tag and private config paths in the operator-managed env file,
 then run Compose with `--no-build` so the host uses the exact loaded candidate.
 The first verifier invocation authenticates the exact manifest and checks the
 packaged files, SBOMs, and image archive before load. The second also compares
-the loaded Fleet, Vision, and proxy image IDs and platforms. Do not treat this
+the loaded Fleet, Vision, and proxy image IDs and platforms. A host on the
+classic Docker image store reports the config digest recorded in
+`release.json`; a host on the containerd image store reports the OCI image
+manifest digest. The verifier accepts the second form only when that manifest
+blob, read from the hash-checked `images.tar`, hashes to the reported digest
+and names the signed config digest. The PASS line records `id_form` per
+service (`config` or `oci-manifest`). Do not treat this
 workstation-built candidate as field accepted until the target host's identity,
 loaded image IDs, GPU, phone, CORE robot, and recovery checks are recorded.
+
+### CI-built candidates (D-437)
+
+The normal path builds the candidate on a GitHub-hosted runner instead of a
+local PC. The runner output is unsigned, and no signing key is ever stored in
+GitHub. Placeholders below (`<owner>/<repository>`, `<commit>`, key paths) are
+filled from the operator's private records.
+
+1. A push to `main` that touches an image source, the candidate's discovery
+   document, or the workflow builds automatically (D-441). To build another
+   commit, dispatch it. A short first job checks whether the release for that
+   commit already exists: a dispatch then fails at once, a push succeeds
+   without building. The build then runs `build_candidate.py --sbom-tool syft` on
+   `ubuntu-24.04` and creates the prerelease `site-<first 12 hex of commit>`
+   with `release.json`, `SHA256SUMS`, and the split tar
+   (`rosy-site-candidate-<commit>.tar.partNN`, each under 2 GiB):
+
+   ```sh
+   gh workflow run build-site-candidate.yml --repo <owner>/<repository> -f ref=<commit>
+   ```
+
+2. On the offline signing station, download only `release.json`. Release
+   assets can be replaced by anyone with write access, so bind the file to the
+   CI run before signing. Both checks are required:
+   - Open the workflow run page and copy the `release.json SHA-256` from the
+     job summary table. Do not take it from arbitrary log lines: build tool
+     output runs with workflow commands paused, and the table is written only
+     after they resume. Alternatively use the subject digest that
+     `gh attestation verify ... --format json` reports for `release.json`. The
+     run summary and attestations cannot be edited by release-asset writers.
+   - Verify the GitHub build provenance of the downloaded file. It must come
+     from this workflow, built from `main`:
+
+   ```sh
+   gh release download site-<sha12> --repo <owner>/<repository> \
+     --pattern release.json --dir <station-dir>
+   gh attestation verify <station-dir>/release.json --repo <owner>/<repository> \
+     --signer-workflow <owner>/<repository>/.github/workflows/build-site-candidate.yml \
+     --source-ref refs/heads/main
+   python3 deploy/site/sign_candidate.py --manifest-only \
+     --manifest <station-dir>/release.json \
+     --expected-commit <commit> \
+     --expected-manifest-sha256 <sha256-from-run-summary> \
+     --signing-key-id "$SITE_SIGNING_KEY_ID" \
+     --private-key /secure/offline/site-release-ed25519.key \
+     --public-key /secure/offline/site-release-ed25519.pub.pem
+   gh release upload site-<sha12> --repo <owner>/<repository> \
+     <station-dir>/release.json.sig
+   ```
+
+   `--manifest-only` does not look at the candidate files. It refuses a
+   manifest whose SHA-256 differs from `--expected-manifest-sha256`, and a
+   `source_commit` that is not 40 hex characters or differs from
+   `--expected-commit`. The signature says "this manifest from that CI run and
+   commit is approved"; the host verifier below still checks every file hash.
+   A candidate dispatched from another branch fails `--source-ref
+   refs/heads/main`; sign only main builds.
+
+3. On the site host, as the operator (no sudo), fetch and stage it. The script
+   checks `SHA256SUMS`, joins the parts, extracts into a fresh staging folder,
+   adds `release.json.sig`, and refuses a release that has no signature yet.
+   Before extracting it rejects any archive member that is not a regular file
+   or directory (symlink, hardlink, device, fifo) or lies outside
+   `<commit>/`, then extracts with Python's tarfile `data` filter (needs
+   python3 3.12 or newer):
+
+   ```sh
+   /usr/local/lib/rosy-site/fetch_candidate.sh \
+     --repo <owner>/<repository> --commit <commit>
+   ```
+
+   Install `fetch_candidate.sh` once next to the reviewed verifier, by the same
+   administrator path. It is not part of the candidate, so adding it did not
+   change the file list that installed verifiers accept.
+
+   It prints the administrator commands that follow: copy the staged folder to
+   `/opt/rosy/candidate`, run the independently installed verifier with
+   `--signature-only`, `docker image load`, run the full verifier, set
+   `ROSY_SITE_IMAGE_TAG`, and restart `rosy-site-stack.service`. These are the
+   same D-301 checks as above; `SHA256SUMS` alone authenticates nothing.
+
+The release job keeps only the newest three `site-*` releases: after creating
+the new prerelease it deletes older ones and their tags (exact
+`^site-[0-9a-f]{12}$` names only). Robots look for `payload-*` releases in the
+first page of 20 recent releases, prereleases included (D-412), so site
+candidates must not push the newest payload release off that page. Stage a
+candidate on the host before three newer ones are built, or rebuild it.
 
 Install the boot unit from that same verified candidate after its configuration
 and secrets are ready. For LAN access install `rosy-site-firewall.service`
@@ -704,6 +850,150 @@ audit through the authenticated `GET /api/fleet/events` cursor API. The Fleet
 image bundles a SQLite-aware online backup and guarded restore command at
 `/opt/rosy/site_db.py`. Do not copy only the live main DB file while WAL is
 active.
+
+### Automatic updates (D-441)
+
+Since D-441 the chain runs by itself: a push to `main` builds the candidate,
+the operator's signing PC signs it, and the site host installs it with a health
+check and rollback. Code merged to `main` becomes the site deployment within
+roughly half an hour. The trust anchors do not move: the private key stays on
+the signing PC, and the host verifies with the verifier and public key it got
+by hand (D-301). Placeholders below are filled from private records.
+
+**Signing PC (Windows or Linux).** `auto_sign_candidates.py` runs every 10
+minutes. It needs Python 3.10+, OpenSSL, and `gh` logged in with a token that
+can upload release assets to this repository only (a fine-grained token with
+Contents read/write on that repository). Keep the config outside the
+repository, for example `C:\RosySigning\auto-sign.json`:
+
+```json
+{
+  "repo": "<owner>/<repository>",
+  "key_id": "<site-signing-key-id>",
+  "private_key": "C:\\RosySigning\\site-release-ed25519.key",
+  "public_key": "C:\\RosySigning\\site-release-ed25519.pub.pem",
+  "state_dir": "C:\\RosySigning\\state",
+  "keep": 10,
+  "max_per_run": 3
+}
+```
+
+```powershell
+python deploy\site\auto_sign_candidates.py --config C:\RosySigning\auto-sign.json --dry-run
+powershell -ExecutionPolicy Bypass -File deploy\site\register_auto_sign_task.ps1 `
+  -ConfigPath C:\RosySigning\auto-sign.json
+```
+
+For each unsigned `site-<12 hex>` release (newest first, at most
+`max_per_run`) it downloads only `release.json` and signs only when all of
+these hold. Otherwise it records a refusal and does not check the same bytes
+again:
+
+- `gh attestation verify` passes for this repository's
+  `build-site-candidate.yml` with `--source-ref refs/heads/main`, and the
+  attested `release.json` subject digest equals the SHA-256 of the downloaded
+  bytes. That digest becomes `--expected-manifest-sha256`.
+- The manifest `source_commit` is on `main` (GitHub compare status `ahead` or
+  `identical`) and the tag is `site-<source_commit[:12]>`.
+- `sign_candidate.sign_manifest_only` accepts it (commit, image tag, platform,
+  digest), and no `release.json.sig` exists yet. It never uses `--clobber`.
+
+Every decision is one JSON line in `<state_dir>/audit.jsonl`. Exit codes: 0
+nothing to do, 10 signed, 20 refused or failed, 2 configuration or lock. The
+task runs only while that user is logged on. Pause with
+`Disable-ScheduledTask -TaskName RosySiteAutoSign`; remove with
+`Unregister-ScheduledTask -TaskName RosySiteAutoSign -Confirm:$false`. On
+Linux run the same command from a systemd user timer or cron.
+
+**Site host (once, as the administrator).** Install the first candidate by
+hand as above; the updater only replaces a running one. Install the updater
+beside the reviewed verifier from a reviewed checkout, never from a candidate:
+
+```sh
+sudo install -o root -g root -m 0755 deploy/site/rosy_site_autoupdate.py \
+  /usr/local/lib/rosy-site/rosy_site_autoupdate.py
+sudo install -o root -g root -m 0644 deploy/site/verify_candidate.py \
+  deploy/site/candidate_signing.py /usr/local/lib/rosy-site/
+sudo install -o root -g root -m 0644 deploy/site/rosy-site-autoupdate.service \
+  deploy/site/rosy-site-autoupdate.timer /etc/systemd/system/
+sudoedit /etc/rosy/site/autoupdate.conf   # JSON below, mode 0644, owner root
+sudo systemctl daemon-reload
+sudo /usr/bin/python3 -I /usr/local/lib/rosy-site/rosy_site_autoupdate.py run --dry-run
+sudo systemctl enable --now rosy-site-autoupdate.timer
+```
+
+```json
+{
+  "repo": "<owner>/<repository>",
+  "key_id": "<site-signing-key-id>",
+  "public_key": "/etc/rosy/site/trust/site-release-ed25519.pub.pem",
+  "health_url": "https://<site-fqdn>:8443/healthz",
+  "health_ca": "/etc/rosy/site/secrets/<site-ca-file>",
+  "health_timeout_s": 300,
+  "keep": 3
+}
+```
+
+Each run (every 15 minutes, randomized by up to 5) picks the newest signed
+`site-*` release created after the installed one and:
+
+1. refuses without changing anything when `ROSY_SITE_PAIRING_COMPOSE` names a
+   file other than the candidate's `compose.pairing.yaml`, when `site.env`
+   sets `COMPOSE_FILE`, when the stack unit (drop-ins included, read through
+   `systemctl cat`) adds a Compose file, or when `docker compose config` with
+   the new tag does not resolve every site service to
+   `rosy-site-<service>:<commit>`. Remove the override, then let it run;
+2. downloads into `/opt/rosy/candidates/.staging-<tag>`, checks
+   `SHA256SUMS`, joins the parts, applies the same tar member rules as
+   `fetch_candidate.sh`, and moves the result to
+   `/opt/rosy/candidates/<commit>`;
+3. runs the installed verifier with the enrolled key (signature and hashes),
+   `docker image load`, then the full verifier (loaded image IDs);
+4. backs up `site.env` to `site.env.autoupdate-prev`, writes the new
+   `ROSY_SITE_IMAGE_TAG`, swaps the `/opt/rosy/candidate` symlink (an
+   existing real directory there is moved once to
+   `/opt/rosy/candidates/<its commit>`), and restarts
+   `rosy-site-stack.service`;
+5. waits up to `health_timeout_s` for `healthz` 200 and all three containers
+   running, healthy, and on the new image. Otherwise it restores the previous
+   symlink and `site.env`, restarts, and records the tag as failed. A failed
+   tag is never retried automatically;
+6. keeps the newest `keep` candidate folders (always the running and previous
+   ones) and removes older `rosy-site-*` images that no container uses.
+
+Every step is one JSON line in `journalctl -u rosy-site-autoupdate`. The
+state is in `/var/lib/rosy/site-autoupdate.json`
+(`sudo python3 -I /usr/local/lib/rosy-site/rosy_site_autoupdate.py status`).
+After fixing the cause of a failed tag, allow it again with
+`sudo python3 -I /usr/local/lib/rosy-site/rosy_site_autoupdate.py forget-failed site-<sha12>`.
+When `verify_candidate.py` or `candidate_signing.py` change on `main`, the
+administrator reinstalls them by the same reviewed path; the updater never
+copies them from a candidate.
+
+**Pause.** Host: `sudo systemctl disable --now rosy-site-autoupdate.timer`.
+Signing PC: `Disable-ScheduledTask -TaskName RosySiteAutoSign`. Either one
+stops new deployments; builds on push keep running and are harmless.
+
+**Roll back by hand.** Pause the host timer first, then point the symlink and
+tag back at a kept folder and restart:
+
+```sh
+sudo systemctl disable --now rosy-site-autoupdate.timer
+ls -lt /opt/rosy/candidates/
+sudo ln -sfn /opt/rosy/candidates/<previous-commit> /opt/rosy/candidate.new
+sudo mv -T /opt/rosy/candidate.new /opt/rosy/candidate
+sudoedit /etc/rosy/site/site.env   # ROSY_SITE_IMAGE_TAG=<previous-commit>
+sudo systemctl restart rosy-site-stack.service
+```
+
+The previous images stay loaded unless that folder was pruned. Re-enable the
+timer only after `forget-failed` or once a newer fix is on `main`: while the
+timer is on, a newer signed candidate replaces a manual rollback.
+
+**Release count.** The build workflow keeps only the newest three `site-*`
+releases, so pushes do not crowd the robots' release scan (D-412 reads the
+first page of 20 releases, prereleases included). A host that was offline
+through more than three builds installs the newest one.
 
 ### Backup and restore operations
 
@@ -1049,3 +1339,31 @@ result. If the GPU/model is unavailable, mark GPU-dependent evidence `DEGRADED`
 and do not silently substitute CPU ArUco results. These measurements do not
 enable automatic movement; D-257/D-268 and the separate freshness and
 false-trigger gates still apply.
+
+## Rosy Cam 화면 상태 확인·깨우기
+
+관제 PC의 자체 ADB 키로 공식 Android 무선 디버깅 페어링을 먼저 완료한다.
+Windows 등 다른 PC의 개인 키를 복사하지 않는다. `cam-screen.json.example`을
+저장소 밖의 개인 JSON 설정으로 복사하고 설치된 ADB 절대 경로, 실제 전화의
+`ro.serialno`, `ro.product.model`을 입력한다. 실제 식별자·주소는 공개 파일에
+기록하지 않는다.
+
+```bash
+python3 deploy/site/rosy_cam_screen.py status --config /private/path/cam-screen.json
+python3 deploy/site/rosy_cam_screen.py wake --config /private/path/cam-screen.json
+```
+
+CLI는 이미 인증된 연결을 먼저 검사하고, 없으면 ADB mDNS 및 Avahi의
+`_adb-tls-connect._tcp`에서 예상 serial의 후보를 찾아 변경된 포트로 재연결한다.
+발견 이름만 믿지 않고 실제 serial과 model을 모두 확인한 단일 연결에만
+`KEYCODE_WAKEUP`을 보낸다. 미인증·오프라인 연결, 식별 불가·불일치·다중 연결은
+거절한다. 페어링이나 ADB 권한 변경은 이 CLI가 수행하지 않는다.
+목록에 다른 기기의 오프라인·미인증 연결이 있어도 보수적으로 거절하므로 먼저
+ADB 연결 목록을 확인한다. 발견된 오래된 포트가 응답하지 않으면 다음 후보를
+시도하지만, 다른 실제 식별자가 응답하면 즉시 거절한다.
+
+`status`도 필요한 경우 기존 페어링으로 재연결한다. `wake_sent`는 깨우기 명령
+전달 결과이며 잠금 해제나 영상 수신 증거가 아니다. OS 화면 상태와 실제 JPEG의
+증가하는 sequence·freshness를 별도로 확인한다. ADB가 끊기거나 무선 디버깅이
+꺼진 경우에는 공식 재연결·페어링 경로를 사용한다. 충전 중 화면 유지와 화면
+제한시간은 전화의 OS 설정이며, 앱의 화면 유지 해제만으로 설정을 덮어쓰지 않는다.

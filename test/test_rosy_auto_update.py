@@ -313,6 +313,9 @@ class FakeHost(upd.Host):
     def _start(self, argv):
         return self._ok()
 
+    def _stop(self, argv):
+        return self._ok()
+
     def _corestate(self, argv):
         return self._ok("ActiveState=active\nSubState=running\nMainPID=101\n")
 
@@ -327,6 +330,9 @@ class FakeHost(upd.Host):
         return self._ok()
 
     def _is_active(self, argv):
+        return self._ok()
+
+    def _is_enabled(self, argv):
         return self._ok()
 
     def _failed(self, argv):
@@ -346,6 +352,8 @@ def kind_of(argv: list[str]) -> str:
         return "recover"
     if argv[:2] == ["systemctl", "start"]:
         return "start"
+    if argv[:2] == ["systemctl", "stop"]:
+        return "stop"
     if argv[:2] == ["systemctl", "show"] and "ActiveState,SubState,MainPID" in argv:
         return "corestate"
     if argv[:2] == ["systemctl", "show"]:
@@ -354,6 +362,8 @@ def kind_of(argv: list[str]) -> str:
         return "restart"
     if argv[:2] == ["systemctl", "is-active"]:
         return "is-active"
+    if argv[:2] == ["systemctl", "is-enabled"]:
+        return "is-enabled"
     if argv[:2] == ["systemctl", "list-units"]:
         return "failed"
     raise AssertionError(f"unexpected command {argv}")
@@ -2498,3 +2508,125 @@ def test_acknowledged_unmarked_rollback_failure_then_operator_rollback(device, h
     up.run()
     assert state(device)["failed"][NEXT]["detail"] == "operator rolled back"
     assert kinds(host).count("activate") == 1
+
+
+# --- D-433: the screen during an update, and after a rollback past rosy-face ---------
+
+
+def test_the_update_marker_follows_the_apply_and_is_gone_after(device, host, hub, keys):
+    hub.publish(keys, NEXT)
+    seen = []
+
+    def during_sync(h, argv):
+        marker = device / upd.UPDATE_DISPLAY
+        seen.append(marker.read_text(encoding="utf-8") if marker.exists() else None)
+        return None
+
+    host.overrides["sync"] = during_sync
+
+    result = updater(host, hub).run()
+
+    assert result["phase"] == "committed", result
+    assert seen and seen[0] == f"image-layer-sync\n{NEXT}\n"
+    assert not (device / upd.UPDATE_DISPLAY).exists()
+
+
+def _retired_display(device):
+    units = device / "etc/systemd/system"
+    units.mkdir(parents=True, exist_ok=True)
+    (units / upd.RETIRED_DISPLAY_UNIT).write_text("[Unit]\n", encoding="utf-8")
+    return units
+
+
+def test_a_rollback_past_rosy_face_starts_the_old_display_once(device, host, hub, keys):
+    hub.publish(keys, NEXT)
+    _retired_display(device)
+    bad = subprocess.CompletedProcess([], 1, "", "boom")
+    host.overrides["ready"] = lambda h, argv: bad if h.links["current"] == NEXT else None
+    host.overrides["is-active"] = lambda h, argv: (
+        subprocess.CompletedProcess([], 3, "", "") if upd.RETIRED_DISPLAY_UNIT in argv else None)
+
+    result = updater(host, hub).run()
+
+    assert result["phase"] == "rolled_back", result
+    starts = [argv for argv in host.calls if argv == ["systemctl", "start", upd.RETIRED_DISPLAY_UNIT]]
+    assert len(starts) == 1
+    assert not (device / upd.UPDATE_DISPLAY).exists()
+
+
+@pytest.mark.parametrize("case", ["face_installed", "already_running", "disabled"])
+def test_the_old_display_is_left_alone_otherwise(device, host, hub, keys, case):
+    hub.publish(keys, NEXT)
+    units = _retired_display(device)
+    if case == "face_installed":
+        (units / upd.FACE_UNIT).write_text("[Unit]\n", encoding="utf-8")
+    if case == "disabled":
+        host.overrides["is-enabled"] = lambda h, argv: subprocess.CompletedProcess([], 1, "", "")
+    if case != "already_running":
+        host.overrides["is-active"] = lambda h, argv: (
+            subprocess.CompletedProcess([], 3, "", "") if upd.RETIRED_DISPLAY_UNIT in argv else None)
+    bad = subprocess.CompletedProcess([], 1, "", "boom")
+    host.overrides["ready"] = lambda h, argv: bad if h.links["current"] == NEXT else None
+
+    updater(host, hub).run()
+
+    assert ["systemctl", "start", upd.RETIRED_DISPLAY_UNIT] not in host.calls
+
+
+def _units(device, *names):
+    units = device / "etc/systemd/system"
+    units.mkdir(parents=True, exist_ok=True)
+    for name in names:
+        (units / name).write_text("[Unit]" + chr(10), encoding="utf-8")
+    return units
+
+
+def _inactive(*units):
+    return lambda h, argv: subprocess.CompletedProcess([], 3, "", "") if any(u in argv for u in units) else None
+
+
+def test_this_updater_swaps_the_display_to_rosy_face_once(device, host, hub, keys):
+    # D-433 review HIGH2: the live swap is this updater's, never the sync's.
+    _units(device, upd.FACE_UNIT, upd.RETIRED_DISPLAY_UNIT)
+    host.overrides["is-active"] = _inactive(upd.FACE_UNIT)
+
+    updater(host, hub).run()
+
+    stop = host.calls.index(["systemctl", "stop", upd.RETIRED_DISPLAY_UNIT])
+    assert host.calls.index(["systemctl", "start", upd.FACE_UNIT]) > stop
+
+
+@pytest.mark.parametrize("case", ["no_face", "face_running", "old_not_running", "face_disabled"])
+def test_no_swap_otherwise(device, host, hub, keys, case):
+    names = [upd.RETIRED_DISPLAY_UNIT] + ([] if case == "no_face" else [upd.FACE_UNIT])
+    _units(device, *names)
+    if case in ("no_face", "face_disabled"):
+        host.overrides["is-active"] = _inactive(upd.FACE_UNIT)
+    if case == "old_not_running":
+        host.overrides["is-active"] = _inactive(upd.FACE_UNIT, upd.RETIRED_DISPLAY_UNIT)
+    if case == "face_disabled":
+        host.overrides["is-enabled"] = lambda h, argv: subprocess.CompletedProcess([], 1, "", "")
+
+    updater(host, hub).run()
+
+    assert ["systemctl", "stop", upd.RETIRED_DISPLAY_UNIT] not in host.calls
+    assert ["systemctl", "start", upd.FACE_UNIT] not in host.calls
+
+
+def test_a_waiting_journal_clears_the_update_marker(device, host, hub, keys):
+    # D-433 review MED3: a held apply must not keep "Updating" over STOPPED or CORE-missing.
+    hub.publish(keys, NEXT)
+    switched(device, host)
+    journal(device, "health")
+    marker = device / upd.UPDATE_DISPLAY
+    marker.parent.mkdir(parents=True, exist_ok=True)
+    marker.write_text("health" + chr(10) + NEXT + chr(10), encoding="utf-8")
+    up = updater(host, hub)
+    up.hold("agent", "G5", 2)
+
+    assert up.run()["phase"] == "held"
+    assert not marker.exists()
+
+    up.release_hold()
+    assert up.run()["phase"] == "committed"
+    assert not marker.exists()

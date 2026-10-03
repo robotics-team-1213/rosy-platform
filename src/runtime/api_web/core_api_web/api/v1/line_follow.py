@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 
 from core_api_web.api.deps import AuthContext, CoreServicesLike, get_services
 from core_api_web.api.errors import ApiError
+from core_api_web.api.grants import STUCK_DECIDE, require_grant
 from core_api_web.api.v1.common import (
     apply_mode,
     enter_navigation_mode,
@@ -129,9 +130,11 @@ def hold_line_follow(auth: AuthContext = Depends(operator),
 
 @line_follow_router.post("/stuck/decision")
 def decide_line_stuck(body: LineStuckDecisionRequest,
-                      auth: AuthContext = Depends(operator),
+                      auth: AuthContext = Depends(require_grant(STUCK_DECIDE)),
                       svc: CoreServicesLike = Depends(get_services)):
     """D-407 §2: WAIT | RESUME | BACK_AND_RETRY | MANUAL | ABORT for the open stuck id."""
+    if body.decision == "MANUAL" and auth.role == "stuck_resolver":
+        raise ApiError("FORBIDDEN", 403, "MANUAL is a human decision (D-438)")
     if body.decision in ("RESUME", "BACK_AND_RETRY", "MANUAL"):
         # Answers that move the wheels (or hand them to a driver, MANUAL) respect the
         # calibration lease like POST /mode does; checked before the stuck is consumed.

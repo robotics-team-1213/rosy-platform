@@ -75,7 +75,8 @@ md("""
 - `CLASSES`: 기본값은 팀 기본 클래스 목록이다(D-373 결정 9: 0 floor/background, 1 lane_line/lane_marking, 2 wall/wall, 3 drivable/drivable, 4 stop_line/stop_line, 5 crosswalk/ignore). `이름:role,이름:role,...`(출력 채널 순서)이고, **데이터셋 클래스와 다르면 멈춘다.** 데이터셋이 다른 목록이면 그 목록을 적거나 비운다(비우면 데이터셋 manifest의 클래스를 그대로 쓴다).
 - `COLOR`/`SCALE`/`MEAN`/`STD`: 학습 전처리. **이 값이 그대로 manifest에 적히고 로봇이 같은 값으로 전처리한다.**
 - `CAMERA_PROFILE_REVISION`: 비워 두면 데이터셋 `sources[]`에서 가져온다.
-- `USE_WANDB`/`WANDB_PROJECT`: (선택) Weights & Biases 실험 기록. 키는 Colab Secret `WANDB_API_KEY`에만 둔다(5c단계). 키가 없으면 기록 없이 학습한다.
+- `RUNS_DIR`: 실험 기록(로컬 + TensorBoard)을 쌓을 폴더. 비워 두면 환경 변수 `ROSY_RUNS_DIR`, 없으면 Colab에서는 `/content/rosy-runs`, 그 밖(GPU PC)에서는 `~/rosy-ml/runs`다. Colab 런타임은 닫히면 지워지므로 남기려면 Drive 경로를 적는다.
+- `USE_WANDB`/`WANDB_PROJECT`: (선택) Weights & Biases 실험 기록. 키는 Colab Secret `WANDB_API_KEY`에만 둔다(5d단계). 키가 없으면 W&B 없이 학습한다. 로컬 기록은 항상 남는다.
 """)
 code('''
 #@title 2. 입력 칸
@@ -93,6 +94,7 @@ EPOCHS = 30  #@param {type:"integer"}
 LR = 0.001  #@param {type:"number"}
 BATCH = 8  #@param {type:"integer"}
 CAMERA_PROFILE_REVISION = ""  #@param {type:"string"}
+RUNS_DIR = ""  #@param {type:"string"}
 WANDB_PROJECT = "rosy-perception"  #@param {type:"string"}
 USE_WANDB = True  #@param {type:"boolean"}
 
@@ -100,6 +102,14 @@ from rosy_lane_model import Preprocess
 from store import parse_dataset_ref
 
 TRAINER, STORE, DATASET_ZIP = TRAINER.strip(), STORE.strip(), DATASET_ZIP.strip()
+RUNS_DIR = RUNS_DIR.strip() or os.environ.get("ROSY_RUNS_DIR", "")
+if not RUNS_DIR:
+    try:
+        import google.colab  # noqa: F401
+        RUNS_DIR = "/content/rosy-runs"
+    except ImportError:   # Colab 밖(GPU PC)
+        RUNS_DIR = os.path.join("~", "rosy-ml", "runs")
+RUNS_DIR = os.path.abspath(os.path.expanduser(RUNS_DIR))
 if not TRAINER:
     raise ValueError("2단계 입력 칸의 TRAINER를 채우세요: 내 이름(예: ana). 바꾼 뒤 2단계부터 다시 실행합니다.")
 try:
@@ -110,6 +120,7 @@ except ValueError:
 PRE = Preprocess(COLOR, SCALE, MEAN, STD)   # 데이터셋과 export가 이 한 객체를 같이 쓴다
 print(PRE)
 print("dataset:", f"store:{DS_NAME}@{DS_SHA}", "| store:", STORE or "(없음: zip으로 받고 zip으로 넘긴다)")
+print("실험 기록 폴더:", RUNS_DIR)
 ''')
 
 md("""
@@ -238,14 +249,44 @@ print("출력 모양 OK:", tuple(_out.shape))
 ''')
 
 md("""
-### 5c. (선택) 실험 기록 (W&B)
+### 5c. 실험 기록 (로컬 + TensorBoard)
+
+기본 기록이다. `RUNS_DIR/<UTC 시각>-<TRAINER>/`에 `config.json`(학습 설정), `history.json`(에폭마다 갱신, 중간에 멈춰도 남는다),
+`summary.json`(7단계 끝에 가장 좋은 에폭, `model_revision`, 내보낸 폴더의 상대 경로)을 쓰고, `tensorboard`가 설치돼 있으면 TensorBoard 이벤트 파일도 같은 폴더에 쓴다
+(없으면 TensorBoard만 건너뛰고 `history.json`에 `"tensorboard": "unavailable"`로 남긴다). 토큰·키가 들어간 설정 항목은 기록에서 빠진다(키 이름만 본다. 설정에 비밀 문장을 적지 않는다). 기록 중 오류(TensorBoard, 디스크)는 기록만 멈추고 학습은 멈추지 않는다.
+manifest에는 호스트 경로 없이 고정 형태 `runs/<run_id>`만 들어간다.
+이 폴더는 모델 폴더(`out/lane_model`)와 따로이므로 store inbox로 넘어가지 않는다.
+""")
+code('''
+#@title 5c. 실험 기록 (로컬 + TensorBoard)
+import datetime, re
+from run_log import RunLog, chain
+
+if globals().get("RUN_LOG") is not None:   # 이 셀을 다시 실행: 앞 기록을 먼저 닫는다
+    RUN_LOG.close()
+_slug = re.sub(r"[^A-Za-z0-9._-]", "_", TRAINER)[:64]
+RUN_ID = f"{datetime.datetime.now(datetime.timezone.utc):%Y%m%dT%H%M%SZ}-{_slug}"
+RUN_DIR = os.path.join(RUNS_DIR, RUN_ID)
+RUN_CONFIG = {
+    "epochs": EPOCHS, "lr": LR, "batch": BATCH, "classes": EXPORT_CLASSES,
+    "preprocessing": PRE.manifest_kwargs(), "dataset": f"store:{DS_NAME}", "dataset_content_sha": DS_SHA,
+    "camera_profile_revision": CAMERA_PROFILE_REVISION, "repo_commit": REPO_COMMIT,
+    "trainer": TRAINER, "trainer_note": TRAINER_NOTE}
+RUN_LOG = RunLog(RUN_DIR)
+RUN_LOG.write_config(RUN_CONFIG)
+LOCAL_EXPERIMENT = {"tracker": "local", "run_id": RUN_ID, "path": f"runs/{RUN_ID}"}
+print("실험 기록 폴더:", RUN_DIR, "| TensorBoard:", RUN_LOG.tensorboard)
+''')
+
+md("""
+### 5d. (선택) 실험 기록 (W&B)
 
 `USE_WANDB`가 켜져 있고 Colab Secret `WANDB_API_KEY`(또는 환경 변수)가 있으면 Weights & Biases에 run을 하나 만든다.
 에폭마다 손실과 클래스별 검증 IoU가 기록되고, run 링크가 manifest의 `metrics.experiment`에 들어간다.
-키가 없으면 건너뛰고 학습은 그대로 진행한다. **키를 셀에 붙여 넣지 않는다**(공개 저장소). 키는 출력하지도, 파일에 쓰지도 않는다.
+키가 없으면 건너뛰고 학습은 그대로 진행한다(5c의 로컬 기록은 W&B와 상관없이 남는다). **키를 셀에 붙여 넣지 않는다**(공개 저장소). 키는 출력하지도, 파일에 쓰지도 않는다.
 """)
 code('''
-#@title 5c. (선택) W&B 실험 기록
+#@title 5d. (선택) W&B 실험 기록
 if globals().get("WANDB_RUN") is not None:   # 이 셀을 다시 실행: 앞 run을 먼저 닫는다
     WANDB_RUN.finish()
 WANDB_RUN = WANDB_EXPERIMENT = None
@@ -270,11 +311,7 @@ if _key:
     os.environ["WANDB_API_KEY"] = _key
     del _key
     try:
-        WANDB_RUN = wandb.init(project=WANDB_PROJECT, job_type="train", config={
-            "epochs": EPOCHS, "lr": LR, "batch": BATCH, "classes": EXPORT_CLASSES,
-            "preprocessing": PRE.manifest_kwargs(), "dataset": f"store:{DS_NAME}", "dataset_content_sha": DS_SHA,
-            "camera_profile_revision": CAMERA_PROFILE_REVISION, "repo_commit": REPO_COMMIT,
-            "trainer": TRAINER, "trainer_note": TRAINER_NOTE})
+        WANDB_RUN = wandb.init(project=WANDB_PROJECT, job_type="train", config=RUN_CONFIG)
     except Exception as _exc:   # 네트워크, 잘못된 키 등: 기록 없이 학습한다
         WANDB_RUN, _skip = None, f"wandb.init 실패: {type(_exc).__name__}"   # 메시지 본문은 출력하지 않는다
     finally:
@@ -291,13 +328,12 @@ else:
 md("""
 ## 6. 학습
 
-에폭마다 학습 손실, 검증 손실, 검증 split의 클래스별 IoU를 출력한다.
+에폭마다 학습 손실, 검증 손실, 검증 split의 클래스별 IoU를 출력하고, 5c의 실험 기록 폴더(와 W&B가 켜져 있으면 W&B)에도 남긴다.
 학습이 끝나면 평균 IoU가 가장 좋았던 에폭의 가중치로 되돌리고, 그 에폭의 IoU를 manifest에 적는다.
 """)
 code('''
 #@title 6. 학습
 from rosy_lane_model import train
-
 
 
 def _log_epoch(row):
@@ -309,7 +345,8 @@ def _log_epoch(row):
 
 
 result = train(model, train_ds, val_ds, epochs=EPOCHS, lr=LR, batch_size=BATCH, device=DEVICE,
-               ignore_index=IGNORE_INDEX, on_epoch=_log_epoch)
+               ignore_index=IGNORE_INDEX,
+               on_epoch=chain(RUN_LOG.on_epoch, _log_epoch if WANDB_RUN is not None else None))
 best_epoch = result["best_epoch"]
 VAL_IOU = {k: round(v, 4) for k, v in result["val_iou"].items() if v is not None}
 print(f"가장 좋은 에폭 {best_epoch}/{EPOCHS}의 검증 클래스별 IoU:")
@@ -324,7 +361,9 @@ md("""
 
 `export()`가 opset 17 ONNX와 `model_manifest.json`을 만든다. 전처리 값은 2단계의 `PRE`에서 그대로 가져온다.
 manifest의 `dataset`에는 `store:<이름>`과 내용 해시가 들어간다.
-W&B run이 있으면 그 링크가 `metrics.experiment`에 들어가고, run 요약에 가장 좋은 에폭과 `model_revision`을 적은 뒤 run을 닫는다.
+`metrics.experiment`에는 W&B run이 있으면 그 링크, 없으면 로컬 기록 폴더(`tracker: local`)가 들어간다.
+로컬 `summary.json`에 가장 좋은 에폭, 검증 IoU, `model_revision`, 내보낸 폴더(상대 경로)를 적고(W&B가 있으면 그 요약에도), run을 닫는다.
+끝에 TensorBoard 실행 명령을 출력한다.
 """)
 code('''
 #@title 7. 내보내기
@@ -335,10 +374,15 @@ OUT_DIR = "out/lane_model"
 doc = export(model, OUT_DIR, classes=EXPORT_CLASSES, **PRE.manifest_kwargs(),
              dataset_repo=f"store:{DS_NAME}", dataset_revision=DS_SHA,
              camera_profile_revision=CAMERA_PROFILE_REVISION, trainer=TRAINER_ID, val_iou=VAL_IOU,
-             experiment=WANDB_EXPERIMENT)
+             experiment=WANDB_EXPERIMENT or LOCAL_EXPERIMENT)
 MODEL_REVISION = doc["model_revision"]
 print(MODEL_REVISION)
 print("trainer:", TRAINER_ID)
+RUN_LOG.finish({"best_epoch": best_epoch, "val_iou": VAL_IOU, "model_revision": MODEL_REVISION,
+                "export_dir": OUT_DIR, "trainer": TRAINER_ID,
+                "experiment": WANDB_EXPERIMENT or LOCAL_EXPERIMENT})
+print("실험 기록 폴더:", RUN_DIR)
+print("TensorBoard 보기:  tensorboard --logdir", RUNS_DIR)
 if WANDB_RUN is not None:
     WANDB_RUN.summary["best_epoch"] = best_epoch
     WANDB_RUN.summary["model_revision"] = MODEL_REVISION

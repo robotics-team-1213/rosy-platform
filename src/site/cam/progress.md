@@ -2,22 +2,23 @@
 module: cam
 logical_modules: []
 owner: SITE
-last_verified: { commit: "2370b41b", date: 2026-10-01 }
+last_verified: { commit: "uncommitted", date: 2026-10-04 }
 gates:
   SOURCE:
     state: GO
-    evidence: "D-374 stage 1 moved it from src/site/overhead/android; D-377 renamed src/site/ceiling_camera -> src/site/cam: applicationId/namespace io.github.livsbittt.rosy.cam, DataStore cam_settings, Gradle root rosy-cam, app_name Rosy Cam. Wire names (rosy-overhead/1, /overhead/v1/frames, _rosy-overhead._tcp, rosyov://, Overhead* classes) unchanged. JVM unit tests 130 passed at a8199fd9 (2026-09-30 Windows, JDK 21)"
+    evidence: "2026-10-04 bounded automatic torch and private stream snapshot/share; observed TorchState, frame-independent 30 s watchdog, thermal/off-failure session cleanup. JVM 326 passed, 0 failures/errors, independent source review approved. Wire names and pinned CA trust unchanged."
     cmd: "cd src/site/cam && gradlew testDebugUnitTest"
   LOCAL:
     state: GO
-    evidence: "testDebugUnitTest --rerun 130 passed and assembleDebug built app-debug.apk with applicationId io.github.livsbittt.rosy.cam at a8199fd9 (2026-09-30 Windows). Host contract: test_app_roles.py, test_surface_icons.py green. No phone install on this change"
-    cmd: "cd src/site/cam && gradlew testDebugUnitTest assembleDebug"
+    evidence: "2026-10-04 testDebugUnitTest, assembleDebug and lintDebug succeeded on Windows/JDK 21; JVM 326 passed. Same-signer Galaxy S21 install -r preserved pairing settings byte-for-byte. Build/cache/private evidence outputs stayed on X:."
+    cmd: "cd src/site/cam && gradlew testDebugUnitTest assembleDebug lintDebug"
   ROS-SIM:
     state: N/A
   ARTIFACT:
     state: N/A
   DEVICE:
     state: PARKED
+    evidence: "2026-10-04 Galaxy S21 standard rear lens: actual automatic torch ON/OFF/re-ON while Dozing, real recognizable rotated snapshot saved. Pinned-site receipt for 63 s: 10/10 HTTP 200, sequence 361-539, 1280x720 JPEGs, age 222-453 ms. Wide lens correctly reported no flash support. Only this feature's live camera operation is verified; complete D-341/D-391 device matrix and surveyed marker/position acceptance remain pending."
   FIELD:
     state: PARKED
 adrs: [D-261, D-341, D-370, D-374, D-377, D-391, D-432]

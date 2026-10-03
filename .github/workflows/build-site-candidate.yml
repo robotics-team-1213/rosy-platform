@@ -1,0 +1,372 @@
+name: Build unsigned site candidate
+
+# D-437: the site candidate (Fleet, Vision, proxy; linux/amd64) is built on a
+# GitHub-hosted runner and published as an UNSIGNED prerelease. The operator's
+# signing PC signs release.json (sign_candidate.py --manifest-only, D-301;
+# automatically through auto_sign_candidates.py since D-441) and attaches
+# release.json.sig. No secret except GITHUB_TOKEN is used; signing keys never
+# reach GitHub.
+#
+# D-441: a push to main that touches anything the images or the candidate
+# contain builds automatically. The paths below are the build_candidate.py
+# image source paths (deploy/site plus every Fleet/Vision Dockerfile COPY
+# source), its DOC_FILES, and this file; test_site_candidate_workflow.py keeps
+# them in step.
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Commit SHA, branch or tag to build (empty = the dispatched commit)
+        required: false
+        default: ""
+        type: string
+  push:
+    branches: [main]
+    paths:
+      - deploy/site/**
+      - src/site/fleet/**
+      - src/site/vision/**
+      - src/site/games/**
+      - src/contracts/foundation/core_common/**
+      - operations/apps/fleet/**
+      - src/hmi/web_common/**
+      - src/runtime/sensing/map/map_v2_fleet/lane_graph.yaml
+      - src/runtime/sensing/map/map_v2_fleet/meshes/road_lines.stl
+      - docs/reference/site-lan-discovery-profile.md
+      - .github/workflows/build-site-candidate.yml
+
+permissions:
+  contents: read
+
+# One run per built commit (a second dispatch of the same commit waits, then
+# stops in check-release-free). Newer pushes cancel older push *builds* via the
+# job-level group on build-unsigned-candidate; publishing is never cancelled
+# mid-way (publish-unsigned-prerelease has its own non-cancelling group).
+concurrency:
+  group: rosy-site-candidate-${{ inputs.ref || github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  check-release-free:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    outputs:
+      commit: ${{ steps.free.outputs.commit }}
+      build: ${{ steps.free.outputs.build }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0 (pinned commit)
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Fail fast if the site release already exists
+        id: free
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          commit="$(git rev-parse HEAD)"
+          [[ "$commit" =~ ^[0-9a-f]{40}$ ]]
+          tag="site-${commit:0:12}"
+          echo "commit=$commit" >>"$GITHUB_OUTPUT"
+          # Only a 404 means "free"; any other API failure stops the run.
+          if response="$(gh api "repos/${GH_REPO}/releases/tags/${tag}" 2>&1)"; then
+            if [[ "$EVENT_NAME" == "push" ]]; then
+              # D-441: a push (e.g. a re-run) for a commit that already has its
+              # release succeeds without building; dispatch still fails fast.
+              echo "::notice::release ${tag} already exists; nothing to build"
+              echo "build=false" >>"$GITHUB_OUTPUT"
+              exit 0
+            fi
+            echo "::error::release ${tag} already exists; delete it or build another commit"
+            exit 1
+          elif ! grep -q "HTTP 404" <<<"$response"; then
+            echo "$response" >&2
+            exit 1
+          fi
+          echo "build=true" >>"$GITHUB_OUTPUT"
+
+  build-unsigned-candidate:
+    needs: check-release-free
+    if: needs.check-release-free.outputs.build == 'true'
+    # D-441: the newest push to main wins. A newer push cancels an older push's
+    # build (its attest/publish jobs are then skipped); a dispatch gets its own
+    # group and is never cancelled. Only this job is cancellable.
+    concurrency:
+      group: rosy-site-candidate-build-${{ github.event_name == 'push' && 'main-push' || github.run_id }}
+      cancel-in-progress: ${{ github.event_name == 'push' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    outputs:
+      commit: ${{ steps.source.outputs.commit }}
+      tag: ${{ steps.source.outputs.tag }}
+    env:
+      SYFT_VERSION: 1.52.0
+      SYFT_SHA256: caeedb81fb0491615f1ebd1761e4145d41ee86dd2cc7bf80669f9f5ad9d6133d
+      CANDIDATE_ROOT: /mnt/rosy-site-candidate
+      UPLOAD_DIR: /mnt/rosy-site-upload
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0 (pinned commit)
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify clean amd64 source and record commit
+        id: source
+        shell: bash
+        env:
+          CHECKED_COMMIT: ${{ needs.check-release-free.outputs.commit }}
+        run: |
+          set -euo pipefail
+          test "$(uname -m)" = x86_64
+          test "$(docker info --format '{{.Architecture}}')" = x86_64
+          test -z "$(git status --porcelain --untracked-files=all)"
+          commit="$(git rev-parse HEAD)"
+          [[ "$commit" =~ ^[0-9a-f]{40}$ ]]
+          # Provenance names the dispatched ref (e.g. main); the built commit
+          # must be in that ref's history so the attestation covers it.
+          git merge-base --is-ancestor "$commit" "$GITHUB_SHA"
+          # A branch ref may move between jobs; build what was checked free.
+          test "$commit" = "$CHECKED_COMMIT"
+          echo "commit=$commit" >>"$GITHUB_OUTPUT"
+          echo "tag=site-${commit:0:12}" >>"$GITHUB_OUTPUT"
+
+      - name: Free runner disk and prepare work directories
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Ephemeral runner: drop preinstalled toolchains the build never uses.
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          sudo mkdir -p "$CANDIDATE_ROOT" "$UPLOAD_DIR"
+          sudo chown "$(id -u):$(id -g)" "$CANDIDATE_ROOT" "$UPLOAD_DIR"
+          df -h / /mnt
+
+      - name: Check Docker Buildx keeps images in the local store
+        shell: bash
+        run: |
+          set -euo pipefail
+          token="$(openssl rand -hex 16)"
+          echo "::stop-commands::${token}"
+          # build_candidate.py runs `docker build`, then inspects and saves the
+          # local image. The runner's default buildx builder uses the docker
+          # driver, so built images land in the local store without --load.
+          docker buildx version
+          docker buildx inspect | grep -Eq '^Driver:[[:space:]]+docker$'
+          echo "::${token}::"
+
+      - name: Install pinned syft
+        shell: bash
+        run: |
+          set -euo pipefail
+          token="$(openssl rand -hex 16)"
+          echo "::stop-commands::${token}"
+          archive="$RUNNER_TEMP/syft.tar.gz"
+          curl --fail --location --proto '=https' --proto-redir '=https' \
+            --output "$archive" \
+            "https://github.com/anchore/syft/releases/download/v${SYFT_VERSION}/syft_${SYFT_VERSION}_linux_amd64.tar.gz"
+          printf '%s  %s\n' "$SYFT_SHA256" "$archive" | sha256sum --check --strict
+          mkdir -p "$RUNNER_TEMP/bin"
+          tar -xzf "$archive" -C "$RUNNER_TEMP/bin" syft
+          echo "$RUNNER_TEMP/bin" >>"$GITHUB_PATH"
+          "$RUNNER_TEMP/bin/syft" version
+          echo "::${token}::"
+
+      - name: Build unsigned candidate
+        shell: bash
+        env:
+          COMMIT: ${{ steps.source.outputs.commit }}
+        run: |
+          set -euo pipefail
+          # Docker, syft and build output must not be able to issue workflow
+          # commands (e.g. a fake notice or summary): pause command parsing.
+          token="$(openssl rand -hex 16)"
+          echo "::stop-commands::${token}"
+          python3 deploy/site/build_candidate.py \
+            --output-dir "$CANDIDATE_ROOT/$COMMIT" \
+            --sbom-tool syft
+          test ! -e "$CANDIDATE_ROOT/$COMMIT/release.json.sig"
+          echo "::${token}::"
+
+      - name: Package candidate into release-sized parts
+        shell: bash
+        env:
+          COMMIT: ${{ steps.source.outputs.commit }}
+        run: |
+          set -euo pipefail
+          token="$(openssl rand -hex 16)"
+          echo "::stop-commands::${token}"
+          # The images are already in images.tar; free their layers first.
+          docker system prune --all --force
+          cp "$CANDIDATE_ROOT/$COMMIT/release.json" "$UPLOAD_DIR/release.json"
+          # GitHub release assets are limited to 2 GiB per file, so the tar is
+          # always split (part00, part01, ...). The site host reassembles the
+          # parts, and verify_candidate.py still checks images.tar's hash.
+          tar -cf - -C "$CANDIDATE_ROOT" "$COMMIT" \
+            | split --bytes=1900M --numeric-suffixes=0 --suffix-length=2 - \
+              "$UPLOAD_DIR/rosy-site-candidate-$COMMIT.tar.part"
+          rm -rf "${CANDIDATE_ROOT:?}/$COMMIT"
+          (
+            cd "$UPLOAD_DIR"
+            sha256sum release.json rosy-site-candidate-"$COMMIT".tar.part* >SHA256SUMS
+            cat SHA256SUMS
+          )
+          echo "::${token}::"
+
+      - name: Publish the manifest hash for the signing station
+        shell: bash
+        env:
+          COMMIT: ${{ steps.source.outputs.commit }}
+        run: |
+          set -euo pipefail
+          # Runs only after every tool step resumed workflow commands. The
+          # operator copies this hash from the job summary table (not from
+          # arbitrary log lines), which release-asset writers cannot edit, into
+          # sign_candidate.py --manifest-only --expected-manifest-sha256.
+          digest="$(sha256sum "$UPLOAD_DIR/release.json" | cut -d' ' -f1)"
+          [[ "$digest" =~ ^[0-9a-f]{64}$ ]]
+          echo "::notice title=release.json SHA-256::${digest} (source commit ${COMMIT})"
+          {
+            echo "## Unsigned site candidate"
+            echo
+            echo "| Field | Value |"
+            echo "|---|---|"
+            echo "| source commit | \`${COMMIT}\` |"
+            echo "| release.json SHA-256 | \`${digest}\` |"
+            echo
+            echo "Sign only if both values match what you approved:"
+            echo "\`sign_candidate.py --manifest-only --expected-commit ${COMMIT} --expected-manifest-sha256 ${digest}\`"
+          } >>"$GITHUB_STEP_SUMMARY"
+
+      - name: Upload manifest and checksums for the provenance job
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2 (pinned commit)
+        with:
+          name: rosy-site-candidate-manifest-${{ steps.source.outputs.commit }}
+          path: |
+            /mnt/rosy-site-upload/release.json
+            /mnt/rosy-site-upload/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Upload unsigned candidate for the release job
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2 (pinned commit)
+        with:
+          name: rosy-site-candidate-unsigned-${{ steps.source.outputs.commit }}
+          path: /mnt/rosy-site-upload/*
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+
+  attest-provenance:
+    # The only job with OIDC and attestation write; it never runs build
+    # tools and sees only release.json and SHA256SUMS.
+    needs: build-unsigned-candidate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0 (pinned commit)
+        with:
+          name: rosy-site-candidate-manifest-${{ needs.build-unsigned-candidate.outputs.commit }}
+          path: provenance-subjects
+
+      - name: Check the subjects match each other
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd provenance-subjects
+          test "$(find . -mindepth 1 -maxdepth 1 -printf '%f\n' | LC_ALL=C sort | paste -sd' ')" \
+            = "SHA256SUMS release.json"
+          grep -E '^[0-9a-f]{64}  release\.json$' SHA256SUMS | sha256sum --check --strict
+
+      - name: Attest build provenance of release.json and SHA256SUMS
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2 (pinned commit)
+        with:
+          subject-path: |
+            provenance-subjects/release.json
+            provenance-subjects/SHA256SUMS
+
+  publish-unsigned-prerelease:
+    needs: [build-unsigned-candidate, attest-provenance]
+    # Publishing (create, then prune) is serialized and never cancelled once
+    # running, so a release is never left half-published and two prunes never
+    # race. A publish still waiting is replaced by a newer one (newest wins).
+    concurrency:
+      group: rosy-site-candidate-publish
+      cancel-in-progress: false
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: write
+    env:
+      COMMIT: ${{ needs.build-unsigned-candidate.outputs.commit }}
+      TAG: ${{ needs.build-unsigned-candidate.outputs.tag }}
+      GH_REPO: ${{ github.repository }}
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0 (pinned commit)
+        with:
+          name: rosy-site-candidate-unsigned-${{ needs.build-unsigned-candidate.outputs.commit }}
+          path: candidate-assets
+
+      - name: Re-check asset checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$COMMIT" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$TAG" == "site-${COMMIT:0:12}" ]]
+          cd candidate-assets
+          sha256sum --check --strict SHA256SUMS
+          test ! -e release.json.sig
+
+      - name: Create unsigned prerelease
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          notes="UNSIGNED until release.json.sig is attached.
+
+          Site candidate (Fleet, Vision, proxy; linux/amd64) built from commit ${COMMIT} by ${RUN_URL}.
+          The operator's signing PC signs release.json (sign_candidate.py --manifest-only, run by
+          auto_sign_candidates.py after the provenance and main-ancestry checks, D-441) and uploads
+          release.json.sig. The site host verifies it before docker image load
+          (deploy/site/README.md, CI-built candidates (D-437), Automatic updates (D-441))."
+          gh release create "$TAG" \
+            --prerelease \
+            --target "$COMMIT" \
+            --title "Site candidate ${TAG} (unsigned)" \
+            --notes "$notes" \
+            candidate-assets/*
+
+      - name: Prune older site candidate releases (keep the newest 3)
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          # Robots look for payload-* among the most recent releases (D-412),
+          # prereleases included, so site-* candidates must not pile up. Only
+          # tags that match ^site-[0-9a-f]{12}$ exactly are ever deleted.
+          gh release list --limit 200 --json tagName,createdAt \
+            --jq 'map(select(.tagName | test("^site-[0-9a-f]{12}$")))
+                  | sort_by(.createdAt) | reverse | .[3:] | .[].tagName' \
+            >"$RUNNER_TEMP/site-releases-to-prune"
+          while read -r old; do
+            [[ "$old" =~ ^site-[0-9a-f]{12}$ ]] || { echo "refusing to prune: $old" >&2; exit 1; }
+            [[ "$old" != "$TAG" ]] || { echo "refusing to prune the new release" >&2; exit 1; }
+            gh release delete "$old" --cleanup-tag --yes
+            echo "pruned $old"
+          done <"$RUNNER_TEMP/site-releases-to-prune"

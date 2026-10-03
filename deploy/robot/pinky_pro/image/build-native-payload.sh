@@ -199,8 +199,9 @@ cp "$NATIVE_RUNTIME_SOURCE/rosy-boot-status.service" "$OVERLAY/etc/systemd/syste
 cp "$NATIVE_RUNTIME_SOURCE/rosy-boot-status.timer" "$OVERLAY/etc/systemd/system/"
 # D-192 US-003: one more run right after the runtime target settles.
 cp "$NATIVE_RUNTIME_SOURCE/rosy-boot-status-ready.service" "$OVERLAY/etc/systemd/system/"
-# D-190: the LCD and buzzer, unprivileged and outside CORE, enabled by the image.
-cp "$NATIVE_RUNTIME_SOURCE/rosy-boot-display.service" "$OVERLAY/etc/systemd/system/"
+# D-190 / D-433: the LCD, buzzer and lamp (rosy-face), unprivileged and outside CORE,
+# enabled by the image. The retired rosy-boot-display.service is not installed.
+cp "$NATIVE_RUNTIME_SOURCE/rosy-face.service" "$OVERLAY/etc/systemd/system/"
 # D-176: boot settings file and fallback AP, both root and outside CORE.
 cp "$NATIVE_RUNTIME_SOURCE/rosy-config.service" "$OVERLAY/etc/systemd/system/"
 cp "$NATIVE_RUNTIME_SOURCE/rosy-network.service" "$OVERLAY/etc/systemd/system/"

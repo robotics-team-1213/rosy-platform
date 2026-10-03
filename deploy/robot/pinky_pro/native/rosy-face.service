@@ -1,0 +1,90 @@
+[Unit]
+Description=ROSY face: the Pinky Pro LCD, buzzer and lamp for the robot's whole life (D-433)
+# D-433: one process outside ROS owns the LCD panel and backlight, the buzzer and
+# the lamp from power-on to shutdown (it replaces rosy-boot-display.service).
+# Outside CORE (D-161) and not ordered after it: it shows BOOTING, PROVISIONED
+# and FAILED as well. It reads /run/rosy-boot, which the root indicator units
+# write, and /run/rosy/face-inputs.json, which CORE rewrites every second, and
+# polls both, so it needs no ordering on either. The emotion package's ROS node
+# (emotion_server) is the sim/bench adapter only; no product unit or launch runs
+# it, so nothing else ever drives these lines.
+After=local-fs.target systemd-udevd.service
+# A crash loop stops after five tries; missing devices never exit non-zero.
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=rosy-display
+Group=rosy-display
+# /dev/i2c-1 is root:dialout 0660 on the Ubuntu image (rosy-pinky-e4us);
+# 99-rosy-display.rules gives spidev0.0 to spi and gpiochip4 to gpio.
+SupplementaryGroups=dialout spi gpio
+# The Pro buzzer is BCM 4 (heard on rosy_18 2026-09-26; BCM 22 is silent there).
+# On by default since D-260 decision 2; ROSY_BUZZER_ENABLED=false (or another
+# ROSY_BUZZER_PIN) in /etc/rosy/boot-display.env wins. ROSY_LAMP_ENABLED=false
+# there leaves the D-260 lamp patterns out.
+Environment=ROSY_BUZZER_ENABLED=true ROSY_BUZZER_PIN=4 ROSY_LAMP_ENABLED=true
+EnvironmentFile=-/etc/rosy/boot-display.env
+# emotion.info_screen, emotion.rosy_lcd, core_common and rosylib come from the running
+# release; the face GIFs from its share/emotion (D-433).
+Environment=PYTHONPATH=/opt/rosy/current/install/lib/python3.12/site-packages
+# D-189: HOME is the unit's own state directory; nothing runs from it.
+StateDirectory=rosy/display
+StateDirectoryMode=0750
+Environment=HOME=/var/lib/rosy/display
+Environment=PYTHONNOUSERSITE=1
+# D-225: never write .pyc under the release. The payload ships checked-hash
+# pycs that stay valid after pack fixes mtimes; a stray write would fail
+# under ProtectSystem=strict and must not change a signed release anyway.
+Environment=PYTHONDONTWRITEBYTECODE=1
+# lgpio (under rpi-lgpio) keeps its notification files in LG_WD or the
+# working directory; both are the state directory. RPI_LGPIO_CHIP selects
+# gpiochip4, the RP1 header chip, where rpi-lgpio honours it; the program
+# refuses to drive the LCD when gpiochip4 is not labelled pinctrl-rp1.
+Environment=LG_WD=/var/lib/rosy/display RPI_LGPIO_CHIP=4
+WorkingDirectory=/var/lib/rosy/display
+# D-260 / D-247 6: the outcome of a buzzer or lamp test rosy-hw-test hands over
+# (display-test.json); root reads it. Nothing else is written here.
+RuntimeDirectory=rosy-display
+RuntimeDirectoryMode=0755
+ExecStart=/usr/bin/python3 -B /opt/rosy/native-runtime/rosy-face.py
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=5
+UMask=0077
+Nice=5
+
+NoNewPrivileges=true
+CapabilityBoundingSet=
+# The LCD, the buzzer line, the battery ADC and the lamp, nothing else (D-181,
+# D-190, D-260). 99-rosy-lamp.rules gives /dev/ws281x_pwm to this unit's own
+# group rosy-display (0660); lamp_pattern, started per state, opens it.
+PrivateDevices=false
+DevicePolicy=closed
+DeviceAllow=/dev/spidev0.0 rw
+DeviceAllow=/dev/gpiochip4 rw
+DeviceAllow=/dev/i2c-1 rw
+DeviceAllow=/dev/ws281x_pwm rw
+# Everything it shows comes from files; it has no network of its own. The
+# account stays rosy-display (D-433 Q4): udev rules, rosy-network, rosy-login-code
+# and rosy-hw-test name that group, and a payload cannot create accounts (D-388).
+PrivateNetwork=true
+RestrictAddressFamilies=AF_UNIX
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=multi-user.target

@@ -37,7 +37,7 @@ install -m 0644 "$SRC"/deploy/robot/pinky_pro/modprobe/*.conf /etc/modprobe.d/
 # The real rosy units (sync-image-layer.py UNITS), plus the image-only first-boot gate as a stub.
 for unit in rosy-release-recover.service rosy-sd-provision.service rosy-core.service rosy-runtime.target \
             rosy-io.service rosy-camera.service rosy-navigation.service rosy-boot-status.service \
-            rosy-boot-status.timer rosy-boot-status-ready.service rosy-boot-display.service \
+            rosy-boot-status.timer rosy-boot-status-ready.service rosy-face.service \
             rosy-config.service rosy-network.service rosy-login-code.service rosy-hw-probe.service \
             rosy-hw-probe.path rosy-hw-test.service rosy-hw-test.path rosy-auto-update.service \
             rosy-auto-update.timer rosy-ssh-access.service rosy-ssh-access.path rosy-ssh-access-boot.service \

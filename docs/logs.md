@@ -4858,12 +4858,97 @@
 - gate 변화: 실제 주행·발열 하강·Cam 화면 off 연속 송출·FIELD 수용은 미판정이며 승격하지 않는다.
 - 결정: D-432. 4자리 페어링 통합은 후속 적용이다.
 
+## 2026-10-03 · uncommitted · perception(D-356): experiment tracking defaults to local run log + TensorBoard
+- 변경: `learning/training/perception/training/run_log.py` 추가(`RunLog`, `chain`), `export_cell.py`가 `metrics.experiment`의 `local` 형태를 트래커별 허용 키로 받는다, 노트북 5c(로컬 기록)·5d(W&B) 분리와 `RUNS_DIR` 입력 칸, COLAB.md/README.md 절 추가, D-356 부록
+- 증거: `python -m pytest learning/training/perception/test -q -p no:cacheprovider`(ML venv), `python tools/harness/rosy_harness.py generate` 뒤 lint·`test/test_harness_contracts.py`
+- gate 변화: 없음(호스트 결과). 모델 PC나 실제 Colab 런타임에서 돌려 본 것은 아님
+- 결정: 사용자 결정 2026-10-03, 기본은 로컬 기록 + TensorBoard, W&B 선택
+
+## 2026-10-03 · uncommitted · perception(D-356): review fixes for the local run log
+- 변경: `run_log.py` 기록 오류가 학습을 멈추지 않음(`chain`은 예외 후 계속, `close()` 추가), 비밀 키 단어 확대, `export_cell`의 로컬 experiment 검증(`run_id`, 상대 `path`), 노트북 5c 고정 `runs/<run_id>`·상대 summary 경로·재실행 시 앞 기록 닫기, D-356 부록 동기화
+- 증거: 훈련 테스트와 `learning/training/perception/test` 전체, harness generate·lint·`test/test_harness_contracts.py`
+- gate 변화: 없음(호스트 결과)
+
+## 2026-10-03 · uncommitted · docs: D-437 GitHub-hosted builds, offline local signing
+- 변경: `docs/adr/D-437-github-hosted-builds-and-offline-local-signing.md` 추가(Accepted, 사용자 결정), ADR Log 행, D-301 부록 "2026-10-03 — CI 빌드·로컬 서명 (D-437)"(manifest-only 서명), `harness.yaml` adr_gaps에 D-436(다른 브랜치) 추가
+- 증거: `python tools/harness/rosy_harness.py generate` 뒤 lint·`test/test_harness_contracts.py` 실행
+- gate 변화: 없음(문서만). 사이트 후보 workflow 첫 실행은 사용자가 승인한 push 뒤, 사이트 서명 키는 D-301대로 미준비
+- 결정: D-437 Accepted, D-301 부록
+- 교훈: 없음
+
+## 2026-10-03 · uncommitted · site(D-437): security review fixes for CI-built site candidates
+- 변경: manifest-only 서명에 `--expected-manifest-sha256` 필수(CI 실행 summary의 해시), 빌드 job의 `release.json`·`SHA256SUMS` 출처 증명과 서명 전 `gh attestation verify` 절차, 옛 `site-*` 릴리스 정리(최신 3개), fetch 스크립트의 링크·장치 거부와 tarfile `data` 필터, action SHA 고정, 이미지 원본 경로 전체의 무시된 파일 거부, 릴리스 존재 사전 검사. D-437·D-301 부록·README 갱신. 로봇 쪽 릴리스 쪽 넘김은 후속 작업
+- 증거: 사이트 후보·서명·검증·workflow·fetch 시험, harness lint, actionlint 1.7.7(Docker)
+- gate 변화: 없음. workflow 첫 실행은 사용자 승인 push 뒤
+- 결정: D-437 Accepted 본문 보강
+- 교훈: 공개 Release 자산은 저장소 쓰기 권한으로 바꿀 수 있다. 서명 대상은 쓰기 권한으로 고칠 수 없는 기록(실행 summary·출처 증명)에 묶어야 한다
+
+## 2026-10-03 · uncommitted · docs: Fleet deployment preflight lessons
+
+- 변경: 사용자 요청으로 `docs/solutions/workflow-issues/site-fleet-deploy-checks-the-whole-configuration.md`에 정적/동적 등록 충돌, Fleet/Vision 대상 계약, 컨테이너 NSS와 Avahi, OS/앱 권한, 최신 정지 증거와 설치 readback을 하나의 배포 일관성 교훈으로 기록했다.
+- 증거: 현재 parser·CLI·roster·NSS/Compose·user discovery 소스, 운영 NSS-only 설치 receipt, Fleet 재시작 후 S21 JPEG readback. 실제 주소·자격 비밀은 기록하지 않았다.
+- gate 변화: 없음. 레거시 발견 conflict 정리·관제 PC 재부팅·outbound FleetAgent·물리 marker commissioning 완료를 이 문서로 주장하지 않는다.
+- 검증: frontmatter/claims validator와 독립 문서 grounding, 문서 계약·harness 검사로 기록 내용과 탐색 가능성을 확인한다.
+
+## 2026-10-03 · uncommitted · docs: D-436 change-scoped host test tiers
+
+- 변경: D-436(호스트 시험은 변경 범위로 고른다) ADR·ADR Log 행을 추가하고, `rosy_harness.py affected` 선택기·시험, pre-push affected 티어, ci.yml PR affected / main·야간·수동 풀 분기, 루트·harness·hooks·workflows AGENTS 시험 안내를 같은 브랜치(`feat/ci-affected-tests`)에 맞췄다.
+- 증거: `test/test_affected_tests.py` 표 시험(tools/ssh·core_common·미분류·sensing 역의존·문서·보조 모듈·deploy 축소·conftest/workflow/설정 escalation·base 부재)과 변이 증명 2건; D-418 브랜치 diff 선택 결과(core_common·platform_parts·tools/device_twin 미분류로 FULL).
+- gate 변화: 없음. 저장소 도구·CI·작업 규칙만이며 장치·이미지·현장 수용과 무관하다.
+
 ## 2026-10-03 · uncommitted · docs(ui): D-439 전체 웹 앱 순차 개선 목표
 
 - 변경: 사용자 지시로 전체 남은 웹 앱의 작업 중심 디자인 개선 goal을 시작했다. registry/route/패널 목록, 공용 철학, 화면별 구현·검토·검증·착지 순서를 D-439와 실행 계획에 기록했다. 다른 브랜치의 D-436~438 번호를 보존한다.
 - 증거: 초기 로컬 Chromium에서 작업 준비 5패널·설치 정비 7패널과 모바일 페이지 높이를 확인했다. 전체 완료나 실제 장치 증거로 주장하지 않는다.
 - gate 변화: 전체 개선 목표 active; 제품 G3·DEVICE/FIELD 승격 없음.
 - 결정: D-439. 기존 토큰·부품·역할·CORE 최종 writer를 유지하고 이유 없는 나열과 작업 도달 문제를 화면별로 개선한다.
+
+## 2026-10-04 · uncommitted · docs(plan): 웹 게이트 사다리·Fleet 승격 ADR 계획
+
+- 변경: `docs/plans/2026-10-04-web-gate-ladder-fleet-readiness-adr-plan.md` 추가. dashboard/pilot ARTIFACT·pilot DEVICE(페달 정지 계약)·fleet ROS-SIM(D-87→D-426)의 게이트를 release 이미지 관측 → 실기 증거 사다리로 묶고, Fleet 사이트 시드 승격과 중앙(8081) 착수 전제, 수용됨-미구현(D-368·D-361·WS 전환) 순서를 정했다. 신규 ADR D-439(웹 표면 게이트는 release 이미지를 탄다)·D-440(Fleet 승격 경로와 중앙 착수 전제) 배정표를 포함하되 착지는 이 계획 승인 뒤로 미뤘다. origin/main과의 분기(ahead 45/behind 91)와 D-427 이동(follow-ups P1)을 선행으로 명시했다.
+- 증거: STATUS.md blockers 원문과 D-437·D-426·d427-post-migration-follow-ups(origin) 대조. 코드·게이트 변화 없음.
+- gate 변화: 없음. 문서만.
+- 결정: 새 결정 없음(D-439/D-440은 이 계획 승인 뒤 Proposed 착지).
+
+## 2026-10-04 · uncommitted · site(D-437): verifier accepts the containerd image ID form
+- 변경: `deploy/site/verify_candidate.py` 전체 검증이 해시 확인을 마친 `images.tar`에서 서비스별 config blob과 `index.json`이 가리키는 OCI manifest blob을 읽어(링크 거부, 디스크 추출 없음) 바이트 해시를 다시 계산하고, manifest의 `config.digest`가 서명된 `image_id`와 같을 때만 manifest digest도 받는다. summary에 `id_form`(`config`/`oci-manifest`). `index.json`이 없는 archive는 config 형태만. 검증기·서명 시험의 가짜 archive를 실제 tar로 바꾸고 containerd·위조 경우 시험 추가. D-437 Consequences, `deploy/site/README.md` 검증 절
+- 증거: 사이트 후보·검증·서명·fetch·workflow 시험과 `test_no_secrets_in_tracked_files`, harness lint. 현장 호스트에서 다시 돌린 것은 아님
+- gate 변화: 없음(호스트 결과). containerd image store 사이트 호스트의 전체 검증 재실행이 남았다
+- 결정: D-437 Consequences 보강(manifest 형식 변경 없음)
+- 교훈: Docker image ID는 image store마다 다르다. 서명된 config digest에서 출발해 archive 안 blob 바이트로 다른 형태를 이어 붙여야 보안을 낮추지 않고 두 store를 모두 받을 수 있다
+
+## 2026-10-04 · uncommitted · docs(adr): D-444·D-445 착지와 main↔origin 정렬
+
+- 변경: main에 origin/main을 merge해 분기를 정리했다(13개 충돌 해결: append-only 저널은 합집합, ADR Log는 번호순 합집합, harness.yaml adr_gaps는 origin 측, NsdSiteBrowser는 공유 세션 아키텍처 유지 + origin의 late-NSD-callback 수정을 NsdDiscoverySession에 이식). 사다리 계획의 ADR 두 건을 D-444(웹 표면 게이트는 release 이미지를 탄다)·D-445(Fleet 승격 경로와 중앙 착수 전제)로 Proposed 착지했다. 계획 배정 표의 D-439/D-440은 착지 시점에 D-439–D-443이 다른 브랜치(feat/hmi-task-layout, feat/device-power-policy, feat/site-auto-update, docs/d442-motion-intent-port, docs/d440-site-device-contract)에 점유돼 재번호했고, 그 다섯 번호는 adr_gaps에 선언했다.
+- 증거: merge 뒤 `rosy_harness.py lint` 0 errors, `test_harness_contracts.py`·`test_network_topology_contracts.py` 83+59 passed. 번호 점유는 전 370 refs·전역 이력 검사로 확인(D-444/D-445 무점유). 백업 브랜치 backup/main-pre-origin-merge.
+- gate 변화: 없음. ARTIFACT/DEVICE 관측·측정은 별도 실행.
+- 결정: D-444·D-445 Proposed(사다리 계획 §2 승인 기반). P0(트리 정렬) 완료 — main ahead 48, behind 0.
+
+## 2026-10-04 · uncommitted · docs(plan): Pilot 실기 정지 계약 측정 계획 (D-444 §2)
+
+- 변경: `docs/plans/2026-10-04-pilot-device-stop-contract-measurement.md` 추가. 페달 해제(PC-1 ≤300/500 ms·0.05 m)·클라이언트 소실(PC-2 ≤700/900 ms·SAF-002 watchdog)·e-stop(PC-3 ≤300/500 ms)의 합격선을 D-250(100 ms zero-keepalive)·D-367(100 ms 명령 루프)·SAF-002(500 ms)·D-110(0.10 m/s)에서 유도해 고정했다. 정지 판정은 `tools/dashboard_drive.py`의 `_moving()` 정의(linear ≤ 0.002 m/s)를 그대로 쓰고, 회차·환경·실패 처리 절차를 정했다.
+- 증거: 기존 계약 인용만으로 구성(새 숫자 발명 없음). 측정 자체는 사다리 P2, 사용자 입회 아래.
+- gate 변화: 없음. 측정 전 합격선 고정 문서.
+- 결정: D-444 §2의 "계량 문서" 요건 충족.
+
+## 2026-10-04 · uncommitted · cam: 실제 사진 공유와 저조도 촬영 검토안
+
+- 변경: `2026-10-04-cam-photo-lowlight-design.md`에 현재 JPEG 저장/별도 ImageCapture/연속 torch를 구분하고, 실제 렌즈의 플래시 지원과 원격 명령·송출·발열·사진 공유의 검증 조건을 기록했다. 방향 변경의 의미는 확인 중이며 앱 기능은 구현하지 않았다.
+- 증거: 실제 S21 JPEG 두 장의 증가하는 seq와 age 227–366 ms, 1280×720을 확인하고 사용자에게 현재 사진을 공유했다. 장치 조회상 활성 id 2의 플래시는 미지원, 기본 후면 id 0은 지원이었다. CameraX 1.4.0 앱에는 별도 ImageCapture/torch 제어가 없다. 실제 사진·장치별 증거는 X:에만 보관했다.
+- gate 변화: 없음. 사진 수신과 capability 조회만이며 조명 점등·고해상도 촬영·저조도 실기 수용을 주장하지 않는다.
+
+## 2026-10-04 · uncommitted · cam: 승인한 자동 조명과 사진 저장 구현
+
+- 변경: 검토안을 사용자 승인한 구현 범위로 갱신하고 cam 운용 문서에 자동 조명 시간·발열 제한, 실제 상태 표시, 사진 저장·공유, 렌즈 변경 시 보정 확인을 기록했다. 고해상도 ImageCapture·Night/Boost·원격 촬영 API·물리적 회전은 후속 범위로 남긴다.
+- 증거: JVM 326 passed, 최종 debug APK 및 lint 성공, 독립 리뷰 승인. 기존 서명자 APK 덮어 설치 후 페어링 설정 바이트 동일. 실제 S21 기본 후면의 자동 점등과 저장한 회전 적용 사진에서 촬영 영역을 식별했다. 화면 절전 중 63초간 10/10 최신 JPEG와 자동 꺼짐·재점등을 확인했다. 개인 사진·장치 식별자·상세 증거는 X:에만 둔다.
+- gate 변화: 없음. SOURCE/LOCAL GO, 전체 DEVICE/FIELD PARKED 유지.
+
+## 2026-10-04 · uncommitted · site(D-441): automatic site stack updates
+- 변경: D-441 ADR·ADR Log 행(D-440은 device-power 브랜치가 써서 다음 번호, `adr_gaps`에 D-438·D-439·D-440). `build-site-candidate.yml`에 main push 트리거와 이미지 원본 경로 필터, push는 기존 릴리스에서 빌드 없이 성공, push 빌드만 취소하는 job concurrency와 비취소 릴리스 그룹. 서명 PC용 `deploy/site/auto_sign_candidates.py`(출처 증명 digest·main 조상·태그 확인 뒤 `sign_manifest_only`, 감사 로그)와 `register_auto_sign_task.ps1`. 사이트 호스트용 `rosy_site_autoupdate.py`·`rosy-site-autoupdate.service`·`.timer`(override 거부, SHA256SUMS·tar 검사, 설치된 검증기, 원자적 site.env·symlink 전환, 건강 확인과 롤백, 정리). D-437·D-301 부록, `deploy/site/README.md` "Automatic updates (D-441)"
+- 증거: 사이트 후보·workflow·fetch·검증기·서명 시험과 새 자동 서명·호스트 갱신 시험(symlink 시험은 Linux 컨테이너에서), `test_no_secrets_in_tracked_files`, harness 계약·lint, actionlint 1.7.7(Docker)
+- gate 변화: 없음. workflow push 실행, 서명 PC 예약 작업, 사이트 호스트 설치와 첫 자동 갱신·롤백은 미검증. 사이트 키 미준비(D-301)
+- 결정: D-441 Accepted, D-437·D-301 개정 부록
+- 교훈: 자동 서명기가 지키는 것은 자산 쓰기 권한과 main 아닌 빌드다. 서명 PC 계정과 main 보호 규칙이 이제 사이트 배포의 문이다
 
 ## 2026-10-04 · uncommitted · docs(ui): D-439 공용 작업 선택 검증과 진입 범위
 

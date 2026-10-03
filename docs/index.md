@@ -191,6 +191,8 @@
 | D-432 | 모든 앱·장치는 공통 발견·연결 규약을 쓰고, 개발 모드에서는 코드 없이 연결한다 |
 | D-435 | 작업 오케스트레이션·Fleet·장치 실행을 역할과 권한으로 구분한다 |
 | D-439 | 웹 앱은 공용 디자인과 작업 중심 정보 위계로 순차 개선한다 |
+| D-444 | 웹 표면 게이트는 release 이미지를 탄다 — dashboard·pilot ARTIFACT는 서명 release 안 share/ 설치 관측, pilot DEVICE는 실기 페달·e-stop 정지 계약 측정 |
+| D-445 | Fleet 승격 경로(ROS-SIM D-426 → ARTIFACT D-437 첫 실행·D-301 서명 → DEVICE 사이트 PC·2대)와 중앙 Fleet(8081) 착수 전제 3개를 고정한다. 착수 자체는 별도 ADR |
 
 ## 계획·결과 문서
 
@@ -264,6 +266,8 @@
 - [2026-10-02-platform-architecture-v02-migration.md](plans/2026-10-02-platform-architecture-v02-migration.md)
 - [2026-10-03-app-ownership-shared-transport-and-layout-migration.md](plans/2026-10-03-app-ownership-shared-transport-and-layout-migration.md)
 - [2026-10-03-pi-ncnn-opencv-implementation.md](plans/2026-10-03-pi-ncnn-opencv-implementation.md)
+- [2026-10-04-pilot-device-stop-contract-measurement.md](plans/2026-10-04-pilot-device-stop-contract-measurement.md)
+- [2026-10-04-web-gate-ladder-fleet-readiness-adr-plan.md](plans/2026-10-04-web-gate-ladder-fleet-readiness-adr-plan.md)
 
 ## 교훈 (docs/solutions)
 
@@ -280,4 +284,4 @@
 - 2026-10-04 · uncommitted · docs(ui): 교통 정책 검증과 나머지 화면 판정
 - 2026-10-04 · uncommitted · docs(ui): 기본 진입 검증과 패널별 결함 기록
 - 2026-10-04 · uncommitted · docs(ui): D-439 공용 작업 선택 검증과 진입 범위
-- 2026-10-03 · uncommitted · docs(ui): D-439 전체 웹 앱 순차 개선 목표
+- 2026-10-04 · uncommitted · site(D-441): automatic site stack updates

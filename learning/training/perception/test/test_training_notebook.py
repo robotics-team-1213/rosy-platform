@@ -119,7 +119,7 @@ def test_wandb_is_optional_and_the_key_stays_secret():
     assert 'WANDB_PROJECT = "rosy-perception"  #@param' in form
     assert 'USE_WANDB = True  #@param {type:"boolean"}' in form
     cells = _code_cells()
-    wb = _cell("#@title 5c.")
+    wb = _cell("#@title 5d.")
     assert cells.index(wb) < cells.index(_cell("#@title 6."))
     assert 'userdata.get("WANDB_API_KEY")' in wb and "SecretNotFoundError" in wb
     assert "NotebookAccessError" in wb and "except ImportError" in wb
@@ -137,8 +137,31 @@ def test_wandb_is_optional_and_the_key_stays_secret():
         assert not re.search(r"(write_text|open)\([^)]*_key", src)
     assert "import wandb" not in (TRAINING / "rosy_lane_model.py").read_text(encoding="utf-8")
     train = _cell("#@title 6.")
-    assert "on_epoch=_log_epoch" in train and "WANDB_RUN.log(" in train
+    assert "chain(RUN_LOG.on_epoch, _log_epoch if WANDB_RUN is not None else None)" in train
+    assert "WANDB_RUN.log(" in train
     export = _cell("#@title 7.")
     assert "experiment=WANDB_EXPERIMENT" in export
     assert 'summary["model_revision"] = MODEL_REVISION' in export and "WANDB_RUN.finish()" in export
     assert not re.search(r"wandb_[A-Za-z0-9]{20,}|[0-9a-f]{40}", NB.read_text(encoding="utf-8"))
+
+
+def test_local_run_log_is_the_default_record():
+    cells = _code_cells()
+    form = _cell("#@title 2.")
+    assert 'RUNS_DIR = ""  #@param {type:"string"}' in form
+    assert "ROSY_RUNS_DIR" in form and "/content/rosy-runs" in form and "rosy-ml" in form
+    loc = _cell("#@title 5c.")
+    assert cells.index(loc) < cells.index(_cell("#@title 5d.")) < cells.index(_cell("#@title 6."))
+    assert "RunLog(RUN_DIR)" in loc and "RUN_LOG.write_config(RUN_CONFIG)" in loc
+    for needle in ('"dataset_content_sha": DS_SHA', '"camera_profile_revision"', '"repo_commit": REPO_COMMIT',
+                   '"trainer_note": TRAINER_NOTE', '"preprocessing"', '"classes"', '"lr": LR'):
+        assert needle in loc, needle
+    assert '"tracker": "local"' in loc and '"path": f"runs/{RUN_ID}"' in loc and "basename" not in loc
+    assert "[^A-Za-z0-9._-]" in loc and "RUN_LOG.close()" in loc
+    assert cells.index(loc) < cells.index(_cell("#@title 6."))
+    assert "export_path" not in _cell("#@title 7.") and "abspath" not in _cell("#@title 7.")
+    assert "config=RUN_CONFIG" in _cell("#@title 5d.")   # W&B gets the same dict
+    export = _cell("#@title 7.")
+    assert "experiment=WANDB_EXPERIMENT or LOCAL_EXPERIMENT" in export
+    assert "RUN_LOG.finish(" in export and "tensorboard --logdir" in export
+    assert export.index("RUN_LOG.finish(") < export.index("WANDB_RUN.finish()")

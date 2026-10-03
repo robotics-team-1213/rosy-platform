@@ -92,8 +92,7 @@ native 목록과 검색/태블릿 메뉴가 잘리지 않는 것을 확인하고
 
 native UI 커밋 `768837712`, 웹/ADR 커밋 `e084652fb`, D-418 통합 `770168ae3`,
 통합 계약 수정 `c98c8de75`. API Ref는 D-418 v1.89를 보존하고 D-432를 v1.90으로 기록한다.
-최종 설치 APK SHA256:
-`bc78d4ff674b0b0c5401f2384f0e85f06c13033734a3d04c426af2fef0a864c7`.
+최종 설치 APK SHA256: `bc78d4ff674b0b0c5401f2384f0e85f06c13033734a3d04c426af2fef0a864c7`.
 APK 안의 `assets/common/ui.js`와 현재 공용 소스의 바이트 일치를 주 담당자가 확인했다.
 
 첫 local main 머지 시도는 다른 세션의 미커밋 `docs/index.md`·`docs/logs.md` 보호 때문에 Git이
