@@ -235,6 +235,7 @@ def _ml(tmp_path, monkeypatch, host="pinky-a.local", state=None):
     monkeypatch.setenv("ROSY_ML_CONFIG", str(cfg))
     key = tmp_path / "id"
     key.write_text("k")
+    key.chmod(0o600)  # doctor refuses a group/world-readable key on POSIX
     kh = tmp_path / "kh"
     kh.write_text("")
     doc = {"operator": "ana", "robots": {"pinky-a": host},
@@ -340,6 +341,7 @@ def test_init_warns_about_an_ip_and_an_address_keyed_pin(tmp_path, monkeypatch, 
     monkeypatch.setenv("ROSY_ML_CONFIG", str(cfg))
     key = tmp_path / "id"
     key.write_text("k")
+    key.chmod(0o600)  # doctor refuses a group/world-readable key on POSIX
     kh = tmp_path / "kh"
     kh.write_text("")
     rc = rosy_ml.main(["init", "--robot", "pinky-a=192.0.2.9", "--identity", str(key),
