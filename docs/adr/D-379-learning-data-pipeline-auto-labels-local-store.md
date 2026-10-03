@@ -134,3 +134,55 @@ LiDAR 바닥 대조, keep 의 공칭 pitch 재확인(4항).
 (스캔·부가 값 = 프레임의 bag 기록 시각 이하에서 가장 늦은 메시지, 오도메트리는 프레임 시각으로 보간).
 재실행(2026-10-01): `20260930T133221Z` pitch 맞춤 11.8°(점수 22.4 대 공칭 −0.7), 규칙 칠 중 벽 위 비율 line 21.3 %·keep
 main 14.4 %·keep v2 14.0 %, 깊은 벽 위 8.5 %·3.8 %·3.5 %. 데이터셋 `d379-auto-lanes/35eb8bcc…`(412 프레임, 22 제외).
+
+### 부록 (2026-10-03) — 고정 평가 세트와 인수 정확도 게이트
+
+결정 3(고정 평가 세트)을 구현한다. 지금까지는 결정만 있고 평가 세트도, 그 세트로 모델을 재는 단계도 없었다.
+
+1. **split 고정.** `build.py`의 세션 split 은 정렬 순서가 아니라 세션 이름의 해시로 정한다:
+   `int(sha256(세션)[:8], 16) % 5 == 0` 이면 val, 아니면 train. 세션 하나의 split 은 자기 이름에만 달려 있으므로 세션을 더해도
+   기존 세션이 옮겨 가지 않는다. 세션이 2개 이상인데 val 이 하나도 없으면 해시가 가장 작은 세션을 val 로, 모두 val 이면 해시가
+   가장 큰 세션을 train 으로 둔다. 세션이 더해질 때 split 이 바뀔 수 있는 것은 이 두 예외로 놓인 세션뿐이다. 이 규칙 이전에 만든
+   데이터셋 버전은 그대로 두고, 다시 빌드하면 새 내용 해시가 생긴다.
+2. **평가 세트 저장.** `build.py --auto-labels <라벨 폴더>... --store S --name N --eval-set` 은 같은
+   `rosy.perception.dataset/1` 스키마로 `<store>/evalsets/<이름>/<내용 해시>/` 에 쓴다. 모든 프레임의 split 은 `eval`,
+   매니페스트에 `"purpose": "eval"` 과 `trusted_sources` 가 붙는다. 데이터셋과 같이 버전 폴더는 덮어쓰지 않는다.
+   `store.py` 의 `evalsets()`·`evalset_path()` 가 이 폴더를 다루고, `rosy_ml store-status` 가 목록을 보인다. `evalsets/` 는 선택
+   폴더라 `layout()` 에 넣지 않는다(기존 store 가 doctor 에서 깨지지 않게).
+3. **믿을 출처만.** 평가 라벨은 라벨 기록 `sources` 에 `lidar` 또는 `trajectory` 가 있는 프레임만 쓴다(`TRUSTED_SOURCES`).
+   결정 3은 "지도 투영·궤적" 이라고 적었지만 지도 투영(5(c))은 아직 없고, 2026-09-30 부록의 LiDAR 벽 라벨이 `labels.py` 에서
+   가장 믿는 출처다. 규칙 마스크는 애초에 출처가 아니다. 믿을 출처가 없는 프레임은 `excluded[]` 에 이유와 함께 남기고,
+   남는 프레임이 없으면 빌드를 거부한다. 출처 불일치(`conflict`)·라벨 비율 미달 제외는 학습 빌드와 같다. 지도 투영이 생기면
+   `TRUSTED_SOURCES` 에 더한다.
+4. **겹침 검사.** 학습 빌드는 `--exclude-eval <평가 세트 버전 폴더>`(여러 번 가능)를 받는다. 평가 세트 매니페스트의 세션
+   (`frames[].session` 과 `labels[].session`)에 든 세션이 학습 입력에 있으면 그 세션 이름과 평가 세트를 적고 빌드를 거부한다.
+   통과하면 학습 매니페스트에 `"disjoint_from": [{"name", "content_sha"}]` 를 적는다. 이 옵션을 주지 않은 빌드의 매니페스트는
+   전과 같다(겹침을 강제하지는 않는다. 운영 절차에서 늘 준다).
+5. **인수 게이트(`model/intake.py`, `intake_gate.yaml`).** lane_seg 전용 키:
+   `eval_set`(`--root` 기준 평가 세트 버전 폴더 경로, 기본 `null`), `eval_max_frames`(400), `min_eval_miou`(`null`),
+   `max_eval_miou_drop`(0.01). object_det 게이트에서는 빠진다. `eval_set` 이 `null` 이면 평가하지 않고 보고서에 `"eval": null`
+   이다(이전과 같음). 값이 있으면:
+   - 평가 프레임(최대 `eval_max_frames`, 고르게)을 로봇과 같은 `preprocess` 로 모델에 넣고, 모델 입력 크기의 logit argmax 를
+     예측으로 한다. 라벨 마스크는 그 크기로 최근접 보간해 맞춘다(전처리가 프레임을 같은 방식으로 줄이므로 화소가 맞고 새 클래스
+     값이 생기지 않는다). `ignore_index` 화소는 뺀다.
+   - 클래스는 **이름으로** 맞춘다. 한쪽에만 있는 클래스는 `unmatched`(`model_only`, `eval_only`)에 적고 뺀다. 맞는 클래스가
+     없으면 실패다. 클래스별 IoU 와, 합집합이 0보다 큰 클래스들의 평균 mIoU, lane_marking role 클래스의 IoU 를 따로 적는다.
+   - **챔피언**: `--out` 아래 `*/intake_report.json` 중 판정이 pass 이고 같은 평가 세트 내용 해시로 잰 보고서의 최고 mIoU
+     (검사 중인 모델 자신의 revision 은 뺀다). mIoU < 챔피언 − `max_eval_miou_drop` 이면 실패. `min_eval_miou` 가 있으면
+     그보다 낮아도 실패.
+   - 평가 세트 폴더가 없거나 매니페스트를 못 읽거나 `purpose` 가 `eval` 이 아니면 모델 탓이 아닌 설정 오류로 보고
+     `transient: true` 다(watch 가 다시 시도한다). `rosy_ml doctor` 는 게이트에 `eval_set` 이 있으면 그 폴더를 확인한다.
+   - 보고서: `"eval": {"set": {"path", "content_sha"}, "frames", "iou", "miou", "matched_classes", "unmatched",
+     "lane_marking_iou", "nonfinite_frames", "champion"}`. 모델 매니페스트의 `metrics.val_iou` 는 비교용으로
+     `trainer_val_iou` 에 옮겨 적고 게이트에는 쓰지 않는다.
+6. **처음 값.** `eval_set` 과 `min_eval_miou` 는 기준 모델 하나를 평가 세트로 잰 뒤에 정한다. 그때까지 `null` 이다.
+   `max_eval_miou_drop` 0.01 은 챔피언이 생긴 뒤에만 작동한다.
+7. **사람이 하는 일로 남는 것:** 어떤 세션을 평가 세트로 둘지 고르기(장면 태그가 고루 들어가게), 평가 세트 버전을 게이트에
+   적기, 첫 기준 측정 뒤 `min_eval_miou` 정하기, 평가 세트를 바꿀 때 챔피언이 새 세트에서 다시 정해진다는 점의 확인.
+   이 게이트도 섀도 배포 자격일 뿐이고 주행 활성화(D-205 P3)를 대신하지 않는다.
+
+**Validation:** `tools/perception/test/test_dataset_build.py`(해시 split, 세션 추가 시 비이동, 예외 두 가지),
+`test_d379_evalset.py`(평가 세트 위치·split·purpose·믿을 출처 필터, 빈 세트 거부, 겹침 거부와 `disjoint_from`, CLI),
+`test_model_intake_eval.py`(이름 매칭과 255 제외, 프레임 상한, `eval_set: null` 하위 호환, 챔피언 대비 회귀 실패,
+`min_eval_miou`, 맞는 클래스 없음, 평가 세트 없음/잘못됨 = transient), `test_rosy_ml.py`(doctor 평가 세트 확인).
+호스트 테스트이고 실물 평가 세트로 잰 값은 아직 없다.

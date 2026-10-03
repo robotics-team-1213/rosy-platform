@@ -17,7 +17,7 @@ Recordings to datasets (D-356, D-373, D-379): pull finished sessions off a robot
 | `extract.py` | Training frames from an mp4 (with sidecar) or an MCAP session; side topics attach by the clock rule in `../AGENTS.md` |
 | `frames.py` | Frame selection: time spacing plus perceptual-hash de-duplication |
 | `prelabel.py` | Pre-labels frames with a learned lane model and packs a CVAT import zip |
-| `build.py` | Builds a dataset from a CVAT export (`classes.yaml` is the source of truth for names and indices; CVAT colours are not trusted) or, with `--auto-labels`, from D-379 labels; session-split, `ignore_index` 255 |
+| `build.py` | Builds a dataset from a CVAT export (`classes.yaml` is the source of truth for names and indices; CVAT colours are not trusted) or, with `--auto-labels`, from D-379 labels; session split by a stable per-session hash, `ignore_index` 255. `--eval-set` writes a fixed eval set to `<store>/evalsets/<name>/<content_sha>/` (lidar/trajectory frames only); `--exclude-eval` refuses training sessions that are in an eval set |
 | `publish.py` | Shards a built dataset (at most 1000 frames per shard) into `<store>/datasets/<name>/<content_sha>/`, never overwriting; HF is optional |
 | `catalog.py` | `data/perception/catalog.jsonl`: `scan`, `add`, `update-tags`, `list` (one row per session) |
 | `autolabel.py` | D-379 automatic labels for a session or video: LiDAR walls, driven floor |
@@ -31,6 +31,7 @@ Recordings to datasets (D-356, D-373, D-379): pull finished sessions off a robot
 - Labels are automatic only; rule masks from the device (`line`, keep) are compared, never used as labels. Geometry comes from the sim URDF; camera pitch is fitted per session to the LiDAR walls, so a session without `scan` needs `--pitch-deg` from a LiDAR session with the same mount.
 - No class may use index 255 (`ignore_index`).
 - Keep frame and label stamps untouched; a sidecar without `stamp_ns` on stamped entries yields null, never a shifted value.
+- Training and eval sets are disjoint by session (D-379 d3): pass `--exclude-eval` for every eval set in use.
 - A store version folder is never overwritten. Do not commit recordings, frames or datasets.
 - `harvest.py` uses the operator SSH options (`../operator_ssh.py`); keep hosts, keys and tokens out of the repo.
 
@@ -40,7 +41,7 @@ Recordings to datasets (D-356, D-373, D-379): pull finished sessions off a robot
 python -m pytest tools/perception/test -q -p no:cacheprovider
 ```
 
-Relevant files: `test_dataset_build.py`, `test_dataset_extract.py`, `test_dataset_harvest.py`, `test_dataset_publish.py`, `test_bag_to_video.py`, `test_shrink_session.py`, `test_autolabel_geometry.py`, `test_d379_*.py`. Needs `mcap`, `numpy`, `cv2`; tests skip where a package is missing.
+Relevant files: `test_dataset_build.py`, `test_dataset_extract.py`, `test_dataset_harvest.py`, `test_dataset_publish.py`, `test_bag_to_video.py`, `test_shrink_session.py`, `test_autolabel_geometry.py`, `test_d379_*.py` (incl. `test_d379_evalset.py`). Needs `mcap`, `numpy`, `cv2`; tests skip where a package is missing.
 
 ### Common Patterns
 

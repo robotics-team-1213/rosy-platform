@@ -98,3 +98,24 @@ moving은 명령(|v| > 0.01 m/s 또는 |ω| > 0.05 rad/s)이 있거나, 프레�
 - 로봇 변경 범위(승인 뒤 별도 작업): 카메라 노드가 같은 헤더 stamp로 `camera/front/compressed`(JPEG q85)를 내고, `control/recording.py`의 `RECORD_TOPICS` 카메라 항목을 압축 토픽으로 바꾼다. 이미지 반영이나 릴리스 푸시가 필요하다. 첫 증거는 Pi에서 기록 중 CPU·지연·드롭 프레임 실측이다.
 
 **Validation:** `tools/perception/test/test_bag_to_video.py`(합성 MCAP으로 프레임 수, ns stamp, 직전값 정렬(미래 메시지 배제), extract 헤더 stamp 시계, max-gap null, LiDAR npz, 압축 입력, motion, extract 왕복을 확인)가 통과했다. 코덱 연구 스크립트와 결과는 저장소 밖 `X:\DevTemp\teleop-video\`에 있다. 호스트 결과는 장치 결과가 아니다.
+
+### 부록 (2026-10-03) — 실험 기록(W&B, 선택)
+
+학습 노트북(`tools/perception/training/rosy_lane_training.ipynb`)에 Weights & Biases 실험 기록을 **선택**으로 붙인다.
+
+- 2단계 입력 칸에 `USE_WANDB`(기본 켜짐)와 `WANDB_PROJECT`(기본 `rosy-perception`)를 둔다. 5c단계가 Colab Secret
+  `WANDB_API_KEY`(Colab 밖에서는 환경 변수)를 읽는다. 키가 없거나 꺼져 있으면 기록을 건너뛰고 학습은 그대로 진행한다.
+- 키는 Colab Secret 에만 둔다. 셀에 붙여 넣지 않는다(공개 저장소). 노트북은 키를 출력하지 않고 어떤 파일에도 쓰지 않는다:
+  `wandb.login()` 은 `~/.netrc` 에 키를 쓰므로 쓰지 않고, 그 런타임 프로세스의 환경 변수로만 넘긴 뒤 run 을 닫을 때 지운다.
+- run 설정에는 에폭·학습률·배치·클래스·전처리, 데이터셋 이름과 내용 해시, `camera_profile_revision`, 저장소 commit, trainer,
+  trainer 메모를 적는다. `train()` 의 `on_epoch` 훅(`rosy_lane_model.py`, wandb 를 import 하지 않는다)이 에폭마다 손실과
+  클래스별 검증 IoU 를 넘긴다. 내보낸 뒤 run 요약에 가장 좋은 에폭·검증 IoU·`model_revision` 을 적고 run 을 닫는다.
+- 모델 매니페스트의 `metrics.experiment` 에 `{"tracker": "wandb", "run_id", "url", "project"}` 만 적는다(`export_cell.py`
+  `experiment=`). 로봇 쪽 `load_manifest` 는 이 키를 `raw` 에 그대로 둔다. run 이 없으면 키도 없다.
+- 계보: 데이터셋 내용 해시 → W&B run(설정에 같은 해시) → `model_revision`(매니페스트의 `metrics.experiment` 링크) →
+  intake 보고서(`trainer_val_iou`, D-379 2026-10-03 부록의 평가 세트 mIoU) → 로봇 `history.jsonl`.
+- 로봇과 사이트 PC 도구(intake, watch, deliver, rosy_ml)는 W&B 에 의존하지 않는다. W&B 가 없어도 루프 전체가 돈다.
+
+**Validation:** `tools/perception/test/test_training_notebook.py`(입력 칸, 5c 셀 위치와 Secret 처리, 키 출력·기록 없음,
+`on_epoch`·`experiment` 연결), `test_training_model.py`(`on_epoch` 가 에폭마다 한 번), `test_training_contract.py`
+(`metrics.experiment` 는 네 키만, 로봇 로더 통과). 실제 Colab 런타임과 W&B 계정으로 돌려 본 적은 아직 없다.
