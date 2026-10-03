@@ -5014,3 +5014,8 @@
 - 증거: 실제 seed42751 정책 register/assess/show 별도 프로세스 재독출, 재실행 이력 2개 유지. metadata unregistered, 평가 reject. registry/공통 계약 36 passed, ownership/구조 51 passed. 상세 `validation/policy-registry-2026-10-04.md`.
 - gate 변화: 내구성 있는 실제 거절 기록 확보. 합성 서명 시험은 운영 승격 증거가 아님. runtime trust 설치·owner·rollback·DEVICE/FIELD 및 전체 목표 미완료.
 - 최종 보강: 독립 리뷰에서 reset object/list 검증 오류를 RED 재현·수정해 계약 0.1.2 wheel을 빌드/isolated 검증했다. 최종 회귀 81 passed/1 skipped, reviewer 수정 확인 6 passed/잔여 findings 없음. 실제 정책은 계속 unregistered/reject다. 모델 PC SSH 72212는 인증 실패 exit 1로 종료했다.
+
+## 2026-10-04 · uncommitted · feat(learning): bind policy promotion to stored dataset closure
+- 변경: DatasetManifest/공통 Episode/원본 file closure를 보존하는 DatasetStore와 promote/history의 데이터 등록·무결성 gate를 연결했다.
+- 증거: 실제 ACT dataset 6 Episodes/234 files 등록·재등록·정책 참조 재독출, 원래 unregistered/reject 유지. 영향 42 passed, 구조 51 passed, 독립 리뷰 41 passed/read-only 실제 closure 확인. 상세 `validation/policy-dataset-closure-2026-10-04.md`.
+- gate 변화: 누락/손상 데이터에서는 승격 거절. sample profile/라벨 진위·owner/rollback·DEVICE/FIELD 및 전체 목표 미완료.

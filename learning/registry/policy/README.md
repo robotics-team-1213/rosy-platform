@@ -36,8 +36,14 @@ hash chain은 보통의 손상을 감지하지만 전체 DB를 다시 쓰는 공
 anchor/서명이 아니다. history 재독출은 파일/chain/단계를 확인하며 과거 receipt의
 현재 key 신뢰 수용을 재판정하는 owner loader가 아니다.
 
-policy snapshot은 가중치·config·정규화·평가를 보존한다. DatasetManifest 및
-원본 dataset 전체의 registry ingestion은 별도 후속이며 dataset revision 참조를
-그 실제 파일들과 교차검증했다고 주장하지 않는다. rollback/stop-readback,
+policy snapshot은 가중치·config·정규화·평가를 보존한다. dataset_store.py는
+DatasetManifest·실제 공통 Episode 목록과 그 source/stream/evidence 파일의 선언된
+dataset files 포함·SHA/bytes를 검사하고 immutable snapshot/SQLite에 등록한다.
+`python learning/registry/policy/dataset_store.py --root <registry>/datasets <dataset-root>`로
+등록한다. promote와 과거 promote 이력 조회는 모든 policy dataset revision이
+등록되고 실제 파일이 온전해야 한다. register/assessment는 unregistered 연구
+metadata 보존이므로 아직 dataset이 없더라도 실행할 수 있다.
+원본 sample body profile 검증(Q6)이나 라벨/과제 진위 수용을 대신하지 않는다.
+rollback/stop-readback,
 owner binding/lease/generation/stale/HOLD, Fleet join·운영 배포는 후속이다.
 torch/ROS/network/actuator는 사용하지 않는다. 모든 DB·산출물은 X에 둔다.

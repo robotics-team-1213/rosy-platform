@@ -13,6 +13,8 @@ sys.path[:0] = [str(ROOT / 'learning/registry/policy'), str(ROOT / 'contracts/le
 from registry import Registry
 from rosy.contracts.learning import seal
 from test_learning_artifact_contracts import policy
+from test_dataset_store import dataset
+from dataset_store import DatasetStore
 
 TEST_KEY = b'test-key' * 4
 
@@ -25,6 +27,10 @@ def source(tmp_path, report=None):
     file.write_bytes(payload)
     ref = {'path': file.name, 'sha256': hashlib.sha256(payload).hexdigest(), 'bytes': len(payload)}
     doc = policy()
+    dataset_root = tmp_path / 'dataset-source'
+    manifest = dataset(dataset_root)
+    DatasetStore(tmp_path / 'registry' / 'datasets').register(dataset_root)
+    doc['dataset_revisions'] = [manifest['revision']]
     doc.update(files=[ref], normalization=ref, evaluations=[ref])
     if report is not None:
         blob = json.dumps(report).encode()
@@ -251,4 +257,15 @@ def test_renamed_act_report_cannot_bypass_rejection(tmp_path):
     trusted = {'test-verifier': {'key': TEST_KEY, 'kinds': {c['kind'] for c in prom['checks']}}}
     registry = Registry(tmp_path / 'registry', trusted=trusted); registry.register(root)
     with pytest.raises(ValueError, match='ACT'):
+        registry.promote(prom, evidence, receipts)
+
+
+def test_missing_registered_dataset_blocks_promotion(tmp_path):
+    root, doc = source(tmp_path)
+    evidence, prom, receipts = promotion(tmp_path, doc)
+    trusted = {'test-verifier': {'key': TEST_KEY, 'kinds': {c['kind'] for c in prom['checks']}}}
+    registry = Registry(tmp_path / 'registry', trusted=trusted); registry.register(root)
+    with sqlite3.connect(registry.root / 'datasets' / 'datasets.sqlite3') as db:
+        db.execute('DELETE FROM datasets')
+    with pytest.raises(ValueError, match='dataset'):
         registry.promote(prom, evidence, receipts)
