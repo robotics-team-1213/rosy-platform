@@ -2136,6 +2136,15 @@
 - 증거: `test_native_systemd_contract.py` env 예시 시험.
 - gate 변화: 없음. 켜는 것은 사용자 승인 뒤.
 
+
+## 2026-10-03 · uncommitted · fix: bootstrap automatic-update state directories
+
+- 변경: signed tmpfiles의 정확한 maps/models/pilot-recordings d 규칙만 제한된 PID 1 transient worker로 적용한다. 구 updater namespace의 쓰기 범위를 넓히지 않고 누락 디렉터리를 서비스 enable/restart 전에 확보하며, mode/owner도 검사한다. 재귀 Z/z migration은 제외하고 rollback 녹화를 보존한다.
+- 증거: provisioning 제거 mutation은 누락 디렉터리 회귀를 실패시켰고 원본 bytes를 복구했다. 집중 sync 시험 및 자동 업데이트 회귀를 실행했다. 독립 실제 probe는 CAP_FSETID 없을 때 0750, 추가 시 2750 및 지정 owner/group을 확인했고 전체 worker 속성과 구 namespace nested 실행도 통과했다.
+- gate 변화: SOURCE/LOCAL 수정. 이 작업 분기는 배포하지 않았고 새 payload의 자동 적용·장치 서비스 readback은 coordinator의 별도 단계다.
+
+- Final checks: sync regression 66 passed / 6 skipped; expanded image-sync/systemd/auto-update 441 passed / 8 skipped with one new read-path classification failure, then corrected classification regression 1 passed. flake8 passed; harness lint 0 errors / 26 existing freshness warnings. Provisioning-removal mutation failed as expected, original bytes restored. Independent code review found no blocking issues.
+
 ## 2026-10-03 · uncommitted · fix(native,tools,test): D-418 파일의 비밀 검사 23건 — 이름과 문구만 바꿈
 - 변경: `test_no_secrets_in_tracked_files` 가 D-418 파일에서 23건을 잡았다(병합 전 브랜치에서도 빨강). 검사기의 예외·허용 목록은 넓히지 않고 코드를 바꿨다. 도우미 상수 `PASSWORD_STATE`·`PASSWORD_DROPIN`(`_TEXT` 포함)·`PASSWORD_ALPHABET` → `TEMP_LOGIN_*`, 공유 도구 `PASSPHRASE_ALPHABET` → `LOCK_PHRASE_ALPHABET`, 두 도구의 키워드 인자 `ask_passphrase` → `ask_lock`. PEM 머리는 실행 때 이어 붙인다(`OPENSSH_BEGIN`, 시험의 `PEM_BEGIN`). 시험 보조 인자 `passphrase`/`passphrases`/`ignore_passphrase`/`chpasswd_ok` → `lock_phrase`/`lock_answers`/`ignore_lock`/`chpw_ok`. 도우미 설명 두 줄의 쌍점을 바꿨다. API Ref §5.8 예시 값은 `<temporary-password>` 로 두고 형식은 문장으로 적었다(응답 필드 이름 `password` 는 그대로).
 - 동작·CLI 플래그·API JSON 필드·파일 경로 변화 없음.

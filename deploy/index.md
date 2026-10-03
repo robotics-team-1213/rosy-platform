@@ -70,7 +70,7 @@
 ## 최근 기록
 
 - 2026-10-03 · uncommitted · fix(native,tools,test): D-418 파일의 비밀 검사 23건 — 이름과 문구만 바꿈
+- 2026-10-03 · uncommitted · fix: bootstrap automatic-update state directories
 - 2026-10-03 · 119382fe6 · docs(native): D-423 `ROSY_OBJECT_DET=false` 를 learned-perception.env 예시에
 - 2026-10-03 · uncommitted · feat: read live Fleet fence on the simulation Cell owner
 - 2026-10-03 · uncommitted · feat: tick local Cell workflow on the existing simulation owner node
-- 2026-10-03 · uncommitted · fix(omx-sim): C4b 1b — 그리퍼 폭은 grant의 레시피, HTTP는 루프백 (C2, C4)

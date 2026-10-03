@@ -272,8 +272,8 @@
 
 ## 최근 기록
 
+- 2026-10-03 · uncommitted · docs: automatic-update state bootstrap plan
 - 2026-10-03 · uncommitted · docs: D-432 common discovery and development link mode
 - 2026-10-03 · uncommitted · fix: retain the UDS owner after a caller disconnects
 - 2026-10-03 · uncommitted · feat: read live Fleet fence on the simulation Cell owner
 - 2026-10-03 · uncommitted · refactor: D-425 Task 3 lifetime acceptance
-- 2026-10-03 · uncommitted · fix: fence Cell owner progression and terminal completion

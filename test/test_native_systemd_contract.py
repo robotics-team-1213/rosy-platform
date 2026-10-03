@@ -426,6 +426,11 @@ DECLARED_WRITES = {
 # Absolute paths a unit's program names but only reads.
 DECLARED_READS = {
     "rosy-release-recover.service": {"/opt/rosy/releases"},  # verify() of old_current
+    "rosy-auto-update.service": {
+        # sync only reads metadata in the updater's namespace. PID 1 starts a
+        # separate bounded tmpfiles worker to create/repair these directories.
+        "/var/lib/rosy/maps", "/var/lib/rosy/models", "/var/lib/rosy/pilot-recordings",
+    },
     "rosy-core.service": {
         "/var/lib/rosy",       # calibration data_root, runtime probe default
         "/var/lib/rosy/maps",  # save_map read-back; slam_toolbox is the writer
