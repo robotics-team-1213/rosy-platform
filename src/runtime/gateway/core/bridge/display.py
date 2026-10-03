@@ -153,9 +153,8 @@ def drive_payload(snapshot, *, hold_s: float = DRIVE_HOLD_S,
 def face_cautions(snapshot) -> list[str]:
     """Degradations only CORE knows, as ``face_screen.CAUTION_TEXT`` codes."""
     codes = []
-    line_follow = getattr(snapshot, "line_follow", None)
-    if line_follow is not None and getattr(line_follow, "mode", "OFF") != "OFF" \
-            and getattr(line_follow, "state", None) == "HOLD":
+    line_follow = snapshot.line_follow
+    if line_follow.mode != "OFF" and line_follow.state == "HOLD":
         codes.append("line_follow_hold")
     if snapshot.docking.state.value == "DOCK_FAILED":
         codes.append("dock_failed")
@@ -177,7 +176,7 @@ def face_inputs_payload(snapshot, *, face: Optional[str], power_mode: Optional[s
     if mode != "IDLE":
         drive = {key: value for key, value in drive_payload(snapshot, goal_x=goal_x, goal_y=goal_y).items()
                  if key != "kind"}
-    line_follow = getattr(snapshot, "line_follow", None)
+    line_follow = snapshot.line_follow
     return {
         "schema": 1,
         "written_at": written_at,
@@ -190,8 +189,8 @@ def face_inputs_payload(snapshot, *, face: Optional[str], power_mode: Optional[s
         "docking_state": snapshot.docking.state.value,
         "battery_percent": round(battery.percent, 1) if battery.percent is not None else None,
         "battery_charging": snapshot.battery_status.charging,
-        "line_follow_mode": getattr(line_follow, "mode", None),
-        "line_follow_state": getattr(line_follow, "state", None),
+        "line_follow_mode": line_follow.mode,
+        "line_follow_state": line_follow.state,
         "caution": face_cautions(snapshot),
         "drive": drive,
         "wake": wake,

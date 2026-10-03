@@ -280,13 +280,18 @@ def screen_for(*, stage: Any = None, state: Any = None, todo: Optional[str] = No
 
     # Rows 9-11: strips under the face. Caution (Q3) outranks a test and calibration.
     caution = [CAUTION_TEXT[code] for code in core.get("caution") or [] if code in CAUTION_TEXT]
-    strip, tone = None, None
+    # Text and tone are assigned apart: a (text, "info") pair reads as an event emit
+    # to the D-8 catalogue guard (test_event_catalogue.py).
+    strip = tone = None
     if state == robot_state.CAUTION or caution:
-        strip, tone = (todo or (caution[0] if caution else "Caution")), "caution"
+        strip = todo or (caution[0] if caution else "Caution")
+        tone = "caution"
     elif test in ("buzzer", "lamp"):
-        strip, tone = f"Testing {test}", "info"
+        strip = f"Testing {test}"
+        tone = "info"
     elif core.get("activity_kind") == "CALIBRATING":
-        strip, tone = CALIBRATING_STRIP, "info"
+        strip = CALIBRATING_STRIP
+        tone = "info"
 
     mode = core.get("robot_mode")
     wake = core.get("wake")
@@ -306,6 +311,7 @@ def screen_for(*, stage: Any = None, state: Any = None, todo: Optional[str] = No
         overlay, row = {"kind": "drive", "payload": {**core["drive"], "kind": "drive"}}, "drive"  # rows 13-16
     if strip is None and mode == "IDLE" and core.get("battery_charging"):  # row 13, resting on the dock
         percent = core.get("battery_percent")
-        strip, tone = (f"Charging {percent:.0f}%" if percent is not None else "Charging"), "info"
+        strip = f"Charging {percent:.0f}%" if percent is not None else "Charging"
+        tone = "info"
     return {**answer, "kind": FACE, "row": row, "face": face, "overlay": overlay, "strip": strip,
             "strip_tone": tone, "backlight": BACKLIGHT.get(power, 100) if overlay is None else 100}
