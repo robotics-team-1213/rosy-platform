@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import subprocess
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -18,6 +19,22 @@ KEY_ID = "rosy-site-test-1"
 COMMIT = "ab" * 20
 TAG = f"site-{COMMIT[:12]}"
 WORKFLOW = f"{REPO}/.github/workflows/build-site-candidate.yml"
+
+
+def test_gh_utf8_output_survives_windows_legacy_locale(tmp_path, monkeypatch):
+    """Exercise real pipe decoding, including gh's Unicode progress on stderr."""
+    monkeypatch.setattr(subprocess, "_text_encoding", lambda: "cp949")
+    output = json.dumps({"verified": "\u2713"}, ensure_ascii=False) + "\n"
+    progress = "\u2713 Verification succeeded\n"
+    script = ("import sys; sys.stdout.buffer.write(" + repr(output.encode("utf-8"))
+              + "); sys.stderr.buffer.write(" + repr(progress.encode("utf-8")) + ")")
+
+    def run_child(argv, **kwargs):
+        return subprocess.run([sys.executable, "-c", script], **kwargs)
+
+    signer = auto.AutoSigner({"repo": REPO, "gh": "gh", "state_dir": tmp_path},
+                             runner=run_child)
+    assert json.loads(signer._gh("attestation", "verify")) == {"verified": "\u2713"}
 
 
 def _keys(directory: Path) -> tuple[Path, Path]:

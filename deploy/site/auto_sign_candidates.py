@@ -164,7 +164,7 @@ class AutoSigner:
     def _gh(self, *args: str, timeout: int = 120) -> str:
         try:
             result = self.runner([self.config["gh"], *args], capture_output=True, text=True,
-                                 check=False, timeout=timeout)
+                                 encoding="utf-8", check=False, timeout=timeout)
         except (OSError, subprocess.SubprocessError) as error:
             raise RuntimeError(f"gh {args[0]} could not run: {type(error).__name__}") from None
         if result.returncode != 0:

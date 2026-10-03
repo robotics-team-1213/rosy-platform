@@ -70,8 +70,8 @@
 
 ## 최근 기록
 
+- 2026-10-04 · uncommitted · fix(D-441): Windows 자동 서명기의 UTF-8 출력 처리
 - 2026-10-04 · uncommitted · verify(D-441): 최종 Linux 관련 suite 확인
 - 2026-10-04 · uncommitted · fix(D-441): 상대 symlink의 롤백 경로 보정
 - 2026-10-04 · uncommitted · verify(D-441): 추가 보정 Linux 회귀 확인
 - 2026-10-04 · uncommitted · fix(D-441): 독립 재검토 추가 결함 보정
-- 2026-10-04 · uncommitted · fix(D-441): 자동 갱신 내부 검토 지적 보정
