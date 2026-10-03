@@ -6,6 +6,8 @@
 
 **이전 동결 (2026-10-03):** 수용 시점부터 D-413 §1의 최상위 `modules/`, D-425 §4의 최상위 `apps/`·`ui/`로 **새** 소스 이전을 시작하지 않는다. 이미 그 경로에 있는 파일(main 기준 49개)과 진행 중 브랜치는 착지 후 §6 B 순서에 맞춰 D-427 경로로 옮긴다. 새 이전은 §2 import 규칙 시험(후속 1)이 main에 들어온 뒤 시작한다.
 
+**이행 기록 (2026-10-04):** 아래 "이행 기록" 절 참조.
+
 ### Context
 
 사용자는 저장소가 "다 몰려 있어서 구조가 보이지 않는다"고 했다. 또 플랫폼이 로봇 자체의 미들웨어에서 학습(모방학습·강화학습)까지 가는 범용 구조여야 한다고 요청했다. 두 세션(ros-e1, ros-d2)이 D-290·D-399·D-413·D-425, 아키텍처 문서 00·10·11·12, `docs/reference/ROSY_Platform_Architecture_Design_v0.2.md`와 현재 코드를 대조했다.
@@ -182,3 +184,66 @@ D-209·D-413·D-425 본문에 부분 대체 표기를 추가했다(2026-10-03 �
 5. 강화학습 env 계약 ADR(관측·행동 공간, reward, 리셋, 개입 기록, 학습 모드 진입·해제·lease).
 
 **References:** [D-209](D-209-perception-folder-and-learned-backend.md), [D-290](D-290-rosy-platform-naming-and-site-intent-boundaries.md), [D-299](D-299-omx-lerobot-development-and-command-ownership.md), [D-326](D-326-agent-loop-boundary.md), [D-392](D-392-provider-neutral-model-tool-contract.md), [D-399](D-399-rosy-layered-architecture-site-plane-device-pipeline.md), [D-413](D-413-platform-modules-integrations-apps-profiles.md), [D-425](D-425-app-surface-ownership-shared-boundaries-and-source-layout.md), [v0.2 설계](../reference/ROSY_Platform_Architecture_Design_v0.2.md), [12 학습 파이프라인](../architecture/12_ROSY_Dataset_and_Learning_Pipeline.md)
+
+### 이행 기록 (2026-10-03~04)
+
+이 절은 사실 기록이다. 위 Decision 본문은 바꾸지 않는다. 기준은 `origin/main` `0b277ae38`(2026-10-04)와 push 전 로컬 브랜치 `refactor/d427-bulk` `ed2b24c7d`다. 실행 계획은 [소스 이전 계획](../plans/2026-10-03-d427-source-migration.md)(rev 4)과 [이동 뒤 남은 일](../plans/2026-10-04-d427-post-migration-follow-ups.md)(rev 1)이다. 경로는 D-226에 따라 기록 시점 그대로 적는다.
+
+#### 착지한 장치 (origin/main)
+
+| 장치 | 커밋 | 내용 |
+|---|---|---|
+| 소유 매니페스트와 import 규칙 시험 (후속 1, §6 C) | `54379a99c`..`541a30fa7` | `tools/harness/platform_parts.yaml`, `test/architecture/test_platform_parts.py`. 현 위반 9건을 `KNOWN_VIOLATIONS`에 고정했다 |
+| wave 0: 이동 상태 필드와 옛 경로 검사 | `147c16383`..`a916a1880` | 패키지당 leaf 목표, root마다 `wave`, partly moved root의 `deferred`, 이동 뒤 `legacy`. `KNOWN_VIOLATIONS` key를 `d427_target`으로 바꿨다. `test_moved_roots_leave_nothing_behind`가 옛 경로의 tracked 파일과 옛 경로 문자열(슬래시, `$VAR/`, 조각 결합, `../`)을 잡는다. harness append-only 검사가 옮긴 `logs.md`를 따라간다. learning ROS root에 `device_install_exception`을 단다 |
+| wave 0: `colcon_roots` 한 목록 | `4bdcf4684`..`d9d993fc8` | 매니페스트 `colcon_roots`를 CI, native payload(`build-native-payload.sh`), SD 이미지(`build-image.sh`·`customize-rootfs.sh`), release 영향 판정, 개발 스크립트가 읽는다. ROS 패키지 이름 27개를 `test_ros_package_names_are_frozen`(`test/architecture/test_colcon_roots.py`)이 고정한다 |
+| wave 0: D-429·D-430 기입 | `fd3732767`..`589068df7` | concern 태그, safety 하위 root·`safety_modules`·`safety_anchors`, 사이트 장치 목표 `operations/site_devices`, D-429 §4 api 규칙, ER2 사이트 장치 구동 이름 거부, D-430 분리·행동 시험, CI `Safety-Review` trailer 검사. 상세는 [D-430 상태 정정](D-430-safety-as-a-separate-concern.md) |
+
+#### Wave 상태
+
+| Wave | 목적지 | 상태 | 커밋 |
+|---|---|---|---|
+| 1 | `learning/training/perception`, `learning/envs/isaac`, `learning/curation/omx` | origin/main | 1-pre `0ad071752`, `b8dc56916`, `50ddfa2cd`, `c606975a2`, 후속 `58b56171f`·`8dda13eec` |
+| 2a | `contracts/skill` (배포 `rosy-contracts-skill`) | origin/main | `b715512f2` |
+| 2b | Episode·DatasetManifest·PolicyArtifact 자리 | 막힘. 후속 2(스키마 설계)를 기다린다 | — |
+| 2c | `rosy-execution-local` 분리 → `middleware/execution/local` | origin/main | `eaab6b3c0` |
+| 3a | `operations/{world,processes/palletizing,apps/fleet,execution}` | origin/main | `8bcbbc53e`..`ba7b49e67`, index 재생성 `b96c5c0d2` |
+| 3b | `operations/{vision,apps/games,processes/cell,ui/cam}`, `operations/site_devices/{dock,signal}`, `operations/vision/signal_observer` | `refactor/d427-bulk`, push 전 | root별 7커밋 `57c694912`..`6616e4c3a`, AGENTS `c50124aab` |
+| 3c | `operations/fleet` | 같은 브랜치, push 전 | `e9f19b687`, 잔여 수정 `9e1147027` |
+| 4a | `middleware/skills/{api,manipulation}`, `middleware/apps/device/omx/agent` | 같은 브랜치, push 전 | `e60dc3da7`, `f5e9d3340` |
+| 4b | `shared/web`, `middleware/ui/{robot,pilot,face}` | 같은 브랜치, push 전 | `3c4372d58`, `188d6af6f` |
+| 4c | `middleware/drivers/*`, `middleware/apps/device/{pinky,omx}/*`, `middleware/core/navigation`, `integrations/simulation/gazebo` | 같은 브랜치, push 전 | `4075c26b1`, `379eb39fb` |
+| 4d | `contracts/{foundation,ros_idl}`, `middleware/core/{gateway,services,events,api_web}` | 같은 브랜치, push 전 | `62fdf79c0`, `040707cda` |
+| 4e | `middleware/perception` | 같은 브랜치, push 전 | `805011387`, `caaa2a586`, rebase 잔여 `ed2b24c7d` |
+| 5 | 빈 `src/`·`modules/`·`apps/` 삭제, `colcon_roots`에서 `src` 제거 | 시작 전 | — |
+
+- 3b–4e의 SHA는 2026-10-04 `0b277ae38` 위로 rebase한 뒤의 값이다. push 전이므로 다시 바뀔 수 있다. 일괄 이동 스크립트는 `tools/harness/d427_move.py`(같은 브랜치 `155cdff30`)다. 후속 계획이 적은 `965c7874a`(3c)·`8767146af`(스크립트)는 rebase 전 SHA다.
+- `refactor/d427-bulk`의 매니페스트는 pending root가 0개이고 `colcon_roots`가 `[src, learning, operations, middleware, contracts, integrations, shared]`다.
+- origin/main의 `colcon_roots`는 `[src, learning, operations]`다.
+- `KNOWN_VIOLATIONS`: 9(`541a30fa7`) → 8(`bef8a0819`, D-429 §4 api 규칙) → 5(`b715512f2`, 2a). 1c는 1건을 교체해 수를 유지했다(계획 Q6). 2b가 착지하면 4건이 된다. bulk 브랜치에서도 5건이다.
+
+#### 사용자 과정 결정 (2026-10-03)
+
+다음 결정은 §6 B의 실행 방법을 바꾼다. ADR 본문과 실행이 조용히 어긋나지 않도록 여기 적는다. 원문은 이전 계획의 "결정 기록"과 루트 `AGENTS.md`다.
+
+1. **미병합 브랜치는 wave를 막지 않는다.** 옮길 경로를 건드리는 미병합 브랜치에는 snapshot tag `archive/<branch>`를 달고 브랜치는 남긴다. 브랜치 주인이 이동 뒤 rebase한다.
+2. **image wave는 release 창을 기다리지 않는다.** wave마다 ARM64 native payload(`build-native-payload.yml`)와 SD 이미지(`build-pinky-image.yml`) CI 빌드로 패키지 목록·rosdep 범위가 같음을 증명한다. 로봇 배포는 이전이 끝난 뒤 다음 정규 release에서 한다(D-191 취지).
+3. **기계적 wave는 자동 gate만으로 착지한다.** safety 코드를 옮기는 wave는 독립 리뷰를 받는다. 일괄 이동분은 착지 뒤 rename 리뷰 한 번으로 받고, 일괄 커밋에도 `Safety-Review:` trailer를 넣는다(CI가 요구한다).
+4. **3b 뒤 남은 wave는 스크립트로 옮긴다.** `tools/harness/d427_move.py <wave>`, wave당 이동 커밋 하나와 잔여 수정 커밋.
+5. **루트 `AGENTS.md` "D-427 이동 기간 규칙":** (1) 우선순위 폴더 이동 > main CI > 안전 > 기능, (2) 이동 중 그 wave 경로 동결, (3) main checkout에서 작업하지 않고 `.worktrees/`에서만, (4) push 전 순서 fetch → rebase → `rosy_harness.py generate` → pre-push, force-push 금지, (5) 새 코드는 `d427_target`에만, (6) 구조를 바꾸는 ADR은 D-427·D-429·D-430과의 관계를 표로 적는다. 같은 절에 (7) safety 태그 경로 변경의 trailer·독립 리뷰가 있다. 2·5항은 이동이 끝나면 지운다(후속 계획 P1-4).
+
+#### §6 원문과 달라진 점
+
+- **이름.** 패키지 이름과 ROS 패키지·노드·토픽 이름은 바뀌지 않았다. `test_ros_package_names_are_frozen`이 27개 이름을 지킨다. 예정된 예외는 D-429 §5의 `fleet.ai` → `rosy.decision` 개명(D-231 예외) 하나다. 이 carve는 3c(`e9f19b687`, 커밋 메시지 "the fleet.ai carve to rosy.decision is not done here")에 들어가지 않았고 아직 남아 있다(후속 계획 P2-1).
+- **deferred 하위 root.** 부모 패키지와 함께 옮겼고 떼어 내기는 미뤘다(계획 Q2). bulk 브랜치 경로 기준이다.
+  - `operations/fleet/fleet/ai` → `operations/decision`(D-429 §5 carve)
+  - `operations/fleet/fleet/server/web` → `operations/ui/console`(D-425 Task 9)
+  - `integrations/simulation/gazebo/launch` → `middleware/apps/device/sim`(gz_sim 분리 후속)
+  - `integrations/simulation/gazebo/scripts` → `tools/sim`(gz_sim 분리 후속)
+- **observer 중첩.** 3b의 신호 관측기 root `operations/vision/signal_observer`가 ROS 패키지 `rosy_vision` 폴더(`operations/vision`) 안에 있다. `__init__.py`가 없어 wheel에 들지 않을 뿐이다. 위치는 후속 계획 P2-4에서 다시 정한다.
+- **contracts 순서.** §6 B 순서는 contracts가 operations 앞이다. 2a의 `contracts/skill`만 그 자리에서 옮겼다. `contracts/foundation`·`contracts/ros_idl`은 CORE 이미지 입력이라 4d에서 CORE와 함께 옮겼다.
+
+#### 열린 증거
+
+- **ARM64 payload·SD 이미지 동등성:** 기록이 없다. origin/main에 `docs/validation/d427-source-migration/`이 없고, wave 0 8번의 기준선 빌드 증거도 없다. 그때까지 `ARTIFACT_EQUIVALENT`를 주장하지 않는다(후속 계획 P1-2).
+- **safety rename 리뷰:** 대기 중이다. bulk 커밋의 trailer는 "independent rename review pending"이다. 대상은 3b 펌웨어, 3c Fleet 정지 경로, 4c OMX local stop, 4d CORE safety 파일이다(후속 계획 P1-3).
+- 로봇 배포(P1-7)와 장치 수용은 이 이전의 출구가 아니다.

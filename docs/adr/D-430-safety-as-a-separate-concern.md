@@ -2,6 +2,8 @@
 
 **Status:** Accepted (2026-10-03, 사용자 승인 — 안전을 별도 관심사로; 독립 리뷰 3회). [D-429](D-429-five-concerns-control-port-and-site-devices.md)(Accepted 2026-10-03)의 다섯 관심사 view에 `safety`를 더하고, D-429 §1 표의 "중재·안전" 층에서 안전을 떼어 별도 체인으로 기술한다. 독립 리뷰와 사용자 승인 뒤 Accepted로 올린다. 이번 변경은 문서뿐이다. 코드·폴더 이전·매니페스트 수정·wire 변경·실기 gate 변화는 없다. D-400 집행, 물리 E-stop, DEVICE/FIELD 수용을 승인하지 않는다.
 
+**상태 정정 (2026-10-04):** 아래 절 참조.
+
 ### Context
 
 사용자는 2026-10-03 "무언가를 제어할 때 안전을 고려하고 있는가"를 물었다. 고려는 하고 있다. 다만 층마다 흩어져 있다.
@@ -211,3 +213,58 @@ safety 태그 코드(§1의 root, 모듈 목록, 앵커 파일)를 바꾸는 변
 4. `arbitration.py`를 safety 심볼(`ModeMachine`, `_ALLOWED`)과 control 심볼(`Priority`, `DEFAULT_SOURCES`, `SourceRegistry`)로 나눌지는 파일 크기 예산과 함께 나중에 정한다. 나누기 전에는 파일 전체가 safety 변경 통제를 받는다(§1).
 
 **References:** [D-429](D-429-five-concerns-control-port-and-site-devices.md), [D-427](D-427-platform-three-parts-middleware-operations-learning.md), [D-399](D-399-rosy-layered-architecture-site-plane-device-pipeline.md), [D-400](D-400-core-safety-policy-off-shadow-enforce.md), [D-369](D-369-control-authority-and-stop-evidence.md), [D-105](D-105-stop-safety-stop.md), [D-330](D-330-fleet-action-admission-stop-and-recovery.md), [D-358](D-358-er2-feedback-outbox-and-replan-fencing.md), [D-421](D-421-fleet-cancel-all-driving-separate-from-latched-estop.md), [D-422](D-422-line-follow-body-referenced-obstacle-stop.md), [D-424](D-424-one-robot-body-for-every-near-check.md), [D-104](D-104-arm-manual-put-safety-limits.md), [D-2](D-2-cmd-vel.md), [D-38](D-38-core.md), [D-392](D-392-provider-neutral-model-tool-contract.md), [D-326](D-326-agent-loop-boundary.md), [D-337](D-337-robot-signal-source-measured-light.md), [D-349](D-349-dock-auto-charge-code-readiness.md), [D-351](D-351-docking-retry-by-failure-kind.md), [D-200](D-200-docking-owns-the-docking-mode.md), [D-419](D-419-saf003-fleet-link-loss-policy.md), [D-208](D-208-sensing-profile-publishes-no-velocity.md), [D-298](D-298-mission-action-and-stop-evidence-terminology.md), [D-336](D-336-fleet-omx-local-ipc-boundary.md), [D-299](D-299-omx-lerobot-development-and-command-ownership.md), [D-172](D-172-archived-branch-port-closure.md), [소유 매니페스트](../../tools/harness/platform_parts.yaml)
+
+### 상태 정정 (2026-10-04)
+
+§2 표와 §3 본문은 2026-10-03 수용 당시 기록으로 그대로 둔다. 아래는 그 뒤 wave 0(`fd3732767`..`589068df7`)이 `origin/main`에 들어온 다음의 정정이다. 기준은 `origin/main` `0b277ae38`이고, 경로는 그 시점 경로다(D-427 wave 3c·4d 이동 전).
+
+#### 층 7: 시험에 있다
+
+- 사이트 장치 구동 이름 17개(`SITE_DEVICE_ACTUATION_NAMES`, `src/site/fleet/test/test_model_tool_adapter_conformance.py:155-162`)가 로봇 구동 이름 8개와 함께 거부 시험 `test_sample_actuation_and_openapi_operations_stay_outside_catalog`(같은 파일 `:165-191`)에 있다. 두 provider profile에서 `TOOL_NOT_ALLOWED`로 거부되는지 본다.
+- catalog 단정 `test_catalog_has_no_site_device_tool_or_effect_class`(`:204`)도 있다. catalog에 사이트 장치 구동 도구가 없고, effect class가 `read_only`·`candidate_writing` 둘뿐임을 본다.
+- 2026-10-04 호스트 실행: 위 두 시험 51개 통과.
+- 따라서 층 7의 상태는 "시험으로 구현됨"이다. §2 표의 "사이트 장치 구동 이름은 아직 시험에 없다"는 수용 당시 상태다.
+
+#### `KNOWN_SAFETY_VIOLATIONS`는 21건이다
+
+`test/architecture/test_safety_separation.py`의 `KNOWN_SAFETY_VIOLATIONS`는 §3이 적은 18건이 아니라 21건이다.
+
+- 더해진 3건은 규칙 2 edge다. `src/site/fleet/fleet/server/app.py`가 섞인 파일 `task_dispatch_routes.py`의 비앵커 이름 `GoalRequest`, `cancel_pending_task_queue`, `fanout_local_omx_stops`를 import한다. 시험 주석은 이것을 "missing from the D-430 §3 grep"이라 적는다.
+- §3의 `console.py:33` `fleet.localization`은 실제 edge가 `fleet.localization.trust`다.
+- 구성: 규칙 1이 16건(`cancel_all.py` 2, `console.py` 9, `task_dispatch_routes.py` 5), 규칙 2가 5건(내부 2, `app.py` 3).
+
+#### 지금 있는 wave 0 시험
+
+8개 묶음, 시험 함수 14개다.
+
+| # | 불변식·규칙 | 시험 | 파일 |
+|---|---|---|---|
+| 1 | 불변식 1·2와 공개 앵커 경계 | `test_safety_does_not_import_decision_learning_or_model_sdks`, `test_decision_and_learning_use_only_safety_public_api` | `test/architecture/test_safety_separation.py` |
+| 2 | 공허한 통과 방지 | `test_each_separation_rule_checks_at_least_one_importer` | 같은 파일 |
+| 3 | 불변식 3a: 운영 소스의 `cmd_vel` publisher가 `ros_bridge.py` 하나, `cmd_vel_pub`을 만지는 함수는 `__init__`·`_send_twist`, `declare_parameter` 기본값 `"cmd_vel"`은 레거시 `safety/node.py`만, OMX `send_goal`은 `ArmCommandOwner`만 | `test_cmd_vel_publisher_is_single_and_only_send_twist_touches_it` | 같은 파일 |
+| 4 | 불변식 3b: E-stop이 모든 출처 출력을 0으로, 없으면 clip | `test_estop_zeroes_every_source_and_clip_applies`, `test_every_registered_source_is_covered` | `src/runtime/services/test/test_safety_behaviour.py` |
+| 5 | 불변식 4·§4: 학습 입력은 조이기만 | `test_learned_inputs_only_tighten_limits` | 같은 파일 |
+| 6 | §4 Fleet 상실 승인 기록 | `test_non_stop_fleet_loss_policy_requires_approval_record` | `test/architecture/test_safety_separation.py` |
+| 7 | §5 CI `Safety-Review:` trailer | CI 단계 "Safety-Review trailer (D-430)"(`.github/workflows/ci.yml:55`)가 `tools/harness/safety_review.py`를 돈다. `BASELINE`(`46b8720c2`, 검사 착지 전 이력)과 리뷰된 `EXEMPT` 목록(지금 비어 있음)을 뺀다. 시험은 `test/test_safety_review.py`의 4개와 `test_safety_review_trailer_check_sees_the_same_safety_paths` | `tools/harness/safety_review.py`, `test/test_safety_review.py`, `test/architecture/test_safety_separation.py` |
+| 8 | §1 앵커와 심볼 검사 | `test_safety_anchors_live_in_safety_tagged_files`(모듈 경로 앵커, 중첩 정의, 문자열 앵커는 `==` 비교만) | `test/architecture/test_safety_separation.py` |
+
+- 매니페스트(`tools/harness/platform_parts.yaml`)에는 `concern: safety` 하위 root, `safety_modules:`, `safety_anchors:`(`public: true` 표시)가 있다.
+- Validation wave 0 2번의 "Fleet 정지 경로 carve 계획"은 별도 문서가 없다. [이동 뒤 남은 일](../plans/2026-10-04-d427-post-migration-follow-ups.md) P3-6이 그 계획이다(21 → 0).
+- 불변식 5 시험 `test_plc_adapter_never_writes_safety_addresses`는 계획대로 아직 없다. 첫 PLC 어댑터와 함께 들어온다.
+
+#### 알려진 시험 빈틈
+
+시험이 일부러 다루지 않는 것은 [D-427 이전 계획 "D-429·D-430 wave 0 후속: 알려진 빈틈"](../plans/2026-10-03-d427-source-migration.md) 절에 있다. 층별 0 출력 구분, fleet·swarm 출처 묶음, 소유자 규칙, 문자열 앵커, 규칙 2 범위, 승인 기록 범위, 병합 커밋 trailer 범위다. 처리 순서는 후속 계획 P3-7이다.
+
+#### Fleet 상실 승인 기록의 범위
+
+`safety.fleet_loss_policy_approval {robot, approver, evidence}`는 **tracked YAML에서만** 검증한다. 런타임 PUT(`/api/v1/safety/limits`)과 장치 overlay는 검증하지 않는다. PUT 처리기는 정책 이름만 확인하고 승인 기록을 보지 않는다(`src/runtime/api_web/core_api_web/api/v1/safety.py:134-140`).
+
+#### 아직 의도보다 약한 층
+
+| 층 | 지금 | 후속 (이동 뒤 남은 일) |
+|---|---|---|
+| 1. 물리 E-stop | 회로 증거와 독립 E-stop 실측이 없다 | P3-1 |
+| 3. Safety Guard + D-400 | D-400 센서 정책은 모든 로봇에서 off다. Nav2·teleop 경로에 몸 기준 근접 정지가 없다 | P3-2 |
+| 4. 반응형 정책 엔벌로프 | 엔벌로프 스킬 계약이 없다 | P3-3 |
+| 5. Arbiter + MANUAL 선점 | OMX Arbiter 표와 MANUAL 선점이 없다 | P3-4(P4-1과 같은 ADR) |
