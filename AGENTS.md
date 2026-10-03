@@ -43,6 +43,18 @@ ROSY is a robot middleware and fleet-control platform (ROS 2 Jazzy, first hardwa
 
 ## For AI Agents
 
+### D-427 이동 기간 규칙 (2026-10-03, 사용자 결정 — 이동 완료 시 2·5항 삭제)
+
+소스 이전(D-427·D-429·D-430, 계획 `docs/plans/2026-10-03-d427-source-migration.md`)이 끝날 때까지 모든 세션이 지킨다.
+
+1. **우선순위:** 폴더 이동 > main CI 초록불 > 안전(D-430 공백) > 기능. 충돌하면 앞이 이긴다.
+2. **이동 중 경로 동결:** wave를 시작하면 그 wave의 경로(계획의 wave 표, 매니페스트 `wave:`)를 고치지 않는다. 다른 경로 작업은 계속한다. 이동 뒤 미병합 브랜치는 주인이 rebase한다.
+3. **main 체크아웃에서 작업하지 않는다.** 모든 작업은 `.worktrees/<topic>`에서 한다. main 체크아웃에 커밋 안 된 변경을 남기면 다른 세션의 fast-forward와 pre-push가 막힌다.
+4. **push 전 순서:** `git fetch` → `origin/main` 위로 rebase → `python tools/harness/rosy_harness.py generate`(생성 문서가 바뀌면 커밋) → pre-push 검사(`tools/hooks/pre-push` 목록). force-push 하지 않는다.
+5. **새 코드는 D-427 목표 경로에만 둔다.** `tools/harness/platform_parts.yaml`의 `d427_target`을 따른다. 동결된 최상위 `modules/`·`apps/`·`ui/`와 이동 예정 `src/` 아래에 새 패키지를 만들지 않는다.
+6. **구조를 바꾸는 ADR은 D-427·D-429·D-430과의 관계를 표로 적는다.** ADR 없이 새 최상위 폴더를 만들지 않는다.
+7. **safety 태그 경로**(매니페스트 `concern: safety`, `safety_modules`, `safety_anchors`)를 바꾸거나 옮기는 커밋은 `Safety-Review:` trailer와 독립 리뷰가 필요하다(D-430 §5, CI가 검사).
+
 ### Working In This Directory
 
 - Treat `docs/spec/ROSY CORE SRS.md`, `docs/reference/ROSY API & Protocol Reference.md`, and `docs/reference/ROSY ADR Log.md` as contracts. Do not invent REST paths, modes, or protocol fields that are not in the API ref or `core_common.protocol.schemas` (`src/contracts/foundation/core_common/protocol/schemas.py`).
