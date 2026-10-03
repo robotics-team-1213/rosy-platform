@@ -280,8 +280,8 @@
 
 ## 최근 기록
 
+- 2026-10-04 · uncommitted · docs(ui): 남은 공용 확인과 실제 정지 접근 검증 기록
 - 2026-10-04 · uncommitted · docs(ui): Fleet 교정 커밋과 주소 대화 소유권 기록
 - 2026-10-04 · uncommitted · docs(ui): viewport 계약 보존과 남은 live 확인 이관 계획
 - 2026-10-04 · uncommitted · docs(ui): 게임·도구·Pilot 웹 판정과 최종 회귀 결함 기록
 - 2026-10-04 · uncommitted · docs(ui): Fleet 작업 분리와 보정 프리뷰의 독립 수명 기록
-- 2026-10-04 · uncommitted · docs(ui): 호환 확인·정지·세션 수명 검증과 후속 화면 규칙

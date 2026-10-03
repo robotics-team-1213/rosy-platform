@@ -5017,3 +5017,10 @@
 - 관측: D-201 desktop 높이 1080px·mobile 실제 light/목록 우선·입력/초점 보존을 확인했다. 이전 조회가 새 수동 대상과 코드를 덮는 독립 발견은 작업 epoch로 수정하고 실제 실패 변이와 원본 복원으로 검증했다.
 - 증거: 기존 Role/Games/주소/네트워크 조건은 완화하지 않았다. 다섯 실제 전달 변이와 복원 통과, raw source 네 hash 및 LF 전달 hash를 직접 대조했다. 초기 route 대역 오류·577/77/33px 실패·teardown 부수 오류는 최종 성공과 구별한다.
 - gate 변화: 교정 SOURCE/LOCAL 근거를 추가했다. 전체 목표는 남은 확인 열세 곳과 최종 검사·최신 main 통합·로컬 착지가 남아 있다. 물리 장치·CI·배포 증거 승격 없음.
+
+## 2026-10-04 · uncommitted · docs(ui): 남은 공용 확인과 실제 정지 접근 검증 기록
+
+- 변경: 제품 `5cffc885d`의 15경로와 독립 SPEC→QUALITY, 주 담당자의 실제 viewport 다섯 장을 연결한다. D-439 §20은 숨겨진 운용 탭 안의 동일 정지를 영구 안전 영역으로 옮기는 실제 클릭 검사 결과를 추가한다.
+- 관측: 이전 positive 요청의 finally가 새 OFF pending을 해제하는 결함을 독립 검토에서 발견하고 owner 조건으로 보완했다. 설정·교통·Fleet의 기존 요청 본문과 확인 뒤 신선도·자격/페이지/readback 소유권을 유지했다. mobile network 카드 8px 넘침은 최소 너비를 풀어 수정했다.
+- 검증: 기존 행동 10통과, 최종 영향 host 39통과·구조 2통과와 여섯 실제 전달 RED→원본 복원 GREEN을 구별해 기록한다. 현재 네 raw source hash와 여섯 전달 hash를 주 담당자가 직접 검사했으며 대표 desktop dark 두 장·390px light 세 장의 Stop 가시성/hit, 가로 넘침·page error 0을 확인했다. 초기 Fleet cancel-count 경합은 무효로 제외하며 처음 개별 로그가 덮어써진 한계를 남긴다.
+- gate 변화: 확인 후속 SOURCE/LOCAL 근거를 추가했다. 전체 목표는 최신 main의 차선 인식·노출·원본 녹화를 보존하는 통합, 실제 source 예산·최종 quick와 로컬 착지가 남아 있다. push·CI·물리 장치·배포 증거 승격 없음.

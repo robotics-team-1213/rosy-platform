@@ -619,3 +619,48 @@ raw-byte hash 및 다섯 LF 정규화 전달 hash를 직접 계산해 일치를 
 `root-task6-hash-check.json`과 `task6-source-unchanged.json`이 그 근거다. teardown
 CancelledError는 최초 행동 단언 실패와 구별한다. lint는 0오류·기존 경고 26건이며
 cached index는 정확한 소유 경로로 대조했다. native 확인 후속과 최신 main 통합은 남아 있다.
+
+### Task6b 공용 확인과 실제 정지 접근
+
+제품 커밋 `5cffc885d`는 승인된 15경로만 포함하며 독립 SPEC→QUALITY와 주 담당자 화면
+확인을 통과했다. cached index는 비었고 최신 main 통합과 로컬 착지는 아직 남아 있다.
+
+호환 설정·교통 적용 아홉 곳과 Fleet의 재허가·지도 목표·일괄 취소·IR 전환 네 곳을
+공용 비차단 확인으로 바꿨다. 기존 waypoint/dock DELETE 두 동작도 같은 자격·페이지·
+readback 수명을 사용한다. 하위 모듈은 셸을 역 import하지 않고 기존 hook을 받는다.
+Fleet 확인 실행기는 Fleet 전용 자산으로 등록하며 CORE 자격이나 새 API를 추가하지 않는다.
+확인 뒤에는 이름·pose/map·SLAM/dock 지원·검토본/입력·선택 로봇·지도·재허가 세대·
+IR 재선택 조건을 다시 확인한다. 기존 body와 서버 허용 조건, 즉시 Stop/OFF를 유지한다.
+
+초기 세 행동 검사는 공용 확인 부재로 3실패(18.04초)였다. 첫 구현은 2통과/1실패
+(22.74초)로, 설정 탭의 SAME 정지가 숨겨진 운용 탭 안에 남는 실제 결함을 드러냈다.
+영구 안전 영역으로 동일 노드/처리기를 옮긴 뒤 3통과(8.72초)했다. 독립 SPEC는 이전
+추종 시작 요청의 finally가 대기 중인 새 OFF 요청을 잠금 해제하는 결함도 발견했다.
+held 요청 재현은 1실패(8.92초), owner 조건을 보완한 묶음은 3통과(17.58초)였으며
+Fleet의 abort를 무시하는 이전 A→새 B 자격 교체 검사도 1통과(10.21초)했다.
+기존 payload·staging·취소·IR·안전 경로 10통과(25.19초), 최종 영향 host 39통과
+(1.83초)는 서로 다른 대상이며 반복 실행과 합산하지 않는다.
+
+주 담당자는 실제 viewport 캡처 다섯 장을 직접 보았다. 호환 설정·Fleet 재허가의 desktop
+dark와 교통 정책·Fleet 지도 목표·IR 전환의 390px light에서 대상과 주 동작이 읽히고
+정지가 대화 밖에 계속 보였다. 실제 theme, 정지 가시성·inert 제외·중앙 hit, 가로 넘침 0과
+page error 0을 캡처 보고서로 대조했다. 처음 mobile network 카드의 8px 넘침은 기존
+카드의 최소 너비를 풀어 수정했고 내용을 자르거나 숨기지 않았다. full-page 캡처는
+보조 자료이며 실제 viewport 판단과 구별한다. 읽기와 policy stage 대역을 사용했으며
+실제 장치의 양의 주행이나 비상 정지 해제는 실행하지 않았다.
+
+여섯 실제 전달 변이는 pose/map 신선도 제거, abort pending 정리 제거, 늦은 정책 readback
+허용, old-positive의 OFF pending 해제, Fleet 승인 뒤 조건 재검사 제거, old-finally의
+새 Fleet owner 해제였다. 최종 변이는 해당 실제 자산으로 전달되어 행동 단언에서 실패했고
+같은 대상의 원본 복원은 통과했다. 재허가 변이는 실제 잘못된 dispatch/rearm POST로
+1실패(3.74초), 원본은 1통과(9.27초)였다. Fleet owner 변이는 B가 대기 중인데 새 대화가
+열리는 결함으로 1실패(13.62초), 원본은 1통과(9.84초)였다. 첫 Fleet 시도의 cancel-count
+경합과 원본 실패는 무효로 제외했다. 전체 실행 로그는 남아 있으나 처음 개별 로그가
+수정 실행으로 덮어써졌다는 provenance 한계를 숨기지 않는다.
+
+주 담당자는 `task6b-mutation-report.json`, 실제 delivery 영수증과 최종 RED/original 로그를
+대조하고 `root-check-task6b-proof.py`로 여섯 변이/원본의 전달 hash와 현재 네 source 파일의
+raw-byte hash가 before/after와 일치함을 직접 검증했다. 일부 로그의 문자 인코딩은 UTF-8이
+아니므로 실패 node/요약은 ASCII byte로 정확히 검사했다. 해당 자료와 viewport 다섯 장은
+`X:\DevTemp\rosy-ui-unify\final-plan`에 있다. 독립 SPEC→QUALITY는 최종 통과했으며
+최신 main 기능 보존 통합·예산 확인·최종 quick·로컬 착지는 다음 단계다.
