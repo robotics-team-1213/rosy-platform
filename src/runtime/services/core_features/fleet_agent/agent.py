@@ -8,6 +8,7 @@ import urllib.parse
 from pathlib import Path
 
 from core_common.protocol.schemas import Envelope, EnvelopeType, HelloPayload, HeartbeatPayload
+from core_common.link_retry import retry_delay
 from .discovery import locate_fleet
 
 logger = logging.getLogger("fleet_agent")
@@ -238,10 +239,11 @@ class FleetAgent:
                 if self.enabled:
                     if stable:
                         backoff = 1.0
+                    delay = retry_delay(backoff, maximum_s=MAX_BACKOFF_S)
                     if why is not None:
                         logger.warning("Fleet agent link lost (%s); reconnecting in %.0f s",
-                                       why, backoff)
-                    await asyncio.sleep(backoff)
+                                       why, delay)
+                    await asyncio.sleep(delay)
                     backoff = next_backoff(backoff)
         finally:
             self.connected = False
