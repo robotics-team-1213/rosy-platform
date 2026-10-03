@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import time
 from hashlib import sha256
 
 import httpx
@@ -191,3 +192,26 @@ def test_fan_out_feeds_the_task_projection_and_wakes_on_stuck_events():
     assert fan({"type": "nav.goal_reached"}) == {"ok": True} and not wake.is_set()
     fan({"type": "nav.line_stuck_opened"})
     assert wake.is_set() and len(seen) == 2
+
+
+def test_claim_and_decision_for_unknown_robot_are_404_and_unclaimed(tmp_path):
+    app = _app(tmp_path, FakeRobot("rosy_01", state=_state()))
+    headers = {"Authorization": f"Bearer {OPERATOR}"}
+    client = TestClient(app)
+    assert client.post("/api/fleet/robots/ghost/line-stuck/claim",
+                       json={"stuck_id": "stuck-abc"}, headers=headers).status_code == 404
+    assert client.post("/api/fleet/robots/ghost/line-stuck/decision",
+                       json={"stuck_id": "stuck-abc", "decision": "WAIT"},
+                       headers=headers).status_code == 404
+    assert not app.state.stuck_resolver._resolver._claims
+
+
+def test_lifespan_runs_the_resolver_and_exits_cleanly(tmp_path):
+    resolver_robot = FakeRobot("rosy_01", state=_state())
+    app = _app(tmp_path, resolver_robot)
+    with TestClient(app):
+        for _ in range(200):
+            if [c for c in resolver_robot.calls if c[0] == "line_stuck_decision"]:
+                break
+            time.sleep(0.01)
+        assert [c for c in resolver_robot.calls if c[0] == "line_stuck_decision"]

@@ -44,9 +44,9 @@ from fleet.server.mission_service import MissionService
 from fleet.server.policy_evidence import PolicyEvidenceStore
 from fleet.server.proposal_store import ProposalStore
 from fleet.server.step_action_kinds import dispatch_open
+from fleet.server.step_dispatcher import StepJobDispatcher
 from fleet.server.stuck_resolver import ResolverConfig, StuckResolver
 from fleet.server.stuck_resolver_loop import StuckResolverLoop
-from fleet.server.step_dispatcher import StepJobDispatcher
 from fleet.server.task_service import FleetTaskService
 
 from fleet.server.console_routes import install_console_routes
@@ -90,7 +90,9 @@ class VisionLeaseRequest(BaseModel):
 
 def _fan_out_events(project, wake: Optional[asyncio.Event]):
     """D-438 §1: the hub has one event slot; the task projection keeps its return value,
-    and lane-stuck events wake the resolver (cheap, never raises into the hub)."""
+    and lane-stuck events wake the resolver (cheap, never raises into the hub).
+    With task_service None and a resolver, the hub now runs projection replay, which
+    needs an event_store with read_events."""
     def callback(event):
         result = project(event) if project is not None else None
         if wake is not None and str(event.get("type", "")).startswith("nav.line_stuck_"):

@@ -135,13 +135,14 @@ def install_console_routes(app, *, console, sightings, require_viewer,
               tags=["line-stuck"])
     async def line_stuck_decision(robot_id: str, body: LineStuckDecisionRequest, request: Request,
                                   principal: SitePrincipal = Depends(require_operator)) -> dict:
-        # D-438 §1: claim before forwarding, so the resolver cannot answer in the gap.
-        resolver_loop = getattr(app.state, "stuck_resolver", None)
-        if resolver_loop is not None:
-            resolver_loop.claim(robot_id, body.stuck_id)
         client = console.clients().get(robot_id)
         if client is None:
             raise http_error(HubError("UNKNOWN_ROBOT", robot_id))
+        # D-438 §1: claim before forwarding, so the resolver cannot answer in the gap.
+        # The claim stays even if the CORE forward fails: a human owns this stuck now.
+        resolver_loop = getattr(app.state, "stuck_resolver", None)
+        if resolver_loop is not None:
+            resolver_loop.claim(robot_id, body.stuck_id)
         record = partial(board.record, robot_id=robot_id, stuck_id=body.stuck_id,
                          decision=body.decision, principal_id=principal.principal_id,
                          audit_id=getattr(request.state, "site_api_audit_id", None))
@@ -171,6 +172,8 @@ def install_console_routes(app, *, console, sightings, require_viewer,
     async def line_stuck_claim(robot_id: str, body: LineStuckClaimRequest,
                                principal: SitePrincipal = Depends(require_operator)) -> dict:
         """D-438 §1: a human opened this stuck; the resolver stops answering it."""
+        if console.clients().get(robot_id) is None:
+            raise http_error(HubError("UNKNOWN_ROBOT", robot_id))
         resolver_loop = getattr(app.state, "stuck_resolver", None)
         if resolver_loop is not None:
             resolver_loop.claim(robot_id, body.stuck_id)
