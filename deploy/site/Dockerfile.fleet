@@ -7,7 +7,8 @@ ENV DEBIAN_FRONTEND=noninteractive \
     PYTHONPATH=/opt/rosy/apps/gateway/src:/opt/rosy/src/site/fleet:/opt/rosy/src/contracts/foundation
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates python3 python3-venv \
+    && apt-get install -y --no-install-recommends ca-certificates python3 python3-venv libnss-mdns \
+    && sed -i 's/^hosts:.*/hosts: files mdns4_minimal [NOTFOUND=return] dns mdns4/' /etc/nsswitch.conf \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd --gid 10001 rosy \
     && useradd --uid 10001 --gid 10001 --create-home --shell /usr/sbin/nologin rosy \

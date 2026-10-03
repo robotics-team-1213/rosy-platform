@@ -272,6 +272,15 @@ an IP-pinned `robots.yaml` entry needs an operator update and is never
 silently rewritten from untrusted mDNS. The LAN test does not replace pairing, CORE health, or
 physical motion acceptance.
 
+Fleet 이미지에는 `libnss-mdns`가 포함된다. 컨테이너는 호스트의 실행 중인
+Avahi `/run/avahi-daemon` 디렉터리를 읽기 전용으로 연결하고 NSS로 `.local`
+주소를 조회한다. 디렉터리 연결은 Avahi 재시작으로 교체된 소켓도 따른다.
+호스트 Avahi와 소켓 접근 권한이 필요하며, 경로가 없으면 Compose가 시작을
+거부한다. 일반 Docker 서비스 이름은 계속 DNS로 조회한다. 이미지와 Compose를
+함께 갱신한 뒤 Fleet 실행 UID로 `socket.getaddrinfo` 또는 `getent hosts`를
+사용해 로봇 `.local` 이름과 `fleet`/`vision`/`proxy`를 확인한다. `nslookup`은
+NSS를 거치지 않는다. TLS CA와 원래 hostname 검증은 그대로 유지한다.
+
 All HTTPS hops verify the configured site CA. The same site certificate must
 contain these DNS SANs: the operator-facing FQDN, the stable Ubuntu host's
 `<hostname>.local`, `proxy`, `fleet`, and
