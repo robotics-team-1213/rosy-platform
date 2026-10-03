@@ -4,6 +4,7 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import re
 import subprocess
 
 import pytest
@@ -117,6 +118,15 @@ def test_bridge_command_reuses_verified_loopback_implementation(tmp_path):
     assert argv == ["/usr/bin/python3", str(tmp_path / "mdns-bridge.py"), "--tls-host", "site-pc.local",
                     "--port", "8443", "--ca-file", str(tmp_path / "site-ca.crt"),
                     "--token-file", str(tmp_path / "discovery_token")]
+
+
+def test_timer_coalescing_stays_inside_fleet_scanner_lease(tmp_path):
+    timer = tool.render_units(tmp_path)["rosy-user-mdns-bridge.timer"]
+    interval = int(re.search(r"OnUnitInactiveSec=(\d+)s", timer).group(1))
+    accuracy = re.search(r"AccuracySec=(\d+)s", timer)
+    # systemd defaults to one minute without AccuracySec; Fleet expires at 45 s.
+    worst_delay = interval + (int(accuracy.group(1)) if accuracy else 60)
+    assert worst_delay < 45
 
 
 def test_advertisers_share_the_exact_existing_protocol_txt(tmp_path):

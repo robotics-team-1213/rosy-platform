@@ -11,7 +11,6 @@ import os
 from pathlib import Path
 import re
 import subprocess
-import sys
 import xml.etree.ElementTree as ET
 
 SYSTEM_UNITS = ("rosy-fleet-advertise.service", "rosy-overhead-advertise.service", "rosy-mdns-bridge.service")
@@ -102,7 +101,8 @@ def render_units(state):
         units[name] = service
     units["rosy-user-mdns-bridge.timer"] = (
         "[Unit]\nDescription=ROSY user discovery scan\n\n[Timer]\nOnBootSec=10s\n"
-        "OnUnitInactiveSec=15s\nUnit=rosy-user-mdns-bridge.service\n\n[Install]\nWantedBy=timers.target\n")
+        "OnUnitInactiveSec=15s\nAccuracySec=1s\nUnit=rosy-user-mdns-bridge.service\n\n[Install]\n"
+        "WantedBy=timers.target\n")
     return units
 
 

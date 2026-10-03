@@ -254,7 +254,8 @@ The installer stores one token as `0600` and the public CA as `0644` under the
 user-owned `0700` directory `~/.local/share/rosy/site-discovery`. Advertisers
 `rosy-user-fleet-advertise.service` and `rosy-user-overhead-advertise.service`
 use the existing common TXT contracts and certificate hostname. The bridge
-timer runs every 15 seconds and reuses the same strict TLS verification and
+timer runs every 15 seconds with `AccuracySec=1s` to stay within Fleet's 45-second
+scanner lease, and reuses the same strict TLS verification and
 loopback connection code. Secrets never appear in unit files or arguments.
 User units have the account's ordinary permissions; they do not inherit the
 root bridge's OS-level IP firewall restrictions. Loopback is enforced by the
