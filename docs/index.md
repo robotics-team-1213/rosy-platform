@@ -280,8 +280,8 @@
 
 ## 최근 기록
 
+- 2026-10-04 · uncommitted · docs(learning): verify fresh diverse Gazebo recordings and ACT
 - 2026-10-04 · uncommitted · feat(learning): execute ACT on stored OMX demonstrations
 - 2026-10-04 · uncommitted · feat(learning): define shared artifacts and wrap OMX Episodes
 - 2026-10-04 · uncommitted · feat(learning): connect recording curation to resumable model jobs
 - 2026-10-04 · uncommitted · feat(learning): resume GPU training through qualified READY
-- 2026-10-04 · uncommitted · verify(learning): prepare recorded-video labels and accept READY candidate

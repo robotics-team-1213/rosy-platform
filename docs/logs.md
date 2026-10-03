@@ -5003,3 +5003,8 @@
 - 변경: OMX ACT 연구 학습 CLI, export snapshot/DatasetManifest/PolicyArtifact, 카메라 rig 계약 0.1.1과 미확인 camera profile의 L1 승격 거절을 추가했다. D-449는 Proposed다.
 - 증거: 저장된 Gazebo 시연 26 train/12 eval 프레임으로 CPU ACT 40 steps와 저장·재로딩 추론 완료. 영향 검사 78 passed/1 skipped. 상세는 `validation/omx-act-offline-2026-10-04.md`.
 - gate 변화: ACT MAE 0.01621 rad > 상수 기준 0.000081 rad, 목표 cluster 2로 연구 승격 거절. owner 실행·새 SIM·DEVICE/FIELD 검증 없음. 전체 목표 active.
+
+## 2026-10-04 · uncommitted · docs(learning): verify fresh diverse Gazebo recordings and ACT
+- 변경: 새 격리 Gazebo에서 6개 완료 시연/75프레임을 수집해 LeRobot export와 ACT 40 steps 고정 평가를 실제 실행했다. 상세는 `validation/omx-diverse-sim-act-2026-10-04.md`.
+- 증거: 목표 cluster 5, train 63/eval 12, native ACT exit 0/save-reload 추론 일치. 실패 녹화 2개 보존/제외. 원본·로그·산출물 zip SHA 4cacbad620a5e448c83ce3217d9044d4cafbcbd10939e6405d92d2a7a87ae16d.
+- gate 변화: 다양성 부족 해소, MAE 0.02964rad > 상수 0.00599rad로 승격 거절. ACT owner/SIM 실행·DEVICE/FIELD·전체 목표 미완료. 전용 SIM 종료, 다른 실행 변경 없음.
