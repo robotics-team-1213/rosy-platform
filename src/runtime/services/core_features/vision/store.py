@@ -115,7 +115,7 @@ class VisionFrameStore:
         self.models = ModelStatusStore()
         self.lane_perception = LanePerceptionStore()
 
-    def publish(self, data: bytes, *, captured_at: float,
+    def _store_frame(self, data: bytes, *, captured_at: float,
                 frame_id: str, source: str, width: int = 0,
                 height: int = 0, overlay: str = "none",
                 quality: Optional[dict] = None,
@@ -180,8 +180,11 @@ class VisionFrameStore:
                 self._frame = frame
             return frame
 
+    def publish(self, data: bytes, **metadata) -> VisionFrame:
+        return self._store_frame(data, **metadata)
+
     def publish_raw(self, data: bytes, **metadata) -> VisionFrame:
-        return self.publish(data, **metadata, raw=True)
+        return self._store_frame(data, **metadata, raw=True)
 
     def _snapshot(self) -> Optional[VisionFrame]:
         with self._lock:

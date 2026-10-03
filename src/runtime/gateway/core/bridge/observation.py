@@ -192,8 +192,8 @@ def camera_preview(services, msg, *, warn: Warn, raw: bool = False, source_now: 
                 raise ValueError('raw preview source image is stale or clock is unavailable')
         else:
             metadata['source_age_s'] = source_age
-        publish = services.vision.publish_raw if raw else services.vision.publish
-        publish(
+        store_frame = services.vision.publish_raw if raw else services.vision.publish
+        store_frame(
             bytes(msg.data),
             captured_at=stamp,
             frame_id=str(msg.header.frame_id),
