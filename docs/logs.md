@@ -4902,3 +4902,9 @@
 - 변경: Arbiter 전용 선점은 exact-goal cancel 후 HOLD를 유지한다. Fleet named operator 인증·감사와 bounded UDS recovery를 CellOwner owner/local-stop/journal에 연결했다. fresh post-HOLD readback과 PREPARED 포함 미해결 Action을 검사하고 잠금으로 stop·claim 경합을 직렬화한다. commit 실패는 HOLD 복원, ACK 유실은 자동 재전송 금지다.
 - 증거: RED 회귀 후 최종 관련 API/transport/owner/store/Cell/안전 구조 152 passed(43.14 s). 실제 호스트 HTTP→UDS frame→owner 연결과 SQLite commit 실패·claim/stop 경합 회귀 포함. X:/DevTemp/rosy-d427/resume/recovery-final.txt 및 docs/validation/d427-source-migration/omx-preempt-recovery-2026-10-04.md. Fleet 구조는 독립 재판정 29,264 줄이며 split·예산·+150은 유지했다.
 - gate 변화: 없음. SOURCE/호스트 후보 검증이다. 실제 UDS·ROS-SIM·CI·ARM64·DEVICE·FIELD는 NOT_RUN, motion/reset/profile enable은 실행하지 않았다.
+
+## 2026-10-04 · uncommitted · D-442 U2 publisher identity static gate
+
+- 변경: 다른 속성·alias·parameter default의 cmd_vel publisher를 추적하는 AST gate를 추가했다. 기존 D-430 검사와 정확한 legacy sensor_only 경계를 유지한다. runtime wrapper·contracts는 후속이다.
+- 증거: 초기 RED9, 독립 리뷰 역조건·local topic RED2 후 수정, 실제 RosBridge 별도 속성 writer mutation 거부 및 byte 복원. 관련18 passed, NEW0, 독립11 passed와 hostile4 검출·APPROVE. docs/validation/d427-source-migration/cmd-vel-publisher-identity-2026-10-04.md.
+- gate 변화: 없음. Task1 static/source/host만 완료이며 U2 binding·artifact·실기는 pending.
