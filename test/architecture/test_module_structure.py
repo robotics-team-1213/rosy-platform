@@ -500,12 +500,13 @@ SIZE_VERDICTS = {
         "canary watch are one short sequential flow; split the canary watch out if it grows further",
     ),
     "deploy/robot/pinky_pro/native/sync-image-layer.py": (
-        876,
+        1018,
         "split: D-388 image-layer sync — the allowlist/plan, the backup-record history (records, "
         "cleanup, crash reconcile) and the apply/pending transaction are separate seams; move the "
         "record history into a sibling module in deploy/robot/pinky_pro/native once the 2026-10-02 bench "
         "run has exercised it on a robot, so the split does not land untested on device; owner deploy, "
-        "covered by test/test_image_layer_sync.py",
+        "covered by test/test_image_layer_sync.py. Re-judged 2026-10-03 at 1018: main reached 1000 "
+        "(state-directory bootstrap) without a re-judgement, D-433 adds 18 (retired units); verdict unchanged",
     ),
     "deploy/robot/pinky_pro/native/rosy-hw-probe.py": (
         641,
