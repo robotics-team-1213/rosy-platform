@@ -5,7 +5,7 @@
 
 ## 결정 (ADR)
 
-출처와 Status: [ROSY ADR Log](../../docs/reference/ROSY%20ADR%20Log.md). 목록은 `progress.md`의 `adrs`다.
+출처와 Status: [ROSY ADR Log](../../../docs/reference/ROSY%20ADR%20Log.md). 목록은 `progress.md`의 `adrs`다.
 
 | ID | 제목 |
 |---|---|
@@ -13,10 +13,10 @@
 
 ## 계획·결과 문서
 
-- [2026-09-21-fleet-signals-integration-design.md](../../docs/plans/2026-09-21-fleet-signals-integration-design.md)
-- [2026-09-21-traffic-light-controller-research.md](../../docs/plans/2026-09-21-traffic-light-controller-research.md)
-- [2026-09-22-fleet-signals-integration.md](../../docs/plans/2026-09-22-fleet-signals-integration.md)
-- [2026-09-22-signals-acceptance-plan.md](../../docs/plans/2026-09-22-signals-acceptance-plan.md)
+- [2026-09-21-fleet-signals-integration-design.md](../../../docs/plans/2026-09-21-fleet-signals-integration-design.md)
+- [2026-09-21-traffic-light-controller-research.md](../../../docs/plans/2026-09-21-traffic-light-controller-research.md)
+- [2026-09-22-fleet-signals-integration.md](../../../docs/plans/2026-09-22-fleet-signals-integration.md)
+- [2026-09-22-signals-acceptance-plan.md](../../../docs/plans/2026-09-22-signals-acceptance-plan.md)
 
 ## 교훈 (docs/solutions)
 

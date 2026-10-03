@@ -71,7 +71,8 @@ REGROWTH_ALLOWANCE = 150
 FILE_BUDGET_WEB = 800
 WEB_SUFFIXES = {".js", ".html", ".css"}
 OPS_SUFFIXES = {".py", ".sh"}
-OPS_ROOTS = ("deploy", "tools", "firmware", "learning")  # learning: moved perception tooling (D-427 wave 1)
+OPS_ROOTS = ("deploy", "tools", "firmware", "learning",  # learning: moved perception tooling (D-427 wave 1)
+             "operations/site_devices")  # site device firmware (D-427 wave 3b)
 HARD_TIER = 1_000  # a file above this gets zero growth allowance
 
 CONTROL_SPLIT = "docs/plans/2026-09-22-control-package-split-design.md"

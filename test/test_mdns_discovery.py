@@ -21,7 +21,7 @@ def test_dock_firmware_advertises_mdns():
 
 def test_signal_firmware_advertises_mdns():
     """신호등 펌웨어가 ESPmDNS를 include하고 rosy-signal 서비스를 등록한다."""
-    sketch = ROOT / "firmware/signal/firmware/rosy_signal/rosy_signal.ino"
+    sketch = ROOT / "operations/site_devices/signal/firmware/rosy_signal/rosy_signal.ino"
     text = sketch.read_text(encoding="utf-8")
     assert "#include <ESPmDNS.h>" in text, "signal must include ESPmDNS"
     assert 'MDNS.addService("rosy-signal", "tcp", 80)' in text, (

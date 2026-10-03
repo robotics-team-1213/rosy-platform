@@ -12,6 +12,6 @@ Colcon 밖 펌웨어. `dock/`은 충전 도크, `signal/`은 신호 제어기다
 | Directory | Purpose |
 |-----------|---------|
 | `dock/` | ROSY-DOCK-001 충전 도크 (see `dock/AGENTS.md`) |
-| `signal/` | ROSY-SIGNAL-001 신호 제어 (see `signal/AGENTS.md`) |
+| (moved) | ROSY-SIGNAL-001 신호 제어는 `operations/site_devices/signal`로 옮겼다(D-427 wave 3b) |
 
 <!-- MANUAL: -->

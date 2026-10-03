@@ -44,7 +44,7 @@ Host-side pytest for deploy/robot/pinky_pro/release/motor/network contracts. The
 | `test_dashboard_drive.py` | `tools/dashboard_drive.py` against the `test_dashboard_browser.py` fixtures; skips without Playwright/Chromium |
 | `test_games_board_browser.py` | Optional Chromium regression for the D-101 laptop match board (real `games/host/preview` server + `games/web` assets); skipped unless `ROSY_RUN_BROWSER_TESTS=1` |
 | `test_dock_contract.py` | Dock firmware contract: `/status` fields, no Wi-Fi secrets in `firmware/dock/` sources |
-| `test_signal_contract.py` | Signal controller contract (ROSY-SIGNAL-001): fail-safe boot, conflict guard, token fail-closed, no secrets in `firmware/signal/` sources |
+| `test_signal_contract.py` | Signal controller contract (ROSY-SIGNAL-001): fail-safe boot, conflict guard, token fail-closed, no secrets in `operations/site_devices/signal/` sources |
 | `test_sd_personalization.py` | Pinky public identity, one-time bundle schema, checksum, and secret-redaction contracts |
 | `test_sd_writer_contract.py` | Non-destructive Windows PlanOnly, two-probe physical-disk, credential, confirmation, and writer boundary |
 

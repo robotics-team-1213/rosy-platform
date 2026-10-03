@@ -185,7 +185,7 @@ modules:
     functional_kind: host-contract
     functional: [test/test_dock_contract.py]
   - name: signal
-    path: firmware/signal
+    path: operations/site_devices/signal
     tests: [test/test_signal_contract.py, operations/vision/signal_observer/test]
     functional_kind: host-contract
     functional: [test/test_signal_contract.py, operations/vision/signal_observer/test]

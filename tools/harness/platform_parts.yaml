@@ -277,17 +277,19 @@ roots:
     wave: "3b"
     note: D-430 §1 dock firmware owns the limit-switch interlock and 0 V boot (layer 2).
     concern: safety
-  - path: firmware/signal
+  - path: operations/site_devices/signal
     part: operations
     d427_target: operations/site_devices/signal
+    legacy: firmware/signal
     wave: "3b"
     note: >-
       D-429 §2 site device owner: firmware, device contract and the driver library Fleet
       imports. Fleet stays the only command path and the signal sequence owner (D-337 §2).
     concern: control
-  - path: firmware/signal/firmware
+  - path: operations/site_devices/signal/firmware
     part: operations
     d427_target: operations/site_devices/signal/firmware
+    legacy: firmware/signal/firmware
     wave: "3b"
     note: D-430 §1 signal firmware owns the boot and supervision-loss failsafe (layer 2).
     concern: safety
