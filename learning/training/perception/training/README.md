@@ -141,3 +141,22 @@ python check_manifest.py out/model_folder      # OK lane-seg-YYYYMMDD-xxxxxxxx �
 3. 손으로 접수하려면 `rosy_ml intake store-inbox:<폴더>`(또는 폴더 경로).
 4. (선택) HF를 쓰는 팀: 폴더를 HF private model 저장소에 한 commit으로 올리고 **40자 hex SHA**를
    넘긴다. 접수는 `hf:<org/repo>@<sha>`다. 사이트 PC는 `backend: hf`일 때만 HF를 본다.
+# 모델 비교 recipe (2026-10-04)
+
+`recipes.py`는 `now2466/pinky-lane-segmentation@443f63fd4a5f6a4929775cecbda01c7b0a4557fe`의
+조명 증강·CE+Dice·AdamW 접근을 ROSY manifest에 맞춘 학습용 helper다.
+기존 `train()`의 기본 Adam/CE 동작은 유지하고, `loss_fn`과
+`optimizer_factory`를 전달한 비교 run에서만 사용한다.
+
+`LightingDataset(train_ds)`는 mask와 geometry를 보존하고 RGB 밝기/대비만 변경한다.
+`pixel_counts(train_ds)`는 255를 제외한 클래스별 학습 픽셀을 집계한다.
+`make_loss(counts, device=...)`는 weighted CE와 관측된 foreground의 masked Dice를 사용한다.
+미관측 클래스는 학습됐다고 표시하지 않으며 foreground 정답이 전혀 없으면 거절한다.
+이 helper는 배경 index 0을 사용하는 현행 자동 라벨 데이터용이다.
+
+외부 모델의 4/5-class 이름을 현행 6-class 이름으로 바꾸거나 partial-label
+background를 임의 변환하지 않는다. 클래스 개선 계획은
+[인식 클래스 설계](../../../../docs/plans/2026-10-04-perception-class-expansion-design.md)를 따른다.
+같은 데이터·세션 분할·seed·에폭으로 base16 기준/개선 recipe와 base8 소형 모델을
+비교하고, 고정 평가의 클래스별 IoU·CPU 지연·모델 크기를 함께 기록한다.
+검증 세션의 높은 수치만으로 전달하거나 주행을 활성화하지 않는다.

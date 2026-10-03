@@ -4962,3 +4962,9 @@
 - 변경: docs/validation/learning-pipeline-2026-10-04/result.md에 실제 고정 평가·READY 거부·재실행 증거를 기록했다. 모델 PC 기존 store에 신규 126프레임 평가 세트를 추가했고 기존 학습 버전·원본은 보존했다.
 - 증거: d78be8339 archive, 모델 PC 실제 관련 suite 142 passed/0 skipped. lane IoU 0.25607·mIoU 0.10458, 학습과 공유 세션 0. wall role 불일치 후보 rejected, accepted 0, 2회 watcher state 해시 동일.
 - gate 변화: LOCAL의 실제 데이터 평가·거부 경로 증거만. 통과 후보·로봇 shadow 전달·rollback·서비스 설치·DEVICE/FIELD는 미완료. LiDAR yaw 승인 기록과 원본 CameraProfile revision 미확인.
+
+## 2026-10-04 · uncommitted · feat(learning): compare supervised recipes and plan perception classes
+
+- 변경: 외부 pinky-lane-segmentation 443f63f의 조명 증강·CE+Dice·AdamW 접근을 현행 6-class manifest에 맞췄다. 기본 trainer는 유지하고 선택적 loss/optimizer hook을 추가했다. 벽·신호등·장애물 라벨과 현재 고정 object_det 계약의 차이를 설계에 기록했다.
+- 증거: 모델 PC 원본 외부 suite 17 passed(torch 2.11, 외부 pin 2.9.1 환경과 다름). 새 recipe 5 passed, 기존 training_model 19 passed. Windows 문서·학습 계약 57 passed, 3 skipped. 실제 GPU 기준 2회 학습의 고정 평가 fail을 learning-gpu-2026-10-04.md에 기록했다. 개선 recipe base16/base8 GPU 비교는 진행 중이다.
+- gate 변화: SOURCE/LOCAL 학습 recipe 및 실제 GPU 거절 증거. 고정 평가 lane IoU는 보강 기준 모델도 0.21407로 부족하다. 신규 물체/신호 상태 학습·장치 전달·주행·DEVICE/FIELD 승격 없음.

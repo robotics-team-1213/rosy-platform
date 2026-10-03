@@ -21,6 +21,17 @@
 
 수거 → catalog → autolabel → build → train → export → intake를 잇는다. 각 단계는 실행 SHA·dataset/eval hash·모델 revision·상태·오류·산출물을 기록한다. 미수거 데이터 삭제 금지, 불완전 READY 금지, 세션 비겹침을 유지한다. GPU 학습과 Isaac을 동시에 실행하지 않는다.
 
+### 사용자 추가 범위: pinky-lane-segmentation 흡수와 비교
+
+`now2466/pinky-lane-segmentation@443f63fd4a5f6a4929775cecbda01c7b0a4557fe`를
+기준으로 조명 증강·CE+Dice·AdamW 기법과 클래스 픽셀 검사를 현행 데이터 계약에 맞춘다.
+전체 외부 trainer를 복제하거나 ROS 런타임에 학습 의존성을 설치하지 않는다.
+기준 LaneUNet base16, 개선 recipe base16, 소형 recipe base8을 같은 6-class 데이터,
+세션 분할·seed·30에폭·고정 평가에서 비교한다. 모델 크기·CPU latency·클래스별 IoU도 기록한다.
+이는 모델 폭과 학습 recipe 비교이며 서로 다른 backbone 3종이라고 부르지 않는다.
+외부 4/5-class 좌우 차선·횡단보도·과속방지턱은 현재 라벨과 의미가 다르다.
+원본 라벨/가중치가 확보되기 전 임의 remap이나 해당 클래스 성능 주장을 하지 않는다.
+
 ## M3 — OMX 정책 첫 고리
 
 공통 Episode·PolicyArtifact·승격·owner 실행 계약을 후속 ADR로 구체화한다. 기존 LeRobot export에서 모방학습과 offline/SIM 평가를 연결한다. policy의 행동 후보는 기존 owner/Safety Guard를 지난다. 물리 과제 결과는 Action 성공과 독립적으로 판정한다.
