@@ -187,6 +187,7 @@
 | D-413 | ROSY는 modules·integrations·apps·profiles로 책임을 나누고 고정 셀 한 흐름부터 이전한다 |
 | D-425 | 앱·웹의 작업 소유권과 공유 경계를 고정하고 실행 조합 apps와 사용자 화면 ui를 분리한다 |
 | D-426 | Fleet–Gazebo 실제 REST/WS·Task/attempt·CORE 결과와 독립 운동/접촉 관측을 함께 검증; 두 로봇/한 Fleet부터 run별 GZ_PARTITION 격리, 진입 경계 grant 재검사·점유 해제 증거·재시작 이전 실행 대조·CORE 독립 base 명령 만료, M01–M08 반복 수용 및 증거 등급 분리 |
+| D-432 | 모든 앱·장치는 공통 발견·연결 규약을 쓰고, 개발 모드에서는 코드 없이 연결한다 |
 
 ## 계획·결과 문서
 
@@ -271,8 +272,8 @@
 
 ## 최근 기록
 
+- 2026-10-03 · uncommitted · docs: D-432 common discovery and development link mode
 - 2026-10-03 · uncommitted · fix: retain the UDS owner after a caller disconnects
 - 2026-10-03 · uncommitted · feat: read live Fleet fence on the simulation Cell owner
 - 2026-10-03 · uncommitted · refactor: D-425 Task 3 lifetime acceptance
 - 2026-10-03 · uncommitted · fix: fence Cell owner progression and terminal completion
-- 2026-10-03 · uncommitted · test: D-425 browser baseline and safety evidence
