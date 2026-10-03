@@ -61,14 +61,18 @@ def _make_candidate(root: Path) -> dict[str, str]:
 
     images = {}
     image_ids = {}
-    for index, service in enumerate(SERVICES, start=1):
-        image_id = "sha256:" + str(index) * 64
+    archive_members = {}
+    docker_manifest = []
+    for service in SERVICES:
+        config = f'{{"os": "linux", "service": "{service}"}}'.encode()
+        image_id = "sha256:" + hashlib.sha256(config).hexdigest()
         image_ids[service] = image_id
+        archive_members[f"blobs/sha256/{image_id[7:]}"] = config
+        docker_manifest.append({"Config": f"blobs/sha256/{image_id[7:]}",
+                                "RepoTags": [f"rosy-site-{service}:{COMMIT}"]})
         sbom = root / "sbom" / f"{service}.spdx"
         sbom.parent.mkdir(parents=True, exist_ok=True)
         sbom.write_text(f"SPDX {service}\n", encoding="utf-8")
-        import hashlib
-
         images[service] = {
             "reference": f"rosy-site-{service}:{COMMIT}",
             "image_id": image_id,
@@ -77,9 +81,16 @@ def _make_candidate(root: Path) -> dict[str, str]:
             "sbom_sha256": hashlib.sha256(sbom.read_bytes()).hexdigest(),
         }
     archive = root / "images.tar"
-    archive.write_bytes(b"candidate image archive")
-    import hashlib
+    import io
     import json
+    import tarfile
+
+    archive_members["manifest.json"] = json.dumps(docker_manifest).encode()
+    with tarfile.open(archive, "w") as tar:
+        for name, data in archive_members.items():
+            info = tarfile.TarInfo(name)
+            info.size = len(data)
+            tar.addfile(info, io.BytesIO(data))
 
     manifest = {
         "manifest_version": 1,

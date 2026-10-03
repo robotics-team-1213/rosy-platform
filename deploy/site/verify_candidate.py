@@ -8,6 +8,7 @@ import json
 import re
 import subprocess
 import sys
+import tarfile
 from pathlib import Path, PurePosixPath
 from typing import Callable
 
@@ -162,6 +163,129 @@ def _verify_candidate_content(candidate_dir: Path, *, manifest_bytes: bytes | No
     }
 
 
+_SHA256_DIGEST = re.compile(r"^sha256:([0-9a-f]{64})$")
+_IMAGE_MANIFEST_TYPES = {
+    "application/vnd.oci.image.manifest.v1+json",
+    "application/vnd.docker.distribution.manifest.v2+json",
+}
+_ARCHIVE_JSON_LIMIT = 4 * 1024 * 1024
+
+
+def _archive_image_ids(
+    archive_path: Path, references: dict[str, tuple[str, str]],
+) -> dict[str, dict[str, str]]:
+    """Map each service to the loaded image IDs its hash-verified archive allows.
+
+    The classic Docker image store reports the config digest as the image ID;
+    the containerd image store reports the OCI image manifest digest. Both are
+    derived here from blob bytes, and both must lead to the signed config digest.
+    Call only after the archive hash has been checked against the signed manifest.
+    """
+    try:
+        with tarfile.open(archive_path, mode="r:") as archive:
+            members: dict[str, tarfile.TarInfo | None] = {}
+            for member in archive:
+                # A repeated name makes "the member" ambiguous; never read it.
+                members[member.name] = None if member.name in members else member
+
+            def read(name: str, *, label: str) -> bytes | None:
+                if name not in members:
+                    return None
+                member = members[name]
+                if member is None or not member.isreg():
+                    raise CandidateVerificationError(f"unsafe image archive member: {label}")
+                if member.size > _ARCHIVE_JSON_LIMIT:
+                    raise CandidateVerificationError(f"image archive member too large: {label}")
+                stream = archive.extractfile(member)
+                if stream is None:
+                    raise CandidateVerificationError(f"unreadable image archive member: {label}")
+                return stream.read()
+
+            def read_json(name: str, *, label: str) -> object:
+                data = read(name, label=label)
+                if data is None:
+                    return None
+                try:
+                    return json.loads(data)
+                except (UnicodeDecodeError, json.JSONDecodeError):
+                    raise CandidateVerificationError(
+                        f"invalid image archive JSON: {label}") from None
+
+            def read_blob(hex_digest: str, *, label: str) -> bytes:
+                data = read(f"blobs/sha256/{hex_digest}", label=label)
+                if data is None:
+                    raise CandidateVerificationError(f"missing image archive blob: {label}")
+                if hashlib.sha256(data).hexdigest() != hex_digest:
+                    raise CandidateVerificationError(
+                        f"image archive blob digest mismatch: {label}")
+                return data
+
+            docker_manifest = read_json("manifest.json", label="manifest.json")
+            if not isinstance(docker_manifest, list):
+                raise CandidateVerificationError("image archive manifest.json is missing")
+            oci_index = read_json("index.json", label="index.json")
+            if oci_index is not None and not (
+                    isinstance(oci_index, dict) and isinstance(oci_index.get("manifests"), list)):
+                raise CandidateVerificationError("invalid image archive index.json")
+
+            accepted: dict[str, dict[str, str]] = {}
+            for service, (reference, image_id) in references.items():
+                entries = [entry for entry in docker_manifest
+                           if isinstance(entry, dict)
+                           and isinstance(entry.get("RepoTags"), list)
+                           and reference in entry["RepoTags"]]
+                if len(entries) != 1 or not isinstance(entries[0].get("Config"), str):
+                    raise CandidateVerificationError(
+                        f"{service} image is missing from the image archive")
+                config_path = entries[0]["Config"]
+                match = (re.fullmatch(r"blobs/sha256/([0-9a-f]{64})", config_path)
+                         or re.fullmatch(r"([0-9a-f]{64})\.json", config_path))
+                if not match or f"sha256:{match.group(1)}" != image_id:
+                    raise CandidateVerificationError(
+                        f"{service} image archive/manifest mismatch")
+                config_bytes = read(config_path, label=f"{service} config")
+                if (config_bytes is None
+                        or hashlib.sha256(config_bytes).hexdigest() != match.group(1)):
+                    raise CandidateVerificationError(
+                        f"image archive blob digest mismatch: {service} config")
+                forms = {image_id: "config"}
+
+                descriptors = []
+                for entry in (oci_index or {}).get("manifests", []):
+                    annotations = entry.get("annotations") if isinstance(entry, dict) else None
+                    if not isinstance(annotations, dict):
+                        continue
+                    names = {annotations.get("io.containerd.image.name"),
+                             annotations.get("org.opencontainers.image.ref.name")}
+                    if reference in names or f"docker.io/library/{reference}" in names:
+                        descriptors.append(entry)
+                if len(descriptors) > 1:
+                    raise CandidateVerificationError(
+                        f"{service} image archive index is ambiguous")
+                if descriptors:
+                    descriptor = descriptors[0]
+                    digest = _SHA256_DIGEST.fullmatch(str(descriptor.get("digest")))
+                    if not digest or descriptor.get("mediaType") not in _IMAGE_MANIFEST_TYPES:
+                        raise CandidateVerificationError(
+                            f"{service} image archive index entry is unsupported")
+                    blob = read_blob(digest.group(1), label=f"{service} image manifest")
+                    try:
+                        image_manifest = json.loads(blob)
+                    except (UnicodeDecodeError, json.JSONDecodeError):
+                        raise CandidateVerificationError(
+                            f"invalid image archive JSON: {service} image manifest") from None
+                    config = (image_manifest.get("config")
+                              if isinstance(image_manifest, dict) else None)
+                    if not isinstance(config, dict) or config.get("digest") != image_id:
+                        raise CandidateVerificationError(
+                            f"{service} image archive/manifest mismatch")
+                    forms[f"sha256:{digest.group(1)}"] = "oci-manifest"
+                accepted[service] = forms
+            return accepted
+    except (OSError, tarfile.TarError):
+        raise CandidateVerificationError("image archive is unreadable") from None
+
+
 def verify_candidate(
     candidate_dir: Path, *, trusted_key_id: str, trusted_public_key: Path,
     runner: Runner = subprocess.run, inspect_loaded_images: bool = True,
@@ -187,6 +311,8 @@ def verify_candidate(
     except CandidateSignatureError as error:
         raise CandidateVerificationError(str(error)) from error
 
+    # Content check verifies the images.tar hash against the signed manifest;
+    # the archive is parsed only after that check.
     summary = _verify_candidate_content(root, manifest_bytes=manifest_bytes)
     if not inspect_loaded_images:
         return {
@@ -196,11 +322,18 @@ def verify_candidate(
             "image_archive_sha256": summary["image_archive_sha256"],
             "manifest_image_ids": summary["image_ids"],
         }
+    archive_ids = _archive_image_ids(
+        root / "images.tar",
+        {service: (summary["manifest"]["images"][service]["reference"],
+                   summary["manifest"]["images"][service]["image_id"])
+         for service in SERVICES},
+    )
     image_ids: dict[str, str] = {}
+    id_forms: dict[str, str] = {}
     for service in SERVICES:
         row = summary["manifest"]["images"][service]
         reference = row["reference"]
-        expected_id = row["image_id"]
+        accepted = archive_ids[service]
         try:
             result = runner(
                 ["docker", "image", "inspect", "--format",
@@ -211,13 +344,15 @@ def verify_candidate(
             raise CandidateVerificationError(
                 f"docker image inspection failed for {service}") from None
         identity = result.stdout.strip().split("|")
-        if len(identity) != 3 or identity[0] != expected_id:
+        if len(identity) != 3 or identity[0] not in accepted:
             raise CandidateVerificationError(f"{service} loaded image ID mismatch")
         if identity[1:] != ["linux", "amd64"]:
             raise CandidateVerificationError(f"{service} loaded platform mismatch")
         image_ids[service] = identity[0]
+        id_forms[service] = accepted[identity[0]]
 
     summary["image_ids"] = image_ids
+    summary["id_form"] = id_forms
     summary.pop("manifest")
     return summary
 

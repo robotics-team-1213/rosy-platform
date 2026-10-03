@@ -704,7 +704,13 @@ Set the image tag and private config paths in the operator-managed env file,
 then run Compose with `--no-build` so the host uses the exact loaded candidate.
 The first verifier invocation authenticates the exact manifest and checks the
 packaged files, SBOMs, and image archive before load. The second also compares
-the loaded Fleet, Vision, and proxy image IDs and platforms. Do not treat this
+the loaded Fleet, Vision, and proxy image IDs and platforms. A host on the
+classic Docker image store reports the config digest recorded in
+`release.json`; a host on the containerd image store reports the OCI image
+manifest digest. The verifier accepts the second form only when that manifest
+blob, read from the hash-checked `images.tar`, hashes to the reported digest
+and names the signed config digest. The PASS line records `id_form` per
+service (`config` or `oci-manifest`). Do not treat this
 workstation-built candidate as field accepted until the target host's identity,
 loaded image IDs, GPU, phone, CORE robot, and recovery checks are recorded.
 

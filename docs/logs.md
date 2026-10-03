@@ -4817,3 +4817,10 @@
 - 증거: 현재 parser·CLI·roster·NSS/Compose·user discovery 소스, 운영 NSS-only 설치 receipt, Fleet 재시작 후 S21 JPEG readback. 실제 주소·자격 비밀은 기록하지 않았다.
 - gate 변화: 없음. 레거시 발견 conflict 정리·관제 PC 재부팅·outbound FleetAgent·물리 marker commissioning 완료를 이 문서로 주장하지 않는다.
 - 검증: frontmatter/claims validator와 독립 문서 grounding, 문서 계약·harness 검사로 기록 내용과 탐색 가능성을 확인한다.
+
+## 2026-10-04 · uncommitted · site(D-437): verifier accepts the containerd image ID form
+- 변경: `deploy/site/verify_candidate.py` 전체 검증이 해시 확인을 마친 `images.tar`에서 서비스별 config blob과 `index.json`이 가리키는 OCI manifest blob을 읽어(링크 거부, 디스크 추출 없음) 바이트 해시를 다시 계산하고, manifest의 `config.digest`가 서명된 `image_id`와 같을 때만 manifest digest도 받는다. summary에 `id_form`(`config`/`oci-manifest`). `index.json`이 없는 archive는 config 형태만. 검증기·서명 시험의 가짜 archive를 실제 tar로 바꾸고 containerd·위조 경우 시험 추가. D-437 Consequences, `deploy/site/README.md` 검증 절
+- 증거: 사이트 후보·검증·서명·fetch·workflow 시험과 `test_no_secrets_in_tracked_files`, harness lint. 현장 호스트에서 다시 돌린 것은 아님
+- gate 변화: 없음(호스트 결과). containerd image store 사이트 호스트의 전체 검증 재실행이 남았다
+- 결정: D-437 Consequences 보강(manifest 형식 변경 없음)
+- 교훈: Docker image ID는 image store마다 다르다. 서명된 config digest에서 출발해 archive 안 blob 바이트로 다른 형태를 이어 붙여야 보안을 낮추지 않고 두 store를 모두 받을 수 있다

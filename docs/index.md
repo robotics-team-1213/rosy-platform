@@ -274,8 +274,8 @@
 
 ## 최근 기록
 
+- 2026-10-04 · uncommitted · site(D-437): verifier accepts the containerd image ID form
 - 2026-10-03 · uncommitted · docs: Fleet deployment preflight lessons
 - 2026-10-03 · uncommitted · site(D-437): security review fixes for CI-built site candidates
 - 2026-10-03 · uncommitted · docs: D-437 GitHub-hosted builds, offline local signing
 - 2026-10-03 · uncommitted · perception(D-356): review fixes for the local run log
-- 2026-10-03 · uncommitted · perception(D-356): experiment tracking defaults to local run log + TensorBoard

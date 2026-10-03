@@ -2,7 +2,9 @@ import base64
 import hashlib
 import importlib
 import json
+import io
 import subprocess
+import tarfile
 from types import SimpleNamespace
 
 import pytest
@@ -17,6 +19,84 @@ TEST_KEY_ID = "rosy-site-test-1"
 
 def _load_verifier():
     return importlib.import_module("deploy.site.verify_candidate")
+
+
+def _sha(data: bytes) -> str:
+    return "sha256:" + hashlib.sha256(data).hexdigest()
+
+
+def _image_blobs(service: str, config_digest: str | None = None):
+    """Config blob and an OCI image manifest blob that names a config digest."""
+    config = json.dumps({"architecture": "amd64", "os": "linux", "service": service}).encode()
+    image_manifest = json.dumps({
+        "schemaVersion": 2,
+        "mediaType": "application/vnd.oci.image.manifest.v1+json",
+        "config": {"mediaType": "application/vnd.oci.image.config.v1+json",
+                   "digest": config_digest or _sha(config), "size": len(config)},
+        "layers": [],
+    }).encode()
+    return config, image_manifest
+
+
+def _write_images_tar(path, *, with_index=True, overrides=None):
+    """Write a docker-save shaped archive; return {service: (config_id, manifest_id)}.
+
+    overrides[service] may set "manifest" (bytes stored as the manifest blob) or
+    "index_digest" (digest written into index.json) to build bad archives.
+    """
+    overrides = overrides or {}
+    files: dict[str, bytes] = {}
+    docker_manifest, index_rows, ids = [], [], {}
+    for service in SERVICES:
+        reference = f"rosy-site-{service}:{COMMIT}"
+        config, image_manifest = _image_blobs(service)
+        config_id, manifest_id = _sha(config), _sha(image_manifest)
+        ids[service] = (config_id, manifest_id)
+        override = overrides.get(service, {})
+        files[f"blobs/sha256/{config_id[7:]}"] = config
+        index_digest = override.get("index_digest", manifest_id)
+        files[f"blobs/sha256/{index_digest[7:]}"] = override.get("manifest", image_manifest)
+        docker_manifest.append({"Config": f"blobs/sha256/{config_id[7:]}",
+                                "RepoTags": [reference], "Layers": []})
+        index_rows.append({
+            "mediaType": "application/vnd.oci.image.manifest.v1+json",
+            "digest": index_digest,
+            "size": len(image_manifest),
+            "annotations": {"io.containerd.image.name": f"docker.io/library/{reference}",
+                            "org.opencontainers.image.ref.name": COMMIT},
+        })
+    files["manifest.json"] = json.dumps(docker_manifest).encode()
+    if with_index:
+        files["index.json"] = json.dumps({"schemaVersion": 2, "manifests": index_rows}).encode()
+    with tarfile.open(path, "w") as archive:
+        for name, data in files.items():
+            info = tarfile.TarInfo(name)
+            info.size = len(data)
+            archive.addfile(info, io.BytesIO(data))
+    return ids
+
+
+def _reseal_archive(root):
+    """Record the rewritten archive hash, as a re-signed manifest would."""
+    manifest_path = root / "release.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["image_archive_sha256"] = hashlib.sha256(
+        (root / "images.tar").read_bytes()).hexdigest()
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+
+def _verify_with(candidate, loaded_ids):
+    root, _, _, trusted_key = candidate
+
+    def runner(args, **kwargs):
+        if "pkeyutl" in args:
+            return SimpleNamespace(returncode=0, stdout="")
+        service = args[-1].split(":", 1)[0].removeprefix("rosy-site-")
+        return SimpleNamespace(stdout=f"{loaded_ids[service]}|linux|amd64\n")
+
+    return _load_verifier().verify_candidate(
+        root, trusted_key_id=TEST_KEY_ID, trusted_public_key=trusted_key, runner=runner,
+    )
 
 
 @pytest.fixture
@@ -37,10 +117,12 @@ def candidate(tmp_path):
     for name in DOC_FILES:
         (root / name).write_text(f"candidate:{name}\n", encoding="utf-8")
 
+    archive = root / "images.tar"
+    archive_ids = _write_images_tar(archive)
     image_rows = {}
     image_ids = {}
-    for offset, service in enumerate(SERVICES, start=1):
-        image_id = "sha256:" + str(offset) * 64
+    for service in SERVICES:
+        image_id = archive_ids[service][0]
         image_ids[service] = image_id
         sbom_path = sbom_dir / f"{service}.spdx"
         sbom_path.write_text(f"SPDX for {service}\n", encoding="utf-8")
@@ -52,8 +134,6 @@ def candidate(tmp_path):
             "sbom_sha256": hashlib.sha256(sbom_path.read_bytes()).hexdigest(),
         }
 
-    archive = root / "images.tar"
-    archive.write_bytes(b"candidate-image-archive")
     signature = {
         "signature_version": 1,
         "signing_key_id": TEST_KEY_ID,
@@ -240,3 +320,99 @@ def test_rejects_signature_from_untrusted_key_id(candidate):
             root, trusted_key_id="untrusted-site-key", trusted_public_key=trusted_key,
             runner=candidate[1],
         )
+
+
+def test_classic_store_config_digest_id_passes(candidate):
+    image_ids = candidate[2]
+    summary = _verify_with(candidate, image_ids)
+
+    assert summary["image_ids"] == image_ids
+    assert summary["id_form"] == {service: "config" for service in SERVICES}
+
+
+def test_containerd_store_oci_manifest_digest_id_passes(candidate):
+    root = candidate[0]
+    ids = _write_images_tar(root / "images.tar")
+    _reseal_archive(root)
+    loaded = {service: ids[service][1] for service in SERVICES}
+
+    summary = _verify_with(candidate, loaded)
+
+    assert summary["image_ids"] == loaded
+    assert summary["id_form"] == {service: "oci-manifest" for service in SERVICES}
+
+
+def test_archive_without_index_accepts_only_config_form(candidate):
+    root = candidate[0]
+    ids = _write_images_tar(root / "images.tar", with_index=False)
+    _reseal_archive(root)
+
+    assert _verify_with(candidate, candidate[2])["id_form"]["fleet"] == "config"
+    loaded = {service: ids[service][1] for service in SERVICES}
+    with pytest.raises(ValueError, match="fleet loaded image ID mismatch"):
+        _verify_with(candidate, loaded)
+
+
+def test_loaded_id_equal_to_another_archive_digest_fails(candidate):
+    root = candidate[0]
+    ids = _write_images_tar(root / "images.tar")
+    _reseal_archive(root)
+    loaded = dict(candidate[2])
+    loaded["vision"] = ids["fleet"][1]
+
+    with pytest.raises(ValueError, match="vision loaded image ID mismatch"):
+        _verify_with(candidate, loaded)
+
+
+def test_index_manifest_whose_config_is_not_the_signed_image_id_fails(candidate):
+    root = candidate[0]
+    _, other = _image_blobs("fleet", config_digest="sha256:" + "e" * 64)
+    _write_images_tar(root / "images.tar", overrides={
+        "fleet": {"manifest": other, "index_digest": _sha(other)}})
+    _reseal_archive(root)
+
+    with pytest.raises(ValueError, match="fleet image archive/manifest mismatch"):
+        _verify_with(candidate, candidate[2])
+
+
+def test_manifest_blob_not_matching_index_digest_fails(candidate):
+    root = candidate[0]
+    _, tampered = _image_blobs("proxy", config_digest="sha256:" + "d" * 64)
+    _write_images_tar(root / "images.tar", overrides={"proxy": {"manifest": tampered}})
+    _reseal_archive(root)
+
+    with pytest.raises(ValueError, match="blob digest mismatch: proxy image manifest"):
+        _verify_with(candidate, candidate[2])
+
+
+def test_archive_member_link_is_rejected(candidate):
+    root = candidate[0]
+    archive = root / "images.tar"
+    data = archive.read_bytes()
+    with tarfile.open(archive, "w") as tar:
+        with tarfile.open(fileobj=io.BytesIO(data)) as source:
+            for member in source:
+                if member.name == "index.json":
+                    link = tarfile.TarInfo("index.json")
+                    link.type = tarfile.SYMTYPE
+                    link.linkname = "manifest.json"
+                    tar.addfile(link)
+                else:
+                    tar.addfile(member, source.extractfile(member))
+    _reseal_archive(root)
+
+    with pytest.raises(ValueError, match="unsafe image archive member: index.json"):
+        _verify_with(candidate, candidate[2])
+
+
+def test_archive_is_not_parsed_before_its_signed_hash_matches(candidate, monkeypatch):
+    root = candidate[0]
+    verifier = _load_verifier()
+    (root / "images.tar").write_bytes(b"not a tar")
+
+    def must_not_parse(*args, **kwargs):
+        raise AssertionError("archive parsed before hash check")
+
+    monkeypatch.setattr(verifier, "_archive_image_ids", must_not_parse)
+    with pytest.raises(ValueError, match="image archive hash mismatch"):
+        _verify(candidate)

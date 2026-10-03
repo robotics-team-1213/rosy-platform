@@ -74,6 +74,7 @@
 - GitHub 쓰기 권한만 가진 사람도 Release 자산(`release.json`, 조각, `SHA256SUMS`, 이미 붙은 `release.json.sig`)을 바꾸거나 지울 수 있다. 바뀐 `release.json`을 운영자가 서명하지 않도록 기대 해시와 출처 증명 확인을 서명 전에 요구한다. 서명 뒤에 자산을 바꾸면 호스트 검증기가 서명이나 파일 해시 단계에서 거부한다. 쓰기 권한으로는 서명을 지우거나 후보를 지워 배포를 막을 수는 있지만, 호스트가 받아들이는 후보를 만들 수는 없다.
 - 로봇 자동 갱신(D-412, `rosy_auto_update.py`)은 `releases?per_page=20` 한 쪽에서 prerelease까지 포함해 `payload-*`를 찾는다. `site-*` prerelease가 쌓이면 최신 payload가 그 쪽 밖으로 밀릴 수 있다. 그래서 release job은 새 prerelease를 만든 뒤 옛 `site-*` 릴리스와 태그를 지우고 최신 3개만 남긴다. 이름이 `^site-[0-9a-f]{12}$`와 정확히 맞는 것만 지우고, 다른 릴리스는 건드리지 않는다.
 - 출처 증명의 source digest는 빌드한 커밋이 아니라 dispatch한 ref의 끝 커밋이다. 빌드한 커밋은 manifest의 `source_commit`과 서명기의 `--expected-commit`으로 묶이고, workflow는 그 커밋이 dispatch 끝 커밋의 조상일 때만 빌드한다.
+- 이미지 ID는 두 형태다(2026-10-04 현장 실패로 확인). `release.json`의 `image_id`는 runner(classic image store)가 기록한 config digest다. containerd image store를 쓰는 호스트는 `docker image load` 뒤 `{{.Id}}`로 OCI image manifest digest를 돌려준다. 전체 검증기는 서명된 해시와 맞은 `images.tar` 안에서 각 이미지의 config blob과 manifest blob을 읽어 바이트 해시를 다시 계산하고, manifest의 `config.digest`가 서명된 `image_id`와 같을 때만 그 manifest digest도 받아들인다. 결과 summary의 `id_form`이 `config`인지 `oci-manifest`인지 남긴다. `index.json`이 없는 옛 archive는 config 형태만 받는다. manifest 형식과 이미 서명된 후보는 바뀌지 않는다.
 - 후속 작업: 로봇 쪽 조회가 `payload-*`를 찾을 때까지 쪽을 넘기거나 prerelease를 거르도록 고친다. 이 브랜치에서는 로봇 코드를 바꾸지 않았다. 그 전까지는 위 정리가 유일한 방어다. 사이트 후보 외의 다른 릴리스가 20개를 넘게 쌓여도 같은 문제가 생긴다.
 
 ### Validation
