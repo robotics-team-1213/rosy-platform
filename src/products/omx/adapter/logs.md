@@ -327,3 +327,9 @@
 - Evidence: installed default load reproduced FileNotFoundError before the fix; prefix/ament path tests failed before the resolver change. OMX/owner/replay regression: 365 passed / 5 skipped. Wheel built from an X: source copy and force-installed into the isolated venv; actual build_cell_owner initialized from site-packages with injected ROS ports, matched the pinned profile geometry and kept local stop closed. Removing the installed asset caused FileNotFoundError and was restored. pip check and production flake8 passed.
 - Review: independent 29 passed; no Critical/Important findings. Final quick tier plus install-path tests: 100 passed / 26 existing warnings. Installed YAML equals source byte-for-byte.
 - Gate: SOURCE/LOCAL only. This closes host installed-resource composition, not Jazzy/colcon, live ROS timer, Fleet fencing/seat integration, thin-sheet geometry or the full two-layer/two-pallet vendor Gazebo acceptance.
+
+
+## 2026-10-03 · uncommitted · fix: retain the UDS owner after a caller disconnects
+- Change: real Linux Fleet HTTP-to-UDS tests derive peer UID from SO_PEERCRED, assert 0660 and wait for identity readback. A closed caller now ends only its connection; the owner and durable journal remain live without replay.
+- Evidence: deterministic disconnect regression failed with BrokenPipeError before fix 6fab54172. Windows focused 44 passed / 2 skipped; adapter/owner/readback 377 passed / 7 skipped; production flake8 passed. Broad Linux ROS 28 passed / 2 failed, no server thread exception. Existing UDS .5 s timeout also failed on main; slow ROS feedback freshness remains unresolved.
+- Gate: partial Linux transport proof only; broad Linux suite is not green. See docs/validation/cell-fleet-uds-2026-10-03/README.md. G7/G9, ROS Cell composition, thin sheets and full two-layer/two-pallet Gazebo acceptance remain open. No deploy, credential registration, physical enablement or push.

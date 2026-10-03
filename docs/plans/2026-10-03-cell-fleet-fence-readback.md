@@ -31,3 +31,5 @@
 - Append evidence to deploy/Fleet/docs logs and D-413 tracking without promoting ROS-SIM. Commit only owned paths, merge latest main, rerun affected checks and fast-forward clean local main.
 
 **Status:** SOURCE/LOCAL implemented. Readback18 passed; independent48 passed/1 skipped plus final18. Actual loopback HTTP is covered with owner API and fake UDS/ROS ports; live ROS/UDS and full G7 acceptance remain open. Agent wheel and pip check passed. Detailed evidence is recorded in module logs.
+
+**Linux follow-up (2026-10-03):** The additional real-UDS branch now verifies kernel UID, fixed socket permissions and live identity readiness during actual Fleet HTTP rearm/stop. Caller disconnect is regression-proven and repaired by `6fab54172`. This is threaded same-process transport evidence with injected Cell ROS ports; broad ROS run remains 28 passed / 2 failed. [Evidence and limitations](../validation/cell-fleet-uds-2026-10-03/README.md).
