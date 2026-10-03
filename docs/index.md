@@ -260,6 +260,7 @@
 - [2026-10-01-pilot-omx-gazebo-practice.md](plans/2026-10-01-pilot-omx-gazebo-practice.md)
 - [2026-10-02-platform-architecture-v02-migration.md](plans/2026-10-02-platform-architecture-v02-migration.md)
 - [2026-10-03-app-ownership-shared-transport-and-layout-migration.md](plans/2026-10-03-app-ownership-shared-transport-and-layout-migration.md)
+- [2026-10-03-pi-ncnn-opencv-implementation.md](plans/2026-10-03-pi-ncnn-opencv-implementation.md)
 
 ## 교훈 (docs/solutions)
 
@@ -272,8 +273,8 @@
 
 ## 최근 기록
 
+- 2026-10-03 · uncommitted · docs(plan): schedule D-431 NCNN migration
 - 2026-10-03 · uncommitted · docs(adr): propose D-431 NCNN inference with OpenCV
 - 2026-10-03 · uncommitted · fix: retain the UDS owner after a caller disconnects
 - 2026-10-03 · uncommitted · feat: read live Fleet fence on the simulation Cell owner
 - 2026-10-03 · uncommitted · refactor: D-425 Task 3 lifetime acceptance
-- 2026-10-03 · uncommitted · fix: fence Cell owner progression and terminal completion

@@ -1,6 +1,6 @@
 ## D-431 라즈베리파이 YOLO 추론은 NCNN을 목표로 하고 OpenCV 영상 처리와 학습 모델의 의미를 유지한다
 
-**Status:** Proposed (2026-10-03). 사용자 요청에 따른 조사와 전환 결정안이다. 구현·기기 설치·실기 수용은 미완료이며 기존 운영 모델은 이 문서만으로 바뀌지 않는다.
+**Status:** Accepted (2026-10-03, 사용자 승인 — 전환 방향을 실행 계획에 반영). 설계 결정의 수용이며 구현·기기 설치·실기 수용은 미완료다. 기존 운영 모델은 이 문서만으로 바뀌지 않는다.
 
 ### Context
 
@@ -30,7 +30,11 @@ OpenCV는 `detector.py:letterbox()`의 크기 조정, `lane_mask.py:preprocess()
 
 ### Consequences
 
-학습 모델을 재사용하고 영상 처리 코드를 유지하면서 추론 엔진을 바꿀 수 있다. 다만 export 변경만으로 완료되지 않으며 backend 어댑터·manifest·공급망·수용 gate가 필요하다. NCNN 형식 자체는 속도·정확도·무오류를 보장하지 않는다. 이 ADR이 수용되면 D-423 §3.3의 YOLO 배포 형식 목표를 부분 개정하며 나머지 작업별 모델·서명·슬롯 계약은 보존한다. 현재는 Proposed이므로 기존 ADR을 Superseded로 바꾸지 않는다.
+학습 모델을 재사용하고 영상 처리 코드를 유지하면서 추론 엔진을 바꿀 수 있다. 다만 export 변경만으로 완료되지 않으며 backend 어댑터·manifest·공급망·수용 gate가 필요하다. NCNN 형식 자체는 속도·정확도·무오류를 보장하지 않는다. D-423 §3.3의 YOLO 배포 형식 목표를 부분 개정하며 나머지 작업별 모델·서명·슬롯 계약은 보존한다. D-423 전체를 Superseded로 바꾸지 않는다.
+
+### Implementation plan
+
+[2026-10-03 Pi NCNN/OpenCV 실행 계획](../plans/2026-10-03-pi-ncnn-opencv-implementation.md)을 따른다. 물체 검출을 먼저 전환하고 자체 차선 모델은 별도 검증한다.
 
 ### Sources and verification
 

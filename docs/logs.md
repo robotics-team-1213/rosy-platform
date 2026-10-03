@@ -4738,3 +4738,10 @@
 - Evidence: official Ultralytics NCNN/Pi and Tencent OpenCV interoperability references; current ONNX-only exporter/loader and cv2 source inspected.
 - Gate: documentation only. No actual trained-model NCNN conversion, ARM64 installation or device inference performed.
 - Validation: network/harness contracts 82 passed, 1 history-lint test deselected; standalone full harness lint 0 errors / 26 existing staleness warnings. Initial new-record encoding failure corrected and regenerated before final checks.
+
+
+## 2026-10-03 · uncommitted · docs(plan): schedule D-431 NCNN migration
+- Change: user-approved D-431 architecture marked Accepted; T0-T7 plan registered for model/baseline, manifest, adapter, export/parity, delivery/rollback, ARM64 dependency, device acceptance, and independent lane-model evaluation.
+- Evidence: D-431 and current exporter/loader/intake/deploy readers inspected; document contract checks and harness lint run before commit.
+- Gate: plan only; implementation and device/field validation remain pending. Existing OpenCV processing and ONNX rollback remain part of the plan.
+- Validation: final document contracts 82 passed / 1 history-lint test deselected; standalone full harness lint 0 errors / 26 existing warnings.
