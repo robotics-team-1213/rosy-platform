@@ -475,3 +475,8 @@
 - 근거: D-359 US-009. protocol RobotMode에 SAFE_STOP이 없다.
 - 증거: 2026-10-03 Windows. test_enum_labels.py와 test_operator_copy.py가 콘솔 묶음 240 passed 안에 포함된다. SAFE_STOP은 MODE_LABEL 키가 아니다.
 - gate 변화: 없음.
+
+## 2026-10-03 · uncommitted · refactor: D-425 page lifetime mechanics
+- 변경: caller/page signal composition과 page epoch를 추가. interval·listener·subscription·one-shot timeout/wait 정리, 늦은 async 결과와 이전 동적 handler 거절. 복귀 조회는 문서가 제공하며 공통 계층에 명령 replay·권한/storage 정책을 넣지 않음.
+- 증거: request/scope/page-scope/Fleet/authorization/poll gate Node 56 passed. 현재 자산 bytes를 확인한 X: 사본 Chromium 14 passed; disposal 변이 8 red, raw camera/Vision guard 변이 4 red, bytes 복원 후 14 green.
+- gate 변화: SOURCE/LOCAL 수명 계약 강화. installed-only·DEVICE/FIELD는 consumer 단위의 후속 gate.

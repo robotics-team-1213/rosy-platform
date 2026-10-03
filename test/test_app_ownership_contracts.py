@@ -192,6 +192,7 @@ import fs from 'node:fs';
 import {pathToFileURL} from 'node:url';
 const [source, name, path, owner, fleetModule] = JSON.parse(process.argv[1]);
 const {createFleetClient} = await import(pathToFileURL(fleetModule));
+const {createPageScope} = await import(new URL('./scope.js', pathToFileURL(fleetModule)));
 const text = fs.readFileSync(source, 'utf8');
 const match = text.match(new RegExp('(?:export )?async function ' + name + '\\([^]*?\\n\\}'));
 if (!match) throw new Error('request function not found');
@@ -204,12 +205,14 @@ const fetch = async (path, options) => {
 const token = owner.toLowerCase() + '-test-token';
 const noop = () => {};
 const fleetClient = createFleetClient({origin: 'https://plane.test', credential: () => token, fetchImpl: fetch});
+const pageScope = createPageScope({events: new EventTarget()});
 const request = new Function('fetch', 'authHeaders', 'session', 'classifyOperation',
-  'window', 'CustomEvent', 'httpError', 'markLocked', 'markUnlocked', 'fleetClient',
+  'window', 'CustomEvent', 'httpError', 'markLocked', 'markUnlocked', 'fleetClient', 'pageScope',
   'return (' + match[0].replace(/^export /, '') + ');')(
   fetch, () => ({Authorization: 'Bearer ' + token}), {token}, () => null,
-  {dispatchEvent: noop}, class {}, () => new Error('unexpected HTTP failure'), noop, noop, fleetClient);
+  {dispatchEvent: noop}, class {}, () => new Error('unexpected HTTP failure'), noop, noop, fleetClient, pageScope);
 await request(path);
+pageScope.dispose();
 console.log(JSON.stringify(calls));
 """
     data = json.dumps([str(ROOT / source), function, path, owner,

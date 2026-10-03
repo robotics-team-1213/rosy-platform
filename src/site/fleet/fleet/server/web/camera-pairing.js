@@ -126,7 +126,7 @@ export function credentialActions(row, manage) {
 
 // dialogs는 /common/ui.js의 { openLiveDialog, confirmIrreversible }다. 셸(console.js)이 넘긴다 —
 // 이 파일은 node 시험이 import하므로 DOM 모듈을 정적으로 끌어오지 않는다.
-export function createCameraPairingPanel({ headers, identity, locked, log, dialogs }) {
+export function createCameraPairingPanel({ scope, headers, identity, locked, log, dialogs }) {
   const el = (id) => document.getElementById(id);
   const state = {
     pending: null, pendingAt: 0, credentials: null, ticks: 0,
@@ -135,16 +135,22 @@ export function createCameraPairingPanel({ headers, identity, locked, log, dialo
 
   // 분류(detail.code/attempts_left)를 잃지 않으려고 셸의 call() 대신 쓴다.
   async function call(path, { method = "GET", body } = {}) {
+    const life = scope.capture();
+    life.check();
     const init = { method, headers: { ...headers() } };
     if (body !== undefined) {
       init.headers["Content-Type"] = "application/json";
       init.body = JSON.stringify(body);
     }
-    const resp = await fetch(path, init);
+    const resp = await fetch(path, {...init, signal: life.signal});
+    life.check();
     let payload = null;
     try {
       payload = await resp.json();
+      life.check();
     } catch (_err) {
+      life.check();
+      if (_err.name === "AbortError") throw _err;
       payload = null;
     }
     if (!resp.ok) {
@@ -186,7 +192,7 @@ export function createCameraPairingPanel({ headers, identity, locked, log, dialo
       node.disabled = true;
       node.setAttribute("reason", reason);
     }
-    node.addEventListener("click", onClick);
+    node.addEventListener("click", scope.guard(onClick));
     return node;
   }
 
@@ -343,6 +349,8 @@ export function createCameraPairingPanel({ headers, identity, locked, log, dialo
   }
 
   async function submitApprove() {
+    const life = scope.capture();
+    life.check();
     const row = state.target;
     if (state.busy || !row) return;
     const code = normalizePairingCode(el("camera-approve-code").value);
@@ -357,11 +365,13 @@ export function createCameraPairingPanel({ headers, identity, locked, log, dialo
       const result = await call(`${BASE}/requests/${encodeURIComponent(row.request_id)}/approve`, {
         method: "POST", body: { code, source_id: source },
       });
+      life.check();
       el("camera-approve-code").value = "";
       el("camera-approve-dialog")?.close?.();
       showApproved(result, row);
       log?.(`카메라 연결 승인 ${result.source_id} (${result.credential_id})`);
     } catch (err) {
+      if (err.name === "AbortError") return;
       const detail = err?.detail || {};
       el("camera-approve-code").value = "";
       lines(el("camera-approve-error"), messageFor(detail), true);
@@ -373,11 +383,14 @@ export function createCameraPairingPanel({ headers, identity, locked, log, dialo
         showResult(messageFor(detail), true, detail.code);
       }
     } finally {
-      state.busy = false;
-      submit.disabled = false;
-      submit.removeAttribute("reason");
+      if (life.current()) {
+        state.busy = false;
+        submit.disabled = false;
+        submit.removeAttribute("reason");
+      }
     }
     await refresh({ credentials: true });
+    life.check();
   }
 
   function showApproved(result, row) {
@@ -392,41 +405,53 @@ export function createCameraPairingPanel({ headers, identity, locked, log, dialo
   }
 
   async function reject(row) {
+    const life = scope.capture();
+    life.check();
     const confirmed = await dialogs.confirmIrreversible({
       message: `"${row.device_label}" 카메라 연결 요청을 거절할까요? 그 폰은 처음부터 다시 요청해야 합니다.`,
       action: "거절",
       opener: () => el("camera-requests")?.querySelector(
         `li[data-request-id="${CSS.escape(row.request_id)}"] ui-button[data-action="reject"]`),
     });
+    life.check();
     if (!confirmed) return;
     try {
       await call(`${BASE}/requests/${encodeURIComponent(row.request_id)}/reject`, { method: "POST" });
+      life.check();
       showResult([`${row.device_label} 연결 요청을 거절했습니다.`], false);
       log?.(`카메라 연결 요청 거절 ${row.device_label}`);
     } catch (err) {
+      if (err.name === "AbortError") return;
       const detail = err?.detail || {};
       showResult(messageFor(detail), true, detail.code);
     }
     await refresh();
+    life.check();
   }
 
   async function revoke(row) {
+    const life = scope.capture();
+    life.check();
     const confirmed = await dialogs.confirmIrreversible({
       message: `"${row.credential_id}" 카메라 자격(${row.source_id})을 폐기할까요? 그 폰은 5초 안에 송신이 끊기고, 다시 쓰려면 새로 연결 승인을 받아야 합니다.`,
       action: "폐기",
       opener: () => el("camera-credentials")?.querySelector(
         `li[data-credential-id="${CSS.escape(row.credential_id)}"] ui-button[data-action="revoke"]`),
     });
+    life.check();
     if (!confirmed) return;
     try {
       await call(`${BASE}/credentials/${encodeURIComponent(row.credential_id)}/revoke`, { method: "POST" });
+      life.check();
       showResult([`${row.source_id} 자격 ${row.credential_id}을(를) 폐기했습니다.`], false);
       log?.(`카메라 자격 폐기 ${row.credential_id}`);
     } catch (err) {
+      if (err.name === "AbortError") return;
       const detail = err?.detail || {};
       showResult(messageFor(detail), true, detail.code);
     }
     await refresh({ credentials: true });
+    life.check();
   }
 
   // 페어링이 꺼진 Fleet(라우트 없음 404)은 다음 resetPolling()(로그인) 전까지 묻지 않는다.
@@ -439,17 +464,24 @@ export function createCameraPairingPanel({ headers, identity, locked, log, dialo
   }
 
   async function refresh({ credentials = false } = {}) {
+    const life = scope.capture();
+    life.check();
     if (inFlight || !gate.due()) return;
     inFlight = true;
     try {
-      state.pending = await call(`${BASE}/pending`);
+      const pending = await call(`${BASE}/pending`);
+      life.check();
+      state.pending = pending;
       state.pendingAt = Date.now();
       gate.ok();
       if (credentials || state.credentials === null || state.ticks % CREDENTIAL_EVERY === 0) {
-        state.credentials = await call(`${BASE}/credentials/summary`);
+        const credentials = await call(`${BASE}/credentials/summary`);
+        life.check();
+        state.credentials = credentials;
       }
       state.ticks += 1;
     } catch (err) {
+      if (err.name === "AbortError") return;
       if (gate.fail(err.status, err.code) === "absent") {
         state.pending = null;
         state.credentials = null;
@@ -457,7 +489,7 @@ export function createCameraPairingPanel({ headers, identity, locked, log, dialo
       }
       return;
     } finally {
-      inFlight = false;
+      if (life.current()) inFlight = false;
     }
     showAvailable(true);
     renderIdentity();
@@ -473,23 +505,36 @@ export function createCameraPairingPanel({ headers, identity, locked, log, dialo
 
   const section = el("camera-link");
   if (section && typeof IntersectionObserver === "function") {
-    new IntersectionObserver((entries) => {
-      const wasOut = !state.inView;
-      state.inView = entries.some((entry) => entry.isIntersecting);
-      if (wasOut && state.inView) poll();
-    }).observe(section);
+    scope.subscribe(() => {
+      const observer = new IntersectionObserver(scope.guard((entries) => {
+        const wasOut = !state.inView;
+        state.inView = entries.some((entry) => entry.isIntersecting);
+        if (wasOut && state.inView) poll();
+      }));
+      observer.observe(section);
+      return () => observer.disconnect();
+    });
   }
-  el("camera-approve-submit")?.addEventListener("click", submitApprove);
-  el("camera-approve-cancel")?.addEventListener("click", () => el("camera-approve-dialog")?.close?.());
-  el("camera-approve-code")?.addEventListener("keydown", (event) => {
+  scope.listen(el("camera-approve-submit"), "click", submitApprove);
+  scope.listen(el("camera-approve-cancel"), "click", () => el("camera-approve-dialog")?.close?.());
+  scope.listen(el("camera-approve-code"), "keydown", (event) => {
     if (event.key === "Enter") submitApprove();
   });
-  el("camera-confirm-close")?.addEventListener("click", () => {
+  scope.listen(el("camera-confirm-close"), "click", () => {
     state.approved = null;
     el("camera-confirm").hidden = true;
   });
-  setInterval(poll, PENDING_POLL_MS);
-  setInterval(tickClocks, 1000);
+  scope.interval(poll, PENDING_POLL_MS);
+  scope.interval(tickClocks, 1000);
+  scope.onDispose(() => {
+    inFlight = false;
+    state.busy = false;
+    state.target = null;
+    el("camera-approve-dialog")?.close?.();
+    el("camera-approve-code").value = "";
+    el("camera-approve-submit").disabled = false;
+    el("camera-approve-submit").removeAttribute("reason");
+  });
 
   return { refresh, resetPolling: () => gate.reset() };
 }

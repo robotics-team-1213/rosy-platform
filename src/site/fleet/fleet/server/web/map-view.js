@@ -12,7 +12,7 @@ import {
 } from "./site-layer.js";
 import { NO_MAP_RETRY_MS, createPollGate } from "./poll-gate.js";
 
-export function createMapView({ el, view, auth, call, onMapChanged, onMapUnavailable }) {
+export function createMapView({ scope, el, view, auth, call, onMapChanged, onMapUnavailable }) {
   // D-359 §4 — 색·글꼴은 ui.js(window.RosyPalette)가 어떤 CSS 색이든 풀어 캐시한다.
   const css = (name) => window.RosyPalette.cssColor(name);
   const font = (size) => window.RosyPalette.canvasFont(size, "mono");
@@ -522,10 +522,15 @@ export function createMapView({ el, view, auth, call, onMapChanged, onMapUnavail
   }
 
   async function refreshSiteMap() {
+    const life = scope.capture();
+    life.check();
     try {
-      view.siteMap = await call("/api/fleet/site-map");
+      const siteMap = await call("/api/fleet/site-map");
+      life.check();
+      view.siteMap = siteMap;
       el("map-stage").dataset.siteMap = "configured";
     } catch (err) {
+      if (err.name === "AbortError") return;
       // NO_SITE_MAP — 카메라 사각형이 설정되지 않은 현장이다. 일시 실패면 직전 사각형을 둔다.
       if (err.status === 404 && err.code === "NO_SITE_MAP") {
         view.siteMap = null;
@@ -545,13 +550,17 @@ export function createMapView({ el, view, auth, call, onMapChanged, onMapUnavail
   }
 
   async function refresh() {
+    const life = scope.capture();
+    life.check();
     if (auth.locked) return;
     sightingsUnavailable = false;
     await refreshSiteMap();
+    life.check();
     if (auth.locked || !mapGate.due()) return;
     let mapFailure = "retry";
     try {
       const grid = await call("/api/fleet/map");
+      life.check();
       mapGate.ok();
       view.map = grid;
       el("map-stage").dataset.mapState = "ready";
@@ -562,6 +571,7 @@ export function createMapView({ el, view, auth, call, onMapChanged, onMapUnavail
       draw();
       onMapChanged();
     } catch (err) {
+      if (err.name === "AbortError") return;
       view.map = null;
       if (!auth.locked) mapFailure = mapGate.fail(err.status, err.code);
       if (view.siteMap && !auth.locked) {
@@ -606,17 +616,22 @@ export function createMapView({ el, view, auth, call, onMapChanged, onMapUnavail
   // 404 를 받으면 다음 refresh() 까지 멈춘다.
   let sightingsInFlight = false;
   let sightingsUnavailable = false;
+  scope.onDispose(() => { sightingsInFlight = false; });
   async function refreshSightings() {
+    const life = scope.capture();
+    life.check();
     if (auth.locked || sightingsInFlight || sightingsUnavailable || !view.siteMap) return;
     sightingsInFlight = true;
     let next = [];
     try {
       next = classifySightings(await call("/api/fleet/sightings"));
+      life.check();
     } catch (err) {
+      if (err.name === "AbortError") return;
       // 일시 실패도 옛 관측을 남기지 않는다.
       if (err.status === 404) sightingsUnavailable = true;
     } finally {
-      sightingsInFlight = false;
+      if (life.current()) sightingsInFlight = false;
     }
     const unchanged = JSON.stringify(next) === JSON.stringify(view.sightings);
     view.sightings = next;

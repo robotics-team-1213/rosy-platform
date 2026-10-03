@@ -40,7 +40,7 @@ function blockWith(button, reason) {
   else button.removeAttribute("reason");
 }
 
-export function createRoster({ el, view, log, call, render, streamEvidence, isOperator,
+export function createRoster({ scope, el, view, log, call, render, streamEvidence, isOperator,
   moveAddress = null, moveAddressBlocked = () => "" }) {
   function needsAttention(robot) {
     const state = robot.state;
@@ -256,7 +256,7 @@ export function createRoster({ el, view, log, call, render, streamEvidence, isOp
             : estop !== false ? "안전 상태 확인 불가"
               : lineFollowActive ? "라인 추종 중" : "");
     if (offlineWhyId) aim.setAttribute("aria-describedby", offlineWhyId);
-    aim.addEventListener("click", () => {
+    aim.addEventListener("click", scope.guard(() => {
       view.selected = view.selected === robot.robot_id ? null : robot.robot_id;
       view.cursor = view.selected && view.map
         ? { col: Math.floor(view.map.width / 2), row: Math.floor(view.map.height / 2) }
@@ -268,7 +268,7 @@ export function createRoster({ el, view, log, call, render, streamEvidence, isOp
       if (view.selected) canvas.focus({preventScroll: true});
       else [...document.querySelectorAll("#roster ui-button[data-goal-robot-id]")]
         .find(button => button.dataset.goalRobotId === robot.robot_id)?.focus({preventScroll: true});
-    });
+    }));
     const cancel = document.createElement("ui-button");
     cancel.setAttribute("kind", "quiet");
     cancel.type = "button";
@@ -276,13 +276,17 @@ export function createRoster({ el, view, log, call, render, streamEvidence, isOp
     blockWith(cancel, view.stateUnavailable ? "Fleet 상태 확인 불가"
       : !robot.online ? (offlineWhyId ? "위 사유" : "로봇 오프라인") : "");
     if (offlineWhyId) cancel.setAttribute("aria-describedby", offlineWhyId);
-    cancel.addEventListener("click", async () => {
+    cancel.addEventListener("click", scope.guard(async () => {
+      const life = scope.capture();
+      life.check();
       try {
         const pending = view.pendingTasks[robot.robot_id];
         if (pending) {
           const readback = await call(`/api/fleet/tasks/${encodeURIComponent(pending.task_id)}`);
+          life.check();
           if (readback.task?.status === "QUEUED") {
             await call(`/api/fleet/tasks/${encodeURIComponent(pending.task_id)}/cancel`, { method: "POST" });
+            life.check();
             delete view.pendingTasks[robot.robot_id];
             render();
             log(`${robot.robot_id} task ${pending.task_id} QUEUED 취소`, "good");
@@ -291,11 +295,13 @@ export function createRoster({ el, view, log, call, render, streamEvidence, isOp
           delete view.pendingTasks[robot.robot_id];
         }
         await call(`/api/fleet/robots/${encodeURIComponent(robot.robot_id)}/cancel`, { method: "POST" });
+        life.check();
         log(`${robot.robot_id} 항법 취소`, "good");
       } catch (err) {
+        if (err.name === "AbortError") return;
         log(`${robot.robot_id} 취소 실패 — ${err.message}`, "bad");
       }
-    });
+    }));
     const lineFollow = state.line_follow || {};
     const cameraFaultLatched = lineFollow.mode === "CAMERA_LINE"
       && lineFollow.state === "LOST"
@@ -308,7 +314,9 @@ export function createRoster({ el, view, log, call, render, streamEvidence, isOp
       blockWith(fallback, view.stateUnavailable ? "Fleet 상태 확인 불가"
         : !robot.online ? "로봇 오프라인"
           : !isOperator() ? "운용자 권한이 필요합니다" : "");
-      fallback.addEventListener("click", async () => {
+      fallback.addEventListener("click", scope.guard(async () => {
+        const life = scope.capture();
+        life.check();
         const mode = lineFollow.mode === "IR_LINE" ? "OFF" : "IR_LINE";
         if (mode === "IR_LINE" && !window.confirm(`${robot.robot_id}의 카메라 고장이 확인되었습니다. CORE 안전 조건을 다시 확인하고 IR 추적을 요청할까요?`)) return;
         try {
@@ -316,11 +324,13 @@ export function createRoster({ el, view, log, call, render, streamEvidence, isOp
             method: "POST", headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ mode }),
           });
+          life.check();
           log(`${robot.robot_id} ${mode === "IR_LINE" ? "IR 추적 요청" : "IR 추적 중지"} · ${result.result?.state || "CORE 응답 확인"}`, "good");
         } catch (err) {
+          if (err.name === "AbortError") return;
           log(`${robot.robot_id} IR 추적 거부 · ${err.message}`, "bad");
         }
-      });
+      }));
       actions.append(fallback);
     }
     actions.append(aim, cancel);
@@ -332,7 +342,7 @@ export function createRoster({ el, view, log, call, render, streamEvidence, isOp
       move.dataset.moveRobotId = robot.robot_id;
       move.textContent = "새 주소로 옮기기…";
       blockWith(move, moveAddressBlocked());
-      move.addEventListener("click", () => moveAddress(robot.robot_id));
+      move.addEventListener("click", scope.guard(() => moveAddress(robot.robot_id)));
       actions.append(move);
     }
     node.appendChild(actions);

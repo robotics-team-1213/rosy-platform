@@ -168,22 +168,37 @@ export const HELP = [
 
 // dialogs는 /common/ui.js의 { openLiveDialog, confirmIrreversible }다. 셸(console.js)이 넘긴다 —
 // 이 파일은 node 시험이 import하므로 DOM 모듈을 정적으로 끌어오지 않는다.
-export function createEnrollmentPanel({ headers, identity, log, dialogs, onMoved }) {
+export function createEnrollmentPanel({ scope, headers, identity, log, dialogs, onMoved }) {
   const el = (id) => document.getElementById(id);
   const state = { listing: null, blockedUntil: 0, target: null, busy: false };
+  scope.onDispose(() => {
+    state.busy = false;
+    state.target = null;
+    el("enroll-dialog")?.close?.();
+    el("enroll-code").value = "";
+    el("enroll-submit").disabled = Date.now() < state.blockedUntil;
+    if (el("enroll-submit").disabled) el("enroll-submit").setAttribute("reason", "잠시 뒤 다시 시도");
+    else el("enroll-submit").removeAttribute("reason");
+  });
 
   // 분류(detail.code/reason)를 잃지 않으려고 셸의 call() 대신 쓴다.
   async function call(path, { method = "GET", body } = {}) {
+    const life = scope.capture();
+    life.check();
     const init = { method, headers: { ...headers() } };
     if (body !== undefined) {
       init.headers["Content-Type"] = "application/json";
       init.body = JSON.stringify(body);
     }
-    const resp = await fetch(path, init);
+    const resp = await fetch(path, {...init, signal: life.signal});
+    life.check();
     let payload = null;
     try {
       payload = await resp.json();
+      life.check();
     } catch (_err) {
+      life.check();
+      if (_err.name === "AbortError") throw _err;
       payload = null;
     }
     if (!resp.ok) {
@@ -201,7 +216,7 @@ export function createEnrollmentPanel({ headers, identity, log, dialogs, onMoved
     node.setAttribute("kind", "quiet");
     node.setAttribute("type", "button");
     node.textContent = label;
-    node.addEventListener("click", onClick);
+    node.addEventListener("click", scope.guard(onClick));
     return node;
   }
 
@@ -217,6 +232,8 @@ export function createEnrollmentPanel({ headers, identity, log, dialogs, onMoved
   }
 
   async function submit(target) {
+    const life = scope.capture();
+    life.check();
     if (state.busy || Date.now() < state.blockedUntil) return;
     const input = el("enroll-code");
     const error = codeError(input.value);
@@ -230,6 +247,7 @@ export function createEnrollmentPanel({ headers, identity, log, dialogs, onMoved
         const row = await call(path, {
           method: "POST", body: { code: input.value },
         });
+        life.check();
         input.value = "";
         el("enroll-dialog")?.close?.();
         showResult(moveDoneLines(row), false);
@@ -240,26 +258,31 @@ export function createEnrollmentPanel({ headers, identity, log, dialogs, onMoved
       const row = await call("/api/fleet/enrollment/robots", {
         method: "POST", body: { ...target, code: input.value },
       });
+      life.check();
       input.value = "";
       el("enroll-dialog")?.close?.();
       showResult([`등록됨: ${row.robot_id} (${row.hostname}, ${row.address})`, ...rowText(row).slice(1)], false);
       log?.(`로봇 등록 ${row.robot_id}`);
     } catch (err) {
+      if (err.name === "AbortError") return;
       const detail = err?.detail || {};
       state.blockedUntil = retryUntil(detail, Date.now());
       showResult(messageFor(detail), true);
     } finally {
-      state.busy = false;
-      const blocked = Date.now() < state.blockedUntil;
-      el("enroll-submit").disabled = blocked;
-      if (blocked) el("enroll-submit").setAttribute("reason", "잠시 뒤 다시 시도");
-      else el("enroll-submit").removeAttribute("reason");
-      if (state.blockedUntil) {
-        setTimeout(() => { el("enroll-submit").disabled = false; el("enroll-submit").removeAttribute("reason"); render(); },
-          Math.max(0, state.blockedUntil - Date.now()));
+      if (life.current()) {
+        state.busy = false;
+        const blocked = Date.now() < state.blockedUntil;
+        el("enroll-submit").disabled = blocked;
+        if (blocked) el("enroll-submit").setAttribute("reason", "잠시 뒤 다시 시도");
+        else el("enroll-submit").removeAttribute("reason");
+        if (state.blockedUntil) {
+          scope.timeout(() => { el("enroll-submit").disabled = false; el("enroll-submit").removeAttribute("reason"); render(); },
+            Math.max(0, state.blockedUntil - Date.now()));
+        }
       }
     }
     await refresh();
+    life.check();
   }
 
   function openDialog(target, label) {
@@ -283,6 +306,8 @@ export function createEnrollmentPanel({ headers, identity, log, dialogs, onMoved
   }
 
   async function act(action, row) {
+    const life = scope.capture();
+    life.check();
     if (action === "move") {
       openMove(row.robot_id);
       return;
@@ -295,20 +320,24 @@ export function createEnrollmentPanel({ headers, identity, log, dialogs, onMoved
         action: "등록 해제",
         opener: () => el("enrolled-list")?.querySelector(`li[data-robot-id="${CSS.escape(row.robot_id)}"] ui-button[data-action="unenroll"]`),
       });
+      life.check();
       if (!confirmed) return;
     }
     const path = `/api/fleet/enrollment/robots/${encodeURIComponent(row.robot_id)}`;
     try {
       if (action === "unenroll") {
         const result = await call(path, { method: "DELETE" });
+        life.check();
         showResult([result.state === "removed" ? `${row.robot_id} 등록 해제됨`
           : `${row.robot_id}: 로봇에 닿지 않아 해제 대기 — 다시 보이면 한 번 회수합니다.`], false);
       }
     } catch (err) {
+      if (err.name === "AbortError") return;
       const detail = err?.detail || {};
       showResult(messageFor(detail), true);
     }
     await refresh();
+    life.check();
   }
 
   function render() {
@@ -364,11 +393,16 @@ export function createEnrollmentPanel({ headers, identity, log, dialogs, onMoved
   const gate = createPollGate();
 
   async function refresh() {
+    const life = scope.capture();
+    life.check();
     if (!gate.due()) return;
     try {
-      state.listing = await call("/api/fleet/enrollment/robots");
+      const listing = await call("/api/fleet/enrollment/robots");
+      life.check();
+      state.listing = listing;
       gate.ok();
     } catch (err) {
+      if (err.name === "AbortError") return;
       gate.fail(err.status, err.code);
       state.listing = null;
       const controls = el("enroll-controls");
@@ -384,14 +418,14 @@ export function createEnrollmentPanel({ headers, identity, log, dialogs, onMoved
     li.textContent = line;
     return li;
   }));
-  el("enroll-address-add")?.addEventListener("click", () => {
+  scope.listen(el("enroll-address-add"), "click", () => {
     const address = parseAddress(el("enroll-address").value);
     if (!address) return showResult([MESSAGES.bad_address], true);
     openDialog({ address }, address);
   });
-  el("enroll-submit")?.addEventListener("click", () => submit(state.target));
-  el("enroll-cancel")?.addEventListener("click", () => el("enroll-dialog")?.close?.());
-  el("enroll-code")?.addEventListener("input", (event) => {
+  scope.listen(el("enroll-submit"), "click", () => submit(state.target));
+  scope.listen(el("enroll-cancel"), "click", () => el("enroll-dialog")?.close?.());
+  scope.listen(el("enroll-code"), "input", (event) => {
     event.target.value = formatCode(event.target.value);
   });
 

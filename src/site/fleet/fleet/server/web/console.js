@@ -11,6 +11,8 @@ import { applyRoleToControls } from "./authorization.js";
 import { addressMap, movableRobots, renumberBanner } from "./address-drift.js";
 import { createPollGate } from "./poll-gate.js";
 import { createFleetClient } from "/common/fleet-client.js";
+import { createPageScope } from "/common/scope.js";
+const pageScope = createPageScope();
 // 좌표계: 로봇 pose 는 CORE 가 TF `map → <ns>base_footprint` 로 읽어 주는 map 프레임
 // 값이다(ros_bridge `_map_frame = "map"`). 그래서 N대를 한 격자 위에 그대로 겹쳐
 // 그릴 수 있다. 격자는 행 0 이 아래쪽(y 최소)이고 캔버스는 위가 0 이라 y 를 뒤집는다.
@@ -47,7 +49,7 @@ function setTopbarOpen(open) {
   el("topbar-more").setAttribute("aria-expanded", String(open));
   el("topbar-extra").dataset.open = String(open);
 }
-el("topbar-more").addEventListener("click", () => {
+pageScope.listen(el("topbar-more"), "click", () => {
   setTopbarOpen(el("topbar-more").getAttribute("aria-expanded") !== "true");
 });
 
@@ -109,23 +111,30 @@ function log(text, kind) {
 const fleetClient = createFleetClient({ credential: () => auth.token });
 
 async function call(path, options = {}) {
+  const task = pageScope.capture();
+  task.check();
   try {
-    const body = await fleetClient(path, options);
+    const body = await fleetClient(path, {...options, signals: [...(options.signals || []), task.signal]});
+    task.check();
     markUnlocked();
     return body;
   } catch (error) {
+    task.check();
     if (error.status === 401) markLocked();
     throw error;
   }
 }
 
 async function refreshDispatchControl() {
+  const life = pageScope.capture();
+  life.check();
   const title = el("dispatch-control-title");
   const detail = el("dispatch-control-detail");
   const rearm = el("dispatch-rearm");
   if (!dispatchGate.due()) return view.dispatchControl;
   try {
     const state = await call("/api/fleet/dispatch-control");
+    life.check();
     dispatchGate.ok();
     view.dispatchControl = state;
     if (state.dispatch_enabled) {
@@ -144,6 +153,7 @@ async function refreshDispatchControl() {
     else rearm.removeAttribute("reason");
     return state;
   } catch (err) {
+    if (err.name === "AbortError") return;
     view.dispatchControl = null;
     if (dispatchGate.fail(err.status, err.code) === "absent") {
       // 작업 대기열이 없는 Fleet — 발행 래치 자체가 없다. 오류가 아니다.
@@ -160,7 +170,9 @@ async function refreshDispatchControl() {
   }
 }
 
-el("dispatch-rearm").addEventListener("click", async () => {
+pageScope.listen(el("dispatch-rearm"), "click", async () => {
+  const life = pageScope.capture();
+  life.check();
   const state = view.dispatchControl;
   if (auth.role !== "operator" || auth.locked || !state?.rearm_available) return;
   if (!window.confirm(`세대 ${state.generation}의 대기 발행을 재허가할까요?`)) return;
@@ -170,11 +182,14 @@ el("dispatch-rearm").addEventListener("click", async () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ expected_generation: state.generation }),
     });
+    life.check();
     log("대기 작업 발행을 재허가했습니다.", "good");
   } catch (err) {
+    if (err.name === "AbortError") return;
     log(`발행 재허가 거부: ${err.message}`, "bad");
   }
   await refreshDispatchControl();
+  life.check();
 });
 
 
@@ -246,11 +261,20 @@ function render() {
 }
 
 let statePollInFlight = false;
+pageScope.onDispose(() => {
+  statePollInFlight = false;
+  view.selected = null;
+  view.cursor = null;
+  document.querySelectorAll("dialog[open]").forEach(dialog => dialog.close("cancel"));
+});
 async function refreshState() {
+  const life = pageScope.capture();
+  life.check();
   if (auth.locked || statePollInFlight) return;
   statePollInFlight = true;
   try {
     const snapshot = await call("/api/fleet/state");
+    life.check();
     view.robots = snapshot.robots;
     view.stateUnavailable = false;
     view.stateLoaded = true;
@@ -267,6 +291,7 @@ async function refreshState() {
     pill.setAttribute("status", snapshot.fleet.online === snapshot.fleet.total ? "neutral" : "crit");
     render();
   } catch (err) {
+    if (err.name === "AbortError") return;
     // D-248: 잠금 pill(토큰 필요)을 서버 없음으로 덮지 않는다 — 401의 이유를 남긴다.
     if (auth.locked) return;
     view.stateUnavailable = true;
@@ -276,7 +301,7 @@ async function refreshState() {
     pill.textContent = "Fleet 서버 없음";
     pill.setAttribute("status", "crit");
   } finally {
-    statePollInFlight = false;
+    if (life.current()) statePollInFlight = false;
   }
 }
 
@@ -292,14 +317,18 @@ function disarmGoal(reason) {
 let scannerLost = false;
 
 async function refreshDiscovery() {
+  const life = pageScope.capture();
+  life.check();
   // D-410 — 발견 목록·등록은 설치 화면에 있다. 운용 화면은 검색기 건강과
   // 고정 주소 판정(로스터 안내)만 이 요청에서 얻는다.
   if (auth.locked) return;
   if (!discoveryGate.due()) return;
   try {
     const snapshot = await call("/api/fleet/discovery");
+    life.check();
     discoveryGate.ok();
     await refreshAddresses();
+    life.check();
     // 검색기 임대(45 s)가 끊기면 새 주소 안내가 멈춘다 — 대기와 구별해 알린다.
     if (snapshot.scanner_state === "expired") {
       if (!scannerLost) log("발견 검색기 끊김 — 로봇 발견·주소 이동 안내 불가", "bad");
@@ -309,6 +338,7 @@ async function refreshDiscovery() {
     if (scannerLost && snapshot.scanner_online) log("발견 검색기 다시 연결됨", "good");
     scannerLost = false;
   } catch (err) {
+    if (err.name === "AbortError") return;
     if (auth.locked) return;
     if (discoveryGate.fail(err.status, err.code) === "absent") return;
   }
@@ -327,10 +357,14 @@ function moveLink() {
 }
 
 async function refreshAddresses() {
+  const life = pageScope.capture();
+  life.check();
   let payload = null;
   try {
     payload = await call("/api/fleet/discovery/addresses");
+    life.check();
   } catch (_err) {
+    if (_err.name === "AbortError") return;
     payload = null;
   }
   const banner = el("address-banner");
@@ -356,12 +390,15 @@ async function refreshAddresses() {
 }
 
 async function refreshAuthorization() {
+  const life = pageScope.capture();
+  life.check();
   // 로그인·토큰 저장마다 꺼진 기능을 한 번씩 다시 묻는다.
   dispatchGate.reset();
   discoveryGate.reset();
   mapView.resetPolling();
   try {
     const identity = await call("/api/fleet/session");
+    life.check();
     auth.role = identity.role;
     auth.principal = identity.principal_id;
     const roleName = identity.role === "operator" ? "운영자" :
@@ -386,8 +423,10 @@ async function refreshAuthorization() {
       refreshDiscovery(),
       formation.refreshFormation(),
     ]);
+    life.check();
     render();
   } catch (_err) {
+    if (_err.name === "AbortError") return;
     if (!auth.locked) markLocked();
   }
 }
@@ -398,7 +437,7 @@ async function refreshAuthorization() {
 // ↑/↓ 로 로스터를 순회하고, Enter 로 그 로봇의 목표 지정을 누르고,
 // Escape 으로 선택을 해소한다. 입력 컨트롤에 있을 땐 간섭하지 않는다.
 // 포커스 링은 표면 전역 :focus-visible 규약이 그린다.
-document.addEventListener("keydown", (event) => {
+pageScope.listen(document, "keydown", (event) => {
   if (event.defaultPrevented || event.target.closest("input, select, textarea, button, ui-button, a, canvas")) return;
   const cards = [...document.querySelectorAll("#roster article")];
   if (!cards.length) return;
@@ -424,6 +463,8 @@ document.addEventListener("keydown", (event) => {
 });
 
 async function commitGoal(col, row) {
+  const life = pageScope.capture();
+  life.check();
   if (!view.selected || !view.map) return;
   const selectedRobot = view.robots.find((robot) => robot.robot_id === view.selected);
   if (view.stateUnavailable || auth.role !== "operator" ||
@@ -448,6 +489,7 @@ async function commitGoal(col, row) {
       headers: { "Content-Type": "application/json", "Idempotency-Key": crypto.randomUUID() },
       body: JSON.stringify({ x: point.x, y: point.y, yaw: 0 }),
     });
+    life.check();
     const task = result && result.task ? result.task : null;
     if (task && task.status === "QUEUED") {
       view.pendingTasks[robotId] = task;
@@ -476,6 +518,7 @@ async function commitGoal(col, row) {
       log(`${robotId} → ${where} 미션 하달`, "good");
     }
   } catch (err) {
+    if (err.name === "AbortError") return;
     log(`${robotId} 미션 거절 — ${err.message}`, "bad");
   }
 }
@@ -485,7 +528,9 @@ function focusGoalButton(robotId) {
     .find(button => button.dataset.goalRobotId === robotId)?.focus({preventScroll: true});
 }
 
-el("map-canvas").addEventListener("click", async (event) => {
+pageScope.listen(el("map-canvas"), "click", async (event) => {
+  const life = pageScope.capture();
+  life.check();
   if (!view.selected || !view.map) return;
   const canvas = el("map-canvas");
   const rect = canvas.getBoundingClientRect();
@@ -504,9 +549,12 @@ el("map-canvas").addEventListener("click", async (event) => {
   view.cursor = { col: Math.floor(col), row: view.map.height - 1 - Math.floor(rowFromTop) };
   render();
   await commitGoal(view.cursor.col, view.cursor.row);
+  life.check();
 });
 
-el("map-canvas").addEventListener("keydown", async (event) => {
+pageScope.listen(el("map-canvas"), "keydown", async (event) => {
+  const life = pageScope.capture();
+  life.check();
   if (!view.selected || !view.map || !view.cursor) return;
   const moves = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, 1], ArrowDown: [0, -1] };
   if (event.key in moves) {
@@ -518,6 +566,7 @@ el("map-canvas").addEventListener("keydown", async (event) => {
   } else if (event.key === "Enter") {
     event.preventDefault();
     await commitGoal(view.cursor.col, view.cursor.row);
+    life.check();
   } else if (event.key === "Escape") {
     event.preventDefault();
     const robotId = view.selected;
@@ -533,14 +582,19 @@ el("map-canvas").addEventListener("keydown", async (event) => {
 
 // 전체 정지는 한 번의 누름으로 즉시 실행된다(D-413 — 비상 정지는 확인 없는 비상 출구.
 // D-371이 대화상자 위에서 살아 있게 한 이유를 끝까지 밀었다: 어떤 사위에도 즉시 눌린다).
-el("estop").addEventListener("click", async () => {
+pageScope.listen(el("estop"), "click", async () => {
+  const life = pageScope.capture();
+  life.check();
   try {
     const result = await call("/api/fleet/estop", { method: "POST" });
+    life.check();
     await refreshDispatchControl();
+    life.check();
     log(`정지 요청 응답: ${result.stopped}/${result.total} · 물리 정지 미확인`, "bad");
     result.robots.filter((r) => !r.stopped)
       .forEach((r) => log(`  ${r.robot_id} 정지 요청 응답 없음 — ${r.error.code}`, "bad"));
   } catch (err) {
+    if (err.name === "AbortError") return;
     log(`전체 정지 실패 — ${err.message}`, "bad");
   }
 });
@@ -549,10 +603,13 @@ el("estop").addEventListener("click", async () => {
 // D-421 — 래치 없는 전체 주행 취소. 응답은 CORE 응답 수이지 물리 정지가 아니다(D-298).
 const CANCEL_ALL_RESULT = { failed: "실패", unreachable: "응답 없음" };
 const CANCEL_ALL_STEP = { swarm: "대형 추종", navigation: "내비게이션", line_follow: "차선 추종" };
-el("cancel-all").addEventListener("click", async () => {
+pageScope.listen(el("cancel-all"), "click", async () => {
+  const life = pageScope.capture();
+  life.check();
   if (!window.confirm("등록된 모든 로봇의 주행(내비게이션 목표·대형 추종·차선 추종)과 대기 작업을 취소합니다. 비상 정지 래치는 걸지 않습니다. 계속할까요?")) return;
   try {
     const result = await call("/api/fleet/cancel-all", { method: "POST" });
+    life.check();
     // 0/0 은 성공이 아니다 — 취소할 로봇이 없었다.
     const allAnswered = result.total > 0 && result.cancelled === result.total;
     log(result.total === 0 ? "주행 취소 대상 로봇 없음 — 등록된 로봇을 확인하세요"
@@ -571,7 +628,9 @@ el("cancel-all").addEventListener("click", async () => {
     // CORE 가 취소를 확인하면 그 로봇은 다시 배정되고, 확인이 없으면 작업은 대조가 필요하다.
     if (awaiting) log("  확인 대기 작업: 로봇이 취소를 알리면 다시 배정, 알리지 않으면 대조 필요", "bad");
     await refreshDispatchControl();
+    life.check();
   } catch (err) {
+    if (err.name === "AbortError") return;
     log(`전체 주행 취소 실패 — ${err.message}`, "bad");
   }
 });
@@ -579,11 +638,11 @@ el("cancel-all").addEventListener("click", async () => {
 
 // D-262: 대형 패널은 formation.js 팩토리가 가진다. 셸은 지도 오버레이와
 // 명렬 렌더를 쥐고, 대형 상태는 view.formation 으로 공유한다.
-const formation = createFormation({ el, view, log, call, render });
+const formation = createFormation({ scope: pageScope, el, view, log, call, render });
 formation.bind();
 
 // Fleet 분해 4: 현장 지도 뷰는 map-view.js 팩토리가 그린다.
-const mapView = createMapView({
+const mapView = createMapView({ scope: pageScope,
   el, view, auth, call,
   onMapChanged: render,
   onMapUnavailable: () => {
@@ -596,19 +655,19 @@ const mapView = createMapView({
 
 // Fleet 분해 3: 명렬 카드와 큐는 roster.js 팩토리가 그린다.
 // D-410 — 주소 이동 조작은 설치 화면이 소유해서 moveAddress 훅을 주지 않는다.
-const roster = createRoster({ el, view, log, call, render,
+const roster = createRoster({ scope: pageScope, el, view, log, call, render,
   streamEvidence: mapView.streamEvidence, isOperator: () => auth.role === "operator" });
 // D-407 판단 요청 — 막힌 로봇의 질문과 다섯 답. 예외 큐 패널 안에 산다.
-const lineStuck = createLineStuckPanel({ el, view, call, log,
+const lineStuck = createLineStuckPanel({ scope: pageScope, el, view, call, log,
   isOperator: () => auth.role === "operator" });
 
-el("roster-toggle").addEventListener("click", () => {
+pageScope.listen(el("roster-toggle"), "click", () => {
   view.showAllRobots = !view.showAllRobots;
   render();
 });
 
 // D-415 — 로그 지우기
-el("log-clear")?.addEventListener("click", () => {
+pageScope.listen(el("log-clear"), "click", () => {
   const box = el("log");
   box.replaceChildren(document.createElement("ui-empty"));
   box.firstChild.textContent = "지웠습니다.";
@@ -633,9 +692,9 @@ function refreshDiagnostics() {
 }
 
 // D-262: 신호등 카드는 signals.js 팩토리가 그린다.
-const signals = createSignals({ el, view, log, call, refreshState });
+const signals = createSignals({ scope: pageScope, el, view, log, call, refreshState });
 // D-410 — 운용 화면의 카메라는 영상 프리뷰만 띄운다. 경기장/맵 보정 뷰는 설치 화면이 가진다.
-const visionView = createVisionView({ el, call, auth, authHeaders });
+const visionView = createVisionView({ scope: pageScope, el, call, auth, authHeaders });
 
 // --- 신호등 (ROSY-SIGNAL-001) --------------------------------------------------
 
@@ -646,6 +705,7 @@ function tickClock() {
 // 토큰 입력 — Enter 와 버튼 모두 저장한다 (form 이 아니라 keydown 이다).
 el("console-token").value = auth.token;
 function saveToken() {
+  pageScope.invalidate();
   auth.token = el("console-token").value.trim();
   // 새 토큰은 직접 재시도한다 — 잠금 플래그가 있으면 직접 호출도 건너뛰므로 먼저 푼다.
   auth.role = null;
@@ -659,8 +719,8 @@ function saveToken() {
   refreshAuthorization();
   visionView.refreshSources();
 }
-el("token-save").addEventListener("click", saveToken);
-el("console-token").addEventListener("keydown", (event) => {
+pageScope.listen(el("token-save"), "click", saveToken);
+pageScope.listen(el("console-token"), "keydown", (event) => {
   if (event.key === "Enter") saveToken();
 });
 
@@ -668,21 +728,28 @@ el("console-token").addEventListener("keydown", (event) => {
 // 바뀌면 다시 풀고 지도를 새로 고침 없이 다시 그린다(캐시는 ui.js가 먼저 비운다).
 const robotColours = () => ["--robot-1", "--robot-2", "--robot-3"].map((name) => window.RosyPalette.cssColor(name));
 view.colors = robotColours();
-document.addEventListener("rosy:theme", () => {
+pageScope.listen(document, "rosy:theme", () => {
   view.colors = robotColours();
   mapView.draw();
 });
 tickClock();
-setInterval(tickClock, 1000);
+pageScope.interval(tickClock, 1000);
 applyRoleToControls(null, operatorControls());
 render();
 refreshAuthorization();
 visionView.refreshSources();
 mapView.refresh();
-setInterval(() => { if (!auth.locked) formation.refreshFormation(); }, MAP_MS);
-setInterval(refreshState, STATE_MS);
-setInterval(() => { if (!auth.locked) refreshDispatchControl(); }, STATE_MS);
-setInterval(refreshDiscovery, MAP_MS);
-setInterval(() => mapView.refresh(), MAP_MS);
-setInterval(() => mapView.refreshSightings(), STATE_MS);
-setInterval(() => visionView.refreshFrame(), 1500);
+pageScope.interval(() => { if (!auth.locked) formation.refreshFormation(); }, MAP_MS);
+pageScope.interval(refreshState, STATE_MS);
+pageScope.interval(() => { if (!auth.locked) refreshDispatchControl(); }, STATE_MS);
+pageScope.interval(refreshDiscovery, MAP_MS);
+pageScope.interval(() => mapView.refresh(), MAP_MS);
+pageScope.interval(() => mapView.refreshSightings(), STATE_MS);
+pageScope.interval(() => visionView.refreshFrame(), 1500);
+
+pageScope.onResume(() => {
+  visionView.reset();
+  refreshAuthorization();
+  visionView.refreshSources();
+  mapView.refresh();
+});
