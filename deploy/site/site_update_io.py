@@ -140,22 +140,28 @@ class Http:
     def get(self, url: str, limit: int) -> bytes:
         try:
             with self._open(url) as response:
+                expected = getattr(response, 'headers', {}).get('Content-Length')
                 data = response.read(limit + 1)
         except (OSError, http.client.HTTPException) as error:
             raise Transient(f"GET {url} failed: {error}") from None
         if len(data) > limit:
             raise Transient(f"GET {url} exceeded {limit} bytes")
+        _check_length(expected, len(data))
         return data
 
     def download(self, url: str, destination: Path) -> str:
         digest = hashlib.sha256()
+        received = 0
         try:
             with self._open(url) as response, destination.open("wb") as stream:
+                expected = getattr(response, 'headers', {}).get('Content-Length')
                 for chunk in iter(lambda: response.read(1024 * 1024), b""):
+                    received += len(chunk)
                     digest.update(chunk)
                     stream.write(chunk)
         except (OSError, http.client.HTTPException) as error:
             raise Transient(f"download {url} failed: {error}") from None
+        _check_length(expected, received)
         return digest.hexdigest()
 
     def status(self, url: str, ca_file: str | None) -> int:
@@ -170,6 +176,84 @@ class Http:
 
 
 # -- helpers ----------------------------------------------------------------------
+
+
+def _check_length(expected, received: int) -> None:
+    if expected is not None:
+        try:
+            complete = int(expected) == received
+        except (TypeError, ValueError):
+            complete = False
+        if not complete:
+            raise Transient('HTTP body does not match Content-Length')
+
+
+def load_update_state(paths: Paths) -> dict:
+    try:
+        state = json.loads(paths.state.read_text(encoding='utf-8'))
+    except FileNotFoundError:
+        if paths.env_backup.exists():
+            raise Refused('state missing while a rollback backup exists') from None
+        state = {}
+    except (OSError, ValueError):
+        raise Refused('update state cannot be read; preserve and recover it manually') from None
+    if not isinstance(state, dict) or not isinstance(state.get('failed', {}), dict):
+        raise Refused('update state has an invalid schema')
+    if 'switch' in state:
+        journal = state['switch']
+        if not isinstance(journal, dict):
+            raise Refused('switch journal has an invalid schema')
+        for key in ('current', 'commit'):
+            if not isinstance(journal.get(key), str) or not _COMMIT.fullmatch(journal[key]):
+                raise Refused('switch journal has an invalid commit')
+        if journal.get('tag') != f"site-{journal['commit'][:12]}":
+            raise Refused('switch journal tag does not match commit')
+        previous = journal.get('previous')
+        if (not isinstance(previous, str) or not Path(previous).is_absolute()
+                or Path(previous).resolve().parent != paths.candidates.resolve()
+                or type(journal.get('migration', False)) is not bool):
+            raise Refused('switch journal has an invalid rollback path')
+    state.setdefault('failed', {})
+    return state
+
+
+def forget_failed(updater, tag: str) -> int:
+    try:
+        with run_lock(updater.paths.lock):
+            state = updater.load_state()
+            removed = state['failed'].pop(tag, None)
+            updater.save_state(state)
+            log('forget-failed', tag=tag, removed=removed is not None)
+            return EXIT_OK
+    except BlockingIOError as error:
+        log('locked', reason=str(error))
+        return EXIT_LOCKED
+    except Refused as error:
+        log('state-refused', reason=str(error))
+        return EXIT_FAILED
+
+
+def containers_reason(rows, commit: str, accepted: dict, run) -> str:
+    if not isinstance(rows, list):
+        return 'docker compose ps output is not a list'
+    for service in SERVICES:
+        matches = [row for row in rows if isinstance(row, dict) and row.get('Service') == service]
+        if len(matches) != 1:
+            return f'{service} needs exactly one running container'
+        row = matches[0]
+        if row.get('Image') != f'rosy-site-{service}:{commit}':
+            return f"{service} runs {row.get('Image')!r}"
+        if row.get('State') != 'running' or row.get('Health') != 'healthy':
+            return f"{service} is {row.get('State')}/{row.get('Health') or 'no health'}"
+        if not row.get('ID'):
+            return f'{service} container ID is missing'
+        try:
+            identity = run(['docker', 'container', 'inspect', '--format', '{{.Image}}', row['ID']]).stdout.strip()
+        except Transient as error:
+            return str(error)
+        if identity not in accepted.get(service, ()):
+            return f'{service} running image identity differs from signed candidate'
+    return ''
 
 def _sha256(path: Path) -> str:
     digest = hashlib.sha256()

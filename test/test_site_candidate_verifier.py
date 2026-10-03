@@ -186,6 +186,8 @@ def test_verifies_manifest_files_sboms_archive_and_loaded_image_ids(candidate):
     assert summary["source_commit"] == COMMIT
     assert summary["verified_images"] == list(SERVICES)
     assert summary["image_ids"] == image_ids
+    for service, identity in image_ids.items():
+        assert identity in summary["accepted_image_ids"][service]
 
 
 def test_signature_only_check_finishes_before_any_docker_inspect(candidate):

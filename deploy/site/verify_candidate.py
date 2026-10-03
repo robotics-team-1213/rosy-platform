@@ -352,6 +352,7 @@ def verify_candidate(
         id_forms[service] = accepted[identity[0]]
 
     summary["image_ids"] = image_ids
+    summary["accepted_image_ids"] = {service: list(identities) for service, identities in archive_ids.items()}
     summary["id_form"] = id_forms
     summary.pop("manifest")
     return summary

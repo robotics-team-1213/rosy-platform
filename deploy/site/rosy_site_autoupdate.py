@@ -32,7 +32,8 @@ if __package__:
         ConfigError, EXIT_CONFIG, EXIT_FAILED, EXIT_LOCKED, EXIT_OK, Http, Paths,
         PROJECT, Refused, Rejected, Runner, SERVICES, SIGNATURE, STACK_UNIT, Transient,
         _COMMIT, _LIST_LIMIT, _MAX_PAGES, _PART, _SMALL_LIMIT, _TAG, _now,
-        load_config, log, read_env, run_lock, safe_extract, swap_link, write_env_tag,
+        containers_reason, forget_failed, load_config, load_update_state, log, read_env,
+        run_lock, safe_extract, swap_link, write_env_tag,
     )
 else:  # pragma: no cover - installed host CLI
     if str(SCRIPT_DIR) not in sys.path:
@@ -42,7 +43,8 @@ else:  # pragma: no cover - installed host CLI
         ConfigError, EXIT_CONFIG, EXIT_FAILED, EXIT_LOCKED, EXIT_OK, Http, Paths,
         PROJECT, Refused, Rejected, Runner, SERVICES, SIGNATURE, STACK_UNIT, Transient,
         _COMMIT, _LIST_LIMIT, _MAX_PAGES, _PART, _SMALL_LIMIT, _TAG, _now,
-        load_config, log, read_env, run_lock, safe_extract, swap_link, write_env_tag,
+        containers_reason, forget_failed, load_config, load_update_state, log, read_env,
+        run_lock, safe_extract, swap_link, write_env_tag,
     )
 
 
@@ -60,18 +62,11 @@ class SiteUpdater:
         self.sleep = sleep
         self.clock = clock
         self.dry_run = dry_run
+        self._accepted_images = {}
 
     # state
     def load_state(self) -> dict:
-        try:
-            state = json.loads(self.paths.state.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
-            state = {}
-        if not isinstance(state, dict):
-            state = {}
-        if not isinstance(state.get("failed"), dict):
-            state["failed"] = {}
-        return state
+        return load_update_state(self.paths)
 
     def save_state(self, state: dict) -> None:
         self.paths.state.parent.mkdir(parents=True, exist_ok=True)
@@ -309,6 +304,8 @@ class SiteUpdater:
                                      runner=self.runner, inspect_loaded_images=loaded)
             if manifest.get('source_commit') != (expected_commit or folder.name):
                 raise Rejected('signed manifest commit differs from candidate commit')
+            if loaded:
+                self._accepted_images[manifest['source_commit']] = manifest.get('accepted_image_ids', {})
             return manifest
         except (CandidateVerificationError, OSError) as error:
             raise Rejected(f"verification failed: {error}") from None
@@ -338,16 +335,7 @@ class SiteUpdater:
                 json.loads(line) for line in out.splitlines() if line.strip()]
         except json.JSONDecodeError:
             return "docker compose ps output is not JSON"
-        by_service = {row.get("Service"): row for row in rows if isinstance(row, dict)}
-        for service in SERVICES:
-            row = by_service.get(service)
-            if row is None:
-                return f"{service} container is missing"
-            if row.get("Image") != f"rosy-site-{service}:{commit}":
-                return f"{service} runs {row.get('Image')!r}"
-            if row.get("State") != "running" or row.get("Health") != "healthy":
-                return f"{service} is {row.get('State')}/{row.get('Health') or 'no health'}"
-        return ""
+        return containers_reason(rows, commit, self._accepted_images.get(commit, {}), self._run)
 
     def _restart(self) -> None:
         self._run(["systemctl", "restart", STACK_UNIT], timeout=300)
@@ -379,6 +367,11 @@ class SiteUpdater:
     def rollback(self, state: dict) -> None:
         transaction = state['switch']
         previous = Path(transaction['previous'])
+        if (not self.paths.env_backup.is_file()
+                or read_env(self.paths.env_backup).get('ROSY_SITE_IMAGE_TAG') != transaction['current']):
+            raise Refused('rollback backup does not match journal commit')
+        verification_path = previous if previous.exists() else self.paths.link
+        self._verify(verification_path, loaded=True, expected_commit=transaction['current'])
         if (transaction.get('migration') and not previous.exists()
                 and self.paths.link.is_dir() and not self.paths.link.is_symlink()):
             os.rename(self.paths.link, previous)
@@ -439,6 +432,9 @@ class SiteUpdater:
         except BlockingIOError as error:
             log("locked", reason=str(error))
             return EXIT_LOCKED
+        except Refused as error:
+            log('state-refused', reason=str(error))
+            return EXIT_FAILED
 
     def _run_locked(self) -> int:
         state = self.load_state()
@@ -471,6 +467,9 @@ class SiteUpdater:
             return EXIT_FAILED
         try:
             self._verify(self.paths.link, loaded=True, expected_commit=current)
+            reason = self._containers_reason(env, current)
+            if reason:
+                raise Rejected(reason)
             release = self.select(self.list_releases(), current, state)
         except Rejected as error:
             log('refused', reason=f'running candidate verification failed: {error}')
@@ -567,11 +566,7 @@ def main(argv: list[str] | None = None) -> int:
         return EXIT_CONFIG
     updater = SiteUpdater(config, paths=paths, dry_run=getattr(args, "dry_run", False))
     if args.command == "forget-failed":
-        state = updater.load_state()
-        removed = state["failed"].pop(args.tag, None)
-        updater.save_state(state)
-        log("forget-failed", tag=args.tag, removed=removed is not None)
-        return EXIT_OK
+        return forget_failed(updater, args.tag)
     return updater.run()
 
 

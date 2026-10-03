@@ -46,6 +46,10 @@ def _tag(commit: str) -> str:
     return f"site-{commit[:12]}"
 
 
+def _image_id(commit: str, service: str) -> str:
+    return 'sha256:' + hashlib.sha256(f'{commit}/{service}'.encode()).hexdigest()
+
+
 def _bundle(commit: str, *, special: tarfile.TarInfo | None = None) -> dict[str, bytes]:
     manifest = json.dumps({"source_commit": commit}).encode() + b"\n"
     buffer = io.BytesIO()
@@ -146,6 +150,7 @@ class FakeHost:
                 healthy = self.healthy_tags is None or self.running in self.healthy_tags
                 return self._ok("\n".join(json.dumps({
                     "Service": s, "Image": f"rosy-site-{s}:{self.running}", "State": "running",
+                    "ID": f'{s}-container',
                     "Health": "healthy" if healthy else "unhealthy"}) for s in upd.SERVICES))
         if args[:3] == ["docker", "image", "load"]:
             commit = Path(args[-1]).parent.name
@@ -153,6 +158,9 @@ class FakeHost:
             return self._ok()
         if args[:3] == ["docker", "image", "ls"]:
             return self._ok("\n".join(sorted(self.images)))
+        if args[:3] == ['docker', 'container', 'inspect']:
+            service = args[-1].split('-')[0]
+            return self._ok(_image_id(self.running, service))
         if args[:2] == ["docker", "ps"]:
             return self._ok("\n".join(f"rosy-site-{s}:{self.running}" for s in upd.SERVICES))
         if args[:3] == ["docker", "image", "rm"]:
@@ -166,7 +174,9 @@ def _verifier(calls):
         calls.append((Path(folder).name, inspect_loaded_images))
         if not (Path(folder) / "release.json.sig").is_file():
             raise upd.CandidateVerificationError("release signature is missing or unsafe")
-        return json.loads((Path(folder) / 'release.json').read_text())
+        manifest = json.loads((Path(folder) / 'release.json').read_text())
+        manifest['accepted_image_ids'] = {s: [_image_id(manifest['source_commit'], s)] for s in upd.SERVICES}
+        return manifest
     return verify
 
 
@@ -493,6 +503,26 @@ def test_verifier_commit_must_match_candidate_directory(host):
         updater._verify(host.paths.candidates / OLD, loaded=False)
 
 
+@pytest.mark.parametrize('mismatch', ['backup', 'candidate'])
+def test_recovery_refuses_mismatched_rollback_evidence(host, mismatch):
+    updater = _updater(host, FakeHttp([], {}), FakeHost(host.paths))
+    shutil.copy2(host.paths.site_env, host.paths.env_backup)
+    target = host.paths.candidates / NEW
+    target.mkdir()
+    upd.write_env_tag(host.paths.site_env, NEW)
+    upd.swap_link(host.paths.link, target)
+    updater.save_state({'failed': {}, 'switch': {'previous': str(host.paths.candidates / OLD),
+                        'current': OLD, 'commit': NEW, 'tag': _tag(NEW)}})
+    if mismatch == 'backup':
+        upd.write_env_tag(host.paths.env_backup, NEW)
+    else:
+        updater.verifier = lambda *args, **kwargs: {'source_commit': NEW}
+    assert updater.run() == upd.EXIT_FAILED
+    assert host.paths.link.resolve() == target
+    assert upd.read_env(host.paths.site_env)['ROSY_SITE_IMAGE_TAG'] == NEW
+    assert 'switch' in updater.load_state()
+
+
 def test_prune_does_not_remove_images_when_container_listing_fails(host):
     fake = FakeHost(host.paths)
 
@@ -594,3 +624,83 @@ def test_installed_cli_loads_only_its_reviewed_modules(tmp_path):
     (tmp_path / 'site_update_io.py').unlink()
     # Missing reviewed helper must fail; never fall back to checkout/candidate code.
     assert subprocess.run(command, capture_output=True, cwd=tmp_path).returncode != 0
+
+
+def test_running_newer_stack_is_not_downgraded_when_env_is_stale(host):
+    releases, blobs = _world((NEW, '2026-10-04'))
+    fake = FakeHost(host.paths)
+    fake.running = NEWER
+    http = FakeHttp(releases, blobs)
+    assert _updater(host, http, fake).run() == upd.EXIT_FAILED
+    assert fake.running == NEWER and http.downloads == []
+    assert not any(c[:2] == ['systemctl', 'restart'] for c in fake.calls)
+
+
+def test_running_container_identity_must_match_signed_candidate(host):
+    releases, blobs = _world((NEW, '2026-10-04'))
+    fake = FakeHost(host.paths)
+
+    def runner(args, **kwargs):
+        if args[:3] == ['docker', 'container', 'inspect']:
+            return fake._ok(_image_id(NEWER, 'fleet'))
+        return fake(args, **kwargs)
+
+    http = FakeHttp(releases, blobs)
+    assert _updater(host, http, runner).run() == upd.EXIT_FAILED
+    assert http.downloads == []
+
+
+@pytest.mark.parametrize('content', ['{', '[]', '{"switch": null}', '{"switch": {}}'])
+def test_corrupt_journal_is_preserved_and_blocks_update(tmp_path, content):
+    paths = upd.Paths(tmp_path)
+    paths.state.parent.mkdir(parents=True)
+    paths.state.write_text(content)
+    updater = upd.SiteUpdater({}, paths=paths)
+    updater._update = lambda state: upd.EXIT_OK
+    assert updater.run() == upd.EXIT_FAILED
+    assert paths.state.read_text() == content
+
+
+def test_unreadable_journal_is_not_treated_as_empty(tmp_path, monkeypatch):
+    paths = upd.Paths(tmp_path)
+    original = Path.read_text
+
+    def denied(path, *args, **kwargs):
+        if path == paths.state:
+            raise PermissionError('journal unreadable')
+        return original(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, 'read_text', denied)
+    with pytest.raises(upd.Refused):
+        upd.SiteUpdater({}, paths=paths).load_state()
+
+
+def test_forget_failed_obeys_update_lock(tmp_path, monkeypatch):
+    paths = upd.Paths(tmp_path)
+    paths.state.parent.mkdir(parents=True)
+    content = json.dumps({'failed': {_tag(NEW): {'reason': 'test'}}})
+    paths.state.write_text(content)
+    monkeypatch.setattr(upd, 'Paths', lambda: paths)
+    monkeypatch.setattr(upd, 'load_config', lambda path: {})
+    with upd.run_lock(paths.lock):
+        assert upd.main(['forget-failed', _tag(NEW)]) == upd.EXIT_LOCKED
+    assert paths.state.read_text() == content
+
+
+@pytest.mark.parametrize('operation', ['get', 'download'])
+def test_truncated_http_body_is_retryable(tmp_path, operation):
+    import http.client
+
+    class Socket:
+        def makefile(self, *args):
+            return io.BytesIO(b'HTTP/1.1 200 OK\r\nContent-Length: 10\r\n\r\nabc')
+
+    response = http.client.HTTPResponse(Socket())
+    response.begin()
+    client = upd.Http()
+    client._open = lambda url: response
+    with pytest.raises(upd.Transient):
+        if operation == 'get':
+            client.get('https://example.invalid', 100)
+        else:
+            client.download('https://example.invalid', tmp_path / 'download')

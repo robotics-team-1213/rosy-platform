@@ -938,7 +938,9 @@ Each run (every 15 minutes, randomized by up to 5) picks the newest signed
 `site-*` release whose commit is a strict descendant of the running commit.
 Release creation time only orders eligible candidates; rebuilding an old
 commit cannot authorize a downgrade. The running signed manifest must match
-`site.env`, and a network error postpones the attempt without blacklisting it.
+`site.env`. Running container tags and immutable image identities must also
+match the signed archive before release selection. A network error, including
+an incomplete HTTP body, postpones the attempt without blacklisting it.
 Each eligible candidate:
 
 1. refuses without changing anything when `ROSY_SITE_PAIRING_COMPOSE` names a
@@ -977,6 +979,9 @@ state is in `/var/lib/rosy/site-autoupdate.json`
 (`sudo python3 -I /usr/local/lib/rosy-site/rosy_site_autoupdate.py status`).
 After fixing the cause of a failed tag, allow it again with
 `sudo python3 -I /usr/local/lib/rosy-site/rosy_site_autoupdate.py forget-failed site-<sha12>`.
+This command takes the updater lock. An unreadable or malformed state file
+blocks changes and is preserved for operator recovery. Interrupted rollback
+requires the backup environment and signed previous candidate to match the journal.
 When `verify_candidate.py`, `candidate_signing.py`, or `site_update_io.py` change on `main`, the
 administrator reinstalls them by the same reviewed path; the updater never
 copies them from a candidate.
