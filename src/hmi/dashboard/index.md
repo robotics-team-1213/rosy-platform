@@ -37,8 +37,8 @@
 
 ## 최근 기록
 
+- 2026-10-04 · uncommitted · feat(ui): 절차 표면의 작업 선택과 유지
 - 2026-10-03 · uncommitted · fix(link): 현재 접속과 후속 코드 규약 구별
 - 2026-10-03 · uncommitted · feat(link): D-432 주소 없는 장비 접속
 - 2026-10-03 · uncommitted · fix(console): 점유 격자를 가리지 않고 즉시 정지는 버튼이 확인이다
 - 2026-10-02 · uncommitted · D-423 카메라 범례에 거리 출처
-- 2026-10-02 · uncommitted · 스타일 가이드 어휘 패리티 — status·empty·actions·readout·icon + "아직 없는 넷" 현행화

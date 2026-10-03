@@ -809,3 +809,11 @@
 - 증거: 영향받는 Python 2345 passed/84 skipped, quick tier 459 passed/2 skipped, Pilot PWA 87 passed/58 skipped. 코드 규약 보정 뒤 해당 인증·페어링 시험을 다시 실행한다. 공개 검증 기록은 docs/validation/discovery-link-2026-10-03/README.md.
 - gate 변화: Android 설치·실제 CORE 인증 확인은 실제 주행·Cam 화면 off 연속 송출·현장 트래픽 수용과 별개다. DEVICE/FIELD 이동 없음.
 - 결정: D-432 후속 결정: 접속은 지금, 짧은 코드 통합은 추후 적용.
+
+## 2026-10-04 · uncommitted · feat(ui): 절차 표면의 작업 선택과 유지
+
+- 변경: `/setup` 5개·`/device` 7개 작업을 매니페스트 순서의 작업 선택기와 한 작업 영역으로 배치한다. 모든 허용 패널을 유지해 입력·결과를 보존하며, `beforeHide` 거부·오류·시간 초과는 현재 작업을 유지한다. 화면 종료는 진행 중 선택을 무효화하고 선택기를 잠근 뒤 제한 시간 안에 확인한다. 종료는 단일 실행이며 성공 때만 리스너·패널·폴링 scope를 닫는다. 운용 조작 그룹의 정지 확인은 유지한다.
+- 증거: Chromium 작업 선택 회귀 6 passed, 독립 품질 회귀 3 passed, 기존 토큰 삭제·정지 대화상자·장치 키보드 포커스·역할 팔레트 수정 확인 4 passed. CORE fixture의 두 테마·1366×768/390×844/1366×600 초기 12셀은 overflow/pageerror 0, 최종 대표 2셀도 0이다. 전체 dashboard 실행은 이전 fixture 상태로 실행 중이며 전체 통과를 주장하지 않는다.
+- gate 변화: SOURCE/LOCAL의 호스트 증거를 보완한다. 이미지 설치·실제 장치·현장 수용은 확인하지 않았다.
+- 결정: D-439. 캡처·pytest 임시는 X:\DevTemp\rosy-ui-unify\task-navigation 에 둔다.
+- 추가 검증: 최종 작업 선택 회귀 6 passed (261.20s), 독립 품질 3 passed (182.47s), 기존 네 대상을 4 passed (180.26s)로 확인했다. 이전 fixture로 시작한 전체 dashboard 실행은 알려진 숨겨진 토큰 패널 2개 실패가 있는 채로 CtrlC 중단했다. 전체 PASS 판정은 없다. 중첩 G2 캡처는 장치 정체성·보드 갱신·운용자 접근 거부까지 생성되었다.

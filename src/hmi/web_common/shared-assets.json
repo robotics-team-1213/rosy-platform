@@ -15,6 +15,8 @@
     "icons/cam.svg": "image/svg+xml",
     "icons/pilot.svg": "image/svg+xml",
     "icons/console.svg": "image/svg+xml",
-    "icons/robot.svg": "image/svg+xml"
+    "icons/robot.svg": "image/svg+xml",
+    "task-chooser.js": "text/javascript",
+    "task-chooser.css": "text/css"
   }
 }

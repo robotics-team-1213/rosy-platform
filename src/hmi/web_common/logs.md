@@ -495,3 +495,10 @@
 - 증거: 공용 컨트롤 26 passed, 표면 registry/토큰 parity 18 passed, 아이콘 재적용·비활성 사유·Enter 동작 브라우저 1 passed. Android 실제 생성값 비교는 PilotColorsTest가 담당한다.
 - gate 변화: 공용 라이브러리의 DEVICE/FIELD는 N/A; 소비 앱 장치 증거와 구별한다.
 - 결정: D-432 공용 디자인 규칙의 소유권.
+
+## 2026-10-04 · uncommitted · feat(ui): 재사용 가능한 절차 작업 선택기
+
+- 변경: `task-chooser.js`/`.css`를 단일 공유 자산 대장과 CMake 설치 목록에 등록한다. 기존 segment 버튼·native field·토큰·반응형 단계를 재사용한다. 안정된 작업 ID, 선택 표시, 방향/Home/End 키, 모바일 선택과 포커스, 전환 대기·거부·오류·시간 제한, 종료 시 선택 잠금과 리스너 정리를 제공한다. 데이터 요청·인증·패널 lifecycle은 호출 표면이 소유한다.
+- 증거: 작업 선택 및 셸 종료 Chromium 회귀 6 passed와 독립 품질 회귀 3 passed. 기존 공유/콘솔 묶음 246 passed와 역할 팔레트 1개 실패 후, D-277 역할 위치 표식을 유지하고 해당 계약을 포함한 4개 대상 회귀를 통과했다. 공유 asset/install 대장 검증은 앞 묶음에 포함한다.
+- gate 변화: 라이브러리 SOURCE/LOCAL 호스트 검증을 보완하며 소비 표면의 DEVICE/FIELD를 대신하지 않는다.
+- 결정: D-439. 공용 helper는 패널을 만들거나 제거하지 않고 전달받은 작업의 가시성과 조작 상태만 관리한다.
