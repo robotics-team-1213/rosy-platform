@@ -4,6 +4,11 @@
 D-427 part. These tests keep that map complete and evaluate the §2 import
 table over the Python files of each part.
 
+Step B migration fields (docs/plans/2026-10-03-d427-source-migration.md, wave 0):
+``wave`` names the wave that moves a root (``none`` when it is already in place),
+``deferred`` names the follow-up that splits a root out of the parent package it
+moves with (Q2). See ``_state`` for moved / partly moved / pending.
+
 KNOWN_VIOLATIONS is checked by set equality (D-168 P5 convention): a new edge
 fails, and so does a listed edge that no longer occurs. The list only shrinks;
 remove an entry in the change that removes the import.
@@ -216,6 +221,78 @@ def test_package_targets_are_leaf_unique():
         if a is not b and _under(b["d427_target"], a["d427_target"])
     ]
     assert clashes == [], f"package targets must be one folder per package: {clashes}"
+
+
+WAVES = {"1", "2c", "3a", "3b", "3c", "4a", "4b", "4c", "4d", "4e"}
+
+
+def _parent(root: dict, roots: list[dict]) -> dict | None:
+    return _owner(str(PurePosixPath(root["path"]).parent), roots)
+
+
+def _state(root: dict, roots: list[dict]) -> str:
+    """D-427 migration state of a root.
+
+    moved: ``path == d427_target``. partly moved: carries ``deferred`` (the
+    follow-up that splits it out) and sits inside its moved parent package.
+    pending: anything else, including a deferred root whose parent has not moved.
+    """
+    if root["path"] == root["d427_target"]:
+        return "moved"
+    parent = _parent(root, roots)
+    if root.get("deferred") and parent is not None and parent["path"] == parent["d427_target"]:
+        return "partly_moved"
+    return "pending"
+
+
+def test_every_root_has_a_wave_and_pending_roots_name_theirs():
+    roots = _manifest()["roots"]
+    bad = []
+    for root in roots:
+        wave = root.get("wave")
+        state = _state(root, roots)
+        if wave not in WAVES | {"none"}:
+            bad.append(f"{root['path']}: wave {wave!r} not in {sorted(WAVES)} or none")
+        elif state == "pending" and wave == "none":
+            bad.append(f"{root['path']}: pending root needs the wave that moves it")
+        elif wave == "none" and root.get("deferred"):
+            bad.append(f"{root['path']}: a deferred root moves in its parent's wave")
+    assert bad == [], bad
+    assert {root["wave"] for root in roots} >= WAVES, "every wave moves at least one root"
+
+
+def test_deferred_roots_ride_inside_their_parent_package():
+    """A deferred root moves with its parent package and keeps its own target, so its
+    path is always inside the parent's path (old location before, parent target after)."""
+    roots = _manifest()["roots"]
+    deferred = [root for root in roots if "deferred" in root]
+    assert len(deferred) >= 3, "Q2 starts with fleet web and gz_sim launch/scripts deferred"
+    for root in deferred:
+        assert isinstance(root["deferred"], str) and root["deferred"].strip(), root
+        assert root["path"] != root["d427_target"], f"{root['path']}: moved roots drop deferred"
+        parent = _parent(root, roots)
+        assert parent is not None and _is_package_root(parent), (
+            f"{root['path']}: deferred needs an enclosing package root"
+        )
+        assert root["wave"] == parent["wave"], f"{root['path']} moves in {parent['path']}'s wave"
+        assert not _under(root["d427_target"], parent["d427_target"]), (
+            f"{root['path']}: a target inside the parent package is not a split; drop the root"
+        )
+
+
+def test_root_states_follow_path_target_and_deferred():
+    parent = {"path": "a/pkg", "d427_target": "x/pkg", "part": "middleware"}
+    child = {"path": "a/pkg/web", "d427_target": "y/web", "part": "operations", "deferred": "T9"}
+    roots = [parent, child]
+    assert _state(parent, roots) == "pending"
+    assert _state(child, roots) == "pending"
+    moved_parent = {**parent, "path": "x/pkg"}
+    moved_child = {**child, "path": "x/pkg/web"}
+    roots = [moved_parent, moved_child]
+    assert _state(moved_parent, roots) == "moved"
+    assert _state(moved_child, roots) == "partly_moved"
+    assert _state({**moved_child, "deferred": None}, roots) == "pending"
+    assert _state({**moved_child, "path": "y/web"}, [moved_parent, {**moved_child, "path": "y/web"}]) == "moved"
 
 
 def test_every_tracked_file_has_exactly_one_owner():
