@@ -71,6 +71,11 @@ FILES = {
     "src/runtime/api_web/core_api_web/app.py": "import core\n",
     "src/runtime/api_web/test/test_app.py": "import core_api_web\n",
     "deploy/robot/run.sh": "echo run\n",
+    "deploy/robot/pinky_pro/udev/99-rosy.rules": "# pinky\n",
+    "deploy/robot/omx/udev/99-rosy.rules": "# omx\n",
+    "deploy/robot/pinky_pro/compose.yaml": "services: {}\n",
+    "deploy/site/compose.yaml": "services: {}\n",
+    "test/test_udev_rules.py": 'RULES = ROOT / "deploy" / "robot" / "pinky_pro" / "udev" / "99-rosy.rules"\n',
     "docs/adr/D-1-sample.md": "## D-1 sample\n",
     "docs/reference/line-follow.md": "# line follow\n",
     "tools/AGENTS.md": "# tools\n",
@@ -129,8 +134,14 @@ CASES = [
     ("changed test file -> only that file", ["src/runtime/sensing/test/test_battery.py"], "affected",
      {"src/runtime/sensing/test/test_battery.py"}),
     ("test helper -> the tests importing it", ["test/fake_core_ssh.py"], "affected", {"test/test_ssh_access.py"}),
-    ("deploy -> functional, not the whole root test/", ["deploy/robot/run.sh"], "affected",
-     {"test/test_robot_runtime.py"}),
+    ("deploy file named by path parts -> that test + deploy functional, not the whole root test/",
+     ["deploy/robot/pinky_pro/udev/99-rosy.rules"], "affected",
+     {"test/test_udev_rules.py", "test/test_robot_runtime.py"}),
+    ("deploy file no test names -> whole root suite (narrowing needs a referencing test)",
+     ["deploy/robot/run.sh"], "affected", {"test"}),
+    ("deploy compose manifest -> full (tests reach it through path constants)",
+     ["deploy/robot/pinky_pro/compose.yaml"], "full", None),
+    ("native unit manifest -> full", ["deploy/robot/pinky_pro/native/rosy-x.service"], "full", None),
     ("conftest -> full", ["src/runtime/gateway/test/conftest.py"], "full", None),
     ("CI workflow -> full", [".github/workflows/ci.yml"], "full", None),
     ("selector config -> full", ["tools/harness/harness.yaml"], "full", None),
@@ -251,7 +262,40 @@ def test_local_run_of_a_full_selection_runs_only_guards_and_direct_suites(sample
     monkeypatch.setattr(affected.subprocess, "run", lambda cmd, cwd: ran.append(cmd) or Done())
     assert affected.run(sample, sel) == 0
     local = {p for cmd in ran for p in cmd[3:] if not p.startswith("-")}
-    assert local == GUARDS | {"test/test_rosy_ssh_enroll.py"}, "FULL stays on GitHub by default"
+    # core_common's own suite and its direct reverse dependent (sensing imports core_common)
+    # run locally; the rest of the full tier stays on GitHub.
+    assert local == GUARDS | {"test/test_rosy_ssh_enroll.py", "src/contracts/foundation/test",
+                              "src/runtime/sensing/test"}, "FULL stays on GitHub by default"
+    assert "test" not in local and "src/runtime/gateway/test" not in local
     ran.clear()
     affected.run(sample, sel, allow_full=True)
     assert "test" in {p for cmd in ran for p in cmd}
+
+
+def test_escalated_paths_are_still_mapped_for_the_local_run(sample):
+    """Review fix: a FULL selection runs locally as guards + the escalated module's own suites."""
+    sel = _select(sample, "src/contracts/foundation/core_common/schemas.py")
+    assert sel.mode == "full"
+    local = {p for inv in sel.local_invocations for p in inv}
+    assert "src/contracts/foundation/test" in local, "core_common's own suite must run locally"
+    assert GUARDS <= local
+    assert not any("maps to no module" in e for e in sel.escalations), "a trigger is not also 'unknown'"
+
+
+def test_parts_match_selects_a_shared_basename_by_its_parent(sample):
+    repo = affected.Repo.load(sample)
+    assert "test/test_udev_rules.py" in repo.referencing_tests("deploy/robot/pinky_pro/udev/99-rosy.rules")
+    assert "test/test_udev_rules.py" not in repo.referencing_tests("deploy/robot/pinky_pro/compose.yaml")
+
+
+def test_skip_drops_paths_the_caller_already_ran(sample, monkeypatch):
+    sel = _select(sample, "tools/ssh/rosy_ssh_enroll.py")
+    ran = []
+
+    class Done:
+        returncode = 0
+
+    monkeypatch.setattr(affected.subprocess, "run", lambda cmd, cwd: ran.append(cmd) or Done())
+    affected.run(sample, sel, skip=frozenset(GUARDS))
+    paths = {p for cmd in ran for p in cmd[3:] if not p.startswith("-")}
+    assert paths == {"test/test_rosy_ssh_enroll.py"}

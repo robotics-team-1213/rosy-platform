@@ -55,6 +55,12 @@ FULL_TRIGGERS = (
     ("**/pytest.ini", "pytest configuration"),
     ("**/tox.ini", "pytest configuration"),
     ("**/*requirements*.txt", "pinned Python dependencies"),
+    # Contract tests reach these through path constants (DEPLOY / "compose.yaml",
+    # staged / "runtime/compose.yaml"), which no path match finds reliably.
+    ("deploy/**/compose*.yaml", "deploy compose manifest"),
+    *((f"deploy/robot/*/{area}/*.{suffix}", f"{area} manifest")
+      for area in ("image", "native")
+      for suffix in ("service", "timer", "path", "target", "conf", "env", "txt", "json", "yaml", "list")),
 )
 
 # Whole suites the CI full run (.github/workflows/ci.yml) executes beyond the
@@ -221,18 +227,29 @@ class Repo:
         return sum(1 for t in self.tracked if PurePosixPath(t).name == name) == 1
 
     def referencing_tests(self, path: str) -> list[str]:
-        """Test files that name `path` (repo path, unique basename, or helper import)."""
+        """Test files that name `path`.
+
+        By repo path, by a basename unique in the repository, by a helper import,
+        or by path components: the basename and its parent directory both appear
+        as whole tokens, which is how contract tests build paths
+        (``ROOT / "deploy" / "robot" / "pinky_pro" / "compose.yaml"``) for a name
+        such as ``compose.yaml`` that several directories share.
+        """
         p = PurePosixPath(path)
         needles = [path]
         if p.name not in IGNORED_BASENAMES and self.basename_unique(path):
             needles.append(p.name)
+        parts = None
+        if p.name not in IGNORED_BASENAMES and p.parent.name:
+            parts = [re.compile(rf"(?<![\w.-]){re.escape(token)}(?![\w.-])") for token in (p.name, p.parent.name)]
         helper = p.stem if p.suffix == ".py" and not TEST_FILE.search(path) else None
         found = []
         for test in self.test_files:
             if test == path:
                 continue
             text = self.text(test)
-            if any(n in text for n in needles) or (helper and helper in self.imports(test)):
+            if (any(n in text for n in needles) or (helper and helper in self.imports(test))
+                    or (parts and all(rx.search(text) for rx in parts))):
                 found.append(test)
         return found
 
@@ -277,8 +294,9 @@ def select(repo: Repo, changed: list[str]) -> Selection:
     for path in changed:
         trigger = next((why for pattern, why in FULL_TRIGGERS if _match(path, pattern)), None)
         if trigger:
+            # Still map the path below: a FULL selection runs locally as the guards plus
+            # these suites (the escalated module's own tests, its referencing tests).
             sel.escalations.append(f"{path}: {trigger}")
-            continue
         if TEST_FILE.search(path):
             if repo.exists(path):
                 add(path, f"changed test file {path}")
@@ -291,11 +309,13 @@ def select(repo: Repo, changed: list[str]) -> Selection:
             touched_modules[module["name"]] = module
             tests = module.get("tests") or []
             if set(tests) & BROAD_TESTS:
-                narrowed = [t for t in tests if t not in BROAD_TESTS] + (module.get("functional") or [])
-                for test in narrowed:
-                    add(test, f"module {module['name']} ({path}; root test/ narrowed to functional)")
-                if not narrowed and not referencing:
-                    add("test", f"module {module['name']} ({path}; no narrower test found)")
+                if referencing:
+                    narrowed = [t for t in tests if t not in BROAD_TESTS] + (module.get("functional") or [])
+                    for test in narrowed:
+                        add(test, f"module {module['name']} ({path}; root test/ narrowed to functional)")
+                else:
+                    # No test names this file: the narrowing has nothing to stand on.
+                    add("test", f"module {module['name']} ({path}; no test names it, whole root suite)")
             else:
                 for test in tests:
                     add(test, f"module {module['name']} ({path})")
@@ -304,7 +324,7 @@ def select(repo: Repo, changed: list[str]) -> Selection:
         importing = [t for t in repo.test_files if prefixes and repo.imports_prefix(t, prefixes)]
         for test in importing:
             add(test, f"imports {'/'.join(prefixes)} ({path})")
-        if referencing or importing:
+        if referencing or importing or trigger:
             continue
         if path.endswith(".md"):
             continue  # D-436 2: a Markdown note outside every module runs the guards only.
@@ -381,13 +401,18 @@ def render(sel: Selection) -> str:
     return "\n".join(lines) + "\n"
 
 
-def run(repo_root: Path, sel: Selection, allow_full: bool = False) -> int:
+def run(repo_root: Path, sel: Selection, allow_full: bool = False,
+        skip: frozenset[str] = frozenset()) -> int:
     invocations = sel.invocations
     if sel.mode == "full" and not allow_full:
         # D-436 4: the full suite runs on GitHub runners, not on this machine.
-        print("[affected] FULL tier runs on GitHub Actions (push, then `gh run watch`);"
-              " running only the guards and directly affected suites here. --full overrides.", flush=True)
+        print("[affected] FULL tier runs on GitHub Actions (push, then `gh run watch`); running here"
+              " only the guards and the suites mapped from the changed files (owning module, direct"
+              " reverse dependents, referencing tests). --full overrides.", flush=True)
         invocations = sel.local_invocations
+    if skip:
+        invocations = [kept for kept in ([p for p in inv if p not in skip] for inv in invocations) if kept]
+        print(f"[affected] skipping {len(skip)} path(s) the caller already ran", flush=True)
     status = 0
     for inv in invocations:
         command = pytest_command(inv, sys.executable)
@@ -400,7 +425,7 @@ def run(repo_root: Path, sel: Selection, allow_full: bool = False) -> int:
 
 
 def main(repo_root: Path, base: str, mode: str, as_json: bool,
-         matrix: bool = False, allow_full: bool = False) -> int:
+         matrix: bool = False, allow_full: bool = False, skip: tuple[str, ...] = ()) -> int:
     repo = Repo.load(repo_root)
     try:
         changed = changed_files(repo_root, base)
@@ -421,5 +446,5 @@ def main(repo_root: Path, base: str, mode: str, as_json: bool,
     else:
         print(render(sel), end="")
     if mode == "run":
-        return run(repo_root, sel, allow_full)
+        return run(repo_root, sel, allow_full, frozenset(skip))
     return 0
