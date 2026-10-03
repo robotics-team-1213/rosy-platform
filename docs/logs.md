@@ -4818,15 +4818,15 @@
 - gate 변화: 없음. 레거시 발견 conflict 정리·관제 PC 재부팅·outbound FleetAgent·물리 marker commissioning 완료를 이 문서로 주장하지 않는다.
 - 검증: frontmatter/claims validator와 독립 문서 grounding, 문서 계약·harness 검사로 기록 내용과 탐색 가능성을 확인한다.
 
+## 2026-10-03 · uncommitted · docs: D-436 change-scoped host test tiers
+
+- 변경: D-436(호스트 시험은 변경 범위로 고른다) ADR·ADR Log 행을 추가하고, `rosy_harness.py affected` 선택기·시험, pre-push affected 티어, ci.yml PR affected / main·야간·수동 풀 분기, 루트·harness·hooks·workflows AGENTS 시험 안내를 같은 브랜치(`feat/ci-affected-tests`)에 맞췄다.
+- 증거: `test/test_affected_tests.py` 표 시험(tools/ssh·core_common·미분류·sensing 역의존·문서·보조 모듈·deploy 축소·conftest/workflow/설정 escalation·base 부재)과 변이 증명 2건; D-418 브랜치 diff 선택 결과(core_common·platform_parts·tools/device_twin 미분류로 FULL).
+- gate 변화: 없음. 저장소 도구·CI·작업 규칙만이며 장치·이미지·현장 수용과 무관하다.
+
 ## 2026-10-04 · uncommitted · site(D-437): verifier accepts the containerd image ID form
 - 변경: `deploy/site/verify_candidate.py` 전체 검증이 해시 확인을 마친 `images.tar`에서 서비스별 config blob과 `index.json`이 가리키는 OCI manifest blob을 읽어(링크 거부, 디스크 추출 없음) 바이트 해시를 다시 계산하고, manifest의 `config.digest`가 서명된 `image_id`와 같을 때만 manifest digest도 받는다. summary에 `id_form`(`config`/`oci-manifest`). `index.json`이 없는 archive는 config 형태만. 검증기·서명 시험의 가짜 archive를 실제 tar로 바꾸고 containerd·위조 경우 시험 추가. D-437 Consequences, `deploy/site/README.md` 검증 절
 - 증거: 사이트 후보·검증·서명·fetch·workflow 시험과 `test_no_secrets_in_tracked_files`, harness lint. 현장 호스트에서 다시 돌린 것은 아님
 - gate 변화: 없음(호스트 결과). containerd image store 사이트 호스트의 전체 검증 재실행이 남았다
 - 결정: D-437 Consequences 보강(manifest 형식 변경 없음)
 - 교훈: Docker image ID는 image store마다 다르다. 서명된 config digest에서 출발해 archive 안 blob 바이트로 다른 형태를 이어 붙여야 보안을 낮추지 않고 두 store를 모두 받을 수 있다
-
-## 2026-10-03 · uncommitted · docs: D-436 change-scoped host test tiers
-
-- 변경: D-436(호스트 시험은 변경 범위로 고른다) ADR·ADR Log 행을 추가하고, `rosy_harness.py affected` 선택기·시험, pre-push affected 티어, ci.yml PR affected / main·야간·수동 풀 분기, 루트·harness·hooks·workflows AGENTS 시험 안내를 같은 브랜치(`feat/ci-affected-tests`)에 맞췄다.
-- 증거: `test/test_affected_tests.py` 표 시험(tools/ssh·core_common·미분류·sensing 역의존·문서·보조 모듈·deploy 축소·conftest/workflow/설정 escalation·base 부재)과 변이 증명 2건; D-418 브랜치 diff 선택 결과(core_common·platform_parts·tools/device_twin 미분류로 FULL).
-- gate 변화: 없음. 저장소 도구·CI·작업 규칙만이며 장치·이미지·현장 수용과 무관하다.
