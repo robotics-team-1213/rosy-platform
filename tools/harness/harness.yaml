@@ -7,6 +7,9 @@ adr_log: docs/reference/ROSY ADR Log.md
 
 # IDs absent from the ADR log on purpose. Remove an entry once the ADR is written.
 adr_gaps:
+  D-446: "ADR already on main, pending learning branch rebase"
+  D-447: "ADR already on main, pending learning branch rebase"
+  D-448: "ADR on another local branch, reserved before learning artifact draft D-449"
   D-428: "ADR written on branch feat/d428-web-face-sweep (8ce5cc237), not yet on main; remove when it lands"
   D-439: "ADR on branch feat/hmi-task-layout (task-oriented web app design), not yet on main; remove when it lands"
   D-440: "ADR on branch feat/device-power-policy (per-device power policy), not yet on main; remove when it lands"

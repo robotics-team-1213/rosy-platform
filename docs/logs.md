@@ -4992,3 +4992,9 @@
 - 변경: recording_job.py가 선택적 harvest→출처 catalog→autolabel→store build→train_job을 연결한다. 평가 session 제외, SHA 재개 검사, 부분 라벨 attempt, parent/child job 결과를 기록한다. idle 우회 옵션을 받지 않고 기존 원본/catalog를 보존한다.
 - 증거: TDD로 중단/변조/heldout/identity/harvest CLI·재시도/parent READY를 검증하고 실제 합성 MP4→autolabel CLI→build 왕복을 실행했다. 필터 후 train1/val1, dataset15c6bd04. 상세 recording-job-2026-10-04.md. 모델 PC SSH 추가 인증이 필요해 실제 녹화의 전체 재실행은 대기한다.
 - gate 변화: SOURCE/LOCAL 앞단 연결 증거. 실제 장치 harvest·실데이터 전체 job·shadow/rollback·system timer·Episode/PolicyArtifact/OMX/Pinky/Fleet·DEVICE/FIELD는 미완료이며 목표active다.
+
+## 2026-10-04 · uncommitted · feat(learning): define shared artifacts and wrap OMX Episodes
+
+- 변경: D-449 Proposed와 stdlib contracts/learning wheel에 Episode/DatasetManifest/PolicyArtifact/PromotionRecord 초안을 구현했다. OMX validated 시연 원본 bytes를 공통 Episode로 감싸고 clock/rad/unknown·operator 과제 표시를 보존했다. owner final command와 runtime 승격은 별도다.
+- 증거: 공통 계약16pass, OMX 변환+export 관련22pass1skip. 소유/import/문서/harness108pass1skip·26기존warn. X에서wheel빌드 SHA8ab5c517. learning-contracts-2026-10-04.md에 검증 범위와 잔여 gate를 기록했다.
+- gate 변화: SOURCE/LOCAL 계약·테스트 시연 변환 증거. 기존 middleware validator 의존/Q6, 정책학습·registry/owner enforcement·OMX/Pinky/Fleet·SIM/DEVICE/FIELD는 미완료. SSH 추가 인증 대기와 기존 operator hold를 유지하며 전체목표active다.

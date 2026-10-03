@@ -52,6 +52,13 @@ import_rules:
 concerns: [learning, decision, control, safety, contracts, other]
 
 roots:
+  - path: contracts/learning
+    part: contracts
+    d427_target: contracts/learning
+    wave: none
+    import_prefix: [rosy.contracts.learning]
+    concern: contracts
+    note: D-449 draft artifact schemas; stdlib only, no runtime authority.
   # --- contracts -----------------------------------------------------------
   - path: src/contracts/foundation
     part: contracts

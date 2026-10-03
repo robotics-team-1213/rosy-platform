@@ -192,6 +192,7 @@
 | D-435 | 작업 오케스트레이션·Fleet·장치 실행을 역할과 권한으로 구분한다 |
 | D-444 | 웹 표면 게이트는 release 이미지를 탄다 — dashboard·pilot ARTIFACT는 서명 release 안 share/ 설치 관측, pilot DEVICE는 실기 페달·e-stop 정지 계약 측정 |
 | D-445 | Fleet 승격 경로(ROS-SIM D-426 → ARTIFACT D-437 첫 실행·D-301 서명 → DEVICE 사이트 PC·2대)와 중앙 Fleet(8081) 착수 전제 3개를 고정한다. 착수 자체는 별도 ADR |
+| D-449 | 학습 산출물은 출처·시계·단위·owner binding과 승격 증거를 공용 계약으로 보존한다 |
 
 ## 계획·결과 문서
 
@@ -279,8 +280,8 @@
 
 ## 최근 기록
 
+- 2026-10-04 · uncommitted · feat(learning): define shared artifacts and wrap OMX Episodes
 - 2026-10-04 · uncommitted · feat(learning): connect recording curation to resumable model jobs
 - 2026-10-04 · uncommitted · feat(learning): resume GPU training through qualified READY
 - 2026-10-04 · uncommitted · verify(learning): prepare recorded-video labels and accept READY candidate
 - 2026-10-04 · uncommitted · verify(learning): compare baseline and lighting Dice model candidates
-- 2026-10-04 · uncommitted · feat(learning): compare supervised recipes and plan perception classes

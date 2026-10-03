@@ -438,3 +438,4 @@
 | D-441 | 사이트 스택 자동 업데이트: main push 빌드 → 서명 PC 자동 서명 → 사이트 호스트 자동 설치·롤백 | Accepted (2026-10-04, 사용자 결정; D-437 수동 실행·손 서명과 D-301 운영자 승인 개정, workflow push 실행·서명 PC 예약 작업·호스트 설치와 첫 자동 갱신은 미검증, 사이트 키 미준비) |
 | D-444 | 웹 표면 게이트는 release 이미지를 탄다 — dashboard·pilot ARTIFACT는 서명 release 안 share/ 설치 관측, pilot DEVICE는 실기 페달·e-stop 정지 계약 측정 | Proposed (2026-10-04, 사다리 계획 승인; 문서 결정, 관측·측정 별도) |
 | D-445 | Fleet 승격 경로(ROS-SIM D-426 → ARTIFACT D-437 첫 실행·D-301 서명 → DEVICE 사이트 PC·2대)와 중앙 Fleet(8081) 착수 전제 3개를 고정한다. 착수 자체는 별도 ADR | Proposed (2026-10-04, 사다리 계획 승인; 문서 결정, 승격·착수 별도) |
+| D-449 | 학습 산출물은 출처·시계·단위·owner binding과 승격 증거를 공용 계약으로 보존한다 | Proposed (2026-10-04, active learning closure implementation; 구조·wire 초안이며 runtime 활성화·장치 수용 승인 아님) |
