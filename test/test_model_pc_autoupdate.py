@@ -238,6 +238,63 @@ def test_build_only_uses_committed_source(tmp_path, keys):
     assert (tmp_path / "result/src/contracts/foundation/core_common/__init__.py").read_text() == "PINNED = True\n"
 
 
+def test_uncommitted_perception_edits_are_kept(tmp_path):
+    m = module()
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    def git(*args):
+        return subprocess.check_output(["git", "-C", str(repo), *args], text=True).strip()
+    git("init")
+    edited = repo / "learning/training/perception/rosy_ml.py"
+    edited.parent.mkdir(parents=True)
+    edited.write_text("print('committed')\n", encoding="utf-8")
+    git("add", "learning/training/perception/rosy_ml.py")
+    git("-c", "user.name=Test", "-c", "user.email=test@example.invalid", "commit", "-m", "fixture")
+    edited.write_text("print('local edit')\n", encoding="utf-8")
+    assert m.perception_edits([repo]) == "uncommitted perception edits"
+    assert edited.read_text(encoding="utf-8") == "print('local edit')\n"
+    (repo / "notes.txt").write_text("outside the code payload", encoding="utf-8")
+    git("checkout", "--", "learning/training/perception/rosy_ml.py")
+    assert m.perception_edits([repo]) is None
+    assert m.perception_edits([tmp_path / "not-a-checkout"]) is None
+
+
+def test_a_local_script_that_differs_from_the_signed_release_is_refused(tmp_path):
+    m = module()
+    signed = tmp_path / "signed"
+    local = tmp_path / "work" / "learning/training/perception"
+    signed.mkdir()
+    local.mkdir(parents=True)
+    (signed / "rosy_ml.py").write_bytes(b"print('signed')\n")
+    (local / "rosy_ml.py").write_bytes(b"print('local edit')\n")
+    assert "differs" in m.checkout_script_conflict(signed, local, "rosy_ml.py")
+    (local / "rosy_ml.py").write_bytes(b"print('signed')\n")
+    assert m.checkout_script_conflict(signed, local, "rosy_ml.py") is None
+    assert m.checkout_script_conflict(signed, tmp_path / "absent", "rosy_ml.py") is None
+
+
+@pytest.mark.skipif(os.name == "nt", reason="Linux symlink/flock updater")
+def test_dirty_checkout_holds_the_switch_and_keeps_the_edit(tmp_path, keys):
+    m = module()
+    repo = tmp_path / "checkout"
+    repo.mkdir()
+    def git(*args):
+        return subprocess.check_call(["git", "-C", str(repo), *args])
+    git("init")
+    edited = repo / "learning/training/perception/rosy_ml.py"
+    edited.parent.mkdir(parents=True)
+    edited.write_text("print('committed')\n", encoding="utf-8")
+    git("add", "learning/training/perception/rosy_ml.py")
+    git("-c", "user.name=Test", "-c", "user.email=test@example.invalid", "commit", "-m", "fixture")
+    edited.write_text("print('local edit')\n", encoding="utf-8")
+    root = tmp_path / "state"
+    candidate(m, root, keys)
+    result = updater(m, root, keys, legacy_roots=(repo,)).run()
+    assert result["result"] == "held" and result["reason"] == "uncommitted perception edits"
+    assert edited.read_text(encoding="utf-8") == "print('local edit')\n"
+    assert not (root / "current").exists()
+
+
 def test_config_requires_absolute_legacy_roots(tmp_path):
     m = module()
     p = tmp_path / "config.json"

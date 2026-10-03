@@ -57,6 +57,7 @@ model-watch도 같은 실행기와 lock을 사용한다. 평가 후 shadow까지
 
 ## 보류와 복구
 
+- 등록한 checkout이나 작업 디렉터리의 `learning/training/perception`에 커밋하지 않은 수정이 있으면 전환을 보류하고 그 파일은 그대로 둔다. exec는 그 수정본을 서명 릴리스 대신 실행하지 않는다. 수정을 브랜치에 커밋해 개발 PC로 가져온 뒤, 더 큰 sequence의 새 서명 후보로 공급한다.
 - `$ROOT/HOLD`가 있으면 updater만 보류한다. 작업을 중단하지 않는다.
 - GPU 관측 실패, 사용률/compute job, legacy learning/Isaac job 또는 work lock은 `held`다. GPU 사용률 0만으로 유휴 판정하지 않는다.
 - 환경 fingerprint 불일치는 별도 환경 릴리스를 요구한다. updater는 pip/apt/CUDA/Isaac 업그레이드를 실행하지 않는다.
