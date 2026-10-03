@@ -632,6 +632,34 @@ def _moved_roots(repo: Path) -> list[dict]:
     return [root for root in roots if root.get("legacy")]
 
 
+def _moved_owner(module_path: str, moved_roots: list[dict]) -> dict | None:
+    owners = [root for root in moved_roots
+              if module_path == root["path"] or module_path.startswith(root["path"] + "/")]
+    return max(owners, key=lambda root: len(root["path"]), default=None)
+
+
+def _append_only_findings(repo: Path, refs: list[str], name: str, module_path: str, text: str,
+                          moved_roots: list[dict]) -> tuple[list[str], list[str]]:
+    """Errors for edited committed log entries, and a warning when a module inside a
+    moved root has no history to compare with (e.g. a rename git did not detect).
+
+    A warning, not an error: a module created after the base ref inside a moved
+    root has no history either, and that is legitimate.
+    """
+    errors: list[str] = []
+    warnings: list[str] = []
+    for ref in refs:
+        committed = _committed_log(repo, ref, module_path, moved_roots)
+        if committed is None:
+            if _moved_owner(module_path, moved_roots) is not None:
+                warnings.append(
+                    f"{name}/logs.md: append-only check skipped at {ref[:12]}: no logs.md at {module_path}, "
+                    "its D-427 legacy path or a detected rename; keep moved logs at 100% rename similarity")
+        elif not is_append_only(committed, text):
+            errors.append(f"{name}/logs.md: entries committed at {ref[:12]} were edited; logs are append-only")
+    return errors, warnings
+
+
 def _committed_log(repo: Path, ref: str, module_path: str, moved_roots: list[dict]) -> str | None:
     """``logs.md`` of a module as committed at ``ref``, following a D-427 move.
 
@@ -643,11 +671,9 @@ def _committed_log(repo: Path, ref: str, module_path: str, moved_roots: list[dic
     committed = _git(repo, "show", f"{ref}:{rel}")
     if committed is not None:
         return committed
-    owners = [root for root in moved_roots
-              if module_path == root["path"] or module_path.startswith(root["path"] + "/")]
-    if not owners:
+    owner = _moved_owner(module_path, moved_roots)
+    if owner is None:
         return None
-    owner = max(owners, key=lambda root: len(root["path"]))
     if owner["path"] == module_path:
         return _git(repo, "show", f"{ref}:{owner['legacy']}/logs.md")
     renamed = _git(repo, "log", "-1", "--follow", "-M", "--diff-filter=R", "--format=", "--name-status",
@@ -705,10 +731,9 @@ def lint(repo: Path) -> tuple[list[str], list[str]]:
         else:
             text = log_path.read_text(encoding="utf-8")
             errors += [f"{name}/logs.md: {e}" for e in validate_log(text)]
-            for ref in refs:
-                committed = _committed_log(repo, ref, module["path"], moved_roots)
-                if committed is not None and not is_append_only(committed, text):
-                    errors.append(f"{name}/logs.md: entries committed at {ref[:12]} were edited; logs are append-only")
+            log_errors, log_warnings = _append_only_findings(repo, refs, name, module["path"], text, moved_roots)
+            errors += log_errors
+            warnings += log_warnings
 
         commit = (meta.get("last_verified") or {}).get("commit")
         if commit == UNCOMMITTED:

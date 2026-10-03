@@ -508,3 +508,32 @@ def test_append_only_follows_a_moved_module_through_legacy(tmp_path):
         edited = GOOD_LOG.replace("- 변경: a", "- 변경: rewritten")
         assert not harness.is_append_only(committed, edited)
     assert harness._committed_log(tmp_path, base, "new/other", moved) is None
+
+
+def test_unfollowable_moved_log_is_reported_not_silently_passed(tmp_path):
+    """A nested logs.md rewritten below git's 50 % rename similarity in the move
+    commit has no traceable history; lint must say the check was skipped."""
+    git = _git_repo(tmp_path)
+    (tmp_path / "old/pkg/sub").mkdir(parents=True)
+    (tmp_path / "old/pkg/logs.md").write_text(GOOD_LOG, encoding="utf-8", newline="\n")
+    (tmp_path / "old/pkg/sub/logs.md").write_text(GOOD_LOG, encoding="utf-8", newline="\n")
+    git("add", "-A")
+    git("commit", "-q", "-m", "before move")
+    base = git("rev-parse", "HEAD")
+    (tmp_path / "new").mkdir()
+    git("mv", "old/pkg", "new/pkg")
+    rewritten = "# sample logs\n\n## 2026-10-03 · abcdef0 · feat: unrelated\n- 변경: z\n- 증거: none\n- gate 변화: 없음\n"
+    (tmp_path / "new/pkg/sub/logs.md").write_text(rewritten, encoding="utf-8", newline="\n")
+    edited_root = GOOD_LOG.replace("- 변경: a", "- 변경: rewritten")
+    (tmp_path / "new/pkg/logs.md").write_text(edited_root, encoding="utf-8", newline="\n")
+    git("add", "-A")
+    git("commit", "-q", "-m", "move and rewrite")
+    moved = [{"path": "new/pkg", "legacy": "old/pkg"}]
+
+    errors, warnings_ = harness._append_only_findings(tmp_path, [base], "sub", "new/pkg/sub", rewritten, moved)
+    assert errors == []
+    assert len(warnings_) == 1 and "append-only check skipped" in warnings_[0] and "sub/logs.md" in warnings_[0]
+    errors, warnings_ = harness._append_only_findings(tmp_path, [base], "pkg", "new/pkg", edited_root, moved)
+    assert len(errors) == 1 and "were edited" in errors[0] and warnings_ == []
+    # A module outside every moved root stays quiet, as before D-427.
+    assert harness._append_only_findings(tmp_path, [base], "x", "brand/new", rewritten, moved) == ([], [])
