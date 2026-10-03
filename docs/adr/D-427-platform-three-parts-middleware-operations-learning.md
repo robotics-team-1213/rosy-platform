@@ -50,8 +50,8 @@ profiles/  deploy/  tools/  test/  docs/
 | contracts | 외부 런타임 의존 없음(ROS IDL·스키마 생성 도구 제외) | 모든 파트·integrations |
 | integrations/* | contracts | 모든 파트, 다른 어댑터 |
 | shared/web | contracts | 모든 파트 |
-| middleware | contracts, integrations/{robots, policies/lerobot_inference, simulation(sim owner만)} | operations, learning, integrations/models, lerobot_training |
-| operations | contracts, shared/web, integrations/{models, storage(원장 export)} | middleware(HTTP/WSS API로만), learning |
+| middleware | contracts, shared/web(ui만), integrations/{robots, policies/lerobot_inference, simulation(sim owner만)} | operations, learning, integrations/models, lerobot_training |
+| operations | contracts, shared/web(ui만), integrations/{models, storage(원장 export)} | middleware(HTTP/WSS API로만), learning |
 | learning | contracts, integrations/{models(오프라인), policies/lerobot_training, simulation, storage} | middleware, operations |
 
 산출물은 코드 import 없이 흐른다.
@@ -113,12 +113,13 @@ ER2는 Skill 이름(capability)만 고른다. 정책 버전은 고르지 않는�
 - 사람 개입은 Arbiter의 MANUAL 우선순위로 처리하고 Episode events에 기록한다.
 - 보상: sim은 ground truth를 쓴다. 실물은 사람 표시와 오프라인 학습한 성공 분류기(VerifierArtifact L0/L1)를 쓴다.
 - 생산 경로에는 학습 루프를 두지 않는다. 실물 학습 중인 장치는 Fleet이 사용 불가로 본다. 물리 E-stop은 항상 독립 경로다.
-- 실물 RL의 선행 조건은 다음 순서다. 모두 충족하기 전에는 어느 경로로도 실물 RL을 하지 않고 sim만 쓴다.
+- 실물 RL의 선행 조건은 다음 순서다. 모두 충족하기 전에는 어느 경로로도 실물 RL을 하지 않고 sim만 쓴다(6단계).
   1. OMX 로컬 owner 수용(D-299 Proposed)
   2. D-399 후속 1(엔벌로프 스킬 계약)
   3. D-399 후속 5(MANUAL 선점)
   4. OMX 리더 팔을 MANUAL 입력으로 여는 ADR(D-399 §6)
-  5. 독립 E-stop 실측
+  5. 장치를 학습 모드로 넘기는 진입·해제·lease 계약 ADR(누가 진입을 승인하고, Fleet의 사용 불가 표시와 어떻게 연결되는지. D-390 lease는 sim 한정)
+  6. 독립 E-stop 실측
 - D-299의 네이티브 LeRobot 모드는 시연 녹화용으로만 남는다.
 - sim→real은 real-to-sim 정렬부터 한다. 알려진 차이는 카메라 pitch 실측 11.8° 대 명목 8°(D-379), 흰 벽·카펫 대 sim 바닥이다. 그다음 보정된 domain randomization과 sysid를 거쳐 L0~L2로 올린다.
 - 첫 대상 순서 제안: OMX 모방학습(ACT, 시연 export 존재) → OMX HIL-SERL 미세조정 → 인식 루프가 L2에 오른 뒤 Pinky 주행 정책.
@@ -140,7 +141,7 @@ ER2는 Skill 이름(capability)만 고른다. 정책 버전은 고르지 않는�
 | D-425 (Accepted 2026-10-03) | §4의 최상위 `apps/`·`ui/`를 각 파트 안으로, `ui/shared/web`을 최상위 `shared/web/`으로 부분 대체한다. 1~3항의 화면 소유·공유 경계는 유지한다 |
 | D-315·D-317 | 폴더가 실행 권한을 증명하지 않는 원칙을 유지한다. 파트는 책임이고, 설치 단위와 대부분 겹치지만 배치 판정은 deploy·package 증거로 한다 |
 | D-299 (Proposed) | 네이티브 LeRobot 모드는 시연 녹화용. 실물 RL은 §5 학습 모드 |
-| D-399 (Proposed) | §2 AI 두 부류를 계승한다. 후속 1·5가 §5의 선행 조건이다 |
+| D-399 (Proposed) | §2 AI 두 부류를 계승한다. 후속 1·5가 §5의 선행 조건이다. 후속 1은 같은 호스트 밖 추론을 위한 D-231 §4 개정 여부도 다루므로 학습 정책의 추론 위치와 직결된다 |
 | D-170·D-177 | Episode가 mission/step id를 직접 기록하려면 Device Action 상관 키 결정이 필요하다. 그 전에는 오프라인 join |
 | D-322 | Isaac Lab 학습 보류를 유지한다(Isaac Lab 3.0은 2026-10-03 기준 Early Access) |
 | D-290·D-296·D-326·D-331·D-392 | 이름·역할·ER2 제안 전용·도구 allowlist를 유지한다 |
@@ -169,10 +170,10 @@ ER2는 Skill 이름(capability)만 고른다. 정책 버전은 고르지 않는�
 
 후속:
 
-1. 소유 매니페스트와 import 규칙 시험(C). 현재 경로를 세 파트·공용층에 대응시키고, 위반을 현 상태 목록으로 고정한 뒤 줄여 간다.
+1. 소유 매니페스트와 import 규칙 시험(C). 현재 경로를 세 파트·공용층에 대응시키고, 위반을 현 상태 목록으로 고정한 뒤 줄여 간다. operations에서 비-LLM 판정기(성공 분류기 등)를 추론하는 경로(onnxruntime 등)는 별도 결정으로 남긴다.
 2. contracts의 Episode·DatasetManifest·PolicyArtifact 초안과 세 녹화 형식 변환기.
 3. D-399 후속 1(엔벌로프 스킬) ADR.
 4. learning 이전 계획(`tools/perception/*`, OMX export, `src/sim/isaac_sim`).
-5. 강화학습 env 계약 ADR(관측·행동 공간, reward, 리셋, 개입 기록).
+5. 강화학습 env 계약 ADR(관측·행동 공간, reward, 리셋, 개입 기록, 학습 모드 진입·해제·lease).
 
 **References:** [D-209](D-209-perception-folder-and-learned-backend.md), [D-290](D-290-rosy-platform-naming-and-site-intent-boundaries.md), [D-299](D-299-omx-lerobot-development-and-command-ownership.md), [D-326](D-326-agent-loop-boundary.md), [D-392](D-392-provider-neutral-model-tool-contract.md), [D-399](D-399-rosy-layered-architecture-site-plane-device-pipeline.md), [D-413](D-413-platform-modules-integrations-apps-profiles.md), [D-425](D-425-app-surface-ownership-shared-boundaries-and-source-layout.md), [v0.2 설계](../reference/ROSY_Platform_Architecture_Design_v0.2.md), [12 학습 파이프라인](../architecture/12_ROSY_Dataset_and_Learning_Pipeline.md)
