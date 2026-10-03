@@ -160,3 +160,45 @@ background를 임의 변환하지 않는다. 클래스 개선 계획은
 같은 데이터·세션 분할·seed·에폭으로 base16 기준/개선 recipe와 base8 소형 모델을
 비교하고, 고정 평가의 클래스별 IoU·CPU 지연·모델 크기를 함께 기록한다.
 검증 세션의 높은 수치만으로 전달하거나 주행을 활성화하지 않는다.
+
+## 모델 PC의 재시작 가능한 학습 job
+
+Linux CUDA 모델 PC에서 `python training/train_job.py config.json --out <job-dir>`로
+기존 immutable store 데이터셋을 학습하고 ONNX 내보내기, 고정 평가 intake,
+canonical inbox의 READY 생성까지 실행한다. 수집·라벨 검수·데이터셋 생성과
+watcher 실행은 별도다. 로봇에 명령을 보내지 않는다.
+
+설정은 다음 키만 받는다. 호스트 경로를 채운 설정은 공개 저장소에 넣지 않는다.
+
+```json
+{
+  "store": "<store-root>",
+  "dataset": "<dataset-name>@<content-sha>",
+  "gate": "<require-eval-gate.yaml>",
+  "replay_root": "<recording-root>",
+  "intake_out": "<shared-qualified-models>",
+  "camera_profile": "<camera-provenance.json>",
+  "training": {
+    "seed": 42705, "epochs": 30, "lr": 0.0003,
+    "batch_size": 16, "base": 16, "recipe": "enhanced"
+  }
+}
+```
+
+camera provenance에는 `accepted` boolean을 명시한다. false는 잠정 캘리브레이션을
+기록하며 장치 승인을 뜻하지 않는다. job은 데이터·평가·설정·소스 SHA와 픽셀
+coverage를 기록하고, 검증에만 있는 클래스는 학습 전에 거절한다.
+`baseline`/`enhanced`, base 8/16을 지원한다. 현행 recipe의 배경 채널은 index 0이다.
+
+같은 설정·소스·job 경로로 재실행하면 완료 단계의 파일 SHA를 확인하고 건너뛴다.
+실패 단계는 새 attempt 폴더에서 재시도하며 이전 오류를 보존한다. 품질 탈락은
+terminal rejected이고 READY를 만들지 않는다. 입력/소스 변경이나 파일 변조는
+재개를 거절한다. 변경 실험에는 새 job 경로를 사용한다.
+자체 intake 증거를 고정하므로 공유 intake 보고서의 후속 지연 측정이 재개를
+깨뜨리지 않는다. watcher가 accepted로 옮긴 동일 모델도 다시 복사하지 않는다.
+
+`job_state.py`가 단일 작성자 잠금과 원자적 상태 저장을 맡는다. GPU job들은
+`~/.cache/rosy-learning/gpu.lock`을 공유하고 시작 시 다른 GPU 프로세스가 있으면
+거절한다. 다른 Isaac 실행기가 이 잠금을 사용하지 않으면 학습 시작 이후의
+동시 실행까지 막지는 못한다. 현장 전달·rollback·주행 승인은 별도 gate다.
+실행 증거는 [학습 job 검증](../../../../docs/validation/training-job-2026-10-04.md)에 있다.

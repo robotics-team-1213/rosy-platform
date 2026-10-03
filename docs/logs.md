@@ -4980,3 +4980,9 @@
 - 변경: 기존 영상 19개 목록과 샘플을 확인하고 5개 영상의 76프레임 도로 mask/CVAT 초안 및 4프레임 물체 box 7개 검수 패키지를 만들었다. 동일 녹화 part를 capture group으로 묶고 기존 평가 세션은 제외했다. 통과 소형 후보의 실제 canonical accepted 이동과 9dfk 기존 manual hold를 확인했다.
 - 증거: 76 JPEG SHA/CVAT mask·7 box 경계·group 비겹침 검증. bundle SHA e1b245a7cfd1969923e42de32c029153d62ebf1ce461f0e5a681231725b2f365. READY f21a7a97 intake pass/attempt1/accepted ONNX SHA 확인. 8kcn DNS exit77·push0; 9dfk 기존 pin/hostname 검증 후 같은 키의 alias 추가, watcher held/push0. 상세 recorded-video-review-2026-10-04.md 및 model-store-accepted-2026-10-04.md.
 - gate 변화: 실제 라벨 초안/접수/hold 존중 증거. 검수 완료 ground truth·물체/신호 학습·장치 shadow 교체/rollback·system timer·DEVICE/FIELD는 미완료. 401 robot state를 idle 증거로 사용하지 않는다.
+
+## 2026-10-04 · uncommitted · feat(learning): resume GPU training through qualified READY
+
+- 변경: train_job.py/job_state.py로 immutable 데이터→GPU→ONNX→strict intake→READY 단계를 연결했다. 입력·소스·단계 파일 SHA, 단일 작성자/GPU 잠금, 재시도 이력, terminal 품질 거절, 부분 복사와 accepted 이동 회복을 구현했다. 수집/검수/build와 watcher·로봇 전달은 별도다.
+- 증거: 신규 상태/READY 시험 Windows/native 10 passed, Windows handover 합계18 passed. 실제 모델 PC GPU 잠금 거절/재시도, seed42707 base8 mIoU0.4917 terminal reject 및 재실행 횟수 불변. seed42705 base16 ed0f9e71 lane0.724265/wall0.829824/mIoU0.518525 pass, canonical READY와 ONNX SHA 확인. 동일 job 재실행 각 attempt1 유지. 상세 training-job-2026-10-04.md.
+- gate 변화: SOURCE/LOCAL 실제 GPU→고정 평가→READY 및 재개 증거. 새 영상은 검수 초안이며 확장 클래스 추가 학습 아님. system timer·harvest부터의 자동 연결·새 후보 accepted/device shadow·rollback·OMX/SIM/Fleet·DEVICE/FIELD는 미완료.
