@@ -12,6 +12,7 @@ for package_root in (
     ROOT / "contracts/skill/src",
     ROOT / "modules/skills/api/src",
     ROOT / "modules/execution/src",
+    ROOT / "middleware/execution/local/src",
     ROOT / "modules/skills/manipulation/src",
 ):
     if str(package_root) not in sys.path:

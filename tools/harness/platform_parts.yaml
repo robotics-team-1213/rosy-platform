@@ -213,18 +213,18 @@ roots:
     d427_target: operations/execution
     wave: "3a"
     note: >-
-      Package metadata only; the three source subtrees below are mapped on their own.
-      Goes with api/site (3a); local splits into its own wheel first (2c).
+      Package metadata only; the api and site source subtrees below are mapped on
+      their own. Goes with api/site (3a); local became rosy-execution-local in 2c.
     concern: other
-  - path: modules/execution/src/rosy/execution/local
+  - path: middleware/execution/local
     part: middleware
     d427_target: middleware/execution/local
+    legacy: modules/execution/src/rosy/execution/local
     wave: "2c"
     import_prefix: [rosy.execution.local]
     note: >-
-      2c makes this the root of the new rosy-execution-local wheel (pyproject.toml
-      here, package under src/rosy/execution/local), so 2c also drops it from
-      PACKAGE_DIR_ROOTS in test_platform_parts.py.
+      Wheel rosy-execution-local (2c, Q4); the import name rosy.execution.local is
+      unchanged. rosy-execution no longer packages it.
     concern: control
   - path: modules/execution/src/rosy/execution/api
     part: operations

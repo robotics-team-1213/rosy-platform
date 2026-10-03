@@ -13,7 +13,7 @@ PROVIDER_ID = "omx.cell-transfer.sim.v1"
 _SCHEMA = "rosy.installation-profile.v1"
 _WHEELS = frozenset({
     "rosy-contracts-skill", "rosy-world", "rosy-skill-api", "rosy-skill-manipulation", "rosy-execution",
-    "rosy-palletizing", "rosy-integration-robot-omx", "rosy-app-agent",
+    "rosy-execution-local", "rosy-palletizing", "rosy-integration-robot-omx", "rosy-app-agent",
 })
 _ROS_PACKAGES = frozenset({"omx_adapter"})
 _FIELDS = frozenset({

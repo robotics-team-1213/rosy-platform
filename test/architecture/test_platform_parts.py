@@ -47,7 +47,6 @@ MANIFEST = ROOT / "tools" / "harness" / "platform_parts.yaml"
 #: Roots (by target) whose folder is itself a package dir, so their dotted package starts at the prefix.
 PACKAGE_DIR_ROOTS = {
     "operations/execution/src/rosy/execution/api",
-    "middleware/execution/local",  # until 2c turns it into a wheel root; 2c removes this line
     "operations/execution/src/rosy/execution/site",
     "middleware/core/services/core_features/safety",  # D-430 §1 sub-root inside the services package
     "middleware/core/services/core_features/decision",  # D-429 §1 device local rules sub-root
