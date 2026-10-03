@@ -4985,3 +4985,12 @@
 - 결정: D-439 §13–14. 종료한 소켓 검증이 새 세션이나 페이지에 영향을 주지 않으며 기존 CORE 허용 조건·재접속·정지 소유권을 유지한다. 미확인 대상은 운전 허용으로 바꾸지 않는다.
 - gate 변화: 전체 웹 목표는 진행 중이며 Fleet·게임·도구와 최종 검증·로컬 main 착지가 남아 있다. 실제 장치·이미지·현장 수용 승격이나 원격 push는 없다.
 - 검증: 네트워크·harness 문서 계약 83통과/기존 경고 26건(63.38초), lint 0오류·기존 경고 26건, 소유 문서 whitespace 검사 통과. 다음 Fleet 제품 작업과 문서 소유 경로를 구별한다.
+
+## 2026-10-04 · uncommitted · docs(ui): Fleet 작업 분리와 보정 프리뷰의 독립 수명 기록
+
+- 변경: D-439 §15에 작업 탐색의 권한 경계와 빠른 숨김·재표시의 프리뷰 취소, 새 owner의 정리 보호, source·모서리 초안 보존을 추가했다. 계획의 Fleet 두 행과 검증 기록은 제품 커밋 `21f5dd310`의 관제/설치 변화 및 독립 SPEC→QUALITY 통과를 연결한다.
+- 관측: 주 담당자가 desktop/phone 8개 dark 화면과 실제 버튼을 선택한 light 두 화면을 직접 보았다. 초기 helper의 theme 이름 오류와 selector 오류는 제품 결과와 구별했다. Fixture preview lease POST를 포함하며 운용 명령이나 실제 장치 동작으로 주장하지 않는다.
+- 증거: 이전 lease가 빠른 복귀 후 새 요청을 막고 옛 프레임을 표시하는 결함을 실제 재현했다. 수정 후 독립 probe는 새 owner 시작·old frame/finally 차단·source/draft 보존을 확인했다. Fleet 새/기존 시험의 초기 실패와 해당 대상 재실행을 구별하고 중복 합산하지 않는다. 네 served 변이의 actual bytes hash를 직접 확인했으며 LF manifest와 CRLF delivery의 차이는 원래 기록을 보존한 보완 proof로 연결했다.
+- gate 변화: SOURCE/LOCAL 근거를 추가했다. 전체 목표는 게임·도구·Pilot 웹, 최종 영향 회귀와 최신 main 통합·로컬 착지가 남아 있다. 원격 push·배포·DEVICE/FIELD 승격 없음.
+- 결정: D-439. 페이지 수명과 visible boolean만으로 빠른 작업 복귀를 구별할 수 없어 작업 프리뷰의 독립 취소 수명이 필요하다.
+- 검증: 보완 문서 계약 98통과/Windows bash 검사 1skip/기존 경고 26건(54.66초), lint 0오류·기존 경고 26건, docs index 생성. 최종 공용 geometry 소비자 회귀는 함수 9개가 param 12개로 확장되어 12통과(567.03초)였으며 앞선 증거와 합산하지 않는다.
