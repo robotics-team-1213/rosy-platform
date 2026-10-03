@@ -454,10 +454,15 @@ class Updater:
 
     def _save_state(self, state: dict) -> None:
         _write_json(self.updates / "state.json", state)
-        self._update_marker(state.get("applying"))
 
     def _update_marker(self, applying) -> None:
-        """D-433 row 3: the screen's "Updating" card follows the apply journal. Best effort."""
+        """D-433 row 3: the screen's "Updating" card, only while THIS run works on an apply.
+
+        Written by ``_journal`` (each step this run takes) and by the "applying"
+        finish at activation; every other finish removes it. A journal left
+        waiting (held, ineligible, stuck) therefore never keeps the card up and
+        hides a stop, a dead CORE or a login code behind it. Best effort.
+        """
         marker = self.root / UPDATE_DISPLAY
         with contextlib.suppress(OSError):
             if isinstance(applying, dict) and RELEASE_ID.fullmatch(str(applying.get("release_id") or "")):
@@ -469,6 +474,29 @@ class Updater:
                 os.replace(temporary, marker)
             else:
                 marker.unlink(missing_ok=True)
+
+    def _face_swap(self) -> None:
+        """D-433: hand the LCD, buzzer and lamp from rosy-boot-display to rosy-face, live.
+
+        The image-layer sync only installs and enables rosy-face; it never swaps,
+        because on a robot updating from 026 the sync runs under 026's updater,
+        whose rollback cannot restart the retired unit. This updater can (see
+        ``_restore_display``), so the swap waits for it: the first timer run after
+        the payload landed, or the next boot, where rosy-face starts and the
+        retired unit's condition keeps it off. Best effort; a failed step is
+        tried again on the next run only while the retired unit still runs.
+        """
+        units = self.root / "etc/systemd/system"
+        if not (units / FACE_UNIT).is_file():
+            return
+        if self._systemctl("is-enabled", "--quiet", FACE_UNIT).returncode != 0:
+            return
+        if self._systemctl("is-active", "--quiet", FACE_UNIT).returncode == 0:
+            return
+        if self._systemctl("is-active", "--quiet", RETIRED_DISPLAY_UNIT).returncode != 0:
+            return
+        if self._systemctl("stop", RETIRED_DISPLAY_UNIT).returncode == 0:
+            self._systemctl("start", FACE_UNIT)
 
     def _restore_display(self) -> None:
         """D-433 Q5: after a rollback the screen must not stay dark until the next boot.
@@ -514,6 +542,8 @@ class Updater:
             "current_release": current, "candidate": candidate, "phase": phase, "reason": reason,
             "last_result": state.get("last_result"),
         }
+        # D-433: only an apply in progress in this run shows "Updating"; a wait clears it.
+        self._update_marker(state.get("applying") if phase == "applying" else None)
         signature = [phase, candidate, _reason_class(reason)]
         if state.get("last_status") != signature:
             self._history(phase, candidate, reason)
@@ -1033,6 +1063,7 @@ class Updater:
         """Record the step before doing it, and keep the claim alive for the next one (review M8)."""
         state["applying"]["step"] = step
         self._save_state(state)
+        self._update_marker(state["applying"])
         with contextlib.suppress(OSError, ValueError, rosy_claim.ClaimBusy):
             rosy_claim.refresh(self.root, CLAIM_HOLDER, CLAIM_TTL_S, now=self.host.now())
 
@@ -1395,6 +1426,7 @@ class Updater:
         # Review L9: an apply in flight is finished (or rolled back) even when disabled.
         if state.get("applying"):
             return self._resume(state)
+        self._face_swap()
         state["candidate"] = None
         config = self._config()
         if not config["enabled"]:

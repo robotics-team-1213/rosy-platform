@@ -124,10 +124,11 @@ ENABLED_UNITS = frozenset({
 # start a second owner of the same lines. A rollback's own sync restores the
 # backed-up original.
 RETIRED_UNITS = frozenset({"rosy-boot-display.service"})
-# successor -> the retired unit it takes over from. When a sync adds the
-# successor, it stops the retired unit and enables and starts the successor
-# (the swap), so the screen is not dark until the next boot.
-SUCCESSORS = {"rosy-face.service": "rosy-boot-display.service"}
+# The sync only installs and enables a successor (rosy-face); it never stops the
+# retired unit or starts the successor. On a robot updating from 026 this sync
+# runs under 026's updater, whose rollback could not restart the retired unit,
+# so the live swap is left to the D-433 updater (rosy_auto_update._face_swap)
+# or the next boot.
 
 # Never offered for a live restart, even when active and changed: the boot
 # oneshots are Required by rosy-core (restarting them restarts CORE), and
@@ -653,16 +654,11 @@ def _post_commands(steps: dict) -> list[list[str]]:
     commands: list[list[str]] = []
     if steps.get("daemon_reload"):
         commands.append(["systemctl", "daemon-reload"])
-    # D-433 swap: the retired owner lets go of the lines before its successor starts.
-    for unit in sorted(set(steps.get("stop", []))):
-        if unit in RETIRED_UNITS:
-            commands.append(["systemctl", "stop", unit])
     for unit in sorted(set(steps.get("enable", []))):
         if unit not in ENABLED_UNITS:
             continue
-        # A new .path or .timer would otherwise sit idle until the next boot; a
-        # successor (D-433) must take over now, not at the next boot.
-        if unit.endswith((".path", ".timer")) or unit in set(steps.get("start", [])):
+        # A new .path or .timer would otherwise sit idle until the next boot.
+        if unit.endswith((".path", ".timer")):
             commands.append(["systemctl", "enable", "--now", unit])
         else:
             commands.append(["systemctl", "enable", unit])
@@ -685,15 +681,9 @@ def _steps(root: Path, work: list[dict], cleanup: list[dict], pending: dict) -> 
         if unit not in removing
         and (root / UNIT_DIR / unit).is_file() and not (root / UNIT_DIR / unit).is_symlink()
     }
-    enable = added | still_there
-    start = {unit for unit in enable if unit in SUCCESSORS} & (added | set(pending.get("start", [])))
-    stop = {unit for unit in {SUCCESSORS[name] for name in start} | set(pending.get("stop", []))
-            if (root / UNIT_DIR / unit).is_file()}
     return {
         "daemon_reload": "unit" in kinds or bool(pending.get("daemon_reload")),
-        "enable": sorted(enable),
-        "start": sorted(start),
-        "stop": sorted(stop),
+        "enable": sorted(added | still_there),
         "udev_reload": "udev" in kinds or bool(pending.get("udev_reload")),
     }
 

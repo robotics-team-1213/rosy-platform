@@ -121,16 +121,17 @@
 
 페이로드 N(첫 `rosy-face` 릴리스)이 026 위에 올 때, `sync-image-layer.py`(N의 것)가:
 
-1. `rosy-face.service`와 `rosy-face.py`를 설치한다(`UNITS`·`ENABLED_UNITS`에 추가).
+1. `rosy-face.service`와 `rosy-face.py`를 설치하고 `rosy-face`를 enable만 한다(`--now` 없음).
 2. `rosy-boot-display.service`를 **지우지 않고 바꾼다.** 새 내용은 지금과 같되 `ConditionPathExists=!/etc/systemd/system/rosy-face.service` 한 줄을 더한다. 바꾼 파일은 백업되므로 026의 롤백이 원래 파일을 되살린다. enable 상태는 건드리지 않는다.
-3. 새 단계 "교대": `systemctl stop rosy-boot-display` 다음 `systemctl enable --now rosy-face`. pending.json에 기록해 실패하면 다음 실행이 끝낸다.
-4. 다음 부팅부터는 조건 때문에 `rosy-boot-display`가 건너뛰고 `rosy-face`만 뜬다.
+3. **동기화는 교대하지 않는다.** `rosy-boot-display`는 계속 돈다. 이 단계에서 은퇴 unit을 재시작하면 조건에 걸려 멈추므로 재시작 목록에서도 뺀다.
+4. **교대는 D-433 업데이터가 한다**(`rosy_auto_update._face_swap`). 026에서 N으로 가는 적용과 그 적용의 건강 검사 실패 롤백은 **026의 업데이터**가 메모리에서 실행한다 — N의 동기화를 부르지만 업데이터 자신은 026 코드라 `_restore_display`가 없다(독립 리뷰 HIGH2, 첫 초안의 "롤백은 N의 코드가 실행한다"는 틀렸다). 그래서 교대는 N의 업데이터가 처음 도는 타이머 실행(10분 주기, 적용 일지가 없을 때)에서 한다: `rosy-face`가 설치·enable되어 있고 멈춰 있으며 `rosy-boot-display`가 돌면 `stop rosy-boot-display` → `start rosy-face`. 그 전에 재부팅하면 부팅이 교대한다(`rosy-face` enable, 은퇴 unit은 조건으로 건너뜀). 이렇게 하면 교대 뒤의 모든 자동 롤백은 `_restore_display`를 가진 코드가 실행하고, 교대 전의 026 롤백은 은퇴 unit을 한 번도 멈추지 않는다(`test_the_026_updater_path_never_darkens_the_screen`).
 
 롤백(N → 026): 026의 동기화가 `rosy-face.service`를 `disable --now`로 지우고 원래 `rosy-boot-display.service`를 되살린다. 그 unit은 enable 상태 그대로이므로 다음 부팅에는 뜬다. 그 사이 공백(Context 6)을 메우려고:
 
-- N의 자동 업데이터(롤백을 실행하는 것은 이미 메모리에 올라 있는 N의 코드다)는 롤백 동기화 뒤 `rosy-boot-display`가 enable이고 비활성이면 `systemctl start rosy-boot-display`를 한 번 부른다.
+- 교대가 끝난 로봇의 자동 롤백은 D-433 이상의 업데이터가 실행한다. 그 업데이터는 롤백 동기화 뒤 `rosy-face.service`가 없고 `rosy-boot-display`가 enable이며 비활성이면 `systemctl start rosy-boot-display`를 한 번 부른다(`_restore_display`). 교대 전(026 업데이터의 롤백)에는 은퇴 unit이 멈춘 적이 없으므로 할 일이 없다.
 - `rosy-release-push.ps1 -Rollback`도 같은 단계를 갖는다.
-- `recover-release.sh`는 부팅 경로라 조건과 enable 상태만으로 맞다.
+- `recover-release.sh`는 부팅 경로라 조건과 enable 상태만으로 맞다. 장치에서 `rollback-release.sh`를 손으로 돌리면 시작 단계가 없어 다음 부팅까지 어둡다 — 운용자는 `rosy-release-push.ps1 -Rollback`을 쓴다.
+- 옛 `rosy-boot-display.py`는 `/opt/rosy/native-runtime`에 그대로 남는다(동기화는 자기가 기록하지 않은 파일을 지우지 않는다). 롤백 뒤 은퇴 unit이 그 프로그램을 실행하므로 남아 있어야 한다.
 
 `rosy-hw-test.py`의 넘김 판정(`DISPLAY_UNIT`)은 `rosy-face.service`를 먼저 보고, 없으면 `rosy-boot-display.service`를 본다(롤백된 로봇).
 
@@ -166,8 +167,8 @@
 - **CORE.** 브리지 5 Hz 전원 틱이 바뀔 때와 1 s마다 `face-inputs.json`을 쓴다(`display.face_inputs_payload`, `host.write_face_inputs`). rosy-core의 `UMask=0027`이 0644를 0640으로 만들기 때문에 쓴 뒤 `chmod 0644`를 한다. 얼굴 이름은 `set_emotion` 서비스가 없어도 `emotion_for`로 정한다(기동 10초 `hello` 포함).
 - **rosy-face.** 0.5 s 폴(파일·상황표·부저·램프), 0.1 s 틱(얼굴 프레임, 백라이트가 낮으면 절반). GIF 프레임은 처음 재생할 때 틱마다 한 장씩 320×240 RGB565로 줄여 저장하고 다시 쓴다. 띠는 패널 바이트 위에 마스크로 얹는다. 소유자 검사는 `getpwnam("rosy-core")`의 uid다. SIGTERM에서 `/run/nologin`이 있으면 "Shutting down", 없으면 "Display restarting" 한 장을 그린다.
 - **정지 카드 원인 줄(Q1).** 스냅샷에는 래치(`estop`)만 있고 누가 눌렀는지는 없다. 그래서 원인은 "E-stop latched"(래치) 또는 "Emergency stop"(모드만 EMERGENCY) 두 가지다. 감시 정지(SAF-002) 사유를 싣는 것은 후속이다.
-- **업데이트 표시.** D-412 업데이터만 `update-display.txt`를 쓴다(적용 일지가 있는 동안). `rosy-release-push.ps1`의 활성화는 쓰지 않는다 — 수 초짜리이고, 쓰려면 원격 단계가 하나 더 필요하다. 후속.
-- **이주.** `rosy-boot-display.service`는 릴리스에만 은퇴 사본(`ConditionPathExists=!/etc/systemd/system/rosy-face.service`)으로 실린다. 동기화는 그 파일이 이미 있는 로봇에서만 교체하고(새 이미지에는 설치하지 않는다), 재시작 목록에 올리지 않는다. rosy-face를 새로 더할 때 `stop rosy-boot-display` → `enable --now rosy-face`를 pending.json에 남겨 끊겨도 다음 실행이 끝낸다. 롤백 뒤 시작(Q5)은 업데이터 `_rollback_tail`과 `rosy-release-push.ps1 -Rollback`의 `display-restore` 단계 두 곳이다.
+- **업데이트 표시.** D-412 업데이터만 `update-display.txt`를 쓴다 — 이 실행이 적용 단계(활성화·동기화·재시작·건강·롤백)를 밟는 동안만이고, 다른 모든 끝(held·ineligible·stuck 대기 포함)에서 지운다(리뷰 MED3). `rosy-release-push.ps1`의 활성화는 쓰지 않는다 — 수 초짜리이고, 쓰려면 원격 단계가 하나 더 필요하다. 후속.
+- **이주.** `rosy-boot-display.service`는 릴리스에만 은퇴 사본(`ConditionPathExists=!/etc/systemd/system/rosy-face.service`)으로 실린다. 동기화는 그 파일이 이미 있는 로봇에서만 교체하고(새 이미지에는 설치하지 않는다), 재시작 목록에 올리지 않는다. 동기화는 rosy-face를 enable만 하고, 살아 있는 교대는 업데이터 `_face_swap`이 한다(결정 6, 리뷰 HIGH2). 롤백 뒤 시작(Q5)은 업데이터 `_rollback_tail`과 `rosy-release-push.ps1 -Rollback`의 `display-restore` 단계(작은따옴표로 한 단어, 리뷰 HIGH1) 두 곳이다. 푸시로 N을 올린 로봇도 교대는 다음 업데이터 타이머나 재부팅에서 일어난다.
 - **발견한 결함.** 부팅 카드의 숨쉼 프레임은 페이로드(`view["frame"]`)에 실렸지만 `render_boot(payload, frame=0)`가 인자로만 받아 실기에서 숨쉬지 않았다(D-385 결정 3). 카드 렌더러가 이제 `frame=`으로 넘긴다.
 - **크기 판정.** `rosy-face.py` 1021줄(구 판정 대체), `ros_bridge.py` 799줄, `rosy_auto_update.py` 1559줄로 다시 판정했다(`test/architecture/test_module_structure.py`).
 

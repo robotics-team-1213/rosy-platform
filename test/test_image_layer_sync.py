@@ -1103,32 +1103,33 @@ def _as_026(device: Path) -> str:
     return old_unit
 
 
-def test_a_026_robot_swaps_the_display_to_rosy_face_now(device):
+def test_a_026_robot_gets_rosy_face_enabled_but_the_sync_never_swaps(device):
+    # D-433 review HIGH2: on a 026 robot this sync runs under 026's updater, whose
+    # rollback cannot restart the retired unit; so the sync leaves it running.
     _as_026(device)
     runner = Runner(active={OLD_DISPLAY, "rosy-io.service"})
 
     result = _sync(device, NEW_ID, runner, dry_run=False)
 
     calls = runner.mutating()
-    stop = calls.index(["systemctl", "stop", OLD_DISPLAY])
-    start = calls.index(["systemctl", "enable", "--now", FACE_UNIT])
-    assert calls.index(["systemctl", "daemon-reload"]) < stop < start
+    assert ["systemctl", "enable", FACE_UNIT] in calls
+    assert ["systemctl", "enable", "--now", FACE_UNIT] not in calls
+    assert not any(OLD_DISPLAY in call for call in calls)
     assert "/etc/systemd/system/rosy-face.service" in result["new"]
     # The old unit is replaced, not removed: its condition keeps it off from the next boot on.
     replaced = (device / "etc/systemd/system" / OLD_DISPLAY).read_text(encoding="utf-8")
     assert "ConditionPathExists=!/etc/systemd/system/rosy-face.service" in replaced
-    # Restarting it would start a second owner of the LCD lines.
+    # Restarting it now would meet the condition and stop it: a dark screen.
     assert OLD_DISPLAY not in result["restart_units"]
-    assert ["systemctl", "disable", "--now", OLD_DISPLAY] not in calls
 
 
-def test_the_swap_dry_run_names_the_commands(device):
+def test_the_dry_run_names_only_the_enable(device):
     _as_026(device)
 
     result = _sync(device, NEW_ID, Runner(active={OLD_DISPLAY}), dry_run=True)
 
-    assert "systemctl stop rosy-boot-display.service" in result["commands"]
-    assert "systemctl enable --now rosy-face.service" in result["commands"]
+    assert "systemctl enable rosy-face.service" in result["commands"]
+    assert not any("rosy-boot-display" in command for command in result["commands"])
 
 
 def test_a_new_image_never_gets_the_retired_unit(tmp_path):
@@ -1146,21 +1147,34 @@ def test_a_new_image_never_gets_the_retired_unit(tmp_path):
     assert runner.mutating() == []
 
 
-def test_a_failed_swap_is_finished_by_the_next_run(device):
-    _as_026(device)
-    failing = FailingRunner(["systemctl", "enable", "--now", FACE_UNIT], active={OLD_DISPLAY})
-    with pytest.raises(sync_mod.SyncError):
-        _sync(device, NEW_ID, failing, dry_run=False)
+def test_the_026_updater_path_never_darkens_the_screen(device):
+    """026's updater: N's sync, a failed health check, then the rollback's sync.
 
-    again = Runner(active=set())
-    _sync(device, NEW_ID, again, dry_run=False)
+    026's updater has no _restore_display; the display must therefore never be
+    stopped, disabled or restarted along the way, whatever the outcome.
+    """
+    old_unit = _as_026(device)
+    old = device / "opt/rosy/releases" / OLD_ID / "deploy/robot/native"
+    shutil.copytree(device / "opt/rosy/releases" / NEW_ID / "deploy/robot/native", old)
+    (old / FACE_UNIT).unlink()
+    (old / "rosy-face.py").unlink()
+    (old / OLD_DISPLAY).write_text(old_unit, encoding="utf-8")
+    runner = Runner(active={OLD_DISPLAY, "rosy-io.service"})
 
-    assert ["systemctl", "enable", "--now", FACE_UNIT] in again.mutating()
+    apply = _sync(device, NEW_ID, runner, dry_run=False)
+    back = _sync(device, OLD_ID, runner, dry_run=False)
+
+    touched = [call for call in runner.mutating() if OLD_DISPLAY in call]
+    assert touched == []
+    assert OLD_DISPLAY not in apply["restart_units"]
+    assert (device / "etc/systemd/system" / OLD_DISPLAY).read_text(encoding="utf-8") == old_unit
+    assert "/etc/systemd/system/rosy-face.service" in back["removed"]
 
 
 def test_a_rollback_to_026_restores_the_old_display_unit(device):
     old_unit = _as_026(device)
     _sync(device, NEW_ID, Runner(active={OLD_DISPLAY}), dry_run=False)
+    # The D-433 updater swapped live (rosy_auto_update._face_swap) before this rollback.
     old = device / "opt/rosy/releases" / OLD_ID / "deploy/robot/native"
     shutil.copytree(device / "opt/rosy/releases" / NEW_ID / "deploy/robot/native", old)
     (old / FACE_UNIT).unlink()
