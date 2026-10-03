@@ -133,3 +133,14 @@ def test_release_job_prunes_only_older_site_releases_after_creating_the_new_one(
     assert 'gh release delete "$old" --cleanup-tag --yes' in run
     assert '[[ "$old" != "$TAG" ]]' in run
     assert "payload" not in run.replace("payload-*", "")
+
+
+def test_every_action_is_pinned_to_a_full_commit_sha():
+    uses = [step["uses"] for job in _workflow()["jobs"].values()
+            for step in job["steps"] if "uses" in step]
+    text = WORKFLOW.read_text(encoding="utf-8")
+
+    assert len(uses) == 4
+    for ref in uses:
+        assert re.fullmatch(r"[\w.-]+/[\w.-]+@[0-9a-f]{40}", ref), ref
+        assert re.search(re.escape(ref) + r" # v\d+\.\d+\.\d+\n", text), ref

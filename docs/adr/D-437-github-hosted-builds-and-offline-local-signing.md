@@ -23,6 +23,7 @@
 2. **runner 결과물은 서명되지 않는다.**
    - 사이트 키(D-301)와 Pinky 릴리스 키는 운영자의 서명 스테이션에만 둔다. GitHub secret으로 올리지 않는다.
    - workflow는 `GITHUB_TOKEN` 말고 어떤 secret도 쓰지 않는다. 빌드 job은 저장소 읽기 권한과 출처 증명용 `id-token: write`·`attestations: write`만 갖고, Release를 만드는 job만 `contents: write`를 갖는다.
+   - 사이트 후보 workflow의 action은 모두 전체 커밋 SHA로 고정하고 태그를 주석으로 단다. 이동하는 태그가 바뀌어도 실행 코드가 바뀌지 않는다.
 3. **사이트 후보의 배포 경로는 공개 저장소의 GitHub Release(prerelease)다.**
    - 태그는 `site-<짧은 커밋>`이다. 후보 묶음은 tar로 묶어 2 GiB 아래 조각(`.partNN`)으로 나누고 `SHA256SUMS`를 붙인다. GitHub Release 자산은 파일당 2 GiB 한도가 있다.
    - `release.json`은 따로 자산으로도 올린다. 서명 스테이션은 이 파일만 내려받는다.
