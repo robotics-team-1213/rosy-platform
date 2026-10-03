@@ -4830,3 +4830,10 @@
 - gate 변화: 없음(호스트 결과). containerd image store 사이트 호스트의 전체 검증 재실행이 남았다
 - 결정: D-437 Consequences 보강(manifest 형식 변경 없음)
 - 교훈: Docker image ID는 image store마다 다르다. 서명된 config digest에서 출발해 archive 안 blob 바이트로 다른 형태를 이어 붙여야 보안을 낮추지 않고 두 store를 모두 받을 수 있다
+
+## 2026-10-04 · uncommitted · site(D-441): automatic site stack updates
+- 변경: D-441 ADR·ADR Log 행(D-440은 device-power 브랜치가 써서 다음 번호, `adr_gaps`에 D-438·D-439·D-440). `build-site-candidate.yml`에 main push 트리거와 이미지 원본 경로 필터, push는 기존 릴리스에서 빌드 없이 성공, push 빌드만 취소하는 job concurrency와 비취소 릴리스 그룹. 서명 PC용 `deploy/site/auto_sign_candidates.py`(출처 증명 digest·main 조상·태그 확인 뒤 `sign_manifest_only`, 감사 로그)와 `register_auto_sign_task.ps1`. 사이트 호스트용 `rosy_site_autoupdate.py`·`rosy-site-autoupdate.service`·`.timer`(override 거부, SHA256SUMS·tar 검사, 설치된 검증기, 원자적 site.env·symlink 전환, 건강 확인과 롤백, 정리). D-437·D-301 부록, `deploy/site/README.md` "Automatic updates (D-441)"
+- 증거: 사이트 후보·workflow·fetch·검증기·서명 시험과 새 자동 서명·호스트 갱신 시험(symlink 시험은 Linux 컨테이너에서), `test_no_secrets_in_tracked_files`, harness 계약·lint, actionlint 1.7.7(Docker)
+- gate 변화: 없음. workflow push 실행, 서명 PC 예약 작업, 사이트 호스트 설치와 첫 자동 갱신·롤백은 미검증. 사이트 키 미준비(D-301)
+- 결정: D-441 Accepted, D-437·D-301 개정 부록
+- 교훈: 자동 서명기가 지키는 것은 자산 쓰기 권한과 main 아닌 빌드다. 서명 PC 계정과 main 보호 규칙이 이제 사이트 배포의 문이다
