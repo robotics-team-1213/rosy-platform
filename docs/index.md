@@ -186,6 +186,7 @@
 | D-390 | Pilot의 OMX-AI 연습은 시뮬레이션 전용 장치 API를 거쳐 로컬 팔 명령 소유자에 연결한다 |
 | D-413 | ROSY는 modules·integrations·apps·profiles로 책임을 나누고 고정 셀 한 흐름부터 이전한다 |
 | D-425 | 앱·웹의 작업 소유권과 공유 경계를 고정하고 실행 조합 apps와 사용자 화면 ui를 분리한다 |
+| D-426 | Fleet–Gazebo 실제 REST/WS·Task/attempt·CORE 결과와 독립 운동/접촉 관측을 함께 검증; 두 로봇/한 Fleet부터 run별 GZ_PARTITION 격리, 진입 경계 grant 재검사·점유 해제 증거·재시작 이전 실행 대조·CORE 독립 base 명령 만료, M01–M08 반복 수용 및 증거 등급 분리 |
 
 ## 계획·결과 문서
 
