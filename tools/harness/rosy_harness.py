@@ -766,6 +766,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--json", action="store_true", help="affected: machine-readable selection")
     parser.add_argument("--ci-matrix", action="store_true",
                         help="affected: one-line JSON {mode, matrix} for the GitHub job matrix (ci.yml)")
+    parser.add_argument("--skip", action="append", default=[], metavar="PATH",
+                        help="affected --run: drop this selected path (already run by the caller); repeatable")
     parser.add_argument("--full", action="store_true",
                         help="affected --run: also run a FULL selection locally (default: GitHub runs it)")
     args = parser.parse_args(argv)
@@ -778,7 +780,7 @@ def main(argv: list[str] | None = None) -> int:
         import affected_tests  # noqa: E402 — sibling module, loaded on demand
 
         return affected_tests.main(repo, args.base, args.action or "print", args.json,
-                                   matrix=args.ci_matrix, allow_full=args.full)
+                                   matrix=args.ci_matrix, allow_full=args.full, skip=tuple(args.skip))
     if args.command == "brief":
         print(render_brief(repo), end="")
         return 0

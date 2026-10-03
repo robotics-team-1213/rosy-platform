@@ -88,3 +88,5 @@ def test_affected_tier_runs_after_the_fast_gate():
     assert fast < step, "the fast suites must stay ahead of the affected tier"
     assert "affected --base" in text and "--run" in text
     assert "--full" not in text, "the full suite runs on GitHub runners, never in the hook"
+    assert '--skip "$suite"' in text and '"${FAST_SUITES[@]}"' in text, (
+        "the affected run skips the fast suites the hook already ran (review: guards ran twice)")
