@@ -108,31 +108,34 @@ export function mount(el, ctx) {
       : `장치 상태를 가져오지 못했습니다: ${error.message}`;
   }
 
-  let refreshing = false;
+  let refreshing = false; let disposed = false;
   const onRefresh = async () => {
-    if (refreshing || ctx.role !== "administrator") return;
+    if (disposed || refreshing || ctx.role !== "administrator") return;
     refreshing = true;
     refresh.disabled = true;
     actionNote.hidden = false;
     actionNote.textContent = "새 장치 점검을 요청하고 있습니다.";
     try {
       const reply = await ctx.api("/api/v1/host/hardware/refresh", {method: "POST"});
+      if (disposed) return;
       actionNote.textContent = reply.accepted === true
         ? "점검 요청을 접수했습니다. 완료 여부는 마지막 측정 시각과 장치 상태에서 확인하세요."
         : (reply.detail || "최근 요청이 있어 점검을 다시 요청하지 않았습니다.");
     } catch (error) {
+      if (disposed) return;
       actionNote.textContent = error.status === 403
         ? "장치 점검을 요청할 권한이 없습니다."
         : `장치 점검 요청 실패: ${error.message}`;
     } finally {
       refreshing = false;
-      setOff(refresh, ctx.role !== "administrator", "관리자 권한 필요");
+      if (!disposed) setOff(refresh, ctx.role !== "administrator", "관리자 권한 필요");
     }
   };
   refresh.addEventListener("click", onRefresh);
 
   const stop = ctx.store.poll("/api/v1/host/hardware", REFRESH_MS, render, fail);
   return () => {
+    disposed = true;
     stop();
     refresh.removeEventListener("click", onRefresh);
   };

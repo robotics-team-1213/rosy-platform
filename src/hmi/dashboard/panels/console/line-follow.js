@@ -1,4 +1,4 @@
-import { enumLabel } from "/common/core_ui_logic.js";
+import { enumLabel, LINE_STATE_LABEL } from "/common/core_ui_logic.js";
 import { confirmIrreversible } from "/common/ui.js";
 
 // D-359 US-009 — 추종 모드 열거값은 요청 본문과 title에만, 운용자 글은 한국어다.
@@ -39,11 +39,11 @@ export function mount(root, ctx) {
       const modeFact = el("dd", "", enumLabel(LINE_MODE_LABEL, current.mode || "OFF"));
       modeFact.title = current.mode || "OFF";
       facts.replaceChildren(el("dt", "", "모드"), modeFact,
-        el("dt", "", "상태"), el("dd", "", current.state || "OFF"),
+        el("dt", "", "상태"), Object.assign(el("dd", "", enumLabel(LINE_STATE_LABEL, current.state)), {title: current.state || ""}),
         el("dt", "", "센서"), el("dd", "", current.source || "—"),
         el("dt", "", "추종 오차"), el("dd", "", current.error == null ? "—" : Number(current.error).toFixed(3)),
         el("dt", "", "신뢰도"), el("dd", "", current.confidence == null ? "—" : `${Math.round(Number(current.confidence) * 100)}%`),
-        el("dt", "", "중지 사유"), el("dd", "", current.reason || "—"));
+        el("dt", "", "중지 사유"), Object.assign(el("dd", "", enumLabel(LINE_STATE_LABEL, current.reason)), {title: current.reason || ""}));
     } else facts.replaceChildren(el("dt", "", "상태"), el("dd", "", "확인 불가 · 다시 확인 중"));
     // 요청 중(pending)은 짧은 잠금이라 사유 없이 끈다.
     const known = pending ? "" : !statusKnown ? "상태 확인 중" : "";

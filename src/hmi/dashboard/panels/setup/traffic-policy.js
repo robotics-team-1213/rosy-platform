@@ -1,3 +1,4 @@
+import { confirmIrreversible } from "/common/ui.js";
 import { enumLabel, TRAFFIC_MODE_LABEL, TRAFFIC_STATE_LABEL, TRAFFIC_REASON_LABEL,
   TRAFFIC_SIGNAL_LABEL, TRAFFIC_SOURCE_LABEL, TRAFFIC_RULE_LABEL } from "/common/core_ui_logic.js";
 
@@ -32,6 +33,7 @@ function result() { const node = el("ui-status", "", ""); node.hidden = true; no
 function section(title, cls) { const node = el("section", `ui-readback ${cls}`); node.append(el("h3", "", title)); return node; }
 
 export function mount(root, ctx) {
+  let confirming = false;
   const lifetime = new AbortController(); let disposed = false;
   const listen = (node, name, handler) => node.addEventListener(name, handler, {signal: lifetime.signal});
   const head = el("ui-head", "", "교통 정책 준비");
@@ -149,9 +151,14 @@ export function mount(root, ctx) {
       dirty = false; render(readback); feedback(stageResult, `검토본 저장됨: ${body.policy_revision}`);
     });
   });
-  listen(apply, "click", () => {
+  listen(apply, "click", async () => {
     if (pending || dirty || !readbackKnown || !current.staged) return;
-    if (!window.confirm("로봇이 완전히 정지했습니까? 검토 중인 교통 정책을 적용합니다.")) return;
+    if (confirming) return;
+    confirming = true;
+    const review = JSON.stringify(current.staged);
+    const confirmed = await confirmIrreversible({message: "로봇이 완전히 정지했습니까? 검토 중인 교통 정책을 적용합니다.", action: "정책 적용", opener: apply, signal: lifetime.signal});
+    confirming = false;
+    if (!confirmed || disposed || pending || dirty || !readbackKnown || !current.staged || review !== JSON.stringify(current.staged)) return;
     request(applyResult, "정책 적용을 요청하고 있습니다.", "정책 적용 실패", async () => {
       const readback = await ctx.api("/api/v1/traffic/policy/apply", {method: "POST", signal: lifetime.signal});
       if (disposed) return;

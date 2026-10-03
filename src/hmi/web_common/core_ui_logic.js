@@ -115,6 +115,12 @@ export const NETWORK_MODE_LABEL = Object.freeze({
 // 앞에 붙이고 나이 뒤처리는 evidenceAgeText()를 쓴다. 노드 순수 시험이 돌아야 해서
 // /common import를 못 하는 fleet 순수 계산 모듈(site-layer.js)만 예외로 같은 문구를
 // 로컬에 두고 이 표를 참조한다.
+export const HEALTH_LABEL = Object.freeze({OK: "정상", WARNING: "주의", ERROR: "오류", UNKNOWN: "확인 전"});
+export const SEVERITY_LABEL = Object.freeze({info: "정보", warning: "주의", error: "오류", critical: "심각"});
+export const SAFETY_POLICY_LABEL = Object.freeze({STOP: "정지", HOLD: "대기", RETURN_HOME: "복귀", CONTINUE: "계속"});
+export const TOKEN_SOURCE_LABEL = Object.freeze({card: "카드", manual: "수동", "pair-physical": "로봇 화면 코드", "pair-admin": "관리자 등록 코드", legacy: "설정 파일"});
+export const LINE_STATE_LABEL = Object.freeze({OFF: "꺼짐", mode_off: "추종 꺼짐"});
+
 export const EVIDENCE_LABEL = Object.freeze({
   fresh: "최신",
   delayed: "지연",

@@ -158,11 +158,11 @@ def test_apply_confirmation_rejection_retry_and_simulation_permission(panel):
     page = panel
     page.evaluate("window.emit({...window.initial,staged:{...window.initial.active,policy_revision:'review-a'}})")
     apply = page.get_by_role("button", name="정지 상태에서 적용", exact=True)
-    page.evaluate("window.confirm=()=>false")
     apply.click()
+    page.locator("dialog.ui-confirm ui-button[kind=quiet]").click()
     assert page.evaluate("window.calls.length") == 0
-    page.evaluate("window.confirm=()=>true")
     apply.click()
+    page.locator("dialog.ui-confirm ui-button[kind=irreversible]").click()
     _response(page, error="ROBOT_MUST_BE_STOPPED")
     expect(apply).to_be_disabled()
     page.evaluate("window.emit({...window.initial,staged:{...window.initial.active,policy_revision:'review-a'}})")
@@ -173,6 +173,7 @@ def test_apply_confirmation_rejection_retry_and_simulation_permission(panel):
     signal.dispatch_event("click")
     assert page.evaluate("window.calls.length") == 1
     apply.click()
+    page.locator("dialog.ui-confirm ui-button[kind=irreversible]").click()
     _response(page, applied=True)
     expect(apply).to_be_disabled()
     expect(page.get_by_text("정지 상태에서 정책 적용을 요청했습니다.", exact=True)).to_be_visible()
@@ -229,6 +230,7 @@ def test_closed_poll_cannot_revert_mutation_and_unmount_prevents_restart(panel):
     expect(apply).to_be_enabled()
     page.evaluate("() => { window.beforeApply=window.emit; }")
     apply.click()
+    page.locator("dialog.ui-confirm ui-button[kind=irreversible]").click()
     _response(page, revision="new-review", applied=True)
     expect(apply).to_be_disabled()
     page.evaluate("window.beforeApply(window.oldSnapshot)")

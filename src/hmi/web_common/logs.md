@@ -524,3 +524,10 @@
 - 증거: 패키지·자산·예산 host 62 passed (28.27s), 공유 상태·정지·manifest 44 passed (7.78s), 집중 browser 7 passed (231.73s)와 영향 browser 3 passed (164.63s), 최종 abort/정지 클릭 1 passed (59.84s). 대상은 중복될 수 있어 합산하지 않는다. 중단된 확인의 DOM·scrim·inert 정리, 사전 취소, 실제 fixture 정지의 취소 동작을 확인했다. 독립 SPEC·QUALITY 최종 검토 PASS.
 - gate 변화: SOURCE/LOCAL 라이브러리 증거이며 장치나 FIELD 증거를 대신하지 않는다. 임시 검증은 X:\DevTemp\rosy-ui-unify\console에 둔다.
 - 결정: D-439 §10. builder는 주입받은 openLiveDialog만 호출하며 ui.js로 역수입하지 않는다.
+
+## 2026-10-04 · uncommitted · feat(ui): 작업 상태의 공용 한국어 이름
+
+- 변경: HEALTH_LABEL, SEVERITY_LABEL, SAFETY_POLICY_LABEL, TOKEN_SOURCE_LABEL, LINE_STATE_LABEL을 공용 값 매핑으로 제공한다. 기존 ROLE_LABEL을 역할 배지와 토큰 입력에서 재사용하며 알려지지 않은 서버 값은 화면 원문과 title로 보존한다. UNKNOWN은 확인 전이며 정상으로 바꾸지 않는다.
+- 증거: 영향 host·공유·패키지·예산 59 passed/23 deselected (35.88s), 최종 영향 browser 15 passed (634.01s). X 제공 자산에서 UNKNOWN을 정상으로 바꾼 변이가 실제 진단 행동 단언을 RED로 만들고 원본 복원 후 GREEN이었다. SPEC·QUALITY 독립 최종 검토 PASS; 중복 묶음은 합산하지 않는다.
+- gate 변화: SOURCE/LOCAL 라이브러리와 fixture 근거이며 DEVICE/FIELD 수용을 대체하지 않는다.
+- 결정: D-439. 이름만 공유하며 권한과 가용성 판단은 기존 소유자와 서버에 둔다.

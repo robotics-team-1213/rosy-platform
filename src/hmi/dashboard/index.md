@@ -37,8 +37,8 @@
 
 ## 최근 기록
 
+- 2026-10-04 · uncommitted · feat(ui): 준비·장치 작업의 결과와 확인 수명 보존
 - 2026-10-04 · uncommitted · feat(ui): 카메라 전체화면과 운용 확인의 정지 접근 보존
 - 2026-10-04 · uncommitted · fix(ui): 교통 정책 검토와 적용 흐름 유지
 - 2026-10-04 · uncommitted · feat(ui): 인증과 역할 진입을 분리한 기본 dashboard
 - 2026-10-04 · uncommitted · feat(ui): 절차 표면의 작업 선택과 유지
-- 2026-10-03 · uncommitted · fix(link): 현재 접속과 후속 코드 규약 구별

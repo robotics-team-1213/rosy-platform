@@ -5,6 +5,7 @@
 import { api, session } from "../client.js";
 import { mountPanels } from "./mount.js";
 import { createStore } from "./store.js";
+import { ROLE_LABEL, enumLabel } from "/common/core_ui_logic.js";
 import { dashboardLoginHref } from "../surface-navigation.js";
 
 const REFRESH_MS = 5_000;
@@ -91,7 +92,8 @@ function refreshPanelState(panels) {
 
 async function assemble() {
   const manifest = await api(`/api/v1/ui/surfaces/${surface}`, { signal: AbortSignal.timeout(REFRESH_MS * 2) });
-  document.getElementById("shell-role").textContent = manifest.role;
+  document.getElementById("shell-role").textContent = enumLabel(ROLE_LABEL, manifest.role);
+  document.getElementById("shell-role").title = manifest.role;
   if (manifest.revision === revision) {
     refreshPanelState(manifest.panels);
     showStatus(manifest.panels.length ? "" : "이 역할로 이 화면에 보일 패널이 없습니다.");

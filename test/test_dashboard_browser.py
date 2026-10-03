@@ -2289,6 +2289,7 @@ def test_map_keyboard_crosshair_posts_a_goal_with_the_same_confirm():
         page.click('[data-map-click="goal"]')
         canvas.focus()
         canvas.press("Enter")
+        page.locator("dialog.ui-confirm ui-button[kind=irreversible]").click()
         page.wait_for_function(
             "() => window.__apiCalls.some((call) => call.path === "
             "'/api/v1/navigation/goal' && call.method === 'POST')",

@@ -127,7 +127,7 @@ def test_setup_localization_preserves_pending_pose_and_slam_actions_during_capab
         page.wait_for_function("window.__calls.length === 1")
         pose_button = page.locator("main form ui-button[type=submit]")
         assert pose_button.is_disabled()
-        pose_status = page.locator("main > ui-status[role=status]").nth(1)
+        pose_status = page.locator("main > section.ui-readback ui-status[role=status]")
         pending_pose_feedback = pose_status.inner_text()
         page.evaluate("window.__callbacks['/api/v1/system/capabilities'].onData({navigation:{goal_navigation:true},slam:true})")
         page.locator("main form").evaluate("node => node.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}))")
@@ -137,22 +137,26 @@ def test_setup_localization_preserves_pending_pose_and_slam_actions_during_capab
         page.evaluate("window.__pending['/api/v1/localization/initialpose'].resolve({accepted:true})")
         page.wait_for_function("document.querySelector('main form ui-button[type=submit]').disabled === false")
 
-        slam_buttons = page.locator("main section.ui-readback ui-button")
+        page.locator("main details summary").click()
+        slam_status = page.locator("main details ui-status[role=status]")
+        slam_buttons = page.locator("main details ui-button")
         start = slam_buttons.nth(0)
         start.click()
+        page.locator("dialog.ui-confirm ui-button[kind=irreversible]").click()
         page.wait_for_function("window.__calls.length === 2")
-        pending_slam_feedback = pose_status.inner_text()
+        pending_slam_feedback = slam_status.inner_text()
         assert slam_buttons.evaluate_all("nodes => nodes.every(node => node.disabled)")
         page.evaluate("window.__callbacks['/api/v1/system/capabilities'].onData({navigation:{goal_navigation:true},slam:true})")
         start.dispatch_event("click")
         assert slam_buttons.evaluate_all("nodes => nodes.every(node => node.disabled)")
-        assert pose_status.inner_text() == pending_slam_feedback
+        assert slam_status.inner_text() == pending_slam_feedback
+        assert "초기 위치 설정 요청을 CORE가 받았습니다" in pose_status.inner_text()
         assert page.evaluate("window.__calls") == [
             {"path": "/api/v1/localization/initialpose", "method": "POST"},
             {"path": "/api/v1/slam/start", "method": "POST"},
         ]
         page.evaluate("window.__pending['/api/v1/slam/start'].resolve({accepted:true})")
-        page.wait_for_function("[...document.querySelectorAll('main section.ui-readback ui-button')].every(node => !node.disabled)")
+        page.wait_for_function("[...document.querySelectorAll('main details ui-button')].every(node => !node.disabled)")
         _unmount_panel(page)
         assert errors == []
         browser.close()
@@ -1080,6 +1084,7 @@ def test_admin_dock_registration_requires_loaded_types_and_fresh_pose():
           window.confirm=()=>true;
           document.querySelector('form').requestSubmit();
         }""")
+        page.locator("dialog.ui-confirm ui-button[kind=irreversible]").click()
         page.wait_for_timeout(30)
         assert page.evaluate("window.__calls") == [{
             "path":"/api/v1/docking/docks","method":"POST",
@@ -1124,6 +1129,7 @@ def test_setup_traffic_policy_stages_before_confirmed_apply():
         assert page.evaluate("window.__calls[0].path") == "/api/v1/traffic/policy/stage"
         assert not page.locator("ui-button").filter(has_text="정지 상태에서 적용").is_disabled()
         page.locator("ui-button").filter(has_text="정지 상태에서 적용").click()
+        page.locator("dialog.ui-confirm ui-button[kind=irreversible]").click()
         page.wait_for_function("window.__calls.length === 2")
         assert page.evaluate("window.__calls[1].path") == "/api/v1/traffic/policy/apply"
         _unmount_panel(page)
@@ -1272,6 +1278,12 @@ def test_console_map_readiness_freshness_and_action_feedback_are_independent():
         page.evaluate("window.__polls['/api/v1/system/capabilities'].onData({navigation:{goal_navigation:true}}); window.__polls['/api/v1/host/commissioning'].onData({runtime_mode:'hardware'}); window.__polls['/api/v1/robot/state'].onData({pose:{x:.5,y:.5,yaw:0}})")
         page.locator('[data-map-click="goal"]').click()
         page.locator("canvas").click(position={"x":30,"y":30})
+        page.evaluate("window.__polls['/api/v1/system/capabilities'].onData({navigation:{goal_navigation:false}})")
+        page.locator("dialog.ui-confirm ui-button[kind=irreversible]").click()
+        assert page.evaluate("window.__calls.filter(call=>call.method==='POST')") == []
+        page.evaluate("window.__polls['/api/v1/system/capabilities'].onData({navigation:{goal_navigation:true}})")
+        page.locator("canvas").click(position={"x":30,"y":30})
+        page.locator("dialog.ui-confirm ui-button[kind=irreversible]").click()
         page.wait_for_function("window.__calls.some(call=>call.method==='POST')")
         page.wait_for_function("[...document.querySelectorAll('#map-test-panel ui-status[role=status]')].at(-1)?.textContent.includes('CORE')")
         accepted = action.inner_text()
@@ -1283,6 +1295,7 @@ def test_console_map_readiness_freshness_and_action_feedback_are_independent():
         page.wait_for_function("[...document.querySelectorAll('#map-test-panel ui-status[role=status]')].at(-1)?.textContent.includes('CORE')")
         page.locator('[data-map-click="goal"]').click()
         page.locator("canvas").click(position={"x":45,"y":45})
+        page.locator("dialog.ui-confirm ui-button[kind=irreversible]").click()
         page.wait_for_function("[...document.querySelectorAll('#map-test-panel ui-status[role=status]')].at(-1)?.textContent.includes('fixture goal rejected')")
         failed = action.inner_text()
         page.evaluate("window.__intervals[10000]()")

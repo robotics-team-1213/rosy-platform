@@ -1,5 +1,6 @@
 // 색은 tokens.css가 소유한다(concept 16 §6, D-72 L1). 캔버스는 CSS 변수를
 // 직접 못 쓰므로 한 번 풀어 둔 표를 쓴다 — 픽셀마다 읽으면 안 된다.
+import { confirmIrreversible } from "/common/ui.js";
 const PALETTE_TOKENS = {
   rasterUnknown: "--raster-unknown",
   rasterFree: "--raster-free",
@@ -112,6 +113,7 @@ export function createFieldMap(options) {
   const canGoal = options.canGoal;
   const setAction = options.setAction;
   const listenerController = new AbortController();
+  let committing = false;
   let resizeObserver = null;
   const layerButtons = [...(options.layerRoot?.querySelectorAll("[data-map-layer]") || [])];
   const clickButtons = [...(options.layerRoot?.querySelectorAll("[data-map-click]") || [])];
@@ -295,6 +297,7 @@ export function createFieldMap(options) {
         apiMaybe("/api/v1/navigation/path"),
         wanted("global_costmap") ? apiMaybe("/api/v1/map/costmap?scope=global") : null,
       ]);
+      if (listenerController.signal.aborted) return;
       state.occupancy = grid;
       state.path = path?.poses || [];
       state.costmap = costmap;
@@ -306,6 +309,7 @@ export function createFieldMap(options) {
         setStatus(grid.map_id || "크기 미상");
       else setStatus(`${grid.width}×${grid.height}${grid.map_id ? ` · ${grid.map_id}` : ""}`);
     } catch (error) {
+      if (listenerController.signal.aborted) return;
       // Without a server freshness field, do not leave a previous snapshot looking current.
       state.occupancy = null;
       state.path = [];
@@ -361,6 +365,7 @@ export function createFieldMap(options) {
 
   // D-259: 클릭과 키보드 확정은 같은 길이다. 좌표→confirm→POST 전부가 여기 있다.
   async function commitPoint(px, py) {
+    if (committing || listenerController.signal.aborted) return;
     if (!state.occupancy || !canvas) {
       setAction?.("최신 지도 데이터를 확인할 수 없어 위치·목표를 보내지 않았습니다.");
       return;
@@ -376,12 +381,17 @@ export function createFieldMap(options) {
     const path = locating
       ? "/api/v1/localization/initialpose"
       : "/api/v1/navigation/goal";
-    if (!window.confirm(`${label} ${world.x.toFixed(2)}, ${world.y.toFixed(2)} 로 보낼까요?`)) return;
+    const mapSnapshot = JSON.stringify(state.occupancy);
+    const modeSnapshot = clickMode;
+    committing = true;
     try {
+      const confirmed = await (options.confirm || confirmIrreversible)({message: `${label} ${world.x.toFixed(2)}, ${world.y.toFixed(2)} 로 보낼까요?`, action: locating ? "위치 설정" : "목표 전송", opener: canvas, signal: listenerController.signal});
+      if (!confirmed || listenerController.signal.aborted || !canGoal?.() || modeSnapshot !== clickMode || mapSnapshot !== JSON.stringify(state.occupancy) || yaw !== (Number(getPose?.()?.yaw) || 0)) return;
       await api(path, {
         method: "POST",
         body: JSON.stringify({ x: world.x, y: world.y, yaw }),
       });
+      if (listenerController.signal.aborted) return;
       setAction?.(`${label} ${world.x.toFixed(2)}, ${world.y.toFixed(2)} 요청을 CORE가 받았습니다. 실제 적용 상태는 로봇 readback으로 확인하세요.`);
       if (!locating) {
         window.dispatchEvent(new CustomEvent("rosy:goal", { detail: { x: world.x, y: world.y } }));
@@ -390,8 +400,8 @@ export function createFieldMap(options) {
         paint();
       }
     } catch (error) {
-      setAction?.(`${label} 전송 실패: ${error.message}`);
-    }
+      if (!listenerController.signal.aborted) setAction?.(`${label} 전송 실패: ${error.message}`);
+    } finally { committing = false; }
   }
 
   canvas?.addEventListener("click", async (event) => {

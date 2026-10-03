@@ -33,6 +33,14 @@ export function mount(el) {
   }
 
   const note = document.createElement("ui-text");
-  note.textContent = "이 브라우저에만 저장됩니다. 시스템은 기기의 밝기 설정을 따릅니다.";
-  el.append(head, group, note);
+  note.textContent = "이 브라우저에만 저장됩니다. 시스템은 기기의 색상 모드 설정을 따릅니다.";
+  const state = document.createElement("ui-status"); state.setAttribute("state", "ready"); state.setAttribute("role", "status");
+  function render() {
+    const theme = window.RosyTheme;
+    const label = value => theme?.choices.find(choice => choice.value === value)?.label || value;
+    state.textContent = `선택: ${label(theme?.get() || "dark")} · 현재 화면: ${label(theme?.resolved() || "dark")}`;
+  }
+  render(); document.addEventListener("rosy:theme", render);
+  el.append(head, group, state, note);
+  return () => document.removeEventListener("rosy:theme", render);
 }
