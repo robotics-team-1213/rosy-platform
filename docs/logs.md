@@ -4965,3 +4965,14 @@
 - 변경: 두 Windows 검증 helper에서 taskkill 오류는 추적 프로세스 종료가 확인된 때만 시간 초과로 유지한다. 살아 있는 프로세스의 native 오류와 silent nonzero는 다시 throw하며 HOLD·재실행 금지를 보존한다.
 - 증거: Windows 원본 검증과 종료 경합 시험 22 passed; 독립 실행 22 passed, APPROVE. docs/validation/d427-source-migration/windows-ssh-timeout-cleanup-2026-10-04.md.
 - gate 변화: SOURCE/LOCAL Windows PowerShell 5.1. 기존 push gate는 1 failed이며 수정 후보 전체 gate·CI·ARM64·DEVICE·FIELD는 별도 검증한다.
+## 2026-10-04 · uncommitted · docs(cell): 팔레타이징 앱 현황과 완료 목표
+
+- 변경: 기준 main f32643ffd의 코어·Fleet·OMX·웹 표면·기존 계획을 대조하고 현황 보고서와 D-446 Proposed 초안을 작성했다. 앱 LOCAL, 박스 전용 ROS-SIM, 슬립시트 포함 원래 C6를 구분해 순서·책임·수용 증거를 명시했다. 다른 브랜치와 공유 main에서 선점한 ADR 번호는 gaps로 기록했다.
+- 증거: X:의 별도 venv에 현재 기준 skill/execution/palletizing wheel을 빌드·설치한 뒤 process compatibility·Cell·layout 회귀 174 passed, skip 없음. 기본 환경은 wheel 미설치로 수집 오류였으며 설치 후 결과와 구분했다. 전용 Cell 웹 표면 부재, 이미 구현된 grasp depth, 현재 슬립시트 거절 시험 및 미완료 종단 수용을 코드와 기록에서 확인했다.
+- gate 변화: 없음. 문서·목표 설정 회차이며 앱 구현·Gazebo 전체 실행·실물 배포는 진행하지 않았다.
+
+## 2026-10-04 · uncommitted · docs(cell): 모델 PC에서 Gazebo 수용
+
+- 변경: 사용자 지시에 따라 Gazebo 호스트를 모델 PC로 정했다. 같은 호스트 UDS·loopback fence를 유지하기 위해 모델 PC에 검증용 Fleet·Cell·OMX·Gazebo를 격리 배치하고, 운영 관제 PC의 원장·등록 로봇과 분리하는 계획을 D-446과 보고서에 반영했다.
+- 증거: D-434/D-336과 실제 apps/agent의 literal-loopback fence를 대조했다. 문서 검사 127 passed/1 skipped, D-438 예약 보완 뒤 실패했던 ADR 검사 2 passed, 최종 lint 0 errors/26 기존 warnings, 상대 링크·diff 검사 통과. 모델 PC 접근과 Gazebo 준비·실행은 아직 검증하지 않았다.
+- gate 변화: 없음. 원격 실행 목표·토폴로지 문서만 갱신했다.
