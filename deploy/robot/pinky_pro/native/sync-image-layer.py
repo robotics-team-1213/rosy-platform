@@ -86,7 +86,9 @@ UNITS = (
     "rosy-boot-status.service",
     "rosy-boot-status.timer",
     "rosy-boot-status-ready.service",
+    # D-433: retired (see RETIRED_UNITS); rosy-face replaces it.
     "rosy-boot-display.service",
+    "rosy-face.service",
     "rosy-config.service",
     "rosy-network.service",
     "rosy-login-code.service",
@@ -108,13 +110,24 @@ ENABLED_UNITS = frozenset({
     "rosy-boot-status-ready.service",
     "rosy-config.service",
     "rosy-network.service",
-    "rosy-boot-display.service",
+    "rosy-face.service",
     "rosy-login-code.service",
     "rosy-hw-probe.service",
     "rosy-hw-probe.path",
     "rosy-hw-test.path",
     "rosy-auto-update.timer",
 })
+
+# D-433: a unit a newer one replaced. Its file is only ever REPLACED where an
+# older image installed it (with a condition that keeps it from starting beside
+# its successor), never installed new, and never restarted: restarting it would
+# start a second owner of the same lines. A rollback's own sync restores the
+# backed-up original.
+RETIRED_UNITS = frozenset({"rosy-boot-display.service"})
+# successor -> the retired unit it takes over from. When a sync adds the
+# successor, it stops the retired unit and enables and starts the successor
+# (the swap), so the screen is not dark until the next boot.
+SUCCESSORS = {"rosy-face.service": "rosy-boot-display.service"}
 
 # Never offered for a live restart, even when active and changed: the boot
 # oneshots are Required by rosy-core (restarting them restarts CORE), and
@@ -132,6 +145,7 @@ def _restartable(unit: str) -> bool:
     return (
         not unit.endswith(".target")
         and unit not in NEXT_BOOT_ONLY
+        and unit not in RETIRED_UNITS
         and not unit.startswith("rosy-first-boot")
     )
 
@@ -247,6 +261,9 @@ def plan(root: Path, native: Path) -> dict:
         if destination.is_symlink():
             # A unit linked to /dev/null is masked; replacing it would unmask it.
             skipped.append({"path": shown, "reason": "destination is a symlink (masked?)"})
+            continue
+        if not destination.exists() and entry["kind"] == "unit" and Path(entry["destination"]).name in RETIRED_UNITS:
+            skipped.append({"path": shown, "reason": "retired unit, not installed here (D-433)"})
             continue
         if not destination.exists():
             result["new"].append(shown)
@@ -636,11 +653,16 @@ def _post_commands(steps: dict) -> list[list[str]]:
     commands: list[list[str]] = []
     if steps.get("daemon_reload"):
         commands.append(["systemctl", "daemon-reload"])
+    # D-433 swap: the retired owner lets go of the lines before its successor starts.
+    for unit in sorted(set(steps.get("stop", []))):
+        if unit in RETIRED_UNITS:
+            commands.append(["systemctl", "stop", unit])
     for unit in sorted(set(steps.get("enable", []))):
         if unit not in ENABLED_UNITS:
             continue
-        # A new .path or .timer would otherwise sit idle until the next boot.
-        if unit.endswith((".path", ".timer")):
+        # A new .path or .timer would otherwise sit idle until the next boot; a
+        # successor (D-433) must take over now, not at the next boot.
+        if unit.endswith((".path", ".timer")) or unit in set(steps.get("start", [])):
             commands.append(["systemctl", "enable", "--now", unit])
         else:
             commands.append(["systemctl", "enable", unit])
@@ -663,9 +685,15 @@ def _steps(root: Path, work: list[dict], cleanup: list[dict], pending: dict) -> 
         if unit not in removing
         and (root / UNIT_DIR / unit).is_file() and not (root / UNIT_DIR / unit).is_symlink()
     }
+    enable = added | still_there
+    start = {unit for unit in enable if unit in SUCCESSORS} & (added | set(pending.get("start", [])))
+    stop = {unit for unit in {SUCCESSORS[name] for name in start} | set(pending.get("stop", []))
+            if (root / UNIT_DIR / unit).is_file()}
     return {
         "daemon_reload": "unit" in kinds or bool(pending.get("daemon_reload")),
-        "enable": sorted(added | still_there),
+        "enable": sorted(enable),
+        "start": sorted(start),
+        "stop": sorted(stop),
         "udev_reload": "udev" in kinds or bool(pending.get("udev_reload")),
     }
 

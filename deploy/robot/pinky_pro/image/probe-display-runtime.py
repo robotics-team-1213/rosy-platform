@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Check the boot display (rosy-boot-display) inside the built image (D-190).
+"""Check rosy-face (the LCD, buzzer and lamp owner) inside the built image (D-190, D-433).
 
 On rosy-pinky-e4us (release 005) the product image had neither ``spidev`` nor
 ``RPi.GPIO`` and nothing drew the LCD. customize-rootfs.sh runs this in the
-chroot as rosy-boot-display.service runs (user rosy-display, its HOME, no user
+chroot as rosy-face.service runs (user rosy-display, its HOME, no user
 site, the release's site-packages on PYTHONPATH, no ROS), and a failure fails
 the build.
 
@@ -34,13 +34,14 @@ import sys
 APT_MODULES = ("spidev", "lgpio", "numpy", "PIL.Image")
 APT_PREFIX = "/usr/lib/python3/dist-packages"
 # D-260: the boot display folds its inputs with the release's rule table.
-RELEASE_MODULES = ("rosylib", "rosylib.battery", "emotion.info_screen", "core_common.robot_state")
+RELEASE_MODULES = ("rosylib", "rosylib.battery", "emotion.info_screen", "core_common.robot_state",
+                   "core_common.face_screen")  # D-433: the situation table
 FONT = "usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
-UNIT = "rosy-boot-display.service"
+UNIT = "rosy-face.service"
 UNIT_RULES = (
     "User=rosy-display", "Environment=PYTHONNOUSERSITE=1", "ProtectSystem=strict",
     "ProtectHome=true", "DevicePolicy=closed", "PrivateNetwork=true",
-    "ExecStart=/usr/bin/python3 -B /opt/rosy/native-runtime/rosy-boot-display.py",
+    "ExecStart=/usr/bin/python3 -B /opt/rosy/native-runtime/rosy-face.py",
 )
 DEVICES = ("/dev/spidev0.0", "/dev/gpiochip4", "/dev/i2c-1", "/dev/ws281x_pwm")  # D-260 3: the lamp
 STAGES = ("BOOTING", "PROVISIONED", "CORE_READY", "FAILED:rosy-core")

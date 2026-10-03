@@ -329,6 +329,9 @@ class FakeHost(upd.Host):
     def _is_active(self, argv):
         return self._ok()
 
+    def _is_enabled(self, argv):
+        return self._ok()
+
     def _failed(self, argv):
         return self._ok("")
 
@@ -354,6 +357,8 @@ def kind_of(argv: list[str]) -> str:
         return "restart"
     if argv[:2] == ["systemctl", "is-active"]:
         return "is-active"
+    if argv[:2] == ["systemctl", "is-enabled"]:
+        return "is-enabled"
     if argv[:2] == ["systemctl", "list-units"]:
         return "failed"
     raise AssertionError(f"unexpected command {argv}")
@@ -2498,3 +2503,66 @@ def test_acknowledged_unmarked_rollback_failure_then_operator_rollback(device, h
     up.run()
     assert state(device)["failed"][NEXT]["detail"] == "operator rolled back"
     assert kinds(host).count("activate") == 1
+
+
+# --- D-433: the screen during an update, and after a rollback past rosy-face ---------
+
+
+def test_the_update_marker_follows_the_apply_and_is_gone_after(device, host, hub, keys):
+    hub.publish(keys, NEXT)
+    seen = []
+
+    def during_sync(h, argv):
+        marker = device / upd.UPDATE_DISPLAY
+        seen.append(marker.read_text(encoding="utf-8") if marker.exists() else None)
+        return None
+
+    host.overrides["sync"] = during_sync
+
+    result = updater(host, hub).run()
+
+    assert result["phase"] == "committed", result
+    assert seen and seen[0] == f"image-layer-sync\n{NEXT}\n"
+    assert not (device / upd.UPDATE_DISPLAY).exists()
+
+
+def _retired_display(device):
+    units = device / "etc/systemd/system"
+    units.mkdir(parents=True, exist_ok=True)
+    (units / upd.RETIRED_DISPLAY_UNIT).write_text("[Unit]\n", encoding="utf-8")
+    return units
+
+
+def test_a_rollback_past_rosy_face_starts_the_old_display_once(device, host, hub, keys):
+    hub.publish(keys, NEXT)
+    _retired_display(device)
+    bad = subprocess.CompletedProcess([], 1, "", "boom")
+    host.overrides["ready"] = lambda h, argv: bad if h.links["current"] == NEXT else None
+    host.overrides["is-active"] = lambda h, argv: (
+        subprocess.CompletedProcess([], 3, "", "") if upd.RETIRED_DISPLAY_UNIT in argv else None)
+
+    result = updater(host, hub).run()
+
+    assert result["phase"] == "rolled_back", result
+    starts = [argv for argv in host.calls if argv == ["systemctl", "start", upd.RETIRED_DISPLAY_UNIT]]
+    assert len(starts) == 1
+    assert not (device / upd.UPDATE_DISPLAY).exists()
+
+
+@pytest.mark.parametrize("case", ["face_installed", "already_running", "disabled"])
+def test_the_old_display_is_left_alone_otherwise(device, host, hub, keys, case):
+    hub.publish(keys, NEXT)
+    units = _retired_display(device)
+    if case == "face_installed":
+        (units / upd.FACE_UNIT).write_text("[Unit]\n", encoding="utf-8")
+    if case == "disabled":
+        host.overrides["is-enabled"] = lambda h, argv: subprocess.CompletedProcess([], 1, "", "")
+    if case != "already_running":
+        host.overrides["is-active"] = lambda h, argv: (
+            subprocess.CompletedProcess([], 3, "", "") if upd.RETIRED_DISPLAY_UNIT in argv else None)
+    bad = subprocess.CompletedProcess([], 1, "", "boom")
+    host.overrides["ready"] = lambda h, argv: bad if h.links["current"] == NEXT else None
+
+    updater(host, hub).run()
+
+    assert ["systemctl", "start", upd.RETIRED_DISPLAY_UNIT] not in host.calls

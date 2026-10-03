@@ -235,8 +235,8 @@ def _valid_root(tmp_path: Path) -> Path:
         (release / "install" / relative).parent.mkdir(parents=True, exist_ok=True)
         (release / "install" / relative).write_text("# fixture\n", encoding="utf-8")
     # D-190: the boot display ships enabled, with its udev rule and apt libraries.
-    (root / "etc/systemd/system/rosy-boot-display.service").write_text("[Unit]\n", encoding="utf-8")
-    (wants.parent / "rosy-boot-display.service").write_text("[Unit]\n", encoding="utf-8")
+    (root / "etc/systemd/system/rosy-face.service").write_text("[Unit]\n", encoding="utf-8")
+    (wants.parent / "rosy-face.service").write_text("[Unit]\n", encoding="utf-8")
     (root / "etc/udev/rules.d/99-rosy-display.rules").write_text('KERNEL=="spidev0.0"\n', encoding="utf-8")
     (root / "var/lib/dpkg").mkdir(parents=True, exist_ok=True)
     (root / "var/lib/dpkg/status").write_text("".join(
@@ -1036,13 +1036,13 @@ def test_mounted_image_verifier_requires_the_hardware_runtime(tmp_path):
 
 def test_mounted_image_verifier_requires_the_boot_display(tmp_path):
     disabled = _valid_root(tmp_path / "disabled")
-    (disabled / "etc/systemd/system/multi-user.target.wants/rosy-boot-display.service").unlink()
+    (disabled / "etc/systemd/system/multi-user.target.wants/rosy-face.service").unlink()
     completed = _verify(disabled)
     assert completed.returncode != 0
-    assert "rosy-boot-display.service is not enabled" in completed.stderr
+    assert "rosy-face.service is not enabled" in completed.stderr
 
     bare = _valid_root(tmp_path / "bare")
-    (bare / "etc/systemd/system/rosy-boot-display.service").unlink()
+    (bare / "etc/systemd/system/rosy-face.service").unlink()
     (bare / "etc/udev/rules.d/99-rosy-display.rules").unlink()
     status = bare / "var/lib/dpkg/status"
     status.write_text(status.read_text(encoding="utf-8").replace(
@@ -1052,7 +1052,7 @@ def test_mounted_image_verifier_requires_the_boot_display(tmp_path):
     config.write_text(config.read_text(encoding="utf-8").replace("dtparam=spi=on\n", ""), encoding="utf-8")
     completed = _verify(bare)
     assert completed.returncode != 0
-    assert "missing systemd unit: rosy-boot-display.service" in completed.stderr
+    assert "missing systemd unit: rosy-face.service" in completed.stderr
     assert "missing display udev rule: etc/udev/rules.d/99-rosy-display.rules" in completed.stderr
     assert "boot display package is not installed: python3-rpi-lgpio" in completed.stderr
     assert "boot display package is not installed: python3-spidev" not in completed.stderr

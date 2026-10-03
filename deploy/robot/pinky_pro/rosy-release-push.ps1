@@ -385,7 +385,15 @@ function Get-RemoteCommandPlan {
         # The core-release check follows the sync for the same reason: a CORE
         # restarted into the older release before its units are back may fail.
         Add-Step $plan "ssh" $SshExe (@("-i", $KeyPath) + $sshOptions + @($target, "sudo", "-n", $RollbackWrapper))
-        if (-not $SkipImageLayerSync) { Add-ImageLayerSteps $plan "" -NoReadyCheck }
+        if (-not $SkipImageLayerSync) {
+            Add-ImageLayerSteps $plan "" -NoReadyCheck
+            # D-433 Q5: a rollback past rosy-face restores rosy-boot-display.service
+            # enabled but stopped; start it once so the LCD, buzzer and lamp are not
+            # dark until the next boot. Never while rosy-face is installed: two
+            # owners would drive the same lines.
+            Add-Step $plan "ssh" $SshExe (@("-i", $KeyPath) + $sshOptions + @($target, "sudo", "-n", "sh", "-c",
+                "test -e /etc/systemd/system/rosy-face.service || ! systemctl is-enabled --quiet rosy-boot-display.service || systemctl is-active --quiet rosy-boot-display.service || systemctl start rosy-boot-display.service")) "display-restore"
+        }
         Add-Step $plan "ssh" $SshExe (@("-i", $KeyPath) + $sshOptions + @($target) + (Get-CoreReleaseCheckArguments)) "core-release-check"
         Add-Step $plan "ssh" $SshExe (@("-i", $KeyPath) + $sshOptions + @($target) + (Get-CoreReadyArguments $CoreReadyProbe))
         Add-Step $plan "ssh" $SshExe ($claimSsh + (Get-ClaimArguments "release" $ClaimHolder)) "claim-release"

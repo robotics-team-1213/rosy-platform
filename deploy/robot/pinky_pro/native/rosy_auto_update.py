@@ -130,6 +130,13 @@ HEALTH_UNITS = ("rosy-core.service", "rosy-io.service", "rosy-camera.service")
 HEALTH_HOLD_S = 60.0
 HEALTH_POLL_S = 5.0
 SELF_UNIT = "rosy-auto-update.service"
+# D-433 row 3: rosy-face shows "Updating" while this marker exists (two lines:
+# step, candidate release id; nothing secret, root 0644).
+UPDATE_DISPLAY = "run/rosy-boot/update-display.txt"
+# D-433 Q5: after a rollback to a release older than rosy-face, its sync restores
+# the retired display unit but does not start it; this updater starts it once.
+FACE_UNIT = "rosy-face.service"
+RETIRED_DISPLAY_UNIT = "rosy-boot-display.service"
 UNIT_NAME = re.compile(r"^rosy-[A-Za-z0-9-]+\.(service|path|timer)$")
 
 # Response size limits.
@@ -447,6 +454,40 @@ class Updater:
 
     def _save_state(self, state: dict) -> None:
         _write_json(self.updates / "state.json", state)
+        self._update_marker(state.get("applying"))
+
+    def _update_marker(self, applying) -> None:
+        """D-433 row 3: the screen's "Updating" card follows the apply journal. Best effort."""
+        marker = self.root / UPDATE_DISPLAY
+        with contextlib.suppress(OSError):
+            if isinstance(applying, dict) and RELEASE_ID.fullmatch(str(applying.get("release_id") or "")):
+                step = re.sub(r"[^a-z-]", "-", str(applying.get("step") or "applying").lower())[:32] or "applying"
+                marker.parent.mkdir(parents=True, exist_ok=True)
+                temporary = marker.with_name(f".{marker.name}.tmp")
+                temporary.write_text(f"{step}\n{applying['release_id']}\n", encoding="utf-8")
+                os.chmod(temporary, 0o644)
+                os.replace(temporary, marker)
+            else:
+                marker.unlink(missing_ok=True)
+
+    def _restore_display(self) -> None:
+        """D-433 Q5: after a rollback the screen must not stay dark until the next boot.
+
+        Only when the rolled-back release has no rosy-face (its unit file is gone)
+        and the retired unit is enabled but not running; starting it beside
+        rosy-face would put two owners on the same lines.
+        """
+        if (self.root / "etc/systemd/system" / FACE_UNIT).exists():
+            return
+        if not (self.root / "etc/systemd/system" / RETIRED_DISPLAY_UNIT).is_file():
+            return
+        if self._systemctl("is-enabled", "--quiet", RETIRED_DISPLAY_UNIT).returncode != 0:
+            return
+        if self._systemctl("is-active", "--quiet", RETIRED_DISPLAY_UNIT).returncode == 0:
+            return
+        started = self._systemctl("start", RETIRED_DISPLAY_UNIT)
+        if started.returncode != 0:
+            raise UpdateError(f"DISPLAY_RESTORE_FAILED: {_tail(started.stderr)}")
 
     def _history(self, event: str, release_id: str | None, detail: str) -> None:
         self.updates.mkdir(parents=True, exist_ok=True)
@@ -1045,7 +1086,8 @@ class Updater:
         if not script.is_file():
             script = Path(self.release_path(release_id)) / RELEASE_SYNC
         problems = []
-        for step in (lambda: self._restart(self._sync(str(script))), self._core_release_check, self._ready):
+        for step in (lambda: self._restart(self._sync(str(script))), self._restore_display,
+                     self._core_release_check, self._ready):
             try:
                 step()
             except UpdateError as exc:

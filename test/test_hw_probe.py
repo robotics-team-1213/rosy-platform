@@ -150,7 +150,7 @@ def test_a_healthy_board_reads_ok_where_a_machine_can_tell(tmp_path):
     root = _tree(tmp_path, nodes=("rosy-motor", "ttyAMA0", "i2c-0", "i2c-1", "spidev0.0", "ws281x_pwm"),
                  csi=("okay", "disabled"), kmsg="6,900,1000,-;ov5647 10-0036: Consider updating driver\n")
     _lamp_channel(root, "3")
-    io = FakeIo(root, active={"rosy-boot-display.service"}, i2c={**HEALTHY_ADC, **IMU_OK}, lidar=LIDAR_OK,
+    io = FakeIo(root, active={"rosy-face.service"}, i2c={**HEALTHY_ADC, **IMU_OK}, lidar=LIDAR_OK,
                 motors=MOTORS_OK, commands=PI_OK)
     rows = probe_module.Probe(io).run()
     states = _states(rows)
@@ -169,7 +169,7 @@ def test_the_2026_09_25_rosy_18_board_shows_all_six_states(tmp_path):
     kmsg = ("6,800,900,-;rp1-cfe 1f00110000.csi: Using DMA\n"
             "3,801,901,-;ov5647 10-0036: probe with driver ov5647 failed with error -121\n")
     root = _tree(tmp_path, csi=("okay", "okay"), kmsg=kmsg)
-    io = FakeIo(root, active={"rosy-io.service", "rosy-boot-display.service"}, commands=PI_OK)
+    io = FakeIo(root, active={"rosy-io.service", "rosy-face.service"}, commands=PI_OK)
     rows = probe_module.Probe(io).run()
     states = _states(rows)
 

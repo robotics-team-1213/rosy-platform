@@ -187,7 +187,7 @@ chroot "$ROOT" env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-instal
     avahi-daemon avahi-utils ca-certificates chrony dnsmasq-base libnss-mdns locales network-manager \
     openssh-server openssl python3 python3-pip python3-yaml \
     python3-rosdep ros-jazzy-ros-base ros-jazzy-rmw-cyclonedds-cpp
-# D-190: the boot display (rosy-boot-display.service). RPi.GPIO on the Pi 5 is
+# D-190: the boot display (rosy-face.service since D-433). RPi.GPIO on the Pi 5 is
 # the rpi-lgpio compatibility layer; spidev drives the ST7789; PIL, numpy and
 # DejaVu draw the card. From the locked Ubuntu suites like every apt package
 # here; the versions land in deb-packages.txt and the verifier checks them.
@@ -423,7 +423,7 @@ systemctl --root "$ROOT" enable NetworkManager.service chrony.service ssh.servic
     rosy-first-boot.service rosy-first-boot-retry.timer rosy-release-recover.service \
     rosy-runtime.target \
     rosy-boot-status.service rosy-boot-status.timer rosy-boot-status-ready.service \
-    rosy-config.service rosy-network.service rosy-boot-display.service \
+    rosy-config.service rosy-network.service rosy-face.service \
     rosy-login-code.service rosy-hw-probe.service rosy-hw-probe.path rosy-hw-test.path \
     rosy-auto-update.timer
 # D-174 T0: the console banner is rendered at runtime into /run/rosy-boot/issue.
@@ -468,7 +468,7 @@ chroot "$ROOT" python3 -B /opt/rosy/first-boot/rosy-new-device-setup.py --help >
     || fail "installed new-device setup entrypoint does not run"
 chroot "$ROOT" python3 -B /opt/rosy/first-boot/rosy-rebind-board.py --help >/dev/null \
     || fail "installed board-rebind entrypoint does not run"
-for entrypoint in rosy-boot-status.py rosy-config-apply.py rosy-network.py rosy-boot-display.py \
+for entrypoint in rosy-boot-status.py rosy-config-apply.py rosy-network.py rosy-face.py \
     rosy-hw-probe.py rosy-hw-test.py rosy-login-code.py; do
     chroot "$ROOT" python3 -B "/opt/rosy/native-runtime/$entrypoint" --help >/dev/null \
         || fail "installed native entrypoint does not run: $entrypoint"
@@ -498,7 +498,7 @@ chroot "$ROOT" setpriv --reuid=rosy-io --regid=rosy-io --clear-groups \
     env -i PATH=/usr/local/bin:/usr/bin:/bin HOME=/var/lib/rosy/io PYTHONNOUSERSITE=1 PYTHONDONTWRITEBYTECODE=1 \
     bash --noprofile --norc -c 'set -a; if [ -r /etc/rosy/runtime.env ]; then . /etc/rosy/runtime.env; fi; set +a; source /opt/ros/jazzy/setup.bash && source /opt/rosy/current/install/setup.bash && exec python3 -B /tmp/rosy-core-probe/probe-io-runtime.py' \
     || fail "the hardware runtime does not import inside the image"
-# D-190: the boot display, as rosy-boot-display.service runs it: user
+# D-190 / D-433: the face, as rosy-face.service runs it: user
 # rosy-display, its HOME, LG_WD and working directory (its StateDirectory),
 # RPI_LGPIO_CHIP, no shell, no user site, the release on PYTHONPATH and no
 # ROS. spidev, RPi.GPIO (rpi-lgpio), rosylib and the boot card import and
@@ -513,7 +513,7 @@ chroot "$ROOT" setpriv --reuid=rosy-display --regid=rosy-display --clear-groups 
     LG_WD=/var/lib/rosy/display RPI_LGPIO_CHIP=4 \
     PYTHONPATH=/opt/rosy/current/install/lib/python3.12/site-packages \
     bash --noprofile --norc -c 'cd /var/lib/rosy/display && exec python3 -B /tmp/rosy-core-probe/probe-display-runtime.py' \
-    || fail "the boot display does not import inside the image"
+    || fail "rosy-face does not import inside the image"
 rm -rf -- "$ROOT/tmp/rosy-core-probe"
 
 # D-225 2.2: nothing writes into the factory release after this point, so seal
