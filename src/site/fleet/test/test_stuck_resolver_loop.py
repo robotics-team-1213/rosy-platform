@@ -215,3 +215,10 @@ def test_lifespan_runs_the_resolver_and_exits_cleanly(tmp_path):
                 break
             time.sleep(0.01)
         assert [c for c in resolver_robot.calls if c[0] == "line_stuck_decision"]
+
+
+def test_line_stuck_js_claims_and_shows_the_resolver_note():
+    from pathlib import Path
+    js = (Path(__file__).resolve().parents[1] / "fleet/server/web/line-stuck.js").read_text(
+        encoding="utf-8")
+    assert "/line-stuck/claim" in js and "export function resolverText" in js
