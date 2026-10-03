@@ -56,6 +56,18 @@ jobs:
           pip3 install --no-cache-dir --break-system-packages -c /tmp/rosy-runtime-constraints.txt \
             flake8 httpx pyyaml jsonschema ext4
 
+      # D-430 §5: a commit that touches a safety-tagged path (platform_parts.yaml
+      # `concern: safety` roots, `safety_modules`, `safety_anchors`) needs a
+      # `Safety-Review:` trailer. Only the event's own range is checked: the PR's
+      # commits, or a push's before..after (the tip alone for a new branch or a
+      # force push). Scheduled/called runs skip it, so one old commit cannot keep CI
+      # red. Relies on the full-history checkout above (fetch-depth: 0).
+      - name: Safety-Review trailer (D-430)
+        if: github.event_name == 'push' || github.event_name == 'pull_request'
+        env:
+          SAFETY_BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+        run: python3 tools/harness/safety_review.py "$SAFETY_BASE" HEAD
+
       - name: Build and install ROS-free platform API wheels
         run: |
           # Build actual wheels outside src/ and install before colcon/pytest. This catches
@@ -68,10 +80,10 @@ jobs:
           mkdir -p "$wheelhouse"
           pip3 wheel --no-deps --no-build-isolation \
             --wheel-dir "$wheelhouse" \
-            modules/world modules/skills/api modules/skills/manipulation modules/execution modules/processes/palletizing integrations/robots/omx apps/agent apps/gateway
+            contracts/skill modules/world modules/skills/api modules/skills/manipulation modules/execution middleware/execution/local modules/processes/palletizing integrations/robots/omx apps/agent apps/gateway
           pip3 install --break-system-packages --no-cache-dir --no-index \
             --find-links "$wheelhouse" \
-            rosy-world==0.1.0 rosy-skill-api==0.1.0 rosy-skill-manipulation==0.1.0 rosy-execution==0.1.0 rosy-palletizing==0.1.0 rosy-integration-robot-omx==0.1.0 rosy-app-agent==0.1.0 rosy-app-gateway==0.1.0
+            rosy-contracts-skill==0.1.0 rosy-world==0.1.0 rosy-skill-api==0.1.0 rosy-skill-manipulation==0.1.0 rosy-execution==0.1.0 rosy-execution-local==0.1.0 rosy-palletizing==0.1.0 rosy-integration-robot-omx==0.1.0 rosy-app-agent==0.1.0 rosy-app-gateway==0.1.0
 
       - name: Build (colcon)
         run: |

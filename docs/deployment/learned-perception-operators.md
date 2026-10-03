@@ -4,8 +4,8 @@
 넣고 빼는 일, 로봇에서 녹화를 가져오는 일을 다룬다. 섀도 모델은 주행에 쓰이지 않는다.
 주행 선택은 D-205 P3 게이트 뒤의 별도 결정이다.
 
-명령은 `rosy_ml` 하나다(`tools/perception/rosy_ml.py`). 아래 예시는 저장소 루트에서
-`python tools/perception/rosy_ml.py ...`로 실행하고, 편의상 `rosy_ml`로 줄여 쓴다.
+명령은 `rosy_ml` 하나다(`learning/training/perception/rosy_ml.py`). 아래 예시는 저장소 루트에서
+`python learning/training/perception/rosy_ml.py ...`로 실행하고, 편의상 `rosy_ml`로 줄여 쓴다.
 로봇은 이름(`pinky-005`)으로 부른다. 주소는 각자의 설정 파일에만 있고 저장소에는 없다.
 
 ## 처음 한 번
@@ -92,7 +92,7 @@
 - **데이터셋 올리기.** 만든 데이터셋을 store에 넣고, 출력된 ref를 학습자에게 준다.
 
   ```bash
-  python tools/perception/dataset/publish.py data/perception/datasets/<name>   # --store 기본값은 설정의 store
+  python learning/training/perception/dataset/publish.py data/perception/datasets/<name>   # --store 기본값은 설정의 store
   # dataset: store:<name>@<content_sha>   ← 이 줄을 학습자에게 전달
   ```
 
@@ -246,3 +246,5 @@ deliver, `harvest`는 harvest). 사이트 자동 반영(watch)은 journal에 남
 
 - 자동 반영이 어떤 로봇에 안 들어간다: `rosy_ml status <robot>`의 `hold:` 줄에 누가 걸었는지
   나온다. 그 사람과 확인한 뒤 `rosy_ml release-hold <robot>`.
+
+> **참고 (2026-10-03, D-434):** 이 문서의 "사이트 PC"(모델 watch·store·사이트 SSH 키)는 모델 PC를 뜻한다. 관제 PC는 사이트 스택만 돌린다.

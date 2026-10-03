@@ -187,6 +187,7 @@
 | D-413 | ROSY는 modules·integrations·apps·profiles로 책임을 나누고 고정 셀 한 흐름부터 이전한다 |
 | D-425 | 앱·웹의 작업 소유권과 공유 경계를 고정하고 실행 조합 apps와 사용자 화면 ui를 분리한다 |
 | D-426 | Fleet–Gazebo 실제 REST/WS·Task/attempt·CORE 결과와 독립 운동/접촉 관측을 함께 검증; 두 로봇/한 Fleet부터 run별 GZ_PARTITION 격리, 진입 경계 grant 재검사·점유 해제 증거·재시작 이전 실행 대조·CORE 독립 base 명령 만료, M01–M08 반복 수용 및 증거 등급 분리 |
+| D-431 | 라즈베리파이 YOLO 추론은 NCNN을 목표로 하고 OpenCV 영상 처리와 학습 모델의 의미를 유지한다 |
 | D-432 | 모든 앱·장치는 공통 발견·연결 규약을 쓰고, 개발 모드에서는 코드 없이 연결한다 |
 
 ## 계획·결과 문서
@@ -260,6 +261,7 @@
 - [2026-10-01-pilot-omx-gazebo-practice.md](plans/2026-10-01-pilot-omx-gazebo-practice.md)
 - [2026-10-02-platform-architecture-v02-migration.md](plans/2026-10-02-platform-architecture-v02-migration.md)
 - [2026-10-03-app-ownership-shared-transport-and-layout-migration.md](plans/2026-10-03-app-ownership-shared-transport-and-layout-migration.md)
+- [2026-10-03-pi-ncnn-opencv-implementation.md](plans/2026-10-03-pi-ncnn-opencv-implementation.md)
 
 ## 교훈 (docs/solutions)
 
@@ -274,6 +276,6 @@
 
 - 2026-10-03 · uncommitted · fix(link): 현재 접속과 후속 코드 규약 구별
 - 2026-10-03 · uncommitted · feat(link): D-432 주소 없는 장비 접속
-- 2026-10-03 · uncommitted · docs: D-432 common discovery and development link mode
-- 2026-10-03 · uncommitted · fix: retain the UDS owner after a caller disconnects
-- 2026-10-03 · uncommitted · feat: read live Fleet fence on the simulation Cell owner
+- 2026-10-03 · uncommitted · docs: D-435 work orchestration and Fleet authority proposal
+- 2026-10-03 · uncommitted · docs: ADR role and Fleet terminology review
+- 2026-10-03 · uncommitted · docs: D-434 model PC and site PC roles, Isaac Sim 5.1, low-memory rules

@@ -4,7 +4,7 @@ schema: rosy.platform-parts.v1
 # colcon, rosdep, payload and image consumer reads this one line through
 # tools/harness/colcon_roots.py (stdlib-only, so keep it a one-line flow list).
 # Checked by test/architecture/test_colcon_roots.py.
-colcon_roots: [src]
+colcon_roots: [src, learning]
 
 # D-427 §6 "지금(C)" ownership manifest: every tracked source root maps to one
 # D-427 part. No folder moves; `d427_target` is where the root goes in step B.
@@ -22,6 +22,11 @@ parts: [middleware, operations, learning, contracts, integrations, shared_web, p
 
 # D-427 §2. Same-part imports are always allowed. Parts not listed here
 # (profiles, deploy, tools, test, docs) are outside the import rules.
+#
+# D-429 §4 api rule, on top of the table: a root is an api root only when it sets
+# `api: true` and every import_prefix ends in `.api`. An api root imports only
+# contracts and other api roots. An integration imports contracts and the api roots
+# of the parts whose `integrations:` list admits its kind.
 import_rules:
   contracts:
     allow: []
@@ -40,6 +45,12 @@ import_rules:
     allow: [contracts]
     integrations: [models, policies/lerobot_training, simulation, storage]
 
+# D-429 §1 five-concern view plus D-430 §1 `safety`. Every root carries one
+# `concern:`. The view does not change import_rules above. `safety` is not only a
+# view: D-430 §3 invariants (test/architecture/test_safety_separation.py) and the
+# §5 `Safety-Review:` trailer check (tools/harness/safety_review.py) read it.
+concerns: [learning, decision, control, safety, contracts, other]
+
 roots:
   # --- contracts -----------------------------------------------------------
   - path: src/contracts/foundation
@@ -47,11 +58,24 @@ roots:
     d427_target: contracts/foundation
     wave: "4d"
     import_prefix: [core_common]
+    concern: contracts
   - path: src/contracts/interfaces
     part: contracts
     d427_target: contracts/ros_idl
     wave: "4d"
     import_prefix: [interfaces]
+    concern: contracts
+  - path: contracts/skill
+    part: contracts
+    d427_target: contracts/skill
+    wave: none
+    import_prefix: [rosy.contracts.skill]
+    note: >-
+      D-427 wave 2a (Q5, Q9): wheel rosy-contracts-skill. SkillInvocation and the
+      AttemptIdentity/ReceiptBinding receipt identity; rosy.skills.api and
+      rosy.execution.local.receipts re-export the same objects. Not an api root
+      (D-429 §4 rule 1 needs an .api prefix); contracts are importable by every part.
+    concern: contracts
 
   # --- middleware: Pinky/OMX device code, skills, drivers, device UI ---------
   - path: src/runtime/gateway
@@ -59,27 +83,48 @@ roots:
     d427_target: middleware/core/gateway
     wave: "4d"
     import_prefix: [core]
+    concern: control
   - path: src/runtime/services
     part: middleware
     d427_target: middleware/core/services
     wave: "4d"
     import_prefix: [core_features]
+    concern: control
+  - path: src/runtime/services/core_features/safety
+    part: middleware
+    d427_target: middleware/core/services/core_features/safety
+    wave: "4d"
+    import_prefix: [core_features.safety]
+    note: D-430 §1 CORE Safety Guard (SAF-001/003/004/005/006, D-400 shadow); moves with CORE.
+    concern: safety
+  - path: src/runtime/services/core_features/decision
+    part: middleware
+    d427_target: middleware/core/services/core_features/decision
+    wave: "4d"
+    import_prefix: [core_features.decision]
+    note: >-
+      D-429 §1 "device local rules" (lane, router, contract), not deliberative decision.
+      Tagged so D-430 invariant 2 has a robot-side importer to check.
+    concern: decision
   - path: src/runtime/events
     part: middleware
     d427_target: middleware/core/events
     wave: "4d"
     import_prefix: [core_events]
+    concern: control
   - path: src/runtime/api_web
     part: middleware
     d427_target: middleware/core/api_web
     wave: "4d"
     import_prefix: [core_api_web]
     note: Pinky Device API web layer and host-agent client.
+    concern: control
   - path: src/runtime/navigation
     part: middleware
     d427_target: middleware/core/navigation
     wave: "4c"
     import_prefix: [navigation]
+    concern: control
   - path: src/runtime/sensing
     part: middleware
     d427_target: middleware/perception
@@ -89,32 +134,39 @@ roots:
       Package `control` also holds the recorder (middleware/recorder), line follow,
       sim tooling (tools/gz) and map assets the Fleet image copies. They move with the
       package in 4e and their split is deferred (D-427 plan Q2); not separate roots yet.
+    concern: control
   - path: src/drivers/imu_bno055
     part: middleware
     d427_target: middleware/drivers/imu_bno055
     wave: "4c"
+    concern: control
   - path: src/products/pinky_pro/adc
     part: middleware
     d427_target: middleware/drivers/pinky_adc
     wave: "4c"
+    concern: control
   - path: src/products/pinky_pro/lamp
     part: middleware
     d427_target: middleware/drivers/pinky_lamp
     wave: "4c"
+    concern: control
   - path: src/products/pinky_pro/led
     part: middleware
     d427_target: middleware/drivers/pinky_led
     wave: "4c"
     import_prefix: [led]
+    concern: control
   - path: src/products/pinky_pro/bringup
     part: middleware
     d427_target: middleware/apps/device/pinky/bringup
     wave: "4c"
     import_prefix: [bringup, rosylib]
+    concern: control
   - path: src/products/pinky_pro/profile
     part: middleware
     d427_target: middleware/apps/device/pinky/profile
     wave: "4c"
+    concern: control
   - path: src/products/omx/adapter
     part: middleware
     d427_target: middleware/apps/device/omx/adapter
@@ -123,48 +175,57 @@ roots:
     note: >-
       demonstration.py and lerobot_export.py are learning-flavoured (future
       learning/curation); kept at package granularity until the B move.
+    concern: control
   - path: src/products/omx/profile
     part: middleware
     d427_target: middleware/apps/device/omx/profile
     wave: "4c"
     note: OMX composition config the adapter validates, not an installation pin (profiles/).
+    concern: control
   - path: src/sim/description
     part: middleware
     d427_target: middleware/apps/device/pinky/description
     wave: "4c"
     note: Pinky URDF used by both the real robot and Gazebo; could also be integrations/robots/pinky.
+    concern: control
   - path: apps/agent
     part: middleware
     d427_target: middleware/apps/device/omx/agent
     wave: "4a"
     import_prefix: [rosy_agent]
     note: OMX cell local Action owner composition (device side of the D-401 cell).
+    concern: control
   - path: modules/skills/api
     part: middleware
     d427_target: middleware/skills/api
     wave: "4a"
     import_prefix: [rosy.skills.api]
+    concern: control
+    api: true
   - path: modules/skills/manipulation
     part: middleware
     d427_target: middleware/skills/manipulation
     wave: "4a"
     import_prefix: [rosy.skills.manipulation]
+    concern: control
   - path: modules/execution
     part: operations
     d427_target: operations/execution
     wave: "3a"
     note: >-
-      Package metadata only; the three source subtrees below are mapped on their own.
-      Goes with api/site (3a); local splits into its own wheel first (2c).
-  - path: modules/execution/src/rosy/execution/local
+      Package metadata only; the api and site source subtrees below are mapped on
+      their own. Goes with api/site (3a); local became rosy-execution-local in 2c.
+    concern: other
+  - path: middleware/execution/local
     part: middleware
     d427_target: middleware/execution/local
+    legacy: modules/execution/src/rosy/execution/local
     wave: "2c"
     import_prefix: [rosy.execution.local]
     note: >-
-      2c makes this the root of the new rosy-execution-local wheel (pyproject.toml
-      here, package under src/rosy/execution/local), so 2c also drops it from
-      PACKAGE_DIR_ROOTS in test_platform_parts.py.
+      Wheel rosy-execution-local (2c, Q4); the import name rosy.execution.local is
+      unchanged. rosy-execution no longer packages it.
+    concern: control
   - path: modules/execution/src/rosy/execution/api
     part: operations
     d427_target: operations/execution/src/rosy/execution/api
@@ -173,38 +234,74 @@ roots:
     note: >-
       PlanBundle API is internal to the execution module (D-413 §3), not contracts;
       placed with its site producer. Re-decide when execution splits in step B.
+    concern: contracts
   - path: modules/execution/src/rosy/execution/site
     part: operations
     d427_target: operations/execution/src/rosy/execution/site
     wave: "3a"
     import_prefix: [rosy.execution.site]
+    concern: other
   - path: src/hmi/dashboard
     part: middleware
     d427_target: middleware/ui/robot
     wave: "4b"
     note: Robot dashboard screens served by core_api_web on the device.
+    concern: other
   - path: src/hmi/pilot
     part: middleware
     d427_target: middleware/ui/pilot
     wave: "4b"
+    concern: other
   - path: apps/pilot
     part: middleware
     d427_target: middleware/ui/pilot/android
     wave: "4b"
     note: D-432 native discovery shell reuses the CORE-served Pilot UI; no command authority.
+    concern: other
   - path: src/hmi/face
     part: middleware
     d427_target: middleware/ui/face
     wave: "4b"
     import_prefix: [emotion]
+    concern: other
+  # D-429 §2: site devices (signal, dock) are operations-owned, listed here so the
+  # firmware entries stay together.
   - path: firmware/dock
-    part: middleware
-    d427_target: middleware/firmware/dock
-    wave: "4a"
+    part: operations
+    d427_target: operations/site_devices/dock
+    wave: "3b"
+    note: >-
+      D-429 §2 site device owner: firmware and device contract only. The robot keeps
+      polling the dock /status directly (core_features/docking stays middleware).
+    concern: control
+  - path: firmware/dock/firmware
+    part: operations
+    d427_target: operations/site_devices/dock/firmware
+    wave: "3b"
+    note: D-430 §1 dock firmware owns the limit-switch interlock and 0 V boot (layer 2).
+    concern: safety
   - path: firmware/signal
-    part: middleware
-    d427_target: middleware/firmware/signal
-    wave: "4a"
+    part: operations
+    d427_target: operations/site_devices/signal
+    wave: "3b"
+    note: >-
+      D-429 §2 site device owner: firmware, device contract and the driver library Fleet
+      imports. Fleet stays the only command path and the signal sequence owner (D-337 §2).
+    concern: control
+  - path: firmware/signal/firmware
+    part: operations
+    d427_target: operations/site_devices/signal/firmware
+    wave: "3b"
+    note: D-430 §1 signal firmware owns the boot and supervision-loss failsafe (layer 2).
+    concern: safety
+  - path: firmware/signal/observer
+    part: operations
+    d427_target: operations/vision/signal_observer
+    wave: "3b"
+    note: >-
+      D-163 read-only observation plane, carved out of the site device owner (D-429 §2).
+      Target is D-429's example; the run host stays undecided (D-163).
+    concern: other
 
   # --- operations: Fleet, world, processes, vision, Console/Cam -------------
   - path: src/site/fleet
@@ -212,71 +309,104 @@ roots:
     d427_target: operations/fleet
     wave: "3c"
     import_prefix: [fleet]
+    concern: decision
+  - path: src/site/fleet/fleet/ai
+    part: operations
+    d427_target: operations/decision
+    wave: "3c"
+    deferred: D-429 §5 carve fleet.ai to rosy.decision
+    import_prefix: [fleet.ai]
+    note: ER2/VLM deliberative decision (D-429 §1); the carve renames it to rosy.decision.
+    concern: decision
   - path: src/site/fleet/fleet/server/web
     part: operations
     d427_target: operations/ui/console
     wave: "3c"
     deferred: D-425 Task 9
+    concern: other
   - path: apps/gateway
     part: operations
     d427_target: operations/apps/fleet
     wave: "3a"
     import_prefix: [rosy_gateway]
+    concern: other
   - path: modules/world
     part: operations
     d427_target: operations/world
     wave: "3a"
     import_prefix: [rosy.world]
+    concern: other
   - path: modules/processes/palletizing
     part: operations
     d427_target: operations/processes/palletizing
     wave: "3a"
     import_prefix: [rosy.processes.palletizing]
+    concern: other
   - path: src/site/cell
     part: operations
     d427_target: operations/processes/cell
     wave: "3b"
     import_prefix: [rosy_cell]
+    concern: other
   - path: src/site/vision
     part: operations
     d427_target: operations/vision
     wave: "3b"
     import_prefix: [rosy_vision]
+    concern: other
   - path: src/site/cam
     part: operations
     d427_target: operations/ui/cam
     wave: "3b"
+    concern: other
   - path: src/site/games
     part: operations
     d427_target: operations/apps/games
     wave: "3b"
     import_prefix: [games]
     note: Laptop game host (D-90) with an overhead camera; a site app, not a process.
+    concern: other
 
   # --- learning -------------------------------------------------------------
-  - path: tools/perception
+  - path: learning/training/perception
     part: learning
     d427_target: learning/training/perception
+    legacy: tools/perception
     wave: "1"
     note: >-
       dataset/ -> learning/datasets, model/ + store.py -> learning/registry,
       training/ -> learning/training; replay and helper scripts follow them.
-  - path: tools/perception/prototype
+    concern: learning
+  - path: tools/perception_prototype
     part: tools
     d427_target: tools/perception_prototype
+    legacy: tools/perception/prototype
     wave: "1"
     note: Camera-calibration and real-run prototypes, not part of the learning loop.
-  - path: src/sim/isaac_sim
+    concern: other
+  - path: learning/envs/isaac
     part: learning
     d427_target: learning/envs/isaac
+    legacy: src/sim/isaac_sim
     wave: "1"
     device_install_exception: "native payload builds every colcon root (Q8); remove with the payload scope change"
     note: Isaac assets and scripts (D-322 holds Isaac Lab training); could also be integrations/simulation/isaac.
+    concern: learning
+  - path: learning/curation/omx
+    part: learning
+    d427_target: learning/curation/omx
+    legacy: src/products/omx/adapter/omx_adapter/lerobot_export.py
+    wave: "1"
+    note: >-
+      Offline LeRobot export of OMX demonstrations (D-427 1c, Q6). Imports
+      omx_adapter.demonstration until 2b moves that check to the Episode profile.
+    concern: learning
   - path: data
     part: learning
     d427_target: data
     wave: none
     note: Teleop recordings and the drive data drop folder; stays in place (D-427 plan Q3).
+    concern: learning
 
   # --- integrations ---------------------------------------------------------
   - path: integrations/robots/omx
@@ -285,18 +415,21 @@ roots:
     d427_target: integrations/robots/omx
     wave: none
     import_prefix: [rosy.integrations.robots.omx]
+    concern: control
   - path: src/sim/gz_sim
     part: integrations
     integration: simulation
     d427_target: integrations/simulation/gazebo
     wave: "4c"
     note: Worlds, models, plugins and Gazebo params; launch/ and scripts/ are mapped on their own.
+    concern: other
   - path: src/sim/gz_sim/launch
     part: middleware
     d427_target: middleware/apps/device/sim
     wave: "4c"
     deferred: gz_sim split follow-up
     note: Launch files start the sim device owner on the same middleware pipeline (D-427 §5).
+    concern: control
   # Same target as the tools/sim root below: when the gz_sim split lands, the
   # scripts move into tools/sim and this root is removed (not given a path).
   - path: src/sim/gz_sim/scripts
@@ -305,77 +438,161 @@ roots:
     wave: "4c"
     deferred: gz_sim split follow-up
     note: Sim benches, acceptance harnesses and world/map converters (swarm_bench drives Fleet).
+    concern: other
 
   # --- shared web -----------------------------------------------------------
   - path: src/hmi/web_common
     part: shared_web
     d427_target: shared/web
     wave: "4b"
+    concern: other
 
   # --- top-level non-part roots ----------------------------------------------
   - path: profiles
     part: profiles
     d427_target: profiles
     wave: none
+    concern: other
   - path: deploy
     part: deploy
     d427_target: deploy
     wave: none
+    concern: other
   - path: tools
     part: tools
     d427_target: tools
     wave: none
     note: Loose scripts directly in tools/ only; every tools/<subfolder> needs its own root.
+    concern: other
   - path: tools/calibration
     part: tools
     d427_target: tools/calibration
     wave: none
     note: Offline per-robot calibration fit and store CLI (never run on a robot).
+    concern: other
   - path: tools/device_twin
     part: tools
     d427_target: tools/device_twin
     wave: none
     note: D-412 device twin test tool; not shipped.
+    concern: other
   - path: tools/harness
     part: tools
     d427_target: tools/harness
     wave: none
+    concern: other
   - path: tools/hooks
     part: tools
     d427_target: tools/hooks
     wave: none
+    concern: other
   - path: tools/icons
     part: tools
     d427_target: tools/icons
     wave: none
+    concern: other
   - path: tools/release
     part: tools
     d427_target: tools/release
     wave: none
+    concern: other
   - path: tools/sim
     part: tools
     d427_target: tools/sim
     wave: none
     note: Sim benches and scenario scripts.
+    concern: other
   - path: .github
     part: tools
     d427_target: .github
     wave: none
     note: CI workflows.
+    concern: other
   - path: .claude
     part: tools
     d427_target: .claude
     wave: none
     note: Project agent skills and settings.
+    concern: other
   - path: test
     part: test
     d427_target: test
     wave: none
+    concern: other
   - path: docs
     part: docs
     d427_target: docs
     wave: none
+    concern: other
   - path: reference
     part: docs
     d427_target: reference
     wave: none
+    concern: other
+
+# D-430 §1: safety files inside mixed folders, tagged per file so no folder is
+# split. A mixed file is safety as a whole (§5 change control); `concern: safety`
+# roots above are the directory form.
+safety_modules:
+  - src/runtime/gateway/core/fleet_loss_wiring.py
+  - src/runtime/gateway/core/bridge/cmd_vel.py
+  - src/runtime/services/core_features/command/manager.py
+  - src/runtime/services/core_features/command/arbitration.py
+  - src/runtime/services/core_features/line_follow/body_stop.py
+  - src/runtime/services/core_features/line_follow/clearance.py
+  - src/runtime/api_web/core_api_web/api/v1/safety.py
+  - src/contracts/foundation/core_common/robot_body.py
+  - src/products/omx/adapter/omx_adapter/command_owner.py
+  - src/products/omx/adapter/omx_adapter/local_stop.py
+  - src/products/omx/adapter/omx_adapter/action_api.py
+  - src/site/fleet/fleet/server/dispatch_admission.py
+  - src/site/fleet/fleet/server/cancel_all.py
+  - src/site/fleet/fleet/server/cancel_all_store.py
+  - src/site/fleet/fleet/server/local_stop_transport.py
+  - src/site/fleet/fleet/server/task_dispatch_routes.py
+  - src/site/fleet/fleet/server/console.py
+
+# D-430 §1 drift anchors and §3 public entry points. `symbol` is the dotted module
+# path plus the (possibly nested) definition; each must resolve to a safety file.
+# `string` anchors are operation literals compared with `==` inside `in`.
+# `public: true` marks what decision/learning code may import (D-430 §3); a class
+# or function that holds a public anchor is importable as its owner.
+# D-430 §4 approval record (validated on tracked YAML only, not on the runtime
+# PUT or device overlays): a robot config whose safety.fleet_loss_policy is not
+# STOP/HOLD carries safety.fleet_loss_policy_approval {robot, approver, evidence}.
+safety_anchors:
+  - {symbol: core_features.safety.manager.SafetyManager}
+  - {symbol: core_features.safety.manager.SafetyManager.trigger_estop, public: true}
+  - {symbol: core_features.safety.manager.SafetyManager.release, public: true}
+  - {symbol: core_features.safety.manager.SafetyManager.clip, public: true}
+  - {symbol: core_features.safety.manager.SafetyManager.set_session_speed, public: true}
+  - {symbol: core_features.safety.manager.SafetyManager.set_person_advisory, public: true}
+  - {symbol: core_features.safety.fleet_loss.FleetLossMonitor.tick, public: true}
+  - {symbol: core_features.safety.shadow.ShadowLog}
+  - {symbol: core.fleet_loss_wiring.build_fleet_loss}
+  - {symbol: core.bridge.cmd_vel.cmd_vel_cycle}
+  - {symbol: core_features.command.manager.CommandManager}
+  - {symbol: core_features.command.arbitration.ModeMachine.release_emergency, public: true}
+  - {symbol: core_features.command.arbitration.ModeMachine.is_emergency, public: true}
+  - {symbol: core_features.command.arbitration._ALLOWED}
+  - {symbol: core_features.line_follow.body_stop.BodyStopMixin}
+  - {symbol: core_features.line_follow.clearance.body_path_gap}
+  - {symbol: core_api_web.api.v1.safety.safety_release}
+  - {symbol: core_api_web.api.v1.safety.safety_limits}
+  - {symbol: core_common.robot_body.RobotBody}
+  - {symbol: omx_adapter.command_owner.ArmCommandOwner}
+  - {symbol: omx_adapter.local_stop.LocalStopController, public: true}
+  - {symbol: omx_adapter.action_api.LocalStopApi.dispatch}
+  - {string: StopLocal, in: omx_adapter.action_api.LocalStopApi.dispatch, public: true}
+  - {string: RearmLocal, in: omx_adapter.action_api.LocalStopApi.dispatch, public: true}
+  - {symbol: fleet.server.dispatch_admission.reserve, public: true}
+  - {symbol: fleet.server.dispatch_admission.release, public: true}
+  - {symbol: fleet.server.cancel_all.cancel_all_driving, public: true}
+  - {symbol: fleet.server.cancel_all.DriveCancelFence, public: true}
+  - {symbol: fleet.server.cancel_all.DispatchCanceled, public: true}
+  - {symbol: fleet.server.cancel_all.DispatchWithdrawn, public: true}
+  - {symbol: fleet.server.cancel_all_store.CANCEL_ALL_REASON, public: true}
+  - {symbol: fleet.server.cancel_all_store.matching_tag, public: true}
+  - {symbol: fleet.server.local_stop_transport.UnixLocalStopTransport, public: true}
+  - {symbol: fleet.server.console.FleetConsole.estop_all, public: true}
+  - {symbol: fleet.server.task_dispatch_routes.install_task_dispatch_routes.dispatch_rearm, public: true}

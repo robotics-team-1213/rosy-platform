@@ -10,8 +10,8 @@ Honest holes, not oversights:
   ``$(find-pkg-share x)``, ``package://x/…`` URIs, and, inside launch files,
   ``package="x"`` and ``<node pkg="x">``. A package name built at runtime is
   invisible here.
-- ``src/sim/isaac_sim`` ships Isaac assets with no ``package.xml``, so this
-  scan never sees it at all.
+- Packages are found under every ``colcon_roots`` entry and placed relative to
+  their root: ``learning/envs/isaac`` (``isaac_sim``, D-427 wave 1) is domain ``envs``.
 - Dynamic imports (``importlib.import_module``, entry points) are invisible.
   The one intended case is core loading ``rosy.sensor_provider`` (D-126).
 - P6 budgets are per code type (D-362): 600 for production ``.py``/``.cpp``/``.hpp``/``.sh``
@@ -32,7 +32,8 @@ import yaml
 ROOT = Path(__file__).resolve().parents[2]
 SRC = ROOT / "src"
 
-DOMAINS = {"contracts", "runtime", "drivers", "products", "hmi", "site", "sim"}
+#: ``envs`` is the first folder under the ``learning`` colcon root (D-427 wave 1).
+DOMAINS = {"contracts", "runtime", "drivers", "products", "hmi", "site", "sim", "envs"}
 
 #: P2 library/contract tier: no process of their own (runtime gates N/A).
 LIBRARY_PACKAGES = {"core_common", "core_events", "core_features", "core_api_web", "web_common"}
@@ -68,7 +69,7 @@ REGROWTH_ALLOWANCE = 150
 FILE_BUDGET_WEB = 800
 WEB_SUFFIXES = {".js", ".html", ".css"}
 OPS_SUFFIXES = {".py", ".sh"}
-OPS_ROOTS = ("deploy", "tools", "firmware")
+OPS_ROOTS = ("deploy", "tools", "firmware", "learning")  # learning: moved perception tooling (D-427 wave 1)
 HARD_TIER = 1_000  # a file above this gets zero growth allowance
 
 CONTROL_SPLIT = "docs/plans/2026-09-22-control-package-split-design.md"
@@ -443,11 +444,11 @@ SIZE_VERDICTS = {
         "accept: the harness gate itself (lint/generate) — one CLI owner pinned by "
         "test/test_harness_contracts.py (X5)",
     ),
-    "tools/perception/rosy_ml.py": (
+    "learning/training/perception/rosy_ml.py": (
         615,
         "accept: the operator CLI is one argparse dispatcher over the wrapped tools (deliver, "
         "harvest, fetch_http, intake), which own the behaviour; covered by "
-        "tools/perception/test/test_rosy_ml.py (X5, D-411 fetch --http)",
+        "learning/training/perception/test/test_rosy_ml.py (X5, D-411 fetch --http)",
     ),
     "deploy/robot/pinky_pro/native/rosy-boot-display.py": (
         688,
@@ -563,9 +564,13 @@ COLCON_ROOTS = tuple(ROOT / root for root in yaml.safe_load(
 MIN_PACKAGES = 27
 
 
+def _rel(path: Path) -> Path:
+    """``path`` relative to the colcon root that holds it (``src`` or ``learning``)."""
+    return path.relative_to(next(root for root in COLCON_ROOTS if path.is_relative_to(root)))
+
+
 def _is_prod(path: Path) -> bool:
-    base = next(root for root in COLCON_ROOTS if path.is_relative_to(root))
-    parts = path.relative_to(base).parts
+    parts = _rel(path).parts
     return not any(p in ("test", "tests", "build", "install", "log") or p.startswith(".") for p in parts)
 
 
@@ -584,11 +589,11 @@ PACKAGES = _packages()
 
 
 def _domain(name: str) -> str:
-    return PACKAGES[name]["dir"].relative_to(SRC).parts[0]
+    return _rel(PACKAGES[name]["dir"]).parts[0]
 
 
 def _family(name: str):
-    parts = PACKAGES[name]["dir"].relative_to(SRC).parts
+    parts = _rel(PACKAGES[name]["dir"]).parts
     return parts[1] if len(parts) == 3 and parts[0] == "products" else None
 
 
@@ -610,6 +615,7 @@ ROLE_DIR = {
     "omx": ("products", "omx", "profile"),
     "omx_adapter": ("products", "omx", "adapter"),
     "imu_bno055": ("drivers", "imu_bno055"),
+    "isaac_sim": ("envs", "isaac"),  # learning/envs/isaac (D-427 wave 1)
 }
 
 
@@ -655,20 +661,20 @@ def _used(name: str) -> dict:
             else:
                 continue
             for top in tops:
-                used.setdefault(top, f"{path.relative_to(SRC).as_posix()} imports {top}")
+                used.setdefault(top, f"{_rel(path).as_posix()} imports {top}")
     for path in _files(name, {".py", ".xml", ".cpp", ".hpp", ".yaml",
                                ".urdf", ".xacro", ".sdf", ".world", ".rviz"}):
         text = path.read_text(encoding="utf-8", errors="ignore")
         for pattern in WORKSPACE_REF_PATTERNS:
             for match in pattern.finditer(text):
-                used.setdefault(match.group(1), f"{path.relative_to(SRC).as_posix()} references {match.group(1)}")
+                used.setdefault(match.group(1), f"{_rel(path).as_posix()} references {match.group(1)}")
         if "launch" in path.relative_to(PACKAGES[name]["dir"]).parts or ".launch." in path.name:
             for pattern in LAUNCH_EXEC_PATTERNS:
                 for match in pattern.finditer(text):
-                    used.setdefault(match.group(1), f"{path.relative_to(SRC).as_posix()} runs {match.group(1)}")
+                    used.setdefault(match.group(1), f"{_rel(path).as_posix()} runs {match.group(1)}")
         if path.suffix in {".cpp", ".hpp"}:
             for match in re.finditer(r"#include\s*[<\"](\w+)/", text):
-                used.setdefault(match.group(1), f"{path.relative_to(SRC).as_posix()} includes {match.group(1)}")
+                used.setdefault(match.group(1), f"{_rel(path).as_posix()} includes {match.group(1)}")
     return {top: site for top, site in used.items() if top in PACKAGES and top != name}
 
 
@@ -678,7 +684,7 @@ def edge_allowed(src_domain, src_family, dst_domain, dst_family, target) -> bool
         return True
     if src_domain == "core":
         return dst_domain == "core"
-    if src_domain == "sim":
+    if src_domain in ("sim", "envs"):  # envs: Isaac moved out of sim (D-427 wave 1)
         return True
     if src_domain == "products":
         if dst_domain == "sim" and target == "description":
@@ -718,7 +724,7 @@ def test_every_package_sits_in_a_domain_group_under_its_own_name():
     """
     bad = []
     for name, info in PACKAGES.items():
-        rel = info["dir"].relative_to(SRC).parts
+        rel = _rel(info["dir"]).parts
         if not layout_ok(rel, name):
             bad.append(f"{name}: {'/'.join(rel)}")
     assert bad == [], bad
@@ -823,7 +829,7 @@ def _over_budget() -> dict:
             total += count
             budget = FILE_BUDGET_WEB if path.suffix in WEB_SUFFIXES else FILE_BUDGET
             if count > budget:
-                over[path.relative_to(SRC).as_posix()] = count
+                over[_rel(path).as_posix()] = count
         if total > PACKAGE_BUDGET:
             over[name] = total
     for root_name in OPS_ROOTS:

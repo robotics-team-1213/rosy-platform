@@ -28,7 +28,7 @@ def test_docs_tests_and_external_robot_products_need_no_pinky_artifact():
 
 def test_ros_workspace_changes_choose_native_payload():
     report = classify_paths(
-        ["src/runtime/gateway/core/api.py", "src/sim/isaac_sim/bridge.py"]
+        ["src/runtime/gateway/core/api.py", "learning/envs/isaac/bridge.py"]
     )
 
     assert report.impact == "native-payload"

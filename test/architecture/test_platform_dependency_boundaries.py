@@ -20,6 +20,7 @@ CURRENT_COMPONENTS = {
     "fleet_site": ("src/site/fleet/fleet", "fleet"),
     "omx_device_adapter": ("src/products/omx/adapter/omx_adapter", "omx_adapter"),
     "world_api": ("modules/world/src/rosy/world/api", "rosy.world.api"),
+    "skill_contracts": ("contracts/skill/src/rosy/contracts/skill", "rosy.contracts.skill"),
     "skill_api": ("modules/skills/api/src/rosy/skills/api", "rosy.skills.api"),
     "execution_api": ("modules/execution/src/rosy/execution/api", "rosy.execution.api"),
     "omx_transfer_integration": (

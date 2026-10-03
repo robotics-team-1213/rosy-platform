@@ -8,6 +8,13 @@
 # Install: tools/hooks/install.sh   Uninstall: rm .git/hooks/pre-push
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
+# Git exports repository-local variables to hooks. Clear them after locating
+# this checkout: gate tests create foreign repositories, where inherited
+# GIT_DIR/GIT_COMMON_DIR override git -C and can mutate this repository.
+# https://git-scm.com/docs/githooks
+while IFS= read -r git_local_variable; do
+  unset "$git_local_variable"
+done < <(git rev-parse --local-env-vars)
 
 PY=""
 for candidate in python3 python; do
@@ -50,6 +57,10 @@ if out:
         " stale committed copies (the 2026-09-29 red-CI class).\n")
     sys.exit(1)
 EOF
+
+# D-430 §5: opt-in early warning only. It never blocks the push; CI enforces it.
+echo "[pre-push] Safety-Review trailers (warning only)"
+"$PY" tools/harness/safety_review.py "$(git merge-base HEAD origin/main 2>/dev/null || true)" HEAD --warn-only
 
 echo "[pre-push] fast contract suites"
 "$PY" -m pytest \

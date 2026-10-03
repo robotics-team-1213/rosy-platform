@@ -2046,6 +2046,22 @@
 - 증거: `test_native_systemd_contract.py` env 예시 시험.
 - gate 변화: 없음. 켜는 것은 사용자 승인 뒤.
 
+## 2026-10-03 · uncommitted · feat(perception): D-431 NCNN/OpenCV 구현과 실제 차선 Pi 재생
+
+- 변경: NCNN schema /2·CPU session·YOLO/TorchScript lane export·실제 프레임 parity·intake 증거 검사·hash 고정 설치·doctor·재생 bench. 기존 OpenCV 전처리를 사용한다.
+- 증거: docs/validation/pi-ncnn-2026-10-03/README.md. 실제 차선 20프레임 분류 일치 100%, 제품 adapter ARM64 재생 오류 0. NCNN 차선 p95 474.59ms, 동일 원본 ONNX FP32 252.22ms.
+- gate 변화: 없음. 운영 차선 전환 HOLD. 학습 YOLO·30분 동시 부하·배포/rollback·현장 수용은 남아 있다.
+- 결정: D-431 Accepted, 구현 및 조건부 lane 평가 기록.
+
+
+## 2026-10-03 · uncommitted · fix: bootstrap automatic-update state directories
+
+- 변경: signed tmpfiles의 정확한 maps/models/pilot-recordings d 규칙만 제한된 PID 1 transient worker로 적용한다. 구 updater namespace의 쓰기 범위를 넓히지 않고 누락 디렉터리를 서비스 enable/restart 전에 확보하며, mode/owner도 검사한다. 재귀 Z/z migration은 제외하고 rollback 녹화를 보존한다.
+- 증거: provisioning 제거 mutation은 누락 디렉터리 회귀를 실패시켰고 원본 bytes를 복구했다. 집중 sync 시험 및 자동 업데이트 회귀를 실행했다. 독립 실제 probe는 CAP_FSETID 없을 때 0750, 추가 시 2750 및 지정 owner/group을 확인했고 전체 worker 속성과 구 namespace nested 실행도 통과했다.
+- gate 변화: SOURCE/LOCAL 수정. 이 작업 분기는 배포하지 않았고 새 payload의 자동 적용·장치 서비스 readback은 coordinator의 별도 단계다.
+
+- Final checks: sync regression 66 passed / 6 skipped; expanded image-sync/systemd/auto-update 441 passed / 8 skipped with one new read-path classification failure, then corrected classification regression 1 passed. flake8 passed; harness lint 0 errors / 26 existing freshness warnings. Provisioning-removal mutation failed as expected, original bytes restored. Independent code review found no blocking issues.
+
 
 ## 2026-10-03 · uncommitted · feat(link): D-432 주소 없는 장비 접속
 

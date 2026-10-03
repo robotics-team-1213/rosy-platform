@@ -51,7 +51,7 @@ SCORE_BAND = 0.10
 # otherwise the base profile height is kept and the fit is pitch/roll only.
 HEIGHT_OBSERVABLE_SPAN_M = 0.02
 # A candidate is recommended only when it beats the base profile by this much
-# (edge response units, same scale as tools/perception/dataset/labels.py) and
+# (edge response units, same scale as learning/training/perception/dataset/labels.py) and
 # sees enough wall returns.
 SCORE_MARGIN = 2.0
 MIN_WALL_POINTS = 60

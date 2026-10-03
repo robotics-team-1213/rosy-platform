@@ -71,6 +71,14 @@ PENDING_FILE = BACKUP_ROOT + "/pending.json"
 MAX_PENDING_ATTEMPTS = 3
 LOCK_FILE = "var/lib/rosy/releases/native-release.lock"
 DEFAULT_PUBLIC_KEY = "etc/rosy/trusted-release-keys/rosy-release-2026-01.pem"
+# Only these nonrecursive directory rules may be applied outside the updater's
+# old mount namespace. Never run the config's z/Z ownership migrations here.
+STATE_DIRECTORIES = {
+    "/var/lib/rosy/maps": ("2750", "rosy-io", "rosy-core"),
+    "/var/lib/rosy/models": ("0750", "root", "rosy-camera"),
+    "/var/lib/rosy/pilot-recordings": ("2750", "rosy-camera", "rosy-core"),
+}
+STATE_CONFIG = BACKUP_ROOT + "/state-directories.conf"
 
 # The units build-native-payload.sh copies from deploy/robot/pinky_pro/native
 # into the image's /etc/systemd/system. The first-boot units come from
@@ -635,6 +643,20 @@ def _load_pending(root: Path, *, dry_run: bool) -> tuple[dict, dict]:
 def _post_commands(steps: dict) -> list[list[str]]:
     """daemon-reload, then enables, then the udev reload; in that order."""
     commands: list[list[str]] = []
+    if steps.get("state_config"):
+        # PID 1 creates this root oneshot outside the old updater's read-only
+        # namespace. The generated config contains only validated d rules.
+        commands.append([
+            "systemd-run", "--quiet", "--wait", "--pipe", "--collect",
+            "--property=Type=exec", "--property=User=root", "--property=Group=root",
+            "--property=ProtectSystem=strict", "--property=ProtectHome=true",
+            "--property=PrivateTmp=true", "--property=PrivateDevices=true",
+            "--property=NoNewPrivileges=true", "--property=RestrictNamespaces=true",
+            "--property=RestrictAddressFamilies=AF_UNIX", "--property=RuntimeMaxSec=60",
+            "--property=CapabilityBoundingSet=CAP_CHOWN CAP_FOWNER CAP_FSETID CAP_DAC_OVERRIDE",
+            "--property=ReadWritePaths=/var/lib/rosy", "--property=TimeoutStartSec=60",
+            "/usr/bin/systemd-tmpfiles", "--create", steps["state_config"],
+        ])
     if steps.get("daemon_reload"):
         commands.append(["systemctl", "daemon-reload"])
     for unit in sorted(set(steps.get("enable", []))):
@@ -648,6 +670,53 @@ def _post_commands(steps: dict) -> list[list[str]]:
     if steps.get("udev_reload"):
         commands.append(["udevadm", "control", "--reload"])
     return commands
+
+
+def state_directory_rules(root: Path, native: Path) -> list[str]:
+    """Missing/drifted image directories, from a bounded signed tmpfiles subset.
+
+    Preserve existing files and recordings on rollback. These additive state
+    directories are deliberately outside file-backup cleanup ownership.
+    """
+    source = native / "tmpfiles-rosy-state.conf"
+    if not source.exists():
+        return []  # Older releases carry no such rules.
+    if source.is_symlink() or not source.is_file():
+        raise SyncError("IMAGE_LAYER_STATE_RULE: tmpfiles config is not a regular file")
+    rules = []
+    seen = set()
+    for line in source.read_text(encoding="utf-8").splitlines():
+        fields = line.split()
+        if not fields or fields[0].startswith("#") or len(fields) < 2:
+            continue
+        path = fields[1]
+        if path not in STATE_DIRECTORIES or fields[0] != "d":
+            continue
+        expected = ["d", path, *STATE_DIRECTORIES[path], "-"]
+        if fields != expected or path in seen:
+            raise SyncError(f"IMAGE_LAYER_STATE_RULE: unapproved rule for {path}")
+        seen.add(path)
+        destination = root / path.lstrip("/")
+        current = destination
+        while current != root:
+            if current.is_symlink():
+                raise SyncError(f"IMAGE_LAYER_STATE_RULE: symlink at {current}")
+            current = current.parent
+        if destination.exists() and not destination.is_dir():
+            raise SyncError(f"IMAGE_LAYER_STATE_RULE: {path} is not a directory")
+        needs = not destination.exists()
+        if destination.exists() and _compare_modes():
+            needs = _mode(destination) != int(expected[2], 8)
+            if root == Path("/"):
+                import grp
+                import pwd
+
+                info = destination.stat()
+                needs = needs or info.st_uid != pwd.getpwnam(expected[3]).pw_uid
+                needs = needs or info.st_gid != grp.getgrnam(expected[4]).gr_gid
+        if needs:
+            rules.append(" ".join(expected))
+    return rules
 
 
 def _steps(root: Path, work: list[dict], cleanup: list[dict], pending: dict) -> dict:
@@ -681,6 +750,7 @@ def _unit_state(runner: Runner, unit: str) -> dict:
 def apply(root: Path, release_id: str, work: list[dict], runner: Runner,
           *, cleanup: list[dict] | None = None, units: list[str] | None = None,
           pending: dict | None = None,
+          state_rules: list[str] | None = None,
           now: Callable[[], _dt.datetime] | None = None) -> dict:
     """Back up, clean up, install, reload. Undo every change if one fails.
 
@@ -691,6 +761,26 @@ def apply(root: Path, release_id: str, work: list[dict], runner: Runner,
     cleanup = cleanup or []
     pending = pending or {}
     steps = _steps(root, work, cleanup, pending)
+    if state_rules:
+        config = root / STATE_CONFIG
+        current = config
+        while current != root:
+            if current.is_symlink():
+                raise SyncError(f"IMAGE_LAYER_STATE_RULE: symlink at {current}")
+            current = current.parent
+        config.parent.mkdir(parents=True, exist_ok=True)
+        temporary = config.with_name(config.name + ".tmp")
+        if temporary.is_symlink():
+            raise SyncError(f"IMAGE_LAYER_STATE_RULE: symlink at {temporary}")
+        with temporary.open("w", encoding="utf-8", newline="\n") as handle:
+            handle.write("\n".join(state_rules) + "\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.chmod(temporary, 0o600)
+        if hasattr(os, "geteuid") and os.geteuid() == 0:
+            os.chown(temporary, 0, 0)
+        os.replace(temporary, config)
+        steps["state_config"] = str(config)
     backup_dir = None
     manifest: dict | None = None
     backup: Path | None = None
@@ -774,6 +864,23 @@ def apply(root: Path, release_id: str, work: list[dict], runner: Runner,
     })
     for argv in commands:
         _check(runner, argv)
+        if argv[0] == "systemd-run":
+            # A successful process must actually have established the service
+            # prerequisites before the caller can restart any runtime unit.
+            for rule in state_rules or []:
+                _, path, mode, user, group, _ = rule.split()
+                directory = root / path.lstrip("/")
+                if directory.is_symlink() or not directory.is_dir():
+                    raise SyncError(f"IMAGE_LAYER_STATE_DIRECTORY: {path} was not created")
+                if _compare_modes() and _mode(directory) != int(mode, 8):
+                    raise SyncError(f"IMAGE_LAYER_STATE_DIRECTORY: {path} has incorrect mode")
+                if root == Path("/"):
+                    import grp
+                    import pwd
+
+                    info = directory.stat()
+                    if info.st_uid != pwd.getpwnam(user).pw_uid or info.st_gid != grp.getgrnam(group).gr_gid:
+                        raise SyncError(f"IMAGE_LAYER_STATE_DIRECTORY: {path} has incorrect ownership")
     (root / PENDING_FILE).unlink()
     if manifest is not None and backup is not None:
         manifest.update(complete=True, commands=[" ".join(argv) for argv in commands])
@@ -798,6 +905,7 @@ def sync(
         native = release / RELEASE_NATIVE
         if not native.is_dir():
             raise SyncError(f"IMAGE_LAYER_SOURCE: release {release_id} has no {RELEASE_NATIVE}")
+        state_rules = state_directory_rules(root, native)
         pending, pending_report = _load_pending(root, dry_run=dry_run)
         reconciled, owed, legacy_ignored = reconcile(root, dry_run=dry_run)
         if owed["daemon_reload"] or owed["udev_reload"] or owed["enable"]:
@@ -821,6 +929,7 @@ def sync(
             ok=True,
             dry_run=dry_run,
             release_id=release_id,
+            state_directories=[rule.split()[1] for rule in state_rules],
             removed=["/" + item["destination"] for item in cleanup if item["state"] == "removed"],
             restored=["/" + item["destination"] for item in cleanup if item["state"] == "restored"],
             pending=pending or None,
@@ -839,11 +948,14 @@ def sync(
             ],
         )
         if dry_run:
+            steps = _steps(root, work, cleanup, pending)
+            if state_rules:
+                steps["state_config"] = str(root / STATE_CONFIG)
             result.update(backup_dir=None, enabled=[], commands=[
-                " ".join(argv) for argv in _post_commands(_steps(root, work, cleanup, pending))])
+                " ".join(argv) for argv in _post_commands(steps)])
         else:
             result.update(apply(root, release_id, work, runner, cleanup=cleanup,
-                                units=units, pending=pending))
+                                units=units, pending=pending, state_rules=state_rules))
         return result
 
 

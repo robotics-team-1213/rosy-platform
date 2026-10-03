@@ -82,6 +82,12 @@ installed=$(cd / && PYTHONNOUSERSITE=1 python3 -B -c \
     "import sys; sys.path.append('$TARGET'); import onnxruntime; print(onnxruntime.__version__)") \
     || fail "onnxruntime does not import from $TARGET"
 [ "$installed" = "$wanted" ] || fail "onnxruntime $installed imported, lock pins $wanted"
+ncnn_wanted=$(sed -n 's/^ncnn==\([^ ]*\).*/\1/p' "$WORK/requirements.txt")
+[ -n "$ncnn_wanted" ] || fail "$requirements_name pins no ncnn"
+ncnn_installed=$(cd / && PYTHONNOUSERSITE=1 python3 -B -c \
+    "import sys; sys.path.append('$TARGET'); import ncnn; import cv2; import numpy; import importlib.metadata; print(importlib.metadata.version('ncnn'))") \
+    || fail "ncnn or system OpenCV/NumPy does not import"
+[ "$ncnn_installed" = "$ncnn_wanted" ] || fail "ncnn $ncnn_installed imported, lock pins $ncnn_wanted"
 
 for rule in "${rules[@]}"; do
     read -r _type path mode user group <<< "$rule"
@@ -89,6 +95,6 @@ for rule in "${rules[@]}"; do
 done
 
 install -d -m 0755 -o root -g root "$(dirname -- "$BENCH_LOG")"
-record="$(date -u +%Y-%m-%dT%H:%M:%SZ) d373-learned-perception requirements_sha256=$full_sha onnxruntime=$installed target=$TARGET"
+record="$(date -u +%Y-%m-%dT%H:%M:%SZ) d373-learned-perception requirements_sha256=$full_sha onnxruntime=$installed ncnn=$ncnn_installed target=$TARGET"
 printf '%s\n' "$record" >> "$BENCH_LOG"
 echo "$record"

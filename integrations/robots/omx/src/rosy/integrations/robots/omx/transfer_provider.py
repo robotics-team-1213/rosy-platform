@@ -7,7 +7,7 @@ from datetime import datetime
 import math
 from typing import TYPE_CHECKING, Protocol
 
-from rosy.skills.api import SkillInvocation
+from rosy.contracts.skill import SkillInvocation
 from rosy.skills.manipulation.transfer import PlannedTransfer, TransferPlanner, TransferSkill
 
 if TYPE_CHECKING:

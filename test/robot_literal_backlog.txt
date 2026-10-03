@@ -67,8 +67,6 @@ sim/gz_sim/scripts/pinky_acceptance.py
 sim/gz_sim/scripts/pinky_nav2_probe.py
 sim/gz_sim/worlds/rosy_gauntlet.world
 sim/gz_sim/worlds/rosy_maze.world
-sim/isaac_sim/model_checks.py
-sim/isaac_sim/run_rosy.py
 site/fleet/fleet/localization/service_logic.py
 site/fleet/fleet/server/bays.py
 site/fleet/fleet/server/traffic.py

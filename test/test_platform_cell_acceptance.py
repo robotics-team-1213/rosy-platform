@@ -7,7 +7,7 @@ import pytest
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
-for relative in ("apps/agent/src", "modules/processes/palletizing/src", "modules/execution/src",
+for relative in ("contracts/skill/src", "apps/agent/src", "modules/processes/palletizing/src", "modules/execution/src",
                  "modules/skills/api/src", "src/products/omx/adapter"):
     path = str(ROOT / relative)
     if path not in sys.path:
