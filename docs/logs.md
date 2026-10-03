@@ -667,7 +667,7 @@
 
 ## 2026-09-20 · uncommitted · chore(fleet): relay diagnosis fields exposed; live iteration deferred to D-83 (environment)
 
-- 변경: formation_status의 relay에 follower_last_error·follower_tx 노출(0 Hz의 이유가 화면과 API에 오르지 않던 관측 공백 — 릴레이가 팔로워 소켓에 기록해 둔 마지막 오류). console.js 상세 패널에 팔로워 오류 줄 추가.
+- 변경: formation_status의 relay에 follower_last_error·follower_tx 노출(0 Hz의 이유가 화면과 API에 오르지 않던 관측 공백 — 릴레이가 팔로워 소켓에 기록해 둔 마지막 오류). console.js 상세 패널에 팔로워 오류 줄 추가. 
 - 증거(LOCAL 실측): 시뮬 완주 1회 성공 — 2/2 online, T6 무장 RUNNING, 릴레이 리더 9.95 Hz, 리더 목표 수납, FOR-004 HOLD 작동. 반복 시도에서는 환경 불안정 확인 — Nav2 component_container SIGSEGV(-11), joint_state_publisher 등 -9 리핑. 2로봇 풀 스택이 이 공유 WSL 박스 자원을 넘는다
 - gate 변화: 없음. SOURCE/LOCAL GO 유지. ARTIFACT/DEVICE/FIELD HOLD·PARKED
 - 결정: 릴레이 follower_tx 0 진단과 실 로봇 오버레이 검증은 D-83 세션의 절차(안정 세션·자원 튜닝 후 sim_verify 절차 재실행)로 귀속한다 — 검증 스크립트는 Rosy/sim_verify.sh에 남긴다. 이 환경에서의 반복 시도는 무효 숫자를 낳는다(D-79 정신)
