@@ -1505,3 +1505,17 @@
 - 증거: 영향받는 Python 2345 passed/84 skipped, quick tier 459 passed/2 skipped, Pilot PWA 87 passed/58 skipped. 코드 규약 보정 뒤 해당 인증·페어링 시험을 다시 실행한다. 공개 검증 기록은 docs/validation/discovery-link-2026-10-03/README.md.
 - gate 변화: Android 설치·실제 CORE 인증 확인은 실제 주행·Cam 화면 off 연속 송출·현장 트래픽 수용과 별개다. DEVICE/FIELD 이동 없음.
 - 결정: D-432 후속 결정: 접속은 지금, 짧은 코드 통합은 추후 적용.
+
+## 2026-10-04 · uncommitted · feat(server): D-438 Fleet stuck resolver phase 1 (rules R1-R3 + human escalation)
+- Change: `fleet/server/stuck_resolver.py` (pure decision core), `stuck_resolver_loop.py` (1 s poll, hub-woken, records as `fleet-resolver`), `line_stuck.py` resolver note, `console_routes.py` claim endpoint (human decision claims first), `app.py` clients/lifespan/hub fan-out, `swarm/robots.py` `resolver_token`, `cli.py` `--stuck-resolver`, console `line-stuck.js` claim + resolver text; API Ref v1.90 version pins in two tests
+- Evidence: `python -m pytest src/site/fleet/test -q` 1658 passed, 7 skipped (2026-10-04 Windows; first run had 3 failures, all the API Ref version pin `v1.89` -> `v1.90`, fixed, re-run of those files 25 passed together with gateway version alignment); `node --test src/site/fleet/test/web/line-stuck.test.mjs` 12 pass; `python -m pytest test/test_harness_contracts.py -q` 59 passed
+- Gate: none. SOURCE/LOCAL only; Gazebo two-robot validation and real-robot tokens are not done (plan "After phase 1").
+- Decision: D-438
+- Lesson: none
+
+## 2026-10-04 · uncommitted · fix(server): D-438 phase 1 final-review findings
+- Change: `fleet_line_stuck_answers` gains nullable `tier`/`rule`/`escalated` with an idempotent PRAGMA + ALTER migration; resolver answers record `tier=rule` + rule id, every escalation is its own `ESCALATE` row, the human route records `tier=human`. `console_routes.SharedGather` (lock + 1 s reuse) is the one `console.snapshot()` + `board.observe` for `GET /api/fleet/state` and `StuckResolverLoop`. The transport resend skips the rule budget; robots absent from the roster lose chains and claims; a claim after an escalation keeps its reason; cancel mid-request records `STUCK_DECISION_OUTCOME_UNKNOWN`; unused `_Chain.claimed` removed; JS string test deleted.
+- Evidence: each code fix red first, then green. `python -m pytest src/site/fleet/test -q` 1666 passed, 7 skipped (2026-10-04 Windows); gateway `test_stuck_resolver_role.py` + `test_line_follow_stuck_api.py` 22 passed; `node --test src/site/fleet/test/web/line-stuck.test.mjs` 12 pass; `ROSY_RUN_BROWSER_TESTS=1 python -m pytest test/test_fleet_console_browser.py -k "stuck or state"` 4 passed, 63 deselected.
+- Gate: none. SOURCE/LOCAL only; Gazebo two-robot validation and real-robot tokens still open.
+- Decision: D-438
+- Lesson: a shared cached snapshot must be enriched per response on copies, never mutated in place.

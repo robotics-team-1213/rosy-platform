@@ -420,3 +420,10 @@
 - 증거: native systemd/버전 문서/구조 시험 199 passed/1 skipped. 최종 quick tier와 SSH 영향 범위는 별도 재실행한다.
 - gate 변화: 장치 활성화·물리 주행·FIELD 이동 없음.
 - 결정: D-418와 D-432를 각각의 경로/opt-in 소유권으로 보존한다.
+
+## 2026-10-04 · uncommitted · feat(api): D-438 `stuck_resolver` 역할과 `STUCK_DECIDE` 권한, API Ref v1.90
+- 변경: `api/grants.py` `STUCK_DECIDE`, `api/deps.py` 역할 순위, `api/v1/line_follow.py` 막힘 답 경로가 `STUCK_DECIDE` 를 요구(`stuck_resolver` 의 `MANUAL` 은 403), `api/v1/auth.py`·`system.py` 역할 목록 문구, `api/app.py` 계약 표기 v1.90
+- 증거: `python -m pytest src/runtime/gateway/test -q` 2025 passed, 16 skipped (2026-10-04 Windows; 첫 실행의 1 failed 는 app.py 계약 표기를 v1.90 으로 올리기 전의 `test_protocol_version_alignment.py` 였고 표기 정정 뒤 통과); `python -m pytest test/test_harness_contracts.py -q` 59 passed
+- gate 변화: 없음
+- 결정: D-438
+- 교훈: 없음

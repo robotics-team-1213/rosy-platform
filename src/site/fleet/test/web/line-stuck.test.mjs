@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 
 import {
   CAUSE_LABEL, DECISIONS, PHASE_LABEL, confirmText, decisionButtons, needsConfirm, outcomeText,
-  pendingStucks, rearText, refusalText, stuckFacts,
+  pendingStucks, rearText, refusalText, resolverText, stuckFacts,
 } from "../../fleet/server/web/line-stuck.js";
 
 const STUCK = {
@@ -118,4 +118,17 @@ test("accepted answers say what the robot will do", () => {
   assert.match(outcomeText("rosy_01", "ABORT", { outcome: "idle" }), /차선 추종을 중단했습니다/);
   assert.doesNotMatch(outcomeText("rosy_01", "ABORT", { outcome: "idle" }), /IDLE/);
   assert.match(outcomeText("rosy_01", "MANUAL", {}), /CORE가 받았습니다/);
+});
+
+test("resolverText says what the Fleet resolver did, or why a human is needed", () => {
+  assert.equal(resolverText(null), "");
+  assert.equal(resolverText({ tier: "rule", rule: "R2", decision: "BACK_AND_RETRY", escalated: null }),
+    "자동 판단 R2: 후진 후 재시도");
+  assert.equal(resolverText({ tier: "human", escalated: "no_rule" }),
+    "자동 판단 불가 — 사람 확인 필요 (맞는 규칙 없음)");
+  assert.equal(resolverText({ tier: "human", escalated: "calibration" }),
+    "자동 판단 불가 — 사람 확인 필요 (보정 중)");
+  assert.equal(resolverText({ tier: "human", escalated: "core:ROBOT_UNREACHABLE" }),
+    "자동 판단 불가 — 사람 확인 필요 (CORE 응답 ROBOT_UNREACHABLE)");
+  assert.equal(resolverText({ tier: "human", escalated: "human_claimed" }), "운영자가 맡음");
 });

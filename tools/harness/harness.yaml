@@ -7,6 +7,8 @@ adr_log: docs/reference/ROSY ADR Log.md
 
 # IDs absent from the ADR log on purpose. Remove an entry once the ADR is written.
 adr_gaps:
+  D-436: "ADR on branch feat/ci-affected-tests, not yet on main; remove when it lands"
+  D-437: "ADR on branch feat/site-candidate-ci, not yet on main; remove when it lands"
   D-433: "ADR on branch feat/d385-native-face-handoff, not yet on main; remove when it lands"
   D-428: "ADR written on branch feat/d428-web-face-sweep (8ce5cc237), not yet on main; remove when it lands"
   D-29: "unused; the vision accelerator shield design only proposed the number"
