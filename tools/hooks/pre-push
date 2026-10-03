@@ -83,19 +83,13 @@ echo "[pre-push] fast contract suites"
   -q
 
 # D-436: affected tier on top of the fast gate above (whose contents stay as
-# they are). Tests of the modules this branch touches, their reverse
-# dependents and the tests naming the changed paths. When the selector
-# escalates to FULL (shared foundation, CI/test config, unmapped file) the hook
-# does not run 40-60 min of suites: it prints why and leaves the full run to CI
-# (main push / nightly) and the release gate.
+# they are). Tests of the modules this branch touches, their direct reverse
+# dependents, the tests naming the changed paths and the guard set. When the
+# selector escalates to FULL (shared foundation, CI/test config, unmapped file)
+# `--run` still runs only the guards and the directly affected suites: the
+# full suite runs on GitHub Actions runners (ci.yml), never on this machine.
 AFFECTED_BASE="$(git merge-base HEAD origin/main 2>/dev/null || echo main)"
 echo "[pre-push] affected tier (D-436, base ${AFFECTED_BASE})"
-AFFECTED_MODE="$("$PY" tools/harness/rosy_harness.py affected --base "$AFFECTED_BASE" --json   | "$PY" -c 'import json, sys; print(json.load(sys.stdin)["mode"])')"
-if [ "$AFFECTED_MODE" = "full" ]; then
-  "$PY" tools/harness/rosy_harness.py affected --base "$AFFECTED_BASE" --print
-  echo "[pre-push] WARNING: selection escalated to FULL; not run here. CI runs the full tier." >&2
-else
-  "$PY" tools/harness/rosy_harness.py affected --base "$AFFECTED_BASE" --run
-fi
+"$PY" tools/harness/rosy_harness.py affected --base "$AFFECTED_BASE" --run
 
 echo "[pre-push] fast gate green"

@@ -14,7 +14,9 @@ def test_ci_installs_root_contract_python_dependencies():
 
 def test_root_contract_step_sources_the_colcon_install():
     workflow = WORKFLOW.read_text(encoding="utf-8")
-    step = workflow.split("- name: Test (deployment and release contracts)", 1)[1]
+    # D-436: the root contract suites run as `root-test-*` matrix entries with `ros: overlay`
+    # (test/test_affected_tests.py pins that); this step is where the overlay is sourced.
+    step = workflow.split("- name: Test (matrix suite, D-436)", 1)[1]
     step = step.split("- name:", 1)[0]
     assert ". /opt/ros/jazzy/setup.sh" in step
     # D-427: colcon builds from the repo root, so the overlay is install/, not src/install/.

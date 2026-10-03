@@ -764,6 +764,10 @@ def main(argv: list[str] | None = None) -> int:
     action.add_argument("--run", dest="action", action="store_const", const="run",
                         help="affected: run the selected pytest invocations")
     parser.add_argument("--json", action="store_true", help="affected: machine-readable selection")
+    parser.add_argument("--ci-matrix", action="store_true",
+                        help="affected: one-line JSON {mode, matrix} for the GitHub job matrix (ci.yml)")
+    parser.add_argument("--full", action="store_true",
+                        help="affected --run: also run a FULL selection locally (default: GitHub runs it)")
     args = parser.parse_args(argv)
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
@@ -773,7 +777,8 @@ def main(argv: list[str] | None = None) -> int:
         sys.path.insert(0, str(Path(__file__).resolve().parent))
         import affected_tests  # noqa: E402 — sibling module, loaded on demand
 
-        return affected_tests.main(repo, args.base, args.action or "print", args.json)
+        return affected_tests.main(repo, args.base, args.action or "print", args.json,
+                                   matrix=args.ci_matrix, allow_full=args.full)
     if args.command == "brief":
         print(render_brief(repo), end="")
         return 0

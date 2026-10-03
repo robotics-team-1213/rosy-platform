@@ -3,13 +3,16 @@
 Usage (from the repository root)::
 
     python tools/harness/rosy_harness.py affected [--base main] [--print|--run] [--json]
+    python tools/harness/rosy_harness.py affected --base SHA --ci-matrix   # GitHub job matrix
 
 Maps every changed file (``git diff base...HEAD`` plus the working tree) to the
 harness module that owns it, adds reverse dependents found through
 ``platform_parts.yaml`` ``import_prefix`` imports, tests that name the changed
 path, and an always-on guard set. Shared foundations, CI/test configuration and
 files that map to nothing escalate to the full tier: unknown means everything,
-never nothing. Suites whose test files share a basename run as separate pytest
+never nothing. The full tier runs on GitHub Actions runners (ci.yml), never
+locally by default: ``--run`` on a FULL selection runs only the guards and the
+directly affected suites and says so; ``--full`` overrides. Suites whose test files share a basename run as separate pytest
 invocations (gateway and sensing both ship ``test_battery.py``).
 
 Standard library plus PyYAML, like the rest of the harness.
@@ -63,6 +66,33 @@ FULL_SUITES = (
     "src/contracts/foundation/test",
 )
 
+# D-436 4: the GitHub full run as parallel matrix entries. Each entry is one
+# runner; its `invocations` run in order (suites sharing a test basename stay in
+# separate invocations: gateway and sensing both ship test_battery.py, vision and
+# games test_preview.py). `ros`: none (host conditions), base (/opt/ros) or
+# overlay (+ colcon install, which also builds). `gating: False` reports only.
+ROOT_SHARDS = 3
+CI_FULL_MATRIX = (
+    {"name": "core-domain", "invocations": [[
+        "src/runtime/gateway/test", "src/runtime/events/test", "src/runtime/services/test",
+        "src/hmi/web_common/test", "src/contracts/foundation/test",
+        "src/products/pinky_pro/profile/test", "src/products/omx/profile/test"]], "ros": "none"},
+    # Never ran in CI before D-436 (D-191 follow-up); reports until its first green run.
+    {"name": "sensing", "invocations": [["src/runtime/sensing/test"]], "ros": "none", "gating": False},
+    {"name": "fleet", "invocations": [["src/site/fleet/test"]], "ros": "none"},
+    {"name": "site-vision-cell", "invocations": [
+        ["src/site/vision/test"], ["src/site/cell/test"],
+        ["test/test_platform_palletizing_compat.py", "test/test_platform_cell_submission.py",
+         "test/architecture/test_platform_dependency_boundaries.py"]], "ros": "none"},
+    {"name": "gz-sim", "invocations": [["src/sim/gz_sim/test"]], "ros": "overlay"},
+    {"name": "hardware-safety", "invocations": [[
+        "src/products/pinky_pro/bringup/test", "src/products/pinky_pro/adc/test",
+        "src/runtime/sensing/test/test_ir_adc_lock.py",
+        "--ignore=src/products/pinky_pro/bringup/test/test_flake8.py",
+        "--ignore=src/products/pinky_pro/bringup/test/test_pep257.py",
+        "--ignore=src/products/pinky_pro/bringup/test/test_copyright.py"]], "ros": "base"},
+)
+
 # A module whose `tests` is the whole root suite is too broad to select by
 # ownership; D-436 §1 narrows it to `functional` plus referencing tests.
 BROAD_TESTS = frozenset({"test"})
@@ -83,10 +113,13 @@ class Selection:
     reasons: dict[str, list[str]] = field(default_factory=dict)  # test path -> why
     escalations: list[str] = field(default_factory=list)
     invocations: list[list[str]] = field(default_factory=list)
+    #: What runs locally when the selection escalated: guards + directly affected suites.
+    local_invocations: list[list[str]] = field(default_factory=list)
 
     def to_json(self) -> dict:
         return {"mode": self.mode, "changed": self.changed, "escalations": self.escalations,
-                "reasons": self.reasons, "invocations": self.invocations}
+                "reasons": self.reasons, "invocations": self.invocations,
+                "local_invocations": self.local_invocations}
 
 
 def _match(path: str, pattern: str) -> bool:
@@ -298,11 +331,31 @@ def select(repo: Repo, changed: list[str]) -> Selection:
             if not _under(test, module["path"]) and repo.imports_prefix(test, prefixes):
                 add(test, f"imports {'/'.join(prefixes)} (module {module['name']})")
 
+    sel.local_invocations = pack(repo, sorted(sel.reasons))
     if sel.escalations:
         sel.mode = "full"
         sel.reasons = {p: ["full tier (D-436 2)"] for p in _full_paths(repo)}
     sel.invocations = pack(repo, sorted(sel.reasons))
     return sel
+
+
+def ci_matrix(repo: Repo, sel: Selection) -> dict:
+    """The GitHub job matrix: CI_FULL_MATRIX plus root test/ shards, or one entry per invocation."""
+    if sel.mode == "full":
+        root_tests = sorted(t for t in repo.test_files if _under(t, "test"))
+        entries = [dict(e) for e in CI_FULL_MATRIX]
+        for i in range(ROOT_SHARDS):
+            entries.append({"name": f"root-test-{i + 1}of{ROOT_SHARDS}",
+                            "invocations": [root_tests[i::ROOT_SHARDS]], "ros": "overlay"})
+    else:
+        entries = [{"name": f"affected-{i + 1}", "invocations": [inv]}
+                   for i, inv in enumerate(sel.invocations)]
+    entries.append({"name": "build-smoke", "kind": "smoke", "invocations": []})
+    for entry in entries:
+        entry.setdefault("kind", "pytest")
+        entry.setdefault("gating", True)
+        entry.setdefault("ros", "overlay")
+    return {"include": entries}
 
 
 def pytest_command(paths: list[str], python: str = "python") -> list[str]:
@@ -328,9 +381,15 @@ def render(sel: Selection) -> str:
     return "\n".join(lines) + "\n"
 
 
-def run(repo_root: Path, sel: Selection) -> int:
+def run(repo_root: Path, sel: Selection, allow_full: bool = False) -> int:
+    invocations = sel.invocations
+    if sel.mode == "full" and not allow_full:
+        # D-436 4: the full suite runs on GitHub runners, not on this machine.
+        print("[affected] FULL tier runs on GitHub Actions (push, then `gh run watch`);"
+              " running only the guards and directly affected suites here. --full overrides.", flush=True)
+        invocations = sel.local_invocations
     status = 0
-    for inv in sel.invocations:
+    for inv in invocations:
         command = pytest_command(inv, sys.executable)
         print("[affected] " + " ".join(pytest_command(inv)), flush=True)
         code = subprocess.run(command, cwd=repo_root).returncode
@@ -340,7 +399,8 @@ def run(repo_root: Path, sel: Selection) -> int:
     return status
 
 
-def main(repo_root: Path, base: str, mode: str, as_json: bool) -> int:
+def main(repo_root: Path, base: str, mode: str, as_json: bool,
+         matrix: bool = False, allow_full: bool = False) -> int:
     repo = Repo.load(repo_root)
     try:
         changed = changed_files(repo_root, base)
@@ -349,10 +409,17 @@ def main(repo_root: Path, base: str, mode: str, as_json: bool) -> int:
         sel = Selection(mode="full", changed=[], escalations=[f"cannot diff against {base!r}: {exc}"])
         sel.reasons = {p: ["full tier (D-436 2)"] for p in _full_paths(repo)}
         sel.invocations = pack(repo, sorted(sel.reasons))
+        sel.local_invocations = [list(GUARD_SET)]
+    if matrix and allow_full and sel.mode != "full":
+        sel.mode = "full"
+        sel.escalations.append("forced (--full): CI event other than pull_request")
+    if matrix:
+        print(json.dumps({"mode": sel.mode, "matrix": ci_matrix(repo, sel)}, separators=(",", ":")))
+        return 0
     if as_json:
         print(json.dumps(sel.to_json(), indent=2, ensure_ascii=False))
     else:
         print(render(sel), end="")
     if mode == "run":
-        return run(repo_root, sel)
+        return run(repo_root, sel, allow_full)
     return 0

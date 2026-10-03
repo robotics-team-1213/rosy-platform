@@ -201,3 +201,57 @@ def test_real_repo_selector_paths_escalate():
     for path in ("tools/harness/affected_tests.py", "tools/harness/harness.yaml",
                  "src/contracts/foundation/core_common/__init__.py", ".github/workflows/ci.yml"):
         assert affected.select(repo, [path]).mode == "full", path
+
+
+# --- D-436 4: GitHub runs the full tier as a parallel matrix; local --run does not -------------
+
+
+def test_ci_full_matrix_runs_every_root_test_once_with_the_overlay(sample):
+    repo = affected.Repo.load(sample)
+    matrix = affected.ci_matrix(repo, _select(sample, ".github/workflows/ci.yml"))["include"]
+    shards = [e for e in matrix if e["name"].startswith("root-test-")]
+    assert len(shards) == affected.ROOT_SHARDS
+    assert all(e["ros"] == "overlay" for e in shards), "root deploy/release contracts need install/"
+    shard_files = [t for e in shards for inv in e["invocations"] for t in inv]
+    root_tests = sorted(t for t in repo.test_files if t.startswith("test/"))
+    assert sorted(shard_files) == root_tests, "each root test file in exactly one shard"
+    assert [e["name"] for e in matrix].count("build-smoke") == 1
+
+
+def test_ci_full_matrix_keeps_gateway_and_sensing_on_separate_runners():
+    owner = {path: entry["name"] for entry in affected.CI_FULL_MATRIX
+             for inv in entry["invocations"] for path in inv}
+    assert owner["src/runtime/gateway/test"] != owner["src/runtime/sensing/test"]
+    for entry in affected.CI_FULL_MATRIX:
+        assert entry["ros"] in {"none", "base", "overlay"}, entry["name"]
+
+
+def test_ci_affected_matrix_is_one_runner_per_invocation(sample):
+    sel = _select(sample, "src/runtime/sensing/control/battery.py")
+    matrix = affected.ci_matrix(affected.Repo.load(sample), sel)["include"]
+    pytest_entries = [e for e in matrix if e["kind"] == "pytest"]
+    assert [e["invocations"][0] for e in pytest_entries] == sel.invocations
+
+
+def test_ci_matrix_cli_forces_full_for_non_pr_events(sample, capsys):
+    assert harness.main(["affected", "--repo", str(sample), "--base", "HEAD", "--full", "--ci-matrix"]) == 0
+    out = json.loads(capsys.readouterr().out)
+    assert out["mode"] == "full"
+    assert any(e["name"].startswith("root-test-") for e in out["matrix"]["include"])
+
+
+def test_local_run_of_a_full_selection_runs_only_guards_and_direct_suites(sample, monkeypatch):
+    sel = _select(sample, "src/contracts/foundation/core_common/schemas.py", "tools/ssh/rosy_ssh_enroll.py")
+    assert sel.mode == "full"
+    ran = []
+
+    class Done:
+        returncode = 0
+
+    monkeypatch.setattr(affected.subprocess, "run", lambda cmd, cwd: ran.append(cmd) or Done())
+    assert affected.run(sample, sel) == 0
+    local = {p for cmd in ran for p in cmd[3:] if not p.startswith("-")}
+    assert local == GUARDS | {"test/test_rosy_ssh_enroll.py"}, "FULL stays on GitHub by default"
+    ran.clear()
+    affected.run(sample, sel, allow_full=True)
+    assert "test" in {p for cmd in ran for p in cmd}

@@ -86,4 +86,5 @@ def test_affected_tier_runs_after_the_fast_gate():
     fast = text.index("test/test_release_boundary_guards.py")
     step = text.index("rosy_harness.py affected")
     assert fast < step, "the fast suites must stay ahead of the affected tier"
-    assert '--run' in text and '"full"' in text, "affected runs; a FULL escalation only warns"
+    assert "affected --base" in text and "--run" in text
+    assert "--full" not in text, "the full suite runs on GitHub runners, never in the hook"
