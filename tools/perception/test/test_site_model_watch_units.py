@@ -26,7 +26,8 @@ def test_service_reads_config_and_token_file_only():
     unit = _unit("rosy-model-watch.service")
     (exec_start,) = unit["ExecStart"]
     assert exec_start.endswith(f"--config {CONFIG}")
-    assert exec_start.split()[1].endswith("/tools/perception/model/watch.py")
+    # the stable wrapper, not a checkout path: the D-427 move must not break the unit
+    assert exec_start.split()[:2] == ["/opt/rosy/model-watch/bin/rosy-model-watch", "watch"]
     assert f"HF_TOKEN_FILE={TOKEN}" in unit["Environment"]
     # the token never appears on a command line or as a literal value
     for value in exec_start.split():

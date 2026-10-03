@@ -20,7 +20,7 @@ Ubuntu site-host stack: Caddy TLS proxy, Fleet console and task SQLite, and Visi
 | `fleet-mdns.py`, `mdns-bridge.py`, `rosy-*advertise.service`, `rosy-mdns-bridge.*` | LAN discovery advertising and bridge |
 | `build_candidate.py`, `sign_candidate.py`, `verify_candidate.py`, `candidate_signing.py` | Signed site candidate build, sign, verify |
 | `site_db.py`, `secret_exec.py` | Site DB maintenance and secret-injecting exec wrapper |
-| `install-model-watch.sh`, `rosy-model-watch.*`, `model-watch.yaml.example` | Model watch units and config template |
+| `install-model-watch.sh`, `rosy-model-watch`, `rosy-model-watch.*`, `model-watch.yaml.example` | Model watch installer, stable entry-point wrapper (finds the watcher before or after the D-427 move), units and config template |
 | `rosy-site-stack.service` | systemd unit for the stack |
 | `*.example`, `*.template.txt` | Config and secret templates only (robots, users, cameras, tokens) |
 

@@ -1,4 +1,5 @@
 """D-373 decision 7: deploy/site/install-model-watch.sh, checked without running it."""
+import os
 import re
 import shutil
 import subprocess
@@ -73,3 +74,42 @@ def test_hf_token_placeholder_only_for_backend_hf():
     token = text.index('[ -e "$TOKEN" ] || run install')
     block = text[text.rindex("\nif ", 0, token):token]
     assert 'if [ "$BACKEND" = hf ]' in block and "\nfi\n" not in block
+
+
+WRAPPER = SCRIPT.parent / "rosy-model-watch"
+
+
+def _locate(src: Path) -> subprocess.CompletedProcess:
+    bash = shutil.which("bash")
+    if not bash:
+        pytest.skip("no bash")
+    env = {**os.environ, "ROSY_MODEL_WATCH_SRC": src.as_posix()}
+    return subprocess.run([bash, WRAPPER.as_posix(), "locate"], capture_output=True, text=True, env=env)
+
+
+def test_installer_installs_the_wrapper_and_doctor_runs_through_it():
+    text = _text()
+    assert 'run install -D -o root -g root -m 0755 "$HERE/rosy-model-watch" "$WRAPPER"' in text
+    assert "WRAPPER=/opt/rosy/model-watch/bin/rosy-model-watch" in text
+    assert '"$WRAPPER" doctor --watch-config "$CONFIG"' in text
+    data = WRAPPER.read_bytes()
+    assert data.startswith(b"#!/usr/bin/env bash\n") and b"\r" not in data
+
+
+@pytest.mark.parametrize("layouts, expected", [
+    (("learning/training/perception",), "learning/training/perception"),
+    (("tools/perception",), "tools/perception"),
+    (("learning/training/perception", "tools/perception"), "learning/training/perception"),
+])
+def test_wrapper_prefers_the_moved_folder_and_falls_back(tmp_path, layouts, expected):
+    for layout in layouts:
+        (tmp_path / layout / "model").mkdir(parents=True)
+        (tmp_path / layout / "model" / "watch.py").write_text("", encoding="utf-8")
+    r = _locate(tmp_path)
+    assert r.returncode == 0, r.stderr
+    assert r.stdout.strip().endswith("/" + expected)
+
+
+def test_wrapper_fails_without_a_watcher(tmp_path):
+    r = _locate(tmp_path)
+    assert r.returncode == 1 and "no perception tools" in r.stderr

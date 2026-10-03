@@ -794,8 +794,13 @@ outstanding.
 
 ## Automatic shadow delivery of new perception models (D-373)
 
-`rosy-model-watch.timer` runs `tools/perception/model/watch.py` every 10
-minutes. Automation stops at the shadow slot: selecting a learned model for
+`rosy-model-watch.timer` runs the perception model watcher (`model/watch.py`)
+every 10 minutes through the stable entry point
+`/opt/rosy/model-watch/bin/rosy-model-watch`. The wrapper looks for the watcher
+in the source copy at `learning/training/perception/` first and at its pre-D-427
+location second, so moving the perception tools does not break the unit. A
+site host installed before this wrapper existed runs the old checkout path:
+update the checkout and re-run `install-model-watch.sh` once. Automation stops at the shadow slot: selecting a learned model for
 driving is not automated and stays behind the D-205 gate. Robots are reached
 over SSH as `rosy` with `sudo -n` (D-373 decision 6).
 
@@ -900,10 +905,11 @@ the service user, 0600) and an empty pinned `known_hosts`,
 layout dirs when they are missing (a mount that exists keeps its owner), and
 the drop-in `/etc/systemd/system/rosy-model-watch.service.d/store.conf` with
 `ReadWritePaths=<store>` (the unit is `ProtectSystem=strict`; the store is its
-only writable path besides its state directory); installs the unit and timer;
-enables the timer only when the config has no `<...>` placeholders left; and
-then runs `rosy_ml doctor --watch-config /etc/rosy/model-watch.yaml` as the
-service user. It prints the remaining steps:
+only writable path besides its state directory); installs the wrapper
+`/opt/rosy/model-watch/bin/rosy-model-watch`, the unit and the timer; enables
+the timer only when the config has no `<...>` placeholders left; and then
+runs `rosy-model-watch doctor --watch-config /etc/rosy/model-watch.yaml`
+(`rosy_ml doctor`) as the service user. It prints the remaining steps:
 
 - **Site key.** The site host uses its own SSH key, not a person's;
   `ssh.identity` is required and has no default. Add the printed
