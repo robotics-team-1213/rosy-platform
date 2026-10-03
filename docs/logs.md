@@ -4771,3 +4771,9 @@
 - gate 변화: 없음(문서만). 모델 PC GPU 학습·NCNN·Isaac 실행, 관제 PC 사이트 스택 이전은 미수용
 - 결정: D-434 Accepted, D-322 부록
 - 교훈: 큰 CUDA wheel 설치는 Wi-Fi에서 uv 기본 timeout으로 끊긴다 — `UV_HTTP_TIMEOUT=600`, 분리 실행, 완료 표식으로 확인
+
+## 2026-10-03 · uncommitted · perception(D-356): experiment tracking defaults to local run log + TensorBoard
+- 변경: `learning/training/perception/training/run_log.py` 추가(`RunLog`, `chain`), `export_cell.py`가 `metrics.experiment`의 `local` 형태를 트래커별 허용 키로 받는다, 노트북 5c(로컬 기록)·5d(W&B) 분리와 `RUNS_DIR` 입력 칸, COLAB.md/README.md 절 추가, D-356 부록
+- 증거: `python -m pytest learning/training/perception/test -q -p no:cacheprovider`(ML venv), `python tools/harness/rosy_harness.py generate` 뒤 lint·`test/test_harness_contracts.py`
+- gate 변화: 없음(호스트 결과). 모델 PC나 실제 Colab 런타임에서 돌려 본 것은 아님
+- 결정: 사용자 결정 2026-10-03, 기본은 로컬 기록 + TensorBoard, W&B 선택

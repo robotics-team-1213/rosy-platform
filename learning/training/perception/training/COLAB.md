@@ -150,15 +150,26 @@ val_ds   = RosyLaneDataset(ds_dir, "val")
 - 모델 입력 `1×3×240×320`, 출력 `1×C×240×320` logit(softmax 전)
 - 전처리(RGB/BGR, 나누는 값, mean, std)를 기억해 둔다. 4단계에 그대로 적는다.
 
+### 실험 기록(로컬 + TensorBoard)
+
+기본 기록이다. 계정도 키도 필요 없고, 노트북 5c단계가 학습 전에 알아서 만든다.
+
+- 위치: 2단계 입력 칸 `RUNS_DIR`. 비우면 환경 변수 `ROSY_RUNS_DIR`, 없으면 Colab은 `/content/rosy-runs`(런타임이 닫히면 사라지니 남기려면 Drive 경로를 적는다), GPU PC는 `~/rosy-ml/runs`.
+- 한 번 학습하면 `<RUNS_DIR>/<UTC 시각>-<trainer>/` 폴더가 하나 생긴다: `config.json`(설정, 토큰·키 항목은 빠진다), `history.json`(에폭마다 갱신, 중간에 멈춰도 남는다), `summary.json`(가장 좋은 에폭, 검증 IoU, `model_revision`, 내보낸 경로), TensorBoard 이벤트 파일. 모델 폴더와 따로라서 store inbox로 넘어가지 않는다.
+- TensorBoard는 `pip install tensorboard`가 되어 있으면 쓴다. 없으면 `history.json`에 `"tensorboard": "unavailable"`만 남기고 학습은 그대로 진행한다.
+- 보기(모델 PC): `tensorboard --logdir ~/rosy-ml/runs --host <tailscale-ip> --port 6006` 를 띄우고 다른 PC 브라우저에서 `http://<tailscale-ip>:6006` 으로 연다. `<tailscale-ip>`는 자리 표시자다. 실제 주소는 이 저장소(공개)에 적지 않는다.
+- manifest의 `metrics.experiment`에는 W&B run이 없으면 `{"tracker": "local", "run_id", "path"}`가 들어간다.
+- 자기 노트북에서는 `from run_log import RunLog, chain`으로 `RunLog(run_dir)`를 만들고 `train(..., on_epoch=chain(log.on_epoch, 다른_훅))`, 끝에 `log.finish({...})`를 부른다.
+
 ### (선택) 실험 기록: Weights & Biases
 
-학습 곡선과 설정을 남기고 싶을 때만 쓴다. 없어도 학습, 넘기기, intake는 그대로 돈다.
+로컬 기록 대신(또는 함께) 외부 서비스에도 남기고 싶을 때만 쓴다. 없어도 학습, 넘기기, intake는 그대로 돈다. W&B run이 있으면 manifest 링크는 W&B 쪽이 된다.
 
 1. [wandb.ai](https://wandb.ai)에서 계정을 만들고 API 키를 받는다.
 2. Colab 왼쪽 열쇠 아이콘(**Secrets**)에 이름 `WANDB_API_KEY`로 키를 넣고 이 노트북의 **노트북 액세스**를 켠다.
    GPU PC에서는 환경 변수 `WANDB_API_KEY`를 쓴다.
 3. 노트북 2단계의 `USE_WANDB`(기본 켜짐)와 `WANDB_PROJECT`(기본 `rosy-perception`)를 확인한다.
-   키가 없으면 5c단계가 "W&B 기록을 건너뜁니다"를 출력하고 학습은 그대로 진행한다.
+   키가 없으면 5d단계가 "W&B 기록을 건너뜁니다"를 출력하고 학습은 그대로 진행한다.
 
 **키를 셀에 붙여 넣지 않는다.** 이 저장소는 공개이고, 셀 내용과 출력이 노트북에 저장된다. 노트북은 키를
 출력하지도, 파일(manifest 포함)에 쓰지도 않는다. 에폭마다 손실과 클래스별 검증 IoU가 run에 기록되고,

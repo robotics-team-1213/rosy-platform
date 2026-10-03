@@ -111,6 +111,14 @@ export(model, "out/model_folder",
 torch 없이 이미 만든 `.onnx`가 있으면 `write_manifest(out_dir, onnx_path=..., <같은 인자>)`를 쓴다.
 TorchScript만 있다면 개발 PC에서 `learning/training/perception/model/export_onnx.py`로 변환한다.
 
+## 실험 기록(로컬 + TensorBoard)
+
+기본은 로컬 기록이다(D-356 부록 2026-10-03): `run_log.py`의 `RunLog(run_dir)`가 `config.json`, `history.json`(에폭마다), `summary.json`을
+쓰고, `tensorboard`가 있으면 이벤트 파일도 쓴다. `train(..., on_epoch=chain(log.on_epoch, ...))`로 연결하고, 끝에 `log.finish({...})`를 부른다.
+`config`의 토큰·키·비밀번호 항목은 기록에서 빠진다. 기록 폴더는 모델 폴더 밖에 둔다(store로 넘어가지 않는다).
+manifest의 `metrics.experiment`는 선택이고 두 형태만 받는다: `{"tracker": "wandb", "run_id", "url", "project"}` 또는
+`{"tracker": "local", "run_id", "path"}`. W&B는 선택이다. 절차는 [COLAB.md](COLAB.md)의 "실험 기록(로컬 + TensorBoard)".
+
 ## 넘기기 전에
 
 ```
