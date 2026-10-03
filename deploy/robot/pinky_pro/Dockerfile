@@ -63,10 +63,10 @@ COPY middleware/ui/pilot /opt/rosy_ws/src/hmi/pilot
 
 WORKDIR /opt/rosy_ws
 # omx/imu/vision/control belong to optional slices, not this core image.
-COPY src/contracts/interfaces ./src/contracts/interfaces
-COPY src/runtime/gateway ./src/runtime/gateway
+COPY src/contracts/interfaces /opt/rosy_ws/src/contracts/interfaces
+COPY src/runtime/gateway /opt/rosy_ws/src/runtime/gateway
 # D-196: CORE reads the robot profile from share/<robot.model>/config.
-COPY src/products/pinky_pro/profile ./src/products/pinky_pro/profile
+COPY src/products/pinky_pro/profile /opt/rosy_ws/src/products/pinky_pro/profile
 RUN set -eo pipefail \
     && source /opt/ros/jazzy/setup.bash \
     && colcon build --merge-install --packages-up-to core pinky_pro web_common dashboard pilot \
@@ -126,15 +126,15 @@ RUN git clone https://github.com/Slamtec/sllidar_ros2.git src/sllidar_ros2 \
     && cd src/sllidar_ros2 \
     && git checkout --detach ${SLLIDAR_COMMIT} \
     && rm -rf .git
-COPY src/contracts/interfaces ./src/contracts/interfaces
-COPY src/contracts/foundation ./src/contracts/foundation
-COPY src/sim/description ./src/sim/description
-COPY src/products/pinky_pro/bringup ./src/products/pinky_pro/bringup
-COPY src/runtime/navigation ./src/runtime/navigation
-COPY src/products/omx/adapter ./src/products/omx/adapter
-COPY src/products/omx/profile ./src/products/omx/profile
-COPY src/runtime/sensing ./src/runtime/sensing
-COPY shared/web ./shared/web
+COPY src/contracts/interfaces /opt/rosy_ws/src/contracts/interfaces
+COPY src/contracts/foundation /opt/rosy_ws/src/contracts/foundation
+COPY src/sim/description /opt/rosy_ws/src/sim/description
+COPY src/products/pinky_pro/bringup /opt/rosy_ws/src/products/pinky_pro/bringup
+COPY src/runtime/navigation /opt/rosy_ws/src/runtime/navigation
+COPY src/products/omx/adapter /opt/rosy_ws/src/products/omx/adapter
+COPY src/products/omx/profile /opt/rosy_ws/src/products/omx/profile
+COPY src/runtime/sensing /opt/rosy_ws/src/runtime/sensing
+COPY shared/web /opt/rosy_ws/src/hmi/web_common
 RUN mkdir -p src/sim/description/meshes
 RUN set -eo pipefail \
     && source /opt/ros/jazzy/setup.bash \

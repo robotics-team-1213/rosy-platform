@@ -5,6 +5,7 @@ import sys
 import yaml
 
 from robot_contracts import (
+    COLCON_ROOTS,
     DEPLOY,
     ROOT,
     board_caps,
@@ -113,7 +114,7 @@ def test_dockerignore_admits_every_source_path_the_dockerfile_copies():
     sources = {
         line.split()[1]
         for line in dockerfile.splitlines()
-        if line.startswith("COPY src/")
+        if line.startswith(tuple(f"COPY {root}/" for root in COLCON_ROOTS))
     }
 
     assert sources

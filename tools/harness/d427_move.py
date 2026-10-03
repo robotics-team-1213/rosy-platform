@@ -1,13 +1,8 @@
 #!/usr/bin/env python3
 r"""D-427 step B bulk mover: move every pending root of one wave and rewrite its consumers.
 
-Usage (from the repository root, clean worktree)::
-
-    python tools/harness/d427_move.py <wave>            # 3c, 4a, 4b, 4c, 4d, 4e
-    python tools/harness/d427_move.py <wave> --dry-run  # print the plan only
-    python tools/harness/d427_move.py --report          # legacy residue of the tree
-
-Source of truth: ``tools/harness/platform_parts.yaml``. A root is pending when
+Usage: ``python tools/harness/d427_move.py <wave> [--dry-run]``, ``--report`` (residue only).
+Source of truth: ``tools/harness/platform_parts.yaml``; a root is pending when
 ``path != d427_target`` and it is not riding inside an already moved parent.
 
 What one run does (docs/plans/2026-10-03-d427-source-migration.md, common procedure):
@@ -22,15 +17,18 @@ What one run does (docs/plans/2026-10-03-d427-source-migration.md, common proced
 3. References to an old path, in the legacy-scan scope (``test/architecture/_legacy_paths``)
    plus the moved roots' own Markdown (never ``logs.md``/``progress.md``, history dirs or
    FROZEN_BYTES):
+   in this order:
    (c) ``../`` strings, resolved from the old file folder (then its ancestors) against the
        pre-move tree, re-relativised from the new folder;
+   (d) ``parents[N]`` / ``.parent`` chains of ``Path(__file__)`` in moved ``.py`` files
+       whose old ancestor is above the moved root: the repo root, an ancestor the new
+       location keeps, or ``(<repo root> / "src" / ...)`` for one it lost;
    (a) slash paths (also after ``/``, ``$VAR/``, ``/repo/`` and in backslash form); a path
        token starting with ``/opt/``, ``/usr/`` or ``/etc/`` is an install path and kept;
    (b) joined literal segments (``"src" / "runtime" / "gateway"``, ``os.path.join``,
-       ``Path(a, b)``, PowerShell ``Join-Path``);
-   (d) ``parents[N]`` / ``.parent`` chains of ``Path(__file__)`` in moved ``.py`` files,
-       when the old ancestor is above the moved root (repo root or an ancestor kept by
-       the new location). Other ancestors are printed as residue.
+       ``Path(a, b)``, PowerShell ``Join-Path``), keeping closing parentheses;
+   (e) ``SRC / "site" / "fleet"`` where ``SRC`` denotes src/ (``--srcvars`` re-applies it).
+   A rewritten ``.py`` that no longer compiles is left alone and reported.
 4. Residue: the legacy scanner findings over the whole tree after the rewrite.
 
 Package names, ROS names, topics and APIs never change (D-231).
@@ -39,7 +37,6 @@ Package names, ROS names, topics and APIs never change (D-231).
 from __future__ import annotations
 
 import argparse
-import os
 import posixpath
 import re
 import shutil
@@ -76,8 +73,6 @@ def load_roots() -> list[dict]:
     return yaml.safe_load(MANIFEST.read_text(encoding="utf-8"))["roots"]
 
 
-# --- plan --------------------------------------------------------------------
-
 def plan(wave: str, roots: list[dict]) -> tuple[list[tuple[str, str]], dict[str, str]]:
     """``moves``: ordered ``git mv`` pairs. ``new_path``: old root path -> new root path."""
     pending = [r for r in roots if r.get("wave") == wave and r["path"] != r["d427_target"]
@@ -113,8 +108,6 @@ def mapper(new_path: dict[str, str]):
     return mapf
 
 
-# --- rewrites ------------------------------------------------------------------
-
 def _install_token(text: str, start: int) -> bool:
     while start > 0 and not _TOKEN_BREAK.match(text, start - 1):
         start -= 1
@@ -126,13 +119,22 @@ def slash_pattern(olds: list[str]) -> re.Pattern:
     return re.compile(f"{_START}(?:{'|'.join(alts)}){_END}")
 
 
-def rewrite_slash(text: str, pattern: re.Pattern, mapping: dict[str, str]) -> tuple[str, int]:
+def _copy_destination(text: str, at: int) -> bool:
+    """Inside the last argument of a Dockerfile COPY/ADD line (a path in the image)."""
+    start = text.rfind("\n", 0, at) + 1
+    end = text.find("\n", at)
+    line = text[start:end if end != -1 else len(text)]
+    return bool(re.match(r"\s*(COPY|ADD)\s", line)) and at - start >= len(line.rstrip()) - len(line.split()[-1])
+
+
+def rewrite_slash(text: str, pattern: re.Pattern, mapping: dict[str, str],
+                  dockerfile: bool = False) -> tuple[str, int]:
     count = 0
 
     def repl(match: re.Match) -> str:
         nonlocal count
         raw = match.group(0)
-        if _install_token(text, match.start()):
+        if _install_token(text, match.start()) or (dockerfile and _copy_destination(text, match.start())):
             return raw
         sep = re.search(r"\\+", raw)
         sep = sep.group(0) if sep else "/"
@@ -140,6 +142,23 @@ def rewrite_slash(text: str, pattern: re.Pattern, mapping: dict[str, str]) -> tu
         count += 1
         return sep.join(mapping[old].split("/"))
     return pattern.sub(repl, text), count
+
+
+def _fit_seps(seps: list[str], need: int) -> list[str] | None:
+    """``need`` separators from the matched ones, keeping every one that closes a
+    parenthesis (``") / "``) so the expression stays balanced. None: cannot fit."""
+    seps = list(seps)
+    while len(seps) > need:
+        plain = [i for i, sep in enumerate(seps) if ")" not in sep]
+        if not plain:
+            return None
+        del seps[plain[-1]]
+    while len(seps) < need:
+        plain = next((sep for sep in seps if ")" not in sep), None)
+        if plain is None:
+            return None
+        seps.insert(0, plain)
+    return seps
 
 
 def join_patterns(mapping: dict[str, str]):
@@ -167,9 +186,9 @@ def rewrite_join(text: str, patterns, mapping: dict[str, str]) -> tuple[str, int
             seps = list(match.groups())
             new = mapping[old].split("/")
             need = len(new) - 1
-            new_seps = seps[len(seps) - need:] if need <= len(seps) else [seps[0]] * (need - len(seps)) + seps
-            if need == 0:
-                new_seps = []
+            new_seps = _fit_seps(seps, need)
+            if new_seps is None:
+                return raw
             count += 1
             return new[0] + "".join(sep + seg for sep, seg in zip(new_seps, new[1:]))
         text = pattern.sub(repl, text)
@@ -177,7 +196,7 @@ def rewrite_join(text: str, patterns, mapping: dict[str, str]) -> tuple[str, int
 
 
 _SRC_VAR = re.compile(
-    r"""^[ \t]*([A-Z_][A-Z0-9_]*)[ \t]*(?::[^=\n]+)?=[ \t]*.*["']src["'][ \t]*\)?[ \t]*(?:#.*)?$""", re.M)
+    r"""^[ \t]*([A-Z_][A-Z0-9_]*)[ \t]*(?::[^=\n]+)?=[ \t]*.*["']src["'][ \t]*\)?[ \t]*(?:#[^\r\n]*)?\r?$""", re.M)
 
 
 _FILE_EXPR = re.compile(
@@ -194,10 +213,7 @@ def _src_names(text: str, path: str) -> set[str]:
             level = _level(m.group(1), m.group(2))
             if level and len(parts) - level == 1:
                 names.add(m.group(0))
-        for m in _VAR_DEF.finditer(text):
-            level = _level(m.group(3), m.group(4))
-            if level and len(parts) - level == 1:
-                names.add(m.group(1))
+        names |= {name for name, level in _var_levels(text).items() if level > 0 and len(parts) - level == 1}
     return names
 
 
@@ -235,7 +251,9 @@ def rewrite_srcvar(text: str, mapping: dict[str, str], path: str = "") -> tuple[
             need = len(new) - 1
             if not seps:
                 seps = [f"{quote}{op}{quote}"]
-            new_seps = seps[len(seps) - need:] if need <= len(seps) else [seps[0]] * (need - len(seps)) + seps
+            new_seps = _fit_seps(seps, need)
+            if new_seps is None:
+                return match.group(0)
             count += 1
             return f"{_parent_of(name)}{op}{quote}" + new[0] + "".join(s + g for s, g in zip(new_seps, new[1:]))
         text = pattern.sub(repl, text)
@@ -281,10 +299,27 @@ def rewrite_relative(text: str, old_file: str, new_file: str, mapf, old_paths: s
     return text, len(edits)
 
 
-_VAR_DEF = re.compile(
-    r"^[ \t]*(\w+)[ \t]*(?::[^=\n]+)?=[ \t]*(?:pathlib\.)?Path\(__file__\)"
-    r"((?:\.resolve\(\)|\.absolute\(\))*)((?:\.parent\b(?!s))*)(?:\.parents\[(\d+)\])?",
-    re.M)
+_DEF_LINE = re.compile(
+    r"""^[ \t]*(\w+)[ \t]*(?::[^=\n]+)?=[ \t]*((?:pathlib\.)?Path\(__file__\)(?:\.resolve\(\)|\.absolute\(\))*|\w+)"""
+    r"""((?:\.parent\b(?!s))*)(?:\.parents\[(\d+)\])?((?:[ \t]*/[ \t]*["'][^"'\n]+["'])*)"""
+    r"""[ \t]*(?:#[^\r\n]*)?\r?$""", re.M)
+
+
+def _var_levels(text: str) -> dict[str, int]:
+    """Variable -> steps above the file, for ``Path(__file__)``-rooted definitions,
+    following other such variables and subtracting appended ``/ "a/b"`` segments."""
+    levels: dict[str, int] = {}
+    for m in _DEF_LINE.finditer(text):
+        base = m.group(2)
+        if base.endswith(")"):
+            base_level = 0
+        elif base in levels:
+            base_level = levels[base]
+        else:
+            continue
+        segs = sum(len([p for p in s.split("/") if p]) for s in re.findall(r"""["']([^"']+)["']""", m.group(5)))
+        levels[m.group(1)] = base_level + _level(m.group(3), m.group(4)) - segs
+    return levels
 
 
 def _level(chain_parents: str, index: str | None) -> int:
@@ -302,10 +337,7 @@ def rewrite_parents(text: str, old_file: str, new_file: str, moved_old: str, mov
     old_parts = PurePosixPath(old_file).parts
     new_parts = PurePosixPath(new_file).parts
     root_depth = len(PurePosixPath(moved_old).parts)
-    # var -> level for Path(__file__)-based definitions
-    levels: dict[str, int] = {}
-    for m in _VAR_DEF.finditer(text):
-        levels[m.group(1)] = _level(m.group(3), m.group(4))
+    levels = _var_levels(text)
     names = "|".join(map(re.escape, levels))
     base_expr = r"(?:pathlib\.)?Path\(__file__\)(?:\.resolve\(\)|\.absolute\(\))*"
     if names:
@@ -378,20 +410,11 @@ def eligible(path: str, moved: bool) -> bool:
 
 def read(path: Path) -> str | None:
     try:
-        if path.stat().st_size > MAX_BYTES:
-            return None
-        data = path.read_bytes()
-    except OSError:
-        return None
-    if b"\0" in data[:8192]:
-        return None
-    try:
-        return data.decode("utf-8")
-    except UnicodeDecodeError:
+        data = path.read_bytes() if path.stat().st_size <= MAX_BYTES else b"\0"
+        return None if b"\0" in data[:8192] else data.decode("utf-8")
+    except (OSError, UnicodeDecodeError):
         return None
 
-
-# --- manifest -------------------------------------------------------------------
 
 def edit_manifest(new_path: dict[str, str], mapf) -> None:
     text = MANIFEST.read_text(encoding="utf-8")
@@ -443,8 +466,6 @@ def update_colcon_roots(files: list[str]) -> list[str]:
     return roots
 
 
-# --- residue --------------------------------------------------------------------
-
 def residue_report() -> list[str]:
     roots = load_roots()
     legacies = {r["legacy"]: r["path"] for r in roots if r.get("legacy")}
@@ -454,21 +475,14 @@ def residue_report() -> list[str]:
     for path in tracked():
         if not in_scope(path):
             continue
-        p = ROOT / path
-        try:
-            data = p.read_bytes()
-        except OSError:
-            continue
-        if b"\0" in data[:8192]:
-            continue
-        for form, matched, legacy in scan.findings(path, data.decode("utf-8", "replace")):
+        data = (ROOT / path).read_bytes() if (ROOT / path).is_file() else b"\0"
+        text = data.decode("utf-8", "replace") if b"\0" not in data[:8192] else ""
+        for form, matched, legacy in scan.findings(path, text):
             if (path, matched) in allow:
                 continue
             found.append(f"{path}: {form} {matched!r} -> {legacy} (now {legacies[legacy]})")
     return sorted(set(found))
 
-
-# --- main -----------------------------------------------------------------------
 
 def run(wave: str, dry_run: bool) -> None:
     roots = load_roots()
@@ -494,7 +508,6 @@ def run(wave: str, dry_run: bool) -> None:
         parts = PurePosixPath(f).parts
         for i in range(1, len(parts)):
             old_paths.add("/".join(parts[:i]))
-    moved_files = 0
     for src, dst in moves:
         (ROOT / dst).parent.mkdir(parents=True, exist_ok=True)
         if (ROOT / dst).exists() and not git("ls-files", "--", dst).strip():
@@ -523,18 +536,24 @@ def run(wave: str, dry_run: bool) -> None:
         if moved or "../" in new:
             new, n = rewrite_relative(new, old_file, path, mapf, old_paths, residue)
             stats["relative"] += n
+        if moved and path.endswith(".py"):
+            top = next(o for o in tops if under(old_file, o))
+            new, n = rewrite_parents(new, old_file, path, top, new_path[top], residue)
+            stats["parents"] += n
         if any(seg in new for seg in last_segs):
-            new, n = rewrite_slash(new, slash, new_path)
+            new, n = rewrite_slash(new, slash, new_path, "Dockerfile" in PurePosixPath(path).name)
             stats["slash"] += n
             new, n = rewrite_join(new, joins, new_path)
             stats["join"] += n
             new, n = rewrite_srcvar(new, new_path, path)
             stats["srcvar"] = stats.get("srcvar", 0) + n
-        if moved and path.endswith(".py"):
-            top = next(o for o in tops if under(old_file, o))
-            new, n = rewrite_parents(new, old_file, path, top, new_path[top], residue)
-            stats["parents"] += n
         if new != text:
+            if path.endswith(".py"):
+                try:
+                    compile(new, path, "exec")
+                except SyntaxError as error:
+                    residue.append(f"{path}: rewrite broke the syntax ({error}); kept the old text")
+                    continue
             (ROOT / path).write_bytes(new.encode("utf-8"))
             changed.append(path)
     roots = update_colcon_roots(tracked())
@@ -543,6 +562,10 @@ def run(wave: str, dry_run: bool) -> None:
     print(f"colcon_roots: {roots}")
     for line in sorted(set(residue)):
         print(f"  manual: {line}")
+    print_report()
+
+
+def print_report() -> None:
     report = residue_report()
     print(f"legacy residue: {len(report)}")
     for line in report:
@@ -559,26 +582,16 @@ def main() -> None:
     args = parser.parse_args()
     if args.srcvars:
         mapping = {r["legacy"]: r["path"] for r in load_roots() if r.get("wave") == args.wave and r.get("legacy")}
-        changed = []
-        for path in tracked():
-            if not eligible(path, False):
-                continue
+        for path in (path for path in tracked() if eligible(path, False)):
             text = read(ROOT / path)
-            if text is None:
-                continue
-            new, n = rewrite_srcvar(text, mapping, path)
+            new, n = rewrite_srcvar(text, mapping, path) if text is not None else (text, 0)
             if n:
                 (ROOT / path).write_bytes(new.encode("utf-8"))
-                changed.append(path)
                 print(f"  srcvar x{n}: {path}")
-        return
-    if args.report or not args.wave:
-        report = residue_report()
-        print(f"legacy residue: {len(report)}")
-        for line in report:
-            print(f"  {line}")
-        return
-    run(args.wave, args.dry_run)
+    elif args.report or not args.wave:
+        print_report()
+    else:
+        run(args.wave, args.dry_run)
 
 
 if __name__ == "__main__":

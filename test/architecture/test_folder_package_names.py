@@ -6,38 +6,44 @@ package name differs goes into this table in the same commit.
 """
 
 import os
+import sys
 from pathlib import Path
 import xml.etree.ElementTree as ET
 
 ROOT = Path(__file__).resolve().parents[2]
-SRC = ROOT / "src"
+sys.path.insert(0, str(ROOT / "tools" / "harness"))
+from colcon_roots import colcon_roots  # noqa: E402
+
 SKIP_DIRS = {"build", "install", "log", ".worktrees", ".git", "node_modules", "__pycache__"}
 
-# Relative folder under src/ (repo-relative for the operations/ root, D-427 wave 3b)
+# Repo-relative folder (D-427: every colcon root, so moves rewrite these as plain paths)
 # -> ROS package name. Mirrored in src/AGENTS.md.
 FOLDER_TO_PACKAGE = {
-    "contracts/foundation": "core_common",
-    "hmi/face": "emotion",
-    "products/omx/adapter": "omx_adapter",
-    "products/omx/profile": "omx",
-    "products/pinky_pro/adc": "sensor_adc",
-    "products/pinky_pro/lamp": "lamp_control",
-    "products/pinky_pro/profile": "pinky_pro",
-    "runtime/api_web": "core_api_web",
-    "runtime/events": "core_events",
-    "runtime/gateway": "core",
-    "runtime/sensing": "control",
-    "runtime/services": "core_features",
+    "src/contracts/foundation": "core_common",
+    "middleware/ui/face": "emotion",
+    "middleware/ui/robot": "dashboard",
+    "shared/web": "web_common",
+    "src/products/omx/adapter": "omx_adapter",
+    "src/products/omx/profile": "omx",
+    "src/products/pinky_pro/adc": "sensor_adc",
+    "src/products/pinky_pro/lamp": "lamp_control",
+    "src/products/pinky_pro/profile": "pinky_pro",
+    "src/runtime/api_web": "core_api_web",
+    "src/runtime/events": "core_events",
+    "src/runtime/gateway": "core",
+    "src/runtime/sensing": "control",
+    "src/runtime/services": "core_features",
     "operations/vision": "rosy_vision",  # D-377 rosy_<word>; D-427 target folder is the word itself
     "operations/processes/cell": "rosy_cell",
+    "learning/envs/isaac": "isaac_sim",
 }
 
 
 def _packages():
-    """folder (relative to src/, or to the repo under operations/) -> package name,
+    """repo-relative folder -> package name over every colcon root,
     skipping build trees and COLCON_IGNORE."""
     found = {}
-    for dirpath, dirnames, filenames in (step for top in (SRC, ROOT / "operations") for step in os.walk(top)):
+    for dirpath, dirnames, filenames in (step for top in colcon_roots() for step in os.walk(ROOT / top)):
         if "COLCON_IGNORE" in filenames:
             dirnames[:] = []
             continue
@@ -45,7 +51,7 @@ def _packages():
         if "package.xml" in filenames:
             folder = Path(dirpath)
             name = ET.parse(folder / "package.xml").getroot().findtext("name", "").strip()
-            found[folder.relative_to(SRC if folder.is_relative_to(SRC) else ROOT).as_posix()] = name
+            found[folder.relative_to(ROOT).as_posix()] = name
     return found
 
 

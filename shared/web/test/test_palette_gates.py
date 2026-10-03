@@ -23,7 +23,7 @@ import token_themes
 
 TOKENS = (Path(__file__).parents[3] / "shared") / "web" / "tokens.css"
 WEB_COMPONENTS = TOKENS.parent / "components.css"
-DASHBOARD = TOKENS.parent.parent / "dashboard"
+DASHBOARD = (TOKENS.parents[2] / "middleware" / "ui") / "robot"
 
 # 신호 색은 현대 다크 UI 액센트 대역에 있어야 한다. 대역은 취향이 아니라
 # 실측이다 — Radix 9, Tailwind 500, Linear, Vercel의 액센트가 모두

@@ -46,7 +46,7 @@ def face(monkeypatch):
     rclpy.qos.ReliabilityPolicy = SimpleNamespace(RELIABLE="reliable")
     ament = ModuleType("ament_index_python")
     ament.packages = ModuleType("ament_index_python.packages")
-    ament.packages.get_package_share_directory = lambda _name: str((FACE.parents[2] / "src" / "hmi"))
+    ament.packages.get_package_share_directory = lambda _name: str(FACE.parent)
     std_msgs = ModuleType("std_msgs")
     std_msgs.msg = ModuleType("std_msgs.msg")
     std_msgs.msg.String = object

@@ -13,9 +13,8 @@ import re
 from pathlib import Path
 
 PILOT = Path(__file__).resolve().parents[1]
-HMI = (PILOT.parents[2] / "src" / "hmi")
-COMMON = HMI / "web_common"
-REPO = HMI.parents[1]
+REPO = PILOT.parents[2]
+COMMON = REPO / "shared" / "web"
 APP = REPO / "src/runtime/api_web/core_api_web/api/app.py"
 
 IMPORT = re.compile(

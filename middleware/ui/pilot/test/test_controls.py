@@ -113,7 +113,7 @@ def test_gripper_state_labels():
 
 def test_gripper_goal_bounds_match_the_sim_contract():
     import re
-    contract = (MODULE.parents[2] / "contracts/foundation/core_common/protocol/omx_sim.py").read_text(encoding="utf-8")
+    contract = ((MODULE.parents[3] / "src") / "contracts/foundation/core_common/protocol/omx_sim.py").read_text(encoding="utf-8")
     bounds = [float(re.search(rf"^GRIPPER_GOAL_{edge}_DURATION_S = ([0-9.]+)$", contract, re.M).group(1))
               for edge in ("MIN", "MAX")]
     out = _run_js("console.log(JSON.stringify([m.GRIPPER_GOAL_MIN_S, m.GRIPPER_GOAL_MAX_S]))")

@@ -35,7 +35,7 @@ SRC = ROOT / "src"
 #: ``envs`` is the first folder under the ``learning`` colcon root (D-427 wave 1);
 #: ``apps``, ``vision`` and ``processes`` are under the ``operations`` root (D-427 wave 3b).
 DOMAINS = {"contracts", "runtime", "drivers", "products", "hmi", "site", "sim", "envs",
-           "apps", "vision", "processes", "fleet"}
+           "apps", "vision", "processes", "fleet", "ui", "web"}
 
 #: P2 library/contract tier: no process of their own (runtime gates N/A).
 LIBRARY_PACKAGES = {"core_common", "core_events", "core_features", "core_api_web", "web_common"}
@@ -557,7 +557,7 @@ SIZE_VERDICTS = {
         "the profile loader out if MoveIt (D-402 follow-up) adds a second planner. Re-judged at 714 "
         "after the review's accepted-recipe item check, release rejection and fingertip overhang",
     ),
-    "hmi/dashboard/app.js": (
+    "ui/robot/app.js": (
         803,
         "split: the shell's session/auth/refresh cycle, the Escape e-stop handler, the goal "
         "tracking, the mode bindings and the formation cell wiring grew with D-383/D-385/D-396 "
@@ -632,8 +632,9 @@ ROLE_DIR = {
     "core_api_web": ("runtime", "api_web"),
     "core_common": ("contracts", "foundation"),
     "control": ("runtime", "sensing"),
-    "web_common": ("hmi", "web_common"),
-    "emotion": ("hmi", "face"),
+    "web_common": ("web",),  # shared/web (D-427 wave 4b)
+    "emotion": ("ui", "face"),  # middleware/ui/face (D-427 wave 4b)
+    "dashboard": ("ui", "robot"),  # middleware/ui/robot (D-427 wave 4b)
     "pinky_pro": ("products", "pinky_pro", "profile"),
     "bringup": ("products", "pinky_pro", "bringup"),
     "sensor_adc": ("products", "pinky_pro", "adc"),
