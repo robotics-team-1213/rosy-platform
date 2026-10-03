@@ -4733,6 +4733,26 @@
 - Gate: partial Linux transport proof only; broad Linux suite is not green. See docs/validation/cell-fleet-uds-2026-10-03/README.md. G7/G9, ROS Cell composition, thin sheets and full two-layer/two-pallet Gazebo acceptance remain open. No deploy, credential registration, physical enablement or push.
 
 
+## 2026-10-03 · uncommitted · docs(adr): propose D-431 NCNN inference with OpenCV
+- Change: target NCNN for Pi YOLO object_det, keep OpenCV/NumPy processing, distinguish weight reuse from numerical identity, require backend/manifest/delivery/device gates; lane_seg has a separate migration gate. D-430 is reserved by the existing safety ADR worktree.
+- Evidence: official Ultralytics NCNN/Pi and Tencent OpenCV interoperability references; current ONNX-only exporter/loader and cv2 source inspected.
+- Gate: documentation only. No actual trained-model NCNN conversion, ARM64 installation or device inference performed.
+- Validation: network/harness contracts 82 passed, 1 history-lint test deselected; standalone full harness lint 0 errors / 26 existing staleness warnings. Initial new-record encoding failure corrected and regenerated before final checks.
+
+
+## 2026-10-03 · uncommitted · docs(plan): schedule D-431 NCNN migration
+- Change: user-approved D-431 architecture marked Accepted; T0-T7 plan registered for model/baseline, manifest, adapter, export/parity, delivery/rollback, ARM64 dependency, device acceptance, and independent lane-model evaluation.
+- Evidence: D-431 and current exporter/loader/intake/deploy readers inspected; document contract checks and harness lint run before commit.
+- Gate: plan only; implementation and device/field validation remain pending. Existing OpenCV processing and ONNX rollback remain part of the plan.
+- Validation: final document contracts 82 passed / 1 history-lint test deselected; standalone full harness lint 0 errors / 26 existing warnings.
+
+## 2026-10-03 · uncommitted · feat(perception): D-431 NCNN/OpenCV 구현과 실제 차선 Pi 재생
+
+- 변경: NCNN schema /2·CPU session·YOLO/TorchScript lane export·실제 프레임 parity·intake 증거 검사·hash 고정 설치·doctor·재생 bench. 기존 OpenCV 전처리를 사용한다.
+- 증거: docs/validation/pi-ncnn-2026-10-03/README.md. 실제 차선 20프레임 분류 일치 100%, 제품 adapter ARM64 재생 오류 0. NCNN 차선 p95 474.59ms, 동일 원본 ONNX FP32 252.22ms.
+- gate 변화: 없음. 운영 차선 전환 HOLD. 학습 YOLO·30분 동시 부하·배포/rollback·현장 수용은 남아 있다.
+- 결정: D-431 Accepted, 구현 및 조건부 lane 평가 기록.
+
 ## 2026-10-03 · uncommitted · docs: D-432 common discovery and development link mode
 - 변경: 모든 앱·장치의 발견/호환성/승인/세션/재연결 책임을 공통 계약으로 기록. 개발 모드 코드 생략, 운영 코드 승인 확장, Fleet→CORE 인증 전환과 현 pin 예외, 트래픽/자원 제한, 역할별 이행 순서·실 AP 수용 기준을 명시. D-431은 다른 브랜치의 미착지 ADR로 gap 등록.
 - 증거: 현재 mDNS/NSD·FleetAgent·주소 변경·개발 인증 소스 대조와 기존 ADR 교차 검토. 검증 명령: harness generate/lint, test_network_topology_contracts.py 및 test_harness_contracts.py. 최초 검색·DHCP 변경·실 AP 트래픽 수용은 후속 단계.
@@ -4744,3 +4764,24 @@
 - 변경: 구 이미지의 missing state-directory 문제와 PID 1 transient bootstrap, exact d-rule 권한 경계, pending 재시도 및 rollback 녹화 보존을 실행 계획으로 기록했다.
 - 증거: implementation 및 host regression과 연계. 실제 새 payload 자동 적용 수락은 별도 장치 readback 단계다.
 - gate 변화: 없음.
+
+## 2026-10-03 · uncommitted · docs: D-434 model PC and site PC roles, Isaac Sim 5.1, low-memory rules
+- 변경: `docs/adr/D-434-model-pc-and-site-pc-roles.md` 추가(Accepted, 사용자 결정), ADR Log 행, D-322 버전 개정 부록(5.1 유지), `harness.yaml` adr_gaps에 D-433(다른 브랜치) 추가, 교훈 `docs/solutions/workflow-issues/cuda-wheel-install-over-wifi-times-out-on-the-model-pc-2026-10-03.md`
+- 증거: `python tools/harness/rosy_harness.py generate` 뒤 lint·`test/test_harness_contracts.py` 실행
+- gate 변화: 없음(문서만). 모델 PC GPU 학습·NCNN·Isaac 실행, 관제 PC 사이트 스택 이전은 미수용
+- 결정: D-434 Accepted, D-322 부록
+- 교훈: 큰 CUDA wheel 설치는 Wi-Fi에서 uv 기본 timeout으로 끊긴다 — `UV_HTTP_TIMEOUT=600`, 분리 실행, 완료 표식으로 확인
+
+## 2026-10-03 · uncommitted · docs: ADR role and Fleet terminology review
+
+- 변경: `docs/assessments/2026-10-03-adr-role-and-terminology-review.md`에 Fleet 서비스/다중 로봇 조정/범용 작업 실행의 혼합, D-290 선택지 처분, 역할과 계층 분류, 로컬 트랜잭션, ER2 후보 fence, 작업 용어의 정합화 검토를 기록했다. 세 대안과 단일 팔·두 로봇·이동 조작·stop 경쟁·링크 상실 사례로 후속 ADR 결정 범위를 정리했다.
+- 증거: D-12/D-21/D-55/D-290/D-296/D-298/D-326/D-333/D-358/D-369/D-392/D-399/D-413/D-427/D-429/D-430, CONCEPTS.md, 설계 v0.2와 현재 proposal store 정적 검토.
+- gate 변화: 없음. 검토·추천만이며 Accepted ADR, 공개 API, 코드·폴더 배치, policy dispatch, ARTIFACT/DEVICE/FIELD 상태는 변경하지 않는다.
+- 검증: harness lint 0 errors/26 warnings, 문서 링크 14개 누락 0, diff whitespace 검사 통과. 문서·구조 계약은 128 passed/1 skipped/1 failed. 실패는 src만 스캔하는 모듈 기준선 시험과 learning/envs/isaac으로 이동된 isaac_sim의 불일치이며 이번 검토의 수정 대상이 아니다.
+
+## 2026-10-03 · uncommitted · docs: D-435 work orchestration and Fleet authority proposal
+
+- 변경: D-435 Proposed 초안·ADR Log·docs ADR 목록과 1차 검토의 2차 보강을 기록했다. 단일 정본의 범위, 비로봇 공유 자원, 수동/정지 경로, 숙고형 모델과 기타 판단의 권한 차이, 로컬 Action과 작업 오케스트레이션, UNKNOWN과 점유 해제의 경계를 명시했다.
+- 증거: D-290/D-298/D-369/D-399/D-413/D-429와 현재 PlanBundle·cell submission 대조. 단일 팔·수동 조작·운송·formation·미래 컨베이어·복합 로봇·stop 경쟁·불명 Action·독립 셀 반례를 초안에 기록했다.
+- gate 변화: 없음. Proposed만 추가했으며 기존 Accepted 계약과 공개 API·코드·정지 fence·원장·policy dispatch·장치 수용은 변경하지 않는다.
+- 검증: 문서 계약 83 passed/26 existing history warnings(full lint·generated records 포함), D-435 제목/상태/색인 일치·로컬 링크 16개 누락 0·반례 9개·diff whitespace 검사 통과. 이전 isaac_sim 구조 기준선 실패는 별도 미해결이며 이번 문서 검증의 통과 범위에 포함하지 않는다.

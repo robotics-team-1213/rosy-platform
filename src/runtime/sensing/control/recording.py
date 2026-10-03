@@ -44,7 +44,7 @@ COMPRESSED_CAMERA_TOPIC = CAMERA_TOPIC + "/compressed"
 # sees walls, never floor paint.
 SCAN_TOPIC = "scan"
 ODOM_TOPIC = "odom"
-# Topics tools/perception/dataset/extract.py attaches to each frame as side
+# Topics learning/training/perception/dataset/extract.py attaches to each frame as side
 # data, keyed by these relative names (prelabel.py reads SHADOW_TOPIC).
 SIDE_TOPICS = ("cmd_vel", "line/observation", SHADOW_TOPIC, SCAN_TOPIC, ODOM_TOPIC)
 

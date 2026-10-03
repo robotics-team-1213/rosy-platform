@@ -10,6 +10,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 for relative in (
+    "contracts/skill/src",
     "modules/execution/src",
     "modules/skills/api/src",
 ):

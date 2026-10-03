@@ -17,6 +17,10 @@
 onnxruntime==1.30.0 \
     --hash=sha256:6c32a000d5139a38ba9349030b0032e3331acb559d596b22738d9d2b343a2b83 \
     --hash=sha256:fa688e7891a6aa206636fe7372e27ee75fd17713289f6b4fc7b190e0a7de9328
+# D-431: CPython 3.12 manylinux ARM64/x86_64; no numpy/OpenCV replacement.
+ncnn==1.0.20260526 \
+    --hash=sha256:fc79db927e1464944343e51da754dbacb5777ecc76da6543cf3ffdf4e485a1f6 \
+    --hash=sha256:fbf61b5e4f003578ebffad9db557b85dd343eb213223730206e1951c55f73560
 flatbuffers==25.12.19 \
     --hash=sha256:7634f50c427838bb021c2d66a3d1168e9d199b0607e6329399f04846d42e20b4
 packaging==26.3 \

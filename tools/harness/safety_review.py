@@ -37,7 +37,7 @@ import sys
 import yaml
 
 #: main when this check landed (D-430 wave 0). Its ancestors are never checked.
-BASELINE = "46b8720c297db5729297de4442051a0265f097ea"
+BASELINE = "46b8720c297db5729297de4442051a0265f097ea"  # git commit revision
 #: Reviewed historical commits after BASELINE that touch safety paths without a
 #: trailer, as full SHA -> reason. Add only with an independent review.
 EXEMPT: dict[str, str] = {}

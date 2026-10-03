@@ -9,7 +9,9 @@
 # makes the store writable for the service, installs the unit and timer, and
 # enables the timer only once the config has no <...> placeholders left. With
 # `backend: hf` only, an EMPTY token file placeholder (never token content).
-# Then runs `rosy_ml doctor --watch-config` as the service user. Never
+# Installs the unit's entry point /opt/rosy/model-watch/bin/rosy-model-watch,
+# which finds the watcher in the checkout before or after the D-427 move.
+# Then runs its `doctor --watch-config` as the service user. Never
 # overwrites an existing config, key, known_hosts or token file.
 # --dry-run prints what would change and needs no root.
 set -euo pipefail
@@ -22,7 +24,7 @@ while [ $# -gt 0 ]; do
     --dry-run) DRY=1 ;;
     --src) SRC=$2; shift ;;
     --venv) VENV=$2; shift ;;
-    -h|--help) sed -n '2,14p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,16p' "$0"; exit 0 ;;
     *) echo "unknown option: $1" >&2; exit 2 ;;
   esac
   shift
@@ -37,6 +39,7 @@ TOKEN=/etc/rosy/site/secrets/hf_token
 UNITDIR=/etc/systemd/system
 DROPIN=$UNITDIR/rosy-model-watch.service.d
 HERE=$(cd "$(dirname "$0")" && pwd)
+WRAPPER=/opt/rosy/model-watch/bin/rosy-model-watch
 
 run() { if [ "$DRY" = 1 ]; then printf '+ %s\n' "$*"; else "$@"; fi; }
 # first uncommented `key: value` of the config (the example when none is installed yet)
@@ -92,6 +95,7 @@ if [ "$BACKEND" = hf ]; then
   run chmod 0640 "$TOKEN"
 fi
 
+run install -D -o root -g root -m 0755 "$HERE/rosy-model-watch" "$WRAPPER"
 run install -m 0644 "$HERE/rosy-model-watch.service" "$HERE/rosy-model-watch.timer" "$UNITDIR/"
 run systemctl daemon-reload
 
@@ -114,8 +118,12 @@ if [ -x "$VENV/bin/python" ]; then
   done
 fi
 
-if [ "$configured" = 1 ] && [ -x "$VENV/bin/python" ] && [ -f "$SRC/tools/perception/rosy_ml.py" ]; then
-  run runuser -u "$SVC" -- "$VENV/bin/python" "$SRC/tools/perception/rosy_ml.py" doctor --watch-config "$CONFIG" \
+# This checkout's copy of the wrapper (none is installed yet under --dry-run) says
+# whether $SRC holds the watcher at either location.
+if [ "$configured" = 1 ] && [ -x "$VENV/bin/python" ] \
+    && ROSY_MODEL_WATCH_SRC=$SRC bash "$HERE/rosy-model-watch" locate >/dev/null 2>&1; then
+  run runuser -u "$SVC" -- env ROSY_MODEL_WATCH_SRC="$SRC" ROSY_MODEL_WATCH_VENV="$VENV" \
+    "$WRAPPER" doctor --watch-config "$CONFIG" \
     || echo "doctor found problems (lines marked with a cross above)"
 else
   echo "doctor skipped: needs a filled config, $VENV and a checkout in $SRC (see deploy/site/README.md)"

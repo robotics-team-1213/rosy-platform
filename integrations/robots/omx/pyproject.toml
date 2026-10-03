@@ -7,7 +7,7 @@ name = "rosy-integration-robot-omx"
 version = "0.1.0"
 description = "OMX binding for the ROSY pallet transfer Skill and local Action owner"
 requires-python = ">=3.12"
-dependencies = ["rosy-skill-manipulation==0.1.0"]
+dependencies = ["rosy-contracts-skill==0.1.0", "rosy-skill-manipulation==0.1.0"]
 
 [tool.setuptools]
 package-dir = {"" = "src"}

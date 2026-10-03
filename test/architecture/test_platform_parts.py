@@ -47,7 +47,6 @@ MANIFEST = ROOT / "tools" / "harness" / "platform_parts.yaml"
 #: Roots (by target) whose folder is itself a package dir, so their dotted package starts at the prefix.
 PACKAGE_DIR_ROOTS = {
     "operations/execution/src/rosy/execution/api",
-    "middleware/execution/local",  # until 2c turns it into a wheel root; 2c removes this line
     "operations/execution/src/rosy/execution/site",
     "middleware/core/services/core_features/safety",  # D-430 §1 sub-root inside the services package
     "middleware/core/services/core_features/decision",  # D-429 §1 device local rules sub-root
@@ -65,17 +64,10 @@ KNOWN_VIOLATIONS = {
     ("integrations/robots/omx", "middleware/apps/device/omx/adapter"): (
         "integrations -> middleware: cell_workflow reuses the adapter pick-place journal"
     ),
-    ("operations/execution/src/rosy/execution/api", "middleware/execution/local"): (
-        "operations -> middleware: PlanBundle embeds local receipt identity types"
-    ),
-    ("operations/execution/src/rosy/execution/api", "middleware/skills/api"): (
-        "operations -> middleware: PlanBundle steps carry SkillInvocation (Skill envelope belongs in contracts)"
-    ),
-    ("operations/processes/palletizing", "middleware/skills/api"): (
-        "operations -> middleware: palletizing builds SkillInvocation steps (Skill envelope belongs in contracts)"
-    ),
-    ("middleware/apps/device/omx/adapter", "external:lerobot"): (
-        "middleware -> lerobot training stack: lerobot_export.py is learning/curation code still in the adapter"
+    ("learning/curation/omx", "middleware/apps/device/omx/adapter"): (
+        "learning -> middleware: lerobot_export validates episodes with omx_adapter.demonstration "
+        "(D-427 Q6: replaces the adapter -> external:lerobot edge 1c removed; 2b moves the check "
+        "to the Episode profile and deletes this entry)"
     ),
     ("learning/training/perception", "middleware/perception"): (
         "learning -> middleware: dataset tools reuse control.recording topics and perception helpers"
@@ -416,7 +408,15 @@ def test_import_rules_only_shrink():
 
 #: (file, matched text) pairs the old-path scan reports that are not paths, e.g. a
 #: path-traversal rejection case like "../../etc/passwd". Stale entries fail.
-LEGACY_SCAN_ALLOWLIST: set[tuple[str, str]] = set()
+LEGACY_SCAN_ALLOWLIST: set[tuple[str, str]] = {
+    # D-427 1-pre: the site model-watch wrapper falls back to the pre-move checkout
+    # layout on purpose, so a site source copy older than wave 1 keeps working.
+    ("deploy/site/rosy-model-watch", "$SRC/tools/perception"),
+    ("learning/training/perception/test/test_site_install_model_watch.py", "tools/perception"),
+    # ... and the two entries above name those strings themselves.
+    ("test/architecture/test_platform_parts.py", "$SRC/tools/perception"),
+    ("test/architecture/test_platform_parts.py", "tools/perception"),
+}
 
 
 def _read_text(path: str) -> str | None:

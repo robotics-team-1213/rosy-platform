@@ -124,7 +124,11 @@ class ObjectDetModel:
         verify_files(manifest)
         factory = session_factory or detector_session
         try:
-            session = factory(manifest.onnx_file(), threads)
+            if session_factory is None and manifest.backend == "ncnn":
+                from .ncnn_session import NcnnSession
+                session = NcnnSession(manifest, threads)
+            else:
+                session = factory(manifest.onnx_file(), threads)
         except Exception as exc:
             raise ManifestError(f"session: {exc}") from exc
         out = np.asarray(session.run(np.zeros(manifest.input.shape, np.float32)))

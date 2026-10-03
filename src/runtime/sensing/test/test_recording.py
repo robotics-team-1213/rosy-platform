@@ -105,7 +105,7 @@ def test_bag_command(tmp_path):
 
 
 def test_record_topics_include_the_lidar_for_wall_labels():
-    # D-379: tools/perception/dataset/autolabel.py projects scan into the camera
+    # D-379: learning/training/perception/dataset/autolabel.py projects scan into the camera
     assert "scan" in RECORD_TOPICS and "odom" in RECORD_TOPICS
 
 
