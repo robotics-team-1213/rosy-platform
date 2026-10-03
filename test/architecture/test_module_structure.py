@@ -77,7 +77,7 @@ CONTROL_SPLIT = "docs/plans/2026-09-22-control-package-split-design.md"
 #: P6 verdicts: path (relative to src/) or package name -> (lines at verdict, verdict).
 SIZE_VERDICTS = {
     "fleet": (
-        29_017,
+        29_657,
         "split: server HTTP boundary, console, signals and the mission-control stores are separate owners "
         "today; re-judged 2026-10-03 at 28001 for D-413 internal Cell producer authentication: bounded "
         "schema, environment credential registry and evidence service are separate modules; goal completion "
@@ -169,7 +169,8 @@ SIZE_VERDICTS = {
         "added. UI assets temporarily still count under fleet; Task 9 in "
         "docs/plans/2026-10-03-app-ownership-shared-transport-and-layout-migration.md moves their "
         "source ownership into ui/console with installed-resource acceptance. The server subpackage "
-        "split remains open and the existing +150 package allowance stays unchanged",
+        "split remains open and the existing +150 package allowance stays unchanged"
+        "; re-judged 2026-10-04 at 29657 for D-438 phase 1: the stuck resolver is two new focused modules (stuck_resolver.py pure core, stuck_resolver_loop.py async loop) and the shared gather lives with the console routes it serves — verdict unchanged",
     ),
     "site/fleet/fleet/server/cell_job_store.py": (
         824,
@@ -257,6 +258,10 @@ SIZE_VERDICTS = {
     "runtime/sensing/control/safety/node.py": (
         795,
         "accept: legacy comparison-graph publisher pinned by test_module_separation; no new work (X3)",
+    ),
+    "site/fleet/fleet/server/app.py": (
+        627,
+        "accept: the FastAPI factory and lifespan own every background task and route install; D-438 added the resolver task, hub event fan-out and shared-gather wiring (2026-10-04) — the resolver logic itself lives in stuck_resolver*.py",
     ),
     "site/fleet/fleet/server/console.py": (
         1138,
