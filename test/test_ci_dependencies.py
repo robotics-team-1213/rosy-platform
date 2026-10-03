@@ -17,7 +17,18 @@ def test_root_contract_step_sources_the_colcon_install():
     step = workflow.split("- name: Test (deployment and release contracts)", 1)[1]
     step = step.split("- name:", 1)[0]
     assert ". /opt/ros/jazzy/setup.sh" in step
-    assert ". src/install/setup.sh" in step
+    # D-427: colcon builds from the repo root, so the overlay is install/, not src/install/.
+    assert ". install/setup.sh" in step
+    assert "src/install" not in workflow
+
+
+def test_ci_colcon_build_runs_from_the_repo_root_over_the_manifest_roots():
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+    step = workflow.split("- name: Build (colcon)", 1)[1].split("- name:", 1)[0]
+    assert "cd src" not in workflow
+    assert 'COLCON_ROOTS="$(python3 tools/harness/colcon_roots.py)"' in step
+    assert "--base-paths $COLCON_ROOTS" in step
+    assert "--build-base build --install-base install --log-base log" in step
 
 
 def test_ci_installs_the_ext4_reader_for_the_card_diagnostics_test():
