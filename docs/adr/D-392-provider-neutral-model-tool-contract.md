@@ -2,7 +2,7 @@
 
 **Status:** Accepted (2026-10-01, logical tool-call and result boundary). No new public endpoint, autonomous Mission admission, device Action, ROS control, stop operation, provider enablement, or physical acceptance is approved.
 
-**부분 보강 제안 (2026-10-03, D-429, Proposed — Accepted 전 미발효):** [D-429](D-429-five-concerns-control-port-and-site-devices.md) §3이 §4 금지 목록에 사이트 장치 구동(신호 점등·순서, 문, 컨베이어, PLC 출력)을 명시적으로 더한다. 사이트 장치 변경은 사람 운영자가 승인하는 후보로만 열리며 그 스키마는 별도 ADR이다. §7 밸브는 그대로다.
+**부분 보강 (2026-10-03, D-429 Accepted):** [D-429](D-429-five-concerns-control-port-and-site-devices.md) §3이 §4 금지 목록에 사이트 장치 구동(신호 점등·순서, 문, 컨베이어, PLC 출력)을 명시적으로 더한다. 사이트 장치 변경은 사람 운영자가 승인하는 후보로만 열리며 그 스키마는 별도 ADR이다. §7 밸브는 그대로다.
 
 ### Context
 
