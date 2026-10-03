@@ -112,3 +112,27 @@ def test_default_class_list_is_the_decision_9_list_and_mismatch_stops():
     assert f'CLASSES = "{DEFAULT_CLASSES}"  #@param' in form
     read = _cell("#@title 4.")
     assert "class_mismatch(_form, ds_classes)" in read and "raise RuntimeError" in read
+
+
+def test_wandb_is_optional_and_the_key_stays_secret():
+    form = _cell("#@title 2.")
+    assert 'WANDB_PROJECT = "rosy-perception"  #@param' in form
+    assert 'USE_WANDB = True  #@param {type:"boolean"}' in form
+    cells = _code_cells()
+    wb = _cell("#@title 5c.")
+    assert cells.index(wb) < cells.index(_cell("#@title 6."))
+    assert 'userdata.get("WANDB_API_KEY")' in wb and "SecretNotFoundError" in wb
+    assert "NotebookAccessError" in wb and "except ImportError" in wb
+    assert 'os.environ.get("WANDB_API_KEY")' in wb and "wandb.init(" in wb
+    assert "WANDB_RUN = WANDB_EXPERIMENT = None" in wb and "건너뜁니다" in wb
+    assert "del _key" in wb and "wandb.login" not in wb.replace("wandb.login()은", "")
+    for src in cells:  # the key is never printed or written out
+        assert not re.search(r"print\([^)]*_key", src)
+        assert not re.search(r"(write_text|open)\([^)]*_key", src)
+    assert "import wandb" not in (TRAINING / "rosy_lane_model.py").read_text(encoding="utf-8")
+    train = _cell("#@title 6.")
+    assert "on_epoch=_log_epoch" in train and "WANDB_RUN.log(" in train
+    export = _cell("#@title 7.")
+    assert "experiment=WANDB_EXPERIMENT" in export
+    assert 'summary["model_revision"] = MODEL_REVISION' in export and "WANDB_RUN.finish()" in export
+    assert not re.search(r"wandb_[A-Za-z0-9]{20,}|[0-9a-f]{40}", NB.read_text(encoding="utf-8"))

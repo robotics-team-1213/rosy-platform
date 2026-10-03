@@ -176,6 +176,20 @@ def test_train_reduces_loss_and_reports_iou():
     assert math.isfinite(history[-1]["val_loss"])
 
 
+def test_train_calls_on_epoch_once_per_epoch_with_the_history_row():
+    torch.manual_seed(0)
+    seen = []
+    result = rlm.train(rlm.LaneUNet(n_classes=2, base=4), _Synthetic(8, 1), _Synthetic(2, 2),
+                       epochs=3, lr=5e-3, batch_size=4, device="cpu", num_workers=0, log=None,
+                       on_epoch=seen.append)
+    assert [r["epoch"] for r in seen] == [1, 2, 3]
+    for row, hist in zip(seen, result["history"]):
+        assert {k: row[k] for k in hist} == hist
+        vals = [v for v in hist["val_iou"].values() if v is not None]
+        assert row["mean_val_iou"] == (pytest.approx(sum(vals) / len(vals)) if vals else None)
+    assert "mean_val_iou" not in result["history"][0]  # the hook gets a copy
+
+
 def test_train_restores_best_epoch():
     torch.manual_seed(1)
     model = rlm.LaneUNet(n_classes=2, base=4)

@@ -74,6 +74,7 @@ md("""
 - `CLASSES`: 기본값은 팀 기본 클래스 목록이다(D-373 결정 9: 0 floor/background, 1 lane_line/lane_marking, 2 wall/wall, 3 drivable/drivable, 4 stop_line/stop_line, 5 crosswalk/ignore). `이름:role,이름:role,...`(출력 채널 순서)이고, **데이터셋 클래스와 다르면 멈춘다.** 데이터셋이 다른 목록이면 그 목록을 적거나 비운다(비우면 데이터셋 manifest의 클래스를 그대로 쓴다).
 - `COLOR`/`SCALE`/`MEAN`/`STD`: 학습 전처리. **이 값이 그대로 manifest에 적히고 로봇이 같은 값으로 전처리한다.**
 - `CAMERA_PROFILE_REVISION`: 비워 두면 데이터셋 `sources[]`에서 가져온다.
+- `USE_WANDB`/`WANDB_PROJECT`: (선택) Weights & Biases 실험 기록. 키는 Colab Secret `WANDB_API_KEY`에만 둔다(5c단계). 키가 없으면 기록 없이 학습한다.
 """)
 code('''
 #@title 2. 입력 칸
@@ -91,6 +92,8 @@ EPOCHS = 30  #@param {type:"integer"}
 LR = 0.001  #@param {type:"number"}
 BATCH = 8  #@param {type:"integer"}
 CAMERA_PROFILE_REVISION = ""  #@param {type:"string"}
+WANDB_PROJECT = "rosy-perception"  #@param {type:"string"}
+USE_WANDB = True  #@param {type:"boolean"}
 
 from rosy_lane_model import Preprocess
 from store import parse_dataset_ref
@@ -234,6 +237,44 @@ print("출력 모양 OK:", tuple(_out.shape))
 ''')
 
 md("""
+### 5c. (선택) 실험 기록 (W&B)
+
+`USE_WANDB`가 켜져 있고 Colab Secret `WANDB_API_KEY`(또는 환경 변수)가 있으면 Weights & Biases에 run을 하나 만든다.
+에폭마다 손실과 클래스별 검증 IoU가 기록되고, run 링크가 manifest의 `metrics.experiment`에 들어간다.
+키가 없으면 건너뛰고 학습은 그대로 진행한다. **키를 셀에 붙여 넣지 않는다**(공개 저장소). 키는 출력하지도, 파일에 쓰지도 않는다.
+""")
+code('''
+#@title 5c. (선택) W&B 실험 기록
+WANDB_RUN = WANDB_EXPERIMENT = None
+_key = None
+if USE_WANDB:
+    try:
+        from google.colab import userdata
+        try:
+            _key = userdata.get("WANDB_API_KEY")
+        except (userdata.SecretNotFoundError, userdata.NotebookAccessError):
+            _key = None
+    except ImportError:   # Colab 밖(GPU PC): 환경 변수를 쓴다
+        _key = None
+    _key = _key or os.environ.get("WANDB_API_KEY")
+if _key:
+    subprocess.run([sys.executable, "-m", "pip", "install", "-q", "wandb"], check=True)
+    import wandb
+    os.environ["WANDB_API_KEY"] = _key   # 이 프로세스 안에서만; wandb.login()은 ~/.netrc에 키를 쓴다
+    del _key
+    WANDB_RUN = wandb.init(project=WANDB_PROJECT, job_type="train", config={
+        "epochs": EPOCHS, "lr": LR, "batch": BATCH, "classes": EXPORT_CLASSES,
+        "preprocessing": PRE.manifest_kwargs(), "dataset": f"store:{DS_NAME}", "dataset_content_sha": DS_SHA,
+        "camera_profile_revision": CAMERA_PROFILE_REVISION, "repo_commit": REPO_COMMIT,
+        "trainer": TRAINER, "trainer_note": TRAINER_NOTE})
+    WANDB_EXPERIMENT = {"tracker": "wandb", "run_id": WANDB_RUN.id, "url": WANDB_RUN.url,
+                        "project": WANDB_PROJECT}
+    print("W&B run:", WANDB_RUN.url)
+else:
+    print("W&B 기록을 건너뜁니다 (USE_WANDB가 꺼져 있거나 Colab Secret WANDB_API_KEY가 없습니다). 학습은 그대로 진행합니다.")
+''')
+
+md("""
 ## 6. 학습
 
 에폭마다 학습 손실, 검증 손실, 검증 split의 클래스별 IoU를 출력한다.
@@ -243,8 +284,18 @@ code('''
 #@title 6. 학습
 from rosy_lane_model import train
 
+
+
+def _log_epoch(row):
+    if WANDB_RUN is not None:
+        WANDB_RUN.log({"epoch": row["epoch"], "train_loss": row["train_loss"], "val_loss": row["val_loss"],
+                       "mean_val_iou": row["mean_val_iou"],
+                       **{f"val_iou/{k}": v for k, v in row["val_iou"].items() if v is not None}},
+                      step=row["epoch"])
+
+
 result = train(model, train_ds, val_ds, epochs=EPOCHS, lr=LR, batch_size=BATCH, device=DEVICE,
-               ignore_index=IGNORE_INDEX)
+               ignore_index=IGNORE_INDEX, on_epoch=_log_epoch)
 best_epoch = result["best_epoch"]
 VAL_IOU = {k: round(v, 4) for k, v in result["val_iou"].items() if v is not None}
 print(f"가장 좋은 에폭 {best_epoch}/{EPOCHS}의 검증 클래스별 IoU:")
@@ -259,6 +310,7 @@ md("""
 
 `export()`가 opset 17 ONNX와 `model_manifest.json`을 만든다. 전처리 값은 2단계의 `PRE`에서 그대로 가져온다.
 manifest의 `dataset`에는 `store:<이름>`과 내용 해시가 들어간다.
+W&B run이 있으면 그 링크가 `metrics.experiment`에 들어가고, run 요약에 가장 좋은 에폭과 `model_revision`을 적은 뒤 run을 닫는다.
 """)
 code('''
 #@title 7. 내보내기
@@ -268,10 +320,19 @@ TRAINER_ID = f"{TRAINER} colab:rosy_lane_training.ipynb@{REPO_COMMIT} {TRAINER_N
 OUT_DIR = "out/lane_model"
 doc = export(model, OUT_DIR, classes=EXPORT_CLASSES, **PRE.manifest_kwargs(),
              dataset_repo=f"store:{DS_NAME}", dataset_revision=DS_SHA,
-             camera_profile_revision=CAMERA_PROFILE_REVISION, trainer=TRAINER_ID, val_iou=VAL_IOU)
+             camera_profile_revision=CAMERA_PROFILE_REVISION, trainer=TRAINER_ID, val_iou=VAL_IOU,
+             experiment=WANDB_EXPERIMENT)
 MODEL_REVISION = doc["model_revision"]
 print(MODEL_REVISION)
 print("trainer:", TRAINER_ID)
+if WANDB_RUN is not None:
+    WANDB_RUN.summary["best_epoch"] = best_epoch
+    WANDB_RUN.summary["model_revision"] = MODEL_REVISION
+    for _k, _v in VAL_IOU.items():
+        WANDB_RUN.summary[f"best_val_iou/{_k}"] = _v
+    WANDB_RUN.finish()
+    WANDB_RUN = None
+    os.environ.pop("WANDB_API_KEY", None)
 ''')
 
 md("""

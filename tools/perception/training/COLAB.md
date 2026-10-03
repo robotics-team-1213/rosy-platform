@@ -149,6 +149,22 @@ val_ds   = RosyLaneDataset(ds_dir, "val")
 - 모델 입력 `1×3×240×320`, 출력 `1×C×240×320` logit(softmax 전)
 - 전처리(RGB/BGR, 나누는 값, mean, std)를 기억해 둔다. 4단계에 그대로 적는다.
 
+### (선택) 실험 기록: Weights & Biases
+
+학습 곡선과 설정을 남기고 싶을 때만 쓴다. 없어도 학습, 넘기기, intake는 그대로 돈다.
+
+1. [wandb.ai](https://wandb.ai)에서 계정을 만들고 API 키를 받는다.
+2. Colab 왼쪽 열쇠 아이콘(**Secrets**)에 이름 `WANDB_API_KEY`로 키를 넣고 이 노트북의 **노트북 액세스**를 켠다.
+   GPU PC에서는 환경 변수 `WANDB_API_KEY`를 쓴다.
+3. 노트북 2단계의 `USE_WANDB`(기본 켜짐)와 `WANDB_PROJECT`(기본 `rosy-perception`)를 확인한다.
+   키가 없으면 5c단계가 "W&B 기록을 건너뜁니다"를 출력하고 학습은 그대로 진행한다.
+
+**키를 셀에 붙여 넣지 않는다.** 이 저장소는 공개이고, 셀 내용과 출력이 노트북에 저장된다. 노트북은 키를
+출력하지도, 파일(manifest 포함)에 쓰지도 않는다. 에폭마다 손실과 클래스별 검증 IoU가 run에 기록되고,
+run 링크(`tracker`, `run_id`, `url`, `project`)는 manifest의 `metrics.experiment`에 들어간다.
+그래서 데이터셋 내용 해시 → W&B run → `model_revision` → intake 보고서 → 로봇 history로 거슬러 올라갈 수 있다.
+자기 노트북에서는 `train(..., on_epoch=...)`으로 에폭마다 기록하고 `export(..., experiment={...})`로 링크를 남긴다.
+
 ## 4. 내보내기: `export()` 한 번
 
 학습이 끝난 `model` 객체로 호출한다.
