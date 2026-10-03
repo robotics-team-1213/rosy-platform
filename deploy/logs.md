@@ -2117,12 +2117,10 @@
 - 증거: `test/test_platform_cell_owner_assembly.py`(스파이로 폭 확인).
 - gate 변화: 없음.
 
-
 ## 2026-10-03 · uncommitted · feat: tick local Cell workflow on the existing simulation owner node
 - Change: bind a 50 ms timer on the existing ROS node to owner.advance_pending and destroy it at shutdown. The accepted owner uses the durable workflow for phase/gripper gates; no new owner, thread, grant or retry path is created.
 - Evidence: actual owner host regression 38 passed; integrated owner/compiler/boundaries 23 passed; independent review 38 passed plus updated restart suite 5 passed. Semantic removal mutation fails ACCEPTED versus SUCCEEDED and is restored. Production flake8 and quick96 pass; harness lint0errors/26 existing freshness warnings. Installed owner/workflow wheel imports and pip check pass.
 - Gate: SOURCE/LOCAL only. ROS runtime/timer and Gazebo were not executed; Fleet fence/seat integration and full recipe acceptance remain open.
-
 
 ## 2026-10-03 · uncommitted · feat: read live Fleet fence on the simulation Cell owner
 - Change: replace the entrypoint unconditional Fleet-current callback with uncached authenticated GET /api/fleet/dispatch-control on an explicitly configured literal loopback endpoint. Require a separately provisioned viewer secret before ROS loads. Direct HTTP avoids proxies/redirects; status, 8 KiB body, strict generation types and finite JSON checks refuse on uncertainty. Existing Action/stop/rearm stays on UDS. Offload async Fleet rearm I/O so the event loop can answer the owner's reverse readback; preserve operator guard and rollback.
@@ -2142,7 +2140,6 @@
 - 증거: docs/validation/pi-ncnn-2026-10-03/README.md. 실제 차선 20프레임 분류 일치 100%, 제품 adapter ARM64 재생 오류 0. NCNN 차선 p95 474.59ms, 동일 원본 ONNX FP32 252.22ms.
 - gate 변화: 없음. 운영 차선 전환 HOLD. 학습 YOLO·30분 동시 부하·배포/rollback·현장 수용은 남아 있다.
 - 결정: D-431 Accepted, 구현 및 조건부 lane 평가 기록.
-
 
 ## 2026-10-03 · uncommitted · fix: bootstrap automatic-update state directories
 
@@ -2166,14 +2163,12 @@
 - gate 변화: 없음
 - 결정: D-418
 
-
 ## 2026-10-03 · uncommitted · feat(link): D-432 주소 없는 장비 접속
 
 - 변경: CORE TLS readiness/Avahi 표기, 4자리 root 로그인 코드, opt-in SSH-only Host Agent unit·native helper·image/sync closure를 추가했다.
 - 증거: 관련 Python 계약 시험·실제 loopback TLS HTTP/WS 시험을 실행했다. Pilot Android 설치·화면과 실제 로봇 연결·현장 트래픽 수용은 서로 다른 증거다.
 - gate 변화: 실제 장비의 제어·FIELD 관문은 이동하지 않는다.
 - 결정: D-432 2026-10-03 추가 결정.
-
 
 ## 2026-10-03 · uncommitted · fix(link): 현재 접속과 후속 코드 규약 구별
 
@@ -2188,6 +2183,7 @@
 - 증거: native systemd/버전 문서/구조 시험 199 passed/1 skipped. 최종 quick tier와 SSH 영향 범위는 별도 재실행한다.
 - gate 변화: 장치 활성화·물리 주행·FIELD 이동 없음.
 - 결정: D-418와 D-432를 각각의 경로/opt-in 소유권으로 보존한다.
+
 ## 2026-10-03 · fcda72b78 · feat(deploy): D-433 rosy-boot-display → rosy-face 이주
 
 - 변경: `rosy-face.py`/`.service`(구 rosy-boot-display, 사용자 rosy-display 유지). 이미지가 rosy-face를 켜고 은퇴 unit은 설치하지 않는다. `sync-image-layer.py`: 026 로봇에서 rosy-face 추가 시 `stop rosy-boot-display` → `enable --now rosy-face`, 은퇴 unit은 조건 붙은 사본으로 교체만(새로 설치·재시작 없음). 업데이터가 적용 중 `/run/rosy-boot/update-display.txt`를 쓰고, 롤백 뒤 은퇴 unit이 켜져 있고 멈춰 있으며 rosy-face가 없으면 한 번 시작한다(Q5). `rosy-release-push.ps1 -Rollback`도 같은 단계. `rosy-hw-test`는 둘 중 도는 unit에 넘긴다.
@@ -2200,6 +2196,7 @@
 - Change: chmod public Fleet/overhead advertisement XML to 0644 before atomic rename. NamedTemporaryFile defaults to 0600; that hides the XML from unprivileged Avahi even though the metadata is public. Keep credentials and TLS trust out of the advertisement.
 - Evidence: the actual new POSIX regression ran against streamed source on a Linux host; before the fix it failed at the pre-rename 0644 assertion, after the fix both Fleet and overhead passed with umask 0077 and an existing 0600 file. Scratch files were automatically removed; no operational files changed.
 - Gate: SOURCE/LOCAL fix only. Parent coordinator owns persistent publisher installation, advertiser restart and device discovery/readback.
+
 ## 2026-10-03 · uncommitted · fix(site): Fleet NSS mDNS resolver closure
 
 - 변경: Fleet 이미지에 libnss-mdns와 `.local` 우선 NSS 조회를 포함하고 실행 중인 호스트 Avahi 디렉터리를 읽기 전용으로 연결한다. 일반 Docker DNS는 유지하고 누락 경로는 자동 생성하지 않는다. 고정 IP 없이 hostname/TLS 검증을 보존한다.
@@ -2212,3 +2209,4 @@
 - Change: add avahi-daemon.service to both Requires and After for the host Avahi socket used by Fleet NSS. Existing Docker, network and firewall dependencies remain.
 - Evidence: baseline dependency regression RED; focused deployment tests 19 passed. Removing only Avahi ordering while preserving Requires was RED; restored tests 2 passed.
 - Gate: SOURCE/LOCAL verified. Separate on-site administrator installation and actual PC boot acceptance remain pending. No robot motion, CORE or camera configuration changes.
+

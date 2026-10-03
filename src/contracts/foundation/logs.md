@@ -358,14 +358,12 @@
 - gate 변화: 없음.
 - 결정: D-411 구현 부록 10.
 
-
 ## 2026-10-03 · uncommitted · feat(link): D-432 주소 없는 장비 접속
 
 - 변경: 공통 TXT에 Dock·Signal 역할, LinkPolicy·접속/페어링 모델·4자리 Cam 표시 별칭을 추가했다. 발견 캐시 BOM을 정리하고 멀티 NIC/충돌·TTL 수명을 고정했다.
 - 증거: 관련 Python 계약 시험·실제 loopback TLS HTTP/WS 시험을 실행했다. Pilot Android 설치·화면과 실제 로봇 연결·현장 트래픽 수용은 서로 다른 증거다.
 - gate 변화: 실제 장비의 제어·FIELD 관문은 이동하지 않는다.
 - 결정: D-432 2026-10-03 추가 결정.
-
 
 ## 2026-10-03 · uncommitted · fix(link): 현재 접속과 후속 코드 규약 구별
 
@@ -380,3 +378,4 @@
 - 증거: `python -m pytest src/contracts/foundation/test/test_face_screen.py -q` 77 passed 2 skipped(POSIX 전용 링크·FIFO).
 - gate 변화: 없음.
 - 결정: D-433 (Proposed)
+

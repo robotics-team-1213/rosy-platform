@@ -99,6 +99,7 @@
 - gate 변화: 없음.
 - 결정: Python과 읽기가 다른 곳은 의도다. 지문 입력은 64 hex만 받는다(Python은 아무 문자열이나 자른다). 이름표 길이는 code point로 센다(Python `len`과 같게). `pairable`은 Fleet 레코드 파서가 앱에 없어 `_rosy-fleet._tcp`를 형식 검사 없이 `not_overhead`로 본다. org.json은 Python json보다 관대하고 중복 키를 거절한다. 벡터 사례는 모두 Python과 같은 답을 낸다.
 - 열린 후속: 2단계(HTTP transport, 설정 화면 진입, UI)는 이어서 같은 브랜치에서 한다.
+
 ## 2026-10-01 · 05280213 · feat(cam): D-341 페어링 클라이언트 2단계 — HTTPS, 조회 간격, 설정 진입과 화면
 
 - 변경: (bbbfc85f) `SiteLink`에 `credential_id`를 더했다(DataStore 키 `credential_id`, 손으로 저장하면 지운다). `SettingsStore.replace`/`restore`로 confirm 실패 때 이전 링크를 되돌린다. `OverheadServiceRecord`가 NSD 주소(페어링에만 다이얼, 저장 안 함)와 `pair=rosy-pair/1` 여부를 가진다. (7fc9c713) `HttpPairingTransport`: rosy-00 S2 라우트(`/api/fleet/pairing/v1/requests`, `…/reveal`, `GET …/{id}`, `…/confirm`, poll secret bearer). URL·SNI는 `tls_host`, TCP는 NSD 주소로만 간다(시스템 DNS 없음). 사전 고정 TLS는 D-341 3·8항 그대로다. `FirstContactTrust`는 첫 leaf를 검증 없이 기록하고, 같은 시도 안에서는 그 leaf만 받는다. 신뢰는 코드 입력, 설치자의 지문 확인, 받은 CA가 그 leaf에 서명했는지(9항)에서 온다. 오류는 FastAPI `{"detail":{"code"}}`와 `Retry-After`로 읽는다. `PairingSession`은 2 s보다 빨리 조회하지 않고 429의 Retry-After를 기다린다. 조회 중 네트워크 오류는 요청 기한까지 다시 시도하고, 다른 leaf가 나오면 멈춘다. `PairingScreen`: 6자리 코드를 크게("123 456"), 승인 대기 문구, 인증서 지문과 자격 번호, "같습니다 — 연결"/"다릅니다 — 취소", 끝 사유별 한국어 문구. (05280213) 설정의 "사이트에 연결 요청": TLS 수신기가 `pair=rosy-pair/1`을 광고하고 주소가 풀렸을 때만 버튼을 띄운다(D-341 2·14항). 기기 이름표는 `Build.MODEL`을 요청 규칙에 맞춰 쓴다. rosy-00 920bef4d 반영: 결과의 `credential_id`가 `^[A-Za-z0-9_-]{1,64}$`가 아니면 저장도 confirm도 하지 않고 "연결 정보가 올바르지 않습니다"를 띄운다.
@@ -106,12 +107,14 @@
 - gate 변화: 없음. DEVICE는 사이트 TXT `pair` 광고(rosy-00) 뒤.
 - 결정: confirm이 거절되거나 응답이 오지 않으면 저장한 링크를 버리고 이전 링크를 되돌린다(코디네이터 지시). 저장 → confirm 순서는 D-341 4항 그대로다. S2 오류 코드는 소문자로 상태 사유가 된다(`commit_mismatch` 등). 404는 요청을 잃은 것(Fleet 재시작)으로 보고 만료로 끝낸다.
 - 열린 후속: progress "페어링에서 남은 것" 1–6.
+
 ## 2026-10-01 · 8fb4b1a8 · fix(cam): D-341 페어링 클라이언트 보안 리뷰 반영(APPROVE WITH FIXES)
 
 - 변경: (d3a8041c) 로컬 main(9dd0948b 포함)을 병합했다. `pairing.v1.json`은 93336f48과 같다. (5c3437ca) M1: confirm을 보낸 뒤의 실패는 모두 `confirm_*` 사유와 `credential_id`를 남긴다. confirm 410은 `confirm_gone`이고 조회 410(`gone`)과 다르다. 응답이 없으면 `confirm_unanswered`로 끝나고 더는 예외를 던지지 않는다. 링크는 버린다. 화면은 "콘솔에서 이 카메라 자격을 폐기한 뒤 다시 연결하세요", 무응답이면 "확인 응답을 받지 못했습니다. 콘솔 자격 목록에서 자격 번호 %1$s가 '활성'이면 폐기한 뒤 다시 연결하세요"와 자격 번호를 띄운다. OkHttp가 실패한 호출을 몰래 다시 보내지 않는다(`retryOnConnectionFailure(false)`). M2: 승인 뒤 `tls_host` SAN 검사(D-341 9 b) 시험. minor 3: S2 오류 코드는 `^[A-Z0-9_]{1,40}$`일 때만 사유가 되고 아니면 `refused_<status>`다. `site_name`은 표시·저장 전에 64 code point로 자르고 제어·서식 문자(양방향 재정렬 포함)를 뺀다. 지문 확인 화면에는 사이트가 보낸 자유 문자열을 띄우지 않는다(패턴 검사된 `source_id`만). minor 5: 대기 기한은 min(서버 `expires_at`, 시작 + 330 s). 악성 자기 승인 수신기 시험, `state` `@Volatile`. (0a3b5259) minor 4: `PairingSession`은 실행 전에 busy를 켜고, 두 번 누름을 무시하며, 진행 중인 답(저장 + confirm)은 취소하지 않는다. 단계 안의 RuntimeException은 `Rejected("internal")`로 끝난다. 조회 간격은 max(2 s, min(Retry-After, 30 s)). (96dbdc44) minor 6: 시도는 `PairingViewModel`(viewModelScope)에 있어 회전에도 이어진다. (dc0aabe2) minor 7: 페어링은 zone id 없는 IP 리터럴로만 다이얼한다. (8fb4b1a8) nit: nonce `toString` 가림, org.json 중복 키·`peekBody` 주석 정정.
 - 증거: `gradlew testDebugUnitTest lintDebug assembleDebug --rerun-tasks` BUILD SUCCESSFUL, JVM 시험 303 passed, 0 failed, lint 0 errors·44 warnings(새 경고 없음). 변이: M3(승인 뒤 SAN 검사 제거)는 `aResultTlsHostTheLeafDoesNotNameIsRejected`가, M6(무응답 confirm의 discard 제거)는 `aConfirmWithoutAnswerDiscardsTheLinkAndNamesTheCredential`·`everyS2RefusalMapsToAState`가 잡는다. 호스트 시험은 progress 참조 (2026-10-01 Windows, JDK 21).
 - gate 변화: 없음.
 - 결정: confirm 뒤 실패는 서버 쪽 자격이 활성일 수 있으므로 사유와 상관없이 폐기 안내를 띄운다. confirm 전 기한 초과(`confirm_deadline`)는 서버가 120 s 뒤 스스로 회수하므로 폐기 안내가 없다.
+
 ## 2026-10-01 · 2370b41b · feat(cam): 응답 없는 confirm은 한 번만 다시 보낸다(S2 멱등 confirm, rosy-00 d5d4a2e4)
 
 - 변경: (aefe32fa) 로컬 main(d5d4a2e4·6dbcc01b 포함)을 병합했다. `pairing.v1.json`은 그대로다. (2370b41b) confirm이 응답 없이(I/O) 끝나면 약 1 s 뒤, 승인 후 120 s 창이 열려 있을 때만, 같은 고정 세션(같은 첫 접촉 leaf)으로 같은 confirm을 정확히 한 번 더 보낸다. 이 자격의 200이 오면 링크를 지킨다(Paired, discard 없음). 다시 무응답·거절(410 등)·엉뚱한 응답이면 지금처럼 `confirm_unanswered`(링크 버림 + 자격 번호와 폐기 안내)다. 처음 confirm이 거절(409/400/410)되면 다시 보내지 않는다. `retryOnConnectionFailure(false)`는 그대로이고, 이 한 번이 유일한 재전송이다.
@@ -124,14 +127,12 @@
 - 증거: `test_release_boundary_guards.py -k secrets` 통과, `gradlew testDebugUnitTest` 통과.
 - gate 변화: 없음.
 
-
 ## 2026-10-03 · uncommitted · feat(link): D-432 주소 없는 장비 접속
 
 - 변경: 자동 발견 큐의 소실/재발견 callback을 닫고 파일 import 비동기 오류를 처리했다. 4자리 표시·공유 fixture 및 316개 JVM 시험/assembleDebug 통과.
 - 증거: 관련 Python 계약 시험·실제 loopback TLS HTTP/WS 시험을 실행했다. Pilot Android 설치·화면과 실제 로봇 연결·현장 트래픽 수용은 서로 다른 증거다.
 - gate 변화: 실제 장비의 제어·FIELD 관문은 이동하지 않는다.
 - 결정: D-432 2026-10-03 추가 결정.
-
 
 ## 2026-10-03 · uncommitted · fix(link): 현재 접속과 후속 코드 규약 구별
 
@@ -174,3 +175,4 @@
 - 증거: 실제 관제 PC에서 `Dozing → Awake` 및 같은 앱 PID를 확인했다. 깨운 뒤 새 JPEG 2장을 수신했고, 화면 끄기 명령 없이 다시 `Dozing`으로 돌아갔다. 그 뒤 63초간 JPEG 10/10 HTTP 200, seq 7800→7977, 1280×720, age 126–502 ms, 서로 다른 이미지 해시를 확인했다. CLI·문서 배치 시험 20 passed 및 독립 소스 리뷰 승인. 앞 항목의 관제 PC 깨우기 검증은 닫혔다. 전체 DEVICE/FIELD 판정 범위는 그대로다.
 - 운용: 설치된 관제 PC에서 `~/.local/bin/rosy-cam-screen wake`, 상태는 `~/.local/bin/rosy-cam-screen status`. 화면 깨우기는 잠금 해제나 송출 재시작이 아니다. 공식 무선 ADB 페어링이 유지되고 같은 망에서 전화에 닿아야 한다.
 - gate 변화: 없음. 이 기능의 실제 관제 PC 깨우기·송출만 확인했으며 전체 DEVICE/FIELD PARKED 유지.
+
