@@ -49,6 +49,8 @@ from control.sensing.perception.learned.detector import ObjectDetModel  # noqa: 
 from control.sensing.perception.learned.manifest import TASKS  # noqa: E402
 from control.sensing.perception.learned.runner import LaneSegModel  # noqa: E402
 
+from intake_eval_gate import _number, compare_to_champion, judge_eval, _eval_gate_error  # noqa: E402
+
 DEFAULT_GATE = Path(__file__).resolve().parent / "intake_gate.yaml"
 REPORT_NAME = "intake_report.json"
 _HF = re.compile(r"^hf:(?P<repo>[^@\s]+/[^@\s]+)@(?P<rev>[^@\s]*)$")
@@ -57,7 +59,7 @@ _SHA = re.compile(r"^[0-9a-f]{40}$")
 
 QDQ_OPS = frozenset({"QuantizeLinear", "DequantizeLinear"})
 CONFIG_EXIT = 4  # a required package is missing here: fix the environment, not the model
-EVAL_KEYS = ("eval_set", "eval_max_frames", "min_eval_miou", "max_eval_miou_drop",
+EVAL_KEYS = ("require_eval", "eval_set", "eval_max_frames", "min_eval_miou", "max_eval_miou_drop",
              "min_lane_marking_iou")  # lane_seg only
 DEFAULT_IGNORE_INDEX = 255
 
@@ -337,11 +339,14 @@ def evaluate(model, eval_dir, max_frames: int) -> dict:
     if not frames:
         raise EvalSetError(f"eval set {eval_dir}: no frames")
     model_names = {c.name: c.index for c in model_classes}
+    model_roles = {c.name: c.role for c in model_classes}
     matched = sorted(set(set_classes) & set(model_names))
     result = {"set": {"path": str(eval_dir), "content_sha": eval_dir.name}, "frames": 0,
               "sessions": sorted(_sessions(manifest)),
               "nonfinite_frames": 0, "iou": {}, "miou": None, "miou_all": None, "miou_classes": [],
               "matched_classes": matched,
+              "role_mismatches": {n: {"model": model_roles[n], "eval": set_roles[n]}
+                                  for n in matched if model_roles[n] != set_roles[n]},
               "unmatched": {"model_only": sorted(set(model_names) - set(set_classes)),
                             "eval_only": sorted(set(set_classes) - set(model_names))},
               "lane_marking_iou": {}}
@@ -381,10 +386,6 @@ def evaluate(model, eval_dir, max_frames: int) -> dict:
     return result
 
 
-def _number(v) -> bool:
-    return isinstance(v, (int, float)) and not isinstance(v, bool) and np.isfinite(v)
-
-
 def find_champion(out, content_sha: str, exclude_revision: str | None) -> dict | None:
     """The best earlier pass on the same eval set: {"model_revision", "miou", "iou"} or None.
     Reports that are not well-formed (not a dict, non-numeric mIoU) are skipped."""
@@ -408,49 +409,6 @@ def find_champion(out, content_sha: str, exclude_revision: str | None) -> dict |
             best = {"model_revision": rep.get("model_revision"), "miou": float(ev["miou"]),
                     "iou": {k: float(v) for k, v in iou.items() if _number(v)}}
     return best
-
-
-def compare_to_champion(ev: dict, champion: dict | None):
-    """Both means over the classes both reports scored (champion and candidate may
-    differ in classes): {"classes", "miou", "champion_miou"}, "no shared classes",
-    or None without a champion."""
-    if champion is None:
-        return None
-    classes = sorted(set(ev["miou_classes"]) & set(champion["iou"]))
-    if not classes:
-        return "no shared classes"
-    return {"classes": classes,
-            "miou": float(np.mean([ev["iou"][c] for c in classes])),
-            "champion_miou": float(np.mean([champion["iou"][c] for c in classes]))}
-
-
-def judge_eval(ev: dict, gate: dict) -> list[str]:
-    if ev.get("disjoint") is False:
-        return [f"eval: training dataset {ev['training_dataset']} shares sessions "
-                f"{ev['shared_sessions']} with the eval set (D-379 d3: must be disjoint)"]
-    if not ev["matched_classes"]:
-        return ["eval: no class name shared by the model and the eval set "
-                f"(model only {ev['unmatched']['model_only']}, eval only {ev['unmatched']['eval_only']})"]
-    if ev["miou"] is None:
-        return [f"eval: no IoU over {ev['frames']} eval frames (no matched non-background class present)"]
-    reasons = []
-    lane_floor = gate.get("min_lane_marking_iou")
-    if lane_floor is not None:
-        if not ev["lane_marking_iou"]:
-            reasons.append("eval: no lane_marking class matched, min_lane_marking_iou is set")
-        for name, v in ev["lane_marking_iou"].items():
-            if v is None or v < lane_floor:
-                reasons.append(f"eval lane_marking IoU {name} "
-                               f"{'none' if v is None else f'{v:.4f}'} < min_lane_marking_iou {lane_floor}")
-    floor = gate.get("min_eval_miou")
-    if floor is not None and ev["miou"] < floor:
-        reasons.append(f"eval mIoU {ev['miou']:.4f} < min_eval_miou {floor}")
-    champ, cmp = ev.get("champion"), ev.get("champion_comparison")
-    drop = gate.get("max_eval_miou_drop") or 0.0
-    if isinstance(cmp, dict) and cmp["miou"] < cmp["champion_miou"] - drop:
-        reasons.append(f"eval mIoU {cmp['miou']:.4f} < champion {champ['model_revision']} "
-                       f"{cmp['champion_miou']:.4f} - {drop} (over {cmp['classes']})")
-    return reasons
 
 
 def _tool_commit() -> str | None:
@@ -502,6 +460,10 @@ def run(source: str, *, out, gate_path=DEFAULT_GATE, root=ROOT, max_frames=None,
         report["files"] = [{"name": f.name, "sha256": f.sha256} for f in manifest.files]
         report["task"] = task = getattr(manifest, "task", "lane_seg")
         gate = report["gate"] = task_gate(gate, task)
+        gate_error = _eval_gate_error(gate) if task == "lane_seg" else None
+        if gate_error:
+            report["config_error"] = True
+            raise ValueError(gate_error)
         videos = replay_videos(gate, root)
         if task == "object_det":
             stats = {**replay_detections(ObjectDetModel.open(folder), videos, max_frames),

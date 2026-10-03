@@ -4950,3 +4950,9 @@
 - 계획: docs/plans/2026-10-04-learning-pipeline-closure.md. 모델 PC sudo 비대화형 불가, 미사용 세션과 LiDAR sidecar 확인. 서비스 설치와 실제 평가 증거는 후속이다.
 
 - gate 변화: SOURCE/LOCAL 수정과 시험만. 실제 데이터 평가·자동 전달·DEVICE/FIELD는 미완료.
+
+## 2026-10-04 · uncommitted · feat(learning): require verified fixed evaluation for deployment gates
+
+- 변경: intake require_eval 옵션으로 고정 평가·유효한 차선 IoU 하한·확인된 학습 세션 비겹침·클래스 역할 일치를 요구한다. 기본 연구 접수는 유지한다. 평가 판정 순수 함수를 intake_eval_gate.py로 분리해 intake를 540줄로 유지했다.
+- 증거: 신규 7시험 RED 후 관련 intake/watch와 파일 예산 시험 137 passed, 6 skipped(Windows symlink·torch/onnx/onnxruntime 부재). 모델 PC의 실제 126프레임 평가에서 기존 모델 lane IoU 0.25607, mIoU 0.10458, 학습 세션 비겹침을 확인했다.
+- gate 변화: SOURCE/LOCAL만. 실제 정확도 하한을 비워 둔 pass를 배포 수용으로 사용하지 않는다. model-watch 서비스·새 정책 실행·DEVICE/FIELD는 미완료다.
