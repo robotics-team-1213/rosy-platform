@@ -4737,3 +4737,10 @@
 - 변경: 모든 앱·장치의 발견/호환성/승인/세션/재연결 책임을 공통 계약으로 기록. 개발 모드 코드 생략, 운영 코드 승인 확장, Fleet→CORE 인증 전환과 현 pin 예외, 트래픽/자원 제한, 역할별 이행 순서·실 AP 수용 기준을 명시. D-431은 다른 브랜치의 미착지 ADR로 gap 등록.
 - 증거: 현재 mDNS/NSD·FleetAgent·주소 변경·개발 인증 소스 대조와 기존 ADR 교차 검토. 검증 명령: harness generate/lint, test_network_topology_contracts.py 및 test_harness_contracts.py. 최초 검색·DHCP 변경·실 AP 트래픽 수용은 후속 단계.
 - gate 변화: 구조 결정만 Accepted. 개발 모드·wire·runtime·credential 설치는 변경하지 않음. ARTIFACT/DEVICE/FIELD 수용 없음.
+
+
+## 2026-10-03 · uncommitted · docs: automatic-update state bootstrap plan
+
+- 변경: 구 이미지의 missing state-directory 문제와 PID 1 transient bootstrap, exact d-rule 권한 경계, pending 재시도 및 rollback 녹화 보존을 실행 계획으로 기록했다.
+- 증거: implementation 및 host regression과 연계. 실제 새 payload 자동 적용 수락은 별도 장치 readback 단계다.
+- gate 변화: 없음.

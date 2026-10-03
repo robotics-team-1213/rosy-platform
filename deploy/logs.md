@@ -2045,3 +2045,12 @@
 - 변경: `native/learned-perception.env.example` 에 `ROSY_OBJECT_DET=false`(+ `ROSY_OBJECT_DET_MAX_HZ` 설명). 서비스·권한 변화 없음. 모델은 `/var/lib/rosy/models/object_det/` 아래이고 deliver 가 root:rosy-camera 0750 으로 만든다.
 - 증거: `test_native_systemd_contract.py` env 예시 시험.
 - gate 변화: 없음. 켜는 것은 사용자 승인 뒤.
+
+
+## 2026-10-03 · uncommitted · fix: bootstrap automatic-update state directories
+
+- 변경: signed tmpfiles의 정확한 maps/models/pilot-recordings d 규칙만 제한된 PID 1 transient worker로 적용한다. 구 updater namespace의 쓰기 범위를 넓히지 않고 누락 디렉터리를 서비스 enable/restart 전에 확보하며, mode/owner도 검사한다. 재귀 Z/z migration은 제외하고 rollback 녹화를 보존한다.
+- 증거: provisioning 제거 mutation은 누락 디렉터리 회귀를 실패시켰고 원본 bytes를 복구했다. 집중 sync 시험 및 자동 업데이트 회귀를 실행했다. 독립 실제 probe는 CAP_FSETID 없을 때 0750, 추가 시 2750 및 지정 owner/group을 확인했고 전체 worker 속성과 구 namespace nested 실행도 통과했다.
+- gate 변화: SOURCE/LOCAL 수정. 이 작업 분기는 배포하지 않았고 새 payload의 자동 적용·장치 서비스 readback은 coordinator의 별도 단계다.
+
+- Final checks: sync regression 66 passed / 6 skipped; expanded image-sync/systemd/auto-update 441 passed / 8 skipped with one new read-path classification failure, then corrected classification regression 1 passed. flake8 passed; harness lint 0 errors / 26 existing freshness warnings. Provisioning-removal mutation failed as expected, original bytes restored. Independent code review found no blocking issues.
