@@ -246,3 +246,5 @@ deliver, `harvest`는 harvest). 사이트 자동 반영(watch)은 journal에 남
 
 - 자동 반영이 어떤 로봇에 안 들어간다: `rosy_ml status <robot>`의 `hold:` 줄에 누가 걸었는지
   나온다. 그 사람과 확인한 뒤 `rosy_ml release-hold <robot>`.
+
+> **참고 (2026-10-03, D-434):** 이 문서의 "사이트 PC"(모델 watch·store·사이트 SSH 키)는 모델 PC를 뜻한다. 관제 PC는 사이트 스택만 돌린다.

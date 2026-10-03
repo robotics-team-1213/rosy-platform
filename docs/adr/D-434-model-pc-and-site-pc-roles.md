@@ -22,7 +22,7 @@
    - 모델 PC는 로봇마다 자기 SSH 공개 키(주석으로 모델 PC를 식별)를 두고, 그 키만 회수하면 접근이 끊긴다. D-418의 등록 절차가 구현되면 그 절차로 옮긴다.
 2. **관제 PC는 사이트 스택만 돌린다.** Docker Compose 사이트 스택, mDNS 광고, 방화벽, 사이트 설정·비밀은 `deploy/site/README.md` 그대로다. 학습 패키지·store·모델 watch는 두지 않는다. Windows Docker Desktop의 사이트 스택은 관제 PC가 수용되면 내린다. 관제 PC에는 ROS가 필요 없다.
 3. **Isaac Sim은 5.1을 유지한다(D-322 버전 개정).**
-   - 다시 설치하지 않는다. D-322의 도구 중 6.1에만 있는 API(`isaacsim.asset.importer.urdf.URDFImporter`/`URDFImporterConfig`, `run_rosy.py`·`import_omx.py`)는 5.1 경로(`URDFParseAndImportFile`, `_urdf.ImportConfig`)를 함께 둔다. ROS 2 그래프 구성(DifferentialController, odom·TF·clock)은 그대로다.
+   - 다시 설치하지 않는다. D-322의 도구 중 6.1에만 있는 API(`isaacsim.asset.importer.urdf.URDFImporter`/`URDFImporterConfig`, `run_rosy.py`·`import_omx.py`)는 5.1 경로(`URDFParseAndImportFile`, `_urdf.ImportConfig`)를 함께 두도록 고친다(미구현). ROS 2 그래프 구성(DifferentialController, odom·TF·clock)은 그대로다.
    - ROS 2 연결을 위해 모델 PC에 ROS 2 Jazzy(apt)를 둔다.
    - D-322의 수용 항목(`/clock`·TF·odom 일관성, 직진·회전·zero-command 정지, 단일 CORE 발행자)은 바뀌지 않는다. Isaac Lab 학습 HOLD(D-427)는 유지한다.
    - 6.1로 올릴지는 RAM 증설 뒤 다시 정한다.

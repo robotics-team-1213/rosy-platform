@@ -37,4 +37,4 @@ Pinky URDF의 바퀴 중심 간격은 0.0811 m이고 현재 Gazebo·Isaac 구동
 
 ### 2026-10-03 버전 개정 — Isaac Sim 5.1 유지 (D-434)
 
-GPU 호스트(모델 PC, D-434)에 이미 설치된 Isaac Sim 5.1과 Isaac Lab 2.3.2를 그대로 쓴다(사용자 결정). 6.1 전용 `URDFImporter`/`URDFImporterConfig`를 쓰는 `run_rosy.py`·`import_omx.py`에는 5.1 가져오기 경로(`URDFParseAndImportFile`, `_urdf.ImportConfig`)를 함께 둔다. 이 문서의 수용 항목과 Isaac Lab 학습 HOLD는 바뀌지 않는다. RAM 32 GB 전까지 headless, 작은 렌더, 센서 최소, 학습과 GPU 동시 사용 금지(D-434 §4)를 따른다. 6.1 전환은 RAM 증설 뒤 다시 정한다.
+GPU 호스트(모델 PC, D-434)에 이미 설치된 Isaac Sim 5.1과 Isaac Lab 2.3.2를 그대로 쓴다(사용자 결정). 6.1 전용 `URDFImporter`/`URDFImporterConfig`를 쓰는 `run_rosy.py`·`import_omx.py`에는 5.1 가져오기 경로(`URDFParseAndImportFile`, `_urdf.ImportConfig`)를 추가해야 한다(미구현, 2026-10-03 기준 코드는 6.1 API만 쓴다). 이 문서의 수용 항목과 Isaac Lab 학습 HOLD는 바뀌지 않는다. RAM 32 GB 전까지 headless, 작은 렌더, 센서 최소, 학습과 GPU 동시 사용 금지(D-434 §4)를 따른다. 6.1 전환은 RAM 증설 뒤 다시 정한다.
