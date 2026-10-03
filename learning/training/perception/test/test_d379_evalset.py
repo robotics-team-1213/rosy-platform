@@ -37,6 +37,9 @@ def test_eval_set_layout_split_purpose_and_trusted_sources(tmp_path):
     assert final.name == store.content_sha(final) == build.content_sha(final)
     assert manifest["purpose"] == "eval" and manifest["schema"] == build.SCHEMA
     assert manifest["trusted_sources"] == ["lidar", "trajectory"]
+    # D-373: the wall channel must survive export as a wall role, so device
+    # postprocessing can distinguish wall evidence from ignored crosswalks.
+    assert {c["name"]: c["role"] for c in manifest["classes"]}["wall"] == "wall"
     assert {f["split"] for f in manifest["frames"]} == {"eval"}
     assert [f["image"].rsplit("__", 1)[1] for f in manifest["frames"]] == ["000000.jpg", "000001.jpg"]
     (gone,) = manifest["excluded"]

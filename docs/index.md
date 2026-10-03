@@ -279,8 +279,8 @@
 
 ## 최근 기록
 
+- 2026-10-04 · uncommitted · fix(learning): preserve wall role in automatic datasets
 - 2026-10-04 · uncommitted · site(D-441): automatic site stack updates
 - 2026-10-04 · uncommitted · cam: 승인한 자동 조명과 사진 저장 구현
 - 2026-10-04 · uncommitted · cam: 실제 사진 공유와 저조도 촬영 검토안
 - 2026-10-04 · uncommitted · docs(plan): Pilot 실기 정지 계약 측정 계획 (D-444 §2)
-- 2026-10-04 · uncommitted · docs(adr): D-444·D-445 착지와 main↔origin 정렬

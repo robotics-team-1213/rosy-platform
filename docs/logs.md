@@ -4942,3 +4942,11 @@
 - gate 변화: 없음. workflow push 실행, 서명 PC 예약 작업, 사이트 호스트 설치와 첫 자동 갱신·롤백은 미검증. 사이트 키 미준비(D-301)
 - 결정: D-441 Accepted, D-437·D-301 개정 부록
 - 교훈: 자동 서명기가 지키는 것은 자산 쓰기 권한과 main 아닌 빌드다. 서명 PC 계정과 main 보호 규칙이 이제 사이트 배포의 문이다
+
+## 2026-10-04 · uncommitted · fix(learning): preserve wall role in automatic datasets
+
+- 변경: D-373 wall 역할을 자동 라벨 CLASSES에 반영하고 d379-auto/2로 새 라벨 세대를 만든다. 기존 데이터셋·모델은 덮어쓰지 않는다. 평가 manifest가 wall 역할을 유지하는 회귀를 추가했다.
+- 증거: 평가 manifest 시험 RED(ignore vs wall) 확인 뒤 관련 autolabel/dataset/evalset/training contract 83 passed, 3 skipped(Windows torch/onnxruntime 부재). 실제 평가·전달·DEVICE/FIELD는 미완료다.
+- 계획: docs/plans/2026-10-04-learning-pipeline-closure.md. 모델 PC sudo 비대화형 불가, 미사용 세션과 LiDAR sidecar 확인. 서비스 설치와 실제 평가 증거는 후속이다.
+
+- gate 변화: SOURCE/LOCAL 수정과 시험만. 실제 데이터 평가·자동 전달·DEVICE/FIELD는 미완료.
