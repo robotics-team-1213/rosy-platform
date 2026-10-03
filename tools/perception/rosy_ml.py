@@ -280,6 +280,16 @@ def _replay_clip_count(cfg: dict) -> int | None:
     return len(intake.replay_videos(gate, cfg.get("replay_root") or intake.ROOT))
 
 
+def _gate_eval_set(cfg: dict) -> Path | None:
+    """The gate's eval set folder (D-379 d3) under replay_root, or None when unset."""
+    try:
+        import intake
+    except ImportError:
+        return None
+    rel = intake.load_gate(cfg.get("gate") or intake.DEFAULT_GATE).get("eval_set")
+    return Path(cfg.get("replay_root") or intake.ROOT) / rel if rel else None
+
+
 class _Report:
     def __init__(self):
         self.failed = False
@@ -418,6 +428,11 @@ def _doctor(cfg, robots, runner, connect, find_spec, resolve=socket.getaddrinfo)
         rep.check("replay clips for intake", lambda: _replay_clip_count(cfg),
                   "copy data/teleop/learning/*.mp4 under replay_root (or the repo root); "
                   "without clips every intake stops as a setup error")
+        eval_set = _gate_eval_set(cfg)
+        if eval_set is not None:
+            rep.check(f"intake eval set {eval_set}", lambda: (eval_set / "manifest.json").is_file(),
+                      "build it with dataset/build.py --auto-labels ... --eval-set, or set "
+                      "eval_set: null in the gate; without it every lane intake stops as a setup error")
     # The site watcher's intake needs both (onnx reads the graph's precision);
     # without them every inbox model stops with a config error (watch exit 6).
     site = str(cfg.get("operator", "")).startswith("site:")
@@ -474,6 +489,9 @@ def _store_status(cfg: dict, init: bool) -> int:
     for name, shas in s["datasets"].items():
         for sha in shas:
             print(f"  store:{name}@{sha}")
+    for name, shas in s["evalsets"].items():
+        for sha in shas:
+            print(f"  evalset {name}@{sha}")
     print(f"inbox: {s['inbox_ready']} ready, {s['inbox_waiting']} waiting (no matching READY)")
     print(f"accepted: {s['accepted']}")
     print(f"rejected: {s['rejected']}")

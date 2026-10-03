@@ -6,7 +6,10 @@ for rel in src/hmi/pilot src/hmi/web src/hmi/dashboard; do
   rm -rf "/rosy/$rel"
   tar -C "$SRC" -cf - "$rel" | tar -C "/rosy" -xf -
 done
+# D-427: the source roots come from tools/harness/platform_parts.yaml.
+COLCON_ROOTS="$(python3 "$(dirname "$0")/harness/colcon_roots.py")"
 cd /rosy
 source /opt/ros/jazzy/setup.bash
-colcon build --symlink-install --packages-select pilot web dashboard 2>&1 | tail -3
+colcon --log-base log build --symlink-install --base-paths $COLCON_ROOTS --build-base build --install-base install \
+    --packages-select pilot web dashboard 2>&1 | tail -3
 echo "SYNC_OK"

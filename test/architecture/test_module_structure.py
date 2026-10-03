@@ -555,18 +555,27 @@ CODE_SUFFIXES = {".py", ".cpp", ".hpp"}
 DECLARING_TAGS = {"depend", "exec_depend", "build_depend", "build_export_depend"}
 
 
+#: D-427 wave 0 item 5: every colcon root in the platform manifest.
+COLCON_ROOTS = tuple(ROOT / root for root in yaml.safe_load(
+    (ROOT / "tools" / "harness" / "platform_parts.yaml").read_text(encoding="utf-8"))["colcon_roots"])
+#: An empty walk passes every per-package rule; today the roots hold 27 packages.
+MIN_PACKAGES = 27
+
+
 def _is_prod(path: Path) -> bool:
-    parts = path.relative_to(SRC).parts
+    base = next(root for root in COLCON_ROOTS if path.is_relative_to(root))
+    parts = path.relative_to(base).parts
     return not any(p in ("test", "tests", "build", "install", "log") or p.startswith(".") for p in parts)
 
 
 def _packages():
     found = {}
-    for package_xml in sorted(SRC.rglob("package.xml")):
+    for package_xml in sorted(xml for base in COLCON_ROOTS for xml in base.rglob("package.xml")):
         if not _is_prod(package_xml):
             continue
         root = ET.parse(package_xml).getroot()
         found[root.findtext("name")] = {"dir": package_xml.parent, "xml": root}
+    assert len(found) >= MIN_PACKAGES, sorted(found)
     return found
 
 

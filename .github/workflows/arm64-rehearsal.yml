@@ -39,15 +39,17 @@ jobs:
       - name: Build (colcon, native arm64)
         run: |
           source /opt/ros/jazzy/setup.sh
-          cd src
+          # D-427: from the repo root over the manifest's colcon_roots.
+          COLCON_ROOTS="$(python3 tools/harness/colcon_roots.py)"
           # Pi 전용 C++ 드라이버(wiringPi/ws2811)와 Gazebo(gz_sim)는 이 리허설
           # 범위 밖 — 나머지 전 패키지를 네이티브 arm64 로 빌드한다
-          colcon build --symlink-install \
+          colcon --log-base log build --symlink-install --base-paths $COLCON_ROOTS \
+            --build-base build --install-base install \
             --packages-skip gz_sim lamp_control sensor_adc imu_bno055 \
             --event-handlers console_direct+
 
       - name: Core suite (ROS-free pytest, native arm64)
         run: |
           source /opt/ros/jazzy/setup.sh
-          source src/install/setup.sh
+          source install/setup.sh
           python3 -m pytest src/runtime/gateway/test/ -q

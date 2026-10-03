@@ -14,7 +14,10 @@ onnxruntime) is a configuration error of this host, not the model's: exit
 CONFIG_EXIT (4), report "config_error": true. Not the D-205 selection gate.
 D-423: the manifest task picks the replay -- lane_seg against the rule-based lane
 detector, object_det through ObjectDetModel (latency, NaN, error and box-count
-statistics) -- and the gate file's per-task section overrides the shared keys."""
+statistics) -- and the gate file's per-task section overrides the shared keys.
+D-379 d3: with gate eval_set set, a lane_seg model is also scored on that fixed
+eval set (per-class IoU, classes matched by name) against min_eval_miou and the
+best earlier pass on the same set ("champion") less max_eval_miou_drop."""
 
 from __future__ import annotations
 
@@ -33,11 +36,13 @@ import numpy as np
 
 ROOT = Path(__file__).resolve().parents[3]
 _SENSING = ROOT / "src" / "runtime" / "sensing"
-if str(_SENSING) not in sys.path:
-    sys.path.insert(0, str(_SENSING))
+_FOUNDATION = ROOT / "src" / "contracts" / "foundation"  # core_common (D-424)
+for _p in (_SENSING, _FOUNDATION):
+    if str(_p) not in sys.path:
+        sys.path.insert(0, str(_p))
 
 from control.sensing.perception.lane import detect_lane_error  # noqa: E402
-from control.sensing.perception.learned.lane_mask import NonFiniteLogits  # noqa: E402
+from control.sensing.perception.learned.lane_mask import NonFiniteLogits, preprocess  # noqa: E402
 from control.sensing.perception.learned.manifest import (  # noqa: E402
     ManifestError, load_manifest, verify_files)
 from control.sensing.perception.learned.detector import ObjectDetModel  # noqa: E402
@@ -52,6 +57,13 @@ _SHA = re.compile(r"^[0-9a-f]{40}$")
 
 QDQ_OPS = frozenset({"QuantizeLinear", "DequantizeLinear"})
 CONFIG_EXIT = 4  # a required package is missing here: fix the environment, not the model
+EVAL_KEYS = ("eval_set", "eval_max_frames", "min_eval_miou", "max_eval_miou_drop",
+             "min_lane_marking_iou")  # lane_seg only
+DEFAULT_IGNORE_INDEX = 255
+
+
+class EvalSetError(ValueError):
+    """The gate's eval set is missing or unreadable: the site's setup, not the model."""
 
 
 def graph_precision(path) -> str:
@@ -196,6 +208,8 @@ def task_gate(gate: dict, task: str) -> dict:
     if task == "lane_seg":
         return shared
     shared.pop("min_visible_fraction", None)  # lane evidence only
+    for key in EVAL_KEYS:  # the eval set scores lane classes only
+        shared.pop(key, None)
     return {**shared, **(gate.get(task) or {})}
 
 
@@ -263,6 +277,178 @@ def replay(model, videos, max_frames: int) -> dict:
     }
 
 
+def model_logits(model, bgr: np.ndarray) -> np.ndarray:
+    """(1, C, H, W) logits at the model input size, the path LaneSegModel.infer uses."""
+    return model._session.run(preprocess(bgr, model.manifest.input))
+
+
+def _read_eval_set(path: Path) -> dict:
+    try:
+        manifest = json.loads((path / "manifest.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise EvalSetError(f"eval set {path}: no readable manifest.json ({exc})") from exc
+    if manifest.get("purpose") != "eval":
+        raise EvalSetError(f"eval set {path}: manifest purpose is not 'eval'")
+    return manifest
+
+
+def _sessions(manifest: dict) -> set[str]:
+    """Sessions of a dataset/eval set manifest: frames[].session and labels[].session."""
+    return ({f["session"] for f in manifest.get("frames") or [] if isinstance(f, dict) and "session" in f}
+            | {v["session"] for v in manifest.get("labels") or [] if isinstance(v, dict) and "session" in v})
+
+
+def training_sessions(store, revision) -> tuple[str, set[str]] | None:
+    """The store dataset version the model was trained on ("<name>@<sha>", its sessions),
+    found as <store>/datasets/*/<revision>/manifest.json; None when it cannot be resolved
+    (no store, a revision that is not a 64-hex content sha, no such folder)."""
+    if not store or not isinstance(revision, str) or not re.fullmatch(r"[0-9a-f]{64}", revision):
+        return None
+    for mf in sorted(Path(store).glob(f"datasets/*/{revision}/manifest.json")):
+        try:
+            return f"{mf.parent.parent.name}@{revision}", _sessions(json.loads(mf.read_text(encoding="utf-8")))
+        except (OSError, ValueError):
+            continue
+    return None
+
+
+def evaluate(model, eval_dir, max_frames: int) -> dict:
+    """Per-class IoU of the model on a fixed eval set (D-379 d3).
+
+    The prediction is argmax of the logits at the model input size; the label mask
+    is resized to that size with nearest neighbour (preprocess resizes the frame
+    the same way, so pixels line up and no class value is invented). Pixels equal
+    to the set's ignore_index are left out. Classes are matched by name; a class on
+    one side only is listed under "unmatched" and left out. "miou" (the gated number)
+    is the mean over matched classes whose union is > 0 and whose eval-set role is not
+    "background" ("miou_classes"); "miou_all" includes background. Frames with
+    non-finite logits are skipped and counted (the replay gate already fails NaN
+    models). An eval set without frames is a setup error (EvalSetError)."""
+    eval_dir = Path(eval_dir)
+    manifest = _read_eval_set(eval_dir)
+    model_classes = model.manifest.classes
+    set_classes = {c["name"]: int(c["index"]) for c in manifest.get("classes", [])}
+    set_roles = {c["name"]: c.get("role") for c in manifest.get("classes", [])}
+    frames = manifest.get("frames") or []
+    if not frames:
+        raise EvalSetError(f"eval set {eval_dir}: no frames")
+    model_names = {c.name: c.index for c in model_classes}
+    matched = sorted(set(set_classes) & set(model_names))
+    result = {"set": {"path": str(eval_dir), "content_sha": eval_dir.name}, "frames": 0,
+              "sessions": sorted(_sessions(manifest)),
+              "nonfinite_frames": 0, "iou": {}, "miou": None, "miou_all": None, "miou_classes": [],
+              "matched_classes": matched,
+              "unmatched": {"model_only": sorted(set(model_names) - set(set_classes)),
+                            "eval_only": sorted(set(set_classes) - set(model_names))},
+              "lane_marking_iou": {}}
+    if not matched:
+        return result
+    ignore = manifest.get("ignore_index", DEFAULT_IGNORE_INDEX)
+    frames = frames[::even_stride(len(frames), max_frames)][:max_frames]
+    inter = dict.fromkeys(matched, 0)
+    union = dict.fromkeys(matched, 0)
+    for f in frames:
+        bgr = cv2.imread(str(eval_dir / f["image"]), cv2.IMREAD_COLOR)
+        mask = cv2.imread(str(eval_dir / f["mask"]), cv2.IMREAD_UNCHANGED)
+        if bgr is None or mask is None or mask.ndim != 2:
+            raise EvalSetError(f"eval set {eval_dir}: unreadable frame {f['image']} / {f['mask']}")
+        logits = model_logits(model, bgr)
+        if not np.isfinite(logits).all():
+            result["nonfinite_frames"] += 1
+            continue
+        pred = np.argmax(logits[0], axis=0)
+        if mask.shape != pred.shape:
+            mask = cv2.resize(mask, (pred.shape[1], pred.shape[0]), interpolation=cv2.INTER_NEAREST)
+        valid = mask != ignore
+        for name in matched:
+            p = (pred == model_names[name]) & valid
+            g = (mask == set_classes[name]) & valid
+            inter[name] += int((p & g).sum())
+            union[name] += int((p | g).sum())
+        result["frames"] += 1
+    result["iou"] = {n: inter[n] / union[n] for n in matched if union[n] > 0}
+    if result["iou"]:
+        result["miou_all"] = float(np.mean(list(result["iou"].values())))
+    result["miou_classes"] = [n for n in result["iou"] if set_roles.get(n) != "background"]
+    if result["miou_classes"]:
+        result["miou"] = float(np.mean([result["iou"][n] for n in result["miou_classes"]]))
+    result["lane_marking_iou"] = {c.name: result["iou"].get(c.name) for c in model_classes
+                                  if c.role == "lane_marking" and c.name in set_classes}
+    return result
+
+
+def _number(v) -> bool:
+    return isinstance(v, (int, float)) and not isinstance(v, bool) and np.isfinite(v)
+
+
+def find_champion(out, content_sha: str, exclude_revision: str | None) -> dict | None:
+    """The best earlier pass on the same eval set: {"model_revision", "miou", "iou"} or None.
+    Reports that are not well-formed (not a dict, non-numeric mIoU) are skipped."""
+    best = None
+    for path in Path(out).glob(f"*/{REPORT_NAME}"):
+        try:
+            rep = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if not isinstance(rep, dict):
+            continue
+        ev = rep.get("eval")
+        if (rep.get("verdict") != "pass" or not isinstance(ev, dict)
+                or rep.get("model_revision") == exclude_revision
+                or not isinstance(ev.get("set"), dict)
+                or ev["set"].get("content_sha") != content_sha
+                or not _number(ev.get("miou"))):
+            continue
+        iou = ev.get("iou") if isinstance(ev.get("iou"), dict) else {}
+        if best is None or ev["miou"] > best["miou"]:
+            best = {"model_revision": rep.get("model_revision"), "miou": float(ev["miou"]),
+                    "iou": {k: float(v) for k, v in iou.items() if _number(v)}}
+    return best
+
+
+def compare_to_champion(ev: dict, champion: dict | None):
+    """Both means over the classes both reports scored (champion and candidate may
+    differ in classes): {"classes", "miou", "champion_miou"}, "no shared classes",
+    or None without a champion."""
+    if champion is None:
+        return None
+    classes = sorted(set(ev["miou_classes"]) & set(champion["iou"]))
+    if not classes:
+        return "no shared classes"
+    return {"classes": classes,
+            "miou": float(np.mean([ev["iou"][c] for c in classes])),
+            "champion_miou": float(np.mean([champion["iou"][c] for c in classes]))}
+
+
+def judge_eval(ev: dict, gate: dict) -> list[str]:
+    if ev.get("disjoint") is False:
+        return [f"eval: training dataset {ev['training_dataset']} shares sessions "
+                f"{ev['shared_sessions']} with the eval set (D-379 d3: must be disjoint)"]
+    if not ev["matched_classes"]:
+        return ["eval: no class name shared by the model and the eval set "
+                f"(model only {ev['unmatched']['model_only']}, eval only {ev['unmatched']['eval_only']})"]
+    if ev["miou"] is None:
+        return [f"eval: no IoU over {ev['frames']} eval frames (no matched non-background class present)"]
+    reasons = []
+    lane_floor = gate.get("min_lane_marking_iou")
+    if lane_floor is not None:
+        if not ev["lane_marking_iou"]:
+            reasons.append("eval: no lane_marking class matched, min_lane_marking_iou is set")
+        for name, v in ev["lane_marking_iou"].items():
+            if v is None or v < lane_floor:
+                reasons.append(f"eval lane_marking IoU {name} "
+                               f"{'none' if v is None else f'{v:.4f}'} < min_lane_marking_iou {lane_floor}")
+    floor = gate.get("min_eval_miou")
+    if floor is not None and ev["miou"] < floor:
+        reasons.append(f"eval mIoU {ev['miou']:.4f} < min_eval_miou {floor}")
+    champ, cmp = ev.get("champion"), ev.get("champion_comparison")
+    drop = gate.get("max_eval_miou_drop") or 0.0
+    if isinstance(cmp, dict) and cmp["miou"] < cmp["champion_miou"] - drop:
+        reasons.append(f"eval mIoU {cmp['miou']:.4f} < champion {champ['model_revision']} "
+                       f"{cmp['champion_miou']:.4f} - {drop} (over {cmp['classes']})")
+    return reasons
+
+
 def _tool_commit() -> str | None:
     try:
         r = subprocess.run(["git", "rev-parse", "HEAD"], cwd=Path(__file__).parent,
@@ -317,10 +503,38 @@ def run(source: str, *, out, gate_path=DEFAULT_GATE, root=ROOT, max_frames=None,
             stats = {**replay_detections(ObjectDetModel.open(folder), videos, max_frames),
                      **int8_metrics(manifest)}
         else:
-            stats = replay(LaneSegModel.open(folder), videos, max_frames)
+            model = LaneSegModel.open(folder)
+            stats = replay(model, videos, max_frames)
+            val_iou = ((getattr(manifest, "raw", None) or {}).get("metrics") or {}).get("val_iou")
+            if val_iou:  # the trainer's own number, for comparison only (not gated)
+                report["trainer_val_iou"] = val_iou
+            report["eval"] = None
+            if gate.get("eval_set"):
+                eval_dir = Path(root) / gate["eval_set"]
+                if not eval_dir.is_dir():
+                    raise EvalSetError(f"eval set {eval_dir} is not a folder (gate eval_set)")
+                ev = evaluate(model, eval_dir, gate.get("eval_max_frames") or 400)
+                trained = training_sessions(store, getattr(manifest, "dataset_revision", None))
+                if trained is None:
+                    ev["disjoint"] = "unverified"
+                    report.setdefault("warnings", []).append(
+                        "disjoint: unverified (dataset.revision is not a dataset version in the store)")
+                else:
+                    shared = sorted(trained[1] & set(ev["sessions"]))
+                    ev["training_dataset"], ev["disjoint"] = trained[0], not shared
+                    if shared:
+                        ev["shared_sessions"] = shared
+                champ = find_champion(out, ev["set"]["content_sha"], manifest.model_revision)
+                ev["champion_comparison"] = compare_to_champion(ev, champ)
+                ev["champion"] = None if champ is None else {
+                    "model_revision": champ["model_revision"], "miou": champ["miou"]}
+                report["eval"] = ev
         report.update(stats)
         report["sources"] = [str(v) for v in videos]
         report["verdict"], report["reasons"] = judge(stats, gate)
+        if report.get("eval"):
+            report["reasons"] += judge_eval(report["eval"], gate)
+            report["verdict"] = "fail" if report["reasons"] else "pass"
         if stats["frames"] == 0:  # no clips under root: a setup error, not the model's
             report["transient"] = True
             report["reasons"].append(f"no replay clips for {gate['replay_sources']} under {root}")
@@ -329,7 +543,8 @@ def run(source: str, *, out, gate_path=DEFAULT_GATE, root=ROOT, max_frames=None,
         report["config_error"] = True
     except (ManifestError, ValueError, OSError, cv2.error) as exc:
         report["reasons"] = [f"{type(exc).__name__}: {exc}"]
-        report["transient"] = isinstance(exc, (OSError, cv2.error))
+        # EvalSetError: the gate's eval set is missing or unreadable (site setup)
+        report["transient"] = isinstance(exc, (OSError, cv2.error, EvalSetError))
 
     text = json.dumps(report, indent=2, ensure_ascii=False) + "\n"
     if report["verdict"] == "pass":

@@ -258,3 +258,33 @@ def test_a_missing_package_stops_the_run_as_a_config_error_and_spends_no_attempt
     assert "m1" not in _state(tmp_path).get("commits", {})
     assert (tmp_path / "store" / "models" / "inbox" / "m1").is_dir()
     assert "onnx" in capsys.readouterr().err
+
+
+def test_a_pass_the_store_refuses_is_no_longer_a_champion(tmp_path):
+    cfg = _config(tmp_path)
+    st = store.Store(tmp_path / "store")
+    _drop(tmp_path, "old", payload="first weights")
+    fakes = Fakes()
+    assert _run(cfg, fakes) == 0
+    # a second hand-over claims the same revision with other files: intake passed, store refuses
+    _drop(tmp_path, "m1", payload="other weights")
+    fakes.intake = lambda name: (fakes.intakes.append(name) or
+                                 (0, {"verdict": "pass", "model_revision": "rev-old", "reasons": []}))
+    report = tmp_path / "models" / "rev-old" / "intake_report.json"
+    report.parent.mkdir(parents=True)
+    report.write_text(json.dumps({"model_revision": "rev-old", "verdict": "pass", "reasons": [],
+                                  "eval": {"set": {"content_sha": "c" * 64}, "miou": 0.9}}))
+    assert _run(cfg, fakes) == 0
+    assert (st.rejected / "m1").is_dir()
+    doc = json.loads(report.read_text(encoding="utf-8"))
+    assert doc["verdict"] == "fail" and "store refused the pass" in doc["reasons"][-1]
+    import intake
+    assert intake.find_champion(tmp_path / "models", "c" * 64, None) is None
+
+
+def test_demote_report_tolerates_missing_or_odd_files(tmp_path):
+    watch.demote_report(tmp_path, "nope", "x")               # no report: nothing to do
+    (tmp_path / "r").mkdir()
+    (tmp_path / "r" / "intake_report.json").write_text("[1]")
+    watch.demote_report(tmp_path, "r", "x")                  # not a dict: left alone
+    assert (tmp_path / "r" / "intake_report.json").read_text() == "[1]"

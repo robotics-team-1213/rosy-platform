@@ -9,7 +9,7 @@ Honest holes, not oversights:
 - Includes are found by launch file name (``*.launch.py`` / ``*_launch.xml``)
   anywhere in a launch file's text. Mentioning a file name in a comment pulls it
   into the closure: that errs toward a larger closure, never a smaller one.
-- Launch names not found in ``src/`` are treated as third-party and not walked.
+- Launch names not found under the colcon roots are treated as third-party and not walked.
 - An executable chosen at runtime (a LaunchConfiguration as ``executable=``)
   is invisible.
 """
@@ -17,24 +17,30 @@ Honest holes, not oversights:
 import re
 from pathlib import Path
 
-from robot_contracts import DEPLOY, LAUNCH_REFERENCE, ROOT
+from robot_contracts import COLCON_ROOTS, DEPLOY, LAUNCH_REFERENCE, ROOT
 
 SRC = ROOT / "src"
 
-#: colcon output. CI builds inside the source tree (`src/build`, `src/install`),
-#: which copies every launch file and setup.py; counting those makes each name
-#: "ambiguous" and the provider look registered twice.
+#: colcon output. CI builds at the repo root now (D-427), but a local build run
+#: inside a colcon root copies every launch file and setup.py there; counting
+#: those makes each name "ambiguous" and the provider look registered twice.
 COLCON_OUTPUT = {"build", "install", "log"}
 
+#: A walk that finds nothing would pass every closure check; refuse it. Today: 37
+#: non-test launch files (`*.launch.py`, `*_launch.xml`, ...) under the roots.
+MIN_LAUNCH_FILES = 37  # update when a launch file is legitimately removed
 
-def _source_parts(path: Path) -> tuple[str, ...] | None:
-    """Parts relative to `src`, or None for hidden and colcon-output paths."""
-    parts = path.relative_to(SRC).parts
-    if parts and parts[0] in COLCON_OUTPUT:
-        return None
-    if any(p.startswith(".") for p in parts):
-        return None
-    return parts
+
+def _source_files(pattern: str):
+    """(path, parts relative to its colcon root) for each match outside hidden and colcon-output paths."""
+    for root in COLCON_ROOTS:
+        for path in sorted((ROOT / root).rglob(pattern)):
+            parts = path.relative_to(ROOT / root).parts
+            if parts and parts[0] in COLCON_OUTPUT:
+                continue
+            if any(p.startswith(".") for p in parts):
+                continue
+            yield path, parts
 
 #: D-143 evidence producers. They publish observations, never a velocity command.
 DEPLOYED_CONTROL_EXECUTABLES = {
@@ -72,12 +78,12 @@ XML_ATTR = re.compile(r"\b(pkg|exec)\s*=\s*['\"](\w+)['\"]")
 
 def _launch_index():
     index = {}
-    for path in SRC.rglob("*"):
-        parts = _source_parts(path)
-        if not path.is_file() or parts is None or "test" in parts:
+    for path, parts in _source_files("*"):
+        if not path.is_file() or "test" in parts:
             continue
         if LAUNCH_REFERENCE.fullmatch(path.name):
             index.setdefault(path.name, []).append(path)
+    assert sum(map(len, index.values())) >= MIN_LAUNCH_FILES, index
     return index
 
 
@@ -165,11 +171,9 @@ def test_exactly_one_package_provides_core_sensors():
     moves the provider must delete the old entry point in the same change.
     """
     registrants = []
-    for path in sorted(SRC.rglob("setup.py")) + sorted(SRC.rglob("setup.cfg")):
-        if _source_parts(path) is None:
-            continue
+    for path, _ in [*_source_files("setup.py"), *_source_files("setup.cfg")]:
         text = path.read_text(encoding="utf-8")
         block = re.search(re.escape(PROVIDER_GROUP) + r"['\"]?\s*[:=]\s*\[?(.*?)(\]|\n\S)", text, re.S)
         if block and re.search(r"\b" + PROVIDER_NAME + r"\s*=", block.group(1)):
-            registrants.append(path.relative_to(SRC).as_posix())
-    assert registrants == ["runtime/sensing/setup.py"], registrants
+            registrants.append(path.relative_to(ROOT).as_posix())
+    assert registrants == ["src/runtime/sensing/setup.py"], registrants

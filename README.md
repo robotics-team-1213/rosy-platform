@@ -131,7 +131,7 @@ D-377에 따라 폴더 끝 이름이 `<word>`, 패키지 이름이 `rosy_<word>`
 
 ```bash
 source env.sh
-colcon build --symlink-install --base-paths src
+colcon --log-base log build --symlink-install --base-paths $(python3 tools/harness/colcon_roots.py) --build-base build --install-base install
 
 # 시뮬레이션 2대
 ros2 launch gz_sim gz_multi.launch.py robots:=2
@@ -170,7 +170,7 @@ python3 tools/harness/rosy_harness.py lint   # ADR 중복·mojibake·append-only
 
 # Full tier: 릴리스·현장 푸시 전, 또는 quick tier에 없는 묶음을 건드렸을 때.
 source env.sh
-cd src && colcon build --symlink-install
+colcon --log-base log build --symlink-install --base-paths $(python3 tools/harness/colcon_roots.py) --build-base build --install-base install
 
 # core 단위 시험 (대부분 라이브 ROS 불필요)
 python3 -m pytest src/runtime/gateway/test/ src/runtime/events/test/ src/runtime/services/test/ src/hmi/web_common/test/ -v

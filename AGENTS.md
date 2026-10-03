@@ -79,7 +79,7 @@ python3 tools/harness/rosy_harness.py lint   # ADR duplicates, mojibake, append-
 # in the quick tier above.
 # ROS 2 overlay (Linux / Pi). On Windows, run Python tests that do not need rclpy.
 source env.sh
-cd src && colcon build --symlink-install
+colcon --log-base log build --symlink-install --base-paths $(python3 tools/harness/colcon_roots.py) --build-base build --install-base install
 
 # core unit tests (no live ROS required for most)
 python3 -m pytest src/runtime/gateway/test/ src/runtime/events/test/ src/runtime/services/test/ src/hmi/web_common/test/ -v

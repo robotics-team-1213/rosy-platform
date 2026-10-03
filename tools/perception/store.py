@@ -5,6 +5,8 @@ Drive folder (Drive for desktop on the site PC, drive.mount in Colab) with the
 same layout. Changing the backend changes the path, not this code.
 
     datasets/<name>/<content_sha>/   immutable once written
+    evalsets/<name>/<content_sha>/   fixed evaluation sets (D-379 d3), same rules;
+                                     optional, so not part of layout()
     models/inbox/<folder>/           trainers drop hand-overs here
     models/accepted/<revision>/      intake passed
     models/rejected/<folder>/        intake failed; REJECTED.txt says why
@@ -86,6 +88,7 @@ class Store:
     def __init__(self, root):
         self.root = Path(root)
         self.datasets_dir = self.root / "datasets"
+        self.evalsets_dir = self.root / "evalsets"
         self.inbox = self.root / "models" / "inbox"
         self.accepted = self.root / "models" / "accepted"
         self.rejected = self.root / "models" / "rejected"
@@ -105,10 +108,17 @@ class Store:
         return self.datasets_dir / name / sha
 
     def datasets(self) -> dict[str, list[str]]:
-        if not self.datasets_dir.is_dir():
-            return {}
-        return {d.name: sorted(v.name for v in d.iterdir() if v.is_dir() and _SHA.fullmatch(v.name))
-                for d in sorted(self.datasets_dir.iterdir()) if d.is_dir() and safe_name(d.name)}
+        return _versions(self.datasets_dir)
+
+    # --- eval sets (D-379 decision 3) ---------------------------------------------------------
+
+    def evalset_path(self, name: str, sha: str) -> Path:
+        if not safe_name(name) or not _SHA.fullmatch(sha or ""):
+            raise StoreError(f"bad eval set ref {name!r}@{sha!r}")
+        return self.evalsets_dir / name / sha
+
+    def evalsets(self) -> dict[str, list[str]]:
+        return _versions(self.evalsets_dir)
 
     def put_dataset(self, src_dir, name: str) -> tuple[Path, str]:
         """Copy src_dir to datasets/<name>/<content_sha>/ (temp sibling, then rename).
@@ -197,9 +207,18 @@ class Store:
 
         def count(d: Path) -> int:
             return sum(p.is_dir() for p in d.iterdir()) if d.is_dir() else 0
-        return {"root": str(self.root), "datasets": self.datasets(), "inbox_ready": ready,
+        return {"root": str(self.root), "datasets": self.datasets(), "evalsets": self.evalsets(),
+                "inbox_ready": ready,
                 "inbox_waiting": len(dirs) - ready, "accepted": count(self.accepted),
                 "rejected": count(self.rejected)}
+
+
+def _versions(base: Path) -> dict[str, list[str]]:
+    """{name: [content_sha, ...]} for <base>/<name>/<content_sha>/ folders."""
+    if not base.is_dir():
+        return {}
+    return {d.name: sorted(v.name for v in d.iterdir() if v.is_dir() and _SHA.fullmatch(v.name))
+            for d in sorted(base.iterdir()) if d.is_dir() and safe_name(d.name)}
 
 
 def _move(src: Path, dest: Path) -> None:

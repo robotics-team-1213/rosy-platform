@@ -16,7 +16,9 @@ import intake  # noqa: E402
 from control.sensing.perception.learned.lane_mask import NonFiniteLogits  # noqa: E402
 
 GATE = {"max_host_latency_ms_p50": 400, "max_nan_frames": 0, "min_visible_fraction": 0.30,
-        "replay_sources": ["data/teleop/learning/*.mp4"], "max_frames_per_source": 200}
+        "replay_sources": ["data/teleop/learning/*.mp4"], "max_frames_per_source": 200,
+        "eval_set": None, "eval_max_frames": 400, "min_eval_miou": None, "max_eval_miou_drop": 0.01,
+        "min_lane_marking_iou": None}
 GOOD = {"frames": 100, "latency_ms": {"p50": 50.0, "p95": 80.0}, "nan_frames": 0,
         "visible_fraction": 0.8}
 

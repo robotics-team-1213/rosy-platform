@@ -39,22 +39,31 @@ def board_profile(mode: str) -> dict:
 #: Both in-tree naming conventions: `hardware.launch.py` and `bringup_launch.xml`.
 LAUNCH_REFERENCE = re.compile(r"([A-Za-z0-9_]+(?:\.launch|_launch)\.(?:xml|py))")
 
-#: CI runs `colcon build` before the root suite, so `src/build`, `src/install` and
-#: `src/log` exist there and not on a bare checkout. Both trees repeat every
-#: package.xml that already sits in source, and their paths sort *before* the
-#: real ones (`src/build/...` < `src/contracts/...` < `src/products/...`), so an
-#: unfiltered walk over `src/` answers with a build artifact on CI and a source
-#: file on a workstation — the same walk, two different answers.
+#: D-427 wave 0 item 5: the colcon source roots, from the one manifest line.
+COLCON_ROOTS = tuple(yaml.safe_load(
+    (ROOT / "tools" / "harness" / "platform_parts.yaml").read_text(encoding="utf-8"))["colcon_roots"])
+
+#: CI now builds from the repo root (`build/`, `install/`, `log/`), outside every
+#: colcon root. A local `colcon build` run inside a root still leaves those trees
+#: there; they repeat every package.xml and sort before the real ones, so an
+#: unfiltered walk would answer with a build artifact on one machine and a
+#: source file on another. Keep filtering them.
 COLCON_OUTPUT = frozenset({"build", "install", "log"})
+
+#: A walk that finds nothing passes every "for each package" check; refuse it.
+MIN_SOURCE_MANIFESTS = 27  # update when a package is legitimately removed
 
 
 def source_manifests() -> list[Path]:
-    """Every package.xml under `src/` that colcon did not generate."""
-    src = ROOT / "src"
-    return sorted(
-        manifest for manifest in src.rglob("package.xml")
-        if not COLCON_OUTPUT & set(manifest.relative_to(src).parts)
+    """Every package.xml under the colcon roots that colcon did not generate."""
+    found = sorted(
+        manifest
+        for root in COLCON_ROOTS
+        for manifest in (ROOT / root).rglob("package.xml")
+        if not COLCON_OUTPUT & set(manifest.relative_to(ROOT / root).parts)
     )
+    assert len(found) >= MIN_SOURCE_MANIFESTS, f"only {len(found)} package.xml under {COLCON_ROOTS}"
+    return found
 
 
 def _launch_file(name: str) -> Path | None:

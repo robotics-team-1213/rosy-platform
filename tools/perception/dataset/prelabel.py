@@ -30,8 +30,10 @@ import build
 
 ROOT = Path(__file__).resolve().parents[3]
 _SENSING = str(ROOT / "src" / "runtime" / "sensing")
-if _SENSING not in sys.path:
-    sys.path.insert(0, _SENSING)
+_FOUNDATION = str(ROOT / "src" / "contracts" / "foundation")  # core_common (D-424)
+for _p in (_SENSING, _FOUNDATION):
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
 
 from control.recording import SHADOW_TOPIC as SHADOW_KEY  # noqa: E402  extract.py's side key
 LANE_MIN_FRACTION = 0.02  # below this share of lane pixels the frame is suspect
