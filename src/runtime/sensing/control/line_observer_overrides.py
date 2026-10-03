@@ -54,12 +54,26 @@ def write_overlay(path: str, data: dict) -> None:
             out.write("# Written by line_observer_overrides (D-344 §12 addendum); "
                       "remove with: line_observer_overrides clear\n")
             yaml.safe_dump(data, out, sort_keys=False)
+            out.flush()
+            os.fsync(out.fileno())
         os.chmod(temp, 0o644)
         os.replace(temp, path)
+        _fsync_dir(directory)
     except BaseException:
         if os.path.exists(temp):
             os.unlink(temp)
         raise
+
+
+def _fsync_dir(directory: str) -> None:
+    """Make the rename survive a power cut (robots are switched off at the bench)."""
+    if not hasattr(os, "O_DIRECTORY"):   # Windows hosts: no directory handles to sync
+        return
+    handle = os.open(directory, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        os.fsync(handle)
+    finally:
+        os.close(handle)
 
 
 def main(argv=None, run=subprocess.run) -> int:
@@ -96,6 +110,7 @@ def main(argv=None, run=subprocess.run) -> int:
             print(f"wrote {args.path}")
         elif os.path.exists(args.path):
             os.unlink(args.path)
+            _fsync_dir(os.path.dirname(args.path) or ".")
             print(f"removed {args.path}; packaged camera lane settings apply")
         else:
             print(f"{args.path} absent; nothing to remove")
