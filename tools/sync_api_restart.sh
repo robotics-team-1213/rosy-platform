@@ -7,7 +7,7 @@ tar -C "$SRC" -cf - src/runtime/api_web | tar -C /rosy -xf -
 COLCON_ROOTS="$(python3 "$(dirname "$0")/harness/colcon_roots.py")"
 cd /rosy
 source /opt/ros/jazzy/setup.bash
-colcon build --symlink-install --base-paths $COLCON_ROOTS --build-base build --install-base install --log-base log \
+colcon --log-base log build --symlink-install --base-paths $COLCON_ROOTS --build-base build --install-base install \
     --packages-select core_api_web 2>&1 | tail -2
 echo "=== restart sim ==="
 pkill -f "gz_multi.launch.py" 2>/dev/null || true

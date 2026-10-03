@@ -130,8 +130,7 @@ rosdep install --from-paths "${ROSDEP_ROOTS[@]}" "$SLLIDAR_SRC" --ignore-src -r 
 (
     cd "$WORKSPACE"
     colcon build --base-paths "${COLCON_ROOTS[@]}" "$SLLIDAR_SRC" --merge-install \
-        --build-base build --install-base "$INSTALL_ROOT" --log-base log \
-        --event-handlers console_direct+
+        --install-base "$INSTALL_ROOT" --event-handlers console_direct+
     colcon list --base-paths "${COLCON_ROOTS[@]}" "$SLLIDAR_SRC" --names-only | LC_ALL=C sort -u > "$INVENTORY.tmp"
 )
 mv -f -- "$INVENTORY.tmp" "$INVENTORY"

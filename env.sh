@@ -4,8 +4,8 @@
 #   - /opt/ros/$ROS_DISTRO/setup.bash source (기본 jazzy)
 #   - 워크스페이스 install/setup.bash가 있으면 추가 source (colcon build 후)
 # 빌드(저장소 root에서, D-427 colcon_roots):
-#   source env.sh && colcon build --base-paths $(python3 tools/harness/colcon_roots.py) \
-#       --build-base build --install-base install --log-base log
+#   source env.sh && colcon --log-base log build --base-paths $(python3 tools/harness/colcon_roots.py) \
+#       --build-base build --install-base install
 
 ROS_DISTRO="${ROS_DISTRO:-jazzy}"
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

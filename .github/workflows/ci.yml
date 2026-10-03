@@ -84,8 +84,8 @@ jobs:
           # D-427: colcon runs from the repo root over the manifest's colcon_roots;
           # build/install/log land at the repo root, never inside a source root.
           COLCON_ROOTS="$(python3 tools/harness/colcon_roots.py)"
-          colcon build --symlink-install --base-paths $COLCON_ROOTS \
-            --build-base build --install-base install --log-base log \
+          colcon --log-base log build --symlink-install --base-paths $COLCON_ROOTS \
+            --build-base build --install-base install \
             --event-handlers console_direct+
 
       - name: Lint (flake8)

@@ -13,6 +13,6 @@ COLCON_ROOTS="$(python3 "$(dirname "$0")/harness/colcon_roots.py")"
 cd "$DST"
 source /opt/ros/jazzy/setup.bash
 export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
-colcon build --symlink-install --base-paths $COLCON_ROOTS --build-base build --install-base install --log-base log \
+colcon --log-base log build --symlink-install --base-paths $COLCON_ROOTS --build-base build --install-base install \
     --packages-select web dashboard pilot core_api_web 2>&1 | tail -n 6
 echo "SYNC_BUILD_DONE"

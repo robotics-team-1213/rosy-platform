@@ -28,7 +28,8 @@ def test_ci_colcon_build_runs_from_the_repo_root_over_the_manifest_roots():
     assert "cd src" not in workflow
     assert 'COLCON_ROOTS="$(python3 tools/harness/colcon_roots.py)"' in step
     assert "--base-paths $COLCON_ROOTS" in step
-    assert "--build-base build --install-base install --log-base log" in step
+    assert "colcon --log-base log build" in step  # --log-base is a global colcon option
+    assert "--build-base build --install-base install" in step
 
 
 def test_ci_installs_the_ext4_reader_for_the_card_diagnostics_test():

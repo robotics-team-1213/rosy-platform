@@ -10,6 +10,6 @@ done
 COLCON_ROOTS="$(python3 "$(dirname "$0")/harness/colcon_roots.py")"
 cd /rosy
 source /opt/ros/jazzy/setup.bash
-colcon build --symlink-install --base-paths $COLCON_ROOTS --build-base build --install-base install --log-base log \
+colcon --log-base log build --symlink-install --base-paths $COLCON_ROOTS --build-base build --install-base install \
     --packages-select pilot web dashboard 2>&1 | tail -3
 echo "SYNC_OK"

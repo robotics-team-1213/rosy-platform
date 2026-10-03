@@ -105,6 +105,8 @@ def test_every_colcon_consumer_reads_the_one_root_list():
         assert base_paths in text, name
         assert "--base-paths src" not in text and "cd src\n" not in text, name
         assert "src/install" not in text and "src/build" not in text, name
+        # --log-base is a global option: `colcon build ... --log-base log` is an argparse error.
+        assert not re.search(r"(?<!colcon )--log-base", text), name
     assert "colcon_roots.py" in (ROOT / "env.sh").read_text(encoding="utf-8")
 
     # Python consumers.
