@@ -299,6 +299,18 @@ def test_health_failure_rolls_back_and_records_the_tag(host):
     assert len(http.downloads) == downloads
 
 
+def test_relative_active_link_rolls_back_to_its_actual_previous_folder(host):
+    host.paths.link.unlink()
+    os.symlink(Path('candidates') / OLD, host.paths.link, target_is_directory=True)
+    releases, blobs = _world((NEW, '2026-10-04'))
+    fake = FakeHost(host.paths, healthy_tags={OLD})
+    updater = _updater(host, FakeHttp(releases, blobs), fake)
+    assert updater.run() == upd.EXIT_FAILED
+    assert host.paths.link.resolve() == host.paths.candidates / OLD
+    assert fake.running == OLD
+    assert 'switch' not in updater.load_state()
+
+
 def test_healthz_failure_alone_also_rolls_back(host):
     releases, blobs = _world((NEW, "2026-10-04T02:00:00Z"))
     http = FakeHttp(releases, blobs)

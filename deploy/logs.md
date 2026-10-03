@@ -2217,3 +2217,9 @@
 - 변경: origin/main의 동시 작업을 보존하며 자동 갱신 브랜치를 rebase했다. 생성된 문서 index를 갱신했다.
 - 증거: 갱신·자동 서명·서명 후보 검증기 관련 Linux suite 76 passed, 0 skipped. 실행 중 컨테이너 불일치, 손상 상태, 잠금, 불완전 HTTP와 복구 증거 불일치를 포함한다. X:/DevTemp/rosy-rereview-linux-green.txt.
 - gate 변화: 기존 gate 유지. 수정 후 독립 재검토와 push 전 검사는 진행 중이며 운영 설치는 아직 수행하지 않았다.
+
+## 2026-10-04 · uncommitted · fix(D-441): 상대 symlink의 롤백 경로 보정
+
+- 변경: 이전 후보와 활성 후보 비교에 canonical 경로를 사용한다. 상대 symlink 대상이 프로세스 작업 폴더 기준으로 기록되지 않도록 했다.
+- 증거: Linux 상대 symlink 회귀는 기존 코드에서 새 후보의 건강 실패 후 롤백 커밋 불일치로 RED였다. 보정 후 이전 폴더·실행 커밋 복원이 확인됐다. 검증 코드의 분리 위치 오류를 바로잡고 최종 관련 suite를 다시 실행 중이다. X:/DevTemp/rosy-rereview-linux-relative-red.txt.
+- gate 변화: 기존 gate 유지. 독립 재검토 승인과 운영 설치 증거는 별도로 확인한다.

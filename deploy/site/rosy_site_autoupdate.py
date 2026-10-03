@@ -209,7 +209,7 @@ class SiteUpdater:
         """Return the installed candidate folder, migrating a real directory once."""
         link = self.paths.link
         if link.is_symlink():
-            return Path(os.readlink(link))
+            return link.resolve(strict=True)
         if not link.is_dir():
             raise Refused(f"{link} does not exist; install the first candidate by hand")
         try:
@@ -289,7 +289,7 @@ class SiteUpdater:
             shutil.copyfile(download / SIGNATURE, folder / SIGNATURE)
             target = self.paths.candidates / commit
             if target.exists():
-                if self.paths.link.is_symlink() and Path(os.readlink(self.paths.link)) == target:
+                if self.paths.link.is_symlink() and self.paths.link.resolve() == target.resolve():
                     raise Rejected("refusing to replace the running candidate folder")
                 shutil.rmtree(target)
             os.replace(folder, target)
