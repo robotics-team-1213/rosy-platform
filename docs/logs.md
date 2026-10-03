@@ -4873,3 +4873,8 @@
 - 변경: generated notebook 누락, 빈 legacy IR scan, container 내부 COPY 목적지 검사·mesh bootstrap, live runbook 경로를 고쳤다. ROS 전용 monitor는 host 미실행을 명시하며 WSL Jazzy에서 실제 시험했다.
 - 증거: 거절된 push main suite 7 failed/12304 passed/499 skipped/1 error. 수정 후 관련 host124 passed1 skipped, known_failures NEW0, runtime34 passed, WSL Jazzy monitor1 OK. 독립 리뷰66 passed1 skipped 및 APPROVE. docs/validation/d427-source-migration/push-gate-corrections-2026-10-04.md.
 - gate 변화: 없음. enforced push 재실행·원격 main·CI·artifact·device 수용은 아직 pending.
+
+## 2026-10-04 · uncommitted · D-442·D-443 이동 브랜치 반영
+- 변경: 사용자가 수용한 두 ADR의 최종 본문과 Accepted 행을 새 소스 배치에 반영했다. 예약된 D-438~D-441 번호는 그 브랜치가 착지할 때까지 gap으로 유지한다. 다른 세션의 커밋·WIP는 변경하지 않았다.
+- 증거: 최종 설계 커밋 155a26258, 독립 재리뷰와 원본 lint 0 errors. 새 배치의 lint·구조 검증은 별도로 실행한다.
+- gate 변화: 없음. 설계 수용이며 안전 구현·릴리스 검증은 후속 단계다.
