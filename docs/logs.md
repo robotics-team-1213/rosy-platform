@@ -4920,3 +4920,9 @@
 - 변경: §4(a) semantic 타입·불변 payload·공통 identity/validity와 포트 결과/Protocol을 namespace wheel로 추가했다. skill 의존성·contracts manifest·CI 실제 wheel 설치를 등록했다. 운영 import는 Task3이다.
 - 증거: FLEET/IDLE 리뷰 누락 RED2 보완, fresh 설치 wheel52 passed, 관련 구조121 passed·NEW0, 독립 설치 wheel52 passed·APPROVE Task2. docs/validation/d427-source-migration/motion-contract-wheel-2026-10-04.md.
 - gate 변화: 없음. SOURCE/host/wheel만 검증했고 binding·native/SD/core Docker·CI·ARM64·DEVICE·FIELD는 pending이다.
+
+## 2026-10-04 · uncommitted · D-442 release contract delivery source
+
+- 변경: 실제 wheel을 native payload·SD 공통 builder·CORE Docker의 복사되는 install에 포함하고 두 ARM64 workflow의 빌드 의존성을 명시했다. source build 찌꺼기는 TMPDIR에만 둔다.
+- 증거: RED3 후 관련48 passed. 실제 Ubuntu3.12 wheel 설치/import와 기존 namespace 반복 설치 거부를 확인했다. 독립 리뷰의 stale pip target 문제를 hard reject로 막았다. docs/validation/d427-source-migration/motion-contract-delivery-2026-10-04.md.
+- gate 변화: 없음. SOURCE/host Linux 검증이며 실제 native ARM64·SD·Docker build·CI·DEVICE·FIELD는 pending이다.

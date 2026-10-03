@@ -23,6 +23,10 @@ def verify_dashboard_route(app: object) -> None:
 
 def main() -> None:
     # Import the same modules the CORE entry point and API need before ROS spins.
+    from rosy.contracts.motion import BaseTwist
+    from rosy.contracts.skill import AttemptIdentity
+    assert BaseTwist(0.0, 0.0).linear_mps == 0.0
+    assert AttemptIdentity is not None
     import core.main  # noqa: F401
     import core.node  # noqa: F401
     from ament_index_python.packages import get_package_share_directory

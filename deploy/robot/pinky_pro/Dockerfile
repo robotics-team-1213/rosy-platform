@@ -46,6 +46,13 @@ RUN apt-get -o Acquire::Retries=5 update \
 
 FROM core-runtime AS core-build
 
+RUN apt-get -o Acquire::Retries=5 update \
+    && apt-get install -y --no-install-recommends python3-setuptools python3-wheel \
+    && rm -rf /var/lib/apt/lists/*
+COPY contracts/skill /opt/rosy_ws/contracts/skill
+COPY contracts/motion /opt/rosy_ws/contracts/motion
+COPY deploy/robot/pinky_pro/image/install-motion-contracts.sh /opt/rosy_ws/install-motion-contracts.sh
+
 COPY deploy/robot/pinky_pro/restore-hollow-toolchain.sh /tmp/restore-hollow-toolchain.sh
 RUN apt-get -o Acquire::Retries=5 update \
     && bash /tmp/restore-hollow-toolchain.sh \
@@ -70,6 +77,7 @@ COPY middleware/apps/device/pinky/profile /opt/rosy_ws/src/products/pinky_pro/pr
 RUN set -eo pipefail \
     && source /opt/ros/jazzy/setup.bash \
     && colcon build --merge-install --packages-up-to core pinky_pro web_common dashboard pilot \
+    && bash /opt/rosy_ws/install-motion-contracts.sh /opt/rosy_ws /opt/rosy_ws/install \
     && test -d /opt/rosy_ws/install
 
 FROM core-runtime AS core

@@ -6,6 +6,11 @@
 !src/contracts/
 !contracts/ros_idl/
 !contracts/foundation/
+!contracts/
+!contracts/skill/
+!contracts/skill/**
+!contracts/motion/
+!contracts/motion/**
 !src/runtime/
 !contracts/ros_idl/**
 !contracts/foundation/**
