@@ -77,3 +77,13 @@ def test_regenerated_but_uncommitted_records_block_the_push():
         "the guard must enumerate the exact harness targets, not a glob — "
         "an unrelated index.md must never block a push"
     )
+
+
+@pytest.mark.skipif(BASH is None, reason="bash is required")
+def test_affected_tier_runs_after_the_fast_gate():
+    """D-436: the affected tier is added on top of the fast gate, never instead of it."""
+    text = SCRIPT.read_text(encoding="utf-8")
+    fast = text.index("test/test_release_boundary_guards.py")
+    step = text.index("rosy_harness.py affected")
+    assert fast < step, "the fast suites must stay ahead of the affected tier"
+    assert '--run' in text and '"full"' in text, "affected runs; a FULL escalation only warns"

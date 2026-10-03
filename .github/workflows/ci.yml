@@ -4,6 +4,10 @@ on:
   push:
     branches: [main]
   pull_request:
+  # D-436: PR 은 affected 티어, main push·야간·수동 실행은 풀 티어를 돈다.
+  schedule:
+    - cron: "0 18 * * *"   # 03:00 KST nightly full run
+  workflow_dispatch:
   # ubuntu-26.04-rehearsal.yml 이 같은 절차를 다른 러너에서 재실행한다 (D-134).
   workflow_call:
     inputs:
@@ -56,6 +60,28 @@ jobs:
           pip3 install --no-cache-dir --break-system-packages -c /tmp/rosy-runtime-constraints.txt \
             flake8 httpx pyyaml jsonschema ext4
 
+      # D-436: 시험 범위. pull_request 는 변경 범위(affected) 티어를 고르고, 선택기가
+      # 공용 기반·CI/시험 설정·미분류 파일 때문에 FULL 로 올리면 아래 전체 단계를 돈다.
+      # main push·schedule·workflow_dispatch·workflow_call(PR 이 아닌 호출)은 항상 풀이다.
+      # 선택은 빌드 전에 한다 — colcon 산출물과 COLCON_IGNORE 가 작업 트리 변경으로
+      # 섞이지 않게. base 는 위 fetch-depth: 0 체크아웃에 있다.
+      - name: Test scope (D-436)
+        id: scope
+        shell: bash
+        env:
+          SCOPE_BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -eo pipefail
+          if [ "${{ github.event_name }}" = "pull_request" ] && [ -n "$SCOPE_BASE" ]; then
+            python3 tools/harness/rosy_harness.py affected --base "$SCOPE_BASE" --print
+            python3 tools/harness/rosy_harness.py affected --base "$SCOPE_BASE" --json > /tmp/rosy-affected.json
+            mode="$(python3 -c 'import json; print(json.load(open("/tmp/rosy-affected.json"))["mode"])')"
+          else
+            echo "full tier: event ${{ github.event_name }} (D-436 4)"
+            mode=full
+          fi
+          echo "mode=$mode" >> "$GITHUB_OUTPUT"
+
       # D-430 §5: a commit that touches a safety-tagged path (platform_parts.yaml
       # `concern: safety` roots, `safety_modules`, `safety_anchors`) needs a
       # `Safety-Review:` trailer. Only the event's own range is checked: the PR's
@@ -105,6 +131,7 @@ jobs:
           flake8 src/runtime/gateway/core src/contracts/foundation/core_common src/runtime/events/core_events src/runtime/services/core_features src/runtime/api_web/core_api_web src/site/fleet/fleet src/site/fleet/test src/sim/gz_sim/launch src/sim/gz_sim/scripts src/sim/gz_sim/test --count --max-line-length=120 --show-source --statistics || true
 
       - name: Test (core domain suites, protocol schemas P1-19)
+        if: steps.scope.outputs.mode == 'full'
         run: |
           python3 -m pytest src/runtime/gateway/test src/runtime/events/test src/runtime/services/test src/hmi/web_common/test src/contracts/foundation/test src/products/pinky_pro/profile/test src/products/omx/profile/test -v
 
@@ -112,18 +139,22 @@ jobs:
       # src/runtime/services 를 sys.path 에 얹으므로 colcon 오버레이 없이도
       # 돈다 — Windows 개발 환경과 같은 조건이다.
       - name: Test (fleet formation, relay, session)
+        if: steps.scope.outputs.mode == 'full'
         run: python3 -m pytest src/site/fleet/test/ -v
 
       # Rosy Vision 수신기도 ROS 를 import 하지 않는다(conftest 가 fleet·games·foundation 을
       # sys.path 에 얹는다). games 와 test_preview.py 기본 이름이 겹치므로 따로 돈다.
       - name: Test (Rosy Vision receiver)
+        if: steps.scope.outputs.mode == 'full'
         run: python3 -m pytest src/site/vision/test -q
 
       # Rosy Cell 코어는 ROS·네트워크 없이 돈다(D-399 Application). 기본 이름 겹침이 없도록 따로 돈다.
       - name: Test (Rosy Cell core)
+        if: steps.scope.outputs.mode == 'full'
         run: python3 -m pytest src/site/cell/test -q
 
       - name: Test (palletizing process compatibility and boundaries)
+        if: steps.scope.outputs.mode == 'full'
         run: python3 -m pytest test/test_platform_palletizing_compat.py test/test_platform_cell_submission.py test/architecture/test_platform_dependency_boundaries.py -q
 
       # 멀티 인스턴스 런치는 로봇마다 포트·HOME·설정을 갈라야 한다. 그 계약은 런치
@@ -131,6 +162,7 @@ jobs:
       # 없는 러너에서는 테스트가 스스로 skip 한다 — 조용히 통과하는 것이 아니라
       # skip 으로 드러난다.
       - name: Test (gz_sim multi-instance launch)
+        if: steps.scope.outputs.mode == 'full'
         shell: bash
         run: |
           # ROS setup.sh 는 미정의 변수를 참조하므로 -u 를 쓰지 않는다.
@@ -145,6 +177,7 @@ jobs:
       # ament 린트(flake8/pep257/copyright)는 기존 파일들이 이미 적색이라 여기서 빼고,
       # 다른 패키지 시험(control·games·emotion·led)의 기존 적색은 D-191 후속 과제다.
       - name: Test (hardware safety - no-motion, ADC lock, battery curve)
+        if: steps.scope.outputs.mode == 'full'
         shell: bash
         run: |
           set -eo pipefail
@@ -158,6 +191,7 @@ jobs:
       # 2026-09-21: 구조적 적색 3건(D-136·D-137 인덱스 행 + D-137 T2 저널 필드)이
       # 수습돼 더 이상 deselect 하지 않고 게이팅한다.
       - name: Test (deployment and release contracts)
+        if: steps.scope.outputs.mode == 'full'
         env:
           # module harness: logs.md 는 이 base 이후로 앞부분이 보존되어야 한다 (비면 origin/main merge-base).
           HARNESS_BASE_REF: ${{ github.event.pull_request.base.sha || github.event.before }}
@@ -165,6 +199,34 @@ jobs:
           . /opt/ros/jazzy/setup.sh
           . install/setup.sh
           python3 -m pytest test/ -v
+
+      # D-436 affected 티어: 고른 pytest 호출을 차례로 돈다(기본 이름이 겹치는 스위트는
+      # 이미 다른 호출로 나뉘어 있다). 5 = 수집 0건(선택된 파일이 skip 만 함)은 실패가 아니다.
+      - name: Test (affected tier, D-436)
+        if: steps.scope.outputs.mode == 'affected'
+        shell: bash
+        env:
+          HARNESS_BASE_REF: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -eo pipefail
+          . /opt/ros/jazzy/setup.sh
+          . install/setup.sh
+          python3 - <<'PY'
+          import json
+          import subprocess
+          import sys
+
+          selection = json.load(open("/tmp/rosy-affected.json"))
+          status = 0
+          for paths in selection["invocations"]:
+              print("::group::pytest " + " ".join(paths), flush=True)
+              code = subprocess.run([sys.executable, "-m", "pytest", *paths, "-v"]).returncode
+              print("::endgroup::", flush=True)
+              if code not in (0, 5):
+                  print(f"::error::pytest {' '.join(paths)} exited {code}", flush=True)
+                  status = 1
+          sys.exit(status)
+          PY
 
       # 호스트 테스트는 ros_bridge 를 임포트하지 않으므로, 모듈 최상단의 ROS
       # 임포트가 노드 생성자를 죽이는 결함을 잡지 못한다. 이 러너에는
