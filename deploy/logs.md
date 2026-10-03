@@ -2190,3 +2190,9 @@
 - Change: add avahi-daemon.service to both Requires and After for the host Avahi socket used by Fleet NSS. Existing Docker, network and firewall dependencies remain.
 - Evidence: baseline dependency regression RED; focused deployment tests 19 passed. Removing only Avahi ordering while preserving Requires was RED; restored tests 2 passed.
 - Gate: SOURCE/LOCAL verified. Separate on-site administrator installation and actual PC boot acceptance remain pending. No robot motion, CORE or camera configuration changes.
+
+## 2026-10-04 · uncommitted · fix(site): 관제 PC의 요청형 카메라 조명
+
+- 변경: 기존 장치 신원 검증과 mDNS 재연결을 보존한 채 light-status/light-request/light-cancel을 추가했다. 공식 카메라 화면의 유일한 조명 버튼만 조작하며 화면 잠금·포커스·새 UI·라벨 영역과 부모 포함 관계를 검증한다. 요청 상태와 실제 torch 상태는 구분하고 이미 요청 중이면 갱신하지 않는다.
+- 증거: CLI 59 passed, 독립 리뷰 승인. 실제 관제 PC 사용자 영역에 원자적으로 배치하고 개인 설정 해시 보존을 확인했다. 실제 S21에서 request_confirmed, 중복 unchanged, cancel_confirmed와 torch 켜짐/꺼짐을 확인했다. 진단 조회는 화면을 깨우지 않으며 송출 시작·보안 잠금 우회는 추가하지 않았다.
+- gate 변화: 없음. 관제 카메라 기능 검증은 Pi 제품 이미지와 전체 현장 수용을 대신하지 않는다.

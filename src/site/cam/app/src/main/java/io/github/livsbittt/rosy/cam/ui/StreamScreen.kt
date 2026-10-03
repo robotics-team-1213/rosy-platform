@@ -107,16 +107,16 @@ fun StreamScreen(
             if (state.running) {
                 val light = state.lighting
                 Text(stringResource(when {
-                    !light.enabled -> R.string.light_disabled
                     !light.supported -> R.string.light_unsupported
                     light.message != null -> R.string.light_error
+                    !light.requested -> R.string.light_disabled
                     light.torchOn -> R.string.light_on
                     light.dark -> R.string.light_dark
                     else -> R.string.light_ready
                 }), style = MaterialTheme.typography.bodySmall)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                    OutlinedButton(onClick = { StreamService.automaticLight(!light.enabled) }) {
-                        Text(stringResource(if (light.enabled) R.string.light_disable else R.string.light_enable))
+                    OutlinedButton(onClick = { StreamService.requestLight(!light.requested) }) {
+                        Text(stringResource(if (light.requested) R.string.light_disable else R.string.light_enable))
                     }
                     Button(onClick = { StreamService.savePhoto() },
                         enabled = !state.previewOnly && !state.photoSaving) {
