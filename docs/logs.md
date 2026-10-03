@@ -4803,3 +4803,10 @@
 - gate 변화: 없음(문서만). 사이트 후보 workflow 첫 실행은 사용자가 승인한 push 뒤, 사이트 서명 키는 D-301대로 미준비
 - 결정: D-437 Accepted, D-301 부록
 - 교훈: 없음
+
+## 2026-10-03 · uncommitted · site(D-437): security review fixes for CI-built site candidates
+- 변경: manifest-only 서명에 `--expected-manifest-sha256` 필수(CI 실행 summary의 해시), 빌드 job의 `release.json`·`SHA256SUMS` 출처 증명과 서명 전 `gh attestation verify` 절차, 옛 `site-*` 릴리스 정리(최신 3개), fetch 스크립트의 링크·장치 거부와 tarfile `data` 필터, action SHA 고정, 이미지 원본 경로 전체의 무시된 파일 거부, 릴리스 존재 사전 검사. D-437·D-301 부록·README 갱신. 로봇 쪽 릴리스 쪽 넘김은 후속 작업
+- 증거: 사이트 후보·서명·검증·workflow·fetch 시험, harness lint, actionlint 1.7.7(Docker)
+- gate 변화: 없음. workflow 첫 실행은 사용자 승인 push 뒤
+- 결정: D-437 Accepted 본문 보강
+- 교훈: 공개 Release 자산은 저장소 쓰기 권한으로 바꿀 수 있다. 서명 대상은 쓰기 권한으로 고칠 수 없는 기록(실행 summary·출처 증명)에 묶어야 한다

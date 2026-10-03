@@ -25,7 +25,7 @@
    - workflow는 `GITHUB_TOKEN` 말고 어떤 secret도 쓰지 않는다. 빌드 job은 저장소 읽기 권한과 출처 증명용 `id-token: write`·`attestations: write`만 갖고, Release를 만드는 job만 `contents: write`를 갖는다.
    - 사이트 후보 workflow의 action은 모두 전체 커밋 SHA로 고정하고 태그를 주석으로 단다. 이동하는 태그가 바뀌어도 실행 코드가 바뀌지 않는다.
 3. **사이트 후보의 배포 경로는 공개 저장소의 GitHub Release(prerelease)다.**
-   - 태그는 `site-<짧은 커밋>`이다. 후보 묶음은 tar로 묶어 2 GiB 아래 조각(`.partNN`)으로 나누고 `SHA256SUMS`를 붙인다. GitHub Release 자산은 파일당 2 GiB 한도가 있다.
+   - 태그는 `site-<짧은 커밋>`이다. 긴 빌드 전에 짧은 사전 job이 같은 태그의 릴리스가 이미 있는지 보고, 있으면 바로 실패한다. 후보 묶음은 tar로 묶어 2 GiB 아래 조각(`.partNN`)으로 나누고 `SHA256SUMS`를 붙인다. GitHub Release 자산은 파일당 2 GiB 한도가 있다.
    - `release.json`은 따로 자산으로도 올린다. 서명 스테이션은 이 파일만 내려받는다.
    - 릴리스 설명은 "`release.json.sig`가 붙기 전에는 UNSIGNED"라고 적는다.
    - 사이트 호스트는 자산을 받아 조각을 잇고, `SHA256SUMS`를 확인하고, 풀고, `release.json.sig`를 넣은 뒤 `docker load` 전에 서명과 파일 해시를 검증한다.
@@ -77,7 +77,7 @@
 
 ### Validation
 
-- 호스트 시험: `--sbom-tool syft` 호출과 결과 파일, 무시된 비밀 파일 거부, manifest-only 서명(커밋 형식·기대 커밋 불일치 거부, 덮어쓰기 거부, 서명 뒤 호스트 검증기 통과), workflow 계약(수동 실행, secret 없음, 빌드 job 읽기 전용, release job만 쓰기, syft 버전·해시 고정, prerelease, 조각 나누기).
+- 호스트 시험: `--sbom-tool syft` 호출과 결과 파일, 이미지 원본 경로의 무시된 비밀 파일 거부, manifest-only 서명(기대 해시 불일치·커밋 형식·기대 커밋 불일치 거부, 덮어쓰기 거부, 서명 뒤 호스트 검증기 통과), fetch 스크립트(서명 없음·예상 밖 자산·변조 조각·심볼릭/하드 링크·FIFO·절대 경로·`..` 거부), workflow 계약(수동 실행, secret 없음, 릴리스 존재 사전 검사, 빌드 job 저장소 읽기 전용, 해시 summary와 출처 증명, release job만 쓰기, 옛 `site-*` 정리, action SHA 고정, syft 버전·해시 고정, prerelease, 조각 나누기).
 - 아직 안 된 것: workflow의 첫 실제 실행. 사용자가 승인한 push 뒤 `gh workflow run build-site-candidate.yml`로 확인한다. 사이트 키 준비와 호스트 수용은 D-301대로 별도 gate다.
 - 이 ADR은 로봇 이동이나 정책 실행을 허락하지 않는다.
 

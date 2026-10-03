@@ -15,7 +15,7 @@ CI job definitions for this repository.
 | `android.yml` | `android-unit`: Rosy Cam (ceiling camera phone app) JVM unit tests (`./gradlew testDebugUnitTest`, Temurin 17), only when `src/site/cam/**` changes |
 | `build-arm64-payload.yml` | Manual native arm64 build of the unsigned core/io OCI payload; uploads a checksum-bound artifact for offline signing, never a release |
 | `build-pinky-image.yml` | Manual native arm64 `.img.xz` build; uploads an unsigned image handoff for offline signing |
-| `build-site-candidate.yml` | D-437: manual amd64 site candidate build (syft SBOM); read-only build job, separate `contents: write` job publishes an UNSIGNED prerelease `site-<sha12>` (tar split into `.partNN` + `SHA256SUMS`, `release.json` as its own asset). Signing stays offline (`sign_candidate.py --manifest-only`) |
+| `build-site-candidate.yml` | D-437: manual amd64 site candidate build (syft SBOM). A pre-job fails fast if `site-<sha12>` exists; the build job (repo read-only, plus `id-token`/`attestations` write for provenance) prints the `release.json` SHA-256 in the job summary and attests `release.json`/`SHA256SUMS`; a separate `contents: write` job publishes the UNSIGNED prerelease (tar split into `.partNN` + `SHA256SUMS`, `release.json` as its own asset) and prunes older `site-*` releases to 3. Actions pinned by commit SHA. Signing stays offline (`sign_candidate.py --manifest-only`) |
 
 ## Subdirectories
 

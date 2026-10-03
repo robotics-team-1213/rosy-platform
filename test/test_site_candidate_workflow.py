@@ -38,7 +38,9 @@ def test_build_job_is_read_only_and_release_job_alone_can_write():
     build = jobs["build-unsigned-candidate"]
     release = jobs["publish-unsigned-prerelease"]
 
-    assert set(jobs) == {"build-unsigned-candidate", "publish-unsigned-prerelease"}
+    assert set(jobs) == {
+        "check-release-free", "build-unsigned-candidate", "publish-unsigned-prerelease"}
+    assert jobs["check-release-free"]["permissions"] == {"contents": "read"}
     assert build["runs-on"] == "ubuntu-24.04"
     # Read-only for the repository; OIDC + attestations only for provenance.
     assert build["permissions"] == {
@@ -47,6 +49,7 @@ def test_build_job_is_read_only_and_release_job_alone_can_write():
     assert release["needs"] == "build-unsigned-candidate"
     assert all(job["timeout-minutes"] <= 120 for job in jobs.values())
     assert not any("GH_TOKEN" in step.get("env", {}) for step in build["steps"])
+    assert build["needs"] == "check-release-free"
     checkout = build["steps"][0]
     assert checkout["uses"].startswith("actions/checkout@")
     assert checkout["with"]["persist-credentials"] is False
@@ -140,7 +143,20 @@ def test_every_action_is_pinned_to_a_full_commit_sha():
             for step in job["steps"] if "uses" in step]
     text = WORKFLOW.read_text(encoding="utf-8")
 
-    assert len(uses) == 4
+    assert len(uses) == 5
     for ref in uses:
         assert re.fullmatch(r"[\w.-]+/[\w.-]+@[0-9a-f]{40}", ref), ref
         assert re.search(re.escape(ref) + r" # v\d+\.\d+\.\d+\n", text), ref
+
+
+def test_pre_job_fails_fast_when_the_site_release_exists():
+    jobs = _workflow()["jobs"]
+    check = jobs["check-release-free"]
+    run = _run_text(check)
+    build_run = _run_text(jobs["build-unsigned-candidate"])
+
+    assert check["timeout-minutes"] <= 15
+    assert 'gh api "repos/${GH_REPO}/releases/tags/${tag}"' in run
+    assert 'grep -q "HTTP 404"' in run
+    assert "already exists" in run
+    assert 'test "$commit" = "$CHECKED_COMMIT"' in build_run

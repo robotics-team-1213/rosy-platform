@@ -715,7 +715,8 @@ local PC. The runner output is unsigned, and no signing key is ever stored in
 GitHub. Placeholders below (`<owner>/<repository>`, `<commit>`, key paths) are
 filled from the operator's private records.
 
-1. Dispatch the build. It runs `build_candidate.py --sbom-tool syft` on
+1. Dispatch the build. A short first job fails at once if the release for
+   that commit already exists. The build then runs `build_candidate.py --sbom-tool syft` on
    `ubuntu-24.04` and creates the prerelease `site-<first 12 hex of commit>`
    with `release.json`, `SHA256SUMS`, and the split tar
    (`rosy-site-candidate-<commit>.tar.partNN`, each under 2 GiB):

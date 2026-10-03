@@ -23,7 +23,43 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  check-release-free:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    outputs:
+      commit: ${{ steps.free.outputs.commit }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Fail fast if the site release already exists
+        id: free
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          commit="$(git rev-parse HEAD)"
+          [[ "$commit" =~ ^[0-9a-f]{40}$ ]]
+          tag="site-${commit:0:12}"
+          # Only a 404 means "free"; any other API failure stops the run.
+          if response="$(gh api "repos/${GH_REPO}/releases/tags/${tag}" 2>&1)"; then
+            echo "::error::release ${tag} already exists; delete it or build another commit"
+            exit 1
+          elif ! grep -q "HTTP 404" <<<"$response"; then
+            echo "$response" >&2
+            exit 1
+          fi
+          echo "commit=$commit" >>"$GITHUB_OUTPUT"
+
   build-unsigned-candidate:
+    needs: check-release-free
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     permissions:
@@ -48,6 +84,8 @@ jobs:
       - name: Verify clean amd64 source and record commit
         id: source
         shell: bash
+        env:
+          CHECKED_COMMIT: ${{ needs.check-release-free.outputs.commit }}
         run: |
           set -euo pipefail
           test "$(uname -m)" = x86_64
@@ -58,6 +96,8 @@ jobs:
           # Provenance names the dispatched ref (e.g. main); the built commit
           # must be in that ref's history so the attestation covers it.
           git merge-base --is-ancestor "$commit" "$GITHUB_SHA"
+          # A branch ref may move between jobs; build what was checked free.
+          test "$commit" = "$CHECKED_COMMIT"
           echo "commit=$commit" >>"$GITHUB_OUTPUT"
           echo "tag=site-${commit:0:12}" >>"$GITHUB_OUTPUT"
 
