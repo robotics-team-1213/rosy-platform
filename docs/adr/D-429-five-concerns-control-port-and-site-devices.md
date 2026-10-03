@@ -19,7 +19,7 @@ D-427은 최상위를 middleware·operations·learning 세 파트와 공용 cont
 1. "판단"이 층마다 흩어져 있다. 층으로 묶으면 7개, 그 안의 판단 종류(아래 §1 표의 "예" 열)는 십여 개다. 서로 다른 권한과 시간 척도를 가진 것들이 같은 단어로 불린다.
 2. Motion Intent는 D-399 문서에만 있고 코드에는 없다(`.py` 파일에서 `motion.intent` 대소문자 무시 검색 0건). 공통 제어 백엔드 포트도 없다. Pinky는 `src/runtime/gateway/core/bridge/ros_bridge.py`가 Twist를 낸다. OMX는 `src/products/omx/adapter/omx_adapter/command_owner.py:290`의 `ActionPort.send_goal(TrajectoryCommand)`를 쓴다. 두 장치가 같은 개념을 다른 모양으로 갖고 있다.
 3. D-427 §1과 §2가 서로 어긋난다. §1은 `integrations/robots/<model>`을 둔다. §2는 integrations가 contracts만 import하게 한다. 그런데 provider·로봇 어댑터는 소유 모듈이 정의한 포트를 구현해야 하므로 그 API를 import할 수밖에 없다. 그래서 `integrations/robots/omx/src/rosy/integrations/robots/omx/transfer_provider.py:10-11`은 §2 아래 영구 위반이다.
-4. 매니페스트가 `firmware/signal`·`firmware/dock`을 middleware로 대응시킨다(`tools/harness/platform_parts.yaml:155-160`). 둘 다 로봇 위가 아니라 사이트에 놓이는 장치다. 신호 순서는 Fleet이 소유하고(D-337 §2), 신호등 heartbeat 폴링·`/command` POST·failsafe 재단언도 Fleet 프로세스 안에서 돈다(`src/site/fleet/fleet/server/signals.py:197-364`). 관측기는 제어와 분리된 읽기 전용 평면이다(D-163; 실행 호스트는 D-163이 정하지 않았다). 도크는 로봇이 `/status`를 직접 읽는다(`core_features/docking/agent.py:74-107`).
+4. 매니페스트가 `firmware/signal`·`firmware/dock`을 middleware로 대응시킨다(`tools/harness/platform_parts.yaml:155-160`). 둘 다 로봇 위가 아니라 사이트에 놓이는 장치다. 신호 순서는 Fleet이 소유하고(D-337 §2), 신호등 heartbeat 폴링·`/command` POST·failsafe 재단언도 Fleet 프로세스 안에서 돈다(`src/site/fleet/fleet/server/signals.py:197-420`). 관측기는 제어와 분리된 읽기 전용 평면이다(D-163; 실행 호스트는 D-163이 정하지 않았다). 도크는 로봇이 `/status`를 직접 읽는다(`core_features/docking/agent.py:74-107`).
 5. D-392 §4의 모델 도구 금지 목록에 사이트 장치 구동이 없다. 녹색 신호는 사실상 로봇에게 주는 진입 허가다. 문 열기·컨베이어 기동도 같은 무게다.
 
 외부 근거(2026-10-03 조회):
@@ -68,7 +68,7 @@ D-427은 최상위를 middleware·operations·learning 세 파트와 공용 cont
 #### 2. 사이트 장치는 operations에 두고, 소비자는 제자리에 둔다 (사용자 결정 2)
 
 - **소유:** 사이트 장치 owner는 `operations/site_devices/<kind>`에 둔다. kind는 지금 `signal`·`dock`, 나중에 `conveyor`·`door`다. 소유 범위는 펌웨어와 장치 계약이다. 런타임이 있는 kind는 그 런타임 라이브러리도 소유한다.
-- **신호 런타임:** 지금 heartbeat 폴링, `/command` POST, failsafe 재단언은 Fleet 프로세스 안에서 돈다(`src/site/fleet/fleet/server/signals.py:197-364`). `operations/site_devices/signal`은 펌웨어, 장치 계약, 그리고 Fleet이 import하는 driver 라이브러리를 소유한다. 별도 프로세스는 만들지 않는다. 두 번째 명령 진입점도 만들지 않는다. 신호등에 명령을 내리는 길은 Fleet 하나다.
+- **신호 런타임:** 지금 heartbeat 폴링, `/command` POST, failsafe 재단언은 Fleet 프로세스 안에서 돈다(`src/site/fleet/fleet/server/signals.py:197-420`). `operations/site_devices/signal`은 펌웨어, 장치 계약, 그리고 Fleet이 import하는 driver 라이브러리를 소유한다. 별도 프로세스는 만들지 않는다. 두 번째 명령 진입점도 만들지 않는다. 신호등에 명령을 내리는 길은 Fleet 하나다.
 - **도크:** 도크에는 operations 런타임이 없다. 로봇이 도크 `/status`를 직접 폴링하고(`src/runtime/services/core_features/docking/agent.py:74-107`), 펌웨어에는 `/status`만 있다(`firmware/dock/firmware/rosy_dock/rosy_dock.ino:195`). `operations/site_devices/dock`은 펌웨어와 장치 계약만 소유한다. 로봇의 직접 읽기는 그대로 둔다. 도크 heartbeat·semantic 명령·감독 failsafe는 지금 없으며, 필요해지면 별도 ADR로 정한다.
 - **관측:** 신호등 관측기(`firmware/signal/observer`, D-163의 읽기 전용 평면)는 operations 관측 평면으로 옮긴다. 목적지 경로는 wave 3 계획에서 정한다(예: `operations/vision/signal_observer`). 실행 호스트는 D-163이 정하지 않았고 이 ADR도 정하지 않는다. 제어와 관측의 분리(D-163)는 그대로다.
 - **로봇 쪽 도킹:** DOCKING 모드(D-200)와 도크 상태 읽기(`core_features/docking/agent.py`, `charging.py`)는 middleware에 남는다. 도크 펌웨어는 사이트에 있고, 도크에 들어가는 로봇의 판단은 로봇에 있다. D-349·D-350·D-351의 단계·재시도 규칙은 그대로다.
@@ -78,7 +78,7 @@ D-427은 최상위를 middleware·operations·learning 세 파트와 공용 cont
 #### 3. ER2는 사이트 장치 변경을 후보로만 제안할 수 있다 (사용자 결정 3)
 
 - ER2는 사이트 장치 변경(예: "정거장 2 신호를 녹색으로")을 **후보 제안**으로만 낼 수 있다. 자동 실행은 없다.
-- **승인자:** 승인자는 인증된 사람 Fleet 운영자뿐이다. 어떤 모델·자동화도 승인할 수 없다. 승인은 후보 기록과 별개 행위다. 근거: D-357 §4는 replan 후보가 기존 admission·사람 확인 규칙을 받는다고 정하고, D-332 §4는 확인을 actor·시각·대상·근거가 남는 감사 이벤트로, 운영 조정 권한을 `operator` 역할로 정하며 뷰어는 확인할 수 없게 한다. "모델·자동화 승인 불가"는 그 위에 이 ADR이 사이트 장치 후보에 대해 명시하는 규칙이다.
+- **승인자:** 승인자는 인증된 사람 Fleet 운영자뿐이다. 어떤 모델·자동화도 승인할 수 없다. 승인은 후보 기록과 별개 행위다. 근거: D-357 §4는 replan 후보가 기존 admission·사람 확인 규칙을 받는다고 정하고, D-332 §4는 확인을 actor·시각·대상·근거가 남는 감사 이벤트로, 운영 조정 권한을 `operator` 역할로 정하며 뷰어는 확인할 수 없게 한다. "모델·자동화 승인 불가"는 그 위에 이 ADR이 사이트 장치 후보에 대해 명시하는 규칙이다. D-332 §4는 재발의 승인(`policy-admin`)과 운영 조정(`operator`)을 나눌 뿐이며, 사이트 장치 후보 승인을 운영 조정(`operator`)으로 분류하는 것은 이 ADR의 결정이다.
 - **승인의 효과:** 승인된 후보는 Fleet 신호 순서·교통 로직(`signals.py`, `traffic.py`)의 **입력**일 뿐이다. 장치에 직접 내려가는 명령이 아니다. 실행 시점에 Fleet이 현재 점유와 세대를 다시 확인한다. 재확인에 실패하면 후보를 stale로 표시하고 재시도하지 않는다(사용자 결정, 2026-10-03). 운영자는 실패 사유를 본다. ER2는 새 턴에서 다시 제안할 수 있고, 그 제안은 새 승인이 필요하다. 승인은 나중에 발동하려고 대기하지 않는다. 조건이 풀리면 실행되는 "예약 승인"은 없다.
 - **인터록 우선:** 운영자 승인은 Fleet 인터록(교차로 점유, 진입 grant, all_red·e-stop scatter, stop latch)을 결코 넘어서지 않는다.
 - **fence 범위:** 이 후보는 다른 제안과 같은 turn·stop 무효화를 받는다(D-357 §6, D-358 §4). 다만 사이트 장치 후보는 Mission에 묶이지 않을 수 있으므로, fence 범위는 site/signal-group 세대 또는 장치 `last_seq`(`signals.py:46`)다. D-358 §4의 공유 트랜잭션 확인을 이 범위로 넓힌다.
@@ -143,7 +143,7 @@ heartbeat·semantic 명령·감독 failsafe는 명령을 받는 장치의 의무
 - **대상과 이름:** `src/site/fleet/fleet/ai`(ER2·VLM 숙고형 코드)를 `operations/decision`으로 옮기며 import 이름을 `fleet.ai`에서 **`rosy.decision`**으로 바꾼다. 기존 wheel namespace가 `rosy.<모듈>`(`rosy.execution`, `rosy.world`, `rosy.skills`, `rosy.processes.palletizing`)이고 파트 이름을 넣지 않으므로 `rosy.operations.decision`이 아니라 `rosy.decision`을 쓴다.
 - **예외 범위:** D-231의 "패키지 이름은 그대로 둔다"에 대한 예외는 이 패키지 하나뿐이다. ROS 패키지·노드·토픽 이름, HTTP API 경로, 공개 wire, 저장 스키마, 모델 도구 이름은 하나도 바꾸지 않는다. 다른 패키지의 개명 근거로 이 절을 쓰지 않는다.
 - **같은 커밋:** 호출자, 시험, 그리고 `fleet.server.proposal_store` ↔ `fleet.ai`의 양방향 import(`fleet/ai/tool_dispatch.py:19` → `fleet.server.proposal_store`, `fleet/server/proposal_store.py:16` → `fleet.ai.model_tool_contract`)를 이동 커밋 하나에서 함께 처리한다. 옛 이름 re-export shim은 두지 않는다(두 이름이 공존하면 같은 계약이 둘로 보인다).
-- **순환 끊기(권고):** 의존 방향은 proposal store → `rosy.decision.api`의 타입 하나로 둔다. 역방향은 두지 않는다. 즉 `ModelToolCall`·`ModelToolResult` 같은 타입을 `rosy.decision.api`(`api: true` root, §4 api 규칙)에 두고 proposal store가 그것을 import한다. `rosy.decision`의 dispatch 구현은 Fleet이 주입하는 저장 포트를 통해 proposal store를 쓴다. 정확한 포트 모양은 carve 커밋에서 정한다.
+- **순환 끊기(권고):** 의존 방향은 proposal store → `rosy.decision.api`의 타입 하나로 둔다. 역방향은 두지 않는다. 즉 `ModelToolCall`·`ModelToolResult` 같은 타입과 proposal store가 내는 예외(`ProposalConflict`·`ProposalRejected`, 지금 `tool_dispatch.py:19`가 import)를 `rosy.decision.api`(`api: true` root, §4 api 규칙)에 두고 proposal store가 그것을 import한다. `rosy.decision`의 dispatch 구현은 Fleet이 주입하는 저장 포트를 통해 proposal store를 쓴다. 정확한 포트 모양은 carve 커밋에서 정한다.
 - **트랜잭션:** D-358 §4의 공유 SQLite 트랜잭션(후보 삽입과 stop·세대·watermark 확인)은 Fleet 안에 그대로 둔다. `rosy.decision`은 트랜잭션을 열지 않고 Fleet의 저장 포트를 호출한다.
 
 ### 기존 결정과의 관계
@@ -196,7 +196,7 @@ heartbeat·semantic 명령·감독 failsafe는 명령을 받는 장치의 의무
   - import 규칙 시험에 §4의 api 규칙 1–4를 넣는다. api root는 `import_prefix`가 `.api`로 끝나고 `api: true`가 있는 root이며, api root는 contracts·api만 import하고, integration은 자기 kind가 허용된 파트의 api만 import한다.
   - KNOWN_VIOLATIONS를 다시 판정한다. `integrations/robots/omx → modules/skills/api` 1건이 빠진다(set equality이므로 같은 변경에서 지운다).
   - `test_model_tool_adapter_conformance.py:157`의 거부 목록에 §3의 사이트 장치 구동 이름을 넣는다. 후속 ADR 3과 별개로 지금 한다. Fleet 시험이므로 wave 0 게이트에 `python -m pytest src/site/fleet/test/test_model_tool_adapter_conformance.py -q`를 더한다.
-- **Wave 3c:** 이름 붙은 carve 커밋 `refactor(d427): carve fleet.ai to rosy.decision`으로 `fleet/ai`를 `operations/decision`(import `rosy.decision`)으로 옮긴다(§5). 같은 커밋에서 호출자(main `ab239c4eb` 기준 비시험 1개 `fleet/server/proposal_store.py`, 시험 10개)와 양방향 import를 함께 고친다. 신호 관측기도 wave 3에서 옮긴다.
+- **Wave 3c:** 이름 붙은 carve 커밋 `refactor(d427): carve fleet.ai to rosy.decision`으로 `fleet/ai`를 `operations/decision`(import `rosy.decision`)으로 옮긴다(§5). 같은 커밋에서 호출자(main `ab239c4eb` 기준 비시험 1개 `fleet/server/proposal_store.py`, 시험 10개)와 양방향 import를 함께 고친다. 같은 커밋에서 `rosy.decision`의 설치 단위(새 `pyproject.toml`, Fleet `setup.py`·`package.xml` 의존 추가)를 만든다. `docs/validation/model-tool-artifact-2026-10-01/manifest.json`의 옛 경로는 증거 기록이므로 고치지 않는다(D-226). shim을 두지 않으므로 carve 직전에 `fleet/ai`·`proposal_store.py`를 건드리는 미병합 브랜치를 다시 확인한다. 신호 관측기도 wave 3에서 옮긴다.
 - **Wave 4a:** `firmware/{dock,signal}`(23파일)이 빠진다. 4a는 `modules/skills/*`·`apps/agent`만 남는다.
 - **위반 잔량:** 계획 문서의 "모든 wave 뒤에도 위반 5건"은 4건이 된다(OMX 어댑터 3건 중 skills/api 1건 해소).
 
