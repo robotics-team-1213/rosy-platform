@@ -101,8 +101,8 @@
 | 장치 | `DevicePolicy=closed`, `DeviceAllow` spidev0.0·gpiochip4·i2c-1·ws281x_pwm만 | D-190·D-260과 같다. 늘리지 않는다 |
 | ROS 환경 | 없음. `PYTHONPATH`는 현재 릴리스 site-packages, GIF는 `/opt/rosy/current/install/share/emotion/emotion` | ROS 없이 동작한다. namespace(예 `/rosy_60`)도 필요 없다 |
 | 순서 | `After=local-fs.target systemd-udevd.service`. CORE·`rosy-runtime.target`에는 걸지 않는다 | 부팅·실패를 보여야 한다(D-190) |
-| 재시작 | `Restart=on-failure`, `RestartSec=2`, 5회/300 s | 지금과 같다. 패널이 없는 보드는 0으로 끝난다 |
-| 이주 | `Conflicts=rosy-boot-display.service` | 둘이 같은 선을 동시에 몰지 않는다 |
+| 재시작 | `Restart=on-failure`, `RestartSec=5`, 5회/300 s | 지금과 같다. 패널이 없는 보드는 0으로 끝난다 |
+| 이주 | `Conflicts=` 없음. 교대는 동기화가 명시적으로 `stop` → `enable --now` 한다(결정 6) | `Conflicts=`는 양방향이라, 은퇴 unit을 시작하는 명령 하나가 조건 실패와 상관없이 rosy-face를 멈출 수 있다 |
 | 샌드박스 | 지금 unit 그대로(`PrivateNetwork`, `AF_UNIX`, 빈 capability, `ProtectSystem=strict` …) | 입력이 파일뿐이다 |
 | 우선순위 | `Nice=5` | 지금과 같다 |
 
@@ -160,6 +160,17 @@
 
 구현이 정한 작은 것(사용자 결정 불필요): 캘리브레이션 띠 문구, 라인 추종 주행 카드 한 줄, 충전 중 띠, 시험 띠 길이.
 
+### 구현 기록 (2026-10-03, 브랜치 `feat/d385-native-face-handoff`, 리뷰 전)
+
+- **상황표.** `core_common.face_screen`(표준 라이브러리만): `screen_for`, `drive_due`·`drive_card_visible`(`core.bridge.display`는 다시 내보내기만 한다), `validate_face_inputs`·`read_face_inputs`. 시험 `src/contracts/foundation/test/test_face_screen.py`가 모든 행과 1–8행의 우선순위 쌍, 신선도 경계(3 s / 미래 5 s), 필드 단위 None 규칙을 본다.
+- **CORE.** 브리지 5 Hz 전원 틱이 바뀔 때와 1 s마다 `face-inputs.json`을 쓴다(`display.face_inputs_payload`, `host.write_face_inputs`). rosy-core의 `UMask=0027`이 0644를 0640으로 만들기 때문에 쓴 뒤 `chmod 0644`를 한다. 얼굴 이름은 `set_emotion` 서비스가 없어도 `emotion_for`로 정한다(기동 10초 `hello` 포함).
+- **rosy-face.** 0.5 s 폴(파일·상황표·부저·램프), 0.1 s 틱(얼굴 프레임, 백라이트가 낮으면 절반). GIF 프레임은 처음 재생할 때 틱마다 한 장씩 320×240 RGB565로 줄여 저장하고 다시 쓴다. 띠는 패널 바이트 위에 마스크로 얹는다. 소유자 검사는 `getpwnam("rosy-core")`의 uid다. SIGTERM에서 `/run/nologin`이 있으면 "Shutting down", 없으면 "Display restarting" 한 장을 그린다.
+- **정지 카드 원인 줄(Q1).** 스냅샷에는 래치(`estop`)만 있고 누가 눌렀는지는 없다. 그래서 원인은 "E-stop latched"(래치) 또는 "Emergency stop"(모드만 EMERGENCY) 두 가지다. 감시 정지(SAF-002) 사유를 싣는 것은 후속이다.
+- **업데이트 표시.** D-412 업데이터만 `update-display.txt`를 쓴다(적용 일지가 있는 동안). `rosy-release-push.ps1`의 활성화는 쓰지 않는다 — 수 초짜리이고, 쓰려면 원격 단계가 하나 더 필요하다. 후속.
+- **이주.** `rosy-boot-display.service`는 릴리스에만 은퇴 사본(`ConditionPathExists=!/etc/systemd/system/rosy-face.service`)으로 실린다. 동기화는 그 파일이 이미 있는 로봇에서만 교체하고(새 이미지에는 설치하지 않는다), 재시작 목록에 올리지 않는다. rosy-face를 새로 더할 때 `stop rosy-boot-display` → `enable --now rosy-face`를 pending.json에 남겨 끊겨도 다음 실행이 끝낸다. 롤백 뒤 시작(Q5)은 업데이터 `_rollback_tail`과 `rosy-release-push.ps1 -Rollback`의 `display-restore` 단계 두 곳이다.
+- **발견한 결함.** 부팅 카드의 숨쉼 프레임은 페이로드(`view["frame"]`)에 실렸지만 `render_boot(payload, frame=0)`가 인자로만 받아 실기에서 숨쉬지 않았다(D-385 결정 3). 카드 렌더러가 이제 `frame=`으로 넘긴다.
+- **크기 판정.** `rosy-face.py` 1021줄(구 판정 대체), `ros_bridge.py` 799줄, `rosy_auto_update.py` 1559줄로 다시 판정했다(`test/architecture/test_module_structure.py`).
+
 ### Consequences
 
 - 로봇 몸의 표면(화면·소리·빛)이 한 프로세스·한 규칙표로 모인다. 얼굴과 주행 카드가 처음으로 실기 화면에 나온다.
@@ -172,7 +183,7 @@
 ### Validation (구현 때)
 
 - 계약 시험(호스트, rclpy 없음): `screen_for` 전 표(행마다 하나 이상, 우선순위 쌍, 신선도 경계 3 s, 모르는 값), `face-inputs.json` 키 셋과 쓰기 규칙, 엄격 읽기(링크·FIFO·크기·소유자·오래됨), 주행 카드 주기 이동 뒤 CORE·`emotion_server` 동일 결과, GIF 변환 캐시 크기, 부저·램프 기존 시험 그대로 통과.
-- unit·이미지 계약: `test_native_systemd_contract.py`·`test_image_customization_contract.py`·`test_device_surface_contract.py`에 `rosy-face`(장치 허용 넷, 다른 unit 금지), `Conflicts=`, 이미지에 `rosy-boot-display` 없음.
+- unit·이미지 계약: `test_native_systemd_contract.py`·`test_image_customization_contract.py`·`test_device_surface_contract.py`에 `rosy-face`(장치 허용 넷, 다른 unit 금지), 이미지에 `rosy-boot-display` 없음.
 - 이주 시험: `sync-image-layer.py`가 026 상태에서 교대 명령을 내는지, 026 동기화로 롤백할 때 옛 파일이 되살아나고 N 업데이터가 옛 unit을 시작하는지(가짜 runner).
 - 변이 증명: 신선도 규칙 제거, 1–9 우선순위 뒤집기, 교대 단계 제거 → 각각 빨강.
 - 기기(사람 확인, 다음 릴리스): 아래 목록.

@@ -43,6 +43,7 @@
 | D-200 | 도킹은 DOCKING 모드와 전용 명령 슬롯을 쥔다 — 모든 도크 기종이 처음부터 끝까지 DOCKING에서 움직인다 |
 | D-205 | 실물 차선 미션으로의 전환: 시뮬레이션 현실화, 인식 재작업, 재합격 순서 |
 | D-411 | Pilot 로봇측 학습 녹화(카메라 유닛 소유, CORE는 시작·정지 요청, `teleop/intent` 원 입력·주체 기록, 1회 10분)와 정지 중에만 허용하는 HTTP 수신(목록·tar·sha256 manifest, `rosy_ml fetch --http`); 기기가 알리는 조작부 서술자 `rosy.controls/1`(base_velocity·joint_jog·gripper, 드라이버는 전송·위젯은 kind별, 팔 조이스틱은 이전 목표 종료 후 순차 제한 목표); OMX 그리퍼 전용 절대 목표·쥠 readback(시뮬레이션만, D-390 유지) |
+| D-433 | 로봇 몸의 화면·소리·빛(LCD·부저·램프)은 ROS 밖 한 프로세스 `rosy-face`(구 `rosy-boot-display`)가 평생 소유하고, 상황표 순수 함수 하나(`core_common`)가 그릴 것을 정한다; CORE는 1 s `face-inputs.json` 핸드오버로 얼굴·주행 카드 내용을 넘기고 신선하지 않으면 상태 카드로 돌아간다; 026 이주·롤백 경로 포함, Q1–Q5 사용자 결정(권고안) |
 
 ## 계획·결과 문서
 
@@ -72,8 +73,8 @@
 
 ## 최근 기록
 
+- 2026-10-03 · e021264e6 · feat(face): D-433 CORE가 rosy-face에 얼굴 핸드오버를 쓴다
 - 2026-10-03 · f4c311569 · feat(bridge): D-423 모델 상태 두 토픽 latched 구독
 - 2026-10-03 · uncommitted · test(console): 지도 도구는 격자 밖에 둔다
 - 2026-10-02 · uncommitted · fix(core): D-419 착지 — console_linked 를 D-407 유예와 합침
 - 2026-10-02 · uncommitted · fix(core): D-419 라운드 4 — Fleet 링크 판정 함수 하나
-- 2026-10-02 · uncommitted · fix(core): D-419 라운드 3 — Fleet 없는 로봇의 SAF-003 검증

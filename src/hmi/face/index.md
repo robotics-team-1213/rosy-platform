@@ -12,6 +12,7 @@
 | D-57 | ROS-native first; board and vendor differences stay in adapters |
 | D-153 | UI/UX 평가는 세 계층이고 판정 단위는 표면이다 |
 | D-306 | 화면별 책임과 UI/UX 개선 완료 기준 |
+| D-433 | 로봇 몸의 화면·소리·빛(LCD·부저·램프)은 ROS 밖 한 프로세스 `rosy-face`(구 `rosy-boot-display`)가 평생 소유하고, 상황표 순수 함수 하나(`core_common`)가 그릴 것을 정한다; CORE는 1 s `face-inputs.json` 핸드오버로 얼굴·주행 카드 내용을 넘기고 신선하지 않으면 상태 카드로 돌아간다; 026 이주·롤백 경로 포함, Q1–Q5 사용자 결정(권고안) |
 
 ## 계획·결과 문서
 
@@ -32,8 +33,8 @@
 
 ## 최근 기록
 
+- 2026-10-03 · f23221421 · feat(face): D-433 rosy-face가 LCD를 쓰는 렌더러
 - 2026-10-01 · uncommitted · D-398 부팅 카드 장미색 사본 정합
 - 2026-10-01 · uncommitted · feat(emotion): 주행 카드 도킹 상태 단어
 - 2026-10-01 · uncommitted · feat(emotion): 주행 카드 목표 좌표 표시
 - 2026-10-01 · uncommitted · feat(emotion): 주행 카드 충전 표시
-- 2026-10-01 · uncommitted · feat(emotion): 부팅 카드 Rosy 정체성 점

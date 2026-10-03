@@ -2045,3 +2045,10 @@
 - 변경: `native/learned-perception.env.example` 에 `ROSY_OBJECT_DET=false`(+ `ROSY_OBJECT_DET_MAX_HZ` 설명). 서비스·권한 변화 없음. 모델은 `/var/lib/rosy/models/object_det/` 아래이고 deliver 가 root:rosy-camera 0750 으로 만든다.
 - 증거: `test_native_systemd_contract.py` env 예시 시험.
 - gate 변화: 없음. 켜는 것은 사용자 승인 뒤.
+
+## 2026-10-03 · fcda72b78 · feat(deploy): D-433 rosy-boot-display → rosy-face 이주
+
+- 변경: `rosy-face.py`/`.service`(구 rosy-boot-display, 사용자 rosy-display 유지). 이미지가 rosy-face를 켜고 은퇴 unit은 설치하지 않는다. `sync-image-layer.py`: 026 로봇에서 rosy-face 추가 시 `stop rosy-boot-display` → `enable --now rosy-face`, 은퇴 unit은 조건 붙은 사본으로 교체만(새로 설치·재시작 없음). 업데이터가 적용 중 `/run/rosy-boot/update-display.txt`를 쓰고, 롤백 뒤 은퇴 unit이 켜져 있고 멈춰 있으며 rosy-face가 없으면 한 번 시작한다(Q5). `rosy-release-push.ps1 -Rollback`도 같은 단계. `rosy-hw-test`는 둘 중 도는 unit에 넘긴다.
+- 증거: `test_image_layer_sync.py`(이주·롤백 5건, 변이 2종 빨강 확인), `test_rosy_auto_update.py`(표시·복원 5건), `test_release_push_entrypoint.py`, `test_native_systemd_contract.py`, `test_device_surface_contract.py`, `test_hw_test.py` 통과.
+- gate 변화: 없음. 페이로드 빌드·실기 미실행.
+- 결정: D-433 (Proposed)

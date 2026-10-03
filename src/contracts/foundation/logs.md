@@ -357,3 +357,10 @@
 - 증거: `python -m pytest src/contracts/foundation/test/ -q` 통과 (2026-10-03 Windows).
 - gate 변화: 없음.
 - 결정: D-411 구현 부록 10.
+
+## 2026-10-03 · e021264e6 · feat(face): D-433 상황표 `core_common.face_screen`
+
+- 변경: LCD 상황표 `screen_for`(D-433 1–18행), D-394 주행 카드 주기(`drive_due`, `drive_card_visible` — `core.bridge.display`에서 이동), `face-inputs.json` 엄격 읽기(`read_face_inputs`, `validate_face_inputs`: 링크·FIFO·16 KiB·소유자·schema 1·3 s). 표준 라이브러리만.
+- 증거: `python -m pytest src/contracts/foundation/test/test_face_screen.py -q` 77 passed 2 skipped(POSIX 전용 링크·FIFO).
+- gate 변화: 없음.
+- 결정: D-433 (Proposed)

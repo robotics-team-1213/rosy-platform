@@ -777,3 +777,10 @@
 - 변경: `ros_bridge.py` `_on_lane_model_status`·`_on_object_det_model_status`(TRANSIENT_LOCAL) → `svc.vision.models`. 구독 목록·latched 시험 갱신. `test_core_logic` D-137 단일 발행자에 `runtime/sensing/control/object_detector.py`.
 - 증거: gateway 두 묶음 1141+715 passed; 실패 `test_core_node_teardown::test_run_drains_executor_workers_before_returning` 1건은 부하 아래에서만(단독 8 passed).
 - gate 변화: 없음.
+
+## 2026-10-03 · e021264e6 · feat(face): D-433 CORE가 rosy-face에 얼굴 핸드오버를 쓴다
+
+- 변경: 브리지 5 Hz 전원 틱에서 `/run/rosy/face-inputs.json`을 바뀔 때와 1 s마다 쓴다(`display.face_inputs_payload`·`face_inputs_due`, `host.write_face_inputs` 0644 강제). 얼굴 이름은 `set_emotion` 서비스 유무와 무관하게 `emotion_for`로 정한다. `display.drive_due`는 `core_common.face_screen`을 다시 내보낸다.
+- 증거: `python -m pytest src/runtime/gateway/test/test_face_inputs.py src/runtime/gateway/test/test_bridge_display.py -q` 통과. ros_bridge.py는 rclpy 없이 import할 수 없어 py_compile만.
+- gate 변화: 없음. 실기 확인 전.
+- 결정: D-433 (Proposed)
