@@ -62,7 +62,7 @@ roots:
     part: middleware
     d427_target: middleware/core
     import_prefix: [core_api_web]
-    note: Pinky Device API web layer; Fleet also consumes it in-process today.
+    note: Pinky Device API web layer and host-agent client.
   - path: src/runtime/navigation
     part: middleware
     d427_target: middleware/core/navigation
@@ -251,6 +251,31 @@ roots:
   - path: tools
     part: tools
     d427_target: tools
+    note: Loose scripts directly in tools/ only; every tools/<subfolder> needs its own root.
+  - path: tools/calibration
+    part: tools
+    d427_target: tools/calibration
+    note: Offline per-robot calibration fit and store CLI (never run on a robot).
+  - path: tools/device_twin
+    part: tools
+    d427_target: tools/device_twin
+    note: D-412 device twin test tool; not shipped.
+  - path: tools/harness
+    part: tools
+    d427_target: tools/harness
+  - path: tools/hooks
+    part: tools
+    d427_target: tools/hooks
+  - path: tools/icons
+    part: tools
+    d427_target: tools/icons
+  - path: tools/release
+    part: tools
+    d427_target: tools/release
+  - path: tools/sim
+    part: tools
+    d427_target: tools/sim
+    note: Sim benches and scenario scripts.
   - path: .github
     part: tools
     d427_target: .github

@@ -11,15 +11,17 @@ remove an entry in the change that removes the import.
 Honest holes, not oversights:
 - Only static ``import`` / ``from`` statements are seen. ``sys.path`` script
   imports resolve only when the imported name is a registered ``import_prefix``.
-- Test code (``test``/``tests`` folders, ``test_*.py``, ``conftest.py``) is skipped,
-  as in test_platform_dependency_boundaries.py.
+- Test code (files under ``test``/``tests`` folders, and ``conftest.py``) is skipped.
 - ``shared_web`` is allowed for every middleware/operations root, not only ui roots.
+- middleware may import ``integrations/simulation`` from any root; §2's
+  "sim owner only" limit is not enforced.
+- contracts' "no external runtime dependency" rule is not checked; only imports
+  of other manifest roots are.
 - Third-party imports are ignored except §2's training stack in middleware.
 - Edges are per root pair, so a second import along a listed edge is not new.
 """
 
-import ast
-import importlib.util
+import os
 import shutil
 import subprocess
 from pathlib import Path, PurePosixPath
@@ -27,16 +29,17 @@ from pathlib import Path, PurePosixPath
 import pytest
 import yaml
 
+from _ast_imports import _imports, _matches
+
 ROOT = Path(__file__).resolve().parents[2]
 MANIFEST = ROOT / "tools" / "harness" / "platform_parts.yaml"
 
-_spec = importlib.util.spec_from_file_location(
-    "_d413_dependency_boundaries", Path(__file__).with_name("test_platform_dependency_boundaries.py")
-)
-_d413 = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(_d413)
-_imports = _d413._imports
-_matches = _d413._matches
+#: Roots whose path is itself a package dir, so their dotted package starts at the prefix.
+PACKAGE_DIR_ROOTS = {
+    "modules/execution/src/rosy/execution/api",
+    "modules/execution/src/rosy/execution/local",
+    "modules/execution/src/rosy/execution/site",
+}
 
 #: Frozen §2 violations as (importer root, imported root or "external:<name>") -> reason.
 KNOWN_VIOLATIONS = {
@@ -76,6 +79,8 @@ def _manifest() -> dict:
 
 def _tracked() -> list[str]:
     if shutil.which("git") is None or not (ROOT / ".git").exists():
+        if os.environ.get("CI"):
+            pytest.fail("D-427 ownership checks need a git checkout in CI")
         pytest.skip("D-427 ownership checks need a git checkout")
     done = subprocess.run(
         ["git", "ls-files"], cwd=ROOT, capture_output=True, text=True, encoding="utf-8", check=True,
@@ -94,19 +99,15 @@ def _owner(path: str, roots: list[dict]) -> dict | None:
 
 def _is_test_file(path: str) -> bool:
     pure = PurePosixPath(path)
-    return (
-        bool({"test", "tests"} & set(pure.parts[:-1]))
-        or pure.name.startswith("test_")
-        or pure.name == "conftest.py"
-    )
+    return bool({"test", "tests"} & set(pure.parts[:-1])) or pure.name == "conftest.py"
 
 
 def _package_of(path: str, root: dict) -> str:
     """Dotted package of ``path``, used to resolve relative imports."""
     relative = PurePosixPath(path).relative_to(root["path"])
-    for prefix in root.get("import_prefix") or ():
-        if root["path"].endswith("/" + prefix.replace(".", "/")):
-            return ".".join([prefix, *relative.parent.parts])
+    if root["path"] in PACKAGE_DIR_ROOTS:
+        (prefix,) = root["import_prefix"]
+        return ".".join([prefix, *relative.parent.parts])
     parts = relative.parent.parts
     if parts[:1] == ("src",):
         parts = parts[1:]
@@ -127,6 +128,8 @@ def _allowed(importer: dict, target: dict, rules: dict) -> bool:
         return True
     source_part, target_part = importer["part"], target["part"]
     if source_part == "integrations":
+        # Deliberately stricter than the other parts: an adapter may not reach
+        # tools/test/deploy either, only contracts.
         return target_part == "contracts"
     if target_part == source_part:
         return True
@@ -151,7 +154,7 @@ def _edges(manifest: dict, tracked: list[str]) -> dict[tuple[str, str], list[str
         importer = _owner(path, roots)
         if importer is None or importer["part"] not in rules:
             continue
-        source = (ROOT / path).read_text(encoding="utf-8")
+        source = (ROOT / path).read_text(encoding="utf-8-sig")
         forbidden_external = rules[importer["part"]].get("forbidden_external", ())
         for name in _imports(source, _package_of(path, importer)):
             target = _target_of(name, owners)
@@ -206,6 +209,39 @@ def test_every_tracked_file_has_exactly_one_owner():
         if _owner(path, roots) is None and pure.suffix != ".md":
             orphans.append(path)
     assert orphans == [], f"add these to tools/harness/platform_parts.yaml: {orphans[:20]}"
+
+
+def test_every_tools_subfolder_has_its_own_root():
+    """The bare ``tools`` root holds loose scripts only, so new learning code under
+    ``tools/<new>/`` cannot hide inside the tools part."""
+    roots = _manifest()["roots"]
+    unowned = sorted({
+        "/".join(PurePosixPath(path).parts[:2])
+        for path in _tracked()
+        if path.startswith("tools/") and len(PurePosixPath(path).parts) > 2
+        and _owner(path, roots)["path"] == "tools"
+    })
+    assert unowned == [], f"add a platform_parts.yaml root for: {unowned}"
+
+
+def test_roots_with_python_packages_declare_their_import_prefix():
+    roots = _manifest()["roots"]
+    tracked = _tracked()
+    package_dirs = {
+        str(PurePosixPath(path).parent) for path in tracked
+        if PurePosixPath(path).name == "__init__.py" and not _is_test_file(path)
+    }
+    missing = []
+    for directory in sorted(package_dirs):
+        if str(PurePosixPath(directory).parent) in package_dirs:
+            continue  # only top-level packages
+        root = _owner(directory + "/__init__.py", roots)
+        if root is None:
+            continue
+        package = _package_of(directory + "/__init__.py", root)
+        if not any(_matches(package, prefix) for prefix in root.get("import_prefix") or ()):
+            missing.append(f"{root['path']}: {package}")
+    assert missing == [], f"declare import_prefix for: {missing}"
 
 
 def test_import_rules_only_shrink():
