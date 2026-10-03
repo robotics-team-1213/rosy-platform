@@ -199,7 +199,7 @@ def face_inputs_payload(snapshot, *, face: Optional[str], power_mode: Optional[s
 
 def face_camera_quality(preview: dict) -> dict:
     """Hand over only fresh JPEG exposure evidence; the reader ages it again."""
-    quality, age_ms = preview.get('quality'), preview.get('age_ms')
+    quality, age_ms = preview.get('quality'), preview.get('quality_age_ms', preview.get('age_ms'))
     fresh = (preview.get('available') is True and preview.get('stale') is False
              and type(age_ms) in (int, float) and 0 <= age_ms <= 2000
              and quality in (dict(valid=False, reason='low_light'), dict(valid=True, reason='usable')))

@@ -220,3 +220,9 @@
 - 변경: 흰 화면·전구 도형·ASCII LIGHT ASSIST 안내를 기존 렌더러에 추가했다. 카메라 판정 성공을 주장하지 않는다.
 - 증거: face table/native loop/PIL/lamp/package/CORE face handover 317 passed, 4 skipped (Windows).
 - gate 변화: SOURCE/LOCAL. ARM64/device/field verification pending.
+
+## 2026-10-04 · uncommitted · feat: 흰 조명 카드 렌더러 분리
+
+- 변경: 600행 파일 경계를 지키기 위해 기존 전구/흰 채움 렌더러를 emotion/light_assist.py로 분리했다. info_screen의 공개 함수와 기존 단일 화면 소유권은 유지한다.
+- 증거: native/face table/PIL 299 passed, 3 skipped.
+- gate 변화: SOURCE/LOCAL. ARM64/device/field evidence remains separate.

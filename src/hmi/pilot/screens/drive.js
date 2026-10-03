@@ -7,7 +7,6 @@
 
 import {postJson, whoami, api as apiGet, authHeaders, token} from "../client.js";
 import {createDeviceSession} from "../link.js";
-import {createVisionPreview} from "../vision.js";
 import {createModelStatus, renderModels} from "../models.js";
 import {driverFor} from "../drivers/registry.js";
 import {
@@ -17,11 +16,11 @@ import {
 import {mountInputs} from "./inputs.js";
 import {slewCommand} from "../stick.js";
 import {mountAutoMode, mountLanePerception} from "./drive-auto.js";
-import {mountRobotRecording} from "./robot-recording.js";
+import {mountRobotRecording, mountBrowserRecording} from "./robot-recording.js";
 import {readControls, profileFromBaseVelocity} from "../controls.js";
 import {calibrationView} from "../calibration.js";
 import {el, mountDriveView, buildStage, buildControls} from "./drive-view.js";
-import {createCameraCapture, classifyOperation, saveCameraFile} from "/common/evidence.js";
+import {classifyOperation, saveCameraFile} from "/common/evidence.js";
 import {MODE_LABEL} from "/common/core_ui_logic.js";
 
 const LOOP_MS = 100;
@@ -152,49 +151,7 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
   session.open();
 
   // --- 영상: 인증 JPEG 폴링 --------------------------------------------------
-  const capture = createCameraCapture({
-    save: saveCameraFile,
-    storeOnRobot: null,          // 로봇 SD 업로드는 dashboard 경로 재사용 예정(후속).
-    onChange: (state) => {
-      if (!element.frame.hidden) element.empty.textContent = state.message;
-      if (element.shotButton) element.shotButton.disabled = !state.ready;
-      if (element.recordButton) {
-        element.recordButton.disabled = !state.supported;
-        element.recordButton.textContent = state.recording ? "화면 녹화 중지" : "화면 녹화";
-      }
-    },
-  });
-
-  const vision = createVisionPreview({
-    apiGet,
-    onQuality: (quality) => {
-      element.visibility.hidden = !(quality?.valid === false && quality?.reason === "low_light");
-    },
-    fetchFrame: async (path) => {
-      const response = await fetch(path, {headers: authHeaders(), cache: "no-store"});
-      // 409·429 본문(JSON)을 이미지로 띄우지 않는다 — 거부하면 다음 틱에 다시 당긴다.
-      if (!response.ok) throw new Error(`frame ${response.status}`);
-      return response.blob();
-    },
-    onFrame: (url, meta) => {
-      element.frame.src = url;
-      element.frame.hidden = false;
-      element.empty.hidden = true;
-      const image = new Image();
-      image.onload = () => capture.acceptFrame({
-        image, blob: meta.blob, sequence: meta.seq, source: "front",
-        capturedAt: meta.at / 1000,
-      });
-      image.src = url;
-    },
-    onUnavailable: (message) => {
-      element.frame.hidden = true;
-      element.empty.hidden = false;
-      element.empty.textContent = message;
-      capture.unavailable(message);
-    },
-  });
-  vision.start();
+  const {capture, vision} = mountBrowserRecording({element, apiGet, authHeaders});
 
   // --- 모델(D-423 §3.6): 읽기 전용 상태, 교체는 rosy_ml CLI ------------------
   const modelPanel = document.createElement("details");
@@ -490,6 +447,17 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
 
   // --- HUD 액션 --------------------------------------------------------------
   const actions = el("ui-actions");
+  const browserLabel = el("label", "브라우저 확인 영상", {class: "ui-field-label"});
+  const browserMode = el("select", null, {class: "ui-field", "data-browser-record-mode": ""});
+  browserMode.className = "ui-field";
+  for (const [value, label] of [["raw", "표시 없는 원본"], ["annotated", "원본 + 모델 표시본"]]) {
+    const option = el("option", label); option.value = value; browserMode.append(option);
+  }
+  browserLabel.append(browserMode); element.browserMode = browserMode;
+  browserMode.addEventListener("change", () => {
+    if (!capture.setPreviewMode(browserMode.value)) browserMode.value = capture.state().previewMode;
+    else { vision.stop(); vision.start(); }
+  });
   const shotButton = el("ui-button", "촬영", {type: "button", "data-evidence-shot": ""});
   shotButton.setAttribute("kind", "quiet");
   shotButton.addEventListener("click", () => capture.screenshot("pc"));
@@ -501,6 +469,10 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
   });
   element.shotButton = shotButton;
   element.recordButton = recordButton;
+  const saveVideo = el("ui-button", "영상 다시 받기", {type: "button", "data-evidence-save": ""});
+  saveVideo.setAttribute("kind", "quiet"); saveVideo.disabled = true; saveVideo.reason = "저장할 영상이 없습니다";
+  saveVideo.addEventListener("click", () => { capture.saveVideo("pc"); capture.saveOperations(); });
+  element.saveVideo = saveVideo;
   const zoomButton = el("ui-button", "확대 맞춤", {type: "button", "data-drive-zoom": ""});
   zoomButton.setAttribute("kind", "quiet");
   zoomButton.addEventListener("click", () => view.cycleZoom());
@@ -532,7 +504,7 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
   const recordingsButton = el("ui-button", "녹화본", {type: "button", "data-recordings-open": ""});
   recordingsButton.setAttribute("kind", "quiet");
   const recordingFact = el("span", null, {"data-drive-fact": "recording", hidden: ""});
-  actions.append(zoomButton, shotButton, recordButton, robotRecordButton, recordingsButton, inputsButton, exit);
+  actions.append(zoomButton, browserLabel, shotButton, recordButton, saveVideo, robotRecordButton, recordingsButton, inputsButton, exit);
   element.hud.append(recordingFact, actions);
   const robotRecording = mountRobotRecording({
     toggle: robotRecordButton, detail: recordingFact, openButton: recordingsButton,

@@ -2202,3 +2202,9 @@
 - 변경: ROSY_LOW_LIGHT_ASSIST=true에서만 기존 LCD·Lamp 소유자가 흰 조명을 켠다. 신선한 usable 상태에서도 유지해 피드백 점멸을 막고 오래된 근거·우선 경보는 해제한다.
 - 증거: face table/native loop/PIL/lamp/package/CORE face handover 317 passed, 4 skipped (Windows).
 - gate 변화: SOURCE/LOCAL. ARM64/device/field verification pending.
+
+## 2026-10-04 · uncommitted · feat: 경보 출력보다 늦게 하드웨어 시험 실행
+
+- 변경: 비상·고장·주의 램프와 소리부터 적용한 뒤 하드웨어 시험을 처리한다. CORE handover가 없어도 현재 경보 패턴 중에는 queued 시험을 보류한다. 명시적 저조도 조명 opt-in은 IDLE와 MANUAL에서 사용할 수 있다.
+- 증거: native/face table/PIL 299 passed, 3 skipped; queued emergency 시험 회귀 포함.
+- gate 변화: SOURCE/LOCAL. ARM64/device/field evidence remains separate.

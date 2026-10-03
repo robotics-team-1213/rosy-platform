@@ -14,10 +14,11 @@ from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from std_msgs.msg import Bool, String
 from std_srvs.srv import SetBool
+from interfaces.srv import PilotRecordingStart
 
 from core_common.protocol.recording import (
     ACTIVE_STATES, ACTIVE_TOPIC, FETCHED_TOPIC, PILOT_RECORDING_ROOT, SET_ACTIVE_SERVICE,
-    STATUS_TOPIC)
+    START_SERVICE, STATUS_TOPIC)
 from . import executor_choice
 from .pilot_recording import DEFAULT_QUOTA_BYTES, DEFAULT_RESERVE_BYTES, PilotRecorder
 from .pilot_recording import recording_device
@@ -61,6 +62,7 @@ class PilotRecorderNode(Node):
         self._status_pub = self.create_publisher(String, STATUS_TOPIC, _LATCHED)
         self._active_pub = self.create_publisher(Bool, ACTIVE_TOPIC, _LATCHED)
         self.create_service(SetBool, SET_ACTIVE_SERVICE, self._on_set_active)
+        self.create_service(PilotRecordingStart, START_SERVICE, self._on_start)
         self.create_subscription(String, FETCHED_TOPIC, self._on_fetched, 5)
         self.create_timer(1.0, self._tick)
         # `starting` -> `recording` within START_POLL_S of rosbag2 opening its file, not 1 s.
@@ -69,6 +71,16 @@ class PilotRecorderNode(Node):
 
     def _on_set_active(self, request, response):
         ok, detail = self._recorder.start() if request.data else self._recorder.stop('requested')
+        response.success = ok
+        response.message = json.dumps({'code': '' if ok else detail, 'status': self._recorder.status()})
+        self._publish()
+        return response
+
+    def _on_start(self, request, response):
+        if type(request.preview_mode) is not int or request.preview_mode not in (0, 1):
+            ok, detail = False, 'RECORDING_INVALID_OPTIONS'
+        else:
+            ok, detail = self._recorder.start(preview_mode='annotated' if request.preview_mode == 1 else 'raw')
         response.success = ok
         response.message = json.dumps({'code': '' if ok else detail, 'status': self._recorder.status()})
         self._publish()

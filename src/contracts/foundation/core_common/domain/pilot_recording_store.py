@@ -62,6 +62,7 @@ def _summary(folder: Path, meta: dict, active_id: str | None) -> dict:
         status=status,
         manifest_sha256=hashlib.sha256(manifest[1]).hexdigest() if complete else None,
         fetched=(folder / FETCHED_NAME).is_file(),
+        preview_mode=meta.get('preview_mode', 'raw'),
     ).model_dump()
 
 

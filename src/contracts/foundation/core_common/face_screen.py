@@ -315,7 +315,7 @@ def screen_for(*, stage: Any = None, state: Any = None, todo: Optional[str] = No
     # Explicit illumination never activates driving, and never hides alerts/tests.
     percent = core.get("battery_percent")
     if (light_assist and strip is None and wake is None
-            and mode == "IDLE" and not core.get("battery_charging")
+            and mode in ("IDLE", "MANUAL") and not core.get("battery_charging")
             and (percent is None or percent >= 20)):
         return {**answer, "kind": LIGHT, "row": "light", "backlight": 100}
     # Row 18: standby sleeps the panel unless a wake card or a caution must be seen.

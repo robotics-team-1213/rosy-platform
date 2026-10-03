@@ -1045,3 +1045,10 @@
 - 변경: 저조도 raw frame은 keeper·between keeper·paint worker를 reset하고 차선 관측을 즉시 무효화한다. preview quality는 밝게 렌더링한 화면이 아닌 원본에서 판정한다. learned mask·freshness·cache key·revision은 하나의 결과 snapshot만 사용한다.
 - 증거: sensing paint source·callback·camera·preview 93 passed, 1 skipped. async result 교체 시 다른 mask와 revision이 섞이는 회귀를 추가했다.
 - gate 변화: SOURCE/LOCAL. 실주행은 수행하지 않았다.
+
+
+## 2026-10-04 · uncommitted · recording: raw originals and optional model display
+
+- 변경: 기본 raw 녹화는 기존 원본 카메라 topics를 유지한다. annotated 옵션은 같은 bag에 별도 표시 영상과 frame별 검출/keeper/learned 근거를 추가하며 원본을 바꾸지 않는다. session/manifest/readback에 선택과 model_unreviewed 출처를 기록한다. 브라우저 원본 preview는 표시본과 동일 촬영 header를 유지한다.
+- 증거: unknown 옵션 거부·SetBool 호환·원본 topic 보존·typed start/readback·manifest 회귀 53 passed. 새 rosidl 및 raw/표시 쌍은 CI와 runtime에서 추가 확인한다.
+- gate 변화: 없음. 자동 표시는 사람이 확인한 학습 라벨이 아니다.

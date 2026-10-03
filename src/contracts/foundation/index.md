@@ -36,8 +36,8 @@
 
 ## 최근 기록
 
+- 2026-10-04 · uncommitted · feat(protocol): recording start 옵션과 capture provenance
+- 2026-10-04 · uncommitted · feat: 명시적 저조도 보조 조명 수동 모드
 - 2026-10-04 · uncommitted · feat: 저조도 face handover 신선도
 - 2026-10-04 · uncommitted · feat(protocol): lane perception selection v1.90
 - 2026-10-03 · e021264e6 · feat(face): D-433 상황표 `core_common.face_screen`
-- 2026-10-03 · uncommitted · feat(controls): D-411 C 검토 — `GripperControl.max_velocity`
-- 2026-10-03 · uncommitted · feat(core_common): D-411 C `OmxSimGripperGoal`

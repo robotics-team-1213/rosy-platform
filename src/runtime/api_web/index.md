@@ -30,8 +30,8 @@
 
 ## 최근 기록
 
+- 2026-10-04 · uncommitted · feat(recording): 원본과 검토 전 주석 옵션
 - 2026-10-04 · uncommitted · feat(api): fresh keeper source readback
 - 2026-10-04 · uncommitted · fix(api): serialize calibration and perception admission
 - 2026-10-04 · uncommitted · feat(api): stationary lane perception selection
 - 2026-10-03 · 0e244456c · docs(api): D-418 재번호 항목의 커밋 기록 정정
-- 2026-10-03 · uncommitted · merge(main): D-418 SSH 접속 계약을 API Ref v1.89 로 재번호

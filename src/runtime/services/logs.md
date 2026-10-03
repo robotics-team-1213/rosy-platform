@@ -453,3 +453,10 @@
 - 변경: CAMERA_LINE low_light 관측은 visible=false/confidence=0으로 검증하고 즉시 정지한다. LOST 이후에도 public tick에서 local recovery를 우회하고 기존 back-off를 취소한다. IR·LiDAR 한도는 변경하지 않는다.
 - 증거: 모든 후진 조건을 만족한 저조도 LOST에서 -0.03 m/s가 발생하는 RED를 재현한 뒤 차단했다. 이미 BACKING일 때 어두운 관측을 받으면 이전 command decision도 evidence revision으로 거절한다. focused CORE/preview/protocol 143 passed, 1 skipped; recovery API/active-backoff 55 passed. 로그는 X:/DevTemp/rosy-lane-device-20261004/lowlight-*.txt.
 - gate 변화: SOURCE/LOCAL. 사용자가 기기 곁에 없으므로 실제 이동은 시험하지 않았다.
+
+## 2026-10-04 · uncommitted · feat(vision): 같은 capture의 bounded raw/annotation pair
+
+- 변경: 최대4개 원본/주석 frame cache는 stamp·frame_id·크기가 일치할 때만 pair로 제공한다. viewer admission은 pair당 공유하며 각 variant를 한 번만 허용한다. stale/missing raw는 대체하지 않고 counterpart는 cache/TTL 안에서만 고정한다.
+- 변경: source image age와 monotonic 수신 나이를 합쳐 조도와 raw freshness를 제한한다. 얼굴 handover도 effective quality_age_ms를 전달해 지연된 사진이 추가2초 조명 권한을 받지 않는다. 이동 경로로 사용하지 않는다.
+- 증거: pair/malformed/dimension/stale/admission/capture-age와 API/Guard/Bridge/schema 포함162 passed,1 skipped.
+- gate 변화: SOURCE/LOCAL. 실제 기기의 capture pair 수신은 별도 증거다.

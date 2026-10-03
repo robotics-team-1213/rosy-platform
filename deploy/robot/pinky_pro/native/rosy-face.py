@@ -671,6 +671,13 @@ class FaceDisplay:
         request = read_test_request(self.root / TEST_REQUEST, self._wall())
         if request is None or request["request_id"] == self._tested:
             return None
+        if self._lamp is not None and self._lamp.pattern in ("emergency", "failed", "caution"):
+            return None
+        if self.screen and (self.screen["kind"] in ("stopped", "update", "shutdown")
+                            or self.screen["row"] == "failed" or self.screen.get("strip_tone") == "caution"):
+            return None  # Alarm outputs must never wait for a blocking bench test.
+        if self._lamp is not None and self._light_session:
+            self._lamp.show(None)
         self._tested = request["request_id"]
         # D-433 row 10: the strip names the test while it plays.
         self._testing, self._testing_until = request["action"], self._clock() + LAMP_TEST_S
@@ -770,7 +777,6 @@ class FaceDisplay:
         if state != self._state:
             self._state = state
         pattern = self.lamp_pattern_for(view, state)
-        self.handle_test()
         screen = self.screen = self.screen_of(view, now)
         if screen and screen["kind"] == "light":
             pattern = "illumination"
@@ -780,6 +786,8 @@ class FaceDisplay:
             # idempotent, so an unchanged pattern costs nothing.
             self._lamp.show(pattern)
             self._lamp.poll()
+        if self.handle_test() is not None:
+            screen = self.screen = self.screen_of(view, now)
         self._power(screen)
         kind = screen["kind"] if screen else "status"
         if kind == "face" and screen["overlay"] is None:

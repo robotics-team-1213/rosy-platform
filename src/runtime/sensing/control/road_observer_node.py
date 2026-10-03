@@ -27,6 +27,7 @@ from .sensing.perception.camera_ground import simulation_ground_plane
 from .object_detector import TOPIC as DETECTIONS_TOPIC
 from .sensing.perception.follow_preview import FrameEvidence
 from .sensing.perception.camera_visibility import is_low_light
+from core_common.protocol.recording import RAW_PREVIEW_TOPIC
 
 # D-423: detections arrive at about 2 Hz, so the overlay takes the newest one up to
 # this old instead of an exact capture-stamp match (display only, never a verdict).
@@ -176,6 +177,7 @@ class RoadObserverNode(Node):
             depth=1, reliability=ReliabilityPolicy.BEST_EFFORT)
         self.preview_pub = self.create_publisher(
             CompressedImage, 'camera/preview/compressed', preview_qos)
+        self.raw_preview_pub = self.create_publisher(CompressedImage, RAW_PREVIEW_TOPIC, preview_qos)
         self.create_subscription(
             Image, 'camera/front', self._on_camera, qos_profile_sensor_data)
         latched = QoSProfile(
@@ -375,6 +377,22 @@ class RoadObserverNode(Node):
         )
         output.data = encoded.tobytes()
         self.preview_pub.publish(output)
+        # A separate raw stream shares the capture header. The consumer joins
+        # stamps, never independently substitutes the latest annotated frame.
+        try:
+            raw = cv2.resize(frame, (preview.shape[1], preview.shape[0]), interpolation=cv2.INTER_AREA)
+            ok, raw_encoded = cv2.imencode('.jpg', raw, [
+                cv2.IMWRITE_JPEG_QUALITY, self._preview_config.jpeg_quality])
+        except (ValueError, cv2.error) as exc:
+            self.get_logger().warning(f'raw camera preview encode failed: {exc}')
+            return
+        if not ok or int(raw_encoded.size) > self._preview_config.max_bytes:
+            return
+        raw_output = CompressedImage()
+        raw_output.header = msg.header
+        raw_output.format = output.format.replace('overlay=follow-road-v2', 'overlay=none')
+        raw_output.data = raw_encoded.tobytes()
+        self.raw_preview_pub.publish(raw_output)
 
     def _on_camera_controls(self, msg: String) -> None:
         summary = str(msg.data)

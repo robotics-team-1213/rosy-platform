@@ -21,3 +21,6 @@ class VisionPreviewStatus(BaseModel):
     overlay: str = 'none'
     sequence: int = 0
     quality: Optional[VisionPreviewQuality] = None
+    quality_age_ms: Optional[int] = None
+    raw_available: bool = False
+    raw_sequence: Optional[int] = None

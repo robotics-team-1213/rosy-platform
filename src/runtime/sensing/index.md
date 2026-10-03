@@ -68,8 +68,8 @@
 
 ## 최근 기록
 
+- 2026-10-04 · uncommitted · recording: raw originals and optional model display
 - 2026-10-04 · uncommitted · fix(lane): 저조도 keeper 무효화와 mask 원자성
 - 2026-10-04 · uncommitted · fix(perception): 운영자 차선 모델 선택과 관측 출처 표시
 - 2026-10-03 · 051349b81 · feat(sensing): 관측 노드 운영자 덮어쓰기 파일 (D-344 §12 보강)
 - 2026-10-03 · uncommitted · feat(perception): D-431 NCNN/OpenCV 구현과 실제 차선 Pi 재생
-- 2026-10-03 · 820444c49 · fix(perception): D-423 2·3단계 리뷰 반영

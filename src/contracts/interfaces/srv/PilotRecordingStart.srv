@@ -1,0 +1,7 @@
+# Evidence only. Raw is always preserved; annotated adds unreviewed model display.
+uint8 RAW=0
+uint8 ANNOTATED=1
+uint8 preview_mode
+---
+bool success
+string message

@@ -172,7 +172,7 @@ def detection_evidence(services, raw: str) -> None:
     services.advisory_feed.ingest(packet)
 
 
-def camera_preview(services, msg, *, warn: Warn) -> None:
+def camera_preview(services, msg, *, warn: Warn, raw: bool = False, source_now: float | None = None) -> None:
     """Store one display-only JPEG without coupling it to driving policy.
 
     `msg` is duck-typed (`format`, `header.stamp`, `frame_id`, `data`).
@@ -183,7 +183,17 @@ def camera_preview(services, msg, *, warn: Warn) -> None:
             float(msg.header.stamp.sec)
             + float(msg.header.stamp.nanosec) * 1e-9
         )
-        services.vision.publish(
+        source_age = None if source_now is None else source_now - stamp
+        fresh_source = (source_age is not None and math.isfinite(source_age) and math.isfinite(stamp)
+                        and stamp >= 0 and 0 <= source_age <= 2.)
+        if not fresh_source:
+            metadata.pop('quality', None)
+            if raw:
+                raise ValueError('raw preview source image is stale or clock is unavailable')
+        else:
+            metadata['source_age_s'] = source_age
+        publish = services.vision.publish_raw if raw else services.vision.publish
+        publish(
             bytes(msg.data),
             captured_at=stamp,
             frame_id=str(msg.header.frame_id),

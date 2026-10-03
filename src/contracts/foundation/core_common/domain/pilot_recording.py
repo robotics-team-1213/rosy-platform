@@ -68,6 +68,8 @@ class PilotRecordingGuard:
         self.hook_errors = 0
         #: (on, wait) -> (ok, message). None until the ROS bridge is wired.
         self.request_active: Optional[Callable[[bool, bool], tuple[bool, str]]] = None
+        self.request_start: Optional[Callable[[str, bool], tuple[bool, str]]] = None
+        self.start_available: Optional[Callable[[], bool]] = None
         #: recording id -> None. Tells the recorder a recording left in full.
         self.publish_fetched: Optional[Callable[[str], None]] = None
 
@@ -87,6 +89,14 @@ class PilotRecordingGuard:
         """A session runs or is still being finished (manifest hashing)."""
         status = self.status()
         return status is not None and status["state"] in _ACTIVE
+
+    def preview_modes(self) -> list[str]:
+        """Advertise the typed option only while its installed route is ready."""
+        if self.status() is None:
+            return []
+        if self.request_start is not None and self.start_available is not None and self.start_available():
+            return ['raw', 'annotated']
+        return ['raw'] if self.request_active is not None else []
 
     def owner(self) -> Optional[str]:
         with self._lock:
@@ -139,19 +149,35 @@ class PilotRecordingGuard:
             self._stop_async("seat_changed")
 
     # ------------------------------------------------------------- actions
-    def start(self, token_id: str) -> dict:
-        request = self.request_active
+    def start(self, token_id: str, *, preview_mode: str = 'raw') -> dict:
+        if preview_mode not in ('raw', 'annotated'):
+            raise RecordingRefused('INVALID_RECORDING_OPTIONS', 422, 'unknown preview mode')
+        typed = (self.request_start is not None and self.start_available is not None
+                 and self.start_available())
+        request = self.request_start if typed else self.request_active if preview_mode == 'raw' else None
         with self._lock:
             status = self._fresh_status()
         if request is None or status is None:
             raise _refused("RECORDER_UNAVAILABLE", "the camera unit's recorder is not reporting")
         if status["state"] in _ACTIVE:
             raise _refused("RECORDING_BUSY", "a recording is running or still being finished")
-        ok, message = request(True, True)
+        ok, message = request(preview_mode if typed else True, True)
         body = self._reply(message)
         if not ok:
             code = body.get("code") or "RECORDER_UNAVAILABLE"
             raise _refused(code, f"the recorder refused to start: {code}")
+        try:
+            actual = RecorderStatus.model_validate(body.get('status')).model_dump(by_alias=True)
+            if actual['state'] not in _ACTIVE or actual.get('preview_mode', 'raw') != preview_mode:
+                raise ValueError('recording start option was not confirmed')
+        except (TypeError, ValueError) as exc:
+            # A malformed success must not become an owned recording with invented options.
+            if self.request_active is not None:
+                try:
+                    self.request_active(False, False)
+                except Exception:  # noqa: BLE001 - best-effort cleanup, preserve the refusal
+                    _log.exception('pilot recorder option mismatch cleanup failed')
+            raise _refused('RECORDER_UNAVAILABLE', 'recorder did not confirm the start options') from exc
         with self._lock:
             self._adopt_reply(body.get("status"))
             self._owner, self._lost_at, self._pending = token_id, None, None

@@ -5,6 +5,7 @@
 // 더 자주 당기면 429 만 늘고, 그 요청들이 teleop 과 같은 브라우저 연결 풀을 잡아먹는다.
 
 export const MIN_PULL_INTERVAL_MS = 420;
+import {fetchCameraPair} from "/common/evidence.js";
 
 export function createVisionPreview({
   apiGet,               // (path) => Promise<{status, body}> — JSON
@@ -13,6 +14,7 @@ export function createVisionPreview({
   onFrame,              // (blobUrl, meta) => void
   onUnavailable,        // (message) => void
   onQuality,            // optional raw observation quality; JPEG freshness is separate
+  previewMode = () => "raw",
   now = () => Date.now(),
 }) {
   let running = false;
@@ -44,28 +46,31 @@ export function createVisionPreview({
         onUnavailable(status.body?.stale === true ? "카메라 프레임 지연" : "카메라 프레임 수신 대기");
         return;
       }
-      if (status.body.sequence === seq) {
+      const mode = previewMode();
+      const key = `${status.body.sequence}:${mode}`;
+      if (key === seq) {
         return;   // 같은 프레임 — 마지막 영상을 유지하고 건너뛴다(숨기지 않는다).
       }
       if (now() - lastPullAt < MIN_PULL_INTERVAL_MS) return;   // 다음 틱에 — 429 를 부르지 않는다
       lastPullAt = now();
-      const frame = await fetchFrame(`/api/v1/vision/front/frame?sequence=${status.body.sequence}`);
+      const pair = await fetchCameraPair(status.body, {fetchFrame, previewMode: mode});
       if (gen !== generation) return;
-      seq = status.body.sequence;
+      seq = key;
       release();
-      objectUrl = URL.createObjectURL(frame);
+      objectUrl = URL.createObjectURL(pair.blob);
       hasFrame = true;
       onFrame?.(objectUrl, {
         width: status.body.width, height: status.body.height,
         age_ms: status.body.age_ms,
         at: now(),
         seq: status.body.sequence,
-        blob: frame,
+        ...pair,
       });
     } catch (error) {
       // 409(시퀀스 진행)·네트워크 일시 오류는 프레임을 숨기지 않고 다음 틱에서 재시도.
-      if (gen === generation && !hasFrame) {
-        onUnavailable("카메라 프레임 수신 대기");
+      if (gen === generation) {
+        seq = null; hasFrame = false; release();
+        onUnavailable(error.message || "카메라 프레임 수신 대기");
       }
       if (gen === generation) onQuality?.(null);
     } finally {

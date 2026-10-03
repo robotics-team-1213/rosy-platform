@@ -376,3 +376,15 @@
 - 변경: 카메라 수신 나이와 face 파일 나이를 합산해 2초까지만 조명 근거를 신뢰한다. IDLE standby 조명은 명시 opt-in이며 경보·보정·시험·충전·저전압이 우선한다.
 - 증거: face table/native loop/PIL/lamp/package/CORE face handover 317 passed, 4 skipped (Windows).
 - gate 변화: SOURCE/LOCAL. ARM64/device/field verification pending.
+
+## 2026-10-04 · uncommitted · feat: 명시적 저조도 보조 조명 수동 모드
+
+- 변경: opt-in 저조도 보조 조명을 IDLE뿐 아니라 MANUAL에서도 허용한다. 자동 navigation, 경보, 시험, 보정, 충전, 낮은 배터리는 보조 조명보다 우선한다.
+- 증거: native/face table/PIL 299 passed, 3 skipped.
+- gate 변화: SOURCE/LOCAL. ARM64/device/field evidence remains separate.
+
+## 2026-10-04 · uncommitted · feat(protocol): recording start 옵션과 capture provenance
+
+- 변경: 중앙 schemas import에 closed RecordingStartRequest를 re-export한다. VisionPreviewStatus에는 pair availability/sequence와 effective quality_age_ms, VisionEvidenceRecord에는 optional raw/annotated group 및 model_unreviewed 출처를 추가한다. body 없는 legacy start는 raw이며 envelope protocol_version1.0은 유지한다.
+- 증거: protocol version alignment와 Guard 실제 옵션 확인·실시간 capability·타입 검증·CORE 통합 포함162 passed,1 skipped.
+- gate 변화: SOURCE/LOCAL. annotations는 human-reviewed ground truth가 아니다.

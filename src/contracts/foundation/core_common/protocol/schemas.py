@@ -28,6 +28,7 @@ from core_common.protocol.localization import LocalizationStatus
 from core_common.protocol.cell_goal_evidence import CellGoalEvidenceSubmission  # noqa: F401
 from core_common.protocol.lane_perception import LanePerceptionRequest, LanePerceptionStatus  # noqa: F401
 from core_common.protocol.vision_preview_status import VisionPreviewStatus  # noqa: F401
+from core_common.protocol.recording_start import RecordingStartRequest  # noqa: F401
 
 PROTOCOL_VERSION = "1.0"
 
@@ -1070,6 +1071,9 @@ class VisionEvidenceRecord(BaseModel):
     bytes: int
     sha256: str
     created_at: str
+    preview_mode: Optional[Literal['raw', 'annotated']] = None
+    pair_group_id: Optional[str] = Field(default=None, pattern=r'^[0-9a-f]{32}$')
+    annotation_origin: Optional[Literal['none', 'model_unreviewed']] = None
 
 
 class VisionEvidenceList(BaseModel):

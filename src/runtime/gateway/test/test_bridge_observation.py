@@ -104,6 +104,24 @@ def _line_payload(**overrides) -> str:
     return json.dumps(payload)
 
 
+def test_camera_quality_and_raw_pair_require_fresh_ros_capture_clock():
+    from core_features.vision import VisionFrameStore
+    svc = SimpleNamespace(vision=VisionFrameStore())
+    msg = SimpleNamespace(header=SimpleNamespace(frame_id='front', stamp=SimpleNamespace(sec=10,nanosec=0)),
+        format='jpeg;width=8;height=8;quality_valid=false;quality_reason=low_light',
+        data=b'\xff\xd8frame\xff\xd9')
+    warnings = []
+    obs.camera_preview(svc, msg, warn=warnings.append, source_now=13.)
+    assert svc.vision.status()['available'] and svc.vision.status()['quality'] is None
+    obs.camera_preview(svc, msg, warn=warnings.append, raw=True, source_now=13.)
+    assert not svc.vision.status()['raw_available'] and warnings
+    msg.header.stamp.sec = 11
+    obs.camera_preview(svc, msg, warn=warnings.append, source_now=11.2)
+    frame = svc.vision.frame()
+    assert frame.quality == dict(valid=False, reason='low_light')
+    assert svc.vision.status(now=frame.received_at+1.9)['quality'] is None
+
+
 def test_a_well_formed_observation_reaches_the_manager_with_both_clocks():
     """The ROS clock and the receipt clock are different questions."""
     svc, calls = _services()

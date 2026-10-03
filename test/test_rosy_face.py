@@ -1386,6 +1386,19 @@ def _answer(root: Path):
     return json.loads(path.read_text(encoding="utf-8")) if path.exists() else None
 
 
+def test_queued_hardware_test_cannot_delay_or_replace_emergency_when_core_missing(tmp_path):
+    module = _display()
+    _lamp_tree(tmp_path)
+    _status(tmp_path, "CORE_READY", robot_mode="EMERGENCY", estop=True, runtime_mode="hardware")
+    spawn = FakeSpawn()
+    display, lamp, _clock, _rendered, _lines = _state_loop(module, tmp_path, spawn=spawn)
+    _hand_over(tmp_path)
+    display._buzzer.test = lambda: pytest.fail("blocking bench test reached emergency")
+    display.step()
+    assert lamp.pattern == "emergency"
+    assert _answer(tmp_path) is None and display._tested is None
+
+
 def test_the_display_plays_a_handed_over_buzzer_test_once(tmp_path):
     module = _display()
     gpio = FakeGPIO()

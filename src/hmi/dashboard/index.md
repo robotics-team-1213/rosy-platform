@@ -37,8 +37,8 @@
 
 ## 최근 기록
 
+- 2026-10-04 · uncommitted · feat: 브라우저 원본·표시본 확인 영상
 - 2026-10-04 · uncommitted · feat: 저조도 카메라 판정 불가 표시
 - 2026-10-04 · uncommitted · feat(dashboard): 차선 인식 선택
 - 2026-10-03 · uncommitted · fix(console): 점유 격자를 가리지 않고 즉시 정지는 버튼이 확인이다
 - 2026-10-02 · uncommitted · D-423 카메라 범례에 거리 출처
-- 2026-10-02 · uncommitted · 스타일 가이드 어휘 패리티 — status·empty·actions·readout·icon + "아직 없는 넷" 현행화

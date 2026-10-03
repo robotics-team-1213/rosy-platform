@@ -805,3 +805,9 @@
 - 변경: 기존 카메라 패널에 저조도 경고를 추가했다. 실시간 JPEG 수신과 차선·물체 판정 가능 여부를 별도로 표시한다.
 - 증거: Pilot·Dashboard 저조도 브라우저 회귀 각각 1 passed; shared controls + shell 30 passed.
 - gate 변화: SOURCE/LOCAL. ARM64/device/field verification pending.
+
+## 2026-10-04 · uncommitted · feat: 브라우저 원본·표시본 확인 영상
+
+- 변경: 카메라 패널에서 원본 또는 원본+표시본을 선택한다. 같은 촬영 시점의 두 프레임을 확인하고 원본부터 저장한다. 원본 누락·구형 서버 응답·촬영 시점 불일치는 녹화를 막는다.
+- 증거: 브라우저 표시본+원본 저장/원본 누락/저조도/확대 3 passed.
+- gate 변화: SOURCE/LOCAL. ARM64/device/field evidence remains separate.

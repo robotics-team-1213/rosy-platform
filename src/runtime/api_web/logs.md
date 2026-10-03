@@ -417,3 +417,10 @@
 - gate 변화: SOURCE/LOCAL. 기기에서 actual source 비율 및 실제 주행은 별도 확인.
 - 최종 증거: readback/API/bridge wiring/vision/host cards/line-follow 확장 102 passed (Windows), fresh fallback와 재시작 cache reset의 API 통합 시험 포함.
 - Review 보완: 실제 learned 표시는 요청 source와 served-mask revision이 모두 있어야 한다. bridge는 ROS camera-header clock으로 이미지 나이 0..2초를 검증한 뒤 receipt-monotonic TTL 2초를 적용한다. pure cache 시험은 services/test 소유 경로로 이동했다.
+
+## 2026-10-04 · uncommitted · feat(recording): 원본과 검토 전 주석 옵션
+
+- 변경: POST recordings는 optional closed preview_mode(raw/annotated)를 받고 생략은 raw다. typed start 서비스와 신선한 recorder status가 확인될 때만 annotated capability를 표시한다. 요청한 mode와 실제 성공 응답이 다르면 소유권을 만들지 않고 거절한다. 기존 SetBool raw/stop은 유지한다.
+- 변경: 기존 front frame API에 overlay=false 원본 variant와 동일 capture provenance header를 더한다. video upload는 pair_group_id32hex와 mode를 함께 검증하며 원본이 먼저 보존된 동일 group/time/count에서만 주석을 저장한다. 주석은 model_unreviewed로서 사람이 검토한 라벨이 아니다. API ref/app v1.91, envelope1.0 유지.
+- 증거: recording-api-red.txt 9 failed로 기존 미구현 경로를 확인한 뒤 focus162 passed,1 skipped; malformed evidence/API import boundary 최종 검증 통과. 모든 시험 scratch는 X:/DevTemp/rosy-lane-device-20261004.
+- gate 변화: SOURCE/LOCAL. 실제 장치 녹화와 브라우저 영상 파일 검증은 별도다.

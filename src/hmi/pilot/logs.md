@@ -316,3 +316,9 @@
 - 변경: 기존 front/status quality를 읽어 저조도에서는 차선·물체를 판정할 수 없다고 표시한다. JPEG 표시를 유지하고 회복·누락·오래된 상태에서는 경고를 해제한다.
 - 증거: Pilot·Dashboard 저조도 브라우저 회귀 각각 1 passed; shared controls + shell 30 passed.
 - gate 변화: SOURCE/LOCAL. ARM64/device/field verification pending.
+
+## 2026-10-04 · uncommitted · feat: 기기 기록과 브라우저 영상 옵션
+
+- 변경: 기기 기록은 원본/표시본 선택을 분리하고 서버 지원·실제 readback을 따른다. 브라우저는 원본을 항상 보존하며 표시본을 별도 저장한다. 녹화 종료 시 원본부터 다운로드하고 다시 받기 동작을 제공한다.
+- 증거: 기기 옵션·실제 readback 1 passed; 저조도 회귀 1 passed; 기존 로봇 기록·hold/takeover 4 passed.
+- gate 변화: SOURCE/LOCAL. ARM64/device/field evidence remains separate.

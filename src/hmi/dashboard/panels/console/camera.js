@@ -30,6 +30,12 @@ export function mount(root, ctx) {
     storage.append(option);
   }
   storageLabel.append(storage);
+  const browserLabel = el("label", "ui-field-label", "브라우저 확인 영상");
+  const browserMode = el("select", "ui-field"); browserMode.id = "vision-record-mode";
+  for (const [value, label] of [["raw", "표시 없는 원본"], ["annotated", "원본 + 모델 표시본"]]) {
+    const option = el("option", "", label); option.value = value; browserMode.append(option);
+  }
+  browserLabel.append(browserMode);
   const shot = el("ui-button", "", "스크린샷"); shot.id = "vision-screenshot";
   shot.type = "button"; shot.setAttribute("kind", "quiet"); actions.append(shot);
   const start = el("ui-button", "", "녹화 시작"); start.id = "vision-record-start";
@@ -40,7 +46,7 @@ export function mount(root, ctx) {
   saveVideo.type = "button"; saveVideo.setAttribute("kind", "quiet"); actions.append(saveVideo);
   const saveLog = el("ui-button", "", "조작 기록 저장"); saveLog.id = "vision-operations-save";
   saveLog.type = "button"; saveLog.setAttribute("kind", "quiet"); actions.append(saveLog);
-  actions.prepend(storageLabel);
+  actions.prepend(storageLabel, browserLabel);
   const captureStatus = el("ui-status", "", "카메라 프레임 수신 대기");
   captureStatus.id = "vision-capture-status";
   const library = el("details", "surface-camera-library");
@@ -122,6 +128,7 @@ export function mount(root, ctx) {
     setOff(expand, !state.ready || !stage.requestFullscreen,
       !state.ready ? "영상 수신 후 확대할 수 있습니다" : "이 브라우저는 전체 화면 확대 불가");
     storage.disabled = state.recording || state.uploading;
+    setOff(browserMode, state.recording || state.uploading, "녹화·저장이 끝난 뒤 선택하세요");
     // 올리는 중(uploading)은 짧은 잠금이라 사유 없이 끈다.
     const waiting = state.uploading ? "" : !state.ready ? "카메라 대기" : "";
     setOff(shot, !state.ready || state.uploading, waiting);
@@ -138,8 +145,8 @@ export function mount(root, ctx) {
   capture = createCameraCapture({onChange: updateCapture, storeOnRobot,
     onComplete: async () => {
       const location = storage.value;
-      if (location !== "robot") capture.saveOperations();
       await capture.saveVideo(location);
+      if (location !== "robot") capture.saveOperations();
     }});
   updateCapture(capture.state());
   expand.addEventListener("click", async () => {
@@ -161,9 +168,14 @@ export function mount(root, ctx) {
   const action = (event) => capture.recordAction(event.detail);
   window.addEventListener("rosy:operator-action", action);
   const preview = createVisionPreview({elements, setText: (id, value) => { elements[id].textContent = value ?? "—"; },
+    previewMode: () => capture.state().previewMode,
     api: ctx.api, authHeaders, hasToken: () => Boolean(session.token), isHidden: () => document.hidden,
     onQuality: (quality) => { qualityIndicator.hidden = !(quality?.valid === false && quality?.reason === "low_light"); },
     onFrame: (frame) => capture.acceptFrame(frame), onUnavailable: (message) => capture.unavailable(message)});
+  browserMode.addEventListener("change", () => {
+    if (!capture.setPreviewMode(browserMode.value)) browserMode.value = capture.state().previewMode;
+    else preview.start();
+  });
   const visibility = () => { if (document.hidden) preview.stop("화면이 숨겨져 카메라를 중지했습니다."); else preview.start(); };
   document.addEventListener("visibilitychange", visibility);
   preview.start();

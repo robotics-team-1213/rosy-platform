@@ -31,7 +31,8 @@ def test_camera_low_light_warning_keeps_raw_preview_and_clears_on_recovery(table
     state = {"quality": {"valid": False, "reason": "low_light"}, "available": True}
 
     def status(route):
-        body = {"available": state["available"], "sequence": 1, "width": 160, "height": 120, "age_ms": 12}
+        body = {"available": state["available"], "sequence": dev_server.FRAME_SEQ, "raw_available": True,
+                "raw_sequence": dev_server.FRAME_SEQ, "width": 160, "height": 120, "age_ms": 12}
         if state["quality"] is not None:
             body["quality"] = state["quality"]
         route.fulfill(json=body)
@@ -47,6 +48,71 @@ def test_camera_low_light_warning_keeps_raw_preview_and_clears_on_recovery(table
     page.locator("[data-drive-visibility]").wait_for(state="visible")
     state["quality"] = None  # A legacy server cannot assert low-light.
     page.locator("[data-drive-visibility]").wait_for(state="hidden")
+    assert errors == [], errors
+
+
+@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1", reason="browser opt-in")
+def test_device_recording_option_uses_capability_and_actual_readback(tablet_page):
+    base_url, page, errors = tablet_page
+    page.goto(f"{base_url}/pilot")
+    page.evaluate("""async () => {
+      const {mountRobotRecording} = await import('/pilot/assets/screens/robot-recording.js');
+      const host=document.createElement('main');document.body.replaceChildren(host);
+      const toggle=document.createElement('ui-button'), detail=document.createElement('span'), openButton=document.createElement('ui-button');
+      host.append(toggle,detail,openButton);window.recordCalls=[];window.recordSupported=true;
+      window.recordActual={state:'idle'};
+      window.recordDispose=mountRobotRecording({toggle,detail,openButton,sheetHost:host,anchor:host,save(){},
+        schedule(fn){window.recordPoll=fn;return ()=>{};},
+        request:async(path,options={})=>{
+          if(options.method==='POST'){
+            recordCalls.push(JSON.parse(options.body));
+            window.recordActual={state:'recording',elapsed_s:1,max_duration_s:600,bytes:5,preview_mode:'raw'};
+            return {ok:true,status:201,body:window.recordActual};
+          }
+          return {status:200,body:{active:window.recordActual,preview_modes:recordSupported?['raw','annotated']:undefined}};
+        }});
+      toggle.dataset.optionToggle='';detail.dataset.optionReadback='';
+    }""")
+    page.wait_for_function("!document.querySelector('[data-robot-record-mode] option[value=annotated]').disabled")
+    page.select_option('[data-robot-record-mode]', 'annotated')
+    page.locator('[data-option-toggle]').click()
+    page.wait_for_function("window.recordCalls.length===1")
+    assert page.evaluate('recordCalls') == [{'preview_mode': 'annotated'}]
+    assert '원본 + 모델 표시본' not in page.inner_text('[data-option-readback]')
+    assert '원본' in page.inner_text('[data-option-readback]')
+    assert page.locator('[data-robot-record-mode]').is_disabled()
+    page.evaluate("recordActual={state:'idle'};recordSupported=false;recordPoll()")
+    page.wait_for_function("document.querySelector('[data-robot-record-mode] option[value=annotated]').disabled")
+    assert page.locator('[data-robot-record-mode]').input_value() == 'raw'
+    page.evaluate('recordDispose.dispose()')
+    assert page.locator('[data-robot-record-mode]').count() == 0
+    assert errors == [], errors
+
+
+@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1", reason="browser opt-in")
+def test_pilot_browser_confirmation_records_and_saves_paired_variants(tablet_page):
+    base_url, page, errors = tablet_page
+    downloads = []
+    page.on('download', lambda item: downloads.append(item.suggested_filename))
+    _enter_drive(page, base_url)
+    page.locator('[data-drive-frame]').wait_for(state='visible')
+    page.evaluate("""() => {window.MediaRecorder=class {
+      static isTypeSupported(type){return type==='video/webm';}
+      constructor(){this.state='inactive';}start(){this.state='recording';}
+      stop(){this.state='inactive';this.ondataavailable({data:new Blob(['VIDEO'])});this.onstop();}
+    };} """)
+    page.select_option('[data-browser-record-mode]', 'annotated')
+    page.wait_for_function("!document.querySelector('[data-evidence-record]').disabled")
+    page.locator('[data-evidence-record]').click()
+    assert page.locator('[data-browser-record-mode]').is_disabled()
+    with page.expect_download():
+        page.locator('[data-evidence-record]').click()
+    while len(downloads) < 3:
+        page.wait_for_event('download', timeout=10_000)
+    assert any(name.endswith('-raw.webm') for name in downloads)
+    assert any(name.endswith('-annotated.webm') for name in downloads)
+    assert page.locator('[data-evidence-save]').is_enabled()
+    page.locator('[data-drive-exit]').click()
     assert errors == [], errors
 
 

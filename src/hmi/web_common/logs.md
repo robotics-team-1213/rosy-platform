@@ -480,3 +480,9 @@
 - 변경: caller/page signal composition과 page epoch를 추가. interval·listener·subscription·one-shot timeout/wait 정리, 늦은 async 결과와 이전 동적 handler 거절. 복귀 조회는 문서가 제공하며 공통 계층에 명령 replay·권한/storage 정책을 넣지 않음.
 - 증거: request/scope/page-scope/Fleet/authorization/poll gate Node 56 passed. 현재 자산 bytes를 확인한 X: 사본 Chromium 14 passed; disposal 변이 8 red, raw camera/Vision guard 변이 4 red, bytes 복원 후 14 green.
 - gate 변화: SOURCE/LOCAL 수명 계약 강화. installed-only·DEVICE/FIELD는 consumer 단위의 후속 gate.
+
+## 2026-10-04 · uncommitted · feat: 원본 픽셀 보존과 같은 촬영 시점의 표시본
+
+- 변경: fetchCameraPair가 variant·sequence·captured_at·frame_id를 검증한다. 원본 canvas에는 drawImage만 사용하고 조작 문구는 표시본에만 넣는다. 원본/표시본 녹화기와 파일·공통 pair_group_id를 분리하고 종료 시 두 stream을 해제한다. PC sidecar에서 표시본을 model_unreviewed로 구분한다.
+- 증거: capture/shared-controls/recording-view 43 passed; 429·불일치·구형 서버·원본 픽셀·두 파일·종료 정리 회귀 포함.
+- gate 변화: SOURCE/LOCAL. ARM64/device/field evidence remains separate.

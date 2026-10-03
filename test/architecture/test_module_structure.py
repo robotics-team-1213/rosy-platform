@@ -299,6 +299,13 @@ SIZE_VERDICTS = {
         "accept: one owner (svc.audit / FileAuditLog), ROS-free, covered by src/runtime/events/test/test_audit.py; "
         "about half the lines are the rationale comments the append/compaction/quarantine rules rest on (X5)",
     ),
+    "runtime/services/core_features/line_follow/manager.py": (
+        605,
+        "accept: one line-follow decision and loss owner; recovery already lives in separate "
+        "stuck/body mixins. The added low-light guards invalidate decisions and bypass autonomous "
+        "recovery without introducing another writer. Configured back-off, active recovery and "
+        "stale-decision tests plus independent reproduction cover this safety boundary.",
+    ),
     "runtime/services/core_features/docking/manager.py": (
         663,
         "accept: 930 -> 663 after the parking-only phases moved to docking/parking_phases.py and the phase/"
@@ -346,7 +353,7 @@ SIZE_VERDICTS = {
         "exception; independent safety review recorded in docs/validation/learned-lane-modes-2026-10-04/README.md.",
     ),
     "control": (
-        44_301,
+        44_469,
         f"split: deploy closure needs only sensing + safety provider (P1a); {CONTROL_SPLIT} "
         "(re-judged 2026-09-30 at 33090 after D-356 added the ROS-free learned perception backend "
         "(sensing/perception/learned), the shadow node and the recording CLI; the learned backend sits "
@@ -419,7 +426,10 @@ SIZE_VERDICTS = {
         "beside the learned lane shadow, each its own module, moves with the P1a split, verdict unchanged; "
         "re-judged 2026-10-03 at 44301 for the D-344 §12 addendum: the operator override overlay validator "
         "beside the IR one (control/ir_overlay.py) and its root-run bench CLI (control/line_observer_overrides.py) "
-        "-- launch-side config, no node logic, moves with the P1a split, verdict unchanged)",
+        "-- launch-side config, no node logic, moves with the P1a split, verdict unchanged). "
+        "Re-judged 2026-10-04 at 44469 for shared raw road-ROI visibility, invalid camera "
+        "evidence/reset and optional raw/annotated recording: observation-only subjects stay "
+        "separate and move with the existing P1a split; no new command writer.",
     ),
     # --- D-362 newly-covered files (web assets in src/ packages, ops roots). ---
     "runtime/sensing/web/diagnostic.html": (
@@ -462,11 +472,14 @@ SIZE_VERDICTS = {
         "learning/training/perception/test/test_rosy_ml.py (X5, D-411 fetch --http)",
     ),
     "deploy/robot/pinky_pro/native/rosy-face.py": (
-        1048,
+        1074,
         "accept: the one owner of LCD, buzzer and lamp (D-433, was rosy-boot-display.py) — one poll "
         "and one frame tick; the situation table lives in core_common.face_screen; covered by "
         "test/test_rosy_face.py (X5). 1048 after the review fixes (last good hand-over, "
-        "shutdown-only poll)",
+        "shutdown-only poll). Re-judged 2026-10-04 at 1074: opt-in light session uses the "
+        "same device owner and priority loop; eligibility/freshness stays in face_screen "
+        "and light rendering is separate. Independent review and queued-test regressions "
+        "preserve alarm-first order, emergency lamp and stale-evidence expiry.",
     ),
     "deploy/robot/pinky_pro/release/updater.py": (
         686,

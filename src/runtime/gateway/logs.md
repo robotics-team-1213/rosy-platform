@@ -790,3 +790,9 @@
 - 변경: JPEG metadata의 원본 low_light quality를 기존 front/status에 전달한다. legacy·malformed·stale는 null이며 JPEG는 유지한다. face-inputs에 camera_quality와 JPEG 수신 나이를 전달하고 reader가 handover 나이를 더해 만료한다. read-only 표시로서 이동 권한은 아니다.
 - 증거: preview·bridge·schema·face handover·CORE focused 143 passed, 1 skipped; 회귀 55 passed.
 - gate 변화: SOURCE/LOCAL. 실제 조명 보조 동작은 별도 기기 증거다.
+
+## 2026-10-04 · uncommitted · feat(bridge): typed 녹화 시작과 원본 JPEG admission
+
+- 변경: pilot_recorder/start typed service에 RAW0/ANNOTATED1만 전달하며 legacy SetBool 정지는 유지한다. camera/preview/raw/compressed를 별도 read-only 구독하고 ROS capture clock을 검증한다. 오래된 원본은 거절, 기존 JPEG는 조도만 unknown으로 표시한다. final cmd_vel 소유권은 변경하지 않는다.
+- 증거: 실제 Bridge wiring registry와 typed0/1 transport, CORE API readback·원본/주석 header 및 source age 검증 포함162 passed,1 skipped.
+- gate 변화: SOURCE/LOCAL. ROS service 설치/실기 녹화 확인은 root 배포 단계에서 수행한다.

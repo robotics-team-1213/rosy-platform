@@ -24,6 +24,7 @@
   <exec_depend>nav2_map_server</exec_depend>
   <exec_depend>nav2_lifecycle_manager</exec_depend>
   <exec_depend>std_srvs</exec_depend>
+  <exec_depend>interfaces</exec_depend>
   <!-- D-373 capture: record_session drives `ros2 bag record` (mcap, snapshot
        mode); capture_trigger_node calls rosbag2_interfaces/srv/Snapshot. -->
   <exec_depend>ros2bag</exec_depend>

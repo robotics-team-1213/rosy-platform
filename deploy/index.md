@@ -70,8 +70,8 @@
 
 ## 최근 기록
 
+- 2026-10-04 · uncommitted · feat: 경보 출력보다 늦게 하드웨어 시험 실행
 - 2026-10-04 · uncommitted · feat: 기존 rosy-face 조명 소유권 유지
 - 2026-10-04 · uncommitted · feat(host): 차선 인식 설정의 native 설치 경로
 - 2026-10-03 · uncommitted · fix(site): order Avahi before the Fleet stack
 - 2026-10-03 · uncommitted · fix(site): Fleet NSS mDNS resolver closure
-- 2026-10-03 · uncommitted · fix: publish readable public DNS-SD XML
