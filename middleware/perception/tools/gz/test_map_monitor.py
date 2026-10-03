@@ -3,6 +3,10 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
+import pytest
+
+pytest.importorskip("rclpy", reason="mapping run monitor requires the ROS environment")
+
 from tools.gz.map_run_monitor import Mon
 
 

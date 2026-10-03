@@ -135,7 +135,7 @@ COPY middleware/apps/device/omx/adapter /opt/rosy_ws/src/products/omx/adapter
 COPY middleware/apps/device/omx/profile /opt/rosy_ws/src/products/omx/profile
 COPY middleware/perception /opt/rosy_ws/src/runtime/sensing
 COPY shared/web /opt/rosy_ws/src/hmi/web_common
-RUN mkdir -p middleware/apps/device/pinky/description/meshes
+RUN mkdir -p /opt/rosy_ws/src/sim/description/meshes
 RUN set -eo pipefail \
     && source /opt/ros/jazzy/setup.bash \
     && colcon build --merge-install \

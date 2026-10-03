@@ -4867,3 +4867,9 @@
 - 변경: 독립 재검토 추가 보정을 ADR에 append하고, 컨테이너 불변 ID 확인·손상 기록 보존·forget-failed 잠금·불완전 HTTP 재시도·복구 증거 대조를 운영 문서에 반영했다.
 - 증거: Windows 관련 suite 51 passed/23 skipped, 모듈 구조 33 passed. 수정 후 독립 검토와 운영 설치는 진행 중이다.
 - gate 변화: 기존 gate 유지. 사용자가 재검토·push·최초 설치까지 요청했다.
+
+## 2026-10-04 · uncommitted · D-427 enforced push gate path corrections
+
+- 변경: generated notebook 누락, 빈 legacy IR scan, container 내부 COPY 목적지 검사·mesh bootstrap, live runbook 경로를 고쳤다. ROS 전용 monitor는 host 미실행을 명시하며 WSL Jazzy에서 실제 시험했다.
+- 증거: 거절된 push main suite 7 failed/12304 passed/499 skipped/1 error. 수정 후 관련 host124 passed1 skipped, known_failures NEW0, runtime34 passed, WSL Jazzy monitor1 OK. 독립 리뷰66 passed1 skipped 및 APPROVE. docs/validation/d427-source-migration/push-gate-corrections-2026-10-04.md.
+- gate 변화: 없음. enforced push 재실행·원격 main·CI·artifact·device 수용은 아직 pending.

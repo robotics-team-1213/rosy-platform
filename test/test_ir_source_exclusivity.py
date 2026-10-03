@@ -11,25 +11,28 @@ Communication-protocol report 2026-09-22 §3.2.1 / remediation plan T2.
 """
 from pathlib import Path
 
+import yaml
+
 ROOT = Path(__file__).resolve().parents[1]
-SRC = ROOT / "src"
+SOURCE_ROOTS = yaml.safe_load((ROOT / "tools/harness/platform_parts.yaml").read_text(encoding="utf-8"))["colcon_roots"]
 
 #: Both launch files must carry this sentence so the rule is greppable where
 #: an operator would wire the graph.
 EXCLUSIVITY_MARKER = "ir_sensor/range single-publisher rule"
 
-LINE_FOLLOW = SRC.parent / "middleware" / "perception" / "launch" / "line_follow.launch.py"
-HARDWARE = SRC.parent / "middleware" / "core" / "navigation" / "launch" / "hardware.launch.py"
-CALIB_NODE = SRC.parent / "middleware" / "perception" / "control" / "calib_node.py"
+LINE_FOLLOW = ROOT / "middleware" / "perception" / "launch" / "line_follow.launch.py"
+HARDWARE = ROOT / "middleware" / "core" / "navigation" / "launch" / "hardware.launch.py"
+CALIB_NODE = ROOT / "middleware" / "perception" / "control" / "calib_node.py"
 
 
 def _launch_files():
-    return sorted(path for manifest in SRC.rglob("package.xml")
+    return sorted(path for source in SOURCE_ROOTS
+                  for manifest in (ROOT / source).rglob("package.xml")
                   for path in (manifest.parent / "launch").glob("*.py"))
 
 
 def test_ir_scan_includes_nested_product_bringup():
-    assert SRC.parent / "middleware" / "apps" / "device" / "pinky" / "bringup" / "launch" / "bringup_robot.launch.py" in _launch_files()
+    assert ROOT / "middleware" / "apps" / "device" / "pinky" / "bringup" / "launch" / "bringup_robot.launch.py" in _launch_files()
 
 
 def _code_text(text: str) -> str:
@@ -78,7 +81,7 @@ def test_rosy_io_graph_starts_ir_but_hardware_graph_does_not_double_it():
     """D-344 §12: rosy-io (motor/core modes) gets IR from bringup's enable_ir;
     the navigation hardware graph includes bringup without enable_ir and takes
     IR from line_follow instead. The two units conflict, so one reader per bus."""
-    bringup = (SRC.parent / "middleware" / "apps" / "device" / "pinky" / "bringup" / "launch"
+    bringup = (ROOT / "middleware" / "apps" / "device" / "pinky" / "bringup" / "launch"
                / "bringup_robot.launch.py").read_text(encoding="utf-8")
     assert "DeclareLaunchArgument('enable_ir', default_value='false'" in bringup
     assert "condition=IfCondition(enable_ir)" in bringup

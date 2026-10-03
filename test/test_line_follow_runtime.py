@@ -13,7 +13,7 @@ def test_io_image_contains_line_follow_runtime_without_polluting_core():
     core, io = dockerfile.split("FROM runtime-common AS io-runtime", 1)
     assert "COPY middleware/perception" not in core
     assert "python3-opencv" not in core
-    assert "COPY middleware/perception ./middleware/perception" in io
+    assert "COPY middleware/perception /opt/rosy_ws/src/runtime/sensing" in io
     assert "python3-opencv" in io
     assert "control" in io
 

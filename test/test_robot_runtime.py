@@ -98,10 +98,11 @@ def test_runtime_builds_distinct_targets_from_shared_dockerfile():
     assert "COPY --from=io-build /opt/rosy_ws/install" in dockerfile
     dockerignore = (ROOT / ".dockerignore").read_text(encoding="utf-8")
     assert "middleware/apps/device/pinky/description/meshes/**" in dockerignore
+    assert "RUN mkdir -p /opt/rosy_ws/src/sim/description/meshes" in dockerfile
     # D-196: the core stage copies the robot package CORE reads its profile from.
-    assert "COPY middleware/apps/device/pinky/profile ./middleware/apps/device/pinky/profile" in dockerfile
+    assert "COPY middleware/apps/device/pinky/profile /opt/rosy_ws/src/products/pinky_pro/profile" in dockerfile
     assert "COPY src/products/pinky_pro ./src/products/pinky_pro" not in dockerfile
-    for allowed in ("!src/products/", "!src/products/pinky_pro/", "!src/products/pinky_pro/**"):
+    for allowed in ("!middleware/apps/", "!middleware/apps/device/pinky/", "!middleware/apps/device/pinky/profile/**"):
         assert allowed in dockerignore.splitlines(), allowed
 
 
@@ -163,7 +164,7 @@ def test_io_image_contains_the_disabled_omx_adapter_contract():
     """The Device image ships the model-neutral OMX boundary without enabling hardware."""
     dockerfile = (DEPLOY / "Dockerfile").read_text(encoding="utf-8")
 
-    assert "COPY middleware/apps/device/omx/adapter ./middleware/apps/device/omx/adapter" in dockerfile
+    assert "COPY middleware/apps/device/omx/adapter /opt/rosy_ws/src/products/omx/adapter" in dockerfile
     assert "omx_adapter" in dockerfile
     disabled = (
         ROOT / "middleware" / "apps" / "device" / "omx" / "profile" / "config" / "omx.disabled.yaml"

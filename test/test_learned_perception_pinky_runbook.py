@@ -12,7 +12,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 DOC = ROOT / "docs" / "deployment" / "learned-perception-pinky.md"
-REPO_PREFIXES = (".github/", ".claude/", "deploy/", "docs/", "src/", "test/", "tools/")
+REPO_PREFIXES = (".github/", ".claude/", "deploy/", "docs/", "src/", "test/", "tools/", "middleware/", "operations/", "contracts/", "learning/", "shared/", "integrations/")
 
 
 def _text() -> str:
