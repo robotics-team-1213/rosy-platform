@@ -209,3 +209,10 @@ def test_claims_are_pruned_when_the_chain_ends():
     r.step(1.0, [_row(stuck=None)])
     r.step(40.0, [_row(stuck=None)])
     assert r._claims == set()
+
+
+def test_claim_survives_a_mode_change_while_the_stuck_is_open():
+    r = StuckResolver(ResolverConfig())
+    r.claim("rosy_01", "stuck-1")
+    r.step(0.0, [_row(stuck=_stuck("stuck-1"))])
+    assert r.step(1.0, [_row(stuck=_stuck("stuck-1"), mode="OFF")]) == []

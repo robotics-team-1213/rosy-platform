@@ -144,7 +144,8 @@ class StuckResolver:
                                   or (chain.closed_at is not None
                                       and now - chain.closed_at > self.config.restuck_s)):
             del self._chains[rid]                  # mode changed or the window passed
-            self._claims = {c for c in self._claims if c[0] != rid}
+            if chain.closed_at is not None:        # a human's claim lives while its stuck is open
+                self._claims = {c for c in self._claims if c[0] != rid}
             chain = None
         if stuck is None:
             if chain is not None and chain.closed_at is None:
