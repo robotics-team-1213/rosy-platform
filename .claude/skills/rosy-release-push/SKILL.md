@@ -186,13 +186,19 @@ published here.
   verified before upload. An existing tag is refused; `--resume` re-attaches to it.
 - **Canary.** The command polls the canary's `rosy_auto_update.py status --json` every 30 s
   and prints each phase. A commit of this id re-signs the rollout with `canary_ok=true`;
-  the other robots apply after `published_at + wave_delay_s` (default 600 s). A rollback or
+  the other robots apply after `published_at + wave_delay_s` (default 0 s, no extra wait).
+  Use `--wave-delay-s <seconds>` when an observation delay is wanted. A rollback or
   refusal of this id, or no commit within `--canary-timeout-min` (default 30), re-signs it
   with `withdrawn=true` and exits non-zero. If the PC stops mid-watch, the others wait;
   rerun with `--release-id <id> --canary <ip> --resume` (Ctrl+C prints that command and the
   `--withdraw` one). Only one publish per release id runs at a time (`publish-<id>\.lock`
   in the work folder). Before its final upload the watch re-reads the rollout on GitHub:
   a release withdrawn meanwhile stays withdrawn.
+- **Open an approved wave immediately.** To remove an older rollout's extra delay without
+  rebuilding its payload, run `--release-id <id> --canary <ip> --resume --open-wave-now`.
+  It verifies the remote signature and requires `canary_ok=true`, then re-signs only
+  `wave_delay_s=0`. Withdrawn releases stay withdrawn; concurrent changes are refused.
+  Robots still require idleness, no hold and adequate battery, and apply on their next updater run.
 - **Withdraw by hand:** `--release-id <id> --withdraw --reason "<why>"`. Robots that already
   applied it stay on it; roll them back with a newer release or `-Rollback`.
 - **Hold** a robot before a test, drive or seal, and release it after:
