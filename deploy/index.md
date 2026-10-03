@@ -70,8 +70,8 @@
 
 ## 최근 기록
 
+- 2026-10-04 · uncommitted · fix(site): 관제 PC의 요청형 카메라 조명
 - 2026-10-03 · uncommitted · fix(site): order Avahi before the Fleet stack
 - 2026-10-03 · uncommitted · fix(site): Fleet NSS mDNS resolver closure
 - 2026-10-03 · uncommitted · fix: publish readable public DNS-SD XML
 - 2026-10-03 · fcda72b78 · feat(deploy): D-433 rosy-boot-display → rosy-face 이주
-- 2026-10-03 · 0e244456c · fix(tools): rosy_ssh_share 가 터미널 밖에서 생성 passphrase 를 출력하지 않음 (D-418)
