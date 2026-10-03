@@ -11,7 +11,7 @@ The D-346 pre-push fast gate (under 2 minutes). Git does not version hooks, so e
 
 | File | Description |
 |------|-------------|
-| `pre-push` | Bash hook. Picks the first of `python3`/`python` that can import `yaml`, then runs: harness `lint`; a check that regenerated `index.md`/`STATUS.md` are committed; pytest on `test/test_harness_contracts.py`, `test/architecture/test_module_structure.py`, `test/test_io_image_closure.py`, `test/test_line_follow_contract_docs.py` and `src/runtime/gateway/test/test_protocol_version_alignment.py` |
+| `pre-push` | Bash hook. Picks the first of `python3`/`python` that can import `yaml`, then runs: harness `lint`; a check that regenerated `index.md`/`STATUS.md` are committed; pytest on `test/test_harness_contracts.py`, `test/architecture/test_module_structure.py`, `test/test_io_image_closure.py`, `test/test_line_follow_contract_docs.py` and `src/runtime/gateway/test/test_protocol_version_alignment.py` (see the file for the current list); then the D-436 affected tier (`rosy_harness.py affected --run` against the `origin/main` merge base). A FULL escalation is printed and left to CI, not run in the hook |
 | `install.sh` | Copies `pre-push` to `.git/hooks/pre-push` and marks it executable. Uninstall with `rm .git/hooks/pre-push` |
 
 ## For AI Agents

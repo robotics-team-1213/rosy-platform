@@ -71,7 +71,15 @@ ROSY is a robot middleware and fleet-control platform (ROS 2 Jazzy, first hardwa
 
 ### Testing Requirements
 
+Tiers (D-436): iterate with the **affected** tier; the **full** tier belongs to main push, nightly/`workflow_dispatch` CI and the release build. PR CI runs affected and goes full by itself when the selector escalates (shared foundation `src/contracts/**`, `tools/harness/**`, `conftest.py`, packaging/pytest config, requirements pins, `.github/workflows/**`, or a file that maps to no module).
+
 ```bash
+# Affected tier (D-436): tests of the touched modules + reverse dependents + tests naming the
+# changed paths + the guard set; prints why each suite runs and when it escalates to FULL.
+# Suites sharing a test basename (gateway vs sensing test_battery.py) come out as separate runs.
+python tools/harness/rosy_harness.py affected --base main          # print the selection
+python tools/harness/rosy_harness.py affected --base main --run    # run it
+
 # Quick tier (D-346): the pre-commit/push gate (~3 min).
 # Same suite as the pre-push hook (tools/hooks/install.sh). 2026-10-01: dashboard
 # contract + root contract suites added after the D-362 split and secret-scan/
@@ -89,8 +97,8 @@ python3 -m pytest test/test_harness_contracts.py test/architecture/test_module_s
   src/runtime/gateway/test/test_host_status_summary.py -q
 python3 tools/harness/rosy_harness.py lint   # ADR duplicates, mojibake, append-only
 
-# Full tier: before a release, a field push, or when the touched suite is not
-# in the quick tier above.
+# Full tier: before a release, a field push, or when `affected` escalated to FULL.
+# `affected --run` on a FULL selection runs the same union as below.
 # ROS 2 overlay (Linux / Pi). On Windows, run Python tests that do not need rclpy.
 source env.sh
 colcon --log-base log build --symlink-install --base-paths $(python3 tools/harness/colcon_roots.py) --build-base build --install-base install

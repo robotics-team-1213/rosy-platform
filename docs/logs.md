@@ -4817,3 +4817,9 @@
 - 증거: 현재 parser·CLI·roster·NSS/Compose·user discovery 소스, 운영 NSS-only 설치 receipt, Fleet 재시작 후 S21 JPEG readback. 실제 주소·자격 비밀은 기록하지 않았다.
 - gate 변화: 없음. 레거시 발견 conflict 정리·관제 PC 재부팅·outbound FleetAgent·물리 marker commissioning 완료를 이 문서로 주장하지 않는다.
 - 검증: frontmatter/claims validator와 독립 문서 grounding, 문서 계약·harness 검사로 기록 내용과 탐색 가능성을 확인한다.
+
+## 2026-10-03 · uncommitted · docs: D-436 change-scoped host test tiers
+
+- 변경: D-436(호스트 시험은 변경 범위로 고른다) ADR·ADR Log 행을 추가하고, `rosy_harness.py affected` 선택기·시험, pre-push affected 티어, ci.yml PR affected / main·야간·수동 풀 분기, 루트·harness·hooks·workflows AGENTS 시험 안내를 같은 브랜치(`feat/ci-affected-tests`)에 맞췄다.
+- 증거: `test/test_affected_tests.py` 표 시험(tools/ssh·core_common·미분류·sensing 역의존·문서·보조 모듈·deploy 축소·conftest/workflow/설정 escalation·base 부재)과 변이 증명 2건; D-418 브랜치 diff 선택 결과(core_common·platform_parts·tools/device_twin 미분류로 FULL).
+- gate 변화: 없음. 저장소 도구·CI·작업 규칙만이며 장치·이미지·현장 수용과 무관하다.

@@ -25,7 +25,8 @@ None.
 
 ### Working In This Directory
 
-- Triggers: push to `main`, all pull requests.
+- Triggers: push to `main`, all pull requests, nightly `schedule` (03:00 KST), `workflow_dispatch`.
+- D-436 tiers: the `Test scope (D-436)` step sets `mode`. Pull requests run `rosy_harness.py affected --base <PR base sha>` and only the `Test (affected tier, D-436)` step, unless the selector escalates to `full`; every other event runs the full step list. Build, flake8, boot smoke, SaveMap guard and Safety-Review run in both tiers. A new full-tier test step needs `if: steps.scope.outputs.mode == 'full'`; a new whole suite also belongs in `FULL_SUITES` in `tools/harness/affected_tests.py`.
 - Boot smoke: `timeout 60 ros2 run core core`; must log `core up` **and** `slam_toolbox unavailable`.
 - SaveMap guard unpacks the slam_toolbox deb and asserts `SaveMap.Request.name` is `std_msgs/String` and `RESULT_SUCCESS == 0`.
 - pip installs: flake8, pydantic, fastapi, uvicorn, httpx, websockets, pyyaml, jsonschema, ext4 (pure-Python ext4 reader for `test/test_card_diagnostics.py`; the test skips without it).
