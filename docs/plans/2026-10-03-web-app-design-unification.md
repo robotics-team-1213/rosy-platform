@@ -25,8 +25,8 @@
 
 | 순서 | 화면/구성 | 기준 파일 | 진행 |
 |---|---|---|---|
-| 1 | 현재 제품 웹 전체 기준선 | `src/hmi/web_common/surfaces.yaml`, `src/hmi/dashboard/panels.yaml` | 점검 중 |
-| 2 | 공용 작업 선택·상태·초점 규칙 | `src/hmi/web_common/{ui.js,components.css,tokens.css}` | 대기 |
+| 1 | 현재 제품 웹 전체 기준선 | `src/hmi/web_common/surfaces.yaml`, `src/hmi/dashboard/panels.yaml` | 초기 기준선/전체 source 목록 확인; 기능별 추가 상태는 해당 작업에서 점검 |
+| 2 | 공용 작업 선택·상태·초점 규칙 | `src/hmi/web_common/{task-chooser.js,task-chooser.css}` | 구현·독립 검토 완료 `15e8742b4`; 전체 회귀는 최종 통합에서 확인 |
 | 3 | 로그인·역할 진입 | `src/hmi/dashboard/{index.html,surface.html,surface-navigation.js}` | 대기 |
 | 4 | 로봇 운용 7패널 | `src/hmi/dashboard/panels/console/`, `shell/` | 대기 |
 | 5 | 작업 준비 5패널 | `src/hmi/dashboard/panels/setup/`, `shell/` | 대기 |
@@ -53,7 +53,8 @@
 ### Task 2: 공용 작업 선택과 절차 화면 구성
 
 **Files:**
-- Modify as required: `src/hmi/web_common/ui.js`, `components.css`.
+- Create: `src/hmi/web_common/task-chooser.js`, `task-chooser.css`; register in `shared-assets.json` and `CMakeLists.txt`.
+- Reuse: `ui.js`, `components.css`, `tokens.css`. `ui.js`는 597/600줄 예산을 유지하고 별도 공용 구성 파일에 작업 선택만 둔다.
 - Modify: `src/hmi/dashboard/shell/mount.js`, `shell.css`, 필요 시 `shell.js`.
 - Test: `src/hmi/dashboard/test/test_surface_layout_browser.py`, `test_surface_entry_browser.py`, `test_action_groups_browser.py`, 공용 컨트롤 브라우저 시험.
 
@@ -68,6 +69,12 @@
 
 **Files:** 위 순서 3–6의 실제 패널, `panels/surface-panels.css`, `panels.yaml`(필요 시), dashboard tests.
 
+세부 묶음은 순서대로 진입 → 교통 정책의 재저장/결과/정보 없음 결함 → 나머지 패널이다.
+기본 `/dashboard` 진입에서는 인증과 허용된 역할 목적지만 활성화하고, 명시적으로
+선택한 `#compatibility` 경로에서 기존 종합 운용 화면을 유지한다. 인증과 토큰 보관은
+기존 client가 계속 소유하며 기본 진입 화면 때문에 영상·상태 socket·운용 polling을
+추가로 켜지 않는다. 등록된 자산과 CSP, 기존 호환 기능을 함께 검증한다.
+
 1. 각 패널의 제목·주 동작·보류 사유·상태·세부 readback·완료 후 위치를 순서대로 점검한다.
 2. 실제로 발견한 기능 문제에는 재현 시험을 먼저 둔다. 단순 문구/간격 변경은 구현을 복제하는 시험을 만들지 않는다.
 3. 공용 helper와 토큰을 적용하고 독립된 목적에 따라 정보를 묶는다. 운용의 지도·영상·정지는 유지한다.
@@ -81,6 +88,8 @@
 
 1. 주의 로봇→대상 선택→현재 상태→개입/완료 흐름, 영상과 지도 읽힘을 확인한다.
 2. 등록/보정은 설치 화면의 작업 흐름으로 정리한다. 접속·빈 목록·권한·비지원 안내를 점검한다.
+   공용 작업 선택은 읽기·이동이므로 `operatorControls()`의 쓰기 권한 잠금 목록에 넣지 않는다.
+   각 작업의 기존 서버 권한, 이름 있는 호출자 조건, 수신 소스·보정 입력 상태는 유지한다.
 3. 같은 동작 아이콘/문구와 공용 부품을 적용한다. Fleet는 CORE 자격을 보유하거나 직접 요청하지 않는다.
 4. `node --test src/site/fleet/test/web/`와 Fleet palette/disabled/server host suites, 영향 browser 시나리오를 실행한다.
 5. 요구사항·품질 검토 후 변경과 증거를 기록하고 커밋한다.
