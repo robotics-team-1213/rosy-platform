@@ -218,3 +218,87 @@ def test_offline_signer_rechecks_contents_after_signature_creation(tmp_path, sit
             root, key_id=TEST_KEY_ID, private_key=private, public_key=public,
         )
     assert not (root / "release.json.sig").exists()
+
+
+def test_manifest_only_signature_lets_the_host_verifier_check_every_file(tmp_path, site_keys):
+    private, public, _, _ = site_keys
+    candidate = tmp_path / "candidate"
+    candidate.mkdir()
+    image_ids = _make_candidate(candidate)
+    station = tmp_path / "station"
+    station.mkdir()
+    manifest = station / "release.json"
+    manifest.write_bytes((candidate / "release.json").read_bytes())
+
+    signed = signer_module.sign_manifest_only(
+        manifest, expected_commit=COMMIT, key_id=TEST_KEY_ID,
+        private_key=private, public_key=public,
+    )
+    assert signed["source_commit"] == COMMIT
+    assert signed["scope"] == "manifest-only"
+    assert sorted(path.name for path in station.iterdir()) == ["release.json", "release.json.sig"]
+
+    (candidate / "release.json.sig").write_bytes((station / "release.json.sig").read_bytes())
+    verified = verify_candidate(
+        candidate, trusted_key_id=TEST_KEY_ID, trusted_public_key=public,
+        inspect_loaded_images=False,
+    )
+    assert verified["manifest_image_ids"] == image_ids
+
+    (candidate / "images.tar").write_bytes(b"swapped after signing")
+    with pytest.raises(ValueError, match="image archive hash mismatch"):
+        verify_candidate(
+            candidate, trusted_key_id=TEST_KEY_ID, trusted_public_key=public,
+            inspect_loaded_images=False,
+        )
+
+    with pytest.raises(ValueError, match="signature already exists"):
+        signer_module.sign_manifest_only(
+            manifest, expected_commit=COMMIT, key_id=TEST_KEY_ID,
+            private_key=private, public_key=public,
+        )
+
+
+@pytest.mark.parametrize(("source_commit", "expected", "message"), [
+    ("abc123", "abc123", "expected commit must be"),
+    ("A" * 40, COMMIT, "source commit is not a 40-character"),
+    ("b" * 40, COMMIT, "differs from the expected commit"),
+])
+def test_manifest_only_signer_refuses_bad_or_unexpected_commits(
+        tmp_path, site_keys, source_commit, expected, message):
+    private, public, _, _ = site_keys
+    manifest = tmp_path / "release.json"
+    manifest.write_text(
+        '{"manifest_version": 1, "source_commit": "%s", "image_tag": "%s", '
+        '"platform": "linux/amd64"}\n' % (source_commit, source_commit),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match=message):
+        signer_module.sign_manifest_only(
+            manifest, expected_commit=expected, key_id=TEST_KEY_ID,
+            private_key=private, public_key=public,
+        )
+    assert not (tmp_path / "release.json.sig").exists()
+
+
+def test_manifest_only_cli_requires_manifest_and_expected_commit(tmp_path, site_keys, capsys):
+    private, public, _, _ = site_keys
+    common = ["--signing-key-id", TEST_KEY_ID, "--private-key", str(private),
+              "--public-key", str(public)]
+
+    with pytest.raises(SystemExit):
+        signer_module.main(["--manifest-only", "--manifest", str(tmp_path / "release.json"),
+                            *common])
+    with pytest.raises(SystemExit):
+        signer_module.main(["--candidate-dir", str(tmp_path), "--expected-commit", COMMIT,
+                            *common])
+
+    candidate = tmp_path / "candidate"
+    candidate.mkdir()
+    _make_candidate(candidate)
+    assert signer_module.main([
+        "--manifest-only", "--manifest", str(candidate / "release.json"),
+        "--expected-commit", COMMIT, *common,
+    ]) == 0
+    assert '"scope": "manifest-only"' in capsys.readouterr().out
