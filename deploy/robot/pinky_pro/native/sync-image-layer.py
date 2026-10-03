@@ -105,8 +105,7 @@ UNITS = (
     # D-412: the idle-time updater; only the timer is enabled.
     "rosy-auto-update.service",
     "rosy-auto-update.timer",
-    # D-418: SSH access on CORE's request; the path unit and the boot cleanup
-    # are enabled, the expiry timer runs only while a temporary password is on.
+    # D-418: SSH access on CORE's request (expiry timer only while a temp login is on).
     "rosy-ssh-access.service",
     "rosy-ssh-access.path",
     "rosy-ssh-access-boot.service",
