@@ -53,8 +53,8 @@ class LineStuckBoard:
             "tier": tier, "rule": rule, "decision": decision, "escalated": escalated,
             "at": self._clock()}
 
-    def _drop_notes(self, robot_id: str) -> None:
-        for key in [k for k in self._resolver if k[0] == robot_id]:
+    def _drop_notes(self, robot_id: str, keep: Optional[str] = None) -> None:
+        for key in [k for k in self._resolver if k[0] == robot_id and k[1] != keep]:
             del self._resolver[key]
 
     def observed_age_s(self) -> Optional[float]:
@@ -85,6 +85,8 @@ class LineStuckBoard:
             previous = self._open.get(robot_id)
             entry = {"robot_id": robot_id, **{k: stuck.get(k) for k in _STATUS_KEYS},
                      "robot_online": True, "observed_at": now}
+            if previous is not None and previous["stuck_id"] != entry["stuck_id"]:
+                self._drop_notes(robot_id, keep=entry["stuck_id"])   # replaced stuck
             entry.update(self._opened(robot_id, entry["stuck_id"], previous, events_of))
             self._open[robot_id] = entry
         for robot_id in set(self._open) - seen:

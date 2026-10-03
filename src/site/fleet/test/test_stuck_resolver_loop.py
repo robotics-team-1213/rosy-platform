@@ -29,5 +29,9 @@ def test_board_view_carries_the_resolver_note():
     board.note_resolver("rosy_01", "stuck-abc", tier="human", rule=None, decision=None,
                         escalated="no_rule")
     assert board.view("rosy_01")["resolver"]["escalated"] == "no_rule"
+    board.observe([{"robot_id": "rosy_01", "online": True,
+                    "state": _state(stuck={**STUCK, "stuck_id": "stuck-new"})}])
+    assert board.view("rosy_01")["resolver"] is None
+    assert ("rosy_01", "stuck-abc") not in board._resolver
     board.observe([{"robot_id": "rosy_01", "online": True, "state": _state(stuck=None)}])
     assert board.view("rosy_01") is None
