@@ -207,3 +207,10 @@
 - 변경: info_screen.py 부팅 카드 로즈 점 (227,27,93)#e31b5d → (246,151,231)#f697e7(--brand-rose). 주석의 토큰 이름 --rose → --brand-rose, 인용 D-82 → D-277. test_info_screen.py pin 갱신. 이 드리프트는 RGBA 4-튜플+소문자 이름이라 parity 정규식을 통과했었다 — 정규식은 web_common에서 고침.
 - 근거: D-398. face 시험 통과.
 - gate 변화: 없음.
+
+## 2026-10-03 · f23221421 · feat(face): D-433 rosy-face가 LCD를 쓰는 렌더러
+
+- 변경: `info_screen.py`에 `render_stopped`(Q1 빨강 STOPPED 카드), `render_notice`(업데이트·종료), `render_strip`(Q3 주의·시험·보정·충전 띠), `to_panel`(GIF 프레임·카드 → ST7789 RGB565 바이트) 추가. `rosy_lcd.img_show`가 `to_panel`을 쓰고 `show_panel`이 미리 만든 바이트를 그린다. 패키지 이름·위치는 그대로(D-427 이동 동결).
+- 증거: `python -m pytest test/test_rosy_face.py -q` 149 passed 1 skipped (카드 6종 320×240, 띠 마스크, GIF 축소). `to_panel`이 예전 `img_show` 수식과 바이트 동일함을 일회 대조.
+- gate 변화: 없음. 실물 LCD 확인 전 DEVICE는 PARKED.
+- 결정: D-433 (Proposed)

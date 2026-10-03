@@ -27,7 +27,7 @@ Repo-structure tests: where folders, packages, documents and imports are allowed
 - Fix the layout, not the test. If a move is intended, update the target/exception table in the same commit.
 - New package: add `AGENTS.md`, a `harness.yaml` entry, `test/`, declare cross-package use in `package.xml`, and add a `FOLDER_TO_PACKAGE` row if folder and package names differ.
 - A file over budget: split it before adding a verdict. Verdict text is a decision record, not a way to pass.
-- Launch coupling is found only through literal package-name calls; dynamic imports are invisible to these scans. Packages are found under every `colcon_roots` entry (`src`, `learning`).
+- Launch coupling is found only through literal package-name calls; dynamic imports are invisible to these scans. Packages are found under every `colcon_roots` entry (`src`, `learning`, `operations`).
 - Prove a new guard by mutation: break the guarded thing, see red, restore, see green.
 
 ### Testing Requirements

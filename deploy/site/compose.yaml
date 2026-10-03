@@ -58,6 +58,13 @@ services:
     volumes:
       - "${ROSY_SITE_CONFIG_DIR:?set ROSY_SITE_CONFIG_DIR}:/run/rosy-config:ro"
       - sighting_data:/var/lib/rosy
+      # NSS queries host Avahi; directory bind follows socket replacement after daemon restart.
+      - type: bind
+        source: /run/avahi-daemon
+        target: /run/avahi-daemon
+        read_only: true
+        bind:
+          create_host_path: false
     secrets:
       - registry_token
       - fleet_sighting_token

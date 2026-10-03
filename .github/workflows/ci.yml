@@ -4,6 +4,11 @@ on:
   push:
     branches: [main]
   pull_request:
+  # D-436: PR 은 affected 티어, main push·야간·수동 실행은 풀 티어를 GitHub 러너에서
+  # 병렬 matrix 로 돈다. 로컬 PC 는 affected 티어와 pre-push 패스트 게이트만 돈다.
+  schedule:
+    - cron: "0 18 * * *"   # 03:00 KST nightly full run
+  workflow_dispatch:
   # ubuntu-26.04-rehearsal.yml 이 같은 절차를 다른 러너에서 재실행한다 (D-134).
   workflow_call:
     inputs:
@@ -12,12 +17,78 @@ on:
         default: ubuntu-24.04
 
 jobs:
-  build:
+  # D-436: 시험 범위와 병렬 matrix 를 정한다. pull_request 는 변경 범위(affected) 티어 —
+  # 선택기가 공용 기반·CI/시험 설정·미분류 파일 때문에 FULL 로 올리면 풀 matrix 다.
+  # main push·schedule·workflow_dispatch·workflow_call(PR 이 아닌 호출)은 항상 풀이다.
+  # D-430 Safety-Review 도 여기서 한 번만 돈다(전체 이력이 필요한 유일한 선행 검사).
+  scope:
     # D-135 전환 (2026-09-20): ubuntu-26.04 리허설 연속 녹색 후 게이팅 러너를
     # 26.04 로 올렸다 — ubuntu-latest 의 강제 이동(10-19~11-19)보다 먼저 검증된
     # 전환이다. 되돌림은 이 기본값을 24.04 로 바꾸면 된다.
     runs-on: ${{ inputs.runs_on || 'ubuntu-26.04' }}
     container: ros:jazzy-ros-base
+    outputs:
+      mode: ${{ steps.scope.outputs.mode }}
+      matrix: ${{ steps.scope.outputs.matrix }}
+    steps:
+      # 전체 이력: 모듈 logs.md 의 append-only 검사가 PR base / push 이전 커밋과 비교한다.
+      # 얕은 clone 이면 HEAD 만 비교되어 이미 커밋된 기록의 수정을 잡지 못한다 (D-61).
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fix git safe directory (container)
+        run: git config --global --add safe.directory "${GITHUB_WORKSPACE}"
+
+      - name: Install selector tools
+        run: |
+          apt-get update -qq
+          apt-get install -y -qq python3-yaml
+
+      # D-430 §5: a commit that touches a safety-tagged path (platform_parts.yaml
+      # `concern: safety` roots, `safety_modules`, `safety_anchors`) needs a
+      # `Safety-Review:` trailer. Only the event's own range is checked: the PR's
+      # commits, or a push's before..after (the tip alone for a new branch or a
+      # force push). Scheduled/called runs skip it, so one old commit cannot keep CI
+      # red. Relies on the full-history checkout above (fetch-depth: 0).
+      - name: Safety-Review trailer (D-430)
+        if: github.event_name == 'push' || github.event_name == 'pull_request'
+        env:
+          SAFETY_BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+        run: python3 tools/harness/safety_review.py "$SAFETY_BASE" HEAD
+
+      - name: Test scope (D-436)
+        id: scope
+        shell: bash
+        env:
+          SCOPE_BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -eo pipefail
+          if [ "${{ github.event_name }}" = "pull_request" ] && [ -n "$SCOPE_BASE" ]; then
+            python3 tools/harness/rosy_harness.py affected --base "$SCOPE_BASE" --print
+            out="$(python3 tools/harness/rosy_harness.py affected --base "$SCOPE_BASE" --ci-matrix)"
+          else
+            echo "full tier: event ${{ github.event_name }} (D-436 4)"
+            out="$(python3 tools/harness/rosy_harness.py affected --base HEAD --full --ci-matrix)"
+          fi
+          echo "mode=$(python3 -c 'import json, sys; print(json.loads(sys.argv[1])["mode"])' "$out")" >> "$GITHUB_OUTPUT"
+          echo "matrix=$(python3 -c 'import json, sys; print(json.dumps(json.loads(sys.argv[1])["matrix"]))' "$out")" >> "$GITHUB_OUTPUT"
+
+  # D-436 병렬 실행: matrix 항목 하나가 러너 하나다(tools/harness/affected_tests.py 의
+  # CI_FULL_MATRIX + 루트 test/ 3 분할, 또는 affected 호출마다 하나, 그리고 build-smoke).
+  # 셋업(컨테이너·apt·pip ≈ 70 초, colcon ≈ 20 초)은 항목마다 반복되지만, 직렬 실행의
+  # 시험 시간(≈ 8.5 분, 루트 test/ 만 4.5 분)보다 훨씬 짧다. colcon 빌드는 오버레이가
+  # 필요한 항목(ros: overlay)과 build-smoke 만 한다.
+  test:
+    needs: scope
+    name: test (${{ matrix.name }})
+    runs-on: ${{ inputs.runs_on || 'ubuntu-26.04' }}
+    container: ros:jazzy-ros-base
+    continue-on-error: ${{ !matrix.gating }}
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.scope.outputs.matrix) }}
     steps:
       # 전체 이력: 모듈 logs.md 의 append-only 검사가 PR base / push 이전 커밋과 비교한다.
       # 얕은 clone 이면 HEAD 만 비교되어 이미 커밋된 기록의 수정을 잡지 못한다 (D-61).
@@ -56,18 +127,6 @@ jobs:
           pip3 install --no-cache-dir --break-system-packages -c /tmp/rosy-runtime-constraints.txt \
             flake8 httpx pyyaml jsonschema ext4
 
-      # D-430 §5: a commit that touches a safety-tagged path (platform_parts.yaml
-      # `concern: safety` roots, `safety_modules`, `safety_anchors`) needs a
-      # `Safety-Review:` trailer. Only the event's own range is checked: the PR's
-      # commits, or a push's before..after (the tip alone for a new branch or a
-      # force push). Scheduled/called runs skip it, so one old commit cannot keep CI
-      # red. Relies on the full-history checkout above (fetch-depth: 0).
-      - name: Safety-Review trailer (D-430)
-        if: github.event_name == 'push' || github.event_name == 'pull_request'
-        env:
-          SAFETY_BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
-        run: python3 tools/harness/safety_review.py "$SAFETY_BASE" HEAD
-
       - name: Build and install ROS-free platform API wheels
         run: |
           # Build actual wheels outside src/ and install before colcon/pytest. This catches
@@ -80,12 +139,13 @@ jobs:
           mkdir -p "$wheelhouse"
           pip3 wheel --no-deps --no-build-isolation \
             --wheel-dir "$wheelhouse" \
-            contracts/skill modules/world modules/skills/api modules/skills/manipulation modules/execution middleware/execution/local modules/processes/palletizing integrations/robots/omx apps/agent apps/gateway
+            contracts/skill operations/world modules/skills/api modules/skills/manipulation operations/execution middleware/execution/local operations/processes/palletizing integrations/robots/omx apps/agent operations/apps/fleet
           pip3 install --break-system-packages --no-cache-dir --no-index \
             --find-links "$wheelhouse" \
             rosy-contracts-skill==0.1.0 rosy-world==0.1.0 rosy-skill-api==0.1.0 rosy-skill-manipulation==0.1.0 rosy-execution==0.1.0 rosy-execution-local==0.1.0 rosy-palletizing==0.1.0 rosy-integration-robot-omx==0.1.0 rosy-app-agent==0.1.0 rosy-app-gateway==0.1.0
 
       - name: Build (colcon)
+        if: matrix.kind == 'smoke' || matrix.ros == 'overlay'
         run: |
           # 러너 셸은 컨테이너 엔트리포인트를 우회하므로 ROS 환경을 직접 얹는다 —
           # 아니면 CMake가 ament_cmake를 찾지 못해 빌드 자체가 시작되지 않는다.
@@ -101,75 +161,52 @@ jobs:
             --event-handlers console_direct+
 
       - name: Lint (flake8)
+        if: matrix.kind == 'smoke'
         run: |
           flake8 src/runtime/gateway/core src/contracts/foundation/core_common src/runtime/events/core_events src/runtime/services/core_features src/runtime/api_web/core_api_web src/site/fleet/fleet src/site/fleet/test src/sim/gz_sim/launch src/sim/gz_sim/scripts src/sim/gz_sim/test --count --max-line-length=120 --show-source --statistics || true
 
-      - name: Test (core domain suites, protocol schemas P1-19)
-        run: |
-          python3 -m pytest src/runtime/gateway/test src/runtime/events/test src/runtime/services/test src/hmi/web_common/test src/contracts/foundation/test src/products/pinky_pro/profile/test src/products/omx/profile/test -v
-
-      # fleet 은 ROS 를 import 하지 않는다. conftest 가 src/contracts/foundation 과
-      # src/runtime/services 를 sys.path 에 얹으므로 colcon 오버레이 없이도
-      # 돈다 — Windows 개발 환경과 같은 조건이다.
-      - name: Test (fleet formation, relay, session)
-        run: python3 -m pytest src/site/fleet/test/ -v
-
-      # Rosy Vision 수신기도 ROS 를 import 하지 않는다(conftest 가 fleet·games·foundation 을
-      # sys.path 에 얹는다). games 와 test_preview.py 기본 이름이 겹치므로 따로 돈다.
-      - name: Test (Rosy Vision receiver)
-        run: python3 -m pytest src/site/vision/test -q
-
-      # Rosy Cell 코어는 ROS·네트워크 없이 돈다(D-399 Application). 기본 이름 겹침이 없도록 따로 돈다.
-      - name: Test (Rosy Cell core)
-        run: python3 -m pytest src/site/cell/test -q
-
-      - name: Test (palletizing process compatibility and boundaries)
-        run: python3 -m pytest test/test_platform_palletizing_compat.py test/test_platform_cell_submission.py test/architecture/test_platform_dependency_boundaries.py -q
-
-      # 멀티 인스턴스 런치는 로봇마다 포트·HOME·설정을 갈라야 한다. 그 계약은 런치
-      # 파일을 실제로 실행해야 검증되므로 ROS 오버레이가 필요하다. ros_gz_sim share 가
-      # 없는 러너에서는 테스트가 스스로 skip 한다 — 조용히 통과하는 것이 아니라
-      # skip 으로 드러난다.
-      - name: Test (gz_sim multi-instance launch)
+      # 항목의 pytest 호출을 차례로 돈다. 기본 이름이 겹치는 스위트는 이미 다른 호출로
+      # 나뉘어 있다(gateway·sensing 의 test_battery.py). ros: none 은 ROS 환경 없이(호스트와
+      # 같은 조건), base 는 /opt/ros 만, overlay 는 colcon install 까지 얹는다 — 루트 test/
+      # 배포·릴리스 계약과 gz_sim 은 overlay 다. 5 = 수집 0건은 실패가 아니다.
+      - name: Test (matrix suite, D-436)
+        if: matrix.kind == 'pytest'
         shell: bash
-        run: |
-          # ROS setup.sh 는 미정의 변수를 참조하므로 -u 를 쓰지 않는다.
-          set -eo pipefail
-          . /opt/ros/jazzy/setup.sh
-          . install/setup.sh
-          python3 -m pytest src/sim/gz_sim/test -v
-
-      # D-192: 패키지 안의 하드웨어 안전 시험은 지금까지 CI 에서 한 번도 돌지 않았다
-      # (이 워크플로는 src/runtime/gateway·fleet·gz_sim·루트 test/ 만 실행한다). 무동작 모드
-      # (토크 꺼짐·cmd_vel 미구독), ADC 버스 잠금, 배터리 곡선 고정을 게이트로 올린다.
-      # ament 린트(flake8/pep257/copyright)는 기존 파일들이 이미 적색이라 여기서 빼고,
-      # 다른 패키지 시험(control·games·emotion·led)의 기존 적색은 D-191 후속 과제다.
-      - name: Test (hardware safety - no-motion, ADC lock, battery curve)
-        shell: bash
-        run: |
-          set -eo pipefail
-          . /opt/ros/jazzy/setup.sh
-          python3 -m pytest src/products/pinky_pro/bringup/test src/products/pinky_pro/adc/test             src/runtime/sensing/test/test_ir_adc_lock.py             --ignore=src/products/pinky_pro/bringup/test/test_flake8.py             --ignore=src/products/pinky_pro/bringup/test/test_pep257.py             --ignore=src/products/pinky_pro/bringup/test/test_copyright.py -v
-
-      # 루트 test/ 는 배포·릴리스 계약을 담고 있으면서도 지금까지 CI 에서 한 번도
-      # 실행되지 않았다. 위 스텝이 src/runtime/gateway/test 만 돌기 때문이다. 그래서
-      # compose 권한 경계와 Wi-Fi 배포 계약이 검증 없이 지나갔다.
-      # ROS 오버레이는 필요 없다 — test_motor_control.py 가 직접 sys.path 를 잡는다.
-      # 2026-09-21: 구조적 적색 3건(D-136·D-137 인덱스 행 + D-137 T2 저널 필드)이
-      # 수습돼 더 이상 deselect 하지 않고 게이팅한다.
-      - name: Test (deployment and release contracts)
         env:
           # module harness: logs.md 는 이 base 이후로 앞부분이 보존되어야 한다 (비면 origin/main merge-base).
           HARNESS_BASE_REF: ${{ github.event.pull_request.base.sha || github.event.before }}
+          ROSY_ROS: ${{ matrix.ros }}
+          ROSY_INVOCATIONS: ${{ toJSON(matrix.invocations) }}
         run: |
-          . /opt/ros/jazzy/setup.sh
-          . install/setup.sh
-          python3 -m pytest test/ -v
+          # ROS setup.sh 는 미정의 변수를 참조하므로 -u 를 쓰지 않는다.
+          set -eo pipefail
+          case "$ROSY_ROS" in
+            overlay) . /opt/ros/jazzy/setup.sh; . install/setup.sh ;;
+            base) . /opt/ros/jazzy/setup.sh ;;
+          esac
+          python3 - <<'PY'
+          import json
+          import os
+          import subprocess
+          import sys
+
+          status = 0
+          for paths in json.loads(os.environ["ROSY_INVOCATIONS"]):
+              print("::group::pytest " + " ".join(paths), flush=True)
+              code = subprocess.run([sys.executable, "-m", "pytest", *paths, "-v",
+                                     "--continue-on-collection-errors"]).returncode
+              print("::endgroup::", flush=True)
+              if code not in (0, 5):
+                  print(f"::error::pytest {' '.join(paths)} exited {code}", flush=True)
+                  status = 1
+          sys.exit(status)
+          PY
 
       # 호스트 테스트는 ros_bridge 를 임포트하지 않으므로, 모듈 최상단의 ROS
       # 임포트가 노드 생성자를 죽이는 결함을 잡지 못한다. 이 러너에는
       # slam_toolbox 가 없어 그 조건이 그대로 재현된다.
       - name: Smoke (node boots without optional ROS packages)
+        if: matrix.kind == 'smoke'
         shell: bash
         run: |
           # ROS setup.sh 는 미정의 변수를 참조하므로 -u 를 쓰지 않는다.
@@ -201,6 +238,7 @@ jobs:
       # 아니라 SIGABRT 다. 호스트 테스트로는 잡히지 않으므로 실제 타입으로 검사한다.
       # 전체 설치(Qt/assimp 의존성)는 무겁다 — deb 만 받아 풀면 바인딩이 임포트된다.
       - name: Guard (SaveMap request type and result codes)
+        if: matrix.kind == 'smoke'
         shell: bash
         run: |
           set -eo pipefail
@@ -225,3 +263,21 @@ jobs:
           assert serialize_message(request)
           print('SaveMap guard OK')
           PY
+
+  # D-436: one stable check name for branch protection. The matrix job names change
+  # with the selection (test (affected-3), test (root-test-2of3)), so protection points
+  # here. Fails unless scope and every gating matrix entry succeeded; a cancelled or
+  # skipped job is a failure. Non-gating entries (continue-on-error) do not fail it.
+  ci-result:
+    name: ci-result
+    needs: [scope, test]
+    if: always()
+    runs-on: ${{ inputs.runs_on || 'ubuntu-26.04' }}
+    steps:
+      - name: All gating jobs passed
+        env:
+          SCOPE_RESULT: ${{ needs.scope.result }}
+          TEST_RESULT: ${{ needs.test.result }}
+        run: |
+          echo "scope=$SCOPE_RESULT test=$TEST_RESULT"
+          test "$SCOPE_RESULT" = success && test "$TEST_RESULT" = success

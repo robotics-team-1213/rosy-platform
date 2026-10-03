@@ -69,6 +69,10 @@ def publish_service(output: Path, port: int, *, role: str = "fleet",
         temp = Path(stream.name)
         stream.write(payload)
     try:
+        # DNS-SD XML contains public metadata. Avahi drops root privileges;
+        # NamedTemporaryFile's 0600 default otherwise hides the new service.
+        # Set permissions before rename, including under a restrictive umask.
+        temp.chmod(0o644)
         temp.replace(output)
     finally:
         temp.unlink(missing_ok=True)

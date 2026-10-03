@@ -30,7 +30,7 @@ from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
 from launch_ros.substitutions import FindPackagePrefix
 
-from control.ir_overlay import usable_overlay
+from control.ir_overlay import usable_operator_overlay, usable_overlay
 
 
 def _env_switch(name):
@@ -72,6 +72,13 @@ def generate_launch_description():
     overlay, overlay_note = usable_overlay()
     if overlay is not None:
         line_params.append(overlay)
+    # D-344 §12 addendum 2026-10-03: the operator's camera lane overrides (bench
+    # keep/NOMINAL) live outside the release, so an update keeps them; last wins.
+    operator, operator_note = usable_operator_overlay()
+    if operator is not None:
+        line_params.append(operator)
+    elif 'skipped' in operator_note:
+        get_logger('camera_preview.launch').warning(f'operator override overlay: {operator_note}')
     return LaunchDescription([
         DeclareLaunchArgument('namespace', default_value=''),
         DeclareLaunchArgument('learned_shadow',
@@ -89,6 +96,7 @@ def generate_launch_description():
                               default_value='/var/lib/rosy/camera/recordings'),
         DeclareLaunchArgument('pilot_recording_root', default_value='/var/lib/rosy/pilot-recordings'),
         LogInfo(msg=f'IR calibration overlay: {overlay_note}'),
+        LogInfo(msg=f'operator override overlay: {operator_note}'),
         Node(
             package='control', executable='camera_detect_node', namespace=namespace,
             output='screen', respawn=True, respawn_delay=2.0,

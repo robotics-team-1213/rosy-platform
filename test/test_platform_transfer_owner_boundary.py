@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 for package_root in (
     ROOT / "contracts/skill/src",
     ROOT / "modules/skills/api/src",
-    ROOT / "modules/execution/src",
+    ROOT / "operations/execution/src",
     ROOT / "middleware/execution/local/src",
     ROOT / "modules/skills/manipulation/src",
 ):

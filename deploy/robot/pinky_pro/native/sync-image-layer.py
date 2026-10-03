@@ -94,7 +94,9 @@ UNITS = (
     "rosy-boot-status.service",
     "rosy-boot-status.timer",
     "rosy-boot-status-ready.service",
+    # D-433: retired (see RETIRED_UNITS); rosy-face replaces it.
     "rosy-boot-display.service",
+    "rosy-face.service",
     "rosy-config.service",
     "rosy-network.service",
     "rosy-login-code.service",
@@ -122,7 +124,7 @@ ENABLED_UNITS = frozenset({
     "rosy-boot-status-ready.service",
     "rosy-config.service",
     "rosy-network.service",
-    "rosy-boot-display.service",
+    "rosy-face.service",
     "rosy-login-code.service",
     "rosy-hw-probe.service",
     "rosy-hw-probe.path",
@@ -131,6 +133,18 @@ ENABLED_UNITS = frozenset({
     "rosy-ssh-access.path",
     "rosy-ssh-access-boot.service",
 })
+
+# D-433: a unit a newer one replaced. Its file is only ever REPLACED where an
+# older image installed it (with a condition that keeps it from starting beside
+# its successor), never installed new, and never restarted: restarting it would
+# start a second owner of the same lines. A rollback's own sync restores the
+# backed-up original.
+RETIRED_UNITS = frozenset({"rosy-boot-display.service"})
+# The sync only installs and enables a successor (rosy-face); it never stops the
+# retired unit or starts the successor. On a robot updating from 026 this sync
+# runs under 026's updater, whose rollback could not restart the retired unit,
+# so the live swap is left to the D-433 updater (rosy_auto_update._face_swap)
+# or the next boot.
 
 # Never offered for a live restart, even when active and changed: the boot
 # oneshots are Required by rosy-core (restarting them restarts CORE), and
@@ -148,6 +162,7 @@ def _restartable(unit: str) -> bool:
     return (
         not unit.endswith(".target")
         and unit not in NEXT_BOOT_ONLY
+        and unit not in RETIRED_UNITS
         and not unit.startswith("rosy-first-boot")
     )
 
@@ -263,6 +278,9 @@ def plan(root: Path, native: Path) -> dict:
         if destination.is_symlink():
             # A unit linked to /dev/null is masked; replacing it would unmask it.
             skipped.append({"path": shown, "reason": "destination is a symlink (masked?)"})
+            continue
+        if not destination.exists() and entry["kind"] == "unit" and Path(entry["destination"]).name in RETIRED_UNITS:
+            skipped.append({"path": shown, "reason": "retired unit, not installed here (D-433)"})
             continue
         if not destination.exists():
             result["new"].append(shown)

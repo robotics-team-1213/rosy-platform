@@ -363,6 +363,8 @@ DECLARED_WRITES = {
         "/run/rosy/hw-test.request", "$HOME/.rosy/hw-confirmations.json",
         # D-260 M1: the boot display's inputs only CORE knows (api/v1/host.py STATUS_INPUTS_FILE).
         "/run/rosy/status-inputs.json",
+        # D-433: rosy-face's hand-over (core_common.face_screen.FACE_INPUTS_FILE).
+        "/run/rosy/face-inputs.json",
         # D-418: the hand-over to rosy-ssh-access.path (ssh_handoff.py REQUEST_FILE), and
         # the root helper's answer, which CORE deletes once read (RESPONSE_FILE).
         "/run/rosy/ssh-access.request", "/run/rosy/ssh-access.response",
@@ -380,12 +382,18 @@ DECLARED_WRITES = {
         # slam_toolbox save_map output: ros_bridge.py ROSY_MAP_OUTPUT_DIR default.
         "/var/lib/rosy/maps/site.pgm",
     },
-    "rosy-boot-display.service": {
+    "rosy-face.service": {
         # lgpio (under rpi-lgpio's RPi.GPIO) keeps its notification files in
         # LG_WD, which the unit points at HOME.
         "$HOME/.lgd-nfy0",
         # D-260 / D-247 6: the outcome of a test rosy-hw-test handed over
-        # (rosy-boot-display.py TEST_RESULT), in the unit's RuntimeDirectory.
+        # (rosy-face.py TEST_RESULT), in the unit's RuntimeDirectory.
+        "/run/rosy-display/display-test.json",
+    },
+    # D-433: the retired unit (shipped only to replace an old robot's copy) is the
+    # same sandbox as rosy-face, which carries its program.
+    "rosy-boot-display.service": {
+        "$HOME/.lgd-nfy0",
         "/run/rosy-display/display-test.json",
     },
     "rosy-login-code.service": {
@@ -458,9 +466,15 @@ DECLARED_READS = {
     },
     # D-344 §12: the optional per-robot IR calibration overlay for line_observer.
     # D-373: root:rosy-camera 0750 models, written only by the operator's sudo install.
-    "rosy-camera.service": {"/etc/rosy/ir_calibration.yaml", "/var/lib/rosy/models"},
+    # D-344 §12 addendum 2026-10-03: the operator's camera lane overrides, root 0644,
+    # written only by line_observer_overrides under sudo.
+    "rosy-camera.service": {"/etc/rosy/ir_calibration.yaml", "/var/lib/rosy/models",
+                            "/etc/rosy/line_observer_overrides.yaml"},
     # boot-status.json, network.json and ap-display.txt (root-written; D-190).
     "rosy-boot-display.service": {"/run/rosy-boot"},
+    # D-433: also CORE's face hand-over in rosy-core's /run/rosy (0755, file 0644)
+    # and the release's emotion GIFs.
+    "rosy-face.service": {"/run/rosy-boot", "/run/rosy", "/opt/rosy/current"},
     # D-193: boot-status.json; CORE's used/burned signal (read strictly, never
     # followed); the image defaults and the applied rosy-config policy.
     "rosy-login-code.service": {
@@ -510,11 +524,18 @@ PROGRAM_SOURCES = {
                             "src/runtime/sensing/control/pilot_recorder_node.py",
                             "src/runtime/sensing/control/pilot_recording.py"],
     "rosy-navigation.service": ["src/runtime/navigation", "src/products/pinky_pro/bringup"],
-    # D-190: the display loop, the emotion card and LCD driver, rosylib.Battery.
-    "rosy-boot-display.service": ["deploy/robot/pinky_pro/native/rosy-boot-display.py",
-                                  # D-260: the rule table it imports from the release.
-                                  "src/contracts/foundation/core_common/robot_state.py",
-                                  "src/hmi/face/emotion/info_screen.py",
+    # D-190 / D-433: the face loop, the emotion cards and LCD driver, rosylib.Battery.
+    "rosy-face.service": ["deploy/robot/pinky_pro/native/rosy-face.py",
+                          # D-260: the rule table it imports from the release.
+                          "src/contracts/foundation/core_common/robot_state.py",
+                          # D-433: the situation table and the face-inputs reader.
+                          "src/contracts/foundation/core_common/face_screen.py",
+                          "src/hmi/face/emotion/info_screen.py",
+                          "src/hmi/face/emotion/rosy_lcd.py",
+                          "src/products/pinky_pro/bringup/rosylib"],
+    # D-433: the retired unit runs the pre-D-433 program an old image still holds;
+    # what it may touch is a subset of rosy-face's.
+    "rosy-boot-display.service": ["src/contracts/foundation/core_common/robot_state.py",
                                   "src/hmi/face/emotion/rosy_lcd.py",
                                   "src/products/pinky_pro/bringup/rosylib"],
     # D-193: the issuer and the policy loader it imports.
@@ -834,7 +855,8 @@ def test_every_home_unit_is_covered_by_the_startup_hook_rule():
 
 
 @pytest.mark.parametrize("unit", [
-    "rosy-core.service", "rosy-io.service", "rosy-navigation.service", "rosy-boot-display.service",
+    "rosy-core.service", "rosy-io.service", "rosy-navigation.service", "rosy-face.service",
+    "rosy-boot-display.service",
 ])
 def test_python_units_never_write_bytecode_into_the_release(unit):
     # D-225: the payload ships checked-hash pycs (valid after pack fixes mtimes);

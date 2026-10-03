@@ -37,12 +37,17 @@ hw = _load()
 
 
 class FakeSystem(hw.System):
-    """``display`` is rosy-boot-display's ActiveState; ``answer`` its reply to a hand-over (None: real)."""
+    """``display`` is rosy-face's ActiveState; ``answer`` its reply to a hand-over (None: real).
 
-    def __init__(self, root: Path, *, display="inactive", beep_error=None, lamp=(0, ""), trusted=True,
+    ``retired`` is the retired rosy-boot-display's state (D-433: a robot rolled back runs it).
+    """
+
+    def __init__(self, root: Path, *, display="inactive", retired="inactive", beep_error=None, lamp=(0, ""),
+                 trusted=True,
                  answer=("done", "BCM 4 · 2 kHz · duty 10 % · 3×150 ms (부팅 표시가 울림)")) -> None:
         super().__init__(root)
         self.display = display
+        self.retired = retired
         self.answer = answer
         self.group = 962  # rosy-display, as on the image
         self.handoffs: list[tuple[str, str]] = []
@@ -53,8 +58,8 @@ class FakeSystem(hw.System):
         self.lamps: list[Path] = []
 
     def unit_state(self, unit):
-        assert unit == "rosy-boot-display.service"
-        return self.display
+        assert unit in hw.DISPLAY_UNITS
+        return self.display if unit == "rosy-face.service" else self.retired
 
     def beep(self, pin):
         self.beeps.append(pin)
@@ -210,6 +215,17 @@ def test_the_buzzer_test_is_handed_to_the_boot_display_when_it_owns_the_line(tmp
     assert result["detail"].endswith("(부팅 표시가 울림)")
 
 
+def test_a_rolled_back_robot_hands_the_test_to_the_retired_display(tmp_path):
+    # D-433: after a rollback to a pre-rosy-face release, rosy-boot-display owns the line again.
+    root = _root(tmp_path)
+    _request(root)
+    system = FakeSystem(root, display="inactive", retired="active")
+    result = _run(root, system)
+
+    assert system.beeps == [] and system.handoffs == [("buzzer", "00112233445566778899aabb")]
+    assert result["state"] == "done"
+
+
 def test_a_display_without_the_buzzer_leaves_the_line_to_this_test(tmp_path):
     root = _root(tmp_path)
     _request(root)
@@ -326,7 +342,7 @@ def test_a_pin_outside_the_display_allow_list_is_never_driven(tmp_path, pin):
 
 
 def _display_module():
-    spec = importlib.util.spec_from_file_location("boot_display_for_hw_test", NATIVE / "rosy-boot-display.py")
+    spec = importlib.util.spec_from_file_location("boot_display_for_hw_test", NATIVE / "rosy-face.py")
     display = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(display)
     return display

@@ -8,7 +8,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 for relative in (
     "apps/agent/src",
-    "apps/gateway/src",
+    "operations/apps/fleet/src",
 ):
     path = ROOT / relative
     if str(path) not in sys.path:

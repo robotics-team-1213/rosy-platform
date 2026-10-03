@@ -121,3 +121,19 @@ moving은 명령(|v| > 0.01 m/s 또는 |ω| > 0.05 rad/s)이 있거나, 프레�
 **Validation:** `tools/perception/test/test_training_notebook.py`(입력 칸, 5c 셀 위치와 Secret 처리, 키 출력·기록 없음,
 `on_epoch`·`experiment` 연결), `test_training_model.py`(`on_epoch` 가 에폭마다 한 번), `test_training_contract.py`
 (`metrics.experiment` 는 네 키만, 로봇 로더 통과). 실제 Colab 런타임과 W&B 계정으로 돌려 본 적은 아직 없다.
+
+
+### 부록 (2026-10-03) — 실험 기록 기본값: 로컬 + TensorBoard (W&B 선택)
+
+사용자 결정(2026-10-03): 실험 기록의 **기본은 로컬 기록 + TensorBoard**이고, W&B는 선택으로 남긴다(위 W&B 부록의 동작은 키가 없을 때 그대로, 키가 있으면 그대로 쓴다).
+
+- 이유: 데이터셋이 작고 학습 횟수가 적어 외부 서비스의 이점이 작다. 외부 계정·키에 의존하지 않아도 루프가 돌아야 한다. 학습은 이제 모델 PC(D-434, Linux)의 노트북 GPU PC 경로나 일반 Python에서 돌고, Colab도 여전히 가능하다.
+- 파일: `learning/training/perception/training/run_log.py`의 `RunLog(run_dir)`가 `<RUNS_DIR>/<UTC 시각>-<trainer>/`에 `config.json`(설정, 키 이름에 token/secret/key/password가 들어간 항목은 쓰지 않는다), `history.json`(에폭마다 원자적으로 갱신), `summary.json`(가장 좋은 에폭, 검증 IoU, `model_revision`, 내보낸 폴더의 상대 경로. 호스트 절대 경로는 쓰지 않는다)과 TensorBoard 이벤트 파일(`loss/train`, `loss/val`, `iou/mean`, `iou/<class>`)을 쓴다. `tensorboard`가 없으면 `history.json`에 `"tensorboard": "unavailable"`을 남기고 계속한다. `RUNS_DIR` 기본값은 환경 변수 `ROSY_RUNS_DIR`, 없으면 Colab `/content/rosy-runs`, 그 밖 `~/rosy-ml/runs`다.
+- 오류 처리: 기록은 학습을 멈추지 않는다. TensorBoard 쓰기 오류는 `history.json`에 `tensorboard: error`와 오류 형식 이름만 남기고 TensorBoard만 끈다. 파일 쓰기 `OSError`는 세고(`write_errors`) 올리지 않는다. `chain()`은 한 훅이 예외를 내도 나머지를 계속 부른다(`KeyboardInterrupt`는 막지 않는다). 설정의 비밀 키 제거는 키 이름만 본다(token, secret, key, password, passwd, pwd, credential, auth, bearer, cookie, private). 값은 보지 않으므로 설정에 비밀 문장을 적지 않는다. 5c를 다시 실행하면 앞 `RunLog`를 먼저 닫는다.
+- 위치: 기록 폴더는 모델 폴더(`model.onnx` + `model_manifest.json`) 밖이라 store inbox로 넘어가지 않는다. 로봇과 사이트 PC 도구는 이 폴더를 읽지 않는다.
+- 보기: 모델 PC에서 `tensorboard --logdir ~/rosy-ml/runs --host <tailscale-ip> --port 6006`(주소는 자리 표시자, 공개 저장소에 실제 주소를 적지 않는다).
+- 매니페스트: `metrics.experiment`는 트래커별 허용 키만 적는다. W&B는 `{"tracker": "wandb", "run_id", "url", "project"}`, 로컬은 `{"tracker": "local", "run_id", "path"}`(`path`는 고정 형태 `runs/<run_id>`, 호스트 경로 없음). 로컬 항목은 `export_cell`이 검증한다: `run_id`는 `^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$`, `path`는 상대 경로·슬래시만·드라이브 문자와 `..` 없음, 어기면 `ValueError`. 알 수 없는 트래커도 거부한다. 로봇 쪽 `load_manifest`는 이 키를 `raw`에 그대로 둔다(변경 없음).
+- 노트북: 5c단계가 로컬 기록을 만들고(W&B가 켜졌어도), 5d단계가 W&B(이전 5c)다. W&B run 설정은 로컬 `config.json`과 같은 dict다. 학습 훅은 `chain(RUN_LOG.on_epoch, W&B 훅 또는 None)`이고, 내보내기는 W&B run이 있으면 그 링크, 없으면 로컬 항목을 `experiment=`로 넘긴 뒤 `RUN_LOG.finish(...)`를 부른다.
+- 계보: 데이터셋 `content_sha` → 로컬 run 폴더(`config.json`에 같은 해시) → `model_revision`(`summary.json`과 매니페스트 `metrics.experiment`) → intake 보고서 → 로봇 `history.jsonl`.
+
+**Validation:** `learning/training/perception/test/test_training_run_log.py`(에폭마다 history, 임시 파일 없음, 설정의 비밀 키 제거, TensorBoard 없음 경로, `chain`이 None을 건너뜀, torch 최상위 import 없음), `test_training_contract.py`(로컬 `metrics.experiment`, 로봇 로더 통과, 알 수 없는 트래커 거부), `test_training_notebook.py`(RUNS_DIR 입력, 5c/5d 순서, 설정 항목, `chain`, `experiment=WANDB_EXPERIMENT or LOCAL_EXPERIMENT`, `RUN_LOG.finish`). 호스트 결과이며 모델 PC나 실제 Colab 런타임에서 돌려 본 것은 아직 아니다.

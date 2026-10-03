@@ -323,7 +323,7 @@ def test_first_upload_is_canary_only_and_signed(tarball, keys, tmp_path):
     assert first["published_at"] == "2026-10-01T15:00:00Z"
     assert first["tarball_sha256"] == signing.sha256_file(tarball)
     assert first["source_revision"] == REVISION
-    assert first["wave_delay_s"] == 600
+    assert first["wave_delay_s"] == 0
 
 
 def test_an_existing_tag_is_refused_without_resume(tarball, keys, tmp_path, capsys):
@@ -363,9 +363,9 @@ def test_the_tarball_must_carry_a_matching_manifest_and_full_revision(tmp_path, 
     assert gh.releases == {}
 
 
-def test_wave_delay_below_60_is_rejected(tarball, keys, tmp_path):
+def test_negative_wave_delay_is_rejected(tarball, keys, tmp_path):
     with pytest.raises(SystemExit) as raised:
-        _publish(tarball, keys, tmp_path, FakeGh(), FakeSsh(), "--wave-delay-s", "59")
+        _publish(tarball, keys, tmp_path, FakeGh(), FakeSsh(), "--wave-delay-s", "-1")
     assert raised.value.code == 2
 
 
@@ -462,7 +462,7 @@ def test_after_canary_ok_the_other_robots_are_shown(tarball, keys, tmp_path, cap
 
     out = capsys.readouterr().out
     assert OTHER_IP in out and "waiting" in out
-    assert "2026-10-01T15:10:00Z" in out  # published_at + wave_delay_s
+    assert "2026-10-01T15:00:00Z" in out  # no added wave delay by default
 
 
 def test_evidence_log_records_each_phase(tarball, keys, tmp_path):
@@ -495,6 +495,72 @@ def test_a_failed_reupload_exits_non_zero(tarball, keys, tmp_path):
 
 
 # --- resume and withdraw ------------------------------------------------------
+
+def _open_wave(keys, tmp_path, gh):
+    return _run(["--release-id", RELEASE_ID, "--out-dir", str(tmp_path / "w"), "--canary", CANARY_IP,
+                 "--resume", "--open-wave-now"], keys, tmp_path, gh, FakeSsh())
+
+
+def test_open_wave_changes_only_the_delay_and_resigns(keys, tmp_path):
+    gh = FakeGh()
+    _signed_release(gh, keys, tmp_path, canary_ok=True)
+    before = _verified(gh, keys)
+    assert _open_wave(keys, tmp_path, gh) == 0
+    assert _verified(gh, keys) == {**before, "wave_delay_s": 0}
+    assert len(_uploads(gh)) == 1
+
+
+@pytest.mark.parametrize("changes", [{"canary_ok": False}, {"canary_ok": True, "withdrawn": True}])
+def test_open_wave_requires_a_nonwithdrawn_approved_canary(keys, tmp_path, changes):
+    gh = FakeGh()
+    _signed_release(gh, keys, tmp_path, **changes)
+    before = _verified(gh, keys)
+    assert _open_wave(keys, tmp_path, gh) != 0
+    assert _verified(gh, keys) == before
+    assert not _uploads(gh)
+
+
+def test_open_wave_requires_a_verified_signature(keys, tmp_path):
+    gh = FakeGh()
+    _signed_release(gh, keys, tmp_path, canary_ok=True)
+    gh.releases[TAG]["assets"]["rollout.json"] += b" "
+    assert _open_wave(keys, tmp_path, gh) != 0
+    assert not _uploads(gh)
+
+
+def test_open_wave_refuses_a_change_before_upload(keys, tmp_path):
+    gh = FakeGh()
+    _signed_release(gh, keys, tmp_path, canary_ok=True)
+    original = gh.__call__
+    downloads = 0
+
+    def race(argv):
+        nonlocal downloads
+        if argv[1:3] == ["release", "download"]:
+            downloads += 1
+            if downloads == 2:
+                _rewrite_remote(gh, keys, wave_delay_s=900)
+        return original(argv)
+
+    assert _open_wave(keys, tmp_path, race) != 0
+    assert _verified(gh, keys)["wave_delay_s"] == 900
+    assert not _uploads(gh)
+
+
+def test_open_wave_preserves_a_withdraw_after_upload(keys, tmp_path):
+    gh = FakeGh()
+    _signed_release(gh, keys, tmp_path, canary_ok=True)
+    gh.after_upload = lambda: _rewrite_remote(gh, keys, withdrawn=True, reason="stop")
+    assert _open_wave(keys, tmp_path, gh) != 0
+    assert _verified(gh, keys)["withdrawn"] is True
+    assert len(_uploads(gh)) == 1
+
+
+def test_open_wave_requires_resume(keys, tmp_path):
+    with pytest.raises(SystemExit) as raised:
+        _run(["--release-id", RELEASE_ID, "--canary", CANARY_IP, "--open-wave-now"],
+             keys, tmp_path, FakeGh(), FakeSsh())
+    assert raised.value.code == 2
 
 def test_resume_reattaches_and_finishes_the_canary(keys, tmp_path):
     gh = FakeGh()
