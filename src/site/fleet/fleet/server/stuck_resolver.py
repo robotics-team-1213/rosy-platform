@@ -26,7 +26,7 @@ class ResolverConfig:
     rule_budget: int = 2
     escalate_after_s: float = 60.0
     peer_reach_m: float = 0.30
-    # Own half width (Pinky 0.057 m) + a peer's rotation radius (0.083 m), rounded up.
+    # Own URDF half width (0.057 m) + a peer's rotation radius (0.083 m), rounded up.
     # ponytail: one body size for every robot; read per-robot geometry when kinds differ.
     peer_band_half_width_m: float = 0.15
     peer_radius_m: float = 0.083          # reach is measured to the peer's body, not its centre
