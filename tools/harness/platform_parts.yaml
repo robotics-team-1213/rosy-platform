@@ -263,17 +263,19 @@ roots:
     concern: other
   # D-429 §2: site devices (signal, dock) are operations-owned, listed here so the
   # firmware entries stay together.
-  - path: firmware/dock
+  - path: operations/site_devices/dock
     part: operations
     d427_target: operations/site_devices/dock
+    legacy: firmware/dock
     wave: "3b"
     note: >-
       D-429 §2 site device owner: firmware and device contract only. The robot keeps
       polling the dock /status directly (core_features/docking stays middleware).
     concern: control
-  - path: firmware/dock/firmware
+  - path: operations/site_devices/dock/firmware
     part: operations
     d427_target: operations/site_devices/dock/firmware
+    legacy: firmware/dock/firmware
     wave: "3b"
     note: D-430 §1 dock firmware owns the limit-switch interlock and 0 V boot (layer 2).
     concern: safety

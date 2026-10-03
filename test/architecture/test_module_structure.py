@@ -15,7 +15,7 @@ Honest holes, not oversights:
 - Dynamic imports (``importlib.import_module``, entry points) are invisible.
   The one intended case is core loading ``rosy.sensor_provider`` (D-126).
 - P6 budgets are per code type (D-362): 600 for production ``.py``/``.cpp``/``.hpp``/``.sh``
-  across ``src/`` packages and the ``deploy``/``tools``/``firmware`` roots, 800 for web
+  across ``src/`` packages and the ``deploy``/``tools``/``learning``/``operations/site_devices`` roots, 800 for web
   assets (``.js``/``.html``/``.css``) inside ``src/`` packages, zero growth allowance above
   1000. Test code and data files are exempt. Line counts are physical lines, blank
   lines and comments included.
@@ -71,7 +71,7 @@ REGROWTH_ALLOWANCE = 150
 FILE_BUDGET_WEB = 800
 WEB_SUFFIXES = {".js", ".html", ".css"}
 OPS_SUFFIXES = {".py", ".sh"}
-OPS_ROOTS = ("deploy", "tools", "firmware", "learning",  # learning: moved perception tooling (D-427 wave 1)
+OPS_ROOTS = ("deploy", "tools", "learning",  # learning: moved perception tooling (D-427 wave 1)
              "operations/site_devices")  # site device firmware (D-427 wave 3b)
 HARD_TIER = 1_000  # a file above this gets zero growth allowance
 
@@ -841,7 +841,7 @@ def test_core_chain_stays_one_way():
 
 
 def _is_prod_outside_src(path: Path) -> bool:
-    """Prod filter for the deploy/tools/firmware roots (D-362), same rule as _is_prod."""
+    """Prod filter for the OPS_ROOTS (D-362), same rule as _is_prod."""
     return not any(
         p in ("test", "tests", "build", "install", "log") or p.startswith(".")
         for p in path.relative_to(ROOT).parts

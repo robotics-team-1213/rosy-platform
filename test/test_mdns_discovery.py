@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def test_dock_firmware_advertises_mdns():
     """도크 펌웨어가 ESPmDNS를 include하고 rosy-dock 서비스를 등록한다."""
-    sketch = ROOT / "firmware/dock/firmware/rosy_dock/rosy_dock.ino"
+    sketch = ROOT / "operations/site_devices/dock/firmware/rosy_dock/rosy_dock.ino"
     text = sketch.read_text(encoding="utf-8")
     assert "#include <ESPmDNS.h>" in text, "dock must include ESPmDNS"
     assert 'MDNS.addService("rosy-dock", "tcp", 80)' in text, (
@@ -58,7 +58,7 @@ def test_discovered_device_shape():
 
 def test_dock_contract_documents_mdns_service_names():
     """계약 문서가 mDNS 서비스명 표를 포함한다 (D-354)."""
-    readme = ROOT / "firmware" / "dock" / "README.md"
+    readme = ROOT / "operations" / "site_devices" / "dock" / "README.md"
     text = readme.read_text(encoding="utf-8")
     assert "_rosy-dock._tcp" in text, "dock contract must name the mDNS service"
     assert "_rosy-signal._tcp" in text, "dock contract cross-references signal (D-352)"

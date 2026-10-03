@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-DOCK = ROOT / "firmware" / "dock"
+DOCK = ROOT / "operations" / "site_devices" / "dock"
 README = DOCK / "README.md"
 
 
