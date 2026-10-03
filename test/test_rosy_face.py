@@ -18,7 +18,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 NATIVE = ROOT / "deploy/robot/pinky_pro/native"
 IMAGE = ROOT / "deploy/robot/pinky_pro/image"
-UNIT = NATIVE / "rosy-boot-display.service"
+UNIT = NATIVE / "rosy-face.service"
 FOUNDATION = ROOT / "src/contracts/foundation"
 PW = "pass" + "word"  # assembled so the tracked-file secret scanner sees no literal
 AP_VALUE = "Kx7" + "mQ2vR9tLpZq"
@@ -38,7 +38,7 @@ def _load(name: str, path: Path):
 
 
 def _display():
-    return _load("rosy_boot_display", NATIVE / "rosy-boot-display.py")
+    return _load("rosy_face", NATIVE / "rosy-face.py")
 
 
 def _network():
@@ -136,7 +136,7 @@ def _loop(module, root, *, voltages=(8.2,), gpio=None, buzzer_on=False, interval
         rendered.append(view)
         return f"image-{len(rendered)}"
 
-    display = module.BootDisplay(root, lcd=lcd, render=render, battery=reader, buzzer=buzzer,
+    display = module.FaceDisplay(root, lcd=lcd, render=render, battery=reader, buzzer=buzzer,
                                  clock=clock, battery_interval=interval)
     return display, lcd, clock, battery, rendered, lines
 
@@ -766,7 +766,7 @@ def test_the_unit_is_an_unprivileged_sandbox_with_exactly_four_devices():
     assert environment["HOME"] == "/var/lib/rosy/display" == directives["WorkingDirectory"][0]
     assert environment["LG_WD"] == "/var/lib/rosy/display"
     assert directives["StateDirectory"] == ["rosy/display"]
-    assert directives["ExecStart"] == ["/usr/bin/python3 -B /opt/rosy/native-runtime/rosy-boot-display.py"]
+    assert directives["ExecStart"] == ["/usr/bin/python3 -B /opt/rosy/native-runtime/rosy-face.py"]
     assert "bash" not in UNIT.read_text(encoding="utf-8")
 
 
@@ -778,16 +778,15 @@ def test_the_unit_starts_early_outside_core_and_is_enabled_by_the_image():
     for runtime in ("rosy-core", "rosy-runtime", "network-online", "rosy-boot-status"):
         assert runtime not in ordered
     assert directives["WantedBy"] == ["multi-user.target"]
-    assert "rosy-boot-display.service" in (IMAGE / "customize-rootfs.sh").read_text(encoding="utf-8")
+    assert "rosy-face.service" in (IMAGE / "customize-rootfs.sh").read_text(encoding="utf-8")
 
 
-def test_emotion_is_bench_only_so_nothing_needs_a_conflict():
-    # D-190 decision 5: one LCD owner. No product unit or launch starts the
-    # emotion face; the first one that does must add Conflicts= with the display.
+def test_no_product_unit_or_launch_starts_emotion_server():
+    # D-190 decision 5 / D-433: one LCD owner, rosy-face. emotion_server is the
+    # sim/bench ROS adapter; no product unit or launch may start it beside rosy-face.
     for unit in NATIVE.glob("*.service"):
         text = unit.read_text(encoding="utf-8")
-        if "emotion" in "".join(line for line in text.splitlines() if line.startswith("Exec")):
-            assert "rosy-boot-display.service" in text, unit.name
+        assert "emotion" not in "".join(line for line in text.splitlines() if line.startswith("Exec")), unit.name
     from robot_contracts import COLCON_ROOTS
 
     launches = [launch for root in COLCON_ROOTS for launch in (ROOT / root).rglob("*.launch.py")
@@ -808,7 +807,8 @@ def test_the_image_installs_the_display_user_packages_rule_and_probe():
         assert package in customizer
     assert "useradd --uid 962 --gid 962 --system --no-create-home --shell /usr/sbin/nologin rosy-display" in customizer
     assert "for group in spi gpio i2c; do" in customizer
-    assert 'cp "$NATIVE_RUNTIME_SOURCE/rosy-boot-display.service" "$OVERLAY/etc/systemd/system/"' in payload
+    assert 'cp "$NATIVE_RUNTIME_SOURCE/rosy-face.service" "$OVERLAY/etc/systemd/system/"' in payload
+    assert 'rosy-boot-display.service" "$OVERLAY' not in payload  # D-433: the retired unit is not in a new image
     assert 'cp "$DISPLAY_UDEV_RULE_SOURCE" "$OVERLAY/etc/udev/rules.d/"' in payload
     probe = customizer.index("probe-display-runtime.py'")
     call = customizer[customizer.rindex("setpriv --reuid=rosy-display", 0, probe):probe]
@@ -847,7 +847,7 @@ def test_the_board_profile_matches_the_unit_and_no_capability_advertises_it():
                 display["battery_adc"]["bus"], display["lamp"]["node"]}
     allowed = {value.split()[0] for value in _directives()["DeviceAllow"]}
     assert declared == allowed
-    assert display["unit"] == "rosy-boot-display.service"
+    assert display["unit"] == "rosy-face.service"
     # BCM 4: heard on rosy_18 on 2026-09-26 (D-190 table); on by default since D-260 2.
     assert display["buzzer"]["bcm_line"] == _display().BUZZER_DEFAULT_LINE == 4
     assert display["buzzer"]["enabled_by_default"] is True
@@ -871,15 +871,16 @@ def test_the_probe_checks_the_modules_and_the_unit(tmp_path):
     assert set(probe.RELEASE_MODULES) >= {"rosylib", "emotion.info_screen"}
     assert probe.DEVICES == ("/dev/spidev0.0", "/dev/gpiochip4", "/dev/i2c-1", "/dev/ws281x_pwm")
     assert "core_common.robot_state" in probe.RELEASE_MODULES
+    assert "core_common.face_screen" in probe.RELEASE_MODULES  # D-433
     failures = probe.check_unit(tmp_path)
-    assert failures == ["missing systemd unit: rosy-boot-display.service"]
+    assert failures == ["missing systemd unit: rosy-face.service"]
     system = tmp_path / "etc/systemd/system"
     (system / "multi-user.target.wants").mkdir(parents=True)
-    (system / "rosy-boot-display.service").write_text(UNIT.read_text(encoding="utf-8"), encoding="utf-8")
-    assert probe.check_unit(tmp_path) == ["rosy-boot-display.service is not enabled"]
-    (system / "multi-user.target.wants/rosy-boot-display.service").write_text("", encoding="utf-8")
+    (system / "rosy-face.service").write_text(UNIT.read_text(encoding="utf-8"), encoding="utf-8")
+    assert probe.check_unit(tmp_path) == ["rosy-face.service is not enabled"]
+    (system / "multi-user.target.wants/rosy-face.service").write_text("", encoding="utf-8")
     assert probe.check_unit(tmp_path) == []
-    (system / "rosy-boot-display.service").write_text(
+    (system / "rosy-face.service").write_text(
         UNIT.read_text(encoding="utf-8") + "DeviceAllow=/dev/gpiomem rw\n", encoding="utf-8")
     assert any("DeviceAllow" in failure for failure in probe.check_unit(tmp_path))
 
@@ -978,7 +979,7 @@ def _state_loop(module, root, *, gpio=None, spawn=None, voltages=(8.2,), logs=No
     display, lcd, clock, battery, rendered, lines = _loop(module, root, gpio=gpio, buzzer_on=gpio is not None,
                                                           voltages=voltages, logs=logs)
     lamp = module.Lamp(root, True, module.Log(lines.append), spawn=spawn or FakeSpawn())
-    display = module.BootDisplay(root, lcd=lcd, render=display._render, battery=display._battery,
+    display = module.FaceDisplay(root, lcd=lcd, render=display._render, battery=display._battery,
                                  buzzer=display._buzzer, clock=clock, lamp=lamp,
                                  wall=wall or (lambda: 1_000_000.0))
     return display, lamp, clock, rendered, lines
@@ -1357,7 +1358,7 @@ def test_the_display_keeps_running_for_the_lamp_without_a_panel_or_buzzer(tmp_pa
         raise SystemExit(7)  # reaching the loop is the point
 
     monkeypatch.setattr(module, "_release_modules", lambda: SimpleNamespace(render_boot=lambda view: view))
-    monkeypatch.setattr(module, "BootDisplay", display)
+    monkeypatch.setattr(module, "FaceDisplay", display)
     monkeypatch.setenv("ROSY_BUZZER_ENABLED", "false")
     monkeypatch.delenv("ROSY_LAMP_ENABLED", raising=False)
 
@@ -1462,3 +1463,363 @@ def test_an_oversized_hand_over_is_not_read(tmp_path):
     _hand_over(tmp_path, pad="x" * 600)
 
     assert module.read_test_request(tmp_path / module.TEST_REQUEST, 1_000_000.0) is None
+
+
+# --- D-433: rosy-face — the situation table drives the LCD -----------------------------
+
+FACE = ROOT / "src/hmi/face"
+WALL = 1_790_000_000.0  # any fixed wall clock; the hand-over's written_at follows it
+
+
+class PanelLCD(FakeLCD):
+    """FakeLCD plus the calls rosy-face makes for frames, sleep and backlight."""
+
+    def __init__(self):
+        super().__init__()
+        self.panels = []
+        self.calls = []
+
+    def show_panel(self, pixel):
+        self.panels.append(pixel)
+
+    def sleep(self):
+        self.calls.append(("sleep",))
+
+    def wake(self):
+        self.calls.append(("wake",))
+
+    def set_backlight(self, value):
+        self.calls.append(("backlight", value))
+
+
+class FakeGif:
+    """A seekable 'GIF' of ``count`` frames; seek past the end raises EOFError like PIL."""
+
+    def __init__(self, count):
+        self.count = count
+        self.at = None
+        self.closed = False
+
+    def seek(self, index):
+        if index >= self.count:
+            raise EOFError
+        self.at = index
+
+    def close(self):
+        self.closed = True
+
+
+def _face_inputs(root: Path, age: float = 0.0, **fields) -> None:
+    from datetime import datetime, timezone
+
+    data = {"schema": 1, "written_at": datetime.fromtimestamp(WALL - age, timezone.utc).isoformat(),
+            "robot_mode": "IDLE", "nav_state": "IDLE", "estop": False, "face": "basic",
+            "power_mode": "active", "activity_kind": None, "docking_state": "UNDOCKED",
+            "battery_percent": 80.0, "battery_charging": False, "line_follow_mode": "OFF",
+            "line_follow_state": "OFF", "caution": [], "drive": None, "wake": None, **fields}
+    (root / "run/rosy").mkdir(parents=True, exist_ok=True)
+    (root / "run/rosy/face-inputs.json").write_text(json.dumps(data), encoding="utf-8")
+
+
+def _face_loop(module, root, *, gifs=None, logs=None):
+    lines = logs if logs is not None else []
+    log = module.Log(lines.append)
+    gifs = gifs if gifs is not None else {"basic": 3, "happy": 2, "interest": 2, "sad": 2}
+    opened = []
+
+    def opener(path):
+        name = Path(path).stem
+        if name not in gifs:
+            raise FileNotFoundError(path)
+        opened.append(name)
+        return FakeGif(gifs[name])
+
+    faces = module.FaceFrames(root / module.FACE_DIR, opener=opener,
+                              convert=lambda image: (image.count, image.at), log=log)
+    rendered: list[dict] = []
+
+    def render(card):
+        rendered.append(card)
+        return f"image-{len(rendered)}"
+
+    lcd = PanelLCD()
+    clock = FakeClock()
+    battery = module.BatteryReader(lambda: FakeBattery([8.2]), lambda volts: 80.0, log)
+    display = module.FaceDisplay(root, lcd=lcd, render=render, battery=battery,
+                                 buzzer=module.Buzzer(None, 4, False, lambda _s: None), clock=clock,
+                                 wall=lambda: WALL, faces=faces,
+                                 strip=lambda frame, text, tone: (frame, text, tone))
+    return display, lcd, clock, rendered, opened, lines
+
+
+def _screen_row(rendered):
+    return rendered[-1]["screen"]["row"]
+
+
+def test_face_owns_the_screen_with_a_fresh_handover(tmp_path):
+    module = _display()
+    _status(tmp_path, "CORE_READY", runtime_mode="hardware")
+    _face_inputs(tmp_path, face="basic")
+    display, lcd, _clock, rendered, opened, _lines = _face_loop(module, tmp_path)
+
+    assert display.step() is False and rendered == []
+    assert display.animating == ("basic", None, None)
+    for _ in range(5):
+        assert display.tick() is True
+    # Lazily: three frames converted one per tick (skip 2 -> sources 0 and 2), then replayed.
+    assert [panel[1] for panel in lcd.panels] == [0, 2, 0, 2, 0]
+    assert opened == ["basic"]
+
+
+def test_a_stale_handover_brings_back_the_status_card(tmp_path):
+    module = _display()
+    _status(tmp_path, "CORE_READY", runtime_mode="hardware")
+    _face_inputs(tmp_path, age=4.0)
+    display, lcd, _clock, rendered, _opened, _lines = _face_loop(module, tmp_path)
+
+    assert display.step() is True
+    assert _screen_row(rendered) == "core_missing"
+    assert rendered[-1]["state_line"] == "CORE not responding"
+    assert display.animating is None and display.tick() is False and lcd.panels == []
+
+
+def test_a_handover_from_someone_else_is_no_handover(tmp_path):
+    module = _display()
+    _status(tmp_path, "CORE_READY", runtime_mode="hardware")
+    _face_inputs(tmp_path)
+    display, _lcd, _clock, rendered, _opened, _lines = _face_loop(module, tmp_path)
+    display._core_owner = os.stat(tmp_path / "run/rosy/face-inputs.json").st_uid + 1
+
+    display.step()
+
+    assert _screen_row(rendered) == "core_missing"
+
+
+def test_estop_is_the_full_stopped_card(tmp_path):
+    module = _display()
+    _status(tmp_path, "CORE_READY", runtime_mode="hardware")
+    _face_inputs(tmp_path, robot_mode="EMERGENCY", estop=True, face="sad")
+    display, _lcd, _clock, rendered, _opened, _lines = _face_loop(module, tmp_path)
+
+    display.step()
+
+    screen = rendered[-1]["screen"]
+    assert screen["kind"] == "stopped" and screen["cause"] == "E-stop latched" and screen["release"]
+
+
+def test_an_unused_login_code_keeps_the_card_until_it_burns(tmp_path):
+    module = _display()
+    _status(tmp_path, "CORE_READY", runtime_mode="hardware")
+    _face_inputs(tmp_path)
+    _login(tmp_path, "ABCD-EFGH\noperator\n")
+    display, _lcd, clock, rendered, _opened, _lines = _face_loop(module, tmp_path)
+
+    display.step()
+    assert _screen_row(rendered) == "login" and rendered[-1]["login_code"] == "ABCD-EFGH"
+
+    _login(tmp_path, "BURNED\n")
+    clock.now += 1
+    _face_inputs(tmp_path)
+    display.step()
+    assert display.animating == ("basic", None, None)
+
+
+def test_the_ap_card_stays_after_core_ready(tmp_path):
+    module = _display()
+    _status(tmp_path, "CORE_READY", runtime_mode="hardware")
+    (tmp_path / "run/rosy-boot/network.json").write_text(json.dumps({"mode": "ap", "ssid": "rosy-x"}),
+                                                          encoding="utf-8")
+    _face_inputs(tmp_path)
+    display, _lcd, _clock, rendered, _opened, _lines = _face_loop(module, tmp_path)
+
+    display.step()
+
+    assert _screen_row(rendered) == "ap"
+
+
+def test_the_update_marker_shows_updating_and_a_stale_one_does_not(tmp_path):
+    module = _display()
+    _status(tmp_path, "CORE_READY", runtime_mode="hardware")
+    _face_inputs(tmp_path)
+    marker = tmp_path / "run/rosy-boot/update-display.txt"
+    marker.write_text("health\n2026.10.03-027\n", encoding="utf-8")
+    os.utime(marker, (WALL, WALL))
+    display, _lcd, clock, rendered, _opened, _lines = _face_loop(module, tmp_path)
+
+    display.step()
+    assert rendered[-1]["screen"]["kind"] == "update" and rendered[-1]["screen"]["release"] == "2026.10.03-027"
+
+    os.utime(marker, (WALL - module.UPDATE_MAX_AGE_S - 1, WALL - module.UPDATE_MAX_AGE_S - 1))
+    clock.now += 1
+    _face_inputs(tmp_path)
+    display.step()
+    assert display.animating is not None
+
+
+@pytest.mark.parametrize("content", ["Applying\n2026.10.03-027\n", "health\nnot-a-release\n", ""])
+def test_the_update_marker_is_strict(tmp_path, content):
+    module = _display()
+    (tmp_path / "run/rosy-boot").mkdir(parents=True)
+    marker = tmp_path / "run/rosy-boot/update-display.txt"
+    marker.write_text(content, encoding="utf-8")
+    os.utime(marker, (WALL, WALL))
+
+    update = module.read_update(tmp_path, WALL)
+
+    assert update is None or update["release"] is None
+
+
+def test_standby_sleeps_the_panel_and_a_wake_card_wakes_it(tmp_path):
+    module = _display()
+    _status(tmp_path, "CORE_READY", runtime_mode="hardware")
+    _face_inputs(tmp_path, power_mode="standby")
+    display, lcd, clock, rendered, _opened, _lines = _face_loop(module, tmp_path)
+
+    display.step()
+    assert ("sleep",) in lcd.calls and ("backlight", 0) in lcd.calls and display.tick() is False
+
+    _face_inputs(tmp_path, power_mode="standby", wake={"reason": "proximity", "hold_s": 4.0})
+    clock.now += 1
+    display.step()
+    assert lcd.calls[-2:] == [("wake",), ("backlight", 100)]
+    assert rendered[-1]["screen"]["overlay"]["kind"] == "wake"
+
+
+def test_the_drive_card_passes_over_the_face_on_the_cadence(tmp_path):
+    module = _display()
+    _status(tmp_path, "CORE_READY", runtime_mode="hardware")
+    _face_inputs(tmp_path, robot_mode="NAVIGATION", nav_state="NAVIGATING", face="happy",
+                 drive={"mode": "NAVIGATION", "speed": 0.12})
+    display, _lcd, clock, rendered, _opened, _lines = _face_loop(module, tmp_path)
+
+    display.step()  # the operating mode just began: the card shows first
+    assert rendered[-1]["screen"]["overlay"]["kind"] == "drive"
+    clock.now += 6
+    _face_inputs(tmp_path, robot_mode="NAVIGATION", nav_state="NAVIGATING", face="happy",
+                 drive={"mode": "NAVIGATION", "speed": 0.12})
+    display.step()
+    assert display.animating == ("happy", None, None)
+    clock.now += 15  # 21 s after the mode began
+    _face_inputs(tmp_path, robot_mode="NAVIGATION", nav_state="NAVIGATING", face="happy",
+                 drive={"mode": "NAVIGATION", "speed": 0.12})
+    display.step()
+    assert rendered[-1]["screen"]["overlay"]["kind"] == "drive"
+
+
+def test_caution_is_a_strip_on_every_face_frame(tmp_path):
+    module = _display()
+    _status(tmp_path, "CORE_READY", runtime_mode="hardware",
+            devices=[{"id": "camera", "state": "no_response", "product": True}])
+    _face_inputs(tmp_path)
+    display, lcd, _clock, _rendered, _opened, _lines = _face_loop(module, tmp_path)
+
+    display.step()
+    display.tick()
+
+    assert display.animating == ("basic", "Check the camera cable", "caution")
+    assert lcd.panels[-1][1:] == ("Check the camera cable", "caution")
+
+
+def test_a_handed_over_test_shows_its_strip(tmp_path):
+    module = _display()
+    _status(tmp_path, "CORE_READY", runtime_mode="hardware")
+    _face_inputs(tmp_path)
+    display, _lcd, _clock, _rendered, _opened, _lines = _face_loop(module, tmp_path)
+    display._testing, display._testing_until = "lamp", display._clock() + 5
+
+    display.step()
+
+    assert display.animating == ("basic", "Testing lamp", "info")
+
+
+def test_a_missing_gif_is_logged_once_and_never_drawn(tmp_path):
+    module = _display()
+    _status(tmp_path, "CORE_READY", runtime_mode="hardware")
+    _face_inputs(tmp_path, face="bored")
+    lines = []
+    display, lcd, _clock, _rendered, _opened, _lines = _face_loop(module, tmp_path, logs=lines)
+
+    display.step()
+
+    assert display.tick() is False and display.tick() is False and lcd.panels == []
+    assert len([line for line in lines if "bored" in line]) == 1
+
+
+def test_the_idle_backlight_halves_the_frame_rate(tmp_path):
+    module = _display()
+    _status(tmp_path, "CORE_READY", runtime_mode="hardware")
+    _face_inputs(tmp_path, power_mode="idle")
+    display, lcd, _clock, _rendered, _opened, _lines = _face_loop(module, tmp_path)
+
+    display.step()
+    drawn = [display.tick() for _ in range(6)]
+
+    assert drawn.count(True) == 3 and ("backlight", 30) in lcd.calls
+
+
+@pytest.mark.parametrize("nologin,title", [(True, "Shutting down"), (False, "Display restarting")])
+def test_sigterm_draws_one_last_card(tmp_path, nologin, title):
+    module = _display()
+    _status(tmp_path, "CORE_READY", runtime_mode="hardware")
+    _face_inputs(tmp_path)
+    if nologin:
+        (tmp_path / "run/nologin").write_text("", encoding="utf-8")
+    display, _lcd, _clock, rendered, _opened, _lines = _face_loop(module, tmp_path)
+    display.shutting_down = True
+
+    display.step()
+
+    assert rendered[-1]["screen"]["kind"] == "shutdown" and rendered[-1]["shutdown_title"] == title
+
+
+def _info_screen():
+    if str(FACE) not in sys.path:
+        sys.path.insert(0, str(FACE))
+    from emotion import info_screen
+    return info_screen
+
+
+@pytest.mark.parametrize("screen", [
+    {"kind": "status", "row": "booting"},
+    {"kind": "stopped", "row": "stopped", "cause": "E-stop latched", "release": "Release: dashboard"},
+    {"kind": "update", "row": "update", "release": "2026.10.03-027"},
+    {"kind": "shutdown", "row": "shutdown"},
+    {"kind": "face", "row": "drive", "overlay": {"kind": "drive", "payload": {"kind": "drive", "mode": "MANUAL"}},
+     "strip": "Charge the battery", "strip_tone": "caution"},
+    {"kind": "face", "row": "wake", "overlay": {"kind": "wake", "payload": {"battery_percent": 50.0}}},
+])
+def test_every_card_renders_on_the_panel_size(screen):
+    module = _display()
+    render = module.card_renderer(_info_screen())
+
+    image = render({"stage": "CORE_READY", "device_name": "rosy-pinky-e4us", "screen": screen})
+
+    assert image.size == (320, 240)
+
+
+def test_the_strip_paints_only_its_band():
+    import numpy as np
+
+    module = _display()
+    info_screen = _info_screen()
+    paint = module.strip_painter(info_screen)
+    frame = np.zeros((320, 240, 2), dtype=np.uint8)
+
+    painted = paint(frame, "Charge the battery", "caution")
+
+    changed = np.argwhere((painted != frame).any(axis=2))
+    assert changed.size and frame.sum() == 0  # the cached frame is never written
+    band = info_screen.STRIP_HEIGHT
+    # Landscape bottom band -> after the panel's flip and rotation, a band of panel columns.
+    assert changed[:, 1].max() - changed[:, 1].min() < band
+
+
+def test_face_frames_reduce_gif_frames_to_panel_bytes():
+    from PIL import Image
+
+    module = _display()
+    convert = module.face_converter(_info_screen())
+
+    panel = convert(Image.new("P", (1000, 750)))
+
+    assert panel.shape == (320, 240, 2) and panel.nbytes == 320 * 240 * 2

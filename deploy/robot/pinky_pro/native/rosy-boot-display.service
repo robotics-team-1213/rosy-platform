@@ -1,5 +1,10 @@
 [Unit]
-Description=ROSY boot display on the Pinky Pro LCD, buzzer and lamp (D-190, D-260)
+Description=ROSY boot display on the Pinky Pro LCD, buzzer and lamp (D-190, D-260) - retired by D-433
+# D-433: retired. rosy-face.service owns the LCD, buzzer and lamp now. This file
+# ships only so sync-image-layer.py can REPLACE the copy a pre-D-433 robot has
+# (never install it new): the condition keeps it from starting beside rosy-face,
+# and a rollback restores the backed-up original, which starts it again.
+ConditionPathExists=!/etc/systemd/system/rosy-face.service
 # Outside CORE (D-161) and not ordered after it: it shows BOOTING, PROVISIONED
 # and FAILED as well. It only reads /run/rosy-boot, which the root indicator
 # units write, and polls for it, so it needs no ordering on them either.
