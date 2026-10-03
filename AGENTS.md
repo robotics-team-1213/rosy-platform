@@ -71,7 +71,18 @@ ROSY is a robot middleware and fleet-control platform (ROS 2 Jazzy, first hardwa
 
 ### Testing Requirements
 
-Tiers (D-436): iterate with the **affected** tier; the **full** tier belongs to main push, nightly/`workflow_dispatch` CI and the release build. PR CI runs affected and goes full by itself when the selector escalates (shared foundation `src/contracts/**`, `tools/harness/**`, `conftest.py`, packaging/pytest config, requirements pins, `.github/workflows/**`, or a file that maps to no module).
+Tiers (D-436). **This machine runs the affected tier (fast iteration) and the pre-push fast gate only. The full suite never runs locally by default; it runs on GitHub Actions runners** as a parallel matrix (`.github/workflows/ci.yml`): push to `main`, pull requests whose selection escalates, nightly schedule, `workflow_dispatch`, and before a release build. The arm64 payload already builds on the GitHub ARM64 runner (`build-native-payload.yml`). PR CI runs affected and goes full by itself when the selector escalates (shared foundation `src/contracts/**`, `tools/harness/**`, `conftest.py`, packaging/pytest config, requirements pins, `.github/workflows/**`, or a file that maps to no module). `affected --run` on an escalated selection runs only the guards and directly affected suites and says the rest is on GitHub; `--full` forces a local full run (avoid: 40-60 min here, and Windows lacks wheels CI installs).
+
+GitHub results (the full tier is never re-run locally to "check"):
+
+```bash
+gh run list --branch <branch> -L 3                      # find the run for your push / PR
+gh run watch <run-id> --exit-status                     # wait; non-zero exit when it fails
+gh run view <run-id> --log-failed                       # only the failed steps' logs
+gh run view <run-id> --json jobs --jq '.jobs[] | select(.conclusion=="failure") | .name'
+```
+
+Reproduce locally only the failed matrix entry's pytest invocation (the job name `test (<entry>)` maps to `CI_FULL_MATRIX` in `tools/harness/affected_tests.py`, or to the `affected-N` invocation printed by the `Test scope (D-436)` step). A local `main` that is not pushed has no CI evidence.
 
 ```bash
 # Affected tier (D-436): tests of the touched modules + reverse dependents + tests naming the
@@ -97,8 +108,8 @@ python3 -m pytest test/test_harness_contracts.py test/architecture/test_module_s
   src/runtime/gateway/test/test_host_status_summary.py -q
 python3 tools/harness/rosy_harness.py lint   # ADR duplicates, mojibake, append-only
 
-# Full tier: before a release, a field push, or when `affected` escalated to FULL.
-# `affected --run` on a FULL selection runs the same union as below.
+# Full tier: runs on GitHub runners (see above), not here. The commands below are what a
+# Linux/WSL host would run to reproduce one CI matrix entry, not a routine local step.
 # ROS 2 overlay (Linux / Pi). On Windows, run Python tests that do not need rclpy.
 source env.sh
 colcon --log-base log build --symlink-install --base-paths $(python3 tools/harness/colcon_roots.py) --build-base build --install-base install

@@ -24,14 +24,20 @@
    - **미분류는 풀이다.** 바뀐 파일이 어떤 모듈·import root에도 속하지 않고, 그것을 가리키는 시험도 없으면 풀로 올린다(모르면 전부, 절대 아무것도 안 함이 아니다). 예외는 Markdown 노트 하나다: 모듈 밖의 `*.md`(AGENTS.md·README 등)는 직접 참조 시험이 있으면 그것을, 없으면 상시 묶음만 돈다.
    - base ref를 못 찾거나 git diff가 실패하면 풀이다.
 3. **문서만 바뀐 경우.** `docs/` 변경은 `docs` 모듈 시험(`test_network_topology_contracts`, `test_harness_contracts`)과 그 문서를 직접 읽는 계약 시험, 상시 묶음을 돈다. ADR 문서는 harness lint와 `test_harness_contracts`(ADR 인덱스·본문 정합)가 이미 상시 묶음에 있으므로 따로 늘리지 않는다 — ADR을 직접 읽는 시험(`test_module_scorecard`가 D-178을 읽는 식)은 참조 규칙으로 따라온다.
-4. **풀 티어는 그대로 남는다.** main push(머지 큐 포함), 야간 schedule, `workflow_dispatch`, 릴리스 빌드 직전에는 지금의 전체 스위트를 돈다. PR CI는 affected 티어를 돌고, 선택기가 풀을 내면 PR에서도 전체 단계를 돈다. colcon 빌드·부팅 스모크·SaveMap 가드·Safety-Review 트레일러 검사는 티어와 무관하게 남는다.
-5. **pre-push.** D-346 패스트 게이트의 내용은 그대로 두고, 그 뒤에 affected 티어를 덧붙인다(`origin/main` 기준). 풀로 올라간 경우 훅은 풀을 돌리지 않고 경고만 남긴다 — 풀은 CI의 main push와 릴리스 전 게이트가 맡는다.
+4. **풀 티어는 GitHub Actions 러너에서만 돈다(2026-10-03 사용자 추가 요구).** 로컬 PC는 빠른 반복을 위한 affected 티어와 pre-push 패스트 게이트만 돈다. 풀 스위트는 기본적으로 로컬에서 돌지 않는다 — `affected --run`이 FULL 선택을 받으면 상시 묶음과 직접 영향 스위트만 돌고 "풀은 GitHub"라고 알린다(`--full`로만 강제). 풀은 GitHub 러너에서 돈다: main push(머지 큐 포함), PR(선택기가 FULL로 올린 경우), 야간 schedule, `workflow_dispatch`, 릴리스 빌드 전. 페이로드 빌드는 이미 GitHub ARM64 러너에서 돈다(`build-native-payload.yml`).
+   - **병렬 matrix.** `ci.yml`은 `scope` 잡(전체 이력 체크아웃, D-430 Safety-Review, 선택기)이 matrix를 내고 `test` 잡이 항목마다 러너 하나로 병렬 실행한다. 풀 matrix(`affected_tests.py`의 `CI_FULL_MATRIX`)는 core-domain(gateway·events·services·web_common·foundation·profiles), sensing(gateway와 `test_battery.py` 기본 이름이 겹쳐 별도 러너; CI에서 처음 도는 스위트라 첫 녹색까지 비게이팅), fleet, site-vision-cell(vision·cell·palletizing을 별도 호출로), gz-sim, hardware-safety, 루트 `test/` 3분할(정렬된 파일 목록 라운드로빈), build-smoke(colcon 빌드·flake8·부팅 스모크·SaveMap 가드)다. affected matrix는 선택된 pytest 호출마다 항목 하나 + build-smoke다.
+   - **셋업.** 항목마다 컨테이너·apt·pip(약 70초)와 플랫폼 wheel(약 7초)을 반복하고, colcon 빌드(약 20초)는 오버레이가 필요한 항목(`ros: overlay` — 루트 test/, gz-sim, affected)과 build-smoke만 한다. 산출물 전달이나 캐시는 두지 않는다 — 2026-10-03 녹색 실행(37127100807)에서 colcon 빌드는 17초로, artifact 업·다운로드보다 짧다.
+   - **예상 벽시계 시간.** 오늘의 직렬 잡은 약 10분 10초(셋업 약 1.5분 + 시험 약 8.5분, 그중 루트 `test/` 4분 29초, core-domain 1분 55초)다. 병렬에서는 scope 약 1분 + 가장 긴 항목(셋업 약 1.5분 + 루트 test/ 3분할 하나 약 1.5~2분 또는 core-domain 약 2분) ≈ 5분 안팎이다. 러너 사용 분은 셋업 반복만큼 는다(항목 10개 × 약 1.5분).
+   - **결과 읽기.** 에이전트는 로컬에서 풀을 다시 돌리지 않고 GitHub 결과를 기다려 읽는다: `gh run list --branch <branch> -L 3`, `gh run watch <run-id> --exit-status`, 실패만 `gh run view <run-id> --log-failed`, 잡 이름은 `gh run view <run-id> --json jobs --jq '.jobs[] | select(.conclusion=="failure") | .name'`. 실패한 항목의 pytest 호출만 로컬에서 재현한다. push하지 않은 로컬 main에는 CI 증거가 없다.
+5. **pre-push.** D-346 패스트 게이트의 내용은 그대로 두고, 그 뒤에 affected 티어를 덧붙인다(`origin/main` 기준, `--run`). 풀로 올라간 경우에도 훅은 상시 묶음과 직접 영향 스위트만 돌린다 — 풀은 GitHub 러너가 맡는다.
 
 ### Alternatives
 
 - **계속 매번 풀:** 40~60분, 병행 시 더 길다. 실패 대부분이 수십 초짜리 묶음에서 나는데 그 비용을 모든 변경에 물린다. 기각.
 - **pytest-testmon 같은 커버리지 기반 선택:** 실행 기록 데이터베이스를 브랜치·CI·Windows/Linux 사이에서 맞춰야 하고, 문서·YAML·셸을 읽는 계약 시험(이 저장소 시험의 큰 몫)을 커버리지로 잡지 못한다. 기각.
 - **사람이 고르는 시험 목록:** 이미 AGENTS.md에 있었고 낡았다(`src/devices/omx/adapter` 같은 옛 경로). 기각.
+- **풀을 로컬에서 기본 실행:** 이 PC에서 40~60분, 병행 브랜치가 있으면 더 길고 CI 러너와 결과가 갈린다(Windows 경로·wheel 부재 — 2026-10-03 dogfood에서 `src/site/cell/test`가 `rosy.processes` wheel 부재로 수집 실패). 기각.
+- **CI 직렬 유지:** 한 잡이 10분을 넘게 잡고, 실패 하나를 보려면 끝까지 기다린다. 병렬 matrix가 답이다. 채택.
 - **미분류 파일은 상시 묶음만:** 빠르지만 새 디렉터리의 변경이 시험 없이 지나간다. 이 ADR은 반대로 정한다 — 미분류는 풀.
 
 ### Consequences
