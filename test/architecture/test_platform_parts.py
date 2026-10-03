@@ -65,15 +65,6 @@ KNOWN_VIOLATIONS = {
     ("integrations/robots/omx", "middleware/apps/device/omx/adapter"): (
         "integrations -> middleware: cell_workflow reuses the adapter pick-place journal"
     ),
-    ("operations/execution/src/rosy/execution/api", "middleware/execution/local"): (
-        "operations -> middleware: PlanBundle embeds local receipt identity types"
-    ),
-    ("operations/execution/src/rosy/execution/api", "middleware/skills/api"): (
-        "operations -> middleware: PlanBundle steps carry SkillInvocation (Skill envelope belongs in contracts)"
-    ),
-    ("operations/processes/palletizing", "middleware/skills/api"): (
-        "operations -> middleware: palletizing builds SkillInvocation steps (Skill envelope belongs in contracts)"
-    ),
     ("learning/curation/omx", "middleware/apps/device/omx/adapter"): (
         "learning -> middleware: lerobot_export validates episodes with omx_adapter.demonstration "
         "(D-427 Q6: replaces the adapter -> external:lerobot edge 1c removed; 2b moves the check "

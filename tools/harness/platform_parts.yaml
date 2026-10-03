@@ -65,6 +65,17 @@ roots:
     wave: "4d"
     import_prefix: [interfaces]
     concern: contracts
+  - path: contracts/skill
+    part: contracts
+    d427_target: contracts/skill
+    wave: none
+    import_prefix: [rosy.contracts.skill]
+    note: >-
+      D-427 wave 2a (Q5, Q9): wheel rosy-contracts-skill. SkillInvocation and the
+      AttemptIdentity/ReceiptBinding receipt identity; rosy.skills.api and
+      rosy.execution.local.receipts re-export the same objects. Not an api root
+      (D-429 §4 rule 1 needs an .api prefix); contracts are importable by every part.
+    concern: contracts
 
   # --- middleware: Pinky/OMX device code, skills, drivers, device UI ---------
   - path: src/runtime/gateway

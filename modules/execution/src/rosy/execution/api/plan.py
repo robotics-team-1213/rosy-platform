@@ -6,8 +6,7 @@ from dataclasses import dataclass
 import re
 from typing import Protocol
 
-from rosy.execution.local.receipts import AttemptIdentity, ReceiptBinding
-from rosy.skills.api import SkillInvocation
+from rosy.contracts.skill import AttemptIdentity, ReceiptBinding, SkillInvocation
 
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 

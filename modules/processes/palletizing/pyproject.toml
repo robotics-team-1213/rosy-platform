@@ -7,7 +7,7 @@ name = "rosy-palletizing"
 version = "0.1.0"
 description = "ROS-free palletizing process compiler and transfer plan adapter."
 requires-python = ">=3.10"
-dependencies = ["PyYAML>=6,<7", "rosy-execution==0.1.0"]
+dependencies = ["PyYAML>=6,<7", "rosy-contracts-skill==0.1.0", "rosy-execution==0.1.0"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
