@@ -23,6 +23,9 @@
 ### 2026-10-03 — CI 빌드·로컬 서명 (D-437)
 
 - 사이트 후보는 이제 GitHub hosted runner(`build-site-candidate.yml`)에서 빌드되고, 서명되지 않은 GitHub prerelease `site-<짧은 커밋>`으로 올라간다. 키는 GitHub에 가지 않는다(결정 2·5 유지).
-- 결정 2를 보강한다. 서명 스테이션은 `sign_candidate.py --manifest-only --manifest <release.json> --expected-commit <sha>`로 `release.json` 바이트만 서명할 수 있다. 이때 manifest가 적은 파일을 로컬에서 검사하지 않는다. 그래서 수 GB `images.tar`를 서명 스테이션에 받을 필요가 없다. 서명기는 `source_commit`이 40자리 16진수이고 운영자가 넘긴 기대 커밋과 같을 때만 서명한다. 덮어쓰기 거부와 공개 키 자가 검증은 그대로다.
-- 이 서명이 증명하는 것은 "그 커밋에서 CI가 만든 이 manifest를 운영자가 승인했다"이다. 묶음 내용의 일치는 결정 3·4대로 사이트 호스트가 확인한다. 따로 설치한 검증기가 `docker load` 전에 배포 파일·SBOM·`images.tar` 해시를 서명된 manifest와 대조한다. 후보 전체를 받는 기존 서명 경로(`--candidate-dir`)도 남는다.
+- 결정 2를 보강한다. 서명 스테이션은 `sign_candidate.py --manifest-only --manifest <release.json> --expected-commit <sha> --expected-manifest-sha256 <hash>`로 `release.json` 바이트만 서명할 수 있다. 이때 manifest가 적은 파일을 로컬에서 검사하지 않는다. 그래서 수 GB `images.tar`를 서명 스테이션에 받을 필요가 없다. 덮어쓰기 거부와 공개 키 자가 검증은 그대로다.
+- Release 자산은 저장소 쓰기 권한으로 바꿀 수 있으므로, 서명 전에 `release.json`을 CI 실행에 묶는다. 둘 다 필수다.
+  - 서명기는 정확한 바이트의 SHA-256이 `--expected-manifest-sha256`과 다르면 거부한다. 이 값은 운영자가 CI 실행 페이지(job summary, 빌드 로그 notice)에서 옮긴다. 실행 기록은 자산 쓰기 권한으로 고칠 수 없다. `source_commit`도 40자리 16진수이고 기대 커밋과 같아야 한다.
+  - 운영자는 서명 전에 `gh attestation verify release.json --repo <owner>/<repo> --signer-workflow <owner>/<repo>/.github/workflows/build-site-candidate.yml --source-ref refs/heads/main`을 통과시킨다(빌드 job의 `actions/attest-build-provenance`). 서명기 플래그가 아니라 문서화된 운영자 절차다.
+- 이 서명이 증명하는 것은 "그 커밋에서 이 CI 실행이 만든 이 manifest를 운영자가 승인했다"이다. 묶음 내용의 일치는 결정 3·4대로 사이트 호스트가 확인한다. 따로 설치한 검증기가 `docker load` 전에 배포 파일·SBOM·`images.tar` 해시를 서명된 manifest와 대조한다. 후보 전체를 받는 기존 서명 경로(`--candidate-dir`)도 남는다.
 - SBOM은 runner에서 syft가 SPDX JSON으로 만든다(같은 `sbom/<service>.spdx` 경로). manifest 형식과 검증기는 바뀌지 않는다.

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import subprocess
 from pathlib import Path
 from types import SimpleNamespace
@@ -230,8 +231,9 @@ def test_manifest_only_signature_lets_the_host_verifier_check_every_file(tmp_pat
     manifest = station / "release.json"
     manifest.write_bytes((candidate / "release.json").read_bytes())
 
+    digest = hashlib.sha256(manifest.read_bytes()).hexdigest()
     signed = signer_module.sign_manifest_only(
-        manifest, expected_commit=COMMIT, key_id=TEST_KEY_ID,
+        manifest, expected_commit=COMMIT, expected_manifest_sha256=digest, key_id=TEST_KEY_ID,
         private_key=private, public_key=public,
     )
     assert signed["source_commit"] == COMMIT
@@ -254,7 +256,8 @@ def test_manifest_only_signature_lets_the_host_verifier_check_every_file(tmp_pat
 
     with pytest.raises(ValueError, match="signature already exists"):
         signer_module.sign_manifest_only(
-            manifest, expected_commit=COMMIT, key_id=TEST_KEY_ID,
+            manifest, expected_commit=COMMIT, expected_manifest_sha256=digest,
+            key_id=TEST_KEY_ID,
             private_key=private, public_key=public,
         )
 
@@ -276,7 +279,9 @@ def test_manifest_only_signer_refuses_bad_or_unexpected_commits(
 
     with pytest.raises(ValueError, match=message):
         signer_module.sign_manifest_only(
-            manifest, expected_commit=expected, key_id=TEST_KEY_ID,
+            manifest, expected_commit=expected,
+            expected_manifest_sha256=hashlib.sha256(manifest.read_bytes()).hexdigest(),
+            key_id=TEST_KEY_ID,
             private_key=private, public_key=public,
         )
     assert not (tmp_path / "release.json.sig").exists()
@@ -297,8 +302,34 @@ def test_manifest_only_cli_requires_manifest_and_expected_commit(tmp_path, site_
     candidate = tmp_path / "candidate"
     candidate.mkdir()
     _make_candidate(candidate)
+    digest = hashlib.sha256((candidate / "release.json").read_bytes()).hexdigest()
+    with pytest.raises(SystemExit):
+        signer_module.main(["--manifest-only", "--manifest", str(candidate / "release.json"),
+                            "--expected-commit", COMMIT, *common])
     assert signer_module.main([
         "--manifest-only", "--manifest", str(candidate / "release.json"),
-        "--expected-commit", COMMIT, *common,
+        "--expected-commit", COMMIT, "--expected-manifest-sha256", digest, *common,
     ]) == 0
     assert '"scope": "manifest-only"' in capsys.readouterr().out
+
+
+def test_manifest_only_signer_refuses_a_manifest_not_matching_the_ci_hash(tmp_path, site_keys):
+    private, public, _, _ = site_keys
+    candidate = tmp_path / "candidate"
+    candidate.mkdir()
+    _make_candidate(candidate)
+    manifest = candidate / "release.json"
+    published = hashlib.sha256(manifest.read_bytes()).hexdigest()
+    # Someone with release write access swaps release.json for one with the
+    # same commit but a different archive hash.
+    manifest.write_text(manifest.read_text(encoding="utf-8").replace(
+        '"image_archive_sha256": "', '"image_archive_sha256": "0'), encoding="utf-8")
+
+    for expected, message in ((published, "differs from the CI run"),
+                              ("ABC", "must be 64 lowercase hex")):
+        with pytest.raises(ValueError, match=message):
+            signer_module.sign_manifest_only(
+                manifest, expected_commit=COMMIT, expected_manifest_sha256=expected,
+                key_id=TEST_KEY_ID, private_key=private, public_key=public,
+            )
+    assert not (candidate / "release.json.sig").exists()

@@ -724,16 +724,25 @@ filled from the operator's private records.
    gh workflow run build-site-candidate.yml --repo <owner>/<repository> -f ref=<commit>
    ```
 
-2. On the offline signing station, download only `release.json`, check that
-   its commit and the workflow run are the ones you approved, sign the manifest
-   bytes, and attach the signature:
+2. On the offline signing station, download only `release.json`. Release
+   assets can be replaced by anyone with write access, so bind the file to the
+   CI run before signing. Both checks are required:
+   - Open the workflow run page and copy the `release.json SHA-256` from the
+     job summary (also a notice in the build log). Run logs and summaries
+     cannot be edited by release-asset writers.
+   - Verify the GitHub build provenance of the downloaded file. It must come
+     from this workflow, built from `main`:
 
    ```sh
    gh release download site-<sha12> --repo <owner>/<repository> \
      --pattern release.json --dir <station-dir>
+   gh attestation verify <station-dir>/release.json --repo <owner>/<repository> \
+     --signer-workflow <owner>/<repository>/.github/workflows/build-site-candidate.yml \
+     --source-ref refs/heads/main
    python3 deploy/site/sign_candidate.py --manifest-only \
      --manifest <station-dir>/release.json \
      --expected-commit <commit> \
+     --expected-manifest-sha256 <sha256-from-run-summary> \
      --signing-key-id "$SITE_SIGNING_KEY_ID" \
      --private-key /secure/offline/site-release-ed25519.key \
      --public-key /secure/offline/site-release-ed25519.pub.pem
@@ -742,9 +751,12 @@ filled from the operator's private records.
    ```
 
    `--manifest-only` does not look at the candidate files. It refuses a
+   manifest whose SHA-256 differs from `--expected-manifest-sha256`, and a
    `source_commit` that is not 40 hex characters or differs from
-   `--expected-commit`. The signature says "this manifest from that commit is
-   approved"; the host verifier below still checks every file hash.
+   `--expected-commit`. The signature says "this manifest from that CI run and
+   commit is approved"; the host verifier below still checks every file hash.
+   A candidate dispatched from another branch fails `--source-ref
+   refs/heads/main`; sign only main builds.
 
 3. On the site host, as the operator (no sudo), fetch and stage it. The script
    checks `SHA256SUMS`, joins the parts, extracts into a fresh staging folder,

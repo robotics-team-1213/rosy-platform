@@ -28,8 +28,8 @@ def test_site_candidate_workflow_is_manual_and_uses_no_secrets():
     assert "secrets." not in text
     assert set(re.findall(r"\$\{\{\s*github\.(\w+)", text)) <= {
         "sha", "repository", "server_url", "run_id", "token"}
-    assert "private-key" not in text and "sign_candidate" not in _run_text(
-        workflow["jobs"]["build-unsigned-candidate"])
+    # The summary may tell the operator what to run; the workflow never signs.
+    assert "private-key" not in text and "python3 deploy/site/sign_candidate.py" not in text
     assert workflow["concurrency"]["cancel-in-progress"] is False
 
 
@@ -40,7 +40,9 @@ def test_build_job_is_read_only_and_release_job_alone_can_write():
 
     assert set(jobs) == {"build-unsigned-candidate", "publish-unsigned-prerelease"}
     assert build["runs-on"] == "ubuntu-24.04"
-    assert build["permissions"] == {"contents": "read"}
+    # Read-only for the repository; OIDC + attestations only for provenance.
+    assert build["permissions"] == {
+        "contents": "read", "id-token": "write", "attestations": "write"}
     assert release["permissions"] == {"contents": "write"}
     assert release["needs"] == "build-unsigned-candidate"
     assert all(job["timeout-minutes"] <= 120 for job in jobs.values())
@@ -62,6 +64,7 @@ def test_build_job_uses_checksum_pinned_syft_and_the_guarded_builder():
     assert "--sbom-tool syft" in run
     assert 'test -z "$(git status --porcelain --untracked-files=all)"' in run
     assert "[[ \"$commit\" =~ ^[0-9a-f]{40}$ ]]" in run
+    assert 'git merge-base --is-ancestor "$commit" "$GITHUB_SHA"' in run
 
 
 def test_candidate_is_split_below_the_release_asset_limit_with_checksums():
@@ -98,3 +101,20 @@ def test_runbook_signs_manifest_only_and_fetches_before_verified_load():
         "fetch_candidate.sh")
     assert "--expected-commit <commit>" in section
     assert "--pattern release.json" in section
+
+
+def test_build_job_publishes_manifest_hash_and_provenance_for_the_signer():
+    build = _workflow()["jobs"]["build-unsigned-candidate"]
+    run = _run_text(build)
+    attest = next(step for step in build["steps"]
+                  if step.get("uses", "").startswith("actions/attest-build-provenance@"))
+
+    assert 'sha256sum "$UPLOAD_DIR/release.json"' in run
+    assert '>>"$GITHUB_STEP_SUMMARY"' in run
+    assert "::notice title=release.json SHA-256::" in run
+    assert "--expected-manifest-sha256" in run
+    assert attest["with"]["subject-path"].split() == [
+        "/mnt/rosy-site-upload/release.json", "/mnt/rosy-site-upload/SHA256SUMS"]
+    names = [step.get("name", "") for step in build["steps"]]
+    assert names.index("Package candidate into release-sized parts") < names.index(
+        attest["name"])

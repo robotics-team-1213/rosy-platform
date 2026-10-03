@@ -27,6 +27,7 @@ else:  # pragma: no cover - exercised by the packaged offline CLI
 
 Runner = Callable[..., subprocess.CompletedProcess]
 _COMMIT = re.compile(r"^[0-9a-f]{40}$")
+_SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _MANIFEST_LIMIT = 8 * 1024 * 1024
 
 
@@ -85,13 +86,15 @@ def sign_candidate(
 
 
 def sign_manifest_only(
-    manifest_path: Path, *, expected_commit: str, key_id: str, private_key: Path,
-    public_key: Path, runner: Runner = subprocess.run,
+    manifest_path: Path, *, expected_commit: str, expected_manifest_sha256: str,
+    key_id: str, private_key: Path, public_key: Path, runner: Runner = subprocess.run,
 ) -> dict[str, str]:
     """Sign a CI-built release.json without the candidate files (D-437).
 
     The signature attests that the operator approved this manifest from the
-    expected commit. Every listed file hash is still checked by the site host's
+    expected commit. The expected SHA-256 is copied from the CI run page (job
+    summary), which release-asset writers cannot edit, and must match the exact
+    bytes before anything else is trusted. Every listed file hash is still checked by the site host's
     independently installed verifier before docker image load (D-301 3-4).
     """
     path = Path(manifest_path)
@@ -102,10 +105,16 @@ def sign_manifest_only(
         raise CandidateVerificationError("signature already exists; refusing to overwrite")
     if not isinstance(expected_commit, str) or not _COMMIT.fullmatch(expected_commit):
         raise CandidateVerificationError("expected commit must be a full 40-character hex SHA")
+    if (not isinstance(expected_manifest_sha256, str)
+            or not _SHA256.fullmatch(expected_manifest_sha256)):
+        raise CandidateVerificationError("expected manifest SHA-256 must be 64 lowercase hex")
 
     manifest_bytes = path.read_bytes()
     if not manifest_bytes or len(manifest_bytes) > _MANIFEST_LIMIT:
         raise CandidateVerificationError("release.json is empty or exceeds the 8 MiB limit")
+    if hashlib.sha256(manifest_bytes).hexdigest() != expected_manifest_sha256:
+        raise CandidateVerificationError(
+            "release.json SHA-256 differs from the CI run's published manifest hash")
     try:
         manifest = json.loads(manifest_bytes)
     except (UnicodeDecodeError, json.JSONDecodeError):
@@ -149,20 +158,27 @@ def main(argv: list[str] | None = None) -> int:
                         help="release.json to sign with --manifest-only")
     parser.add_argument("--expected-commit",
                         help="40-hex source commit the operator approved (--manifest-only)")
+    parser.add_argument("--expected-manifest-sha256",
+                        help="64-hex SHA-256 of release.json from the CI run summary "
+                             "(--manifest-only)")
     parser.add_argument("--signing-key-id", required=True)
     parser.add_argument("--private-key", required=True, type=Path,
                         help="offline Ed25519 private key; never copied into the candidate")
     parser.add_argument("--public-key", required=True, type=Path,
                         help="matching public key used to verify the new signature")
     args = parser.parse_args(argv)
-    if args.manifest_only and (args.manifest is None or args.expected_commit is None):
-        parser.error("--manifest-only requires --manifest and --expected-commit")
-    if not args.manifest_only and (args.manifest is not None or args.expected_commit is not None):
-        parser.error("--manifest and --expected-commit are only valid with --manifest-only")
+    only_options = (args.manifest, args.expected_commit, args.expected_manifest_sha256)
+    if args.manifest_only and any(value is None for value in only_options):
+        parser.error("--manifest-only requires --manifest, --expected-commit and "
+                     "--expected-manifest-sha256")
+    if not args.manifest_only and any(value is not None for value in only_options):
+        parser.error("--manifest, --expected-commit and --expected-manifest-sha256 are only "
+                     "valid with --manifest-only")
     try:
         if args.manifest_only:
             result = sign_manifest_only(
                 args.manifest, expected_commit=args.expected_commit,
+                expected_manifest_sha256=args.expected_manifest_sha256,
                 key_id=args.signing_key_id,
                 private_key=args.private_key, public_key=args.public_key,
             )
