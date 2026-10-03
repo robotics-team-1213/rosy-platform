@@ -80,3 +80,7 @@ D-2(단일 cmd_vel), D-18(API 계약), D-59(영상 중계, §3 에서 고침), D
 - 해석: R1 의 "앞 경로 띠"는 기지 대 기지 0.30 m, 옆 ±0.15 m(자기 반폭 + 상대 회전반경 0.083 m)로 잰다. 로봇 종류별 몸 크기는 아직 읽지 않는다.
 - 등록(D-361)으로 들어온 로봇은 아직 판단기 클라이언트가 없다. robots.yaml 로봇만 갖는다.
 - 판단기 클라이언트 연결은 닫지 않는다(콘솔 클라이언트는 `console.aclose()` 가 닫지만 이쪽은 프로세스 종료에 맡긴다).
+- R1 은 모든 로봇의 자세가 하나의 사이트 좌표계에 있다고 가정한다(Fleet 위치 D-395·D-257). 자세를 모르면 R1 은 쓰지 않고, `obstacle_ahead` 에 R2 `BACK_AND_RETRY` 가 갈 수 있다. 이때도 CORE 의 뒤쪽 확인(D-407 §2 재검사)이 후진을 막는다.
+- 감사(§8): `fleet_line_stuck_answers` 에 null 가능 열 `tier`(`human`·`rule`), `rule`(`R1`–`R3`), `escalated` 를 더했다. 판단기가 사람에게 올릴 때마다 `decision: "ESCALATE"`, `accepted` null, `principal_id: "fleet-resolver"` 행이 따로 남는다. 옛 DB 는 열 때 `PRAGMA table_info` + `ALTER TABLE ADD COLUMN` 으로 열이 붙는다. `chain_id` 는 사슬 식별자가 없어 넣지 않았다.
+- 공유 gather: `console.snapshot()` 은 교통·인계·대형 속도 판단도 돌리고 모든 로봇에 GET 하므로, `GET /api/fleet/state` 와 판단기 루프는 `console_routes.SharedGather`(잠금 하나, 1 s 안의 결과 재사용, 새로 읽을 때만 `board.observe`)를 같이 쓴다(`app.state.fleet_gather`). 작업 배차 루프의 `console.snapshot()` 은 그대로다.
+- 전송 재시도 한 번(§5)은 규칙 예산에 막히지 않는다. 명단에서 빠진 로봇의 사슬·맡음은 지운다. 올린 뒤 사람이 맡으면 올린 사유를 유지한다(없으면 `human_claimed`). 판단기가 로봇 응답을 기다리다 멈추면 그 답은 `STUCK_DECISION_OUTCOME_UNKNOWN`(accepted null)로 남는다.

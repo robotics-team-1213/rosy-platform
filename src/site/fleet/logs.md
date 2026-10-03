@@ -1496,3 +1496,10 @@
 - Gate: none. SOURCE/LOCAL only; Gazebo two-robot validation and real-robot tokens are not done (plan "After phase 1").
 - Decision: D-438
 - Lesson: none
+
+## 2026-10-04 · uncommitted · fix(server): D-438 phase 1 final-review findings
+- Change: `fleet_line_stuck_answers` gains nullable `tier`/`rule`/`escalated` with an idempotent PRAGMA + ALTER migration; resolver answers record `tier=rule` + rule id, every escalation is its own `ESCALATE` row, the human route records `tier=human`. `console_routes.SharedGather` (lock + 1 s reuse) is the one `console.snapshot()` + `board.observe` for `GET /api/fleet/state` and `StuckResolverLoop`. The transport resend skips the rule budget; robots absent from the roster lose chains and claims; a claim after an escalation keeps its reason; cancel mid-request records `STUCK_DECISION_OUTCOME_UNKNOWN`; unused `_Chain.claimed` removed; JS string test deleted.
+- Evidence: each code fix red first, then green. `python -m pytest src/site/fleet/test -q` 1666 passed, 7 skipped (2026-10-04 Windows); gateway `test_stuck_resolver_role.py` + `test_line_follow_stuck_api.py` 22 passed; `node --test src/site/fleet/test/web/line-stuck.test.mjs` 12 pass; `ROSY_RUN_BROWSER_TESTS=1 python -m pytest test/test_fleet_console_browser.py -k "stuck or state"` 4 passed, 63 deselected.
+- Gate: none. SOURCE/LOCAL only; Gazebo two-robot validation and real-robot tokens still open.
+- Decision: D-438
+- Lesson: a shared cached snapshot must be enriched per response on copies, never mutated in place.
