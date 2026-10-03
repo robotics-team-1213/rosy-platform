@@ -31,7 +31,8 @@ Rosy Pilot 원격 조종 표면(D-323). 정적 파일이며 `core_api_web`이 `/
 |-----------|---------|
 | `test/` | Node 서브프로세스 순수 시험(`test_stick.py`·`test_controls.py`·`test_arm_stick.py` 등)과 Playwright 브라우저 시험(`ROSY_RUN_BROWSER_TESTS=1`, `dev_server.py` 가짜 CORE) |
 | `widgets/` | D-411 kind별 DOM 위젯(`joint_jog.js`: 2축 패드·관절 버튼; `gripper.js`: 열기/반/닫기·열림 %·쥠 배지) |
-| `drivers/`, `screens/` | 전송 드라이버(전송만), 화면 |
+| `drivers/` | Device-kind transport drivers (see `drivers/AGENTS.md`) |
+| `screens/` | Role screens (see `screens/AGENTS.md`) |
 
 ## For AI Agents
 

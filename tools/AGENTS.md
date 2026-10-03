@@ -26,11 +26,13 @@ Commands a developer runs from the workspace. These are not installed on the rob
 
 | Directory | Purpose |
 |-----------|---------|
-| `harness/` | Reads each module's `progress.md` and `logs.md` |
-| `sim/` | Local sim probes, `sim_verify.sh`, and host simulations that compose several packages (`simulate_line_follow.py`, `simulate_semantic_road.py`). Not a second product tree |
+| `harness/` | Reads each module's `progress.md` and `logs.md` (see `harness/AGENTS.md`) |
+| `hooks/` | D-346 pre-push fast gate and its installer (see `hooks/AGENTS.md`) |
+| `release/` | Artifact download and signed payload preparation (see `release/AGENTS.md`) |
+| `sim/` | Local sim probes, `sim_verify.sh`, and host simulations that compose several packages (`simulate_line_follow.py`, `simulate_semantic_road.py`). Not a second product tree (see `sim/AGENTS.md`) |
 | `perception/` | D-356 learned-loop tooling: `dataset/`, `model/`, `training/`, `test/` (see `perception/AGENTS.md`) |
-| `calibration/` | D-47 addendum 2026-10-01: `run_calibration.py` (protocol v1, one command, `--dry-run`/`--offline`), `analyze_session.py` (wheel/LiDAR-yaw/camera fits from recordings), `store_cli.py` (list/accept/reject/pin), `test/` |
-| `perception/prototype/` | Unreviewed camera-estimation and real-video replay prototypes (D-205). Replaced by the reviewed P2 replay tool |
+| `calibration/` | D-47 addendum 2026-10-01: `run_calibration.py` (protocol v1, one command, `--dry-run`/`--offline`), `analyze_session.py` (wheel/LiDAR-yaw/camera fits from recordings), `store_cli.py` (list/accept/reject/pin), `test/` (see `calibration/AGENTS.md`) |
+| `perception/prototype/` | Unreviewed camera-estimation and real-video replay prototypes (D-205). Replaced by the reviewed P2 replay tool (see `perception/prototype/AGENTS.md`) |
 
 ## For AI Agents
 

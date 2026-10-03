@@ -19,7 +19,7 @@ Fleet 쪽에 남는다(D-12): 하달한 목표를 기억하는 곳은 여기지 
 | `traffic.py` | 경로 충돌 판정(순수 기하). 전송도 asyncio 도 없다 |
 | (대형) | `swarm/session.py` 의 `FormationSession` 을 콘솔이 하나만 들고 연다 |
 | `app.py` | FastAPI 표면. `/api/fleet/*` 와 `/console` 정적 자산 allowlist |
-| `web/` | 관제 UI (index.html, tokens.css, styles.css, console.js) |
+| `web/` | 관제 UI (index.html, tokens.css, styles.css, console.js) (see `web/AGENTS.md`) |
 
 ## For AI Agents
 

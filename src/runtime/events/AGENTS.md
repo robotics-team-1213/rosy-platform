@@ -20,6 +20,12 @@ Library/contract tier (D-168 P2): no process of its own. ROS-SIM/ARTIFACT/DEVICE
 | `test/` | `test_audit.py`: LOG-001 restart survival, retention, pruning, health |
 | `core_events/events/` | EventBus + audit writer |
 
+## Subdirectories
+
+| Directory | Purpose |
+|-----------|---------|
+| `core_events/` | Python package: EventBus and file audit log (see `core_events/AGENTS.md`) |
+
 ## For AI Agents
 
 ### Working In This Directory

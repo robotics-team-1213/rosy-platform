@@ -21,6 +21,12 @@ Library/contract tier (D-168 P2): no process of its own. ROS-SIM/ARTIFACT/DEVICE
 | `core_features/<feature>/` | One requirement family per subpackage; split rules in `docs/plans/2026-09-06-module-split-criteria.md` |
 | `core_features/maps.py` | Map read path (not SLAM) |
 
+## Subdirectories
+
+| Directory | Purpose |
+|-----------|---------|
+| `core_features/` | Python package: feature managers, one subpackage per requirement family (see `core_features/AGENTS.md`) |
+
 ## For AI Agents
 
 ### Working In This Directory
