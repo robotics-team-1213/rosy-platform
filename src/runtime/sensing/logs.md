@@ -975,3 +975,45 @@
 - 변경: 알고리즘·반경(0.18 m/0.3 rad)은 그대로다. `global_candidates` 가 미세 단계 뒤 앞선 후보와 `apart()` 가 아닌 후보를 버린다.
 - 증거: `test_loc_candidates.py` +9(미세 단계가 두 시드를 한 자세로 모으면 1개만 남음, 제자리·거울 180° 쌍둥이가 가까운 흐린 세 번째가 있어도 `distinct()` 를 늘 통과 × 4 자세). 30 passed.
 - gate 변화: 없음.
+
+## 2026-10-02 · 071acb65c · feat(sensing): D-423 카메라 영역 거리 — LiDAR 우선, 바닥 평면 예비
+
+- 원인: 화면이 "OBJ n UNKNOWN unranged" 만 보였다. 실기 `camera.yaml` 의 핀홀 여섯 값은 일부러 0 이라 영역 거리가 늘 없었다.
+- 변경: ROS 없는 `sensing/perception/region_range.py`(기울기를 넣은 화소 방위, 스캔 → 카메라 기준 방위·앞 거리, 거리 선택 규칙 L ≤ G*+허용오차 → L, 아니면 G). `camera_regions` 가 바닥 거리에 `range_source='G'`. 증거 영역 `s`('L'/'G', `m` 이 있을 때만, 뒤 호환)·관측 `ground_source`. `follow_preview` 배지 "OBJ 1 UNKNOWN 0.42m L". `calibrated_values.nominal_camera_profile`·`lidar_nose_rad`(URDF NOMINAL < 승인 기록). `camera_detect_node` 에 `camera_ground_mode: nominal` + `allow_nominal_ground`, `region_lidar_range`(scan 구독, `is_robot_scan`, 신선도 0.3 s). `camera.yaml` 기본값은 pinhole/0·두 스위치 꺼짐 그대로.
+- 증거: `python -m pytest src/runtime/sensing/test/ -q` 2339 passed, 104 skipped(Windows), `test/known_failures.py` 0 new. 새 시험 `test_region_range.py` 21, `test_camera_detect_region_range.py` 5, 그 밖 +13.
+- gate 변화: 없음. 실기 적용은 사용자 승인 뒤 설정 변경(D-423 §4).
+- 결정: D-423 Proposed
+- 교훈: URDF 8° 기울기로는 0.4 m 앞 접지점을 약 0.66 m 로 읽는다(실측 11.2–11.8°). 그래서 LiDAR 가 더 가까우면 LiDAR 를 믿는 비대칭 규칙을 썼다.
+
+## 2026-10-03 · uncommitted · fix(sensing): D-423 리뷰 반영 — 운영자 덮어쓰기, 시뮬 스캔, 구독 조건
+
+- 원인: D-423 1단계 리뷰(I-1, I-2, M-1, M-3..M-6).
+- 변경: `camera_detect_node` 에 `camera_pitch_rad_override`·`camera_height_m_override`·`lidar_yaw_offset_override`(NaN = 없음, `line_observer_node` 와 같음)를 두고 `calibrated_values.nominal_camera_profile`·`lidar_nose_rad` 의 `override=` 로 넘긴다(`finite_overrides`). `accept_simulation_scans`(기본 false)가 `enable_simulation_scans(True)` 를 부르고, 스캔이 와도 모두 버려지면 한 번 경고한다. `region_lidar_range` 는 NOMINAL 평면이 있을 때만 `scan` 을 구독하고 아니면 경고한다(`_start_region_lidar`). 매핑이 아닌 YAML 은 ({}, 사유). `camera.yaml` 주석에 설치 경로 `/opt/rosy/current/install/share/pinky_pro/config/camera_nominal.yaml` 와 시작 때 한 번 읽음을 적었다. 기하·기록·덮어쓰기는 노드 시작 때 한 번 읽으므로 새 기록 승인 뒤에는 노드를 다시 시작한다. ADR §1.1·§1.7·§2.3(짝짓기는 표시용)·§4·§검증 보강.
+- 증거: 아래 커밋 메시지와 동일한 실행(센서 시험 전체, harness lint, test/architecture).
+- gate 변화: 없음. 장치 기본값 불변.
+- 결정: D-423 Proposed
+- 교훈: 없음
+
+## 2026-10-03 · 66c83863d · feat(perception): D-423 2·3단계 — 물체 검출 백엔드·노드·화면·작업별 슬롯·서명
+
+- 변경: 매니페스트 `object_det`(e75079a62), `learned/detector.py`·`region_range.range_boxes`(a5916a45c), `control/object_detector.py`·`object_detector_node.py`·`camera_preview.launch.py` `object_det`(`ROSY_OBJECT_DET`, 기본 false)(119382fe6), `follow_preview` 짝짓기·`road_observer_node` 0.6 s 결합(43b7f88d6), `learned/slots.py`(e7f0b8e80), 검출기 프레임별 NaN 거부(88d84455d), `learned/signature.py`·`checked_opener`·`allow_unsigned_models`(fd613c6ca), hotpath 감시 목록(9d0416dd3), D-137 단일 발행자 화이트리스트에 `object_detector.py`(f4c311569). 장치 기본값 모두 꺼짐.
+- 증거: `python -m pytest src/runtime/sensing/test/ -q` 네 묶음 2407 passed, 106 skipped(Windows, 2026-10-03), `test/known_failures.py` 0 new.
+- gate 변화: 없음. Gazebo·실기 검증은 조정자 일정.
+- 결정: D-423 Proposed(구현 기록 추가)
+- 교훈: D-137 의 `vision/detections` 는 발행자 하나로 예약돼 있었다(gateway `test_core_logic`). 토픽 글자를 한 파일에만 두고 구독자는 상수를 가져오게 해 화이트리스트를 한 줄로 유지했다.
+
+## 2026-10-03 · uncommitted · fix(perception): D-423 조정자 결정 — 차선 서명 경고만, 서명 우회는 환경 변수로만
+
+- 변경: `learned/signature.py` `SignatureCheck`(enforce/경고만, 마지막으로 연 모델의 `signed`·`reason`), `allow_unsigned_from_env`(`ROSY_ALLOW_UNSIGNED_MODELS`, 정확히 "true" 만). `object_detector_node` 는 ROS 파라미터 `allow_unsigned_models` 를 없애고 환경 변수를 시작 때 한 번 읽는다; `trusted_keys_dir` 는 읽기 전용. `learned_lane_node` 는 경고만 — 서명 없는 모델도 열고 경고 로그, 상태 `signed`. `LearnedStatus.payload(signed=)`. CORE 상태 저장소가 `signed` 를 넘긴다. ADR: `vision/detections` 는 `object_detector.py` 소유, Hailo 는 이 노드의 백엔드(D-209); 후속 = 0930 차선 모델 서명 뒤 강제.
+- 증거: 아래 커밋의 sensing·services·gateway 관련 시험.
+- gate 변화: 없음.
+- 결정: D-423 (조정자 결정 2026-10-03)
+- 교훈: 없음
+
+## 2026-10-03 · 820444c49 · fix(perception): D-423 2·3단계 리뷰 반영
+
+- 변경: H1 int8 보정 입력 이름은 fp32 모델에서, `--color` 순서, 단계 파일은 모든 경로에서 정리(9cbae6ffa). M1 object_det intake 에 `max_int8_vs_fp32_rel`(9cbae6ffa). L4 parity rtol. H2 lane_seg 의 promote·`rollback --slot active` 거부, M3 서명 없는 object_det push 거부(`--allow-unsigned`, `--check`), L3 shadow==active 이면 promote 무동작, M4 `rosy_ml` 슬롯 명령을 `model/slot_cli.py` 로(600→595줄)(fc80b363a). M2 NMS 앞 상위 300 후보, M5 openssl 프로세스 오류 → SignatureError, L5 object_det 세션 spinning 끔(5e79d8a3d). L9 사람 상자 행 검사, L10 Pilot 패널은 열려 있을 때만 묻기, M6 D-137 시험 이름·AST 발행자 검사(0deb00525). latest-only 구독 목록에 road_observer 의 TOPIC 구독(820444c49, f4c311569 에서 놓침).
+- 증거: sensing 네 묶음 2421 passed, 106 skipped, known_failures 0 new; tools/perception 546 passed; services+api_web+pilot+architecture+gateway 일부 890 passed.
+- gate 변화: 없음.
+- 결정: D-423
+- 교훈: 시험 묶음을 커밋보다 먼저 돌리면 그 뒤의 커밋을 덮지 못한다 — 마지막 커밋 뒤에 다시 돈다.

@@ -46,7 +46,7 @@ from core.bridge.cmd_vel import cmd_vel_cycle
 from core.bridge.docking_executor import BridgeDockingExecutor
 from core.bridge.goal_tracker import GoalTracker
 from core_features.maps import occupancy_map_id
-from core_features.vision import PREVIEW_TOPIC
+from core_features.vision import MODEL_STATUS_TOPICS, PREVIEW_TOPIC
 from core_features.navigation.initial_pose import amcl_pose_covariance
 from interfaces.srv import Emotion, SetLed
 import tf2_ros
@@ -105,6 +105,10 @@ class RosBridge:
         node.create_subscription(
             CompressedImage, PREVIEW_TOPIC,
             self._on_camera_preview, preview_qos)
+        # D-423 §3.6: learned-model status per task (latched by the model nodes); display only.
+        lane_topic, object_topic = MODEL_STATUS_TOPICS
+        node.create_subscription(String, lane_topic, self._on_lane_model_status, _LATCHED)
+        node.create_subscription(String, object_topic, self._on_object_det_model_status, _LATCHED)
         # Nav2 lifecycle nodes announce their authoritative goal state on
         # transition_event.  CORE never infers readiness from node discovery;
         # it requires these active transitions plus the motor adapter lease.
@@ -299,6 +303,13 @@ class RosBridge:
     def _on_battery(self, msg: Float32) -> None:
         self._voltage_topic_seen = True
         battery_policy.apply_voltage(self._svc, float(msg.data))
+
+    def _on_lane_model_status(self, msg: String) -> None:
+        self._svc.vision.models.accept("perception/learned/status", msg.data, now=time.monotonic())
+
+    def _on_object_det_model_status(self, msg: String) -> None:
+        self._svc.vision.models.accept("perception/learned/object_det/status", msg.data,
+                                       now=time.monotonic())
 
     def _on_detection_evidence(self, msg: String) -> None:
         observation.detection_evidence(self._svc, msg.data)

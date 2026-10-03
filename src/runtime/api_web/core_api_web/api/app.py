@@ -1,4 +1,4 @@
-"""core_api_web.api.app — FastAPI 팩토리 (P1-9, API-101). 계약: ROSY-API-REF-001 v1.87."""
+"""core_api_web.api.app — FastAPI 팩토리 (P1-9, API-101). 계약: ROSY-API-REF-001 v1.88."""
 
 from __future__ import annotations
 
@@ -110,7 +110,7 @@ def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
     app = FastAPI(
         title="ROSY CORE API",
         version="1.20.0",
-        description="로봇 미들웨어 API — 계약: ROSY-API-REF-001 (v1.87)",
+        description="로봇 미들웨어 API — 계약: ROSY-API-REF-001 (v1.88)",
     )
     app.state.core = services
     agent = getattr(services, "fleet_agent", None)
@@ -256,6 +256,7 @@ def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
         "widgets/gripper.js": "application/javascript",
         "input-state.js": "application/javascript",
         "vision.js": "application/javascript",
+        "models.js": "application/javascript",
         "manifest.webmanifest": "application/manifest+json",
         "sw.js": "application/javascript",
         "icons/icon-192.png": "image/png",

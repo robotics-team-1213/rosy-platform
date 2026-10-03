@@ -11,7 +11,10 @@ and the rule-based detector -> intake_report.json. Pass: the folder is copied
 to <out>/<model_revision>/ with the report. Fail: the report is written next
 to the source and the exit code is 1. A missing Python package (onnx,
 onnxruntime) is a configuration error of this host, not the model's: exit
-CONFIG_EXIT (4), report "config_error": true. Not the D-205 selection gate."""
+CONFIG_EXIT (4), report "config_error": true. Not the D-205 selection gate.
+D-423: the manifest task picks the replay -- lane_seg against the rule-based lane
+detector, object_det through ObjectDetModel (latency, NaN, error and box-count
+statistics) -- and the gate file's per-task section overrides the shared keys."""
 
 from __future__ import annotations
 
@@ -37,6 +40,8 @@ from control.sensing.perception.lane import detect_lane_error  # noqa: E402
 from control.sensing.perception.learned.lane_mask import NonFiniteLogits  # noqa: E402
 from control.sensing.perception.learned.manifest import (  # noqa: E402
     ManifestError, load_manifest, verify_files)
+from control.sensing.perception.learned.detector import ObjectDetModel  # noqa: E402
+from control.sensing.perception.learned.manifest import TASKS  # noqa: E402
 from control.sensing.perception.learned.runner import LaneSegModel  # noqa: E402
 
 DEFAULT_GATE = Path(__file__).resolve().parent / "intake_gate.yaml"
@@ -80,8 +85,19 @@ def judge(stats: dict, gate: dict) -> tuple[str, list[str]]:
         reasons.append(f"NaN frames {stats['nan_frames']} > {gate['max_nan_frames']}")
     if stats.get("error_frames", 0) > 0:
         reasons.append(f"inference error frames {stats['error_frames']} > 0")
+    rel_cap = gate.get("max_int8_vs_fp32_rel")
+    if rel_cap is not None and stats.get("precision") == "int8":
+        rel = stats.get("int8_vs_fp32_rel")
+        if rel is None:
+            reasons.append("int8 model without int8_vs_fp32_rel (convert.py --int8 records it)")
+        elif rel > rel_cap:
+            reasons.append(f"int8 vs fp32 {rel:.3g} > {rel_cap} (relative, on random probes)")
+    cap = gate.get("max_detections_per_frame_p95")
+    p95 = (stats.get("detections_per_frame") or {}).get("p95")
+    if cap is not None and p95 is not None and p95 > cap:
+        reasons.append(f"detections per frame p95 {p95} > {cap}")
     vis = stats.get("visible_fraction", 0.0)
-    if stats.get("frames", 0) > 0 and vis < gate["min_visible_fraction"]:
+    if "min_visible_fraction" in gate and stats.get("frames", 0) > 0 and vis < gate["min_visible_fraction"]:
         reasons.append(f"visible fraction {vis:.3f} < {gate['min_visible_fraction']}")
     return ("fail" if reasons else "pass"), reasons
 
@@ -164,6 +180,48 @@ def _video_frames(path: Path, max_frames: int):
             i += 1
     finally:
         cap.release()
+
+
+def int8_metrics(manifest) -> dict:
+    """precision and convert.py's int8_vs_fp32_rel from the manifest (D-423 review M1)."""
+    int8 = any(getattr(f, "precision", None) == "int8" for f in getattr(manifest, "files", ()))
+    rel = ((getattr(manifest, "raw", None) or {}).get("metrics") or {}).get("int8_vs_fp32_rel")
+    return {"precision": "int8" if int8 else "fp32",
+            "int8_vs_fp32_rel": float(rel) if isinstance(rel, (int, float)) and not isinstance(rel, bool) else None}
+
+
+def task_gate(gate: dict, task: str) -> dict:
+    """The shared keys overlaid by the task's section; other tasks' sections dropped (D-423)."""
+    shared = {k: v for k, v in gate.items() if k not in TASKS}
+    if task == "lane_seg":
+        return shared
+    shared.pop("min_visible_fraction", None)  # lane evidence only
+    return {**shared, **(gate.get(task) or {})}
+
+
+def replay_detections(model, videos, max_frames: int) -> dict:
+    """object_det replay statistics: no rule-based reference exists for these classes."""
+    latencies, counts, classes = [], [], {}
+    frames = nan_frames = error_frames = 0
+    for video in videos:
+        for bgr in _video_frames(video, max_frames):
+            frames += 1
+            try:
+                result = model.infer(bgr)
+            except ValueError as exc:
+                nan_frames += isinstance(exc, NonFiniteLogits)
+                error_frames += not isinstance(exc, NonFiniteLogits)
+                continue
+            latencies.append(result.latency_ms)
+            counts.append(len(result.detections))
+            for d in result.detections:
+                classes[d["label"]] = classes.get(d["label"], 0) + 1
+    pct = lambda values, q: float(np.percentile(values, q)) if values else None  # noqa: E731
+    return {"frames": frames, "latency_ms": {"p50": pct(latencies, 50), "p95": pct(latencies, 95)},
+            "nan_frames": nan_frames, "error_frames": error_frames,
+            "detections_per_frame": {"mean": float(np.mean(counts)) if counts else None,
+                                     "p95": pct(counts, 95)},
+            "class_counts": classes}
 
 
 def replay(model, videos, max_frames: int) -> dict:
@@ -252,9 +310,14 @@ def run(source: str, *, out, gate_path=DEFAULT_GATE, root=ROOT, max_frames=None,
         check_precision(manifest)
         # deliver.py push refuses a model whose files differ from these.
         report["files"] = [{"name": f.name, "sha256": f.sha256} for f in manifest.files]
-        model = LaneSegModel.open(folder)
+        report["task"] = task = getattr(manifest, "task", "lane_seg")
+        gate = report["gate"] = task_gate(gate, task)
         videos = replay_videos(gate, root)
-        stats = replay(model, videos, max_frames)
+        if task == "object_det":
+            stats = {**replay_detections(ObjectDetModel.open(folder), videos, max_frames),
+                     **int8_metrics(manifest)}
+        else:
+            stats = replay(LaneSegModel.open(folder), videos, max_frames)
         report.update(stats)
         report["sources"] = [str(v) for v in videos]
         report["verdict"], report["reasons"] = judge(stats, gate)

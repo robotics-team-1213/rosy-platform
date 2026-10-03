@@ -17,6 +17,7 @@ install(FILES
   arm-stick.js
   input-state.js
   vision.js
+  models.js
   manifest.webmanifest
   sw.js
   DESTINATION share/${PROJECT_NAME}

@@ -72,8 +72,8 @@
 
 ## 최근 기록
 
+- 2026-10-03 · f4c311569 · feat(bridge): D-423 모델 상태 두 토픽 latched 구독
 - 2026-10-03 · uncommitted · test(console): 지도 도구는 격자 밖에 둔다
 - 2026-10-02 · uncommitted · fix(core): D-419 착지 — console_linked 를 D-407 유예와 합침
 - 2026-10-02 · uncommitted · fix(core): D-419 라운드 4 — Fleet 링크 판정 함수 하나
 - 2026-10-02 · uncommitted · fix(core): D-419 라운드 3 — Fleet 없는 로봇의 SAF-003 검증
-- 2026-10-02 · uncommitted · fix(core): D-419 재리뷰 — 배선 타이밍, console_linked 디바운스

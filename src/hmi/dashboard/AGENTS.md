@@ -24,7 +24,10 @@ Operator dashboard screens (D-23, D-243). FastAPI in `core_api_web` serves this 
 
 ## Subdirectories
 
-None.
+| Directory | Purpose |
+|-----------|---------|
+| `panels/` | Role-surface panel modules (see `panels/AGENTS.md`) |
+| `shell/` | Role-surface shell: mounting, store (see `shell/AGENTS.md`) |
 
 ## For AI Agents
 

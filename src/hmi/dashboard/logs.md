@@ -782,6 +782,11 @@
 - gate 변화: 없음.
 - 최종 증거: web_common+dashboard 286 passed 82 skipped. fleet styles.css opacity: 0.4 사전 실패 1건은 본 변경 없이도 재현(stash 확인)되어 무관.
 
+## 2026-10-02 · uncommitted · D-423 카메라 범례에 거리 출처
+- 변경: `panels/console/camera.js` 범례 OBJ 줄에 "0.42m L은 카메라 앞 거리(L LiDAR, G 바닥 평면 추정)" 추가.
+- 근거: D-423 §1.6.
+- gate 변화: 없음.
+
 ## 2026-10-03 · uncommitted · fix(console): 점유 격자를 가리지 않고 즉시 정지는 버튼이 확인이다
 - 변경: 지도 도구는 점유 지도 제목의 한 줄, 범례는 캔버스 아래 한 줄. 즉시 정지 클릭의 window.confirm을 뺐다(Esc 표시, 해제는 그대로 묻는다). Escape는 session.token이 있을 때만 같은 정지를 보낸다. 신선하지 않은 계기는 지연·연결 끊김·정보 없음이 크고 숫자는 작다. 소켓이 살아 있어도 위치·속도가 신선하지 않으면 배지는 "통로만 연결", 그 외에는 "값 수신 중". 64rem 미만에서는 즉시 정지를 뷰포트 바닥에 고정하고 연결 문장을 숨기지 않는다. 모드 히어로·기능 이름·차선 꺼짐은 한국어. API 문서는 점검의 호스트 상태로 옮겼다. SAFE_STOP은 RobotMode에 넣지 않고 operatorModeLabel로 "안전 정지".
 - 근거: D-201, D-218, D-77. 운용 화면 비평의 P1·P2.

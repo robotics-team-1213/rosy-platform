@@ -17,7 +17,7 @@ The Rosy Cam phone app (Kotlin/CameraX) lives in its own module `src/site/cam` (
 
 | Directory | Purpose |
 |-----------|---------|
-| `rosy_vision/` | Python package: `protocol.py`, `ingest.py` (latest-only receiver/direct preview), `detect.py` (isolated OpenCV CPU detector), `rectify.py` (D-318 display-only preview transform), `project.py` (shared games homography), `publish.py` (source-token Fleet client), `worker.py` (fresh latest-frame orchestration), `cli.py` |
+| `rosy_vision/` | Python package: `protocol.py`, `ingest.py` (latest-only receiver/direct preview), `detect.py` (isolated OpenCV CPU detector), `rectify.py` (D-318 display-only preview transform), `project.py` (shared games homography), `publish.py` (source-token Fleet client), `worker.py` (fresh latest-frame orchestration), `cli.py` (see `rosy_vision/AGENTS.md`) |
 | `test/` | ROS-free pytest, `conftest.py` bootstraps `sys.path` without a colcon install |
 
 ## For AI Agents

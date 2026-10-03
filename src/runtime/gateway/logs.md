@@ -771,3 +771,9 @@
 - 근거: D-77 운용 화면. 격자를 가리던 배치를 계약으로 되돌리지 않기 위해서.
 - 증거: 2026-10-03 Windows. test_the_map_tools_stay_off_the_raster가 콘솔 묶음 240 passed 안에 포함된다.
 - gate 변화: 없음.
+
+## 2026-10-03 · f4c311569 · feat(bridge): D-423 모델 상태 두 토픽 latched 구독
+
+- 변경: `ros_bridge.py` `_on_lane_model_status`·`_on_object_det_model_status`(TRANSIENT_LOCAL) → `svc.vision.models`. 구독 목록·latched 시험 갱신. `test_core_logic` D-137 단일 발행자에 `runtime/sensing/control/object_detector.py`.
+- 증거: gateway 두 묶음 1141+715 passed; 실패 `test_core_node_teardown::test_run_drains_executor_workers_before_returning` 1건은 부하 아래에서만(단독 8 passed).
+- gate 변화: 없음.

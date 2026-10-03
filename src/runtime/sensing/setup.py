@@ -47,6 +47,7 @@ setup(
             'ir_adc_node = control.ir_adc_node:main',
             'line_observer_node = control.line_observer_node:main',
             'learned_lane_node = control.learned_lane_node:main',
+            'object_detector_node = control.object_detector_node:main',
             'capture_trigger_node = control.capture_trigger_node:main',
             'pilot_recorder_node = control.pilot_recorder_node:main',
             'road_state_node = control.road_state_node:main',

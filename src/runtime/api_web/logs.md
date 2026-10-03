@@ -369,3 +369,9 @@
 - 증거: 병합 커밋의 host pytest 묶음(보고서), `rosy_harness.py lint` 0 errors.
 - gate 변화: 없음.
 - 결정: D-411 구현 부록 15.
+
+## 2026-10-03 · b84e72c55 · feat(api): D-423 `GET /api/v1/vision/models`(viewer, 읽기 전용), API Ref v1.83
+
+- 변경: `api/v1/vision.py` 경로, `app.py` pilot 자산 `models.js`(09553e730), 설명의 계약 판 v1.83(714e0f90c). 쓰기 API 없음.
+- 증거: `test_vision_preview.py`(API·405), api_web 묶음 739 passed(services·pilot 포함).
+- gate 변화: 없음.

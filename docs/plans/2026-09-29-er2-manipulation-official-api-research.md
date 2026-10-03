@@ -51,3 +51,29 @@ Google의 공식 pick-and-place 예시는 `move(x,y,high)`와 `setGripperState(o
 - 사용 예정인 OMX controller 및 Franka/MoveIt 버전의 실제 ROS 2 액션·서비스·취소 의미를 설치 대상 환경에서 확인한다. 위 MoveIt 문서는 Rolling이며 Jazzy 설치본과 API 호환성을 입증하지 않는다.
 - `pick` 단독, `place` 단독, `pick_place` 복합 작업 중 첫 공개 API 범위와 지속 상태의 소유자를 ADR에서 결정한다.
 - API 계약과 ROS 액션 매핑은 별도 구현 게이트를 거쳐야 한다. 문서의 예시는 배포된 API가 아니다.
+
+
+## 2026-09-29 Gemini API 키·데이터 처리·ER 2 한계 추가 확인
+
+> 확인일: 2026-09-29. 아래 내용은 이 날짜에 열람한 Google AI for Developers, Google Cloud, Google DeepMind 공식 문서 기준이다. 계정·지역·청구 설정에 따른 약관은 배포 전에 다시 확인해야 한다.
+
+### 공식 문서에서 확인한 사실
+
+- **키 종류와 전환 상태:** Gemini API는 standard key와 service account에 결합된 authorization key를 문서화한다. 2026-05-28부터 AI Studio에서 새로 만드는 키는 authorization key가 기본이며, Gemini API에 제한되고 유출 탐지 차단 기능을 제공한다. authorization key 요청은 Cloud service-account 사용량 지표에 기록되지 않는다고 안내한다. 현재 키 문서는 unrestricted standard key 거부를 설명하지만, 과거 검색 결과의 “2026년 9월부터 모든 standard key 거부” 일정은 열람한 최신 문서에서 확인하지 못했다. 그 일정을 현재 확정 정책으로 전제하지 않는다. [Gemini API 키 문서](https://ai.google.dev/gemini-api/docs/api-key)
+- **키 보호·제한·회전:** 키를 Git이나 클라이언트 코드에 넣지 말고, 서버에서 환경 변수 또는 Secret Manager로 읽으며, REST 요청은 URL 쿼리 대신 `x-goog-api-key` 헤더를 사용한다. API 제한과 사용처 제한(IP 등)을 적용하고, 키를 앱별로 분리하며 사용량을 감시한다. Cloud의 회전 절차는 동일 제한의 새 키 생성 → 모든 소비자 전환 확인 → 이전 키 삭제 순서다. Gemini API 운영에서 authorization key를 쓸 때 결합 service account에 IAM 역할을 부여하지 말라고 Cloud가 명시한다. [Gemini API 키 문서](https://ai.google.dev/gemini-api/docs/api-key), [Cloud 키 보안 모범 사례](https://docs.cloud.google.com/docs/authentication/api-keys-best-practices), [Cloud 키 제한 및 회전](https://docs.cloud.google.com/docs/authentication/api-keys)
+- **무료/유료 데이터 처리:** Gemini API는 활성 Cloud Billing 계정이 연결된 프로젝트를 통한 사용을 Paid Service로 정의한다. Unpaid Service에서는 프롬프트·시스템 지침·이미지 등 입력과 응답이 제품·모델 개선에 사용될 수 있고, 사람 검토자가 이를 읽거나 주석 처리할 수 있으므로 민감·기밀·개인정보를 제출하지 말라고 한다. Paid Service에서는 프롬프트와 응답을 제품 개선에 쓰지 않고 Data Processing Addendum에 따라 처리하지만, 위반 탐지·서비스 보안 및 법적/규제 공개를 위해 제한된 기간 로그할 수 있다. 약관은 기간을 구체적인 일수로 보장하지 않는다. [Gemini API 추가 약관](https://ai.google.dev/gemini-api/terms), [요금제별 데이터 사용 표](https://ai.google.dev/gemini-api/docs/pricing)
+- **ER 2 사용 범위·한계:** ER 2 model card는 모델을 robotics용 시공간 추론, tool orchestration, physical-agent success detection에 특화된 VLM으로 설명한다. 동시에 production/commercial/public 환경 사용 전 재량 있는 판단을 요구하고, 오작동이 사망·부상·재산 피해를 초래할 수 있는 safety-critical 업무에서는 사용하지 말라고 명시한다. ER 2의 Known Limitations와 Acceptable Usage 세부사항은 Gemini 3.5 Flash model card로 위임되고, 그 카드도 한계·허용 사용 세부사항을 Gemini 3 Flash 카드로 위임한다. 따라서 ER 2 카드만으로 작업별 안전성이나 실패율을 보증할 수 없고, 제한사항이 완결되어 있다고 볼 수 없다. [ER 2 model card](https://deepmind.google/models/model-cards/gemini-robotics-er-2/), [Gemini 3.5 Flash model card](https://deepmind.google/models/model-cards/gemini-3-5-flash/)
+- **이미지 요청 제한:** 인라인 이미지 문서는 프롬프트·시스템 지침·인라인 바이트를 합한 전체 요청의 상한을 20 MB로 제시하며, 더 큰 입력이나 재사용 입력에는 Files API를 권한다. 이는 API 크기 제한이지, 현장 카메라 프레임을 외부 서비스에 보내도 된다는 데이터 승인 근거가 아니다. [Gemini 이미지 입력 문서](https://ai.google.dev/gemini-api/docs/image-understanding)
+
+### Rosy에 대한 설계 추론
+
+- ER 2에는 선택 작업만 보내고, 로봇·작업자·시설을 식별할 수 있는 이미지를 다루는 실제 호출 경로는 **활성 Billing 프로젝트의 Paid Service 사용 여부를 확인**해야 한다. 무료 quota로 자동 대체되는 설정은 금지하고, billing·키·정책 상태를 확인할 수 없으면 모델 제안 요청을 거부하는 fail-closed 구성이 적절하다. 이는 Google 약관의 무료·유료 처리 차이를 Rosy 데이터 경계에 적용한 추론이다.
+- 카메라 원본은 로컬에서 영역·해상도·프레임 수를 최소화하고 식별 정보를 줄인 뒤 전송한다. 요청·예외·추적 로그에는 키, 이미지/base64, 원문 프롬프트를 남기지 않고 필요한 감사 근거는 로컬 ID·digest·정책 결과로 남긴다. 20 MB 한도에 맞추려고 Files API로 원본을 무조건 올리는 동작도 추가 동의·보존 정책 없이는 선택하지 않는다.
+- 키는 로봇/환경별 분리, Gemini API 전용 제한, 가능한 경우 고정 egress IP 제한, secret manager 주입, 비용·호출량 경보, 교체 및 폐기 절차가 필요하다. authorization key의 service account에는 IAM 역할을 주지 않으며, 해당 인증 요청이 service-account usage metrics에 없다는 점을 고려해 애플리케이션 측 호출·오류 상관관계를 기록한다. 회전은 이전 키 폐기 전 새 키 전환 검증을 포함한다.
+- ER 2 model card의 safety-critical 제한을 전제로 어댑터는 제안 생성용 비안전핵심 후보 경로로만 둔다. ER 2 응답이나 모델의 성공 판단을 안전성 증명으로 취급하지 않는다. 안전 검증, 충돌/작업공간 검사, ROS action 실행 권한, stop/E-stop과 장치 readback은 Rosy/ROS 로컬 제어 경계에 둔다. 상업·공개 운영과 촬영 데이터 처리 적합성은 source 구현만으로 승인되지 않으며 별도 법무·운영 판단이 필요하다.
+
+### 확인 시 남은 모호성
+
+- 현재 키 문서는 unrestricted standard key 거부를 명시하지만, 전체 standard key 폐기 일정은 확인되지 않았다. 새 구현은 authorization key 호환성을 우선 검증하되, 실제 프로젝트 키 종류와 Gemini API 접근은 배포 전 해당 계정에서 확인해야 한다.
+- Paid Service도 제한된 기간의 입력·응답 로그를 허용하지만, 확인한 약관은 정확한 보존 기간이나 모든 지역별 세부 적용을 특정하지 않는다. Rosy가 임의 보존 기간을 단정해서는 안 된다.
+- ER 2 카드가 상위 Gemini 3.5 Flash 및 Gemini 3 Flash model card로 제한사항을 위임하므로, 여기서는 ER 2 조작 성공률·좌표 오차·안전 임계값을 보증하지 않는다. 작업·카메라·로봇별 검증이 별도로 필요하다.

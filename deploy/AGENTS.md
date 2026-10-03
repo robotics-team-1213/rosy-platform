@@ -32,8 +32,8 @@ unit. At this level only the harness records.
 | Directory | Purpose |
 |-----------|---------|
 | `robot/pinky_pro/` | Pinky Pro product deployment: native runtime, image, release, SD media, and development compatibility files |
-| `robot/omx/` | OMX workstation development and simulation preparation; not an accepted field runtime |
-| `site/` | Site-host Fleet, Vision, and Caddy stack; separate from the Pi product image |
+| `robot/omx/` | OMX workstation development and simulation preparation; not an accepted field runtime (see `robot/omx/AGENTS.md`) |
+| `site/` | Site-host Fleet, Vision, and Caddy stack; separate from the Pi product image (see `site/AGENTS.md`) |
 
 `robot/` groups deployment inputs by robot product. Shared ROS packages remain
 under `src/`; this folder is not a shared device-control library.

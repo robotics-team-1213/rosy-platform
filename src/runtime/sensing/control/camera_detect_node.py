@@ -14,8 +14,9 @@
   /camera/controls    the exposure/gain/white-balance the sensor was frozen at
   /camera/debug       one-line human-readable column scores
 """
-import time
 import json
+import math
+import time
 
 import numpy as np
 import rclpy
@@ -26,6 +27,7 @@ from std_msgs.msg import Bool, Float32, String
 
 from core_common.protocol.recording import ACTIVE_TOPIC
 from . import executor_choice
+from .camera_region_range import RegionRangeMixin
 from .sensing.perception.camera import classify_frame
 from .sensing.perception.camera_controls import (
     lock_action, lock_controls, lock_summary, static_controls)
@@ -79,7 +81,7 @@ class _OpenCVCamera:
         return freeze_v4l2_controls(self._capture, self._cv2)
 
 
-class CameraDetectNode(Node):
+class CameraDetectNode(RegionRangeMixin, Node):
     def __init__(self):
         super().__init__('camera_detect_node')
         self.declare_parameter('width', 320)
@@ -128,6 +130,19 @@ class CameraDetectNode(Node):
         self.declare_parameter('camera_homography_min_validation_frames', 2)
         self.declare_parameter('camera_homography_min_validation_span_cm', 10.0)
         self.declare_parameter('camera_homography_max_range_m', 0.6)
+        # D-423 mode 'nominal': camera_nominal.yaml (URDF nominal) < accepted
+        # camera_profile record, plus the D-364 section 3 second opt-in.
+        self.declare_parameter('nominal_camera_profile_path', '')
+        self.declare_parameter('allow_nominal_ground', False)
+        for name in ('camera_pitch_rad_override', 'camera_height_m_override', 'lidar_yaw_offset_override'):
+            self.declare_parameter(name, math.nan)  # D-397 operator layer; NaN = no override
+        # D-423: LiDAR range in each region's bearing span (NOMINAL plane only).
+        self.declare_parameter('region_lidar_range', False)
+        self.declare_parameter('region_lidar_max_age_s', 0.3)
+        self.declare_parameter('region_lidar_tolerance_m', 0.05)
+        self.declare_parameter('region_lidar_tolerance_ratio', 0.2)
+        # Gazebo /scan only when a sim launch asks; the robot keeps its own C1.
+        self.declare_parameter('accept_simulation_scans', False)
         # D-373: JPEG copy of camera/front for the snapshot recorder. Off unless
         # the capture launch argument turns it on; encoding costs CPU per frame.
         self.declare_parameter('publish_compressed', False)
@@ -186,6 +201,9 @@ class CameraDetectNode(Node):
             principal_y=float(self.get_parameter('camera_principal_y').value),
             max_range_m=float(self.get_parameter('camera_max_range_m').value))
         self._ground_mode = str(self.get_parameter('camera_ground_mode').value).strip().lower()
+        self._nominal_ground, self._camera_x_m = self._load_nominal_ground()
+        self._scan, self._scan_rejected_logged, self._lidar_nose = None, False, None
+        self._start_region_lidar()
         self._homography_enabled = bool(
             self.get_parameter('camera_homography_enabled').value)
         self._homography = load_homography_profile(
@@ -240,6 +258,8 @@ class CameraDetectNode(Node):
             self._ground = (self._homography.model
                             if self._homography_enabled and self._homography.eligible
                             else None)
+        elif self._ground_mode == 'nominal':
+            self._ground = self._nominal_ground
         else:
             self._ground = None
 
@@ -254,7 +274,9 @@ class CameraDetectNode(Node):
             and self._ground is self._homography.model)
         status['pinhole_active'] = bool(
             self._ground_mode == 'pinhole' and self._pinhole_ground is not None)
-        if self._ground_mode not in ('pinhole', 'homography', 'off'):
+        status['nominal_active'] = bool(
+            self._ground_mode == 'nominal' and self._nominal_ground is not None)
+        if self._ground_mode not in ('pinhole', 'homography', 'nominal', 'off'):
             status['reason'] = 'unsupported_mode'
         elif self._ground_mode != 'homography':
             status['reason'] = 'mode_' + self._ground_mode
@@ -444,9 +466,11 @@ class CameraDetectNode(Node):
             return
 
         self.side_pub.publish(Float32(data=float(res['side'])))
+        res = dict(res, regions=self._lidar_ranged(res.get('regions', []), capture_stamp))
         self.observation_pub.publish(String(data=json.dumps(observation_payload(
             capture_stamp, cliff, blocked, res['side'], res,
-            (bgr.shape[1], bgr.shape[0]), 'onboard_camera_pixels'))))
+            (bgr.shape[1], bgr.shape[0]), 'onboard_camera_pixels',
+            ground_source=self._ground_mode.upper() if self._ground is not None else None))))
         cols = res['cols']
         mcols = res.get('mid_cols', cols)
         self.dbg_pub.publish(

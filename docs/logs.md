@@ -4627,6 +4627,13 @@
 - Gate: SOURCE/LOCAL only; no second owner or ROS loop added. Parent terminal workflow, Fleet/OMX two-ledger replay and ROS-SIM remain open.
 
 
+## 2026-10-03 · uncommitted · docs: D-426 Fleet–Gazebo 실제 통신·주행 수용 설계
+
+- 요청: 실제 관제/로봇 요구를 Fleet–Gazebo 구현 목표와 ADR로 구체화.
+- 변경: D-426 Proposed, T1–T6 구현 계획, M01–M08 반복 수용 행렬. 일관성·실행 가능성·장애 가정·통신 경계 검토 반영: Agent launch 설정, contact 계측, ideal odometry 한계, base watchdog 부재, 진입 시한 재검사, 이전 실행 정지 대조, 부정 시험 판정 분리, GZ_PARTITION 격리.
+- 증거: 문서 검토와 계약 검사 결과는 별도 검토 문서에 기록. 실제 Gazebo/DEVICE/FIELD 합격으로 승격하지 않음.
+- gate 변화: 없음 — 문서/구현 목표 설정만. 실제 회차 미실행.
+
 ## 2026-10-03 · uncommitted · feat: journal Cell hold release and local Action completion
 - Change: reuse physical gripper transaction rules with canonical Cell grant provenance; optionally compose durable workflow gates with the real Skill phase runner. Require matching scoped fresh hold/release readback before local terminal success. Provider/clock/cancel errors and snapshot recovery stay HOLD.
 - Evidence: focused planner/API/runner/transaction/boundary suite 36 passed; sensor and cancel failure review corrections included. Full OMX adapter plus provider/Skill/boundary regression: 371 passed / 5 skipped. Quick tier: 96 passed / 25 freshness warnings. Independent review: 31 passed, no remaining Critical/Important findings.

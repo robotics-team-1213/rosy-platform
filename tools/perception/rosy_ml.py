@@ -6,7 +6,8 @@
   rosy_ml store-status [--init]          datasets and model inbox/accepted/rejected counts
   rosy_ml status [ROBOT]                 shadow pointer, installed revisions, history
   rosy_ml deliver ROBOT REVISION         push an intake-passed model to the shadow slot (holds the robot)
-  rosy_ml rollback ROBOT                 back to shadow.previous (holds the robot)
+  rosy_ml promote ROBOT                  active <- shadow, old active -> previous (holds; D-423)
+  rosy_ml rollback ROBOT [--slot active] back to shadow.previous, or active <- previous (holds)
   rosy_ml release-hold ROBOT             remove the hold: site auto delivery resumes
   rosy_ml harvest ROBOT                  pull finished recordings (only while idle)
   rosy_ml fetch ROBOT --http             pull Pilot recordings over CORE HTTP (D-411, operator token)
@@ -54,6 +55,7 @@ for _p in (HERE, HERE / "model", HERE / "dataset"):
         sys.path.insert(0, str(_p))
 
 import operator_ssh  # noqa: E402
+import slot_cli  # noqa: E402
 import store  # noqa: E402
 
 SITE_TOKEN_FILE = "/etc/rosy/site/secrets/hf_token"
@@ -511,15 +513,12 @@ def main(argv=None, *, runner=subprocess.run, connect=socket.create_connection,
     p = sub.add_parser("status")
     p.add_argument("robot", nargs="?")
     p.add_argument("--history", type=int, default=10)
+    p.add_argument("--task", default="lane_seg")
     p.add_argument("--watch-config", help="read the site watcher's config (and its failures)")
     p = sub.add_parser("repin")
     p.add_argument("robot")
     p.add_argument("--watch-config", help="read the site watcher's config")
-    p = sub.add_parser("deliver")
-    p.add_argument("robot")
-    p.add_argument("revision")
-    for name in ("rollback", "release-hold"):
-        sub.add_parser(name).add_argument("robot")
+    slot_cli.add_parsers(sub)  # deliver, promote, rollback, release-hold (D-423 --task/--slot)
     p = sub.add_parser("harvest")
     p.add_argument("robot")
     p.add_argument("--dest")
@@ -559,7 +558,7 @@ def main(argv=None, *, runner=subprocess.run, connect=socket.create_connection,
         return _repin(cfg, args.robot, runner)
     if args.cmd == "store-status":
         return _store_status(cfg, args.init)
-    if args.cmd in ("status", "deliver", "rollback", "release-hold"):
+    if args.cmd in ("status", "deliver", "promote", "rollback", "release-hold"):
         import deliver
         if args.cmd == "status":
             rc = 0
@@ -568,10 +567,9 @@ def main(argv=None, *, runner=subprocess.run, connect=socket.create_connection,
             for name, host in zip(robots, hosts):
                 print(f"== {name}")
                 rc = max(rc, deliver.main(["status", host, *_ssh_argv(cfg, name), "--history",
-                                           str(args.history)], runner=runner))
+                                           str(args.history), "--task", args.task], runner=runner))
             return rc
-        head = (["push", hosts[0], args.revision, "--models", str(cfg["intake_out"])]
-                if args.cmd == "deliver" else [args.cmd, hosts[0]])
+        head = slot_cli.deliver_argv(args, hosts[0], str(cfg["intake_out"]))
         return deliver.main([*head, *_ssh_argv(cfg, robots[0]), "--operator", cfg["operator"]],
                             runner=runner)
     if args.cmd == "harvest":
