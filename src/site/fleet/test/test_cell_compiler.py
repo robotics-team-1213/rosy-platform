@@ -20,7 +20,7 @@ from rosy.processes.palletizing.cell import load_cell  # noqa: E402
 from rosy.processes.palletizing.compiler import compile_job, job_document  # noqa: E402
 from rosy.processes.palletizing.recipe import load_recipe  # noqa: E402
 
-EXAMPLES = ROOT / "src/site/cell/examples/omx_sim"
+EXAMPLES = ROOT / "operations/processes/cell/examples/omx_sim"
 TOL_M = 0.001
 
 

@@ -62,10 +62,10 @@ modules:
     functional_kind: pytest
     functional: [operations/vision/test]
   - name: rosy_cell
-    path: src/site/cell
-    tests: [src/site/cell/test]
+    path: operations/processes/cell
+    tests: [operations/processes/cell/test]
     functional_kind: pytest
-    functional: [src/site/cell/test]
+    functional: [operations/processes/cell/test]
   - name: palletizing
     path: operations/processes/palletizing
     tests: [test/test_platform_palletizing_compat.py, test/architecture/test_platform_dependency_boundaries.py]

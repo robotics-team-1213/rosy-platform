@@ -29,7 +29,7 @@ FOLDER_TO_PACKAGE = {
     "runtime/sensing": "control",
     "runtime/services": "core_features",
     "operations/vision": "rosy_vision",  # D-377 rosy_<word>; D-427 target folder is the word itself
-    "site/cell": "rosy_cell",
+    "operations/processes/cell": "rosy_cell",
 }
 
 

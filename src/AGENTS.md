@@ -45,7 +45,7 @@ Folders carry the role name; ROS package names stay (D-231). Where they differ, 
 | `runtime/sensing` | `control` |
 | `runtime/services` | `core_features` |
 | `../operations/vision` | `rosy_vision` (D-377 app rule `rosy_<word>`) |
-| `site/cell` | `rosy_cell` (D-377 app rule `rosy_<word>`) |
+| `../operations/processes/cell` | `rosy_cell` (D-377 app rule `rosy_<word>`) |
 
 ### Placement Rules
 

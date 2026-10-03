@@ -15,7 +15,7 @@ from rosy.execution.site.cell_submission import compile_cell_submission
 
 
 def documents():
-    root = ROOT / "src/site/cell/examples/omx_sim"
+    root = ROOT / "operations/processes/cell/examples/omx_sim"
     return tuple(yaml.safe_load((root / name).read_text(encoding="utf-8")) for name in ("recipe.yaml", "cell.yaml"))
 
 

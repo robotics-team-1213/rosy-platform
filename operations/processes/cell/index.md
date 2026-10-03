@@ -26,7 +26,7 @@
 
 ## 시험
 
-- `src/site/cell/test`
+- `operations/processes/cell/test`
 
 ## 최근 기록
 

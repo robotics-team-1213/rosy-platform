@@ -20,7 +20,7 @@ from core_common.protocol.schemas import FleetCellTransferGrant  # noqa: E402
 from omx_adapter.action_runner import action_grant_digest  # noqa: E402
 from rosy_agent.omx_cell_owner import CellOwnerSettings, build_cell_owner  # noqa: E402
 
-EXAMPLES = ROOT / "src/site/cell/examples/omx_sim"
+EXAMPLES = ROOT / "operations/processes/cell/examples/omx_sim"
 FLEET_UID = 1001
 
 

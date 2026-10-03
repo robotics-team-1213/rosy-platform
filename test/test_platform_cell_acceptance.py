@@ -18,7 +18,7 @@ from rosy.processes.palletizing.cell import load_cell  # noqa: E402
 from rosy.processes.palletizing.recipe import load_recipe  # noqa: E402
 from rosy_agent.omx_cell_documents import PalletizingCellDocumentValidator  # noqa: E402
 
-EXAMPLES = ROOT / "src/site/cell/examples/omx_sim"
+EXAMPLES = ROOT / "operations/processes/cell/examples/omx_sim"
 
 
 def _docs():

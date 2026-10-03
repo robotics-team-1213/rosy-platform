@@ -5,7 +5,7 @@
   Frame transform: Gazebo world == OMX robot_base (link0). The vendor launch
   omx_f_follower_ai_gazebo.launch.py spawns omx_f at x=y=z=0, R=P=Y=0 and the URDF
   joint world_fixed is the identity, so every pose below is already in the base frame
-  used by src/site/cell/examples/omx_sim/cell.yaml. Table top = z 0.
+  used by operations/processes/cell/examples/omx_sim/cell.yaml. Table top = z 0.
 
   Layout (must match cell.yaml / recipe.yaml; test/test_cell_omx_sim_layout_contract.py):
     pallet_a  0.10 x 0.08 x 0.01 plate, near-left top corner (0.13,  0.01, 0.01)

@@ -6,7 +6,7 @@ components:
     path: src/contracts/foundation/core_common
     import_prefix: core_common
   - name: cell_process_compat
-    path: src/site/cell/rosy_cell
+    path: operations/processes/cell/rosy_cell
     import_prefix: rosy_cell
   - name: palletizing_process
     path: operations/processes/palletizing/src/rosy/processes/palletizing

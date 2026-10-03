@@ -102,6 +102,7 @@ ROS/vendor 표현 사이의 변환에 두며, 그 자체로 별도 동작 owner�
     └── training/perception/       # D-356 학습 루프 도구(데이터셋·학습 인계·모델 배달)
     operations/
     ├── apps/games/                # package: games — 게임 호스트(D-427 wave 3b)
+    ├── processes/cell/            # package: rosy_cell — Rosy Cell 호환 facade(D-427 wave 3b)
     └── vision/                    # Rosy Vision: 천장 카메라 입력·sighting 처리(패키지 rosy_vision)
 
 폴더명과 ROS 패키지 이름은 항상 같지 않다(예: `runtime/gateway`는 `core`). site 앱은

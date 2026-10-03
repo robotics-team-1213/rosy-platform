@@ -35,5 +35,5 @@ Rosy Cell (D-377 id `cell`, package `rosy_cell`) is the D-399 Application for pa
 ### Testing Requirements
 
 ```bash
-python -m pytest src/site/cell/test -q
+python -m pytest operations/processes/cell/test -q
 ```

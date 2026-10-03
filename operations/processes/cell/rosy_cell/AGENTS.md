@@ -34,7 +34,7 @@ D-413 compatibility import facade for `operations/processes/palletizing`, whose 
 ### Testing Requirements
 
 ```bash
-python -m pytest src/site/cell/test -q
+python -m pytest operations/processes/cell/test -q
 ```
 
 Tests: `test_cell.py`, `test_cell_frame.py`, `test_recipe.py`, `test_pattern_grid.py`, `test_pattern_split.py`, `test_stack.py`, `test_sequence.py`, `test_compiler.py`, `test_cell_package.py` (fixtures in `test/fixtures/`).

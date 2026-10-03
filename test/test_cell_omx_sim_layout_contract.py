@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-for _path in (ROOT / "src/products/omx/adapter", ROOT / "src/site/cell"):
+for _path in (ROOT / "src/products/omx/adapter", ROOT / "operations/processes/cell"):
     if str(_path) not in sys.path:
         sys.path.insert(0, str(_path))
 
@@ -36,7 +36,7 @@ from rosy_cell.cell import load_cell  # noqa: E402
 from rosy_cell.compiler import compile_job  # noqa: E402
 from rosy_cell.recipe import load_recipe  # noqa: E402
 
-EXAMPLE = ROOT / "src/site/cell/examples/omx_sim"
+EXAMPLE = ROOT / "operations/processes/cell/examples/omx_sim"
 PROFILE = ROOT / "deploy/robot/omx/sim/cell_profile.yaml"
 
 
