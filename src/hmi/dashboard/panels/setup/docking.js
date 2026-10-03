@@ -43,7 +43,7 @@ export function mount(root, ctx) {
         if (disposed || confirming || !poseFresh || pendingTeaches.has(dock.id) || !docksLoaded) return;
         const target = JSON.stringify(dock); const position = poseSnapshot;
         confirming = true;
-        const confirmed = await confirmIrreversible({message: `현재 위치를 ${dock.id} 도크 포즈로 기록할까요? 실제 도킹 위치에 로봇을 맞춘 뒤 진행하세요.`, action: "위치 기록", signal: lifetime.signal});
+        const confirmed = await confirmIrreversible({message: `현재 위치를 "${dock.id}" 도크 포즈로 기록할까요? 실제 도킹 위치에 로봇을 맞춘 뒤 진행하세요.`, action: "위치 기록", signal: lifetime.signal});
         confirming = false;
         if (!confirmed || disposed || position !== poseSnapshot || !poseFresh || pendingTeaches.has(dock.id) || !docksLoaded || !docks.some(item => JSON.stringify(item) === target)) return;
         pendingTeaches.add(dock.id);

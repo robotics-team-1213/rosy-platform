@@ -192,7 +192,7 @@ export function mount(root, ctx) {
     const typeSnapshot = JSON.stringify(existingType);
     const poseSnapshot = JSON.stringify([pose.pose, pose.map_id]);
     confirming = true;
-    const confirmed = await confirmIrreversible({message: `${dockId} 도크를 현재 위치에 등록할까요? 현재 위치가 실제 도크에 정확히 맞는지 확인하세요.`, action: "도크 등록", signal: lifetime.signal});
+    const confirmed = await confirmIrreversible({message: `"${dockId}" 도크를 현재 위치에 등록할까요? 현재 위치가 실제 도크에 정확히 맞는지 확인하세요.`, action: "도크 등록", signal: lifetime.signal});
     confirming = false;
     if (!confirmed || disposed || pending || !poseFresh || !typesLoaded
         || poseSnapshot !== JSON.stringify([pose?.pose, pose?.map_id])

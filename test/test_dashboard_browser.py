@@ -19,7 +19,7 @@ WEB = ROOT / "src" / "hmi" / "dashboard"
 #: boot before the first assertion.
 WEB_COMMON = ROOT / "src" / "hmi" / "web_common"
 
-from browser_harness import DECLINE_CONFIRM, accept_confirm, open_page  # noqa: E402
+from browser_harness import open_page  # noqa: E402
 
 #: F-09 — 정상 상태의 따뜻한 색 예산 스캔(D-82: 따뜻한 것이 보이면 언제나
 #: 무언가 잘못된 것이다). 캔버스 fillStyle 정규화로 토큰·계산색을 같은 형식으로
@@ -1008,7 +1008,175 @@ def test_console_state_matrix_renders_each_state(state):
         browser.close()
 
 
-DECLINE_MODE_CONFIRM = DECLINE_CONFIRM
+def test_compatibility_confirmation_keeps_stop_live_and_owns_command_completion():
+    from playwright.sync_api import sync_playwright, expect
+
+    with sync_playwright() as playwright:
+        browser, page = _launch_page(playwright)
+        page.goto('http://rosy.test/dashboard#compatibility')
+        page.wait_for_function("document.querySelector('#robot-mode').textContent==='수동'")
+        page.locator('[data-mode=IDLE]').click()
+        dialog = page.locator('dialog.ui-confirm')
+        expect(dialog).to_have_count(1)
+        expect(dialog.get_by_role('button', name='요청 전송', exact=True)).to_be_visible()
+        page.locator('[data-mode=IDLE]').dispatch_event('click')
+        expect(dialog).to_have_count(1)
+        page.locator('#emergency-stop').click()
+        expect(dialog).to_have_count(0)
+        assert page.evaluate("__apiCalls.filter(c=>c.path==='/api/v1/mode').length") == 0
+        assert page.evaluate("__apiCalls.filter(c=>c.path==='/api/v1/safety/stop').length") == 1
+        page.evaluate("""() => { const prior=fetch;window.fetch=(url,options={})=>String(url).endsWith('/api/v1/mode')?new Promise(resolve=>{window.finishMode=()=>resolve(new Response('{}'));window.modeBody=JSON.parse(options.body);}):prior(url,options); }""")
+        page.locator('[data-mode=IDLE]').click()
+        dialog.locator('ui-button[kind=irreversible]').click()
+        page.wait_for_function("typeof finishMode==='function'")
+        page.locator('#dds-cyclone-apply').dispatch_event('click')
+        expect(dialog).to_have_count(0)
+        assert page.evaluate('window.modeBody') == {'mode': 'IDLE'}
+        page.evaluate('finishMode()')
+        page.wait_for_function("document.querySelector('[data-mode=IDLE]').disabled===false")
+        page.locator('[data-line-mode=IR_LINE]').click()
+        page.locator('[data-line-mode=OFF]').evaluate("button=>button.scrollIntoView({block:'end'})")
+        page.locator('#emergency-stop').click(position={'x':62,'y':60}, timeout=3_000)
+        expect(dialog).to_have_count(0)
+        page.wait_for_function("__apiCalls.filter(c=>c.path==='/api/v1/safety/stop').length===2")
+        page.locator('[data-line-mode=IR_LINE]').click()
+        page.locator('[data-line-mode=OFF]').evaluate("button=>button.scrollIntoView({block:'end'})")
+        page.mouse.move(380, 680)
+        page.mouse.wheel(0, 150)
+        page.wait_for_function("document.querySelector('[data-line-mode=OFF]').getBoundingClientRect().top<750")
+        page.locator('[data-line-mode=OFF]').click()
+        expect(dialog).to_have_count(0)
+        page.wait_for_function("__apiCalls.some(c=>c.path==='/api/v1/line-follow/mode' && c.body.mode==='OFF')")
+        page.evaluate("""() => {const prior=fetch;window.fetch=(url,options={})=>String(url).endsWith('/api/v1/line-follow/mode')&&JSON.parse(options.body).mode!=='OFF'?new Promise(resolve=>window.finishLine=()=>resolve(new Response('{"mode":"IR_LINE","state":"FOLLOW"}'))):prior(url,options);}""")
+        page.locator('[data-line-mode=IR_LINE]').click()
+        dialog.locator('ui-button[kind=irreversible]').click()
+        page.wait_for_function("typeof finishLine==='function'")
+        expect(page.locator('[data-line-mode=OFF]')).to_be_enabled()
+        page.locator('[data-line-mode=OFF]').click()
+        page.wait_for_function("__apiCalls.filter(c=>c.path==='/api/v1/line-follow/mode' && c.body.mode==='OFF').length===2")
+        page.evaluate('finishLine()')
+        page.wait_for_timeout(80)
+        expect(page.locator('[data-line-mode=OFF]')).to_have_attribute('aria-pressed','true')
+        browser.close()
+
+
+def test_compatibility_confirmation_rechecks_capability_and_network_targets():
+    from playwright.sync_api import sync_playwright, expect
+
+    with sync_playwright() as playwright:
+        browser, page = _launch_page(playwright)
+        page.goto('http://rosy.test/dashboard#compatibility')
+        page.wait_for_function("document.querySelector('#robot-mode').textContent==='수동'")
+        page.locator('[data-mode=NAVIGATION]').click()
+        dialog = page.locator('dialog.ui-confirm')
+        page.evaluate("async()=>{const {session}=await import('/dashboard/assets/client.js');session.capabilities.navigation.goal_navigation=false;}")
+        dialog.locator('ui-button[kind=irreversible]').click()
+        assert page.evaluate("__apiCalls.filter(c=>c.path==='/api/v1/mode').length") == 0
+        page.locator('#view-inspect').click()
+        page.evaluate("async()=>{const {session}=await import('/dashboard/assets/client.js');clearInterval(session.refreshTimer);session.refreshTimer=null;document.querySelector('#network-card').dataset.available='true';document.querySelector('#network-connect').disabled=false;document.querySelector('#network-apply').disabled=false;}")
+        page.locator('#network-ssid-input').fill('fixture-a')
+        page.locator('#network-psk-input').fill('fixture-secret')
+        page.locator('#network-connect').click()
+        page.locator('#network-ssid-input').evaluate("input=>input.value='fixture-b'")
+        dialog.locator('ui-button[kind=irreversible]').click()
+        assert page.evaluate("__apiCalls.filter(c=>c.path==='/api/v1/host/network/connect').length") == 0
+        assert page.locator('#network-psk-input').input_value() == 'fixture-secret'
+        page.locator('#network-connect').click()
+        dialog.locator('ui-button[kind=irreversible]').click()
+        page.wait_for_function("__apiCalls.some(c=>c.path==='/api/v1/host/network/connect')")
+        body=page.evaluate("__apiCalls.find(c=>c.path==='/api/v1/host/network/connect').body")
+        assert body['ssid']=='fixture-b' and body['psk']=='fixture-secret' and body['confirmed'] is True
+        assert body['idempotency_key']
+        expect(page.locator('#network-psk-input')).to_have_value('')
+        browser.close()
+
+
+def test_compatibility_old_auth_and_pagehide_cancel_confirmation_and_readbacks():
+    from playwright.sync_api import sync_playwright, expect
+
+    with sync_playwright() as playwright:
+        browser, page = _launch_page(playwright, real_map=True, extra_init="const interval=setInterval;window.setInterval=(fn,ms)=>{if(ms===5000)window.slowTick=fn;return interval(fn,ms);};")
+        page.goto('http://rosy.test/dashboard#compatibility')
+        page.wait_for_function("document.querySelector('#robot-mode').textContent==='수동'")
+        page.evaluate("""async()=>{const {session}=await import('/dashboard/assets/client.js');clearInterval(session.refreshTimer);session.refreshTimer=null;const prior=fetch;window.fetch=(url,options={})=>String(url).endsWith('/api/v1/mode')?new Promise(resolve=>window.finishOldMode=()=>resolve(new Response('{}'))):prior(url,options);}""")
+        page.locator('[data-mode=IDLE]').click()
+        page.locator('dialog.ui-confirm ui-button[kind=irreversible]').click()
+        page.wait_for_function("typeof finishOldMode==='function'")
+        page.locator('#open-auth').click()
+        page.locator('#auth-tab-token').click()
+        page.locator('#token-input').fill('replacement-fixture-token')
+        page.locator('#auth-form').evaluate('form=>form.requestSubmit()')
+        page.wait_for_function("document.querySelector('#auth-message').textContent==='연결되었습니다.'")
+        before=page.evaluate("__apiCalls.filter(c=>c.path==='/api/v1/robot/state').length")
+        page.evaluate('finishOldMode()')
+        page.wait_for_timeout(80)
+        assert page.evaluate("__apiCalls.filter(c=>c.path==='/api/v1/robot/state').length") == before
+        assert '모드 요청을 전송했습니다' not in page.locator('#action-message').inner_text()
+        page.locator('[data-map-click=goal]').click()
+        page.locator('#map-canvas').focus()
+        page.locator('#map-canvas').press('Enter')
+        expect(page.locator('dialog.ui-confirm')).to_have_count(1)
+        page.locator('#token-input').evaluate("input=>input.value='map-replacement-fixture-token'")
+        page.locator('#auth-form').evaluate('form=>form.requestSubmit()')
+        expect(page.locator('dialog.ui-confirm')).to_have_count(0)
+        page.wait_for_function("document.querySelector('#auth-message').textContent==='연결되었습니다.'")
+        assert page.evaluate("__apiCalls.filter(c=>c.path==='/api/v1/navigation/goal').length") == 0
+        page.evaluate("""() => {const prior=fetch;let first=true;window.fetch=(url,options={})=>String(url).endsWith('/api/v1/auth/whoami')&&first?(first=false,new Promise(resolve=>window.finishRefusal=()=>resolve(new Response('{"detail":"old identity revoked"}',{status:401})))):prior(url,options);__sockets.at(-1).dispatchEvent(new CloseEvent('close',{code:4401}));}""")
+        page.wait_for_function("typeof finishRefusal==='function'")
+        page.locator('#token-input').evaluate("input=>input.value='post-refusal-fixture-token'")
+        page.locator('#auth-form').evaluate('form=>form.requestSubmit()')
+        page.wait_for_function("document.querySelector('#auth-message').textContent==='연결되었습니다.'")
+        page.evaluate('finishRefusal()')
+        page.wait_for_timeout(80)
+        assert page.evaluate("sessionStorage.getItem('rosy.dashboard.token')") == 'post-refusal-fixture-token'
+        assert page.locator('#robot-mode').inner_text() == '수동'
+        for failed in (False, True):
+            page.evaluate("""() => {const prior=fetch;let first=true;window.fetch=(url,options={})=>String(url).endsWith('/api/v1/map')&&first?(first=false,new Promise((resolve,reject)=>{window.finishMap=()=>resolve(new Response(JSON.stringify({width:2,height:2,resolution:1,origin:{x:0,y:0,yaw:0},data:[100,100,100,100],map_id:'obsolete-map'})));window.failMap=()=>reject(new Error('obsolete map failure'));})):prior(url,options);slowTick();}""")
+            page.wait_for_function("typeof finishMap==='function'")
+            page.locator('#open-auth').click()
+            page.locator('#auth-tab-token').click()
+            page.locator('#token-input').fill(f'next-fixture-token-{failed}')
+            page.locator('#auth-form').evaluate('form=>form.requestSubmit()')
+            page.wait_for_function("document.querySelector('#auth-message').textContent==='연결되었습니다.'")
+            snapshot=page.locator('#field-map-panel').inner_html()
+            raster=page.locator('#map-canvas').evaluate('canvas=>canvas.toDataURL()')
+            page.evaluate('failMap()' if failed else 'finishMap()')
+            page.wait_for_timeout(80)
+            assert page.locator('#field-map-panel').inner_html()==snapshot
+            assert page.locator('#map-canvas').evaluate('canvas=>canvas.toDataURL()')==raster
+            page.evaluate('delete window.finishMap;delete window.failMap')
+        page.evaluate("""() => {const prior=fetch;window.fetch=(url,options={})=>String(url).endsWith('/api/v1/navigation/goal')&&options.method==='POST'?new Promise(resolve=>window.finishGoal=()=>resolve(new Response('{}'))):prior(url,options);}""")
+        page.locator('#map-canvas').focus()
+        page.locator('#map-canvas').press('Enter')
+        page.locator('dialog.ui-confirm ui-button[kind=irreversible]').click()
+        page.wait_for_function("typeof finishGoal==='function'")
+        page.locator('[data-mode=IDLE]').click()
+        page.locator('dialog.ui-confirm').wait_for()
+        page.evaluate("""() => {window.oldSocket=__sockets.at(-1);const prior=fetch;let first=true;window.fetch=(url,options={})=>String(url).endsWith('/api/v1/auth/whoami')&&first?(first=false,new Promise(resolve=>window.finishHiddenRefusal=()=>resolve(new Response('{"role":"administrator"}')))):prior(url,options);oldSocket.dispatchEvent(new CloseEvent('close',{code:4401}));}""")
+        page.wait_for_function("typeof finishHiddenRefusal==='function'")
+        page.evaluate("window.dispatchEvent(new PageTransitionEvent('pagehide'))")
+        expect(page.locator('dialog.ui-confirm')).to_have_count(0)
+        snapshot=page.locator('#connection-badge').inner_html()
+        calls=page.evaluate('__apiCalls.length')
+        count=page.evaluate('__sockets.length')
+        map_snapshot=page.locator('#field-map-panel').inner_html()
+        map_raster=page.locator('#map-canvas').evaluate('canvas=>canvas.toDataURL()')
+        action=page.locator('#action-message').inner_html()
+        page.evaluate('finishGoal()')
+        page.evaluate('finishHiddenRefusal()')
+        page.evaluate("oldSocket.dispatchEvent(new MessageEvent('message',{data:JSON.stringify({mode:'NAVIGATION'})}));oldSocket.dispatchEvent(new CloseEvent('close',{code:1006}))")
+        page.wait_for_timeout(1_150)
+        assert page.locator('#connection-badge').inner_html()==snapshot
+        assert page.evaluate('__apiCalls.length')==calls
+        assert page.evaluate('__sockets.length')==count
+        assert page.locator('#field-map-panel').inner_html()==map_snapshot
+        assert page.locator('#map-canvas').evaluate('canvas=>canvas.toDataURL()')==map_raster
+        assert page.locator('#action-message').inner_html()==action
+        page.evaluate("window.dispatchEvent(new PageTransitionEvent('pageshow',{persisted:true}))")
+        page.wait_for_function('__sockets.length>'+str(count))
+        page.evaluate("oldSocket.dispatchEvent(new MessageEvent('message',{data:JSON.stringify({mode:'NAVIGATION'})}))")
+        assert page.locator('#robot-mode').inner_text()=='수동'
+        browser.close()
 
 
 def test_irreversible_mode_change_needs_confirm_and_decline_blocks_it():
@@ -1018,7 +1186,7 @@ def test_irreversible_mode_change_needs_confirm_and_decline_blocks_it():
 
     with sync_playwright() as playwright:
         try:
-            browser, page = _launch_page(playwright, extra_init=DECLINE_MODE_CONFIRM)
+            browser, page = _launch_page(playwright)
         except Exception as error:
             pytest.skip(f"Playwright Chromium unavailable: {error}")
         page.goto(
@@ -1030,22 +1198,23 @@ def test_irreversible_mode_change_needs_confirm_and_decline_blocks_it():
             "document.getElementById('robot-mode')?.textContent === '수동'"
         )
         page.locator('[data-mode="IDLE"]').click()
-        page.wait_for_function("window.__confirms.length === 1")
+        dialog = page.locator("dialog.ui-confirm")
+        dialog.wait_for()
+        prompt = dialog.locator("p").inner_text()
+        dialog.locator("ui-button[kind=quiet]").click()
         declined_calls = page.evaluate(
             "window.__apiCalls.filter((call) => call.path === '/api/v1/mode')"
         )
-        accept_confirm(page)
         page.locator('[data-mode="IDLE"]').click()
+        dialog.locator("ui-button[kind=irreversible]").click()
         page.wait_for_function(
             "window.__apiCalls.some((call) => call.path === '/api/v1/mode')"
         )
-        confirms = page.evaluate("window.__confirms")
         browser.close()
 
     # D-359 US-009 (P2-2 review) — the confirm names the mode in Korean, never the enum.
-    assert "대기 모드로 변경할까요" in confirms[0] and "IDLE" not in confirms[0]
+    assert "대기 모드로 변경할까요" in prompt and "IDLE" not in prompt
     assert declined_calls == []
-    assert len(confirms) == 2
 
 
 def test_irreversible_cyclone_apply_needs_confirm_and_decline_blocks_it():
@@ -1055,7 +1224,7 @@ def test_irreversible_cyclone_apply_needs_confirm_and_decline_blocks_it():
 
     with sync_playwright() as playwright:
         try:
-            browser, page = _launch_page(playwright, extra_init=DECLINE_CONFIRM)
+            browser, page = _launch_page(playwright)
         except Exception as error:
             pytest.skip(f"Playwright Chromium unavailable: {error}")
         page.goto(
@@ -1068,23 +1237,24 @@ def test_irreversible_cyclone_apply_needs_confirm_and_decline_blocks_it():
         )
         page.locator("#view-inspect").click()
         page.locator("#dds-cyclone-apply").click()
-        page.wait_for_function("window.__confirms.length === 1")
+        dialog = page.locator("dialog.ui-confirm")
+        dialog.wait_for()
+        prompt = dialog.locator("p").inner_text()
+        dialog.locator("ui-button[kind=quiet]").click()
         declined = page.evaluate(
             "window.__apiCalls.filter((call) =>"
             " call.path === '/api/v1/system/dds/cyclone')"
         )
-        accept_confirm(page)
         page.locator("#dds-cyclone-apply").click()
+        dialog.locator("ui-button[kind=irreversible]").click()
         page.wait_for_function(
             "window.__apiCalls.some((call) =>"
             " call.path === '/api/v1/system/dds/cyclone')"
         )
-        confirms = page.evaluate("window.__confirms")
         browser.close()
 
-    assert "CycloneDDS를 저장하고 로봇을 재부팅할까요" in confirms[0]
+    assert "CycloneDDS를 저장하고 로봇을 재부팅할까요" in prompt
     assert declined == []
-    assert len(confirms) == 2
 
 
 # US-010 — rosy-pinky-e4us, release 005, CORE-only, viewer token. The page

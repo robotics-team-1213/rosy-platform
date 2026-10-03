@@ -21,6 +21,9 @@ def _route_panel_test(page) -> None:
     confirmation_source = (ROOT / "src" / "hmi" / "web_common" / "confirmation.js").read_text(encoding="utf-8")
     page.route("http://rosy.test/common/confirmation.js", lambda route: route.fulfill(
         status=200, content_type="application/javascript", body=confirmation_source))
+    geometry_source = (ROOT / "src" / "hmi" / "web_common" / "live-dialog-geometry.js").read_text(encoding="utf-8")
+    page.route("http://rosy.test/common/live-dialog-geometry.js", lambda route: route.fulfill(
+        status=200, content_type="application/javascript", body=geometry_source))
     page.route("http://rosy.test/common/core_ui_logic.js", lambda route: route.fulfill(
         status=200, content_type="application/javascript", body=logic_source))
     pose_source = (WEB / "panels" / "setup" / "pose-evidence.js").read_text(encoding="utf-8")

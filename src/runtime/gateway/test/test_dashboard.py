@@ -309,7 +309,8 @@ def test_dashboard_draws_occupancy_map_path_and_click_goal():
     assert "fitCanvas" in mapper
     assert "ResizeObserver" in mapper
     assert "refreshPath" in mapper
-    assert "window.confirm" in mapper
+    assert "confirmIrreversible" in mapper
+    assert "window.confirm" not in mapper
     assert "https://" not in mapper
     assert "localStorage" not in mapper
 

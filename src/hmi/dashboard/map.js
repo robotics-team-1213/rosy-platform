@@ -280,7 +280,9 @@ export function createFieldMap(options) {
   }
 
   async function refreshPath() {
-    const path = await apiMaybe("/api/v1/navigation/path");
+    const isCurrent = options.captureLifetime?.().current || (() => true);
+    const path = await apiMaybe("/api/v1/navigation/path").catch(() => null);
+    if (listenerController.signal.aborted || !isCurrent()) return;
     state.path = path?.poses || [];
     paint();
   }
@@ -290,14 +292,14 @@ export function createFieldMap(options) {
     return !sources || sources[key] !== false;
   }
 
-  async function refresh() {
+  async function refresh(isCurrent = options.captureLifetime?.().current || (() => true)) {
     try {
       const [grid, path, costmap] = await Promise.all([
         wanted("occupancy") ? apiMaybe("/api/v1/map") : null,
         apiMaybe("/api/v1/navigation/path"),
         wanted("global_costmap") ? apiMaybe("/api/v1/map/costmap?scope=global") : null,
       ]);
-      if (listenerController.signal.aborted) return;
+      if (listenerController.signal.aborted || !isCurrent()) return;
       state.occupancy = grid;
       state.path = path?.poses || [];
       state.costmap = costmap;
@@ -309,7 +311,7 @@ export function createFieldMap(options) {
         setStatus(grid.map_id || "크기 미상");
       else setStatus(`${grid.width}×${grid.height}${grid.map_id ? ` · ${grid.map_id}` : ""}`);
     } catch (error) {
-      if (listenerController.signal.aborted) return;
+      if (listenerController.signal.aborted || !isCurrent()) return;
       // Without a server freshness field, do not leave a previous snapshot looking current.
       state.occupancy = null;
       state.path = [];
@@ -383,15 +385,16 @@ export function createFieldMap(options) {
       : "/api/v1/navigation/goal";
     const mapSnapshot = JSON.stringify(state.occupancy);
     const modeSnapshot = clickMode;
+    const owner = options.captureLifetime?.() || {current: () => true, signal: listenerController.signal};
     committing = true;
     try {
-      const confirmed = await (options.confirm || confirmIrreversible)({message: `${label} ${world.x.toFixed(2)}, ${world.y.toFixed(2)} 로 보낼까요?`, action: locating ? "위치 설정" : "목표 전송", opener: canvas, signal: listenerController.signal});
-      if (!confirmed || listenerController.signal.aborted || !canGoal?.() || modeSnapshot !== clickMode || mapSnapshot !== JSON.stringify(state.occupancy) || yaw !== (Number(getPose?.()?.yaw) || 0)) return;
+      const confirmed = await (options.confirm || confirmIrreversible)({message: `${label} ${world.x.toFixed(2)}, ${world.y.toFixed(2)} 로 보낼까요?`, action: locating ? "위치 설정" : "목표 전송", opener: canvas, signal: AbortSignal.any([owner.signal, listenerController.signal])});
+      if (!confirmed || !owner.current() || listenerController.signal.aborted || !canGoal?.() || modeSnapshot !== clickMode || mapSnapshot !== JSON.stringify(state.occupancy) || yaw !== (Number(getPose?.()?.yaw) || 0)) return;
       await api(path, {
         method: "POST",
         body: JSON.stringify({ x: world.x, y: world.y, yaw }),
       });
-      if (listenerController.signal.aborted) return;
+      if (listenerController.signal.aborted || !owner.current()) return;
       setAction?.(`${label} ${world.x.toFixed(2)}, ${world.y.toFixed(2)} 요청을 CORE가 받았습니다. 실제 적용 상태는 로봇 readback으로 확인하세요.`);
       if (!locating) {
         window.dispatchEvent(new CustomEvent("rosy:goal", { detail: { x: world.x, y: world.y } }));
@@ -400,7 +403,7 @@ export function createFieldMap(options) {
         paint();
       }
     } catch (error) {
-      if (!listenerController.signal.aborted) setAction?.(`${label} 전송 실패: ${error.message}`);
+      if (!listenerController.signal.aborted && owner.current()) setAction?.(`${label} 전송 실패: ${error.message}`);
     } finally { committing = false; }
   }
 

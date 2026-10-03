@@ -861,3 +861,14 @@
 - 화면 증거: 변경 작업 desktop 10개와 대표 phone 4개, 제목 수정 후 위치 설정 재촬영 1개를 부모 검증자가 직접 확인했다. overflow·pageerror·잘못된 kind/state 0, 선택 작업 1개와 첫 화면 정지를 확인했다. SPEC·QUALITY 최종 독립 소스 검토 PASS. 임시 근거는 X:\DevTemp\rosy-ui-unify\remaining-workflows에 둔다.
 - gate 변화: SOURCE/LOCAL 및 fixture 근거만 추가한다. 실제 장치·ARM 이미지·FIELD 수용이나 물리적 정지 증거가 아니다.
 - 결정: D-439 §10. 기존 작업 소유권과 CORE 판단을 유지하며 화면은 현재 정보·입력·실행 결과를 구분한다.
+
+## 2026-10-04 · uncommitted · feat(ui): 호환 운용 확인과 인증·페이지 수명 보호
+
+- 변경: 호환 화면의 모드·차선 시작·정지 해제·CycloneDDS·네트워크 모드·SSID 연결·프로필 적용 7개 native 확인을 공용 비모달 확인으로 바꿨다. 확인과 명령·readback을 단일 소유자로 처리하고 확인 뒤 현재 기능·상태·입력을 다시 확인한다. 기존 API 본문·권한·비밀 입력 지우기·모드/차선 앞 teleop zero를 유지하며 즉시 정지와 OFF는 확인 중에도 실제 클릭 가능하다.
+- 변경: 인증 교체·로그아웃 시작·유효 페어링 시작·pagehide가 이전 소유자를 취소한다. 늦은 명령·상태·지도·인증 응답은 GET·화면 반영·소켓 재연결을 시작하지 않는다. 지도 확인과 POST도 같은 인증/페이지 ticket을 사용한다. pagehide에서 소켓·타이머를 정리하고 BFCache 복귀는 현재 인증으로 다시 연결한다. 소켓 4401 확인은 취소 가능한 epoch와 토큰을 검사하여 이전 401이 새 세션을 지우지 않는다.
+- 증거: 최초 RED 5 failed (105.81s), 집중 행동 5 passed/71 deselected (174.27s), 지도 수명/기존 키보드 목표 2 passed/74 deselected (98.81s), 최종 소켓 수명 1 passed/75 deselected (35.15s), 영향 인증·저장·로그아웃·4401·teleop 7 passed/69 deselected (281.21s). 겹치는 대상은 합산하지 않는다. 호스트 집중 145 passed/1 failed (23.01s)의 도크 대상 따옴표 계약 위반 2곳을 수정하고 해당 scan 1 passed (0.23s); 예산 2 passed와 자산·설치·정지·예산 30 passed (3.17s), API 패키지 2 passed (0.03s)를 확인했다.
+- 증거: X 제공 자산에서 확인 후 가용성, 지도 readback/명령 수명, pagehide 정리, 소켓 인증 수명을 제거한 변이가 실제 행동 단언을 RED로 만들었다. 각 report는 제공 URL·원본/변이 SHA256·변경되지 않은 제품 소스·원본 복원 GREEN을 기록한다. 예상 RED traceback의 stderr가 PowerShell wrapper 상태를 실패로 표시한 초기 실행은 의미상 검출 결과와 복원 GREEN을 분리 기록했다. 실제 제품 파일은 변이하지 않았다.
+- 화면 증거: 부모 검증자가 desktop1366 dark와 phone390 light 확인 화면을 직접 보았다. 요청 전송 문구·정지 hit-test·자연 스크롤 OFF가 보이며 가로 넘침·페이지 오류·대역 API 쓰기 요청 0이다. SPEC·QUALITY 독립 최종 소스 검토 PASS. 임시 근거: X:\DevTemp\rosy-ui-unify\compatibility.
+- fixture 증거: 영향 자산 smoke 1 passed/1 failed (60.80s)의 기존 호스트 fixture가 /common/ui.js alias를 빠뜨린 것을 보완하고 실패한 대상만 1 passed (58.51s)로 확인했다. 새 geometry import는 두 명시적 역할 fixture에 등록했다.
+- gate 변화: SOURCE/LOCAL 및 fixture 근거이며 실제 장치·ARM 이미지·FIELD 수용을 대체하지 않는다. 레거시 구조와 CORE 최종 명령 소유권을 보존한다.
+- 결정: D-439 §13–14. 기존 공용 확인과 페이지 소유권을 사용하며 app 및 dashboard 전체 소스 예산을 유지한다.

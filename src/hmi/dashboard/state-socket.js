@@ -10,8 +10,10 @@ export function createStateSocket({ onState, poll, onUnauthorized }) {
   const RECONNECT_MIN_MS = 1000;
   const RECONNECT_MAX_MS = 30000;
   const RECONNECT_STABLE_MS = 10000;
+  let verificationLifetime = new AbortController();
 
   function closeStateSocket() {
+    verificationLifetime.abort(); verificationLifetime = new AbortController();
     const socket = session.socket;
     session.socket = null;
     session.socketLive = false;
@@ -49,15 +51,17 @@ export function createStateSocket({ onState, poll, onUnauthorized }) {
   // first message came too late. Ask REST which: 401 there ends the session,
   // anything else is retried with backoff.
   async function verifyAfterSocketRefusal() {
+    const owner = verificationLifetime, token = session.token;
+    const current = () => owner === verificationLifetime && !owner.signal.aborted && token === session.token;
     try {
-      await api("/api/v1/auth/whoami");
+      await api("/api/v1/auth/whoami", {signal: owner.signal});
     } catch (error) {
-      if (error.status === 401) {
+      if (current() && error.status === 401) {
         onUnauthorized();
         return;
       }
     }
-    if (session.token) scheduleReconnect();
+    if (current() && session.token) scheduleReconnect();
   }
 
   function connect() {

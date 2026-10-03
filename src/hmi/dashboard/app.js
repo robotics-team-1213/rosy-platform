@@ -64,8 +64,40 @@ import {
 } from "./telemetry.js";
 import { startTeleop, stopTeleop, teleopActive, teleopEligible, updateTeleopControls } from "./teleop.js";
 import { createStateSocket } from "./state-socket.js";
+import { confirmIrreversible } from "/common/ui.js";
+import { createPageScope } from "/common/scope.js";
 
 export { TELEMETRY_CHANNELS } from "./telemetry.js";
+
+const pageScope = createPageScope();
+let authLifetime = new AbortController(), commandOwner = null;
+function authTicket() {
+  const held = authLifetime, token = session.token, page = pageScope.capture();
+  return {signal: AbortSignal.any([held.signal, page.signal]), current: () => !held.signal.aborted && held === authLifetime && token === session.token && page.current()};
+}
+function invalidateAuth() {
+  authLifetime.abort(); authLifetime = new AbortController(); commandOwner = null;
+  stateSocket.stop(); clearInterval(session.refreshTimer); session.refreshTimer = null;
+  clearTimeout(codeRetryTimer); clearTimeout(actionMessageTimer); elements["code-submit"].disabled = false;
+  session.modeChangePending = lineFollow.pending = false; updateModeButtons(); updateLegacyLineControls();
+}
+function updateLegacyLineControls() {
+  updateLineFollowButtons();
+  const off = document.querySelector('[data-line-mode="OFF"]');
+  if (off) { off.disabled = !session.token || !["operator", "administrator"].includes(session.role); if (off.disabled) off.setAttribute("reason", "운용자 권한 필요"); else off.removeAttribute("reason"); }
+}
+async function runConfirmed(message, opener, eligible, run, fail, pending = () => {}, kind = "") {
+  if (commandOwner || !session.token || !eligible()) return;
+  const owner = authTicket(), role = session.role;
+  const active = () => commandOwner === owner && owner.current() && role === session.role;
+  owner.kind = kind;
+  commandOwner = owner;
+  try {
+    if (!await confirmIrreversible({message, action: "요청 전송", opener, signal: owner.signal}) || !active() || !eligible()) return;
+    pending(true); await run(active, {...owner, current: active});
+  } catch (error) { if (active()) fail(error); }
+  finally { if (commandOwner === owner) { pending(false); commandOwner = null; } }
+}
 
 const fieldMap = createFieldMap({
   canvas: elements["map-canvas"],
@@ -74,6 +106,7 @@ const fieldMap = createFieldMap({
   layerRoot: document.getElementById("field-map-panel"),
   api,
   apiMaybe,
+  captureLifetime: authTicket,
   getPose: () => session.robotState?.pose,
   getNavigation: () => session.robotState?.navigation,
   // v1.21: the server says which snapshots exist; asking for a missing one is
@@ -152,6 +185,7 @@ function renderRobotState(state) {
     button.setAttribute("aria-pressed", String(button.dataset.mode === state.mode));
   });
   renderLineFollow(state.line_follow);
+  updateLegacyLineControls();
   renderTrafficStatus(state.traffic_policy);
 
   renderSafetyHero();
@@ -184,7 +218,7 @@ function renderSafety(safety) {
   renderTriage();
   fillSafetyForm(safety);
   updateTeleopControls();
-  updateLineFollowButtons();
+  updateLegacyLineControls();
 }
 
 function renderCapabilities(capabilities) {
@@ -193,7 +227,7 @@ function renderCapabilities(capabilities) {
   fieldMap.setPose();
   updateModeButtons();
   updateTeleopControls();
-  updateLineFollowButtons();
+  updateLegacyLineControls();
 }
 
 function updateModeButtons() {
@@ -260,22 +294,26 @@ function updateAdminControls() {
 // D-193 5: the server says who this browser is (role, label, source, expiry) on a
 // route every role may read. Probing an admin-only route instead cost every
 // viewer a 403 in the console on each load (US-010).
-async function detectRole() {
+async function detectRole(owner = authTicket()) {
+  if (!owner.current()) return;
   session.role = "";
   session.identity = null;
   try {
-    const me = await api("/api/v1/auth/whoami");
+    const me = await api("/api/v1/auth/whoami", {signal: owner.signal});
+    if (!owner.current()) return;
     session.identity = me || null;
     session.role = me?.role || "";
   } catch (_error) {
+    if (!owner.current()) return;
     session.role = "";
   }
   renderIdentity();
   updateAdminControls();
-  await refreshSurfaceBridge();
+  await refreshSurfaceBridge(owner);
 }
 
-async function refreshSurfaceBridge() {
+async function refreshSurfaceBridge(owner = authTicket()) {
+  if (!owner.current()) return;
   const nav = elements["surface-bridge"];
   if (!nav) return;
   if (!session.identity) {
@@ -283,10 +321,11 @@ async function refreshSurfaceBridge() {
     return;
   }
   try {
-    const manifest = await api("/api/v1/ui/surfaces/console");
+    const manifest = await api("/api/v1/ui/surfaces/console", {signal: owner.signal});
+    if (!owner.current()) return;
     dashboardSurfaceBridge(nav, manifest?.surfaces);
   } catch (_error) {
-    dashboardSurfaceBridge(nav, []);
+    if (owner.current()) dashboardSurfaceBridge(nav, []);
   }
 }
 
@@ -317,7 +356,8 @@ function renderIdentity() {
   }
 }
 
-async function refreshSlowData() {
+async function refreshSlowData(owner = authTicket()) {
+  if (!owner.current()) return;
   const required = [
     [api("/api/v1/system/runtime"), renderRuntime],
     [api("/api/v1/system/info"), renderRobotInfo],
@@ -338,41 +378,40 @@ async function refreshSlowData() {
     [api("/api/v1/docking/docks"), renderDocks],
     [isAdmin() ? api("/api/v1/system/tokens") : Promise.resolve({tokens: []}), renderTokens],
   ];
-  const [requiredResults, optionalResults] = await Promise.all([
-    Promise.allSettled(required.map((item) => item[0])),
-    Promise.allSettled(optional.map((item) => item[0])),
-  ]);
-  requiredResults.forEach((result, index) => {
-    if (result.status === "fulfilled") required[index][1](result.value);
-  });
-  optionalResults.forEach((result, index) => {
-    if (result.status === "fulfilled") optional[index][1](result.value);
-  });
+  const read = entries => Promise.allSettled(entries.map(async ([promise, render]) => {
+    const value = await promise;
+    if (owner.current()) render(value);
+  }));
+  const [requiredResults] = await Promise.all([read(required), read(optional)]);
+  if (!owner.current()) return;
   // After capabilities: its `runtime.maps` says which map snapshots exist.
-  await fieldMap.refresh().catch(() => {});
+  await fieldMap.refresh(owner.current).catch(() => {});
+  if (!owner.current()) return;
   const failed = requiredResults.find((result) => result.status === "rejected");
   if (failed) throw failed.reason;
 }
 
-async function refreshRobotState() {
-  const state = await api("/api/v1/robot/state");
+async function refreshRobotState(owner = authTicket()) {
+  if (!owner.current()) return;
+  const state = await api("/api/v1/robot/state", {signal: owner.signal});
+  if (!owner.current()) return;
   // 이제부터는 빈 값이 "물었는데 없다"를 뜻한다 — em dash를 쓸 수 있다.
   markRequested();
   renderRobotState(state);
 }
 
 const stateSocket = createStateSocket({
-  onState: renderRobotState,
-  poll: () => refreshRobotState().catch(showConnectionError),
+  onState: state => { if (pageScope.capture().current()) renderRobotState(state); },
+  poll: () => { const owner = authTicket(); return refreshRobotState(owner).catch(error => { if (owner.current()) showConnectionError(error); }); },
   onUnauthorized: () => signOut("세션이 만료되었거나 회수되었습니다. 다시 로그인하세요."),
 });
+pageScope.onDispose(invalidateAuth);
+pageScope.onResume(restoreConnection);
 
 /** End this browser's session locally: stop everything that uses the token, then forget it. */
 function signOut(message) {
+  invalidateAuth();
   stopTeleop("로그아웃으로 정지했습니다.");
-  stateSocket.stop();
-  clearInterval(session.refreshTimer);
-  session.refreshTimer = null;
   stopVisionPreview("카메라 인증 대기");
   forgetToken();
   session.reconnectDelayMs = 1000;
@@ -394,31 +433,43 @@ function showConnectionError(error) {
   setText("hero-message", error.message || "Rosy API에 연결할 수 없습니다.");
 }
 
-async function connect() {
+async function connect(owner = authTicket()) {
+  if (!owner.current()) return false;
   session.reconnectDelayMs = 1000;
   setText("auth-notice", "");
   setConnection("unknown", "연결 중");
-  await detectRole();
-  await Promise.all([refreshRobotState(), refreshSlowData()]);
+  await detectRole(owner);
+  if (!owner.current()) return false;
+  await Promise.all([refreshRobotState(owner), refreshSlowData(owner)]);
+  if (!owner.current()) return false;
   stateSocket.connect();
   clearInterval(session.refreshTimer);
-  session.refreshTimer = setInterval(() => refreshSlowData().catch(showConnectionError), 5000);
+  session.refreshTimer = setInterval(() => refreshSlowData(owner).catch(error => { if (owner.current()) showConnectionError(error); }), 5000);
   startVisionPreview();
   elements["auth-drawer"].classList.remove("open");
   completeDashboardAuthentication();
+  return true;
+}
+function restoreConnection() {
+  if (!session.token) return;
+  const owner = authTicket();
+  connect(owner).catch(error => { if (owner.current()) { showConnectionError(error); elements["auth-drawer"].classList.add("open"); } });
 }
 
-elements["auth-form"].addEventListener("submit", async (event) => {
+pageScope.listen(elements["auth-form"], "submit", async (event) => {
   event.preventDefault();
+  invalidateAuth();
   stopVisionPreview("카메라 재인증 중");
   // A pasted token (card or manual) has no expiry: this tab only (D-193 6).
   rememberToken(elements["token-input"].value.trim());
+  const owner = authTicket();
   elements["token-input"].value = "";
   setText("auth-message", "연결 확인 중…");
   try {
-    await connect();
+    if (!await connect(owner)) return;
     setText("auth-message", "연결되었습니다.");
   } catch (error) {
+    if (!owner.current()) return;
     forgetToken();
     stateSocket.stop();
     renderIdentity();
@@ -430,7 +481,7 @@ elements["auth-form"].addEventListener("submit", async (event) => {
 
 let codeRetryTimer = null;
 
-elements["code-form"].addEventListener("submit", async (event) => {
+pageScope.listen(elements["code-form"], "submit", async (event) => {
   event.preventDefault();
   if (elements["code-submit"].disabled) return;
   const code = normalizeLoginCode(elements["code-input"].value);
@@ -438,6 +489,8 @@ elements["code-form"].addEventListener("submit", async (event) => {
     setText("code-message", code.error);
     return;
   }
+  invalidateAuth();
+  const lifetime = authLifetime;
   setText("code-message", "코드 확인 중…");
   elements["code-submit"].disabled = true;
   let identity = null;
@@ -445,23 +498,28 @@ elements["code-form"].addEventListener("submit", async (event) => {
     identity = await pairWithCode(code.value, {
       label: elements["code-label"].value.trim(),
       persist: elements["code-remember"].checked,
+      signal: AbortSignal.any([lifetime.signal, pageScope.signal]),
     });
   } catch (error) {
+    if (lifetime !== authLifetime || lifetime.signal.aborted || !pageScope.capture().current()) return;
     setText("code-message", error.message || "로봇에 닿지 못했습니다.");
     // 429: keep the button off until the server's Retry-After has passed.
     clearTimeout(codeRetryTimer);
     codeRetryTimer = setTimeout(() => {
-      elements["code-submit"].disabled = false;
+      if (lifetime === authLifetime && !lifetime.signal.aborted && pageScope.capture().current()) elements["code-submit"].disabled = false;
     }, (error.retryAfter || 0) * 1000);
     return;
   }
+  if (lifetime !== authLifetime || lifetime.signal.aborted || !pageScope.capture().current()) return;
+  const owner = authTicket();
   elements["code-submit"].disabled = false;
   elements["code-input"].value = "";
   stopVisionPreview("카메라 재인증 중");
   try {
-    await connect();
+    if (!await connect(owner)) return;
     setText("code-message", `${identity.role} 로 로그인했습니다 · ${expiryLabel(identity.expires_at)}`);
   } catch (error) {
+    if (!owner.current()) return;
     setText("code-message", `로그인은 되었지만 연결하지 못했습니다: ${error.message}`);
     showConnectionError(error);
   }
@@ -479,14 +537,18 @@ function showAuthTab(which) {
 elements["auth-tab-code"].addEventListener("click", () => showAuthTab("code"));
 elements["auth-tab-token"].addEventListener("click", () => showAuthTab("token"));
 
-elements["logout"].addEventListener("click", async () => {
+pageScope.listen(elements["logout"], "click", async () => {
+  invalidateAuth();
+  const lifetime = authLifetime;
+  const owner = authTicket();
   try {
-    const deleted = await logout();
+    const deleted = await logout({signal: owner.signal});
+    if (lifetime !== authLifetime || lifetime.signal.aborted || !pageScope.capture().current()) return;
     signOut(deleted
       ? "로그아웃했습니다. 이 브라우저의 키는 로봇에서 지워졌습니다."
       : "이 브라우저에서 키를 지웠습니다. 토큰 자체는 로봇에 남아 있습니다 — 회수는 설정의 API 토큰에서 합니다.");
   } catch (error) {
-    setText("hero-message", `로그아웃 실패: ${error.message}`);
+    if (owner.current()) setText("hero-message", `로그아웃 실패: ${error.message}`);
   }
 });
 
@@ -495,47 +557,48 @@ elements["close-auth"].addEventListener("click", () => elements["auth-drawer"].c
 elements["refresh-events"].addEventListener("click", () => api("/api/v1/events?limit=10").then(renderEvents).catch(showConnectionError));
 
 document.querySelectorAll("ui-button[data-mode]").forEach((button) => {
-  button.addEventListener("click", async () => {
-    if (button.disabled || session.modeChangePending) return;
+  pageScope.listen(button, "click", async () => {
+    if (commandOwner || button.disabled || session.modeChangePending) return;
     const requestedMode = button.dataset.mode;
+    const previous = session.robotState?.mode;
     stopTeleop("모드 변경 전에 정지했습니다.");
-    if (!window.confirm(`${enumLabel(MODE_LABEL, requestedMode)} 모드로 변경할까요? 주변 안전을 확인하세요.`)) return;
-    session.modeChangePending = true;
-    updateModeButtons();
-    try {
+    await runConfirmed(`${enumLabel(MODE_LABEL, requestedMode)} 모드로 변경할까요? 주변 안전을 확인하세요.`, button,
+      () => !session.modeChangePending && previous === session.robotState?.mode && (requestedMode !== "NAVIGATION" || session.capabilities?.navigation?.goal_navigation === true), async (active, owner) => {
       await api("/api/v1/mode", { method: "POST", body: JSON.stringify({ mode: requestedMode }) });
+      if (!active()) return;
       announceAction( `${enumLabel(MODE_LABEL, requestedMode)} 모드 요청을 전송했습니다.`);
-      await refreshRobotState();
-    } catch (error) {
-      announceAction( `모드 변경 실패: ${error.message}`);
-    } finally {
-      session.modeChangePending = false;
-      updateModeButtons();
-    }
+      await refreshRobotState(owner);
+    }, error => announceAction(`모드 변경 실패: ${error.message}`), pending => { session.modeChangePending = pending; updateModeButtons(); });
   });
 });
 
 document.querySelectorAll("[data-line-mode]").forEach((button) => {
-  button.addEventListener("click", async () => {
-    if (button.disabled || lineFollow.pending) return;
+  if (button.dataset.lineMode === "OFF") button.dataset.alwaysLive = "";
+  pageScope.listen(button, "click", async () => {
     const mode = button.dataset.lineMode;
+    if (button.disabled || (lineFollow.pending && mode !== "OFF")) return;
+    if (mode !== "OFF" && commandOwner) return;
     stopTeleop("차선 추종 모드 변경 전에 정지했습니다.");
-    if (mode !== "OFF" && !window.confirm(`${button.textContent.trim()} 차선 추종을 시작할까요? 주변 안전을 확인하세요.`)) return;
-    lineFollow.pending = true;
-    updateLineFollowButtons();
-    try {
+    const pending = value => { lineFollow.pending = value; updateLegacyLineControls(); };
+    const run = async (active, owner) => {
       const status = await api("/api/v1/line-follow/mode", {
         method: "PUT",
         body: JSON.stringify({ mode }),
       });
+      if (!active()) return;
       renderLineFollow(status);
+      updateLegacyLineControls();
       announceAction( mode === "OFF" ? "차선 추종을 해제했습니다." : `${button.textContent.trim()} 차선 추종을 선택했습니다.`);
-      await refreshRobotState();
-    } catch (error) {
-      announceAction( `차선 추종 변경 실패: ${error.message}`);
-    } finally {
-      lineFollow.pending = false;
-      updateLineFollowButtons();
+      await refreshRobotState(owner);
+    };
+    const fail = error => announceAction(`차선 추종 변경 실패: ${error.message}`);
+    if (mode !== "OFF") await runConfirmed(`${button.textContent.trim()} 차선 추종을 시작할까요? 주변 안전을 확인하세요.`, button,
+      () => !lineFollow.pending && session.capabilities?.navigation?.goal_navigation === true && session.robotState?.safety?.estop !== true, run, fail, pending, "line");
+    else {
+      if (commandOwner?.kind === "line") commandOwner = null;
+      const owner = authTicket(), role = session.role, active = () => owner.current() && role === session.role; pending(true);
+      try { await run(active, {...owner, current: active}); } catch (error) { if (active()) fail(error); }
+      finally { if (active()) pending(false); }
     }
   });
 });
@@ -568,17 +631,20 @@ elements["view-operate"].addEventListener("click", () => showView("operate"));
 elements["view-inspect"].addEventListener("click", () => showView("inspect"));
 showView("operate");
 
-elements["emergency-stop"].addEventListener("click", async () => {
+async function requestStop(message) {
+  const owner = authTicket();
   // 빨간 버튼이 확인이다. 정지 해제는 release-stop이 묻는다.
   stopTeleop("비상정지를 요청했습니다.");
   try {
     await api("/api/v1/safety/stop", { method: "POST" });
-    announceAction( "비상정지가 활성화되었습니다.");
-    await refreshRobotState();
+    if (!owner.current()) return;
+    announceAction(message);
+    await refreshRobotState(owner);
   } catch (error) {
-    announceAction( `정지 명령 실패: ${error.message}`);
+    if (owner.current()) announceAction(`정지 명령 실패: ${error.message}`);
   }
-});
+}
+elements["emergency-stop"].addEventListener("click", () => requestStop("비상정지가 활성화되었습니다."));
 
 // D-396: 지도에서 보낸 목표를 기억한다 — 내비게이션 줄에 표시용.
 window.addEventListener("rosy:goal", (event) => {
@@ -608,31 +674,24 @@ document.addEventListener("keydown", (event) => {
   if (event.repeat) return;
   if (session.robotState?.safety?.estop === true) return;
   if (!session.token) return;
-  stopTeleop("Escape 키로 비상정지를 요청했습니다.");
-  api("/api/v1/safety/stop", { method: "POST" })
-    .then(async () => {
-      announceAction( "비상정지가 활성화되었습니다 (Escape).");
-      await refreshRobotState();
-    })
-    .catch((error) => announceAction( `정지 명령 실패: ${error.message}`));
+  requestStop("비상정지가 활성화되었습니다 (Escape).");
 });
 
-elements["release-stop"].addEventListener("click", async () => {
-  if (!window.confirm("주변 안전을 확인했고 정지를 해제할까요?")) return;
-  try {
+pageScope.listen(elements["release-stop"], "click", async () => {
+  await runConfirmed("주변 안전을 확인했고 정지를 해제할까요?", elements["release-stop"],
+    () => isAdmin() && session.robotState?.safety?.estop === true && new HeadlessState(session.robotState).isFresh("safety"), async (active, owner) => {
     await api("/api/v1/safety/release", { method: "POST" });
+    if (!active()) return;
     announceAction( "비상정지가 해제되었습니다.");
-    await refreshRobotState();
-  } catch (error) {
-    announceAction( `정지 해제 실패: ${error.message}`);
-  }
+    await refreshRobotState(owner);
+  }, error => announceAction(`정지 해제 실패: ${error.message}`));
 });
 
 
 
-elements["dds-cyclone-apply"]?.addEventListener("click", async () => {
-  if (!window.confirm("CycloneDDS를 저장하고 로봇을 재부팅할까요? 모터와 화면이 잠시 내려갑니다.")) return;
-  try {
+pageScope.listen(elements["dds-cyclone-apply"], "click", async () => {
+  await runConfirmed("CycloneDDS를 저장하고 로봇을 재부팅할까요? 모터와 화면이 잠시 내려갑니다.", elements["dds-cyclone-apply"],
+    () => isAdmin() && session.identity !== null && session.robotState?.online === true, async active => {
     const payload = await api("/api/v1/system/dds/cyclone", {
       method: "POST",
       body: JSON.stringify({
@@ -640,15 +699,14 @@ elements["dds-cyclone-apply"]?.addEventListener("click", async () => {
         idempotency_key: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()),
       }),
     });
+    if (!active()) return;
     const reboot = payload.reboot || {};
     if (reboot.available === false) {
       announceAction( reboot.detail || "저장했습니다. 런타임을 다시 띄우세요.");
       return;
     }
     announceAction( reboot.ok ? "재부팅을 요청했습니다." : (reboot.detail || "재부팅이 거부되었습니다."));
-  } catch (error) {
-    announceAction( `Cyclone 적용 실패: ${error.message}`);
-  }
+  }, error => announceAction(`Cyclone 적용 실패: ${error.message}`));
 });
 
 // D-247: CORE only writes a request file; the root probe measures. The result
@@ -713,100 +771,40 @@ elements["hardware-list"]?.addEventListener("click", async (event) => {
   }
 });
 
-async function applyNetworkMode(mode, prompt) {
-  if (!window.confirm(prompt)) return;
-  try {
-    const payload = await api("/api/v1/host/network/mode", {
-      method: "POST",
-      body: JSON.stringify({
-        mode,
-        confirmed: true,
-        idempotency_key: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()),
-      }),
-    });
-    if (payload.available === false) {
-      setText("network-note", payload.detail || "Host Agent가 없어 적용하지 못했습니다.");
-      return;
-    }
-    setText("network-note", payload.ok ? `${enumLabel(NETWORK_MODE_LABEL, mode)} 모드를 적용했습니다.` : (payload.detail || "적용이 거부되었습니다."));
-    const status = await api("/api/v1/host/network");
-    renderHostNetwork(status);
-  } catch (error) {
-    setText("network-note", `네트워크 모드 변경 실패: ${error.message}`);
-  }
+async function runNetwork(button, path, body, prompt, success, failure, eligible = () => true) {
+  const networkMode = elements["network-mode"]?.textContent;
+  const clearSecret = () => { if (body.psk !== undefined && elements["network-psk-input"].value === body.psk) elements["network-psk-input"].value = ""; };
+  await runConfirmed(prompt, button, () => isAdmin() && document.getElementById("network-card")?.dataset.available === "true" && networkMode === elements["network-mode"]?.textContent && eligible(), async (active, owner) => {
+    try {
+      const payload = await api(path, {method: "POST", body: JSON.stringify({...body, confirmed: true,
+        idempotency_key: crypto.randomUUID ? crypto.randomUUID() : String(Date.now())})});
+      if (!active()) return;
+      clearSecret();
+      setText("network-note", payload.available === false ? (payload.detail || "Host Agent가 없어 적용하지 못했습니다.") : payload.ok ? success : (payload.detail || "적용이 거부되었습니다."));
+      if (payload.available === false || !active()) return;
+      const status = await api("/api/v1/host/network", {signal: owner.signal});
+      if (active()) renderHostNetwork(status);
+    } catch (error) { if (active()) { clearSecret(); throw error; } }
+  }, error => setText("network-note", `${failure}: ${error.message}`));
 }
+for (const [id, mode, prompt] of [
+  ["network-ap-off", "SITE_STA", "AP를 끌까요? 로봇은 사업장 Wi-Fi(SITE_STA)만 씁니다. 연결이 잠깐 끊길 수 있습니다."],
+  ["network-ap-on", "RELAY_AP_STA", "AP를 켤까요? 로봇이 릴레이(AP+STA)를 엽니다. 연결이 잠깐 끊길 수 있습니다."],
+]) pageScope.listen(elements[id], "click", () => runNetwork(elements[id], "/api/v1/host/network/mode", {mode}, prompt,
+  `${enumLabel(NETWORK_MODE_LABEL, mode)} 모드를 적용했습니다.`, "네트워크 모드 변경 실패"));
 
-elements["network-ap-off"]?.addEventListener("click", () => {
-  applyNetworkMode("SITE_STA", "AP를 끌까요? 로봇은 사업장 Wi-Fi(SITE_STA)만 씁니다. 연결이 잠깐 끊길 수 있습니다.");
+pageScope.listen(elements["network-connect"], "click", () => {
+  const ssid = elements["network-ssid-input"]?.value.trim(), psk = elements["network-psk-input"]?.value || "";
+  if (!ssid || psk.length < 8) { setText("network-note", !ssid ? "SSID를 입력하세요." : "암호는 8자 이상이어야 합니다."); return; }
+  runNetwork(elements["network-connect"], "/api/v1/host/network/connect", {ssid, psk}, `${ssid} 에 연결할까요? 연결이 잠깐 끊길 수 있습니다.`, `${ssid} 에 연결했습니다.`, "Wi-Fi 연결 실패",
+    () => ssid === elements["network-ssid-input"].value.trim() && psk === elements["network-psk-input"].value);
 });
 
-elements["network-ap-on"]?.addEventListener("click", () => {
-  applyNetworkMode("RELAY_AP_STA", "AP를 켤까요? 로봇이 릴레이(AP+STA)를 엽니다. 연결이 잠깐 끊길 수 있습니다.");
-});
-
-elements["network-connect"]?.addEventListener("click", async () => {
-  const ssid = elements["network-ssid-input"]?.value.trim();
-  const input = elements["network-psk-input"];
-  const psk = input ? input.value : "";
-  if (!ssid) {
-    setText("network-note", "SSID를 입력하세요.");
-    return;
-  }
-  if (psk.length < 8) {
-    setText("network-note", "암호는 8자 이상이어야 합니다.");
-    return;
-  }
-  if (!window.confirm(`${ssid} 에 연결할까요? 연결이 잠깐 끊길 수 있습니다.`)) return;
-  try {
-    const payload = await api("/api/v1/host/network/connect", {
-      method: "POST",
-      body: JSON.stringify({
-        ssid,
-        psk,
-        confirmed: true,
-        idempotency_key: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()),
-      }),
-    });
-    if (elements["network-psk-input"]) elements["network-psk-input"].value = "";
-    if (payload.available === false) {
-      setText("network-note", payload.detail || "Host Agent가 없어 연결하지 못했습니다.");
-      return;
-    }
-    setText("network-note", payload.ok ? `${ssid} 에 연결했습니다.` : (payload.detail || "연결이 거부되었습니다."));
-    const status = await api("/api/v1/host/network");
-    renderHostNetwork(status);
-  } catch (error) {
-    if (elements["network-psk-input"]) elements["network-psk-input"].value = "";
-    setText("network-note", `Wi-Fi 연결 실패: ${error.message}`);
-  }
-});
-
-elements["network-apply"]?.addEventListener("click", async () => {
+pageScope.listen(elements["network-apply"], "click", () => {
   const profileId = elements["network-profile-id"]?.value.trim();
-  if (!profileId) {
-    setText("network-note", "프로파일 id를 입력하세요.");
-    return;
-  }
-  if (!window.confirm(`${profileId} 네트워크 프로파일을 적용할까요? 연결이 잠깐 끊길 수 있습니다.`)) return;
-  try {
-    const payload = await api("/api/v1/host/network/apply", {
-      method: "POST",
-      body: JSON.stringify({
-        profile_id: profileId,
-        confirmed: true,
-        idempotency_key: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()),
-      }),
-    });
-    if (payload.available === false) {
-      setText("network-note", payload.detail || "Host Agent가 없어 적용하지 못했습니다.");
-      return;
-    }
-    setText("network-note", payload.ok ? `${profileId} 를 적용했습니다.` : (payload.detail || "적용이 거부되었습니다."));
-    const status = await api("/api/v1/host/network");
-    renderHostNetwork(status);
-  } catch (error) {
-    setText("network-note", `프로파일 적용 실패: ${error.message}`);
-  }
+  if (!profileId) { setText("network-note", "프로파일 id를 입력하세요."); return; }
+  runNetwork(elements["network-apply"], "/api/v1/host/network/apply", {profile_id: profileId}, `${profileId} 네트워크 프로파일을 적용할까요? 연결이 잠깐 끊길 수 있습니다.`, `${profileId} 를 적용했습니다.`, "프로파일 적용 실패",
+    () => profileId === elements["network-profile-id"].value.trim());
 });
 
 bindFormSave("network-connect-form", "network-connect");
@@ -817,14 +815,8 @@ initSettings({
   refreshRobotState: () => refreshRobotState(),
 });
 
-setInterval(() => setText("clock", new Date().toLocaleTimeString("ko-KR", { hour12: false })), 1000);
+pageScope.interval(() => setText("clock", new Date().toLocaleTimeString("ko-KR", { hour12: false })), 1000);
 setText("clock", new Date().toLocaleTimeString("ko-KR", { hour12: false }));
 
-if (session.token) {
-  connect().catch((error) => {
-    showConnectionError(error);
-    elements["auth-drawer"].classList.add("open");
-  });
-} else {
-  elements["auth-drawer"].classList.add("open");
-}
+if (session.token) restoreConnection();
+else elements["auth-drawer"].classList.add("open");

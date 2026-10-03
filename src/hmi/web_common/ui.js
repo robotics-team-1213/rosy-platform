@@ -2,6 +2,7 @@
 // 요소 자체에 남는다. 색과 크기는 components.css 가 tokens.css 로 그린다.
 
 import { createConfirmIrreversible } from "/common/confirmation.js";
+import { disjointRectangles } from "/common/live-dialog-geometry.js";
 const KINDS = ["primary", "quiet", "irreversible", "segment", "toggle"];
 const BUTTON_SIZES = ["secondary", "primary", "irreversible"];
 const KIND_SIZES = { primary: "primary", irreversible: "irreversible" };
@@ -358,10 +359,9 @@ export function openLiveDialog(dialog, { initialFocus = null, opener = document.
     };
     walk(document.body);
   };
-  // 스크림은 화면 전체를 덮되, 보이는 정지 컨트롤 상자마다 evenodd 구멍을 낸다.
+  // 겹치는 정지 컨트롤도 교집합이 다시 덮이지 않도록 서로 겹치지 않는 구멍을 낸다.
   const punch = () => {
-    const holes = liveNodes().filter((node) => node.getClientRects().length > 0).map((node) => {
-      const r = node.getBoundingClientRect();
+    const holes = disjointRectangles(liveNodes().filter(node => node.getClientRects().length > 0).map(node => node.getBoundingClientRect()), innerWidth, innerHeight).map(r => {
       return `0 0, ${r.left}px ${r.top}px, ${r.right}px ${r.top}px, ${r.right}px ${r.bottom}px, ${r.left}px ${r.bottom}px, ${r.left}px ${r.top}px`;
     });
     scrim.style.clipPath = holes.length

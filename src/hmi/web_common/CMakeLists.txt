@@ -13,6 +13,7 @@ install(FILES
   hold-ticker.js
   ui.js
   confirmation.js
+  live-dialog-geometry.js
   task-chooser.js
   task-chooser.css
   theme.js

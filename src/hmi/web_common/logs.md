@@ -531,3 +531,12 @@
 - 증거: 영향 host·공유·패키지·예산 59 passed/23 deselected (35.88s), 최종 영향 browser 15 passed (634.01s). X 제공 자산에서 UNKNOWN을 정상으로 바꾼 변이가 실제 진단 행동 단언을 RED로 만들고 원본 복원 후 GREEN이었다. SPEC·QUALITY 독립 최종 검토 PASS; 중복 묶음은 합산하지 않는다.
 - gate 변화: SOURCE/LOCAL 라이브러리와 fixture 근거이며 DEVICE/FIELD 수용을 대체하지 않는다.
 - 결정: D-439. 이름만 공유하며 권한과 가용성 판단은 기존 소유자와 서버에 둔다.
+
+## 2026-10-04 · uncommitted · fix(ui): 겹치는 정지 컨트롤의 실제 클릭 영역 보존
+
+- 변경: 비모달 확인 scrim의 live 컨트롤 구멍을 y-band와 병합 x 구간으로 서로 겹치지 않는 합집합으로 만든다. 기존 evenodd 방식이 Stop과 OFF의 교집합을 다시 덮는 실측 오류를 수정했다. 새 순수 live-dialog-geometry.js를 공용 manifest/CMake에 등록하며 기존 표시 여부·scroll/resize/mutation·종료 정리를 유지한다. 색상·토큰·권한·정지 처리 소유자는 바꾸지 않았다.
+- 증거: 실제 phone Stop 하단 좌측 클릭 RED 1 failed (43.54s), 최종 호환 집중 행동 5 passed (174.27s). 제공된 이전 구멍 변이가 실제 Stop 클릭을 차단했고, URL·다른 SHA256·원본 불변을 확인한 동일 회귀의 복원 GREEN (56.93s)을 기록했다. 순수 helper는 합집합 면적175, 겹침/포함/중복의 단일 덮임, viewport clipping, 비정상 좌표, 실제 Stop/OFF 소수 좌표를 검사한다.
+- 증거: 공용 helper/설치/버튼과 dashboard 집중 host 145 passed/1 prompt failure (23.01s); 기존 대상 따옴표 scan 1 passed (0.23s)로 수정 확인. 자산·설치·정지·예산 30 passed (3.17s), API 패키지 2 passed (0.03s). 영향 fixture는 새 import를 명시적으로 제공한다. 부모 화면 직접 검토와 SPEC·QUALITY 최종 소스 검토 PASS; 중복 묶음은 합산하지 않는다.
+- gate 변화: SOURCE/LOCAL 라이브러리와 fixture 근거이며 물리적 정지·DEVICE/FIELD 수용은 아니다. 임시 근거: X:\DevTemp\rosy-ui-unify\compatibility.
+- 결정: D-439 §13. 사용자에게 노출된 모든 즉시 정지 hit 영역을 공용 확인에서도 보존한다.
+- 단위 검출력 증거: 부모 검증자가 X의 동일 test 사본에서 helper를 원래 겹친 사각형 반환으로 바꿔 실제 단언 RED, 실제 helper 복원 GREEN을 직접 실행했다 (5.18s). test 동일·변이 반영·다른 SHA256·제품 불변을 report로 확인했다. 최초 X 사본 pytest 수집은 30s timeout이며 RED로 세지 않는다.

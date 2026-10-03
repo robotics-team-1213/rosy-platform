@@ -8,6 +8,7 @@
     "hold-ticker.js": "text/javascript",
     "ui.js": "text/javascript",
     "confirmation.js": "text/javascript",
+    "live-dialog-geometry.js": "text/javascript",
     "theme.js": "text/javascript",
     "evidence.js": "text/javascript",
     "request.js": "text/javascript",
