@@ -22,9 +22,13 @@ import ast
 import functools
 from pathlib import PurePosixPath
 
-from test_platform_parts import ROOT, _is_test_file, _manifest, _owner, _package_of, _tracked
+from test_platform_parts import ROOT, _is_test_file, _owner, _package_of, _tracked
+from test_platform_parts import _manifest as _read_manifest
 
 SAFETY = "safety"
+
+#: One parse per session; the tests below only read it.
+_manifest = functools.lru_cache(maxsize=1)(_read_manifest)
 
 
 @functools.lru_cache(maxsize=1)
@@ -57,6 +61,7 @@ def _module_of(name: str) -> str | None:
     return None
 
 
+@functools.lru_cache(maxsize=None)
 def _concern_of(path: str) -> str | None:
     manifest = _manifest()
     if path in manifest["safety_modules"]:
@@ -96,6 +101,7 @@ def _resolve_symbol(symbol: str) -> tuple[str | None, ast.AST | None]:
     return path, node
 
 
+@functools.lru_cache(maxsize=1)
 def _safety_files() -> list[str]:
     return sorted(path for path in _tracked()
                   if path.endswith(".py") and not _is_test_file(path) and _concern_of(path) == SAFETY)

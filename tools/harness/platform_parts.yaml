@@ -241,28 +241,44 @@ roots:
     wave: "4b"
     import_prefix: [emotion]
     concern: other
+  # D-429 §2: site devices (signal, dock) are operations-owned, listed here so the
+  # firmware entries stay together.
   - path: firmware/dock
-    part: middleware
-    d427_target: middleware/firmware/dock
-    wave: "4a"
+    part: operations
+    d427_target: operations/site_devices/dock
+    wave: "3b"
+    note: >-
+      D-429 §2 site device owner: firmware and device contract only. The robot keeps
+      polling the dock /status directly (core_features/docking stays middleware).
     concern: control
   - path: firmware/dock/firmware
-    part: middleware
-    d427_target: middleware/firmware/dock/firmware
-    wave: "4a"
+    part: operations
+    d427_target: operations/site_devices/dock/firmware
+    wave: "3b"
     note: D-430 §1 dock firmware owns the limit-switch interlock and 0 V boot (layer 2).
     concern: safety
   - path: firmware/signal
-    part: middleware
-    d427_target: middleware/firmware/signal
-    wave: "4a"
+    part: operations
+    d427_target: operations/site_devices/signal
+    wave: "3b"
+    note: >-
+      D-429 §2 site device owner: firmware, device contract and the driver library Fleet
+      imports. Fleet stays the only command path and the signal sequence owner (D-337 §2).
     concern: control
   - path: firmware/signal/firmware
-    part: middleware
-    d427_target: middleware/firmware/signal/firmware
-    wave: "4a"
+    part: operations
+    d427_target: operations/site_devices/signal/firmware
+    wave: "3b"
     note: D-430 §1 signal firmware owns the boot and supervision-loss failsafe (layer 2).
     concern: safety
+  - path: firmware/signal/observer
+    part: operations
+    d427_target: operations/vision/signal_observer
+    wave: "3b"
+    note: >-
+      D-163 read-only observation plane, carved out of the site device owner (D-429 §2).
+      Target is D-429's example; the run host stays undecided (D-163).
+    concern: other
 
   # --- operations: Fleet, world, processes, vision, Console/Cam -------------
   - path: src/site/fleet
