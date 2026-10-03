@@ -274,8 +274,8 @@
 
 ## 최근 기록
 
+- 2026-10-03 · uncommitted · docs: Fleet deployment preflight lessons
 - 2026-10-03 · uncommitted · docs: D-435 work orchestration and Fleet authority proposal
 - 2026-10-03 · uncommitted · docs: ADR role and Fleet terminology review
 - 2026-10-03 · uncommitted · docs: D-434 model PC and site PC roles, Isaac Sim 5.1, low-memory rules
 - 2026-10-03 · uncommitted · docs: automatic-update state bootstrap plan
-- 2026-10-03 · uncommitted · docs: D-432 common discovery and development link mode

@@ -4785,3 +4785,10 @@
 - 증거: D-290/D-298/D-369/D-399/D-413/D-429와 현재 PlanBundle·cell submission 대조. 단일 팔·수동 조작·운송·formation·미래 컨베이어·복합 로봇·stop 경쟁·불명 Action·독립 셀 반례를 초안에 기록했다.
 - gate 변화: 없음. Proposed만 추가했으며 기존 Accepted 계약과 공개 API·코드·정지 fence·원장·policy dispatch·장치 수용은 변경하지 않는다.
 - 검증: 문서 계약 83 passed/26 existing history warnings(full lint·generated records 포함), D-435 제목/상태/색인 일치·로컬 링크 16개 누락 0·반례 9개·diff whitespace 검사 통과. 이전 isaac_sim 구조 기준선 실패는 별도 미해결이며 이번 문서 검증의 통과 범위에 포함하지 않는다.
+
+## 2026-10-03 · uncommitted · docs: Fleet deployment preflight lessons
+
+- 변경: 사용자 요청으로 `docs/solutions/workflow-issues/site-fleet-deploy-checks-the-whole-configuration.md`에 정적/동적 등록 충돌, Fleet/Vision 대상 계약, 컨테이너 NSS와 Avahi, OS/앱 권한, 최신 정지 증거와 설치 readback을 하나의 배포 일관성 교훈으로 기록했다.
+- 증거: 현재 parser·CLI·roster·NSS/Compose·user discovery 소스, 운영 NSS-only 설치 receipt, Fleet 재시작 후 S21 JPEG readback. 실제 주소·자격 비밀은 기록하지 않았다.
+- gate 변화: 없음. 레거시 발견 conflict 정리·관제 PC 재부팅·outbound FleetAgent·물리 marker commissioning 완료를 이 문서로 주장하지 않는다.
+- 검증: frontmatter/claims validator와 독립 문서 grounding, 문서 계약·harness 검사로 기록 내용과 탐색 가능성을 확인한다.
