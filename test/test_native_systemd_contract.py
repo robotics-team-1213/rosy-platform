@@ -460,7 +460,10 @@ DECLARED_READS = {
     },
     # D-344 §12: the optional per-robot IR calibration overlay for line_observer.
     # D-373: root:rosy-camera 0750 models, written only by the operator's sudo install.
-    "rosy-camera.service": {"/etc/rosy/ir_calibration.yaml", "/var/lib/rosy/models"},
+    # D-344 §12 addendum 2026-10-03: the operator's camera lane overrides, root 0644,
+    # written only by line_observer_overrides under sudo.
+    "rosy-camera.service": {"/etc/rosy/ir_calibration.yaml", "/var/lib/rosy/models",
+                            "/etc/rosy/line_observer_overrides.yaml"},
     # boot-status.json, network.json and ap-display.txt (root-written; D-190).
     "rosy-boot-display.service": {"/run/rosy-boot"},
     # D-433: also CORE's face hand-over in rosy-core's /run/rosy (0755, file 0644)

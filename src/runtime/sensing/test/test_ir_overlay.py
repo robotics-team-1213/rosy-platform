@@ -4,7 +4,9 @@ from pathlib import Path
 
 import pytest
 
-from control.ir_overlay import IR_CALIBRATION_OVERLAY, overlay_problem, usable_overlay
+from control.ir_overlay import (
+    IR_CALIBRATION_OVERLAY, OPERATOR_KEYS, OPERATOR_OVERLAY, overlay_problem,
+    usable_operator_overlay, usable_overlay)
 from control.sensing.perception.ir_calibration import compute_ir_calibration, render_config
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -66,3 +68,61 @@ def test_an_unimportable_checker_skips_the_overlay_instead_of_aborting(tmp_path,
     monkeypatch.setitem(sys.modules, "control.sensing.perception.lane", None)   # import → ImportError
     path, note = usable_overlay(str(target))
     assert path is None and "skipped" in note and "cannot check" in note
+
+
+# D-344 §12 addendum 2026-10-03: the operator's camera lane overrides outside the release.
+OPERATOR = """/**/line_observer_node:
+  ros__parameters:
+    camera_lane_mode: keep
+    camera_ground_source: NOMINAL
+    allow_nominal_ground: true
+    nominal_camera_profile_path: /opt/rosy/current/install/share/pinky_pro/config/camera_nominal.yaml
+    debug_overlay: true
+    camera_pitch_rad_override: 0.19547687622336488
+    camera_height_m_override: 0.059
+"""
+
+
+def test_absent_operator_overlay_keeps_todays_behaviour(tmp_path):
+    path, note = usable_operator_overlay(str(tmp_path / "line_observer_overrides.yaml"))
+    assert path is None and "absent" in note and "skipped" not in note
+
+
+def test_valid_operator_overlay_is_loaded(tmp_path):
+    target = tmp_path / "line_observer_overrides.yaml"
+    target.write_text(OPERATOR, encoding="utf-8")
+    assert usable_operator_overlay(str(target)) == (str(target), f"{target} loaded")
+
+
+@pytest.mark.parametrize("text, why", [
+    ("{: [", "unreadable"),
+    (OPERATOR.replace("debug_overlay: true", "lane_graph_path: /tmp/g.yaml"), "allowed"),
+    (OPERATOR.replace("camera_lane_mode: keep", "camera_lane_mode: route_a"), "camera_lane_mode"),
+    (OPERATOR.replace("NOMINAL", "GAZEBO"), "camera_ground_source"),
+    (OPERATOR.replace("debug_overlay: true", "debug_overlay: 1"), "true or false"),
+    (OPERATOR.replace("/opt/rosy/current", "opt/rosy/current"), "absolute"),
+    (OPERATOR.replace("0.059", "59"), "camera_height_m_override"),         # int, and mm
+    (OPERATOR.replace("0.059", "0.59"), "camera_height_m_override"),       # outside range
+    (OPERATOR.replace("0.19547687622336488", ".nan"), "camera_pitch_rad_override"),
+    (OPERATOR.replace("    allow_nominal_ground: true\n", ""), "NOMINAL ground needs"),
+    (OPERATOR + "/**/road_observer_node:\n  ros__parameters:\n    debug_overlay: true\n", "top level"),
+    (OPERATOR.replace("ros__parameters:", "params:"), "ros__parameters"),
+])
+def test_malformed_operator_overlay_is_skipped_with_a_reason(tmp_path, text, why):
+    target = tmp_path / "line_observer_overrides.yaml"
+    target.write_text(text, encoding="utf-8")
+    path, note = usable_operator_overlay(str(target))
+    assert path is None and "skipped" in note and why in note
+
+
+def test_operator_keys_are_declared_observer_parameters():
+    node = (ROOT / "control/line_observer_node.py").read_text(encoding="utf-8")
+    for key in OPERATOR_KEYS:
+        assert f"declare_parameter('{key}'" in node, key
+
+
+def test_camera_launch_layers_the_operator_overlay_last_outside_the_release():
+    launch = (ROOT / "launch/camera_preview.launch.py").read_text(encoding="utf-8")
+    assert launch.index("line_params.append(overlay)") < launch.index("line_params.append(operator)")
+    assert "usable_operator_overlay()" in launch
+    assert OPERATOR_OVERLAY.startswith("/etc/rosy/") and OPERATOR_OVERLAY != IR_CALIBRATION_OVERLAY

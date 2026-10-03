@@ -1,9 +1,17 @@
-"""Per-robot IR calibration overlay for line_observer_node (D-344 §12). Pure, ROS-free.
+"""Per-robot overlays for line_observer_node (D-344 §12). Pure, ROS-free.
 
-The overlay is a partial ROS parameter file holding only the observer's IR
-calibration keys. A malformed file must never crash-loop the observer (it
-still owes CORE camera line evidence), so launch validates it here and skips
-it with a message instead of handing it to the node.
+Two partial ROS parameter files under /etc/rosy, which a payload release never
+replaces (D-388 sync refuses etc/rosy/), are layered after the release's
+line_follow.yaml:
+
+* the IR calibration overlay, holding only the observer's IR calibration keys;
+* the operator override overlay (D-344 §12 addendum 2026-10-03), holding only
+  an allowlist of camera lane keys: the bench setting that used to be edited
+  into the release's line_follow.yaml and was lost on every update.
+
+A malformed file must never crash-loop the observer (it still owes CORE camera
+line evidence), so launch validates each here and skips it with a message
+instead of handing it to the node.
 """
 
 from __future__ import annotations
@@ -24,14 +32,9 @@ ALLOWED_KEYS = frozenset(("ir_calibration_enabled", "ir_black", "ir_white") + _F
 
 def overlay_problem(data) -> Optional[str]:
     """None when `data` is a usable observer overlay, else why not."""
-    if not isinstance(data, dict) or set(data) != {NODE_KEY}:
-        return f"top level must be exactly {NODE_KEY!r}"
-    node = data[NODE_KEY]
-    if not isinstance(node, dict) or set(node) != {"ros__parameters"}:
-        return "node block must hold only ros__parameters"
-    params = node["ros__parameters"]
-    if not isinstance(params, dict) or not params:
-        return "ros__parameters must be a non-empty mapping"
+    params, problem = _observer_params(data)
+    if problem is not None:
+        return problem
     unknown = set(params) - ALLOWED_KEYS
     if unknown:
         return f"only IR calibration keys are allowed, got {sorted(unknown)}"
@@ -65,14 +68,79 @@ def overlay_problem(data) -> Optional[str]:
 
 def usable_overlay(path: str = IR_CALIBRATION_OVERLAY) -> tuple[Optional[str], str]:
     """(path to load or None, message for the launch log)."""
+    return _usable(path, overlay_problem, "IR calibration stays as packaged")
+
+
+#: Operator overrides of the observer's camera lane settings (bench keep/NOMINAL).
+OPERATOR_OVERLAY = "/etc/rosy/line_observer_overrides.yaml"
+#: Modes that need no key outside this allowlist (route_* need a lane graph and route).
+OPERATOR_LANE_MODES = ("line", "between", "lane", "edge_left", "centre", "keep")
+#: A robot has no Gazebo ground; GAZEBO stays a sim launch setting.
+OPERATOR_GROUND_SOURCES = ("PINKY", "NOMINAL")
+#: D-397 operator layer, same physical range as calibration_store.check_values camera_profile.
+OPERATOR_RANGES = {"camera_pitch_rad_override": (-0.2, 0.6),
+                   "camera_height_m_override": (0.02, 0.2)}
+OPERATOR_KEYS = frozenset(("camera_lane_mode", "camera_ground_source", "allow_nominal_ground",
+                           "nominal_camera_profile_path", "debug_overlay") + tuple(OPERATOR_RANGES))
+
+
+def operator_overlay_problem(data) -> Optional[str]:
+    """None when `data` is a usable operator override overlay, else why not."""
+    params, problem = _observer_params(data)
+    if problem is not None:
+        return problem
+    unknown = set(params) - OPERATOR_KEYS
+    if unknown:
+        return f"only {sorted(OPERATOR_KEYS)} are allowed, got {sorted(unknown)}"
+    if "camera_lane_mode" in params and params["camera_lane_mode"] not in OPERATOR_LANE_MODES:
+        return f"camera_lane_mode must be one of {list(OPERATOR_LANE_MODES)}"
+    if ("camera_ground_source" in params
+            and params["camera_ground_source"] not in OPERATOR_GROUND_SOURCES):
+        return f"camera_ground_source must be one of {list(OPERATOR_GROUND_SOURCES)}"
+    for key in ("allow_nominal_ground", "debug_overlay"):
+        if key in params and type(params[key]) is not bool:
+            return f"{key} must be true or false"
+    if "nominal_camera_profile_path" in params:
+        value = params["nominal_camera_profile_path"]
+        if not isinstance(value, str) or not value.startswith("/") or not value.endswith(".yaml"):
+            return "nominal_camera_profile_path must be an absolute path to a .yaml file"
+    for key, (low, high) in OPERATOR_RANGES.items():
+        if key in params:
+            value = params[key]
+            if type(value) is not float or not math.isfinite(value) or not low <= value <= high:
+                return f"{key} must be a decimal number in [{low}, {high}]"
+    if params.get("camera_ground_source") == "NOMINAL" and not (
+            params.get("allow_nominal_ground") is True and params.get("nominal_camera_profile_path")):
+        return "NOMINAL ground needs allow_nominal_ground: true and nominal_camera_profile_path"
+    return None
+
+
+def usable_operator_overlay(path: str = OPERATOR_OVERLAY) -> tuple[Optional[str], str]:
+    """(path to load or None, message for the launch log)."""
+    return _usable(path, operator_overlay_problem, "camera lane settings stay as packaged")
+
+
+def _observer_params(data):
+    if not isinstance(data, dict) or set(data) != {NODE_KEY}:
+        return None, f"top level must be exactly {NODE_KEY!r}"
+    node = data[NODE_KEY]
+    if not isinstance(node, dict) or set(node) != {"ros__parameters"}:
+        return None, "node block must hold only ros__parameters"
+    params = node["ros__parameters"]
+    if not isinstance(params, dict) or not params:
+        return None, "ros__parameters must be a non-empty mapping"
+    return params, None
+
+
+def _usable(path, problem_of, absent_note):
     if not os.path.isfile(path):
-        return None, f"{path} absent; IR calibration stays as packaged"
+        return None, f"{path} absent; {absent_note}"
     try:
         with open(path, encoding="utf-8") as handle:
             data = yaml.safe_load(handle)
     except (OSError, UnicodeDecodeError, yaml.YAMLError) as exc:
         return None, f"{path} unreadable, skipped: {exc}"
-    problem = overlay_problem(data)
+    problem = problem_of(data)
     if problem is not None:
         return None, f"{path} skipped: {problem}"
     return path, f"{path} loaded"
