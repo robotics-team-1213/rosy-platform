@@ -79,12 +79,14 @@ def test_evaluate_matches_classes_by_name_and_ignores_255(tmp_path):
     assert ev["frames"] == 3 and ev["set"]["content_sha"] == SHA
     assert ev["matched_classes"] == ["floor", "lane"]
     assert ev["unmatched"] == {"model_only": ["extra"], "eval_only": ["wall"]}
-    assert ev["iou"] == {"floor": 1.0, "lane": 1.0} and ev["miou"] == 1.0
+    assert ev["iou"] == {"floor": 1.0, "lane": 1.0} and ev["miou"] == ev["miou_all"] == 1.0
+    assert ev["miou_classes"] == ["lane"]  # floor has role background in the eval set
     assert ev["lane_marking_iou"] == {"lane": 1.0}
     # lane too wide by two columns: lane 4/6 per row, floor 2/4 per row
     ev = intake.evaluate(_model(_pred(6)), _eval_set(tmp_path / "b"), 400)
     assert ev["iou"] == {"floor": pytest.approx(0.5), "lane": pytest.approx(4 / 6)}
-    assert ev["miou"] == pytest.approx((0.5 + 4 / 6) / 2)
+    assert ev["miou_all"] == pytest.approx((0.5 + 4 / 6) / 2)
+    assert ev["miou"] == pytest.approx(4 / 6)  # gated mean leaves background out
 
 
 def test_evaluate_frame_cap(tmp_path):
@@ -215,3 +217,30 @@ def test_find_champion_skips_malformed_reports(tmp_path):
     _champion_report(out, "ok", {"lane": 0.7, "bad": "x"}, 0.7)
     assert intake.find_champion(out, SHA, None) == {"model_revision": "ok", "miou": 0.7,
                                                     "iou": {"lane": 0.7}}
+
+
+def test_min_lane_marking_iou(tmp_path, monkeypatch):
+    _eval_set(tmp_path)
+    rc, report = _run(tmp_path, monkeypatch, _model(_pred(6)),
+                      {"eval_set": EVAL_REL, "min_lane_marking_iou": 0.8})
+    assert rc == 1 and any("min_lane_marking_iou" in r and "lane" in r for r in report["reasons"])
+    rc, report = _run(tmp_path, monkeypatch, _model(_pred()),
+                      {"eval_set": EVAL_REL, "min_lane_marking_iou": 0.8})
+    assert rc == 0, report["reasons"]
+
+
+def test_eval_set_without_frames_is_a_setup_error(tmp_path, monkeypatch):
+    d = _eval_set(tmp_path)
+    doc = json.loads((d / "manifest.json").read_text(encoding="utf-8"))
+    doc["frames"] = []
+    (d / "manifest.json").write_text(json.dumps(doc), encoding="utf-8")
+    rc, report = _run(tmp_path, monkeypatch, _model(_pred()), {"eval_set": EVAL_REL})
+    assert rc == 1 and report["transient"] is True and "no frames" in report["reasons"][0]
+
+
+def test_background_only_match_is_a_model_fail(tmp_path, monkeypatch):
+    _eval_set(tmp_path, classes=(("floor", "background"), ("paint", "lane_marking")))
+    rc, report = _run(tmp_path, monkeypatch, _model(_pred()), {"eval_set": EVAL_REL})
+    assert rc == 1 and report["transient"] is False
+    assert report["eval"]["miou"] is None and report["eval"]["miou_all"] == 1.0
+    assert any("non-background" in r for r in report["reasons"])

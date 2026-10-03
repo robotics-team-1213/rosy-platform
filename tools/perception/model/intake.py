@@ -55,7 +55,8 @@ _SHA = re.compile(r"^[0-9a-f]{40}$")
 
 QDQ_OPS = frozenset({"QuantizeLinear", "DequantizeLinear"})
 CONFIG_EXIT = 4  # a required package is missing here: fix the environment, not the model
-EVAL_KEYS = ("eval_set", "eval_max_frames", "min_eval_miou", "max_eval_miou_drop")  # lane_seg only
+EVAL_KEYS = ("eval_set", "eval_max_frames", "min_eval_miou", "max_eval_miou_drop",
+             "min_lane_marking_iou")  # lane_seg only
 DEFAULT_IGNORE_INDEX = 255
 
 
@@ -296,24 +297,30 @@ def evaluate(model, eval_dir, max_frames: int) -> dict:
     is resized to that size with nearest neighbour (preprocess resizes the frame
     the same way, so pixels line up and no class value is invented). Pixels equal
     to the set's ignore_index are left out. Classes are matched by name; a class on
-    one side only is listed under "unmatched" and left out. mIoU is the mean over
-    matched classes whose union is > 0. Frames with non-finite logits are skipped
-    and counted (the replay gate already fails NaN models)."""
+    one side only is listed under "unmatched" and left out. "miou" (the gated number)
+    is the mean over matched classes whose union is > 0 and whose eval-set role is not
+    "background" ("miou_classes"); "miou_all" includes background. Frames with
+    non-finite logits are skipped and counted (the replay gate already fails NaN
+    models). An eval set without frames is a setup error (EvalSetError)."""
     eval_dir = Path(eval_dir)
     manifest = _read_eval_set(eval_dir)
     model_classes = model.manifest.classes
     set_classes = {c["name"]: int(c["index"]) for c in manifest.get("classes", [])}
+    set_roles = {c["name"]: c.get("role") for c in manifest.get("classes", [])}
+    frames = manifest.get("frames") or []
+    if not frames:
+        raise EvalSetError(f"eval set {eval_dir}: no frames")
     model_names = {c.name: c.index for c in model_classes}
     matched = sorted(set(set_classes) & set(model_names))
     result = {"set": {"path": str(eval_dir), "content_sha": eval_dir.name}, "frames": 0,
-              "nonfinite_frames": 0, "iou": {}, "miou": None, "matched_classes": matched,
+              "nonfinite_frames": 0, "iou": {}, "miou": None, "miou_all": None, "miou_classes": [],
+              "matched_classes": matched,
               "unmatched": {"model_only": sorted(set(model_names) - set(set_classes)),
                             "eval_only": sorted(set(set_classes) - set(model_names))},
               "lane_marking_iou": {}}
     if not matched:
         return result
     ignore = manifest.get("ignore_index", DEFAULT_IGNORE_INDEX)
-    frames = manifest.get("frames", [])
     frames = frames[::even_stride(len(frames), max_frames)][:max_frames]
     inter = dict.fromkeys(matched, 0)
     union = dict.fromkeys(matched, 0)
@@ -338,7 +345,10 @@ def evaluate(model, eval_dir, max_frames: int) -> dict:
         result["frames"] += 1
     result["iou"] = {n: inter[n] / union[n] for n in matched if union[n] > 0}
     if result["iou"]:
-        result["miou"] = float(np.mean(list(result["iou"].values())))
+        result["miou_all"] = float(np.mean(list(result["iou"].values())))
+    result["miou_classes"] = [n for n in result["iou"] if set_roles.get(n) != "background"]
+    if result["miou_classes"]:
+        result["miou"] = float(np.mean([result["iou"][n] for n in result["miou_classes"]]))
     result["lane_marking_iou"] = {c.name: result["iou"].get(c.name) for c in model_classes
                                   if c.role == "lane_marking" and c.name in set_classes}
     return result
@@ -379,7 +389,7 @@ def compare_to_champion(ev: dict, champion: dict | None):
     or None without a champion."""
     if champion is None:
         return None
-    classes = sorted(set(ev["iou"]) & set(champion["iou"]))
+    classes = sorted(set(ev["miou_classes"]) & set(champion["iou"]))
     if not classes:
         return "no shared classes"
     return {"classes": classes,
@@ -392,8 +402,16 @@ def judge_eval(ev: dict, gate: dict) -> list[str]:
         return ["eval: no class name shared by the model and the eval set "
                 f"(model only {ev['unmatched']['model_only']}, eval only {ev['unmatched']['eval_only']})"]
     if ev["miou"] is None:
-        return [f"eval: no IoU over {ev['frames']} eval frames (no matched class present)"]
+        return [f"eval: no IoU over {ev['frames']} eval frames (no matched non-background class present)"]
     reasons = []
+    lane_floor = gate.get("min_lane_marking_iou")
+    if lane_floor is not None:
+        if not ev["lane_marking_iou"]:
+            reasons.append("eval: no lane_marking class matched, min_lane_marking_iou is set")
+        for name, v in ev["lane_marking_iou"].items():
+            if v is None or v < lane_floor:
+                reasons.append(f"eval lane_marking IoU {name} "
+                               f"{'none' if v is None else f'{v:.4f}'} < min_lane_marking_iou {lane_floor}")
     floor = gate.get("min_eval_miou")
     if floor is not None and ev["miou"] < floor:
         reasons.append(f"eval mIoU {ev['miou']:.4f} < min_eval_miou {floor}")
