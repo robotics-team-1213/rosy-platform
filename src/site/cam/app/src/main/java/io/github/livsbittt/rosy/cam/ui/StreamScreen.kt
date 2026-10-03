@@ -34,7 +34,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -66,13 +65,6 @@ fun StreamScreen(
     onOpenSettings: () -> Unit,
 ) {
     val pairing = siteLink?.toPairing()
-    // Keep the screen on while streaming (design section 5).
-    val view = LocalView.current
-    DisposableEffect(state.running) {
-        view.keepScreenOn = state.running
-        onDispose { view.keepScreenOn = false }
-    }
-
     Column(
         modifier = Modifier
             .fillMaxSize()

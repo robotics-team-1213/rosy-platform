@@ -32,8 +32,8 @@
 
 ## 최근 기록
 
+- 2026-10-04 · 03ea9b522 · fix(cam): 실제 관제 PC의 자체 키로 원격 깨우기 확인
+- 2026-10-04 · 956755f38 · fix(cam): 화면 자동 절전 중에도 송출 유지
 - 2026-10-03 · uncommitted · fix(cam): NSD 탐색 종료 뒤 늦은 콜백이 앱을 중단하지 않는다
 - 2026-10-01 · uncommitted · fix(cam): 비밀 스캔 — pollSecret 식별자와 긴 시험 이름
 - 2026-10-01 · 2370b41b · feat(cam): 응답 없는 confirm은 한 번만 다시 보낸다(S2 멱등 confirm, rosy-00 d5d4a2e4)
-- 2026-10-01 · 8fb4b1a8 · fix(cam): D-341 페어링 클라이언트 보안 리뷰 반영(APPROVE WITH FIXES)
-- 2026-10-01 · 05280213 · feat(cam): D-341 페어링 클라이언트 2단계 — HTTPS, 조회 간격, 설정 진입과 화면

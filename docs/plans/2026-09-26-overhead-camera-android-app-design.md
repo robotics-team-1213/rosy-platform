@@ -81,7 +81,7 @@
 - **CameraX** `Preview` + `ImageAnalysis`(`STRATEGY_KEEP_ONLY_LATEST`, YUV_420_888). 분석 콜백에서 fps 제한 → YUV→JPEG 인코딩 → 링크로 전달.
 - **노출·초점·화이트밸런스 고정:** 마커 인식은 밝기 흔들림에 약하다. 거치 후 "노출 고정" 버튼 → Camera2 interop으로 AE/AWB lock, 초점 고정. 조명이 바뀌면 다시 누른다. (실물 조건: 흰 벽·카펫 — 실측 필요)
 - **렌즈:** 기본 후면 광각 1배. 트랙 전체가 안 들어오면 초광각 선택 옵션(기기마다 다름).
-- **포그라운드 서비스:** `foregroundServiceType="camera"`(Android 14+는 `FOREGROUND_SERVICE_CAMERA` 권한, 앱이 보이는 상태에서 시작). 화면 켜짐 유지(밝기 최저 허용), partial wake lock, Wi-Fi 고성능 lock(절전으로 인한 지연 튐 방지).
+- **포그라운드 서비스:** `foregroundServiceType="camera"`(Android 14+는 `FOREGROUND_SERVICE_CAMERA` 권한, 앱이 보이는 상태에서 시작). partial wake lock, Wi-Fi 고성능 lock(절전으로 인한 지연 튐 방지). 2026-10-04 사용자 요청으로 화면 켜짐 유지는 제거했다. 화면은 Android의 설정된 시간 후 자동 절전으로 들어가며 송출은 서비스가 계속한다. 충전 중에도 자동 절전하려면 Android의 충전 중 화면 유지 옵션도 꺼야 한다. 필요한 때 관제 PC가 정식 페어링한 무선 ADB로 화면을 깨운다. 화면 깨우기는 잠금 해제나 앱 재시작을 뜻하지 않는다.
 - **발열:** `PowerManager` 열 상태가 `SEVERE` 이상이면 fps를 스스로 반으로, `CRITICAL`이면 송신 중단 + 화면 경고. 전원 연결 운용을 권장한다.
 - **재연결:** 끊기면 1 s → 2 s → 5 s 백오프. 끊긴 동안 프레임을 쌓지 않는다.
 

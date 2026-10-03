@@ -130,3 +130,17 @@
 - 변경: NSD에 전달하는 순수 Kotlin executor가 종료된 scheduler의 거절을 흡수한다. 등록과 종료가 같은 잠금을 사용해 실제 등록 전에 해제가 먼저 실행되는 경쟁도 막는다. 인증서 고정·토큰·선 위 계약은 그대로다.
 - 증거: 늦은 콜백 JVM 시험이 수정 전 같은 예외로 실패했고, 수정 후 전체 JVM 309 passed 및 debug APK 빌드가 성공했다. 설치된 S21과 새 APK의 서명자 SHA-256이 같음을 확인한 뒤 `install -r` 했으며 저장된 설정은 바이트 단위로 동일했다. 공식 UI에서 송출 중지·시작을 3회 반복해 같은 프로세스가 유지됐고 FATAL 예외는 0건이었다. 마지막 재시작 뒤 실제 JPEG seq가 46에서 52로 증가했다. 실제 사이트 수신은 63초 동안 10/10 HTTP 200, 증가하는 seq, 1280×720 실제 JPEG, age 102–430 ms였다. 수신 JPEG의 CPU ArUco 진단은 마커 없음으로 나왔고 Fleet 위치 원장은 비어 있었다. 위치·현장 수용을 주장하지 않는다.
 - gate 변화: SOURCE/LOCAL GO 유지. 이 수정의 S21 송출 수신만 확인했으며 전체 D-341/D-391 DEVICE 행렬과 FIELD는 PARKED 유지. 실제 주소·토큰·상세 증거는 공개 문서에 적지 않고 X:에 두었다.
+
+## 2026-10-04 · 956755f38 · fix(cam): 화면 자동 절전 중에도 송출 유지
+
+- 변경: 송출 화면의 `keepScreenOn` 효과만 제거했다. 서비스의 CPU·Wi-Fi 잠금과 CameraX 수명주기는 유지한다. 사용자 요청으로 설치된 S21의 화면 제한 시간을 30초, 충전 중 화면 유지 옵션을 꺼짐으로 설정했다. 앱은 전역 화면 설정을 강제로 변경하지 않는다.
+- 증거: `testDebugUnitTest assembleDebug` 성공, JVM 309 passed, 0 failures. 기존 서명자와 일치한 APK를 덮어 설치했고 페어링 설정은 바이트 단위로 유지됐다. 실제 화면 절전 중 63초 동안 10/10 HTTP 200, 증가하는 seq, 1280×720 JPEG, age 168–457 ms를 수신했다. 명시적 `KEYCODE_WAKEUP` 후에도 같은 카메라 프로세스에서 새 JPEG가 도착했고, 별도 화면 끄기 명령 없이 다시 자동 절전했다. FATAL 0건. 상세 장치 증거는 X:에 보관했다.
+- 경계: 위 깨우기 증거의 ADB 실행 호스트는 개발 PC다. 사용자가 추가 요청한 관제 PC 자체 키 페어링과 원격 깨우기는 별도 검증 대상이다. 프로세스 종료·폰 재부팅 뒤 송출 자동 시작이나 마커 위치 수용은 확인하지 않았다. SOURCE/LOCAL GO 유지, 전체 DEVICE/FIELD PARKED 유지.
+- gate 변화: 없음. SOURCE/LOCAL GO, 전체 DEVICE/FIELD PARKED 유지.
+
+## 2026-10-04 · 03ea9b522 · fix(cam): 실제 관제 PC의 자체 키로 원격 깨우기 확인
+
+- 변경: 관제 PC 사용자 영역에 공식 Android Platform Tools와 `rosy-cam-screen` 도구를 설치했다. PC 자체 키를 휴대폰의 공식 코드 페어링으로 승인했다. 다른 PC 키를 복사하거나 관리자 권한을 우회하지 않았다. 개인 설정은 0600이며 실제 식별자는 공개 소스에 넣지 않았다. 도구는 인증된 연결의 실제 serial/model을 확인하고 유일한 대상에만 `KEYCODE_WAKEUP`을 보낸다. mDNS의 오래된 포트는 재시도하되 식별 불일치·중복·미인증 연결에서는 거절한다.
+- 증거: 실제 관제 PC에서 `Dozing → Awake` 및 같은 앱 PID를 확인했다. 깨운 뒤 새 JPEG 2장을 수신했고, 화면 끄기 명령 없이 다시 `Dozing`으로 돌아갔다. 그 뒤 63초간 JPEG 10/10 HTTP 200, seq 7800→7977, 1280×720, age 126–502 ms, 서로 다른 이미지 해시를 확인했다. CLI·문서 배치 시험 20 passed 및 독립 소스 리뷰 승인. 앞 항목의 관제 PC 깨우기 검증은 닫혔다. 전체 DEVICE/FIELD 판정 범위는 그대로다.
+- 운용: 설치된 관제 PC에서 `~/.local/bin/rosy-cam-screen wake`, 상태는 `~/.local/bin/rosy-cam-screen status`. 화면 깨우기는 잠금 해제나 송출 재시작이 아니다. 공식 무선 ADB 페어링이 유지되고 같은 망에서 전화에 닿아야 한다.
+- gate 변화: 없음. 이 기능의 실제 관제 PC 깨우기·송출만 확인했으며 전체 DEVICE/FIELD PARKED 유지.
