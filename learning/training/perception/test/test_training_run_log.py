@@ -102,3 +102,89 @@ def test_module_imports_no_torch_at_top_level():
     assert "import torch" not in "\n".join(
         ln for ln in Path(run_log.__file__).read_text(encoding="utf-8").splitlines()
         if not ln.startswith(" "))
+
+
+def test_tensorboard_write_error_never_stops_training(tmp_path, monkeypatch):
+    class Broken:
+        closed = 0
+
+        def add_scalar(self, *a):
+            raise RuntimeError("disk full")
+
+        def flush(self):
+            pass
+
+        def close(self):
+            Broken.closed += 1
+
+    log = RunLog(tmp_path, tensorboard=False)
+    log._writer = Broken()
+    log.tensorboard = "enabled"
+    log.on_epoch(_row(1))
+    log.on_epoch(_row(2))  # writer is gone, still fine
+    assert log.tensorboard == "error" and log.tensorboard_error == "RuntimeError"
+    assert log._writer is None and Broken.closed == 1
+    doc = json.loads((tmp_path / "history.json").read_text(encoding="utf-8"))
+    assert len(doc["history"]) == 2 and doc["tensorboard"] == "error"
+    assert doc["tensorboard_error"] == "RuntimeError"
+
+
+def test_history_write_oserror_is_counted_not_raised(tmp_path, monkeypatch):
+    log = RunLog(tmp_path, tensorboard=False)
+
+    def boom(path, doc):
+        raise OSError("read-only")
+
+    monkeypatch.setattr(run_log, "_atomic_json", boom)
+    log.on_epoch(_row(1))
+    log.write_config({"a": 1})
+    log.finish({"b": 1})
+    assert log.write_errors == 3 and len(log.history) == 1
+
+
+def test_row_missing_keys_is_tolerated(tmp_path):
+    log = RunLog(tmp_path, tensorboard=False)
+    log.on_epoch({})
+    log.on_epoch({"epoch": 2, "val_iou": None})
+    assert len(log.history) == 2
+
+
+def test_close_is_idempotent(tmp_path):
+    log = RunLog(tmp_path, tensorboard=False)
+    n = []
+
+    class W:
+        def close(self):
+            n.append(1)
+
+    log._writer = W()
+    log.close()
+    log.close()
+    log.finish({})
+    assert n == [1]
+
+
+def test_chain_continues_after_a_raising_callback_but_not_ctrl_c():
+    import pytest
+    seen = []
+
+    def bad(r):
+        raise ValueError("x")
+
+    chain(bad, lambda r: seen.append(r))(7)
+    assert seen == [7]
+
+    def interrupt(r):
+        raise KeyboardInterrupt
+
+    with pytest.raises(KeyboardInterrupt):
+        chain(interrupt, lambda r: seen.append("no"))(1)
+    assert seen == [7]
+
+
+def test_more_secret_words_are_dropped_and_values_are_not_scanned(tmp_path):
+    log = RunLog(tmp_path, tensorboard=False)
+    cfg = {"passwd": 1, "DB_PWD": 1, "Credentials": 1, "oauth": 1, "Bearer": 1, "cookie_jar": 1,
+           "private_note": 1, "note": "sk-looks-secret"}
+    log.write_config(cfg)
+    assert json.loads((tmp_path / "config.json").read_text(encoding="utf-8")) == {"note": "sk-looks-secret"}
