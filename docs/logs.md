@@ -5008,3 +5008,9 @@
 - 변경: 새 격리 Gazebo에서 6개 완료 시연/75프레임을 수집해 LeRobot export와 ACT 40 steps 고정 평가를 실제 실행했다. 상세는 `validation/omx-diverse-sim-act-2026-10-04.md`.
 - 증거: 목표 cluster 5, train 63/eval 12, native ACT exit 0/save-reload 추론 일치. 실패 녹화 2개 보존/제외. 원본·로그·산출물 zip SHA 4cacbad620a5e448c83ce3217d9044d4cafbcbd10939e6405d92d2a7a87ae16d.
 - gate 변화: 다양성 부족 해소, MAE 0.02964rad > 상수 0.00599rad로 승격 거절. ACT owner/SIM 실행·DEVICE/FIELD·전체 목표 미완료. 전용 SIM 종료, 다른 실행 변경 없음.
+
+## 2026-10-04 · uncommitted · feat(learning): persist policy registration and verified promotion metadata
+- 변경: learning/registry/policy SQLite snapshot/hash-chain/CAS 원장과 ACT 연구 gate 재계산, scoped signed verifier receipt·실제 report binding 승격 API를 구현했다. D-449 Proposed 보강.
+- 증거: 실제 seed42751 정책 register/assess/show 별도 프로세스 재독출, 재실행 이력 2개 유지. metadata unregistered, 평가 reject. registry/공통 계약 36 passed, ownership/구조 51 passed. 상세 `validation/policy-registry-2026-10-04.md`.
+- gate 변화: 내구성 있는 실제 거절 기록 확보. 합성 서명 시험은 운영 승격 증거가 아님. runtime trust 설치·owner·rollback·DEVICE/FIELD 및 전체 목표 미완료.
+- 최종 보강: 독립 리뷰에서 reset object/list 검증 오류를 RED 재현·수정해 계약 0.1.2 wheel을 빌드/isolated 검증했다. 최종 회귀 81 passed/1 skipped, reviewer 수정 확인 6 passed/잔여 findings 없음. 실제 정책은 계속 unregistered/reject다. 모델 PC SSH 72212는 인증 실패 exit 1로 종료했다.

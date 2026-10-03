@@ -209,7 +209,7 @@ def validate_policy(doc, *, root=None):
     _fields(value["timing"], "period_ns max_observation_age_ns max_action_age_ns")
     if any(type(t) is not int or t <= 0 for t in value["timing"].values()):
         raise ValueError("positive integer timing budgets required")
-    if value["failure_mode"] != "hold" or set(value["reset_events"]) != {
+    if value["failure_mode"] != "hold" or not isinstance(value["reset_events"], list) or set(value["reset_events"]) != {
             "stop", "hold", "lease_change", "episode_change"} or len(value["reset_events"]) != 4:
         raise ValueError("HOLD failure and explicit reset events required")
     revisions = value["dataset_revisions"]

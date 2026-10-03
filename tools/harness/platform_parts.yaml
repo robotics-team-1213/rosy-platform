@@ -52,6 +52,13 @@ import_rules:
 concerns: [learning, decision, control, safety, contracts, other]
 
 roots:
+  - path: learning/registry/policy
+    part: learning
+    d427_target: learning/registry/policy
+    wave: none
+    import_prefix: []
+    concern: learning
+    note: D-449 policy artifact snapshots and transactional metadata ledger; no runtime authority.
   - path: learning/training/omx
     part: learning
     d427_target: learning/training/omx

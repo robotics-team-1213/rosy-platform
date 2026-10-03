@@ -66,6 +66,9 @@ FULL_TRIGGERS = (
 # Whole suites the CI full run (.github/workflows/ci.yml) executes beyond the
 # registered module `tests`; the printed full tier is their union.
 FULL_SUITES = (
+    "learning/registry/policy/test",
+    "learning/training/omx/test",
+    "learning/curation/omx/test",
     "src/runtime/events/test",
     "src/runtime/services/test",
     "src/hmi/web_common/test",
@@ -79,6 +82,9 @@ FULL_SUITES = (
 # overlay (+ colcon install, which also builds). `gating: False` reports only.
 ROOT_SHARDS = 3
 CI_FULL_MATRIX = (
+    {"name": "learning-policy", "invocations": [
+        ["learning/registry/policy/test"], ["learning/training/omx/test"],
+        ["learning/curation/omx/test"]], "ros": "none"},
     {"name": "core-domain", "invocations": [[
         "src/runtime/gateway/test", "src/runtime/events/test", "src/runtime/services/test",
         "src/hmi/web_common/test", "src/contracts/foundation/test",

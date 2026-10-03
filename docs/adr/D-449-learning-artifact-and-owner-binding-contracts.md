@@ -73,3 +73,12 @@ CameraInfo SHA를 둔다. camera_profile_revision은 없으면 null을 유지하
 연구 경로를 추가했다. owner/envelope가 미등록이면 연구 artifact로 명시하고,
 실제 평가 부족·SIM/independent task 미확인에서 승격을 만들지 않는다.
 실행 근거: docs/validation/omx-act-offline-2026-10-04.md.
+
+### 구현 보강 — 2026-10-04 정책 원장 초안
+
+learning/registry/policy는 immutable policy 파일 snapshot과 SQLite 단계 CAS,
+canonical event chain을 둔다. 실제 ACT 보고서의 연구 조건을 재계산해 거절 이력을
+기록한다. promote API는 policy/promotion/report hash에 묶인 scoped verifier의
+HMAC receipt와 실제 pass JSON을 요구한다. 운영 신뢰 키/승인 verifier는 설치하지
+않았고 원장 상태가 actuator 권한을 부여하지 않는다. DatasetManifest ingestion,
+rollback의 stop/승인 계약과 owner 소비는 후속이다. 구조 제안 상태는 유지한다.

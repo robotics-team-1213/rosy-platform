@@ -116,6 +116,7 @@ def test_policy_can_preserve_unknown_camera_profile_with_explicit_rig():
 @pytest.mark.parametrize("field,value", [
     ("owner", {"kind": "pinky_core_command_manager", "controller_revision": "c", "envelope_revision": "e"}),
     ("joint_names", ["j2", "j1"]), ("failure_mode", "clamp"), ("reset_events", ["stop"]),
+    ("reset_events", {name: False for name in ("stop", "hold", "lease_change", "episode_change")}),
     ("timing", {"period_ns": True, "max_observation_age_ns": 1, "max_action_age_ns": 1}),
 ])
 def test_policy_refuses_incompatible_owner_order_and_timing(field, value):

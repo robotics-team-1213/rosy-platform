@@ -28,6 +28,8 @@ scale을 명시한다. camera_profile_revision의 null을 보존할 수 있지�
 사용하는 정책의 L1 이상 승격 기록은 실제 CameraProfile binding 없이 거절한다.
 
 샘플 wire 입력과 거절 예는 `test/test_learning_artifact_contracts.py`에서 검증한다.
+0.1.2는 reset_events를 반드시 JSON list로 요구한다. 같은 이름의 key를 가진
+object를 목록으로 오인해 받던 검증 오류를 수정했으며 정상 정책 revision은 유지한다.
 OMX 변환기는 `learning/curation/omx/common_episode.py`이다. 기존 시연의 profile
 검증과 원본 bytes를 보존한다. 기존 runtime recorder·LeRobot 파일 형식은 유지한다.
 Pinky/Pilot 변환기·Fleet join·학습 정책 실제 소비/승격·장치 loader는 아직 남아 있다.
