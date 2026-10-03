@@ -56,6 +56,15 @@ jobs:
           pip3 install --no-cache-dir --break-system-packages -c /tmp/rosy-runtime-constraints.txt \
             flake8 httpx pyyaml jsonschema ext4
 
+      # D-430 §5: a commit that touches a safety-tagged path (platform_parts.yaml
+      # `concern: safety` roots and `safety_modules`) needs a `Safety-Review:` trailer.
+      # Only commits after the script's BASELINE are checked, so older history passes.
+      # Relies on the full-history checkout above (fetch-depth: 0).
+      - name: Safety-Review trailer (D-430)
+        env:
+          SAFETY_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: python3 tools/harness/safety_review.py "$SAFETY_BASE" HEAD
+
       - name: Build and install ROS-free platform API wheels
         run: |
           # Build actual wheels outside src/ and install before colcon/pytest. This catches

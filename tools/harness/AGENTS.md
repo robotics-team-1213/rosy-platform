@@ -13,6 +13,8 @@ The D-61 module harness: a registry of modules, each of which keeps `progress.md
 |------|-------------|
 | `harness.yaml` | Registry: `adr_log`, `adr_gaps` (ADR numbers deliberately absent, with reason), `status`, `stale_after_commits`, and `modules` (`name`, `path`, `tests`, `functional_kind`, `functional`). Edit it when a package is added, moved or removed |
 | `rosy_harness.py` | `generate` rewrites every module `index.md` and `STATUS.md`; `lint` validates and exits 1 on errors (staleness is only a warning) |
+| `platform_parts.yaml` | D-427 part manifest: every root's part, `d427_target`, wave and D-429/D-430 `concern`; `safety_modules` and `safety_anchors` (D-430 §1). Checked by `test/architecture/test_platform_parts.py` and `test_safety_separation.py` |
+| `safety_review.py` | D-430 §5: `python tools/harness/safety_review.py BASE HEAD [--warn-only]` fails when a non-merge commit after its `BASELINE` touches (or untags) a safety-tagged path without a `Safety-Review:` trailer. CI runs it on the PR/push range; the pre-push hook runs it as a warning |
 | `run_functional.py` | Runs each module's `functional` pytest surface in isolation (`--module NAME` for one) |
 
 ## For AI Agents

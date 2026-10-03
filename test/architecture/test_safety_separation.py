@@ -439,3 +439,16 @@ def test_non_stop_fleet_loss_policy_requires_approval_record():
     assert problems == []
     assert len(seen) >= 2, seen
     assert seen.get(DEFAULT_CONFIG) == "STOP", "the shared default is STOP for every robot"
+
+
+def test_safety_review_trailer_check_sees_the_same_safety_paths():
+    """Structural. D-430 §5: the CI trailer check (tools/harness/safety_review.py)
+    classifies every tracked file exactly as these tests do."""
+    import safety_review
+
+    manifest = _manifest()
+    modules = set(manifest["safety_modules"])
+    mismatched = [path for path in _tracked()
+                  if safety_review.is_safety(path, manifest["roots"], modules) != (_concern_of(path) == SAFETY)]
+    assert mismatched == []
+    assert sum(safety_review.is_safety(path, manifest["roots"], modules) for path in _tracked()) >= 20
