@@ -60,12 +60,12 @@ store는 경로 하나다. 지금은 사이트 PC의 로컬 폴더이고, 팀이
 
 ```python
 !git clone --depth 1 --filter=blob:none --sparse https://github.com/livsbittt/rosy-os.git rosy
-!cd rosy && git sparse-checkout set tools/perception/training src/runtime/sensing/control
+!cd rosy && git sparse-checkout set tools/perception/training src/runtime/sensing/control src/contracts/foundation/core_common
 !pip -q install onnx onnxruntime
 
 import sys
 sys.path += ["/content/rosy/tools/perception/training", "/content/rosy/tools/perception",
-             "/content/rosy/src/runtime/sensing"]
+             "/content/rosy/src/runtime/sensing", "/content/rosy/src/contracts/foundation"]
 from export_cell import export, write_manifest
 ```
 
@@ -78,6 +78,7 @@ from export_cell import export, write_manifest
   상위 폴더 파일도 받으므로 따로 지정하지 않아도 된다.
 - `src/runtime/sensing/control/...`: 로봇이 실제로 쓰는 manifest 검사기와 모델 로더.
   `export()`와 `check_manifest.py`가 이것으로 로봇과 똑같이 검사한다.
+- `src/contracts/foundation/core_common/`: `control`이 가져오는 공용 로봇 몸체 정의(D-424). 없으면 위 검사기를 import할 수 없다.
 
 ## 2. 데이터 준비
 
