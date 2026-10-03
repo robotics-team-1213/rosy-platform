@@ -232,7 +232,7 @@ surfaces:
     app_name_en: Rosy Cam
     short_name: Rosy Cam
     icon: src/hmi/web_common/icons/cam.svg
-    path: src/site/cam
+    path: operations/ui/cam
     themes: [dark]
     surface: site
     medium: native
@@ -242,7 +242,7 @@ surfaces:
     role: 카메라 캡처·프레임 송신·설치 위치 안내만 — 로봇 명령·정지·CORE 연결이 없다 (D-370 1항)
     owns: [camera-physical-install]
     contracts: [token_parity]
-    token_copy: src/site/cam/app/src/main/java/io/github/livsbittt/rosy/cam/ui/RosyTheme.kt
+    token_copy: operations/ui/cam/app/src/main/java/io/github/livsbittt/rosy/cam/ui/RosyTheme.kt
     baseline_reason: >
       네이티브 앱 화면은 브라우저 캡처 회차(G2) 대상이 아니다. 실제 폰 화면 확인은
       D-261의 A3 실기기 회차에서 첫 캡처를 남긴다.

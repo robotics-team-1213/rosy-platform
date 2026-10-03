@@ -74,7 +74,7 @@ modules:
   # D-374: Android JVM tests need a JDK/Gradle, so the host functional surface is the
   # registry/icon/role contract tests; `gradlew testDebugUnitTest` runs in android.yml.
   - name: cam
-    path: src/site/cam
+    path: operations/ui/cam
     tests: [test/architecture/test_app_roles.py, src/hmi/web_common/test/test_surface_icons.py]
     functional_kind: host-contract
     functional: [test/architecture/test_app_roles.py, src/hmi/web_common/test/test_surface_icons.py]

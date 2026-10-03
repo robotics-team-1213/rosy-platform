@@ -13,7 +13,7 @@ from pathlib import Path
 import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
-CAMERA_APP = ROOT / "src/site/cam/app/src/main/java"
+CAMERA_APP = ROOT / "operations/ui/cam/app/src/main/java"
 VISION = ROOT / "operations/vision/rosy_vision"
 REGISTRY = ROOT / "src/hmi/web_common/surfaces.yaml"
 

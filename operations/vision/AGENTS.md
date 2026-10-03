@@ -2,7 +2,7 @@
 
 Rosy Vision (D-377 id `vision`, package `rosy_vision`): `rosy-overhead/1` WebSocket ingest and CPU ArUco-to-site-map display worker (D-257, D-261). The wire names (`rosy-overhead/1`, `/overhead/v1/frames`, `_rosy-overhead._tcp`) stay unchanged (D-374 3항, D-377 4항). ROS-free, no `cmd_vel`; Fleet receives derived sighting JSON only, never JPEG. The worker does not create D-268 policy evidence or start tasks.
 
-The Rosy Cam phone app (Kotlin/CameraX) lives in its own module `src/site/cam` (D-377); it is not part of this package.
+The Rosy Cam phone app (Kotlin/CameraX) lives in its own module `operations/ui/cam` (D-377); it is not part of this package.
 
 ## Key Files
 

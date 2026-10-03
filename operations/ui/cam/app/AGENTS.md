@@ -5,7 +5,7 @@
 
 ## Purpose
 
-The single Gradle module `:app` of Rosy Cam (Kotlin, Jetpack Compose, CameraX, OkHttp). It captures ceiling-camera JPEG frames and pushes them to the site-PC Rosy Vision receiver over `rosy-overhead/1`. Fleet never sees frames, only derived poses from Vision (D-257, D-261). Gradle wrapper, settings and version catalog live one level up in `src/site/cam/`.
+The single Gradle module `:app` of Rosy Cam (Kotlin, Jetpack Compose, CameraX, OkHttp). It captures ceiling-camera JPEG frames and pushes them to the site-PC Rosy Vision receiver over `rosy-overhead/1`. Fleet never sees frames, only derived poses from Vision (D-257, D-261). Gradle wrapper, settings and version catalog live one level up in `operations/ui/cam/`.
 
 ## Key Files
 
@@ -35,7 +35,7 @@ The single Gradle module `:app` of Rosy Cam (Kotlin, Jetpack Compose, CameraX, O
 
 ```powershell
 $env:JAVA_HOME='X:\java\jdk-21.0.8'; $env:GRADLE_USER_HOME='X:\DevCaches\gradle'
-cd src/site/cam; .\gradlew.bat :app:testDebugUnitTest; .\gradlew.bat --stop
+cd operations/ui/cam; .\gradlew.bat :app:testDebugUnitTest; .\gradlew.bat --stop
 ```
 
 Unit tests need no emulator or device. A green unit run is not device or field acceptance.

@@ -187,9 +187,9 @@ def test_ros_package_names_are_frozen():
     assert set(locations) == FROZEN_ROS_PACKAGES
     # Each name has exactly one source path (supersedes test_target_layout's uniqueness check).
     assert {name: paths for name, paths in locations.items() if len(paths) != 1} == {}
-    # src/site/cam is the Rosy Cam Android app: colcon skips it (COLCON_IGNORE) and it
+    # operations/ui/cam is the Rosy Cam Android app: colcon skips it (COLCON_IGNORE) and it
     # holds no package.xml, so it adds no name. The walk above does not honour
     # COLCON_IGNORE because CI drops one into gz_sim before the root suite runs.
-    cam = ROOT / "src" / "site" / "cam"
+    cam = ROOT / "operations" / "ui" / "cam"
     assert (cam / "COLCON_IGNORE").is_file()
     assert not list(cam.rglob("package.xml"))

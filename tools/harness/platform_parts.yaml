@@ -356,9 +356,10 @@ roots:
     wave: "3b"
     import_prefix: [rosy_vision]
     concern: other
-  - path: src/site/cam
+  - path: operations/ui/cam
     part: operations
     d427_target: operations/ui/cam
+    legacy: src/site/cam
     wave: "3b"
     concern: other
   - path: operations/apps/games

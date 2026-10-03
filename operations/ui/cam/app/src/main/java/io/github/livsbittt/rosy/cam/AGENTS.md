@@ -36,7 +36,7 @@ All Rosy Cam app code: capture, encode, and push latest-only JPEG frames to the 
 
 ### Testing Requirements
 
-Matching tests live in `app/src/test/java/io/github/livsbittt/rosy/cam/<subpackage>/` (`camera`, `health`, `link`, `pairing`, `service`, `settings`, `ui`); `Vectors.kt` loads shared vectors. Run from `src/site/cam`: `.\gradlew.bat :app:testDebugUnitTest`.
+Matching tests live in `app/src/test/java/io/github/livsbittt/rosy/cam/<subpackage>/` (`camera`, `health`, `link`, `pairing`, `service`, `settings`, `ui`); `Vectors.kt` loads shared vectors. Run from `operations/ui/cam`: `.\gradlew.bat :app:testDebugUnitTest`.
 
 ### Common Patterns
 

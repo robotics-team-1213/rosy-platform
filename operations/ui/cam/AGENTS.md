@@ -36,7 +36,7 @@ Moved out of `src/site/overhead/android` on 2026-09-30 (D-374 stage 1), then ren
 
 ```powershell
 $env:JAVA_HOME='X:\java\jdk-21.0.8'; $env:GRADLE_USER_HOME='X:\DevCaches\gradle'
-cd src/site/cam; .\gradlew.bat testDebugUnitTest assembleDebug; .\gradlew.bat --stop
+cd operations/ui/cam; .\gradlew.bat testDebugUnitTest assembleDebug; .\gradlew.bat --stop
 ```
 
 Host contract tests (no JDK): `python -m pytest test/architecture/test_app_roles.py src/hmi/web_common/test/test_surface_icons.py -q`. CI: `.github/workflows/android.yml`.

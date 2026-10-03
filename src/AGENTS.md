@@ -22,7 +22,7 @@ No files at this level. Each package directory has its own `AGENTS.md` (e.g. `ru
 | `hmi/` | `face/` (package `emotion`, robot LCD), `web_common/` (package `web_common`, shared browser assets), `dashboard/` (operator screens served by `core_api_web`), `pilot/` (package `pilot`, Rosy Pilot teleop surface served by `core_api_web`, D-323) |
 | `sim/` | Simulation: `description` (URDF/xacro, meshes, RViz), `gz_sim` (Gazebo worlds; CMake no-ops on aarch64) |
 | `../learning/envs/isaac` | Not under `src/` since D-427 wave 1: ROS package `isaac_sim` (Isaac Sim integration area), found through the `colcon_roots` list in `tools/harness/platform_parts.yaml` |
-| `site/` | `fleet/` (site mission/task ledger and console), and `cam/` (Rosy Cam ceiling camera Android app, not a ROS package). The game host and Rosy Vision (package `rosy_vision`) moved to `../operations/apps/games` and `../operations/vision` (D-427 wave 3b) |
+| `site/` | `fleet/` (site mission/task ledger and console). The game host, Rosy Vision (package `rosy_vision`), Rosy Cell and the Rosy Cam Android app moved to `../operations/apps/games`, `../operations/vision`, `../operations/processes/cell` and `../operations/ui/cam` (D-427 wave 3b) |
 
 ## For AI Agents
 

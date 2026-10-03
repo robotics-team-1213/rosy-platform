@@ -122,13 +122,13 @@ def test_android_app_is_not_a_colcon_package():
 
 
 def test_rule_catches_each_mismatch(tmp_path):
-    app = tmp_path / "src/site/cam"
+    app = tmp_path / "operations/ui/cam"
     (app / "app").mkdir(parents=True)
     (app / "app/build.gradle.kts").write_text(
         'namespace = "io.github.livsbittt.rosy.cam"\n'
         'applicationId = "io.github.livsbittt.rosy.ceilingcamera"\n', encoding="utf-8")
     (app / "settings.gradle.kts").write_text('rootProject.name = "rosy-ceiling-camera"\n', encoding="utf-8")
-    row = {"id": "cam", "path": "src/site/cam", "app_name": "Rosy 천장 카메라",
+    row = {"id": "cam", "path": "operations/ui/cam", "app_name": "Rosy 천장 카메라",
            "icon": "src/hmi/web_common/icons/ceiling-camera.svg"}
     problems = identity_problems(row, tmp_path)
     assert len(problems) == 4, problems

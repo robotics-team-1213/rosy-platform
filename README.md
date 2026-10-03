@@ -88,8 +88,7 @@ ROS/vendor 표현 사이의 변환에 두며, 그 자체로 별도 동작 owner�
     │   └── omx/                   # profile, adapter
     ├── drivers/imu_bno055/        # 칩 드라이버
     ├── site/
-    │   ├── fleet/                 # 현장 미션·작업 원장·콘솔 서버
-    │   └── cam/                   # Rosy Cam: 천장 카메라 폰 앱(Android, ROS 패키지 아님)
+    │   └── fleet/                 # 현장 미션·작업 원장·콘솔 서버
     ├── hmi/
     │   ├── dashboard/             # CORE API가 제공하는 operator 화면
     │   ├── face/                  # package: emotion
@@ -103,6 +102,7 @@ ROS/vendor 표현 사이의 변환에 두며, 그 자체로 별도 동작 owner�
     operations/
     ├── apps/games/                # package: games — 게임 호스트(D-427 wave 3b)
     ├── processes/cell/            # package: rosy_cell — Rosy Cell 호환 facade(D-427 wave 3b)
+    ├── ui/cam/                    # Rosy Cam: 천장 카메라 폰 앱(Android, ROS 패키지 아님)
     └── vision/                    # Rosy Vision: 천장 카메라 입력·sighting 처리(패키지 rosy_vision)
 
 폴더명과 ROS 패키지 이름은 항상 같지 않다(예: `runtime/gateway`는 `core`). site 앱은

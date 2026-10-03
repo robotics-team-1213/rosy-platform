@@ -28,7 +28,7 @@ Python package for Rosy Vision: receive-only `rosy-overhead/1` WebSocket ingest 
 
 ### Working In This Directory
 
-- `protocol.py` must match the Kotlin app (`src/site/cam`) byte for byte; the shared vector file `test/fixtures/protocol/overhead-ingest.v1.json` decides, not a local edit.
+- `protocol.py` must match the Kotlin app (`operations/ui/cam`) byte for byte; the shared vector file `test/fixtures/protocol/overhead-ingest.v1.json` decides, not a local edit.
 - Keep OpenCV out of `protocol.py`, `ingest.py`, `publish.py`; it belongs in `detect.py` and the proposal modules.
 - Latest-only everywhere: do not add frame queues. Never trust the phone clock; use the receiver's own time minus `age_ms`.
 - Proposals (field, map fit) and rectification are display-only; they never alter the raw frame used for sightings or become policy evidence.
