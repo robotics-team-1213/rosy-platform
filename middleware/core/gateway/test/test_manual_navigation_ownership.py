@@ -20,6 +20,9 @@ OPERATOR = {"Authorization": "Bearer rosy-dev-operator"}
 ])
 def test_autonomy_refuses_live_manual_without_taking_output(core_client, path, body):
     client, svc = core_client()
+    # Admission tests keep the session alive independently of loaded host timing.
+    # The separate expiry case checks the production 500 ms watchdog.
+    svc.command.watchdog.timeout_ms = 60_000
     sent = []
 
     class Executor:
@@ -94,6 +97,7 @@ def test_teleop_cannot_commit_after_navigation_took_an_expired_session(core_clie
 
 def test_line_follow_refusal_preserves_navigation_state(core_client, monkeypatch):
     client, svc = core_client()
+    svc.command.watchdog.timeout_ms = 60_000
     cancelled = []
     monkeypatch.setattr(svc.nav, "cancel", lambda **kwargs: cancelled.append(kwargs))
     assert svc.modes.transition(Mode.MANUAL)[0]
