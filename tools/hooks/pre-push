@@ -51,6 +51,10 @@ if out:
     sys.exit(1)
 EOF
 
+# D-430 §5: opt-in early warning only. It never blocks the push; CI enforces it.
+echo "[pre-push] Safety-Review trailers (warning only)"
+"$PY" tools/harness/safety_review.py "$(git merge-base HEAD origin/main 2>/dev/null || true)" HEAD --warn-only
+
 echo "[pre-push] fast contract suites"
 "$PY" -m pytest \
   test/test_harness_contracts.py \

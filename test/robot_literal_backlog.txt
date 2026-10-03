@@ -73,3 +73,16 @@ site/fleet/fleet/localization/service_logic.py
 site/fleet/fleet/server/bays.py
 site/fleet/fleet/server/traffic.py
 site/fleet/fleet/server/cancel_all.py
+# D-430 follow-up classification (2026-10-03); each entry says what it is and who should own the value.
+# (a) data-shaped Pinky constant in a descriptor builder: pinky_controls() is the Pinky controls profile (D-411 section 8); move it to the Pinky product profile.
+contracts/foundation/core_common/protocol/controls.py
+# (a) PINKY_PRO_GEOMETRY URDF nominal + DECEL_MPS2 comment (D-424); safety-tagged, no edit without safety review; geometry should be loaded from the product profile/geometry.yaml (D-397).
+contracts/foundation/core_common/robot_body.py
+# (a) imports pinky_controls (D-411) for the capabilities announce; drops out when the controls profile moves to the product profile (see controls.py).
+runtime/api_web/core_api_web/api/v1/system.py
+# (a) comment-only: Pinky LiDAR example numbers in a docstring (D-424); safety-tagged, left unedited pending safety review.
+runtime/sensing/control/control/lidar_guard.py
+# (a) comment-only: Pinky LiDAR floor note (D-424); safety-tagged, left unedited pending safety review.
+runtime/sensing/control/control/safety_profile.py
+# (a) comment-only: Pinky example distances in a docstring (D-424); the values already come from config/URDF body, reword when the Pinky profile owns them.
+runtime/services/core_features/localization/mission.py
