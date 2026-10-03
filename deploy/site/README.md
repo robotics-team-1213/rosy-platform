@@ -729,8 +729,11 @@ filled from the operator's private records.
    assets can be replaced by anyone with write access, so bind the file to the
    CI run before signing. Both checks are required:
    - Open the workflow run page and copy the `release.json SHA-256` from the
-     job summary (also a notice in the build log). Run logs and summaries
-     cannot be edited by release-asset writers.
+     job summary table. Do not take it from arbitrary log lines: build tool
+     output runs with workflow commands paused, and the table is written only
+     after they resume. Alternatively use the subject digest that
+     `gh attestation verify ... --format json` reports for `release.json`. The
+     run summary and attestations cannot be edited by release-asset writers.
    - Verify the GitHub build provenance of the downloaded file. It must come
      from this workflow, built from `main`:
 

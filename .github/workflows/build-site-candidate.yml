@@ -113,16 +113,21 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          token="$(openssl rand -hex 16)"
+          echo "::stop-commands::${token}"
           # build_candidate.py runs `docker build`, then inspects and saves the
           # local image. The runner's default buildx builder uses the docker
           # driver, so built images land in the local store without --load.
           docker buildx version
           docker buildx inspect | grep -Eq '^Driver:[[:space:]]+docker$'
+          echo "::${token}::"
 
       - name: Install pinned syft
         shell: bash
         run: |
           set -euo pipefail
+          token="$(openssl rand -hex 16)"
+          echo "::stop-commands::${token}"
           archive="$RUNNER_TEMP/syft.tar.gz"
           curl --fail --location --proto '=https' --proto-redir '=https' \
             --output "$archive" \
@@ -132,6 +137,7 @@ jobs:
           tar -xzf "$archive" -C "$RUNNER_TEMP/bin" syft
           echo "$RUNNER_TEMP/bin" >>"$GITHUB_PATH"
           "$RUNNER_TEMP/bin/syft" version
+          echo "::${token}::"
 
       - name: Build unsigned candidate
         shell: bash
@@ -139,10 +145,15 @@ jobs:
           COMMIT: ${{ steps.source.outputs.commit }}
         run: |
           set -euo pipefail
+          # Docker, syft and build output must not be able to issue workflow
+          # commands (e.g. a fake notice or summary): pause command parsing.
+          token="$(openssl rand -hex 16)"
+          echo "::stop-commands::${token}"
           python3 deploy/site/build_candidate.py \
             --output-dir "$CANDIDATE_ROOT/$COMMIT" \
             --sbom-tool syft
           test ! -e "$CANDIDATE_ROOT/$COMMIT/release.json.sig"
+          echo "::${token}::"
 
       - name: Package candidate into release-sized parts
         shell: bash
@@ -150,6 +161,8 @@ jobs:
           COMMIT: ${{ steps.source.outputs.commit }}
         run: |
           set -euo pipefail
+          token="$(openssl rand -hex 16)"
+          echo "::stop-commands::${token}"
           # The images are already in images.tar; free their layers first.
           docker system prune --all --force
           cp "$CANDIDATE_ROOT/$COMMIT/release.json" "$UPLOAD_DIR/release.json"
@@ -165,6 +178,7 @@ jobs:
             sha256sum release.json rosy-site-candidate-"$COMMIT".tar.part* >SHA256SUMS
             cat SHA256SUMS
           )
+          echo "::${token}::"
 
       - name: Publish the manifest hash for the signing station
         shell: bash
@@ -172,8 +186,9 @@ jobs:
           COMMIT: ${{ steps.source.outputs.commit }}
         run: |
           set -euo pipefail
-          # The operator copies this hash from the run page (log and summary),
-          # which release-asset writers cannot edit, into
+          # Runs only after every tool step resumed workflow commands. The
+          # operator copies this hash from the job summary table (not from
+          # arbitrary log lines), which release-asset writers cannot edit, into
           # sign_candidate.py --manifest-only --expected-manifest-sha256.
           digest="$(sha256sum "$UPLOAD_DIR/release.json" | cut -d' ' -f1)"
           [[ "$digest" =~ ^[0-9a-f]{64}$ ]]

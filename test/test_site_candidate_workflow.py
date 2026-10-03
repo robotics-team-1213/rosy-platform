@@ -172,3 +172,30 @@ def test_pre_job_fails_fast_when_the_site_release_exists():
     assert 'grep -q "HTTP 404"' in run
     assert "already exists" in run
     assert 'test "$commit" = "$CHECKED_COMMIT"' in build_run
+
+
+def test_tool_output_cannot_issue_workflow_commands_before_the_hash_is_published():
+    steps = _workflow()["jobs"]["build-unsigned-candidate"]["steps"]
+    by_name = {step.get("name"): step for step in steps}
+    names = [step.get("name") for step in steps]
+    tool_steps = ("Check Docker Buildx keeps images in the local store", "Install pinned syft",
+                  "Build unsigned candidate", "Package candidate into release-sized parts")
+    markers = {"Install pinned syft": "sha256sum --check --strict",
+               "Build unsigned candidate": "deploy/site/build_candidate.py",
+               "Package candidate into release-sized parts": "docker system prune",
+               "Check Docker Buildx keeps images in the local store": "docker buildx inspect"}
+
+    for name in tool_steps:
+        run = by_name[name]["run"]
+        stop = run.index('echo "::stop-commands::${token}"')
+        resume = run.rindex('echo "::${token}::"')
+        assert 'token="$(openssl rand -hex 16)"' in run[:stop], name
+        assert stop < run.index(markers[name]) < resume, name
+        assert not run[resume:].strip().replace('echo "::${token}::"', ""), name
+
+    hash_step = by_name["Publish the manifest hash for the signing station"]
+    assert "stop-commands" not in hash_step["run"]
+    assert max(names.index(name) for name in tool_steps) < names.index(hash_step["name"])
+    readme = (ROOT / "deploy" / "site" / "README.md").read_text(encoding="utf-8")
+    assert "job summary table" in readme
+    assert "gh attestation verify" in readme and "--format json" in readme
