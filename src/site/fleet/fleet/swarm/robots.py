@@ -24,13 +24,14 @@ class RobotEndpoint:
     base_url: str   # 끝 슬래시 없음
     token: str   # CORE REST operator token
     fleet_pairing_token: str | None = None  # CORE FleetAgent → SiteHub only
+    resolver_token: str | None = None  # D-438: CORE stuck_resolver token
 
 
 _REQUIRED = ("robot_id", "base_url", "token")
 
 
 def _endpoint(robot_id, base_url, token, where: str,
-              fleet_pairing_token=None) -> RobotEndpoint:
+              fleet_pairing_token=None, resolver_token=None) -> RobotEndpoint:
     """load_robots 와 write_robots 가 같은 규칙을 통과시킨다."""
     if not robot_id or not base_url or not token:
         raise RobotsFileError(f"{where}: robot_id, base_url and token are all required")
@@ -45,12 +46,19 @@ def _endpoint(robot_id, base_url, token, where: str,
             raise RobotsFileError(f"{where}: 'fleet_pairing_token' must be a non-empty quoted string")
         if fleet_pairing_token == token:
             raise RobotsFileError(f"{where}: fleet_pairing_token must differ from the REST token")
+    if resolver_token is not None:
+        if not isinstance(resolver_token, str) or not resolver_token:
+            raise RobotsFileError(f"{where}: 'resolver_token' must be a non-empty quoted string")
+        if resolver_token in (token, fleet_pairing_token):
+            raise RobotsFileError(
+                f"{where}: resolver_token must differ from the REST and fleet pairing tokens")
     base_url = base_url.rstrip("/")
     if not base_url.lower().startswith(("http://", "https://")):
         # 스킴이 없으면 ws_url 이 호스트를 잃고 `ws:///...` 를 만든다 — 연결 시점이 아니라
         # 여기서 거절한다.
         raise RobotsFileError(f"{where}: base_url needs an http:// or https:// scheme")
-    return RobotEndpoint(str(robot_id), base_url, token, fleet_pairing_token)
+    return RobotEndpoint(str(robot_id), base_url, token, fleet_pairing_token,
+                         resolver_token)
 
 
 def load_robots(path: Path, *, allow_empty: bool = False) -> list[RobotEndpoint]:
@@ -78,7 +86,8 @@ def load_robots(path: Path, *, allow_empty: bool = False) -> list[RobotEndpoint]
             if not row.get(key):
                 raise RobotsFileError(f"{path}: robots[{i}] is missing '{key}'")
         endpoint = _endpoint(row["robot_id"], row["base_url"], row["token"],
-                             f"{path}: robots[{i}]", row.get("fleet_pairing_token"))
+                             f"{path}: robots[{i}]", row.get("fleet_pairing_token"),
+                             row.get("resolver_token"))
         if endpoint.robot_id in seen:
             raise RobotsFileError(f"{path}: duplicate robot_id {endpoint.robot_id!r}")
         seen.add(endpoint.robot_id)
@@ -97,7 +106,7 @@ def write_robots(path: Path, robots: list[RobotEndpoint]) -> None:
     if not robots:
         raise RobotsFileError("every robot needs robot_id, base_url and token")
     normalized = [_endpoint(r.robot_id, r.base_url, r.token, f"robots[{i}]",
-                            r.fleet_pairing_token) for i, r in enumerate(robots)]
+                            r.fleet_pairing_token, r.resolver_token) for i, r in enumerate(robots)]
     ids = [r.robot_id for r in normalized]
     if len(set(ids)) != len(ids):
         raise RobotsFileError(f"duplicate robot_id in {ids}")
@@ -106,6 +115,8 @@ def write_robots(path: Path, robots: list[RobotEndpoint]) -> None:
         row = {"robot_id": r.robot_id, "base_url": r.base_url, "token": r.token}
         if r.fleet_pairing_token is not None:
             row["fleet_pairing_token"] = r.fleet_pairing_token
+        if r.resolver_token is not None:
+            row["resolver_token"] = r.resolver_token
         rows.append(row)
     target = Path(path)
     text = yaml.safe_dump({"robots": rows}, sort_keys=False)
