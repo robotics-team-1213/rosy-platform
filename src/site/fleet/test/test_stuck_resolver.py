@@ -216,3 +216,23 @@ def test_claim_survives_a_mode_change_while_the_stuck_is_open():
     r.claim("rosy_01", "stuck-1")
     r.step(0.0, [_row(stuck=_stuck("stuck-1"))])
     assert r.step(1.0, [_row(stuck=_stuck("stuck-1"), mode="OFF")]) == []
+
+
+def test_budget_never_blocks_the_one_transport_resend():
+    r = StuckResolver(ResolverConfig(rule_budget=2))
+    a = r.step(0.0, [_row(stuck=_stuck("stuck-1"))])[0]
+    r.sent(a, 0.0)
+    r.result(a, code=None)
+    r.step(1.0, [_row(stuck=None)])
+    b = r.step(2.0, [_row(stuck=_stuck("stuck-2"))])[0]
+    r.sent(b, 2.0)
+    assert r.result(b, code="ROBOT_UNREACHABLE") is None
+    assert r.step(3.0, [_row(stuck=_stuck("stuck-2"))]) == [b]           # resend, not rule_budget
+
+
+def test_robots_that_leave_the_roster_lose_their_chain_and_claims():
+    r = StuckResolver(ResolverConfig())
+    r.claim("rosy_02", "stuck-9")
+    r.step(0.0, [_row(stuck=_stuck()), _row("rosy_02", _stuck("stuck-9"))])
+    r.step(1.0, [_row(stuck=_stuck())])
+    assert set(r._chains) == {"rosy_01"} and r._claims == set()

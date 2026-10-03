@@ -57,12 +57,12 @@ class _Chain:
     stuck_id: Optional[str] = None
     closed_at: Optional[float] = None
     rule_answers: int = 0
+    # Phase 2 (model tier) only: phase-1 rules never answer RESUME, so this stays None.
     resume_id: Optional[str] = None                  # stuck id the resolver answered RESUME
     retired: set = field(default_factory=set)
     answered: set = field(default_factory=set)       # stuck ids with an answer in flight/done
     retries: dict = field(default_factory=dict)      # stuck id -> transport resends
     escalated: set = field(default_factory=set)      # stuck ids already escalated
-    claimed: set = field(default_factory=set)        # stuck ids a human owns
 
 
 def _stuck_of(row: Mapping) -> Optional[dict]:
@@ -127,6 +127,10 @@ class StuckResolver:
 
     def step(self, now: float, rows: Iterable[Mapping]) -> list[Action]:
         rows = [r for r in rows if isinstance(r, Mapping) and r.get("robot_id")]
+        present = {str(r["robot_id"]) for r in rows}         # rows are the full roster
+        for rid in set(self._chains) - present:
+            del self._chains[rid]
+        self._claims = {c for c in self._claims if c[0] in present}
         actions: list[Action] = []
         for row in rows:
             action = self._one(now, row, rows)
@@ -174,7 +178,8 @@ class StuckResolver:
         rule = self._rule(row, stuck, rows, chain)
         if rule is None:
             return self._escalate(chain, rid, sid, "no_rule")
-        if chain.rule_answers >= self.config.rule_budget:
+        # §5: the one transport resend repeats an answer already counted; never block it.
+        if chain.rule_answers >= self.config.rule_budget and chain.retries.get(sid) != 1:
             return self._escalate(chain, rid, sid, "rule_budget")
         return Answer(rid, sid, rule[1], rule[0])
 
