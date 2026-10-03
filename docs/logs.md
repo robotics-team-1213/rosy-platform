@@ -4909,3 +4909,10 @@
 - gate 변화: 없음(호스트 결과). containerd image store 사이트 호스트의 전체 검증 재실행이 남았다
 - 결정: D-437 Consequences 보강(manifest 형식 변경 없음)
 - 교훈: Docker image ID는 image store마다 다르다. 서명된 config digest에서 출발해 archive 안 blob 바이트로 다른 형태를 이어 붙여야 보안을 낮추지 않고 두 store를 모두 받을 수 있다
+
+## 2026-10-04 · uncommitted · docs(adr): D-444·D-445 착지와 main↔origin 정렬
+
+- 변경: main에 origin/main을 merge해 분기를 정리했다(13개 충돌 해결: append-only 저널은 합집합, ADR Log는 번호순 합집합, harness.yaml adr_gaps는 origin 측, NsdSiteBrowser는 공유 세션 아키텍처 유지 + origin의 late-NSD-callback 수정을 NsdDiscoverySession에 이식). 사다리 계획의 ADR 두 건을 D-444(웹 표면 게이트는 release 이미지를 탄다)·D-445(Fleet 승격 경로와 중앙 착수 전제)로 Proposed 착지했다. 계획 배정 표의 D-439/D-440은 착지 시점에 D-439–D-443이 다른 브랜치(feat/hmi-task-layout, feat/device-power-policy, feat/site-auto-update, docs/d442-motion-intent-port, docs/d440-site-device-contract)에 점유돼 재번호했고, 그 다섯 번호는 adr_gaps에 선언했다.
+- 증거: merge 뒤 `rosy_harness.py lint` 0 errors, `test_harness_contracts.py`·`test_network_topology_contracts.py` 83+59 passed. 번호 점유는 전 370 refs·전역 이력 검사로 확인(D-444/D-445 무점유). 백업 브랜치 backup/main-pre-origin-merge.
+- gate 변화: 없음. ARTIFACT/DEVICE 관측·측정은 별도 실행.
+- 결정: D-444·D-445 Proposed(사다리 계획 §2 승인 기반). P0(트리 정렬) 완료 — main ahead 48, behind 0.

@@ -435,3 +435,5 @@
 | D-436 | 호스트 시험은 변경 범위로 고른다 — 반복과 PR CI는 affected 티어, 공용 기반·미분류 변경과 main·야간·릴리스는 풀 | Accepted (2026-10-03, 사용자 요청; 저장소 도구·CI·작업 규칙만) |
 | D-437 | 공개 저장소의 빌드는 GitHub Actions hosted runner에서 하고, 서명만 로컬 오프라인 키로 한다 | Accepted (2026-10-03, 사용자 결정; 사이트 후보 workflow 첫 실행은 push 승인 뒤, 사이트 키 미준비) |
 | D-438 | 막힌 로봇의 판단은 Fleet 판단기가 규칙 → 비전 모델 → 사람 순으로 내린다 | Accepted (2026-10-03, 사용자 승인; D-407 §2 의 답하는 주체와 Fleet 쪽 영상 해석을 고침, 사전 주의점은 다음 ADR, 문서만) |
+| D-444 | 웹 표면 게이트는 release 이미지를 탄다 — dashboard·pilot ARTIFACT는 서명 release 안 share/ 설치 관측, pilot DEVICE는 실기 페달·e-stop 정지 계약 측정 | Proposed (2026-10-04, 사다리 계획 승인; 문서 결정, 관측·측정 별도) |
+| D-445 | Fleet 승격 경로(ROS-SIM D-426 → ARTIFACT D-437 첫 실행·D-301 서명 → DEVICE 사이트 PC·2대)와 중앙 Fleet(8081) 착수 전제 3개를 고정한다. 착수 자체는 별도 ADR | Proposed (2026-10-04, 사다리 계획 승인; 문서 결정, 승격·착수 별도) |
