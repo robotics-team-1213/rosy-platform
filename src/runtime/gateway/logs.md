@@ -10,6 +10,7 @@
 - 결정: D-61 Proposed
 - 교훈: 없음
 
+
 ## 2026-09-15 · uncommitted · docs(harness): stop carrying over unrerun ROS-SIM evidence
 - 변경: 리뷰 반영. `last_verified.commit`을 `uncommitted`로, SOURCE에 재실행 명령 추가
 - 증거: `python -m pytest test/test_harness_contracts.py test/test_network_topology_contracts.py -q` 62 passed; `python tools/harness/rosy_harness.py lint` 0 errors, 2 warnings(uncommitted). ROS 시험 자체는 미실행
@@ -52,6 +53,7 @@
 - 결정: 서버 계약을 바꾸지 않는다. 셋 다 S3·S4가 이미 배송한 데이터만 소비한다. 임계값(`stale_after_s`)은 읽지 않는다 — 피어가 커밋한 게이트(`test_dashboard.py:427-429`)가 클라이언트 접근을 금지하며, 표시와 재계산은 다르지만 그 경계를 이 세션이 일방적으로 옮기지 않았다
 - 교훈: 고침과 그 고침을 지키는 시험이 같은 좁은 패턴을 인코딩하면 둘 다 같은 구멍을 갖는다. em dash를 `>—<` 모양으로만 찾아 지웠고 시험도 같은 정규식을 썼더니 `SEQ —`·`voltage —`처럼 라벨이 앞에 붙은 4곳이 고침과 시험 양쪽을 빠져나갔다 — 리뷰어가 잡았다. 시험을 "텍스트가 대시로 끝나는 id 자리"로 넓히고 수정 전 마크업에 걸어 45곳을 잡는지 확인했다. 그리고 `표본 수집 대기` 같은 문구를 처음에 같은 결함으로 봤으나, 그건 "아직 안 물어서 기다린다"를 산문으로 말한 것이라 결함이 아니다 — `상태 없음` 하나만 "물었는데 없다"로 읽혀 기존 관용구 `확인 전`에 맞췄다
 
+
 ## 2026-09-18 · uncommitted · fix(core): 보고 pose 의 임자를 map 프레임으로 못박는다
 - 변경: `bridge/odometry.py` 에 `odom_owns_pose()`, `ros_bridge` 가 map→base TF 를 읽은 시각을 기억하고 그것이 신선하면 odom 콜백은 pose 를 건드리지 않는다. 시험 2건(`test_bridge_odometry.py`)
 - 증거: 미로 주행 뒤 실측 — Gazebo 정답 (2.005, 2.181), TF `map→base` (1.969, 2.228) 로 AMCL 은 6 cm 안에 있었는데 `/api/v1/robot/pose` 는 (4.219, 4.590) 을 돌려줬다. 그 값은 `/rosy_01/odom` 과 정확히 같다. 수정 뒤 같은 시나리오에서 측위 오차 3.27 m → 0.03 m
@@ -65,6 +67,7 @@
 - gate 변화: 없음
 - 결정: 두 문법을 한 화면에 섞지 않는다(concept 16 §4 L2). 점검 뷰의 패널은 지우지 않고 옮겼다 — 설치·정비가 쓰는 화면이고 절차 문법이 맞는 자리다
 - 교훈: 시험이 전부 통과해도 화면은 안 뜰 수 있다. 기존 브라우저 시험이 **CSS를 빈 문자열로 서빙**해서 배치는 한 번도 검증된 적이 없었고, 실제로 렌더해 재 보니 네 개의 결함이 한 번에 나왔다 — `[hidden]`이 `display:flex`에 져서 숨긴 뷰가 레이아웃을 먹고 있었고(3582px 스크롤), `aspect-ratio: 5/3`이 `flex:1`과 싸워 지도를 54px로 눌렀고, `hero-copy`의 `padding: 50px`이 상태줄을 141px로 만들었고, 존재를 잊고 있던 `.page-footer`가 64px를 더하고 있었다. 그리고 내가 `#page-footer`로 셀렉터를 썼는데 그건 클래스였다 — 재보지 않았으면 못 찾았다. 마지막으로 D-82가 위험을 어두운 빨강으로 바꾼 뒤 옛 옅은 빨강에 맞춰진 어두운 잉크가 대비 2.86:1로 남아 있었다. 값만 보는 게이트는 CSS 안의 **짝**을 못 본다 — 짝을 보는 게이트를 새로 넣었다
+
 
 ## 2026-09-18 · uncommitted · refactor(web): float the map controls so the map gets the observe region back
 - 변경: `.field-map-panel` 흐름에 있던 지도 툴바 두 줄(레이어·클릭 동작)을 `.map-stage` 안으로 옮기고 `.map-controls`로 묶어 지도 위 좌상단에 겹쳤다. 겹친 칩은 `--scrim` 바탕과 `--surface-line` 테두리로 점유 격자와 갈린다. `test_console_layout.py`에 게이트 1건
@@ -433,7 +436,6 @@
 - gate 변화: 없음
 - 결정: D-196 Proposed
 - 교훈: 없음
-
 ## 2026-09-24 · uncommitted · docs(adr): D-200 docking owns the DOCKING mode
 - 변경: `docs/adr/D-200-docking-owns-the-docking-mode.md` 추가(Accepted), ADR Log 표 D-200 행, `progress.md`의 `adrs`에 D-200. 주차 설계 문서에 D-200 링크 한 줄. 이미 main에 있는 구현(도킹 전용 슬롯, `route_nav_cmd_vel`, `take_docking_mode`/`release_docking_mode`/`leave_docking`, ModeMachine `expect`와 리스너 격리)을 기록했다. 코드 본문은 바꾸지 않았다.
 - 증거: 시험 `test_docking_mode_ownership`, `test_docking_mode_release`, `test_mode_listener_isolation`, `test_bridge_docking_executor`, `test_docking_parking*`, `core_features/test/test_docking_review_fixes`. Gazebo 미션 4/4(주차 오차 1.4–2.3 mm, 1.7° 이하)는 25° 세계의 ROS-SIM이고 장치 증거가 아니다.
@@ -454,7 +456,6 @@
 - gate 변화: 없음 (DEVICE 재검증 필요).
 - 결정: D-32, D-192.
 - 교훈: 없음
-
 ## 2026-09-25 · uncommitted · refactor(runtime): move core under src/runtime (D-231)
 
 - 변경: src/runtime/core로 이동, 동작 변경 없음 (D-231)
@@ -477,7 +478,6 @@
 - gate 변화: 없음; ROS-SIM/DEVICE/FIELD 범위 밖.
 - 결정: D-257 Proposed; schema-only pass는 카메라/vision worker 동작 증명이 아니다.
 - 교훈: 없음
-
 ## 2026-09-26 · uncommitted · FleetAgent site discovery integration
 
 - 변경: CORE가 기존 직접 Fleet URL 경로를 유지하면서, 승인된 pairing token이 있는 경우에만 발견된 사이트로 outbound WSS를 연다. SD 등록용 일회성 값은 연결 토큰으로 쓰지 않는다.
@@ -488,7 +488,6 @@
 - Change: launch now resolves default YAML from core_common share; source fixtures follow the new owner.
 - Evidence: 1,812 gateway/config/image tests passed with 28 skipped; flake8 passed for changed runtime/config Python files.
 - Gate: LOCAL only; ROS-SIM, image and device runtime remain unverified.
-
 ## 2026-09-28 · uncommitted · report camera-line observation hold
 
 - Change: selected CAMERA_LINE missing/stale/invalid evidence keeps the existing fail-closed zero command candidate and adds a camera-specific reason. Source changes still discard old evidence; no IR auto-switch was added.
@@ -512,7 +511,6 @@
 - Change: preserve the canceled Nav2 generation's Fleet correlation until the terminal result callback, including cancel-before-acceptance. Publish that result without changing a newer navigation state.
 - Evidence: focused GoalTracker and navigation manager regression suites pass; full changed-suite rerun pending.
 - Gate: SOURCE/LOCAL only; no ROS-SIM, image, device, stop readback, or FIELD acceptance.
-
 ## 2026-09-28 · uncommitted · close canceled-generation result recovery
 
 - Change: retain at most 128 canceled correlations; publish late terminal results without changing a newer navigation state. Unreadable action results leave the attempt unresolved.
@@ -536,14 +534,12 @@
 - Change: `_signal_observer_binding` parses the file-only `traffic_policy.signal_observer` block (empty/absent = feature off; malformed values fail the build; a binding without the policy's map/scene fails the build too — every frame would be rejected otherwise). CoreServices carries `signal_observer` and starts the daemon-thread monitor next to the manager it feeds; status fields `signal_source_kind`/`signal_head_age_s`/`signal_head_frozen` flow to snapshots and `/api/v1/traffic` unchanged routes.
 - Evidence: test_traffic_policy +4 (absent by default, binds+starts with url captured, missing map/scene ValueError, status view). Combined host run 501 passed (traffic, services, API, event catalogue, foundation, runtime config); flake8 clean on changed lines — the reported services.py F401/E306/W293 sit outside this diff (parallel track's lines).
 - Gate: SOURCE/LOCAL only; no live observer, ROS-SIM, device, or FIELD acceptance. Dashboard readback (T4) remains.
-
 ## 2026-09-29 · uncommitted · docs(core): 24b6d4bb 브리지 판정 추출의 모듈 기록 보수
 
 - 변경: 24b6d4bb(2026-09-24)가 bridge/observation.py 신설, 시블리 4종 확장(reconcile.led·display.republish_due·goal_tracker.on_response/on_result·save_map.await_call), ros_bridge 757-590행(D-168 예산 복귀)을 반영하면서 이 모듈의 저널과 bridge/AGENTS.md 갱신이 빠졌다. bridge/AGENTS.md에 observation.py 행(Key Files·시험 sibling 목록)과 D-338 원칙 서술을 추가하고, 낡은 no-remote 주장을 origin/CI 현황으로 정정했으며 이 항목으로 모듈 저널을 소급 기록한다. 결정 원칙의 정본은 docs/adr/D-338.
 - 증거: 24b6d4bb stat 13 files +1047/-237. 현재 observation.py 203행(c33f51a6 카메라 폴트 폴백 확장 포함), ros_bridge.py 582행. bridge 시블리 시험(test_bridge_observation·timers·goal_tracker·reconcile·display·save_map) 전체 통과(2026-09-29 Windows).
 - gate 변화: 없음.
 - 교훈: 병행 세션에 작업이 흡수 커밋되면 저널 의무까지 사라지지는 않는다 — 구현이 이미 main에 있으면 기록만 별도 커밋으로 보수한다.
-
 ## 2026-09-29 · uncommitted · feat(api): /system/capabilities에 lifecycle 블록 (D-347, v1.58)
 
 - 변경: api/v1/system.py의 capabilities 끝점에 lifecycle_from(svc.capability.to_dict(), truth.reasons)를 실었다 — 광고된 플래그별 단일 생애 어휘(additive). 기존 flags·withheld·runtime·501 게이트·409 CAPABILITY_WITHHELT 불변. 신규 시험 test_capability_lifecycle.py(wire 1건 포함 6건).
@@ -551,7 +547,6 @@
 - gate 변화: 없음.
 - 결정: inventory PresentationState는 그대로 — D-347 본문 표가 대응을 정의한다(unavailable≈blocked 등).
 - 교훈: core_client은 팩토리 픽스처다( (TestClient, services) 반환) — 첫 사용에 401·function 오류가 나면 소비 방식부터 확인한다.
-
 ## 2026-09-30 · uncommitted · feat(display): display/info에 charging 상태 추가 (D-350·D-351)
 
 - 변경: bridge/display.py info_payload에 "charging" 필드 추가 (additive, false 기본). 화면이 CHARGING/CHARGED_HOLD 상태를 표시할 수 있게 한다.
@@ -608,7 +603,6 @@
 - 변경: ros_bridge 가 5 Hz 상태 틱에서 reconcile.emotion(LiDAR 문법 — latch 없이 재시도)으로 표정을 바꾼다. 서비스 클라이언트 5개로 늘어 test_bridge_timers 핀을 같이 갱신했다.
 - 증거: test_bridge_reconcile.py 표정 3건·test_bridge_timers.py. 433 passed.
 - gate 변화: 없음.
-
 ## 2026-10-01 · uncommitted · fix(test): status-inputs 키 집합에 swarm_role 추가 (D-383 뒤치움)
 
 - 변경: d0f2b7f5(D-383)가 `api/v1/host.py` 의 `status_inputs` 에 `swarm_role`(대형 역할 leader/follower, 없으면 absent)을 더하며 루트 host 시험만 갱신했다. 게이트웨이의 키 집합 동일성 시험이 그 키를 몰라 main CI core 단계가 붉었다. 기대 키 집합에 `swarm_role` 을 넣고, 상태 없음(None)도 absent로 기록됨을 함께 단언한다.
@@ -621,7 +615,6 @@
 - 변경: bridge/display.py 에 DRIVE_EVERY_S/DRIVE_HOLD_S·drive_due(운용 중에만, 20 s)·drive_payload(kind: drive, 웨이크 카드와 같은 반올림 계약, 결측 속도 None). ros_bridge 상태 틱이 기존 display/info 퍼블리셔로 발행한다(구조 변화 없음).
 - 증거: test_bridge_display.py (변이: EMERGENCY 제외 시 빨강). 게이트웨이 관련 212 passed.
 - gate 변화: 없음.
-
 ## 2026-10-01 · a527920a · feat(core): 보정 lease 배선과 만료 타이머
 - 변경: `CoreServices.calibration` 을 만들고 상태 스냅샷 provider 로 건다. `ros_bridge._tick_power` 가 `calibration.expire_due()` 를 불러 아무도 상태를 읽지 않아도 만료 이벤트가 난다. 새 시험 `test/test_calibration_session.py`. 15770a9c: `display.info_payload` 가 `activity` 를 싣는다(LCD).
 - 증거: test_calibration_session.py 13 passed, test_bridge_display 통과, test_event_catalogue·test_module_criteria 통과(릴레이 함수·getattr 도달을 만들지 않도록 고침).
@@ -692,6 +685,7 @@
 - 변경: CI 빨강(36877526967 등 3회 연속, 2026-10-01 14:28 원격 푸시부터)의 원인인 C6 reach 8종을 전부 삭제로 수정. snapshot.mode/navigation/docking 은 StateSnapshot 이 보장하는 선언 멤버(schemas.py)라 직접 접근으로 바꾸고, docking_state 는 pin 된 모드-맥락 계약(도킹 중에만 실린다)대로 고침. self._svc.nav.current_goal 은 NavigationManager 에 선언된 적이 없는 멤버 — 주행 카드의 목표 좌표는 태어나서 한 번도 값이 실린 적 없었다(죽은 reach). 읽기를 지우고 판정을 문서에 남긴다. 시험 stub 의 docking.state 를 실제 DockState enum 으로(문자열 이중 모양 제거).
 - 근거: docs/plans/2026-09-06-module-split-criteria.md 행 추가(판정: 전부 Seam lie — deletion). test_module_criteria·test_bridge_display·test_bridge_reconcile·test_bridge_timers·test_emotion_map·test_goal_tracker 87 passed, flake8 초록.
 - gate 변화: 없음. 목표 좌표 표시는 NavigationManager 가 current_goal 을 선언하는 커밋에서 돌아온다(직접 접근 + 실측 시험 동반).
+
 
 ## 2026-10-02 · uncommitted · feat(bridge): D-395 P2-7 미션 조립과 배선
 
@@ -784,6 +778,7 @@
 - 증거: gateway 두 묶음 1141+715 passed; 실패 `test_core_node_teardown::test_run_drains_executor_workers_before_returning` 1건은 부하 아래에서만(단독 8 passed).
 - gate 변화: 없음.
 
+
 ## 2026-10-03 · uncommitted · feat(link): D-432 주소 없는 장비 접속
 
 - 변경: 선택적 CORE TLS를 listener 이전에 검증하고 shutdown에서 공유 발견 캐시를 닫는다. 4자리 코드와 LAN 장비 목록 admission 시험을 추가했다.
@@ -791,17 +786,16 @@
 - gate 변화: 실제 장비의 제어·FIELD 관문은 이동하지 않는다.
 - 결정: D-432 2026-10-03 추가 결정.
 
+
 ## 2026-10-03 · uncommitted · fix(link): 현재 접속과 후속 코드 규약 구별
 
 - 변경: 사용자 보정으로 4자리 코드 발급·Cam 표시 별칭은 이번 적용에서 제외했다. 현재 로봇 8자·Cam 6자리 규약을 유지하며 D-432에 추후 통합을 기록했다. 실제 Pinky 접속 수정은 진행한다.
 - 증거: 영향받는 Python 2345 passed/84 skipped, quick tier 459 passed/2 skipped, Pilot PWA 87 passed/58 skipped. 코드 규약 보정 뒤 해당 인증·페어링 시험을 다시 실행한다. 공개 검증 기록은 docs/validation/discovery-link-2026-10-03/README.md.
 - gate 변화: Android 설치·실제 CORE 인증 확인은 실제 주행·Cam 화면 off 연속 송출·현장 트래픽 수용과 별개다. DEVICE/FIELD 이동 없음.
 - 결정: D-432 후속 결정: 접속은 지금, 짧은 코드 통합은 추후 적용.
-
 ## 2026-10-03 · e021264e6 · feat(face): D-433 CORE가 rosy-face에 얼굴 핸드오버를 쓴다
 
 - 변경: 브리지 5 Hz 전원 틱에서 `/run/rosy/face-inputs.json`을 바뀔 때와 1 s마다 쓴다(`display.face_inputs_payload`·`face_inputs_due`, `host.write_face_inputs` 0644 강제). 얼굴 이름은 `set_emotion` 서비스 유무와 무관하게 `emotion_for`로 정한다. `display.drive_due`는 `core_common.face_screen`을 다시 내보낸다.
 - 증거: `python -m pytest src/runtime/gateway/test/test_face_inputs.py src/runtime/gateway/test/test_bridge_display.py -q` 통과. ros_bridge.py는 rclpy 없이 import할 수 없어 py_compile만.
 - gate 변화: 없음. 실기 확인 전.
 - 결정: D-433 (Proposed)
-

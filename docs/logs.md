@@ -4786,6 +4786,78 @@
 - gate 변화: 없음. Proposed만 추가했으며 기존 Accepted 계약과 공개 API·코드·정지 fence·원장·policy dispatch·장치 수용은 변경하지 않는다.
 - 검증: 문서 계약 83 passed/26 existing history warnings(full lint·generated records 포함), D-435 제목/상태/색인 일치·로컬 링크 16개 누락 0·반례 9개·diff whitespace 검사 통과. 이전 isaac_sim 구조 기준선 실패는 별도 미해결이며 이번 문서 검증의 통과 범위에 포함하지 않는다.
 
+## 2026-10-03 · uncommitted · docs: D-431 remote model PC and isolated Pi verification
+
+- 변경: 기존 원격 학습 PC로 실제 차선 TorchScript의 NCNN 변환·제품 intake를 실행하고 후속 증거와 계획 상태를 기록했다. Pi 임시 경로에서 서명 전달·손상 후보 거부·ONNX rollback을 검증했다.
+- 증거: 20프레임 pixel agreement 100%, PC NCNN/ONNX intake 각 380프레임 pass. 실기 격리 SignatureCheck/ModelSlot/rollback pass, 운영 pointer·manifest 전후 동일. 30분 동시 부하는 마지막 기록 표본 1,337.41초를 남긴 뒤 ROS 종료·cleanup 오류로 중단됐고 CPU 진단 ERROR, 마지막 p95 595.41ms였다. 정확한 종료 시간은 미확인이다. 잔여 임시 인증 1개는 API 회수와 readback 완료.
+- gate 변화: 없음. 학습 YOLO·라벨 IoU·provenance·30분 완료·정식 ARM64 release readback은 미완료이며 운영 전환과 ARTIFACT/DEVICE/FIELD 승격은 HOLD다.
+- 결정: D-431. 시스템 OpenCV와 기존 ONNX를 유지한다. 상세 범위는 `validation/pi-ncnn-remote-2026-10-03/README.md`.
+
+## 2026-10-03 · uncommitted · docs: D-435 authority handoff and device pipeline refinement
+
+- 변경: D-435 Proposed에 §8–§12 보강 후보와 검토 문서 3차 기록을 추가했다. 배정/발행/장치 수락·기존 claim 저장·SkillInvocation/Action identity·실행 출력의 Arbiter/Guard 순서·전체 진행 이력에 따른 자원 해제를 구체화했다. 형식 검사와 의미 검증도 구분했다.
+- 증거: dispatch_admission·MissionDispatcher·StepDispatcher·CellJobStore.release_before_send·SkillInvocation 정적 대조. 고정 OMX 대상, robot/workcell/object/pallet 공용 claim, 미발행과 UNKNOWN, 1 Step→1 Action 현재 범위를 확인했다.
+- gate 변화: 없음. Proposed 보강만이며 기존 Accepted 계약·코드·wire·원장·활성화·배포·장치 gate는 변경하지 않는다.
+- 추가 근거: Open-RMF 공식 task allocation/rmf_task Usage와 ROS 2 Actions 설계를 대조했다. Fleet 구현 안의 작업 실행 자체는 금지하지 않고 전체 Mission 정본과 위임 범위를 구분한다. 기존 SDK/대시보드 직접 장치 요청도 MANUAL에 한정하지 않도록 보강했다.
+- 검증: 문서 계약+모듈 기준선 단일 시험 84 passed/26 existing history warnings(full lint·generated records 포함). 기존 isaac_sim 기준선 시험은 상류 8dda13eec 수정 이후 현재 통과하며 이번 변경의 효과로 주장하지 않는다.
+
+## 2026-10-03 · uncommitted · docs: D-435 consolidated acceptance candidate
+
+- 변경: D-435 끝에 최종 수용 후보 요약 S1–S7과 검토 문서 최종 기록을 추가했다. 역할·권한·작업 흐름·원장/claim·증거·기존 ADR 부분 대체/유지·현재 구현 대응·완료 범위를 한 곳에 정리했다.
+- 증거: D-70/D-403·MissionService·목표 증거 경로를 추가 대조했다. 정형 공정 역할은 service principal의 admission 권한이 아니며 Rosy Cell 서비스는 제안/resolve, Job 승인은 이름 있는 사람 operator라는 현재 계약을 명시했다.
+- gate 변화: 없음. D-435는 Proposed이고 기존 Accepted 계약·실행 경로·API·원장·principal·simulation/실물 gate는 변경하지 않는다.
+
+- 최종 검증: network topology/harness 계약 검사 83 passed, 26 warnings(기존 last_verified 이력); S1–S7·Proposed 상태·로컬 링크 21개와 git diff --check 확인. 장치/물리 수용 증거는 아니다.
+
+## 2026-10-03 · uncommitted · docs: align D-435 roles with D-427 migration
+
+- 변경: D-435 S8에 제품/파트/논리 역할과 혼합 구현 대응을 추가했다. D-427 부록에 최신 경로 상태, 속도 우선 결정의 우선순위, D-425 기능/설치 gate 관계를 보강했다. 평가 문서에 세 선택과 권고 근거를 기록했다.
+- 근거: 기준 e23b8fe26, 매니페스트 71 root의 현재 path 누락 0개; execution submission/gateway composition 코드와 D-290/D-413/D-425/D-427/D-429/D-434 정적 대조.
+- gate 변화: 없음. D-435 Proposed 유지; 매니페스트·목표 경로·wave·원장·API·권한·배포 변경 없음. 경로 존재는 wave/artifact 수용 증거가 아니다.
+
+- Verification: initial run caught damaged UTF-8 append text; corrected those additions and regenerated the index. Final network/harness/platform-parts/colcon-roots run: 107 passed, 26 existing last_verified warnings. Local links: 32 valid; manifest unchanged; git diff --check passed.
+
+- Follow-up: added Codex review comments C1-C4 to the D-427 plan, with recommendations, concrete questions and an append-only response format for plan owners. Existing decisions, manifest and wave gates are unchanged.
+
+- Landing preparation: isolated docs/d435-review from main c67f05b5d. Regenerated docs/index.md to include the newer main log entry; initial isolated failures were both the same stale-index check. Existing document content and Proposed status remain unchanged.
+
+
+## 2026-10-03 · uncommitted · feat(link): D-432 주소 없는 장비 접속
+
+- 변경: D-432 구현 부록과 API Ref v1.89에 게임 장비 목록 접속, 내부 bootstrap과 운영 흐름의 차이, 로컬 HTTP 개발 예외·코드4·SSH opt-in을 고정했다.
+- 증거: 관련 Python 계약 시험·실제 loopback TLS HTTP/WS 시험을 실행했다. Pilot Android 설치·화면과 실제 로봇 연결·현장 트래픽 수용은 서로 다른 증거다.
+- gate 변화: 실제 장비의 제어·FIELD 관문은 이동하지 않는다.
+- 결정: D-432 2026-10-03 추가 결정.
+
+
+## 2026-10-03 · uncommitted · fix(link): 현재 접속과 후속 코드 규약 구별
+
+- 변경: 사용자 보정으로 4자리 코드 발급·Cam 표시 별칭은 이번 적용에서 제외했다. 현재 로봇 8자·Cam 6자리 규약을 유지하며 D-432에 추후 통합을 기록했다. 실제 Pinky 접속 수정은 진행한다.
+- 증거: 영향받는 Python 2345 passed/84 skipped, quick tier 459 passed/2 skipped, Pilot PWA 87 passed/58 skipped. 코드 규약 보정 뒤 해당 인증·페어링 시험을 다시 실행한다. 공개 검증 기록은 docs/validation/discovery-link-2026-10-03/README.md.
+- gate 변화: Android 설치·실제 CORE 인증 확인은 실제 주행·Cam 화면 off 연속 송출·현장 트래픽 수용과 별개다. DEVICE/FIELD 이동 없음.
+- 결정: D-432 후속 결정: 접속은 지금, 짧은 코드 통합은 추후 적용.
+
+## 2026-10-03 · uncommitted · docs(adr): Pilot 화면별 개선과 공용 디자인 소유권
+
+- 변경: D-432에 화면별 목적/주 동작/상태/복귀 기준, 조회 전용 카메라, 원본 320×240 경계, 공용 SVG 동작 버튼과 native 색 생성 결정을 추가했다.
+- 증거: 실제 태블릿 화면 직접 확인과 브라우저/JVM 시험은 docs/validation/discovery-link-2026-10-03에 따로 기록한다. 물리 주행/발열 하강/화면 off 연속 송출은 미판정이다.
+- gate 변화: DEVICE/FIELD 이동 없음.
+- 결정: 사용자 최신 지시로 지금 구현하며 4자리 코드 통합만 추후 적용한다.
+
+## 2026-10-03 · uncommitted · fix(integration): D-418 SSH와 D-432 연결/UI 계약 통합
+
+- 변경: API Ref는 D-418 v1.89 뒤 D-432 v1.90을 보존하고 app 설명과 문서 pin을 맞췄다. 배포 서비스 목록은 두 SSH 소유자를 모두 포함하면서 기존 1000줄 hard tier를 유지한다. sandbox 시험은 공개 키 helper의 실제 write/read IPC와 양의 디렉터리 시작 조건을 검사한다. 권한을 넓히지 않았다.
+- 증거: native systemd/버전 문서/구조 시험 199 passed/1 skipped. 최종 quick tier와 SSH 영향 범위는 별도 재실행한다.
+- gate 변화: 장치 활성화·물리 주행·FIELD 이동 없음.
+- 결정: D-418와 D-432를 각각의 경로/opt-in 소유권으로 보존한다.
+
+## 2026-10-03 · uncommitted · docs(ui): D-432 공용 디자인과 설치 검증 마무리
+
+- 변경: Pilot 화면별 점검, 웹 공용 동작 아이콘과 native canonical 색 생성, 실제 태블릿 설치 증거를 D-432/디자인 규칙/검증 기록으로 연결했다. 최신 D-435 문서는 기존 journal prefix를 보존하여 통합했다.
+- 증거: 실제 Pinky 인증·저장 자격 재접속·조회 전용 카메라, native Pilot 30/Cam 318 JVM 시험 통과. 브라우저 마지막 재조작 시험에서 완료 receipt를 목표 ID에 고정했다. 최종 브라우저·문서 검증 결과는 validation/discovery-link-2026-10-03/README.md에 기록한다.
+- gate 변화: 실제 주행·발열 하강·Cam 화면 off 연속 송출·FIELD 수용은 미판정이며 승격하지 않는다.
+- 결정: D-432. 4자리 페어링 통합은 후속 적용이다.
+
 ## 2026-10-03 · uncommitted · perception(D-356): experiment tracking defaults to local run log + TensorBoard
 - 변경: `learning/training/perception/training/run_log.py` 추가(`RunLog`, `chain`), `export_cell.py`가 `metrics.experiment`의 `local` 형태를 트래커별 허용 키로 받는다, 노트북 5c(로컬 기록)·5d(W&B) 분리와 `RUNS_DIR` 입력 칸, COLAB.md/README.md 절 추가, D-356 부록
 - 증거: `python -m pytest learning/training/perception/test -q -p no:cacheprovider`(ML venv), `python tools/harness/rosy_harness.py generate` 뒤 lint·`test/test_harness_contracts.py`
@@ -4824,6 +4896,13 @@
 - 증거: `test/test_affected_tests.py` 표 시험(tools/ssh·core_common·미분류·sensing 역의존·문서·보조 모듈·deploy 축소·conftest/workflow/설정 escalation·base 부재)과 변이 증명 2건; D-418 브랜치 diff 선택 결과(core_common·platform_parts·tools/device_twin 미분류로 FULL).
 - gate 변화: 없음. 저장소 도구·CI·작업 규칙만이며 장치·이미지·현장 수용과 무관하다.
 
+## 2026-10-04 · uncommitted · docs(plan): 웹 게이트 사다리·Fleet 승격 ADR 계획
+
+- 변경: `docs/plans/2026-10-04-web-gate-ladder-fleet-readiness-adr-plan.md` 추가. dashboard/pilot ARTIFACT·pilot DEVICE(페달 정지 계약)·fleet ROS-SIM(D-87→D-426)의 게이트를 release 이미지 관측 → 실기 증거 사다리로 묶고, Fleet 사이트 시드 승격과 중앙(8081) 착수 전제, 수용됨-미구현(D-368·D-361·WS 전환) 순서를 정했다. 신규 ADR D-439(웹 표면 게이트는 release 이미지를 탄다)·D-440(Fleet 승격 경로와 중앙 착수 전제) 배정표를 포함하되 착지는 이 계획 승인 뒤로 미뤘다. origin/main과의 분기(ahead 45/behind 91)와 D-427 이동(follow-ups P1)을 선행으로 명시했다.
+- 증거: STATUS.md blockers 원문과 D-437·D-426·d427-post-migration-follow-ups(origin) 대조. 코드·게이트 변화 없음.
+- gate 변화: 없음. 문서만.
+- 결정: 새 결정 없음(D-439/D-440은 이 계획 승인 뒤 Proposed 착지).
+
 ## 2026-10-04 · uncommitted · site(D-437): verifier accepts the containerd image ID form
 - 변경: `deploy/site/verify_candidate.py` 전체 검증이 해시 확인을 마친 `images.tar`에서 서비스별 config blob과 `index.json`이 가리키는 OCI manifest blob을 읽어(링크 거부, 디스크 추출 없음) 바이트 해시를 다시 계산하고, manifest의 `config.digest`가 서명된 `image_id`와 같을 때만 manifest digest도 받는다. summary에 `id_form`(`config`/`oci-manifest`). `index.json`이 없는 archive는 config 형태만. 검증기·서명 시험의 가짜 archive를 실제 tar로 바꾸고 containerd·위조 경우 시험 추가. D-437 Consequences, `deploy/site/README.md` 검증 절
 - 증거: 사이트 후보·검증·서명·fetch·workflow 시험과 `test_no_secrets_in_tracked_files`, harness lint. 현장 호스트에서 다시 돌린 것은 아님
@@ -4831,75 +4910,19 @@
 - 결정: D-437 Consequences 보강(manifest 형식 변경 없음)
 - 교훈: Docker image ID는 image store마다 다르다. 서명된 config digest에서 출발해 archive 안 blob 바이트로 다른 형태를 이어 붙여야 보안을 낮추지 않고 두 store를 모두 받을 수 있다
 
-## 2026-10-04 · uncommitted · docs: D-431 remote model PC and isolated Pi verification
+## 2026-10-04 · uncommitted · docs(adr): D-444·D-445 착지와 main↔origin 정렬
 
-- 변경: 기존 원격 학습 PC로 실제 차선 TorchScript의 NCNN 변환·제품 intake를 실행하고 후속 증거와 계획 상태를 기록했다. Pi 임시 경로에서 서명 전달·손상 후보 거부·ONNX rollback을 검증했다.
-- 증거: 20프레임 pixel agreement 100%, PC NCNN/ONNX intake 각 380프레임 pass. 실기 격리 SignatureCheck/ModelSlot/rollback pass, 운영 pointer·manifest 전후 동일. 30분 동시 부하는 마지막 기록 표본 1,337.41초를 남긴 뒤 ROS 종료·cleanup 오류로 중단됐고 CPU 진단 ERROR, 마지막 p95 595.41ms였다. 정확한 종료 시간은 미확인이다. 잔여 임시 인증 1개는 API 회수와 readback 완료.
-- gate 변화: 없음. 학습 YOLO·라벨 IoU·provenance·30분 완료·정식 ARM64 release readback은 미완료이며 운영 전환과 ARTIFACT/DEVICE/FIELD 승격은 HOLD다.
-- 결정: D-431. 시스템 OpenCV와 기존 ONNX를 유지한다. 상세 범위는 `validation/pi-ncnn-remote-2026-10-03/README.md`.
+- 변경: main에 origin/main을 merge해 분기를 정리했다(13개 충돌 해결: append-only 저널은 합집합, ADR Log는 번호순 합집합, harness.yaml adr_gaps는 origin 측, NsdSiteBrowser는 공유 세션 아키텍처 유지 + origin의 late-NSD-callback 수정을 NsdDiscoverySession에 이식). 사다리 계획의 ADR 두 건을 D-444(웹 표면 게이트는 release 이미지를 탄다)·D-445(Fleet 승격 경로와 중앙 착수 전제)로 Proposed 착지했다. 계획 배정 표의 D-439/D-440은 착지 시점에 D-439–D-443이 다른 브랜치(feat/hmi-task-layout, feat/device-power-policy, feat/site-auto-update, docs/d442-motion-intent-port, docs/d440-site-device-contract)에 점유돼 재번호했고, 그 다섯 번호는 adr_gaps에 선언했다.
+- 증거: merge 뒤 `rosy_harness.py lint` 0 errors, `test_harness_contracts.py`·`test_network_topology_contracts.py` 83+59 passed. 번호 점유는 전 370 refs·전역 이력 검사로 확인(D-444/D-445 무점유). 백업 브랜치 backup/main-pre-origin-merge.
+- gate 변화: 없음. ARTIFACT/DEVICE 관측·측정은 별도 실행.
+- 결정: D-444·D-445 Proposed(사다리 계획 §2 승인 기반). P0(트리 정렬) 완료 — main ahead 48, behind 0.
 
-## 2026-10-04 · uncommitted · docs: D-435 authority handoff and device pipeline refinement
+## 2026-10-04 · uncommitted · docs(plan): Pilot 실기 정지 계약 측정 계획 (D-444 §2)
 
-- 변경: D-435 Proposed에 §8–§12 보강 후보와 검토 문서 3차 기록을 추가했다. 배정/발행/장치 수락·기존 claim 저장·SkillInvocation/Action identity·실행 출력의 Arbiter/Guard 순서·전체 진행 이력에 따른 자원 해제를 구체화했다. 형식 검사와 의미 검증도 구분했다.
-- 증거: dispatch_admission·MissionDispatcher·StepDispatcher·CellJobStore.release_before_send·SkillInvocation 정적 대조. 고정 OMX 대상, robot/workcell/object/pallet 공용 claim, 미발행과 UNKNOWN, 1 Step→1 Action 현재 범위를 확인했다.
-- gate 변화: 없음. Proposed 보강만이며 기존 Accepted 계약·코드·wire·원장·활성화·배포·장치 gate는 변경하지 않는다.
-- 추가 근거: Open-RMF 공식 task allocation/rmf_task Usage와 ROS 2 Actions 설계를 대조했다. Fleet 구현 안의 작업 실행 자체는 금지하지 않고 전체 Mission 정본과 위임 범위를 구분한다. 기존 SDK/대시보드 직접 장치 요청도 MANUAL에 한정하지 않도록 보강했다.
-- 검증: 문서 계약+모듈 기준선 단일 시험 84 passed/26 existing history warnings(full lint·generated records 포함). 기존 isaac_sim 기준선 시험은 상류 8dda13eec 수정 이후 현재 통과하며 이번 변경의 효과로 주장하지 않는다.
-
-## 2026-10-04 · uncommitted · docs: D-435 consolidated acceptance candidate
-
-- 변경: D-435 끝에 최종 수용 후보 요약 S1–S7과 검토 문서 최종 기록을 추가했다. 역할·권한·작업 흐름·원장/claim·증거·기존 ADR 부분 대체/유지·현재 구현 대응·완료 범위를 한 곳에 정리했다.
-- 증거: D-70/D-403·MissionService·목표 증거 경로를 추가 대조했다. 정형 공정 역할은 service principal의 admission 권한이 아니며 Rosy Cell 서비스는 제안/resolve, Job 승인은 이름 있는 사람 operator라는 현재 계약을 명시했다.
-- gate 변화: 없음. D-435는 Proposed이고 기존 Accepted 계약·실행 경로·API·원장·principal·simulation/실물 gate는 변경하지 않는다.
-
-- 최종 검증: network topology/harness 계약 검사 83 passed, 26 warnings(기존 last_verified 이력); S1–S7·Proposed 상태·로컬 링크 21개와 git diff --check 확인. 장치/물리 수용 증거는 아니다.
-
-## 2026-10-04 · uncommitted · docs: align D-435 roles with D-427 migration
-
-- 변경: D-435 S8에 제품/파트/논리 역할과 혼합 구현 대응을 추가했다. D-427 부록에 최신 경로 상태, 속도 우선 결정의 우선순위, D-425 기능/설치 gate 관계를 보강했다. 평가 문서에 세 선택과 권고 근거를 기록했다.
-- 근거: 기준 e23b8fe26, 매니페스트 71 root의 현재 path 누락 0개; execution submission/gateway composition 코드와 D-290/D-413/D-425/D-427/D-429/D-434 정적 대조.
-- gate 변화: 없음. D-435 Proposed 유지; 매니페스트·목표 경로·wave·원장·API·권한·배포 변경 없음. 경로 존재는 wave/artifact 수용 증거가 아니다.
-
-- Verification: initial run caught damaged UTF-8 append text; corrected those additions and regenerated the index. Final network/harness/platform-parts/colcon-roots run: 107 passed, 26 existing last_verified warnings. Local links: 32 valid; manifest unchanged; git diff --check passed.
-
-- Follow-up: added Codex review comments C1-C4 to the D-427 plan, with recommendations, concrete questions and an append-only response format for plan owners. Existing decisions, manifest and wave gates are unchanged.
-
-- Landing preparation: isolated docs/d435-review from main c67f05b5d. Regenerated docs/index.md to include the newer main log entry; initial isolated failures were both the same stale-index check. Existing document content and Proposed status remain unchanged.
-
-## 2026-10-04 · uncommitted · feat(link): D-432 주소 없는 장비 접속
-
-- 변경: D-432 구현 부록과 API Ref v1.89에 게임 장비 목록 접속, 내부 bootstrap과 운영 흐름의 차이, 로컬 HTTP 개발 예외·코드4·SSH opt-in을 고정했다.
-- 증거: 관련 Python 계약 시험·실제 loopback TLS HTTP/WS 시험을 실행했다. Pilot Android 설치·화면과 실제 로봇 연결·현장 트래픽 수용은 서로 다른 증거다.
-- gate 변화: 실제 장비의 제어·FIELD 관문은 이동하지 않는다.
-- 결정: D-432 2026-10-03 추가 결정.
-
-## 2026-10-04 · uncommitted · fix(link): 현재 접속과 후속 코드 규약 구별
-
-- 변경: 사용자 보정으로 4자리 코드 발급·Cam 표시 별칭은 이번 적용에서 제외했다. 현재 로봇 8자·Cam 6자리 규약을 유지하며 D-432에 추후 통합을 기록했다. 실제 Pinky 접속 수정은 진행한다.
-- 증거: 영향받는 Python 2345 passed/84 skipped, quick tier 459 passed/2 skipped, Pilot PWA 87 passed/58 skipped. 코드 규약 보정 뒤 해당 인증·페어링 시험을 다시 실행한다. 공개 검증 기록은 docs/validation/discovery-link-2026-10-03/README.md.
-- gate 변화: Android 설치·실제 CORE 인증 확인은 실제 주행·Cam 화면 off 연속 송출·현장 트래픽 수용과 별개다. DEVICE/FIELD 이동 없음.
-- 결정: D-432 후속 결정: 접속은 지금, 짧은 코드 통합은 추후 적용.
-
-## 2026-10-04 · uncommitted · docs(adr): Pilot 화면별 개선과 공용 디자인 소유권
-
-- 변경: D-432에 화면별 목적/주 동작/상태/복귀 기준, 조회 전용 카메라, 원본 320×240 경계, 공용 SVG 동작 버튼과 native 색 생성 결정을 추가했다.
-- 증거: 실제 태블릿 화면 직접 확인과 브라우저/JVM 시험은 docs/validation/discovery-link-2026-10-03에 따로 기록한다. 물리 주행/발열 하강/화면 off 연속 송출은 미판정이다.
-- gate 변화: DEVICE/FIELD 이동 없음.
-- 결정: 사용자 최신 지시로 지금 구현하며 4자리 코드 통합만 추후 적용한다.
-
-## 2026-10-04 · uncommitted · fix(integration): D-418 SSH와 D-432 연결/UI 계약 통합
-
-- 변경: API Ref는 D-418 v1.89 뒤 D-432 v1.90을 보존하고 app 설명과 문서 pin을 맞췄다. 배포 서비스 목록은 두 SSH 소유자를 모두 포함하면서 기존 1000줄 hard tier를 유지한다. sandbox 시험은 공개 키 helper의 실제 write/read IPC와 양의 디렉터리 시작 조건을 검사한다. 권한을 넓히지 않았다.
-- 증거: native systemd/버전 문서/구조 시험 199 passed/1 skipped. 최종 quick tier와 SSH 영향 범위는 별도 재실행한다.
-- gate 변화: 장치 활성화·물리 주행·FIELD 이동 없음.
-- 결정: D-418와 D-432를 각각의 경로/opt-in 소유권으로 보존한다.
-
-## 2026-10-04 · uncommitted · docs(ui): D-432 공용 디자인과 설치 검증 마무리
-
-- 변경: Pilot 화면별 점검, 웹 공용 동작 아이콘과 native canonical 색 생성, 실제 태블릿 설치 증거를 D-432/디자인 규칙/검증 기록으로 연결했다. 최신 D-435 문서는 기존 journal prefix를 보존하여 통합했다.
-- 증거: 실제 Pinky 인증·저장 자격 재접속·조회 전용 카메라, native Pilot 30/Cam 318 JVM 시험 통과. 브라우저 마지막 재조작 시험에서 완료 receipt를 목표 ID에 고정했다. 최종 브라우저·문서 검증 결과는 validation/discovery-link-2026-10-03/README.md에 기록한다.
-- gate 변화: 실제 주행·발열 하강·Cam 화면 off 연속 송출·FIELD 수용은 미판정이며 승격하지 않는다.
-- 결정: D-432. 4자리 페어링 통합은 후속 적용이다.
+- 변경: `docs/plans/2026-10-04-pilot-device-stop-contract-measurement.md` 추가. 페달 해제(PC-1 ≤300/500 ms·0.05 m)·클라이언트 소실(PC-2 ≤700/900 ms·SAF-002 watchdog)·e-stop(PC-3 ≤300/500 ms)의 합격선을 D-250(100 ms zero-keepalive)·D-367(100 ms 명령 루프)·SAF-002(500 ms)·D-110(0.10 m/s)에서 유도해 고정했다. 정지 판정은 `tools/dashboard_drive.py`의 `_moving()` 정의(linear ≤ 0.002 m/s)를 그대로 쓰고, 회차·환경·실패 처리 절차를 정했다.
+- 증거: 기존 계약 인용만으로 구성(새 숫자 발명 없음). 측정 자체는 사다리 P2, 사용자 입회 아래.
+- gate 변화: 없음. 측정 전 합격선 고정 문서.
+- 결정: D-444 §2의 "계량 문서" 요건 충족.
 
 ## 2026-10-04 · uncommitted · site(D-441): automatic site stack updates
 - 변경: D-441 ADR·ADR Log 행(D-440은 device-power 브랜치가 써서 다음 번호, `adr_gaps`에 D-438·D-439·D-440). `build-site-candidate.yml`에 main push 트리거와 이미지 원본 경로 필터, push는 기존 릴리스에서 빌드 없이 성공, push 빌드만 취소하는 job concurrency와 비취소 릴리스 그룹. 서명 PC용 `deploy/site/auto_sign_candidates.py`(출처 증명 digest·main 조상·태그 확인 뒤 `sign_manifest_only`, 감사 로그)와 `register_auto_sign_task.ps1`. 사이트 호스트용 `rosy_site_autoupdate.py`·`rosy-site-autoupdate.service`·`.timer`(override 거부, SHA256SUMS·tar 검사, 설치된 검증기, 원자적 site.env·symlink 전환, 건강 확인과 롤백, 정리). D-437·D-301 부록, `deploy/site/README.md` "Automatic updates (D-441)"
@@ -4907,10 +4930,3 @@
 - gate 변화: 없음. workflow push 실행, 서명 PC 예약 작업, 사이트 호스트 설치와 첫 자동 갱신·롤백은 미검증. 사이트 키 미준비(D-301)
 - 결정: D-441 Accepted, D-437·D-301 개정 부록
 - 교훈: 자동 서명기가 지키는 것은 자산 쓰기 권한과 main 아닌 빌드다. 서명 PC 계정과 main 보호 규칙이 이제 사이트 배포의 문이다
-
-## 2026-10-04 · uncommitted · docs(plan): 웹 게이트 사다리·Fleet 승격 ADR 계획
-
-- 변경: `docs/plans/2026-10-04-web-gate-ladder-fleet-readiness-adr-plan.md` 추가. dashboard/pilot ARTIFACT·pilot DEVICE(페달 정지 계약)·fleet ROS-SIM(D-87→D-426)의 게이트를 release 이미지 관측 → 실기 증거 사다리로 묶고, Fleet 사이트 시드 승격과 중앙(8081) 착수 전제, 수용됨-미구현(D-368·D-361·WS 전환) 순서를 정했다. 신규 ADR D-439(웹 표면 게이트는 release 이미지를 탄다)·D-440(Fleet 승격 경로와 중앙 착수 전제) 배정표를 포함하되 착지는 이 계획 승인 뒤로 미뤘다. origin/main과의 분기(ahead 45/behind 91)와 D-427 이동(follow-ups P1)을 선행으로 명시했다.
-- 증거: STATUS.md blockers 원문과 D-437·D-426·d427-post-migration-follow-ups(origin) 대조. 코드·게이트 변화 없음.
-- gate 변화: 없음. 문서만.
-- 결정: 새 결정 없음(D-439/D-440은 이 계획 승인 뒤 Proposed 착지).

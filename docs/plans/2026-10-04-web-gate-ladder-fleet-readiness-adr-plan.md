@@ -6,7 +6,9 @@
 
 ## 0. 경고 — 시작 전 필수
 
-1. **로컬 `main`과 `origin/main`이 갈라져 있다** (ahead 45 / behind 91, 2026-10-04). origin에만 있는 D-433·D-436·D-437 ADR과 PR #43 등이 로컬에 없고, 로컬의 D-438은 origin에 없다. 이 계획의 모든 착지는 먼저 fetch → rebase(또는 사용자가 정한 정렬)로 트리를 하나로 만든 뒤다. ADR 번호도 착지 직전에 ADR Log에서 다시 확인한다(`docs/adr/AGENTS.md` 규칙).
+**2026-10-04 체크포인트:** P0(트리 정렬) 완료 — main이 origin/main을 merge(ahead 48, behind 0), lint 0 errors, 계약 시험 통과. D-444·D-445 착지와 함께 D-439–D-443 브랜치 점유를 adr_gaps에 선언했다. 아래 1·2항은 역사 기록으로 남긴다.
+
+1. **로컬 `main`과 `origin/main`이 갈라져 있다** (ahead 45 / behind 91, 2026-10-04 기준 작성 시점). origin에만 있는 D-433·D-436·D-437 ADR과 PR #43 등이 로컬에 없고, 로컬의 D-438은 origin에 없다. 이 계획의 모든 착지는 먼저 fetch → rebase(또는 사용자가 정한 정렬)로 트리를 하나로 만든 뒤다. ADR 번호도 착지 직전에 ADR Log에서 다시 확인한다(`docs/adr/AGENTS.md` 규칙).
 2. **D-427 소스 이동이 진행 중이다.** origin의 [`2026-10-04-d427-post-migration-follow-ups.md`](2026-10-04-d427-post-migration-follow-ups.md) P1(이동 마무리·동등성 증거·다음 release 배포)이 이 계획의 1단계 입력이다. 이 계획은 그 문서와 경쟁하지 않고, 그 위에 웹 표면 게이트를 얹는다. 경로는 이 문서에서 모듈 이름(dashboard, pilot, fleet)으로 부르고, 착지 시점의 실제 경로를 따른다.
 3. **실물 로봇·사이트 PC는 공유 자원이다.** 동작을 일으키는 모든 단계(페달 측정, release 설치, 사이트 배포)는 사용자 승인 뒤에만 한다.
 
@@ -79,8 +81,8 @@
 
 | 배정 | 제목(초안) | 고정하는 것 | 상태 |
 |---|---|---|---|
-| **D-439** | 웹 표면 게이트는 release 이미지를 탄다 | R1+R2: dashboard/pilot ARTIFACT 관측 조건, pilot DEVICE 페달 정지 계약·측정 절차·합격선, 증거 위치 | 이 계획 승인 뒤 Proposed로 착지 |
-| **D-440** | Fleet 승격 경로와 중앙 착수 전제 | R3: 사이트 시드 승격 경로(ROS-SIM→ARTIFACT→DEVICE→FIELD), 중앙 Fleet 착수의 3전제, 착수 자체는 별도 ADR | 이 계획 승인 뒤 Proposed로 착지 |
+| **D-444** | 웹 표면 게이트는 release 이미지를 탄다 | R1+R2: dashboard/pilot ARTIFACT 관측 조건, pilot DEVICE 페달 정지 계약·측정 절차·합격선, 증거 위치 | **착지 완료 (2026-10-04, Proposed)** — `docs/adr/D-444-web-surfaces-ride-the-release-image.md`. 계획 배정표의 D-439는 착지 시점에 다른 브랜치가 점유해 재번호 |
+| **D-445** | Fleet 승격 경로와 중앙 착수 전제 | R3: 사이트 시드 승격 경로(ROS-SIM→ARTIFACT→DEVICE→FIELD), 중앙 Fleet 착수의 3전제, 착수 자체는 별도 ADR | **착지 완료 (2026-10-04, Proposed)** — `docs/adr/D-445-fleet-promotion-path-and-central-start-preconditions.md`. 계획 배정표의 D-440은 재번호 |
 | (번호 미배정) | 웹 표면 실시간 구독 통일 | R4 실행 계약: 폴링 폐지 순서, `store.js`·gather의 WS 전환 | P4-2 착수 시 배정 |
 
 두 ADR 모두 착지 전에 §0-1의 번호 재확인을 한다. 이 계획 문서가 먼저 사용자 승인을 받는다.

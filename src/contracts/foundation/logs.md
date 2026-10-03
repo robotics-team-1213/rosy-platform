@@ -358,6 +358,7 @@
 - gate 변화: 없음.
 - 결정: D-411 구현 부록 10.
 
+
 ## 2026-10-03 · uncommitted · feat(link): D-432 주소 없는 장비 접속
 
 - 변경: 공통 TXT에 Dock·Signal 역할, LinkPolicy·접속/페어링 모델·4자리 Cam 표시 별칭을 추가했다. 발견 캐시 BOM을 정리하고 멀티 NIC/충돌·TTL 수명을 고정했다.
@@ -365,17 +366,16 @@
 - gate 변화: 실제 장비의 제어·FIELD 관문은 이동하지 않는다.
 - 결정: D-432 2026-10-03 추가 결정.
 
+
 ## 2026-10-03 · uncommitted · fix(link): 현재 접속과 후속 코드 규약 구별
 
 - 변경: 사용자 보정으로 4자리 코드 발급·Cam 표시 별칭은 이번 적용에서 제외했다. 현재 로봇 8자·Cam 6자리 규약을 유지하며 D-432에 추후 통합을 기록했다. 실제 Pinky 접속 수정은 진행한다.
 - 증거: 영향받는 Python 2345 passed/84 skipped, quick tier 459 passed/2 skipped, Pilot PWA 87 passed/58 skipped. 코드 규약 보정 뒤 해당 인증·페어링 시험을 다시 실행한다. 공개 검증 기록은 docs/validation/discovery-link-2026-10-03/README.md.
 - gate 변화: Android 설치·실제 CORE 인증 확인은 실제 주행·Cam 화면 off 연속 송출·현장 트래픽 수용과 별개다. DEVICE/FIELD 이동 없음.
 - 결정: D-432 후속 결정: 접속은 지금, 짧은 코드 통합은 추후 적용.
-
 ## 2026-10-03 · e021264e6 · feat(face): D-433 상황표 `core_common.face_screen`
 
 - 변경: LCD 상황표 `screen_for`(D-433 1–18행), D-394 주행 카드 주기(`drive_due`, `drive_card_visible` — `core.bridge.display`에서 이동), `face-inputs.json` 엄격 읽기(`read_face_inputs`, `validate_face_inputs`: 링크·FIFO·16 KiB·소유자·schema 1·3 s). 표준 라이브러리만.
 - 증거: `python -m pytest src/contracts/foundation/test/test_face_screen.py -q` 77 passed 2 skipped(POSIX 전용 링크·FIFO).
 - gate 변화: 없음.
 - 결정: D-433 (Proposed)
-
