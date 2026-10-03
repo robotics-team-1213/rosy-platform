@@ -31,5 +31,5 @@ def test_web_budgets_are_owned_by_the_architecture_gate():
     assert gate.FILE_BUDGET_WEB == 800
     # The two files D-262 kept verdicts for must stay under recorded verdicts.
     over = gate._over_budget()
-    assert "runtime/sensing/web/diagnostic.html" in over
-    assert "sim/gz_sim/scripts/lane_live_view.html" in over
+    assert "perception/web/diagnostic.html" in over
+    assert "simulation/gazebo/scripts/lane_live_view.html" in over

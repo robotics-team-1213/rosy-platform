@@ -17,10 +17,9 @@ SRC = ROOT / "src"
 COLCON_ROOTS = yaml.safe_load(
     (ROOT / "tools" / "harness" / "platform_parts.yaml").read_text(encoding="utf-8"))["colcon_roots"]
 
-# Packages still under src/ (folder relative to src/). D-427 wave 4e empties it.
-TARGET = {
-    "runtime/sensing",
-}
+# Packages still under src/ (folder relative to src/). D-427 wave 4e emptied it; wave 5
+# removes the src/ folder notes and this file.
+TARGET: set[str] = set()
 
 # D-231 decision 4: places the owner's sketch had that this repo does not take.
 FORBIDDEN_NAMES = {"rosy_pinky_pro", "rosy_decision", "rosy_ai_worker", "ai_worker", "rosy_manipulation"}

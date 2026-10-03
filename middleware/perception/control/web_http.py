@@ -54,10 +54,11 @@ def web_common_dir(share=None):
     ROS-free (D-171)."""
     if share and os.path.isfile(os.path.join(share, "shared-assets.json")):
         return share
+    # <repo>/middleware/perception/control/web_http.py -> <repo>/shared/web (D-427).
     return os.path.join(
         os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(
             os.path.abspath(__file__))))),
-        "hmi", "web_common")
+        "shared", "web")
 
 
 def shared_assets(root):

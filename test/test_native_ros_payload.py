@@ -87,38 +87,27 @@ def test_image_workflow_installs_pinky_hardware_dependencies_before_payload_buil
 
 
 def test_required_source_resolver_includes_transitive_product_deps_not_non_product_apps():
-    result = subprocess.run(
-        [
-            sys.executable,
-            str(RESOLVE_SOURCE_PATHS),
-            "--source-root",
-            str(ROOT / "src"),
-            "--required",
-            str(REQUIRED),
-            "--chroot-prefix",
-            "/tmp/rosy-src/src",
-        ],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    # D-427: the real tree over every manifest colcon root, as build-image.sh passes it.
+    roots = yaml.safe_load((ROOT / "tools" / "harness" / "platform_parts.yaml").read_text(
+        encoding="utf-8"))["colcon_roots"]
+    result = _resolve(ROOT, REQUIRED, roots)
 
     assert result.returncode == 0, result.stderr
     paths = set(result.stdout.splitlines())
     for suffix in (
-        "/runtime/gateway", "/contracts/foundation", "/runtime/events",
-        "/runtime/services", "/runtime/api_web", "/contracts/interfaces",
-        "/products/pinky_pro/adc", "/drivers/imu_bno055", "/products/pinky_pro/lamp",
+        "/middleware/core/gateway", "/contracts/foundation", "/middleware/core/events",
+        "/middleware/core/services", "/middleware/core/api_web", "/contracts/ros_idl",
+        "/middleware/drivers/pinky_adc", "/middleware/drivers/imu_bno055", "/middleware/drivers/pinky_lamp",
     ):
         assert any(path.endswith(suffix) for path in paths)
-    assert not any(path.endswith("/sim/gz_sim") for path in paths)
+    assert not any(path.endswith("/simulation/gazebo") for path in paths)
     assert not any(path.endswith("/apps/games") for path in paths)
-    assert not any(path.endswith("/site/fleet") for path in paths)
+    assert not any(path.endswith("/operations/fleet") for path in paths)
 
 
 def test_required_source_resolver_ignores_colcon_output_roots(tmp_path):
     source_root = tmp_path / "src"
-    real_package = source_root / "runtime" / "sensing"
+    real_package = source_root / "fixture" / "sensing"
     generated_package = source_root / "build" / "control"
     real_package.mkdir(parents=True)
     generated_package.mkdir(parents=True)
@@ -149,7 +138,7 @@ def test_required_source_resolver_ignores_colcon_output_roots(tmp_path):
     )
 
     assert result.returncode == 0, result.stderr
-    assert result.stdout.splitlines() == ["/tmp/rosy-src/middleware/perception"]
+    assert result.stdout.splitlines() == ["/tmp/rosy-src/src/fixture/sensing"]
 
 
 def _package(directory: Path, name: str, depends: tuple[str, ...] = ()) -> None:
@@ -172,7 +161,7 @@ def _resolve(workspace: Path, required: Path, roots: list[str]) -> subprocess.Co
 def test_required_source_resolver_spans_every_colcon_root(tmp_path):
     # D-427: packages in one root may depend on packages in another; paths keep the root.
     workspace = tmp_path / "ws"
-    _package(workspace / "middleware" / "core" / "gateway", "core", ("core_common",))
+    _package(workspace / "src" / "fixture" / "gateway", "core", ("core_common",))
     _package(workspace / "middleware" / "contracts" / "foundation", "core_common")
     _package(workspace / "unlisted" / "games", "games")
     _package(workspace / "src" / "build" / "core", "core")  # colcon output inside a root
@@ -183,15 +172,15 @@ def test_required_source_resolver_spans_every_colcon_root(tmp_path):
 
     assert result.returncode == 0, result.stderr
     assert sorted(result.stdout.splitlines()) == [
-        "/tmp/rosy-src/middleware/contracts/foundation", "/tmp/rosy-src/middleware/core/gateway",
+        "/tmp/rosy-src/middleware/contracts/foundation", "/tmp/rosy-src/src/fixture/gateway",
     ]
     # Outside the listed roots core_common is an external key, as any rosdep key is.
-    assert _resolve(workspace, required, ["src"]).stdout.splitlines() == ["/tmp/rosy-src/middleware/core/gateway"]
+    assert _resolve(workspace, required, ["src"]).stdout.splitlines() == ["/tmp/rosy-src/src/fixture/gateway"]
 
 
 def test_required_source_resolver_rejects_a_name_duplicated_across_roots(tmp_path):
     workspace = tmp_path / "ws"
-    _package(workspace / "middleware" / "perception", "control")
+    _package(workspace / "src" / "fixture" / "sensing", "control")
     _package(workspace / "learning" / "sensing", "control")
     required = tmp_path / "required.txt"
     required.write_text("control\n", encoding="utf-8")

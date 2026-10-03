@@ -14,10 +14,10 @@ from core_features.safety.manager import BatteryPolicy, SafetyManager, SpeedLimi
 from core_features.state.manager import StateManager
 from core_features.waypoints.manager import Waypoint, WaypointManager
 
-#: src/ 트리 루트 — 이 파일은 <root>/middleware/core/gateway/test/ 에 있다.
-SRC_ROOT = (Path(__file__).resolve().parents[4] / "src")
-#: D-427 wave 3b: site apps (Rosy Vision, Cell, Games) left src/ for operations/.
-SCAN_ROOTS = (SRC_ROOT, SRC_ROOT.parent / "operations")
+#: 저장소 루트 — 이 파일은 <root>/middleware/core/gateway/test/ 에 있다.
+REPO_ROOT = Path(__file__).resolve().parents[4]
+#: D-427: product code lives under these part roots; keys are repo-relative.
+SCAN_ROOTS = tuple(REPO_ROOT / name for name in ("operations", "middleware", "contracts", "shared", "integrations"))
 
 
 @pytest.fixture
@@ -413,7 +413,7 @@ class TestD137SequenceContract:
         백엔드다(D-209, D-423 결정 2026-10-03). CORE 는 이 토픽을 발행하지 않는다.
         """
         allowed = {    # 상대 경로 -> 사유.
-            str(Path("runtime/sensing/control/object_detector.py")):
+            str(Path("middleware/perception/control/object_detector.py")):
                 "D-423 object_detector_node: the single advisory publisher (Pi CPU int8 ONNX)",
         }
         offenders = {}
@@ -423,7 +423,7 @@ class TestD137SequenceContract:
                 continue
             text = path.read_text(encoding="utf-8", errors="replace")
             if "vision/detections" in text:
-                offenders[os.path.relpath(path, SRC_ROOT)] = text
+                offenders[os.path.relpath(path, REPO_ROOT)] = text
         unexpected = sorted(set(offenders) - set(allowed))
         assert not unexpected, f"vision/detections 발행 후보 발견: {unexpected}"
 
@@ -450,8 +450,8 @@ class TestD137SequenceContract:
                     literal = isinstance(topic, ast.Constant) and topic.value == "vision/detections"
                     named = isinstance(topic, ast.Name) and topic.id in names
                     if literal or named:
-                        publishers.add(Path(os.path.relpath(path, SRC_ROOT)).as_posix())
-        assert publishers == {"runtime/sensing/control/object_detector_node.py"}, publishers
+                        publishers.add(Path(os.path.relpath(path, REPO_ROOT)).as_posix())
+        assert publishers == {"middleware/perception/control/object_detector_node.py"}, publishers
 
 
 def _function_body(text: str, name: str) -> str:

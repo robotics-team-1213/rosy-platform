@@ -61,7 +61,7 @@ FINAL_CMD_VEL = re.compile(r"""['"]cmd_vel['"]""")
 #: safety_node as the legacy final publisher). Everything else in control
 #: must not name the final topic.
 LEGACY_FINAL_PUBLISHER = (
-    "runtime/sensing/control/safety/node.py",
+    "middleware/perception/control/safety/node.py",
     "self.declare_parameter('cmd_out', 'cmd_vel')",
 )
 
@@ -70,14 +70,14 @@ LEGACY_FINAL_PUBLISHER = (
 #: training-input capture, never a publish). Pinned read-only exception -
 #: repoint or edit the line and this guard goes red until the pin moves.
 RECORDING_SIDE_TOPIC = (
-    "runtime/sensing/control/recording.py",
+    "middleware/perception/control/recording.py",
     'SIDE_TOPICS = ("cmd_vel", "line/observation", SHADOW_TOPIC, SCAN_TOPIC, ODOM_TOPIC)',
 )
 
 #: D-411 A: the Pilot recorder's rosbag2 topic list records the CORE final
 #: command as evidence (rosbag2 subscribes; nothing is published). Same pin rule.
 PILOT_RECORDING_TOPICS = (
-    "runtime/sensing/control/pilot_recording.py",
+    "middleware/perception/control/pilot_recording.py",
     'PILOT_TOPICS = (COMPRESSED_CAMERA_TOPIC, "cmd_vel", ODOM_TOPIC, SCAN_TOPIC, "line/observation",',
 )
 
@@ -119,7 +119,7 @@ def test_core_imports_no_slice_code():
             continue
         hits = _import_tops(path) & set(SLICE_TOPS)
         if hits:
-            violations.append(f"{path.relative_to(SRC)} imports {sorted(hits)}")
+            violations.append(f"{path.relative_to(ROOT)} imports {sorted(hits)}")
     assert violations == [], violations
 
 
@@ -137,7 +137,7 @@ def test_control_has_no_final_cmd_vel():
     ]
     violations = []
     for path in _prod_py_files(CONTROL_PKG):
-        rel = path.relative_to(SRC).as_posix()
+        rel = path.relative_to(ROOT).as_posix()
         text = path.read_text(encoding="utf-8")
         for i, line in enumerate(text.splitlines(), 1):
             if any(p.search(line) for p in forbidden_patterns):
@@ -227,7 +227,7 @@ def test_fleet_prod_only_core_common():
     for path in _prod_py_files(FLEET):
         for top in _import_tops(path):
             if top.startswith("core_") and top != "core_common":
-                violations.append(f"{path.relative_to(SRC)} imports {top}")
+                violations.append(f"{path.relative_to(ROOT)} imports {top}")
     assert violations == [], violations
 
 def test_control_imports_no_core_code():
@@ -265,10 +265,10 @@ def test_control_imports_no_core_code():
         for module in sorted(modules):
             top = module.split(".")[0]
             if top in runtime_tops:
-                rel = path.relative_to(SRC).as_posix()
+                rel = path.relative_to(ROOT).as_posix()
                 violations.append(f"{rel}: imported {module}")
             elif top == "core_common" and not module.startswith(allowed_contracts):
-                rel = path.relative_to(SRC).as_posix()
+                rel = path.relative_to(ROOT).as_posix()
                 violations.append(f"{rel}: imported {module} (contract surface only, D-155 refinement)")
     assert not violations, "control must not depend on core:\n" + "\n".join(violations)
 
