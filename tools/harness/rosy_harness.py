@@ -623,6 +623,41 @@ def _history_refs(repo: Path) -> tuple[list[str], str | None]:
     return list(dict.fromkeys([*refs, "HEAD"])), note
 
 
+def _moved_roots(repo: Path) -> list[dict]:
+    """D-427 manifest roots that record their pre-move path as ``legacy``."""
+    manifest = repo / "tools" / "harness" / "platform_parts.yaml"
+    if not manifest.is_file():
+        return []
+    roots = (yaml.safe_load(manifest.read_text(encoding="utf-8")) or {}).get("roots") or []
+    return [root for root in roots if root.get("legacy")]
+
+
+def _committed_log(repo: Path, ref: str, module_path: str, moved_roots: list[dict]) -> str | None:
+    """``logs.md`` of a module as committed at ``ref``, following a D-427 move.
+
+    Right after a move the ref has no file at the new path, which would skip the
+    append-only check. A module at a moved root is read at its ``legacy`` path; a
+    module nested deeper in one follows its rename in git history.
+    """
+    rel = f"{module_path}/logs.md"
+    committed = _git(repo, "show", f"{ref}:{rel}")
+    if committed is not None:
+        return committed
+    owners = [root for root in moved_roots
+              if module_path == root["path"] or module_path.startswith(root["path"] + "/")]
+    if not owners:
+        return None
+    owner = max(owners, key=lambda root: len(root["path"]))
+    if owner["path"] == module_path:
+        return _git(repo, "show", f"{ref}:{owner['legacy']}/logs.md")
+    renamed = _git(repo, "log", "-1", "--follow", "-M", "--diff-filter=R", "--format=", "--name-status",
+                   "HEAD", "--", rel) or ""
+    fields = renamed.strip().split("\t")
+    if len(fields) == 3 and fields[0].startswith("R"):
+        return _git(repo, "show", f"{ref}:{fields[1]}")
+    return None
+
+
 def lint(repo: Path) -> tuple[list[str], list[str]]:
     config = load_config(repo)
     errors: list[str] = []
@@ -650,6 +685,7 @@ def lint(repo: Path) -> tuple[list[str], list[str]]:
     refs, note = _history_refs(repo)
     if note:
         warnings.append(note)
+    moved_roots = _moved_roots(repo)
 
     for module in config["modules"]:
         name, base = module["name"], repo / module["path"]
@@ -670,7 +706,7 @@ def lint(repo: Path) -> tuple[list[str], list[str]]:
             text = log_path.read_text(encoding="utf-8")
             errors += [f"{name}/logs.md: {e}" for e in validate_log(text)]
             for ref in refs:
-                committed = _git(repo, "show", f"{ref}:{log_path.relative_to(repo).as_posix()}")
+                committed = _committed_log(repo, ref, module["path"], moved_roots)
                 if committed is not None and not is_append_only(committed, text):
                     errors.append(f"{name}/logs.md: entries committed at {ref[:12]} were edited; logs are append-only")
 

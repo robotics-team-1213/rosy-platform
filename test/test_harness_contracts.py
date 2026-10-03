@@ -466,3 +466,45 @@ def test_mojibake_question_runs_are_found():
     assert harness.find_mojibake(corrupt) == [1]
     assert harness.find_mojibake("| D-10 | 온전한 행 | 이어폰? 아니고 |") == []
 
+
+# --- D-427 wave 0: append-only check follows a moved module -----------------
+
+
+def _git_repo(tmp_path: Path):
+    import shutil
+    import subprocess
+
+    if shutil.which("git") is None:
+        pytest.skip("needs git")
+
+    def git(*args: str) -> str:
+        return subprocess.run(["git", "-C", str(tmp_path), *args], check=True,
+                              capture_output=True, text=True, encoding="utf-8").stdout.strip()
+
+    git("init", "-q")
+    git("config", "user.email", "harness@test")
+    git("config", "user.name", "harness")
+    git("config", "core.autocrlf", "false")
+    return git
+
+
+def test_append_only_follows_a_moved_module_through_legacy(tmp_path):
+    git = _git_repo(tmp_path)
+    for module in ("old/pkg", "old/pkg/sub"):
+        (tmp_path / module).mkdir(parents=True, exist_ok=True)
+        (tmp_path / module / "logs.md").write_text(GOOD_LOG, encoding="utf-8", newline="\n")
+    git("add", "-A")
+    git("commit", "-q", "-m", "before move")
+    base = git("rev-parse", "HEAD")
+    (tmp_path / "new").mkdir()
+    git("mv", "old/pkg", "new/pkg")
+    git("commit", "-q", "-m", "move")
+    moved = [{"path": "new/pkg", "legacy": "old/pkg"}]
+
+    assert harness._committed_log(tmp_path, base, "new/pkg", []) is None  # what lint saw before
+    for module in ("new/pkg", "new/pkg/sub"):
+        committed = harness._committed_log(tmp_path, base, module, moved)
+        assert committed == GOOD_LOG, module
+        edited = GOOD_LOG.replace("- 변경: a", "- 변경: rewritten")
+        assert not harness.is_append_only(committed, edited)
+    assert harness._committed_log(tmp_path, base, "new/other", moved) is None
