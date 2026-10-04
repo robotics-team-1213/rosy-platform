@@ -17,11 +17,11 @@ CAMERA_APP = ROOT / "operations/ui/cam/app/src/main/java"
 VISION = ROOT / "operations/vision/rosy_vision"
 REGISTRY = ROOT / "shared/web/surfaces.yaml"
 
-# 1. Rosy Cam: no CORE API or Fleet user API; D-341 v1 / D-456 v2 camera pairing only.
+# 1. Rosy Cam: no CORE API or Fleet user API; D-341 v1 and D-456 v2 pairing only.
 #    no robot motion or stop (the user decided on 2026-09-30: no stop credential).
 CAMERA_FORBIDDEN = {
     "CORE API": re.compile(r"/api/v1/"),
-    "Fleet user API": re.compile(r'''/api/fleet/(?!pairing/v(?:1|2)(?:[/"'$]|$))'''),
+    "Fleet user API": re.compile(r"/api/fleet/(?!pairing/(?:v1|v2)(?:/|\$path\b|[\"']|$))"),
     "cmd_vel": re.compile(r"cmd_vel"),
     "estop": re.compile(r"estop", re.IGNORECASE),
 }
@@ -88,6 +88,16 @@ def test_camera_pairing_namespace_exemption_keeps_user_routes_forbidden():
                  "/api/fleet/pairing/v2admin", "/api/fleet/pairing/v3/requests"):
         assert forbidden.search(path), path
     assert CAMERA_FORBIDDEN["CORE API"].search("/api/v1/control/teleop")
+
+
+def test_camera_pairing_exception_keeps_the_version_boundary():
+    rule = CAMERA_FORBIDDEN["Fleet user API"]
+    for path in ('/api/fleet/pairing/v1/pending', '/api/fleet/pairing/v2/pending',
+                 '"/api/fleet/pairing/v2$path"', '"/api/fleet/pairing/v2"'):
+        assert rule.search(path) is None
+    for path in ('/api/fleet/pairing/v20/pending', '/api/fleet/pairing/v2extra',
+                 '/api/fleet/pairing/v2$paths', '/api/fleet/state'):
+        assert rule.search(path) is not None
 
 
 def test_vision_has_no_robot_command_and_writes_only_sightings_and_detections_to_fleet():
