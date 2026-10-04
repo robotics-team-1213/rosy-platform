@@ -1,4 +1,4 @@
-﻿"""Unactuated continuous casters must not inherit importer position brakes."""
+"""Unactuated continuous casters must not inherit importer position brakes."""
 import sys
 from pathlib import Path
 import xml.etree.ElementTree as ET

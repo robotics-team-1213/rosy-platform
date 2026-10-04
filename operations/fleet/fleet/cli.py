@@ -522,7 +522,7 @@ def run_console(args: argparse.Namespace) -> None:
     if getattr(args, "central", False):
         # D-454 1단계: 중앙 프로파일 — 등록 로스터가 정본이므로 등록 저장소가 필요하다.
         if enrollment is None:
-            sys.exit("--central requires an enrollment store (--enrollment-db); the central "
+            sys.exit("--central requires --robot-credential-key-file and --tasks-db; the central "
                      "registry reads the site roster as its source of truth")
         from fleet.server.central_registry import CentralRegistry
 

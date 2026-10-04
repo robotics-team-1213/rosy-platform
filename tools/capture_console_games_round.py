@@ -11,12 +11,12 @@ surfaces.yaml); games keeps its own pitch palette.
 
 Examples:
 
-    python operations/fleet/tools/capture_console_games_round.py \
+    python tools/capture_console_games_round.py \
         --out-dir docs/validation/fleet-games-capture-2026-10-04
 """
 
-# 배치 규칙(tools/AGENTS.md): 여러 패키지를 엮는 스크립트는 모듈 tools/에 둔다.
-# fleet 모듈 tools/가 게임을 엮으므로 이 스크립트는 순수 측정 역할만 한다.
+# Cross-module observation tool; not installed in the Fleet runtime.
+# Historical capture output is not a UX acceptance gate (see its HOLD receipt).
 
 from __future__ import annotations
 
@@ -27,7 +27,7 @@ import time
 from pathlib import Path
 from urllib.parse import urlsplit
 
-REPO = Path(__file__).resolve().parents[3]
+REPO = Path(__file__).resolve().parents[1]
 for _entry in (
     "operations/fleet",
     "operations/fleet/test",

@@ -100,11 +100,19 @@ SIZE_VERDICTS = {
         "duplicate its socket. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        33_844,
-        "split: D-457 re-judged 2026-10-04 at 33844 after marker-priority tracking integration: "
-        "display-only matching, calibration ledger and routes have separate bounded files; "
-        "Vision retains image processing and no command or localization path is added. "
-        "split: re-judged 2026-10-04 at 32162 after integrating main 2ad047602 with D-452: "
+        33_657,
+        "split: D-457 re-judged at 33657 after integration with main 754c20ee3; bounded "
+        "display-only calibration, tracking routes/matcher and UI coordinates add 1188 to Fleet. "
+        "The composition root stays below 600 after main's extraction; no command owner changes. "
+        "split: independently re-judged 2026-10-04 at measured 32469 after main 387b19841: "
+        "307 since the previous 32162 consists of prior integration 7, D-455 meet/resolver "
+        "181, central read projection/routes/CLI 123, app/worker extraction -11 and web 7; "
+        "the incoming cross-module capture tool is correctly placed under root tools, outside Fleet; it remains UX HOLD, not accepted screen evidence. "
+        "Retain B2 server subpackage and UI resource migration obligations, owner boundaries, "
+        "600 production/800 web limits, 1000 zero-growth tier and +150 package allowance. "
+        "Source accounting and independent review are recorded in "
+        "docs/validation/network-peer-discovery-2026-10-04/main-integration-checkpoint.md. "
+        "Previously re-judged 2026-10-04 at 32162 after integrating main 2ad047602 with D-452: "
         "incoming main counts 31786, including focused meet subpackage 653 and existing "
         "resolver/loop/transport wiring 135 beyond its 30998 verdict; the approved "
         "Cell checkpoint/editor delta 377 and D-452 delta 376 both retain their owners. "
@@ -254,12 +262,6 @@ SIZE_VERDICTS = {
         "begin/complete/mark_unknown) is the only separable seam, so revisit it as a split if the store "
         "grows past 800",
     ),
-    "fleet/fleet/server/app.py": (
-        608,
-        "accept: D-457 bounded composition root wiring (tracking source validation and route installer); "
-        "calibration, matching, auth routes and persistence live in tracking modules. Single app owner, "
-        "ROS-free and host-testable; no command implementation or second publisher is introduced.",
-    ),
     "fleet/fleet/server/enrollment.py": (
         664,
         "accept: one owner (D-361 robot enrollment — exchange, binding, pinned-address gate, unenroll and "
@@ -283,8 +285,8 @@ SIZE_VERDICTS = {
         "2026-10-01 at 887 after idempotent per-attempt phase projection joined the Mission event transaction",
     ),
     "foundation/core_common/protocol/schemas.py": (
-        1_320,
-        "accept: D-457 re-judged at 1320: one bounded OverheadDetectionsPayload re-export; model lives in "
+        1_315,
+        "accept: D-457 re-judged at 1315 after current schema extraction: one bounded OverheadDetectionsPayload re-export; model lives in "
         "overhead_detections.py, display-only, no version pin or runtime ownership change. "
         "accept: re-judged 2026-10-04 at 1319 after main's model extractions: Cell request models live in protocol/cell_app.py; only "
         "two public re-export lines join the canonical schema entrypoint. Zero-growth allowance unchanged. "

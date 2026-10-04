@@ -386,3 +386,15 @@
 - 증거: 브라우저 2 passed(이웃 표시+목적 URL 명시·불가 시 조용+게이트 생존). api_web 전체 77 passed/13 skipped(동일 코미트 범위의 site-rooms 시험 포함). node --check 통과.
 - gate 변화: 없음. 호스트 UI. PWA 기억 방·관전 모드·운전석 임대·MJPEG은 뒤 작업(D-343 §2.1·2.4-5).
 - 결정: D-343 계획 §4 순서 2의 프런트 부분.
+
+## 2026-10-04 · uncommitted · fix(pilot): LAN 목록 재검색과 저장 연결 기록 보존
+
+- 변경: 웹 LAN 목록은 loading/empty/failure를 구분하고 5초 singleflight 요청·다시 찾기를 제공한다. canonical LAN robot URL만 명시적으로 열며 발견을 승인으로 표시하지 않는다. Native Vault는 만료·충돌·검색 오류에서 암호화 기록을 보존하고 실제 HTTPS 신원 검증 후 hostname 슬롯으로 이전한다. HTTP 주소 변경은 자격 재사용하지 않는다. 로컬 기록 삭제는 zero/연결 종료 뒤 처리하며 기존 IP 재등장도 fence로 막는다.
+- 증거: 독립 SPEC·Quality·Safety PASS, 작성자 JVM24 PASS·변이3 RED·복원24 PASS, root 실제 적용 소스 Gradle 컴파일/JVM24 PASS와 Chrome 목록4 PASS. 최초 root Gradle 실행은 PowerShell property 인자 분리로 태스크 조회 실패였고 실제 테스트 실행은 아니며 인자를 고쳐 재검증했다.
+- gate 변화: SOURCE/LOCAL 한정. 일반 상대 승인/key proof/만료 뒤 무코드 로그인 갱신은 D-456 후속 소유 작업이고 실제 tablet/robot DEVICE 수락은 미완료다.
+
+## 2026-10-04 · uncommitted · fix(ui): LAN 재검색 버튼의 공용 kind 선언 정합
+
+- 변경: 동적 다시 찾기 버튼의 quiet 종류를 생성 직후 명시해 공용 helper 계약 검사에서 확인할 수 있게 했다. 기존 클릭/재검색/인증 행동과 종류 값은 동일하다.
+- 증거: Pinky 학습 앱 main 동기화 중 공용 컴포넌트 검사가 이 위치를 지적했다. 해당 계약 및 Pilot 브라우저 소스 검사를 다시 수행한다.
+- gate 변화: 없음. 장치 연결·주행·페어링 수용을 수행하지 않는다.

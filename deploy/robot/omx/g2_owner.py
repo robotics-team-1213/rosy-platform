@@ -5,7 +5,6 @@ import os
 from pathlib import Path
 import secrets
 import threading
-import time
 
 from g2_common import ROOT, configure_imports
 from g2_ports import SimAidGoalPort, isolation_guard, refuse_g2_owner, write_json
@@ -26,7 +25,6 @@ def main():
     lock.write(str(os.getpid()))
     lock.flush()
     import rclpy
-    import uvicorn
     from rclpy.executors import MultiThreadedExecutor
     from rclpy.node import Node
     from rclpy.parameter import Parameter
@@ -104,42 +102,18 @@ def main():
     accepted_recipe = owner.acceptance.accept_recipe(json.loads((run / "recipe.json").read_text()),
                                                      actor_id="g2-sim-acceptor")
     write_json(run / "owner-acceptance.json", {"cell": accepted_cell, "recipe": accepted_recipe})
-    timer = None
     executor = MultiThreadedExecutor(num_threads=4)
     executor.add_node(node)
     threading.Thread(target=executor.spin, daemon=True).start()
     try:
-        # No Fleet Action endpoint exists until the reserved startup goal is measured ready.
-        from g2_startup import prepare_home
-        from omx_adapter.kinematics import ARM_JOINTS, OmxKinematics, TopDownPose
-        deadline = time.monotonic()+60.
-        while True:
-            sample = owner.runtime.latest_joint_state
-            if (sample is not None and owner.runtime.action_port.server_is_ready()
-                    and owner.runtime.owner.state == "ready"
-                    and 0 <= owner.runtime.monotonic()-sample.received_at
-                    <= owner.profile.max_joint_state_age_s):
-                break
-            if time.monotonic() >= deadline:
-                raise RuntimeError("SIM startup owner readiness timed out")
-            time.sleep(.05)
-        home = json.loads((run / "cell.json").read_text())["home"]
-        q = OmxKinematics.load().solve_top_down(TopDownPose(**home), owner.profile.ik_limits()).joints
-        target = dict(zip(ARM_JOINTS, q))
-        target[owner.profile.gripper_joint] = owner.profile.gripper_open
-        try:
-            write_json(run / "startup-home.json", prepare_home(owner.runtime, owner.profile, target))
-        except Exception as exc:
-            write_json(run / "startup-home-failure.json", {"result": "HOLD", "error": str(exc),
-                                                          "fixture": "SIM_STARTUP_HOME"})
-            raise
-        timer = node.create_timer(0.05, owner.advance_pending)
-        threading.Thread(target=owner.uds_server.serve_forever, daemon=True).start()
-        uvicorn.run(owner.http_app, host="127.0.0.1", port=8088, access_log=False)
+        # Publish no positive command until startup has a reviewed stop-fenced path.
+        # Existing StopLocal and readback operations stay reachable; SubmitAction
+        # remains disabled even if an operator later rearms the local stop latch.
+        from g2_startup import hold_startup
+        write_json(run / "startup-home-failure.json", hold_startup(owner))
+        owner.uds_server.serve_forever()
     finally:
         owner.uds_server.stop()
-        if timer is not None:
-            node.destroy_timer(timer)
         executor.shutdown(timeout_sec=5)
         node.destroy_node()
         rclpy.shutdown()

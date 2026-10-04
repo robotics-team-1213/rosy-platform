@@ -94,9 +94,20 @@ def _map_pose(row: Mapping) -> Optional[tuple[float, float, float]]:
     """
     from fleet.localization.trust import LEGACY, TRUSTED, classify
 
-    state = row.get("state") if isinstance(row.get("state"), Mapping) else None
-    if classify(state) not in (LEGACY, TRUSTED):
+    state = row.get("state")
+    if not row.get("online", True) or not isinstance(state, Mapping):
         return None
+    verdict = classify(state)
+    if verdict not in (LEGACY, TRUSTED):
+        return None
+    if "localization" in row:
+        # Console owns the D-395 restart grace. Null raw localization is not
+        # legacy while its current badge says the map pose is untrusted.
+        badge = row["localization"]
+        if not isinstance(badge, Mapping) or badge.get("trusted") is not True:
+            return None
+        if (badge.get("legacy") is True) != (verdict == LEGACY):
+            return None
     return _pose_of(row)
 
 
@@ -452,7 +463,7 @@ class StuckResolver:
         door_x, door_y, _tangent = painted.line(plan.edge_id).point_at(plan.s_m)
         clearance = self.config.peer_reach_m + self.config.peer_radius_m
         for other in rows:
-            if str(other.get("robot_id")) == rid or not other.get("online", True):
+            if str(other.get("robot_id")) == rid:
                 continue
             pose = _map_pose(other)
             if pose is None:

@@ -59,30 +59,52 @@ function readoutPair(pairs) {
 
 // --- 이웃 방 (D-343 2.2 — 이 기기가 대신 찾아 준 이웃 로봇) ---
 async function refreshLobby(host) {
-  const rows = await api("/api/v1/site/rooms").then((r) => r.body?.rooms ?? []).catch(() => null);
-  if (rows === null) {
-    return;  // 탐색 불가면 로비는 조용히 없다 — 접속 흐름을 막지 않는다.
-  }
-  const here = location.host.toLowerCase().replace(/\.local(:|$)/, "$1");
-  const others = rows.filter((row) => `${row.hostname}.local:${row.port}`.toLowerCase() !== here);
-  const section = el("div", null, {"data-lobby-list": ""});
-  if (others.length === 0) {
-    section.append(el("ui-text", "같은 현장에 이웃 로봇이 없습니다", {scale: "label"}));
-  } else {
+  if (host.__lobbyBusy) return;
+  host.__lobbyBusy = true;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 5000);
+  host.setAttribute("aria-live", "polite");
+  host.replaceChildren(el("ui-text", "같은 LAN의 로봇을 찾는 중…", {scale: "label"}));
+  try {
+    const result = await api("/api/v1/site/rooms", {signal: controller.signal});
+    if (!result.ok || !Array.isArray(result.body?.rooms)) throw new Error("discovery unavailable");
     const list = el("ui-actions");
-    for (const room of others.slice(0, 8)) {
-      const go = el("ui-button", room.hostname, {type: "button", "data-lobby-room": room.hostname,
-        "data-lobby-url": room.url});
+    const seen = new Set();
+    for (const room of result.body.rooms.slice(0, 64)) {
+      if (!room || room.kind !== "robot" || typeof room.hostname !== "string") continue;
+      const hostname = room.hostname.toLowerCase();
+      const fqdn = hostname.endsWith(".local") ? hostname : `${hostname}.local`;
+      if (!/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.local$/.test(fqdn)
+          || !Number.isInteger(room.port) || room.port < 1 || room.port > 65535) continue;
+      let target;
+      try { target = new URL(room.url); } catch { continue; }
+      if (!["http:", "https:"].includes(target.protocol) || target.hostname !== fqdn
+          || target.username || target.password || target.search || target.pathname !== "/pilot/"
+          || target.hash !== "#join"
+          || Number(target.port || (target.protocol === "https:" ? 443 : 80)) !== room.port) continue;
+      const currentPort = Number(location.port || (location.protocol === "https:" ? 443 : 80));
+      if (room.port === currentPort && [fqdn, room.address].includes(location.hostname)) continue;
+      if (seen.has(fqdn)) continue;
+      seen.add(fqdn);
+      const go = el("ui-button", hostname, {type: "button", "data-lobby-room": room.hostname,
+        "data-lobby-url": target.href});
       go.setAttribute("kind", "segment");
-      go.addEventListener("click", () => {
-        // 그 기기의 origin 으로 이동한다(D-343 2.3 — CORS 를 열지 않는다).
-        location.assign(room.url);
-      });
+      go.addEventListener("click", () => location.assign(target.href));
       list.append(go);
     }
-    section.append(el("ui-text", "이웃 로봇", {scale: "label"}), list);
+    host.replaceChildren(el("ui-text", seen.size ? "같은 LAN의 로봇 · 선택 후 연결 확인"
+      : "같은 LAN에서 발견한 다른 로봇이 없습니다", {scale: "label"}));
+    if (seen.size) host.append(list, el("p", "발견 목록입니다. 선택한 로봇에서 승인·로그인을 확인합니다."));
+  } catch {
+    host.replaceChildren(el("ui-text", "로봇 목록을 가져오지 못했습니다. LAN 연결을 확인하고 다시 찾아주세요.", {scale: "label"}));
+  } finally {
+    clearTimeout(timer);
+    host.__lobbyBusy = false;
+    const retry = el("ui-button", "다시 찾기", {type: "button", "data-lobby-retry": ""});
+    retry.setAttribute("kind", "quiet");
+    retry.addEventListener("click", () => refreshLobby(host));
+    host.append(retry);
   }
-  host.replaceChildren(section);
 }
 
 // --- 최근 접속 목록 (게임 "계속하기") ---

@@ -492,7 +492,20 @@
 - gate 변화: 없음. 호스트 계약. 운전석 임대(2.4)·MJPEG(2.3)·PWA 로비 화면(2.1)은 뒤 작업.
 - 결정: D-343 계획 §4 순서 2. PWA 화면·관전 모드·좌석은 D-343 §2.1·2.5의 뒤 작업.
 
+## 2026-10-04 · uncommitted · fix(discovery): bounded LAN rooms와 TLS/FQDN 계약 정합
+
+- 변경: 공용 발견 cache를 먼저 사용하고 optional adapter가 없을 때만 5초 success/error singleflight Avahi fallback을 쓴다. stdout128KiB·4초/유한 종료 회수, actual service/domain/role, canonical FQDN·TLS 링크, 64행·초과 identity 충돌을 검증한다. 공개 미승인 힌트 typed 계약을 schemas와 API Ref1.98에 함께 기록하고 기존1.97 중앙 GET와 envelope1.0을 유지한다.
+- 증거: 원본8c의 double.local·TLS HTTP·중복100·8동시 scan8 결함 재현 후 후보22 PASS, 65번째 identity 경계 RED→GREEN, 독립 SPEC·Quality·Safety PASS. 실제 적용 API/schema/P6 검사는 별도 root 수행 중이다.
+- gate 변화: SOURCE/LOCAL 후보. 실제 LAN/Avahi/장치/멀티worker 트래픽 수용과 서명 배포는 별도다.
+
+## 2026-10-04 · uncommitted · fix(api): 실제 계약 판과 rooms 내부 저장 표현 정합
+
+- 변경: FastAPI 설명의 이전1.96 판을 현재 API Ref1.98로 맞췄다. rooms 내부의 목록 tuple/dict 저장을 명시적 signature/room record로 바꿔 이벤트 발행 검사기의 구조 오인을 피한다. 검사기/이벤트 목록/분류 규칙은 바꾸지 않는다.
+- 증거: 정상 pre-push3 실패 중 protocol/event2 원인을 실제로 확인하고 해당 검사·secret provenance·rooms22를 합친 실제114 PASS로 재검증했다.
+- gate 변화: SOURCE/LOCAL gate 수리. 원격 push/CI/서명 배포·장치 수락은 별도다.
+
 ## 2026-10-04 · uncommitted · docs(api): D-457 site display contract v1.97
 
 - 변경: 사이트 표시 전용 추적 계약과 FastAPI 설명 버전을 일치시켰다. 로봇 endpoint·wire envelope·주행 행위 변경 없음.
 - 증거: protocol_version_alignment 시험 통과. DEVICE/FIELD 변화 없음.
+- gate 변화: 없음. 사이트 표시 계약 문서 정합이며 로봇 wire/주행 경계는 유지한다.
