@@ -7,12 +7,10 @@
 정상 등록 해제 이외의 marker 초기화나 CA 교체 절차를 이 변경에서 제공하지 않는다.
 
 독립 검토자 `/root/ship_core_merge`: SPEC·Quality·Safety SOURCE PASS.
-전송 검토 영수증 SHA256:
-`9a6d4e5aa77594060adf2d3f52a5b917d91f3cf3c32497507efdec8e4c86167b`.
+전송 검토 영수증 SHA256: `9a6d4e5aa77594060adf2d3f52a5b917d91f3cf3c32497507efdec8e4c86167b`.
 초기 구조 검토는 CLI의 명시된 다음 옵션 전 builder 분리 조건 때문에 HOLD였다.
 기능별 조립을 분리한 후 구조·SPEC·Quality·Safety SOURCE PASS로 재판정했다.
-최종 builder 검토 영수증 SHA256:
-`0c2a2bc9c602224016592db471b3c2c659c3432f5b8b68650c0069585ed90df0`.
+최종 builder 검토 영수증 SHA256: `0c2a2bc9c602224016592db471b3c2c659c3432f5b8b68650c0069585ed90df0`.
 
 D-362 재판정의 동일 production 필터·physical line 측정은 Fleet 35,606줄이다.
 기존 판정 35,137줄 대비 469줄이며 이전 동시 작업 80줄, TLS 전송 변경 364줄,
