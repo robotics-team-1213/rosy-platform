@@ -229,6 +229,7 @@ adrs:
 - D-453
 - D-455
 plans:
+- docs/plans/2026-10-05-model-pc-pixel-label-pipeline.md
 - docs/plans/2026-10-04-d329-matrix-schema.md
 - docs/plans/2026-10-04-d443-signal-supervision.md
 - docs/plans/2026-10-03-pi-ncnn-opencv-implementation.md

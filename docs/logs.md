@@ -5830,3 +5830,9 @@ osy-d395-s1d\`.
 - 변경: 차선·바닥·벽 픽셀 우선, 기하/기존 모델과 로컬 분할 보완, 선택 OpenRouter 보조 판단을 D-462 검수와 D-464 builder 앞단에 연결하는 설계를 기록한다. RTX 5080 16 GB는 설계 기준이며 실제 GPU·처리량·라벨 품질은 미검증이다.
 - 증거: 생성 직전 main·작업 트리 ADR/Log와 전체 로컬 브랜치 ADR trees 및 harness adr_gaps에서 최고 번호 D-464를 확인했다. lint와 문서 계약 시험 결과는 X:/DevTemp/pixel-label-adr에 보존한다.
 - gate 변화: 설계 기록만 추가한다. 모델 설치·외부 API 호출·학습·승격·GPU/DEVICE/FIELD 수용은 별도다.
+
+## 2026-10-05 · uncommitted · docs(learning): D-465 모델 PC 픽셀 처리 파이프라인 구축 계획
+
+- 변경: 환경/입력 doctor·기존 baseline·indexed 255 import와 초안 revision·최신 승인 builder/admission·선택 SAM/외부 보조·실 GPU 파일럿을 7개 구현 task로 분해한다. 기존 색상 ZIP의 미라벨 보존 한계와 기존 앱 소유 경계를 기록한다.
+- 증거: 기존 prelabel/autolabel·Job·D-446 실행기·review_ingest/review_masks·review_dataset/learning_cycle 소스 및 D-462/D-464 계약을 확인했다. 문서 lint/계약 테스트는 X:/DevTemp/pixel-plan에 보존한다.
+- gate 변화: 구축 계획만 추가한다. 제품 구현·원격 환경 변경·외부 API·실 학습·GPU/품질 수용은 NOT_RUN이다.

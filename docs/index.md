@@ -285,6 +285,7 @@
 - [2026-10-04-d443-signal-supervision.md](plans/2026-10-04-d443-signal-supervision.md)
 - [2026-10-04-pilot-device-stop-contract-measurement.md](plans/2026-10-04-pilot-device-stop-contract-measurement.md)
 - [2026-10-04-web-gate-ladder-fleet-readiness-adr-plan.md](plans/2026-10-04-web-gate-ladder-fleet-readiness-adr-plan.md)
+- [2026-10-05-model-pc-pixel-label-pipeline.md](plans/2026-10-05-model-pc-pixel-label-pipeline.md)
 
 ## 교훈 (docs/solutions)
 
@@ -299,8 +300,8 @@
 
 ## 최근 기록
 
+- 2026-10-05 · uncommitted · docs(learning): D-465 모델 PC 픽셀 처리 파이프라인 구축 계획
 - 2026-10-05 · uncommitted · docs(learning): 모델 PC 픽셀 자동 라벨 초안 파이프라인 D-465
 - 2026-10-05 · uncommitted · fix(pairing): TLS CI 의존성과 통합 버전 기록
 - 2026-10-05 · uncommitted · docs(learning): bind approved indexed masks to immutable dataset construction
 - 2026-10-05 · uncommitted · fix(release): 무마커 시작점의 검토 기록과 inherited CI fixture 복구
-- 2026-10-05 · uncommitted · test(learning): pin receipt exclusion tombstone aliases
