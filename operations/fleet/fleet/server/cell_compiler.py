@@ -62,6 +62,7 @@ class PalletizingCellJobCompiler:
             job=process_compiler.job_document(job), plan_bundle=plan.bundle,
             ledger_markers=tuple({"after_step_ordinal": marker.after_step_ordinal,
                                   "pallet_id": marker.pallet_id} for marker in plan.ledger_markers),
+            operator_checkpoints=tuple(checkpoint.as_dict() for checkpoint in plan.operator_checkpoints),
         )
 
 

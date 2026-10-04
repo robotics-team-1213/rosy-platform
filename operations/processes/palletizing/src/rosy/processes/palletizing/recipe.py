@@ -8,7 +8,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
-from . import SCHEMA_RECIPE, fields
+from . import SCHEMA_RECIPE, SCHEMA_RECIPE_MANUAL, fields
 from .fields import FieldError
 from .load import Box, Pallet
 from .pattern import PATTERNS
@@ -47,6 +47,7 @@ class Recipe:
     slip_sheet_station: str | None
     layers: tuple[LayerSpec, ...]
     content_hash: str
+    slip_sheet_handling: str = "robot"
 
 
 def content_hash(data: object) -> str:
@@ -104,6 +105,13 @@ def _slip_sheet(value: object, field: str) -> tuple[float, str]:
     return fields.positive(d["thickness"], f"{field}.thickness"), fields.text(d["station"], f"{field}.station")
 
 
+def _manual_sheet(value: object, field: str) -> tuple[float, None]:
+    d = fields.mapping(value, field, ("thickness", "handling"))
+    if d["handling"] != "operator":
+        raise FieldError(f"{field}.handling must be operator for recipe/2")
+    return fields.positive(d["thickness"], f"{field}.thickness"), None
+
+
 def load_recipe(text: str) -> Recipe:
     try:
         data = fields.parse(text, "recipe")
@@ -126,13 +134,16 @@ def load_recipe(text: str) -> Recipe:
     pallets = read("pallets", _pallets)
     pick_station = read("pick_station", fields.text)
     gap = read("gap", fields.non_negative)
-    sheet = read("slip_sheet", _slip_sheet)
+    manual = data.get("schema") == SCHEMA_RECIPE_MANUAL
+    sheet = read("slip_sheet", _manual_sheet if manual else _slip_sheet)
     layers = read("layers", _layers)
 
-    if "schema" in data and data["schema"] != SCHEMA_RECIPE:
-        problems.append(f"schema must be {SCHEMA_RECIPE}")
+    if "schema" in data and data["schema"] not in {SCHEMA_RECIPE, SCHEMA_RECIPE_MANUAL}:
+        problems.append(f"schema must be {SCHEMA_RECIPE} or {SCHEMA_RECIPE_MANUAL}")
     if mode is not None and mode not in MODES:
         problems.append(f"mode must be one of {MODES}")
+    if manual and mode != "palletize":
+        problems.append("recipe/2 operator sheet handling supports palletize only")
     if pallets is not None:
         if not pallets:
             problems.append("at least one pallet is required")
@@ -159,4 +170,5 @@ def load_recipe(text: str) -> Recipe:
         slip_sheet_station=sheet[1] if sheet else None,
         layers=layers,
         content_hash=content_hash(data),
+        slip_sheet_handling="operator" if manual else "robot",
     )

@@ -33,6 +33,12 @@ class Step:
 
 
 @dataclass(frozen=True)
+class OperatorSheetStep(Step):
+    """A human operation in the canonical Job, never a robot motion instruction."""
+    thickness_m: float
+
+
+@dataclass(frozen=True)
 class Job:
     recipe_hash: str
     cell_hash: str
@@ -101,7 +107,7 @@ def carry_z(recipe: Recipe, cell: CellConfig, *, tol_m: float) -> float:
     """Highest surface over the whole Job + held-item hang below the TCP + approach clearance (D-402 §6).
 
     The hang is box height - grasp_depth (the TCP grasps grasp_depth below the box top, C3b
-    B1), or the slip-sheet thickness if that is larger (a sheet is taken at its top face).
+    B1), or a robot-handled slip-sheet thickness if larger (a sheet is taken at its top face).
 
     Surfaces: the top of every pallet's full stack (all four footprint corners, so a tilted frame is
     covered) and every station pose the recipe uses. Home is not an obstacle and is not included.
@@ -119,7 +125,8 @@ def _carry_z(recipe: Recipe, cell: CellConfig, plans: dict[str, StackPlan]) -> f
                 tops.append(frame.to_base((x, y, plan.height))[2])
     stations = [recipe.pick_station] + ([recipe.slip_sheet_station] if recipe.slip_sheet_station else [])
     tops += [cell.station_pose(s)[2] for s in stations]
-    hang = max(recipe.box.height - recipe.box.grasp_depth, recipe.slip_sheet_thickness or 0.0,
+    sheet_hang = (recipe.slip_sheet_thickness or 0.0) if recipe.slip_sheet_handling == "robot" else 0.0
+    hang = max(recipe.box.height - recipe.box.grasp_depth, sheet_hang,
                cell.fingertip_overhang_m)
     return max(tops) + hang + cell.approach_clearance_m
 
@@ -144,7 +151,11 @@ def compile_job(recipe: Recipe, cell: CellConfig, *, tol_m: float) -> Job:
             sheet_pose = _on_pallet(frame, *centre, sheet.z, 0.0) if sheet else None
             if recipe.mode == "palletize":
                 if sheet_pose:
-                    steps += _transfer(sheet_station, sheet_pose, "slip_sheet", slot.id, n, clearance)
+                    if recipe.slip_sheet_handling == "operator":
+                        steps.append(OperatorSheetStep("operator_sheet", "slip_sheet", slot.id, n,
+                                                       sheet_pose, None, recipe.slip_sheet_thickness))
+                    else:
+                        steps += _transfer(sheet_station, sheet_pose, "slip_sheet", slot.id, n, clearance)
                 for b in ordered:
                     steps += _transfer(station, _on_pallet(frame, b.x, b.y, b.z_top, b.yaw), "box", slot.id, n,
                                        clearance, depth)
