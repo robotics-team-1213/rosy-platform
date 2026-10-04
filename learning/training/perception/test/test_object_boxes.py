@@ -1,5 +1,6 @@
 """D-423 §2.5: LiDAR clusters -> candidate object boxes; human labels always win."""
 import json
+import hashlib
 import sys
 from pathlib import Path
 
@@ -16,6 +17,20 @@ from geometry import Camera, Lidar  # noqa: E402
 from control.sensing.perception.learned.manifest import OBJECT_CLASSES  # noqa: E402
 
 CAM = Camera.from_profile(width=320, height=240)
+
+
+def bind_image(tmp_path, labels, human):
+    import cv2
+    image = cv2.imencode(".png", np.zeros((240, 320, 3), dtype=np.uint8))[1].tobytes()
+    (tmp_path / "frame.png").write_bytes(image)
+    digest = hashlib.sha256(image).hexdigest()
+    rows = [json.loads(x) for x in labels.read_text().splitlines()]
+    rows[0].update(image="frame.png", image_sha256=digest)
+    labels.write_text("".join(json.dumps(x) + "\n" for x in rows))
+    reviews = [json.loads(x) for x in human.read_text().splitlines()]
+    reviews[0]["image_sha256"] = digest
+    human.write_text("".join(json.dumps(x) + "\n" for x in reviews))
+    return digest
 
 
 def box_points(cx, cy, half=0.04, n=9):
@@ -79,6 +94,7 @@ def test_cli_merges_a_labels_jsonl_with_human_rows(tmp_path):
                                 "boxes": [{"bbox_xyxy": [100, 100, 140, 160], "label": "robot"}]})
                      + "\n", encoding="utf-8")
     out = tmp_path / "yolo"
+    bind_image(tmp_path, labels, human)
     assert OB.main([str(labels), "--human", str(human), "--out", str(out), "--size", "320", "240"]) == 0
     assert (out / "000000.txt").read_text(encoding="utf-8").startswith(f"{OBJECT_CLASSES.index('robot')} ")
     # Not reviewed by a person: no label file (an empty one would claim "nothing there",
@@ -114,8 +130,60 @@ def test_only_explicit_complete_approved_empty_boxes_can_claim_negative(tmp_path
     human.write_text(json.dumps({"index": 0, "boxes": [], "review_status": "approved",
                                  "complete_frame_review": True}) + "\n")
     out = tmp_path / "out"
+    digest = bind_image(tmp_path, labels, human)
     OB.main([str(labels), "--human", str(human), "--out", str(out), "--size", "320", "240"])
     assert (out / "000000.txt").read_text() == ""
+    assert (out / "source.jsonl").read_bytes() == labels.read_bytes()
+    assert (out / "human.jsonl").read_bytes() == human.read_bytes()
+    (tmp_path / "frame.png").write_bytes(b"source changed after export")
+    assert hashlib.sha256((out / "images/000000.png").read_bytes()).hexdigest() == digest
+    manifest = json.loads((out / "manifest.json").read_text())
+    assert manifest["exported_indices"] == [0] and manifest["queued_indices"] == []
+    assert manifest["classes"] == list(OBJECT_CLASSES)
+    assert {x["path"] for x in manifest["files"]} == {
+        p.relative_to(out).as_posix() for p in out.rglob("*") if p.is_file() and p.name != "manifest.json"}
+    for ref in manifest["files"]:
+        data = (out / ref["path"]).read_bytes()
+        assert len(data) == ref["bytes"] and hashlib.sha256(data).hexdigest() == ref["sha256"]
+
+
+@pytest.mark.parametrize("mutation", ["image", "review_hash", "source_hash", "path_escape", "size"])
+def test_approved_label_must_match_exact_source_image(tmp_path, mutation):
+    labels, human = tmp_path / "labels.jsonl", tmp_path / "human.jsonl"
+    labels.write_text(json.dumps({"index": 0}) + "\n")
+    human.write_text(json.dumps({"index": 0, "review_status": "approved", "complete_frame_review": True,
+                                 "boxes": []}) + "\n")
+    bind_image(tmp_path, labels, human)
+    size = ["320", "240"]
+    if mutation == "image":
+        (tmp_path / "frame.png").write_bytes(b"different image")
+    elif mutation == "size":
+        size = ["640", "480"]
+    else:
+        path = human if mutation == "review_hash" else labels
+        row = json.loads(path.read_text())
+        if mutation == "path_escape":
+            outside = tmp_path.parent / "outside.png"
+            outside.write_bytes((tmp_path / "frame.png").read_bytes())
+            row["image"] = "../outside.png"
+        else:
+            row["image_sha256"] = "a" * 64
+        path.write_text(json.dumps(row) + "\n")
+    out = tmp_path / "out"
+    with pytest.raises(ValueError):
+        OB.main([str(labels), "--human", str(human), "--out", str(out), "--size", *size])
+    assert not out.exists()
+
+
+def test_approved_review_without_image_binding_is_refused(tmp_path):
+    labels, human = tmp_path / "labels.jsonl", tmp_path / "human.jsonl"
+    labels.write_text(json.dumps({"index": 0}) + "\n")
+    human.write_text(json.dumps({"index": 0, "review_status": "approved", "complete_frame_review": True,
+                                 "boxes": []}) + "\n")
+    out = tmp_path / "out"
+    with pytest.raises(ValueError, match="image"):
+        OB.main([str(labels), "--human", str(human), "--out", str(out), "--size", "320", "240"])
+    assert not out.exists()
 
 
 def test_existing_output_cannot_retain_stale_training_labels(tmp_path):

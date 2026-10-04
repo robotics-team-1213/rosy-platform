@@ -5090,3 +5090,8 @@
 
 - 변경: human 행 존재만으로 partial/empty label을 export하던 문제와 기존 출력의 stale txt 재사용을 RED11로 재현했다. approved+complete_frame_review bool true+명시 boxes만 export하며 불명확 상태는 원 review와 사유를 대기열에 남긴다. index/geometry 검증 후 새 출력만 생성한다.
 - 증거: 독립 검토의 none/reject 이미지 밖 박스 우회 RED1 재현 후 merge 이전 geometry 검사로 수정했다. 최종 object33pass, 관련 autolabel/review65pass. 실제4영상 초안 프레임/7박스/4image SHA 확인, v1/v2 training txt0/pending4. 문서15pass/1skip. 근거: validation/object-review-export-2026-10-04.md. 사람 승인·image binding·새 모델 품질과 전체 장치/운영 목표는 미완료다.
+
+### 2026-10-04 · uncommitted · fix(learning): bind approved object labels to image bytes
+
+- 변경: 동일 index의 다른 사진에 승인 라벨을 적용하는 문제를 RED6으로 재현했다. source/review/실제 image SHA와 크기/상대 경로를 검증한 뒤 검증 bytes를 snapshot하고 실제 파싱한 입력·모든 output hash manifest를 보존한다.
+- 증거: object39pass/관련71pass. 실제4pending frame/7draft boxes/4image SHA 확인, txt0/queue4/3manifest ref 검증. 실제 승인 export는 아직 없고 positive snapshot 증거는 unit fixture이다. 근거: validation/object-review-image-binding-2026-10-04.md. 사람 인증/검수·group provenance·새 dataset/model/device/field와 전체 목표는 미완료다.
