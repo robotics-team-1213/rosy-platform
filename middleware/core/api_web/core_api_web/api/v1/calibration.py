@@ -47,6 +47,8 @@ def _busy_reason(svc: CoreServicesLike) -> str | None:
     A lease fences *other* tokens; it must not be opened over motion someone
     else already started, or that motion keeps running under the owner's lease.
     """
+    if getattr(svc.modes, "motion_reserved", False):
+        return "lane perception configuration is being applied"
     if svc.modes.mode not in (Mode.IDLE, Mode.MANUAL):
         return f"robot mode is {svc.modes.mode.value}; calibration starts from IDLE or MANUAL"
     if svc.nav.nav_state in _NAV_BUSY or svc.nav.mapping_active:
@@ -74,15 +76,16 @@ def get_session(_: AuthContext = Depends(viewer),
 @calibration_router.post("/session", status_code=201)
 def start_session(body: SessionRequest, auth: AuthContext = Depends(operator),
                   svc: CoreServicesLike = Depends(get_services)):
-    busy = _busy_reason(svc)
-    if busy is not None:
-        raise ApiError("MODE_CONFLICT", 409, f"calibration refused: {busy}")
-    try:
-        session = svc.calibration.start(
-            kind=body.kind, label=body.label, ttl_s=body.ttl_s,
-            owner_id=auth.token_id, owner_role=auth.role, owner_label=auth.label)
-    except CalibrationSessionError as exc:
-        _raise(exc)
+    with svc.modes.idle_admission:
+        busy = _busy_reason(svc)
+        if busy is not None:
+            raise ApiError("MODE_CONFLICT", 409, f"calibration refused: {busy}")
+        try:
+            session = svc.calibration.start(
+                kind=body.kind, label=body.label, ttl_s=body.ttl_s,
+                owner_id=auth.token_id, owner_role=auth.role, owner_label=auth.label)
+        except CalibrationSessionError as exc:
+            _raise(exc)
     return {"session": session}
 
 

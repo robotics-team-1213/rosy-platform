@@ -24,7 +24,7 @@ from hashlib import sha256
 from pathlib import Path
 from typing import Mapping, Optional
 
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException
 from pydantic import BaseModel, ConfigDict, field_validator
 
 from core_common.protocol.vision_preview import VisionLeaseSigner
@@ -44,6 +44,8 @@ from fleet.server.policy_evidence import PolicyEvidenceStore
 from fleet.server.proposal_store import ProposalStore
 from fleet.server.step_action_kinds import dispatch_open
 from fleet.server.step_dispatcher import StepJobDispatcher
+from fleet.server.stuck_resolver import ResolverConfig, StuckResolver
+from fleet.server.stuck_resolver_loop import StuckResolverLoop
 from fleet.server.task_service import FleetTaskService
 
 from fleet.server.console_routes import install_console_routes
@@ -59,9 +61,11 @@ from fleet.server.site_auth import (
     assert_robot_credential_key_isolated,
     build_authorize,
     build_role_guards,
+    install_mutation_audit,
     parse_site_principals,
 )
 from fleet.server.static_routes import install_static_routes
+from fleet.hub.server import fan_out_events as _fan_out_events
 from fleet.server.task_dispatch_routes import (  # noqa: F401 — GoalRequest 재수출: test_task_contract_docs 참조
     GoalRequest,
     cancel_pending_task_queue,
@@ -112,6 +116,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                mission_model_turn_worker=None,
                post_action_observation_source=None,
                site_lanes: Optional[Mapping] = None,
+               stuck_resolver_clients: Optional[Mapping[str, object]] = None,
                pairing=None, pairing_sync_token: Optional[str] = None,
                localization_service=None, deployment_profile: str = "production",
                omx_cell_grant_revisions: Optional[Mapping[str, Mapping[str, str]]] = None,
@@ -287,6 +292,9 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         if console._signals is not None:
             signal_task = asyncio.create_task(console._signals.run())
         app.state.signal_supervision = signal_task
+        resolver_task = None
+        if getattr(app.state, "stuck_resolver", None) is not None:
+            resolver_task = asyncio.create_task(app.state.stuck_resolver.run())
         if localization_service is not None:
             localization_task = asyncio.create_task(localization_service.run())
         if task_service is not None and start_task_dispatcher:
@@ -315,7 +323,8 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         finally:
             for background in (dispatcher, mission_worker, cell_job_worker, proposal_expiry,
                                goal_evidence_worker, mission_feedback_scheduler,
-                               mission_model_turn_worker_task, localization_task, signal_task):
+                               mission_model_turn_worker_task, localization_task,
+                               signal_task, resolver_task):
                 if background is not None:
                     background.cancel()
                     try:
@@ -352,32 +361,13 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     app.state.omx_instances = configured_omx
     app.state.localization_service = localization_service
     if task_service is not None:
-        if hub is not None:
-            hub.set_event_callback(task_service.project_core_event)
 
         async def release_traffic_task(mission: dict) -> None:
             task_service.traffic_queue_released(mission["task_id"])
 
         console.set_task_queue_release_callback(release_traffic_task)
 
-    @app.middleware("http")
-    async def finish_mutation_audit(request: Request, call_next):
-        try:
-            response = await call_next(request)
-        except Exception:
-            audit_id = getattr(request.state, "site_api_audit_id", None)
-            if audit_id is not None:
-                task_service.store.finish_api_audit(audit_id, status_code=500)
-            raise
-        audit_id = getattr(request.state, "site_api_audit_id", None)
-        if audit_id is not None:
-            task_service.store.finish_api_audit(audit_id, status_code=response.status_code)
-        return response
-
-    @app.get("/healthz", include_in_schema=False)
-    async def healthz() -> dict:
-        """Minimal process liveness for local container supervision."""
-        return {"status": "ok"}
+    install_mutation_audit(app, task_service)
 
     if hub is not None:
         from fleet.hub.server import install_hub_routes
@@ -448,6 +438,16 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                            answer_log_path=task_service.store.path if task_service else None)
     install_signal_routes(app, signals=console._signals, require_viewer=require_viewer,
                           require_operator=require_operator, auth_configured=bool(principals or console_token))
+
+    if stuck_resolver_clients is not None:
+        app.state.stuck_resolver = StuckResolverLoop(
+            app.state.fleet_gather, app.state.line_stuck, StuckResolver(ResolverConfig()),
+            clients=lambda: stuck_resolver_clients)
+    if hub is not None and (task_service is not None or stuck_resolver_clients is not None):
+        resolver = getattr(app.state, "stuck_resolver", None)
+        hub.set_event_callback(_fan_out_events(
+            task_service.project_core_event if task_service is not None else None,
+            resolver.wake if resolver is not None else None))
 
     install_task_dispatch_routes(app, console=console, task_service=task_service,
                                  configured_omx=configured_omx,

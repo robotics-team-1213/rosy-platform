@@ -1,0 +1,155 @@
+{
+  "read_only": true,
+  "source_commit": "6a549b980bf171f802227629540e7c20481d599e",
+  "observed_at_utc": "2026-10-04T05:22:33.006474+00:00",
+  "firmware_status_snapshot": {
+    "phase": "idle",
+    "candidate": null,
+    "current_release": "2026.10.04-033",
+    "updated_at": "2026-10-04T03:02:38Z",
+    "last_result": {
+      "release_id": "2026.10.04-033",
+      "outcome": "committed",
+      "at": "2026-10-03T15:24:09Z"
+    }
+  },
+  "firmware_state_snapshot": {
+    "candidate": null,
+    "committed": [
+      "2026.10.02-026",
+      "2026.10.03-031",
+      "2026.10.04-033"
+    ],
+    "last_result": {
+      "release_id": "2026.10.04-033",
+      "outcome": "committed",
+      "at": "2026-10-03T15:24:09Z"
+    },
+    "failed_ids": [
+      "2026.10.03-029"
+    ]
+  },
+  "firmware_history": {
+    "count": 27,
+    "events": {
+      "disabled": 1,
+      "idle": 5,
+      "error": 1,
+      "staged": 4,
+      "applying": 4,
+      "pruned": 4,
+      "committed": 3,
+      "rollback_started": 1,
+      "rolled_back": 1,
+      "hold_set": 2,
+      "hold_expired": 1
+    },
+    "last": [
+      {
+        "at": "2026-10-03T11:40:34Z",
+        "event": "applying",
+        "release_id": "2026.10.03-031",
+        "boot_id": "a5b05dd4-869d-4b13-b63c-ab13acbf2aaa"
+      },
+      {
+        "at": "2026-10-03T11:41:47Z",
+        "event": "pruned",
+        "release_id": null,
+        "boot_id": "a5b05dd4-869d-4b13-b63c-ab13acbf2aaa"
+      },
+      {
+        "at": "2026-10-03T11:41:47Z",
+        "event": "committed",
+        "release_id": "2026.10.03-031",
+        "boot_id": "a5b05dd4-869d-4b13-b63c-ab13acbf2aaa"
+      },
+      {
+        "at": "2026-10-03T11:57:07Z",
+        "event": "idle",
+        "release_id": null,
+        "boot_id": "8d4ce09b-5ba3-4181-9d81-c7e892a3e659"
+      },
+      {
+        "at": "2026-10-03T15:22:43Z",
+        "event": "staged",
+        "release_id": "2026.10.04-033",
+        "boot_id": "b275dabf-4b5e-46bf-8859-467a71fe4798"
+      },
+      {
+        "at": "2026-10-03T15:22:55Z",
+        "event": "applying",
+        "release_id": "2026.10.04-033",
+        "boot_id": "b275dabf-4b5e-46bf-8859-467a71fe4798"
+      },
+      {
+        "at": "2026-10-03T15:24:10Z",
+        "event": "pruned",
+        "release_id": null,
+        "boot_id": "b275dabf-4b5e-46bf-8859-467a71fe4798"
+      },
+      {
+        "at": "2026-10-03T15:24:10Z",
+        "event": "committed",
+        "release_id": "2026.10.04-033",
+        "boot_id": "b275dabf-4b5e-46bf-8859-467a71fe4798"
+      },
+      {
+        "at": "2026-10-03T15:32:24Z",
+        "event": "idle",
+        "release_id": null,
+        "boot_id": "b275dabf-4b5e-46bf-8859-467a71fe4798"
+      },
+      {
+        "at": "2026-10-03T17:12:01Z",
+        "event": "hold_set",
+        "release_id": null,
+        "boot_id": "892890a9-cf6e-4a3d-8723-3670467df593"
+      },
+      {
+        "at": "2026-10-03T19:56:23Z",
+        "event": "hold_set",
+        "release_id": null,
+        "boot_id": "892890a9-cf6e-4a3d-8723-3670467df593"
+      },
+      {
+        "at": "2026-10-04T00:05:07Z",
+        "event": "hold_expired",
+        "release_id": null,
+        "boot_id": "892890a9-cf6e-4a3d-8723-3670467df593"
+      }
+    ]
+  },
+  "model_history": {
+    "count": 1,
+    "events": {
+      "push": 1
+    },
+    "last": [
+      {
+        "ts": "2026-10-03T15:05:27Z",
+        "action": "push",
+        "revision": "lane-seg-20261003-6e2e5640",
+        "previous": ""
+      }
+    ]
+  },
+  "shadow_revision": "lane-seg-20261003-6e2e5640",
+  "limits": [
+    "Stored status is not a fresh live API response.",
+    "No deployment, model promotion, motion or physical display observation performed.",
+    "History is bounded; counts describe the current file only.",
+    "Model history records pointer operations, not every attempted transfer or failure."
+  ],
+  "source_contract_tests": [
+    {
+      "suite": "native auto-update and activation",
+      "passed": 273,
+      "skipped": 1
+    },
+    {
+      "suite": "model deliver and intake",
+      "passed": 99,
+      "skipped": 24
+    }
+  ]
+}

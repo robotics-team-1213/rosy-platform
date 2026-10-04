@@ -4824,6 +4824,83 @@
 - 증거: `test/test_affected_tests.py` 표 시험(tools/ssh·core_common·미분류·sensing 역의존·문서·보조 모듈·deploy 축소·conftest/workflow/설정 escalation·base 부재)과 변이 증명 2건; D-418 브랜치 diff 선택 결과(core_common·platform_parts·tools/device_twin 미분류로 FULL).
 - gate 변화: 없음. 저장소 도구·CI·작업 규칙만이며 장치·이미지·현장 수용과 무관하다.
 
+## 2026-10-03 · uncommitted · docs: D-431 remote model PC and isolated Pi verification
+
+- 변경: 기존 원격 학습 PC로 실제 차선 TorchScript의 NCNN 변환·제품 intake를 실행하고 후속 증거와 계획 상태를 기록했다. Pi 임시 경로에서 서명 전달·손상 후보 거부·ONNX rollback을 검증했다.
+- 증거: 20프레임 pixel agreement 100%, PC NCNN/ONNX intake 각 380프레임 pass. 실기 격리 SignatureCheck/ModelSlot/rollback pass, 운영 pointer·manifest 전후 동일. 30분 동시 부하는 마지막 기록 표본 1,337.41초를 남긴 뒤 ROS 종료·cleanup 오류로 중단됐고 CPU 진단 ERROR, 마지막 p95 595.41ms였다. 정확한 종료 시간은 미확인이다. 잔여 임시 인증 1개는 API 회수와 readback 완료.
+- gate 변화: 없음. 학습 YOLO·라벨 IoU·provenance·30분 완료·정식 ARM64 release readback은 미완료이며 운영 전환과 ARTIFACT/DEVICE/FIELD 승격은 HOLD다.
+- 결정: D-431. 시스템 OpenCV와 기존 ONNX를 유지한다. 상세 범위는 `validation/pi-ncnn-remote-2026-10-03/README.md`.
+
+## 2026-10-03 · uncommitted · docs: D-435 authority handoff and device pipeline refinement
+
+- 변경: D-435 Proposed에 §8–§12 보강 후보와 검토 문서 3차 기록을 추가했다. 배정/발행/장치 수락·기존 claim 저장·SkillInvocation/Action identity·실행 출력의 Arbiter/Guard 순서·전체 진행 이력에 따른 자원 해제를 구체화했다. 형식 검사와 의미 검증도 구분했다.
+- 증거: dispatch_admission·MissionDispatcher·StepDispatcher·CellJobStore.release_before_send·SkillInvocation 정적 대조. 고정 OMX 대상, robot/workcell/object/pallet 공용 claim, 미발행과 UNKNOWN, 1 Step→1 Action 현재 범위를 확인했다.
+- gate 변화: 없음. Proposed 보강만이며 기존 Accepted 계약·코드·wire·원장·활성화·배포·장치 gate는 변경하지 않는다.
+- 추가 근거: Open-RMF 공식 task allocation/rmf_task Usage와 ROS 2 Actions 설계를 대조했다. Fleet 구현 안의 작업 실행 자체는 금지하지 않고 전체 Mission 정본과 위임 범위를 구분한다. 기존 SDK/대시보드 직접 장치 요청도 MANUAL에 한정하지 않도록 보강했다.
+- 검증: 문서 계약+모듈 기준선 단일 시험 84 passed/26 existing history warnings(full lint·generated records 포함). 기존 isaac_sim 기준선 시험은 상류 8dda13eec 수정 이후 현재 통과하며 이번 변경의 효과로 주장하지 않는다.
+
+## 2026-10-03 · uncommitted · docs: D-435 consolidated acceptance candidate
+
+- 변경: D-435 끝에 최종 수용 후보 요약 S1–S7과 검토 문서 최종 기록을 추가했다. 역할·권한·작업 흐름·원장/claim·증거·기존 ADR 부분 대체/유지·현재 구현 대응·완료 범위를 한 곳에 정리했다.
+- 증거: D-70/D-403·MissionService·목표 증거 경로를 추가 대조했다. 정형 공정 역할은 service principal의 admission 권한이 아니며 Rosy Cell 서비스는 제안/resolve, Job 승인은 이름 있는 사람 operator라는 현재 계약을 명시했다.
+- gate 변화: 없음. D-435는 Proposed이고 기존 Accepted 계약·실행 경로·API·원장·principal·simulation/실물 gate는 변경하지 않는다.
+
+- 최종 검증: network topology/harness 계약 검사 83 passed, 26 warnings(기존 last_verified 이력); S1–S7·Proposed 상태·로컬 링크 21개와 git diff --check 확인. 장치/물리 수용 증거는 아니다.
+
+## 2026-10-03 · uncommitted · docs: align D-435 roles with D-427 migration
+
+- 변경: D-435 S8에 제품/파트/논리 역할과 혼합 구현 대응을 추가했다. D-427 부록에 최신 경로 상태, 속도 우선 결정의 우선순위, D-425 기능/설치 gate 관계를 보강했다. 평가 문서에 세 선택과 권고 근거를 기록했다.
+- 근거: 기준 e23b8fe26, 매니페스트 71 root의 현재 path 누락 0개; execution submission/gateway composition 코드와 D-290/D-413/D-425/D-427/D-429/D-434 정적 대조.
+- gate 변화: 없음. D-435 Proposed 유지; 매니페스트·목표 경로·wave·원장·API·권한·배포 변경 없음. 경로 존재는 wave/artifact 수용 증거가 아니다.
+
+- Verification: initial run caught damaged UTF-8 append text; corrected those additions and regenerated the index. Final network/harness/platform-parts/colcon-roots run: 107 passed, 26 existing last_verified warnings. Local links: 32 valid; manifest unchanged; git diff --check passed.
+
+- Follow-up: added Codex review comments C1-C4 to the D-427 plan, with recommendations, concrete questions and an append-only response format for plan owners. Existing decisions, manifest and wave gates are unchanged.
+
+- Landing preparation: isolated docs/d435-review from main c67f05b5d. Regenerated docs/index.md to include the newer main log entry; initial isolated failures were both the same stale-index check. Existing document content and Proposed status remain unchanged.
+
+## 2026-10-03 · uncommitted · feat(link): D-432 주소 없는 장비 접속
+
+- 변경: D-432 구현 부록과 API Ref v1.89에 게임 장비 목록 접속, 내부 bootstrap과 운영 흐름의 차이, 로컬 HTTP 개발 예외·코드4·SSH opt-in을 고정했다.
+- 증거: 관련 Python 계약 시험·실제 loopback TLS HTTP/WS 시험을 실행했다. Pilot Android 설치·화면과 실제 로봇 연결·현장 트래픽 수용은 서로 다른 증거다.
+- gate 변화: 실제 장비의 제어·FIELD 관문은 이동하지 않는다.
+- 결정: D-432 2026-10-03 추가 결정.
+
+## 2026-10-03 · uncommitted · fix(link): 현재 접속과 후속 코드 규약 구별
+
+- 변경: 사용자 보정으로 4자리 코드 발급·Cam 표시 별칭은 이번 적용에서 제외했다. 현재 로봇 8자·Cam 6자리 규약을 유지하며 D-432에 추후 통합을 기록했다. 실제 Pinky 접속 수정은 진행한다.
+- 증거: 영향받는 Python 2345 passed/84 skipped, quick tier 459 passed/2 skipped, Pilot PWA 87 passed/58 skipped. 코드 규약 보정 뒤 해당 인증·페어링 시험을 다시 실행한다. 공개 검증 기록은 docs/validation/discovery-link-2026-10-03/README.md.
+- gate 변화: Android 설치·실제 CORE 인증 확인은 실제 주행·Cam 화면 off 연속 송출·현장 트래픽 수용과 별개다. DEVICE/FIELD 이동 없음.
+- 결정: D-432 후속 결정: 접속은 지금, 짧은 코드 통합은 추후 적용.
+
+## 2026-10-03 · uncommitted · docs(adr): Pilot 화면별 개선과 공용 디자인 소유권
+
+- 변경: D-432에 화면별 목적/주 동작/상태/복귀 기준, 조회 전용 카메라, 원본 320×240 경계, 공용 SVG 동작 버튼과 native 색 생성 결정을 추가했다.
+- 증거: 실제 태블릿 화면 직접 확인과 브라우저/JVM 시험은 docs/validation/discovery-link-2026-10-03에 따로 기록한다. 물리 주행/발열 하강/화면 off 연속 송출은 미판정이다.
+- gate 변화: DEVICE/FIELD 이동 없음.
+- 결정: 사용자 최신 지시로 지금 구현하며 4자리 코드 통합만 추후 적용한다.
+
+## 2026-10-03 · uncommitted · fix(integration): D-418 SSH와 D-432 연결/UI 계약 통합
+
+- 변경: API Ref는 D-418 v1.89 뒤 D-432 v1.90을 보존하고 app 설명과 문서 pin을 맞췄다. 배포 서비스 목록은 두 SSH 소유자를 모두 포함하면서 기존 1000줄 hard tier를 유지한다. sandbox 시험은 공개 키 helper의 실제 write/read IPC와 양의 디렉터리 시작 조건을 검사한다. 권한을 넓히지 않았다.
+- 증거: native systemd/버전 문서/구조 시험 199 passed/1 skipped. 최종 quick tier와 SSH 영향 범위는 별도 재실행한다.
+- gate 변화: 장치 활성화·물리 주행·FIELD 이동 없음.
+- 결정: D-418와 D-432를 각각의 경로/opt-in 소유권으로 보존한다.
+
+## 2026-10-03 · uncommitted · docs(ui): D-432 공용 디자인과 설치 검증 마무리
+
+- 변경: Pilot 화면별 점검, 웹 공용 동작 아이콘과 native canonical 색 생성, 실제 태블릿 설치 증거를 D-432/디자인 규칙/검증 기록으로 연결했다. 최신 D-435 문서는 기존 journal prefix를 보존하여 통합했다.
+- 증거: 실제 Pinky 인증·저장 자격 재접속·조회 전용 카메라, native Pilot 30/Cam 318 JVM 시험 통과. 브라우저 마지막 재조작 시험에서 완료 receipt를 목표 ID에 고정했다. 최종 브라우저·문서 검증 결과는 validation/discovery-link-2026-10-03/README.md에 기록한다.
+- gate 변화: 실제 주행·발열 하강·Cam 화면 off 연속 송출·FIELD 수용은 미판정이며 승격하지 않는다.
+- 결정: D-432. 4자리 페어링 통합은 후속 적용이다.
+
+## 2026-10-03 · uncommitted · docs(ui): D-439 전체 웹 앱 순차 개선 목표
+
+- 변경: 사용자 지시로 전체 남은 웹 앱의 작업 중심 디자인 개선 goal을 시작했다. registry/route/패널 목록, 공용 철학, 화면별 구현·검토·검증·착지 순서를 D-439와 실행 계획에 기록했다. 다른 브랜치의 D-436~438 번호를 보존한다.
+- 증거: 초기 로컬 Chromium에서 작업 준비 5패널·설치 정비 7패널과 모바일 페이지 높이를 확인했다. 전체 완료나 실제 장치 증거로 주장하지 않는다.
+- gate 변화: 전체 개선 목표 active; 제품 G3·DEVICE/FIELD 승격 없음.
+- 결정: D-439. 기존 토큰·부품·역할·CORE 최종 writer를 유지하고 이유 없는 나열과 작업 도달 문제를 화면별로 개선한다.
+
 ## 2026-10-04 · uncommitted · site(D-437): verifier accepts the containerd image ID form
 - 변경: `deploy/site/verify_candidate.py` 전체 검증이 해시 확인을 마친 `images.tar`에서 서비스별 config blob과 `index.json`이 가리키는 OCI manifest blob을 읽어(링크 거부, 디스크 추출 없음) 바이트 해시를 다시 계산하고, manifest의 `config.digest`가 서명된 `image_id`와 같을 때만 manifest digest도 받는다. summary에 `id_form`(`config`/`oci-manifest`). `index.json`이 없는 archive는 config 형태만. 검증기·서명 시험의 가짜 archive를 실제 tar로 바꾸고 containerd·위조 경우 시험 추가. D-437 Consequences, `deploy/site/README.md` 검증 절
 - 증거: 사이트 후보·검증·서명·fetch·workflow 시험과 `test_no_secrets_in_tracked_files`, harness lint. 현장 호스트에서 다시 돌린 것은 아님
@@ -4993,3 +5070,204 @@
 - 변경: main의 모델 PC 자동 갱신 ADR과 번호가 충돌해 팔레타이징 목표를 D-450으로 옮겼다. 이전 로그의 D-446은 당시 번호이며 append-only 이력을 보존한다. 현재 계획·progress·API 참조는 D-450으로 연결한다.
 - 증거: 브라우저/API 19 passed, optional import 회귀 수정 뒤 API 8 passed, fast gate 462 passed/2 skipped/12 기존 warnings. 독립 리뷰가 Cell fence와 CORE API 버전 설명만 변경된 것을 확인했다. Isaac host 33 passed/1 skipped와 모델 PC graph 관측은 별도 validation 문서에 기록했다.
 - gate 변화: SOURCE/LOCAL 부분 증거만 추가했다. Isaac 정상 종료·실제 주행, Gazebo OMX 격리 실행 및 G1 전체 기능 수용은 미완료다.
+## 2026-10-04 · uncommitted · docs(plan): 웹 게이트 사다리·Fleet 승격 ADR 계획
+
+- 변경: `docs/plans/2026-10-04-web-gate-ladder-fleet-readiness-adr-plan.md` 추가. dashboard/pilot ARTIFACT·pilot DEVICE(페달 정지 계약)·fleet ROS-SIM(D-87→D-426)의 게이트를 release 이미지 관측 → 실기 증거 사다리로 묶고, Fleet 사이트 시드 승격과 중앙(8081) 착수 전제, 수용됨-미구현(D-368·D-361·WS 전환) 순서를 정했다. 신규 ADR D-439(웹 표면 게이트는 release 이미지를 탄다)·D-440(Fleet 승격 경로와 중앙 착수 전제) 배정표를 포함하되 착지는 이 계획 승인 뒤로 미뤘다. origin/main과의 분기(ahead 45/behind 91)와 D-427 이동(follow-ups P1)을 선행으로 명시했다.
+- 증거: STATUS.md blockers 원문과 D-437·D-426·d427-post-migration-follow-ups(origin) 대조. 코드·게이트 변화 없음.
+- gate 변화: 없음. 문서만.
+- 결정: 새 결정 없음(D-439/D-440은 이 계획 승인 뒤 Proposed 착지).
+
+## 2026-10-04 · uncommitted · docs(adr): D-444·D-445 착지와 main↔origin 정렬
+
+- 변경: main에 origin/main을 merge해 분기를 정리했다(13개 충돌 해결: append-only 저널은 합집합, ADR Log는 번호순 합집합, harness.yaml adr_gaps는 origin 측, NsdSiteBrowser는 공유 세션 아키텍처 유지 + origin의 late-NSD-callback 수정을 NsdDiscoverySession에 이식). 사다리 계획의 ADR 두 건을 D-444(웹 표면 게이트는 release 이미지를 탄다)·D-445(Fleet 승격 경로와 중앙 착수 전제)로 Proposed 착지했다. 계획 배정 표의 D-439/D-440은 착지 시점에 D-439–D-443이 다른 브랜치(feat/hmi-task-layout, feat/device-power-policy, feat/site-auto-update, docs/d442-motion-intent-port, docs/d440-site-device-contract)에 점유돼 재번호했고, 그 다섯 번호는 adr_gaps에 선언했다.
+- 증거: merge 뒤 `rosy_harness.py lint` 0 errors, `test_harness_contracts.py`·`test_network_topology_contracts.py` 83+59 passed. 번호 점유는 전 370 refs·전역 이력 검사로 확인(D-444/D-445 무점유). 백업 브랜치 backup/main-pre-origin-merge.
+- gate 변화: 없음. ARTIFACT/DEVICE 관측·측정은 별도 실행.
+- 결정: D-444·D-445 Proposed(사다리 계획 §2 승인 기반). P0(트리 정렬) 완료 — main ahead 48, behind 0.
+
+## 2026-10-04 · uncommitted · docs(plan): Pilot 실기 정지 계약 측정 계획 (D-444 §2)
+
+- 변경: `docs/plans/2026-10-04-pilot-device-stop-contract-measurement.md` 추가. 페달 해제(PC-1 ≤300/500 ms·0.05 m)·클라이언트 소실(PC-2 ≤700/900 ms·SAF-002 watchdog)·e-stop(PC-3 ≤300/500 ms)의 합격선을 D-250(100 ms zero-keepalive)·D-367(100 ms 명령 루프)·SAF-002(500 ms)·D-110(0.10 m/s)에서 유도해 고정했다. 정지 판정은 `tools/dashboard_drive.py`의 `_moving()` 정의(linear ≤ 0.002 m/s)를 그대로 쓰고, 회차·환경·실패 처리 절차를 정했다.
+- 증거: 기존 계약 인용만으로 구성(새 숫자 발명 없음). 측정 자체는 사다리 P2, 사용자 입회 아래.
+- gate 변화: 없음. 측정 전 합격선 고정 문서.
+- 결정: D-444 §2의 "계량 문서" 요건 충족.
+
+## 2026-10-04 · uncommitted · site(D-441): automatic site stack updates
+- 변경: D-441 ADR·ADR Log 행(D-440은 device-power 브랜치가 써서 다음 번호, `adr_gaps`에 D-438·D-439·D-440). `build-site-candidate.yml`에 main push 트리거와 이미지 원본 경로 필터, push는 기존 릴리스에서 빌드 없이 성공, push 빌드만 취소하는 job concurrency와 비취소 릴리스 그룹. 서명 PC용 `deploy/site/auto_sign_candidates.py`(출처 증명 digest·main 조상·태그 확인 뒤 `sign_manifest_only`, 감사 로그)와 `register_auto_sign_task.ps1`. 사이트 호스트용 `rosy_site_autoupdate.py`·`rosy-site-autoupdate.service`·`.timer`(override 거부, SHA256SUMS·tar 검사, 설치된 검증기, 원자적 site.env·symlink 전환, 건강 확인과 롤백, 정리). D-437·D-301 부록, `deploy/site/README.md` "Automatic updates (D-441)"
+- 증거: 사이트 후보·workflow·fetch·검증기·서명 시험과 새 자동 서명·호스트 갱신 시험(symlink 시험은 Linux 컨테이너에서), `test_no_secrets_in_tracked_files`, harness 계약·lint, actionlint 1.7.7(Docker)
+- gate 변화: 없음. workflow push 실행, 서명 PC 예약 작업, 사이트 호스트 설치와 첫 자동 갱신·롤백은 미검증. 사이트 키 미준비(D-301)
+- 결정: D-441 Accepted, D-437·D-301 개정 부록
+- 교훈: 자동 서명기가 지키는 것은 자산 쓰기 권한과 main 아닌 빌드다. 서명 PC 계정과 main 보호 규칙이 이제 사이트 배포의 문이다
+- gate 변화: 없음. SOURCE/LOCAL GO, 전체 DEVICE/FIELD PARKED 유지.
+
+## 2026-10-04 · uncommitted · docs(adr): D-447 웹 실시간 구독 재사용 계약
+
+- 변경: `docs/adr/D-447-web-realtime-reuse-open-sockets.md` 추가. 사다리 계획 §4가 "착수 시 배정"으로 남겨둔 웹 표면 실시간 구독 통일 ADR을 D-447로 착지했다. 원칙(이미 열린 소켓 재사용·스키마 불변·소켓 우선 폴링 폴백), 순서((a) Fleet gather 출처 전환 → (b) 셸 store.js /ws/state), 신선도 규칙(hub heartbeat 1 Hz 기준 `hub_state_max_age_s` 기본 3.0 s), 감사(`gather_source` additive)를 정했다.
+- 증거: registry `RobotRecord.snapshot`(heartbeat가 이미 StateSnapshot 저장), `server/AGENTS.md`의 봉합점 예약, PRT-003 1 Hz, SAF-003 5.0 s와의 관계 대조. (a)단계 구현은 별도 커밋(워크트리).
+- gate 변화: 없음. 승격 무관.
+- 결정: D-447 Proposed. (a) 구현 착수.
+
+## 2026-10-04 · uncommitted · D-446 모델 PC도 서명 코드 자동 업데이트에 포함하고 작업·GPU 환경·모델 승격을 분리한다
+
+- 변경: D-446 모델 PC의 서명 코드 후보·작업 잠금·환경 지문·유휴 source 전환·실패 복귀를 구현했다. perception과 control/core_common은 같은 commit과 상대 경로로 묶고 고정 bootstrap을 사용한다. 기존 data는 외부 디렉터리로 연결한다.
+- 증거: 실제 모델 PC의 격리 Linux 시험 30 passed. 서명과 작업 환경 guard는 변이에서 실패를 확인했다. 사용자 updater timer 설치·enabled/active와 linger를 확인했다. 리뷰에서 발견한 import closure와 unmanaged 작업 admission을 보완했다.
+- gate 변화: 없음. 코드 updater 설치와 첫 후보 전환·model-watch doctor·학습 모델 품질·주행 수용은 별도 증거로 판정한다. push·CI는 수행하지 않았다.
+
+## 2026-10-04 · uncommitted · 모델 PC 코드 갱신은 커밋하지 않은 perception 수정을 덮지 않는다
+
+- 변경: D-446. 등록한 checkout의 `learning/training/perception`에 커밋하지 않은 수정이 있으면 전환을 보류하고 그 파일은 그대로 둔다. exec는 작업 디렉터리의 같은 스크립트가 서명 릴리스와 바이트가 다르면 실행하지 않는다.
+- 증거: `test/test_model_pc_autoupdate.py` 12 passed, 21 skipped (Windows). 보류 통합 시험은 Linux symlink/flock이라 건너뛰었다. 모델 PC 설치와 자동 전환은 하지 않았다.
+- gate 변화: 없음. 설치·자동 전환·장기 운용 수용은 미검증.
+
+## 2026-10-04 · uncommitted · docs: learned lane selection and low-light evidence
+
+- 변경: 운전 모드와 paint source 선택, 실제 learned/fallback readback, 정지 중 Host 적용, 저조도 판정·흰 LCD/LED opt-in 및 자동 복구 차단의 계획과 검증 경계를 기록했다.
+- 증거: `docs/plans/2026-10-04-learned-lane-driving-modes.md`, `docs/validation/learned-lane-modes-2026-10-04/README.md`, 같은 회차 `low-light.md`; source·host·browser 회귀 및 독립 안전 검토.
+- gate 변화: 없음. ARM64 설치·실제 조명·주행을 host 검사나 명령 반환값으로 주장하지 않는다.
+- 교훈: 모델 사용 여부, 시야, 실제 조명 효과와 물리 주행은 각각 확인해야 한다.
+
+## 2026-10-04 · uncommitted · docs: 원본/표시 녹화와 밝기 양극단 추가 검증
+
+- 변경: 기기·브라우저 녹화의 원본 보존 및 별도 미검수 표시본, raw road ROI 과노출/저조도 분리, 조명 해제와 CORE 복구 차단의 추가 회차를 기록한다.
+- 검증: 단계별 source/host 결과만 기록하며 실제 LED·회전교차로·주행 합격을 주장하지 않는다.
+- 증거: `docs/validation/learned-lane-modes-2026-10-04/recording.md`, `docs/validation/learned-lane-modes-2026-10-04/exposure.md`.
+
+- gate 변화: SOURCE/LOCAL. 실기 노출·조명·주행은 별도 검증이다.
+
+## 2026-10-04 · uncommitted · fix: 확장 검사에서 드러난 릴리스 종료 경계
+
+- 변경: Host Agent 종료 대기 누락을 수정하고, 프레임 모듈 분리 및 API v1.91에 맞춰 기존 계약 검사를 갱신했다.
+- 증거: 수정 전 확장 검사 11455 passed, 449 skipped, 7 failed. 수정 후 native 195 passed/1 skipped, frame 계약 47 passed, Fleet 문서 22 passed. docs/validation/learned-lane-modes-2026-10-04/release-lifecycle.md.
+- gate 변화: SOURCE/LOCAL. 이전 push 반환값으로 확장 검사 합격을 주장하지 않으며, 수정 후보의 필수 검사·CI·ARM64·실기는 별도로 확인한다.
+
+## 2026-10-04 · uncommitted · docs: 암실 IR 활용 조사와 병렬 변경 통합
+
+- 변경: 공식 Pinky ADC와 현재 교정·선 추정·명시적 IR 선택 경로를 대조했다. RGB 색상과 3채널 반사값을 구별하고 정지 상태 밝기별 검증, 포화 처리 후속 후보와 회전교차로 정보 한계를 기록했다. 병합에서 기존 양쪽 로그를 바이트 단위로 보존하고 생성 색인을 갱신했다.
+- 증거: docs/validation/learned-lane-modes-2026-10-04/infrared-darkness.md. 브라우저 병합 회귀 13 passed; Fleet gather/discovery/link 45 passed. 크기 판정은 검토된 부모 코드 증가를 합산하며 기존 allowance를 유지했다.
+- gate 변화: 없음. IR 자동 전환·암실 성능·배포·실기 주행을 수행하거나 수용하지 않았다.
+
+## 2026-10-04 · uncommitted · docs(ui): D-439 공용 작업 선택 검증과 진입 범위
+
+- 변경: 전체 HTML 10개/역할 패널 19개를 대조하고 초기 화면을 직접 확인했다. DESIGN에 공용 작업 선택의 철학·소유권을 추가하고 D-439에 기본 인증 진입과 명시적 호환 운용, 인증 전후 정지의 의미를 기록했다.
+- 증거: 공용 작업 선택 `15e8742b4`; 최종 6개 행동 시험, 독립 품질 3개, 기존 집중 회귀 4개 통과. 밝고 어두운 대표 화면을 직접 보았다. 최초 전체 dashboard 실행은 수정 전 fixture 실패를 포함해 중단했으므로 전체 통과로 기록하지 않는다.
+- gate 변화: 목표 active; 진입·패널·Fleet·게임·도구와 최종 전체 회귀·main 착지 남음. 실물 명령·DEVICE/FIELD 승격 없음.
+- 결정: D-439. 역할 장미색 위치 표식은 D-277대로 유지하며 새 작업 선택은 중립 공용 부품을 쓴다.
+
+## 2026-10-04 · uncommitted · docs(ui): 기본 진입 검증과 패널별 결함 기록
+
+- 변경: 기본 진입 `4e8cbe92d`의 인증·역할 목적지·명시적 호환 운용을 기록했다. 호환 query 정규화와 선택적 취소 signal의 이유, 준비·정비 12개 작업의 직접 시각 관측, 교통 정책의 수정→검토본 저장→정지 확인 적용 구조를 D-439와 계획에 추가했다.
+- 증거: 최종 요구사항·품질 검토 통과, 독립 Node 동작 검증 2건, 집중 브라우저와 3개 guard 변이 검출. host/browser 묶음은 중복이 있어 합산하지 않는다. 최종 compact 320/390 대표 화면을 직접 확인했다. 생성/lint 0오류·기존 검증 시각 경고 27건이다.
+- gate 변화: 목표 active. 교통 정책·카메라·나머지 패널·Fleet·게임·도구와 최종 통합 회귀·로컬 main 병합이 남아 있다. 실제 장치·ARM 이미지·FIELD 승격 없음.
+- 결정: D-439. D-405 테마 아이콘의 기존 사용자 결정은 유지하고 사실과 다른 안내를 고친다. 카메라 확대의 정지 접근과 원본 가장자리·닫기·초점 복귀를 다음 구현에서 검증한다.
+
+## 2026-10-04 · uncommitted · docs(ui): 교통 정책 검증과 나머지 화면 판정
+
+- 변경: 교통 정책 `5b590cb37`의 입력·검토본·결과 소유권과 늦은 조회 세대 보호를 기록했다. D-439에 확대 화면의 기존 정지 노드 복구, 비차단 확인 뒤 재판정, 독립 작업의 결과와 정보 없음, 작성·개발 도구의 범위를 추가했다.
+- 증거: 최종 영향 시험 29개와 독립 요구사항·품질 검토 통과. 교통 정책 캡처 6개와 작성·개발 도구의 읽기 전용 캡처 8개를 직접 보았다. styleguide 모바일 46px 넘침과 template 상단 배치는 이후 수정 대상이며 정상 장치 데이터로 주장하지 않는다.
+- gate 변화: 전체 목표 진행 중. 카메라·나머지 패널·Fleet·게임·작성 도구와 최종 통합·로컬 main 병합이 남아 있다. DEVICE/FIELD 승격 없음.
+- 결정: D-439. PARKED 진단을 운용 경로로 활성화하지 않고 시뮬 뷰어의 자체 정적 자산 계약을 유지한다. 마커 관측 준비는 운용 승인이 아니다.
+
+## 2026-10-04 · uncommitted · docs(ui): D-439 카메라 확대·운용 확인 검증과 준비·정비의 개별 판정
+
+- 변경: `da3021b64`의 실제 fullscreen 정지·촬영 피드백·녹화 중지와 비차단 확인 결과를 검증 기록에 추가했다. 운용·준비·정비 19패널의 수정/유지 이유를 각각 기록했다. 위치 설정 제목의 목적 배치와 도크 등록 부분 성공 안내를 실제 화면·독립 검토로 보완했다.
+- 증거: 카메라 최종 캡처 4개, 준비·정비 14개와 위치 설정 재캡처를 주 담당자가 직접 보았다. 준비·정비 대상 브라우저 묶음 15통과(634.01초); 새 보호 조건의 X: 대체 자산 검증은 진행 중이므로 최종 결과는 후속 기록한다. 겹치는 실행은 합산하지 않는다.
+- 후속: Pilot 웹 대상 확인 실패의 빈 본문·모바일 상단 눌림도 GET 전용 화면에서 발견해 마지막 화면 묶음에 포함했다. 최신 main 통합 후 호환 확인창·Fleet·게임·도구와 최종 영향 검증·로컬 병합이 남아 있다.
+- gate 변화: SOURCE/LOCAL 근거 추가만 기록하며 DEVICE/FIELD·실제 정지·현장 수용 승격은 없다.
+
+## 2026-10-04 · uncommitted · docs(ui): 호환 확인·정지·세션 수명 검증과 후속 화면 규칙
+
+- 변경: D-439에 겹친 정지 영역의 합집합과 확인·명령·후속 조회의 자격/페이지 소유권, Pilot 웹 대상 미확인·재시도 원칙을 추가했다. 계획과 검증 기록은 호환 제품 커밋 `b1dce38fe`와 최신 main 선행 통합 `c1c118b37`의 실제 범위를 구별한다.
+- 증거: 데스크톱/휴대폰 확인 화면을 직접 보았고 요구사항·품질 최종 검토는 통과했다. 집중 브라우저·기존 회귀·host 결과는 겹치는 실행을 합산하지 않고 기록했다. 여섯 대체 자산 변이의 전달·실패 검출·복원 통과를 직접 대조했고 geometry 단위 함수의 X: 변이도 직접 확인했다. 초기 문구·fixture 실패, 수집 제한 종료, 예상 실패 wrapper 상태는 최종 통과와 구별한다.
+- 결정: D-439 §13–14. 종료한 소켓 검증이 새 세션이나 페이지에 영향을 주지 않으며 기존 CORE 허용 조건·재접속·정지 소유권을 유지한다. 미확인 대상은 운전 허용으로 바꾸지 않는다.
+- gate 변화: 전체 웹 목표는 진행 중이며 Fleet·게임·도구와 최종 검증·로컬 main 착지가 남아 있다. 실제 장치·이미지·현장 수용 승격이나 원격 push는 없다.
+- 검증: 네트워크·harness 문서 계약 83통과/기존 경고 26건(63.38초), lint 0오류·기존 경고 26건, 소유 문서 whitespace 검사 통과. 다음 Fleet 제품 작업과 문서 소유 경로를 구별한다.
+
+## 2026-10-04 · uncommitted · docs(ui): Fleet 작업 분리와 보정 프리뷰의 독립 수명 기록
+
+- 변경: D-439 §15에 작업 탐색의 권한 경계와 빠른 숨김·재표시의 프리뷰 취소, 새 owner의 정리 보호, source·모서리 초안 보존을 추가했다. 계획의 Fleet 두 행과 검증 기록은 제품 커밋 `21f5dd310`의 관제/설치 변화 및 독립 SPEC→QUALITY 통과를 연결한다.
+- 관측: 주 담당자가 desktop/phone 8개 dark 화면과 실제 버튼을 선택한 light 두 화면을 직접 보았다. 초기 helper의 theme 이름 오류와 selector 오류는 제품 결과와 구별했다. Fixture preview lease POST를 포함하며 운용 명령이나 실제 장치 동작으로 주장하지 않는다.
+- 증거: 이전 lease가 빠른 복귀 후 새 요청을 막고 옛 프레임을 표시하는 결함을 실제 재현했다. 수정 후 독립 probe는 새 owner 시작·old frame/finally 차단·source/draft 보존을 확인했다. Fleet 새/기존 시험의 초기 실패와 해당 대상 재실행을 구별하고 중복 합산하지 않는다. 네 served 변이의 actual bytes hash를 직접 확인했으며 LF manifest와 CRLF delivery의 차이는 원래 기록을 보존한 보완 proof로 연결했다.
+- gate 변화: SOURCE/LOCAL 근거를 추가했다. 전체 목표는 게임·도구·Pilot 웹, 최종 영향 회귀와 최신 main 통합·로컬 착지가 남아 있다. 원격 push·배포·DEVICE/FIELD 승격 없음.
+- 결정: D-439. 페이지 수명과 visible boolean만으로 빠른 작업 복귀를 구별할 수 없어 작업 프리뷰의 독립 취소 수명이 필요하다.
+- 검증: 보완 문서 계약 98통과/Windows bash 검사 1skip/기존 경고 26건(54.66초), lint 0오류·기존 경고 26건, docs index 생성. 최종 공용 geometry 소비자 회귀는 함수 9개가 param 12개로 확장되어 12통과(567.03초)였으며 앞선 증거와 합산하지 않는다.
+
+## 2026-10-04 · uncommitted · docs(ui): 게임·도구·Pilot 웹 판정과 최종 회귀 결함 기록
+
+- 변경: D-439 §16에 관측 미확인·실측 0·재시도 안내 소유권과 PARKED 표시 변경 범위를 추가했다. 계획과 검증 기록은 제품 커밋 `e3f2bcd06` 및 독립 SPEC→QUALITY, 직접 확인한 최종 열여섯 화면을 연결한다.
+- 증거: 기존 색상·독립 자산·native/drive/arm·정지 계약의 유지 이유, 실제 API/자산·예산과 browser 결과, 네 served 변이 RED→복원 GREEN 및 정규화 hash를 기록한다. 초기 실패·수집 오류·대역 오작동은 최종 통과와 구별한다.
+- 관측: 최종 Role 51통과/7실패, Fleet 56통과/7실패, 호환 18통과/1실패를 숨기지 않는다. Fleet D-201의 desktop 높이 1657px는 실제 제품 회귀로 고쳐야 하며 gate나 ADR를 완화하지 않는다. 확인·설치 소유권·준비 신호의 기존 fixture 수정도 원래 행동 검사를 보존한다.
+- gate 변화: 게임·도구·Pilot 웹 SOURCE/LOCAL 근거를 추가했다. 전체 목표는 후속 실패 수정·검증·최신 main 통합과 로컬 착지가 남아 있다. push·배포·실제 장치·현장 승격 없음.
+- 결정: D-439; 화면별 작업 구분과 기존 안전·권한의 소유권을 함께 유지한다.
+- 검증: root quick 첫 실행은 458통과/1실패/2skip/기존 경고 26건(132.01초), 문서 network는 24통과(0.55초)였다. secret guard의 Git SHA 문구 오탐은 동일 커밋의 짧은 hash로 고쳤고 UI 입력 선언은 후속 제품 수정으로 연결한다. scan·허용 목록을 완화하지 않는다.
+
+## 2026-10-04 · uncommitted · docs(ui): viewport 계약 보존과 남은 live 확인 이관 계획
+
+- 결정: D-439 §17–18은 D-201 viewport·실제 크기·작은 화면의 작업 순서 및 남은 호환/Fleet 확인 열세 곳의 공용 확인·대상 신선도·정지 접근을 명시한다. 실제 caller를 대조한 후속 계획이며 하위 모듈의 app 역 import나 서버 권한 변경을 추가하지 않는다.
+- 변경: 프로젝트 dashboard-drive 안내를 실제 공용 확인·compatibility 준비 표시·task/disclosure 탐색에 맞췄다. 옛 native dialog 승인 지침은 현재 확인창을 조작하지 못하므로 교체했다.
+- 검증: 나머지 host 237통과/1옛 문구 실패, Pilot Node/자산 87통과, Games 14개 중 7통과/7CSP 대기 실패를 기록한다. Role 진단 2실패 뒤 실제 조작 묶음 9통과, Fleet 첫 높이 수정 3통과/4실패는 아직 최종 완료가 아니다. 입력 source의 별도 scan finding 0은 전체 tracked scan 통과를 대신하지 않는다.
+- gate 변화: 전체 목표는 viewport·설치 주소 hint·확인 후속 제품 및 최종 검증·main 착지가 남아 있다. 실제 장치·CI·배포 증거를 승격하지 않는다.
+
+## 2026-10-04 · uncommitted · docs(ui): Fleet 교정 커밋과 주소 대화 소유권 기록
+
+- 변경: 제품 `b42bcb12a`의 소유 19경로와 독립 SPEC→QUALITY, 주 담당자의 실제 최종 네 캡처를 계획/검증 기록에 연결한다. D-439 §19는 조회 힌트·시간 제한·모호함·새 대화 epoch와 기존 서버 신원/코드 검증을 구별한다.
+- 관측: D-201 desktop 높이 1080px·mobile 실제 light/목록 우선·입력/초점 보존을 확인했다. 이전 조회가 새 수동 대상과 코드를 덮는 독립 발견은 작업 epoch로 수정하고 실제 실패 변이와 원본 복원으로 검증했다.
+- 증거: 기존 Role/Games/주소/네트워크 조건은 완화하지 않았다. 다섯 실제 전달 변이와 복원 통과, raw source 네 hash 및 LF 전달 hash를 직접 대조했다. 초기 route 대역 오류·577/77/33px 실패·teardown 부수 오류는 최종 성공과 구별한다.
+- gate 변화: 교정 SOURCE/LOCAL 근거를 추가했다. 전체 목표는 남은 확인 열세 곳과 최종 검사·최신 main 통합·로컬 착지가 남아 있다. 물리 장치·CI·배포 증거 승격 없음.
+
+## 2026-10-04 · uncommitted · docs(ui): 남은 공용 확인과 실제 정지 접근 검증 기록
+
+- 변경: 제품 `5cffc885d`의 15경로와 독립 SPEC→QUALITY, 주 담당자의 실제 viewport 다섯 장을 연결한다. D-439 §20은 숨겨진 운용 탭 안의 동일 정지를 영구 안전 영역으로 옮기는 실제 클릭 검사 결과를 추가한다.
+- 관측: 이전 positive 요청의 finally가 새 OFF pending을 해제하는 결함을 독립 검토에서 발견하고 owner 조건으로 보완했다. 설정·교통·Fleet의 기존 요청 본문과 확인 뒤 신선도·자격/페이지/readback 소유권을 유지했다. mobile network 카드 8px 넘침은 최소 너비를 풀어 수정했다.
+- 검증: 기존 행동 10통과, 최종 영향 host 39통과·구조 2통과와 여섯 실제 전달 RED→원본 복원 GREEN을 구별해 기록한다. 현재 네 raw source hash와 여섯 전달 hash를 주 담당자가 직접 검사했으며 대표 desktop dark 두 장·390px light 세 장의 Stop 가시성/hit, 가로 넘침·page error 0을 확인했다. 초기 Fleet cancel-count 경합은 무효로 제외하며 처음 개별 로그가 덮어써진 한계를 남긴다.
+- gate 변화: 확인 후속 SOURCE/LOCAL 근거를 추가했다. 전체 목표는 최신 main의 차선 인식·노출·원본 녹화를 보존하는 통합, 실제 source 예산·최종 quick와 로컬 착지가 남아 있다. push·CI·물리 장치·배포 증거 승격 없음.
+
+## 2026-10-04 · 6485f8a39 · docs(ui): 공용 웹 디자인 통합 검증과 로컬 main 착지
+
+- 변경: D-439 §21과 화면별 계획·최종 검증 기록. 최신 main의 원본/표시 영상 저장·노출 경고·인식 방식과 공용 작업 배치·정지 접근을 보존했다. DOM 표현 재사용으로 dashboard 9,999줄/Fleet 29,806줄을 유지하며 기존 예산을 올리지 않았다.
+- 증거: API 32통과, browser 첫 34통과/2실패 뒤 두 exact 재검사 2통과, Fleet 4통과/Pilot 4통과, 자산·역할·예산·인식 수명 24통과. root quick 최종 459통과/기존 2skip/경고 26건(127.73초), known-failure 비교 0 new/0 known. 독립 SPEC→QUALITY 통과와 주 담당자 통합 viewport 다섯 장 직접 확인.
+- gate 변화: SOURCE/LOCAL 범위의 전체 화면 목표와 로컬 main fast-forward를 완료했다. main HEAD `6485f8a39` 확인, 다른 세션의 `list.txt` 보존. push·CI·배포·장치·현장 수용은 실행하거나 승격하지 않았다.
+- 결정: 양 부모 작업 기록 일곱 파일의 본문·중복 횟수·main 순서를 보존했다. D-441 정확한 역사 제목의 두 본문만 기존 예외 방식으로 유지하며 append-only 본문 검사는 계속 적용한다. 실제 전달 인식 수명 변이 두 실패와 원본 복원 두 통과의 hash를 직접 확인했다.
+- 검증: 이전 실패·수정 재실행·기존 skip/경고를 합산하지 않는다. 첫 통합 quick 원본이 최종 runner 실행으로 덮어써진 provenance 한계와 역사 bare CR 보존을 검증 기록에 명시했다. Pilot은 기존 dark 고정에 따라 두 방향 모두 dark이며 light 증거로 세지 않는다.
+
+## 2026-10-04 · uncommitted · docs: migrated UI release integration and device update
+
+- 변경: D-439 공용 UI와 D-432 발견·발열 대응을 최신 D-427 구조로 통합했다. 독립 검토한 두 부모의 정지 권한·신호 감독·복구 계약을 보존하고 Pilot Android 입력, 운영 도구 및 registry 경로를 맞췄다. CI ArUco 4.6 경계 오류는 위치 허용치를 유지한 채 실제 backend에서 수정했다.
+- 증거: migration/harness/구조 110 PASS, 나머지 quick 370 PASS/2 Linux SKIP, ArUco 동일 범위 실제 4.6/5.0 각 45 PASS, Pilot 30 JVM PASS 및 Cam 341 JVM PASS. 기존 설치본과 새 APK 인증서가 일치하고 무선 ADB update 둘 다 성공했다. 첫 실패와 재검사 로그, 독립 SPEC/QUALITY·안전 검토를 보존했다. 상세: docs/validation/ui-release-integration-2026-10-04/README.md.
+- gate 변화: SOURCE/LOCAL scoped 증거 갱신. 원격 CI·정식 이미지 배포·현재 기기 화면 및 현장 수용은 별도 진행 중이며 올려 기록하지 않는다.
+## 2026-10-04 · uncommitted · fix: CI Gazebo 제외 파일의 수명
+
+- 변경: CI colcon 빌드에서만 만든 Gazebo `COLCON_IGNORE`는 성공·실패 종료 때 제거한다. 기존 제외 파일은 보존하여 빌드 뒤 소스 구조 검사가 실제 패키지를 계속 볼 수 있게 했다.
+- 증거: main bcf1010b의 CI 37174760531에서 구조 시험 두 건이 임시 제외 파일 때문에 실패했다. 실제 Bash 빌드 단계 회귀는 수정 전 2 failed/2 passed, 수정 후 관련 시험 12 passed다. 성공·종료 코드 42에서 빌드 중 제외와 종료 뒤 복원, 기존 파일 bytes 보존을 검증했다.
+- gate 변화: SOURCE/LOCAL 증거만 추가한다. 원격 CI 재검증과 서명 후보의 실제 제어 PC 설치·HTTPS·타이머 수락은 아직 남아 있다.
+## 2026-10-04 · uncommitted · D-446 remote integration after source migration
+
+- Change: Rebase model-PC signed updates onto remote main; preserve committed records and use middleware/perception and contracts/foundation source closure.
+- Evidence: Model-PC Linux tests 34 passed; Windows tests 13 passed, 21 Linux-only skips. Rollback bootstrap supports the already installed previous layout; its regression test failed before the fix. Remote CI and first migrated-source activation are pending.
+- gate 변화: None. Existing data, credentials, GPU environment and model promotion remain separate.
+
+## 2026-10-04 · uncommitted · D-446 clean older checkout permits signed execution
+
+- Change: Protect uncommitted entrypoint edits without blocking an approved update from a clean older checkout.
+- Evidence: Regression failed before the fix. Windows 14 passed, 21 Linux-only skips; model-PC Linux 35 passed.
+- gate 변화: None. Remote CI and migrated-source device activation remain separate.
+## 2026-10-04 · uncommitted · feat(power): fresh battery evidence and idle saving
+
+- 변경: 반복 저배터리 표본의 wake를 단계 변화로 제한하여 기존 IDLE/STANDBY 타이머가 동작한다. Viewer GET /api/v1/power/health와 공유 typed 응답에 배터리·충전 확인 age, 정책 상한·wake 근거, shutdown 요청, 진단 요약을 제공한다. API Ref v1.92, envelope 1.0 유지.
+- 검증: injected clock 회귀와 auth/read-only API, 기존 배터리·정지·sentinel 경로 검증. 최종 근거는 docs/plans/2026-10-04-power-health-and-wake.md. OS halt·EEPROM·GPIO·기본 LiDAR 모터 정책 변경 없음.
+- gate 변화: SOURCE/LOCAL; 실제 소비전력·충전·RTC/외부 버튼 wake와 배포는 미검증.
+
+## 2026-10-04 · uncommitted · feat(power): long testing dwell with low battery saving
+
+- 변경: 정상 IDLE/STANDBY 기준을 600/1800초로 늘리고 warning60/300, critical/deep30/120초와 min을 취한다. YAML override·API effective timers에 연결한다. 기존 이동·정보 hold·disabled와 배터리 정지/종료 권한을 유지한다.
+- 증거: 주입 시계·설정 parser RED3 failed, 전원/배터리/bridge GREEN180 passed. 구조 재판정은 docs/plans/2026-10-04-power-health-and-wake.md에 기록한다.
+- gate 변화: SOURCE/LOCAL. 기기 소비전력·물리 wake·배포 검증은 별도다.
+## 2026-10-04 · uncommitted · verify(D-441): 최초 설치와 실제 후속 자동 갱신 확인
+
+- 변경: 검토된 93f66072c 후보를 일회성 설치 대상으로 고정하고, 이미 받은 후보를 서명·manifest 해시 검증 후 재사용했다. 기존 등록 키로 서명한 최초 설치와 후속 a24b6ca8a 후보의 자동 갱신을 완료했다.
+- 증거: 독립 설치기 Linux 재현 10개 통과. source 93f66072c CI 37176545073 및 실행 a24b6ca8a CI 37177384801 필수 검사 통과; 비필수 sensing 실패 5개는 기존 기준과 동일. 별도 SSH readback에서 서명·main 후손 계보·실제 컨테이너 3개의 불변 이미지 ID·HTTPS 200·타이머 active/enabled·서명된 롤백 후보 보존·중단 기록 없음 확인. 주소·계정·인증 정보가 포함된 실제 기록은 외부 운영 증거로 보관했다.
+- gate 변화: D-441 최초 설치와 실제 자동 갱신의 SITE_RUNTIME 검증 완료. 로봇 이동이나 FIELD 수용 상태는 변경하지 않았다.
+
+## 2026-10-04 · uncommitted · docs: additional road video and update record audit
+
+- 변경: 과거 실제 영상 2개/24표본/2모델 48판정(마스크 재실행 별도)과 native 펌웨어·모델 변경 기록 감사를 docs/validation/road-video-and-update-records-2026-10-04에 기록했다. 원본 미디어는 비공개로 보존한다.
+- 증거: 중앙 원 흰 경계 검출, 바닥/벽 오분류와 API/UI 이력 연결 공백을 분리했다. updater·모델 계약 372 passed/25 skipped; 영상 정합성 및 독립 육안 검토 완료. 문서 계약 98 passed/1 skipped; harness lint 0 errors/16 기존 검증 경고.
+- gate 변화: 없음. 과거 영상 재생과 읽기 전용 장치 증거이며 실주행·신규 배포·모델 승격·반복 재부팅 원인 확정은 아니다.

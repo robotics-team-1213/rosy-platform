@@ -210,11 +210,14 @@ def _held(device_id: str) -> dict:
     return _device(device_id, "not_measured", held_by="rosy-io.service")
 
 
-def test_rows_rosy_io_holds_are_judged_from_fresh_topics(tmp_path):
+def test_rows_rosy_io_holds_are_judged_from_fresh_topics(tmp_path, monkeypatch):
     import time
 
-    state = FakeState(velocity="fresh", battery="fresh", voltage=8.49, lidar_at=time.time(),
-                      ultrasonic_at=time.time())
+    now = time.time()
+    # Judge fixture freshness independently of client setup and host load.
+    monkeypatch.setattr(host_api, "time", SimpleNamespace(time=lambda: now))
+    state = FakeState(velocity="fresh", battery="fresh", voltage=8.49, lidar_at=now,
+                      ultrasonic_at=now)
     _write(tmp_path, [_held("motor.1"), _held("motor.2"), _held("lidar"), _held("adc.battery"),
                       _held("adc.ir0"), _held("adc.ultrasonic"), _device("camera", "no_response")])
     body = _client(_config(tmp_path, "hardware"), state).get(
@@ -663,7 +666,10 @@ def test_the_script_wires_the_buzzer_and_lamp_test_for_administrators_only():
     actions = script.split("function humanTestActions")[1].split("\nfunction ")[0]
     assert "!isAdmin()" in actions
     assert "innerHTML" not in actions and "outerHTML" not in actions
-    assert "textContent = test.detail" in actions
+    assert 'createNode("span", "device-test", test.detail)' in actions
+    factory = (WEB / "dom.js").read_text(encoding="utf-8").split("export function createNode")[1].split("\n}")[0]
+    assert "node.textContent = text" in factory
+    assert "innerHTML" not in factory and "outerHTML" not in factory
     # The card is read until it shows this request's outcome, bounded, not after a fixed pause.
     assert "const HW_TEST_WAIT_MS = 12000;" in script
     wait = script.split("async function waitForHardwareTest")[1].split("\n}\n")[0]

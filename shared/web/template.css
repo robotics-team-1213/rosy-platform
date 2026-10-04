@@ -1,0 +1,5 @@
+@media (width < 40rem) {
+  .ui-template ui-topbar { flex-wrap: wrap; gap: var(--space-2); }
+  .ui-template ui-brand { flex: 1 1 100%; min-width: 0; }
+  .ui-template ui-topbar [data-spacer] { display: none; }
+}

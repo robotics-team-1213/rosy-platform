@@ -287,6 +287,13 @@ roots:
     legacy: src/hmi/pilot
     wave: "4b"
     concern: other
+  - path: middleware/ui/pilot/android
+    part: middleware
+    d427_target: middleware/ui/pilot/android
+    legacy: apps/pilot
+    wave: "4b"
+    note: D-432 native discovery shell reuses the CORE-served Pilot UI; no command authority.
+    concern: other
   - path: middleware/ui/face
     part: middleware
     d427_target: middleware/ui/face

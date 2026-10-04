@@ -1,0 +1,953 @@
+{
+  "scope": "stationary live camera subscriber beside existing CORE/camera/IO; interrupted trial",
+  "requested_duration_s": 1800,
+  "completed_30_minutes": false,
+  "final_summary_written": false,
+  "last_recorded_elapsed_s": 1337.4097901430005,
+  "last_recorded_counts": {
+    "received": 3236,
+    "inferred": 2401
+  },
+  "last_recorded_latency_ms_p95": 595.4123600004095,
+  "sampled_temperature_c_max": 77.1,
+  "sampled_rss_hwm_bytes_max": 354373632,
+  "inference_process_cpu_cumulative_percent_last": 121.34660226447676,
+  "cpu_error_sample_count": 45,
+  "sample_count": 45,
+  "sampled_modes": [
+    "EMERGENCY",
+    "IDLE",
+    "MANUAL",
+    "NAVIGATION"
+  ],
+  "sampled_navigation_idle": true,
+  "service_identity_and_restart_counts_unchanged": true,
+  "benchmark_process_stopped": true,
+  "termination": "ROS ExternalShutdownException; cleanup double-shutdown RCLError; initiating cause unconfirmed",
+  "operational_acceptance": "HOLD",
+  "motion_command_publisher": false,
+  "throttling_measured_during_trial": false,
+  "live_output_parity_measured": false,
+  "short_cpu_readback": {
+    "overall_cpu_percent": 98.99623588456713,
+    "process_cpu_percent": {
+      "rosy-core": 58.944960172920666,
+      "rosy-camera": 0.0,
+      "rosy-io": 0.0,
+      "ncnn-bench": 125.88245731844074
+    },
+    "cores": 4,
+    "sample_s": 2.0018674989996725
+  },
+  "authentication_cleanup": {
+    "benchmark_tokens_cleaned_after_shutdown": 1,
+    "benchmark_tokens_remaining": 0,
+    "benchmark_auth_revoked_confirmed": true,
+    "readback_token_revoked_confirmed": true
+  },
+  "raw_log_sha256": "1820133e87aa96ee0aa73c58d1c93802f3c7071529b53abf8e63a9c31b33f5e5",
+  "resource_samples_sha256": "d8c8092d0545c2af28fbf12023e8522f8ca8534a2141ce786d401108a2295664",
+  "bench_script_sha256": "e759f20dd80c5a3fff1dc85f69bfca340b60d164fb2b721c96de2598b9bad3a5",
+  "samples": [
+    {
+      "elapsed_s": 0.6044207519998963,
+      "temperature_c": 74.35,
+      "cpu_percent": 111.73644679892067,
+      "counts": {
+        "received": 11,
+        "inferred": 1
+      },
+      "latency_ms_p95": 565.5431630002568,
+      "diagnostics": {
+        "core": "OK",
+        "cpu": "ERROR",
+        "memory": "OK",
+        "disk": "OK",
+        "odom_topic": "OK",
+        "navigation_readiness": "OK"
+      },
+      "VmHWM_bytes": 352591872,
+      "VmRSS_bytes": 352591872
+    },
+    {
+      "elapsed_s": 30.752326949000235,
+      "temperature_c": 74.35,
+      "cpu_percent": 119.23533454821073,
+      "counts": {
+        "received": 83,
+        "inferred": 56
+      },
+      "latency_ms_p95": 566.4809365000565,
+      "diagnostics": {
+        "core": "OK",
+        "cpu": "ERROR",
+        "memory": "OK",
+        "disk": "OK",
+        "odom_topic": "OK",
+        "navigation_readiness": "OK"
+      },
+      "VmHWM_bytes": 353140736,
+      "VmRSS_bytes": 353140736
+    },
+    {
+      "elapsed_s": 60.86596152099992,
+      "temperature_c": 74.35,
+      "cpu_percent": 119.61002420685001,
+      "counts": {
+        "received": 160,
+        "inferred": 110
+      },
+      "latency_ms_p95": 585.9358529499785,
+      "diagnostics": {
+        "core": "OK",
+        "cpu": "ERROR",
+        "memory": "OK",
+        "disk": "OK",
+        "odom_topic": "OK",
+        "navigation_readiness": "OK"
+      },
+      "VmHWM_bytes": 353460224,
+      "VmRSS_bytes": 353460224
+    },
+    {
+      "elapsed_s": 91.03481013400051,
+      "temperature_c": 74.35,
+      "cpu_percent": 119.05711568296002,
+      "counts": {
+        "received": 232,
+        "inferred": 164
+      },
+      "latency_ms_p95": 599.9140918001103,
+      "diagnostics": {
+        "core": "OK",
+        "cpu": "ERROR",
+        "memory": "OK",
+        "disk": "OK",
+        "odom_topic": "OK",
+        "navigation_readiness": "OK"
+      },
+      "VmHWM_bytes": 353472512,
+      "VmRSS_bytes": 353472512
+    },
+    {
+      "elapsed_s": 121.5126227540004,
+      "temperature_c": 75.45,
+      "cpu_percent": 119.5993616887144,
+      "counts": {
+        "received": 303,
+        "inferred": 219
+      },
+      "latency_ms_p95": 597.7672065996558,
+      "diagnostics": {
+        "core": "OK",
+        "cpu": "ERROR",
+        "memory": "OK",
+        "disk": "OK",
+        "odom_topic": "OK",
+        "navigation_readiness": "OK"
+      },
+      "VmHWM_bytes": 353492992,
+      "VmRSS_bytes": 353492992
+    },
+    {
+      "elapsed_s": 151.99077817099987,
+      "temperature_c": 74.35,
+      "cpu_percent": 119.64302021758884,
+      "counts": {
+        "received": 375,
+        "inferred": 274
+      },
+      "latency_ms_p95": 598.0297855996923,
+      "diagnostics": {
+        "core": "OK",
+        "cpu": "ERROR",
+        "memory": "OK",
+        "disk": "OK",
+        "odom_topic": "OK",
+        "navigation_readiness": "OK"
+      },
+      "VmHWM_bytes": 353505280,
+      "VmRSS_bytes": 353505280
+    },
+    {
+      "elapsed_s": 182.25149222599975,
+      "temperature_c": 75.45,
+      "cpu_percent": 119.68159699648433,
+      "counts": {
+        "received": 442,
+        "inferred": 328
+      },
+      "latency_ms_p95": 598.3448803997362,
+      "diagnostics": {
+        "core": "OK",
+        "cpu": "ERROR",
+        "memory": "OK",
+        "disk": "OK",
+        "odom_topic": "OK",
+        "navigation_readiness": "OK"
+      },
+      "VmHWM_bytes": 353529856,
+      "VmRSS_bytes": 353529856
+    },
+    {
+      "elapsed_s": 212.53509521600063,
+      "temperature_c": 76.55,
+      "cpu_percent": 119.92081083925,
+      "counts": {
+        "received": 513,
+        "inferred": 383
+      },
+      "latency_ms_p95": 588.6070094000387,
+      "diagnostics": {
+        "core": "OK",
+        "cpu": "ERROR",
+        "memory": "OK",
+        "disk": "OK",
+        "odom_topic": "OK",
+        "navigation_readiness": "OK"
+      },
+      "VmHWM_bytes": 353538048,
+      "VmRSS_bytes": 353538048
+    },
+    {
+      "elapsed_s": 243.0065614639998,
+      "temperature_c": 75.45,
+      "cpu_percent": 119.79615715608027,
+      "counts": {
+        "received": 590,
+        "inferred": 437
+      },
+      "latency_ms_p95": 598.9952205998634,
+      "diagnostics": {
+        "core": "OK",
+        "cpu": "ERROR",
+        "memory": "OK",
+        "disk": "OK",
+        "odom_topic": "OK",
+        "navigation_readiness": "OK"
+      },
+      "VmHWM_bytes": 353546240,
+      "VmRSS_bytes": 353546240
+    },
+    {
+      "elapsed_s": 273.27467543000057,
+      "temperature_c": 74.9,
+      "cpu_percent": 119.69161490479327,
+      "counts": {
+        "received": 666,
+        "inferred": 491
+      },
+      "latency_ms_p95": 600.5670190002093,
+      "diagnostics": {
+        "core": "OK",
+        "cpu": "ERROR",
+        "memory": "OK",
+        "disk": "OK",
+        "odom_topic": "OK",
+        "navigation_readiness": "OK"
+      },
+      "VmHWM_bytes": 353550336,
+      "VmRSS_bytes": 353550336
+    },
+    {
+      "elapsed_s": 303.4647514400003,
+      "temperature_c": 74.35,
+      "cpu_percent": 119.61126862431215,
+      "counts": {
+        "received": 744,
+        "inferred": 545
+      },
+      "latency_ms_p95": 601.835965600003,
+      "diagnostics": {
+        "core": "OK",
+        "cpu": "ERROR",
+        "memory": "OK",
+        "disk": "OK",
+        "odom_topic": "OK",
+        "navigation_readiness": "OK"
+      },
+      "VmHWM_bytes": 353562624,
+      "VmRSS_bytes": 353562624
+    },
+    {
+      "elapsed_s": 333.7378570000001,
+      "temperature_c": 76.0,
+      "cpu_percent": 119.58024341481881,
+      "counts": {
+        "received": 823,
+        "inferred": 600
+      },
+      "latency_ms_p95": 601.0207712502506,
+      "diagnostics": {
+        "core": "OK",
+        "cpu": "ERROR",
+        "memory": "OK",
+        "disk": "OK",
+        "odom_topic": "OK",
+        "navigation_readiness": "OK"
+      },
+      "VmHWM_bytes": 353566720,
+      "VmRSS_bytes": 353566720
+    },
+    {
+      "elapsed_s": 364.14748163200056,
+      "temperature_c": 77.1,
+      "cpu_percent": 119.53678369823102,
+      "counts": {
+        "received": 894,
+        "inferred": 655
+      },
+      "latency_ms_p95": 600.3906670001925,
+      "diagnostics": {
+        "core": "OK",
+        "cpu": "ERROR",
+        "memory": "OK",
+        "disk": "OK",
+        "odom_topic": "OK",
+        "navigation_readiness": "OK"
+      },
+      "VmHWM_bytes": 353574912,
+      "VmRSS_bytes": 353574912
+    },
+    {
+      "elapsed_s": 394.50571655800013,
+      "temperature_c": 74.35,
+      "cpu_percent": 119.67205901174567,
+      "counts": {
+        "received": 967,
+        "inferred": 710
+      },
+      "latency_ms_p95": 599.4899973999962,
+      "diagnostics": {
+        "core": "OK",
+        "cpu": "ERROR",
+        "memory": "OK",
+        "disk": "OK",
+        "odom_topic": "OK",
+        "navigation_readiness": "OK"
+      },
+      "VmHWM_bytes": 353583104,
+      "VmRSS_bytes": 353583104
+    },
+    {
+      "elapsed_s": 424.8064649810003,
+      "temperature_c": 74.9,
+      "cpu_percent": 119.83957281129636,
+      "counts": {
+        "received": 1037,
+        "inferred": 765
+      },
+      "latency_ms_p95": 597.2122119997947,
+      "diagnostics": {
+        "core": "OK",
+        "cpu": "ERROR",
+        "memory": "OK",
+        "disk": "OK",
+        "odom_topic": "OK",
+        "navigation_readiness": "OK"
+      },
+      "VmHWM_bytes": 353591296,
+      "VmRSS_bytes": 353591296
+    },
+    {
+      "elapsed_s": 455.3210903569998,
+      "temperature_c": 75.45,
+      "cpu_percent": 119.72622052353816,
+      "counts": {
+        "received": 1108,
+        "inferred": 820
+      },
+      "latency_ms_p95": 598.7831733998063,
+      "diagnostics": {
+        "core": "OK",
+        "cpu": "ERROR",
+        "memory": "OK",
+        "disk": "OK",
+        "odom_topic": "OK",
+        "navigation_readiness": "OK"
+      },
+      "VmHWM_bytes": 353599488,
+      "VmRSS_bytes": 353599488
+    },
+    {
+      "elapsed_s": 485.6626338690003,
+      "temperature_c": 77.1,
+      "cpu_percent": 119.79510433799014,
+      "counts": {
+        "received": 1187,
+        "inferred": 875
+      },
+      "latency_ms_p95": 596.0873045001789,
+      "diagnostics": {
+        "core": "OK",
+        "cpu": "ERROR",
+        "memory": "OK",
+        "disk": "OK",
+        "odom_topic": "OK",
+        "navigation_readiness": "OK"
+      },
+      "VmHWM_bytes": 353603584,
+      "VmRSS_bytes": 353603584
+    },
+    {
+      "elapsed_s": 515.9373097180005,
+      "temperature_c": 75.45,
+      "cpu_percent": 119.76720951092739,
+      "counts": {
+        "received": 1261,
+        "inferred": 930
+      },
+      "latency_ms_p95": 591.276588350047,
+      "diagnostics": {
+        "core": "OK",
+        "cpu": "ERROR",
+        "memory": "OK",
+        "disk": "OK",
+        "odom_topic": "OK",
+        "navigation_readiness": "OK"
+      },
+      "VmHWM_bytes": 353611776,
+      "VmRSS_bytes": 353611776
+    },
+    {
+      "elapsed_s": 546.1426094509998,
+      "temperature_c": 74.35,
+      "cpu_percent": 119.91742357886099,
+      "counts": {
+        "received": 1334,
+        "inferred": 985
+      },
+      "latency_ms_p95": 589.1313578000336,
+      "diagnostics": {
+        "core": "OK",
+        "cpu": "ERROR",
+        "memory": "OK",
+        "disk": "OK",
+        "odom_topic": "OK",
+        "navigation_readiness": "OK"
+      },
+      "VmHWM_bytes": 353619968,
+      "VmRSS_bytes": 353619968
+    },
+    {
+      "elapsed_s": 576.7190265079998,
+      "temperature_c": 74.9,
+      "cpu_percent": 119.99839905306129,
+      "counts": {
+        "received": 1404,
+        "inferred": 1040
+      },
+      "latency_ms_p95": 589.1973985500044,
+      "diagnostics": {
+        "core": "OK",
+        "cpu": "ERROR",
+        "memory": "OK",
+        "disk": "OK",
+        "odom_topic": "OK",
+        "navigation_readiness": "OK"
+      },
+      "VmHWM_bytes": 353619968,
+      "VmRSS_bytes": 353619968
+    },
+    {
+      "elapsed_s": 606.954377344,
+      "temperature_c": 76.55,
+      "cpu_percent": 120.01486296409868,
+      "counts": {
+        "received": 1478,
+        "inferred": 1094
+      },
+      "latency_ms_p95": 592.5782867500855,
+      "diagnostics": {
+        "core": "OK",
+        "cpu": "ERROR",
+        "memory": "OK",
+        "disk": "OK",
+        "odom_topic": "OK",
+        "navigation_readiness": "OK"
+      },
+      "VmHWM_bytes": 353632256,
+      "VmRSS_bytes": 353632256
+    },
+    {
+      "elapsed_s": 637.4076609539998,
+      "temperature_c": 76.0,
+      "cpu_percent": 119.97541207277533,
+      "counts": {
+        "received": 1553,
+        "inferred": 1149
+      },
+      "latency_ms_p95": 591.3355032000253,
+      "diagnostics": {
+        "core": "OK",
+        "cpu": "ERROR",
+        "memory": "OK",
+        "disk": "OK",
+        "odom_topic": "OK",
+        "navigation_readiness": "OK"
+      },
+      "VmHWM_bytes": 353632256,
+      "VmRSS_bytes": 353632256
+    },
+    {
+      "elapsed_s": 667.8014747300003,
+      "temperature_c": 76.0,
+      "cpu_percent": 120.05468763844034,
+      "counts": {
+        "received": 1625,
+        "inferred": 1204
+      },
+      "latency_ms_p95": 589.133529100036,
+      "diagnostics": {
+        "core": "OK",
+        "cpu": "ERROR",
+        "memory": "OK",
+        "disk": "OK",
+        "odom_topic": "OK",
+        "navigation_readiness": "OK"
+      },
+      "VmHWM_bytes": 353640448,
+      "VmRSS_bytes": 353640448
+    },
+    {
+      "elapsed_s": 698.265689029,
+      "temperature_c": 75.45,
+      "cpu_percent": 120.11636256269871,
+      "counts": {
+        "received": 1698,
+        "inferred": 1259
+      },
+      "latency_ms_p95": 589.1009596000004,
+      "diagnostics": {
+        "core": "OK",
+        "cpu": "ERROR",
+        "memory": "OK",
+        "disk": "OK",
+        "odom_topic": "OK",
+        "navigation_readiness": "OK"
+      },
+      "VmHWM_bytes": 353644544,
+      "VmRSS_bytes": 353644544
+    },
+    {
+      "elapsed_s": 728.6481925420003,
+      "temperature_c": 75.45,
+      "cpu_percent": 120.29355772353424,
+      "counts": {
+        "received": 1775,
+        "inferred": 1314
+      },
+      "latency_ms_p95": 587.7433046498479,
+      "diagnostics": {
+        "core": "OK",
+        "cpu": "ERROR",
+        "memory": "OK",
+        "disk": "OK",
+        "odom_topic": "OK",
+        "navigation_readiness": "OK"
+      },
+      "VmHWM_bytes": 353652736,
+      "VmRSS_bytes": 353652736
+    },
+    {
+      "elapsed_s": 759.2479458100006,
+      "temperature_c": 76.0,
+      "cpu_percent": 120.49547572986658,
+      "counts": {
+        "received": 1850,
+        "inferred": 1369
+      },
+      "latency_ms_p95": 588.2638093999046,
+      "diagnostics": {
+        "core": "OK",
+        "cpu": "ERROR",
+        "memory": "OK",
+        "disk": "OK",
+        "odom_topic": "OK",
+        "navigation_readiness": "OK"
+      },
+      "VmHWM_bytes": 353660928,
+      "VmRSS_bytes": 353660928
+    },
+    {
+      "elapsed_s": 789.8372861120006,
+      "temperature_c": 76.0,
+      "cpu_percent": 120.64559145994484,
+      "counts": {
+        "received": 1929,
+        "inferred": 1424
+      },
+      "latency_ms_p95": 586.9724145497003,
+      "diagnostics": {
+        "core": "OK",
+        "cpu": "ERROR",
+        "memory": "OK",
+        "disk": "OK",
+        "odom_topic": "OK",
+        "navigation_readiness": "OK"
+      },
+      "VmHWM_bytes": 353669120,
+      "VmRSS_bytes": 353669120
+    },
+    {
+      "elapsed_s": 820.3075373390002,
+      "temperature_c": 75.45,
+      "cpu_percent": 120.70953756137371,
+      "counts": {
+        "received": 2000,
+        "inferred": 1479
+      },
+      "latency_ms_p95": 586.7614972993579,
+      "diagnostics": {
+        "core": "OK",
+        "cpu": "ERROR",
+        "memory": "OK",
+        "disk": "OK",
+        "odom_topic": "OK",
+        "navigation_readiness": "OK"
+      },
+      "VmHWM_bytes": 353669120,
+      "VmRSS_bytes": 353669120
+    },
+    {
+      "elapsed_s": 850.5389132850005,
+      "temperature_c": 76.0,
+      "cpu_percent": 120.70275260880352,
+      "counts": {
+        "received": 2069,
+        "inferred": 1533
+      },
+      "latency_ms_p95": 586.8458641994948,
+      "diagnostics": {
+        "core": "OK",
+        "cpu": "ERROR",
+        "memory": "OK",
+        "disk": "OK",
+        "odom_topic": "OK",
+        "navigation_readiness": "OK"
+      },
+      "VmHWM_bytes": 353681408,
+      "VmRSS_bytes": 353681408
+    },
+    {
+      "elapsed_s": 881.0519063210004,
+      "temperature_c": 76.55,
+      "cpu_percent": 120.82860215129479,
+      "counts": {
+        "received": 2142,
+        "inferred": 1588
+      },
+      "latency_ms_p95": 586.5645129494623,
+      "diagnostics": {
+        "core": "OK",
+        "cpu": "ERROR",
+        "memory": "OK",
+        "disk": "OK",
+        "odom_topic": "OK",
+        "navigation_readiness": "OK"
+      },
+      "VmHWM_bytes": 353697792,
+      "VmRSS_bytes": 353697792
+    },
+    {
+      "elapsed_s": 911.6238011180003,
+      "temperature_c": 76.0,
+      "cpu_percent": 120.87108076332156,
+      "counts": {
+        "received": 2224,
+        "inferred": 1643
+      },
+      "latency_ms_p95": 586.0594415998091,
+      "diagnostics": {
+        "core": "OK",
+        "cpu": "ERROR",
+        "memory": "OK",
+        "disk": "OK",
+        "odom_topic": "OK",
+        "navigation_readiness": "OK"
+      },
+      "VmHWM_bytes": 353738752,
+      "VmRSS_bytes": 353738752
+    },
+    {
+      "elapsed_s": 941.8369934460006,
+      "temperature_c": 77.1,
+      "cpu_percent": 120.94965619709566,
+      "counts": {
+        "received": 2293,
+        "inferred": 1697
+      },
+      "latency_ms_p95": 586.3474045996553,
+      "diagnostics": {
+        "core": "OK",
+        "cpu": "ERROR",
+        "memory": "OK",
+        "disk": "OK",
+        "odom_topic": "OK",
+        "navigation_readiness": "OK"
+      },
+      "VmHWM_bytes": 353771520,
+      "VmRSS_bytes": 353771520
+    },
+    {
+      "elapsed_s": 972.2899262600004,
+      "temperature_c": 74.9,
+      "cpu_percent": 120.99288839051678,
+      "counts": {
+        "received": 2365,
+        "inferred": 1752
+      },
+      "latency_ms_p95": 585.1978248001157,
+      "diagnostics": {
+        "core": "OK",
+        "cpu": "ERROR",
+        "memory": "OK",
+        "disk": "OK",
+        "odom_topic": "OK",
+        "navigation_readiness": "OK"
+      },
+      "VmHWM_bytes": 353808384,
+      "VmRSS_bytes": 353808384
+    },
+    {
+      "elapsed_s": 1002.8863698790001,
+      "temperature_c": 75.45,
+      "cpu_percent": 121.03483664788985,
+      "counts": {
+        "received": 2438,
+        "inferred": 1807
+      },
+      "latency_ms_p95": 583.7682071000017,
+      "diagnostics": {
+        "core": "OK",
+        "cpu": "ERROR",
+        "memory": "OK",
+        "disk": "OK",
+        "odom_topic": "OK",
+        "navigation_readiness": "OK"
+      },
+      "VmHWM_bytes": 353841152,
+      "VmRSS_bytes": 353841152
+    },
+    {
+      "elapsed_s": 1033.4008960460005,
+      "temperature_c": 74.35,
+      "cpu_percent": 121.09391559965283,
+      "counts": {
+        "received": 2515,
+        "inferred": 1862
+      },
+      "latency_ms_p95": 583.6181138000027,
+      "diagnostics": {
+        "core": "OK",
+        "cpu": "ERROR",
+        "memory": "OK",
+        "disk": "OK",
+        "odom_topic": "OK",
+        "navigation_readiness": "OK"
+      },
+      "VmHWM_bytes": 353869824,
+      "VmRSS_bytes": 353869824
+    },
+    {
+      "elapsed_s": 1063.966971637,
+      "temperature_c": 74.35,
+      "cpu_percent": 121.19557240268732,
+      "counts": {
+        "received": 2594,
+        "inferred": 1917
+      },
+      "latency_ms_p95": 582.819210799971,
+      "diagnostics": {
+        "core": "OK",
+        "cpu": "ERROR",
+        "memory": "OK",
+        "disk": "OK",
+        "odom_topic": "OK",
+        "navigation_readiness": "OK"
+      },
+      "VmHWM_bytes": 353898496,
+      "VmRSS_bytes": 353898496
+    },
+    {
+      "elapsed_s": 1094.5065738860003,
+      "temperature_c": 75.45,
+      "cpu_percent": 121.28465693146802,
+      "counts": {
+        "received": 2663,
+        "inferred": 1972
+      },
+      "latency_ms_p95": 582.51947404965,
+      "diagnostics": {
+        "core": "OK",
+        "cpu": "ERROR",
+        "memory": "OK",
+        "disk": "OK",
+        "odom_topic": "OK",
+        "navigation_readiness": "OK"
+      },
+      "VmHWM_bytes": 353955840,
+      "VmRSS_bytes": 353955840
+    },
+    {
+      "elapsed_s": 1124.8656575209998,
+      "temperature_c": 75.45,
+      "cpu_percent": 121.25465911519633,
+      "counts": {
+        "received": 2733,
+        "inferred": 2026
+      },
+      "latency_ms_p95": 583.7751237500015,
+      "diagnostics": {
+        "core": "OK",
+        "cpu": "ERROR",
+        "memory": "OK",
+        "disk": "OK",
+        "odom_topic": "OK",
+        "navigation_readiness": "OK"
+      },
+      "VmHWM_bytes": 353988608,
+      "VmRSS_bytes": 353988608
+    },
+    {
+      "elapsed_s": 1155.3463711579998,
+      "temperature_c": 75.45,
+      "cpu_percent": 121.33950335819111,
+      "counts": {
+        "received": 2813,
+        "inferred": 2081
+      },
+      "latency_ms_p95": 583.8097070000003,
+      "diagnostics": {
+        "core": "OK",
+        "cpu": "ERROR",
+        "memory": "OK",
+        "disk": "OK",
+        "odom_topic": "OK",
+        "navigation_readiness": "OK"
+      },
+      "VmHWM_bytes": 354017280,
+      "VmRSS_bytes": 354017280
+    },
+    {
+      "elapsed_s": 1185.5115788970006,
+      "temperature_c": 75.45,
+      "cpu_percent": 121.10393441924674,
+      "counts": {
+        "received": 2879,
+        "inferred": 2131
+      },
+      "latency_ms_p95": 591.7040529998303,
+      "diagnostics": {
+        "core": "OK",
+        "cpu": "ERROR",
+        "memory": "OK",
+        "disk": "OK",
+        "odom_topic": "OK",
+        "navigation_readiness": "OK"
+      },
+      "VmHWM_bytes": 354127872,
+      "VmRSS_bytes": 354127872
+    },
+    {
+      "elapsed_s": 1215.7480972889998,
+      "temperature_c": 74.9,
+      "cpu_percent": 121.03846522057925,
+      "counts": {
+        "received": 2948,
+        "inferred": 2184
+      },
+      "latency_ms_p95": 592.6222986502125,
+      "diagnostics": {
+        "core": "OK",
+        "cpu": "ERROR",
+        "memory": "OK",
+        "disk": "OK",
+        "odom_topic": "OK",
+        "navigation_readiness": "OK"
+      },
+      "VmHWM_bytes": 354181120,
+      "VmRSS_bytes": 354181120
+    },
+    {
+      "elapsed_s": 1245.8283835930006,
+      "temperature_c": 76.0,
+      "cpu_percent": 121.14396161751404,
+      "counts": {
+        "received": 3022,
+        "inferred": 2238
+      },
+      "latency_ms_p95": 594.2212099505015,
+      "diagnostics": {
+        "core": "OK",
+        "cpu": "ERROR",
+        "memory": "OK",
+        "disk": "OK",
+        "odom_topic": "OK",
+        "navigation_readiness": "OK"
+      },
+      "VmHWM_bytes": 354222080,
+      "VmRSS_bytes": 354222080
+    },
+    {
+      "elapsed_s": 1276.2605436590002,
+      "temperature_c": 73.8,
+      "cpu_percent": 121.21267209114121,
+      "counts": {
+        "received": 3094,
+        "inferred": 2292
+      },
+      "latency_ms_p95": 595.7359262000863,
+      "diagnostics": {
+        "core": "OK",
+        "cpu": "ERROR",
+        "memory": "OK",
+        "disk": "OK",
+        "odom_topic": "OK",
+        "navigation_readiness": "OK"
+      },
+      "VmHWM_bytes": 354250752,
+      "VmRSS_bytes": 354250752
+    },
+    {
+      "elapsed_s": 1306.8721433760002,
+      "temperature_c": 74.9,
+      "cpu_percent": 121.23587943615331,
+      "counts": {
+        "received": 3166,
+        "inferred": 2346
+      },
+      "latency_ms_p95": 596.4104387498992,
+      "diagnostics": {
+        "core": "OK",
+        "cpu": "ERROR",
+        "memory": "OK",
+        "disk": "OK",
+        "odom_topic": "OK",
+        "navigation_readiness": "OK"
+      },
+      "VmHWM_bytes": 354344960,
+      "VmRSS_bytes": 354344960
+    },
+    {
+      "elapsed_s": 1337.4097901430005,
+      "temperature_c": 74.9,
+      "cpu_percent": 121.34660226447676,
+      "counts": {
+        "received": 3236,
+        "inferred": 2401
+      },
+      "latency_ms_p95": 595.4123600004095,
+      "diagnostics": {
+        "core": "OK",
+        "cpu": "ERROR",
+        "memory": "OK",
+        "disk": "OK",
+        "odom_topic": "OK",
+        "navigation_readiness": "OK"
+      },
+      "VmHWM_bytes": 354373632,
+      "VmRSS_bytes": 354373632
+    }
+  ]
+}

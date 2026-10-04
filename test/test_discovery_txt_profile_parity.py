@@ -33,7 +33,7 @@ def _profile_table() -> dict[str, dict[str, str]]:
 def test_every_service_type_matches_the_profile_column():
     vectors = json.loads(VECTORS.read_text(encoding="utf-8"))
     table = _profile_table()
-    assert len(vectors["profile"]) == 3
+    assert len(vectors["profile"]) == 5
     for service_type, profile in vectors["profile"].items():
         column = table[profile["role_column"]]
         assert {key: column[key] for key in COMMON_KEYS} == profile["required"], service_type

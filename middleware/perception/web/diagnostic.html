@@ -155,8 +155,8 @@ main { flex:1; min-height:0; display:grid; gap: 0;
           border:1px solid var(--border); border-radius: var(--radius-control);
           padding: 0 var(--space-2); pointer-events:none;
           font-variant-numeric:tabular-nums; }
-.viewbar { position:absolute; top:8px; right:8px; display:flex; gap: var(--space-1);
-           align-items:center; }
+.viewbar { position:absolute; top:8px; right:8px; max-width:calc(100% - 16px); display:flex; flex-wrap:wrap; gap: var(--space-1);
+           justify-content:flex-end; align-items:center; }
 .viewbar ui-button { flex: none; }
 #zoompct { font-size: var(--text-micro); color:var(--ink-2); background:rgba(13,13,13,0.78);
            border:1px solid var(--border); border-radius: var(--radius-control); padding: 0 var(--space-2);

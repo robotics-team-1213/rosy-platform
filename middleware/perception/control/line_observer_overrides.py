@@ -43,6 +43,10 @@ def overlay_for(args) -> dict:
         params["camera_pitch_rad_override"] = math.radians(args.pitch_deg)
     if args.height_m is not None:
         params["camera_height_m_override"] = float(args.height_m)
+    if args.paint_source is not None:
+        params["paint_source"] = args.paint_source
+    if args.model_pointer is not None:
+        params["learned_lane_pointer"] = args.model_pointer
     return {NODE_KEY: {"ros__parameters": params}}
 
 
@@ -90,6 +94,9 @@ def main(argv=None, run=subprocess.run) -> int:
     apply.add_argument("--profile", help="nominal camera profile (required for NOMINAL ground)")
     apply.add_argument("--pitch-deg", type=float)
     apply.add_argument("--height-m", type=float)
+    apply.add_argument("--paint-source", choices=("threshold", "denoise", "learned"),
+                       help="keep-mode paint input; learned falls back to denoise per frame")
+    apply.add_argument("--model-pointer", help="absolute model pointer, required for learned paint")
     apply.add_argument("--no-debug-overlay", action="store_true")
     clear = sub.add_parser("clear", help="remove the overlay, then restart rosy-camera")
     for command in (apply, clear):

@@ -7,15 +7,9 @@ adr_log: docs/reference/ROSY ADR Log.md
 
 # IDs absent from the ADR log on purpose. Remove an entry once the ADR is written.
 adr_gaps:
-  D-446: "Allocated on origin/main to model-PC signed code updates; remove on integration"
-  D-447: "Allocated in the shared main checkout to web realtime socket reuse"
   D-448: "Unused: model-PC code update ADR was renumbered to D-446 during concurrent work"
   D-449: "Allocated on another branch to learning artifact and owner binding contracts"
-  D-444: "Allocated in the shared main checkout to web surface release gates; not on origin/main"
-  D-445: "Allocated in the shared main checkout to Fleet promotion preconditions; not on origin/main"
-  D-438: "ADR written on branch docs/d438-fleet-stuck-resolver, not yet on main; remove when it lands"
-  D-439: "ADR written on branch feat/hmi-task-layout, not yet on main; remove when it lands"
-  D-440: "ADR (per-device power policy) written in the device-power worktree, not yet on main; D-441 took the next number on 2026-10-04; remove when it lands"
+  D-440: "ADR (per-device power policy) is reserved on feat/device-power-policy; implementation integration does not establish the missing ADR body"
   D-428: "ADR written on branch feat/d428-web-face-sweep (8ce5cc237), not yet on main; remove when it lands"
   D-29: "unused; the vision accelerator shield design only proposed the number"
   D-324: "unused; the Pinky artifact-selection ADR was first written as D-324 and renumbered to D-325 to avoid a same-day collision (commit 45f9470b, 2026-09-29). Remove if another session lands an ADR as D-324"

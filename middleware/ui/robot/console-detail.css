@@ -317,6 +317,14 @@
    분류 띠까지 떠도 전부 들어와야 한다(D-201). */
 .control-panel { gap: var(--space-2); }
 .safety-actions { display: grid; gap: var(--space-2); }
+#compatibility-shell > ui-topbar { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; }
+#compatibility-shell .topbar-status { flex-wrap: wrap; justify-content: flex-end; }
+.compatibility-safety .stop-button { flex-direction: column; align-items: flex-start; }
+@media (width < 40rem) {
+  #compatibility-shell > ui-topbar { grid-template-columns: minmax(0, 1fr) auto; }
+  #compatibility-shell .topbar-status { grid-column: 1 / -1; grid-row: 2; }
+  .compatibility-safety { grid-column: 2; grid-row: 1; }
+}
 .safety-actions ui-button {
   width: 100%;
   flex-direction: column;
@@ -455,6 +463,7 @@
    사라진다. */
 .host-card-grid { display: grid; grid-template-columns: 1fr; gap: var(--space-3); }
 .host-card {
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: var(--space-3);

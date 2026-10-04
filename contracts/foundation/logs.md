@@ -358,9 +358,69 @@
 - gate 변화: 없음.
 - 결정: D-411 구현 부록 10.
 
+
+## 2026-10-03 · uncommitted · feat(link): D-432 주소 없는 장비 접속
+
+- 변경: 공통 TXT에 Dock·Signal 역할, LinkPolicy·접속/페어링 모델·4자리 Cam 표시 별칭을 추가했다. 발견 캐시 BOM을 정리하고 멀티 NIC/충돌·TTL 수명을 고정했다.
+- 증거: 관련 Python 계약 시험·실제 loopback TLS HTTP/WS 시험을 실행했다. Pilot Android 설치·화면과 실제 로봇 연결·현장 트래픽 수용은 서로 다른 증거다.
+- gate 변화: 실제 장비의 제어·FIELD 관문은 이동하지 않는다.
+- 결정: D-432 2026-10-03 추가 결정.
+
+
+## 2026-10-03 · uncommitted · fix(link): 현재 접속과 후속 코드 규약 구별
+
+- 변경: 사용자 보정으로 4자리 코드 발급·Cam 표시 별칭은 이번 적용에서 제외했다. 현재 로봇 8자·Cam 6자리 규약을 유지하며 D-432에 추후 통합을 기록했다. 실제 Pinky 접속 수정은 진행한다.
+- 증거: 영향받는 Python 2345 passed/84 skipped, quick tier 459 passed/2 skipped, Pilot PWA 87 passed/58 skipped. 코드 규약 보정 뒤 해당 인증·페어링 시험을 다시 실행한다. 공개 검증 기록은 docs/validation/discovery-link-2026-10-03/README.md.
+- gate 변화: Android 설치·실제 CORE 인증 확인은 실제 주행·Cam 화면 off 연속 송출·현장 트래픽 수용과 별개다. DEVICE/FIELD 이동 없음.
+- 결정: D-432 후속 결정: 접속은 지금, 짧은 코드 통합은 추후 적용.
 ## 2026-10-03 · e021264e6 · feat(face): D-433 상황표 `core_common.face_screen`
 
 - 변경: LCD 상황표 `screen_for`(D-433 1–18행), D-394 주행 카드 주기(`drive_due`, `drive_card_visible` — `core.bridge.display`에서 이동), `face-inputs.json` 엄격 읽기(`read_face_inputs`, `validate_face_inputs`: 링크·FIFO·16 KiB·소유자·schema 1·3 s). 표준 라이브러리만.
 - 증거: `python -m pytest src/contracts/foundation/test/test_face_screen.py -q` 77 passed 2 skipped(POSIX 전용 링크·FIFO).
 - gate 변화: 없음.
 - 결정: D-433 (Proposed)
+
+## 2026-10-04 · uncommitted · feat(protocol): lane perception selection v1.90
+- 변경: `LanePerceptionRequest`(closed paint_source enum), `LanePerceptionStatus`(configured selection, signed model integrity, applied service state, nullable live source) 추가. API ref v1.90; WS envelope protocol_version 1.0 유지.
+- 증거: protocol version alignment 및 lane perception API 7 passed; API/import/calibration/command 관련 53 passed (Windows).
+- gate 변화: SOURCE/LOCAL. 실제 모델 추론·주행은 별도 DEVICE/FIELD 증거.
+- 결정: `docs/plans/2026-10-04-learned-lane-driving-modes.md`
+
+## 2026-10-04 · uncommitted · feat: 저조도 face handover 신선도
+
+- 변경: 카메라 수신 나이와 face 파일 나이를 합산해 2초까지만 조명 근거를 신뢰한다. IDLE standby 조명은 명시 opt-in이며 경보·보정·시험·충전·저전압이 우선한다.
+- 증거: face table/native loop/PIL/lamp/package/CORE face handover 317 passed, 4 skipped (Windows).
+- gate 변화: SOURCE/LOCAL. ARM64/device/field verification pending.
+
+## 2026-10-04 · uncommitted · feat: 명시적 저조도 보조 조명 수동 모드
+
+- 변경: opt-in 저조도 보조 조명을 IDLE뿐 아니라 MANUAL에서도 허용한다. 자동 navigation, 경보, 시험, 보정, 충전, 낮은 배터리는 보조 조명보다 우선한다.
+- 증거: native/face table/PIL 299 passed, 3 skipped.
+- gate 변화: SOURCE/LOCAL. ARM64/device/field evidence remains separate.
+
+## 2026-10-04 · uncommitted · feat(protocol): recording start 옵션과 capture provenance
+
+- 변경: 중앙 schemas import에 closed RecordingStartRequest를 re-export한다. VisionPreviewStatus에는 pair availability/sequence와 effective quality_age_ms, VisionEvidenceRecord에는 optional raw/annotated group 및 model_unreviewed 출처를 추가한다. body 없는 legacy start는 raw이며 envelope protocol_version1.0은 유지한다.
+- 증거: protocol version alignment와 Guard 실제 옵션 확인·실시간 capability·타입 검증·CORE 통합 포함162 passed,1 skipped.
+- gate 변화: SOURCE/LOCAL. annotations는 human-reviewed ground truth가 아니다.
+
+## 2026-10-04 · uncommitted · fix(vision): preserve fresh overexposed quality
+- 변경: 원본 조도 invalid reason overexposed를 preview store, API protocol, face handover sanitizer에 전달한다. low_light 조명 허용 범위와 2초 촬영·수신·handover 신선도는 유지한다.
+- 검증: 과다 노출 관측을 버리는 RED 3 failed; API·handover·stale 회귀 포함 GREEN은 X:/DevTemp/rosy-lane-device-20261004/overexposed-api-green.txt. 배포·실주행 미검증, 명령 전송 없음.
+- 추가 검증: face handover integration RED 1 failed로 display whitelist 누락을 확인·수정. 최종 focused 129 passed, 3 skipped (overexposed-api-green.txt).
+
+- gate 변화: SOURCE/LOCAL. 실기 노출·조명·주행은 별도 검증이다.
+
+
+## 2026-10-04 · uncommitted · feat(power): fresh battery evidence and idle saving
+
+- 변경: 반복 저배터리 표본의 wake를 단계 변화로 제한하여 기존 IDLE/STANDBY 타이머가 동작한다. Viewer GET /api/v1/power/health와 공유 typed 응답에 배터리·충전 확인 age, 정책 상한·wake 근거, shutdown 요청, 진단 요약을 제공한다. API Ref v1.92, envelope 1.0 유지.
+- 검증: injected clock 회귀와 auth/read-only API, 기존 배터리·정지·sentinel 경로 검증. 최종 근거는 docs/plans/2026-10-04-power-health-and-wake.md. OS halt·EEPROM·GPIO·기본 LiDAR 모터 정책 변경 없음.
+- gate 변화: SOURCE/LOCAL; 실제 소비전력·충전·RTC/외부 버튼 wake와 배포는 미검증.
+
+
+## 2026-10-04 · uncommitted · feat(power): long testing dwell with low battery saving
+
+- 변경: 정상 IDLE/STANDBY 기준을 600/1800초로 늘리고 warning60/300, critical/deep30/120초와 min을 취한다. YAML override·API effective timers에 연결한다. 기존 이동·정보 hold·disabled와 배터리 정지/종료 권한을 유지한다.
+- 증거: 주입 시계·설정 parser RED3 failed, 전원/배터리/bridge GREEN180 passed. 구조 재판정은 docs/plans/2026-10-04-power-health-and-wake.md에 기록한다.
+- gate 변화: SOURCE/LOCAL. 기기 소비전력·물리 wake·배포 검증은 별도다.

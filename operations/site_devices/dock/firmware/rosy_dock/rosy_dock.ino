@@ -190,6 +190,10 @@ void setup() {
   // 3줄이 전부다. dock_id 가 인스턴스명이 된다 (NVS 에서 이미 읽었다).
   if (MDNS.begin(dockId.c_str())) {
     MDNS.addService("rosy-dock", "tcp", 80);
+    MDNS.addServiceTxt("rosy-dock", "tcp", "product", "rosy");
+    MDNS.addServiceTxt("rosy-dock", "tcp", "role", "dock");
+    MDNS.addServiceTxt("rosy-dock", "tcp", "proto", "rosy-dock/1");
+    MDNS.addServiceTxt("rosy-dock", "tcp", "tls", "none");
   }
 
   server.on("/status", HTTP_GET, handleStatus);

@@ -2,6 +2,9 @@
 // 한 패널의 import 실패나 mount 예외는 그 자리에만 머문다 — 나머지 패널과 e-stop은 계속 돈다.
 // 자리(ui-section)를 await 전에 먼저 붙이므로 화면 순서는 매니페스트 순서 그대로다.
 
+import { createTaskChooser, TASK_CONFIRM_TIMEOUT_MS } from "/common/task-chooser.js";
+import { createNode } from "../dom.js";
+
 function linkStyle(href) {
   if (document.head.querySelector(`link[data-panel-css="${href}"]`)) return;
   const link = document.createElement("link");
@@ -12,23 +15,62 @@ function linkStyle(href) {
 }
 
 function failure(section, panel, error) {
-  const note = document.createElement("ui-empty");
-  note.textContent = `${panel.title} 패널을 열지 못했습니다: ${error.message || error}`;
+  const note = createNode("ui-empty", "", `${panel.title} 패널을 열지 못했습니다: ${error.message || error}`);
   section.replaceChildren(note);
   section.dataset.failed = "true";
 }
 
 function actionGroupPanel(id, title) {
-  const panel = document.createElement("div");
-  panel.className = "action-group-panel";
+  const panel = createNode("div", "action-group-panel");
   panel.id = `action-group-${id}`;
   panel.setAttribute("role", "tabpanel");
   panel.setAttribute("aria-label", `${title} 조작`);
   return panel;
 }
 
+async function canCloseProcedure(handle) {
+  if (!handle?.beforeHide) return true;
+  let timer;
+  try {
+    return await Promise.race([
+      Promise.resolve().then(() => handle.beforeHide()),
+      new Promise(resolve => {
+        timer = setTimeout(() => resolve({message: "화면 종료 확인 시간이 지났습니다. 현재 작업과 연결을 확인하세요."}), TASK_CONFIRM_TIMEOUT_MS);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export async function mountPanels(root, panels, contextFor, actionGroups = []) {
   const handles = [];
+  let teardown = null;
+  let closed = false;
+  const procedurePanels = panels.filter(panel => panel.slot === "main");
+  const procedureSlot = root.querySelector('[data-slot="main"]');
+  const procedureContainers = new Map();
+  let taskChooser = null;
+  if (procedureSlot && procedurePanels.length) {
+    linkStyle("/common/task-chooser.css");
+    procedureSlot.classList.add("procedure-tasks");
+    const content = createNode("div", "procedure-content");
+    for (const panel of procedurePanels) {
+      const container = createNode("div", "procedure-panel");
+      container.id = `procedure-${panel.id}`;
+      container.hidden = true;
+      content.append(container);
+      procedureContainers.set(panel.id, container);
+    }
+    taskChooser = createTaskChooser({
+      tasks: procedurePanels.map(panel => ({id: panel.id, title: panel.title, panel: procedureContainers.get(panel.id)})),
+      beforeSelect: async (from) => {
+        const handle = handles.find(item => item.panelId === from);
+        return handle?.beforeHide ? await handle.beforeHide() : true;
+      },
+    });
+    procedureSlot.append(taskChooser.element, content);
+  }
   const actionGroupElements = [];
   const actionPanels = panels.filter((panel) => panel.slot === "act" && panel.action_group);
   const groups = new Map();
@@ -47,28 +89,25 @@ export async function mountPanels(root, panels, contextFor, actionGroups = []) {
     section.dataset.panel = panel.id;
     section.dataset.state = panel.state;
     section.setAttribute("aria-label", panel.title);
-    const heading = document.createElement("h2");
-    heading.className = "sr-only";
-    heading.textContent = panel.title;
+    const heading = createNode("h2", "sr-only", panel.title);
     section.append(heading);
     // 모듈 import 동안 빈 카드 대신 로딩 상태를 보인다 — 느린 네트워크에서
     // "테두리만 있는 빈 상자"는 정상으로 그리지 않는다는 Law 0의 로딩 번역이다.
-    const loading = document.createElement("ui-empty");
-    loading.textContent = `${panel.title} 패널을 불러오는 중입니다.`;
+    const loading = createNode("ui-empty", "", `${panel.title} 패널을 불러오는 중입니다.`);
     section.append(loading);
-    const container = panel.slot === "main" ? document.createElement("div") : section;
+    const container = procedureContainers.get(panel.id) || section;
     if (container !== section) {
       container.className = "procedure-panel";
       container.append(section);
     }
-    slot.append(container);
+    if (!container.isConnected) slot.append(container);
     const ctx = contextFor(panel);
-    const handle = {section, container, ctx, unmount: null, actionGroup: panel.action_group || null};
+    const handle = {panelId: panel.id, section, container, ctx, unmount: null, actionGroup: panel.action_group || null};
     handles.push(handle);
     try {
       const module = await import(panel.module);
       loading.remove();
-      const mounted = module.mount(section, ctx);
+      const mounted = await module.mount(section, ctx);
       handle.beforeHide = typeof mounted?.beforeHide === "function" ? mounted.beforeHide : null;
       handle.unmount = typeof mounted === "function" ? mounted
         : typeof mounted?.unmount === "function" ? mounted.unmount : null;
@@ -85,13 +124,14 @@ export async function mountPanels(root, panels, contextFor, actionGroups = []) {
     await mountOne(panel, slot);
   }
 
+  taskChooser?.setReady();
+
   const actSlot = root.querySelector('[data-slot="act"]');
   const groupHandles = new Map();
   let selectedGroup = null;
   let switching = false;
   if (actSlot && groups.size) {
-    const tablist = document.createElement("div");
-    tablist.className = "action-group-tabs";
+    const tablist = createNode("div", "action-group-tabs");
     tablist.setAttribute("role", "tablist");
     tablist.setAttribute("aria-label", "조작 그룹");
     actionGroupElements.push(tablist);
@@ -217,21 +257,42 @@ export async function mountPanels(root, panels, contextFor, actionGroups = []) {
     await mountGroup(defaultGroup);
   }
 
+  async function closeAll() {
+    if (selectedGroup) {
+      if (!await canLeaveGroup(selectedGroup)) throw new Error("현재 조작 작업이 끝나지 않아 화면을 유지합니다.");
+    }
+    if (taskChooser) {
+      await taskChooser.pause();
+      try {
+        const handle = handles.find(item => item.panelId === taskChooser.selectedId);
+        const result = await canCloseProcedure(handle);
+        if (result !== true) throw new Error(result?.message || "현재 작업이 끝나지 않아 화면을 유지합니다.");
+      } catch (error) {
+        taskChooser.resume(error.message || "화면 종료를 확인하지 못했습니다. 현재 작업과 연결을 확인하세요.");
+        throw error;
+      }
+      taskChooser.destroy();
+    }
+    for (const { container, ctx, unmount } of handles) {
+      try {
+        if (unmount) unmount();
+      } catch (_error) {
+        // A broken unmount must not keep the next panel mounted.
+      }
+      ctx.store.stopAll();
+      container.remove();
+    }
+    procedureSlot?.querySelector(".procedure-content")?.remove();
+    procedureSlot?.classList.remove("procedure-tasks");
+    for (const element of actionGroupElements) element.remove();
+    closed = true;
+  }
+
   return {
-    async unmountAll() {
-      if (selectedGroup) {
-        if (!await canLeaveGroup(selectedGroup)) throw new Error("현재 조작 작업이 끝나지 않아 화면을 유지합니다.");
-      }
-      for (const { container, ctx, unmount } of handles) {
-        try {
-          if (unmount) unmount();
-        } catch (_error) {
-          // A broken unmount must not keep the next panel mounted.
-        }
-        ctx.store.stopAll();
-        container.remove();
-      }
-      for (const element of actionGroupElements) element.remove();
+    unmountAll() {
+      if (closed) return Promise.resolve();
+      if (!teardown) teardown = Promise.resolve().then(closeAll).finally(() => { teardown = null; });
+      return teardown;
     },
   };
 }

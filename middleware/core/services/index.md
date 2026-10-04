@@ -37,8 +37,8 @@
 
 ## 최근 기록
 
-- 2026-10-04 · uncommitted · D-442 U1 MANUAL 보호
-- 2026-10-03 · b84e72c55 · feat(vision): D-423 학습 모델 상태 저장소(읽기 전용)
-- 2026-10-03 · uncommitted · test(fleet_agent): D-419 시험 시간 여유 — 포화된 호스트
-- 2026-10-03 · uncommitted · fix(fleet_agent): D-419 착지 리뷰 — 이벤트 동시 전송 상한, 되돌림 중복, 하트비트 시한
-- 2026-10-02 · uncommitted · fix(fleet_agent): D-419 착지 — main 의 D-407 수신 루프와 병합
+- 2026-10-04 · uncommitted · feat(power): long testing dwell with low battery saving
+- 2026-10-04 · uncommitted · feat(power): fresh battery evidence and idle saving
+- 2026-10-04 · uncommitted · fix(vision): preserve fresh overexposed quality
+- 2026-10-04 · uncommitted · feat(vision): 같은 capture의 bounded raw/annotation pair
+- 2026-10-04 · uncommitted · fix(line-follow): 저조도 정지와 recovery 차단

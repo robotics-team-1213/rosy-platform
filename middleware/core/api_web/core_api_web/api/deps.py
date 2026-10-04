@@ -103,7 +103,7 @@ class CoreServicesLike(Protocol):
     waypoints: Any
 
 
-ROLE_RANK = {"viewer": 0, "operator": 1, "administrator": 2}
+ROLE_RANK = {"viewer": 0, "stuck_resolver": 0, "operator": 1, "administrator": 2}
 
 #: 운영자가 직접 고른 토큰의 하한. 생성 토큰은 이보다 훨씬 길다.
 MIN_TOKEN_LENGTH = 16
@@ -111,8 +111,8 @@ MAX_TOKEN_LENGTH = 128
 
 #: D-193 5. 토큰이 어디서 왔는가. `card` 는 SD 카드 첫 부팅, `manual` 은
 #: 설정 화면·API, `pair-*` 는 로그인 코드, `legacy` 는 평문 레거시 항목이다.
-TOKEN_SOURCES = frozenset({"card", "manual", "pair-physical", "pair-admin", "legacy"})
-PAIRED_SOURCES = frozenset({"pair-physical", "pair-admin"})
+TOKEN_SOURCES = frozenset({"card", "manual", "pair-physical", "pair-admin", "pair-development", "legacy"})
+PAIRED_SOURCES = frozenset({"pair-physical", "pair-admin", "pair-development"})
 
 #: D-193 7. 장치 모드(`ROSY_DEPLOYMENT=device`)가 거부하는 공용 개발 토큰의
 #: 다이제스트. 원문은 `config/rosy_dev_auth.yaml` 에만 있다.
@@ -133,6 +133,11 @@ TOKEN_WRITE_LOCK = threading.RLock()
 def device_mode() -> bool:
     """네이티브 장치 런타임인가 (`rosy-runtime.env` 의 `ROSY_DEPLOYMENT=device`)."""
     return os.environ.get("ROSY_DEPLOYMENT", "").strip() == "device"
+
+
+def development_link_enabled(config: dict) -> bool:
+    return (os.environ.get('ROSY_DEPLOYMENT', '').strip() == 'development'
+            and (config.get('network') or {}).get('connection_mode') == 'development')
 
 
 def token_digest(token: str) -> str:
@@ -273,6 +278,8 @@ def auth_entries(config: dict) -> list[dict[str, Any]]:
     저장 양쪽의 유일한 입력이다.
     """
     records = _configured_records(config)
+    if not development_link_enabled(config):
+        records = [item for item in records if item['source'] != 'pair-development']
     if device_mode():
         records = [item for item in records if not _refused_in_device_mode(item)]
     return records

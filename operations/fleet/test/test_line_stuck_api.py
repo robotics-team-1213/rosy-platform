@@ -97,6 +97,7 @@ def test_without_the_agent_event_the_stuck_still_shows_with_unknown_clearances(t
 def test_a_closed_stuck_leaves_the_list_and_an_unreachable_robot_keeps_it_marked(tmp_path):
     robot = FakeRobot("rosy_01", state=_state())
     client, _ = _named_app(_console(robot), tmp_path)
+    client.app.state.fleet_gather.max_age_s = 0.0    # every read below is a fresh gather
     _row(client)
 
     robot.state_error = ConnectionError("down")
@@ -150,6 +151,7 @@ def test_an_operator_answer_is_forwarded_and_audited_with_the_principal(tmp_path
                                        "accepted", "outcome", "code")} == {
         "robot_id": "rosy_01", "stuck_id": "stuck-abc", "decision": "WAIT",
         "principal_id": "op-7", "accepted": 1, "outcome": "hold", "code": None}
+    assert (durable[0]["tier"], durable[0]["rule"], durable[0]["escalated"]) == ("human", None, None)
     audit_ids = {row.get("request_id") for row in store.api_audit()}
     assert durable[0]["audit_id"] and durable[0]["audit_id"] in audit_ids
     assert ("line_stuck_decision", "stuck-abc", "WAIT") in robot.calls
@@ -280,3 +282,26 @@ def test_transport_failures_are_502_recorded_and_a_timeout_says_the_outcome_is_u
     row = LineStuckAnswerLog(store.path).rows()[0]
     assert row["accepted"] == durable_accepted and row["code"] == code
     assert store.api_audit()[0]["status_code"] == 502
+
+
+def test_an_old_answer_log_gains_the_resolver_columns(tmp_path):
+    import sqlite3
+    path = tmp_path / "old.sqlite3"
+    with sqlite3.connect(path) as db:
+        db.execute("""CREATE TABLE fleet_line_stuck_answers (
+                       answer_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                       at TEXT NOT NULL, audit_id TEXT, robot_id TEXT NOT NULL,
+                       stuck_id TEXT NOT NULL, decision TEXT NOT NULL,
+                       principal_id TEXT NOT NULL, accepted INTEGER, outcome TEXT,
+                       code TEXT, message TEXT)""")
+        db.execute("INSERT INTO fleet_line_stuck_answers (at, robot_id, stuck_id, decision, "
+                   "principal_id) VALUES ('t', 'rosy_01', 'stuck-old', 'WAIT', 'op-7')")
+    db.close()
+    LineStuckAnswerLog(path)
+    log = LineStuckAnswerLog(path)                       # migration is idempotent
+    LineStuckBoard(log=log).record(robot_id="rosy_01", stuck_id="stuck-new", decision="WAIT",
+                                   principal_id="fleet-resolver", accepted=True, tier="rule",
+                                   rule="R1")
+    new, old = log.rows()
+    assert (new["tier"], new["rule"], new["escalated"]) == ("rule", "R1", None)
+    assert old["stuck_id"] == "stuck-old" and old["tier"] is None

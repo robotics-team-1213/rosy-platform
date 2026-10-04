@@ -5,14 +5,16 @@
 import { api, session } from "../client.js";
 import { mountPanels } from "./mount.js";
 import { createStore } from "./store.js";
+import { ROLE_LABEL, enumLabel } from "/common/core_ui_logic.js";
 import { dashboardLoginHref } from "../surface-navigation.js";
+import { createNode } from "../dom.js";
 
 const REFRESH_MS = 5_000;
 const surface = document.body.dataset.surface;
 const status = document.getElementById("surface-status");
 const notice = document.getElementById("shell-notice");
 const safetyStatus = document.getElementById("safety-mode-status");
-const store = createStore(api);
+const store = createStore(api, { session });
 let mounted = null;
 let revision = null;
 let inflight = null;
@@ -45,30 +47,26 @@ function showStatus(text) {
   status.textContent = text || "";
 }
 
-function showLoginStatus(text) {
+function showLinkedStatus(text, href, label) {
   status.hidden = false;
-  const link = document.createElement("a");
-  link.className = "surface-auth-link";
-  link.href = dashboardLoginHref(`/${surface}`);
-  link.textContent = "같은 탭에서 로그인";
+  const link = createNode("a", "surface-auth-link", label);
+  link.href = href;
   status.replaceChildren(document.createTextNode(`${text} `), link);
 }
 
+function showLoginStatus(text) {
+  showLinkedStatus(text, dashboardLoginHref(`/${surface}`), "같은 탭에서 로그인");
+}
+
 function showRoleDeniedStatus() {
-  status.hidden = false;
-  const link = document.createElement("a");
-  link.className = "surface-auth-link";
-  link.href = "/console";
-  link.textContent = "운용 화면으로 이동";
-  status.replaceChildren(document.createTextNode("이 화면은 현재 계정 역할로 열 수 없습니다. "), link);
+  showLinkedStatus("이 화면은 현재 계정 역할로 열 수 없습니다.", "/console", "운용 화면으로 이동");
 }
 
 function renderSwitch(surfaces) {
   const nav = document.getElementById("surface-switch");
   nav.replaceChildren(...surfaces.map(({ id, title }) => {
-    const link = document.createElement("a");
+    const link = createNode("a", "", title);
     link.href = `/${id}`;
-    link.textContent = title;
     if (id === surface) link.setAttribute("aria-current", "page");
     return link;
   }));
@@ -91,7 +89,8 @@ function refreshPanelState(panels) {
 
 async function assemble() {
   const manifest = await api(`/api/v1/ui/surfaces/${surface}`, { signal: AbortSignal.timeout(REFRESH_MS * 2) });
-  document.getElementById("shell-role").textContent = manifest.role;
+  document.getElementById("shell-role").textContent = enumLabel(ROLE_LABEL, manifest.role);
+  document.getElementById("shell-role").title = manifest.role;
   if (manifest.revision === revision) {
     refreshPanelState(manifest.panels);
     showStatus(manifest.panels.length ? "" : "이 역할로 이 화면에 보일 패널이 없습니다.");
@@ -185,6 +184,6 @@ if (!session.token) {
   refresh();
   intervalId = setInterval(refresh, REFRESH_MS);
   if (["setup", "device"].includes(surface)) {
-    stopSafety = store.scope().poll("/api/v1/robot/state", 1_000, renderSafetyMode, onSafetyModeError);
+    stopSafety = store.scope().state(renderSafetyMode, onSafetyModeError);
   }
 }

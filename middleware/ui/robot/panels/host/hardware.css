@@ -13,5 +13,5 @@
 .hardware-device-evidence { grid-column: 1 / -1; margin: 0; color: var(--nominal-quiet); line-height: var(--leading-copy); overflow-wrap: anywhere; }
 .hardware-device-state { align-self: start; }
 .hardware-facts[data-stale="true"] ~ .hardware-device-list { color: var(--ink-quiet); }
-.hardware-refresh { justify-self: start; }
+.hardware-refresh { align-self: flex-start; }
 .hardware-action-note { margin: 0; color: var(--nominal-quiet); line-height: var(--leading-copy); }

@@ -33,8 +33,8 @@
 
 ## 최근 기록
 
+- 2026-10-04 · uncommitted · feat: 흰 조명 카드 렌더러 분리
+- 2026-10-04 · uncommitted · feat: 저조도 흰 화면 보조 조명
 - 2026-10-03 · f23221421 · feat(face): D-433 rosy-face가 LCD를 쓰는 렌더러
 - 2026-10-01 · uncommitted · D-398 부팅 카드 장미색 사본 정합
 - 2026-10-01 · uncommitted · feat(emotion): 주행 카드 도킹 상태 단어
-- 2026-10-01 · uncommitted · feat(emotion): 주행 카드 목표 좌표 표시
-- 2026-10-01 · uncommitted · feat(emotion): 주행 카드 충전 표시

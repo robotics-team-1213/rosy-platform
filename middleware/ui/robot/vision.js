@@ -2,9 +2,11 @@
 // 주기·시퀀스·중단 상태는 이 모듈이 가진다. map.js 와 같은 팩토리 모양이다.
 // D-398 — 증거 말·나이 뒤처리는 공용 어휘 표에서 온다.
 import { EVIDENCE_LABEL, evidenceAgeText } from "/common/core_ui_logic.js";
+import {fetchCameraPair} from "/common/evidence.js";
 
 export function createVisionPreview({
-  elements, setText, api, authHeaders, hasToken, isHidden, onFrame, onUnavailable,
+  elements, setText, api, authHeaders, hasToken, isHidden, onFrame, onUnavailable, onQuality,
+  previewMode = () => "raw",
 }) {
   const hasNumber = (value) => typeof value === "number" && Number.isFinite(value);
   let pending = false;
@@ -29,6 +31,7 @@ export function createVisionPreview({
   }
 
   function renderUnavailable(status = {}, message = "카메라 프레임 수신 대기") {
+    onQuality?.(null);
     onUnavailable?.(message);
     const stale = status.stale === true;
     elements["vision-stage"].dataset.state = stale ? "stale" : "waiting";
@@ -59,6 +62,7 @@ export function createVisionPreview({
         signal: controller.signal, cache: "no-store",
       });
       if (gen !== generation || !hasToken()) return;
+      onQuality?.(status.available === true ? status.quality ?? null : null);
       if (!status.available) {
         visionSequence = null;
         releaseObjectUrl();
@@ -66,29 +70,12 @@ export function createVisionPreview({
           status, status.stale ? "카메라 프레임 만료 · HOLD" : "카메라 프레임 수신 대기");
         return;
       }
-      if (visionSequence !== status.sequence) {
-        const response = await fetch(
-          `/api/v1/vision/front/frame?sequence=${encodeURIComponent(status.sequence)}`,
-          {
-            headers: authHeaders(), cache: "no-store", signal: controller.signal,
-          },
-        );
-        if (response.status === 409 || response.status === 429) {
-          visionSequence = null;
-          releaseObjectUrl();
-          renderUnavailable(
-            status,
-            response.status === 429
-              ? "카메라 속도 제한 · 재동기화 대기"
-              : "카메라 프레임 변경 · 재동기화 대기",
-          );
-          return;
-        }
-        if (!response.ok) throw new Error(`camera frame ${response.status}`);
-        if (response.headers.get("X-Rosy-Camera-Sequence") !== String(status.sequence)) {
-          return;
-        }
-        const blob = await response.blob();
+      const mode = previewMode();
+      const key = `${status.sequence}:${mode}`;
+      if (visionSequence !== key) {
+        const pair = await fetchCameraPair(status, {previewMode: mode,
+          fetchFrame: (path) => fetch(path, {headers: authHeaders(), cache: "no-store", signal: controller.signal})});
+        const blob = pair.blob;
         const nextUrl = URL.createObjectURL(blob);
         const candidate = new Image();
         candidate.src = nextUrl;
@@ -102,13 +89,23 @@ export function createVisionPreview({
           URL.revokeObjectURL(nextUrl);
           return;
         }
+        let rawImage = candidate;
+        if (mode === "annotated") {
+          const rawUrl = URL.createObjectURL(pair.rawBlob);
+          rawImage = new Image(); rawImage.src = rawUrl;
+          try { await rawImage.decode(); }
+          catch (error) { URL.revokeObjectURL(nextUrl); throw error; }
+          finally { URL.revokeObjectURL(rawUrl); }
+        }
+        if (gen !== generation || !hasToken()) {
+          URL.revokeObjectURL(nextUrl); return;
+        }
         elements["vision-frame"].src = nextUrl;
         releaseObjectUrl();
         objectUrl = nextUrl;
-        visionSequence = status.sequence;
+        visionSequence = key;
         try {
-          onFrame?.({image: candidate, blob, sequence: status.sequence,
-            source: status.source, capturedAt: status.captured_at});
+          onFrame?.({...pair, image: candidate, rawImage, blob});
         } catch (_error) { /* Recording cannot interrupt the live preview. */ }
       }
       if (gen !== generation || !hasToken()) return;
@@ -124,6 +121,7 @@ export function createVisionPreview({
       renderEvidence("fresh", "실시간", "LIVE");
     } catch (error) {
       if (error.name === "AbortError" || gen !== generation) return;
+      onQuality?.(null);
       visionSequence = null;
       releaseObjectUrl();
       renderUnavailable({}, `카메라 연결 확인 · ${error.message}`);
@@ -143,6 +141,7 @@ export function createVisionPreview({
     timer = null;
     pending = false;
     visionSequence = null;
+    onQuality?.(null);
     releaseObjectUrl();
     renderUnavailable({}, message);
   }

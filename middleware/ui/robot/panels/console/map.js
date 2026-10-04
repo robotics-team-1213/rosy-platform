@@ -123,13 +123,14 @@ export function mount(root, ctx) {
   }, (error) => {
     commissioning = null; readErrors.commissioning = error.message; renderReadiness(); syncMapActions();
   });
-  let loading = false;
+  let loading = false; let disposed = false;
   const refresh = async () => {
-    if (loading) return;
+    if (disposed || loading) return;
     loading = true;
     try { await map.refresh(); }
     catch (error) { mapStatus.setAttribute("state", error.status === 403 ? "forbidden" : "error"); mapStatus.textContent = `지도 데이터를 받지 못했습니다: ${error.message}`; }
     finally {
+      if (disposed) return;
       status.hidden = true; loading = false;
       const failed = ["error", "forbidden"].includes(map.mapState) || mapStatus.getAttribute("state") === "error";
       mapStatus.hidden = failed; // 같은 원인을 무대 밖에서 한 번 더 말하지 않는다.
@@ -147,5 +148,5 @@ export function mount(root, ctx) {
   retry.addEventListener("click", () => { refresh(); });
   refresh();
   const timer = setInterval(refresh, 10_000);
-  return () => { clearInterval(timer); stopState(); stopCapabilities(); stopCommissioning(); map.destroy(); };
+  return () => { disposed = true; clearInterval(timer); stopState(); stopCapabilities(); stopCommissioning(); map.destroy(); };
 }

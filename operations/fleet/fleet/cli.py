@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import dataclasses
 import os
 import stat
 import sys
@@ -80,6 +81,9 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
                          help="dedicated Fleet-to-Vision preview lease signing secret")
     console.add_argument("--users-file", default=None, type=Path,
                          help="개인별 Fleet API 토큰 digest 및 역할을 담은 root 관리 파일")
+    console.add_argument("--stuck-resolver", action="store_true",
+                         help="D-438: answer lane stucks with rules for robots that have a "
+                              "resolver_token in robots.yaml; others go to the console")
     console.add_argument("--tls-cert", default=None, type=Path,
                          help="HTTPS server certificate chain; pair with --tls-key")
     console.add_argument("--tls-key", default=None, type=Path,
@@ -494,6 +498,14 @@ def run_console(args: argparse.Namespace) -> None:
         console, sighting_service, enabled=getattr(args, "localization_service", True),
         overhead_cue=getattr(args, "localization_overhead_cue", False),
         lane_rules=getattr(args, "localization_lane_rules", None))
+    stuck_resolver_clients = None
+    if getattr(args, "stuck_resolver", False):
+        stuck_resolver_clients = {
+            ep.robot_id: HttpRobotClient(dataclasses.replace(ep, token=ep.resolver_token))
+            for ep in endpoints if ep.resolver_token}
+        if not stuck_resolver_clients:
+            print("warning: --stuck-resolver set but no robot has a resolver_token; "
+                  "every stuck will be escalated", file=sys.stderr)
     app = create_app(console, console_token=console_token, web_common=args.web_common,
                      hub=hub, sightings=sighting_service, task_service=task_service,
                      mission_service=mission_service, proposal_store=proposal_store,
@@ -507,7 +519,8 @@ def run_console(args: argparse.Namespace) -> None:
                      vision_sources=vision_sources, enrollment=enrollment,
                      robot_credential_key=robot_key_text, site_lanes=site_lanes,
                      pairing=pairing_service, pairing_sync_token=pairing_sync_token,
-                     localization_service=localization_service)
+                     localization_service=localization_service,
+                     stuck_resolver_clients=stuck_resolver_clients)
     signals_note = f", {len(signal_eps)} signals" if signal_console is not None else ""
     print(f"fleet console: http://{args.host}:{args.port}/console  "
           f"({len(console.robot_ids)} robots{signals_note})",

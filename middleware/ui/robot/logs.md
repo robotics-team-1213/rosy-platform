@@ -793,3 +793,147 @@
 - 증거: 2026-10-03 Windows. 대화 계약, 콘솔 배치, enum, 운용 카피, dashboard 패키지, host copy, shared controls, token, ui route, dashboard browser, drive를 ROSY_RUN_BROWSER_TESTS=1로 한 번에 실행해 240 passed, 2 failed. 실패 둘은 Page.goto 5000ms 초과였고 같은 둘만 다시 실행하면 2 passed(4.04s). Escape의 session.token과 화면 모드 수동을 고친 뒤 키보드 목표 확인과 상태 읽기 시험은 2 passed(6.07s). 1366에서 도구와 범례는 캔버스를 가리지 않고 문서 스크롤은 0이다. 캔버스 높이는 112px이다(비전 스테이지 238px, 도구 줄 72px). 390에서 즉시 정지는 뷰포트 바닥에 고정된다.
 - gate 변화: 없음.
 - 미증명: 실기 텔레옵. 비전 신선도 판정은 바꾸지 않았다.
+
+
+## 2026-10-03 · uncommitted · feat(link): D-432 주소 없는 장비 접속
+
+- 변경: 로그인 코드 표시는 4자리이며 기존 8자리 입력은 호환한다. endpoint/역할/명령 owner는 유지한다.
+- 증거: 관련 Python 계약 시험·실제 loopback TLS HTTP/WS 시험을 실행했다. Pilot Android 설치·화면과 실제 로봇 연결·현장 트래픽 수용은 서로 다른 증거다.
+- gate 변화: 실제 장비의 제어·FIELD 관문은 이동하지 않는다.
+- 결정: D-432 2026-10-03 추가 결정.
+
+
+## 2026-10-03 · uncommitted · fix(link): 현재 접속과 후속 코드 규약 구별
+
+- 변경: 사용자 보정으로 4자리 코드 발급·Cam 표시 별칭은 이번 적용에서 제외했다. 현재 로봇 8자·Cam 6자리 규약을 유지하며 D-432에 추후 통합을 기록했다. 실제 Pinky 접속 수정은 진행한다.
+- 증거: 영향받는 Python 2345 passed/84 skipped, quick tier 459 passed/2 skipped, Pilot PWA 87 passed/58 skipped. 코드 규약 보정 뒤 해당 인증·페어링 시험을 다시 실행한다. 공개 검증 기록은 docs/validation/discovery-link-2026-10-03/README.md.
+- gate 변화: Android 설치·실제 CORE 인증 확인은 실제 주행·Cam 화면 off 연속 송출·현장 트래픽 수용과 별개다. DEVICE/FIELD 이동 없음.
+- 결정: D-432 후속 결정: 접속은 지금, 짧은 코드 통합은 추후 적용.
+
+## 2026-10-04 · uncommitted · feat(dashboard): 차선 인식 선택
+
+- 변경: 차선 추종 패널에 인식 방식 선택과 설정/실제 추론 출처 표시. 관리자·신선한 정지 IDLE·추종 OFF에서만 적용. 적용 중 추종 시작 잠금, 실패는 실패로 표시하고 PUT 뒤 GET readback을 확인한다.
+- 증거: 인식 적용 실패·pending·readback 브라우저 2 passed, 기존 패널 브라우저 13 passed. 실제 입력의 최신 출처와 모델 판을 별도로 표시하며 지연·누락은 확인 대기로 둔다.
+- gate 변화: 없음. 실제 추론 출처 없는 응답은 확인 대기로 표시한다.
+
+## 2026-10-04 · uncommitted · feat: 저조도 카메라 판정 불가 표시
+
+- 변경: 기존 카메라 패널에 저조도 경고를 추가했다. 실시간 JPEG 수신과 차선·물체 판정 가능 여부를 별도로 표시한다.
+- 증거: Pilot·Dashboard 저조도 브라우저 회귀 각각 1 passed; shared controls + shell 30 passed.
+- gate 변화: SOURCE/LOCAL. ARM64/device/field verification pending.
+
+## 2026-10-04 · uncommitted · feat: 브라우저 원본·표시본 확인 영상
+
+- 변경: 카메라 패널에서 원본 또는 원본+표시본을 선택한다. 같은 촬영 시점의 두 프레임을 확인하고 원본부터 저장한다. 원본 누락·구형 서버 응답·촬영 시점 불일치는 녹화를 막는다.
+- 증거: 브라우저 표시본+원본 저장/원본 누락/저조도/확대 3 passed.
+- gate 변화: SOURCE/LOCAL. ARM64/device/field evidence remains separate.
+
+## 2026-10-04 · uncommitted · fix: 과노출 판정 불가 안내
+
+- 변경: 기존 카메라 품질 경고에 과노출 안내를 추가했다. JPEG 수신 상태와 차선 판정 가능 여부는 별도로 표시하며 원본 픽셀은 바꾸지 않는다.
+- 증거: Pilot/Dashboard bright-dark browser 2 passed; native quality/alarm 9 passed.
+- gate 변화: SOURCE/LOCAL. No device writes or motion.
+## 2026-10-04 · uncommitted · feat(ui): 절차 표면의 작업 선택과 유지
+
+- 변경: `/setup` 5개·`/device` 7개 작업을 매니페스트 순서의 작업 선택기와 한 작업 영역으로 배치한다. 모든 허용 패널을 유지해 입력·결과를 보존하며, `beforeHide` 거부·오류·시간 초과는 현재 작업을 유지한다. 화면 종료는 진행 중 선택을 무효화하고 선택기를 잠근 뒤 제한 시간 안에 확인한다. 종료는 단일 실행이며 성공 때만 리스너·패널·폴링 scope를 닫는다. 운용 조작 그룹의 정지 확인은 유지한다.
+- 증거: Chromium 작업 선택 회귀 6 passed, 독립 품질 회귀 3 passed, 기존 토큰 삭제·정지 대화상자·장치 키보드 포커스·역할 팔레트 수정 확인 4 passed. CORE fixture의 두 테마·1366×768/390×844/1366×600 초기 12셀은 overflow/pageerror 0, 최종 대표 2셀도 0이다. 전체 dashboard 실행은 이전 fixture 상태로 실행 중이며 전체 통과를 주장하지 않는다.
+- gate 변화: SOURCE/LOCAL의 호스트 증거를 보완한다. 이미지 설치·실제 장치·현장 수용은 확인하지 않았다.
+- 결정: D-439. 캡처·pytest 임시는 X:\DevTemp\rosy-ui-unify\task-navigation 에 둔다.
+- 추가 검증: 최종 작업 선택 회귀 6 passed (261.20s), 독립 품질 3 passed (182.47s), 기존 네 대상을 4 passed (180.26s)로 확인했다. 이전 fixture로 시작한 전체 dashboard 실행은 알려진 숨겨진 토큰 패널 2개 실패가 있는 채로 CtrlC 중단했다. 전체 PASS 판정은 없다. 중첩 G2 캡처는 장치 정체성·보드 갱신·운용자 접근 거부까지 생성되었다.
+
+## 2026-10-04 · uncommitted · feat(ui): 인증과 역할 진입을 분리한 기본 dashboard
+
+- 변경: 기본 `/dashboard`는 기존 단일 인증 폼과 client 자격 증명 저장 규칙을 사용하고, 서버 manifest가 허용한 역할 화면만 안내한다. 명시적 `#compatibility` 진입은 `view=compatibility`로 소유권을 보존하여 기존 skip link와 새로고침에서도 운용 화면을 유지한다. 기본 화면은 운용 socket·카메라·주기 조회를 시작하지 않는다. 정지는 확인된 사용자만 직접 요청하며 이전 세션 응답은 새 자격 증명으로 상태를 읽지 않는다.
+- 변경: 10초 요청 제한, 잘못된 identity/manifest와 권한 없음의 구별, 재시도, 만료·로그아웃·코드 페어링을 기존 client에 연결했다. 선택적인 abort signal은 실제 중단 사유를 보존하며 중단된 페어링 응답은 토큰을 저장하지 않는다. 기존 app.js 운용 동작은 변경하지 않았다.
+- 증거: 영향 host 묶음 342 passed/95 skipped (591.46s), API 묶음 106 passed/13 skipped (38.42s), 후속 인증·구조 묶음 64 passed/2 skipped (31.08s). 브라우저 후속 묶음은 6 passed (2667.49s), 최종 진입 회귀 3 passed (218.53s), 실제 abort·legacy skip/새로고침·history 3 passed (168.84s), malformed identity 1 passed (65.74s), 새 자격 증명으로 재인증한 이전 정지 응답 1 passed (59.38s)이다. 묶음은 중복 대상이 있어 합산하지 않는다. 초기 fixture 압축 헤더·준비 시점 실패는 수정 후 해당 대상으로 재검증했다. 전체 dashboard 브라우저 PASS를 주장하지 않는다.
+- 증거: CORE fixture의 desktop login과 최종 compact 320 dark/390 light 캡처를 직접 확인했다. overflow/pageerror는 없으며 캡처와 임시 검증은 `X:\DevTemp\rosy-ui-unify\entry`에 둔다. SPEC·QUALITY 독립 검토를 통과했다.
+- gate 변화: SOURCE/LOCAL 증거만 보완했다. 모든 명령 API는 브라우저 fixture이며 실제 장치·ARM 이미지·FIELD 수용 증거가 아니다.
+- 결정: D-439. 인증 저장의 단일 소유자는 client.js이고 운용 화면은 명시적인 호환 진입에만 유지한다.
+- 회귀 민감도: X 드라이브의 브라우저 자산 대체로 identity 검증·manifest 검증·정지 응답 generation 검사를 각각 제거했을 때 해당 테스트가 실제 잘못된 동작을 검출했다. 3개 변이 모두 검출했고 pageerror는 없었다. 초기 대체 handler 서명 오류는 수정 후 재실행했으며 증거에 포함하지 않는다. 제품 소스는 변이하지 않았다.
+
+## 2026-10-04 · uncommitted · fix(ui): 교통 정책 검토와 적용 흐름 유지
+
+- 변경: 현재 CORE 판정, 정책 입력, 검토본 저장과 정지 확인 후 적용, 시뮬레이션 신호를 기존 공유 부품으로 묶었다. 서버가 받는 MONITOR_ONLY를 사용하고 알려진 값은 공용 한국어 이름으로, 알려지지 않은 값은 원문으로 표시한다. null 정지선 거리는 정보 없음으로 남긴다.
+- 변경: 요청 중 입력과 동작을 함께 잠그고 종료 후 저장 버튼을 복구한다. 입력이 바뀌면 검토본 재저장을 요구하며 클릭 handler도 같은 적용 조건을 확인한다. 마지막 동작 결과는 finally와 주기 읽기로 덮지 않는다. 읽기 실패는 입력과 결과를 유지하고 적용·시뮬레이션의 이전 가용성을 폐기한다. 셸 종료 시 요청과 리스너·poll scope를 정리한다.
+- 증거: 기존 코드에서 새 브라우저 회귀 4개가 단계 반복, 요청 중 입력, null 거리, 적용 오류 보존 실패를 검출했다(4 failed, 214.02s). 최종 영향 Chromium 6 passed (147.22s): 새 행동 회귀 5개와 기존 원시 패널 확인 흐름 1개다. 공유·패키지·예산·교통 API 호스트 묶음은 240 passed/24 skipped/1 stale allowlist failure (114.35s); 실제로 사라진 5개 예외를 제거하고 공유 상태·비활성 계약 2 passed (0.36s)로 확인했다. 초기 X basetemp 부모 누락과 사유를 포함한 정확 텍스트 locator 오류는 교정했다. 전체 dashboard 브라우저 PASS를 주장하지 않는다.
+- 한계: 기존 native 적용 확인은 유지한다. 그 modal이 열린 동안 비상 정지 접근성을 보장한다는 증거는 아니며 후속 공용 확인 전환 대상으로 남긴다. CORE의 운용자 권한·정지 증거·주행 중 적용 금지와 시뮬레이션 가용성 계약은 바꾸지 않았다.
+- gate 변화: SOURCE/LOCAL 호스트 증거만 보완한다. 실제 장치 명령, ARM 이미지 또는 FIELD 수용 검증이 아니다.
+- 결정: D-439. 교통 판정과 동작 허용의 권위는 CORE이며 화면은 현재 읽기·입력·동작 결과를 구분한다.
+- 후속 품질 수정: 변경 요청 전 이전 poll을 닫고 generation을 폐기하며 완료 후 같은 2초 주기로 다시 읽는다. 늦은 이전 읽기·오류는 저장된 검토본과 입력을 바꾸지 못하고 요청 실패는 새 읽기까지 현재 가용성을 미확인으로 유지한다. 종료된 패널은 읽기를 재시작하지 않는다.
+- 최종 증거: 늦은 이전 poll·적용 후 이전 검토본·요청 중 종료 회귀를 추가했다. 첫 후속 5 passed/1 fixture failure (43.44s)는 함수 대입을 반환한 Playwright evaluate가 함수를 자동 호출한 오류였으며 void arrow로 수정했다. 최종 영향 묶음 29 passed (22.21s): 교통 행동 6개, 기존 원시 패널 1개, 공유 상태·비활성 2개와 패키지·예산이다. 독립 SPEC·QUALITY 최종 소스 검토를 통과했다. 이전 묶음과 합산하지 않는다.
+- 회귀 민감도: 제품을 바꾸지 않고 X의 제공 자산에서 poll generation guard만 제거했을 때 새 회귀가 new-review 대신 old-review로 바뀐 실제 입력을 검출했다.
+- 화면 증거: 실제 CORE fixture의 1366×768, 390×844, 1366×600을 dark/light로 캡처하고 모두 직접 확인했다. 6개 모두 가로 넘침·pageerror·누락 kind/state 0, 표시 작업 1개, 첫 화면 비상 정지 표시다. 임시 캡처·검증은 X:\DevTemp\rosy-ui-unify\traffic-policy에 있다. native 확인 modal 한계는 위와 같다.
+
+## 2026-10-04 · uncommitted · feat(ui): 카메라 전체화면과 운용 확인의 정지 접근 보존
+
+- 변경: 실제 fullscreen 진입 후 기존 셸 정지·피드백, 녹화 중지·녹화 피드백 노드를 placeholder로 옮기고 종료·거부·unmount 때 복구한다. 진입 대기 중에는 원래 정지가 계속 보인다. 늦은 확대 완료는 종료된 패널을 되살리지 않는다. 영상 가장자리는 contain으로 보존하며 저장 도구를 접어도 녹화 중지는 남는다. 일반 화면의 잘못 표시된 확대 닫기를 숨겼다.
+- 변경: 운전 모드·도킹·차선 추종 확인을 공용 비차단 확인으로 바꿨다. 중복 확인을 막고 확인 후 현재 기능·상태·대상·처리 중·생존을 다시 확인하며 종료는 확인을 취소한다. 기존 명령 경로와 서버 권한을 보존하고 상태 부품의 pending/ready/error/unavailable을 명시했다. 공유 역할 이름과 나머지 패널 확인 이관은 후속 Task3d 범위다.
+- 증거: 사전 RED 2 failed (119.18s)와 확인 이관 RED 1 failed (26.76s)를 재현했다. 최종 집중 묶음 7 passed (231.73s), 기존 영향 브라우저 3 passed (164.63s), SPEC 수정 후 카메라 2 passed (73.44s), 공용 확인 중 실제 fixture 정지 클릭 1 passed (59.84s). 초기 green 2 passed/4 failed (291.19s)는 닫기 초점과 fixture 함수 대입·cleanup 차이를 수정했고, 녹화 fixture의 상수 sequence는 신선한 연속 프레임으로 수정했다. 겹치는 대상은 합산하지 않는다.
+- 증거: 호스트 패키지·예산 62 passed (28.27s), 공유 상태·정지·manifest 44 passed (7.78s). X의 제공 자산에서 세 운용 패널의 확인 후 가용성 검사를 각각 지웠을 때 동일 회귀가 잘못된 fixture 명령을 검출했다. 제품 소스는 변이하지 않았다. 독립 SPEC·QUALITY 최종 검토 PASS.
+- 화면 증거: CORE fixture와 합성 네 모서리 프레임으로 desktop dark/mobile light의 일반·실제 fullscreen 4개를 직접 확인했다. 녹화 중이며 보조 도구를 접어도 정지·녹화 피드백이 보인다. GET만 허용했고 pageerror·가로 넘침 0이다. 캡처·임시는 `X:\DevTemp\rosy-ui-unify\console`에 둔다.
+- gate 변화: SOURCE/LOCAL 및 fixture 증거다. 실제 장치 명령·ARM 이미지·FIELD 수용을 확인하지 않았다.
+- 결정: D-439 §10. 새 정지 소유자나 복제 버튼을 만들지 않고 기존 셸 소유권을 유지한다.
+
+## 2026-10-04 · uncommitted · feat(ui): 준비·장치 작업의 결과와 확인 수명 보존
+
+- 변경: 위치 설정과 SLAM 결과를 분리하고 목적 제목을 입력 폼 밖에 두었다. 네트워크·릴리스 결과는 가용성 안내와 별도로 유지하며 commissioning의 true/false/누락을 구분한다. 도크 유형 생성 후 위치가 오래되거나 바뀌면 유형 저장 결과와 재시도 안내를 보존하고 도크 등록은 보내지 않는다.
+- 변경: 지도·도크·SLAM·교통 정책·호스트·토큰 삭제에 공용 비모달 확인을 적용했다. 확인 후 기존 권한·기능·입력·대상·revision·수명을 다시 확인하고 중복 요청과 종료 후 반영을 막는다. 기존 서버 권한, 정지 증거, teleop zero와 beforeHide 계약은 유지했다.
+- 변경: 보안의 독립 결과와 일회성 자격 증명, 기기 색상 모드와 현재 선택, 진단의 미확인 다음 행동, 알려진 이벤트·역할·라인 상태 이름과 미래 원문을 명확히 표시한다. 긴 이벤트 값은 줄바꿈하며 하드웨어 새로 고침은 콘텐츠 너비를 유지한다. 요청 접수를 측정 완료로 표현하지 않는다.
+- 증거: 최초 행동 RED 3 failed (106.22s), 초기 확장 행동 6 passed (236.25s), 최종 영향 browser 묶음 15 passed (634.01s), host·공유·패키지·예산 59 passed/23 deselected (35.88s), SPEC 수정 대상 3 passed (80.32s), 도크 부분 성공·확인 수명 2 passed (76.23s). 묶음은 중복 대상이 있어 합산하지 않는다. 초기 정확한 버튼·native 확인 fixture 및 비동기 결과 대기 오류, 새 테스트 함수 배치 오류를 바로잡고 해당 대상을 재확인했다. 전체 dashboard PASS는 주장하지 않는다.
+- 증거: X에서 제공한 자산 변이 10개가 각 실제 행동 단언을 RED로 만들고 원본 자산 복원 후 GREEN이었다. 결과 소유권·terminal 결과·누락 hold·현재 토큰·종료 후 readback·rollback 대상·확인 수명·SLAM 기능·UNKNOWN·요청/측정 구분을 검증했다. 도크 부분 성공 안내 변이도 별도로 검출했다. 최초 변이 실행의 즉시 DOM 단언은 close 이벤트 이전 시점 오류여서 종료 후 대기로 수정했다. 제품 자산은 변이하지 않았다.
+- 화면 증거: 변경 작업 desktop 10개와 대표 phone 4개, 제목 수정 후 위치 설정 재촬영 1개를 부모 검증자가 직접 확인했다. overflow·pageerror·잘못된 kind/state 0, 선택 작업 1개와 첫 화면 정지를 확인했다. SPEC·QUALITY 최종 독립 소스 검토 PASS. 임시 근거는 X:\DevTemp\rosy-ui-unify\remaining-workflows에 둔다.
+- gate 변화: SOURCE/LOCAL 및 fixture 근거만 추가한다. 실제 장치·ARM 이미지·FIELD 수용이나 물리적 정지 증거가 아니다.
+- 결정: D-439 §10. 기존 작업 소유권과 CORE 판단을 유지하며 화면은 현재 정보·입력·실행 결과를 구분한다.
+
+## 2026-10-04 · uncommitted · feat(ui): 호환 운용 확인과 인증·페이지 수명 보호
+
+- 변경: 호환 화면의 모드·차선 시작·정지 해제·CycloneDDS·네트워크 모드·SSID 연결·프로필 적용 7개 native 확인을 공용 비모달 확인으로 바꿨다. 확인과 명령·readback을 단일 소유자로 처리하고 확인 뒤 현재 기능·상태·입력을 다시 확인한다. 기존 API 본문·권한·비밀 입력 지우기·모드/차선 앞 teleop zero를 유지하며 즉시 정지와 OFF는 확인 중에도 실제 클릭 가능하다.
+- 변경: 인증 교체·로그아웃 시작·유효 페어링 시작·pagehide가 이전 소유자를 취소한다. 늦은 명령·상태·지도·인증 응답은 GET·화면 반영·소켓 재연결을 시작하지 않는다. 지도 확인과 POST도 같은 인증/페이지 ticket을 사용한다. pagehide에서 소켓·타이머를 정리하고 BFCache 복귀는 현재 인증으로 다시 연결한다. 소켓 4401 확인은 취소 가능한 epoch와 토큰을 검사하여 이전 401이 새 세션을 지우지 않는다.
+- 증거: 최초 RED 5 failed (105.81s), 집중 행동 5 passed/71 deselected (174.27s), 지도 수명/기존 키보드 목표 2 passed/74 deselected (98.81s), 최종 소켓 수명 1 passed/75 deselected (35.15s), 영향 인증·저장·로그아웃·4401·teleop 7 passed/69 deselected (281.21s). 겹치는 대상은 합산하지 않는다. 호스트 집중 145 passed/1 failed (23.01s)의 도크 대상 따옴표 계약 위반 2곳을 수정하고 해당 scan 1 passed (0.23s); 예산 2 passed와 자산·설치·정지·예산 30 passed (3.17s), API 패키지 2 passed (0.03s)를 확인했다.
+- 증거: X 제공 자산에서 확인 후 가용성, 지도 readback/명령 수명, pagehide 정리, 소켓 인증 수명을 제거한 변이가 실제 행동 단언을 RED로 만들었다. 각 report는 제공 URL·원본/변이 SHA256·변경되지 않은 제품 소스·원본 복원 GREEN을 기록한다. 예상 RED traceback의 stderr가 PowerShell wrapper 상태를 실패로 표시한 초기 실행은 의미상 검출 결과와 복원 GREEN을 분리 기록했다. 실제 제품 파일은 변이하지 않았다.
+- 화면 증거: 부모 검증자가 desktop1366 dark와 phone390 light 확인 화면을 직접 보았다. 요청 전송 문구·정지 hit-test·자연 스크롤 OFF가 보이며 가로 넘침·페이지 오류·대역 API 쓰기 요청 0이다. SPEC·QUALITY 독립 최종 소스 검토 PASS. 임시 근거: X:\DevTemp\rosy-ui-unify\compatibility.
+- fixture 증거: 영향 자산 smoke 1 passed/1 failed (60.80s)의 기존 호스트 fixture가 /common/ui.js alias를 빠뜨린 것을 보완하고 실패한 대상만 1 passed (58.51s)로 확인했다. 새 geometry import는 두 명시적 역할 fixture에 등록했다.
+- gate 변화: SOURCE/LOCAL 및 fixture 근거이며 실제 장치·ARM 이미지·FIELD 수용을 대체하지 않는다. 레거시 구조와 CORE 최종 명령 소유권을 보존한다.
+- 결정: D-439 §13–14. 기존 공용 확인과 페이지 소유권을 사용하며 app 및 dashboard 전체 소스 예산을 유지한다.
+
+## 2026-10-04 · uncommitted · feat(ui): 실제 작업 선택 견본과 좁은 어휘 갤러리
+
+- 변경: styleguide가 공용 createTaskChooser를 실제 실행하며 두 작업을 모두 마운트해 입력을 유지한다. 작은 화면의 긴 gate 코드와 demo 행을 감싼다. 기존 어휘·ADR·소유권을 보존하면서 역사 나열을 현재 사용 규칙으로 정리하고 공통 demo에 이미 적용한 flex/wrap 중복 규칙을 제거했다. 새 JS는 API/CMake 허용 목록에 함께 등록했다.
+- 증거: API UI 경로·실제 구조 예산·dashboard gate 소유권 16 passed (8.21s). dashboard 실제 합계 10000줄이며 한도를 올리거나 공용 모듈로 코드를 옮기지 않았다. 최종 화면 검토는 부모 검증자가 별도로 수행한다.
+- gate 변화: SOURCE/LOCAL 견본과 자산 계약이며 장치 요청을 보내지 않는다.
+- 결정: D-439 Task5, D-92, D-129, D-130.2. 공용 작업 선택 소유권을 소비한다.
+
+## 2026-10-04 · uncommitted · test(web): 실제 작업 준비와 확인 대화상자 회귀 보완
+
+- 변경: compatibility 진입 완료 마커와 task chooser·CSS 준비를 기다린 뒤 실제 작업을 선택한다. SLAM 준비 details를 연 다음 조작하며 mode·line·docking의 공유 확인을 실제 승인·취소한다. 기존 요청 본문, no-POST, 결과·pending 단언을 유지한다. 네트워크의 DOM 자격 입력은 지역 joinCredential snapshot으로 보존하여 실제 비밀이 아닌 선언식을 secret scanner가 오인하지 않게 했다. wire psk와 입력 freshness 비교는 동일하다.
+- 진단: G2 matrix의 맵핑 시작은 선택된 작업 안의 닫힌 SLAM details 때문에 숨겨졌고 기존 도크 제출은 공유 확인 승인이 빠졌다. 이전 select_option 시간 초과의 CSS/준비 경쟁은 추론으로 구분하며 실제 busy chooser 관측 후 준비 대기를 추가했다. 모두 native confirm fixture 문제라고 분류하지 않는다.
+- 검증: 정확한 실패 Role 7개·compatibility traffic·기존 네트워크 freshness 9 passed(195.34s). 최종 네트워크 단언은 Fleet 주소 흐름과 함께 2 passed(16.16s)로 재확인했다. 실제 구조 예산·Games copy host 35 passed(16.68s), dashboard 합계 10000줄 유지. 실제 app.js의 cheap secret scan 결과는 빈 목록이다. 근거 X:/DevTemp/rosy-ui-unify/final-plan/role-fixed.log, move-network-final.log, task6-host.log, app-secret.log.
+- gate 변화: SOURCE/LOCAL fixture·선언식 보완이며 장치/현장 검증을 대신하지 않는다.
+- 결정: D-439 Task6. DOM 부착과 화면·모듈 준비를 구분하고 숨은 목적 그룹을 사용자처럼 연 뒤 조작한다.
+
+## 2026-10-04 · uncommitted · fix(web): 호환 설정의 확인과 요청 소유권
+
+- 변경: 웨이포인트 덮어쓰기·이동·Home, SLAM 시작·저장, 도크 teach·dock·undock, 교통 정책 적용의 native 확인을 공용 비모달 확인으로 바꿨다. 기존 웨이포인트·도크 삭제도 같은 요청/readback 소유권을 사용한다. app이 자격·페이지·진행 중 요청을 소유하고 settings/telemetry는 전달된 hook을 사용하여 역방향 import 없이 현재 대상·입력·위치·맵·검토 revision을 다시 확인한다. 서버 API·본문·권한과 SLAM 중지의 즉시 동작은 유지한다.
+- 정지: 같은 #emergency-stop을 호환 화면의 영구 안전 위치로 옮겨 점검 화면에서도 확인 중 접근할 수 있게 했다. 기존 handler·키보드·정지 해제 위치는 유지한다. 실제 390px 점검의 network-card 최소 콘텐츠 폭으로 생긴 8px 넘침은 카드의 min-width: 0으로 해결했다.
+- 요청 수명: 자격/페이지 취소가 현재 요청의 transient pending을 복구하며 이전 finally는 새 요청의 잠금을 해제하지 않는다. 양수 차선 요청 뒤 OFF가 진행 중일 때 옛 양수 응답이 새 OFF 잠금을 풀던 독립 SPEC 경합은 실제 held 요청 RED 1 failed(8.92s) 뒤 owner 비교로 수정했다. OFF·페이지 취소·Fleet 강화 검사의 교차 확인은 3 passed(17.58s)이다.
+- 검증: 최초 새 통합 시나리오 3 failed(18.04s). 첫 구현은 2 passed/1 failed(22.74s)로 숨은 정지 버튼을 실제 드러냈고 영구 안전 위치 적용 후 3 passed(8.72s). 기존 설정·삭제·교통 정책과 Fleet 관련 payload/취소 검사 10 passed(25.19s); 자산·예산 14 passed(1.40s), 최종 공용 제어·자산·예산 39 passed(1.83s). 중복된 성공을 전체 suite 성공으로 합산하지 않는다.
+- 변이: X 전용 실제 전달 JS의 위치/맵 freshness, 취소 pending 복구, 늦은 정책 readback, OFF 잠금, Fleet eligibility/owner 6개가 각각 동작 단언에서 RED이고 원본은 GREEN이다. source raw hash 전후 일치 및 전달 hash는 final-plan/task6b-mutation-report.json, task6b-source-unchanged.json, task6b-delivery.jsonl에 기록했다. 초기 Fleet 두 시도의 EStop 취소/클릭 경합과 restored 실패는 유효 변이 증거에서 제외하며 초기 aggregate 로그를 보존한다. 개별 로그는 최종 corrected 결과로 교체되었다.
+- 화면: settings desktop dark 및 traffic phone light의 실제 확인창 viewport를 캡처했다. 정지 visible/center-hit·inert false, 가로 넘침·pageerror 0. 근거 X:/DevTemp/rosy-ui-unify/final-plan/task6b-captures/report.json 및 *-viewport.png. 부모의 직접 시각 판단과 독립 최종 검토는 별도 기록한다.
+- gate 변화: SOURCE/LOCAL. 배포·실제 장치·물리 정지·FIELD 수용을 주장하지 않는다.
+- 결정: D-439 §18·§20. 확인창부터 명령·readback 완료까지 한 작업 owner를 유지하고 즉시 OFF의 새 잠금을 옛 요청이 해제하지 않는다.
+- 최종 수용: 독립 SPEC 및 QUALITY PASS, 부모가 5개 실제 viewport와 6개 delivered/source hash를 직접 확인하여 PASS. 마지막 scoped CSS 후 구조 예산 2 passed(0.96s), lint 0 errors/26 기존 warnings, diff check PASS. source/장치 gate 구분은 유지하며 소스 commit은 Git 기록을 따른다.
+
+## 2026-10-04 · 6485f8a39 · fix(ui): 영상 증거와 공용 배치의 main 통합
+
+- 변경: 원본/표시 저장·노출 경고를 확대/동일 정지/접힌 저장 도구와 함께 유지했다. 일곱 렌더러의 DOM 표현과 복귀/목록 실패 처리를 기존 소유자 안에서 재사용했다. 새 인식 PUT/GET은 종료한 화면의 조회·DOM을 바꾸지 않는다.
+- 증거: dashboard aggregate 9,999줄, 영향 browser 34통과/2실패 뒤 실제 도구 열기·초점 대기 exact 2통과, 자산/인식 수명 포함 최종 24통과. 실제 전달 수명 변이 2실패/원본 복원 2통과와 raw source/delivery hash 대조. 독립 SPEC/QUALITY와 실제 viewport 세 장 직접 확인.
+- gate 변화: SOURCE/LOCAL 통합과 main 착지 완료. 실제 영상 품질·열 관리·장치 수용은 미실행이며 합성 카메라를 사용했다.
+- 결정: D-439 §21. 크기 예산·권한·명령 소유자·REST payload는 기존 계약을 유지한다.
+
+## 2026-10-04 · uncommitted · feat(shell): D-447 (b) store subscribes /ws/state with REST fallback
+
+- 변경: `shell/store.js` `scope().state(onData, onError)` — 이미 열린 `/ws/state` 소켓을 재사용하는 공유 구독(토큰은 첫 메시지, D-193; 4401 whoami 재검사; 4403 재시도 없음; 접속 끊김 백오프 1→30 s + 10 s 안정 리셋은 state-socket.js와 같은 규칙). 소켓이 죽으면 그 범위는 `GET /api/v1/robot/state` 1 s 폴링으로 돌아가고, 소켓이 살아나면 폴백이 멈춘다. 마지막 구독자가 나가면 스트림 전체가 닫힌다. 소비자 2곳 전환: 셸 안전 상태 표시(shell.js)와 overview 패널(panels/console/overview.js) — 이제 한 표면에서 robot/state 폴링이 소켓 1개로 합쳐진다. 나머지 poll() 경로는 불변.
+- 증거: `node --test src/hmi/dashboard/test/web/store.test.mjs` 5 passed(첫 프레임 auth·프레임 전달·스코프 공유/마지막 구독 해제 종료·close→REST 폴백→소켓 부활 정지·4403 재접속 없음); `python -m pytest src/hmi/dashboard/test src/hmi/web_common/test -q` 297 passed/126 skipped — 실패 2건(test_surface_bridge app.js 브리지, test_responsive_tiers console-detail.css 40rem)은 main에서 동일하게 적색인 선재 실패(known_failures 미등록, 이 브랜치 소유 아님).
+- gate 변화: 없음. SOURCE/LOCAL. 브라우저 실화면 회귀(ROSY_RUN_BROWSER_TESTS)는 다음 회차.
+- 결정: D-447 (b). (a) Fleet gather 전환과 같은 원칙, 같은 ADR.
+- 교훈: none

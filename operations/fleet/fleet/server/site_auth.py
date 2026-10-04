@@ -180,3 +180,20 @@ def build_role_guards(authorize, principals: Mapping[str, SitePrincipal]):
         return principal
 
     return require_viewer, require_operator, require_named_operator, require_proposer
+
+
+def install_mutation_audit(app, task_service):
+    """Finish the audit started by authorization after the HTTP outcome is known."""
+    @app.middleware("http")
+    async def finish_mutation_audit(request: Request, call_next):
+        try:
+            response = await call_next(request)
+        except Exception:
+            audit_id = getattr(request.state, "site_api_audit_id", None)
+            if audit_id is not None:
+                task_service.store.finish_api_audit(audit_id, status_code=500)
+            raise
+        audit_id = getattr(request.state, "site_api_audit_id", None)
+        if audit_id is not None:
+            task_service.store.finish_api_audit(audit_id, status_code=response.status_code)
+        return response

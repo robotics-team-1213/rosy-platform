@@ -8,22 +8,27 @@ on:
     branches: [main]
     paths:
       - "operations/ui/cam/**"
+      - "middleware/ui/pilot/**"
       - ".github/workflows/android.yml"
       - "test/fixtures/protocol/**"
-      - "shared/web/icons/**"
+      - "shared/web/**"
   pull_request:
     paths:
       - "operations/ui/cam/**"
+      - "middleware/ui/pilot/**"
       - ".github/workflows/android.yml"
       - "test/fixtures/protocol/**"
-      - "shared/web/icons/**"
+      - "shared/web/**"
 
 jobs:
   android-unit:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        app: [operations/ui/cam, middleware/ui/pilot/android]
     defaults:
       run:
-        working-directory: operations/ui/cam
+        working-directory: ${{ matrix.app }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4

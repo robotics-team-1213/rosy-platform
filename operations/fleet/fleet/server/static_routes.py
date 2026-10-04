@@ -21,6 +21,7 @@ CONSOLE_ASSETS = {
     "cell.css": "text/css",
     "styles.css": "text/css",
     "console.js": "application/javascript",
+    "confirmed-action.js": "application/javascript",
     "install.js": "application/javascript",
     "address-drift.js": "application/javascript",
     "authorization.js": "application/javascript",
@@ -59,6 +60,11 @@ def shared_assets(root: Optional[Path]) -> dict[str, str]:
 
 
 def install_static_routes(app: FastAPI) -> None:
+    @app.get("/healthz", include_in_schema=False)
+    async def healthz() -> dict:
+        """Minimal process liveness for local container supervision."""
+        return {"status": "ok"}
+
     @app.get("/console/cell", include_in_schema=False)
     def cell_page():
         return FileResponse(

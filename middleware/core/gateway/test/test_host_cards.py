@@ -45,10 +45,12 @@ def client():
     from fastapi.testclient import TestClient
 
     from core_features.calibration import CalibrationSessionManager
+    from core_features.command.arbitration import ModeMachine
 
     # Host actions consult the calibration lease (D-321 addendum); an idle one here.
     idle_lease = CalibrationSessionManager(SimpleNamespace(publish=lambda *a, **k: None))
-    return TestClient(create_app(CONFIG, SimpleNamespace(config=CONFIG, calibration=idle_lease)))
+    return TestClient(create_app(CONFIG, SimpleNamespace(config=CONFIG, calibration=idle_lease,
+                                                        modes=ModeMachine())))
 
 
 def _auth(token: str) -> dict:

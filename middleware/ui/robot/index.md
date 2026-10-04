@@ -37,8 +37,8 @@
 
 ## 최근 기록
 
-- 2026-10-03 · uncommitted · fix(console): 점유 격자를 가리지 않고 즉시 정지는 버튼이 확인이다
-- 2026-10-02 · uncommitted · D-423 카메라 범례에 거리 출처
-- 2026-10-02 · uncommitted · 스타일 가이드 어휘 패리티 — status·empty·actions·readout·icon + "아직 없는 넷" 현행화
-- 2026-10-02 · uncommitted · D-409 잔존 높이 함수 dvh 교정
-- 2026-10-02 · uncommitted · D-405 /device 테마 버튼 아이콘 렌더 + fullscreen 100dvh 게이트 수리
+- 2026-10-04 · uncommitted · feat(shell): D-447 (b) store subscribes /ws/state with REST fallback
+- 2026-10-04 · 6485f8a39 · fix(ui): 영상 증거와 공용 배치의 main 통합
+- 2026-10-04 · uncommitted · fix(web): 호환 설정의 확인과 요청 소유권
+- 2026-10-04 · uncommitted · test(web): 실제 작업 준비와 확인 대화상자 회귀 보완
+- 2026-10-04 · uncommitted · feat(ui): 실제 작업 선택 견본과 좁은 어휘 갤러리

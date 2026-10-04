@@ -22,6 +22,7 @@ set(
   "srv/Emotion.srv"
   "srv/SetBrightness.srv"
   "srv/SetLamp.srv"
+  "srv/PilotRecordingStart.srv"
 )
 
 set(

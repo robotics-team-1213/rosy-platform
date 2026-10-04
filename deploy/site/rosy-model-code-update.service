@@ -1,0 +1,10 @@
+[Unit]
+Description=Apply approved model-PC code when jobs and GPU are idle (D-446)
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 -I %h/.local/lib/rosy-model-code/rosy_model_code.py --config %h/.config/rosy/model-code.json run
+TimeoutStartSec=5min
+NoNewPrivileges=yes
+UMask=0077
+KillMode=control-group

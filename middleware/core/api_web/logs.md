@@ -398,8 +398,83 @@
 - gate 변화: 없음
 - 결정: D-418
 
+## 2026-10-03 · uncommitted · feat(link): D-432 주소 없는 장비 접속
+
+- 변경: API Ref v1.89: connection/dev session LAN 진입, 기본 paired·명시적 개발 operator 세션·1h 만료·모드 종료 회수·Host/Origin 제한. SSH 관리자는 전용 Host Agent로 승인한다.
+- 증거: 관련 Python 계약 시험·실제 loopback TLS HTTP/WS 시험을 실행했다. Pilot Android 설치·화면과 실제 로봇 연결·현장 트래픽 수용은 서로 다른 증거다.
+- gate 변화: 실제 장비의 제어·FIELD 관문은 이동하지 않는다.
+- 결정: D-432 2026-10-03 추가 결정.
+
+## 2026-10-03 · uncommitted · fix(link): 현재 접속과 후속 코드 규약 구별
+
+- 변경: 사용자 보정으로 4자리 코드 발급·Cam 표시 별칭은 이번 적용에서 제외했다. 현재 로봇 8자·Cam 6자리 규약을 유지하며 D-432에 추후 통합을 기록했다. 실제 Pinky 접속 수정은 진행한다.
+- 증거: 영향받는 Python 2345 passed/84 skipped, quick tier 459 passed/2 skipped, Pilot PWA 87 passed/58 skipped. 코드 규약 보정 뒤 해당 인증·페어링 시험을 다시 실행한다. 공개 검증 기록은 docs/validation/discovery-link-2026-10-03/README.md.
+- gate 변화: Android 설치·실제 CORE 인증 확인은 실제 주행·Cam 화면 off 연속 송출·현장 트래픽 수용과 별개다. DEVICE/FIELD 이동 없음.
+- 결정: D-432 후속 결정: 접속은 지금, 짧은 코드 통합은 추후 적용.
+
+## 2026-10-03 · uncommitted · fix(integration): D-418 SSH와 D-432 연결/UI 계약 통합
+
+- 변경: API Ref는 D-418 v1.89 뒤 D-432 v1.90을 보존하고 app 설명과 문서 pin을 맞췄다. 배포 서비스 목록은 두 SSH 소유자를 모두 포함하면서 기존 1000줄 hard tier를 유지한다. sandbox 시험은 공개 키 helper의 실제 write/read IPC와 양의 디렉터리 시작 조건을 검사한다. 권한을 넓히지 않았다.
+- 증거: native systemd/버전 문서/구조 시험 199 passed/1 skipped. 최종 quick tier와 SSH 영향 범위는 별도 재실행한다.
+- gate 변화: 장치 활성화·물리 주행·FIELD 이동 없음.
+- 결정: D-418와 D-432를 각각의 경로/opt-in 소유권으로 보존한다.
+
 ## 2026-10-04 · uncommitted · D-442 U1 MANUAL 보호
 
 - 변경: 살아 있는 수동 세션의 NAVIGATION 전환을 ModeMachine에서 거부한다. teleop 입력과 watchdog 갱신은 같은 모드 잠금 안에서 다시 확인한 뒤 반영한다. API의 자율 진입은 부작용 전에 409 MODE_CONFLICT로 거부한다. 정지와 만료된 세션은 기존 전환을 유지한다.
 - 증거: 신규 회귀 시험에서 탈취 5 failed, 경합 1 failed, line-follow 취소 부작용 1 failed를 수정 전에 재현했다. 관련 시험 167 passed, known_failures 비교 NEW 0, lint 0 errors. 독립 재리뷰에서 경합 양방향과 교착 부재를 확인했고 코드 차단 사항 없이 승인했다. 근거는 docs/validation/d427-source-migration/manual-ownership-review-2026-10-04.md.
 - gate 변화: 없음. 호스트 검증이며 sim·장치·실주행 수용은 미실행이다.
+## 2026-10-04 · uncommitted · feat(api): D-438 `stuck_resolver` 역할과 `STUCK_DECIDE` 권한, API Ref v1.90
+- 변경: `api/grants.py` `STUCK_DECIDE`, `api/deps.py` 역할 순위, `api/v1/line_follow.py` 막힘 답 경로가 `STUCK_DECIDE` 를 요구(`stuck_resolver` 의 `MANUAL` 은 403), `api/v1/auth.py`·`system.py` 역할 목록 문구, `api/app.py` 계약 표기 v1.90
+- 증거: `python -m pytest src/runtime/gateway/test -q` 2025 passed, 16 skipped (2026-10-04 Windows; 첫 실행의 1 failed 는 app.py 계약 표기를 v1.90 으로 올리기 전의 `test_protocol_version_alignment.py` 였고 표기 정정 뒤 통과); `python -m pytest test/test_harness_contracts.py -q` 59 passed
+- gate 변화: 없음
+- 결정: D-438
+- 교훈: 없음
+
+## 2026-10-04 · uncommitted · feat(api): stationary lane perception selection
+- 변경: GET/PUT `/api/v1/line-follow/perception`, viewer 조회/admin 변경, closed paint_source body와 Host Agent 릴레이. 실제 ModeMachine IDLE 예약으로 변경 중 주행 시작을 거부하며 실패 시에도 finally 해제한다. CORE status handover는 fresh sensor velocity와 calibration_active를 1초마다 기록한다.
+- 증거: host/API/systemd/status/line-follow 관련 395 passed, 2 skipped (Windows). concurrent Host apply 동안 mode/teleop/line-follow 거부 및 예약 해제 회귀 시험 포함. live 배포와 주행은 이 기록의 증거가 아니다.
+- gate 변화: SOURCE/LOCAL, DEVICE/FIELD 별도 검증.
+- 결정: `docs/plans/2026-10-04-learned-lane-driving-modes.md`
+- 교훈: 기존 Host Agent는 설치 경로가 없어 API만 추가하면 503이었다. signed native helper/unit 설치와 실제 status producer 주기를 함께 연결해야 한다.
+
+## 2026-10-04 · uncommitted · fix(api): serialize calibration and perception admission
+- 변경: 실제 ModeMachine의 shared idle_admission RLock으로 보정 busy_check+start와 perception calibration.current+IDLE reservation을 하나의 admission 결정으로 묶었다. 보정 session이나 activity를 생성하지 않는다. 내부 mode lock과 분리해 docking listener 잠금 순서를 보존한다.
+- 증거: calibration.start를 busy_check 직후 정지시킨 경쟁 시험은 변경 전 Host 설정이 통과해 실패했다. 수정 후 pending admission을 기다리고 실제 보정 session이 생기면 CALIBRATION_ACTIVE로 거부하며 Host 호출은 0회다. perception/calibration/command/line-follow/swarm focused 82 passed (Windows).
+- gate 변화: SOURCE/LOCAL. 실제 장치·주행 증거는 별도.
+- 결정: 독립 safety review 지적의 admission race 수정.
+
+## 2026-10-04 · uncommitted · feat(api): fresh keeper source readback
+- 변경: read-only `line/keep_debug` source를 기존 svc.vision latest cache로 수신한다. CORE perception 응답은 configured source와 실제 threshold/denoise/learned/denoise_fallback을 구분하고 receipt-monotonic age 및 producer의 실제 mask revision을 제공한다. 2초 초과·malformed·설정 불일치·clock reset 및 재시작 전 증거는 null이다. 주행 판단이나 privileged Host 경로를 바꾸지 않는다.
+- 증거: 신규 source/bridge/vision/API focused 33 passed. fallback·malformed·stale·model mismatch·stamp reset을 검증했다. 전체 CORE의 host card fake fixture는 실제 ModeMachine으로 보완했고 IR revision 거부 시험은 주입 clock으로 HTTP 지연과 분리했다. 최종 확장 시험 진행 중.
+- gate 변화: SOURCE/LOCAL. 기기에서 actual source 비율 및 실제 주행은 별도 확인.
+- 최종 증거: readback/API/bridge wiring/vision/host cards/line-follow 확장 102 passed (Windows), fresh fallback와 재시작 cache reset의 API 통합 시험 포함.
+- Review 보완: 실제 learned 표시는 요청 source와 served-mask revision이 모두 있어야 한다. bridge는 ROS camera-header clock으로 이미지 나이 0..2초를 검증한 뒤 receipt-monotonic TTL 2초를 적용한다. pure cache 시험은 services/test 소유 경로로 이동했다.
+
+## 2026-10-04 · uncommitted · feat(recording): 원본과 검토 전 주석 옵션
+
+- 변경: POST recordings는 optional closed preview_mode(raw/annotated)를 받고 생략은 raw다. typed start 서비스와 신선한 recorder status가 확인될 때만 annotated capability를 표시한다. 요청한 mode와 실제 성공 응답이 다르면 소유권을 만들지 않고 거절한다. 기존 SetBool raw/stop은 유지한다.
+- 변경: 기존 front frame API에 overlay=false 원본 variant와 동일 capture provenance header를 더한다. video upload는 pair_group_id32hex와 mode를 함께 검증하며 원본이 먼저 보존된 동일 group/time/count에서만 주석을 저장한다. 주석은 model_unreviewed로서 사람이 검토한 라벨이 아니다. API ref/app v1.91, envelope1.0 유지.
+- 증거: recording-api-red.txt 9 failed로 기존 미구현 경로를 확인한 뒤 focus162 passed,1 skipped; malformed evidence/API import boundary 최종 검증 통과. 모든 시험 scratch는 X:/DevTemp/rosy-lane-device-20261004.
+- gate 변화: SOURCE/LOCAL. 실제 장치 녹화와 브라우저 영상 파일 검증은 별도다.
+
+## 2026-10-04 · uncommitted · feat(ui): 기본 dashboard 진입 자산 허용
+
+- 변경: dashboard 정적 허용 목록에 entry-router.js, dashboard-entry.js, dashboard-entry.css 세 자산만 추가했다. CMake 설치 목록과 맞추며 인증·안전 API의 서버 권한 계약은 변경하지 않았다.
+- 증거: API·구조 묶음 106 passed/13 skipped (38.42s), 후속 인증·구조 묶음 64 passed/2 skipped (31.08s). CORE TestClient의 실제 정적 경로·CSP로 새 진입 브라우저를 검증했고 운용 요청은 fixture로만 응답했다. 두 묶음은 중복 대상이 있어 합산하지 않는다.
+- gate 변화: SOURCE/LOCAL 자산 계약만 보완했다. 실제 안전 명령이나 장치 배포 증거는 없다.
+- 결정: D-439. 기본 진입의 역할 링크는 기존 서버 manifest와 로컬 경로 허용 목록을 함께 따른다.
+
+## 2026-10-04 · uncommitted · feat(ui): 어휘 갤러리 작업 선택 자산 허용
+
+- 변경: styleguide_assets에 실제 공용 작업 선택 견본 styleguide.js 한 자산과 JavaScript MIME을 등록해 CMake 설치 목록과 맞췄다. API 권한과 안전 명령은 바꾸지 않았다.
+- 증거: 실제 UI 경로·CSP와 구조 예산 16 passed (8.21s). 공용 템플릿 CSS는 기존 shared-assets.json 소비 경로를 따른다.
+- gate 변화: SOURCE/LOCAL 정적 자산 계약만 보완했다.
+- 결정: D-439 Task5. 동작 소유자는 공용 작업 선택이며 서버 요청을 보내는 견본이 아니다.
+
+
+## 2026-10-04 · uncommitted · feat(power): fresh battery evidence and idle saving
+
+- 변경: 반복 저배터리 표본의 wake를 단계 변화로 제한하여 기존 IDLE/STANDBY 타이머가 동작한다. Viewer GET /api/v1/power/health와 공유 typed 응답에 배터리·충전 확인 age, 정책 상한·wake 근거, shutdown 요청, 진단 요약을 제공한다. API Ref v1.92, envelope 1.0 유지.
+- 검증: injected clock 회귀와 auth/read-only API, 기존 배터리·정지·sentinel 경로 검증. 최종 근거는 docs/plans/2026-10-04-power-health-and-wake.md. OS halt·EEPROM·GPIO·기본 LiDAR 모터 정책 변경 없음.
+- gate 변화: SOURCE/LOCAL; 실제 소비전력·충전·RTC/외부 버튼 wake와 배포는 미검증.

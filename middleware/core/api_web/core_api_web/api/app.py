@@ -1,4 +1,4 @@
-"""core_api_web.api.app — FastAPI 팩토리 (P1-9, API-101). 계약: ROSY-API-REF-001 v1.90."""
+"""core_api_web.api.app — FastAPI 팩토리 (P1-9, API-101). 계약: ROSY-API-REF-001 v1.93."""
 
 from __future__ import annotations
 
@@ -18,6 +18,7 @@ from core_api_web.api.ui_registry import load_registry
 from core_api_web.api.deps import CoreServicesLike, refused_token_count
 from core_api_web.api.errors import register_exception_handlers
 from core_api_web.api.v1.auth import PairingState
+from core_api_web.api.v1.connection import connection_router
 from core_api_web.api.v1.routes import (
     auth_router,
     calibration_router,
@@ -110,7 +111,7 @@ def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
     app = FastAPI(
         title="ROSY CORE API",
         version="1.20.0",
-        description="로봇 미들웨어 API — 계약: ROSY-API-REF-001 (v1.90)",
+        description="로봇 미들웨어 API — 계약: ROSY-API-REF-001 (v1.93)",
     )
     app.state.core = services
     agent = getattr(services, "fleet_agent", None)
@@ -150,6 +151,9 @@ def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
         "styles.css": "text/css",
         "console-detail.css": "text/css",
         "app.js": "application/javascript",
+        "entry-router.js": "application/javascript",
+        "dashboard-entry.js": "application/javascript",
+        "dashboard-entry.css": "text/css",
         "telemetry.js": "application/javascript",
         "teleop.js": "application/javascript",
         "state-socket.js": "application/javascript",
@@ -173,6 +177,7 @@ def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
     }
 
     app.include_router(auth_router)
+    app.include_router(connection_router)
     app.include_router(system_router)
     app.include_router(robot_router)
     app.include_router(control_router)
@@ -344,7 +349,7 @@ def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
             },
         )
 
-    styleguide_assets = {"styleguide.css": "text/css"}
+    styleguide_assets = {"styleguide.css": "text/css", "styleguide.js": "text/javascript"}
 
     @app.get("/styleguide/assets/{asset_name:path}", include_in_schema=False)
     def styleguide_asset(asset_name: str):

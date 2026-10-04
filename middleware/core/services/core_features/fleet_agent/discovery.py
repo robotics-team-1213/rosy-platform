@@ -6,14 +6,31 @@ import http.client
 import json
 import socket
 import ssl
-import subprocess
 from pathlib import Path
+
+from core_common.discover import get_shared_cache
 
 from core_common.protocol.discovery_txt import (
     FLEET as SERVICE_TYPE, HOSTNAME, REQUIRED, Accepted, classify, parse_txt_pairs,
 )
 
 HEALTH_MAX_BYTES = 1024
+
+
+class DiscoveryConflict(ValueError):
+    """A competing identity requires an operator, rather than automatic retries."""
+
+
+class DiscoveryUnavailable(ValueError):
+    """The approved peer is temporarily absent."""
+
+
+class FleetLocation(str):
+    def __new__(cls, hostname, address, port):
+        value = str.__new__(cls, f'https://{hostname}:{port}')
+        value.address = address
+        value.port = port
+        return value
 
 
 def check_health_body(body: bytes) -> None:
@@ -65,20 +82,36 @@ def probe_health(candidate: dict, expected_hostname: str, ca_file: Path) -> None
 
 
 def locate_fleet(expected_hostname: str, ca_file: Path, *,
-                 runner=subprocess.run, probe=probe_health) -> str:
+                 runner=None, probe=probe_health, cache=None) -> str:
     """Return a site URL only after a unique DNS-SD result and pinned TLS probe."""
     hostname = expected_hostname.lower().rstrip(".")
     if not HOSTNAME.fullmatch(hostname):
         raise ValueError("expected .local hostname is invalid")
     if not ca_file.is_file():
         raise ValueError("site CA file is missing")
-    result = runner(["avahi-browse", "-r", "-t", "-p", "-k", SERVICE_TYPE],
-                    capture_output=True, text=True, check=True, timeout=12)
-    matches = [item for item in parse_avahi(result.stdout) if item["hostname"] == hostname]
+    if runner is not None:
+        # Compatibility for scripts/tests injecting the legacy Avahi adapter.
+        result = runner(["avahi-browse", "-r", "-t", "-p", "-k", SERVICE_TYPE],
+                        capture_output=True, text=True, check=True, timeout=12)
+        candidates = parse_avahi(result.stdout)
+    else:
+        candidates = []
+        records = (cache or get_shared_cache()).wait(SERVICE_TYPE, timeout_s=3)
+        same_host = [r for r in records if r.host.lower().rstrip('.') == hostname and r.addresses]
+        if any(set(a.addresses).isdisjoint(b.addresses) for a in same_host for b in same_host):
+            raise DiscoveryConflict('ambiguous Fleet host advertisement')
+        for item in records:
+            for address in item.addresses:
+                result = classify(SERVICE_TYPE, item.host, address, item.port, list(item.txt))
+                if isinstance(result, Accepted):
+                    row = {"hostname": result.host, "address": address, "port": item.port}
+                    if row not in candidates:
+                        candidates.append(row)
+    matches = [item for item in candidates if item["hostname"] == hostname]
     if not matches:
-        raise ValueError("expected Fleet host not found")
-    if len(matches) != 1:
-        raise ValueError("ambiguous Fleet host advertisement")
-    candidate = matches[0]
+        raise DiscoveryUnavailable("expected Fleet host not found")
+    if (runner is not None and len(matches) != 1) or len({row['port'] for row in matches}) != 1:
+        raise DiscoveryConflict("ambiguous Fleet host advertisement")
+    candidate = min(matches, key=lambda row: row['address'])
     probe(candidate, hostname, ca_file)
-    return f"https://{hostname}:{candidate['port']}"
+    return FleetLocation(hostname, candidate['address'], candidate['port'])

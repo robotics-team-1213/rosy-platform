@@ -1490,6 +1490,20 @@
 - Final checks: quick tier 96 passed / 26 existing warnings; harness lint 0 errors / 26 warnings. Entry configuration regression guards the ROS import directly and passed.
 - Gate: SOURCE/LOCAL only. Host HTTP is real; ROS and UDS credential transport are substituted. Live ROS/UDS (a)-(i), seat exclusion, thin-sheet handling and full two-layer/two-pallet vendor Gazebo acceptance remain open. Socket timeout bounds inactivity, not an end-to-end stop deadline. No viewer credential registration, service deployment, physical enablement or push performed.
 
+## 2026-10-03 · uncommitted · feat(link): D-432 주소 없는 장비 접속
+
+- 변경: 신뢰된 CA·DNS 이름을 유지하면서 discovered SRV IP/port로 HTTP/WS를 전송한다. Cam 4자리 표시와 기존 코드가 한 시도 한도를 공유한다.
+- 증거: 관련 Python 계약 시험·실제 loopback TLS HTTP/WS 시험을 실행했다. Pilot Android 설치·화면과 실제 로봇 연결·현장 트래픽 수용은 서로 다른 증거다.
+- gate 변화: 실제 장비의 제어·FIELD 관문은 이동하지 않는다.
+- 결정: D-432 2026-10-03 추가 결정.
+
+## 2026-10-03 · uncommitted · fix(link): 현재 접속과 후속 코드 규약 구별
+
+- 변경: 사용자 보정으로 4자리 코드 발급·Cam 표시 별칭은 이번 적용에서 제외했다. 현재 로봇 8자·Cam 6자리 규약을 유지하며 D-432에 추후 통합을 기록했다. 실제 Pinky 접속 수정은 진행한다.
+- 증거: 영향받는 Python 2345 passed/84 skipped, quick tier 459 passed/2 skipped, Pilot PWA 87 passed/58 skipped. 코드 규약 보정 뒤 해당 인증·페어링 시험을 다시 실행한다. 공개 검증 기록은 docs/validation/discovery-link-2026-10-03/README.md.
+- gate 변화: Android 설치·실제 CORE 인증 확인은 실제 주행·Cam 화면 off 연속 송출·현장 트래픽 수용과 별개다. DEVICE/FIELD 이동 없음.
+- 결정: D-432 후속 결정: 접속은 지금, 짧은 코드 통합은 추후 적용.
+
 ## 2026-10-04 · uncommitted · D-427 shared asset path contract
 - Change: Validate both installed share/web_common and source shared/web with the asset manifest, CSS and JS.
 - Evidence: X:/DevTemp/rosy-d427/resume/fixed.txt: 12 passed; known_failures NEW 0.
@@ -1520,3 +1534,82 @@
 - 검증: 실제 palletizing compiler를 사용한 API save→18-transfer preview→service proposal→separate admit READY가 통과했다. 실제 Chromium에서 늦은 compile 응답 무효화·조회 실패 후 승인 잠금·검토한 generation의 409·취소 이후 재승인 잠금을 확인했다. 모든 transport는 비연결/가짜 장치이며 실제 전송 성공 증거가 아니다.
 - 독립 리뷰: spec·quality 리뷰의 stale async/fence 두 결함을 수정했다. 입력 변경 epoch, 요청 중 입력 잠금, 읽기 전 snapshot 삭제, 검토한 generation 고정과 충돌 후 재조회가 적용됐다.
 - gate 변화: G1 전체 완료는 아니다. 장치 티칭 wizard, 정본 레시피의 모든 구조 편집, 독립 지정 수용과 모델 PC OMX 종단이 남았다. Fleet ROS-SIM/DEVICE/FIELD 승격 없음.
+## 2026-10-04 · uncommitted · feat(server): D-438 Fleet stuck resolver phase 1 (rules R1-R3 + human escalation)
+- Change: `fleet/server/stuck_resolver.py` (pure decision core), `stuck_resolver_loop.py` (1 s poll, hub-woken, records as `fleet-resolver`), `line_stuck.py` resolver note, `console_routes.py` claim endpoint (human decision claims first), `app.py` clients/lifespan/hub fan-out, `swarm/robots.py` `resolver_token`, `cli.py` `--stuck-resolver`, console `line-stuck.js` claim + resolver text; API Ref v1.90 version pins in two tests
+- Evidence: `python -m pytest src/site/fleet/test -q` 1658 passed, 7 skipped (2026-10-04 Windows; first run had 3 failures, all the API Ref version pin `v1.89` -> `v1.90`, fixed, re-run of those files 25 passed together with gateway version alignment); `node --test src/site/fleet/test/web/line-stuck.test.mjs` 12 pass; `python -m pytest test/test_harness_contracts.py -q` 59 passed
+- Gate: none. SOURCE/LOCAL only; Gazebo two-robot validation and real-robot tokens are not done (plan "After phase 1").
+- Decision: D-438
+- Lesson: none
+
+## 2026-10-04 · uncommitted · fix(server): D-438 phase 1 final-review findings
+- Change: `fleet_line_stuck_answers` gains nullable `tier`/`rule`/`escalated` with an idempotent PRAGMA + ALTER migration; resolver answers record `tier=rule` + rule id, every escalation is its own `ESCALATE` row, the human route records `tier=human`. `console_routes.SharedGather` (lock + 1 s reuse) is the one `console.snapshot()` + `board.observe` for `GET /api/fleet/state` and `StuckResolverLoop`. The transport resend skips the rule budget; robots absent from the roster lose chains and claims; a claim after an escalation keeps its reason; cancel mid-request records `STUCK_DECISION_OUTCOME_UNKNOWN`; unused `_Chain.claimed` removed; JS string test deleted.
+- Evidence: each code fix red first, then green. `python -m pytest src/site/fleet/test -q` 1666 passed, 7 skipped (2026-10-04 Windows); gateway `test_stuck_resolver_role.py` + `test_line_follow_stuck_api.py` 22 passed; `node --test src/site/fleet/test/web/line-stuck.test.mjs` 12 pass; `ROSY_RUN_BROWSER_TESTS=1 python -m pytest test/test_fleet_console_browser.py -k "stuck or state"` 4 passed, 63 deselected.
+- Gate: none. SOURCE/LOCAL only; Gazebo two-robot validation and real-robot tokens still open.
+- Decision: D-438
+- Lesson: a shared cached snapshot must be enriched per response on copies, never mutated in place.
+
+## 2026-10-04 · uncommitted · feat(server): D-447 (a) gather reads fresh hub snapshots first
+- Change: `hub/registry.py` `RobotRecord.last_heartbeat_monotonic` + read-only `find()` (gather must not create records); `hub/hub.py` `_heartbeat` stamps arrival (`time.monotonic()`); `server/console.py` `snapshot()` gathers per-robot via `_gather_state()` — a hub record that is online, has a snapshot, and whose heartbeat arrived within `hub_state_max_age_s` (new ctor param, default 3.0 s) answers from the registry `StateSnapshot` and skips the REST GET; stale/offline/unknown robots fall back to REST as before. Rows gain additive `gather_source: "hub"|"rest"|null`. No schema, endpoint, or wire change; `SharedGather` 1 s reuse untouched.
+- Evidence: new `test/test_server_gather_source.py` 6 passed (fresh-skips-REST, stale falls back, offline falls back, REST-failure row shape unchanged, no record creation, heartbeat stamp); `python -m pytest src/site/fleet/test -q` 1683 passed, 7 skipped (2026-10-04 Windows, run.txt compared via `test/known_failures.py`: 0 new); flake8 findings on touched files are pre-existing on main (noqa line offset, hub.py W293) and CI flake8 is non-gating.
+- Gate: none. SOURCE/LOCAL only; no robot, no hub socket in this run.
+- Decision: D-447 (a). (b) robot shell `store.js` `/ws/state` subscription is the next pass under the same ADR.
+- Lesson: none
+
+## 2026-10-04 · uncommitted · test: API v1.91 문서 계약 유지
+
+- 변경: API 문서 개정에 맞춰 Fleet 문서 버전 pin 세 곳을 v1.91로 갱신한다. task·intent·물리 상태·cursor 본문 검사는 유지한다.
+- 증거: mission progress 및 task contract 문서 회귀 22 passed.
+- gate 변화: SOURCE/LOCAL. Fleet 배포와 물리 제출 검증은 포함하지 않는다.
+
+## 2026-10-04 · uncommitted · feat(web): D-439 Fleet 작업 탐색과 보정 미리보기 수명
+
+- 변경: 설치를 로봇 등록·카메라 연결 승인·카메라 설치/보정의 공용 task chooser로 구분한다. 모든 작업 DOM과 입력·credentials·source·corners는 유지하고 viewer/401에서도 읽기 탐색과 발견 재시도를 허용한다. 관제의 예외·로스터·지도를 우선 배치하고 대형·신호·기록을 후속 작업으로 묶는다. 발견 실패는 이전 행을 지우고 empty/offline/expired/unsupported 상태와 재시도를 표시한다.
+- 수명: 숨겨진 보정은 lease/frame 요청을 시작하지 않는다. 작업을 숨기면 preview epoch를 취소하고 frame owner만 해제한다. 이전 응답·finally는 새 owner를 바꾸지 않는다. 양수 크기의 scoped ResizeObserver가 복귀 후 corner geometry를 갱신하며 console의 기본 preview 동작은 유지한다.
+- 증거: baseline chooser RED 1 failed. 변경 후 workflow 최종 batch는 4 passed/1 failed(198.22s). 실패는 닫힌 보정 details에 입력하려던 fixture였으며 실제 summary 클릭을 추가한 동일 rapid test는 1 passed(38.10s)로 재검증했다. 이를 전체 5 GREEN 실행으로 합산하지 않는다. 기존 선택 회귀는 10 passed/5 failed였고, 실패 5 cases를 새 작업 선택·안내 DOM·bounded poll 조건으로 수정해 5 passed/62 deselected(167.08s)로 재검증했다. 관련 host 70 passed/1 heading fixture failed 후 heading 1 passed; Fleet web .test.js Node 145 passed; 최종 source budget 2 passed. 로그: X:/DevTemp/rosy-ui-unify/fleet/.
+- 변이: X 전용 실제 served bytes로 chooser role exemption 제거·geometry observer 제거·hidden preview guard 제거·rapid pausePreview 제거가 각각 해당 행동 검증을 실패시켰다. 마지막 rapid 변이는 leaseRequests가 2가 되지 않아 RED 1 failed(57.23s); teardown CancelledError는 부수 출력이다. manifests와 delivery SHA-256은 fleet/mutations 각 디렉터리에 있다. 제품 bytes는 변경하지 않았다.
+- 변이 bytes 보완: 앞선 세 manifest는 LF 정규화 text의 hash였고 실제 파일/전달은 CRLF였다. newline-delivery-proof.json은 원래 증거를 보존하며 raw 파일 hash=delivery hash, CRLF→LF 정규화 hash=기존 manifest hash가 세 건 모두 일치함을 기록한다. rapid manifest는 raw bytes hash로 직접 일치한다.
+- 독립 증거: SPEC의 abort 무시 lease 재현에서 새 owner 시작·old frame/finally 차단·source/draft 보존 PASS. X:/DevTemp/rosy-ui-unify/fleet-spec/rapid_visibility_fixed_report.json. Root는 desktop/phone 및 실제 밝은 테마 captures를 직접 확인했으며 overflow/pageerrors 0. Fixture preview lease POST는 포함하며 operational command는 실행하지 않았다.
+- 최종 확인: 독립 SPEC 및 QUALITY PASS. preview epoch 최종 변경 후 vision-view 소비 Node 두 파일 12 passed(477.58ms); 이는 lens/profile/badge 계약이며 비동기 수명은 현재 browser/SPEC 증거로 확인한다. rapid GREEN과 served RED는 같은 최종 source/test이며 manifest/delivery/source hash 대조가 일치했다. generate는 Fleet index만 변경했고 lint 0 errors/26 기존 warnings, diff check PASS.
+- Gate: SOURCE/LOCAL 범위. Fleet 전체 suite·배포·실장비·ROS-SIM·FIELD 수용을 주장하지 않는다. 기존 서버 역할·인증·source proof·CORE motion authority는 유지한다. source commit SHA는 Git 기록을 따른다.
+- 결정: D-439 Task 4 및 작업별 preview 독립 수명.
+- 교훈: visible predicate만으로 hide→reshow를 구분할 수 없다. frame 작업에는 작업별 epoch와 finally owner 비교가 함께 필요하다.
+
+## 2026-10-04 · uncommitted · fix(web): 관제 뷰포트와 주소 확인의 작업 소유권
+
+- 변경: 데스크톱의 지도·카메라와 로봇·운용 영역을 각각 묶어 선언 뷰포트의 문서 스크롤을 없앴다. 좁은 화면에서는 같은 네 영역을 주의·로봇·지도·운용 순서로 실제 DOM에 옮기고 입력과 초점을 보존한다. PageScope가 미디어 listener 정리와 복귀를 소유한다. 기록은 기본 8줄을 유지하고 진단·설치 안내와 나란히 배치한다. 신호등이 없을 때 파일 편집을 지시하지 않는다.
+- 주소 확인: 설치의 로봇별 옮기기가 기존 discovery/addresses에서 서버가 movable로 판단한 단일 주소만 안내한다. 실패·모호함·10초 만료는 새 주소 미확인으로 표시하고 화면 코드의 서버 검증을 유지한다. 후보 조회는 페이지·자격·작업 epoch를 확인하여 새 대화상자와 코드, 새 조회 잠금을 덮어쓰지 않는다. 실제 POST 본문은 코드만 보낸다.
+- 검증: 최초 Fleet 재검증 3 passed/4 failed(47.72s)는 77px 스크롤과 옛 설치·테마 fixture를 드러냈다. 다음 3 passed/3 failed(19.31s), 2 passed/1 failed(7.99s)를 보존한다. 최종 뷰포트·390/320 순서·동일 DOM/입력/초점 3 passed(8.35s); 테마·서버 코드·viewer·조회 만료 4 passed(24.38s). 강화된 후보 작업 소유권 최종 원본 1 passed(16.06s). 기존 주소 옮김과 compatibility 네트워크 2 passed(16.16s). 주소·등록 Node 20 passed, palette/disabled host 19 passed(1.80s). 지나간 성공을 중복 합산하지 않는다.
+- 변이: X 전용으로 실제 전달한 roster 숨김, DOM 복제, 모호한 후보 허용, 만료 제거, 새 대화상자 소유권 제거가 각각 RED이고 원본은 GREEN이다. delivery/source 해시와 sourceUnchanged를 final-plan/task6-mutation-report.json 및 task6-source-unchanged.json에 기록했다. 첫 경로가 자산 URL과 달라 변이가 전달되지 않은 시도는 유효 증거에서 제외한다. 소유권 변이는 실제 새 수동 대상이 옛 로봇 대상으로 바뀌는 단언에서 실패했다.
+- 화면: 부모 검증자가 실제 dark 1920의 문서 높이 1080과 light 390의 자연스러운 세로 흐름을 직접 확인했다. 가로 넘침·페이지 오류는 0이며 같은 정지·대형·신호·로봇·지도·카메라의 양수 크기를 유지한다. 근거는 X:/DevTemp/rosy-ui-unify/final-plan/ 및 fleet/root-fit-final/.
+- gate 변화: SOURCE/LOCAL 검증이며 배포·실제 장치·FIELD 승인을 주장하지 않는다. API 권한과 최종 동작 판단은 서버가 소유한다.
+- 결정: D-439 §17. 같은 DOM을 옮기는 배치는 시각 순서뿐 아니라 키보드 순서와 draft 소유권도 보존해야 한다.
+
+## 2026-10-04 · uncommitted · fix(web): 관제 확인과 명령의 공통 소유권
+
+- 변경: console과 roster가 private confirmed-action factory를 함께 사용하여 발행 재허가·맵 목표·전체 주행 취소·양수 IR 선택을 공용 비모달 확인으로 처리한다. 한 owner가 확인부터 요청/readback까지 유지되며 자격·역할·PageScope 교체 시 취소한다. 재허가 세대/availability, 맵 geometry·선택 로봇·온라인·정지 상태, IR 재선택 사유/모드의 현재 eligibility를 다시 확인한다. 같은 Fleet API·본문·idempotency와 기존 서버 권한은 유지한다. IR OFF는 즉시 보내며 해당 양수 owner를 취소한다.
+- 검증: 초기 통합 RED 3 failed(18.04s) 후 기존 payload/취소 계약 10 passed(25.19s), 자산·예산 14 passed(1.40s). 강화 시나리오의 2 passed/1 failed(23.51s)는 CAMERA_LINE 상태에서 맵 목표를 누른 fixture 오류였다. 맵 OFF·IR CAMERA_LINE 상태를 실제 계약대로 분리하고 이전 자격 응답을 abort 무시 adapter로 유지한 최종 Fleet owner 검사 1 passed(10.21s). 최종 eligibility 변이 복원에서도 같은 강화 node가 통과했다. 최종 공용 제어·자산·예산 39 passed(1.83s).
+- 변이: X 실제 전달 private module의 확인 후 eligibility 제거는 generation 변경 뒤 dispatch/rearm POST 단언에서 RED 1 failed(3.74s); owner finally 비교 제거는 옛 A 완료가 새 B를 풀어 취소 확인창이 생기는 단언에서 RED였다. 원본 제공은 각각 GREEN. 초기 EStop의 닫히는 확인창에 취소를 누른 두 무효 시도는 제외하고 실제 count 0을 기다려 재증명했다. dashboard 포함 6개 receipts/source raw hash는 final-plan/task6b-mutation-report.json, task6b-source-unchanged.json, task6b-delivery.jsonl.
+- 화면: rearm desktop dark, map/IR phone light의 실제 확인창 viewport 3개는 Stop visible/center-hit·inert false, 가로 넘침·pageerror 0. fake API만 사용했으며 실제 로봇 명령은 실행하지 않았다. 근거 X:/DevTemp/rosy-ui-unify/final-plan/task6b-captures/report.json 및 *-viewport.png.
+- gate 변화: SOURCE/LOCAL. 물리 정지·장치·배포·FIELD 수용을 주장하지 않는다. 최종 SPEC/QUALITY 및 부모 직접 화면 판단은 별도 기록한다.
+- 결정: D-439 §18. shell 자격 수명과 한 작업 소유권을 조합하고 오래된 finally가 새 작업을 해제하지 않는다.
+- 최종 수용: 독립 SPEC 및 QUALITY PASS, 부모의 실제 5개 viewport와 변이 hash 검증 PASS. 구조 예산 2 passed(0.96s), lint 0 errors/26 기존 warnings, diff check PASS. 배포/장치 수용은 포함하지 않는다.
+
+## 2026-10-04 · 6485f8a39 · refactor(ui): 통합 명렬 카드의 표현 재사용
+
+- 변경: 명렬 카드의 DOM 생성 열두 구간을 기존 roster 파일 안에서 재사용했다. 클래스·textContent·ARIA·동작과 지도/정지/공용 확인 소유자를 유지했다.
+- 증거: Fleet package 29,815줄의 초과를 29,806줄로 줄였다. 기존 verdict 29,657+150을 올리지 않았다. 실제 viewport·compact 정지 접근·공용 확인 generation 재검사 4통과(15.38초), 독립 SPEC→QUALITY 통과.
+- gate 변화: SOURCE/LOCAL과 main 착지 완료. 운용 허가·비상 정지 해제·물리 명령·배포·현장 수용은 실행하지 않았다.
+- 결정: D-439 §21과 D-201 화면 계약을 함께 유지한다. 반복 표현만 재사용하고 command owner나 서버 권한은 이동하지 않는다.
+
+
+## 2026-10-04 · uncommitted · feat(power): fresh battery evidence and idle saving
+
+- 변경: 반복 저배터리 표본의 wake를 단계 변화로 제한하여 기존 IDLE/STANDBY 타이머가 동작한다. Viewer GET /api/v1/power/health와 공유 typed 응답에 배터리·충전 확인 age, 정책 상한·wake 근거, shutdown 요청, 진단 요약을 제공한다. API Ref v1.92, envelope 1.0 유지.
+- 검증: injected clock 회귀와 auth/read-only API, 기존 배터리·정지·sentinel 경로 검증. 최종 근거는 docs/plans/2026-10-04-power-health-and-wake.md. OS halt·EEPROM·GPIO·기본 LiDAR 모터 정책 변경 없음.
+- gate 변화: SOURCE/LOCAL; 실제 소비전력·충전·RTC/외부 버튼 wake와 배포는 미검증.
+
+## 2026-10-04 · uncommitted · refactor(fleet): main 통합 시 HTTP composition 경계 유지
+
+- 변경: main의 stuck resolver·access·power 계약과 Cell workspace를 함께 보존했다. API Ref Cell additive 항목을 v1.93으로 올렸고 대응 metadata/version pin을 맞췄다. 동일 audit middleware를 site_auth, 동일 event fanout을 hub/server, healthz를 static route owner로 옮겨 app composition을 594줄로 유지했다.
+- 증거: 독립 source 검토는 auth/audit/fanout/health 동작 보존과 optional dependency guard를 확인했다. 구조 count Fleet 30621/schema 1319로 명시 재판정하고 기존 +150/zero allowance는 유지했다. 실제 vendor retry exit0/1passed와 컨테이너 정리 확인은 별도 deploy validation에 기록했다.
+- gate 변화: SOURCE 통합 검토이며 최종 통합 시험은 별도로 진행한다. full G1/G2 및 Isaac 주행·Nav2·두 로봇 수용은 미완료다.

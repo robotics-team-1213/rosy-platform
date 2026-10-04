@@ -77,17 +77,36 @@ data class RobotCoreServiceRecord(val name: String, val host: String, val port: 
         }
 
         fun parse(serviceType: String, serviceName: String, resolvedHost: String?, port: Int, attributes: Map<String, ByteArray?>): RobotCoreServiceRecord? {
-            if (rejection(serviceType, resolvedHost, port, attributes) != null) return null
+            val address = resolvedHost?.takeIf { SiteLink.isIpLiteral(it) }
+            val hostname = resolvedHost?.takeUnless { SiteLink.isIpLiteral(it) }
+            if (rejection(serviceType, address, port, attributes, hostname) != null) return null
             return RobotCoreServiceRecord(serviceName, resolvedHost ?: return null, port)
         }
 
         /** Rejection reason in the D-370 discovery vocabulary, or null when accepted. */
-        internal fun rejection(serviceType: String, resolvedHost: String?, port: Int, attributes: Map<String, ByteArray?>): String? {
+        internal fun rejection(serviceType: String, resolvedHost: String?, port: Int, attributes: Map<String, ByteArray?>, hostname: String? = null): String? {
             if (normalizeServiceType(serviceType) != normalizeServiceType(SERVICE_TYPE)) return "wrong_type"
-            if (resolvedHost == null) return "bad_address"
+            if (hostname != null && !SiteLink.isTlsHost(SiteLink.normalizeHost(hostname))) return "bad_host"
+            if (resolvedHost != null && !lanIpv4(resolvedHost)) return "bad_address"
             if (port !in 1..65535) return "bad_port"
             val txt = attributes.mapValues { (_, value) -> value?.toString(StandardCharsets.UTF_8)?.trim().orEmpty() }
-            return commonKeyRejection(txt, "robot", "core-v1", "none")
+            val legacy = listOf("product", "role", "proto", "tls").none { it in txt }
+            if (!legacy) commonKeyRejection(txt, "robot", "core-v1", txt["tls"]?.takeIf { it in listOf("none", "required") } ?: "none")?.let { return it }
+            return if (txt["network"] == "ap") "ap_mode" else null
+        }
+
+        private fun lanIpv4(address: String): Boolean {
+            if (!SiteLink.isIpLiteral(address) || address.contains(':')) return false
+            val octets = address.split('.').map { it.toInt() }
+            // Match Python ipaddress.is_private, including documentation/benchmark ranges used in vectors.
+            return (octets[0] == 0 && octets.any { it != 0 }) || octets[0] == 10 ||
+                (octets[0] == 172 && octets[1] in 16..31) ||
+                (octets[0] == 192 && octets[1] == 168) ||
+                (octets[0] == 192 && octets[1] == 0 && octets[2] == 0 && octets[3] !in listOf(9, 10)) ||
+                (octets[0] == 192 && octets[1] == 0 && octets[2] == 2) ||
+                (octets[0] == 198 && octets[1] in 18..19) ||
+                (octets[0] == 198 && octets[1] == 51 && octets[2] == 100) ||
+                (octets[0] == 203 && octets[1] == 0 && octets[2] == 113) || octets[0] >= 240
         }
     }
 }

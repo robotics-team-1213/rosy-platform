@@ -49,7 +49,7 @@ from core.bridge.goal_tracker import GoalTracker
 from core_features.maps import occupancy_map_id
 from core_features.vision import MODEL_STATUS_TOPICS, PREVIEW_TOPIC
 from core_features.navigation.initial_pose import amcl_pose_covariance
-from interfaces.srv import Emotion, SetLed
+from interfaces.srv import Emotion, SetLed, PilotRecordingStart
 import tf2_ros
 from tf2_ros import Buffer, TransformListener
 
@@ -65,6 +65,7 @@ from core_features.diagnostics.collector import (
 from core_features.navigation.manager import NavGoalSpec, NavigationError
 from core_common.protocol.schemas import HealthState
 from core_common.protocol.recording import (
+    START_SERVICE, RAW_PREVIEW_TOPIC,
     FETCHED_TOPIC, SET_ACTIVE_SERVICE, STATUS_TOPIC, TELEOP_INTENT_TOPIC, teleop_intent)
 
 # 늦게 뜬 노드도 현재 모드를 즉시 받도록 latch 한다 (PWR-003).
@@ -95,6 +96,7 @@ class RosBridge:
         node.create_subscription(Float32, "battery/voltage", self._on_battery, 10)
         node.create_subscription(Twist, "nav_cmd_vel", self._on_nav_cmd_vel, 10)
         node.create_subscription(String, "line/observation", self._on_line_observation, 10)
+        node.create_subscription(String, "line/keep_debug", self._on_lane_perception, 1)
         # D-137 T4: 검출 증거는 boxes 토픽과 분리된 evidence 채널로 들어온다
         # (D-136 §2). 판정은 ROS-free 피드가 하고, 이 파일은 적응만 한다.
         node.create_subscription(String, "detection_evidence",
@@ -107,6 +109,9 @@ class RosBridge:
         node.create_subscription(
             CompressedImage, PREVIEW_TOPIC,
             self._on_camera_preview, preview_qos)
+        node.create_subscription(
+            CompressedImage, RAW_PREVIEW_TOPIC,
+            self._on_camera_raw_preview, preview_qos)
         # D-423 §3.6: learned-model status per task (latched by the model nodes); display only.
         lane_topic, object_topic = MODEL_STATUS_TOPICS
         node.create_subscription(String, lane_topic, self._on_lane_model_status, _LATCHED)
@@ -163,6 +168,7 @@ class RosBridge:
         self._lidar_start_client = node.create_client(Empty, "start_motor")
         self._lidar_stop_client = node.create_client(Empty, "stop_motor")
         self._pilot_recorder_client = node.create_client(SetBool, SET_ACTIVE_SERVICE)  # D-411 A
+        self._pilot_recording_start_client = node.create_client(PilotRecordingStart, START_SERVICE)
 
         self._cmd_timer = node.create_timer(1.0 / 50.0, self._publish_cmd_vel)
         self._state_timer = node.create_timer(1.0 / self._state_hz, self._tick_state)
@@ -261,6 +267,8 @@ class RosBridge:
             String(data=json.dumps(teleop_intent(**fields))))
         guard = self._svc.pilot_recording
         guard.request_active = self._request_pilot_recording
+        guard.request_start = self._request_pilot_recording_start
+        guard.start_available = self._pilot_recording_start_client.service_is_ready
         guard.publish_fetched = lambda rid: self.pilot_fetched_pub.publish(
             String(data=json.dumps({"id": rid})))
         self._node.get_logger().info("ros_bridge ready (cmd_vel sole publisher @50Hz)")
@@ -290,6 +298,22 @@ class RosBridge:
             return False, ""
         return bool(response.success), str(response.message)
 
+    def _request_pilot_recording_start(self, preview_mode: str, wait: bool) -> tuple[bool, str]:
+        client = self._pilot_recording_start_client
+        if not client.service_is_ready():
+            return False, ''
+        request = PilotRecordingStart.Request()
+        request.preview_mode = {'raw': 0, 'annotated': 1}[preview_mode]
+        future = client.call_async(request)
+        if not wait:
+            future.add_done_callback(self._log_pilot_recording_refusal)
+            return True, ''
+        try:
+            response = save_map.await_call(future, timeout=3.0)
+        except RuntimeError:
+            return False, ''
+        return bool(response.success), str(response.message)
+
     def _log_pilot_recording_refusal(self, future) -> None:
         response = future.result() if not future.cancelled() and future.exception() is None else None
         if response is None:
@@ -314,6 +338,11 @@ class RosBridge:
 
     def _on_lane_model_status(self, msg: String) -> None:
         self._svc.vision.models.accept("perception/learned/status", msg.data, now=time.monotonic())
+
+    def _on_lane_perception(self, msg: String) -> None:
+        self._svc.vision.lane_perception.accept(
+            msg.data, now=time.monotonic(),
+            source_now=self._node.get_clock().now().nanoseconds / 1e9)
 
     def _on_object_det_model_status(self, msg: String) -> None:
         self._svc.vision.models.accept("perception/learned/object_det/status", msg.data,
@@ -364,7 +393,13 @@ class RosBridge:
 
     def _on_camera_preview(self, msg: CompressedImage) -> None:
         observation.camera_preview(
-            self._svc, msg, warn=self._node.get_logger().warning)
+            self._svc, msg, warn=self._node.get_logger().warning,
+            source_now=self._node.get_clock().now().nanoseconds * 1e-9)
+
+    def _on_camera_raw_preview(self, msg: CompressedImage) -> None:
+        observation.camera_preview(
+            self._svc, msg, warn=self._node.get_logger().warning, raw=True,
+            source_now=self._node.get_clock().now().nanoseconds * 1e-9)
 
     def _tick_line_follow(self) -> None:
         # D-395 P2-7 mission ends and rotate/nudge twists ride this 20 Hz timer.
@@ -557,6 +592,8 @@ class RosBridge:
         content = display.face_inputs_payload(
             snapshot, face=self._face_desired, power_mode=status.mode.value, wake=wake,
             written_at=datetime.now(timezone.utc).isoformat(timespec="milliseconds"))
+        preview = self._svc.vision.status(now=time.monotonic())
+        content.update(display.face_camera_quality(preview))
         if not display.face_inputs_due(content, self._face_inputs_last, now,
                                        self._face_inputs_at, FACE_INPUTS_PERIOD_S):
             return

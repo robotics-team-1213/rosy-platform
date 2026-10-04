@@ -1,6 +1,11 @@
 """D-411 A: pilot_recorder_node stays thin; the camera publishes JPEG only while recording."""
 
 from pathlib import Path
+import ast
+import json
+import types
+
+import pytest
 
 from core_common.protocol import recording as rec
 
@@ -24,6 +29,25 @@ def test_node_wraps_the_ros_free_recorder_and_never_drives():
     assert "self._recorder.recover()" in src
     assert "cmd_vel" not in src and "Twist" not in src
     assert "subprocess" not in src  # the process belongs to PilotRecorder
+
+
+@pytest.mark.parametrize('mode, expected', [(0, 'raw'), (1, 'annotated'), (2, None), (True, None)])
+def test_typed_start_options_are_closed_and_read_back_the_recorder(mode, expected):
+    tree = ast.parse(_src('pilot_recorder_node.py'))
+    cls = next(n for n in tree.body if isinstance(n, ast.ClassDef))
+    fn = next(n for n in cls.body if isinstance(n, ast.FunctionDef) and n.name == '_on_start')
+    scope = {'json': json}
+    exec(compile(ast.Module(body=[fn], type_ignores=[]), '<recorder-start>', 'exec'), scope)
+    calls = []
+    def start(**kwargs):
+        calls.append(kwargs)
+        return True, 'session-id'
+    node = types.SimpleNamespace(_recorder=types.SimpleNamespace(start=start, status=lambda: {'state': 'starting'}),
+                                 _publish=lambda: None)
+    response = scope['_on_start'](node, types.SimpleNamespace(preview_mode=mode), types.SimpleNamespace())
+    assert response.success is (expected is not None)
+    assert calls == ([{'preview_mode': expected}] if expected is not None else [])
+    assert json.loads(response.message)['status'] == {'state': 'starting'}
 
 
 def test_node_main_matches_the_capture_trigger_shape():

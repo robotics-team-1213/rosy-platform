@@ -35,6 +35,8 @@ from control.recording import (
 
 PILOT_TOPICS = (COMPRESSED_CAMERA_TOPIC, "cmd_vel", ODOM_TOPIC, SCAN_TOPIC, "line/observation",
                 TELEOP_INTENT_TOPIC)
+ANNOTATED_TOPICS = ('camera/preview/compressed', 'camera/observation', 'line/keep_debug',
+                    'perception/learned/shadow', 'perception/learned/status')
 DEFAULT_QUOTA_BYTES = 4 * 1024 ** 3
 # Headroom kept free inside the quota so a started session can run its full length.
 DEFAULT_RESERVE_BYTES = 1024 ** 3
@@ -52,13 +54,14 @@ _HASH_CHUNK = 1 << 20
 _DEVICE_MAX = 48              # leaves room for new_session's "_<n>" suffix inside the id
 
 
-def pilot_bag_command(folder, namespace: str = "") -> list[str]:
+def pilot_bag_command(folder, namespace: str = "", *, preview_mode: str = 'raw') -> list[str]:
     # pdeathsig: rosbag2 gets SIGINT (and closes its file) if the node dies hard, so a
     # SIGKILLed or crashed node never leaves a writer filling the disk.
     return ["setpriv", "--pdeathsig", "INT", "--",
             "ros2", "bag", "record", "--storage", "mcap",
             "--storage-preset-profile", "zstd_fast", "--max-bag-duration", "30",
-            "-o", str(Path(folder) / "bag"), "--topics", *_ns_topics(PILOT_TOPICS, namespace)]
+            "-o", str(Path(folder) / "bag"), "--topics",
+            *_ns_topics(PILOT_TOPICS + (ANNOTATED_TOPICS if preview_mode == 'annotated' else ()), namespace)]
 
 
 def _sha256(path: Path) -> str:
@@ -99,7 +102,9 @@ def write_manifest(folder: Path, *, duration_s: float | None = None) -> Path:
             "topics": list(meta.get("topics", ())),
             "stop_reason": meta.get("stop_reason") or "recovered",
             "bag_returncode": meta.get("bag_returncode"),
-            "writer_killed": bool(meta.get("writer_killed", False)), "files": files}
+            "writer_killed": bool(meta.get("writer_killed", False)), "files": files,
+            "preview_mode": meta.get('preview_mode', 'raw'),
+            "annotation_origin": meta.get('annotation_origin', 'none')}
     tmp = folder / (MANIFEST_NAME + ".tmp")
     with tmp.open("w", encoding="utf-8") as handle:
         json.dump(body, handle, sort_keys=True)
@@ -191,6 +196,7 @@ class PilotRecorder:
         self._stop_reason = ""
         self._killed = False
         self._last_stop_reason = ""
+        self._preview_mode = 'raw'
         self._boot_id = uuid.uuid4().hex
         self._seqs = itertools.count(1)   # next() is atomic: any thread may build a status
 
@@ -198,7 +204,9 @@ class PilotRecorder:
     def _busy(self) -> bool:
         return self._proc is not None or self._finalizing is not None
 
-    def start(self) -> tuple[bool, str]:
+    def start(self, *, preview_mode: str = 'raw') -> tuple[bool, str]:
+        if preview_mode not in ('raw', 'annotated'):
+            return False, 'RECORDING_INVALID_OPTIONS'
         if self._busy():
             return False, "RECORDING_BUSY"
         try:
@@ -212,8 +220,11 @@ class PilotRecorder:
                 return False, "RECORDING_DISK_FULL"
             folder = new_session(self._root, device=self._device, camera_profile_revision="",
                                  model_revision="", task_id=None, reason="pilot",
-                                 now=self._now(), topics=PILOT_TOPICS,
-                                 extra={"mode": "pilot", "writer_ready": False})
+                                 now=self._now(), topics=PILOT_TOPICS + (
+                                     ANNOTATED_TOPICS if preview_mode == 'annotated' else ()),
+                                 extra={"mode": "pilot", "writer_ready": False,
+                                        'preview_mode': preview_mode,
+                                        'annotation_origin': 'model_unreviewed' if preview_mode == 'annotated' else 'none'})
         except OSError as exc:
             self._log(f"pilot recording cannot start: {exc}")
             return False, "RECORDER_UNAVAILABLE"
@@ -222,7 +233,7 @@ class PilotRecorder:
             shutil.rmtree(folder, ignore_errors=True)
             return False, "RECORDER_UNAVAILABLE"
         try:
-            proc = self._popen(pilot_bag_command(folder, self._namespace),
+            proc = self._popen(pilot_bag_command(folder, self._namespace, preview_mode=preview_mode),
                                stdin=subprocess.DEVNULL, start_new_session=True)
         except (OSError, ValueError) as exc:
             self._log(f"pilot recording: rosbag2 did not start: {exc}")
@@ -235,6 +246,7 @@ class PilotRecorder:
         self._proc, self._folder, self._killed = proc, folder, False
         self._started, self._stopping_since, self._stop_reason = self._clock(), None, ""
         self._recording_since = None
+        self._preview_mode = preview_mode
         return True, folder.name
 
     def poll_start(self) -> bool:
@@ -371,6 +383,7 @@ class PilotRecorder:
             "last_stop_reason": self._last_stop_reason,
             "boot_id": self._boot_id,
             "seq": next(self._seqs),
+            "preview_mode": self._preview_mode if busy else 'raw',
         }
 
     # ------------------------------------------------------------ disk upkeep

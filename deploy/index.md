@@ -70,8 +70,8 @@
 
 ## 최근 기록
 
-- 2026-10-04 · uncommitted · verify(sim): 모델 PC vendor fault retry 통과
-- 2026-10-04 · uncommitted · fix(sim): 실제 pytest 수집 후 vendor probe 시작
-- 2026-10-04 · uncommitted · fix: Windows SSH timeout 종료 경합
-- 2026-10-04 · uncommitted · fix(D-441): Windows 자동 서명기의 UTF-8 출력 처리
-- 2026-10-04 · uncommitted · verify(D-441): 최종 Linux 관련 suite 확인
+- 2026-10-04 · uncommitted · verify(D-441): 최초 설치와 실제 후속 자동 갱신 확인
+- 2026-10-04 · uncommitted · D-446 clean older checkout permits signed execution
+- 2026-10-04 · uncommitted · D-446 remote integration after source migration
+- 2026-10-04 · uncommitted · fix: native 차선 설정과 SSH 페어링 병합
+- 2026-10-04 · uncommitted · fix: 릴리스 전환에서 Host Agent 종료 대기

@@ -2,7 +2,7 @@ import { HeadlessState } from "/common/core_ui_logic.js";
 import { confirmIrreversible } from "/common/ui.js";
 import { poseUnavailableReason } from "./pose-evidence.js";
 
-function el(tag, cls, text) { const node = document.createElement(tag); if (cls) node.className = cls; if (text !== undefined) node.textContent = text; return node; }
+function el(tag, cls, text) { const node = document.createElement(tag); if (tag === "ui-status") node.setAttribute("state", "ready"); if (cls) node.className = cls; if (text !== undefined) node.textContent = text; return node; }
 function input(labelText, name, type = "text") {
   const label = el("label", "ui-field-label", labelText); const control = el("input", "ui-field");
   control.name = name; control.type = type; control.autocomplete = "off"; label.append(control);
@@ -10,6 +10,7 @@ function input(labelText, name, type = "text") {
 }
 
 export function mount(root, ctx) {
+  const lifetime = new AbortController(); let disposed = false; let confirming = false;
   const head = el("ui-head", "", "도크 유형 및 위치 관리");
   const status = el("ui-status", "", "pose와 도크 목록을 불러오는 중입니다.");
   const gate = el("ui-status", "", "");
@@ -19,8 +20,6 @@ export function mount(root, ctx) {
   gate.setAttribute("aria-atomic", "true");
   gate.hidden = true;
   const registrationNotice = el("ui-status", "", "");
-  registrationNotice.setAttribute("role", "status");
-  registrationNotice.setAttribute("aria-live", "polite");
   registrationNotice.setAttribute("aria-atomic", "true");
   const form = el("form", "ui-form");
   const idField = input("새 도크 ID (필수)", "dock_id"); idField.control.maxLength = 64; idField.control.required = true;
@@ -116,20 +115,23 @@ export function mount(root, ctx) {
       const remove = el("ui-button", "", deleting ? "삭제 중…" : "삭제…"); remove.setAttribute("kind", "quiet"); remove.type = "button";
       remove.disabled = deleting;
       remove.addEventListener("click", async () => {
-        if (pendingDeletes.has(item.id) || !docksLoaded) return;
-        const confirmed = await confirmIrreversible({message: `"${item.id}" 도크를 삭제할까요? 되돌릴 수 없습니다.`, action: "도크 삭제",
+        if (disposed || confirming || pendingDeletes.has(item.id) || !docksLoaded) return;
+        confirming = true;
+        const confirmed = await confirmIrreversible({message: `"${item.id}" 도크를 삭제할까요? 되돌릴 수 없습니다.`, action: "도크 삭제", signal: lifetime.signal,
           opener: () => (remove.isConnected ? remove : list.querySelector(`li[data-dock-id="${CSS.escape(String(item.id))}"] ui-button`))});
-        if (!confirmed || pendingDeletes.has(item.id) || !docksLoaded) return;
+        confirming = false;
+        if (!confirmed || disposed || pendingDeletes.has(item.id) || !docksLoaded || !docks.some(dock => JSON.stringify(dock) === JSON.stringify(item))) return;
         pendingDeletes.add(item.id);
         listNotice = ""; updateListStatus();
         renderDocks();
         try {
           await ctx.api(`/api/v1/docking/docks/${encodeURIComponent(item.id)}`, {method: "DELETE"});
+          if (disposed) return;
           listNotice = `${item.id} 도크를 삭제했습니다.`;
           docks = docks.filter((dock) => dock.id !== item.id);
-        } catch (error) { listNotice = `도크 삭제 실패: ${error.message}`; }
-        finally { pendingDeletes.delete(item.id); renderDocks(); }
-        updateListStatus();
+        } catch (error) { if (!disposed) listNotice = `도크 삭제 실패: ${error.message}`; }
+        finally { pendingDeletes.delete(item.id); if (!disposed) renderDocks(); }
+        if (!disposed) updateListStatus();
       });
       row.append(remove); list.append(row);
     }
@@ -177,7 +179,7 @@ export function mount(root, ctx) {
   updateDetectorFields();
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
-    if (!poseFresh || !pose || pending) { status.textContent = "pose 수신이 확인될 때까지 기다리세요."; return; }
+    if (disposed) return; if (!poseFresh || !pose || pending) { status.textContent = "pose 수신이 확인될 때까지 기다리세요."; return; }
     const dockId = idField.control.value.trim(); const typeName = typeField.control.value.trim();
     if (!dockId) { reportRegistrationResult("도크 ID를 입력하세요."); idField.control.focus(); return; }
     if (!typeName) { reportRegistrationResult("도크 유형 이름을 입력하세요."); typeField.control.focus(); return; }
@@ -185,7 +187,17 @@ export function mount(root, ctx) {
     if (!existingType && !detector.value) { reportRegistrationResult("새 유형에는 검출기 종류를 선택하세요."); detector.focus(); return; }
     if (!existingType && detector.value === "observation" && !tag.control.value) { reportRegistrationResult("태그 관측 유형에는 태그 ID가 필요합니다."); tag.control.focus(); return; }
     if (!existingType && detector.value === "observation" && !tagSize.control.value) { reportRegistrationResult("태그 관측 유형에는 태그 크기가 필요합니다."); tagSize.control.focus(); return; }
-    if (!window.confirm(`${dockId} 도크를 현재 위치에 등록할까요? 현재 위치가 실제 도크에 정확히 맞는지 확인하세요.`)) return;
+    if (disposed || confirming) return;
+    const formSnapshot = JSON.stringify([dockId, typeName, detector.value, tag.control.value, tagSize.control.value]);
+    const typeSnapshot = JSON.stringify(existingType);
+    const poseSnapshot = JSON.stringify([pose.pose, pose.map_id]);
+    confirming = true;
+    const confirmed = await confirmIrreversible({message: `"${dockId}" 도크를 현재 위치에 등록할까요? 현재 위치가 실제 도크에 정확히 맞는지 확인하세요.`, action: "도크 등록", signal: lifetime.signal});
+    confirming = false;
+    if (!confirmed || disposed || pending || !poseFresh || !typesLoaded
+        || poseSnapshot !== JSON.stringify([pose?.pose, pose?.map_id])
+        || formSnapshot !== JSON.stringify([idField.control.value.trim(), typeField.control.value.trim(), detector.value, tag.control.value, tagSize.control.value])
+        || typeSnapshot !== JSON.stringify(types.find(item => item.name === typeName))) return;
     pending = true; updateRegistrationReadiness();
     registrationResult = "";
     setText(registrationNotice, "");
@@ -195,14 +207,17 @@ export function mount(root, ctx) {
         const body = {name: typeName, detector: detector.value};
         if (detector.value === "observation") { body.tag_id = Number(tag.control.value); body.tag_size_m = Number(tagSize.control.value); }
         const savedType = await ctx.api("/api/v1/docking/types", {method: "POST", body: JSON.stringify(body)});
+        if (disposed) return;
         types = [...types, savedType]; renderTypes(); createdType = true;
+        if (!poseFresh || poseSnapshot !== JSON.stringify([pose?.pose, pose?.map_id])) { reportRegistrationResult("도크 유형은 저장됐습니다. 현재 위치를 다시 확인해야 해서 도크는 등록하지 않았습니다. 위치를 확인하고 같은 유형으로 다시 시도하세요."); return; }
       }
       await ctx.api("/api/v1/docking/docks", {method: "POST", body: JSON.stringify({
         id: dockId, type: typeName, x: Number(pose.pose.x), y: Number(pose.pose.y), yaw: Number(pose.pose.yaw) || 0, map_id: pose.map_id || null,
       })});
+      if (disposed) return;
       reportRegistrationResult(`${dockId} 도크를 등록했습니다.`); idField.control.value = "";
-    } catch (error) { reportRegistrationResult(`도크 등록 실패${createdType ? " (유형은 저장됐습니다. 같은 유형으로 다시 시도할 수 있습니다)" : ""}: ${error.message}`); }
-    finally { pending = false; updateRegistrationReadiness(); }
+    } catch (error) { if (!disposed) reportRegistrationResult(`도크 등록 실패${createdType ? " (유형은 저장됐습니다. 같은 유형으로 다시 시도할 수 있습니다)" : ""}: ${error.message}`); }
+    finally { pending = false; if (!disposed) updateRegistrationReadiness(); }
   });
-  return () => { stopTypes(); stopState(); stopDocks(); };
+  return () => { disposed = true; lifetime.abort(); stopTypes(); stopState(); stopDocks(); };
 }

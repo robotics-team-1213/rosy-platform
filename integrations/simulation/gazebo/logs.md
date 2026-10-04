@@ -231,3 +231,10 @@
 - 증거: WSL `glxinfo -B` 기본 llvmpipe(Accelerated: no), `GALLIUM_DRIVER=d3d12`에서 "D3D12 (AMD Radeon(TM) 860M Graphics)" GL 4.6 Accelerated: yes(EGL surfaceless 같음). WSL Jazzy `test_gz_multi_core.py` 20 passed, host `test_d395_s2_bench.py test_gz_multi_core.py` 16 passed/1 skipped.
 - gate 변화: 없음(기본값 불변).
 - 결정: 없음
+
+## 2026-10-04 · uncommitted · fix(ui): 경로 뷰어의 미수신 거리
+
+- 변경: 독립 lane viewer는 첫 경로 수신 전 완료 수/거리를 대기/미확인으로 표시한다. renderProgress(null)은 이전 거리·진행 막대·현재 key와 key 강조를 지우며 실제 측정 0은 유지한다. 공용 경로·framework를 추가하지 않았다.
+- 증거: null 수명 원본 제공 1 passed (2.54s), 기존 키보드 탭과 경기 보드 2 passed (4.54s). X 제공 null 거리 정리 제거 변이가 이전 2.0m를 남겨 실제 단언 RED, 동일 원본 제공 GREEN·제품 SHA256 불변을 확인했다.
+- gate 변화: SOURCE/LOCAL 읽기 전용 뷰어이며 Gazebo/장치/물리 gate는 움직이지 않는다.
+- 결정: D-439 Task5. 미수신을 측정 0으로 표시하지 않는다.

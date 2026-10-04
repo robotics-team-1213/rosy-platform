@@ -42,7 +42,7 @@ def _env_switch(name):
     return 'false'
 
 
-def _env_rate(name, default):
+def _env_rate(name, default, minimum=0.0, maximum=float('inf')):
     value = os.environ.get(name)
     if value is None:
         return default
@@ -50,10 +50,10 @@ def _env_rate(name, default):
         rate = float(value)
     except ValueError:
         rate = -1.0
-    if 0.0 <= rate < float('inf'):
+    if minimum <= rate <= maximum and rate < float('inf'):
         return str(rate)
     get_logger('camera_preview.launch').warning(
-        f'{name}={value!r} is not a rate >= 0 in Hz; using {default}')
+        f'{name}={value!r} is not a finite rate in [{minimum}, {maximum}] Hz; using {default}')
     return default
 
 
@@ -81,6 +81,10 @@ def generate_launch_description():
         get_logger('camera_preview.launch').warning(f'operator override overlay: {operator_note}')
     return LaunchDescription([
         DeclareLaunchArgument('namespace', default_value=''),
+        # Keep frame-age guards intact while matching the Pi inference budget.
+        # 4 Hz stays inside the keeper's 0.5 s maximum frame-gap budget.
+        DeclareLaunchArgument('camera_fps',
+                              default_value=_env_rate('ROSY_CAMERA_FPS', '8.0', 4.0, 8.0)),
         DeclareLaunchArgument('learned_shadow',
                               default_value=_env_switch('ROSY_LEARNED_SHADOW')),
         DeclareLaunchArgument('shadow_pointer', default_value='/var/lib/rosy/models/shadow'),
@@ -102,6 +106,7 @@ def generate_launch_description():
             output='screen', respawn=True, respawn_delay=2.0,
             parameters=[os.path.join(config, 'camera.yaml'), {
                 'camera_backend': 'picamera2',
+                'fps': ParameterValue(LaunchConfiguration('camera_fps'), value_type=float),
                 'publish_compressed': ParameterValue(capture, value_type=bool)}],
         ),
         Node(

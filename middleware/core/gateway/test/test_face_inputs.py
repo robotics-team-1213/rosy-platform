@@ -54,11 +54,25 @@ def test_the_payload_is_what_the_reader_validates():
     assert read["drive"]["speed"] == 0.12 and "kind" not in read["drive"]
     assert read["battery_percent"] == 55.5
     # Every key the bridge writes is one the reader knows: nothing rides unread.
-    assert set(payload) - {"schema", "written_at"} == set(read) - {"written_ts"}
+    assert set(payload) - {"schema", "written_at", "camera_quality_age_s"} == set(read) - {
+        "written_ts", "camera_quality", "camera_quality_until"}
 
 
 def test_idle_carries_no_drive_card():
     assert _payload(_snapshot(mode="IDLE", navigation="IDLE"), face="basic")["drive"] is None
+
+
+@pytest.mark.parametrize('reason', ['low_light', 'overexposed'])
+def test_face_quality_handover_preserves_camera_age_and_clears_stale_or_missing(reason):
+    from core_features.vision import VisionFrameStore
+    store = VisionFrameStore()
+    store.publish(b'\xff\xd8\xff\xd9', captured_at=100., received_at=10., frame_id='front',
+                  source='front', quality=dict(valid=False, reason=reason))
+    assert display.face_camera_quality(store.status(now=11.)) == dict(
+        camera_quality=dict(valid=False, reason=reason), camera_quality_age_s=1.)
+    assert display.face_camera_quality(store.status(now=12.1)) == dict(
+        camera_quality=None, camera_quality_age_s=None)
+    assert display.face_camera_quality({})['camera_quality'] is None
 
 
 @pytest.mark.parametrize("snapshot,codes", [
