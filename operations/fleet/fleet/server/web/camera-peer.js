@@ -47,7 +47,7 @@ export function createCameraPeerPanel({scope,headers,identity,locked,dialogs,onU
     const life=scope.capture(), owner=ownerKey(); life.check(); busy=true;
     try {
       const allowed = await dialogs.confirmIrreversible({
-        message:`폰의 확인 문자 ${row.display_code}와 기기 이름 ${row.label}이 맞는지 확인하세요. 카메라 자리: ${source}. ${remember ? '이 연결을 기억합니다.' : '승인 기한 안에서 연결합니다.'}`,
+        message:`기기 "${row.label}"의 확인 문자 ${row.display_code}가 폰과 일치하는지 확인하고 카메라 자리 "${source}"의 연결을 승인할까요? ${remember ? '이 연결을 기억합니다.' : '승인 기한 안에서 연결합니다.'}`,
         action:'연결 승인',signal:life.signal});
       life.check();
       if (!allowed || owner !== ownerKey() || locked() || !pending.some(item =>
@@ -63,7 +63,7 @@ export function createCameraPeerPanel({scope,headers,identity,locked,dialogs,onU
     const life=scope.capture(), owner=ownerKey(); life.check(); busy=true;
     try {
       const allowed=await dialogs.confirmIrreversible({
-        message:`${row.label}의 기억한 연결과 영상 자격을 해제할까요? 다시 사용하려면 이 화면에서 승인해야 합니다.`,
+        message:`"${row.label}"의 기억한 연결과 영상 자격을 해제할까요? 다시 사용하려면 이 화면에서 승인해야 합니다.`,
         action:'연결 해제',signal:life.signal}); life.check();
       if (!allowed || owner!==ownerKey() || locked()) return;
       await call(`${BASE}/relationships/${encodeURIComponent(row.relationship_id)}/revoke`,{method:'POST'});

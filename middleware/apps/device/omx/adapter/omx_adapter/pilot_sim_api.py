@@ -26,6 +26,7 @@ PILOT_ASSETS = {
     "styles.css": "text/css", "app.js": "application/javascript",
     "client.js": "application/javascript", "stick.js": "application/javascript",
     "link.js": "application/javascript", "autonomy.js": "application/javascript",
+    "peer-approval.js": "application/javascript",
     "input-state.js": "application/javascript", "vision.js": "application/javascript",
     "models.js": "application/javascript",
     "calibration.js": "application/javascript", "recording.js": "application/javascript",

@@ -207,6 +207,7 @@
 | D-459 | Pinky 학습 검수는 저장되는 웹앱으로 제공하고 자동 초안·수동 정답·학습 수용을 분리한다 |
 | D-461 | ROSY 작업 화면은 상태·다음 작업·행동을 먼저 보여주고 공용 작업 부품으로 구성한다 |
 | D-462 | Pinky 반복 검수는 프레임 정체성·객체/픽셀 독립 revision·최신 결정 확인을 보존한다 |
+| D-465 | 모델 PC에서 픽셀 자동 라벨 초안을 만들고 검수·학습 자격을 분리한다 |
 
 ## 계획·결과 문서
 
@@ -298,8 +299,8 @@
 
 ## 최근 기록
 
+- 2026-10-05 · uncommitted · docs(learning): 모델 PC 픽셀 자동 라벨 초안 파이프라인 D-465
 - 2026-10-05 · uncommitted · fix(pairing): TLS CI 의존성과 통합 버전 기록
 - 2026-10-05 · uncommitted · docs(learning): bind approved indexed masks to immutable dataset construction
 - 2026-10-05 · uncommitted · fix(release): 무마커 시작점의 검토 기록과 inherited CI fixture 복구
 - 2026-10-05 · uncommitted · test(learning): pin receipt exclusion tombstone aliases
-- 2026-10-05 · uncommitted · test(learning): reject resealed embedded authority scalar aliases
