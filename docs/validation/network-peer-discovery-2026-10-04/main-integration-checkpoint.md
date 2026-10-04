@@ -140,3 +140,16 @@ token을 폐기하지 않은 채 revoked로 표시하는 문제가 있어 적용
 `5fa31ad82212f2981af0f5a08877c1f24852bb2c`와 정확히 같았고 독립 검토자가 이를
 확인했다. 이후 추가 main 변경은 별도로 병합·검증하며 이전 결과를 새 기기 수용으로
 확대하지 않는다. 원본 검토 이력은 `verify/ui-ship-reviewed-9be` 로컬 ref에 보존했다.
+
+
+### LAN 수신 승인·목록 통합과 Fleet 크기 재판정
+
+- D-456은 사용자 선택(LAN 즉시 발견, 최초 상대 승인, QR/코드 보조, 장기 오프라인 관계 보존)을 기록한다. 일반 수신 승인/key proof/로그인 갱신은 아직 구현됐다고 표시하지 않는다.
+- 387b19841 통합에서 실제 동일 P6 filter의 Fleet 총계는 32,605행이다. 이전 32,162 대비 기존 307 + 합성 캡처 도구 136을 독립 분해 검토했다. 기존 split/B2·UI 자원 소유 이주 의무·파일 한도·+150 허용량은 유지한다. 기준만 정확한 현재 총계로 재판정하며 기존 실패나 allowance를 숨기지 않는다.
+- 2150354e2 캡처 원본은 미렌더링·인증 대기 실패 관측으로 보존한다. 실제 PNG를 root와 독립 검토자가 확인했으며 정상 UX/G3는 HOLD다.
+
+
+후속 구조 검사에서 캡처136행의 fleet→games 위반을 재현했다. tools/AGENTS.md의 교차 모듈 도구 규칙에 따라 root tools로 이동하고 Fleet 기준을 실제 이동 후 총계32,469로 기록한다. 기존32,605 관측은 잘못된 배치까지 포함한 중간 수치로 보존하며 split·허용량·방향 예외를 추가하지 않는다.
+
+
+이번 적용 소스 결과: rooms API + P6 구조 + API 버전/Task 문서62 PASS, Mission 버전1 PASS, Native Pilot Kotlin 컴파일/JVM24 PASS, Chrome LAN 목록4 PASS, D-456 문서/위상85 PASS. 초기 소스 크기 실패(32469>32162+150)는 독립 재판정했고 이후 incoming capture의2구조 실패는 workspace tools 소유 경로로 바로잡았다. 일반 수신 승인/key-proof/session renewal과 실제 LAN·tablet·robot 재연결·서명 배포는 여전히 미완료이며 이 host 결과를 그 증거로 쓰지 않는다.

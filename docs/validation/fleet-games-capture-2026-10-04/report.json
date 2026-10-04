@@ -1,0 +1,30 @@
+{
+  "rows": [
+    {
+      "surface": "console",
+      "viewport": "1920x1080"
+    },
+    {
+      "surface": "console",
+      "viewport": "390x844"
+    },
+    {
+      "surface": "console",
+      "viewport": "320x568"
+    },
+    {
+      "surface": "games",
+      "viewport": "1280x800"
+    },
+    {
+      "surface": "games",
+      "viewport": "390x844"
+    },
+    {
+      "surface": "games",
+      "viewport": "320x568"
+    }
+  ],
+  "pageErrors": [],
+  "generated": "2026-10-04 21:46:37"
+}
