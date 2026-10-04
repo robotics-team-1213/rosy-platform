@@ -17,6 +17,7 @@ gates:
     blocker: "OMX 관절·그리퍼·취소의 Gazebo action/readback은 docs/validation/pilot-omx-gazebo-2026-10-01/에서 확인. Gazebo 작업대 영상·시연 기록 15프레임과 실제 LeRobot v3 재독출도 통과. 그리퍼 정밀 도달·전체 재시작 회복·Pinky 재측정은 남음"
   ARTIFACT:
     state: GO
+    cmd: "gh workflow run 'Payload boot smoke (arm64)' --ref main; gh run watch <run-id> -R livsbittt/rosy-os"
     evidence: "share/pilot 설치: 서명 payload 2026.10.04-034 안 관측 + arm64 러너 부팅 GET /pilot 200+CSP (payload-boot-smoke run 37200780702, D-444 P1.2)"
   DEVICE:
     state: HOLD

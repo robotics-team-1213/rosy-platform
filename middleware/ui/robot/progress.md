@@ -16,6 +16,7 @@ gates:
     state: N/A
   ARTIFACT:
     state: GO
+    cmd: "gh workflow run 'Payload boot smoke (arm64)' --ref main; gh run watch <run-id> -R livsbittt/rosy-os"
     evidence: "share/dashboard 설치: 서명 payload 2026.10.04-034 안 관측 + arm64 러너 부팅 GET /dashboard 200+CSP (payload-boot-smoke run 37200780702, D-444 P1.2)"
   DEVICE:
     state: N/A
