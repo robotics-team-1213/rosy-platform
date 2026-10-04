@@ -5547,3 +5547,9 @@
 - Change: Resolve nine conflicts in an isolated integration worktree; preserve main and learning logs, safety tags, Proposed D-449 and learning CI suites; update ten code/test files to migrated paths.
 - Evidence: HOST policy211pass14skip, perception235pass14skip; initial guard117pass1fail then legacy allowlist restored and failed test passed; independent review131pass and90pass1skip APPROVE; lint0errors8warnings. See validation/learning-main-integration-2026-10-04.md.
 - Gate: Source integration candidate only. Fast/affected checks, remote CI, privileged installation, human labels, shadow/rollback and authenticated owner/Fleet/device/field acceptance remain separate.
+
+## 2026-10-04 · uncommitted · fix(learning): bind reviewed public digests to exact repository lines
+
+- Change: Preserve frozen learning evidence; explicitly bind87 independently reviewed public digest lines to path/line SHA/token for repository entropy checks only. Classify two D-449 contract profile files in robot-literal backlog and read CLI child help as UTF-8.
+- Evidence: New regression RED then15pass; inventory/release/literal99pass; affected717pass59skip with1encoding warning, corrected CLI12pass with thread warnings promoted to errors. Main baseline two failing guards2pass. See validation/learning-integration-guard-repair-2026-10-04.md.
+- Gate: HOST repair; raw/image scanner and credential/key/PSK/QR checks unchanged. Final independent code review and tracked inventory scan precede commit. CI, installation, human labels, shadow/rollback and owner/Fleet/device/field remain pending.
