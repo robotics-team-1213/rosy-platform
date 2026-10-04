@@ -278,3 +278,22 @@ def test_pixel_approval_rejects_equal_but_wrong_scalar_types(tmp_path,key,value)
     current['decision_sha256'] = review_evidence.sha(review_evidence.encoded(current))
     with pytest.raises(ValueError,match='scalar type'):
         review_evidence.validate_authority(current)
+
+
+def test_ignore_float_and_resealed_embedded_authority_fail_strict_validation(tmp_path):
+    store = open_store(tmp_path)
+    review_masks.bind_classes(store,CLASSES)
+    current = review_evidence.decisions(store)
+    invalid = dict(current, ignore_index=255.0)
+    del invalid['decision_sha256']
+    invalid['decision_sha256'] = review_evidence.sha(review_evidence.encoded(invalid))
+    with pytest.raises(ValueError,match='ignore index'):
+        review_evidence.validate_authority(invalid)
+    out = Path(store.prepare()['path'])
+    doc = json.loads((out/'review-contract.json').read_bytes())
+    doc['authority']['frames'][0]['original_video_verified'] = 0
+    raw = review_evidence.encoded(doc)
+    (out/'review-contract.json').write_bytes(raw)
+    (out/'AUTHORITY_COMPLETE').write_text(review_evidence.sha(raw),encoding='ascii')
+    with pytest.raises(ValueError,match='digest'):
+        review_evidence.verify_current(out,current)

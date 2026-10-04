@@ -220,7 +220,9 @@ def validate_authority(current):
         if key not in current or not valid_digest(current[key], nullable=True):
             raise ValueError('invalid authority class/map binding')
     if ((current['pixel_classes_sha256'] is None) != (current['classes_signature'] is None)
-            or current.get('ignore_index') != (255 if current['pixel_classes_sha256'] else None)):
+            or (current['pixel_classes_sha256'] is not None and
+                (type(current.get('ignore_index')) is not int or current['ignore_index'] != 255))
+            or (current['pixel_classes_sha256'] is None and current.get('ignore_index') is not None)):
         raise ValueError('invalid class signature or ignore index')
     rows = current.get('frames')
     if not isinstance(rows, list) or not 1 <= len(rows) <= 100000:
@@ -314,8 +316,12 @@ def verify_current(export, current):
     if safe_file(root, 'AUTHORITY_COMPLETE').read_text().strip() != sha(raw):
         raise ValueError('incomplete review authority')
     doc = json.loads(raw)
-    if doc.get('schema') != 'rosy.pinky-review-export/2' or doc.get('authority') != current:
+    validate_authority(doc.get('authority'))
+    if doc.get('schema') != 'rosy.pinky-review-export/2' or encoded(doc['authority']) != encoded(current):
         raise ValueError('stale review export; latest decisions required')
+    if (doc.get('current_decisions_required') is not True or doc.get('training_dataset_qualified') is not False
+            or doc.get('pixel_projection_verified') is not False):
+        raise ValueError('invalid review qualification boundary')
     files = doc.get('files')
     if not isinstance(files, list) or not files:
         raise ValueError('sealed files required')
