@@ -379,3 +379,22 @@
 - 결정: D-432 추가 결정. 중단은 검색 tick만 취소하고 종료 완료 콜백을 보존한다. 주 프로세스나 제어 세션을 검색 복구 때문에 종료하지 않는다.
 - 증거: JVM 46 PASS·APK 빌드 성공, 동일 서명 install-r 및 설치 APK SHA 일치. 실제 태블릿에서 전용 검색 자식 장애 후 부모 PID 유지·새 자식·새 IPv4 응답·목록 복구를 확인했다. 연속 다시 찾기, background 정리와 resume 재검색도 확인했다. 독립 SOURCE SPEC·Safety·QUALITY PASS.
 - gate 변화: 이 Android 발견 복구의 실제 관측만 기록한다. 로봇 CORE 접속·정지 해제·주행·장치 릴리스 수락은 별개이며 실행하지 않았다.
+
+## 2026-10-04 · uncommitted · feat(pilot): 로비 방 목록 — `GET /api/v1/site/rooms` 소비 (D-343 2.2-3)
+
+- 변경: 접속 화면의 토큰 폼 위에 이웃 방 목록(`screens/connect.js` — `GET /api/v1/site/rooms` 공개 정보, 같은 기기는 제외, 최대 8개). 각 방 버튼은 그 기기의 origin 진입 URL을 `data-lobby-url`에 명시하고 클릭하면 `location.assign`으로 이동한다(CORS를 열지 않는다, D-323 same-origin 유지). 이웃 없으면 한 줄 안내. 탐색 불가(503·끊김)면 로비는 조용히 없고 토큰 게이트는 그대로 산다(접속 흐름을 막지 않는다).
+- 증거: 브라우저 2 passed(이웃 표시+목적 URL 명시·불가 시 조용+게이트 생존). api_web 전체 77 passed/13 skipped(동일 코미트 범위의 site-rooms 시험 포함). node --check 통과.
+- gate 변화: 없음. 호스트 UI. PWA 기억 방·관전 모드·운전석 임대·MJPEG은 뒤 작업(D-343 §2.1·2.4-5).
+- 결정: D-343 계획 §4 순서 2의 프런트 부분.
+
+## 2026-10-04 · uncommitted · fix(pilot): LAN 목록 재검색과 저장 연결 기록 보존
+
+- 변경: 웹 LAN 목록은 loading/empty/failure를 구분하고 5초 singleflight 요청·다시 찾기를 제공한다. canonical LAN robot URL만 명시적으로 열며 발견을 승인으로 표시하지 않는다. Native Vault는 만료·충돌·검색 오류에서 암호화 기록을 보존하고 실제 HTTPS 신원 검증 후 hostname 슬롯으로 이전한다. HTTP 주소 변경은 자격 재사용하지 않는다. 로컬 기록 삭제는 zero/연결 종료 뒤 처리하며 기존 IP 재등장도 fence로 막는다.
+- 증거: 독립 SPEC·Quality·Safety PASS, 작성자 JVM24 PASS·변이3 RED·복원24 PASS, root 실제 적용 소스 Gradle 컴파일/JVM24 PASS와 Chrome 목록4 PASS. 최초 root Gradle 실행은 PowerShell property 인자 분리로 태스크 조회 실패였고 실제 테스트 실행은 아니며 인자를 고쳐 재검증했다.
+- gate 변화: SOURCE/LOCAL 한정. 일반 상대 승인/key proof/만료 뒤 무코드 로그인 갱신은 D-456 후속 소유 작업이고 실제 tablet/robot DEVICE 수락은 미완료다.
+
+## 2026-10-04 · uncommitted · fix(ui): LAN 재검색 버튼의 공용 kind 선언 정합
+
+- 변경: 동적 다시 찾기 버튼의 quiet 종류를 생성 직후 명시해 공용 helper 계약 검사에서 확인할 수 있게 했다. 기존 클릭/재검색/인증 행동과 종류 값은 동일하다.
+- 증거: Pinky 학습 앱 main 동기화 중 공용 컴포넌트 검사가 이 위치를 지적했다. 해당 계약 및 Pilot 브라우저 소스 검사를 다시 수행한다.
+- gate 변화: 없음. 장치 연결·주행·페어링 수용을 수행하지 않는다.

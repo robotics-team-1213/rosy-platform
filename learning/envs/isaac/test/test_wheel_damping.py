@@ -1,4 +1,4 @@
-﻿"""Wheel gains must be explicit, finite, and verified before playback."""
+"""Wheel gains must be explicit, finite, and verified before playback."""
 import sys
 from pathlib import Path
 from types import SimpleNamespace

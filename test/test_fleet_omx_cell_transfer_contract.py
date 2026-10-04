@@ -4,6 +4,7 @@ Only the socket is replaced; the Fleet UDS client and the OMX ActionApi/ActionRu
 """
 
 import json
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -41,10 +42,14 @@ def _cell_grant_document(now):
 @pytest.fixture
 def cell_exchange(tmp_path, monkeypatch):
     monkeypatch.syspath_prepend(str(OMX_ROOT))
+    monkeypatch.syspath_prepend(str(OMX_ROOT / "test"))
     from omx_adapter.action_api import ActionApi, action_grant_digest
     from omx_adapter.action_runner import ActionRunner
     from omx_adapter.action_store import ActionStore
     from omx_adapter.local_stop import LocalStopController
+    from omx_adapter.command_owner import ArmCommandOwner
+    from omx_adapter.control_seat_admission import ControlSeatAdmission
+    from test_omx_command_owner import FakeActionClient, make_config
 
     document = _cell_grant_document(datetime.now(timezone.utc))
     document["request_digest"] = action_grant_digest(document)
@@ -74,6 +79,10 @@ def cell_exchange(tmp_path, monkeypatch):
             raise AssertionError("CELL_TRANSFER cancel goes to the exact phase goal")
 
     store = ActionStore(tmp_path / "actions.sqlite3")
+    owner = ArmCommandOwner(replace(make_config(), workcell_id="omx-1",
+                                   instance_id="omx-1-control"), FakeActionClient())
+    admission = ControlSeatAdmission(owner, store)
+    owner.bind_control_admission(admission)
     stop = LocalStopController(store.path, workcell_id="omx-1", instance_id="omx-1-control")
 
     def current(epoch, generation):
@@ -86,6 +95,7 @@ def cell_exchange(tmp_path, monkeypatch):
         principal_for_peer=lambda uid: f"fleet-uid-{uid}", allowed_peer_uids={1001},
         current_fence=current, capability_current=lambda request: True,
         submission_fence=stop, enabled=True,
+        control_admission=admission,
         phase_runner_factories={"CELL_TRANSFER": lambda received, recorder: (
             seen.append(received) or Phases(recorder))},
     )
@@ -114,6 +124,14 @@ def test_typed_cell_transfer_submit_is_a_v2_frame_parsed_as_the_cell_grant(cell_
     assert receipt.state.value == "ACCEPTED"
     assert [phase.phase_id for phase in receipt.phase_summaries] == ["approach"]
     assert store.get_action(grant.action_id)["action_kind"] == "CELL_TRANSFER"
+
+
+def test_live_pilot_seat_refuses_cell_transfer_before_journaling(cell_exchange):
+    transport, grant, api, seen, _, store = cell_exchange
+    api.runner.control_admission.acquire("pilot-token", "pilot-seat", ttl_s=10)
+    with pytest.raises(LocalActionRejected, match="pilot seat"):
+        transport.submit(grant)
+    assert seen == [] and store.get_action(grant.action_id) is None
 
 
 def test_cell_transfer_get_and_cancel_use_v2_and_keep_the_attempt(cell_exchange):

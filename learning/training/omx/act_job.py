@@ -18,6 +18,27 @@ for path in (ROOT / "contracts/learning/src", ROOT / "learning/curation/omx"):
     sys.path.insert(0, str(path))
 
 
+def verify_reader_image(pixels, original, expected_sha256):
+    """Recheck consumed RGB against validated PNG using the exporter's lossy bound."""
+    from io import BytesIO
+    from PIL import Image
+    data = Path(original).read_bytes()
+    if hashlib.sha256(data).hexdigest() != expected_sha256:
+        raise ValueError("LeRobot source PNG hash differs from validated row")
+    with Image.open(BytesIO(data)) as image:
+        expected = np.asarray(image, dtype=np.uint8)
+    pixels = np.asarray(pixels)
+    if (pixels.ndim != 3 or pixels.shape[0] != 3
+            or pixels.transpose(1, 2, 0).shape != expected.shape
+            or not np.issubdtype(pixels.dtype, np.floating)
+            or not np.isfinite(pixels).all() or (pixels < 0).any() or (pixels > 1).any()):
+        raise ValueError("LeRobot source image dimensions/range differ")
+    error = float(np.abs(pixels.transpose(1, 2, 0) * 255 - expected).mean())
+    if error > 8:
+        raise ValueError("LeRobot source image differs beyond export lossy encoding tolerance")
+    return error
+
+
 def chunk_indices(count, start, size):
     if not 0 <= start < count or size < 1:
         raise ValueError("valid episode offset and positive chunk required")
@@ -137,6 +158,7 @@ def run(train_exports, eval_export, out, *, steps=40, seed=42750, n_action_steps
                     raise ValueError("LeRobot wall receipt clock differs")
                 np.testing.assert_allclose(actual["action.duration_s"].numpy(), [row["duration_s"]],
                                            atol=1e-7, rtol=1e-6)
+                verify_reader_image(actual["observation.images.front"].numpy(), source / row["image_path"], row["image_sha256"])
                 images.append(torch.nn.functional.interpolate(actual["observation.images.front"].unsqueeze(0),
                                                               size=(64, 64), mode="bilinear", align_corners=False)[0])
                 states.append(actual["observation.state"])

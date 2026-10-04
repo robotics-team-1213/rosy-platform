@@ -2,7 +2,7 @@
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.96
+**Version:** v1.98
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -446,7 +446,7 @@ v1.70 추가 경로(모두 Bearer 인증):
 - tar 의 마지막 바이트가 나간 녹화만 CORE 가 `pilot_recorder/fetched`(`{id}`)로 알리고, 녹화기가 `fetched.json` 을 써 쿼터 정리 대상으로 삼는다. 받지 않은 녹화는 지우지 않는다.
 - 저장 위치는 `/var/lib/rosy/pilot-recordings`(설정 `recording.pilot_root`): `rosy-camera` 가 쓰고 setgid `rosy-core` 그룹으로 CORE 가 읽기만 한다.
 
-`teleop/intent`(ROS `std_msgs/String` JSON, `rosy.teleop.intent/1`)는 CORE 가 teleop 판정마다 낸다 — 관리자 앞 거부(capability·보정 lease·keep)도 포함. 싱크 실패는 명령을 거부하지 않는다.
+`teleop/intent`(ROS `std_msgs/String` JSON, `rosy.teleop.intent/1`)는 CORE 가 teleop 판정마다 낸다 — 관리자 앞 거부(capability·보정 lease·keep)도 포함. 싱크 실패는 명령을 거부하지 않는다. 수신 중에도 정지 조건을 블록마다 다시 보고, 깨지거나 파일이 계획과 달라지면(링크·교체·크기) 본문을 `Content-Length` 보다 짧게 끊는다. 짧은 본문은 실패이며, tar 는 이어 받을 수 없으므로 나중에 처음부터 다시 받는다.
 
 | 필드 | 형 | 의미 |
 |---|---|---|
@@ -458,6 +458,17 @@ v1.70 추가 경로(모두 Bearer 인증):
 | `accepted` | bool | 수락 여부 |
 | `code` | str | 거부 코드, 수락이면 `""` |
 | `t_mono_ns` | int | CORE monotonic ns |
+
+## 5.11 Pilot 방 목록 — `GET /api/v1/site/rooms` (D-343·D-432·D-452, v1.98)
+
+브라우저는 mDNS를 직접 수행하지 않는다. CORE는 공용 `_rosy._tcp` event cache를 먼저 읽고, 해당 adapter가 없을 때만 제한된 Avahi fallback을 사용한다.
+행은 발견 규칙 v0.1의 공개 정보만 싣는다 — 토큰·비밀은 싣지 않는다(D-193).
+
+| Method | 경로 | 권한 | 요청/응답 |
+|---|---|---|---|
+| GET | `/api/v1/site/rooms` | 공개 발견 읽기(인증 없음) | `{rooms: [{hostname, address, port, kind, url}]}` — `url`은 그 기기의 pilot 진입(`http[s]://<hostname>:<port>/pilot/#join`; hostname은 정규화된 `.local` FQDN이고 `tls=required`는 HTTPS). 발견 adapter/Avahi가 없거나 실패하면 503 `DISCOVERY_UNAVAILABLE`. `Cache-Control: no-store`. |
+
+행은 미승인 발견 힌트이고 선택 후 해당 origin의 기존 인증·승인을 거친다. 자격을 전달하거나 자동 등록하지 않는다. canonical private IPv4 분류·최대 64행·중복/신원 충돌 제외를 유지한다. fallback은 동시 한 번, 성공/실패 5초 cache, stdout 128KiB, subprocess 4초와 유한 종료/회수 상한을 갖는다. 응답 typed 계약은 `core_common.protocol.schemas.SiteRoomsSnapshot`이다.
 
 ---
 
@@ -1146,16 +1157,30 @@ profile:
 
 Fleet(rosy_fleet)이 제공하는 엔드포인트. Base: `http://<fleet-host>:8081`
 
-> **상태 (v1.16): 미구현.** 이 카탈로그 전체(포트 8081, 페어링 토큰 발급, 명령
-> 추적, 미션)는 중앙 Fleet 서버가 착수할 때 구현된다. 현재 존재하는 것은 사이트
-> 시드(`fleet console`)로, **`:8090`의 `/api/fleet/*`**(경로도 다르다 — 사이트
-> 것과 로봇 계약을 섞지 않으려는 의도)와 SiteHub gather/scatter 뿐이다. 로봇↔
-> 시드 콘솔 사이의 실제 프로토콜은 §5~§7 을 따른다.
+> **상태 (v1.97, D-454): 로봇 레지스트리 읽기 두 경로 구현.**
+> `fleet console --central`이 기존 사이트 앱에 §10.1의 GET 두 경로를 마운트한다.
+> 기본 사이트 프로파일에는 이 경로가 없다. 별도 8081 서비스나 중앙 쓰기·명령·
+> 미션 API는 아직 구현하지 않았다. 기존 `:8090`의 `/api/fleet/*`와 SiteHub는
+> 유지하며, 로봇↔사이트 프로토콜은 §5~§7을 따른다.
 
 사이트 시드의 추가 경로는 §10.6에 기록한다. 이 API는 로봇 `/api/v1/*`와 다른
-listener·자격 증명이며 중앙 Fleet catalog의 구현 상태로 간주하지 않는다.
+listener·자격 증명이다. §10.1의 명시된 읽기 경로 외 중앙 카탈로그의 구현 상태로
+간주하지 않는다.
 
 ## 10.1 로봇·페어링
+
+D-454 1단계의 구현은 아래 GET 두 경로에 한정한다. 기존 Fleet Viewer 이상의
+인증을 사용하며, CLI 활성화에는 기존 `--robot-credential-key-file`과 `--tasks-db`
+등록 구성이 필요하다. 나머지 행은 후속 목표 계약이다. 등록·페어링·권한을
+읽기 요청이나 발견 광고로 변경하지 않는다.
+
+목록은 `{robots: [...]}`, 상세는 한 행이며 각 행은 `robot_id`, `source`
+(`static`·`enrolled`), `online`, `state`, `capabilities`, `address_last_seen`을
+반환한다. 등록 로스터가 정본이며 등록되지 않은 상세는 404 `UNKNOWN_ROBOT`이다.
+목록은 robot_id 오름차순이고 이 단계에는 pagination이 없다. `online`은 기존
+Hub의 연결 상태이고 물리 동작 수락 증거가 아니다. `state`·`capabilities`는 기존
+스냅샷에 없으면 null이며 서버가 기능을 추정하지 않는다. 마지막 발견 주소도
+등록 신원과 안전하게 대조할 수 없으면 null이다.
 
 | Method | Path | Role | 요구사항 |
 |---|---|---|---|
@@ -2158,6 +2183,8 @@ owner ready, StopLocal ACK, caller 확인 boolean 또는 simulation pose만으�
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.98 | 2026-10-04 | Additive (D-343·D-432·D-452): 공개 LAN 로봇 발견 목록의 typed 64행 계약, FQDN/TLS 링크, 공용 cache와 제한된 singleflight fallback. 인증·승인·제어 부여 없음; 기존 v1.97 중앙 GET 정본과 envelope 1.0 유지 |
+| v1.97 | 2026-10-04 | Additive (D-454): 기존 등록 로스터를 읽는 opt-in 중앙 Fleet GET 목록·상세의 구현 상태와 응답을 명시. 기존 Viewer 인증·등록 정본·envelope 1.0 유지; 중앙 쓰기·명령·미션은 미구현 |
 | v1.96 | 2026-10-04 | Additive integration (D-452, D-450, D-453): 역할 발견·승인 directory, Cell 수동 간지 readback, CORE 단일 구간 YIELD 계약을 함께 보존. 기존 인증·HOLD·보정 lease·E-Stop 및 envelope 1.0 유지 |
 | v1.95 | 2026-10-04 | Additive (D-453, feat/meet-algorithms): CORE `POST /api/v1/line-follow/stuck/decision` 에 `YIELD` 와 선택 필드 `yield_m`·`yield_turn_rad`. 한 답은 한 구간이고 outcome 에 `yield` 가 있다. 필드가 없거나 다른 결정에 붙으면 400. 보정 lease·E-Stop 은 `RESUME`·`BACK_AND_RETRY` 와 같다. `stuck_resolver` 의 `MANUAL` 은 403. 운용자 Fleet `POST /api/fleet/robots/{robot_id}/line-stuck/decision` 의 다섯 단어와 추가 필드 422 는 그대로다. 판단기가 로봇에 `YIELD` 를 직접 보낸다. envelope `protocol_version` 1.0 유지 |
 | v1.94 | 2026-10-04 | Additive (D-450): recipe/2 작업자 간지 지시와 Cell Job의 optional read-only `operator_checkpoints`, 공유 `CellOperatorCheckpoint` 스키마. durable HOLD·재시작/재개 우회 차단; owner 접근·삽입 확인 API는 미제공. envelope 1.0 유지 |

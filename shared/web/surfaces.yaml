@@ -43,7 +43,7 @@ surfaces:
     ports:
       - {port: 8767, source: learning/training/perception/dataset/review_app.py}
     audience: Pinky 학습 객체 라벨 검수자
-    role: 원본 사진 검수와 승인 자료 준비를 소유하는 로컬 학습 도구 (D-456)
+    role: 원본 사진 검수와 승인 자료 준비를 소유하는 로컬 학습 도구 (D-459)
     owns: [pinky-object-review, pinky-review-export]
     contracts: [shared_controls, typography_focus]
     contract_reason: 로컬 학습 도구이며 로봇 명령·운용 셸·비상정지 또는 비가역 장치 행동이 없다. 초안 교체 확인은 브라우저 기본 dialog다.

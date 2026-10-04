@@ -148,3 +148,46 @@ def test_slower_publisher_can_settle_with_duplicate_fresh_polls():
     f.sleep = slower
     assert f.run()["result"] == "READY"
     assert .5 <= f.t < 1.
+
+
+def test_startup_hold_disables_real_action_submission_without_resetting_stop(tmp_path, monkeypatch):
+    from g2_startup import hold_startup
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[1] / "middleware/apps/device/omx/adapter/test"))
+    from test_omx_action_api import _runner, _grant
+    from core_common.protocol.schemas import FleetActionGrant
+    from omx_adapter.action_api import ActionApi
+    store, driver, runner = _runner(tmp_path)
+    before = runner.local_stop.snapshot(workcell_id="omx-1", instance_id="omx-1-control")
+    owner = NS(runner=runner, runtime=NS(submit=lambda *a: pytest.fail("startup must not dispatch")))
+    receipt = hold_startup(owner)
+    assert receipt["result"] == "HOLD" and receipt["fixture"] == "SIM_STARTUP_HOME"
+    after = runner.local_stop.snapshot(workcell_id="omx-1", instance_id="omx-1-control")
+    assert after == before
+    result = ActionApi(runner).dispatch({"version": 1, "operation": "SubmitAction", "grant": FleetActionGrant.model_validate(_grant()).model_dump(mode="json")}, peer_uid=1001)
+    assert result["status"] == 403 and "disabled" in result["error"]["message"]
+    assert driver.submissions == [] and store.unresolved_actions(workcell_id="omx-1") == []
+
+
+def test_startup_hold_keeps_existing_stop_and_readback_api_available(tmp_path, monkeypatch):
+    from datetime import datetime, timezone
+    from g2_startup import hold_startup
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[1] / "middleware/apps/device/omx/adapter/test"))
+    from test_omx_action_api import _runner, _grant
+    from core_common.protocol.schemas import FleetActionGrant
+    from omx_adapter.action_api import ActionApi, LocalStopApi
+    from core_common.protocol.schemas import StopRequestSource
+    store, driver, runner = _runner(tmp_path)
+    hold_startup(NS(runner=runner))
+    stop_api = LocalStopApi(runner.local_stop, source_by_peer_uid={1001: StopRequestSource.FLEET},
+                           cancel_active=lambda uid: runner.cancel_unresolved(peer_uid=uid))
+    api = ActionApi(runner, stop_api=stop_api, identity={"simulation": True})
+    query = {"version": 1, "operation": "GetStopState", "workcell_id": "omx-1", "instance_id": "omx-1-control"}
+    assert api.dispatch(query, peer_uid=1001)["status"] == 200
+    assert api.dispatch({"version": 1, "operation": "GetOwnerIdentity"}, peer_uid=1001)["status"] == 200
+    trip = {**query, "operation": "StopLocal", "authority_epoch": 2, "dispatch_generation": 8,
+            "requested_at": datetime.now(timezone.utc).isoformat(), "reason": "startup operator stop"}
+    stopped = api.dispatch(trip, peer_uid=1001)
+    assert stopped["status"] == 200 and stopped["snapshot"]["state"] == "LOCAL_LATCHED"
+    assert api.dispatch(query, peer_uid=1001)["snapshot"]["state"] == "LOCAL_LATCHED"
+    assert api.dispatch({"version": 1, "operation": "SubmitAction", "grant": FleetActionGrant.model_validate(_grant()).model_dump(mode="json")}, peer_uid=1001)["status"] == 403
+    assert driver.submissions == []

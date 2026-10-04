@@ -5697,3 +5697,16 @@ osy-d395-s1d\`.
 - gate 변화: 없음. segmentation 승인·학습 qualification·GPU job 실행·정책 승격·장치·물리 모바일·현장 수용은 주장하지 않는다. 착지·push·배포는 수행하지 않았다.
 - 추가 검사: harness/affected 91 passed/3 failed에서 생성 색인을 갱신한 뒤 실패 대상과 최종 backend를 다시 검사했다. 10 passed/2 failed이며 두 실패는 clean baseline에 재현된 deploy/logs.md 인코딩/heading 및 전체 lint다. known_failures.py는 미등록 기존 실패를 2 NEW로 보고하므로 전체 green을 주장하지 않는다. D-457은 동료 fix/site-markerless-live-map에 예약된 본문이어서 이 브랜치 adr_gaps에 임시 예약 이유를 기록했다. 실제 4개 결과 연결과 서버 재시작 후 사진 state/연결 목록 동일, PC/모바일 viewport page error 0을 확인했다.
 - 최종 확인: shared_controls 24 passed/2 failed는 기존 baseline의 cell-document-editor.js field와 peer-picker.js disabled reason 두 건이며 이번 학습 표면의 신규 오류는 없다. 현재 운영 state로 새 receiver export를 만들어 승인 2장만 내보냈고, 제외 source 2와 미분류 pending source 3은 학습 라벨에서 제외했다. COMPLETE/manifest 모든 파일 hash·byte 수와 검수 state 불변을 확인했다. 초기 3장 승인은 역사적 import/export에 보존되며 현재 4번 재검수 대기를 승인으로 되돌리지 않았다.
+## 2026-10-04 · uncommitted · docs(pairing): D-456 LAN 수신 승인과 지속 페어링
+
+- 변경: 사용자는 상대 화면 승인 기본·QR/코드 보조·LAN 우선을 선택했다. 기존 승인/SQLite 보존과 실제 공백(Pilot IP 슬롯·실패 삭제, CORE 일반 상대 승인·지속 신원 증명/세션 갱신 미구현)을 분리해 D-456에 기록했다.
+- 증거: 기존 소스·API·저장/만료/발견 경로와 공식 Android 문서를 확인했다. 새 범용 승인 거래·장치 재연결은 아직 검증하지 않았다. 초기 저널 형식 실패는 헤딩과 필수 항목을 수정하고 다시 검사한다.
+- gate 변화: 구조 결정. 기존 만료·권한·키/CA pin을 우회하지 않으며 전체 구현·배포·장치 수락을 주장하지 않는다.
+
+## 2026-10-04 · uncommitted · fix(docs): Pinky 검수 ADR 번호 충돌 해결과 main 동기화
+
+- 변경: 사용자 로컬 병합 지시로 main을 전담 branch에 병합했다. 동료 LAN 페어링 D-456을 보존하고 우리 검수 ADR을 전역 예약 확인 후 D-459로 정정했다. 공통 저널과 ADR 행은 양쪽 내용을 보존했다.
+- 증거: 초기 승인·운영자의 추가 편집·learning 연결 상태는 기존 SQLite에 보존한다. 동기화 후 관련 검증은 동일 branch에서 수행한다.
+- gate 변화: 없음. 로컬 병합이며 push·배포·장치 수용은 별도다.
+
+- 동기화 검증: 관련 검사 196 passed/1 failed에서 main의 Pilot 다시 찾기 버튼 선언을 공용 helper 계약에 맞게 명시했다. 해당 계약과 생성 정합 2 passed; Pilot 실 서버 브라우저 72건은 NOT_RUN/skipped다. known_failures 신규 0. 이전 baseline 인코딩/field 오류는 최신 main에서 해소되어 재현되지 않았다.

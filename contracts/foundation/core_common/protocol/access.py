@@ -10,6 +10,21 @@ class ConnectionInfo(BaseModel):
     transport: Literal['http', 'https']
 
 
+class RoomDiscoveryHint(BaseModel):
+    """Public LAN observation, never an approved identity or a control grant."""
+    model_config = ConfigDict(extra='forbid', strict=True)
+    hostname: str = Field(pattern=r'^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.local$')
+    address: str = Field(min_length=7, max_length=15)
+    port: int = Field(ge=1, le=65535)
+    kind: Literal['robot']
+    url: str = Field(min_length=1, max_length=512)
+
+
+class SiteRoomsSnapshot(BaseModel):
+    model_config = ConfigDict(extra='forbid', strict=True)
+    rooms: list[RoomDiscoveryHint] = Field(max_length=64)
+
+
 class LoginPairRequest(BaseModel):
     """Existing eight-symbol screen code."""
     code: str = Field(min_length=1, max_length=32)

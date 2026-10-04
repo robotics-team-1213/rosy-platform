@@ -100,8 +100,16 @@ SIZE_VERDICTS = {
         "duplicate its socket. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        32_162,
-        "split: re-judged 2026-10-04 at 32162 after integrating main 2ad047602 with D-452: "
+        32_469,
+        "split: independently re-judged 2026-10-04 at measured 32469 after main 387b19841: "
+        "307 since the previous 32162 consists of prior integration 7, D-455 meet/resolver "
+        "181, central read projection/routes/CLI 123, app/worker extraction -11 and web 7; "
+        "the incoming cross-module capture tool is correctly placed under root tools, outside Fleet; it remains UX HOLD, not accepted screen evidence. "
+        "Retain B2 server subpackage and UI resource migration obligations, owner boundaries, "
+        "600 production/800 web limits, 1000 zero-growth tier and +150 package allowance. "
+        "Source accounting and independent review are recorded in "
+        "docs/validation/network-peer-discovery-2026-10-04/main-integration-checkpoint.md. "
+        "Previously re-judged 2026-10-04 at 32162 after integrating main 2ad047602 with D-452: "
         "incoming main counts 31786, including focused meet subpackage 653 and existing "
         "resolver/loop/transport wiring 135 beyond its 30998 verdict; the approved "
         "Cell checkpoint/editor delta 377 and D-452 delta 376 both retain their owners. "

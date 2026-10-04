@@ -1693,3 +1693,28 @@
 - 증거: `test_central_registry_write.py` 신규 9 passed. fleet 전체(셀 앱 2파일 수집 오류 제외, main 선재) **1815 passed/7 skipped, known_failures 0 new**. flake8 0.
 - gate 변화: 없음. ROS-SIM/DEVICE/FIELD 주장 없음(D-454 결정 3).
 - 결정: D-454 결정 2 계속. 뒤는 pairing-tokens(2)와 §10.2 명령 상관·ACK(D-426 선행).
+
+## 2026-10-04 · uncommitted · fix(registry): 중앙 1c 쓰기 보류와 실제 등록 원장 보존
+
+- 변경: 02dc934a7의 이력은 보존하되 기존 두 중앙 GET 정본을 유지한다. Admin·실명 actor·등록 소유자가 없는 중앙 쓰기와 저장소 직접 수정은 제공하지 않는다. 기존 사이트 등록·페어링·해제 경로를 유지한다.
+- 증거: 실제 앱·로스터·EnrollmentService·암호화 SQLite를 사용하는 미마운트·불변 회귀를 추가했다. 작성자 검사 22 PASS 및 독립 SPEC·Quality·Safety 검토 PASS이며 실제 통합 재검사는 별도 수행한다. fake 저장소가 숨긴 인터페이스·알 수 없는 항목·거짓 token 폐기 문제는 실행 승인 근거로 쓰지 않는다.
+- gate 변화: 중앙 1c 쓰기 적용은 HOLD다. 같은 장비의 identity·endpoint·살아 있는 연결·영구 credential·감사는 변경하지 않는다. 로봇 동작·토큰 폐기·등록 해제를 이 검증을 위해 요청하지 않는다.
+
+## 2026-10-04 · uncommitted · feat(tools): Fleet·게임 캡처 회차 6셀 (D-359 §7.8)
+
+- 변경: `operations/fleet/tools/capture_console_games_round.py` 신설 — 실제 Fleet 앱(FakeRobot 2대) + 실제 games preview 서버를 Playwright로 찍는다. 회차 `docs/validation/fleet-games-capture-2026-10-04/`에 console 3셀(1920/390/320) + games 3셀(1280/390/320). 배치 규칙도구 위치: fleet 모듈 tools/(게임을 엮는 순수 측정) — tools/AGENTS.md 배치 규칙 준수.
+- 증거: 6셀 캡처(페이지 오류 0). flake8 0.
+- gate 변화: 없음. LOCAL 합성 증거. 게임 readback 2대·사람 G3는 다음 회차.
+- 결정: D-359 §7.8 역할 표면 나머지 캡처.
+
+## 2026-10-04 · uncommitted · docs(ux): 기존 캡처의 미완료 화면을 HOLD로 분리
+
+- 변경: 2150354e2 원본 캡처·report를 보존하고 README에 실제 미렌더링·인증 대기와 도구의 auth/method/CSP 누락을 명시했다. 페이지 오류 0을 정상 UX로 취급하지 않는다.
+- 증거: 원본 console-1920x1080 PNG를 root와 독립 검토자가 직접 확인했다. 기존 사진은 실패 관측이며 현재 통합 코드의 정상 화면 검증은 아니다.
+- gate 변화: LOCAL UX/G3 HOLD. 실물/정지/DEVICE 수락 없음.
+
+## 2026-10-04 · uncommitted · fix(tools): 교차 모듈 캡처를 workspace tools에 배치
+
+- 변경: Fleet와 games를 엮는 캡처는 tools/AGENTS.md 규칙에 따라 root tools/capture_console_games_round.py로 이동했다. REPO 계산과 현재 재현 경로를 맞췄다. Fleet 운영 runtime에 games import를 추가하지 않는다.
+- 증거: 실제 구조 검사에서 fleet→games 미선언/방향 위반2건이 재현됐다. 모듈의 dependency/방향 allowlist를 늘리지 않고 잘못된 배치를 수정해 다시 검사한다. 이전32605는 잘못 모듈에 들어간 캡처136행을 포함한 실측이며 이동 뒤 예상32469를 다시 측정한다.
+- gate 변화: 소스 배치 정합. 기존 캡처의 UX HOLD는 그대로이며 실제 역할/장치 수락을 주장하지 않는다.

@@ -15,9 +15,10 @@ gates:
   ROS-SIM:
     state: N/A
   ARTIFACT:
-    state: GO
-    cmd: "gh workflow run 'Payload boot smoke (arm64)' --ref main; gh run watch <run-id> -R livsbittt/rosy-os"
-    evidence: "share/dashboard 설치: 서명 payload 2026.10.04-034 안 관측 + arm64 러너 부팅 GET /dashboard 200+CSP (payload-boot-smoke run 37200780702, D-444 P1.2)"
+    state: HOLD
+    cmd: "gh workflow run payload-boot-smoke.yml -R livsbittt/rosy-os --ref af0b3211384c9a8f2e5abbc2863c2fbcb54b0ca3 -f build_run_id=37189180389; gh run watch <issued-run-id> -R livsbittt/rosy-os"
+    evidence: "share/dashboard: 서명 payload 2026.10.04-034 설치 관측. 무서명 동일 빌드(source dd159ab3361739e41c105dcef533bd0e1fd8f614)의 hosted ARM GET /dashboard 200+CSP(run 37200780702, workflow source af0b3211384c9a8f2e5abbc2863c2fbcb54b0ca3). cmd는 이 역사적 벤치 재현이며 현재 통합 후보 수용을 증명하지 않는다"
+    blocker: "D-444 R1의 서명 release를 탄 기기에서 GET /dashboard 200+CSP는 미확인. hosted ARM 무서명 벤치는 이를 대체하지 않는다"
   DEVICE:
     state: N/A
   FIELD:

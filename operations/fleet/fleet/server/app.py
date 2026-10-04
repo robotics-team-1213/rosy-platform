@@ -412,35 +412,18 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
 
     from fleet.server.peer_routes import install_peer_catalogue
     catalogue = install_peer_catalogue(app, console=console, enrollment=enrollment,
-                                      pairing=pairing, read_guard=read_guard,
-                                      directory_file=approved_peer_directory_file)
+                                       pairing=pairing, read_guard=read_guard,
+                                       directory_file=approved_peer_directory_file)
     if discovery is not None:
         install_discovery_routes(app, console=console, hub=hub, discovery=discovery,
                                  discovery_token=discovery_token, enrollment=enrollment,
                                  principals=principals, require_viewer=require_viewer,
                                  read_guard=read_guard, catalogue=catalogue)
 
-    if enrollment is not None:
-        from fleet.server.enrollment_routes import install_enrollment_routes
-
-        install_enrollment_routes(app, enrollment, require_viewer=require_viewer,
-                                  require_operator=require_operator,
-                                  named_identity=bool(principals))
-
-    if pairing is not None:
-        from fleet.server.pairing_routes import install_pairing_routes
-
-        install_pairing_routes(app, pairing, sync_token=pairing_sync_token,
-                               require_viewer=require_viewer, require_operator=require_operator,
-                               named_identity=bool(principals))
-
-    if central_registry is not None:
-        # D-454 1단계: 중앙 프로파일 마운트 — `/api/v1/fleet/*` (API Ref §10.1 읽기).
-        from fleet.server.central_registry_routes import install_central_registry_routes
-
-        install_central_registry_routes(app, central_registry,
-                                        require_viewer=require_viewer,
-                                        require_operator=require_operator)
+    from fleet.server.central_registry_routes import install_registry_routes
+    install_registry_routes(app, registry=central_registry, enrollment=enrollment, pairing=pairing,
+                            sync_token=pairing_sync_token, require_viewer=require_viewer,
+                            require_operator=require_operator, named_identity=bool(principals))
 
     install_ingest_routes(app, console=console, console_token=console_token, hub=hub,
                           sightings=sightings, policy_evidence=policy_evidence,
@@ -475,18 +458,13 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
 
     proposal_create = proposal_resolve = None
     if mission_service is not None:
-        proposal_create, proposal_resolve = install_mission_routes(app, mission_service=mission_service,
-                               proposal_store=proposal_store,
-                               cell_job_store=cell_job_store,
-                               cell_job_resolver=cell_job_resolver,
-                               goal_evidence_service=goal_evidence_service,
-                               mission_progress=mission_progress,
-                               candidate_resolver=candidate_resolver,
-                               require_viewer=require_viewer,
-                               require_operator=require_operator,
-                               require_named_operator=require_named_operator,
-                               require_proposer=require_proposer,
-                               read_guard=read_guard, operator_guard=operator_guard)
+        proposal_create, proposal_resolve = install_mission_routes(
+            app, mission_service=mission_service, proposal_store=proposal_store,
+            cell_job_store=cell_job_store, cell_job_resolver=cell_job_resolver,
+            goal_evidence_service=goal_evidence_service, mission_progress=mission_progress,
+            candidate_resolver=candidate_resolver, require_viewer=require_viewer,
+            require_operator=require_operator, require_named_operator=require_named_operator,
+            require_proposer=require_proposer, read_guard=read_guard, operator_guard=operator_guard)
         from fleet.server.cell_job_routes import install_cell_job_routes
 
         install_cell_job_routes(app, cell_job_store=cell_job_store,

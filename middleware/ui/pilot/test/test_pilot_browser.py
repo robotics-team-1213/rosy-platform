@@ -444,6 +444,84 @@ def test_bad_token_is_refused_with_guidance(tablet_page):
     assert errors == [], errors
 
 
+@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+                    reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
+def test_lobby_lists_neighbours_and_points_to_their_origin(tablet_page):
+    """이웃 방 목록(D-343 2.2-3): 이 기기가 대신 찾은 방들이 보이고, 각 버튼이 그 origin URL 을 가진다."""
+    base_url, page, errors = tablet_page
+    page.route("**/api/v1/site/rooms",
+               lambda route: route.fulfill(json={"rooms": [
+                   {"hostname": "rosy-02", "address": "10.0.0.8", "port": 8080,
+                    "kind": "robot", "url": "http://rosy-02.local:8080/pilot/#join"}]}))
+    page.goto(f"{base_url}/pilot")
+    page.wait_for_selector("form[data-pilot-token-form] ui-field input")
+    room = page.locator("[data-lobby-room=rosy-02]")
+    room.wait_for(state="visible")
+    # 이동 목적지는 버튼의 진입 URL 에 명시돼 있다(D-343 2.3). 시험 호스트에서
+    # 가짜 LAN 이름은 풀리지 않으므로 클릭하지 않고 목적지를 단언한다.
+    assert room.get_attribute("data-lobby-url") == "http://rosy-02.local:8080/pilot/#join"
+    assert errors == [], errors
+
+
+@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+                    reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
+def test_lobby_failure_shows_retry_and_gate_survives(tablet_page):
+    """A failed scan is distinguishable from an empty LAN; login remains usable."""
+    base_url, page, errors = tablet_page
+    page.route("**/api/v1/site/rooms",
+               lambda route: route.fulfill(status=503, json={"code": "DISCOVERY_UNAVAILABLE"}))
+    page.goto(f"{base_url}/pilot")
+    page.wait_for_selector("form[data-pilot-token-form] ui-field input")
+    page.get_by_text("로봇 목록을 가져오지 못했습니다.", exact=False).wait_for(state="visible")
+    page.locator("[data-lobby-retry]").wait_for(state="visible")
+    assert page.locator("[data-lobby-room]").count() == 0
+    assert errors == [], errors
+
+
+@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1", reason="browser opt-in")
+def test_lobby_retry_recovers_without_duplicate_scans(tablet_page):
+    base_url, page, errors = tablet_page
+    calls = []
+
+    def rooms(route):
+        calls.append(route.request.method)
+        if len(calls) == 1:
+            route.fulfill(status=503, json={"code": "DISCOVERY_UNAVAILABLE"})
+        else:
+            route.fulfill(json={"rooms": [{"hostname": "rosy-02.local", "address": "10.0.0.8",
+                "port": 443, "kind": "robot", "url": "https://rosy-02.local/pilot/#join"}]})
+
+    page.route("**/api/v1/site/rooms", rooms)
+    page.goto(f"{base_url}/pilot")
+    page.locator("[data-lobby-retry]").wait_for(state="visible")
+    page.evaluate("""() => {const retry=document.querySelector('[data-lobby-retry]');
+        retry.click(); retry.click(); retry.click();}""")
+    page.locator('[data-lobby-room="rosy-02.local"]').wait_for(state="visible")
+    assert calls == ["GET", "GET"]
+    assert page.locator("form[data-pilot-token-form] ui-field input").is_visible()
+    assert errors == [], errors
+
+
+@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1", reason="browser opt-in")
+def test_lobby_rejects_unsafe_urls_and_suppresses_current_robot(tablet_page):
+    from urllib.parse import urlsplit
+    base_url, page, errors = tablet_page
+    local = urlsplit(base_url)
+    rows = [{"hostname": "rosy-02.local", "address": "10.0.0.8", "port": 8080, "kind": "robot", "url": url}
+            for url in ("javascript:alert(1)", "https://elsewhere.example/pilot/#join",
+                        "http://user:secret@rosy-02.local:8080/pilot/#join")]
+    rows += [{"hostname": "rosy-01.local", "address": local.hostname, "port": local.port,
+              "kind": "robot", "url": f"http://rosy-01.local:{local.port}/pilot/#join"},
+             {"hostname": "rosy-03.local", "address": "10.0.0.9", "port": 443, "kind": "robot",
+              "url": "https://rosy-03.local/pilot/#join"}]
+    page.route("**/api/v1/site/rooms", lambda route: route.fulfill(json={"rooms": rows}))
+    page.goto(f"{base_url}/pilot")
+    page.locator('[data-lobby-room="rosy-03.local"]').wait_for(state="visible")
+    assert page.locator("[data-lobby-room]").count() == 1
+    assert "선택한 로봇에서 승인·로그인을 확인합니다" in page.locator("[data-lobby-list]").inner_text()
+    assert errors == [], errors
+
+
 def _enter_drive(page, base_url):
     page.goto(f"{base_url}/pilot")
     page.wait_for_selector("form[data-pilot-token-form] ui-field input")
