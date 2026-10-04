@@ -5095,3 +5095,8 @@
 
 - 변경: 동일 index의 다른 사진에 승인 라벨을 적용하는 문제를 RED6으로 재현했다. source/review/실제 image SHA와 크기/상대 경로를 검증한 뒤 검증 bytes를 snapshot하고 실제 파싱한 입력·모든 output hash manifest를 보존한다.
 - 증거: object39pass/관련71pass. 실제4pending frame/7draft boxes/4image SHA 확인, txt0/queue4/3manifest ref 검증. 실제 승인 export는 아직 없고 positive snapshot 증거는 unit fixture이다. 근거: validation/object-review-image-binding-2026-10-04.md. 사람 인증/검수·group provenance·새 dataset/model/device/field와 전체 목표는 미완료다.
+
+### 2026-10-04 · uncommitted · fix(learning): verify excluded evaluation content
+
+- 변경: --exclude-eval의 manifest 변경으로 heldout 세션이 빠지는 문제와 image/mask/추가 파일 미검출을 RED4+강화CVAT RED1로 재현했다. 폴더 content_sha/버전 이름과 파싱 전후 manifest bytes를 검사하고 변경·읽기 오류를 출력 작성 전 거절한다.
+- 증거: 독립 검토의 ABA 우회 RED1 후 파싱 manifest bytes를 직접 content hash에 포함해 수정했다. 최종53pass/1skip, 정상/변조2frame 및 ABA host fixture를 X v1/v2에 보존하고 원본 불변·변조 거절 확인. 실제126frame 모델PC평가 수용이 아니다. 근거: validation/eval-exclusion-integrity-2026-10-04.md. 객체group/사람검수/실제modelPC wholejob/shadowrollback와 전체운영목표 미완료.

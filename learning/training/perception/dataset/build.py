@@ -276,7 +276,7 @@ def build_dataset(export, frame_dirs, classes, out, deleted_indexes=(), exclude_
     return manifest
 
 
-def content_sha(folder) -> str:
+def content_sha(folder, *, manifest_bytes=None) -> str:
     """D-373 decision 8 store version: sha256 over sorted "relpath\\0filesha256\\n" lines.
 
     Minimal stand-in until learning/training/perception/store.py (feat/d373-learning-loop-lap2)
@@ -286,9 +286,12 @@ def content_sha(folder) -> str:
     for p in folder.rglob("*"):
         if p.is_file():
             h = hashlib.sha256()
-            with open(p, "rb") as fh:
-                for chunk in iter(lambda: fh.read(1 << 20), b""):
-                    h.update(chunk)
+            if manifest_bytes is not None and p.relative_to(folder).as_posix() == "manifest.json":
+                h.update(manifest_bytes)
+            else:
+                with open(p, "rb") as fh:
+                    for chunk in iter(lambda: fh.read(1 << 20), b""):
+                        h.update(chunk)
             lines.append(f"{p.relative_to(folder).as_posix()}\0{h.hexdigest()}\n")
     return hashlib.sha256("".join(sorted(lines)).encode("utf-8")).hexdigest()
 
@@ -297,11 +300,19 @@ def read_eval_set(folder) -> tuple[dict, set[str]]:
     """An eval set version folder -> (ref {"name", "content_sha"}, its sessions)."""
     folder = Path(folder)
     try:
-        manifest = json.loads((folder / "manifest.json").read_text(encoding="utf-8"))
+        manifest_bytes = (folder / "manifest.json").read_bytes()
+        manifest = json.loads(manifest_bytes.decode("utf-8"))
     except (OSError, ValueError) as exc:
         raise BuildError(f"--exclude-eval {folder}: no readable manifest.json ({exc})") from exc
     if manifest.get("purpose") != "eval":
         raise BuildError(f"--exclude-eval {folder}: not an eval set (purpose != 'eval')")
+    try:
+        digest = content_sha(folder, manifest_bytes=manifest_bytes)
+        stable_manifest = (folder / "manifest.json").read_bytes() == manifest_bytes
+    except OSError as exc:
+        raise BuildError(f"--exclude-eval {folder}: cannot verify eval content hash ({exc})") from exc
+    if digest != folder.name or not stable_manifest:
+        raise BuildError(f"--exclude-eval {folder}: eval content hash differs from fixed version")
     sessions = ({f["session"] for f in manifest.get("frames", [])}
                 | {v["session"] for v in manifest.get("labels", [])})
     return {"name": folder.parent.name, "content_sha": folder.name}, sessions
