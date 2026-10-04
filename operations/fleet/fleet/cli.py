@@ -116,6 +116,8 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     console.add_argument("--mission-api", action="store_true",
                          help=("enable persistent Mission proposal/read APIs without ER 2 or Mission "
                                "dispatch; existing Fleet operator commands remain available"))
+    console.add_argument("--cell-app-service-id", default=None,
+                         help="existing site-users service principal for explicit Cell workspace proposals")
     console.add_argument("--cell-job-stack-tol-m", default=None, type=float, help=(
         "recompile Cell Job proposals with palletizing at this stack tolerance; needs --mission-api"))
     console.add_argument("--goal-evidence-config", default=None, type=Path,
@@ -510,6 +512,7 @@ def run_console(args: argparse.Namespace) -> None:
                      hub=hub, sightings=sighting_service, task_service=task_service,
                      mission_service=mission_service, proposal_store=proposal_store,
                      cell_job_compiler=cell_job_compiler,
+                     cell_app_service_id=getattr(args, "cell_app_service_id", None),
                      goal_evidence_service=goal_evidence_service,
                      site_users=site_users, discovery=discovery,
                      discovery_token=discovery_token,

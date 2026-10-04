@@ -114,6 +114,11 @@ class FakeHttp:
     def status(self, url: str, ca_file) -> int:
         return self.health
 
+    def functional(self, url, ca_file, token_file):
+        if url.endswith('/api/fleet/state'):
+            return {'robots': [{'robot_id': 'robot-test'}]}
+        return {'sources': ['camera-test']}
+
 
 class FakeHost:
     """systemctl + docker; the running tag follows site.env at each restart."""
@@ -140,6 +145,8 @@ class FakeHost:
             self.running = upd.read_env(self.paths.site_env)["ROSY_SITE_IMAGE_TAG"]
             return self._ok()
         if args[:2] == ["docker", "compose"]:
+            if "--hash" in args:
+                return self._ok("\n".join(f"{s} hash-{s}" for s in upd.SERVICES))
             if "config" in args:
                 tag = kwargs["env"]["ROSY_SITE_IMAGE_TAG"]
                 services = {s: {"image": f"rosy-site-{s}:{tag}"} for s in upd.SERVICES}
@@ -160,6 +167,10 @@ class FakeHost:
             return self._ok("\n".join(sorted(self.images)))
         if args[:3] == ['docker', 'container', 'inspect']:
             service = args[-1].split('-')[0]
+            if '--format' not in args:
+                return self._ok(json.dumps([{"Image": _image_id(self.running, service),
+                    "Config": {"Labels": {"com.docker.compose.config-hash": f"hash-{service}"}},
+                    "HostConfig": {"ReadonlyRootfs": True, "Privileged": False}}]))
             return self._ok(_image_id(self.running, service))
         if args[:2] == ["docker", "ps"]:
             return self._ok("\n".join(f"rosy-site-{s}:{self.running}" for s in upd.SERVICES))
@@ -186,6 +197,7 @@ def host(tmp_path):
         pytest.skip("needs symlinks (Linux site host; Windows without developer mode "
                     "cannot create them)")
     paths = upd.Paths(tmp_path)
+    paths.state.parent.mkdir(parents=True)
     paths.site_env.parent.mkdir(parents=True)
     paths.site_env.write_text(f"# site\nROSY_SITE_IMAGE_TAG={OLD}\nROSY_SITE_CONFIG_DIR=/etc/x\n",
                               encoding="utf-8")
@@ -217,6 +229,139 @@ def _world(*commits_created, signed=True):
         blobs[_tag(commit)] = assets
         releases.append(_release(commit, created, assets, signed=signed))
     return releases, blobs
+
+
+def test_signed_manual_install_is_adopted_even_when_idle(host):
+    host.paths.state.write_text(json.dumps({"installed": {"commit": "0" * 40}, "failed": {}}))
+    http, fake = FakeHttp([], {}), FakeHost(host.paths)
+    assert _updater(host, http, fake).run() == upd.EXIT_OK
+    state = json.loads(host.paths.state.read_text())
+    assert state["installed"]["commit"] == OLD
+    assert state["installed"]["origin"] == "manual"
+    assert state.get("previous") is None
+
+
+def test_next_switch_records_actual_manual_install_as_previous(host):
+    host.paths.state.write_text(json.dumps({"installed": {"commit": "0" * 40}, "failed": {}}))
+    rows, blobs = _world((NEW, "2026-10-04T02:00:00Z"))
+    assert _updater(host, FakeHttp(rows, blobs), FakeHost(host.paths)).run() == upd.EXIT_OK
+    assert json.loads(host.paths.state.read_text())["previous"]["commit"] == OLD
+
+
+def test_hold_does_not_download_restart_or_prune(host):
+    host.paths.state.write_text(json.dumps({"hold": {"reason": "local maintenance"}, "failed": {}}))
+    rows, blobs = _world((NEW, "2026-10-04T02:00:00Z"))
+    http, fake = FakeHttp(rows, blobs), FakeHost(host.paths)
+    assert _updater(host, http, fake).run() == upd.EXIT_OK
+    assert json.loads(host.paths.state.read_text())["last_run"]["result"] == "held"
+    assert http.downloads == [] and fake.calls == []
+    assert upd.read_env(host.paths.site_env)["ROSY_SITE_IMAGE_TAG"] == OLD
+
+
+def test_hold_resume_uses_updater_lock_and_preserves_other_state(host):
+    updater = _updater(host, FakeHttp([], {}), FakeHost(host.paths))
+    updater.save_state({'failed': {'site-aaaaaaaaaaaa': {'reason': 'bad'}}})
+    assert upd.set_hold(updater, 'local work') == upd.EXIT_OK
+    assert updater.load_state()['hold']['reason'] == 'local work'
+    with upd.run_lock(host.paths.lock):
+        assert upd.set_hold(updater, None) == upd.EXIT_LOCKED
+    assert 'hold' in updater.load_state()
+    assert upd.set_hold(updater, None) == upd.EXIT_OK
+    assert 'hold' not in updater.load_state()
+    assert 'site-aaaaaaaaaaaa' in updater.load_state()['failed']
+
+
+@pytest.mark.parametrize('payload', [{'status': 'ok'}, {'robots': []}, {'robots': [{'robot_id': 'other'}]}])
+def test_functional_failure_rolls_back_despite_healthy_containers(host, payload):
+    rows, blobs = _world((NEW, '2026-10-04T02:00:00Z'))
+    http, fake = FakeHttp(rows, blobs), FakeHost(host.paths)
+    token = host.root / 'viewer-token'
+    token.write_text('never-log-this-token')
+    host.config['functional_checks'] = [{'path': '/api/fleet/state', 'token_file': str(token),
+                                        'required_ids': ['robot-test']}]
+    http.functional = lambda *args: payload if fake.running == NEW else {'robots': [{'robot_id': 'robot-test'}]}
+    assert _updater(host, http, fake).run() == upd.EXIT_FAILED
+    assert fake.running == OLD
+    assert _tag(NEW) in json.loads(host.paths.state.read_text())['failed']
+
+
+def test_functional_sources_gate_checks_configured_camera(host):
+    http, fake = FakeHttp([], {}), FakeHost(host.paths)
+    host.config['functional_checks'] = [{'path': '/api/fleet/vision/sources', 'token_file': 'unused',
+                                        'required_ids': ['missing-camera']}]
+    updater = _updater(host, http, fake)
+    updater._verify(host.paths.link, loaded=True, expected_commit=OLD)
+    assert updater.healthy(upd.read_env(host.paths.site_env), OLD)[0] is False
+
+
+def test_functional_http_failure_never_discloses_token(tmp_path, monkeypatch, capsys):
+    from deploy.site import site_update_io as io
+    token = tmp_path / 'viewer-token'
+    token.write_text('secret-that-must-not-appear')
+    class Opener:
+        def open(self, request, **kwargs):
+            assert request.get_header('Authorization') == 'Bearer secret-that-must-not-appear'
+            assert request.full_url == 'https://site.example.invalid/api/fleet/state'
+            raise OSError('secret-that-must-not-appear')
+    monkeypatch.setattr(io.urllib.request, 'build_opener', lambda *args: Opener())
+    with pytest.raises(io.Transient) as error:
+        io.Http().functional('https://site.example.invalid/api/fleet/state', None, token)
+    assert 'secret-that-must-not-appear' not in str(error.value)
+    assert 'secret-that-must-not-appear' not in capsys.readouterr().out
+    with pytest.raises(io.Transient, match='redirects'):
+        io._NoCredentialRedirect().redirect_request(None, None, None, None, None, None)
+
+
+@pytest.mark.parametrize('path', ['https://other.example.invalid', '/api/fleet/state?x=1', [], '/api/fleet/do'])
+def test_functional_configuration_rejects_unapproved_paths(tmp_path, path):
+    public, token = tmp_path / 'public', tmp_path / 'token'
+    public.write_text('public')
+    token.write_text('viewer')
+    config = tmp_path / 'autoupdate.json'
+    config.write_text(json.dumps({'repo': REPO, 'key_id': 'test', 'public_key': str(public),
+        'health_url': 'https://site.example.invalid/healthz', 'functional_checks': [
+            {'path': path, 'token_file': str(token), 'required_ids': ['robot-test']}]}))
+    with pytest.raises(upd.ConfigError, match='supported'):
+        upd.load_config(config)
+
+
+def test_dry_run_does_not_adopt_manual_install(host):
+    original = {'installed': {'commit': '0' * 40}, 'previous': {'commit': 'f' * 40}, 'failed': {}}
+    host.paths.state.write_text(json.dumps(original))
+    assert _updater(host, FakeHttp([], {}), FakeHost(host.paths), dry_run=True).run() == upd.EXIT_OK
+    state = json.loads(host.paths.state.read_text())
+    assert state['installed'] == original['installed'] and state['previous'] == original['previous']
+
+
+@pytest.mark.parametrize('hold', [False, [], {}, {'reason': ''}])
+def test_invalid_hold_is_preserved_and_blocks_changes(host, hold):
+    original = json.dumps({'failed': {}, 'hold': hold})
+    host.paths.state.write_text(original)
+    fake = FakeHost(host.paths)
+    assert _updater(host, FakeHttp([], {}), fake).run() == upd.EXIT_FAILED
+    assert host.paths.state.read_text() == original and not fake.calls
+
+
+@pytest.mark.parametrize("field", ["hash", "readonly", "privileged"])
+def test_local_runtime_drift_blocks_switch(host, field):
+    rows, blobs = _world((NEW, "2026-10-04T02:00:00Z"))
+    fake = FakeHost(host.paths)
+    def drift(args, **kwargs):
+        result = fake(args, **kwargs)
+        if args[:3] == ['docker', 'container', 'inspect'] and '--format' not in args:
+            info = json.loads(result.stdout)
+            if field == "hash":
+                info[0]["Config"]["Labels"]["com.docker.compose.config-hash"] = "locally-changed"
+            elif field == "readonly":
+                info[0]["HostConfig"]["ReadonlyRootfs"] = False
+            else:
+                info[0]["HostConfig"]["Privileged"] = True
+            result.stdout = json.dumps(info)
+        return result
+    http = FakeHttp(rows, blobs)
+    assert _updater(host, http, drift).run() == upd.EXIT_FAILED
+    assert http.downloads == []
+    assert not any(a[:2] == ['systemctl', 'restart'] for a in fake.calls)
 
 
 # -- selection ------------------------------------------------------------------
@@ -492,7 +637,8 @@ def test_restart_timeout_restores_previous_stack(host):
     assert fake.running == OLD
 
 
-def test_interrupted_switch_is_undone_before_network_access(host):
+@pytest.mark.parametrize('held', [False, True])
+def test_interrupted_switch_is_undone_before_network_access(host, held):
     import shutil
     updater = _updater(host, FakeHttp([], {}), FakeHost(host.paths))
     shutil.copy2(host.paths.site_env, host.paths.env_backup)
@@ -500,12 +646,16 @@ def test_interrupted_switch_is_undone_before_network_access(host):
     target.mkdir()
     upd.write_env_tag(host.paths.site_env, NEW)
     upd.swap_link(host.paths.link, target)
-    updater.save_state({'failed': {}, 'switch': {'previous': str(host.paths.candidates / OLD),
-                        'current': OLD, 'commit': NEW, 'tag': _tag(NEW)}})
+    state = {'failed': {}, 'switch': {'previous': str(host.paths.candidates / OLD),
+                                     'current': OLD, 'commit': NEW, 'tag': _tag(NEW)}}
+    if held:
+        state['hold'] = {'reason': 'local work'}
+    updater.save_state(state)
     assert updater.run() == upd.EXIT_FAILED
     assert host.paths.link.resolve() == host.paths.candidates / OLD
     assert upd.read_env(host.paths.site_env)['ROSY_SITE_IMAGE_TAG'] == OLD
     assert 'switch' not in updater.load_state()
+    assert bool(updater.load_state().get('hold')) == held
 
 
 def test_verifier_commit_must_match_candidate_directory(host):

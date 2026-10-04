@@ -90,3 +90,50 @@ def test_affected_tier_runs_after_the_fast_gate():
     assert "--full" not in text, "the full suite runs on GitHub runners, never in the hook"
     assert '--skip "$suite"' in text and '"${FAST_SUITES[@]}"' in text, (
         "the affected run skips the fast suites the hook already ran (review: guards ran twice)")
+
+
+INSTALLER = ROOT / "tools" / "hooks" / "install.sh"
+INSTALL_BASH = (str(Path(os.environ.get("ProgramFiles", "C:/Program Files")) / "Git/bin/bash.exe")
+                if os.name == "nt" else BASH)
+
+
+@pytest.mark.skipif(not INSTALL_BASH or not Path(INSTALL_BASH).is_file(), reason="native bash is required")
+@pytest.mark.parametrize("location", ["default", "relative", "absolute", "tracked"])
+def test_installer_uses_the_hooks_path_git_uses_from_a_linked_worktree(tmp_path, location):
+    env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+    def git(root, *args):
+        return subprocess.run(["git", "-C", str(root), *args], check=True, env=env,
+                              capture_output=True, text=True).stdout.strip()
+    parent = tmp_path / "parent repo"
+    parent.mkdir()
+    git(parent, "init", "-q")
+    source = parent / "tools/hooks/pre-push"
+    source.parent.mkdir(parents=True)
+    source.write_bytes(SCRIPT.read_bytes().replace(b"\r\n", b"\n").replace(b"\n", b"\r\n"))
+    git(parent, "add", "tools/hooks/pre-push")
+    git(parent, "-c", "user.name=Test", "-c", "user.email=test@example.invalid", "commit", "-qm", "fixture")
+    linked = tmp_path / "linked worktree"
+    git(parent, "worktree", "add", "-qb", "linked", str(linked))
+    if location != "default":
+        configured = {"relative": ".local hooks", "tracked": "tools/hooks"}.get(location, (tmp_path / "external hooks").as_posix())
+        git(linked, "config", "core.hooksPath", configured)
+    hook_dir = Path(git(linked, "rev-parse", "--git-path", "hooks"))
+    if not hook_dir.is_absolute(): hook_dir = linked / hook_dir
+    config_before = (parent / ".git/config").read_bytes()
+    refs_before = git(parent, "show-ref")
+    result = subprocess.run([INSTALL_BASH, "-c", INSTALLER.read_text(encoding="utf-8")],
+                            cwd=linked, env=env, capture_output=True, text=True, encoding="utf-8", errors="replace")
+    if location == "tracked":
+        assert result.returncode != 0
+        assert (linked / "tools/hooks/pre-push").read_bytes() == source.read_bytes()
+        assert (parent / ".git/config").read_bytes() == config_before
+        assert git(parent, "show-ref") == refs_before
+        return
+    assert result.returncode == 0, result.stderr
+    installed = hook_dir / "pre-push"
+    assert installed.read_bytes() == (linked / "tools/hooks/pre-push").read_bytes().replace(b"\r\n", b"\n")
+    parse = subprocess.run([INSTALL_BASH, "-n", installed.as_posix()], capture_output=True)
+    assert parse.returncode == 0, parse.stderr
+    assert (linked / ".git").is_file()
+    assert (parent / ".git/config").read_bytes() == config_before
+    assert git(parent, "show-ref") == refs_before

@@ -21,4 +21,21 @@ def attach_goal_predicates(document: dict, item_geometry: Mapping[str, Mapping[s
         step["goal_predicate"] = step_goal_predicate(step["inputs"], tolerance, offsets[step["inputs"]["item"]])
 
 
-__all__ = ["attach_goal_predicates"]
+__all__ = ["attach_goal_predicates", "make_cell_job_resolver"]
+
+
+def make_cell_job_resolver(compiler, item_pose_tolerance):
+    """Compose canonical Cell submission with optional independent goal predicates."""
+    if compiler is None:
+        return None
+    from rosy.execution.site.cell_submission import compile_cell_submission
+
+    def resolve(candidate, *, workcell_id, instance_id):
+        submission = compile_cell_submission(
+            candidate, compiler=compiler, workcell_id=workcell_id, instance_id=instance_id)
+        document = submission.as_store_document()
+        if item_pose_tolerance is not None:
+            attach_goal_predicates(document, compiler.item_geometry(candidate["recipe"]), item_pose_tolerance)
+        return document
+
+    return resolve

@@ -24,7 +24,7 @@ from hashlib import sha256
 from pathlib import Path
 from typing import Mapping, Optional
 
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException
 from pydantic import BaseModel, ConfigDict, field_validator
 
 from core_common.protocol.vision_preview import VisionLeaseSigner
@@ -61,9 +61,11 @@ from fleet.server.site_auth import (
     assert_robot_credential_key_isolated,
     build_authorize,
     build_role_guards,
+    install_mutation_audit,
     parse_site_principals,
 )
 from fleet.server.static_routes import install_static_routes
+from fleet.hub.server import fan_out_events as _fan_out_events
 from fleet.server.task_dispatch_routes import (  # noqa: F401 — GoalRequest 재수출: test_task_contract_docs 참조
     GoalRequest,
     cancel_pending_task_queue,
@@ -87,19 +89,6 @@ class VisionLeaseRequest(BaseModel):
             return None
         from core_common.protocol.vision_preview import PreviewRectification
         return PreviewRectification.from_mapping(value).as_dict()
-
-
-def _fan_out_events(project, wake: Optional[asyncio.Event]):
-    """D-438 §1: the hub has one event slot; the task projection keeps its return value,
-    and lane-stuck events wake the resolver (cheap, never raises into the hub).
-    With task_service None and a resolver, the hub now runs projection replay, which
-    needs an event_store with read_events."""
-    def callback(event):
-        result = project(event) if project is not None else None
-        if wake is not None and str(event.get("type", "")).startswith("nav.line_stuck_"):
-            wake.set()
-        return result
-    return callback
 
 
 def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
@@ -132,7 +121,8 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                pairing=None, pairing_sync_token: Optional[str] = None,
                localization_service=None, deployment_profile: str = "production",
                omx_cell_grant_revisions: Optional[Mapping[str, Mapping[str, str]]] = None,
-               cell_item_pose_tolerance=None, cell_goal_registry=None) -> FastAPI:
+               cell_item_pose_tolerance=None, cell_goal_registry=None,
+               cell_app_service_id: str | None = None) -> FastAPI:
     if deployment_profile not in DEPLOYMENT_PROFILES:
         raise ValueError(f"unsupported deployment_profile {deployment_profile!r}")
     mission_configured = mission_service is not None or proposal_store is not None
@@ -166,20 +156,8 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         cell_job_store.recover_after_startup()
     cell_job_resolver = None
     if cell_job_compiler is not None:
-        from rosy.execution.site.cell_submission import compile_cell_submission
-        from fleet.server.cell_goal_evidence import attach_goal_predicates
-
-        def compile_cell_job(candidate, *, workcell_id, instance_id):
-            submission = compile_cell_submission(
-                candidate, compiler=cell_job_compiler,
-                workcell_id=workcell_id, instance_id=instance_id,
-            )
-            document = submission.as_store_document()
-            if cell_item_pose_tolerance is not None:
-                attach_goal_predicates(document, cell_job_compiler.item_geometry(candidate["recipe"]),
-                                       cell_item_pose_tolerance)
-            return document
-        cell_job_resolver = compile_cell_job
+        from fleet.server.cell_goal_evidence import make_cell_job_resolver
+        cell_job_resolver = make_cell_job_resolver(cell_job_compiler, cell_item_pose_tolerance)
     if site_users is not None and task_service is None:
         raise ValueError("per-user site authorization requires persistent task/audit storage")
     if bool(discovery) != bool(discovery_token):
@@ -390,24 +368,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
 
         console.set_task_queue_release_callback(release_traffic_task)
 
-    @app.middleware("http")
-    async def finish_mutation_audit(request: Request, call_next):
-        try:
-            response = await call_next(request)
-        except Exception:
-            audit_id = getattr(request.state, "site_api_audit_id", None)
-            if audit_id is not None:
-                task_service.store.finish_api_audit(audit_id, status_code=500)
-            raise
-        audit_id = getattr(request.state, "site_api_audit_id", None)
-        if audit_id is not None:
-            task_service.store.finish_api_audit(audit_id, status_code=response.status_code)
-        return response
-
-    @app.get("/healthz", include_in_schema=False)
-    async def healthz() -> dict:
-        """Minimal process liveness for local container supervision."""
-        return {"status": "ok"}
+    install_mutation_audit(app, task_service)
 
     if hub is not None:
         from fleet.hub.server import install_hub_routes
@@ -504,8 +465,9 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                                  read_guard=read_guard, operator_guard=operator_guard,
                                  drive_cancel=drive_cancel)
 
+    proposal_create = proposal_resolve = None
     if mission_service is not None:
-        install_mission_routes(app, mission_service=mission_service,
+        proposal_create, proposal_resolve = install_mission_routes(app, mission_service=mission_service,
                                proposal_store=proposal_store,
                                cell_job_store=cell_job_store,
                                cell_job_resolver=cell_job_resolver,
@@ -522,6 +484,12 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         install_cell_job_routes(app, cell_job_store=cell_job_store,
                                 require_named_operator=require_named_operator,
                                 operator_guard=operator_guard, read_guard=read_guard)
+
+    from fleet.server.cell_app_routes import install_cell_app_routes
+    install_cell_app_routes(app, mission_service=mission_service, compiler=cell_job_compiler,
+                            service_id=cell_app_service_id, principals=principals,
+                            proposal_create=proposal_create, proposal_resolve=proposal_resolve,
+                            require_viewer=require_viewer, require_named_operator=require_named_operator)
 
     install_intent_routes(app, console=console, task_service=task_service,
                           require_operator=require_operator,

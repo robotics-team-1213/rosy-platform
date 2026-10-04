@@ -502,6 +502,11 @@
 - 증거: Python 집중 35 passed, 추가 구조/Fleet 97 passed, Node 전체 109 passed. 실제 입력 누락·colcon 오배치·raw enum 표시 mutation 네 건 RED 뒤 원본 bytes 복원·GREEN. 알려진 실패 0 new, backlog 증가 없음. `docs/validation/d427-source-migration/push5-gate-corrections-2026-10-04.md`.
 - 독립 리뷰: d427_safety_review APPROVE source/host, 별도 Python 22 passed·Node 3 passed. Fleet +12 줄은 기존 +150·split 판정 안에 있고 예산·allowlist를 늘리지 않았다.
 - gate 변화: SOURCE/로컬 증거만 추가한다. 새 pre-push·원격 CI·ARM64·SD·기기·현장 수락은 후속이다.
+## 2026-10-04 · uncommitted · feat(web): Console Cell workspace ownership
+
+- 변경: Console의 `/console/cell` 작업 화면을 같은 프로세스/포트/CSP에 추가했다. cell-document/compile/proposal 소유를 기존 Console 표면에 등록하고 mission 승인·복구는 Console의 기존 Fleet API를 사용한다. 공용 token·request·controls를 재사용하며 별도 service 자격을 브라우저에 노출하지 않는다.
+- 검증: 공용 field/disabled reason 계약을 통과했다. PC/390px Chromium에서 canonical preview와 별도 승인, 모바일 가로 넘침 없음, 오류와 stale 응답 조작을 확인했다. 현장 UI 수용은 별도다.
+- gate 변화: 기존 표면 GO를 확장 수용으로 해석하지 않는다. Cell 전체 G1 및 실제 현장 수용은 미완료다.
 ## 2026-10-04 · uncommitted · feat: 원본 픽셀 보존과 같은 촬영 시점의 표시본
 
 - 변경: fetchCameraPair가 variant·sequence·captured_at·frame_id를 검증한다. 원본 canvas에는 drawImage만 사용하고 조작 문구는 표시본에만 넣는다. 원본/표시본 녹화기와 파일·공통 pair_group_id를 분리하고 종료 시 두 stream을 해제한다. PC sidecar에서 표시본을 model_unreviewed로 구분한다.
@@ -559,3 +564,11 @@
 - 증거: 비활성 사유·복사 위치 검출·SW·예산 8 passed (2.48s), API UI 경로/구조 16 passed (8.21s). 공용 UI/helper 동작은 변경하지 않았다.
 - gate 변화: SOURCE/LOCAL 라이브러리 자산만 보완한다. DEVICE/FIELD 수용은 소비 런타임에 남긴다.
 - 결정: D-439 Task5, D-359. 일반 허용 수를 넓히지 않고 실제 위치를 구별한다.
+
+## 2026-10-04 · uncommitted · feat(test): D-329 전환 4 — matrix.json 스키마와 보존 시험, 40rem 정식 경계
+
+- 변경: (1) `test/test_baseline_matrix.py` 신설 — 회차 폴더의 `matrix.json`(스키마 `rosy.g2-matrix/1`)이 선언한 셀마다 파일이 있고 추적돼 있는지 판정한다. 파일명 규칙 `<surface>-<state>-<가로>x<세로>.png`도 여기서 지킨다. 합성 오류 매트릭스(스키마·미등록 id·round 불일치·규약 위반·중복·없는 파일·깨진 json)로 변이 확인을 포함한다. 실행 계획은 `docs/plans/2026-10-04-d329-matrix-schema.md`. 첫 적용: `docs/validation/pilot-g2-baseline-2026-10-04/`의 셀 9장을 규약명으로 옮기고 matrix.json을 남겼다. (2) `surface_registry.py`에 `NARROW_WIDTH = ("(width < 40rem)",)` 추가 — 템플릿·Pilot 접속 머리·호환 셸 머리 접기가 같은 값으로 쓰는 폭 40rem(640px)을 세 단 외 체계 경계로 승인한다. 이로써 main을 막던 `test_responsive_tiers` 선재 실패(console-detail.css 40rem, 표면 등재와 TIER_VALUES 등재 금지가 양립 불가였던 교착)이 해소된다.
+- 증거: `python -m pytest shared/web/test -q` **218 passed/24 skipped (0 failed)** — 회귀 전멸. 변이 확인 9케이스 포함 2 passed. known_failures 비교 상동.
+- gate 변화: 없음. 문서·시험 자산.
+- 결정: D-329 Decision 4·Transition 4(스키마를 실행 계획에서 정하고 시험을 그 뒤에 연다). 40rem 승인의 근거는 세 표면의 실사용(template.css·pilot styles.css·console-detail.css)과 TIER_VALUES의 기존 분류.
+- 교훈: "등재 금지 목록에만 값 두기"는 그 값을 쓰는 조건 형태를 허용 목록에 함께 두지 않으면 교착한다 — 둘은 한 커밋이어야 한다.

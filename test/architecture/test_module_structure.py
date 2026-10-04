@@ -100,8 +100,11 @@ SIZE_VERDICTS = {
         "duplicate its socket. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        30_063,
-        "split: server HTTP boundary, console, signals and the mission-control stores are separate owners "
+        30_621,
+        "split: re-judged 2026-10-04 at 30621 after main integration for D-450: bounded Cell document store/routes and Console "
+        "assets reuse existing proposal and execution owners; app composition remains below 600 lines. "
+        "Independent review preserves the subpackage/UI migration plan and existing +150 allowance. "
+        "server HTTP boundary, console, signals and the mission-control stores are separate owners "
         "today; re-judged 2026-10-03 at 28001 for D-413 internal Cell producer authentication: bounded "
         "schema, environment credential registry and evidence service are separate modules; goal completion "
         "retains its existing journal owner and atomically fences the verified terminal event. No new HTTP "
@@ -251,8 +254,10 @@ SIZE_VERDICTS = {
         "2026-10-01 at 887 after idempotent per-attempt phase projection joined the Mission event transaction",
     ),
     "foundation/core_common/protocol/schemas.py": (
-        1_324,
-        "accept: the D-18 single contract source — every envelope, event and capability model in one "
+        1_319,
+        "accept: re-judged 2026-10-04 at 1319 after main's model extractions: Cell request models live in protocol/cell_app.py; only "
+        "two public re-export lines join the canonical schema entrypoint. Zero-growth allowance unchanged. "
+        "the D-18 single contract source — every envelope, event and capability model in one "
         "importable place; re-judged 2026-10-03 at 1240 for the D-413 public CellGoalEvidenceSubmission "
         "re-export, then at 1245 after combining main's D-422 body-stop fields with that one-line export. "
         "Re-judged 2026-10-03 at 1324 after retaining D-418 models and two bounded D-432 access-contract re-exports; models live in access.py. "
@@ -294,10 +299,6 @@ SIZE_VERDICTS = {
     "perception/control/safety/node.py": (
         795,
         "accept: legacy comparison-graph publisher pinned by test_module_separation; no new work (X3)",
-    ),
-    "fleet/fleet/server/app.py": (
-        627,
-        "accept: the FastAPI factory and lifespan own every background task and route install; D-438 added the resolver task, hub event fan-out and shared-gather wiring (2026-10-04) — the resolver logic itself lives in stuck_resolver*.py",
     ),
     "fleet/fleet/server/console.py": (
         1154,

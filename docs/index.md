@@ -196,6 +196,7 @@
 | D-444 | 웹 표면 게이트는 release 이미지를 탄다 — dashboard·pilot ARTIFACT는 서명 release 안 share/ 설치 관측, pilot DEVICE는 실기 페달·e-stop 정지 계약 측정 |
 | D-445 | Fleet 승격 경로(ROS-SIM D-426 → ARTIFACT D-437 첫 실행·D-301 서명 → DEVICE 사이트 PC·2대)와 중앙 Fleet(8081) 착수 전제 3개를 고정한다. 착수 자체는 별도 ADR |
 | D-447 | 웹 표면의 실시간 상태는 이미 열린 소켓을 재사용한다 — Fleet gather는 hub-fresh 로봇을 registry 스냅샷으로 먼저 읽고(신선도 `hub_state_max_age_s`, REST 폴백), 로봇 셸 `store.js`의 `/ws/state` 전환이 그 뒤를 잇는다. 새 전송 계약 없음, 응답 스키마 불변, 행마다 `gather_source` |
+| D-450 | 팔레타이징 앱은 화면의 한 작업 흐름과 박스 전용 Gazebo 수용을 먼저 완성한다 |
 
 ## 계획·결과 문서
 
@@ -269,6 +270,7 @@
 - [2026-10-02-platform-architecture-v02-migration.md](plans/2026-10-02-platform-architecture-v02-migration.md)
 - [2026-10-03-app-ownership-shared-transport-and-layout-migration.md](plans/2026-10-03-app-ownership-shared-transport-and-layout-migration.md)
 - [2026-10-03-pi-ncnn-opencv-implementation.md](plans/2026-10-03-pi-ncnn-opencv-implementation.md)
+- [2026-10-04-d329-matrix-schema.md](plans/2026-10-04-d329-matrix-schema.md)
 - [2026-10-04-d443-signal-supervision.md](plans/2026-10-04-d443-signal-supervision.md)
 - [2026-10-04-pilot-device-stop-contract-measurement.md](plans/2026-10-04-pilot-device-stop-contract-measurement.md)
 - [2026-10-04-web-gate-ladder-fleet-readiness-adr-plan.md](plans/2026-10-04-web-gate-ladder-fleet-readiness-adr-plan.md)
@@ -284,8 +286,8 @@
 
 ## 최근 기록
 
+- 2026-10-04 · uncommitted · fix: install Windows hooks with executable LF line endings
+- 2026-10-04 · uncommitted · fix: resolve hook installation through Git
+- 2026-10-04 · uncommitted · D-441 local update follow-up design
+- 2026-10-04 · uncommitted · D-427 wave5 remote CI and ARM64 artifacts
 - 2026-10-04 · uncommitted · D-452 모델 SSH 대상과 광고
-- 2026-10-04 · uncommitted · D-452 네트워크 역할 발견과 신원 연결
-- 2026-10-04 · uncommitted · D-359 responsive header and owned mode confirmation
-- 2026-10-04 · uncommitted · D-432 Pilot failure retry and Cam thermal screen sleep
-- 2026-10-04 · uncommitted · merge: synchronize shared main with final remote migration

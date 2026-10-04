@@ -2089,11 +2089,32 @@ This contract and host tests establish SOURCE/LOCAL composition. Independent
 Gazebo placement evaluation, the actual OMX owner/provider and ROS-SIM, device
 and field acceptance require their own evidence.
 
+## Fleet Cell 작업 화면 (D-450, v1.90)
+
+`/console/cell`은 기존 Fleet Console 프로세스·인증·포트의 작업 화면이다. 신규 실행 writer나 원장을 만들지 않는다. 운영자 입력 문서는 초안으로 저장할 수 있으며, 저장 성공이 실행 가능한 문서임을 뜻하지 않는다. `compile`은 설치된 정본 process compiler로 검증하고 계산한다.
+
+| 경로 | 권한 | 요청 · 응답 |
+|---|---|---|
+| `GET /api/fleet/cell-app/documents` | 기존 viewer | `{documents:[{kind,id,digest,updated_at}]}` |
+| `GET /api/fleet/cell-app/documents/{kind}/{identifier}` | 기존 viewer | `{kind,id,digest,document,updated_at}` |
+| `POST /api/fleet/cell-app/documents/{kind}/{identifier}` | named operator | `CellAppDocumentSaveRequest`: `{document,expected_digest:null 또는 sha256}` → 저장 문서. 생성은 null, 수정은 현재 digest가 필요 |
+| `POST /api/fleet/cell-app/compile` | named operator | `CellAppCompileRequest`: `{recipe_id,recipe_digest,cell_id,cell_digest}` → `{candidate,process_artifact_digest,summary:{transfer_count,pallet_markers}}`. 실행·제안·승인 부작용 없음 |
+| `POST /api/fleet/cell-app/proposals` | named operator | `CellAppProposalRequest`: compile 참조 + `{request_key,workcell_id,instance_id}` → 기존 proposal resolve 응답. 구성된 service principal이 제안·resolve하며 admit하지 않음 |
+
+`kind`는 `recipe|cell`, 문서 ID는 `[A-Za-z0-9][A-Za-z0-9_-]{0,63}`, digest는 소문자 sha256다. 문서는 finite JSON object, canonical JSON UTF-8 64 KiB 이하. 동일 DB의 문서 revision은 트랜잭션에서 비교한다. `request_key`는 160자 이하, `workcell_id`/`instance_id`는 96자 이하이며 공백 trim·제어문자 없는 기존 proposal 식별자 규칙을 따른다. 미리보기 candidate는 기존 `{kind:"cell_job",recipe,cell,recipe_sha256,cell_sha256,job}` 계약 그대로다. 저장 revision digest와 process의 recipe/cell hash는 각각 해당 canonical 표현의 해시다.
+
+제안 composition은 `--cell-app-service-id`로 지정한 실제 site-users `role=service` ID를 검증한다. 미구성이면 제안은 503; 존재하지 않거나 operator/viewer ID이면 서버 구성을 거절한다. 서비스 자격은 브라우저에 전달하지 않는다. HTTP를 시작한 named operator의 API audit와 proposal 원장의 service author를 함께 유지한다. 같은 request key 재시도는 기존 ProposalStore idempotency/충돌 규칙을 사용한다. UI는 실패 시 자동 재제안·승인·재실행하지 않는다.
+
+오류: `CELL_APP_UNCONFIGURED`(503), `CELL_APP_DOCUMENT_NOT_FOUND`(404), `CELL_APP_DOCUMENT_CHANGED`(409), `CELL_APP_DOCUMENT_INVALID`(422), `CELL_APP_COMPILE_INVALID`(422; `message`, `problems`). 문서 저장·compile·proposal POST는 기존 Fleet API audit를 받는다. 기존 proposal/admission 오류도 그대로 전달한다.
+
+작업 화면의 승인·진행·복구는 기존 `/api/fleet/missions/{id}/admit`, `/api/fleet/cell-jobs/{id}`, `/reconcile`, `/resume`, `/cancel`을 사용한다. 승인/재승인은 현재 dispatch generation과 named operator가 필요하다. UNKNOWN의 자동 재시도는 없다. cancel은 기존 `HOLD/CANCELLED_BY_OPERATOR` 계약을 유지한다. 서비스 제안 성공·실행 성공·독립 목표 확인은 별개다.
+
 # 11. 변경 이력
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
 | v1.94 | 2026-10-04 | Additive (D-452): 별도 authenticated peers 역할 목록, 선택적 bounded scanner services, 실제 모델 SSH profile. 발견·승인·ready 분리, envelope 1.0 및 기존 등록/인증 유지 |
+| v1.93 | 2026-10-04 | Additive (D-450): Fleet Console `/console/cell` 작업 화면의 revision 문서 저장·정본 compile·명시 service proposal API 및 `CellApp*Request` 스키마 추가. 기존 named operator admission/복구·원장을 재사용. envelope version 1.0 유지 |
 | v1.92 | 2026-10-04 | Additive: Viewer GET /api/v1/power/health; battery age/freshness, timestamped charging evidence, software sleep blockers and wake constraints. Read-only; envelope protocol_version 1.0 unchanged. |
 | v1.91 | 2026-10-04 | Additive (D-438 1단계, docs/d438-fleet-stuck-resolver): CORE 역할 `stuck_resolver`(순위 viewer)와 capability `STUCK_DECIDE`; `POST /api/v1/line-follow/stuck/decision` 은 `STUCK_DECIDE` 를 요구(operator·administrator 도 가짐), `stuck_resolver` 의 `MANUAL` 은 403. Site Fleet `POST /api/fleet/robots/{robot_id}/line-stuck/claim`(operator), 로봇 행 `line_stuck.resolver`, `robots.yaml` `resolver_token`, `fleet console --stuck-resolver`. `fleet_line_stuck_answers` 에 null 가능 열 `tier`·`rule`·`escalated`(옛 DB 는 열 때 추가), 판단기가 사람에게 올릴 때마다 `ESCALATE` 행. `GET /api/fleet/state` 와 판단기는 1 s 안에서 한 번의 gather 를 같이 쓴다. 로봇 이벤트·FleetAgent 프로토콜 변경 없음 |
 | v1.90 | 2026-10-03 | Additive (D-432): LAN 장비 목록 접속, auth/connection·auth/development-session, 선택적 CORE TLS·발견 전송과 SSH 공개 키 등록. 기존 코드 규약·envelope 1.0 유지. |

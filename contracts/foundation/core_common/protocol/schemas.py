@@ -30,6 +30,8 @@ from core_common.protocol.access import LoginPairRequest, CameraPairApprovalRequ
 from core_common.protocol.access import ConnectionInfo  # noqa: F401
 from core_common.protocol.localization import LocalizationStatus
 from core_common.protocol.cell_goal_evidence import CellGoalEvidenceSubmission  # noqa: F401
+from core_common.protocol.cell_app import (  # noqa: F401
+    CellAppCompileRequest, CellAppDocumentSaveRequest, CellAppProposalRequest)
 from core_common.protocol.lane_perception import LanePerceptionRequest, LanePerceptionStatus  # noqa: F401
 from core_common.protocol.vision_preview_status import VisionPreviewStatus  # noqa: F401
 from core_common.protocol.recording_start import RecordingStartRequest  # noqa: F401

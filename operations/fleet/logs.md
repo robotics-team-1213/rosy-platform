@@ -1528,6 +1528,12 @@
 - 증거: Python 집중 35 passed, 추가 구조/Fleet 97 passed, Node 전체 109 passed. 실제 입력 누락·colcon 오배치·raw enum 표시 mutation 네 건 RED 뒤 원본 bytes 복원·GREEN. 알려진 실패 0 new, backlog 증가 없음. `docs/validation/d427-source-migration/push5-gate-corrections-2026-10-04.md`.
 - 독립 리뷰: d427_safety_review APPROVE source/host, 별도 Python 22 passed·Node 3 passed. Fleet +12 줄은 기존 +150·split 판정 안에 있고 예산·allowlist를 늘리지 않았다.
 - gate 변화: SOURCE/로컬 증거만 추가한다. 새 pre-push·원격 CI·ARM64·SD·기기·현장 수락은 후속이다.
+## 2026-10-04 · uncommitted · feat(cell): revisioned Console workspace
+
+- 변경: `/console/cell`에 초안 문서 revision 저장·canonical compile·설정된 service 제안·named operator 별도 승인·작업 상태·reconcile/resume/cancel을 연결했다. 별도 writer/실행 원장은 없다. 박스 치수/질량/잡는 깊이·home/도구 설정 편집과 팔레트·층별 footprint 미리보기, JSON 파일 입력을 제공한다. 관제의 실제 credentials/enrollment는 바꾸지 않았다.
+- 검증: 실제 palletizing compiler를 사용한 API save→18-transfer preview→service proposal→separate admit READY가 통과했다. 실제 Chromium에서 늦은 compile 응답 무효화·조회 실패 후 승인 잠금·검토한 generation의 409·취소 이후 재승인 잠금을 확인했다. 모든 transport는 비연결/가짜 장치이며 실제 전송 성공 증거가 아니다.
+- 독립 리뷰: spec·quality 리뷰의 stale async/fence 두 결함을 수정했다. 입력 변경 epoch, 요청 중 입력 잠금, 읽기 전 snapshot 삭제, 검토한 generation 고정과 충돌 후 재조회가 적용됐다.
+- gate 변화: G1 전체 완료는 아니다. 장치 티칭 wizard, 정본 레시피의 모든 구조 편집, 독립 지정 수용과 모델 PC OMX 종단이 남았다. Fleet ROS-SIM/DEVICE/FIELD 승격 없음.
 ## 2026-10-04 · uncommitted · feat(server): D-438 Fleet stuck resolver phase 1 (rules R1-R3 + human escalation)
 - Change: `fleet/server/stuck_resolver.py` (pure decision core), `stuck_resolver_loop.py` (1 s poll, hub-woken, records as `fleet-resolver`), `line_stuck.py` resolver note, `console_routes.py` claim endpoint (human decision claims first), `app.py` clients/lifespan/hub fan-out, `swarm/robots.py` `resolver_token`, `cli.py` `--stuck-resolver`, console `line-stuck.js` claim + resolver text; API Ref v1.90 version pins in two tests
 - Evidence: `python -m pytest src/site/fleet/test -q` 1658 passed, 7 skipped (2026-10-04 Windows; first run had 3 failures, all the API Ref version pin `v1.89` -> `v1.90`, fixed, re-run of those files 25 passed together with gateway version alignment); `node --test src/site/fleet/test/web/line-stuck.test.mjs` 12 pass; `python -m pytest test/test_harness_contracts.py -q` 59 passed
@@ -1607,3 +1613,8 @@
 - 변경: viewer peers catalogue·metadata-only 승인 directory·호스트 multi-role scanner를 기존 등록과 분리한다. 모든 소유 주장 충돌은 승인 해제/unknown으로 처리한다. 기존 command/credential/endpoint는 보존한다.
 - 증거: catalogue/API24 PASS, schema37 PASS, scanner Linux11 PASS 및 독립 source SPEC·Quality·Safety PASS. docs/validation/network-peer-discovery-2026-10-04/peer-backend-checkpoint.md.
 - gate 변화: focused SOURCE/LOCAL; 실제 인증 operator·container namespace·다른 망 연결·배포 수락 별도.
+## 2026-10-04 · uncommitted · refactor(fleet): main 통합 시 HTTP composition 경계 유지
+
+- 변경: main의 stuck resolver·access·power 계약과 Cell workspace를 함께 보존했다. API Ref Cell additive 항목을 v1.93으로 올렸고 대응 metadata/version pin을 맞췄다. 동일 audit middleware를 site_auth, 동일 event fanout을 hub/server, healthz를 static route owner로 옮겨 app composition을 594줄로 유지했다.
+- 증거: 독립 source 검토는 auth/audit/fanout/health 동작 보존과 optional dependency guard를 확인했다. 구조 count Fleet 30621/schema 1319로 명시 재판정하고 기존 +150/zero allowance는 유지했다. 실제 vendor retry exit0/1passed와 컨테이너 정리 확인은 별도 deploy validation에 기록했다.
+- gate 변화: SOURCE 통합 검토이며 최종 통합 시험은 별도로 진행한다. full G1/G2 및 Isaac 주행·Nav2·두 로봇 수용은 미완료다.

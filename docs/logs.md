@@ -5042,6 +5042,34 @@
 - 변경: 두 Windows 검증 helper에서 taskkill 오류는 추적 프로세스 종료가 확인된 때만 시간 초과로 유지한다. 살아 있는 프로세스의 native 오류와 silent nonzero는 다시 throw하며 HOLD·재실행 금지를 보존한다.
 - 증거: Windows 원본 검증과 종료 경합 시험 22 passed; 독립 실행 22 passed, APPROVE. docs/validation/d427-source-migration/windows-ssh-timeout-cleanup-2026-10-04.md.
 - gate 변화: SOURCE/LOCAL Windows PowerShell 5.1. 기존 push gate는 1 failed이며 수정 후보 전체 gate·CI·ARM64·DEVICE·FIELD는 별도 검증한다.
+## 2026-10-04 · uncommitted · docs(cell): 팔레타이징 앱 현황과 완료 목표
+
+- 변경: 기준 main f32643ffd의 코어·Fleet·OMX·웹 표면·기존 계획을 대조하고 현황 보고서와 D-446 Proposed 초안을 작성했다. 앱 LOCAL, 박스 전용 ROS-SIM, 슬립시트 포함 원래 C6를 구분해 순서·책임·수용 증거를 명시했다. 다른 브랜치와 공유 main에서 선점한 ADR 번호는 gaps로 기록했다.
+- 증거: X:의 별도 venv에 현재 기준 skill/execution/palletizing wheel을 빌드·설치한 뒤 process compatibility·Cell·layout 회귀 174 passed, skip 없음. 기본 환경은 wheel 미설치로 수집 오류였으며 설치 후 결과와 구분했다. 전용 Cell 웹 표면 부재, 이미 구현된 grasp depth, 현재 슬립시트 거절 시험 및 미완료 종단 수용을 코드와 기록에서 확인했다.
+- gate 변화: 없음. 문서·목표 설정 회차이며 앱 구현·Gazebo 전체 실행·실물 배포는 진행하지 않았다.
+
+## 2026-10-04 · uncommitted · docs(cell): 모델 PC에서 Gazebo 수용
+
+- 변경: 사용자 지시에 따라 Gazebo 호스트를 모델 PC로 정했다. 같은 호스트 UDS·loopback fence를 유지하기 위해 모델 PC에 검증용 Fleet·Cell·OMX·Gazebo를 격리 배치하고, 운영 관제 PC의 원장·등록 로봇과 분리하는 계획을 D-446과 보고서에 반영했다.
+- 증거: D-434/D-336과 실제 apps/agent의 literal-loopback fence를 대조했다. 문서 검사 127 passed/1 skipped, D-438 예약 보완 뒤 실패했던 ADR 검사 2 passed, 최종 lint 0 errors/26 기존 warnings, 상대 링크·diff 검사 통과. 모델 PC 접근과 Gazebo 준비·실행은 아직 검증하지 않았다.
+- gate 변화: 없음. 원격 실행 목표·토폴로지 문서만 갱신했다.
+
+## 2026-10-04 · uncommitted · docs(cell): Isaac 주행 연계와 전체 완료 경계
+
+- 변경: D-446과 현황 보고서에 Isaac 추가 검토를 연결했다. 모델 PC 한 대 주행→Nav2→두 대 Fleet→이동 후 적재를 분리하고, 고정 Cell 좌표를 이동 작업에 그대로 쓰지 않도록 검증 항목을 기록했다. 전체 앱·Gazebo·Isaac 개발은 아직 미완료임을 명시했다.
+- 증거: Isaac helper 10 passed/1 skipped, 소스의 6.1 importer·단일 로봇 그래프와 D-434의 5.1 기록, 기존 CORE/Nav2 명령 경계 및 NVIDIA 5.1 Navigation/Clock 공식 문서를 대조했다. 실제 모델 PC 접속·주행 결과는 없다.
+- gate 변화: 없음. 추가 검토·목표 문서이며 구현·runtime 승격·실물 구동은 진행하지 않았다.
+## 2026-10-04 · uncommitted · docs: Cell and Isaac implementation progress
+
+- 변경: 사용자 구현 요청에 따라 D-450 실행 계획과 API Ref v1.90 Cell workspace 요청 계약을 추가했다. 기존 proposal/원장/승인 경계를 보존한다. 모델 PC에서 ROS/GPU/Isaac 버전과 격리 실행 prerequisites를 확인했다.
+- 증거: 신규 Cell store/API 및 Chromium 오류·승인 시나리오 15 passed. Isaac source helper/runner 31 passed, xacro 1 skipped. 모델 PC에서 GPU/ROS/SDK 설치 baseline을 읽고 bounded no-motion import를 시도했으며 실제 그래프 수용은 미통과다.
+- gate 변화: Cell host API/브라우저는 부분 구현 검증이며 G1/G2/G3 전체 수용이 아니다. Gazebo/Nav2 설치 완료·격리된 OMX vendor runtime·original C6 sheet 취급은 확인 전이다. Isaac 실제 import/graph/정지 검증은 호스트 시험과 별도로 진행 중이며 ROS-SIM GO를 선언하지 않는다.
+
+## 2026-10-04 · uncommitted · docs(cell): 번호 충돌 정리와 검증 증거
+
+- 변경: main의 모델 PC 자동 갱신 ADR과 번호가 충돌해 팔레타이징 목표를 D-450으로 옮겼다. 이전 로그의 D-446은 당시 번호이며 append-only 이력을 보존한다. 현재 계획·progress·API 참조는 D-450으로 연결한다.
+- 증거: 브라우저/API 19 passed, optional import 회귀 수정 뒤 API 8 passed, fast gate 462 passed/2 skipped/12 기존 warnings. 독립 리뷰가 Cell fence와 CORE API 버전 설명만 변경된 것을 확인했다. Isaac host 33 passed/1 skipped와 모델 PC graph 관측은 별도 validation 문서에 기록했다.
+- gate 변화: SOURCE/LOCAL 부분 증거만 추가했다. Isaac 정상 종료·실제 주행, Gazebo OMX 격리 실행 및 G1 전체 기능 수용은 미완료다.
 ## 2026-10-04 · uncommitted · docs(plan): 웹 게이트 사다리·Fleet 승격 ADR 계획
 
 - 변경: `docs/plans/2026-10-04-web-gate-ladder-fleet-readiness-adr-plan.md` 추가. dashboard/pilot ARTIFACT·pilot DEVICE(페달 정지 계약)·fleet ROS-SIM(D-87→D-426)의 게이트를 release 이미지 관측 → 실기 증거 사다리로 묶고, Fleet 사이트 시드 승격과 중앙(8081) 착수 전제, 수용됨-미구현(D-368·D-361·WS 전환) 순서를 정했다. 신규 ADR D-439(웹 표면 게이트는 release 이미지를 탄다)·D-440(Fleet 승격 경로와 중앙 착수 전제) 배정표를 포함하되 착지는 이 계획 승인 뒤로 미뤘다. origin/main과의 분기(ahead 45/behind 91)와 D-427 이동(follow-ups P1)을 선행으로 명시했다.
@@ -5294,3 +5322,28 @@
 - 변경: 승인 논리 이름으로 매 관찰·배포 전에 주소를 해석한다. 실제 SSH listener만 광고하고 종료·손실 시 소유 광고 child를 회수한다. CLI doctor도 같은 profile을 사용한다. Dock·Signal active consumer는 충전 판단·watchdog/credential 경계를 확인해 재지정하지 않는다.
 - 증거: 모델199 PASS/22 기존 platform SKIP/NEW0, 독립 SPEC·Quality·Safety source PASS. docs/validation/network-peer-discovery-2026-10-04/source-checkpoint.md.
 - gate 변화: SOURCE/LOCAL focused; 실제 모델 PC 설치·광고·다른 망 연결·서명 배포는 별도 미검증.
+## 2026-10-04 · uncommitted · D-427 wave5 remote CI and ARM64 artifacts
+
+- 변경: 소스 1722ca6ec6d7의 실제 원격 push, 전체 GitHub CI, native/SD 035 산출물 검증과 남은 수용 조건을 기록했다. 제품 runtime·계약·manifest·시험 판정은 바꾸지 않았다.
+- 증거: push12 fast462 passed/2 skipped, mapped3667 passed/151 skipped·NEW0; GitHub 10matrix+scope+ci-result 모두 SUCCESS. 실제 ARM64 native/SD build28 packages 각각 SUCCESS. native 실제2547manifest/2548SUMS·독립 APPROVE; SD ZIP/외부14SUMS/전체XZ12869835264bytes·metadata21검사·독립 APPROVE. 공개 문서 배치/출판9 passed. docs/validation/d427-source-migration/wave5-arm64-artifact-verification-2026-10-04.md.
+- gate 변화: 없음. unsigned SD mounted verifier의 shape/config 검사와 서명·full factory SUMS·기기 부팅을 구분했다. 실제 prepare는 canary ABI SSH255 timeout으로 exit1, 서명·발행 전 종료했다. site PC NOT_RUN, peer 실제 delivery NOT_SENT, device/field 미검증이다. firmware S7은 다음 개정이며 flash·motion·E-Stop reset을 실행하지 않았다.
+
+## 2026-10-04 · uncommitted · D-441 local update follow-up design
+
+- 변경: 사용자 요청에 따라 수동 서명 설치 기록 동기화, 잠금 기반 보류/재개, 실행 설정 비교, 정확한 main CI 승인 후 서명, 선택적 Fleet/Vision 기능 검사 설계와 실행 계획을 기록했다. D-427 소스 소유권과 D-430 구동 권한을 변경하지 않는다.
+- 증거: 원본 updater 신규 사례 10개 RED, 원본 signer CI 사례 8개 RED; 수정본 격리 Linux 108 passed/0 skipped. 별도 생성 후 미실행 컨테이너의 Compose hash 일치와 명령 변경 감지를 실측했다. 현장 서비스는 전환하지 않았다.
+- gate 변화: 없음. 신규 설치·후보 CI·실제 프레임 수신은 별도 운영 검증이다.
+
+
+## 2026-10-04 · uncommitted · fix: resolve hook installation through Git
+
+- Change: Install the existing pre-push gate at the path Git resolves for linked worktrees and default, relative or absolute core.hooksPath. Preserve hook contents and repository configuration/refs.
+- Evidence: Three real linked-worktree installer regressions failed before correction and passed afterwards on Windows and model-PC Linux. Independent review caught hidden-untracked Git configuration in the model-PC code guard; both affected status calls now request all untracked files.
+- gate 변화: None. Tests install only in disposable repositories; the shared checkout hook and device runtime are unchanged.
+
+
+## 2026-10-04 · uncommitted · fix: install Windows hooks with executable LF line endings
+
+- Change: Normalize CRLF while installing pre-push from a Windows checkout. Keep the previous same-file refusal before output redirection, including tracked core.hooksPath layouts, to preserve source bytes.
+- Evidence: Real Windows installation exposed a byte mismatch; three forced-CRLF regressions failed before correction. Linux hook suite 8 passed after correction, including Bash parsing and tracked-source/config/ref preservation. Independent review approved the follow-up.
+- gate 변화: None. The live hook was restored to the exact published LF bytes and syntax-checked; device source switching remains guarded.
