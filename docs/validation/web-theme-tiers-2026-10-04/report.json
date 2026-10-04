@@ -1,0 +1,132 @@
+{
+  "rows": [
+    {
+      "surface": "console",
+      "theme": "dark",
+      "viewport": "1280x800",
+      "data-theme": "dark",
+      "badResponses": []
+    },
+    {
+      "surface": "console",
+      "theme": "dark",
+      "viewport": "390x844",
+      "data-theme": "dark",
+      "badResponses": []
+    },
+    {
+      "surface": "console",
+      "theme": "dark",
+      "viewport": "320x568",
+      "data-theme": "dark",
+      "badResponses": []
+    },
+    {
+      "surface": "setup",
+      "theme": "dark",
+      "viewport": "1280x800",
+      "data-theme": "dark",
+      "badResponses": []
+    },
+    {
+      "surface": "setup",
+      "theme": "dark",
+      "viewport": "390x844",
+      "data-theme": "dark",
+      "badResponses": []
+    },
+    {
+      "surface": "setup",
+      "theme": "dark",
+      "viewport": "320x568",
+      "data-theme": "dark",
+      "badResponses": []
+    },
+    {
+      "surface": "device",
+      "theme": "dark",
+      "viewport": "1280x800",
+      "data-theme": "dark",
+      "badResponses": []
+    },
+    {
+      "surface": "device",
+      "theme": "dark",
+      "viewport": "390x844",
+      "data-theme": "dark",
+      "badResponses": []
+    },
+    {
+      "surface": "device",
+      "theme": "dark",
+      "viewport": "320x568",
+      "data-theme": "dark",
+      "badResponses": []
+    },
+    {
+      "surface": "console",
+      "theme": "light",
+      "viewport": "1280x800",
+      "data-theme": "light",
+      "badResponses": []
+    },
+    {
+      "surface": "console",
+      "theme": "light",
+      "viewport": "390x844",
+      "data-theme": "light",
+      "badResponses": []
+    },
+    {
+      "surface": "console",
+      "theme": "light",
+      "viewport": "320x568",
+      "data-theme": "light",
+      "badResponses": []
+    },
+    {
+      "surface": "setup",
+      "theme": "light",
+      "viewport": "1280x800",
+      "data-theme": "light",
+      "badResponses": []
+    },
+    {
+      "surface": "setup",
+      "theme": "light",
+      "viewport": "390x844",
+      "data-theme": "light",
+      "badResponses": []
+    },
+    {
+      "surface": "setup",
+      "theme": "light",
+      "viewport": "320x568",
+      "data-theme": "light",
+      "badResponses": []
+    },
+    {
+      "surface": "device",
+      "theme": "light",
+      "viewport": "1280x800",
+      "data-theme": "light",
+      "badResponses": []
+    },
+    {
+      "surface": "device",
+      "theme": "light",
+      "viewport": "390x844",
+      "data-theme": "light",
+      "badResponses": []
+    },
+    {
+      "surface": "device",
+      "theme": "light",
+      "viewport": "320x568",
+      "data-theme": "light",
+      "badResponses": []
+    }
+  ],
+  "pageErrors": [],
+  "generated": "2026-10-04 20:06:12"
+}

@@ -281,6 +281,7 @@
 
 ## 교훈 (docs/solutions)
 
+- [PowerShell 한글 저널 append가 UTF-8을 망가뜨린다 (2026-10-04, 4회)](solutions/workflow-issues/powershell-utf8-append-mangles-korean-journals.md)
 - [Verify what you ship - the working tree is not the commit](solutions/workflow-issues/verify-what-you-ship-the-working-tree-is-not-the-commit.md)
 
 ## 시험
