@@ -5760,3 +5760,10 @@ osy-d395-s1d\`.
 - 변경: 최신 결정에 object_review_sha256와 source_sha256를 추가하고 export human의 video/frame 출처를 원본과 맞춘다. 정확히 일치하는 legacy primary image SHA·영상명/frame만 연결하고 이미지·검수 decision/version과 legacy source를 보존한다. 승인 scalar 타입을 엄격히 확인한다. dev 작업 화면 title 범위를 검사하며 별도 앱 identity를 만들지 않는다.
 - 증거: reseal한 박스 변조 거부·잘못된 승인 bool/int·legacy exact-image 중복·latest ETag 및 기존 backend/title 18 passed, known_failures 신규0. root는 실제 SSH 소비 경로에서 human 출처 누락을 재현했고 producer가 보완했다. 실제 운영 state는 아직 읽기만 수행했다.
 - gate 변화: SOURCE/LOCAL 보강. root-owned bridge/adapter의 독립 수용·실제 human pixel 승인·장치 수용·CI는 별도다. push·배포·주행·HOLD 해제 없음.
+
+## 2026-10-05 · uncommitted · feat(fleet): D-463 차선 경로는 다음 짧은 점
+
+- 변경: POST /api/fleet/robots/{robot_id}/route 가 저장된 차선 간선 순서를 폴리라인으로 펼치고, 지도에 LOCALIZED 된 자세일 때만 약 0.20 m 앞의 점을 기존 goal 로 보낸다. 위치 블록이 없거나 odom 이면 409 ROUTE_POSE_UNTRUSTED 이고 CORE navigation/goal 을 호출하지 않는다. GoalRequest 는 {x, y, yaw} 그대로다. ADR docs/adr/D-463-fleet-lane-route.md. D-462 는 review-cycle 작업 트리의 번호라 adr_gaps 에 남겼다.
+- 증거: operations/fleet/test/test_lane_route.py, test_task_contract_docs.py, test_server_app.py, test_line_follow_contract_docs.py, test_mission_progress.py 74 passed. test/known_failures.py 는 새 실패 0. harness lint 의 STATUS.md 와 pilot index stale 2건은 이 브랜치의 베이스에 이미 있다.
+- gate 변화: 없음. 호스트 시험. DEVICE, ROS-SIM, 실차 주행은 없다.
+- 결정: D-463 Accepted.
