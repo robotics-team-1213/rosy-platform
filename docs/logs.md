@@ -5735,3 +5735,9 @@ osy-d395-s1d\`.
 - 변경: 최신 main에서 추가된 공용 components.css 814줄을 한 책임의 토큰 기반 공용 컴포넌트 스타일로 독립 검토하고 accept 판정을 기록했다. 기존 600줄 상한과 growth allowance는 유지한다. 감사 검사의 공개 SHA 상수명과 참조만 SOURCE_COMMIT으로 정정하여 값·감사 원문·대상을 보존했다.
 - 증거: 깨끗한 main 1b669c7cb에서 두 실패 재현. 관련 재검사 119 PASS 뒤 감사 문자열의 원문 보존을 바로잡고 감사·비밀값 검사 9 PASS. 추적 관련 최신 통합 776 PASS/known_failures 신규 0; Chromium 4 PASS. UI 스타일 내용이나 배치 변경 없음.
 - gate 변화: SOURCE/LOCAL 검사 정합. main 착지·push·CI·서명 후보 배포와 현장 좌표 오차는 이후 단계다.
+
+## 2026-10-05 · uncommitted · uiux(review): 필터 일치 이동과 마지막 라벨 복구
+
+- 변경: 사용자 즉시 머지·추가 개선 지시로 D-459/D-461의 반복 검수 흐름을 보완했다. 목록·선택·이전/다음·URL의 필터를 일치시키고 빈 상태 복귀를 추가했다. 마지막 라벨 수정·삭제는 현재 version CAS로 복구하며 승인을 복원하지 않는다.
+- 증거: 실제 Chromium 회귀 3개와 기존 backend 5개, 총 8 passed, known_failures 신규 0. 승인 대기 유지·새로고침·빈 상태·다른 탭 변경 보호를 확인했다. PC/모바일 4폭×dark/light 및 필터 건너뛰기·모바일 복구 총 10 검사에서 page error/가로 넘침 0, 운영 검수 rows 불변을 확인했다. 공용 controls/token/title/responsive 및 harness 계약 132 passed, 신규 0. 증거는 X:/DevTemp/pinky-review-flow-20261005에 있다. 물리 모바일·원격 CI 수용은 별도다.
+- gate 변화: 로컬 앱 개선이며 물리 모바일·장치·학습 qualification·정책 승격·CI 수용을 주장하지 않는다. 운영 승인/제외 이력 보존, 로봇 움직임·모델 활성화·push·배포 없음.
