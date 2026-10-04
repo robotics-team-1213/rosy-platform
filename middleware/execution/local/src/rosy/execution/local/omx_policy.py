@@ -4,6 +4,7 @@ The authority provider must validate an installed policy and a currently authori
 local lease. This module defines no issuer, network endpoint, promotion or recovery.
 """
 from dataclasses import dataclass, fields
+from collections import OrderedDict
 import hashlib
 import inspect
 import json
@@ -107,7 +108,8 @@ def owner_binding(owner):
 class OwnerPolicySession:
     """One lease/episode; all faults latch HOLD and never release owner/local stop."""
     def __init__(self,policy,owner,fence,lease,*,authority_current,owner_identity,monotonic=time.monotonic,
-                 enabled=False,max_lease_duration_ns=1_000_000_000,camera_current=None):
+                 enabled=False,max_lease_duration_ns=1_000_000_000,camera_current=None,
+                 observation_history_capacity=64):
         if not isinstance(policy,InstalledPolicy) or not isinstance(owner,ArmCommandOwner):
             raise ValueError('installed policy and existing OMX owner required')
         if not isinstance(fence,LocalStopController) or not isinstance(lease,PolicyLease):
@@ -116,6 +118,8 @@ class OwnerPolicySession:
             raise ValueError('explicit local authority provider and enabled flag required')
         _ns(max_lease_duration_ns)
         if max_lease_duration_ns==0: raise ValueError('positive installed lease budget required')
+        if type(observation_history_capacity) is not int or not 1<=observation_history_capacity<=4096:
+            raise ValueError('observation history capacity must be an integer from 1 to 4096')
         self.policy,self.owner,self.fence=policy,owner,fence
         self._lease=lease; self._authority=authority_current; self._clock=monotonic
         self._identity=owner_identity
@@ -123,18 +127,25 @@ class OwnerPolicySession:
         self._cameras=camera_current
         self.enabled=enabled;self._ttl=max_lease_duration_ns
         self._lock=threading.RLock();self._snapshot=None;self._active_command=None
+        self._history=OrderedDict();self._history_capacity=observation_history_capacity
         self._last_now=None;self._last_submit=None;self.hold_reason='';self.cancel_decision=None
         self._owner_session=owner.session_id
+        self._config=owner.config
         self._binding()
 
     @property
     def lease(self): return self._lease
+
+    def _owner_current(self):
+        if self.owner.config is not self._config or self.owner.session_id!=self._owner_session:
+            self._fail('policy_owner_binding_changed')
 
     def _binding(self):
         doc=self.policy.recheck();cfg=self.owner.config;identity=self.lease.identity
         if doc['profile']!='omx_joint_target_v1' or doc['environment']!='sim':
             raise ValueError('only the isolated OMX SIM policy profile is supported')
         observed=self._identity()
+        self._owner_current()
         if (not isinstance(observed,dict) or observed.get('simulation') is not True
                 or (observed.get('workcell_id'),observed.get('instance_id'))!=(cfg.workcell_id,cfg.instance_id)
                 or observed.get('profile')!=doc['device_profile_revision']):
@@ -198,6 +209,7 @@ class OwnerPolicySession:
                     self._fail('policy_camera_binding')
         now=self._now()
         self._lease_time(self.lease,now)
+        self._owner_current()
         self._fresh(doc,now,cameras)
         return doc,now,cameras
 
@@ -216,10 +228,28 @@ class OwnerPolicySession:
                 if not isinstance(snapshot,JointStateSnapshot):self._fail('policy_observation_type')
                 if not self.owner.observe_joint_state(snapshot): self._fail('owner_observation_rejected')
                 self._snapshot=snapshot
+                self._history[snapshot.sequence]=snapshot
+                while len(self._history)>self._history_capacity:self._history.popitem(last=False)
             except PermissionError:
                 if not self.hold_reason:self._fail('policy_observation_unavailable')
                 raise
             except Exception as exc:self._fail('policy_observation_validation:'+type(exc).__name__)
+
+    def _source(self,candidate,doc,now):
+        source=self._history.get(candidate.sequence)
+        if (source is None or candidate.sequence>self._snapshot.sequence
+                or candidate.observed_at_ns!=int(source.received_at*1_000_000_000)):
+            self._fail('policy_candidate_scope_or_observation')
+        if not 0<=now-candidate.observed_at_ns<=doc['timing']['max_observation_age_ns']:
+            self._fail('policy_source_observation_stale')
+        self._owner_current()
+        cfg=self._config
+        if source.calibration_revision!=cfg.calibration_revision:
+            self._fail('policy_source_calibration')
+        if any(abs(self._snapshot.positions[name]-source.positions[name])>cfg.max_start_state_tolerances[name]
+               for name in cfg.joint_names):
+            self._fail('policy_source_start_state_changed')
+        return source
 
     def submit(self,candidate):
         with self._lock:
@@ -228,10 +258,9 @@ class OwnerPolicySession:
                 if not isinstance(candidate,PolicyCandidate): self._fail('policy_candidate_type')
                 lease=self.lease
                 if ((candidate.lease_id,candidate.episode_id,candidate.policy_revision)!=
-                        (lease.lease_id,lease.episode_id,lease.policy_revision)
-                        or candidate.sequence!=self._snapshot.sequence
-                        or candidate.observed_at_ns!=int(self._snapshot.received_at*1_000_000_000)):
+                        (lease.lease_id,lease.episode_id,lease.policy_revision)):
                     self._fail('policy_candidate_scope_or_observation')
+                self._source(candidate,doc,now)
                 if candidate.camera_frames!=tuple(c.frame_sha256 for c in cameras):self._fail('policy_camera_frame_mismatch')
                 if any(c.received_at_ns>candidate.produced_at_ns for c in cameras):self._fail('policy_camera_action_causality')
                 if not candidate.observed_at_ns<=candidate.produced_at_ns<=now:
@@ -245,26 +274,25 @@ class OwnerPolicySession:
                     self._fail('policy_period_not_elapsed')
                 def final_submit():
                     _,final_now,final_cameras=self._guard()
-                    if (candidate.sequence!=self._snapshot.sequence
-                            or candidate.observed_at_ns!=int(self._snapshot.received_at*1_000_000_000)):
-                        self._fail('policy_observation_changed_at_submit')
+                    source=self._source(candidate,doc,final_now)
                     if candidate.camera_frames!=tuple(c.frame_sha256 for c in final_cameras):
                         self._fail('policy_camera_changed_at_submit')
                     if any(c.received_at_ns>candidate.produced_at_ns for c in final_cameras):
                         self._fail('policy_camera_action_causality_at_submit')
                     if final_now-candidate.produced_at_ns>doc['timing']['max_action_age_ns']:
                         self._fail('policy_action_stale_at_submit')
-                    cfg=self.owner.config
+                    cfg=self._config
                     command=TrajectoryCommand(workcell_id=cfg.workcell_id,instance_id=cfg.instance_id,
                         command_id=str(uuid4()),session_id=self.owner.session_id,owner='learned_policy',
                         positions=dict(zip(cfg.joint_names,candidate.positions)),
                         duration_s=doc['timing']['period_ns']/1_000_000_000,source_state_sequence=candidate.sequence,
                         calibration_revision=cfg.calibration_revision,joint_names=cfg.joint_names,
-                        expected_start_state_positions=dict(self._snapshot.positions),
+                        expected_start_state_positions=dict(source.positions),
                         start_state_tolerances=dict(cfg.max_start_state_tolerances))
                     final_now=self._now()
                     self._lease_time(self.lease,final_now)
                     self._fresh(doc,final_now,final_cameras)
+                    self._source(candidate,doc,final_now)
                     if final_now-candidate.produced_at_ns>doc['timing']['max_action_age_ns']:
                         self._fail('policy_action_stale_at_submit')
                     decision=self.owner.submit(command)

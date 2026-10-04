@@ -21,7 +21,7 @@ from test_omx_command_owner import make_config,FakeActionClient
 from test_learning_artifact_contracts import policy
 
 
-def setup_session(tmp_path,enabled=True,camera=False):
+def setup_session(tmp_path,enabled=True,camera=False,**session_options):
     clock=[10.0]; authority=[True]
     cfg=make_config(allowed_owners=('learned_policy',), velocity_limits={'joint_1':1,'joint_2':1},
                     acceleration_limits={'joint_1':10,'joint_2':10})
@@ -50,7 +50,8 @@ def setup_session(tmp_path,enabled=True,camera=False):
         owner_identity=lambda:dict(workcell_id=cfg.workcell_id,instance_id=cfg.instance_id,
                                    simulation=True,profile=doc['device_profile_revision']),
         authority_current=lambda _:authority[0],monotonic=lambda:clock[0],enabled=enabled,
-        camera_current=(lambda:(CameraSnapshot('front','cam-front','a'*64,(3,2,2),10_000_000_000,'c'*64),)) if camera else None)
+        camera_current=(lambda:(CameraSnapshot('front','cam-front','a'*64,(3,2,2),10_000_000_000,'c'*64),)) if camera else None,
+        **session_options)
     session.observe(JointStateSnapshot({'joint_1':0.1,'joint_2':0.0},10,10.0,'cal-7'))
     return session,client,clock,authority,root
 
@@ -181,7 +182,7 @@ def test_observation_change_inside_final_fence_rejects_old_candidate(tmp_path):
     def changing(_):
         calls.append(1)
         if len(calls)==2:
-            session.observe(JointStateSnapshot({'joint_1':0.1,'joint_2':0.0},11,10.0,'cal-7'))
+            session.observe(JointStateSnapshot({'joint_1':0.12,'joint_2':0.0},11,10.0,'cal-7'))
         return True
     session._authority=changing
     with pytest.raises(PermissionError):session.submit(candidate(session))
@@ -281,3 +282,69 @@ def test_camera_arriving_after_action_production_never_dispatches(tmp_path):
     session._cameras=lambda:(camera,);clock[0]=10.02
     with pytest.raises(PermissionError):session.submit(candidate(session,camera_frames=('c'*64,)))
     assert not client.commands
+
+
+@pytest.mark.parametrize('inside_fence',[False,True])
+def test_fresh_original_observation_survives_bounded_joint_update(tmp_path,inside_fence):
+    session,client,clock,*_=setup_session(tmp_path)
+    clock[0]=10.02
+    snapshot=JointStateSnapshot({'joint_1':0.102,'joint_2':0.002},11,10.01,'cal-7')
+    if inside_fence:
+        calls=[]
+        def updating(_):
+            calls.append(1)
+            if len(calls)==3:session.observe(snapshot)
+            return True
+        session._authority=updating
+    else:session.observe(snapshot)
+    assert session.submit(candidate(session,produced_at_ns=10_015_000_000)).accepted
+    command=client.commands[0]
+    assert command.source_state_sequence==10
+    assert dict(command.expected_start_state_positions)=={'joint_1':0.1,'joint_2':0.0}
+
+
+@pytest.mark.parametrize('mode',['stale','moved','timestamp','evicted'])
+def test_invalid_historical_input_never_dispatches(tmp_path,mode):
+    session,client,clock,*_=setup_session(tmp_path,observation_history_capacity=1 if mode=='evicted' else 64)
+    clock[0]=10.06 if mode=='stale' else 10.02
+    session.observe(JointStateSnapshot({'joint_1':0.12 if mode=='moved' else 0.1,'joint_2':0.0},11,clock[0],'cal-7'))
+    action=candidate(session,produced_at_ns=int(clock[0]*1e9),
+                     observed_at_ns=10_000_000_001 if mode=='timestamp' else 10_000_000_000)
+    with pytest.raises(PermissionError):session.submit(action)
+    assert session.hold_reason and not client.commands
+
+
+@pytest.mark.parametrize('capacity',[0,-1,4097,True,1.5])
+def test_invalid_observation_history_capacity(tmp_path,capacity):
+    with pytest.raises(ValueError,match='history capacity'):
+        setup_session(tmp_path,observation_history_capacity=capacity)
+
+
+@pytest.mark.parametrize('mode',['stale','moved','evicted'])
+def test_historical_source_invalidated_inside_final_authority_is_rejected(tmp_path,mode):
+    session,client,clock,*_=setup_session(tmp_path,observation_history_capacity=1 if mode=='evicted' else 64)
+    calls=[]
+    def changing(_):
+        calls.append(1)
+        if len(calls)==3:
+            clock[0]=10.06 if mode=='stale' else 10.02
+            session.observe(JointStateSnapshot({'joint_1':0.12 if mode=='moved' else 0.1,'joint_2':0.0},
+                                               11,clock[0],'cal-7'))
+        return True
+    session._authority=changing
+    with pytest.raises(PermissionError):session.submit(candidate(session))
+    assert session.hold_reason and not client.commands
+
+
+def test_final_callback_cannot_widen_installed_source_tolerance(tmp_path):
+    session,client,*_=setup_session(tmp_path)
+    calls=[]
+    def widening(_):
+        calls.append(1)
+        if len(calls)==3:
+            session.owner.config=replace(session.owner.config,max_start_state_tolerances={'joint_1':0.1,'joint_2':0.1})
+            session.observe(JointStateSnapshot({'joint_1':0.12,'joint_2':0.0},11,10.0,'cal-7'))
+        return True
+    session._authority=widening
+    with pytest.raises(PermissionError):session.submit(candidate(session))
+    assert session.hold_reason and not client.commands

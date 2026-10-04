@@ -280,8 +280,8 @@
 
 ## 최근 기록
 
+- 2026-10-04 · uncommitted · fix(execution): preserve bounded policy source observations
 - 2026-10-04 · uncommitted · feat(learning): bind ACT inference to immutable observations
 - 2026-10-04 · uncommitted · feat(execution): fence OMX policy candidates at existing owner
 - 2026-10-04 · uncommitted · feat(execution): verify pinned policy installation bindings
 - 2026-10-04 · uncommitted · feat(learning): preserve OMX owner receipt provenance
-- 2026-10-04 · uncommitted · feat(learning): export exact Fleet Episode bindings

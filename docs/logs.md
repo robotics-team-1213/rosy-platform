@@ -5059,3 +5059,8 @@
 - 변경: 고정 config/weights/정규화/RGB 관측 bytes로 ACT를 계산하고 queue의 최초 관측·생성 시각을 보존한다. 큐 길이 1..4의 별도 연구 설정을 추가했다.
 - 증거: native73pass·host48pass1torch-skip·독립24pass. 실제 동일 train5/eval1 seed42751/40steps의 4행동/1행동 비교는 같은 weights/history를 재현했다. queue age/관측 위반9→0이나 MAE는 상수 기준보다 커 둘 다 reject. 새 정책 unregistered·2events, 새 Dataset6Episodes/234refs. 상세 validation/act-inference-binding-2026-10-04.md.
 - gate 변화: SOURCE/HOST 추론 소비·큐 provenance 공백 해소. 실제 capture/issuer/scheduler/owner composition·독립SIM·주행 품질·라벨·rollback·DEVICE/FIELD와 전체 목표 미완료. push/merge/deploy/물리 활성화 없음.
+
+## 2026-10-04 · uncommitted · fix(execution): preserve bounded policy source observations
+- 변경: 추론 중 관절 갱신 시 원관측 sequence/시각/시작 자세를 bounded history에서 검증하고 설치 tolerance·나이를 final fence에서 재검사한다. owner config/session을 고정해 callback 중 tolerance 교체를 거절한다. wheel0.1.3.
+- 증거: RED11 및 독립 발견 envelope 교체 RED1 후 host145pass. wheel source bytes 대조 일치. 상세 validation/policy-source-history-2026-10-04.md.
+- gate 변화: SOURCE/HOST 원관측 제출 공백 보완. 실제 issuer/capture/scheduler/ROS·독립SIM·Fleet 실제 receipt·shadow/rollback·라벨/새 객체 학습·DEVICE/FIELD 및 전체 목표 미완료. 카메라10Hz/관측budget50ms는 실제 watchdog 확인 필요.
