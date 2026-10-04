@@ -7,8 +7,10 @@ Hash verification proves preserved bytes, not receipt authenticity or task succe
 import argparse
 import hashlib
 import json
+import os
 from pathlib import Path
 import sys
+import tempfile
 
 ROOT = Path(__file__).resolve().parents[3]
 sys.path[:0] = [str(ROOT / 'contracts/learning/src'),
@@ -80,15 +82,27 @@ def export(episode_file, receipt_file, output):
     result['inputs'] = dict(episode_manifest_sha256=hashlib.sha256(episode_bytes).hexdigest(),
                             receipt_sha256=hashlib.sha256(receipt_bytes).hexdigest())
     result['verification'] = 'episode_file_hashes_and_receipt_schema'
-    # Check again before publication: no silent source rewrite during the join.
-    validate_episode(episode, root=episode_file.parent)
-    _profile(episode, episode_file.parent)
-    if episode_file.read_bytes() != episode_bytes or receipt_file.read_bytes() != receipt_bytes:
-        raise ValueError('input changed during export')
     result = seal(result)
+    payload = (json.dumps(result, indent=2, ensure_ascii=False, allow_nan=False) + '\n').encode('utf-8')
     output.parent.mkdir(parents=True, exist_ok=True)
-    with output.open('x', encoding='utf-8') as stream:
-        stream.write(json.dumps(result, indent=2, ensure_ascii=False, allow_nan=False) + '\n')
+    staged = None
+    try:
+        with tempfile.NamedTemporaryFile(dir=output.parent, prefix='.' + output.name + '-',
+                                         suffix='.pending', delete=False) as stream:
+            staged = Path(stream.name)
+            stream.write(payload)
+            stream.flush()
+            os.fsync(stream.fileno())
+        # Validate after storage I/O as well: a slow write cannot hide input changes.
+        validate_episode(episode, root=episode_file.parent)
+        _profile(episode, episode_file.parent)
+        if episode_file.read_bytes() != episode_bytes or receipt_file.read_bytes() != receipt_bytes:
+            raise ValueError('input changed during export')
+        # Atomic same-directory publication, without replacing another owner's result.
+        os.link(staged, output)
+    finally:
+        if staged is not None:
+            staged.unlink(missing_ok=True)
     return result
 
 

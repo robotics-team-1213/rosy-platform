@@ -68,6 +68,14 @@ receipt.instance_id가 모두 일치할 때만 mission/step/request/epoch/genera
 키 없음·여러 키·불일치·terminal 결과 충돌은 binding=null의 unmatched로 남긴다.
 Episode outcome evidence의 상대 경로는 원래 Episode root에 속하며 export 디렉터리의
 파일로 해석하지 않는다. source archive는 Episode revision으로 별도 보존해야 한다.
+출력은 같은 디렉터리의 임시 파일에 완전히 쓰고 fsync한 뒤, 배타적 hard link로
+게시한다. 저장 실패나 게시 전 입력 변경은 최종 파일을 남기지 않으며, 경쟁
+게시자의 파일은 덮어쓰지 않는다. 예외 처리 시 자기 임시 파일만 지운다. 프로세스가
+강제 종료되면 임시 파일이 남을 수 있지만, 최종 경로에는 부분 JSON을 게시하지
+않는다. hard link를 지원하지 않는 파일시스템에서는 게시를 거절한다. 이 동작은
+전원 손실 뒤 디렉터리 메타데이터의 내구성이나 Fleet 수신 확인을 보장하지 않는다.
+POSIX에서는 임시 파일의 소유자 전용 권한을 유지한다. 다른 계정의 receiver에
+전달하려면 기존 운영 전달 경로에서 별도 읽기 권한과 수신 증거를 확인해야 한다.
 
 task outcome/judge와 policy null을 보존한다. receipt.state=SUCCEEDED가 독립 과제
 성공이나 policy 실행 증거를 만들지 않는다. 구조 검증·해시는 receipt 진위나 Fleet
