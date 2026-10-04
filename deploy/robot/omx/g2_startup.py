@@ -103,3 +103,15 @@ def prepare_home(runtime, profile, target, *, wall_clock=time.monotonic, sleep=t
             stable_since, stable_sample_stamp = None, None
         sleep(.05)
     raise RuntimeError("SIM startup home readiness timed out; admission remains fenced")
+
+
+def hold_startup(owner):
+    """Keep existing stop/readback IPC available without automatically moving home.
+
+    Reserved Pilot admission does not authorize bypassing UNKNOWN LocalStop.
+    A future startup goal needs explicit authorization, an open generation's
+    final submit fence, and exact-goal StopLocal cancellation before execution.
+    """
+    owner.runner.enabled = False
+    return {"fixture": "SIM_STARTUP_HOME", "result": "HOLD",
+            "reason": "STARTUP_AUTHORIZATION_REQUIRED"}

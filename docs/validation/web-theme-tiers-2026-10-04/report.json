@@ -1,31 +1,91 @@
 {
+  "tier": "LOCAL synthetic development-auth fixture; not operator/device acceptance",
   "rows": [
     {
       "surface": "console",
       "theme": "dark",
       "viewport": "1280x800",
       "data-theme": "dark",
-      "badResponses": []
+      "contentReady": true,
+      "measurements": {
+        "authGate": false,
+        "role": "administrator",
+        "panels": 4,
+        "failedPanels": 0,
+        "overflow": 0
+      },
+      "badResponses": [
+        [
+          "/api/v1/map",
+          404
+        ],
+        [
+          "/api/v1/map/costmap?scope=global",
+          404
+        ]
+      ]
     },
     {
       "surface": "console",
       "theme": "dark",
       "viewport": "390x844",
       "data-theme": "dark",
-      "badResponses": []
+      "contentReady": true,
+      "measurements": {
+        "authGate": false,
+        "role": "administrator",
+        "panels": 4,
+        "failedPanels": 0,
+        "overflow": 0
+      },
+      "badResponses": [
+        [
+          "/api/v1/map",
+          404
+        ],
+        [
+          "/api/v1/map/costmap?scope=global",
+          404
+        ]
+      ]
     },
     {
       "surface": "console",
       "theme": "dark",
       "viewport": "320x568",
       "data-theme": "dark",
-      "badResponses": []
+      "contentReady": true,
+      "measurements": {
+        "authGate": false,
+        "role": "administrator",
+        "panels": 4,
+        "failedPanels": 0,
+        "overflow": 0
+      },
+      "badResponses": [
+        [
+          "/api/v1/map",
+          404
+        ],
+        [
+          "/api/v1/map/costmap?scope=global",
+          404
+        ]
+      ]
     },
     {
       "surface": "setup",
       "theme": "dark",
       "viewport": "1280x800",
       "data-theme": "dark",
+      "contentReady": true,
+      "measurements": {
+        "authGate": false,
+        "role": "administrator",
+        "panels": 5,
+        "failedPanels": 0,
+        "overflow": 0
+      },
       "badResponses": []
     },
     {
@@ -33,6 +93,14 @@
       "theme": "dark",
       "viewport": "390x844",
       "data-theme": "dark",
+      "contentReady": true,
+      "measurements": {
+        "authGate": false,
+        "role": "administrator",
+        "panels": 5,
+        "failedPanels": 0,
+        "overflow": 0
+      },
       "badResponses": []
     },
     {
@@ -40,6 +108,14 @@
       "theme": "dark",
       "viewport": "320x568",
       "data-theme": "dark",
+      "contentReady": true,
+      "measurements": {
+        "authGate": false,
+        "role": "administrator",
+        "panels": 5,
+        "failedPanels": 0,
+        "overflow": 0
+      },
       "badResponses": []
     },
     {
@@ -47,6 +123,14 @@
       "theme": "dark",
       "viewport": "1280x800",
       "data-theme": "dark",
+      "contentReady": true,
+      "measurements": {
+        "authGate": false,
+        "role": "administrator",
+        "panels": 7,
+        "failedPanels": 0,
+        "overflow": 0
+      },
       "badResponses": []
     },
     {
@@ -54,6 +138,14 @@
       "theme": "dark",
       "viewport": "390x844",
       "data-theme": "dark",
+      "contentReady": true,
+      "measurements": {
+        "authGate": false,
+        "role": "administrator",
+        "panels": 7,
+        "failedPanels": 0,
+        "overflow": 0
+      },
       "badResponses": []
     },
     {
@@ -61,6 +153,14 @@
       "theme": "dark",
       "viewport": "320x568",
       "data-theme": "dark",
+      "contentReady": true,
+      "measurements": {
+        "authGate": false,
+        "role": "administrator",
+        "panels": 7,
+        "failedPanels": 0,
+        "overflow": 0
+      },
       "badResponses": []
     },
     {
@@ -68,27 +168,86 @@
       "theme": "light",
       "viewport": "1280x800",
       "data-theme": "light",
-      "badResponses": []
+      "contentReady": true,
+      "measurements": {
+        "authGate": false,
+        "role": "administrator",
+        "panels": 4,
+        "failedPanels": 0,
+        "overflow": 0
+      },
+      "badResponses": [
+        [
+          "/api/v1/map",
+          404
+        ],
+        [
+          "/api/v1/map/costmap?scope=global",
+          404
+        ]
+      ]
     },
     {
       "surface": "console",
       "theme": "light",
       "viewport": "390x844",
       "data-theme": "light",
-      "badResponses": []
+      "contentReady": true,
+      "measurements": {
+        "authGate": false,
+        "role": "administrator",
+        "panels": 4,
+        "failedPanels": 0,
+        "overflow": 0
+      },
+      "badResponses": [
+        [
+          "/api/v1/map",
+          404
+        ],
+        [
+          "/api/v1/map/costmap?scope=global",
+          404
+        ]
+      ]
     },
     {
       "surface": "console",
       "theme": "light",
       "viewport": "320x568",
       "data-theme": "light",
-      "badResponses": []
+      "contentReady": true,
+      "measurements": {
+        "authGate": false,
+        "role": "administrator",
+        "panels": 4,
+        "failedPanels": 0,
+        "overflow": 0
+      },
+      "badResponses": [
+        [
+          "/api/v1/map",
+          404
+        ],
+        [
+          "/api/v1/map/costmap?scope=global",
+          404
+        ]
+      ]
     },
     {
       "surface": "setup",
       "theme": "light",
       "viewport": "1280x800",
       "data-theme": "light",
+      "contentReady": true,
+      "measurements": {
+        "authGate": false,
+        "role": "administrator",
+        "panels": 5,
+        "failedPanels": 0,
+        "overflow": 0
+      },
       "badResponses": []
     },
     {
@@ -96,6 +255,14 @@
       "theme": "light",
       "viewport": "390x844",
       "data-theme": "light",
+      "contentReady": true,
+      "measurements": {
+        "authGate": false,
+        "role": "administrator",
+        "panels": 5,
+        "failedPanels": 0,
+        "overflow": 0
+      },
       "badResponses": []
     },
     {
@@ -103,6 +270,14 @@
       "theme": "light",
       "viewport": "320x568",
       "data-theme": "light",
+      "contentReady": true,
+      "measurements": {
+        "authGate": false,
+        "role": "administrator",
+        "panels": 5,
+        "failedPanels": 0,
+        "overflow": 0
+      },
       "badResponses": []
     },
     {
@@ -110,6 +285,14 @@
       "theme": "light",
       "viewport": "1280x800",
       "data-theme": "light",
+      "contentReady": true,
+      "measurements": {
+        "authGate": false,
+        "role": "administrator",
+        "panels": 7,
+        "failedPanels": 0,
+        "overflow": 0
+      },
       "badResponses": []
     },
     {
@@ -117,6 +300,14 @@
       "theme": "light",
       "viewport": "390x844",
       "data-theme": "light",
+      "contentReady": true,
+      "measurements": {
+        "authGate": false,
+        "role": "administrator",
+        "panels": 7,
+        "failedPanels": 0,
+        "overflow": 0
+      },
       "badResponses": []
     },
     {
@@ -124,9 +315,17 @@
       "theme": "light",
       "viewport": "320x568",
       "data-theme": "light",
+      "contentReady": true,
+      "measurements": {
+        "authGate": false,
+        "role": "administrator",
+        "panels": 7,
+        "failedPanels": 0,
+        "overflow": 0
+      },
       "badResponses": []
     }
   ],
   "pageErrors": [],
-  "generated": "2026-10-04 20:06:12"
+  "generated": "2026-10-04 20:37:04"
 }

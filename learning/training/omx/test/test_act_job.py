@@ -47,3 +47,48 @@ def test_invalid_action_queue_length_fails_before_source_or_model_access(tmp_pat
     with pytest.raises(ValueError,match='n_action_steps'):
         run([],tmp_path/'absent',tmp_path/'output',n_action_steps=steps)
     assert not (tmp_path/'output').exists()
+
+
+def test_consumed_reader_frame_is_bound_to_original_png(tmp_path):
+    from hashlib import sha256
+    from PIL import Image
+    from act_job import verify_reader_image
+    original = tmp_path / "original.png"
+    rgb = np.full((32, 32, 3), [255, 0, 0], dtype=np.uint8)
+    Image.fromarray(rgb).save(original)
+    matching = rgb.transpose(2, 0, 1).astype(np.float32) / 255
+    assert verify_reader_image(matching, original, sha256(original.read_bytes()).hexdigest()) == 0
+    # Preserve the existing exporter's lossy encoding allowance.
+    assert verify_reader_image(matching * .99, original, sha256(original.read_bytes()).hexdigest()) < 8
+    substituted = np.full((3, 32, 32), 0., dtype=np.float32)
+    substituted[2] = 1
+    with pytest.raises(ValueError, match="source image differs"):
+        verify_reader_image(substituted, original, sha256(original.read_bytes()).hexdigest())
+
+
+@pytest.mark.parametrize('pixels', [
+    np.full((3, 32, 32), np.nan), np.zeros((3, 31, 32)),
+    np.full((3, 32, 32), 1.1), np.zeros((3, 32, 32), dtype=np.uint8),
+])
+def test_consumed_reader_frame_shape_range_and_finiteness_are_checked(tmp_path, pixels):
+    from hashlib import sha256
+    from PIL import Image
+    from act_job import verify_reader_image
+    original = tmp_path / "original.png"
+    Image.fromarray(np.zeros((32, 32, 3), dtype=np.uint8)).save(original)
+    with pytest.raises(ValueError, match="source image dimensions/range"):
+        verify_reader_image(pixels, original, sha256(original.read_bytes()).hexdigest())
+
+
+def test_source_png_changed_after_validation_is_refused_even_if_reader_matches(tmp_path):
+    from hashlib import sha256
+    from PIL import Image
+    from act_job import verify_reader_image
+    original = tmp_path / "original.png"
+    Image.fromarray(np.full((32, 32, 3), [255, 0, 0], dtype=np.uint8)).save(original)
+    validated_hash = sha256(original.read_bytes()).hexdigest()
+    changed = np.full((32, 32, 3), [0, 0, 255], dtype=np.uint8)
+    Image.fromarray(changed).save(original)
+    with pytest.raises(ValueError, match="PNG hash differs"):
+        verify_reader_image(changed.transpose(2, 0, 1).astype(np.float32) / 255,
+                            original, validated_hash)

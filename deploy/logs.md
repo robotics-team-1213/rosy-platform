@@ -2404,11 +2404,18 @@
 - 증거: 독립 host 194 PASS·1 POSIX skip, 실패 횟수 임계값 mutation RED 확인. Linux에서 fsync/rename 상태 전이·systemd-analyze verify PASS(의존 서비스는 검증용 stub). 격리 user systemd에서 시작 0.074초·재시작 0.103초, 2초로 축소한 관찰 타이머·정지 시 취소·미확인 부팅 후 시작 보류 PASS. 서명 payload·기기 적용은 별도다.
 - gate 변화: SOURCE/LOCAL 보호 로직만 확인했다. 원래 카메라 시작 관련 본체 재부팅의 전기·커널 원인은 미확정이며 물리 전원 초기화와 카메라 복구 수락은 미완료다.
 
-## 2026-10-04 ? uncommitted ? fix(g2): preserve the total SIM AID deadline while allowing RPC acknowledgement
+## 2026-10-04 · uncommitted · fix(g2): startup 측정 검증과 자동 home HOLD
 
-- ??: attach RPC? 150ms, ?? echo? ???? ???? ?? 200ms ??? ????. ?? transport ???Boolean ????? ??? ???? ??? attach/detach? ????. positive RPC? exact-model state echo? ?? ???? ????stop/reset? ??.
-- ??: r4 ?? startup home READY 9.264s, ????? ?? ROS status4/result0, held readback ? TRANSFER ??. ?? echo? true?? service_ok=false, 106.89ms? transfer ROS goal? ??? UNKNOWN/HOLD, ?? cleanup PASS. 100ms RPC ??? ?? ?? ???? timeout? negative reply? ?? receipt??? ??? ? ??. SDK request ?? ??? Gazebo queued-ack ??? ????: https://github.com/gazebosim/gz-sim/blob/gz-sim8/src/SystemManager.cc#L340-L351 .
-- gate ??: SOURCE/LOCAL deadline ?? RED?GREEN? ??. ?? 16? ???fault matrix??? checkpoint??? ??? HOLD/NOT_RUN?? full_g2=false. ?? ??? ??? ??? ???? ? ???????? ????.
+- 변경: 초기 추가안은 owner의 durable Pilot seat에 startup home intent를 예약하고, 정확한 ROS goal UUID의 성공 결과 이후 신선한 관절 측정과 0.5초 안정성을 확인한 뒤 seat reconciliation과 UDS 시작을 수행하려 했다. stop/reset이나 Fleet grant를 새로 만들지 않는 의도였다.
+- 직전 관측 기록: r3 SDK prepare는 PASS였으나 첫 Action이 PHASE_RUNNER_START_UNKNOWN으로 HOLD였고 phase goal 제출은 0건, cleanup은 PASS였다. spawn 상태의 HOME_DEVIATION과 GRIPPER_NOT_OPEN이 planner에서 거절된 원인을 startup 목표로 보완하려 했다. 이 관측을 box16 완료나 현재 통합 startup 실행 증거로 승격하지 않는다.
+- 검토와 현재 상태: 초기 UNKNOWN LocalStop을 우회하는 자동 제출과 homing 중 StopLocal IPC 부재가 독립 검토에서 확인됐다. 통합 fallback은 자동 home을 제출하지 않고 ActionRunner를 비활성화하며 기존 stop·상태 조회 IPC만 제공한다. STARTUP_AUTHORIZATION_REQUIRED HOLD를 기록하고 runner는 rearm·admit 전에 종료한다. stop latch 초기화·자동 rearm·Pilot HTTP 제어는 하지 않는다.
+- 증거: 기존 측정 helper 10개를 보존했고 실제 ActionApi·LocalStop 기반 fallback 회귀 2건은 gate-noop RED 뒤 적용본 G2 12 PASS였다. 적용 통합 소스의 G2·camera boot guard·native systemd 전체 세 파일은 206 PASS·기존 Windows POSIX signal 1 SKIP·NEW 0이었다. 독립 fallback SPEC·Quality·Safety 검토는 PASS다.
+- gate 변화: SOURCE/LOCAL 보완만 확인했다. 자동 startup 실행에는 명시적 승인·열린 세대의 최종 run_if_open fence·정확한 startup goal 취소 연결이 필요하다. box16 배치·fault matrix·실제 startup·물리 장치 수용은 HOLD/NOT_RUN이며 full_g2=false를 유지한다.
+## 2026-10-04 · uncommitted · fix(g2): SIM AID 승인 응답의 전체 시간 한도 유지
+
+- 변경: 429e13b83의 SIM AID attach 요청 한도를 150ms로 조정하고 상태 echo 확인까지의 전체 200ms 한도를 유지한다. detach도 publish 시간을 포함해 남은 시간만 기다린다. transport 결과와 Boolean 응답을 따로 기록하며 한도를 넘긴 echo는 확인 성공으로 쓰지 않는다. 요청 재실행·stop 초기화·승인 확장은 없다.
+- 증거: 병합 원문의 인코딩 손상 항목은 X:/DevTemp/rosy-ui-ship/g2-aid-imported-journal-original.txt에 보존했다. 복구할 수 없는 실행 관측 문장은 현재 증거로 사용하지 않는다. 해당 source와 독립 host 검사를 대조하며 실제 ROS·장비 실행은 확인하지 않았다.
+- gate 변화: SOURCE/HOST 범위의 시간 한도 보완이다. 통합 G2 startup은 HOLD를 유지하며 box16·fault matrix·실제 startup·물리 수용은 HOLD/NOT_RUN이다. full_g2=false이며 자동 rearm이나 동작 제출은 하지 않는다.
 ## 2026-10-04 · uncommitted · feat(ci): payload 부팅 스모크 — arm64 러너에서 D-444 P1.2 관측
 
 - 변경: `payload-boot-smoke.yml`(workflow_dispatch 전용, `ubuntu-24.04-arm`, GITHUB_TOKEN 한정 비밀 없음). payload artifact를 내려 압축을 풀고, ROS 핀(CycloneDDS·nav2-msgs·tf2)과 CI 부트 스모크의 파이썬 스택을 설치한 뒤, `release/install`에서 `ROSY_ROBOT_NUMBER=1`로 CORE를 부팅해 `GET /dashboard`·`/pilot`·`/console`의 200+CSP를 검사한다(실패 시 로그 업로드). 정의: `.github/workflows`의 `payload-boot-smoke.yml`과 `test/test_payload_boot_smoke_workflow.py`(6 계약).

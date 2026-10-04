@@ -56,3 +56,74 @@ PASS이며 원격 Gradle 실행·새 CI·서명 배포·실장비 수락은 별�
 verdict32162·allowance150의 상한32312 안이며 26줄 여유다. 이 보완은 D-454
 들어온 소스 대비 생산 코드 순증가0이며 기존 두 조립 호출의 AST 인자 값·순서와
 공용 권한을 유지한다. 최종 5개 파일 lint 오류0과 독립 해시 대조 PASS를 확인했다.
+
+뒤이어 들어온 중앙 DELETE 추가안은 일반 Admin 권한 부재와 영구 등록 정리
+소유자 우회가 독립 검토에서 확인돼 활성 경로로 반영하지 않았다. 추가 이력은
+보존하며 중앙 조회·실제 객체 보완과 기존 등록 해제 경로를 유지한다. 이 판단과
+후속 Admin·EnrollmentService 소유 조건을 D-454에 기록했다.
+
+실제 앱·로스터의 중앙 DELETE 미마운트·등록 정보 불변 회귀를 추가하고 중앙
+조회·기존 등록 해제·페어링 40 PASS를 확인했다. 미등록 중앙 DELETE 요청은 기존
+GET 경로의 method-not-allowed(405)로 종료하며 로봇 호출이나 등록 변경이 없다.
+생산 코드와 승인·영구 등록 소유자는 이전 검토본 그대로 유지된다.
+
+G2 startup 추가안 `4941cfb4f995e894ba33717306ad9c790483ae06`의 자동 home 제출은
+초기 UNKNOWN LocalStop을 우회하고 homing 중 StopLocal IPC가 열리지 않는 문제가
+독립 검토에서 확인돼 그대로 활성화하지 않았다. 통합 fallback은 자동 home을
+제출하지 않고 ActionRunner의 제출을 비활성화하며 기존 StopLocal·상태 조회
+IPC를 제공한다. 시작 결과는 `STARTUP_AUTHORIZATION_REQUIRED` HOLD이고 runner는
+그 기록을 확인하면 rearm·admit 요청 전에 종료한다. 기존 stop latch를 초기화하거나
+자동 rearm하지 않으며 Pilot HTTP 제어와 pending Action 진행도 시작하지 않는다.
+
+이 fallback의 독립 SPEC·Quality·Safety 검토는 PASS다. 시작 homing 완료나 G2
+수용을 뜻하지 않는다. 추후 실행에는 명시적인 startup 승인, 기존 열린 authority
+epoch·dispatch generation의 최종 `run_if_open` 제출 fence, 정확한 startup goal의
+StopLocal 취소 연결이 모두 필요하다. ROS 성공 뒤 신선한 관절 측정과 안정성을
+확인하는 기존 helper 검증 10개는 보존했다. fallback 회귀는 실제 ActionApi·
+LocalStop·ActionRunner로 승인된 열린 상태에서도 제출 차단·stop 상태 불변·
+StopLocal 처리·조회 가능·driver 미제출을 확인했다.
+
+적용된 통합 worktree에서 G2 startup·camera boot guard·native systemd 세 파일을
+실행해 206 PASS·기존 Windows POSIX signal 1 SKIP·NEW 0을 확인했다(2.72초).
+native systemd는 카메라 11개만의 실행이 아니라 전체 파일 실행이다. 카메라의
+독립 검토 범위 9개 boot guard·11개 관련 계약 검증과 이 통합 실행을 중복 합산하지
+않는다. 실행 당시 HEAD는 `59f716387960fe6b37adfaf934ad65b8c66ce43c`이고
+494 snapshot의 병합과 fallback이 worktree에 적용된 상태였다. 실제 ROS startup,
+카메라 boot, 이미지 설치, 원격 CI와 물리 수용은 이 결과로 확인하지 않았다.
+정확한 실행 로그는 private `X:/DevTemp/rosy-ui-ship/core/g2-final-applied/run.log`다.
+
+추가 main `36ecf380c`의 학습 계약·정책 설치·Fleet 유지보수 변경을 통합했다.
+기존 G2 startup HOLD, 중앙 DELETE 미제공, 승인된 장비 식별과 SSH 신뢰 경계를
+유지한다. 학습 등록이나 서명 확인만으로 실행 승인·물리 수용을 부여하지 않는다.
+실제 통합 소스의 정책 설치·owner session·중앙 조회·G2·크기 검사 116 PASS를 확인했다.
+
+학습 입력 영상이 export 뒤 바뀌어도 원본 provenance만 확인하던 문제를 보완했다.
+실제 reader가 소비하는 프레임을 resize 전에 원본 PNG와 대조하며, 같은 원본 bytes의
+해시를 행의 고정 해시와 확인한 뒤 디코딩한다. 기존 RGB 평균 오차 8 허용 범위는
+유지한다. 영상 교체와 PNG·영상 동시 교체를 거부하는 반례를 확인했다. 실제 통합
+소스의 관련 학습·CI wheel 검사 15 PASS·NEW 0이다. 실제 LeRobot/PyTorch 학습이나
+정책 실행·기기 수용은 이 검사로 확인하지 않았다.
+
+CI의 wheel 목록에는 새 learning 계약 패키지를 포함하고 실제 프로젝트 버전에
+맞춰 설치하도록 수정했다. 별도 X: 환경에서 실제 wheel 12개 빌드·오프라인 설치·
+의존성 검사와 설치된 ROS-free 모듈 import를 확인했다. 이전 버전 핀의 설치 실패를
+보존했다. Ubuntu·ROS overlay·최종 커밋의 원격 CI는 별도로 통과해야 한다.
+
+테마·뷰포트 캡처 도구의 로그인 화면 오인도 교정했다. 인증 후 콘텐츠가 표시되는
+18개 화면에서 테마·가로 넘침을 확인했으나 합성 환경의 지도 API 404를 숨기지 않아
+전체 판정은 LOCAL HOLD다. 해당 회차의 이미지·보고서·정정은
+`docs/validation/web-theme-tiers-2026-10-04/`에 있다. 실제 운영자·장비 수용과 구분한다.
+
+추가 D-455 합류 로직에서는 오프라인·상태 미확인·localization 유예 중인 장비를
+통행 가능으로 간주하는 문제를 수정했다. 현재 Console 신뢰 판정과 원본 자세를
+함께 확인하고, 동료의 위치가 불확실하면 문으로 복귀하는 YIELD·RESUME를 보류한다.
+새 신뢰 상태 이후에만 보존된 계획을 판단하며 D-453 불확실 YIELD 재실행 금지는
+유지한다. 실제 통합 검사 64 PASS와 알고리즘 17 PASS·NEW 0을 확인했다.
+최초 명령의 존재하지 않는 파일 경로 오류는 검증 실패로 보존했고 통과로 합산하지
+않았다. 장비 주행은 수행하지 않았다.
+
+수동 ARM payload 벤치는 입력을 환경변수로 받아 검증하고, 정확한 성공 빌드의
+소스·workflow·저장소·만료되지 않은 단일 artifact·manifest·checksum을 연결한다.
+웹 검사는 같은 GET 응답의 상태·본문·CSP를 확인한다. 실제 통합 host 회귀는
+15 PASS·NEW 0이다. 이 워크플로 자체의 최종 커밋 ARM 실행·서명 배포·실물 응답은
+별도 검증이며 unsigned hosted process 관측을 기기 수용으로 승격하지 않는다.

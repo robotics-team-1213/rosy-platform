@@ -39,9 +39,17 @@ r3 실행에는 `PHASE_RUNNER_START_UNKNOWN`과 ROS phase goal 부재가 남았�
 
 ## Solution
 
-`deploy/robot/omx/g2_owner.py`는 Cell 홈의 IK와 승인된 열린 그리퍼 목표를 계산하고,
-같은 owner runtime의 `prepare_home()`이 성공한 뒤 UDS와 HTTP 서버를 연다.
-`deploy/robot/omx/g2_startup.py`는 실제 durable Pilot admission을 사용한다.
+이전 후보는 Cell 홈의 IK와 열린 그리퍼 목표를 계산하고 같은 owner runtime의
+`prepare_home()` 성공 뒤 서버를 여는 구조였다. 아래 코드는 당시 측정 helper의
+구조이며 현재 자동 실행 경로가 아니다. durable Pilot admission만으로 초기
+LocalStop을 우회하거나 시작 goal의 정지 취소 연결을 생략할 수 없다.
+
+현재 통합 `deploy/robot/omx/g2_owner.py`는 자동 home을 제출하지 않는다.
+`STARTUP_AUTHORIZATION_REQUIRED` HOLD를 기록하고 ActionRunner를 비활성화한 뒤
+StopLocal·상태 조회 IPC만 제공한다. runner도 rearm·admit 전에 HOLD를 확인한다.
+명시적 startup 승인, 열린 세대의 최종 제출 fence, 정확한 시작 goal 취소 연결이
+마련되기 전에는 아래 helper를 운영 시작 경로에 연결하지 않는다. 기존 stop latch를
+초기화하거나 자동 rearm하지 않는다.
 
 ```python
 # g2_startup.py: register the sink before a goal can report acceptance.
@@ -67,6 +75,10 @@ if (new_sample and sample.received_at > stable_sample_stamp
 SQLite의 pending intent를 지우거나 자동 재제출해 통과시키지 않는다.
 
 ## Verified outcome and limits
+
+아래 r4·r5는 이전 후보의 모델 PC 관측 기록이다. 현재 통합 소스의 자동 시작 수용,
+초기 stop 경계 보완 또는 실물 장비 수용을 증명하지 않는다. 현재 fallback의 host
+검증과 HOLD 조건은 [통합 검증 기록](../../validation/network-peer-discovery-2026-10-04/main-integration-checkpoint.md)을 따른다.
 
 - r4 모델 PC Gazebo: `startup-home.json`의 `READY`, wall 9.264474초,
   일치하는 승인·종료 ROS goal UUID, status 4/result 0,
