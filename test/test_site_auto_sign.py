@@ -62,13 +62,18 @@ class FakeGh:
 
     def __init__(self, *, manifest: bytes | None = None, tag: str = TAG,
                  attested: str | None = None, source_ref: str = "refs/heads/main",
-                 compare: str = "ahead", signed: bool = False):
+                 compare: str = "ahead", signed: bool = False,
+                 release_name: str | None = None, release_body: str | None = None):
         self.manifest = manifest if manifest is not None else _manifest()
         self.tag = tag
         digest = hashlib.sha256(self.manifest).hexdigest()
         self.attested = attested or digest
         self.source_ref = source_ref
         self.compare = compare
+        self.release_name = (release_name if release_name is not None
+                             else f"Site candidate {tag} (unsigned)")
+        self.release_body = (release_body if release_body is not None
+                             else "release.json.sig가 붙기 전에는 UNSIGNED")
         self.assets = ["SHA256SUMS", "release.json", "rosy-site-candidate.tar.part00"]
         if signed:
             self.assets.append("release.json.sig")
@@ -124,6 +129,15 @@ class FakeGh:
             assert "--clobber" not in args
             self.uploads.append(Path(args[3]).read_bytes())
             self.assets.append("release.json.sig")
+            return self._ok()
+        if args[:2] == ["release", "view"]:
+            return self._ok(json.dumps({"name": self.release_name, "body": self.release_body}))
+        if args[:2] == ["release", "edit"]:
+            flag, value = args[5], args[6]
+            if flag == "--title":
+                self.release_name = value
+            elif flag == "--notes":
+                self.release_body = value
             return self._ok()
         raise AssertionError(f"unexpected gh call: {args}")
 
@@ -191,9 +205,22 @@ def test_happy_path_signs_uploads_and_audits(tmp_path, keys):
     # Only the site tag was downloaded; payload-* is never touched.
     downloads = [call for call in gh.calls if call[:2] == ["release", "download"]]
     assert [call[2] for call in downloads] == [TAG]
+    # The signed release no longer calls itself unsigned (D-437 3 취지).
+    assert gh.release_name == f"Site candidate {TAG} (signed)"
+    assert "UNSIGNED" not in gh.release_body and "SIGNED" in gh.release_body
 
     # The next run sees the signature and has nothing to do.
     assert auto.AutoSigner(_config(tmp_path, keys), runner=gh).run() == auto.EXIT_IDLE
+
+
+def test_already_correct_title_is_not_edited(tmp_path, keys):
+    gh = FakeGh(release_name=f"Site candidate {TAG}",
+                release_body="signed release")
+    signer = auto.AutoSigner(_config(tmp_path, keys), runner=gh)
+
+    assert signer.run() == auto.EXIT_SIGNED
+    assert gh.release_name == f"Site candidate {TAG}"
+    assert not any(call[:2] == ["release", "edit"] for call in gh.calls)
 
 
 def test_attestation_digest_mismatch_is_refused(tmp_path, keys):

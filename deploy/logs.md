@@ -2374,6 +2374,13 @@
 - 증거: 독립 source 검토 뒤 host preflight 16회/marker 8·16, 독립 15 tests 통과. 설치 패키지 shadow와 멈춘 clock의 반복 발행을 거절한다. read-only root/repo·network-none·no devices·bounded resource와 실제 컨테이너 ID/label·성공한 daemon 목록 기반 종료 검사를 준비했다.
 - gate 변화: SOURCE/LOCAL만 추가했다. SDK 이미지 preflight·전체 16회 ROS-SIM과 fault matrix는 NOT_RUN이며 full_g2=false다. 기존 narrow vendor 취소 증거를 전체 G2로 올리지 않는다. 수동 슬립시트 checkpoint·물리 파지는 별도다.
 
+## 2026-10-04 · uncommitted · fix(site): 서명된 후보의 제목·설명이 서명 상태를 말한다
+
+- 변경: `auto_sign_candidates.py`가 서명 자산을 올린 뒤 릴리스를 다시 읽어 제목의 "(unsigned)"를 "(signed)"로, 설명의 "UNSIGNED"를 "SIGNED"로 고친다(D-437 3의 취지 — 사람은 목록의 제목을 읽는다). 교정 실패는 서명을 되돌리지 않고 감사에만 남긴다. 이미 바른 제목은 만지지 않는다.
+- 증거: `test/test_site_auto_sign.py` 25 passed — happy path가 제목·설명 교정을 단언(변이: 이미 바른 제목은 edit 호출 0건), `test_site_candidate_signing.py`·`test_site_candidate_workflow.py` 30 passed 회귀 없음. flake8 지적 2건(E128)은 main 선재.
+- gate 변화: 없음.
+- 결정: D-441 뒤 정리. 근거: 2026-10-04 관측 회차에서 서명 완료 후에도 제목이 "(unsigned)"로 남어 사람이 오독한 사실.
+
 ## 2026-10-04 · uncommitted · fix(camera): 시작 중 반복 부팅 보호
 
 - 변경: 카메라 시작 전 fsync 기록, 두 번의 미확인 부팅 뒤 선택 서비스 보류, 별도 90초 관찰 타이머와 정상 종료 구분을 추가했다. 카메라 재시도를 10초·300초 내 3회로 제한하고 관찰 시간을 카메라 시작 완료와 분리했다. D-161의 CORE·호스트 권한 분리와 D-373의 선택 perception 설정을 유지한다.

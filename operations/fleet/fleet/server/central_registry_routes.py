@@ -11,11 +11,14 @@ from typing import Callable
 
 from fastapi import APIRouter, Depends, FastAPI, HTTPException
 
+from fleet.hub.hub import HubError
 from fleet.server.central_registry import CentralRegistry
+from fleet.server.roster import RosterConflict
 
 
 def install_central_registry_routes(app: FastAPI, registry: CentralRegistry, *,
-                                    require_viewer: Callable) -> None:
+                                    require_viewer: Callable,
+                                    require_operator: Callable) -> None:
     router = APIRouter()
 
     @router.get("/api/v1/fleet/robots", dependencies=[Depends(require_viewer)],
@@ -31,5 +34,22 @@ def install_central_registry_routes(app: FastAPI, registry: CentralRegistry, *,
             raise HTTPException(status_code=404,
                                 detail={"code": "UNKNOWN_ROBOT", "message": robot_id})
         return row
+
+    @router.delete("/api/v1/fleet/robots/{robot_id}",
+                   dependencies=[Depends(require_operator)], tags=["central-fleet"])
+    async def fleet_robot_delete(robot_id: str) -> dict:
+        """등록 해제(REG-001a). 로스터의 차단(진행 작업 등)은 409 로 내려온다."""
+        try:
+            await registry.roster.remove(robot_id)
+        except RosterConflict as conflict:
+            detail = {"code": conflict.code, "message": str(conflict)}
+            if conflict.task_ids:
+                detail["task_ids"] = conflict.task_ids
+            raise HTTPException(status_code=409, detail=detail) from None
+        except HubError as error:
+            status = 404 if error.code == "UNKNOWN_ROBOT" else 409
+            raise HTTPException(status_code=status,
+                                detail={"code": error.code, "message": str(error)}) from None
+        return {"robot_id": robot_id, "removed": True}
 
     app.include_router(router)
