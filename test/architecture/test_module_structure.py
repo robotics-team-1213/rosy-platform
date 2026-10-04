@@ -80,6 +80,15 @@ CONTROL_SPLIT = "docs/plans/2026-09-22-control-package-split-design.md"
 
 #: P6 verdicts: path (relative to src/) or package name -> (lines at verdict, verdict).
 SIZE_VERDICTS = {
+    "ui/pilot/styles.css": (
+        811,
+        "split: Pilot lobby, connection and drive responsive layouts share this surface stylesheet; "
+        "D-447 concurrent baseline work restores the existing 44px target floor on narrow screens. "
+        "Retain that correction; group the screen-specific rules into separately loaded assets "
+        "under docs/plans/2026-10-04-ui-release-and-live-refinement.md with installed and native "
+        "asset parity checks. Owner pilot; follow-up after device acceptance. Web ceiling and "
+        "growth allowance remain unchanged",
+    ),
     "dashboard": (
         10_148,
         "split: D-447(b) adds a focused shared state-stream store to the already separated task "
@@ -360,7 +369,7 @@ SIZE_VERDICTS = {
         "accept: sim-only read-only viewer server (HTTP handler + ROS subscriptions); the pure logic already lives in live_view_model.py and the page in lane_live_view.html, covered by test_lane_live_view*.py and test_live_view_model.py (X5)",
     ),
     "core_features": (
-        12_536,
+        12_723,
         "accept: the ROS-free CORE feature managers (command, safety, docking, line_follow, "
         "traffic_policy, navigation, swarm, ...) are already one subpackage per feature, each "
         "under the file budget; the package total is a sum of independent owners, not one "
@@ -386,7 +395,18 @@ SIZE_VERDICTS = {
         "uses the existing ModeMachine and its separate lock. No new deploy unit or file-budget "
         "exception; independent safety review recorded in docs/validation/learned-lane-modes-2026-10-04/README.md. "
         "Concurrent merge adds the main branch's 57 reviewed FleetAgent/discovery lines to this "
-        "12479 baseline, yielding 12536; the existing 150 allowance is unchanged.",
+        "12479 baseline, yielding 12536; the existing 150 allowance is unchanged. "
+        "Re-judged 2026-10-04 at 12551: the user-requested long testing dwell and bounded "
+        "low-battery limits add 15 production lines within the existing power owner; "
+        "docs/plans/2026-10-04-power-health-and-wake.md records the policy and safety review. "
+        "Re-judged 2026-10-04 at 12723 after the concurrent power-health merge: "
+        "independent production-line counts are 12662 for integration parent 8dfa7fe (73 files), "
+        "12701 for main parent 030323440 (73 files), and 12723 for the union (73 files). "
+        "The integration-parent delta is battery.py +22 and power/manager.py +39; "
+        "the main-parent delta retains 22 D-442 manual-owner and mode-locked command/watchdog lines. "
+        "Power policy remains in its existing owner and the command admission lock is preserved. "
+        "docs/validation/ui-release-integration-2026-10-04/README.md records the independent review. "
+        "The feature grouping, file budgets and 150 allowance are unchanged.",
     ),
     "control": (
         44_469,

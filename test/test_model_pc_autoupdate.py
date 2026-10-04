@@ -470,3 +470,49 @@ def test_clean_older_checkout_does_not_block_signed_script(tmp_path):
     assert m.checkout_script_conflict(signed, checkout, "job.py") is None
     (checkout / "job.py").write_text("LOCAL = True\n")
     assert m.checkout_script_conflict(signed, checkout, "job.py") is not None
+
+
+def test_environment_retains_incomplete_distribution_records(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    m = module()
+    valid = SimpleNamespace(metadata={"Name": "Known_Package"}, version="1.2")
+    assert m.distribution_fingerprint(valid) == ("known-package", "1.2")
+    records = [valid]
+    for name in ["unnamed.egg-info", "other.dist-info"]:
+        entry = tmp_path / name
+        entry.mkdir()
+        (entry / "RECORD").write_text("installed-file,hash,1\n")
+        records.append(SimpleNamespace(metadata={}, version=None, _path=entry))
+    monkeypatch.setattr(m.importlib.metadata, "distributions", lambda: iter(records))
+    first = m.environment_info()
+    assert len(first["packages"]) == 3
+    assert sum(name.startswith("<invalid-metadata>:") for name, _ in first["packages"]) == 2
+    assert str(tmp_path) not in json.dumps(first)
+    records.reverse()
+    assert m.environment_info() == first
+    (tmp_path / "unnamed.egg-info" / "RECORD").write_text("changed-installed-file,hash,1\n")
+    changed = m.environment_info()
+    assert m.fingerprint(changed) != m.fingerprint(first)
+    records.pop(0)
+    assert m.fingerprint(m.environment_info()) != m.fingerprint(changed)
+
+
+@pytest.mark.parametrize("kind", ["unidentified", "missing", "unreadable"])
+def test_incomplete_distribution_without_readable_provenance_fails_closed(tmp_path, monkeypatch, kind):
+    from types import SimpleNamespace
+
+    m = module()
+    distribution = SimpleNamespace(metadata={}, version=None)
+    if kind != "unidentified":
+        distribution._path = tmp_path / "broken.dist-info"
+    if kind == "unreadable":
+        distribution._path.mkdir()
+        (distribution._path / "RECORD").write_text("installed-file\n")
+
+        def unreadable(_path):
+            raise PermissionError("metadata is unreadable")
+
+        monkeypatch.setattr(m, "digest", unreadable)
+    with pytest.raises(ValueError, match="environment package metadata"):
+        m.distribution_fingerprint(distribution)

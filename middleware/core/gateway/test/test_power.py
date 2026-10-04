@@ -557,6 +557,25 @@ VIEWER = {"Authorization": "Bearer rosy-dev-viewer"}
 
 
 class TestPowerApi:
+    def test_health_requires_auth_and_is_read_only(self, client):
+        api, svc = client
+        assert api.get("/api/v1/power/health").status_code == 401
+        svc.power.request_mode(PowerMode.STANDBY)
+        body = api.get("/api/v1/power/health", headers=VIEWER).json()
+        assert body["power"]["mode"] == "STANDBY"
+        assert svc.power.mode == PowerMode.STANDBY
+        assert body["battery"]["evidence"] == "missing"
+        assert body["recommendation"] == "restore_battery_telemetry"
+        assert body["policy"]["api_wake_requires_running_os"] is True
+
+    def test_health_does_not_invent_charging_or_remaining_runtime(self, client):
+        api, svc = client
+        svc.battery.on_voltage(7.6)
+        body = api.get("/api/v1/power/health", headers=VIEWER).json()
+        assert body["battery"]["evidence"] == "fresh"
+        assert body["battery"]["charging_state"] == "unconfirmed"
+        assert body["battery"]["remaining_runtime_s"] is None
+
     def test_get_power_requires_auth(self, client):
         api, _ = client
         assert api.get("/api/v1/power").status_code == 401
@@ -598,3 +617,11 @@ class TestPowerApi:
         api, _ = client
         body = api.get("/api/v1/robot/state", headers=VIEWER).json()
         assert body["power"]["mode"] == "ACTIVE"
+
+
+def test_power_config_reads_low_battery_dwell_overrides():
+    cfg = _power_config({'warning_idle_after_s': 45, 'warning_standby_after_s': 240,
+                         'critical_idle_after_s': 20, 'critical_standby_after_s': 90})
+    assert (cfg.idle_after_s, cfg.standby_after_s) == (600, 1800)
+    assert (cfg.warning_idle_after_s, cfg.warning_standby_after_s) == (45, 240)
+    assert (cfg.critical_idle_after_s, cfg.critical_standby_after_s) == (20, 90)

@@ -21,12 +21,14 @@ class RobotDiscovery(context: Context, private val store: CandidateStore, privat
     private var active = false
     private var resolveVersion = 0
     private var lock: WifiManager.MulticastLock? = null
+    private fun trace(message: String) = android.util.Log.i("RosyPilotDiscovery", message)
     private val listener = object : NsdManager.DiscoveryListener {
-        override fun onDiscoveryStarted(type: String) = Unit
-        override fun onDiscoveryStopped(type: String) = Unit
-        override fun onStartDiscoveryFailed(type: String, error: Int) { changed() }
+        override fun onDiscoveryStarted(type: String) { trace("Discovery started type=$type") }
+        override fun onDiscoveryStopped(type: String) { trace("Discovery stopped type=$type") }
+        override fun onStartDiscoveryFailed(type: String, error: Int) { trace("Discovery failed type=$type error=$error"); changed() }
         override fun onStopDiscoveryFailed(type: String, error: Int) = Unit
         override fun onServiceFound(info: NsdServiceInfo) { main.post {
+            trace("Found name=${info.serviceName} type=${info.serviceType} stopped=$stopped")
             if (stopped || info.serviceType.trimEnd('.') != "_rosy._tcp") return@post
             val generation = store.found(info.serviceName) ?: return@post
             services[info.serviceName] = info to generation
@@ -34,6 +36,7 @@ class RobotDiscovery(context: Context, private val store: CandidateStore, privat
             else if (pending.none { it.first.serviceName == info.serviceName }) { pending.add(info to generation); next() }
         } }
         override fun onServiceLost(info: NsdServiceInfo) { main.post {
+            trace("Lost name=${info.serviceName} stopped=$stopped")
             if (stopped) return@post
             store.lost(info.serviceName)
             services.remove(info.serviceName)
@@ -72,20 +75,23 @@ class RobotDiscovery(context: Context, private val store: CandidateStore, privat
     }
     private fun record(info: NsdServiceInfo, generation: Long, addresses: List<String>) {
         if (stopped) return
+        fun rejected(reason: String) { trace("Rejected name=${info.serviceName} port=${info.port} addresses=${addresses.joinToString(",")} reason=$reason") }
         fun txt(key: String) = info.attributes[key]?.toString(Charsets.UTF_8)?.trim()?.lowercase()
-        if (txt("network") == "ap") return
+        if (txt("network") == "ap") { rejected("ap_mode"); return }
         val secure = txt("tls") == "required"
         // InetAddress.hostName can run reverse DNS and crash the Android main thread.
         @Suppress("DEPRECATION") val cached = info.host?.toString()?.substringBefore('/')?.lowercase()?.trimEnd('.')
         @Suppress("DEPRECATION") val host = txt("tls_host") ?: cached?.takeIf { io.github.livsbittt.rosy.cam.settings.SiteLink.isTlsHost(it) }
-            ?: info.host?.hostAddress?.takeUnless { secure } ?: return
+            ?: info.host?.hostAddress?.takeUnless { secure } ?: run { rejected("secure_host_missing"); return }
         val isName = io.github.livsbittt.rosy.cam.settings.SiteLink.isTlsHost(host)
-        if (!isName && (secure || !io.github.livsbittt.rosy.cam.settings.SiteLink.isIpLiteral(host))) return
+        if (!isName && (secure || !io.github.livsbittt.rosy.cam.settings.SiteLink.isIpLiteral(host))) { rejected("bad_host"); return }
         val ips = addresses.filter { address ->
-            io.github.livsbittt.rosy.cam.settings.RobotCoreServiceRecord.rejection(
-                info.serviceType, address, info.port, info.attributes, host.takeIf { isName }) == null
+            val reason = io.github.livsbittt.rosy.cam.settings.RobotCoreServiceRecord.rejection(
+                info.serviceType, address, info.port, info.attributes, host.takeIf { isName })
+            if (reason != null) rejected(reason)
+            reason == null
         }
-        if (ips.isEmpty() || info.port !in 1..65535) return
+        if (ips.isEmpty() || info.port !in 1..65535) { rejected("no_eligible_address"); return }
         store.resolved(info.serviceName, generation, Candidate(host, info.port, ips.sorted(), txt("name") ?: info.serviceName, txt("robot_id").orEmpty(), secure))
         android.util.Log.i("RosyPilotDiscovery", "Resolved ${info.serviceName} host=$host port=${info.port} addresses=${ips.sorted().joinToString(",")} tls=$secure")
         changed()
@@ -113,16 +119,22 @@ class RobotDiscovery(context: Context, private val store: CandidateStore, privat
         val entry = pending.removeFirstOrNull() ?: return
         active = true
         val version = ++resolveVersion
+        val started = android.os.SystemClock.elapsedRealtime()
+        trace("Resolve start name=${entry.first.serviceName} version=$version")
         fun done() { if (!stopped && version == resolveVersion) { active = false; next() } }
         val resolver = object : NsdManager.ResolveListener {
-            override fun onResolveFailed(info: NsdServiceInfo, error: Int) { main.post { done() } }
+            override fun onResolveFailed(info: NsdServiceInfo, error: Int) { main.post {
+                trace("Resolve failed name=${info.serviceName} version=$version error=$error elapsedMs=${android.os.SystemClock.elapsedRealtime() - started}")
+                done()
+            } }
             override fun onServiceResolved(info: NsdServiceInfo) { main.post {
+                trace("Resolve callback name=${info.serviceName} version=$version current=$resolveVersion stopped=$stopped elapsedMs=${android.os.SystemClock.elapsedRealtime() - started}")
                 if (!stopped && version == resolveVersion) {
                     record(info, entry.second, listOfNotNull(info.host?.hostAddress)); done()
                 }
             } }
         }
         runCatching { manager.resolveService(entry.first, resolver) }.onFailure { done() }
-        main.postDelayed({ done() }, 2000)
+        main.postDelayed({ if (!stopped && version == resolveVersion && active) trace("Resolve local timeout name=${entry.first.serviceName} version=$version elapsedMs=${android.os.SystemClock.elapsedRealtime() - started}"); done() }, 2000)
     }
 }

@@ -219,8 +219,12 @@ navigation:
 
 power:                            # PWR-001~004 절전/근접 웨이크 (D-24)
   enabled: true                   # false 이면 항상 ACTIVE — 기존 동작과 동일
-  idle_after_s: 60                # 무활동 이 시간 후 IDLE
-  standby_after_s: 300            # 무활동 이 시간 후 STANDBY
+  idle_after_s: 600                # 무활동 이 시간 후 IDLE
+  standby_after_s: 1800            # 무활동 이 시간 후 STANDBY
+  warning_idle_after_s: 60
+  warning_standby_after_s: 300
+  critical_idle_after_s: 30
+  critical_standby_after_s: 120
   info_hold_s: 15                 # 웨이크 후 정보 화면 유지 시간 (s)
   active_rate_hz: 20              # sensor_adc ADC 폴링 주기 (모드별)
   idle_rate_hz: 5

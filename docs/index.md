@@ -284,8 +284,8 @@
 
 ## 최근 기록
 
+- 2026-10-04 · uncommitted · feat(power): long testing dwell with low battery saving
+- 2026-10-04 · uncommitted · feat(power): fresh battery evidence and idle saving
 - 2026-10-04 · uncommitted · D-446 clean older checkout permits signed execution
 - 2026-10-04 · uncommitted · D-446 remote integration after source migration
 - 2026-10-04 · uncommitted · fix: CI Gazebo 제외 파일의 수명
-- 2026-10-04 · uncommitted · docs: migrated UI release integration and device update
-- 2026-10-04 · 6485f8a39 · docs(ui): 공용 웹 디자인 통합 검증과 로컬 main 착지

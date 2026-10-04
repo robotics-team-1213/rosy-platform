@@ -271,3 +271,30 @@ build 시 PilotColors와 Android 색 리소스를 생성한다. 누락된 토큰
 영상 배치와 제어 입력·네트워크·정지 처리는 표면이 소유한다. 공용 디자인 컴포넌트는 로봇
 명령을 보내거나 연결을 열지 않는다. 도구에서 입력/녹화본을 열면 기존 도구 패널을 접고,
 닫으면 보이는 도구 버튼으로 초점을 돌려준다. 중첩 패널이 같은 작업 공간을 가리지 않는다.
+
+### 2026-10-04 추가 결정: Android 검색 고착의 독립 복구
+
+실제 Android 12 태블릿에서 이전 서비스의 NSD resolve가 종료되지 않아, 새 로봇 광고를
+발견해도 `FAILURE_ALREADY_ACTIVE`로 주소 해석을 진행하지 못했다. 앱 내부 2초 타이머는
+OS의 활성 resolve를 취소하지 않는다. 앱 프로세스 재시작 후에는 현재 광고의 IPv4 주소가
+154 ms 만에 해석되고 로봇 목록의 연결 버튼이 활성화됐다. 목록 표시는 CORE 접속 성공과 구분한다.
+
+NSD와 multicast lock은 앱과 동일 UID의 private bound service `:discovery`가 소유한다.
+서비스는 `exported=false`이고 Messenger로만 통신한다. 부모는 기존 64개·60초 후보 저장소와
+주소/TLS/장비 식별 검사를 유지한다. epoch·query ID·presence generation·단조 시각으로
+이전 바인딩, 제거 후 재발견, TTL이 지난 응답을 폐기한다. 격리 UID와 숨겨진 API는 쓰지 않는다.
+
+한 번에 하나의 native resolve만 실행하며 bind/resolve 제한 시간은 12초다. 시간 초과나
+활성 resolve 충돌이면 epoch를 무효화하고 STOP/unbind를 요청한다. 자식은 NSD와 multicast
+lock을 해제한 뒤 자기 PID만 종료한다. 부모는 Binder death 확인 후에만 다시 바인딩한다.
+자동 재시도는 1/2/4초 대기, 5분 동안 최대 3회다. 명시적 '다시 찾기'는 새 검색 예산을
+시작한다. 빈 LAN은 재시작 사유가 아니다. 정리가 확인되지 않으면 오류와 복구 동작을 표시한다.
+백그라운드 전환과 목록 종료는 기한·대기를 취소하며 제어 세션·주 프로세스·Cam을 종료하지 않는다.
+
+JVM 결함 주입과 실제 태블릿의 자식 종료·재검색·백그라운드 정리를 별도로 검증한다.
+부모 PID 유지, 새 자식 PID, 실제 로봇 목록 복구를 기록한다. 이 결정은 Android 발견 복구에
+한정하며 로봇 CORE 프로세스 구조와 페어링 코드 규격을 변경하지 않는다. 후보·TTL·재시도
+상한으로 multicast 및 IPC 부하를 제한한다.
+
+근거: [Android bound services](https://developer.android.com/develop/background-work/services/bound-services),
+[ServiceConnection](https://developer.android.com/reference/android/content/ServiceConnection).

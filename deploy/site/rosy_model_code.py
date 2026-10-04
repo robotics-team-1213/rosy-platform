@@ -56,10 +56,38 @@ def fingerprint(value):
     return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 
+def distribution_fingerprint(distribution):
+    metadata, version = distribution.metadata, distribution.version
+    name = metadata.get("Name")
+    if isinstance(name, str) and name and isinstance(version, str) and version:
+        return name.lower().replace("_", "-"), version
+    # An incomplete installed record still participates in the environment.
+    # PathDistribution's metadata entry identifies it without exposing its host path.
+    try:
+        entry = Path(distribution._path)
+        if not entry.name or entry.is_symlink(): raise ValueError("unidentified metadata entry")
+        if entry.is_file():
+            files = [(entry.name, digest(entry))]
+        elif entry.is_dir():
+            files, pending = [], [entry]
+            while pending:
+                for path in pending.pop().iterdir():
+                    if path.is_symlink(): raise ValueError("linked metadata entry")
+                    if path.is_dir(): pending.append(path)
+                    elif path.is_file(): files.append((path.relative_to(entry).as_posix(), digest(path)))
+                    else: raise ValueError("unreadable metadata member")
+            files.sort()
+        else:
+            raise ValueError("missing metadata entry")
+        record = {"metadata": sorted(metadata.items()), "version": version, "files": files}
+        return "<invalid-metadata>:" + entry.name, fingerprint(record)
+    except (AttributeError, OSError, TypeError, ValueError) as exc:
+        raise ValueError("environment package metadata unreadable or unidentified") from exc
+
+
 def environment_info():
     return {"python": f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}",
-            "packages": sorted((d.metadata["Name"].lower().replace("_", "-"), d.version)
-                               for d in importlib.metadata.distributions())}
+            "packages": sorted(distribution_fingerprint(d) for d in importlib.metadata.distributions())}
 
 
 def atomic_json(path, value):

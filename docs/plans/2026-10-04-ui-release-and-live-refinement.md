@@ -24,6 +24,10 @@ D-427/D-430 경로 이전·안전 소유권. 이 계획은 실제 실행 증거�
    역할별 원본 경계와 installed-resource 계약을 기록한다. 새 ROS 실행 프로세스나
    중복 소켓을 만들지 않으며 파일 상한·패키지 +150 허용치를 유지한다.
 
+8. Pilot 화면별 responsive CSS를 기존 로비·연결·운용 담당에 맞춰 분리한다.
+   좁은 화면의 44px 조작 면적 수정은 유지한다. asset loading 순서, 공용 토큰,
+   installed-resource와 Android APK 자산 일치를 검증한 뒤 분리하며 파일 상한을 바꾸지 않는다.
+
 현재: 통합 소스의 독립 검토, migration/구조 110 PASS와 나머지 quick 370 PASS/2 SKIP를 확인했다.
 기존 인증서가 동일한 Pilot·Cam APK를 무선 ADB `install -r`로 업데이트했다.
 원격 CI와 서명된 로봇/관제 후보 배포, 순차 실물 화면 수용은 진행 중이다.
