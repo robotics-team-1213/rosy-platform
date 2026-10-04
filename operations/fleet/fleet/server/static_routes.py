@@ -24,6 +24,7 @@ CONSOLE_ASSETS = {
     "console.js": "application/javascript",
     "confirmed-action.js": "application/javascript",
     "install.js": "application/javascript",
+    "peer-picker.js": "application/javascript",
     "address-drift.js": "application/javascript",
     "authorization.js": "application/javascript",
     "camera-pairing.js": "application/javascript",

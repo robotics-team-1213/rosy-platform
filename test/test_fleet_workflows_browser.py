@@ -52,9 +52,11 @@ def test_install_tasks_stay_mounted_and_navigate_while_role_locked(console_url):
         browser, page, errors = _open_console(p, api)
         page.goto(install_url(console_url), wait_until='networkidle')
         tabs = page.get_by_role('tab')
-        expect(tabs).to_have_count(3)
+        expect(tabs).to_have_count(4)
         for tab in tabs.all():
             expect(tab).to_be_enabled()
+        expect(page.locator('#peer-picker')).to_be_visible()
+        choose(page, '로봇 등록')
         expect(page.locator('#robot-enrollment')).to_be_visible()
         page.locator('#enroll-address').fill('192.0.2.55:8080')
         page.locator('#robot-enrollment').evaluate('node=>window.retainedEnrollment=node')
@@ -90,6 +92,7 @@ def test_discovery_empty_failure_unsupported_and_explicit_retry(console_url):
     with sync_playwright() as p:
         browser, page, errors = _open_console(p, api)
         page.goto(install_url(console_url), wait_until='networkidle')
+        choose(page, '로봇 등록')
         expect(page.locator('#discovery-empty')).to_contain_text('아직 발견된 로봇이 없습니다')
         api['/api/fleet/discovery'] = (503, {'detail': {'code': 'SCANNER_UNAVAILABLE'}})
         page.locator('#discovery-retry').click()
@@ -110,6 +113,64 @@ def test_discovery_empty_failure_unsupported_and_explicit_retry(console_url):
         page.locator('#discovery-retry').click()
         expect(page.locator('#discovery-list')).to_be_hidden()
         assert '192.0.2.8' not in page.locator('#discovery-list').text_content()
+        assert errors == []
+        browser.close()
+
+
+def _peer_api():
+    return {**API, '/api/fleet/session': {'principal_id': 'reader', 'role': 'viewer'},
+            '/api/fleet/peers': {'scanner_state': 'online', 'scanner_age_s': 1,
+                'peers': [{'name': 'Fixture Pink', 'role': 'robot', 'peer_id': 'rosy_02',
+                           'approval': 'approved', 'freshness': 'fresh', 'readiness': 'unknown'}]},
+            '/api/fleet/discovery': {'scanner_online': True, 'devices': []}}
+
+
+def test_actual_install_viewer_chooser_navigation_and_401_clear_owner_links(console_url):
+    """Run actual install.js; synthetic identity is not operator authentication evidence."""
+    from playwright.sync_api import sync_playwright, expect
+
+    api, calls = _peer_api(), []
+    with sync_playwright() as p:
+        browser, page, errors = _open_console(p, api, posts=calls,
+            init_script="sessionStorage.setItem('rosy-console-token','fixture-token');")
+        page.goto(install_url(console_url), wait_until='networkidle')
+        expect(page.locator('#peer-picker')).to_be_visible()
+        expect(page.locator('#peer-role')).to_be_enabled()
+        expect(page.locator('#peer-retry')).to_be_enabled()
+        expect(page.locator('#peer-list a')).to_have_attribute('href', '/console?robot=rosy_02')
+        choose(page, '로봇 등록')
+        expect(page.locator('#enroll-address')).to_be_disabled()
+        choose(page, '장비 찾기')
+        expect(page.locator('#peer-picker')).to_be_visible()
+        api['/api/fleet/session'] = (401, {'detail': {'code': 'TOKEN_REQUIRED'}})
+        page.locator('#token-save').click()
+        expect(page.locator('#user-role')).to_have_text('인증 필요')
+        expect(page.locator('#peer-list')).to_be_hidden()
+        expect(page.locator('#peer-list a')).to_have_count(0)
+        expect(page.locator('#peer-empty')).to_contain_text('접속 후')
+        assert not [method for method, _ in calls if method != 'GET']
+        assert errors == []
+        browser.close()
+
+
+def test_actual_console_identity_link_focuses_card_without_arming_or_post(console_url):
+    from playwright.sync_api import sync_playwright, expect
+    from test_fleet_console_browser import WEB
+
+    calls = []
+    with sync_playwright() as p:
+        browser, page, errors = _open_console(p, _peer_api(), posts=calls,
+            init_script="sessionStorage.setItem('rosy-console-token','fixture-token');")
+        # The local static server has no FastAPI /console route; deliver its actual source page.
+        page.route('**/console?robot=*', lambda route: route.fulfill(status=200,
+            content_type='text/html', body=(WEB / 'index.html').read_text(encoding='utf-8')))
+        page.goto(install_url(console_url), wait_until='networkidle')
+        page.locator('#peer-list a').click()
+        page.wait_for_function("document.activeElement?.dataset.robotId==='rosy_02'")
+        expect(page.locator('#roster article.selected')).to_have_count(0)
+        expect(page.locator('#map-canvas')).to_have_class('idle')
+        expect(page.locator('[data-goal-robot-id="rosy_02"]')).to_have_attribute('aria-pressed', 'false')
+        assert not [method for method, _ in calls if method != 'GET']
         assert errors == []
         browser.close()
 

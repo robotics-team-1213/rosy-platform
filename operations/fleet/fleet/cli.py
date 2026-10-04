@@ -77,6 +77,8 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
                          help="환경변수에서 관제 토큰을 읽는다(명령행 secret 노출 방지)")
     console.add_argument("--discovery-token-env", default=None,
                          help="host mDNS scanner credential environment variable")
+    console.add_argument("--approved-peer-directory-file", default=None, type=Path,
+                         help="admin-provisioned public peer metadata JSON; no credentials or enrollment")
     console.add_argument("--vision-preview-secret-env", default=None,
                          help="dedicated Fleet-to-Vision preview lease signing secret")
     console.add_argument("--users-file", default=None, type=Path,
@@ -514,6 +516,7 @@ def run_console(args: argparse.Namespace) -> None:
                      goal_evidence_service=goal_evidence_service,
                      site_users=site_users, discovery=discovery,
                      discovery_token=discovery_token,
+                     approved_peer_directory_file=getattr(args, 'approved_peer_directory_file', None),
                      start_task_dispatcher=not mission_api,
                      vision_lease_secret=vision_preview_secret,
                      vision_sources=vision_sources, enrollment=enrollment,

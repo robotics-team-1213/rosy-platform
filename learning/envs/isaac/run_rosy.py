@@ -14,7 +14,8 @@ from model_checks import check_urdf
 from prepare_urdf import validate_output_path
 from importer_compat import import_model, reference_model
 import command_watchdog
-from drive_runtime import force_zero_wheels
+from drive_runtime import (configure_passive_drive, configure_velocity_drive, force_zero_wheels,
+                           passive_caster_joints, positive_damping)
 
 
 def parse_args():
@@ -26,6 +27,8 @@ def parse_args():
     parser.add_argument("--chassis-prim", help="base_footprint prim path if auto-discovery is ambiguous")
     parser.add_argument("--headless", action="store_true")
     parser.add_argument("--frames", type=int, default=0, help="0 runs until interrupted")
+    parser.add_argument("--wheel-damping", type=positive_damping,
+                        help="Explicit positive wheel velocity drive gain for measured simulation tuning")
     return parser.parse_args()
 
 
@@ -39,6 +42,7 @@ def main():
         raise SystemExit(f"URDF not found: {args.urdf}")
     try:
         check_urdf(args.urdf, "pinky", allow_package=False)
+        passive_joints = passive_caster_joints(ET.parse(args.urdf).getroot())
     except (ValueError, OSError, ET.ParseError) as exc:
         raise SystemExit(f"Pinky URDF preflight failed: {exc}") from exc
     if args.frames < 0:
@@ -101,12 +105,15 @@ def main():
             if not joint.IsA(UsdPhysics.RevoluteJoint):
                 raise RuntimeError(f"Wheel is not a revolute joint: {joint_name}")
             drive = UsdPhysics.DriveAPI.Apply(joint, "angular")
-            drive.CreateStiffnessAttr(0.0)
-            damping = drive.GetDampingAttr().Get()
-            if damping is None or damping <= 0:
-                drive.CreateDampingAttr(1.0)
-            drive.CreateTargetVelocityAttr(0.0)
+            damping = configure_velocity_drive(drive, args.wheel_damping)
+            print(f"Wheel velocity drive: {joint_name}; stiffness=0; damping={damping}; target=0", flush=True)
             wheel_drives.append(drive)
+        for joint_name in passive_joints:
+            joint = stage.GetPrimAtPath(find_prim(joint_name))
+            if not joint.IsA(UsdPhysics.RevoluteJoint):
+                raise RuntimeError(f"Caster is not a revolute joint: {joint_name}")
+            configure_passive_drive(UsdPhysics.DriveAPI.Apply(joint, "angular"))
+            print(f"Passive caster drive: {joint_name}; stiffness=0; damping=0; target=0", flush=True)
         guard = command_watchdog.CommandWatchdog()
         command_watchdog.ACTIVE_WATCHDOG = guard
 

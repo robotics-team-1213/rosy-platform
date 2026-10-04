@@ -217,6 +217,9 @@ adrs:
 - D-445
 - D-447
 - D-450
+- D-454
+- D-451
+- D-453
 plans:
 - docs/plans/2026-10-04-d329-matrix-schema.md
 - docs/plans/2026-10-04-d443-signal-supervision.md

@@ -1,0 +1,16 @@
+[
+  {
+    "name": "Approved model host",
+    "role": "model-host",
+    "transport": "ssh",
+    "service_type": "_rosy-model._tcp",
+    "hostname": "model.example.test",
+    "address": null,
+    "port": 22,
+    "peer_id": "model-owner-profile",
+    "provenance": "approved-directory",
+    "approval": "approved",
+    "freshness": "unavailable",
+    "readiness": "unknown"
+  }
+]

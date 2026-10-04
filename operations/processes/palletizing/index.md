@@ -30,8 +30,8 @@
 
 ## 최근 기록
 
+- 2026-10-04 · uncommitted · feat(palletizing): 작업자 수동 간지 checkpoint
 - 2026-10-04 · uncommitted · docs(palletizing): 앱 완료 목표를 현재 구현과 대조
 - 2026-10-02 · uncommitted · feat(palletizing): `job_document(job)` (C4b G5)
 - 2026-10-02 · c07896af · feat(palletizing): port C3b grasp depth and tool fingertip overhang (merge)
 - 2026-10-02 · uncommitted · feat(process): include taught home pose in transfer plan
-- 2026-10-02 · d9e70f71 · docs(test): refresh Task 3 evidence after latest-main sync

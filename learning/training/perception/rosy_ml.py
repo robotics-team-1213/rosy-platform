@@ -135,10 +135,14 @@ def load_config(path) -> dict:
     return _check(yaml.safe_load(Path(path).read_text(encoding="utf-8")))
 
 
-def config_from_watch(watch_cfg: dict, hostname: str | None = None) -> dict:
+def config_from_watch(watch_cfg: dict, hostname: str | None = None, *, selected_robot=None) -> dict:
     """The site watcher's config seen as an operator config (doctor on the site PC)."""
+    import peer_targets
+    roster = [r for r in watch_cfg['robots'] if selected_robot is None or r['name'] == selected_robot]
+    if not roster:
+        raise ValueError(f'unknown robot {selected_robot!r}')
     cfg = {"operator": f"site:{hostname or socket.gethostname()}",
-           "robots": {r["name"]: r["host"] for r in watch_cfg["robots"]},
+           "robots": {r["name"]: peer_targets.resolve(r) for r in roster},
            "ssh": dict(watch_cfg["ssh"]), "intake_out": watch_cfg["intake_out"]}
     if watch_cfg.get("state_file"):
         cfg["state_file"] = watch_cfg["state_file"]
@@ -561,7 +565,7 @@ def main(argv=None, *, runner=subprocess.run, connect=socket.create_connection,
     try:
         if getattr(args, "watch_config", None):
             import watch
-            cfg = config_from_watch(watch.load_config(args.watch_config))
+            cfg = config_from_watch(watch.load_config(args.watch_config), selected_robot=getattr(args, 'robot', None))
         else:
             path = config_path()
             if not path.exists():
@@ -570,6 +574,11 @@ def main(argv=None, *, runner=subprocess.run, connect=socket.create_connection,
             cfg = load_config(path)
         robots = [args.robot] if getattr(args, "robot", None) else list(cfg["robots"])
         hosts = [_host(cfg, r) for r in robots]
+    except RuntimeError as exc:
+        if getattr(exc, 'kind', None) not in operator_ssh.KIND_EXIT:
+            raise
+        print(f"✗ network: {exc} — retry when the approved robot is reachable")
+        return operator_ssh.KIND_EXIT[exc.kind]
     except (OSError, ValueError) as exc:
         print(f"✗ config — fix: {exc}")
         return 2

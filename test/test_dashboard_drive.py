@@ -70,13 +70,56 @@ def test_status_reads_the_apis_with_the_injected_token(page):
     json.dumps(result)
 
 
-def test_mode_accepts_the_confirm_and_reports_whether_the_robot_followed(page):
+def test_mode_accepts_the_confirm_and_reports_whether_the_robot_followed(page, monkeypatch):
+    # The shipped dialog must gate the request, and its actual Cancel control
+    # must leave the fixture robot untouched before the tool requests a mode.
+    page.locator('.mode-control [data-mode="IDLE"]').click()
+    confirmation = page.locator("dialog.ui-confirm[open]")
+    confirmation.wait_for(state="visible")
+    assert page.evaluate("window.__apiCalls.filter((c) => c.path === '/api/v1/mode')") == []
+    with pytest.raises(RuntimeError, match="existing confirmation"):
+        dashboard_drive.set_mode(page, "IDLE", timeout_s=0.5)
+    confirmation.locator('ui-button[kind="quiet"]').click()
+    confirmation.wait_for(state="hidden")
+    assert page.evaluate("window.__apiCalls.filter((c) => c.path === '/api/v1/mode')") == []
     missed = dashboard_drive.set_mode(page, "IDLE", timeout_s=0.5)
     calls = page.evaluate("window.__apiCalls.filter((c) => c.path === '/api/v1/mode')")
     assert calls and calls[-1]["body"] == {"mode": "IDLE"}
     assert missed == {"requested": "IDLE", "mode": "MANUAL", "reached": False}
     page.evaluate("window.__rosyStateOverrides = {robot_state: {mode: 'IDLE'}}; null")
     assert dashboard_drive.set_mode(page, "IDLE", timeout_s=2.0)["reached"] is True
+    # Replace the mode dialog when its prompt is inspected. A live locator
+    # would approve the replacement's unrelated command; an owned element
+    # must fail closed even though the replacement uses the same CSS classes.
+    before = len(page.evaluate("window.__apiCalls.filter((c) => c.path === '/api/v1/mode')"))
+    from playwright.sync_api import ElementHandle
+    original_read = ElementHandle.inner_text
+    page.evaluate("window.__unrelatedApprovals = 0")
+
+    def replace_after_inspection(element, *args, **kwargs):
+        text = original_read(element, *args, **kwargs)
+        if element.evaluate("el => el.matches('dialog.ui-confirm[open] > p')"):
+            # Schedule a real DOM replacement at the inspection boundary,
+            # without substituting any result or invoking application handlers.
+            page.evaluate("""() => {
+          const dialog = document.querySelector('dialog.ui-confirm[open]');
+          dialog.close('cancel'); dialog.remove();
+          const other = document.createElement('dialog'); other.className = 'ui-confirm';
+          const description = document.createElement('p'); description.textContent = 'Unrelated action';
+          const action = document.createElement('ui-button'); action.setAttribute('kind', 'irreversible'); action.textContent = 'Unrelated action';
+          action.addEventListener('click', () => {
+            window.__unrelatedApprovals += 1;
+            fetch('/api/v1/mode', {method: 'POST', body: JSON.stringify({mode: 'NAVIGATION'})});
+          });
+          other.append(description, action); document.body.append(other); other.show();
+            }""")
+        return text
+
+    monkeypatch.setattr(ElementHandle, "inner_text", replace_after_inspection)
+    with pytest.raises(RuntimeError, match="closed or replaced"):
+        dashboard_drive.set_mode(page, "MANUAL", timeout_s=0.5)
+    assert page.evaluate("window.__unrelatedApprovals") == 0
+    assert len(page.evaluate("window.__apiCalls.filter((c) => c.path === '/api/v1/mode')")) == before
 
 
 def test_teleop_holds_then_releases_to_zero(page):

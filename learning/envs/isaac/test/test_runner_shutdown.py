@@ -17,11 +17,12 @@ def test_sdk_error_survives_runner_cleanup(runner, tmp_path, monkeypatch):
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     urdf = tmp_path / "model.urdf"
-    urdf.write_text("<robot/>")
+    urdf.write_text('<robot><joint name="caster_rotate_joint" type="continuous"/>'
+                    '<joint name="caster_wheel_joint" type="continuous"/></robot>')
     monkeypatch.setenv("ROS_DOMAIN_ID", "139")
     monkeypatch.setattr(module, "parse_args", lambda: SimpleNamespace(
         namespace="rosy_99", model="omx_f", urdf=urdf, output_dir=tmp_path / "output",
-        headless=True, frames=1))
+        headless=True, frames=1, wheel_damping=None))
     monkeypatch.setattr(module, "check_urdf", lambda *a, **k: None)
     if runner == "import_omx":
         monkeypatch.setattr(module, "check_vendor_manifest", lambda: None)

@@ -478,3 +478,9 @@
 - 변경: 반복 저배터리 표본의 wake를 단계 변화로 제한하여 기존 IDLE/STANDBY 타이머가 동작한다. Viewer GET /api/v1/power/health와 공유 typed 응답에 배터리·충전 확인 age, 정책 상한·wake 근거, shutdown 요청, 진단 요약을 제공한다. API Ref v1.92, envelope 1.0 유지.
 - 검증: injected clock 회귀와 auth/read-only API, 기존 배터리·정지·sentinel 경로 검증. 최종 근거는 docs/plans/2026-10-04-power-health-and-wake.md. OS halt·EEPROM·GPIO·기본 LiDAR 모터 정책 변경 없음.
 - gate 변화: SOURCE/LOCAL; 실제 소비전력·충전·RTC/외부 버튼 wake와 배포는 미검증.
+
+## 2026-10-04 · uncommitted · fix(api): 현재 문서 버전 설명 정렬
+
+- 변경: FastAPI 설명과 module docstring의 v1.93을 현재 API Ref v1.94에 맞췄다. runtime endpoint·envelope·권한은 변경하지 않는다.
+- 증거: 최종 fast gate의 버전 불일치 실패를 재현했고 관련 계약 검사를 재실행한다. 공개 APK SHA-256·commit 값은 원값을 유지하며 같은 줄에 출처 표기를 명확히 했다. secret scanner 예외는 추가하지 않는다.
+- gate 변화: SOURCE 정렬이며 LOCAL 재검증·원격 CI·DEVICE·FIELD는 별도다.

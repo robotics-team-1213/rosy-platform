@@ -1,12 +1,11 @@
 """웹 표면의 대화 상자 계약 — D-218.
 
-세 웹 표면(콘솔·Fleet·게임)은 브라우저 네이티브 window.confirm 을 확인
-문법으로 쓴다(불가역 확인의 졸업, D-92 제5항 — 두 번째 표면이 생기며
-트리거가 성립했고, '공유 컴포넌트'의 자리를 브라우저가 이미 채우고 있다).
+웹 표면은 D-371·D-439 공용 confirmIrreversible과 수명·권한을 소유하는
+확인 처리기를 쓴다. 네이티브 window.confirm은 정지 접근을 막으므로 금지한다.
 이 계약이 지키는 것:
 
 1. alert/prompt 는 금지다 — 모의 안내(F-20)도, 확인 아닌 길도 없다.
-2. confirm 은 고정된 파일·횟수로만 산다 — 새 확인은 이 핀을 고치는
+2. 공용 확인과 소유 처리기는 고정된 파일·횟수로만 산다 — 새 확인은 이 핀을 고치는
    커밋과 함께 온다(그 커밋이 리뷰의 자리다).
 3. 확인 없이 세상을 바꾸는 길이 늘어나는지는 브라우저 시험이 지킨다
    (Fleet 전체 정지·콘솔 모드 전환·정책 적용의 거부 경로).
@@ -34,15 +33,33 @@ def _load_registry():
 
 registry = _load_registry()
 
-#: 파일별 window.confirm 허용 수. 늘릴 때는 이 표와 함께 커밋한다.
+#: 상대 경로별 공용 확인/소유 처리기 호출 수. 새 확인은 이 표와 함께 리뷰한다.
 PINNED_CONFIRMS = {
-    "app.js": 7,  # 즉시 정지는 빨간 버튼이 확인이다. 정지 해제는 그대로 묻는다.
-    "settings.js": 8,  # D-371: 목록 행 삭제 셋(토큰·도크·웨이포인트)은 confirmIrreversible
-    "map.js": 1,
-    "telemetry.js": 1,  # 교통 정책 적용 확인 — D-362 P1 분할로 app.js에서 이동
-    "console.js": 3,   # Fleet 목표 지정, 정지 래치 재허가, D-421 전체 주행 취소 (전체 정지는 D-414로 확인 없음)
-    "roster.js": 1,    # 카메라 고장 뒤 IR 추적 선택 확인
+    "middleware/ui/robot/app.js": 6,
+    "middleware/ui/robot/map.js": 1,
+    "middleware/ui/robot/panels/console/docking.js": 1,
+    "middleware/ui/robot/panels/console/line-follow.js": 1,
+    "middleware/ui/robot/panels/console/mode.js": 1,
+    "middleware/ui/robot/panels/host/operations.js": 1,
+    "middleware/ui/robot/panels/setup/dock-admin.js": 2,
+    "middleware/ui/robot/panels/setup/docking.js": 1,
+    "middleware/ui/robot/panels/setup/localization.js": 1,
+    "middleware/ui/robot/panels/setup/traffic-policy.js": 1,
+    "middleware/ui/robot/panels/system/security.js": 1,
+    "middleware/ui/robot/settings.js": 2,
+    "middleware/ui/robot/telemetry.js": 1,
+    "operations/fleet/fleet/server/web/camera-pairing.js": 2,
+    "operations/fleet/fleet/server/web/confirmed-action.js": 1,
+    "operations/fleet/fleet/server/web/console.js": 3,
+    "operations/fleet/fleet/server/web/enrollment.js": 1,
+    "operations/fleet/fleet/server/web/roster.js": 1,
 }
+CONFIRM_CALL = re.compile(
+    r"\bconfirmIrreversible\s*\(|\bconfirmedAction\.run\s*\(|"
+    r"(?<!function )\brunConfirmed\s*\(|"
+    r"\(options\.confirm\s*\|\|\s*confirmIrreversible\)\s*\(|"
+    r"(?<!\w)confirm\s*\("
+)
 
 
 def surface_scripts():
@@ -51,7 +68,7 @@ def surface_scripts():
             if base.suffix == ".js":
                 yield base
             continue
-        for path in sorted(base.glob("*.js")):
+        for path in sorted(base.rglob("*.js")):
             yield path
 
 
@@ -74,11 +91,12 @@ def test_confirm_lives_only_in_the_pinned_files_and_counts():
     found = {}
     for path in surface_scripts():
         text = path.read_text(encoding="utf-8")
-        count = len(re.findall(r"window\.confirm\(", text))
+        assert not re.search(r"window\.confirm\s*\(", text), path.relative_to(ROOT)
+        count = len(CONFIRM_CALL.findall(text))
         if count:
-            found[path.name] = count
+            found[path.relative_to(ROOT).as_posix()] = count
     assert found == PINNED_CONFIRMS, (
-        f"window.confirm 배치가 핀과 다르다(D-218): {found} != {PINNED_CONFIRMS}"
+        f"공용 확인 소유자가 핀과 다르다(D-371·D-439): {found} != {PINNED_CONFIRMS}"
     )
 
 
@@ -87,7 +105,9 @@ def test_every_confirm_message_names_what_it_will_do():
     for path in surface_scripts():
         text = path.read_text(encoding="utf-8")
         for block in re.findall(
-            r"window\.confirm\(((?:\"[^\"]*\"|'[^']*'|`[^`]*`))\)", text
+            r"(?:\b(?:confirmIrreversible|confirm|confirmedAction\.run)\s*\(\s*\{\s*"
+            r"(?:kind,\s*)?message:\s*|\bconfirmIrreversible\)\s*\(\s*\{\s*message:\s*|"
+            r"\brunConfirmed\(\s*)((?:\"[^\"]*\"|'[^']*'|`[^`]*`))", text
         ):
             message = block[1:-1]
             assert "까요" in message or "니까" in message or "확인" in message, (

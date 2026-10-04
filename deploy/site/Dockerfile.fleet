@@ -27,6 +27,7 @@ COPY middleware/perception/map/map_v2_fleet/lane_graph.yaml middleware/perceptio
 
 RUN python3 -m venv /opt/rosy-venv \
     && /opt/rosy-venv/bin/pip install --no-cache-dir -r /opt/rosy/requirements.txt \
+    && /opt/rosy-venv/bin/python -c "from zeroconf import ServiceBrowser, Zeroconf" \
     && rm /opt/rosy/requirements.txt
 
 WORKDIR /opt/rosy

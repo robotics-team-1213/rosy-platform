@@ -34,12 +34,14 @@ function refreshControls() {
     $(id).setAttribute('reason', busy ? '요청 처리 중' : '');
   }
   for (const id of commands) {
+    const sheetBlocked = id === 'resume' && job?.operator_checkpoints?.some(row => row.status === 'WAITING_ACCESS');
     const needsJob = ['admit', 'reconcile', 'resume', 'cancel'].includes(id);
     const jobAllowed = !needsJob || (job && job.mission_id === $('mission-id').value &&
       (id === 'admit' ? job.status === 'PROPOSED' : id === 'cancel' ? ['READY', 'ACTION_SUCCEEDED', 'HOLD'].includes(job.status) && job.reason !== 'CANCELLED_BY_OPERATOR' : job.status === 'HOLD' && job.reason !== 'CANCELLED_BY_OPERATOR'));
-    const allowed = role === 'operator' && !busy && jobAllowed && (id !== 'propose' || previewRefs !== null);
+    const allowed = role === 'operator' && !busy && jobAllowed && !sheetBlocked && (id !== 'propose' || previewRefs !== null);
     $(id).disabled = !allowed;
-    if (!allowed) $(id).setAttribute('reason', busy ? '요청 처리 중' : role !== 'operator' ? '운영자 접속 필요' : '저장 후 미리보기 필요');
+    if (!allowed) $(id).setAttribute('reason', busy ? '요청 처리 중' : role !== 'operator' ? '운영자 접속 필요' :
+      sheetBlocked ? '작업자 간지 삽입 확인 대기' : '저장 후 미리보기 필요');
     else $(id).removeAttribute('reason');
   }
 }
@@ -246,6 +248,7 @@ async function readJob() {
   job = null; jobGeneration = null;
   $('job-state').textContent = '현재 상태 확인 중';
   $('job-summary').textContent = '현재 상태 확인 중'; $('step-progress').replaceChildren();
+  $('sheet-progress').replaceChildren();
   const result = await api(`/api/fleet/cell-jobs/${encodeURIComponent(id)}`);
   const control = await api('/api/fleet/dispatch-control');
   jobGeneration = control.generation;
@@ -255,6 +258,13 @@ async function readJob() {
     const li = document.createElement('li');
     const inputs = step.step.inputs;
     li.textContent = `${step.step_index + 1} · ${inputs.pallet_id} · ${inputs.layer_index + 1}층 · ${inputs.item} · ${step.status}${step.reason ? ' · ' + step.reason : ''}`;
+    return li;
+  }));
+  $('sheet-progress').replaceChildren(...(job.operator_checkpoints ?? []).map(row => {
+    const li = document.createElement('li');
+    const instruction = row.status === 'WAITING_ACCESS' ?
+      '삽입 확인 대기 · 작업자 접근 허가가 확인되지 않아 아직 진행할 수 없습니다' : '간지 지점 도달 전';
+    li.textContent = `${row.pallet_id} · ${row.layer_index + 1}층 · ${row.thickness_m * 1000} mm · ${instruction}`;
     return li;
   }));
   $('notice').textContent = `작업 ${job.status} · ${job.reason || ''} · 확인한 정지 세대 ${jobGeneration}`;
@@ -269,6 +279,9 @@ $('new-proposal').addEventListener('click', () => {
 for (const command of ['admit', 'resume', 'reconcile', 'cancel']) {
   $(command).addEventListener('click', () => action(async () => {
     if (!job || job.mission_id !== $('mission-id').value) throw new Error('작업 상태를 먼저 확인하세요.');
+    if (command === 'resume' && job.operator_checkpoints?.some(row => row.status === 'WAITING_ACCESS')) {
+      throw new Error('작업자 간지 삽입 확인 대기 · 일반 재승인으로 진행할 수 없습니다.');
+    }
     const id = encodeURIComponent(job.mission_id);
     let body = {};
     if (command === 'admit' || command === 'resume') {

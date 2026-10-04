@@ -9,6 +9,7 @@ import { createVisionView } from "./vision-view.js";
 import { createFieldView } from "./field-view.js";
 import { createMapFitView } from "./map-fit-view.js";
 import { createPollGate } from "./poll-gate.js";
+import { createPeerPicker } from "./peer-picker.js";
 import { addressMap, movableRobots } from "./address-drift.js";
 import { createFleetClient } from "/common/fleet-client.js";
 import { createPageScope } from "/common/scope.js";
@@ -28,6 +29,7 @@ const LOG_MAX = 40;
 
 // 꺼진 기능(라우트 없음 404)은 다음 로그인·토큰 저장까지 두드리지 않는다.
 const discoveryGate = createPollGate();
+let peerPicker = null;
 
 const auth = {
   token: sessionStorage.getItem("rosy-console-token") || "",
@@ -46,6 +48,7 @@ function operatorControls() {
   return [...document.querySelectorAll(
     "ui-button:not(#token-save):not(#topbar-more):not(#vision-refresh):not([data-theme-choice]), main input, main select:not(#vision-source)")]
     .filter(control => !control.closest(".ui-task-chooser")
+      && !control.closest("#peer-picker")
       && !["discovery-retry", "camera-confirm-close", "enroll-cancel", "camera-approve-cancel"].includes(control.id));
 }
 
@@ -62,6 +65,7 @@ function markLocked() {
   auth.locked = true;
   setTopbarOpen(true);
   auth.role = null;
+  peerPicker?.reset();
   el("user-role").textContent = "인증 필요";
   el("user-role").setAttribute("status", "crit");
   const pill = el("online-pill");
@@ -109,6 +113,7 @@ const taskChooser = createTaskChooser({beforeSelect: from => {
   if (from === "calibration") visionView.pausePreview();
   return true;
 }, tasks: [
+  {id: "peers", title: "장비 찾기", panel: el("peer-picker")},
   {id: "robots", title: "로봇 등록", panel: el("robot-enrollment")},
   {id: "cameras", title: "카메라 연결 승인", panel: el("camera-link")},
   {id: "calibration", title: "카메라 설치·보정", panel: el("camera-calibration")},
@@ -154,6 +159,18 @@ let mapFit = null;
 const fieldView = createFieldView({ scope: pageScope, el, view, visionView,
   onLayersChanged: () => { mapFit?.render(); } });
 mapFit = createMapFitView({ scope: pageScope, el, view, call, visionView, onChanged: () => fieldView.render() });
+peerPicker = createPeerPicker({scope: pageScope, el, call,
+  isLocked: () => auth.locked || !auth.role,
+  isActive: () => taskChooser.selectedId === "peers",
+  sources: () => [...el("vision-source").options].map(option => option.value),
+  onCamera: async source => {
+    const life = pageScope.capture();
+    await taskChooser.choose("calibration"); life.check();
+    if (taskChooser.selectedId !== "calibration" || auth.locked) return;
+    const select = el("vision-source");
+    if (![...select.options].some(option => option.value === source)) return;
+    select.value = source; select.dispatchEvent(new Event("change")); select.focus();
+  }});
 
 pageScope.listen(el("topbar-more"), "click", () => {
   setTopbarOpen(el("topbar-more").getAttribute("aria-expanded") !== "true");
@@ -166,6 +183,7 @@ function tickClock() {
 el("console-token").value = auth.token;
 function saveToken() {
   pageScope.invalidate();
+  peerPicker.reset();
   auth.token = el("console-token").value.trim();
   auth.role = null;
   applyRole();
@@ -285,6 +303,7 @@ async function refreshAuthorization() {
     await Promise.allSettled([
       cameraPairing.refresh({ credentials: true }),
       refreshDiscovery(),
+      peerPicker.refresh(),
     ]);
     life.check();
   } catch (_err) {
@@ -299,6 +318,7 @@ applyRole();
 refreshAuthorization();
 visionView.refreshSources();
 pageScope.interval(refreshDiscovery, MAP_MS);
+pageScope.interval(() => peerPicker.refresh(), MAP_MS);
 pageScope.interval(() => { if (!auth.locked) visionView.refreshFrame(); }, STATE_MS + 500);
 
 pageScope.onResume(() => {

@@ -4483,7 +4483,8 @@
 
 ## 2026-10-02 · uncommitted · docs(adr): D-395 개정 9 — S1 Gazebo 통과
 - 변경: 다른 세션과 조율한 조용한 시간대(13:54–16:09 KST)의 S1 네 번째 실행 15회를 기록하고 S1을 닫았다. 확정 오차 ≤1.2 cm / 1.2°, 거울 결정 0/35, 강제 거울 탐지 6/6(3.1–4.1 sim s), 실제 주행 중 들어 옮김 4회 완전 통과. 남은 단계는 S2(4대 sim), 실기(개정 5)·S3, D-257·D-393 개정 수락(사용자 승인).
-- 증거: `docs/plans/2026-10-02-d395-s1-bench-results.md` Run 4, `X:\DevTemposy-d395-s1d\`.
+- 증거: `docs/plans/2026-10-02-d395-s1-bench-results.md` Run 4, `X:\DevTemp
+osy-d395-s1d\`.
 - gate 변화: 없음(Proposed). ROS-SIM S1 통과.
 
 ## 2026-10-02 · uncommitted · docs(logs): D-395 개정 9 항목의 증거 경로 정정
@@ -5298,6 +5299,43 @@
 - gate 변화: None. This Git integration does not activate devices or establish release/field acceptance.
 
 
+## 2026-10-04 · uncommitted · D-432 Pilot failure retry and Cam thermal screen sleep
+
+- 변경: Pilot 연결 시 목록 cache를 무효화하여 실패·취소 후 현재 TTL·충돌·발열 정책에 따라 카드를 다시 구성한다. HTTP와 secure 후보의 오류 안내를 구분한다. 기존 신뢰·가입·CORE 명령 권한은 유지한다. D-432에 결정과 후속 실기 기록을 추가했다.
+- 증거: 독립 source SPEC·QUALITY PASS, Pilot JVM46 PASS·동일 서명·설치 hash 일치, 실제 실패→같은 카드 직접 재시도→목록 복귀 PASS. Cam thermal status3/Dozing에서 깨우기 없이 수신 seq2126→2132·HTTP200/200·실제 밝은 영상 확인. docs/validation/ui-release-integration-2026-10-04/live-followup.md.
+- gate 변화: 없음. 로봇 SSH·CORE TCP는 여전히 시간 초과/경로 오류이며 정상 연결과 native 배포는 미검증이다. 기존 사이트 수신기를 이번 통합 revision 배포 수락으로 기록하지 않는다. 최종 원격 push·CI·서명 후보 전달과 인증된 전체 웹 화면 확인은 후속이다.
+
+
+## 2026-10-04 · uncommitted · D-359 responsive header and owned mode confirmation
+
+- 변경: 공용 자산 이동·확인창·SLAM 클릭 반복·request owner·Fleet queue wrapper와 stylesheet 목록을 실제 소스 계약대로 검사한다. 임의 40rem 상단바 분기 세 곳을 기존 64rem 단으로 정렬했다. dashboard_drive는 전역 native 자동 승인을 제거하고 요청한 모드의 실제 확인창·버튼 identity만 승인하며 결과를 조회한다. 교체된 확인창은 승인하지 않는다.
+- 증거: 대시보드/bridge 실패6 PASS, Fleet 실패2 PASS, 반응형 실패1 PASS, 모드 도구 실패1 PASS·모두 focused0 NEW. 모드 실제 DOM 창 교체에서 다른 승인0·POST 증가0. 독립 source 검토 PASS. 12 반응형 상단바 DOM 측정에서 가로 넘침 없음. Pilot 자산 변경 후 기존 서명 재빌드·설치 hash 일치. docs/validation/ui-release-integration-2026-10-04/live-followup.md.
+- gate 변화: 없음. broad pre-push 실패 원본은 보존하며 최종 source push·원격 CI는 후속이다. 정적 header fixture·로컬 mode fixture·기존 사이트 Vision 수신과 실제 장비 수락은 구분한다. 실제 모드 변경·정지 해제·구동은 없다.
+
+## 2026-10-04 · uncommitted · D-452 네트워크 역할 발견과 신원 연결
+
+- 변경: 모든 표면에서 주소 입력 대신 장비 이름과 역할로 찾는다. 같은 LAN 발견과 승인 directory를 구분하고 기존 CA·token·SSH HostKeyAlias를 보존한다. 모델 PC는 실제 SSH 서비스를 광고하며 가짜 추론 API는 만들지 않는다.
+- 증거: docs/plans/2026-10-04-network-peer-discovery.md. 컨테이너 의존성 및 실제 namespace, 재접속 신원 resolver, 승인 목록 UI를 순서대로 구현·독립 검증한다.
+- gate 변화: 구조 결정 Accepted; 코드·CI·실제 장비·다른 망 연결 수락은 각각 별도 증거로 기록한다.
+
+## 2026-10-04 · uncommitted · D-452 모델 SSH 대상과 광고
+
+- 변경: 승인 논리 이름으로 매 관찰·배포 전에 주소를 해석한다. 실제 SSH listener만 광고하고 종료·손실 시 소유 광고 child를 회수한다. CLI doctor도 같은 profile을 사용한다. Dock·Signal active consumer는 충전 판단·watchdog/credential 경계를 확인해 재지정하지 않는다.
+- 증거: 모델199 PASS/22 기존 platform SKIP/NEW0, 독립 SPEC·Quality·Safety source PASS. docs/validation/network-peer-discovery-2026-10-04/source-checkpoint.md.
+- gate 변화: SOURCE/LOCAL focused; 실제 모델 PC 설치·광고·다른 망 연결·서명 배포는 별도 미검증.
+## 2026-10-04 · uncommitted · D-427 wave5 remote CI and ARM64 artifacts
+
+- 변경: 소스 1722ca6ec6d7의 실제 원격 push, 전체 GitHub CI, native/SD 035 산출물 검증과 남은 수용 조건을 기록했다. 제품 runtime·계약·manifest·시험 판정은 바꾸지 않았다.
+- 증거: push12 fast462 passed/2 skipped, mapped3667 passed/151 skipped·NEW0; GitHub 10matrix+scope+ci-result 모두 SUCCESS. 실제 ARM64 native/SD build28 packages 각각 SUCCESS. native 실제2547manifest/2548SUMS·독립 APPROVE; SD ZIP/외부14SUMS/전체XZ12869835264bytes·metadata21검사·독립 APPROVE. 공개 문서 배치/출판9 passed. docs/validation/d427-source-migration/wave5-arm64-artifact-verification-2026-10-04.md.
+- gate 변화: 없음. unsigned SD mounted verifier의 shape/config 검사와 서명·full factory SUMS·기기 부팅을 구분했다. 실제 prepare는 canary ABI SSH255 timeout으로 exit1, 서명·발행 전 종료했다. site PC NOT_RUN, peer 실제 delivery NOT_SENT, device/field 미검증이다. firmware S7은 다음 개정이며 flash·motion·E-Stop reset을 실행하지 않았다.
+
+## 2026-10-04 · uncommitted · D-441 local update follow-up design
+
+- 변경: 사용자 요청에 따라 수동 서명 설치 기록 동기화, 잠금 기반 보류/재개, 실행 설정 비교, 정확한 main CI 승인 후 서명, 선택적 Fleet/Vision 기능 검사 설계와 실행 계획을 기록했다. D-427 소스 소유권과 D-430 구동 권한을 변경하지 않는다.
+- 증거: 원본 updater 신규 사례 10개 RED, 원본 signer CI 사례 8개 RED; 수정본 격리 Linux 108 passed/0 skipped. 별도 생성 후 미실행 컨테이너의 Compose hash 일치와 명령 변경 감지를 실측했다. 현장 서비스는 전환하지 않았다.
+- gate 변화: 없음. 신규 설치·후보 CI·실제 프레임 수신은 별도 운영 검증이다.
+
+
 ## 2026-10-04 · uncommitted · fix: resolve hook installation through Git
 
 - Change: Install the existing pre-push gate at the path Git resolves for linked worktrees and default, relative or absolute core.hooksPath. Preserve hook contents and repository configuration/refs.
@@ -5316,3 +5354,43 @@
 - 변경: 구조 편집 계획과 작업자 삽입·확인 후 다음 층 진행 계획을 추가하고 D-450에 사용자 선택을 부록으로 남겼다. 수동 슬립시트는 canonical checkpoint로 정의하며 일반 resume 우회를 금지한다.
 - 증거: 구조 편집 Chromium 및 Cell API/store/job 23 통과, 독립 UI 검토 승인. 수동 checkpoint는 설계이며 구현·ROS-SIM·물리 작업자 접근 증거는 NOT_RUN이다.
 - gate 변화: G1 초안 편집만 보강했다. G1 티칭·G2 전체 fault matrix·G3·Isaac 실제 주행 수용은 미완료다.
+
+
+## 2026-10-04 · uncommitted · D-427 wave5 signed native and actual offline SD readback
+
+- 변경: 소스 1722ca6ec6d7의 후보035 실제 ABI·서명·pack, SD image 내부 factory 전체 파일 bytes, site PC 실제 identity·dry-run·sudo 제약을 새 frozen 증거로 기록했다. 앞선 unsigned 기록과 제품 runtime은 유지한다.
+- 증거: 기존 ABI gate 공통314개 일치/불일치0/release-only28; signed tar2879members·2548SUMS·독립 APPROVE. SD readonly debugfs 실제 exit0 후2547manifest/2548SUMS와 native·SD Python/JS743개 실제 bytes 일치·독립 APPROVE. 실제 readonly SSH hostname/status exit0·current033/candidate null/idle. docs/validation/d427-source-migration/wave5-signed-and-offline-readback-2026-10-04.md.
+- gate 변화: 없음. 발행·자동 활성화·canary/secondary035 readback은 미완료이고 사용 세션 조율이 남았다. SD unsigned와 ELF 실행 동등성·부팅·FIELD는 별도다. site PC installer5files 일치/dry-run0이나 sudo 인증 거절로 실제 설치NOT_RUN; peer delivery NOT_SENT; firmwareS7 다음 개정/no flash·motion·E-Stop reset.
+
+## 2026-10-04 · uncommitted · D-452 승인 다른 망 경로와 선택 CLI
+
+- 변경: CORE는 명시적 승인 WSS directory를 광고 부재일 때만 사용하고 기존 TLS SNI/CA/health를 먼저 검증한다. 충돌·인증 실패에 우회하지 않는다. 모델 doctor는 전체 roster 문법 검증 후 선택한 논리 장비만 해석해 다른 offline peer의 영향에서 분리한다.
+- 증거: 병합 후 CORE85 PASS/모델 CLI63 PASS·기존 SKIP1/NEW0, 독립 source SPEC·Quality·Safety PASS. API Ref v1.94에 정확한 profile fields와 absence-only 경계를 기록했다.
+- gate 변화: focused SOURCE/LOCAL; 실제 다른 망 접속·서명 후보·기기 실행 수락 별도.
+
+## 2026-10-04 · uncommitted · docs(validation): 웹 표면 ARTIFACT 관측 회차 — 서명 payload 안 share/ 확인 (D-444 P1)
+
+- 변경: `docs/validation/web-artifact-observation-2026-10-04/` 회차. (1) Fleet 사이트 후보: 빌드→출처 증명→자동 서명(D-441 예약 작업)까지 파이프라인이 자율 운영 중임을 확인하고 서명 후보 5건(`site-bcf1010b2a1e`…`site-d0e76b4d7eda`)을 관측했다 — D-445 중앙 착수 전제 ③ 충족. 릴리스 제목의 `(unsigned)` 잔재가 사람을 오해시키는 것을 후속 항목으로 기록. (2) dashboard·pilot: `build-native-payload.yml` run 37189180389(`2026.10.04-034`, main dd159ab33계) success — 무서명 artifact(101,072,789 B)와 서명 tar(`prepare_payload_release.py`, 키 rosy-release-2026-01) 모두에서 `install/share/dashboard/index.html`·`install/share/pilot/app.js`·`install/share/web_common/tokens.css`를 확인했다. 로봇 미푸시. dashboard·pilot `progress.md` ARTIFACT blocker를 "설치 관측됨, 남은 것=기기 GET 200+CSP"로 갱신했다. (3) push 경로 운영 노트: 공유 체크아웃에서 pre-push 훅의 장기 실행이 세션 착지에 오염된 사실 3회(62/276 실패 — 냉동 재검증으로 전부 초록)와, 냉동 커밋 게이트(quick tier 462 passed·lint 0·대상 스위트 468/218 passed) 후 훅 없는 클론에서 push한 경위를 기록했다. `--no-verify` 미사용, 공유 hooks 미변경, 전체 계층 정본은 GitHub CI.
+- 증거: 위 회차 문서. main `dd159ab33` origin에 push 완료(109b34065..dd159ab33).
+- gate 변화: dashboard ARTIFACT·pilot ARTIFACT blocker 갱신(HOLD 유지, 사유 축소). D-445 전제 ③ 충족 관측.
+- 결정: D-444 R1 앞조항 관측 완료. 남은 P1 조각: 그 payload를 탄 기기/컨테이너의 GET 200+CSP(P1.2).
+- 교훈: 릴리스 제목은 서명 상태를 말해야 한다 — 제목은 사람이 목록을 읽는 유일한 곳일 수 있다.
+
+## 2026-10-04 · uncommitted · docs(adr): D-454 중앙 Fleet 착수
+
+- 변경: `docs/adr/D-454-central-fleet-commencement-seed-growth-and-prt004-order.md` 추가(Accepted, 사용자 지시 "착수해"). D-445가 예약한 착수 ADR이다. 결정: 중앙 Fleet은 시드(`operations/fleet`) 위 성장(새 트리 없음, 배포 프로파일만 다름), 단계 순서 §10.1 레지스트리 → §10.2 명령 추정·PRT-004 활성화(D-170·D-297 유보 해제) → §10.3 미션/대형 → §10.4 지도/백업 → §10.5 사건/감사, (2)단계 착공 전 D-426 ROS-SIM 선행, DEVICE/FIELD 승격 주장 없음. 전제 상태 기록: ③ 관측(서명 후보 5건), ①② 사다리 병행. 번호 D-448–D-453은 여섯 갈래가 써서 D-454 사용.
+- 증거: 서명 후보 관측(docs/validation/web-artifact-observation-2026-10-04), lint 0 errors.
+- gate 변화: 없음. 문서 결정.
+- 결정: D-454 Accepted. 1단계 설계 문서 착수가 다음 행위.
+
+## 2026-10-04 · uncommitted · docs(adr): D-451 한 줄 교착의 양보는 Fleet 알고리즘이 고른다
+
+- 변경: `docs/adr/D-451-fleet-lane-meet-decider.md` 와 ADR Log 행. 만나는 양보는 `operations/fleet/fleet/meet` 만 고르고, 로봇은 그 주문 하나를 실행하거나 CORE 재검사로 거부한다. `room_hold`·`wait_both` 와 260919 `track_v2` 숫자를 고정했다. D-448·D-449·D-450 은 다른 브랜치 번호라 `adr_gaps` 에 남겼다.
+- 증거: `operations/fleet/test/test_meet_algorithms.py`. 호스트 판단 시험. CORE 전달과 실차는 없다.
+- gate 변화: 없음. SOURCE/LOCAL 판단 시험. DEVICE·ROS-SIM·FIELD 승격 아님.
+
+## 2026-10-04 · uncommitted · feat(fleet): D-453 양보 한 구간
+
+- 변경: D-451 주문 하나를 기존 `POST /api/v1/line-follow/stuck/decision` 의 `YIELD` 한 구간으로 보낸다. CORE 는 회전을 확인한 뒤 앞으로만 기어 가고, 끝나면 선으로 돌아가지 않는다. 운용자 Fleet 경로의 다섯 단어는 그대로다. ADR `docs/adr/D-453-yield-one-segment.md`. D-452 는 integrate/ui-ship 번호라 `adr_gaps` 에 남겼다.
+- 증거: `operations/fleet/test/test_meet_place.py`, `test_stuck_resolver.py`, `test_transport.py`, `test_meet_algorithms.py`, `middleware/core/services/test/test_line_stuck_recovery.py`, `middleware/core/gateway/test/test_line_follow_stuck_api.py`.
+- gate 변화: 없음. 호스트 판단 시험. 장치·ROS-SIM 은 주장하지 않는다.

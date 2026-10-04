@@ -137,6 +137,15 @@ class StepJobDispatcher:
         if (self.omx_instances.get(job["workcell_id"]) != job["instance_id"]
                 or job["instance_id"] not in self.grant_revisions):
             return self._view(job, index, "NOT_CONFIGURED")
+        try:
+            job = self.store.guard_sheet_checkpoint(job["mission_id"], step_index=index)
+        except MissionConflict:
+            return self._view(self.store.get(job["mission_id"]), index, None)
+        except KeyError:
+            return None
+        if job["status"] != "READY":
+            return self._view(job, index, job["status"])
+        step = job["steps"][index]
         if not self._simulation_identity(job["workcell_id"], job["instance_id"]):
             return self._view(job, index, "NOT_SIMULATION")
         try:

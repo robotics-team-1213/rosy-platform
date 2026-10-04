@@ -8,6 +8,7 @@ from core_api_web.api.app import create_app
 
 
 WEB_ROOT = Path(__file__).resolve().parents[4] / "middleware" / "ui" / "robot"
+COMMON_ROOT = Path(__file__).resolve().parents[4] / "shared" / "web"
 
 
 def dashboard_js(*, without: tuple[str, ...] = ()) -> str:
@@ -34,6 +35,32 @@ def dashboard_css() -> str:
     the cascade only means something in link order.
     """
     return "\n".join((WEB_ROOT / name).read_text(encoding="utf-8") for name in SHELL_SHEETS)
+
+
+def assert_confirmation_contract(bundle: str) -> None:
+    """The shared live dialog replaces the blocking browser confirmation."""
+    assert 'import { confirmIrreversible } from "/common/ui.js";' in bundle
+    assert "await confirmIrreversible(" in bundle
+    ui = (COMMON_ROOT / "ui.js").read_text(encoding="utf-8")
+    confirmation = (COMMON_ROOT / "confirmation.js").read_text(encoding="utf-8")
+    assert 'import { createConfirmIrreversible } from "/common/confirmation.js";' in ui
+    assert "confirmIrreversible = createConfirmIrreversible(openLiveDialog)" in ui
+    assert 'cancel.addEventListener("click", () => dialog.close("cancel"))' in confirmation
+    assert 'run.addEventListener("click", () => dialog.close("confirm"))' in confirmation
+    assert 'resolve(!signal?.aborted && value === "confirm")' in confirmation
+
+
+def assert_slam_click_routes(bundle: str) -> None:
+    """All three local SLAM commands share one click-only route binding."""
+    binding = re.search(
+        r'for \(const action of \["start", "stop", "save"\]\) '
+        r'elements\[`slam-\$\{action\}`\]\?\.addEventListener\("click", .*?\n\}\);',
+        bundle, re.DOTALL,
+    )
+    assert binding
+    assert 'settingsRequest({path: `/api/v1/slam/${action}`' in binding.group(0)
+    assert 'body: action === "save" ? {name} : null' in binding.group(0)
+    assert "session.capabilities?.slam === true" in binding.group(0)
 
 
 
@@ -100,7 +127,11 @@ def test_dashboard_assets_are_local_and_reference_runtime_contract(dashboard_cli
     assert "/api/v1/safety/stop" in bundle
     assert "/ws/state" in bundle
     assert "modeChangePending" in bundle
-    assert "window.confirm" in bundle
+    assert_confirmation_contract(bundle)
+    for name in ("ui.js", "confirmation.js"):
+        shared = dashboard_client.get(f"/common/{name}")
+        assert shared.status_code == 200
+        assert shared.content == (COMMON_ROOT / name).read_bytes()
     assert "navigation?.goal_navigation" in bundle
     assert "/api/v1/teleop" in bundle
     assert "pointerdown" in bundle
@@ -205,7 +236,7 @@ def test_dashboard_exposes_authenticated_live_camera_preview(dashboard_client):
     assert re.search(r'import\s*\{\s*fetchCameraPair\s*\}\s*from\s*"/common/evidence.js"', vision)
     shared = dashboard_client.get("/common/evidence.js")
     assert shared.status_code == 200
-    assert shared.content == (WEB_ROOT.parent / "web_common" / "evidence.js").read_bytes()
+    assert shared.content == (COMMON_ROOT / "evidence.js").read_bytes()
     assert "export async function fetchCameraPair" in shared.text
     assert "/api/v1/vision/front/frame?sequence=" in shared.text
     assert "await fetchFrame(" in shared.text
@@ -371,7 +402,7 @@ def test_dashboard_field_settings_use_click_handlers_not_form_submit():
     assert '["waypoint-save"]?.addEventListener("click"' in script
     assert '["limits-save"]?.addEventListener("click"' in script
     assert '["dock-register"]?.addEventListener("click"' in script
-    assert '["slam-save"]?.addEventListener("click"' in script
+    assert_slam_click_routes(script)
     assert "detectRole" in script
     # US-010 / D-193 5: the role comes from whoami, never from an admin-only
     # probe that answers every viewer with a 403.
@@ -459,13 +490,16 @@ def test_dashboard_exposes_local_field_settings_not_fleet():
 
     assert "/api/v1/waypoints" in script
     assert "/api/v1/safety/limits" in script
-    assert "/api/v1/slam/start" in script
-    assert "/api/v1/navigation/home" in script
+    assert_slam_click_routes(script)
+    # The shared waypoint handler constructs the home/goal endpoint from the
+    # clicked action; keep both the selector and resulting route under test.
+    assert 'const remove = action === "delete", home = action === "home";' in script
+    assert '`/api/v1/navigation/${home ? "home" : "goal"}`' in script
     assert "/api/v1/docking/docks" in script
     assert "/api/v1/docking/dock" in script
     assert "renderDocks" in script
     assert "renderWaypoints" in script
-    assert "window.confirm" in script
+    assert_confirmation_contract(script)
     assert "/api/v1/swarm" not in script
 
     assert ".field-settings-panel" in css

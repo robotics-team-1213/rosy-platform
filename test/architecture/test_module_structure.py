@@ -100,8 +100,28 @@ SIZE_VERDICTS = {
         "duplicate its socket. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        30_621,
-        "split: re-judged 2026-10-04 at 30621 after main integration for D-450: bounded Cell document store/routes and Console "
+        32_162,
+        "split: re-judged 2026-10-04 at 32162 after integrating main 2ad047602 with D-452: "
+        "incoming main counts 31786, including focused meet subpackage 653 and existing "
+        "resolver/loop/transport wiring 135 beyond its 30998 verdict; the approved "
+        "Cell checkpoint/editor delta 377 and D-452 delta 376 both retain their owners. "
+        "The integrated package adds no new command publisher or large file; app.py is 599. "
+        "Independent count/owner review retains B2 subpackage and UI migration obligations, "
+        "600 production/800 web limits, 1000 zero-growth tier and +150 package allowance. "
+        "Previously re-judged 2026-10-04 at 30997 for D-452 after independent source review: "
+        "the +376 lines comprise focused catalogue/directory/routes owners 170, bounded wiring 24, "
+        "peer-picker owner 128, existing presentation wiring 51 and Cell return link 3. "
+        "app.py is 599; new metadata owners do not publish commands or replace enrollment. "
+        "Expiry/conflict/auth/lifetime and three-width browser regressions exercise these seams. "
+        "Keep the flat-server subpackage migration obligation, 600 production/800 web file limits, "
+        "1000-line zero-growth tier and +150 package allowance unchanged; implementation and "
+        "evidence are in docs/plans/2026-10-04-network-peer-discovery.md. "
+        "Previously re-judged 2026-10-04 at 30998 for manual sheet checkpoints: the existing SQLite Job owner "
+        "keeps transactional barriers and extracts bounded checkpoint validation and read projection modules. "
+        "The Console adds explicit handling and read-only wait instructions; no access-confirmation provider, "
+        "ROS publisher or device command owner is added. Store remains 959 lines below its 974 growth ceiling; "
+        "schema aggregation stays 1319. Independent process and guard reviews retain the split plan and +150 allowance. "
+        "re-judged 2026-10-04 at 30621 after main integration for D-450: bounded Cell document store/routes and Console "
         "assets reuse existing proposal and execution owners; app composition remains below 600 lines. "
         "Independent review preserves the subpackage/UI migration plan and existing +150 allowance. "
         "server HTTP boundary, console, signals and the mission-control stores are separate owners "
@@ -370,8 +390,14 @@ SIZE_VERDICTS = {
         "accept: sim-only read-only viewer server (HTTP handler + ROS subscriptions); the pure logic already lives in live_view_model.py and the page in lane_live_view.html, covered by test_lane_live_view*.py and test_live_view_model.py (X5)",
     ),
     "core_features": (
-        12_723,
-        "accept: the ROS-free CORE feature managers (command, safety, docking, line_follow, "
+        12_926,
+        "accept: re-judged 2026-10-04 at 12926 after D-452/D-453 integration: "
+        "D-452 adds 93 discovery owner/helper lines (agent 16, helper 77); D-453 adds "
+        "110 to the existing stuck recovery/wiring seam (103 and 7). These remain "
+        "independent feature subpackages below file budgets, with CORE's existing "
+        "command publisher and lease/E-Stop authority preserved. Independent source "
+        "count/owner review retains all file limits, 1000 zero-growth tier and +150 "
+        "package allowance. The ROS-free CORE feature managers (command, safety, docking, line_follow, "
         "traffic_policy, navigation, swarm, ...) are already one subpackage per feature, each "
         "under the file budget; the package total is a sum of independent owners, not one "
         "tangled module. First judged 2026-10-02 at 10104 when D-407 lane stuck recovery joined "

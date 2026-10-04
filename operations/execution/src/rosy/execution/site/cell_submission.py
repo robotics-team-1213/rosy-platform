@@ -40,6 +40,7 @@ class CellJobCompilation:
     job: Mapping
     plan_bundle: PlanBundle
     ledger_markers: tuple[Mapping, ...]
+    operator_checkpoints: tuple[Mapping, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -56,6 +57,7 @@ class CellJobSubmission:
     plan_bundle: PlanBundle
     ledger_markers: tuple[tuple[int, str], ...]
     resources: tuple[tuple[str, str], ...]
+    operator_checkpoints: tuple[Mapping, ...] = ()
 
     @property
     def action_kinds(self) -> tuple[str, ...]:
@@ -70,7 +72,7 @@ class CellJobSubmission:
                 return [thaw(item) for item in value]
             return value
 
-        return {
+        document = {
             "job_id": self.job_id,
             "workcell_id": self.workcell_id,
             "instance_id": self.instance_id,
@@ -90,6 +92,9 @@ class CellJobSubmission:
                 for ordinal, pallet in self.ledger_markers
             ],
         }
+        if self.operator_checkpoints:
+            document["operator_checkpoints"] = [thaw(row) for row in self.operator_checkpoints]
+        return document
 
 
 def _canonical(value: object, *, field: str) -> str:
@@ -98,6 +103,68 @@ def _canonical(value: object, *, field: str) -> str:
                           ensure_ascii=False, allow_nan=False)
     except (TypeError, ValueError) as exc:
         raise ValueError(f"{field} must be finite JSON") from exc
+
+
+def operator_checkpoint_id(recipe_digest: str, cell_digest: str, descriptor: Mapping) -> str:
+    """Content identity for non-motion metadata; it grants no execution authority."""
+    if (not isinstance(recipe_digest, str) or not _SHA256.fullmatch(recipe_digest)
+            or not isinstance(cell_digest, str) or not _SHA256.fullmatch(cell_digest)):
+        raise ValueError("operator checkpoint requires recipe/cell SHA256 digests")
+    encoded = _canonical({"recipe_sha256": recipe_digest, "cell_sha256": cell_digest,
+                          "checkpoint": dict(descriptor)}, field="operator checkpoint identity")
+    return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+
+
+def _operator_checkpoints(compiled: CellJobCompilation, bundle: PlanBundle) -> tuple[Mapping, ...]:
+    """Reconstruct checkpoint placement from the canonical Job, not caller metadata."""
+    if not isinstance(compiled.operator_checkpoints, tuple):
+        raise ValueError("operator checkpoints must be a canonical tuple")
+    steps = compiled.job.get("steps", ())
+    has_manual_step = any(isinstance(step, Mapping) and step.get("kind") == "operator_sheet"
+                          for step in steps)
+    if not compiled.operator_checkpoints and not has_manual_step:
+        return ()
+    if not isinstance(steps, (list, tuple)) or not all(
+            isinstance(step, Mapping) and "kind" in step for step in steps):
+        raise ValueError("operator checkpoints require canonical Job step mappings")
+    expected, completed_transfers = [], 0
+    for step in steps:
+        if step["kind"] == "pick":
+            completed_transfers += 1
+        if step["kind"] != "operator_sheet":
+            continue
+        if (set(step) != {"kind", "item", "pallet", "layer", "target", "approach_z", "thickness_m"}
+                or step["item"] != "slip_sheet" or step["approach_z"] is not None
+                or not isinstance(step["target"], Mapping)
+                or set(step["target"]) != {"x", "y", "z", "yaw"}):
+            raise ValueError("operator checkpoint Job step has an invalid shape")
+        ordinal = completed_transfers+1
+        layer = step["layer"]
+        if (not 1 <= ordinal <= len(bundle.steps) or isinstance(layer, bool)
+                or not isinstance(layer, int) or layer < 0):
+            raise ValueError("operator checkpoint must precede an existing layer transfer")
+        thickness = _finite(step["thickness_m"], "checkpoint thickness")
+        if thickness <= 0:
+            raise ValueError("operator checkpoint thickness must be positive")
+        descriptor = {"kind": "operator_sheet", "before_transfer_ordinal": ordinal,
+                      "pallet_id": _identifier(step["pallet"], "checkpoint pallet_id"), "layer_index": layer,
+                      "sheet_pose_base": {_key: _finite(step["target"][_value], "checkpoint pose")
+                                          for _key, _value in (
+                                              ("x_m", "x"), ("y_m", "y"), ("z_m", "z"), ("yaw_rad", "yaw"))},
+                      "thickness_m": thickness}
+        following = bundle.steps[ordinal-1].invocation.inputs
+        if (following["item"] != "box" or following["pallet_id"] != descriptor["pallet_id"]
+                or following["layer_index"] != layer):
+            raise ValueError("operator checkpoint does not bind the following box layer")
+        expected.append({"checkpoint_id": operator_checkpoint_id(bundle.recipe_digest, bundle.cell_digest,
+                                                                 descriptor), **descriptor})
+    ordinals = [row["before_transfer_ordinal"] for row in expected]
+    if ordinals != sorted(set(ordinals)):
+        raise ValueError("operator checkpoints must be uniquely ordered by transfer boundary")
+    if _canonical(list(compiled.operator_checkpoints), field="operator checkpoints") != _canonical(
+            expected, field="Job operator checkpoints"):
+        raise ValueError("operator checkpoint metadata differs from canonical Job binding")
+    return tuple(expected)
 
 
 def _identifier(value: object, field: str, *, limit: int = 192) -> str:
@@ -224,4 +291,5 @@ def compile_cell_submission(candidate: Mapping, *, compiler: CellJobCompiler,
         plan_bundle=bundle,
         ledger_markers=tuple(markers),
         resources=resources,
+        operator_checkpoints=_operator_checkpoints(compiled, bundle),
     )
