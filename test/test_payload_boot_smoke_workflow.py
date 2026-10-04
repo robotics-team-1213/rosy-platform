@@ -25,9 +25,10 @@ def test_manual_dispatch_only_no_schedule_or_push():
         "수동 실행만 허용한다 — push마다 돌면 payload 빌드 비용이 배가된다"
 
 
-def test_runs_on_the_arm_runner_with_bounded_timeout():
+def test_runs_in_the_ros_container_on_the_arm_runner():
     job = _workflow()["jobs"]["boot-smoke"]
     assert job["runs-on"] == "ubuntu-24.04-arm", "native arm64 — 에뮬레이션 금지(D-161 취지)"
+    assert job["container"] == "ros:jazzy-ros-base", "ROS apt 소스는 컨테이너가 제공한다"
     assert 0 < int(job["timeout-minutes"]) <= 30
 
 
