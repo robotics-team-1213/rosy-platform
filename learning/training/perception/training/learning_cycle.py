@@ -7,6 +7,7 @@ Review exports are progress evidence, not qualification for segmentation trainin
 import argparse
 import hashlib
 import json
+import math
 from pathlib import Path, PurePosixPath, PureWindowsPath
 import sys
 import time
@@ -69,7 +70,7 @@ def verified_export(folder):
 
 def validate_config(config):
     expected = {"trainer", "recipes", "requests_dir", "reviews_dir", "interval_s", "max_attempts"}
-    if set(config) != expected or not isinstance(config["trainer"], dict):
+    if set(config) - {"authority"} != expected or not isinstance(config["trainer"], dict):
         raise JobError("cycle needs trainer/recipes/requests_dir/reviews_dir/interval_s/max_attempts")
     if type(config["interval_s"]) is not int or config["interval_s"] < 1:
         raise JobError("positive interval_s required")
@@ -79,6 +80,11 @@ def validate_config(config):
         raise JobError("nonempty recipes required")
     if len({signature(r) for r in config["recipes"]}) != len(config["recipes"]):
         raise JobError("duplicate recipe")
+    authority = config.get("authority")
+    if authority is not None and (not isinstance(authority, dict)
+            or set(authority) != {"path", "workspace_id", "max_age_s"}
+            or type(authority["max_age_s"]) is not int or not 1 <= authority["max_age_s"] <= 3600):
+        raise JobError("authority path/workspace_id/bounded max_age_s required")
 
 
 def validate_request(request, trainer):
@@ -129,16 +135,64 @@ def review_queue(exports):
             for key, frame in sorted(frames.items())]
 
 
+def current_authority(config, job):
+    """A transport receipt is usable only while its independent fetch remains fresh."""
+    from review_authority import advance_revision
+    cfg = config["authority"]
+    previous = job.state.get("current_authority", {}).get("revision")
+    try:
+        path = Path(cfg["path"])
+        if path.is_symlink() or path.stat().st_size > 16 * 1024 * 1024:
+            raise JobError("invalid current authority delivery file")
+        delivery = json.loads(path.read_bytes())
+        stamp = delivery.get("checked_at_unix")
+        if (delivery.get("schema") != "rosy.pinky-review-current-delivery/1"
+                or delivery.get("workspace_id") != cfg["workspace_id"]
+                or delivery.get("available") is not True
+                or type(stamp) not in (int, float) or not math.isfinite(stamp)
+                or not -5 <= time.time() - stamp <= cfg["max_age_s"]):
+            raise JobError("current authority unavailable, expired or from another workspace")
+        current = delivery["authority"]
+        revision = advance_revision(current, workspace_id=cfg["workspace_id"], previous=previous)
+        job.state["current_authority"] = {"status": "verified", "revision": revision,
+                                          "checked_at_unix": stamp}
+        return current
+    except (OSError, ValueError, KeyError, TypeError) as error:
+        job.state["current_authority"] = {"status": "unavailable", "revision": previous,
+                                          "error": str(error)}
+        return None
+
+
 def scan_reviews(config, job):
     root = Path(config["reviews_dir"])
     progress = job.state.setdefault("reviews", {})
-    current, seen = [], set()
+    current, seen, authority_rows = [], set(), {}
+    authority = current_authority(config, job) if config.get("authority") is not None else None
     for folder in sorted(root.glob("*")):
         if folder.name.startswith(".") or not folder.is_dir() or not (folder / "COMPLETE").is_file():
             continue
         try:
             seen.add(str(folder))
             row = verified_export(folder)
+            if (folder / "review-contract.json").exists() or (folder / "AUTHORITY_COMPLETE").exists():
+                if authority is None:
+                    raise JobError("current authority required for v2 review export")
+                from review_authority import verify_bundle
+                try:
+                    verified = verify_bundle(folder, authority,
+                                             workspace_id=config["authority"]["workspace_id"])
+                except ValueError as error:
+                    progress[str(folder)] = {"status": "stale", "error": str(error)}
+                    continue
+                contract = verified["contract"]
+                for decision in contract["authority"]["frames"]:
+                    authority_rows[decision["review_uid"]] = dict(
+                        decision, training_dataset_qualified=False)
+                progress[str(folder)] = {"status": "verified", "contract_sha": verified["contract_sha"],
+                                         "workspace_id": authority["workspace_id"],
+                                         "generation": authority["generation"],
+                                         "training_dataset_qualified": False}
+                continue
             progress[str(folder)] = {"status": "verified", **row}
             current.append(row)
         except (OSError, ValueError, KeyError) as error:
@@ -146,6 +200,11 @@ def scan_reviews(config, job):
     for path in progress.keys() - seen:
         progress[path]["status"] = "unavailable"
     job.state["review_queue"] = review_queue(current)
+    if authority_rows:
+        final_authority = current_authority(config, job)
+        if final_authority != authority:
+            authority_rows.clear()  # Long verification cannot extend an expired or replaced decision snapshot.
+    job.state["authority_queue"] = [authority_rows[key] for key in sorted(authority_rows)]
     # Persist full per-frame decisions, including pending and excluded, before training.
     job._save()
 
