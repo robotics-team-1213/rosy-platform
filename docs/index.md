@@ -299,8 +299,8 @@
 
 ## 최근 기록
 
+- 2026-10-05 · uncommitted · feat(learning): indexed trainer 독립 admission D-464
 - 2026-10-05 · uncommitted · docs: SRP 검토 커밋 식별자 단축
 - 2026-10-05 · uncommitted · test: fence app and web document ownership
 - 2026-10-05 · uncommitted · docs(learning): 모델 PC 픽셀 자동 라벨 초안 파이프라인 D-465
 - 2026-10-05 · uncommitted · fix(pairing): TLS CI 의존성과 통합 버전 기록
-- 2026-10-05 · uncommitted · docs(learning): bind approved indexed masks to immutable dataset construction

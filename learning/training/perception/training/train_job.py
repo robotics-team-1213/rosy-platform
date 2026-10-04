@@ -6,8 +6,9 @@ training {seed, epochs, lr, batch_size, base, recipe: baseline|enhanced}.
 No device command or watcher invocation. Upstream harvest/curation remains separate.
 """
 import argparse
-from contextlib import contextmanager
+from contextlib import contextmanager, ExitStack
 import json
+import hashlib
 import os
 from pathlib import Path
 import random
@@ -43,7 +44,7 @@ def snapshot_intake(artifact, report):
     return receipt({"artifact": str(artifact)}, [proof])
 
 
-def publish_ready(folder, store_root, job_name):
+def publish_ready(folder, store_root, job_name, *, before_ready=None):
     """Recover our partial copy or a watcher move; never overwrite different content."""
     import handover
     from store import (Store, content_sha, safe_name, publication_group,
@@ -72,6 +73,8 @@ def publish_ready(folder, store_root, job_name):
         if location.is_dir():
             if all((location / name).is_file() and sha(location / name) == sha(folder / name)
                    for name in names):
+                if before_ready is not None:
+                    before_ready()
                 return location
             raise JobError("existing store revision has different content")
     publication_directory(target)
@@ -98,8 +101,12 @@ def publish_ready(folder, store_root, job_name):
     if ready.exists():
         if ready.read_text().strip() != digest:
             raise JobError("existing READY digest differs")
+        if before_ready is not None:
+            before_ready()
     else:
         shared_publication_permissions(target, group)
+        if before_ready is not None:
+            before_ready()
         ready.write_text(digest, encoding="utf-8")  # always last
     if group is not None:
         ready.chmod(0o640)  # recover interruption after READY write, before chmod
@@ -127,7 +134,13 @@ def gpu_lease():
         yield
 
 
-def run(config, out):
+def run(config, out, *, indexed_review=None):
+    """Only a trusted owner-injected verifier can admit indexed content."""
+    with ExitStack() as stack:
+        return _run(config, out, indexed_review, stack)
+
+
+def _run(config, out, indexed_review, admission_stack):
     import yaml
     from store import Store, content_sha, parse_dataset_ref
     from intake import run as intake_run
@@ -150,7 +163,8 @@ def run(config, out):
     if content_sha(dataset) != dataset.name:
         raise JobError("dataset content hash differs from version")
     gate_path = Path(config["gate"]).resolve()
-    gate = yaml.safe_load(gate_path.read_text())
+    gate_raw = gate_path.read_bytes()
+    gate = yaml.safe_load(gate_raw)
     if gate.get("require_eval") is not True or _eval_gate_error(gate):
         raise JobError("valid require_eval deployment gate required")
     evalset = (Path(config["replay_root"]) / gate["eval_set"]).resolve()
@@ -159,10 +173,13 @@ def run(config, out):
     dataset_doc = json.loads((dataset / "manifest.json").read_text())
     sources = dataset_doc.get("sources", [])
     sources = sources if isinstance(sources, list) else [sources]
-    if (dataset_doc.get("builder") == "review_dataset.py (D-464)"
-            or any(isinstance(source, dict)
-                   and source.get("annotation_origin") == "human_reviewed_pinky_indexed" for source in sources)):
-        raise JobError("independent indexed review training admission required")
+    indexed = (dataset_doc.get("builder") == "review_dataset.py (D-464)"
+               or any(isinstance(source, dict)
+                      and source.get("annotation_origin") == "human_reviewed_pinky_indexed" for source in sources))
+    if indexed:
+        from review_admission import IndexedReview
+        if type(indexed_review) is not IndexedReview:
+            raise JobError("independent indexed review training admission required")
     eval_doc = json.loads((evalset / "manifest.json").read_text())
     if eval_doc.get("purpose") != "eval":
         raise JobError("fixed evaluation dataset purpose required")
@@ -170,19 +187,36 @@ def run(config, out):
     if shared:
         raise JobError(f"training/evaluation sessions overlap: {sorted(shared)}")
     profile = Path(config["camera_profile"]).resolve()
-    camera = json.loads(profile.read_text())
+    camera_raw = profile.read_bytes()
+    camera = json.loads(camera_raw)
     if not isinstance(camera.get("accepted"), bool):
         raise JobError("camera provenance must state accepted boolean explicitly")
     source_files = [HERE / name for name in
                     ("train_job.py", "job_state.py", "rosy_lane_model.py", "recipes.py", "export_cell.py")]
     source_files += [PERCEPTION / "model" / name for name in ("intake.py", "intake_eval_gate.py")]
     source_files += [PERCEPTION / "store.py"]
+    if indexed:
+        source_files += [HERE / name for name in ("review_admission.py", "review_dataset.py", "review_authority.py")]
+        source_files += [PERCEPTION / "dataset" / "build.py"]
     inputs = {"config": config, "dataset_sha": dataset.name, "eval_sha": evalset.name,
-              "gate_sha": sha(gate_path), "camera_sha": sha(profile),
+              "gate_sha": hashlib.sha256(gate_raw).hexdigest(), "camera_sha": hashlib.sha256(camera_raw).hexdigest(),
               "source_files": {p.relative_to(ROOT).as_posix(): sha(p) for p in source_files}}
+    admitted = None
+    if indexed:
+        expected_files = {gate_path: inputs["gate_sha"], profile: inputs["camera_sha"],
+                          **{ROOT / relative: digest for relative, digest in inputs["source_files"].items()}}
+        admitted = admission_stack.enter_context(indexed_review.open(
+            config, dataset, evalset, source_files, expected_file_hashes=expected_files))
+        inputs["indexed_review"] = admitted.evidence
+        dataset, gate_path = admitted.dataset, admitted.gate_path
+    def check_indexed():
+        if admitted is not None:
+            admitted.check()
     out = Path(out).resolve()
+    check_indexed()
     with Job(out, inputs) as job:
         def train_stage(attempt):
+            check_indexed()
             import numpy as np
             import torch
             from rosy_lane_model import LaneUNet, RosyLaneDataset, train
@@ -200,9 +234,11 @@ def run(config, out):
                 raise JobError("recipe requires background index 0")
             counts, val_counts = pixel_counts(train_ds), pixel_counts(val_ds)
             unobserved = check_coverage(train_ds.classes, counts, val_counts)
+            check_indexed()
             attempt_dir = out / f"train-{attempt}"
             attempt_dir.mkdir(exist_ok=False)
             with gpu_lease():
+                check_indexed()
                 if not torch.cuda.is_available():
                     raise JobError("CUDA required")
                 torch.cuda.manual_seed_all(seed)
@@ -232,6 +268,7 @@ def run(config, out):
         trained = job.step("train", train_stage)
 
         def export_stage(attempt):
+            check_indexed()
             import torch
             from rosy_lane_model import LaneUNet, Preprocess
             from export_cell import export
@@ -249,6 +286,7 @@ def run(config, out):
         exported = job.step("export", export_stage)
 
         def intake_stage(attempt):
+            check_indexed()
             accepted = Path(config["intake_out"]) / exported["revision"]
             if (accepted / "model_manifest.json").exists() and (
                     sha(accepted / "model_manifest.json") != sha(Path(exported["artifact"]) / "model_manifest.json")):
@@ -263,13 +301,15 @@ def run(config, out):
         qualified = job.step("intake", intake_stage)
 
         def ready_stage(attempt):
-            target = publish_ready(qualified["artifact"], store.root, out.name)
+            check_indexed()
+            target = publish_ready(qualified["artifact"], store.root, out.name, before_ready=check_indexed)
             summary = out / "ready-receipt.json"
             summary.write_text(json.dumps({"revision": exported["revision"], "location": str(target)}))
             return receipt({"revision": exported["revision"], "location": str(target)}, [summary])
         result = job.step("ready", ready_stage)
         # A watcher may have moved the last receipt's folder after a crash/restart.
-        result["location"] = str(publish_ready(qualified["artifact"], store.root, out.name))
+        check_indexed()
+        result["location"] = str(publish_ready(qualified["artifact"], store.root, out.name, before_ready=check_indexed))
         job.finish()
         return result
 

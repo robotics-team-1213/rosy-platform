@@ -5842,3 +5842,10 @@ osy-d395-s1d\`.
 - 변경: 앱·웹 SRP 계획의 검토 스냅샷을 확인 가능한 짧은 커밋 식별자로 표기한다. 긴 식별자를 고엔트로피 비밀값으로 탐지한 push 검사를 해결하며 비밀값 검출 규칙은 유지한다.
 - 증거: 기존 커밋 객체를 직접 조회했다. 비밀값 검사를 재실행하고 결과를 X:/DevTemp/rosy-ui-ship/secret-doc-sha-fix.log에 기록한다.
 - gate 변화: 없음. 문서 표기만 변경한다.
+
+
+## 2026-10-05 · uncommitted · feat(learning): indexed trainer 독립 admission D-464
+
+- 변경: 원래 sealed export와 trusted transport workspace/highwater, 원본 pixels 및 전체 eval inventory를 scratch 재구축해 저장 SHA와 대조한다. trainer는 captured train/eval/gate를 소비하고 Job/GPU 및 실제 READY marker 직전 fresh authority/TTL/source/recipe를 재확인한다. CLI boolean/build receipt는 권한이 아니다.
+- 증거: X:/DevTemp/ta에 RED12FAIL, initial24PASS, interleaving45PASS/NEW0 및 독립 정책 리뷰를 남긴다. 최종 affected/source 체크는 완료 보고서로 별도 고정한다. 실제 labels/meta 복구 후보16개는 원래2digest 일치0이어서 UNKNOWN을 유지한다.
+- gate 변화: 호스트 SOURCE/격리 검증만. 실제 마스크 승인0, eval rowbinding 결손은 HOLD이며 학습 요청/GPU/서비스 배포/모델 활성화/주행은 실행하지 않는다.
