@@ -364,3 +364,11 @@
 - 증거: 영향 Pilot 브라우저 7 passed/57 deselected (37.06s), 최종 시작 수명 1 passed (4.80s). SW·예산·비활성 닫힌 목록 8 passed (2.48s), API/예산 16 passed (8.21s). 최초 GREEN의 import fixture 실패와 호스트 SW/예산 실패는 수정 후 해당 대상으로 재검증했다. X 제공 pending 잠금·새 안내 소유권 변이가 실제 단언 RED이며 원본 제공 GREEN, 제품 소스 SHA256 불변을 확인했다.
 - gate 변화: SOURCE/LOCAL·대역 발견 증거이다. 실제 이동·정지 해제·장치 수용을 실행하지 않았다.
 - 결정: D-439 Task5. 기존 drive/arm/HUD/인증과 같은 출처 계약을 보존한다. 근거 X:\DevTemp\rosy-ui-unify\tools.
+
+## 2026-10-04 · uncommitted · feat(pilot): 크래프트 회차 1 — G2 기준선과 44px 바닥 회복
+
+- 변경: 첫 저장소용 G2 기준선 셀 9장(게이트·로비·주행 × 태블릿 가로·세로·전화, dev_server 합성)을 `docs/validation/pilot-g2-baseline-2026-10-04/`에 남기고 `surfaces.yaml` pilot의 `baseline_reason`을 baseline 경로로 바꿨다. 기계 계측으로 좁은 티어의 조작 면적 위반을 찾아 고쳤다 — `styles.css` 끝에 `width < 30rem` 블록에서 레이아웃 규칙(`data-drive-layout="side|below"`의 `min-width: 0`)이 프리셋(저속/보통/빠름)과 정밀 토글을 내용 폭으로 줄여 44px 바닥을 뚫는 것(390px에서 36px, 320px에서 42px)을 같은 특이도 되돌림(min-width 2.75rem + flex 0 1 auto)으로 회복. 넓은 화면의 flex 채움은 불변.
+- 증거: 기계 계측 8셀(게이트 3·주행 3·전화 320 계측) 전부 e-stop 111×58 보임·44px 미만 0·4.5:1 미만 0·가로 넘침 0px(수정 전 390px 3개·320px 1개 위반 → 수정 후 0). 12px 텍스트는 DESIGN.md Micro 승인 바닥이라 무결. `python -m pytest src/hmi/pilot/test src/hmi/web_common/test src/runtime/api_web/test/test_pilot_route.py -q` 302 passed/92 skipped — `test_responsive_tiers` 1건은 main 선재 실패(console-detail.css 40rem, 이 브랜치 소유 아님). registry 시험은 PNG 추적 후 15 passed.
+- gate 변화: 없음. LOCAL 합성 증거. 사람 G3 시트·실물 태블릿 관측은 다음 회차(사다리 P2와 묶음).
+- 결정: DESIGN.md 조작 면적 바닥(44px, 모든 티어). D-280·D-405 계측 규율 준수.
+- 교훈: flex 채움용 `min-width: 0`은 좁은 티어에서 터치 바닥을 무력화한다 — 되돌림은 같은 특이도 + 파일 끝 배치로만 이긴다.
