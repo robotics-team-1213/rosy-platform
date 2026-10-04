@@ -5742,6 +5742,12 @@ osy-d395-s1d\`.
 - 증거: 실제 Chromium 회귀 3개와 기존 backend 5개, 총 8 passed, known_failures 신규 0. 승인 대기 유지·새로고침·빈 상태·다른 탭 변경 보호를 확인했다. PC/모바일 4폭×dark/light 및 필터 건너뛰기·모바일 복구 총 10 검사에서 page error/가로 넘침 0, 운영 검수 rows 불변을 확인했다. 공용 controls/token/title/responsive 및 harness 계약 132 passed, 신규 0. 증거는 X:/DevTemp/pinky-review-flow-20261005에 있다. 물리 모바일·원격 CI 수용은 별도다.
 - gate 변화: 로컬 앱 개선이며 물리 모바일·장치·학습 qualification·정책 승격·CI 수용을 주장하지 않는다. 운영 승인/제외 이력 보존, 로봇 움직임·모델 활성화·push·배포 없음.
 
+## 2026-10-05 · uncommitted · feat(learning): D-462 incremental pixel review
+
+- 변경: Existing Pinky app adds pending multi-video imports, independent original-coordinate pixel editing, verified nominal CAD references and coherent current-decision/export contracts. Canvas palette and learning surface ownership remain in shared tokens/declarations.
+- 증거: Root independent review found cross-store mixed reads. Producer now captures metadata/frames/masks/representations in one SQLite transaction and seals that exact revision. Concurrent-writer, stale authority and bundle integrity regressions added; host/shared contracts 252 passed/24 skipped and explicit Chromium regression suite 13 passed, NEW=0.
+- gate 변화: Local host/Chromium with separate test state. Live human approvals, pixel qualification, original-video/map-camera evidence and root integration acceptance remain separate. No shared physical gate is advanced.
+
 ## 2026-10-05 · uncommitted · docs(validation): P2 페달 계측 실행 준비 완료 — 사용자 입회 대기
 
 - 변경: `docs/validation/p2-pedal-readiness-2026-10-04/README.md` 추가. 합격선(계량 문서 고정), 서명 payload(2026.10.04-034), 부팅 증거(arm64 러너 run 37200780702), 측정 도구, 실행 절차, 사용자가 해야 할 것(시간·승인·입회)을 한 곳에 정리. D-426 Gazebo ROS-SIM은 WSL/Linux가 필요하여 이 Windows 세션에서 실행 불가 — 착수 보류로 기록.
@@ -5749,9 +5755,21 @@ osy-d395-s1d\`.
 - gate 변화: 없음.
 - 결정: P2는 사용자 입회 대기. D-426은 Linux 환경 대기.
 
+## 2026-10-05 · uncommitted · fix(learning): bind review content and existing source identities
+
+- 변경: 최신 결정에 object_review_sha256와 source_sha256를 추가하고 export human의 video/frame 출처를 원본과 맞춘다. 정확히 일치하는 legacy primary image SHA·영상명/frame만 연결하고 이미지·검수 decision/version과 legacy source를 보존한다. 승인 scalar 타입을 엄격히 확인한다. dev 작업 화면 title 범위를 검사하며 별도 앱 identity를 만들지 않는다.
+- 증거: reseal한 박스 변조 거부·잘못된 승인 bool/int·legacy exact-image 중복·latest ETag 및 기존 backend/title 18 passed, known_failures 신규0. root는 실제 SSH 소비 경로에서 human 출처 누락을 재현했고 producer가 보완했다. 실제 운영 state는 아직 읽기만 수행했다.
+- gate 변화: SOURCE/LOCAL 보강. root-owned bridge/adapter의 독립 수용·실제 human pixel 승인·장치 수용·CI는 별도다. push·배포·주행·HOLD 해제 없음.
+
 ## 2026-10-05 · uncommitted · feat(fleet): D-463 차선 경로는 다음 짧은 점
 
 - 변경: POST /api/fleet/robots/{robot_id}/route 가 저장된 차선 간선 순서를 폴리라인으로 펼치고, 지도에 LOCALIZED 된 자세일 때만 약 0.20 m 앞의 점을 기존 goal 로 보낸다. 위치 블록이 없거나 odom 이면 409 ROUTE_POSE_UNTRUSTED 이고 CORE navigation/goal 을 호출하지 않는다. GoalRequest 는 {x, y, yaw} 그대로다. ADR docs/adr/D-463-fleet-lane-route.md. D-462 는 review-cycle 작업 트리의 번호라 adr_gaps 에 남겼다.
 - 증거: operations/fleet/test/test_lane_route.py, test_task_contract_docs.py, test_server_app.py, test_line_follow_contract_docs.py, test_mission_progress.py 74 passed. test/known_failures.py 는 새 실패 0. harness lint 의 STATUS.md 와 pilot index stale 2건은 이 브랜치의 베이스에 이미 있다.
 - gate 변화: 없음. 호스트 시험. DEVICE, ROS-SIM, 실차 주행은 없다.
 - 결정: D-463 Accepted.
+
+## 2026-10-05 · uncommitted · fix(learning): validate sealed receipt authority exactly
+
+- 변경: producer helper는 v2 contract뿐 아니라 봉인된 pinky-review-receipt.json authority도 schema/digest/types로 검증하고 encoded JSON의 정확한 일치를 요구한다. Python dict의 False==0 동등성으로 변조 receipt를 수용하는 경로를 제거한다. Root consumer/adapter 경로는 고치지 않는다.
+- 증거: Root의 독립 합성 reseal 재현을 회귀로 옮겼다. 수정 전1failed/1passed 재현을 X:/DevTemp/pinky-review-cycle-20261005/receipt-red.txt에 보존하고, 수정 후 기존 snapshot/content/CAS와 receipt 두 변조 회귀를 함께 검증한다. 실제 사람 검수 상태는 변경하지 않는다.
+- gate 변화: SOURCE/LOCAL helper 보완. 실제 export의 격리 model-PC 소비 통과는 Root 증거이며 생산 학습 서비스 전환·human pixel qualification과 별개다. push·주행·HOLD 해제·정책 권한 변경 없음.

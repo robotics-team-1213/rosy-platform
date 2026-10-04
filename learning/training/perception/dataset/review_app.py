@@ -21,6 +21,9 @@ from urllib.parse import urlparse
 
 import review_return
 from learning_workspace import Workspace, WORKFLOWS
+import review_evidence
+import review_ingest
+import review_masks
 
 STATIC = Path(__file__).with_name('review_app_web')
 COMMON = Path(__file__).resolve().parents[4] / 'shared' / 'web'
@@ -50,6 +53,8 @@ class ReviewStore:
             if initialized:
                 if any(x is not None for x in (source, human, images)):
                     raise ValueError('existing workspace: restart with --state only; imports never overwrite reviews')
+                review_masks.configure(self)
+                review_evidence.configure(self)
                 return
             if source is None or human is None or images is None:
                 raise ValueError('first start requires source, human and images')
@@ -76,6 +81,8 @@ class ReviewStore:
                 db.execute('INSERT INTO events(frame,action,version,review) VALUES (?,?,?,?)',
                            (index, 'import', 1, json.dumps(review)))
             db.execute("INSERT INTO metadata VALUES ('initialized','true')")
+        review_masks.configure(self)
+        review_evidence.configure(self)
 
     @contextmanager
     def connect(self):
@@ -177,11 +184,13 @@ class ReviewStore:
                        (json.dumps(review), status, version, index))
             db.execute('INSERT INTO events(frame,action,version,review) VALUES (?,?,?,?)',
                        (index, action, version, json.dumps(review)))
+            db.execute("UPDATE metadata SET value=CAST(value AS INTEGER)+1 WHERE key='generation'")
         return self.get(index)
 
     def prepare(self):
         with self.lock:
-            frames = self.list_frames()
+            captured = review_evidence.snapshot(self)
+            frames = captured['frames']
             export_id = uuid.uuid4().hex
             inputs = self.state / 'exports' / (export_id + '-inputs')
             inputs.mkdir(parents=True)
@@ -191,7 +200,7 @@ class ReviewStore:
             # app snapshot; omit their pending human row from the training receiver.
             unclassified = [f['index'] for f in frames
                             if any(b.get('label') is None for b in f['review']['boxes'])]
-            human.write_bytes(review_return._jsonl(f['review'] for f in frames if f['index'] not in unclassified))
+            human.write_bytes(review_return._jsonl(review_evidence.human_review(f) for f in frames if f['index'] not in unclassified))
             (inputs / 'application-snapshot.json').write_text(json.dumps(frames, ensure_ascii=False, indent=2), encoding='utf-8')
             out = self.state / 'exports' / export_id
             receipt = review_return.receive_review(source, human, self.state, out)
@@ -201,7 +210,12 @@ class ReviewStore:
                            unclassified_indices=unclassified,
                            segmentation_approved=False,
                            qualification='HOLD: learning owner must establish session mapping, session-disjoint splits and exclude every fixed eval set before training')
+            receipt.update(review_contract_schema='rosy.pinky-review-export/2',
+                           authority=captured['authority'],
+                           current_decisions_required=True)
             (out / 'pinky-review-receipt.json').write_text(json.dumps(receipt, ensure_ascii=False, indent=2), encoding='utf-8')
+            contract = review_evidence.seal_export(self, out, receipt, captured)
+            receipt['pixel_approved_frames'] = contract['pixel_approved_frames']
             with self.connect() as db:
                 db.execute('INSERT INTO exports VALUES (?,?)', (export_id, json.dumps(receipt)))
             return receipt
@@ -216,13 +230,15 @@ def make_server(store, port=8767):
     learning = Workspace(store.db)
 
     class Handler(BaseHTTPRequestHandler):
-        def send(self, data, code=200, mime='application/json; charset=utf-8'):
+        def send(self, data, code=200, mime='application/json; charset=utf-8', etag=None):
             if isinstance(data, (dict, list)):
                 data = json.dumps(data, ensure_ascii=False).encode('utf-8')
             self.send_response(code)
             self.send_header('Content-Type', mime)
             self.send_header('Content-Length', str(len(data)))
             self.send_header('Cache-Control', 'no-store')
+            if etag:
+                self.send_header('ETag', etag)
             self.send_header('X-Content-Type-Options', 'nosniff')
             self.send_header('Content-Security-Policy', "default-src 'self'; img-src 'self'; style-src 'self'; script-src 'self'; frame-ancestors 'none'; base-uri 'none'")
             self.end_headers()
@@ -237,8 +253,27 @@ def make_server(store, port=8767):
             path = urlparse(self.path).path
             try:
                 if path == '/api/workspace':
-                    return self.send({'frames': store.list_frames(), 'classes': list(review_return.exporter.OBJECT_CLASSES),
-                                      'token': token, 'exports': store.exports(), 'segmentation_supported': False})
+                    frames = [dict(row, pixel_status=review_masks.get(store, row['index'])['status'])
+                              for row in store.list_frames()]
+                    return self.send({'frames': frames, 'classes': list(review_return.exporter.OBJECT_CLASSES),
+                                      'token': token, 'exports': store.exports(), 'segmentation_supported': True,
+                                      'pixel_classes': review_masks.classes(store),
+                                      'map_reference': review_evidence.map_reference(store)})
+                if path == '/api/decisions':
+                    value = review_evidence.decisions(store)
+                    tag = '"' + value['decision_sha256'] + '"'
+                    if self.headers.get('If-None-Match') == tag:
+                        return self.send(b'', 304, etag=tag)
+                    return self.send(value, etag=tag)
+                if path == '/api/catalog':
+                    return self.send({'catalog': review_evidence.metadata(store, 'import_catalog'),
+                                      'cad_catalog': review_evidence.metadata(store, 'cad_catalog'),
+                                      'map_reference': review_evidence.map_reference(store), 'token': token})
+                if path.startswith('/api/mask-images/'):
+                    review = review_masks.get(store, int(path.rsplit('/', 1)[1]))
+                    return self.send(review_masks.encode(review_masks.pixels(store, review)), mime='image/png')
+                if path.startswith('/api/masks/'):
+                    return self.send(review_masks.get(store, int(path.rsplit('/', 1)[1])))
                 if path == '/api/learning':
                     return self.send({'workflows': WORKFLOWS, 'items': learning.list(), 'token': token,
                                       'counts': {state: sum(f['status'] == state for f in store.list_frames())
@@ -248,7 +283,8 @@ def make_server(store, port=8767):
                     return self.send(image.read_bytes(), mime=mimetypes.guess_type(image.name)[0])
                 files = {'/': 'index.html', '/app.js': 'app.js', '/app.css': 'app.css',
                          '/box-geometry.mjs': 'box-geometry.mjs', '/learning': 'learning.html',
-                         '/learning.js': 'learning.js'}
+                         '/learning.js': 'learning.js', '/pixels': 'pixels.html', '/pixels.js': 'pixels.js',
+                         '/catalog': 'catalog.html', '/catalog.js': 'catalog.js'}
                 name = path.removeprefix('/common/')
                 if path.startswith('/common/') and name in SHARED_ASSETS:
                     file = COMMON / name
@@ -289,6 +325,19 @@ def make_server(store, port=8767):
                 path = urlparse(self.path).path
                 if path == '/api/prepare':
                     return self.send(store.prepare())
+                if path == '/api/import':
+                    if not body.get('path'):
+                        body['path'] = review_evidence.metadata(store, 'import_catalog')
+                    if not body.get('path'):
+                        raise ValueError('등록할 검증 입력 폴더가 필요합니다.')
+                    return self.send(review_ingest.import_frames(store, body))
+                if path == '/api/cad':
+                    path = body.get('path') or review_evidence.metadata(store, 'cad_catalog')
+                    if not path:
+                        raise ValueError('CAD 검증 자료 경로가 필요합니다.')
+                    return self.send(review_evidence.register_map(store, path))
+                if path.startswith('/api/masks/'):
+                    return self.send(review_masks.update(store, int(path.rsplit('/', 1)[1]), body, Conflict))
                 if path == '/api/learning/register':
                     return self.send(learning.register(body))
                 if path == '/api/learning/remove':
@@ -314,8 +363,14 @@ def main():
     parser.add_argument('--human', type=Path)
     parser.add_argument('--images', type=Path)
     parser.add_argument('--port', type=int, default=8767)
+    parser.add_argument('--catalog', type=Path, help='prepared verified-inputs folder shown in app')
+    parser.add_argument('--cad-catalog', type=Path, help='verified CAD reference catalog shown in app')
     args = parser.parse_args()
     store = ReviewStore(args.state, args.source, args.human, args.images)
+    with store.connect() as db:
+        for key, path in [('import_catalog', args.catalog), ('cad_catalog', args.cad_catalog)]:
+            if path:
+                db.execute('INSERT OR REPLACE INTO metadata VALUES (?,?)', (key, str(path.resolve())))
     server = make_server(store, args.port)
     print(f'Pinky review: http://127.0.0.1:{server.server_port}', flush=True)
     try:

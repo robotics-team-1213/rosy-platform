@@ -29,6 +29,7 @@ gates:
   FIELD:
     state: N/A
 adrs:
+- D-462
 - D-461
 - D-456
 - D-459
@@ -316,6 +317,10 @@ plans:
 - ADR 로그 분리(개별 `docs/adr/D-NNN-*.md`)는 보류한다.
 
 ## 다음 gate
+
+- D-462는 기존 Pinky 앱의 반복 영상 등록·픽셀 독립 검수·latest decision export를 확장한다.
+  SQLite 단일 snapshot과 exact approval/class/representation binding을 호스트·Chromium에서 검증한다.
+  실제 영상-camera-CAD projection과 root-owned builder/bridge의 독립 학습 수용은 남아 있다.
 
 1. ARTIFACT/DEVICE는 deploy·rosy_core gate가 소유한다. docs가 GO로 옮기지 않는다.
 2. ADR 개별 파일 분리는 후속이며 이 Log 본문은 유지한다.
