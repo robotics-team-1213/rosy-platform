@@ -5110,3 +5110,9 @@
 
 - 별도 라벨링 세션 구현과 독립 검토를 거쳐 source/human/image bytes 고정, 전체 입력 검증, 실제 크기별 export와 outer COMPLETE를 추가했다. 실제 pending 반환은 320×240 세 프레임/640×480 한 프레임, 확정 라벨0/대기4이다. Root 18개 파일 hash/크기와 COMPLETE를 확인했다.
 - 관련 최종56pass, 독립10pass, 문서15pass/1skip. 근거: validation/object-review-return-2026-10-04.md. 사용자 지적 횡단보도 오분류·회전교차로 미검증은 미해결이며 어두운 장면 대응은 이번 범위에서 제외하고 후속 ADR 항목으로 기록했다. 기존 평가/게이트 변경 없음. 실제 사람 검수·새 모델·DEVICE/FIELD 및 전체 목표 미완료.
+
+### 2026-10-04 · uncommitted · docs(learning): record model PC job and site intake
+
+- 현 소스로 실제5세션/404프레임 GPU30epoch→ONNX→intake→READY를 실행했다. 분리된 intake 이력의 최고 모델 비교 누락을 확인하고 canonical 이력으로 재검사했다. 후보는 최고 모델 대비 성능 하락으로 rejected이며 resume도 재승격을 거절했다.
+- 관제 PC에 독립 venv와 입력을 준비해 1617파일 hash/크기/coverage를 확인했다. 실제 READY→intake→rejected, pip check와 import 통과. 상시 watcher·일반 OpenSSH 서버 설치는 sudo 인증 필요로 관리자 스크립트 인계 단계다. 모델 PC 전용 키 로그인은 실제 Server accepts key 확인, 관제 별칭은 Tailscale SSH 접속까지 확인했다.
+- 근거: validation/model-pc-recording-job-and-site-intake-2026-10-04.md. 로봇 전달/주행/HOLD 해제 없음. 사람 라벨·새 클래스 평가·상시화·shadow/rollback·owner/Fleet·DEVICE/FIELD 및 전체 목표 미완료.
