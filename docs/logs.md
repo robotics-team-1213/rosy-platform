@@ -5855,3 +5855,9 @@ osy-d395-s1d\`.
 - 변경: 기존 cycle의 pinned authority 유효기간과 producer owner 유효기간 중 최솟값을 transport 조회, dataset 재구축, IndexedReview에 동일하게 전달한다. 5초 정책을 90초 기본값으로 늘리지 않는다. 승인 발급자·highwater·출처·READY 조건은 그대로다.
 - 증거: X:/DevTemp/rosy-ui-ship/review-ttl에 새 경계 RED3FAIL3PASS, 수정 후 focused6PASS, 기존 관련5개 suite208PASS1SKIP50.05초 및 known_failures NEW0을 기록했다. stale20초/fresh2초, 양쪽5초/90초 설정, 느린 재구축 중 만료를 실제 synthetic admission/request 경계로 확인했다.
 - gate 변화: 호스트 SOURCE/격리 검증만. 실제 GPU·학습 요청·장치 설정·배포·모델 활성화·주행은 실행하지 않는다. 독립 소스 리뷰 후 이 수정만 커밋하며 native038/Android/배포 closure는 변경하지 않는다.
+
+## 2026-10-05 · uncommitted · refactor(learning): 데이터셋 출처 검증 owner 분리
+
+- 변경: 674줄 review_dataset의 stable bytes·source proof·sealed eval companion 검증4함수를 review_provenance로 그대로 옮겼다. 기존 import는 re-export로 유지하고 새 owner를 trainer 입력 코드 hash에 포함한다. dataset474줄·provenance209줄이며 P6 제한·verdict 예외는 변경하지 않는다.
+- 증거: X:/DevTemp/rosy-ui-ship/review-budget에 기존 P6/새 owner 결속 RED2FAIL, 수정 후2PASS, 기존 관련5개 suite와 module_structure 전체242PASS1SKIP65.34초/NEW0을 기록했다. 네 함수 AST 동일성과 새 owner가 변경되면 학습 import/GPU 전 거절하는 경계를 확인했다.
+- gate 변화: SOURCE/격리 검증만. 승인·출처 bytes·dataset SHA·최신성·게시 규약은 유지하며 배포·native·Android·자격증명·실제 GPU/장치 실행은 변경하지 않는다. 독립 리뷰 후 이 변경만 커밋한다.
