@@ -5049,3 +5049,8 @@
 - 변경: 고정 profile/controller/envelope/camera/정규화/행동 범위/주기/stale budget과 PolicyArtifact 파일을 대조하는 ROS-free loader와 재검증 경로. middleware→contracts만 사용한다.
 - 증거: host54pass·독립17pass, isolated0.1.1 wheel 실제3정책 integrity/미설정 binding 거절. camera bool alias는 RED3 후 수정. 상세 validation/owner-policy-install-binding-2026-10-04.md.
 - gate 변화: owner 실행 전 설치 호환성 검사 확보. 프로세스 wiring·승격 trust·lease/HOLD/rollback·독립SIM·DEVICE/FIELD는 미완료. 모델 PC는 Tailscale 추가 인증 대기.
+
+## 2026-10-04 · uncommitted · feat(execution): fence OMX policy candidates at existing owner
+- 변경: default-disabled SIM owner session의 설치/lease/세대/관측/카메라/행동 시각 최종검사와 HOLD/cancel. 기존 stop fence와 writer를 사용한다. 영상 라벨 보완 및 독립 평가 계획도 기록했다.
+- 증거: 관련 host153pass·독립38pass, D-430 소스 리뷰 승인. 0.1.2 isolated wheel은 실제3정책 integrity를 검증하고 미설정 binding을 거절했다. 영상 초안80이미지 SHA 재검증; 라벨76프레임/7박스는 검수 대기. 상세 validation/omx-policy-owner-session-2026-10-04.md.
+- gate 변화: SOURCE/HOST session 검사 확보. 실제 issuer/capture/scheduler/ROS·독립SIM·rollback·Pinky·새 객체 학습·DEVICE/FIELD와 전체 목표는 미완료. SSH handle은 인증 실패로 종료, 원격 실행 증거 없음.

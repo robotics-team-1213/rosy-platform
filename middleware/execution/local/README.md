@@ -1,8 +1,8 @@
 # Local execution evidence and policy installation checks
 
-`rosy-execution-local` 0.1.1 depends on the ROS-free skill0.1.0 and learning0.1.6
-contracts wheels. It imports no learning registry, inference framework, ROS node,
-device driver, or network client.
+`rosy-execution-local` 0.1.2 depends on the ROS-free skill0.1.0 and learning0.1.6
+contracts wheels. The policy installation loader imports no learning registry,
+inference framework, ROS node, device driver, or network client.
 
 `policy_install.InstallBinding` captures trusted installation inputs: pinned policy
 revision, device/camera profile, camera metadata, normalization hash, owner/controller/
@@ -20,6 +20,26 @@ execution or recovery authority. It does not make the mutable filesystem immutab
 a later inference loader must preserve/revalidate the exact model bytes it consumes.
 An authorized envelope Skill and the existing owner/StopFence must enforce dispatch,
 stale/HOLD/reset/stop/rollback. There is no runtime process wiring in this change.
+
+The optional `omx_policy` module uses the installed OMX adapter's ROS-free
+`ArmCommandOwner`/`LocalStopController` plus the foundation schema dependencies
+(including Pydantic). The adapter is provided by the native product payload; these
+imports are lazy with respect to the package and are not additional pip wheels.
+Importing the installation loader alone still needs only the contracts wheels.
+
+`OwnerPolicySession` defaults disabled and accepts only a bound SIM identity. It
+checks the pinned controller/config, local stop epoch/generation, scoped short lease,
+joint sequence/time, camera identity/calibration/shape/frame hashes, action causality,
+period and stale budgets. It rechecks time after external providers and immediately
+before dispatch through the existing owner. Faults latch HOLD and request cancellation
+of its own active command. No automatic recovery/rearm or final publisher is added.
+
+Composition must provide authenticated local authority and camera capture providers
+and actually schedule `poll()`. DTO metadata/hash checks do not authenticate capture
+or prove inference consumed the pixels. This module supplies neither providers nor
+an issuer/scheduler/promotion wire API. Host positive tests use synthetic installed
+artifacts/authority/capture and fake action transport; cancellation is not independent
+stopped proof. Actual research policies remain unqualified and unactivated.
 
 Host tests:
 

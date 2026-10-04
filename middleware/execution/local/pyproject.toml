@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "rosy-execution-local"
-version = "0.1.1"
+version = "0.1.2"
 description = "ROS-free local execution evidence contracts for device owners"
 requires-python = ">=3.12"
 dependencies = ["rosy-contracts-skill==0.1.0", "rosy-contracts-learning==0.1.6"]
