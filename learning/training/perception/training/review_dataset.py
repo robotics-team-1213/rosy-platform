@@ -286,6 +286,137 @@ def _capture_proofs(paths):
     return proofs, observed
 
 
+def validate_eval_companions(eval_folders, companion_files):
+    """Capture sealed evaluation lineage; never grant pixel proof or admission.
+
+    The internal bundle contains manifest.json, COMPLETE and every resource
+    named by its exact inventory. External snapshot paths are not this contract.
+    """
+    from store import file_hashes
+    from dataset.build import read_eval_set
+    def require(condition, message):
+        if not condition:
+            raise ValueError('eval companion: ' + message)
+    def parse(raw):
+        def pairs(rows):
+            result = {}
+            for key, value in rows:
+                require(key not in result, 'duplicate JSON field')
+                result[key] = value
+            return result
+        return json.loads(raw, object_pairs_hook=pairs,
+                          parse_constant=lambda _: require(False, 'finite JSON required'))
+    def relative(name):
+        require(isinstance(name, str) and name and '\\' not in name and ':' not in name
+                and all(p not in ('', '.', '..') for p in name.split('/'))
+                and not PurePosixPath(name).is_absolute(), 'relative artifact path required')
+        return name
+    def sha(raw):
+        return hashlib.sha256(raw).hexdigest()
+    def text(value):
+        return isinstance(value, str) and bool(value.strip())
+    folders = tuple(Path(p).absolute() for p in eval_folders)
+    roots = set(folders)
+    require(len(roots) == len(folders), 'duplicate evaluation folder')
+    require(bool(roots), 'evaluation inventory empty')
+    expected = {}
+    for root in roots:
+        ref, _, raw = read_eval_set(root, with_manifest=True)
+        require((ref['name'], ref['content_sha']) not in expected, 'duplicate evaluation ref')
+        expected[(ref['name'], ref['content_sha'])] = (root, raw)
+    observed, captured, frames, blockers, seen = {}, {}, [], set(), set()
+    for value in companion_files:
+        root = Path(value).absolute()
+        raw = _stable_bytes(root / 'manifest.json'); seal = _stable_bytes(root / 'COMPLETE')
+        require(seal.decode('ascii').strip() == sha(raw), 'seal differs')
+        doc = parse(raw)
+        require(isinstance(doc, dict) and set(doc) == {'schema', 'eval_ref', 'eval_manifest_sha256',
+                'eval_files', 'resources', 'sources', 'frames'}
+                and doc['schema'] == 'rosy.pinky-fixed-eval-companion/1', 'schema fields required')
+        ref = doc['eval_ref']
+        require(isinstance(ref, dict) and set(ref) == {'name', 'content_sha'}
+                and text(ref['name']) and text(ref['content_sha']), 'exact eval ref required')
+        key = (ref['name'], ref['content_sha'])
+        require(key in expected and key not in seen, 'unknown or duplicate eval version')
+        seen.add(key); eval_root, eval_raw = expected[key]
+        require(sha(eval_raw) == doc['eval_manifest_sha256'], 'eval manifest differs')
+        require(doc['eval_files'] == file_hashes(eval_root), 'full eval inventory differs')
+        eval_bytes = {relative(name): _stable_bytes(eval_root / name) for name in doc['eval_files']}
+        require(all(sha(data) == doc['eval_files'][name] for name, data in eval_bytes.items()), 'eval changed during capture')
+        resources = doc['resources']; require(isinstance(resources, dict), 'resource inventory required')
+        payloads = {}
+        for name, digest in resources.items():
+            relative(name); require(name not in ('manifest.json', 'COMPLETE'), 'reserved resource')
+            data = _stable_bytes(root / name)
+            require(isinstance(digest, str) and sha(data) == digest, 'resource digest differs')
+            payloads[name] = data
+        require(set(file_hashes(root)) == {'manifest.json', 'COMPLETE', *resources}, 'bundle path set differs')
+        def resource(name):
+            require(isinstance(name, str) and name in payloads, 'resource reference missing')
+            return payloads[name]
+        eval_doc = parse(eval_raw); sources = {}
+        require(isinstance(doc['sources'], list) and doc['sources'], 'original sources required')
+        for source in doc['sources']:
+            require(isinstance(source, dict) and set(source) == {'session', 'labels', 'meta', 'video', 'sidecar', 'pts', 'labels_digest'}
+                    and text(source['session']) and source['session'] not in sources, 'source fields required')
+            session = source['session']
+            labels = [parse(line) for line in resource(source['labels']).splitlines() if line.strip()]
+            require(labels and all(isinstance(r, dict) and type(r.get('index')) is int and r['index'] >= 0
+                    and type(r.get('t')) in (int, float) and math.isfinite(r['t']) and r.get('session') == session for r in labels), 'canonical label rows required')
+            require(len({r['index'] for r in labels}) == len(labels), 'duplicate label index')
+            canonical = ''.join(json.dumps(r, sort_keys=True, allow_nan=False) + '\n' for r in sorted(labels, key=lambda r: r['index'])).encode()
+            matches = [r for r in eval_doc.get('labels', []) if r.get('session') == session]
+            require(len(matches) == 1 and sha(canonical) == source['labels_digest'] == matches[0].get('labels_digest'), 'full canonical label digest differs')
+            meta = parse(resource(source['meta']))
+            require(isinstance(meta, dict) and isinstance(meta.get('source'), dict)
+                and meta.get('session') == session and meta['source'].get('sha256') == {
+                'video': sha(resource(source['video'])), 'sidecar': sha(resource(source['sidecar']))}, 'original meta source hashes differ')
+            side = [parse(line) for line in resource(source['sidecar']).splitlines() if line.strip()]
+            require(side and all(isinstance(r, dict) and type(r.get('index')) is int and r['index'] == i
+                    and type(r.get('t')) in (int, float) and math.isfinite(r['t']) for i, r in enumerate(side)), 'explicit sequential sidecar index required')
+            pts = parse(resource(source['pts']))
+            require(isinstance(pts, list) and len(pts) == len(side) and all(isinstance(r, dict)
+                    and type(r.get('video_frame')) is int and r['video_frame'] == i
+                    and type(r.get('pts')) is int and text(r.get('time_base')) for i, r in enumerate(pts)), 'exact ordinal PTS inventory required')
+            sources[session] = (source, {r['index']: r for r in labels}, side)
+        expected_rows = {(r['session'], r['image']): r for r in eval_doc['frames']}
+        require(len(expected_rows) == len(eval_doc['frames']) and expected_rows, 'unique eval frame identity required')
+        row_keys = set(); require(isinstance(doc['frames'], list), 'frame bindings required')
+        for row in doc['frames']:
+            require(isinstance(row, dict) and set(row) == {'session', 'image', 'sample_index', 'video_frame', 'capture_group',
+                'group_basis', 'decoded_video_pixels_verified', 'extraction'}, 'frame fields required')
+            identity = (row['session'], row['image'])
+            require(identity in expected_rows and identity not in row_keys and row['session'] in sources, 'exact unique eval frame required')
+            row_keys.add(identity); source, labels, side = sources[row['session']]
+            require(type(row['sample_index']) is int and row['sample_index'] in labels and type(row['video_frame']) is int
+                    and 0 <= row['video_frame'] < len(side), 'exact selected index and original ordinal required')
+            label = labels[row['sample_index']]
+            matches = [i for i, sample in enumerate(side) if sample['t'] == label['t']]
+            require(matches == [row['video_frame']], 'unique exact timestamp ordinal required')
+            require(row['decoded_video_pixels_verified'] is False, 'lineage cannot assert decoded pixels')
+            require((row['capture_group'] is None and row['group_basis'] is None) or
+                    (text(row['capture_group']) and row['group_basis'] == 'operator_collection_assertion'), 'explicit group assertion required')
+            if row['capture_group'] is None: blockers.add('eval_group_assertion_unknown')
+            blockers.add('eval_decoded_pixels_unverified')
+            extraction = row['extraction']; require(isinstance(extraction, dict) and set(extraction) == {'image', 'mask', 'conf'}, 'all extraction bytes required')
+            for kind in extraction:
+                name = expected_rows[identity].get(kind)
+                require(name in eval_bytes and resource(extraction[kind]) == eval_bytes[name], 'original extraction bytes differ')
+            frames.append(dict(row, source_video_sha256=sha(resource(source['video'])), eval_ref=ref))
+        require(row_keys == set(expected_rows), 'full eval row coverage required')
+        require(set(sources) == {key[0] for key in expected_rows}, 'source session coverage differs')
+        bindings = {root / 'manifest.json': raw, root / 'COMPLETE': seal,
+                    **{root / name: data for name, data in payloads.items()},
+                    **{eval_root / name: data for name, data in eval_bytes.items()}}
+        require(all(_stable_bytes(path) == data for path, data in bindings.items()), 'captured artifacts changed')
+        require(file_hashes(eval_root) == doc['eval_files'] and set(file_hashes(root)) == {'manifest.json', 'COMPLETE', *resources}, 'inventory changed')
+        observed.update(bindings)
+        captured[sha(raw)] = {'manifest.json': raw, 'COMPLETE': seal, **payloads}
+    require(seen == set(expected), 'all active eval companions required')
+    return dict(training_admission=False, training_dataset_qualified=False, frames=frames,
+                blockers=sorted(blockers), observed=observed, captured_files=captured)
+
+
 def _verify_video_requests(requests, scratch):
     """One sequential decode per video; retain only the current decoded frame."""
     import cv2
@@ -341,7 +472,8 @@ def _active_eval(store, folders, gate_eval_refs):
 
 def build_dataset(export_root, *, fetch_current, workspace_id, eval_folders,
                   source_proof_files, store, name, staging_parent, gate_eval_refs=(),
-                  authority_max_age_s=90, previous_authority=None, now=time.time):
+                  authority_max_age_s=90, previous_authority=None, now=time.time,
+                  eval_companion_files=()):
     """Publish verified bytes only; always return training_admission=False.
 
     Publication is immutable content storage, never authorization to train.
@@ -365,9 +497,21 @@ def build_dataset(export_root, *, fetch_current, workspace_id, eval_folders,
         folders = tuple(eval_folders)
         inventory = _active_eval(store, folders, gate_eval_refs)
         refs, sessions, groups, videos, eval_images, complete = _eval_inventory(folders)
+        eval_inventory = (list(refs), set(sessions), set(groups), set(videos), set(eval_images), complete)
+        companions = (validate_eval_companions(folders, eval_companion_files)
+                      if eval_companion_files else None)
         if not complete:
             raise ValueError('eval source group/video/frame inventory incomplete')
         proofs, observed = _capture_proofs(source_proof_files)
+        if companions is not None:
+            observed.update(companions['observed'])
+            # Additional lineage can exclude candidates, never replace the
+            # manifest's group fields or original PNG pixel-proof requirement.
+            for row in companions['frames']:
+                sessions.add(row['session'])
+                videos.add((row['source_video_sha256'], row['video_frame']))
+                if row['capture_group'] is not None:
+                    groups.add(row['capture_group'])
         eval_captured = {}
         for folder in folders:
             root = Path(folder).absolute()
@@ -474,6 +618,11 @@ def build_dataset(export_root, *, fetch_current, workspace_id, eval_folders,
                                         image_sha256=frame['image_sha256'], mask_sha256=frame['mask_sha256'],
                                         classes_sha256=current['pixel_classes_sha256'], classes_signature=current['classes_signature']))
             evidence = dataset / 'evidence'; evidence.mkdir(exist_ok=True)
+            if companions is not None:
+                for digest, payloads in companions['captured_files'].items():
+                    for relative, raw in payloads.items():
+                        path = evidence / 'eval-companions' / digest / relative
+                        path.parent.mkdir(parents=True, exist_ok=True); path.write_bytes(raw)
             for proof in proofs.values():
                 path = evidence / 'source-proofs' / (proof['sha256'] + '.json')
                 path.parent.mkdir(exist_ok=True); path.write_bytes(proof['bytes'])
@@ -490,7 +639,7 @@ def build_dataset(export_root, *, fetch_current, workspace_id, eval_folders,
             latest, _ = _delivery(fetch_current, workspace_id, revision, authority_max_age_s, now)
             if latest != current:
                 raise ValueError('current authority changed before publication')
-            if _active_eval(store, folders, gate_eval_refs) != inventory or _eval_inventory(folders) != (refs, sessions, groups, videos, eval_images, complete):
+            if _active_eval(store, folders, gate_eval_refs) != inventory or _eval_inventory(folders) != eval_inventory:
                 raise ValueError('eval inventory changed before publication')
             if any(_stable_bytes(path) != raw for path, raw in observed.items()):
                 raise ValueError('source proof artifacts changed before publication')
@@ -502,7 +651,7 @@ def build_dataset(export_root, *, fetch_current, workspace_id, eval_folders,
             latest, _ = _delivery(fetch_current, workspace_id, revision, authority_max_age_s, now)
             if latest != current:
                 raise ValueError('current authority changed after immutable publication')
-            if _active_eval(store, folders, gate_eval_refs) != inventory or _eval_inventory(folders) != (refs, sessions, groups, videos, eval_images, complete):
+            if _active_eval(store, folders, gate_eval_refs) != inventory or _eval_inventory(folders) != eval_inventory:
                 raise ValueError('eval changed after immutable publication')
             if any(_stable_bytes(path) != raw for path, raw in observed.items()):
                 raise ValueError('source proofs changed after immutable publication')
