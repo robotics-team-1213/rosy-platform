@@ -330,8 +330,8 @@ def is_append_only(old: str, new: str) -> bool:
     # this exact provenance correction may replace it; all other entries
     # still require byte-for-byte preservation after normalization.
     provenance_reconciliations = {
-        "a5eecc71690d74036c9e393a2a47262843dfd369b71fe0d6ff92c40a24730c49": (
-            "76178d7f01aab15760f4ed9cda9787123aeb087bf4d796eed0d203c941f7648a"
+        "a5eecc71690d74036c9e393a2a47262843dfd369b71fe0d6ff92c40a24730c49": (  # original block SHA256
+            "76178d7f01aab15760f4ed9cda9787123aeb087bf4d796eed0d203c941f7648a"  # corrected block SHA256
         ),
     }
     new_hashes = {hashlib.sha256(block.encode("utf-8")).hexdigest() for block in new_blocks}
