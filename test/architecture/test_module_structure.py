@@ -107,7 +107,10 @@ SIZE_VERDICTS = {
         "duplicate its socket. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        33_657,
+        33_866,
+        "split: D-463 re-judged at 33866: the lane route adds a fresh-pose read "
+        "(trusted_map_pose) in the gather owner and a dispatch route that submits through "
+        "the existing goal path; no command owner changes. "
         "split: D-457 re-judged at 33657 after integration with main 754c20ee3; bounded "
         "display-only calibration, tracking routes/matcher and UI coordinates add 1188 to Fleet. "
         "The composition root stays below 600 after main's extraction; no command owner changes. "
@@ -341,7 +344,7 @@ SIZE_VERDICTS = {
         "accept: legacy comparison-graph publisher pinned by test_module_separation; no new work (X3)",
     ),
     "fleet/fleet/server/console.py": (
-        1154,
+        1159,
         "accept: one owner (FleetConsole gather/scatter), host-testable (X5). Re-judged 2026-09-30 at 1013: "
         "D-361 roster mutation and pinned-address holds change the gather/traffic tables in place, so they "
         "stay with their owner; the roster policy itself lives in roster.py; re-judged 2026-09-30 at 1021 "
@@ -358,7 +361,10 @@ SIZE_VERDICTS = {
         "kept beside _seen/_trusted, which it updates in the same gather — verdict unchanged. "
         "Re-judged 2026-10-04 at 1154: D-447 selects a fresh hub snapshot before REST in the "
         "same gather owner and records source provenance; test_server_gather_source.py checks "
-        "fresh/stale/disconnected fallback. The zero-growth allowance remains unchanged.",
+        "fresh/stale/disconnected fallback. Re-judged 2026-10-05 at 1159 for D-463: "
+        "trusted_map_pose is another fresh read in the same gather owner (map-frame "
+        "LOCALIZED check feeding the lane route); verdict unchanged. "
+        "The zero-growth allowance remains unchanged.",
     ),
     "perception/control/sensing/perception/lane.py": (
         765,

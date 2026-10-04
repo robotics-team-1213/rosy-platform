@@ -51,6 +51,12 @@ EXEMPT: dict[str, str] = {
         "validated fresh bound heartbeat reuse, monotonic age and stale/offline REST fallback; "
         "dispatch/traffic and CORE command ownership unchanged. See docs/validation/"
         "ui-release-integration-2026-10-04/README.md.",
+    "f8165b2a44d01ff628d5bd75ec923953bd09d000":  # git commit revision
+        "Independently reviewed by OpenCode GLM session on 2026-10-05: D-463 adds a "
+        "lane-route endpoint that expands stored edges and calls the existing goal path; "
+        "trusted_map_pose is a fresh read, non-LOCALIZED poses are refused without "
+        "calling CORE, and cancel/stop generation (cancel_all, DriveCancelFence, OMX "
+        "fanout) is untouched. Additive dispatch read/submit only.",
 }
 MANIFEST = "tools/harness/platform_parts.yaml"
 TRAILER = re.compile(r"^Safety-Review:[ \t]*\S", re.MULTILINE)
