@@ -5232,3 +5232,8 @@
 - 변경: 정상 IDLE/STANDBY 기준을 600/1800초로 늘리고 warning60/300, critical/deep30/120초와 min을 취한다. YAML override·API effective timers에 연결한다. 기존 이동·정보 hold·disabled와 배터리 정지/종료 권한을 유지한다.
 - 증거: 주입 시계·설정 parser RED3 failed, 전원/배터리/bridge GREEN180 passed. 구조 재판정은 docs/plans/2026-10-04-power-health-and-wake.md에 기록한다.
 - gate 변화: SOURCE/LOCAL. 기기 소비전력·물리 wake·배포 검증은 별도다.
+## 2026-10-04 · uncommitted · docs(adr): D-451 한 줄 교착의 양보는 Fleet 알고리즘이 고른다
+
+- 변경: `docs/adr/D-451-fleet-lane-meet-decider.md` 와 ADR Log 행. 만나는 양보는 `operations/fleet/fleet/meet` 만 고르고, 로봇은 그 주문 하나를 실행하거나 CORE 재검사로 거부한다. `room_hold`·`wait_both` 와 260919 `track_v2` 숫자를 고정했다. D-448·D-449·D-450 은 다른 브랜치 번호라 `adr_gaps` 에 남겼다.
+- 증거: `operations/fleet/test/test_meet_algorithms.py`. 호스트 판단 시험. CORE 전달과 실차는 없다.
+- gate 변화: 없음. SOURCE/LOCAL 판단 시험. DEVICE·ROS-SIM·FIELD 승격 아님.

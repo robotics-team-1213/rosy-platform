@@ -216,6 +216,7 @@ adrs:
 - D-444
 - D-445
 - D-447
+- D-451
 plans:
 - docs/plans/2026-10-04-d443-signal-supervision.md
 - docs/plans/2026-10-03-pi-ncnn-opencv-implementation.md

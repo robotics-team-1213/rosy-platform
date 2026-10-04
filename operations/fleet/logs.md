@@ -1601,3 +1601,8 @@
 - 변경: 반복 저배터리 표본의 wake를 단계 변화로 제한하여 기존 IDLE/STANDBY 타이머가 동작한다. Viewer GET /api/v1/power/health와 공유 typed 응답에 배터리·충전 확인 age, 정책 상한·wake 근거, shutdown 요청, 진단 요약을 제공한다. API Ref v1.92, envelope 1.0 유지.
 - 검증: injected clock 회귀와 auth/read-only API, 기존 배터리·정지·sentinel 경로 검증. 최종 근거는 docs/plans/2026-10-04-power-health-and-wake.md. OS halt·EEPROM·GPIO·기본 LiDAR 모터 정책 변경 없음.
 - gate 변화: SOURCE/LOCAL; 실제 소비전력·충전·RTC/외부 버튼 wake와 배포는 미검증.
+## 2026-10-04 · uncommitted · feat(fleet): D-451 한 줄 교착 알고리즘 room_hold
+
+- 변경: `operations/fleet/fleet/meet` 에 장면·주문·이름 등록과 `room_hold`·`wait_both`·`track_v2` 를 넣었다. 고리 같은 방향은 서지 않고, 찬 방의 문은 빼며, 핀이 비키는 쪽을 유지하고, 방 안은 `WAIT` 다. 콘솔·차선 추종·stuck 판단기에는 연결하지 않았다.
+- 증거: `operations/fleet/test/test_meet_algorithms.py`.
+- gate 변화: 없음. 호스트 판단 시험. 주문은 아직 바퀴로 나가지 않는다.
