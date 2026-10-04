@@ -682,6 +682,39 @@ def test_history_failure_after_the_move_is_reported():
     assert "pointer changed, history not written" in body and "exit 3" in body
 
 
+@pytest.mark.parametrize('action', ['push', 'rollback', 'promote', 'rollback-active', 'release-hold'])
+def test_history_is_synchronized_after_append_inside_the_pointer_lock(action):
+    script = _push_script() if action == 'push' else deliver.remote_script(action, None)
+    body = _body(script)
+    append = body.index(f'tee -a {ROOT_M}/history.jsonl')
+    flush = body.index(f'sync -f {ROOT_M}/history.jsonl')
+    assert append < flush
+    assert 'history durability unknown' in body[flush:] and 'exit 3' in body[flush:]
+
+
+def test_history_sync_failure_keeps_hold_and_reports_uncertain_pointer(tmp_path):
+    if sys.platform != 'linux':
+        pytest.skip('fault injection executes Ubuntu remote shell on Linux')
+    root = tmp_path / 'models'
+    root.mkdir()
+    (root / 'shadow').write_text('/model/current')
+    (root / 'shadow.previous').write_text('/model/previous')
+    bin_dir = tmp_path / 'bin'
+    bin_dir.mkdir()
+    sync = bin_dir / 'sync'
+    sync.write_text('#!/bin/sh\nif [ "$1" = "-f" ]; then exit 1; fi\nexec /usr/bin/sync "$@"\n')
+    sync.chmod(0o755)
+    import os
+    env = dict(os.environ, PATH=str(bin_dir) + os.pathsep + os.environ['PATH'])
+    script = deliver.remote_script('rollback', None, str(root), privileged=False)
+    result = subprocess.run(['bash', '-c', script], env=env, capture_output=True, text=True)
+    assert result.returncode == 3
+    assert 'history durability unknown' in result.stderr
+    assert (root / 'shadow').read_text() == '/model/previous'
+    assert (root / 'hold').exists()
+    assert json.loads((root / 'history.jsonl').read_text())['action'] == 'rollback'
+
+
 def test_status_and_observe_read_the_hold_file():
     assert f"{S} cat {HOLD}" in deliver.remote_script("status", None)
     assert f"{S} cat {HOLD}" in deliver.remote_script("observe", None)

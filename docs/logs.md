@@ -5136,3 +5136,9 @@
 
 - 모델 전달CLI에시도별private JSONL/초기·step fsync/model·intake SHA/단계·종료 기록을연결했다. 저장실패는network전차단, timeout·중단·변경실패는원격unknown 보존. remote pointer/HOLD script와기존exit코드그대로다. pytest합성이력은별도tmp_path에격리한다.
 - Windows관련184pass18skip/독립72pass18skip, Linux전달3suite89pass. 실제host강제종료는start/step만보존, 실제로봇status는exit78/원격unknown이었다. Linux6suite첫pack누락도별도보존했다. 근거: validation/model-delivery-attempt-journal-2026-10-04.md. 실제shadow/rollback·최신watch설치·정책/Fleet/DEVICE/FIELD 및전체목표미완료.
+
+## 2026-10-04 · uncommitted · fix(learning): synchronize pointer history before acknowledgement
+
+- 변경: history append 뒤 lock 안에서 sync-f를 수행하고 실패 시 exit3/durability unknown을 보고한다.
+- 증거: Linux scratch 실패 주입에서 변경된 pointer와 유지된 HOLD를 확인했다. Linux 관련 6 suites 208pass/0skip, 독립 호스트 검토77pass/19skip. 실제 관제 전용 키 publickey 인증·host pin·LAN 기본 별칭도 검증했다. 근거: validation/model-delivery-attempt-journal-2026-10-04.md.
+- gate 변화: model-watch는 아직 not-found이며 실제 로봇 전달/rollback·사람 라벨·정책/Fleet/DEVICE/FIELD 및 전체 목표는 미완료다.

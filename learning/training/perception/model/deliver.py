@@ -190,6 +190,8 @@ def remote_script(action: str, rev: str | None, root: str = REMOTE_ROOT, *,
             f"{q(json.dumps(a.get('operator')))} {q(json.dumps(a.get('host_of_operator')))} "
             f"{q(json.dumps(a.get('tool_commit')))} | tee -a {hist} >/dev/null"
             f" || {{ echo 'pointer changed, history not written' >&2; exit {HISTORY_EXIT}; }}",
+            f"sync -f {hist} || {{ echo 'pointer changed; history durability unknown' >&2;"
+            f" exit {HISTORY_EXIT}; }}",
         ]
 
     def write_hold(act: str, revision_expr: str) -> list[str]:
