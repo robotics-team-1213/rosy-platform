@@ -5677,3 +5677,9 @@ osy-d395-s1d\`.
 - 증거: r4/r5 startup READY와 seat reconciliation. r5 첫 박스 placement receipt 후 두 번째 이송의 item_lost_in_transit으로 LOCAL_ACTION_HOLD; run exit 1, cleanup exit 0, full_g2 false, fault matrix NOT_RUN. frontmatter/schema와 소스 정의를 확인한다. vocabulary 신규 용어 없음, solutions 발견성 gap 없음.
 - 검증: ce-compound frontmatter와 claims 검사 PASS. harness 59 passed, 2 failed. 두 실패는 깨끗한 main 6a37dd732 worktree에서도 같은 기존 deploy/logs.md 인코딩 손상으로 재현됐다. 저장소 known_failures 목록은 변경하지 않았고, 실측 baseline 비교의 신규 실패는 0이다. 증거는 X:/DevTemp/rosy-ce-g2-home-20261004-d94a/의 baseline-tests.txt, candidate-tests.txt, comparison.json에 있다.
 - gate 변화: 없음. 초기 홈 해결만 기록했으며 box16·fault matrix·직접 실행 경로의 설치 수용·장치/현장 승격을 주장하지 않는다.
+
+## 2026-10-04 · uncommitted · feat(learning): D-456 Pinky 영속 검수 웹앱
+
+- 변경: 전담 feat/pinky-review-web에서 서버 SQLite 영속 객체 검수, 박스 편집·자동 저장·명시 승인/제외·version 충돌 거부·기존 review_return 직접 export를 구현했다. D-280/D-359 공용 토큰·부품·테마와 자동 초안/수동 정답/학습 수용 구분을 D-456에 기록했다.
+- 검증: 관련 호스트 검사 231 passed, 4 failed; known_failures.py는 목록에 없는 4건을 NEW로 보고했다. clean baseline 02dc934a7의 등록 worktree에서도 네 실패가 재현돼 baseline comparison 신규 실패 0이다. 실패는 기존 cell-document-editor.js field, peer-picker.js disabled reason, deploy/logs.md 인코딩/heading과 harness lint다. known_failures.txt를 변경하지 않았다. 실 Chromium PC/모바일 viewport 13 시나리오·콘솔 오류 0, 별도 테스트 state로 검증했다. 운영 state의 서버 재시작·원본 user approval unchanged·3장/6박스 export COMPLETE/hash 검증을 확인했다.
+- gate 변화: 기존 모듈 gate를 승격하지 않는다. 원본 1·2·4 승인/3 제외, 신호 unknown을 유지한다. 픽셀 마스크 편집과 신규 자동 추론 job은 미구현이다. dataset session mapping·고정 eval 제외는 학습 owner 검증 전 HOLD다. 로봇 동작·모델 활성화·착지·push·배포는 수행하지 않았다.

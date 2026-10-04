@@ -572,3 +572,8 @@
 - gate 변화: 없음. 문서·시험 자산.
 - 결정: D-329 Decision 4·Transition 4(스키마를 실행 계획에서 정하고 시험을 그 뒤에 연다). 40rem 승인의 근거는 세 표면의 실사용(template.css·pilot styles.css·console-detail.css)과 TIER_VALUES의 기존 분류.
 - 교훈: "등재 금지 목록에만 값 두기"는 그 값을 쓰는 조건 형태를 허용 목록에 함께 두지 않으면 교착한다 — 둘은 한 커밋이어야 한다.
+
+## 2026-10-04 · uncommitted · feat(web): Pinky 검수 표면 등록
+
+- 변경: D-456 로컬 학습 도구 pinky-review를 surfaces.yaml에 등록했다. 기본 포트는 game-board와 겹치지 않는 8767, dark/light 공용 토큰·shared_controls·typography_focus 적용이다. 로봇 운용/stop writer를 소유하지 않는다.
+- 검증: 관련 계약 검증과 실 Chromium PC/모바일 viewport는 웹앱 owner 증거에서 확인한다. 기존 field/disabled reason 두 실패는 clean baseline에도 재현됐다. UI/source 등록이며 module gate 승격은 없다.
