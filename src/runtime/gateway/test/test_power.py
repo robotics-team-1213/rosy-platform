@@ -617,3 +617,11 @@ class TestPowerApi:
         api, _ = client
         body = api.get("/api/v1/robot/state", headers=VIEWER).json()
         assert body["power"]["mode"] == "ACTIVE"
+
+
+def test_power_config_reads_low_battery_dwell_overrides():
+    cfg = _power_config({'warning_idle_after_s': 45, 'warning_standby_after_s': 240,
+                         'critical_idle_after_s': 20, 'critical_standby_after_s': 90})
+    assert (cfg.idle_after_s, cfg.standby_after_s) == (600, 1800)
+    assert (cfg.warning_idle_after_s, cfg.warning_standby_after_s) == (45, 240)
+    assert (cfg.critical_idle_after_s, cfg.critical_standby_after_s) == (20, 90)

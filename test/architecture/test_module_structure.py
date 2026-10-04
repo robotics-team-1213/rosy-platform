@@ -335,7 +335,7 @@ SIZE_VERDICTS = {
         "accept: sim-only read-only viewer server (HTTP handler + ROS subscriptions); the pure logic already lives in live_view_model.py and the page in lane_live_view.html, covered by test_lane_live_view*.py and test_live_view_model.py (X5)",
     ),
     "core_features": (
-        12_536,
+        12_551,
         "accept: the ROS-free CORE feature managers (command, safety, docking, line_follow, "
         "traffic_policy, navigation, swarm, ...) are already one subpackage per feature, each "
         "under the file budget; the package total is a sum of independent owners, not one "
@@ -361,7 +361,11 @@ SIZE_VERDICTS = {
         "uses the existing ModeMachine and its separate lock. No new deploy unit or file-budget "
         "exception; independent safety review recorded in docs/validation/learned-lane-modes-2026-10-04/README.md. "
         "Concurrent merge adds the main branch's 57 reviewed FleetAgent/discovery lines to this "
-        "12479 baseline, yielding 12536; the existing 150 allowance is unchanged.",
+        "12479 baseline, yielding 12536; the existing 150 allowance is unchanged. "
+        "Re-judged 2026-10-04 at 12551: the user-requested long testing dwell and bounded "
+        "low-battery limits add 15 production lines within the existing power owner; "
+        "docs/plans/2026-10-04-power-health-and-wake.md records the policy and safety review. "
+        "The split verdict, file budgets and 150 allowance are unchanged.",
     ),
     "control": (
         44_469,

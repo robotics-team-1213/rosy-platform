@@ -51,3 +51,36 @@ def test_power_health_explains_moving_robot_sleep_interlock():
     assert health['sleep_blockers'] == ['robot_mode_not_idle']
     assert health['deepest_available_mode'] == 'ACTIVE'
     assert health['os_halt_remote_wake'] == 'not_verified'
+
+
+def test_long_testing_dwell_shortens_only_for_low_battery_and_keeps_motion_interlock():
+    now = [0.0]
+    power = PowerManager(PowerConfig(), clock=lambda: now[0])
+    now[0] = 300
+    power.tick()
+    assert power.mode == PowerMode.ACTIVE
+    now[0] = 600
+    power.tick()
+    assert power.mode == PowerMode.IDLE
+    now[0] = 1800
+    power.tick()
+    assert power.mode == PowerMode.STANDBY
+    power.on_battery_alert('critical')
+    health = power.health()
+    assert health['effective_idle_after_s'] == 30
+    assert health['effective_standby_after_s'] == 120
+    now[0] += 120
+    power.tick()
+    assert power.mode == PowerMode.STANDBY
+    power.on_robot_mode(RobotMode.MANUAL)
+    assert power.mode == PowerMode.ACTIVE
+
+
+def test_warning_dwell_and_explicit_standby_use_effective_limits():
+    power = PowerManager(PowerConfig(warning_idle_after_s=45, warning_standby_after_s=240))
+    power.on_battery_alert('warning')
+    assert power.health()['effective_idle_after_s'] == 45
+    power.request_mode(PowerMode.STANDBY)
+    assert power.mode == PowerMode.STANDBY
+    power.on_battery_alert('ok')
+    assert power.health()['effective_standby_after_s'] == 1800

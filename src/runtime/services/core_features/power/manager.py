@@ -58,8 +58,12 @@ class LidarPolicy:
 @dataclass
 class PowerConfig:
     enabled: bool = True
-    idle_after_s: float = 60.0
-    standby_after_s: float = 300.0
+    idle_after_s: float = 600.0
+    standby_after_s: float = 1800.0
+    warning_idle_after_s: float = 60.0
+    warning_standby_after_s: float = 300.0
+    critical_idle_after_s: float = 30.0
+    critical_standby_after_s: float = 120.0
     info_hold_s: float = 15.0
     active_rate_hz: float = 20.0
     idle_rate_hz: float = 5.0
@@ -299,6 +303,15 @@ class PowerManager:
         if state != previous and state in ("warning", "critical", "deep"):
             self.wake(WAKE_BATTERY, now=now)
 
+    def _dwell_limits(self) -> tuple[float, float]:
+        cfg = self._cfg
+        normal = (cfg.idle_after_s, cfg.standby_after_s)
+        if self._battery_alert == "warning":
+            return (min(normal[0], cfg.warning_idle_after_s), min(normal[1], cfg.warning_standby_after_s))
+        if self._battery_alert in ("critical", "deep"):
+            return (min(normal[0], cfg.critical_idle_after_s), min(normal[1], cfg.critical_standby_after_s))
+        return normal
+
     def health(self) -> dict:
         with self._lock:
             blockers = []
@@ -311,6 +324,8 @@ class PowerManager:
             return {
                 "sleep_blockers": blockers,
                 "deepest_available_mode": "ACTIVE" if blockers else "STANDBY", "deepest_mode_basis": "policy_target",
+                "effective_idle_after_s": self._dwell_limits()[0],
+                "effective_standby_after_s": self._dwell_limits()[1],
                 "battery_alert": self._battery_alert,
                 "idle_after_s": self._cfg.idle_after_s, "standby_after_s": self._cfg.standby_after_s,
                 "wake_sources": ["api", "proximity", "contact", "activity", "battery_level_change"],
@@ -338,8 +353,7 @@ class PowerManager:
             return
         with self._lock:
             # 자연 만료 시각으로 되돌려 즉시 강등이 가능하게 한다.
-            dwell = (self._cfg.standby_after_s if mode == PowerMode.STANDBY
-                     else self._cfg.idle_after_s)
+            dwell = self._dwell_limits()[1 if mode == PowerMode.STANDBY else 0]
             self._last_activity = current - dwell
             self._info_until = 0.0
         self._evaluate(current, reason=f"request:{source}")
@@ -362,9 +376,10 @@ class PowerManager:
                 target = PowerMode.ACTIVE
             else:
                 dwell = now - self._last_activity
-                if dwell >= self._cfg.standby_after_s:
+                idle_after, standby_after = self._dwell_limits()
+                if dwell >= standby_after:
                     target = PowerMode.STANDBY
-                elif dwell >= self._cfg.idle_after_s:
+                elif dwell >= idle_after:
                     target = PowerMode.IDLE
                 else:
                     target = PowerMode.ACTIVE

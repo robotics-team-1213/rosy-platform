@@ -1,6 +1,6 @@
 # 전원·배터리 health와 절전·복귀 개선
 
-현재 소프트웨어 절전은 ACTIVE/IDLE/STANDBY다. STANDBY에서도 CORE API와 안전 감시는 유지하며, OS halt와 구별한다. 유휴 기본 기준은 60초 IDLE, 300초 STANDBY이며 표본 주기는 20/5/2 Hz다. 로봇 비-IDLE와 정보 표시 hold는 절전을 막는다. LiDAR 모터 정지는 기존 벤치 승인 기본값을 유지하고 실제 모터 상태와 정책 의도를 구별한다.
+현재 소프트웨어 절전은 ACTIVE/IDLE/STANDBY다. STANDBY에서도 CORE API와 안전 감시는 유지하며, OS halt와 구별한다. 유휴 기본 기준은 600초 IDLE, 1800초 STANDBY이며 표본 주기는 20/5/2 Hz다. 로봇 비-IDLE와 정보 표시 hold는 절전을 막는다. LiDAR 모터 정지는 기존 벤치 승인 기본값을 유지하고 실제 모터 상태와 정책 의도를 구별한다.
 
 저배터리 표본마다 wake를 호출하면 계속 ACTIVE가 된다. 경보 단계가 바뀔 때만 알리고 깨우도록 수정한다. 경보 표시·정지·deep 방전 sentinel의 기존 안전 경로는 유지한다. 잔량 경보가 같으면 유휴 절전이 가능하며 실제 부하 감소는 기기에서 측정해야 한다. 알 수 없는 배터리로 종료를 새로 결정하지 않는다.
 
@@ -18,3 +18,11 @@ Viewer `GET /api/v1/power/health`는 조회만 한다. 현재 전원 상태, 절
 기준선 비교: clean base 767ab07ed에서도 dashboard 패키지 크기 verdict 누락 검사가 실패했다. 이 변경은 dashboard 또는 SIZE_VERDICTS를 수정하지 않는다. 소스 검사는 소비전력 절감량, 기기 적용 또는 완전 종료 후 깨우기를 입증하지 않는다.
 
 공통 fast gate는 455 passed/2 skipped이며 초기 로그 형식·새 테스트 위치 오류를 수정한 재검사 6 passed. 남은 dashboard 크기 오류는 clean baseline에서 재현했다(known_failures 목록에는 등록되지 않아 비교 도구는 NEW로 표시). 새 순수 전원 테스트는 소유 모듈 services/test에 두고, 예외 목록이나 크기 예산을 늘리지 않았다. 최종 harness lint 0 errors/26 기존 경고.
+
+사용자 후속 결정: 계속 시험하고 본체 전원을 켜둔 상황에 맞춰 정상 유휴 기준을 10분 IDLE/30분 STANDBY로 늘린다. warning은 60/300초, critical/deep은 30/120초로 단축하되 정상 설정보다 길어지지 않게 min을 취한다. 각 설정은 power YAML override가 가능하며 API effective_idle_after_s/effective_standby_after_s로 현재 적용 기준을 확인한다. 주행·정보 hold·disabled interlocks와 기존 배터리 정지/종료 정책은 유지한다. 정상으로 복귀하면 긴 기준을 다시 적용하며, 명시적 STANDBY 요청도 현재 유효 기준을 사용한다.
+
+구조 재판정: 기존 core_features 정책 소유자 안의 네 기준과 유효 dwell 함수에 생산 코드 15줄을 추가한다. 패키지 verdict baseline만 12536에서 12551로 조정하고 기존 150 allowance, 파일별 제한, split 판단은 유지한다. 새 배포 단위나 GPIO/halt 경로는 없다. 최종 정책 변화는 독립 안전 검토 및 주입 시계 검사를 따른다.
+
+후속 최종 검사: 전원/배터리/bridge·parser·API/계약·테스트 소유권·크기·로그 186 passed(7.46초). 저배터리 단축은 절전 가능한 로봇 IDLE에서만 적용된다. 실제 DEEP의 E-Stop으로 로봇이 비-IDLE이면 절전을 막는 기존 안전 interlock이 우선하며, 해제하지 않는다. deep sentinel 종료 조건은 기존 경로대로다.
+
+후속 독립 안전 검토 lane_api: SOURCE GO, 관련 검사183개와 별도 경계 검증6개 통과. 각 경보·기존 더 짧은 기준의 min, 반복 DEEP 알림, 주행/EMERGENCY/정보 hold/disabled 인터록과 명시적 STANDBY의 유효 기준을 확인했다. 물리 wake나 소비전력 감소를 승인한 것은 아니다.

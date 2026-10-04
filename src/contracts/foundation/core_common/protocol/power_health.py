@@ -29,6 +29,8 @@ class PowerPolicyHealth(BaseModel):
     battery_alert: str
     idle_after_s: float
     standby_after_s: float
+    effective_idle_after_s: float
+    effective_standby_after_s: float
     wake_sources: list[str]
     wake_sources_basis: Literal["policy_supported_not_hardware_verified"]
     api_wake_requires_running_os: bool
