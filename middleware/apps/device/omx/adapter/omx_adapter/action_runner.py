@@ -106,6 +106,7 @@ class ActionRunner:
                  phase_runner_factories: Mapping[str, Callable[
                      [ActionGrant, ActionPhaseRecorder], PhaseExecution
                  ]] | None = None,
+                 control_admission=None,
                  enabled: bool = False,
                  now: Callable[[], datetime] | None = None) -> None:
         self.store = store
@@ -117,6 +118,12 @@ class ActionRunner:
         self.current_fence = current_fence
         self.capability_current = capability_current
         self.submission_fence = submission_fence
+        self.control_admission = control_admission
+        if control_admission is not None and (
+                control_admission.store is not store
+                or control_admission.owner.config.workcell_id != workcell_id
+                or control_admission.owner.config.instance_id != instance_id):
+            raise ValueError("control admission must share the owner identity and Action store")
         # One factory per kind: the PICK_PLACE runner never executes CELL_TRANSFER.
         # ``phase_runner_factory`` is the existing PICK_PLACE factory.
         factories = dict(phase_runner_factories or {})
@@ -198,18 +205,23 @@ class ActionRunner:
             # Fail closed before any journal row: unknown kinds never reach the driver.
             raise PermissionError(f"action kind {grant.action_kind!r} has no admitted executor")
         self._validate(grant)
+        if grant.action_kind == "CELL_TRANSFER" and self.control_admission is None:
+            raise PermissionError("CELL_TRANSFER requires shared control admission")
         request = grant.model_dump(mode="json")
-        created = self.store.create_action(
-            workcell_id=grant.workcell_id, instance_id=grant.instance_id,
-            principal_id=principal_id, request_key=grant.action_id,
-            action_id=grant.action_id, action_kind=grant.action_kind,
-            configuration_revision=grant.config_revision,
-            # Cell Transfer is recipe/cell bound and deliberately camera blind.
-            # Empty is a truthful no-observation value; PICK_PLACE remains nonempty.
-            observation_id=(grant.observation_revision
-                            if isinstance(grant, FleetActionGrant) else ""),
-            owner_generation=grant.dispatch_generation, payload=request,
-        )
+        def create_action():
+            return self.store.create_action(
+                workcell_id=grant.workcell_id, instance_id=grant.instance_id,
+                principal_id=principal_id, request_key=grant.action_id,
+                action_id=grant.action_id, action_kind=grant.action_kind,
+                configuration_revision=grant.config_revision,
+                # Cell Transfer is recipe/cell bound and deliberately camera blind.
+                # Empty is a truthful no-observation value; PICK_PLACE remains nonempty.
+                observation_id=(grant.observation_revision
+                                if isinstance(grant, FleetActionGrant) else ""),
+                owner_generation=grant.dispatch_generation, payload=request,
+            )
+        created = (create_action() if self.control_admission is None else
+                   self.control_admission.run_action_admission(create_action))
         action = created["action"]
         if not created["created"] and action["state"] != "PREPARED":
             return self._receipt(action, created=False)

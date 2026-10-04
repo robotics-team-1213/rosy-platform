@@ -80,6 +80,11 @@ class PilotSimRuntime:
                  gripper_open: float | None = None, gripper_closed: float | None = None,
                  gripper_velocity: float | None = None, gripper_preload: float | None = None) -> None:
         self.arm = arm
+        self.control_admission = getattr(arm, "control_admission", None)
+        if self.control_admission is not None and self.control_admission.owner is not arm.owner:
+            raise ValueError("Pilot and Cell must share the canonical owner")
+        if "rule_based" in arm.owner.config.allowed_owners and self.control_admission is None:
+            raise RuntimeError("shared Cell owner requires control admission")
         self.instance_id = arm.owner.config.instance_id
         self.joint_names = arm.owner.config.joint_names
         self.gripper = gripper
@@ -250,7 +255,7 @@ class PilotSimRuntime:
 
         admitted = "" if jog.joint in self._jog_joints() else "joint_not_admitted"
         return self._dispatch(jog.request_id, jog.instance_id, jog.state_sequence, jog.duration_s,
-                              place, admitted)
+                              place, admitted, jog.seat_id)
 
     def submit_gripper(self, goal: OmxSimGripperGoal) -> dict:
         """One absolute gripper goal; the arm joints keep their readback (D-411 C)."""
@@ -268,7 +273,7 @@ class PilotSimRuntime:
         configured = "" if self._gripper_spec is not None else "gripper_not_configured"
         with self._lock:
             result = self._dispatch(goal.request_id, goal.instance_id, goal.state_sequence,
-                                    goal.duration_s, place, configured)
+                                    goal.duration_s, place, configured, goal.seat_id)
             if result["state"] != "REJECTED":
                 self._gripper_goal = (goal.request_id, goal.position)
                 self._gripper_stall = None
@@ -276,7 +281,7 @@ class PilotSimRuntime:
             return result
 
     def _dispatch(self, request_id: str, instance_id: str, state_sequence: int, duration_s: float,
-                  place: Callable[[dict, Mapping], str], not_admitted: str) -> dict:
+                  place: Callable[[dict, Mapping], str], not_admitted: str, seat_id: str) -> dict:
         """Shared checks (instance, admission, single active goal, ready, served readback) and dispatch."""
         with self._lock:
             state = self.arm.latest_joint_state
@@ -299,6 +304,11 @@ class PilotSimRuntime:
             reason = place(target, config.position_limits)
             if reason:
                 return {"command_id": request_id, "state": "REJECTED", "reason": reason}
+            if self.control_admission is not None:
+                try:
+                    self.control_admission.reserve_pilot(seat_id, request_id)
+                except PermissionError:
+                    return {"command_id": request_id, "state": "REJECTED", "reason": "control_seat_fenced"}
             return self._send(request_id, state, target, duration_s)
 
     def _send(self, request_id: str, state, target: dict, duration_s: float) -> dict:
@@ -320,6 +330,8 @@ class PilotSimRuntime:
                 self.capture.prepare(command)
             decision = self.arm.submit(command)
             if not decision.accepted:
+                if self.control_admission is not None and decision.reason != "action_submission_failed":
+                    self.control_admission.note_rejected(request_id)
                 self._goals.pop(request_id, None)
                 self._active = None
                 if self.capture is not None:
@@ -344,8 +356,14 @@ class PilotSimRuntime:
             self._active = None
             return dict(receipt)
 
-    def cancel_active(self) -> None:
+    def cancel_active(self, *, seat_id: str | None = None) -> None:
         with self._lock:
+            if (seat_id is not None and self.control_admission is not None
+                    and not self.control_admission.cleanup_matches(seat_id, self._active)):
+                return
+            self._hold_pending = False
+            self._gripper_goal = None
+            self._gripper_stall = None
             if self._active:
                 self.cancel(self._active)
             self._interrupt_capture("control_released")
@@ -368,6 +386,8 @@ class PilotSimRuntime:
             if event.sequence <= last:
                 return
             self._last_event_sequence[event.command_id] = event.sequence
+            if self.control_admission is not None:
+                self.control_admission.note_goal(event.command_id, event.kind, event.goal_id)
             if event.kind == "GOAL_ACCEPTED":
                 receipt.update(state="ROS_ACCEPTED", ros_goal_id=event.goal_id)
             elif event.kind == "RUNNING_FEEDBACK":
@@ -416,7 +436,13 @@ class PilotSimRuntime:
             target[self.gripper] = held
             duration = min(max(abs(held - state.positions[self.gripper]) / self.gripper_velocity,
                                GRIPPER_GOAL_MIN_DURATION_S), GRIPPER_GOAL_MAX_DURATION_S)
-            self._send(f"hold-{self._gripper_goal[0]}", state, target, duration)
+            command_id = f"hold-{self._gripper_goal[0]}"
+            if self.control_admission is not None:
+                try:
+                    self.control_admission.reserve_hold(command_id, source_command_id=self._gripper_goal[0])
+                except PermissionError:
+                    return
+            self._send(command_id, state, target, duration)
 
     def on_watchdog(self) -> None:
         self._sample_gripper()
