@@ -30,6 +30,7 @@ CANVAS_FILES = [
     FLEET / "map-fit-view.js",
     FLEET / "console.js",
     GAMES / "board.js",
+    SRC.parent / "learning/training/perception/dataset/review_app_web/app.js",
 ]
 HEX_LITERAL = re.compile(r"#[0-9a-fA-F]{6}\b|[\"'`]#[0-9a-fA-F]{3,8}[\"'`]")
 FONT_ASSIGN = re.compile(r"\.font\s*=\s*([^;]+);")
@@ -55,7 +56,9 @@ def test_canvas_fonts_use_the_token_family_at_12px_or_more(path):
     assert re.findall(r"\d+px", source) == [], "글꼴 크기는 canvasFont가 12px 아래를 막는다"
     assert "sans-serif" not in source and "monospace" not in source
     for rhs in FONT_ASSIGN.findall(source):
-        assert FONT_SOURCES.match(rhs.strip()), f"{path.name}: ctx.font = {rhs.strip()}"
+        imported_font = rhs.strip().startswith("canvasFont(") and re.search(
+            r"import\s*\{[^}]*\bcanvasFont\b[^}]*\}\s*from\s*['\"]/common/ui\.js['\"]", source)
+        assert FONT_SOURCES.match(rhs.strip()) or imported_font, f"{path.name}: ctx.font = {rhs.strip()}"
     for local in re.findall(r"const (font|labelFont) = ([^;]+);", source):
         assert "canvasFont" in local[1] or local[1].startswith("font("), local
 

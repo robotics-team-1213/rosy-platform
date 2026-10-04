@@ -8,7 +8,7 @@ const RELEARN_WARNING = "배경을 다시 학습합니다. 트랙 위의 로봇�
   + "남아 있으면 배경으로 굳어 추적되지 않습니다(약 10초). 계속할까요?";
 
 export function createTrackingView({ scope, el, view, call, auth, onChanged = () => {},
-  confirm = (text) => window.confirm(text) }) {
+  confirmedAction }) {
   const line = el("tracking-state");
   const relearn = el("tracking-relearn");
   const legend = el("legend-tracking");
@@ -90,30 +90,29 @@ export function createTrackingView({ scope, el, view, call, auth, onChanged = ()
   }
 
   scope.listen(relearn, "click", async () => {
-    const life = scope.capture();
-    life.check();
-    if (auth.locked || auth.role !== "operator" || !sources.length || relearning
-        || !confirm(RELEARN_WARNING)) return;
-    relearning = true;
-    try {
-      for (const sourceId of sources) {
-        await call("/api/fleet/tracking/relearn", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ source_id: sourceId }),
-          signals: [life.signal],
-        });
-        life.check();
-      }
-      line.dataset.state = "warn";
-      line.textContent = "배경을 다시 학습합니다 — 트랙을 비워 두세요(약 10초).";
-    } catch (error) {
-      if (error.name === "AbortError") return;
-      line.dataset.state = "warn";
-      line.textContent = `배경 다시 학습 실패: ${error.message || error}`;
-    } finally {
-      relearning = false;
-    }
+    await confirmedAction.run({
+      message: RELEARN_WARNING, opener: relearn,
+      eligible: () => !auth.locked && auth.role === "operator" && sources.length > 0 && !relearning,
+      request: async owner => {
+        const selectedSources = [...sources];
+        relearning = true;
+        try {
+          for (const sourceId of selectedSources) {
+            await call("/api/fleet/tracking/relearn", {
+              method: "POST", headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ source_id: sourceId }), signals: [owner.signal],
+            });
+            owner.check();
+          }
+          line.dataset.state = "warn";
+          line.textContent = "배경을 다시 학습합니다. 트랙을 비워 주세요(약 10초).";
+        } finally { relearning = false; }
+      },
+      onError: error => {
+        line.dataset.state = "warn";
+        line.textContent = "배경 다시 학습 실패: " + (error.message || error);
+      },
+    });
   });
 
   function reset() {

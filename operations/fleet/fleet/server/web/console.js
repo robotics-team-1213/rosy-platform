@@ -721,7 +721,7 @@ const visionView = createVisionView({ scope: pageScope, el, call, auth, authHead
 
 // --- 신호등 (ROSY-SIGNAL-001) --------------------------------------------------
 
-const trackingView = createTrackingView({ scope: pageScope, el, view, call, auth, onChanged: () => mapView.draw() });
+const trackingView = createTrackingView({ scope: pageScope, el, view, call, auth, confirmedAction, onChanged: () => mapView.draw() });
 
 function tickClock() {
   el("clock").textContent = new Date().toTimeString().slice(0, 8);

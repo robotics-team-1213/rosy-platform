@@ -30,6 +30,7 @@ NON_PRODUCT = {
 #: D-277 — 장미색이 살아도 좋은 파일. 워드마크(ui-brand·레거시 .brand b)와
 #: 현재 위치 표식(역할 메뉴·표면 링크) 가족, 그리고 팔레트 원본.
 ROSE_FILES = {
+    "learning/training/perception/dataset/review_app_web/app.css",  # ROSY wordmark only; checked below
     "shared/web/tokens.css",                 # 팔레트 원본(정의)
     "shared/web/components.css",             # ui-brand 워드마크
     "middleware/ui/robot/styles.css",                  # 레거시 셸 워드마크(.brand b)
@@ -48,6 +49,14 @@ _MOTION = re.compile(r"(?:^|[;{\s])(?:transition|animation)\s*:|@keyframes\b")
 _ROSE = re.compile(r"--brand-rose(?:-wash)?\b")
 _GROUND = re.compile(r"var\((--ground-soft|--ground-card)\)")
 _FULL_VIEWPORT_VH = re.compile(r"(?<![\da-z])100vh\b")
+
+
+def test_review_app_rose_is_confined_to_its_wordmark():
+    path = registry.REPO / "learning/training/perception/dataset/review_app_web/app.css"
+    css = path.read_text(encoding="utf-8")
+    wordmark = re.search(r"(?m)^\.wordmark\s*\{([^}]*)\}", css)
+    assert wordmark and _ROSE.search(wordmark[1])
+    assert len(_ROSE.findall(css)) == len(_ROSE.findall(wordmark[1])) == 1
 
 
 def _web_rows() -> list[dict]:

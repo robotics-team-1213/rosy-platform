@@ -75,3 +75,43 @@ def test_position_expires_even_when_the_next_poll_never_returns(console_url):  #
         assert page.locator("#tracking-position-rows tr").count() == 0
         assert not errors
         browser.close()
+
+
+def test_background_relearn_requires_the_owned_confirmation(console_url):  # noqa: F811
+    from playwright.sync_api import sync_playwright
+
+    posts = []
+    body = {"sources": [{"source_id": "north", "status": "OK", "fps": 3}],
+            "robots": [], "unknown": []}
+
+    def serve(route):
+        path = urlparse(route.request.url).path
+        if path == "/api/fleet/tracking":
+            route.fulfill(status=200, json=body)
+        elif path == "/api/fleet/tracking/relearn":
+            posts.append(route.request.post_data_json)
+            route.fulfill(status=200, json={})
+        else:
+            _serve_api(route)
+
+    with sync_playwright() as playwright:
+        browser, page, errors = open_page(playwright, 1440, 900)
+        page.add_init_script("sessionStorage.setItem('rosy-console-token', 'tracking-browser')")
+        page.route("**/api/**", serve)
+        page.goto(console_url, wait_until="domcontentloaded")
+        button = page.locator("#tracking-relearn")
+        button.wait_for(state="visible")
+        button.click()
+        dialog = page.locator("dialog.ui-confirm")
+        dialog.wait_for()
+        assert not posts
+        dialog.locator('ui-button[kind=quiet]').click()
+        dialog.wait_for(state="detached")
+        assert not posts
+        button.click()
+        dialog.wait_for()
+        dialog.locator('ui-button[kind=irreversible]').click()
+        page.wait_for_function("document.querySelector('#tracking-state').dataset.state === 'warn'")
+        assert posts == [{"source_id": "north"}]
+        assert not errors
+        browser.close()

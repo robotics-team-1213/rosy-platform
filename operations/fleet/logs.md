@@ -1726,3 +1726,10 @@
 - gate 변화: 없음. SOURCE/LOCAL 변경이며 DEVICE/FIELD 완료 주장 없음. 기존 등록·credentials 보존.
 
 - D-457 추가 검증: 좌표 표(X/Y m, 관측 기준)와 표시 수명 삭제. 관련 기능 602 passed, Node 34 passed, Chromium 14 passed. 공통 검사 기존 실패는 깨끗한 기준 main에서 재현했으며 docs/validation/2026-10-04-overhead-marker-fallback-local.md에 기록했다.
+
+
+## 2026-10-05 · uncommitted · fix(site): complete candidate contract and owned relearn guards
+
+- 변경: API Ref1.99 검사 핀과 페어링 overlay의 --track을 정합했다. 배경 학습을 기존 공용 확인 소유자에 연결하고 운용자 권한 안내를 표시한다. UI/UX 리팩터링 없음.
+- 증거: affected 첫 묶음 7751 PASS/8 FAIL/15 ERROR와 perception 2626 PASS/109 SKIP. 발견 항목을 정리하여 관련 130 PASS 및 공유 palette 26 PASS. 부족한 motion 계약 경로를 호스트 환경에 추가한 직접 재검사도 포함한다. Chromium 확인·취소·수명 검증 4 PASS; 나머지 이전 scope 12 PASS. 최신 깨끗한 main에서 기존 확인 테스트의 숨은 작업 탭 클릭 실패를 재현한 뒤 실제 작업 탭 선택을 먼저 하도록 검사만 수정했다.
+- gate 변화: SOURCE/LOCAL 증거만 갱신. 현장 두 등록 로봇 online 및 S21 sequence 증가를 재확인했지만 서명 배포·배경 학습·좌표 오차는 미완료이며 관리자 인증이 없는 기존 정적 설정은 보존한다.

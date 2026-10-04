@@ -579,3 +579,10 @@
 - 검증: 관련 계약 검증과 실 Chromium PC/모바일 viewport는 웹앱 owner 증거에서 확인한다. 기존 field/disabled reason 두 실패는 clean baseline에도 재현됐다. UI/source 등록이며 module gate 승격은 없다.
 
 - gate 변화: 없음. 로컬 검수 표면 등록이며 장치·현장 수용을 대신하지 않는다.
+
+
+## 2026-10-05 · uncommitted · fix(contracts): register existing review canvas and wordmark
+
+- 변경: 최신 main의 검수 캔버스를 기존 팔레트 검사에 포함하고 공용 모듈에서 직접 가져온 canvasFont 바인딩을 검증한다. 기존 ROSY 워드마크 CSS를 목록에 포함하되 rose 참조가 그 규칙 한 곳뿐임을 별도 검증한다. 화면·색·배치 변경 없음.
+- 증거: 깨끗한 main 50f2c7374에서 동일한 목록 누락 2건 재현(21 passed, 2 failed). 검증 범위를 보강했으며 재검사 진행 중이다.
+- gate 변화: 없음. SOURCE 계약 검증 보강이며 DEVICE/FIELD 수용 주장이 아니다.
