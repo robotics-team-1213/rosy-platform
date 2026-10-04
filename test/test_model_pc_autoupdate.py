@@ -274,17 +274,22 @@ def test_a_local_script_that_differs_from_the_signed_release_is_refused(tmp_path
 
 
 @pytest.mark.skipif(os.name == "nt", reason="Linux symlink/flock updater")
-def test_dirty_checkout_holds_the_switch_and_keeps_the_edit(tmp_path, keys):
+@pytest.mark.parametrize("code_path", [
+    "learning/training/perception/rosy_ml.py", "tools/perception/rosy_ml.py",
+    "middleware/perception/control/model.py", "src/runtime/sensing/control/model.py",
+    "contracts/foundation/core_common/model.py", "src/contracts/foundation/core_common/model.py",
+])
+def test_dirty_checkout_holds_the_switch_and_keeps_the_edit(tmp_path, keys, code_path):
     m = module()
     repo = tmp_path / "checkout"
     repo.mkdir()
     def git(*args):
         return subprocess.check_call(["git", "-C", str(repo), *args])
     git("init")
-    edited = repo / "learning/training/perception/rosy_ml.py"
+    edited = repo / code_path
     edited.parent.mkdir(parents=True)
     edited.write_text("print('committed')\n", encoding="utf-8")
-    git("add", "learning/training/perception/rosy_ml.py")
+    git("add", "--", code_path)
     git("-c", "user.name=Test", "-c", "user.email=test@example.invalid", "commit", "-m", "fixture")
     edited.write_text("print('local edit')\n", encoding="utf-8")
     root = tmp_path / "state"
@@ -516,3 +521,66 @@ def test_incomplete_distribution_without_readable_provenance_fails_closed(tmp_pa
         monkeypatch.setattr(m, "digest", unreadable)
     with pytest.raises(ValueError, match="environment package metadata"):
         m.distribution_fingerprint(distribution)
+
+
+@pytest.mark.parametrize("code_path", [
+    "learning/training/perception/rosy_ml.py", "tools/perception/rosy_ml.py",
+    "middleware/perception/control/model.py", "src/runtime/sensing/control/model.py",
+    "contracts/foundation/core_common/model.py", "src/contracts/foundation/core_common/model.py",
+])
+@pytest.mark.parametrize("edit_kind", ["modified", "staged", "untracked", "deleted"])
+def test_checkout_guard_protects_the_whole_current_and_legacy_code_closure(tmp_path, code_path, edit_kind):
+    m = module()
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    def git(*args):
+        return subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True)
+    git("init")
+    source = repo / code_path
+    source.parent.mkdir(parents=True)
+    source.write_bytes(b"committed\n")
+    git("add", "--", code_path)
+    git("-c", "user.name=Test", "-c", "user.email=test@example.invalid", "commit", "-m", "fixture")
+    assert m.perception_edits([repo]) is None
+    if edit_kind == "deleted":
+        source.unlink()
+    elif edit_kind == "untracked":
+        source = source.with_name("local.py")
+        source.write_bytes(b"local\n")
+    else:
+        source.write_bytes(b"local\n")
+        if edit_kind == "staged": git("add", "--", code_path)
+    before = git("status", "--porcelain").stdout
+    assert m.perception_edits([repo]) == "uncommitted perception edits"
+    assert git("status", "--porcelain").stdout == before
+    if edit_kind != "deleted": assert source.read_bytes() == b"local\n"
+
+
+@pytest.mark.parametrize("error", [OSError("unavailable"), subprocess.TimeoutExpired("git", 15)])
+def test_checkout_observation_errors_hold_instead_of_crashing(tmp_path, monkeypatch, error):
+    m = module()
+    (tmp_path / ".git").mkdir()
+    def fail(*args, **kwargs): raise error
+    monkeypatch.setattr(m.subprocess, "run", fail)
+    assert m.perception_edits([tmp_path]) == "checkout observation failed"
+
+
+@pytest.mark.parametrize("guard", ["update", "exec"])
+def test_hidden_untracked_files_still_block_signed_code(tmp_path, guard):
+    m = module()
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    def git(*args):
+        return subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True)
+    git("init")
+    git("config", "status.showUntrackedFiles", "no")
+    script = repo / "middleware/perception/control/local.py"
+    script.parent.mkdir(parents=True)
+    script.write_bytes(b"local edit\n")
+    if guard == "update":
+        assert m.perception_edits([repo]) == "uncommitted perception edits"
+    else:
+        signed = tmp_path / "signed"
+        signed.mkdir()
+        assert "differs" in m.checkout_script_conflict(signed, repo, script.relative_to(repo).as_posix())
+    assert script.read_bytes() == b"local edit\n"

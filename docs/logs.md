@@ -5296,3 +5296,10 @@
 - Change: Merge origin/main 1722ca6ec into shared main e79d8b01d; preserve the local legacy/current ArUco regression fixtures and remote two-pixel corner refinement. Preserve both histories and append-only records.
 - Evidence: Perception marker/dock suites 32 passed; architecture suites 51 passed. Independent review found no production safety regression; two stale tuning assertions were corrected and rerun. Fast contract validation is recorded in the integration receipt.
 - gate 변화: None. This Git integration does not activate devices or establish release/field acceptance.
+
+
+## 2026-10-04 · uncommitted · fix: resolve hook installation through Git
+
+- Change: Install the existing pre-push gate at the path Git resolves for linked worktrees and default, relative or absolute core.hooksPath. Preserve hook contents and repository configuration/refs.
+- Evidence: Three real linked-worktree installer regressions failed before correction and passed afterwards on Windows and model-PC Linux. Independent review caught hidden-untracked Git configuration in the model-PC code guard; both affected status calls now request all untracked files.
+- gate 변화: None. Tests install only in disposable repositories; the shared checkout hook and device runtime are unchanged.
