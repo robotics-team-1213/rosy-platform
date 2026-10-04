@@ -31,3 +31,12 @@
 ## 잇는 결정
 
 D-5(로봇 outbound WS), D-81(gather 경로), D-170·D-177·D-297(PRT-004 유보·설계·활성화), D-290(Console 경계), D-316(결과 상관), D-330(단일 claim), D-435(작업 오케스트레이션), D-437(빌드·서명), D-444·D-445(게이트 사다리와 착수 전제), FLEET SRS, 계획 `2026-10-04-web-gate-ladder-fleet-readiness-adr-plan.md`.
+
+## 1단계 읽기 뷰의 실제 적용 경계 (2026-10-04)
+
+- 중앙 읽기 두 경로 `GET /api/v1/fleet/robots`, `GET /api/v1/fleet/robots/{id}`는 기존 사이트 listener에 `fleet console --central`을 명시한 경우에만 함께 등록된다. 기본 사이트 프로파일은 중앙 경로를 열지 않는다. 필요한 등록 저장소 구성은 기존 `--robot-credential-key-file`과 `--tasks-db`다. 사이트 listener의 TLS·자격 증명·외부 바인딩 제한은 그대로 적용된다.
+- 신원 목록은 실제 `SiteRoster.robot_ids`가 정본이다. 정적 로봇은 `source=static`, 기존 로스터가 승인된 경로로 추가한 로봇은 `source=enrolled`로 표시한다. 로스터 밖 신원은 상세 404이며 광고 이름이 목록이나 신원을 만들지 않는다. 등록·페어링·승인·폐기 write는 이 중앙 읽기 경로에 추가되지 않았다.
+- 두 경로는 기존 `require_viewer` 가드를 사용한다. 실명 사이트 사용자 구성 시 유효한 기존 Viewer 이상 사이트 자격 증명이 필요하며 미인증 요청은 401이다. 기존 루프백 개발 프로파일의 암묵적 사이트 권한은 변경하지 않는다. 이 단계가 새 중앙 전용 자격 증명이나 Admin 변경 권한을 만들지는 않는다.
+- `state`는 기존 hub의 마지막 로봇 스냅샷을 그대로 전달하며 없으면 null이다. `online`은 기존 paired-agent 기록의 연결 flag다. false/스냅샷 없음은 물리 전원 꺼짐이나 완료 실패 판정이 아니다. 신선도·안전·물리 작업 수용을 이 flag로 새로 계산하지 않는다. `capabilities`는 현재 StateSnapshot에 그 소유 증거 필드가 없어 null이며, `capabilities_degraded`로 대체하지 않는다.
+- `address_last_seen`은 현재 TTL 안의 DiscoveryStore 관측 중 기존 승인 endpoint와 port에 유일하게 연결되는 행만 표시한다. 스캐너 만료·충돌·미연결 광고이면 null이다. 주소 표시가 endpoint 변경·TLS 승인·명령 권한·새 등록을 만들지 않는다. 승인 이름만으로 광고를 다른 신원에 묶는 보강은 하지 않는다.
+- 로컬 검증은 실제 SiteRoster·DiscoveryStore·hub 기록·CLI 조립·앱 권한 가드를 사용하며 Robot transport는 fixture다. 이 증거는 SOURCE/LOCAL이며, 중앙 배포 활성화·DEVICE/FIELD 및 REG-002의 실제 Capability 제공 완료를 주장하지 않는다. 후속 7개 중앙 변경/페어링 경로와 PRT-004 활성화는 각 별도 단계가 소유한다.

@@ -16,6 +16,23 @@ from fleet.server.central_registry import CentralRegistry
 from fleet.server.roster import RosterConflict
 
 
+def install_registry_routes(app: FastAPI, *, registry, enrollment, pairing, sync_token,
+                            require_viewer: Callable, require_operator: Callable,
+                            named_identity: bool) -> None:
+    """Compose existing registry/pairing owners without changing their guards or writes."""
+    if enrollment is not None:
+        from fleet.server.enrollment_routes import install_enrollment_routes
+        install_enrollment_routes(app, enrollment, require_viewer=require_viewer,
+                                  require_operator=require_operator, named_identity=named_identity)
+    if pairing is not None:
+        from fleet.server.pairing_routes import install_pairing_routes
+        install_pairing_routes(app, pairing, sync_token=sync_token,
+                               require_viewer=require_viewer, require_operator=require_operator,
+                               named_identity=named_identity)
+    if registry is not None:
+        install_central_registry_routes(app, registry, require_viewer=require_viewer)
+
+
 def install_central_registry_routes(app: FastAPI, registry: CentralRegistry, *,
                                     require_viewer: Callable,
                                     require_operator: Callable) -> None:
