@@ -217,7 +217,7 @@ adrs:
 - D-445
 - D-447
 plans:
-  - docs/plans/2026-10-04-d329-matrix-schema.md
+- docs/plans/2026-10-04-d329-matrix-schema.md
 - docs/plans/2026-10-04-d443-signal-supervision.md
 - docs/plans/2026-10-03-pi-ncnn-opencv-implementation.md
 - docs/plans/2026-10-03-app-ownership-shared-transport-and-layout-migration.md
