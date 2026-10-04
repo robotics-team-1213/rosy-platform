@@ -21,6 +21,8 @@ param(
     [string]$TarExe = "tar",
     [switch]$Force,
     [string]$ApiToken = "",
+    [string]$ApiTlsHost = "",
+    [string]$ApiCaFile = "",
     [int]$ApiPort = 8080
 )
 # D-225 Decision 2.3: push a signed native payload release from the operator
@@ -448,16 +450,18 @@ if ($PrintCommands) {
 # --- calibration guard (D-321 addendum) -------------------------------------
 # Activation restarts rosy-runtime.target, which cuts any calibration drive
 # short. Ask CORE for an active calibration session first and refuse unless
-# -Force. The check itself is soft: no token or no answer only warns. The
+# -Force. Legacy HTTP is soft; explicit TLS failures always refuse. The
 # guard gets this push's ssh settings so it can resolve an IP to the device
 # hostname its stored credential is named after.
 $calibrationGuard = Join-Path $PSScriptRoot "rosy-calibration-guard.ps1"
 & $calibrationGuard -Robot $Robot -Action "a release push/rollback (CORE restart)" `
     -ApiPort $ApiPort -ApiToken $ApiToken -RosyUser $RosyUser -KeyPath $KeyPath `
-    -KnownHosts $KnownHosts -SshExe $SshExe -Force:$Force
+    -KnownHosts $KnownHosts -SshExe $SshExe -PythonExe $PythonExe `
+    -ApiTlsHost $ApiTlsHost -ApiCaFile $ApiCaFile -Force:$Force
 if ($LASTEXITCODE -eq 3) {
     Fail "Release push refused: a calibration session is active on $Robot. Wait for it to end or pass -Force."
 }
+if ($LASTEXITCODE -ne 0) { Fail "Release push refused: calibration check failed." }
 
 # --- execution: run exactly the plan just built -----------------------------
 

@@ -72,7 +72,19 @@ Verified twice on 2026-09-26: releases 013 and 014 on a Pinky Pro running image 
    python deploy/robot/pinky_pro/release/build_payload_release.py pack --release-dir $P/x/<id> --out $P/<id>.tar.gz --modes-from $P/<id>.unsigned.tar.gz --public-key deploy/robot/pinky_pro/release/public-keys/<key>.pem
    ```
 5. **Push and activate.**
+   For an already TLS-enabled CORE, both the preview and real invocation must
+   include `-ApiTlsHost <verified-device-hostname.local> -ApiCaFile <verified-public-ca.pem>`.
+   Obtain those public values through the approved pinned device transport.
+   The default remains legacy HTTP; it does not detect or enable TLS automatically.
+   With the TLS pair set, the calibration guard verifies the CA and exact hostname
+   before sending the bearer through HTTPS. Missing credentials, certificate or
+   hostname failures, HTTP errors and malformed replies refuse the operation;
+   `-Force` overrides only an observed active session, never a failed TLS check.
    ```powershell
+   # Already TLS-enabled CORE: verified public trust values are mandatory.
+   deploy\robot\pinky_pro\rosy-release-push.ps1 -Robot <robot-ip> -Tarball <P>\<id>.tar.gz -ApiTlsHost <verified-hostname.local> -ApiCaFile <verified-public-ca.pem> -PrintCommands
+   deploy\robot\pinky_pro\rosy-release-push.ps1 -Robot <robot-ip> -Tarball <P>\<id>.tar.gz -ApiTlsHost <verified-hostname.local> -ApiCaFile <verified-public-ca.pem>
+   # Legacy HTTP receiver only:
    deploy\\robot\\pinky_pro\rosy-release-push.ps1 -Robot <robot-ip> -Tarball <P>\<id>.tar.gz -PrintCommands   # dry run
    deploy\\robot\\pinky_pro\rosy-release-push.ps1 -Robot <robot-ip> -Tarball <P>\<id>.tar.gz
    ```
@@ -110,9 +122,10 @@ Verified twice on 2026-09-26: releases 013 and 014 on a Pinky Pro running image 
      another robot's file against this address. Residual risk: this trusts known_hosts.
      Robots that share a host key (a cloned image whose keys were never regenerated)
      cannot be told apart, and a robot whose name has no plain known_hosts entry is
-     skipped (warned), not checked. HTTP 401/403 means the token is wrong, not that CORE is down. An active session **refuses** the push (`REFUSED ... would
+     skipped (warned in legacy HTTP; refused in explicit TLS mode), not checked.
+     HTTP 401/403 means the token is wrong, not that CORE is down. An active session **refuses** the push (`REFUSED ... would
      interrupt a running calibration`) — wait for it, ask its owner to end it, or pass
-     `-Force` only when you know the calibration is abandoned. No token or no answer only
+     `-Force` only when you know the calibration is abandoned. In legacy HTTP mode, no token or no answer only
      warns: `CALIBRATION CHECK SKIPPED` lists the credential files it looked for and why
      the hostname lookup failed. Treat that line as a missing safety check, not as noise.
      `-PrintCommands` skips the check.
