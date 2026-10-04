@@ -5029,3 +5029,8 @@
 - 변경: 2 train/1 eval 녹화의 원본 직접 검증, content-disjoint split, train-only 정규화, ridge/CNN 학습·모델 재로딩·단위별 전체/moving/stop 평가를 연결했다.
 - 증거: 실제 train1,068/eval222프레임, CNN40steps와 ridge 완료. 두 모델 모두 zero보다 오차가 컸다. native7pass와 독립40pass, 원본 중복 우회/CI torch 누락 수정. 상세 `validation/pinky-behavior-comparison-2026-10-04.md`.
 - gate 변화: 실제 모델 비교 증거 확보, 연구용으로만 유지. camera calibration/identity·expert 주행 의도·owner/독립 과제·Fleet·DEVICE/FIELD와 전체 목표 미완료.
+
+## 2026-10-04 · uncommitted · feat(learning): bind Pinky models to artifacts and durable rejection
+- 변경: 계약0.1.5 unknown calibration 보존/known-profile 모순 거절, 실제 모델/영상 replay·원본 MCAP 직접 재검증 exporter, Pinky 원장 평가 및 bound reject 승격 거절을 연결했다.
+- 증거: 실제 CNN/ridge 공통 artifact 2개와 원래3datasets 검증, 원장 snapshot/거절/별도 CLI 재독출, native94pass/0skip·독립68pass. wheel stdlib/dependency 없음 검증. 상세 `validation/pinky-policy-artifact-2026-10-04.md`.
+- gate 변화: 연구 산출물/거절 이력이 실제 보존됨. expert/camera·owner 집행·독립SIM/Fleet·rollback·DEVICE/FIELD 및 전체 목표 미완료, 운영 승격 없음.

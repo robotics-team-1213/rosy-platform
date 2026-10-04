@@ -61,7 +61,7 @@ def test_native_model_save_reload(tmp_path):
     assert (tmp_path / 'tiny_cnn.pt').is_file() and (tmp_path / 'rgb_ridge.npz').is_file()
 
 
-def test_native_three_session_job_from_real_mcap(tmp_path):
+def native_job(tmp_path):
     pytest.importorskip('torch'); pytest.importorskip('mcap_ros2')
     sys.path.insert(0, str(ROOT / 'learning/curation/pinky/test'))
     from test_raw_mcap import native_recording
@@ -83,6 +83,11 @@ def test_native_three_session_job_from_real_mcap(tmp_path):
         convert(named, meta, dataset, environment='sim', clock_domain='gazebo_sim')
         datasets.append(dataset)
     result = run(datasets[:2], datasets[-1], tmp_path / 'job', steps=2, seed=7, stride=1)
+    return result, tmp_path / 'job'
+
+
+def test_native_three_session_job_from_real_mcap(tmp_path):
+    result, _ = native_job(tmp_path)
     assert result['train_frames'] == 4 and result['eval_frames'] == 2
     assert result['verdict'] == 'research_only' and result['promotion'] == 'not_eligible'
     state = json.loads((tmp_path / 'job/state.json').read_text())

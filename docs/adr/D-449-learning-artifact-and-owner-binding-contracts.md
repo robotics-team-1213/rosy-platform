@@ -82,3 +82,17 @@ canonical event chain을 둔다. 실제 ACT 보고서의 연구 조건을 재계
 HMAC receipt와 실제 pass JSON을 요구한다. 운영 신뢰 키/승인 verifier는 설치하지
 않았고 원장 상태가 actuator 권한을 부여하지 않는다. DatasetManifest ingestion,
 rollback의 stop/승인 계약과 owner 소비는 후속이다. 구조 제안 상태는 유지한다.
+
+### 구현 보강 — 2026-10-04 Pinky 연구 모델·거절 원장
+
+계약 0.1.5는 실제로 없는 camera calibration SHA를 null로 보존한다. CameraProfile도
+null이어야 하며 알려진 profile/null calibration의 모순은 거부한다. 물리 shadow에는
+계속 알려진 CameraProfile과 calibration이 필요하다. 선언된 topic 이름은 물리
+카메라 identity의 인증이 아니다. profile·controller·envelope·timing 연구 값도 집행 증거가 아니다.
+
+Pinky exporter는 기존 비교의 file/원본 Episode closure와 train-only 정규화·target·metrics를
+재검산하고 MCAP를 직접 재검증한다. 선택한 모델을 reload해 실제 평가 영상에 재실행한다.
+현재 recorded CORE velocity 모델은 base velocity candidate 인터페이스의 연구 artifact다.
+원장은 숫자 기반 baseline 거절과 expert intent 미확인을 보존하고 외부 pass override를
+막는다. 학습·평가 dataset references는 원래 세션 revision을 유지한다. owner 실행·
+등록 trust·독립 과제·Fleet·DEVICE/FIELD 수용은 이 계약 보강으로 완료되지 않는다.

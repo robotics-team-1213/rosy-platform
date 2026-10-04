@@ -23,6 +23,20 @@ moving 기준은 기록된 |v| > 0.01m/s 또는 |w| > 0.05rad/s다. 실제 움�
 
 목표는 expert intent가 아닌 기록된 CORE 최종 출력이다. 카메라 보정/identity,
 pixel provenance, owner 집행, 독립 과제 결과는 확인되지 않았다. calibration SHA를
-만들어 공통 PolicyArtifact를 채우지 않으며 모든 결과는 `research_only`다.
+만들지 않으며 모든 비교 결과는 `research_only`다.
 고정 eval을 보고 seed/steps/모델을 튜닝하지 않는다. policy qualification·READY·승격·
 로봇 명령이나 Fleet 결과를 만들지 않는다. 출력 경로·device 정보는 private evidence다.
+
+`artifact_export.py <comparison-run> <new-output-on-X> --model tiny_cnn|rgb_ridge`는
+같은 모델의 공통 연구 PolicyArtifact를 내보낸다. 파일 목록과 dataset closure,
+원본 평가 target·train-only 정규화·metrics를 재검산하고 원본 MCAP도 직접 검증한다.
+저장된 모델을 실제 eval 영상에 다시 실행해 예전 예측 NPZ와 비교한다.
+예전 pass 보고서나 해시를 다시 맞춘 다른 weights로 검증을 우회할 수 없다.
+복사한 파일의 원본 SHA도 재검사한다. 새 raw-reverification 보고서는 산출물에 포함된다.
+
+artifact의 CameraProfile/calibration은 null이며 identity는 declared front topic이다.
+device profile은 보존한 source YAML 해시와 명목 limits(±0.20m/s·±0.80rad/s),
+controller/envelope는 unregistered 연구 binding이다. period125ms·observation250ms·
+action125ms budgets도 연구 선언이며 runtime 집행 측정값이 아니다.
+정책 인터페이스는 base_velocity_candidate이고 학습 target은 기록된 CORE 최종 속도다.
+등록/거절 증거는 유지하지만 이 선언만으로 cmd_vel·stale/HOLD 집행을 켜지 않는다.

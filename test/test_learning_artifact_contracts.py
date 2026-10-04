@@ -113,6 +113,17 @@ def test_policy_can_preserve_unknown_camera_profile_with_explicit_rig():
         validate_promotion(promotion, candidate)
 
 
+def test_unknown_camera_calibration_is_preserved_only_with_unknown_profile():
+    doc = policy()
+    doc['camera_profile_revision'] = None
+    doc['cameras'] = [{'name': 'front', 'identity': 'declared-topic:camera/front', 'calibration_sha256': None,
+                       'source_shape': [3, 240, 320], 'model_shape': [3, 48, 64], 'color': 'rgb', 'scale': 1/255}]
+    assert validate_policy(seal(doc))['cameras'][0]['calibration_sha256'] is None
+    doc['camera_profile_revision'] = 'known-profile'
+    with pytest.raises(ValueError, match='calibration'):
+        validate_policy(seal(doc))
+
+
 @pytest.mark.parametrize("field,value", [
     ("owner", {"kind": "pinky_core_command_manager", "controller_revision": "c", "envelope_revision": "e"}),
     ("joint_names", ["j2", "j1"]), ("failure_mode", "clamp"), ("reset_events", ["stop"]),

@@ -48,3 +48,8 @@ binding, capture/log 시계와 recorded CORE command의 m/s·rad/s 및 dt를 검
 DatasetStore는 Pinky도 등록하며 Pilot은 거부한다. 원본 MCAP↔sidecar 변환 진위와
 영상 pixels/scan 내용을 인증하지 않는다. 정책 승격은 Dataset Episode의
 profile·robot/environment 호환성을 같은 검증 객체에서 검사한다.
+
+0.1.5의 영상 정책은 camera calibration SHA가 실제로 없으면 null을 보존한다.
+이때 CameraProfile도 null이어야 한다. 알려진 profile과 null calibration 조합은
+거부하며 null profile은 L1 물리 shadow 승격을 통과하지 못한다. topic identity는
+카메라의 물리 identity 인증이 아니다. 계약 wheel은 여전히 stdlib만 사용한다.

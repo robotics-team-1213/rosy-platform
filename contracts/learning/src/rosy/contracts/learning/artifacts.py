@@ -156,7 +156,11 @@ def validate_policy(doc, *, root=None):
         _fields(camera, "name identity calibration_sha256 source_shape model_shape color scale")
         _text(camera["name"])
         _text(camera["identity"])
-        _hash(camera["calibration_sha256"])
+        if camera['calibration_sha256'] is None:
+            if value['camera_profile_revision'] is not None:
+                raise ValueError('known camera profile requires known calibration sha256')
+        else:
+            _hash(camera['calibration_sha256'])
         for key in ("source_shape", "model_shape"):
             dims = camera[key]
             if (not isinstance(dims, list) or len(dims) != 3 or dims[0] != 3

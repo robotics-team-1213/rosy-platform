@@ -60,6 +60,34 @@ def act_assessment(report):
             'validator': 'rosy-act-research-gate/1'}
 
 
+def pinky_assessment(report):
+    if (report.get('schema') != 'rosy.pinky-offline-eval/1'
+            or report.get('model') not in ('tiny_cnn', 'rgb_ridge')
+            or report.get('target') != 'recorded_core_final_velocity'
+            or report.get('expert_status') != 'unverified'):
+        raise ValueError('unsupported recorded Pinky evaluation semantics')
+    for key in ('mae_m_s', 'mae_rad_s', 'zero_mae_m_s', 'zero_mae_rad_s',
+                'constant_mae_m_s', 'constant_mae_rad_s'):
+        value = report.get(key)
+        if type(value) not in (int, float) or not math.isfinite(value) or value < 0:
+            raise ValueError('invalid Pinky error metric')
+    for key in ('eval_frames', 'prediction_limit_violations'):
+        if type(report.get(key)) is not int or report[key] < 0:
+            raise ValueError('invalid Pinky count metric')
+    reasons = ['recorded_velocity_expert_intent_unverified']
+    if report['eval_frames'] == 0 or report.get('reloaded_prediction_verified') is not True:
+        reasons.append('evaluation_or_reload_unverified')
+    if report['prediction_limit_violations']:
+        reasons.append('nominal_profile_velocity_limit_violation')
+    for unit in ('m_s', 'rad_s'):
+        if report[f'mae_{unit}'] >= min(report[f'zero_mae_{unit}'], report[f'constant_mae_{unit}']):
+            reasons.append(f'does_not_beat_velocity_baseline_{unit}')
+    if report.get('verdict') != 'reject':
+        raise ValueError('Pinky claimed verdict differs from recorded-velocity gate')
+    return {'verdict': 'reject', 'reasons': reasons, 'independent_task_success': 'unverified',
+            'validator': 'rosy-pinky-recorded-velocity-research-gate/1'}
+
+
 class Registry:
     def __init__(self, root, *, trusted=None):
         self.root = Path(root).resolve()
@@ -228,6 +256,33 @@ class Registry:
             self._append(db, 'assessment', revision, stage[0], stage[0], data)
             return data
 
+    def _pinky(self, root, policy):
+        reports = []
+        for ref in policy['evaluations']:
+            report = read(root / ref['path'])
+            if isinstance(report, dict) and report.get('schema') == 'rosy.pinky-offline-eval/1':
+                reports.append((report, ref))
+        if len(reports) != 1:
+            raise ValueError('one bound Pinky offline report required')
+        return pinky_assessment(reports[0][0]), reports[0][1]
+
+    def assess_pinky(self, revision):
+        with self._db() as db:
+            events = self._audit(db)
+            stage = db.execute('SELECT stage FROM policies WHERE revision=?', (revision,)).fetchone()
+            if not stage:
+                raise ValueError('policy not registered')
+            root, policy = self._policy(revision)
+            if policy['profile'] != 'pinky_base_velocity_v1':
+                raise ValueError('Pinky policy profile required')
+            result, ref = self._pinky(root, policy)
+            data = {**result, 'report': ref}
+            if any(e['operation'] == 'assessment' and e['policy_revision'] == revision
+                   and e['data'] == data for e in events):
+                return data
+            self._append(db, 'assessment', revision, stage[0], stage[0], data)
+            return data
+
     def _receipt(self, receipt, promotion, check):
         if not isinstance(receipt, dict) or set(receipt) != {'principal', 'payload', 'signature'}:
             raise ValueError('invalid verifier receipt')
@@ -251,6 +306,8 @@ class Registry:
             root, policy = self._policy(revision)
             promotion = validate_promotion(promotion, policy, root=evidence_root)
             DatasetStore(self.root / 'datasets').require_policy(policy)
+            if policy['profile'] == 'pinky_base_velocity_v1' and self._pinky(root, policy)[0]['verdict'] == 'reject':
+                raise ValueError('bound Pinky offline evaluation rejected')
             # A separate pass claim cannot override the artifact's failed ACT report.
             for report, _ in self._act_reports(root, policy):
                 if act_assessment(report)['verdict'] == 'reject':
@@ -281,6 +338,7 @@ def main():
     sub = parser.add_subparsers(dest='command', required=True)
     sub.add_parser('register').add_argument('source', type=Path)
     sub.add_parser('assess-act').add_argument('revision')
+    sub.add_parser('assess-pinky').add_argument('revision')
     sub.add_parser('show').add_argument('revision')
     sub.add_parser('history')
     args = parser.parse_args()
@@ -289,6 +347,8 @@ def main():
         result = registry.register(args.source)
     elif args.command == 'assess-act':
         result = registry.assess_act(args.revision)
+    elif args.command == 'assess-pinky':
+        result = registry.assess_pinky(args.revision)
     elif args.command == 'show':
         result = registry.show(args.revision)
     else:

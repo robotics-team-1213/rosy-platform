@@ -30,6 +30,12 @@ receipt와 policy-bound pass 보고서를 추가 요구한다. trust keys는 원
 테스트의 signed pass 보고서는 합성 fixture이며 실제 승격/평가 수용 증거가 아니다.
 bound ACT reject는 외부 signed pass 주장으로도 덮어쓸 수 없다.
 
+`assess-pinky <revision>`은 hash-bound `rosy.pinky-offline-eval/1`의 m/s·rad/s
+각각을 zero/train-constant 기준과 비교하고 reload·frame 수·명목 limit 위반을 검사한다.
+기록된 CORE 속도는 expert intent가 미확인이므로 현재 gate는 reject를 유지한다.
+Pinky 승격에는 정확히 하나의 bound 보고서가 필요하며 거절을 외부 signed pass로
+덮어쓸 수 없다. idempotent 평가가 정책의 unregistered 단계를 바꾸지 않는다.
+
 서명은 설정된 verifier가 해당 bytes를 인정했다는 뜻이며 독립 판정의 정확성을
 자동 증명하지 않는다. trust 설정을 누가 승인하는지와 보고서 생성기는 후속이다.
 hash chain은 보통의 손상을 감지하지만 전체 DB를 다시 쓰는 공격에 대한 외부
