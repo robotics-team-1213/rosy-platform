@@ -1674,3 +1674,9 @@
 - 변경: 기존 goal evidence grace 유지보수 루프를 기존 background_workers 모듈로 이동했다. app의 private 호출은 동일 logger를 바인딩한 partial로 유지하며 grace 처리·예외·주기·Action 활성화 경계는 유지한다.
 - 증거: main에서도 app607행의 미등록 budget 실패가 재현됐다. 이동 후 size guards·server app·central registry48pass, 독립 검사47pass. 병합 전 관련 검사 결과는 X:/DevTemp/rosy-learning-audit-20261004/landing-*에 보존한다.
 - gate 변화: SOURCE/LOCAL 병합 수리. 서비스 설치·timer·장치/현장 수용은 미완료다.
+## 2026-10-04 · uncommitted · feat(server): D-454 1b — 등록 해제 경로와 로스터 차단 전달
+
+- 변경: `DELETE /api/v1/fleet/robots/{id}`(REG-001a, operator 가드). 로스터 `remove()`의 진행 작업 차단(RosterConflict)은 409+task_ids로, 미등록은 404 UNKNOWN_ROBOT으로 내려온다. `CentralRegistry.roster` 속성으로 정본 로스터를 노출한다. 같은 회차의 시험 결함 수정: 증거 무계산 단언이 스냅샷을 두 번 만들어 자동 타임스탬프가 어긋났다 — 같은 객체에서 비교한다.
+- 증거: `test/test_central_registry.py` 8 passed(해제·차단 409+task_ids·미등록 404·operator 전용 403 포함). fleet 전체(셀 앱 2파일 제외, 사유 동일) 1800 passed/1 failed → 결함 수정 후 초록, known_failures 0 new. flake8 0.
+- gate 변화: 없음.
+- 결정: D-454 결정 2의 §10.1 확장. PATCH(이름·그룹)·페어링 토큰·승인 대기·토큰 폐기는 다음 회차.

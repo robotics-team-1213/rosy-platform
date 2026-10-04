@@ -439,7 +439,8 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         from fleet.server.central_registry_routes import install_central_registry_routes
 
         install_central_registry_routes(app, central_registry,
-                                        require_viewer=require_viewer)
+                                        require_viewer=require_viewer,
+                                        require_operator=require_operator)
 
     install_ingest_routes(app, console=console, console_token=console_token, hub=hub,
                           sightings=sightings, policy_evidence=policy_evidence,
