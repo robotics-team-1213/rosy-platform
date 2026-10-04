@@ -299,7 +299,7 @@
 ## 최근 기록
 
 - 2026-10-05 · uncommitted · docs(learning): bind approved indexed masks to immutable dataset construction
+- 2026-10-05 · uncommitted · fix(release): 무마커 시작점의 검토 기록과 inherited CI fixture 복구
 - 2026-10-05 · uncommitted · test(learning): pin receipt exclusion tombstone aliases
 - 2026-10-05 · uncommitted · test(learning): reject resealed embedded authority scalar aliases
 - 2026-10-05 · uncommitted · docs(reference): D-368 행 v1.101→v1.102 재번호
-- 2026-10-05 · uncommitted · docs(reference): D-368 행 v1.100→v1.101 재번호

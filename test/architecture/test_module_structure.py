@@ -108,10 +108,11 @@ SIZE_VERDICTS = {
     ),
     "fleet": (
         34_211,
-        "split: re-judged 2026-10-05 at 34211 after the markerless start-point "
-        "service and routes (+345 over the D-463 33866 re-judge): reference-pose "
-        "storage over approved calibrations; no command owner changes; the service "
-        "takes plain sources/calibrations so the D-457 tracking boundary holds. "
+        "split: independently re-judged 2026-10-05 at 34211 for the markerless start reference. "
+        "The store/routes and pure layer/view own 91/43/35/120 lines, with bounded composition "
+        "and drawing wiring. Reference-only poses add no motion or localization writer. "
+        "Retain the B2 server subpackage/UI resource split obligations, the existing +150 "
+        "allowance and all individual file limits; user scope excludes UX refactoring. "
         "split: D-463 re-judged at 33866: the lane route adds a fresh-pose read "
         "(trusted_map_pose) in the gather owner and a dispatch route that submits through "
         "the existing goal path; no command owner changes. "
