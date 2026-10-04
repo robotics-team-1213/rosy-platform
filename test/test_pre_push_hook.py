@@ -98,7 +98,7 @@ INSTALL_BASH = (str(Path(os.environ.get("ProgramFiles", "C:/Program Files")) / "
 
 
 @pytest.mark.skipif(not INSTALL_BASH or not Path(INSTALL_BASH).is_file(), reason="native bash is required")
-@pytest.mark.parametrize("location", ["default", "relative", "absolute"])
+@pytest.mark.parametrize("location", ["default", "relative", "absolute", "tracked"])
 def test_installer_uses_the_hooks_path_git_uses_from_a_linked_worktree(tmp_path, location):
     env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
     def git(root, *args):
@@ -109,13 +109,13 @@ def test_installer_uses_the_hooks_path_git_uses_from_a_linked_worktree(tmp_path,
     git(parent, "init", "-q")
     source = parent / "tools/hooks/pre-push"
     source.parent.mkdir(parents=True)
-    source.write_bytes(SCRIPT.read_bytes())
+    source.write_bytes(SCRIPT.read_bytes().replace(b"\r\n", b"\n").replace(b"\n", b"\r\n"))
     git(parent, "add", "tools/hooks/pre-push")
     git(parent, "-c", "user.name=Test", "-c", "user.email=test@example.invalid", "commit", "-qm", "fixture")
     linked = tmp_path / "linked worktree"
     git(parent, "worktree", "add", "-qb", "linked", str(linked))
     if location != "default":
-        configured = ".local hooks" if location == "relative" else (tmp_path / "external hooks").as_posix()
+        configured = {"relative": ".local hooks", "tracked": "tools/hooks"}.get(location, (tmp_path / "external hooks").as_posix())
         git(linked, "config", "core.hooksPath", configured)
     hook_dir = Path(git(linked, "rev-parse", "--git-path", "hooks"))
     if not hook_dir.is_absolute(): hook_dir = linked / hook_dir
@@ -123,8 +123,17 @@ def test_installer_uses_the_hooks_path_git_uses_from_a_linked_worktree(tmp_path,
     refs_before = git(parent, "show-ref")
     result = subprocess.run([INSTALL_BASH, "-c", INSTALLER.read_text(encoding="utf-8")],
                             cwd=linked, env=env, capture_output=True, text=True, encoding="utf-8", errors="replace")
+    if location == "tracked":
+        assert result.returncode != 0
+        assert (linked / "tools/hooks/pre-push").read_bytes() == source.read_bytes()
+        assert (parent / ".git/config").read_bytes() == config_before
+        assert git(parent, "show-ref") == refs_before
+        return
     assert result.returncode == 0, result.stderr
-    assert (hook_dir / "pre-push").read_bytes() == (linked / "tools/hooks/pre-push").read_bytes()
+    installed = hook_dir / "pre-push"
+    assert installed.read_bytes() == (linked / "tools/hooks/pre-push").read_bytes().replace(b"\r\n", b"\n")
+    parse = subprocess.run([INSTALL_BASH, "-n", installed.as_posix()], capture_output=True)
+    assert parse.returncode == 0, parse.stderr
     assert (linked / ".git").is_file()
     assert (parent / ".git/config").read_bytes() == config_before
     assert git(parent, "show-ref") == refs_before

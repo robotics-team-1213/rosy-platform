@@ -5036,3 +5036,10 @@
 - Change: Install the existing pre-push gate at the path Git resolves for linked worktrees and default, relative or absolute core.hooksPath. Preserve hook contents and repository configuration/refs.
 - Evidence: Three real linked-worktree installer regressions failed before correction and passed afterwards on Windows and model-PC Linux. Independent review caught hidden-untracked Git configuration in the model-PC code guard; both affected status calls now request all untracked files.
 - gate 변화: None. Tests install only in disposable repositories; the shared checkout hook and device runtime are unchanged.
+
+
+## 2026-10-04 · uncommitted · fix: install Windows hooks with executable LF line endings
+
+- Change: Normalize CRLF while installing pre-push from a Windows checkout. Keep the previous same-file refusal before output redirection, including tracked core.hooksPath layouts, to preserve source bytes.
+- Evidence: Real Windows installation exposed a byte mismatch; three forced-CRLF regressions failed before correction. Linux hook suite 8 passed after correction, including Bash parsing and tracked-source/config/ref preservation. Independent review approved the follow-up.
+- gate 변화: None. The live hook was restored to the exact published LF bytes and syntax-checked; device source switching remains guarded.
