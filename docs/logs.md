@@ -5116,3 +5116,13 @@
 - 현 소스로 실제5세션/404프레임 GPU30epoch→ONNX→intake→READY를 실행했다. 분리된 intake 이력의 최고 모델 비교 누락을 확인하고 canonical 이력으로 재검사했다. 후보는 최고 모델 대비 성능 하락으로 rejected이며 resume도 재승격을 거절했다.
 - 관제 PC에 독립 venv와 입력을 준비해 1617파일 hash/크기/coverage를 확인했다. 실제 READY→intake→rejected, pip check와 import 통과. 상시 watcher·일반 OpenSSH 서버 설치는 sudo 인증 필요로 관리자 스크립트 인계 단계다. 모델 PC 전용 키 로그인은 실제 Server accepts key 확인, 관제 별칭은 Tailscale SSH 접속까지 확인했다.
 - 근거: validation/model-pc-recording-job-and-site-intake-2026-10-04.md. 로봇 전달/주행/HOLD 해제 없음. 사람 라벨·새 클래스 평가·상시화·shadow/rollback·owner/Fleet·DEVICE/FIELD 및 전체 목표 미완료.
+
+### 2026-10-04 · uncommitted · docs(learning): verify site accepted model path
+
+- 관제 PC에서 기존 최고 모델/학습 데이터1894파일 검증 후 실제 READY→intake pass→accepted를 확인했다. 고정126평가 mIoU0.518525, manifest/model hashes/READY/pass report 재확인. 이전 rejected 후보를 보존했다.
+- 로봇 SSH/TCP 응답 없음. 관제 등록 주소는 기존과 같고 active enrollment2는 연결 증거가 아니다. 실제 서비스 UID의 readonly DB: CORE audit 비어 있음, Fleet dispatch PROCESS_RESTARTED/disabled. enrollment/credentials/dispatch/HOLD/로봇 변경 없음. 근거: validation/site-champion-acceptance-2026-10-04.md. 전체 목표 미완료.
+
+### 2026-10-04 · uncommitted · feat(learning): quarantine historical edge candidates for review
+
+- 인계된279 PNG/6영상·sidecar 해시를 모델 PC에서 재검증하고 provenance queue/CVAT원본PNG ZIP/gallery/receipt를 생성했다. 기존 학습 manifest snapshot의 세션 중복183, 고정평가 세션 중복0, 사람승인0/train qualified false다. 새홀드아웃으로 승인하지 않는다.
+- CVAT이름충돌 실패를 독립검토에서 재현 후 차단했다. 실제279 ZIPentry bytehash/CRC 독립확인. 근거: validation/edge-candidate-review-intake-2026-10-04.md. CVAT마스크 반환→PNG바인딩/사람승인/학습형식연결은 남아 있으며 어두운장면 개선은 후속ADR범위다. 전체목표 미완료.
