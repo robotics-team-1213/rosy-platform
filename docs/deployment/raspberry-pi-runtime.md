@@ -365,3 +365,33 @@ For an image rollback, set `ROSY_CORE_IMAGE` and `ROSY_IO_IMAGE` to the last
 accepted digests, run `docker compose pull`, then start the hardware profile.
 Never roll back the robot configuration or waypoint data implicitly with the
 container image.
+
+
+## 카메라 시작 중 반복 부팅 보호
+
+`rosy-camera.service`는 선택 기능이다. CORE와 기본 I/O가 준비된 뒤 카메라가
+시작되지만, 별도 `rosy-camera-healthy.timer`가 90초 후에 생존을 확인하므로 카메라 시작·설정 변경·runtime target 완료가 그 시간을 기다리지 않는다.
+이 확인은 프로세스 생존만 뜻하며 영상 수신·추론·주행 수락을 뜻하지 않는다.
+카메라 프로세스 재시도는 10초 간격, 300초 안에 최대 3회다.
+
+`/var/lib/rosy/camera/boot-guard.json`은 카메라 시작 전에 디스크에 동기화된다.
+90초 확인이나 정상 종료 없이 부팅 ID가 두 번 바뀌면 이후 카메라 시작은
+보류된다. CORE·접속·화면은 유지하고 카메라에 의존한 동작은 사용할 수 없다.
+이는 전기·커널·카메라 드라이버 원인을 판정하거나 본체를 재부팅하는 기능이 아니다.
+손상된 기록도 카메라 시작을 거절하므로 원본을 보존하고 점검한다.
+
+복구 순서는 운영자가 본체 전원을 완전히 차단해 MCU를 초기화하고, 모터 비활성
+상태에서 센서 응답과 안정적인 부팅을 확인한 뒤 카메라만 재시험하는 것이다.
+다른 진단용 drop-in이나 카메라 hold marker는 그 소유 세션의 복구 절차로 처리한다.
+보호 기록은 카메라를 정지한 상태에서 백업 후 아래 명령으로 초기화한다.
+
+```bash
+sudo -n systemctl stop rosy-camera.service
+sudo -n cp -a /var/lib/rosy/camera/boot-guard.json /var/lib/rosy/camera/boot-guard.json.before-reset
+sudo -n -u rosy-camera python3 -I -B /opt/rosy/current/deploy/robot/native/camera-boot-guard.py reset
+sudo -n systemctl reset-failed rosy-camera.service
+sudo -n systemctl start rosy-camera.service
+```
+
+새 코드 적용은 서명된 payload와 image-layer sync를 통해 진행한다. 기존 release에
+현재 main 파일을 덧씌워 부팅 복구를 검증한 것으로 간주하지 않는다.
