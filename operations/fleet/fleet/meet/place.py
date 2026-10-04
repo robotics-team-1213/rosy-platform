@@ -232,3 +232,18 @@ def _toward(place: Place, hold: tuple[float, float]) -> tuple[float, float] | No
     if distance < DONE_M:
         return None
     return _wrap(math.atan2(dy, dx) - place.yaw), distance
+
+
+def steer_toward(x: float, y: float, yaw: float, target: tuple[float, float]) -> tuple[float, float] | None:
+    """지도 위 한 점에서 목표까지의 다음 구간. 0.05 m 안이면 None.
+
+    도착은 다음 자세가 말한다. 보낸 지령의 시간을 적분하지 않는다.
+    """
+    return _toward(Place(None, 0.0, 1, True, None, x, y, yaw), target)
+
+
+def along_to(place: Place, painted: Painted, target_s: float) -> tuple[float, float] | None:
+    """이미 선 위에 있을 때, 그 선의 s 까지 한 구간."""
+    if place.edge_id is None:
+        return None
+    return _along(painted.line(place.edge_id), place, target_s)

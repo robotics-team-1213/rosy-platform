@@ -1674,3 +1674,9 @@
 - 증거: `test/test_central_registry.py` 8 passed(해제·차단 409+task_ids·미등록 404·operator 전용 403 포함). fleet 전체(셀 앱 2파일 제외, 사유 동일) 1800 passed/1 failed → 결함 수정 후 초록, known_failures 0 new. flake8 0.
 - gate 변화: 없음.
 - 결정: D-454 결정 2의 §10.1 확장. PATCH(이름·그룹)·페어링 토큰·승인 대기·토큰 폐기는 다음 회차.
+
+## 2026-10-04 · uncommitted · feat(fleet): D-455 양보 합류는 지도 자세
+
+- 변경: 양보 계획이 있는 동안, 선 밖 틈은 정차 점이나 선으로 보정한다. 동료가 문을 지나면 방에서 문으로 YIELD 하고, 진행 방향을 되찾으면 RESUME 한다. 오도메트리 프레임은 무응답이다.
+- 증거: operations/fleet/test/test_meet_place.py, test_stuck_resolver.py 포함 관련 호스트 203 passed. known_failures 새 실패 0.
+- gate 변화: 없음. 호스트 판단 시험. 장치·ROS-SIM 은 주장하지 않는다.

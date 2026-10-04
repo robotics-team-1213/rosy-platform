@@ -5394,3 +5394,9 @@ osy-d395-s1d\`.
 - 변경: D-451 주문 하나를 기존 `POST /api/v1/line-follow/stuck/decision` 의 `YIELD` 한 구간으로 보낸다. CORE 는 회전을 확인한 뒤 앞으로만 기어 가고, 끝나면 선으로 돌아가지 않는다. 운용자 Fleet 경로의 다섯 단어는 그대로다. ADR `docs/adr/D-453-yield-one-segment.md`. D-452 는 integrate/ui-ship 번호라 `adr_gaps` 에 남겼다.
 - 증거: `operations/fleet/test/test_meet_place.py`, `test_stuck_resolver.py`, `test_transport.py`, `test_meet_algorithms.py`, `middleware/core/services/test/test_line_stuck_recovery.py`, `middleware/core/gateway/test/test_line_follow_stuck_api.py`.
 - gate 변화: 없음. 호스트 판단 시험. 장치·ROS-SIM 은 주장하지 않는다.
+
+## 2026-10-04 · uncommitted · feat(fleet): D-455 양보 합류는 지도 자세
+
+- 변경: 방 안 대기는 그대로 두고, 막힘 판단기가 쓸 수 있는 지도 자세로 문까지 YIELD 한 뒤 선 위에서 RESUME 한다. 오도메트리 좌표와 지령 적분은 차선에 올리지 않는다. ADR docs/adr/D-455-yield-rejoin-by-map-pose.md. API 판과 운용자 다섯 단어는 그대로다.
+- 증거: 관련 호스트 시험 203 passed. test/known_failures.py 는 새 실패 0. 장치·ROS-SIM 은 돌리지 않았다.
+- gate 변화: 없음. SOURCE/LOCAL 판단 시험. DEVICE·ROS-SIM·FIELD 승격 아님.

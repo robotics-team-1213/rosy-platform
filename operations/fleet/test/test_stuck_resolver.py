@@ -4,17 +4,23 @@ import math
 
 import pytest
 
-from fleet.meet.place import painted_track, pose_on
+from fleet.meet.place import painted_track, pose_on, project
 from fleet.server.stuck_resolver import Answer, Escalate, ResolverConfig, StuckResolver
 
 
 def _row(robot_id="rosy_01", stuck=None, *, mode="CAMERA_LINE", pose=(0.0, 0.0, 0.0),
-         online=True, estop=False):
+         online=True, estop=False, localization=None):
     state = {"robot_id": robot_id, "safety": {"estop": estop},
              "pose": None if pose is None else {"x": pose[0], "y": pose[1], "yaw": pose[2]},
              "line_follow": {"mode": mode, "state": "HOLD" if stuck else "TRACKING",
                              "stuck": stuck}}
+    if localization is not None:
+        state["localization"] = localization
     return {"robot_id": robot_id, "online": online, "state": state}
+
+
+def _frame(pose_frame):
+    return {"state": "LOCALIZED", "pose_frame": pose_frame, "confidence": 1.0}
 
 
 def _stuck(stuck_id="stuck-1", cause="obstacle_ahead", *, local=True, attempts=0, max_attempts=2):
@@ -288,3 +294,91 @@ def test_robots_that_leave_the_roster_lose_their_chain_and_claims():
     r.step(0.0, [_row(stuck=_stuck()), _row("rosy_02", _stuck("stuck-9"))])
     r.step(1.0, [_row(stuck=_stuck())])
     assert set(r._chains) == {"rosy_01"} and r._claims == set()
+
+
+def _yielded():
+    stuck = _stuck()
+    stuck["phase"] = "YIELDED"
+    return stuck
+
+
+def _started_east_yield():
+    _painted, door, near, far = _east_pair()
+    resolver = StuckResolver(ResolverConfig())
+    first = resolver.step(0.0, [_row("near", _stuck(), pose=near), _row("far", None, pose=far)])[0]
+    resolver.sent(first, 0.0)
+    return resolver, door, far
+
+
+def test_localized_map_pose_still_yields_and_odom_frame_does_not():
+    _painted, _door, near, far = _east_pair()
+    mapped = StuckResolver(ResolverConfig()).step(0.0, [
+        _row("near", _stuck(), pose=near, localization=_frame("map")),
+        _row("far", None, pose=far, localization=_frame("map")),
+    ])
+    assert mapped[0].decision == "YIELD" and mapped[0].rule == "meet"
+    odom = StuckResolver(ResolverConfig()).step(0.0, [
+        _row("near", _stuck(), pose=near, localization=_frame("odom")),
+        _row("far", None, pose=far, localization=_frame("odom")),
+    ])
+    assert odom == [Answer("near", "stuck-1", "WAIT", "R1")]
+
+
+def test_a_gap_beside_the_line_returns_to_the_paint_not_across_the_floor():
+    resolver, _door, far = _started_east_yield()
+    painted = painted_track()
+    x, y, yaw = pose_on(painted, "east", 1.2, direction=1)
+    gap = (x + 0.10 * math.cos(yaw + math.pi / 2), y + 0.10 * math.sin(yaw + math.pi / 2), yaw)
+    assert project(painted, gap[0], gap[1], gap[2]) is None
+    move = resolver.step(1.0, [_row("near", _yielded(), pose=gap), _row("far", None, pose=far)])
+    assert len(move) == 1 and move[0].decision == "YIELD"
+    assert move[0].yield_m == pytest.approx(0.10, abs=0.03)
+
+
+def test_the_spur_gap_aims_at_the_hold_unless_the_pose_is_odom():
+    resolver, door, far = _started_east_yield()
+    painted = painted_track()
+    room = next(item for item in painted.rooms if item.id == "east_room")
+    dx, dy, _tangent = painted.line("east").point_at(door.s_m)
+    mid = ((dx + room.hold_xy[0]) / 2, (dy + room.hold_xy[1]) / 2, 0.0)
+    assert project(painted, mid[0], mid[1], mid[2]) is None
+    move = resolver.step(1.0, [_row("near", _yielded(), pose=mid), _row("far", None, pose=far)])
+    assert len(move) == 1 and move[0].decision == "YIELD"
+    assert move[0].yield_m == pytest.approx(
+        math.hypot(room.hold_xy[0] - mid[0], room.hold_xy[1] - mid[1]), abs=0.05)
+    assert resolver.step(2.0, [
+        _row("near", _yielded(), pose=mid, localization=_frame("odom")),
+        _row("far", None, pose=far),
+    ]) == []
+
+
+def test_in_room_returns_only_after_the_passer_clears_the_door():
+    resolver, door, far = _started_east_yield()
+    painted = painted_track()
+    room = next(item for item in painted.rooms if item.id == "east_room")
+    hold = (room.hold_xy[0], room.hold_xy[1], 0.0)
+    yielded = _yielded()
+    assert resolver.step(1.0, [_row("near", yielded, pose=hold), _row("far", None, pose=far)]) == []
+    past = pose_on(painted, "east", door.s_m - 0.70, direction=-1)
+    blocked = resolver.step(2.0, [
+        _row("near", yielded, pose=hold),
+        _row("far", None, pose=past, localization=_frame("odom")),
+    ])
+    assert blocked == []
+    back = resolver.step(3.0, [_row("near", yielded, pose=hold), _row("far", None, pose=past)])
+    assert len(back) == 1 and back[0].decision == "YIELD"
+    dx, dy, _tangent = painted.line("east").point_at(door.s_m)
+    assert back[0].yield_m == pytest.approx(math.hypot(hold[0] - dx, hold[1] - dy), abs=0.05)
+    resolver.sent(back[0], 3.0)
+    assert resolver.step(4.0, [_row("near", yielded, pose=hold), _row("far", None, pose=past)]) == []
+    facing = pose_on(painted, "east", door.s_m, direction=-1)
+    turn = resolver.step(5.0, [_row("near", yielded, pose=facing), _row("far", None, pose=past)])
+    assert len(turn) == 1 and turn[0].decision == "YIELD"
+    assert turn[0].yield_m == pytest.approx(0.15, abs=0.04)
+    resolver.sent(turn[0], 5.0)
+    home = pose_on(painted, "east", door.s_m + 0.15, direction=1)
+    done = resolver.step(6.0, [_row("near", yielded, pose=home), _row("far", None, pose=past)])
+    assert done == [Answer("near", "stuck-1", "RESUME", "meet")]
+    resolver.sent(done[0], 6.0)
+    resolver.result(done[0], code="STUCK_DECISION_REFUSED")
+    assert resolver.step(7.0, [_row("near", yielded, pose=home), _row("far", None, pose=past)]) == done

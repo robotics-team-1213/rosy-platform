@@ -4,7 +4,7 @@ import math
 
 import pytest
 
-from fleet.meet.place import painted_track, pose_on, project, yield_move
+from fleet.meet.place import painted_track, pose_on, project, steer_toward, yield_move
 from fleet.meet.scene import Action, Order
 
 
@@ -49,3 +49,18 @@ def test_a_sidestep_follows_the_line_to_the_door_then_the_hold():
     into = yield_move(at_door, order, painted)
     assert into is not None
     assert into[1] == pytest.approx(math.hypot(0.65 - dx, 0.30 - dy), abs=0.05)
+
+
+def test_the_door_to_hold_gap_is_not_on_the_track_and_steers_by_xy():
+    painted = painted_track()
+    door = next(item for item in painted.doors if item.room_id == "east_room")
+    room = next(item for item in painted.rooms if item.id == "east_room")
+    dx, dy, _tangent = painted.line("east").point_at(door.s_m)
+    mid_x, mid_y = (dx + room.hold_xy[0]) / 2, (dy + room.hold_xy[1]) / 2
+    assert project(painted, mid_x, mid_y, 0.0) is None
+    into = steer_toward(mid_x, mid_y, 0.0, room.hold_xy)
+    assert into is not None
+    assert into[1] == pytest.approx(math.hypot(room.hold_xy[0] - mid_x, room.hold_xy[1] - mid_y), abs=0.01)
+    back = steer_toward(room.hold_xy[0], room.hold_xy[1], 0.0, (dx, dy))
+    assert back is not None
+    assert back[1] == pytest.approx(math.hypot(room.hold_xy[0] - dx, room.hold_xy[1] - dy), abs=0.01)
