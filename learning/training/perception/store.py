@@ -110,6 +110,13 @@ def _sha256(path: Path) -> str:
 def file_hashes(folder) -> dict[str, str]:
     """{"a/b.png": sha256} for every counted file under folder."""
     folder = Path(folder)
+    if os.name == "nt":
+        # Regular Windows paths can silently omit deep files during is_file().
+        absolute = os.path.abspath(folder)
+        if not absolute.startswith("\\\\?\\"):
+            absolute = ("\\\\?\\UNC\\" + absolute[2:] if absolute.startswith("\\\\")
+                        else "\\\\?\\" + absolute)
+        folder = Path(absolute)
     if not folder.is_dir():
         raise FileNotFoundError(f"not a folder: {folder}")
     out = {}
