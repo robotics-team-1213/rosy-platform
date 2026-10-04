@@ -5670,3 +5670,9 @@ osy-d395-s1d\`.
 - 변경: 방 안 대기는 그대로 두고, 막힘 판단기가 쓸 수 있는 지도 자세로 문까지 YIELD 한 뒤 선 위에서 RESUME 한다. 오도메트리 좌표와 지령 적분은 차선에 올리지 않는다. ADR docs/adr/D-455-yield-rejoin-by-map-pose.md. API 판과 운용자 다섯 단어는 그대로다.
 - 증거: 관련 호스트 시험 203 passed. test/known_failures.py 는 새 실패 0. 장치·ROS-SIM 은 돌리지 않았다.
 - gate 변화: 없음. SOURCE/LOCAL 판단 시험. DEVICE·ROS-SIM·FIELD 승격 아님.
+
+## 2026-10-04 · uncommitted · docs(cell): 홈 준비 교훈과 모델 PC 직접 검증 경로
+
+- 변경: ce-compound lightweight로 Cell Action admission 전 durable Pilot 홈 복귀와 전진하는 관절 관측 교훈을 기록했다. 모델 PC 직접 실행은 root 소유 고정 worker와 검증 데이터 요청, 비공개 증거, 정확한 정리의 제안 설계다. 서비스 구현·설치는 아직 없다.
+- 증거: r4/r5 startup READY와 seat reconciliation. r5 첫 박스 placement receipt 후 두 번째 이송의 item_lost_in_transit으로 LOCAL_ACTION_HOLD; run exit 1, cleanup exit 0, full_g2 false, fault matrix NOT_RUN. frontmatter/schema와 소스 정의를 확인한다. vocabulary 신규 용어 없음, solutions 발견성 gap 없음.
+- gate 변화: 없음. 초기 홈 해결만 기록했으며 box16·fault matrix·직접 실행 경로의 설치 수용·장치/현장 승격을 주장하지 않는다.
