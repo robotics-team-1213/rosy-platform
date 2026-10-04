@@ -2346,3 +2346,9 @@
 - Change: Observe all signed payload code roots and enrolled previous layouts; include hidden untracked files and hold on unavailable or timed-out Git observations. Preserve signed archive roots, checkout bytes and data outside the payload.
 - Evidence: Initial regression 25 failed/4 passed; corrected closure/error/hook regressions 29 passed on Windows. Hidden-untracked regression 2 failed before correction, 5 focused checks passed after correction. Isolated model-PC Linux updater/hook suites 79 passed, including six real held-switch scenarios.
 - gate 변화: None. Production controller installation, activation and release/field acceptance are separate.
+
+## 2026-10-04 · uncommitted · fix(g2): provision the per-instance IPC directory before startup
+
+- Change: Move private run subdirectory provisioning into fresh_evidence and create uds/omx_cell_sim_01 before starting the owner. Preserve the UnixActionServer service-manager requirement, existing grants and failed-run receipts.
+- Evidence: Actual isolated Gazebo controllers and Fleet started, but the owner IPC thread failed because its parent was absent; readiness timed out before proposal/admission. Child groups and container removal were verified. Host directory regression failed before correction; 16 tests passed afterward with one explicit AF_UNIX host skip. Independent review reran the 16 tests. Model-PC Linux reproduced the original kernel bind failure and verified corrected bind, connect, data roundtrip, 0700 parent mode and reuse refusal.
+- gate 변화: SOURCE/LOCAL provisioning only. Prepare SDK import passed, but actual box16 placement remains HOLD; fault matrix, manual sheet runtime and physical acceptance remain NOT_RUN. Fresh retry uses the existing image and does not replay the previous run.

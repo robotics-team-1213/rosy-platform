@@ -13,6 +13,10 @@ def fresh_evidence(path):
         raise ValueError("G2 evidence directory must be empty; preserve previous runs")
     path.mkdir(parents=True, exist_ok=True)
     path.chmod(0o700)
+    for name in ("http", "staging", "aid", "placements", "uds"):
+        (path / name).mkdir(mode=0o700)
+    # Service-manager provisioning precedes the owner; the IPC server never creates it.
+    (path / "uds" / "omx_cell_sim_01").mkdir(mode=0o700)
     return path
 
 

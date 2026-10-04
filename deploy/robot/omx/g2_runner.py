@@ -300,8 +300,6 @@ def main():
     if args.mode != "host-preflight":
         isolation_guard(ROOT)
     run = fresh_evidence(args.evidence)
-    for name in ("http", "staging", "aid", "placements", "uds"):
-        (run / name).mkdir(mode=0o700)
     children = Children(run)
     outcome, error = "HOLD", None
     try:

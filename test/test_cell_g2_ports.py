@@ -3,6 +3,7 @@ import importlib.util
 from pathlib import Path
 from types import SimpleNamespace
 import sys
+import socket
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -53,6 +54,26 @@ def test_used_run_directory_is_refused_without_overwriting_receipts(tmp_path):
     with pytest.raises(ValueError, match="empty"):
         module().fresh_evidence(root)
     assert (root / "previous.json").read_text() == "previous"
+
+
+def test_fresh_run_provisions_its_instance_socket_before_starting_owner(tmp_path):
+    run = module().fresh_evidence(tmp_path / "run")
+    assert (run / "uds" / "omx_cell_sim_01").is_dir()
+
+
+@pytest.mark.skipif(not hasattr(socket, "AF_UNIX"), reason="Unix IPC requires a Linux host")
+def test_fresh_run_can_bind_its_instance_socket_before_starting_owner(tmp_path):
+    run = module().fresh_evidence(tmp_path / "run")
+    socket_path = run / "uds" / "omx_cell_sim_01" / "control.sock"
+    with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as listener:
+        listener.bind(str(socket_path))
+        listener.listen(1)
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:
+            client.connect(str(socket_path))
+            connection, _ = listener.accept()
+            with connection:
+                client.sendall(b"readiness")
+                assert connection.recv(9) == b"readiness"
 
 
 def grant():
