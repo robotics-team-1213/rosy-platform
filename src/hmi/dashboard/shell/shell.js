@@ -14,7 +14,7 @@ const surface = document.body.dataset.surface;
 const status = document.getElementById("surface-status");
 const notice = document.getElementById("shell-notice");
 const safetyStatus = document.getElementById("safety-mode-status");
-const store = createStore(api);
+const store = createStore(api, { session });
 let mounted = null;
 let revision = null;
 let inflight = null;
@@ -184,6 +184,6 @@ if (!session.token) {
   refresh();
   intervalId = setInterval(refresh, REFRESH_MS);
   if (["setup", "device"].includes(surface)) {
-    stopSafety = store.scope().poll("/api/v1/robot/state", 1_000, renderSafetyMode, onSafetyModeError);
+    stopSafety = store.scope().state(renderSafetyMode, onSafetyModeError);
   }
 }
