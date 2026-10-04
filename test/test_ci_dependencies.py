@@ -133,3 +133,20 @@ def test_raw_numpy_tools_are_isolated_from_debian_and_keep_runtime_constraints()
     assert "-c" in requirements, "retain runtime constraints for raw tools"
     assert 'PYTHONPATH='+target+'${PYTHONPATH:+:$PYTHONPATH}' in script
     assert "numpy==2.2.6" in (ROOT / "learning/curation/pinky/requirements-raw.txt").read_text()
+
+
+def test_ci_loads_hashlocked_receiver_crypto_before_tls_contracts():
+    import yaml
+
+    steps = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))["jobs"]["test"]["steps"]
+    step = next((s for s in steps if s["name"] == "Install receiver TLS verification runtime"), None)
+    assert step is not None, "TLS contracts cannot use the older container cryptography"
+    script = step["run"]
+    assert "receiver-crypto-requirements.txt" in script
+    assert "--require-hashes --no-deps --only-binary=:all:" in script
+    assert "--platform manylinux_2_28_x86_64 --platform manylinux2014_x86_64" in script
+    assert "--target /tmp/rosy-receiver-crypto" in script
+    assert 'echo "PYTHONPATH=/tmp/rosy-receiver-crypto${PYTHONPATH:+:$PYTHONPATH}"' in script
+    assert "from cryptography.x509.verification import PolicyBuilder, Store" in script
+    assert 'cryptography.__version__ == "49.0.0"' in script
+    assert steps.index(step) < next(i for i, s in enumerate(steps) if s["name"] == "Test (matrix suite, D-436)")

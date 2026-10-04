@@ -127,6 +127,18 @@ jobs:
           pip3 install --no-cache-dir --break-system-packages -c /tmp/rosy-runtime-constraints.txt \
             flake8 httpx pyyaml jsonschema ext4
 
+      - name: Install receiver TLS verification runtime
+        run: |
+          # D-456: load the same hashlocked receiver crypto as the signed ARM payload.
+          # Explicit compatible platforms select the existing reviewed AMD64 wheel hashes.
+          pip3 install --no-cache-dir --break-system-packages \
+            --require-hashes --no-deps --only-binary=:all: \
+            --platform manylinux_2_28_x86_64 --platform manylinux2014_x86_64 \
+            --target /tmp/rosy-receiver-crypto \
+            -r deploy/robot/pinky_pro/image/receiver-crypto-requirements.txt
+          PYTHONPATH=/tmp/rosy-receiver-crypto python3 -c 'import cryptography; from cryptography.x509.verification import PolicyBuilder, Store; assert cryptography.__version__ == "49.0.0"'
+          echo "PYTHONPATH=/tmp/rosy-receiver-crypto${PYTHONPATH:+:$PYTHONPATH}" >> "$GITHUB_ENV"
+
       - name: Install Pinky raw verification tools
         if: contains(toJSON(matrix.invocations), 'learning/curation/pinky') || contains(toJSON(matrix.invocations), 'learning/training/pinky')
         run: |
