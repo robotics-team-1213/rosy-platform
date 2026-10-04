@@ -70,8 +70,8 @@
 
 ## 최근 기록
 
+- 2026-10-04 · uncommitted · model-watch installer CRLF config parsing
 - 2026-10-04 · uncommitted · fix(site): keep model delivery journal in service state
 - 2026-10-04 · uncommitted · fix: protect the full model-PC code closure
 - 2026-10-04 · uncommitted · D-441 local maintenance and manual install safety
 - 2026-10-04 · uncommitted · verify(D-441): 최초 설치와 실제 후속 자동 갱신 확인
-- 2026-10-04 · uncommitted · D-446 clean older checkout permits signed execution

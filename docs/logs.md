@@ -5580,3 +5580,10 @@
 - Change: New POSIX setgid publication normalizes new dataset/eval/model parents and files before rename/READY; source and existing versions unchanged. Reject ancestor/source/partial symlinks and repair interrupted READY chmod on retry.
 - Evidence: Native model-PC corrected RED4fail, evalRED1fail, linkRED2fail, retryRED1fail; final5suites59pass0skip. See validation/shared-store-publication-2026-10-04.md.
 - Gate: Nonprivileged source/Linux evidence. Actual service UID access, membership/config binding, updated pinned installer source, system service, robot HOLD and owner/Fleet/field gates remain pending.
+
+
+## 2026-10-04 · uncommitted · model-watch installer CRLF config parsing
+
+- Change: cfg_value removes carriage returns before quote/comment trimming, so LF and CRLF backend/store values select the same installation branch.
+- Evidence: Native Linux RED2fail4pass for plain/quoted CRLF; after fix LF/CRLF/plain/quoted/comment regressions and existing install/unit suites23pass. Independent source review requested. V2 source881file archive and CPUintake pass did not establish installation closure: dry-run exit0 omitted store/drop-in before this fix.
+- Gate: No privileged install or timer activation. Existing v2 bundle preserved; corrected committed source must be repackaged and reviewed before administrator request supersedes it. Producer config remains an inactive candidate; actual service UID/group/doctor/robot HOLD gates pending.
