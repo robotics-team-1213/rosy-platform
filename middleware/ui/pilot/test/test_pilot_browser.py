@@ -444,6 +444,38 @@ def test_bad_token_is_refused_with_guidance(tablet_page):
     assert errors == [], errors
 
 
+@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+                    reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
+def test_lobby_lists_neighbours_and_points_to_their_origin(tablet_page):
+    """이웃 방 목록(D-343 2.2-3): 이 기기가 대신 찾은 방들이 보이고, 각 버튼이 그 origin URL 을 가진다."""
+    base_url, page, errors = tablet_page
+    page.route("**/api/v1/site/rooms",
+               lambda route: route.fulfill(json={"rooms": [
+                   {"hostname": "rosy-02", "address": "10.0.0.8", "port": 8080,
+                    "kind": "robot", "url": "http://rosy-02.local:8080/pilot/#join"}]}))
+    page.goto(f"{base_url}/pilot")
+    page.wait_for_selector("form[data-pilot-token-form] ui-field input")
+    room = page.locator("[data-lobby-room=rosy-02]")
+    room.wait_for(state="visible")
+    # 이동 목적지는 버튼의 진입 URL 에 명시돼 있다(D-343 2.3). 시험 호스트에서
+    # 가짜 LAN 이름은 풀리지 않으므로 클릭하지 않고 목적지를 단언한다.
+    assert room.get_attribute("data-lobby-url") == "http://rosy-02.local:8080/pilot/#join"
+    assert errors == [], errors
+
+
+@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+                    reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
+def test_lobby_is_absent_and_gate_survives_when_rooms_is_unreachable(tablet_page):
+    """탐색 불가(503/끊김)면 로비는 조용히 없고 토큰 게이트는 산다."""
+    base_url, page, errors = tablet_page
+    page.route("**/api/v1/site/rooms",
+               lambda route: route.fulfill(status=503, json={"code": "DISCOVERY_UNAVAILABLE"}))
+    page.goto(f"{base_url}/pilot")
+    page.wait_for_selector("form[data-pilot-token-form] ui-field input")
+    assert page.locator("[data-lobby-room]").count() == 0
+    assert errors == [], errors
+
+
 def _enter_drive(page, base_url):
     page.goto(f"{base_url}/pilot")
     page.wait_for_selector("form[data-pilot-token-form] ui-field input")

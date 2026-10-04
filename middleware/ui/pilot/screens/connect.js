@@ -57,6 +57,34 @@ function readoutPair(pairs) {
   return list;
 }
 
+// --- 이웃 방 (D-343 2.2 — 이 기기가 대신 찾아 준 이웃 로봇) ---
+async function refreshLobby(host) {
+  const rows = await api("/api/v1/site/rooms").then((r) => r.body?.rooms ?? []).catch(() => null);
+  if (rows === null) {
+    return;  // 탐색 불가면 로비는 조용히 없다 — 접속 흐름을 막지 않는다.
+  }
+  const here = location.host.toLowerCase().replace(/\.local(:|$)/, "$1");
+  const others = rows.filter((row) => `${row.hostname}.local:${row.port}`.toLowerCase() !== here);
+  const section = el("div", null, {"data-lobby-list": ""});
+  if (others.length === 0) {
+    section.append(el("ui-text", "같은 현장에 이웃 로봇이 없습니다", {scale: "label"}));
+  } else {
+    const list = el("ui-actions");
+    for (const room of others.slice(0, 8)) {
+      const go = el("ui-button", room.hostname, {type: "button", "data-lobby-room": room.hostname,
+        "data-lobby-url": room.url});
+      go.setAttribute("kind", "segment");
+      go.addEventListener("click", () => {
+        // 그 기기의 origin 으로 이동한다(D-343 2.3 — CORS 를 열지 않는다).
+        location.assign(room.url);
+      });
+      list.append(go);
+    }
+    section.append(el("ui-text", "이웃 로봇", {scale: "label"}), list);
+  }
+  host.replaceChildren(section);
+}
+
 // --- 최근 접속 목록 (게임 "계속하기") ---
 function renderRecentList(root, onConnect) {
   const recent = getRecent();
@@ -110,6 +138,11 @@ function renderTokenForm(root, onConnect, message) {
   // 최근 접속 목록
   const recent = renderRecentList(root, onConnect);
   if (recent) root.append(recent);
+
+  // 이웃 방 (D-343 2.2 — 이 기기가 대신 찾아 준 이웃. 주소는 현재 origin 으로만 연다)
+  const lobby = el("div", null, {"data-lobby-list": ""});
+  root.append(lobby);
+  refreshLobby(lobby);
 
   // 새 연결
   const divider = el("ui-text", "새 연결", {scale: "label"});
