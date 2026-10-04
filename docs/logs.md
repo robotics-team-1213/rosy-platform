@@ -5009,3 +5009,10 @@
 - 변경: wave5 후보를 origin/main의 CI 임시 Gazebo 제외 파일 수명 수정 위에 rebase했다. 원격 CI·실제 Bash 시험과 docs/logs 원문 prefix를 보존하고 이번 세션의 정리·인식 수정만 추가했다.
 - 증거: rebase 후보 6a7de04dc75c clean, 관련 CI/inventory 12 passed; 독립 peer prefix·source bytes 확인 및 CI 9 passed·APPROVE. docs/validation/d427-source-migration/wave5-rebase-independent-review-2026-10-04.md. 충돌 상태 push9는 lint3 errors·exit1이므로 수락 증거가 아니다.
 - gate 변화: 없음. 최종 push gate·원격 CI·ARM64·SD·release·실기는 후속이며 전체 legacy 인식 시험도 진행 중이다.
+
+
+## 2026-10-04 · uncommitted · D-427 wave5 final host and fixture corrections
+
+- 변경: 흡수 소유권 시험의 폐기된 src guide 참조를 정본 manifest로 옮기고, Git 영향 시험 fixture를 현행 perception 경로로 맞췄다. 알 수 없는 retired src의 REVIEW 우선 판정은 유지한다. production classifier·runtime·manifest·wheel 입력은 바꾸지 않았다.
+- 증거: push11 fast462 passed/2 skipped 이후 mapped2 failed/3664 passed/151 skipped라 원격 반영은 거부됐다. 실제 OpenCV4.6 전체2588 passed/107 skipped·NEW0, WSL package27 동일/CI build26 finished exit0. 수정 관련14 passed·독립14 passed·APPROVE. docs/validation/d427-source-migration/wave5-final-host-verification-2026-10-04.md.
+- gate 변화: 없음. 최종 SHA의 push·GitHub CI·ARM64·SD·release·DEVICE·FIELD는 후속이다. HOST·합성 결과를 실기 수락으로 바꾸지 않는다.
