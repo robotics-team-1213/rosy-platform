@@ -6,6 +6,7 @@ import { createRoster } from "./roster.js";
 import { createLineStuckPanel } from "./line-stuck.js";
 import { createSignals } from "./signals.js";
 import { createTrackingView } from "./tracking-view.js";
+import { createStartPointView } from "./start-point-view.js";
 import { createVisionView } from "./vision-view.js";
 import { applyRoleToControls } from "./authorization.js";
 // D-410 — 기기 등록·카메라 연결 승인·경기장/맵 보정은 설치 화면(install.js)이 가진다.
@@ -722,6 +723,7 @@ const visionView = createVisionView({ scope: pageScope, el, call, auth, authHead
 // --- 신호등 (ROSY-SIGNAL-001) --------------------------------------------------
 
 const trackingView = createTrackingView({ scope: pageScope, el, view, call, auth, confirmedAction, onChanged: () => mapView.draw() });
+const startPointView = createStartPointView({scope: pageScope, el, view, call, auth, onChanged: () => mapView.draw()});
 
 function tickClock() {
   el("clock").textContent = new Date().toTimeString().slice(0, 8);
