@@ -28,7 +28,8 @@
 - **빌드**: `build-native-payload.yml` `release_id=2026.10.04-034`, run `37189180389`(workflow_dispatch, main = `dd159ab33`계) — conclusion **success**.
 - **무서명 artifact 관측**: artifact `rosy-native-payload-unsigned-2026.10.04-034-dd159ab3…` (101,072,789 B)를 내려 확인 — `rosy-packages.txt`에 `dashboard`·`pilot` 등재, `install/share/dashboard/`(cmake·environment·hook·panels·shell·app.js)와 `install/share/pilot/`(app.js·drivers·icons·screens·widgets) 실재.
 - **서명 payload 관측**: `prepare_payload_release.py --run 37189180389 --skip-abi`(서명 PC, 키 `rosy-release-2026-01`) → `2026.10.04-034.tar.gz` 서명 완료(download 22.7s·검증·서명 8.8s·pack 13.4s). tar 목록에서 `install/share/dashboard/index.html`, `install/share/pilot/app.js`, `install/share/web_common/tokens.css` 확인. 로봇 미푸시(rosy-release-push는 별도 승인 단계).
-- **판정**: D-444 R1의 "서명 release payload 안에 share/dashboard·share/pilot가 설치되어 있고"는 관측됐다. 남은 조항은 그 이미지를 탄 기기의 `GET /dashboard`·`/pilot` 200+CSP(P1.2 벤치) — 이 회차가 완료라 주장하지 않는 부분.
+- **부팅·HTTP 관측 (D-444 P1.2)**: `payload-boot-smoke.yml` run `37200780702`(arm64 러너 + `ros:jazzy-ros-base` 컨테이너)에서 payload install로 CORE 부팅 → **`GET /dashboard` 200+CSP · `GET /pilot` 200+CSP · `GET /console` 200+CSP**. 부팅 로그: `core up: robot_id=rosy_01 model=Pinky Pro` + `api server on 0.0.0.0:8080` + `slam_toolbox unavailable`(예상대로, CI와 동일).
+- **판정**: **D-444 R1 전 조항 관측 완료 — dashboard·pilot ARTIFACT GO.**
 
 ## 3. push 경로 기록 (2026-10-04, 공유 체크아웃 운영 노트)
 
@@ -40,5 +41,8 @@
 
 - [x] 서명 사이트 후보 1건 이상 관측 (§1, 5건)
 - [x] payload 안 `share/dashboard`·`share/pilot` 관측 — 무서명 artifact + 서명 tar 모두 (§2)
+- [x] arm64 러너 부팅 `GET /dashboard`·`/pilot`·`/console` 200+CSP (P1.2 완결, run 37200780702)
+- [x] dashboard·pilot ARTIFACT **GO** (D-444 R1 전 조항)
 - [x] 회차 README 닫기 + 모듈 저널 진입
-- [ ] 남은 것(다음 회차): 기기/컨테이너 부팅 `GET /dashboard`·`/pilot` 200+CSP (P1.2)
+
+이 회차가 닫는 것: D-444 P1 전체. 남는 것(다음 회차): P2(페달 정지 계측 — 사용자 입회), P3(fleet ROS-SIM D-426).
