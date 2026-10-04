@@ -48,6 +48,47 @@ def _text(value, nullable=False):
     return (nullable and value is None) or (isinstance(value, str) and bool(value.strip()) and len(value) <= 4096)
 
 
+RICH_FRAME_FIELDS = {'width', 'height', 'source_sha256', 'object_review_sha256',
+                     'representations_sha256', 'frame_excluded', 'complete_frame_review',
+                     'background_reviewed', 'pixel_approval'}
+
+
+def _rich(value):
+    return ('classes_signature' in value or 'ignore_index' in value
+            or any(isinstance(r, dict) and RICH_FRAME_FIELDS & set(r) for r in value.get('frames', [])))
+
+
+def _validate_rich(value):
+    _require(re.fullmatch('[0-9a-f]{32}', value['workspace_id']) is not None, 'rich workspace identity invalid')
+    _require(bool(value['frames']), 'complete rich frames required')
+    for key in ('pixel_classes_sha256', 'classes_signature', 'ignore_index'):
+        _require(key in value, 'complete rich class binding required')
+    classes, signature, ignore = (value[k] for k in ('pixel_classes_sha256', 'classes_signature', 'ignore_index'))
+    _require(_hex(classes, True) and _hex(signature, True) and (classes is None) == (signature is None)
+             and ((classes is None and ignore is None) or (classes is not None and type(ignore) is int and ignore == 255)),
+             'exact class signature and ignore index required')
+    for row in value['frames']:
+        _require(RICH_FRAME_FIELDS <= set(row), 'complete rich frame binding required')
+        _require(all(_integer(row[k], 1) and row[k] <= 4096 for k in ('width', 'height'))
+                 and row['object_version'] > 0, 'rich dimensions or object revision invalid')
+        for key in ('source_sha256', 'object_review_sha256', 'representations_sha256'):
+            _require(_hex(row[key]), 'rich content digest invalid')
+        for key in ('frame_excluded', 'complete_frame_review', 'background_reviewed'):
+            _require(type(row[key]) is bool, 'exact rich review boolean required')
+        _require(row['frame_excluded'] == (row['object_decision'] == 'excluded'), 'whole-frame exclusion binding differs')
+        if row['mask_decision'] == 'approved':
+            expected = {'image_sha256': row['image_sha256'], 'mask_sha256': row['mask_sha256'],
+                        'mask_version': row['mask_version'], 'width': row['width'], 'height': row['height'],
+                        'classes_sha256': classes, 'classes_signature': signature, 'ignore_index': 255,
+                        'complete_frame_review': True, 'background_reviewed': True}
+            _require(classes is not None and row['complete_frame_review'] is True
+                     and row['background_reviewed'] is True and row['fixed_eval_overlap'] is not True
+                     and isinstance(row['pixel_approval'], dict) and _encoded(row['pixel_approval']) == _encoded(expected),
+                     'exact pixel approval binding differs')
+        else:
+            _require(row['pixel_approval'] is None, 'unapproved mask cannot retain approval')
+
+
 def validate_current(current):
     """Validate/recompute the complete current snapshot; return a detached copy."""
     _require(isinstance(current, dict), 'current decisions unavailable')
@@ -97,6 +138,8 @@ def validate_current(current):
         _require('mask_sha256' in row and _hex(row['mask_sha256'], True), 'mask hash invalid')
         if row['mask_decision'] == 'approved':
             _require(row['mask_sha256'] is not None and row['mask_version'] > 0, 'approved mask binding missing')
+    if _rich(value):
+        _validate_rich(value)
     return value
 
 
@@ -186,6 +229,70 @@ def _paths(root):
     return paths
 
 
+def _human_review(frame):
+    review, source = frame.get('review'), frame['source']
+    _require(isinstance(review, dict) and isinstance(review.get('boxes'), list), 'complete object review required')
+    _require(all(isinstance(box, dict) for box in review['boxes']), 'object review boxes invalid')
+    return dict(review, video=source.get('video'), video_frame=source.get('video_frame'))
+
+
+def _jsonlines(raw):
+    return [_json(line) for line in raw.splitlines() if line.strip()]
+
+
+def _verify_rich(value, doc, legacy, refs, read, app):
+    mandatory = {'representations.json'}
+    if value['pixel_classes_sha256'] is not None:
+        mandatory.add('pixel-classes.yaml')
+    if value['map_reference_sha256'] is not None:
+        mandatory.add('cad-reference.json')
+    _require(mandatory <= set(refs), 'mandatory rich binding file missing')
+    receipt = _json(read('pinky-review-receipt.json'))
+    _require(isinstance(receipt, dict) and receipt.get('export_id') == doc['export_id']
+             and _encoded(receipt.get('authority')) == _encoded(value), 'receipt authority or export identity differs')
+    frames = [app[row['frame']] for row in value['frames']]
+    sources = _jsonlines(read('inputs/source.jsonl'))
+    human = _jsonlines(read('inputs/human.jsonl'))
+    _require(_encoded(sources) == _encoded([f['source'] for f in frames]), 'complete source snapshot differs')
+    expected_human = [_human_review(f) for f in frames
+                      if not any(b.get('label') is None for b in _human_review(f)['boxes'])]
+    _require(_encoded(human) == _encoded(expected_human), 'human object content differs from snapshot')
+    for name, key in [('inputs/source.jsonl', 'source_sha256'), ('inputs/human.jsonl', 'human_sha256')]:
+        _require(_hex(legacy.get(key)) and _sha(read(name)) == legacy[key], 'legacy source provenance differs')
+    representations = _json(read('representations.json'))
+    _require(isinstance(representations, dict) and set(representations) == {str(r['frame']) for r in value['frames']},
+             'complete representation snapshot required')
+    for row, frame in zip(value['frames'], frames):
+        source = frame['source']
+        _require(_sha(_encoded(source)) == row['source_sha256']
+                 and _sha(_encoded(_human_review(frame))) == row['object_review_sha256'], 'object or source content digest differs')
+        _require(type(source.get('width')) is int and source['width'] == row['width']
+                 and type(source.get('height')) is int and source['height'] == row['height'], 'source dimensions binding differs')
+        for key in ('source_session', 'capture_group', 'source_video_sha256', 'video_frame', 'fixed_eval_overlap', 'map_revision', 'map_pose'):
+            _require(_encoded(source.get(key)) == _encoded(row[key]), 'source metadata binding differs')
+        _require(source.get('original_video_verified', False) is row['original_video_verified'], 'source video verification binding differs')
+        reps = representations[str(row['frame'])]
+        _require(isinstance(reps, list) and all(isinstance(r, dict) and _hex(r.get('image_sha256')) for r in reps)
+                 and _sha(_encoded(reps)) == row['representations_sha256'], 'representation content digest differs')
+        _require(len({r['image_sha256'] for r in reps}) == len(reps)
+                 and any(r['image_sha256'] == row['image_sha256'] and type(r.get('width')) is int
+                         and r['width'] == row['width'] and type(r.get('height')) is int
+                         and r['height'] == row['height'] for r in reps), 'selected image representation missing')
+        suffix = PurePosixPath(source.get('image', '')).suffix.lower()
+        _require(suffix in ('.jpg', '.jpeg', '.png'), 'supported source image suffix required')
+        name = f'inputs/images/{row["frame"]:06d}{suffix}'
+        _require(name in refs and refs[name]['sha256'] == row['image_sha256'], 'selected image bytes binding differs')
+    groups = legacy.get('groups')
+    _require(isinstance(groups, list) and all(isinstance(g, dict) and isinstance(g.get('exported_indices'), list) for g in groups),
+             'object group inventory required')
+    exported = [i for g in groups for i in g['exported_indices']]
+    approved = {r['frame'] for r in value['frames'] if r['object_decision'] == 'approved'}
+    _require(all(_integer(i) for i in exported) and len(exported) == len(approved) and set(exported) == approved,
+             'object approval count differs')
+    if value['map_reference_sha256'] is not None:
+        _require(refs['cad-reference.json']['sha256'] == value['map_reference_sha256'], 'CAD reference binding differs')
+
+
 def verify_bundle(export_root, current, *, workspace_id):
     """Verify both seals and exact current equality; never qualify the dataset."""
     value = validate_current(current)
@@ -232,6 +339,8 @@ def verify_bundle(export_root, current, *, workspace_id):
         _require(row is not None and type(row.get('version')) is int and row['version'] == frame['object_version']
                  and row.get('status') == frame['object_decision'] and isinstance(row.get('source'), dict)
                  and row['source'].get('image_sha256') == frame['image_sha256'], 'application decision binding differs')
+    if _rich(value):
+        _verify_rich(value, doc, legacy, refs, read, app)
     if value.get('pixel_classes_sha256') is not None:
         _require('pixel-classes.yaml' in refs and refs['pixel-classes.yaml']['sha256'] == value['pixel_classes_sha256'], 'current pixel class binding differs')
     masks = [_json(line) for line in read('pixel-reviews.jsonl').splitlines() if line.strip()]
