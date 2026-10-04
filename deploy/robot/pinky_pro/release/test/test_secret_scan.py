@@ -56,3 +56,44 @@ def test_the_same_quote_anywhere_else_is_still_a_secret(tmp_path):
     assert [f.kind for f in findings] == ["credential"], (
         "the prose excuse must stay pinned to the one journal path"
     )
+
+def test_nullable_kotlin_annotations_keep_credential_defaults_visible():
+    slot = 'request' + 'Secret'
+    argument = 'sec' + 'ret'
+    bearer_name = 'bear' + 'er'
+    declaration = 'private var ' + slot + ': String? = '
+    assert secret_scan.scan_text('Client.kt', declaration + 'null') == []
+    signature = 'fun call(' + argument + ': String? = null, ' + bearer_name + ': String? = null): String {'
+    assert secret_scan.scan_text('Client.kt', signature) == []
+    leaked = declaration + '"' + 'live' + '9182aeb27c4d"'
+    assert any(f.kind == 'credential' for f in secret_scan.scan_text('Client.kt', leaked))
+    assert secret_scan.scan_text('config.yaml', argument + ': String? = null')
+
+
+def test_generated_request_secrets_and_named_slot_reads_are_code():
+    assert secret_scan.scan_text('service.py', 'secret = secrets.token_urlsafe(32)') == []
+    assert secret_scan.scan_text('service.py', 'def _row(self, request_id, secret=None):') == []
+    assert secret_scan.scan_text('Client.kt', 'requestSecret = string(created, "request_secret", 43)') == []
+    slot = 'request' + 'Secret'
+    leaked = slot + ' = string(created, "' + 'live' + '9182aeb27c4d", 43)'
+    assert any(f.kind == 'credential' for f in secret_scan.scan_text('Client.kt', leaked))
+    leaked_call = 'sec' + 'ret = secrets.token_urlsafe("' + 'live' + '9182aeb27c4d")'
+    assert any(f.kind == 'credential' for f in secret_scan.scan_text('service.py', leaked_call))
+    for filename in ('config.py', 'config.yaml'):
+        quoted_call = 'pass' + 'word = "secrets.token_urlsafe(32)"'
+        assert any(f.kind == 'credential' for f in secret_scan.scan_text(filename, quoted_call))
+    ambiguous_slot = slot + ' = decrypt("request___secret")'
+    assert any(f.kind == 'credential' for f in secret_scan.scan_text('Client.kt', ambiguous_slot))
+
+
+def test_public_peer_vectors_are_bound_to_exact_path_field_and_value():
+    for field, values in secret_scan._PEER_PUBLIC_VECTOR_VALUES.items():
+        for value in values:
+            line = '  "' + field + '": "' + value + '",'
+            assert secret_scan.scan_text(secret_scan._PEER_VECTOR_PATH, line) == []
+            assert secret_scan.scan_text('other.json', line)
+            assert secret_scan.scan_text(secret_scan._PEER_VECTOR_PATH, line.replace(field, 'api_token'))
+            changed = line.replace(value, value[:-1] + ('3' if value[-1] != '3' else '4'))
+            assert secret_scan.scan_text(secret_scan._PEER_VECTOR_PATH, changed)
+            mixed = line + ' api_' + 'token="' + 'live' + '9182aeb27c4d"'
+            assert any(f.kind == 'credential' for f in secret_scan.scan_text(secret_scan._PEER_VECTOR_PATH, mixed))

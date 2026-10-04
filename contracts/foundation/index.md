@@ -36,8 +36,8 @@
 
 ## 최근 기록
 
+- 2026-10-05 · uncommitted · feat(pairing): 승인 관계 계약과 설정 쓰기 경계
 - 2026-10-04 · uncommitted · fix(site): D-457 마커 우선·무마커 폴백
 - 2026-10-04 · uncommitted · feat(protocol): 공개 LAN rooms typed snapshot
 - 2026-10-04 · uncommitted · D-452 역할 발견과 승인 directory 계약
 - 2026-10-04 · uncommitted · feat(power): long testing dwell with low battery saving
-- 2026-10-04 · uncommitted · feat(power): fresh battery evidence and idle saving

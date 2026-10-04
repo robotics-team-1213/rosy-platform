@@ -37,6 +37,7 @@ GUARD_SET = (
     "test/test_release_boundary_guards.py",
     "test/architecture/test_module_structure.py",
     "test/test_harness_contracts.py",
+    "test/test_secret_public_provenance.py",
     "middleware/core/gateway/test/test_protocol_version_alignment.py",
     "test/test_robot_literals.py",
     "test/architecture/test_platform_parts.py",

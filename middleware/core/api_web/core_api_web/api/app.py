@@ -1,4 +1,4 @@
-"""core_api_web.api.app — FastAPI 팩토리 (P1-9, API-101). 계약: ROSY-API-REF-001 v1.99."""
+"""core_api_web.api.app — FastAPI 팩토리 (P1-9, API-101). 계약: ROSY-API-REF-001 v1.101."""
 
 from __future__ import annotations
 
@@ -112,7 +112,7 @@ def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
     app = FastAPI(
         title="ROSY CORE API",
         version="1.20.0",
-        description="로봇 미들웨어 API — 계약: ROSY-API-REF-001 (v1.99)",
+        description="로봇 미들웨어 API — 계약: ROSY-API-REF-001 (v1.101)",
     )
     app.state.core = services
     agent = getattr(services, "fleet_agent", None)
@@ -152,6 +152,7 @@ def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
         "styles.css": "text/css",
         "console-detail.css": "text/css",
         "app.js": "application/javascript",
+        "peer-approval.js": "application/javascript",
         "entry-router.js": "application/javascript",
         "dashboard-entry.js": "application/javascript",
         "dashboard-entry.css": "text/css",
@@ -177,6 +178,8 @@ def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
         **registry.assets(),
     }
 
+    from .peer_pairing.receiver_routes import router as peer_pairing_router
+    app.include_router(peer_pairing_router)
     app.include_router(auth_router)
     app.include_router(connection_router)
     app.include_router(system_router)
@@ -242,6 +245,7 @@ def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
         "stick.js": "application/javascript",
         "link.js": "application/javascript",
         "app.js": "application/javascript",
+        "peer-approval.js": "application/javascript",
         "client.js": "application/javascript",
         "drivers/registry.js": "application/javascript",
         "drivers/pinky_core.js": "application/javascript",

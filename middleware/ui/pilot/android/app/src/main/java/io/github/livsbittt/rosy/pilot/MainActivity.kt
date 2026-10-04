@@ -27,6 +27,8 @@ class MainActivity : Activity() {
     private val main = Handler(Looper.getMainLooper())
     private val io = Executors.newSingleThreadExecutor()
     private val vault by lazy { PairingVault(this) }
+    private val peerVault by lazy { PeerRelationshipVault(this) }
+    private val peerUi by lazy { PeerApprovalUi(this, { AndroidPeerIdentity(this) }, peerVault) }
     private var candidates = CandidateStore()
     private var discovery: RobotDiscovery? = null
     private var proxy: PilotProxy? = null
@@ -37,6 +39,7 @@ class MainActivity : Activity() {
     private var foreground = false
     private var opening = false
     private var lastError: String? = null
+    private var lastSelectedCandidate: Candidate? = null
     private val screenSleep = PendingScreenSleep()
     private val sleeping get() = screenSleep.active
     private var pendingApprovedSleep = false
@@ -76,7 +79,7 @@ class MainActivity : Activity() {
         identity.addView(View(this), LinearLayout.LayoutParams(1, 0, 1f))
         healthText = views.label("태블릿 상태 확인 중", 14f, true); identity.addView(healthText)
         lastHealth?.let { renderHealth(it) }
-        identity.addView(button("태블릿") { deviceDetails() })
+        identity.addView(button("기기·연결") { deviceDetails() })
         val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(views.dp(24), views.dp(40), views.dp(40), views.dp(24)) }
         columns.addView(list, LinearLayout.LayoutParams(0, -1, 1f))
         val header = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL }
@@ -116,6 +119,7 @@ class MainActivity : Activity() {
         lastError = null
         val addresses = runCatching { candidates.addresses(incoming.host, incoming.port) }.getOrNull() ?: return
         val candidate = incoming.copy(addresses = addresses)
+        lastSelectedCandidate = candidate
         opening = true
         val version = ++attempt; val store = candidates
         for (i in 0 until robots.childCount) robots.getChildAt(i).isEnabled = false
@@ -125,19 +129,28 @@ class MainActivity : Activity() {
         io.execute {
             if (attempt != version) return@execute
             try {
-                val offer = LobbyPairing.offer(candidate)
-                val remembered = if (offer.mode == "paired") vault.inspect(candidate, offer, store) else SavedLogin(SavedLoginStatus.NONE)
+                val direct = if (candidate.secure) peerUi.connect(candidate, store,
+                    { version == attempt && foreground }, { if (version == attempt) returnToLobby() }) else null
+                if (version != attempt) return@execute
+                val offer = direct?.let { LobbyOffer("paired", it.target.id) } ?: LobbyPairing.offer(candidate)
+                val remembered = if (direct != null) SavedLogin(SavedLoginStatus.READY, direct)
+                    else if (offer.mode == "paired") vault.inspect(candidate, offer, store) else SavedLogin(SavedLoginStatus.NONE)
                 val saved = remembered.session
-                val reused = saved?.takeIf { LobbyPairing.reuse(it) }
+                val reused = direct ?: saved?.takeIf { LobbyPairing.reuse(it) }
                 main.post {
                     if (version != attempt || !foreground) return@post
                     if (reused != null) join(candidate, offer, store, version, null, reused)
                     else if (offer.mode == "development") join(candidate, offer, store, version, null)
                     else pairingCode(candidate, offer, store, version, remembered.status)
                 }
-            } catch (_: Exception) { failed(version, if (candidate.secure)
-                "연결할 수 없습니다. 로봇 전원·같은 Wi-Fi·신뢰된 HTTPS 연결을 확인한 뒤 다시 선택하세요."
-                else "연결할 수 없습니다. 로봇 전원과 같은 Wi-Fi 연결을 확인한 뒤 다시 선택하세요.") }
+            } catch (error: Exception) { failed(version, when {
+                error is PeerApprovalExpired -> "승인 기록은 유지되지만 사용 기한이 끝났습니다. 수신 장치에서 재승인을 확인하세요."
+                error is PeerApprovalTimeout -> "수신 승인을 기다리는 시간이 끝났습니다. 로봇을 다시 선택해 요청하세요."
+                error is PeerKeyChanged -> "기억한 수신 장치의 키와 다릅니다. 승인 기록을 유지하고 연결을 차단했습니다."
+                error is PeerRefused -> "승인 기록은 지우지 않았습니다. 수신 장치에서 승인·발급자 상태를 확인한 뒤 다시 선택하세요."
+                candidate.secure -> "연결할 수 없습니다. 로봇 전원·같은 Wi-Fi·신뢰된 HTTPS 연결을 확인한 뒤 다시 선택하세요."
+                else -> "연결할 수 없습니다. 로봇 전원과 같은 Wi-Fi 연결을 확인한 뒤 다시 선택하세요."
+            }) }
         }
     }
     private fun pairingCode(candidate: Candidate, offer: LobbyOffer, store: CandidateStore, version: Long, savedStatus: SavedLoginStatus) {
@@ -181,7 +194,7 @@ class MainActivity : Activity() {
                     bar.addView(button("로봇 목록") { returnToLobby() })
                     status = label("${candidate.name} · ${approved.target.id}", 18f).apply { setPadding(views.dp(20), 0, views.dp(20), 0); typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL); maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END }
                     bar.addView(status, LinearLayout.LayoutParams(0, -2, 1f))
-                    bar.addView(button("태블릿") { deviceDetails(candidate) })
+                    bar.addView(button("기기·연결") { deviceDetails(candidate) })
                     root.addView(bar)
                     healthText = label("태블릿 상태 확인 중", 14f); lastHealth?.let { renderHealth(it) }
                     val view = WebView(this); web = view; view.setBackgroundColor(PilotColors.background)
@@ -211,7 +224,8 @@ class MainActivity : Activity() {
                             if (proxy === ready && web === view) view.loadUrl("${ready.origin}/pilot")
                         }
                     }
-                    status.text = "${candidate.name} · ${approved.target.id} · ${if (offer.mode == "development") "개발 연결" else "연결됨"}"
+                    val connectionLabel = when (approved.peerApproval?.persistent) { true -> "승인 유지 · 연결됨"; false -> "기간 제한 승인 · 연결됨"; null -> if (offer.mode == "development") "개발 연결" else "연결됨" }
+                    status.text = "${candidate.name} · ${approved.target.id} · $connectionLabel"
                 }
             } catch (error: Exception) {
                 // Exception messages and HTTP bodies can contain credentials; log class and locations only.
@@ -232,7 +246,7 @@ class MainActivity : Activity() {
     } }
     private fun endSession(forget: Candidate? = null, afterClosed: (() -> Unit)? = null) {
         // Resource-owning completion callbacks must run their stale-attempt cleanup.
-        attempt++; screenSleep.revoke(); opening = false; main.removeCallbacks(refreshTick)
+        attempt++; peerUi.close(); screenSleep.revoke(); opening = false; main.removeCallbacks(refreshTick)
         val closingAttempt = attempt
         pairingDialog?.dismiss(); pairingDialog = null
         web?.evaluateJavascript("window.dispatchEvent(new Event('blur')); sessionStorage.clear();", null)
@@ -242,7 +256,7 @@ class MainActivity : Activity() {
         discovery?.stop(clearCandidates = false); discovery = null
         // Serialize the cooling completion behind startup/stale relay cleanup and native zero.
         SessionShutdown.close(io, java.util.concurrent.Executor { main.post(it) },
-            { oldRelay?.stop(); oldCandidates.clear(); forget?.let { vault.erase(it) } }, afterClosed?.let { action -> { if (attempt == closingAttempt) action() } })
+            { oldRelay?.stop(); oldCandidates.clear(); forget?.let { vault.erase(it); if (it.secure) peerVault.erase(it) } }, afterClosed?.let { action -> { if (attempt == closingAttempt) action() } })
         CookieManager.getInstance().removeAllCookies(null); WebStorage.getInstance().deleteAllData(); showLobby()
     }
     private fun renderHealth(value: DeviceHealth) {
@@ -255,20 +269,22 @@ class MainActivity : Activity() {
         if (foreground && cooling.requestSleep(value)) sleepScreen(askPermission = false)
         else if (foreground && !sleeping && !cooling.coolingRequired) { if (wasCooling) screenPower.restore(); startDiscovery() }
     }
-    private fun deviceDetails(candidate: Candidate? = null) {
+    private fun deviceDetails(candidate: Candidate? = lastSelectedCandidate) {
         val thermal = when (lastHealth?.thermalStatus) { 0 -> "정상"; 1 -> "가벼운 발열"; 2 -> "발열 주의"; 3, 4, 5, 6 -> "발열 보호"; else -> "상태 확인 불가" }
         pairingDialog?.dismiss()
-        pairingDialog = AlertDialog.Builder(this).setTitle("태블릿 상태")
-            .setMessage("${healthText.text}\n발열: $thermal\n\n화면을 끄면 조종 연결을 닫습니다. 로봇은 다시 선택해 연결할 수 있습니다.")
+        pairingDialog = AlertDialog.Builder(this).setTitle("기기·연결")
+            .setMessage((candidate?.let { "${it.name}\n${it.host}\n\n" } ?: "") + "${healthText.text}\n발열: $thermal\n\n" + (session?.peerApproval?.let {
+                "승인 관계: ${if (it.persistent) "지속 승인" else "기간 제한 (${it.authorizationExpiresAt})"}\n로그인: ${session?.expiresAt}까지\n승인 폐기는 수신 장치에서 확인하세요.\n\n"
+            } ?: "") + "화면을 끄면 조종 연결을 닫습니다. 로봇은 다시 선택해 연결할 수 있습니다.")
             .setPositiveButton("화면 끄기") { _, _ -> sleepScreen(true) }.setNegativeButton("닫기", null)
             .apply { if (candidate != null) setNeutralButton("이 앱의 연결 기록 지우기") { _, _ -> forgetConnection(candidate) } }.create()
         pairingDialog!!.show()
     }
     private fun forgetConnection(candidate: Candidate) {
         pairingDialog = AlertDialog.Builder(this).setTitle("이 앱의 연결 기록 지우기")
-            .setMessage("조종 연결을 닫고 이 태블릿에 저장된 로그인 정보만 지웁니다. 수신 장치의 승인이나 다른 앱의 연결은 해제하지 않습니다.")
+            .setMessage("${candidate.name}\n${candidate.host}\n\n조종 연결을 닫고 이 태블릿에 저장된 로그인과 승인 연결 기록만 지웁니다. 수신 장치의 승인이나 다른 앱의 연결은 해제하지 않습니다.")
             .setNegativeButton("취소", null).setPositiveButton("지우기") { _, _ ->
-                endSession(forget = candidate) { opening = false; startDiscovery() }; opening = true
+                endSession(forget = candidate) { lastSelectedCandidate = null; opening = false; startDiscovery() }; opening = true
             }.create()
         pairingDialog!!.show()
     }

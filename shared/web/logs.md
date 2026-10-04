@@ -593,11 +593,23 @@
 - 증거: 검수·객체 반환·새 학습 연결·harness 재검증 131 passed, known_failures 신규 0. 뒤이은 저널 검사는 기존 entry 안에 추가한 행을 append-only 위반으로 발견하여 별도 새 heading으로 기록을 분리했다.
 - gate 변화: 로컬 fast-forward 착지 대상이며 push·배포·장치 수용은 수행하지 않는다.
 
+## 2026-10-04 · uncommitted · fix(web): register learning review canvas and development titles
+
+- Change: apply the existing canvas palette/font checks to the learning review app, use shared ui-brand, and name both pages with the registry development scope. No rose exception, review behavior, security boundary or device command was added.
+- Evidence: inherited source failures reproduced (3 failed, 21 passed); repaired source and review/workspace suites 36 passed. Independent review 47 passed. Full shared web suite and final push/CI checks follow.
+- gate 변화: source contract repair only; physical acceptance remains HOLD.
+
 ## 2026-10-05 · uncommitted · fix(contracts): register existing review canvas and wordmark
 
 - 변경: 최신 main의 검수 캔버스를 기존 팔레트 검사에 포함하고 공용 모듈에서 직접 가져온 canvasFont 바인딩을 검증한다. 기존 ROSY 워드마크 CSS를 목록에 포함하되 rose 참조가 그 규칙 한 곳뿐임을 별도 검증한다. 화면·색·배치 변경 없음.
 - 증거: 깨끗한 main 50f2c7374에서 동일한 목록 누락 2건 재현(21 passed, 2 failed). 검증 범위를 보강했으며 재검사 진행 중이다.
 - gate 변화: 없음. SOURCE 계약 검증 보강이며 DEVICE/FIELD 수용 주장이 아니다.
+
+## 2026-10-05 · uncommitted · feat(learning): D-462 incremental pixel review
+
+- 변경: Existing Pinky app adds pending multi-video imports, independent original-coordinate pixel editing, verified nominal CAD references and coherent current-decision/export contracts. Canvas palette and learning surface ownership remain in shared tokens/declarations.
+- 증거: Root independent review found cross-store mixed reads. Producer now captures metadata/frames/masks/representations in one SQLite transaction and seals that exact revision. Concurrent-writer, stale authority and bundle integrity regressions added; host/shared contracts 252 passed/24 skipped and explicit Chromium regression suite 13 passed, NEW=0.
+- gate 변화: Local host/Chromium with separate test state. Live human approvals, pixel qualification, original-video/map-camera evidence and root integration acceptance remain separate. No shared physical gate is advanced.
 
 ## 2026-10-05 · uncommitted · fix(contracts): repair inherited site release checks
 
@@ -610,3 +622,9 @@
 - 변경: D-459·D-461에서 이미 등록한 dev 범위를 D-339 제목 대응에 추가하고 검수·학습 작업 페이지 제목을 개발 범위로 맞춘다. 설치 앱 검사에 예외나 가짜 패키지를 넣지 않는다. 제목 검사는 두 페이지를 모두 확인한다.
 - 증거: 정상 push hook이 발견한 새 title 실패를 수정하며 전체 영향 선택을 재검증한다. 이전 hook FAST 464 passed/2 skipped, 영향 묶음 290 passed/1 failed/1 skipped였고 실패는 이번 title 누락이다.
 - gate 변화: SOURCE 계약 복구이며 본문·배치·로봇 동작·CI·배포 수용 변경은 없다.
+
+## 2026-10-05 · uncommitted · fix(learning): bind review content and existing source identities
+
+- 변경: 최신 결정에 object_review_sha256와 source_sha256를 추가하고 export human의 video/frame 출처를 원본과 맞춘다. 정확히 일치하는 legacy primary image SHA·영상명/frame만 연결하고 이미지·검수 decision/version과 legacy source를 보존한다. 승인 scalar 타입을 엄격히 확인한다. dev 작업 화면 title 범위를 검사하며 별도 앱 identity를 만들지 않는다.
+- 증거: reseal한 박스 변조 거부·잘못된 승인 bool/int·legacy exact-image 중복·latest ETag 및 기존 backend/title 18 passed, known_failures 신규0. root는 실제 SSH 소비 경로에서 human 출처 누락을 재현했고 producer가 보완했다. 실제 운영 state는 아직 읽기만 수행했다.
+- gate 변화: SOURCE/LOCAL 보강. root-owned bridge/adapter의 독립 수용·실제 human pixel 승인·장치 수용·CI는 별도다. push·배포·주행·HOLD 해제 없음.

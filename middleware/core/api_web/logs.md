@@ -509,3 +509,9 @@
 - 변경: 사이트 표시 전용 추적 계약과 FastAPI 설명 버전을 일치시켰다. 로봇 endpoint·wire envelope·주행 행위 변경 없음.
 - 증거: protocol_version_alignment 시험 통과. DEVICE/FIELD 변화 없음.
 - gate 변화: 없음. 사이트 표시 계약 문서 정합이며 로봇 wire/주행 경계는 유지한다.
+
+## 2026-10-05 · uncommitted · feat(auth): LAN 수신 승인과 키 결속 로그인
+
+- 변경: 인증된 기존 관리자가 상대 화면에서 요청을 승인하고, client P256 증명으로 최대 1시간의 기존 로그인 세션을 발급한다. 지속 승인은 명시한 연결 기억과 만료 없는 기존 card/manual 관리자에 한정한다. 관계 generation·발급자 digest·session marker로 폐기·저장소 누락·발급자 변경을 차단한다. API Reference는 v1.100이다.
+- 증거: 통합본의 실제 암호화·owner 승인·HTTP·replay·issuer/관계 폐기·전체 overlay 삭제를 포함한 32 PASS. 요청 수·본문·poll·익명 증명 예산은 제한하며 네트워크 발견 자체는 승인이나 제어 admission이 아니다.
+- gate 변화: SOURCE/LOCAL 추가 증거. 정상 HTTPS·기존 named 권한·CORE 최종 명령 경계를 유지한다. 서명 ARM64·실기 수신 승인·앱 재연결과 Fleet/Cam 별도 owner 경로는 미완료다.

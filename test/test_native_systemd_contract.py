@@ -446,6 +446,8 @@ DECLARED_READS = {
         "/var/lib/rosy/maps", "/var/lib/rosy/models", "/var/lib/rosy/pilot-recordings",
     },
     "rosy-core.service": {
+        # D-456: signed receiver crypto is loaded from immutable release payloads.
+        "/opt/rosy/releases",
         "/var/lib/rosy",       # calibration data_root, runtime probe default
         # D-432: connect to the root helper socket; CORE does not create it.
         "/run/rosy-host/ssh-pairing.sock",

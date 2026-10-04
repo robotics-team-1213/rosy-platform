@@ -1,3 +1,4 @@
+import {mountReceiverApprovals} from "/assets/peer-approval.js";
 import { ROLE_LABEL, SAFETY_POLICY_LABEL, TOKEN_SOURCE_LABEL, enumLabel } from "/common/core_ui_logic.js";
 import { confirmIrreversible } from "/common/ui.js";
 // D-359 §5.3 — 끌 때 이유를 같이 준다. 켜거나 짧은 요청 중 잠금이면 이유를 지운다.
@@ -44,7 +45,9 @@ export function mount(root, ctx) {
   const save = el("ui-button", "", "정책 저장"); save.setAttribute("kind", "primary"); save.type = "submit";
   safetyForm.append(...fields.map((item) => item.label), fleetLabel, batteryLabel, save);
   safetySection.append(safetyForm, safetyReadStatus, safetyActionStatus);
-  root.append(head, tokenSection, safetySection);
+  root.append(head);
+  const stopReceiver=mountReceiverApprovals(root,ctx);
+  root.append(tokenSection,safetySection);
 
   let tokens = []; let tokenMutationPending = false;
   let safetyDirty = false; let safetyPending = false;
@@ -156,5 +159,5 @@ export function mount(root, ctx) {
     } catch (error) { setStatus(safetyActionStatus, `안전 정책 저장 실패: ${error.message}`); }
     finally { safetyPending = false; if (!disposed) syncSafetyControls(); }
   });
-  return () => { disposed = true; lifetime.abort(); stopTokens(); stopSafety(); };
+  return () => { stopReceiver(); disposed = true; lifetime.abort(); stopTokens(); stopSafety(); };
 }

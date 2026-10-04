@@ -25,6 +25,7 @@
 | D-300 | Surface typography and focus feedback use shared tokens |
 | D-329 | 표면은 등록으로 계약을 받고, 육안 기준은 저장소에 남는다 |
 | D-461 | ROSY 작업 화면은 상태·다음 작업·행동을 먼저 보여주고 공용 작업 부품으로 구성한다 |
+| D-462 | Pinky 반복 검수는 프레임 정체성·객체/픽셀 독립 revision·최신 결정 확인을 보존한다 |
 
 ## 계획·결과 문서
 
@@ -45,8 +46,8 @@
 
 ## 최근 기록
 
+- 2026-10-05 · uncommitted · fix(learning): bind review content and existing source identities
 - 2026-10-05 · uncommitted · fix(contracts): name registered developer page scopes
 - 2026-10-05 · uncommitted · fix(contracts): repair inherited site release checks
+- 2026-10-05 · uncommitted · feat(learning): D-462 incremental pixel review
 - 2026-10-05 · uncommitted · fix(contracts): register existing review canvas and wordmark
-- 2026-10-04 · uncommitted · docs(learning): UX 착지 동기화 검증
-- 2026-10-04 · uncommitted · uiux(learning): D-461 작업 우선 공용 구성과 검수 편의

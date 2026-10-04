@@ -1,0 +1,72 @@
+{
+  "scope": "Public known-test P256 points only; no live/private key material",
+  "receiver_public_key": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEfPJ7GI0DT36KUjgDBLUaw8CJaeJ38hs1pgtI/EdmmXgHd1UQ247QQCk9msafdDDbun2t5jzpgimeBLedInhz0Q==",
+  "client_public_key": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEaxfR8uEsQkf4vOblY6RA8ncDfYEt6zOg9KE5RdiYwpZP40Li/hp/m47n60p8D54WK84zV2sxXs7LtkBoN79R9Q==",
+  "vectors": [
+    {
+      "context": "request",
+      "fields": {
+        "receiver_id": "rosy_01",
+        "receiver_key_sha256": "dc0ce633dbcc913dafafa4b89ac44d8ce683fdfc3f60c8bdf21213b9f2b534ba",
+        "client_id": "pilot_01",
+        "label": "\ud604\uc7a5 \ud0dc\ube14\ub9bf \ud83d\ude00",
+        "client_public_key": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEaxfR8uEsQkf4vOblY6RA8ncDfYEt6zOg9KE5RdiYwpZP40Li/hp/m47n60p8D54WK84zV2sxXs7LtkBoN79R9Q==",
+        "role": "operator",
+        "nonce": "0101010101010101010101010101010101010101010101010101010101010101"
+      },
+      "ascii": "{\"context\":\"request\",\"fields\":{\"client_id\":\"pilot_01\",\"client_public_key\":\"MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEaxfR8uEsQkf4vOblY6RA8ncDfYEt6zOg9KE5RdiYwpZP40Li/hp/m47n60p8D54WK84zV2sxXs7LtkBoN79R9Q==\",\"label\":\"\\ud604\\uc7a5 \\ud0dc\\ube14\\ub9bf \\ud83d\\ude00\",\"nonce\":\"0101010101010101010101010101010101010101010101010101010101010101\",\"receiver_id\":\"rosy_01\",\"receiver_key_sha256\":\"dc0ce633dbcc913dafafa4b89ac44d8ce683fdfc3f60c8bdf21213b9f2b534ba\",\"role\":\"operator\"},\"version\":\"rosy.peer-proof/1\"}",
+      "sha256": "6152964b16892a38b28e2abc82529055b4ab2ddca0db3ee29662301698fbadf7"
+    },
+    {
+      "context": "receiver-challenge",
+      "fields": {
+        "relationship_id": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        "challenge_id": "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+        "nonce": "0202020202020202020202020202020202020202020202020202020202020202",
+        "receiver_id": "rosy_01",
+        "receiver_key_sha256": "dc0ce633dbcc913dafafa4b89ac44d8ce683fdfc3f60c8bdf21213b9f2b534ba",
+        "client_id": "pilot_01",
+        "client_key_sha256": "5cd252fb0ce8932436faf8ccd1040981b89ee4ad6b9fe9e2a2b7e71aacb27cd3",
+        "role": "operator",
+        "generation": 0,
+        "expires_at": "2026-10-05T00:01:00+00:00"
+      },
+      "ascii": "{\"context\":\"receiver-challenge\",\"fields\":{\"challenge_id\":\"BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB\",\"client_id\":\"pilot_01\",\"client_key_sha256\":\"5cd252fb0ce8932436faf8ccd1040981b89ee4ad6b9fe9e2a2b7e71aacb27cd3\",\"expires_at\":\"2026-10-05T00:01:00+00:00\",\"generation\":0,\"nonce\":\"0202020202020202020202020202020202020202020202020202020202020202\",\"receiver_id\":\"rosy_01\",\"receiver_key_sha256\":\"dc0ce633dbcc913dafafa4b89ac44d8ce683fdfc3f60c8bdf21213b9f2b534ba\",\"relationship_id\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\",\"role\":\"operator\"},\"version\":\"rosy.peer-proof/1\"}",
+      "sha256": "7dd15851ef0c13a3c191eff9c83499bc051b92b3201e15336cf5826462fe7e8f"
+    },
+    {
+      "context": "session-request",
+      "fields": {
+        "relationship_id": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        "challenge_id": "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+        "nonce": "0202020202020202020202020202020202020202020202020202020202020202",
+        "receiver_id": "rosy_01",
+        "receiver_key_sha256": "dc0ce633dbcc913dafafa4b89ac44d8ce683fdfc3f60c8bdf21213b9f2b534ba",
+        "client_id": "pilot_01",
+        "client_key_sha256": "5cd252fb0ce8932436faf8ccd1040981b89ee4ad6b9fe9e2a2b7e71aacb27cd3",
+        "role": "operator",
+        "generation": 0,
+        "expires_at": "2026-10-05T00:01:00+00:00"
+      },
+      "ascii": "{\"context\":\"session-request\",\"fields\":{\"challenge_id\":\"BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB\",\"client_id\":\"pilot_01\",\"client_key_sha256\":\"5cd252fb0ce8932436faf8ccd1040981b89ee4ad6b9fe9e2a2b7e71aacb27cd3\",\"expires_at\":\"2026-10-05T00:01:00+00:00\",\"generation\":0,\"nonce\":\"0202020202020202020202020202020202020202020202020202020202020202\",\"receiver_id\":\"rosy_01\",\"receiver_key_sha256\":\"dc0ce633dbcc913dafafa4b89ac44d8ce683fdfc3f60c8bdf21213b9f2b534ba\",\"relationship_id\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\",\"role\":\"operator\"},\"version\":\"rosy.peer-proof/1\"}",
+      "sha256": "9bdefcf04b1022b4e9eb9c2cfa5ddd7f4725d0c148a412d289eed2b1ea96ea81"
+    }
+  ],
+  "python_signature": {
+    "public_key": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEC+iypgREmR8DKZo+83oOFx+SKJCeAcQBoCudNggdrhVKK5pTjj9YuYOtsux1l0lXAaRhvo2w+jtiKSbGHVdllA==",
+    "fields": {
+      "relationship_id": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "challenge_id": "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+      "nonce": "0202020202020202020202020202020202020202020202020202020202020202",
+      "receiver_id": "rosy_01",
+      "receiver_key_sha256": "dc0ce633dbcc913dafafa4b89ac44d8ce683fdfc3f60c8bdf21213b9f2b534ba",
+      "client_id": "pilot_01",
+      "client_key_sha256": "5cd252fb0ce8932436faf8ccd1040981b89ee4ad6b9fe9e2a2b7e71aacb27cd3",
+      "role": "operator",
+      "generation": 0,
+      "expires_at": "2026-10-05T00:01:00+00:00"
+    },
+    "context": "receiver-challenge",
+    "signature": "MEUCIGj28eNNnlw4zwNwo3EYK4npeSZkJQrymIxZ+E3drcBkAiEA92Meq6XZCsVLfodbqnmAqBSxvaMR2WJsFLXEN4HvX8w="
+  }
+}
