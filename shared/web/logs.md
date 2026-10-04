@@ -577,3 +577,5 @@
 
 - 변경: D-456 로컬 학습 도구 pinky-review를 surfaces.yaml에 등록했다. 기본 포트는 game-board와 겹치지 않는 8767, dark/light 공용 토큰·shared_controls·typography_focus 적용이다. 로봇 운용/stop writer를 소유하지 않는다.
 - 검증: 관련 계약 검증과 실 Chromium PC/모바일 viewport는 웹앱 owner 증거에서 확인한다. 기존 field/disabled reason 두 실패는 clean baseline에도 재현됐다. UI/source 등록이며 module gate 승격은 없다.
+
+- gate 변화: 없음. 로컬 검수 표면 등록이며 장치·현장 수용을 대신하지 않는다.

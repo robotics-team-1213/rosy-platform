@@ -294,8 +294,8 @@
 
 ## 최근 기록
 
+- 2026-10-04 · uncommitted · feat(learning): Pinky 박스 직접 선택·드래그 편집
 - 2026-10-04 · uncommitted · feat(learning): D-456 Pinky 영속 검수 웹앱
 - 2026-10-04 · uncommitted · docs(cell): 홈 준비 교훈과 모델 PC 직접 검증 경로
 - 2026-10-04 · uncommitted · feat(fleet): D-455 양보 합류는 지도 자세
 - 2026-10-04 · uncommitted · fix(harness): pin one committed G2 encoding repair
-- 2026-10-04 · uncommitted · feat(fleet): D-453 양보 한 구간

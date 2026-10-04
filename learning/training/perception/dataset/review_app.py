@@ -240,14 +240,17 @@ def make_server(store, port=8767):
                 if path.startswith('/api/images/'):
                     image = store.image(int(path.rsplit('/', 1)[1]))
                     return self.send(image.read_bytes(), mime=mimetypes.guess_type(image.name)[0])
-                files = {'/': 'index.html', '/app.js': 'app.js', '/app.css': 'app.css'}
+                files = {'/': 'index.html', '/app.js': 'app.js', '/app.css': 'app.css',
+                         '/box-geometry.mjs': 'box-geometry.mjs'}
                 name = path.removeprefix('/common/')
                 if path.startswith('/common/') and name in SHARED_ASSETS:
                     file = COMMON / name
                     return self.send(file.read_bytes(), mime=SHARED_ASSETS[name])
                 if path in files:
                     file = STATIC / files[path]
-                    return self.send(file.read_bytes(), mime=mimetypes.guess_type(file.name)[0] + '; charset=utf-8')
+                    types = {'.html': 'text/html', '.css': 'text/css',
+                             '.js': 'text/javascript', '.mjs': 'text/javascript'}
+                    return self.send(file.read_bytes(), mime=types[file.suffix] + '; charset=utf-8')
                 self.send({'error': 'not found'}, 404)
             except (KeyError, ValueError, OSError) as exc:
                 self.send({'error': str(exc)}, 400)

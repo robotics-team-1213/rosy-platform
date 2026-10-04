@@ -5683,3 +5683,9 @@ osy-d395-s1d\`.
 - 변경: 전담 feat/pinky-review-web에서 서버 SQLite 영속 객체 검수, 박스 편집·자동 저장·명시 승인/제외·version 충돌 거부·기존 review_return 직접 export를 구현했다. D-280/D-359 공용 토큰·부품·테마와 자동 초안/수동 정답/학습 수용 구분을 D-456에 기록했다.
 - 검증: 관련 호스트 검사 231 passed, 4 failed; known_failures.py는 목록에 없는 4건을 NEW로 보고했다. clean baseline 02dc934a7의 등록 worktree에서도 네 실패가 재현돼 baseline comparison 신규 실패 0이다. 실패는 기존 cell-document-editor.js field, peer-picker.js disabled reason, deploy/logs.md 인코딩/heading과 harness lint다. known_failures.txt를 변경하지 않았다. 실 Chromium PC/모바일 viewport 13 시나리오·콘솔 오류 0, 별도 테스트 state로 검증했다. 운영 state의 서버 재시작·원본 user approval unchanged·3장/6박스 export COMPLETE/hash 검증을 확인했다.
 - gate 변화: 기존 모듈 gate를 승격하지 않는다. 원본 1·2·4 승인/3 제외, 신호 unknown을 유지한다. 픽셀 마스크 편집과 신규 자동 추론 job은 미구현이다. dataset session mapping·고정 eval 제외는 학습 owner 검증 전 HOLD다. 로봇 동작·모델 활성화·착지·push·배포는 수행하지 않았다.
+
+## 2026-10-04 · uncommitted · feat(learning): Pinky 박스 직접 선택·드래그 편집
+
+- 변경: D-456 후속 사용자 요청으로 기존 좌표 자동 overlay, 숫자 입력 미리보기, 빈 곳 드래그 생성, 기존 박스 선택·이동, 모서리/변 resize, 선택 박스 삭제와 캔버스 Delete를 구현했다. 드래그 중 미리보기만 보여주고 놓을 때 version 검사·저장·재검수 전환을 한다. Esc/touch cancel은 저장을 바꾸지 않는다. 모델 선택/신규 추론 요청으로 확대하지 않는다.
+- 검증: 순수 좌표 기하 Node 4 passed, host pytest 55 passed 및 known_failures 신규 0. 실제 Chromium desktop drag 8 시나리오와 모바일 viewport touch 4 시나리오, 콘솔 오류 0. 운영 데이터를 편집하지 않는 별도 test state에서 실행했다. Windows MIME registry의 .mjs=text/plain 문제를 실패 시험으로 재현하고 모듈 응답을 text/javascript로 고정했다.
+- gate 변화: 없음. 기존 사용자 승인 이력과 운영자의 후속 편집을 보존한다. 픽셀 segmentation·신규 모델 추론·장치 활성화·착지·push·배포는 범위 밖이다.

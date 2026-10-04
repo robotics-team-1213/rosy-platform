@@ -82,6 +82,8 @@ def test_http_blocks_foreign_hosts_and_tokenless_writes(tmp_path):
     url = f'http://127.0.0.1:{server.server_port}'
     try:
         workspace = json.load(urllib.request.urlopen(url + '/api/workspace'))
+        with urllib.request.urlopen(url + '/box-geometry.mjs') as response:
+            assert response.headers.get_content_type() == 'text/javascript'
         for headers in ({}, {'X-Pinky-Token': workspace['token'], 'Origin': 'https://foreign.example'}):
             request = urllib.request.Request(url + '/api/prepare', b'{}', headers=headers)
             with pytest.raises(urllib.error.HTTPError) as error:

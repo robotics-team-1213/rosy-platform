@@ -1,27 +1,30 @@
 import { cssColor, canvasFont, clearPalette } from '/common/ui.js';
+import { drawnBox, dragBox, hitBox, boxHandles } from '/box-geometry.mjs';
 
 const $ = id => document.getElementById(id);
 const names = {'':'클래스 선택 필요',robot:'로봇', obstacle_box:'장애물 상자', cone:'콘', traffic_light:'신호등', sign:'표지판', person_feet:'사람 발'};
 const states = {unknown:'알 수 없음', red:'빨강', yellow:'노랑', green:'초록', off:'꺼짐'};
 const statuses = {approved:'승인', excluded:'제외', pending:'검수 대기'};
-let workspace, frame, image, ready = false, busy = false, conflicted = false, loadSerial = 0, drawing = false, start;
+let workspace, frame, image, ready = false, busy = false, conflicted = false, loadSerial = 0, drawing = false;
+let gesture = null, selected = null, coordinatePreview = null;
 
 function error(message='') { $('error').textContent = message; $('error').hidden = !message; }
 function enable() {
-  const locked = !ready || busy || conflicted;
+  const locked = !ready || busy || conflicted || !!gesture;
   $('approve').disabled = locked || !$('complete').checked || frame?.status === 'excluded';
   const reason = !ready ? '사진을 불러온 뒤 승인할 수 있습니다.' : busy ? '저장을 마친 뒤 승인할 수 있습니다.' : conflicted ? '최신 내용을 불러온 뒤 다시 확인하세요.' : frame?.status === 'excluded' ? '제외 사진은 재검수로 돌려야 합니다.' : !$('complete').checked ? '사진 전체 확인에 체크하세요.' : '';
   if (reason) $('approve').setAttribute('reason',reason); else $('approve').removeAttribute('reason');
   $('exclude').disabled = locked || frame?.status === 'excluded';
   $('reopen').disabled = locked;
   $('draw').disabled = $('add').disabled = locked || frame?.status === 'excluded';
+  $('delete-selected').disabled = locked || frame?.status === 'excluded' || selected===null;
   $('candidates').disabled = locked || frame?.status === 'excluded';
-  $('prepare').disabled = busy || conflicted || !workspace;
-  $('reload').disabled = busy;
-  $('filter').disabled = busy;
+  $('prepare').disabled = busy || conflicted || !!gesture || !workspace;
+  $('reload').disabled = busy || !!gesture;
+  $('filter').disabled = busy || !!gesture;
   $('complete').disabled = locked || frame?.status === 'excluded';
   document.querySelectorAll('#boxes input, #boxes select, #boxes ui-button').forEach(el => el.disabled = locked || frame?.status === 'excluded');
-  document.querySelectorAll('#frames ui-button').forEach(el => el.disabled = busy);
+  document.querySelectorAll('#frames ui-button').forEach(el => el.disabled = busy || !!gesture);
 }
 async function request(path, body) {
   const response = await fetch(path, body === undefined ? {} : {method:'POST', headers:{'Content-Type':'application/json', 'X-Pinky-Token':workspace.token}, body:JSON.stringify(body)});
@@ -40,7 +43,7 @@ function list() {
     const button = document.createElement('ui-button'); button.setAttribute('kind','segment'); button.setAttribute('aria-pressed',String(f.index === frame?.index));
     button.textContent = `사진 ${f.index + 1}`;
     const badge = document.createElement('span'); badge.className = 'frame-badge'; badge.textContent = statuses[f.status]; button.append(badge);
-    button.onclick = () => { if (!busy) select(f.index); }; $('frames').append(button);
+    button.onclick = () => { if (!busy && !gesture) select(f.index); }; $('frames').append(button);
   });
 }
 function paint() {
@@ -50,13 +53,28 @@ function paint() {
   ctx.drawImage(image,0,0);
   ctx.strokeStyle = cssColor('--series-primary'); ctx.fillStyle = cssColor('--ink');
   ctx.lineWidth = Math.max(1,canvas.width/320); ctx.font = canvasFont(14,'mono');
-  frame.review.boxes.forEach((box,i) => {
-    const [x0,y0,x1,y1] = box.bbox_xyxy; ctx.strokeRect(x0,y0,x1-x0,y1-y0);
+  const boxes = coordinatePreview || frame.review.boxes;
+  const marker = 8 * canvas.width / Math.max(1,canvas.getBoundingClientRect().width);
+  boxes.forEach((box,i) => {
+    const bounds = gesture?.index === i ? gesture.preview : box.bbox_xyxy;
+    const [x0,y0,x1,y1] = bounds; ctx.strokeRect(x0,y0,x1-x0,y1-y0);
     ctx.fillText(String(i+1),x0+3,Math.max(14,y0-3));
+    if (i === selected) {
+      for (const [x,y] of Object.values(boxHandles(bounds))) {
+        ctx.fillStyle=cssColor('--ground'); ctx.fillRect(x-marker/2,y-marker/2,marker,marker);
+        ctx.strokeRect(x-marker/2,y-marker/2,marker,marker);
+      }
+      ctx.fillStyle=cssColor('--ink');
+    }
   });
+  if (gesture?.mode === 'draw') {
+    const [x0,y0,x1,y1] = gesture.preview;
+    ctx.setLineDash([marker,marker/2]); ctx.strokeRect(x0,y0,x1-x0,y1-y0); ctx.setLineDash([]);
+  }
 }
 async function select(index) {
   const serial = ++loadSerial;
+  cancelGesture(); selected=null; coordinatePreview=null;
   ready = false; frame = structuredClone(workspace.frames.find(f => f.index === index));
   $('complete').checked = false; drawing = false; $('draw').setAttribute('aria-pressed','false');
   $('frame-title').textContent = `사진 ${index+1}`; $('status').textContent = statuses[frame.status];
@@ -88,13 +106,23 @@ function renderBoxes() {
   frame.review.boxes.forEach((box,i) => {
     const row=document.createElement('div'); row.className='box-row'; const top=document.createElement('div'); top.className='box-top';
     const number=document.createElement('span'); number.className='box-number'; number.textContent=`#${i+1}`; top.append(number);
+    const pick=document.createElement('ui-button'); pick.setAttribute('kind','toggle'); pick.setAttribute('aria-pressed',String(selected===i)); pick.textContent=`박스 ${i+1} 선택`;
+    pick.onclick=()=> {selected=i; drawing=false; $('draw').setAttribute('aria-pressed','false'); renderBoxes(); paint();}; top.append(pick);
     top.append(selectField(`박스 ${i+1} 클래스`,names,box.label,value => edit(boxes=> {boxes[i].label=value || null; if(value==='traffic_light') boxes[i].signal_state ??= 'unknown';})));
     if (box.label === 'traffic_light') top.append(selectField(`박스 ${i+1} 신호`,states,box.signal_state || 'unknown',value=>edit(boxes=>boxes[i].signal_state=value)));
-    const remove=document.createElement('ui-button'); remove.setAttribute('kind','quiet'); remove.textContent=`박스 ${i+1} 삭제`; remove.onclick=()=>edit(boxes=>boxes.splice(i,1)); top.append(remove); row.append(top);
+    const remove=document.createElement('ui-button'); remove.setAttribute('kind','quiet'); remove.textContent=`박스 ${i+1} 삭제`; remove.onclick=()=> {selected=null;edit(boxes=>boxes.splice(i,1));}; top.append(remove); row.append(top);
     const coordinates=document.createElement('div'); coordinates.className='coordinates';
     ['x0','y0','x1','y1'].forEach((name,j) => {
       const label=document.createElement('label'); label.textContent=name;
       const input=document.createElement('input'); input.className='ui-field'; input.type='number'; input.step='0.1'; input.min='0'; input.max=String(j%2 ? frame.source.height : frame.source.width); input.value=box.bbox_xyxy[j]; input.setAttribute('aria-label',`박스 ${i+1} ${name}`);
+      input.onfocus=()=> {selected=i; paint();};
+      input.oninput=()=> {
+        const boxes=structuredClone(frame.review.boxes); boxes[i].bbox_xyxy[j]=Number(input.value);
+        const [x0,y0,x1,y1]=boxes[i].bbox_xyxy;
+        if (input.value!=='' && 0<=x0 && x0<x1 && x1<=frame.source.width && 0<=y0 && y0<y1 && y1<=frame.source.height) {
+          coordinatePreview=boxes; paint();
+        }
+      };
       input.onchange=()=>edit(boxes=>boxes[i].bbox_xyxy[j]=Number(input.value)); label.append(input); coordinates.append(label);
     }); row.append(coordinates); $('boxes').append(row);
   });
@@ -108,8 +136,9 @@ async function mutate(action, extras={}) {
     const saved=await request(`/api/frames/${id}`,{version:frame.version,action,...extras});
     workspace.frames[workspace.frames.findIndex(f=>f.index===id)]=saved; frame=structuredClone(saved);
     $('status').textContent=statuses[frame.status]; $('save-status').textContent=`서버 저장됨 · v${frame.version}`;
+    coordinatePreview=null; if (selected>=frame.review.boxes.length) selected=null;
     renderBoxes(); list(); paint();
-  } catch(e) {error(e.message); renderBoxes(); $('save-status').textContent='저장 실패 · 최신 내용 불러오기 후 다시 수정하세요';}
+  } catch(e) {coordinatePreview=null; error(e.message); renderBoxes(); paint(); $('save-status').textContent='저장 실패 · 최신 내용 불러오기 후 다시 수정하세요';}
   finally {busy=false; enable();}
 }
 function edit(change) {
@@ -122,14 +151,66 @@ $('exclude').onclick=()=>mutate('exclude'); $('reopen').onclick=()=>mutate('reop
 $('candidates').onclick=()=> {if (window.confirm('현재 수정 라벨을 원본 초안으로 바꾸고 재검수하시겠습니까?')) mutate('candidates');};
 $('draw').onclick=()=> {drawing=!drawing; $('draw').setAttribute('aria-pressed',String(drawing));};
 $('add').onclick=()=>edit(boxes=>boxes.push({label:null,bbox_xyxy:[0,0,Math.min(40,frame.source.width),Math.min(40,frame.source.height)]}));
+$('delete-selected').onclick=()=> {if(selected!==null) {const index=selected; selected=null;edit(boxes=>boxes.splice(index,1));}};
 function point(event) {const rect=$('canvas').getBoundingClientRect(); return [Math.max(0,Math.min(frame.source.width,(event.clientX-rect.left)*frame.source.width/rect.width)),Math.max(0,Math.min(frame.source.height,(event.clientY-rect.top)*frame.source.height/rect.height))];}
-$('canvas').onpointerdown=event=> {if (drawing && ready && !busy && !conflicted && frame.status!=='excluded') {start=point(event); $('canvas').setPointerCapture(event.pointerId);}};
-$('canvas').onpointerup=event=> {
-  if (!start) return; const end=point(event), begin=start; start=null;
-  if (Math.abs(begin[0]-end[0])<2 || Math.abs(begin[1]-end[1])<2) return;
-  edit(boxes=>boxes.push({label:null,bbox_xyxy:[Math.min(begin[0],end[0]),Math.min(begin[1],end[1]),Math.max(begin[0],end[0]),Math.max(begin[1],end[1])].map(v=>Math.round(v*10)/10)}));
+function canDrag() {return ready && !busy && !conflicted && frame.status!=='excluded';}
+function cancelGesture() {
+  if (!gesture) return;
+  const id=gesture.pointerId; gesture=null;
+  if ($('canvas').hasPointerCapture(id)) $('canvas').releasePointerCapture(id);
+  if (frame) {renderBoxes(); paint(); enable();}
+  $('drag-status').textContent='변경을 취소했습니다.';
+}
+function previewGesture(event) {
+  if (!gesture || gesture.pointerId!==event.pointerId) return;
+  const current=point(event), {width,height}=frame.source;
+  gesture.preview=gesture.mode==='draw' ? drawnBox(gesture.start,current,width,height) : dragBox(gesture.original,gesture.mode,gesture.start,current,width,height);
+  if (gesture.index!==null) {
+    ['x0','y0','x1','y1'].forEach((name,j)=> {
+      const input=document.querySelector(`input[aria-label="박스 ${gesture.index+1} ${name}"]`);
+      if(input) input.value=gesture.preview[j];
+    });
+  }
+  paint();
+}
+$('canvas').onpointerdown=event=> {
+  if (!canDrag() || gesture || event.isPrimary===false || event.button!==0) return;
+  const start=point(event), tolerance=(event.pointerType==='touch' ? 14 : 10)*frame.source.width/$('canvas').getBoundingClientRect().width;
+  const hit=drawing ? null : hitBox(frame.review.boxes,start,tolerance,selected);
+  selected=hit?.index ?? null; coordinatePreview=null;
+  gesture={pointerId:event.pointerId,start,index:selected,mode:hit?.mode ?? 'draw',original:hit ? [...frame.review.boxes[hit.index].bbox_xyxy] : null,preview:hit ? [...frame.review.boxes[hit.index].bbox_xyxy] : [...start,...start]};
+  $('canvas').focus({preventScroll:true});
+  $('canvas').setPointerCapture(event.pointerId); renderBoxes(); enable(); paint();
+  $('drag-status').textContent=gesture.mode==='draw' ? '새 박스를 그리고 있습니다. 놓으면 저장됩니다.' : '박스 위치·크기를 수정 중입니다. 놓으면 저장됩니다.';
+  event.preventDefault();
 };
-$('canvas').onpointercancel=()=> {start=null;};
+$('canvas').onpointermove=event=> {
+  if (gesture) {previewGesture(event); return;}
+  if (!canDrag()) {$('canvas').style.cursor='default';return;}
+  const hit=drawing ? null : hitBox(frame.review.boxes,point(event),10*frame.source.width/$('canvas').getBoundingClientRect().width,selected);
+  const cursors={nw:'nwse-resize',se:'nwse-resize',ne:'nesw-resize',sw:'nesw-resize',n:'ns-resize',s:'ns-resize',e:'ew-resize',w:'ew-resize',move:'move'};
+  $('canvas').style.cursor=hit ? cursors[hit.mode] : 'crosshair';
+};
+$('canvas').onpointerup=event=> {
+  if (!gesture || gesture.pointerId!==event.pointerId) return;
+  previewGesture(event);
+  const finished=gesture; gesture=null;
+  if ($('canvas').hasPointerCapture(event.pointerId)) $('canvas').releasePointerCapture(event.pointerId);
+  const [x0,y0,x1,y1]=finished.preview;
+  if (finished.mode==='draw' && (x1-x0<2 || y1-y0<2)) {paint(); enable(); $('drag-status').textContent='박스의 시작점과 끝점을 드래그하세요.';return;}
+  if (finished.original && finished.original.every((v,i)=>v===finished.preview[i])) {paint(); enable(); $('drag-status').textContent=`박스 ${selected+1} 선택됨 · 안쪽은 이동, 손잡이는 크기 조절`;return;}
+  $('drag-status').textContent='변경한 박스를 서버에 저장합니다.';
+  if (finished.mode==='draw') {selected=frame.review.boxes.length; drawing=false; $('draw').setAttribute('aria-pressed','false'); edit(boxes=>boxes.push({label:null,bbox_xyxy:finished.preview}));}
+  else edit(boxes=>boxes[finished.index].bbox_xyxy=finished.preview);
+};
+$('canvas').onpointercancel=event=> {if(gesture?.pointerId===event.pointerId) cancelGesture();};
+$('canvas').onlostpointercapture=event=> {if(gesture?.pointerId===event.pointerId) cancelGesture();};
+document.addEventListener('keydown',event=> {
+  if(event.key==='Escape' && gesture) {event.preventDefault();cancelGesture();}
+  if(event.key==='Delete' && document.activeElement===$('canvas') && selected!==null && canDrag() && !gesture) {
+    event.preventDefault(); $('delete-selected').click();
+  }
+});
 $('filter').onchange=list;
 $('reload').onclick=async()=> {if(!busy) await load(frame?.index);};
 $('theme').value=document.documentElement.dataset.theme || 'dark';
