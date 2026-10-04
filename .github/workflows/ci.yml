@@ -127,6 +127,13 @@ jobs:
           pip3 install --no-cache-dir --break-system-packages -c /tmp/rosy-runtime-constraints.txt \
             flake8 httpx pyyaml jsonschema ext4
 
+      - name: Install Pinky raw verification tools
+        if: contains(toJSON(matrix.invocations), 'learning/curation/pinky')
+        run: |
+          # Real CDR/MCAP and video tests must run, not skip behind missing host tools.
+          pip3 install --no-cache-dir --break-system-packages -c /tmp/rosy-runtime-constraints.txt \
+            -r learning/curation/pinky/requirements-raw.txt
+
       - name: Build and install ROS-free platform API wheels
         run: |
           # Build actual wheels outside src/ and install before colcon/pytest. This catches

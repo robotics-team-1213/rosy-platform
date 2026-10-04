@@ -5019,3 +5019,8 @@
 - 변경: DatasetManifest/공통 Episode/원본 file closure를 보존하는 DatasetStore와 promote/history의 데이터 등록·무결성 gate를 연결했다.
 - 증거: 실제 ACT dataset 6 Episodes/234 files 등록·재등록·정책 참조 재독출, 원래 unregistered/reject 유지. 영향 42 passed, 구조 51 passed, 독립 리뷰 41 passed/read-only 실제 closure 확인. 상세 `validation/policy-dataset-closure-2026-10-04.md`.
 - gate 변화: 누락/손상 데이터에서는 승격 거절. sample profile/라벨 진위·owner/rollback·DEVICE/FIELD 및 전체 목표 미완료.
+
+## 2026-10-04 · uncommitted · feat(learning): verify Pinky raw messages before behavior inputs
+- 변경: MCAP camera/명령/odom/JSON/scan 원본 대조와 전체 영상 decode 검사, 전후 dataset closure를 행동 입력 준비에 연결했다.
+- 증거: 실제 12개 bag/2,673프레임 직접 검증 통과. native 26 passed/skip 없음, 독립 리뷰 같은 26 passed. source 누락/JSON 타입 혼동을 RED 재현 후 수정했다. 상세 `validation/pinky-raw-derivation-2026-10-04.md`.
+- gate 변화: 연구 입력만 준비. expert 의미·고정 행동 평가·camera profile·task acceptance·owner/Fleet·DEVICE/FIELD 및 전체 목표 미완료.

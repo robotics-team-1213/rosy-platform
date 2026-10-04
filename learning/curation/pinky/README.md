@@ -22,9 +22,23 @@ task는 녹화 reason(수집 목적), events stream은 원본 session lifecycle 
 Action/Attempt/Fleet ID와 task/action outcome은 추론하지 않는다. task_id는 원본에만
 보존한다. policy/calibration은 null, camera/model은 원본 null 또는 revision을 유지한다.
 
-MCAP 메시지와 변환 sidecar의 실제 대조, 영상 pixel 및 scan NPZ 내용은 아직
-검증하지 않는다. SHA·메타데이터·sidecar 시계/명령 검사를 변환 진위, expert 정답,
-정책 학습/과제 성공 또는 runtime activation 수용으로 해석하지 않는다.
+`verify_raw.py`는 ROS 2 CDR/MCAP의 camera·cmd_vel·odom·JSON 관측·scan을
+sidecar 및 NPZ에 대조한다. 단일 namespace·표준 schema·CRC·원본 시각을 검사하며
+검증 전후 Episode의 모든 파일이 DatasetManifest에 같은 해시/크기로 선언되어야 한다.
+영상은 전체 decode의 프레임 수와 크기를 검사한다. 손실 압축 pixel provenance,
+expert 정답, 실제 움직임과 과제 성공은 여전히 확인되지 않았다.
+
+```powershell
+python -m pip install -r learning/curation/pinky/requirements-raw.txt
+python -B learning/curation/pinky/verify_raw.py <immutable-dataset> --out <new-report-on-X>
+python -B learning/curation/pinky/prepare_behavior.py <immutable-dataset> <new-input-directory-on-X>
+```
+
+행동 입력 준비는 검증기를 직접 실행한다. 기존 pass 보고서를 입력으로 받지 않는다.
+출력의 `research_input_only`, `split=unassigned`와 holds를 유지한다. 기록된 CORE
+최종 속도는 expert intent로 인증되지 않았으며 미래 목표로 바꾸지 않는다.
+고정 행동 평가·camera profile·task acceptance가 확보되기 전 학습/승격 준비로
+해석하지 않는다. 이 도구의 MCAP/numpy/OpenCV 의존성은 호스트용이며 계약 wheel에는 없다.
 CORE cmd_vel에 대한 새로운 publisher나 로봇 접속 기능은 없다.
 
 ```powershell
