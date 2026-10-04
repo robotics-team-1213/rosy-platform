@@ -35,11 +35,15 @@
 # 가리는 원시 색이 없는 항목은 적지 않는다. 테마를 따르는 표면의 색은 tokens.css에서만 온다.
 surfaces:
   - id: pinky-review
+    app_name: Rosy Learning
+    app_name_en: Rosy Learning
     api_owners: []
     path: learning/training/perception/dataset/review_app_web
     themes: [dark, light]
     surface: dev
     medium: web
+    breakpoints:
+      - {value: 90rem, reason: 사진 목록·캔버스·라벨 inspector의 세 칸을 좁은 데스크톱에서 압축한다 (D-461).}
     ports:
       - {port: 8767, source: learning/training/perception/dataset/review_app.py}
     audience: Pinky 학습 객체 라벨 검수자

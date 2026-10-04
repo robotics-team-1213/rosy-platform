@@ -24,6 +24,7 @@
 | D-294 | Shared typography and interaction tokens use a closed scale |
 | D-300 | Surface typography and focus feedback use shared tokens |
 | D-329 | 표면은 등록으로 계약을 받고, 육안 기준은 저장소에 남는다 |
+| D-461 | ROSY 작업 화면은 상태·다음 작업·행동을 먼저 보여주고 공용 작업 부품으로 구성한다 |
 
 ## 계획·결과 문서
 
@@ -44,8 +45,8 @@
 
 ## 최근 기록
 
+- 2026-10-04 · uncommitted · docs(learning): UX 착지 동기화 검증
+- 2026-10-04 · uncommitted · uiux(learning): D-461 작업 우선 공용 구성과 검수 편의
 - 2026-10-04 · uncommitted · feat(web): Pinky 검수 표면 등록
 - 2026-10-04 · uncommitted · feat(test): D-329 전환 4 — matrix.json 스키마와 보존 시험, 40rem 정식 경계
 - 2026-10-04 · uncommitted · fix(ui): 공용 템플릿 작은 상단 행
-- 2026-10-04 · uncommitted · fix(ui): 겹치는 정지 컨트롤의 실제 클릭 영역 보존
-- 2026-10-04 · uncommitted · feat(ui): 작업 상태의 공용 한국어 이름
