@@ -1779,3 +1779,9 @@
 - 변경: 승인 paint-fit의 source/map/revision에 묶인 reference-only x/y/yaw를 SQLite에 저장한다. viewer 읽기·operator 저장/삭제·revision CAS·범위/finite 검증·보정 변경 무효화를 추가했다. 기존 지도에서 선택하거나 입력해 저장하고 위치·방향을 다시 표시한다. 지도 선택은 goal 클릭과 분리하며 CORE 위치·신원·주행 승인을 바꾸지 않는다.
 - 증거: 관련 API/계약·공용 UI 149 passed, known_failures 신규 0; Node 좌표·여백·무효 표시 3 passed; 실제 Chromium 선택/저장/새로고침/보정 변경·토큰 변경·occupancy 표시/선택 중 지도 변경 3 passed. 독립 읽기 검토의 좌표 형식·JSON 헤더·map 변경 지적 3건을 수정했다.
 - gate 변화: SOURCE/LOCAL. 실제 카메라 보정 승인·두 로봇 신원 연결·현장 시작 위치/방향 일치·정확한 후보 CI/서명/배포 수용은 아직 별도다. UI/UX 리팩터링과 주행 없음.
+
+## 2026-10-05 · uncommitted · fix(dialog-target): 카메라 승인·해제 대상 확인
+
+- 변경: 기존 승인·해제 대화상자의 기기 이름과 확인 문자를 따옴표로 구분하고 승인 여부를 질문한다. 레이아웃·UI/UX 리팩터링·API·권한 변경 없음.
+- 증거: irreversible 행 행동 검사와 실제 Chromium 카메라 승인 확인 검사 12 passed, known_failures NEW 0.
+- gate 변화: SOURCE/LOCAL. 장치·현장 수락은 별도다.
