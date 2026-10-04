@@ -770,7 +770,7 @@ def test_console_line_follow_and_docking_feedback_full_shell_captures(tmp_path):
               overflowX: Math.max(0, document.documentElement.scrollWidth - innerWidth),
               eStopVisible: document.querySelector('#shell-estop')?.getBoundingClientRect().right <= innerWidth,
               readback: document.querySelector('[data-panel="console.line_follow"] ui-status')?.textContent || '',
-              action: [...document.querySelectorAll('[data-panel="console.line_follow"] ui-status[role="status"]')].at(-1)?.textContent || '',
+              action: [...document.querySelectorAll('[data-panel="console.line_follow"] > ui-status[role="status"]')].at(-1)?.textContent || '',
             })""")
             assert line_measured["overflowX"] == 0 and line_measured["eStopVisible"]
             assert "fixture line status unavailable" in line_measured["readback"] and "CORE" in line_measured["action"]

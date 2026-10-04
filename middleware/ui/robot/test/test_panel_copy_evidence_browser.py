@@ -36,7 +36,10 @@ MOUNT = """async ([module, role]) => {
   const callbacks = {}; window.__callbacks = callbacks; window.__calls = [];
   window.__prompts = [];
   window.confirm = (text) => { window.__prompts.push(text); return false; };
-  const store = {poll(path, interval, onData, onError) { callbacks[path] = {onData, onError, interval}; return () => {}; }};
+  const store = {
+    poll(path, interval, onData, onError) { callbacks[path] = {onData, onError, interval}; return () => {}; },
+    state(onData, onError) { return this.poll("/api/v1/robot/state", 1000, onData, onError); },
+  };
   window.__unmount = mount(root, {role, store, surfaces: [],
     api: async (path, options) => { window.__calls.push(path); if (window.__api) return window.__api(path, options); return {}; }});
 }"""
