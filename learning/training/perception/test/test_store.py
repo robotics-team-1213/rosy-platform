@@ -66,6 +66,27 @@ def test_content_sha_of_an_empty_or_missing_folder(tmp_path):
         store.content_sha(tmp_path / "nope")
 
 
+@pytest.mark.skipif(os.name != "nt", reason="Windows extended-path hashing regression")
+@pytest.mark.parametrize("path_form", ["absolute", "relative", "extended"])
+def test_content_sha_counts_files_beyond_windows_max_path(tmp_path, monkeypatch, path_form):
+    files = {"manifest.json": b"{}", "evidence/source-proofs/" + "a" * 64 + ".json": b"proof"}
+    short = _tree(tmp_path / "short", files)
+    long = tmp_path / "published"
+    while len(str(long)) < 210:
+        long /= "nested-" + "n" * 20
+    extended = Path("\\\\?\\" + str(long.absolute()))
+    _tree(extended, files)
+    assert len(str(long / next(name for name in files if name != "manifest.json"))) > 260
+    requested = long
+    if path_form == "relative":
+        monkeypatch.chdir(tmp_path)
+        requested = long.relative_to(tmp_path)
+    elif path_form == "extended":
+        requested = extended
+    assert store.file_hashes(requested) == store.file_hashes(short)
+    assert store.content_sha(requested) == store.content_sha(short)
+
+
 # --- datasets -------------------------------------------------------------------------------
 
 def test_put_dataset_copies_into_the_content_address(tmp_path):
