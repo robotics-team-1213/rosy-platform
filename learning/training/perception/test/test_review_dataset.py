@@ -1,4 +1,4 @@
-﻿"""Read-only candidate diagnostics; this API never grants dataset qualification."""
+"""Read-only candidate diagnostics; this API never grants dataset qualification."""
 import copy
 import hashlib
 import json

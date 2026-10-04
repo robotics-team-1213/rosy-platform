@@ -5806,3 +5806,9 @@ osy-d395-s1d\`.
 - 변경: receipt authority의 frame_excluded=False→0를 별도 회귀로 고정했다. original_video_verified alias와 함께 embedded digest 유지/재계산 및 외부 inventory/marker 재봉인을 모두 시험한다. helper의 기존 validate_authority(receipt.authority)·encoded equality를 유지하며 root 소비자 코드는 수정하지 않는다.
 - 증거: X:/DevTemp/pinky-review-cycle-20261005/receipt-frame-excluded-tests.txt 및 최신 main 동기화 후 별도 시험 출력에 남긴다. 실제 사람 검수·이력과 기존 봉인 export는 변경하지 않는다.
 - gate 변화: SOURCE/LOCAL 회귀 보강. 모델PC 격리 소비 수용은 root 증거이며 생산 bridge/cycle 배포·학습 적격성과 별개다. push·주행·모델 활성화·HOLD 해제 없음.
+
+## 2026-10-05 · uncommitted · docs(learning): bind approved indexed masks to immutable dataset construction
+
+- 변경: D-464는 명시 승인된 Pinky indexed 픽셀을 원본 영상·바이트·최신 authority·촬영 component 및 실제 전체 eval version 분리 검증 후 dataset/1으로 만드는 책임을 정한다. D-379의 기존 자동 라벨과 고정 eval 신뢰 출처를 유지하며 CVAT origin으로 위장하지 않는다.
+- 증거: 새 번호 생성 직전 main/작업 트리/430 branch ADR trees, ADR Log 및 harness gaps를 조회했다. 문서 lint 결과와 계약 회귀 출력은 로컬 임시 증거로 보존한다. 실제 승인0·eval source/group 미확정은 HOLD이며 새로운 데이터 게시·학습·모델 승격을 의미하지 않는다.
+- gate 변화: 문서 계약만 기록한다. 사용자 승인된 builder 소스 구현·격리 roundtrip 및 실제 trainer admission 검증은 각각 별도 단계다.
