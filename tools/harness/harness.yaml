@@ -7,6 +7,7 @@ adr_log: docs/reference/ROSY ADR Log.md
 
 # IDs absent from the ADR log on purpose. Remove an entry once the ADR is written.
 adr_gaps:
+  D-451: "Allocated to the Fleet lane meet decider on another branch (7b33a250de303a6355c4d6359f9bc401cb17593c); remove when its ADR lands"
   D-440: "ADR (per-device power policy) is reserved on feat/device-power-policy; implementation integration does not establish the missing ADR body"
   D-428: "ADR written on branch feat/d428-web-face-sweep (8ce5cc237), not yet on main; remove when it lands"
   D-29: "unused; the vision accelerator shield design only proposed the number"

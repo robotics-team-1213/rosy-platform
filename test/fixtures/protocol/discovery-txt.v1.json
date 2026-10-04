@@ -82,6 +82,18 @@
       },
       "optional": [],
       "legacy_without_common_keys": false
+    },
+    "_rosy-model._tcp": {
+      "role_column": "Model",
+      "required": {
+        "product": "rosy",
+        "role": "model-host",
+        "proto": "ssh/2",
+        "tls": "none",
+        "transport": "ssh"
+      },
+      "optional": [],
+      "legacy_without_common_keys": false
     }
   },
   "cases": [
@@ -714,6 +726,348 @@
       "expect": {
         "accepted": true,
         "legacy": false
+      }
+    },
+    {
+      "service_type": "_rosy-model._tcp",
+      "host": "model-a.local",
+      "address": "192.168.4.20",
+      "port": 22,
+      "txt": [
+        "product=rosy",
+        "role=model-host",
+        "proto=ssh/2",
+        "tls=none",
+        "transport=ssh"
+      ],
+      "id": "model_ssh_ok",
+      "expect": {
+        "accepted": true,
+        "legacy": false
+      }
+    },
+    {
+      "service_type": "_rosy-model._tcp",
+      "host": "model-a.local",
+      "address": "192.168.4.20",
+      "port": 22,
+      "txt": [
+        "role=model-host",
+        "proto=ssh/2",
+        "tls=none",
+        "transport=ssh"
+      ],
+      "id": "model_missing_product",
+      "expect": {
+        "accepted": false,
+        "reason": "missing_key"
+      }
+    },
+    {
+      "service_type": "_rosy-model._tcp",
+      "host": "model-a.local",
+      "address": "192.168.4.20",
+      "port": 22,
+      "txt": [
+        "product=rosy",
+        "role=model-host",
+        "proto=ssh/2",
+        "tls=none",
+        "transport=ssh",
+        "product=rosy"
+      ],
+      "id": "model_duplicate_product",
+      "expect": {
+        "accepted": false,
+        "reason": "duplicate_key"
+      }
+    },
+    {
+      "service_type": "_rosy-model._tcp",
+      "host": "model-a.local",
+      "address": "192.168.4.20",
+      "port": 22,
+      "txt": [
+        "product=wrong",
+        "role=model-host",
+        "proto=ssh/2",
+        "tls=none",
+        "transport=ssh"
+      ],
+      "id": "model_wrong_product",
+      "expect": {
+        "accepted": false,
+        "reason": "value_mismatch"
+      }
+    },
+    {
+      "service_type": "_rosy-model._tcp",
+      "host": "model-a.local",
+      "address": "192.168.4.20",
+      "port": 22,
+      "txt": [
+        "product=rosy",
+        "proto=ssh/2",
+        "tls=none",
+        "transport=ssh"
+      ],
+      "id": "model_missing_role",
+      "expect": {
+        "accepted": false,
+        "reason": "missing_key"
+      }
+    },
+    {
+      "service_type": "_rosy-model._tcp",
+      "host": "model-a.local",
+      "address": "192.168.4.20",
+      "port": 22,
+      "txt": [
+        "product=rosy",
+        "role=model-host",
+        "proto=ssh/2",
+        "tls=none",
+        "transport=ssh",
+        "role=model-host"
+      ],
+      "id": "model_duplicate_role",
+      "expect": {
+        "accepted": false,
+        "reason": "duplicate_key"
+      }
+    },
+    {
+      "service_type": "_rosy-model._tcp",
+      "host": "model-a.local",
+      "address": "192.168.4.20",
+      "port": 22,
+      "txt": [
+        "product=rosy",
+        "role=wrong",
+        "proto=ssh/2",
+        "tls=none",
+        "transport=ssh"
+      ],
+      "id": "model_wrong_role",
+      "expect": {
+        "accepted": false,
+        "reason": "value_mismatch"
+      }
+    },
+    {
+      "service_type": "_rosy-model._tcp",
+      "host": "model-a.local",
+      "address": "192.168.4.20",
+      "port": 22,
+      "txt": [
+        "product=rosy",
+        "role=model-host",
+        "tls=none",
+        "transport=ssh"
+      ],
+      "id": "model_missing_proto",
+      "expect": {
+        "accepted": false,
+        "reason": "missing_key"
+      }
+    },
+    {
+      "service_type": "_rosy-model._tcp",
+      "host": "model-a.local",
+      "address": "192.168.4.20",
+      "port": 22,
+      "txt": [
+        "product=rosy",
+        "role=model-host",
+        "proto=ssh/2",
+        "tls=none",
+        "transport=ssh",
+        "proto=ssh/2"
+      ],
+      "id": "model_duplicate_proto",
+      "expect": {
+        "accepted": false,
+        "reason": "duplicate_key"
+      }
+    },
+    {
+      "service_type": "_rosy-model._tcp",
+      "host": "model-a.local",
+      "address": "192.168.4.20",
+      "port": 22,
+      "txt": [
+        "product=rosy",
+        "role=model-host",
+        "proto=wrong",
+        "tls=none",
+        "transport=ssh"
+      ],
+      "id": "model_wrong_proto",
+      "expect": {
+        "accepted": false,
+        "reason": "value_mismatch"
+      }
+    },
+    {
+      "service_type": "_rosy-model._tcp",
+      "host": "model-a.local",
+      "address": "192.168.4.20",
+      "port": 22,
+      "txt": [
+        "product=rosy",
+        "role=model-host",
+        "proto=ssh/2",
+        "transport=ssh"
+      ],
+      "id": "model_missing_tls",
+      "expect": {
+        "accepted": false,
+        "reason": "missing_key"
+      }
+    },
+    {
+      "service_type": "_rosy-model._tcp",
+      "host": "model-a.local",
+      "address": "192.168.4.20",
+      "port": 22,
+      "txt": [
+        "product=rosy",
+        "role=model-host",
+        "proto=ssh/2",
+        "tls=none",
+        "transport=ssh",
+        "tls=none"
+      ],
+      "id": "model_duplicate_tls",
+      "expect": {
+        "accepted": false,
+        "reason": "duplicate_key"
+      }
+    },
+    {
+      "service_type": "_rosy-model._tcp",
+      "host": "model-a.local",
+      "address": "192.168.4.20",
+      "port": 22,
+      "txt": [
+        "product=rosy",
+        "role=model-host",
+        "proto=ssh/2",
+        "tls=wrong",
+        "transport=ssh"
+      ],
+      "id": "model_wrong_tls",
+      "expect": {
+        "accepted": false,
+        "reason": "value_mismatch"
+      }
+    },
+    {
+      "service_type": "_rosy-model._tcp",
+      "host": "model-a.local",
+      "address": "192.168.4.20",
+      "port": 22,
+      "txt": [
+        "product=rosy",
+        "role=model-host",
+        "proto=ssh/2",
+        "tls=none"
+      ],
+      "id": "model_missing_transport",
+      "expect": {
+        "accepted": false,
+        "reason": "missing_key"
+      }
+    },
+    {
+      "service_type": "_rosy-model._tcp",
+      "host": "model-a.local",
+      "address": "192.168.4.20",
+      "port": 22,
+      "txt": [
+        "product=rosy",
+        "role=model-host",
+        "proto=ssh/2",
+        "tls=none",
+        "transport=ssh",
+        "transport=ssh"
+      ],
+      "id": "model_duplicate_transport",
+      "expect": {
+        "accepted": false,
+        "reason": "duplicate_key"
+      }
+    },
+    {
+      "service_type": "_rosy-model._tcp",
+      "host": "model-a.local",
+      "address": "192.168.4.20",
+      "port": 22,
+      "txt": [
+        "product=rosy",
+        "role=model-host",
+        "proto=ssh/2",
+        "tls=none",
+        "transport=wrong"
+      ],
+      "id": "model_wrong_transport",
+      "expect": {
+        "accepted": false,
+        "reason": "value_mismatch"
+      }
+    },
+    {
+      "service_type": "_rosy-model._tcp",
+      "host": "model.example",
+      "address": "192.168.4.20",
+      "port": 22,
+      "txt": [
+        "product=rosy",
+        "role=model-host",
+        "proto=ssh/2",
+        "tls=none",
+        "transport=ssh"
+      ],
+      "id": "model_bad_host",
+      "expect": {
+        "accepted": false,
+        "reason": "bad_host"
+      }
+    },
+    {
+      "service_type": "_rosy-model._tcp",
+      "host": "model-a.local",
+      "address": "192.168.4.20",
+      "port": 0,
+      "txt": [
+        "product=rosy",
+        "role=model-host",
+        "proto=ssh/2",
+        "tls=none",
+        "transport=ssh"
+      ],
+      "id": "model_bad_port",
+      "expect": {
+        "accepted": false,
+        "reason": "bad_port"
+      }
+    },
+    {
+      "service_type": "_rosy-model._tcp",
+      "host": "model-a.local",
+      "address": "127.0.0.1",
+      "port": 22,
+      "txt": [
+        "product=rosy",
+        "role=model-host",
+        "proto=ssh/2",
+        "tls=none",
+        "transport=ssh"
+      ],
+      "id": "model_loopback",
+      "expect": {
+        "accepted": false,
+        "reason": "bad_address"
       }
     }
   ]

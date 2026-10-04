@@ -33,10 +33,13 @@ def _profile_table() -> dict[str, dict[str, str]]:
 def test_every_service_type_matches_the_profile_column():
     vectors = json.loads(VECTORS.read_text(encoding="utf-8"))
     table = _profile_table()
-    assert len(vectors["profile"]) == 5
+    assert set(vectors["profile"]) == {
+        '_rosy._tcp', '_rosy-fleet._tcp', '_rosy-overhead._tcp',
+        '_rosy-dock._tcp', '_rosy-signal._tcp', '_rosy-model._tcp',
+    }
     for service_type, profile in vectors["profile"].items():
         column = table[profile["role_column"]]
-        assert {key: column[key] for key in COMMON_KEYS} == profile["required"], service_type
+        assert {key: column[key] for key in profile["required"]} == profile["required"], service_type
         assert f"`{service_type}.local`" in PROFILE.read_text(encoding="utf-8")
 
 

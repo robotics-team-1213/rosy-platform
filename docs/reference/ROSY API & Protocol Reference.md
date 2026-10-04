@@ -2,7 +2,7 @@
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.92
+**Version:** v1.94
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -1469,6 +1469,7 @@ credential, separate from site users, CORE REST, and FleetAgent pairing.
 | Method | Path | Authority | Result |
 |---|---|---|---|
 | POST | `/api/fleet/discovery/scan` | host scanner Bearer only | Replace the short-lived discovery scan; 401 invalid credential, 400 invalid observation |
+| GET | `/api/fleet/peers` | site viewer+ | D-452 `PeerCatalogue`: bounded role catalogue, separate discovery/approval/readiness; no credentials or automatic enrollment |
 | GET | `/api/fleet/discovery` | site viewer+ | `{scanner_online, scanner_state, scanner_age_s, devices[]}` with status `registration_pending`, `pairing_pending`, `verified_online`, or `conflict` |
 | GET | `/api/fleet/discovery/addresses` | site viewer+ | `{scanner_state, all_outside, robots[]}`: per roster robot `{robot_id, origin, pinned, pinned_is_name, status, in_subnet, seen_addresses[], movable}`; status `in_scanned_subnet`, `outside_scanned_subnets`, `seen_at_other_address`, or `unknown`. Explains only: nothing resolves or follows a new address (D-361 3, D-370 5.3); no credentials |
 
@@ -1486,6 +1487,43 @@ port. A duplicate advertised name or identity mismatch is a conflict. The
 discovery routes never add an endpoint, assign a robot number, expose a token,
 or command CORE. Cross-VLAN, blocked multicast, and AP mode use manual endpoint
 configuration and the existing outbound FleetAgent path.
+
+### D-452 역할 목록 (v1.94)
+
+정본은 `core_common.protocol.network_peers`의 `PeerObservation`, `PeerSummary`,
+`PeerCatalogue`이다. 기존 scanner payload의 `devices[]`는 로봇 등록 관찰로 유지한다.
+선택적 `services[]`는 역할별 관찰이며 두 배열의 합계가 최대 64개이다. 생략하면 빈 배열이다.
+`services[]`는 non-robot 5역할만 전달한다. 로봇 관찰은 기존 `devices[]`에서 한 번만 세며,
+선택적 `transport=http|https`는 검증한 TXT의 TLS 요구를 표현한다(기존 생략 행은 legacy HTTP).
+이는 TLS 인증 접속 성공이 아니다. catalogue는 이 기존 로봇 관찰을 역할 row로도 표현한다.
+한 번의 성공한 scan이 두 관찰 목록을 교체하며 같은 45초 lease를 사용한다.
+클라이언트 앱의 session presence를 scanner가 임의로 제출할 수 없다.
+
+`PeerCatalogue`는 `{peers[], scanner_state, scanner_age_s}`이다. `scanner_state`는
+`never_seen|online|expired`, age는 유한한 0 이상 초 또는 null이다. 각 row는
+`name`, `role`(`robot|fleet|overhead-camera|dock|signal|model-host|pilot|cam`),
+`transport`(`http|https|ssh|session`), nullable `service_type`, `hostname`, `address`, `port`,
+nullable `peer_id`, `provenance`(`mdns|approved-directory`),
+`freshness`(`fresh|expired|conflict|unavailable`), `approval`(`approved|unapproved`),
+`readiness`(`unknown|verified|unreachable`)를 가진다. mDNS network endpoint는
+정규화된 `.local` 이름, RFC1918 IPv4, 1..65535 port이다. 승인 directory는 기존 승인된
+정규화 DNS 이름과 port를 유지하며 현재 미해결 address는 null로, 확인된 VPN/DNS 주소는
+unicast 힌트로 표시할 수 있다. 둘 다 역할별 정본 service type과 transport를 검사한다.
+기존 승인된 literal-IP profile은 `hostname=null`과 실제 `address`로 이주 전 상태를
+보존하며 DNS 이름을 만들어 넣지 않는다. 정상 선택 화면은 승인 `peer_id`·이름을 사용한다.
+이름은 제어 문자 없는 1..96자이다. token·key·개인 경로·임의 TXT를
+반환하지 않는다. 앱 presence는 `transport=session`이며 inbound endpoint가 모두 null이다.
+
+광고는 `peer_id`나 승인·검증 상태를 만들지 않는다. 승인 신원은 기존 directory가 제공하며,
+`verified`는 fresh인 승인 대상의 endpoint owner가 실제 인증 접속을 확인했을 때만 가능하다.
+충돌·만료·오류에서는 verified를 유지하지 않는다. 목록 조회는 viewer에게 허용하지만,
+선택 이후 접속·쓰기·SSH 배포는 각 endpoint의 기존 인증과 운영자 권한을 그대로 적용한다.
+다른 망의 approved DNS/profile 경로와 실제 연결 수락은 이 LAN 조회의 성공만으로 증명하지 않는다.
+
+MODEL은 `_rosy-model._tcp`, `product=rosy`, `role=model-host`, `proto=ssh/2`,
+`tls=none`, `transport=ssh`를 필수로 광고한다. 실제 sshd listener의 SRV port만 제공하며
+추론 HTTP API가 아니다. `tls=none`은 SSH 호스트 키 인증을 생략한다는 뜻이 아니다.
+기존 승인 논리 이름의 HostKeyAlias·known_hosts·StrictHostKeyChecking이 계속 신원을 검증한다.
 
 
 ## 10.10 Site Fleet intent interpretation and message boundaries (D-293 Accepted, D-316 Accepted)
@@ -2048,6 +2086,7 @@ and field acceptance require their own evidence.
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.94 | 2026-10-04 | Additive (D-452): 별도 authenticated peers 역할 목록, 선택적 bounded scanner services, 실제 모델 SSH profile. 발견·승인·ready 분리, envelope 1.0 및 기존 등록/인증 유지 |
 | v1.92 | 2026-10-04 | Additive: Viewer GET /api/v1/power/health; battery age/freshness, timestamped charging evidence, software sleep blockers and wake constraints. Read-only; envelope protocol_version 1.0 unchanged. |
 | v1.91 | 2026-10-04 | Additive (D-438 1단계, docs/d438-fleet-stuck-resolver): CORE 역할 `stuck_resolver`(순위 viewer)와 capability `STUCK_DECIDE`; `POST /api/v1/line-follow/stuck/decision` 은 `STUCK_DECIDE` 를 요구(operator·administrator 도 가짐), `stuck_resolver` 의 `MANUAL` 은 403. Site Fleet `POST /api/fleet/robots/{robot_id}/line-stuck/claim`(operator), 로봇 행 `line_stuck.resolver`, `robots.yaml` `resolver_token`, `fleet console --stuck-resolver`. `fleet_line_stuck_answers` 에 null 가능 열 `tier`·`rule`·`escalated`(옛 DB 는 열 때 추가), 판단기가 사람에게 올릴 때마다 `ESCALATE` 행. `GET /api/fleet/state` 와 판단기는 1 s 안에서 한 번의 gather 를 같이 쓴다. 로봇 이벤트·FleetAgent 프로토콜 변경 없음 |
 | v1.90 | 2026-10-03 | Additive (D-432): LAN 장비 목록 접속, auth/connection·auth/development-session, 선택적 CORE TLS·발견 전송과 SSH 공개 키 등록. 기존 코드 규약·envelope 1.0 유지. |

@@ -424,3 +424,9 @@
 - 변경: 정상 IDLE/STANDBY 기준을 600/1800초로 늘리고 warning60/300, critical/deep30/120초와 min을 취한다. YAML override·API effective timers에 연결한다. 기존 이동·정보 hold·disabled와 배터리 정지/종료 권한을 유지한다.
 - 증거: 주입 시계·설정 parser RED3 failed, 전원/배터리/bridge GREEN180 passed. 구조 재판정은 docs/plans/2026-10-04-power-health-and-wake.md에 기록한다.
 - gate 변화: SOURCE/LOCAL. 기기 소비전력·물리 wake·배포 검증은 별도다.
+
+## 2026-10-04 · uncommitted · D-452 역할 발견과 승인 directory 계약
+
+- 변경: 실제 모델 SSH의 여섯 번째 TXT profile과 공용 PeerObservation/PeerSummary/PeerCatalogue를 추가한다. 발견·승인·접속 검증을 분리하고 credential 및 listener 없는 앱의 가짜 endpoint를 거부한다. mDNS의 .local/RFC1918와 승인 directory의 DNS/VPN·현재 미해결 주소를 구분한다. API Ref v1.94, envelope 1.0 유지.
+- 검증: metadata RED collection(미구현) 뒤 focused252 passed/2 Linux skipped. directory 신원·미해결·VPN 및 mDNS 외부 host 거부 회귀12 PASS. 독립 source review에서 발견한 directory 제한을 수정했다.
+- gate 변화: 없음; provider/consumer 구현과 CI·컨테이너 namespace·실제 모델/로봇·다른 망 수락은 별도다. 이 focused 계약 검증으로 전체 module gate를 새로 승격하지 않는다.

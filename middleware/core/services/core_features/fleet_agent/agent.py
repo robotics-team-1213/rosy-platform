@@ -9,6 +9,7 @@ from pathlib import Path
 
 from core_common.protocol.schemas import Envelope, EnvelopeType, HelloPayload, HeartbeatPayload
 from core_common.link_retry import retry_delay
+from core_common.protocol.discovery_txt import HOSTNAME
 from .discovery import locate_fleet, DiscoveryConflict, DiscoveryUnavailable
 
 logger = logging.getLogger("fleet_agent")
@@ -55,15 +56,29 @@ def next_backoff(current: float) -> float:
     return min(current * 2.0, MAX_BACKOFF_S)
 
 
+def _discovery_profile(fleet_cfg: dict) -> dict | None:
+    """A declared trust profile must never fall back to a legacy URL."""
+    discovery = fleet_cfg.get("discovery")
+    if discovery is None or discovery == {}:
+        return None
+    if not isinstance(discovery, dict):
+        raise ValueError("fleet.discovery must be a mapping")
+    hostname, ca_file = discovery.get("expected_hostname"), discovery.get("ca_file")
+    if not isinstance(hostname, str) or not HOSTNAME.fullmatch(hostname.lower().rstrip(".")):
+        raise ValueError("fleet.discovery requires an approved .local hostname")
+    if not isinstance(ca_file, str) or not Path(ca_file).is_absolute():
+        raise ValueError("fleet.discovery requires an absolute site CA path")
+    return {"expected_hostname": hostname.lower().rstrip("."), "ca_file": ca_file}
+
+
 def fleet_link_configured(fleet_cfg: dict) -> bool:
     """The agent runs only with an approved pairing token and a site location."""
     fleet_cfg = fleet_cfg or {}
-    discovery = fleet_cfg.get("discovery") or {}
-    has_discovery = (isinstance(discovery, dict)
-                     and isinstance(discovery.get("expected_hostname"), str)
-                     and isinstance(discovery.get("ca_file"), str)
-                     and Path(discovery["ca_file"]).is_absolute())
-    return bool(fleet_cfg.get("pairing_token")) and bool(fleet_cfg.get("hub_url") or has_discovery)
+    try:
+        discovery = _discovery_profile(fleet_cfg)
+    except ValueError:
+        return False
+    return bool(fleet_cfg.get("pairing_token")) and bool(discovery or fleet_cfg.get("hub_url"))
 
 
 def heartbeat_reply_timeout_s(fleet_cfg: dict) -> float:
@@ -160,7 +175,9 @@ class FleetAgent:
             return
 
         self.enabled = True
-        self._pending = (fleet_cfg.get("hub_url") or "", fleet_cfg.get("pairing_token"))
+        # D-452: approved identity/CA pins win over a stale transport URL.
+        hub_url = "" if _discovery_profile(fleet_cfg) else fleet_cfg.get("hub_url") or ""
+        self._pending = (hub_url, fleet_cfg.get("pairing_token"))
         try:
             asyncio.get_running_loop()
         except RuntimeError:
@@ -199,8 +216,16 @@ class FleetAgent:
         import websockets
         from websockets.exceptions import WebSocketException
 
-        discovery = self.config.get("fleet", {}).get("discovery") or {}
-        discover = not hub_url
+        try:
+            discovery = _discovery_profile(self.config.get("fleet", {}) or {})
+        except ValueError as exc:
+            logger.error("Fleet link configuration rejected: %s", exc)
+            self.enabled = False
+            return
+        discover = discovery is not None
+        if not discover and not hub_url:
+            self.enabled = False
+            return
         ca_file = Path(discovery["ca_file"]) if discover else None
 
         # Keep buffering events even when disconnected to not lose them

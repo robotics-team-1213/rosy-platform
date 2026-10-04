@@ -27,6 +27,7 @@ FLEET = "_rosy-fleet._tcp"
 OVERHEAD = "_rosy-overhead._tcp"
 DOCK = "_rosy-dock._tcp"
 SIGNAL = "_rosy-signal._tcp"
+MODEL = "_rosy-model._tcp"
 
 COMMON_KEYS = ("product", "role", "proto", "tls")
 REQUIRED: dict[str, dict[str, str]] = {
@@ -36,6 +37,8 @@ REQUIRED: dict[str, dict[str, str]] = {
                "tls": "required"},
     DOCK: {"product": "rosy", "role": "dock", "proto": "rosy-dock/1", "tls": "none"},
     SIGNAL: {"product": "rosy", "role": "signal", "proto": "rosy-signal/1", "tls": "none"},
+    MODEL: {"product": "rosy", "role": "model-host", "proto": "ssh/2", "tls": "none",
+            "transport": "ssh"},
 }
 # Old robot images advertise stage/release/name/network only (profile, line 26).
 LEGACY_ALLOWED = frozenset({ROBOT})

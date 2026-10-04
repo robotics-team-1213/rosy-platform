@@ -36,8 +36,8 @@
 
 ## 최근 기록
 
+- 2026-10-04 · uncommitted · D-452 역할 발견과 승인 directory 계약
 - 2026-10-04 · uncommitted · feat(power): long testing dwell with low battery saving
 - 2026-10-04 · uncommitted · feat(power): fresh battery evidence and idle saving
 - 2026-10-04 · uncommitted · fix(vision): preserve fresh overexposed quality
 - 2026-10-04 · uncommitted · feat(protocol): recording start 옵션과 capture provenance
-- 2026-10-04 · uncommitted · feat: 명시적 저조도 보조 조명 수동 모드

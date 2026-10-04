@@ -5268,3 +5268,23 @@
 - Change: Merge origin/main 1722ca6ec into shared main e79d8b01d; preserve the local legacy/current ArUco regression fixtures and remote two-pixel corner refinement. Preserve both histories and append-only records.
 - Evidence: Perception marker/dock suites 32 passed; architecture suites 51 passed. Independent review found no production safety regression; two stale tuning assertions were corrected and rerun. Fast contract validation is recorded in the integration receipt.
 - gate 변화: None. This Git integration does not activate devices or establish release/field acceptance.
+
+
+## 2026-10-04 · uncommitted · D-432 Pilot failure retry and Cam thermal screen sleep
+
+- 변경: Pilot 연결 시 목록 cache를 무효화하여 실패·취소 후 현재 TTL·충돌·발열 정책에 따라 카드를 다시 구성한다. HTTP와 secure 후보의 오류 안내를 구분한다. 기존 신뢰·가입·CORE 명령 권한은 유지한다. D-432에 결정과 후속 실기 기록을 추가했다.
+- 증거: 독립 source SPEC·QUALITY PASS, Pilot JVM46 PASS·동일 서명·설치 hash 일치, 실제 실패→같은 카드 직접 재시도→목록 복귀 PASS. Cam thermal status3/Dozing에서 깨우기 없이 수신 seq2126→2132·HTTP200/200·실제 밝은 영상 확인. docs/validation/ui-release-integration-2026-10-04/live-followup.md.
+- gate 변화: 없음. 로봇 SSH·CORE TCP는 여전히 시간 초과/경로 오류이며 정상 연결과 native 배포는 미검증이다. 기존 사이트 수신기를 이번 통합 revision 배포 수락으로 기록하지 않는다. 최종 원격 push·CI·서명 후보 전달과 인증된 전체 웹 화면 확인은 후속이다.
+
+
+## 2026-10-04 · uncommitted · D-359 responsive header and owned mode confirmation
+
+- 변경: 공용 자산 이동·확인창·SLAM 클릭 반복·request owner·Fleet queue wrapper와 stylesheet 목록을 실제 소스 계약대로 검사한다. 임의 40rem 상단바 분기 세 곳을 기존 64rem 단으로 정렬했다. dashboard_drive는 전역 native 자동 승인을 제거하고 요청한 모드의 실제 확인창·버튼 identity만 승인하며 결과를 조회한다. 교체된 확인창은 승인하지 않는다.
+- 증거: 대시보드/bridge 실패6 PASS, Fleet 실패2 PASS, 반응형 실패1 PASS, 모드 도구 실패1 PASS·모두 focused0 NEW. 모드 실제 DOM 창 교체에서 다른 승인0·POST 증가0. 독립 source 검토 PASS. 12 반응형 상단바 DOM 측정에서 가로 넘침 없음. Pilot 자산 변경 후 기존 서명 재빌드·설치 hash 일치. docs/validation/ui-release-integration-2026-10-04/live-followup.md.
+- gate 변화: 없음. broad pre-push 실패 원본은 보존하며 최종 source push·원격 CI는 후속이다. 정적 header fixture·로컬 mode fixture·기존 사이트 Vision 수신과 실제 장비 수락은 구분한다. 실제 모드 변경·정지 해제·구동은 없다.
+
+## 2026-10-04 · uncommitted · D-452 네트워크 역할 발견과 신원 연결
+
+- 변경: 모든 표면에서 주소 입력 대신 장비 이름과 역할로 찾는다. 같은 LAN 발견과 승인 directory를 구분하고 기존 CA·token·SSH HostKeyAlias를 보존한다. 모델 PC는 실제 SSH 서비스를 광고하며 가짜 추론 API는 만들지 않는다.
+- 증거: docs/plans/2026-10-04-network-peer-discovery.md. 컨테이너 의존성 및 실제 namespace, 재접속 신원 resolver, 승인 목록 UI를 순서대로 구현·독립 검증한다.
+- gate 변화: 구조 결정 Accepted; 코드·CI·실제 장비·다른 망 연결 수락은 각각 별도 증거로 기록한다.

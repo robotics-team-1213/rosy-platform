@@ -284,8 +284,8 @@
 
 ## 최근 기록
 
+- 2026-10-04 · uncommitted · D-452 네트워크 역할 발견과 신원 연결
+- 2026-10-04 · uncommitted · D-359 responsive header and owned mode confirmation
+- 2026-10-04 · uncommitted · D-432 Pilot failure retry and Cam thermal screen sleep
 - 2026-10-04 · uncommitted · merge: synchronize shared main with final remote migration
 - 2026-10-04 · uncommitted · D-427 wave5 final host and fixture corrections
-- 2026-10-04 · uncommitted · D-427 peer CI correction integration
-- 2026-10-04 · uncommitted · D-427 wave5 cleanup and CI compatibility
-- 2026-10-04 · uncommitted · docs: additional road video and update record audit
