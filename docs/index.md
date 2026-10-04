@@ -297,8 +297,8 @@
 
 ## 최근 기록
 
+- 2026-10-04 · uncommitted · docs(learning): UX 착지 동기화 검증
 - 2026-10-04 · uncommitted · uiux(learning): D-461 작업 우선 공용 구성과 검수 편의
 - 2026-10-04 · uncommitted · fix(docs): Pinky 검수 ADR 번호 충돌 해결과 main 동기화
 - 2026-10-04 · uncommitted · docs(pairing): D-456 LAN 수신 승인과 지속 페어링
 - 2026-10-04 · uncommitted · feat(learning): D-458 공통 학습 작업 화면
-- 2026-10-04 · uncommitted · feat(learning): Pinky 박스 직접 선택·드래그 편집

@@ -586,3 +586,9 @@
 - 증거: 첫 실제 Chromium 검사 PC/모바일 4폭·2테마·2표면에서 overflow/page error 0, 검색·빈 상태·키보드·검수 이동 8 시나리오를 확인했다. 발견한 공용 계약 선언과 배치 문제를 묶어 수정하고 최종 관련 pytest/브라우저 확인을 진행한다.
 - gate 변화: SOURCE/LOCAL 변경이며 물리 모바일·학습 qualification·장치·현장·CI 수용을 주장하지 않는다. 로봇·모델 활성화·push·배포 없음.
 - 최종 확인: 관련 호스트 287 passed/24 skipped, known_failures 신규 0. Node 좌표 기하 4 passed. 실제 Chromium 최종 PC/모바일 4폭×2테마×2표면에서 page error/가로 넘침 0; 검색·이동 8, 좌표 preview/drag/resize/cancel/delete 8, 터치 4, 결과 연결·오류·변경·손상·누락·해제 6 및 키보드 Delete 보호·명시 승인·자료 준비·재검수 흐름을 별도 test state에서 확인했다. 운영 사진과 4개 결과 연결은 수정하지 않았다. 증거는 X:/DevTemp/pinky-web-ux-20261004에 저장했다. skipped는 해당 외부 런타임 NOT_RUN이며 CI·물리 전화기 검증이 아니다.
+
+## 2026-10-04 · uncommitted · docs(learning): UX 착지 동기화 검증
+
+- 변경: 최신 main의 학습 cycle/review bridge와 D-460 본문을 병합하고 임시 D-460 예약을 제거했다.
+- 증거: 검수·객체 반환·새 학습 연결·harness 재검증 131 passed, known_failures 신규 0. 뒤이은 저널 검사는 기존 entry 안에 추가한 행을 append-only 위반으로 발견하여 별도 새 heading으로 기록을 분리했다.
+- gate 변화: 로컬 fast-forward 착지 대상이며 push·배포·장치 수용은 수행하지 않는다.
