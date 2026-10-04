@@ -53,6 +53,10 @@ TIERS = ("(width < 30rem)", "(30rem <= width < 64rem)", "(width >= 64rem)")
 TIER_UNIONS = ("(width < 64rem)", "(width >= 30rem)")
 #: §6.5 고정 높이 프레임 규칙 — 높이 질의는 이 두 조건만 세 단과 같이 허용된다.
 FRAME_HEIGHT = ("(height >= 40rem)", "(height < 40rem)")
+
+#: 폭 40rem(640px) — 세 단(D-359 §6.2) 외의 체계 경계. 템플릿·Pilot 접속 머리·호환 셸 머리
+#: 접기가 같은 값으로 쓴다. TIER_VALUES 가 등재 금지 목록에 40rem 을 두는 근거이기도 하다.
+NARROW_WIDTH = ("(width < 40rem)",)
 TIER_VALUES = ("30rem", "64rem", "40rem")
 _BREAKPOINT_VALUE = re.compile(r"^[1-9][0-9]*(?:px|rem)$")
 _MEDIA_RULE = re.compile(r"@media\b([^{;]*)\{")
@@ -265,7 +269,7 @@ def breakpoint_problems(root=None, row: dict | None = None) -> list[str]:
     """D-359 §6.1·§6.2 — `@media` 크기 조건은 세 단(또는 §6.5 높이)이거나 표면 허용 목록 값이다."""
     base = REPO if root is None else Path(root)
     return _size_problems(media_conditions(base, row), _listed(row, "breakpoints"), (row or {}).get("id"),
-                          TIERS + TIER_UNIONS + FRAME_HEIGHT, "breakpoints")
+                          TIERS + TIER_UNIONS + FRAME_HEIGHT + NARROW_WIDTH, "breakpoints")
 
 
 def container_problems(root=None, row: dict | None = None) -> list[str]:
