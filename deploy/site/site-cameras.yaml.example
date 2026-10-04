@@ -1,6 +1,8 @@
 # Copy outside the repository to /etc/rosy/site/site-cameras.yaml.
 # Marker IDs, map dimensions and revisions below are illustrative; survey and
 # calibrate the real installation before accepting sightings.
+# robot_ids are enrolled robots that are on the floor. robot_markers may be {}
+# when those robots have no ceiling marker (D-457). A placeholder id is not a robot.
 sources:
   # credential: static (default) - the phone is given a fixed token by hand (rosyov:// link).
   # credential: paired - D-341: the phone asks the site to connect and an operator approves it in the

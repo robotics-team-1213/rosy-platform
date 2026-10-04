@@ -1779,3 +1779,9 @@
 - 변경: 승인 paint-fit의 source/map/revision에 묶인 reference-only x/y/yaw를 SQLite에 저장한다. viewer 읽기·operator 저장/삭제·revision CAS·범위/finite 검증·보정 변경 무효화를 추가했다. 기존 지도에서 선택하거나 입력해 저장하고 위치·방향을 다시 표시한다. 지도 선택은 goal 클릭과 분리하며 CORE 위치·신원·주행 승인을 바꾸지 않는다.
 - 증거: 관련 API/계약·공용 UI 149 passed, known_failures 신규 0; Node 좌표·여백·무효 표시 3 passed; 실제 Chromium 선택/저장/새로고침/보정 변경·토큰 변경·occupancy 표시/선택 중 지도 변경 3 passed. 독립 읽기 검토의 좌표 형식·JSON 헤더·map 변경 지적 3건을 수정했다.
 - gate 변화: SOURCE/LOCAL. 실제 카메라 보정 승인·두 로봇 신원 연결·현장 시작 위치/방향 일치·정확한 후보 CI/서명/배포 수용은 아직 별도다. UI/UX 리팩터링과 주행 없음.
+
+## 2026-10-05 · uncommitted · feat(fleet): 승인된 추적 보정으로 카메라 영상을 편다
+
+- 변경: 검토 중 제안이 없으면 관제 화면은 승인된 Fleet 추적 보정(D-457, 같은 source·지도·렌즈)으로 천장 영상을 트랙 미터에 편다. 기록이 없거나 렌즈가 다르면 이 브라우저의 표시 초안을 쓴다. 표시 전용이며 관측·CameraMap·주행에 넣지 않는다. 예시 카메라 주석은 바닥에 있는 등록 로봇만 robot_ids에 두고, 마커가 없으면 robot_markers가 {}일 수 있다고 적는다.
+- 증거: Node map-fit 17 passed (렌즈 일치·행렬 왕복 포함). pytest 콘솔 추적·카메라 예시·페어링 16 passed, known_failures 신규 0.
+- gate 변화: SOURCE/LOCAL. 서명된 사이트 이미지의 콘솔 JS는 이 커밋만으로 바뀌지 않는다. 주행 없음.
