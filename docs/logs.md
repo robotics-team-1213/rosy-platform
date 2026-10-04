@@ -5689,3 +5689,11 @@ osy-d395-s1d\`.
 - 변경: D-456 후속 사용자 요청으로 기존 좌표 자동 overlay, 숫자 입력 미리보기, 빈 곳 드래그 생성, 기존 박스 선택·이동, 모서리/변 resize, 선택 박스 삭제와 캔버스 Delete를 구현했다. 드래그 중 미리보기만 보여주고 놓을 때 version 검사·저장·재검수 전환을 한다. Esc/touch cancel은 저장을 바꾸지 않는다. 모델 선택/신규 추론 요청으로 확대하지 않는다.
 - 검증: 순수 좌표 기하 Node 4 passed, host pytest 55 passed 및 known_failures 신규 0. 실제 Chromium desktop drag 8 시나리오와 모바일 viewport touch 4 시나리오, 콘솔 오류 0. 운영 데이터를 편집하지 않는 별도 test state에서 실행했다. Windows MIME registry의 .mjs=text/plain 문제를 실패 시험으로 재현하고 모듈 응답을 text/javascript로 고정했다.
 - gate 변화: 없음. 기존 사용자 승인 이력과 운영자의 후속 편집을 보존한다. 픽셀 segmentation·신규 모델 추론·장치 활성화·착지·push·배포는 범위 밖이다.
+
+## 2026-10-04 · uncommitted · feat(learning): D-458 공통 학습 작업 화면
+
+- 변경: 사용자 지정 범위인 학습 관련 앱·웹 전체에서 객체/영역 검수, perception 단계 job, Pinky 원본·행동 연구, OMX ACT, 정책 원장, Isaac 환경의 기존 기능과 다음 작업을 점검했다. D-458에 공통 화면 결정을 기록하고 같은 로컬 서버 /learning에 결과 폴더 연결·SQLite 영속 목록·종류 필터·파일 변경/누락/손상 표시·단계 실패 이유·검수 양방향 이동·연결 해제를 구현했다. 임의 명령/학습 실행/네트워크/모델 API는 추가하지 않았다.
+- 검증: 호스트 59 passed 및 known_failures 신규 0, 좌표 기하 Node 4 passed. 실제 Chromium PC/모바일 viewport 10 시나리오·page error 0. 실제 learning 결과 4폴더를 연결하고 원본 객체 검수 state 변경 없이 유지했다. 운영 state의 현재 1·2 승인/3 제외/4 pending(version 2, 기존 운영자 미분류 추가 편집)을 그대로 보존했다. 결과 보고서 선언/파일 SHA 확인은 독립 closure·정책 수용 검증이 아니다.
+- gate 변화: 없음. segmentation 승인·학습 qualification·GPU job 실행·정책 승격·장치·물리 모바일·현장 수용은 주장하지 않는다. 착지·push·배포는 수행하지 않았다.
+- 추가 검사: harness/affected 91 passed/3 failed에서 생성 색인을 갱신한 뒤 실패 대상과 최종 backend를 다시 검사했다. 10 passed/2 failed이며 두 실패는 clean baseline에 재현된 deploy/logs.md 인코딩/heading 및 전체 lint다. known_failures.py는 미등록 기존 실패를 2 NEW로 보고하므로 전체 green을 주장하지 않는다. D-457은 동료 fix/site-markerless-live-map에 예약된 본문이어서 이 브랜치 adr_gaps에 임시 예약 이유를 기록했다. 실제 4개 결과 연결과 서버 재시작 후 사진 state/연결 목록 동일, PC/모바일 viewport page error 0을 확인했다.
+- 최종 확인: shared_controls 24 passed/2 failed는 기존 baseline의 cell-document-editor.js field와 peer-picker.js disabled reason 두 건이며 이번 학습 표면의 신규 오류는 없다. 현재 운영 state로 새 receiver export를 만들어 승인 2장만 내보냈고, 제외 source 2와 미분류 pending source 3은 학습 라벨에서 제외했다. COMPLETE/manifest 모든 파일 hash·byte 수와 검수 state 불변을 확인했다. 초기 3장 승인은 역사적 import/export에 보존되며 현재 4번 재검수 대기를 승인으로 되돌리지 않았다.

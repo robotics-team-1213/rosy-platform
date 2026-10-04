@@ -20,6 +20,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 import review_return
+from learning_workspace import Workspace, WORKFLOWS
 
 STATIC = Path(__file__).with_name('review_app_web')
 COMMON = Path(__file__).resolve().parents[4] / 'shared' / 'web'
@@ -212,6 +213,7 @@ class ReviewStore:
 
 def make_server(store, port=8767):
     token = secrets.token_urlsafe(32)
+    learning = Workspace(store.db)
 
     class Handler(BaseHTTPRequestHandler):
         def send(self, data, code=200, mime='application/json; charset=utf-8'):
@@ -237,11 +239,16 @@ def make_server(store, port=8767):
                 if path == '/api/workspace':
                     return self.send({'frames': store.list_frames(), 'classes': list(review_return.exporter.OBJECT_CLASSES),
                                       'token': token, 'exports': store.exports(), 'segmentation_supported': False})
+                if path == '/api/learning':
+                    return self.send({'workflows': WORKFLOWS, 'items': learning.list(), 'token': token,
+                                      'counts': {state: sum(f['status'] == state for f in store.list_frames())
+                                                 for state in ('approved', 'pending', 'excluded')}})
                 if path.startswith('/api/images/'):
                     image = store.image(int(path.rsplit('/', 1)[1]))
                     return self.send(image.read_bytes(), mime=mimetypes.guess_type(image.name)[0])
                 files = {'/': 'index.html', '/app.js': 'app.js', '/app.css': 'app.css',
-                         '/box-geometry.mjs': 'box-geometry.mjs'}
+                         '/box-geometry.mjs': 'box-geometry.mjs', '/learning': 'learning.html',
+                         '/learning.js': 'learning.js'}
                 name = path.removeprefix('/common/')
                 if path.startswith('/common/') and name in SHARED_ASSETS:
                     file = COMMON / name
@@ -271,6 +278,13 @@ def make_server(store, port=8767):
                 path = urlparse(self.path).path
                 if path == '/api/prepare':
                     return self.send(store.prepare())
+                if path == '/api/learning/register':
+                    return self.send(learning.register(body))
+                if path == '/api/learning/remove':
+                    try:
+                        return self.send(learning.remove(body))
+                    except ValueError as exc:
+                        raise Conflict(str(exc)) from exc
                 if path.startswith('/api/frames/'):
                     return self.send(store.update(int(path.rsplit('/', 1)[1]), body))
                 self.send({'error': 'not found'}, 404)

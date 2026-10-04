@@ -30,6 +30,12 @@ canvas { width: 100%; max-width: 52rem; height: auto; display: block; margin: au
 #error { color: var(--status-warn); }
 .preparation { border-top: 1px solid var(--surface-line); padding: var(--space-6); max-width: 100rem; margin: auto; }
 pre { white-space: pre-wrap; overflow-wrap: break-word; color: var(--ink-quiet); font-size: var(--text-label); }
+.learning-main { max-width: 80rem; margin: auto; }
+.learning-section, .learning-job { border-top: 1px solid var(--surface-line); padding-block: var(--space-5); }
+.learning-form { display: grid; gap: var(--space-3); }
+.learning-form label { display: grid; gap: var(--space-2); }
+.learning-job p, #learning-error { overflow-wrap: anywhere; }
+#learning-error { color: var(--status-warn); }
 [hidden] { display: none !important; }
 @media (width < 64rem) { .workspace { grid-template-columns: 1fr; } aside { border-right: 0; border-bottom: 1px solid var(--surface-line); } nav { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); } .scope { padding-top: var(--space-3); } }
 @media (width < 30rem) { main, aside, .preparation { padding: var(--space-4); } h1 { font-size: var(--text-body); } .coordinates { display: grid; grid-template-columns: 1fr 1fr; } .box-top > label { width: 100%; } .box-top select { flex: 1; min-width: 0; } }

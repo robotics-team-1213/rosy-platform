@@ -203,6 +203,7 @@
 | D-454 | 중앙 Fleet 착수 — 시드(`operations/fleet`) 위 성장, 단계 순서 §10.1 레지스트리 → §10.2 명령 추적·PRT-004 활성화(D-170·D-297 유보 해제) → §10.3 미션/대형 → §10.4 지도/백업 → §10.5 사건/감사. (2)단계 착공 전 D-426 ROS-SIM 선행 |
 | D-455 | 방에서 선으로 돌아오는 구간은 지도 자세가 정하고, 오도메트리 좌표는 차선에 올리지 않는다 |
 | D-456 | Pinky 학습 검수는 저장되는 웹앱으로 제공하고 자동 초안·수동 정답·학습 수용을 분리한다 |
+| D-458 | 학습 앱·웹 공통 작업 화면과 결과 확인 경계 |
 
 ## 계획·결과 문서
 
@@ -294,8 +295,8 @@
 
 ## 최근 기록
 
+- 2026-10-04 · uncommitted · feat(learning): D-458 공통 학습 작업 화면
 - 2026-10-04 · uncommitted · feat(learning): Pinky 박스 직접 선택·드래그 편집
 - 2026-10-04 · uncommitted · feat(learning): D-456 Pinky 영속 검수 웹앱
 - 2026-10-04 · uncommitted · docs(cell): 홈 준비 교훈과 모델 PC 직접 검증 경로
 - 2026-10-04 · uncommitted · feat(fleet): D-455 양보 합류는 지도 자세
-- 2026-10-04 · uncommitted · fix(harness): pin one committed G2 encoding repair

@@ -82,6 +82,20 @@ def test_http_blocks_foreign_hosts_and_tokenless_writes(tmp_path):
     url = f'http://127.0.0.1:{server.server_port}'
     try:
         workspace = json.load(urllib.request.urlopen(url + '/api/workspace'))
+        assert len(json.load(urllib.request.urlopen(url + '/api/learning'))['workflows']) == 8
+        with urllib.request.urlopen(url + '/learning') as response:
+            assert response.headers.get_content_type() == 'text/html'
+        report = tmp_path / 'state.json'
+        report.write_text('{"outcome":"running"}')
+        request = urllib.request.Request(url + '/api/learning/register', json.dumps(
+            {'kind': 'perception', 'name': 'HTTP job', 'path': str(tmp_path)}).encode(),
+            headers={'X-Pinky-Token': workspace['token']})
+        item = json.load(urllib.request.urlopen(request))
+        request = urllib.request.Request(url + '/api/learning/remove', json.dumps(
+            {'id': item['id'], 'version': 999}).encode(), headers={'X-Pinky-Token': workspace['token']})
+        with pytest.raises(urllib.error.HTTPError) as error:
+            urllib.request.urlopen(request)
+        assert error.value.code == 409
         with urllib.request.urlopen(url + '/box-geometry.mjs') as response:
             assert response.headers.get_content_type() == 'text/javascript'
         for headers in ({}, {'X-Pinky-Token': workspace['token'], 'Origin': 'https://foreign.example'}):

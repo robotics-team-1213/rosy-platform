@@ -40,3 +40,14 @@ python test/known_failures.py X:/DevTemp/pinky-review-run.txt
 Windows PowerShell 5의 기본 `>`는 UTF-16을 쓸 수 있어 위처럼 UTF-8 출력으로 남긴다. pytest의 종료 코드와 출력의 실패 요약도 함께 확인한다.
 
 개발용 순수 좌표 기하 시험은 Node 24 이상에서 `node --test learning/training/perception/test/review_box_geometry.test.mjs`로 실행한다. Node는 앱 실행 의존성이 아니다.
+### 공통 학습 작업 화면 (D-458)
+
+같은 서버의 `/learning`에서 사진 검수 상태와 기존 학습 도구의 결과를 확인한다.
+작업 종류·이름·결과 폴더 전체 경로를 입력하면 SQLite에 연결 목록을 저장한다.
+지원 JSON 파일은 종류 선택 시 표시한다. JSONL 다운로드나 수동 파일 이동 없이
+최신 결과 확인으로 보고서 상태·단계 실패·파일 변경을 읽는다. 연결 해제는 원본 파일을 지우지 않는다.
+
+Perception 단계 job, Pinky 원본 검증·행동 비교, OMX ACT, 영역 검수 반환,
+정책 산출물과 Isaac 환경을 구분한다. 보고서의 선언 상태·SHA와 등록 후 변경 여부만 확인한다.
+이 화면은 원본 closure나 승인 receipt를 검증하지 않으며, 학습 시작·정책 승격·로봇 활성화 기능은 없다.
+새 결과 버전의 기준을 등록하려면 기존 연결을 해제하고 새 이름으로 연결한다.
