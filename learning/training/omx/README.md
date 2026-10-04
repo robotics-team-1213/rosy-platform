@@ -25,8 +25,12 @@ DatasetManifest에 포함한다. train-only 정규화를 사용하며 RGB source
 resize/scale, 실제 source duration을 기록한다. chunk는 episode 경계를 넘지 않는다.
 
 현재 설정: ACT ResNet18, dim64/head4/encoder1/decoder1, chunk4, VAE off,
-pretrained weights 없음, CPU4threads, batch8, AdamW lr0.001. 영상 정책을 학습하지만
-task/duration 정책을 학습했다고 주장하지 않는다. HOLD/reset/stale는 선언이며
+pretrained weights 없음, CPU4threads, batch8, AdamW lr0.001.
+모든 policy parameter를 하나의 optimizer group으로 학습한다. 저장 ACTConfig의
+optimizer_lr/optimizer_lr_backbone은 둘 다 0.001, weight_decay는 0.0001이며
+offline-report는 실제 optimizer parameter group의 lr/weight_decay/betas/eps와
+실행 옵션, gradient clip norm 1.0을 기록한다. 기존 artifact는 덮어쓰지 않는다.
+영상 정책을 학습하지만 task/duration 정책을 학습했다고 주장하지 않는다. HOLD/reset/stale는 선언이며
 실제 owner 집행은 후속이다. camera_profile은 null을 유지하고 rig fingerprint는
 별도로 보존한다.
 

@@ -5080,3 +5080,8 @@
 - 변경: 같은train5/validation1/seed42751/1-action/모델/optimizer의 사전고정400step 실제학습 비교. 기존artifact와gate를 유지하고 별도policy/원장 register+reject2events를 보존했다.
 - 증거: history400개/첫40loss·config·정규화·Dataset·135reader 동일. MAE.029368→.009403 약68%감소하나 상수.005990보다 나빠reject. 독립weightreload12frame/원장10events5unregistered 검증. wrapper terminalexit1/실제검증산출물은 별도기록. 상세 validation/act-training-length-study-2026-10-04.md.
 - gate 변화: 연구실험과데이터fitness 증거 확보. 각Episode1target/1command, persistence.000705로 실제task시연/독립평가 보강 필요. optimizerdefault metadata 불일치도 후속수정 필요. timing/trust/ownerROS/Fleet/shadow/rollback/새클래스/DEVICE/FIELD와 전체 목표 미완료.
+
+### 2026-10-04 · uncommitted · fix(learning): record actual ACT optimizer settings
+
+- 저장 ACTConfig lr/backbone lr0.001/weight_decay0.0001과 실제 single-group AdamW를 일치시키고 보고서에 실제 optimizer groups/options/clip1.0을 기록했다. 기존 artifact와 gate는 보존한다.
+- 실제40-step seed42751 대조 exit0: weights/history/normalization byte-identical,135원본 입력 unchanged, MAE0.0293680454/reject 유지. 독립 검토 승인. 영향 검사209pass/1skip/1secret-scan fail이며 기존82검출 대비 새 검출0; 문서 검사15pass/1skip. 근거: docs/validation/act-optimizer-provenance-2026-10-04.md. 전체 gate와 목표는 미완료다.

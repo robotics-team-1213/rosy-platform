@@ -161,9 +161,11 @@ def run(train_exports, eval_export, out, *, steps=40, seed=42750, n_action_steps
                            output_features={"action": PolicyFeature(FeatureType.ACTION, (len(names),))},
                            chunk_size=4, n_action_steps=n_action_steps, dim_model=64, n_heads=4, dim_feedforward=256,
                            n_encoder_layers=1, n_decoder_layers=1, use_vae=False, dropout=0.0,
-                           pretrained_backbone_weights=None, device="cpu")
+                           pretrained_backbone_weights=None, device="cpu",
+                           optimizer_lr=1e-3, optimizer_lr_backbone=1e-3, optimizer_weight_decay=1e-4)
         policy = ACTPolicy(config)
-        optimizer = torch.optim.AdamW(policy.parameters(), lr=1e-3, weight_decay=1e-4)
+        optimizer = torch.optim.AdamW(policy.parameters(), lr=config.optimizer_lr,
+                                      weight_decay=config.optimizer_weight_decay)
         indices = [(e, i) for e, a in enumerate(arrays[:-1]) for i in range(len(a[0]))]
         history = []
         _write(out / "state.json", {"status": "training", "steps": steps, "seed": seed, "source_episodes": ids})
@@ -209,6 +211,12 @@ def run(train_exports, eval_export, out, *, steps=40, seed=42750, n_action_steps
         report.update(algorithm="lerobot-act", lerobot_version="0.4.4", torch_version=str(torch.__version__),
                       device="cpu", seed=seed, steps=steps, n_action_steps=n_action_steps,
                       train_episodes=ids[:-1], eval_episode=ids[-1],
+                      optimizer={"type": "AdamW", "parameter_grouping": "all_policy_parameters",
+                                 "parameter_groups": [{key: group[key] for key in
+                                     ("lr", "weight_decay", "betas", "eps", "amsgrad", "maximize",
+                                      "foreach", "capturable", "differentiable", "fused")}
+                                     for group in optimizer.param_groups],
+                                 "gradient_clip_norm": 1.0},
                       reloaded_prediction_verified=True, task_outcome_source="operator_source_only")
         _write(out / "offline-report.json", report)
         refs = [_ref(p, out) for folder in ("episodes", "reader-inputs")
