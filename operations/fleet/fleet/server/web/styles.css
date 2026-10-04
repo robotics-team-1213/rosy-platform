@@ -512,8 +512,8 @@ main {
 @media (width < 90rem) {
   ui-topbar {
     display: grid;
-    grid-template-columns: auto minmax(0, 1fr) auto auto auto;
-    grid-template-areas: "brand pill clock more estop";
+    grid-template-columns: auto minmax(0, 1fr) auto auto auto auto;
+    grid-template-areas: "brand pill cell clock more estop";
     align-items: center;
     gap: var(--space-2);
     padding: var(--space-2) var(--space-3);
@@ -522,6 +522,7 @@ main {
   ui-topbar .spacer { display: none; }
   /* 연결 표지는 줄이 모자라면 말줄임으로 줄어든다 — 이름과 비상 정지는 줄지 않는다. */
   #online-pill { grid-area: pill; justify-self: start; min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  ui-topbar > a[href="/console/cell"] { grid-area: cell; }
   #clock { grid-area: clock; justify-self: end; }
   #topbar-more { display: inline-flex; grid-area: more; }
   #estop { grid-area: estop; }
@@ -552,7 +553,7 @@ main {
 @media (width < 30rem) {
   ui-topbar {
     grid-template-columns: minmax(0, 1fr) auto auto auto;
-    grid-template-areas: "brand brand more estop" "pill clock clock estop";
+    grid-template-areas: "brand cell more estop" "pill clock clock estop";
     gap: var(--space-1) var(--space-2);
     padding: var(--space-2);
   }
