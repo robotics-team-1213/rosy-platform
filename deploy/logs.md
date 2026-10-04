@@ -2434,3 +2434,9 @@
 - 변경: 기존 Avahi 명령이 없는 Model 호스트에서도 이미 설치된 Avahi 서비스에 독립 D-Bus 연결로 SSH 서비스를 등록한다. 명령이 있으면 기존 경로를 우선하며 실제 LAN listener와 SSH banner를 확인한 뒤에만 광고한다. daemon 소유자 변경·충돌·listener 종료 시 자기 등록을 철회하고 연결을 닫는다. Bluetooth나 전체 포트 검색은 추가하지 않는다(D-452·D-456).
 - 증거: 독립 SPEC·Quality·Safety 소스 검토 PASS의 두 파일과 적용본 LF 정규화 해시가 같다. 적용 작업 트리의 Model 발견·canvas·화면 제목·Android launcher·site workflow 회귀 67 PASS, 디자인 범위·CI 의존성 14 PASS다. D-Bus 상태 시험은 주입한 버스로 확인했고 실제 등록은 아직 하지 않았다. 메서드 호출별 2초 한도와 주기적 상태 검사를 사용하며 전체 등록 시간이 정확히 10초라고 주장하지 않는다.
 - gate 변화: SOURCE/LOCAL 보완. 새 SHA의 CI·서명·bootstrap 설치·실제 LAN 목록과 접속은 NOT_RUN이며 기존 ARTIFACT/DEVICE HOLD를 유지한다. 검색 성공은 페어링 승인이나 로봇 조작 권한을 발급하지 않는다.
+
+## 2026-10-05 · uncommitted · fix(ci): LAN 배포 검사의 도구 설치와 Android 상태 경로 수정
+
+- 변경: Pinky MCAP·영상 도구를 CI 작업 전용 경로에 설치하고 해당 작업의 PYTHONPATH에만 연결한다. Debian NumPy를 제거하거나 ROS 런타임 패키지와 바꾸지 않는다. 두 Android 작업은 Kotlin 영속 상태 경로를 RUNNER_TEMP의 독립 경로로 명시해 Pilot의 Windows 경로 기본값을 덮어쓴다.
+- 증거: 두 workflow 독립 SPEC·Quality·Safety 검토 PASS. 실제 Linux의 동일 pins·constraints·pip --target 설치 성공, NumPy 2.2.6·OpenCV 4.12·MCAP 1.5 import와 배열·JPEG 실행 성공, Debian NumPy 1.26.4 파일과 RECORD 부재 상태 불변. 두 앱·공백 포함 Windows/Unix 경로의 실제 wrapper 인자 전달 4건 PASS. 관련 CI·화면 계약 81 PASS. wrapper 검사는 Gradle/Kotlin 컴파일 증거가 아니며 실제 컴파일과 exact SHA의 GitHub 전체 CI는 별도 확인한다.
+- gate 변화: SOURCE/LOCAL 오류 보완. unsigned 후보를 배포하지 않으며 exact SHA의 ci-result·Android CI·서명·실기 배포는 미확인이다.

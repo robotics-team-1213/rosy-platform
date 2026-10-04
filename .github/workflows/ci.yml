@@ -131,8 +131,11 @@ jobs:
         if: contains(toJSON(matrix.invocations), 'learning/curation/pinky') || contains(toJSON(matrix.invocations), 'learning/training/pinky')
         run: |
           # Real CDR/MCAP and video tests must run, not skip behind missing host tools.
+          # Keep NumPy 2/OpenCV in this job's tool directory; Debian's NumPy has
+          # no pip RECORD and must remain available to the ROS base image.
           pip3 install --no-cache-dir --break-system-packages -c /tmp/rosy-runtime-constraints.txt \
-            -r learning/curation/pinky/requirements-raw.txt
+            --target /tmp/rosy-pinky-raw-tools -r learning/curation/pinky/requirements-raw.txt
+          echo "PYTHONPATH=/tmp/rosy-pinky-raw-tools${PYTHONPATH:+:$PYTHONPATH}" >> "$GITHUB_ENV"
 
       - name: Install Pinky CPU model comparison tools
         if: contains(toJSON(matrix.invocations), 'learning/training/pinky')
