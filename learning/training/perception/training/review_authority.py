@@ -293,8 +293,13 @@ def _verify_rich(value, doc, legacy, refs, read, app):
         _require(refs['cad-reference.json']['sha256'] == value['map_reference_sha256'], 'CAD reference binding differs')
 
 
-def verify_bundle(export_root, current, *, workspace_id):
-    """Verify both seals and exact current equality; never qualify the dataset."""
+def verify_bundle(export_root, current, *, workspace_id, capture_files=False):
+    """Verify seals/current; optionally return the verified byte snapshot.
+
+    Downstream decoders consume captured_files rather than reopening paths after
+    validation. This snapshot establishes byte integrity, not dataset eligibility.
+    """
+    _require(type(capture_files) is bool, 'capture_files must be bool')
     value = validate_current(current)
     advance_revision(value, workspace_id=workspace_id)
     root = Path(os.path.abspath(export_root))
@@ -362,4 +367,8 @@ def verify_bundle(export_root, current, *, workspace_id):
     for name, payload in captured.items():
         _require(_read(root, name) == payload, 'bundle changed during validation')
     _require(_paths(root) == expected, 'bundle changed during validation')
-    return {'contract': doc, 'contract_sha': _sha(raw), 'files': sorted(expected), 'training_dataset_qualified': False}
+    result = {'contract': doc, 'contract_sha': _sha(raw), 'files': sorted(expected),
+              'training_dataset_qualified': False}
+    if capture_files:
+        result['captured_files'] = dict(captured)
+    return result
