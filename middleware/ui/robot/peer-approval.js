@@ -42,7 +42,7 @@ export function createReceiverApprovals({root, api, isAdmin, captureLifetime, ru
         const act = action => {
           const button = document.createElement('ui-button');
           if (action === 'approve') button.setAttribute('kind', 'primary'); else button.setAttribute('kind', 'quiet');
-          button.setAttribute('type', 'button'); button.textContent = action === 'approve' ? '승인' : '거절';
+          button.setAttribute('type', 'button'); button.textContent = action === 'approve' ? '승인' : '거절…';
           button.addEventListener('click', async () => {
             if (deciding) return;
             deciding = true;
