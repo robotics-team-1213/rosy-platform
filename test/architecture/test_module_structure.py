@@ -107,7 +107,11 @@ SIZE_VERDICTS = {
         "duplicate its socket. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        33_866,
+        34_211,
+        "split: re-judged 2026-10-05 at 34211 after the markerless start-point "
+        "service and routes (+345 over the D-463 33866 re-judge): reference-pose "
+        "storage over approved calibrations; no command owner changes; the service "
+        "takes plain sources/calibrations so the D-457 tracking boundary holds. "
         "split: D-463 re-judged at 33866: the lane route adds a fresh-pose read "
         "(trusted_map_pose) in the gather owner and a dispatch route that submits through "
         "the existing goal path; no command owner changes. "

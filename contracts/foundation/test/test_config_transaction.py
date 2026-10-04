@@ -35,8 +35,14 @@ class OverlayConcurrency(unittest.TestCase):
     def test_distinct_processes_serialize_same_overlay_without_lost_updates(self):
         program = ('import sys; from pathlib import Path; from core_common.config import patch_local_config; '
                    'patch_local_config({"process": {sys.argv[2]: sys.argv[2]}}, Path(sys.argv[1]))')
+        # A bare `python -c` child has no pytest sys.path; point it at this source tree
+        # so the test runs wherever the suite runs (host, CI container, installed robot).
+        env = {**os.environ,
+               'PYTHONPATH': str(Path(__file__).resolve().parents[1])
+               + (os.pathsep + os.environ['PYTHONPATH'] if 'PYTHONPATH' in os.environ else '')}
         children = [subprocess.Popen([sys.executable, '-c', program, str(self.path), str(n)],
-                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE) for n in range(8)]
+                                     stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env)
+                    for n in range(8)]
         for child in children:
             out, err = child.communicate(timeout=15)
             self.assertEqual(0, child.returncode, err.decode())
