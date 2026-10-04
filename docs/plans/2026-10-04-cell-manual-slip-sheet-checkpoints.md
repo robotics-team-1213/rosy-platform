@@ -32,4 +32,6 @@ checkpoint 확인용 요청·응답과 API Reference를 같은 변경에서 확�
 
 ## 현재 상태
 
-사용자 선택과 설계를 기록했다. 수동 checkpoint 구현·ROS-SIM 수용은 NOT_RUN이다. 기존 박스 전용 G2 실행이나 draft 화면의 sheet 설정 해제를 수동 checkpoint 완료로 표시하지 않는다.
+recipe/2와 canonical Job의 수동 checkpoint, box-only PlanBundle, Fleet durable 보류, 관제 대기 표시를 구현했다. PROCESS 소스 219 tests 및 설치 wheel 호환 169 tests, Fleet 보류 105 tests와 독립 48 tests, 읽기 전용 계약 19 tests를 검증했다. 기존 recipe/1을 유지하며 수동 간지 두께를 다음 층 높이에 반영한다. 관제의 일반 재승인은 간지 대기를 통과시키지 않는다.
+
+owner-exclusive 작업자 접근 허용과 확인 API는 아직 연결하지 않았다. 따라서 실제 수동 작업은 `OPERATOR_SHEET_ACCESS_UNAVAILABLE`로 HOLD하며 작업자의 확인으로 다음 층을 재개하는 전체 경로·ROS-SIM·현장 수용은 NOT_RUN이다. 기존 박스 전용 G2 실행이나 draft 화면의 sheet 설정 해제를 수동 checkpoint 완료로 표시하지 않는다.

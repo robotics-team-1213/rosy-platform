@@ -100,8 +100,13 @@ SIZE_VERDICTS = {
         "duplicate its socket. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        30_621,
-        "split: re-judged 2026-10-04 at 30621 after main integration for D-450: bounded Cell document store/routes and Console "
+        30_998,
+        "split: re-judged 2026-10-04 at 30998 for manual sheet checkpoints: the existing SQLite Job owner "
+        "keeps transactional barriers and extracts bounded checkpoint validation and read projection modules. "
+        "The Console adds explicit handling and read-only wait instructions; no access-confirmation provider, "
+        "ROS publisher or device command owner is added. Store remains 959 lines below its 974 growth ceiling; "
+        "schema aggregation stays 1319. Independent process and guard reviews retain the split plan and +150 allowance. "
+        "Previously re-judged 2026-10-04 at 30621 after main integration for D-450: bounded Cell document store/routes and Console "
         "assets reuse existing proposal and execution owners; app composition remains below 600 lines. "
         "Independent review preserves the subpackage/UI migration plan and existing +150 allowance. "
         "server HTTP boundary, console, signals and the mission-control stores are separate owners "

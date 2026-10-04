@@ -32,7 +32,9 @@ def browser_site(tmp_path):
     listener = socket.socket()
     listener.bind(("127.0.0.1", 0))
     origin = f"http://127.0.0.1:{listener.getsockname()[1]}"
-    server = uvicorn.Server(uvicorn.Config(client.app, log_level="error"))
+    server = uvicorn.Server(uvicorn.Config(
+        client.app, log_level="error", timeout_graceful_shutdown=3,
+        timeout_keep_alive=1))
     worker = threading.Thread(target=server.run, kwargs={"sockets": [listener]}, daemon=True)
     worker.start()
     try:
@@ -173,6 +175,51 @@ def test_import_updates_existing_revision_and_guided_fields(browser_site):
     expect(page.locator("#notice")).to_contain_text("문서 저장 완료")
     page.locator("#compile").click()
     expect(page.locator("#summary")).to_contain_text("18회 전송")
+
+
+def test_manual_sheet_choice_preserves_thickness_and_requires_operator_barrier(browser_site):
+    from playwright.sync_api import expect
+
+    page, _, _ = browser_site
+    _prepare(page)
+    page.locator("#recipe-sheet-handling").select_option("operator")
+    draft = json.loads(page.locator("#recipe-document").input_value())
+    assert draft["schema"] == "rosy_cell.recipe/2"
+    assert draft["slip_sheet"] == {"handling": "operator", "thickness": 0.002}
+    expect(page.locator("#propose")).to_have_attribute("disabled", "")
+    page.locator("#recipe-save").click()
+    expect(page.locator("#notice")).to_contain_text("저장 완료")
+    page.locator("#compile").click()
+    expect(page.locator("#summary")).to_contain_text("16회 전송")
+    preview = json.loads(page.locator("#preview").text_content())
+    assert len([step for step in preview["steps"]
+                if step["kind"] == "operator_sheet"]) == 2
+
+
+def test_sheet_access_unavailable_is_visible_and_generic_resume_is_disabled(browser_site):
+    from playwright.sync_api import expect
+
+    page, _, _ = browser_site
+    page.locator("#credential input").fill("operator-secret")
+    page.locator("#connect").click()
+    expect(page.locator("#session")).to_contain_text("operator-1")
+    job = {"mission_id": "sheet-held", "status": "HOLD", "current_step_index": 0,
+           "reason": "OPERATOR_SHEET_ACCESS_UNAVAILABLE", "steps": [
+               {"step_index": 0, "status": "HOLD", "step": {"inputs": {
+                   "pallet_id": "A", "layer_index": 1, "item": "box"}}}],
+           "operator_checkpoints": [{"checkpoint_id": "a" * 64, "status": "WAITING_ACCESS",
+                                     "pallet_id": "A", "layer_index": 1, "thickness_m": 0.002}]}
+    page.route("**/api/fleet/cell-jobs/sheet-held", lambda route: route.fulfill(json={"job": job}))
+    page.locator("#mission-id").fill("sheet-held")
+    page.locator("#read-job").click()
+    expect(page.locator("#sheet-progress")).to_contain_text("A · 2층")
+    expect(page.locator("#sheet-progress")).to_contain_text("2 mm")
+    expect(page.locator("#sheet-progress")).to_contain_text("삽입 확인 대기")
+    expect(page.locator("#resume")).to_have_attribute("disabled", "")
+    expect(page.locator("#resume")).to_have_attribute("reason", "작업자 간지 삽입 확인 대기")
+    expect(page.locator("#sheet-progress")).to_contain_text("아직 진행할 수 없습니다")
+    page.set_viewport_size({"width": 390, "height": 844})
+    assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
 
 
 def test_structured_drafts_compile_box_only_and_survive_reload(browser_site):

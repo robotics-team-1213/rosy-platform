@@ -68,13 +68,34 @@ export function renderStructuredDocument(kind, document, root, change) {
     enabled.id = 'recipe-sheet-enabled'; enabled.checked = Object.hasOwn(document, 'slip_sheet');
     const label = window.document.createElement('label'); label.textContent = '슬립시트 설정 포함';
     enabled.addEventListener('change', () => change(draft => {
-      if (enabled.checked) draft.slip_sheet = {thickness: null, station: ''};
+      if (enabled.checked) draft.slip_sheet = draft.schema === 'rosy_cell.recipe/2' ?
+        {handling: 'operator', thickness: null} : {thickness: null, station: ''};
       else delete draft.slip_sheet;
     }, true));
     label.append(enabled); sheet.append(label);
     if (enabled.checked) {
+      const handling = window.document.createElement('select');
+      handling.className = 'ui-field'; handling.id = 'recipe-sheet-handling';
+      for (const [value, title] of [['robot', '로봇 집기'], ['operator', '작업자가 넣고 확인 후 다음 층']]) {
+        const option = window.document.createElement('option'); option.value = value;
+        option.textContent = title; handling.append(option);
+      }
+      handling.value = document.slip_sheet?.handling === 'operator' ? 'operator' : 'robot';
+      const handlingLabel = window.document.createElement('label'); handlingLabel.textContent = '슬립시트 취급';
+      handlingLabel.append(handling); sheet.append(handlingLabel);
+      handling.addEventListener('change', () => change(draft => {
+        const thickness = draft.slip_sheet.thickness;
+        draft.schema = handling.value === 'operator' ? 'rosy_cell.recipe/2' : 'rosy_cell.recipe/1';
+        draft.slip_sheet = handling.value === 'operator' ? {handling: 'operator', thickness} :
+          {thickness, station: ''};
+      }, true));
       field(sheet, ['slip_sheet', 'thickness'], '두께 (m)');
-      field(sheet, ['slip_sheet', 'station'], '슬립시트 공급 스테이션', 'text');
+      if (handling.value === 'robot') field(sheet, ['slip_sheet', 'station'], '슬립시트 공급 스테이션', 'text');
+      else {
+        const note = window.document.createElement('p');
+        note.textContent = '간지 지점에서 삽입 확인을 기다립니다. 작업자 접근 허가가 확인되기 전에는 다음 층을 진행할 수 없습니다.';
+        sheet.append(note);
+      }
     }
   } else {
     const rules = group('프레임 판정 기준');

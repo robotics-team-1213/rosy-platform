@@ -2,7 +2,7 @@
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.93
+**Version:** v1.94
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -2064,10 +2064,47 @@ and field acceptance require their own evidence.
 
 작업 화면의 승인·진행·복구는 기존 `/api/fleet/missions/{id}/admit`, `/api/fleet/cell-jobs/{id}`, `/reconcile`, `/resume`, `/cancel`을 사용한다. 승인/재승인은 현재 dispatch generation과 named operator가 필요하다. UNKNOWN의 자동 재시도는 없다. cancel은 기존 `HOLD/CANCELLED_BY_OPERATOR` 계약을 유지한다. 서비스 제안 성공·실행 성공·독립 목표 확인은 별개다.
 
+## Cell 수동 슬립시트 대기 (D-450)
+
+`rosy_cell.recipe/2`는 palletize의 작업자 간지 삽입을 명시한다. `slip_sheet`는
+`{handling:"operator",thickness:<positive metres>}`이며 로봇 공급 station을 받지 않는다.
+recipe/1의 자동 sheet·문서 해시·Job 직렬화는 유지한다. 수동 depalletize는 아직 거절한다.
+PROCESS가 간지 두께를 다음 층 높이에 포함하고 non-motion `operator_sheet` Job 단계와
+hash-bound checkpoint를 만든다. 실행 PlanBundle에는 box transfer만 들어간다.
+
+`GET /api/fleet/cell-jobs/{mission_id}`는 수동 Job에만 `job.operator_checkpoints`를 추가한다.
+각 행은 공유 `CellOperatorCheckpoint` 스키마이며 다음 필드를 가진다.
+
+| 필드 | 의미 |
+|---|---|
+| `checkpoint_id` | recipe/cell digests와 아래 canonical instruction을 결합한 SHA-256 |
+| `kind` | `operator_sheet` |
+| `before_transfer_ordinal` | 다음 box transfer의 1-based 순번 |
+| `pallet_id`, `layer_index` | 팔레트 ID와 0-based 층 번호 |
+| `sheet_pose_base` | 작성된 간지 top-face 배치 지시 `{x_m,y_m,z_m,yaw_rad}`. 실측 pose가 아님 |
+| `thickness_m` | 양수 두께(m) |
+| `status` | `WAITING` 또는 `WAITING_ACCESS` |
+| `updated_at` | timezone을 포함한 원장 변경 시각 |
+
+`checkpoint_id = SHA256(UTF8(canonicalJSON({recipe_sha256,cell_sha256,checkpoint:descriptor_without_id})))`.
+canonical JSON은 sorted keys·compact separators·`ensure_ascii=False`·`allow_nan=False`이며
+descriptor는 위 필드 중 `checkpoint_id`, `status`, `updated_at`을 제외한 여섯 지시 필드다.
+
+이전 box의 독립 목표 확인과 marker 원장 반영 후 다음 transfer를 READY로 만들기 전에
+같은 SQLite transaction에서 checkpoint와 Job/다음 step을 HOLD하고 CLAIMED 자원을 HELD로 보존한다.
+첫 층 간지도 admission에서 막는다. 재시작·start·일반 resume는 이 대기를 우회하지 못하며
+완료 box를 다시 하달하지 않는다. 수동 checkpoint가 없는 기존 Job의 응답 필드는 유지한다.
+
+현재 대기 이유는 `OPERATOR_SHEET_ACCESS_UNAVAILABLE`이며 일반 resume는 409다.
+작업자 삽입 확인 API와 owner-exclusive 접근 허가 계약은 아직 제공하지 않는다.
+owner ready, StopLocal ACK, caller 확인 boolean 또는 simulation pose만으로 다음 층을 열지 않는다.
+이 readback은 작업자의 안전 접근이나 간지 삽입 완료 증거가 아니다.
+
 # 11. 변경 이력
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.94 | 2026-10-04 | Additive (D-450): recipe/2 작업자 간지 지시와 Cell Job의 optional read-only `operator_checkpoints`, 공유 `CellOperatorCheckpoint` 스키마. durable HOLD·재시작/재개 우회 차단; owner 접근·삽입 확인 API는 미제공. envelope 1.0 유지 |
 | v1.93 | 2026-10-04 | Additive (D-450): Fleet Console `/console/cell` 작업 화면의 revision 문서 저장·정본 compile·명시 service proposal API 및 `CellApp*Request` 스키마 추가. 기존 named operator admission/복구·원장을 재사용. envelope version 1.0 유지 |
 | v1.92 | 2026-10-04 | Additive: Viewer GET /api/v1/power/health; battery age/freshness, timestamped charging evidence, software sleep blockers and wake constraints. Read-only; envelope protocol_version 1.0 unchanged. |
 | v1.91 | 2026-10-04 | Additive (D-438 1단계, docs/d438-fleet-stuck-resolver): CORE 역할 `stuck_resolver`(순위 viewer)와 capability `STUCK_DECIDE`; `POST /api/v1/line-follow/stuck/decision` 은 `STUCK_DECIDE` 를 요구(operator·administrator 도 가짐), `stuck_resolver` 의 `MANUAL` 은 403. Site Fleet `POST /api/fleet/robots/{robot_id}/line-stuck/claim`(operator), 로봇 행 `line_stuck.resolver`, `robots.yaml` `resolver_token`, `fleet console --stuck-resolver`. `fleet_line_stuck_answers` 에 null 가능 열 `tier`·`rule`·`escalated`(옛 DB 는 열 때 추가), 판단기가 사람에게 올릴 때마다 `ESCALATE` 행. `GET /api/fleet/state` 와 판단기는 1 s 안에서 한 번의 gather 를 같이 쓴다. 로봇 이벤트·FleetAgent 프로토콜 변경 없음 |

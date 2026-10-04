@@ -81,8 +81,8 @@
 
 ## 최근 기록
 
+- 2026-10-04 · uncommitted · fix(cell): 수동 간지 확인 전 다음 층 보류
 - 2026-10-04 · uncommitted · feat(cell): 구조화된 초안 입력 확장
 - 2026-10-04 · uncommitted · refactor(fleet): main 통합 시 HTTP composition 경계 유지
 - 2026-10-04 · uncommitted · feat(power): fresh battery evidence and idle saving
 - 2026-10-04 · 6485f8a39 · refactor(ui): 통합 명렬 카드의 표현 재사용
-- 2026-10-04 · uncommitted · fix(web): 관제 확인과 명령의 공통 소유권
