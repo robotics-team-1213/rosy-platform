@@ -45,8 +45,8 @@
 
 ## 최근 기록
 
+- 2026-10-05 · uncommitted · fix(contracts): name registered developer page scopes
 - 2026-10-05 · uncommitted · fix(contracts): repair inherited site release checks
 - 2026-10-05 · uncommitted · fix(contracts): register existing review canvas and wordmark
 - 2026-10-04 · uncommitted · docs(learning): UX 착지 동기화 검증
 - 2026-10-04 · uncommitted · uiux(learning): D-461 작업 우선 공용 구성과 검수 편의
-- 2026-10-04 · uncommitted · feat(web): Pinky 검수 표면 등록
