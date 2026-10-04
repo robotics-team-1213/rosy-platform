@@ -101,7 +101,7 @@ class MainActivity : Activity() {
         }
         if (web != null || opening) return
         val records = candidates.records()
-        status.text = lastError ?: if (cooling.coolingRequired) "태블릿 발열이 내려갈 때까지 조종 연결을 닫았습니다." else if (records.isEmpty()) "같은 Wi-Fi에서 로봇을 찾고 있습니다…" else "${records.size}대 발견 · 연결할 로봇을 선택하세요."
+        status.text = lastError ?: if (cooling.coolingRequired) "태블릿 발열이 내려갈 때까지 조종 연결을 닫았습니다." else if (records.isEmpty()) discovery?.status ?: "같은 Wi-Fi에서 로봇을 찾고 있습니다…" else "${records.size}대 발견 · 연결할 로봇을 선택하세요."
         if (shownCandidates == records && shownCooling == cooling.coolingRequired) return
         shownCandidates = records; shownCooling = cooling.coolingRequired; robots.removeAllViews()
         if (records.isEmpty()) { robots.addView(label(if (cooling.coolingRequired) "태블릿이 식으면 다시 연결할 수 있습니다." else "로봇이 보이지 않으면 같은 Wi-Fi와 로봇 전원을 확인하세요.", 16f)); return }

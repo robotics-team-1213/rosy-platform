@@ -36,8 +36,8 @@ def _detector_parameters(aruco):
     parameters = create() if create is not None else aruco.DetectorParameters()
     parameters.cornerRefinementMethod = aruco.CORNER_REFINE_SUBPIX
     # The approach tag can start four pixels from the image edge. The legacy
-    # five-pixel window biases that corner; three keeps refinement on the image.
-    parameters.cornerRefinementWinSize = 3
+    # five-pixel window biases that corner; two keeps refinement local on both APIs.
+    parameters.cornerRefinementWinSize = 2
     return parameters
 
 
