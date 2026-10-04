@@ -112,7 +112,7 @@ def scan_reviews(config, job):
     root = Path(config["reviews_dir"])
     progress = job.state.setdefault("reviews", {})
     for folder in sorted(root.glob("*")):
-        if not folder.is_dir() or not (folder / "COMPLETE").is_file():
+        if folder.name.startswith(".") or not folder.is_dir() or not (folder / "COMPLETE").is_file():
             continue
         try:
             row = verified_export(folder)

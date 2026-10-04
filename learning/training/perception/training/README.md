@@ -276,3 +276,10 @@ camera provenance가 미수용인 연구 데이터는 운영 검증을 마친 �
 집계하지 않는다. 객체 박스 검수 결과는 segmentation 학습 자료로 변환하지
 않으며 `training_dataset_qualified=false`를 유지한다. 검수자가 승인한 새 픽셀
 마스크는 기존 build.py를 통해 세션이 분리된 불변 데이터 버전으로 만들어야 한다.
+
+검수 PC의 `review_bridge.py config.json --out <상태 경로>`는 새 COMPLETE export를
+모델 PC의 `reviews_dir`로 전달한다. 설정은 `source`, `peer`(승인된 SSH alias),
+`remote_reviews`, `interval_s`, `max_attempts`다. SSH는 key-only와 host pin을 유지하고,
+원격에서는 파일·manifest 해시를 다시 확인한 뒤 staging을 불변 export로 바꾼다.
+같은 export는 재전달하지 않고 네트워크 오류만 제한 재시도한다. hidden staging과
+미완료 export는 읽지 않는다. 라벨 승인·데이터셋 구성·학습·로봇 활성화는 하지 않는다.
