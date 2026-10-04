@@ -52,6 +52,32 @@ def test_independent_admission_reaches_only_fake_job_with_captured_dataset(tmp_p
     assert not list(args['store'].root.rglob('READY'))
 
 
+def test_provenance_owner_is_bound_and_late_source_change_denied_before_training(tmp_path, monkeypatch):
+    import review_admission
+    args, authority, _, config = fixture(tmp_path)
+    changed = [False]
+    original = review_admission._stable_bytes
+    def source_bytes(path):
+        raw = original(path)
+        return raw + b'\n# changed provenance implementation\n' if (
+            changed[0] and Path(path).name == 'review_provenance.py') else raw
+    class FakeJob:
+        def __init__(self, folder, inputs):
+            assert any(path.endswith('/review_provenance.py') for path in inputs['source_files'])
+        def __enter__(self): changed[0] = True; return self
+        def __exit__(self, *args): pass
+        def step(self, name, callback):
+            assert name == 'train'
+            return callback(1)
+    monkeypatch.setattr(review_admission, '_stable_bytes', source_bytes)
+    monkeypatch.setattr(train_job, 'Job', FakeJob)
+    monkeypatch.setattr(train_job, 'gpu_lease', lambda: pytest.fail('changed source cannot reach GPU'))
+    with pytest.raises(JobError, match='trainer source changed'):
+        train_job.run(config, tmp_path / 'job', indexed_review=context(args, authority))
+    assert not (tmp_path / 'job').exists()
+    assert not list(args['store'].root.rglob('READY'))
+
+
 @pytest.mark.parametrize('case', ['expired', 'workspace', 'rollback', 'revoked', 'video', 'eval'])
 def test_negative_admission_creates_no_job_or_ready(tmp_path, monkeypatch, case):
     args, authority, _, config = fixture(tmp_path)
