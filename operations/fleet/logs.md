@@ -1738,6 +1738,30 @@
 
 - D-457 추가 검증: 좌표 표(X/Y m, 관측 기준)와 표시 수명 삭제. 관련 기능 602 passed, Node 34 passed, Chromium 14 passed. 공통 검사 기존 실패는 깨끗한 기준 main에서 재현했으며 docs/validation/2026-10-04-overhead-marker-fallback-local.md에 기록했다.
 
+## 2026-10-04 · uncommitted · refactor(fleet): move periodic goal evidence worker out of app composition
+
+- 변경: 기존 goal-evidence grace reconciliation loop를 background_workers로 이동하고 app의 기존 이름과 logger를 partial로 보존했다. 실행 주기·예외 처리·dispatch 권한은 같다.
+- 증거: 깨끗한 origin/main에서 app.py 607줄의 size verdict gate 실패를 재현했다. 이동 뒤 app.py 599줄이고 동일 gate PASS. 관련 서버 app·goal-evidence 58 PASS, 독립 8개 suite 121 PASS와 이전 코드 differential trace 일치로 재검토 APPROVE.
+- gate 변화: SOURCE/LOCAL 구성 분리만 기록한다. 실제 새 이미지와 물리 수락은 별도다.
+
+## 2026-10-04 · uncommitted · fix(ci): preserve current admission and shared controls in regressions
+
+- 변경: CELL_TRANSFER 교환 시험에 기존 real shared-admission 도우미를 연결하고 재시작 시험은 새 owner/admission을 reopened store에 한 번만 bind한다. 기존 승인 거부·store identity·replay·직접 driver 거부·미해결 stop 검증은 유지한다. Slip sheet checkbox에 공용 field/check 클래스를 적용하고 장비 목록 조회 중 버튼에 사유를 표시한다. reset/finally에서 그 사유를 지운다.
+- 증거: 이전 두 CELL_TRANSFER 파일 18 FAIL/14 PASS를 재현했다. 수정 뒤 관련 Python 선택 94 PASS, Node 3 PASS와 독립 재검토 APPROVE. 새 runtime guard나 robot 명령은 없다.
+- gate 변화: SOURCE/LOCAL CI 복구만 기록한다. 새 이미지와 실제 UI/물리 수락은 별도다.
+
+## 2026-10-04 · uncommitted · docs: re-judge exact integrated Fleet size
+
+- Change: Record the independently counted 32481 production/web lines after inherited D-454 registry/permission wiring and D-455 map-pose extensions, plus four reviewed shared UI lines. Preserve B2/UI migration, all file limits and the package +150 allowance. No production code changed for this judgement.
+- Evidence: Independent accounting: recorded32162, current main32477, current branch32481. Registry owners remain bounded, resolver507, app600, Console777; no new final command publisher. Architecture and registry/meet/resolver regressions77passed.
+- Gate: SOURCE/LOCAL architecture judgement only; no robot, motion or physical acceptance.
+
+## 2026-10-04 · uncommitted · fix(tools): restore cross-module capture ownership
+
+- Change: Move the inherited Fleet/Games capture tool to workspace tools, as required by tools/AGENTS.md. Update repository resolution and the run command; retain the historical capture entry unchanged. The initial architecture run rejected its Fleet-to-Games import with two failures.
+- Evidence: Corrected architecture and registry-write regressions42passed. Independently measured Fleet32543 consists of prior32481 plus62 inherited registry lines; retain +150 allowance, B2/UI migration and all individual file limits. The capture composes fake Fleet with local Games preview; it is not device or physical evidence.
+- Gate: SOURCE/LOCAL correction only. Signed installer5dbbe7 remains unchanged; physical marker identity stays HOLD.
+
 ## 2026-10-05 · uncommitted · fix(site): complete candidate contract and owned relearn guards
 
 - 변경: API Ref1.99 검사 핀과 페어링 overlay의 --track을 정합했다. 배경 학습을 기존 공용 확인 소유자에 연결하고 운용자 권한 안내를 표시한다. UI/UX 리팩터링 없음.

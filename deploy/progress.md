@@ -48,6 +48,8 @@ plans:
 ---
 ## 지금 상태
 
+- 2026-10-05 D-456: 수신 암호화 보조 payload와 claim 기반 TLS 유지보수 도구의 SOURCE/LOCAL 검사를 확인했다. CORE는 `/opt/rosy/releases`를 읽기만 한다. 실 POSIX 권한·ARM 빌드·서명된 장치 반영·LAN HTTPS 연결은 미확인으로 남긴다.
+
 - D-161 제품 기준선은 Ubuntu Server 24.04 arm64 + native ROS 2 Jazzy다.
   D-291에 따라 `rosy-runtime.target`은 CORE와 무구동 I/O를 기본 시작한다. 구동과 navigation은 별도 승인 뒤 활성화한다.
   Compose는 개발·CI 호환 경로일 뿐 제품 이미지 의존성이 아니다.

@@ -17,6 +17,8 @@ from __future__ import annotations
 import logging
 import os
 import re
+import tempfile
+from .config_transaction import transaction
 from pathlib import Path
 from typing import Any, Optional
 
@@ -235,7 +237,7 @@ def load_config(explicit_path: Optional[str] = None) -> dict[str, Any]:
     return config
 
 
-def patch_local_config(patch: dict[str, Any], path: Optional[Path] = None) -> Path:
+def _patch_local_config_unlocked(patch: dict[str, Any], path: Optional[Path] = None) -> Path:
     """Deep-merge `patch` into the local overlay file. Never writes package defaults.
 
     Only the overlay is updated, so unrelated keys (auth tokens, robot id) stay
@@ -255,14 +257,28 @@ def patch_local_config(patch: dict[str, Any], path: Optional[Path] = None) -> Pa
 
     merged = _deep_merge(existing, patch)
     target.parent.mkdir(parents=True, exist_ok=True)
-    tmp = target.with_name(target.name + ".tmp")
+    descriptor, temporary = tempfile.mkstemp(prefix=target.name + ".", suffix=".tmp", dir=target.parent)
+    tmp = Path(temporary)
     try:
-        tmp.write_text(
-            yaml.safe_dump(merged, allow_unicode=True, sort_keys=False),
-            encoding="utf-8",
-        )
+        with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
+            stream.write(yaml.safe_dump(merged, allow_unicode=True, sort_keys=False))
+            stream.flush()
+            os.fsync(stream.fileno())
         os.replace(tmp, target)
+        if os.name == 'posix':
+            directory = os.open(target.parent, os.O_RDONLY | os.O_DIRECTORY)
+            try:
+                os.fsync(directory)
+            finally:
+                os.close(directory)
     except Exception:
         tmp.unlink(missing_ok=True)
         raise
     return target
+
+
+def patch_local_config(patch: dict[str, Any], path: Optional[Path] = None) -> Path:
+    """Preserve unrelated overlay keys under the shared process/thread fence."""
+    target = Path(path) if path is not None else overlay_path()
+    with transaction(target):
+        return _patch_local_config_unlocked(patch, target)

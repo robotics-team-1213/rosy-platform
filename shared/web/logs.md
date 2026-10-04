@@ -593,6 +593,12 @@
 - 증거: 검수·객체 반환·새 학습 연결·harness 재검증 131 passed, known_failures 신규 0. 뒤이은 저널 검사는 기존 entry 안에 추가한 행을 append-only 위반으로 발견하여 별도 새 heading으로 기록을 분리했다.
 - gate 변화: 로컬 fast-forward 착지 대상이며 push·배포·장치 수용은 수행하지 않는다.
 
+## 2026-10-04 · uncommitted · fix(web): register learning review canvas and development titles
+
+- Change: apply the existing canvas palette/font checks to the learning review app, use shared ui-brand, and name both pages with the registry development scope. No rose exception, review behavior, security boundary or device command was added.
+- Evidence: inherited source failures reproduced (3 failed, 21 passed); repaired source and review/workspace suites 36 passed. Independent review 47 passed. Full shared web suite and final push/CI checks follow.
+- gate 변화: source contract repair only; physical acceptance remains HOLD.
+
 ## 2026-10-05 · uncommitted · fix(contracts): register existing review canvas and wordmark
 
 - 변경: 최신 main의 검수 캔버스를 기존 팔레트 검사에 포함하고 공용 모듈에서 직접 가져온 canvasFont 바인딩을 검증한다. 기존 ROSY 워드마크 CSS를 목록에 포함하되 rose 참조가 그 규칙 한 곳뿐임을 별도 검증한다. 화면·색·배치 변경 없음.

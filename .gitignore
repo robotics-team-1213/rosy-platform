@@ -131,3 +131,6 @@ Thumbs.db
 # D-432 filled development trust/credential envelopes (templates remain tracked).
 **/pilot-development.json
 **/cam-development.json
+
+# D-456: exported per-device LAN TLS material is private, never a template.
+/deploy/robot/pinky_pro/release/tls-local/

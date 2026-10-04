@@ -87,6 +87,10 @@ def main() -> None:
     stop = threading.Event()
     install_stop_handlers(stop)
 
+    if os.environ.get("ROSY_DEPLOYMENT") == "device":
+        from core_common.runtime_python import activate_core_auxiliary
+        activate_core_auxiliary(__file__)
+
     from core_common.rmw import apply_cyclone_rmw
 
     apply_cyclone_rmw(os.environ)

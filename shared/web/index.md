@@ -50,4 +50,4 @@
 - 2026-10-05 · uncommitted · fix(contracts): repair inherited site release checks
 - 2026-10-05 · uncommitted · feat(learning): D-462 incremental pixel review
 - 2026-10-05 · uncommitted · fix(contracts): register existing review canvas and wordmark
-- 2026-10-04 · uncommitted · docs(learning): UX 착지 동기화 검증
+- 2026-10-04 · uncommitted · fix(web): register learning review canvas and development titles
