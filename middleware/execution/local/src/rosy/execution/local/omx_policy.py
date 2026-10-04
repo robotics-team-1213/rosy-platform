@@ -81,6 +81,7 @@ class PolicyCandidate:
     produced_at_ns: int
     positions: tuple
     camera_frames: tuple = ()
+    camera_received_at_ns: tuple = ()
 
     def __post_init__(self):
         for value in (self.lease_id,self.episode_id,self.policy_revision): _text(value)
@@ -92,6 +93,9 @@ class PolicyCandidate:
         frames=tuple(self.camera_frames)
         for frame in frames:_sha(frame)
         object.__setattr__(self,'camera_frames',frames)
+        stamps=tuple(self.camera_received_at_ns)
+        for stamp in stamps:_ns(stamp)
+        object.__setattr__(self,'camera_received_at_ns',stamps)
 
 
 def owner_binding(owner):
@@ -128,6 +132,7 @@ class OwnerPolicySession:
         self.enabled=enabled;self._ttl=max_lease_duration_ns
         self._lock=threading.RLock();self._snapshot=None;self._active_command=None
         self._history=OrderedDict();self._history_capacity=observation_history_capacity
+        self._camera_history=OrderedDict()
         self._last_now=None;self._last_submit=None;self.hold_reason='';self.cancel_decision=None
         self._owner_session=owner.session_id
         self._config=owner.config
@@ -137,8 +142,17 @@ class OwnerPolicySession:
     def lease(self): return self._lease
 
     def _owner_current(self):
+        self._check_hold()
         if self.owner.config is not self._config or self.owner.session_id!=self._owner_session:
             self._fail('policy_owner_binding_changed')
+
+    def _check_hold(self):
+        if self.hold_reason:raise PermissionError(self.hold_reason)
+
+    def _stop_open(self):
+        identity=self.lease.identity
+        if not self.fence.is_open(authority_epoch=identity.authority_epoch,dispatch_generation=identity.dispatch_generation):
+            self._fail('local_stop_closed')
 
     def _binding(self):
         doc=self.policy.recheck();cfg=self.owner.config;identity=self.lease.identity
@@ -173,6 +187,7 @@ class OwnerPolicySession:
 
     def _now(self):
         value=self._clock()
+        self._check_hold()
         if type(value) not in (int,float) or not math.isfinite(value) or value<0:
             self._fail('invalid_owner_clock')
         now=int(value*1_000_000_000)
@@ -210,7 +225,16 @@ class OwnerPolicySession:
         now=self._now()
         self._lease_time(self.lease,now)
         self._owner_current()
+        self._stop_open()
+        now=self._now()
+        self._lease_time(self.lease,now)
+        self._owner_current()
         self._fresh(doc,now,cameras)
+        if cameras:
+            key=(tuple(c.frame_sha256 for c in cameras),tuple(c.received_at_ns for c in cameras))
+            self._camera_history[key]=cameras
+            self._camera_history.move_to_end(key)
+            while len(self._camera_history)>self._history_capacity:self._camera_history.popitem(last=False)
         return doc,now,cameras
 
     def _fresh(self,doc,now,cameras):
@@ -234,6 +258,32 @@ class OwnerPolicySession:
                 if not self.hold_reason:self._fail('policy_observation_unavailable')
                 raise
             except Exception as exc:self._fail('policy_observation_validation:'+type(exc).__name__)
+
+    def capture_observation(self):
+        """Freeze guarded metadata; composition must supply its exact RGB bytes."""
+        with self._lock:
+            try:
+                _,_,cameras=self._guard()
+                return self._snapshot,cameras
+            except PermissionError:
+                if not self.hold_reason:self._fail('policy_capture_authority_closed')
+                raise
+            except Exception as exc:self._fail('policy_capture_validation:'+type(exc).__name__)
+
+    def _camera_source(self,candidate,doc,now,current):
+        if candidate.camera_received_at_ns:
+            if (len(candidate.camera_frames)!=len(doc['cameras'])
+                    or len(candidate.camera_received_at_ns)!=len(doc['cameras'])):
+                self._fail('policy_camera_source_count')
+            source=self._camera_history.get((candidate.camera_frames,candidate.camera_received_at_ns))
+            if source is None:self._fail('policy_camera_source_unknown')
+        else:
+            source=current
+            if candidate.camera_frames!=tuple(c.frame_sha256 for c in source):self._fail('policy_camera_frame_mismatch')
+        if any(not 0<=now-c.received_at_ns<=doc['timing']['max_observation_age_ns'] for c in source):
+            self._fail('policy_camera_source_stale')
+        if any(c.received_at_ns>candidate.produced_at_ns for c in source):self._fail('policy_camera_action_causality')
+        return source
 
     def _source(self,candidate,doc,now):
         source=self._history.get(candidate.sequence)
@@ -261,8 +311,7 @@ class OwnerPolicySession:
                         (lease.lease_id,lease.episode_id,lease.policy_revision)):
                     self._fail('policy_candidate_scope_or_observation')
                 self._source(candidate,doc,now)
-                if candidate.camera_frames!=tuple(c.frame_sha256 for c in cameras):self._fail('policy_camera_frame_mismatch')
-                if any(c.received_at_ns>candidate.produced_at_ns for c in cameras):self._fail('policy_camera_action_causality')
+                self._camera_source(candidate,doc,now,cameras)
                 if not candidate.observed_at_ns<=candidate.produced_at_ns<=now:
                     self._fail('policy_action_clock')
                 if now-candidate.produced_at_ns>doc['timing']['max_action_age_ns']:
@@ -275,10 +324,7 @@ class OwnerPolicySession:
                 def final_submit():
                     _,final_now,final_cameras=self._guard()
                     source=self._source(candidate,doc,final_now)
-                    if candidate.camera_frames!=tuple(c.frame_sha256 for c in final_cameras):
-                        self._fail('policy_camera_changed_at_submit')
-                    if any(c.received_at_ns>candidate.produced_at_ns for c in final_cameras):
-                        self._fail('policy_camera_action_causality_at_submit')
+                    self._camera_source(candidate,doc,final_now,final_cameras)
                     if final_now-candidate.produced_at_ns>doc['timing']['max_action_age_ns']:
                         self._fail('policy_action_stale_at_submit')
                     cfg=self._config
@@ -289,12 +335,15 @@ class OwnerPolicySession:
                         calibration_revision=cfg.calibration_revision,joint_names=cfg.joint_names,
                         expected_start_state_positions=dict(source.positions),
                         start_state_tolerances=dict(cfg.max_start_state_tolerances))
+                    self._stop_open()
                     final_now=self._now()
                     self._lease_time(self.lease,final_now)
                     self._fresh(doc,final_now,final_cameras)
                     self._source(candidate,doc,final_now)
+                    self._camera_source(candidate,doc,final_now,final_cameras)
                     if final_now-candidate.produced_at_ns>doc['timing']['max_action_age_ns']:
                         self._fail('policy_action_stale_at_submit')
+                    self._check_hold()
                     decision=self.owner.submit(command)
                     if not decision.accepted: self._fail('owner_rejected:'+decision.reason)
                     self._active_command=command.command_id;self._last_submit=final_now
@@ -327,14 +376,19 @@ class OwnerPolicySession:
     def renew(self,lease):
         with self._lock:
             try:
-                _,now,_=self._guard()
+                doc,now,cameras=self._guard()
                 old=self.lease
                 if (not isinstance(lease,PolicyLease) or (lease.lease_id,lease.episode_id,lease.policy_revision,lease.identity)!=
                         (old.lease_id,old.episode_id,old.policy_revision,old.identity)
                         or lease.owner_session_id!=old.owner_session_id
                         or lease.issued_at_ns<old.issued_at_ns or lease.expires_at_ns<=old.expires_at_ns):
                     self._fail('policy_lease_changed')
-                self._check_lease(lease,now);self._lease=lease
+                self._check_lease(lease,now)
+                self._owner_current();self._stop_open()
+                now=self._now()
+                self._lease_time(old,now);self._lease_time(lease,now)
+                self._owner_current();self._fresh(doc,now,cameras)
+                self._check_hold();self._lease=lease
             except PermissionError:
                 if not self.hold_reason:self._fail('policy_renew_authority_closed')
                 raise

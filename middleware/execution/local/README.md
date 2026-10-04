@@ -1,6 +1,6 @@
 # Local execution evidence and policy installation checks
 
-`rosy-execution-local` 0.1.3 depends on the ROS-free skill0.1.0 and learning0.1.6
+`rosy-execution-local` 0.1.4 depends on the ROS-free skill0.1.0 and learning0.1.6
 contracts wheels. The policy installation loader imports no learning registry,
 inference framework, ROS node, device driver, or network client.
 
@@ -41,7 +41,20 @@ and the current pose remains within the owner's installed start-state tolerances
 The command carries the original inference start pose, never a substituted latest
 pose. Source freshness and pose difference are rechecked inside the final fence;
 unknown, evicted, stale or moved sources latch HOLD. The owner still enforces source
-sequence advancement. Camera frame equality and age checks are unchanged.
+sequence advancement.
+
+`capture_observation()` returns frozen joint/camera metadata after the existing
+guard. Composition must supply the exact immutable RGB bytes with these hashes.
+Camera sets validated through the trusted provider are retained with the same
+bounded capacity. Candidates may supply ordered `camera_received_at_ns` alongside
+`camera_frames` to select an exact previously recorded capture. Source age and
+production causality remain enforced, including the final fence. Identical RGB
+from two captures is distinguished by receipt time. Unknown/evicted/stale sources
+fail closed. Candidates without receipt times keep the strict latest-frame check.
+Latest-input freshness is still required. Provider errors cannot swallow latched
+HOLD; local stop and generation are rechecked after providers and before dispatch
+or renewal. Timing is checked after stop-store reads. The monotonic clock must be
+a trusted read-only local clock shared with capture and inference.
 
 Composition must provide authenticated local authority and camera capture providers
 and actually schedule `poll()`. DTO metadata/hash checks do not authenticate capture

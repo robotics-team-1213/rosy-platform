@@ -53,6 +53,9 @@ ACT의 `n_action_steps` 큐를 유지하고, queued action은 **최초 소비 �
 그대로 반환한다. 현재 호출에 새 이미지가 들어와도 큐 값의 관측이라고 주장하지 않는다.
 `InferenceResult.candidate_fields()`는 기존 local 후보 필드이며 public wire/실행 권한이 아니다.
 호출자가 실제 owner에서 원래 sequence/time/camera frame을 대조하게 해야 한다.
+후보는 원frame SHA와 `camera_received_at_ns`를 함께 전달해 동일 RGB의 다른 capture와
+구별한다. 큐 출력도 원 수신 시각을 보존한다. owner의 guarded metadata capture와 실제
+immutable RGB snapshot을 맞춰야 하며 timestamp 필드 자체가 capture 신뢰를 부여하지 않는다.
 아직 trusted capture/issuer·scheduler·ROS 프로세스와의 composition은 없다.
 
 기본 n_action_steps=4는 유지한다. `--n-action-steps 1`은 chunk_size4를 유지하면서

@@ -5070,3 +5070,8 @@
 - 증거: 약15초130frame/658sample 중 camera stale370, 수신간격 median109.223ms. 실제RGB bytes/calibration/capture stamp 확인. v1 import 실패 보존, v2 terminal exit0. 상세 validation/omx-live-camera-timing-2026-10-04.md.
 - gate 변화: 실제 SIM capture 타이밍 불일치 확인. 빠른 입력의 별도 profile 실험이 필요하며 owner HOLD/정지·독립 과제·정책 실행/승격·Fleet·shadow/rollback·영상 검수/새 학습·DEVICE/FIELD 및 전체 목표 미완료.
 - 추가 실험: 사전고정30Hz 연구world/기존50ms 예산. raw302개 저장한 v3의 계측시점 불일치2개를 보존하고, 동일시점 finalv4를 실행했다. v4 frame252/sample527/stale92, mismatch0; 수신median51.250ms. 원자료252개 SHA/calibration/stamp재검증, terminalexit0. zero-stale 목표는 실패이며 원자료 I/O/soft-rendering/부하가 포함돼 rate만의 인과 효과를 주장하지 않는다.
+
+## 2026-10-04 · uncommitted · fix(execution): bind camera candidates to original receipt times
+- 변경: guarded capture metadata와 bounded camera history, 원SHA/수신시각 candidate binding. ACT큐도 원timestamp를 보존한다. provider 후 HOLD/stop과 renewal검사를 보완하고 stop read 지연 후 시간 예산을 검사한다. wheel0.1.4.
+- 증거: 관련host110pass/native16pass/독립86pass D430source 승인. 실제12frame ACT replay에서12timestamp binding 일치, 품질reject 재현, 이번 HOST observation age10/12위반. 상세 validation/policy-camera-source-binding-2026-10-04.md.
+- gate 변화: SOURCE/HOST 추론 원frame 보존과 final safety 검사 보완. 실제 입력 타이밍/품질·trusted capture/issuer/scheduler·owner ROS/독립SIM·Fleet/shadow/rollback·사람 라벨/new training·modelPC·DEVICE/FIELD 및 전체 목표 미완료.

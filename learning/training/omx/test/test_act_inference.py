@@ -67,6 +67,7 @@ def test_exact_bytes_and_raw_frame_are_consumed(tmp_path,monkeypatch):
     assert result.source.frame_sha256==hashlib.sha256(obs.rgb).hexdigest()
     assert result.positions==(.1,.2) and result.chunk_index==0 and result.consumed_current
     assert result.candidate_fields()['sequence']==10
+    assert result.candidate_fields()['camera_received_at_ns']==(result.source.camera_received_at_ns,)
 
 
 def test_queued_actions_keep_original_observation_and_generation_time(tmp_path,monkeypatch):
@@ -77,6 +78,7 @@ def test_queued_actions_keep_original_observation_and_generation_time(tmp_path,m
     assert not queued.consumed_current and queued.chunk_index==1
     assert queued.candidate_fields()['camera_frames']==(first.source.frame_sha256,)
     assert queued.candidate_fields()['sequence']==10
+    assert queued.candidate_fields()['camera_received_at_ns']==(first.source.camera_received_at_ns,)
 
 
 @pytest.mark.parametrize('change',[dict(episode_id='next'),dict(lease_id='next')])

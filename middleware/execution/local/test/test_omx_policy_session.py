@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 import sys
 from dataclasses import replace
+from datetime import datetime,timezone
 
 import pytest
 
@@ -16,6 +17,7 @@ from rosy.contracts.skill import AttemptIdentity
 from rosy.contracts.learning import seal
 from omx_adapter.command_owner import ArmCommandOwner,JointStateSnapshot
 from omx_adapter.local_stop import LocalStopController
+from core_common.protocol.schemas import LocalStopRequest,StopRequestSource
 from omx_adapter.action_store import ActionStore
 from test_omx_command_owner import make_config,FakeActionClient
 from test_learning_artifact_contracts import policy
@@ -348,3 +350,123 @@ def test_final_callback_cannot_widen_installed_source_tolerance(tmp_path):
     session._authority=widening
     with pytest.raises(PermissionError):session.submit(candidate(session))
     assert session.hold_reason and not client.commands
+
+
+@pytest.mark.parametrize('same_pixels',[False,True])
+def test_recorded_camera_source_survives_new_capture(tmp_path,same_pixels):
+    session,client,clock,*_=setup_session(tmp_path,camera=True)
+    joint,cameras=session.capture_observation()
+    assert joint.sequence==10 and cameras[0].received_at_ns==10_000_000_000
+    clock[0]=10.02
+    current=replace(cameras[0],received_at_ns=10_015_000_000,frame_sha256='c'*64 if same_pixels else 'd'*64)
+    session._cameras=lambda:(current,)
+    action=candidate(session,camera_frames=('c'*64,),camera_received_at_ns=(10_000_000_000,),produced_at_ns=10_010_000_000)
+    assert session.submit(action).accepted
+    assert len(client.commands)==1
+
+
+@pytest.mark.parametrize('mode',['unknown','evicted','stale','timestamp','causality','count'])
+def test_invalid_recorded_camera_source_never_dispatches(tmp_path,mode):
+    session,client,clock,*_=setup_session(tmp_path,camera=True,observation_history_capacity=1 if mode=='evicted' else 64)
+    original=session._cameras()[0]
+    if mode!='unknown':session.capture_observation()
+    clock[0]=10.06 if mode=='stale' else 10.02
+    current=replace(original,received_at_ns=int(clock[0]*1e9),frame_sha256='d'*64)
+    session._cameras=lambda:(current,)
+    session.observe(JointStateSnapshot({'joint_1':0.1,'joint_2':0.0},11,clock[0],'cal-7'))
+    action=candidate(session,sequence=11,observed_at_ns=int(clock[0]*1e9),produced_at_ns=int(clock[0]*1e9),
+        camera_frames=('c'*64,),camera_received_at_ns=(10_000_000_001,) if mode=='timestamp' else (10_000_000_000,))
+    if mode=='causality':
+        session.capture_observation()
+        action=replace(action,sequence=10,observed_at_ns=10_000_000_000,produced_at_ns=10_010_000_000,
+                       camera_frames=('d'*64,),camera_received_at_ns=(10_020_000_000,))
+    if mode=='count':action=replace(action,camera_received_at_ns=(10_000_000_000,10_000_000_000))
+    with pytest.raises(PermissionError):session.submit(action)
+    assert session.hold_reason and not client.commands
+    if mode=='causality':assert session.hold_reason=='policy_camera_action_causality'
+    if mode=='stale':assert session.hold_reason=='policy_camera_source_stale'
+
+
+def test_camera_update_in_final_fence_preserves_valid_recorded_source(tmp_path):
+    session,client,clock,*_=setup_session(tmp_path,camera=True)
+    original=session.capture_observation()[1][0]
+    clock[0]=10.02;calls=[]
+    def updating(_):
+        calls.append(1)
+        if len(calls)==3:session._cameras=lambda:(replace(original,received_at_ns=10_015_000_000,frame_sha256='d'*64),)
+        return True
+    session._authority=updating
+    assert session.submit(candidate(session,camera_frames=('c'*64,),camera_received_at_ns=(10_000_000_000,),
+                                    produced_at_ns=10_010_000_000)).accepted
+
+
+@pytest.mark.parametrize('stamp',[True,-1,1.5,2**63])
+def test_invalid_candidate_camera_timestamp(stamp):
+    with pytest.raises(ValueError):
+        PolicyCandidate('lease','episode','policy',10,0,0,(0.1,),camera_frames=('c'*64,),camera_received_at_ns=(stamp,))
+
+
+@pytest.mark.parametrize('operation',['submit','capture','renew'])
+def test_provider_cannot_swallow_reentrant_hold(tmp_path,operation):
+    session,client,*_=setup_session(tmp_path,camera=True)
+    calls=[]
+    trigger={'submit':3,'capture':1,'renew':2}[operation]
+    def catches_local_failure(_):
+        calls.append(1)
+        if len(calls)==trigger:
+            try:session.observe(None)
+            except PermissionError:pass
+        return True
+    session._authority=catches_local_failure
+    with pytest.raises(PermissionError):
+        if operation=='submit':session.submit(candidate(session,camera_frames=('c'*64,),camera_received_at_ns=(10_000_000_000,)))
+        elif operation=='capture':session.capture_observation()
+        else:session.renew(replace(session.lease,expires_at_ns=10_950_000_000))
+    assert session.hold_reason=='policy_observation_type' and not client.commands
+    if operation=='renew':assert session.lease.expires_at_ns==10_900_000_000
+
+
+def test_final_authority_cannot_trip_stop_then_dispatch(tmp_path):
+    session,client,*_=setup_session(tmp_path,camera=True)
+    calls=[]
+    def stopping(_):
+        calls.append(1)
+        if len(calls)==3:
+            ident=session.lease.identity
+            session.fence.trip(LocalStopRequest(workcell_id=ident.workcell_id,instance_id=ident.instance_id,
+                authority_epoch=ident.authority_epoch,dispatch_generation=ident.dispatch_generation,
+                reason='operator_stop',requested_at=datetime.now(timezone.utc)),source=StopRequestSource.OPERATOR_LOCAL)
+        return True
+    session._authority=stopping
+    with pytest.raises(PermissionError):session.submit(candidate(session,camera_frames=('c'*64,),camera_received_at_ns=(10_000_000_000,)))
+    assert not client.commands and session.hold_reason
+    assert not session.fence.is_open(authority_epoch=2,dispatch_generation=7)
+
+
+def test_renew_provider_stop_cancels_active_and_keeps_old_lease(tmp_path):
+    session,client,*_=setup_session(tmp_path)
+    session.submit(candidate(session));old=session.lease;calls=[]
+    def stopping(_):
+        calls.append(1)
+        if len(calls)==2:
+            ident=session.lease.identity
+            session.fence.trip(LocalStopRequest(workcell_id=ident.workcell_id,instance_id=ident.instance_id,
+                authority_epoch=2,dispatch_generation=7,requested_at=datetime.now(timezone.utc),reason='operator_stop'),
+                source=StopRequestSource.OPERATOR_LOCAL)
+        return True
+    session._authority=stopping
+    with pytest.raises(PermissionError):session.renew(replace(old,expires_at_ns=10_950_000_000))
+    assert session.lease==old and session.hold_reason and client.handles[0].cancel_calls==1
+
+
+def test_final_stop_read_latency_cannot_expire_lease_then_dispatch(tmp_path):
+    session,client,clock,*_=setup_session(tmp_path)
+    session._lease=replace(session.lease,expires_at_ns=10_030_000_000)
+    original=session.fence.is_open;calls=[]
+    def delayed(**scope):
+        result=original(**scope);calls.append(1)
+        if len(calls)==3:clock[0]=10.04
+        return result
+    session.fence.is_open=delayed
+    with pytest.raises(PermissionError):session.submit(candidate(session))
+    assert not client.commands and session.hold_reason

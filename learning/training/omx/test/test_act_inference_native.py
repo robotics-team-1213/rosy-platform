@@ -35,6 +35,7 @@ def test_actual_act_weights_consume_snapshot_and_keep_queue_source(tmp_path):
     second=engine.infer(observation(sequence=11,rgb=b'\x00'*192))
     assert first.consumed_current and not second.consumed_current
     assert first.source==second.source and second.chunk_index==1
+    assert first.candidate_fields()['camera_received_at_ns']==second.candidate_fields()['camera_received_at_ns']==(10_000_000_000,)
     (root/'policy/model.safetensors').write_bytes(b'corrupt after immutable load')
     engine.reset('episode_change')
     replayed=engine.infer(observation())

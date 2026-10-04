@@ -89,7 +89,8 @@ class InferenceResult:
         return dict(lease_id=self.source.lease_id,episode_id=self.source.episode_id,
             policy_revision=self.policy_revision,sequence=self.source.sequence,
             observed_at_ns=self.source.observed_at_ns,produced_at_ns=self.produced_at_ns,
-            positions=self.positions,camera_frames=(self.source.frame_sha256,))
+            positions=self.positions,camera_frames=(self.source.frame_sha256,),
+            camera_received_at_ns=(self.source.camera_received_at_ns,))
 
 
 def _snapshot(root,pin):
