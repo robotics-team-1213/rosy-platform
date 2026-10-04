@@ -2184,3 +2184,9 @@
 - 증거: 집중 배포 시험 61 passed, flake8/diff 검사 통과. 디렉터리를 단일 소켓 연결로 바꾼 mutation은 실패했고 원본 복구 후 2 passed. 실제 사이트 candidate의 UID 10001/read-only/cap-drop ALL 실행에서 두 로봇 hostname과 fleet/vision/proxy 조회를 확인했다. Avahi 연결 없는 negative control은 실패했고 가상 Avahi 소켓 교체 후 동일 이름의 새 주소 조회를 확인했다.
 - 범위: 현재 Fleet 앱 이미지에 NSS만 추가한 candidate를 만들었다. 운영 root 설정 설치와 Fleet 재생성, 인증된 장치 연결은 coordinator의 별도 단계이며 이 기록은 그 완료를 주장하지 않는다.
 - gate 변화: SOURCE/LOCAL 및 후보 컨테이너의 이름 조회 검증 완료. 운영 Fleet 등록과 로봇 연결은 관리자 적용 이후 별도 확인한다.
+
+## 2026-10-04 · uncommitted · fix(camera): 시작 중 반복 부팅 보호
+
+- 변경: 카메라 시작 전 fsync 기록, 두 번의 미확인 부팅 뒤 선택 서비스 보류, 별도 90초 관찰 타이머와 정상 종료 구분을 추가했다. 카메라 재시도를 10초·300초 내 3회로 제한하고 관찰 시간을 카메라 시작 완료와 분리했다. D-161의 CORE·호스트 권한 분리와 D-373의 선택 perception 설정을 유지한다.
+- 증거: 독립 host 194 PASS·1 POSIX skip, 실패 횟수 임계값 mutation RED 확인. Linux에서 fsync/rename 상태 전이·systemd-analyze verify PASS(의존 서비스는 검증용 stub). 격리 user systemd에서 시작 0.074초·재시작 0.103초, 2초로 축소한 관찰 타이머·정지 시 취소·미확인 부팅 후 시작 보류 PASS. 서명 payload·기기 적용은 별도다.
+- gate 변화: SOURCE/LOCAL 보호 로직만 확인했다. 원래 카메라 시작 관련 본체 재부팅의 전기·커널 원인은 미확정이며 물리 전원 초기화와 카메라 복구 수락은 미완료다.

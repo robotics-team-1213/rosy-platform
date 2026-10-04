@@ -3,6 +3,9 @@ Description=ROSY front camera and bounded preview
 Requires=rosy-core.service
 After=rosy-core.service
 PartOf=rosy-runtime.target
+Wants=rosy-camera-healthy.timer
+StartLimitIntervalSec=300
+StartLimitBurst=3
 
 [Service]
 Type=simple
@@ -22,9 +25,11 @@ Environment=HOME=/var/lib/rosy/camera
 Environment=PYTHONNOUSERSITE=1
 Environment=PYTHONDONTWRITEBYTECODE=1
 WorkingDirectory=/opt/rosy/current
+ExecCondition=/usr/bin/python3 -I -B /opt/rosy/current/deploy/robot/native/camera-boot-guard.py check
 ExecStart=/usr/bin/bash --noprofile --norc -c 'source /opt/ros/jazzy/setup.bash && source /opt/rosy/current/install/setup.bash && exec ros2 launch control camera_preview.launch.py namespace:=${ROSY_NAMESPACE}'
+ExecStopPost=/usr/bin/python3 -I -B /opt/rosy/current/deploy/robot/native/camera-boot-guard.py stopped
 Restart=on-failure
-RestartSec=2
+RestartSec=10
 TimeoutStopSec=10
 KillSignal=SIGINT
 UMask=0027

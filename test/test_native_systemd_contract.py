@@ -366,7 +366,9 @@ DECLARED_WRITES = {
         "/run/rosy/ssh-access.request", "/run/rosy/ssh-access.response",
     },
     "rosy-io.service": {"/var/log/rosy-io/launch.log"},
+    "rosy-camera-healthy.service": {"/var/lib/rosy/camera"},
     "rosy-camera.service": {
+        "/var/lib/rosy/camera",
         "/var/log/rosy-camera/launch.log",
         # D-373: capture snapshots under the unit's own StateDirectory=rosy/camera.
         "/var/lib/rosy/camera/recordings",
@@ -508,7 +510,9 @@ PROGRAM_SOURCES = {
         "imported-by:src/runtime/gateway:control:src/runtime/sensing",
     ],
     "rosy-io.service": ["src/products/pinky_pro/bringup"],
-    "rosy-camera.service": ["src/runtime/sensing/launch/camera_preview.launch.py",
+    "rosy-camera-healthy.service": ["deploy/robot/pinky_pro/native/camera-boot-guard.py"],
+    "rosy-camera.service": ["deploy/robot/pinky_pro/native/camera-boot-guard.py",
+                            "src/runtime/sensing/launch/camera_preview.launch.py",
                             "src/runtime/sensing/control/camera_detect_node.py",
                             "src/runtime/sensing/control/road_observer_node.py",
                             # D-344 §12: the IR calibration overlay the launch validates.
