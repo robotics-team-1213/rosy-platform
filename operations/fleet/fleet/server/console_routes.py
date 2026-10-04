@@ -68,8 +68,9 @@ class SharedGather:
     the returned snapshot as read-only: it is shared."""
 
     def __init__(self, console, board: LineStuckBoard, *, max_age_s: float = 1.0,
-                 clock: Callable[[], float] = time.monotonic) -> None:
+                 clock: Callable[[], float] = time.monotonic, tracking=None) -> None:
         self._console, self._board, self._clock = console, board, clock
+        self._tracking = tracking
         self.max_age_s = max_age_s
         self._lock = asyncio.Lock()
         self._snapshot: Optional[dict] = None
@@ -78,7 +79,10 @@ class SharedGather:
     async def __call__(self) -> dict:
         async with self._lock:
             if self._snapshot is None or self._clock() - self._at >= self.max_age_s:
+                gathered_at = self._tracking.now() if self._tracking is not None else None
                 snapshot = await self._console.snapshot()
+                if self._tracking is not None:
+                    self._tracking.observe_states(snapshot["robots"], now=gathered_at)
                 self._board.observe(snapshot["robots"], self._console.hub.registry.events_since)
                 self._snapshot, self._at = snapshot, self._clock()
             return self._snapshot
@@ -86,12 +90,12 @@ class SharedGather:
 
 def install_console_routes(app, *, console, sightings, require_viewer,
                            read_guard, operator_guard, require_operator,
-                           site_lanes=None, answer_log_path=None) -> None:
+                           site_lanes=None, answer_log_path=None, tracking=None) -> None:
     # D-407: open lane stucks, read from each gather. CORE's stuck block is the truth.
     board = app.state.line_stuck = LineStuckBoard(
         log=LineStuckAnswerLog(answer_log_path) if answer_log_path is not None else None)
 
-    gather = app.state.fleet_gather = SharedGather(console, board)
+    gather = app.state.fleet_gather = SharedGather(console, board, tracking=tracking)
 
     async def gathered() -> dict:
         snapshot = await gather()

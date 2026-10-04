@@ -293,8 +293,8 @@
 
 ## 최근 기록
 
+- 2026-10-04 · uncommitted · fix(site): D-457 마커 우선·무마커 폴백
 - 2026-10-04 · uncommitted · docs(cell): 홈 준비 교훈과 모델 PC 직접 검증 경로
 - 2026-10-04 · uncommitted · feat(fleet): D-455 양보 합류는 지도 자세
 - 2026-10-04 · uncommitted · fix(harness): pin one committed G2 encoding repair
 - 2026-10-04 · uncommitted · feat(fleet): D-453 양보 한 구간
-- 2026-10-04 · uncommitted · docs(adr): D-451 한 줄 교착의 양보는 Fleet 알고리즘이 고른다

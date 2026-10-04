@@ -5677,3 +5677,9 @@ osy-d395-s1d\`.
 - 증거: r4/r5 startup READY와 seat reconciliation. r5 첫 박스 placement receipt 후 두 번째 이송의 item_lost_in_transit으로 LOCAL_ACTION_HOLD; run exit 1, cleanup exit 0, full_g2 false, fault matrix NOT_RUN. frontmatter/schema와 소스 정의를 확인한다. vocabulary 신규 용어 없음, solutions 발견성 gap 없음.
 - 검증: ce-compound frontmatter와 claims 검사 PASS. harness 59 passed, 2 failed. 두 실패는 깨끗한 main 6a37dd732 worktree에서도 같은 기존 deploy/logs.md 인코딩 손상으로 재현됐다. 저장소 known_failures 목록은 변경하지 않았고, 실측 baseline 비교의 신규 실패는 0이다. 증거는 X:/DevTemp/rosy-ce-g2-home-20261004-d94a/의 baseline-tests.txt, candidate-tests.txt, comparison.json에 있다.
 - gate 변화: 없음. 초기 홈 해결만 기록했으며 box16·fault matrix·직접 실행 경로의 설치 수용·장치/현장 승격을 주장하지 않는다.
+
+## 2026-10-04 · uncommitted · fix(site): D-457 마커 우선·무마커 폴백
+
+- 변경: 현행 모듈에 source-token 표시 추적과 승인 보정을 통합. 마커 명시 대응 우선, 없으면 익명 검출·신뢰 가능한 map pose 대조. UI/UX 리팩터링 없음.
+- 증거: 공유 벡터·Vision·Fleet·브라우저 전환 조건을 호스트에서 검증. 실제 사이트는 두 등록 로봇과 S21 영상 연결 조회만 확인. 후보 배포·빈 트랙 학습·실물 위치 오차는 미완료.
+- gate 변화: 없음. SOURCE/LOCAL 변경이며 DEVICE/FIELD 완료 주장 없음. 기존 등록·credentials 보존.

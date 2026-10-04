@@ -100,7 +100,10 @@ SIZE_VERDICTS = {
         "duplicate its socket. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        32_162,
+        33_844,
+        "split: D-457 re-judged 2026-10-04 at 33844 after marker-priority tracking integration: "
+        "display-only matching, calibration ledger and routes have separate bounded files; "
+        "Vision retains image processing and no command or localization path is added. "
         "split: re-judged 2026-10-04 at 32162 after integrating main 2ad047602 with D-452: "
         "incoming main counts 31786, including focused meet subpackage 653 and existing "
         "resolver/loop/transport wiring 135 beyond its 30998 verdict; the approved "
@@ -251,6 +254,12 @@ SIZE_VERDICTS = {
         "begin/complete/mark_unknown) is the only separable seam, so revisit it as a split if the store "
         "grows past 800",
     ),
+    "fleet/fleet/server/app.py": (
+        608,
+        "accept: D-457 bounded composition root wiring (tracking source validation and route installer); "
+        "calibration, matching, auth routes and persistence live in tracking modules. Single app owner, "
+        "ROS-free and host-testable; no command implementation or second publisher is introduced.",
+    ),
     "fleet/fleet/server/enrollment.py": (
         664,
         "accept: one owner (D-361 robot enrollment — exchange, binding, pinned-address gate, unenroll and "
@@ -274,7 +283,9 @@ SIZE_VERDICTS = {
         "2026-10-01 at 887 after idempotent per-attempt phase projection joined the Mission event transaction",
     ),
     "foundation/core_common/protocol/schemas.py": (
-        1_319,
+        1_320,
+        "accept: D-457 re-judged at 1320: one bounded OverheadDetectionsPayload re-export; model lives in "
+        "overhead_detections.py, display-only, no version pin or runtime ownership change. "
         "accept: re-judged 2026-10-04 at 1319 after main's model extractions: Cell request models live in protocol/cell_app.py; only "
         "two public re-export lines join the canonical schema entrypoint. Zero-growth allowance unchanged. "
         "the D-18 single contract source — every envelope, event and capability model in one "

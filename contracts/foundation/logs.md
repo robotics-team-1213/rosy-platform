@@ -430,3 +430,9 @@
 - 변경: 실제 모델 SSH의 여섯 번째 TXT profile과 공용 PeerObservation/PeerSummary/PeerCatalogue를 추가한다. 발견·승인·접속 검증을 분리하고 credential 및 listener 없는 앱의 가짜 endpoint를 거부한다. mDNS의 .local/RFC1918와 승인 directory의 DNS/VPN·현재 미해결 주소를 구분한다. API Ref v1.94, envelope 1.0 유지.
 - 검증: metadata RED collection(미구현) 뒤 focused252 passed/2 Linux skipped. directory 신원·미해결·VPN 및 mDNS 외부 host 거부 회귀12 PASS. 독립 source review에서 발견한 directory 제한을 수정했다.
 - gate 변화: 없음; provider/consumer 구현과 CI·컨테이너 namespace·실제 모델/로봇·다른 망 수락은 별도다. 이 focused 계약 검증으로 전체 module gate를 새로 승격하지 않는다.
+
+## 2026-10-04 · uncommitted · fix(site): D-457 마커 우선·무마커 폴백
+
+- 변경: 현행 모듈에 source-token 표시 추적과 승인 보정을 통합. 마커 명시 대응 우선, 없으면 익명 검출·신뢰 가능한 map pose 대조. UI/UX 리팩터링 없음.
+- 증거: 공유 벡터·Vision·Fleet·브라우저 전환 조건을 호스트에서 검증. 실제 사이트는 두 등록 로봇과 S21 영상 연결 조회만 확인. 후보 배포·빈 트랙 학습·실물 위치 오차는 미완료.
+- gate 변화: 없음. SOURCE/LOCAL 변경이며 DEVICE/FIELD 완료 주장 없음. 기존 등록·credentials 보존.

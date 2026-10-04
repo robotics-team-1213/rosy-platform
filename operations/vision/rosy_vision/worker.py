@@ -5,6 +5,7 @@ from __future__ import annotations
 import math
 import time
 import asyncio
+import logging
 from typing import Callable
 
 from rosy_vision.detect import detect_markers
@@ -12,11 +13,13 @@ from rosy_vision.project import CameraMap, project_frame
 
 MAX_FUTURE_S = 0.05
 
+logger = logging.getLogger("rosy_vision")
+
 
 class VisionWorker:
     def __init__(self, *, source_id: str, ingest, camera: CameraMap, publisher,
                  detector: Callable = detect_markers, clock: Callable[[], float] = time.time,
-                 max_age_s: float = 0.75) -> None:
+                 max_age_s: float = 0.75, tracker=None) -> None:
         if not math.isfinite(max_age_s) or max_age_s <= 0:
             raise ValueError("vision max age must be positive and finite")
         self.source_id = source_id
@@ -27,6 +30,8 @@ class VisionWorker:
         self.clock = clock
         self.max_age_s = max_age_s
         self._last_frame_key: tuple[int, float, float] | None = None
+        # D-457: optional markerless tracking step (rosy_vision.track.worker.TrackWorker).
+        self.tracker = tracker
 
     async def process_latest(self) -> tuple:
         if self.source_id != self.camera.source_id:
@@ -57,8 +62,19 @@ class VisionWorker:
             captured_at=frame.captured_at,
             markers=markers,
         )
-        for sighting in sightings:
-            await self.publisher.publish(sighting)
+        try:
+            for sighting in sightings:
+                await self.publisher.publish(sighting)
+        finally:
+            # A rejected sighting must not cost the frame its tracking step, and a tracking
+            # failure must not mask the sighting error.
+            if self.tracker is not None:
+                try:
+                    await self.tracker.process(frame, markers)
+                except Exception as exc:
+                    # Do not log URLs, request bodies, headers, or arbitrary exception text.
+                    logger.error("tracking step failed source=%s error_type=%s",
+                                 self.source_id, type(exc).__name__)
         return sightings
 
     async def run(self, *, stop_event: asyncio.Event, poll_interval_s: float = 0.03) -> None:

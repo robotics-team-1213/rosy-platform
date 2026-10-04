@@ -104,6 +104,16 @@
         <span><i class="sw robot"></i>로봇</span>
         <span><i class="sw goal"></i>목표</span>
         <span id="legend-sighting" hidden><i class="sw sighting"></i>카메라 관측</span>
+        <span id="legend-tracking" hidden><i class="sw tracking"></i>관제 카메라 추적</span>
+      </div>
+      <div class="tracking-bar">
+        <p class="hint tracking-state" id="tracking-state" role="status" data-state="none" hidden></p>
+        <table id="tracking-positions" aria-label="카메라 관측 지도 좌표" hidden>
+          <caption>지도 좌표 · m · 카메라 관측</caption>
+          <thead><tr><th scope="col">대상</th><th scope="col">X (m)</th><th scope="col">Y (m)</th><th scope="col">관측 기준</th></tr></thead>
+          <tbody id="tracking-position-rows"></tbody>
+        </table>
+        <ui-button kind="quiet" id="tracking-relearn" type="button" data-role-lock hidden>배경 다시 학습</ui-button>
       </div>
       <p class="hint" id="hint" aria-live="polite" title="로봇 카드의 목표 지정을 누른 뒤 지도를 찍으면 그 로봇에게만 목표가 갑니다" hidden></p>
       <section class="vision-preview" aria-labelledby="vision-heading">

@@ -64,6 +64,7 @@ def _serve_api(route):
 
 
 @pytest.mark.parametrize("document,held", [("index.html", "/api/fleet/state"),
+                                            ("index.html", "/api/fleet/tracking"),
                                             ("install.html", "/api/fleet/discovery"),
                                             ("install.html", "/api/fleet/pairing/v1/pending"),
                                             ("index.html", "/api/vision/sources/camera/frame")])

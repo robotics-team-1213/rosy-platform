@@ -30,8 +30,8 @@
 
 ## 최근 기록
 
+- 2026-10-04 · uncommitted · docs(api): D-457 site display contract v1.97
 - 2026-10-04 · uncommitted · feat(api): D-343 로비 잔여 — `GET /api/v1/site/rooms`
 - 2026-10-04 · uncommitted · fix(api): 현재 문서 버전 설명 정렬
 - 2026-10-04 · uncommitted · feat(power): fresh battery evidence and idle saving
 - 2026-10-04 · uncommitted · feat(ui): 어휘 갤러리 작업 선택 자산 허용
-- 2026-10-04 · uncommitted · feat(ui): 기본 dashboard 진입 자산 허용

@@ -1,5 +1,7 @@
 import math
 
+import pytest
+
 from rosy_vision.project import CameraMap, project_frame
 
 
@@ -84,3 +86,12 @@ def test_camera_map_rejects_duplicate_corner_markers():
     except ValueError:
         return
     raise AssertionError("duplicate calibration corner markers must be rejected")
+
+
+def test_marker_homography_needs_all_four_corners():
+    from rosy_vision.project import marker_homography
+
+    camera = _camera()
+    homography = marker_homography(camera, _markers())
+    assert homography.apply(500, 300) == pytest.approx((4.0, 2.0))
+    assert marker_homography(camera, {30: _markers()[30]}) is None

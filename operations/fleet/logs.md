@@ -1700,3 +1700,11 @@
 - 증거: 6셀 캡처(페이지 오류 0). flake8 0.
 - gate 변화: 없음. LOCAL 합성 증거. 게임 readback 2대·사람 G3는 다음 회차.
 - 결정: D-359 §7.8 역할 표면 나머지 캡처.
+
+## 2026-10-04 · uncommitted · fix(site): D-457 마커 우선·무마커 폴백
+
+- 변경: 현행 모듈에 source-token 표시 추적과 승인 보정을 통합. 마커 명시 대응 우선, 없으면 익명 검출·신뢰 가능한 map pose 대조. UI/UX 리팩터링 없음.
+- 증거: 공유 벡터·Vision·Fleet·브라우저 전환 조건을 호스트에서 검증. 실제 사이트는 두 등록 로봇과 S21 영상 연결 조회만 확인. 후보 배포·빈 트랙 학습·실물 위치 오차는 미완료.
+- gate 변화: 없음. SOURCE/LOCAL 변경이며 DEVICE/FIELD 완료 주장 없음. 기존 등록·credentials 보존.
+
+- D-457 추가 검증: 좌표 표(X/Y m, 관측 기준)와 표시 수명 삭제. 관련 기능 602 passed, Node 34 passed, Chromium 14 passed. 공통 검사 기존 실패는 깨끗한 기준 main에서 재현했으며 docs/validation/2026-10-04-overhead-marker-fallback-local.md에 기록했다.

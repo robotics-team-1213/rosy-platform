@@ -10,6 +10,7 @@ import {
   classifySightings, siteBounds, canvasSizeFor, fitTransform, project, gridLines, GRID_STEP_M,
   streamEvidence,
 } from "./site-layer.js";
+import { offsetLabel, preferMarkers } from "./tracking-layer.js";
 import { NO_MAP_RETRY_MS, createPollGate } from "./poll-gate.js";
 
 export function createMapView({ scope, el, view, auth, call, onMapChanged, onMapUnavailable }) {
@@ -293,6 +294,40 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     drawChip(ctx, null, cx, cy + size * 1.9, sightingLabel(s), s.state === "delayed" ? "warn" : undefined);
   }
 
+  // D-457 관제 카메라 추적: 카메라 위치 고리 + 자가보고 위치까지 선 + 차이 칩. 0.15 m 초과는 주황,
+  // 프레임 미확인(D-395 이전 로봇)은 점선. 이름 모를 검출은 회색 점. 표시 전용 — 목표·교통정리에 쓰지 않는다.
+  function drawCameraTracking(ctx, toPoint, size, lineWidth) {
+    if (!layerOn("tracking") || !view.cameraTracking) return;
+    const tracking = preferMarkers(view.cameraTracking, layerOn("sightings") ? view.sightings : []);
+    ctx.save();
+    ctx.lineWidth = lineWidth;
+    for (const row of tracking.robots) {
+      const cam = toPoint(row.camera.x, row.camera.y);
+      const pose = row.pose ? toPoint(row.pose.x, row.pose.y) : null;
+      ctx.strokeStyle = css(row.warn ? "--status-warn" : "--series-primary");
+      ctx.setLineDash(row.verified ? [] : [lineWidth * 2, lineWidth * 2]);
+      ctx.beginPath();
+      if (pose) {
+        ctx.moveTo(cam.x, cam.y);
+        ctx.lineTo(pose.x, pose.y);
+        ctx.stroke();
+      }
+      ctx.setLineDash([]);
+      ctx.beginPath();
+      ctx.arc(cam.x, cam.y, size * 0.9, 0, Math.PI * 2);
+      ctx.stroke();
+      drawChip(ctx, null, cam.x, cam.y - size * 1.8, offsetLabel(row), row.warn ? "warn" : undefined);
+    }
+    ctx.fillStyle = css("--ink-quiet");
+    for (const item of tracking.unknown) {
+      const p = toPoint(item.x, item.y);
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, size * 0.35, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
   function sitePolygons() {
     return (view.siteMap?.maps || []).filter((m) => (m.polygon_m || []).length >= 3);
   }
@@ -319,6 +354,7 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
       ctx.stroke();
     }
     ctx.restore();
+    drawCameraTracking(ctx, toCell, size, 0.5);
     if (!layerOn("sightings")) return;
     for (const s of view.sightings) drawSighting(ctx, s, toCell, size, 0.5);
   }
@@ -424,8 +460,10 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     }
     ctx.restore();
 
-    if (!layerOn("sightings")) return;
-    for (const s of view.sightings) drawSighting(ctx, s, toPx, Math.max(7, t.scale * 0.09), 1.5);
+    drawCameraTracking(ctx, toPx, Math.max(7, t.scale * 0.09), 1.5);
+    if (layerOn("sightings")) {
+      for (const s of view.sightings) drawSighting(ctx, s, toPx, Math.max(7, t.scale * 0.09), 1.5);
+    }
     flushChips(ctx);
   }
 

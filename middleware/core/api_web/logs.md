@@ -491,3 +491,8 @@
 - 증거: `test/test_site_rooms.py` 4 passed(방 모양·분류기 거절·200·503). api_web 전체 77 passed/13 skipped, gateway 비ROS 수집 오류는 휠 부재(main 동일). flake8 0.
 - gate 변화: 없음. 호스트 계약. 운전석 임대(2.4)·MJPEG(2.3)·PWA 로비 화면(2.1)은 뒤 작업.
 - 결정: D-343 계획 §4 순서 2. PWA 화면·관전 모드·좌석은 D-343 §2.1·2.5의 뒤 작업.
+
+## 2026-10-04 · uncommitted · docs(api): D-457 site display contract v1.97
+
+- 변경: 사이트 표시 전용 추적 계약과 FastAPI 설명 버전을 일치시켰다. 로봇 endpoint·wire envelope·주행 행위 변경 없음.
+- 증거: protocol_version_alignment 시험 통과. DEVICE/FIELD 변화 없음.

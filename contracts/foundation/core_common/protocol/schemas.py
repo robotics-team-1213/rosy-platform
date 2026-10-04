@@ -35,6 +35,7 @@ from core_common.protocol.cell_app import (  # noqa: F401
 from core_common.protocol.lane_perception import LanePerceptionRequest, LanePerceptionStatus  # noqa: F401
 from core_common.protocol.vision_preview_status import VisionPreviewStatus  # noqa: F401
 from core_common.protocol.recording_start import RecordingStartRequest  # noqa: F401
+from core_common.protocol.overhead_detections import OverheadDetectionsPayload  # noqa: F401
 # PowerHealthResponse lives in protocol.power_health and references these shared types.
 # Import that response from its module to avoid a schema import cycle.
 

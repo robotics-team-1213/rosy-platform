@@ -103,6 +103,8 @@ services:
       - -m
       - rosy_vision.cli
       - vision
+      # D-457 marker priority and anonymous fallback, display-only.
+      - --track
       - --config
       - /run/rosy-config/site-cameras.yaml
       - --host

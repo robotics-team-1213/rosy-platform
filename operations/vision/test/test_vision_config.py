@@ -61,6 +61,19 @@ def test_loader_rejects_missing_or_reused_credentials(tmp_path):
 ENV = {"ROSY_PHONE_CEILING_NORTH": "phone-secret", "ROSY_FLEET_CEILING_NORTH": "vision-secret"}
 
 
+@pytest.mark.parametrize("markers", [{}, {"rosy_01": 7}])
+def test_marker_assignment_can_cover_only_some_tracking_targets(tmp_path, markers):
+    row = _source(robot_ids=["rosy_01", "rosy_02"], robot_markers=markers)
+    config = load_vision_sources(_write(tmp_path / "c.yaml", [row]), environ=ENV)[0]
+    assert config.camera.robot_markers == markers
+
+
+def test_marker_assignment_cannot_name_an_unknown_tracking_target(tmp_path):
+    row = _source(robot_markers={"rosy_02": 7})
+    with pytest.raises(ValueError, match="robot_markers"):
+        load_vision_sources(_write(tmp_path / "c.yaml", [row]), environ=ENV)
+
+
 def test_sources_default_to_static_with_a_phone_token(tmp_path):
     config = load_vision_sources(_write(tmp_path / "c.yaml", [_source()]), environ=ENV)[0]
     assert (config.credential, config.phone_token) == ("static", "phone-secret")

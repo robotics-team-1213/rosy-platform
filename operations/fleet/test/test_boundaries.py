@@ -90,3 +90,53 @@ LOCALIZATION_FORBIDDEN = FORBIDDEN + ("fleet.server", "fastapi")
 def test_localization_arbiter_modules_import_no_transport(module):
     for name in _imports(LOCALIZATION_DIR / module):
         assert not name.startswith(LOCALIZATION_FORBIDDEN), f"{module} imports {name}"
+
+
+#: D-457 5: overhead tracking is display only. Besides its own modules, only the app wiring,
+#: the console state route (which hands it robot states) and the CLI may name it.
+TRACKING_IMPORTERS = {"server/app.py", "server/console_routes.py", "server/tracking.py",
+                      "server/tracking_routes.py", "cli.py"}
+
+
+def _tracking_imports(source: str) -> list[str]:
+    """Every import in ``source`` that names a fleet.server tracking module, in any spelling."""
+    found = []
+    for node in ast.walk(ast.parse(source)):
+        if isinstance(node, ast.Import):
+            found += [alias.name for alias in node.names
+                      if alias.name.startswith("fleet.server.")
+                      and alias.name.rsplit(".", 1)[-1].startswith("tracking")]
+        elif isinstance(node, ast.ImportFrom):
+            module = node.module
+            if module is not None and module.rsplit(".", 1)[-1].startswith("tracking"):
+                found.append(module)
+            elif module in (None, "fleet.server", "server"):
+                found += [f"{module or '.'}:{alias.name}" for alias in node.names
+                          if alias.name.startswith("tracking")]
+    return found
+
+
+@pytest.mark.parametrize("snippet", [
+    "from fleet.server import tracking",
+    "from . import tracking",
+    "from .server.tracking import TrackingService",
+    "from .tracking_match import match",
+    "import fleet.server.tracking_calibration",
+])
+def test_tracking_import_guard_sees_every_spelling(snippet):
+    assert _tracking_imports(snippet) != []
+
+
+def test_tracking_import_guard_ignores_unrelated_names():
+    assert _tracking_imports("from fleet.server import traffic\nfrom . import bays\nimport json") == []
+
+
+def test_traffic_bays_missions_and_localization_never_read_overhead_tracking():
+    offenders = []
+    for path in _py_files(FLEET_PKG):
+        rel = path.relative_to(FLEET_PKG).as_posix()
+        if rel in TRACKING_IMPORTERS:
+            continue
+        offenders += [f"{rel} imports {name}"
+                      for name in _tracking_imports(path.read_text(encoding="utf-8"))]
+    assert offenders == []

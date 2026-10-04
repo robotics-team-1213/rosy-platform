@@ -5,7 +5,7 @@ import {
   flatMatrix, multiply3, invert3, project, scale3, projectPolyline, projectTriangles,
   normalizeMapProposal, reasonText, cutGuidance, fitSummary, pickLanes, topDownLayout,
   parseMapDraft, draftFrom, fieldToMap, retryDelay, MAP_FIT_MAX_TRIES, canAccept, fitUsable,
-  orientHomography,
+  orientHomography, calibrationRequest,
 } from "../../fleet/server/web/map-fit.js";
 
 test("the field fallback maps the field rectangle onto the map rectangle, y up", () => {
@@ -229,4 +229,39 @@ test("an accepted draft round-trips through storage and rejects foreign values",
   assert.equal(parseMapDraft(null), null);
   assert.equal(parseMapDraft(JSON.stringify({ map_to_image: [1, 2, 3], image: { width: 1, height: 1 } })), null);
   assert.equal(flatMatrix([[1, 2, 3], [4, 5, 6], [7, 8, "x"]]), null);
+});
+
+test("an applied fit becomes a Fleet calibration request; previous or other-source fits never do", () => {
+  const body = {
+    accepted: true, image: { width: 1280, height: 720 }, frame_seq: 12,
+    proposal: { image_to_map: [[0.005, 0, 0], [0, -0.005, 3.6], [0, 0, 1]], score: 0.9, precision: 0.95,
+      coverage: 0.8, cut_directions: [] },
+  };
+  const pending = { source: "ceiling_north", norm: normalizeMapProposal(body, {}) };
+  const laneSet = { mapId: "map_v2_fleet", bounds: { min_x: 0, min_y: 0, max_x: 6.4, max_y: 3.6 } };
+  const lens = { kind: "standard", focal_mm: 5.4, hfov_deg: 66.9 };
+  const request = calibrationRequest(pending, "ceiling_north", laneSet, lens);
+  assert.equal(request.source_id, "ceiling_north");
+  assert.equal(request.map_id, "map_v2_fleet");
+  assert.equal(request.map_to_image.length, 9);
+  close(request.map_to_image[0], 200);
+  close(request.map_to_image[4], -200);
+  close(request.map_to_image[5], 720);
+  assert.deepEqual(request.image, { width: 1280, height: 720 });
+  assert.deepEqual(request.track_bounds_m, { min_x: 0, min_y: 0, max_x: 6.4, max_y: 3.6 });
+  assert.equal(request.fit_score, 0.855);
+  assert.deepEqual(request.lens, lens);
+  assert.equal(request.frame_seq, 12);
+  const previous = { ...pending, norm: { ...pending.norm, previous: true } };
+  assert.equal(calibrationRequest(previous, "ceiling_north", laneSet, lens), null);
+  assert.equal(calibrationRequest(pending, "ceiling_south", laneSet, lens), null);
+  assert.equal(calibrationRequest(pending, "ceiling_north", null, lens), null);
+  const noMap = calibrationRequest(pending, "ceiling_north", { mapId: null, bounds: laneSet.bounds }, null);
+  assert.equal("map_id" in noMap, false);
+  assert.equal(noMap.lens, null);
+  // A proposal made against another map (its lane stamp) is never filed under the current map.
+  const stamped = { ...pending, stamp: { mapId: "map_old", laneSha: null, paintSha: null } };
+  assert.equal(calibrationRequest(stamped, "ceiling_north", laneSet, lens), null);
+  const sameMap = { ...pending, stamp: { mapId: "map_v2_fleet", laneSha: null, paintSha: null } };
+  assert.equal(calibrationRequest(sameMap, "ceiling_north", laneSet, lens).map_id, "map_v2_fleet");
 });

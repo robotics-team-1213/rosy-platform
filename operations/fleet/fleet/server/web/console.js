@@ -5,6 +5,7 @@ import { createMapView } from "./map-view.js";
 import { createRoster } from "./roster.js";
 import { createLineStuckPanel } from "./line-stuck.js";
 import { createSignals } from "./signals.js";
+import { createTrackingView } from "./tracking-view.js";
 import { createVisionView } from "./vision-view.js";
 import { applyRoleToControls } from "./authorization.js";
 // D-410 — 기기 등록·카메라 연결 승인·경기장/맵 보정은 설치 화면(install.js)이 가진다.
@@ -103,6 +104,7 @@ const view = {
   map: null,
   siteMap: null,   // D-257 천장 카메라 사각형 (GET /api/fleet/site-map)
   sightings: [],   // 카메라 관측 — 표시 전용, CORE pose 와 섞지 않는다
+  cameraTracking: { robots: [], unknown: [] }, // D-457 관제 카메라 추적 — 표시·교차확인 전용
   robots: [],
   showAllRobots: false,
   selected: null, // 목표 지정을 기다리는 robot_id
@@ -719,6 +721,8 @@ const visionView = createVisionView({ scope: pageScope, el, call, auth, authHead
 
 // --- 신호등 (ROSY-SIGNAL-001) --------------------------------------------------
 
+const trackingView = createTrackingView({ scope: pageScope, el, view, call, auth, onChanged: () => mapView.draw() });
+
 function tickClock() {
   el("clock").textContent = new Date().toTimeString().slice(0, 8);
 }
@@ -737,6 +741,8 @@ function saveToken() {
     sessionStorage.removeItem("rosy-console-token");
   }
   visionView.reset();
+  trackingView.reset();
+  trackingView.refresh();
   refreshAuthorization();
   visionView.refreshSources();
 }
@@ -760,6 +766,7 @@ render();
 refreshAuthorization();
 visionView.refreshSources();
 mapView.refresh();
+trackingView.refresh();
 pageScope.interval(() => { if (!auth.locked) formation.refreshFormation(); }, MAP_MS);
 pageScope.interval(refreshState, STATE_MS);
 pageScope.interval(() => signals.presence(), STATE_MS);
@@ -767,10 +774,13 @@ pageScope.interval(() => { if (!auth.locked) refreshDispatchControl(); }, STATE_
 pageScope.interval(refreshDiscovery, MAP_MS);
 pageScope.interval(() => mapView.refresh(), MAP_MS);
 pageScope.interval(() => mapView.refreshSightings(), STATE_MS);
+pageScope.interval(() => trackingView.refresh(), STATE_MS);
 pageScope.interval(() => visionView.refreshFrame(), 1500);
 
 pageScope.onResume(() => {
   visionView.reset();
+  trackingView.reset();
+  trackingView.refresh();
   refreshAuthorization();
   visionView.refreshSources();
   mapView.refresh();
