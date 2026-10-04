@@ -44,8 +44,8 @@ symlink/flock/systemd 제외는 Linux 실행·현장 검증으로 간주하지 �
 
 ### 기존 커밋의 안전 검토 기록
 
-이미 작성된 `7e34baacebc02dd6103dbdd17c5e861b92a02945`와
-`a4caeed0f5119df17f138203cd6e01eb373da671`은 안전 trailer가 없었다.
+이미 작성된 commit SHA `7e34baacebc02dd6103dbdd17c5e861b92a02945`와
+commit SHA `a4caeed0f5119df17f138203cd6e01eb373da671`은 안전 trailer가 없었다.
 독립 검토자 `Codex /root/pilot_review`가 실제 커밋과 현재 이동된 소스를
 대조해 각각 DNS-SD TXT/제한된 개발 접속/TLS/SSH 보호와 신선한 heartbeat의
 REST fallback을 확인했다. 펌웨어 interlock·기존 dispatch·CORE 최종 명령 권한은
