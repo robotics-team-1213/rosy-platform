@@ -157,6 +157,12 @@ def run(config, out):
     if content_sha(evalset) != evalset.name:
         raise JobError("evaluation content hash differs from version")
     dataset_doc = json.loads((dataset / "manifest.json").read_text())
+    sources = dataset_doc.get("sources", [])
+    sources = sources if isinstance(sources, list) else [sources]
+    if (dataset_doc.get("builder") == "review_dataset.py (D-464)"
+            or any(isinstance(source, dict)
+                   and source.get("annotation_origin") == "human_reviewed_pinky_indexed" for source in sources)):
+        raise JobError("independent indexed review training admission required")
     eval_doc = json.loads((evalset / "manifest.json").read_text())
     if eval_doc.get("purpose") != "eval":
         raise JobError("fixed evaluation dataset purpose required")

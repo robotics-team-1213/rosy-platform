@@ -106,3 +106,68 @@ def test_resume_uses_frozen_intake_proof_when_shared_report_changes(tmp_path):
         qualified = job.step("intake", lambda attempt: pytest.fail("do not repeat intake"))
     assert qualified["artifact"] == str(folder)
     assert "latency_ms_p50" not in json.loads((folder / "intake_report.json").read_text())
+
+
+def training_input(tmp_path, markers):
+    """Use content-addressed real dataset/eval folders and an ordinary strict gate."""
+    from store import Store, content_sha
+    store = Store(tmp_path / 'store')
+    source = tmp_path / 'dataset'
+    source.mkdir()
+    manifest = {'schema': 'rosy.perception.dataset/1', 'frames': [
+        {'session': 'train-session', 'split': 'train'}, {'session': 'val-session', 'split': 'val'}],
+        **markers}
+    (source / 'manifest.json').write_text(json.dumps(manifest), encoding='utf8')
+    _, digest = store.put_dataset(source, 'example')
+    evaluation = tmp_path / 'eval'
+    evaluation.mkdir()
+    (evaluation / 'manifest.json').write_text(json.dumps({'purpose': 'eval',
+        'frames': [{'session': 'held-out', 'split': 'eval'}]}), encoding='utf8')
+    fixed = evaluation.parent / content_sha(evaluation)
+    evaluation.rename(fixed)
+    evaluation = fixed
+    gate = tmp_path / 'gate.json'
+    gate.write_text(json.dumps({'require_eval': True, 'eval_set': str(evaluation),
+                               'min_lane_marking_iou': 0.1}), encoding='utf8')
+    camera = tmp_path / 'camera.json'
+    camera.write_text('{"accepted": false}', encoding='utf8')
+    return {'store': str(store.root), 'dataset': 'example@' + digest, 'gate': str(gate),
+            'replay_root': str(tmp_path), 'intake_out': str(tmp_path / 'intake'),
+            'camera_profile': str(camera), 'training': {'seed': 1, 'epochs': 1, 'lr': 0.001,
+            'batch_size': 1, 'base': 8, 'recipe': 'baseline'}}
+
+
+@pytest.mark.parametrize('markers', [
+    {'sources': [{'annotation_origin': 'human_reviewed_pinky_indexed'}]},
+    {'sources': {'annotation_origin': 'human_reviewed_pinky_indexed', 'training_admission': True}},
+    {'builder': 'review_dataset.py (D-464)'},
+    {'sources': [{'annotation_origin': 'human_reviewed_pinky_indexed'}],
+     'builder': 'review_dataset.py (D-464)', 'training_admission': True},
+])
+def test_indexed_artifact_cannot_start_job_even_with_caller_admission_flag(tmp_path, monkeypatch, markers):
+    import train_job
+    cfg = training_input(tmp_path, markers)
+    out = tmp_path / 'job'
+    def forbidden(*args, **kwargs):
+        pytest.fail('indexed artifact must be rejected before Job/GPU/model stages')
+    monkeypatch.setattr(train_job, 'Job', forbidden)
+    monkeypatch.setattr(train_job, 'gpu_lease', forbidden)
+    monkeypatch.setattr(train_job, 'publish_ready', forbidden)
+    with pytest.raises(JobError, match='independent indexed review training admission required'):
+        train_job.run(cfg, out)
+    assert not out.exists() and not Path(cfg['intake_out']).exists()
+    assert not list(Path(cfg['store']).rglob('READY'))
+
+
+@pytest.mark.parametrize('sources', [[{'sources': ['lidar']}], None])
+def test_automatic_dataset_still_reaches_existing_job_boundary(tmp_path, monkeypatch, sources):
+    import train_job
+    cfg = training_input(tmp_path, {'sources': sources,
+                                    'builder': 'build.py --auto-labels (D-379)'})
+    class ExistingJobBoundary(Exception):
+        pass
+    def boundary(*args, **kwargs):
+        raise ExistingJobBoundary
+    monkeypatch.setattr(train_job, 'Job', boundary)
+    with pytest.raises(ExistingJobBoundary):
+        train_job.run(cfg, tmp_path / 'job')

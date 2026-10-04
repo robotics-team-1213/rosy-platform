@@ -448,3 +448,9 @@
 - 변경: D-456의 typed 요청·승인·키 증명·단기 세션 계약을 공용 protocol에 두고 설정 overlay의 쓰기를 파일 잠금과 원자적 교체로 직렬화한다. CORE 전용 보조 Python 경로는 설치된 서명 release의 소유권·권한·경로·startup hook을 확인한다.
 - 증거: 통합본의 실제 P256·API·파일 삭제·서로 다른 프로세스 설정 쓰기·보조 경로 검사 32 PASS. 승인 저장 파일 전체 삭제 시 메모리 기록을 복구하지 않는 회귀 검사를 포함한다. subprocess에는 공용 패키지 PYTHONPATH를 명시했고 첫 환경 누락 실패를 원본으로 보존했다.
 - gate 변화: 이 변경의 SOURCE/LOCAL 확인. Linux 실권한·ARM import·서명 payload·실기 승인은 별도이며 과거 DEVICE 증거를 이번 연결 수용으로 사용하지 않는다.
+
+## 2026-10-05 · uncommitted · fix(test): config transaction 하위 프로세스의 현행 package 경로
+
+- 변경: config_transaction 동시 프로세스 시험이 contracts/foundation 경로를 자식 PYTHONPATH에 전달하며 기존 환경을 보존한다. config writer와 locking 구현 변경 없음.
+- 증거: main CI core-domain의 ModuleNotFoundError를 호스트에서 재현했다. 수리 후 config transaction·source encoding·시작점·review dataset·P6 묶음 42 passed, known_failures 신규 0.
+- gate 변화: LOCAL fixture 복구만. 실물 설정·주행·배포 수용 변경 없음.
