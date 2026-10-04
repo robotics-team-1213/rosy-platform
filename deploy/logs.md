@@ -2541,3 +2541,9 @@
 - 변경: D-456 서명 설치기의 일반 파일 기본 128KiB 제한은 유지하고 릴리스 manifest·checksum·서명 전후 비교에만 유한한 4MiB 제한을 적용한다. 경로·소유권·서명·claim·정지·동일 소스·기존 CA 보호는 유지한다.
 - 증거: 정확한 8a0929575의 ARM 빌드 성공, 두 로봇 각각 314개 ABI 일치, 2913개 서명 파일 검증, 실제 037 배포와 CORE 준비 성공. 실제 TLS 설치 전 검사는 일반 계정 소유 경로와 manifest 520894바이트/SHA256SUMS 383685바이트를 거절했다. 서명과 일치하는 기존 76파일·5경로만 root 소유로 보호했고 기존 root 소유 폐기 파일을 보존했다. 설정을 바꾸기 전 거절됐으므로 런타임을 복구하고 claim을 해제했다. 수정본의 실제 POSIX/OpenSSL 회귀 검사 32 passed/1 기존 skip, 크기 경계·일반 설정 기본 제한·4MiB 초과 거절을 포함한다.
 - gate 변화: SOURCE/LOCAL. 로봇 037 배포는 확인했지만 TLS·앱 승인·기억된 관계 재접속과 관제 카메라 승인은 아직 미검증이다. 서명 소스를 우회하는 파일 덮어쓰기로 실기 연결을 승격하지 않는다.
+
+## 2026-10-05 · uncommitted · fix(discovery): TLS 인증서 이름을 포함하는 로봇 검색 광고
+
+- 변경: D-456 boot-status가 공개 설정의 TLS 호스트 이름을 상태와 LAN TXT 광고에 전달한다. TLS 필수 모드에서 유효한 단일 `.local` 호스트만 표시하며 IP·외부 도메인·빈 이름·일반 HTTP의 TLS 이름 광고를 거절한다. 광고로 자격을 발급하거나 인증서 검증을 우회하지 않는다.
+- 증거: 실제 두 로봇의 정확한 ca1484c5b 서명 릴리스 038 배포·TLS 설치·CORE 준비 통과. 기존 운영자 기록을 보존했다. 관제의 실제 multicast 응답은 HTTPS 필수지만 인증서 이름 필드가 빠졌고 Tablet Pilot은 secure_host_missing으로 거절했다. 회귀 검사 수정 전 1 failed/0.21s, 최종 boot-status/state/TLS 관련 Windows 53 passed/3 기존 POSIX skip/0.82s. 기존 Cam의 승인된 ceiling_north 연결은 실제 앱에서 2.5–3.0fps 송출과 정지됨/0.0fps 복귀를 확인했다. 마커 인식은 수신기에서 보고되지 않았다.
+- gate 변화: SOURCE/LOCAL 및 명시된 038 TLS·기존 Cam 송출 DEVICE 증거. 새 검색 필드의 서명 배포 후 실제 Pilot 승인·기억된 관계 재접속과 관제 신규 Camera Peer 승인은 별도다.
