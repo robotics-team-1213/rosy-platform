@@ -5376,6 +5376,13 @@ osy-d395-s1d\`.
 - 결정: D-444 R1 앞조항 관측 완료. 남은 P1 조각: 그 payload를 탄 기기/컨테이너의 GET 200+CSP(P1.2).
 - 교훈: 릴리스 제목은 서명 상태를 말해야 한다 — 제목은 사람이 목록을 읽는 유일한 곳일 수 있다.
 
+## 2026-10-04 · uncommitted · docs(adr): D-454 중앙 Fleet 착수
+
+- 변경: `docs/adr/D-454-central-fleet-commencement-seed-growth-and-prt004-order.md` 추가(Accepted, 사용자 지시 "착수해"). D-445가 예약한 착수 ADR이다. 결정: 중앙 Fleet은 시드(`operations/fleet`) 위 성장(새 트리 없음, 배포 프로파일만 다름), 단계 순서 §10.1 레지스트리 → §10.2 명령 추정·PRT-004 활성화(D-170·D-297 유보 해제) → §10.3 미션/대형 → §10.4 지도/백업 → §10.5 사건/감사, (2)단계 착공 전 D-426 ROS-SIM 선행, DEVICE/FIELD 승격 주장 없음. 전제 상태 기록: ③ 관측(서명 후보 5건), ①② 사다리 병행. 번호 D-448–D-453은 여섯 갈래가 써서 D-454 사용.
+- 증거: 서명 후보 관측(docs/validation/web-artifact-observation-2026-10-04), lint 0 errors.
+- gate 변화: 없음. 문서 결정.
+- 결정: D-454 Accepted. 1단계 설계 문서 착수가 다음 행위.
+
 ## 2026-10-04 · uncommitted · docs(adr): D-451 한 줄 교착의 양보는 Fleet 알고리즘이 고른다
 
 - 변경: `docs/adr/D-451-fleet-lane-meet-decider.md` 와 ADR Log 행. 만나는 양보는 `operations/fleet/fleet/meet` 만 고르고, 로봇은 그 주문 하나를 실행하거나 CORE 재검사로 거부한다. `room_hold`·`wait_both` 와 260919 `track_v2` 숫자를 고정했다. D-448·D-449·D-450 은 다른 브랜치 번호라 `adr_gaps` 에 남겼다.

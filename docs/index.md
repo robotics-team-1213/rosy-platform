@@ -199,6 +199,7 @@
 | D-450 | 팔레타이징 앱은 화면의 한 작업 흐름과 박스 전용 Gazebo 수용을 먼저 완성한다 |
 | D-451 | 한 줄에서 만나는 양보는 Fleet 알고리즘이 고르고, 로봇은 그 한 수를 실행하거나 거부한다 |
 | D-453 | 양보 한 구간은 기존 막힘 답 YIELD 로 보내고, CORE 는 돌려 확인한 뒤 앞으로만 간다 |
+| D-454 | 중앙 Fleet 착수 — 시드(`operations/fleet`) 위 성장, 단계 순서 §10.1 레지스트리 → §10.2 명령 추적·PRT-004 활성화(D-170·D-297 유보 해제) → §10.3 미션/대형 → §10.4 지도/백업 → §10.5 사건/감사. (2)단계 착공 전 D-426 ROS-SIM 선행 |
 
 ## 계획·결과 문서
 
@@ -290,6 +291,6 @@
 
 - 2026-10-04 · uncommitted · feat(fleet): D-453 양보 한 구간
 - 2026-10-04 · uncommitted · docs(adr): D-451 한 줄 교착의 양보는 Fleet 알고리즘이 고른다
+- 2026-10-04 · uncommitted · docs(adr): D-454 중앙 Fleet 착수
 - 2026-10-04 · uncommitted · docs(validation): 웹 표면 ARTIFACT 관측 회차 — 서명 payload 안 share/ 확인 (D-444 P1)
 - 2026-10-04 · uncommitted · D-452 승인 다른 망 경로와 선택 CLI
-- 2026-10-04 · uncommitted · D-427 wave5 signed native and actual offline SD readback
