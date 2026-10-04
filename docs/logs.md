@@ -5142,3 +5142,9 @@
 - 변경: history append 뒤 lock 안에서 sync-f를 수행하고 실패 시 exit3/durability unknown을 보고한다.
 - 증거: Linux scratch 실패 주입에서 변경된 pointer와 유지된 HOLD를 확인했다. Linux 관련 6 suites 208pass/0skip, 독립 호스트 검토77pass/19skip. 실제 관제 전용 키 publickey 인증·host pin·LAN 기본 별칭도 검증했다. 근거: validation/model-delivery-attempt-journal-2026-10-04.md.
 - gate 변화: model-watch는 아직 not-found이며 실제 로봇 전달/rollback·사람 라벨·정책/Fleet/DEVICE/FIELD 및 전체 목표는 미완료다.
+
+## 2026-10-04 · uncommitted · fix(learning): restore model-watch placement to Accepted D-434
+
+- 변경: 관제 상시 watch 설치 후보가 D-434 및 계획 M1.5와 충돌한 것을 확인하고 요청을 철회했다. 원본과 SHA를 보존한 관제 installer는 즉시 중단한다. 기존 관제 intake는 과거 별도 재현 증거로 명시했다. 모델 PC용 pinned source/offline dependency 설치 후보를 준비했다.
+- 증거: 모델 PC system unit/경로 not-found 확인, 온라인 PyPI timeout terminal 확인 후 offline wheel10개/archive SHA 검증, 별도 venv sync/check/CPU imports/journal fsync/installer dry-run exit0. Python base는 /usr/bin/python3.12다. 실제 sudo와 물리 명령은 미실행이다. 근거: validation/model-watch-placement-correction-2026-10-04.md.
+- gate 변화: D-434 배치를 복구했다. 실제 모델 PC system 설치·canonical store/eval/history 연결·robot shadow/rollback·사람 라벨·owner/Fleet/DEVICE/FIELD와 전체 목표는 미완료다.

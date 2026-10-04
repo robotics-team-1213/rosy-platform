@@ -54,3 +54,10 @@ exit 0이지만 Tailscale SSH 인증이며 일반 OpenSSH 서버는 미설치다
 원본 증거는 X:/DevTemp/rosy-learning-audit-20261004/whole-recording-job-evidence와
 site-intake-evidence에 있다. 실제 사람 라벨·새 클래스 평가, 상시 watcher, shadow/rollback,
 OMX/Pinky owner 실행·Fleet 결과 및 DEVICE/FIELD 수용은 미완료다.
+
+## 후속 배치 정정
+
+관제의 intake 결과는 당시 별도 재현 증거로 보존한다. 상시 설치 대상은 Accepted
+D-434의 모델 PC다. 관제 installer 요청은 실제 system 설치 전에 철회했다.
+현재 모델 PC 환경 준비와 남은 실행 단계는
+[배치 정정 기록](model-watch-placement-correction-2026-10-04.md)을 따른다.

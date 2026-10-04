@@ -280,8 +280,8 @@
 
 ## 최근 기록
 
+- 2026-10-04 · uncommitted · fix(learning): restore model-watch placement to Accepted D-434
 - 2026-10-04 · uncommitted · fix(learning): synchronize pointer history before acknowledgement
 - 2026-10-04 · uncommitted · docs(validation): compare ACT40 and400 steps
 - 2026-10-04 · uncommitted · fix(execution): bind camera candidates to original receipt times
 - 2026-10-04 · uncommitted · docs(validation): measure actual OMX SIM capture freshness
-- 2026-10-04 · uncommitted · fix(execution): preserve bounded policy source observations

@@ -28,3 +28,10 @@ site-watch-candidate-v3에 있으며 마지막 디렉터리 안에 v4 결과를 
 model-watch 실제 서비스/계정 실행, robot key/host pin, 현재 로봇 통신,
 shadow loader/rollback, 사람 라벨과 policy/owner/Fleet 인증 결과는 남는다.
 운영 주행, HOLD 해제와 물리 명령은 실행하지 않았다.
+
+## 배치 정정
+
+이 문서의 관제 venv/dry-run은 당시 별도 재현 증거다. Accepted D-434와 계획 M1.5는
+상시 model-watch를 모델 PC에 둔다. 관제 관리자 설치 후보는 실제 system 설치 전에
+철회하고 중단시켰다. 현재 설치 대상과 증거는
+[배치 정정 기록](model-watch-placement-correction-2026-10-04.md)을 따른다.
