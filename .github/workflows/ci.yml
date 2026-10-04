@@ -124,8 +124,10 @@ jobs:
           # 두 벌 깔리지 않는다. 해시가 있는 파일을 제약으로 주면 pip 이 해시 모드로 바뀌므로
           # name==version 줄만 뽑는다.
           grep -o '^[A-Za-z0-9._-]*==[^ ]*' deploy/robot/pinky_pro/image/device-python-requirements.txt > /tmp/rosy-runtime-constraints.txt
+          # Match the signed receiver auxiliary runtime: Ubuntu's older cryptography
+          # lacks x509.verification used by the private TLS anchor (D-456).
           pip3 install --no-cache-dir --break-system-packages -c /tmp/rosy-runtime-constraints.txt \
-            flake8 httpx pyyaml jsonschema ext4
+            flake8 httpx pyyaml jsonschema ext4 cryptography==49.0.0
 
       - name: Install Pinky raw verification tools
         if: contains(toJSON(matrix.invocations), 'learning/curation/pinky') || contains(toJSON(matrix.invocations), 'learning/training/pinky')
