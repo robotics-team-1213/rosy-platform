@@ -338,15 +338,17 @@ class HttpRobotClient:
         import websockets
         from websockets.exceptions import ConnectionClosed
 
-        from fleet.swarm.discovery_transport import resolve_robot, tls_context
-        context = tls_context(self._ep)
+        from fleet.swarm.discovery_transport import resolve_robot
+        context = self._socket_context()
         options = {'ssl': context} if context else {}
         if self._ep.discovery:
             address, port = await resolve_robot(self._ep)
             from urllib.parse import urlsplit
             options.update(host=address, port=port, server_hostname=urlsplit(url).hostname)
+            await self._socket_admission(address, port)
         ws = await websockets.connect(url, proxy=None, logger=_ws_log, **options)
         try:
+            self._socket_auth_admission()
             await ws.send(json.dumps({"type": "auth", "token": self._ep.token}))
         except ConnectionClosed:
             # Already closed by the robot: reading the socket surfaces the close
@@ -356,6 +358,16 @@ class HttpRobotClient:
             await ws.close()
             raise
         return ws
+
+    async def _socket_admission(self, address: str, port: int) -> None:
+        """Enrolled clients may require identity admission before the auth frame."""
+
+    def _socket_auth_admission(self) -> None:
+        """Enrolled clients recheck their gate after the connection await."""
+
+    def _socket_context(self):
+        from fleet.swarm.discovery_transport import tls_context
+        return tls_context(self._ep)
 
     async def pose_stream(self) -> AsyncIterator[str]:
         """리더 pose 프레임(텍스트). 소켓이 닫히면 끝난다 — 재연결은 호출자 몫.

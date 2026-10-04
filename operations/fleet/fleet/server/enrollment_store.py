@@ -169,6 +169,11 @@ class EnrollmentStore:
                     created_at REAL NOT NULL,
                     updated_at REAL NOT NULL
                 );
+                CREATE TABLE IF NOT EXISTS robot_enrollment_tls (
+                    robot_id TEXT PRIMARY KEY,
+                    origin TEXT NOT NULL,
+                    ca_sha256 TEXT NOT NULL
+                );
                 """
             )
             ensure_device_pairing_audit(connection)
@@ -244,6 +249,26 @@ class EnrollmentStore:
         with closing(self._connect()) as connection:
             with connection:
                 connection.execute("DELETE FROM robot_enrollments WHERE robot_id=?", (robot_id,))
+                connection.execute("DELETE FROM robot_enrollment_tls WHERE robot_id=?", (robot_id,))
+
+    def tls_markers(self) -> dict[str, dict]:
+        with closing(self._connect()) as connection:
+            return {row['robot_id']: dict(row) for row in connection.execute(
+                'SELECT robot_id, origin, ca_sha256 FROM robot_enrollment_tls')}
+
+    def remember_tls(self, markers: list[dict]) -> None:
+        """Atomic downgrade fence only; never reseals or changes an enrolled credential."""
+        with closing(self._connect()) as connection:
+            with connection:
+                ids = {row[0] for row in connection.execute('SELECT robot_id FROM robot_enrollments')}
+                existing = {row['robot_id']: dict(row) for row in connection.execute(
+                    'SELECT robot_id, origin, ca_sha256 FROM robot_enrollment_tls')}
+                for marker in markers:
+                    if marker['robot_id'] not in ids or (marker['robot_id'] in existing
+                                                         and marker != existing[marker['robot_id']]):
+                        raise ValueError('TLS transport marker conflicts with enrolled identity')
+                connection.executemany('INSERT OR IGNORE INTO robot_enrollment_tls VALUES (?, ?, ?)',
+                                       [(m['robot_id'], m['origin'], m['ca_sha256']) for m in markers])
 
     def audit(self, *, action: str, outcome: str, principal_id: str | None,
               target: str | None, device_kind: str = ROBOT) -> None:
