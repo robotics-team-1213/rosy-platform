@@ -70,8 +70,8 @@
 
 ## 최근 기록
 
+- 2026-10-04 · uncommitted · fix(camera): 시작 중 반복 부팅 보호
 - 2026-10-04 · uncommitted · fix(site): 서명된 후보의 제목·설명이 서명 상태를 말한다
 - 2026-10-04 · uncommitted · feat(omx): 정본 G2 격리 실행기
 - 2026-10-04 · uncommitted · fix(ci): 두 Android 앱의 실제 wrapper 선택
 - 2026-10-04 · uncommitted · fix(g2): provision the per-instance IPC directory before startup
-- 2026-10-04 · uncommitted · fix: protect the full model-PC code closure

@@ -16,6 +16,11 @@ class CentralRegistry:
         self._console = console
         self._discovery = discovery
 
+    @property
+    def roster(self):
+        """§10.1 등록 해제(REG-001a)가 부르는 로스터 정본."""
+        return self._roster
+
     def _hub_record(self, robot_id: str):
         hub = getattr(self._console, "hub", None) if self._console is not None else None
         registry = getattr(hub, "registry", None) if hub is not None else None

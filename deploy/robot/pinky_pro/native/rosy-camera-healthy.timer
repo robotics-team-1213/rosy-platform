@@ -1,0 +1,10 @@
+[Unit]
+Description=ROSY optional camera startup survival observation
+BindsTo=rosy-camera.service
+After=rosy-camera.service
+PartOf=rosy-camera.service
+
+[Timer]
+OnActiveSec=90
+AccuracySec=1
+Unit=rosy-camera-healthy.service
