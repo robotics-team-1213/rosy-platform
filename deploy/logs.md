@@ -2260,3 +2260,9 @@
 - Change: Rebase model-PC signed updates onto remote main; preserve committed records and use middleware/perception and contracts/foundation source closure.
 - Evidence: Model-PC Linux tests 34 passed; Windows tests 13 passed, 21 Linux-only skips. Rollback bootstrap supports the already installed previous layout; its regression test failed before the fix. Remote CI and first migrated-source activation are pending.
 - gate 변화: None. Existing data, credentials, GPU environment and model promotion remain separate.
+
+## 2026-10-04 · uncommitted · D-446 clean older checkout permits signed execution
+
+- Change: Protect uncommitted entrypoint edits without blocking an approved update from a clean older checkout.
+- Evidence: Regression failed before the fix. Windows 14 passed, 21 Linux-only skips; model-PC Linux 35 passed.
+- gate 변화: None. Remote CI and migrated-source device activation remain separate.
