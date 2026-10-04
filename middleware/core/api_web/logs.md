@@ -484,3 +484,10 @@
 - 변경: FastAPI 설명과 module docstring의 v1.93을 현재 API Ref v1.94에 맞췄다. runtime endpoint·envelope·권한은 변경하지 않는다.
 - 증거: 최종 fast gate의 버전 불일치 실패를 재현했고 관련 계약 검사를 재실행한다. 공개 APK SHA-256·commit 값은 원값을 유지하며 같은 줄에 출처 표기를 명확히 했다. secret scanner 예외는 추가하지 않는다.
 - gate 변화: SOURCE 정렬이며 LOCAL 재검증·원격 CI·DEVICE·FIELD는 별도다.
+
+## 2026-10-04 · uncommitted · feat(api): D-343 로비 잔여 — `GET /api/v1/site/rooms`
+
+- 변경: `api/v1/rooms.py` 신설 — Viewer 인증 없이 읽는 공개 방 목록(Avahi `_rosy._tcp` 탐색 + `discovery_txt.classify`, 행은 hostname/address/port/kind/url만, 토큰·비밀 없음 D-193). URL은 그 기기의 pilot 진입(`http://<hostname>.local:<port>/pilot/#join`, CORS를 열지 않는다). Avahi 없음은 503 `DISCOVERY_UNAVAILABLE`(왜 없는지를 숨기지 않는다). routes 애그리게이터·`app.py` 등록. API Ref §5.11 신설(D-18 문서 주기).
+- 증거: `test/test_site_rooms.py` 4 passed(방 모양·분류기 거절·200·503). api_web 전체 77 passed/13 skipped, gateway 비ROS 수집 오류는 휠 부재(main 동일). flake8 0.
+- gate 변화: 없음. 호스트 계약. 운전석 임대(2.4)·MJPEG(2.3)·PWA 로비 화면(2.1)은 뒤 작업.
+- 결정: D-343 계획 §4 순서 2. PWA 화면·관전 모드·좌석은 D-343 §2.1·2.5의 뒤 작업.

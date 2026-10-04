@@ -27,6 +27,7 @@ from core_api_web.api.v1.observability import (
     metrics_router,
 )
 from core_api_web.api.v1.robot import power_router, robot_router, sensors_router
+from core_api_web.api.v1.rooms import rooms_router
 from core_api_web.api.v1.safety import safety_router
 from core_api_web.api.v1.swarm import swarm_router
 from core_api_web.api.v1.system import system_router
@@ -56,6 +57,7 @@ __all__ = [
     "power_router",
     "recordings_router",
     "robot_router",
+    "rooms_router",
     "safety_router",
     "sensors_router",
     "slam_router",

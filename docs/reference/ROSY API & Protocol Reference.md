@@ -446,7 +446,16 @@ v1.70 추가 경로(모두 Bearer 인증):
 - tar 의 마지막 바이트가 나간 녹화만 CORE 가 `pilot_recorder/fetched`(`{id}`)로 알리고, 녹화기가 `fetched.json` 을 써 쿼터 정리 대상으로 삼는다. 받지 않은 녹화는 지우지 않는다.
 - 저장 위치는 `/var/lib/rosy/pilot-recordings`(설정 `recording.pilot_root`): `rosy-camera` 가 쓰고 setgid `rosy-core` 그룹으로 CORE 가 읽기만 한다.
 
-`teleop/intent`(ROS `std_msgs/String` JSON, `rosy.teleop.intent/1`)는 CORE 가 teleop 판정마다 낸다 — 관리자 앞 거부(capability·보정 lease·keep)도 포함. 싱크 실패는 명령을 거부하지 않는다.
+`teleop/intent`(ROS `std_msgs/String` JSON, `rosy.teleop.intent/1`)는 CORE 가 teleop 판정마다 낸다 — 관리자 앞 거부(capability·보정 lease·keep)도 포함. 싱크 실패는 명령을 거부하지 않는다. 수신 중에도 정지 조건을 블록마다 다시 보고, 깨지거나 파일이 계획과 달라지면(링크·교체·크기) 본문을 `Content-Length` 보다 짧게 끊는다. 짧은 본문은 실패이며, tar 는 이어 받을 수 없으므로 나중에 처음부터 다시 받는다.
+
+## 5.11 Pilot 방 목록 — `GET /api/v1/site/rooms` (D-343 1·2, v1.92)
+
+브라우저는 mDNS 를 못 하므로 각 CORE 가 Avahi 로 `_rosy._tcp` 탐색을 대신 한다.
+행은 발견 규칙 v0.1의 공개 정보만 싣는다 — 토큰·비밀은 싣지 않는다(D-193).
+
+| Method | 경로 | 권한 | 요청/응답 |
+|---|---|---|---|
+| GET | `/api/v1/site/rooms` | Viewer | `{rooms: [{hostname, address, port, kind, url}]}` — `url`은 그 기기의 pilot 진입(`http://<hostname>.local:<port>/pilot/#join`). Avahi 가 없으면 503 `DISCOVERY_UNAVAILABLE`. `Cache-Control: no-store`. |
 
 | 필드 | 형 | 의미 |
 |---|---|---|
