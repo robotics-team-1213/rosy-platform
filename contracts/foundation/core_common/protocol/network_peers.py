@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import ipaddress
 import re
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -106,3 +106,15 @@ class PeerCatalogue(BaseModel):
     peers: list[PeerSummary] = Field(default_factory=list, max_length=64)
     scanner_state: Literal['never_seen', 'online', 'expired'] = 'never_seen'
     scanner_age_s: float | None = Field(default=None, ge=0, allow_inf_nan=False)
+
+
+class DiscoveryScanPayload(BaseModel):
+    """Host scanner hints; services exclude robot duplicates and client sessions."""
+    devices: list[dict[str, Any]] = Field(max_length=64)
+    services: list[PeerObservation] = Field(default_factory=list, max_length=64)
+
+    @model_validator(mode='after')
+    def total_scan_budget(self):
+        if len(self.devices) + len(self.services) > 64:
+            raise ValueError('combined discovery scan exceeds 64 observations')
+        return self

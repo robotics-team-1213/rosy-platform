@@ -114,6 +114,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                start_task_dispatcher: bool = True,
                site_users: Optional[Mapping[str, Mapping[str, str]]] = None,
                discovery=None, discovery_token: Optional[str] = None,
+               approved_peer_directory_file: Optional[Path] = None,
                vision_lease_secret: Optional[str] = None,
                vision_sources: tuple[str, ...] = (),
                omx_instances: Optional[Mapping[str, str]] = None,
@@ -445,11 +446,18 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     read_guard = [Depends(require_viewer)]
     operator_guard = [Depends(require_operator)]
 
+    from fleet.server.peer_catalogue import PeerCatalogueStore
+    from fleet.server.peer_directory import load_approved_peer_directory
+    from fleet.server.peer_routes import install_peer_routes
+    catalogue = PeerCatalogueStore()
+    install_peer_routes(app, catalogue=catalogue, console=console, enrollment=enrollment,
+                        pairing=pairing, read_guard=read_guard,
+                        directory_rows=load_approved_peer_directory(approved_peer_directory_file))
     if discovery is not None:
         install_discovery_routes(app, console=console, hub=hub, discovery=discovery,
                                  discovery_token=discovery_token, enrollment=enrollment,
                                  principals=principals, require_viewer=require_viewer,
-                                 read_guard=read_guard)
+                                 read_guard=read_guard, catalogue=catalogue)
 
     if enrollment is not None:
         from fleet.server.enrollment_routes import install_enrollment_routes

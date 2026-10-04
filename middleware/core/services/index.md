@@ -37,8 +37,8 @@
 
 ## 최근 기록
 
+- 2026-10-04 · uncommitted · D-452 승인 Fleet 발견 우선
 - 2026-10-04 · uncommitted · feat(power): long testing dwell with low battery saving
 - 2026-10-04 · uncommitted · feat(power): fresh battery evidence and idle saving
 - 2026-10-04 · uncommitted · fix(vision): preserve fresh overexposed quality
 - 2026-10-04 · uncommitted · feat(vision): 같은 capture의 bounded raw/annotation pair
-- 2026-10-04 · uncommitted · fix(line-follow): 저조도 정지와 recovery 차단

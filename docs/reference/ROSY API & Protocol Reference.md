@@ -1520,6 +1520,13 @@ unicast 힌트로 표시할 수 있다. 둘 다 역할별 정본 service type과
 선택 이후 접속·쓰기·SSH 배포는 각 endpoint의 기존 인증과 운영자 권한을 그대로 적용한다.
 다른 망의 approved DNS/profile 경로와 실제 연결 수락은 이 LAN 조회의 성공만으로 증명하지 않는다.
 
+관제의 `--approved-peer-directory-file`은 배포 관리자가 준비한 metadata-only JSON 배열을
+시작 시 읽는다(예: `deploy/site/approved-peers.json.example`). 최대 64행·1 MiB이며
+각 행은 approved-directory/approved, unknown readiness와 unavailable freshness만 허용한다.
+중복 JSON 키·신원·역할/hostname 소유 충돌·credential/extra·허위 live 상태는 시작을 거부한다.
+이 파일은 토큰을 발급하거나 기존 endpoint를 변경하지 않으며 쓰기 API가 없다. 이후 접속은
+해당 장비 owner의 기존 승인 profile과 인증을 따른다. IP/URL 가져오기는 운용자의 정상 선택 단계가 아니다.
+
 MODEL은 `_rosy-model._tcp`, `product=rosy`, `role=model-host`, `proto=ssh/2`,
 `tls=none`, `transport=ssh`를 필수로 광고한다. 실제 sshd listener의 SRV port만 제공하며
 추론 HTTP API가 아니다. `tls=none`은 SSH 호스트 키 인증을 생략한다는 뜻이 아니다.

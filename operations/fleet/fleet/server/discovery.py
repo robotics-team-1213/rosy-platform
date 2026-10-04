@@ -48,6 +48,9 @@ class DiscoveryStore:
             hostname = device.get("hostname", "")
             address = device.get("address")
             port = device.get("port")
+            transport = device.get('transport')
+            if transport is not None and transport not in ('http', 'https'):
+                raise ValueError('invalid robot discovery transport')
             if (not isinstance(name, str) or not name or len(name) > 96
                     or any(ord(char) < 32 for char in name)):
                 raise ValueError("invalid discovery name")
@@ -70,9 +73,12 @@ class DiscoveryStore:
             release = device.get("release", "")
             if any(not isinstance(value, str) or len(value) > 96 for value in (stage, release)):
                 raise ValueError("invalid discovery metadata")
-            rows.append({"name": name, "hostname": result.host or "",
+            row = {"name": name, "hostname": result.host or "",
                          "address": str(ip), "port": port,
-                         "stage": stage, "release": release})
+                         "stage": stage, "release": release}
+            if transport is not None:
+                row['transport'] = transport
+            rows.append(row)
         # One service may appear on several interfaces; identical addresses collapse.
         self._rows = list({(row["name"], row["address"], row["port"]): row
                            for row in rows}.values())

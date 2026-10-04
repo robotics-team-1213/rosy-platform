@@ -493,3 +493,9 @@
 - 변경: 정상 IDLE/STANDBY 기준을 600/1800초로 늘리고 warning60/300, critical/deep30/120초와 min을 취한다. YAML override·API effective timers에 연결한다. 기존 이동·정보 hold·disabled와 배터리 정지/종료 권한을 유지한다.
 - 증거: 주입 시계·설정 parser RED3 failed, 전원/배터리/bridge GREEN180 passed. 구조 재판정은 docs/plans/2026-10-04-power-health-and-wake.md에 기록한다.
 - gate 변화: SOURCE/LOCAL. 기기 소비전력·물리 wake·배포 검증은 별도다.
+
+## 2026-10-04 · uncommitted · D-452 승인 Fleet 발견 우선
+
+- 변경: 지속 token과 hostname/CA pin이 있는 Agent는 legacy hub URL보다 발견을 우선하고 잘못된 pin/충돌/신뢰 실패에 우회하지 않는다.
+- 증거: focused60 PASS 및 독립 source SPEC·Quality·Safety review PASS, source-checkpoint.md.
+- gate 변화: SOURCE/LOCAL focused; 실제 robot/Fleet 연결·다른 망 실행 수락은 별도.
