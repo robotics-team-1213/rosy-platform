@@ -5126,3 +5126,8 @@
 
 - 인계된279 PNG/6영상·sidecar 해시를 모델 PC에서 재검증하고 provenance queue/CVAT원본PNG ZIP/gallery/receipt를 생성했다. 기존 학습 manifest snapshot의 세션 중복183, 고정평가 세션 중복0, 사람승인0/train qualified false다. 새홀드아웃으로 승인하지 않는다.
 - CVAT이름충돌 실패를 독립검토에서 재현 후 차단했다. 실제279 ZIPentry bytehash/CRC 독립확인. 근거: validation/edge-candidate-review-intake-2026-10-04.md. CVAT마스크 반환→PNG바인딩/사람승인/학습형식연결은 남아 있으며 어두운장면 개선은 후속ADR범위다. 전체목표 미완료.
+
+### 2026-10-04 · uncommitted · feat(learning): bind human CVAT masks to original PNG datasets
+
+- receipt 검증→image/mask hash·전체화면/배경 명시 승인→고정eval버전/세션 검증→원본PNG/frames.jsonl 반환→기존builder 입력을 연결했다. builder에서도 human mask/labelmap/classes 바인딩을 재검증하며 승인자료변경·eval재읽기교체·메타누락을 거절한다.
+- root관련73pass/1skip, 독립64pass/1skip, 합성2세션 승인반환→PNGdataset/session split/fixedeval분리 positive 검증. 실제모델PC279 pending반환 exit0/export0/queue279/trainfalse/라벨입력없음. 근거: validation/edge-mask-return-and-png-build-2026-10-04.md. 실제사람검수·학습/장치/Fleet/전체목표 미완료.
