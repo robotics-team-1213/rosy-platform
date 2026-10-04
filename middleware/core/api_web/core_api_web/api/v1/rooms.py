@@ -31,7 +31,9 @@ class _Unavailable(Exception):
 
 
 def _rooms(devices):
-    found, identities, conflicts = {}, {}, set()
+    found = {}
+    identities = {}
+    conflicts = set()
     for device in devices:
         if discovery_txt.normalize_service_type(device.service_type) != _ROBOT_SERVICE:
             continue
@@ -54,17 +56,17 @@ def _rooms(devices):
                 continue
             scheme = "https" if verdict.txt.get("tls") == "required" else "http"
             signature = (address, device.port, scheme, identity)
-            if host in found and found[host][0] != signature:
+            if host in found and found[host]["signature"] != signature:
                 conflicts.add(host)
                 continue
             elif host not in found:
                 if len(found) >= _MAX_ROOMS:
                     continue
-                found[host] = (signature, {"hostname": host, "address": address,
+                found[host] = {"signature": signature, "room": {"hostname": host, "address": address,
                                            "port": device.port, "kind": "robot",
-                                           "url": f"{scheme}://{host}:{device.port}/pilot/#join"})
+                                           "url": f"{scheme}://{host}:{device.port}/pilot/#join"}}
                 identities[identity] = host
-    return [found[host][1] for host in sorted(found) if host not in conflicts]
+    return [found[host]["room"] for host in sorted(found) if host not in conflicts]
 
 
 def _parse_avahi(output):

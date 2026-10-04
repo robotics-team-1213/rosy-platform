@@ -2422,3 +2422,9 @@
 - 증거: `test_payload_boot_smoke_workflow.py` 6 passed(수동 전용·arm 러너·비밀 부재·3 프로브·CSP·부팅 핀·로그 업로드), `test_ci_dependencies.py` 9 passed 회귀 없음. Windows Docker 호스트의 arm64 에뮬레이션 벤치는 binfmt 유실로 반복 불능이었다(2026-10-04 3회 유실 — 벤치 로그 X:/DevTemp/opencode/p12-bench) — payload 파이썬 진입점이 노드 구축까지 도달했음은 확인했다.
 - gate 변화: dashboard·pilot ARTIFACT의 "기기 GET 200" 조항이 이 워크플로 실행으로 관측될 수 있게 되었다(첫 실행은 별도).
 - 결정: D-444 P1.2, D-161(native arm64). 로컬 에뮬레이션은 폐기하고 러너 벤치가 정본이다.
+
+## 2026-10-04 · uncommitted · fix(provenance): 검토된 공개 출처 해시를 정확한 행에 결속
+
+- 변경: 실제 공개 git commit/tree와 이미 검토한 normalized journal 무결성 digest14개 행의 path/line SHA/value를 기존 public_provenance 정본에 추가했다. 일반 credential shape·알 수 없는 entropy·변경된 행은 계속 검출한다. scanner 규칙/전역 예외는 늘리지 않는다.
+- 증거: normal pre-push의13개 공개 해시 진단과 같은 알려진 hash가 있는1개 추가 행을 확인했다. 40자 값은 실제 git object의 commit/tree다. 정확한 결속·stale/변경/credential 거부 회귀와 protocol/event/rooms 포함114 PASS로 검사했다.
+- gate 변화: SOURCE/LOCAL 출처 정합. 실제 signing key·장치 자격은 읽거나 변경하지 않았다.
