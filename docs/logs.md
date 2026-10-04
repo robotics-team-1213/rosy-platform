@@ -4944,3 +4944,9 @@
 - 변경: 검증된 계약 타입·실제 wheel 전달 source·Pinky 원본 single-use 래퍼와 push3 경로/recorder 수정 커밋을 Accepted ADR·U1/U3·신호/충전/POLICY 후보에 합쳤다. 기존 append 로그는 보존하고 이번 suffix만 LF로 정리했다.
 - 증거: 최종 관련255 passed, NEW0. docs/validation/d427-source-migration/pinky-safety-integration-2026-10-04.md에 승인된 원본/통합 커밋 대응을 고정했다. 이전 실패 push를 통과로 쓰지 않는다.
 - gate 변화: 없음. 최신 committed SHA enforced push·CI·ARM64/SD/033 parity·서명 release·DEVICE/FIELD는 계속 별도 gate다.
+
+## 2026-10-04 · uncommitted · D-427 push4 fast gate follow-up
+
+- 변경: U1 순수 서비스 동작 시험을 services 소유 폴더로 나누고 gateway는 실제 HTTP 준비/거부를 검증한다. frozen 예외 집합은 늘리지 않았다. D-442의 정확한 writer 포트 타입 이름만 literal gate에서 허용하고 내부 revision은 장치 중립 이름으로 고쳤다.
+- 증거: push4 빠른검사2 failed/457 passed라 push는 거부됐다. 수정 후30 passed·flake0, robot 설정문자열은 계속 검출한다. docs/validation/d427-source-migration/push4-fast-gate-corrections-2026-10-04.md.
+- gate 변화: 없음. 다음 SHA 강제검사·CI·artifact·device는 별도 gate다.

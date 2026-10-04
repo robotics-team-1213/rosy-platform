@@ -9,6 +9,8 @@ the de-Pinky work (plan P5).
 import re
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[1]
 
 BACKLOG = Path(__file__).with_name("robot_literal_backlog.txt")
@@ -23,6 +25,21 @@ HOME_PREFIXES = ("src/products/pinky_pro/", "middleware/apps/device/pinky/bringu
 SCAN_ROOTS = ("src", "operations", "middleware", "contracts", "shared", "integrations")
 
 
+@pytest.mark.parametrize("text,expected", [("class PinkyTwistPort: pass", False),
+                                           ('class PinkyTwistPort: pass\nDEFAULT_MODEL="pinky_pro"', True),
+                                           ('GUARD_REVISION="pinky-anything"', True)])
+def test_writer_binding_type_name_never_exempts_robot_configuration_literals(text, expected):
+    assert _has_robot_literal("middleware/core/gateway/core/bridge/cmd_vel.py", text) is expected
+
+
+def _has_robot_literal(path, text):
+    # Accepted D-442 U2 places this exact binding type beside the existing
+    # writer. Exempt its type name only, never the file or other robot values.
+    if path == "middleware/core/gateway/core/bridge/cmd_vel.py":
+        text = re.sub(r"\bPinkyTwistPort\b", "DeviceTwistPort", text)
+    return PATTERN.search(text) is not None
+
+
 def hits() -> set:
     found = set()
     for path in (path for root in SCAN_ROOTS for path in (ROOT / root).rglob("*")):
@@ -34,7 +51,7 @@ def hits() -> set:
         key = rel.as_posix()
         if key.startswith(HOME_PREFIXES):
             continue
-        if PATTERN.search(path.read_text(encoding="utf-8", errors="ignore")):
+        if _has_robot_literal(key, path.read_text(encoding="utf-8", errors="ignore")):
             found.add(key)
     return found
 

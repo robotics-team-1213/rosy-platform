@@ -25,7 +25,7 @@ from rosy.contracts.motion import (BaseTwist, EstopStatus, GuardedMotion, Motion
 
 
 # Stage (b) records the existing clip implementation; Arbiter admission is (c).
-GUARD_REVISION = "pinky-command-manager-b-v1"
+GUARD_REVISION = "command-manager-b-v1"
 GUARD_LIFETIME_S = 0.3
 _BINDING_TOKEN = object()
 
