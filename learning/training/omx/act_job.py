@@ -66,7 +66,9 @@ def _ref(path, root):
             "bytes": path.stat().st_size}
 
 
-def run(train_exports, eval_export, out, *, steps=40, seed=42750):
+def run(train_exports, eval_export, out, *, steps=40, seed=42750, n_action_steps=4):
+    if type(n_action_steps) is not int or not 1<=n_action_steps<=4:
+        raise ValueError('n_action_steps must be an integer in 1..4 within chunk_size=4')
     if importlib.metadata.version("lerobot") != "0.4.4":
         raise ValueError("separate lerobot==0.4.4 environment required")
     if type(steps) is not int or not 1 <= steps <= 10000:
@@ -157,7 +159,7 @@ def run(train_exports, eval_export, out, *, steps=40, seed=42750):
         config = ACTConfig(input_features={"observation.state": PolicyFeature(FeatureType.STATE, (len(names),)),
                            "observation.images.front": PolicyFeature(FeatureType.VISUAL, (3, 64, 64))},
                            output_features={"action": PolicyFeature(FeatureType.ACTION, (len(names),))},
-                           chunk_size=4, n_action_steps=4, dim_model=64, n_heads=4, dim_feedforward=256,
+                           chunk_size=4, n_action_steps=n_action_steps, dim_model=64, n_heads=4, dim_feedforward=256,
                            n_encoder_layers=1, n_decoder_layers=1, use_vae=False, dropout=0.0,
                            pretrained_backbone_weights=None, device="cpu")
         policy = ACTPolicy(config)
@@ -205,7 +207,8 @@ def run(train_exports, eval_export, out, *, steps=40, seed=42750):
         limits = [sources[0]["position_limits_rad"][name] for name in names]
         report = offline_report(truth, prediction, action_mean.numpy(), train_actions.numpy(), limits)
         report.update(algorithm="lerobot-act", lerobot_version="0.4.4", torch_version=str(torch.__version__),
-                      device="cpu", seed=seed, steps=steps, train_episodes=ids[:-1], eval_episode=ids[-1],
+                      device="cpu", seed=seed, steps=steps, n_action_steps=n_action_steps,
+                      train_episodes=ids[:-1], eval_episode=ids[-1],
                       reloaded_prediction_verified=True, task_outcome_source="operator_source_only")
         _write(out / "offline-report.json", report)
         refs = [_ref(p, out) for folder in ("episodes", "reader-inputs")
@@ -253,8 +256,10 @@ def main():
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--steps", type=int, default=40)
     ap.add_argument("--seed", type=int, default=42750)
+    ap.add_argument("--n-action-steps", type=int, default=4, choices=range(1,5))
     args = ap.parse_args()
-    print(json.dumps(run(args.train_export, args.eval_export, args.out, steps=args.steps, seed=args.seed)))
+    print(json.dumps(run(args.train_export, args.eval_export, args.out, steps=args.steps, seed=args.seed,
+                         n_action_steps=args.n_action_steps)))
 
 
 if __name__ == "__main__":

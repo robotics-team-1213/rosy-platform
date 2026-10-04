@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from act_job import chunk_indices, offline_report, compatible_sources
+from act_job import chunk_indices, offline_report, compatible_sources, run
 
 
 def test_chunk_padding_never_crosses_episode_boundary():
@@ -40,3 +40,10 @@ def test_rig_joint_order_and_limits_mismatch_refused():
     compatible_sources([source, source.copy()])
     with pytest.raises(ValueError):
         compatible_sources([source, {**source, "joint_names": ["j2", "j1"]}])
+
+
+@pytest.mark.parametrize('steps',[True,0,5,1.5])
+def test_invalid_action_queue_length_fails_before_source_or_model_access(tmp_path,steps):
+    with pytest.raises(ValueError,match='n_action_steps'):
+        run([],tmp_path/'absent',tmp_path/'output',n_action_steps=steps)
+    assert not (tmp_path/'output').exists()

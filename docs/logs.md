@@ -5054,3 +5054,8 @@
 - 변경: default-disabled SIM owner session의 설치/lease/세대/관측/카메라/행동 시각 최종검사와 HOLD/cancel. 기존 stop fence와 writer를 사용한다. 영상 라벨 보완 및 독립 평가 계획도 기록했다.
 - 증거: 관련 host153pass·독립38pass, D-430 소스 리뷰 승인. 0.1.2 isolated wheel은 실제3정책 integrity를 검증하고 미설정 binding을 거절했다. 영상 초안80이미지 SHA 재검증; 라벨76프레임/7박스는 검수 대기. 상세 validation/omx-policy-owner-session-2026-10-04.md.
 - gate 변화: SOURCE/HOST session 검사 확보. 실제 issuer/capture/scheduler/ROS·독립SIM·rollback·Pinky·새 객체 학습·DEVICE/FIELD와 전체 목표는 미완료. SSH handle은 인증 실패로 종료, 원격 실행 증거 없음.
+
+## 2026-10-04 · uncommitted · feat(learning): bind ACT inference to immutable observations
+- 변경: 고정 config/weights/정규화/RGB 관측 bytes로 ACT를 계산하고 queue의 최초 관측·생성 시각을 보존한다. 큐 길이 1..4의 별도 연구 설정을 추가했다.
+- 증거: native73pass·host48pass1torch-skip·독립24pass. 실제 동일 train5/eval1 seed42751/40steps의 4행동/1행동 비교는 같은 weights/history를 재현했다. queue age/관측 위반9→0이나 MAE는 상수 기준보다 커 둘 다 reject. 새 정책 unregistered·2events, 새 Dataset6Episodes/234refs. 상세 validation/act-inference-binding-2026-10-04.md.
+- gate 변화: SOURCE/HOST 추론 소비·큐 provenance 공백 해소. 실제 capture/issuer/scheduler/owner composition·독립SIM·주행 품질·라벨·rollback·DEVICE/FIELD와 전체 목표 미완료. push/merge/deploy/물리 활성화 없음.
