@@ -296,8 +296,8 @@
 
 ## 최근 기록
 
+- 2026-10-04 · uncommitted · audit(d427): passive lane and release provenance
+- 2026-10-04 · uncommitted · audit(d427): imported journal encoding loss
+- 2026-10-04 · uncommitted · docs(d427): wave 5 개별 게이트와 브라우저 후속 증거
 - 2026-10-04 · uncommitted · fix(docs): Pinky 검수 ADR 번호 충돌 해결과 main 동기화
 - 2026-10-04 · uncommitted · docs(pairing): D-456 LAN 수신 승인과 지속 페어링
-- 2026-10-04 · uncommitted · feat(learning): D-458 공통 학습 작업 화면
-- 2026-10-04 · uncommitted · feat(learning): Pinky 박스 직접 선택·드래그 편집
-- 2026-10-04 · uncommitted · feat(learning): D-456 Pinky 영속 검수 웹앱
