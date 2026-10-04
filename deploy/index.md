@@ -63,6 +63,7 @@
 ## 교훈 (docs/solutions)
 
 - [컨테이너에서 `kill -0`은 좀비를 산 것으로 본다](../docs/solutions/deployment/container-zombie-kill0-blindness.md)
+- [Cell 시뮬레이터는 홈 복귀를 관측한 뒤 Action을 받는다](../docs/solutions/logic-errors/cell-startup-must-reach-home-before-action-admission.md)
 
 ## 시험
 

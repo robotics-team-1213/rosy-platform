@@ -282,6 +282,7 @@
 
 ## 교훈 (docs/solutions)
 
+- [Cell 시뮬레이터는 홈 복귀를 관측한 뒤 Action을 받는다](solutions/logic-errors/cell-startup-must-reach-home-before-action-admission.md)
 - [PowerShell 한글 저널 append가 UTF-8을 망가뜨린다 (2026-10-04, 4회)](solutions/workflow-issues/powershell-utf8-append-mangles-korean-journals.md)
 - [Verify what you ship - the working tree is not the commit](solutions/workflow-issues/verify-what-you-ship-the-working-tree-is-not-the-commit.md)
 
@@ -292,8 +293,8 @@
 
 ## 최근 기록
 
+- 2026-10-04 · uncommitted · docs(cell): 홈 준비 교훈과 모델 PC 직접 검증 경로
 - 2026-10-04 · uncommitted · feat(fleet): D-455 양보 합류는 지도 자세
 - 2026-10-04 · uncommitted · fix(harness): pin one committed G2 encoding repair
 - 2026-10-04 · uncommitted · feat(fleet): D-453 양보 한 구간
 - 2026-10-04 · uncommitted · docs(adr): D-451 한 줄 교착의 양보는 Fleet 알고리즘이 고른다
-- 2026-10-04 · uncommitted · docs(adr): D-454 중앙 Fleet 착수
