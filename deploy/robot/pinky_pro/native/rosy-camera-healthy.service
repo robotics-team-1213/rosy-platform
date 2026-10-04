@@ -1,0 +1,29 @@
+[Unit]
+Description=ROSY record surviving optional camera startup
+After=rosy-camera.service
+PartOf=rosy-camera.service
+
+[Service]
+Type=oneshot
+User=rosy-camera
+Group=rosy-camera
+StateDirectory=rosy/camera
+StateDirectoryMode=0750
+Environment=HOME=/var/lib/rosy/camera
+Environment=PYTHONNOUSERSITE=1
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecCondition=/usr/bin/systemctl is-active --quiet rosy-camera.service
+ExecStart=/usr/bin/python3 -I -B /opt/rosy/current/deploy/robot/native/camera-boot-guard.py healthy
+TimeoutStartSec=10
+UMask=0027
+NoNewPrivileges=true
+PrivateDevices=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictAddressFamilies=AF_UNIX
