@@ -297,8 +297,8 @@
 
 ## 최근 기록
 
+- 2026-10-05 · uncommitted · fix(guards): judge shared component size and name public commit provenance
 - 2026-10-04 · uncommitted · fix(site): D-457 마커 우선·무마커 폴백
 - 2026-10-04 · uncommitted · docs(learning): UX 착지 동기화 검증
 - 2026-10-04 · uncommitted · uiux(learning): D-461 작업 우선 공용 구성과 검수 편의
 - 2026-10-04 · uncommitted · audit(d427): passive lane and release provenance
-- 2026-10-04 · uncommitted · audit(d427): imported journal encoding loss
