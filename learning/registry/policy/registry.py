@@ -126,7 +126,7 @@ class Registry:
             if event['operation'] == 'promote':
                 promotion = event['data']['promotion']
                 _, policy = self._policy(event['policy_revision'])
-                DatasetStore(self.root / 'datasets').require(policy['dataset_revisions'])
+                DatasetStore(self.root / 'datasets').require_policy(policy)
                 validate_promotion(promotion, policy, root=self.root / 'evidence' / promotion['revision'])
         return events
 
@@ -250,7 +250,7 @@ class Registry:
                 raise ValueError('promotion current stage differs')
             root, policy = self._policy(revision)
             promotion = validate_promotion(promotion, policy, root=evidence_root)
-            DatasetStore(self.root / 'datasets').require(policy['dataset_revisions'])
+            DatasetStore(self.root / 'datasets').require_policy(policy)
             # A separate pass claim cannot override the artifact's failed ACT report.
             for report, _ in self._act_reports(root, policy):
                 if act_assessment(report)['verdict'] == 'reject':

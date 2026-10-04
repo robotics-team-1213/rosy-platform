@@ -41,3 +41,10 @@ rad 목표·시계·간격·skew·원본 해시·RGB PNG CRC와 압축 행을 �
 DatasetStore와 offline curation은 OMX profile 본문 검증을 호출한다.
 DatasetStore는 아직 본문 검증기가 없는 Pinky/Pilot profile을 등록하지 않는다.
 원본 task outcome은 operator 기록이며 독립 과제 성공의 인증은 아니다.
+
+0.1.4는 Pinky recording profile과 변환 metadata/sidecar를 추가한다.
+`rosy.contracts.learning.pinky.validate_profile`은 원본 session과 변환 파일의
+binding, capture/log 시계와 recorded CORE command의 m/s·rad/s 및 dt를 검사한다.
+DatasetStore는 Pinky도 등록하며 Pilot은 거부한다. 원본 MCAP↔sidecar 변환 진위와
+영상 pixels/scan 내용을 인증하지 않는다. 정책 승격은 Dataset Episode의
+profile·robot/environment 호환성을 같은 검증 객체에서 검사한다.

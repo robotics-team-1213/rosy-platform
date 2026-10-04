@@ -68,6 +68,31 @@ def test_store_does_not_keep_database_file_open(tmp_path):
     assert not (store.root / 'datasets.sqlite3').exists()
 
 
+def test_pinky_policy_cannot_promote_on_omx_dataset(tmp_path):
+    source = tmp_path / 'source'; doc = dataset(source)
+    store = DatasetStore(tmp_path / 'store'); store.register(source)
+    with pytest.raises(ValueError, match='policy.*Episode'):
+        store.require_policy({'profile': 'pinky_base_velocity_v1', 'robot_type': 'pinky_pro',
+                              'environment': 'real', 'dataset_revisions': [doc['revision']]})
+
+
+def test_compatibility_does_not_trust_reopened_unhashed_episode(tmp_path, monkeypatch):
+    source = tmp_path / 'source'; doc = dataset(source)
+    store = DatasetStore(tmp_path / 'store'); store.register(source)
+    original = store.require
+    def interleaved(revisions, **kwargs):
+        result = original(revisions, **kwargs)
+        path = store.root / doc['revision'] / 'manifest.json'
+        episode = json.loads(path.read_text())
+        episode.update(profile='pinky_recording_session_v1', robot_type='pinky_pro', environment='real')
+        path.write_text(json.dumps(episode))  # Intentionally neither hashed nor resealed.
+        return result
+    monkeypatch.setattr(store, 'require', interleaved)
+    with pytest.raises(ValueError, match='policy.*Episode'):
+        store.require_policy({'profile': 'pinky_base_velocity_v1', 'robot_type': 'pinky_pro',
+                              'environment': 'real', 'dataset_revisions': [doc['revision']]})
+
+
 def test_hash_consistent_bad_joint_target_never_enters_store(tmp_path):
     root = tmp_path / 'source'; dataset(root)
     samples = root / 'source/samples.jsonl'
@@ -106,5 +131,5 @@ def test_unsupported_profile_cannot_bypass_body_validation(tmp_path, profile):
             ref.update(bytes=path.stat().st_size, sha256=hashlib.sha256(path.read_bytes()).hexdigest())
     doc['episodes'] = [ep['revision']]
     (root / 'dataset-manifest.json').write_text(json.dumps(seal(doc)))
-    with pytest.raises(ValueError, match='profile validator not implemented'):
+    with pytest.raises(ValueError, match='profile validator not implemented|Pinky recording metadata required'):
         DatasetStore(tmp_path / 'store').register(root)

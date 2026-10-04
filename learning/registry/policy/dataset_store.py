@@ -13,9 +13,10 @@ ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / 'contracts/learning/src'))
 from rosy.contracts.learning import validate_dataset, validate_episode  # noqa: E402
 from rosy.contracts.learning.omx import validate_profile  # noqa: E402
+from rosy.contracts.learning.pinky import validate_profile as validate_pinky  # noqa: E402
 
 
-def closure(root):
+def closure(root, *, policy=None):
     root = Path(root).resolve()
     doc = validate_dataset(json.loads((root / 'dataset-manifest.json').read_text(encoding='utf-8')), root=root)
     files = {ref['path']: ref for ref in doc['files']}
@@ -35,9 +36,19 @@ def closure(root):
             name = (path.parent / ref['path']).relative_to(root).as_posix()
             if name not in files or any(files[name][key] != ref[key] for key in ('sha256', 'bytes')):
                 raise ValueError('Episode file is outside declared dataset closure')
-        if episode['profile'] != 'omx_demonstration_v1':
+        if episode['profile'] == 'omx_demonstration_v1':
+            validate_profile(episode, root=path.parent)
+        elif episode['profile'] == 'pinky_recording_session_v1':
+            validate_pinky(episode, root=path.parent)
+        else:
             raise ValueError('Episode body profile validator not implemented')
-        validate_profile(episode, root=path.parent)
+        if policy is not None:
+            profile = {'omx_joint_target_v1': 'omx_demonstration_v1',
+                       'pinky_base_velocity_v1': 'pinky_recording_session_v1'}[policy['profile']]
+            if any(episode[key] != value for key, value in {
+                    'profile': profile, 'robot_type': policy['robot_type'],
+                    'environment': policy['environment']}.items()):
+                raise ValueError('policy profile/robot/environment differs from Dataset Episode')
         episodes[episode['revision']] = episode
     if set(episodes) != set(doc['episodes']):
         raise ValueError('DatasetManifest Episode revisions differ from actual manifests')
@@ -53,7 +64,7 @@ class DatasetStore:
         with closing(sqlite3.connect(self.root / 'datasets.sqlite3')) as db:
             db.execute('CREATE TABLE IF NOT EXISTS datasets (revision TEXT PRIMARY KEY)')
 
-    def require(self, revisions):
+    def require(self, revisions, *, policy=None):
         with closing(sqlite3.connect(self.root / 'datasets.sqlite3')) as db:
             registered = {row[0] for row in db.execute('SELECT revision FROM datasets')}
         for revision in revisions:
@@ -61,7 +72,7 @@ class DatasetStore:
                 raise ValueError('canonical dataset revision required')
             if revision not in registered:
                 raise ValueError('policy dataset not registered')
-            if closure(self.root / revision)['revision'] != revision:
+            if closure(self.root / revision, policy=policy)['revision'] != revision:
                 raise ValueError('registered dataset revision differs')
         return list(revisions)
 
@@ -100,6 +111,9 @@ class DatasetStore:
             raise
         finally:
             db.close()
+
+    def require_policy(self, policy):
+        return self.require(policy['dataset_revisions'], policy=policy)
 
 
 def main():

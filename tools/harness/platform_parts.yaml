@@ -52,6 +52,13 @@ import_rules:
 concerns: [learning, decision, control, safety, contracts, other]
 
 roots:
+  - path: learning/curation/pinky
+    part: learning
+    d427_target: learning/curation/pinky
+    wave: none
+    import_prefix: []
+    concern: learning
+    note: D-449 recorded Pinky source snapshots and Episode conversion; no control authority.
   - path: learning/registry/policy
     part: learning
     d427_target: learning/registry/policy

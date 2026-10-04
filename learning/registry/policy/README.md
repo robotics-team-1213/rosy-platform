@@ -44,7 +44,10 @@ dataset files 포함·SHA/bytes를 검사하고 immutable snapshot/SQLite에 등
 등록되고 실제 파일이 온전해야 한다. register/assessment는 unregistered 연구
 metadata 보존이므로 아직 dataset이 없더라도 실행할 수 있다.
 OMX sample body profile(Q6)의 시계·rad 목표·완료 상태·PNG와 wrapper 연결을 검사한다.
-Pinky/Pilot은 본문 검증기가 없어 등록을 거부한다. 라벨/과제 진위 수용은 별도다.
+Pinky는 닫힌 원본 session/변환 metadata binding과 sidecar 시계/명령 의미를 검사한다.
+Pilot은 본문 검증기가 없어 등록을 거부한다. 라벨/과제·MCAP 변환 진위 수용은 별도다.
+승격과 이력 조회는 Dataset Episode profile·robot/environment와 정책의 일치를
+같은 검증된 Episode 객체로 판정한다. 설치·camera/joint/runtime owner binding은 후속이다.
 rollback/stop-readback,
 owner binding/lease/generation/stale/HOLD, Fleet join·운영 배포는 후속이다.
 torch/ROS/network/actuator는 사용하지 않는다. 모든 DB·산출물은 X에 둔다.

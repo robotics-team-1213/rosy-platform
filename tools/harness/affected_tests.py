@@ -69,6 +69,7 @@ FULL_SUITES = (
     "learning/registry/policy/test",
     "learning/training/omx/test",
     "learning/curation/omx/test",
+    "learning/curation/pinky/test",
     "src/runtime/events/test",
     "src/runtime/services/test",
     "src/hmi/web_common/test",
@@ -84,7 +85,7 @@ ROOT_SHARDS = 3
 CI_FULL_MATRIX = (
     {"name": "learning-policy", "invocations": [
         ["learning/registry/policy/test"], ["learning/training/omx/test"],
-        ["learning/curation/omx/test"]], "ros": "none"},
+        ["learning/curation/omx/test"], ["learning/curation/pinky/test"]], "ros": "none"},
     {"name": "core-domain", "invocations": [[
         "src/runtime/gateway/test", "src/runtime/events/test", "src/runtime/services/test",
         "src/hmi/web_common/test", "src/contracts/foundation/test",
