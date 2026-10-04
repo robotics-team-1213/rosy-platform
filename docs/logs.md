@@ -5205,3 +5205,8 @@
 - 변경: D-439 공용 UI와 D-432 발견·발열 대응을 최신 D-427 구조로 통합했다. 독립 검토한 두 부모의 정지 권한·신호 감독·복구 계약을 보존하고 Pilot Android 입력, 운영 도구 및 registry 경로를 맞췄다. CI ArUco 4.6 경계 오류는 위치 허용치를 유지한 채 실제 backend에서 수정했다.
 - 증거: migration/harness/구조 110 PASS, 나머지 quick 370 PASS/2 Linux SKIP, ArUco 동일 범위 실제 4.6/5.0 각 45 PASS, Pilot 30 JVM PASS 및 Cam 341 JVM PASS. 기존 설치본과 새 APK 인증서가 일치하고 무선 ADB update 둘 다 성공했다. 첫 실패와 재검사 로그, 독립 SPEC/QUALITY·안전 검토를 보존했다. 상세: docs/validation/ui-release-integration-2026-10-04/README.md.
 - gate 변화: SOURCE/LOCAL scoped 증거 갱신. 원격 CI·정식 이미지 배포·현재 기기 화면 및 현장 수용은 별도 진행 중이며 올려 기록하지 않는다.
+## 2026-10-04 · uncommitted · fix: CI Gazebo 제외 파일의 수명
+
+- 변경: CI colcon 빌드에서만 만든 Gazebo `COLCON_IGNORE`는 성공·실패 종료 때 제거한다. 기존 제외 파일은 보존하여 빌드 뒤 소스 구조 검사가 실제 패키지를 계속 볼 수 있게 했다.
+- 증거: main bcf1010b의 CI 37174760531에서 구조 시험 두 건이 임시 제외 파일 때문에 실패했다. 실제 Bash 빌드 단계 회귀는 수정 전 2 failed/2 passed, 수정 후 관련 시험 12 passed다. 성공·종료 코드 42에서 빌드 중 제외와 종료 뒤 복원, 기존 파일 bytes 보존을 검증했다.
+- gate 변화: SOURCE/LOCAL 증거만 추가한다. 원격 CI 재검증과 서명 후보의 실제 제어 PC 설치·HTTPS·타이머 수락은 아직 남아 있다.

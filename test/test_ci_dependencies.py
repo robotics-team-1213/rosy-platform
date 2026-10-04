@@ -1,10 +1,53 @@
 """Keep root contract tests reproducible in the ROS CI container."""
 
 from pathlib import Path
+import os
+import shutil
+import subprocess
+
+import pytest
 
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github" / "workflows" / "ci.yml"
+
+
+@pytest.mark.parametrize("build_exit", [0, 42])
+@pytest.mark.parametrize("preexisting", [False, True])
+def test_colcon_ignore_is_scoped_to_the_build(tmp_path, build_exit, preexisting):
+    """Source metadata remains visible after either successful or failed builds."""
+    import yaml
+
+    bash = (Path(os.environ.get("ProgramFiles", "C:/Program Files")) / "Git/bin/bash.exe"
+            if os.name == "nt" else Path(shutil.which("bash") or "/missing-bash"))
+    if not bash.is_file():
+        pytest.skip("Bash is required for the real CI shell-step fixture")
+    jobs = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))["jobs"]
+    script = next(step["run"] for step in jobs["test"]["steps"] if step["name"] == "Build (colcon)")
+    script = script.replace(". /opt/ros/jazzy/setup.sh", ":")
+    marker = tmp_path / "integrations/simulation/gazebo/COLCON_IGNORE"
+    marker.parent.mkdir(parents=True)
+    if preexisting:
+        marker.write_text("preexisting\n", encoding="utf-8")
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    for name, body in {
+        "python3": "printf '%s\\n' integrations\n",
+        "colcon": "test -f integrations/simulation/gazebo/COLCON_IGNORE || exit 91\n"
+                  "printf '%s\\n' ignored > build-trace\n" + f"exit {build_exit}\n",
+    }.items():
+        stub = bin_dir / name
+        stub.write_text("#!/bin/sh\n" + body, encoding="utf-8", newline="\n")
+        stub.chmod(0o755)
+    environment = {**os.environ, "PATH": str(bin_dir) + os.pathsep + os.environ["PATH"]}
+    result = subprocess.run([str(bash), "-e", "-c", script], cwd=tmp_path,
+                            env=environment, capture_output=True, text=True, timeout=30)
+    assert result.returncode == build_exit, result.stderr
+    assert (tmp_path / "build-trace").read_text().strip() == "ignored"
+    if preexisting:
+        assert marker.read_text() == "preexisting\n"
+    else:
+        assert not marker.exists(), "CI-generated ignore hid the source package from later guards"
 
 
 def test_ci_installs_root_contract_python_dependencies():
