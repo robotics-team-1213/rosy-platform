@@ -288,6 +288,6 @@
 
 - 2026-10-04 · uncommitted · fix: install Windows hooks with executable LF line endings
 - 2026-10-04 · uncommitted · fix: resolve hook installation through Git
+- 2026-10-04 · uncommitted · D-441 local update follow-up design
+- 2026-10-04 · uncommitted · D-427 wave5 remote CI and ARM64 artifacts
 - 2026-10-04 · uncommitted · merge: synchronize shared main with final remote migration
-- 2026-10-04 · uncommitted · D-427 wave5 final host and fixture corrections
-- 2026-10-04 · uncommitted · D-427 peer CI correction integration

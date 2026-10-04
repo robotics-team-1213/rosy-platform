@@ -5297,6 +5297,18 @@
 - Evidence: Perception marker/dock suites 32 passed; architecture suites 51 passed. Independent review found no production safety regression; two stale tuning assertions were corrected and rerun. Fast contract validation is recorded in the integration receipt.
 - gate 변화: None. This Git integration does not activate devices or establish release/field acceptance.
 
+## 2026-10-04 · uncommitted · D-427 wave5 remote CI and ARM64 artifacts
+
+- 변경: 소스 1722ca6ec6d7의 실제 원격 push, 전체 GitHub CI, native/SD 035 산출물 검증과 남은 수용 조건을 기록했다. 제품 runtime·계약·manifest·시험 판정은 바꾸지 않았다.
+- 증거: push12 fast462 passed/2 skipped, mapped3667 passed/151 skipped·NEW0; GitHub 10matrix+scope+ci-result 모두 SUCCESS. 실제 ARM64 native/SD build28 packages 각각 SUCCESS. native 실제2547manifest/2548SUMS·독립 APPROVE; SD ZIP/외부14SUMS/전체XZ12869835264bytes·metadata21검사·독립 APPROVE. 공개 문서 배치/출판9 passed. docs/validation/d427-source-migration/wave5-arm64-artifact-verification-2026-10-04.md.
+- gate 변화: 없음. unsigned SD mounted verifier의 shape/config 검사와 서명·full factory SUMS·기기 부팅을 구분했다. 실제 prepare는 canary ABI SSH255 timeout으로 exit1, 서명·발행 전 종료했다. site PC NOT_RUN, peer 실제 delivery NOT_SENT, device/field 미검증이다. firmware S7은 다음 개정이며 flash·motion·E-Stop reset을 실행하지 않았다.
+
+## 2026-10-04 · uncommitted · D-441 local update follow-up design
+
+- 변경: 사용자 요청에 따라 수동 서명 설치 기록 동기화, 잠금 기반 보류/재개, 실행 설정 비교, 정확한 main CI 승인 후 서명, 선택적 Fleet/Vision 기능 검사 설계와 실행 계획을 기록했다. D-427 소스 소유권과 D-430 구동 권한을 변경하지 않는다.
+- 증거: 원본 updater 신규 사례 10개 RED, 원본 signer CI 사례 8개 RED; 수정본 격리 Linux 108 passed/0 skipped. 별도 생성 후 미실행 컨테이너의 Compose hash 일치와 명령 변경 감지를 실측했다. 현장 서비스는 전환하지 않았다.
+- gate 변화: 없음. 신규 설치·후보 CI·실제 프레임 수신은 별도 운영 검증이다.
+
 
 ## 2026-10-04 · uncommitted · fix: resolve hook installation through Git
 

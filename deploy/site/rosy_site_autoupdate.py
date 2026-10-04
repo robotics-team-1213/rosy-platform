@@ -4,10 +4,6 @@
 The reviewed updater, I/O ports and verifier are installed together outside
 candidate folders. Switching exceptions roll back; a durable switch journal
 is recovered before selecting another candidate. See deploy/site/README.md.
-
-    rosy_site_autoupdate.py run [--dry-run]
-    rosy_site_autoupdate.py status
-    rosy_site_autoupdate.py forget-failed <site-tag>
 """
 
 from __future__ import annotations
@@ -32,8 +28,8 @@ if __package__:
         ConfigError, EXIT_CONFIG, EXIT_FAILED, EXIT_LOCKED, EXIT_OK, Http, Paths,
         PROJECT, Refused, Rejected, Runner, SERVICES, SIGNATURE, STACK_UNIT, Transient,
         _COMMIT, _LIST_LIMIT, _MAX_PAGES, _PART, _SMALL_LIMIT, _TAG, _now,
-        containers_reason, forget_failed, load_config, load_update_state, log, read_env,
-        run_lock, safe_extract, swap_link, write_env_tag,
+        containers_reason, forget_failed, functional_reason, load_config, load_update_state, log, read_env,
+        run_lock, runtime_reason, safe_extract, set_hold, swap_link, write_env_tag,
     )
 else:  # pragma: no cover - installed host CLI
     if str(SCRIPT_DIR) not in sys.path:
@@ -43,8 +39,8 @@ else:  # pragma: no cover - installed host CLI
         ConfigError, EXIT_CONFIG, EXIT_FAILED, EXIT_LOCKED, EXIT_OK, Http, Paths,
         PROJECT, Refused, Rejected, Runner, SERVICES, SIGNATURE, STACK_UNIT, Transient,
         _COMMIT, _LIST_LIMIT, _MAX_PAGES, _PART, _SMALL_LIMIT, _TAG, _now,
-        containers_reason, forget_failed, load_config, load_update_state, log, read_env,
-        run_lock, safe_extract, swap_link, write_env_tag,
+        containers_reason, forget_failed, functional_reason, load_config, load_update_state, log, read_env,
+        run_lock, runtime_reason, safe_extract, set_hold, swap_link, write_env_tag,
     )
 
 
@@ -319,6 +315,8 @@ class SiteUpdater:
             reason = f"healthz returned {status}"
             if status == 200:
                 reason = self._containers_reason(env, commit)
+                if reason == '':
+                    reason = functional_reason(self.config, self.http)
                 if reason == "":
                     return True, "healthy"
             if self.clock() >= deadline:
@@ -335,7 +333,17 @@ class SiteUpdater:
                 json.loads(line) for line in out.splitlines() if line.strip()]
         except json.JSONDecodeError:
             return "docker compose ps output is not JSON"
-        return containers_reason(rows, commit, self._accepted_images.get(commit, {}), self._run)
+        reason = containers_reason(rows, commit, self._accepted_images.get(commit, {}), self._run)
+        if reason:
+            return reason
+        try:
+            output = self._compose(env, 'config', '--hash', '*', tag=commit).stdout
+            hashes = dict(line.split() for line in output.splitlines() if line.strip())
+            return runtime_reason(rows, hashes, self._run)
+        except Transient as error:
+            return str(error)
+        except ValueError:
+            return 'Compose configuration hashes cannot be verified'
 
     def _restart(self) -> None:
         self._run(["systemctl", "restart", STACK_UNIT], timeout=300)
@@ -453,6 +461,10 @@ class SiteUpdater:
                     return EXIT_FAILED
                 state['last_run']['result'] = 'recovered'
                 return EXIT_FAILED
+            if state.get('hold'):
+                log('held')
+                state['last_run']['result'] = 'held'
+                return EXIT_OK
             return self._update(state)
         finally:
             self.save_state(state)
@@ -468,8 +480,16 @@ class SiteUpdater:
         try:
             self._verify(self.paths.link, loaded=True, expected_commit=current)
             reason = self._containers_reason(env, current)
+            if not reason:
+                reason = functional_reason(self.config, self.http)
             if reason:
                 raise Rejected(reason)
+            installed = state.get('installed')
+            if not self.dry_run and (not isinstance(installed, dict) or installed.get('commit') != current):
+                state['installed'] = {'commit': current, 'tag': f'site-{current[:12]}',
+                                      'origin': 'manual', 'time': _now()}
+                state.pop('previous', None)  # never invent rollback history for a manual switch
+                log('adopted-current', commit=current)
             release = self.select(self.list_releases(), current, state)
         except Rejected as error:
             log('refused', reason=f'running candidate verification failed: {error}')
@@ -554,6 +574,9 @@ def main(argv: list[str] | None = None) -> int:
     commands.add_parser("status", help="print the state file")
     forget = commands.add_parser("forget-failed", help="allow a failed tag to be tried again")
     forget.add_argument("tag")
+    hold = commands.add_parser('hold', help='pause new updates during local maintenance')
+    hold.add_argument('reason')
+    commands.add_parser('resume', help='allow updates after local maintenance')
     args = parser.parse_args(argv)
     paths = Paths()
     if args.command == "status":
@@ -567,6 +590,8 @@ def main(argv: list[str] | None = None) -> int:
     updater = SiteUpdater(config, paths=paths, dry_run=getattr(args, "dry_run", False))
     if args.command == "forget-failed":
         return forget_failed(updater, args.tag)
+    if args.command in {'hold', 'resume'}:
+        return set_hold(updater, args.reason if args.command == 'hold' else None)
     return updater.run()
 
 

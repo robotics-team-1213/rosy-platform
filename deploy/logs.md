@@ -2340,6 +2340,12 @@
 - 증거: 독립 설치기 Linux 재현 10개 통과. source 93f66072c CI 37176545073 및 실행 a24b6ca8a CI 37177384801 필수 검사 통과; 비필수 sensing 실패 5개는 기존 기준과 동일. 별도 SSH readback에서 서명·main 후손 계보·실제 컨테이너 3개의 불변 이미지 ID·HTTPS 200·타이머 active/enabled·서명된 롤백 후보 보존·중단 기록 없음 확인. 주소·계정·인증 정보가 포함된 실제 기록은 외부 운영 증거로 보관했다.
 - gate 변화: D-441 최초 설치와 실제 자동 갱신의 SITE_RUNTIME 검증 완료. 로봇 이동이나 FIELD 수용 상태는 변경하지 않았다.
 
+## 2026-10-04 · uncommitted · D-441 local maintenance and manual install safety
+
+- Change: Reconcile the verified actual signed installation before selection; add locked hold/resume with interrupted recovery first; check running Compose configuration hashes and read-only/nonprivileged roots; require exact-main CI and ci-result before automatic signing; add optional authenticated read-only Fleet state/Vision source gates.
+- Evidence: Original updater failed all 10 new behavior cases; initial signer failed all 8 CI cases. Updated isolated Linux updater/signer/verifier suites 108 passed, zero skipped. Real Docker Compose v5.6.0 matched the generated hash to a separately created, never-started container and detected a changed command; cleanup succeeded. Credentials, malformed holds and rollback behavior are covered. Final independent review APPROVE (45 passed, 43 Windows skips, zero new failures); affected/fast gates follow before commit.
+- gate 변화: SOURCE/LOCAL evidence only. Reviewed privileged updater and signing-station copies require separate installation; current site runtime does not yet include this follow-up. Camera listing is not advancing-frame or physical acceptance evidence.
+
 
 ## 2026-10-04 · uncommitted · fix: protect the full model-PC code closure
 

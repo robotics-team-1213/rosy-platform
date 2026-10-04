@@ -986,6 +986,67 @@ When `verify_candidate.py`, `candidate_signing.py`, or `site_update_io.py` chang
 administrator reinstalls them by the same reviewed path; the updater never
 copies them from a candidate.
 
+### Local maintenance and manual installation (D-441 follow-up)
+
+Local Git edits and commits are source work: they do not replace the running
+signed images. Publish, pass CI, build and sign a candidate to deploy that code.
+The signing station now requires the newest `ci.yml` run for the exact main
+commit and its `ci-result` gate to succeed. Pending, failed or unavailable CI
+proof postpones signing; the same manifest is checked again next time.
+
+Before changing the site deployment locally, use:
+
+```bash
+sudo python3 -I /usr/local/lib/rosy-site/rosy_site_autoupdate.py hold 'local maintenance'
+# Finish and verify the local work, then explicitly resume.
+sudo python3 -I /usr/local/lib/rosy-site/rosy_site_autoupdate.py resume
+```
+
+Both commands take the updater lock. Hold prevents new downloads, switches and
+pruning. It does not stop recovery of an already interrupted switch; recovery
+runs first. `status` shows the hold and `last_run.result=held`. Resume permits
+checks again; it does not bypass signature or runtime verification.
+
+A manually installed signed version is accepted only when its manifest,
+environment tag and actual running image identities agree. After verification,
+the updater reconciles `installed` with that real commit and marks its origin
+`manual`. It clears uncertain previous history rather than inventing it. The
+next automatic switch records this actual installation as `previous` and keeps
+its rollback folder/images. A dry run does not adopt the manual installation.
+
+The current Compose hashes must agree with the running containers' configuration
+labels, and their root filesystems must remain read-only and unprivileged. An
+ordinary local deployment/configuration mismatch blocks a switch; restore the
+approved settings or keep the host on hold. This detects ordinary operational
+drift; it does not defend against a root administrator forging Docker labels.
+It also does not inspect every mutable database/configuration file's contents.
+
+For a functional gate, add `functional_checks` to host `autoupdate.conf`:
+
+```json
+"functional_checks": [
+  {"path": "/api/fleet/state", "token_file": "/etc/rosy/site/secrets/<viewer-token-file>",
+   "required_ids": ["<robot-id>"]},
+  {"path": "/api/fleet/vision/sources", "token_file": "/etc/rosy/site/secrets/<viewer-token-file>",
+   "required_ids": ["<camera-source-id>"]}
+]
+```
+
+Use an enrolled viewer credential in a separate absolute regular file protected
+by host permissions. It is read at request time and never placed in command
+arguments or logs. Only these GET APIs on the health URL's HTTPS origin are
+allowed; authenticated redirects are refused. The gate checks response structure
+and required IDs before staging and after switching. A failing preflight leaves
+the current installation in place; failure after switching triggers rollback.
+Hosts without this setting retain the liveness-only gate. Listing a camera is
+not proof of advancing frames, and listing a robot is not physical acceptance.
+Record actual camera frame reception separately without sending motion.
+
+The administrator must reinstall the reviewed updater, I/O and verifier modules
+outside candidate folders to activate these changes; a new signed image alone
+does not replace those privileged tools. Upgrade the signing station's reviewed
+script separately as well, preserving its existing enrolled key.
+
 **Pause.** Host: `sudo systemctl disable --now rosy-site-autoupdate.timer`.
 Signing PC: `Disable-ScheduledTask -TaskName RosySiteAutoSign`. Either one
 stops new deployments; builds on push keep running and are harmless.
