@@ -1693,3 +1693,10 @@
 - 증거: `test_central_registry_write.py` 신규 9 passed. fleet 전체(셀 앱 2파일 수집 오류 제외, main 선재) **1815 passed/7 skipped, known_failures 0 new**. flake8 0.
 - gate 변화: 없음. ROS-SIM/DEVICE/FIELD 주장 없음(D-454 결정 3).
 - 결정: D-454 결정 2 계속. 뒤는 pairing-tokens(2)와 §10.2 명령 상관·ACK(D-426 선행).
+
+## 2026-10-04 · uncommitted · feat(tools): Fleet·게임 캡처 회차 6셀 (D-359 §7.8)
+
+- 변경: `operations/fleet/tools/capture_console_games_round.py` 신설 — 실제 Fleet 앱(FakeRobot 2대) + 실제 games preview 서버를 Playwright로 찍는다. 회차 `docs/validation/fleet-games-capture-2026-10-04/`에 console 3셀(1920/390/320) + games 3셀(1280/390/320). 배치 규칙도구 위치: fleet 모듈 tools/(게임을 엮는 순수 측정) — tools/AGENTS.md 배치 규칙 준수.
+- 증거: 6셀 캡처(페이지 오류 0). flake8 0.
+- gate 변화: 없음. LOCAL 합성 증거. 게임 readback 2대·사람 G3는 다음 회차.
+- 결정: D-359 §7.8 역할 표면 나머지 캡처.
