@@ -52,6 +52,17 @@
     <div class="install-tasks">
       <nav id="install-chooser" aria-label="설치 작업"></nav>
       <div class="install-workspace">
+        <section id="peer-picker" class="panel install-task" aria-labelledby="peer-heading">
+          <div class="robot-head"><h2 id="peer-heading">장비 찾기</h2><ui-tag id="peer-status" status="neutral">접속 대기</ui-tag></div>
+          <p class="hint">장비 이름을 선택해 담당 화면으로 이동합니다. 검색된 장비의 연결 권한은 별도로 확인합니다.</p>
+          <div class="peer-toolbar">
+            <label for="peer-role">장비 역할</label>
+            <select id="peer-role" class="ui-field"><option value="">모든 역할</option></select>
+            <ui-button id="peer-retry" kind="quiet" type="button">다시 찾기</ui-button>
+          </div>
+          <ul id="peer-list" class="peer-list" aria-label="장비 목록" hidden></ul>
+          <ui-empty id="peer-empty" role="status">접속 후 장비 목록을 확인하세요.</ui-empty>
+        </section>
             <section id="robot-enrollment" class="panel install-task" aria-labelledby="discovery-heading">
             <div class="robot-head">
               <h2 id="discovery-heading">로봇 등록</h2>

@@ -18,3 +18,11 @@ D-452의 같은 망 검색과 다른 망 승인 directory를 같은 역할 목�
 
 Cell 화면의 관제 복귀는 /console native link이며 취소는 장비 정지와 구분한다.
 실제 구동·정지 해제나 Cell G1/G2 수락을 수행한 기록이 아니다.
+
+통합 검증: 구현 worker의 실제 install/console와 기존 5 workflow는 7 PASS,
+최종 3너비 오류/만료 검사는 3 PASS, Node 18 PASS였다. 독립 reviewer는 10개
+파일 해시와 실제 로그, 권한 및 포커스 동작을 대조하여 SPEC·Quality·Safety PASS했다.
+통합 담당자가 실제 workflow를 별도로 실행해 7 PASS(33.86초), catalogue와
+3너비 fixture는 23 PASS였다. 첫 workflow 실행에서 opt-in 환경 미설정으로 생긴
+7 SKIP은 보존하고 ROSY_RUN_BROWSER_TESTS=1로 해당 7개를 실행했다. NEW 실패는 0이다.
+이 결과는 source fixture 증거이며 실제 운영자·장비·원격 배포 수락으로 표시하지 않는다.
