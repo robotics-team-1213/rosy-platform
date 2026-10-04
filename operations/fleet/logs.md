@@ -1618,3 +1618,10 @@
 - 변경: main의 stuck resolver·access·power 계약과 Cell workspace를 함께 보존했다. API Ref Cell additive 항목을 v1.93으로 올렸고 대응 metadata/version pin을 맞췄다. 동일 audit middleware를 site_auth, 동일 event fanout을 hub/server, healthz를 static route owner로 옮겨 app composition을 594줄로 유지했다.
 - 증거: 독립 source 검토는 auth/audit/fanout/health 동작 보존과 optional dependency guard를 확인했다. 구조 count Fleet 30621/schema 1319로 명시 재판정하고 기존 +150/zero allowance는 유지했다. 실제 vendor retry exit0/1passed와 컨테이너 정리 확인은 별도 deploy validation에 기록했다.
 - gate 변화: SOURCE 통합 검토이며 최종 통합 시험은 별도로 진행한다. full G1/G2 및 Isaac 주행·Nav2·두 로봇 수용은 미완료다.
+
+## 2026-10-04 · uncommitted · D-452 장비 찾기와 화면 소유 경계
+
+- 변경: 역할 목록·다시 찾기·승인/만료/오류 안내를 기존 작업 선택 화면에 연결했다. 로봇은 등록 상태 카드 포커스만, Cam은 기존 source 보정 화면만 연다. Cell 관제 복귀와 취소 의미를 보완했다.
+- 구조: catalogue/directory/routes와 picker를 별도 owner로 두고 composition factory로 app.py를 599줄로 유지한다. D-362 Fleet 패키지 30997줄(+376)을 독립 리뷰로 재판정하며 기존 flat server 분리 의무·파일 제한·+150 allowance를 유지한다.
+- 증거: docs/validation/network-peer-discovery-2026-10-04/peer-ui-checkpoint.md. 최종 통합 gate·원격 CI·서명 배포·실제 운영자 및 다른 망 연결은 별도 검증이다.
+- gate 변화: focused SOURCE/LOCAL 검증이며 최종 통합·CI·DEVICE·FIELD 수락은 보류한다.

@@ -68,3 +68,10 @@ ESP32 Signal 서비스와 같은 endpoint로 취급하지 않는다.
 
 근거: [DNS-SD RFC 6763](https://www.rfc-editor.org/rfc/rfc6763.html),
 [mDNS RFC 6762](https://www.rfc-editor.org/rfc/rfc6762.html), D-354, D-361, D-432.
+
+### 장비 선택 화면 적용
+
+설치·보정 화면은 장비 찾기를 첫 작업으로 제공한다. 역할과 승인·검색 상태를
+표시하고 다시 찾기를 제공한다. 승인된 기존 로봇·Cam만 해당 소유 화면으로 이동한다.
+광고 주소 직접 링크·자동 명령·암묵적 등록은 하지 않는다. 상세 검증과 실기 경계는
+[UI 검증 기록](../validation/network-peer-discovery-2026-10-04/peer-ui-checkpoint.md)에 남긴다.

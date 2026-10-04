@@ -79,8 +79,8 @@
 
 ## 최근 기록
 
+- 2026-10-04 · uncommitted · D-452 장비 찾기와 화면 소유 경계
 - 2026-10-04 · uncommitted · refactor(fleet): main 통합 시 HTTP composition 경계 유지
 - 2026-10-04 · uncommitted · D-452 승인 역할 목록과 신원 충돌
 - 2026-10-04 · uncommitted · feat(power): fresh battery evidence and idle saving
 - 2026-10-04 · 6485f8a39 · refactor(ui): 통합 명렬 카드의 표현 재사용
-- 2026-10-04 · uncommitted · fix(web): 관제 확인과 명령의 공통 소유권

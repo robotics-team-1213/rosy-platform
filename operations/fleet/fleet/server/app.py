@@ -407,13 +407,10 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     read_guard = [Depends(require_viewer)]
     operator_guard = [Depends(require_operator)]
 
-    from fleet.server.peer_catalogue import PeerCatalogueStore
-    from fleet.server.peer_directory import load_approved_peer_directory
-    from fleet.server.peer_routes import install_peer_routes
-    catalogue = PeerCatalogueStore()
-    install_peer_routes(app, catalogue=catalogue, console=console, enrollment=enrollment,
-                        pairing=pairing, read_guard=read_guard,
-                        directory_rows=load_approved_peer_directory(approved_peer_directory_file))
+    from fleet.server.peer_routes import install_peer_catalogue
+    catalogue = install_peer_catalogue(app, console=console, enrollment=enrollment,
+                                      pairing=pairing, read_guard=read_guard,
+                                      directory_file=approved_peer_directory_file)
     if discovery is not None:
         install_discovery_routes(app, console=console, hub=hub, discovery=discovery,
                                  discovery_token=discovery_token, enrollment=enrollment,

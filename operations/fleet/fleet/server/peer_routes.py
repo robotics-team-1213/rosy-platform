@@ -5,6 +5,16 @@ import ipaddress
 from core_common.protocol.network_peers import PeerSummary
 
 
+def install_peer_catalogue(app, *, console, enrollment, pairing, read_guard, directory_file):
+    from fleet.server.peer_catalogue import PeerCatalogueStore
+    from fleet.server.peer_directory import load_approved_peer_directory
+    catalogue = PeerCatalogueStore()
+    install_peer_routes(app, catalogue=catalogue, console=console, enrollment=enrollment,
+                        pairing=pairing, read_guard=read_guard,
+                        directory_rows=load_approved_peer_directory(directory_file))
+    return catalogue
+
+
 def install_peer_routes(app, *, catalogue, console, enrollment, pairing, read_guard, directory_rows=()):
     @app.get('/api/fleet/peers', dependencies=read_guard, tags=['fleet-discovery'])
     def peers():

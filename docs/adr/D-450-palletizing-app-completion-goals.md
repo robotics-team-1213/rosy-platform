@@ -80,3 +80,7 @@ G2를 첫 시뮬레이션 제품 수용으로 분리하는 범위와 G3 슬립�
 사용자 `처리해줄래?` 요청으로 구현을 착수했다. 첫 입력·제안·운용 화면은 별도 서버/포트 대신 기존 Fleet Console의 `/console/cell`로 제공한다. D-425의 mission 표면 소유를 보존하면서 Cell 초안·계산·제안 소유를 Console에 추가한다. 운영자 요청의 audit와 registry에 설정된 실제 service proposal author를 분리하고, 실행 승인은 명시적인 별도 named operator 조작이다.
 
 이 착수는 G1/G2/G3 수용 완료나 DEVICE/FIELD 승격을 뜻하지 않는다. JSON 초안/파일 입력과 박스·home/도구 설정 편집은 전체 티칭 wizard 또는 레시피 구조 편집의 대체물이 아니다.
+
+### 관제 복귀와 취소 의미 보충 (2026-10-04)
+
+Cell 작업 화면은 기존 named operator 관제로 돌아가는 명시적 링크를 제공한다. 버튼 높이는 기존 공용 target token을 따른다. 작업 취소가 실행 장비 정지가 아니라는 뜻을 함께 표시하여 물리 정지 접근과 원장 취소를 혼동하지 않게 한다. 390/1200 폭의 실제 정적 Chromium에서 링크 노출·180x48px target·native focus/href를 확인했다. 이 보충은 G1/G2 또는 실제 정지·작업 실행 수락을 승격하지 않는다.

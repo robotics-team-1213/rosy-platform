@@ -100,8 +100,16 @@ SIZE_VERDICTS = {
         "duplicate its socket. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        30_621,
-        "split: re-judged 2026-10-04 at 30621 after main integration for D-450: bounded Cell document store/routes and Console "
+        30_997,
+        "split: re-judged 2026-10-04 at 30997 for D-452 after independent source review: "
+        "the +376 lines comprise focused catalogue/directory/routes owners 170, bounded wiring 24, "
+        "peer-picker owner 128, existing presentation wiring 51 and Cell return link 3. "
+        "app.py is 599; new metadata owners do not publish commands or replace enrollment. "
+        "Expiry/conflict/auth/lifetime and three-width browser regressions exercise these seams. "
+        "Keep the flat-server subpackage migration obligation, 600 production/800 web file limits, "
+        "1000-line zero-growth tier and +150 package allowance unchanged; implementation and "
+        "evidence are in docs/plans/2026-10-04-network-peer-discovery.md. "
+        "re-judged 2026-10-04 at 30621 after main integration for D-450: bounded Cell document store/routes and Console "
         "assets reuse existing proposal and execution owners; app composition remains below 600 lines. "
         "Independent review preserves the subpackage/UI migration plan and existing +150 allowance. "
         "server HTTP boundary, console, signals and the mission-control stores are separate owners "
