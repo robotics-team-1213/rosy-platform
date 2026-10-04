@@ -5131,3 +5131,8 @@
 
 - receipt 검증→image/mask hash·전체화면/배경 명시 승인→고정eval버전/세션 검증→원본PNG/frames.jsonl 반환→기존builder 입력을 연결했다. builder에서도 human mask/labelmap/classes 바인딩을 재검증하며 승인자료변경·eval재읽기교체·메타누락을 거절한다.
 - root관련73pass/1skip, 독립64pass/1skip, 합성2세션 승인반환→PNGdataset/session split/fixedeval분리 positive 검증. 실제모델PC279 pending반환 exit0/export0/queue279/trainfalse/라벨입력없음. 근거: validation/edge-mask-return-and-png-build-2026-10-04.md. 실제사람검수·학습/장치/Fleet/전체목표 미완료.
+
+### 2026-10-04 · uncommitted · feat(learning): journal shadow delivery and rollback attempts
+
+- 모델 전달CLI에시도별private JSONL/초기·step fsync/model·intake SHA/단계·종료 기록을연결했다. 저장실패는network전차단, timeout·중단·변경실패는원격unknown 보존. remote pointer/HOLD script와기존exit코드그대로다. pytest합성이력은별도tmp_path에격리한다.
+- Windows관련184pass18skip/독립72pass18skip, Linux전달3suite89pass. 실제host강제종료는start/step만보존, 실제로봇status는exit78/원격unknown이었다. Linux6suite첫pack누락도별도보존했다. 근거: validation/model-delivery-attempt-journal-2026-10-04.md. 실제shadow/rollback·최신watch설치·정책/Fleet/DEVICE/FIELD 및전체목표미완료.
