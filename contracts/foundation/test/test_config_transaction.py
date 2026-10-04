@@ -35,8 +35,11 @@ class OverlayConcurrency(unittest.TestCase):
     def test_distinct_processes_serialize_same_overlay_without_lost_updates(self):
         program = ('import sys; from pathlib import Path; from core_common.config import patch_local_config; '
                    'patch_local_config({"process": {sys.argv[2]: sys.argv[2]}}, Path(sys.argv[1]))')
+        child_env = {**os.environ, 'PYTHONPATH': os.pathsep.join(
+            (str(Path(__file__).resolve().parents[1]), os.environ.get('PYTHONPATH', '')))}
         children = [subprocess.Popen([sys.executable, '-c', program, str(self.path), str(n)],
-                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE) for n in range(8)]
+                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                    env=child_env) for n in range(8)]
         for child in children:
             out, err = child.communicate(timeout=15)
             self.assertEqual(0, child.returncode, err.decode())

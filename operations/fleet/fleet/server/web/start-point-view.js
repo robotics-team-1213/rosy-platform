@@ -113,7 +113,7 @@ export function createStartPointView({scope, el, view, call, auth, onChanged}) {
     } finally {if (life.current() && epoch===serial) {busy=false;controls();await refresh();}}
   }
   scope.listen(save,'click',()=>mutate('PUT')); scope.listen(remove,'click',()=>mutate('DELETE'));
-  function reset() {serial++; busy=false; loading=false; ready=false; records=[]; points=[];gate.reset();view.startPoints=[];source.replaceChildren();fields.forEach(field=>field.value='');stopPicking();controls();onChanged();}
+  function reset() {serial++; busy=false; loading=false; ready=false; records=[]; points=[];gate.reset();view.startPoints=[];source.replaceChildren();fields.forEach(field=>field.value='');message.textContent='인증 후 시작점 상태를 다시 확인하세요.';stopPicking();controls();onChanged();}
   scope.onDispose(reset); scope.onResume(refresh); scope.interval(refresh,3000);
   controls(); refresh();
   return {refresh,reset};
