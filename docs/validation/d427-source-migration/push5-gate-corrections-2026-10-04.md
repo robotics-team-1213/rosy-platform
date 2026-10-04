@@ -2,7 +2,7 @@
 
 ## 기준과 관측
 
-- 후보 기준: `69779adb524eafe36a18995c71757fbbef7beef5`. 원격 기준 `7e26295117b9a6c1457ad8920f5d1123fa99171c`.
+- 후보 기준: `69779adb524e`. 원격 기준 `7e26295117b9`.
 - push5 빠른 게이트: 462 passed / 2 skipped / 11 freshness warnings, 84.59 s.
 - 주 영향 범위: 3 failed / 12556 passed / 527 skipped / 20 warnings, 2123.78 s.
 - 나머지 perception 포함 묶음: 2836 passed / 112 skipped, 415.35 s. face: 3 skipped.

@@ -1,6 +1,6 @@
 # Push5 corrections independent review
 
-- Reviewed baseline: 69779adb524eafe36a18995c71757fbbef7beef5, plus the five owned uncommitted paths. Repository source and HEAD were not edited by the reviewer.
+- Reviewed baseline: 69779adb524e, plus the five owned uncommitted paths. Repository source and HEAD were not edited by the reviewer.
 - Verdict: APPROVE source/host correction slice; no safety blocker found. Final candidate-SHA enforced gate has not been rerun and is not claimed passing. ARM64/SD/Docker build/DEVICE/FIELD remain separate.
 
 ## Scope and findings

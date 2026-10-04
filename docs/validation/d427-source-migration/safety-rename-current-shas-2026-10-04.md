@@ -1,13 +1,13 @@
 # D-427 safety rename final independent audit
 
-- Frozen reviewed HEAD: `69779adb524eafe36a18995c71757fbbef7beef5` (push5 in progress; untouched).
-- Current remote baseline: `7e26295117b9a6c1457ad8920f5d1123fa99171c`.
-- Pure migration endpoint: `d7409e99648184b6bb8d10598e904f7469562433`; later deliberate behavior commits are excluded from rename equivalence.
+- Frozen reviewed HEAD: `69779adb524e` (push5 in progress; untouched).
+- Current remote baseline: `7e26295117b9`.
+- Pure migration endpoint: `d7409e996481`; later deliberate behavior commits are excluded from rename equivalence.
 - Reviewer: independent d427_safety_review; read-only repository; this report and script only under X:.
 
 ## Existing evidence and coverage gap
 
-- Existing tracked evidence: `docs/validation/d427-source-migration/safety-rename-review-2026-10-04.md` (last touching commit `f4a99840ff5f665204cae1c4a7febab8bb3e7f31`). It records prior `c402cc45e..6820c2dc5` review, old relocation SHAs, 17 modules/35 anchors/3 roots, and 21 known violations.
+- Existing tracked evidence: `docs/validation/d427-source-migration/safety-rename-review-2026-10-04.md` (last touching commit `f4a99840ff5f`). It records prior `c402cc45e..6820c2dc5` review, old relocation SHAs, 17 modules/35 anchors/3 roots, and 21 known violations.
 - The existing record is substantive prior review evidence but is not by itself a current rebased-candidate per-commit proof: its IDs predate the latest origin rebase and sensing scope lacks a specific relocation SHA. This audit supplies that missing current-SHA link.
 - Its raw local evidence remains `X:/DevTemp/rosy-d427/resume/review/inspect.txt` and `commits.txt`; raw text alone is not durable device/artifact acceptance.
 
@@ -15,12 +15,12 @@
 
 | Scope | Previously reviewed SHA | Current SHA |
 |---|---|---|
-| signal | `dd6238b08` | `9711e2da359833acea85634a9c55774afbb5642b` |
-| dock | `6ea10c14b` | `cad0caad9149034f98157b4aace06f36521ed108` |
-| Fleet | `040ef50ff` | `d44aaada50a32f6c5392e6ca95f5ababf461e049` |
-| OMX | `6b0bb9f02` | `ea62919a7b11f3378789c2d0c8a58209a43e934e` |
-| CORE | `21de6b578` | `3cc2bdd8a250deba3164daf6ece62cd89e2e6244` |
-| sensing safety subtree | prior aggregate review | `67f83db1ca695deb6e3da0ad67732583c08d186e` (wave 4e) |
+| signal | `dd6238b08` | `9711e2da3598` |
+| dock | `6ea10c14b` | `cad0caad9149` |
+| Fleet | `040ef50ff` | `d44aaada50a3` |
+| OMX | `6b0bb9f02` | `ea62919a7b11` |
+| CORE | `21de6b578` | `3cc2bdd8a250` |
+| sensing safety subtree | prior aggregate review | `67f83db1ca69` (wave 4e) |
 
 ## Source equivalence
 
@@ -40,12 +40,12 @@
 
 | SHA | Subject | Monitored safety changes |
 |---|---|---|
-| `9711e2da359833acea85634a9c55774afbb5642b` | refactor(d427): move firmware/signal to operations/site_devices/signal | 1 R100 |
-| `cad0caad9149034f98157b4aace06f36521ed108` | refactor(d427): move firmware/dock to operations/site_devices/dock | 1 R100 |
-| `d44aaada50a32f6c5392e6ca95f5ababf461e049` | refactor(d427): wave 3c bulk move (299 files) | 1 R099, 5 R100 |
-| `ea62919a7b11f3378789c2d0c8a58209a43e934e` | refactor(d427): wave 4c bulk move (477 files) | 3 R100 |
-| `3cc2bdd8a250deba3164daf6ece62cd89e2e6244` | refactor(d427): wave 4d bulk move (566 files) | 13 R100 |
-| `67f83db1ca695deb6e3da0ad67732583c08d186e` | refactor(d427): wave 4e bulk move (731 files) | 8 R100 |
+| `9711e2da3598` | refactor(d427): move firmware/signal to operations/site_devices/signal | 1 R100 |
+| `cad0caad9149` | refactor(d427): move firmware/dock to operations/site_devices/dock | 1 R100 |
+| `d44aaada50a3` | refactor(d427): wave 3c bulk move (299 files) | 1 R099, 5 R100 |
+| `ea62919a7b11` | refactor(d427): wave 4c bulk move (477 files) | 3 R100 |
+| `3cc2bdd8a250` | refactor(d427): wave 4d bulk move (566 files) | 13 R100 |
+| `67f83db1ca69` | refactor(d427): wave 4e bulk move (731 files) | 8 R100 |
 
 `git diff -M <sha>^ <sha> --name-status` was used for every migration commit; only those touching the monitored safety file set appear above. All wave 3b -> 4e migration commits were traversed.
 
@@ -69,10 +69,10 @@
 
 ## Separate deliberate safety behavior commits
 
-- `fcf8ce3f10e5435892e58a1ff8b15ac7edf993d6`: fix(fleet): supervise signals and fence stale operator intent. Separately reviewed behavior; not part of rename equivalence.
-- `f425eae332372e477538aaa0a6372691f63559ee`: fix(safety): keep live manual control against autonomous navigation. Separately reviewed behavior; not part of rename equivalence.
-- `cffd0a6044deca548591c22beea99442fcb0df7d`: fix(omx): latch preemption and expose audited owner recovery. Separately reviewed behavior; not part of rename equivalence.
-- `60ed52480cc1a71d8a444613b103351ee59d28e9`: fix(pinky): bind final Twist writes to a single-use original guard. Separately reviewed behavior; not part of rename equivalence.
+- `fcf8ce3f10e5`: fix(fleet): supervise signals and fence stale operator intent. Separately reviewed behavior; not part of rename equivalence.
+- `f425eae33237`: fix(safety): keep live manual control against autonomous navigation. Separately reviewed behavior; not part of rename equivalence.
+- `cffd0a6044de`: fix(omx): latch preemption and expose audited owner recovery. Separately reviewed behavior; not part of rename equivalence.
+- `60ed52480cc1`: fix(pinky): bind final Twist writes to a single-use original guard. Separately reviewed behavior; not part of rename equivalence.
 - `aaf40fd0c`: charging safety tagging; `65941ea1a`: static learned-policy configuration guard; `0b3d90470`: attribute-independent cmd_vel publisher static gate. These are separate source changes, not movement.
 - `69779adb5`: test ownership/type-name exception and internal guard marker correction; previously independently approved, not treated as migration behavior equivalence.
 
@@ -82,19 +82,19 @@
 
 ## Raw filtered name-status details
 
-### 9711e2da359833acea85634a9c55774afbb5642b refactor(d427): move firmware/signal to operations/site_devices/signal
+### 9711e2da3598 refactor(d427): move firmware/signal to operations/site_devices/signal
 
 ```text
 R100	firmware/signal/firmware/rosy_signal/rosy_signal.ino	operations/site_devices/signal/firmware/rosy_signal/rosy_signal.ino
 ```
 
-### cad0caad9149034f98157b4aace06f36521ed108 refactor(d427): move firmware/dock to operations/site_devices/dock
+### cad0caad9149 refactor(d427): move firmware/dock to operations/site_devices/dock
 
 ```text
 R100	firmware/dock/firmware/rosy_dock/rosy_dock.ino	operations/site_devices/dock/firmware/rosy_dock/rosy_dock.ino
 ```
 
-### d44aaada50a32f6c5392e6ca95f5ababf461e049 refactor(d427): wave 3c bulk move (299 files)
+### d44aaada50a3 refactor(d427): wave 3c bulk move (299 files)
 
 ```text
 R100	src/site/fleet/fleet/server/cancel_all.py	operations/fleet/fleet/server/cancel_all.py
@@ -105,7 +105,7 @@ R100	src/site/fleet/fleet/server/local_stop_transport.py	operations/fleet/fleet/
 R100	src/site/fleet/fleet/server/task_dispatch_routes.py	operations/fleet/fleet/server/task_dispatch_routes.py
 ```
 
-### ea62919a7b11f3378789c2d0c8a58209a43e934e refactor(d427): wave 4c bulk move (477 files)
+### ea62919a7b11 refactor(d427): wave 4c bulk move (477 files)
 
 ```text
 R100	src/products/omx/adapter/omx_adapter/action_api.py	middleware/apps/device/omx/adapter/omx_adapter/action_api.py
@@ -113,7 +113,7 @@ R100	src/products/omx/adapter/omx_adapter/command_owner.py	middleware/apps/devic
 R100	src/products/omx/adapter/omx_adapter/local_stop.py	middleware/apps/device/omx/adapter/omx_adapter/local_stop.py
 ```
 
-### 3cc2bdd8a250deba3164daf6ece62cd89e2e6244 refactor(d427): wave 4d bulk move (566 files)
+### 3cc2bdd8a250 refactor(d427): wave 4d bulk move (566 files)
 
 ```text
 R100	src/contracts/foundation/core_common/robot_body.py	contracts/foundation/core_common/robot_body.py
@@ -131,7 +131,7 @@ R100	src/runtime/services/core_features/safety/manager.py	middleware/core/servic
 R100	src/runtime/services/core_features/safety/shadow.py	middleware/core/services/core_features/safety/shadow.py
 ```
 
-### 67f83db1ca695deb6e3da0ad67732583c08d186e refactor(d427): wave 4e bulk move (731 files)
+### 67f83db1ca69 refactor(d427): wave 4e bulk move (731 files)
 
 ```text
 R100	src/runtime/sensing/control/safety/__init__.py	middleware/perception/control/safety/__init__.py
