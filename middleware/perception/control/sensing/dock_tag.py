@@ -35,6 +35,10 @@ def _detector_parameters(aruco):
     create = getattr(aruco, "DetectorParameters_create", None)
     parameters = create() if create is not None else aruco.DetectorParameters()
     parameters.cornerRefinementMethod = aruco.CORNER_REFINE_SUBPIX
+    # A 5 px half-window reaches the inner cells of a small oblique tag on
+    # OpenCV 4.6; unlike newer ArUco it does not shrink that window by cell size.
+    # Keep the refinement local to the outer corner on both API generations.
+    parameters.cornerRefinementWinSize = 2
     return parameters
 
 

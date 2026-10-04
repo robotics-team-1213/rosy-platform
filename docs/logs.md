@@ -4995,3 +4995,10 @@
 - Change: Protect uncommitted entrypoint edits without blocking an approved update from a clean older checkout.
 - Evidence: Regression failed before the fix. Windows 14 passed, 21 Linux-only skips; model-PC Linux 35 passed.
 - gate 변화: None. Remote CI and migrated-source device activation remain separate.
+
+
+## 2026-10-04 · uncommitted · D-427 wave5 cleanup and CI compatibility
+
+- 변경: 추적 legacy src guide 10개와 manifest의 src colcon root를 정리했다. literal guard는 운영 소유 manifest를 읽으며 기존 검사 888개·backlog·안전 경계를 유지한다. D-443 Accepted 문장과 root AGENTS 이동 기간 규칙을 맞췄다. CI 임시 Gazebo 제외 파일의 수명은 먼저 반영된 peer 수정으로 보존하고 OpenCV 4.6 marker API와 작은 태그 코너 보정을 수정했다.
+- 증거: 구조·harness·literal 219 passed/1 skipped·NEW0, 현재 API 관련52 passed, 실제 Ubuntu/OpenCV4.6 관련43 passed. 초기 cleanup 및 추가 CI 수정 독립 APPROVE, 별도49/43 passed. docs/validation/d427-source-migration/wave5-cleanup-2026-10-04.md.
+- gate 변화: 없음. 코너 보정은 실제 sensing 변경이며 합성 7pose 한계만 확인했다. 기존 source CI 실패는 보존하고 최종 SHA의 전체 CI·ARM64·SD·artifact·release·DEVICE·FIELD는 후속이다. S7 firmware는 다음 개정이며 flash·motion·E-Stop reset을 실행하지 않았다.

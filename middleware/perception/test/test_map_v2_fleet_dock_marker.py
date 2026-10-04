@@ -86,11 +86,12 @@ def test_the_texture_decodes_to_id_7_with_a_white_quiet_zone():
                              image[:, :cell].ravel(), image[:, -cell:].ravel()])
     assert border.min() == 255                     # quiet zone
     assert image[cell:2 * cell, cell:-cell].max() == 0   # the marker's black border
-    detector = cv2.aruco.ArucoDetector(
-        cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50),
-        cv2.aruco.DetectorParameters())
-    _, ids, _ = detector.detectMarkers(cv2.copyMakeBorder(
-        image, 40, 40, 40, 40, cv2.BORDER_CONSTANT, value=255))
+    dictionary = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50)
+    padded = cv2.copyMakeBorder(image, 40, 40, 40, 40, cv2.BORDER_CONSTANT, value=255)
+    if hasattr(cv2.aruco, "ArucoDetector"):
+        _, ids, _ = cv2.aruco.ArucoDetector(dictionary).detectMarkers(padded)
+    else:
+        _, ids, _ = cv2.aruco.detectMarkers(padded, dictionary)
     assert ids is not None and ids.flatten().tolist() == [7]
     assert np.array_equal(image, dock_scene.tag_texture())
 
