@@ -543,3 +543,30 @@ def test_unfollowable_moved_log_is_reported_not_silently_passed(tmp_path):
     assert len(errors) == 1 and "were edited" in errors[0] and warnings_ == []
     # A module outside every moved root stays quiet, as before D-427.
     assert harness._append_only_findings(tmp_path, [base], "x", "brand/new", rewritten, moved) == ([], [])
+
+
+@pytest.mark.parametrize("mutation", ["exact", "old", "new", "missing", "other_edit", "other_delete"])
+def test_logs_only_reconcile_exact_unrecoverable_g2_record(mutation):
+    old = """## 2026-10-04 ? uncommitted ? fix(g2): reserved startup home before Cell admission
+
+- ??: G2 ?? ?? ??? ?? owner? ?? Pilot seat? ???? ???? ??? ??? ???. ??? ROS goal UUID? ?? ??? ?? ? ??? 0.5? ???? ???? seat ???reconciliation? ??? ? UDS? ????. stop/reset??? ???Fleet grant ??? ??? ???.
+- ??: r3 SDK prepare PASS ? ? Action? PHASE_RUNNER_START_UNKNOWN?? HOLD, phase goal ??? 0??? cleanup? PASS??. spawn ?? HOME_DEVIATION???? ?? gripper GRIPPER_NOT_OPEN? planner? ????? r3? ?? ??? ????? ????. ?? ?? ??? ????? exact UUID ?? RED, 10Hz ?? poll ?? RED?GREEN, ?? SQLite ??? intent ??? ????.
+- gate ??: SOURCE/LOCAL?. box16 ?? ???fault matrix??? ??????? ??? ?? HOLD/NOT_RUN, full_g2=false?. ?? ?? ??? ???? ? ????? ?????."""
+    new = """## 2026-10-04 · 230ccfc2a · docs: record unrecoverable G2 journal corruption
+
+- Change: Replace the corrupted journal entry introduced in commit 230ccfc2ae78116fc185688ed2627c9c2aeb211f. The original Korean text was irreversibly converted to question marks; this entry does not reconstruct it. The commit title records measured-home preparation through reserved Pilot admission.
+- Evidence: The immutable original remains in deploy/logs.md at that commit. Normalized original block SHA256: a5eecc71690d74036c9e393a2a47262843dfd369b71fe0d6ff92c40a24730c49. Source paths include g2_startup.py, g2_owner.py, g2_runner.py and test_cell_g2_startup.py. No test or runtime result is inferred from the damaged text.
+- Gate: Provenance correction only; ROS-SIM, DEVICE and FIELD acceptance are not established by this entry."""
+    baseline = GOOD_LOG + "\n\n" + old
+    corrected = GOOD_LOG + "\n\n" + new
+    if mutation == "old":
+        baseline = baseline.replace("reserved startup", "changed startup", 1)
+    elif mutation == "new":
+        corrected = corrected.replace("Provenance correction only", "Accepted in production", 1)
+    elif mutation == "missing":
+        corrected = GOOD_LOG
+    elif mutation == "other_edit":
+        corrected = corrected.replace("- 변경: a", "- 변경: altered")
+    elif mutation == "other_delete":
+        corrected = new
+    assert harness.is_append_only(baseline, corrected) is (mutation == "exact")

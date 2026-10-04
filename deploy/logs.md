@@ -2381,11 +2381,11 @@
 - gate 변화: 없음.
 - 결정: D-441 뒤 정리. 근거: 2026-10-04 관측 회차에서 서명 완료 후에도 제목이 "(unsigned)"로 남어 사람이 오독한 사실.
 
-## 2026-10-04 ? uncommitted ? fix(g2): reserved startup home before Cell admission
+## 2026-10-04 · 230ccfc2a · docs: record unrecoverable G2 journal corruption
 
-- ??: G2 ?? ?? ??? ?? owner? ?? Pilot seat? ???? ???? ??? ??? ???. ??? ROS goal UUID? ?? ??? ?? ? ??? 0.5? ???? ???? seat ???reconciliation? ??? ? UDS? ????. stop/reset??? ???Fleet grant ??? ??? ???.
-- ??: r3 SDK prepare PASS ? ? Action? PHASE_RUNNER_START_UNKNOWN?? HOLD, phase goal ??? 0??? cleanup? PASS??. spawn ?? HOME_DEVIATION???? ?? gripper GRIPPER_NOT_OPEN? planner? ????? r3? ?? ??? ????? ????. ?? ?? ??? ????? exact UUID ?? RED, 10Hz ?? poll ?? RED?GREEN, ?? SQLite ??? intent ??? ????.
-- gate ??: SOURCE/LOCAL?. box16 ?? ???fault matrix??? ??????? ??? ?? HOLD/NOT_RUN, full_g2=false?. ?? ?? ??? ???? ? ????? ?????.
+- Change: Replace the corrupted journal entry introduced in commit 230ccfc2ae78116fc185688ed2627c9c2aeb211f. The original Korean text was irreversibly converted to question marks; this entry does not reconstruct it. The commit title records measured-home preparation through reserved Pilot admission.
+- Evidence: The immutable original remains in deploy/logs.md at that commit. Normalized original block SHA256: a5eecc71690d74036c9e393a2a47262843dfd369b71fe0d6ff92c40a24730c49. Source paths include g2_startup.py, g2_owner.py, g2_runner.py and test_cell_g2_startup.py. No test or runtime result is inferred from the damaged text.
+- Gate: Provenance correction only; ROS-SIM, DEVICE and FIELD acceptance are not established by this entry.
 ## 2026-10-04 · uncommitted · fix(camera): 시작 중 반복 부팅 보호
 
 - 변경: 카메라 시작 전 fsync 기록, 두 번의 미확인 부팅 뒤 선택 서비스 보류, 별도 90초 관찰 타이머와 정상 종료 구분을 추가했다. 카메라 재시도를 10초·300초 내 3회로 제한하고 관찰 시간을 카메라 시작 완료와 분리했다. D-161의 CORE·호스트 권한 분리와 D-373의 선택 perception 설정을 유지한다.
@@ -2403,3 +2403,10 @@
 - Change: Activated the independently reviewed config-only setup with a dedicated viewer; retained existing users and enrollment. Repaired pre-existing CI blockers and removed the new setup test's BOM so exact-main CI can gate automatic signing again.
 - Evidence: Installer exit 0; viewer Fleet/Vision GET 200; two JPEG sequences advanced with 160/520ms frame ages. Enrollment readback unchanged, three managed containers healthy, timer enabled/active and no recovery journal. The following scheduled updater cycle finished idle after configured functional checks. Isolated setup 22 passed; CI repair selection 94 passed, Isaac 24 passed and Node 3 passed; independent review APPROVE with 151 Python passes, 15 explicit POSIX skips and 3 Node passes.
 - gate 변화: Config activation and read-only runtime evidence only. Remote CI/merge/new image delivery are separate. Second robot power and physical marker identity remain unverified; no motion or E-Stop reset was used.
+
+
+## 2026-10-04 · uncommitted · fix(ci): reconcile exact corrupted journal provenance
+
+- Change: Replace only the unrecoverable G2 journal block from 230ccfc2a with explicit source provenance. The history guard permits only the exact original/replacement block hash pair; encoding and unrelated history guards remain active. Refresh the native image-sync size verdict from 1020 to 1021 for the existing b9f884623 unit allowlist line, retaining the required future split and zero growth allowance.
+- Evidence: Exact-pair acceptance initially failed before implementation; all six mutation variants pass after correction. Harness and selection suites 98 passed. Architecture and image-sync suites 104 passed, 6 platform skips. Independent review approved both narrowly scoped corrections.
+- Gate: SOURCE/LOCAL only; no native runtime or physical acceptance is inferred.

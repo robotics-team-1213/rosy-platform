@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import hashlib
 import os
 import re
 import subprocess
@@ -325,8 +326,20 @@ def is_append_only(old: str, new: str) -> bool:
             "77 passed; known-failure comparison: 0 new, 0 known.",
         ),
     }
+    # The G2 journal at 230ccfc2a irreversibly lost its Korean text. Only
+    # this exact provenance correction may replace it; all other entries
+    # still require byte-for-byte preservation after normalization.
+    provenance_reconciliations = {
+        "a5eecc71690d74036c9e393a2a47262843dfd369b71fe0d6ff92c40a24730c49": (
+            "76178d7f01aab15760f4ed9cda9787123aeb087bf4d796eed0d203c941f7648a"
+        ),
+    }
+    new_hashes = {hashlib.sha256(block.encode("utf-8")).hexdigest() for block in new_blocks}
     for block in old_blocks:
         if block in new_blocks:
+            continue
+        corrected_hash = provenance_reconciliations.get(hashlib.sha256(block.encode("utf-8")).hexdigest())
+        if corrected_hash is not None and corrected_hash in new_hashes:
             continue
         lines = block.splitlines()
         replacement = evidence_reconciliations.get(lines[0])
