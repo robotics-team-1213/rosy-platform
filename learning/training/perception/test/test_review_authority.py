@@ -70,6 +70,32 @@ def test_current_digest_is_recomputed_and_input_is_not_mutated():
         validate_current(value)
 
 
+def test_bundle_exposes_only_verified_captured_bytes_when_requested(tmp_path):
+    root = tmp_path / 'export'
+    value = current()
+    seal_bundle(root, value)
+    expected = {p.relative_to(root).as_posix(): p.read_bytes()
+                for p in root.rglob('*') if p.is_file()}
+    ordinary = verify_bundle(root, value, workspace_id='fixture')
+    assert 'captured_files' not in ordinary
+    captured = verify_bundle(root, value, workspace_id='fixture', capture_files=True)
+    assert captured['captured_files'] == expected
+    assert {k: v for k, v in captured.items() if k != 'captured_files'} == ordinary
+    (root / 'inputs/source.jsonl').write_bytes(b'changed after validation\n')
+    assert captured['captured_files']['inputs/source.jsonl'] == expected['inputs/source.jsonl']
+    with pytest.raises(ReviewAuthorityError):
+        verify_bundle(root, value, workspace_id='fixture', capture_files=True)
+
+
+@pytest.mark.parametrize('flag', [0, 1, None, 'true'])
+def test_capture_files_requires_explicit_bool(tmp_path, flag):
+    root = tmp_path / 'export'
+    value = current()
+    seal_bundle(root, value)
+    with pytest.raises(ReviewAuthorityError):
+        verify_bundle(root, value, workspace_id='fixture', capture_files=flag)
+
+
 @pytest.mark.parametrize('field,value', [('generation', True), ('workspace_id', ''), ('schema', 'other')])
 def test_current_required_types_fail_even_when_resealed(field, value):
     doc = current(); doc[field] = value

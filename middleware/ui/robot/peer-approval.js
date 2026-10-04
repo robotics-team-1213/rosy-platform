@@ -48,7 +48,9 @@ export function createReceiverApprovals({root, api, isAdmin, captureLifetime, ru
             deciding = true;
             const requested = remember.checked;
             const active = () => owner.current() && isAdmin() && generation === epoch && item.isConnected && item.getClientRects().length > 0;
-            try { await runConfirmed(`${row.label} (${row.display_code}) 연결을 ${action === 'approve' ? '승인' : '거절'}하시겠습니까?`,
+            try { await runConfirmed(action === 'approve'
+              ? `${row.label} (${row.display_code}) 연결을 승인하시겠습니까?`
+              : `${row.label} (${row.display_code}) 연결을 거절하시겠습니까?`,
               button, active, async (_current, ticket) => {
                 const result = await api(`/api/v1/auth/peer-pairing/requests/${encodeURIComponent(row.request_id)}/decision`,
                   {method: 'POST', signal: ticket.signal, body: JSON.stringify({action, revision: row.revision, persist_requested: requested})});
