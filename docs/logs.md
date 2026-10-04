@@ -5002,3 +5002,10 @@
 - 변경: 추적 legacy src guide 10개와 manifest의 src colcon root를 정리했다. literal guard는 운영 소유 manifest를 읽으며 기존 검사 888개·backlog·안전 경계를 유지한다. D-443 Accepted 문장과 root AGENTS 이동 기간 규칙을 맞췄다. CI 임시 Gazebo 제외 파일의 수명은 먼저 반영된 peer 수정으로 보존하고 OpenCV 4.6 marker API와 작은 태그 코너 보정을 수정했다.
 - 증거: 구조·harness·literal 219 passed/1 skipped·NEW0, 현재 API 관련52 passed, 실제 Ubuntu/OpenCV4.6 관련43 passed. 초기 cleanup 및 추가 CI 수정 독립 APPROVE, 별도49/43 passed. docs/validation/d427-source-migration/wave5-cleanup-2026-10-04.md.
 - gate 변화: 없음. 코너 보정은 실제 sensing 변경이며 합성 7pose 한계만 확인했다. 기존 source CI 실패는 보존하고 최종 SHA의 전체 CI·ARM64·SD·artifact·release·DEVICE·FIELD는 후속이다. S7 firmware는 다음 개정이며 flash·motion·E-Stop reset을 실행하지 않았다.
+
+
+## 2026-10-04 · uncommitted · D-427 peer CI correction integration
+
+- 변경: wave5 후보를 origin/main의 CI 임시 Gazebo 제외 파일 수명 수정 위에 rebase했다. 원격 CI·실제 Bash 시험과 docs/logs 원문 prefix를 보존하고 이번 세션의 정리·인식 수정만 추가했다.
+- 증거: rebase 후보 6a7de04dc75c clean, 관련 CI/inventory 12 passed; 독립 peer prefix·source bytes 확인 및 CI 9 passed·APPROVE. docs/validation/d427-source-migration/wave5-rebase-independent-review-2026-10-04.md. 충돌 상태 push9는 lint3 errors·exit1이므로 수락 증거가 아니다.
+- gate 변화: 없음. 최종 push gate·원격 CI·ARM64·SD·release·실기는 후속이며 전체 legacy 인식 시험도 진행 중이다.
