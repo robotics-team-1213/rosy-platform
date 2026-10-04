@@ -253,3 +253,26 @@ job별 catalog-source.jsonl과 catalog-curated.jsonl을 보존하며 기존 cata
 부분 라벨은 새 attempt에서 만들고 성공한 소스의 처리는 반복하지 않는다.
 CVAT/model 예측의 검수 대기 mask를 이 자동 라벨 경로에 섞지 않는다.
 Windows scratch/output은 X 드라이브에 둔다.
+
+## 여러 데이터 버전을 반복 학습하기
+
+`learning_cycle.py config.json --out <상태 경로>`는 새 요청을 확인하고 기존
+`train_job.py`를 반복 호출한다. `--once`는 한 번 검사한 뒤 끝낸다. 설정에는
+`trainer`(기존 train_job 설정), `recipes`(training 설정 목록), `requests_dir`,
+`reviews_dir`, `interval_s`, `max_attempts`를 넣는다. 요청 폴더의 새 JSON은
+`{"dataset":"<name>@<content_sha>","purpose":"research"}`다. 요청 파일은 수정하지
+않고 새 파일로 게시한다. 같은 데이터와 training 설정은 중복 요청·재시작에도
+다시 학습하지 않는다. 품질 거절은 그 후보만 끝내고, 실행 오류는 제한된 횟수만
+재시도한다. 프로세스가 끊기면 기존 train_job의 검증된 단계부터 재개한다.
+
+연속 실행 상태의 writer lock은 중복 실행을 거절한다. 요청 데이터의 내용 해시,
+train/val 세션 분리와 저장소의 모든 고정 평가셋 제외를 먼저 검사한다. 실제
+학습·수출·intake·READY 게시에는 기존 train_job의 품질 게이트를 그대로 쓴다.
+camera provenance가 미수용인 연구 데이터는 운영 검증을 마친 데이터가 아니다.
+이 실행기는 로봇 연결, 전달, HOLD 해제, 주행 활성화를 수행하지 않는다.
+
+`reviews_dir/<export>/`의 Pinky 웹 검수 결과는 COMPLETE와 manifest의 모든 파일
+해시를 검사한 뒤 승인·대기·제외 행을 상태에 기록한다. 검수 중인 결과는
+집계하지 않는다. 객체 박스 검수 결과는 segmentation 학습 자료로 변환하지
+않으며 `training_dataset_qualified=false`를 유지한다. 검수자가 승인한 새 픽셀
+마스크는 기존 build.py를 통해 세션이 분리된 불변 데이터 버전으로 만들어야 한다.
