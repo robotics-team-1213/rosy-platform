@@ -46,7 +46,7 @@ run() { if [ "$DRY" = 1 ]; then printf '+ %s\n' "$*"; else "$@"; fi; }
 cfg_value() {
   local file=$CONFIG
   [ -r "$file" ] || file=$HERE/model-watch.yaml.example
-  sed -n "s/^$1:[[:space:]]*//p" "$file" | head -n 1 | sed "s/[[:space:]]*#.*$//; s/^[\"']//; s/[\"']$//"
+  sed -n "s/^$1:[[:space:]]*//p" "$file" | head -n 1 | tr -d '\r' | sed "s/[[:space:]]*#.*$//; s/^[\"']//; s/[\"']$//"
 }
 
 [ "$DRY" = 1 ] || [ "$(id -u)" -eq 0 ] || { echo "run as root (sudo), or pass --dry-run" >&2; exit 1; }

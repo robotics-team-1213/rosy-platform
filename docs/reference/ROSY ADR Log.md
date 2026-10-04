@@ -444,6 +444,7 @@
 | D-445 | Fleet 승격 경로(ROS-SIM D-426 → ARTIFACT D-437 첫 실행·D-301 서명 → DEVICE 사이트 PC·2대)와 중앙 Fleet(8081) 착수 전제 3개를 고정한다. 착수 자체는 별도 ADR | Proposed (2026-10-04, 사다리 계획 승인; 문서 결정, 승격·착수 별도) |
 | D-446 | 모델 PC도 서명 코드 자동 업데이트에 포함하고 작업·GPU 환경·모델 승격을 분리한다 | Accepted (2026-10-04, implementation authorized; device acceptance tracked separately) |
 | D-447 | 웹 표면의 실시간 상태는 이미 열린 소켓을 재사용한다 — Fleet gather는 hub-fresh 로봇을 registry 스냅샷으로 먼저 읽고(신선도 `hub_state_max_age_s`, REST 폴백), 로봇 셸 `store.js`의 `/ws/state` 전환이 그 뒤를 잇는다. 새 전송 계약 없음, 응답 스키마 불변, 행마다 `gather_source` | Proposed (2026-10-04, 사용자 지시; (a) Fleet 출처 전환 구현 동반, 승격 무관) |
+| D-449 | 학습 산출물은 출처·시계·단위·owner binding과 승격 증거를 공용 계약으로 보존한다 | Proposed (2026-10-04, active learning closure implementation; 구조·wire 초안이며 runtime 활성화·장치 수용 승인 아님) |
 | D-451 | 한 줄에서 만나는 양보는 Fleet 알고리즘이 고르고, 로봇은 그 한 수를 실행하거나 거부한다 | Accepted (2026-10-04, 사용자 결정; Fleet 순수 판단과 room_hold·wait_both, CORE 전달·cmd_vel·막힘 어휘·DEVICE·ROS-SIM은 다음 결정) |
 | D-452 | 주소 대신 장비 신원과 역할로 네트워크 연결 대상을 찾는다 | Accepted (2026-10-04, 사용자 구현 요청; 공통 역할 발견·승인 신원 대상·기존 인증 보존, 구현 및 DEVICE/FIELD 증거 별도) |
 | D-453 | 양보 한 구간은 기존 막힘 답 YIELD 로 보내고, CORE 는 돌려 확인한 뒤 앞으로만 간다 | Accepted (2026-10-04, 사용자 결정; 한 구간 YIELD, CORE 는 확인 후 전진, 운용자 다섯 단어 유지, 합류·D-442·DEVICE·ROS-SIM은 다음) |

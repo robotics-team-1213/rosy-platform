@@ -51,10 +51,17 @@ def package(model_folder, inbox_dir) -> Path:
     model_folder = Path(model_folder)
     rev, names = _files(model_folder)
     dest = Path(inbox_dir) / f"{rev}__{_utc()}"
-    dest.mkdir(parents=True, exist_ok=False)
+    group = store.publication_group(Path(inbox_dir))
+    if group is not None:
+        store.refuse_publication_links(model_folder)
+    store.publication_directory(dest, exist_ok=False)
     for name in names:
         shutil.copy2(model_folder / name, dest / name)
-    (dest / store.READY).write_text(store.content_sha(dest), encoding="utf-8")
+    store.shared_publication_permissions(dest, group)
+    marker = dest / store.READY
+    marker.write_text(store.content_sha(dest), encoding="utf-8")
+    if group is not None:
+        marker.chmod(0o640)
     print(f"handed over: {dest}")
     return dest
 

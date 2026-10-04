@@ -16,6 +16,37 @@ CLASSES = [
 ]
 
 
+def test_original_png_frames_preserve_bytes_and_extension(tmp_path):
+    dirs = [_frames_dir(tmp_path, s, [0]) for s in ('s1', 's2')]
+    for d in dirs:
+        pixels = np.full((8, 8, 3), 37, np.uint8)
+        raw = cv2.imencode('.png', pixels)[1].tobytes()
+        (d / 'original.png').write_bytes(raw)
+        row = {'session': d.name, 'index': 0, 'image': 'original.png',
+               'image_sha256': hashlib.sha256(raw).hexdigest()}
+        (d / 'frames.jsonl').write_text(json.dumps(row) + '\n')
+    exp = _export(tmp_path, _names('s1', 's2', indexes=(0,)))
+    out = tmp_path / 'dataset'
+    result = build.build_dataset(exp, dirs, CLASSES, out)
+    for frame in result['frames']:
+        assert frame['image'].endswith('.png')
+        assert (out / frame['image']).read_bytes() == (tmp_path / frame['session'] / 'original.png').read_bytes()
+
+
+@pytest.mark.parametrize('image,digest', [('original.png', '0' * 64), ('../other.png', '0' * 64)])
+def test_explicit_image_hash_and_path_are_checked_before_output(tmp_path, image, digest):
+    d = _frames_dir(tmp_path, 's1', [0])
+    second = _frames_dir(tmp_path, 's2', [0])
+    (d / 'original.png').write_bytes(b'changed')
+    (d / 'frames.jsonl').write_text(json.dumps({'session': 's1', 'index': 0,
+                                               'image': image, 'image_sha256': digest}))
+    out = tmp_path / 'dataset'
+    export = _export(tmp_path, _names('s1', 's2', indexes=(0,)))
+    with pytest.raises(build.BuildError):
+        build.build_dataset(export, [d, second], CLASSES, out)
+    assert not out.exists()
+
+
 def _frames_dir(root, session, indexes, with_meta=True):
     d = root / session
     (d / "frames").mkdir(parents=True)

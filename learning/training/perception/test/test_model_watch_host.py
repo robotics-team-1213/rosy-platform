@@ -390,3 +390,24 @@ def test_no_failure_means_no_line(tmp_path, monkeypatch, capsys):
     _ml(tmp_path, monkeypatch, state=tmp_path / "missing.json")
     rosy_ml.main(["status", "pinky-a"], runner=td.FakeRunner())
     assert "watcher failure" not in capsys.readouterr().out
+
+
+def test_service_delivery_journal_uses_writable_state_not_protected_home(tmp_path, monkeypatch):
+    import delivery_journal
+    unit = (ROOT / "deploy/site/rosy-model-watch.service").read_text(encoding="utf-8")
+    values = dict(line.removeprefix("Environment=").split("=", 1)
+                  for line in unit.splitlines() if line.startswith("Environment="))
+    state = "/var/lib/rosy-model-watch"
+    assert values.get("ROSY_MODEL_DELIVERY_JOURNAL_DIR") == state + "/model-delivery"
+    assert "StateDirectory=rosy-model-watch" in unit and "ProtectHome=yes" in unit
+    mapped = tmp_path / "state" / "model-delivery"
+    monkeypatch.setenv("ROSY_MODEL_DELIVERY_JOURNAL_DIR", str(mapped))
+    monkeypatch.setenv("HOME", str(tmp_path / "protected-home"))
+    attempt = delivery_journal.Attempt(delivery_journal.default_root(),
+        types.SimpleNamespace(action="push", task="lane_seg", host="pinky-a.local",
+                              revision="m1", slot="shadow"))
+    attempt.finish(76)
+    rows = [json.loads(line) for line in attempt.path.read_text().splitlines()]
+    assert [row["event"] for row in rows] == ["started", "finished"]
+    assert rows[-1]["command_outcome"] == "refused"
+    assert not (tmp_path / "protected-home").exists()

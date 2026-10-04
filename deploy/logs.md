@@ -2358,6 +2358,18 @@
 - Evidence: Initial regression 25 failed/4 passed; corrected closure/error/hook regressions 29 passed on Windows. Hidden-untracked regression 2 failed before correction, 5 focused checks passed after correction. Isolated model-PC Linux updater/hook suites 79 passed, including six real held-switch scenarios.
 - gate 변화: None. Production controller installation, activation and release/field acceptance are separate.
 
+## 2026-10-04 · uncommitted · fix(site): keep model delivery journal in service state
+
+- 변경: model-watch의 전달 이력 경로를 기존 StateDirectory 아래로 명시했다. ProtectHome와 기존 hardening·권한·timer 활성화 조건은 유지한다.
+- 증거: 서비스 경로 회귀 RED 후 관련 호스트53pass, 독립47pass. 관제 운영 venv에서 실제 JSONL 생성/fsync와 installer dry-run exit0. 운영 venv에는 pytest가 없어 첫 회귀 실행 실패를 보존했다. 별도 source 후보의 해시를 확인했으며 관리자 설치는 실행하지 않았다.
+- gate 변화: SOURCE/LOCAL 보강. 실제 systemd 서비스 실행·관리자 설치·로봇 shadow/rollback·DEVICE/FIELD는 미검증이다.
+
+
+## 2026-10-04 · uncommitted · model-watch installer CRLF config parsing
+
+- Change: cfg_value removes carriage returns before quote/comment trimming, so LF and CRLF backend/store values select the same installation branch.
+- Evidence: Native Linux RED2fail4pass for plain/quoted CRLF; after fix LF/CRLF/plain/quoted/comment regressions and existing install/unit suites23pass. Independent source review requested. V2 source881file archive and CPUintake pass did not establish installation closure: dry-run exit0 omitted store/drop-in before this fix.
+- Gate: No privileged install or timer activation. Existing v2 bundle preserved; corrected committed source must be repackaged and reviewed before administrator request supersedes it. Producer config remains an inactive candidate; actual service UID/group/doctor/robot HOLD gates pending.
 ## 2026-10-04 · uncommitted · fix(g2): provision the per-instance IPC directory before startup
 
 - Change: Move private run subdirectory provisioning into fresh_evidence and create uds/omx_cell_sim_01 before starting the owner. Preserve the UnixActionServer service-manager requirement, existing grants and failed-run receipts.
@@ -2386,6 +2398,11 @@
 - Change: Replace the corrupted journal entry introduced in commit 230ccfc2ae78116fc185688ed2627c9c2aeb211f. The original Korean text was irreversibly converted to question marks; this entry does not reconstruct it. The commit title records measured-home preparation through reserved Pilot admission.
 - Evidence: The immutable original remains in deploy/logs.md at that commit. Normalized original block SHA256: a5eecc71690d74036c9e393a2a47262843dfd369b71fe0d6ff92c40a24730c49. Source paths include g2_startup.py, g2_owner.py, g2_runner.py and test_cell_g2_startup.py. No test or runtime result is inferred from the damaged text.
 - Gate: Provenance correction only; ROS-SIM, DEVICE and FIELD acceptance are not established by this entry.
+## 2026-10-04 · uncommitted · fix(g2): reserved startup home before Cell admission
+
+- 변경: 커밋 230ccfc2a의 reserved Pilot admission을 통한 G2 시작 home 준비를 반영했다. 병합 중 발견한 인코딩 손상 원문은 X:/DevTemp/rosy-learning-audit-20261004/g2-imported-journal-original.txt에 보존했다. 복구 불가능한 원문을 실행 증거로 사용하지 않는다.
+- 증거: 해당 커밋의 Independent-Review는 48 passed·1 Unix-host skip이며 실제 ROS-SIM 재시도는 pending이다. 통합 담당자의 G2 startup·ports 검사 26 passed·1 skipped. SOURCE/HOST 근거만 보존한다.
+- gate 변화: box16 전체 실행·fault matrix·수동 간지·물리 수용은 HOLD/NOT_RUN이며 full_g2=false다. 실제 주행·HOLD 해제는 수행하지 않았다.
 ## 2026-10-04 · uncommitted · fix(camera): 시작 중 반복 부팅 보호
 
 - 변경: 카메라 시작 전 fsync 기록, 두 번의 미확인 부팅 뒤 선택 서비스 보류, 별도 90초 관찰 타이머와 정상 종료 구분을 추가했다. 카메라 재시도를 10초·300초 내 3회로 제한하고 관찰 시간을 카메라 시작 완료와 분리했다. D-161의 CORE·호스트 권한 분리와 D-373의 선택 perception 설정을 유지한다.
@@ -2410,3 +2427,10 @@
 - Change: Replace only the unrecoverable G2 journal block from 230ccfc2a with explicit source provenance. The history guard permits only the exact original/replacement block hash pair; encoding and unrelated history guards remain active. Refresh the native image-sync size verdict from 1020 to 1021 for the existing b9f884623 unit allowlist line, retaining the required future split and zero growth allowance.
 - Evidence: Exact-pair acceptance initially failed before implementation; all six mutation variants pass after correction. Harness and selection suites 98 passed. Architecture and image-sync suites 104 passed, 6 platform skips. Independent review approved both narrowly scoped corrections.
 - Gate: SOURCE/LOCAL only; no native runtime or physical acceptance is inferred.
+
+## 2026-10-04 · uncommitted · feat(ci): payload 부팅 스모크 — arm64 러너에서 D-444 P1.2 관측
+
+- 변경: `payload-boot-smoke.yml`(workflow_dispatch 전용, `ubuntu-24.04-arm`, GITHUB_TOKEN 한정 비밀 없음). payload artifact를 내려 압축을 풀고, ROS 핀(CycloneDDS·nav2-msgs·tf2)과 CI 부트 스모크의 파이썬 스택을 설치한 뒤, `release/install`에서 `ROSY_ROBOT_NUMBER=1`로 CORE를 부팅해 `GET /dashboard`·`/pilot`·`/console`의 200+CSP를 검사한다(실패 시 로그 업로드). 정의: `.github/workflows`의 `payload-boot-smoke.yml`과 `test/test_payload_boot_smoke_workflow.py`(6 계약).
+- 증거: `test_payload_boot_smoke_workflow.py` 6 passed(수동 전용·arm 러너·비밀 부재·3 프로브·CSP·부팅 핀·로그 업로드), `test_ci_dependencies.py` 9 passed 회귀 없음. Windows Docker 호스트의 arm64 에뮬레이션 벤치는 binfmt 유실로 반복 불능이었다(2026-10-04 3회 유실 — 벤치 로그 X:/DevTemp/opencode/p12-bench) — payload 파이썬 진입점이 노드 구축까지 도달했음은 확인했다.
+- gate 변화: dashboard·pilot ARTIFACT의 "기기 GET 200" 조항이 이 워크플로 실행으로 관측될 수 있게 되었다(첫 실행은 별도).
+- 결정: D-444 P1.2, D-161(native arm64). 로컬 에뮬레이션은 폐기하고 러너 벤치가 정본이다.

@@ -518,3 +518,11 @@ python -c "import yaml;[print(r.get('wave','-'),r['path'],'->',r['d427_target'])
 ### 답변 기록 방식
 
 각 담당자는 이 절 아래에 `C1`–`C4`별로 **동의 / 대안 / 사실 정정**, 근거 경로·시험·커밋, 필요한 후속 작업을 덧붙일 수 있다. 권고에 대한 동의와 ADR 수용·구현 완료는 구별한다. 미답변을 승인으로 간주하지 않는다. 기존 결정과 충돌하는 변경안은 차이와 영향을 먼저 적어 검토한다.
+
+### 2026-10-04 Q6 SOURCE 후보
+
+`feat/learning-pipeline-closure`에서 OMX 시연 본문 검증을 `contracts/learning`의
+stdlib profile로 옮겨 curation의 middleware import를 제거했다. 위반 집합은 5→4다.
+기준 SHA `828cfdf01`, 대상은 계약·curation·learning registry와 import guard이며
+device recorder/wave 4c 경로는 유지한다. [검증 기록](../validation/omx-profile-validation-2026-10-04.md).
+이는 Q6 SOURCE/HOST 해소이며 전체 2b·main 착지·runtime ARTIFACT_EQUIVALENT는 미검증이다.

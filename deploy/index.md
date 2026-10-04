@@ -70,8 +70,8 @@
 
 ## 최근 기록
 
+- 2026-10-04 · uncommitted · feat(ci): payload 부팅 스모크 — arm64 러너에서 D-444 P1.2 관측
 - 2026-10-04 · uncommitted · fix(ci): reconcile exact corrupted journal provenance
 - 2026-10-04 · uncommitted · D-441 functional activation and CI delivery repair
 - 2026-10-04 · uncommitted · D-441 dedicated functional verification setup
 - 2026-10-04 · uncommitted · fix(camera): 시작 중 반복 부팅 보호
-- 2026-10-04 · 230ccfc2a · docs: record unrecoverable G2 journal corruption
