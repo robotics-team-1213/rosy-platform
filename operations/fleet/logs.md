@@ -1822,3 +1822,10 @@
 - 변경: 공개 sidecar를 기존 등록 ID·정본 .local 이름·CA DER 지문에 묶는다. 기존 encrypted credentials/principal/expiry/address를 유지하며 bounded nofollow 파일 검증과 같은 TLS 위치의 anonymous identity 확인 뒤에만 코드·Bearer·WSS auth를 보낸다. 기존 hold/expiry를 await 뒤에도 검사한다. 공개 origin/CA marker는 같은 등록부에 원자 저장하고 설정 누락·교체·재시작의 HTTP downgrade를 막는다. 정상 로그아웃 확인 후 실제 등록 행 삭제에만 marker를 함께 지운다. CLI와 두 기존 Compose는 기존 RO config의 선택적 공개 파일만 전달한다. 새 roster·권한·token 갱신·TLS 무시는 없다.
 - 증거: 최종 기존 affected 206 passed/2 Windows filesystem skipped(49.27s), 마지막 새 테스트 23 passed/1 symlink skipped(2.77s), 독립 tail 5 passed(1.61s). restart/CA DER/receiver ID/WS identity/REST await/WS await 6개 X compiled-byte 변이는 모두 실제 RED이며 원본 복원 GREEN과 production hash 불변을 확인했다. owned Python 6파일 flake8 0, diff check 및 known_failures 0 NEW. 초기 namespace prerequisite 실패와 pending logout retry RED는 별도 원본 로그로 보존했다. 공개 runbook은 CA/origin rotation 및 실제 관리자 적용을 미구현·미실행으로 밝힌다.
 - gate 변화: SOURCE/LOCAL만. 독립 SPEC/Quality/Safety source PASS. 실제 TLS handshake/WSS·사이트 설정·기기·운용 승인은 NOT_RUN이며 기존 ARTIFACT/DEVICE/FIELD gate를 올리지 않는다.
+
+
+## 2026-10-05 · uncommitted · refactor(fleet): CLI feature 생성 경계 분리
+
+- 변경: 기존 P6 before-next-flag 의무에 맞춰 Mission·Cell compiler·proposal/evidence, 카메라 pairing, 등록 TLS 생성만 lazy console builder로 옮겼다. CLI의 기존 거절·alias·옵션, 동일한 load→roster.sync 순서, 한 번의 create_app 및 기존 localization builder 위임을 유지한다. 런타임·권한·새 background owner는 추가하지 않는다.
+- 증거: Mission·pairing 본문 AST 동등과 등록 생성의 명시적 config 인수 외 동등, 새 interpreter에서 비활성 optional dependency 미로드·alias 동등을 확인했다. 기존 CLI/TLS 55 passed/Windows symlink 1 skipped(34.83s), owned Python 2파일 flake8 0, known_failures 0 NEW. 실제 동일 P6 filter에서 CLI652→586, 새 builder91, Fleet35581→35606(+25)이다. 600/800/1000 및 +150 제한은 수정하지 않았다.
+- gate 변화: SOURCE/LOCAL 구조 후속만. 실기·사이트 설정·운용 수용은 이전 NOT_RUN을 유지한다. CLI stale verdict와 Fleet package 재판정은 통합 owner가 별도로 처리한다.
