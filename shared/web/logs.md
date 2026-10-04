@@ -617,6 +617,12 @@
 - 증거: 깨끗한 main 1b669c7cb에서 Fleet grid와 개발 도구 identity 실패 2건 재현, GitHub CI e9bc8634c의 learning-policy 오류 원인 확인. 관련 호스트 71 passed, known_failures 신규 0. 독립 읽기 검토와 정확한 후속 SHA CI는 별도 확인한다.
 - gate 변화: SOURCE 계약 복구. CI 성공·서명·관제 PC 배포·FIELD 수용을 주장하지 않는다.
 
+## 2026-10-05 · uncommitted · fix(contracts): name registered developer page scopes
+
+- 변경: D-459·D-461에서 이미 등록한 dev 범위를 D-339 제목 대응에 추가하고 검수·학습 작업 페이지 제목을 개발 범위로 맞춘다. 설치 앱 검사에 예외나 가짜 패키지를 넣지 않는다. 제목 검사는 두 페이지를 모두 확인한다.
+- 증거: 정상 push hook이 발견한 새 title 실패를 수정하며 전체 영향 선택을 재검증한다. 이전 hook FAST 464 passed/2 skipped, 영향 묶음 290 passed/1 failed/1 skipped였고 실패는 이번 title 누락이다.
+- gate 변화: SOURCE 계약 복구이며 본문·배치·로봇 동작·CI·배포 수용 변경은 없다.
+
 ## 2026-10-05 · uncommitted · fix(learning): bind review content and existing source identities
 
 - 변경: 최신 결정에 object_review_sha256와 source_sha256를 추가하고 export human의 video/frame 출처를 원본과 맞춘다. 정확히 일치하는 legacy primary image SHA·영상명/frame만 연결하고 이미지·검수 decision/version과 legacy source를 보존한다. 승인 scalar 타입을 엄격히 확인한다. dev 작업 화면 title 범위를 검사하며 별도 앱 identity를 만들지 않는다.

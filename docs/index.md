@@ -299,7 +299,7 @@
 ## 최근 기록
 
 - 2026-10-05 · uncommitted · test(learning): reject resealed embedded authority scalar aliases
+- 2026-10-05 · uncommitted · docs(reference): D-368 행 v1.101→v1.102 재번호
+- 2026-10-05 · uncommitted · docs(reference): D-368 행 v1.100→v1.101 재번호
+- 2026-10-05 · uncommitted · docs(reference): API Ref v1.100 — D-368 운전자 MJPEG 스트림
 - 2026-10-05 · uncommitted · fix(learning): validate sealed receipt authority exactly
-- 2026-10-05 · uncommitted · feat(fleet): D-463 차선 경로는 다음 짧은 점
-- 2026-10-05 · uncommitted · fix(learning): bind review content and existing source identities
-- 2026-10-05 · uncommitted · docs(validation): P2 페달 계측 실행 준비 완료 — 사용자 입회 대기

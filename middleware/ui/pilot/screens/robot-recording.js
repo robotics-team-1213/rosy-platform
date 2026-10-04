@@ -309,6 +309,26 @@ export function mountBrowserRecording({element, apiGet, authHeaders}) {
     },
   });
 
+  // Screens feed both sources (polling and the D-368 driver stream) through
+  // this one path so the browser recording capture sees a single pipeline.
+  async function acceptPreview(url, meta = {}) {
+    element.frame.src = url;
+    element.frame.hidden = false;
+    element.empty.hidden = true;
+    const image = new Image();
+    image.src = url;
+    try {
+      await image.decode();
+      let rawImage = image;
+      if (meta.previewMode === "annotated") {
+        const rawUrl = URL.createObjectURL(meta.rawBlob);
+        rawImage = new Image(); rawImage.src = rawUrl;
+        try { await rawImage.decode(); } finally { URL.revokeObjectURL(rawUrl); }
+      }
+      capture.acceptFrame({...meta, image, rawImage});
+    } catch (_error) { capture.unavailable("원본 프레임을 읽을 수 없습니다."); }
+  }
+
   const vision = createVisionPreview({
     apiGet,
     previewMode: () => capture.state().previewMode,
@@ -323,23 +343,7 @@ export function mountBrowserRecording({element, apiGet, authHeaders}) {
       if (!response.ok) throw new Error(`frame ${response.status}`);
       return response;
     },
-    onFrame: async (url, meta) => {
-      element.frame.src = url;
-      element.frame.hidden = false;
-      element.empty.hidden = true;
-      const image = new Image();
-      image.src = url;
-      try {
-        await image.decode();
-        let rawImage = image;
-        if (meta.previewMode === "annotated") {
-          const rawUrl = URL.createObjectURL(meta.rawBlob);
-          rawImage = new Image(); rawImage.src = rawUrl;
-          try { await rawImage.decode(); } finally { URL.revokeObjectURL(rawUrl); }
-        }
-        capture.acceptFrame({...meta, image, rawImage});
-      } catch (_error) { capture.unavailable("원본 프레임을 읽을 수 없습니다."); }
-    },
+    onFrame: async (url, meta) => acceptPreview(url, meta),
     onUnavailable: (message) => {
       element.frame.hidden = true;
       element.empty.hidden = false;
@@ -348,5 +352,5 @@ export function mountBrowserRecording({element, apiGet, authHeaders}) {
     },
   });
   vision.start();
-  return {capture, vision};
+  return {capture, vision, acceptPreview};
 }

@@ -1,11 +1,12 @@
 """Observation-only front camera preview endpoints."""
 
+import asyncio
 import json
 import re
 import time
 
 from fastapi import APIRouter, Depends, Query, Request, Response
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 
 from core_api_web.api.deps import (
     AuthContext,
@@ -13,6 +14,7 @@ from core_api_web.api.deps import (
     VisionFrameAdvanced,
     VisionPullRateLimited,
     VisionPreviewStatus,
+    VisionStreamRefused,
     VisionEvidenceRecord,
     VisionEvidenceList,
     get_services,
@@ -23,6 +25,11 @@ from core_api_web.api.v1 import vision_evidence
 
 
 vision_router = APIRouter(prefix="/api/v1/vision", tags=["vision"])
+
+#: Sequence-check cadence for the driver stream (D-368 §1). The publisher's
+#: frame rate bounds the emitted fps; this only decides how soon a new
+#: sequence is noticed.
+STREAM_POLL_S = 0.05
 
 
 @vision_router.get("/front/status", response_model=VisionPreviewStatus)
@@ -81,6 +88,54 @@ def get_front_camera_frame(
             "X-Rosy-Camera-Captured-At": str(frame.captured_at),
             "X-Rosy-Camera-Frame-Id": frame.frame_id,
             "X-Rosy-Camera-Variant": 'annotated' if overlay else 'raw',
+        },
+    )
+
+
+@vision_router.get("/front/stream")
+async def stream_front_camera(
+        overlay: bool = Query(default=True),
+        auth: AuthContext = Depends(operator),
+        svc: CoreServicesLike = Depends(get_services)):
+    """D-368: MJPEG stream for the current teleop driver only (no seat lease,
+    D-460). Spectators keep the 0.4 s polling path. One stream at a time; a
+    new accepted teleop from another token ends the previous stream."""
+    try:
+        svc.vision_stream.open(auth.token_id)
+    except VisionStreamRefused as exc:
+        raise ApiError(exc.code, exc.status, str(exc)) from exc
+    token = auth.token_id
+
+    async def parts():
+        last_sequence = 0
+        try:
+            while True:
+                if svc.vision_stream.driver() != token:
+                    return  # seat changed (D-411 vocabulary): end the stream
+                frame = svc.vision.latest_frame(overlay=overlay)
+                if frame is not None and frame.sequence > last_sequence:
+                    last_sequence = frame.sequence
+                    headers = (
+                        b"Content-Type: image/jpeg\r\n"
+                        + f"Content-Length: {len(frame.data)}\r\n".encode("ascii")
+                        + f"X-Rosy-Camera-Sequence: {frame.sequence}\r\n".encode("ascii")
+                        + f"X-Rosy-Camera-Source: {frame.source}\r\n".encode("ascii")
+                        + f"X-Rosy-Camera-Captured-At: {frame.captured_at:.3f}\r\n".encode("ascii")
+                        + b"\r\n"
+                    )
+                    yield b"--frame\r\n" + headers + frame.data + b"\r\n"
+                await asyncio.sleep(STREAM_POLL_S)
+        finally:
+            svc.vision_stream.close(token)
+
+    return StreamingResponse(
+        parts(),
+        media_type="multipart/x-mixed-replace; boundary=frame",
+        headers={
+            "Cache-Control": "no-store",
+            # JPEG parts are already compressed; keep GZipMiddleware away.
+            "Content-Encoding": "identity",
+            "X-Accel-Buffering": "no",
         },
     )
 
