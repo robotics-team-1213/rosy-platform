@@ -221,7 +221,9 @@ def run_once(config, out, *, publisher=publish, current_fetcher=fetch_current,
                     files = [folder / path for path in export_files(folder)]
                     return receipt(result, files)
                 job.step(key, stage)
-                job.state.get("errors", {}).pop(str(folder), None)
+                if str(folder) in job.state.get("errors", {}):
+                    job.state["errors"].pop(str(folder))
+                    job._save()
             except Exception as error:
                 job.state.setdefault("errors", {})[str(folder)] = f"{type(error).__name__}: {error}"
                 job._save()

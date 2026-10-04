@@ -149,6 +149,47 @@ def test_new_authority_cannot_refresh_receiver_ttl_when_delivery_fails(tmp_path)
     assert state['current_authority']['status'] == 'delivery_failed'
 
 
+@pytest.mark.parametrize('cached', [False, True])
+def test_success_persists_cleared_transfer_error_without_retransferring_cached_step(tmp_path, cached):
+    from job_state import Job
+    source = tmp_path / 'incoming'
+    folder = bundle(source, current())
+    cfg, out = config(source), tmp_path / 'state'
+    calls = []
+    def publisher(*args):
+        calls.append(args)
+        if not cached and len(calls) == 1:
+            raise subprocess.TimeoutExpired('transfer', 30)
+        return {'training_dataset_qualified': False}
+    kwargs = {'publisher': publisher, 'current_fetcher': lambda _: current(),
+              'current_publisher': lambda *args: {'available': True}}
+    first = review_bridge.run_once(cfg, out, **kwargs)
+    if cached:
+        # A previously successful stage can retain the old bug's persisted timeout.
+        with Job(out, cfg) as job:
+            job.state.setdefault('errors', {})[str(folder)] = 'TimeoutExpired: earlier transfer'
+            job._save()
+    with Job(out, cfg) as job:
+        job.state.setdefault('errors', {})['unrelated-folder'] = 'preserve unrelated failure'
+        job._save()
+    resumed = review_bridge.run_once(cfg, out, **kwargs)
+    persisted = json.loads((out / 'state.json').read_bytes())
+    assert str(folder) not in resumed.get('errors', {})
+    assert str(folder) not in persisted.get('errors', {})
+    assert persisted['errors']['unrelated-folder'] == 'preserve unrelated failure'
+    assert persisted['input_signature'] == first['input_signature']
+    assert persisted['inputs'] == cfg
+    assert persisted['current_authority']['status'] == 'verified'
+    expected_attempts = 1 if cached else 2
+    assert len(calls) == expected_attempts
+    assert len(persisted['steps']) == 1
+    assert next(iter(persisted['steps'].values()))['attempts'] == expected_attempts
+    done = persisted['steps']
+    again = review_bridge.run_once(cfg, out, **kwargs)
+    assert again['steps'] == done and len(calls) == expected_attempts
+    assert str(folder) not in json.loads((out / 'state.json').read_bytes()).get('errors', {})
+
+
 def test_actual_receiver_script_atomic_replace_refuses_revision_rollback(tmp_path, monkeypatch):
     """Execute the exact SSH receiver script locally, without claiming live SSH proof."""
     remote = tmp_path / 'remote'
