@@ -10,7 +10,7 @@ import numpy as np
 
 Status = Literal["OK", "LEARNING", "CALIBRATION_REQUIRED", "SCENE_CHANGED"]
 
-#: Pinky Pro URDF NOMINAL (D-397, products/pinky_pro/profile/config/geometry.yaml; the drift
+#: Commissioned URDF nominal geometry (D-397; the drift
 #: test is test_overhead_track_model.py). The silhouette seen from above is the top deck and
 #: the LiDAR, the highest part listed, so the parallax height is the LiDAR height.
 ROBOT_TOP_HEIGHT_M = 0.125
