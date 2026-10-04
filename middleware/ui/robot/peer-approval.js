@@ -35,7 +35,7 @@ export function createReceiverApprovals({root, api, isAdmin, captureLifetime, ru
         const detail = document.createElement('p');
         detail.className = 'host-note';
         detail.textContent = `${row.client_id} · ${row.role === 'operator' ? '조작 권한' : '조회 권한'} · 키 ${row.client_key_sha256.match(/.{1,4}/g).join(' ')}`;
-        const label = document.createElement('label');
+        const label = document.createElement('label'); label.className = 'ui-check';
         const remember = document.createElement('input');
         remember.type = 'checkbox'; remember.className='ui-field'; remember.checked = true;
         label.append(remember, document.createTextNode(' 연결 기억'));
