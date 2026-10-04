@@ -67,7 +67,7 @@ jobs:
       - name: Boot CORE from the payload install
         shell: bash
         run: |
-          set -euo pipefail
+          set -eo pipefail  # NOT -u: ROS setup.sh has unbound variables (repo convention)
           source /opt/ros/jazzy/setup.bash
           source "$GITHUB_WORKSPACE/release/install/setup.bash"
           export ROSY_ROBOT_NUMBER=1 RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
