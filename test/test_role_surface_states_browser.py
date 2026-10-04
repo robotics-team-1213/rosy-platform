@@ -15,6 +15,12 @@ WEB = ROOT / "src" / "hmi" / "dashboard"
 
 def _module_page(playwright, modules: dict[str, Path], width: int = 390):
     browser, page, errors = open_page(playwright, width, 844)
+    confirmation = ROOT / "src" / "hmi" / "web_common" / "confirmation.js"
+    page.route("http://rosy.test/common/confirmation.js", lambda route: route.fulfill(
+        status=200, content_type="application/javascript", body=confirmation.read_text(encoding="utf-8")))
+    geometry = ROOT / "src" / "hmi" / "web_common" / "live-dialog-geometry.js"
+    page.route("http://rosy.test/common/live-dialog-geometry.js", lambda route: route.fulfill(
+        status=200, content_type="application/javascript", body=geometry.read_text(encoding="utf-8")))
     page.route(
         "http://rosy.test/panel-test",
         lambda route: route.fulfill(
@@ -23,7 +29,7 @@ def _module_page(playwright, modules: dict[str, Path], width: int = 390):
             body="<!doctype html><html><head></head><body></body></html>",
         ),
     )
-    for url, path in modules.items():
+    for url, path in {"/common/ui.js": ROOT / "src" / "hmi" / "web_common" / "ui.js", **modules}.items():
         page.route(
             f"http://rosy.test{url}",
             lambda route, _request, path=path: route.fulfill(

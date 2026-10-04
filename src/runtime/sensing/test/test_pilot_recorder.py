@@ -129,6 +129,35 @@ def test_bag_command_records_the_d411_topics_namespaced_and_dies_with_its_parent
                       "/rosy_01/scan", "/rosy_01/line/observation", "/rosy_01/teleop/intent"]
 
 
+def test_annotated_recording_preserves_raw_and_separates_model_evidence(tmp_path):
+    rig = Rig(tmp_path)
+    ok, rid = rig.rec.start(preview_mode='annotated')
+    assert ok
+    topics = rig.cmds[-1][rig.cmds[-1].index('--topics') + 1:]
+    assert '/rosy_01/camera/front/compressed' in topics
+    assert '/rosy_01/camera/preview/compressed' in topics
+    assert '/rosy_01/line/keep_debug' in topics
+    assert rig.rec.status()['preview_mode'] == 'annotated'
+    meta = _meta(tmp_path / rid)
+    assert meta['preview_mode'] == 'annotated'
+    assert meta['annotation_origin'] == 'model_unreviewed'
+    rig.write_bag(tmp_path / rid)
+    rig.rec.tick()
+    rig.rec.stop('requested')
+    rig.finish()
+    assert _manifest(tmp_path / rid).preview_mode == 'annotated'
+
+
+def test_raw_default_and_unknown_recording_options_cannot_add_annotations(tmp_path):
+    rig = Rig(tmp_path)
+    assert rig.rec.start(preview_mode='human_ground_truth') == (False, 'RECORDING_INVALID_OPTIONS')
+    assert not rig.cmds and not list(tmp_path.iterdir())
+    ok, rid = rig.rec.start()
+    assert ok and rig.rec.status()['preview_mode'] == 'raw'
+    assert _meta(tmp_path / rid)['annotation_origin'] == 'none'
+    assert '/rosy_01/camera/preview/compressed' not in rig.cmds[-1]
+
+
 def test_start_stop_finish_writes_a_verifiable_manifest(tmp_path):
     rig = Rig(tmp_path)
     ok, rid = rig.rec.start()

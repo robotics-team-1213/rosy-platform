@@ -6,6 +6,8 @@ can say what it needs without meaning "any operator":
 - `NAVIGATE`: a human puts the robot somewhere (goal, initial pose, `source: human`).
 - `LOCALIZE_ASSIST`: Fleet's localization service reads candidates and sends
   decisions and suspects (contract docs/plans/2026-10-01-d395-phase2-interfaces.md §2).
+- `STUCK_DECIDE`: answer a D-407 lane stuck. Operators and administrators carry it;
+  the `stuck_resolver` role (D-438, Fleet's resolver) carries only this.
 
 Grants derive from the token's role. Fleet's robot token is an operator token
 (robots.yaml `token`, or D-361 enrollment, which refuses any other role), so it
@@ -21,11 +23,14 @@ from core_api_web.api.errors import ApiError
 
 NAVIGATE = "NAVIGATE"
 LOCALIZE_ASSIST = "LOCALIZE_ASSIST"
+STUCK_DECIDE = "STUCK_DECIDE"
 
 ROLE_GRANTS: dict[str, frozenset[str]] = {
     "viewer": frozenset(),
-    "operator": frozenset({NAVIGATE, LOCALIZE_ASSIST}),
-    "administrator": frozenset({NAVIGATE, LOCALIZE_ASSIST}),
+    # D-438 §1: Fleet's stuck resolver answers D-407 stucks and reads; rank stays viewer.
+    "stuck_resolver": frozenset({STUCK_DECIDE}),
+    "operator": frozenset({NAVIGATE, LOCALIZE_ASSIST, STUCK_DECIDE}),
+    "administrator": frozenset({NAVIGATE, LOCALIZE_ASSIST, STUCK_DECIDE}),
 }
 
 

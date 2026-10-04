@@ -27,6 +27,13 @@ const FACT_ICONS = Object.freeze({
   safety: '<svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 3l7 3v5c0 4.4-3 7.5-7 9-4-1.5-7-4.6-7-9V6z"/></svg>',
 });
 
+function nodeWithText(tagName, className = "", text) {
+  const node = document.createElement(tagName);
+  node.className = className;
+  if (text !== undefined) node.textContent = text;
+  return node;
+}
+
 function tag(text, cls) {
   const node = document.createElement("ui-tag");
   node.setAttribute("status", TAG_STATUS[cls] || "neutral");
@@ -41,7 +48,7 @@ function blockWith(button, reason) {
 }
 
 export function createRoster({ scope, el, view, log, call, render, streamEvidence, isOperator,
-  moveAddress = null, moveAddressBlocked = () => "" }) {
+  moveAddress = null, moveAddressBlocked = () => "", confirmedAction }) {
   function needsAttention(robot) {
     const state = robot.state;
     const evidence = streamEvidence(view.formation, robot.robot_id);
@@ -104,12 +111,10 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
       : estop !== false && robot.online
         ? "안전 상태를 확인할 수 없어 목표를 보낼 수 없습니다." : "";
 
-    const head = document.createElement("div");
-    head.className = "robot-head";
+    const head = nodeWithText("div", "robot-head");
     const robotName = document.createElement("b");
     robotName.textContent = robot.robot_id;
-    const spacer = document.createElement("span");
-    spacer.className = "spacer";
+    const spacer = nodeWithText("span", "spacer");
     head.append(robotName, spacer);
     // D-359 US-009 — 모드 글은 공용 MODE_LABEL, 열거값은 title에만 둔다.
     const modeTag = tag(
@@ -140,8 +145,7 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
     }
     node.appendChild(head);
 
-    const facts = document.createElement("div");
-    facts.className = "facts";
+    const facts = nodeWithText("div", "facts");
     const battery = state.battery && typeof state.battery.percent === "number"
       ? `${Math.round(state.battery.percent)}%` : "—";
     const rows = [
@@ -158,9 +162,7 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
       // D-405 — 라벨의 얼굴은 아이콘, 한국어 이름은 스크린리더와 title에 남는다.
       labelEl.title = label;
       labelEl.innerHTML = icon;
-      const srLabel = document.createElement("span");
-      srLabel.className = "sr-only";
-      srLabel.textContent = label;
+      const srLabel = nodeWithText("span", "sr-only", label);
       labelEl.appendChild(srLabel);
       let valueEl;
       if (label === "안전" && value === "비상 정지") {
@@ -178,8 +180,7 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
 
     if (!view.stateUnavailable && robot.yielding) {
       // 운영자가 보내지 않은 좌표로 로봇이 움직인다. 이유를 적지 않으면 오작동으로 읽힌다.
-      const why = document.createElement("p");
-      why.className = "hint";
+      const why = nodeWithText("p", "hint");
       why.textContent = `${robot.yielding.for} 가 지나가도록 비켜서는 중 — `
         + `(${robot.yielding.bay.x.toFixed(2)}, ${robot.yielding.bay.y.toFixed(2)}) 로 물러납니다`;
       node.appendChild(why);
@@ -187,9 +188,7 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
 
     if (!view.stateUnavailable && robot.queued) {
       // 왜 안 가는지 화면이 말하지 않으면 운영자는 미션이 사라졌다고 읽는다.
-      const why = document.createElement("p");
-      why.className = "hint";
-      why.textContent = queuedReason(robot.queued);
+      const why = nodeWithText("p", "hint", queuedReason(robot.queued));
       node.appendChild(why);
     }
 
@@ -198,8 +197,7 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
     const offlineWhyId = !view.stateUnavailable && !robot.online && robot.error
       ? `robot-why-${robot.robot_id}` : null;
     if (!view.stateUnavailable && !robot.online && robot.error) {
-      const why = document.createElement("p");
-      why.className = "hint";
+      const why = nodeWithText("p", "hint");
       why.textContent = robot.error.reachable
         ? `로봇이 거절: ${robot.error.code}`
         : `닿지 않음: ${REACH_LABEL[robot.error.code] ?? robot.error.code}`;
@@ -212,8 +210,7 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
     const address = !view.stateUnavailable && !robot.online
       ? addressReason(view.addresses?.[robot.robot_id]) : null;
     if (address) {
-      const why = document.createElement("p");
-      why.className = "hint";
+      const why = nodeWithText("p", "hint");
       why.dataset.addressReason = view.addresses[robot.robot_id].status;
       why.textContent = address.text;
       node.appendChild(why);
@@ -221,8 +218,7 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
 
     // D-416 — 오프라인 로봇의 마지막 응답 시각: "언제부터 안 됐지?"에 바로 답한다.
     if (!view.stateUnavailable && !robot.online) {
-      const seen = document.createElement("p");
-      seen.className = "hint";
+      const seen = nodeWithText("p", "hint");
       seen.dataset.fact = "last-seen";
       const ts = robot.state?.ts;
       if (typeof ts === "number" && ts > 0) {
@@ -236,8 +232,7 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
       node.appendChild(seen);
     }
 
-    const actions = document.createElement("div");
-    actions.className = "robot-actions";
+    const actions = nodeWithText("div", "robot-actions");
     const aim = document.createElement("ui-button");
     // D-406 — 목표 받기는 토글이다. 눌림(aria-pressed)이 계열 파랑 채움으로 보여
     // "지금 지도를 찍으면 이 로봇이 움직인다"가 색으로 말해진다.
@@ -318,18 +313,25 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
         const life = scope.capture();
         life.check();
         const mode = lineFollow.mode === "IR_LINE" ? "OFF" : "IR_LINE";
-        if (mode === "IR_LINE" && !window.confirm(`${robot.robot_id}의 카메라 고장이 확인되었습니다. CORE 안전 조건을 다시 확인하고 IR 추적을 요청할까요?`)) return;
-        try {
+        const kind = `IR:${robot.robot_id}`;
+        const send = async owner => {
           const result = await call(`/api/fleet/robots/${encodeURIComponent(robot.robot_id)}/line-follow`, {
             method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ mode }),
+            body: JSON.stringify({ mode }), signals: [owner.signal],
           });
-          life.check();
+          owner.check();
           log(`${robot.robot_id} ${mode === "IR_LINE" ? "IR 추적 요청" : "IR 추적 중지"} · ${result.result?.state || "CORE 응답 확인"}`, "good");
-        } catch (err) {
-          if (err.name === "AbortError") return;
-          log(`${robot.robot_id} IR 추적 거부 · ${err.message}`, "bad");
+        };
+        const fail = err => log(`${robot.robot_id} IR 추적 거부 · ${err.message}`, "bad");
+        if (mode === "OFF") {
+          confirmedAction.cancel(kind);
+          try { await send(life); } catch (err) { if (life.current() && err.name !== "AbortError") fail(err); }
+          return;
         }
+        await confirmedAction.run({kind, message: `${robot.robot_id}의 카메라 고장이 확인되었습니다. CORE 안전 조건을 다시 확인하고 IR 추적을 요청할까요?`, opener: fallback,
+          eligible: () => !view.stateUnavailable && isOperator() && view.robots.some(current => current.robot_id === robot.robot_id && current.online
+            && current.state?.line_follow?.mode === "CAMERA_LINE" && current.state.line_follow.state === "LOST" && current.state.line_follow.reason === "camera_reselection_required"),
+          request: send, onError: fail});
       }));
       actions.append(fallback);
     }
@@ -347,15 +349,11 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
     }
     node.appendChild(actions);
     if (goalSafetyReason) {
-      const why = document.createElement("p");
-      why.className = "hint";
-      why.textContent = goalSafetyReason;
+      const why = nodeWithText("p", "hint", goalSafetyReason);
       node.appendChild(why);
     }
     if (lineFollowActive) {
-      const why = document.createElement("p");
-      why.className = "hint";
-      why.textContent = "선택된 line-follow가 CORE motion을 소유합니다. 먼저 중지해야 Nav2 목표를 받을 수 있습니다.";
+      const why = nodeWithText("p", "hint", "선택된 line-follow가 CORE motion을 소유합니다. 먼저 중지해야 Nav2 목표를 받을 수 있습니다.");
       node.appendChild(why);
     }
     return node;

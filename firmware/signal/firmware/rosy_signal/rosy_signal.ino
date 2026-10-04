@@ -389,6 +389,10 @@ void setup() {
   // D-354: mDNS 광고 — Fleet/로봇이 IP 없이 rosy-signal-<id>.local 로 찾는다.
   if (MDNS.begin(signalId.c_str())) {
     MDNS.addService("rosy-signal", "tcp", 80);
+    MDNS.addServiceTxt("rosy-signal", "tcp", "product", "rosy");
+    MDNS.addServiceTxt("rosy-signal", "tcp", "role", "signal");
+    MDNS.addServiceTxt("rosy-signal", "tcp", "proto", "rosy-signal/1");
+    MDNS.addServiceTxt("rosy-signal", "tcp", "tls", "none");
   }
 
   server.collectHeaders(HEADER_KEYS, 1);

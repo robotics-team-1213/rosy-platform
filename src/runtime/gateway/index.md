@@ -73,8 +73,8 @@
 
 ## 최근 기록
 
-- 2026-10-03 · e021264e6 · feat(face): D-433 CORE가 rosy-face에 얼굴 핸드오버를 쓴다
-- 2026-10-03 · f4c311569 · feat(bridge): D-423 모델 상태 두 토픽 latched 구독
-- 2026-10-03 · uncommitted · test(console): 지도 도구는 격자 밖에 둔다
-- 2026-10-02 · uncommitted · fix(core): D-419 착지 — console_linked 를 D-407 유예와 합침
-- 2026-10-02 · uncommitted · fix(core): D-419 라운드 4 — Fleet 링크 판정 함수 하나
+- 2026-10-04 · uncommitted · feat(power): long testing dwell with low battery saving
+- 2026-10-04 · uncommitted · feat(power): fresh battery evidence and idle saving
+- 2026-10-04 · uncommitted · test: 카메라 프레임 모듈의 실제 제공 경로
+- 2026-10-04 · uncommitted · fix(vision): preserve fresh overexposed quality
+- 2026-10-04 · uncommitted · feat(bridge): typed 녹화 시작과 원본 JPEG admission

@@ -49,7 +49,8 @@ def parse_avahi(output: str) -> list[dict]:
         if (address.version != 4 or not address.is_private or address.is_loopback
                 or address.is_link_local or not 1 <= port <= 65535
                 or len(pairs) != len(txt)
-                or (not legacy and any(txt.get(key) != value for key, value in TXT.items()))
+                or (not legacy and any(txt.get(key) != value for key, value in TXT.items() if key != 'tls'))
+                or (not legacy and txt.get('tls') not in ('none', 'required'))
                 or txt.get("network") != "sta" or not txt.get("name")):
             continue
         row = {"name": txt["name"], "hostname": hostname,

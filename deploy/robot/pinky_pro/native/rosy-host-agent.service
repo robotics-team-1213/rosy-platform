@@ -1,0 +1,32 @@
+[Unit]
+Description=ROSY lane perception Host Agent (dedicated CORE peer only)
+After=rosy-core.service
+PartOf=rosy-runtime.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+Environment=PYTHONNOUSERSITE=1 PYTHONDONTWRITEBYTECODE=1
+ExecStart=/usr/bin/python3 -B /opt/rosy/current/deploy/robot/native/rosy-host-agent.py
+Restart=on-failure
+RestartSec=2
+TimeoutStopSec=5
+LogsDirectory=rosy-host-agent
+LogsDirectoryMode=0750
+UMask=0027
+NoNewPrivileges=true
+PrivateDevices=true
+PrivateTmp=true
+# Atomic replacement of the established /etc/rosy overlay needs directory writes.
+# Match the root SSH helper's sandbox; the command surface is lane-only.
+ProtectSystem=true
+PrivateNetwork=true
+RestrictAddressFamilies=AF_UNIX
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+
+[Install]
+WantedBy=rosy-runtime.target

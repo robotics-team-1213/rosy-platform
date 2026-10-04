@@ -30,7 +30,7 @@ from typing import Any, Callable, Optional
 from fastapi import APIRouter, Depends, Request
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse, Response
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from core_api_web.api.deps import (
     PAIRED_SOURCES,
@@ -49,6 +49,7 @@ from core_api_web.api.deps import (
 )
 from core_api_web.api.errors import ApiError, error_body
 from core_api_web.api.v1.common import admin, viewer
+from core_common.protocol.schemas import LoginPairRequest as PairRequest
 
 auth_router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 
@@ -83,7 +84,8 @@ RATE_WINDOW_S = 60.0
 MAX_WRONG_ATTEMPTS = 5
 ENROLLMENT_TTL_S = 300.0
 MAX_ENROLLMENT_CODES = 8
-DEFAULT_LIFETIME_HOURS = {"viewer": 168.0, "operator": 168.0, "administrator": 24.0}
+DEFAULT_LIFETIME_HOURS = {"viewer": 168.0, "stuck_resolver": 168.0, "operator": 168.0,
+                          "administrator": 24.0}
 MAX_LIFETIME_HOURS = 168.0
 
 #: D-193 4: 사설·AP 대역과 루프백만 받는다. AP(10.42.0.0/24)는 10/8 안에 있다.
@@ -397,11 +399,6 @@ def _match(state: PairingState, code: str,
     return None, candidates
 
 
-class PairRequest(BaseModel):
-    code: str = Field(min_length=1, max_length=32)
-    label: str = Field(default="", max_length=64)
-
-
 @auth_router.post("/pair", status_code=201)
 async def pair(request: Request, svc: CoreServicesLike = Depends(get_services)):
     """로그인 코드 → 이 브라우저 전용 만료 토큰 (인증 없음, D-193 4)."""
@@ -530,7 +527,8 @@ def create_enrollment_code(body: EnrollmentRequest, request: Request,
     """관리자가 자기 화면에서 다른 기기용 코드를 받는다. 5분, CORE 메모리에만."""
     role = body.role.strip()
     if role not in ROLE_RANK:
-        raise ApiError("VALIDATION_ERROR", 400, "role must be viewer, operator or administrator")
+        raise ApiError("VALIDATION_ERROR", 400,
+                       "role must be viewer, stuck_resolver, operator or administrator")
     if ROLE_RANK[role] > auth.rank:
         raise ApiError("FORBIDDEN", 403, "an enrollment code cannot exceed the issuer's role")
     code = "".join(secrets.choice(ALPHABET) for _ in range(CODE_LENGTH))

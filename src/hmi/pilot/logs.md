@@ -304,3 +304,71 @@
 - 변경: `models.js`(5 s 폴링 `GET /api/v1/vision/models`, 작업·슬롯·판·마지막 오류), 주행 화면 HUD 에 접는 패널, 셸 캐시 키 `2026-10-03-1`, 설치 목록. promote/rollback 은 `rosy_ml` 에만.
 - 증거: `src/hmi/pilot/test` 53 passed, 24 skipped(브라우저 시험은 이 PC 에서 건너뜀).
 - gate 변화: 없음.
+
+
+## 2026-10-03 · uncommitted · feat(link): D-432 주소 없는 장비 접속
+
+- 변경: 태블릿 native shell은 같은 LAN 장비 목록→선택→개발 즉시 접속 또는 4자리 페어링 흐름이다. 설정 파일 UI는 사용자 보정으로 제거했다. 기존 Pilot PWA와 제어 owner를 재사용한다.
+- 증거: 관련 Python 계약 시험·실제 loopback TLS HTTP/WS 시험을 실행했다. Pilot Android 설치·화면과 실제 로봇 연결·현장 트래픽 수용은 서로 다른 증거다.
+- gate 변화: 실제 장비의 제어·FIELD 관문은 이동하지 않는다.
+- 결정: D-432 2026-10-03 추가 결정.
+
+
+## 2026-10-03 · uncommitted · fix(link): 현재 접속과 후속 코드 규약 구별
+
+- 변경: 사용자 보정으로 4자리 코드 발급·Cam 표시 별칭은 이번 적용에서 제외했다. 현재 로봇 8자·Cam 6자리 규약을 유지하며 D-432에 추후 통합을 기록했다. 실제 Pinky 접속 수정은 진행한다.
+- 증거: 영향받는 Python 2345 passed/84 skipped, quick tier 459 passed/2 skipped, Pilot PWA 87 passed/58 skipped. 코드 규약 보정 뒤 해당 인증·페어링 시험을 다시 실행한다. 공개 검증 기록은 docs/validation/discovery-link-2026-10-03/README.md.
+- gate 변화: Android 설치·실제 CORE 인증 확인은 실제 주행·Cam 화면 off 연속 송출·현장 트래픽 수용과 별개다. DEVICE/FIELD 이동 없음.
+- 결정: D-432 후속 결정: 접속은 지금, 짧은 코드 통합은 추후 적용.
+
+## 2026-10-03 · uncommitted · feat(pilot): 공용 규칙으로 화면별 작업 흐름 정리
+
+- 변경: 로봇 목록·연결·조회 전용 카메라·주행 도구·입력 설정·녹화본·OMX SIM을 같은 UI 규칙으로 정리했다. 전체 영상/채우기/잘림 드래그·읽기 쉬운 동작 이름·단일 열린 패널·닫기 초점 복귀를 적용했다. 설정 변경 후 게임패드 미리보기가 멈추는 결함과 실제 태블릿 카메라 높이 0 결함을 수정했다.
+- 증거: 실제 태블릿 목록에서 Pinky 인증/저장 자격 재접속/GET 카메라 전체 영상 확인. 녹화 브라우저 9 passed, 입력/OMX 기록 3 passed, 비상 정지 중 GET 영상 1 passed, 공용 아이콘 키보드/비활성 사유 1 passed. 남은 브라우저 시나리오는 최종 검증 기록에 구별한다.
+- gate 변화: 실제 양의 주행 명령·비상 정지 해제는 실행하지 않았다. DEVICE/FIELD 이동 없음.
+- 결정: D-432 화면별 순차 개선/공용 디자인 소유권.
+
+## 2026-10-03 · uncommitted · test(pilot): 재조작 시험의 새 목표 실행 상태 분리
+
+- 변경: OMX 오류 후 재조작 시험의 완료 receipt를 해당 목표 ID에만 적용한다. 전역 SUCCEEDED가 이후 목표까지 즉시 완료하여 누적 목표 수 2를 지나치던 fixture 결함을 제거했다. 단순 전역 RUNNING 재설정은 이전 목표도 실행 중으로 되살려 거절을 만들므로 사용하지 않는다. 제품 제어 코드는 변경하지 않았다.
+- 증거: 진단 브라우저에서 오류 뒤 조작 가능 복귀, 다음 목표 수락, 거절 없음 확인. 최종 재검증 결과는 docs/validation/discovery-link-2026-10-03/README.md에 기록한다.
+- gate 변화: DEVICE/FIELD 이동 없음.
+- 결정: D-432 공용 UI 최종 검증; 첫 실패와 재실행 결과를 구별한다.
+
+## 2026-10-04 · uncommitted · feat(pilot): 운전 모드와 차선 인식 분리
+
+- 변경: 수동·차선 자동·지도 목표 선택과 독립 인식 선택(학습 모델/반사 제거/기존 검출). 정지·설정은 명시적 조작이며 인식 선택은 주행 모드를 바꾸지 않는다. 관리자·신선한 정지 IDLE·차선 OFF에서만 적용하고 적용 중 진행을 막는다. 성공 응답과 설정 readback을 확인하며 실제 추론 출처가 없으면 확인 대기로 표시한다. Pilot 셸 캐시 갱신.
+- 증거: Pilot host 87 passed, 59 skipped. 기존 자동·hold·수동 takeover 브라우저 4 passed. 인식 적용 실패·pending·readback·구 서버 브라우저 1 passed.
+- gate 변화: 없음. 실기 주행 수용 증거는 아직 없다.
+
+## 2026-10-04 · uncommitted · feat: 저조도 카메라 판정 불가 표시
+
+- 변경: 기존 front/status quality를 읽어 저조도에서는 차선·물체를 판정할 수 없다고 표시한다. JPEG 표시를 유지하고 회복·누락·오래된 상태에서는 경고를 해제한다.
+- 증거: Pilot·Dashboard 저조도 브라우저 회귀 각각 1 passed; shared controls + shell 30 passed.
+- gate 변화: SOURCE/LOCAL. ARM64/device/field verification pending.
+
+## 2026-10-04 · uncommitted · feat: 기기 기록과 브라우저 영상 옵션
+
+- 변경: 기기 기록은 원본/표시본 선택을 분리하고 서버 지원·실제 readback을 따른다. 브라우저는 원본을 항상 보존하며 표시본을 별도 저장한다. 녹화 종료 시 원본부터 다운로드하고 다시 받기 동작을 제공한다.
+- 증거: 기기 옵션·실제 readback 1 passed; 저조도 회귀 1 passed; 기존 로봇 기록·hold/takeover 4 passed.
+- gate 변화: SOURCE/LOCAL. ARM64/device/field evidence remains separate.
+
+## 2026-10-04 · uncommitted · fix: 과노출 판정 불가 안내
+
+- 변경: 원본 영상 위에 덧씌우지 않고 기존 품질 경고에서 과노출 · 차선 정보 확인 불가를 표시한다. 저조도·과노출·회복·구형 응답을 각각 구분한다.
+- 증거: Pilot/Dashboard bright-dark browser 2 passed; native quality/alarm 9 passed.
+- gate 변화: SOURCE/LOCAL. No device writes or motion.
+## 2026-10-04 · uncommitted · fix(pilot): 시작 대상 확인 실패와 재시도
+
+- 변경: 대상 발견 실패·잘못된 응답은 빈 본문 대신 대상 미확인 안내와 같은 발견 재시도를 제공한다. 짧은 pending 잠금으로 중복 발견을 막고 실제 404만 기존 Pinky 연결로 간다. 성공·실패 응답은 시작 안내를 아직 소유할 때만 상단 문구를 바꿔 더 늦은 정지 안내를 보존한다. 연결 화면의 작은 상단 행을 감싸고 이미 전체 주행 폭에서 숨기는 세 중복 selector를 제거해 styles.css 800줄을 유지한다. SW CACHE를 올리고 실제 공용 import 두 자산을 셸·개발 fixture에 등록했다.
+- 증거: 영향 Pilot 브라우저 7 passed/57 deselected (37.06s), 최종 시작 수명 1 passed (4.80s). SW·예산·비활성 닫힌 목록 8 passed (2.48s), API/예산 16 passed (8.21s). 최초 GREEN의 import fixture 실패와 호스트 SW/예산 실패는 수정 후 해당 대상으로 재검증했다. X 제공 pending 잠금·새 안내 소유권 변이가 실제 단언 RED이며 원본 제공 GREEN, 제품 소스 SHA256 불변을 확인했다.
+- gate 변화: SOURCE/LOCAL·대역 발견 증거이다. 실제 이동·정지 해제·장치 수용을 실행하지 않았다.
+- 결정: D-439 Task5. 기존 drive/arm/HUD/인증과 같은 출처 계약을 보존한다. 근거 X:\DevTemp\rosy-ui-unify\tools.
+
+## 2026-10-04 · uncommitted · feat(pilot): 크래프트 회차 1 — G2 기준선과 44px 바닥 회복
+
+- 변경: 첫 저장소용 G2 기준선 셀 9장(게이트·로비·주행 × 태블릿 가로·세로·전화, dev_server 합성)을 `docs/validation/pilot-g2-baseline-2026-10-04/`에 남기고 `surfaces.yaml` pilot의 `baseline_reason`을 baseline 경로로 바꿨다. 기계 계측으로 좁은 티어의 조작 면적 위반을 찾아 고쳤다 — `styles.css` 끝에 `width < 30rem` 블록에서 레이아웃 규칙(`data-drive-layout="side|below"`의 `min-width: 0`)이 프리셋(저속/보통/빠름)과 정밀 토글을 내용 폭으로 줄여 44px 바닥을 뚫는 것(390px에서 36px, 320px에서 42px)을 같은 특이도 되돌림(min-width 2.75rem + flex 0 1 auto)으로 회복. 넓은 화면의 flex 채움은 불변.
+- 증거: 기계 계측 8셀(게이트 3·주행 3·전화 320 계측) 전부 e-stop 111×58 보임·44px 미만 0·4.5:1 미만 0·가로 넘침 0px(수정 전 390px 3개·320px 1개 위반 → 수정 후 0). 12px 텍스트는 DESIGN.md Micro 승인 바닥이라 무결. `python -m pytest src/hmi/pilot/test src/hmi/web_common/test src/runtime/api_web/test/test_pilot_route.py -q` 302 passed/92 skipped — `test_responsive_tiers` 1건은 main 선재 실패(console-detail.css 40rem, 이 브랜치 소유 아님). registry 시험은 PNG 추적 후 15 passed.
+- gate 변화: 없음. LOCAL 합성 증거. 사람 G3 시트·실물 태블릿 관측은 다음 회차(사다리 P2와 묶음).
+- 결정: DESIGN.md 조작 면적 바닥(44px, 모든 티어). D-280·D-405 계측 규율 준수.
+- 교훈: flex 채움용 `min-width: 0`은 좁은 티어에서 터치 바닥을 무력화한다 — 되돌림은 같은 특이도 + 파일 끝 배치로만 이긴다.

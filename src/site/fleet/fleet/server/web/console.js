@@ -11,6 +11,8 @@ import { applyRoleToControls } from "./authorization.js";
 import { addressMap, movableRobots, renumberBanner } from "./address-drift.js";
 import { createPollGate } from "./poll-gate.js";
 import { createFleetClient } from "/common/fleet-client.js";
+import { confirmIrreversible } from "/common/ui.js";
+import { createConfirmedAction } from "./confirmed-action.js";
 import { createPageScope } from "/common/scope.js";
 const pageScope = createPageScope();
 // 좌표계: 로봇 pose 는 CORE 가 TF `map → <ns>base_footprint` 로 읽어 주는 map 프레임
@@ -19,6 +21,23 @@ const pageScope = createPageScope();
 
 
 const el = (id) => document.getElementById(id);
+const layoutMedia = matchMedia("(min-width: 64rem)");
+const layoutPanels = [document.querySelector('.queues-panel'), document.querySelector('[aria-labelledby="roster-heading"]'),
+  document.querySelector('[aria-labelledby="map-heading"]'), document.querySelector('.ops-block')];
+function layoutConsole() {
+  const main = el("fleet-main"), primary = main.querySelector('.console-primary'), secondary = main.querySelector('.console-secondary');
+  const focused = document.activeElement;
+  layoutPanels.forEach((node, index) => {
+    const parent = layoutMedia.matches ? (index === 0 || index === 2 ? primary : secondary) : main;
+    const before = layoutMedia.matches ? null : primary;
+    if (parent.moveBefore) parent.moveBefore(node, before);
+    else parent.insertBefore(node, before);
+  });
+  if (focused?.isConnected && document.activeElement !== focused) focused.focus({preventScroll: true});
+}
+layoutConsole();
+pageScope.listen(layoutMedia, "change", layoutConsole);
+pageScope.onResume(layoutConsole);
 
 // 셸 폴링 운율과 로그 상한은 셸이 가진다. 지도 격자·오버레이 임계는 map-view.js에 있다.
 const STATE_MS = 1000;
@@ -38,6 +57,7 @@ const auth = {
   // D-248: 잠기면 폴링이 401 을 두드리지 않는다. 수동 저장·새로고침은 막지 않는다.
   locked: false,
 };
+const confirmedAction = createConfirmedAction({scope: pageScope, identity: () => ({...auth}), confirm: confirmIrreversible});
 
 function authHeaders() {
   return auth.token ? { "Authorization": `Bearer ${auth.token}` } : {};
@@ -54,6 +74,7 @@ pageScope.listen(el("topbar-more"), "click", () => {
 });
 
 function markLocked() {
+  confirmedAction.cancel();
   auth.locked = true;
   setTopbarOpen(true);
   auth.role = null;
@@ -75,7 +96,7 @@ function operatorControls() {
   // 화면 테마(data-theme-choice)는 이 브라우저의 표시 선호라 권한과 무관하다(D-359 §2.5).
   // 머리 토글(#topbar-more)은 접힌 칸을 여는 표시 조작이다(§6.4).
   return document.querySelectorAll(
-    "ui-button:not(#token-save):not(#topbar-more):not(#roster-toggle):not(#vision-refresh):not([data-theme-choice]), main input, main select:not(#vision-source)");
+    "ui-button:not(#token-save):not(#topbar-more):not(#roster-toggle):not(#vision-refresh):not(#log-clear):not([data-theme-choice]), main input, main select:not(#vision-source)");
 }
 
 const view = {
@@ -125,15 +146,14 @@ async function call(path, options = {}) {
   }
 }
 
-async function refreshDispatchControl() {
-  const life = pageScope.capture();
+async function refreshDispatchControl(life = pageScope.capture()) {
   life.check();
   const title = el("dispatch-control-title");
   const detail = el("dispatch-control-detail");
   const rearm = el("dispatch-rearm");
   if (!dispatchGate.due()) return view.dispatchControl;
   try {
-    const state = await call("/api/fleet/dispatch-control");
+    const state = await call("/api/fleet/dispatch-control", {signals: [life.signal]});
     life.check();
     dispatchGate.ok();
     view.dispatchControl = state;
@@ -171,25 +191,20 @@ async function refreshDispatchControl() {
 }
 
 pageScope.listen(el("dispatch-rearm"), "click", async () => {
-  const life = pageScope.capture();
-  life.check();
   const state = view.dispatchControl;
-  if (auth.role !== "operator" || auth.locked || !state?.rearm_available) return;
-  if (!window.confirm(`세대 ${state.generation}의 대기 발행을 재허가할까요?`)) return;
-  try {
+  await confirmedAction.run({message: `세대 ${state?.generation}의 대기 발행을 재허가할까요?`, opener: el("dispatch-rearm"),
+    eligible: () => state?.rearm_available && view.dispatchControl?.rearm_available && state.generation === view.dispatchControl.generation,
+    request: async owner => {
     await call("/api/fleet/dispatch/rearm", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ expected_generation: state.generation }),
+      signals: [owner.signal],
     });
-    life.check();
+    if (!owner.current()) return;
     log("대기 작업 발행을 재허가했습니다.", "good");
-  } catch (err) {
-    if (err.name === "AbortError") return;
-    log(`발행 재허가 거부: ${err.message}`, "bad");
-  }
-  await refreshDispatchControl();
-  life.check();
+    await refreshDispatchControl(owner);
+  }, onError: err => log(`발행 재허가 거부: ${err.message}`, "bad")});
 });
 
 
@@ -399,6 +414,7 @@ async function refreshAuthorization() {
   try {
     const identity = await call("/api/fleet/session");
     life.check();
+    if (auth.role !== identity.role) confirmedAction.cancel();
     auth.role = identity.role;
     auth.principal = identity.principal_id;
     const roleName = identity.role === "operator" ? "운영자" :
@@ -475,7 +491,11 @@ async function commitGoal(col, row) {
   }
   const point = mapView.toWorld(view.map, col, row);
   const robotId = view.selected;
-  if (!window.confirm(`${robotId}에게 목표 (${point.x.toFixed(2)}, ${point.y.toFixed(2)}) m를 보낼까요?`)) return;
+  const mapSnapshot = JSON.stringify([view.map.map_id, view.map.width, view.map.height, view.map.resolution, view.map.origin]);
+  await confirmedAction.run({message: `${robotId}에게 목표 (${point.x.toFixed(2)}, ${point.y.toFixed(2)}) m를 보낼까요?`, opener: el("map-canvas"),
+    eligible: () => !view.stateUnavailable && view.selected === robotId && view.robots.some(robot => robot.robot_id === robotId && robot.online && robot.state?.safety?.estop === false)
+      && mapSnapshot === JSON.stringify([view.map?.map_id, view.map?.width, view.map?.height, view.map?.resolution, view.map?.origin]),
+    request: async owner => {
   view.selected = null;
   view.cursor = null;
   const canvas = el("map-canvas");
@@ -483,13 +503,13 @@ async function commitGoal(col, row) {
   canvas.tabIndex = -1;
   render();
   focusGoalButton(robotId);
-  try {
     const result = await call(`/api/fleet/robots/${encodeURIComponent(robotId)}/goal`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "Idempotency-Key": crypto.randomUUID() },
       body: JSON.stringify({ x: point.x, y: point.y, yaw: 0 }),
+      signals: [owner.signal],
     });
-    life.check();
+    if (!owner.current()) return;
     const task = result && result.task ? result.task : null;
     if (task && task.status === "QUEUED") {
       view.pendingTasks[robotId] = task;
@@ -517,10 +537,7 @@ async function commitGoal(col, row) {
     } else {
       log(`${robotId} → ${where} 미션 하달`, "good");
     }
-  } catch (err) {
-    if (err.name === "AbortError") return;
-    log(`${robotId} 미션 거절 — ${err.message}`, "bad");
-  }
+  }, onError: err => log(`${robotId} 미션 거절 — ${err.message}`, "bad")});
 }
 
 function focusGoalButton(robotId) {
@@ -604,12 +621,10 @@ pageScope.listen(el("estop"), "click", async () => {
 const CANCEL_ALL_RESULT = { failed: "실패", unreachable: "응답 없음" };
 const CANCEL_ALL_STEP = { swarm: "대형 추종", navigation: "내비게이션", line_follow: "차선 추종" };
 pageScope.listen(el("cancel-all"), "click", async () => {
-  const life = pageScope.capture();
-  life.check();
-  if (!window.confirm("등록된 모든 로봇의 주행(내비게이션 목표·대형 추종·차선 추종)과 대기 작업을 취소합니다. 비상 정지 래치는 걸지 않습니다. 계속할까요?")) return;
-  try {
-    const result = await call("/api/fleet/cancel-all", { method: "POST" });
-    life.check();
+  await confirmedAction.run({message: "등록된 모든 로봇의 주행(내비게이션 목표·대형 추종·차선 추종)과 대기 작업을 취소합니다. 비상 정지 래치는 걸지 않습니다. 계속할까요?", opener: el("cancel-all"), eligible: () => !auth.locked,
+    request: async owner => {
+    const result = await call("/api/fleet/cancel-all", { method: "POST", signals: [owner.signal] });
+    if (!owner.current()) return;
     // 0/0 은 성공이 아니다 — 취소할 로봇이 없었다.
     const allAnswered = result.total > 0 && result.cancelled === result.total;
     log(result.total === 0 ? "주행 취소 대상 로봇 없음 — 등록된 로봇을 확인하세요"
@@ -627,12 +642,8 @@ pageScope.listen(el("cancel-all"), "click", async () => {
     result.tasks.error ? "bad" : undefined);
     // CORE 가 취소를 확인하면 그 로봇은 다시 배정되고, 확인이 없으면 작업은 대조가 필요하다.
     if (awaiting) log("  확인 대기 작업: 로봇이 취소를 알리면 다시 배정, 알리지 않으면 대조 필요", "bad");
-    await refreshDispatchControl();
-    life.check();
-  } catch (err) {
-    if (err.name === "AbortError") return;
-    log(`전체 주행 취소 실패 — ${err.message}`, "bad");
-  }
+    await refreshDispatchControl(owner);
+  }, onError: err => log(`전체 주행 취소 실패 — ${err.message}`, "bad")});
 });
 
 
@@ -656,7 +667,7 @@ const mapView = createMapView({ scope: pageScope,
 // Fleet 분해 3: 명렬 카드와 큐는 roster.js 팩토리가 그린다.
 // D-410 — 주소 이동 조작은 설치 화면이 소유해서 moveAddress 훅을 주지 않는다.
 const roster = createRoster({ scope: pageScope, el, view, log, call, render,
-  streamEvidence: mapView.streamEvidence, isOperator: () => auth.role === "operator" });
+  streamEvidence: mapView.streamEvidence, isOperator: () => auth.role === "operator", confirmedAction });
 // D-407 판단 요청 — 막힌 로봇의 질문과 다섯 답. 예외 큐 패널 안에 산다.
 const lineStuck = createLineStuckPanel({ scope: pageScope, el, view, call, log,
   isOperator: () => auth.role === "operator" });

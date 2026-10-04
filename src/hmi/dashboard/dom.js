@@ -5,6 +5,13 @@ export const elements = Object.fromEntries(
   [...document.querySelectorAll("[id]")].map((element) => [element.id, element]),
 );
 
+export function createNode(tag, className = "", text) {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text !== undefined) node.textContent = text;
+  return node;
+}
+
 // D-359 §5.2 — 기계가 말한 상태·모드 값을 공용 <ui-tag status> 어휘로 옮긴다.
 // 정상(OK·연결·코어 모드)은 색이 아닌 active, 주의는 warn, 고장·없음은 crit(채움).
 // 표면 CSS가 [data-status]/[data-mode]로 태그를 다시 칠하지 않도록 여기 한 곳에 둔다.

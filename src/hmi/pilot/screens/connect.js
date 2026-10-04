@@ -25,8 +25,10 @@ function removeRecentEntry(host) {
   localStorage.setItem(RECENT_KEY, JSON.stringify(getRecent().filter((r) => r.host !== host)));
 }
 
-import {token, setToken, clearToken, whoami, fetchCapabilities, LOGIN_CODE, pairWithCode} from "../client.js";
+import {token, setToken, clearToken, whoami, fetchCapabilities, LOGIN_CODE, pairWithCode, api, authHeaders} from "../client.js";
 import {driverFor} from "../drivers/registry.js";
+import {createVisionPreview} from "../vision.js";
+import {mountDriveView, actionIcon} from "./drive-view.js";
 
 const DRIVER_KIND = "pinky_core";
 
@@ -158,6 +160,7 @@ function renderOffline(root, onConnect) {
 }
 
 async function check(root, onReady, onEnter) {
+  root.__pilotPreviewClose?.();
   const gate = driverFor(DRIVER_KIND);
   setTag("확인 중");
   notice("");
@@ -208,15 +211,88 @@ async function check(root, onReady, onEnter) {
   const enter = el("ui-button", "주행 시작", {type: "button", "data-drive-enter": ""});
   enter.setAttribute("kind", "primary");
   enter.addEventListener("click", () => onEnter?.({role: me.body?.role, capabilities: caps.body ?? {}}));
+  const state = await api("/api/v1/robot/state").catch(() => null);
+  const emergency = state?.body?.mode === "EMERGENCY";
+  if (emergency) {
+    enter.disabled = true;
+    enter.reason = "비상 정지 중에는 주행을 시작할 수 없습니다";
+    setTag("비상 정지 중"); notice("로봇에 연결됐습니다 · 비상 정지 중");
+  }
+  const camera = el("ui-button", "카메라 보기", {type: "button", kind: "primary", "data-camera-preview": ""});
+  camera.setAttribute("kind", "primary");
+  actionIcon(camera, "fit");
+  camera.addEventListener("click", () => showCamera(root, () => check(root, onReady, onEnter)));
+  const actions = el("ui-actions"); actions.append(camera, enter);
+  const roleLabel = {operator: "운영자", administrator: "관리자", viewer: "조회 전용"};
+  const summary = readoutPair([["로봇 연결", "확인됨"], ["사용 권한", roleLabel[me.body?.role] ?? "확인 필요"]]);
+  summary.dataset.gateState = emergency ? "BLOCK" : "READY";
   root.replaceChildren(
-    el("ui-head", "접속", {id: "pilot-gate-heading"}),
-    readoutPair([["게이트", "READY"], ["역할", me.body?.role ?? "operator"]]),
-    enter,
+    el("ui-head", "로봇에 연결됐습니다", {id: "pilot-gate-heading"}),
+    summary,
+    el("p", emergency ? "비상 정지 중입니다. 카메라는 조종을 시작하지 않고 볼 수 있습니다."
+      : "먼저 카메라를 확인하세요. 주행을 시작하면 누르는 동안만 로봇을 조종합니다.", {"data-ready-guidance": ""}),
+    actions,
   );
   onReady?.({role: me.body?.role});
 }
 
+function showCamera(root, onBack) {
+  setTag("영상 보기"); notice("조종하지 않는 카메라 보기");
+  document.body.dataset.pilotScreen = "preview";
+  const arena = el("div", null, {class: "pilot-drive", "data-readonly-camera": ""});
+  const stage = el("div", null, {"data-drive-stage": ""});
+  const hud = el("div", null, {"data-drive-hud": ""});
+  const description = el("span", "카메라 · 조종하지 않는 보기", {"data-camera-description": ""});
+  const zoomFact = el("span", "", {"data-drive-fact": "zoom", hidden: ""});
+  const view = el("div", null, {"data-drive-view": ""});
+  const frame = el("img", null, {alt: "로봇 전방 카메라 전체 영상", "data-drive-frame": "", hidden: ""});
+  const empty = el("ui-empty", "카메라 프레임 수신 대기", {"data-drive-empty": ""});
+  view.append(frame, empty); stage.append(hud, view); arena.append(stage);
+  root.replaceChildren(arena);
+  const elements = {frame, hud, view, zoomFact};
+  const layout = mountDriveView(arena, elements);
+  const actions = el("ui-actions");
+  const fitButton = el("ui-button", "전체 영상", {kind: "segment", type: "button", "data-drive-fit": ""});
+  fitButton.setAttribute("kind", "segment");
+  actionIcon(fitButton, "fit");
+  elements.fitButton = fitButton;
+  const fillButton = el("ui-button", "화면 채우기", {kind: "segment", type: "button", "data-drive-fill": ""});
+  fillButton.setAttribute("kind", "segment");
+  actionIcon(fillButton, "expand");
+  elements.fillButton = fillButton;
+  elements.fitButton.addEventListener("click", () => layout.setZoom(1));
+  elements.fillButton.addEventListener("click", () => layout.setZoom("full"));
+  const back = el("ui-button", "접속 화면으로", {kind: "quiet", type: "button", "data-camera-back": ""});
+  back.setAttribute("kind", "quiet");
+  actionIcon(back, "back");
+  back.addEventListener("click", onBack);
+  actions.append(elements.fitButton, elements.fillButton, back);
+  hud.append(description, zoomFact, actions);
+  layout.setZoom(1);
+  const preview = createVisionPreview({
+    apiGet: api,
+    fetchFrame: async (path) => {
+      const response = await fetch(path, {headers: authHeaders(), cache: "no-store"});
+      if (!response.ok) throw new Error("camera frame unavailable");
+      return response.blob();
+    },
+    onFrame: (url, meta) => {
+      frame.src = url; frame.hidden = false; empty.hidden = true;
+      description.textContent = `카메라 · ${meta.width ?? "—"}×${meta.height ?? "—"} · 조종하지 않는 보기`;
+    },
+    onUnavailable: (message) => { frame.hidden = true; empty.hidden = false; empty.textContent = message; },
+  });
+  const visibility = () => { document.hidden ? preview.stop() : preview.start(); };
+  document.addEventListener("visibilitychange", visibility);
+  root.__pilotPreviewClose = () => {
+    preview.stop(); layout.close(); document.removeEventListener("visibilitychange", visibility);
+    document.body.dataset.pilotScreen = "connect"; delete root.__pilotPreviewClose;
+  };
+  preview.start();
+}
+
 export function mountConnect(root, {onReady, onEnter} = {}) {
+  root.__pilotPreviewClose?.();
   const run = () => check(root, onReady, onEnter);
   root.__pilotRunCheck = run;
   root.__pilotForm = () => renderTokenForm(root, run);

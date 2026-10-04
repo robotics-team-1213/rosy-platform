@@ -224,6 +224,7 @@ class BatteryMonitor:
 
         self._voltage: Optional[float] = None
         self._last_sample_at: Optional[float] = None
+        self._charging_checked_at: Optional[float] = None
 
         self._level = BatteryLevel.OK
         self._descend_count = 0
@@ -316,6 +317,26 @@ class BatteryMonitor:
             return False
         return self._last_sample_at - self._deep_since >= self._cfg.deep_dwell_s
 
+    def health(self) -> dict:
+        """Freshness and confirmation, without guessing charge current or remaining runtime."""
+        with self._lock:
+            age = None if self._last_sample_at is None else max(0.0, self._clock() - self._last_sample_at)
+            charge_age = (None if self._charging_checked_at is None
+                          else max(0.0, self._clock() - self._charging_checked_at))
+            confirmed = (self._charging and age is not None and age <= 5.0
+                         and charge_age is not None and charge_age <= 5.0)
+            return {
+                "evidence": "missing" if age is None else "fresh" if age <= 5.0 else "stale",
+                "sample_age_s": age, "stale_after_s": 5.0,
+                "level": self._level.value, "percent": self._percent_locked(),
+                "filtered_voltage": self._voltage,
+                "charging_state": "confirmed" if confirmed else "unconfirmed",
+                "charging_evidence_age_s": charge_age, "charging_latched": self._charging,
+                "shutdown_armed": self._shutdown_armed_locked(),
+                "shutdown_request_written": self._sentinel_written,
+                "remaining_runtime_s": None, "remaining_runtime_reason": "current_and_capacity_not_measured",
+            }
+
     # --- 입력 -----------------------------------------------------------------
 
     def set_charging(self, confirmed: bool) -> None:
@@ -330,6 +351,7 @@ class BatteryMonitor:
         """
         pending: list[tuple] = []
         with self._lock:
+            self._charging_checked_at = self._clock()
             if bool(confirmed) == self._charging:
                 return
             self._charging = bool(confirmed)

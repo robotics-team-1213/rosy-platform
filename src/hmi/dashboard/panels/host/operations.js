@@ -1,10 +1,11 @@
+import { confirmIrreversible } from "/common/ui.js";
 import { NETWORK_MODE_LABEL, enumLabel, EVIDENCE_LABEL } from "/common/core_ui_logic.js";
 
 // D-359 §5.3 — 끌 때 이유를 같이 준다. 켜거나 짧은 요청 중 잠금이면 이유를 지운다.
 function setOff(control, off, reason = "") { control.disabled = Boolean(off); if (off && reason) control.setAttribute("reason", reason); else control.removeAttribute("reason"); }
 // Read-only host-agent views. An unreachable agent remains visibly unavailable.
 function el(tag, cls, text) {
-  const node = document.createElement(tag);
+  const node = document.createElement(tag); if (tag === "ui-status") node.setAttribute("state", "ready");
   if (cls) node.className = cls;
   if (text !== undefined) node.textContent = text;
   return node;
@@ -118,12 +119,14 @@ function card(title, path, interval, ctx, describe, summarize) {
 }
 
 export function mount(root, ctx) {
+  const lifetime = new AbortController(); let disposed = false; let confirming = false;
+  const hold = value => value === true ? "승인 대기" : value === false ? "확인됨" : "확인 전";
   const head = el("ui-head", "", "네트워크 및 장치 운영 상태");
   const network = card("네트워크", "/api/v1/host/network", 10_000, ctx, (data) => [["모드", data.mode == null ? null : enumLabel(NETWORK_MODE_LABEL, data.mode)], ["SSID", data.ssid], ["액세스 포인트", data.ap_active == null ? null : data.ap_active ? "켜짐" : "꺼짐"], ["IPv4", data.ipv4], ["기본 경로", data.default_route], ["DNS", (data.dns || []).join(", ")], ["인터넷", data.internet == null ? null : data.internet ? "도달" : "도달 안 됨"], ["단말 접근", data.peer_reachable == null ? null : data.peer_reachable ? "가능" : "확인 필요"]],
     (data) => `${enumLabel(NETWORK_MODE_LABEL, data.mode, "모드 미확인")} · ${data.ssid || "SSID 없음"}`);
   const release = card("릴리스", "/api/v1/host/release", 15_000, ctx, (data) => [["상태", data.state], ["현재 버전", data.current], ["이전 버전", data.previous], ["대기 버전", data.staged], ["마지막 실패", data.last_failure], ["리비전", data.git_revision], ["설정/데이터 스키마", data.config_schema == null ? null : `${data.config_schema} / ${data.data_schema}`]],
     (data) => `${data.state || "상태 미확인"} · 현재 ${data.current || "버전 미확인"} · 이전 ${data.previous || "없음"}`);
-  const commissioning = card("커미셔닝", "/api/v1/host/commissioning", 15_000, ctx, (data) => [["실행 모드", data.runtime_mode], ["동작 차단 사유", data.motion_reason], ["모터", data.motor_hold ? "승인 대기" : "확인됨"], ["LiDAR", data.lidar_hold ? "승인 대기" : "확인됨"], ["배터리", data.battery_hold ? "승인 대기" : "확인됨"], ["IMU", data.imu_hold ? "승인 대기" : "확인됨"], ["SLAM", data.slam_hold ? "승인 대기" : "확인됨"], ["Fleet", data.fleet_hold ? "승인 대기" : "확인됨"], ["세부 정보", data.detail]],
+  const commissioning = card("커미셔닝", "/api/v1/host/commissioning", 15_000, ctx, (data) => [["실행 모드", data.runtime_mode], ["동작 차단 사유", data.motion_reason], ["모터", hold(data.motor_hold)], ["LiDAR", hold(data.lidar_hold)], ["배터리", hold(data.battery_hold)], ["IMU", hold(data.imu_hold)], ["SLAM", hold(data.slam_hold)], ["Fleet", hold(data.fleet_hold)], ["세부 정보", data.detail]],
     (data) => `${data.runtime_mode || "실행 모드 미확인"} · ${data.motion_reason || "동작 차단 사유 없음"}`);
   const cards = [network, release, commissioning];
   // 두 작업 묶음이 같은 에이전트 상태로 막히면 원인은 패널 위 한 줄에만 둔다.
@@ -145,22 +148,22 @@ export function mount(root, ctx) {
   const field = el("input", "ui-field"); field.type = "password"; field.autocomplete = "new-password"; field.maxLength = 63; field.setAttribute("aria-label", "Wi-Fi 암호"); field.placeholder = "Wi-Fi 암호";
   const connect = el("ui-button", "", "Wi-Fi 연결"); connect.setAttribute("kind", "primary"); connect.type = "submit"; connectForm.append(ssid, field, connect); networkActions.append(connectForm);
   const networkNote = el("ui-status", "", "호스트 에이전트 상태 확인 전에는 네트워크 작업을 쓸 수 없습니다."); networkNote.setAttribute("state", "pending"); networkActions.append(networkNote);
+  const networkResult = el("ui-status"); networkResult.hidden = true; networkResult.setAttribute("state", "ready"); networkResult.setAttribute("role", "status"); networkActions.append(networkResult);
   networkNote.id = `host-network-note-${++noteSerial}`;
   network.wrap.insertBefore(networkActions, network.readout);
-  let networkHasResult = false;
   let networkPending = false;
   function networkEnabled(enabled) {
+    for (const control of [profile, ssid, field]) setOff(control, networkPending, "");
     const blocked = !enabled && !networkPending;
     for (const button of [sta, relay, applyProfile, connect]) {
       setOff(button, !enabled || networkPending, networkPending ? "" : SEE_ABOVE);
       pointAt(button, networkNote, blocked);
     }
     if (blocked) {
-      networkHasResult = false;
       networkNote.textContent = agentBlock(network.wrap, "네트워크");
       networkNote.setAttribute("state", "unavailable");
     }
-    networkNote.hidden = enabled && !networkHasResult && !networkPending;
+    networkNote.hidden = enabled && !networkPending;
     syncGroup();
   }
   network.onUpdate(() => networkEnabled(network.wrap.dataset.available === "true"));
@@ -171,8 +174,8 @@ export function mount(root, ctx) {
   const clearHold = el("ui-button", "", "복구 보류 해제"); clearHold.setAttribute("kind", "quiet"); clearHold.type = "button";
   rollback.disabled = clearHold.disabled = true; releaseActions.append(rollback, clearHold); release.wrap.insertBefore(releaseActions, release.readout);
   const releaseNote = el("ui-status", "", "호스트 에이전트 상태 확인 전에는 릴리스 작업을 쓸 수 없습니다."); releaseNote.setAttribute("state", "pending"); release.wrap.insertBefore(releaseNote, release.readout);
+  const releaseResult = el("ui-status"); releaseResult.hidden = true; releaseResult.setAttribute("state", "ready"); releaseResult.setAttribute("role", "status"); release.wrap.insertBefore(releaseResult, release.readout);
   releaseNote.id = `host-release-note-${++noteSerial}`;
-  let releaseHasResult = false;
   let releasePending = false;
   function syncReleaseActions() {
     const held = release.data.state === "RECOVERY_HOLD";
@@ -184,11 +187,10 @@ export function mount(root, ctx) {
       agent || (releasePending ? "" : "보류 없음"));
     for (const button of [rollback, clearHold]) pointAt(button, releaseNote, Boolean(agent));
     if (agent) {
-      releaseHasResult = false;
       releaseNote.textContent = agentBlock(release.wrap, "릴리스");
       releaseNote.setAttribute("state", "unavailable");
     }
-    releaseNote.hidden = release.wrap.dataset.available === "true" && !releaseHasResult && !releasePending;
+    releaseNote.hidden = release.wrap.dataset.available === "true" && !releasePending;
     syncGroup();
   }
   syncGroup = () => {
@@ -204,8 +206,8 @@ export function mount(root, ctx) {
       // 묶음이 풀리면 각 작업 묶음이 제 사유를 되찾는다(숨김·연결을 그 묶음의 식대로).
       const netOff = network.wrap.dataset.available !== "true" && !networkPending;
       const relOff = release.wrap.dataset.available !== "true" && !releasePending;
-      networkNote.hidden = !netOff && !networkHasResult && !networkPending;
-      releaseNote.hidden = !relOff && !releaseHasResult && !releasePending;
+      networkNote.hidden = !netOff && !networkPending;
+      releaseNote.hidden = !relOff && !releasePending;
       for (const button of [sta, relay, applyProfile, connect]) { pointAt(button, groupNote, false); pointAt(button, networkNote, netOff); }
       for (const button of [rollback, clearHold]) { pointAt(button, groupNote, false); pointAt(button, releaseNote, relOff); }
       return;
@@ -220,7 +222,20 @@ export function mount(root, ctx) {
 
   async function postHost(button, path, body, confirmText, note, success) {
     const isNetwork = note === networkNote;
-    if ((isNetwork ? networkPending : releasePending) || button.disabled || !window.confirm(confirmText)) return;
+    if (disposed || confirming || (isNetwork ? networkPending : releasePending) || button.disabled) return;
+    const previous = release.data.previous;
+    const networkMode = network.data.mode;
+    confirming = true;
+    const confirmed = await confirmIrreversible({message: confirmText, action: "요청 전송", opener: button, signal: lifetime.signal});
+    confirming = false;
+    if (disposed || !confirmed) return;
+    networkEnabled(network.wrap.dataset.available === "true"); syncReleaseActions();
+    if (button.disabled || (isNetwork ? networkPending : releasePending)
+        || (isNetwork && networkMode !== network.data.mode)
+        || (body.profile_id && body.profile_id !== profile.value.trim())
+        || (body.ssid && (body.ssid !== ssid.value.trim() || body.psk !== field.value))
+        || (!isNetwork && previous !== release.data.previous)) return;
+    note = isNetwork ? networkResult : releaseResult;
     if (isNetwork) networkPending = true;
     else releasePending = true;
     if (isNetwork) networkEnabled(network.wrap.dataset.available === "true");
@@ -228,15 +243,16 @@ export function mount(root, ctx) {
     note.hidden = false;
     note.textContent = "요청 결과를 기다리는 중입니다.";
     note.setAttribute("state", "pending");
-    if (note === networkNote) networkHasResult = true;
-    if (note === releaseNote) releaseHasResult = true;
     try {
       const result = await ctx.api(path, {method: "POST", body: JSON.stringify({...body, confirmed: true, idempotency_key: crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`})});
+      if (disposed) return;
       note.textContent = result.available === false ? (result.detail || "호스트 에이전트에 연결할 수 없습니다.")
         : result.ok === false ? (result.detail || "요청이 거부되었습니다.") : success;
       note.setAttribute("state", result.available === false ? "unavailable" : result.ok === false ? "error" : "ready");
-    } catch (error) { note.textContent = `요청 실패: ${error.message}`; note.setAttribute("state", "error"); }
+    } catch (error) { if (disposed) return; note.textContent = `요청 실패: ${error.message}`; note.setAttribute("state", "error"); }
     finally {
+      if (disposed) return;
+      if (isNetwork && body.psk !== undefined) field.value = "";
       if (isNetwork) { networkPending = false; networkEnabled(network.wrap.dataset.available === "true"); }
       else { releasePending = false; syncReleaseActions(); }
     }
@@ -244,18 +260,18 @@ export function mount(root, ctx) {
   sta.addEventListener("click", () => postHost(sta, "/api/v1/host/network/mode", {mode: "SITE_STA"}, "사업장 Wi-Fi로 전환할까요? 연결이 잠시 끊길 수 있습니다.", networkNote, "네트워크 모드 전환을 요청했습니다."));
   relay.addEventListener("click", () => postHost(relay, "/api/v1/host/network/mode", {mode: "RELAY_AP_STA"}, "릴레이 AP를 켤까요? 연결이 잠시 끊길 수 있습니다.", networkNote, "릴레이 AP 전환을 요청했습니다."));
   applyForm.addEventListener("submit", (event) => {
-    event.preventDefault(); const id = profile.value.trim(); if (!id) { networkHasResult = true; networkNote.hidden = false; networkNote.textContent = "프로파일 ID를 입력하세요."; networkNote.setAttribute("state", "error"); return; }
+    event.preventDefault(); const id = profile.value.trim(); if (!id) { networkResult.hidden = false; networkResult.textContent = "프로파일 ID를 입력하세요."; networkResult.setAttribute("state", "error"); return; }
     postHost(applyProfile, "/api/v1/host/network/apply", {profile_id: id}, `${id} 네트워크 프로파일을 적용할까요? 연결이 잠시 끊길 수 있습니다.`, networkNote, "프로파일 적용을 요청했습니다.");
   });
   connectForm.addEventListener("submit", (event) => {
     event.preventDefault(); const name = ssid.value.trim();
-    if (!name || field.value.length < 8 || field.value.length > 63) { networkHasResult = true; networkNote.hidden = false; networkNote.textContent = "SSID와 8~63자 Wi-Fi 암호를 입력하세요."; networkNote.setAttribute("state", "error"); return; }
-    postHost(connect, "/api/v1/host/network/connect", {ssid: name, psk: field.value}, `${name} Wi-Fi에 연결할까요? 연결이 잠시 끊길 수 있습니다.`, networkNote, "Wi-Fi 연결을 요청했습니다.").finally(() => { field.value = ""; });
+    if (!name || field.value.length < 8 || field.value.length > 63) { networkResult.hidden = false; networkResult.textContent = "SSID와 8~63자 Wi-Fi 암호를 입력하세요."; networkResult.setAttribute("state", "error"); return; }
+    postHost(connect, "/api/v1/host/network/connect", {ssid: name, psk: field.value}, `${name} Wi-Fi에 연결할까요? 연결이 잠시 끊길 수 있습니다.`, networkNote, "Wi-Fi 연결을 요청했습니다.");
   });
-  rollback.addEventListener("click", () => postHost(rollback, "/api/v1/host/release/rollback", {}, "이전 릴리스로 복귀할까요? 현재 실행이 중단될 수 있습니다.", releaseNote, "롤백을 요청했습니다."));
+  rollback.addEventListener("click", () => postHost(rollback, "/api/v1/host/release/rollback", {}, `${release.data.previous || "이전 릴리스"}로 복귀할까요? 현재 실행이 중단될 수 있습니다.`, releaseNote, "롤백을 요청했습니다."));
   clearHold.addEventListener("click", () => postHost(clearHold, "/api/v1/host/release/clear-hold", {}, "복구 보류를 해제할까요?", releaseNote, "복구 보류 해제를 요청했습니다."));
 
   root.append(head, ...cards.map(({wrap}) => wrap));
   syncGroup();
-  return () => cards.forEach(({stop}) => stop());
+  return () => { disposed = true; lifetime.abort(); cards.forEach(({stop}) => stop()); };
 }

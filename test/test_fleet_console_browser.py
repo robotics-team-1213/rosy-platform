@@ -448,6 +448,86 @@ def test_fleet_estop_fires_on_one_click_without_any_dialog(console_url):
         browser.close()
 
 
+def test_fleet_confirmation_keeps_stop_live_and_rechecks_dispatch_generation(console_url):
+    from playwright.sync_api import sync_playwright, expect
+
+    api = {**API, '/api/fleet/dispatch-control': {'generation': 7, 'dispatch_enabled': False,
+           'rearm_available': True, 'queued_tasks': 2, 'unresolved_actions': 0},
+           '/api/fleet/estop': {'stopped': 3, 'total': 3},
+           '/api/fleet/dispatch/rearm': {'generation': 7, 'dispatch_enabled': True}}
+    calls = []
+    api['/api/fleet/state'] = json.loads(json.dumps(SNAPSHOT))
+    robot = api['/api/fleet/state']['robots'][0]
+    robot['state']['line_follow'] = {'mode': 'CAMERA_LINE', 'state': 'LOST', 'reason': 'camera_reselection_required'}
+    with sync_playwright() as playwright:
+        browser, page, errors = _open_console(playwright, api, calls,
+            init_script="sessionStorage.setItem('rosy-console-token','fixture-token');")
+        page.goto(console_url, wait_until='networkidle')
+        page.locator('#dispatch-rearm').click()
+        dialog = page.locator('dialog.ui-confirm')
+        expect(dialog).to_have_count(1, timeout=3000)
+        page.locator('#estop').click()
+        assert ('POST', '/api/fleet/estop') in calls
+        expect(dialog).to_have_count(0)
+        page.locator('#dispatch-rearm').click()
+        api['/api/fleet/dispatch-control']['generation'] = 8
+        page.wait_for_function('() => document.querySelector("#dispatch-control-detail").textContent.includes("8")')
+        dialog.locator('ui-button[kind=irreversible]').click()
+        page.wait_for_timeout(100)
+        assert ('POST', '/api/fleet/dispatch/rearm') not in calls
+        robot['state']['line_follow']['mode'] = 'OFF'
+        page.locator('#roster-toggle').click()
+        page.wait_for_function('() => !document.querySelector("ui-button[data-goal-robot-id=rosy_01]").disabled')
+        page.locator('ui-button[data-goal-robot-id="rosy_01"]').click()
+        page.locator('#map-canvas').press('Enter')
+        dialog.wait_for()
+        robot['state']['safety']['estop'] = True
+        page.wait_for_function('() => !document.querySelector("#roster article.selected")')
+        dialog.locator('ui-button[kind=irreversible]').click()
+        page.wait_for_timeout(100)
+        assert ('POST', '/api/fleet/robots/rosy_01/goal') not in calls
+        robot['state']['safety']['estop'] = False
+        robot['state']['line_follow']['mode'] = 'CAMERA_LINE'
+        fallback = page.get_by_role('button', name='IR 추적 선택', exact=True)
+        fallback.wait_for()
+        fallback.click()
+        robot['state']['line_follow']['mode'] = 'OFF'
+        page.wait_for_function('() => ![...document.querySelectorAll("#roster ui-button")].some(node=>node.textContent==="IR 추적 선택")')
+        dialog.locator('ui-button[kind=irreversible]').click()
+        page.wait_for_timeout(100)
+        assert ('POST', '/api/fleet/robots/rosy_01/line-follow') not in calls
+        held = []
+        page.evaluate("""() => {const previous=fetch;window.fetch=(url,options={})=>{if(String(url).endsWith('/api/fleet/dispatch/rearm')){options={...options};delete options.signal;}return previous(url,options);};}""")
+        page.route('**/api/fleet/dispatch/rearm', lambda route: held.append(route))
+        page.locator('#dispatch-rearm').click()
+        dialog.locator('ui-button[kind=irreversible]').click()
+        page.wait_for_timeout(100)
+        assert len(held) == 1
+        page.locator('#cancel-all').click()
+        expect(dialog).to_have_count(0)
+        assert ('POST', '/api/fleet/cancel-all') not in calls
+        page.locator('#console-token').fill('replacement-fixture-token')
+        page.locator('#token-save').click()
+        page.wait_for_function('() => !document.querySelector("#dispatch-rearm").disabled')
+        page.locator('#dispatch-rearm').click()
+        dialog.locator('ui-button[kind=irreversible]').click()
+        page.wait_for_timeout(100)
+        assert len(held) == 2
+        held[0].fulfill(status=200, json={'generation': 8, 'dispatch_enabled': True})
+        page.wait_for_timeout(100)
+        page.locator('#cancel-all').click()
+        expect(dialog).to_have_count(0)
+        page.evaluate('() => dispatchEvent(new PageTransitionEvent("pagehide"))')
+        snapshot = page.locator('#log').inner_html()
+        held[1].fulfill(status=200, json={'generation': 8, 'dispatch_enabled': True})
+        page.wait_for_timeout(100)
+        expect(dialog).to_have_count(0)
+        assert page.locator('#log').inner_html() == snapshot
+        assert ('POST', '/api/fleet/dispatch/rearm') not in calls
+        assert not errors
+        browser.close()
+
+
 def test_fleet_cancel_all_requires_confirm_and_logs_each_robot_honestly(console_url):
     """D-421 — 전체 주행 취소는 confirm을 지나고, 로봇별 결과와 물리 정지 미확인을 쓴다."""
     from playwright.sync_api import sync_playwright
@@ -491,15 +571,17 @@ def test_fleet_cancel_all_requires_confirm_and_logs_each_robot_honestly(console_
             p, api, posts=posts, init_script=DECLINE_CONFIRM)
         page.goto(console_url, wait_until="networkidle")
         page.locator("#cancel-all").click()
-        page.wait_for_function("() => window.__confirms.length === 1")
+        dialog = page.locator('dialog.ui-confirm')
+        dialog.wait_for()
+        confirms = [dialog.inner_text()]
+        dialog.locator('ui-button[kind=quiet]').click()
         declined = [post for post in posts if post[1] == "/api/fleet/cancel-all"]
-        accept_confirm(page)
         page.locator("#cancel-all").click()
+        dialog.locator('ui-button[kind=irreversible]').click()
         page.get_by_text("주행 취소 요청 응답: 1/3 · 물리 정지 미확인").wait_for()
         page.get_by_text("rosy_02 주행 취소 응답 없음 — 대형 추종 ConnectError · 내비게이션 ConnectError · 차선 추종 ConnectError").wait_for()
         page.get_by_text("rosy_03 주행 취소 실패 — 주소 미확인 — 차선 추종 끄기 미전송").wait_for()
         page.get_by_text("대기 작업 2개 취소 · 로봇 취소 확인 대기 작업 1개").wait_for()
-        confirms = page.evaluate("window.__confirms")
         save_temp_screenshot(page, "fleet_cancel_all_result.png")
         assert not errors, f"페이지 오류: {errors}"
         browser.close()
@@ -734,14 +816,15 @@ def test_discovery_read_loss_removes_old_device_addresses_and_recovers(console_u
     }
     with sync_playwright() as playwright:
         browser, page, errors = _open_console(playwright, api)
-        page.goto(console_url, wait_until="networkidle")
+        page.goto(console_url.rsplit("/", 1)[0] + "/install.html", wait_until="networkidle")
         page.wait_for_function("() => document.querySelector('#discovery-list')?.textContent.includes('192.0.2.10')")
 
         api["/api/fleet/discovery"] = (503, {"detail": {"code": "SCANNER_UNAVAILABLE"}})
         page.wait_for_function("() => document.querySelector('#discovery-status')?.textContent === '발견 상태 확인 불가'",
-                               timeout=7000)
+                               timeout=12000)
         assert "192.0.2.10" not in page.inner_text("#discovery-list")
-        assert "발견 목록을 확인할 수 없습니다" in page.inner_text("#discovery-list")
+        assert page.locator("#discovery-list").is_hidden()
+        assert "발견 목록을 확인할 수 없습니다" in page.inner_text("#discovery-empty")
 
         api["/api/fleet/discovery"] = {"scanner_online": True, "devices": [{
             "name": "rosy-new", "address": "192.0.2.11", "port": 8000,
@@ -780,7 +863,7 @@ def test_expired_scanner_lease_raises_an_alarm_and_clears_on_return(console_url)
     }
     with sync_playwright() as playwright:
         browser, page, errors = _open_console(playwright, api)
-        page.goto(console_url, wait_until="networkidle")
+        page.goto(console_url.rsplit("/", 1)[0] + "/install.html", wait_until="networkidle")
         page.wait_for_function("() => document.querySelector('#discovery-status')?.textContent === '검색기 연결 대기'")
         assert page.get_attribute("#discovery-status", "status") == "warn"
 
@@ -789,8 +872,9 @@ def test_expired_scanner_lease_raises_an_alarm_and_clears_on_return(console_url)
         page.wait_for_function("() => document.querySelector('#discovery-status')?.textContent === '검색기 끊김'",
                                timeout=7000)
         assert page.get_attribute("#discovery-status", "status") == "crit"
-        assert "마지막 스캔 61초 전" in page.inner_text("#discovery-list")
-        assert "새 주소로 옮기기" in page.inner_text("#discovery-list")
+        assert page.locator("#discovery-list").is_hidden()
+        assert "마지막 스캔 61초 전" in page.inner_text("#discovery-empty")
+        assert "새 주소로 옮기기" in page.inner_text("#discovery-empty")
         assert page.inner_text("#log").count("발견 검색기 끊김") == 1
 
         api["/api/fleet/discovery"] = online
@@ -919,16 +1003,18 @@ def test_fleet_map_keyboard_goal_requires_confirmation_and_can_cancel(console_ur
         assert "Enter" in page.inner_text("#hint")
         save_temp_screenshot(page, "fleet_goal_preconfirm.png")
         page.keyboard.press("Enter")
-        assert page.evaluate("window.__confirms.length") == 1
-        assert "rosy_02" in page.evaluate("window.__confirms[0]")
+        dialog = page.locator('dialog.ui-confirm')
+        dialog.wait_for()
+        assert "rosy_02" in dialog.inner_text()
+        dialog.locator('ui-button[kind=quiet]').click()
         assert not any(method == "POST" and path == goal_path for method, path in posts)
         page.keyboard.press("Escape")
         assert page.locator(".robot.selected").count() == 0
         assert page.evaluate("document.activeElement?.dataset.goalRobotId") == "rosy_02"
 
         aim.click()
-        accept_confirm(page)
         page.keyboard.press("Enter")
+        dialog.locator('ui-button[kind=irreversible]').click()
         page.wait_for_function("() => document.querySelector('#log')?.textContent.includes('미션 하달')")
         assert sum(method == "POST" and path == goal_path for method, path in posts) == 1
         assert page.locator("#log ui-empty").count() == 0
@@ -964,6 +1050,7 @@ def test_queued_navigation_is_successful_and_cancel_targets_task(console_url):
         assert canvas_box
         page.mouse.click(canvas_box["x"] + canvas_box["width"] / 2,
                          canvas_box["y"] + canvas_box["height"] / 2)
+        page.locator('dialog.ui-confirm ui-button[kind=irreversible]').click()
         page.wait_for_function("() => document.querySelector('#log')?.textContent.includes('task-queued-123')")
         assert "QUEUED" in page.inner_text("#log")
         assert "#1" in page.inner_text("#log")
@@ -1040,17 +1127,18 @@ FLEET_FIT_PROBE = """() => {
     const n = document.querySelector(sel);
     if (!n) return null;
     const b = n.getBoundingClientRect();
-    return { top: Math.round(b.top), bottom: Math.round(b.bottom), height: Math.round(b.height) };
+    return { top: Math.round(b.top), bottom: Math.round(b.bottom), height: Math.round(b.height), width: Math.round(b.width) };
   };
   return {
     docOverflow: document.documentElement.scrollHeight - window.innerHeight,
-    mapPanel: inside('main > .panel[aria-labelledby="map-heading"]'),
+    mapPanel: inside('.panel[aria-labelledby="map-heading"]'),
     mapCanvas: inside('#map-canvas'),
     visionFrame: inside('#vision-frame'),
     visionPreview: inside('.vision-preview'),
     signals: inside('.signals'),
     formation: inside('.formation'),
-    rosterPanel: inside('main > .panel[aria-labelledby="roster-heading"]'),
+    rosterPanel: inside('.panel[aria-labelledby="roster-heading"]'),
+    stop: inside('#estop'),
     roster: inside('#roster'),
     rosterHeading: inside('#roster-heading'),
     vh: window.innerHeight,
@@ -1086,6 +1174,10 @@ def test_console_fits_the_declared_viewport(console_url):
         assert box is not None and box["bottom"] <= fit["vh"] and box["top"] >= 0, (
             f"{name} 이(가) 뷰포트 밖이다(D-201): {box}"
         )
+    for name in ("mapCanvas", "visionFrame", "visionPreview", "signals", "formation", "roster", "rosterPanel", "stop"):
+        assert fit[name]["width"] > 0 and fit[name]["height"] > 0, fit
+    assert fit["stop"]["width"] >= 58 and fit["stop"]["height"] >= 58, fit
+    assert fit["stop"]["top"] >= 0 and fit["stop"]["bottom"] <= fit["vh"], fit
     assert fit["roster"]["top"] - fit["rosterHeading"]["bottom"] <= 24, fit
     assert fit["rosterPanel"]["height"] <= 0.75 * fit["vh"], fit
 
@@ -1106,12 +1198,14 @@ def test_fleet_control_groups_are_semantic_subheadings(console_url):
         )
         headings = [
             "기기 연결",
-            "로봇 등록",
             "대형",
             "신호등",
         ]
         for name in headings:
             assert page.get_by_role("heading", name=name, exact=True).count() == 1
+        assert page.locator('.device-link a[href="/console/install"]').count() == 1
+        page.goto(console_url.rsplit("/", 1)[0] + "/install.html", wait_until="networkidle")
+        assert page.get_by_role("heading", name="로봇 등록", exact=True).count() == 1
         assert not errors
         browser.close()
 
@@ -1148,7 +1242,7 @@ def test_robot_enrollment_panel_enrolls_by_screen_code(console_url):
             route.fulfill(status=201, json=enrolled)
 
         page.route("**/api/fleet/enrollment/robots", enroll)
-        page.goto(console_url, wait_until="networkidle")
+        page.goto(console_url.rsplit("/", 1)[0] + "/install.html", wait_until="networkidle")
         page.get_by_role("heading", name="로봇 등록", exact=True).wait_for()
         page.locator("#discovery-list ui-button", has_text="등록").first.click()
         assert not page.locator("#enroll-move-check").is_visible()
@@ -1188,7 +1282,7 @@ def test_enrollment_dialog_leaves_the_fleet_stop_live(console_url):
     with sync_playwright() as playwright:
         browser, page, errors = _open_console(playwright, _enrollment_api(listing), posts)
         page.on("dialog", lambda dialog: dialog.accept())  # 전체 정지의 window.confirm
-        page.goto(console_url, wait_until="networkidle")
+        page.goto(console_url.rsplit("/", 1)[0] + "/install.html", wait_until="networkidle")
         page.get_by_role("heading", name="로봇 등록", exact=True).wait_for()
         opener = page.locator("#discovery-list ui-button", has_text="등록").first
         opener.click()
@@ -1239,7 +1333,7 @@ def test_unenroll_is_a_quiet_row_action_confirmed_by_name(console_url):
             route.fulfill(status=200, json={"state": "removed"})
 
         page.route("**/api/fleet/enrollment/robots/rosy_09", remove)
-        page.goto(console_url, wait_until="networkidle")
+        page.goto(console_url.rsplit("/", 1)[0] + "/install.html", wait_until="networkidle")
         row_button = page.locator('#enrolled-list li[data-robot-id="rosy_09"] ui-button[data-action="unenroll"]')
         row_button.wait_for()
         assert row_button.inner_text() == "등록 해제…"
@@ -1285,7 +1379,8 @@ def test_camera_rectification_controls_are_accessible_source_scoped_and_reset(co
         )
         page.on("request", lambda request: lease_payloads.append(json.loads(request.post_data))
                 if request.url.endswith("/api/fleet/vision/lease") and request.post_data else None)
-        page.goto(console_url, wait_until="networkidle")
+        page.goto(console_url.rsplit("/", 1)[0] + "/install.html", wait_until="networkidle")
+        page.get_by_role("tab", name="카메라 설치·보정", exact=True).click()
         page.get_by_text("왜곡 및 사각 보정", exact=True).click()
         page.get_by_label("왼쪽 위 X (%)").fill("10")
         page.get_by_label("출력 비율").select_option("1")
@@ -1343,7 +1438,8 @@ def test_camera_rectification_direct_manipulation(console_url):
             )
 
         page.route("**/api/vision/**", serve_frame)
-        page.goto(console_url, wait_until="networkidle")
+        page.goto(console_url.rsplit("/", 1)[0] + "/install.html", wait_until="networkidle")
+        page.get_by_role("tab", name="카메라 설치·보정", exact=True).click()
         page.get_by_text("왜곡 및 사각 보정", exact=True).click()
         page.get_by_role("button", name="원본에서 영역 조정").click()
         page.wait_for_timeout(500)
@@ -1414,6 +1510,7 @@ def test_camera_rectification_direct_manipulation(console_url):
         assert lease_payloads[-1]["rectification"]["corners"][1][1] > 0.2
         assert not errors
         page.reload(wait_until="networkidle")
+        page.get_by_role("combobox", name="작업 선택").select_option('calibration')
         page.get_by_text("왜곡 및 사각 보정", exact=True).click()
         assert page.get_by_label("오른쪽 위 X (%)").input_value() == preserved_x
         browser.close()
@@ -1444,8 +1541,10 @@ def test_camera_fault_ir_fallback_decline_sends_no_request(console_url):
         fallback = page.get_by_role("button", name="IR 추적 선택", exact=True)
         fallback.wait_for(state="visible")
         fallback.click()
-        page.wait_for_function("() => window.__confirms?.length === 1")
-        confirm = page.evaluate("window.__confirms[0]")
+        dialog = page.locator('dialog.ui-confirm')
+        dialog.wait_for()
+        confirm = dialog.inner_text()
+        dialog.locator('ui-button[kind=quiet]').click()
         browser.close()
 
     assert "rosy_01" in confirm and "IR 추적" in confirm and "요청할까요?" in confirm
@@ -1593,6 +1692,12 @@ def test_wide_header_keeps_every_item_on_one_line(console_url):
         for width, height in ((1920, 1080), (1366, 768), (1280, 800)):
             page.set_viewport_size({"width": width, "height": height})
             page.goto(console_url, wait_until="networkidle")
+            if page.locator('#topbar-more').is_visible():
+                page.locator('#topbar-more').click()
+                assert page.get_by_role('group', name='화면 테마', exact=True).count() == 1
+                page.locator('#topbar-more').click()
+            else:
+                assert page.get_by_role('group', name='화면 테마', exact=True).count() == 1
             results[width] = page.evaluate("""() => {
               const label = document.querySelector('#theme-choice-label');
               const line = parseFloat(getComputedStyle(label).lineHeight) || 20;
@@ -1605,7 +1710,7 @@ def test_wide_header_keeps_every_item_on_one_line(console_url):
         browser.close()
 
     assert errors == []
-    assert results[1920]["labelLines"] == 1 and not results[1920]["moreShown"], results
+    assert results[1920]["labelLines"] == 0 and not results[1920]["moreShown"], results
     for width in (1366, 1280):
         assert results[width]["moreShown"] and results[width]["labelLines"] == 0, results
     for width, result in results.items():
@@ -1900,16 +2005,35 @@ def test_single_column_tier_puts_exceptions_before_the_map_and_formation_last(co
         assert (top["#roster"] < top["#map-stage"] < top[".vision-preview"] < top[".formation"]
                 < top["#log"] < top[".device-link"]), top
         assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
+        page.evaluate("""() => {
+          window.retainedPanels = ['.queues-panel', '[aria-labelledby=roster-heading]',
+            '[aria-labelledby=map-heading]', '.ops-block'].map(sel => document.querySelector(sel));
+          document.querySelector('.formation-form-wrap').open = true;
+          const input = document.querySelector('#formation-spacing');
+          input.value = '1.7'; input.focus();
+        }""")
         page.set_viewport_size({"width": 1366, "height": 768})
+        page.wait_for_function("() => document.querySelector('.console-primary').contains(document.querySelector('#map-stage'))")
+        assert page.evaluate("() => ['.queues-panel', '[aria-labelledby=roster-heading]', '[aria-labelledby=map-heading]', '.ops-block'].every((sel, i) => document.querySelector(sel) === window.retainedPanels[i])")
         wide = page.evaluate(probe)
-        # wide: map column left, roster column right, both starting on the first row. Inside the
-        # roster column, 대형 stacks under the list and 기기 연결 stands beside the list.
+        # D-439: primary map/roster remain side by side; secondary tasks follow both in DOM and layout.
         left = page.evaluate("""() => Object.fromEntries(['#map-stage', '#roster', '.formation', '.device-link']
           .map((sel) => [sel, document.querySelector(sel).getBoundingClientRect().left]))""")
-        assert left["#map-stage"] < left["#roster"] < left[".device-link"], left
-        assert abs(left[".formation"] - left["#roster"]) < 1 and wide["#roster"] < wide[".formation"], (left, wide)
-        assert wide["#roster"] <= wide[".device-link"] < wide[".formation"], wide
+        assert left["#map-stage"] < left["#roster"], left
+        assert wide[".formation"] > max(wide["#roster"], wide["#map-stage"]), wide
+        assert wide["#log"] < wide[".device-link"], wide
+        assert page.evaluate("document.querySelector('[aria-labelledby=map-heading]').compareDocumentPosition(document.querySelector('.ops-block')) & Node.DOCUMENT_POSITION_FOLLOWING")
         assert wide["#roster"] < wide["#map-stage"] + 200, wide
+        page.set_viewport_size({"width": width, "height": height})
+        page.wait_for_function("() => document.querySelector('[aria-labelledby=roster-heading]').parentElement.id === 'fleet-main'")
+        assert page.evaluate("""() => {
+          const panels = ['.queues-panel', '[aria-labelledby=roster-heading]',
+            '[aria-labelledby=map-heading]', '.ops-block'].map(sel => document.querySelector(sel));
+          return panels.every((node, i) => node === window.retainedPanels[i])
+            && panels[1].compareDocumentPosition(panels[2]) & Node.DOCUMENT_POSITION_FOLLOWING;
+        }""")
+        assert page.locator('#formation-spacing').input_value() == '1.7'
+        assert page.locator('#formation-spacing').evaluate('(node) => node === document.activeElement')
         assert not errors
         browser.close()
 
@@ -2022,7 +2146,8 @@ def test_camera_approval_takes_the_phone_code_and_shows_the_mutual_check(console
                 "confirm_within_s": 120})
 
         page.route("**/api/fleet/pairing/v1/requests/req-7f3a/approve", approve)
-        page.goto(console_url, wait_until="networkidle")
+        page.goto(console_url.rsplit("/", 1)[0] + "/install.html", wait_until="networkidle")
+        page.get_by_role("tab", name="카메라 연결 승인", exact=True).click()
         page.get_by_role("heading", name="카메라 연결 승인", exact=True).wait_for()
         ready = page.locator('#camera-requests li[data-request-id="req-7f3a"] ui-button[data-action="approve"]')
         ready.wait_for()
@@ -2096,7 +2221,8 @@ def test_camera_reject_and_revoke_are_quiet_row_actions_confirmed_by_name(consol
                    answer({"request_id": "req-81bc", "state": "rejected"}))
         page.route("**/api/fleet/pairing/v1/credentials/cred-4be1a09c3d2f/revoke",
                    answer({"credential_id": "cred-4be1a09c3d2f", "state": "revoked"}))
-        page.goto(console_url, wait_until="networkidle")
+        page.goto(console_url.rsplit("/", 1)[0] + "/install.html", wait_until="networkidle")
+        page.get_by_role("tab", name="카메라 연결 승인", exact=True).click()
         revoke = page.locator('#camera-credentials li[data-credential-id="cred-4be1a09c3d2f"] '
                               'ui-button[data-action="revoke"]')
         revoke.wait_for()
@@ -2138,7 +2264,8 @@ def test_camera_lists_without_actions_for_viewers_and_the_shared_token(console_u
 
     with sync_playwright() as playwright:
         browser, page, errors = _open_console(playwright, _camera_api(principal, role))
-        page.goto(console_url, wait_until="networkidle")
+        page.goto(console_url.rsplit("/", 1)[0] + "/install.html", wait_until="networkidle")
+        page.get_by_role("tab", name="카메라 연결 승인", exact=True).click()
         page.locator('#camera-requests li[data-request-id="req-7f3a"]').wait_for()
         page.locator('#camera-credentials li[data-credential-id="cred-4be1a09c3d2f"]').wait_for()
         assert page.locator("#camera-requests ui-button, #camera-credentials ui-button").count() == 0
@@ -2162,7 +2289,8 @@ def test_camera_section_is_calm_when_fleet_has_no_pairing(console_url):
     posts = []
     with sync_playwright() as playwright:
         browser, page, errors = _open_console(playwright, api, posts)
-        page.goto(console_url, wait_until="networkidle")
+        page.goto(console_url.rsplit("/", 1)[0] + "/install.html", wait_until="networkidle")
+        page.get_by_role("tab", name="카메라 연결 승인", exact=True).click()
         calm = page.locator("#camera-link-unavailable")
         calm.wait_for()
         assert calm.inner_text() == "이 Fleet에는 카메라 연결 승인이 설정되지 않았습니다."
@@ -2242,26 +2370,24 @@ def test_offline_robots_say_why_and_each_move_asks_for_the_screen_code(console_u
         assert "같은 로봇이 10.16.36.20:8080에 보입니다 — 새 주소로 옮기기…" in card.inner_text()
         static = page.locator('#roster article[data-robot-id="rosy_01"]').inner_text()
         assert "고정 주소 192.0.2.10:8443이(가) 지금 망에 없을 수 있습니다" in static
-        # Cards keep their content height; the roster column scrolls (D-201 fits the viewport),
-        # and scrolling brings a card's reason line and its move shortcut fully into view.
+        # Cards retain readable reasons; address actions belong to the install owner.
         assert page.evaluate("""() => [...document.querySelectorAll('#roster article')]
             .every((card) => card.scrollHeight <= card.clientHeight + 1)""")
         assert page.evaluate("""() => {
-            const button = document.querySelector('#roster ui-button[data-move-robot-id="rosy_10"]');
-            button.scrollIntoView({block: 'nearest'});
-            const r = button.getBoundingClientRect();
+            const reason = document.querySelector('#roster article[data-robot-id="rosy_10"] [data-address-reason]');
+            reason.scrollIntoView({block: 'nearest'});
+            const r = reason.getBoundingClientRect();
             const box = document.querySelector('#roster').getBoundingClientRect();
             return r.top >= box.top - 1 && r.bottom <= box.bottom + 1; }""")
-        # The camera section's last line keeps clear of the next heading (it read as overlapping).
-        assert page.evaluate("""() => {
-            const line = document.querySelector('#camera-link-unavailable').getBoundingClientRect();
-            const head = document.querySelector('#signals-heading').getBoundingClientRect();
-            return line.bottom + 8 <= head.top; }""")
+        assert page.locator('#roster ui-button[data-move-robot-id]').count() == 0
+        assert page.locator('.device-link a[href="/console/install"]').is_visible()
         page.evaluate("document.querySelector('#roster').scrollTop = 0")
         _shot(page, "roster-renumbered-1920.png")
         assert not page.locator("text=(전체)").count()
 
-        listed.nth(0).locator("ui-button").click()
+        page.goto(console_url.rsplit("/", 1)[0] + "/install.html", wait_until="networkidle")
+        page.wait_for_function("() => document.querySelectorAll('#enrolled-list ui-button[data-action=move]').length === 2")
+        page.locator('#enrolled-list li[data-robot-id="rosy_09"] ui-button[data-action="move"]').click()
         dialog = page.locator("#enroll-dialog")
         dialog.wait_for()
         assert "rosy_09 → 10.16.36.20:8080" in page.locator("#enroll-target").inner_text()
@@ -2298,6 +2424,71 @@ def test_offline_robots_say_why_and_each_move_asks_for_the_screen_code(console_u
         browser.close()
 
 
+def test_move_candidate_timeout_and_pagehide_keep_server_code_flow_owned(console_url):
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as playwright:
+        api = _address_api()
+        api['/api/fleet/discovery/addresses']['robots'][1]['seen_addresses'].append('10.16.36.99:8080')
+        browser, page, errors = _open_console(playwright, api)
+        held = []
+        page.goto(console_url.rsplit('/', 1)[0] + '/install.html', wait_until='networkidle')
+        move = page.locator('#enrolled-list li[data-robot-id="rosy_09"] ui-button[data-action="move"]')
+        move.wait_for()
+        move.click()
+        page.locator('#enroll-dialog').wait_for()
+        assert page.locator('#enroll-move-address').inner_text() == '새 주소 미확인'
+        page.locator('#enroll-cancel').click()
+        page.route('**/api/fleet/discovery/addresses', lambda route: held.append(route))
+        move.click()
+        page.wait_for_function('() => document.querySelector("#enroll-result").textContent.includes("확인")')
+        move.click()
+        assert len(held) == 1
+        assert page.locator('#estop').is_enabled()
+        page.locator('#enroll-dialog').wait_for(timeout=15000)
+        assert page.locator('#enroll-move-address').inner_text() == '새 주소 미확인'
+        assert page.locator('#enroll-submit').is_enabled()
+        page.locator('#enroll-cancel').click()
+        move.click()
+        page.wait_for_timeout(100)
+        assert len(held) == 2
+        page.locator('#enroll-address').fill('10.16.36.88:8080')
+        page.locator('#enroll-address-add').click()
+        page.locator('#enroll-code').fill('7KXM-' + 'P3QA')
+        held[-1].fulfill(status=200, json=_address_api()['/api/fleet/discovery/addresses'])
+        page.wait_for_timeout(100)
+        assert page.locator('#enroll-target').inner_text() == '10.16.36.88:8080'
+        assert page.locator('#enroll-code').input_value() == '7KXM-' + 'P3QA'
+        page.locator('#enroll-cancel').click()
+        move.click()
+        page.wait_for_timeout(100)
+        assert len(held) == 3
+        page.locator('#enroll-address-add').click()
+        page.locator('#enroll-cancel').click()
+        move.click()
+        page.wait_for_timeout(100)
+        assert len(held) == 4
+        held[-2].fulfill(status=200, json=_address_api()['/api/fleet/discovery/addresses'])
+        page.wait_for_timeout(100)
+        move.click()
+        assert len(held) == 4  # An old finally cannot release the newer lookup.
+        page.locator('#console-token').fill('replacement-fixture-token')
+        page.locator('#token-save').click()
+        page.wait_for_function('() => !document.querySelector("#enroll-address-add").disabled')
+        held[-1].fulfill(status=200, json=_address_api()['/api/fleet/discovery/addresses'])
+        page.wait_for_timeout(100)
+        assert page.locator('#enroll-dialog').is_hidden()
+        move.click()
+        page.wait_for_timeout(100)
+        assert len(held) == 5
+        page.evaluate('() => dispatchEvent(new PageTransitionEvent("pagehide"))')
+        held[-1].fulfill(status=200, json=_address_api()['/api/fleet/discovery/addresses'])
+        page.wait_for_timeout(100)
+        assert page.locator('#enroll-dialog').is_hidden()
+        assert not errors
+        browser.close()
+
+
 def test_viewer_sees_reasons_but_no_live_move_buttons(console_url):
     from playwright.sync_api import sync_playwright
 
@@ -2308,10 +2499,13 @@ def test_viewer_sees_reasons_but_no_live_move_buttons(console_url):
         page.locator("#address-banner").wait_for()
         page.wait_for_function(
             "() => document.querySelectorAll('#roster p[data-address-reason]').length === 3")
-        for selector in ('#address-movable ui-button', 'ui-button[data-move-robot-id="rosy_09"]'):
-            button = page.locator(selector).first
-            assert button.is_disabled(), selector
-            assert button.get_attribute("reason") == "운용자 권한이 필요합니다", selector
+        assert page.locator('#roster ui-button[data-move-robot-id]').count() == 0
+        page.goto(console_url.rsplit("/", 1)[0] + "/install.html", wait_until="networkidle")
+        page.wait_for_function("() => document.querySelectorAll('#enrolled-list li[data-robot-id]').length > 0")
+        assert page.locator('#enrolled-list ui-button[data-action="move"]').count() == 0
+        button = page.locator('#enroll-address-add')
+        assert button.is_disabled()
+        assert button.get_attribute("reason") == "운용자 권한이 필요합니다"
         assert not errors
         browser.close()
 
@@ -2445,15 +2639,22 @@ def test_line_stuck_panel_confirms_resume_and_shows_cores_refusal_verbatim(conso
     api = {"/api/fleet/state": snapshot, "/api/fleet/map": MAP_GRID,
            "/api/fleet/formation": {"active": False, "state": "IDLE"}}
     bodies = []
+    order = []
     with sync_playwright() as playwright:
         browser, page, errors = _open_console(playwright, api)
 
+        def claim(route):
+            order.append("claim")
+            route.fulfill(status=200, json={"ok": True})
+
         def decision(route):
+            order.append("decision")
             bodies.append(json.loads(route.request.post_data or "{}"))
             route.fulfill(status=409, json={"detail": {
                 "code": "STUCK_DECISION_REFUSED", "robot_id": "rosy_01", "robot_status": 409,
                 "message": "RESUME refused: object_within_stop_distance"}})
 
+        page.route("**/api/fleet/robots/rosy_01/line-stuck/claim", claim)
         page.route("**/api/fleet/robots/rosy_01/line-stuck/decision", decision)
         page.goto(console_url, wait_until="networkidle")
         panel = page.locator("#stuck-panel")
@@ -2473,6 +2674,7 @@ def test_line_stuck_panel_confirms_resume_and_shows_cores_refusal_verbatim(conso
         page.keyboard.press("Escape")
         confirm.wait_for(state="detached")
         assert bodies == []
+        assert order == ["claim"]   # D-438: the click claims; cancelling sends no decision
 
         # Keyboard: open the confirm step, survive a poll, then send.
         item.locator('ui-button[data-decision="RESUME"]').focus()
@@ -2488,6 +2690,7 @@ def test_line_stuck_panel_confirms_resume_and_shows_cores_refusal_verbatim(conso
         result.wait_for(state="visible")
         text = result.text_content()
         assert bodies == [{"stuck_id": "stuck-abc", "decision": "RESUME"}]
+        assert order == ["claim", "claim", "decision"]   # claim always precedes the decision
         assert "정지 거리 안에 아직 물체가 있습니다" in text
         assert "STUCK_DECISION_REFUSED: RESUME refused: object_within_stop_distance" in text
         assert result.get_attribute("data-kind") == "bad"
@@ -2581,6 +2784,6 @@ def test_line_stuck_confirm_follows_the_live_stuck_and_an_offline_robot(console_
         assert "로봇 연결이 끊겼습니다" in yes.get_attribute("reason")
         yes.click(force=True)
         page.wait_for_timeout(300)
-        assert not [p for p in posts if p[0] == "POST" and "line-stuck" in p[1]]
+        assert not [p for p in posts if p[0] == "POST" and p[1].endswith("/line-stuck/decision")]
         assert not errors
         browser.close()

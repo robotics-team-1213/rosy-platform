@@ -536,7 +536,17 @@ def problems(root=None) -> list[str]:
 
         copy = row.get("token_copy")
         if "token_parity" in contracts:
-            if not isinstance(copy, str) or not copy.strip():
+            source = row.get("token_source")
+            if source:
+                if copy:
+                    found.append(f"value: {label} must choose token_copy or token_source")
+                if source != "src/hmi/web_common/tokens.css":
+                    found.append(f"path: {label} token_source must be canonical tokens.css")
+                for key in ("token_source", "token_generator", "token_verification"):
+                    value = row.get(key)
+                    if not isinstance(value, str) or not (base / value).is_file():
+                        found.append(f"path: {label} missing {key} source file")
+            elif not isinstance(copy, str) or not copy.strip():
                 found.append(f"path: {label}이(가) token_parity를 받는데 token_copy가 없다")
             elif not (base / copy).is_file():
                 found.append(f"path: {label} token_copy 파일이 저장소에 없다: {copy}")

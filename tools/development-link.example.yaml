@@ -1,0 +1,8 @@
+# Public input example for tools/development_link.py; this file contains no credentials.
+mode: development
+site: bench-a
+robots:
+  - rosy_01=robot-a.local
+lifetime_hours: 24
+# Select a new private output directory. On the Windows operator PC use X:/DevTemp/.
+runtime_root: /etc/rosy/development

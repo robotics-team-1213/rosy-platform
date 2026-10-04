@@ -13,6 +13,19 @@ from control.line_observer_overrides import main
 PROFILE = "/opt/rosy/current/install/share/pinky_pro/config/camera_nominal.yaml"
 
 
+def test_apply_learned_paint_writes_a_loadable_overlay(tmp_path):
+    target = tmp_path / "learned.yaml"
+    calls, run = _run_log()
+    assert main(["--path", str(target), "apply", "--profile", PROFILE,
+                 "--paint-source", "learned", "--model-pointer", "/var/lib/rosy/models/shadow"],
+                run=run) == 0
+    params = yaml.safe_load(target.read_text())[NODE_KEY]["ros__parameters"]
+    assert params["paint_source"] == "learned"
+    assert params["learned_lane_pointer"] == "/var/lib/rosy/models/shadow"
+    assert usable_operator_overlay(str(target))[0] == str(target)
+    assert calls == [["systemctl", "restart", "rosy-camera"]]
+
+
 @pytest.fixture(autouse=True)
 def profile_installed(monkeypatch):
     """PROFILE is the robot path; pretend the release installed it on this host."""

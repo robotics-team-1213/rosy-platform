@@ -214,10 +214,12 @@ EXPECTED_SUBSCRIPTIONS = [
     ("battery/voltage", "_on_battery", 10),
     ("nav_cmd_vel", "_on_nav_cmd_vel", 10),
     ("line/observation", "_on_line_observation", 10),
+    ("line/keep_debug", "_on_lane_perception", 1),
     ("detection_evidence", "_on_detection_evidence", 10),
     ("road/observation", "_on_road_observation", 10),
     ("dock/observation", "_on_dock_observation", 10),
     ("camera/preview/compressed", "_on_camera_preview", "PREVIEW"),
+    ("camera/preview/raw/compressed", "_on_camera_raw_preview", "PREVIEW"),
     # D-423 §3.6: learned-model status per task, latched by the model nodes; display only.
     ("perception/learned/status", "_on_lane_model_status", "LATCHED"),
     ("perception/learned/object_det/status", "_on_object_det_model_status", "LATCHED"),
@@ -272,6 +274,7 @@ EXPECTED_PUBLISHERS = [
 #: mode-chosen expression; absent on a bench, the bridge just keeps the face.
 #: The sixth (D-411 A) asks the camera unit's recorder to start or stop.
 EXPECTED_CLIENTS = ["set_led", "set_emotion", "start_motor", "stop_motor", "pilot_recorder/set_active",
+                    "pilot_recorder/start",
                     "slam_toolbox/save_map"]
 
 
@@ -314,6 +317,21 @@ def test_the_three_latched_endpoints_stay_latched(registered):
 
 def test_the_bridge_opens_the_same_service_clients(registered):
     assert registered.node.clients == EXPECTED_CLIENTS
+
+
+@pytest.mark.parametrize('mode,number', [('raw',0), ('annotated',1)])
+def test_typed_recording_start_transports_the_closed_mode(registered, monkeypatch, mode, number):
+    import sys
+    module = sys.modules[registered.bridge.__class__.__module__]
+    requests = []
+    response = types.SimpleNamespace(success=True, message='confirmed')
+    monkeypatch.setattr(module, 'PilotRecordingStart', types.SimpleNamespace(Request=types.SimpleNamespace))
+    monkeypatch.setattr(module.save_map, 'await_call', lambda future, timeout: response)
+    registered.bridge._pilot_recording_start_client = types.SimpleNamespace(
+        service_is_ready=lambda: True,
+        call_async=lambda request: requests.append(request) or object())
+    assert registered.bridge._request_pilot_recording_start(mode, True) == (True, 'confirmed')
+    assert requests[0].preview_mode == number
 
 
 def test_the_nav2_action_client_and_tf_listener_are_built(registered):

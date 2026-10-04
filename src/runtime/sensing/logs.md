@@ -1032,3 +1032,37 @@
 - gate 변화: 없음(패키지 기본값 그대로, 파일 없으면 동작 같음).
 - 결정: D-344 §12 보강 (2026-10-03)
 - 교훈: 릴리스 디렉터리 안 수정은 다음 업데이트(약 10 분 자동)에서 말없이 사라진다. 로봇별 설정은 `/etc/rosy/` 에 둔다.
+
+## 2026-10-04 · uncommitted · fix(perception): 운영자 차선 모델 선택과 관측 출처 표시
+
+- 변경: 관측 노드 운영자 overlay에 threshold/denoise/learned 선택·고정 모델 pointer·추론 cadence와 threads 검사를 추가했다. optional `ROSY_CAMERA_FPS`는 기본 8 Hz를 유지하고 4..8 Hz만 허용한다. 추론 지연을 줄이려고 마스크 신선도 검사를 완화하지 않는다.
+- 변경: 바닥색 규칙의 전경·어둠 영역은 `REGION UNCLASSIFIED/DARK`, 실제 객체 모델이 연결한 클래스만 `DET`로 표시한다. 바닥과 다른 페인트를 장애물 종류로 단정하지 않는다. 차단 판정·거리 안전 기준은 그대로다.
+- 증거: observer overlay/CLI/preview/capture rate 집중 시험 83 passed, 23 skipped; camera/classifier 회귀 63 passed. 실제 정지 프레임 비교는 학습 keeper 양쪽 경계 confidence 0.9, 밝기 규칙 왼쪽 경계 confidence 0.6. 실시간 적용 및 주행 수용은 별도 검증한다.
+- gate 변화: 없음. 모델 intake·ARM64 배포·실시간 관측·실제 이동을 구분한다.
+
+## 2026-10-04 · uncommitted · fix(lane): 저조도 keeper 무효화와 mask 원자성
+
+- 변경: 저조도 raw frame은 keeper·between keeper·paint worker를 reset하고 차선 관측을 즉시 무효화한다. preview quality는 밝게 렌더링한 화면이 아닌 원본에서 판정한다. learned mask·freshness·cache key·revision은 하나의 결과 snapshot만 사용한다.
+- 증거: sensing paint source·callback·camera·preview 93 passed, 1 skipped. async result 교체 시 다른 mask와 revision이 섞이는 회귀를 추가했다.
+- gate 변화: SOURCE/LOCAL. 실주행은 수행하지 않았다.
+
+
+## 2026-10-04 · uncommitted · recording: raw originals and optional model display
+
+- 변경: 기본 raw 녹화는 기존 원본 카메라 topics를 유지한다. annotated 옵션은 같은 bag에 별도 표시 영상과 frame별 검출/keeper/learned 근거를 추가하며 원본을 바꾸지 않는다. session/manifest/readback에 선택과 model_unreviewed 출처를 기록한다. 브라우저 원본 preview는 표시본과 동일 촬영 header를 유지한다.
+- 증거: unknown 옵션 거부·SetBool 호환·원본 topic 보존·typed start/readback·manifest 회귀 53 passed. 새 rosidl 및 raw/표시 쌍은 CI와 runtime에서 추가 확인한다.
+- gate 변화: 없음. 자동 표시는 사람이 확인한 학습 라벨이 아니다.
+
+## 2026-10-04 · uncommitted · fix(perception): 밝기 양극단의 원본 관측
+
+- 변경: 도로 ROI grayscale clipping과 저조도를 구분하고 두 경우 최신 원본 전달·keeper/mask reset·품질 표시를 유지한다. HSV 단일 채널 포화를 흰색 과노출로 판정하지 않는다.
+- 검증: camera/worker/node/preview 98 passed, ROI 경계·색 포화 5 passed, raw JPEG 양극단 2 passed. 실기 노출 조정·조명 효과는 별도이다.
+- 증거: `docs/validation/learned-lane-modes-2026-10-04/exposure.md`.
+
+- gate 변화: SOURCE/LOCAL. 실기 노출·조명·주행은 별도 검증이다.
+## 2026-10-04 · uncommitted · fix(ui): PARKED 진단 지도 도구 행 감싸기
+
+- 변경: diagnostic.html의 viewbar CSS만 지도 내부 폭으로 제한하고 도구를 감싼다. 세 영역·지도 좌표/수학·IIFE·POST·포트·실행 제외 경계는 그대로다.
+- 증거: 호스트 영향 묶음에서 palette/부품 계약이 통과했으며 실제 구조 예산/API 경로 16 passed (8.21s). 부모 검증자의 GET 실패 상태 화면 검토를 사용한다.
+- gate 변화: PARKED 경계를 유지한다. 런타임 활성화·장치 접속은 하지 않았다.
+- 결정: D-439 Task5. 내부 toolbar 잘림만 줄인다.

@@ -26,6 +26,7 @@ SupplementaryGroups=dialout spi gpio
 # there leaves the D-260 lamp patterns out.
 Environment=ROSY_BUZZER_ENABLED=true ROSY_BUZZER_PIN=4 ROSY_LAMP_ENABLED=true
 EnvironmentFile=-/etc/rosy/boot-display.env
+# ROSY_LOW_LIGHT_ASSIST=true opts into fresh-camera low-light LCD/lamp illumination.
 # emotion.info_screen, emotion.rosy_lcd, core_common and rosylib come from the running
 # release; the face GIFs from its share/emotion (D-433).
 Environment=PYTHONPATH=/opt/rosy/current/install/lib/python3.12/site-packages

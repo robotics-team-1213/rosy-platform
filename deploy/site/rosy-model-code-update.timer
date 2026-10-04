@@ -1,0 +1,10 @@
+[Unit]
+Description=Check the model-PC approved code inbox (D-446)
+
+[Timer]
+OnBootSec=2min
+OnUnitInactiveSec=10min
+Unit=rosy-model-code-update.service
+
+[Install]
+WantedBy=timers.target

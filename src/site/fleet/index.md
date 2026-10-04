@@ -44,6 +44,7 @@
 | D-392 | 모델 도구 호출은 provider 중립 메시지 계약과 Fleet 소유 allowlist를 따른다 |
 | D-407 | 차선 자율 막힘 복구: 앞물체·차선 상실이 이어지면 관제에 판단 요청(WAIT·RESUME·BACK_AND_RETRY·MANUAL·ABORT), 답이 없으면 뒤 여유 확인 후 짧은 후진과 재판단(최대 2회, 기본 꺼짐) |
 | D-413 | ROSY는 modules·integrations·apps·profiles로 책임을 나누고 고정 셀 한 흐름부터 이전한다 |
+| D-439 | 웹 앱은 공용 디자인과 작업 중심 정보 위계로 순차 개선한다 |
 
 ## 계획·결과 문서
 
@@ -74,8 +75,8 @@
 
 ## 최근 기록
 
-- 2026-10-03 · uncommitted · feat: read live Fleet fence on the simulation Cell owner
-- 2026-10-03 · uncommitted · refactor: D-425 Console document lifetime
-- 2026-10-03 · uncommitted · test: D-425 browser baseline and safety facts
-- 2026-10-03 · uncommitted · refactor: D-425 Console HTTP adapter checkpoint
-- 2026-10-03 · uncommitted · merge(fleet): main에 들어온 병렬 Cell 하달기를 걷고 공개 목표 증거 입구를 C4b 설계로 옮김
+- 2026-10-04 · uncommitted · feat(power): fresh battery evidence and idle saving
+- 2026-10-04 · 6485f8a39 · refactor(ui): 통합 명렬 카드의 표현 재사용
+- 2026-10-04 · uncommitted · fix(web): 관제 확인과 명령의 공통 소유권
+- 2026-10-04 · uncommitted · fix(web): 관제 뷰포트와 주소 확인의 작업 소유권
+- 2026-10-04 · uncommitted · feat(web): D-439 Fleet 작업 탐색과 보정 미리보기 수명

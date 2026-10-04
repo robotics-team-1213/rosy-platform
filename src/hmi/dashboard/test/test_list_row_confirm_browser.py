@@ -88,10 +88,12 @@ def test_device_first_viewport_spends_at_most_one_danger_fill_besides_the_estop(
 
 def test_device_token_delete_goes_through_a_dialog_that_names_the_token(tmp_path):
     from playwright.sync_api import sync_playwright
+    from test_role_g2_browser import _select_task
 
     deletes = []
     with sync_playwright() as playwright:
         browser, page, errors = _open_device(playwright, tmp_path, 1366, 768, "dark", deletes)
+        _select_task(page, "system.security")
         current = page.locator("li[data-token-id] ui-button[disabled]")
         assert current.count() == 1 and "지금 쓰는 토큰" in current.inner_text()
 
@@ -152,10 +154,12 @@ STOP_STATE = """() => {
 
 def test_device_estop_stays_live_over_the_delete_dialog(tmp_path):
     from playwright.sync_api import sync_playwright
+    from test_role_g2_browser import _select_task
 
     requests = []
     with sync_playwright() as playwright:
         browser, page, errors = _open_device(playwright, tmp_path, 1366, 768, "dark", requests)
+        _select_task(page, "system.security")
         row = page.locator("li[data-token-id]").filter(has=page.locator("ui-button:not([disabled])")).first
         dialog = page.locator("dialog.ui-confirm")
         stop = page.locator("#shell-estop")

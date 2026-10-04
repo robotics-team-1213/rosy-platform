@@ -26,6 +26,7 @@
 
 ## 최근 기록
 
+- 2026-10-04 · uncommitted · interfaces: additive typed recording start options
 - 2026-09-25 · uncommitted · refactor(contracts): move interfaces under src/contracts (D-231)
 - 2026-09-22 · uncommitted · chore: update ARTIFACT blocker to Native Image Builder (D-164)
 - 2026-09-16 · uncommitted · docs(harness): park interfaces field gate and point at the CI build

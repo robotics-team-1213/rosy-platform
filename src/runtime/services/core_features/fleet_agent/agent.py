@@ -8,7 +8,8 @@ import urllib.parse
 from pathlib import Path
 
 from core_common.protocol.schemas import Envelope, EnvelopeType, HelloPayload, HeartbeatPayload
-from .discovery import locate_fleet
+from core_common.link_retry import retry_delay
+from .discovery import locate_fleet, DiscoveryConflict, DiscoveryUnavailable
 
 logger = logging.getLogger("fleet_agent")
 
@@ -218,6 +219,9 @@ class FleetAgent:
                         "http://", "ws://").replace("https://", "wss://")
                     options = ({"ssl": ssl.create_default_context(cafile=str(ca_file)),
                                 "proxy": None} if discover else {})
+                    if discover and getattr(current_hub, 'address', None):
+                        options.update(host=current_hub.address, port=current_hub.port,
+                                       server_hostname=discovery['expected_hostname'])
                     self._connect(ws_url)  # for tests
                     async with websockets.connect(ws_url, **options) as ws:
                         self._ws = ws
@@ -226,7 +230,23 @@ class FleetAgent:
                         if why is None:
                             break                    # hello refused: stop for good
 
+                except (ssl.SSLCertVerificationError, DiscoveryConflict) as exc:
+                    logger.error('Fleet link requires operator: %s', exc)
+                    self.enabled = False
+                    break
+                except DiscoveryUnavailable as exc:
+                    logger.warning('Fleet peer temporarily absent: %s', exc)
+                except ValueError as exc:
+                    logger.error('Fleet link configuration rejected: %s', exc)
+                    self.enabled = False
+                    break
                 except (WebSocketException, OSError) as exc:
+                    status = getattr(getattr(exc, 'response', None), 'status_code', None)
+                    code = getattr(getattr(exc, 'rcvd', None), 'code', None)
+                    if status in (401, 403) or code in (4401, 4403):
+                        logger.error('Fleet authentication rejected; operator action required')
+                        self.enabled = False
+                        break
                     logger.warning("Fleet agent disconnected: %s", exc)
                 except asyncio.CancelledError:
                     break
@@ -238,10 +258,11 @@ class FleetAgent:
                 if self.enabled:
                     if stable:
                         backoff = 1.0
+                    delay = retry_delay(backoff, maximum_s=MAX_BACKOFF_S)
                     if why is not None:
                         logger.warning("Fleet agent link lost (%s); reconnecting in %.0f s",
-                                       why, backoff)
-                    await asyncio.sleep(backoff)
+                                       why, delay)
+                    await asyncio.sleep(delay)
                     backoff = next_backoff(backoff)
         finally:
             self.connected = False
@@ -358,6 +379,8 @@ class FleetAgent:
             except asyncio.CancelledError:
                 raise
             except Exception as exc:
+                if getattr(getattr(exc, 'rcvd', None), 'code', None) in (4401, 4403):
+                    self.enabled = False
                 logger.info("Fleet hub socket closed: %s", exc)
                 return f"connection closed ({exc})"
             self.last_rx = self._clock()
@@ -392,6 +415,7 @@ class FleetAgent:
                 if code in SESSION_FATAL_ERRORS and (
                         answers == EnvelopeType.HEARTBEAT or code == "PAIRING_INVALID"):
                     logger.error("Fleet hub ended the session: %s", code)
+                    self.enabled = False
                     self.connected = False
                     await self._abort(ws)
                     return f"hub ended the session: {code}"

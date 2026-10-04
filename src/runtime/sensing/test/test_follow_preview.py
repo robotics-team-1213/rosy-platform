@@ -51,6 +51,16 @@ def test_non_keep_camera_line_shows_direction_without_fabricated_target(monkeypa
     assert 'TARGET' not in texts
 
 
+def test_low_light_explains_visibility_without_guessing_an_obstacle(monkeypatch):
+    texts = []
+    monkeypatch.setattr(cv2, 'putText', lambda img, text, *a, **kw: texts.append(text))
+    draw_follow_evidence(np.zeros((240, 320, 3), np.uint8), scale=1, objects={
+        'image_size': [320, 240], 'quality': {'valid': False, 'reason': 'low_light'},
+        'regions': [{'b': [0, 0, 320, 240], 'n': 1, 'k': 'd'}]})
+    assert any(t.startswith('LOW LIGHT: visibility unavailable') for t in texts)
+    assert not any(t.startswith(('REGION ', 'OBJ ', 'DET ')) for t in texts)
+
+
 def test_selected_boundaries_target_and_objects_are_visible(monkeypatch):
     texts = []
     real_text = cv2.putText
@@ -73,7 +83,8 @@ def test_selected_boundaries_target_and_objects_are_visible(monkeypatch):
     assert any('85%' in t for t in texts)
     assert 'LEFT LANE' in texts and 'RIGHT LANE' in texts
     assert 'FOLLOW PATH' in texts
-    assert any('OBJ 1' in t and 'UNKNOWN' in t for t in texts)
+    assert any('REGION 1' in t and 'UNCLASSIFIED' in t for t in texts)
+    assert not any(t.startswith('OBJ ') for t in texts)
     assert any('unranged' in t for t in texts)
     assert any('transverse' in t for t in texts)
     assert np.any(np.all(image == (60, 220, 60), axis=2))
@@ -82,11 +93,11 @@ def test_selected_boundaries_target_and_objects_are_visible(monkeypatch):
 
 
 @pytest.mark.parametrize('record,label', [
-    ({'b': [20, 150, 60, 200], 'n': 0, 'k': 'f', 'm': 0.42, 's': 'L'}, 'OBJ 1 UNKNOWN 0.42m L'),
-    ({'b': [20, 150, 60, 200], 'n': 1, 'k': 'd', 'm': 0.3, 's': 'G'}, 'OBJ 1 DARK 0.30m G NEAR'),
-    ({'b': [20, 150, 60, 200], 'n': 0, 'k': 'f', 'm': 0.3}, 'OBJ 1 UNKNOWN 0.30m'),
-    ({'b': [20, 150, 60, 200], 'n': 0, 'k': 'f', 's': 'L'}, 'OBJ 1 UNKNOWN unranged'),
-    ({'b': [20, 150, 60, 200], 'n': 0, 'k': 'f', 'm': 0.3, 's': 'X'}, 'OBJ 1 UNKNOWN 0.30m'),
+    ({'b': [20, 150, 60, 200], 'n': 0, 'k': 'f', 'm': 0.42, 's': 'L'}, 'REGION 1 UNCLASSIFIED 0.42m L'),
+    ({'b': [20, 150, 60, 200], 'n': 1, 'k': 'd', 'm': 0.3, 's': 'G'}, 'REGION 1 DARK 0.30m G NEAR'),
+    ({'b': [20, 150, 60, 200], 'n': 0, 'k': 'f', 'm': 0.3}, 'REGION 1 UNCLASSIFIED 0.30m'),
+    ({'b': [20, 150, 60, 200], 'n': 0, 'k': 'f', 's': 'L'}, 'REGION 1 UNCLASSIFIED unranged'),
+    ({'b': [20, 150, 60, 200], 'n': 0, 'k': 'f', 'm': 0.3, 's': 'X'}, 'REGION 1 UNCLASSIFIED 0.30m'),
 ])
 def test_object_badge_names_the_range_source(monkeypatch, record, label):
     """D-423: L = LiDAR, G = ground plane; no source letter is invented."""
@@ -108,7 +119,7 @@ def test_hold_discards_target_and_missing_objects_do_not_mean_clear(monkeypatch)
     draw_follow_evidence(image, scale=1, keep={
         'strategy': 'none', 'reason': 'junction', 'target_px': [200, 100]}, objects=None)
     assert any('HOLD' in t and 'junction' in t for t in texts)
-    assert any('OBJECTS: unavailable' in t for t in texts)
+    assert any('REGIONS: unavailable' in t for t in texts)
     assert not np.any(np.all(image[:180] == (230, 60, 230), axis=2))
 
 
@@ -202,7 +213,7 @@ def test_paired_region_shows_the_class_and_the_detection_range(monkeypatch):
         'image_size': [320, 240], 'quality': {'valid': True},
         'regions': [{'b': [20, 150, 60, 200], 'n': 0, 'k': 'f', 'm': 0.5, 's': 'G'}]},
         detections=_detections(('cone', 22, 152, 38, 48), ranges=[{'m': 0.42, 's': 'L'}]))
-    assert 'OBJ 1 cone 0.42m L' in texts
+    assert 'DET 1 cone 0.42m L' in texts
 
 
 def test_unpaired_detection_is_drawn_on_its_own(monkeypatch):

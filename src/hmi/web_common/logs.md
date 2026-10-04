@@ -480,3 +480,75 @@
 - 변경: caller/page signal composition과 page epoch를 추가. interval·listener·subscription·one-shot timeout/wait 정리, 늦은 async 결과와 이전 동적 handler 거절. 복귀 조회는 문서가 제공하며 공통 계층에 명령 replay·권한/storage 정책을 넣지 않음.
 - 증거: request/scope/page-scope/Fleet/authorization/poll gate Node 56 passed. 현재 자산 bytes를 확인한 X: 사본 Chromium 14 passed; disposal 변이 8 red, raw camera/Vision guard 변이 4 red, bytes 복원 후 14 green.
 - gate 변화: SOURCE/LOCAL 수명 계약 강화. installed-only·DEVICE/FIELD는 consumer 단위의 후속 gate.
+
+
+## 2026-10-03 · uncommitted · feat(link): D-432 주소 없는 장비 접속
+
+- 변경: 기존 Pilot의 native wrapper를 parent_app으로 등록한다. wrapper는 listen port를 소유하지 않고 기존 조종 화면을 사용한다.
+- 증거: 관련 Python 계약 시험·실제 loopback TLS HTTP/WS 시험을 실행했다. Pilot Android 설치·화면과 실제 로봇 연결·현장 트래픽 수용은 서로 다른 증거다.
+- gate 변화: 실제 장비의 제어·FIELD 관문은 이동하지 않는다.
+- 결정: D-432 2026-10-03 추가 결정.
+
+## 2026-10-03 · uncommitted · feat(ui): 공용 동작 아이콘과 생성형 native 토큰 계약
+
+- 변경: actionIcon이 SVG/currentColor/글자/disabled 사유를 공용 구성한다. 기존 팔레트·터치·글자·아이콘 크기 토큰을 재사용하며 소비 화면은 배치만 소유한다. Native Pilot은 tokens.css에서 색을 생성하고 registry는 source/generator/runtime verification을 요구한다.
+- 증거: 공용 컨트롤 26 passed, 표면 registry/토큰 parity 18 passed, 아이콘 재적용·비활성 사유·Enter 동작 브라우저 1 passed. Android 실제 생성값 비교는 PilotColorsTest가 담당한다.
+- gate 변화: 공용 라이브러리의 DEVICE/FIELD는 N/A; 소비 앱 장치 증거와 구별한다.
+- 결정: D-432 공용 디자인 규칙의 소유권.
+
+## 2026-10-04 · uncommitted · feat: 원본 픽셀 보존과 같은 촬영 시점의 표시본
+
+- 변경: fetchCameraPair가 variant·sequence·captured_at·frame_id를 검증한다. 원본 canvas에는 drawImage만 사용하고 조작 문구는 표시본에만 넣는다. 원본/표시본 녹화기와 파일·공통 pair_group_id를 분리하고 종료 시 두 stream을 해제한다. PC sidecar에서 표시본을 model_unreviewed로 구분한다.
+- 증거: capture/shared-controls/recording-view 43 passed; 429·불일치·구형 서버·원본 픽셀·두 파일·종료 정리 회귀 포함.
+- gate 변화: SOURCE/LOCAL. ARM64/device/field evidence remains separate.
+## 2026-10-04 · uncommitted · feat(ui): 재사용 가능한 절차 작업 선택기
+
+- 변경: `task-chooser.js`/`.css`를 단일 공유 자산 대장과 CMake 설치 목록에 등록한다. 기존 segment 버튼·native field·토큰·반응형 단계를 재사용한다. 안정된 작업 ID, 선택 표시, 방향/Home/End 키, 모바일 선택과 포커스, 전환 대기·거부·오류·시간 제한, 종료 시 선택 잠금과 리스너 정리를 제공한다. 데이터 요청·인증·패널 lifecycle은 호출 표면이 소유한다.
+- 증거: 작업 선택 및 셸 종료 Chromium 회귀 6 passed와 독립 품질 회귀 3 passed. 기존 공유/콘솔 묶음 246 passed와 역할 팔레트 1개 실패 후, D-277 역할 위치 표식을 유지하고 해당 계약을 포함한 4개 대상 회귀를 통과했다. 공유 asset/install 대장 검증은 앞 묶음에 포함한다.
+- gate 변화: 라이브러리 SOURCE/LOCAL 호스트 검증을 보완하며 소비 표면의 DEVICE/FIELD를 대신하지 않는다.
+- 결정: D-439. 공용 helper는 패널을 만들거나 제거하지 않고 전달받은 작업의 가시성과 조작 상태만 관리한다.
+
+## 2026-10-04 · uncommitted · feat(ui): 공용 역할 이름으로 기본 진입 정렬
+
+- 변경: `core_ui_logic.js`에 동결된 ROLE_LABEL을 추가하여 viewer/operator/administrator 표시 이름을 공유한다. 새 dashboard 진입은 받은 역할을 검증하고 알려지지 않은 문자열 역할은 원문으로 표시한다. 새 디자인 토큰은 추가하지 않았다.
+- 증거: 공유·dashboard 영향 host 묶음 342 passed/95 skipped (591.46s), 후속 인증·구조 묶음 64 passed/2 skipped (31.08s). 기본 진입 실제 CORE fixture 브라우저 회귀와 독립 SPEC·QUALITY 검토를 통과했다. host 묶음과 브라우저 대상은 중복될 수 있어 합산하지 않는다.
+- gate 변화: SOURCE/LOCAL 증거만 보완하며 DEVICE/FIELD를 대신하지 않는다.
+- 결정: D-439. 공용 규칙은 표시 이름만 소유하고 서버 역할 권한을 추론하지 않는다.
+
+## 2026-10-04 · uncommitted · fix(ui): 교통 정책 운용자 이름 공유
+
+- 변경: core_ui_logic.js에 CORE의 교통 정책 모드·판정·사유·신호·신호원·정지선 규칙 이름을 동결한 공용 표로 추가했다. enumLabel의 모르는 값 원문 표시와 없는 값 — 계약을 유지한다. 토큰·권한 판정은 추가하지 않았다. 교통 패널이 단일 비활성 사유 helper로 이동하면서 사라진 기존 예외 5개를 닫힌 allowlist에서 제거했다.
+- 증거: 최종 교통 행동 Chromium 6 passed (147.22s), 공유·패키지·예산·교통 API 호스트 240 passed/24 skipped 뒤 사라진 예외 1 failure를 정리하고 해당 상태·비활성 계약 2 passed (0.36s). 알려진 한국어 이름, 원문 미래 enum, null/누락 readback은 브라우저에서 확인했다. 묶음 대상은 중복될 수 있어 합산하지 않는다.
+- gate 변화: 공용 라이브러리 SOURCE/LOCAL 증거이며 소비 표면의 DEVICE/FIELD를 대신하지 않는다.
+- 결정: D-439. 표시 이름만 공유하고 정책 가용성·정지 조건은 서버가 판단한다.
+- 최종 후속 증거: poll generation·실패 후 가용성·종료 회귀를 포함한 영향 묶음 29 passed (22.21s), 독립 SPEC·QUALITY 최종 검토 PASS. 이전 묶음과 합산하지 않는다. 실제로 사라진 allowlist만 제거했으며 guard를 X 제공 자산에서 지웠을 때 행동 회귀가 검토본 역전을 검출했다. 제품 소스는 변이하지 않았다.
+
+## 2026-10-04 · uncommitted · feat(ui): 생존 범위로 취소하는 공용 확인
+
+- 변경: confirmation.js의 builder를 ui.js에서 위임한다. 기존 confirmIrreversible API와 openLiveDialog의 단일 정지·inert·초점 정리는 유지하며 선택적 AbortSignal이 이미 취소됐으면 열지 않고, 열린 확인은 false로 취소한다. 닫힌 확인은 abort listener를 제거한다. 공유 자산 manifest/CMake를 등록하고 위험 실행 버튼의 단일 소유자 계약은 추출한 builder만 허용한다.
+- 증거: 패키지·자산·예산 host 62 passed (28.27s), 공유 상태·정지·manifest 44 passed (7.78s), 집중 browser 7 passed (231.73s)와 영향 browser 3 passed (164.63s), 최종 abort/정지 클릭 1 passed (59.84s). 대상은 중복될 수 있어 합산하지 않는다. 중단된 확인의 DOM·scrim·inert 정리, 사전 취소, 실제 fixture 정지의 취소 동작을 확인했다. 독립 SPEC·QUALITY 최종 검토 PASS.
+- gate 변화: SOURCE/LOCAL 라이브러리 증거이며 장치나 FIELD 증거를 대신하지 않는다. 임시 검증은 X:\DevTemp\rosy-ui-unify\console에 둔다.
+- 결정: D-439 §10. builder는 주입받은 openLiveDialog만 호출하며 ui.js로 역수입하지 않는다.
+
+## 2026-10-04 · uncommitted · feat(ui): 작업 상태의 공용 한국어 이름
+
+- 변경: HEALTH_LABEL, SEVERITY_LABEL, SAFETY_POLICY_LABEL, TOKEN_SOURCE_LABEL, LINE_STATE_LABEL을 공용 값 매핑으로 제공한다. 기존 ROLE_LABEL을 역할 배지와 토큰 입력에서 재사용하며 알려지지 않은 서버 값은 화면 원문과 title로 보존한다. UNKNOWN은 확인 전이며 정상으로 바꾸지 않는다.
+- 증거: 영향 host·공유·패키지·예산 59 passed/23 deselected (35.88s), 최종 영향 browser 15 passed (634.01s). X 제공 자산에서 UNKNOWN을 정상으로 바꾼 변이가 실제 진단 행동 단언을 RED로 만들고 원본 복원 후 GREEN이었다. SPEC·QUALITY 독립 최종 검토 PASS; 중복 묶음은 합산하지 않는다.
+- gate 변화: SOURCE/LOCAL 라이브러리와 fixture 근거이며 DEVICE/FIELD 수용을 대체하지 않는다.
+- 결정: D-439. 이름만 공유하며 권한과 가용성 판단은 기존 소유자와 서버에 둔다.
+
+## 2026-10-04 · uncommitted · fix(ui): 겹치는 정지 컨트롤의 실제 클릭 영역 보존
+
+- 변경: 비모달 확인 scrim의 live 컨트롤 구멍을 y-band와 병합 x 구간으로 서로 겹치지 않는 합집합으로 만든다. 기존 evenodd 방식이 Stop과 OFF의 교집합을 다시 덮는 실측 오류를 수정했다. 새 순수 live-dialog-geometry.js를 공용 manifest/CMake에 등록하며 기존 표시 여부·scroll/resize/mutation·종료 정리를 유지한다. 색상·토큰·권한·정지 처리 소유자는 바꾸지 않았다.
+- 증거: 실제 phone Stop 하단 좌측 클릭 RED 1 failed (43.54s), 최종 호환 집중 행동 5 passed (174.27s). 제공된 이전 구멍 변이가 실제 Stop 클릭을 차단했고, URL·다른 SHA256·원본 불변을 확인한 동일 회귀의 복원 GREEN (56.93s)을 기록했다. 순수 helper는 합집합 면적175, 겹침/포함/중복의 단일 덮임, viewport clipping, 비정상 좌표, 실제 Stop/OFF 소수 좌표를 검사한다.
+- 증거: 공용 helper/설치/버튼과 dashboard 집중 host 145 passed/1 prompt failure (23.01s); 기존 대상 따옴표 scan 1 passed (0.23s)로 수정 확인. 자산·설치·정지·예산 30 passed (3.17s), API 패키지 2 passed (0.03s). 영향 fixture는 새 import를 명시적으로 제공한다. 부모 화면 직접 검토와 SPEC·QUALITY 최종 소스 검토 PASS; 중복 묶음은 합산하지 않는다.
+- gate 변화: SOURCE/LOCAL 라이브러리와 fixture 근거이며 물리적 정지·DEVICE/FIELD 수용은 아니다. 임시 근거: X:\DevTemp\rosy-ui-unify\compatibility.
+- 결정: D-439 §13. 사용자에게 노출된 모든 즉시 정지 hit 영역을 공용 확인에서도 보존한다.
+- 단위 검출력 증거: 부모 검증자가 X의 동일 test 사본에서 helper를 원래 겹친 사각형 반환으로 바꿔 실제 단언 RED, 실제 helper 복원 GREEN을 직접 실행했다 (5.18s). test 동일·변이 반영·다른 SHA256·제품 불변을 report로 확인했다. 최초 X 사본 pytest 수집은 30s timeout이며 RED로 세지 않는다.
+
+## 2026-10-04 · uncommitted · fix(ui): 공용 템플릿 작은 상단 행
+
+- 변경: 템플릿에만 적용하는 CSS를 manifest/CMake에 등록하고 작은 상단의 브랜드 설명이 자연스럽게 감싸지도록 했다. D-277 브랜드 rose·기존 부품·토큰은 유지한다. Task3e 인증/페이지 취소 뒤 code-submit 잠금 복구는 긴 정확한 닫힌 항목으로 구별하고 기존 generic 두 위치 수를 유지했다.
+- 증거: 비활성 사유·복사 위치 검출·SW·예산 8 passed (2.48s), API UI 경로/구조 16 passed (8.21s). 공용 UI/helper 동작은 변경하지 않았다.
+- gate 변화: SOURCE/LOCAL 라이브러리 자산만 보완한다. DEVICE/FIELD 수용은 소비 런타임에 남긴다.
+- 결정: D-439 Task5, D-359. 일반 허용 수를 넓히지 않고 실제 위치를 구별한다.

@@ -6,10 +6,12 @@ console.py 의 gather/scatter 를 그대로 드러내는 읽기와 위임이다.
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
+import time
 from functools import partial
-from typing import Literal, Optional
+from typing import Callable, Literal, Optional
 
 import httpx
 from fastapi import Depends, HTTPException, Request, Response
@@ -54,13 +56,41 @@ class LineStuckDecisionRequest(BaseModel):
     decision: Literal["WAIT", "RESUME", "BACK_AND_RETRY", "MANUAL", "ABORT"]
 
 
-def _transport_failure(exc: BaseException) -> tuple[str, str]:
+class LineStuckClaimRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    stuck_id: str = Field(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_.:-]+$")
+
+
+def transport_failure(exc: BaseException) -> tuple[str, str]:
     """A connect failure never reached CORE; anything later may have been applied."""
     if isinstance(exc, (httpx.ConnectError, httpx.ConnectTimeout, ConnectionRefusedError)):
         return "ROBOT_UNREACHABLE", "answer not delivered: the robot could not be reached"
     return ("STUCK_DECISION_OUTCOME_UNKNOWN",
             "the robot did not reply; CORE may have applied the answer. "
             "Re-read the stuck before answering again")
+
+
+class SharedGather:
+    """D-438: one ``console.snapshot()`` + ``board.observe`` for every reader within
+    ``max_age_s``. The snapshot also runs traffic, hand-off and swarm-speed logic and GETs
+    every robot, so the state route and the resolver must not each run it. Callers treat
+    the returned snapshot as read-only: it is shared."""
+
+    def __init__(self, console, board: LineStuckBoard, *, max_age_s: float = 1.0,
+                 clock: Callable[[], float] = time.monotonic) -> None:
+        self._console, self._board, self._clock = console, board, clock
+        self.max_age_s = max_age_s
+        self._lock = asyncio.Lock()
+        self._snapshot: Optional[dict] = None
+        self._at = 0.0
+
+    async def __call__(self) -> dict:
+        async with self._lock:
+            if self._snapshot is None or self._clock() - self._at >= self.max_age_s:
+                snapshot = await self._console.snapshot()
+                self._board.observe(snapshot["robots"], self._console.hub.registry.events_since)
+                self._snapshot, self._at = snapshot, self._clock()
+            return self._snapshot
 
 
 def install_console_routes(app, *, console, sightings, require_viewer,
@@ -70,12 +100,13 @@ def install_console_routes(app, *, console, sightings, require_viewer,
     board = app.state.line_stuck = LineStuckBoard(
         log=LineStuckAnswerLog(answer_log_path) if answer_log_path is not None else None)
 
+    gather = app.state.fleet_gather = SharedGather(console, board)
+
     async def gathered() -> dict:
-        snapshot = await console.snapshot()
-        board.observe(snapshot["robots"], console.hub.registry.events_since)
-        for row in snapshot["robots"]:
-            row["line_stuck"] = board.view(row["robot_id"])
-        return snapshot
+        snapshot = await gather()
+        # Per response, on copies: the cached snapshot is shared with the resolver.
+        return {**snapshot, "robots": [{**row, "line_stuck": board.view(row["robot_id"])}
+                                       for row in snapshot["robots"]]}
 
     @app.get("/api/fleet/state", dependencies=read_guard, tags=["fleet"])
     async def fleet_state() -> dict:
@@ -121,8 +152,9 @@ def install_console_routes(app, *, console, sightings, require_viewer,
 
     @app.get("/api/fleet/line-stuck", dependencies=read_guard, tags=["line-stuck"])
     async def line_stuck_pending() -> dict:
-        # The board as of the last /state gather (the console polls it every second); this
-        # read does not fan out to every robot. `observed_age_s` says how old it is.
+        # The board as of the last shared gather (the resolver and the console's /state
+        # poll refresh it about every second); this read does not fan out to every robot.
+        # `observed_age_s` says how old it is.
         return {"pending": board.pending(), "answers": board.answers(),
                 "observed_age_s": board.observed_age_s()}
 
@@ -133,8 +165,13 @@ def install_console_routes(app, *, console, sightings, require_viewer,
         client = console.clients().get(robot_id)
         if client is None:
             raise http_error(HubError("UNKNOWN_ROBOT", robot_id))
+        # D-438 §1: claim before forwarding, so the resolver cannot answer in the gap.
+        # The claim stays even if the CORE forward fails: a human owns this stuck now.
+        resolver_loop = getattr(app.state, "stuck_resolver", None)
+        if resolver_loop is not None:
+            resolver_loop.claim(robot_id, body.stuck_id)
         record = partial(board.record, robot_id=robot_id, stuck_id=body.stuck_id,
-                         decision=body.decision, principal_id=principal.principal_id,
+                         decision=body.decision, principal_id=principal.principal_id, tier="human",
                          audit_id=getattr(request.state, "site_api_audit_id", None))
         try:
             # Forwarded unchanged with the robot credential; CORE alone judges the answer.
@@ -147,7 +184,7 @@ def install_console_routes(app, *, console, sightings, require_viewer,
                 "code": exc.code, "message": exc.message, "robot_id": robot_id,
                 "robot_status": exc.status}) from exc
         except (httpx.HTTPError, OSError) as exc:
-            code, message = _transport_failure(exc)
+            code, message = transport_failure(exc)
             record(accepted=False if code == "ROBOT_UNREACHABLE" else None,
                    code=code, message=f"{message} ({type(exc).__name__})")
             raise HTTPException(status_code=502, detail={
@@ -156,6 +193,19 @@ def install_console_routes(app, *, console, sightings, require_viewer,
         answer = record(accepted=True, outcome=result.get("outcome"))
         return {"robot_id": robot_id, "actor_id": principal.principal_id,
                 "answer": answer, "result": result}
+
+    @app.post("/api/fleet/robots/{robot_id}/line-stuck/claim", dependencies=operator_guard,
+              tags=["line-stuck"])
+    async def line_stuck_claim(robot_id: str, body: LineStuckClaimRequest,
+                               principal: SitePrincipal = Depends(require_operator)) -> dict:
+        """D-438 §1: a human opened this stuck; the resolver stops answering it."""
+        if console.clients().get(robot_id) is None:
+            raise http_error(HubError("UNKNOWN_ROBOT", robot_id))
+        resolver_loop = getattr(app.state, "stuck_resolver", None)
+        if resolver_loop is not None:
+            resolver_loop.claim(robot_id, body.stuck_id)
+        return {"robot_id": robot_id, "stuck_id": body.stuck_id,
+                "claimed_by": principal.principal_id}
 
     @app.get("/api/fleet/formation", dependencies=read_guard, tags=["formation"])
     async def formation_state() -> dict:

@@ -14,6 +14,8 @@ import time
 from typing import Optional
 
 from .models import ModelStatusStore
+from .lane_perception import LanePerceptionStore
+from .frame_pairs import FramePairs
 
 
 def _source_label(value: object) -> str:
@@ -39,12 +41,17 @@ def parse_preview_format(value: str) -> Optional[dict]:
             return 0
         return result if 0 <= result <= 4096 else 0
 
-    return {
+    metadata = {
         "source": _source_label(fields.get("source", "UNKNOWN")),
         "width": dimension("width"),
         "height": dimension("height"),
         "overlay": fields.get("overlay", "none")[:80] or "none",
     }
+    if fields.get('quality_valid') == 'false' and fields.get('quality_reason') in ('low_light', 'overexposed'):
+        metadata['quality'] = dict(valid=False, reason=fields['quality_reason'])
+    elif fields.get('quality_valid') == 'true' and fields.get('quality_reason') == 'usable':
+        metadata['quality'] = dict(valid=True, reason='usable')
+    return metadata
 
 
 @dataclass(frozen=True)
@@ -58,6 +65,8 @@ class VisionFrame:
     height: int
     overlay: str
     sequence: int
+    quality: Optional[dict] = None
+    source_age_s: float = 0.0
 
 
 class VisionFrameAdvanced(RuntimeError):
@@ -101,14 +110,17 @@ class VisionFrameStore:
         self._lock = threading.Lock()
         self._frame: Optional[VisionFrame] = None
         self._sequence = 0
-        self._last_pull_by_viewer: dict[str, float] = {}
+        self._pairs = FramePairs()
         # D-423 §3.6: the robot's learned-model status per task, read-only display data.
         self.models = ModelStatusStore()
+        self.lane_perception = LanePerceptionStore()
 
-    def publish(self, data: bytes, *, captured_at: float,
+    def _store_frame(self, data: bytes, *, captured_at: float,
                 frame_id: str, source: str, width: int = 0,
                 height: int = 0, overlay: str = "none",
-                received_at: Optional[float] = None) -> VisionFrame:
+                quality: Optional[dict] = None,
+                received_at: Optional[float] = None, raw: bool = False,
+                source_age_s: float = 0.0) -> VisionFrame:
         payload = bytes(data)
         if len(payload) < 4 or not (
                 payload.startswith(b"\xff\xd8")
@@ -125,16 +137,32 @@ class VisionFrameStore:
         if clean_width < 0 or clean_height < 0:
             raise ValueError("camera dimensions cannot be negative")
         clean_frame_id = str(frame_id).strip()[:160]
+        if any(ord(char) < 32 or ord(char) > 126 for char in clean_frame_id):
+            raise ValueError('camera frame id must be safe ASCII metadata')
         clean_source = _source_label(source)
         clean_overlay = str(overlay).strip()[:80] or "none"
+        if raw and clean_overlay != 'none':
+            raise ValueError('raw preview cannot carry an overlay')
+        clean_quality = (dict(quality) if isinstance(quality, dict) and type(quality.get('valid')) is bool and quality in (
+            dict(valid=False, reason='low_light'), dict(valid=False, reason='overexposed'),
+            dict(valid=True, reason='usable')) else None)
+        if type(source_age_s) not in (float, int) or not math.isfinite(source_age_s) or source_age_s < 0:
+            raise ValueError('source image age must be finite and nonnegative')
 
         with self._lock:
-            if (self._frame is not None
-                    and received - self._frame.received_at
+            self._pairs.expire(received, self._stale_after_s)
+            previous = (self._pairs.raw[-1] if self._pairs.raw else None) if raw else self._frame
+            if (previous is not None
+                    and received - previous.received_at
                     <= self._stale_after_s
-                    and captured < self._frame.captured_at):
+                    and captured < previous.captured_at):
                 raise ValueError("older camera frame cannot replace latest frame")
-            self._sequence += 1
+            if previous is not None and captured <= previous.captured_at:
+                clean_quality = None  # repeated source image is not a new quality receipt
+                if raw:
+                    raise ValueError('raw capture stamp must advance')
+            if not raw:
+                self._sequence += 1
             frame = VisionFrame(
                 data=payload,
                 captured_at=captured,
@@ -145,9 +173,19 @@ class VisionFrameStore:
                 height=clean_height,
                 overlay=clean_overlay,
                 sequence=self._sequence,
+                quality=clean_quality,
+                source_age_s=float(source_age_s),
             )
-            self._frame = frame
+            self._pairs.add(frame, raw=raw)
+            if not raw:
+                self._frame = frame
             return frame
+
+    def publish(self, data: bytes, **metadata) -> VisionFrame:
+        return self._store_frame(data, **metadata)
+
+    def publish_raw(self, data: bytes, **metadata) -> VisionFrame:
+        return self._store_frame(data, **metadata, raw=True)
 
     def _snapshot(self) -> Optional[VisionFrame]:
         with self._lock:
@@ -164,7 +202,7 @@ class VisionFrameStore:
 
     def frame_for_viewer(
             self, viewer_id: str, *, expected_sequence: Optional[int] = None,
-            now: Optional[float] = None) -> Optional[VisionFrame]:
+            now: Optional[float] = None, overlay: bool = True) -> Optional[VisionFrame]:
         """Atomically bind a fresh frame to status sequence and viewer rate."""
         current = time.monotonic() if now is None else float(now)
         if not math.isfinite(current):
@@ -173,27 +211,35 @@ class VisionFrameStore:
         if not viewer:
             raise ValueError("viewer id is required")
         with self._lock:
+            self._pairs.expire(current, self._stale_after_s)
             frame = self._frame
-            if frame is None or current - frame.received_at > self._stale_after_s:
+            if frame is None or not 0 <= current - frame.received_at <= self._stale_after_s:
                 return None
-            if (expected_sequence is not None
-                    and int(expected_sequence) != frame.sequence):
+            sequence = frame.sequence if expected_sequence is None else int(expected_sequence)
+            previous = self._pairs.pulls.get(viewer)
+            if sequence != frame.sequence and previous is not None and sequence == previous['sequence']:
+                frame = self._pairs.annotated_for(sequence)
+            if frame is None or sequence != frame.sequence:
+                latest = self._frame
+                raise VisionFrameAdvanced(latest.sequence)
+            selected = frame if overlay else self._pairs.raw_for(frame)
+            if selected is None or not 0 <= current - selected.received_at + (
+                    selected.source_age_s if not overlay else 0.) <= self._stale_after_s:
+                return None
+            if previous is not None and sequence == previous['sequence']:
+                if overlay in previous['served']:
+                    raise VisionPullRateLimited(self._min_pull_interval_s)
+                previous['served'].add(overlay)
+                return selected
+            if sequence != self._frame.sequence:
                 raise VisionFrameAdvanced(frame.sequence)
-            previous = self._last_pull_by_viewer.get(viewer)
-            if (previous is not None and current >= previous
-                    and current - previous + 1e-9
+            if (previous is not None and current >= previous['at']
+                    and current - previous['at'] + 1e-9
                     < self._min_pull_interval_s):
                 raise VisionPullRateLimited(
-                    self._min_pull_interval_s - (current - previous))
-            self._last_pull_by_viewer[viewer] = current
-            # Keep the bounded auth population from becoming a historical map.
-            expiry = current - max(self._stale_after_s,
-                                   self._min_pull_interval_s) * 2.0
-            self._last_pull_by_viewer = {
-                key: pulled for key, pulled in self._last_pull_by_viewer.items()
-                if pulled >= expiry
-            }
-            return frame
+                    self._min_pull_interval_s - (current - previous['at']))
+            self._pairs.pulls[viewer] = dict(at=current, sequence=sequence, served={overlay})
+            return selected
 
     def status(self, *, now: Optional[float] = None) -> dict:
         frame = self._snapshot()
@@ -209,10 +255,20 @@ class VisionFrameStore:
                 "height": 0,
                 "overlay": "none",
                 "sequence": 0,
+                "quality": None,
+                "quality_age_ms": None,
+                "raw_available": False,
+                "raw_sequence": None,
             }
         current = time.monotonic() if now is None else float(now)
         age_s = max(0.0, current - frame.received_at)
         stale = age_s > self._stale_after_s
+        with self._lock:
+            raw_frame = self._pairs.raw_for(frame)
+        raw_available = (not stale and raw_frame is not None
+                         and 0 <= current - raw_frame.received_at + raw_frame.source_age_s <= self._stale_after_s)
+        quality_age_s = current - frame.received_at + frame.source_age_s
+        quality_fresh = frame.quality is not None and not stale and 0 <= quality_age_s <= self._stale_after_s
         return {
             "available": not stale,
             "stale": stale,
@@ -224,4 +280,8 @@ class VisionFrameStore:
             "height": frame.height,
             "overlay": frame.overlay,
             "sequence": frame.sequence,
+            "quality": dict(frame.quality) if quality_fresh else None,
+            "quality_age_ms": int(round(quality_age_s * 1000.)) if quality_fresh else None,
+            "raw_available": raw_available,
+            "raw_sequence": frame.sequence if raw_available else None,
         }

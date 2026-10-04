@@ -4,8 +4,10 @@
 // 받는 중에 취소하거나 화면을 나가면 요청을 끊는다 — 끝까지 받지 않은 녹화본을 CORE 가
 // "받음"으로 표시하지 않게. 서버 글자로 HTML 을 만들지 않는다(textContent 만).
 
+import {createVisionPreview} from "../vision.js";
+import {createCameraCapture, saveCameraFile} from "/common/evidence.js";
 import {api, apiBlob} from "../client.js";
-import {el} from "./drive-view.js";
+import {el, actionIcon} from "./drive-view.js";
 import {RECORDING_POLL_MS, errorText, recordingView, sheetNotice, sheetRows} from "../recording.js";
 
 const NOTICE_POLLS = 5;            // 거부 사유를 HUD 칩에 남겨 두는 폴링 횟수(약 5 s)
@@ -16,8 +18,16 @@ const FETCH_TIMEOUT_MS = 600_000;  // 받기 한 번의 시한(PILOT_FETCH_MAX_B
 const every = (fn, ms) => { const id = setInterval(fn, ms); return () => clearInterval(id); };
 
 export function mountRobotRecording({toggle, detail, openButton, sheetHost, anchor, save,
+                                     returnFocus = openButton,
                                      request = api, requestBlob = apiBlob, schedule = every} = {}) {
   let active = null;
+  let annotatedReady = false;
+  const modeLabel = el("label", "로봇 학습·주행 기록", {class: "ui-field-label"});
+  const mode = el("select", null, {class: "ui-field", "data-robot-record-mode": ""});
+  mode.className = "ui-field";
+  const rawOption = el("option", "원본만 (기본)"); rawOption.value = "raw";
+  const annotatedOption = el("option", "원본 + 모델 표시본"); annotatedOption.value = "annotated";
+  mode.append(rawOption, annotatedOption); modeLabel.append(mode); toggle.before(modeLabel);
   let pending = null;          // 진행 중인 시작·정지 요청(Promise)
   let epoch = 0;               // 누를 때마다 오른다 — 그 전에 떠난 폴링 응답은 버린다
   let polling = false;
@@ -36,13 +46,20 @@ export function mountRobotRecording({toggle, detail, openButton, sheetHost, anch
 
   function render() {
     const view = recordingView(active);
+    annotatedOption.disabled = !annotatedReady;
+    mode.title = annotatedReady ? "원본은 항상 보존하며 모델 표시본은 확인용입니다" : "표시본 기록 지원을 확인하지 못했습니다. 원본만 선택할 수 있습니다";
+    mode.disabled = Boolean(pending) || view.recording;
+    mode.setAttribute("reason", "기록을 종료한 뒤 선택하세요");
+    if (!annotatedReady) mode.value = "raw";
     toggle.textContent = view.label;
     toggle.disabled = Boolean(pending) || !view.available || view.busy;
     toggle.reason = pending ? "요청 보내는 중" : toggle.disabled ? view.reason : "";
     toggle.dataset.state = active?.state ?? "offline";
     toggle.setAttribute("aria-pressed", String(view.recording));
     toggle.setAttribute("aria-label", view.ariaLabel);
-    const text = notice || view.detail;
+    const actualMode = active?.preview_mode;
+    const format = actualMode === "annotated" ? "원본 + 모델 표시본 · 결과는 확인용" : actualMode === "raw" ? "원본" : "저장 형식 확인 대기";
+    const text = notice || (view.recording ? `${view.detail} · ${format}` : view.detail);
     detail.textContent = text;
     detail.hidden = !text;
     detail.dataset.state = notice ? "refused" : (active?.state ?? "offline");
@@ -56,6 +73,7 @@ export function mountRobotRecording({toggle, detail, openButton, sheetHost, anch
     polling = false;
     if (disposed || mine !== epoch || pending) return;      // 그사이 누른 결과가 이긴다
     active = response?.status === 200 ? (response.body?.active ?? null) : null;
+    annotatedReady = response?.body?.preview_modes?.includes("annotated") === true;
     if (noticePolls > 0 && --noticePolls === 0) notice = "";
     render();
   }
@@ -63,7 +81,8 @@ export function mountRobotRecording({toggle, detail, openButton, sheetHost, anch
   async function send(stopping) {
     epoch += 1;
     const response = await request(stopping ? "/api/v1/recordings/active/stop" : "/api/v1/recordings",
-                                   {method: "POST", timeoutMs: REQUEST_TIMEOUT_MS}).catch(() => null);
+                                   {method: "POST", timeoutMs: REQUEST_TIMEOUT_MS,
+                                    ...(!stopping && annotatedReady ? {body: JSON.stringify({preview_mode: mode.value})} : {})}).catch(() => null);
     if (disposed) return;
     epoch += 1;
     if (response?.ok) {
@@ -111,7 +130,7 @@ export function mountRobotRecording({toggle, detail, openButton, sheetHost, anch
     sheet.remove();
     sheet = null;
     openButton.setAttribute("aria-pressed", "false");
-    if (!disposed) openButton.focus();
+    if (!disposed) returnFocus.focus();
   }
 
   function renderRows(listing, failure) {
@@ -137,12 +156,16 @@ export function mountRobotRecording({toggle, detail, openButton, sheetHost, anch
                                           "aria-live": "polite"}));
       let action;
       if (busy) {
-        const cancel = el("ui-button", "취소", {type: "button", "data-recording-cancel": ""});
+        const cancel = el("ui-button", "받기 취소", {type: "button", "data-recording-cancel": ""});
+        cancel.setAttribute("kind", "quiet");
+        actionIcon(cancel, "close");
         cancel.setAttribute("kind", "quiet");
         cancel.addEventListener("click", () => download?.controller.abort());
         action = cancel;
       } else {
-        const receive = el("ui-button", "받기", {type: "button", "data-recording-fetch": ""});
+        const receive = el("ui-button", "파일 받기", {type: "button", "data-recording-fetch": ""});
+        receive.setAttribute("kind", "quiet");
+        actionIcon(receive, "download");
         receive.setAttribute("kind", "quiet");
         receive.disabled = !row.canFetch || download !== null;
         receive.reason = receive.disabled && row.reason !== message ? row.reason : "";
@@ -204,14 +227,18 @@ export function mountRobotRecording({toggle, detail, openButton, sheetHost, anch
     noticeNode.hidden = true;
     const list = el("div", null, {"data-recordings-list": ""});
     const actions = el("ui-actions");
-    const refresh = el("ui-button", "새로고침", {type: "button", "data-recordings-refresh": ""});
+    const refresh = el("ui-button", "다시 불러오기", {type: "button", "data-recordings-refresh": ""});
+    refresh.setAttribute("kind", "quiet");
+    actionIcon(refresh, "refresh");
     refresh.setAttribute("kind", "quiet");
     refresh.addEventListener("click", () => refreshSheet());
     const close = el("ui-button", "닫기", {type: "button", "data-recordings-close": ""});
     close.setAttribute("kind", "quiet");
+    actionIcon(close, "close");
+    close.setAttribute("kind", "quiet");
     close.addEventListener("click", closeSheet);
     actions.append(refresh, close);
-    sheet.append(head, noticeNode, list, actions);
+    sheet.append(head, el("p", "로봇에 저장된 녹화 파일입니다. 파일 받기는 로봇이 멈춰 있을 때 가능합니다."), noticeNode, list, actions);
     sheetHost.append(sheet);
     shown = "";
     placeSheet();
@@ -233,6 +260,7 @@ export function mountRobotRecording({toggle, detail, openButton, sheetHost, anch
   const stopPolling = schedule(poll, RECORDING_POLL_MS);
 
   return {
+    closeSheet,
     // 나가기: 받는 중이면 끊고, 막 보낸 시작이 있으면 끝나기를 기다린 뒤, 이 기기가 시작한
     // 녹화만 멈춘다(남의 녹화는 그대로 — CORE 도 403 으로 막는다).
     async stopIfOwned() {
@@ -250,6 +278,75 @@ export function mountRobotRecording({toggle, detail, openButton, sheetHost, anch
       disposed = true;
       stopPolling();
       closeSheet();
+      modeLabel.remove();
     },
   };
+}
+
+
+// Browser confirmation recordings share the existing authenticated preview.
+export function mountBrowserRecording({element, apiGet, authHeaders}) {
+  const capture = createCameraCapture({
+    save: saveCameraFile,
+    onComplete: async () => { await capture.saveVideo("pc"); capture.saveOperations(); },
+    storeOnRobot: null,          // 로봇 SD 업로드는 dashboard 경로 재사용 예정(후속).
+    onChange: (state) => {
+      if (!element.frame.hidden) element.empty.textContent = state.message;
+      if (element.shotButton) element.shotButton.disabled = !state.ready;
+      if (element.recordButton) {
+        element.recordButton.disabled = !state.supported || (!state.recording && !state.ready);
+        element.recordButton.reason = !state.supported ? "이 브라우저는 녹화를 지원하지 않습니다" : !state.ready ? "표시 없는 원본 수신 대기" : "";
+        element.recordButton.textContent = state.recording ? "화면 녹화 중지" : "화면 녹화";
+      }
+      if (element.browserMode) {
+        element.browserMode.disabled = state.recording || state.uploading;
+        element.browserMode.setAttribute("reason", state.recording ? "녹화를 종료한 뒤 선택하세요" : "저장 중");
+      }
+      if (element.saveVideo) {
+        element.saveVideo.disabled = !state.saved || state.recording;
+        element.saveVideo.reason = state.recording ? "녹화 중" : "저장할 영상이 없습니다";
+      }
+    },
+  });
+
+  const vision = createVisionPreview({
+    apiGet,
+    previewMode: () => capture.state().previewMode,
+    onQuality: (quality) => {
+      element.visibility.hidden = !(quality?.valid === false && ["low_light", "overexposed"].includes(quality?.reason));
+      element.visibility.textContent = quality?.reason === "overexposed"
+        ? "과노출 · 차선 정보 확인 불가" : "조도가 낮아 차선·물체를 판정할 수 없습니다";
+    },
+    fetchFrame: async (path) => {
+      const response = await fetch(path, {headers: authHeaders(), cache: "no-store"});
+      // 409·429 본문(JSON)을 이미지로 띄우지 않는다 — 거부하면 다음 틱에 다시 당긴다.
+      if (!response.ok) throw new Error(`frame ${response.status}`);
+      return response;
+    },
+    onFrame: async (url, meta) => {
+      element.frame.src = url;
+      element.frame.hidden = false;
+      element.empty.hidden = true;
+      const image = new Image();
+      image.src = url;
+      try {
+        await image.decode();
+        let rawImage = image;
+        if (meta.previewMode === "annotated") {
+          const rawUrl = URL.createObjectURL(meta.rawBlob);
+          rawImage = new Image(); rawImage.src = rawUrl;
+          try { await rawImage.decode(); } finally { URL.revokeObjectURL(rawUrl); }
+        }
+        capture.acceptFrame({...meta, image, rawImage});
+      } catch (_error) { capture.unavailable("원본 프레임을 읽을 수 없습니다."); }
+    },
+    onUnavailable: (message) => {
+      element.frame.hidden = true;
+      element.empty.hidden = false;
+      element.empty.textContent = message;
+      capture.unavailable(message);
+    },
+  });
+  vision.start();
+  return {capture, vision};
 }

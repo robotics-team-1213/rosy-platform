@@ -1,16 +1,13 @@
 import { HeadlessState } from "/common/core_ui_logic.js";
 import { poseUnavailableReason } from "./pose-evidence.js";
+import { createNode } from "/assets/dom.js";
 // D-359 §5.3 — 끌 때 이유를 같이 준다. 켜거나 짧은 요청 중 잠금이면 이유를 지운다.
 function setOff(control, off, reason = "") { control.disabled = Boolean(off); if (off && reason) control.setAttribute("reason", reason); else control.removeAttribute("reason"); }
 export function mount(el, ctx) {
-  const head = document.createElement("ui-head");
-  head.textContent = "웨이포인트 준비";
-  const help = document.createElement("p");
-  help.textContent = "현재 위치를 웨이포인트로 저장합니다. 위치 정보가 들어오면 저장할 수 있습니다.";
-  const form = document.createElement("form");
-  form.className = "ui-form";
-  const input = document.createElement("input");
-  input.className = "ui-field";
+  const head = createNode("ui-head", "", "웨이포인트 준비");
+  const help = createNode("p", "", "현재 위치를 웨이포인트로 저장합니다. 위치 정보가 들어오면 저장할 수 있습니다.");
+  const form = createNode("form", "ui-form");
+  const input = createNode("input", "ui-field");
   input.name = "name";
   input.maxLength = 64;
   input.autocomplete = "off";
@@ -30,11 +27,9 @@ export function mount(el, ctx) {
   const listStatus = document.createElement("p");
   listStatus.setAttribute("role", "status");
   listStatus.setAttribute("aria-live", "polite");
-  const list = document.createElement("ul");
-  list.className = "waypoint-list";
+  const list = createNode("ul", "waypoint-list");
   list.hidden = true;
-  const emptyNote = document.createElement("ui-empty");
-  emptyNote.textContent = "저장된 웨이포인트가 없습니다.";
+  const emptyNote = createNode("ui-empty", "", "저장된 웨이포인트가 없습니다.");
   emptyNote.hidden = true;
   let latestState = null;
   let pending = false;
@@ -70,8 +65,7 @@ export function mount(el, ctx) {
     setStatus(listStatus, "");
     if (!waypoints.length) return;
     for (const waypoint of waypoints) {
-      const row = document.createElement("li");
-      row.textContent = `${waypoint.name}: ${Number(waypoint.x).toFixed(2)}, ${Number(waypoint.y).toFixed(2)}`;
+      const row = createNode("li", "", `${waypoint.name}: ${Number(waypoint.x).toFixed(2)}, ${Number(waypoint.y).toFixed(2)}`);
       list.append(row);
     }
   }, (error) => {

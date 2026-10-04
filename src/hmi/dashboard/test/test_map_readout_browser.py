@@ -26,8 +26,8 @@ class _Handler(SimpleHTTPRequestHandler):
     def translate_path(self, path):
         if path == "/assets/map.js":
             return str(ROOT / "map.js")
-        if path == "/common/ui.js":
-            return str(ROOT.parent / "web_common" / "ui.js")
+        if path.startswith("/common/"):
+            return str(ROOT.parent / "web_common" / path.removeprefix("/common/"))
         return super().translate_path(path)
 
     def do_GET(self):

@@ -68,6 +68,8 @@ COMMON_MIME = {
     "core_ui_logic.js": "application/javascript",
     "hold-ticker.js": "application/javascript",
     "ui.js": "application/javascript",
+    "confirmation.js": "application/javascript",
+    "live-dialog-geometry.js": "application/javascript",
     "evidence.js": "application/javascript",
 }
 
@@ -111,14 +113,17 @@ def vision_status(request: Request):
     if _role(request) is None:
         return JSONResponse({"detail": "unauthorized"}, status_code=401)
     return {"available": True, "stale": False, "width": 160, "height": 120,
-            "seq": FRAME_SEQ, "age_ms": 12}
+            "seq": FRAME_SEQ, "sequence": FRAME_SEQ, "raw_available": True, "raw_sequence": FRAME_SEQ, "age_ms": 12}
 
 
 @app.get("/api/v1/vision/front/frame")
 def vision_frame(request: Request):
     if _role(request) is None:
         return JSONResponse({"detail": "unauthorized"}, status_code=401)
-    return Response(FRAME_JPEG, media_type="image/jpeg")
+    variant = "raw" if request.query_params.get("overlay") == "false" else "annotated"
+    return Response(FRAME_JPEG, media_type="image/jpeg", headers={
+        "X-Rosy-Camera-Sequence": str(FRAME_SEQ), "X-Rosy-Camera-Captured-At": "5",
+        "X-Rosy-Camera-Frame-Id": "front", "X-Rosy-Camera-Variant": variant})
 
 
 def _role(request: Request) -> str | None:

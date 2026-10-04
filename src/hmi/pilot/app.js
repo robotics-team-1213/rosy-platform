@@ -82,9 +82,18 @@ if ("serviceWorker" in navigator) {
     .catch((error) => console.warn("service worker registration failed", error));
 }
 
+let discovering = false;
 async function start() {
+  if (discovering) return;
+  discovering = true;
+  document.body.dataset.pilotScreen = "connect";
+  const retry = connectRoot.querySelector("[data-discovery-retry]");
+  if (retry) retry.disabled = true;
+  const notice = document.querySelector("#pilot-notice");
+  if (notice) notice.textContent = "조종 대상을 확인하고 있습니다.";
   try {
     const target = await omxSim.discover();
+    if (notice?.textContent === "조종 대상을 확인하고 있습니다.") notice.textContent = "";
     if (target === null) { showConnect(); return; }
     simTarget = target;
     document.body.dataset.pilotScreen = "arm";
@@ -94,8 +103,19 @@ async function start() {
     document.querySelectorAll("[data-estop], [data-goto]").forEach((button) => { button.hidden = true; });
     mountArm(armRoot, target, omxSim);
   } catch (error) {
-    const notice = document.querySelector("#pilot-notice");
-    if (notice) notice.textContent = `대상 확인 실패 · ${error.message}`;
+    if (notice?.textContent === "조종 대상을 확인하고 있습니다.") notice.textContent = `대상 확인 실패 · ${error.message}`;
+    const heading = Object.assign(document.createElement("h2"), {id: "pilot-gate-heading", textContent: "조종 대상 확인"});
+    const message = Object.assign(document.createElement("ui-empty"), {textContent: "조종 대상을 확인하지 못했습니다. 연결을 확인한 뒤 다시 시도하세요."});
+    const detail = Object.assign(document.createElement("p"), {textContent: error.message});
+    const retry = document.createElement("ui-button");
+    retry.setAttribute("kind", "quiet"); retry.setAttribute("type", "button");
+    retry.dataset.discoveryRetry = ""; retry.textContent = "대상 다시 확인";
+    retry.addEventListener("click", start);
+    connectRoot.replaceChildren(heading, message, detail, retry);
+  } finally {
+    discovering = false;
+    const retry = connectRoot.querySelector("[data-discovery-retry]");
+    if (retry) retry.disabled = false;
   }
 }
 start();

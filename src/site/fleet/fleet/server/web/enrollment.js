@@ -168,11 +168,13 @@ export const HELP = [
 
 // dialogs는 /common/ui.js의 { openLiveDialog, confirmIrreversible }다. 셸(console.js)이 넘긴다 —
 // 이 파일은 node 시험이 import하므로 DOM 모듈을 정적으로 끌어오지 않는다.
-export function createEnrollmentPanel({ scope, headers, identity, log, dialogs, onMoved }) {
+export function createEnrollmentPanel({ scope, headers, identity, log, dialogs, onMoved, candidateAddress }) {
   const el = (id) => document.getElementById(id);
-  const state = { listing: null, blockedUntil: 0, target: null, busy: false };
+  const state = { listing: null, blockedUntil: 0, target: null, busy: false, candidatePending: false, candidateEpoch: 0 };
+  function cancelCandidate() { state.candidateEpoch++; state.candidatePending = false; }
   scope.onDispose(() => {
     state.busy = false;
+    cancelCandidate();
     state.target = null;
     el("enroll-dialog")?.close?.();
     el("enroll-code").value = "";
@@ -286,14 +288,15 @@ export function createEnrollmentPanel({ scope, headers, identity, log, dialogs, 
   }
 
   function openDialog(target, label) {
+    cancelCandidate();
     state.target = target;
     el("enroll-target").textContent = label;
     el("enroll-submit").textContent = target.move ? "옮기기" : "등록";
     const check = el("enroll-move-check");
     if (check) {
       check.hidden = !target.move;
-      el("enroll-move-address").textContent = target.address || "";
-      el("enroll-move-note").textContent = MOVE_CHECK;
+      el("enroll-move-address").textContent = target.address || "새 주소 미확인";
+      el("enroll-move-note").textContent = target.address ? MOVE_CHECK : "새 주소를 확인하지 못했습니다. 로봇 이름과 화면 코드를 확인하세요. 서버가 연결 대상을 확인합니다.";
     }
     el("enroll-code").value = "";
     const dialog = el("enroll-dialog");
@@ -309,10 +312,22 @@ export function createEnrollmentPanel({ scope, headers, identity, log, dialogs, 
     const life = scope.capture();
     life.check();
     if (action === "move") {
-      openMove(row.robot_id);
+      if (state.busy || state.candidatePending || !canManage(identity())) return;
+      state.candidatePending = true;
+      const candidateEpoch = ++state.candidateEpoch;
+      let address = null;
+      try {
+        showResult(["새 주소를 확인하고 있습니다."], false);
+        address = await candidateAddress?.(row.robot_id);
+      } catch (error) {
+        if (error.name === "AbortError" || !life.current()) return;
+      } finally { if (life.current() && candidateEpoch === state.candidateEpoch) state.candidatePending = false; }
+      if (!life.current() || candidateEpoch !== state.candidateEpoch || !canManage(identity())) return;
+      openMove(row.robot_id, address);
       return;
     }
     {
+      cancelCandidate();
       // D-371 — 등록 해제는 사이트 토큰 회수라 되돌리려면 다시 등록해야 한다. 대상을 이름으로 묻는다.
       // 폴링이 목록을 다시 그려도 포커스는 지금 화면의 그 행 버튼으로 돌아간다.
       const confirmed = await dialogs.confirmIrreversible({
@@ -424,7 +439,7 @@ export function createEnrollmentPanel({ scope, headers, identity, log, dialogs, 
     openDialog({ address }, address);
   });
   scope.listen(el("enroll-submit"), "click", () => submit(state.target));
-  scope.listen(el("enroll-cancel"), "click", () => el("enroll-dialog")?.close?.());
+  scope.listen(el("enroll-cancel"), "click", () => { cancelCandidate(); el("enroll-dialog")?.close?.(); });
   scope.listen(el("enroll-code"), "input", (event) => {
     event.target.value = formatCode(event.target.value);
   });

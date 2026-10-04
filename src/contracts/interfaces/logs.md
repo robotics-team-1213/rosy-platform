@@ -36,3 +36,10 @@
 - gate 변화: 없음
 - 결정: D-231
 - 교훈: 없음
+
+
+## 2026-10-04 · uncommitted · interfaces: additive typed recording start options
+
+- 변경: 기존 SetBool start/stop을 유지하고 RAW/ANNOTATED 두 값을 받는 PilotRecordingStart 서비스 정의를 추가했다. ROS 서비스는 녹화 근거만 요청하며 바퀴 제어를 하지 않는다.
+- 증거: service surface 및 recorder typed option 거부·원본 보존·manifest 회귀 53 passed. 실제 rosidl 생성은 ARM64/ROS CI 빌드에서 확인한다.
+- gate 변화: 없음. host 검사로 rosidl/기기 수용을 주장하지 않는다.

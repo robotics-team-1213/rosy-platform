@@ -1,0 +1,28 @@
+[Unit]
+Description=ROSY opt-in SSH public key pairing
+ConditionPathExists=/etc/rosy/ssh-pairing.enabled
+ConditionPathIsDirectory=/home/rosy/.ssh
+After=rosy-sd-provision.service
+PartOf=rosy-runtime.target
+
+[Service]
+Type=simple
+User=root
+Group=rosy-core
+RuntimeDirectory=rosy-host
+RuntimeDirectoryMode=0750
+LogsDirectory=rosy-ssh-pairing
+LogsDirectoryMode=0700
+UMask=0077
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/usr/bin/python3 /opt/rosy/current/deploy/robot/native/rosy-ssh-pairing.py
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/rosy/.ssh
+PrivateTmp=true
+
+[Install]
+WantedBy=rosy-runtime.target

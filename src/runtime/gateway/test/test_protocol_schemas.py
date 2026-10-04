@@ -81,6 +81,10 @@ def test_vision_preview_status_contract():
         "height": 360,
         "overlay": "semantic-road-v1",
         "sequence": 7,
+        "quality": None,
+        "quality_age_ms": None,
+        "raw_available": False,
+        "raw_sequence": None,
     }
 
 

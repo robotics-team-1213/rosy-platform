@@ -1,21 +1,21 @@
 ---
 name: rosy-land-on-main
-description: Use when starting, committing, or merging work in the Rosy OS repo while other agent sessions may share the same checkout — creating a branch or worktree, staging files, picking an ADR number, adding an ADR Log row, fast-forwarding local main, or when git status shows files you did not touch, a merge is blocked by someone else's uncommitted file, or a test fails and you cannot tell whether your change caused it.
+description: Use when starting, committing, or merging work in rosy-platform while other agent sessions share the checkout — creating a branch or worktree, staging files, picking an ADR number, adding an ADR Log row, fast-forwarding local main, or when git status shows files you did not touch, a merge is blocked by someone else's uncommitted file, or a test fails and you cannot tell whether your change caused it. The rules live in the umbrella AGENTS.md section 「같이 하는 깃」.
 ---
 
 # Landing work on local main in a shared checkout
 
 ## Overview
 
-The main checkout (`Rosy OS/`) is shared: several sessions edit, stage and commit there,
-and **one `.git/index` serves all of them**. Anything you did not write is a peer's
-in-flight work — never stage, revert, stash, amend over, or "clean up" it.
-Work in your own worktree; touch main only to fast-forward it.
+The rules are the umbrella `F:\Dev\Control\Robot\Rosy\AGENTS.md` section 「같이 하는 깃」.
+This file is only the commands for that section. If the two disagree, the umbrella section wins.
+The repo is `F:\Dev\Control\Robot\Rosy\rosy-platform` (no space). One `.git/index` serves the
+shared `main` checkout. A path you did not write belongs to another session.
 
 ## Before you start
 
 ```bash
-cd "<repo>/Rosy OS"                      # quote: the path has a space
+cd F:\Dev\Control\Robot\Rosy\rosy-platform
 git status --short --branch; git worktree list
 git worktree add --relative-paths .worktrees/<short-name> -b <type>/<topic> main
 ```
@@ -75,20 +75,18 @@ digraph land {
   "merge main into branch, rerun tests" -> "new failures?";
   "new failures?" -> "fix on branch" [label="yes"];
   "fix on branch" -> "merge main into branch, rerun tests";
-  "new failures?" -> "main checkout clean in your paths?" [label="no"];
-  "main checkout clean in your paths?" -> "git merge --ff-only <branch>" [label="yes, ff possible"];
-  "main checkout clean in your paths?" -> "git merge --no-ff <branch>" [label="dirty only in unrelated paths, ff impossible"];
-  "main checkout clean in your paths?" -> "wait (bounded) or ask" [label="peer's uncommitted file blocks"];
+  "new failures?" -> "git merge --ff-only <branch> on main" [label="no"];
+  "git merge --ff-only <branch> on main" -> "stop and report the refusal" [label="refused"];
 }
 ```
 
 1. In the worktree: `git merge main`, rerun the relevant tests, compare with `known_failures`.
-2. In the main checkout: `git merge --ff-only <branch>`. If main moved and ff is impossible,
-   repeat step 1. Use `--no-ff` only when main is dirty in paths your branch does not touch.
-3. If git refuses because a peer's uncommitted file would be overwritten: **do not touch that
-   file.** Wait in a bounded loop (e.g. 10 × 60 s re-trying `git merge --ff-only`) or ask the
-   user/peer. Never stash, checkout, or delete it.
-4. Do not push unless the task says so. Local main ahead of `origin/main` has no CI evidence.
+2. In the main checkout: `git merge --ff-only <branch>`. If main has new commits, repeat step 1
+   and try `--ff-only` again. There is no `--no-ff` landing.
+3. If git refuses because a peer's uncommitted file would be overwritten: leave that file.
+   Report the refusal. Do not stash, checkout, or delete it, and do not clean the file and retry.
+4. Push only when the task says to push, and then only in the D-427 order in `AGENTS.md`.
+   Local main ahead of `origin/main` has no CI evidence.
 
 ## Red flags — stop
 

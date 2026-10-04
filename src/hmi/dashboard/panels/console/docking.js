@@ -1,14 +1,17 @@
 // D-359 §5.3 — 끌 때 이유를 같이 준다. 켜거나 짧은 요청 중 잠금이면 이유를 지운다.
 function setOff(control, off, reason = "") { control.disabled = Boolean(off); if (off && reason) control.setAttribute("reason", reason); else control.removeAttribute("reason"); }
 import { DOCK_STATE_LABEL, enumLabel } from "/common/core_ui_logic.js";
+import { confirmIrreversible } from "/common/ui.js";
 // Console owns motion commands; setup owns teaching and dock inventory.
 function el(tag, cls, text) { const node = document.createElement(tag); if (cls) node.className = cls; if (text !== undefined) node.textContent = text; return node; }
 
 export function mount(root, ctx) {
+  const lifetime = new AbortController(); let disposed = false; let confirming = false;
   const head = el("ui-head", "", "도킹 운용");
   const statusMessage = el("ui-status", "", "도킹 상태를 확인하는 중입니다.");
   const dockListStatus = el("ui-status", "", "도크 목록을 불러오는 중입니다.");
   const actionStatus = el("ui-status");
+  statusMessage.setAttribute("state", "pending"); dockListStatus.setAttribute("state", "pending"); actionStatus.setAttribute("state", "ready");
   actionStatus.setAttribute("role", "status");
   actionStatus.setAttribute("aria-live", "polite");
   const facts = el("dl", "ui-readout");
@@ -74,17 +77,25 @@ export function mount(root, ctx) {
   });
 
   async function run(button, path, body, prompt, pendingMessage, success) {
-    if (!supported || !statusKnown || pendingCommands > 0 || button.disabled || !window.confirm(prompt)) return;
+    if (disposed || confirming || !supported || !statusKnown || pendingCommands > 0 || button.disabled) return;
+    confirming = true; enableActions();
+    const confirmed = await confirmIrreversible({message: prompt, action: button.textContent, opener: button, signal: lifetime.signal});
+    confirming = false;
+    if (disposed) return;
+    enableActions();
+    if (!confirmed || !supported || !statusKnown || pendingCommands > 0 || button.disabled || (body?.dock && body.dock !== select.value)) return;
     pendingCommands += 1;
     enableActions();
     setStatus(actionStatus, pendingMessage);
+    actionStatus.setAttribute("state", "pending");
     try {
       const result = await ctx.api(path, {method: "POST", ...(body ? {body: JSON.stringify(body)} : {})});
+      if (disposed) return;
       if (typeof result?.state === "string") renderStatus(result);
-      setStatus(actionStatus, success);
+      actionStatus.setAttribute("state", "ready"); setStatus(actionStatus, success);
     }
-    catch (error) { setStatus(actionStatus, `도킹 요청 실패: ${error.message}`); }
-    finally { pendingCommands -= 1; enableActions(); }
+    catch (error) { if (!disposed) { actionStatus.setAttribute("state", "error"); setStatus(actionStatus, `도킹 요청 실패: ${error.message}`); } }
+    finally { pendingCommands -= 1; if (!disposed) enableActions(); }
   }
   dock.addEventListener("click", () => {
     const id = select.value;
@@ -101,6 +112,6 @@ export function mount(root, ctx) {
       if (["DOCKING", "UNDOCKING"].includes(currentState)) return {message: "도킹 작업이 끝나거나 취소 상태를 확인한 뒤 조작 그룹을 바꾸세요."};
       return true;
     },
-    unmount() { stopStatus(); stopDocks(); },
+    unmount() { disposed = true; lifetime.abort(); stopStatus(); stopDocks(); },
   };
 }

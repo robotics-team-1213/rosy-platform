@@ -61,8 +61,14 @@ def _validate(metadata: object) -> tuple[str, int]:
     if kind == "video":
         required = {"schema_version", "kind", "mime_type", "started_at", "stopped_at",
                     "frame_count", "operations"}
-        if set(metadata) != required or metadata["mime_type"] not in ("video/webm", "video/mp4"):
+        paired = {'preview_mode', 'pair_group_id'}
+        if (set(metadata) not in (required, required | paired)
+                or metadata["mime_type"] not in ("video/webm", "video/mp4")):
             raise _invalid("video metadata is invalid")
+        if paired <= metadata.keys() and (metadata['preview_mode'] not in ('raw','annotated')
+                or not isinstance(metadata['pair_group_id'], str)
+                or not re.fullmatch(r'[0-9a-f]{32}', metadata['pair_group_id'])):
+            raise _invalid('video pair metadata is invalid')
         started = _timestamp(metadata["started_at"])
         stopped = _timestamp(metadata["stopped_at"])
         if not 0 <= (stopped - started).total_seconds() <= 301:
@@ -94,6 +100,23 @@ def _validate(metadata: object) -> tuple[str, int]:
             raise _invalid("screenshot source is invalid")
         return "jpg", MAX_JPEG_BYTES
     raise _invalid("camera evidence kind is invalid")
+
+
+def _require_raw_pair(metadata: dict, root: Path) -> None:
+    if metadata.get('preview_mode') != 'annotated':
+        return
+    for path in root.glob('*.json'):
+        try:
+            record = json.loads(path.read_text(encoding='utf-8'))
+            if (record.get('kind') == 'video' and record.get('preview_mode') == 'raw'
+                    and record.get('pair_group_id') == metadata['pair_group_id']
+                    and all(record.get(key) == metadata[key] for key in ('started_at','stopped_at','frame_count'))
+                    and re.fullmatch(r'[0-9a-f]{24}\.(webm|mp4)', record.get('file_name', ''))
+                    and (root / record['file_name']).is_file()):
+                return
+        except (OSError, ValueError, TypeError, AttributeError):
+            continue
+    raise _invalid('annotated video requires its preserved raw capture first')
 
 
 async def _header(stream):
@@ -143,6 +166,7 @@ async def save_evidence(chunks: AsyncIterable[bytes], root: Path,
     manifest_path = root / f"{identifier}.json"
     manifest_part = root / f"{identifier}.json.part"
     async with _WRITE_LOCK:
+        _require_raw_pair(metadata, root)
         used = sum(path.stat().st_size for path in root.iterdir()
                    if path.is_file() and path.suffix in (".jpg", ".webm", ".mp4"))
         if used >= MAX_TOTAL_BYTES or shutil.disk_usage(root).free < MIN_FREE_BYTES + limit:
@@ -181,6 +205,9 @@ async def save_evidence(chunks: AsyncIterable[bytes], root: Path,
             result = {"id": identifier, "kind": metadata["kind"], "file_name": media_path.name,
                       "mime_type": metadata["mime_type"], "bytes": size,
                       "sha256": digest.hexdigest(), "created_at": created}
+            if 'preview_mode' in metadata:
+                result.update(preview_mode=metadata['preview_mode'], pair_group_id=metadata['pair_group_id'],
+                              annotation_origin='model_unreviewed' if metadata['preview_mode'] == 'annotated' else 'none')
             with manifest_part.open("x", encoding="utf-8") as output:
                 json.dump({**result, **metadata}, output, ensure_ascii=False, separators=(",", ":"))
                 output.write("\n")
@@ -203,8 +230,11 @@ def list_evidence(root: Path) -> list[dict]:
         try:
             record = json.loads(path.read_text(encoding="utf-8"))
             if (path.stem == record.get("id") and (root / record["file_name"]).is_file()):
-                records.append({key: record[key] for key in
-                                ("id", "kind", "file_name", "mime_type", "bytes", "sha256", "created_at")})
+                item = {key: record[key] for key in
+                        ("id", "kind", "file_name", "mime_type", "bytes", "sha256", "created_at")}
+                item.update({key: record[key] for key in ('preview_mode', 'pair_group_id', 'annotation_origin')
+                             if key in record})
+                records.append(item)
         except (OSError, ValueError, KeyError, TypeError, AttributeError):
             continue
     return sorted(records, key=lambda record: (record["created_at"], record["id"]),

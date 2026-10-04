@@ -163,9 +163,7 @@ surfaces:
       게임형 HUD 의 큰 표적은 공용 종류(누르는 동안 채워지는 toggle·고르는 segment)와 size 속성,
       표면 CSS 의 배치 규칙(min-height·폭)으로만 만들고, 영상 위 대비는 버튼이 아니라 조작부 판이
       바탕을 가진다(D-363 부록 참조).
-    baseline_reason: >
-      G2 기준선 셀이 아직 없다. 주행 화면 캡처는 실물·가제보 증거라 공개 저장소 밖(D-226)에 있고,
-      저장소용 합성 캡처를 남기는 회차에 이 문장을 baseline 경로로 바꾼다.
+    baseline: docs/validation/pilot-g2-baseline-2026-10-04/drive-tablet-land.png
 
   - id: web-common
     api_owners: []
@@ -225,6 +223,23 @@ surfaces:
     baseline_reason: >
       LCD 화면은 브라우저 캡처 회차(G2) 대상이 아니다. 정보 화면 캡처는
       test_info_screen_capture가 호스트에서 만들고 저장소에 기준선을 두지 않는다.
+
+  - id: pilot-shell
+    parent_app: pilot
+    api_owners: [CORE]
+    path: apps/pilot
+    themes: [dark]
+    surface: robot
+    medium: native
+    ports: []
+    audience: 태블릿 운전자 — Rosy Pilot의 자동 발견·장비 목록 접속 화면
+    role: Pilot의 신뢰된 대상 발견·연결만 소유하며 조종 화면과 명령은 기존 Pilot PWA를 사용한다
+    owns: [pilot-device-lobby]
+    contracts: [token_parity]
+    token_source: src/hmi/web_common/tokens.css
+    token_generator: apps/pilot/app/build.gradle.kts
+    token_verification: apps/pilot/app/src/test/java/io/github/livsbittt/rosy/pilot/PilotColorsTest.kt
+    baseline_reason: 실제 태블릿 설치·렌더링은 D-432 장치 검증으로 기록한다; 조종 화면은 Pilot PWA 기준선을 재사용한다.
 
   - id: cam
     api_owners: [Fleet-pairing, Vision-ingest]

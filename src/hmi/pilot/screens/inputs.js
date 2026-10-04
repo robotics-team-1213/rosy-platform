@@ -5,12 +5,24 @@ import {inputConfig, saveInputConfig, stickMap} from "../input-state.js";
 
 export function mountInputs(root, {onClose, onChange} = {}) {
   let config = inputConfig();
-
-  function field(labelText, value) {
-    const cell = el("div");
-    cell.append(el("ui-text", labelText, {scale: "label"}), el("ui-text", value, {scale: "value"}));
-    return cell;
-  }
+  let previewNode;
+  let previewTimer;
+  let closed = false;
+  const returnFocus = document.activeElement;
+  const closePanel = () => {
+    if (closed) return;
+    closed = true;
+    clearInterval(previewTimer);
+    root.removeEventListener("keydown", onKey);
+    onClose?.();
+    if (returnFocus?.isConnected && returnFocus.getClientRects().length) returnFocus.focus();
+  };
+  const onKey = (event) => {
+    if (event.key === "Escape") { event.stopPropagation(); closePanel(); }
+  };
+  root.setAttribute("role", "region");
+  root.setAttribute("aria-label", "조종 입력 설정");
+  root.addEventListener("keydown", onKey);
 
   function render() {
     const head = el("ui-head", "입력 조정");
@@ -19,7 +31,7 @@ export function mountInputs(root, {onClose, onChange} = {}) {
     const presetCell = el("div");
     presetCell.append(el("ui-text", "속도 프리셋", {scale: "label"}));
     const presets = el("ui-actions");
-    for (const [name, label] of [["low", "저"], ["mid", "중"], ["high", "고"]]) {
+    for (const [name, label] of [["low", "저속"], ["mid", "보통"], ["high", "빠름"]]) {
       const button = el("ui-button", label, {type: "button", "aria-pressed": String(config.preset === name)});
       button.setAttribute("kind", "segment");
       button.addEventListener("click", () => {
@@ -40,7 +52,7 @@ export function mountInputs(root, {onClose, onChange} = {}) {
       deadLabel.textContent = `데드존 ${Number(config.deadzone).toFixed(2)}`;
     });
     const deadCell = el("div");
-    deadCell.append(deadLabel, dead);
+    deadCell.append(deadLabel, dead, el("p", "중앙 부근의 작은 움직임을 무시합니다. 값이 클수록 더 움직여야 반응합니다."));
 
     const curveCell = el("div");
     curveCell.append(el("ui-text", "감도 곡선", {scale: "label"}));
@@ -68,23 +80,20 @@ export function mountInputs(root, {onClose, onChange} = {}) {
 
     grid.append(presetCell, deadCell, curveCell, invertCell);
 
-    const previewLabel = el("ui-text", "미리보기 — 게임패드 축", {scale: "label"});
+    const previewLabel = el("ui-text", "게임패드 입력 미리보기", {scale: "label"});
     const preview = el("ui-text", "—", {scale: "value", "data-input-preview": ""});
 
     const close = el("ui-button", "닫기", {type: "button"});
     close.setAttribute("kind", "quiet");
-    const closePanel = () => {
-      clearInterval(previewTimer);
-      onClose?.();
-    };
     close.addEventListener("click", closePanel);
 
-    root.replaceChildren(head, grid, previewLabel, preview, close);
+    root.replaceChildren(head, el("p", "설정은 바로 저장됩니다. 미리보기만으로 로봇은 움직이지 않습니다."), grid, previewLabel, preview, close);
+    previewNode = preview;
     return preview;
   }
 
-  const previewNode = render();
-  const previewTimer = setInterval(() => {
+  render();
+  previewTimer = setInterval(() => {
     const pad = navigator.getGamepads ? [...navigator.getGamepads()].find(Boolean) : null;
     if (!pad) {
       previewNode.textContent = "게임패드 미연결";
@@ -93,13 +102,10 @@ export function mountInputs(root, {onClose, onChange} = {}) {
     const raw = {x: pad.axes[0] ?? 0, y: -(pad.axes[1] ?? 0)};
     const mapped = stickMap({kind: "pad", ...raw});
     previewNode.textContent =
-      `raw(${raw.x.toFixed(2)}, ${raw.y.toFixed(2)}) → linear ${mapped.linear.toFixed(3)} m/s, angular ${mapped.angular.toFixed(3)} rad/s${mapped.pivot ? " (제자리)" : ""}`;
+      `입력 (${raw.x.toFixed(2)}, ${raw.y.toFixed(2)}) · 전후 ${mapped.linear.toFixed(3)} m/s · 회전 ${mapped.angular.toFixed(3)} rad/s${mapped.pivot ? " (제자리)" : ""}`;
   }, 250);
   // 부모(주행 화면)가 나갈 때 미리보기 타이머까지 거둘 수 있게 닫기 함수를 돌려준다.
-  return () => {
-    clearInterval(previewTimer);
-    onClose?.();
-  };
+  return closePanel;
 }
 
 function el(tag, text, attrs = {}) {

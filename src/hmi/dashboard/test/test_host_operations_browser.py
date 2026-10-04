@@ -8,7 +8,7 @@ from pathlib import Path
 from threading import Thread
 
 import pytest
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import expect, sync_playwright
 
 
 REPO = Path(__file__).resolve().parents[4]
@@ -44,6 +44,7 @@ def test_network_action_reports_rejection_and_success_beside_controls():
             page.on("pageerror", lambda error: errors.append(str(error)))
             page.goto(f"http://127.0.0.1:{server.server_port}/")
             page.evaluate("""async () => {
+              await import('/common/ui.js');
               const {mount} = await import('/src/hmi/dashboard/panels/host/operations.js');
               const root = document.createElement('main'); document.body.append(root);
               const callbacks = {};
@@ -65,9 +66,10 @@ def test_network_action_reports_rejection_and_success_beside_controls():
             page.locator("form").filter(has=page.locator('input[aria-label="네트워크 프로파일 ID"]')).evaluate(
                 "form => form.dispatchEvent(new Event('submit', {bubbles:true,cancelable:true}))"
             )
+            page.locator("dialog.ui-confirm ui-button[kind=irreversible]").click()
             network = page.locator("section.ui-readback").filter(has_text="네트워크").first
-            result = network.locator("ui-status").last
-            assert "프로파일이 거부되었습니다" in result.inner_text()
+            result = network.locator(".ui-readback > ui-status").last
+            expect(result).to_contain_text("프로파일이 거부되었습니다")
             assert result.is_visible()
             assert page.evaluate("window.__calls.length") == 1
 
@@ -75,7 +77,8 @@ def test_network_action_reports_rejection_and_success_beside_controls():
             page.locator("form").filter(has=page.locator('input[aria-label="네트워크 프로파일 ID"]')).evaluate(
                 "form => form.dispatchEvent(new Event('submit', {bubbles:true,cancelable:true}))"
             )
-            assert "프로파일 적용을 요청했습니다" in result.inner_text()
+            page.locator("dialog.ui-confirm ui-button[kind=irreversible]").click()
+            expect(result).to_contain_text("프로파일 적용을 요청했습니다")
             assert result.is_visible()
             assert page.evaluate("window.__calls.length") == 2
 
@@ -86,8 +89,9 @@ def test_network_action_reports_rejection_and_success_beside_controls():
               });
             }""")
             page.get_by_text("이전 릴리스로 복귀", exact=True).click()
+            page.locator("dialog.ui-confirm ui-button[kind=irreversible]").click()
             release = page.locator("section.ui-readback").filter(has_text="릴리스").first
-            release_result = release.locator("ui-status").last
+            release_result = release.locator("ui-status").nth(2)
             assert "이전 릴리스가 거부되었습니다" in release_result.inner_text()
             assert release_result.is_visible()
 
@@ -99,6 +103,7 @@ def test_network_action_reports_rejection_and_success_beside_controls():
             page.locator("form").filter(has=page.locator('input[aria-label="Wi-Fi SSID"]')).evaluate(
                 "form => form.dispatchEvent(new Event('submit', {bubbles:true,cancelable:true}))"
             )
+            page.locator("dialog.ui-confirm ui-button[kind=quiet]").click()
             page.wait_for_timeout(100)
             assert page.evaluate("window.__calls.length") == 3
             assert errors == []
@@ -122,6 +127,7 @@ def test_host_actions_stay_locked_during_request_and_status_poll():
             page.on("pageerror", lambda error: errors.append(str(error)))
             page.goto(f"http://127.0.0.1:{server.server_port}/")
             page.evaluate("""async () => {
+              await import('/common/ui.js');
               const {mount} = await import('/src/hmi/dashboard/panels/host/operations.js');
               const root = document.createElement('main'); document.body.append(root);
               const callbacks = {}; window.__callbacks = callbacks;
@@ -141,6 +147,7 @@ def test_host_actions_stay_locked_during_request_and_status_poll():
                 evidence:{evidence:'fresh',age_s:0},data:{state:'IDLE',previous:'r1'}});
             }""")
             page.get_by_text("사업장 Wi-Fi로 전환", exact=True).click()
+            page.locator("dialog.ui-confirm ui-button[kind=irreversible]").click()
             page.evaluate("""() => {
               window.__callbacks['/api/v1/host/network'].onData({available:true,ok:true,
                 evidence:{evidence:'fresh',age_s:0},data:{mode:'SITE_STA'}});
@@ -152,6 +159,7 @@ def test_host_actions_stay_locked_during_request_and_status_poll():
             page.wait_for_function("[...document.querySelectorAll('ui-button')].find(x => x.textContent === '릴레이 AP 켜기').disabled === false")
 
             page.get_by_text("이전 릴리스로 복귀", exact=True).click()
+            page.locator("dialog.ui-confirm ui-button[kind=irreversible]").click()
             page.evaluate("""() => {
               window.__callbacks['/api/v1/host/release'].onData({available:true,ok:true,
                 evidence:{evidence:'fresh',age_s:0},data:{state:'IDLE',previous:'r1'}});
@@ -182,6 +190,7 @@ def test_host_status_cards_render_only_server_evidence_and_block_untrusted_actio
             page.on("pageerror", lambda error: errors.append(str(error)))
             page.goto(f"http://127.0.0.1:{server.server_port}/")
             page.evaluate("""async () => {
+              await import('/common/ui.js');
               const {mount} = await import('/src/hmi/dashboard/panels/host/operations.js');
               const root = document.createElement('main'); document.body.append(root);
               const callbacks = {}; window.__callbacks = callbacks;
@@ -210,8 +219,8 @@ def test_host_status_cards_render_only_server_evidence_and_block_untrusted_actio
                     result = page.evaluate("""([section, button]) => {
                       const card = document.querySelectorAll('section.ui-readback')[section];
                       return {status: card.querySelector('ui-status').textContent,
-                        actionNote: [...card.querySelectorAll('ui-status')].at(-1).textContent,
-                        disabled: [...card.querySelectorAll('ui-button')].find(x => x.textContent === button).disabled};
+                        actionNote: card.querySelector('[id^="host-network-note"], [id^="host-release-note"]').textContent,
+                        disabled: [...card.querySelectorAll('ui-button')].find(x => x.textContent.startsWith(button)).disabled};
                     }""", [section, button])
                     assert label in result["status"], result
                     assert result["disabled"] is not enabled, result

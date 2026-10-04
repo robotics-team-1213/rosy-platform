@@ -63,6 +63,10 @@ def test_latest_frame_store_is_monotonic_and_fail_closed_when_stale():
         "height": 360,
         "overlay": "semantic-road-v1",
         "sequence": 1,
+        "quality": None,
+        "quality_age_ms": None,
+        "raw_available": False,
+        "raw_sequence": None,
     }
     assert store.frame(now=20.5).data == jpeg(b"first")
 
@@ -101,15 +105,17 @@ def test_frame_pull_is_sequence_bound_and_rate_limited_per_viewer():
     with pytest.raises(VisionPullRateLimited):
         store.frame_for_viewer(
             "viewer-a", expected_sequence=stored.sequence, now=20.1)
-    assert store.frame_for_viewer(
-        "viewer-a", expected_sequence=stored.sequence, now=20.4) == stored
+    # A stalled camera must not let a repeated variant spend a second admission.
+    with pytest.raises(VisionPullRateLimited):
+        store.frame_for_viewer("viewer-a", expected_sequence=stored.sequence, now=20.4)
     # Limits are isolated by authenticated token id.
     assert store.frame_for_viewer(
         "viewer-b", expected_sequence=stored.sequence, now=20.1) == stored
 
 
+@pytest.mark.parametrize('quality_reason', ['low_light', 'overexposed'])
 def test_camera_preview_api_requires_auth_and_returns_jpeg(
-        core_client, monkeypatch):
+        core_client, monkeypatch, quality_reason):
     client, services = core_client()
 
     assert client.get("/api/v1/vision/front/status").status_code == 401
@@ -124,7 +130,7 @@ def test_camera_preview_api_requires_auth_and_returns_jpeg(
     services.vision.publish(
         jpeg(b"dashboard"), captured_at=42.25,
         frame_id="front_camera_link", source="GAZEBO",
-        width=640, height=360, overlay="semantic-road-v1")
+        width=640, height=360, overlay="semantic-road-v1", quality=dict(valid=False, reason=quality_reason))
 
     status = client.get("/api/v1/vision/front/status", headers=VIEWER)
     frame = client.get(
@@ -136,6 +142,7 @@ def test_camera_preview_api_requires_auth_and_returns_jpeg(
     assert status.json()["available"] is True
     assert status.json()["source"] == "GAZEBO"
     assert status.json()["width"] == 640
+    assert status.json()['quality'] == dict(valid=False, reason=quality_reason)
     assert status.headers["cache-control"] == "no-store"
     assert frame.status_code == 200
     assert frame.headers["content-type"] == "image/jpeg"
@@ -143,6 +150,32 @@ def test_camera_preview_api_requires_auth_and_returns_jpeg(
     assert frame.headers["cache-control"] == "no-store"
     assert frame.headers["x-rosy-camera-source"] == "GAZEBO"
     assert frame.content == jpeg(b"dashboard")
+
+
+def test_raw_and_annotated_api_are_same_capture_and_admitted_once_each(core_client, monkeypatch):
+    client, services = core_client()
+    from core.bridge.observation import camera_preview
+    from types import SimpleNamespace
+    stamp = SimpleNamespace(sec=42, nanosec=250000000)
+    header = SimpleNamespace(stamp=stamp, frame_id='front_camera_link')
+    warnings = []
+    camera_preview(services, SimpleNamespace(header=header, data=jpeg(b'raw'),
+        format='jpeg;source=front;width=320;height=240;overlay=none'), warn=warnings.append, raw=True, source_now=42.25)
+    camera_preview(services, SimpleNamespace(header=header, data=jpeg(b'annotated'),
+        format='jpeg;source=front;width=320;height=240;overlay=follow-road-v2'), warn=warnings.append, source_now=42.25)
+    assert not warnings
+    status = client.get('/api/v1/vision/front/status', headers=VIEWER).json()
+    assert status['raw_available'] and status['raw_sequence'] == status['sequence']
+    sequence = status['sequence']
+    original = client.get(f'/api/v1/vision/front/frame?sequence={sequence}&overlay=false', headers=VIEWER)
+    annotated = client.get(f'/api/v1/vision/front/frame?sequence={sequence}', headers=VIEWER)
+    assert original.content == jpeg(b'raw') and annotated.content == jpeg(b'annotated')
+    assert original.headers['x-rosy-camera-variant'] == 'raw'
+    assert annotated.headers['x-rosy-camera-variant'] == 'annotated'
+    for key in ('x-rosy-camera-captured-at', 'x-rosy-camera-frame-id', 'x-rosy-camera-sequence'):
+        assert original.headers[key] == annotated.headers[key]
+    assert client.get(f'/api/v1/vision/front/frame?sequence={sequence}&overlay=false',
+                      headers=VIEWER).status_code == 429
 
     advanced = client.get(
         "/api/v1/vision/front/frame?sequence=999", headers=VIEWER)
@@ -157,7 +190,7 @@ def test_camera_preview_api_requires_auth_and_returns_jpeg(
 
     monkeypatch.setattr(services.vision, "frame_for_viewer", rate_limited)
     limited = client.get(
-        f"/api/v1/vision/front/frame?sequence={status.json()['sequence']}",
+        f"/api/v1/vision/front/frame?sequence={sequence}",
         headers=VIEWER,
     )
     assert limited.status_code == 429
