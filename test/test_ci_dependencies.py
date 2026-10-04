@@ -94,3 +94,43 @@ def test_ci_result_aggregates_the_matrix_for_branch_protection():
     assert result["if"] == "always()", "must run (and fail) when a needed job fails or is cancelled"
     script = result["steps"][-1]["run"]
     assert 'test "$SCOPE_RESULT" = success' in script and 'test "$TEST_RESULT" = success' in script
+
+
+def test_offline_wheel_install_matches_built_metadata_and_internal_dependencies():
+    import re
+    import tomllib
+    import yaml
+
+    steps = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))["jobs"]["test"]["steps"]
+    script = next(s["run"] for s in steps if s["name"] == "Build and install ROS-free platform API wheels")
+    built = {}
+    for path in re.findall(r"[a-z][a-z_/-]+/[a-z][a-z_/-]+", script):
+        metadata = ROOT / path / "pyproject.toml"
+        if metadata.is_file():
+            project = tomllib.loads(metadata.read_text(encoding="utf-8"))["project"]
+            built[project["name"]] = project
+    installed = dict(re.findall(r"(rosy-[a-z-]+)==([0-9.]+)", script))
+    assert built, "CI must build real source wheels"
+    assert installed == {name: p["version"] for name, p in built.items()}
+    for project in built.values():
+        for dependency in project.get("dependencies", []):
+            if dependency.startswith("rosy-"):
+                name, version = dependency.split("==")
+                assert installed.get(name) == version, f"offline wheelhouse missing {dependency}"
+
+
+def test_raw_numpy_shadow_precedes_requirements_without_uninstalling_debian():
+    import shlex
+    import yaml
+
+    steps = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))["jobs"]["test"]["steps"]
+    script = next(s["run"] for s in steps if s["name"] == "Install Pinky raw verification tools")
+    pinned = next(line for line in (ROOT / "learning/curation/pinky/requirements-raw.txt").read_text().splitlines()
+                  if line.startswith("numpy=="))
+    commands = [shlex.split(line) for line in script.replace("\\\n", " ").splitlines()
+                if line.strip() and not line.lstrip().startswith("#")]
+    shadow = next((i for i, args in enumerate(commands) if pinned in args), None)
+    requirements = next(i for i, args in enumerate(commands) if "-r" in args)
+    assert shadow is not None and shadow < requirements, "Debian NumPy must not be uninstalled"
+    assert {"--ignore-installed", "--no-deps", "--only-binary=:all:"} <= set(commands[shadow])
+    assert "-c" in commands[requirements], "retain runtime constraints for raw tools"

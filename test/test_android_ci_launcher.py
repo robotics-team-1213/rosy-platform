@@ -26,7 +26,7 @@ def test_each_matrix_project_reaches_wrapper_java_with_its_own_unit_task(tmp_pat
     java.chmod(0o700)
     env = {**os.environ, 'GITHUB_WORKSPACE': ROOT.as_posix(),
            'JAVA_HOME': java.parent.parent.as_posix(), 'GRADLE_PROBE': probe.as_posix(),
-           'JAVA_OPTS': '', 'GRADLE_OPTS': ''}
+           'JAVA_OPTS': '', 'GRADLE_OPTS': '', 'RUNNER_TEMP': (tmp_path / 'runner temp').as_posix()}
     subprocess.run([bash, '-n', '-c', command], env=env, check=True, timeout=10)
     subprocess.run([bash, '-c', command], cwd=ROOT / app, env=env, check=True, timeout=10)
     args = probe.read_text('utf-8').splitlines()
@@ -37,3 +37,6 @@ def test_each_matrix_project_reaches_wrapper_java_with_its_own_unit_task(tmp_pat
     assert selected.samefile(ROOT / app)
     assert 'testDebugUnitTest' in args and '--no-daemon' in args
     assert not any(a in args for a in ('--dry-run', '--exclude-task', '-x'))
+
+    assert f'-Prosy.buildRoot={env["RUNNER_TEMP"]}/rosy-pilot-build' in args
+    assert f'-Pkotlin.project.persistent.dir={env["RUNNER_TEMP"]}/rosy-pilot-kotlin-state' in args

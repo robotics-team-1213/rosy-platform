@@ -2410,6 +2410,12 @@
 - Change: Replace only the corrupted journal entry introduced in commit 429e13b8313484a25751a7c7896fe1b7aca41b92. Korean text was irreversibly converted to question marks; it is not reconstructed. The source commit title records acknowledgement budgeting within the existing aid deadline.
 - Evidence: The immutable original remains in deploy/logs.md at that commit. Normalized original block SHA256: e2f80dbdfc41bdcff21a27d50ddd7ae909a32d02270c5db525808c6d9977883d. Source paths are g2_aid.py and test_cell_g2_aid.py. No test or runtime result is inferred from damaged text.
 - Gate: Provenance correction only; ROS-SIM, DEVICE and FIELD acceptance are not established by this entry.
+## 2026-10-04 · uncommitted · fix(ci): align wheel closure and portable Android build outputs
+
+- Change: Build/install the existing learning1.6 dependency and local execution1.4 wheel; shadow pinned NumPy2.2.6 without uninstalling Debian files before unchanged raw tools. Send Android build and Kotlin state to RUNNER_TEMP in CI while retaining approved Windows X defaults. Add a real learning ABI diagnostic; no test or constraint is bypassed.
+- Evidence: Main387b and PR run37205556518 reproduced stale local0.1.0 and Debian NumPy RECORD failures. Four regression failures before repair; final13passed. Built and resolved12 actual offline wheels outside source. Disposable ROS Jazzy amd64 container passed NumPy/Torch roundtrip and OpenCV resize with versions2.2.6/4.12.0/2.7.1+cpu. Independent scope review APPROVE.
+- Gate: SOURCE/LOCAL and CI environment repair only; final GitHub CI and signed site candidate delivery remain pending. Installer5dbbe7 unchanged; physical marker identity HOLD.
+
 ## 2026-10-04 · uncommitted · feat(omx): 정본 G2 격리 실행기
 
 - 변경: 실제 Cell 문서 저장·compile·service proposal·별도 named simulation operator admission·Fleet grant·UDS·owner·Gazebo를 연결하는 박스 16회 하네스를 추가했다. 각 grant의 staging intent를 세계 변경 전에 fsync하고 재제출을 금지한다. 실제 측정 프로세스가 pose·gripper·진행 clock과 이전 배치를 검증한다.

@@ -131,6 +131,9 @@ jobs:
         if: contains(toJSON(matrix.invocations), 'learning/curation/pinky') || contains(toJSON(matrix.invocations), 'learning/training/pinky')
         run: |
           # Real CDR/MCAP and video tests must run, not skip behind missing host tools.
+          # Shadow Debian NumPy in this disposable container without uninstalling apt files.
+          pip3 install --no-cache-dir --break-system-packages --ignore-installed --no-deps \
+            --only-binary=:all: numpy==2.2.6
           pip3 install --no-cache-dir --break-system-packages -c /tmp/rosy-runtime-constraints.txt \
             -r learning/curation/pinky/requirements-raw.txt
 
@@ -138,6 +141,8 @@ jobs:
         if: contains(toJSON(matrix.invocations), 'learning/training/pinky')
         run: |
           pip3 install --no-cache-dir --break-system-packages --index-url https://download.pytorch.org/whl/cpu torch==2.7.1
+          # Exercise the learning ABI before model tests in the actual ROS container.
+          python3 -c "import numpy as np, cv2, torch; sample = np.zeros((2, 2), dtype=np.uint8); assert np.array_equal(torch.from_numpy(sample).numpy(), sample); assert cv2.resize(sample, (4, 4)).shape == (4, 4); print('learning ABI', np.__version__, cv2.__version__, torch.__version__)"
 
       - name: Build and install ROS-free platform API wheels
         run: |
@@ -151,10 +156,10 @@ jobs:
           mkdir -p "$wheelhouse"
           pip3 wheel --no-deps --no-build-isolation \
             --wheel-dir "$wheelhouse" \
-            contracts/skill contracts/motion operations/world middleware/skills/api middleware/skills/manipulation operations/execution middleware/execution/local operations/processes/palletizing integrations/robots/omx middleware/apps/device/omx/agent operations/apps/fleet
+            contracts/skill contracts/motion contracts/learning operations/world middleware/skills/api middleware/skills/manipulation operations/execution middleware/execution/local operations/processes/palletizing integrations/robots/omx middleware/apps/device/omx/agent operations/apps/fleet
           pip3 install --break-system-packages --no-cache-dir --no-index \
             --find-links "$wheelhouse" \
-            rosy-contracts-skill==0.1.0 rosy-contracts-motion==0.1.0 rosy-world==0.1.0 rosy-skill-api==0.1.0 rosy-skill-manipulation==0.1.0 rosy-execution==0.1.0 rosy-execution-local==0.1.0 rosy-palletizing==0.1.0 rosy-integration-robot-omx==0.1.0 rosy-app-agent==0.1.0 rosy-app-gateway==0.1.0
+            rosy-contracts-skill==0.1.0 rosy-contracts-motion==0.1.0 rosy-contracts-learning==0.1.6 rosy-world==0.1.0 rosy-skill-api==0.1.0 rosy-skill-manipulation==0.1.0 rosy-execution==0.1.0 rosy-execution-local==0.1.4 rosy-palletizing==0.1.0 rosy-integration-robot-omx==0.1.0 rosy-app-agent==0.1.0 rosy-app-gateway==0.1.0
 
       - name: Build (colcon)
         if: matrix.kind == 'smoke' || matrix.ros == 'overlay'
