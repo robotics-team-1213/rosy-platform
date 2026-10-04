@@ -287,3 +287,41 @@ camera provenance가 미수용인 연구 데이터는 운영 검증을 마친 �
 원격에서는 파일·manifest 해시를 다시 확인한 뒤 staging을 불변 export로 바꾼다.
 같은 export는 재전달하지 않고 네트워크 오류만 제한 재시도한다. hidden staging과
 미완료 export는 읽지 않는다. 라벨 승인·데이터셋 구성·학습·로봇 활성화는 하지 않는다.
+
+
+## 현재 검수 결정을 모델 PC로 전달하기
+
+새 GUI 계약은 `rosy.pinky-review-decisions/1`과 `rosy.pinky-review-export/2`이다.
+외부 봉인은 `review-contract.json`의 SHA256인 `AUTHORITY_COMPLETE`이다.
+`COMPLETE`만 있는 내보내기는 최신 승인 근거가 아니다.
+
+bridge 설정에 다음 선택 항목을 추가하면 새 봉인을 기다리고 contract SHA로 전송을 구분한다.
+
+```json
+{"authority":{"endpoint":"http://127.0.0.1:8767/api/decisions","workspace_id":"<verified-workspace-id>"}}
+```
+
+endpoint는 검수 PC의 localhost이다. bridge는 현재 결정을 검증해 승인된 SSH peer의
+`<remote_reviews>/.authority/current.json`으로 atomic replace한다. 두 봉인과 외부 manifest의
+모든 파일을 전송한다. 현재 조회 실패는 unavailable로 전달하고 전송 실패는 별도로 기록한다.
+같은 generation의 다른 digest, 이전 generation, 다른 workspace는 거절한다.
+
+학습 PC의 cycle 설정에는 다음 선택 항목을 쓴다.
+
+```json
+{"authority":{"path":"<reviews>/.authority/current.json","workspace_id":"<verified-workspace-id>","max_age_s":90}}
+```
+
+cycle은 확인 시각·최대 나이·고정 workspace·generation/digest를 검증하고 현재와 완전히
+일치하는 v2 export만 `authority_queue`에 넣는다. 이 큐는 항상
+`training_dataset_qualified=false`이다. 기존 legacy `review_queue`는 과거 검수 증거이며
+독립 픽셀 승인이나 최신 권한으로 올리지 않는다.
+
+`review_authority.py`는 파일 봉인·binding·revision을 확인하는 ROS-free 소비 검증기이다.
+검증 통과는 사람의 정답 라벨, 데이터셋 자격 또는 모델/로봇 활성화가 아니다.
+indexed PNG를 기존 CVAT RGB builder에 바로 넣지 않는다. 별도 adapter와 명시 사람 승인,
+이미지/마스크/labelmap/class 서명, 모든 고정 eval session 제외가 확보되어야 한다.
+
+기존 Job은 입력 signature가 바뀌면 거절한다. 기존 서비스 설정만 바꿔 같은 상태 디렉터리에
+덮어 실행하지 않는다. 신규 상태/기존 dedup history 이관을 검증한 후 서비스 전환한다.
+이번 host 구현·테스트는 실제 GUI/SSH 전달이나 현장 수용 완료를 뜻하지 않는다.

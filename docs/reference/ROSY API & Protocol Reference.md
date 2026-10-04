@@ -2,7 +2,7 @@
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.100
+**Version:** v1.101
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -278,7 +278,7 @@ config `control.sensor_adapter.mode` 와 같은 문자열이다(D-400). 일반 �
 | GET | `/api/v1/vision/models` | Viewer | D-423: 로봇 학습 모델 상태(작업별, 읽기 전용) `{tasks:[{task,slot,model_revision,last_error,frames_inferred,latency_ms_p50,signed,age_s,stale}]}` (`signed`: 노드가 서명을 확인했으면 true/false, 아니면 null; lane_seg 는 경고만이라 false 일 수 있다). `lane_seg`/`shadow` 는 `perception/learned/status`, `object_det`/`active` 는 `perception/learned/object_det/status` 에서 온다. CORE 는 포인터 파일을 읽지 못하므로 노드가 없는 슬롯은 빠진다. `no-store`. 교체(promote/rollback)는 운영자 CLI(`rosy_ml`)만 — CORE 쓰기 API 없음 |
 | GET | `/api/v1/vision/front/status` | Viewer | 최신 front camera preview의 available/stale, source, frame, 크기, overlay, sequence 메타데이터. 원본 영상은 상태 WebSocket에 싣지 않음 |
 | GET | `/api/v1/vision/front/frame` | Viewer | D-152 fresh 최신 JPEG 한 장. `Cache-Control: no-store`, `Content-Encoding: identity`; 없거나 stale이면 404 `CAMERA_FRAME_UNAVAILABLE` |
-| GET | `/api/v1/vision/front/stream` | Operator | D-368 (v1.100) 운전자 전용 MJPEG 스트림. `multipart/x-mixed-replace; boundary=frame`, `?overlay=`(기본 true, `false`면 raw pair). 파트 헤더 `X-Rosy-Camera-{Sequence,Source,Captured-At}`. 조종 소유권은 가장 최근 수락된 teleop 토큰(D-460, 임대 없음): 운전자 아님 409 `CAMERA_STREAM_NOT_DRIVER`, 동시 하나만 409 `CAMERA_STREAM_BUSY`, 다른 토큰의 teleop 수락으로 열린 스트림이 끝난다. 인증은 헤더만(D-193). 관전자·관제 화면은 기존 0.4 s 폴링을 그대로 쓴다 |
+| GET | `/api/v1/vision/front/stream` | Operator | D-368 (v1.101) 운전자 전용 MJPEG 스트림. `multipart/x-mixed-replace; boundary=frame`, `?overlay=`(기본 true, `false`면 raw pair). 파트 헤더 `X-Rosy-Camera-{Sequence,Source,Captured-At}`. 조종 소유권은 가장 최근 수락된 teleop 토큰(D-460, 임대 없음): 운전자 아님 409 `CAMERA_STREAM_NOT_DRIVER`, 동시 하나만 409 `CAMERA_STREAM_BUSY`, 다른 토큰의 teleop 수락으로 열린 스트림이 끝난다. 인증은 헤더만(D-193). 관전자·관제 화면은 기존 0.4 s 폴링을 그대로 쓴다 |
 | POST | `/api/v1/vision/front/evidence` | Operator | 카메라 화면에서 만든 JPEG 스크린샷 또는 WebM/MP4 녹화를 로봇 SD에 저장. 길이 접두 JSON 메타데이터 뒤에 바이너리 미디어를 전송; 성공 시 `VisionEvidenceRecord`(201) |
 | GET | `/api/v1/vision/front/evidence` | Operator | 저장된 카메라 증거의 최신 목록(`VisionEvidenceList`, 최대 50건) |
 | GET | `/api/v1/vision/front/evidence/{id}` | Operator | 저장 미디어 다운로드. 24자리 불투명 id만 허용; 없으면 404 |
@@ -696,7 +696,7 @@ CORE-only 런타임(`runtime_mode: core`, D-161)에서 한 번도 값이 오지 
 
 Camera preview transfer rules (v1.12, D-152):
 
-- v1.100 운전자 MJPEG 스트림(D-368): `GET /api/v1/vision/front/stream` 는 최신 프레임 저장소에서 **새 sequence가 들어올 때만** 파트를 내보낸다(multipart, boundary `frame`). 받을 수 있는 사람은 **현재 운전자 한 명** — 조종 소유권은 좌석 임대가 아니라(D-460) 가장 최근 수락된 teleop의 토큰이다. 운전자가 없거나 다른 토큰이면 409 `CAMERA_STREAM_NOT_DRIVER`, 스트림은 동시에 하나만 열린다(409 `CAMERA_STREAM_BUSY`). 다른 토큰의 teleop가 수락되면 열린 스트림은 끝나고 슬롯이 비며, 클라이언트 끊김도 슬롯을 돌려놓는다. 인증은 `Authorization` 헤더로만 하고 토큰을 URL에 두지 않는다(D-193) — 브라우저 `<img>` 는 헤더를 못 보내므로 클라이언트는 `fetch()` 스트림을 잘라 그린다. 발행 주기 상향(기본 12 fps)은 ROS-SIM/DEVICE 단계의 로봇 측 사항이며 이 경로 계약에 속하지 않는다.
+- v1.101 운전자 MJPEG 스트림(D-368): `GET /api/v1/vision/front/stream` 는 최신 프레임 저장소에서 **새 sequence가 들어올 때만** 파트를 내보낸다(multipart, boundary `frame`). 받을 수 있는 사람은 **현재 운전자 한 명** — 조종 소유권은 좌석 임대가 아니라(D-460) 가장 최근 수락된 teleop의 토큰이다. 운전자가 없거나 다른 토큰이면 409 `CAMERA_STREAM_NOT_DRIVER`, 스트림은 동시에 하나만 열린다(409 `CAMERA_STREAM_BUSY`). 다른 토큰의 teleop가 수락되면 열린 스트림은 끝나고 슬롯이 비며, 클라이언트 끊김도 슬롯을 돌려놓는다. 인증은 `Authorization` 헤더로만 하고 토큰을 URL에 두지 않는다(D-193) — 브라우저 `<img>` 는 헤더를 못 보내므로 클라이언트는 `fetch()` 스트림을 잘라 그린다. 발행 주기 상향(기본 12 fps)은 ROS-SIM/DEVICE 단계의 로봇 측 사항이며 이 경로 계약에 속하지 않는다.
 
 - v1.91 `raw_available`와 `raw_sequence`는 같은 capture stamp·frame_id·크기의 원본이 있는지 표시한다. raw_sequence는 대응 주석 sequence와 같다. `GET /front/frame?sequence=S&overlay=false`는 원본, 생략/true는 주석 JPEG이며 Variant(raw/annotated)·Frame-Id·Captured-At·Sequence 응답 header로 구분한다. 최근 최대 4개 frame 쌍을 보관하고 source image age와 monotonic 수신 TTL을 2초로 제한한다. 한 viewer의 같은 pair는 각 variant를 한 번만 가져올 수 있으며 둘이 한 admission을 공유한다. 반복 variant/400ms 안의 다음 pair는 429, 교체되어 짝을 확인할 수 없으면 409, 없거나 낡은 raw는 404이다. 원본 요청을 주석으로 대체하지 않는다.
 - `quality_age_ms`는 source image age + monotonic 수신 나이이며 얼굴 조명 보조 handover도 이 나이에 파일 전달 나이를 더해 만료한다. source clock이 없거나 잘못되거나 image age가 0..2초 밖이면 조도는 null이고 raw pair로 채택하지 않는다. 기존 주석 JPEG 표시 경로는 유지한다.
@@ -1432,6 +1432,7 @@ command. Reusing a key for a different request returns `409 IDEMPOTENCY_CONFLICT
 |---|---|---|---|
 | GET | `/api/fleet/session` | any configured site-user bearer | Returns only the authenticated `principal_id` and role for the current console session. |
 | POST | `/api/fleet/robots/{robot_id}/goal` | `operator` bearer + `Idempotency-Key` | Validates the configured robot and finite goal, durably accepts the task as `QUEUED`, then lets the dispatcher request a CORE goal. |
+| POST | `/api/fleet/robots/{robot_id}/route` | `operator` bearer + `Idempotency-Key` when durable tasks are configured | D-463 (v1.100): body `{edges: [edge_id, ...]}` of 1 to 8 stored lane-graph edge ids; extra fields 422. Each edge must exist and its `to` must equal the next edge `from`, or 400 `ROUTE_UNKNOWN_EDGE` / `ROUTE_DISCONTINUOUS`. Fleet expands the stored polyline and submits only the next point about 0.20 m ahead, yaw equal to the tangent, through the existing goal path. It does not submit the far junction as that goal. The fresh snapshot must be `LOCALIZED` with `pose_frame` `map` and within 0.08 m of the polyline; otherwise 409 `ROUTE_POSE_UNTRUSTED` or `ROUTE_OFF_LANE` and CORE is not called. A snapshot with no localization block is refused. Within 0.05 m of the end the response is 200 `ROUTE_COMPLETE` and no goal. `GoalRequest` stays `{x, y, yaw}`. |
 | POST | `/api/fleet/do` (when `do` is `navigate`) | `operator` bearer + `Idempotency-Key` | Uses the same task service; each navigation step gets a deterministic child key from the request key and step position. |
 | GET | `/api/fleet/tasks/{task_id}` | any configured user bearer | Returns the durable task projection and append-only status history. |
 | POST | `/api/fleet/tasks/{task_id}/cancel` | `operator` bearer | Cancels a task only while it is still queued; it does not cancel a goal already dispatched to CORE. |
@@ -2218,7 +2219,8 @@ owner ready, StopLocal ACK, caller 확인 boolean 또는 simulation pose만으�
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
-| v1.100 | 2026-10-05 | Additive (D-368, feat/d368-driver-mjpeg-stream): 운전자 전용 MJPEG 스트림 `GET /api/v1/vision/front/stream`(operator, `multipart/x-mixed-replace; boundary=frame`, `?overlay=`). 조종 소유권은 수락 teleop 토큰(D-460 — 임대 없음). 운전자 아님 409 `CAMERA_STREAM_NOT_DRIVER`, 이미 열림 409 `CAMERA_STREAM_BUSY`, 새 수락 teleop가 열린 스트림을 끝낸다. 관전자·관제는 기존 0.4 s 폴링 유지. envelope 1.0 유지 |
+| v1.101 | 2026-10-05 | Additive (D-368, feat/d368-driver-mjpeg-stream): 운전자 전용 MJPEG 스트림 `GET /api/v1/vision/front/stream`(operator, `multipart/x-mixed-replace; boundary=frame`, `?overlay=`). 조종 소유권은 수락 teleop 토큰(D-460 — 임대 없음). 운전자 아님 409 `CAMERA_STREAM_NOT_DRIVER`, 이미 열림 409 `CAMERA_STREAM_BUSY`, 새 수락 teleop가 열린 스트림을 끝낸다. 관전자·관제는 기존 0.4 s 폴링 유지. envelope 1.0 유지. v1.100을 D-463이 main에서 먼저 써 v1.101로 재번호 |
+| v1.100 | 2026-10-05 | Additive (D-463): POST `/api/fleet/robots/{robot_id}/route` expands stored lane-graph edge ids into that polyline and submits only the next point about 0.20 m ahead through the existing goal path. The far junction is not one goal. A pose that is not LOCALIZED in the map frame, or is more than 0.08 m off the polyline, does not call CORE. GoalRequest stays {x, y, yaw}. envelope 1.0 unchanged |
 | v1.99 | 2026-10-04 | D-457: 마커 우선·무마커 폴백 표시 추적, source-token 검출, operator 보정·재학습. 기존 sighting·envelope 1.0·주행 경계 유지 |
 | v1.98 | 2026-10-04 | Additive (D-343·D-432·D-452): 공개 LAN 로봇 발견 목록의 typed 64행 계약, FQDN/TLS 링크, 공용 cache와 제한된 singleflight fallback. 인증·승인·제어 부여 없음; 기존 v1.97 중앙 GET 정본과 envelope 1.0 유지 |
 | v1.97 | 2026-10-04 | Additive (D-454): 기존 등록 로스터를 읽는 opt-in 중앙 Fleet GET 목록·상세의 구현 상태와 응답을 명시. 기존 Viewer 인증·등록 정본·envelope 1.0 유지; 중앙 쓰기·명령·미션은 미구현 |

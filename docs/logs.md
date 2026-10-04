@@ -5749,9 +5749,23 @@ osy-d395-s1d\`.
 - gate 변화: 없음.
 - 결정: P2는 사용자 입회 대기. D-426은 Linux 환경 대기.
 
+## 2026-10-05 · uncommitted · feat(fleet): D-463 차선 경로는 다음 짧은 점
+
+- 변경: POST /api/fleet/robots/{robot_id}/route 가 저장된 차선 간선 순서를 폴리라인으로 펼치고, 지도에 LOCALIZED 된 자세일 때만 약 0.20 m 앞의 점을 기존 goal 로 보낸다. 위치 블록이 없거나 odom 이면 409 ROUTE_POSE_UNTRUSTED 이고 CORE navigation/goal 을 호출하지 않는다. GoalRequest 는 {x, y, yaw} 그대로다. ADR docs/adr/D-463-fleet-lane-route.md. D-462 는 review-cycle 작업 트리의 번호라 adr_gaps 에 남겼다.
+- 증거: operations/fleet/test/test_lane_route.py, test_task_contract_docs.py, test_server_app.py, test_line_follow_contract_docs.py, test_mission_progress.py 74 passed. test/known_failures.py 는 새 실패 0. harness lint 의 STATUS.md 와 pilot index stale 2건은 이 브랜치의 베이스에 이미 있다.
+- gate 변화: 없음. 호스트 시험. DEVICE, ROS-SIM, 실차 주행은 없다.
+- 결정: D-463 Accepted.
+
 ## 2026-10-05 · uncommitted · docs(reference): API Ref v1.100 — D-368 운전자 MJPEG 스트림
 
 - 변경: `ROSY API & Protocol Reference.md` v1.99→v1.100. §5 경로 표에 `GET /api/v1/vision/front/stream`(operator, multipart boundary `frame`, `?overlay=`) 행 추가, 카메라 preview 전송 규칙에 스트림 조항(운전자 = 마지막 수락 teleop 토큰, D-460 임대 없음·409 코드 두 종·동시 하나·새 sequence만·헤더 인증 D-193) 추가, 버전 이력 행 추가.
 - 증거: 문서와 구현(`api/v1/vision.py`, `core_features/vision/stream.py`) 동일 커밋. envelope `protocol_version` 1.0 불변(PRT-006 additive). schemas.py 신규 페이로드 없음(멀티파트는 JSON envelope 아님).
 - gate 변화: 없음.
 - 결정: D-368 §1~3·5의 CORE·클라이언트 계약 확정. §4(발행 12 fps 상향)는 로봇 측 ROS-SIM/DEVICE 사항으로 남는다.
+
+## 2026-10-05 · uncommitted · docs(reference): D-368 행 v1.100→v1.101 재번호
+
+- 변경: main 병합에서 D-463(차선 경로)이 v1.100을 먼저 썼다. D-368 스트림의 이력 행·경로 표·전송 규칙 조항·문서 Version 표기를 v1.101로 옮기고, app.py 계약 표기와 세 문서 시험 핀을 같이 올렸다.
+- 증거: lint 재검사 0 error(재번호 전 append-only 위반 1건 수정 — 커밋된 앞 항목은 원문 유지).
+- gate 변화: 없음.
+- 결정: API 문서 버전 충돌은 늦게 착지한 쪽이 재번호한다.
