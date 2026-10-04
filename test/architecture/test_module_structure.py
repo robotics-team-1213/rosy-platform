@@ -100,17 +100,16 @@ SIZE_VERDICTS = {
         "duplicate its socket. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        32_543,
-        "split: re-judged 2026-10-04 at 32543 after inherited D-454 registry routes +62. "
-        "The cross-module fake/local capture tool belongs in workspace tools, not Fleet; "
-        "retain +150 allowance, B2/UI migration and 600 production/800 web/1000 zero-growth "
-        "file limits. Capture uses fake Fleet and local games preview, not device evidence. "
-        "Previously re-judged 2026-10-04 at 32481 after D-454 registry/permission wiring and D-455 "
-        "map-pose meet/resolver extensions: inherited source counts 32477, plus four reviewed shared "
-        "UI lines. Registry model/routes remain bounded; resolver is 507, app is 600 and web Console "
-        "is 777. No new final command publisher. Independent production/web accounting confirms "
-        "319 above the recorded 32162; retain +150, B2/UI migration obligations and existing "
-        "600 production/800 web/1000 zero-growth file limits. Previously re-judged 2026-10-04 at 32162 after integrating main 2ad047602 with D-452: "
+        32_469,
+        "split: independently re-judged 2026-10-04 at measured 32469 after main 387b19841: "
+        "307 since the previous 32162 consists of prior integration 7, D-455 meet/resolver "
+        "181, central read projection/routes/CLI 123, app/worker extraction -11 and web 7; "
+        "the incoming cross-module capture tool is correctly placed under root tools, outside Fleet; it remains UX HOLD, not accepted screen evidence. "
+        "Retain B2 server subpackage and UI resource migration obligations, owner boundaries, "
+        "600 production/800 web limits, 1000 zero-growth tier and +150 package allowance. "
+        "Source accounting and independent review are recorded in "
+        "docs/validation/network-peer-discovery-2026-10-04/main-integration-checkpoint.md. "
+        "Previously re-judged 2026-10-04 at 32162 after integrating main 2ad047602 with D-452: "
         "incoming main counts 31786, including focused meet subpackage 653 and existing "
         "resolver/loop/transport wiring 135 beyond its 30998 verdict; the approved "
         "Cell checkpoint/editor delta 377 and D-452 delta 376 both retain their owners. "
@@ -613,7 +612,7 @@ SIZE_VERDICTS = {
         "canary watch are one short sequential flow; split the canary watch out if it grows further",
     ),
     "deploy/robot/pinky_pro/native/sync-image-layer.py": (
-        1021,
+        1020,
         "split: D-388 image-layer sync — the allowlist/plan, the backup-record history (records, "
         "cleanup, crash reconcile) and the apply/pending transaction are separate seams; move the "
         "record history into a sibling module in deploy/robot/pinky_pro/native once the 2026-10-02 bench "
@@ -621,9 +620,7 @@ SIZE_VERDICTS = {
         "covered by test/test_image_layer_sync.py. Re-judged 2026-10-03 at 1018: main reached 1000 "
         "(state-directory bootstrap) without a re-judgement, D-433 adds 18 (retired units); verdict unchanged. "
         "Re-judged 2026-10-04 at 1020: two lane-only Host unit allowlist entries, no new sync logic; "
-        "record-history split remains required after device exercise. "
-        "Re-judged 2026-10-04 at 1021: b9f884623 adds one allowlist line for the camera health "
-        "service and timer, no new sync logic; the deferred record-history split remains required.",
+        "record-history split remains required after device exercise.",
     ),
     "deploy/robot/pinky_pro/native/rosy-hw-probe.py": (
         641,

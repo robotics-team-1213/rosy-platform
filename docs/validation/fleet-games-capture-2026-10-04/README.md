@@ -30,3 +30,7 @@ python tools/capture_console_games_round.py \
 
 - 게임 보드·로봇 정지 readback 2대와 카메라(DEVICE 회차).
 - Fleet 관제자 관점의 사람 G3 8항 시트.
+
+## 독립 화면 재검토 — UX HOLD
+
+2026-10-04 실제 console-1920x1080 PNG는 기본 브라우저 스타일, 큰 아이콘, 접속 인증 필요와 로봇 목록 로딩 상태다. dark 표면·실제 인증·앱 준비가 완료된 정상 UI 증거가 아니다. 도구는 API/console 인증을 fixture로 주입하고 method를 GET으로 바꾸며 CSP를 보존하지 않는다. 페이지 오류 0만으로 인증·스타일·로딩 완료·정지·overflow를 보증할 수 없다. 원본 캡처와 report는 실패 관측으로 보존하며 LOCAL UX/G3·DEVICE 수락은 HOLD다. 정상 역할 로그인·CSP·method/body 유지와 화면 준비·스타일·반응형 상태 검사가 필요하다.

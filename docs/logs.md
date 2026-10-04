@@ -5677,3 +5677,36 @@ osy-d395-s1d\`.
 - 증거: r4/r5 startup READY와 seat reconciliation. r5 첫 박스 placement receipt 후 두 번째 이송의 item_lost_in_transit으로 LOCAL_ACTION_HOLD; run exit 1, cleanup exit 0, full_g2 false, fault matrix NOT_RUN. frontmatter/schema와 소스 정의를 확인한다. vocabulary 신규 용어 없음, solutions 발견성 gap 없음.
 - 검증: ce-compound frontmatter와 claims 검사 PASS. harness 59 passed, 2 failed. 두 실패는 깨끗한 main 6a37dd732 worktree에서도 같은 기존 deploy/logs.md 인코딩 손상으로 재현됐다. 저장소 known_failures 목록은 변경하지 않았고, 실측 baseline 비교의 신규 실패는 0이다. 증거는 X:/DevTemp/rosy-ce-g2-home-20261004-d94a/의 baseline-tests.txt, candidate-tests.txt, comparison.json에 있다.
 - gate 변화: 없음. 초기 홈 해결만 기록했으며 box16·fault matrix·직접 실행 경로의 설치 수용·장치/현장 승격을 주장하지 않는다.
+
+## 2026-10-04 · uncommitted · feat(learning): D-456 Pinky 영속 검수 웹앱
+
+- 변경: 전담 feat/pinky-review-web에서 서버 SQLite 영속 객체 검수, 박스 편집·자동 저장·명시 승인/제외·version 충돌 거부·기존 review_return 직접 export를 구현했다. D-280/D-359 공용 토큰·부품·테마와 자동 초안/수동 정답/학습 수용 구분을 D-456에 기록했다.
+- 검증: 관련 호스트 검사 231 passed, 4 failed; known_failures.py는 목록에 없는 4건을 NEW로 보고했다. clean baseline 02dc934a7의 등록 worktree에서도 네 실패가 재현돼 baseline comparison 신규 실패 0이다. 실패는 기존 cell-document-editor.js field, peer-picker.js disabled reason, deploy/logs.md 인코딩/heading과 harness lint다. known_failures.txt를 변경하지 않았다. 실 Chromium PC/모바일 viewport 13 시나리오·콘솔 오류 0, 별도 테스트 state로 검증했다. 운영 state의 서버 재시작·원본 user approval unchanged·3장/6박스 export COMPLETE/hash 검증을 확인했다.
+- gate 변화: 기존 모듈 gate를 승격하지 않는다. 원본 1·2·4 승인/3 제외, 신호 unknown을 유지한다. 픽셀 마스크 편집과 신규 자동 추론 job은 미구현이다. dataset session mapping·고정 eval 제외는 학습 owner 검증 전 HOLD다. 로봇 동작·모델 활성화·착지·push·배포는 수행하지 않았다.
+
+## 2026-10-04 · uncommitted · feat(learning): Pinky 박스 직접 선택·드래그 편집
+
+- 변경: D-456 후속 사용자 요청으로 기존 좌표 자동 overlay, 숫자 입력 미리보기, 빈 곳 드래그 생성, 기존 박스 선택·이동, 모서리/변 resize, 선택 박스 삭제와 캔버스 Delete를 구현했다. 드래그 중 미리보기만 보여주고 놓을 때 version 검사·저장·재검수 전환을 한다. Esc/touch cancel은 저장을 바꾸지 않는다. 모델 선택/신규 추론 요청으로 확대하지 않는다.
+- 검증: 순수 좌표 기하 Node 4 passed, host pytest 55 passed 및 known_failures 신규 0. 실제 Chromium desktop drag 8 시나리오와 모바일 viewport touch 4 시나리오, 콘솔 오류 0. 운영 데이터를 편집하지 않는 별도 test state에서 실행했다. Windows MIME registry의 .mjs=text/plain 문제를 실패 시험으로 재현하고 모듈 응답을 text/javascript로 고정했다.
+- gate 변화: 없음. 기존 사용자 승인 이력과 운영자의 후속 편집을 보존한다. 픽셀 segmentation·신규 모델 추론·장치 활성화·착지·push·배포는 범위 밖이다.
+
+## 2026-10-04 · uncommitted · feat(learning): D-458 공통 학습 작업 화면
+
+- 변경: 사용자 지정 범위인 학습 관련 앱·웹 전체에서 객체/영역 검수, perception 단계 job, Pinky 원본·행동 연구, OMX ACT, 정책 원장, Isaac 환경의 기존 기능과 다음 작업을 점검했다. D-458에 공통 화면 결정을 기록하고 같은 로컬 서버 /learning에 결과 폴더 연결·SQLite 영속 목록·종류 필터·파일 변경/누락/손상 표시·단계 실패 이유·검수 양방향 이동·연결 해제를 구현했다. 임의 명령/학습 실행/네트워크/모델 API는 추가하지 않았다.
+- 검증: 호스트 59 passed 및 known_failures 신규 0, 좌표 기하 Node 4 passed. 실제 Chromium PC/모바일 viewport 10 시나리오·page error 0. 실제 learning 결과 4폴더를 연결하고 원본 객체 검수 state 변경 없이 유지했다. 운영 state의 현재 1·2 승인/3 제외/4 pending(version 2, 기존 운영자 미분류 추가 편집)을 그대로 보존했다. 결과 보고서 선언/파일 SHA 확인은 독립 closure·정책 수용 검증이 아니다.
+- gate 변화: 없음. segmentation 승인·학습 qualification·GPU job 실행·정책 승격·장치·물리 모바일·현장 수용은 주장하지 않는다. 착지·push·배포는 수행하지 않았다.
+- 추가 검사: harness/affected 91 passed/3 failed에서 생성 색인을 갱신한 뒤 실패 대상과 최종 backend를 다시 검사했다. 10 passed/2 failed이며 두 실패는 clean baseline에 재현된 deploy/logs.md 인코딩/heading 및 전체 lint다. known_failures.py는 미등록 기존 실패를 2 NEW로 보고하므로 전체 green을 주장하지 않는다. D-457은 동료 fix/site-markerless-live-map에 예약된 본문이어서 이 브랜치 adr_gaps에 임시 예약 이유를 기록했다. 실제 4개 결과 연결과 서버 재시작 후 사진 state/연결 목록 동일, PC/모바일 viewport page error 0을 확인했다.
+- 최종 확인: shared_controls 24 passed/2 failed는 기존 baseline의 cell-document-editor.js field와 peer-picker.js disabled reason 두 건이며 이번 학습 표면의 신규 오류는 없다. 현재 운영 state로 새 receiver export를 만들어 승인 2장만 내보냈고, 제외 source 2와 미분류 pending source 3은 학습 라벨에서 제외했다. COMPLETE/manifest 모든 파일 hash·byte 수와 검수 state 불변을 확인했다. 초기 3장 승인은 역사적 import/export에 보존되며 현재 4번 재검수 대기를 승인으로 되돌리지 않았다.
+## 2026-10-04 · uncommitted · docs(pairing): D-456 LAN 수신 승인과 지속 페어링
+
+- 변경: 사용자는 상대 화면 승인 기본·QR/코드 보조·LAN 우선을 선택했다. 기존 승인/SQLite 보존과 실제 공백(Pilot IP 슬롯·실패 삭제, CORE 일반 상대 승인·지속 신원 증명/세션 갱신 미구현)을 분리해 D-456에 기록했다.
+- 증거: 기존 소스·API·저장/만료/발견 경로와 공식 Android 문서를 확인했다. 새 범용 승인 거래·장치 재연결은 아직 검증하지 않았다. 초기 저널 형식 실패는 헤딩과 필수 항목을 수정하고 다시 검사한다.
+- gate 변화: 구조 결정. 기존 만료·권한·키/CA pin을 우회하지 않으며 전체 구현·배포·장치 수락을 주장하지 않는다.
+
+## 2026-10-04 · uncommitted · fix(docs): Pinky 검수 ADR 번호 충돌 해결과 main 동기화
+
+- 변경: 사용자 로컬 병합 지시로 main을 전담 branch에 병합했다. 동료 LAN 페어링 D-456을 보존하고 우리 검수 ADR을 전역 예약 확인 후 D-459로 정정했다. 공통 저널과 ADR 행은 양쪽 내용을 보존했다.
+- 증거: 초기 승인·운영자의 추가 편집·learning 연결 상태는 기존 SQLite에 보존한다. 동기화 후 관련 검증은 동일 branch에서 수행한다.
+- gate 변화: 없음. 로컬 병합이며 push·배포·장치 수용은 별도다.
+
+- 동기화 검증: 관련 검사 196 passed/1 failed에서 main의 Pilot 다시 찾기 버튼 선언을 공용 helper 계약에 맞게 명시했다. 해당 계약과 생성 정합 2 passed; Pilot 실 서버 브라우저 72건은 NOT_RUN/skipped다. known_failures 신규 0. 이전 baseline 인코딩/field 오류는 최신 main에서 해소되어 재현되지 않았다.

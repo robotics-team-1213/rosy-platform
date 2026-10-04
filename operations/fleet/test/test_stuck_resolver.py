@@ -382,3 +382,50 @@ def test_in_room_returns_only_after_the_passer_clears_the_door():
     resolver.sent(done[0], 6.0)
     resolver.result(done[0], code="STUCK_DECISION_REFUSED")
     assert resolver.step(7.0, [_row("near", yielded, pose=home), _row("far", None, pose=past)]) == done
+
+
+@pytest.mark.parametrize("unavailable", ["offline", "missing_state", "unknown", "lapsed"])
+def test_rejoin_holds_when_a_roster_peer_has_no_current_map_pose(unavailable):
+    from fleet.localization.trust import badge
+
+    resolver, door, _far = _started_east_yield()
+    painted = painted_track()
+    room = next(item for item in painted.rooms if item.id == "east_room")
+    me = _row("near", _yielded(), pose=(*room.hold_xy, 0.0))
+    past = pose_on(painted, "east", door.s_m - 0.70, direction=-1)
+    peer = _row("far", None, pose=past)
+    if unavailable == "offline":
+        peer["online"], peer["state"] = False, None
+    elif unavailable == "missing_state":
+        peer["state"] = None
+    elif unavailable == "unknown":
+        peer["state"]["localization"] = {"state": "UNKNOWN", "pose_frame": "odom"}
+    peer["localization"] = badge(peer["state"], lapsed=unavailable == "lapsed")
+    assert resolver.step(1.0, [me, peer]) == []
+    # A new, verified map snapshot opens the same retained plan; no pose/draft reset.
+    peer = _row("far", None, pose=past, localization=_frame("map"))
+    peer["localization"] = badge(peer["state"])
+    move = resolver.step(2.0, [me, peer])
+    assert len(move) == 1 and move[0].decision == "YIELD"
+
+
+@pytest.mark.parametrize("where", ["room", "door"])
+def test_rejoin_never_moves_or_resumes_from_a_lapsed_own_pose(where):
+    from fleet.localization.trust import badge
+
+    resolver, door, _far = _started_east_yield()
+    painted = painted_track()
+    room = next(item for item in painted.rooms if item.id == "east_room")
+    hold = (*room.hold_xy, 0.0)
+    peer = _row("far", None, pose=pose_on(painted, "east", door.s_m - 0.70, direction=-1))
+    # Entering the room is observed while trust is still valid.
+    assert resolver.step(1.0, [_row("near", _yielded(), pose=hold),
+                               _row("far", None, pose=_far)]) == []
+    pose = hold if where == "room" else pose_on(painted, "east", door.s_m + 0.15, direction=1)
+    me = _row("near", _yielded(), pose=pose)
+    me["localization"] = badge(me["state"], lapsed=True)
+    assert me["localization"]["trusted"] is False
+    assert resolver.step(2.0, [me, peer]) == []
+    me["localization"] = badge(me["state"])
+    action = resolver.step(3.0, [me, peer])
+    assert len(action) == 1 and action[0].decision == ("YIELD" if where == "room" else "RESUME")

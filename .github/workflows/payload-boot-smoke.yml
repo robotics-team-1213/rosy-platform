@@ -1,107 +1,166 @@
+# D-444 P1.2: manual unsigned hosted ARM process observation; not device boot, signing or delivery acceptance.
 name: Payload boot smoke (arm64)
-
-# D-444 P1.2 (container bench): boot the unsigned native payload artifact on
-# the same arm64 runner that builds it, and observe GET /dashboard /pilot
-# /console -> 200 + CSP. Native arm64 - no emulation. Manual only; uses only
-# the job token. Local emulation on Windows hosts is unreliable (binfmt churn,
-# 2026-10-04).
-
-"on":
+'on':
   workflow_dispatch:
     inputs:
       build_run_id:
-        description: "build-native-payload.yml run id (empty = latest successful)"
+        description: Successful build-native-payload.yml run for this exact source SHA (empty = resolve it)
         required: false
         type: string
-
 permissions:
   contents: read
-
+  actions: read
 jobs:
   boot-smoke:
     runs-on: ubuntu-24.04-arm
-    container: ros:jazzy-ros-base
+    container: ros:jazzy-ros-base@sha256:c3706ef0a0aa45413c07803cf433602f543b22e45b4855f6fca955c2d8ecc4e8
     timeout-minutes: 30
     steps:
-      - name: Resolve the payload artifact (GitHub API, no gh needed)
-        shell: bash
-        run: |
-          set -euo pipefail
-          REPO="livsbittt/rosy-os"
-          TOKEN="${{ github.token }}"
-          AUTH="Authorization: Bearer $TOKEN"
-          if [ -n "${{ inputs.build_run_id }}" ]; then
-            RUN="${{ inputs.build_run_id }}"
-          else
-            RUN=$(curl -sf -H "$AUTH" \
-              "https://api.github.com/repos/$REPO/actions/workflows/build-native-payload.yml/runs?status=success&per_page=1" \
-              | python3 -c 'import json,sys; print(json.load(sys.stdin)["workflow_runs"][0]["id"])')
-          fi
-          echo "RUN=$RUN" >> "$GITHUB_ENV"
-          ARTIFACT_URL=$(curl -sf -H "$AUTH" \
-            "https://api.github.com/repos/$REPO/actions/runs/$RUN/artifacts" \
-            | python3 -c 'import json,sys; print(json.load(sys.stdin)["artifacts"][0]["archive_download_url"])')
-          mkdir -p payload
-          curl -sfL -H "$AUTH" -o payload/artifact.zip "$ARTIFACT_URL"
-          python3 -m zipfile -e payload/artifact.zip payload/
-          ls payload/*.tar.gz
-
-      - name: Unpack
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p release && tar -xzf payload/*.tar.gz -C release
-          ls release/install > /dev/null
-
-      - name: Deps (ROS pins + CI python stack)
-        shell: bash
-        run: |
-          set -euo pipefail
-          apt-get update -qq
-          apt-get install -y -qq ros-jazzy-rmw-cyclonedds-cpp \
-            ros-jazzy-nav2-msgs ros-jazzy-tf2-msgs ros-jazzy-tf2-geometry-msgs \
-            curl jq python3-pip >/dev/null
-          python3 -m pip install --quiet --no-cache-dir --break-system-packages \
-            pydantic fastapi "uvicorn[standard]" httpx "websockets>=14" PyYAML jsonschema
-
-      - name: Boot CORE from the payload install
-        shell: bash
-        run: |
-          set -eo pipefail  # NOT -u: ROS setup.sh has unbound variables (repo convention)
-          source /opt/ros/jazzy/setup.bash
-          source "$GITHUB_WORKSPACE/release/install/setup.bash"
-          export ROSY_ROBOT_NUMBER=1 RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
-          setsid nohup ros2 run core core > core.log 2>&1 &
-          echo $! > core.pid
-          deadline=$((SECONDS+600))
-          while [ $SECONDS -lt $deadline ]; do
-            grep -q "core up" core.log && grep -q "api server" core.log && break
-            kill -0 "$(cat core.pid)" 2>/dev/null || { echo "core exited early"; tail -40 core.log; exit 1; }
-            sleep 5
-          done
-          grep -q "core up" core.log && grep -q "api server" core.log \
-            || { echo "no 'core up' or 'api server' in 600s"; tail -40 core.log; exit 1; }
-          echo "core up, api server ready"
-          sleep 3
-
-      - name: Probe the web surfaces (D-444 R1)
-        shell: bash
-        run: |
-          set -eo pipefail
-          for path in dashboard pilot console; do
-            code=$(curl -s -o /dev/null -w "%{http_code}" "http://127.0.0.1:8080/$path") \
-              || { echo "curl /$path exited $?"; tail -10 core.log; exit 1; }
-            csp=$(curl -s -D /tmp/hdrs -o /dev/null "http://127.0.0.1:8080/$path" \
-              && grep -ci content-security-policy /tmp/hdrs || true)
-            echo "GET /$path -> $code (csp-header=$csp)"
-            [ "$code" = "200" ] || { echo "FAIL /$path expected 200 got $code"; tail -5 core.log; exit 1; }
-            [ "$csp" -ge 1 ] || { echo "FAIL /$path missing CSP"; exit 1; }
-          done
-
-      - name: Upload the boot log
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: payload-boot-smoke-log
-          path: core.log
-          if-no-files-found: ignore
+    - name: Install resolver tools in the ROS container
+      shell: bash
+      run: |
+        set -euo pipefail
+        apt-get update -qq
+        apt-get install -y -qq curl python3
+    - name: Resolve the payload artifact
+      shell: bash
+      run: |
+        set -euo pipefail
+        [[ "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ ]]
+        [[ "$GH_REPO" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]
+        [[ -z "$BUILD_RUN_ID" || "$BUILD_RUN_ID" =~ ^[0-9]+$ ]]
+        AUTH="Authorization: Bearer $GH_TOKEN"
+        API="https://api.github.com/repos/$GH_REPO"
+        if [ -n "$BUILD_RUN_ID" ]; then
+          RUN="$BUILD_RUN_ID"
+        else
+          RUN=$(curl -sf -H "$AUTH" "$API/actions/workflows/build-native-payload.yml/runs?status=success&head_sha=$EXPECTED_SHA&per_page=1" \
+            | python3 -c 'import json,sys; print(json.load(sys.stdin)["workflow_runs"][0]["id"])')
+        fi
+        [[ "$RUN" =~ ^[0-9]+$ ]]
+        curl -sf -H "$AUTH" "$API/actions/runs/$RUN" > build-run.json
+        curl -sf -H "$AUTH" "$API/actions/runs/$RUN/artifacts" > build-artifacts.json
+        ARTIFACT_ID=$(python3 - "$RUN" "$EXPECTED_SHA" "$GH_REPO" <<'PY'
+        import json, re, sys
+        run, sha, repo = sys.argv[1:]
+        r = json.load(open('build-run.json'))
+        if (str(r.get('id')) != run or r.get('head_sha') != sha
+            or r.get('path') != '.github/workflows/build-native-payload.yml'
+            or r.get('repository', {}).get('full_name') != repo
+            or r.get('head_repository', {}).get('full_name') != repo
+            or r.get('event') != 'workflow_dispatch' or r.get('head_branch') != 'main'
+            or r.get('status') != 'completed' or r.get('conclusion') != 'success'):
+            raise SystemExit('payload run identity/status mismatch')
+        pattern = r'rosy-native-payload-unsigned-[0-9]{4}\.[0-9]{2}\.[0-9]{2}-[0-9]{3}-' + re.escape(sha)
+        a = [a for a in json.load(open('build-artifacts.json'))['artifacts']
+             if re.fullmatch(pattern, a.get('name', '')) and a.get('expired') is False]
+        if len(a) != 1 or type(a[0].get('id')) is not int or a[0]['id'] <= 0:
+            raise SystemExit('one exact unexpired payload artifact required')
+        json.dump({'release_id': a[0]['name'].removeprefix('rosy-native-payload-unsigned-').removesuffix('-' + sha)}, open('selected-artifact.json', 'w'))
+        print(a[0]['id'])
+        PY
+        )
+        [[ "$ARTIFACT_ID" =~ ^[0-9]+$ ]]
+        mkdir payload
+        curl -sfL -H "$AUTH" -o payload/artifact.zip "$API/actions/artifacts/$ARTIFACT_ID/zip"
+        python3 - <<'PY'
+        import pathlib, stat, zipfile
+        with zipfile.ZipFile('payload/artifact.zip') as z:
+            for m in z.infolist():
+                p = pathlib.PurePosixPath(m.filename)
+                if p.is_absolute() or '..' in p.parts or '\\' in m.filename or stat.S_ISLNK(m.external_attr >> 16):
+                    raise SystemExit('unsafe artifact member')
+            z.extractall('payload')
+        PY
+        printf 'RUN=%s\nARTIFACT_ID=%s\n' "$RUN" "$ARTIFACT_ID" >> "$GITHUB_ENV"
+      env:
+        GH_TOKEN: ${{ github.token }}
+        BUILD_RUN_ID: ${{ inputs.build_run_id }}
+    - name: Unpack
+      shell: bash
+      run: |
+        set -euo pipefail
+        python3 - <<'PY'
+        import glob, json, os, pathlib, tarfile
+        archives = glob.glob('payload/*.unsigned.tar.gz')
+        if len(archives) != 1:
+            raise SystemExit('one unsigned archive required')
+        root = pathlib.Path('release')
+        root.mkdir()
+        with tarfile.open(archives[0]) as archive:
+            if any(not (m.isfile() or m.isdir()) for m in archive.getmembers()):
+                raise SystemExit('payload links/devices are not permitted')
+            archive.extractall(root, filter='data')
+        m = json.loads((root / 'manifest.json').read_text())
+        expected_release = json.load(open('selected-artifact.json'))['release_id']
+        if (m.get('schema_version') != 1 or m.get('release_id') != expected_release
+            or m.get('target') != {'board': 'pinky_pro', 'host': 'raspberry-pi-5', 'architecture': 'arm64', 'os_family': 'ubuntu-server', 'os_release': '24.04'}
+            or m.get('runtime') != {'model': 'native-systemd', 'default_mode': 'core'}
+            or m.get('git_revision') != os.environ['EXPECTED_SHA']):
+            raise SystemExit('payload manifest source mismatch')
+        if (root / 'SHA256SUMS.sig').exists():
+            raise SystemExit('this bench accepts unsigned build handoff only')
+        if ((root / 'source-revision.txt').read_text().strip() != os.environ['EXPECTED_SHA']
+            or (root / 'install/.rosy-release').read_text().strip() != expected_release):
+            raise SystemExit('payload embedded source/release mismatch')
+        if not (root / 'install').is_dir():
+            raise SystemExit('native payload install missing')
+        PY
+        (cd release && sha256sum --check --strict --quiet SHA256SUMS)
+    - name: Deps (ROS pins + CI python stack)
+      shell: bash
+      run: |
+        set -euo pipefail
+        apt-get update -qq
+        apt-get install -y -qq ros-jazzy-rmw-cyclonedds-cpp \
+          ros-jazzy-nav2-msgs ros-jazzy-tf2-msgs ros-jazzy-tf2-geometry-msgs \
+          curl jq python3-pip >/dev/null
+        python3 -m pip install --quiet --no-cache-dir --break-system-packages \
+          pydantic fastapi "uvicorn[standard]" httpx "websockets>=14" PyYAML jsonschema
+    - name: Boot CORE from the payload install
+      shell: bash
+      run: |
+        set -eo pipefail  # NOT -u: ROS setup.sh has unbound variables (repo convention)
+        test "$(uname -m)" = aarch64
+        source /opt/ros/jazzy/setup.bash
+        source "$GITHUB_WORKSPACE/release/install/setup.bash"
+        export ROSY_ROBOT_NUMBER=1 RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+        export ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST
+        echo "HOSTED_ARM_PROCESS_OBSERVATION: unsigned bench; not device boot acceptance"
+        setsid nohup ros2 run core core > core.log 2>&1 &
+        echo $! > core.pid
+        deadline=$((SECONDS+600))
+        while [ $SECONDS -lt $deadline ]; do
+          grep -q "core up" core.log && grep -q "api server" core.log && break
+          kill -0 "$(cat core.pid)" 2>/dev/null || { echo "core exited early"; tail -40 core.log; exit 1; }
+          sleep 5
+        done
+        grep -q "core up" core.log && grep -q "api server" core.log \
+          || { echo "no 'core up' or 'api server' in 600s"; tail -40 core.log; exit 1; }
+        echo "core up, api server ready"
+        sleep 3
+    - name: Probe the web surfaces (D-444 R1)
+      shell: bash
+      run: |
+        set -euo pipefail
+        mkdir -p probe
+        for path in dashboard pilot console; do
+          code=$(curl --silent --show-error --max-time 15 -D "probe/$path.headers" -o "probe/$path.body" -w "%{http_code}" "http://127.0.0.1:8080/$path") \
+            || { echo "GET /$path transport failure"; tail -10 core.log; exit 1; }
+          csp=$(grep -ci '^content-security-policy:' "probe/$path.headers" || true)
+          echo "GET /$path -> $code (csp-header=$csp)"
+          [ "$code" = "200" ] || { echo "FAIL /$path expected 200 got $code"; tail -5 core.log; exit 1; }
+          [ "$csp" -ge 1 ] || { echo "FAIL /$path missing GET CSP"; exit 1; }
+        done
+    - name: Upload the boot log
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: payload-boot-smoke-log
+        path: |
+          core.log
+          probe/
+        if-no-files-found: ignore
+    env:
+      GH_REPO: ${{ github.repository }}
+      EXPECTED_SHA: ${{ github.sha }}

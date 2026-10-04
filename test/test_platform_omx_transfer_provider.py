@@ -357,9 +357,16 @@ def test_composed_cell_skill_runs_real_analytic_plan_and_phase_journal(
     assert driver.submissions == []
     from omx_adapter.local_stop import LocalStopBlocked, LocalStopController
     from test_omx_action_api import FakeDriver
+    from test_omx_command_owner import FakeActionClient
+    from omx_adapter.command_owner import ArmCommandOwner
+    from omx_adapter.control_seat_admission import ControlSeatAdmission
 
     reopened_store = ActionStore(tmp_path / "actions.sqlite3")
     reopened_driver = FakeDriver()
+    reopened_owner = ArmCommandOwner(action_runner.control_admission.owner.config,
+                                     FakeActionClient())
+    reopened_admission = ControlSeatAdmission(reopened_owner, reopened_store)
+    reopened_owner.bind_control_admission(reopened_admission)
     reopened_stop = LocalStopController(
         tmp_path / "actions.sqlite3", workcell_id=grant.workcell_id, instance_id=grant.instance_id,
     )
@@ -367,13 +374,6 @@ def test_composed_cell_skill_runs_real_analytic_plan_and_phase_journal(
         with pytest.raises(LocalStopBlocked, match="unresolved local Actions"):
             reopened_stop.rearm(authority_epoch=2, dispatch_generation=8, operator_confirmed=True,
                                 fleet_fence_current=action_runner.current_fence)
-    from omx_adapter.command_owner import ArmCommandOwner
-    from omx_adapter.control_seat_admission import ControlSeatAdmission
-    from test_omx_command_owner import FakeActionClient
-
-    reopened_owner = ArmCommandOwner(action_runner.control_admission.owner.config, FakeActionClient())
-    reopened_admission = ControlSeatAdmission(reopened_owner, reopened_store)
-    reopened_owner.bind_control_admission(reopened_admission)
     reopened_runner = ActionRunner(
         reopened_store, reopened_driver, workcell_id=grant.workcell_id, instance_id=grant.instance_id,
         principal_for_peer=action_runner.principal_for_peer, allowed_peer_uids={1001},

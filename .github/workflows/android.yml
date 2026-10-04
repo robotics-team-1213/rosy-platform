@@ -42,4 +42,4 @@ jobs:
       # Both apps use AGP 8.7.2; the committed Cam wrapper pins Gradle 8.11.1.
       # Select the matrix project explicitly; Pilot has no separate wrapper.
       - name: Unit tests
-        run: bash "$GITHUB_WORKSPACE/operations/ui/cam/gradlew" --project-dir "$GITHUB_WORKSPACE/${{ matrix.app }}" testDebugUnitTest --no-daemon -Prosy.buildRoot="$RUNNER_TEMP/rosy-pilot-build" -Pkotlin.project.persistent.dir="$RUNNER_TEMP/rosy-pilot-kotlin-state"
+        run: bash "$GITHUB_WORKSPACE/operations/ui/cam/gradlew" --project-dir "$GITHUB_WORKSPACE/${{ matrix.app }}" "-Prosy.buildRoot=$RUNNER_TEMP/rosy-android-build" testDebugUnitTest --no-daemon -Pkotlin.project.persistent.dir="$RUNNER_TEMP/rosy-pilot-kotlin-state"

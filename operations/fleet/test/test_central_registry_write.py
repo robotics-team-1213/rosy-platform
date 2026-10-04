@@ -1,116 +1,77 @@
-"""D-454 1c — §10.1 나머지 경로 계약 (PATCH·token/revoke·pending·pairing-tokens).
+"""D-454 central writes remain unmounted until their authority owner is implemented.
 
-PATCH는 등록 저장소의 discovery_name을, token/revoke는 상태 전환을, pending은
-비-active 목록을 돌려준다. pairing-tokens는 501(설계 대기).
+The documented Admin and named EnrollmentService contract is unresolved. Updating
+an enrollment flag is not a token revocation or an approved discovery-identity edit.
+These real-app tests preserve the reviewed GET-only boundary; no device calls.
 """
 
-from __future__ import annotations
+from hashlib import sha256
 
 import pytest
-from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from fleet.server.central_registry import CentralRegistry
-from fleet.server.central_registry_routes import install_central_registry_routes
+from fleet.server.app import create_app
+from fleet.server.enrollment import EnrollmentService
+from fleet.server.enrollment_store import EnrollmentStore, seal
+from fleet.server.task_service import FleetTaskService
+from fleet.server.task_store import FleetTaskStore
+from test_central_registry import _registry
 
 
-class FakeRoster:
-    def robot_ids(self):
-        return ["rosy_01"]
-
-    def source_of(self, robot_id):
-        return "static" if robot_id == "rosy_01" else None
-
-
-class FakeStore:
-    def __init__(self):
-        self.rows_data = {"rosy_01": {"robot_id": "rosy_01", "discovery_name": "old",
-                                      "state": "active"}}
-        self.updates: list[tuple[str, dict]] = []
-
-    def update(self, robot_id, **fields):
-        if robot_id not in self.rows_data:
-            raise KeyError(robot_id)
-        self.rows_data[robot_id].update(fields)
-        self.updates.append((robot_id, fields))
-
-
-class FakeEnrollment:
-    def __init__(self):
-        self._store = FakeStore()
-
-    def listing(self):
-        return {"robots": list(self._store.rows_data.values())}
-
-
-@pytest.fixture
-def client():
-    app = FastAPI()
-    registry = CentralRegistry(FakeRoster())
-    enrollment = FakeEnrollment()
-    install_central_registry_routes(app, registry,
-                                    require_viewer=lambda: "viewer",
-                                    require_operator=lambda: "operator",
-                                    enrollment=enrollment)
-    return TestClient(app), enrollment
-
-
-def test_patch_updates_discovery_name(client):
-    c, enrollment = client
-    response = c.patch("/api/v1/fleet/robots/rosy_01", json={"name": "새 이름"})
-    assert response.status_code == 200
-    assert response.json() == {"robot_id": "rosy_01", "name": "새 이름"}
-    assert enrollment._store.rows_data["rosy_01"]["discovery_name"] == "새 이름"
-
-
-def test_patch_unknown_robot_404(client):
-    c, _ = client
-    assert c.patch("/api/v1/fleet/robots/rosy_99", json={"name": "x"}).status_code == 404
-
-
-def test_patch_empty_name_422(client):
-    c, _ = client
-    assert c.patch("/api/v1/fleet/robots/rosy_01", json={"name": "  "}).status_code == 422
-
-
-def test_token_revoke_marks_needs_new_code(client):
-    c, enrollment = client
-    response = c.post("/api/v1/fleet/robots/rosy_01/token/revoke")
-    assert response.status_code == 200
-    assert response.json()["token_state"] == "revoked"
-    assert enrollment._store.rows_data["rosy_01"]["state"] == "needs_new_code"
-
-
-def test_token_revoke_unknown_404(client):
-    c, _ = client
-    assert c.post("/api/v1/fleet/robots/rosy_99/token/revoke").status_code == 404
-
-
-def test_pending_robots_lists_non_active(client):
-    c, enrollment = client
-    enrollment._store.rows_data["rosy_01"]["state"] = "needs_new_code"
-    body = c.get("/api/v1/fleet/pending-robots").json()
-    assert len(body["pending"]) == 1
-    assert body["pending"][0]["robot_id"] == "rosy_01"
-
-
-def test_pending_robots_empty_when_all_active(client):
-    c, _ = client
-    body = c.get("/api/v1/fleet/pending-robots").json()
-    assert body["pending"] == []
-
-
-def test_pairing_tokens_501(client):
-    c, _ = client
-    response = c.post("/api/v1/fleet/pairing-tokens")
-    assert response.status_code == 501
-    assert response.json()["detail"]["code"] == "NOT_IMPLEMENTED"
-
-
-def test_patch_without_enrollment_501():
-    app = FastAPI()
-    install_central_registry_routes(app, CentralRegistry(FakeRoster()),
-                                    require_viewer=lambda: "v",
-                                    require_operator=lambda: "o")
-    c = TestClient(app)
-    assert c.patch("/api/v1/fleet/robots/rosy_01", json={"name": "x"}).status_code == 501
+@pytest.mark.parametrize("identity", ["anonymous", "viewer", "operator"])
+@pytest.mark.parametrize("robot_id", ["rosy_01", "rosy_02", "not-approved"])
+def test_proposed_central_writes_cannot_change_real_approved_registry(tmp_path, identity, robot_id):
+    registry = _registry()  # Real FleetConsole/SiteRoster/DiscoveryStore; fixture robot clients.
+    key = b"x" * 32
+    store = EnrollmentStore(tmp_path / "enrollment.sqlite3")
+    store.insert({"robot_id": "rosy_02", "hostname": "rosy-02", "discovery_name": "rosy_02",
+                  "address": "10.0.0.8:8080", "token_id": "fixture-token-id", "role": "operator",
+                  "source": "screen_code", "principal_id": "enroller-1", "state": "active"},
+                 seal(key, "fixture-robot-secret", slot="rest", robot_id="rosy_02",
+                      token_id="fixture-token-id"))
+    enrollment = EnrollmentService(store, registry._roster, key=key, discovery=registry._discovery)
+    tasks = FleetTaskService(FleetTaskStore(tmp_path / "fleet.sqlite3"),
+                             robot_ids=set(registry._roster.robot_ids))
+    users = {sha256(f"fixture-{role}".encode()).hexdigest(): {
+        "principal_id": f"{role}-1", "role": role} for role in ("viewer", "operator")}
+    app = create_app(registry._console, central_registry=registry, enrollment=enrollment,
+                     task_service=tasks, site_users=users)
+    proposed = [("PATCH", "/api/v1/fleet/robots/{robot_id}"),
+                ("DELETE", "/api/v1/fleet/robots/{robot_id}"),
+                ("POST", "/api/v1/fleet/robots/{robot_id}/token/revoke"),
+                ("GET", "/api/v1/fleet/pending-robots"),
+                ("POST", "/api/v1/fleet/pending-robots/{robot_id}/approve"),
+                ("POST", "/api/v1/fleet/pairing-tokens")]
+    mounted = app.openapi()["paths"]
+    for method, path in proposed:
+        assert method.lower() not in mounted.get(path, {})
+    before_rows = registry.rows()
+    before_ids = list(registry._roster.robot_ids)
+    before_endpoints = dict(registry._console.registered_endpoints)
+    before_clients = dict(registry._console._clients)
+    before_enrollment = store.rows()
+    before_ciphertext = store.ciphertext("rosy_02")
+    before_audit = store.audit_rows()
+    client = TestClient(app)
+    headers = {} if identity == "anonymous" else {"Authorization": f"Bearer fixture-{identity}"}
+    for method, path in proposed:
+        response = client.request(method, path.format(robot_id=robot_id), headers=headers,
+                                  json={"name": "unapproved discovery alias", "group": "unapproved"})
+        assert response.status_code in (404, 405), (method, path, response.text)
+    assert registry.rows() == before_rows
+    assert registry._roster.robot_ids == before_ids
+    assert registry._console.registered_endpoints == before_endpoints
+    assert registry._console._clients == before_clients
+    # Reload SQLite, not an in-memory fake, to prove durable credentials and identity are unchanged.
+    reopened = EnrollmentStore(store.path)
+    assert reopened.rows() == before_enrollment
+    assert reopened.ciphertext("rosy_02") == before_ciphertext
+    assert reopened.audit_rows() == before_audit
+    assert registry.row("rosy_01")["address_last_seen"] == "10.0.0.7"
+    assert registry.row("not-approved") is None
+    assert all(not robot.calls for robot in before_clients.values())
+    read = client.get("/api/v1/fleet/robots", headers=headers)
+    assert read.status_code == (401 if identity == "anonymous" else 200)
+    if identity != "anonymous":
+        assert read.json() == {"robots": before_rows}
+        assert client.get("/api/v1/fleet/robots/not-approved", headers=headers).status_code == 404

@@ -430,3 +430,9 @@
 - 변경: 실제 모델 SSH의 여섯 번째 TXT profile과 공용 PeerObservation/PeerSummary/PeerCatalogue를 추가한다. 발견·승인·접속 검증을 분리하고 credential 및 listener 없는 앱의 가짜 endpoint를 거부한다. mDNS의 .local/RFC1918와 승인 directory의 DNS/VPN·현재 미해결 주소를 구분한다. API Ref v1.94, envelope 1.0 유지.
 - 검증: metadata RED collection(미구현) 뒤 focused252 passed/2 Linux skipped. directory 신원·미해결·VPN 및 mDNS 외부 host 거부 회귀12 PASS. 독립 source review에서 발견한 directory 제한을 수정했다.
 - gate 변화: 없음; provider/consumer 구현과 CI·컨테이너 namespace·실제 모델/로봇·다른 망 수락은 별도다. 이 focused 계약 검증으로 전체 module gate를 새로 승격하지 않는다.
+
+## 2026-10-04 · uncommitted · feat(protocol): 공개 LAN rooms typed snapshot
+
+- 변경: access의 RoomDiscoveryHint/SiteRoomsSnapshot을 schemas로 재노출한다. 공개 로봇 힌트 기존5필드와64행 상한·extra 금지·port/FQDN 형식을 API Ref1.98과 맞춘다. CORE 성공응답은 실제 model 검증을 거친다.
+- 증거: producer의 canonical service/role/TLS/identity 분류는 그대로이며 body에 secret/승인/제어 권한을 추가하지 않는다. 실제 producer·구조 검사는 root 수행 중이다.
+- gate 변화: 통신 typed 계약. 신원 승인·제어 포트·장치 수락 변경 없음.

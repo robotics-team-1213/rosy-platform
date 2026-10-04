@@ -10,6 +10,7 @@ export function renderStructuredDocument(kind, document, root, change) {
   }
   function field(container, path, title, type = 'number', choices = null) {
     const label = window.document.createElement('label'); label.textContent = title;
+    if (type === 'checkbox') label.className = 'ui-check';
     const input = window.document.createElement(choices ? 'select' : 'input');
     input.className = 'ui-field'; input.dataset.path = path.join('.');
     if (choices) {
@@ -67,7 +68,8 @@ export function renderStructuredDocument(kind, document, root, change) {
     const enabled = window.document.createElement('input'); enabled.type = 'checkbox';
     enabled.className = 'ui-field';
     enabled.id = 'recipe-sheet-enabled'; enabled.checked = Object.hasOwn(document, 'slip_sheet');
-    const label = window.document.createElement('label'); label.className = 'ui-check'; label.textContent = '슬립시트 설정 포함';
+    const label = window.document.createElement('label'); label.className = 'ui-check';
+    label.textContent = '슬립시트 설정 포함';
     enabled.addEventListener('change', () => change(draft => {
       if (enabled.checked) draft.slip_sheet = draft.schema === 'rosy_cell.recipe/2' ?
         {handling: 'operator', thickness: null} : {thickness: null, station: ''};

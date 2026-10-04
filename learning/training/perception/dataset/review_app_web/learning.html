@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="ko" data-theme="dark">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Rosy 개발 — 학습 작업</title><link rel="stylesheet" href="/common/tokens.css"><script src="/common/theme.js"></script>
+<link rel="stylesheet" href="/common/components.css"><link rel="stylesheet" href="/app.css">
+<script type="module" src="/learning.js"></script></head>
+<body><a class="skip-link" href="#learning-main">학습 작업으로 이동</a>
+<ui-shell grammar="procedure"><ui-topbar><ui-brand><b>ROSY</b></ui-brand><h1>학습 작업</h1><span data-spacer></span>
+<a href="/">사진 검수</a><label>화면 <select id="theme" class="ui-field"><option value="dark">어둡게</option><option value="light">밝게</option></select></label></ui-topbar>
+<main id="learning-main" class="learning-main" tabindex="-1">
+<p class="eyebrow">LEARNING WORKSPACE</p><h2>검수부터 결과 확인까지</h2>
+<p>기존 학습 도구의 결과를 연결해 진행 상황과 다음 작업을 확인합니다. 연결 목록은 자동 저장됩니다.</p>
+<section class="learning-section"><h2>사진 검수</h2><p id="review-counts" role="status">불러오는 중</p><a href="/">Pinky 사진·박스 검수 열기</a>
+<p class="quiet">객체 승인과 영역 마스크 승인은 별개입니다. 학습 자료 준비 후 세션 분리와 고정 평가 제외를 확인하세요.</p></section>
+<section class="learning-section"><h2>작업 결과 연결</h2><p>이미 실행한 작업의 결과 폴더를 한 번 연결하세요. 기존 파일은 수정하지 않습니다.</p>
+<form id="register" class="learning-form"><label>작업 종류 <select id="kind" class="ui-field" required></select></label>
+<label>작업 이름 <input id="name" class="ui-field" maxlength="100" required placeholder="예: 독립 세션 평가"></label>
+<label>결과 폴더 <input id="path" class="ui-field" required placeholder="이 PC의 결과 폴더 전체 경로"></label>
+<p id="expected-files" class="quiet"></p><ui-button id="connect" kind="primary">결과 연결</ui-button></form>
+<p id="notice" role="status" aria-live="polite"></p><p id="learning-error" role="alert"></p></section>
+<section class="learning-section"><div class="toolbar"><h2>연결한 작업</h2><span data-spacer></span>
+<label>종류 <select id="kind-filter" class="ui-field"><option value="all">전체</option></select></label><ui-button id="refresh" kind="quiet">최신 결과 확인</ui-button></div>
+<p id="updated" class="quiet"></p><div id="jobs" aria-live="polite"></div></section>
+<details class="learning-section"><summary>지원 기능과 다음 작업</summary><div id="capabilities"></div>
+<p class="quiet">새 자동 추론·웹 학습 실행·픽셀 편집·CVAT 서버 연결·정책 승격 화면은 아직 지원하지 않습니다. 기존 CLI 작업 결과를 이 화면에서 확인할 수 있습니다.</p></details>
+</main></ui-shell></body></html>

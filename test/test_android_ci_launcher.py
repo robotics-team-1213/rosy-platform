@@ -22,11 +22,13 @@ def test_each_matrix_project_reaches_wrapper_java_with_its_own_unit_task(tmp_pat
     java = tmp_path / 'java home' / 'bin' / 'java'
     java.parent.mkdir(parents=True)
     probe = tmp_path / 'arguments.txt'
+    runner_temp = tmp_path / 'runner temp'
     java.write_text('#!/bin/sh\nprintf "%s\\n" "$@" > "$GRADLE_PROBE"\n', encoding='utf-8', newline='\n')
     java.chmod(0o700)
     env = {**os.environ, 'GITHUB_WORKSPACE': ROOT.as_posix(),
+           'RUNNER_TEMP': runner_temp.as_posix(),
            'JAVA_HOME': java.parent.parent.as_posix(), 'GRADLE_PROBE': probe.as_posix(),
-           'JAVA_OPTS': '', 'GRADLE_OPTS': '', 'RUNNER_TEMP': (tmp_path / 'runner temp').as_posix()}
+           'JAVA_OPTS': '', 'GRADLE_OPTS': ''}
     subprocess.run([bash, '-n', '-c', command], env=env, check=True, timeout=10)
     subprocess.run([bash, '-c', command], cwd=ROOT / app, env=env, check=True, timeout=10)
     args = probe.read_text('utf-8').splitlines()
@@ -35,8 +37,9 @@ def test_each_matrix_project_reaches_wrapper_java_with_its_own_unit_task(tmp_pat
     assert 'org.gradle.wrapper.GradleWrapperMain' in args
     selected = Path(args[args.index('--project-dir') + 1])
     assert selected.samefile(ROOT / app)
+    assert [a for a in args if a.startswith('-Prosy.buildRoot=')] == [
+        f'-Prosy.buildRoot={runner_temp.as_posix()}/rosy-android-build']
     assert 'testDebugUnitTest' in args and '--no-daemon' in args
     assert not any(a in args for a in ('--dry-run', '--exclude-task', '-x'))
 
-    assert f'-Prosy.buildRoot={env["RUNNER_TEMP"]}/rosy-pilot-build' in args
-    assert f'-Pkotlin.project.persistent.dir={env["RUNNER_TEMP"]}/rosy-pilot-kotlin-state' in args
+    assert f'-Pkotlin.project.persistent.dir={runner_temp.as_posix()}/rosy-pilot-kotlin-state' in args

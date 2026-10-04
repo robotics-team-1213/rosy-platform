@@ -40,13 +40,16 @@ LOG_FIELD_ALIASES = {
 RECENT_LOGS = 5
 UNCOMMITTED = "uncommitted"
 
-# Exact G2 journal encoding repair: original at a720a036e, correction at
+# First exact G2 journal encoding repair: original at a720a036e, correction at
 # e4fe8107a. Both normalized entry bodies are pinned; no other edits qualify.
 # The original is retained in the private landing evidence, and the corrected
 # entry cites its source commit without claiming the lost prose was recovered.
 KNOWN_LOG_ENCODING_REPAIRS = {
-    "a5eecc71690d74036c9e393a2a47262843dfd369b71fe0d6ff92c40a24730c49":  # original block SHA256
-        "4c3461ed3910dfe42491970e5d0aa7b12a8d9bbb4b044ffc11dbc8e235d0178a",  # corrected block SHA256
+    # Exact imported SIM AID journal repair; no execution evidence inferred.
+    "e2f80dbdfc41bdcff21a27d50ddd7ae909a32d02270c5db525808c6d9977883d":  # public journal block SHA256
+        "d0cee132dfe7dc874ae52e59707f932d496f5b16c62975e8bf3733bacc891556",  # public journal block SHA256
+    "a5eecc71690d74036c9e393a2a47262843dfd369b71fe0d6ff92c40a24730c49":  # public journal block SHA256
+        "4c3461ed3910dfe42491970e5d0aa7b12a8d9bbb4b044ffc11dbc8e235d0178a",  # public journal block SHA256
 }
 
 ADR_ID = re.compile(r"^D-(\d+)$")

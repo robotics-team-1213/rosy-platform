@@ -44,8 +44,8 @@
 
 ## 최근 기록
 
+- 2026-10-04 · uncommitted · fix(web): register learning review canvas and development titles
+- 2026-10-04 · uncommitted · feat(web): Pinky 검수 표면 등록
 - 2026-10-04 · uncommitted · feat(test): D-329 전환 4 — matrix.json 스키마와 보존 시험, 40rem 정식 경계
 - 2026-10-04 · uncommitted · fix(ui): 공용 템플릿 작은 상단 행
 - 2026-10-04 · uncommitted · fix(ui): 겹치는 정지 컨트롤의 실제 클릭 영역 보존
-- 2026-10-04 · uncommitted · feat(ui): 작업 상태의 공용 한국어 이름
-- 2026-10-04 · uncommitted · feat(ui): 생존 범위로 취소하는 공용 확인

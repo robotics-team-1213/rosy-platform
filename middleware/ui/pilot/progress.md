@@ -16,9 +16,10 @@ gates:
     state: HOLD
     blocker: "OMX 관절·그리퍼·취소의 Gazebo action/readback은 docs/validation/pilot-omx-gazebo-2026-10-01/에서 확인. Gazebo 작업대 영상·시연 기록 15프레임과 실제 LeRobot v3 재독출도 통과. 그리퍼 정밀 도달·전체 재시작 회복·Pinky 재측정은 남음"
   ARTIFACT:
-    state: GO
-    cmd: "gh workflow run 'Payload boot smoke (arm64)' --ref main; gh run watch <run-id> -R livsbittt/rosy-os"
-    evidence: "share/pilot 설치: 서명 payload 2026.10.04-034 안 관측 + arm64 러너 부팅 GET /pilot 200+CSP (payload-boot-smoke run 37200780702, D-444 P1.2)"
+    state: HOLD
+    cmd: "gh workflow run payload-boot-smoke.yml -R livsbittt/rosy-os --ref af0b3211384c9a8f2e5abbc2863c2fbcb54b0ca3 -f build_run_id=37189180389; gh run watch <issued-run-id> -R livsbittt/rosy-os"
+    evidence: "share/pilot: 서명 payload 2026.10.04-034 설치 관측. 무서명 동일 빌드(source dd159ab3361739e41c105dcef533bd0e1fd8f614)의 hosted ARM GET /pilot 200+CSP(run 37200780702, workflow source af0b3211384c9a8f2e5abbc2863c2fbcb54b0ca3). cmd는 이 역사적 벤치 재현이며 현재 통합 후보 수용을 증명하지 않는다"
+    blocker: "D-444 R1의 서명 release를 탄 기기에서 GET /pilot 200+CSP는 미확인. hosted ARM 무서명 벤치는 이를 대체하지 않는다"
   DEVICE:
     state: HOLD
     blocker: "실기 Pinky 에서 페달 hold-해제가 실제 정지로 이어지는 확인 전"

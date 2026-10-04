@@ -1,8 +1,8 @@
 """Capture a Fleet-console + games-board round (D-359 remainder of §7.8).
 
 Serves the real Fleet app (FastAPI + two fake robots) and the real games
-match-board preview through Playwright route interception and local loopback HTTP,
-with no ROS. Saves one screenshot per surface × viewport, plus ``report.json``
+match-board preview through Playwright route interception, with no network
+and no ROS. Saves one screenshot per surface × viewport, plus ``report.json``
 (data-theme, first responses, page errors).
 
 Declared round: console × {1920×1080, 390×844, 320×568} + games ×
@@ -15,7 +15,8 @@ Examples:
         --out-dir docs/validation/fleet-games-capture-2026-10-04
 """
 
-# Cross-module measurement belongs in workspace tools (tools/AGENTS.md).
+# Cross-module observation tool; not installed in the Fleet runtime.
+# Historical capture output is not a UX acceptance gate (see its HOLD receipt).
 
 from __future__ import annotations
 
