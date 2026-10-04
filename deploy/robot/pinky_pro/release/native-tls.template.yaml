@@ -1,0 +1,8 @@
+# Public path template only. The operator helper never loads this file.
+# Private CA/key generation stays on the claimed device during stopped maintenance.
+network:
+  connection_mode: paired
+  tls:
+    cert_file: /etc/rosy/tls/fullchain.pem
+    key_file: /etc/rosy/tls/leaf.key
+    ca_file: /etc/rosy/tls/ca.pem

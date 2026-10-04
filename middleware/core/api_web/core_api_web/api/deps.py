@@ -192,7 +192,10 @@ def expires_before(first: Optional[str], second: Optional[str]) -> Optional[str]
 
 def token_alive(config: dict, token_id: str) -> bool:
     """그 id 의 토큰이 아직 있고 만료되지 않았는가 (WebSocket 재확인, 등록 코드 발급자)."""
-    return any(item["id"] == token_id and not is_expired(item) for item in auth_entries(config))
+    from .peer_pairing.receiver_session_policy import session_allowed
+    records = auth_entries(config)
+    return any(item["id"] == token_id and not is_expired(item) and session_allowed(config, item, records)
+               for item in records)
 
 
 def is_durable_admin(record: dict[str, Any]) -> bool:
@@ -203,7 +206,7 @@ def is_durable_admin(record: dict[str, Any]) -> bool:
 def _record(*, id: str, role: str, digest: str, label: str = "",
             created_at: Optional[str] = None, legacy: bool = False,
             expires_at: Optional[str] = None, source: str = "manual",
-            paired_via: Optional[str] = None) -> dict[str, Any]:
+            paired_via: Optional[str] = None, peer_binding=None) -> dict[str, Any]:
     return {
         "id": id,
         "role": role if role in ROLE_RANK else "viewer",
@@ -214,6 +217,7 @@ def _record(*, id: str, role: str, digest: str, label: str = "",
         "expires_at": str(expires_at) if expires_at is not None else None,
         "source": source if source in TOKEN_SOURCES else "manual",
         "paired_via": str(paired_via) if paired_via is not None else None,
+        **({"peer_binding": peer_binding} if peer_binding is not None else {}),
     }
 
 
@@ -244,6 +248,7 @@ def _configured_records(config: dict) -> list[dict[str, Any]]:
                 expires_at=item.get("expires_at"),
                 source=str(item.get("source") or "manual"),
                 paired_via=item.get("paired_via"),
+                peer_binding=(item["peer_binding"] if item.get("peer_binding") is not None else {"invalid": True}) if "peer_binding" in item else None,
             ))
         elif item.get("token"):
             records.append(_from_legacy_plaintext(
@@ -308,6 +313,8 @@ def stored_token_entries(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
             entry["expires_at"] = item["expires_at"]
         if item.get("paired_via") is not None:
             entry["paired_via"] = item["paired_via"]
+        if item.get("peer_binding") is not None:
+            entry["peer_binding"] = item["peer_binding"]
         stored.append(entry)
     return stored
 
@@ -378,9 +385,11 @@ def authenticate(config: dict, bearer: Optional[str], query_token: Optional[str]
     if not token:
         raise ApiError("UNAUTHORIZED", 401, "missing or invalid token")
     presented = token_digest(token)
-    for item in auth_entries(config):
+    from .peer_pairing.receiver_session_policy import session_allowed
+    records = auth_entries(config)
+    for item in records:
         if hmac.compare_digest(presented, item["digest"]):
-            if is_expired(item):
+            if is_expired(item) or not session_allowed(config, item, records):
                 break
             _LAST_USED[item["id"]] = _utc_now()
             return AuthContext(token_id=item["id"], role=item["role"], source=item["source"],

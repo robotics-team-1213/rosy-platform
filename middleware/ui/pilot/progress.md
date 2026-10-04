@@ -37,6 +37,8 @@ plans:
 
 ## 지금 상태
 
+- 2026-10-05 D-456: Native Pilot의 LAN 선택·수신 승인·암호화 승인 기록·신원 증명 재연결은 SOURCE/LOCAL 구현과 실제 Kotlin/JVM 81 PASS를 확인했다. 새 페어링의 서명 APK·실제 승인 화면·DHCP/장기 오프라인 재접속은 미확인이다. 기존 DEVICE GO는 D-444의 사용자 확인 범위이며 새 페어링 수용을 뜻하지 않는다.
+
 - 골격 착지: `/pilot` 라우트·web_common ui-shell 표면·`stick.js` 순수 입력 매핑.
 - 앱은 같은 출처의 `/api/v1`·`/ws/*` 만 말한다(D-323, CORE SRS §1.3).
 - 1차 기기는 현장 태블릿(Lenovo 1200×2000) — 가로 모드 기준 레이아웃.

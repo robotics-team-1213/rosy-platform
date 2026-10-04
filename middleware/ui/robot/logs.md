@@ -951,3 +951,8 @@
 - Change: Add the existing payload-boot-smoke workflow dispatch command to the ARTIFACT progress entry; preserve its state and evidence. No screen or runtime code changed.
 - Evidence: GitHub run 37200780702 was independently read back as completed/success at commit af0b3211384c9a8f2e5abbc2863c2fbcb54b0ca3. This records the command missing from the existing GO entry; it does not repeat the observation or claim device acceptance.
 - Gate: Metadata correction only; existing physical and field gates are unchanged.
+## 2026-10-05 · uncommitted · feat(robot): 기존 관리자 화면에서 LAN 연결 승인
+
+- 변경: 정상 /device 보안 절차와 기존 대시보드에 공용 수신 승인 컴포넌트를 연결한다. 요청 이름·4문자 확인값·역할·키와 공용 CA 확인값을 표시하고 명시 승인/거절·연결 기억·처리 결과를 제공한다. 세션/표면 lifetime이 끝나면 늦은 응답과 쓰기를 취소한다.
+- 증거: 실제 Chromium에서 공용 dialog와 승인 컴포넌트 3 PASS; 서버·저장소 통합 32 PASS. 브라우저 fixture는 실제 상대 화면이나 LAN TLS 수용이 아니다. 공용 tokens/components와 같은 출처 API·CSP를 사용한다.
+- gate 변화: 이 컴포넌트 SOURCE/LOCAL 증거. 기기 승인은 자동 조종·정지 해제·mode 변경을 시작하지 않는다. 실제 앱과 로봇 화면의 최초 승인·오프라인 재연결은 별도 확인한다.

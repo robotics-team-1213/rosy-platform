@@ -850,3 +850,9 @@
 - 변경: 정상 IDLE/STANDBY 기준을 600/1800초로 늘리고 warning60/300, critical/deep30/120초와 min을 취한다. YAML override·API effective timers에 연결한다. 기존 이동·정보 hold·disabled와 배터리 정지/종료 권한을 유지한다.
 - 증거: 주입 시계·설정 parser RED3 failed, 전원/배터리/bridge GREEN180 passed. 구조 재판정은 docs/plans/2026-10-04-power-health-and-wake.md에 기록한다.
 - gate 변화: SOURCE/LOCAL. 기기 소비전력·물리 wake·배포 검증은 별도다.
+
+## 2026-10-05 · uncommitted · feat(core): 수신 승인용 신뢰 anchor와 보조 runtime
+
+- 변경: 기존 TLS cert/key 설정에 선택적 공용 CA를 더하고 실제 hostname·CA·leaf chain을 검증한다. device CORE는 현재 서명 release의 고정 암호화 wheel 경로만 활성화하며 ROS/learning 전역 Python과 D-189 base runtime 해시는 유지한다.
+- 증거: 실제 CA·hostname 실패와 보조 import-root·쓰기 권한·startup hook 거부를 포함한 통합 32 PASS. 호스트 시험은 native ARM import나 로봇 TLS 설치 증거가 아니다.
+- gate 변화: SOURCE/LOCAL만. 외부 client가 ROS를 직접 말하거나 최종 cmd_vel·정지·제어 lease를 우회하는 경로를 추가하지 않는다. ARTIFACT/DEVICE/FIELD 확인은 남아 있다.

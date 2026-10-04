@@ -2513,3 +2513,8 @@
 - Change: allow60 seconds only for Git Bash startup on Windows in the Android fake-Java launcher test; Linux remains10 seconds, and all jar/project/build/Kotlin/unit-task assertions remain intact. Retain main independently-reviewed ACT helper, Fleet cell/stop header assertions and local review-tool classification. Production workflows, updater restart limits and robot authority are unchanged.
 - Evidence: preceding hook had3238 passes/259 skips and exactly2 Windows10-second subprocess timeouts. Same environment reproduced1 pass/1 timeout; corrected launcher2 passed, with independent2-pass verification and approval. Final normal hook and exact CI follow.
 - gate 변화: host test reliability repair only; no production acceptance claim.
+## 2026-10-05 · uncommitted · feat(pairing): 서명 payload의 수신 암호화와 TLS 유지보수
+
+- 변경: D-456 CORE 수신 승인에 필요한 hash-locked 암호화 wheel을 서명 release의 읽기 전용 보조 경로에 설치한다. 기존 base Python pins는 유지한다. root 전용 TLS 도구는 검증된 현재 release·유효한 유지보수 claim·정지된 runtime에서만 기존 설정을 보존하며 실행한다.
+- 증거: TLS 도구 Linux 검사 30 PASS·DrvFS 권한 검사 1 SKIP, 최종 hostname 보완 검사 3 PASS. native 패키징 관련 263 PASS·1 SKIP 뒤 읽기 경로 분류와 새 스크립트 실행 비트 누락을 수정하고 실패 두 건을 재검사해 2 PASS. 실 POSIX 소유권·ARM 빌드·장치 TLS 설치는 아직 확인하지 않았다.
+- gate 변화: 이번 변경의 SOURCE/LOCAL 증거만 추가한다. 서명 배포와 실제 LAN 접속은 미완료다.

@@ -162,6 +162,18 @@ sha256sum "$SCRIPT_DIR/device-python-requirements.txt" | awk '{print $1}' \
 printf '%s\n' "$RELEASE_ID" > "$INSTALL_ROOT/.rosy-release"
 cp "$SCRIPT_DIR/required-ros-packages.txt" "$RELEASE_ROOT/required-ros-packages.txt"
 mkdir -p "$RELEASE_ROOT/deploy/robot"
+# D456 auxiliary import runtime is signed inside the payload; base runtime stays unchanged.
+mkdir -p "$RELEASE_ROOT/deploy/robot/release"
+cp "$SCRIPT_DIR/../release/native_tls_provision.py" "$RELEASE_ROOT/deploy/robot/release/native_tls_provision.py"
+CRYPTO_REQUIREMENTS="$SCRIPT_DIR/receiver-crypto-requirements.txt"
+[[ "$(sha256sum "$CRYPTO_REQUIREMENTS" | awk '{print $1}')" == "$(lock_value receiver_crypto requirements_sha256)" ]] \
+    || fail "receiver crypto requirements differ from input lock"
+CRYPTO_WHEELS="$VENDOR_WORK/receiver-wheels"
+mkdir -p "$CRYPTO_WHEELS"
+python3 -m pip download --require-hashes --no-deps --only-binary=:all: \
+    --dest "$CRYPTO_WHEELS" -r "$CRYPTO_REQUIREMENTS"
+bash "$SCRIPT_DIR/install-receiver-crypto.sh" "$CRYPTO_REQUIREMENTS" "$CRYPTO_WHEELS" "$RELEASE_ROOT"
+
 "$NATIVE_RUNTIME_SOURCE/install-native-runtime.sh" "$RELEASE_ROOT/deploy/robot/native"
 
 # Stage the immutable image-owned bootstrap tools separately from the

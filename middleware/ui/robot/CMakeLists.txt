@@ -11,6 +11,7 @@ install(FILES
   styleguide.css
   styleguide.js
   app.js
+  peer-approval.js
   entry-router.js
   dashboard-entry.js
   dashboard-entry.css

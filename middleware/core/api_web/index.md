@@ -30,8 +30,8 @@
 
 ## 최근 기록
 
+- 2026-10-05 · uncommitted · feat(auth): LAN 수신 승인과 키 결속 로그인
 - 2026-10-04 · uncommitted · docs(api): D-457 site display contract v1.97
 - 2026-10-04 · uncommitted · fix(api): 실제 계약 판과 rooms 내부 저장 표현 정합
 - 2026-10-04 · uncommitted · fix(discovery): bounded LAN rooms와 TLS/FQDN 계약 정합
 - 2026-10-04 · uncommitted · feat(api): D-343 로비 잔여 — `GET /api/v1/site/rooms`
-- 2026-10-04 · uncommitted · fix(api): 현재 문서 버전 설명 정렬

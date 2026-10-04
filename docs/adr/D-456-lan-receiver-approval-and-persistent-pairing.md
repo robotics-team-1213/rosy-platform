@@ -96,3 +96,25 @@ SOURCE·LOCAL·CI·서명 배포·실기 두 화면 확인을 구분한다.
 근거: D-193, D-341, D-361, D-432, D-452;
 [Android Companion device pairing](https://developer.android.com/develop/connectivity/bluetooth/companion-device-pairing),
 [ADB Wi-Fi architecture](https://android.googlesource.com/platform/packages/modules/adb/+/HEAD/docs/dev/adb_wifi.md).
+
+
+## 2026-10-05 CORE 구현 slice와 남은 수용 경계
+
+공유 typed 계약은 API Reference v1.100과 `core_common.protocol.peer_pairing`에 둔다.
+기존 CORE overlay의 한 atomic commit을 사용하며 별도 SQLite를 도입하지 않는다.
+명시적 연결 기억은 실제 현재 issuer record의 nonlegacy·nondevelopment·card/manual·
+만료 없는 administrator를 `is_durable_admin`으로 확인한 경우만 persistent 관계로
+허용한다. 역할 이름만으로 영구 권한을 추론하지 않는다. 임시 issuer는 최대 168시간과
+issuer expiry를 함께 적용하고 관계와 단기 token의 수명을 분리한다.
+
+원래 issuer ID/digest/source/named principal과 client/receiver P256 key, generation을
+보관한다. 자식 token에 명시적 peer_binding을 저장하여 관계 누락/손상·폐기·issuer
+폐기·키/권한 변경에 HTTP와 live socket 모두 fail closed한다. expired/revoked 관계는
+삭제하지 않지만 status의 authorization_available을 false로 반환한다.
+
+선택적 network.tls.ca_file은 실제 TLS provisioning 소유이며 기존 listener의
+cert/key/chain/hostname 검증과 결합한다. 인증된 수신 화면의 실제 CA 지문과 D-341
+anonymous first-contact/LeafBinding/물리 비교 후에만 credential 흐름을 진행한다.
+4자리 번호는 요청 비교용이다. CORE 후보의 QR renderer, HTTP-only 기기 TLS 설치,
+Native Pilot/Fleet/Cam 결합, native ARM crypto 실행과 signed DEVICE 수용은 별도이며
+이 source slice로 전체 D-456 목표 완료를 주장하지 않는다.
