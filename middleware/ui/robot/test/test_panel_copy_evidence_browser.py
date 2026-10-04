@@ -401,6 +401,7 @@ def test_camera_fullscreen_keeps_owned_stop_feedback_and_record_stop(panel):
     assert page.locator('#vision-record-stop').is_visible()
     page.locator('#vision-expand').click()
     page.wait_for_function("() => document.fullscreenElement?.id==='vision-stage'")
+    page.wait_for_function("() => document.fullscreenElement?.contains(ownedStop)&&document.fullscreenElement.contains(ownedNotice)&&document.fullscreenElement.contains(ownedRecordStop)", timeout=5000)
     assert page.evaluate("() => document.fullscreenElement.contains(ownedStop)&&document.fullscreenElement.contains(ownedNotice)&&document.fullscreenElement.contains(ownedRecordStop)")
     assert page.locator('#shell-estop').count() == 1
     assert page.locator('#vision-record-stop').is_visible()
@@ -410,6 +411,7 @@ def test_camera_fullscreen_keeps_owned_stop_feedback_and_record_stop(panel):
     assert page.locator('#shell-notice').inner_text() == 'fixture stop received'
     page.locator('.surface-camera-close').click()
     page.wait_for_function('() => document.fullscreenElement===null')
+    page.wait_for_function("() => ownedStop.parentElement.localName==='ui-topbar' && ownedNotice.parentElement===ownedStop.parentElement && !document.querySelector('#vision-stage').contains(ownedRecordStop)", timeout=5000)
     assert page.evaluate("() => ownedStop.parentElement.localName==='ui-topbar' && ownedNotice.parentElement===ownedStop.parentElement && !document.querySelector('#vision-stage').contains(ownedRecordStop)")
     page.wait_for_function("() => document.activeElement.id==='vision-expand'")
 
