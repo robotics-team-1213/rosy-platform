@@ -18,6 +18,7 @@ WEB_ROOT = Path(__file__).resolve().parent / "web"
 
 CONSOLE_ASSETS = {
     "cell.js": "application/javascript",
+    "cell-document-editor.js": "application/javascript",
     "cell.css": "text/css",
     "styles.css": "text/css",
     "console.js": "application/javascript",

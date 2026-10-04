@@ -1,4 +1,5 @@
 import {createFleetClient} from '/common/fleet-client.js';
+import {renderStructuredDocument} from '/console/assets/cell-document-editor.js';
 
 const $ = id => document.getElementById(id);
 const request = createFleetClient({credential: () => $('credential').value, origin: location.origin});
@@ -23,6 +24,10 @@ function refreshControls() {
     field.disabled = busy;
     field.setAttribute('reason', busy ? '요청 처리 중 · 입력 잠시 잠금' : '');
     field.setAttribute('aria-describedby', 'notice');
+  }
+  for (const control of document.querySelectorAll('[data-document-edit]')) {
+    control.disabled = busy;
+    control.setAttribute('reason', busy ? '요청 처리 중' : '');
   }
   for (const id of ['connect', 'recipe-load', 'cell-load', 'read-job', 'new-proposal']) {
     $(id).disabled = busy;
@@ -75,6 +80,7 @@ function loaded(kind, revision) {
   else cellFields(revision.document);
 }
 function cellFields(cell) {
+  structuredFields('cell', cell);
   $('cell-fields').replaceChildren();
   for (const [path, title] of [
     [['kinematics_revision'], '장치 URDF revision'],
@@ -100,6 +106,7 @@ function cellFields(cell) {
   }
 }
 function recipeFields(recipe) {
+  structuredFields('recipe', recipe);
   $('recipe-fields').replaceChildren();
   for (const [field, title, unit, parent] of [
     ['length', '박스 길이', 'm', 'box'], ['width', '박스 폭', 'm', 'box'],
@@ -125,12 +132,27 @@ function recipeFields(recipe) {
     label.append(input); $('recipe-fields').append(label);
   }
 }
+function structuredFields(kind, value) {
+  renderStructuredDocument(kind, value, $(kind + '-structure'), (mutate, redraw = false) => {
+    if (busy) return;
+    editEpoch++; invalidate();
+    try {
+      const draft = JSON.parse($(kind + '-document').value);
+      mutate(draft);
+      $(kind + '-document').value = JSON.stringify(draft, null, 2);
+      if (redraw) structuredFields(kind, draft);
+      $(kind + '-revision').textContent = '수정한 문서 · 저장 전';
+      refreshControls();
+    } catch { $('notice').textContent = '문서 구조를 확인한 뒤 불러오세요.'; }
+  });
+  refreshControls();
+}
 for (const kind of ['recipe', 'cell']) {
   for (const part of ['id', 'document']) $(kind + '-' + part).addEventListener('input', () => {
     editEpoch++; invalidate();
     if (part === 'document') {
       try { const document = JSON.parse($(kind + '-document').value); if (kind === 'recipe') recipeFields(document); else cellFields(document); }
-      catch { $(kind + '-fields').replaceChildren(); }
+      catch { $(kind + '-fields').replaceChildren(); $(kind + '-structure').replaceChildren(); }
     }
   });
   $(kind + '-file').addEventListener('change', async () => {

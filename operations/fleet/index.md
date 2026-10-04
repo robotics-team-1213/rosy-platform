@@ -66,6 +66,8 @@
 - [2026-10-01-model-tool-contract-implementation.md](../../docs/plans/2026-10-01-model-tool-contract-implementation.md)
 - [2026-10-02-platform-architecture-v02-migration.md](../../docs/plans/2026-10-02-platform-architecture-v02-migration.md)
 - [2026-10-04-cell-isaac-implementation.md](../../docs/plans/2026-10-04-cell-isaac-implementation.md)
+- [2026-10-04-cell-manual-slip-sheet-checkpoints.md](../../docs/plans/2026-10-04-cell-manual-slip-sheet-checkpoints.md)
+- [2026-10-04-cell-structured-draft-editing.md](../../docs/plans/2026-10-04-cell-structured-draft-editing.md)
 - [2026-10-04-d442-omx-preempt-recovery.md](../../docs/plans/2026-10-04-d442-omx-preempt-recovery.md)
 - [2026-10-04-d443-signal-supervision.md](../../docs/plans/2026-10-04-d443-signal-supervision.md)
 
@@ -79,8 +81,8 @@
 
 ## 최근 기록
 
+- 2026-10-04 · uncommitted · feat(cell): 구조화된 초안 입력 확장
 - 2026-10-04 · uncommitted · refactor(fleet): main 통합 시 HTTP composition 경계 유지
 - 2026-10-04 · uncommitted · feat(power): fresh battery evidence and idle saving
 - 2026-10-04 · 6485f8a39 · refactor(ui): 통합 명렬 카드의 표현 재사용
 - 2026-10-04 · uncommitted · fix(web): 관제 확인과 명령의 공통 소유권
-- 2026-10-04 · uncommitted · fix(web): 관제 뷰포트와 주소 확인의 작업 소유권

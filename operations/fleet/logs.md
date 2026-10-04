@@ -1613,3 +1613,10 @@
 - 변경: main의 stuck resolver·access·power 계약과 Cell workspace를 함께 보존했다. API Ref Cell additive 항목을 v1.93으로 올렸고 대응 metadata/version pin을 맞췄다. 동일 audit middleware를 site_auth, 동일 event fanout을 hub/server, healthz를 static route owner로 옮겨 app composition을 594줄로 유지했다.
 - 증거: 독립 source 검토는 auth/audit/fanout/health 동작 보존과 optional dependency guard를 확인했다. 구조 count Fleet 30621/schema 1319로 명시 재판정하고 기존 +150/zero allowance는 유지했다. 실제 vendor retry exit0/1passed와 컨테이너 정리 확인은 별도 deploy validation에 기록했다.
 - gate 변화: SOURCE 통합 검토이며 최종 통합 시험은 별도로 진행한다. full G1/G2 및 Isaac 주행·Nav2·두 로봇 수용은 미완료다.
+
+## 2026-10-04 · uncommitted · feat(cell): 구조화된 초안 입력 확장
+
+- 변경: 같은 JSON 초안에 레시피·팔레트·층·슬립시트와 셀 프레임 세 점·스테이션·판정 한계를 편집하는 입력을 제공했다. 저장 후 재생성된 입력의 busy 잠금 누락을 실제 브라우저에서 재현하고 수정했다.
+- 증거: Chromium 구조 편집 RED 2 실패 뒤 GREEN 2 통과; busy RED 1 실패 뒤 전체 Cell browser/API/store/job 23 통과. 독립 UI 검토 승인.
+- gate 변화: SOURCE/LOCAL 편집 증거만 추가한다. 장치 TCP capture·owner 티칭 수락, G2 전체 적재와 G3 작업자 슬립시트 확인은 미완료다.
+- 결정: D-450. 사용자는 작업자가 슬립시트를 넣고 확인한 뒤 다음 층을 진행하도록 선택했다. durable checkpoint 설계를 별도 기록했다.

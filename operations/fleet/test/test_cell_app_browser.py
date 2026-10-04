@@ -173,3 +173,81 @@ def test_import_updates_existing_revision_and_guided_fields(browser_site):
     expect(page.locator("#notice")).to_contain_text("문서 저장 완료")
     page.locator("#compile").click()
     expect(page.locator("#summary")).to_contain_text("18회 전송")
+
+
+def test_structured_drafts_compile_box_only_and_survive_reload(browser_site):
+    from playwright.sync_api import expect
+
+    page, _, _ = browser_site
+    _prepare(page)
+    page.locator('#recipe-structure [data-path="layers.1.slip_sheet_below"]').uncheck()
+    page.locator("#recipe-sheet-enabled").uncheck()
+    page.locator('#recipe-structure [data-path="pallets.0.id"]').fill("A-review")
+    page.locator("#cell-structure summary").filter(has_text="프레임 pallet_a").click()
+    page.locator('#cell-structure [data-path="frames.pallet_a.origin.1"]').fill("0.012")
+    assert page.locator("#propose").get_attribute("disabled") is not None
+    for kind in ("recipe", "cell"):
+        page.locator(f"#{kind}-save").click()
+        expect(page.locator("#notice")).to_contain_text("문서 저장 완료")
+    page.locator("#compile").click()
+    expect(page.locator("#summary")).to_contain_text("16회 전송")
+    assert "slip_sheet" not in json.loads(page.locator("#recipe-document").input_value())
+    page.reload()
+    page.locator("#credential input").fill("operator-secret")
+    page.locator("#connect").click()
+    expect(page.locator("#session")).to_contain_text("operator-1")
+    for kind in ("recipe", "cell"):
+        page.locator(f"#{kind}-load").click()
+        expect(page.locator("#notice")).to_contain_text("저장된 문서를 불러왔습니다")
+    expect(page.locator('#recipe-structure [data-path="pallets.0.id"]')).to_have_value("A-review")
+    expect(page.locator('#cell-structure [data-path="frames.pallet_a.origin.1"]')).to_have_value("0.012")
+    page.set_viewport_size({"width": 390, "height": 844})
+    assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+
+
+def test_structured_layer_edit_retains_canonical_errors_and_has_no_dispatch(browser_site):
+    from playwright.sync_api import expect
+
+    page, _, _ = browser_site
+    _prepare(page)
+    execution_requests = []
+    page.on("request", lambda request: execution_requests.append(request.url)
+            if request.url.endswith(("/proposals", "/admit")) else None)
+    page.locator("#recipe-layer-add").click()
+    expect(page.locator('#recipe-structure [data-path="layers.2.pattern"]')).to_have_value("grid")
+    page.locator("#recipe-save").click()
+    expect(page.locator("#notice")).to_contain_text("문서 저장 완료")
+    page.locator("#compile").click()
+    expect(page.locator("#notice")).to_contain_text("stack")
+    assert page.locator("#propose").get_attribute("disabled") is not None
+    assert not execution_requests
+    page.locator('[data-remove-layer="2"]').click()
+    page.locator("#recipe-save").click()
+    expect(page.locator("#notice")).to_contain_text("문서 저장 완료")
+    page.locator("#compile").click()
+    expect(page.locator("#summary")).to_contain_text("18회 전송")
+
+
+def test_saved_structured_controls_stay_locked_until_list_read_finishes(browser_site):
+    from playwright.sync_api import expect
+
+    page, _, _ = browser_site
+    _prepare(page)
+    locked = []
+
+    def delayed_list(route):
+        response = route.fetch()
+        locked.append(page.evaluate("""() => {
+            const fields = [...document.querySelectorAll('#recipe-structure input, #recipe-structure select')];
+            const before = document.getElementById('recipe-document').value;
+            const add = document.getElementById('recipe-layer-add');
+            const disabled = add.hasAttribute('disabled') && fields.every(field => field.disabled);
+            add.click();
+            return disabled && document.getElementById('recipe-document').value === before;
+        }"""))
+        route.fulfill(response=response)
+
+    page.route("**/api/fleet/cell-app/documents", delayed_list)
+    page.locator("#recipe-save").click()
+    expect(page.locator("#notice")).to_contain_text("문서 저장 완료")
+    assert locked == [True]

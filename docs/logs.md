@@ -5303,3 +5303,9 @@
 - Change: Install the existing pre-push gate at the path Git resolves for linked worktrees and default, relative or absolute core.hooksPath. Preserve hook contents and repository configuration/refs.
 - Evidence: Three real linked-worktree installer regressions failed before correction and passed afterwards on Windows and model-PC Linux. Independent review caught hidden-untracked Git configuration in the model-PC code guard; both affected status calls now request all untracked files.
 - gate 변화: None. Tests install only in disposable repositories; the shared checkout hook and device runtime are unchanged.
+
+## 2026-10-04 · uncommitted · D-450 Cell 초안 편집과 수동 슬립시트 선택
+
+- 변경: 구조 편집 계획과 작업자 삽입·확인 후 다음 층 진행 계획을 추가하고 D-450에 사용자 선택을 부록으로 남겼다. 수동 슬립시트는 canonical checkpoint로 정의하며 일반 resume 우회를 금지한다.
+- 증거: 구조 편집 Chromium 및 Cell API/store/job 23 통과, 독립 UI 검토 승인. 수동 checkpoint는 설계이며 구현·ROS-SIM·물리 작업자 접근 증거는 NOT_RUN이다.
+- gate 변화: G1 초안 편집만 보강했다. G1 티칭·G2 전체 fault matrix·G3·Isaac 실제 주행 수용은 미완료다.
