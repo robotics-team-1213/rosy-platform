@@ -5837,6 +5837,12 @@ osy-d395-s1d\`.
 - 증거: `enrollment.js`를 `console.js`에 넣으면 펜스가 `['enrollment.js']`로 실패하고, 되돌리면 통과한다. 제품 코드는 변하지 않았다.
 - gate 변화: 없음. 호스트 시험과 문서만이며 장치 수용은 없다.
 
+## 2026-10-05 · uncommitted · docs: SRP 검토 커밋 식별자 단축
+
+- 변경: 앱·웹 SRP 계획의 검토 스냅샷을 확인 가능한 짧은 커밋 식별자로 표기한다. 긴 식별자를 고엔트로피 비밀값으로 탐지한 push 검사를 해결하며 비밀값 검출 규칙은 유지한다.
+- 증거: 기존 커밋 객체를 직접 조회했다. 비밀값 검사를 재실행하고 결과를 X:/DevTemp/rosy-ui-ship/secret-doc-sha-fix.log에 기록한다.
+- gate 변화: 없음. 문서 표기만 변경한다.
+
 
 ## 2026-10-05 · uncommitted · feat(learning): indexed trainer 독립 admission D-464
 
