@@ -71,26 +71,29 @@ jobs:
           source /opt/ros/jazzy/setup.bash
           source "$GITHUB_WORKSPACE/release/install/setup.bash"
           export ROSY_ROBOT_NUMBER=1 RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
-          ros2 run core core > core.log 2>&1 &
+          setsid nohup ros2 run core core > core.log 2>&1 &
           echo $! > core.pid
           deadline=$((SECONDS+600))
           while [ $SECONDS -lt $deadline ]; do
-            grep -q "core up" core.log && break
+            grep -q "core up" core.log && grep -q "api server" core.log && break
             kill -0 "$(cat core.pid)" 2>/dev/null || { echo "core exited early"; tail -40 core.log; exit 1; }
             sleep 5
           done
-          grep -q "core up" core.log || { echo "no 'core up' in 600s"; tail -40 core.log; exit 1; }
-          echo "core up"
+          grep -q "core up" core.log && grep -q "api server" core.log \
+            || { echo "no 'core up' or 'api server' in 600s"; tail -40 core.log; exit 1; }
+          echo "core up, api server ready"
+          sleep 3
 
       - name: Probe the web surfaces (D-444 R1)
         shell: bash
         run: |
-          set -euo pipefail
+          set -eo pipefail
           for path in dashboard pilot console; do
-            code=$(curl -s -o /dev/null -w "%{http_code}" "http://127.0.0.1:8080/$path")
-            csp=$(curl -sI "http://127.0.0.1:8080/$path" | grep -ci content-security-policy)
+            code=$(curl -s -o /dev/null -w "%{http_code}" "http://127.0.0.1:8080/$path") \
+              || { echo "curl /$path exited $?"; tail -10 core.log; exit 1; }
+            csp=$(curl -sI "http://127.0.0.1:8080/$path" 2>/dev/null | grep -ci content-security-policy || true)
             echo "GET /$path -> $code (csp-header=$csp)"
-            [ "$code" = "200" ] || { echo "FAIL /$path"; exit 1; }
+            [ "$code" = "200" ] || { echo "FAIL /$path expected 200 got $code"; tail -5 core.log; exit 1; }
             [ "$csp" -ge 1 ] || { echo "FAIL /$path missing CSP"; exit 1; }
           done
 
