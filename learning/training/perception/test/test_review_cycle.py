@@ -343,3 +343,20 @@ def test_resealed_receipt_authority_rejects_false_integer_alias(tmp_path,field,r
     (out/'AUTHORITY_COMPLETE').write_text(review_evidence.sha(raw),encoding='ascii')
     with pytest.raises(ValueError):
         review_evidence.verify_current(out,current)
+
+
+def test_pixel_undo_walks_back_every_edit(tmp_path):
+    store = open_store(tmp_path)
+    review_masks.bind_classes(store, CLASSES)
+    review = review_masks.update(store, 0, {'version':0, 'action':'fill', 'label':0}, Conflict)
+    for x in (5, 10, 15):
+        review = review_masks.update(store, 0, {'version':review['version'], 'action':'paint',
+                                               'label':4, 'radius':1, 'points':[[x, 9]]}, Conflict)
+    for remaining in ((5, 10), (5,), ()):
+        review = review_masks.update(store, 0, {'version':review['version'], 'action':'undo'}, Conflict)
+        mask = review_masks.pixels(store, review)
+        assert [x for x in (5, 10, 15) if mask[9, x] == 4] == list(remaining)
+    review = review_masks.update(store, 0, {'version':review['version'], 'action':'undo'}, Conflict)
+    assert np.all(review_masks.pixels(store, review) == 255)
+    with pytest.raises(ValueError, match='되돌릴'):
+        review_masks.update(store, 0, {'version':review['version'], 'action':'undo'}, Conflict)

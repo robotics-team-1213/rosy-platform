@@ -157,12 +157,16 @@ def update(store, index, body, conflict):
                 for first, second in zip(checked, checked[1:]):
                     cv2.line(image, first, second, value, radius * 2)
         elif action == 'undo':
-            old = db.execute("SELECT review FROM pixel_events WHERE frame=? AND action IN ('paint','fill') ORDER BY id DESC LIMIT 1", (index,)).fetchone()
-            if not old or review['status'] != 'pending':
-                raise ValueError('no pending pixel edit to undo')
-            prior = json.loads(old[0])
-            if prior['saved_version'] != review['version']:
-                raise ValueError('only last pixel edit can be undone')
+            # Walk back one edit per undo: after an undo, the next target is the
+            # edit that produced the version that undo restored.
+            last = db.execute('SELECT action, review FROM pixel_events WHERE frame=? ORDER BY id DESC LIMIT 1', (index,)).fetchone()
+            target = None
+            if last and review['status'] == 'pending' and json.loads(last[1]).get('saved_version') == review['version']:
+                want = review['version'] if last[0] in ('paint', 'fill') else json.loads(last[1]).get('restored_version')
+                target = db.execute("SELECT review FROM pixel_events WHERE frame=? AND version=? AND action IN ('paint','fill')", (index, want)).fetchone()
+            if not target:
+                raise ValueError('되돌릴 픽셀 수정이 없습니다.')
+            prior = json.loads(target[0])
             image = pixels(store, dict(review, path=prior['path'], sha256=prior['sha256']))
         elif action == 'approve':
             if body.get('complete_frame_review') is not True or body.get('background_reviewed') is not True:
@@ -193,6 +197,8 @@ def update(store, index, body, conflict):
                     json.dumps(approval) if approval else None))
         previous = {key: review[key] for key in ('path', 'sha256', 'version')}
         previous['saved_version'] = version
+        if action == 'undo':
+            previous['restored_version'] = prior['version']
         db.execute('INSERT INTO pixel_events(frame,version,action,review) VALUES (?,?,?,?)',
                    (index, version, action, json.dumps(previous)))
         db.execute("UPDATE metadata SET value=CAST(value AS INTEGER)+1 WHERE key='generation'")
