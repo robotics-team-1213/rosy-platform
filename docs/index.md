@@ -287,8 +287,8 @@
 
 ## 최근 기록
 
+- 2026-10-04 · uncommitted · docs(learning): qualify model-PC service data snapshot
 - 2026-10-04 · uncommitted · test(learning): assemble credential samples at runtime
 - 2026-10-04 · uncommitted · fix(learning): bind reviewed public digests to exact repository lines
 - 2026-10-04 · uncommitted · merge(learning): preserve learning closure across D-427 main
 - 2026-10-04 · uncommitted · docs(validation): prove model-PC watcher READY and HOLD handling
-- 2026-10-04 · uncommitted · fix(learning): restore model-watch placement to Accepted D-434

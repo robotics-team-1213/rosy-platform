@@ -5559,3 +5559,10 @@
 - Change: Preserve scanner strictness; assemble intentional credential/PSK/QR samples at runtime so tracked test source itself does not ship credential-shaped fixtures.
 - Evidence: Earlier pre-stage99pass excluded the untracked test source. Tracked scan then17pass1fail; corrected complete provenance/release/robot suite99pass. Commit6eae392c6 preceded observation of that failure; no main landing. See validation/learning-tracked-fixture-check-2026-10-04.md.
 - Gate: Corrected HOST tracked-source verification; no broad exception or known-failure entry. Administrator installation, real labels, shadow/rollback and owner/Fleet/device/field remain incomplete.
+
+## 2026-10-04 · uncommitted · docs(learning): qualify model-PC service data snapshot
+
+- Change: Prepare a private immutable service-data archive with verified store/eval/models, three canonical intake reports, state, nineteen MP4 replays, unchanged thresholds and public host pin; preserve original source data and private keys.
+- Evidence: Actual model-PC preparation5980files/287651840bytes; original before/after SHAequal; snapshot intakePASS/eval126/mIoU0.5185248134695789. Initial collector misused tuple return and exited1 after savingPASS; preserved and corrected verification without rerunning evaluation. Actual archive member/hash verification5980files exit0. See validation/model-watch-service-data-2026-10-04.md.
+- Gate: User-path data preparation and qualification only. Sudo import, service-user access, own-key enrollment, doctor, timer and real shadow/rollback remain pending; no motion or HOLD release.
+- Additional evidence: Independent review caught verifier reuse/extra-member gaps. Separate v2 uses copied input/returned report and full snapshot path-set/hash checks; actual nativev2 exit0/PASS/reasons empty. Corrected archive scanner rejects every link/special entry. Source review APPROVE; originalv1 retained.
