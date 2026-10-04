@@ -71,8 +71,8 @@
 
 ## 최근 기록
 
+- 2026-10-05 · uncommitted · fix(discovery): 사용자 검색 서비스의 검증된 카메라 기능 표시
 - 2026-10-05 · uncommitted · fix(release): ARM 수신 암호화 입력 잠금 해시 수정
 - 2026-10-05 · uncommitted · fix(pairing): 실제 자격 검사를 유지하는 source 분류 보완
 - 2026-10-05 · uncommitted · feat(pairing): 서명 payload의 수신 암호화와 TLS 유지보수
 - 2026-10-05 · uncommitted · fix(test): bound Windows wrapper startup without weakening argv checks
-- 2026-10-05 · uncommitted · fix(ci): integrate reviewed site checks with current main

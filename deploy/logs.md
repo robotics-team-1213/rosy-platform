@@ -2529,3 +2529,9 @@
 - 변경: receiver_crypto 요구사항 잠금값을 Linux checkout의 Git LF 파일 SHA-256으로 고친다. Windows CRLF checkout에서 계산한 값 때문에 실제 ARM 빌드가 거부한 원인을 바로잡는다. 라이브러리 버전·wheel 해시·require-hashes·빌더의 원시 파일 해시 검증은 유지한다.
 - 증거: 정확한 0548d2a00 ARM 실행의 실패를 원본 로그로 보존했다. Git LF 474바이트와 Windows CRLF 483바이트 차이를 독립 대조했다. 신규 Linux 바이트 회귀 검사는 수정 전 1 failed, 수정 후 관련 native payload·CI 의존성 검사 27 passed/7.58s다.
 - gate 변화: SOURCE/LOCAL. 이전 ARM 실패 결과물은 배포하지 않는다. 수정 소스의 원격 검사·ARM 빌드·서명·실기 검증은 이어서 수행한다.
+
+## 2026-10-05 · uncommitted · fix(discovery): 사용자 검색 서비스의 검증된 카메라 기능 표시
+
+- 변경: 일반 계정 검색 서비스가 명시적으로 설정한 카메라 페어링 기능을 표시할 수 있게 한다. 기존 CA와 인증서 이름으로 제한된 HTTPS 신원 응답을 검사하고, 설치 전과 광고 시작 전에 저장된 수신 신원과 다시 대조한다. 기본 기능 비활성화와 기존 자격·CA를 보존하며 광고만으로 승인하지 않는다.
+- 증거: 독립 원본 검사 36 passed/1 기존 POSIX skip, 작성자 관련 검사 156 passed/3 기존 skip, 변경 두 경로 비밀값 검사 0 findings. 병합한 학습 승인·native payload 검사도 짧은 X 경로에서 152 passed/1 skip다. 긴 Windows 임시 경로의 쓰기 실패는 원본 로그로 남겼으며 긴 경로 지원 완료로 표시하지 않는다.
+- gate 변화: SOURCE/LOCAL. 실제 관제는 서명된 0548d2a00으로 갱신해 세 서비스 정상·HTTPS 정상과 Fleet 실행 계정의 두 로봇 이름 해석을 확인했다. 현재 실제 카메라 신원 경로는 설정 비활성화로 404이며 새 광고도 이를 거부한다. 관리자 설정과 기존 운영자 로그인이 필요한 승인·재접속은 아직 미검증이다.
