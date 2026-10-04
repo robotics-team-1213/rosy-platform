@@ -34,8 +34,8 @@
 
 ## 최근 기록
 
+- 2026-10-05 · uncommitted · fix(pilot): 승인 화면 시험 서버 자산 정합
 - 2026-10-05 · uncommitted · feat(drive): D-368 운전자 MJPEG 스트림 클라이언트
 - 2026-10-05 · uncommitted · refactor(pairing): 발급 세션 변수와 시험 이름 명확화
 - 2026-10-05 · uncommitted · feat(pairing): LAN 승인 기록과 신원 확인 재연결
 - 2026-10-05 · uncommitted · feat(pilot): DEVICE GO — 사용자 실기 확인 (D-444 §2 R2)
-- 2026-10-04 · uncommitted · fix(pilot): 조종하지 않는 카메라의 frame Response 보존

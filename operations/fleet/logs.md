@@ -1785,3 +1785,9 @@
 - 변경: 카메라 승인·해제 대화상자에서 대상 이름을 따옴표로 구분하고 승인 결과를 명확히 묻는다. 기존 D-341 v1과 D-456 v2 카메라 페어링 namespace만 역할 검사에서 허용하고 v20·v2admin·로봇·사용자·작업 경로는 계속 거절한다.
 - 증거: 기존 문구·역할 검사 두 실패를 재현했다. 수리 후 두 관련 suite 14 passed이고 독립 SOURCE 검토에서 owner·lifetime·abort·POST 흐름 불변을 확인했다. 태블릿의 실제 LAN 로봇 목록 및 선택 뒤 기존 로그인 코드 창을 확인했으며 Pilot/Cam APK는 기존 서명으로 업데이트했다.
 - gate 변화: SOURCE/LOCAL 및 앱 설치 증거. 새 상대 승인·관제/로봇 배포·승인 유지 재연결의 DEVICE 수용은 아직 별도다.
+
+## 2026-10-05 · uncommitted · fix(ci): 카메라 브라우저 명시적 실행
+
+- 변경: Playwright를 브라우저 fixture의 명시적 opt-in 뒤에 불러온다. opt-in 중 의존성 누락은 오류로 남기며 Fleet CI는 도구 설치 후 ROSY_BROWSER_TESTS=1을 명시한다.
+- 증거: 실제 부모 Chromium에서 카메라 7·시작점 3·픽셀 편집 3 합계 13 passed/201.85s. 후보에서 opt-out 7 SKIP과 의존성 없는 opt-in 7 ERROR를 구분해 확인했다. 런타임 TLS 검사는 완화하지 않았다.
+- gate 변화: SOURCE/LOCAL 브라우저 증거. CI 성공·서명 배포·실제 양쪽 승인과 재연결은 별도다.

@@ -144,6 +144,7 @@ jobs:
         run: |
           pip3 install --no-cache-dir --break-system-packages -c /tmp/rosy-runtime-constraints.txt playwright
           python3 -m playwright install --with-deps chromium
+          echo "ROSY_BROWSER_TESTS=1" >> "$GITHUB_ENV"
 
       - name: Install Pinky raw verification tools
         if: contains(toJSON(matrix.invocations), 'learning/curation/pinky') || contains(toJSON(matrix.invocations), 'learning/training/pinky')
