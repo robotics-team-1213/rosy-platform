@@ -2391,3 +2391,8 @@
 - 변경: 카메라 시작 전 fsync 기록, 두 번의 미확인 부팅 뒤 선택 서비스 보류, 별도 90초 관찰 타이머와 정상 종료 구분을 추가했다. 카메라 재시도를 10초·300초 내 3회로 제한하고 관찰 시간을 카메라 시작 완료와 분리했다. D-161의 CORE·호스트 권한 분리와 D-373의 선택 perception 설정을 유지한다.
 - 증거: 독립 host 194 PASS·1 POSIX skip, 실패 횟수 임계값 mutation RED 확인. Linux에서 fsync/rename 상태 전이·systemd-analyze verify PASS(의존 서비스는 검증용 stub). 격리 user systemd에서 시작 0.074초·재시작 0.103초, 2초로 축소한 관찰 타이머·정지 시 취소·미확인 부팅 후 시작 보류 PASS. 서명 payload·기기 적용은 별도다.
 - gate 변화: SOURCE/LOCAL 보호 로직만 확인했다. 원래 카메라 시작 관련 본체 재부팅의 전기·커널 원인은 미확정이며 물리 전원 초기화와 카메라 복구 수락은 미완료다.
+## 2026-10-04 · uncommitted · D-441 dedicated functional verification setup
+
+- Change: Add config-only viewer provisioning with protected token, existing principal and Fleet group-access preservation, signed-runtime preflight, guarded Fleet restart, atomic journal recovery and exact timer-state restoration. GET gates select durable enrolled identities and configured Vision sources; no robot command or enrollment reset.
+- Evidence: Initial plan regressions 5 failed before implementation. Isolated Linux setup tests 22 passed, with actual bytes/modes/fsync and simulated root ownership only. Checksum, concurrent-edit and principal-collision mutations each caused the intended test failure. Windows API/helper checks pass; POSIX recovery tests run separately on Linux.
+- gate 변화: SOURCE/LOCAL evidence only. Root installation and live viewer readback remain separate; listing does not establish advancing frames or physical robot acceptance. Legacy camera marker references require physical identity confirmation before roster cleanup.
