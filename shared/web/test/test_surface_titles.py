@@ -14,7 +14,7 @@ import surface_registry as registry
 
 SCOPE = {"robot": "로봇", "site": "사이트", "sim": "시뮬", "dev": "개발"}
 LIBRARY = {"web-common"}
-PAGES = ("index.html", "surface.html", "learning.html")
+PAGES = ("index.html", "surface.html", "learning.html", "pixels.html", "catalog.html")
 TITLE = re.compile(r"<title>(.*?)</title>", re.S | re.I)
 
 

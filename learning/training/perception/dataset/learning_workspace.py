@@ -8,9 +8,9 @@ from pathlib import Path
 WORKFLOWS = [
     {'id': 'review', 'name': '객체 라벨 검수', 'support': '웹에서 편집·승인·제외·자료 준비',
      'next': '사진 전체를 확인하고 승인 자료를 준비하세요. 세션 분리·고정 평가 제외는 학습 담당자가 확인합니다.'},
-    {'id': 'segmentation', 'name': '영역 마스크 검수', 'support': 'CVAT / 기존 반환 도구',
+    {'id': 'segmentation', 'name': '영역 마스크 검수', 'support': '웹 픽셀 편집·독립 승인 / CVAT 기존 반환 도구',
      'files': ['review-return.json', 'manifest.json'],
-     'next': 'CVAT 픽셀 검수와 edge_review_return으로 반환하세요. 객체 박스 승인은 픽셀 승인에 적용되지 않습니다.'},
+     'next': '픽셀 검수에서 사진 전체와 배경을 확인하고 명시 승인하세요. 객체 박스 승인은 픽셀 승인에 적용되지 않습니다. 학습 반영은 별도 검증합니다.'},
     {'id': 'perception', 'name': 'Perception 학습', 'support': '기존 recording_job / train_job CLI',
      'files': ['state.json', 'summary.json', 'intake_report.json'],
      'next': '실패 단계를 확인하고 원래 job 설정으로 CLI를 재개하세요. 품질 거절은 새 조건과 새 작업이 필요합니다.'},
