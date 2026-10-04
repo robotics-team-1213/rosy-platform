@@ -334,6 +334,21 @@ class ArmCommandOwner:
         self._last_command_state_sequence = -1
         self._hold_reason = ""
         self._hold_sequence = -1
+        self._control_admission = None
+
+    def bind_control_admission(self, admission) -> None:
+        """Bind the same-process seat policy before any owner command is admitted."""
+        with self._lock:
+            if self._active is not None or self._seen_commands or self._control_admission is not None:
+                raise RuntimeError("control admission must be bound once before command dispatch")
+            if admission.owner is not self:
+                raise ValueError("control admission belongs to another owner")
+            self._control_admission = admission
+
+    def run_admission_policy(self, operation):
+        """Serialize short seat/journal decisions with canonical owner state, without ROS I/O."""
+        with self._lock:
+            return operation(self._state)
 
     @property
     def state(self) -> str:
@@ -542,6 +557,8 @@ class ArmCommandOwner:
                     if any(abs(value) > limits[name]
                            for name, value in zip(command.joint_names, values)):
                         return self._decision(False, reason, command_id)
+            if self._control_admission is not None and not self._control_admission.check_command(command):
+                return self._decision(False, "control_seat_fenced", command_id)
             self._seen_commands[command_id] = fingerprint
             try:
                 handle = self._action_port.send_goal(command)

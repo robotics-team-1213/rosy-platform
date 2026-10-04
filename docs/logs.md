@@ -5349,6 +5349,12 @@ osy-d395-s1d\`.
 - Evidence: Real Windows installation exposed a byte mismatch; three forced-CRLF regressions failed before correction. Linux hook suite 8 passed after correction, including Bash parsing and tracked-source/config/ref preservation. Independent review approved the follow-up.
 - gate 변화: None. The live hook was restored to the exact published LF bytes and syntax-checked; device source switching remains guarded.
 
+## 2026-10-04 · uncommitted · D-450 Cell 초안 편집과 수동 슬립시트 선택
+
+- 변경: 구조 편집 계획과 작업자 삽입·확인 후 다음 층 진행 계획을 추가하고 D-450에 사용자 선택을 부록으로 남겼다. 수동 슬립시트는 canonical checkpoint로 정의하며 일반 resume 우회를 금지한다.
+- 증거: 구조 편집 Chromium 및 Cell API/store/job 23 통과, 독립 UI 검토 승인. 수동 checkpoint는 설계이며 구현·ROS-SIM·물리 작업자 접근 증거는 NOT_RUN이다.
+- gate 변화: G1 초안 편집만 보강했다. G1 티칭·G2 전체 fault matrix·G3·Isaac 실제 주행 수용은 미완료다.
+
 
 ## 2026-10-04 · uncommitted · D-427 wave5 signed native and actual offline SD readback
 
@@ -5369,3 +5375,15 @@ osy-d395-s1d\`.
 - gate 변화: dashboard ARTIFACT·pilot ARTIFACT blocker 갱신(HOLD 유지, 사유 축소). D-445 전제 ③ 충족 관측.
 - 결정: D-444 R1 앞조항 관측 완료. 남은 P1 조각: 그 payload를 탄 기기/컨테이너의 GET 200+CSP(P1.2).
 - 교훈: 릴리스 제목은 서명 상태를 말해야 한다 — 제목은 사람이 목록을 읽는 유일한 곳일 수 있다.
+
+## 2026-10-04 · uncommitted · docs(adr): D-451 한 줄 교착의 양보는 Fleet 알고리즘이 고른다
+
+- 변경: `docs/adr/D-451-fleet-lane-meet-decider.md` 와 ADR Log 행. 만나는 양보는 `operations/fleet/fleet/meet` 만 고르고, 로봇은 그 주문 하나를 실행하거나 CORE 재검사로 거부한다. `room_hold`·`wait_both` 와 260919 `track_v2` 숫자를 고정했다. D-448·D-449·D-450 은 다른 브랜치 번호라 `adr_gaps` 에 남겼다.
+- 증거: `operations/fleet/test/test_meet_algorithms.py`. 호스트 판단 시험. CORE 전달과 실차는 없다.
+- gate 변화: 없음. SOURCE/LOCAL 판단 시험. DEVICE·ROS-SIM·FIELD 승격 아님.
+
+## 2026-10-04 · uncommitted · feat(fleet): D-453 양보 한 구간
+
+- 변경: D-451 주문 하나를 기존 `POST /api/v1/line-follow/stuck/decision` 의 `YIELD` 한 구간으로 보낸다. CORE 는 회전을 확인한 뒤 앞으로만 기어 가고, 끝나면 선으로 돌아가지 않는다. 운용자 Fleet 경로의 다섯 단어는 그대로다. ADR `docs/adr/D-453-yield-one-segment.md`. D-452 는 integrate/ui-ship 번호라 `adr_gaps` 에 남겼다.
+- 증거: `operations/fleet/test/test_meet_place.py`, `test_stuck_resolver.py`, `test_transport.py`, `test_meet_algorithms.py`, `middleware/core/services/test/test_line_stuck_recovery.py`, `middleware/core/gateway/test/test_line_follow_stuck_api.py`.
+- gate 변화: 없음. 호스트 판단 시험. 장치·ROS-SIM 은 주장하지 않는다.

@@ -27,7 +27,8 @@ from fleet.server.goal_evidence_store import GoalEvidenceStore
 from omx_adapter.action_api import ActionApi
 from omx_adapter.action_runner import ActionRunner
 from omx_adapter.action_store import ActionStore
-from omx_adapter.command_owner import TrajectoryCommand
+from omx_adapter.command_owner import ArmCommandOwner, TrajectoryCommand
+from omx_adapter.control_seat_admission import ControlSeatAdmission
 from omx_adapter.gripper_contract import GripperObservation
 from omx_adapter.kinematics import OmxKinematics
 from omx_adapter.local_stop import LocalStopController
@@ -35,6 +36,7 @@ from omx_adapter.pose_plan import CellPlanningProfile
 from rosy.integrations.robots.omx.transfer_provider import create_omx_cell_transfer_phase_factory
 from test_cell_job_store import _submission
 from test_omx_action_api import FakeDriver
+from test_omx_command_owner import FakeActionClient, make_config
 from test_omx_pick_place_runner import _event, _GoalPort
 from test_omx_pose_plan import _request, _state, _planner
 from test_cell_goal_evidence_api import _evidence
@@ -53,6 +55,10 @@ class LocalTransport:
             "grasp_width_m": .03, "grasp_depth_m": .01, "height_m": .03,
         }}
         self.store = ActionStore(path)
+        owner = ArmCommandOwner(replace(make_config(), workcell_id="omx_01", instance_id="omx_01_control"),
+                                FakeActionClient())
+        admission = ControlSeatAdmission(owner, self.store)
+        owner.bind_control_admission(admission)
         self.driver = FakeDriver()
         stop = LocalStopController(path, workcell_id="omx_01", instance_id="omx_01_control")
         current = lambda epoch, generation: (epoch, generation) == (
@@ -110,7 +116,7 @@ class LocalTransport:
         self.runner = ActionRunner(self.store, self.driver, workcell_id="omx_01", instance_id="omx_01_control",
             principal_for_peer=lambda uid: "fleet-owner", allowed_peer_uids={1001}, current_fence=current,
             capability_current=lambda grant: grant.config_revision == "cell-config-v1", submission_fence=stop,
-            phase_runner_factories={"CELL_TRANSFER": create}, enabled=True)
+            phase_runner_factories={"CELL_TRANSFER": create}, control_admission=admission, enabled=True)
         self.api = ActionApi(self.runner, identity={"simulation": True, "workcell_id": "omx_01",
             "instance_id": "omx_01_control", "journal_id": journal_identity(path)})
 

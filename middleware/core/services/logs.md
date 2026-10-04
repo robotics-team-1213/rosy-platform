@@ -499,3 +499,9 @@
 - 변경: 지속 token과 hostname/CA pin이 있는 Agent는 legacy hub URL보다 발견을 우선하고 잘못된 pin/충돌/신뢰 실패에 우회하지 않는다.
 - 증거: focused60 PASS 및 독립 source SPEC·Quality·Safety review PASS, source-checkpoint.md.
 - gate 변화: SOURCE/LOCAL focused; 실제 robot/Fleet 연결·다른 망 실행 수락은 별도.
+
+## 2026-10-04 · uncommitted · fix(safety): 활성 양보 구간 기한 보존
+
+- 변경: TURNING/CRAWLING 중 새 YIELD 답변은 기존 거절 계약으로 처리하여 같은 또는 다른 구간이 현재 deadline·phase·twist를 재설정하지 못하게 한다. YIELDED 후 다음 구간과 기존 단일 command publisher·lease·E-Stop 경계를 유지한다.
+- 증거: 신규 4개 RED→GREEN, 상태 머신·manager·API 관련 115 PASS. main 병합 후 Fleet/CORE ownership 재판정에서 기존 파일/패키지 예산과 분할 의무는 유지한다.
+- gate 변화: SOURCE/LOCAL. 실제 장비 구동·모드 변경·정지 해제·DEVICE/FIELD 수락은 실행하지 않았다.

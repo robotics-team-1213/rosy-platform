@@ -7,9 +7,10 @@ import math
 
 from rosy.contracts.skill import SkillInvocation
 from rosy.execution.api import PlanBundle, PlanStep
+from rosy.execution.site.cell_submission import operator_checkpoint_id
 
 from .cell import CellConfig, Pose
-from .compiler import Job, compile_job
+from .compiler import Job, OperatorSheetStep, compile_job
 from .recipe import Recipe
 
 
@@ -29,11 +30,28 @@ class PalletLedgerMarker:
 
 
 @dataclass(frozen=True)
+class OperatorSheetCheckpoint:
+    checkpoint_id: str
+    before_transfer_ordinal: int
+    pallet_id: str
+    layer_index: int
+    sheet_pose_base: Pose
+    thickness_m: float
+
+    def as_dict(self):
+        return {"checkpoint_id": self.checkpoint_id, "kind": "operator_sheet",
+                "before_transfer_ordinal": self.before_transfer_ordinal, "pallet_id": self.pallet_id,
+                "layer_index": self.layer_index, "sheet_pose_base": _pose(self.sheet_pose_base, "sheet pose"),
+                "thickness_m": self.thickness_m}
+
+
+@dataclass(frozen=True)
 class PalletizingPlan:
     """The executable transfer plan plus non-executable, site-owned ledger markers."""
 
     bundle: PlanBundle
     ledger_markers: tuple[PalletLedgerMarker, ...]
+    operator_checkpoints: tuple[OperatorSheetCheckpoint, ...] = ()
 
     def __post_init__(self) -> None:
         if not isinstance(self.bundle, PlanBundle):
@@ -45,6 +63,13 @@ class PalletizingPlan:
         ordinals = tuple(marker.after_step_ordinal for marker in self.ledger_markers)
         if ordinals != tuple(sorted(set(ordinals))) or any(value > len(self.bundle.steps) for value in ordinals):
             raise ValueError("ledger markers must be ordered, unique and within the transfer plan")
+        if not isinstance(self.operator_checkpoints, tuple) or any(
+                not isinstance(checkpoint, OperatorSheetCheckpoint) for checkpoint in self.operator_checkpoints):
+            raise ValueError("operator checkpoints must use canonical checkpoint records")
+        checkpoint_ordinals = [item.before_transfer_ordinal for item in self.operator_checkpoints]
+        if (checkpoint_ordinals != sorted(set(checkpoint_ordinals))
+                or any(not 1 <= ordinal <= len(self.bundle.steps) for ordinal in checkpoint_ordinals)):
+            raise ValueError("operator checkpoints must be ordered before an existing transfer")
 
 
 def _pose(value: Pose | None, field: str) -> dict[str, float]:
@@ -81,6 +106,7 @@ def compile_plan_bundle(
     carry_z = _height(job.carry_z, "Job carry_z")
     plan_steps: list[PlanStep] = []
     ledger_markers: list[PalletLedgerMarker] = []
+    checkpoints: list[OperatorSheetCheckpoint] = []
     seen_markers: set[str] = set()
     transfer_pallets: set[str] = set()
     last_pallet: str | None = None
@@ -88,6 +114,19 @@ def compile_plan_bundle(
 
     while index < len(job.steps):
         current = job.steps[index]
+        if current.kind == "operator_sheet":
+            if (not isinstance(current, OperatorSheetStep) or current.item != "slip_sheet"
+                    or current.approach_z is not None or recipe.slip_sheet_handling != "operator"):
+                raise ValueError("operator_sheet must be canonical non-motion metadata")
+            descriptor = {"kind": "operator_sheet", "before_transfer_ordinal": len(plan_steps)+1,
+                          "pallet_id": current.pallet, "layer_index": current.layer,
+                          "sheet_pose_base": _pose(current.target, "sheet pose"),
+                          "thickness_m": current.thickness_m}
+            identity = operator_checkpoint_id(recipe.content_hash, cell.content_hash, descriptor)
+            checkpoints.append(OperatorSheetCheckpoint(identity, len(plan_steps)+1, current.pallet,
+                                                       current.layer, current.target, current.thickness_m))
+            index += 1
+            continue
         if current.kind == "pallet_done":
             if (current.item, current.layer, current.target, current.approach_z) != ("", None, None, None):
                 raise ValueError("pallet_done must be a ledger marker without motion fields")
@@ -152,4 +191,4 @@ def compile_plan_bundle(
         steps=tuple(plan_steps),
         verification_refs=verification_refs,
     )
-    return PalletizingPlan(bundle, tuple(ledger_markers))
+    return PalletizingPlan(bundle, tuple(ledger_markers), tuple(checkpoints))

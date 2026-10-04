@@ -75,7 +75,14 @@ def test_stuck_is_in_the_line_follow_status(core_client):
     client, _, stuck_id = _stuck(core_client)
     body = client.get("/api/v1/line-follow", headers=VIEWER).json()
     assert body["stuck"]["stuck_id"] == stuck_id and body["stuck"]["phase"] == "ASKING"
-    assert body["stuck"]["decisions"] == ["WAIT", "RESUME", "BACK_AND_RETRY", "MANUAL", "ABORT"]
+    assert body["stuck"]["decisions"] == [
+        "WAIT", "RESUME", "BACK_AND_RETRY", "MANUAL", "ABORT", "YIELD"]
+
+
+def test_yield_without_a_segment_is_rejected(core_client):
+    client, _, stuck_id = _stuck(core_client)
+    missing = client.post(URL, json={"stuck_id": stuck_id, "decision": "YIELD"}, headers=OPERATOR)
+    assert missing.status_code == 400, missing.text
 
 
 def test_decision_requires_operator_and_a_matching_stuck_id(core_client):

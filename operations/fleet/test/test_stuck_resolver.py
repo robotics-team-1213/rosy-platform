@@ -1,5 +1,10 @@
 """D-438 resolver core: chains, budgets, deadline, rules R1-R3, CORE response handling."""
 
+import math
+
+import pytest
+
+from fleet.meet.place import painted_track, pose_on
 from fleet.server.stuck_resolver import Answer, Escalate, ResolverConfig, StuckResolver
 
 
@@ -30,6 +35,53 @@ def test_r1_waits_for_a_peer_in_the_front_band():
     me = _row("rosy_01", _stuck(), pose=(0.0, 0.0, 0.0))
     peer = _row("rosy_02", None, pose=(0.20, 0.03, 3.14))
     assert r.step(0.0, [me, peer]) == [Answer("rosy_01", "stuck-1", "WAIT", "R1")]
+
+
+def _east_pair():
+    painted = painted_track()
+    door = next(item for item in painted.doors if item.edge_id == "east")
+    near = pose_on(painted, "east", 1.2, direction=1)
+    # Close enough for the 0.30 m peer band, still on the paint (side stays under 0.15 m).
+    far = pose_on(painted, "east", 1.45, direction=-1)
+    return painted, door, near, far
+
+
+def test_on_track_head_on_yields_and_an_off_track_peer_stays_on_r1():
+    _painted, door, near, far = _east_pair()
+    yielder = StuckResolver(ResolverConfig())
+    actions = yielder.step(0.0, [_row("near", _stuck(), pose=near), _row("far", None, pose=far)])
+    assert len(actions) == 1 and isinstance(actions[0], Answer)
+    assert actions[0].decision == "YIELD" and actions[0].rule == "meet"
+    assert actions[0].yield_m == pytest.approx(abs(1.2 - door.s_m), abs=0.05)
+    assert abs(actions[0].yield_turn_rad) == pytest.approx(math.pi, abs=0.2)
+    holder = StuckResolver(ResolverConfig())
+    held = holder.step(0.0, [_row("far", _stuck(), pose=far), _row("near", None, pose=near)])
+    assert held == [Answer("far", "stuck-1", "WAIT", "meet")]
+
+
+def test_a_finished_segment_sends_the_sidestep_without_restarting_the_same_one():
+    _painted, door, near, far = _east_pair()
+    resolver = StuckResolver(ResolverConfig())
+    first = resolver.step(0.0, [_row("near", _stuck(), pose=near), _row("far", None, pose=far)])[0]
+    resolver.sent(first, 0.0)
+    yielded = _stuck()
+    yielded["phase"] = "YIELDED"
+    assert resolver.step(1.0, [_row("near", yielded, pose=near), _row("far", None, pose=far)]) == []
+    door_pose = pose_on(painted_track(), "east", door.s_m, direction=-1)
+    nxt = resolver.step(2.0, [_row("near", yielded, pose=door_pose), _row("far", None, pose=far)])
+    assert len(nxt) == 1 and nxt[0].decision == "YIELD"
+    assert 0.05 < nxt[0].yield_m < 0.6
+
+
+def test_three_robots_on_one_two_way_edge_escalate():
+    painted = painted_track()
+    poses = [pose_on(painted, "east", s, direction=1) for s in (1.0, 1.08, 1.16)]
+    action = StuckResolver(ResolverConfig()).step(0.0, [
+        _row("a", _stuck(), pose=poses[0]),
+        _row("b", None, pose=poses[1]),
+        _row("c", None, pose=poses[2]),
+    ])[0]
+    assert isinstance(action, Escalate) and action.reason == "meet"
 
 
 def test_r1_ignores_a_peer_behind_or_beside_and_unknown_poses():

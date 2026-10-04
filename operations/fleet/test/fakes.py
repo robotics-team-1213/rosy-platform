@@ -194,7 +194,7 @@ class FakeRobot:
         self._record("line_follow_mode", mode)
         return {"mode": mode, "state": "WAITING" if mode == "IR_LINE" else "OFF"}
 
-    async def line_stuck_decision(self, stuck_id: str, decision: str) -> dict:
+    async def line_stuck_decision(self, stuck_id: str, decision: str, **_extra) -> dict:
         self._record("line_stuck_decision", stuck_id, decision)
         if self.stuck_decision_error is not None:
             raise self.stuck_decision_error
