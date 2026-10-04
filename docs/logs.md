@@ -5861,3 +5861,9 @@ osy-d395-s1d\`.
 - 변경: 674줄 review_dataset의 stable bytes·source proof·sealed eval companion 검증4함수를 review_provenance로 그대로 옮겼다. 기존 import는 re-export로 유지하고 새 owner를 trainer 입력 코드 hash에 포함한다. dataset474줄·provenance209줄이며 P6 제한·verdict 예외는 변경하지 않는다.
 - 증거: X:/DevTemp/rosy-ui-ship/review-budget에 기존 P6/새 owner 결속 RED2FAIL, 수정 후2PASS, 기존 관련5개 suite와 module_structure 전체242PASS1SKIP65.34초/NEW0을 기록했다. 네 함수 AST 동일성과 새 owner가 변경되면 학습 import/GPU 전 거절하는 경계를 확인했다.
 - gate 변화: SOURCE/격리 검증만. 승인·출처 bytes·dataset SHA·최신성·게시 규약은 유지하며 배포·native·Android·자격증명·실제 GPU/장치 실행은 변경하지 않는다. 독립 리뷰 후 이 변경만 커밋한다.
+
+## 2026-10-05 · uncommitted · fix(integration): 실제 LAN 연결의 HTTPS 등록 경계 기록
+
+- 변경: D-456에 기존 관제 encrypted enrollment의 공개 TLS binding과 단일 REST/WS endpoint owner를 기록한다. 같은 LAN의 발견 이름을 사용하고 기존 자격·발급자·만료·철회를 보존한다. static roster 중복이나 평문 fallback으로 접속 실패를 숨기지 않는다.
+- 증거: 두 로봇의 실제 038 HTTPS identity를 SSH로 확인한 CA와 호스트 이름으로 검증했다. 관제 DB에는 기존 active 승인 두 행이 있고, 기존 enrollment client는 HTTP를 재구성한다. 관련 최신 main 통합 검사는 199 passed/64.92초/NEW0이다. source companion 분리 충돌은 stable reader와 두 코드 owner fingerprint를 보존해 통합했다.
+- gate 변화: 실제 HTTPS identity와 기존 등록 상태만 확인했다. Pilot 승인·연결과 관제 HTTPS 등록 경로·새 Camera Peer 승인은 아직 수용하지 않는다. 최신 main의 bounded-trial STOP/send 경합은 독립 source 모의 실행으로 재현되어 수정 전 릴리스를 HOLD한다. 주행·정지 해제·등록 초기화는 수행하지 않는다.
