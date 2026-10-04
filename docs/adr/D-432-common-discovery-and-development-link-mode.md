@@ -298,3 +298,15 @@ JVM 결함 주입과 실제 태블릿의 자식 종료·재검색·백그라운�
 
 근거: [Android bound services](https://developer.android.com/develop/background-work/services/bound-services),
 [ServiceConnection](https://developer.android.com/reference/android/content/ServiceConnection).
+
+### 2026-10-04 추가 결정: Pilot 연결 실패 후 즉시 재시도
+
+실제 HTTP 로봇의 접속 실패에서 HTTPS 점검 안내가 나오고 연결 카드가 비활성 상태로
+남았다. 연결 시 목록 cache를 무효화하여 실패·취소의 terminal refresh가 현재 후보로
+카드를 다시 구성한다. TTL 만료·주소 충돌·발열 제한은 그대로 적용하며 활성 상태를
+무조건 강제하지 않는다. HTTP 후보에는 전원·같은 Wi-Fi·다시 선택을 안내하고 secure
+후보에는 기존 신뢰된 HTTPS 안내도 유지한다. 검색 성공을 접속 성공으로 표현하지 않는다.
+
+실제 태블릿에서 실패 후 같은 카드를 다시 눌러 재시도하고 목록으로 복귀하는 흐름을
+확인한다. 정상 로봇 접속과 배포 수락은 별도로 검증한다. 이 결정은 연결 실패 표현과
+재시도에 한정하며 페어링 코드 규격·TLS 신뢰·CORE 명령 권한을 변경하지 않는다.

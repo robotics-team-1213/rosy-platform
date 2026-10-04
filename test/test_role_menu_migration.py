@@ -152,7 +152,7 @@ def test_console_surface_contains_a_stoppable_live_camera_panel():
     assert 'import { createVisionPreview } from "/assets/vision.js"' in source
     assert "/api/v1/vision/front/status" in vision
     assert re.search(r'import\s*\{\s*fetchCameraPair\s*\}\s*from\s*"/common/evidence.js"', vision)
-    frames = (WEB.parent / "web_common" / "evidence.js").read_text(encoding="utf-8")
+    frames = (ROOT / "shared" / "web" / "evidence.js").read_text(encoding="utf-8")
     assert "export async function fetchCameraPair" in frames
     assert "/api/v1/vision/front/frame?sequence=" in frames
     assert "await fetchFrame(" in frames
