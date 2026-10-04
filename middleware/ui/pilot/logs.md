@@ -353,6 +353,11 @@
 - 증거: 기기 옵션·실제 readback 1 passed; 저조도 회귀 1 passed; 기존 로봇 기록·hold/takeover 4 passed.
 - gate 변화: SOURCE/LOCAL. ARM64/device/field evidence remains separate.
 
+## 2026-10-04 · uncommitted · docs: provide the recorded artifact gate command
+
+- Change: Add the existing payload-boot-smoke workflow dispatch command to the ARTIFACT progress entry; preserve its state and evidence. No screen or runtime code changed.
+- Evidence: GitHub run 37200780702 was independently read back as completed/success at commit af0b3211384c9a8f2e5abbc2863c2fbcb54b0ca3. This records the command missing from the existing GO entry; it does not repeat the observation or claim device acceptance.
+- Gate: Metadata correction only; existing physical and field gates are unchanged.
 ## 2026-10-04 · uncommitted · fix: 과노출 판정 불가 안내
 
 - 변경: 원본 영상 위에 덧씌우지 않고 기존 품질 경고에서 과노출 · 차선 정보 확인 불가를 표시한다. 저조도·과노출·회복·구형 응답을 각각 구분한다.
@@ -411,6 +416,17 @@
 - 증거: 사용자 확인 ("건했어. pilot 는 돼", 2026-10-05). 합격선 참조: `docs/plans/2026-10-04-pilot-device-stop-contract-measurement.md`.
 - gate 변화: pilot DEVICE **GO** (사용자 확인 등급). FIELD는 별개(D-454 결정 3).
 - 결정: D-444 §2 R2 충족. 사다리 P2 완료.
+## 2026-10-05 · uncommitted · feat(pairing): LAN 승인 기록과 신원 확인 재연결
+
+- 변경: 같은 LAN 목록에서 선택한 장비에 수신 승인을 요청하고 P256 키·TLS 신원 확인 뒤 기존 조종 세션으로 연결한다. 승인 기록은 일반 세션과 별도로 암호화해 보관한다. 승인 직후 연결 실패에도 기록을 남기고, 키 변경·폐기·발급자 만료 시 기록을 보존한 채 접속을 차단한다. 마지막 선택 장비의 연결 정보를 실패 화면에서도 열 수 있다.
+- 증거: 최종 Kotlin 컴파일과 실제 JVM 검사 81 PASS·0 SKIP. 승인 뒤 challenge 실패의 저장 순서와 실패한 재연결에서 기존 암호화 바이트 보존을 회귀 검사했다. 실제 Android 대화상자 표시·APK 설치·상대 화면 승인·DHCP 재연결은 아직 확인하지 않았다.
+- gate 변화: 새 페어링 변경의 SOURCE/LOCAL 증거다. 기존 D-444 사용자 실기 확인 DEVICE GO는 보존하며 이를 새 페어링 수용으로 대신하지 않는다. Bluetooth·주소 입력·개발 설정은 기본 연결 흐름에 추가하지 않는다.
+
+## 2026-10-05 · uncommitted · refactor(pairing): 발급 세션 변수와 시험 이름 명확화
+
+- 변경: 발급된 단기 세션 변수명을 accessToken으로 명확히 하고 세 시험 이름을 줄였다. wire 필드와 검증 단언은 유지한다.
+- 증거: 세 파일의 독립 source 검토에서 이름 변경만 확인했다. 변경한 실제 snapshot의 Kotlin 컴파일과 JVM 검사 81 PASS·0 SKIP를 다시 확인했다.
+- gate 변화: SOURCE/LOCAL만. 실제 설치·LAN 승인 수용은 별도다.
 
 ## 2026-10-05 · uncommitted · feat(drive): D-368 운전자 MJPEG 스트림 클라이언트
 

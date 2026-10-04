@@ -442,3 +442,9 @@
 - 변경: 현행 모듈에 source-token 표시 추적과 승인 보정을 통합. 마커 명시 대응 우선, 없으면 익명 검출·신뢰 가능한 map pose 대조. UI/UX 리팩터링 없음.
 - 증거: 공유 벡터·Vision·Fleet·브라우저 전환 조건을 호스트에서 검증. 실제 사이트는 두 등록 로봇과 S21 영상 연결 조회만 확인. 후보 배포·빈 트랙 학습·실물 위치 오차는 미완료.
 - gate 변화: 없음. SOURCE/LOCAL 변경이며 DEVICE/FIELD 완료 주장 없음. 기존 등록·credentials 보존.
+
+## 2026-10-05 · uncommitted · feat(pairing): 승인 관계 계약과 설정 쓰기 경계
+
+- 변경: D-456의 typed 요청·승인·키 증명·단기 세션 계약을 공용 protocol에 두고 설정 overlay의 쓰기를 파일 잠금과 원자적 교체로 직렬화한다. CORE 전용 보조 Python 경로는 설치된 서명 release의 소유권·권한·경로·startup hook을 확인한다.
+- 증거: 통합본의 실제 P256·API·파일 삭제·서로 다른 프로세스 설정 쓰기·보조 경로 검사 32 PASS. 승인 저장 파일 전체 삭제 시 메모리 기록을 복구하지 않는 회귀 검사를 포함한다. subprocess에는 공용 패키지 PYTHONPATH를 명시했고 첫 환경 누락 실패를 원본으로 보존했다.
+- gate 변화: 이 변경의 SOURCE/LOCAL 확인. Linux 실권한·ARM import·서명 payload·실기 승인은 별도이며 과거 DEVICE 증거를 이번 연결 수용으로 사용하지 않는다.

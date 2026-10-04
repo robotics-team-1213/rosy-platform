@@ -206,6 +206,7 @@
 | D-458 | 학습 앱·웹 공통 작업 화면과 결과 확인 경계 |
 | D-459 | Pinky 학습 검수는 저장되는 웹앱으로 제공하고 자동 초안·수동 정답·학습 수용을 분리한다 |
 | D-461 | ROSY 작업 화면은 상태·다음 작업·행동을 먼저 보여주고 공용 작업 부품으로 구성한다 |
+| D-462 | Pinky 반복 검수는 프레임 정체성·객체/픽셀 독립 revision·최신 결정 확인을 보존한다 |
 
 ## 계획·결과 문서
 
@@ -297,8 +298,8 @@
 
 ## 최근 기록
 
+- 2026-10-05 · uncommitted · docs(reference): D-368 행 v1.101→v1.102 재번호
 - 2026-10-05 · uncommitted · docs(reference): D-368 행 v1.100→v1.101 재번호
 - 2026-10-05 · uncommitted · docs(reference): API Ref v1.100 — D-368 운전자 MJPEG 스트림
+- 2026-10-05 · uncommitted · fix(learning): validate sealed receipt authority exactly
 - 2026-10-05 · uncommitted · feat(fleet): D-463 차선 경로는 다음 짧은 점
-- 2026-10-05 · uncommitted · docs(validation): P2 페달 계측 실행 준비 완료 — 사용자 입회 대기
-- 2026-10-05 · uncommitted · uiux(review): 필터 일치 이동과 마지막 라벨 복구

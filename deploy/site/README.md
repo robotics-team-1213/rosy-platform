@@ -1023,6 +1023,24 @@ It also does not inspect every mutable database/configuration file's contents.
 
 For a functional gate, add `functional_checks` to host `autoupdate.conf`:
 
+기존 운영 계정 토큰 대신 전용 viewer를 만들 때는 검토된
+`site_functional_setup.py`를 운영자의 sudo 터미널에서 실행한다.
+기본 실행은 preflight만 수행하고 `--apply`는 계정·토큰·설정을 적용한다.
+설치기는 현재 서명된 이미지와 실행 설정, 대기 작업, 기존 권한을 확인하고
+Fleet만 재시작한다. 기존 사용자와 enrollment, 키, 타이머 상태를 보존한다.
+사용자 파일의 Fleet 그룹 읽기 권한도 유지하며 새 raw token은 root0600이다.
+
+중단된 설치는 같은 `--apply`로 먼저 복구한다. 모든 복구 자료의 checksum과
+현재 파일을 확인한 뒤 기존 파일을 복원한다. 알 수 없는 로컬 수정은 덮어쓰지
+않는다. API가 응답하지 않거나 작업 중이면 Fleet를 재시작하지 않고 복구 기록과
+정지된 타이머를 유지한다. 원인을 해소한 뒤 같은 명령을 재실행한다.
+완료 후 `/var/lib/rosy/site-functional-setup-receipt.json`과 실제 GET 응답을 확인한다.
+
+이 gate는 Fleet의 등록 ID와 Vision source가 유지되는지 검사한다. 로봇의 online,
+카메라 프레임 갱신, marker와 로봇의 물리적 대응, 주행 인수는 별도 검증한다.
+정적 roster를 정리하기 전에 카메라 `robot_ids`와 `robot_markers` 참조를 함께
+확인하고 실제 marker 부착을 확인한다. offline만으로 기존 등록이나 키를 지우지 않는다.
+
 ```json
 "functional_checks": [
   {"path": "/api/fleet/state", "token_file": "/etc/rosy/site/secrets/<viewer-token-file>",

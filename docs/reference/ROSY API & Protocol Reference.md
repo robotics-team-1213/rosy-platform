@@ -2,7 +2,7 @@
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.101
+**Version:** v1.102
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -278,7 +278,7 @@ config `control.sensor_adapter.mode` 와 같은 문자열이다(D-400). 일반 �
 | GET | `/api/v1/vision/models` | Viewer | D-423: 로봇 학습 모델 상태(작업별, 읽기 전용) `{tasks:[{task,slot,model_revision,last_error,frames_inferred,latency_ms_p50,signed,age_s,stale}]}` (`signed`: 노드가 서명을 확인했으면 true/false, 아니면 null; lane_seg 는 경고만이라 false 일 수 있다). `lane_seg`/`shadow` 는 `perception/learned/status`, `object_det`/`active` 는 `perception/learned/object_det/status` 에서 온다. CORE 는 포인터 파일을 읽지 못하므로 노드가 없는 슬롯은 빠진다. `no-store`. 교체(promote/rollback)는 운영자 CLI(`rosy_ml`)만 — CORE 쓰기 API 없음 |
 | GET | `/api/v1/vision/front/status` | Viewer | 최신 front camera preview의 available/stale, source, frame, 크기, overlay, sequence 메타데이터. 원본 영상은 상태 WebSocket에 싣지 않음 |
 | GET | `/api/v1/vision/front/frame` | Viewer | D-152 fresh 최신 JPEG 한 장. `Cache-Control: no-store`, `Content-Encoding: identity`; 없거나 stale이면 404 `CAMERA_FRAME_UNAVAILABLE` |
-| GET | `/api/v1/vision/front/stream` | Operator | D-368 (v1.101) 운전자 전용 MJPEG 스트림. `multipart/x-mixed-replace; boundary=frame`, `?overlay=`(기본 true, `false`면 raw pair). 파트 헤더 `X-Rosy-Camera-{Sequence,Source,Captured-At}`. 조종 소유권은 가장 최근 수락된 teleop 토큰(D-460, 임대 없음): 운전자 아님 409 `CAMERA_STREAM_NOT_DRIVER`, 동시 하나만 409 `CAMERA_STREAM_BUSY`, 다른 토큰의 teleop 수락으로 열린 스트림이 끝난다. 인증은 헤더만(D-193). 관전자·관제 화면은 기존 0.4 s 폴링을 그대로 쓴다 |
+| GET | `/api/v1/vision/front/stream` | Operator | D-368 (v1.102) 운전자 전용 MJPEG 스트림. `multipart/x-mixed-replace; boundary=frame`, `?overlay=`(기본 true, `false`면 raw pair). 파트 헤더 `X-Rosy-Camera-{Sequence,Source,Captured-At}`. 조종 소유권은 가장 최근 수락된 teleop 토큰(D-460, 임대 없음): 운전자 아님 409 `CAMERA_STREAM_NOT_DRIVER`, 동시 하나만 409 `CAMERA_STREAM_BUSY`, 다른 토큰의 teleop 수락으로 열린 스트림이 끝난다. 인증은 헤더만(D-193). 관전자·관제 화면은 기존 0.4 s 폴링을 그대로 쓴다 |
 | POST | `/api/v1/vision/front/evidence` | Operator | 카메라 화면에서 만든 JPEG 스크린샷 또는 WebM/MP4 녹화를 로봇 SD에 저장. 길이 접두 JSON 메타데이터 뒤에 바이너리 미디어를 전송; 성공 시 `VisionEvidenceRecord`(201) |
 | GET | `/api/v1/vision/front/evidence` | Operator | 저장된 카메라 증거의 최신 목록(`VisionEvidenceList`, 최대 50건) |
 | GET | `/api/v1/vision/front/evidence/{id}` | Operator | 저장 미디어 다운로드. 24자리 불투명 id만 허용; 없으면 404 |
@@ -696,7 +696,7 @@ CORE-only 런타임(`runtime_mode: core`, D-161)에서 한 번도 값이 오지 
 
 Camera preview transfer rules (v1.12, D-152):
 
-- v1.101 운전자 MJPEG 스트림(D-368): `GET /api/v1/vision/front/stream` 는 최신 프레임 저장소에서 **새 sequence가 들어올 때만** 파트를 내보낸다(multipart, boundary `frame`). 받을 수 있는 사람은 **현재 운전자 한 명** — 조종 소유권은 좌석 임대가 아니라(D-460) 가장 최근 수락된 teleop의 토큰이다. 운전자가 없거나 다른 토큰이면 409 `CAMERA_STREAM_NOT_DRIVER`, 스트림은 동시에 하나만 열린다(409 `CAMERA_STREAM_BUSY`). 다른 토큰의 teleop가 수락되면 열린 스트림은 끝나고 슬롯이 비며, 클라이언트 끊김도 슬롯을 돌려놓는다. 인증은 `Authorization` 헤더로만 하고 토큰을 URL에 두지 않는다(D-193) — 브라우저 `<img>` 는 헤더를 못 보내므로 클라이언트는 `fetch()` 스트림을 잘라 그린다. 발행 주기 상향(기본 12 fps)은 ROS-SIM/DEVICE 단계의 로봇 측 사항이며 이 경로 계약에 속하지 않는다.
+- v1.102 운전자 MJPEG 스트림(D-368): `GET /api/v1/vision/front/stream` 는 최신 프레임 저장소에서 **새 sequence가 들어올 때만** 파트를 내보낸다(multipart, boundary `frame`). 받을 수 있는 사람은 **현재 운전자 한 명** — 조종 소유권은 좌석 임대가 아니라(D-460) 가장 최근 수락된 teleop의 토큰이다. 운전자가 없거나 다른 토큰이면 409 `CAMERA_STREAM_NOT_DRIVER`, 스트림은 동시에 하나만 열린다(409 `CAMERA_STREAM_BUSY`). 다른 토큰의 teleop가 수락되면 열린 스트림은 끝나고 슬롯이 비며, 클라이언트 끊김도 슬롯을 돌려놓는다. 인증은 `Authorization` 헤더로만 하고 토큰을 URL에 두지 않는다(D-193) — 브라우저 `<img>` 는 헤더를 못 보내므로 클라이언트는 `fetch()` 스트림을 잘라 그린다. 발행 주기 상향(기본 12 fps)은 ROS-SIM/DEVICE 단계의 로봇 측 사항이며 이 경로 계약에 속하지 않는다.
 
 - v1.91 `raw_available`와 `raw_sequence`는 같은 capture stamp·frame_id·크기의 원본이 있는지 표시한다. raw_sequence는 대응 주석 sequence와 같다. `GET /front/frame?sequence=S&overlay=false`는 원본, 생략/true는 주석 JPEG이며 Variant(raw/annotated)·Frame-Id·Captured-At·Sequence 응답 header로 구분한다. 최근 최대 4개 frame 쌍을 보관하고 source image age와 monotonic 수신 TTL을 2초로 제한한다. 한 viewer의 같은 pair는 각 variant를 한 번만 가져올 수 있으며 둘이 한 admission을 공유한다. 반복 variant/400ms 안의 다음 pair는 429, 교체되어 짝을 확인할 수 없으면 409, 없거나 낡은 raw는 404이다. 원본 요청을 주석으로 대체하지 않는다.
 - `quality_age_ms`는 source image age + monotonic 수신 나이이며 얼굴 조명 보조 handover도 이 나이에 파일 전달 나이를 더해 만료한다. source clock이 없거나 잘못되거나 image age가 0..2초 밖이면 조도는 null이고 raw pair로 채택하지 않는다. 기존 주석 JPEG 표시 경로는 유지한다.
@@ -2215,11 +2215,112 @@ descriptor는 위 필드 중 `checkpoint_id`, `status`, `updated_at`을 제외�
 owner ready, StopLocal ACK, caller 확인 boolean 또는 simulation pose만으로 다음 층을 열지 않는다.
 이 readback은 작업자의 안전 접근이나 간지 삽입 완료 증거가 아니다.
 
+### D-456 CORE 수신 승인과 기억한 연결 (v1.101)
+
+이 규약은 LAN 최초 승인과 이미 승인된 키의 재접속을 구분한다. 모든 경로는 실제
+HTTPS listener를 요구하며 CORE는 `proxy_headers=False`를 유지한다. 광고는 후보를
+보여줄 뿐 인증서를 신뢰시키거나 권한을 발급하지 않는다. HTTP-only 로봇의 최초
+신뢰·TLS provisioning과 Native Pilot 결합은 이 CORE 후보의 완료 범위가 아니다.
+
+Prefix: `/api/v1/auth/peer-pairing`.
+
+| Method / path | 입력·권한 | 결과 |
+|---|---|---|
+| GET `/identity` | 검증할 HTTPS origin | receiver_id, receiver_public_key(SPKI DER base64), receiver_key_sha256, optional tls_hostname/tls_ca_pem/tls_ca_sha256 |
+| POST `/requests` | LAN, fields+P256 signature | request_id, request_secret, display_code, revision=0, state=pending, paired=false, expires_at |
+| GET `/pending` | 현재 named administrator | 최대 16개의 대기 요청; 비밀값 없음 |
+| GET `/requests/{id}` | `X-Request-Secret` | state/revision, 승인됐다면 relationship_id/generation/persistent/authorization_expires_at/authorization_available |
+| DELETE `/requests/{id}` | 같은 요청 비밀 | pending만 cancelled로 전환 |
+| POST `/requests/{id}/decision` | 현재 named administrator; action=approve/reject, revision, persist_requested | 승인 거래 결과; **paired=false**, credential 발급과 구분 |
+| POST `/relationships/{id}/challenge` | 이미 승인된 관계 ID | fields와 receiver_signature; 최대 60초, 한 번만 사용 |
+| POST `/relationships/{id}/session` | 해당 client key의 fields+signature | 기존 digest token의 id/token/role/expires_at; 최대 1시간 |
+| DELETE `/relationships/{id}` | 현재 named administrator | revoked와 증가한 generation; 자식 세션 거부 |
+
+Request fields: receiver_id, receiver_key_sha256, client_id, label(1–64자),
+client_public_key(SPKI DER base64), role(viewer/operator), nonce(64자 hex).
+관계 ID는 request ID와 같은 32자 base64url이다. 비밀 request_secret은 43자
+base64url이며 서버는 hash만 보관한다. 4자리 영숫자는 양쪽 화면의 요청 비교용이고,
+승인·로그인 자격이 아니다. 상태 polling 간격은 최소 2초다.
+
+Challenge fields: relationship_id, challenge_id, nonce, receiver_id,
+receiver_key_sha256, client_id, client_key_sha256, role, generation, expires_at.
+처음 승인한 generation은 0이며 client는 기억한 승인과 정확히 비교한다. 폐기한
+관계 ID는 재승인하지 않는다. 새 동의는 새 request/relationship ID를 쓴다.
+
+서명 transcript는 `{"version":"rosy.peer-proof/1","context":...,"fields":...}`의
+key를 정렬한 compact ASCII JSON이다. Python `ensure_ascii=True`, lowercase Unicode
+escape와 UTF16 surrogate pair, `/` 비escape, `allow_nan=False`가 기준이다. Context는
+request / receiver-challenge / session-request로 분리한다. P256 ECDSA SHA256,
+DER signature의 canonical base64를 사용한다. 서버 challenge의 공개 키·키 지문은
+광고에서 새로 받아 신뢰하지 않고 기존 HTTPS 또는 승인된 화면/QR trust anchor에
+대한 값과 비교한다.
+
+`persistent=true`는 수신 소유자가 `persist_requested=true`로 명시 승인하고 실제 현재
+issuer record가 nonlegacy·nondevelopment digest·card/manual source의 만료 없는
+administrator일 때만 허용한다. issuer ID/digest/source/named principal/scope를
+보존하고 매 갱신과 HTTP·live socket 인증에 재확인한다. 임시 pair-* issuer는 기억
+요청이 있어도 `persistent=false` 및 issuer보다 길지 않은 만료(최대 168시간)를
+반환한다. 관계 기록은 세션 만료·오프라인만으로 지우지 않는다. issuer 폐기·키 변경·
+관계 폐기·만료는 자식 세션과 새 발급을 거부한다.
+
+동일 요청 승인 결과가 저장된 뒤 응답을 잃어도 같은 관계를 읽어 복구한다. 재시도는
+권한 기간을 늘리거나 관계를 중복 생성하지 않는다. nonce 소비·token digest·관계·
+감사는 CORE의 기존 config overlay 한 번의 atomic commit에 포함한다. 최대 관계
+128개, pending 16개/300초(상태 보관 600초), source 128개·신청 30회/분(잘못된
+증명도 crypto 실행 전에 포함), challenge 64개/60초, 관계당 활성 세션 4개, audit
+256개를 넘기지 않는다. 용량이 가득 차면 기존 관계를 암묵적으로 삭제하지 않는다.
+
+API 오류: 실제 HTTPS 또는 최초 LAN 조건 불충족 403, 기존 인증 없음 401,
+권한 부족 403, 409(변경·만료·한도·증명 거부), 잘못된 typed 입력 422,
+4096 bytes 초과 413, 저장 identity 초기화 불가 503. 응답은 no-store다.
+이 로그인 발급은 Pilot seat·teleop 수락·calibration lease·모드·정지 해제를
+발급하지 않는다(D-460/D-411). 실제 조작은 기존 CORE 게이트를 그대로 통과한다.
+
+암호화 의존은 signed release의 `runtime-python` 보조 경로에 hashlocked ARM binary
+wheels로 실어 CORE entry만 읽는다. D-189 base `python-runtime.sha256`과 이미지
+global Python 요구사항은 변경하지 않는다. 기기에서 apt/pip download를 실행하지
+않으며 새 CLI·user-site·`.pth` hook을 실행하지 않는다. native ARM build의 실제
+import/sign/verify와 정상 signed candidate/device 수락은 별도 검증이다.
+
+
+`authorization_available`은 현재 issuer와 관계가 유효할 때만 true다. 과거의 승인
+결정은 revoked/expired 관계에서도 보관하지만 usable approval로 해석하지 않는다.
+새 세션 token에는 `peer_binding={relationship_id,generation}`을 함께 저장한다.
+관계 저장소·관계·session_ids 누락/손상이나 generation 불일치는 HTTP와 live socket
+모두 거부한다. 기존 peer_binding 없는 D-193 token 의미는 바꾸지 않는다.
+
+선택적 `network.tls.ca_file`은 TLS provisioning 소유의 절대 경로이며 cert_file과
+key_file을 대체하지 않는다. 설정된 public CA 하나(최대 8192 bytes)가 현재 TLS
+leaf/fullchain(최대 32768 bytes)을 실제 OS hostname.local에 대해 검증해야 한다.
+CA BasicConstraints/keyCertSign/현재 validity 및 chain/SAN을 검증하고 실패하면
+listener/first-contact를 닫는다. 성공할 때만 identity의 세 optional field를 함께
+공개한다. 지문은 CA DER SHA256 lowercase hex이며 CA private key는 공개하지 않는다.
+ca_file이 없으면 세 field는 null이며 기존 신뢰 검증을 대체하지 않는다.
+
+수신 기기의 인증된 관리자 화면에 독립적으로 읽은 CA 지문과 hostname을 표시한다.
+D-341 첫 접촉은 anonymous identity/request/status와 물리 화면의 지문 비교,
+실제 관측 leaf의 CA binding/SAN 검증까지만 허용한다. 해당 신뢰가 확립되기 전
+challenge/session이나 bearer 전송을 허용하지 않는다. mDNS·4자리 번호로 CA를
+신뢰하지 않는다. 이 CORE slice의 public QR renderer는 아직 구현하지 않았다.
+
+anonymous identity/challenge/session 호출은 crypto 전에 source별 합계 30회/분,
+source map 최대 128개로 admission하며 한도는 429다. 최초 신청의 별도 30회/분
+한도도 잘못된 증명을 포함한다. overlay 거래는 config.yaml.lock의 동일 UID
+소유 0600 sidecar로 process/thread fence하고 unrelated token/config를 보존한다.
+기존 lower-layer card/manual token은 실제 merged config provenance로 확인하지만,
+peer 관계 저장소는 overlay 소유이며 삭제된 관계를 process memory에서 복원하지 않는다.
+
+운영 수용은 별도다: HTTP-only Pinky의 TLS provisioning, 실제 native ARM crypto
+build/import, signed delivery, Native Pilot coupled client, 실제 두 화면 승인과 재접속,
+Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 주장하지 않는다.
+
+
 # 11. 변경 이력
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
-| v1.101 | 2026-10-05 | Additive (D-368, feat/d368-driver-mjpeg-stream): 운전자 전용 MJPEG 스트림 `GET /api/v1/vision/front/stream`(operator, `multipart/x-mixed-replace; boundary=frame`, `?overlay=`). 조종 소유권은 수락 teleop 토큰(D-460 — 임대 없음). 운전자 아님 409 `CAMERA_STREAM_NOT_DRIVER`, 이미 열림 409 `CAMERA_STREAM_BUSY`, 새 수락 teleop가 열린 스트림을 끝낸다. 관전자·관제는 기존 0.4 s 폴링 유지. envelope 1.0 유지. v1.100을 D-463이 main에서 먼저 써 v1.101로 재번호 |
+| v1.102 | 2026-10-05 | Additive (D-368, feat/d368-driver-mjpeg-stream): 운전자 전용 MJPEG 스트림 `GET /api/v1/vision/front/stream`(operator, `multipart/x-mixed-replace; boundary=frame`, `?overlay=`). 조종 소유권은 수락 teleop 토큰(D-460 — 임대 없음). 운전자 아님 409 `CAMERA_STREAM_NOT_DRIVER`, 이미 열림 409 `CAMERA_STREAM_BUSY`, 새 수락 teleop가 열린 스트림을 끝낸다. 관전자·관제는 기존 0.4 s 폴링 유지. envelope 1.0 유지. v1.100(D-463)·v1.101(D-456)을 main이 먼저 써 v1.102로 재번호 |
+| v1.101 | 2026-10-05 | D-456: LAN 수신 승인·P256 관계·명시적 연결 기억·issuer-bound 단기 세션·선택적 CA first-contact. D-460 조작 게이트 유지; 실기 수용 별도 |
 | v1.100 | 2026-10-05 | Additive (D-463): POST `/api/fleet/robots/{robot_id}/route` expands stored lane-graph edge ids into that polyline and submits only the next point about 0.20 m ahead through the existing goal path. The far junction is not one goal. A pose that is not LOCALIZED in the map frame, or is more than 0.08 m off the polyline, does not call CORE. GoalRequest stays {x, y, yaw}. envelope 1.0 unchanged |
 | v1.99 | 2026-10-04 | D-457: 마커 우선·무마커 폴백 표시 추적, source-token 검출, operator 보정·재학습. 기존 sighting·envelope 1.0·주행 경계 유지 |
 | v1.98 | 2026-10-04 | Additive (D-343·D-432·D-452): 공개 LAN 로봇 발견 목록의 typed 64행 계약, FQDN/TLS 링크, 공용 cache와 제한된 singleflight fallback. 인증·승인·제어 부여 없음; 기존 v1.97 중앙 GET 정본과 envelope 1.0 유지 |

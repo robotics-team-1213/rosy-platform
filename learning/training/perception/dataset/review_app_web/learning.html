@@ -1,12 +1,12 @@
 <!doctype html>
 <html lang="ko" data-theme="dark">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Rosy Learning — 학습 작업</title><link rel="stylesheet" href="/common/tokens.css"><script src="/common/theme.js"></script>
+<title>Rosy 개발 — 학습 작업</title><link rel="stylesheet" href="/common/tokens.css"><script src="/common/theme.js"></script>
 <link rel="stylesheet" href="/common/components.css"><link rel="stylesheet" href="/app.css">
 <script type="module" src="/learning.js"></script></head>
 <body><a class="skip-link" href="#learning-main">학습 작업으로 이동</a>
 <ui-shell grammar="procedure"><ui-topbar><ui-brand><b>ROSY</b></ui-brand><h1>학습 작업</h1>
-<nav class="workspace-tabs" aria-label="학습 화면"><a href="/learning" aria-current="page">작업 목록</a><a href="/">사진 검수</a></nav><span data-spacer></span>
+<nav class="workspace-tabs" aria-label="학습 화면"><a href="/learning" aria-current="page">작업 목록</a><a href="/">사진 검수</a><a href="/pixels">픽셀 검수</a><a href="/catalog">자료 등록</a></nav><span data-spacer></span>
 <label class="theme-label">화면 <select id="theme" class="ui-field"><option value="dark">어둡게</option><option value="light">밝게</option></select></label></ui-topbar>
 <main id="learning-main" class="learning-main" tabindex="-1">
 <div class="workspace-heading"><div><h2>오늘 확인할 학습 결과</h2><p>검수 상태와 학습 결과를 확인하고 다음 작업으로 이어가세요.</p></div><ui-button id="new-task" kind="primary">작업 결과 연결</ui-button></div>
@@ -26,5 +26,5 @@
 <p id="updated" class="quiet"></p><div id="jobs" aria-live="polite"></div>
 <ui-empty id="empty-jobs" hidden><h3 id="empty-title">연결한 작업이 없습니다</h3><p id="empty-description">위의 작업 결과 연결에서 기존 결과 폴더를 연결하세요.</p><ui-button id="reset-filters" kind="quiet" hidden>검색·필터 초기화</ui-button></ui-empty></section>
 <details class="learning-section"><summary>지원 기능과 다음 작업</summary><div id="capabilities"></div>
-<p class="quiet">새 자동 추론·웹 학습 실행·픽셀 편집·CVAT 서버 연결·정책 승격 화면은 아직 지원하지 않습니다. 기존 CLI 작업 결과를 이 화면에서 확인할 수 있습니다.</p></details>
+<p class="quiet">자료 등록과 픽셀 검수는 이 앱에서 이어갑니다. 새 자동 추론·웹 학습 실행·CVAT 서버 연결·정책 승격 화면은 아직 지원하지 않습니다. 기존 CLI 작업 결과를 이 화면에서 확인할 수 있습니다.</p></details>
 </main></ui-shell></body></html>

@@ -85,7 +85,7 @@
 ## 최근 기록
 
 - 2026-10-05 · uncommitted · fix(site): complete candidate contract and owned relearn guards
-- 2026-10-04 · uncommitted · fix(site): D-457 마커 우선·무마커 폴백
-- 2026-10-04 · uncommitted · fix(fleet): Cell header와 등록 시험의 실제 작업 선택
-- 2026-10-04 · uncommitted · fix(tools): 교차 모듈 캡처를 workspace tools에 배치
-- 2026-10-04 · uncommitted · docs(ux): 기존 캡처의 미완료 화면을 HOLD로 분리
+- 2026-10-04 · uncommitted · fix(tools): restore cross-module capture ownership
+- 2026-10-04 · uncommitted · docs: re-judge exact integrated Fleet size
+- 2026-10-04 · uncommitted · fix(ci): preserve current admission and shared controls in regressions
+- 2026-10-04 · uncommitted · refactor(fleet): move periodic goal evidence worker out of app composition

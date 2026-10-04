@@ -215,3 +215,7 @@ provenance:
   record_apt_repository_metadata: true
   record_build_host: true
   record_rosy_package_inventory: true
+
+receiver_crypto:
+  requirements_sha256: c35e75883e936321317bb96e2aa18f71795d526f01c7b1a4c960ff9518990d27
+  verified: true

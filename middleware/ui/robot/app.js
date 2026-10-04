@@ -1,3 +1,4 @@
+import { createReceiverApprovals } from "./peer-approval.js";
 // 대시보드 셸 — 세션·인증·연결 생명주기와 화면 바인딩. 상태 렌더는
 // telemetry.js, 수동 조종은 teleop.js, 상태 소켓은 state-socket.js가 가진다
 // (D-362 P1 분할; 임포트 방향은 여전히 dom ← client ← settings ← 셸 한 방향).
@@ -77,6 +78,7 @@ function authTicket() {
   return {signal: AbortSignal.any([held.signal, page.signal]), current: () => !held.signal.aborted && held === authLifetime && token === session.token && page.current()};
 }
 function invalidateAuth() {
+  receiverApprovals.clear();
   authLifetime.abort(); authLifetime = new AbortController(); commandOwner = null;
   stateSocket.stop(); clearInterval(session.refreshTimer); session.refreshTimer = null;
   clearTimeout(codeRetryTimer); clearTimeout(actionMessageTimer); elements["code-submit"].disabled = false;
@@ -360,7 +362,9 @@ function renderIdentity() {
   }
 }
 
+const receiverApprovals = createReceiverApprovals({root: document.getElementById("peer-approval-panel"), api, isAdmin, captureLifetime: authTicket, runConfirmed});
 async function refreshSlowData(owner = authTicket()) {
+  receiverApprovals.refresh(owner);
   if (!owner.current()) return;
   const required = [
     [api("/api/v1/system/runtime"), renderRuntime],

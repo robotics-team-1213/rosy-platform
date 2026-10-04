@@ -30,7 +30,7 @@ def server_tls_options(config: dict) -> dict:
                 raise ValueError('development connection policy does not bind this robot')
     if tls is None:
         return {}
-    if not isinstance(tls, dict) or set(tls) != {'cert_file', 'key_file'}:
+    if not isinstance(tls, dict) or set(tls) not in ({'cert_file', 'key_file'}, {'cert_file', 'key_file', 'ca_file'}):
         raise ValueError('TLS requires cert_file and key_file together')
     for value in tls.values():
         if not isinstance(value, str) or not value or not Path(value).is_absolute() or not Path(value).is_file():
@@ -41,4 +41,7 @@ def server_tls_options(config: dict) -> dict:
         context.load_cert_chain(tls['cert_file'], tls['key_file'])
     except (OSError, ssl.SSLError) as exc:
         raise ValueError('TLS certificate/key validation failed') from exc
+    if 'ca_file' in tls:
+        from core_api_web.api.peer_pairing.tls_anchor import configured_tls_anchor
+        configured_tls_anchor(config)
     return {'ssl_certfile': tls['cert_file'], 'ssl_keyfile': tls['key_file']}

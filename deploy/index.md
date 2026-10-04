@@ -71,8 +71,8 @@
 
 ## 최근 기록
 
-- 2026-10-05 · uncommitted · test(discovery): 최신 main 통합과 실제 Android 컴파일 확인
-- 2026-10-05 · uncommitted · fix(ci): LAN 배포 검사의 도구 설치와 Android 상태 경로 수정
-- 2026-10-05 · uncommitted · fix(discovery): 같은 LAN Model 발견에 설치된 Avahi D-Bus 사용
-- 2026-10-04 · uncommitted · fix(provenance): 검토된 공개 출처 해시를 정확한 행에 결속
-- 2026-10-04 · uncommitted · feat(ci): payload 부팅 스모크 — arm64 러너에서 D-444 P1.2 관측
+- 2026-10-05 · uncommitted · fix(pairing): 실제 자격 검사를 유지하는 source 분류 보완
+- 2026-10-05 · uncommitted · feat(pairing): 서명 payload의 수신 암호화와 TLS 유지보수
+- 2026-10-05 · uncommitted · fix(test): bound Windows wrapper startup without weakening argv checks
+- 2026-10-05 · uncommitted · fix(ci): integrate reviewed site checks with current main
+- 2026-10-05 · uncommitted · fix(provenance): preserve reviewed source-line bindings

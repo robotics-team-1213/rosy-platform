@@ -851,6 +851,12 @@
 - 증거: 주입 시계·설정 parser RED3 failed, 전원/배터리/bridge GREEN180 passed. 구조 재판정은 docs/plans/2026-10-04-power-health-and-wake.md에 기록한다.
 - gate 변화: SOURCE/LOCAL. 기기 소비전력·물리 wake·배포 검증은 별도다.
 
+## 2026-10-05 · uncommitted · feat(core): 수신 승인용 신뢰 anchor와 보조 runtime
+
+- 변경: 기존 TLS cert/key 설정에 선택적 공용 CA를 더하고 실제 hostname·CA·leaf chain을 검증한다. device CORE는 현재 서명 release의 고정 암호화 wheel 경로만 활성화하며 ROS/learning 전역 Python과 D-189 base runtime 해시는 유지한다.
+- 증거: 실제 CA·hostname 실패와 보조 import-root·쓰기 권한·startup hook 거부를 포함한 통합 32 PASS. 호스트 시험은 native ARM import나 로봇 TLS 설치 증거가 아니다.
+- gate 변화: SOURCE/LOCAL만. 외부 client가 ROS를 직접 말하거나 최종 cmd_vel·정지·제어 lease를 우회하는 경로를 추가하지 않는다. ARTIFACT/DEVICE/FIELD 확인은 남아 있다.
+
 ## 2026-10-05 · uncommitted · feat(services): D-368 vision_stream 배선
 
 - 변경: `core/services.py` `CoreServices`에 `vision_stream: DriverStreamGate` 필드(default_factory) 추가. `gateway/test/test_vision_stream.py` 추가 — core_client 팩토리로 실제 CoreServices 위에서 스트림 라우트 계약(401·409·새 sequence만·운전자 교체·연결 종료)을 검증. 무한 응답을 TestClient portal과 함께 쓰면 교착이라 생성기 직접 반복으로 검증한다(파일 머리말에 근거 기록).
