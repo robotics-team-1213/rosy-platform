@@ -17,6 +17,9 @@ import org.json.JSONObject
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.first
+import java.util.UUID
+import io.github.livsbittt.rosy.cam.pairing.peer.CameraConnection
 
 private val Context.camDataStore: DataStore<Preferences> by preferencesDataStore(name = "cam_settings")
 
@@ -27,8 +30,34 @@ private val Context.camDataStore: DataStore<Preferences> by preferencesDataStore
  * A pairing saved before D-391 (key `host`, and `pin`) is read through [SiteLink.from]: an IP host becomes
  * `manual_host`, a DNS name `tls_host`. The next [save] rewrites it in the new keys.
  */
-class SettingsStore(context: Context) {
-    private val store = context.applicationContext.camDataStore
+class SettingsStore internal constructor(private val store: DataStore<Preferences>) {
+    constructor(context: Context) : this(context.applicationContext.camDataStore)
+    private data class Rollback(val previous: SiteLink?, val replaced: SiteLink, val revision: String, val relationship: String?)
+    private var rollback: Rollback? = null
+
+    data class PeerSnapshot(val link: SiteLink?, val revision: String, val relationshipId: String?)
+    suspend fun peerSnapshot(): PeerSnapshot = store.data.first().let {
+        PeerSnapshot(decode(it), it[LINK_REVISION] ?: "0", it[PEER_RELATIONSHIP])
+    }
+    /** The DataStore transaction fences newer manual links, receiver choices and local forgetting. */
+    suspend fun installPeer(connection: CameraConnection, expected: PeerSnapshot, valid: () -> Boolean) {
+        store.edit { prefs ->
+            require(prefs[DEVELOPMENT_POLICY] == null && (prefs[LINK_REVISION] ?: "0") == expected.revision && decode(prefs) == expected.link)
+            check(valid()) { "camera connection superseded" }
+            require(SiteLink.validate(connection.link) == null)
+            write(prefs, connection.link)
+            prefs[PEER_RELATIONSHIP] = connection.relationship.id
+        }
+    }
+    suspend fun forgetPeer(origin: String) {
+        store.edit { prefs ->
+            val current = decode(prefs)
+            if (current?.tlsHost != null && "https://${current.tlsHost}:${current.port}" == origin && prefs[PEER_RELATIONSHIP] != null) {
+                SiteLinkPrefs.encode(current).keys.forEach { prefs.remove(stringPreferencesKey(it)) }
+                prefs.remove(PEER_RELATIONSHIP); prefs[LINK_REVISION] = UUID.randomUUID().toString()
+            }
+        }
+    }
 
     /** The stored record as read: the usable link, plus a salvaged or rejected host for the screen. */
     val stored: Flow<SiteLinkPrefs.Stored> = store.data
@@ -105,7 +134,9 @@ class SettingsStore(context: Context) {
         store.edit { prefs ->
             require(prefs[DEVELOPMENT_POLICY] == null) { "revoke development link before pairing" }
             previous = decode(prefs)
+            val priorPeer = prefs[PEER_RELATIONSHIP]
             write(prefs, link)
+            rollback = Rollback(previous, link, prefs[LINK_REVISION]!!, priorPeer)
             prefs.remove(DEVELOPMENT_POLICY)
         }
         return previous
@@ -114,9 +145,11 @@ class SettingsStore(context: Context) {
     /** Undoes [replace]: writes [previous] back, or removes every site-link key when there was none. */
     suspend fun restore(previous: SiteLink?, replaced: SiteLink) {
         store.edit { prefs ->
-            if (decode(prefs) != replaced) return@edit
+            val owned = rollback ?: return@edit
+            if (owned.replaced !== replaced || owned.previous != previous || owned.revision != prefs[LINK_REVISION] || decode(prefs) != replaced) return@edit
             if (previous != null) {
                 write(prefs, previous)
+                if (owned.relationship != null) prefs[PEER_RELATIONSHIP] = owned.relationship
             } else {
                 SiteLinkPrefs.encode(replaced).keys.forEach { prefs.remove(stringPreferencesKey(it)) }
             }
@@ -138,6 +171,9 @@ class SettingsStore(context: Context) {
 
     /** Applies [SiteLinkPrefs.encode]: typed keys for values, removal for nulls (DataStore keys match by name). */
     private fun write(prefs: MutablePreferences, link: SiteLink) {
+        prefs[LINK_REVISION] = UUID.randomUUID().toString()
+        prefs.remove(PEER_RELATIONSHIP)
+        rollback = null
         SiteLinkPrefs.encode(link).forEach { (name, value) ->
             when (value) {
                 null -> prefs.remove(stringPreferencesKey(name))
@@ -156,5 +192,7 @@ class SettingsStore(context: Context) {
     private companion object {
         val LENS = stringPreferencesKey("lens")
         val DEVELOPMENT_POLICY = stringPreferencesKey("development_link_policy")
+        val LINK_REVISION = stringPreferencesKey("site_link_revision")
+        val PEER_RELATIONSHIP = stringPreferencesKey("camera_peer_relationship")
     }
 }

@@ -118,3 +118,24 @@ anonymous first-contact/LeafBinding/물리 비교 후에만 credential 흐름을
 4자리 번호는 요청 비교용이다. CORE 후보의 QR renderer, HTTP-only 기기 TLS 설치,
 Native Pilot/Fleet/Cam 결합, native ARM crypto 실행과 signed DEVICE 수용은 별도이며
 이 source slice로 전체 D-456 목표 완료를 주장하지 않는다.
+
+
+## 2026-10-05 Fleet/Cam 구현 통합과 LAN 기본 흐름
+
+사용자의 재확인에 따라 Bluetooth 없이 같은 LAN의 발견 목록에서 기기를 선택한다.
+IP 입력이나 개발 설정 가져오기를 정상 접속의 전제로 두지 않는다. 최초 상대 화면 승인과
+이후 신원 증명은 별도 단계이며 광고 목록만으로 자격이나 제어 권한을 주지 않는다.
+
+API Reference v1.103의 `rosy.camera-peer/1`은 기존 Fleet 영상 자격 소유자에 둔다.
+CORE 운영자 자격을 영상 자격으로 재사용하지 않는다. 현재 named site operator의
+명시적 연결 기억 승인, source 점유, SQLite nonce/credential 원자적 갱신과 issuer/key/
+generation 검증을 적용한다. 기억한 관계는 장기 오프라인에도 보존하지만 폐기·키 변경·
+발급자 철회는 갱신을 거부한다. 최초 CA 확인은 기존 HTTPS 물리 비교 경계이며 네 문자
+표시값은 요청 대조용이다. 네 문자만으로 서버 인증을 끝냈다고 주장하지 않는다.
+
+상대 승인 화면은 공용 선택·체크·확인 컴포넌트를 사용한다. 401/403에서는 보호 목록을
+지우고 같은 인증 epoch의 polling을 멈추며 명시적 재인증 뒤 다시 확인한다. 구형 수신기의
+404도 자동 반복을 멈춘다. 승인이나 재연결은 카메라 촬영·lease·주행·정지 해제를 시작하지 않는다.
+
+SOURCE/LOCAL 통합 후에도 Android 앱 빌드·기존 서명 업데이트·실제 두 화면 승인과
+DHCP/오프라인 복귀·발열 대응은 각각 검증해야 한다. 이 기록은 실기 완료가 아니다.

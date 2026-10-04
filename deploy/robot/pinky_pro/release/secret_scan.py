@@ -131,14 +131,23 @@ _PEER_PUBLIC_VECTOR_VALUES = {
     'signature': frozenset({
         'MEUCIGj28eNNnlw4zwNwo3EYK4npeSZkJQrymIxZ+E3drcBkAiEA92Meq6XZCsVLfodbqnmAqBSxvaMR2WJsFLXEN4HvX8w'}),
 }
+_CAMERA_PEER_VECTOR_PATH = 'operations/ui/cam/app/src/test/resources/camera-peer-transcripts.json'
+_CAMERA_PEER_PUBLIC_VECTOR_VALUES = {
+    'nonce': frozenset({'01' * 32, '02' * 32}),
+    'signature': frozenset({
+        'MEQCIB8WKmontsmONrEJCGMhZ+ioZLoH4cDiBfq6s6FlP99GAiBtnNpxoX+FyYb20FDkoCxWsDWlZ50nT7yzs6l+5v+VAw=='}),
+}
 
 
 def _is_public_peer_vector(path: str, line: str, value: str) -> bool:
-    if path.replace('\\', '/') != _PEER_VECTOR_PATH:
+    allowed = {_PEER_VECTOR_PATH: _PEER_PUBLIC_VECTOR_VALUES,
+               _CAMERA_PEER_VECTOR_PATH: _CAMERA_PEER_PUBLIC_VECTOR_VALUES,
+               'test/fixtures/protocol/camera-peer.v1.json': _CAMERA_PEER_PUBLIC_VECTOR_VALUES}.get(path.replace('\\', '/'))
+    if allowed is None:
         return False
     field = re.fullmatch(r'\s*"(nonce|public_key|signature)":\s*"([A-Za-z0-9+/=]+)"\s*,?\s*', line)
     return bool(field and field.group(2).rstrip('=') == value.rstrip('=')
-                and value.rstrip('=') in _PEER_PUBLIC_VECTOR_VALUES[field.group(1)])
+                and value.rstrip('=') in {item.rstrip('=') for item in allowed.get(field.group(1), frozenset())})
 
 # SubjectPublicKeyInfo for Ed25519 is public integrity material, not a secret.
 # Validate the complete DER shape rather than ignoring arbitrary base64 between

@@ -44,7 +44,8 @@ def test_base_compose_has_no_pairing_so_default_behaviour_is_unchanged(base):
 
 
 def test_overlay_only_touches_fleet_and_vision(overlay):
-    assert set(overlay) == {"services", "secrets"}
+    assert set(overlay) == {"services", "secrets", "x-rosy-site"}
+    assert overlay["x-rosy-site"] == {"camera_peer_profile": "rosy.camera-peer/1"}
     assert set(overlay["services"]) == {"fleet", "vision"}
 
 

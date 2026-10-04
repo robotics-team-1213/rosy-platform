@@ -12,6 +12,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 # D-226 table "gitignore로 막는 것": sample paths that must never be committable.
 MUST_IGNORE = [
+    "deploy/site/state/fleet.sqlite3.camera-peer.pem",
     "deploy/robot/pinky_pro/release/tls-local/ca.key",
     "deploy/robot/pinky_pro/release/tls-local/leaf.key",
     "deploy/robot/pinky_pro/release/tls-local/managed.json",
@@ -44,6 +45,7 @@ MUST_IGNORE = [
 
 # D-226 table "추적하는 것": templates and public material next to the secrets.
 MUST_TRACK = [
+    "deploy/site/camera-peer-identity.template.yaml",
     "deploy/robot/pinky_pro/release/native-tls.template.yaml",
     'tools/development-link.example.yaml',
     "deploy/robot/pinky_pro/.env.example",

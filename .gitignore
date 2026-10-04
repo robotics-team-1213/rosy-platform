@@ -134,3 +134,6 @@ Thumbs.db
 
 # D-456: exported per-device LAN TLS material is private, never a template.
 /deploy/robot/pinky_pro/release/tls-local/
+
+# D-456: generated Fleet camera application identity; public PEM stays tracked.
+*.camera-peer.pem

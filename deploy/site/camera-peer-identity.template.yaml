@@ -1,0 +1,14 @@
+# Public placement metadata only. Do not fill this file with key material.
+profile: rosy.camera-peer/1
+private_identity:
+  path_rule: "<tasks-db>.camera-peer.pem"
+  owner: "current Fleet process UID"
+  mode: "0600"
+  encoding: "unencrypted P-256 PKCS8 PEM, generated locally"
+  initialization: "create once only when no remembered relationships exist"
+  missing_or_changed_with_relationships: "deny v2 startup; never regenerate or auto-enroll"
+public_identity:
+  fields: [receiver_id, receiver_public_key, receiver_key_sha256]
+  receiver_id_rule: "fleet- plus first32 lowercase hex of public SPKI SHA256"
+  exposure: "verified HTTPS receiver identity endpoint"
+# TLS CA/public leaf files are separate; this ignore rule must not hide them.

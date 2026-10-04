@@ -27,7 +27,7 @@ AUDIT_LIMIT = 10_000
 STATES = ("pending_confirm", "active", "revoked")
 _COLUMNS = ("credential_id", "device_kind", "source_id", "token_sha256", "state", "device_label",
             "principal_id", "created_at", "confirmed_at", "revoked_at", "revoked_by",
-            "revoke_reason", "expires_at")
+            "revoke_reason", "expires_at", "peer_relationship_id", "peer_generation")
 
 
 class PairingStore:
@@ -56,13 +56,19 @@ class PairingStore:
                     revoked_at REAL,
                     revoked_by TEXT,
                     revoke_reason TEXT,
-                    expires_at REAL NOT NULL
+                    expires_at REAL NOT NULL,
+                    peer_relationship_id TEXT,
+                    peer_generation INTEGER
                 );
                 CREATE INDEX IF NOT EXISTS device_credentials_source
                     ON device_credentials(device_kind, source_id, state);
                 """
             )
             ensure_device_pairing_audit(connection)
+            columns = {row[1] for row in connection.execute('PRAGMA table_info(device_credentials)')}
+            for name, kind in [('peer_relationship_id', 'TEXT'), ('peer_generation', 'INTEGER')]:
+                if name not in columns:
+                    connection.execute(f'ALTER TABLE device_credentials ADD COLUMN {name} {kind}')
         if os.name != "nt":
             for path in (self.path, self.path.with_name(self.path.name + "-wal"),
                          self.path.with_name(self.path.name + "-shm")):

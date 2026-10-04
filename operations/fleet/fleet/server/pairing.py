@@ -101,7 +101,8 @@ class PairingService:
                  tls_host: str, site_name: str, sources: Mapping[str, str],
                  monotonic: Callable[[], float] = time.monotonic,
                  wall: Callable[[], float] = time.time,
-                 credential_lifetime_s: float = CREDENTIAL_LIFETIME_S) -> None:
+                 credential_lifetime_s: float = CREDENTIAL_LIFETIME_S,
+                 served_leaf_pem: str | None = None) -> None:
         if not isinstance(leaf_cert_sha256, str) or not pairing.SHA256_HEX.fullmatch(leaf_cert_sha256):
             raise ValueError("pairing needs the served leaf certificate's DER SHA-256")
         reason = site_link._ca_pem_reason(site_ca_pem)
@@ -116,6 +117,9 @@ class PairingService:
         if not math.isfinite(credential_lifetime_s) or credential_lifetime_s <= 0:
             raise ValueError("credential lifetime must be positive")
         self.store = store
+        self.served_leaf_pem = served_leaf_pem
+        self.peer_credential_allowed = None
+        self.peer_source_owned = None
         self.leaf_cert_sha256 = leaf_cert_sha256
         self.site_ca_pem = site_ca_pem
         self.site_ca_fingerprint = pairing.site_fingerprint(site_ca_pem)
@@ -186,6 +190,8 @@ class PairingService:
         return hmac.new(self._code_key, code.encode("ascii"), sha256).digest()
 
     def _source_has_credential(self, source_id: str) -> bool:
+        if self.peer_source_owned is not None and self.peer_source_owned(source_id):
+            return True
         wall = self._wall()
         return any(row["source_id"] == source_id and row["state"] in ("pending_confirm", "active")
                    and row["expires_at"] > wall for row in self.store.credential_rows())
@@ -413,6 +419,7 @@ class PairingService:
             "approved_by": row["principal_id"], "approved_at": _iso(row["created_at"]),
             "confirmed_at": _iso(row["confirmed_at"]) if row["confirmed_at"] else None,
             "expires_at": _iso(row["expires_at"]), "expired": row["expires_at"] <= wall,
+            **({'relationship_id':row['peer_relationship_id']} if row.get('peer_relationship_id') else {}),
         } for row in self.store.credential_rows()],
             "site_ca_fingerprint": self.site_ca_fingerprint}
 
@@ -426,4 +433,7 @@ class PairingService:
         return [{"credential_id": row["credential_id"], "source_id": row["source_id"],
                  "token_sha256": row["token_sha256"], "expires_at": _iso(row["expires_at"])}
                 for row in self.store.credential_rows()
-                if row["state"] == "active" and row["expires_at"] > wall]
+                if row["state"] == "active" and row["expires_at"] > wall
+                and (not (row.get('peer_relationship_id') is not None or row.get('peer_generation') is not None
+                          or row['credential_id'].startswith('cam-peer-'))
+                     or (self.peer_credential_allowed is not None and self.peer_credential_allowed(row)))]

@@ -205,3 +205,9 @@
 - 결정: D-432/D-439의 작업 중심 공용 디자인을 적용한다. rememberSaveable 표시 상태만 변경하며 인증·송출·설정 정책은 유지한다.
 - 증거: 변경 전 실제 S21에서 송출 3 fps와 기존 수신 대상/설정을 확인했다. 독립 SOURCE 검토 PASS. 변경 후 JVM·APK 및 실기 접힘/펼침 확인은 진행 중이다.
 - gate 변화: 없음. black preview 캡처의 원인은 아직 확인되지 않았으며 송출 성공으로 영상 보기 수락을 대체하지 않는다.
+
+## 2026-10-05 · uncommitted · feat(cam): LAN 수신 선택·상대 승인·기억한 연결 갱신
+
+- 변경: LAN 목록 선택을 앱의 정상 연결 시작으로 두고 camera-peer 프로파일의 Keystore 신원·암호화 관계 기록·same-origin TLS·fresh proof 갱신을 기존 OverheadLink에 연결한다. legacy rollback과 같은 값 재선택을 보존하고 marker 누락 자격은 fail closed한다. Bluetooth·IP 입력·자동 촬영은 추가하지 않는다.
+- 증거: 독립 최종 22 경로 SOURCE PASS; JVM 366 PASS, 최종 marked guard RED/복원 12 PASS. 부모 정규화 소스 일치와 server/native golden 바이트 일치 확인. 실제 widget·Keystore·LAN·APK 업데이트는 별도 검증한다.
+- gate 변화: SOURCE/LOCAL. 기존 capture·Stop·thermal·screen sleep 소유자는 유지한다. 실제 signed 배포와 receiver 두 화면 승인은 완료로 표시하지 않는다.

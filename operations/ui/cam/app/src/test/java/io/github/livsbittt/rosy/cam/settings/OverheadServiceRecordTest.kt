@@ -7,6 +7,17 @@ import org.junit.Assert.assertNotNull
 import org.junit.Test
 
 class OverheadServiceRecordTest {
+    @Test fun peerCapabilityIsExplicitAndCannotDowngrade() {
+        fun record(peer: String?, pair: String? = "rosy-pair/1") = OverheadServiceRecord.parse(
+            "_rosy-overhead._tcp.", "site", "site-a.local", 8443, attributes().toMutableMap().also {
+                if (peer != null) it["peer"] = peer.bytes()
+                if (pair != null) it["pair"] = pair.bytes()
+            })
+        assertEquals(false, record(null)?.peerApproval)
+        assertEquals(true, record("rosy.camera-peer/1")?.peerApproval)
+        assertNull(record("other-camera/1"))
+        assertNull(record("rosy.camera-peer/1", null))
+    }
     @Test
     fun acceptsOnlyTlsOverheadReceiverAdvertisements() {
         val record = OverheadServiceRecord.parse(

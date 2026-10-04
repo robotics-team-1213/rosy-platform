@@ -286,7 +286,7 @@ export function createCameraPairingPanel({ scope, headers, identity, locked, log
     if (!list || !summary) return;
     const manage = canApprove(identity());
     keepFocus(list, "data-credential-id", () => {
-      const rows = (summary.credentials || []).filter((row) => row.state !== "revoked").map((row) => {
+      const rows = (summary.credentials || []).filter((row) => row.state !== "revoked" && !row.relationship_id).map((row) => {
         const item = document.createElement("li");
         item.dataset.credentialId = row.credential_id;
         const head = document.createElement("b");

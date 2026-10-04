@@ -115,6 +115,8 @@ def classify(service_type: str, host: str | None, address: str | None, port: obj
             if values[key] != expected:
                 return Rejected("value_mismatch")
     if kind == OVERHEAD:
+        if 'peer' in values and (values['peer'] != 'rosy.camera-peer/1' or values.get('pair') != 'rosy-pair/1'):
+            return Rejected('value_mismatch')
         if "tls_host" not in values:
             return Rejected("missing_key")
         tls_host = normalize_host(values["tls_host"])

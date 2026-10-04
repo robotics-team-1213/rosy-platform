@@ -2,7 +2,7 @@
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.102
+**Version:** v1.103
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -2456,3 +2456,98 @@ Pilot은 같은 LAN에서 발견한 장비 목록으로 시작한다. 설정 파
 외부 Host·Origin은 거부한다. HTTP 자격을 DHCP의 새 주소로 자동 전달하지 않고 연결을 닫아 다시 입장한다.
 기존 `POST /api/v1/auth/pair`는 8자리 코드로 일반 모드에 연결한다. 새 접속 API가 없는 기존 로봇도 이 경로로 연결한다.
 envelope `protocol_version`은 1.0이다. 발견은 신뢰·안전 승인·액추에이터 허용의 증거가 아니다.
+
+
+## D-456 Fleet/Cam LAN 수신 승인 프로파일
+
+API Reference v1.103의 additive minor 변경이며 envelope 1.0은 유지한다. CORE 운영자 로그인과 Fleet 영상 자격은 서로 다른 권한이다.
+`core_common.protocol.camera_peer`가 새 typed wire의 원천이며 기존 v1은 유지한다.
+
+| 항목 | 계약 |
+|---|---|
+| profile | `rosy.camera-peer/1` |
+| audience | `fleet-camera-ingest` |
+| device_kind | `overhead-camera` |
+| source_role | `camera` |
+| 발급 자격 role | 기존 `overhead-camera` |
+| TLS endpoint | 선택한 수신 장비의 기존 사이트 HTTPS origin; frame ingress와 동일 |
+| 발견 TXT | 기존 `pair=rosy-pair/1`에 선택적 `peer=rosy.camera-peer/1` 추가 |
+
+새 TXT는 capability hint이며 신원·준비 상태·승인 증거가 아니다. 새 signed site의
+resolved Compose가 camera profile과 pairing CA/TLS/named-users/SQLite/sync 설정을
+포함하고 기존 pairing이 활성일 때만 public env와 overhead advertiser가 추가한다.
+권한·네트워크 daemon·수동 IP 설정은 추가하지 않는다. 실제 HTTPS identity/proof가
+실패하면 자격을 전달하지 않는다. 광고로 CA, source 또는 endpoint를 바꾸지 않는다.
+
+`/api/fleet/pairing/v2`는 HTTPS 전용이다. 초기 anonymous identity는 locally configured
+site CA가 실제 configured leaf/chain/hostname을 검증한 public anchor만 제공한다.
+client는 기존 D341 limited first-contact 및 물리 수신 지문 비교 후 operational proof로
+넘어간다. QR/4문자에 bearer를 담지 않는다; 4문자는 요청 비교용이다.
+
+| 경로 | 권한·결과 |
+|---|---|
+| GET `/identity` | anonymous, IdentitySnapshot, 공개 receiver P256 key와 CA |
+| POST `/requests` | anonymous, SignedRequest -> CreatedRequest, 메모리 대기만 생성 |
+| GET `/pending` | 실제 현재 named configured operator, PendingRequest 목록 |
+| GET `/relationships` | 같은 operator, RelationshipSnapshot 목록; 비밀/digest 미노출 |
+| GET `/requests/{id}` | request_secret Bearer, StateSnapshot |
+| POST `/requests/{id}/cancel` | request_secret Bearer, 아직 pending인 요청만 취소 |
+| POST `/requests/{id}/decision` | named operator; action/revision/source_id/persist_requested |
+| POST `/challenge` | remembered relationship_id/generation; signed 60초 ChallengeSnapshot |
+| POST `/session` | SignedSession; 원래 key/source/profile/generation에만 영상 자격 발급 |
+| POST `/relationships/{id}/revoke` | current named operator, 관계 세대 폐기와 자식 자격 회수 |
+
+모든 응답은 no-store. 승인 결과는 `credential_issued=false`이고 실제 session 발급과
+구별한다. 관계의 `authorization_available=false`는 기록 삭제가 아니라 갱신 불가다.
+relationship_id=request_id로 승인 직후 응답 유실/재시작 상태를 복구한다. request secret은
+digest로만 SQLite에 보관하고 승인 전 요청은 restart 때 잊는다.
+
+단기 자격은 기존 최대 180일과 사이트가 정한 더 짧은 credential lifetime을 넘지 않는다.
+`persist_requested=true`와 실제 `site-users.yaml` strict loader의 configured static
+named operator (principal_id+role+token digest)를 함께 확인한 경우만 관계 만료를 두지
+않는다. direct-config의 extra expiry/unknown metadata를 버려 영구 issuer로 만드는
+변환은 거부한다. 이 slice에는 임시 named-site-user issuer를 새로 만드는 기능이 없다.
+remember=false 관계는 자격 lifetime으로 제한하고 기록은 남긴다.
+
+issuer principal/digest/role/provenance는 갱신 및 sync 때 현재 loaded site config와
+다시 비교한다. named user 변경은 기존 loader/restart 경계를 따른다. remembered
+source는 오프라인/자격 만료 뒤에도 다른 key에 재할당하지 않으며 명시적 revoke가 필요하다.
+SQLite 트랜잭션은 nonce 소비와 자격 digest/관계 marker/감사를 한 번에 commit한다.
+재접속은 이전 active 자식을 대체하고 관계별 최근 자격 이력 4개만 남긴다.
+missing/malformed marker, missing relationship, generation/issuer/source 불일치는
+new camera credential을 legacy credential로 취급하지 않는다.
+
+기존 Vision sync body와 source/lease/capability는 바꾸지 않는다. 정상 sync는 2초 주기이고
+실패 때 last-good 목록은 기존 600초 한도를 유지하므로 즉시 offline revoke를 주장하지 않는다.
+CORE route/좌석/주행/정지 해제나 카메라 시작 권한은 발급하지 않는다.
+
+한도: pending 16개/300초+closed 300초, request 및 proof 각각 site-wide 30회/분,
+status 600회/분 및 valid request별 2초, poll cache 144개, relationship 128개,
+challenge 64개/60초, request body 4096bytes, transcript 4096bytes. 한도는 기존 상태를
+밀어내지 않고 거부한다. receiver 웹 polling은 2.5초 singleflight이며 hidden/offscreen/
+locked/lifetime 종료 시 멈춘다.
+
+현재 source/host 후보이며 실제 Native Cam 연결, 배포/재부팅/lease 수용은 별도다.
+
+## Typed field handoff for API v1.103
+
+Every v2 expires_at and authorization_expires_at is an ISO-8601 UTC string,
+for example 2026-10-05T00:05:00Z. Unchanged v1 Vision credential sync uses numeric
+Unix seconds for expires_at; do not substitute the numeric field in v2 examples.
+No live token belongs in a public example. State retains credential_issued=false
+even after approval; SessionSnapshot alone contains the newly issued credential.
+persistent=true plus authorization_expires_at=null describes only the explicit
+remembered static-owner relationship, not child credential expiration.
+SessionSnapshot role is exactly overhead-camera. Signed profile source_role=camera,
+device_kind=overhead-camera, audience=fleet-camera-ingest and profile=rosy.camera-peer/1
+remain mandatory. ChallengeFields/SessionSnapshot source_id is immutable. Initial
+generation is 0; revocation increments it. Four-character display code is unique
+among current bounded requests and is not a secret. Request status/cancel require
+the exact request-secret Bearer header.
+
+SessionSnapshot credential_id는 `^cam-peer-[A-Za-z0-9_-]{24}$` 전용 namespace다.
+P-256 public key는 canonical padded Base64 DER SPKI이며 키 digest는 DER의 SHA256이다.
+서명은 DER ECDSA SHA256이고 canonical padded Base64를 사용한다. 서명 입력은
+`{version: rosy.peer-proof/1, context, fields}`의 키 정렬·공백 없는 ensure_ascii JSON이다.
+context는 request, receiver-challenge, session-request로 분리한다. 공개 golden vector는
+`test/fixtures/protocol/camera-peer.v1.json`이며 Native Cam resource와 바이트가 같아야 한다.

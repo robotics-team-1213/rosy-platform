@@ -1767,3 +1767,9 @@
 - 변경: API Ref1.99 검사 핀과 페어링 overlay의 --track을 정합했다. 배경 학습을 기존 공용 확인 소유자에 연결하고 운용자 권한 안내를 표시한다. UI/UX 리팩터링 없음.
 - 증거: affected 첫 묶음 7751 PASS/8 FAIL/15 ERROR와 perception 2626 PASS/109 SKIP. 발견 항목을 정리하여 관련 130 PASS 및 공유 palette 26 PASS. 부족한 motion 계약 경로를 호스트 환경에 추가한 직접 재검사도 포함한다. Chromium 확인·취소·수명 검증 4 PASS; 나머지 이전 scope 12 PASS. 최신 깨끗한 main에서 기존 확인 테스트의 숨은 작업 탭 클릭 실패를 재현한 뒤 실제 작업 탭 선택을 먼저 하도록 검사만 수정했다.
 - gate 변화: SOURCE/LOCAL 증거만 갱신. 현장 두 등록 로봇 online 및 S21 sequence 증가를 재확인했지만 서명 배포·배경 학습·좌표 오차는 미완료이며 관리자 인증이 없는 기존 정적 설정은 보존한다.
+
+## 2026-10-05 · uncommitted · feat(fleet): LAN 수신 승인과 기억한 Cam 연결
+
+- 변경: 기존 영상 자격 소유자에 HTTPS camera-peer 프로파일, source/key/issuer/generation 관계, 원자적 nonce 소비·자격 갱신, 정상 설치 화면 승인을 연결한다. Bluetooth·IP 입력은 기본 흐름에 넣지 않는다.
+- 증거: 독립 최종 35 경로 SPEC/Quality/Safety SOURCE PASS. 실제 부모 통합 peer/deploy/shared 133 PASS + 기존 CORE kind 1 FAIL 후 공용·CORE Chromium 29 PASS; v1 호환·namespace·API 계약 82 PASS. 인증 거절 브라우저 probe에서 보호 목록 제거·재조회 중단·POST 0. D-362 측정과 기존 분할 의무는 검토 기록 참조.
+- gate 변화: SOURCE/LOCAL이며 기존 기기 gate를 대체하지 않는다. Android 앱·signed site·실제 LAN 승인/오프라인 재연결은 추가 검증한다.

@@ -41,7 +41,8 @@ export function createReceiverApprovals({root, api, isAdmin, captureLifetime, ru
         label.append(remember, document.createTextNode(' 연결 기억'));
         const act = action => {
           const button = document.createElement('ui-button');
-          button.setAttribute('kind', action === 'approve' ? 'primary' : 'quiet');
+          button.setAttribute('kind', 'quiet');
+          if (action === 'approve') button.setAttribute('kind', 'primary');
           button.setAttribute('type', 'button'); button.textContent = action === 'approve' ? '승인' : '거절';
           button.addEventListener('click', async () => {
             if (deciding) return;

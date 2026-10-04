@@ -578,11 +578,12 @@ def _build_pairing(args: argparse.Namespace, *, tls_cert, tasks_db, sighting_ser
         print("warning: D-341 pairing is on but no sighting source is credential: paired; "
               "requests can be listed but not approved", file=sys.stderr)
     try:
-        leaf_sha256 = der_sha256(Path(tls_cert).read_text(encoding="utf-8-sig"))
+        served_leaf_pem = Path(tls_cert).read_text(encoding="utf-8-sig")
+        leaf_sha256 = der_sha256(served_leaf_pem)
         site_ca_pem = Path(pairing_ca).read_text(encoding="utf-8-sig")
         service = PairingService(PairingStore(tasks_db), leaf_cert_sha256=leaf_sha256,
                                  site_ca_pem=site_ca_pem, tls_host=tls_host,
-                                 site_name=site_name, sources=sources)
+                                 site_name=site_name, sources=sources, served_leaf_pem=served_leaf_pem)
     except (OSError, UnicodeDecodeError, ValueError) as exc:
         sys.exit(f"D-341 pairing configuration refused: {exc}")
     sync_token = None

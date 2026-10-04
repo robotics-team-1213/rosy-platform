@@ -97,3 +97,22 @@ def test_public_peer_vectors_are_bound_to_exact_path_field_and_value():
             assert secret_scan.scan_text(secret_scan._PEER_VECTOR_PATH, changed)
             mixed = line + ' api_' + 'token="' + 'live' + '9182aeb27c4d"'
             assert any(f.kind == 'credential' for f in secret_scan.scan_text(secret_scan._PEER_VECTOR_PATH, mixed))
+
+
+def test_camera_public_vectors_keep_other_fields_and_paths_protected():
+    path = 'operations/ui/cam/app/src/test/resources/camera-peer-transcripts.json'
+    nonce = '01' * 32
+    signature = ('MEQCIB8WKmontsmONrEJCGMhZ+'
+                 'ioZLoH4cDiBfq6s6FlP99GAiB'
+                 'tnNpxoX+FyYb20FDkoCxWsDWlZ'
+                 '50nT7yzs6l+5v+VAw==')
+    for field, value in [('nonce', nonce), ('signature', signature)]:
+        line = '  "' + field + '": "' + value + '",'
+        assert secret_scan.scan_text(path, line) == []
+        assert secret_scan.scan_text('other.json', line)
+        assert secret_scan.scan_text(path, line.replace(field, 'api_token'))
+        assert secret_scan.scan_text(path, line.replace(value, '03' * 32))
+        leaked = line + '\napi_' + 'token="' + 'live' + '9182aeb27c4d"'
+        assert any(f.kind == 'credential' for f in secret_scan.scan_text(path, leaked))
+    key_header = '-----BEGIN ' + 'PRIVATE KEY-----'
+    assert any(f.kind == 'private-key' for f in secret_scan.scan_text(path, key_header))

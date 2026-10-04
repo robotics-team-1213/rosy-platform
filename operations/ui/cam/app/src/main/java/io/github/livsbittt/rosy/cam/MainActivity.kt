@@ -49,6 +49,10 @@ import io.github.livsbittt.rosy.cam.ui.rememberLan
 import kotlinx.coroutines.launch
 import io.github.livsbittt.rosy.cam.health.ScreenPower
 import io.github.livsbittt.rosy.cam.health.ScreenCoolingPolicy
+import io.github.livsbittt.rosy.cam.pairing.peer.CameraPeerViewModel
+import io.github.livsbittt.rosy.cam.pairing.peer.CameraPeerState
+import io.github.livsbittt.rosy.cam.ui.CameraLanScreen
+import io.github.livsbittt.rosy.cam.ui.CameraPeerScreen
 
 /**
  * Single activity: stream screen + settings screen, runtime permissions, and the
@@ -60,6 +64,7 @@ class MainActivity : ComponentActivity() {
     private val deepLinkInvalid = mutableStateOf<String?>(null)
     private lateinit var settings: SettingsStore
     private val pairingModel: PairingViewModel by viewModels()
+    private val cameraPeerModel: CameraPeerViewModel by viewModels()
     private val screenCooling = ScreenCoolingPolicy()
     private val screenResting = mutableStateOf(false)
     private lateinit var screenPower: ScreenPower
@@ -101,6 +106,10 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         handlePairingIntent(intent)
+    }
+    override fun onStop() {
+        if (!isChangingConfigurations) cameraPeerModel.close()
+        super.onStop()
     }
 
     private fun handlePairingIntent(intent: Intent?) {
@@ -155,6 +164,7 @@ class MainActivity : ComponentActivity() {
         val lan = rememberLan()
         val lens by settings.lens.collectAsStateWithLifecycle(initialValue = null)
         var showSettings by remember { mutableStateOf(false) }
+        var showLan by remember { mutableStateOf(true) }
         var localError by remember { mutableStateOf<String?>(null) }
         val scope = rememberCoroutineScope()
         val permissionDenied = stringResource(R.string.error_camera_permission)
@@ -185,8 +195,13 @@ class MainActivity : ComponentActivity() {
 
         // The attempt lives in the ViewModel, so rotation keeps the code, the poll loop and a running answer.
         val attempt by pairingModel.attempt.collectAsStateWithLifecycle()
+        val peerState by cameraPeerModel.state.collectAsStateWithLifecycle()
+        val rememberedPeers by cameraPeerModel.remembered.collectAsStateWithLifecycle()
         val current = attempt
-        if (current != null) {
+        if (peerState != CameraPeerState.Idle && !state.running) {
+            CameraPeerScreen(peerState, cameraPeerModel::confirmCertificate, cameraPeerModel::close, cameraPeerModel::open,
+                onDone = { cameraPeerModel.close(); showLan = false }, onForget = cameraPeerModel::forget)
+        } else if (current != null) {
             val session = current.session
             val pairingState by session.state.collectAsStateWithLifecycle()
             val busy by session.busy.collectAsStateWithLifecycle()
@@ -198,10 +213,17 @@ class MainActivity : ComponentActivity() {
                 onCancel = { pairingModel.close() },
                 onRetry = { session.start(current.site) },
                 onClose = {
-                    if (pairingState is PairingState.Paired) showSettings = false
+                    if (pairingState is PairingState.Paired) { showSettings = false; showLan = false }
                     pairingModel.close()
                 },
             )
+        } else if (showLan && !showSettings && !state.running) {
+            CameraLanScreen(onSelect = { record ->
+                val site = PairableSite(record.name, record.tlsHost, record.port, record.address)
+                if (record.peerApproval) cameraPeerModel.open(site)
+                else pairingModel.open(site, deviceLabel(), BuildConfig.VERSION_NAME)
+            }, onSettings = { showSettings = true }, onCurrent = if (siteLink == null) null else ({ showLan = false }),
+                remembered = rememberedPeers, onRemembered = cameraPeerModel::open)
         } else if (showSettings) {
             SettingsScreen(
                 currentLink = siteLink,
@@ -222,7 +244,9 @@ class MainActivity : ComponentActivity() {
                 },
                 onDevelopmentRevoke = { scope.launch { settings.revokeDevelopment() } },
                 onPairRequest = { record ->
-                    pairingModel.open(PairableSite(record.name, record.tlsHost, record.port, record.address), deviceLabel(), BuildConfig.VERSION_NAME)
+                    val selected = PairableSite(record.name, record.tlsHost, record.port, record.address)
+                    if (record.peerApproval) { showSettings = false; cameraPeerModel.open(selected) }
+                    else pairingModel.open(selected, deviceLabel(), BuildConfig.VERSION_NAME)
                 },
             )
         } else {
@@ -236,7 +260,7 @@ class MainActivity : ComponentActivity() {
                 onStart = onStart,
                 onStop = { StreamService.stop(this) },
                 onScreenOff = { sleepScreen(true) },
-                onOpenSettings = { showSettings = true },
+                onOpenSettings = { showLan = true; showSettings = state.running },
             )
         }
 

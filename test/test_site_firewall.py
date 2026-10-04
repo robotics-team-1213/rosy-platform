@@ -353,7 +353,7 @@ def test_apply_writes_only_the_public_values_for_the_host_units(tmp_path):
     host = FakeHost(config=_config(bind="127.0.0.1", port="9443", lan_iface=""))
     assert module.main(["apply", "--env-file", str(env), "--public-env", str(public)], run=host) == 0
     assert public.read_text(encoding="utf-8") == \
-        "ROSY_SITE_TLS_HOST=site-pc.local\nROSY_SITE_HTTPS_PORT=9443\nROSY_SITE_PAIRING=0\n"
+        "ROSY_SITE_TLS_HOST=site-pc.local\nROSY_SITE_HTTPS_PORT=9443\nROSY_SITE_PAIRING=0\nROSY_SITE_CAMERA_PEER=0\n"
 
 
 OVERLAY = "/opt/rosy/candidate/deploy/site/compose.pairing.yaml"

@@ -105,6 +105,7 @@ class OverheadLink(
     private val device: String,
     private val resolver: SiteResolver? = null,
     private val client: OkHttpClient = defaultClient(pairing.pin, resolver?.let { SiteDns(pairing.host, it) }),
+    private val credentialProvider: CredentialProvider? = null,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val lock = Any()
@@ -143,6 +144,8 @@ class OverheadLink(
     private var running = false
     private var started = false
     private var reconnectJob: Job? = null
+    private var credentialJob: Job? = null
+    private var expiryJob: Job? = null
     private var seq = 0L
     private var sentCount = 0L
 
@@ -174,6 +177,8 @@ class OverheadLink(
             generation++
             reconnectJob?.cancel()
             reconnectJob = null
+            credentialJob?.cancel(); credentialJob = null
+            expiryJob?.cancel(); expiryJob = null
             ws = socket
             socket = null
         }
@@ -192,6 +197,8 @@ class OverheadLink(
             if (!running) return
             reconnectJob?.cancel()
             reconnectJob = null
+            credentialJob?.cancel(); credentialJob = null
+            expiryJob?.cancel(); expiryJob = null
             ws = socket
             socket = null
             generation++
@@ -250,13 +257,40 @@ class OverheadLink(
             seq = 0
         }
         _status.update { it.copy(state = LinkState.CONNECTING) }
+        if (credentialProvider != null) {
+            val job = scope.launch(start = kotlinx.coroutines.CoroutineStart.LAZY) {
+                try {
+                    val renewed = credentialProvider.renew { isCurrent(gen) }
+                    require(renewed.pairing.host == pairing.host && renewed.pairing.port == pairing.port && renewed.pairing.source == pairing.source &&
+                        renewed.pairing.pin == pairing.pin && renewed.pairing.secure == pairing.secure && renewed.expiresAt > java.time.Instant.now())
+                    if (!isCurrent(gen)) return@launch
+                    openSocket(gen, renewed.pairing)
+                    synchronized(lock) {
+                        if (isCurrent(gen)) expiryJob = scope.launch {
+                            delay(java.time.Duration.between(java.time.Instant.now(), renewed.expiresAt.minusSeconds(60)).toMillis().coerceAtLeast(1000))
+                            if (isCurrent(gen)) reconnect()
+                        }
+                    }
+                } catch (_: kotlinx.coroutines.CancellationException) { }
+                catch (failure: Exception) {
+                    val denied = failure is CredentialDenied || failure is IllegalArgumentException
+                    onLost(gen, if (denied) LinkError.Unauthorized else LinkError.Network(failure.javaClass.simpleName), denied)
+                }
+            }
+            synchronized(lock) { if (isCurrent(gen)) { credentialJob = job; job.start() } else job.cancel() }
+            return
+        }
+        openSocket(gen, pairing)
+    }
+
+    private fun openSocket(gen: Int, authorized: PairingUri) {
+        if (!isCurrent(gen)) return
         val request = Request.Builder()
-            .url(pairing.wsUrl)
-            .header("Authorization", "Bearer ${pairing.token}")
+            .url(authorized.wsUrl)
+            .header("Authorization", "Bearer ${authorized.token}")
             .build()
-        val ws = client.newWebSocket(request, Listener(gen))
         synchronized(lock) {
-            if (gen == generation && running) socket = ws else ws.cancel()
+            if (gen == generation && running) socket = client.newWebSocket(request, Listener(gen))
         }
     }
 
@@ -267,6 +301,7 @@ class OverheadLink(
         synchronized(lock) {
             if (!running || gen != generation) return
             socket = null
+            expiryJob?.cancel(); expiryJob = null
             generation++
             if (fatal) {
                 running = false

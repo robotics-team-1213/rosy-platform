@@ -3,6 +3,8 @@
 # rosy-site-stack.service adds it from ROSY_SITE_PAIRING_COMPOSE in site.env (README, Camera pairing).
 # Compose replaces `command` and the ROSY_CREDENTIAL_PATHS value as a whole, so both are repeated
 # from compose.yaml with the pairing parts appended; test_site_pairing_deploy.py keeps them in step.
+x-rosy-site:
+  camera_peer_profile: rosy.camera-peer/1
 services:
   fleet:
     command:

@@ -107,8 +107,13 @@ SIZE_VERDICTS = {
         "duplicate its socket. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        33_866,
-        "split: D-463 independently re-judged at measured 33866 on 2026-10-05: lane "
+        34_792,
+        "split: D-456 independently re-judged at measured 34792 on 2026-10-05: "
+        "camera peer owners add 926 lines (756 backend, 135 web, 35 existing wiring); "
+        "bounded sibling modules keep app589 and console1159 unchanged. Retain "
+        "the Fleet server/UI split queue and all file/package growth allowances; "
+        "see docs/validation/d456-fleet-camera-peer-review-2026-10-05/README.md. "
+        "D-463 independently re-judged at measured 33866 on 2026-10-05: lane "
         "math is a bounded sibling module, routes retain the existing dispatcher and "
         "console retains its gather/trust accessor. Existing B2/UI split queue and "
         "+150 package allowance stay unchanged; see docs/validation/"

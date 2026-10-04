@@ -5,6 +5,7 @@
 import { applyRoleToControls } from "./authorization.js";
 import { DISCOVERY_LABELS, createEnrollmentPanel } from "./enrollment.js";
 import { createCameraPairingPanel } from "./camera-pairing.js";
+import { createCameraPeerPanel } from "./camera-peer.js";
 import { createVisionView } from "./vision-view.js";
 import { createFieldView } from "./field-view.js";
 import { createMapFitView } from "./map-fit-view.js";
@@ -151,6 +152,9 @@ const cameraPairing = createCameraPairingPanel({ scope: pageScope,
   log,
   dialogs: { confirmIrreversible, openLiveDialog },
 });
+const cameraPeer = createCameraPeerPanel({scope:pageScope,headers:authHeaders,
+  identity:()=>({role:auth.role,principal_id:auth.principal}),locked:()=>auth.locked,
+  dialogs:{confirmIrreversible},onUnauthorized:markLocked});
 
 // 카메라 설치·보정 체인 (D-360/D-375). 지도가 없으니 레이어 변경은 맵 맞춤 뷰만 다시 그린다.
 const visionView = createVisionView({ scope: pageScope, el, call, auth, authHeaders,
@@ -302,6 +306,7 @@ async function refreshAuthorization() {
     applyRole();
     await Promise.allSettled([
       cameraPairing.refresh({ credentials: true }),
+      cameraPeer.refresh(),
       refreshDiscovery(),
       peerPicker.refresh(),
     ]);

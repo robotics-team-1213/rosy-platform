@@ -33,6 +33,8 @@ import io.github.livsbittt.rosy.cam.link.LinkState
 import io.github.livsbittt.rosy.cam.link.LinkStatus
 import io.github.livsbittt.rosy.cam.link.OverheadConfig
 import io.github.livsbittt.rosy.cam.link.OverheadLink
+import io.github.livsbittt.rosy.cam.pairing.peer.CameraPeerManager
+import io.github.livsbittt.rosy.cam.pairing.peer.CameraCredentialProvider
 import io.github.livsbittt.rosy.cam.link.SiteResolver
 import io.github.livsbittt.rosy.cam.link.SiteRoute
 import io.github.livsbittt.rosy.cam.settings.NsdSiteBrowser
@@ -181,6 +183,15 @@ class StreamService : LifecycleService() {
             val pairing = siteLink?.toPairing()
             // D-391 1: the site's address is looked up on every (re)connect, never taken from the saved record.
             val resolver = siteLink?.let { SiteResolver(it, NsdSiteBrowser(applicationContext)) }
+            val peer = store.peerSnapshot()
+            if (peer.link != siteLink) { endSession(); return@launch }
+            val relationship = try { CameraPeerManager.requiredRelationship(siteLink, peer.relationshipId) }
+                catch (_: io.github.livsbittt.rosy.cam.link.CredentialDenied) {
+                    _state.update { it.copy(link = io.github.livsbittt.rosy.cam.link.LinkStatus(error = io.github.livsbittt.rosy.cam.link.LinkError.Unauthorized, stopped = true)) }
+                    endSession(); return@launch
+                }
+            val renewal = if (siteLink != null && resolver != null && relationship != null)
+                CameraCredentialProvider(CameraPeerManager(applicationContext), siteLink, relationship, resolver) else null
             val plan = CameraSessionPlan.from(pairing)
             val backCameras = try {
                 LensProbe.backCameras(applicationContext)
@@ -199,7 +210,7 @@ class StreamService : LifecycleService() {
             val notificationHealth = monitor.health.distinctUntilChangedBy { it?.notificationKey }
             launch { monitor.health.collect { h -> _state.update { it.copy(health = h) } } }
             val newLink = if (plan.sendFrames && pairing != null) {
-                OverheadLink(pairing, BuildConfig.VERSION_NAME, "${Build.MANUFACTURER} ${Build.MODEL}", resolver)
+                OverheadLink(pairing, BuildConfig.VERSION_NAME, "${Build.MANUFACTURER} ${Build.MODEL}", resolver, credentialProvider = renewal)
                     .also { it.lens = LensSelector.helloLens(pick) }
             } else null
             if (newLink != null && resolver != null && siteLink != null) {

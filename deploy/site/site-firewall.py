@@ -95,7 +95,20 @@ def compose_settings(config: dict) -> dict:
         raise ConfigError(f"the proxy must publish container port {PROXY_PORT} exactly once")
     extension = config.get("x-rosy-site") or {}
     secrets = config.get("secrets") or {}
+    profile = extension.get('camera_peer_profile')
+    if profile not in (None, 'rosy.camera-peer/1'):
+        raise ConfigError('unsupported configured camera peer profile')
+    command = config.get('services', {}).get('fleet', {}).get('command', [])
+    required = ('--pairing-ca','--pairing-tls-host','--tls-cert','--tls-key',
+                '--users-file','--tasks-db','--pairing-sync-token-env')
+    if profile is not None:
+        if not isinstance(command, list) or not all(isinstance(word,str) for word in command):
+            raise ConfigError('camera peer profile requires the resolved Fleet command')
+        for flag in required:
+            if command.count(flag) != 1 or command.index(flag)+1 >= len(command) or not command[command.index(flag)+1] or command[command.index(flag)+1].startswith('--'):
+                raise ConfigError('camera peer profile requires complete receiver pairing configuration')
     return {"bind": ports[0].get("host_ip") or "", "port": int(ports[0]["published"]),
+            'camera_peer': '1' if profile is not None else '0',
             "lan_iface": extension.get("lan_iface") or "",
             "allow_literal_bind": extension.get("allow_literal_bind") == "1",
             "tls_host": extension.get("tls_host") or "",
@@ -326,7 +339,8 @@ def write_public_env(settings: dict, path: Path) -> None:
     """The public values the host units need (bridge, advertisers), as Compose resolved them."""
     path.parent.mkdir(parents=True, exist_ok=True)
     text = (f"ROSY_SITE_TLS_HOST={settings['tls_host']}\nROSY_SITE_HTTPS_PORT={settings['port']}\n"
-            f"ROSY_SITE_PAIRING={settings.get('pairing', '0')}\n")
+            f"ROSY_SITE_PAIRING={settings.get('pairing', '0')}\n"
+            f"ROSY_SITE_CAMERA_PEER={settings.get('camera_peer', '0') if settings.get('pairing') == '1' else '0'}\n")
     with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=path.parent, delete=False) as out:
         out.write(text)
     Path(out.name).chmod(0o644)

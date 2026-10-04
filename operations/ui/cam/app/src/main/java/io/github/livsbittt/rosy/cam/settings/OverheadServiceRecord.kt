@@ -14,6 +14,7 @@ data class OverheadServiceRecord(
     val port: Int,
     val address: String? = null,
     val pairable: Boolean = false,
+    val peerApproval: Boolean = false,
 ) {
     val name: String get() = serviceName
     companion object {
@@ -28,12 +29,14 @@ data class OverheadServiceRecord(
             return record.copy(
                 address = address,
                 pairable = Pairing.pairable(info.serviceType, null, address, info.port, txt) == null,
+                peerApproval = record.peerApproval && address != null,
             )
         }
 
         fun parse(serviceType: String, serviceName: String, tlsHost: String, port: Int, attributes: Map<String, ByteArray?>): OverheadServiceRecord? {
             if (rejection(serviceType, tlsHost, port, attributes) != null) return null
-            return OverheadServiceRecord(serviceName, normalizeHost(attributes.text("tls_host").orEmpty()), port)
+            return OverheadServiceRecord(serviceName, normalizeHost(attributes.text("tls_host").orEmpty()), port,
+                peerApproval = attributes.text("peer") == "rosy.camera-peer/1")
         }
 
         /**
@@ -44,7 +47,8 @@ data class OverheadServiceRecord(
 
         private fun parse(serviceType: String, serviceName: String, port: Int, attributes: Map<String, ByteArray?>): OverheadServiceRecord? {
             if (rejection(serviceType, null, port, attributes) != null) return null
-            return OverheadServiceRecord(serviceName, normalizeHost(attributes.text("tls_host").orEmpty()), port)
+            return OverheadServiceRecord(serviceName, normalizeHost(attributes.text("tls_host").orEmpty()), port,
+                peerApproval = attributes.text("peer") == "rosy.camera-peer/1")
         }
 
         /**
@@ -56,6 +60,7 @@ data class OverheadServiceRecord(
             if (port !in 1..65535) return "bad_port"
             val txt = attributes.mapValues { (_, value) -> value?.toString(StandardCharsets.UTF_8)?.trim().orEmpty() }
             commonKeyRejection(txt, "overhead-camera", "rosy-overhead/1", "required")?.let { return it }
+            if ("peer" in txt && (txt["peer"] != "rosy.camera-peer/1" || txt["pair"] != "rosy-pair/1")) return "value_mismatch"
             val tlsHost = attributes.text("tls_host") ?: return "missing_key"
             // Same rule as core_common discovery_txt: one label + ".local", compared case-insensitively
             // with a trailing root dot trimmed.
