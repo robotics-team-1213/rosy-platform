@@ -84,8 +84,8 @@
 
 ## 최근 기록
 
+- 2026-10-05 · uncommitted · fix(pairing): 승인 대상 문구와 Cam 역할 경계 정합
 - 2026-10-05 · uncommitted · feat(fleet): 무마커 시작점 위치·방향 저장
 - 2026-10-05 · uncommitted · feat(fleet): LAN 수신 승인과 기억한 Cam 연결
 - 2026-10-05 · uncommitted · fix(site): complete candidate contract and owned relearn guards
 - 2026-10-04 · uncommitted · fix(tools): restore cross-module capture ownership
-- 2026-10-04 · uncommitted · docs: re-judge exact integrated Fleet size
