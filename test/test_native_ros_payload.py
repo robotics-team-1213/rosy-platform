@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import hashlib
 import shutil
 import subprocess
 import sys
@@ -44,6 +45,14 @@ def test_native_payload_tools_exist():
     assert VERIFY.is_file()
     assert HARDWARE_DEPS.is_file()
     assert RESOLVE_SOURCE_PATHS.is_file()
+
+
+def test_receiver_crypto_lock_matches_linux_requirements_bytes():
+    # GitHub/Linux checks out LF; Windows may materialize the same blob as CRLF.
+    requirements = (IMAGE / "receiver-crypto-requirements.txt").read_bytes().replace(b"\r\n", b"\n")
+    lock = yaml.safe_load(LOCK.read_text(encoding="utf-8"))["receiver_crypto"]
+    assert lock["verified"] is True
+    assert hashlib.sha256(requirements).hexdigest() == lock["requirements_sha256"]
 
 
 def test_pinky_hardware_dependencies_are_exactly_pinned():
