@@ -141,6 +141,7 @@ jobs:
         if: contains(toJSON(matrix.invocations), 'learning/training/pinky')
         run: |
           pip3 install --no-cache-dir --break-system-packages --index-url https://download.pytorch.org/whl/cpu torch==2.7.1
+          python3 -c "import numpy as np, torch, cv2; a=np.zeros((2,2,3),dtype=np.uint8); assert torch.from_numpy(a).numpy().shape==a.shape; assert cv2.resize(a,(4,4)).shape==(4,4,3); print(np.__version__,torch.__version__,cv2.__version__)"
 
       - name: Build and install ROS-free platform API wheels
         run: |
