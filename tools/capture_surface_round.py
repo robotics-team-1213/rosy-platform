@@ -39,8 +39,6 @@ for _entry in (
     if _path not in sys.path:
         sys.path.insert(0, _path)
 
-import yaml  # noqa: E402
-
 TOKEN_KEY = "rosy.dashboard.token"
 THEME_KEY = "rosy.theme"
 
