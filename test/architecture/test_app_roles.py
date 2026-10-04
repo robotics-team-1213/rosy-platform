@@ -17,11 +17,11 @@ CAMERA_APP = ROOT / "operations/ui/cam/app/src/main/java"
 VISION = ROOT / "operations/vision/rosy_vision"
 REGISTRY = ROOT / "shared/web/surfaces.yaml"
 
-# 1. Rosy Cam (ceiling camera app): no CORE API, no Fleet user API (D-341 pairing/v1 excepted),
+# 1. Rosy Cam: no CORE API or Fleet user API; D-341 v1 and D-456 v2 pairing only.
 #    no robot motion or stop (the user decided on 2026-09-30: no stop credential).
 CAMERA_FORBIDDEN = {
     "CORE API": re.compile(r"/api/v1/"),
-    "Fleet user API": re.compile(r"/api/fleet/(?!pairing/v1)"),
+    "Fleet user API": re.compile(r"/api/fleet/(?!pairing/(?:v1|v2)(?:/|\$path\b|[\"']|$))"),
     "cmd_vel": re.compile(r"cmd_vel"),
     "estop": re.compile(r"estop", re.IGNORECASE),
 }
@@ -76,6 +76,16 @@ def owns_overlaps(rows: list[dict]) -> list[str]:
 def test_camera_app_has_no_robot_or_fleet_user_calls():
     assert CAMERA_APP.is_dir()
     assert _hits(CAMERA_APP, (".kt", ".java"), CAMERA_FORBIDDEN) == []
+
+
+def test_camera_pairing_exception_keeps_the_version_boundary():
+    rule = CAMERA_FORBIDDEN["Fleet user API"]
+    for path in ('/api/fleet/pairing/v1/pending', '/api/fleet/pairing/v2/pending',
+                 '"/api/fleet/pairing/v2$path"', '"/api/fleet/pairing/v2"'):
+        assert rule.search(path) is None
+    for path in ('/api/fleet/pairing/v20/pending', '/api/fleet/pairing/v2extra',
+                 '/api/fleet/pairing/v2$paths', '/api/fleet/state'):
+        assert rule.search(path) is not None
 
 
 def test_vision_has_no_robot_command_and_writes_only_sightings_and_detections_to_fleet():

@@ -16,11 +16,11 @@ from fleet.server.site_auth import build_authorize, build_role_guards, parse_sit
 from test_camera_peer_service import receiver, request, sign
 
 
-def certificates():
+def certificates(hostname='site.local', *, with_key=False):
     now = datetime.now(timezone.utc)
     ca_key, key = [ec.generate_private_key(ec.SECP256R1()) for _ in range(2)]
     ca_name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, 'Test site CA')])
-    leaf_name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, 'site.local')])
+    leaf_name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, hostname)])
     common = lambda: x509.CertificateBuilder().serial_number(x509.random_serial_number()).not_valid_before(
         now - timedelta(days=1)).not_valid_after(now + timedelta(days=2))
     ca = (common().subject_name(ca_name).issuer_name(ca_name).public_key(ca_key.public_key())
@@ -31,14 +31,18 @@ def certificates():
           .sign(ca_key,hashes.SHA256()))
     leaf = (common().subject_name(leaf_name).issuer_name(ca_name).public_key(key.public_key())
             .add_extension(x509.BasicConstraints(ca=False,path_length=None),critical=True)
-            .add_extension(x509.SubjectAlternativeName([x509.DNSName('site.local')]),critical=False)
+            .add_extension(x509.SubjectAlternativeName([x509.DNSName(hostname)]),critical=False)
             .add_extension(x509.KeyUsage(True,False,False,False,False,False,False,False,False),critical=True)
             .add_extension(x509.ExtendedKeyUsage([ExtendedKeyUsageOID.SERVER_AUTH]),critical=False)
             .add_extension(x509.SubjectKeyIdentifier.from_public_key(key.public_key()),critical=False)
             .add_extension(x509.AuthorityKeyIdentifier.from_issuer_public_key(ca_key.public_key()),critical=False)
             .sign(ca_key,hashes.SHA256()))
     pem = lambda cert: cert.public_bytes(serialization.Encoding.PEM).decode('ascii')
-    return pem(ca), pem(leaf) + pem(ca)
+    result = pem(ca), pem(leaf) + pem(ca)
+    if with_key:
+        return (*result, key.private_bytes(serialization.Encoding.PEM,
+                serialization.PrivateFormat.PKCS8, serialization.NoEncryption()).decode('ascii'))
+    return result
 
 
 @pytest.fixture
