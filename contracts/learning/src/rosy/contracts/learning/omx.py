@@ -193,6 +193,13 @@ def validate_profile(doc, *, root):
             or value['outcome'] != {'task': manifest['task_outcome'], 'action': 'unknown',
                                     'judge': 'operator', 'evidence': [refs[name]]}):
         raise ValueError('OMX Episode outcome/calibration binding differs')
+    receipt_names = sorted(path for path in refs if path.startswith('owner-receipts/'))
+    if receipt_names != [f'owner-receipts/{i:06d}.json' for i in range(len(receipt_names))]:
+        raise ValueError('noncanonical owner receipt source paths')
+    receipts = [json.loads((root / path).read_text(encoding='utf-8')) for path in receipt_names]
+    expected_correlations = owner_correlations(validated, receipts)
+    if value['correlations'] != expected_correlations:
+        raise ValueError('OMX Episode correlations lack matching owner receipt provenance')
     required = ['samples.jsonl', 'events.jsonl'] + [row['image_path'] for row in validated['samples']]
     for relative in required:
         path = (original.parent / relative).relative_to(root).as_posix()
@@ -204,3 +211,45 @@ def validate_profile(doc, *, root):
         if value['streams'][stream] != refs[path]:
             raise ValueError('OMX Episode stream binding differs')
     return validated
+
+
+def owner_correlations(validated, receipts):
+    """Provenance check only: goal UUID coverage is not receipt authentication."""
+    empty = {'action_ids': [], 'attempt_ids': []}
+    if not receipts:
+        return empty
+    fields = ('mission_id', 'step_id', 'action_id', 'attempt_id', 'workcell_id',
+              'instance_id', 'request_digest', 'authority_epoch', 'dispatch_generation', 'journal_id')
+    identities, goals, events = [], [], []
+    for receipt in receipts:
+        if not isinstance(receipt, dict):
+            raise ValueError('owner receipt object required')
+        for name in fields:
+            value = receipt.get(name)
+            if name in ('authority_epoch', 'dispatch_generation'):
+                if type(value) is not int or value < 0:
+                    raise ValueError('owner receipt generation invalid')
+            elif not isinstance(value, str) or not value or value != value.strip():
+                raise ValueError('owner receipt identity missing')
+        if not re.fullmatch('[0-9a-f]{64}', receipt['request_digest']):
+            raise ValueError('owner receipt request digest invalid')
+        if len({receipt[name] for name in fields[:4]}) != 4:
+            raise ValueError('owner receipt action identities must be distinct')
+        if receipt['instance_id'] != validated['manifest']['provenance']['instance_id']:
+            raise ValueError('owner receipt instance differs from original recording')
+        goal = receipt.get('driver_goal_id')
+        if not isinstance(goal, str) or goal not in {row['ros_goal_id'] for row in validated['samples']}:
+            raise ValueError('owner receipt driver goal differs from recorded goal')
+        event = receipt.get('journal_event_id')
+        if type(event) is not int or event < 1:
+            raise ValueError('owner receipt event watermark invalid')
+        identities.append(tuple(receipt[name] for name in fields))
+        goals.append(goal)
+        events.append(event)
+    if len(set(identities)) != 1:
+        raise ValueError('owner receipts belong to different Action/attempt/generation/journal')
+    if len(set(goals)) != len(goals) or len(set(events)) != len(events):
+        raise ValueError('duplicate owner receipt goal/event')
+    if set(goals) != {row['ros_goal_id'] for row in validated['samples']}:
+        raise ValueError('owner receipts do not cover every recorded goal')
+    return {'action_ids': [receipts[0]['action_id']], 'attempt_ids': [receipts[0]['attempt_id']]}

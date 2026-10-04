@@ -53,3 +53,11 @@ profile·robot/environment 호환성을 같은 검증 객체에서 검사한다.
 이때 CameraProfile도 null이어야 한다. 알려진 profile과 null calibration 조합은
 거부하며 null profile은 L1 물리 shadow 승격을 통과하지 못한다. topic identity는
 카메라의 물리 identity 인증이 아니다. 계약 wheel은 여전히 stdlib만 사용한다.
+
+0.1.6은 OMX owner receipt provenance를 보존한다. 공통 Episode sources의
+`owner-receipts/000000.json`부터 연속 파일과 녹화 sample의 ros_goal_id 전체를
+대조한다. 동일 mission/step/action/attempt/workcell/instance/request/epoch/generation/
+journal만 단일 상관 pair로 보존한다. Receipt 없는 legacy source는 empty
+correlations만 허용한다. schema 구조가 맞더라도 임의 상관 키는 profile 검증에서
+거절한다. 이것은 goal/identity 근거 검증이며 receipt 인증이나 독립 과제·정책 실행
+검증이 아니다. action outcome unknown과 policy revision null을 유지한다.

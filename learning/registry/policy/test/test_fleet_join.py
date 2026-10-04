@@ -80,15 +80,14 @@ def test_episode_revision_tampering_rejected():
 
 
 def test_export_verifies_original_files_and_does_not_overwrite(tmp_path):
+    sys.path[:0] = [str(ROOT / 'src/products/omx/adapter'),
+                   str(ROOT / 'src/products/omx/adapter/test'), str(ROOT / 'learning/curation/omx')]
+    from test_demonstration import complete_episode
+    from common_episode import convert
+    original = tmp_path / 'recordings'
+    recorded = complete_episode(original)
     source = tmp_path / 'episode'
-    source.mkdir()
-    blob = b'original stream'
-    (source / 'source.jsonl').write_bytes(blob)
-    ref = dict(path='source.jsonl', sha256=hashlib.sha256(blob).hexdigest(), bytes=len(blob))
-    doc = correlated()
-    doc['sources'] = [ref]
-    doc['streams'] = dict.fromkeys(['observation', 'action', 'events'], ref)
-    doc = seal(doc)
+    doc = convert(original / recorded['episode_id'], source)
     manifest = source / 'manifest.json'
     manifest.write_text(json.dumps(doc), encoding='utf-8')
     wire = tmp_path / 'receipt.json'
@@ -99,6 +98,6 @@ def test_export_verifies_original_files_and_does_not_overwrite(tmp_path):
     assert result['inputs']['receipt_sha256'] == hashlib.sha256(wire.read_bytes()).hexdigest()
     with pytest.raises(FileExistsError):
         export(manifest, wire, output)
-    (source / 'source.jsonl').write_bytes(b'corrupt')
+    (source / 'source/samples.jsonl').write_bytes(b'corrupt')
     with pytest.raises(ValueError, match='hash/size'):
         export(manifest, wire, tmp_path / 'new.json')

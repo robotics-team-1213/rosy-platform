@@ -16,6 +16,15 @@ sys.path[:0] = [str(ROOT / 'contracts/learning/src'),
 
 from core_common.protocol.schemas import DeviceActionReceipt  # noqa: E402
 from rosy.contracts.learning import seal, validate_episode  # noqa: E402
+from rosy.contracts.learning.omx import validate_profile as validate_omx  # noqa: E402
+from rosy.contracts.learning.pinky import validate_profile as validate_pinky  # noqa: E402
+
+
+def _profile(episode, root):
+    validators = {'omx_demonstration_v1': validate_omx, 'pinky_recording_session_v1': validate_pinky}
+    if episode['profile'] not in validators:
+        raise ValueError('Episode profile provenance validator not implemented')
+    validators[episode['profile']](episode, root=root)
 
 
 def join(episode, receipt):
@@ -55,12 +64,25 @@ def export(episode_file, receipt_file, output):
     episode_bytes, receipt_bytes = episode_file.read_bytes(), receipt_file.read_bytes()
     episode = json.loads(episode_bytes)
     validate_episode(episode, root=episode_file.parent)
+    _profile(episode, episode_file.parent)
     result = join(episode, json.loads(receipt_bytes))
+    if result['status'] == 'matched' and episode['profile'] == 'omx_demonstration_v1':
+        preserved = [json.loads((episode_file.parent / ref['path']).read_text(encoding='utf-8'))
+                     for ref in episode['sources'] if ref['path'].startswith('owner-receipts/')]
+        names = ('mission_id', 'step_id', 'action_id', 'attempt_id', 'workcell_id', 'instance_id',
+                 'request_digest', 'authority_epoch', 'dispatch_generation', 'journal_id')
+        wire = result['receipt']
+        if (not preserved or any(wire[name] != preserved[0][name] for name in names)
+                or wire['driver_goal_id'] not in {item['driver_goal_id'] for item in preserved}):
+            result.update(status='unmatched', reason='owner_receipt_identity_mismatch', binding=None)
+        else:
+            result['binding']['journal_id'] = wire['journal_id']
     result['inputs'] = dict(episode_manifest_sha256=hashlib.sha256(episode_bytes).hexdigest(),
                             receipt_sha256=hashlib.sha256(receipt_bytes).hexdigest())
     result['verification'] = 'episode_file_hashes_and_receipt_schema'
     # Check again before publication: no silent source rewrite during the join.
     validate_episode(episode, root=episode_file.parent)
+    _profile(episode, episode_file.parent)
     if episode_file.read_bytes() != episode_bytes or receipt_file.read_bytes() != receipt_bytes:
         raise ValueError('input changed during export')
     result = seal(result)

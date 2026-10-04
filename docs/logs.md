@@ -5039,3 +5039,8 @@
 - 변경: 기존 D-18 receipt와 단일 action/attempt/instance 일치만 연결하는 오프라인 export. unknown·unmatched·Action/과제 결과 분리와 원본 hash 보존.
 - 증거: host68pass, 독립12pass; 실제5Dataset/10Episode closure 감사에서 join-ready=0. 상세 validation/learning-fleet-export-2026-10-04.md.
 - gate 변화: 연결 도구 확보. 실제 receipt 연결·owner/rollback·독립SIM·DEVICE/FIELD 및 전체 목표 미완료.
+
+## 2026-10-04 · uncommitted · feat(learning): preserve OMX owner receipt provenance
+- 변경: sample goal 전체와 동일 실행 identity/세대/journal receipt를 공통 Episode sources로 보존. 근거 없는 correlations·profile 변경·다른 receipt 세대 우회를 거절한다. 계약0.1.6은 stdlib만 사용한다.
+- 증거: host91pass와 parts18pass, isolated wheel 실제5Dataset/10Episode 재검증. 리뷰 우회2건은 RED9건 후 수정. 상세 validation/omx-owner-receipt-provenance-2026-10-04.md.
+- gate 변화: HOST provenance/Fleet export 고리 보강. 실제 receipt 수집/인증·owner 정책 실행·독립SIM·rollback·DEVICE/FIELD 및 전체 목표 미완료.

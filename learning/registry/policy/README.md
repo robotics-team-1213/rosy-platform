@@ -75,3 +75,10 @@ task outcome/judge와 policy null을 보존한다. receipt.state=SUCCEEDED가 �
 수용은 별도다. 2026-10-04 실제 snapshot Episode10개는 모두 상관 키가 없었다.
 따라서 실제 연결은 미실행이며 다음 recorder/export에서 기존 owner의 정확한 키를
 보존해야 한다. `docs/validation/learning-fleet-export-2026-10-04.md` 참조.
+
+OMX common_episode 변환의 `--owner-receipt <json>`을 goal마다 반복해 원본
+goal UUID와 receipt를 연결할 수 있다. export는 OMX/Pinky profile validator를
+실행하고 Pilot은 거절한다. OMX matched 결과는 별도 receipt의 전체 실행 identity와
+journal/driver goal을 보존된 owner receipt와 다시 비교한다. profile 변경이나
+같은 action/attempt의 다른 generation으로 우회하지 않는다. 구체 검증은
+`docs/validation/omx-owner-receipt-provenance-2026-10-04.md` 참조.

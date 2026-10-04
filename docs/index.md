@@ -280,8 +280,8 @@
 
 ## 최근 기록
 
+- 2026-10-04 · uncommitted · feat(learning): preserve OMX owner receipt provenance
 - 2026-10-04 · uncommitted · feat(learning): export exact Fleet Episode bindings
 - 2026-10-04 · uncommitted · feat(learning): bind Pinky models to artifacts and durable rejection
 - 2026-10-04 · uncommitted · feat(learning): compare recorded Pinky velocity models offline
 - 2026-10-04 · uncommitted · feat(learning): verify Pinky raw messages before behavior inputs
-- 2026-10-04 · uncommitted · feat(learning): bind policy promotion to stored dataset closure
