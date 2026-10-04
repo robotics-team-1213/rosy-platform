@@ -2373,3 +2373,10 @@
 - 변경: 실제 Cell 문서 저장·compile·service proposal·별도 named simulation operator admission·Fleet grant·UDS·owner·Gazebo를 연결하는 박스 16회 하네스를 추가했다. 각 grant의 staging intent를 세계 변경 전에 fsync하고 재제출을 금지한다. 실제 측정 프로세스가 pose·gripper·진행 clock과 이전 배치를 검증한다.
 - 증거: 독립 source 검토 뒤 host preflight 16회/marker 8·16, 독립 15 tests 통과. 설치 패키지 shadow와 멈춘 clock의 반복 발행을 거절한다. read-only root/repo·network-none·no devices·bounded resource와 실제 컨테이너 ID/label·성공한 daemon 목록 기반 종료 검사를 준비했다.
 - gate 변화: SOURCE/LOCAL만 추가했다. SDK 이미지 preflight·전체 16회 ROS-SIM과 fault matrix는 NOT_RUN이며 full_g2=false다. 기존 narrow vendor 취소 증거를 전체 G2로 올리지 않는다. 수동 슬립시트 checkpoint·물리 파지는 별도다.
+
+## 2026-10-04 · uncommitted · fix(site): 서명된 후보의 제목·설명이 서명 상태를 말한다
+
+- 변경: `auto_sign_candidates.py`가 서명 자산을 올린 뒤 릴리스를 다시 읽어 제목의 "(unsigned)"를 "(signed)"로, 설명의 "UNSIGNED"를 "SIGNED"로 고친다(D-437 3의 취지 — 사람은 목록의 제목을 읽는다). 교정 실패는 서명을 되돌리지 않고 감사에만 남긴다. 이미 바른 제목은 만지지 않는다.
+- 증거: `test/test_site_auto_sign.py` 25 passed — happy path가 제목·설명 교정을 단언(변이: 이미 바른 제목은 edit 호출 0건), `test_site_candidate_signing.py`·`test_site_candidate_workflow.py` 30 passed 회귀 없음. flake8 지적 2건(E128)은 main 선재.
+- gate 변화: 없음.
+- 결정: D-441 뒤 정리. 근거: 2026-10-04 관측 회차에서 서명 완료 후에도 제목이 "(unsigned)"로 남어 사람이 오독한 사실.
