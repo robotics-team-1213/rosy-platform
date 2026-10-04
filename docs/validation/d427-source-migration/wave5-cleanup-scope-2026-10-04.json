@@ -1,0 +1,19 @@
+{
+  "base": "bcf1010b2",
+  "candidate_worktree": "d427-w5",
+  "production_roots": [
+    "contracts",
+    "integrations",
+    "middleware",
+    "operations",
+    "shared"
+  ],
+  "eligible_before": 888,
+  "eligible_after": 888,
+  "eligible_equal": true,
+  "removed": [],
+  "added": [],
+  "hits_equal": true,
+  "backlog_equal": true,
+  "legacy_dirs_present": []
+}

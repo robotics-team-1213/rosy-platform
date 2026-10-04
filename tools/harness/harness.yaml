@@ -7,10 +7,9 @@ adr_log: docs/reference/ROSY ADR Log.md
 
 # IDs absent from the ADR log on purpose. Remove an entry once the ADR is written.
 adr_gaps:
+  D-448: "Unused: model-PC code update ADR was renumbered to D-446 during concurrent work"
+  D-449: "Allocated on another branch to learning artifact and owner binding contracts"
   D-440: "ADR (per-device power policy) is reserved on feat/device-power-policy; implementation integration does not establish the missing ADR body"
-  D-448: "reserved on feat/model-pc-autoupdate; remove when that ADR lands on this branch"
-  D-449: "reserved on feat/learning-pipeline-closure; remove when that ADR lands on this branch"
-  D-450: "reserved on feat/cell-isaac-completion-20261004; remove when that ADR lands on this branch"
   D-452: "reserved on integrate/ui-ship; remove when that ADR lands on this branch"
   D-428: "ADR written on branch feat/d428-web-face-sweep (8ce5cc237), not yet on main; remove when it lands"
   D-29: "unused; the vision accelerator shield design only proposed the number"

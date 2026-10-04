@@ -214,7 +214,7 @@ def install_mission_routes(app, *, mission_service, proposal_store, goal_evidenc
                            mission_progress, candidate_resolver, cell_job_store,
                            cell_job_resolver, require_viewer, require_operator,
                            require_named_operator, require_proposer,
-                           read_guard, operator_guard) -> None:
+                           read_guard, operator_guard):
     if goal_evidence_service is not None:
         @app.post("/api/fleet/goal-evidence", tags=["fleet-goal-evidence"])
         def fleet_goal_evidence(
@@ -479,3 +479,5 @@ def install_mission_routes(app, *, mission_service, proposal_store, goal_evidenc
                                                          "message": str(exc)}) from exc
         return {"proposal": _mission_candidate_result(proposal, admitted)["proposal"],
                 "mission": admitted, "physical_submission": "NOT_CONNECTED"}
+
+    return fleet_proposal_create, fleet_proposal_resolve

@@ -198,3 +198,10 @@
 - Change: Retain origin/main c402cc45e automatic lighting and photo files at the new path; move the remaining documentation and update executable progress commands.
 - Evidence: Rebase completed; Android build and device checks NOT_RUN.
 - gate 변화: none. Host tests do not establish device or field acceptance.
+
+## 2026-10-04 · uncommitted · Cam 송출 화면의 운영 정보 우선 표시
+
+- 변경: 실제 화면에서 다중 주소가 영상을 밀어내는 문제를 확인해 주소·렌즈·비트레이트·품질 설정을 접히는 진단 영역으로 옮겼다. 송출 상태·온도·마커 안내·fps·오류·누락 경고와 촬영 유지/종료 접근은 기본 화면에 남긴다.
+- 결정: D-432/D-439의 작업 중심 공용 디자인을 적용한다. rememberSaveable 표시 상태만 변경하며 인증·송출·설정 정책은 유지한다.
+- 증거: 변경 전 실제 S21에서 송출 3 fps와 기존 수신 대상/설정을 확인했다. 독립 SOURCE 검토 PASS. 변경 후 JVM·APK 및 실기 접힘/펼침 확인은 진행 중이다.
+- gate 변화: 없음. black preview 캡처의 원인은 아직 확인되지 않았으며 송출 성공으로 영상 보기 수락을 대체하지 않는다.

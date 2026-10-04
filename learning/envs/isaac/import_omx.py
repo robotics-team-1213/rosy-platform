@@ -1,4 +1,4 @@
-"""Import a pinned OMX-F or OMX-L model into Isaac Sim 6.1 and inspect its USD."""
+"""Import a pinned OMX-F or OMX-L model into Isaac Sim 5.1/6.x and inspect its USD."""
 
 import argparse
 from pathlib import Path
@@ -6,6 +6,7 @@ import xml.etree.ElementTree as ET
 
 from model_checks import check_urdf, check_vendor_manifest, EXPECTED_JOINTS
 from prepare_urdf import validate_output_path
+from importer_compat import import_model, reference_model
 
 
 def parse_args():
@@ -32,27 +33,20 @@ def main():
 
     from isaacsim import SimulationApp
 
-    app = SimulationApp({"headless": args.headless})
+    # Preserve a failed import's nonzero exit after normal extension cleanup.
+    app = SimulationApp({"headless": args.headless, "fast_shutdown": False})
     try:
         import omni.kit.app
+        import omni.kit.commands
         import omni.usd
-        from isaacsim.asset.importer.urdf import URDFImporter, URDFImporterConfig
-        from pxr import UsdPhysics
+        from pxr import Usd, UsdGeom, UsdPhysics
 
         manager = omni.kit.app.get_app().get_extension_manager()
         manager.set_extension_enabled_immediate("isaacsim.asset.importer.urdf", True)
-        config = URDFImporterConfig(
-            urdf_path=str(args.urdf.resolve()),
-            usd_path=str(output_dir),
-            robot_type="Manipulator",
-            fix_base=None,  # Preserve the vendor's world_fixed joint.
-            merge_fixed_joints=False,
-            collision_from_visuals=False,
-        )
-        usd_path = URDFImporter(config).import_urdf()
-        if not usd_path or not Path(usd_path).is_file():
-            raise RuntimeError(f"OMX import produced no USD: {usd_path}")
-        omni.usd.get_context().open_stage(usd_path)
+        import isaacsim.asset.importer.urdf as urdf_api
+
+        usd_path = import_model(urdf_api, omni.kit.commands.execute, args.urdf, output_dir, "Manipulator")
+        reference_model(omni.usd.get_context(), usd_path, Usd, UsdGeom)
         app.update()
         stage = omni.usd.get_context().get_stage()
         if stage is None:

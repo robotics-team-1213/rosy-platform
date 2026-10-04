@@ -71,9 +71,9 @@ surfaces:
     medium: web
     ports:
       - {port: 8090, source: operations/fleet/fleet/cli.py}
-    audience: 사이트 관제자 (D-153 §7 — Fleet /console) · 설치자 (D-410 — /console/install 기기 등록·카메라 보정)
+    audience: 사이트 관제자 (D-153 §7 — Fleet /console) · 설치자 (D-410 — /console/install 기기 등록·카메라 보정) · Cell 작업 준비자 (/console/cell, D-446)
     role: 사이트 로스터·여러 로봇 모니터링·Mission·사이트 정지 요청·기기 연결 승인 (D-370 1항)
-    owns: [site-monitoring, mission, overhead-camera-view, device-link-site, estop]
+    owns: [site-monitoring, mission, cell-document, cell-compile, cell-proposal, overhead-camera-view, device-link-site, estop]
     grammar: exception
     contracts: [shared_controls, typography_focus, dialog]
     breakpoints:
@@ -163,7 +163,7 @@ surfaces:
       게임형 HUD 의 큰 표적은 공용 종류(누르는 동안 채워지는 toggle·고르는 segment)와 size 속성,
       표면 CSS 의 배치 규칙(min-height·폭)으로만 만들고, 영상 위 대비는 버튼이 아니라 조작부 판이
       바탕을 가진다(D-363 부록 참조).
-    baseline: docs/validation/pilot-g2-baseline-2026-10-04/drive-tablet-land.png
+    baseline: docs/validation/pilot-g2-baseline-2026-10-04/pilot-drive-2000x1200.png
 
   - id: web-common
     api_owners: []

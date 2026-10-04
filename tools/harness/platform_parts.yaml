@@ -4,15 +4,15 @@ schema: rosy.platform-parts.v1
 # colcon, rosdep, payload and image consumer reads this one line through
 # tools/harness/colcon_roots.py (stdlib-only, so keep it a one-line flow list).
 # Checked by test/architecture/test_colcon_roots.py.
-colcon_roots: [src, learning, operations, middleware, contracts, integrations, shared]
+colcon_roots: [learning, operations, middleware, contracts, integrations, shared]
 
-# D-427 §6 "지금(C)" ownership manifest: every tracked source root maps to one
-# D-427 part. No folder moves; `d427_target` is where the root goes in step B.
+# D-427 ownership manifest after wave 5: every tracked source root maps to one
+# D-427 part. `legacy` fields stay for one release to guard rebasing branches.
 # Checked by test/architecture/test_platform_parts.py.
 #
 # Coverage: each tracked file resolves to its deepest matching entry, so a
 # nested entry carves a subtree out of its parent. Exempt: files at the repo
-# root and Markdown folder notes in directories no entry covers (src/AGENTS.md).
+# root and Markdown folder notes in directories no entry covers.
 #
 # `import_prefix` lists the Python top-level names a root installs, so an
 # imported module can be traced back to its owner. Script folders that put
@@ -85,7 +85,10 @@ roots:
     wave: none
     import_prefix: [rosy.contracts.motion]
     concern: contracts
-    note: D-442(a) ROS-free Motion Intent and DeviceControlPort shapes; no operating consumer yet.
+    note: >-
+      D-442(a) ROS-free Motion Intent and DeviceControlPort shapes. The Pinky B
+      writer binding consumes GuardedMotion carrying BaseTwist; full producer admission and the
+      OMX DeviceControlPort remain deferred.
 
   # --- middleware: Pinky/OMX device code, skills, drivers, device UI ---------
   - path: middleware/core/gateway

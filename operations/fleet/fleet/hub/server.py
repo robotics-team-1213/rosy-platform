@@ -10,6 +10,16 @@ from fleet.hub.hub import SiteHub
 
 logger = logging.getLogger("hub.server")
 
+
+def fan_out_events(project, wake: Optional[asyncio.Event]):
+    """Keep task projection results and wake the resolver on lane-stuck events."""
+    def callback(event):
+        result = project(event) if project is not None else None
+        if wake is not None and str(event.get("type", "")).startswith("nav.line_stuck_"):
+            wake.set()
+        return result
+    return callback
+
 async def send_reply(websocket, reply: Envelope) -> bool:
     """Reply unless the agent has gone: never send into a closed socket (D-407 re-run:
     "websocket.send after websocket.close" when the agent dropped the link)."""

@@ -210,11 +210,14 @@ def _held(device_id: str) -> dict:
     return _device(device_id, "not_measured", held_by="rosy-io.service")
 
 
-def test_rows_rosy_io_holds_are_judged_from_fresh_topics(tmp_path):
+def test_rows_rosy_io_holds_are_judged_from_fresh_topics(tmp_path, monkeypatch):
     import time
 
-    state = FakeState(velocity="fresh", battery="fresh", voltage=8.49, lidar_at=time.time(),
-                      ultrasonic_at=time.time())
+    now = time.time()
+    # Judge fixture freshness independently of client setup and host load.
+    monkeypatch.setattr(host_api, "time", SimpleNamespace(time=lambda: now))
+    state = FakeState(velocity="fresh", battery="fresh", voltage=8.49, lidar_at=now,
+                      ultrasonic_at=now)
     _write(tmp_path, [_held("motor.1"), _held("motor.2"), _held("lidar"), _held("adc.battery"),
                       _held("adc.ir0"), _held("adc.ultrasonic"), _device("camera", "no_response")])
     body = _client(_config(tmp_path, "hardware"), state).get(

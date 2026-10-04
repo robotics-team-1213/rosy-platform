@@ -32,6 +32,19 @@ fi
 
 export PYTHONPATH="/repo/contracts/foundation:/repo/operations/fleet:/repo/operations/fleet/test:/repo/middleware/apps/device/omx/adapter:${PYTHONPATH:-}"
 export PYTHONDONTWRITEBYTECODE=1
+# This synchronous rclpy test owns its executor; launch_testing hooks are not
+# used. Their autoload collection can import unrelated sibling HTTP tests.
+export PYTEST_DISABLE_PLUGIN_AUTOLOAD=1
+unset PYTEST_PLUGINS PYTEST_ADDOPTS
+vendor_test="/repo/middleware/apps/device/omx/adapter/test/test_omx_fleet_ros_actionserver.py::test_fleet_mission_reaches_ros_goal_once_without_claiming_semantic_completion[generation-change]"
+collection_log="/tmp/rosy-fleet-vendor-collection.log"
+# Prove actual pytest collection before starting Gazebo, not just module import.
+python3 -m pytest "$vendor_test" --collect-only -q -p no:cacheprovider \
+  --basetemp "/tmp/rosy-fleet-vendor-collection-$$" | tee "$collection_log"
+grep -Eq '^1 test collected' "$collection_log" || {
+  echo "vendor probe requires exactly one collected test" >&2
+  exit 2
+}
 export OMX_FLEET_VENDOR_SIM_ACTION=/arm_controller/follow_joint_trajectory
 export OMX_FLEET_VENDOR_SIM_JOINT_STATES=/joint_states
 export OMX_FLEET_VENDOR_SIM_STARTUP_TIMEOUT_S=180
@@ -49,8 +62,7 @@ cleanup() {
 trap cleanup EXIT
 
 if ! python3 -m pytest \
-  /repo/middleware/apps/device/omx/adapter/test/test_omx_fleet_ros_actionserver.py \
-  -k generation-change -x -s -q -p no:cacheprovider \
+  "$vendor_test" -x -s -q -p no:cacheprovider \
   --basetemp "/tmp/rosy-fleet-vendor-pytest-$$"; then
   tail -n 80 /tmp/rosy-fleet-vendor-launch.log >&2
   exit 1

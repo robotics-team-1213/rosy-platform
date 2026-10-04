@@ -32,3 +32,9 @@
 - 변경: Job의 정본 JSON(`recipe_hash`, `cell_hash`, `carry_z`, `steps`)을 하나로 둔다. Rosy Cell 제안과 Fleet 재컴파일이 같은 바이트로 비교한다(D-403 §3).
 - 증거: `src/site/fleet/test/test_cell_compiler.py`.
 - gate 변화: 없음.
+
+## 2026-10-04 · uncommitted · docs(palletizing): 앱 완료 목표를 현재 구현과 대조
+
+- 변경: 현황 보고서와 D-446 목표 초안에서 정본 process 재사용, 전용 앱 흐름, 박스 전용 중간 수용과 슬립시트 후속 목표를 구분했다. 예전 grasp depth 미지원 설명과 현재 코드의 차이도 기록했다. process 코드는 바꾸지 않았다.
+- 증거: 기준 main f32643ffd에서 복사·빌드한 설치 wheel로 compatibility·Cell·layout 174 passed, skip 없음. 슬립시트 거절도 의도된 시험이며 전체 적재 성공으로 해석하지 않는다.
+- gate 변화: SOURCE GO 유지, ROS-SIM/ARTIFACT HOLD와 DEVICE/FIELD PARKED 유지. 목표 문서는 수용 승격 근거가 아니다.

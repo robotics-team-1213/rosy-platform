@@ -75,7 +75,7 @@ def _setup(tmp_path, **app_options):
             ("viewer-secret", "viewer-1", "viewer"),
         )
     }
-    compiler = FixedCellCompiler()
+    compiler = app_options.pop("compiler", None) or FixedCellCompiler()
     app = create_app(
         FleetConsole(
             [RobotEndpoint("rosy_01", "http://127.0.0.1:8080", "robot-token")],
