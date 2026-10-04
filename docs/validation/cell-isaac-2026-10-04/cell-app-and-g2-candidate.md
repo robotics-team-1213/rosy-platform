@@ -22,3 +22,7 @@ SIM AID의 detachable joint와 SIM GRIPPER 측정은 실제 파지나 작업자 
 수동 처리 선택은 간지 두께를 보존하며 별도 로봇 집기 위치를 만들지 않는다. 관제는 간지 삽입 대기 사유를 표시하고 일반 재승인으로 이를 통과시키지 않는다. owner 접근 허용 계약과 확인 경로가 아직 없어 실제 작업은 `OPERATOR_SHEET_ACCESS_UNAVAILABLE`로 보류된다. 체크포인트는 같은 Fleet SQLite 트랜잭션에서 Job·다음 단계와 함께 보류하며, 누락·부분 투영은 저장 자체를 롤백한다. HTTP 확인 기능과 물리 작업자 접근 수용은 NOT_RUN이다.
 
 모델 PC 직접 SSH 접속은 확인했으나 비밀번호 없는 sudo와 Docker 접근은 거부되었다. 사용자가 실행한 G2 준비 명령의 이미지 빌드는 성공했지만 cap-drop 컨테이너가 소스 마운트를 읽지 못해 import 검사가 실패했다. 실패 결과와 검증 컨테이너 부재 확인을 보존했고 소스 읽기 권한을 고친 별도 재시도 폴더를 준비했다. 이미지 preflight와 시뮬레이터 수용은 아직 HOLD/NOT_RUN이다. Isaac A07은 정상 프로세스 종료를 확인했지만 전진 거리와 입력 만료 후 실제 정지 조건을 만족하지 못했으므로 주행 수용은 HOLD다.
+
+최신 main 통합 후 PROCESS·G2·Isaac source 68 tests가 통과했다. fast 실행은 462 passed·기존 2 skips였으며, 나머지 1건은 검증 문서의 공개 SHA-256 표기에 대한 secret-scan 오탐이었다. 해당 네 값에 명시적인 `sha256:` 표기를 추가한 뒤 release-boundary 전체 79 tests가 통과했다. scanner나 예외 목록은 변경하지 않았다. 문서 병합의 충돌 표시는 별도 수정했으며 양쪽 부모의 모든 journal entry가 보존됐다는 독립 검토와 lint 오류 0을 확인했다.
+
+교훈: cap-drop 컨테이너의 root는 다른 UID가 소유한 0700 마운트에 대한 읽기 권한을 우회하지 못한다. 정제된 소스에만 읽기 권한을 부여하고 evidence는 실제 고정 image UID와 일치시키며, rootless/userns 설정은 별도 소유권 검증 전 거절한다. 호스트 SSH 성공·Docker 이미지 빌드 성공·컨테이너 import 성공을 각각 검증해야 한다.

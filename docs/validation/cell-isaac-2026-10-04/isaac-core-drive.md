@@ -40,10 +40,10 @@
 
 | 파일 | SHA-256 |
 |---|---|
-| `run_rosy.py` | `02daff97bdf37c2be5a11af6eeb1536ea436b7082da4437bfa61d4d11fe4b594` |
-| `drive_runtime.py` | `dfc761295d56bea445a4e578b4e3ec5ed052981da29d72390ca243772e833632` |
-| `sdk_entrypoint.py` | `1587f59b8ae7eb2239e425fe91bcc2d077bb08ad53ce9275b89c3262afc02c7e` |
-| `command_watchdog.py` | `933bbbeab2195a9d25bcaacc68b0b703c3d4be2c2ddc0b6426381c5fd1baad68` |
+| `run_rosy.py` | sha256: `02daff97bdf37c2be5a11af6eeb1536ea436b7082da4437bfa61d4d11fe4b594` |
+| `drive_runtime.py` | sha256: `dfc761295d56bea445a4e578b4e3ec5ed052981da29d72390ca243772e833632` |
+| `sdk_entrypoint.py` | sha256: `1587f59b8ae7eb2239e425fe91bcc2d077bb08ad53ce9275b89c3262afc02c7e` |
+| `command_watchdog.py` | sha256: `933bbbeab2195a9d25bcaacc68b0b703c3d4be2c2ddc0b6426381c5fd1baad68` |
 
 원본 `supervisor-receipt.json`에는 전체 runner 파일 hash와 소유 프로세스의 종료/부재 검사가 있다. `drive-observation.json`은 독립 ROS 관측과 API phase 경계, `sdk-receipt.json`은 실제 callback·gain/action·zero readback을 보관한다. SDK exception/native signal을 exit 0으로 바꾸지 않았다.
 
