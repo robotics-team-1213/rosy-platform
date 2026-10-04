@@ -23,32 +23,28 @@ jobs:
     container: ros:jazzy-ros-base
     timeout-minutes: 30
     steps:
-      - name: Install gh in the container
-        shell: bash
-        run: |
-          set -euo pipefail
-          curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
-            -o /usr/share/keyrings/githubcli-archive-keyring.gpg
-          echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
-            > /etc/apt/sources.list.d/github-cli.list
-          apt-get update -qq && apt-get install -y -qq gh >/dev/null
-
-      - name: Resolve the payload artifact
+      - name: Resolve the payload artifact (GitHub API, no gh needed)
         shell: bash
         run: |
           set -euo pipefail
           REPO="livsbittt/rosy-os"
+          TOKEN="${{ github.token }}"
+          AUTH="Authorization: Bearer $TOKEN"
           if [ -n "${{ inputs.build_run_id }}" ]; then
             RUN="${{ inputs.build_run_id }}"
           else
-            RUN=$(gh run list -R "$REPO" --workflow "Build Pinky Pro native payload" \
-              --status success --limit 1 --json databaseId --jq '.[0].databaseId')
+            RUN=$(curl -sf -H "$AUTH" \
+              "https://api.github.com/repos/$REPO/actions/workflows/build-native-payload.yml/runs?status=success&per_page=1" \
+              | python3 -c 'import json,sys; print(json.load(sys.stdin)["workflow_runs"][0]["id"])')
           fi
           echo "RUN=$RUN" >> "$GITHUB_ENV"
-          NAME=$(gh api "repos/$REPO/actions/runs/$RUN/artifacts" --jq '.artifacts[0].name')
-          gh run download -R "$REPO" "$RUN" --name "$NAME" --dir payload
-        env:
-          GH_TOKEN: ${{ github.token }}
+          ARTIFACT_URL=$(curl -sf -H "$AUTH" \
+            "https://api.github.com/repos/$REPO/actions/runs/$RUN/artifacts" \
+            | python3 -c 'import json,sys; print(json.load(sys.stdin)["artifacts"][0]["archive_download_url"])')
+          mkdir -p payload
+          curl -sfL -H "$AUTH" -o payload/artifact.zip "$ARTIFACT_URL"
+          python3 -m zipfile -e payload/artifact.zip payload/
+          ls payload/*.tar.gz
 
       - name: Unpack
         shell: bash
