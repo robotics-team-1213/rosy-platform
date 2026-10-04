@@ -5064,3 +5064,9 @@
 - 변경: 추론 중 관절 갱신 시 원관측 sequence/시각/시작 자세를 bounded history에서 검증하고 설치 tolerance·나이를 final fence에서 재검사한다. owner config/session을 고정해 callback 중 tolerance 교체를 거절한다. wheel0.1.3.
 - 증거: RED11 및 독립 발견 envelope 교체 RED1 후 host145pass. wheel source bytes 대조 일치. 상세 validation/policy-source-history-2026-10-04.md.
 - gate 변화: SOURCE/HOST 원관측 제출 공백 보완. 실제 issuer/capture/scheduler/ROS·독립SIM·Fleet 실제 receipt·shadow/rollback·라벨/새 객체 학습·DEVICE/FIELD 및 전체 목표 미완료. 카메라10Hz/관측budget50ms는 실제 watchdog 확인 필요.
+
+## 2026-10-04 · uncommitted · docs(validation): measure actual OMX SIM capture freshness
+- 변경: 기존 ACT50ms 예산과 pinned Gazebo10Hz world/camera를 격리 network-none SIM capture에서 대조했다. 수신만 수행하며 기존 정책/운영 gate는 변경하지 않았다.
+- 증거: 약15초130frame/658sample 중 camera stale370, 수신간격 median109.223ms. 실제RGB bytes/calibration/capture stamp 확인. v1 import 실패 보존, v2 terminal exit0. 상세 validation/omx-live-camera-timing-2026-10-04.md.
+- gate 변화: 실제 SIM capture 타이밍 불일치 확인. 빠른 입력의 별도 profile 실험이 필요하며 owner HOLD/정지·독립 과제·정책 실행/승격·Fleet·shadow/rollback·영상 검수/새 학습·DEVICE/FIELD 및 전체 목표 미완료.
+- 추가 실험: 사전고정30Hz 연구world/기존50ms 예산. raw302개 저장한 v3의 계측시점 불일치2개를 보존하고, 동일시점 finalv4를 실행했다. v4 frame252/sample527/stale92, mismatch0; 수신median51.250ms. 원자료252개 SHA/calibration/stamp재검증, terminalexit0. zero-stale 목표는 실패이며 원자료 I/O/soft-rendering/부하가 포함돼 rate만의 인과 효과를 주장하지 않는다.
