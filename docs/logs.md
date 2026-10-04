@@ -5100,3 +5100,8 @@
 
 - 변경: --exclude-eval의 manifest 변경으로 heldout 세션이 빠지는 문제와 image/mask/추가 파일 미검출을 RED4+강화CVAT RED1로 재현했다. 폴더 content_sha/버전 이름과 파싱 전후 manifest bytes를 검사하고 변경·읽기 오류를 출력 작성 전 거절한다.
 - 증거: 독립 검토의 ABA 우회 RED1 후 파싱 manifest bytes를 직접 content hash에 포함해 수정했다. 최종53pass/1skip, 정상/변조2frame 및 ABA host fixture를 X v1/v2에 보존하고 원본 불변·변조 거절 확인. 실제126frame 모델PC평가 수용이 아니다. 근거: validation/eval-exclusion-integrity-2026-10-04.md. 객체group/사람검수/실제modelPC wholejob/shadowrollback와 전체운영목표 미완료.
+
+### 2026-10-04 · uncommitted · feat(learning): prepare offline human label review editor
+
+- 사용자 요청으로 별도 라벨 검토 세션 실행. 원본80image hash/bytes와 pending4frame7boxes 보존한 visual editor/JSONL 저장fallback 구현. 사용자 직접검수 담당이며 세션 초안을 실제 승인으로 승격하지 않는다. 별도76원본이미지zip/동일이름마스크zip CVAT 인계도 준비했다.
+- 증거: focused6pass/독립6pass, 실제Chromium 편집·승인해제·이미지로딩차단·4row JSONL표시 확인. 경로재진입/로딩전잘못된승인 RED수정. 자동download는도구에서취소되어성공미확인;복사fallback검증. 근거: validation/video-label-review-editor-2026-10-04.md. 실제humanreview/training/device/field와전체goal미완료.
