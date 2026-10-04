@@ -9,22 +9,41 @@ import copy
 import hashlib
 import json
 import math
+import os
 from pathlib import Path
 import tempfile
 import time
 
 from job_state import JobError
 from store import Store, content_sha, file_hashes, parse_dataset_ref
-from review_dataset import build_dataset, _delivery, _stable_bytes
+from review_dataset import build_dataset, _delivery, _stable_bytes, _capture_proofs, validate_eval_companions
 
 
 def _hash(value):
     return hashlib.sha256(json.dumps(value, sort_keys=True, allow_nan=False).encode()).hexdigest()
 
 
+def _extended_path(path):
+    path = Path(path)
+    if os.name != 'nt':
+        return path
+    value = str(path.absolute())
+    if value.startswith('\\\\?\\'):
+        return path
+    if value.startswith('\\\\'):
+        return Path('\\\\?\\UNC\\' + value[2:])
+    return Path('\\\\?\\' + value)
+
+
 def _snapshot(root, target):
     """Capture only verified hashed bytes, rejecting links and copy-time changes."""
     root = Path(root)
+    target = Path(target)
+    if os.name == 'nt':
+        # Captured companion evidence nests content hashes under a private
+        # snapshot. Preserve every file through Win32's extended path form;
+        # never shorten/drop evidence or relax the content check.
+        root, target = _extended_path(root), _extended_path(target)
     expected = file_hashes(root)
     target.mkdir(parents=True)
     for relative, digest in expected.items():
@@ -59,11 +78,13 @@ class IndexedReview:
     not an empty new Job state. The default train_job CLI never creates this.
     """
     def __init__(self, *, export_root, fetch_current, workspace_id, source_proof_files,
-                 staging_parent, previous_authority, authority_max_age_s=90, now=time.time):
+                 staging_parent, previous_authority, authority_max_age_s=90, now=time.time,
+                 eval_companion_files=()):
         self.export_root = Path(export_root)
         self.fetch_current = fetch_current
         self.workspace_id = workspace_id
         self.source_proof_files = tuple(source_proof_files)
+        self.eval_companion_files = tuple(eval_companion_files)
         self.staging_parent = Path(staging_parent)
         self.previous_authority = copy.deepcopy(previous_authority)
         self.authority_max_age_s = authority_max_age_s
@@ -82,7 +103,7 @@ class IndexedReview:
         session = _Session(self, config, Path(dataset), Path(evaluation), source_files, expected_file_hashes)
         session.check()
         # Reconstruction validates configured scratch placement/links first.
-        with tempfile.TemporaryDirectory(prefix='indexed-admission-', dir=self.staging_parent) as temp:
+        with tempfile.TemporaryDirectory(prefix='indexed-admission-', dir=_extended_path(self.staging_parent)) as temp:
             root = Path(temp)
             session.dataset = _snapshot(dataset, root / 'datasets' / Path(dataset).name)
             evaluations = {path: _snapshot(path, root / 'evalsets' / path.parent.name / path.name)
@@ -124,6 +145,16 @@ class _Session:
         if self.evaluation not in self.eval_folders:
             raise JobError('gate evaluation must be in the complete actual store inventory')
         self.gate_refs = [dict(name=self.evaluation.parent.name, content_sha=self.evaluation.name)]
+        try:
+            _, observed = _capture_proofs(owner.source_proof_files)
+            self.review_input_hashes = {path: hashlib.sha256(raw).hexdigest()
+                                       for path,raw in observed.items()}
+            if owner.eval_companion_files:
+                companion = validate_eval_companions(self.eval_folders,owner.eval_companion_files)
+                self.review_input_hashes.update({path:hashlib.sha256(raw).hexdigest()
+                    for path,raw in companion['observed'].items()})
+        except (ValueError,OSError,KeyError,TypeError) as exc:
+            raise JobError('indexed source/eval capture denied: '+str(exc)) from exc
         self.bound_authority = None
 
     @property
@@ -137,6 +168,9 @@ class _Session:
             raise ValueError('training config/recipe changed after admission')
         if any(_stable_bytes(path) != raw for path, raw in self.bindings.items()):
             raise ValueError('gate/camera/trainer source changed after admission')
+        if any(hashlib.sha256(_stable_bytes(path)).hexdigest()!=digest
+               for path,digest in self.review_input_hashes.items()):
+            raise ValueError('source/eval proof artifacts changed after admission')
         if content_sha(self.original_dataset) != self.dataset_sha:
             raise ValueError('stored dataset changed after admission')
         actual_evals = tuple(sorted(self.store.evalset_path(name, digest).absolute()
@@ -165,7 +199,8 @@ class _Session:
                 authority_max_age_s=self.owner.authority_max_age_s, now=self.owner.now,
                 eval_folders=self.eval_folders, gate_eval_refs=self.gate_refs,
                 source_proof_files=self.owner.source_proof_files, store=self.store, name=self.name,
-                staging_parent=self.owner.staging_parent)
+                staging_parent=self.owner.staging_parent,
+                eval_companion_files=self.owner.eval_companion_files)
             if (report.get('status') != 'PUBLISHED_CONTENT_NOT_ADMITTED'
                     or report.get('dataset_revision') != self.dataset_sha
                     or report.get('authority') != revision):

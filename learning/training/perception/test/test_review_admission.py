@@ -157,7 +157,7 @@ def test_new_job_cannot_start_without_persisted_owner_highwater(tmp_path):
             pytest.fail('fresh job must not reset highwater')
 
 
-@pytest.mark.parametrize('case', ['recipe', 'snapshot', 'expiry', 'evalbytes', 'evalinventory'])
+@pytest.mark.parametrize('case', ['recipe', 'snapshot', 'expiry', 'evalbytes', 'evalinventory', 'source_metadata', 'source_video'])
 def test_final_current_callback_cannot_mutate_verified_inputs(tmp_path, monkeypatch, case):
     import review_admission
     args, authority, built, config = fixture(tmp_path)
@@ -176,6 +176,12 @@ def test_final_current_callback_cannot_mutate_verified_inputs(tmp_path, monkeypa
                     import shutil
                     root = args['eval_folders'][0]
                     shutil.copytree(root, args['store'].evalsets_dir / 'added' / root.name)
+                if case == 'source_metadata':
+                    proof=Path(args['source_proof_files'][0]); value=json.loads(proof.read_text())
+                    value['operator_note']='changed after reconstruction'
+                    proof.write_text(json.dumps(value))
+                if case == 'source_video':
+                    (tmp_path/'video0.avi').write_bytes(b'changed after reconstruction')
             return delivery(authority)
         ctx.fetch_current = fetch
         if case == 'expiry':

@@ -342,3 +342,23 @@ authority·TTL·recipe/소스·실제 eval inventory·사본 bytes를 다시 검
 실제 마스크 승인0, 평가 frame/group UNKNOWN과 부족한 source proof는 구현 뒤에도 HOLD다.
 격리 synthetic 시험은 실제 사람 정답·GPU 학습·서비스 전환 수용이 아니다. 이 owner 경로를
 기존 서비스에 연결하거나 실제 학습을 실행하는 작업은 별도 실행 범위다.
+# Indexed review producer composition
+
+The default `learning_cycle.py` CLI keeps indexed requests on HOLD without an
+owner context. The trusted producer entrypoint `review_pipeline.py CONFIG --out
+STATE [--once]` accepts a private configuration with `cycle` (the existing cycle
+configuration) and `review`: `source_proof_files`, `staging_parent`,
+`dataset_name`, optionally `eval_companion_files` and `authority_max_age_s` (at
+most 90 seconds). Source paths and secrets stay outside this public repository.
+
+This composition builds only explicitly approved indexed masks, checks persisted
+transport highwater and fresh source/eval-bound `IndexedReview`, then atomically
+publishes a research request and injects the owner context into the trainer. No
+receipt or caller boolean grants training. Equivalent generation-only refreshes
+preserve terminal work and recipe attempt budgets. Companions are evaluation
+provenance/exclusion evidence; they do not grant GT, JPEG pixel equivalence or
+collection-group qualification. Missing actual approvals remain HOLD.
+
+See `docs/plans/2026-10-05-pinky-pipeline-completion.md` for scope and isolated
+verification. A real eligible invocation can train; no real GPU or robot command
+is part of the synthetic composition tests.
