@@ -277,8 +277,8 @@
 
 ## 최근 기록
 
+- 2026-10-04 · uncommitted · D-441 local update follow-up design
 - 2026-10-04 · uncommitted · D-427 wave5 final host and fixture corrections
 - 2026-10-04 · uncommitted · D-427 peer CI correction integration
 - 2026-10-04 · uncommitted · D-427 wave5 cleanup and CI compatibility
 - 2026-10-04 · uncommitted · D-446 clean older checkout permits signed execution
-- 2026-10-04 · uncommitted · D-446 remote integration after source migration

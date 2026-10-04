@@ -15,6 +15,7 @@ import sys
 import tarfile
 import urllib.error
 import urllib.request
+from urllib.parse import urlsplit
 from typing import Callable, Iterator
 
 Runner = Callable[..., subprocess.CompletedProcess]
@@ -36,6 +37,8 @@ _PART = re.compile(r"^rosy-site-candidate-([0-9a-f]{40})\.tar\.part(\d{2})$")
 _MAX_PAGES = 10
 _LIST_LIMIT = 16 * 1024 * 1024
 _SMALL_LIMIT = 8 * 1024 * 1024
+_FUNCTIONAL_PATHS = {'/api/fleet/state': ('robots', 'robot_id'),
+                     '/api/fleet/vision/sources': ('sources', None)}
 
 
 class Transient(Exception):
@@ -84,7 +87,7 @@ def load_config(path: Path) -> dict:
     if not isinstance(raw, dict):
         raise ConfigError("config must be a JSON object")
     allowed = {"repo", "key_id", "public_key", "keep", "health_url", "health_ca",
-               "health_timeout_s"}
+               "health_timeout_s", "functional_checks"}
     if set(raw) - allowed:
         raise ConfigError(f"unknown config keys: {sorted(set(raw) - allowed)}")
     if not isinstance(raw.get("repo"), str) or not _REPO.fullmatch(raw["repo"]):
@@ -105,8 +108,26 @@ def load_config(path: Path) -> dict:
     timeout = raw.get("health_timeout_s", 300)
     if type(timeout) is not int or not 30 <= timeout <= 1800:
         raise ConfigError("health_timeout_s must be an integer from 30 to 1800")
+    checks = raw.get('functional_checks', [])
+    origin = urlsplit(url)
+    if not origin.hostname or origin.username or origin.password:
+        raise ConfigError('health_url must have a host and no embedded credentials')
+    if not isinstance(checks, list) or len(checks) > 2:
+        raise ConfigError('functional_checks must be a list of at most two checks')
+    for check in checks:
+        if (not isinstance(check, dict) or set(check) != {'path', 'token_file', 'required_ids'}
+                or not isinstance(check['path'], str) or check['path'] not in _FUNCTIONAL_PATHS):
+            raise ConfigError('functional check must name a supported read-only Fleet API')
+        token = check['token_file']
+        if (not isinstance(token, str) or not Path(token).is_absolute()
+                or not Path(token).is_file() or Path(token).is_symlink()):
+            raise ConfigError('functional token_file must be an absolute regular file')
+        ids = check['required_ids']
+        if not isinstance(ids, list) or not ids or any(not isinstance(i, str) or not i for i in ids):
+            raise ConfigError('functional required_ids must contain configured IDs')
     return {"repo": raw["repo"], "key_id": raw["key_id"], "public_key": Path(raw["public_key"]),
-            "keep": keep, "health_url": url, "health_ca": ca, "health_timeout_s": timeout}
+            "keep": keep, "health_url": url, "health_ca": ca, "health_timeout_s": timeout,
+            'functional_checks': checks}
 
 
 # -- HTTPS ----------------------------------------------------------------------
@@ -117,6 +138,11 @@ class _HttpsOnly(urllib.request.HTTPRedirectHandler):
             raise urllib.error.HTTPError(newurl, code, "refusing a non-https redirect",
                                          headers, fp)
         return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+class _NoCredentialRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, *args, **kwargs):
+        raise Transient('functional API redirects are refused')
 
 
 class Http:
@@ -174,8 +200,43 @@ class Http:
         except (OSError, urllib.error.URLError):
             return 0
 
+    def functional(self, url: str, ca_file, token_file) -> dict:
+        """Authenticated GET, bounded JSON, no redirects and no credential logging."""
+        try:
+            with Path(token_file).open('r', encoding='utf-8') as stream:
+                token = stream.read(8193).strip()
+            if not token or len(token) > 8192 or '\n' in token or '\r' in token:
+                raise Transient('functional credential file is invalid')
+            opener = urllib.request.build_opener(_NoCredentialRedirect,
+                urllib.request.HTTPSHandler(context=ssl.create_default_context(cafile=ca_file)))
+            request = urllib.request.Request(url, headers={'Authorization': 'Bearer ' + token})
+            with opener.open(request, timeout=5) as response:
+                data = response.read(_SMALL_LIMIT + 1)
+            if len(data) > _SMALL_LIMIT:
+                raise Transient('functional response exceeds size limit')
+            return json.loads(data)
+        except (OSError, ValueError, http.client.HTTPException):
+            raise Transient('functional API or credential could not be read') from None
+
 
 # -- helpers ----------------------------------------------------------------------
+
+def functional_reason(config: dict, http: Http) -> str:
+    origin = urlsplit(config['health_url'])
+    for check in config.get('functional_checks', []):
+        try:
+            payload = http.functional(f'{origin.scheme}://{origin.netloc}{check["path"]}',
+                                      config['health_ca'], check['token_file'])
+            collection, field = _FUNCTIONAL_PATHS[check['path']]
+            rows = payload[collection]
+            if not isinstance(rows, list):
+                return 'functional API collection has invalid structure'
+            ids = {row[field] if field else row for row in rows}
+            if not set(check['required_ids']) <= ids:
+                return 'functional API is missing configured IDs'
+        except (Transient, OSError, ValueError, KeyError, TypeError):
+            return 'functional API validation failed'
+    return ''
 
 
 def _check_length(expected, received: int) -> None:
@@ -199,6 +260,11 @@ def load_update_state(paths: Paths) -> dict:
         raise Refused('update state cannot be read; preserve and recover it manually') from None
     if not isinstance(state, dict) or not isinstance(state.get('failed', {}), dict):
         raise Refused('update state has an invalid schema')
+    if 'hold' in state:
+        hold = state['hold']
+        if (not isinstance(hold, dict) or not isinstance(hold.get('reason'), str)
+                or not hold['reason'].strip() or len(hold['reason']) > 200):
+            raise Refused('maintenance hold has an invalid schema')
     if 'switch' in state:
         journal = state['switch']
         if not isinstance(journal, dict):
@@ -231,6 +297,48 @@ def forget_failed(updater, tag: str) -> int:
     except Refused as error:
         log('state-refused', reason=str(error))
         return EXIT_FAILED
+
+
+def set_hold(updater, reason: str | None) -> int:
+    """Operator control uses the same lock as switching and journal recovery."""
+    try:
+        with run_lock(updater.paths.lock):
+            state = updater.load_state()
+            if reason is None:
+                state.pop('hold', None)
+            else:
+                if not reason.strip() or len(reason) > 200:
+                    raise Refused('hold reason must contain 1 to 200 characters')
+                state['hold'] = {'reason': reason.strip(), 'time': _now()}
+            updater.save_state(state)
+            log('hold-changed', held=reason is not None)
+            return EXIT_OK
+    except BlockingIOError:
+        return EXIT_LOCKED
+    except Refused as error:
+        log('state-refused', reason=str(error))
+        return EXIT_FAILED
+
+
+def runtime_reason(rows, hashes: dict, run) -> str:
+    """Detect operational drift without logging inspect output or credentials."""
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        service = row.get('Service')
+        if service not in SERVICES:
+            continue
+        try:
+            details = json.loads(run(['docker', 'container', 'inspect', row['ID']]).stdout)[0]
+            host = details['HostConfig']
+            labels = details['Config'].get('Labels') or {}
+            if not hashes.get(service) or labels.get('com.docker.compose.config-hash') != hashes[service]:
+                return f'{service} runtime differs from current Compose configuration'
+            if host.get('ReadonlyRootfs') is not True or host.get('Privileged') is not False:
+                return f'{service} runtime no longer has a read-only unprivileged root'
+        except (ValueError, KeyError, IndexError, TypeError, AttributeError):
+            return f'{service} runtime configuration cannot be verified'
+    return ''
 
 
 def containers_reason(rows, commit: str, accepted: dict, run) -> str:

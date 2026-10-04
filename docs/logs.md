@@ -5016,3 +5016,9 @@
 - 변경: 흡수 소유권 시험의 폐기된 src guide 참조를 정본 manifest로 옮기고, Git 영향 시험 fixture를 현행 perception 경로로 맞췄다. 알 수 없는 retired src의 REVIEW 우선 판정은 유지한다. production classifier·runtime·manifest·wheel 입력은 바꾸지 않았다.
 - 증거: push11 fast462 passed/2 skipped 이후 mapped2 failed/3664 passed/151 skipped라 원격 반영은 거부됐다. 실제 OpenCV4.6 전체2588 passed/107 skipped·NEW0, WSL package27 동일/CI build26 finished exit0. 수정 관련14 passed·독립14 passed·APPROVE. docs/validation/d427-source-migration/wave5-final-host-verification-2026-10-04.md.
 - gate 변화: 없음. 최종 SHA의 push·GitHub CI·ARM64·SD·release·DEVICE·FIELD는 후속이다. HOST·합성 결과를 실기 수락으로 바꾸지 않는다.
+
+## 2026-10-04 · uncommitted · D-441 local update follow-up design
+
+- 변경: 사용자 요청에 따라 수동 서명 설치 기록 동기화, 잠금 기반 보류/재개, 실행 설정 비교, 정확한 main CI 승인 후 서명, 선택적 Fleet/Vision 기능 검사 설계와 실행 계획을 기록했다. D-427 소스 소유권과 D-430 구동 권한을 변경하지 않는다.
+- 증거: 원본 updater 신규 사례 10개 RED, 원본 signer CI 사례 8개 RED; 수정본 격리 Linux 108 passed/0 skipped. 별도 생성 후 미실행 컨테이너의 Compose hash 일치와 명령 변경 감지를 실측했다. 현장 서비스는 전환하지 않았다.
+- gate 변화: 없음. 신규 설치·후보 CI·실제 프레임 수신은 별도 운영 검증이다.
