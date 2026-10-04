@@ -26,10 +26,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from candidate_signing import sign_manifest_bytes, verify_manifest_signature
 
 PREFIX = "learning/training/perception/"
-CODE_PREFIXES = (PREFIX, "src/runtime/sensing/control/", "src/contracts/foundation/core_common/")
+CODE_PREFIXES = (PREFIX, "middleware/perception/control/", "contracts/foundation/core_common/")
 LIMIT = 512 * 1024 * 1024
 FORBIDDEN = {"data", "private", "runs", "scratch", "checkpoints", "store", ".git", ".venv", "__pycache__", "secrets"}
 IMPORT_PATHS = (PREFIX.rstrip("/"), PREFIX + "model", PREFIX + "dataset", PREFIX + "training",
+                "middleware/perception", "contracts/foundation",
                 "src/runtime/sensing", "src/contracts/foundation")
 PATH_SETUP = ("import pathlib,sys,runpy;root=pathlib.Path(sys.argv.pop(1)).resolve();"
               f"sys.path[:0]=[str(root/p) for p in {IMPORT_PATHS!r}]")
@@ -200,7 +201,7 @@ def unpack(archive, dest):
                     shutil.copyfileobj(src, out)
                 if os.name == "posix": target.chmod(0o444)
     for required in (PREFIX + "model/watch.py", PREFIX + "rosy_ml.py",
-                     "src/runtime/sensing/control/__init__.py", "src/contracts/foundation/core_common/__init__.py"):
+                     "middleware/perception/control/__init__.py", "contracts/foundation/core_common/__init__.py"):
         if not (dest / required).is_file(): raise ValueError("missing model-code entry point or dependency")
 
 

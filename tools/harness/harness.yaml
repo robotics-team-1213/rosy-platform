@@ -7,6 +7,8 @@ adr_log: docs/reference/ROSY ADR Log.md
 
 # IDs absent from the ADR log on purpose. Remove an entry once the ADR is written.
 adr_gaps:
+  D-444: "ADR exists on local main, not yet integrated into remote main"
+  D-445: "ADR exists on local main, not yet integrated into remote main"
   D-438: "ADR written on branch docs/d438-fleet-stuck-resolver, not yet on main; remove when it lands"
   D-439: "ADR written on branch feat/hmi-task-layout, not yet on main; remove when it lands"
   D-440: "ADR (per-device power policy) written in the device-power worktree, not yet on main; D-441 took the next number on 2026-10-04; remove when it lands"

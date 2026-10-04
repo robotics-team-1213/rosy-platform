@@ -4983,3 +4983,9 @@
 - 변경: D-446. 등록한 checkout의 `learning/training/perception`에 커밋하지 않은 수정이 있으면 전환을 보류하고 그 파일은 그대로 둔다. exec는 작업 디렉터리의 같은 스크립트가 서명 릴리스와 바이트가 다르면 실행하지 않는다.
 - 증거: `test/test_model_pc_autoupdate.py` 12 passed, 21 skipped (Windows). 보류 통합 시험은 Linux symlink/flock이라 건너뛰었다. 모델 PC 설치와 자동 전환은 하지 않았다.
 - gate 변화: 없음. 설치·자동 전환·장기 운용 수용은 미검증.
+
+## 2026-10-04 · uncommitted · D-446 remote integration after source migration
+
+- Change: Rebase model-PC signed updates onto remote main; preserve committed records and use middleware/perception and contracts/foundation source closure.
+- Evidence: Model-PC Linux tests 34 passed; Windows tests 13 passed, 21 Linux-only skips. Rollback bootstrap supports the already installed previous layout; its regression test failed before the fix. Remote CI and first migrated-source activation are pending.
+- gate 변화: None. Existing data, credentials, GPU environment and model promotion remain separate.

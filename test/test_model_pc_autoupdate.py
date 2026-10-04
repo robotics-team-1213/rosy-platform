@@ -39,7 +39,7 @@ def candidate(m, root, keys, seq=1, env="e" * 64, *, bad_source=False):
     dest.mkdir(parents=True)
     with tarfile.open(dest / "code.tar", "w") as tar:
         for name in ("learning/training/perception/model/watch.py", "learning/training/perception/rosy_ml.py",
-                     "src/runtime/sensing/control/__init__.py", "src/contracts/foundation/core_common/__init__.py"):
+                     "middleware/perception/control/__init__.py", "contracts/foundation/core_common/__init__.py"):
             data = b"broken python !" if bad_source else b"print('ok')\n"
             info = tarfile.TarInfo(name)
             info.size = len(data)
@@ -170,7 +170,7 @@ def test_archive_rejects_traversal_links_and_non_code_payload(tmp_path, name, li
     p = tmp_path / "bad.tar"
     with tarfile.open(p, "w") as tar:
         for valid in ["learning/training/perception/model/watch.py", "learning/training/perception/rosy_ml.py",
-                      "src/runtime/sensing/control/__init__.py", "src/contracts/foundation/core_common/__init__.py"]:
+                      "middleware/perception/control/__init__.py", "contracts/foundation/core_common/__init__.py"]:
             data = b"print('ok')\n"
             baseline = tarfile.TarInfo(valid)
             baseline.size = len(data)
@@ -219,12 +219,12 @@ def test_build_only_uses_committed_source(tmp_path, keys):
     (code / "model").mkdir(parents=True)
     (code / "model/watch.py").write_text("print('committed')\n")
     (code / "rosy_ml.py").write_text("print('committed')\n")
-    for name in ["src/runtime/sensing/control/__init__.py", "src/contracts/foundation/core_common/__init__.py"]:
+    for name in ["middleware/perception/control/__init__.py", "contracts/foundation/core_common/__init__.py"]:
         dep = repo / name
         dep.parent.mkdir(parents=True)
         dep.write_text("PINNED = True\n")
     git("add", "learning/training/perception/model/watch.py", "learning/training/perception/rosy_ml.py",
-        "src/runtime/sensing/control/__init__.py", "src/contracts/foundation/core_common/__init__.py")
+        "middleware/perception/control/__init__.py", "contracts/foundation/core_common/__init__.py")
     git("-c", "user.name=Test", "-c", "user.email=test@example.invalid", "commit", "-m", "fixture")
     sha = git("rev-parse", "HEAD")
     (code / "rosy_ml.py").write_text("print('dirty')\n")
@@ -234,8 +234,8 @@ def test_build_only_uses_committed_source(tmp_path, keys):
     m.unpack(out / "code.tar", tmp_path / "result")
     assert (tmp_path / "result/learning/training/perception/rosy_ml.py").read_text() == "print('committed')\n"
     assert not (tmp_path / "result/learning/training/perception/secret").exists()
-    assert (tmp_path / "result/src/runtime/sensing/control/__init__.py").read_text() == "PINNED = True\n"
-    assert (tmp_path / "result/src/contracts/foundation/core_common/__init__.py").read_text() == "PINNED = True\n"
+    assert (tmp_path / "result/middleware/perception/control/__init__.py").read_text() == "PINNED = True\n"
+    assert (tmp_path / "result/contracts/foundation/core_common/__init__.py").read_text() == "PINNED = True\n"
 
 
 def test_uncommitted_perception_edits_are_kept(tmp_path):
@@ -402,7 +402,7 @@ def test_isolated_bootstrap_uses_pinned_sibling_and_dependency_paths(tmp_path):
     model.mkdir(parents=True)
     (model / "helper.py").write_text("VALUE = 'pinned'\n")
     (model / "tool.py").write_text("import sys,helper,control,core_common; print(helper.VALUE,control.VALUE,core_common.VALUE,sys.flags.isolated)\n")
-    for name in ["src/runtime/sensing/control", "src/contracts/foundation/core_common"]:
+    for name in ["middleware/perception/control", "contracts/foundation/core_common"]:
         path = root / name
         path.mkdir(parents=True)
         (path / "__init__.py").write_text("VALUE = 'pinned'\n")
@@ -440,3 +440,16 @@ def test_idle_clears_the_previous_hold_reason(tmp_path, keys):
     u.busy = lambda: None
     result = u.run()
     assert result["result"] == "idle" and result["reason"] is None
+
+
+def test_bootstrap_can_run_previous_layout_after_rollback(tmp_path):
+    m = module()
+    root = tmp_path / "previous"
+    for folder, package in [("src/runtime/sensing", "control"), ("src/contracts/foundation", "core_common")]:
+        path = root / folder / package
+        path.mkdir(parents=True)
+        (path / "__init__.py").write_text("PINNED = True\n")
+    script = root / "job.py"
+    script.write_text("import control,core_common; assert control.PINNED and core_common.PINNED\n")
+    result = subprocess.run(m.bootstrap_command(sys.executable, root, script, []), capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
