@@ -598,3 +598,9 @@
 - 변경: 최신 main의 검수 캔버스를 기존 팔레트 검사에 포함하고 공용 모듈에서 직접 가져온 canvasFont 바인딩을 검증한다. 기존 ROSY 워드마크 CSS를 목록에 포함하되 rose 참조가 그 규칙 한 곳뿐임을 별도 검증한다. 화면·색·배치 변경 없음.
 - 증거: 깨끗한 main 50f2c7374에서 동일한 목록 누락 2건 재현(21 passed, 2 failed). 검증 범위를 보강했으며 재검사 진행 중이다.
 - gate 변화: 없음. SOURCE 계약 검증 보강이며 DEVICE/FIELD 수용 주장이 아니다.
+
+## 2026-10-05 · uncommitted · fix(contracts): repair inherited site release checks
+
+- 변경: 기존 Cell 링크를 보존하는 topbar 계약 기대값을 갱신한다. D-459·D-461 로컬 사진 검수 도구의 작업 화면 이름을 별도 설치 앱으로 등록한 metadata를 바로잡고, pytest 7이 ACT 테스트 준비 helper를 nose module setup으로 호출하는 이름 충돌을 없앤다. 제품 화면·로봇 명령·앱 설치 구조는 바꾸지 않는다.
+- 증거: 깨끗한 main 1b669c7cb에서 Fleet grid와 개발 도구 identity 실패 2건 재현, GitHub CI e9bc8634c의 learning-policy 오류 원인 확인. 관련 호스트 71 passed, known_failures 신규 0. 독립 읽기 검토와 정확한 후속 SHA CI는 별도 확인한다.
+- gate 변화: SOURCE 계약 복구. CI 성공·서명·관제 PC 배포·FIELD 수용을 주장하지 않는다.
