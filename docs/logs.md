@@ -5085,3 +5085,8 @@
 
 - 저장 ACTConfig lr/backbone lr0.001/weight_decay0.0001과 실제 single-group AdamW를 일치시키고 보고서에 실제 optimizer groups/options/clip1.0을 기록했다. 기존 artifact와 gate는 보존한다.
 - 실제40-step seed42751 대조 exit0: weights/history/normalization byte-identical,135원본 입력 unchanged, MAE0.0293680454/reject 유지. 독립 검토 승인. 영향 검사209pass/1skip/1secret-scan fail이며 기존82검출 대비 새 검출0; 문서 검사15pass/1skip. 근거: docs/validation/act-optimizer-provenance-2026-10-04.md. 전체 gate와 목표는 미완료다.
+
+### 2026-10-04 · uncommitted · fix(learning): require complete approved object review
+
+- 변경: human 행 존재만으로 partial/empty label을 export하던 문제와 기존 출력의 stale txt 재사용을 RED11로 재현했다. approved+complete_frame_review bool true+명시 boxes만 export하며 불명확 상태는 원 review와 사유를 대기열에 남긴다. index/geometry 검증 후 새 출력만 생성한다.
+- 증거: 독립 검토의 none/reject 이미지 밖 박스 우회 RED1 재현 후 merge 이전 geometry 검사로 수정했다. 최종 object33pass, 관련 autolabel/review65pass. 실제4영상 초안 프레임/7박스/4image SHA 확인, v1/v2 training txt0/pending4. 문서15pass/1skip. 근거: validation/object-review-export-2026-10-04.md. 사람 승인·image binding·새 모델 품질과 전체 장치/운영 목표는 미완료다.

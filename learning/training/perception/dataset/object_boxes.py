@@ -10,9 +10,11 @@ merge_review        human boxes win; a human box labelled "none" rejects the aut
 to_yolo_lines       labelled boxes in the object_det contract class order (manifest
                     OBJECT_CLASSES), normalised centre-size.
 
-CLI: object_boxes.py <labels.jsonl> --human <human.jsonl> --out <dir> --size W H
-writes <dir>/<index>.txt only for frames a person reviewed (an empty file means "nothing
-there", which only a person may claim) and <dir>/review_queue.jsonl for the rest."""
+CLI: object_boxes.py <labels.jsonl> --human <human.jsonl> --out <new-dir> --size W H
+writes <dir>/<index>.txt only for review_status="approved", complete_frame_review=true
+and an explicit boxes list. An empty file means "nothing there", which only a person's
+complete approved review may claim. Other rows remain in review_queue.jsonl.
+These review flags describe annotation completion, not authenticated reviewer identity."""
 
 from __future__ import annotations
 
@@ -118,30 +120,66 @@ def _rows(path):
     return [json.loads(line) for line in Path(path).read_text(encoding="utf-8").splitlines() if line.strip()]
 
 
+def _indexed_rows(path):
+    rows = {}
+    for row in _rows(path):
+        if not isinstance(row, dict) or type(row.get("index")) is not int or row["index"] < 0:
+            raise ValueError("review/source index must be a nonnegative integer")
+        if row["index"] in rows:
+            raise ValueError("duplicate review/source index")
+        rows[row["index"]] = row
+    return rows
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("labels", help="autolabel labels.jsonl (rows carry 'objects' with --object-boxes)")
-    ap.add_argument("--human", help="human review rows: {index, boxes: [{bbox_xyxy, label}]}")
+    ap.add_argument("--human", help='rows: {index, review_status:"approved", complete_frame_review:true, '
+                                   'boxes:[{bbox_xyxy,label}]} (pending/partial rows stay queued)')
     ap.add_argument("--out", required=True)
     ap.add_argument("--size", type=int, nargs=2, required=True, metavar=("W", "H"))
     args = ap.parse_args(argv)
-    human = {row["index"]: row.get("boxes", []) for row in (_rows(args.human) if args.human else [])}
     out = Path(args.out)
-    out.mkdir(parents=True, exist_ok=True)
-    queue = []
-    for row in _rows(args.labels):
+    if out.exists():
+        raise ValueError("new output directory required; prior labels are never reused or overwritten")
+    if any(v <= 0 for v in args.size):
+        raise ValueError("positive image size required")
+    source = _indexed_rows(args.labels)
+    human = _indexed_rows(args.human) if args.human else {}
+    if set(human) - set(source):
+        raise ValueError("human review index absent from source labels")
+    queue, exports = [], {}
+    for row in source.values():
         auto = row.get("objects", [])
-        if row["index"] not in human:
-            queue.append({"index": row["index"], "objects": auto})
+        review = human.get(row["index"])
+        if (review is None or review.get("review_status") != "approved"
+                or review.get("complete_frame_review") is not True):
+            queue.append({"index": row["index"], "objects": auto, "review": review,
+                          "reason": "complete_approved_review_required"})
             continue
-        merged = merge_review(auto, human[row["index"]])
+        if not isinstance(review.get("boxes"), list):
+            raise ValueError("complete approved review requires an explicit boxes list")
+        for box in review["boxes"]:
+            _check_human_box(box)
+            x0, y0, x1, y1 = box["bbox_xyxy"]
+            if not (0 <= x0 < x1 <= args.size[0] and 0 <= y0 < y1 <= args.size[1]):
+                raise ValueError("review box outside image bounds")
+        merged = merge_review(auto, review["boxes"])
         if needs_review(merged):
-            queue.append({"index": row["index"], "objects": merged})
+            queue.append({"index": row["index"], "objects": merged, "review": review,
+                          "reason": "unlabelled_candidate_boxes"})
             continue
-        lines = to_yolo_lines(merged, args.size)
-        (out / f"{row['index']:06d}.txt").write_text("".join(f"{line}\n" for line in lines), encoding="utf-8")
+        for box in merged:
+            _check_human_box(box)
+            x0, y0, x1, y1 = box["bbox_xyxy"]
+            if not (0 <= x0 < x1 <= args.size[0] and 0 <= y0 < y1 <= args.size[1]):
+                raise ValueError("review box outside image bounds")
+        exports[row["index"]] = to_yolo_lines(merged, args.size)
+    out.mkdir(parents=True, exist_ok=False)
+    for index, lines in exports.items():
+        (out / f"{index:06d}.txt").write_text("".join(f"{line}\n" for line in lines), encoding="utf-8")
     (out / "review_queue.jsonl").write_text("".join(json.dumps(q) + "\n" for q in queue), encoding="utf-8")
-    print(f"{len(human)} reviewed, {len(queue)} waiting in {out / 'review_queue.jsonl'}")
+    print(f"{len(exports)} complete approved frames exported, {len(queue)} waiting in {out / 'review_queue.jsonl'}")
     return 0
 
 

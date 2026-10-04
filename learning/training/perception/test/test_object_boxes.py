@@ -75,7 +75,8 @@ def test_cli_merges_a_labels_jsonl_with_human_rows(tmp_path):
         {"bbox_xyxy": [100, 100, 140, 160], "label": None, "source": "lidar_cluster"}]}) + "\n" +
         json.dumps({"index": 1}) + "\n", encoding="utf-8")
     human = tmp_path / "human.jsonl"
-    human.write_text(json.dumps({"index": 0, "boxes": [{"bbox_xyxy": [100, 100, 140, 160], "label": "robot"}]})
+    human.write_text(json.dumps({"index": 0, "review_status": "approved", "complete_frame_review": True,
+                                "boxes": [{"bbox_xyxy": [100, 100, 140, 160], "label": "robot"}]})
                      + "\n", encoding="utf-8")
     out = tmp_path / "yolo"
     assert OB.main([str(labels), "--human", str(human), "--out", str(out), "--size", "320", "240"]) == 0
@@ -85,6 +86,78 @@ def test_cli_merges_a_labels_jsonl_with_human_rows(tmp_path):
     assert not (out / "000001.txt").exists()
     queue = [json.loads(line) for line in (out / "review_queue.jsonl").read_text(encoding="utf-8").splitlines()]
     assert [q["index"] for q in queue] == [1]
+
+
+@pytest.mark.parametrize("review", [
+    {}, {"review_status": "pending_human", "complete_frame_review": False},
+    {"review_status": "approved", "complete_frame_review": False},
+    {"review_status": "pending_human", "complete_frame_review": True},
+    {"review_status": "approved", "complete_frame_review": 1},
+])
+@pytest.mark.parametrize("boxes", [[], [{"bbox_xyxy": [0, 0, 5, 5], "label": "robot"}]])
+def test_partial_or_pending_review_never_exports_training_label(tmp_path, review, boxes):
+    labels = tmp_path / "labels.jsonl"
+    labels.write_text(json.dumps({"index": 0}) + "\n")
+    human = tmp_path / "human.jsonl"
+    human.write_text(json.dumps({"index": 0, "boxes": boxes, **review}) + "\n")
+    out = tmp_path / "out"
+    assert OB.main([str(labels), "--human", str(human), "--out", str(out), "--size", "320", "240"]) == 0
+    assert not (out / "000000.txt").exists()
+    queue = [json.loads(x) for x in (out / "review_queue.jsonl").read_text().splitlines()]
+    assert [q["index"] for q in queue] == [0]
+
+
+def test_only_explicit_complete_approved_empty_boxes_can_claim_negative(tmp_path):
+    labels = tmp_path / "labels.jsonl"
+    labels.write_text(json.dumps({"index": 0}) + "\n")
+    human = tmp_path / "human.jsonl"
+    human.write_text(json.dumps({"index": 0, "boxes": [], "review_status": "approved",
+                                 "complete_frame_review": True}) + "\n")
+    out = tmp_path / "out"
+    OB.main([str(labels), "--human", str(human), "--out", str(out), "--size", "320", "240"])
+    assert (out / "000000.txt").read_text() == ""
+
+
+def test_existing_output_cannot_retain_stale_training_labels(tmp_path):
+    labels = tmp_path / "labels.jsonl"
+    labels.write_text(json.dumps({"index": 0}) + "\n")
+    out = tmp_path / "out"
+    out.mkdir()
+    (out / "000000.txt").write_text("old approved label")
+    with pytest.raises(ValueError, match="new output"):
+        OB.main([str(labels), "--out", str(out), "--size", "320", "240"])
+    assert (out / "000000.txt").read_text() == "old approved label"
+
+
+@pytest.mark.parametrize("reviews", [
+    [{"index": 0, "review_status": "approved", "complete_frame_review": True}],
+    [{"index": 0}, {"index": 0}],
+    [{"index": True}], [{"index": -1}], [{"index": 1}],
+    [{"index": 0, "review_status": "approved", "complete_frame_review": True,
+      "boxes": [{"bbox_xyxy": [-1, 0, 5, 5], "label": "robot"}]}],
+])
+def test_ambiguous_or_invalid_review_cannot_create_partial_export(tmp_path, reviews):
+    labels = tmp_path / "labels.jsonl"
+    labels.write_text(json.dumps({"index": 0}) + "\n")
+    human = tmp_path / "human.jsonl"
+    human.write_text("".join(json.dumps(row) + "\n" for row in reviews))
+    out = tmp_path / "out"
+    with pytest.raises(ValueError):
+        OB.main([str(labels), "--human", str(human), "--out", str(out), "--size", "320", "240"])
+    assert not out.exists()
+
+
+def test_out_of_bounds_rejection_cannot_turn_candidate_into_negative(tmp_path):
+    labels = tmp_path / "labels.jsonl"
+    labels.write_text(json.dumps({"index": 0, "objects": [
+        {"bbox_xyxy": [0, 0, 5, 5], "label": None}]}) + "\n")
+    human = tmp_path / "human.jsonl"
+    human.write_text(json.dumps({"index": 0, "review_status": "approved", "complete_frame_review": True,
+        "boxes": [{"bbox_xyxy": [-1, -1, 5, 5], "label": "none"}]}) + "\n")
+    out = tmp_path / "out"
+    with pytest.raises(ValueError, match="bounds"):
+        OB.main([str(labels), "--human", str(human), "--out", str(out), "--size", "320", "240"])
+    assert not out.exists()
 
 
 def test_autolabel_writes_candidate_boxes_only_on_request():
