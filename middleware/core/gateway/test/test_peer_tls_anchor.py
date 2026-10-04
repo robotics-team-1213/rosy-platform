@@ -5,11 +5,19 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
+import pytest
+
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.x509.oid import NameOID, ExtendedKeyUsageOID
 from core_api_web.api.peer_pairing.tls_anchor import configured_tls_anchor
+
+# Chain verification lives in cryptography>=42; CI runners and the current device
+# image ship older wheels, where the anchor stays unpublished (fail-closed) and
+# this contract runs where the verifier exists (dev hosts, next device image).
+pytest.importorskip("cryptography.x509.verification",
+                    reason="TLS chain verification needs cryptography>=42")
 
 
 class TLSAnchor(unittest.TestCase):
