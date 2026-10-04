@@ -127,15 +127,15 @@ class PeerClient internal constructor(private val candidate: Candidate, private 
             checkAlive()
             val issued = call("/relationships/${relationship.id}/session", "POST", signed("session-request", fields))
             string(issued, "id", 128)
-            val token = string(issued, "token", 128); require(token.length >= 16 && string(issued, "role", 16) == relationship.role)
+            val accessToken = string(issued, "token", 128); require(accessToken.length >= 16 && string(issued, "role", 16) == relationship.role)
             val sessionExpiry = expiry(issued, "expires_at"); require(sessionExpiry > now() && sessionExpiry <= now().plusSeconds(3605))
             relationship.authorizationExpiresAt?.let { require(sessionExpiry <= it) }
             checkAlive()
-            val who = call("/api/v1/auth/whoami", "GET", bearer = token)
+            val who = call("/api/v1/auth/whoami", "GET", bearer = accessToken)
             require(string(who, "role", 32) == relationship.role)
-            val info = call("/api/v1/system/info", "GET", bearer = token); require(string(info, "robot_id", 64) == receiverId)
+            val info = call("/api/v1/system/info", "GET", bearer = accessToken); require(string(info, "robot_id", 64) == receiverId)
             checkAlive()
-            return LobbySession(RobotTarget(receiverId, candidate.host, candidate.port, token), true, sessionExpiry, candidate, store, caPem, relationship)
+            return LobbySession(RobotTarget(receiverId, candidate.host, candidate.port, accessToken), true, sessionExpiry, candidate, store, caPem, relationship)
         } finally {
             if (!approved && requestId != null && requestSecret != null) cleanupCancel()
             clients.forEach { it.connectionPool.evictAll(); it.dispatcher.executorService.shutdown() }

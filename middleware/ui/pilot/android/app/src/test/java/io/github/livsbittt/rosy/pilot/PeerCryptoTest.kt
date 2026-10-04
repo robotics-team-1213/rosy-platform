@@ -17,7 +17,7 @@ class PeerCryptoTest {
             assertEquals(row.getString("sha256"), PeerProof.hash(bytes))
         }
     }
-    @Test fun realP256SignaturesCannotMoveBetweenContextOrFields() {
+    @Test fun p256ProofBindsContextAndFields() {
         val key = KeyPairGenerator.getInstance("EC").apply { initialize(ECGenParameterSpec("secp256r1")) }.generateKeyPair()
         val fields = JSONObject().put("nonce", "a".repeat(64)).put("generation", 0).put("label", "현장 😀")
         val publicKey = PeerProof.encodeKey(key.public)

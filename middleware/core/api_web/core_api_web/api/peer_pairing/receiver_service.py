@@ -22,7 +22,9 @@ class PeerReceiver:
         self._lock = threading.RLock()
         grants = repository.grants()
         self._identity = PeerIdentity(key_path, [g["receiver_key_sha256"] for g in grants.values()])
-        self._pending, self._rates, self._challenges = {}, {}, {}
+        self._pending = {}
+        self._rates = {}
+        self._challenges = {}
 
     def identity(self):
         return {"receiver_id": self.receiver_id, "receiver_public_key": self._identity.public_key,

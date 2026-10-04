@@ -202,7 +202,7 @@ class PeerClientTest {
             } finally { flow.close(); executor.shutdownNow() }
         }
     }
-    @Test fun actualVerified404AllowsLegacyButPrivateUntrusted404CannotBootstrapOrFallback() {
+    @Test fun verified404KeepsLegacyTrust() {
         Fixture().use { f -> f.corrupt = "identity404"; assertNull(f.flow().connect({}, { false })) }
         Fixture().use { f -> f.corrupt = "identity404"; assertThrows(PeerRefused::class.java) { f.flow(lobbyClient(f.candidate)).connect({}, { false }) } }
     }
@@ -232,7 +232,7 @@ class PeerClientTest {
             } finally { flow.close(); executor.shutdownNow() }
         }
     }
-    @Test fun session503RetryAfterZeroCannotSilentlyRepeatTheSignedPositivePost() {
+    @Test fun session503CannotReplayProof() {
         Fixture().use { f ->
             f.corrupt = "retry503"
             val outcome = runCatching { f.flow().connect({}, { false }) }

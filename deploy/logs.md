@@ -2518,3 +2518,8 @@
 - 변경: D-456 CORE 수신 승인에 필요한 hash-locked 암호화 wheel을 서명 release의 읽기 전용 보조 경로에 설치한다. 기존 base Python pins는 유지한다. root 전용 TLS 도구는 검증된 현재 release·유효한 유지보수 claim·정지된 runtime에서만 기존 설정을 보존하며 실행한다.
 - 증거: TLS 도구 Linux 검사 30 PASS·DrvFS 권한 검사 1 SKIP, 최종 hostname 보완 검사 3 PASS. native 패키징 관련 263 PASS·1 SKIP 뒤 읽기 경로 분류와 새 스크립트 실행 비트 누락을 수정하고 실패 두 건을 재검사해 2 PASS. 실 POSIX 소유권·ARM 빌드·장치 TLS 설치는 아직 확인하지 않았다.
 - gate 변화: 이번 변경의 SOURCE/LOCAL 증거만 추가한다. 서명 배포와 실제 LAN 접속은 미완료다.
+## 2026-10-05 · uncommitted · fix(pairing): 실제 자격 검사를 유지하는 source 분류 보완
+
+- 변경: 닫힌 숫자 인자의 코드 호출은 따옴표 없는 참조만 인정한다. Kotlin nullable String 선언의 실제 기본값을 검사하며 camel/snake 슬롯은 정확한 이름만 허용한다. 공개 P256 시험 벡터는 한 경로·필드·정확한 값의 entropy 토큰만 예외로 두고 자격·개인키 검사는 유지한다.
+- 증거: 첫 정상 push는 474 PASS·2 SKIP·2 FAIL로 중단됐다. 독립 검사에서 따옴표 안 호출과 임의 underscore 슬롯의 과도한 허용을 확인해 고쳤고 실제 negative 검사 7 PASS다. 수정 전 실패와 중간 검사 원본은 보존했다. 최종 release/event/API 통합 및 정상 push 검사는 이어서 확인한다.
+- gate 변화: SOURCE/LOCAL 수정이며 CI·서명 배포·DEVICE를 승격하지 않는다.
