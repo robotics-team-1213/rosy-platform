@@ -206,6 +206,7 @@
 | D-458 | 학습 앱·웹 공통 작업 화면과 결과 확인 경계 |
 | D-459 | Pinky 학습 검수는 저장되는 웹앱으로 제공하고 자동 초안·수동 정답·학습 수용을 분리한다 |
 | D-461 | ROSY 작업 화면은 상태·다음 작업·행동을 먼저 보여주고 공용 작업 부품으로 구성한다 |
+| D-462 | Pinky 반복 검수는 프레임 정체성·객체/픽셀 독립 revision·최신 결정 확인을 보존한다 |
 
 ## 계획·결과 문서
 
@@ -297,8 +298,8 @@
 
 ## 최근 기록
 
+- 2026-10-05 · uncommitted · feat(learning): D-462 incremental pixel review
 - 2026-10-05 · uncommitted · uiux(review): 필터 일치 이동과 마지막 라벨 복구
 - 2026-10-05 · uncommitted · fix(guards): judge shared component size and name public commit provenance
 - 2026-10-04 · uncommitted · fix(site): D-457 마커 우선·무마커 폴백
 - 2026-10-04 · uncommitted · docs(learning): UX 착지 동기화 검증
-- 2026-10-04 · uncommitted · uiux(learning): D-461 작업 우선 공용 구성과 검수 편의

@@ -6,12 +6,12 @@
 <script type="module" src="/app.js"></script></head>
 <body><a class="skip-link" href="#editor">사진 검수로 이동</a>
 <ui-shell grammar="procedure"><ui-topbar><ui-brand><b>ROSY</b></ui-brand><h1>사진 검수</h1>
-<nav class="workspace-tabs" aria-label="학습 화면"><a href="/learning">작업 목록</a><a href="/" aria-current="page">사진 검수</a></nav><span data-spacer></span>
+<nav class="workspace-tabs" aria-label="학습 화면"><a href="/learning">작업 목록</a><a href="/" aria-current="page">사진 검수</a><a href="/pixels">픽셀 검수</a><a href="/catalog">자료 등록</a></nav><span data-spacer></span>
 <label class="theme-label">화면 <select id="theme" class="ui-field"><option value="dark">어둡게</option><option value="light">밝게</option></select></label></ui-topbar>
 <div class="workspace"><aside class="photo-sidebar" aria-label="검수 작업 목록"><h2>객체 사진</h2><p id="counts" class="quiet">불러오는 중</p>
 <label class="ui-field-label">상태 <select id="filter" class="ui-field"><option value="all">전체</option><option value="pending">검수 대기</option><option value="approved">승인</option><option value="excluded">제외</option></select></label>
 <nav id="frames" aria-label="사진 선택"></nav><ui-empty id="empty-frames" hidden>이 상태의 사진이 없습니다.</ui-empty>
-<div class="scope"><h3>영역 검수는 별도입니다</h3><p>벽·차선·횡단보도 픽셀 편집은 CVAT에서 진행합니다. 객체 승인은 마스크 승인에 적용되지 않습니다.</p></div></aside>
+<div class="scope"><h3>픽셀 검수는 독립 승인입니다</h3><p><a href="/pixels">벽·차선·횡단보도 픽셀 검수 열기</a>. 객체 승인은 마스크 승인에 적용되지 않습니다.</p></div></aside>
 <main id="editor" tabindex="-1"><ui-empty id="empty-review" hidden><h2>이 상태의 사진이 없습니다</h2><p>전체 사진을 열거나 다른 검수 상태를 선택하세요.</p><ui-button id="show-all" kind="quiet">전체 사진 보기</ui-button></ui-empty><div id="review-content"><div class="frame-heading"><div><h2 id="frame-title">사진을 불러오는 중</h2><p id="frame-progress" class="quiet"></p></div><ui-tag id="status">대기</ui-tag></div>
 <div class="ui-workspace-bar frame-navigation"><ui-button id="prev-frame" kind="quiet">이전 사진</ui-button><ui-button id="next-frame" kind="quiet">다음 사진</ui-button><span data-spacer></span><ui-button id="next-pending" kind="quiet">다음 검수 대기</ui-button></div>
 <div class="review-layout"><section class="review-stage" aria-label="사진과 박스"><div class="image-stage"><canvas id="canvas" tabindex="0" aria-label="객체 박스 편집 화면"></canvas><p id="image-message" role="status">사진을 불러오는 중</p></div>

@@ -46,9 +46,9 @@ surfaces:
       - {value: 90rem, reason: 사진 목록·캔버스·라벨 inspector의 세 칸을 좁은 데스크톱에서 압축한다 (D-461).}
     ports:
       - {port: 8767, source: learning/training/perception/dataset/review_app.py}
-    audience: Pinky 학습 객체 라벨 검수자
-    role: 원본 사진 검수와 승인 자료 준비를 소유하는 로컬 학습 도구 (D-459)
-    owns: [pinky-object-review, pinky-review-export]
+    audience: Pinky 학습 객체·픽셀 라벨 검수자
+    role: 원본 다중 영상·객체/픽셀 독립 검수와 최신 결정 export를 소유하는 로컬 학습 도구 (D-459·D-462)
+    owns: [pinky-object-review, pinky-pixel-review, pinky-review-export]
     contracts: [shared_controls, typography_focus]
     contract_reason: 로컬 학습 도구이며 로봇 명령·운용 셸·비상정지 또는 비가역 장치 행동이 없다. 초안 교체 확인은 브라우저 기본 dialog다.
     baseline_reason: 최초 로컬 PC/모바일 브라우저 검증은 담당 세션의 X 드라이브 증거이며 배포 G2 기준선이 아니다.

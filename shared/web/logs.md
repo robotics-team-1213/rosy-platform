@@ -598,3 +598,9 @@
 - 변경: 최신 main의 검수 캔버스를 기존 팔레트 검사에 포함하고 공용 모듈에서 직접 가져온 canvasFont 바인딩을 검증한다. 기존 ROSY 워드마크 CSS를 목록에 포함하되 rose 참조가 그 규칙 한 곳뿐임을 별도 검증한다. 화면·색·배치 변경 없음.
 - 증거: 깨끗한 main 50f2c7374에서 동일한 목록 누락 2건 재현(21 passed, 2 failed). 검증 범위를 보강했으며 재검사 진행 중이다.
 - gate 변화: 없음. SOURCE 계약 검증 보강이며 DEVICE/FIELD 수용 주장이 아니다.
+
+## 2026-10-05 · uncommitted · feat(learning): D-462 incremental pixel review
+
+- 변경: Existing Pinky app adds pending multi-video imports, independent original-coordinate pixel editing, verified nominal CAD references and coherent current-decision/export contracts. Canvas palette and learning surface ownership remain in shared tokens/declarations.
+- 증거: Root independent review found cross-store mixed reads. Producer now captures metadata/frames/masks/representations in one SQLite transaction and seals that exact revision. Concurrent-writer, stale authority and bundle integrity regressions added; host/shared contracts 252 passed/24 skipped and explicit Chromium regression suite 13 passed, NEW=0.
+- gate 변화: Local host/Chromium with separate test state. Live human approvals, pixel qualification, original-video/map-camera evidence and root integration acceptance remain separate. No shared physical gate is advanced.

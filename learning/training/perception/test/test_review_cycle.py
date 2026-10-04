@@ -1,0 +1,213 @@
+"""Incremental pending import, independent masks and current export authority."""
+import hashlib
+import json
+from pathlib import Path
+
+import cv2
+import numpy as np
+import pytest
+from contextlib import contextmanager
+
+from test_review_app import open_store
+from review_app import ReviewStore, Conflict
+import review_evidence
+import review_ingest
+import review_masks
+
+
+CLASSES = b'''classes:
+- {index: 0, name: floor, role: background, color: [90, 90, 90]}
+- {index: 1, name: lane_line, role: lane_marking, color: [255, 255, 255]}
+- {index: 2, name: wall, role: wall, color: [220, 60, 60]}
+- {index: 3, name: drivable, role: drivable, color: [60, 200, 60]}
+- {index: 4, name: stop_line, role: stop_line, color: [250, 200, 0]}
+- {index: 5, name: crosswalk, role: ignore, color: [0, 160, 255]}
+'''
+
+
+def catalog(tmp_path):
+    folder = tmp_path / 'catalog'
+    folder.mkdir()
+    classes = folder / 'classes.yaml'
+    classes.write_bytes(CLASSES)
+    rows = []
+    for suffix in ('.jpg', '.png'):
+        raw = cv2.imencode(suffix, np.full((24, 32, 3), 100, dtype=np.uint8))[1].tobytes()
+        image = folder / ('same-frame' + suffix)
+        image.write_bytes(raw)
+        rows.append({'image': str(image), 'image_sha256': hashlib.sha256(raw).hexdigest(),
+                     'width': 32, 'height': 24, 'source_video_sha256': '1' * 64,
+                     'source_video': 'teleop_bot_20260930T171014Z.mp4', 'video_frame': 9,
+                     'source_session': 'declared-alias' + suffix, 'capture_group': 'group-1',
+                     'fixed_eval_overlap': False, 'pixel_gt_approved': True})
+    (folder / 'verified-inputs.jsonl').write_text('\n'.join(json.dumps(r) for r in rows), encoding='utf-8')
+    return folder, classes, rows
+
+
+def test_import_deduplicates_source_frames_and_preserves_all_old_reviews(tmp_path):
+    store = open_store(tmp_path)
+    before = store.list_frames()
+    folder, classes, _ = catalog(tmp_path)
+    result = review_ingest.import_frames(store, {'path': str(folder), 'classes': str(classes)})
+    assert result['added'] == 1 and result['duplicate_representations'] == 1
+    assert store.list_frames()[:2] == before
+    assert store.get(2)['status'] == 'pending'
+    assert review_masks.get(store, 2)['status'] == 'pending'
+    assert np.all(review_masks.pixels(store, review_masks.get(store, 2)) == 255)
+    current = review_evidence.decisions(store)
+    assert review_ingest.import_frames(store, {'path': str(folder), 'classes': str(classes)})['added'] == 0
+    assert review_evidence.decisions(store) == current
+    assert ReviewStore(store.state).list_frames()[:2] == before
+
+
+def test_invalid_import_never_changes_legacy_or_adds_partial_frames(tmp_path):
+    store = open_store(tmp_path)
+    before = store.list_frames()
+    folder, classes, rows = catalog(tmp_path)
+    Path(rows[-1]['image']).write_bytes(b'changed')
+    with pytest.raises(ValueError, match='hash'):
+        review_ingest.import_frames(store, {'path': str(folder), 'classes': str(classes)})
+    assert store.list_frames() == before
+
+
+def test_mask_requires_full_background_review_and_never_restores_object_approval(tmp_path):
+    store = open_store(tmp_path)
+    review_masks.bind_classes(store, CLASSES)
+    before = store.get(0)
+    with pytest.raises(ValueError, match='미검수'):
+        review_masks.update(store, 0, {'version':0, 'action':'approve',
+                                      'complete_frame_review':True, 'background_reviewed':True}, Conflict)
+    painted = review_masks.update(store, 0, {'version':0, 'action':'fill', 'label':0}, Conflict)
+    with pytest.raises(ValueError, match='각각'):
+        review_masks.update(store, 0, {'version':painted['version'], 'action':'approve',
+                                      'complete_frame_review':True}, Conflict)
+    approved = review_masks.update(store, 0, {'version':painted['version'], 'action':'approve',
+                                            'complete_frame_review':True, 'background_reviewed':True}, Conflict)
+    assert approved['status'] == 'approved'
+    changed = review_masks.update(store, 0, {'version':approved['version'], 'action':'paint',
+                                           'label':4, 'radius':2, 'points':[[8,9],[15,9]]}, Conflict)
+    assert changed['status'] == 'pending'
+    assert store.get(0) == before
+    undo = review_masks.update(store, 0, {'version':changed['version'], 'action':'undo'}, Conflict)
+    assert undo['status'] == 'pending' and np.all(review_masks.pixels(store, undo) == 0)
+    with pytest.raises(Conflict):
+        review_masks.update(store, 0, {'version':changed['version'], 'action':'fill', 'label':0}, Conflict)
+    with pytest.raises(ValueError, match='제외'):
+        review_masks.update(store, 1, {'version':0, 'action':'fill', 'label':0}, Conflict)
+
+
+def test_old_complete_export_cannot_resurrect_excluded_or_changed_frame(tmp_path):
+    store = open_store(tmp_path)
+    review_masks.bind_classes(store, CLASSES)
+    mask = review_masks.update(store, 0, {'version':0, 'action':'fill', 'label':0}, Conflict)
+    review_masks.update(store, 0, {'version':mask['version'], 'action':'approve',
+                                 'complete_frame_review':True, 'background_reviewed':True}, Conflict)
+    receipt = store.prepare()
+    doc = review_evidence.verify_current(receipt['path'], review_evidence.decisions(store))
+    assert doc['pixel_approved_frames'] == 1
+    assert doc['authority']['frames'][1]['object_decision'] == 'excluded'
+    store.update(0, {'version':1, 'action':'exclude'})
+    with pytest.raises(ValueError, match='stale'):
+        review_evidence.verify_current(receipt['path'], review_evidence.decisions(store))
+    newer = store.prepare()
+    assert review_evidence.verify_current(newer['path'], review_evidence.decisions(store))['pixel_approved_frames'] == 0
+    target = Path(newer['path']) / 'application-snapshot.json'
+    target.write_bytes(b'corrupt')
+    with pytest.raises(ValueError, match='changed'):
+        review_evidence.verify_current(newer['path'], review_evidence.decisions(store))
+
+
+def test_snapshot_remains_coherent_when_second_store_commits_between_reads(tmp_path):
+    store = open_store(tmp_path)
+    actor = ReviewStore(store.state)
+    with store.connect() as db:
+        db.execute('PRAGMA journal_mode=WAL')
+    original = store.connect
+    changed = []
+
+    @contextmanager
+    def interleaved():
+        with original() as db:
+            def trace(sql):
+                if sql == 'SELECT * FROM masks' and not changed:
+                    changed.append(True)
+                    actor.update(0, {'version': 1, 'action': 'exclude'})
+            db.set_trace_callback(trace)
+            yield db
+    store.connect = interleaved
+    old = review_evidence.decisions(store)
+    store.connect = original
+    live = review_evidence.decisions(actor)
+    assert changed and old['generation'] == 1 and live['generation'] == 2
+    assert old['frames'][0]['object_decision'] == 'approved'
+    assert live['frames'][0]['object_decision'] == 'excluded'
+
+
+def test_export_uses_captured_revision_even_if_writer_changes_during_sealing(tmp_path, monkeypatch):
+    store = open_store(tmp_path)
+    actor = ReviewStore(store.state)
+    original = review_evidence.seal_export
+    def interleave(owner, out, receipt, captured):
+        actor.update(0, {'version': 1, 'action': 'exclude'})
+        return original(owner, out, receipt, captured)
+    monkeypatch.setattr(review_evidence, 'seal_export', interleave)
+    receipt = store.prepare()
+    old = receipt['authority']
+    assert review_evidence.verify_current(receipt['path'], old)['authority']['generation'] == 1
+    with pytest.raises(ValueError, match='stale'):
+        review_evidence.verify_current(receipt['path'], review_evidence.decisions(actor))
+
+
+def test_resealed_bundle_cannot_hide_missing_sources_or_duplicate_paths(tmp_path):
+    store = open_store(tmp_path)
+    current = review_evidence.decisions(store)
+    out = Path(store.prepare()['path'])
+    contract = out / 'review-contract.json'
+    original = json.loads(contract.read_bytes())
+    def reseal(doc):
+        raw = review_evidence.encoded(doc)
+        contract.write_bytes(raw)
+        (out / 'AUTHORITY_COMPLETE').write_text(review_evidence.sha(raw), encoding='ascii')
+    doc = dict(original, files=original['files'] + [original['files'][0]])
+    reseal(doc)
+    with pytest.raises(ValueError, match='duplicate'):
+        review_evidence.verify_current(out, current)
+    doc = dict(original, files=[f for f in original['files'] if not f['path'].startswith('inputs/images/')])
+    reseal(doc)
+    with pytest.raises(ValueError, match='mandatory'):
+        review_evidence.verify_current(out, current)
+    reseal(original)
+    invalid = dict(current, generation=True)
+    with pytest.raises(ValueError, match='generation'):
+        review_evidence.verify_current(out, invalid)
+    invalid = dict(current, decision_sha256='0'*64)
+    with pytest.raises(ValueError, match='digest'):
+        review_evidence.verify_current(out, invalid)
+
+
+def test_current_http_etag_detects_revocation_without_exporting_write_token(tmp_path):
+    import threading
+    import urllib.request
+    import urllib.error
+    from review_app import make_server
+    store = open_store(tmp_path)
+    server = make_server(store, 0)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    url = f'http://127.0.0.1:{server.server_port}/api/decisions'
+    try:
+        with urllib.request.urlopen(url) as response:
+            current, tag = json.load(response), response.headers['ETag']
+        review_evidence.validate_authority(current)
+        assert tag == '"' + current['decision_sha256'] + '"' and 'token' not in current
+        with pytest.raises(urllib.error.HTTPError) as error:
+            urllib.request.urlopen(urllib.request.Request(url, headers={'If-None-Match': tag}))
+        assert error.value.code == 304
+        store.update(0, {'version': 1, 'action': 'exclude'})
+        with urllib.request.urlopen(urllib.request.Request(url, headers={'If-None-Match': tag})) as response:
+            changed = json.load(response)
+            assert response.status == 200 and response.headers['ETag'] != tag
+        assert changed['frames'][0]['frame_excluded'] is True
+        assert changed['generation'] == current['generation'] + 1
+    finally:
+        server.shutdown(); server.server_close(); thread.join()

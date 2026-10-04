@@ -5741,3 +5741,9 @@ osy-d395-s1d\`.
 - 변경: 사용자 즉시 머지·추가 개선 지시로 D-459/D-461의 반복 검수 흐름을 보완했다. 목록·선택·이전/다음·URL의 필터를 일치시키고 빈 상태 복귀를 추가했다. 마지막 라벨 수정·삭제는 현재 version CAS로 복구하며 승인을 복원하지 않는다.
 - 증거: 실제 Chromium 회귀 3개와 기존 backend 5개, 총 8 passed, known_failures 신규 0. 승인 대기 유지·새로고침·빈 상태·다른 탭 변경 보호를 확인했다. PC/모바일 4폭×dark/light 및 필터 건너뛰기·모바일 복구 총 10 검사에서 page error/가로 넘침 0, 운영 검수 rows 불변을 확인했다. 공용 controls/token/title/responsive 및 harness 계약 132 passed, 신규 0. 증거는 X:/DevTemp/pinky-review-flow-20261005에 있다. 물리 모바일·원격 CI 수용은 별도다.
 - gate 변화: 로컬 앱 개선이며 물리 모바일·장치·학습 qualification·정책 승격·CI 수용을 주장하지 않는다. 운영 승인/제외 이력 보존, 로봇 움직임·모델 활성화·push·배포 없음.
+
+## 2026-10-05 · uncommitted · feat(learning): D-462 incremental pixel review
+
+- 변경: Existing Pinky app adds pending multi-video imports, independent original-coordinate pixel editing, verified nominal CAD references and coherent current-decision/export contracts. Canvas palette and learning surface ownership remain in shared tokens/declarations.
+- 증거: Root independent review found cross-store mixed reads. Producer now captures metadata/frames/masks/representations in one SQLite transaction and seals that exact revision. Concurrent-writer, stale authority and bundle integrity regressions added; host/shared contracts 252 passed/24 skipped and explicit Chromium regression suite 13 passed, NEW=0.
+- gate 변화: Local host/Chromium with separate test state. Live human approvals, pixel qualification, original-video/map-camera evidence and root integration acceptance remain separate. No shared physical gate is advanced.

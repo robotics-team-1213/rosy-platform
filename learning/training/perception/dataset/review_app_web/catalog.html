@@ -1,0 +1,10 @@
+<!doctype html>
+<html lang="ko" data-theme="dark"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Rosy Learning — 자료 등록</title><link rel="stylesheet" href="/common/tokens.css"><script src="/common/theme.js"></script><link rel="stylesheet" href="/common/components.css"><link rel="stylesheet" href="/app.css"><script type="module" src="/catalog.js"></script></head>
+<body><a class="skip-link" href="#catalog-main">자료 등록으로 이동</a><ui-shell grammar="procedure"><ui-topbar><ui-brand><b>ROSY</b></ui-brand><h1>자료 등록</h1><nav class="workspace-tabs" aria-label="학습 화면"><a href="/learning">작업 목록</a><a href="/">객체 검수</a><a href="/pixels">픽셀 검수</a><a href="/catalog" aria-current="page">자료 등록</a></nav></ui-topbar>
+<main class="learning-main" id="catalog-main" tabindex="-1"><h2>준비된 영상 프레임 이어서 검수하기</h2><p>원본 파일의 해시와 크기를 확인하고 기존 작업에 추가합니다. 새 사진·마스크는 검수 대기로 시작하며 기존 결정은 유지됩니다.</p>
+<form id="import-form" class="ui-form"><label class="ui-field-label">검증된 입력 폴더 <input id="catalog-path" class="ui-field" required></label><ui-button id="import" kind="primary">영상 프레임 등록</ui-button></form>
+<ui-status id="result" state="pending" hidden></ui-status><ui-status id="catalog-error" state="error" role="alert" hidden></ui-status>
+<section class="learning-section"><h2>객체와 픽셀을 따로 검수합니다</h2><p>같은 영상 해시·프레임의 JPEG/PNG 표현은 하나의 사진으로 묶습니다. 원본 촬영 세션과 보수적인 촬영 그룹을 보존하며 원본 MP4가 직접 확인되지 않은 경우 그 공백을 유지합니다.</p><ui-actions><a href="/?filter=pending">객체 검수 대기</a><a href="/pixels">픽셀 검수 열기</a></ui-actions></section>
+<section class="learning-section"><h2>CAD 지도 참고 연결</h2><p>CAD·차선 그래프·Nav2 파일 출처를 확인합니다. 지도와 영상의 실제 투영에는 촬영 지도 revision·동기화 자세·카메라 보정 증거가 추가로 필요합니다.</p><form id="cad-form" class="ui-form"><label class="ui-field-label">지도 검증 자료 <input id="cad-path" class="ui-field" required></label><ui-button id="cad" kind="quiet">지도 참조 검증·연결</ui-button></form><ui-status id="map-status" state="pending">아직 연결한 지도 참조가 없습니다.</ui-status><details><summary>검증된 파일과 남은 연결 증거</summary><pre id="map-details"></pre></details></section>
+<p>기존 학습·검증에서 stop_line·crosswalk 픽셀은 0입니다. CAD 투영·객체 박스를 사람 픽셀 정답으로 승인하지 않습니다.</p></main></ui-shell></body></html>
