@@ -186,7 +186,7 @@ def test_dashboard_exposes_traffic_evidence_and_staged_policy_controls():
     assert "trafficPolicyPending" in script
 
 
-def test_dashboard_exposes_authenticated_live_camera_preview():
+def test_dashboard_exposes_authenticated_live_camera_preview(dashboard_client):
     html = (WEB_ROOT / "index.html").read_text(encoding="utf-8")
     script = dashboard_js()
     css = dashboard_css()
@@ -199,14 +199,27 @@ def test_dashboard_exposes_authenticated_live_camera_preview():
         assert f'id="{element_id}"' in html
     assert 'aria-label="로봇 전방 카메라와 도로 인식 오버레이"' in html
     assert "/api/v1/vision/front/status" in script
-    assert "/api/v1/vision/front/frame" in script
+    vision = (WEB_ROOT / "vision.js").read_text(encoding="utf-8")
+    # Frame admission belongs to the imported shared module; prove the actual
+    # served closure, not an unrelated endpoint literal somewhere in the bundle.
+    assert re.search(r'import\s*\{\s*fetchCameraPair\s*\}\s*from\s*"/common/evidence.js"', vision)
+    shared = dashboard_client.get("/common/evidence.js")
+    assert shared.status_code == 200
+    assert shared.content == (WEB_ROOT.parent / "web_common" / "evidence.js").read_bytes()
+    assert "export async function fetchCameraPair" in shared.text
+    assert "/api/v1/vision/front/frame?sequence=" in shared.text
+    assert "await fetchFrame(" in shared.text
+    assert "fetchFrame: (path) => fetch(path, {headers: authHeaders(), cache: \"no-store\", signal: controller.signal})" in vision
     assert "authHeaders()" in script
     assert "URL.createObjectURL" in script
     assert "URL.revokeObjectURL" in script
     assert "visionSequence" in script
     assert "AbortController" in script
     assert "stopVisionPreview" in script
-    assert "X-Rosy-Camera-Sequence" in script
+    assert "X-Rosy-Camera-Sequence" in shared.text
+    assert "X-Rosy-Camera-Variant" in shared.text
+    assert "aborter?.abort()" in vision
+    assert "gen !== generation || !hasToken()" in vision
     assert ".vision-stage" in css
     assert '.vision-stage[data-state="live"]' in css
     assert '.vision-stage[data-state="stale"]' in css

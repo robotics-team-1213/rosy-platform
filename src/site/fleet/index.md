@@ -78,5 +78,5 @@
 - 2026-10-04 · uncommitted · fix(web): 관제 확인과 명령의 공통 소유권
 - 2026-10-04 · uncommitted · fix(web): 관제 뷰포트와 주소 확인의 작업 소유권
 - 2026-10-04 · uncommitted · feat(web): D-439 Fleet 작업 탐색과 보정 미리보기 수명
-- 2026-10-04 · uncommitted · fix(server): D-438 phase 1 final-review findings
-- 2026-10-04 · uncommitted · feat(server): D-438 Fleet stuck resolver phase 1 (rules R1-R3 + human escalation)
+- 2026-10-04 · uncommitted · test: API v1.91 문서 계약 유지
+- 2026-10-04 · uncommitted · feat(server): D-447 (a) gather reads fresh hub snapshots first

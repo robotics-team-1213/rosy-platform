@@ -5,6 +5,8 @@ line and the lamp node. rosy-boot-display reads them from its environment
 (systemd applies /etc/rosy/boot-display.env), rosy-hw-test and rosy-hw-probe
 from the file itself; all three must agree, so all three use this module.
 
+``ROSY_LOW_LIGHT_ASSIST`` opts into screen and lamp illumination (default off).
+
 Rules: surrounding whitespace and one pair of matching quotes are stripped;
 exactly ``true`` or ``false`` counts; a missing key is the default (both are
 on since D-260); anything else is off, and ``valid`` says so for a log line.
@@ -16,7 +18,8 @@ from __future__ import annotations
 ENV_FILE = "etc/rosy/boot-display.env"
 BUZZER_KEY = "ROSY_BUZZER_ENABLED"
 LAMP_KEY = "ROSY_LAMP_ENABLED"
-DEFAULTS = {BUZZER_KEY: True, LAMP_KEY: True}
+LOW_LIGHT_KEY = "ROSY_LOW_LIGHT_ASSIST"
+DEFAULTS = {BUZZER_KEY: True, LAMP_KEY: True, LOW_LIGHT_KEY: False}
 
 
 def unquote(value: str) -> str:

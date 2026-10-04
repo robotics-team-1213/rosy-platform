@@ -5,6 +5,7 @@
 // 생기지 않고, 어느 쪽이 어느 쪽을 아는지가 한 방향으로 고정된다.
 
 import {
+  createNode,
   bindFormSave,
   elements,
   fillNumberInput,
@@ -79,8 +80,7 @@ export function renderTokens(payload) {
   list.replaceChildren();
   if (!tokens.length) {
     const empty = document.createElement("li");
-    const note = document.createElement("ui-empty");
-    note.textContent = "저장된 토큰이 없습니다.";
+    const note = createNode("ui-empty", "", "저장된 토큰이 없습니다.");
     empty.append(note);
     list.append(empty);
     return;
@@ -88,8 +88,7 @@ export function renderTokens(payload) {
   tokens.forEach((item) => {
     const row = document.createElement("li");
     row.dataset.tokenId = item.id || "";
-    const title = document.createElement("strong");
-    title.textContent = item.role || "viewer";
+    const title = createNode("strong", "", item.role || "viewer");
     const meta = document.createElement("span");
     const created = item.created_at ? String(item.created_at).slice(0, 10) : "";
     // D-193 6g: source, expiry and "this device" are visible per token.
@@ -98,8 +97,7 @@ export function renderTokens(payload) {
     if (item.legacy) parts.push("설정 파일 평문");
     if (item.current) parts.push("이 기기");
     meta.textContent = parts.join(" · ");
-    const actions = document.createElement("div");
-    actions.className = "waypoint-actions";
+    const actions = createNode("div", "waypoint-actions");
     const remove = document.createElement("ui-button");
     remove.setAttribute("kind", "quiet");
     remove.type = "button";
@@ -152,8 +150,7 @@ export function renderDocks(payload) {
   list.replaceChildren();
   if (!docks.length) {
     const empty = document.createElement("li");
-    const note = document.createElement("ui-empty");
-    note.textContent = "등록된 도크가 없습니다.";
+    const note = createNode("ui-empty", "", "등록된 도크가 없습니다.");
     empty.append(note);
     list.append(empty);
     return;
@@ -161,12 +158,9 @@ export function renderDocks(payload) {
   docks.forEach((dock) => {
     const row = document.createElement("li");
     row.dataset.id = dock.id || "";
-    const title = document.createElement("strong");
-    title.textContent = dock.id || "(id 없음)";
-    const meta = document.createElement("span");
-    meta.textContent = `${dock.type || "?"} · ${number(dock.x, 2)}, ${number(dock.y, 2)}`;
-    const actions = document.createElement("div");
-    actions.className = "waypoint-actions";
+    const title = createNode("strong", "", dock.id || "(id 없음)");
+    const meta = createNode("span", "", `${dock.type || "?"} · ${number(dock.x, 2)}, ${number(dock.y, 2)}`);
+    const actions = createNode("div", "waypoint-actions");
     const teach = document.createElement("ui-button");
     teach.setAttribute("kind", "quiet");
     teach.type = "button";
@@ -215,8 +209,7 @@ export function renderWaypoints(payload) {
   list.replaceChildren();
   if (!waypoints.length) {
     const empty = document.createElement("li");
-    const note = document.createElement("ui-empty");
-    note.textContent = "저장된 웨이포인트가 없습니다.";
+    const note = createNode("ui-empty", "", "저장된 웨이포인트가 없습니다.");
     empty.append(note);
     list.append(empty);
     return;
@@ -224,12 +217,9 @@ export function renderWaypoints(payload) {
   waypoints.forEach((waypoint) => {
     const row = document.createElement("li");
     row.dataset.name = waypoint.name || "";
-    const title = document.createElement("strong");
-    title.textContent = waypoint.name || "(이름 없음)";
-    const meta = document.createElement("span");
-    meta.textContent = `${number(waypoint.x, 2)}, ${number(waypoint.y, 2)} · yaw ${number(waypoint.yaw, 2)}`;
-    const actions = document.createElement("div");
-    actions.className = "waypoint-actions";
+    const title = createNode("strong", "", waypoint.name || "(이름 없음)");
+    const meta = createNode("span", "", `${number(waypoint.x, 2)}, ${number(waypoint.y, 2)} · yaw ${number(waypoint.yaw, 2)}`);
+    const actions = createNode("div", "waypoint-actions");
     const go = document.createElement("ui-button");
     go.setAttribute("kind", "quiet");
     go.type = "button";

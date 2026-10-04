@@ -3,6 +3,7 @@
 // 셸 의존이 없어 어떤 셸 함수도 import 하지 않는다. 이 파일이 셸 싱글턴
 // (fieldMap·teleop·hostCards) 을 필요로 하게 되면 그 함수는 여기 있을 수 없다.
 import {
+  createNode,
   bytes,
   duration,
   elements,
@@ -219,10 +220,8 @@ export function renderTriage() {
   context.forEach((fault) => {
     const item = document.createElement("li");
     item.dataset.category = fault.category;
-    const title = document.createElement("b");
-    title.textContent = fault.title;
-    const detail = document.createElement("span");
-    detail.textContent = fault.detail;
+    const title = createNode("b", "", fault.title);
+    const detail = createNode("span", "", fault.detail);
     item.append(title, detail);
     list.append(item);
   });
@@ -302,15 +301,12 @@ export function renderInventory(inventory) {
   );
   elements["capability-list"].replaceChildren();
   rows.forEach((row) => {
-    const item = document.createElement("div");
-    item.className = "capability-item";
+    const item = createNode("div", "capability-item");
     item.dataset.state = row.state;
     if (CONFIGURED_REASONS[row.reason]) item.dataset.cause = "runtime";
-    const label = document.createElement("span");
-    label.textContent = knownWord(CAPABILITY_LABEL, row.id);
+    const label = createNode("span", "", knownWord(CAPABILITY_LABEL, row.id));
     label.title = row.id;
-    const state = document.createElement("b");
-    state.textContent = knownWord(PRESENTATION_LABEL, row.state);
+    const state = createNode("b", "", knownWord(PRESENTATION_LABEL, row.state));
     state.title = row.state;
     item.append(label, state);
     if (row.reason) {
@@ -379,23 +375,16 @@ export function renderEvents(payload) {
   elements["event-list"].replaceChildren();
   if (!events.length) {
     const empty = document.createElement("li");
-    const note = document.createElement("ui-empty");
-    note.textContent = "수신된 이벤트가 없습니다.";
+    const note = createNode("ui-empty", "", "수신된 이벤트가 없습니다.");
     empty.append(note);
     elements["event-list"].append(empty);
     return;
   }
   events.forEach((event) => {
     const row = document.createElement("li");
-    const time = document.createElement("time");
-    time.className = "event-time";
-    time.textContent = event.ts ? new Date(event.ts).toLocaleTimeString("ko-KR") : "—";
-    const type = document.createElement("span");
-    type.className = "event-type";
-    type.textContent = event.type || "unknown.event";
-    const severity = document.createElement("span");
-    severity.className = `event-severity ${event.severity || "info"}`;
-    severity.textContent = (event.severity || "info").toUpperCase();
+    const time = createNode("time", "event-time", event.ts ? new Date(event.ts).toLocaleTimeString("ko-KR") : "—");
+    const type = createNode("span", "event-type", event.type || "unknown.event");
+    const severity = createNode("span", `event-severity ${event.severity || "info"}`, (event.severity || "info").toUpperCase());
     // D-396: 심각도 색 — 위험은 채움, 주의는 텍스트 색, info 는 뮤트.
     if (event.severity === "critical" || event.severity === "error") {
       severity.dataset.severity = "crit";

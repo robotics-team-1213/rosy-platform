@@ -246,6 +246,26 @@ def test_a_good_handover_validates():
     assert result["drive"]["speed"] == 0.1
 
 
+@pytest.mark.parametrize("file_age,quality_age,fresh", [(0, 0, True), (1, 1, True), (1.1, 1, False), (-1, 0, False), (0, True, False)])
+@pytest.mark.parametrize("reason", ["low_light", "overexposed"])
+def test_camera_quality_includes_handover_age(file_age, quality_age, fresh, reason):
+    result = fs.validate_face_inputs(handover(camera_quality={"valid": False, "reason": reason},
+                                              camera_quality_age_s=quality_age), NOW + timedelta(seconds=file_age))
+    assert (result["camera_quality"] is not None) is fresh
+
+
+def test_opt_in_light_assist_can_illuminate_idle_standby_but_preserves_priority():
+    inputs = {**READY, "core": core(power_mode="standby"), "light_assist": True}
+    answer = fs.screen_for(**inputs)
+    assert answer["kind"] == fs.LIGHT and answer["backlight"] == 100 and answer["awake"]
+    for fields in ({"estop": True}, {"battery_charging": True}, {"battery_percent": 10},
+                   {"activity_kind": "CALIBRATING"}, {"robot_mode": "NAVIGATION"}, {"caution": ["line_follow_hold"]}):
+        assert fs.screen_for(**{**inputs, "core": core(power_mode="standby", **fields)})["kind"] != fs.LIGHT
+    assert fs.screen_for(**inputs, update={"release": "new"})["kind"] == fs.UPDATE
+    assert fs.screen_for(**inputs, test="lamp")["kind"] != fs.LIGHT
+    assert fs.screen_for(**{**inputs, "core": core(robot_mode="MANUAL")})["kind"] == fs.LIGHT
+
+
 @pytest.mark.parametrize("age,fresh", [(0.0, True), (3.0, True), (3.01, False), (60.0, False),
                                        (-5.0, True), (-5.01, False)])
 def test_freshness_boundary(age, fresh):

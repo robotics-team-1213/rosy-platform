@@ -18,6 +18,9 @@ export function mount(root, ctx) {
   toolbar.append(closeExpanded); stage.append(frame, empty, toolbar);
   const status = el("ui-tag", "", "수신 대기"); status.id = "vision-status";
   status.dataset.evidence = "unavailable"; status.title = "WAITING"; status.setAttribute("status", "neutral");
+  const qualityIndicator = el("ui-status", "", "조도가 낮아 차선·물체를 판정할 수 없습니다");
+  qualityIndicator.id = "vision-quality"; qualityIndicator.hidden = true; qualityIndicator.setAttribute("state", "warning");
+  qualityIndicator.setAttribute("role", "status"); qualityIndicator.setAttribute("aria-live", "polite");
   const actions = el("ui-actions", "surface-actions surface-camera-actions");
   const expand = el("ui-button", "", "영상 확대"); expand.id = "vision-expand";
   expand.type = "button"; expand.setAttribute("kind", "quiet"); actions.append(expand);
@@ -29,6 +32,12 @@ export function mount(root, ctx) {
     storage.append(option);
   }
   storageLabel.append(storage);
+  const browserLabel = el("label", "ui-field-label", "브라우저 확인 영상");
+  const browserMode = el("select", "ui-field"); browserMode.id = "vision-record-mode";
+  for (const [value, label] of [["raw", "표시 없는 원본"], ["annotated", "원본 + 모델 표시본"]]) {
+    const option = el("option", "", label); option.value = value; browserMode.append(option);
+  }
+  browserLabel.append(browserMode);
   const shot = el("ui-button", "", "스크린샷"); shot.id = "vision-screenshot";
   shot.type = "button"; shot.setAttribute("kind", "quiet"); actions.append(shot);
   const start = el("ui-button", "", "녹화 시작"); start.id = "vision-record-start";
@@ -40,7 +49,7 @@ export function mount(root, ctx) {
   const saveLog = el("ui-button", "", "조작 기록 저장"); saveLog.id = "vision-operations-save";
   saveLog.type = "button"; saveLog.setAttribute("kind", "quiet"); actions.append(saveLog);
   const primaryActions = el("ui-actions", "surface-actions"); primaryActions.append(expand, stop);
-  actions.prepend(storageLabel);
+  actions.prepend(storageLabel, browserLabel);
   const tools = el("details", "surface-camera-tools");
   tools.append(el("summary", "", "사진·녹화 저장 도구"), actions);
   const captureStatus = el("ui-status", "", "카메라 프레임 수신 대기");
@@ -76,14 +85,11 @@ export function mount(root, ctx) {
       if (!records.length) files.append(el("li", "", "로봇에 저장된 카메라 파일이 없습니다."));
     }
     refreshLibrary = loadLibrary;
-    refresh.addEventListener("click", () => loadLibrary().catch((error) => {
+    const refreshWithFeedback = () => loadLibrary().catch((error) => {
       captureStatus.hidden = false; captureStatus.textContent = `로봇 저장 목록을 읽지 못했습니다: ${error.message}`;
-    }));
-    library.addEventListener("toggle", () => {
-      if (library.open) loadLibrary().catch((error) => {
-        captureStatus.hidden = false; captureStatus.textContent = `로봇 저장 목록을 읽지 못했습니다: ${error.message}`;
-      });
     });
+    refresh.addEventListener("click", refreshWithFeedback);
+    library.addEventListener("toggle", () => { if (library.open) refreshWithFeedback(); });
   }
   const facts = el("dl", "ui-readout");
   const source = el("dd", "", "—"); source.id = "vision-source";
@@ -98,10 +104,10 @@ export function mount(root, ctx) {
     "LEFT LANE · RIGHT LANE: 추종에 선택한 왼쪽·오른쪽 경계. UNSEEN은 선택한 경계가 없음.",
     "FOLLOW PATH: 따라갈 목표 방향. 점선은 주행 궤적이나 객체의 미래 이동이 아님.",
     "CURRENT LANE: 선택한 차로. CANDIDATE: 추가 차로 후보이며 자동 차선 변경 대상이 아님.",
-    "OBJ UNKNOWN · DARK: 종류 미확인 전경 영역이며 차선 페인트도 포함될 수 있음. NEAR는 가까운 중앙 경로 영역에 걸침. 0.42m L은 카메라 앞 거리(L LiDAR, G 바닥 평면 추정). unranged는 거리 미확인.",
+    "REGION UNCLASSIFIED · DARK: 바닥 색과 다른 미분류 영역이며 벽·차선 페인트도 포함될 수 있음. 장애물 종류를 알아본 결과가 아님. DET는 객체 모델 검출. NEAR는 가까운 중앙 경로 영역에 걸침. 0.42m L은 카메라 앞 거리(L LiDAR, G 바닥 평면 추정). unranged는 거리 미확인.",
     "TAG: 영상에서 식별한 표식 번호. PRED STOP은 도로 예측 표시 중단.",
   ]) legend.append(el("p", "", text));
-  root.append(head, stage, status, primaryActions, tools, legend, captureStatus, library, facts);
+  root.append(head, stage, status, qualityIndicator, primaryActions, tools, legend, captureStatus, library, facts);
   const elements = {"vision-stage": stage, "vision-frame": frame, "vision-empty": empty,
     "vision-status": status, "vision-source": source, "vision-resolution": resolution,
     "vision-age": age, "vision-captured": captured};
@@ -124,6 +130,7 @@ export function mount(root, ctx) {
     setOff(expand, expanding || !state.ready || !stage.requestFullscreen,
       !state.ready ? "영상 수신 후 확대할 수 있습니다" : "이 브라우저는 전체 화면 확대 불가");
     storage.disabled = state.recording || state.uploading;
+    setOff(browserMode, state.recording || state.uploading, "녹화·저장이 끝난 뒤 선택하세요");
     // 올리는 중(uploading)은 짧은 잠금이라 사유 없이 끈다.
     const waiting = state.uploading ? "" : !state.ready ? "카메라 대기" : "";
     setOff(shot, !state.ready || state.uploading, waiting);
@@ -141,14 +148,14 @@ export function mount(root, ctx) {
   capture = createCameraCapture({onChange: updateCapture, storeOnRobot,
     onComplete: async () => {
       const location = storage.value;
-      if (location !== "robot") capture.saveOperations();
       await capture.saveVideo(location);
+      if (location !== "robot") capture.saveOperations();
     }});
   updateCapture(capture.state());
   let homes = [];
   function relocate() {
     if (homes.length) return;
-    for (const node of [document.getElementById("shell-estop"), document.getElementById("shell-notice"), stop, captureStatus].filter(Boolean)) {
+    for (const node of [document.getElementById("shell-estop"), document.getElementById("shell-notice"), stop, captureStatus, qualityIndicator].filter(Boolean)) {
       const anchor = document.createComment("camera-fullscreen-home");
       node.before(anchor); homes.push({node, anchor}); toolbar.append(node);
     }
@@ -193,8 +200,18 @@ export function mount(root, ctx) {
   const action = (event) => capture.recordAction(event.detail);
   window.addEventListener("rosy:operator-action", action);
   const preview = createVisionPreview({elements, setText: (id, value) => { elements[id].textContent = value ?? "—"; },
+    previewMode: () => capture.state().previewMode,
     api: ctx.api, authHeaders, hasToken: () => Boolean(session.token), isHidden: () => document.hidden,
+    onQuality: (quality) => {
+      qualityIndicator.hidden = !(quality?.valid === false && ["low_light", "overexposed"].includes(quality?.reason));
+      qualityIndicator.textContent = quality?.reason === "overexposed"
+        ? "과노출 · 차선 정보 확인 불가" : "조도가 낮아 차선·물체를 판정할 수 없습니다";
+    },
     onFrame: (frame) => capture.acceptFrame(frame), onUnavailable: (message) => capture.unavailable(message)});
+  browserMode.addEventListener("change", () => {
+    if (!capture.setPreviewMode(browserMode.value)) browserMode.value = capture.state().previewMode;
+    else preview.start();
+  });
   const visibility = () => { if (document.hidden) preview.stop("화면이 숨겨져 카메라를 중지했습니다."); else preview.start(); };
   document.addEventListener("visibilitychange", visibility);
   preview.start();

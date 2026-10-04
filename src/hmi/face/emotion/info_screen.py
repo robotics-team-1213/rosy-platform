@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from PIL import Image, ImageDraw, ImageFont
 
 from . import wifi_qr
+from .light_assist import render_light_assist as render_light_assist
 
 
 @dataclass(frozen=True)

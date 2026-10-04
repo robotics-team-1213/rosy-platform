@@ -72,6 +72,82 @@ console.log(JSON.stringify({metadata:JSON.parse(new TextDecoder().decode(bytes.s
                       "media": [255, 216, 255, 217]}
 
 
+def test_paired_frame_fetch_verifies_variant_stamp_and_never_falls_back():
+    result = _run_js("""
+const calls = [];
+let failure = '', mismatch = false, wrongVariant = false;
+const fetchFrame = async path => {
+  calls.push(path);
+  const annotated = path.endsWith('overlay=true');
+  return new Response(new Blob(['JPEG'],{type:'image/jpeg'}), {status:failure ? 429 : 200,
+    headers:{'X-Rosy-Camera-Variant':wrongVariant ? 'annotated' : annotated?'annotated':'raw',
+      'X-Rosy-Camera-Sequence':'7', 'X-Rosy-Camera-Captured-At':mismatch && annotated?'12':'11',
+      'X-Rosy-Camera-Frame-Id':'front'}});
+};
+const status = {sequence:7,raw_sequence:7,raw_available:true};
+const raw = await camera.fetchCameraPair(status,{fetchFrame});
+const pair = await camera.fetchCameraPair(status,{fetchFrame,previewMode:'annotated'});
+const errors = [];
+for (const kind of ['missing','mismatch','rate','legacy']) {
+  mismatch = kind === 'mismatch'; failure = kind === 'rate'; wrongVariant = kind === 'legacy';
+  try { await camera.fetchCameraPair(kind==='missing'?{sequence:7}:status,{fetchFrame,previewMode:'annotated'}); }
+  catch (error) { errors.push({kind,message:error.message}); }
+}
+console.log(JSON.stringify({calls,raw:raw.previewMode,pair:pair.previewMode,
+  hasRaw:pair.rawBlob.type,errors}));
+""")
+    assert result['calls'][:3] == [
+        '/api/v1/vision/front/frame?sequence=7&overlay=false',
+        '/api/v1/vision/front/frame?sequence=7&overlay=false',
+        '/api/v1/vision/front/frame?sequence=7&overlay=true']
+    assert result['raw'] == 'raw' and result['pair'] == 'annotated'
+    assert result['hasRaw'] == 'image/jpeg'
+    assert [error['kind'] for error in result['errors']] == ['missing','mismatch','rate','legacy']
+
+
+@pytest.mark.parametrize('mode', ['raw', 'annotated'])
+def test_capture_keeps_raw_pixels_unlabelled_and_saves_both_variant_files(mode):
+    result = _run_js("""
+const mode = """ + json.dumps(mode) + """;
+const draws = [], stopped = [], saved = [], uploads = [];
+const realCrypto=globalThis.crypto;
+Object.defineProperty(globalThis,'crypto',{value:{getRandomValues:values=>realCrypto.getRandomValues(values)}});
+globalThis.MediaRecorder = class {
+  static isTypeSupported(type){return type==='video/webm';}
+  constructor(){this.state='inactive';}
+  start(){this.state='recording';}
+  stop(){this.state='inactive';this.ondataavailable({data:new Blob(['VIDEO'])});this.onstop();}
+};
+globalThis.window={RosyPalette:{cssColor(){return 'ink';},canvasFont(){return '14px body';}}};
+globalThis.document={createElement(){const id=draws.length;draws.push([]);return {
+  getContext(){return {drawImage(image){draws[id].push(image.id);},fillRect(){draws[id].push('strip');},fillText(){draws[id].push('text');}};},
+  captureStream(){return {getTracks(){return [{stop(){stopped.push(id);}}];}};}
+};}};
+const capture=camera.createCameraCapture({now:()=>1000,save:(blob,name)=>saved.push(name),
+ storeOnRobot:async(blob,metadata)=>{uploads.push(metadata);return {file_name:'saved.webm'};}});
+capture.setPreviewMode(mode);
+const blob=new Blob(['JPEG'],{type:'image/jpeg'});
+capture.acceptFrame({image:{id:mode==='raw'?'raw':'annotated',naturalWidth:320,naturalHeight:240},blob,
+ rawImage:{id:'raw',naturalWidth:320,naturalHeight:240},rawBlob:blob,previewMode:mode,sequence:1});
+const started=capture.start(), locked=capture.setPreviewMode('raw');
+capture.recordAction({action:'manual',result:'accepted'});
+capture.dispose(); await capture.saveVideo('both');
+console.log(JSON.stringify({started,locked,draws,stopped,saved,uploads,state:capture.state()}));
+""")
+    assert result['started'] and result['locked'] is False
+    assert set(result['draws'][0]) == {'raw'}
+    assert result['saved'][0].endswith('-raw.webm')
+    assert result['uploads'][0]['preview_mode'] == 'raw'
+    assert len(result['uploads'][0]['pair_group_id']) == 32
+    assert len(result['stopped']) == (2 if mode == 'annotated' else 1)
+    if mode == 'annotated':
+        assert 'text' in result['draws'][1] and 'annotated' in result['draws'][1]
+        assert result['saved'][1].endswith('-annotated.webm')
+        assert result['uploads'][1]['preview_mode'] == 'annotated'
+        assert result['uploads'][0]['pair_group_id'] == result['uploads'][1]['pair_group_id']
+    assert result['state']['recording'] is False
+
+
 def test_recorded_video_and_operation_manifest_can_be_saved_together():
     result = _run_js("""
 globalThis.MediaRecorder = class {

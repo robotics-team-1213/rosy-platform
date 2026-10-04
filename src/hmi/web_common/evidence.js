@@ -19,6 +19,35 @@ const MAX_DURATION_MS = 5 * 60 * 1000;
 const MAX_VIDEO_BYTES = 60 * 1024 * 1024;
 const FRAME_FRESH_MS = 2_000;
 
+export async function fetchCameraPair(status, {fetchFrame, previewMode = "raw"}) {
+  if (status.raw_available !== true || status.raw_sequence !== status.sequence) {
+    throw new Error("표시 없는 원본이 준비되지 않았습니다.");
+  }
+  async function read(variant) {
+    const response = await fetchFrame(`/api/v1/vision/front/frame?sequence=${encodeURIComponent(status.sequence)}&overlay=${variant === "annotated"}`);
+    if (!response.ok) throw new Error(`camera ${variant} ${response.status}`);
+    const headers = response.headers;
+    const sequence = headers.get("X-Rosy-Camera-Sequence");
+    const capturedAt = headers.get("X-Rosy-Camera-Captured-At");
+    const frameId = headers.get("X-Rosy-Camera-Frame-Id");
+    if (headers.get("X-Rosy-Camera-Variant") !== variant || sequence !== String(status.sequence)
+        || !capturedAt || !Number.isFinite(Number(capturedAt)) || !frameId) {
+      throw new Error("원본·표시본 출처를 확인할 수 없습니다.");
+    }
+    const blob = await response.blob();
+    if (blob.type !== "image/jpeg") throw new Error("JPEG 원본이 아닙니다.");
+    return {blob, sequence: Number(sequence), capturedAt: Number(capturedAt), frameId,
+      source: headers.get("X-Rosy-Camera-Source") || "front"};
+  }
+  const raw = await read("raw");
+  if (previewMode === "raw") return {...raw, rawBlob: raw.blob, previewMode};
+  const annotated = await read("annotated");
+  if (annotated.capturedAt !== raw.capturedAt || annotated.frameId !== raw.frameId) {
+    throw new Error("원본과 표시본의 촬영 시점이 다릅니다.");
+  }
+  return {...annotated, rawBlob: raw.blob, previewMode};
+}
+
 export function classifyOperation(method, path, status) {
   const action = OPERATIONS.get(`${String(method).toUpperCase()} ${path}`);
   return action ? {action, result: status >= 200 && status < 300 ? "accepted" : "failed"} : null;
@@ -77,6 +106,15 @@ export function createCameraCapture({onChange = () => {}, onComplete = () => {},
   let frame = null;
   let frameAt = -Infinity;
   let recorder = null;
+  let derivative = null;
+  let derivativeStream = null;
+  let derivativeCanvas = null;
+  let derivativeContext = null;
+  let derivativeChunks = [];
+  let previewMode = "raw";
+  let pairGroup = null;
+  let finalizing = false;
+  let disposed = false;
   let stream = null;
   let canvas = null;
   let context = null;
@@ -93,29 +131,36 @@ export function createCameraCapture({onChange = () => {}, onComplete = () => {},
 
   const active = () => recorder && recorder.state === "recording";
   const ready = () => frame && now() - frameAt <= FRAME_FRESH_MS;
-  const state = () => ({ready: Boolean(ready()), recording: Boolean(active()), uploading,
-    saved: Boolean(completed), supported: Boolean(recordingType()), message});
+  const state = () => ({ready: Boolean(ready()), recording: Boolean(active()) || finalizing, uploading,
+    saved: Boolean(completed), supported: Boolean(recordingType()), previewMode, message});
   const notify = () => onChange(state());
   // D-359 §4 — 색·글꼴은 ui.js(window.RosyPalette)가 푼다. 녹화 중에는 프레임마다
   // 다시 그리므로 테마가 바뀌면 다음 프레임부터 새 색이다.
   const tokenColor = (name) => window.RosyPalette.cssColor(name);
   function draw() {
     if (!frame || !context) return;
-    context.drawImage(frame.image, 0, 0, canvas.width, canvas.height);
+    context.drawImage(frame.rawImage || frame.image, 0, 0, canvas.width, canvas.height);
+    if (!derivativeContext) return;
+    derivativeContext.drawImage(frame.image, 0, 0, derivativeCanvas.width, derivativeCanvas.height);
     const last = timeline.snapshot().at(-1);
     if (last && now() - startedAt - last.elapsed_ms < 3_000) {
-      const height = Math.max(28, Math.round(canvas.height * 0.13));
-      context.fillStyle = tokenColor("--scrim");
-      context.fillRect(0, canvas.height - height, canvas.width, height);
-      context.fillStyle = tokenColor("--ink");
-      context.font = window.RosyPalette.canvasFont(Math.max(14, Math.round(height * 0.48)), "body");
-      context.fillText(`${(last.elapsed_ms / 1000).toFixed(1)}s  ${last.action} · ${last.result === "accepted" ? "접수" : "실패"}`,
-        8, canvas.height - Math.round(height * 0.28), canvas.width - 16);
+      const height = Math.max(28, Math.round(derivativeCanvas.height * 0.13));
+      derivativeContext.fillStyle = tokenColor("--scrim");
+      derivativeContext.fillRect(0, derivativeCanvas.height - height, derivativeCanvas.width, height);
+      derivativeContext.fillStyle = tokenColor("--ink");
+      derivativeContext.font = window.RosyPalette.canvasFont(Math.max(14, Math.round(height * 0.48)), "body");
+      derivativeContext.fillText(`${(last.elapsed_ms / 1000).toFixed(1)}s  ${last.action} · ${last.result === "accepted" ? "접수" : "실패"}`,
+        8, derivativeCanvas.height - Math.round(height * 0.28), derivativeCanvas.width - 16);
     }
   }
-  function acceptFrame({image, blob, sequence, source, capturedAt}) {
+  function acceptFrame({image, blob, sequence, source, capturedAt, rawImage, rawBlob, previewMode: incomingMode}) {
+    if (disposed) return;
+    if (incomingMode && incomingMode !== previewMode) return;
     if (!image?.naturalWidth || !image?.naturalHeight || blob?.type !== "image/jpeg") return;
-    frame = {image, blob, sequence, source, capturedAt};
+    if (previewMode === "annotated" && (!rawImage?.naturalWidth || rawBlob?.type !== "image/jpeg")) {
+      unavailable("같은 촬영 시점의 원본이 없어 표시본 녹화를 중지합니다."); return;
+    }
+    frame = {image, blob, sequence, source, capturedAt, rawImage, rawBlob};
     frameAt = now();
     if (active()) { frameCount += 1; draw(); }
     message = active() ? "녹화 중 · 화면 미리보기를 기록합니다." : "스크린샷 또는 녹화를 시작할 수 있습니다.";
@@ -129,7 +174,7 @@ export function createCameraCapture({onChange = () => {}, onComplete = () => {},
   }
   async function screenshot(location = "pc") {
     if (!ready()) { message = "새 카메라 프레임이 없어 저장할 수 없습니다."; notify(); return false; }
-    const shot = frame;
+    const shot = {...frame, blob: frame.rawBlob || frame.blob};
     if (location === "pc" || location === "both") save(shot.blob, `rosy-camera-${fileStamp()}.jpg`);
     if (location === "robot" || location === "both") {
       if (!storeOnRobot || uploading) return false;
@@ -146,21 +191,36 @@ export function createCameraCapture({onChange = () => {}, onComplete = () => {},
   }
   function start() {
     const type = recordingType();
-    if (!ready() || !type || active()) { message = "새 프레임과 브라우저 녹화 지원을 확인하세요."; notify(); return false; }
+    if (disposed || !ready() || !type || active() || finalizing) { message = "새 프레임과 브라우저 녹화 지원을 확인하세요."; notify(); return false; }
     completed = null;
     timeline = createOperationTimeline();
     chunks = [];
     bytes = 0;
     frameCount = 1;
+    pairGroup = Array.from(crypto.getRandomValues(new Uint8Array(16)),
+      value => value.toString(16).padStart(2, "0")).join("");
+    derivativeChunks = [];
     startedAt = now();
     startedWall = new Date();
     canvas = document.createElement("canvas");
-    canvas.width = frame.image.naturalWidth;
-    canvas.height = frame.image.naturalHeight;
+    canvas.width = (frame.rawImage || frame.image).naturalWidth;
+    canvas.height = (frame.rawImage || frame.image).naturalHeight;
     context = canvas.getContext("2d");
     if (!context || !canvas.captureStream) { message = "이 브라우저는 영상 녹화를 지원하지 않습니다."; notify(); return false; }
-    draw();
     try {
+      if (previewMode === "annotated") {
+        derivativeCanvas = document.createElement("canvas");
+        derivativeCanvas.width = frame.image.naturalWidth; derivativeCanvas.height = frame.image.naturalHeight;
+        derivativeContext = derivativeCanvas.getContext("2d");
+        derivativeStream = derivativeCanvas.captureStream(2);
+        derivative = new MediaRecorder(derivativeStream, {mimeType: type});
+        derivative.ondataavailable = (event) => {
+          if (event.data?.size) { derivativeChunks.push(event.data); bytes += event.data.size; }
+          if (bytes > MAX_VIDEO_BYTES && active()) stop("녹화 크기 제한에 도달했습니다.");
+        };
+        derivative.onerror = () => stop("표시본 녹화 오류로 원본과 함께 중지했습니다.");
+      }
+      draw();
       stream = canvas.captureStream(2);
       recorder = new MediaRecorder(stream, {mimeType: type});
       recorder.ondataavailable = (event) => {
@@ -168,16 +228,25 @@ export function createCameraCapture({onChange = () => {}, onComplete = () => {},
         if (bytes > MAX_VIDEO_BYTES && active()) stop("녹화 크기 제한에 도달했습니다.");
       };
       recorder.onerror = () => stop("브라우저 녹화 오류로 중지했습니다.");
-      recorder.onstop = () => {
+      const finish = () => {
+        finalizing = false;
         clearTimeout(timer); timer = null;
         stream?.getTracks().forEach((track) => track.stop());
         stream = null;
+        derivativeStream?.getTracks().forEach((track) => track.stop()); derivativeStream = null;
         const stamp = fileStamp(startedWall);
         completed = {video: new Blob(chunks, {type}),
-          name: `rosy-camera-${stamp}`, extension: type.startsWith("video/mp4") ? "mp4" : "webm",
+          name: `rosy-camera-${stamp}-raw`, extension: type.startsWith("video/mp4") ? "mp4" : "webm",
           manifest: {schema_version: 1, kind: "video", mime_type: type.split(";")[0],
+            preview_mode: "raw", pair_group_id: pairGroup,
             started_at: startedWall.toISOString(), stopped_at: new Date().toISOString(), frame_count: frameCount,
             operations: timeline.snapshot()}};
+        if (completed.video.size && derivativeChunks.length) {
+          completed.derivative = {video: new Blob(derivativeChunks, {type}),
+            name: `rosy-camera-${stamp}-annotated`, extension: completed.extension,
+            manifest: {...completed.manifest, preview_mode: "annotated"}};
+        }
+        derivativeChunks = []; derivative = null; derivativeContext = null; derivativeCanvas = null;
         chunks = [];
         if (!completed.video.size) completed = null;
         message = completed
@@ -189,6 +258,10 @@ export function createCameraCapture({onChange = () => {}, onComplete = () => {},
           notify();
         });
       };
+      let rawStopped = false, derivativeStopped = !derivative;
+      recorder.onstop = () => { rawStopped = true; if (derivativeStopped) finish(); };
+      if (derivative) derivative.onstop = () => { derivativeStopped = true; if (rawStopped) finish(); };
+      derivative?.start(1_000);
       recorder.start(1_000);
       timer = setTimeout(() => stop("5분 제한에 도달해 녹화를 중지했습니다."), MAX_DURATION_MS);
       message = "녹화 중 · 화면 미리보기를 기록합니다.";
@@ -196,15 +269,20 @@ export function createCameraCapture({onChange = () => {}, onComplete = () => {},
       return true;
     } catch (_error) {
       stream?.getTracks().forEach((track) => track.stop());
+      if (derivative?.state === "recording") derivative.stop();
+      derivativeStream?.getTracks().forEach((track) => track.stop());
+      derivative = null; derivativeStream = null; derivativeContext = null;
       stream = null; recorder = null;
       message = "브라우저가 녹화를 시작하지 못했습니다."; notify();
       return false;
     }
   }
   function stop(reason = "녹화를 중지했습니다.") {
-    if (!active()) return false;
+    if (!active() || finalizing) return false;
     clearTimeout(timer); timer = null;
     message = reason;
+    finalizing = true;
+    if (derivative?.state === "recording") derivative.stop();
     recorder.stop();
     notify();
     return true;
@@ -216,12 +294,16 @@ export function createCameraCapture({onChange = () => {}, onComplete = () => {},
   }
   async function saveVideo(location = "pc") {
     if (!completed?.video.size) return false;
-    if (location === "pc" || location === "both") save(completed.video, `${completed.name}.${completed.extension}`);
+    const files = [completed, completed.derivative].filter(Boolean);
+    if (location === "pc" || location === "both") {
+      for (const file of files) save(file.video, `${file.name}.${file.extension}`);
+    }
     if (location === "robot" || location === "both") {
       if (!storeOnRobot || uploading || completed.video.size > 64 * 1024 * 1024) return false;
       uploading = true; notify();
       try {
-        const record = await storeOnRobot(completed.video, completed.manifest);
+        let record;
+        for (const file of files) record = await storeOnRobot(file.video, file.manifest);
         message = `영상을 로봇 SD에 저장했습니다 · ${record.file_name}`;
       } catch (error) { message = `로봇 저장 실패: ${error.message}`; return false; }
       finally { uploading = false; notify(); }
@@ -230,14 +312,24 @@ export function createCameraCapture({onChange = () => {}, onComplete = () => {},
   }
   function saveOperations() {
     if (!completed) return false;
-    save(new Blob([JSON.stringify(completed.manifest, null, 2) + "\n"], {type: "application/json"}),
+    const manifest = {...completed.manifest, annotation_origin: "none",
+      derivative: completed.derivative ? {file_name: `${completed.derivative.name}.${completed.derivative.extension}`,
+        preview_mode: "annotated", annotation_origin: "model_unreviewed"} : null};
+    save(new Blob([JSON.stringify(manifest, null, 2) + "\n"], {type: "application/json"}),
       `${completed.name}.json`);
     return true;
   }
   function dispose() {
+    disposed = true;
     if (active()) stop("카메라 화면을 닫아 녹화를 중지했습니다.");
     frame = null;
   }
+  function setPreviewMode(value) {
+    if (disposed || active() || finalizing || uploading || !["raw", "annotated"].includes(value)) return false;
+    previewMode = value; frame = null; frameAt = -Infinity;
+    message = value === "raw" ? "표시 없는 원본 수신 대기" : "원본 + 모델 표시본 수신 대기 · 결과는 확인용입니다.";
+    notify(); return true;
+  }
   return {acceptFrame, unavailable, screenshot, start, stop, recordAction,
-    saveVideo, saveOperations, dispose, state};
+    saveVideo, saveOperations, dispose, state, setPreviewMode};
 }

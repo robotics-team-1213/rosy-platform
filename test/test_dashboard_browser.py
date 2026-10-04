@@ -186,6 +186,7 @@ window.fetch = async (input, options = {}) => {
       frame_id: 'front_camera_link', captured_at: 42.25,
       age_ms: 80, width: 640, height: 360,
       overlay: 'semantic-road-v1', sequence: window.__cameraSequence,
+      raw_available: true, raw_sequence: window.__cameraSequence,
     },
     '/api/v1/waypoints': {waypoints: []},
     '/api/v1/docking/status': {state: 'UNDOCKED', dock_id: null, supported: false},
@@ -306,8 +307,10 @@ window.fetch = async (input, options = {}) => {
       status: 200,
       headers: {
         'Content-Type': 'image/jpeg',
-        'X-Rosy-Camera-Sequence': String(window.__cameraSequence),
+        'X-Rosy-Camera-Sequence': url.searchParams.get('sequence') || String(window.__cameraSequence),
         'X-Rosy-Camera-Captured-At': '42.25',
+        'X-Rosy-Camera-Frame-Id': 'front_camera_link',
+        'X-Rosy-Camera-Variant': url.searchParams.get('overlay') === 'true' ? 'annotated' : 'raw',
       },
     });
   }
@@ -720,7 +723,7 @@ def test_live_camera_preview_is_visible_beside_the_map():
         call for call in calls
         if call["path"] == "/api/v1/vision/front/frame"
     )
-    assert frame_call["search"] == "?sequence=7"
+    assert frame_call["search"] == "?sequence=7&overlay=false"
 
 
 def test_unavailable_camera_keeps_missing_timestamps_missing():
@@ -803,7 +806,7 @@ def test_rate_limited_camera_never_leaves_an_old_frame_live():
         )
         page.evaluate("window.__cameraSequence = 8; window.__cameraFrameStatus = 429")
         page.wait_for_function(
-            "document.getElementById('vision-empty')?.textContent.includes('속도 제한')"
+            "document.getElementById('vision-empty')?.textContent.includes('camera raw 429')"
         )
         assert page.locator("#vision-frame").is_hidden()
         assert page.locator("#vision-status").inner_text() == "수신 대기"

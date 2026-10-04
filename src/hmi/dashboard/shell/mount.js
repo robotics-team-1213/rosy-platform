@@ -3,6 +3,7 @@
 // 자리(ui-section)를 await 전에 먼저 붙이므로 화면 순서는 매니페스트 순서 그대로다.
 
 import { createTaskChooser, TASK_CONFIRM_TIMEOUT_MS } from "/common/task-chooser.js";
+import { createNode } from "../dom.js";
 
 function linkStyle(href) {
   if (document.head.querySelector(`link[data-panel-css="${href}"]`)) return;
@@ -14,15 +15,13 @@ function linkStyle(href) {
 }
 
 function failure(section, panel, error) {
-  const note = document.createElement("ui-empty");
-  note.textContent = `${panel.title} 패널을 열지 못했습니다: ${error.message || error}`;
+  const note = createNode("ui-empty", "", `${panel.title} 패널을 열지 못했습니다: ${error.message || error}`);
   section.replaceChildren(note);
   section.dataset.failed = "true";
 }
 
 function actionGroupPanel(id, title) {
-  const panel = document.createElement("div");
-  panel.className = "action-group-panel";
+  const panel = createNode("div", "action-group-panel");
   panel.id = `action-group-${id}`;
   panel.setAttribute("role", "tabpanel");
   panel.setAttribute("aria-label", `${title} 조작`);
@@ -55,11 +54,9 @@ export async function mountPanels(root, panels, contextFor, actionGroups = []) {
   if (procedureSlot && procedurePanels.length) {
     linkStyle("/common/task-chooser.css");
     procedureSlot.classList.add("procedure-tasks");
-    const content = document.createElement("div");
-    content.className = "procedure-content";
+    const content = createNode("div", "procedure-content");
     for (const panel of procedurePanels) {
-      const container = document.createElement("div");
-      container.className = "procedure-panel";
+      const container = createNode("div", "procedure-panel");
       container.id = `procedure-${panel.id}`;
       container.hidden = true;
       content.append(container);
@@ -92,14 +89,11 @@ export async function mountPanels(root, panels, contextFor, actionGroups = []) {
     section.dataset.panel = panel.id;
     section.dataset.state = panel.state;
     section.setAttribute("aria-label", panel.title);
-    const heading = document.createElement("h2");
-    heading.className = "sr-only";
-    heading.textContent = panel.title;
+    const heading = createNode("h2", "sr-only", panel.title);
     section.append(heading);
     // 모듈 import 동안 빈 카드 대신 로딩 상태를 보인다 — 느린 네트워크에서
     // "테두리만 있는 빈 상자"는 정상으로 그리지 않는다는 Law 0의 로딩 번역이다.
-    const loading = document.createElement("ui-empty");
-    loading.textContent = `${panel.title} 패널을 불러오는 중입니다.`;
+    const loading = createNode("ui-empty", "", `${panel.title} 패널을 불러오는 중입니다.`);
     section.append(loading);
     const container = procedureContainers.get(panel.id) || section;
     if (container !== section) {
@@ -137,8 +131,7 @@ export async function mountPanels(root, panels, contextFor, actionGroups = []) {
   let selectedGroup = null;
   let switching = false;
   if (actSlot && groups.size) {
-    const tablist = document.createElement("div");
-    tablist.className = "action-group-tabs";
+    const tablist = createNode("div", "action-group-tabs");
     tablist.setAttribute("role", "tablist");
     tablist.setAttribute("aria-label", "조작 그룹");
     actionGroupElements.push(tablist);

@@ -2212,3 +2212,57 @@
 - Change: add avahi-daemon.service to both Requires and After for the host Avahi socket used by Fleet NSS. Existing Docker, network and firewall dependencies remain.
 - Evidence: baseline dependency regression RED; focused deployment tests 19 passed. Removing only Avahi ordering while preserving Requires was RED; restored tests 2 passed.
 - Gate: SOURCE/LOCAL verified. Separate on-site administrator installation and actual PC boot acceptance remain pending. No robot motion, CORE or camera configuration changes.
+
+## 2026-10-04 · uncommitted · fix(site): 관제 PC의 요청형 카메라 조명
+
+- 변경: 기존 장치 신원 검증과 mDNS 재연결을 보존한 채 light-status/light-request/light-cancel을 추가했다. 공식 카메라 화면의 유일한 조명 버튼만 조작하며 화면 잠금·포커스·새 UI·라벨 영역과 부모 포함 관계를 검증한다. 요청 상태와 실제 torch 상태는 구분하고 이미 요청 중이면 갱신하지 않는다.
+- 증거: CLI 59 passed, 독립 리뷰 승인. 실제 관제 PC 사용자 영역에 원자적으로 배치하고 개인 설정 해시 보존을 확인했다. 실제 S21에서 request_confirmed, 중복 unchanged, cancel_confirmed와 torch 켜짐/꺼짐을 확인했다. 진단 조회는 화면을 깨우지 않으며 송출 시작·보안 잠금 우회는 추가하지 않았다.
+- gate 변화: 없음. 관제 카메라 기능 검증은 Pi 제품 이미지와 전체 현장 수용을 대신하지 않는다.
+
+## 2026-10-04 · uncommitted · D-446 모델 PC도 서명 코드 자동 업데이트에 포함하고 작업·GPU 환경·모델 승격을 분리한다
+
+- 변경: D-446 모델 PC의 서명 코드 후보·작업 잠금·환경 지문·유휴 source 전환·실패 복귀를 구현했다. perception과 control/core_common은 같은 commit과 상대 경로로 묶고 고정 bootstrap을 사용한다. 기존 data는 외부 디렉터리로 연결한다.
+- 증거: 실제 모델 PC의 격리 Linux 시험 30 passed. 서명과 작업 환경 guard는 변이에서 실패를 확인했다. 사용자 updater timer 설치·enabled/active와 linger를 확인했다. 리뷰에서 발견한 import closure와 unmanaged 작업 admission을 보완했다.
+- gate 변화: 없음. 코드 updater 설치와 첫 후보 전환·model-watch doctor·학습 모델 품질·주행 수용은 별도 증거로 판정한다. push·CI는 수행하지 않았다.
+
+## 2026-10-04 · uncommitted · 모델 PC 코드 갱신은 커밋하지 않은 perception 수정을 덮지 않는다
+
+- 변경: D-446. 등록한 checkout의 `learning/training/perception`에 커밋하지 않은 수정이 있으면 전환을 보류하고 그 파일은 그대로 둔다. exec는 작업 디렉터리의 같은 스크립트가 서명 릴리스와 바이트가 다르면 실행하지 않는다.
+- 증거: `test/test_model_pc_autoupdate.py` 12 passed, 21 skipped (Windows). 보류 통합 시험은 Linux symlink/flock이라 건너뛰었다. 모델 PC 설치와 자동 전환은 하지 않았다.
+- gate 변화: 없음. 설치·자동 전환·장기 운용 수용은 미검증.
+
+## 2026-10-04 · uncommitted · feat(host): 차선 인식 설정의 native 설치 경로
+
+- 변경: 고정 observer overlay·서명된 lane model만 다루는 Host 명령과 lane-only native Host service를 연결했다. 전용 CORE peer UID와 닫힌 command allowlist를 사용한다. 설치 helper·runtime target·payload/image unit·image-layer sync allowlist를 함께 등록한다. 임의 경로·shell·기기 접근을 허용하지 않는다.
+- 증거: host/API/systemd/status/line-follow 관련 395 passed, 2 skipped 및 installed-layout import 포함 18 passed. 실제 배포·서비스 실행은 별도 검증한다.
+- gate 변화: 없음. 서명된 ARM64 release와 실제 device readback 없이 DEVICE/FIELD 완료로 주장하지 않는다.
+
+## 2026-10-04 · uncommitted · feat: 기존 rosy-face 조명 소유권 유지
+
+- 변경: ROSY_LOW_LIGHT_ASSIST=true에서만 기존 LCD·Lamp 소유자가 흰 조명을 켠다. 신선한 usable 상태에서도 유지해 피드백 점멸을 막고 오래된 근거·우선 경보는 해제한다.
+- 증거: face table/native loop/PIL/lamp/package/CORE face handover 317 passed, 4 skipped (Windows).
+- gate 변화: SOURCE/LOCAL. ARM64/device/field verification pending.
+
+## 2026-10-04 · uncommitted · feat: 경보 출력보다 늦게 하드웨어 시험 실행
+
+- 변경: 비상·고장·주의 램프와 소리부터 적용한 뒤 하드웨어 시험을 처리한다. CORE handover가 없어도 현재 경보 패턴 중에는 queued 시험을 보류한다. 명시적 저조도 조명 opt-in은 IDLE와 MANUAL에서 사용할 수 있다.
+- 증거: native/face table/PIL 299 passed, 3 skipped; queued emergency 시험 회귀 포함.
+- gate 변화: SOURCE/LOCAL. ARM64/device/field evidence remains separate.
+
+## 2026-10-04 · uncommitted · fix: 과노출 보조 조명 해제
+
+- 변경: 신선한 overexposed 품질이면 기존 저조도 조명 세션을 즉시 해제한다. usable 상태의 점멸 방지 유지와 경보 우선순위는 유지한다.
+- 증거: Pilot/Dashboard bright-dark browser 2 passed; native quality/alarm 9 passed.
+- gate 변화: SOURCE/LOCAL. No device writes or motion.
+
+## 2026-10-04 · uncommitted · fix: 릴리스 전환에서 Host Agent 종료 대기
+
+- 변경: runtime PartOf인 Host Agent를 명시적 동기 종료 목록에 포함한다. 종료 실패 시 후보 시작과 릴리스 링크 전환을 하지 않는 회귀 검사를 추가했다.
+- 증거: native activation/systemd 195 passed, 1 skipped. 종료 목록 누락을 메모리에서 재주입하면 계약 검사가 실패한다. 독립 검토와 설치 helper 경계는 docs/validation/learned-lane-modes-2026-10-04/release-lifecycle.md.
+- gate 변화: SOURCE/LOCAL. 설치된 helper·unit·PID 확인과 ARM64/DEVICE/FIELD는 별도다.
+
+## 2026-10-04 · uncommitted · fix: native 차선 설정과 SSH 페어링 병합
+
+- 변경: 병렬 main의 SSH pairing unit과 차선 Host Agent 설치·target 의존성·닫힌 명령 검증을 함께 보존했다. 두 PartOf unit을 릴리스 전환의 동기 종료 목록에 포함하고 중복 allowlist 초기화를 제거했다.
+- 증거: 독립 native/API 병합 검사 191 passed; 통합 native/API 검사 162 passed, 7 skipped. docs/validation/learned-lane-modes-2026-10-04/release-lifecycle.md.
+- gate 변화: SOURCE/LOCAL. 기존 서명 ARM64 후보와 이번 병합 SHA는 별개이며 새 배포·서비스 실행·실기 조명·주행은 미검증.

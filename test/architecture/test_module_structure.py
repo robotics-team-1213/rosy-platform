@@ -245,7 +245,9 @@ SIZE_VERDICTS = {
         "(body_gap_m, stop_gap_m, clearance_source); the logic stays in line_follow/body_stop.py; "
         "same verdict."
         " Re-judged 2026-10-03 at 1321 after merging main: the D-418 robot SSH access models (host keys, "
-        "managed keys, temporary password status with lock_pending; API v1.89) on top of D-422; same verdict.",
+        "managed keys, temporary password status with lock_pending; API v1.89) on top of D-422; same verdict."
+        " Re-judged 2026-10-04 at 1322: bounded lane selection/readback models were split into "
+        "protocol/lane_perception.py; one re-export preserves the single public schema import point.",
     ),
     "site/fleet/fleet/server/task_store.py": (
         1060,
@@ -264,7 +266,7 @@ SIZE_VERDICTS = {
         "accept: the FastAPI factory and lifespan own every background task and route install; D-438 added the resolver task, hub event fan-out and shared-gather wiring (2026-10-04) — the resolver logic itself lives in stuck_resolver*.py",
     ),
     "site/fleet/fleet/server/console.py": (
-        1138,
+        1154,
         "accept: one owner (FleetConsole gather/scatter), host-testable (X5). Re-judged 2026-09-30 at 1013: "
         "D-361 roster mutation and pinned-address holds change the gather/traffic tables in place, so they "
         "stay with their owner; the roster policy itself lives in roster.py; re-judged 2026-09-30 at 1021 "
@@ -278,7 +280,10 @@ SIZE_VERDICTS = {
         "2026-10-02 at 1111 when the P2-7 review made the hold also cancel crossing yields "
         "(_yielding) and stop a formation near the mover — same tables, verdict unchanged; re-judged "
         "2026-10-02 at 1138 for D-395 S2 Finding 1: the lapsed-robot null grace (_loc_null_since) is "
-        "kept beside _seen/_trusted, which it updates in the same gather — verdict unchanged",
+        "kept beside _seen/_trusted, which it updates in the same gather — verdict unchanged. "
+        "Re-judged 2026-10-04 at 1154: D-447 selects a fresh hub snapshot before REST in the "
+        "same gather owner and records source provenance; test_server_gather_source.py checks "
+        "fresh/stale/disconnected fallback. The zero-growth allowance remains unchanged.",
     ),
     "runtime/sensing/control/sensing/perception/lane.py": (
         765,
@@ -303,6 +308,13 @@ SIZE_VERDICTS = {
         "accept: one owner (svc.audit / FileAuditLog), ROS-free, covered by src/runtime/events/test/test_audit.py; "
         "about half the lines are the rationale comments the append/compaction/quarantine rules rest on (X5)",
     ),
+    "runtime/services/core_features/line_follow/manager.py": (
+        605,
+        "accept: one line-follow decision and loss owner; recovery already lives in separate "
+        "stuck/body mixins. The added low-light guards invalidate decisions and bypass autonomous "
+        "recovery without introducing another writer. Configured back-off, active recovery and "
+        "stale-decision tests plus independent reproduction cover this safety boundary.",
+    ),
     "runtime/services/core_features/docking/manager.py": (
         663,
         "accept: 930 -> 663 after the parking-only phases moved to docking/parking_phases.py and the phase/"
@@ -323,7 +335,7 @@ SIZE_VERDICTS = {
         "accept: sim-only read-only viewer server (HTTP handler + ROS subscriptions); the pure logic already lives in live_view_model.py and the page in lane_live_view.html, covered by test_lane_live_view*.py and test_live_view_model.py (X5)",
     ),
     "core_features": (
-        12_297,
+        12_536,
         "accept: the ROS-free CORE feature managers (command, safety, docking, line_follow, "
         "traffic_policy, navigation, swarm, ...) are already one subpackage per feature, each "
         "under the file budget; the package total is a sum of independent owners, not one "
@@ -344,10 +356,15 @@ SIZE_VERDICTS = {
         "fleet_agent/agent.py; same verdict. D-424 merged on top (within the allowance) "
         "(localization/mission.py body-referenced rotate and nudge checks, watched turn, "
         "mission_config); same verdict. Re-judged 2026-10-03 at 12297 for the D-424 follow-up (debounced turn evidence gaps in "
-        "localization/mission.py); same verdict",
+        "localization/mission.py); same verdict. Re-judged 2026-10-04 at 12479: bounded "
+        "read-only keeper evidence lives separately in vision/lane_perception.py; motion admission "
+        "uses the existing ModeMachine and its separate lock. No new deploy unit or file-budget "
+        "exception; independent safety review recorded in docs/validation/learned-lane-modes-2026-10-04/README.md. "
+        "Concurrent merge adds the main branch's 57 reviewed FleetAgent/discovery lines to this "
+        "12479 baseline, yielding 12536; the existing 150 allowance is unchanged.",
     ),
     "control": (
-        44_301,
+        44_469,
         f"split: deploy closure needs only sensing + safety provider (P1a); {CONTROL_SPLIT} "
         "(re-judged 2026-09-30 at 33090 after D-356 added the ROS-free learned perception backend "
         "(sensing/perception/learned), the shadow node and the recording CLI; the learned backend sits "
@@ -420,7 +437,10 @@ SIZE_VERDICTS = {
         "beside the learned lane shadow, each its own module, moves with the P1a split, verdict unchanged; "
         "re-judged 2026-10-03 at 44301 for the D-344 §12 addendum: the operator override overlay validator "
         "beside the IR one (control/ir_overlay.py) and its root-run bench CLI (control/line_observer_overrides.py) "
-        "-- launch-side config, no node logic, moves with the P1a split, verdict unchanged)",
+        "-- launch-side config, no node logic, moves with the P1a split, verdict unchanged). "
+        "Re-judged 2026-10-04 at 44469 for shared raw road-ROI visibility, invalid camera "
+        "evidence/reset and optional raw/annotated recording: observation-only subjects stay "
+        "separate and move with the existing P1a split; no new command writer.",
     ),
     # --- D-362 newly-covered files (web assets in src/ packages, ops roots). ---
     "runtime/sensing/web/diagnostic.html": (
@@ -463,11 +483,14 @@ SIZE_VERDICTS = {
         "learning/training/perception/test/test_rosy_ml.py (X5, D-411 fetch --http)",
     ),
     "deploy/robot/pinky_pro/native/rosy-face.py": (
-        1048,
+        1074,
         "accept: the one owner of LCD, buzzer and lamp (D-433, was rosy-boot-display.py) — one poll "
         "and one frame tick; the situation table lives in core_common.face_screen; covered by "
         "test/test_rosy_face.py (X5). 1048 after the review fixes (last good hand-over, "
-        "shutdown-only poll)",
+        "shutdown-only poll). Re-judged 2026-10-04 at 1074: opt-in light session uses the "
+        "same device owner and priority loop; eligibility/freshness stays in face_screen "
+        "and light rendering is separate. Independent review and queued-test regressions "
+        "preserve alarm-first order, emergency lamp and stale-evidence expiry.",
     ),
     "deploy/robot/pinky_pro/release/updater.py": (
         686,
@@ -516,13 +539,15 @@ SIZE_VERDICTS = {
         "grow independently; the updater must never import executable code from a candidate",
     ),
     "deploy/robot/pinky_pro/native/sync-image-layer.py": (
-        1018,
+        1020,
         "split: D-388 image-layer sync — the allowlist/plan, the backup-record history (records, "
         "cleanup, crash reconcile) and the apply/pending transaction are separate seams; move the "
         "record history into a sibling module in deploy/robot/pinky_pro/native once the 2026-10-02 bench "
         "run has exercised it on a robot, so the split does not land untested on device; owner deploy, "
         "covered by test/test_image_layer_sync.py. Re-judged 2026-10-03 at 1018: main reached 1000 "
-        "(state-directory bootstrap) without a re-judgement, D-433 adds 18 (retired units); verdict unchanged",
+        "(state-directory bootstrap) without a re-judgement, D-433 adds 18 (retired units); verdict unchanged. "
+        "Re-judged 2026-10-04 at 1020: two lane-only Host unit allowlist entries, no new sync logic; "
+        "record-history split remains required after device exercise.",
     ),
     "deploy/robot/pinky_pro/native/rosy-hw-probe.py": (
         641,

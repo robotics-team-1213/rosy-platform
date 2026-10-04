@@ -129,3 +129,30 @@ def test_camera_launch_layers_the_operator_overlay_last_outside_the_release():
     assert launch.index("line_params.append(overlay)") < launch.index("line_params.append(operator)")
     assert "usable_operator_overlay()" in launch
     assert OPERATOR_OVERLAY.startswith("/etc/rosy/") and OPERATOR_OVERLAY != IR_CALIBRATION_OVERLAY
+
+
+def test_learned_paint_overlay_loads_the_existing_keep_pipeline(tmp_path):
+    target = tmp_path / "learned.yaml"
+    target.write_text(OPERATOR + "    paint_source: learned\n"
+                      "    learned_lane_pointer: /var/lib/rosy/models/shadow\n"
+                      "    learned_paint_every_n: 2\n    learned_paint_threads: 1\n", encoding="utf-8")
+    assert usable_operator_overlay(str(target))[0] == str(target)
+
+
+@pytest.mark.parametrize("extra", [
+    "paint_source: unknown", "paint_source: learned", "learned_paint_threads: 0",
+    "learned_paint_threads: true", "learned_paint_every_n: 0",
+    "learned_lane_pointer: relative/path",
+])
+def test_unsafe_paint_overlay_is_skipped(tmp_path, extra):
+    target = tmp_path / "bad.yaml"
+    target.write_text(OPERATOR + "    " + extra + "\n", encoding="utf-8")
+    assert usable_operator_overlay(str(target))[0] is None
+
+
+def test_learned_paint_cannot_be_selected_in_a_mode_that_ignores_it(tmp_path):
+    target = tmp_path / "wrong-mode.yaml"
+    target.write_text(OPERATOR.replace("camera_lane_mode: keep", "camera_lane_mode: line")
+                      + "    paint_source: learned\n"
+                      "    learned_lane_pointer: /var/lib/rosy/models/shadow\n", encoding="utf-8")
+    assert usable_operator_overlay(str(target))[0] is None

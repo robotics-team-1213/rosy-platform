@@ -77,3 +77,9 @@
 - 변경: `lamp_pattern.c`에 blocked(청록 2 Hz 점멸) 추가, `known()`·usage 갱신.
 - 증거: C↔파이썬 이름 동기 시험 (변이 증명: known()에서 빼면 빨강). 실기 점등은 DEVICE 단계.
 - gate 변화: 없음.
+
+## 2026-10-04 · uncommitted · feat: 기존 lamp helper 흰 조명 패턴
+
+- 변경: 기존 lamp_pattern에 illumination을 추가했다. 8개 GPIO19 GRB LED에 흰색 최대 밝기를 출력하고 SIGTERM 종료 시 소등한다. 별도 GPIO 소유자는 추가하지 않았다.
+- 증거: face table/native loop/PIL/lamp/package/CORE face handover 317 passed, 4 skipped (Windows).
+- gate 변화: SOURCE/LOCAL. ARM64/device/field verification pending.

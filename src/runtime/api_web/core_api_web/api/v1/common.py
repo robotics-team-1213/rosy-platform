@@ -69,6 +69,8 @@ def require_calibration_owner(svc: CoreServicesLike, auth: AuthContext, action: 
 
     E-stop is never routed through here — anyone can always stop the robot.
     """
+    if getattr(svc.modes, "motion_reserved", False):
+        raise ApiError("MODE_CONFLICT", 409, "lane perception configuration is being applied")
     session = svc.calibration.blocking(auth.token_id)
     if session is not None:
         raise ApiError(

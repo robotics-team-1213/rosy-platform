@@ -186,7 +186,13 @@ def draw_follow_evidence(image, *, scale, keep=None, objects=None, road_state=No
             centre = np.mean(points, axis=0).astype(int)
             text(label, (int(centre[0]) - 40, int(centre[1])), muted, .30, True)
 
-    object_status = 'OBJECTS: unavailable'
+    object_status = 'REGIONS: unavailable'
+    if (isinstance(objects, dict) and objects.get('image_size') == original_size
+            and isinstance(objects.get('quality'), dict)
+            and objects['quality'].get('valid') is False
+            and objects['quality'].get('reason') in ('low_light', 'underexposed', 'overexposed')):
+        label = 'OVEREXPOSED' if objects['quality']['reason'] == 'overexposed' else 'LOW LIGHT'
+        object_status = label + ': visibility unavailable'
     found = []
     if (isinstance(detections, dict) and [detections.get('input_width'), detections.get('input_height')]
             == original_size):
@@ -196,7 +202,7 @@ def draw_follow_evidence(image, *, scale, keep=None, objects=None, road_state=No
     if (isinstance(objects, dict) and objects.get('image_size') == original_size
             and isinstance(objects.get('quality'), dict) and objects['quality'].get('valid') is True):
         regions = records(objects, 'regions', 48)
-        object_status = f'OBJECTS: {len(regions)} unknown'
+        object_status = f'REGIONS: {len(regions)} unclassified'
         paired = pair_detections(regions, found, original_size)
         labelled = 0
         badges = []
@@ -213,13 +219,15 @@ def draw_follow_evidence(image, *, scale, keep=None, objects=None, road_state=No
             cv2.rectangle(image, a, b, colour, 2)
             if labelled < 3:
                 ranged = _range_label(record)  # D-423: L LiDAR, G ground plane
-                kind = 'DARK' if record.get('k') == 'd' else 'UNKNOWN'
+                prefix = 'REGION'
+                kind = 'DARK' if record.get('k') == 'd' else 'UNCLASSIFIED'
                 if index in paired:  # the detection names it and brings its own range
                     di = paired[index]
+                    prefix = 'DET'
                     kind = str(found[di].get('label'))[:16]
                     ranged = _range_label(found_ranges[di] if di < len(found_ranges) else None)
                 # Fixed separate rows stay readable when foreground boxes overlap.
-                badges.append((f'OBJ {index + 1} {kind} {ranged}' + (' NEAR' if record.get('n') == 1 else ''),
+                badges.append((f'{prefix} {index + 1} {kind} {ranged}' + (' NEAR' if record.get('n') == 1 else ''),
                                (6, 65 + labelled * int(17 * max(1, w / 400))), colour))
                 text(str(index + 1), (a[0] + 4, max(145, a[1] + 14)), colour, .32, True)
                 labelled += 1

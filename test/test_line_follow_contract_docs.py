@@ -16,6 +16,7 @@ def test_api_reference_documents_line_follow_endpoints_and_snapshot():
         "API Ref header version moved — update this pin in the same change")
     assert "`/api/v1/line-follow`" in reference
     assert "`/api/v1/line-follow/mode`" in reference
+    assert "`/api/v1/line-follow/perception`" in reference
     assert '"line_follow": {' in reference
     assert "IR_LINE" in reference
     assert "CAMERA_LINE" in reference

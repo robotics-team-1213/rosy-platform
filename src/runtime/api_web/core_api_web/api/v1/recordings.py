@@ -22,6 +22,7 @@ from core_api_web.api.v1.common import operator, viewer
 from core_common.domain.pilot_recording import RecordingRefused
 from core_common.domain.pilot_recording_store import archive_plan, iter_archive, list_recordings
 from core_common.protocol.recording import ACTIVE_STATES, PILOT_RECORDING_ROOT
+from core_common.protocol.schemas import RecordingStartRequest
 
 recordings_router = APIRouter(prefix="/api/v1/recordings", tags=["recordings"])
 _log = logging.getLogger(__name__)
@@ -90,13 +91,15 @@ def recordings(_: AuthContext = Depends(viewer), svc: CoreServicesLike = Depends
 @recordings_router.get("/active")
 def active(auth: AuthContext = Depends(viewer), svc: CoreServicesLike = Depends(get_services)):
     return {"active": svc.pilot_recording.status(),
-            "owned": svc.pilot_recording.owner() == auth.token_id}
+            "owned": svc.pilot_recording.owner() == auth.token_id,
+            "preview_modes": svc.pilot_recording.preview_modes()}
 
 
 @recordings_router.post("", status_code=201)
-def start(auth: AuthContext = Depends(operator), svc: CoreServicesLike = Depends(get_services)):
+def start(body: RecordingStartRequest | None = None, auth: AuthContext = Depends(operator),
+          svc: CoreServicesLike = Depends(get_services)):
     try:
-        return svc.pilot_recording.start(auth.token_id)
+        return svc.pilot_recording.start(auth.token_id, preview_mode=body.preview_mode if body else 'raw')
     except RecordingRefused as exc:
         raise _refused(exc) from exc
 

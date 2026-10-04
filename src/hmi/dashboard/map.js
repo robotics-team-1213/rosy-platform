@@ -100,18 +100,11 @@ function paintLayers(occupancy, costmap, layers, width, height) {
 }
 
 export function createFieldMap(options) {
-  const canvas = options.canvas;
-  const empty = options.empty;
-  const status = options.status;
-  const api = options.api;
-  const apiMaybe = options.apiMaybe;
-  const emptyRecoveryLink = options.emptyRecoveryLink;
+  const {
+    canvas, empty, status, api, apiMaybe, emptyRecoveryLink,
+    getPose, getNavigation, getMapSources, canGoal, setAction,
+  } = options;
   const mayOpenSetup = options.mayOpenSetup === true;
-  const getPose = options.getPose;
-  const getNavigation = options.getNavigation;
-  const getMapSources = options.getMapSources;
-  const canGoal = options.canGoal;
-  const setAction = options.setAction;
   const listenerController = new AbortController();
   let committing = false;
   let resizeObserver = null;

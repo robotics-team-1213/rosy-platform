@@ -1,0 +1,12 @@
+[Unit]
+Description=Evaluate and deliver models to shadow using the pinned model-PC code (D-373, D-446)
+ConditionPathExists=%h/.config/rosy/model-watch.yaml
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 -I %h/.local/lib/rosy-model-code/rosy_model_code.py --config %h/.config/rosy/model-code.json exec model/watch.py --config %h/.config/rosy/model-watch.yaml
+TimeoutStartSec=6h
+NoNewPrivileges=yes
+UMask=0077
+KillMode=control-group
+SuccessExitStatus=3

@@ -78,6 +78,19 @@ def test_installed_runtime_does_not_reach_back_into_a_repository(tmp_path):
 
 
 @pytest.mark.skipif(BASH is None, reason="bash is required to run the installer")
+def test_lane_host_helpers_import_from_installed_tree(tmp_path):
+    runtime = tmp_path / "device/opt/rosy/native-runtime"
+    _install(runtime)
+    completed = subprocess.run(
+        [sys.executable, "-B", "-c",
+         "import host_agent, host_agent_server, host_lane_perception; "
+         "assert 'lane_perception.set' in host_agent.ALLOWLIST"],
+        cwd=runtime, env=_isolated_env(), capture_output=True, text=True,
+    )
+    assert completed.returncode == 0, completed.stderr
+
+
+@pytest.mark.skipif(BASH is None, reason="bash is required to run the installer")
 def test_recovery_writes_no_bytecode_into_the_installed_tree(tmp_path):
     # Bytecode beside a signed release is an unlisted file that fails verify().
     device_root = tmp_path / "device"

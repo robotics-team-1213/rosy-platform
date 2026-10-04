@@ -44,6 +44,33 @@ def _wire(svc, *, ok=True, code="RECORDING_QUOTA_FULL"):
     return calls, sent
 
 
+@pytest.mark.parametrize('body', [{'preview_mode':'unknown'}, {'preview_mode':True},
+                                 {'preview_mode':'raw','path':'/tmp/out'}])
+def test_recording_start_rejects_unknown_or_untyped_options_before_transport(core_client, body):
+    client, svc = core_client()
+    calls, _ = _wire(svc)
+    response = client.post('/api/v1/recordings', json=body, headers=OPERATOR)
+    assert response.status_code == 400 and calls == []
+
+
+def test_typed_annotated_start_returns_actual_mode_and_live_capability(core_client):
+    client, svc = core_client()
+    legacy, _ = _wire(svc)
+    typed = []
+    svc.pilot_recording.start_available = lambda: True
+    def request(mode, wait):
+        typed.append((mode,wait))
+        status = _status('starting', RID)
+        status['preview_mode'] = mode
+        return True, json.dumps(dict(code='',status=status))
+    svc.pilot_recording.request_start = request
+    status = client.get('/api/v1/recordings/active', headers=VIEWER).json()
+    assert status['preview_modes'] == ['raw','annotated']
+    response = client.post('/api/v1/recordings', json={'preview_mode':'annotated'}, headers=OPERATOR)
+    assert response.status_code == 201 and response.json()['preview_mode'] == 'annotated'
+    assert typed == [('annotated',True)] and not legacy
+
+
 def _recording(root):
     folder = root / RID
     (folder / "bag").mkdir(parents=True)

@@ -799,3 +799,28 @@
 - 증거: `python -m pytest src/runtime/gateway/test/test_face_inputs.py src/runtime/gateway/test/test_bridge_display.py -q` 통과. ros_bridge.py는 rclpy 없이 import할 수 없어 py_compile만.
 - gate 변화: 없음. 실기 확인 전.
 - 결정: D-433 (Proposed)
+
+## 2026-10-04 · uncommitted · feat(vision): 원본 조도와 얼굴 handover
+
+- 변경: JPEG metadata의 원본 low_light quality를 기존 front/status에 전달한다. legacy·malformed·stale는 null이며 JPEG는 유지한다. face-inputs에 camera_quality와 JPEG 수신 나이를 전달하고 reader가 handover 나이를 더해 만료한다. read-only 표시로서 이동 권한은 아니다.
+- 증거: preview·bridge·schema·face handover·CORE focused 143 passed, 1 skipped; 회귀 55 passed.
+- gate 변화: SOURCE/LOCAL. 실제 조명 보조 동작은 별도 기기 증거다.
+
+## 2026-10-04 · uncommitted · feat(bridge): typed 녹화 시작과 원본 JPEG admission
+
+- 변경: pilot_recorder/start typed service에 RAW0/ANNOTATED1만 전달하며 legacy SetBool 정지는 유지한다. camera/preview/raw/compressed를 별도 read-only 구독하고 ROS capture clock을 검증한다. 오래된 원본은 거절, 기존 JPEG는 조도만 unknown으로 표시한다. final cmd_vel 소유권은 변경하지 않는다.
+- 증거: 실제 Bridge wiring registry와 typed0/1 transport, CORE API readback·원본/주석 header 및 source age 검증 포함162 passed,1 skipped.
+- gate 변화: SOURCE/LOCAL. ROS service 설치/실기 녹화 확인은 root 배포 단계에서 수행한다.
+
+## 2026-10-04 · uncommitted · fix(vision): preserve fresh overexposed quality
+- 변경: 원본 조도 invalid reason overexposed를 preview store, API protocol, face handover sanitizer에 전달한다. low_light 조명 허용 범위와 2초 촬영·수신·handover 신선도는 유지한다.
+- 검증: 과다 노출 관측을 버리는 RED 3 failed; API·handover·stale 회귀 포함 GREEN은 X:/DevTemp/rosy-lane-device-20261004/overexposed-api-green.txt. 배포·실주행 미검증, 명령 전송 없음.
+- 추가 검증: face handover integration RED 1 failed로 display whitelist 누락을 확인·수정. 최종 focused 129 passed, 3 skipped (overexposed-api-green.txt).
+
+- gate 변화: SOURCE/LOCAL. 실기 노출·조명·주행은 별도 검증이다.
+
+## 2026-10-04 · uncommitted · test: 카메라 프레임 모듈의 실제 제공 경로
+
+- 변경: Dashboard 카메라 계약을 분리된 shared frame 모듈의 import와 실제 제공 bytes, 인증·취소·late frame guard에 연결했다.
+- 증거: Dashboard·role surface·paired camera 회귀 47 passed. 기존 API·동작·권한 검사를 약화하지 않았다.
+- gate 변화: SOURCE/LOCAL. 실기 화면 검증은 별도다.

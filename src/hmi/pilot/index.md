@@ -35,7 +35,7 @@
 ## 최근 기록
 
 - 2026-10-04 · uncommitted · fix(pilot): 시작 대상 확인 실패와 재시도
-- 2026-10-03 · uncommitted · test(pilot): 재조작 시험의 새 목표 실행 상태 분리
-- 2026-10-03 · uncommitted · feat(pilot): 공용 규칙으로 화면별 작업 흐름 정리
-- 2026-10-03 · uncommitted · fix(link): 현재 접속과 후속 코드 규약 구별
-- 2026-10-03 · uncommitted · feat(link): D-432 주소 없는 장비 접속
+- 2026-10-04 · uncommitted · fix: 과노출 판정 불가 안내
+- 2026-10-04 · uncommitted · feat: 기기 기록과 브라우저 영상 옵션
+- 2026-10-04 · uncommitted · feat: 저조도 카메라 판정 불가 표시
+- 2026-10-04 · uncommitted · feat(pilot): 운전 모드와 차선 인식 분리

@@ -335,6 +335,29 @@
 - gate 변화: DEVICE/FIELD 이동 없음.
 - 결정: D-432 공용 UI 최종 검증; 첫 실패와 재실행 결과를 구별한다.
 
+## 2026-10-04 · uncommitted · feat(pilot): 운전 모드와 차선 인식 분리
+
+- 변경: 수동·차선 자동·지도 목표 선택과 독립 인식 선택(학습 모델/반사 제거/기존 검출). 정지·설정은 명시적 조작이며 인식 선택은 주행 모드를 바꾸지 않는다. 관리자·신선한 정지 IDLE·차선 OFF에서만 적용하고 적용 중 진행을 막는다. 성공 응답과 설정 readback을 확인하며 실제 추론 출처가 없으면 확인 대기로 표시한다. Pilot 셸 캐시 갱신.
+- 증거: Pilot host 87 passed, 59 skipped. 기존 자동·hold·수동 takeover 브라우저 4 passed. 인식 적용 실패·pending·readback·구 서버 브라우저 1 passed.
+- gate 변화: 없음. 실기 주행 수용 증거는 아직 없다.
+
+## 2026-10-04 · uncommitted · feat: 저조도 카메라 판정 불가 표시
+
+- 변경: 기존 front/status quality를 읽어 저조도에서는 차선·물체를 판정할 수 없다고 표시한다. JPEG 표시를 유지하고 회복·누락·오래된 상태에서는 경고를 해제한다.
+- 증거: Pilot·Dashboard 저조도 브라우저 회귀 각각 1 passed; shared controls + shell 30 passed.
+- gate 변화: SOURCE/LOCAL. ARM64/device/field verification pending.
+
+## 2026-10-04 · uncommitted · feat: 기기 기록과 브라우저 영상 옵션
+
+- 변경: 기기 기록은 원본/표시본 선택을 분리하고 서버 지원·실제 readback을 따른다. 브라우저는 원본을 항상 보존하며 표시본을 별도 저장한다. 녹화 종료 시 원본부터 다운로드하고 다시 받기 동작을 제공한다.
+- 증거: 기기 옵션·실제 readback 1 passed; 저조도 회귀 1 passed; 기존 로봇 기록·hold/takeover 4 passed.
+- gate 변화: SOURCE/LOCAL. ARM64/device/field evidence remains separate.
+
+## 2026-10-04 · uncommitted · fix: 과노출 판정 불가 안내
+
+- 변경: 원본 영상 위에 덧씌우지 않고 기존 품질 경고에서 과노출 · 차선 정보 확인 불가를 표시한다. 저조도·과노출·회복·구형 응답을 각각 구분한다.
+- 증거: Pilot/Dashboard bright-dark browser 2 passed; native quality/alarm 9 passed.
+- gate 변화: SOURCE/LOCAL. No device writes or motion.
 ## 2026-10-04 · uncommitted · fix(pilot): 시작 대상 확인 실패와 재시도
 
 - 변경: 대상 발견 실패·잘못된 응답은 빈 본문 대신 대상 미확인 안내와 같은 발견 재시도를 제공한다. 짧은 pending 잠금으로 중복 발견을 막고 실제 404만 기존 Pinky 연결로 간다. 성공·실패 응답은 시작 안내를 아직 소유할 때만 상단 문구를 바꿔 더 늦은 정지 안내를 보존한다. 연결 화면의 작은 상단 행을 감싸고 이미 전체 주행 폭에서 숨기는 세 중복 selector를 제거해 styles.css 800줄을 유지한다. SW CACHE를 올리고 실제 공용 import 두 자산을 셸·개발 fixture에 등록했다.

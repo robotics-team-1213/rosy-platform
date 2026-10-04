@@ -4949,6 +4949,67 @@
 - gate 변화: 없음. workflow push 실행, 서명 PC 예약 작업, 사이트 호스트 설치와 첫 자동 갱신·롤백은 미검증. 사이트 키 미준비(D-301)
 - 결정: D-441 Accepted, D-437·D-301 개정 부록
 - 교훈: 자동 서명기가 지키는 것은 자산 쓰기 권한과 main 아닌 빌드다. 서명 PC 계정과 main 보호 규칙이 이제 사이트 배포의 문이다
+- gate 변화: 없음. SOURCE/LOCAL GO, 전체 DEVICE/FIELD PARKED 유지.
+
+## 2026-10-04 · uncommitted · cam: 촬영 조명을 명시적 요청으로 제한
+
+- 변경: 사용자의 정정에 따라 조명을 기본 꺼짐으로 수정하고 앱·관제 PC 요청당 최대 30초로 제한했다. 어둠·발열 회복·재시작으로 다시 켜지지 않으며 중복 요청은 시간을 연장하지 않는다. 설계와 사용 문서에 요청형 자동 판단의 경계를 기록했다.
+- 증거: JVM 330 passed, APK/lint 성공, CLI 59 passed, 독립 리뷰 승인. 같은 서명 설치와 설정 보존, 실제 S21 만료 후 꺼짐 유지와 송출 재시작 기본 꺼짐, 실제 관제 PC 요청·취소 및 최신 JPEG 수신을 확인했다.
+- gate 변화: 없음. SOURCE/LOCAL GO, 전체 DEVICE/FIELD PARKED 유지.
+
+## 2026-10-04 · uncommitted · docs(adr): D-447 웹 실시간 구독 재사용 계약
+
+- 변경: `docs/adr/D-447-web-realtime-reuse-open-sockets.md` 추가. 사다리 계획 §4가 "착수 시 배정"으로 남겨둔 웹 표면 실시간 구독 통일 ADR을 D-447로 착지했다. 원칙(이미 열린 소켓 재사용·스키마 불변·소켓 우선 폴링 폴백), 순서((a) Fleet gather 출처 전환 → (b) 셸 store.js /ws/state), 신선도 규칙(hub heartbeat 1 Hz 기준 `hub_state_max_age_s` 기본 3.0 s), 감사(`gather_source` additive)를 정했다.
+- 증거: registry `RobotRecord.snapshot`(heartbeat가 이미 StateSnapshot 저장), `server/AGENTS.md`의 봉합점 예약, PRT-003 1 Hz, SAF-003 5.0 s와의 관계 대조. (a)단계 구현은 별도 커밋(워크트리).
+- gate 변화: 없음. 승격 무관.
+- 결정: D-447 Proposed. (a) 구현 착수.
+
+
+## 2026-10-04 · uncommitted · D-446 모델 PC도 서명 코드 자동 업데이트에 포함하고 작업·GPU 환경·모델 승격을 분리한다
+
+- 변경: D-446 모델 PC의 서명 코드 후보·작업 잠금·환경 지문·유휴 source 전환·실패 복귀를 구현했다. perception과 control/core_common은 같은 commit과 상대 경로로 묶고 고정 bootstrap을 사용한다. 기존 data는 외부 디렉터리로 연결한다.
+- 증거: 실제 모델 PC의 격리 Linux 시험 30 passed. 서명과 작업 환경 guard는 변이에서 실패를 확인했다. 사용자 updater timer 설치·enabled/active와 linger를 확인했다. 리뷰에서 발견한 import closure와 unmanaged 작업 admission을 보완했다.
+- gate 변화: 없음. 코드 updater 설치와 첫 후보 전환·model-watch doctor·학습 모델 품질·주행 수용은 별도 증거로 판정한다. push·CI는 수행하지 않았다.
+
+## 2026-10-04 · uncommitted · 모델 PC 코드 갱신은 커밋하지 않은 perception 수정을 덮지 않는다
+
+- 변경: D-446. 등록한 checkout의 `learning/training/perception`에 커밋하지 않은 수정이 있으면 전환을 보류하고 그 파일은 그대로 둔다. exec는 작업 디렉터리의 같은 스크립트가 서명 릴리스와 바이트가 다르면 실행하지 않는다.
+- 증거: `test/test_model_pc_autoupdate.py` 12 passed, 21 skipped (Windows). 보류 통합 시험은 Linux symlink/flock이라 건너뛰었다. 모델 PC 설치와 자동 전환은 하지 않았다.
+- gate 변화: 없음. 설치·자동 전환·장기 운용 수용은 미검증.
+
+
+## 2026-10-04 · uncommitted · docs: learned lane selection and low-light evidence
+
+- 변경: 운전 모드와 paint source 선택, 실제 learned/fallback readback, 정지 중 Host 적용, 저조도 판정·흰 LCD/LED opt-in 및 자동 복구 차단의 계획과 검증 경계를 기록했다.
+- 증거: `docs/plans/2026-10-04-learned-lane-driving-modes.md`, `docs/validation/learned-lane-modes-2026-10-04/README.md`, 같은 회차 `low-light.md`; source·host·browser 회귀 및 독립 안전 검토.
+- gate 변화: 없음. ARM64 설치·실제 조명·주행을 host 검사나 명령 반환값으로 주장하지 않는다.
+- 교훈: 모델 사용 여부, 시야, 실제 조명 효과와 물리 주행은 각각 확인해야 한다.
+
+## 2026-10-04 · uncommitted · docs: 원본/표시 녹화와 밝기 양극단 추가 검증
+
+- 변경: 기기·브라우저 녹화의 원본 보존 및 별도 미검수 표시본, raw road ROI 과노출/저조도 분리, 조명 해제와 CORE 복구 차단의 추가 회차를 기록한다.
+- 검증: 단계별 source/host 결과만 기록하며 실제 LED·회전교차로·주행 합격을 주장하지 않는다.
+- 증거: `docs/validation/learned-lane-modes-2026-10-04/recording.md`, `docs/validation/learned-lane-modes-2026-10-04/exposure.md`.
+
+- gate 변화: SOURCE/LOCAL. 실기 노출·조명·주행은 별도 검증이다.
+
+## 2026-10-04 · uncommitted · fix: 확장 검사에서 드러난 릴리스 종료 경계
+
+- 변경: Host Agent 종료 대기 누락을 수정하고, 프레임 모듈 분리 및 API v1.91에 맞춰 기존 계약 검사를 갱신했다.
+- 증거: 수정 전 확장 검사 11455 passed, 449 skipped, 7 failed. 수정 후 native 195 passed/1 skipped, frame 계약 47 passed, Fleet 문서 22 passed. docs/validation/learned-lane-modes-2026-10-04/release-lifecycle.md.
+- gate 변화: SOURCE/LOCAL. 이전 push 반환값으로 확장 검사 합격을 주장하지 않으며, 수정 후보의 필수 검사·CI·ARM64·실기는 별도로 확인한다.
+
+## 2026-10-04 · uncommitted · docs: 암실 IR 활용 조사와 병렬 변경 통합
+
+- 변경: 공식 Pinky ADC와 현재 교정·선 추정·명시적 IR 선택 경로를 대조했다. RGB 색상과 3채널 반사값을 구별하고 정지 상태 밝기별 검증, 포화 처리 후속 후보와 회전교차로 정보 한계를 기록했다. 병합에서 기존 양쪽 로그를 바이트 단위로 보존하고 생성 색인을 갱신했다.
+- 증거: docs/validation/learned-lane-modes-2026-10-04/infrared-darkness.md. 브라우저 병합 회귀 13 passed; Fleet gather/discovery/link 45 passed. 크기 판정은 검토된 부모 코드 증가를 합산하며 기존 allowance를 유지했다.
+- gate 변화: 없음. IR 자동 전환·암실 성능·배포·실기 주행을 수행하거나 수용하지 않았다.
+## 2026-10-04 · uncommitted · site(D-441): automatic site stack updates
+- 변경: D-441 ADR·ADR Log 행(D-440은 device-power 브랜치가 써서 다음 번호, `adr_gaps`에 D-438·D-439·D-440). `build-site-candidate.yml`에 main push 트리거와 이미지 원본 경로 필터, push는 기존 릴리스에서 빌드 없이 성공, push 빌드만 취소하는 job concurrency와 비취소 릴리스 그룹. 서명 PC용 `deploy/site/auto_sign_candidates.py`(출처 증명 digest·main 조상·태그 확인 뒤 `sign_manifest_only`, 감사 로그)와 `register_auto_sign_task.ps1`. 사이트 호스트용 `rosy_site_autoupdate.py`·`rosy-site-autoupdate.service`·`.timer`(override 거부, SHA256SUMS·tar 검사, 설치된 검증기, 원자적 site.env·symlink 전환, 건강 확인과 롤백, 정리). D-437·D-301 부록, `deploy/site/README.md` "Automatic updates (D-441)"
+- 증거: 사이트 후보·workflow·fetch·검증기·서명 시험과 새 자동 서명·호스트 갱신 시험(symlink 시험은 Linux 컨테이너에서), `test_no_secrets_in_tracked_files`, harness 계약·lint, actionlint 1.7.7(Docker)
+- gate 변화: 없음. workflow push 실행, 서명 PC 예약 작업, 사이트 호스트 설치와 첫 자동 갱신·롤백은 미검증. 사이트 키 미준비(D-301)
+- 결정: D-441 Accepted, D-437·D-301 개정 부록
+- 교훈: 자동 서명기가 지키는 것은 자산 쓰기 권한과 main 아닌 빌드다. 서명 PC 계정과 main 보호 규칙이 이제 사이트 배포의 문이다
 
 ## 2026-10-04 · uncommitted · docs(ui): D-439 공용 작업 선택 검증과 진입 범위
 

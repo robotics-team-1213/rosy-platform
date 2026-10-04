@@ -42,6 +42,45 @@ MOUNT = """async ([module, role]) => {
 }"""
 
 
+def test_lane_perception_admin_idle_gate_pending_failure_and_readback(panel):
+    page = panel("console/line-follow.js", role="administrator")
+    page.evaluate("""() => {
+      window.__callbacks['/api/v1/line-follow'].onData({mode:'OFF'});
+      window.__callbacks['/api/v1/robot/state'].onData({mode:'MANUAL',velocity:{linear:0,angular:0}});
+      window.__callbacks['/api/v1/line-follow/perception'].onData({paint_source:'denoise',applied_paint_source:null});
+    }""")
+    apply = page.locator("ui-button", has_text="인식 적용")
+    assert apply.evaluate("e=>e.disabled")
+    page.evaluate("""() => {
+      window.__callbacks['/api/v1/robot/state'].onData({mode:'IDLE',velocity:{linear:0,angular:0}});
+      window.__api = async (path, options) => {
+        if (options?.method === 'PUT') return new Promise((resolve,reject)=>{window.failApply=()=>reject(new Error('restart failed'));});
+        return {paint_source:'learned',applied_paint_source:null};
+      };
+    }""")
+    page.select_option("select[aria-label='차선 인식 방식']", "learned")
+    apply.evaluate("button=>{window.__callbacks['/api/v1/robot/state'].onData({mode:'IDLE',velocity:{linear:0,angular:0}}); button.click();}")
+    assert apply.evaluate("e=>e.disabled")
+    assert page.locator("ui-button", has_text="추종 시작").evaluate("e=>e.disabled")
+    page.evaluate("window.failApply()")
+    page.wait_for_function("document.body.textContent.includes('인식 적용 실패')")
+    assert "설정 적용: 학습 모델" not in page.inner_text("body")
+    page.evaluate("""() => {
+      window.__callbacks['/api/v1/line-follow/perception'].onData({paint_source:'denoise'});
+      window.__api=async (path,options)=>options?.method==='PUT' ? {applied:true} : {paint_source:'learned',applied_paint_source:null};
+    }""")
+    page.select_option("select[aria-label='차선 인식 방식']", "learned")
+    apply.evaluate("button=>{window.__callbacks['/api/v1/robot/state'].onData({mode:'IDLE',velocity:{linear:0,angular:0}}); button.click();}")
+    page.wait_for_function("document.body.textContent.includes('설정 적용: 학습 모델')")
+    assert "실제 추론: 확인 대기" in page.inner_text("body")
+    page.evaluate("window.__callbacks['/api/v1/line-follow/perception'].onData({paint_source:'learned',applied_paint_source:'denoise_fallback',applied_source_age_s:0.3})")
+    assert "학습 미사용 · 전처리 대체" in page.inner_text("body")
+    page.evaluate("window.__callbacks['/api/v1/line-follow/perception'].onData({paint_source:'learned',applied_paint_source:'learned',applied_source_age_s:0.3,applied_model_revision:'lane-test-r2'})")
+    assert "모델 lane-test-r2" in page.inner_text("body")
+    page.evaluate("window.__callbacks['/api/v1/line-follow/perception'].onData({paint_source:'learned',applied_paint_source:'learned',applied_source_age_s:3})")
+    assert "실제 추론: 확인 대기" in page.inner_text("body")
+
+
 class _Handler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(ROOT), **kwargs)
@@ -287,7 +326,7 @@ def test_camera_explains_lane_object_labels_and_disables_expansion_without_a_fra
     assert expand.get_attribute('reason') == '영상 수신 후 확대할 수 있습니다'
     page.locator('.surface-camera-legend summary').click()
     assert 'LEFT LANE' in page.locator('.surface-camera-legend').inner_text()
-    assert 'UNKNOWN' in page.locator('.surface-camera-legend').inner_text()
+    assert 'UNCLASSIFIED' in page.locator('.surface-camera-legend').inner_text()
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
 
 
@@ -296,16 +335,17 @@ def test_camera_can_expand_live_image_and_return_focus_after_exit(panel):
     import numpy as np
     image = cv2.imencode('.jpg', np.full((240, 320, 3), 90, np.uint8))[1].tobytes()
     page = panel('console/camera.js', role='viewer')
-    page.route('**/api/v1/vision/front/frame?sequence=1',
+    page.route('**/api/v1/vision/front/frame?sequence=1&overlay=false',
                lambda route: route.fulfill(body=image, content_type='image/jpeg',
-                                          headers={'X-Rosy-Camera-Sequence': '1'}))
+                                          headers={'X-Rosy-Camera-Sequence': '1', 'X-Rosy-Camera-Variant':'raw',
+                                                   'X-Rosy-Camera-Captured-At':'5', 'X-Rosy-Camera-Frame-Id':'front'}))
     page.evaluate("""async () => {
       __unmount();
       const {session} = await import('/assets/client.js'); session.token = 'rosy-dev-viewer';
       const {mount} = await import('/assets/panels/console/camera.js');
       document.querySelector('#root').replaceChildren();
       __unmount = mount(document.querySelector('#root'), {role:'viewer', api:async () => ({
-        available:true, stale:false, sequence:1, source:'GAZEBO', width:320, height:240,
+        available:true, stale:false, sequence:1, raw_available:true,raw_sequence:1, source:'GAZEBO', width:320, height:240,
         captured_at:5, age_ms:20}), store:{poll(){return () => {};}}});
     }""")
     page.locator('#vision-frame').wait_for(state='visible')
@@ -314,6 +354,7 @@ def test_camera_can_expand_live_image_and_return_focus_after_exit(panel):
     assert page.locator('.surface-camera-close').is_visible()
     page.locator('.surface-camera-close').click()
     page.wait_for_function('document.fullscreenElement === null')
+    page.wait_for_function("document.activeElement.id === 'vision-expand'")
     assert page.evaluate("document.activeElement.id === 'vision-expand'")
     page.evaluate('typeof __unmount === "function" ? __unmount() : __unmount.unmount()')
 
@@ -321,10 +362,14 @@ def test_camera_can_expand_live_image_and_return_focus_after_exit(panel):
 def _live_camera_with_shell(panel):
     import cv2
     import numpy as np
+    from urllib.parse import parse_qs, urlsplit
     image = cv2.imencode('.jpg', np.full((240, 320, 3), 90, np.uint8))[1].tobytes()
     page = panel('console/camera.js', role='viewer')
     page.route('**/api/v1/vision/front/frame?sequence=*',
-               lambda route: route.fulfill(body=image, content_type='image/jpeg', headers={'X-Rosy-Camera-Sequence': route.request.url.rsplit('=', 1)[1]}))
+               lambda route: route.fulfill(body=image, content_type='image/jpeg', headers={
+                   'X-Rosy-Camera-Sequence': parse_qs(urlsplit(route.request.url).query)['sequence'][0],
+                   'X-Rosy-Camera-Variant': 'raw', 'X-Rosy-Camera-Captured-At': '5',
+                   'X-Rosy-Camera-Frame-Id': 'front_camera_link'}))
     page.evaluate("""async () => {
       __unmount();
       const {session}=await import('/assets/client.js'); session.token='fixture-viewer';
@@ -336,7 +381,7 @@ def _live_camera_with_shell(panel):
       const {mount}=await import('/assets/panels/console/camera.js');
       document.querySelector('#root').replaceChildren();
       let sequence=0;
-      __unmount=mount(document.querySelector('#root'),{role:'viewer',api:async()=>({available:true,stale:false,sequence:++sequence,source:'GAZEBO',width:320,height:240,captured_at:5,age_ms:20}),store:{poll(){return()=>{}}}});
+      __unmount=mount(document.querySelector('#root'),{role:'viewer',api:async()=>({available:true,stale:false,sequence:++sequence,raw_available:true,raw_sequence:sequence,source:'GAZEBO',width:320,height:240,captured_at:5,age_ms:20}),store:{poll(){return()=>{}}}});
       window.ownedRecordStop=document.querySelector('#vision-record-stop');
     }""")
     page.locator('#vision-frame').wait_for(state='visible')
@@ -453,3 +498,84 @@ def test_console_confirmation_is_nonblocking_and_unmount_cancels_late_action(pan
     page.wait_for_function('() => !document.querySelector("dialog[open]")')
     assert page.locator('.ui-confirm-scrim').count() == 0
     assert page.evaluate('window.__calls.length') == 0
+
+
+def test_browser_annotation_saves_original_and_derivative_and_rejects_missing_raw(panel):
+    import cv2
+    import numpy as np
+    image = cv2.imencode('.jpg', np.full((120, 160, 3), 90, np.uint8))[1].tobytes()
+    page = panel('console/camera.js', role='viewer')
+    downloads = []
+    page.on('download', lambda item: downloads.append(item.suggested_filename))
+
+    def frame(route):
+        variant = 'annotated' if route.request.url.endswith('overlay=true') else 'raw'
+        route.fulfill(body=image, content_type='image/jpeg', headers={
+            'X-Rosy-Camera-Sequence':'1','X-Rosy-Camera-Variant':variant,
+            'X-Rosy-Camera-Captured-At':'5','X-Rosy-Camera-Frame-Id':'front'})
+
+    page.route('**/api/v1/vision/front/frame?*', frame)
+    page.evaluate("""async () => {
+      __unmount();const {session}=await import('/assets/client.js');session.token='rosy-dev-viewer';
+      const {mount}=await import('/assets/panels/console/camera.js');document.querySelector('#root').replaceChildren();
+      window.rawReady=true;
+      window.MediaRecorder=class {
+        static isTypeSupported(type){return type==='video/webm';}
+        constructor(){this.state='inactive';}start(){this.state='recording';}
+        stop(){this.state='inactive';this.ondataavailable({data:new Blob(['VIDEO'])});this.onstop();}
+      };
+      __unmount=mount(document.querySelector('#root'),{role:'viewer',api:async()=>({available:true,
+        sequence:1,raw_sequence:1,raw_available:rawReady,width:160,height:120,age_ms:20}),store:{poll(){return ()=>{};}}});
+    }""")
+    page.wait_for_function("!document.querySelector('#vision-record-start').disabled")
+    assert page.locator('#vision-record-mode').input_value() == 'raw'
+    page.locator('.surface-camera-tools summary').click()
+    page.select_option('#vision-record-mode', 'annotated')
+    page.wait_for_function("!document.querySelector('#vision-record-start').disabled")
+    page.locator('#vision-record-start').click()
+    assert page.locator('#vision-record-mode').is_disabled()
+    page.locator('#vision-record-stop').click()
+    page.wait_for_function("!document.querySelector('#vision-record-mode').disabled")
+    page.wait_for_timeout(500)
+    assert any(name.endswith('-raw.webm') for name in downloads)
+    assert any(name.endswith('-annotated.webm') for name in downloads)
+    page.evaluate('rawReady=false')
+    page.select_option('#vision-record-mode', 'raw')
+    page.wait_for_function("document.querySelector('#vision-record-start').disabled")
+    assert '원본' in page.inner_text('#vision-empty')
+    page.evaluate('__unmount()')
+
+
+def test_camera_low_light_is_visibility_failure_with_live_raw_frame(panel):
+    import cv2
+    import numpy as np
+    image = cv2.imencode('.jpg', np.zeros((120, 160, 3), np.uint8))[1].tobytes()
+    page = panel('console/camera.js', role='viewer')
+    page.route('**/api/v1/vision/front/frame?sequence=1&overlay=false',
+               lambda route: route.fulfill(body=image, content_type='image/jpeg',
+                                          headers={'X-Rosy-Camera-Sequence': '1', 'X-Rosy-Camera-Variant':'raw',
+                                                   'X-Rosy-Camera-Captured-At':'5', 'X-Rosy-Camera-Frame-Id':'front'}))
+    page.evaluate("""async () => {
+      __unmount();
+      const {session} = await import('/assets/client.js'); session.token = 'rosy-dev-viewer';
+      const {mount} = await import('/assets/panels/console/camera.js');
+      document.querySelector('#root').replaceChildren();
+      window.cameraQuality={valid:false,reason:'low_light'};
+      __unmount = mount(document.querySelector('#root'), {role:'viewer', api:async () => ({
+        available:true, stale:false, sequence:1, raw_available:true,raw_sequence:1, source:'CAMERA', width:160, height:120,
+        captured_at:5, age_ms:20, quality:window.cameraQuality}), store:{poll(){return () => {};}}});
+    }""")
+    page.locator('#vision-quality').wait_for(state='visible')
+    page.locator('#vision-frame').wait_for(state='visible')
+    assert '차선·물체를 판정할 수 없습니다' in page.inner_text('#vision-quality')
+    assert page.locator('#vision-status').inner_text() == '실시간'
+    page.evaluate("window.cameraQuality={valid:false,reason:'overexposed'}")
+    page.wait_for_function("document.querySelector('#vision-quality').textContent.includes('과노출')")
+    assert page.inner_text('#vision-quality') == '과노출 · 차선 정보 확인 불가'
+    page.evaluate("window.cameraQuality={valid:true,reason:'ok'}")
+    page.locator('#vision-quality').wait_for(state='hidden')
+    page.evaluate("window.cameraQuality={valid:false,reason:'low_light'}")
+    page.locator('#vision-quality').wait_for(state='visible')
+    page.evaluate("window.cameraQuality=undefined")
+    page.locator('#vision-quality').wait_for(state='hidden')
+    page.evaluate('__unmount()')

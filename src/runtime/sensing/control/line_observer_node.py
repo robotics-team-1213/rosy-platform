@@ -24,6 +24,7 @@ from . import executor_choice
 from .calibrated_values import calibrated
 from .sensing.perception.camera_ground import nominal_ground_plane, simulation_ground_plane
 from .sensing.perception.image_frame import image_msg_to_frame
+from .sensing.perception.camera_visibility import visibility_reason
 from .sensing.perception.lane import (
     IRLineCalibration,
     LaneBetweenKeeper,
@@ -307,7 +308,7 @@ class LineObserverNode(Node):
     def _stamp(self) -> float:
         return self.get_clock().now().nanoseconds * 1e-9
 
-    def _publish(self, source, observation, *, stamp=None) -> None:
+    def _publish(self, source, observation, *, stamp=None, quality=None) -> None:
         payload = line_observation_payload(
             source, self._stamp() if stamp is None else stamp, observation,
             ir_calibrated=(source == 'IR_LINE' and self._ir_calibration is not None),
@@ -316,6 +317,8 @@ class LineObserverNode(Node):
             ground=(self._ground_label()
                     if source == 'CAMERA_LINE' and self._camera_mode_uses_ground() else None),
         )
+        if quality is not None:
+            payload['quality'] = quality
         self.observation_pub.publish(String(data=json.dumps(payload, sort_keys=True)))
 
     def _on_ir(self, msg: UInt16MultiArray) -> None:
@@ -394,6 +397,18 @@ class LineObserverNode(Node):
             return
         try:
             frame = image_msg_to_frame(msg)
+            reason = visibility_reason(frame)
+            if reason != 'usable':
+                self._lane_keeper.reset()
+                self._between_keeper.reset()
+                self._keep_last_stamp = None
+                if self._paint_worker is not None:
+                    self._paint_worker.reset()
+                source_stamp = float(msg.header.stamp.sec) + float(msg.header.stamp.nanosec) * 1e-9
+                self._publish('CAMERA_LINE', None, stamp=source_stamp,
+                              quality=dict(valid=False, reason=reason))
+                self._publish_debug(msg, frame, None)
+                return
             mode = str(self.get_parameter('camera_lane_mode').value)
             if mode != 'keep' and self._paint_worker is not None:
                 self._paint_worker.reset()
@@ -431,6 +446,10 @@ class LineObserverNode(Node):
                     frame, ground, paint_mask=paint,
                     lane_half_width_m=float(self.get_parameter('lane_half_width_m').value))
                 bundle = dict(self._lane_keeper.last, paint_source_used=paint_used,
+                              paint_source_requested=str(self.get_parameter('paint_source').value),
+                              paint_model_revision=(self._paint_worker.used_model_revision
+                                                    if paint_used == 'learned' and self._paint_worker is not None
+                                                    else None),
                               image_size=[frame.shape[1], frame.shape[0]],
                               camera_geometry_source=str(self.get_parameter('camera_ground_source').value).upper(),
                               ground=self._ground_label(),

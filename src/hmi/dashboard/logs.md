@@ -810,6 +810,29 @@
 - gate 변화: Android 설치·실제 CORE 인증 확인은 실제 주행·Cam 화면 off 연속 송출·현장 트래픽 수용과 별개다. DEVICE/FIELD 이동 없음.
 - 결정: D-432 후속 결정: 접속은 지금, 짧은 코드 통합은 추후 적용.
 
+## 2026-10-04 · uncommitted · feat(dashboard): 차선 인식 선택
+
+- 변경: 차선 추종 패널에 인식 방식 선택과 설정/실제 추론 출처 표시. 관리자·신선한 정지 IDLE·추종 OFF에서만 적용. 적용 중 추종 시작 잠금, 실패는 실패로 표시하고 PUT 뒤 GET readback을 확인한다.
+- 증거: 인식 적용 실패·pending·readback 브라우저 2 passed, 기존 패널 브라우저 13 passed. 실제 입력의 최신 출처와 모델 판을 별도로 표시하며 지연·누락은 확인 대기로 둔다.
+- gate 변화: 없음. 실제 추론 출처 없는 응답은 확인 대기로 표시한다.
+
+## 2026-10-04 · uncommitted · feat: 저조도 카메라 판정 불가 표시
+
+- 변경: 기존 카메라 패널에 저조도 경고를 추가했다. 실시간 JPEG 수신과 차선·물체 판정 가능 여부를 별도로 표시한다.
+- 증거: Pilot·Dashboard 저조도 브라우저 회귀 각각 1 passed; shared controls + shell 30 passed.
+- gate 변화: SOURCE/LOCAL. ARM64/device/field verification pending.
+
+## 2026-10-04 · uncommitted · feat: 브라우저 원본·표시본 확인 영상
+
+- 변경: 카메라 패널에서 원본 또는 원본+표시본을 선택한다. 같은 촬영 시점의 두 프레임을 확인하고 원본부터 저장한다. 원본 누락·구형 서버 응답·촬영 시점 불일치는 녹화를 막는다.
+- 증거: 브라우저 표시본+원본 저장/원본 누락/저조도/확대 3 passed.
+- gate 변화: SOURCE/LOCAL. ARM64/device/field evidence remains separate.
+
+## 2026-10-04 · uncommitted · fix: 과노출 판정 불가 안내
+
+- 변경: 기존 카메라 품질 경고에 과노출 안내를 추가했다. JPEG 수신 상태와 차선 판정 가능 여부는 별도로 표시하며 원본 픽셀은 바꾸지 않는다.
+- 증거: Pilot/Dashboard bright-dark browser 2 passed; native quality/alarm 9 passed.
+- gate 변화: SOURCE/LOCAL. No device writes or motion.
 ## 2026-10-04 · uncommitted · feat(ui): 절차 표면의 작업 선택과 유지
 
 - 변경: `/setup` 5개·`/device` 7개 작업을 매니페스트 순서의 작업 선택기와 한 작업 영역으로 배치한다. 모든 허용 패널을 유지해 입력·결과를 보존하며, `beforeHide` 거부·오류·시간 초과는 현재 작업을 유지한다. 화면 종료는 진행 중 선택을 무효화하고 선택기를 잠근 뒤 제한 시간 안에 확인한다. 종료는 단일 실행이며 성공 때만 리스너·패널·폴링 scope를 닫는다. 운용 조작 그룹의 정지 확인은 유지한다.

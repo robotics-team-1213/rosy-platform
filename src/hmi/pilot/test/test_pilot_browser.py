@@ -26,6 +26,175 @@ TABLET_VIEWPORTS = [(2000, 1200), (1200, 2000)]
 
 
 @pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1", reason="browser opt-in")
+def test_camera_low_light_warning_keeps_raw_preview_and_clears_on_recovery(tablet_page):
+    base_url, page, errors = tablet_page
+    state = {"quality": {"valid": False, "reason": "low_light"}, "available": True}
+
+    def status(route):
+        body = {"available": state["available"], "sequence": dev_server.FRAME_SEQ, "raw_available": True,
+                "raw_sequence": dev_server.FRAME_SEQ, "width": 160, "height": 120, "age_ms": 12}
+        if state["quality"] is not None:
+            body["quality"] = state["quality"]
+        route.fulfill(json=body)
+
+    page.route("**/api/v1/vision/front/status", status)
+    _enter_drive(page, base_url)
+    page.locator("[data-drive-visibility]").wait_for(state="visible")
+    page.locator("[data-drive-frame]").wait_for(state="visible")
+    assert "차선·물체를 판정할 수 없습니다" in page.inner_text("[data-drive-visibility]")
+    state["quality"] = {"valid": False, "reason": "overexposed"}
+    page.wait_for_function("document.querySelector('[data-drive-visibility]').textContent.includes('과노출')")
+    assert page.inner_text("[data-drive-visibility]") == "과노출 · 차선 정보 확인 불가"
+    state["quality"] = {"valid": True, "reason": "ok"}
+    page.locator("[data-drive-visibility]").wait_for(state="hidden")
+    state["quality"] = {"valid": False, "reason": "low_light"}
+    page.locator("[data-drive-visibility]").wait_for(state="visible")
+    state["quality"] = None  # A legacy server cannot assert low-light.
+    page.locator("[data-drive-visibility]").wait_for(state="hidden")
+    assert errors == [], errors
+
+
+@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1", reason="browser opt-in")
+def test_device_recording_option_uses_capability_and_actual_readback(tablet_page):
+    base_url, page, errors = tablet_page
+    page.goto(f"{base_url}/pilot")
+    page.evaluate("""async () => {
+      const {mountRobotRecording} = await import('/pilot/assets/screens/robot-recording.js');
+      const host=document.createElement('main');document.body.replaceChildren(host);
+      const toggle=document.createElement('ui-button'), detail=document.createElement('span'), openButton=document.createElement('ui-button');
+      host.append(toggle,detail,openButton);window.recordCalls=[];window.recordSupported=true;
+      window.recordActual={state:'idle'};
+      window.recordDispose=mountRobotRecording({toggle,detail,openButton,sheetHost:host,anchor:host,save(){},
+        schedule(fn){window.recordPoll=fn;return ()=>{};},
+        request:async(path,options={})=>{
+          if(options.method==='POST'){
+            recordCalls.push(JSON.parse(options.body));
+            window.recordActual={state:'recording',elapsed_s:1,max_duration_s:600,bytes:5,preview_mode:'raw'};
+            return {ok:true,status:201,body:window.recordActual};
+          }
+          return {status:200,body:{active:window.recordActual,preview_modes:recordSupported?['raw','annotated']:undefined}};
+        }});
+      toggle.dataset.optionToggle='';detail.dataset.optionReadback='';
+    }""")
+    page.wait_for_function("!document.querySelector('[data-robot-record-mode] option[value=annotated]').disabled")
+    page.select_option('[data-robot-record-mode]', 'annotated')
+    page.locator('[data-option-toggle]').click()
+    page.wait_for_function("window.recordCalls.length===1")
+    assert page.evaluate('recordCalls') == [{'preview_mode': 'annotated'}]
+    assert '원본 + 모델 표시본' not in page.inner_text('[data-option-readback]')
+    assert '원본' in page.inner_text('[data-option-readback]')
+    assert page.locator('[data-robot-record-mode]').is_disabled()
+    page.evaluate("recordActual={state:'idle'};recordSupported=false;recordPoll()")
+    page.wait_for_function("document.querySelector('[data-robot-record-mode] option[value=annotated]').disabled")
+    assert page.locator('[data-robot-record-mode]').input_value() == 'raw'
+    page.evaluate('recordDispose.dispose()')
+    assert page.locator('[data-robot-record-mode]').count() == 0
+    assert errors == [], errors
+
+
+@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1", reason="browser opt-in")
+def test_pilot_browser_confirmation_records_and_saves_paired_variants(tablet_page):
+    base_url, page, errors = tablet_page
+    downloads = []
+    page.on('download', lambda item: downloads.append(item.suggested_filename))
+    _enter_drive(page, base_url)
+    page.locator('[data-drive-frame]').wait_for(state='visible')
+    page.locator('[data-drive-tools]').click()
+    page.locator('[data-drive-tools-panel]').wait_for(state='visible')
+    page.evaluate("""() => {window.MediaRecorder=class {
+      static isTypeSupported(type){return type==='video/webm';}
+      constructor(){this.state='inactive';}start(){this.state='recording';}
+      stop(){this.state='inactive';this.ondataavailable({data:new Blob(['VIDEO'])});this.onstop();}
+    };} """)
+    page.select_option('[data-browser-record-mode]', 'annotated')
+    page.wait_for_function("!document.querySelector('[data-evidence-record]').disabled")
+    page.locator('[data-evidence-record]').click()
+    assert page.locator('[data-browser-record-mode]').is_disabled()
+    with page.expect_download():
+        page.locator('[data-evidence-record]').click()
+    while len(downloads) < 3:
+        page.wait_for_event('download', timeout=10_000)
+    assert any(name.endswith('-raw.webm') for name in downloads)
+    assert any(name.endswith('-annotated.webm') for name in downloads)
+    assert page.locator('[data-evidence-save]').is_enabled()
+    page.locator('[data-drive-exit]').click()
+    assert errors == [], errors
+
+
+@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1", reason="browser opt-in")
+def test_lane_perception_failed_apply_idle_guard_and_readback(tablet_page):
+    """Configuration never actuates; pending/failure/readback remain distinct."""
+    base_url, page, errors = tablet_page
+    page.goto(f"{base_url}/pilot")
+    page.evaluate("""async () => {
+      const {mountLanePerception} = await import('/pilot/assets/screens/drive-auto.js');
+      const root = document.createElement('main'); document.body.replaceChildren(root);
+      window.selected = 'denoise'; window.mode = 'MANUAL'; window.puts = [];
+      window.pending = false; window.fail = true; window.unsupported = false;
+      const apiGet = async (path, options={}) => {
+        if (path.endsWith('/whoami')) return {status:200, body:{role:'administrator'}};
+        if (path.endsWith('/robot/state')) return {status:200, body:{mode:window.mode, velocity:{linear:0,angular:0}}};
+        if (path === '/api/v1/line-follow') return {status:200, body:{mode:'OFF'}};
+        if (path.endsWith('/perception')) {
+          if (options.method === 'PUT') {
+            window.applyTimeout = options.timeoutMs;
+            window.puts.push(JSON.parse(options.body));
+            return new Promise(resolve => { window.finishApply = () => {
+              if (window.fail) resolve({status:409, body:{detail:'idle required'}});
+              else {window.selected = JSON.parse(options.body).paint_source; window.deferReadback=true; resolve({status:200,body:{applied:true}});}
+            }; });
+          }
+          if (window.deferReadback) return new Promise(resolve=>{window.finishReadback=()=>{
+            window.deferReadback=false;
+            resolve({status:200,body:{paint_source:window.selected,applied_paint_source:null}});
+          };});
+          return window.unsupported ? {status:404} : {status:200, body:{paint_source:window.selected,
+            applied_paint_source:window.actualSource??null, applied_source_age_s:window.actualAge??null,
+            applied_model_revision:window.actualRevision??null}};
+        }
+        throw new Error('unexpected actuation '+path);
+      };
+      window.perception = mountLanePerception(root, {apiGet, onPending:value=>{window.pending=value;}});
+      root.querySelector('details').open = true;
+    }""")
+    page.wait_for_function("document.querySelector('[data-lane-apply]').disabled")
+    assert page.evaluate("window.puts") == []
+    page.evaluate("window.mode = 'IDLE'; window.perception.refresh()")
+    page.wait_for_function("!document.querySelector('[data-lane-apply]').disabled")
+    page.select_option("[data-lane-perception]", "learned")
+    page.click("[data-lane-apply]")
+    assert page.evaluate("window.pending") is True
+    assert page.evaluate("window.applyTimeout") >= 70000
+    assert page.locator("[data-lane-apply]").evaluate("e=>e.disabled")
+    page.evaluate("window.finishApply()")
+    page.wait_for_function("document.querySelector('[data-lane-perception-status]').textContent.includes('적용 실패')")
+    assert "설정 적용: 학습" not in page.inner_text("[data-lane-perception-status]")
+    page.evaluate("window.fail = false; window.perception.refresh()")
+    page.wait_for_function("!document.querySelector('[data-lane-apply]').disabled")
+    page.select_option("[data-lane-perception]", "learned")
+    page.click("[data-lane-apply]")
+    page.evaluate("window.finishApply()")
+    page.wait_for_function("typeof window.finishReadback === 'function'")
+    assert page.evaluate("window.pending") is True
+    assert page.locator("[data-lane-apply]").evaluate("e=>e.disabled")
+    page.evaluate("window.finishReadback()")
+    page.wait_for_function("document.querySelector('[data-lane-perception-status]').textContent.includes('설정 적용: 학습 모델')")
+    assert "실제 추론: 확인 대기" in page.inner_text("[data-lane-perception-status]")
+    page.evaluate("window.actualSource='denoise_fallback'; window.actualAge=0.4; window.actualRevision='old-model'; window.perception.refresh()")
+    page.wait_for_function("document.querySelector('[data-lane-perception-status]').textContent.includes('학습 미사용 · 전처리 대체')")
+    assert "모델 old-model" not in page.inner_text("[data-lane-perception-status]")
+    page.evaluate("window.actualSource='learned'; window.actualRevision='lane-test-r2'; window.perception.refresh()")
+    page.wait_for_function("document.querySelector('[data-lane-perception-status]').textContent.includes('모델 lane-test-r2')")
+    page.evaluate("window.actualAge=3; window.perception.refresh()")
+    page.wait_for_function("document.querySelector('[data-lane-perception-status]').textContent.includes('실제 추론: 확인 대기')")
+    page.evaluate("window.unsupported = true; window.perception.refresh()")
+    page.wait_for_function("document.querySelector('[data-lane-apply]').disabled")
+    assert "지원하지 않습니다" in page.inner_text("[data-lane-perception-status]")
+    page.evaluate("window.perception.dispose()")
+    assert errors == [], errors
+
+
+@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1", reason="browser opt-in")
 def test_omx_recording_retry_outcome_stale_camera_and_disposal(tablet_page):
     base_url, page, errors = tablet_page
     page.goto(f"{base_url}/pilot")

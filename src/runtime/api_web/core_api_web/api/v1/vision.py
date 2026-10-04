@@ -47,11 +47,12 @@ def get_model_status(
 @vision_router.get("/front/frame")
 def get_front_camera_frame(
         sequence: int = Query(ge=1),
+        overlay: bool = Query(default=True),
         auth: AuthContext = Depends(viewer),
         svc: CoreServicesLike = Depends(get_services)):
     try:
         frame = svc.vision.frame_for_viewer(
-            auth.token_id, expected_sequence=sequence)
+            auth.token_id, expected_sequence=sequence, overlay=overlay)
     except VisionFrameAdvanced as exc:
         raise ApiError(
             "CAMERA_FRAME_ADVANCED", 409,
@@ -78,6 +79,8 @@ def get_front_camera_frame(
             "X-Rosy-Camera-Source": frame.source,
             "X-Rosy-Camera-Sequence": str(frame.sequence),
             "X-Rosy-Camera-Captured-At": str(frame.captured_at),
+            "X-Rosy-Camera-Frame-Id": frame.frame_id,
+            "X-Rosy-Camera-Variant": 'annotated' if overlay else 'raw',
         },
     )
 

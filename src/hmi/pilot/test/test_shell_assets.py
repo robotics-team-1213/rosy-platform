@@ -82,7 +82,7 @@ def _reachable() -> dict[str, str]:
 
 def test_the_import_walk_finds_the_known_edges():
     reachable = _reachable()
-    assert reachable["/common/evidence.js"] == "/pilot/assets/screens/drive.js"
+    assert reachable["/common/evidence.js"] == "/pilot/assets/vision.js"
     assert "/pilot/assets/screens/drive-auto.js" in reachable
     assert "/pilot/assets/autonomy.js" in reachable
 

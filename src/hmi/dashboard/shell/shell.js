@@ -7,6 +7,7 @@ import { mountPanels } from "./mount.js";
 import { createStore } from "./store.js";
 import { ROLE_LABEL, enumLabel } from "/common/core_ui_logic.js";
 import { dashboardLoginHref } from "../surface-navigation.js";
+import { createNode } from "../dom.js";
 
 const REFRESH_MS = 5_000;
 const surface = document.body.dataset.surface;
@@ -46,30 +47,26 @@ function showStatus(text) {
   status.textContent = text || "";
 }
 
-function showLoginStatus(text) {
+function showLinkedStatus(text, href, label) {
   status.hidden = false;
-  const link = document.createElement("a");
-  link.className = "surface-auth-link";
-  link.href = dashboardLoginHref(`/${surface}`);
-  link.textContent = "같은 탭에서 로그인";
+  const link = createNode("a", "surface-auth-link", label);
+  link.href = href;
   status.replaceChildren(document.createTextNode(`${text} `), link);
 }
 
+function showLoginStatus(text) {
+  showLinkedStatus(text, dashboardLoginHref(`/${surface}`), "같은 탭에서 로그인");
+}
+
 function showRoleDeniedStatus() {
-  status.hidden = false;
-  const link = document.createElement("a");
-  link.className = "surface-auth-link";
-  link.href = "/console";
-  link.textContent = "운용 화면으로 이동";
-  status.replaceChildren(document.createTextNode("이 화면은 현재 계정 역할로 열 수 없습니다. "), link);
+  showLinkedStatus("이 화면은 현재 계정 역할로 열 수 없습니다.", "/console", "운용 화면으로 이동");
 }
 
 function renderSwitch(surfaces) {
   const nav = document.getElementById("surface-switch");
   nav.replaceChildren(...surfaces.map(({ id, title }) => {
-    const link = document.createElement("a");
+    const link = createNode("a", "", title);
     link.href = `/${id}`;
-    link.textContent = title;
     if (id === surface) link.setAttribute("aria-current", "page");
     return link;
   }));

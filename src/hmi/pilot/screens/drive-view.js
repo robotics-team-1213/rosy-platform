@@ -225,6 +225,8 @@ function buildHud() {
   const motion = el("span", MODE_LABEL.IDLE, {"data-drive-motion": "", "data-kind": "idle"});
   const cap = el("span", "", {"data-drive-fact": "cap"});
   const zoom = el("span", "", {"data-drive-fact": "zoom", hidden: ""});
+  const visibility = el("ui-status", "조도가 낮아 차선·물체를 판정할 수 없습니다", {
+    "data-drive-visibility": "", state: "warning", role: "status", "aria-live": "polite", hidden: ""});
   const facts = el("div", null, {"data-drive-facts": ""});
   facts.append(
     el("span", "…", {"data-drive-fact": "link"}),
@@ -233,7 +235,7 @@ function buildHud() {
     el("span", "—", {"data-drive-fact": "battery"}),
     el("span", "보정 중", {"data-drive-fact": "activity", hidden: ""}),
   );
-  hud.append(gauge, motion, cap, zoom, facts);
+  hud.append(gauge, motion, cap, zoom, facts, visibility);
   return hud;
 }
 
@@ -266,11 +268,21 @@ export function buildControls(profile) {
   reverse.setAttribute("kind", "toggle");
   pedals.append(forward, reverse);
   left.append(tune);
+  const modes = el("ui-actions", null, {"aria-label": "운전 모드"});
+  const manual = el("ui-button", "수동", {type: "button", kind: "segment", "data-drive-manual": "", "aria-pressed": "true"});
+  manual.setAttribute("kind", "segment");
+  modes.append(manual);
   if (profile.autonomy?.includes("line")) {
     const autoToggle = el("ui-button", "차선 자동", {type: "button", "data-drive-auto": "", "aria-pressed": "false"});
     autoToggle.setAttribute("kind", "segment");
-    left.append(autoToggle);
+    modes.append(autoToggle);
   }
+  const goal = el("ui-button", "지도 목표", {type: "button", kind: "segment", "data-drive-goal": ""});
+  goal.setAttribute("kind", "segment");
+  goal.disabled = true;
+  goal.setAttribute("reason", "목표 내비게이션 기능 확인 중");
+  modes.append(goal);
+  left.append(modes);
   left.append(pedals);
   if (profile.autonomy?.includes("line")) {
     const go = el("ui-button", "진행 ▶ 누르는 동안", {type: "button", size: "primary", tone: "good", "data-drive-go": "",

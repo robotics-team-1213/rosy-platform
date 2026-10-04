@@ -428,6 +428,32 @@
 - 결정: D-438
 - 교훈: 없음
 
+## 2026-10-04 · uncommitted · feat(api): stationary lane perception selection
+- 변경: GET/PUT `/api/v1/line-follow/perception`, viewer 조회/admin 변경, closed paint_source body와 Host Agent 릴레이. 실제 ModeMachine IDLE 예약으로 변경 중 주행 시작을 거부하며 실패 시에도 finally 해제한다. CORE status handover는 fresh sensor velocity와 calibration_active를 1초마다 기록한다.
+- 증거: host/API/systemd/status/line-follow 관련 395 passed, 2 skipped (Windows). concurrent Host apply 동안 mode/teleop/line-follow 거부 및 예약 해제 회귀 시험 포함. live 배포와 주행은 이 기록의 증거가 아니다.
+- gate 변화: SOURCE/LOCAL, DEVICE/FIELD 별도 검증.
+- 결정: `docs/plans/2026-10-04-learned-lane-driving-modes.md`
+- 교훈: 기존 Host Agent는 설치 경로가 없어 API만 추가하면 503이었다. signed native helper/unit 설치와 실제 status producer 주기를 함께 연결해야 한다.
+
+## 2026-10-04 · uncommitted · fix(api): serialize calibration and perception admission
+- 변경: 실제 ModeMachine의 shared idle_admission RLock으로 보정 busy_check+start와 perception calibration.current+IDLE reservation을 하나의 admission 결정으로 묶었다. 보정 session이나 activity를 생성하지 않는다. 내부 mode lock과 분리해 docking listener 잠금 순서를 보존한다.
+- 증거: calibration.start를 busy_check 직후 정지시킨 경쟁 시험은 변경 전 Host 설정이 통과해 실패했다. 수정 후 pending admission을 기다리고 실제 보정 session이 생기면 CALIBRATION_ACTIVE로 거부하며 Host 호출은 0회다. perception/calibration/command/line-follow/swarm focused 82 passed (Windows).
+- gate 변화: SOURCE/LOCAL. 실제 장치·주행 증거는 별도.
+- 결정: 독립 safety review 지적의 admission race 수정.
+
+## 2026-10-04 · uncommitted · feat(api): fresh keeper source readback
+- 변경: read-only `line/keep_debug` source를 기존 svc.vision latest cache로 수신한다. CORE perception 응답은 configured source와 실제 threshold/denoise/learned/denoise_fallback을 구분하고 receipt-monotonic age 및 producer의 실제 mask revision을 제공한다. 2초 초과·malformed·설정 불일치·clock reset 및 재시작 전 증거는 null이다. 주행 판단이나 privileged Host 경로를 바꾸지 않는다.
+- 증거: 신규 source/bridge/vision/API focused 33 passed. fallback·malformed·stale·model mismatch·stamp reset을 검증했다. 전체 CORE의 host card fake fixture는 실제 ModeMachine으로 보완했고 IR revision 거부 시험은 주입 clock으로 HTTP 지연과 분리했다. 최종 확장 시험 진행 중.
+- gate 변화: SOURCE/LOCAL. 기기에서 actual source 비율 및 실제 주행은 별도 확인.
+- 최종 증거: readback/API/bridge wiring/vision/host cards/line-follow 확장 102 passed (Windows), fresh fallback와 재시작 cache reset의 API 통합 시험 포함.
+- Review 보완: 실제 learned 표시는 요청 source와 served-mask revision이 모두 있어야 한다. bridge는 ROS camera-header clock으로 이미지 나이 0..2초를 검증한 뒤 receipt-monotonic TTL 2초를 적용한다. pure cache 시험은 services/test 소유 경로로 이동했다.
+
+## 2026-10-04 · uncommitted · feat(recording): 원본과 검토 전 주석 옵션
+
+- 변경: POST recordings는 optional closed preview_mode(raw/annotated)를 받고 생략은 raw다. typed start 서비스와 신선한 recorder status가 확인될 때만 annotated capability를 표시한다. 요청한 mode와 실제 성공 응답이 다르면 소유권을 만들지 않고 거절한다. 기존 SetBool raw/stop은 유지한다.
+- 변경: 기존 front frame API에 overlay=false 원본 variant와 동일 capture provenance header를 더한다. video upload는 pair_group_id32hex와 mode를 함께 검증하며 원본이 먼저 보존된 동일 group/time/count에서만 주석을 저장한다. 주석은 model_unreviewed로서 사람이 검토한 라벨이 아니다. API ref/app v1.91, envelope1.0 유지.
+- 증거: recording-api-red.txt 9 failed로 기존 미구현 경로를 확인한 뒤 focus162 passed,1 skipped; malformed evidence/API import boundary 최종 검증 통과. 모든 시험 scratch는 X:/DevTemp/rosy-lane-device-20261004.
+- gate 변화: SOURCE/LOCAL. 실제 장치 녹화와 브라우저 영상 파일 검증은 별도다.
 ## 2026-10-04 · uncommitted · feat(ui): 기본 dashboard 진입 자산 허용
 
 - 변경: dashboard 정적 허용 목록에 entry-router.js, dashboard-entry.js, dashboard-entry.css 세 자산만 추가했다. CMake 설치 목록과 맞추며 인증·안전 API의 서버 권한 계약은 변경하지 않았다.

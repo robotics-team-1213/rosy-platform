@@ -1520,6 +1520,18 @@
 - Decision: D-438
 - Lesson: a shared cached snapshot must be enriched per response on copies, never mutated in place.
 
+## 2026-10-04 · uncommitted · feat(server): D-447 (a) gather reads fresh hub snapshots first
+- Change: `hub/registry.py` `RobotRecord.last_heartbeat_monotonic` + read-only `find()` (gather must not create records); `hub/hub.py` `_heartbeat` stamps arrival (`time.monotonic()`); `server/console.py` `snapshot()` gathers per-robot via `_gather_state()` — a hub record that is online, has a snapshot, and whose heartbeat arrived within `hub_state_max_age_s` (new ctor param, default 3.0 s) answers from the registry `StateSnapshot` and skips the REST GET; stale/offline/unknown robots fall back to REST as before. Rows gain additive `gather_source: "hub"|"rest"|null`. No schema, endpoint, or wire change; `SharedGather` 1 s reuse untouched.
+- Evidence: new `test/test_server_gather_source.py` 6 passed (fresh-skips-REST, stale falls back, offline falls back, REST-failure row shape unchanged, no record creation, heartbeat stamp); `python -m pytest src/site/fleet/test -q` 1683 passed, 7 skipped (2026-10-04 Windows, run.txt compared via `test/known_failures.py`: 0 new); flake8 findings on touched files are pre-existing on main (noqa line offset, hub.py W293) and CI flake8 is non-gating.
+- Gate: none. SOURCE/LOCAL only; no robot, no hub socket in this run.
+- Decision: D-447 (a). (b) robot shell `store.js` `/ws/state` subscription is the next pass under the same ADR.
+- Lesson: none
+
+## 2026-10-04 · uncommitted · test: API v1.91 문서 계약 유지
+
+- 변경: API 문서 개정에 맞춰 Fleet 문서 버전 pin 세 곳을 v1.91로 갱신한다. task·intent·물리 상태·cursor 본문 검사는 유지한다.
+- 증거: mission progress 및 task contract 문서 회귀 22 passed.
+- gate 변화: SOURCE/LOCAL. Fleet 배포와 물리 제출 검증은 포함하지 않는다.
 ## 2026-10-04 · uncommitted · feat(web): D-439 Fleet 작업 탐색과 보정 미리보기 수명
 
 - 변경: 설치를 로봇 등록·카메라 연결 승인·카메라 설치/보정의 공용 task chooser로 구분한다. 모든 작업 DOM과 입력·credentials·source·corners는 유지하고 viewer/401에서도 읽기 탐색과 발견 재시도를 허용한다. 관제의 예외·로스터·지도를 우선 배치하고 대형·신호·기록을 후속 작업으로 묶는다. 발견 실패는 이전 행을 지우고 empty/offline/expired/unsupported 상태와 재시도를 표시한다.

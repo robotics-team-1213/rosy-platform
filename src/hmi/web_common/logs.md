@@ -496,6 +496,11 @@
 - gate 변화: 공용 라이브러리의 DEVICE/FIELD는 N/A; 소비 앱 장치 증거와 구별한다.
 - 결정: D-432 공용 디자인 규칙의 소유권.
 
+## 2026-10-04 · uncommitted · feat: 원본 픽셀 보존과 같은 촬영 시점의 표시본
+
+- 변경: fetchCameraPair가 variant·sequence·captured_at·frame_id를 검증한다. 원본 canvas에는 drawImage만 사용하고 조작 문구는 표시본에만 넣는다. 원본/표시본 녹화기와 파일·공통 pair_group_id를 분리하고 종료 시 두 stream을 해제한다. PC sidecar에서 표시본을 model_unreviewed로 구분한다.
+- 증거: capture/shared-controls/recording-view 43 passed; 429·불일치·구형 서버·원본 픽셀·두 파일·종료 정리 회귀 포함.
+- gate 변화: SOURCE/LOCAL. ARM64/device/field evidence remains separate.
 ## 2026-10-04 · uncommitted · feat(ui): 재사용 가능한 절차 작업 선택기
 
 - 변경: `task-chooser.js`/`.css`를 단일 공유 자산 대장과 CMake 설치 목록에 등록한다. 기존 segment 버튼·native field·토큰·반응형 단계를 재사용한다. 안정된 작업 ID, 선택 표시, 방향/Home/End 키, 모바일 선택과 포커스, 전환 대기·거부·오류·시간 제한, 종료 시 선택 잠금과 리스너 정리를 제공한다. 데이터 요청·인증·패널 lifecycle은 호출 표면이 소유한다.
