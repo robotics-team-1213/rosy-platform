@@ -70,8 +70,8 @@
 
 ## 최근 기록
 
+- 2026-10-04 · uncommitted · verify(D-441): 최초 설치와 실제 후속 자동 갱신 확인
 - 2026-10-04 · uncommitted · D-446 clean older checkout permits signed execution
 - 2026-10-04 · uncommitted · D-446 remote integration after source migration
 - 2026-10-04 · uncommitted · fix: native 차선 설정과 SSH 페어링 병합
 - 2026-10-04 · uncommitted · fix: 릴리스 전환에서 Host Agent 종료 대기
-- 2026-10-04 · uncommitted · fix: 과노출 보조 조명 해제
