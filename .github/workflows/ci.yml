@@ -152,7 +152,12 @@ jobs:
           . /opt/ros/jazzy/setup.sh
           # 러너에는 Gazebo/ros_gz가 없다 — gz_sim은 aarch64처럼 CI에서도 제외한다.
           # gz_sim 테스트 스텝은 ros_gz_sim share 부재 시 스스로 skip 한다.
-          touch integrations/simulation/gazebo/COLCON_IGNORE
+          # Source-structure tests must still see this package after the build.
+          GZ_IGNORE=integrations/simulation/gazebo/COLCON_IGNORE
+          if [ ! -e "$GZ_IGNORE" ]; then
+            trap 'rm -f "$GZ_IGNORE"' EXIT
+            touch "$GZ_IGNORE"
+          fi
           # D-427: colcon runs from the repo root over the manifest's colcon_roots;
           # build/install/log land at the repo root, never inside a source root.
           COLCON_ROOTS="$(python3 tools/harness/colcon_roots.py)"

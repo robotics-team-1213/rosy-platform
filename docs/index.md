@@ -277,8 +277,8 @@
 
 ## 최근 기록
 
+- 2026-10-04 · uncommitted · fix: CI Gazebo 제외 파일의 수명
 - 2026-10-04 · uncommitted · fix: Windows SSH timeout 종료 경합
 - 2026-10-04 · uncommitted · fix: D-427 push5 통합 게이트 정합성
 - 2026-10-04 · uncommitted · D-427 push4 fast gate follow-up
 - 2026-10-04 · uncommitted · D-427 Pinky safety source integration
-- 2026-10-04 · uncommitted · D-427 push3 follow-up corrections

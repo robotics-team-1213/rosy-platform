@@ -4965,3 +4965,9 @@
 - 변경: 두 Windows 검증 helper에서 taskkill 오류는 추적 프로세스 종료가 확인된 때만 시간 초과로 유지한다. 살아 있는 프로세스의 native 오류와 silent nonzero는 다시 throw하며 HOLD·재실행 금지를 보존한다.
 - 증거: Windows 원본 검증과 종료 경합 시험 22 passed; 독립 실행 22 passed, APPROVE. docs/validation/d427-source-migration/windows-ssh-timeout-cleanup-2026-10-04.md.
 - gate 변화: SOURCE/LOCAL Windows PowerShell 5.1. 기존 push gate는 1 failed이며 수정 후보 전체 gate·CI·ARM64·DEVICE·FIELD는 별도 검증한다.
+
+## 2026-10-04 · uncommitted · fix: CI Gazebo 제외 파일의 수명
+
+- 변경: CI colcon 빌드에서만 만든 Gazebo `COLCON_IGNORE`는 성공·실패 종료 때 제거한다. 기존 제외 파일은 보존하여 빌드 뒤 소스 구조 검사가 실제 패키지를 계속 볼 수 있게 했다.
+- 증거: main bcf1010b의 CI 37174760531에서 구조 시험 두 건이 임시 제외 파일 때문에 실패했다. 실제 Bash 빌드 단계 회귀는 수정 전 2 failed/2 passed, 수정 후 관련 시험 12 passed다. 성공·종료 코드 42에서 빌드 중 제외와 종료 뒤 복원, 기존 파일 bytes 보존을 검증했다.
+- gate 변화: SOURCE/LOCAL 증거만 추가한다. 원격 CI 재검증과 서명 후보의 실제 제어 PC 설치·HTTPS·타이머 수락은 아직 남아 있다.
