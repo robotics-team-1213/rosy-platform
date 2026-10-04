@@ -521,3 +521,9 @@
 - 변경: `api/v1/vision.py`에 `GET /api/v1/vision/front/stream`(operator, multipart boundary `frame`, `?overlay=`) 추가 — 새 sequence만 내보내고, 운전자 교체·클라이언트 끊김에 슬롯 해제. `deps.py`에 `VisionStreamRefused` 재수출과 `CoreServicesLike.vision_stream` 추가. `control.py` teleop 수락 뒤 `vision_stream.on_teleop` 훅(pilot_recording 훅과 같은 실패 무시 규약).
 - 증거: `middleware/core/gateway/test/test_vision_stream.py` 8 PASS(401·미운전 409·BUSY·새 sequence만·운전자 교체·관전 폴링 불변·연결 종료 해제·driver 불투명 id). API Ref v1.100(D-18).
 - gate 변화: SOURCE. 발행 주기 상항(12 fps 요청)은 로봇 측 ROS-SIM/DEVICE 사항으로 이 경로 밖.
+
+## 2026-10-05 · uncommitted · docs(api): 무마커 시작점 계약 v1.103 표시
+
+- 변경: Fleet 전용 시작점 API의 additive 계약 버전 v1.103을 API reference와 CORE 앱 설명 metadata에 맞춘다. CORE route/envelope/로봇 동작 변경 없음.
+- 증거: 현행 버전 pin과 Fleet API 관련 검증 묶음 149 passed, known_failures 신규 0. 전체 CORE/ARM/현장 수용은 별도다.
+- gate 변화: 계약 설명 정합만 보강한다.

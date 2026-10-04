@@ -338,6 +338,8 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
             close_observation_source = getattr(post_action_observation_source, "aclose", None)
             if callable(close_observation_source):
                 await close_observation_source()
+            if getattr(app.state, "start_points", None) is not None:
+                app.state.start_points.close()
 
     app = FastAPI(
         title="ROSY Fleet",
@@ -443,6 +445,10 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         from fleet.server.tracking_routes import install_tracking_routes
         install_tracking_routes(app, tracking=tracking, require_operator=require_operator,
                                 read_guard=read_guard, operator_guard=operator_guard)
+        from fleet.server.start_points import StartPointService
+        from fleet.server.start_point_routes import install_start_point_routes
+        install_start_point_routes(app, service=StartPointService(tracking),
+                                   read_guard=read_guard, require_operator=require_operator)
     install_signal_routes(app, signals=console._signals, require_viewer=require_viewer,
                           require_operator=require_operator, auth_configured=bool(principals or console_token))
 
