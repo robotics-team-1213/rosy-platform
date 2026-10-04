@@ -137,8 +137,9 @@ def load_config(path) -> dict:
 
 def config_from_watch(watch_cfg: dict, hostname: str | None = None) -> dict:
     """The site watcher's config seen as an operator config (doctor on the site PC)."""
+    import peer_targets
     cfg = {"operator": f"site:{hostname or socket.gethostname()}",
-           "robots": {r["name"]: r["host"] for r in watch_cfg["robots"]},
+           "robots": {r["name"]: peer_targets.resolve(r) for r in watch_cfg["robots"]},
            "ssh": dict(watch_cfg["ssh"]), "intake_out": watch_cfg["intake_out"]}
     if watch_cfg.get("state_file"):
         cfg["state_file"] = watch_cfg["state_file"]
@@ -570,6 +571,11 @@ def main(argv=None, *, runner=subprocess.run, connect=socket.create_connection,
             cfg = load_config(path)
         robots = [args.robot] if getattr(args, "robot", None) else list(cfg["robots"])
         hosts = [_host(cfg, r) for r in robots]
+    except RuntimeError as exc:
+        if getattr(exc, 'kind', None) not in operator_ssh.KIND_EXIT:
+            raise
+        print(f"✗ network: {exc} — retry when the approved robot is reachable")
+        return operator_ssh.KIND_EXIT[exc.kind]
     except (OSError, ValueError) as exc:
         print(f"✗ config — fix: {exc}")
         return 2

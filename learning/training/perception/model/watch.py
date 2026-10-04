@@ -57,8 +57,9 @@ Config (YAML):
   backend: inbox                          # optional: inbox (default) | hf
   store: /srv/rosy/store                  # backend inbox: the store folder (local, NAS, Drive)
   repo: org/lane-seg                      # backend hf: the HF model repo
-  robots: [{name: <robot-id>, host: <hostname>.local, user: rosy}]   # user optional
-      # host is a name (mDNS); an IP works but is not recommended: the network renumbers.
+  robots: [{name: <robot-id>, expected_hostname: <approved DNS name>, user: rosy}]
+      # Optional mdns_hostname (.local) and allow_dns_fallback: true are local policy.
+      # A host-only entry is explicit legacy compatibility, not a discovery fallback.
       # The host key is pinned in known_hosts under `name` (ssh HostKeyAlias), not the host.
   ssh: {identity: <site key>, known_hosts: <pinned file>}     # both required
   intake_out: /var/lib/rosy-model-watch/models
@@ -104,7 +105,7 @@ import tempfile
 from pathlib import Path
 
 MODEL_DIR = Path(__file__).resolve().parent
-for _p in (MODEL_DIR, MODEL_DIR.parent):
+for _p in (MODEL_DIR, MODEL_DIR.parent, MODEL_DIR.parents[3] / 'contracts' / 'foundation'):
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
 
@@ -112,7 +113,6 @@ import store  # noqa: E402
 
 DEFAULT_CONFIG = "/etc/rosy/model-watch.yaml"
 _REPO = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*")
-_NAME = re.compile(r"[A-Za-z0-9._][A-Za-z0-9._-]*")
 _SHA = re.compile(r"[0-9a-f]{40}")
 import operator_ssh  # noqa: E402  (learning/training/perception, on sys.path above)
 from deliver import HELD_EXIT, LOCK_BUSY_EXIT as BUSY_EXIT  # noqa: E402  no attempt used
@@ -173,9 +173,8 @@ def load_config(path) -> dict:
         raise ValueError("robots: at least one {name, host}")
     names = set()
     for r in robots:
-        if not isinstance(r, dict) or not all(
-                isinstance(r.get(k), str) and _NAME.fullmatch(r[k]) for k in ("name", "host")):
-            raise ValueError(f"robots: bad entry {r!r}")
+        import peer_targets
+        peer_targets.validate(r)
         if r["name"] in names:
             raise ValueError(f"robots: duplicate name {r['name']!r}")
         names.add(r["name"])
@@ -258,7 +257,8 @@ def default_inbox_intake(cfg: dict):
 def default_deliverer(cfg: dict):
     def push(robot: dict, rev: str) -> int:
         import deliver
-        return deliver.main(["push", robot["host"], rev, "--models", str(cfg["intake_out"]),
+        import peer_targets
+        return deliver.main(["push", peer_targets.resolve(robot), rev, "--models", str(cfg["intake_out"]),
                              "--user", robot.get("user", "rosy"),
                              "--host-key-alias", robot["name"],
                              "--identity", cfg["ssh"]["identity"],
@@ -272,7 +272,8 @@ def default_deliverer(cfg: dict):
 def default_observer(cfg: dict):
     def read(robot: dict) -> dict:
         import deliver
-        return deliver.observe(robot["host"], user=robot.get("user", "rosy"),
+        import peer_targets
+        return deliver.observe(peer_targets.resolve(robot), user=robot.get("user", "rosy"),
                                identity=cfg["ssh"]["identity"],
                                known_hosts=cfg["ssh"]["known_hosts"],
                                host_key_alias=robot["name"])
@@ -515,6 +516,9 @@ def main(argv=None, *, list_commits=hf_list_commits, intake_fn=None, deliver_fn=
             try:
                 code = deliver_fn(robots[name], rev)
             except Exception as exc:  # noqa: BLE001 - one robot never blocks the others
+                if getattr(exc, "kind", None) in operator_ssh.KIND_EXIT:
+                    state = net_failure(state, name, exc.kind, str(exc))
+                    continue
                 code, error = 1, f"{type(exc).__name__}: {exc}"
             else:
                 error = None if code == 0 else f"deliver exit {code}"

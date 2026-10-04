@@ -53,6 +53,15 @@ UID의 실제 browser, 모델 호스트의 실제 SSH 광고, 인증된 웹 목�
 
 ### Consequences
 
+현재 Dock·Signal의 자동 주소 변경은 역할 목록의 관찰까지만 적용한다. Dock의
+`agent_url`은 DockingManager의 DOCKED·충전 확인·배터리 판단에 연결돼 있어 GET-only 변경도
+물리 판단 권한을 바꾼다. Signal의 같은 `base_url`은 token을 쓰는 `/status`와 `/command`를
+공유하며 `/status`도 firmware watchdog을 갱신한다. 현재 둘은 인증된 서버 신원 pin이
+없고 응답 device id를 설정 신원과 대조하지 않는다. 광고로 이 consumer 주소를 바꾸거나
+신원 확인 전 token을 보내지 않는다. 실제 충전·신호 제어의 주소 추종은 서버 신원과
+기존 단일 감독자 계약을 충족한 뒤 별도 검증한다. `/observed`는 카메라 관찰 서버이며
+ESP32 Signal 서비스와 같은 endpoint로 취급하지 않는다.
+
 주소 필드 대신 승인된 대상 신원을 저장하고 서비스별 adapter를 공용 resolver에
 연결해야 한다. 기존 HTTP 장비의 신뢰 전제가 부족하면 관찰 목록에만 나타나며,
 물리 제어를 지원하려면 해당 장비의 승인된 인증 규약이 먼저 충족돼야 한다.

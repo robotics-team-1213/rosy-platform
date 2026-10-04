@@ -5288,3 +5288,9 @@
 - 변경: 모든 표면에서 주소 입력 대신 장비 이름과 역할로 찾는다. 같은 LAN 발견과 승인 directory를 구분하고 기존 CA·token·SSH HostKeyAlias를 보존한다. 모델 PC는 실제 SSH 서비스를 광고하며 가짜 추론 API는 만들지 않는다.
 - 증거: docs/plans/2026-10-04-network-peer-discovery.md. 컨테이너 의존성 및 실제 namespace, 재접속 신원 resolver, 승인 목록 UI를 순서대로 구현·독립 검증한다.
 - gate 변화: 구조 결정 Accepted; 코드·CI·실제 장비·다른 망 연결 수락은 각각 별도 증거로 기록한다.
+
+## 2026-10-04 · uncommitted · D-452 모델 SSH 대상과 광고
+
+- 변경: 승인 논리 이름으로 매 관찰·배포 전에 주소를 해석한다. 실제 SSH listener만 광고하고 종료·손실 시 소유 광고 child를 회수한다. CLI doctor도 같은 profile을 사용한다. Dock·Signal active consumer는 충전 판단·watchdog/credential 경계를 확인해 재지정하지 않는다.
+- 증거: 모델199 PASS/22 기존 platform SKIP/NEW0, 독립 SPEC·Quality·Safety source PASS. docs/validation/network-peer-discovery-2026-10-04/source-checkpoint.md.
+- gate 변화: SOURCE/LOCAL focused; 실제 모델 PC 설치·광고·다른 망 연결·서명 배포는 별도 미검증.

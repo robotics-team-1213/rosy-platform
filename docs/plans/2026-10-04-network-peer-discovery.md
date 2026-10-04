@@ -13,7 +13,8 @@
    모델 워처의 논리 이름 resolver는 매 연결마다 주소를 갱신하고 기존 HostKeyAlias·
    known_hosts·서명/intake/shadow 검사를 유지한다. 가짜 모델 추론 listener는 만들지 않는다.
 4. CORE FleetAgent의 승인된 hostname/CA profile은 explicit URL보다 발견을 우선한다.
-   Dock·Signal은 unsigned 광고의 관찰/제어 경계를 유지해 resolver를 연결한다.
+   Dock·Signal은 unsigned 광고를 역할 목록에만 관찰한다. 현재 active consumer의 URL은
+   충전 판단·token 전송·watchdog 감독을 바꾸므로 광고로 재지정하지 않는다(D-452 경계).
 5. protocol/TXT fixture·API ref·ADR를 실제 변경과 함께 갱신한다. 각 소유 범위의
    의미 있는 주소 변경·만료·중복·잘못된 신원·종료 검사를 실행하고 독립 검토한다.
 6. 최종 SHA를 push하고 정확한 원격 CI·서명 후보·사이트/앱/로봇 실행 SHA를 확인한다.
