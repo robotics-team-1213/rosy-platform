@@ -30,7 +30,7 @@ NS="${ROSY_NAMESPACE:+/$ROSY_NAMESPACE}"   # 네임스페이스가 비어 있으
 |---|---|---|---|
 | 이미지 (SD 재굽기) | `onnxruntime`과 의존 wheel(해시 고정)을 전용 prefix `/opt/rosy/learned-perception/site-packages`에, `/var/lib/rosy/models` `root:rosy-camera 0750` | `deploy/robot/pinky_pro/image/learned-perception-requirements.txt`, `deploy/robot/pinky_pro/image/customize-rootfs.sh`, `deploy/robot/pinky_pro/native/tmpfiles-rosy-state.conf` | 벤치 설치 스크립트 (C절) |
 | 부트·호스트 (유닛) | `rosy-camera.service`의 `EnvironmentFile=-/etc/rosy/learned-perception.env` | `deploy/robot/pinky_pro/native/rosy-camera.service` | 릴리스 사본에서 유닛 손 설치 (D절 2) |
-| 페이로드 (서명 릴리스) | `learned_lane_node`, `capture_trigger_node`, 스냅샷 녹화, `camera_preview.launch.py`의 두 스위치 | `src/runtime/sensing/` | 페이로드 푸시 (D절 1) |
+| 페이로드 (서명 릴리스) | `learned_lane_node`, `capture_trigger_node`, 스냅샷 녹화, `camera_preview.launch.py`의 두 스위치 | `middleware/perception/` | 페이로드 푸시 (D절 1) |
 | 운영자 설정 (로봇 한 대) | `/etc/rosy/learned-perception.env`의 `ROSY_LEARNED_SHADOW`, `ROSY_CAPTURE` | 예시: `deploy/robot/pinky_pro/native/learned-perception.env.example` | `sudo install` (D절 3) |
 
 스위치 파일이 없으면 두 기능 모두 꺼진다(유닛의 `-`). 값은 `true`와 `false`만 인정한다. 그 밖의

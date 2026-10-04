@@ -7,10 +7,8 @@ adr_log: docs/reference/ROSY ADR Log.md
 
 # IDs absent from the ADR log on purpose. Remove an entry once the ADR is written.
 adr_gaps:
+  D-440: "ADR (per-device power policy) is reserved on feat/device-power-policy; implementation integration does not establish the missing ADR body"
   D-428: "ADR written on branch feat/d428-web-face-sweep (8ce5cc237), not yet on main; remove when it lands"
-  D-440: "ADR on branch feat/device-power-policy (per-device power policy), not yet on main; remove when it lands"
-  D-442: "ADR on branch docs/d442-motion-intent-port (Motion Intent + DeviceControlPort), not yet on main; remove when it lands"
-  D-443: "ADR on branch docs/d440-site-device-contract (rosy.site-device/1), not yet on main; remove when it lands"
   D-29: "unused; the vision accelerator shield design only proposed the number"
   D-324: "unused; the Pinky artifact-selection ADR was first written as D-324 and renumbered to D-325 to avoid a same-day collision (commit 45f9470b, 2026-09-29). Remove if another session lands an ADR as D-324"
   D-35: "reserved for the swarm formation HOLD decision pending the sim bench"
@@ -32,40 +30,40 @@ stale_after_commits: 5
 # shipped-code surface. Shared compose/Nav2 slice files are contracts only.
 modules:
   - name: core
-    path: src/runtime/gateway
-    tests: [src/runtime/gateway/test]
+    path: middleware/core/gateway
+    tests: [middleware/core/gateway/test]
     functional_kind: pytest
-    functional: [src/runtime/gateway/test]
+    functional: [middleware/core/gateway/test]
   - name: deploy
     path: deploy
     tests: [test]
     functional_kind: host-contract
     functional: [test/test_robot_runtime.py]
   - name: control
-    path: src/runtime/sensing
-    tests: [src/runtime/sensing/test, test/test_control_absorption_package.py]
+    path: middleware/perception
+    tests: [middleware/perception/test, test/test_control_absorption_package.py]
     functional_kind: pytest
-    functional: [src/runtime/sensing/test]
+    functional: [middleware/perception/test]
   - name: fleet
-    path: src/site/fleet
-    tests: [src/site/fleet/test]
+    path: operations/fleet
+    tests: [operations/fleet/test]
     functional_kind: pytest
-    functional: [src/site/fleet/test]
+    functional: [operations/fleet/test]
   - name: games
-    path: src/site/games
-    tests: [src/site/games/test, test/test_rosy_games_surface.py]
+    path: operations/apps/games
+    tests: [operations/apps/games/test, test/test_rosy_games_surface.py]
     functional_kind: pytest
-    functional: [src/site/games/test]
+    functional: [operations/apps/games/test]
   - name: rosy_vision
-    path: src/site/vision
-    tests: [src/site/vision/test]
+    path: operations/vision
+    tests: [operations/vision/test]
     functional_kind: pytest
-    functional: [src/site/vision/test]
+    functional: [operations/vision/test]
   - name: rosy_cell
-    path: src/site/cell
-    tests: [src/site/cell/test]
+    path: operations/processes/cell
+    tests: [operations/processes/cell/test]
     functional_kind: pytest
-    functional: [src/site/cell/test]
+    functional: [operations/processes/cell/test]
   - name: palletizing
     path: operations/processes/palletizing
     tests: [test/test_platform_palletizing_compat.py, test/architecture/test_platform_dependency_boundaries.py]
@@ -74,121 +72,121 @@ modules:
   # D-374: Android JVM tests need a JDK/Gradle, so the host functional surface is the
   # registry/icon/role contract tests; `gradlew testDebugUnitTest` runs in android.yml.
   - name: cam
-    path: src/site/cam
-    tests: [test/architecture/test_app_roles.py, src/hmi/web_common/test/test_surface_icons.py]
+    path: operations/ui/cam
+    tests: [test/architecture/test_app_roles.py, shared/web/test/test_surface_icons.py]
     functional_kind: host-contract
-    functional: [test/architecture/test_app_roles.py, src/hmi/web_common/test/test_surface_icons.py]
+    functional: [test/architecture/test_app_roles.py, shared/web/test/test_surface_icons.py]
   - name: gz_sim
-    path: src/sim/gz_sim
-    tests: [src/sim/gz_sim/test]
+    path: integrations/simulation/gazebo
+    tests: [integrations/simulation/gazebo/test]
     functional_kind: host-contract
-    functional: [src/sim/gz_sim/test/test_gz_package_contract.py, src/sim/gz_sim/test/test_world_to_map.py, src/sim/gz_sim/test/test_world_profiles.py]
+    functional: [integrations/simulation/gazebo/test/test_gz_package_contract.py, integrations/simulation/gazebo/test/test_world_to_map.py, integrations/simulation/gazebo/test/test_world_profiles.py]
   - name: navigation
-    path: src/runtime/navigation
+    path: middleware/core/navigation
     tests: [test/test_nav2_hardware_slice.py, test/test_footprint_profiles.py, test/test_nav2_profile_limits.py, test/test_nav2_bandwidth_contracts.py, test/test_flask_launch_removed.py]
     functional_kind: pytest
     functional: [test/test_footprint_profiles.py, test/test_nav2_profile_limits.py]
   - name: bringup
-    path: src/products/pinky_pro/bringup
-    tests: [test/test_motor_control.py, test/test_bringup_motor_contracts.py, test/test_dynamixel_driver_safety.py, src/products/pinky_pro/bringup/test/test_command_deadman.py, src/products/pinky_pro/bringup/test/test_pinky_pro_adapter.py]
+    path: middleware/apps/device/pinky/bringup
+    tests: [test/test_motor_control.py, test/test_bringup_motor_contracts.py, test/test_dynamixel_driver_safety.py, middleware/apps/device/pinky/bringup/test/test_command_deadman.py, middleware/apps/device/pinky/bringup/test/test_pinky_pro_adapter.py]
     functional_kind: pytest
-    functional: [src/products/pinky_pro/bringup/test/test_command_deadman.py, test/test_motor_control.py]
+    functional: [middleware/apps/device/pinky/bringup/test/test_command_deadman.py, test/test_motor_control.py]
   - name: emotion
-    path: src/hmi/face
-    tests: [src/hmi/face/test/test_info_screen.py, src/hmi/face/test/test_info_screen_boot.py, src/hmi/face/test/test_wifi_qr.py, test/test_nav2_hardware_slice.py]
+    path: middleware/ui/face
+    tests: [middleware/ui/face/test/test_info_screen.py, middleware/ui/face/test/test_info_screen_boot.py, middleware/ui/face/test/test_wifi_qr.py, test/test_nav2_hardware_slice.py]
     functional_kind: pytest
-    functional: [src/hmi/face/test/test_info_screen.py]
+    functional: [middleware/ui/face/test/test_info_screen.py]
   - name: led
-    path: src/products/pinky_pro/led
-    tests: [src/products/pinky_pro/led/test/test_led_package_contract.py, test/test_nav2_hardware_slice.py]
+    path: middleware/drivers/pinky_led
+    tests: [middleware/drivers/pinky_led/test/test_led_package_contract.py, test/test_nav2_hardware_slice.py]
     functional_kind: host-contract
-    functional: [src/products/pinky_pro/led/test/test_led_package_contract.py]
+    functional: [middleware/drivers/pinky_led/test/test_led_package_contract.py]
   - name: imu_bno055
-    path: src/drivers/imu_bno055
-    tests: [src/drivers/imu_bno055/test/test_package_contract.py, test/test_nav2_hardware_slice.py]
+    path: middleware/drivers/imu_bno055
+    tests: [middleware/drivers/imu_bno055/test/test_package_contract.py, test/test_nav2_hardware_slice.py]
     functional_kind: host-contract
-    functional: [src/drivers/imu_bno055/test/test_package_contract.py]
+    functional: [middleware/drivers/imu_bno055/test/test_package_contract.py]
   - name: sensor_adc
-    path: src/products/pinky_pro/adc
-    tests: [src/products/pinky_pro/adc/test/test_adc_package_contract.py, test/test_nav2_hardware_slice.py]
+    path: middleware/drivers/pinky_adc
+    tests: [middleware/drivers/pinky_adc/test/test_adc_package_contract.py, test/test_nav2_hardware_slice.py]
     functional_kind: host-contract
-    functional: [src/products/pinky_pro/adc/test/test_adc_package_contract.py]
+    functional: [middleware/drivers/pinky_adc/test/test_adc_package_contract.py]
   - name: lamp_control
-    path: src/products/pinky_pro/lamp
-    tests: [src/products/pinky_pro/lamp/test/test_lamp_package_contract.py, test/test_nav2_hardware_slice.py]
+    path: middleware/drivers/pinky_lamp
+    tests: [middleware/drivers/pinky_lamp/test/test_lamp_package_contract.py, test/test_nav2_hardware_slice.py]
     functional_kind: host-contract
-    functional: [src/products/pinky_pro/lamp/test/test_lamp_package_contract.py]
+    functional: [middleware/drivers/pinky_lamp/test/test_lamp_package_contract.py]
   - name: core_common
-    path: src/contracts/foundation
-    tests: [src/contracts/foundation/test]
+    path: contracts/foundation
+    tests: [contracts/foundation/test]
     functional_kind: pytest
-    functional: [src/contracts/foundation/test]
+    functional: [contracts/foundation/test]
   - name: core_events
-    path: src/runtime/events
-    tests: [src/runtime/events/test/test_audit.py, src/runtime/gateway/test/test_core_logic.py]
+    path: middleware/core/events
+    tests: [middleware/core/events/test/test_audit.py, middleware/core/gateway/test/test_core_logic.py]
     functional_kind: pytest
-    functional: [src/runtime/events/test/test_audit.py]
+    functional: [middleware/core/events/test/test_audit.py]
   - name: core_features
-    path: src/runtime/services
-    tests: [src/runtime/gateway/test/test_core_logic.py, src/runtime/services/test/test_docking.py, src/runtime/services/test/test_swarm.py, src/runtime/gateway/test/test_power.py, src/runtime/gateway/test/test_traffic_policy.py, src/runtime/services/test/test_teleop_intent.py]
+    path: middleware/core/services
+    tests: [middleware/core/gateway/test/test_core_logic.py, middleware/core/services/test/test_docking.py, middleware/core/services/test/test_swarm.py, middleware/core/gateway/test/test_power.py, middleware/core/gateway/test/test_traffic_policy.py, middleware/core/services/test/test_teleop_intent.py]
     functional_kind: pytest
-    functional: [src/runtime/gateway/test/test_core_logic.py, src/runtime/services/test/test_docking.py]
+    functional: [middleware/core/gateway/test/test_core_logic.py, middleware/core/services/test/test_docking.py]
   - name: core_api_web
-    path: src/runtime/api_web
-    tests: [src/runtime/api_web/test]
+    path: middleware/core/api_web
+    tests: [middleware/core/api_web/test]
     functional_kind: pytest
-    functional: [src/runtime/api_web/test]
+    functional: [middleware/core/api_web/test]
   - name: web_common
-    path: src/hmi/web_common
-    tests: [src/hmi/web_common/test/test_ui_token_contracts.py, src/hmi/web_common/test/test_palette_gates.py, src/hmi/web_common/test/test_headless_state.py]
+    path: shared/web
+    tests: [shared/web/test/test_ui_token_contracts.py, shared/web/test/test_palette_gates.py, shared/web/test/test_headless_state.py]
     functional_kind: host-contract
-    functional: [src/hmi/web_common/test/test_ui_token_contracts.py]
+    functional: [shared/web/test/test_ui_token_contracts.py]
   - name: dashboard
-    path: src/hmi/dashboard
-    tests: [src/hmi/dashboard/test]
+    path: middleware/ui/robot
+    tests: [middleware/ui/robot/test]
     functional_kind: host-contract
-    functional: [src/hmi/dashboard/test/test_dashboard_package.py]
+    functional: [middleware/ui/robot/test/test_dashboard_package.py]
   - name: pilot
-    path: src/hmi/pilot
-    tests: [src/hmi/pilot/test]
+    path: middleware/ui/pilot
+    tests: [middleware/ui/pilot/test]
     functional_kind: host-contract
-    functional: [src/hmi/pilot/test/test_stick.py]
+    functional: [middleware/ui/pilot/test/test_stick.py]
   - name: omx_adapter
-    path: src/products/omx/adapter
-    tests: [src/products/omx/adapter/test]
+    path: middleware/apps/device/omx/adapter
+    tests: [middleware/apps/device/omx/adapter/test]
     functional_kind: pytest
-    functional: [src/products/omx/adapter/test]
+    functional: [middleware/apps/device/omx/adapter/test]
   - name: interfaces
-    path: src/contracts/interfaces
-    tests: [src/contracts/interfaces/test/test_srv_surface.py]
+    path: contracts/ros_idl
+    tests: [contracts/ros_idl/test/test_srv_surface.py]
     functional_kind: interface-only
-    functional: [src/contracts/interfaces/test/test_srv_surface.py]
-    artifacts: [src/contracts/interfaces/srv/SetLed.srv, src/contracts/interfaces/srv/SetLamp.srv, src/contracts/interfaces/srv/SetBrightness.srv, src/contracts/interfaces/srv/Emotion.srv]
+    functional: [contracts/ros_idl/test/test_srv_surface.py]
+    artifacts: [contracts/ros_idl/srv/SetLed.srv, contracts/ros_idl/srv/SetLamp.srv, contracts/ros_idl/srv/SetBrightness.srv, contracts/ros_idl/srv/Emotion.srv]
   - name: pinky_pro
-    path: src/products/pinky_pro/profile
-    tests: [src/products/pinky_pro/profile/test]
+    path: middleware/apps/device/pinky/profile
+    tests: [middleware/apps/device/pinky/profile/test]
     functional_kind: host-contract
-    functional: [src/products/pinky_pro/profile/test/test_robot_package.py]
+    functional: [middleware/apps/device/pinky/profile/test/test_robot_package.py]
   - name: omx
-    path: src/products/omx/profile
-    tests: [src/products/omx/profile/test]
+    path: middleware/apps/device/omx/profile
+    tests: [middleware/apps/device/omx/profile/test]
     functional_kind: host-contract
-    functional: [src/products/omx/profile/test/test_omx_package.py]
+    functional: [middleware/apps/device/omx/profile/test/test_omx_package.py]
   - name: description
-    path: src/sim/description
-    tests: [src/sim/description/test/test_urdf_surface.py, test/test_robot_runtime.py]
+    path: middleware/apps/device/pinky/description
+    tests: [middleware/apps/device/pinky/description/test/test_urdf_surface.py, test/test_robot_runtime.py]
     functional_kind: host-contract
-    functional: [src/sim/description/test/test_urdf_surface.py]
+    functional: [middleware/apps/device/pinky/description/test/test_urdf_surface.py]
   - name: dock
-    path: firmware/dock
-    tests: [test/test_dock_contract.py, src/runtime/services/test/test_docking.py]
+    path: operations/site_devices/dock
+    tests: [test/test_dock_contract.py, middleware/core/services/test/test_docking.py]
     functional_kind: host-contract
     functional: [test/test_dock_contract.py]
   - name: signal
-    path: firmware/signal
-    tests: [test/test_signal_contract.py, firmware/signal/observer/test]
+    path: operations/site_devices/signal
+    tests: [test/test_signal_contract.py, operations/vision/signal_observer/test]
     functional_kind: host-contract
-    functional: [test/test_signal_contract.py, firmware/signal/observer/test]
+    functional: [test/test_signal_contract.py, operations/vision/signal_observer/test]
   - name: docs
     path: docs
     tests: [test/test_network_topology_contracts.py, test/test_harness_contracts.py]

@@ -17,9 +17,9 @@ Pinky 주행은 CORE가, OMX 팔은 장치 수용을 마친 OMX 로컬 제어기
 먼저 읽는다.
 
 - **CORE 단일 게이트웨이** — 외부 클라이언트는 ROS를 직접 쓰지 않고 CORE API로만
-  말한다(CORE SRS §1.3). `core`(`src/runtime/gateway`)가 유일한 외부 접점이다.
+  말한다(CORE SRS §1.3). `core`(`middleware/core/gateway`)가 유일한 외부 접점이다.
 - **유일한 `cmd_vel` publisher** — Command Manager(`core_features.command`)만 최종
-  주행 명령을 발행한다(D-2). `control`(`src/runtime/sensing`)의 legacy 최종
+  주행 명령을 발행한다(D-2). `control`(`middleware/perception`)의 legacy 최종
   publisher는 CORE와 병행하지 않는다.
 - **단일 프로세스** — CORE는 한 프로세스에서 메인 스레드 rclpy `MultiThreadedExecutor`,
   워커 스레드 uvicorn+FastAPI로 돈다(D-1). 진입점은 `ros2 run core core`.
@@ -55,10 +55,10 @@ site/·hmi/ 경로만으로 PC 배치를 추론하지 않는다. 실행과 후�
 
 | 질문 | 배치 기준 | 현재 예 |
 |---|---|---|
-| 계약·타입인가? | ROS 인터페이스는 `src/contracts/interfaces`, 공통 Python 계약 모듈은 의미에 따라 `src/contracts/foundation`에 둔다. 계약은 동작을 실행하지 않는다. | `interfaces`, `core_common` |
+| 계약·타입인가? | ROS 인터페이스는 `contracts/ros_idl`, 공통 Python 계약 모듈은 의미에 따라 `contracts/foundation`에 둔다. 계약은 동작을 실행하지 않는다. | `interfaces`, `core_common` |
 | 로봇 실행 구성요소인가? | ROS 실행 패키지는 `src/runtime/<role>`에 둔다. `runtime/`은 모든 제품이 공유하는 단일 엔진을 뜻하지 않는다. | `runtime/gateway`의 `core`는 Pinky 장치 미들웨어다. `runtime/sensing`의 `control`은 별도 ROS 패키지다. |
 | 제품별 소스·번역기인가? | 실제 제품 전용 프로필·bringup·ROS/vendor API adapter는 `src/products/<model>`에 둔다. adapter 경로만으로 최종 writer나 운용 수용을 선언하지 않는다. | `products/pinky_pro`, `products/omx/adapter` |
-| 현장 서버 기능인가? | 중앙 현장 서비스는 `src/site/<service>`에 둔다. Fleet은 작업 원장을 소유하고 장치 actuator를 쓰지 않는다. | `site/fleet`, `site/vision` |
+| 현장 서버 기능인가? | 중앙 현장 서비스는 `src/site/<service>`에 둔다. Fleet은 작업 원장을 소유하고 장치 actuator를 쓰지 않는다. | `site/fleet`, `operations/vision` |
 | 사용자 표시 자산인가? | 화면 자산은 `src/hmi/<surface>`에 둔다. 실제 제공 프로세스와 호스트는 서버·배포 정의에서 확인한다. | CORE가 제공하는 `hmi/dashboard`, Fleet이 제공하는 `site/fleet` console |
 | 드라이버·시뮬레이션인가? | 칩 수준 코드는 `src/drivers`, ROS/Gazebo 모델과 world는 `src/sim`에 둔다. | `drivers/imu_bno055`, `sim/description`, `sim/gz_sim` |
 | 어디서 설치·실행되는가? | 호스트별 설치·이미지·릴리스 closure는 `deploy/`에서 정의하고 package manifest와 빌드 규칙으로 검증한다. | `deploy/robot/pinky_pro`, `deploy/site`, `deploy/robot/pinky_pro/image`, `deploy/robot/pinky_pro/release` |
@@ -88,10 +88,7 @@ ROS/vendor 표현 사이의 변환에 두며, 그 자체로 별도 동작 owner�
     │   └── omx/                   # profile, adapter
     ├── drivers/imu_bno055/        # 칩 드라이버
     ├── site/
-    │   ├── fleet/                 # 현장 미션·작업 원장·콘솔 서버
-    │   ├── vision/                # Rosy Vision: 천장 카메라 입력·sighting 처리(패키지 rosy_vision)
-    │   ├── cam/                   # Rosy Cam: 천장 카메라 폰 앱(Android, ROS 패키지 아님)
-    │   └── games/                 # 게임 호스트
+    │   └── fleet/                 # 현장 미션·작업 원장·콘솔 서버
     ├── hmi/
     │   ├── dashboard/             # CORE API가 제공하는 operator 화면
     │   ├── face/                  # package: emotion
@@ -102,9 +99,14 @@ ROS/vendor 표현 사이의 변환에 두며, 그 자체로 별도 동작 owner�
     learning/
     ├── envs/isaac/                # package: isaac_sim — Isaac Sim 6.1 standalone integration; GPU runtime validation pending
     └── training/perception/       # D-356 학습 루프 도구(데이터셋·학습 인계·모델 배달)
+    operations/
+    ├── apps/games/                # package: games — 게임 호스트(D-427 wave 3b)
+    ├── processes/cell/            # package: rosy_cell — Rosy Cell 호환 facade(D-427 wave 3b)
+    ├── ui/cam/                    # Rosy Cam: 천장 카메라 폰 앱(Android, ROS 패키지 아님)
+    └── vision/                    # Rosy Vision: 천장 카메라 입력·sighting 처리(패키지 rosy_vision)
 
 폴더명과 ROS 패키지 이름은 항상 같지 않다(예: `runtime/gateway`는 `core`). site 앱은
-D-377에 따라 폴더 끝 이름이 `<word>`, 패키지 이름이 `rosy_<word>`다(`site/vision`은
+D-377에 따라 폴더 끝 이름이 `<word>`, 패키지 이름이 `rosy_<word>`다(`operations/vision`은
 `rosy_vision`). `products/omx/adapter`는 소스 위치를 말할 뿐 OMX 장치의 운영 writer
 수용 완료를 뜻하지 않는다. Fleet console은 `site/fleet` 서버가 제공하고 브라우저
 관제 PC는 별도 배치가 가능하다. 영상 경계는
@@ -161,13 +163,13 @@ python3 -m pytest test/test_harness_contracts.py test/architecture/test_module_s
   test/test_io_image_closure.py test/test_line_follow_contract_docs.py \
   test/test_behavior_test_ownership.py test/test_module_scorecard.py \
   test/test_release_boundary_guards.py test/test_robot_literals.py \
-  src/runtime/gateway/test/test_protocol_version_alignment.py \
-  src/runtime/gateway/test/test_event_catalogue.py \
-  src/runtime/gateway/test/test_console_layout.py \
-  src/runtime/gateway/test/test_host_cards.py \
-  src/runtime/gateway/test/test_host_hardware.py \
-  src/runtime/gateway/test/test_triage_contract.py \
-  src/runtime/gateway/test/test_host_status_summary.py -q
+  middleware/core/gateway/test/test_protocol_version_alignment.py \
+  middleware/core/gateway/test/test_event_catalogue.py \
+  middleware/core/gateway/test/test_console_layout.py \
+  middleware/core/gateway/test/test_host_cards.py \
+  middleware/core/gateway/test/test_host_hardware.py \
+  middleware/core/gateway/test/test_triage_contract.py \
+  middleware/core/gateway/test/test_host_status_summary.py -q
 python3 tools/harness/rosy_harness.py lint   # ADR 중복·mojibake·append-only·staleness
 
 # Full tier: 릴리스·현장 푸시 전, 또는 quick tier에 없는 묶음을 건드렸을 때.
@@ -175,10 +177,10 @@ source env.sh
 colcon --log-base log build --symlink-install --base-paths $(python3 tools/harness/colcon_roots.py) --build-base build --install-base install
 
 # core 단위 시험 (대부분 라이브 ROS 불필요)
-python3 -m pytest src/runtime/gateway/test/ src/runtime/events/test/ src/runtime/services/test/ src/hmi/web_common/test/ -v
+python3 -m pytest middleware/core/gateway/test/ middleware/core/events/test/ middleware/core/services/test/ shared/web/test/ -v
 
 # Fleet formation/relay/session/console (ROS 불필요)
-python3 -m pytest src/site/fleet/test/ -v
+python3 -m pytest operations/fleet/test/ -v
 
 # deploy·release·motor·Wi-Fi·호스트 계약
 python3 -m pytest test/ -v

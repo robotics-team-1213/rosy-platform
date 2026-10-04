@@ -12,7 +12,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 DOC = ROOT / "docs" / "deployment" / "learned-perception-pinky.md"
-REPO_PREFIXES = (".github/", ".claude/", "deploy/", "docs/", "src/", "test/", "tools/")
+REPO_PREFIXES = (".github/", ".claude/", "deploy/", "docs/", "src/", "test/", "tools/", "middleware/", "operations/", "contracts/", "learning/", "shared/", "integrations/")
 
 
 def _text() -> str:
@@ -52,7 +52,7 @@ def test_sections_a_to_g():
 def test_switch_matches_the_unit_and_the_launch_file():
     text = _text()
     unit = (ROOT / "deploy/robot/pinky_pro/native/rosy-camera.service").read_text(encoding="utf-8")
-    launch = (ROOT / "src/runtime/sensing/launch/camera_preview.launch.py").read_text(encoding="utf-8")
+    launch = (ROOT / "middleware/perception/launch/camera_preview.launch.py").read_text(encoding="utf-8")
     assert "EnvironmentFile=-/etc/rosy/learned-perception.env" in unit
     assert "EnvironmentFile=-/etc/rosy/learned-perception.env" in text
     for name in ("ROSY_LEARNED_SHADOW", "ROSY_CAPTURE"):
@@ -63,9 +63,9 @@ def test_switch_matches_the_unit_and_the_launch_file():
 
 def test_topics_and_commands_match_the_code():
     text = _text()
-    trigger = (ROOT / "src/runtime/sensing/control/capture_trigger_node.py").read_text(encoding="utf-8")
-    shadow = (ROOT / "src/runtime/sensing/control/learned_lane_node.py").read_text(encoding="utf-8")
-    status = (ROOT / "src/runtime/sensing/control/sensing/perception/learned/status.py").read_text(
+    trigger = (ROOT / "middleware/perception/control/capture_trigger_node.py").read_text(encoding="utf-8")
+    shadow = (ROOT / "middleware/perception/control/learned_lane_node.py").read_text(encoding="utf-8")
+    status = (ROOT / "middleware/perception/control/sensing/perception/learned/status.py").read_text(
         encoding="utf-8")
     assert "'capture/request'" in trigger
     assert re.search(r'ros2 topic pub --once "\$NS/capture/request" std_msgs/msg/String', text)

@@ -1,0 +1,48 @@
+import cv2
+import numpy as np
+import pytest
+from types import SimpleNamespace
+from dock_scene import marker_image
+from control.sensing.perception.visual_tags import detect_visual_tags
+
+
+def test_blank_frame_has_no_tag_and_does_not_invent_an_object_class():
+    if not hasattr(cv2, 'aruco'):
+        pytest.skip('OpenCV ArUco backend unavailable')
+    assert detect_visual_tags(np.full((240, 320, 3), 255, np.uint8)) == []
+
+
+@pytest.mark.parametrize("legacy_api", [False, True])
+def test_known_tag_identity_and_image_box_are_from_pixels(monkeypatch, legacy_api):
+    if not hasattr(cv2, 'aruco'):
+        pytest.skip('OpenCV ArUco backend unavailable')
+    calls = []
+    if legacy_api:
+        backend = cv2.aruco
+        draw = getattr(backend, "generateImageMarker", None) or backend.drawMarker
+
+        def detect(image, dictionary):
+            calls.append("detect")
+            if hasattr(backend, "ArucoDetector"):
+                return backend.ArucoDetector(dictionary).detectMarkers(image)
+            return backend.detectMarkers(image, dictionary)
+
+        monkeypatch.setattr(cv2, "aruco", SimpleNamespace(
+            DICT_4X4_50=backend.DICT_4X4_50,
+            getPredefinedDictionary=backend.getPredefinedDictionary,
+            drawMarker=draw, detectMarkers=detect))
+    marker = marker_image(7, 100)
+    image = np.full((240, 320, 3), 255, np.uint8)
+    image[70:170, 100:200] = marker[:, :, None]
+    tags = detect_visual_tags(image)
+    assert len(tags) == 1 and tags[0]['tag_id'] == 7
+    assert np.min(tags[0]['corners_px'], axis=0) == pytest.approx([100, 70], abs=2)
+    assert 'robot_id' not in tags[0] and 'distance_m' not in tags[0]
+    if legacy_api:
+        assert calls == ["detect"]
+
+
+def test_invalid_image_is_unavailable():
+    assert detect_visual_tags(None) is None
+    assert detect_visual_tags(np.empty((0, 320, 3), np.uint8)) is None
+    assert detect_visual_tags(np.zeros((240, 320, 1), np.uint8)) is None

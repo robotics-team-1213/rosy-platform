@@ -44,7 +44,7 @@ Every screen a person sees is registered in `web_common/surfaces.yaml`. Walk thi
    - Serve shared files from `web_common/shared-assets.json`; never add a per-server allowlist.
    - Robot screens use same-origin `/api/v1` and `/ws/*`. The WS token goes in the first frame, never the URL (D-193).
    - Send a CSP on every HTML response.
-6. **Verify:** `python -m pytest src/hmi/web_common/test -q` checks the registry, titles, ports and token copies.
+6. **Verify:** `python -m pytest shared/web/test -q` checks the registry, titles, ports and token copies.
 
 - Keep the physical source directory distinct from the ROS package name (web/ is web_common).
 - The browser workstation may differ from the host running Fleet or CORE. Follow D-275 and deployment configuration.

@@ -10,10 +10,10 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 for package_root in (
     ROOT / "contracts/skill/src",
-    ROOT / "modules/skills/api/src",
+    ROOT / "middleware/skills/api/src",
     ROOT / "operations/execution/src",
     ROOT / "middleware/execution/local/src",
-    ROOT / "modules/skills/manipulation/src",
+    ROOT / "middleware/skills/manipulation/src",
 ):
     if str(package_root) not in sys.path:
         sys.path.insert(0, str(package_root))
@@ -173,7 +173,7 @@ def test_skill_rejects_missing_evidence_and_malformed_inputs_before_ports():
 
 def test_skill_module_has_no_robot_or_persistence_imports():
     relative = (
-        "modules/skills/manipulation/src/rosy/skills/"
+        "middleware/skills/manipulation/src/rosy/skills/"
         "manipulation/transfer.py"
     )
     path = ROOT / relative

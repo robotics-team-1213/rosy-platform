@@ -30,7 +30,7 @@ import sys
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(REPO / "src" / "contracts" / "foundation"))
+sys.path.insert(0, str(REPO / "contracts" / "foundation"))
 
 from core_common.calibration_store import KINDS, CalibrationStore, check_values  # noqa: E402
 

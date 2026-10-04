@@ -28,7 +28,7 @@ def test_docs_tests_and_external_robot_products_need_no_pinky_artifact():
 
 def test_ros_workspace_changes_choose_native_payload():
     report = classify_paths(
-        ["src/runtime/gateway/core/api.py", "learning/envs/isaac/bridge.py"]
+        ["middleware/core/gateway/core/api.py", "learning/envs/isaac/bridge.py"]
     )
 
     assert report.impact == "native-payload"
@@ -50,7 +50,7 @@ def test_every_manifest_colcon_root_chooses_native_payload():
 def test_image_or_host_foundation_changes_choose_flashable_image():
     report = classify_paths(
         [
-            "src/products/pinky_pro/bringup/launch/robot.launch.py",
+            "middleware/apps/device/pinky/bringup/launch/robot.launch.py",
             "deploy/robot/pinky_pro/image/inputs.lock.yaml",
         ]
     )
@@ -61,7 +61,7 @@ def test_image_or_host_foundation_changes_choose_flashable_image():
 def test_unclassified_pinky_paths_force_review_even_with_payload_changes():
     report = classify_paths(
         [
-            "src/runtime/gateway/core/api.py",
+            "middleware/core/gateway/core/api.py",
             "deploy/robot/pinky_pro/release/updater.py",
         ]
     )

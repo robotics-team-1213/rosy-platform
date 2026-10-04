@@ -1,18 +1,18 @@
 .gitattributes text eol=lf
 *.sh text eol=lf
-src/sim/gz_sim/scripts/*.py text eol=lf
+integrations/simulation/gazebo/scripts/*.py text eol=lf
 
 # map_v2_fleet generated outputs must be byte-deterministic across checkouts
 # (test_map_v2_fleet_scene.py compares them byte for byte). core.autocrlf=true
 # would otherwise normalise the text .world/.yaml to CRLF on Windows checkout,
 # and could mangle the binary .stl/.pgm if git's binary heuristic misfires.
-# Paths follow the bundle: src/apps/control -> src/runtime/sensing (D-241).
-src/runtime/sensing/map/map_v2_fleet/worlds/*.world text eol=lf
-src/runtime/sensing/map/map_v2_fleet/meshes/*.stl binary
-src/runtime/sensing/map/map_v2_fleet/maps/*.pgm binary
-src/runtime/sensing/map/map_v2_fleet/maps/*.yaml text eol=lf
-"src/runtime/sensing/map/map_v2_fleet/260919 MAP FILE.STL" binary
-src/runtime/sensing/map/map_v2_fleet/lane_graph.yaml text eol=lf
+# Paths follow the bundle: src/apps/control -> middleware/perception (D-241).
+middleware/perception/map/map_v2_fleet/worlds/*.world text eol=lf
+middleware/perception/map/map_v2_fleet/meshes/*.stl binary
+middleware/perception/map/map_v2_fleet/maps/*.pgm binary
+middleware/perception/map/map_v2_fleet/maps/*.yaml text eol=lf
+"middleware/perception/map/map_v2_fleet/260919 MAP FILE.STL" binary
+middleware/perception/map/map_v2_fleet/lane_graph.yaml text eol=lf
 deploy/robot/native/rosy-diag text eol=lf
 # D-189: inputs.lock.yaml pins this file by SHA-256; its bytes must not change per checkout.
 deploy/robot/pinky_pro/image/device-python-requirements.txt text eol=lf

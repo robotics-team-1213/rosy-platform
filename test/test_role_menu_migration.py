@@ -7,7 +7,7 @@ import yaml
 
 
 ROOT = Path(__file__).resolve().parents[1]
-WEB = ROOT / "src" / "hmi" / "dashboard"
+WEB = ROOT / "middleware" / "ui" / "robot"
 
 
 def test_device_surface_contains_system_and_host_readbacks():

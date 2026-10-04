@@ -352,13 +352,13 @@ KNOWN_FIXTURES = frozenset({
 FIXTURE_ROOT = "test/"
 
 #: Journal prose that quotes an invented fixture value while describing its
-#: own removal (src/site/fleet/logs.md, 2026-09-29: the entry that replaced
+#: own removal (operations/fleet/logs.md, 2026-09-29: the entry that replaced
 #: an ``api_key="fixture-secret"`` literal with the allowlisted key quotes the
 #: old value). The code literal is gone; module logs are append-only, so the
 #: quote cannot be reworded. Pinned to one exact path per entry — the same
 #: value anywhere else, including that module's code, is still a finding.
 KNOWN_PROSE_QUOTES: dict[str, frozenset[str]] = {
-    "src/site/fleet/logs.md": frozenset({"fixture-secret"}),
+    "operations/fleet/logs.md": frozenset({"fixture-secret"}),
 }
 
 DEFAULT_EXCLUDED_SUFFIXES = frozenset(

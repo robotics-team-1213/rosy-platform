@@ -10,7 +10,7 @@ def test_robot_and_dev_envs_pin_cyclonedds():
     compose = (ROOT / "deploy" / "robot" / "pinky_pro" / "compose.yaml").read_text(encoding="utf-8")
     env_sh = (ROOT / "env.sh").read_text(encoding="utf-8")
     rosy_env = (
-        ROOT / "src" / "products" / "pinky_pro" / "bringup" / "scripts" / "rosy_env.sh"
+        ROOT / "middleware" / "apps" / "device" / "pinky" / "bringup" / "scripts" / "rosy_env.sh"
     ).read_text(encoding="utf-8")
     dockerfile = (ROOT / "deploy" / "robot" / "pinky_pro" / "Dockerfile").read_text(encoding="utf-8")
     assert "RMW_IMPLEMENTATION: rmw_cyclonedds_cpp" in compose
@@ -24,7 +24,7 @@ def test_robot_and_dev_envs_pin_cyclonedds():
 def test_gz_multi_pins_cyclone_and_localhost_discovery():
     """D-117 / D-120: 시뮬도 Cyclone. ROS_LOCALHOST_ONLY 는 쓰지 않는다."""
     launch = (
-        ROOT / "src" / "sim" / "gz_sim" / "launch" / "gz_multi.launch.py"
+        ROOT / "integrations" / "simulation" / "gazebo" / "launch" / "gz_multi.launch.py"
     ).read_text(encoding="utf-8")
     assert "rmw_cyclonedds_cpp" in launch
     assert "ROS_AUTOMATIC_DISCOVERY_RANGE" in launch
@@ -43,13 +43,13 @@ def test_env_sh_sets_localhost_discovery_range():
 def test_gz_bridges_do_not_carry_raw_images():
     """D-118: 생 Image 는 parameter_bridge / 기본 image_bridge 에 없다."""
     template = (
-        ROOT / "src" / "sim" / "gz_sim" / "launch" / "gz_multi.launch.py"
+        ROOT / "integrations" / "simulation" / "gazebo" / "launch" / "gz_multi.launch.py"
     ).read_text(encoding="utf-8")
     yaml_bridge = (
-        ROOT / "src" / "sim" / "gz_sim" / "params" / "rosy_bridge.yaml"
+        ROOT / "integrations" / "simulation" / "gazebo" / "params" / "rosy_bridge.yaml"
     ).read_text(encoding="utf-8")
     single = (
-        ROOT / "src" / "sim" / "gz_sim" / "launch" / "launch_sim.launch.xml"
+        ROOT / "integrations" / "simulation" / "gazebo" / "launch" / "launch_sim.launch.xml"
     ).read_text(encoding="utf-8")
     assert "sensor_msgs/msg/Image" not in template
     assert "image_bridge" not in template
@@ -61,8 +61,8 @@ def test_gz_bridges_do_not_carry_raw_images():
 
 def test_fleet_and_games_do_not_import_sensor_image():
     """D-118: 관제·게임 호스트는 Image 를 import 하지 않는다."""
-    games = ROOT / "src" / "site" / "games" / "games"
-    fleet = ROOT / "src" / "site" / "fleet" / "fleet"
+    games = ROOT / "operations" / "apps" / "games" / "games"
+    fleet = ROOT / "operations" / "fleet" / "fleet"
     for folder in (games, fleet):
         for path in folder.rglob("*.py"):
             text = path.read_text(encoding="utf-8")
@@ -73,12 +73,12 @@ def test_fleet_and_games_do_not_import_sensor_image():
 def test_scan_image_imu_use_sensor_data_qos():
     """D-119: 생산 LaserScan/Imu/Image pub·sub 은 qos_profile_sensor_data."""
     camera = (
-        ROOT / "src" / "runtime" / "sensing" / "control" / "camera_detect_node.py"
+        ROOT / "middleware" / "perception" / "control" / "camera_detect_node.py"
     ).read_text(encoding="utf-8")
     assert "qos_profile_sensor_data" in camera
     assert "create_publisher(Image, 'camera/front', qos_profile_sensor_data)" in camera
     bridge = (
-        ROOT / "src" / "runtime" / "gateway" / "core" / "bridge" / "ros_bridge.py"
+        ROOT / "middleware" / "core" / "gateway" / "core" / "bridge" / "ros_bridge.py"
     ).read_text(encoding="utf-8")
     assert "qos_profile_sensor_data" in bridge
     assert 'create_subscription(LaserScan, "scan", self._on_scan, qos_profile_sensor_data)' in bridge

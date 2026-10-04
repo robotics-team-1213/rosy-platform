@@ -8,7 +8,7 @@ import pytest
 
 from host_lane_perception import LanePerceptionConfig
 
-sys.path.append(str(Path(__file__).resolve().parents[1] / "src/runtime/sensing"))
+sys.path.append(str(Path(__file__).resolve().parents[1] / "middleware/perception"))
 
 
 def idle():

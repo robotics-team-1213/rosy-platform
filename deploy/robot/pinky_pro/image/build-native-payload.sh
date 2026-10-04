@@ -85,7 +85,7 @@ NATIVE_RUNTIME_SOURCE="$WORKSPACE/deploy/robot/pinky_pro/native"
 FIRST_BOOT_SOURCE="$WORKSPACE/deploy/robot/pinky_pro/image/first-boot"
 SD_TOOLS_SOURCE="$WORKSPACE/deploy/robot/pinky_pro/sd"
 ROBOT_CONFIG_SOURCE="$WORKSPACE/deploy/robot/pinky_pro/config"
-CYCLONEDDS_SOURCE="$WORKSPACE/src/products/pinky_pro/bringup/config/cyclonedds_localhost.xml"
+CYCLONEDDS_SOURCE="$WORKSPACE/middleware/apps/device/pinky/bringup/config/cyclonedds_localhost.xml"
 UDEV_RULE_SOURCE="$WORKSPACE/deploy/robot/pinky_pro/udev/99-rosy-motor.rules"
 DISPLAY_UDEV_RULE_SOURCE="$WORKSPACE/deploy/robot/pinky_pro/udev/99-rosy-display.rules"
 LAMP_UDEV_RULE_SOURCE="$WORKSPACE/deploy/robot/pinky_pro/udev/99-rosy-lamp.rules"
@@ -134,6 +134,8 @@ rosdep install --from-paths "${ROSDEP_ROOTS[@]}" "$SLLIDAR_SRC" --ignore-src -r 
     colcon list --base-paths "${COLCON_ROOTS[@]}" "$SLLIDAR_SRC" --names-only | LC_ALL=C sort -u > "$INVENTORY.tmp"
 )
 mv -f -- "$INVENTORY.tmp" "$INVENTORY"
+# D-442: ROS-free contracts live in the shipped install, not the build host.
+"$SCRIPT_DIR/install-motion-contracts.sh" "$WORKSPACE" "$INSTALL_ROOT"
 # D-225: build_payload_release.py pack sets every member's mtime to
 # 2000-01-01, so a timestamp-validated .pyc from colcon no longer matches its
 # source on the robot and Python recompiles (or, read-only, re-reads) it on

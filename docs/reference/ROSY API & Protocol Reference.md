@@ -1689,6 +1689,19 @@ driver standstill readback, safety-rated E-stop, or physical stop confirmation.
 Physical stop and goal evidence remain separately sourced and correlated.
 `RearmLocal(LocalStopRearmRequest)` is accepted only from the configured Fleet peer UID. Site Fleet may issue it only after an authenticated named-operator rearm request advances the shared dispatch generation; OMX independently requires the exact current Fleet authority/generation fence, zero unresolved local Actions, and a generation newer than its persisted latch. A Fleet rearm that cannot confirm every configured local instance rolls Fleet dispatch closed again and sends a local stop rollback. A process restart reopens neither Fleet nor OMX dispatch automatically. These checks coordinate software submission; they do not certify a physical E-stop reset or safe-to-move state.
 
+#### OMX owner HOLD 복구 (D-442 U3)
+
+owner recovery adapter를 가진 같은-host OMX 구성은 version 1의 `GetOwnerState`와 `RecoverOwner`를 추가로 제공한다. 기존 `RearmLocal`과 다른 owner HOLD 래치이며 preempt·motion 제출·물리 reset은 이 표면에 없다. Fleet peer UID만 허용한다. 모든 필드는 추가 필드를 거부하며 version·순번·generation은 실제 int(bool 제외)다.
+
+- `GetOwnerState`: `{version:1, operation:"GetOwnerState", workcell_id, instance_id}`. 정확한 장치 identity와 `{state, reason, observed_sequence}`를 읽는다. 순번이 없으면 null이며 어떤 래치도 바꾸지 않는다.
+- `RecoverOwner`: `{version:1, operation:"RecoverOwner", workcell_id, instance_id, authority_epoch, dispatch_generation, operator_confirmed:true, observed_sequence, actor_id}`. 확인은 실제 bool true, 순번/epoch/generation은 nonnegative int, actor는 Fleet가 인증한 이름 있는 operator identity다. 이름을 보냈다는 것만으로 사람 확인을 증명하지 않는다.
+- local stop OPEN·현재 fence·미해결 Action 없음(PREPARED 포함)·선점 이후 fresh readback·operator 확인을 검사한다. stop→owner→journal 순서로 확인부터 복구까지 직렬화한다. journal commit 실패는 원래 owner HOLD를 같은 잠금 안에서 복원한다. 반환은 `decision`(accepted/state/reason), 정확한 장치·actor·readback identity이며 성공은 ready일 뿐 동작이나 물리 정지 증거가 아니다. 닫힌 fence/오래된 readback은 409, 저장소 실패는 503이다.
+
+Fleet 표면은 `GET /api/fleet/workcells/{workcell_id}/owner`(viewer 읽기), `POST /api/fleet/workcells/{workcell_id}/owner/recover`(configured named operator만)다. POST 본문은 `{operator_confirmed:true, observed_sequence, expected_generation}`(strict bool/int, 추가 필드 금지). Fleet의 기존 durable INTENT/RESULT 감사 경로를 사용하고 저장 실패·닫힌 dispatch·미해결 Action·generation 불일치 시 UDS를 보내지 않는다. workcell은 configured OMX map에서 instance로 해석하며 사용자가 instance를 바꾸지 않는다. POST는 현재 epoch/generation과 인증된 actor를 UDS에 전달한다. ACK의 identity·순번·ready 상태를 검사하고 잃거나 불명한 ACK를 자동 재전송하지 않는다.
+
+현재 이 recovery 표면은 OMX cell simulation composition에 연결된다. 실제 ROS/UDS·물리 장치 수용은 별도 증거이며, 이 API를 추가했다고 hardware owner를 켜지 않는다.
+
+
 The source now provides a newline-delimited JSON UDS handler and local Action runner. Each connection carries one request frame, capped at 64 KiB, and peer UID is read from Linux `SO_PEERCRED`; the parent socket directory must already be provisioned. `request_digest` is lowercase SHA-256 over UTF-8 canonical JSON of the complete `FleetActionGrant` with `request_digest` omitted (sorted keys, compact separators, Pydantic JSON-mode ISO-8601 timestamps). The runner is disabled by default, journals before driver submission, and never replays an Action already in `SUBMITTING`, `UNKNOWN`, or later. These source modules do not register a service entrypoint, connect a selected ROS/gripper driver, or provide physical stop/goal proof; those remain gated by ROS-SIM, DEVICE, and FIELD.
 
 `DeviceActionReceipt` binds every local readback to the same mission, step, action,

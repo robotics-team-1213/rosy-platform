@@ -15,14 +15,14 @@ import yaml
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-CONTROL_ROOT = REPO_ROOT / "src/runtime/sensing"
+CONTROL_ROOT = REPO_ROOT / "middleware/perception"
 if str(CONTROL_ROOT) not in sys.path:
     sys.path.insert(0, str(CONTROL_ROOT))
 _PACKAGE_ROOTS = {
-    "core": "src/runtime/gateway",
-    "core_common": "src/contracts/foundation",
-    "core_events": "src/runtime/events",
-    "core_features": "src/runtime/services",
+    "core": "middleware/core/gateway",
+    "core_common": "contracts/foundation",
+    "core_events": "middleware/core/events",
+    "core_features": "middleware/core/services",
 }
 for _package in _PACKAGE_ROOTS:
     _path = str(REPO_ROOT / _PACKAGE_ROOTS[_package])

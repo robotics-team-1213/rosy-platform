@@ -9,19 +9,19 @@ import pytest
 from browser_harness import open_page
 
 ROOT = Path(__file__).resolve().parents[1]
-WEB = ROOT / "src" / "hmi" / "dashboard"
+WEB = ROOT / "middleware" / "ui" / "robot"
 
 
 def _route_panel_test(page) -> None:
     """Load shared elements used by the dashboard shell."""
-    ui_source = (ROOT / "src" / "hmi" / "web_common" / "ui.js").read_text(encoding="utf-8")
+    ui_source = (ROOT / "shared" / "web" / "ui.js").read_text(encoding="utf-8")
     page.route("http://rosy.test/common/ui.js", lambda route: route.fulfill(
         status=200, content_type="application/javascript", body=ui_source))
-    logic_source = (ROOT / "src" / "hmi" / "web_common" / "core_ui_logic.js").read_text(encoding="utf-8")
-    confirmation_source = (ROOT / "src" / "hmi" / "web_common" / "confirmation.js").read_text(encoding="utf-8")
+    logic_source = (ROOT / "shared" / "web" / "core_ui_logic.js").read_text(encoding="utf-8")
+    confirmation_source = (ROOT / "shared" / "web" / "confirmation.js").read_text(encoding="utf-8")
     page.route("http://rosy.test/common/confirmation.js", lambda route: route.fulfill(
         status=200, content_type="application/javascript", body=confirmation_source))
-    geometry_source = (ROOT / "src" / "hmi" / "web_common" / "live-dialog-geometry.js").read_text(encoding="utf-8")
+    geometry_source = (ROOT / "shared" / "web" / "live-dialog-geometry.js").read_text(encoding="utf-8")
     page.route("http://rosy.test/common/live-dialog-geometry.js", lambda route: route.fulfill(
         status=200, content_type="application/javascript", body=geometry_source))
     page.route("http://rosy.test/common/core_ui_logic.js", lambda route: route.fulfill(
@@ -302,7 +302,7 @@ def test_setup_docking_refuses_teach_without_fresh_pose():
             pytest.skip(f"Playwright Chromium unavailable: {error}")
         _route_panel_test(page)
         source = (WEB / "panels" / "setup" / "docking.js").read_text(encoding="utf-8")
-        state_logic = (ROOT / "src" / "hmi" / "web_common" / "core_ui_logic.js").read_text(encoding="utf-8")
+        state_logic = (ROOT / "shared" / "web" / "core_ui_logic.js").read_text(encoding="utf-8")
         page.route("http://rosy.test/assets/panels/setup/docking.js", lambda route: route.fulfill(
             status=200, content_type="application/javascript", body=source))
         page.route("http://rosy.test/common/core_ui_logic.js", lambda route: route.fulfill(
@@ -544,8 +544,8 @@ def test_console_teleop_keeps_readiness_reasons_separate_from_action_feedback():
             pytest.skip(f"Playwright Chromium unavailable: {error}")
         _route_panel_test(page)
         module = (WEB / "panels" / "console" / "teleop.js").read_text(encoding="utf-8")
-        state_logic = (ROOT / "src" / "hmi" / "web_common" / "core_ui_logic.js").read_text(encoding="utf-8")
-        ticker = (ROOT / "src" / "hmi" / "web_common" / "hold-ticker.js").read_text(encoding="utf-8")
+        state_logic = (ROOT / "shared" / "web" / "core_ui_logic.js").read_text(encoding="utf-8")
+        ticker = (ROOT / "shared" / "web" / "hold-ticker.js").read_text(encoding="utf-8")
         page.route("http://rosy.test/assets/panels/console/teleop.js", lambda route: route.fulfill(
             status=200, content_type="application/javascript", body=module))
         page.route("http://rosy.test/common/core_ui_logic.js", lambda route: route.fulfill(
@@ -623,8 +623,8 @@ def test_console_teleop_timeout_and_failed_stop_feedback_survive_polling():
             pytest.skip(f"Playwright Chromium unavailable: {error}")
         _route_panel_test(page)
         module = (WEB / "panels" / "console" / "teleop.js").read_text(encoding="utf-8")
-        state_logic = (ROOT / "src" / "hmi" / "web_common" / "core_ui_logic.js").read_text(encoding="utf-8")
-        ticker = (ROOT / "src" / "hmi" / "web_common" / "hold-ticker.js").read_text(encoding="utf-8")
+        state_logic = (ROOT / "shared" / "web" / "core_ui_logic.js").read_text(encoding="utf-8")
+        ticker = (ROOT / "shared" / "web" / "hold-ticker.js").read_text(encoding="utf-8")
         page.route("http://rosy.test/assets/panels/console/teleop.js", lambda route: route.fulfill(
             status=200, content_type="application/javascript", body=module))
         page.route("http://rosy.test/common/core_ui_logic.js", lambda route: route.fulfill(
@@ -892,8 +892,8 @@ def test_console_teleop_sends_repeated_hold_and_terminal_zero(hold_ms, release):
             pytest.skip(f"Playwright Chromium unavailable: {error}")
         _route_panel_test(page)
         module = (WEB / "panels" / "console" / "teleop.js").read_text(encoding="utf-8")
-        state_logic = (ROOT / "src" / "hmi" / "web_common" / "core_ui_logic.js").read_text(encoding="utf-8")
-        ticker = (ROOT / "src" / "hmi" / "web_common" / "hold-ticker.js").read_text(encoding="utf-8")
+        state_logic = (ROOT / "shared" / "web" / "core_ui_logic.js").read_text(encoding="utf-8")
+        ticker = (ROOT / "shared" / "web" / "hold-ticker.js").read_text(encoding="utf-8")
         page.route("http://rosy.test/assets/panels/console/teleop.js", lambda route: route.fulfill(
             status=200, content_type="application/javascript", body=module))
         page.route("http://rosy.test/common/core_ui_logic.js", lambda route: route.fulfill(
@@ -1061,7 +1061,7 @@ def test_admin_dock_registration_requires_loaded_types_and_fresh_pose():
             pytest.skip(f"Playwright Chromium unavailable: {error}")
         _route_panel_test(page)
         source = (WEB / "panels" / "setup" / "dock-admin.js").read_text(encoding="utf-8")
-        logic = (WEB.parent / "web_common" / "core_ui_logic.js").read_text(encoding="utf-8")
+        logic = (ROOT / "shared" / "web" / "core_ui_logic.js").read_text(encoding="utf-8")
         page.route("http://rosy.test/assets/panels/setup/dock-admin.js", lambda route: route.fulfill(
             status=200, content_type="application/javascript", body=source))
         page.route("http://rosy.test/common/core_ui_logic.js", lambda route: route.fulfill(

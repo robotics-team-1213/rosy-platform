@@ -1,0 +1,11 @@
+# D-442(b) contract delivery source slice — 2026-10-04
+
+Parent: 25d2df4d8. Runtime binding is not in this commit. A shared installer copies contract metadata/src to TMPDIR, builds both actual namespace wheels offline without dependency resolution, installs both together under the release merge-install lib/pythonX.Y/site-packages and verifies imports reside there. Native payload invokes it before checked-hash compilation; SD uses that same builder. CORE Docker includes both contracts, builder prerequisites and the same installer in core-build, retains the final install-tree COPY and probes imports. Both ARM64 build workflows install pip/setuptools/wheel explicitly.
+
+Three delivery regressions were RED before wiring; relevant payload/image/runtime regressions are **48 passed**, 17.31 s (X:/DevTemp/rosy-d427/resume/motion-delivery-related.txt). Actual Ubuntu Python3.12 built and installed both wheels from F source copies exclusively under X scratch; import smoke passed (motion-delivery-linux-v2.txt). The installer is tracked executable 100755.
+
+Independent review reproduced pip --target silently keeping a stale existing rosy namespace while returning zero and passing a zero-only smoke. The installer now hard-rejects any existing release rosy namespace before building or installation, rather than overwrite another namespace owner. An actual repeated invocation on the existing Linux install fails with `release contract namespace already exists` (motion-delivery-existing.txt). Fresh installs also verify both nonzero Twist components. A release build must have a fresh contract namespace; future namespace ownership changes require explicit integration.
+
+This establishes SOURCE/host-Linux wheel delivery logic. Actual native ARM64 payload, CORE Docker build, SD image, full CI, DEVICE and FIELD remain NOT_RUN for this slice. Runtime port binding remains pending.
+
+Independent reviewer /root/d427_safety_review: **APPROVE delivery source/host-Linux slice**. Fresh final-helper Ubuntu3.12 install with PIP_NO_INDEX=1 and TMPDIR X passed exit0; identical invocation rejected exit1 before mutation. Actual ARM64/SD/Docker/CI/DEVICE closure remains pending. Harness lint: zero errors, ten existing freshness warnings.

@@ -16,7 +16,7 @@ import secrets
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
-for path in (ROOT / 'src/contracts/foundation', ROOT / 'src/site/fleet'):
+for path in (ROOT / 'contracts/foundation', ROOT / 'operations/fleet'):
     if str(path) not in sys.path:
         sys.path.insert(0, str(path))
 

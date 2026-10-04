@@ -8,8 +8,8 @@ import xml.etree.ElementTree as ET
 
 
 REPOSITORY = Path(__file__).resolve().parents[3]
-# The old sibling src/sim/description (D-427 wave 4c moves it to middleware).
-DESCRIPTION = REPOSITORY / "src" / "sim" / "description"
+# The old sibling middleware/apps/device/pinky/description (D-427 wave 4c moves it to middleware).
+DESCRIPTION = REPOSITORY / "middleware" / "apps" / "device" / "pinky" / "description"
 
 
 def validate_output_path(path: Path) -> Path:

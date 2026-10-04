@@ -7,8 +7,8 @@ Frames (all metres, radians):
          image column grows to the right (-y), image row grows downwards.
 
 The camera numbers come from the NOMINAL profile (D-364 section 3,
-src/products/pinky_pro/profile/config/camera_nominal.yaml). The LiDAR mount comes
-from the sim URDF (src/sim/description/urdf/rosy.urdf.xacro): base_footprint ->
+middleware/apps/device/pinky/profile/config/camera_nominal.yaml). The LiDAR mount comes
+from the sim URDF (middleware/apps/device/pinky/description/urdf/rosy.urdf.xacro): base_footprint ->
 base_link z 0.028, base_link -> rplidar_mount xyz (-0.017, 0, 0.067),
 rplidar_mount -> rplidar_link z 0.030, so the scan plane is 0.125 m above the
 floor and 0.017 m behind base. The height is the URDF value, not a tape
@@ -28,8 +28,8 @@ from pathlib import Path
 import numpy as np
 
 REPO = Path(__file__).resolve().parents[4]
-PROFILE_PATH = REPO / "src" / "products" / "pinky_pro" / "profile" / "config" / "camera_nominal.yaml"
-ROBOT_YAML = REPO / "src" / "runtime" / "sensing" / "config" / "robot.yaml"
+PROFILE_PATH = REPO / "middleware" / "apps" / "device" / "pinky" / "profile" / "config" / "camera_nominal.yaml"
+ROBOT_YAML = REPO / "middleware" / "perception" / "config" / "robot.yaml"
 CALIBRATION_STORE = REPO / "data" / "calibration"
 LIDAR_FORWARD_DEG = 180.0
 
@@ -52,7 +52,7 @@ def labeller_lidar_yaw_deg(device=None, store_root=str(CALIBRATION_STORE)):
     Cached: one store read per device per process."""
     if device:
         import sys
-        sys.path.insert(0, str(REPO / "src" / "contracts" / "foundation"))
+        sys.path.insert(0, str(REPO / "contracts" / "foundation"))
         from core_common.calibration_store import resolve
         values, source = resolve("lidar_mount", {"lidar_yaw_offset": math.radians(LIDAR_FORWARD_DEG)},
                                  fallback_source="180 deg default", robot=device, root=store_root,

@@ -9,7 +9,7 @@ import sys
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-CELL_ROOT = ROOT / "src" / "site" / "cell"
+CELL_ROOT = ROOT / "operations" / "processes" / "cell"
 if str(CELL_ROOT) not in sys.path:
     sys.path.insert(0, str(CELL_ROOT))
 

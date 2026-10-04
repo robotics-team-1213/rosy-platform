@@ -24,17 +24,17 @@ GUARDS = set(affected.GUARD_SET)
 HARNESS_YAML = """\
 modules:
   - name: core
-    path: src/runtime/gateway
-    tests: [src/runtime/gateway/test]
+    path: middleware/core/gateway
+    tests: [middleware/core/gateway/test]
   - name: control
-    path: src/runtime/sensing
-    tests: [src/runtime/sensing/test]
+    path: middleware/perception
+    tests: [middleware/perception/test]
   - name: core_common
-    path: src/contracts/foundation
-    tests: [src/contracts/foundation/test]
+    path: contracts/foundation
+    tests: [contracts/foundation/test]
   - name: core_api_web
-    path: src/runtime/api_web
-    tests: [src/runtime/api_web/test]
+    path: middleware/core/api_web
+    tests: [middleware/core/api_web/test]
   - name: deploy
     path: deploy
     tests: [test]
@@ -46,13 +46,13 @@ modules:
 
 PARTS_YAML = """\
 roots:
-  - path: src/contracts/foundation
+  - path: contracts/foundation
     import_prefix: [core_common]
-  - path: src/runtime/gateway
+  - path: middleware/core/gateway
     import_prefix: [core]
-  - path: src/runtime/sensing
+  - path: middleware/perception
     import_prefix: [control]
-  - path: src/runtime/api_web
+  - path: middleware/core/api_web
     import_prefix: [core_api_web]
   - path: tools
   - path: docs
@@ -61,15 +61,15 @@ roots:
 FILES = {
     "tools/harness/harness.yaml": HARNESS_YAML,
     "tools/harness/platform_parts.yaml": PARTS_YAML,
-    "src/contracts/foundation/core_common/schemas.py": "X = 1\n",
-    "src/contracts/foundation/test/test_schemas.py": "import core_common\n",
-    "src/runtime/sensing/control/battery.py": "from core_common import schemas\n",
-    "src/runtime/sensing/test/test_battery.py": "from control import battery\n",
-    "src/runtime/gateway/core/node.py": "from control.battery import read\n",
-    "src/runtime/gateway/test/test_battery.py": "import core\n",
-    "src/runtime/gateway/test/conftest.py": "",
-    "src/runtime/api_web/core_api_web/app.py": "import core\n",
-    "src/runtime/api_web/test/test_app.py": "import core_api_web\n",
+    "contracts/foundation/core_common/schemas.py": "X = 1\n",
+    "contracts/foundation/test/test_schemas.py": "import core_common\n",
+    "middleware/perception/control/battery.py": "from core_common import schemas\n",
+    "middleware/perception/test/test_battery.py": "from control import battery\n",
+    "middleware/core/gateway/core/node.py": "from control.battery import read\n",
+    "middleware/core/gateway/test/test_battery.py": "import core\n",
+    "middleware/core/gateway/test/conftest.py": "",
+    "middleware/core/api_web/core_api_web/app.py": "import core\n",
+    "middleware/core/api_web/test/test_app.py": "import core_api_web\n",
     "deploy/robot/run.sh": "echo run\n",
     "deploy/robot/pinky_pro/udev/99-rosy.rules": "# pinky\n",
     "deploy/robot/omx/udev/99-rosy.rules": "# omx\n",
@@ -120,19 +120,19 @@ def _select(sample: Path, *changed: str) -> affected.Selection:
 CASES = [
     ("tools/ssh only -> guards + the tests naming the script",
      ["tools/ssh/rosy_ssh_enroll.py"], "affected", {"test/test_rosy_ssh_enroll.py"}),
-    ("core_common -> full", ["src/contracts/foundation/core_common/schemas.py"], "full", None),
+    ("core_common -> full", ["contracts/foundation/core_common/schemas.py"], "full", None),
     ("unmapped file -> full (unknown never means nothing)", ["tools/mystery/run.sh"], "full", None),
     ("sensing -> sensing suite + direct reverse dependent gateway (api_web is two hops: not pulled)",
-     ["src/runtime/sensing/control/battery.py"], "affected",
-     {"src/runtime/sensing/test", "src/runtime/gateway/test"}),
+     ["middleware/perception/control/battery.py"], "affected",
+     {"middleware/perception/test", "middleware/core/gateway/test"}),
     ("ADR only -> docs module contracts (guards cover the ADR index)",
      ["docs/adr/D-1-sample.md"], "affected", {"test/test_network_topology_contracts.py"}),
     ("doc read by a contract test -> that test too",
      ["docs/reference/line-follow.md"], "affected",
      {"test/test_network_topology_contracts.py", "test/test_line_follow_contract_docs.py"}),
     ("Markdown note outside modules -> guards only", ["tools/AGENTS.md"], "affected", set()),
-    ("changed test file -> only that file", ["src/runtime/sensing/test/test_battery.py"], "affected",
-     {"src/runtime/sensing/test/test_battery.py"}),
+    ("changed test file -> only that file", ["middleware/perception/test/test_battery.py"], "affected",
+     {"middleware/perception/test/test_battery.py"}),
     ("test helper -> the tests importing it", ["test/fake_core_ssh.py"], "affected", {"test/test_ssh_access.py"}),
     ("deploy file named by path parts -> that test + deploy functional, not the whole root test/",
      ["deploy/robot/pinky_pro/udev/99-rosy.rules"], "affected",
@@ -142,7 +142,7 @@ CASES = [
     ("deploy compose manifest -> full (tests reach it through path constants)",
      ["deploy/robot/pinky_pro/compose.yaml"], "full", None),
     ("native unit manifest -> full", ["deploy/robot/pinky_pro/native/rosy-x.service"], "full", None),
-    ("conftest -> full", ["src/runtime/gateway/test/conftest.py"], "full", None),
+    ("conftest -> full", ["middleware/core/gateway/test/conftest.py"], "full", None),
     ("CI workflow -> full", [".github/workflows/ci.yml"], "full", None),
     ("selector config -> full", ["tools/harness/harness.yaml"], "full", None),
     ("requirements pin -> full", ["deploy/robot/device-python-requirements.txt"], "full", None),
@@ -164,9 +164,9 @@ def test_selection_table(sample, case, changed, mode, extra):
 
 
 def test_duplicate_basenames_run_in_separate_invocations(sample):
-    sel = _select(sample, "src/runtime/sensing/control/battery.py")
+    sel = _select(sample, "middleware/perception/control/battery.py")
     owners = {path: i for i, inv in enumerate(sel.invocations) for path in inv}
-    assert owners["src/runtime/sensing/test"] != owners["src/runtime/gateway/test"]
+    assert owners["middleware/perception/test"] != owners["middleware/core/gateway/test"]
     repo = affected.Repo.load(sample)
     for inv in sel.invocations:
         names = [PurePosixPath(t).name for p in inv for t in repo.test_files_under(p)]
@@ -174,8 +174,8 @@ def test_duplicate_basenames_run_in_separate_invocations(sample):
 
 
 def test_reasons_name_the_reverse_dependency(sample):
-    sel = _select(sample, "src/runtime/sensing/control/battery.py")
-    assert any("reverse dependent core" in why for why in sel.reasons["src/runtime/gateway/test"])
+    sel = _select(sample, "middleware/perception/control/battery.py")
+    assert any("reverse dependent core" in why for why in sel.reasons["middleware/core/gateway/test"])
 
 
 def test_cli_json_diffs_against_base_and_working_tree(sample, capsys):
@@ -212,7 +212,7 @@ def test_real_repo_selector_paths_escalate():
     """The selector's own files and the harness config always escalate."""
     repo = affected.Repo.load(ROOT)
     for path in ("tools/harness/affected_tests.py", "tools/harness/harness.yaml",
-                 "src/contracts/foundation/core_common/__init__.py", ".github/workflows/ci.yml"):
+                 "contracts/foundation/core_common/__init__.py", ".github/workflows/ci.yml"):
         assert affected.select(repo, [path]).mode == "full", path
 
 
@@ -234,13 +234,13 @@ def test_ci_full_matrix_runs_every_root_test_once_with_the_overlay(sample):
 def test_ci_full_matrix_keeps_gateway_and_sensing_on_separate_runners():
     owner = {path: entry["name"] for entry in affected.CI_FULL_MATRIX
              for inv in entry["invocations"] for path in inv}
-    assert owner["src/runtime/gateway/test"] != owner["src/runtime/sensing/test"]
+    assert owner["middleware/core/gateway/test"] != owner["middleware/perception/test"]
     for entry in affected.CI_FULL_MATRIX:
         assert entry["ros"] in {"none", "base", "overlay"}, entry["name"]
 
 
 def test_ci_affected_matrix_is_one_runner_per_invocation(sample):
-    sel = _select(sample, "src/runtime/sensing/control/battery.py")
+    sel = _select(sample, "middleware/perception/control/battery.py")
     matrix = affected.ci_matrix(affected.Repo.load(sample), sel)["include"]
     pytest_entries = [e for e in matrix if e["kind"] == "pytest"]
     assert [e["invocations"][0] for e in pytest_entries] == sel.invocations
@@ -254,7 +254,7 @@ def test_ci_matrix_cli_forces_full_for_non_pr_events(sample, capsys):
 
 
 def test_local_run_of_a_full_selection_runs_only_guards_and_direct_suites(sample, monkeypatch):
-    sel = _select(sample, "src/contracts/foundation/core_common/schemas.py", "tools/ssh/rosy_ssh_enroll.py")
+    sel = _select(sample, "contracts/foundation/core_common/schemas.py", "tools/ssh/rosy_ssh_enroll.py")
     assert sel.mode == "full"
     ran = []
 
@@ -266,9 +266,9 @@ def test_local_run_of_a_full_selection_runs_only_guards_and_direct_suites(sample
     local = {p for cmd in ran for p in cmd[3:] if not p.startswith("-")}
     # core_common's own suite and its direct reverse dependent (sensing imports core_common)
     # run locally; the rest of the full tier stays on GitHub.
-    assert local == GUARDS | {"test/test_rosy_ssh_enroll.py", "src/contracts/foundation/test",
-                              "src/runtime/sensing/test"}, "FULL stays on GitHub by default"
-    assert "test" not in local and "src/runtime/gateway/test" not in local
+    assert local == GUARDS | {"test/test_rosy_ssh_enroll.py", "contracts/foundation/test",
+                              "middleware/perception/test"}, "FULL stays on GitHub by default"
+    assert "test" not in local and "middleware/core/gateway/test" not in local
     ran.clear()
     affected.run(sample, sel, allow_full=True)
     assert "test" in {p for cmd in ran for p in cmd}
@@ -276,10 +276,10 @@ def test_local_run_of_a_full_selection_runs_only_guards_and_direct_suites(sample
 
 def test_escalated_paths_are_still_mapped_for_the_local_run(sample):
     """Review fix: a FULL selection runs locally as guards + the escalated module's own suites."""
-    sel = _select(sample, "src/contracts/foundation/core_common/schemas.py")
+    sel = _select(sample, "contracts/foundation/core_common/schemas.py")
     assert sel.mode == "full"
     local = {p for inv in sel.local_invocations for p in inv}
-    assert "src/contracts/foundation/test" in local, "core_common's own suite must run locally"
+    assert "contracts/foundation/test" in local, "core_common's own suite must run locally"
     assert GUARDS <= local
     assert not any("maps to no module" in e for e in sel.escalations), "a trigger is not also 'unknown'"
 

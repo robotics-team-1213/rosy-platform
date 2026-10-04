@@ -7,7 +7,7 @@ import pytest
 import yaml
 
 from robot_contracts import ROOT
-sys.path.insert(0, str(ROOT / "src" / "runtime" / "navigation"))
+sys.path.insert(0, str(ROOT / "middleware" / "core" / "navigation"))
 
 from navigation.profile_limits import (
     MotionLimits,
@@ -18,7 +18,7 @@ from navigation.profile_limits import (
 
 
 PROFILE = ROOT / "deploy" / "robot" / "pinky_pro" / "config" / "profile.hardware.yaml"
-NAV2 = ROOT / "src" / "runtime" / "navigation" / "params" / "nav2_params.yaml"
+NAV2 = ROOT / "middleware" / "core" / "navigation" / "params" / "nav2_params.yaml"
 
 
 def test_costmaps_wait_for_amcl_before_activating():
@@ -40,7 +40,7 @@ def test_nav2_default_inflation_is_the_hardware_value():
 
 
 def test_factory_sim_inflation_is_wider_than_hardware_default():
-    catalog = ROOT / "src" / "sim" / "gz_sim" / "config" / "worlds.yaml"
+    catalog = ROOT / "integrations" / "simulation" / "gazebo" / "config" / "worlds.yaml"
     worlds = yaml.safe_load(catalog.read_text(encoding="utf-8"))["worlds"]
     factory = float(worlds["rosy_factory.world"]["inflation_radius"])
     assert factory > 0.15
@@ -73,10 +73,10 @@ def test_deployed_motor_defaults_match_the_hardware_profile():
 def test_pinky_profile_files_share_the_hardware_motion_ceilings():
     limits = load_motion_limits(PROFILE)
     paths = (
-        ROOT / "src" / "products" / "pinky_pro" / "profile" / "config" / "profile.yaml",
+        ROOT / "middleware" / "apps" / "device" / "pinky" / "profile" / "config" / "profile.yaml",
         ROOT / "deploy" / "robot" / "pinky_pro" / "config" / "profile.core.yaml",
         ROOT / "deploy" / "robot" / "pinky_pro" / "config" / "profile.motor.yaml",
-        ROOT / "src" / "contracts" / "foundation" / "config" / "rosy_default.yaml",
+        ROOT / "contracts" / "foundation" / "config" / "rosy_default.yaml",
     )
     for path in paths:
         if path.name == "rosy_default.yaml":

@@ -47,7 +47,7 @@ python -m pytest test/architecture -q
 
 ### Internal
 
-- `tools/harness/harness.yaml`, `src/hmi/web_common/surfaces.yaml`, every `src/**/package.xml`, `src/AGENTS.md`
+- `tools/harness/harness.yaml`, `shared/web/surfaces.yaml`, every `src/**/package.xml`, `src/AGENTS.md`
 
 ### External
 

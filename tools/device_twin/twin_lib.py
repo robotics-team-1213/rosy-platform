@@ -43,7 +43,7 @@ R = {name: value[0] for name, value in RELEASES.items()}
 UPDATER = "/opt/rosy/native-runtime/rosy_auto_update.py"
 UPDATES = "/var/lib/rosy/updates"
 #: D-418: CORE's own hand-over code (stdlib), run in the twin as rosy-core by twin-ssh-request.
-SSH_HANDOFF = "src/runtime/api_web/core_api_web/api/v1/ssh_handoff.py"
+SSH_HANDOFF = "middleware/core/api_web/core_api_web/api/v1/ssh_handoff.py"
 
 
 def log(message: str) -> None:

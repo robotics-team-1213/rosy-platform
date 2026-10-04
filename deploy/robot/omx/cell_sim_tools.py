@@ -1,7 +1,7 @@
 """Gazebo-side helpers for probe_cell_transfer.py (Rosy Cell C3/C3b, simulation only).
 
 ``SimAid`` drives the labelled DetachableJoint SIM AID described in
-src/sim/gz_sim/worlds/omx_cell_workcell_sim_aid.sdf, and ``spawn_infeed_block`` stages the
+integrations/simulation/gazebo/worlds/omx_cell_workcell_sim_aid.sdf, and ``spawn_infeed_block`` stages the
 next block. They exist only in this simulation probe path; no production module imports them.
 
 C3b: the aid joint is added to omx_f at runtime (parent omx_f::link5, child the block) by

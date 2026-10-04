@@ -20,7 +20,7 @@ def _module():
 
 def _robot_module():
     path = (Path(__file__).resolve().parents[1]
-            / "src/runtime/services/core_features/fleet_agent/discovery.py")
+            / "middleware/core/services/core_features/fleet_agent/discovery.py")
     spec = importlib.util.spec_from_file_location("rosy_robot_fleet_mdns", path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)

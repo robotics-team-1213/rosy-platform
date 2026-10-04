@@ -65,7 +65,7 @@ def test_core_is_the_service_main_process_so_stop_signals_stay_clean():
     assert "SuccessExitStatus" not in unit
     # the other half of the contract lives in core.main: the escalation must not be a
     # signal death, or systemd would count it as a clean stop like any other
-    core_main = (ROOT / "src" / "runtime" / "gateway" / "core" / "main.py").read_text(
+    core_main = (ROOT / "middleware" / "core" / "gateway" / "core" / "main.py").read_text(
         encoding="utf-8")
     assert "STUCK_SHUTDOWN_EXIT_CODE = 2" in core_main
     assert "os._exit(STUCK_SHUTDOWN_EXIT_CODE)" in core_main
@@ -75,11 +75,11 @@ def test_core_is_the_service_main_process_so_stop_signals_stay_clean():
     assert "--merge-install" in payload
     assert '--install-base "$INSTALL_ROOT"' in payload
     assert 'INSTALL_ROOT="$RELEASE_ROOT/install"' in payload
-    setup_cfg = (ROOT / "src" / "runtime" / "gateway" / "setup.cfg").read_text(encoding="utf-8")
+    setup_cfg = (ROOT / "middleware" / "core" / "gateway" / "setup.cfg").read_text(encoding="utf-8")
     assert "install_scripts=$base/lib/core" in setup_cfg
     # the script itself is generated from this entry point; a rename would leave a unit
     # pointing at a file nobody builds any more
-    setup_py = (ROOT / "src" / "runtime" / "gateway" / "setup.py").read_text(encoding="utf-8")
+    setup_py = (ROOT / "middleware" / "core" / "gateway" / "setup.py").read_text(encoding="utf-8")
     assert "'core=core.main:main'" in setup_py
 
 
@@ -507,37 +507,37 @@ PROGRAM_SOURCES = {
     # control sits under src/core since a93d5188 but runs its nodes as their own
     # processes, so only the modules CORE imports count (PROGRAM_EXCLUDES).
     "rosy-core.service": [
-        "src/runtime/gateway",
-        "src/runtime/events",
-        "src/runtime/services",
-        "src/runtime/api_web",
-        "src/contracts/foundation",
-        "imported-by:src/runtime/gateway:control:src/runtime/sensing",
+        "middleware/core/gateway",
+        "middleware/core/events",
+        "middleware/core/services",
+        "middleware/core/api_web",
+        "contracts/foundation",
+        "imported-by:middleware/core/gateway:control:middleware/perception",
     ],
-    "rosy-io.service": ["src/products/pinky_pro/bringup"],
-    "rosy-camera.service": ["src/runtime/sensing/launch/camera_preview.launch.py",
-                            "src/runtime/sensing/control/camera_detect_node.py",
-                            "src/runtime/sensing/control/road_observer_node.py",
+    "rosy-io.service": ["middleware/apps/device/pinky/bringup"],
+    "rosy-camera.service": ["middleware/perception/launch/camera_preview.launch.py",
+                            "middleware/perception/control/camera_detect_node.py",
+                            "middleware/perception/control/road_observer_node.py",
                             # D-344 §12: the IR calibration overlay the launch validates.
-                            "src/runtime/sensing/control/ir_overlay.py",
+                            "middleware/perception/control/ir_overlay.py",
                             # D-411: the Pilot recorder and its session state machine.
-                            "src/runtime/sensing/control/pilot_recorder_node.py",
-                            "src/runtime/sensing/control/pilot_recording.py"],
-    "rosy-navigation.service": ["src/runtime/navigation", "src/products/pinky_pro/bringup"],
+                            "middleware/perception/control/pilot_recorder_node.py",
+                            "middleware/perception/control/pilot_recording.py"],
+    "rosy-navigation.service": ["middleware/core/navigation", "middleware/apps/device/pinky/bringup"],
     # D-190 / D-433: the face loop, the emotion cards and LCD driver, rosylib.Battery.
     "rosy-face.service": ["deploy/robot/pinky_pro/native/rosy-face.py",
                           # D-260: the rule table it imports from the release.
-                          "src/contracts/foundation/core_common/robot_state.py",
+                          "contracts/foundation/core_common/robot_state.py",
                           # D-433: the situation table and the face-inputs reader.
-                          "src/contracts/foundation/core_common/face_screen.py",
-                          "src/hmi/face/emotion/info_screen.py",
-                          "src/hmi/face/emotion/rosy_lcd.py",
-                          "src/products/pinky_pro/bringup/rosylib"],
+                          "contracts/foundation/core_common/face_screen.py",
+                          "middleware/ui/face/emotion/info_screen.py",
+                          "middleware/ui/face/emotion/rosy_lcd.py",
+                          "middleware/apps/device/pinky/bringup/rosylib"],
     # D-433: the retired unit runs the pre-D-433 program an old image still holds;
     # what it may touch is a subset of rosy-face's.
-    "rosy-boot-display.service": ["src/contracts/foundation/core_common/robot_state.py",
-                                  "src/hmi/face/emotion/rosy_lcd.py",
-                                  "src/products/pinky_pro/bringup/rosylib"],
+    "rosy-boot-display.service": ["contracts/foundation/core_common/robot_state.py",
+                                  "middleware/ui/face/emotion/rosy_lcd.py",
+                                  "middleware/apps/device/pinky/bringup/rosylib"],
     # D-193: the issuer and the policy loader it imports.
     "rosy-login-code.service": ["deploy/robot/pinky_pro/native/rosy-login-code.py",
                                 "deploy/robot/pinky_pro/native/rosy_config.py"],
@@ -636,7 +636,7 @@ def _imported_modules(importer: str, package: str, package_root: str) -> list[Pa
 
 # Trees inside a directory source that are not part of that unit's program.
 PROGRAM_EXCLUDES = {
-    "rosy-core.service": ("src/runtime/sensing",),
+    "rosy-core.service": ("middleware/perception",),
 }
 
 
@@ -1034,11 +1034,11 @@ def test_contract_helpers_treat_dynamic_users_as_non_root():
 def test_core_program_scan_follows_imports_into_the_control_package():
     # CORE's production modules import no control module today (only its tests
     # do), so the scan adds nothing now; it picks them up the moment one does.
-    assert "imported-by:src/runtime/gateway:control:src/runtime/sensing" in PROGRAM_SOURCES["rosy-core.service"]
+    assert "imported-by:middleware/core/gateway:control:middleware/perception" in PROGRAM_SOURCES["rosy-core.service"]
     resolved = {path.relative_to(ROOT).as_posix()
-                for path in _imported_modules("src/runtime/gateway/test", "control", "src/runtime/sensing")}
-    assert "src/runtime/sensing/control/sensor_provider.py" in resolved
-    assert "src/runtime/sensing/control/calibration_storage.py" in resolved
+                for path in _imported_modules("middleware/core/gateway/test", "control", "middleware/perception")}
+    assert "middleware/perception/control/sensor_provider.py" in resolved
+    assert "middleware/perception/control/calibration_storage.py" in resolved
 
 
 # D-373: the operator's on-device switch for camera_preview.launch.py learned_shadow/capture.
@@ -1083,7 +1083,7 @@ def test_learned_perception_env_example_ships_both_switches_off():
     settings = [line for line in example.splitlines() if line and not line.startswith("#")]
     assert settings == ["ROSY_LEARNED_SHADOW=false", "ROSY_CAPTURE=false", "ROSY_OBJECT_DET=false"]
     assert "/etc/rosy/learned-perception.env" in example
-    launch = (ROOT / "src/runtime/sensing/launch/camera_preview.launch.py").read_text(encoding="utf-8")
+    launch = (ROOT / "middleware/perception/launch/camera_preview.launch.py").read_text(encoding="utf-8")
     assert "'ROSY_LEARNED_SHADOW'" in launch and "'ROSY_CAPTURE'" in launch
 
 

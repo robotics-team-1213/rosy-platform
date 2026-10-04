@@ -32,7 +32,7 @@ def test_checked_in_geometry_matches_the_urdf():
 
 def test_header_names_the_urdf_source_without_hashes():
     text = urdf_nominal.OUTPUT.read_text(encoding="utf-8")
-    assert "src/sim/description/urdf/rosy.urdf.xacro" in text
+    assert "middleware/apps/device/pinky/description/urdf/rosy.urdf.xacro" in text
     assert not re.search(r"[0-9a-f]{40}", text), "no hashes: the secret scan rejects 40-hex strings"
     assert "upstream import 6455b1a9" in text
 
@@ -71,7 +71,7 @@ def test_camera_follows_the_tilt_arg():
     # the Gazebo lane bench value (map_v2_fleet_lane.launch.py dock_observer)
     assert g["camera"]["x_m"] == pytest.approx(0.028481, abs=1e-6)
     assert g["camera"]["height_m"] == pytest.approx(0.060194, abs=1e-6)
-    lane = (urdf_nominal.REPO / "src" / "sim" / "gz_sim" / "launch" / "map_v2_fleet_lane.launch.py").read_text(
+    lane = (urdf_nominal.REPO / "integrations" / "simulation" / "gazebo" / "launch" / "map_v2_fleet_lane.launch.py").read_text(
         encoding="utf-8")
     assert '"cam_tilt_deg": "25"' in lane
     assert lane.count(f'"camera_x_offset_m": {round(g["camera"]["x_m"], 6)},') == 2
@@ -89,9 +89,9 @@ def test_unsupported_xacro_fails_loudly():
 
 G = GEOMETRY
 SRC = REPO / "src"
-SENSING = SRC / "runtime" / "sensing"
-BRINGUP = SRC / "products" / "pinky_pro" / "bringup"
-PROFILE = SRC / "products" / "pinky_pro" / "profile" / "config"
+SENSING = SRC.parent / "middleware" / "perception"
+BRINGUP = SRC.parent / "middleware" / "apps" / "device" / "pinky" / "bringup"
+PROFILE = SRC.parent / "middleware" / "apps" / "device" / "pinky" / "profile" / "config"
 
 
 def _yaml(path):
@@ -148,7 +148,7 @@ def test_lidar_mount_consumers():
     auto = _yaml(SENSING / "config" / "auto_calib.yaml")["/**/safety_node"]["ros__parameters"]
     assert auto["lidar_yaw_offset"] == pytest.approx(yaw, abs=1e-6)
     assert _yaml(PROFILE / "core.yaml")["line_follow"]["lidar_forward_deg"] == forward
-    store = _module_constants(SRC / "contracts" / "foundation" / "core_common" / "calibration_store.py",
+    store = _module_constants(SRC.parent / "contracts" / "foundation" / "core_common" / "calibration_store.py",
                               "LIDAR_NOMINAL_DEG")
     assert store["LIDAR_NOMINAL_DEG"] == forward
     assert _number(SENSING / "control" / "road_state_node.py",
@@ -157,7 +157,7 @@ def test_lidar_mount_consumers():
                                    "LIDAR_FORWARD_DEG", "LIDAR_HEIGHT_M", "LIDAR_X_OFFSET_M")
     assert perception == {"LIDAR_FORWARD_DEG": forward, "LIDAR_HEIGHT_M": G["lidar"]["height_m"],
                           "LIDAR_X_OFFSET_M": G["lidar"]["x_m"]}
-    world_to_map = _module_constants(SRC / "sim" / "gz_sim" / "scripts" / "world_to_map.py", "LIDAR_Z")
+    world_to_map = _module_constants(SRC.parent / "integrations" / "simulation" / "gazebo" / "scripts" / "world_to_map.py", "LIDAR_Z")
     assert world_to_map["LIDAR_Z"] == G["lidar"]["height_m"]
 
 
@@ -167,7 +167,7 @@ def test_camera_consumers():
     assert nominal["pitch_rad"] == pytest.approx(cam["pitch_rad"], abs=1e-6)
     assert nominal["height_m"] == pytest.approx(cam["height_m"], abs=1e-6)
     assert nominal["x_offset_m"] == pytest.approx(cam["x_m"], abs=1e-6)
-    real = _module_constants(SRC / "sim" / "gz_sim" / "launch" / "map_v2_fleet_real.launch.py",
+    real = _module_constants(SRC.parent / "integrations" / "simulation" / "gazebo" / "launch" / "map_v2_fleet_real.launch.py",
                              "REAL_TILT_DEG", "REAL_CAM_MOUNT_Z", "REAL_CAMERA_HEIGHT_M", "REAL_CAMERA_X_OFFSET_M")
     assert real["REAL_TILT_DEG"] == cam["tilt_arg_deg"]
     assert real["REAL_CAM_MOUNT_Z"] == cam["mount_z_arg_m"]
@@ -189,11 +189,11 @@ def test_wheel_consumers():
     # The launch arguments are operator overrides only; 0 leaves the URDF nominal above.
     assert "DeclareLaunchArgument('wheel_radius', default_value='0.0')" in launch
     assert "DeclareLaunchArgument('wheel_separation', default_value='0.0')" in launch
-    store = _module_constants(SRC / "contracts" / "foundation" / "core_common" / "calibration_store.py",
+    store = _module_constants(SRC.parent / "contracts" / "foundation" / "core_common" / "calibration_store.py",
                               "NOMINAL_WHEEL_RADIUS_M", "NOMINAL_WHEEL_SEPARATION_M", "WHEEL_TOLERANCE")
     assert (store["NOMINAL_WHEEL_RADIUS_M"], store["NOMINAL_WHEEL_SEPARATION_M"]) == (radius, separation)
     assert store["WHEEL_TOLERANCE"] == 0.10
-    gz = _text(SRC / "sim" / "description" / "urdf" / "rosy_gz.urdf.xacro")
+    gz = _text(SRC.parent / "middleware" / "apps" / "device" / "pinky" / "description" / "urdf" / "rosy_gz.urdf.xacro")
     assert f"<wheel_separation>{separation}</wheel_separation>" in gz
     assert f"<wheel_radius>{radius}</wheel_radius>" in gz
     isaac = _load("isaac_graph_contract", REPO / "learning" / "envs" / "isaac" / "graph_contract.py").robot_contract("rosy_01")
@@ -215,7 +215,7 @@ def test_line_follow_stuck_body_consumers():
 
 def test_shared_robot_body_matches_geometry():
     """D-424: core_common.robot_body.PINKY_PRO is the one body every near/stop check uses."""
-    foundation = str(SRC / "contracts" / "foundation")
+    foundation = str(SRC.parent / "contracts" / "foundation")
     if foundation not in sys.path:
         sys.path.insert(0, foundation)
     from core_common import robot_body as body_module
@@ -230,7 +230,7 @@ def test_shared_robot_body_matches_geometry():
     assert (body.lidar_x_m, body.lidar_y_m, body.lidar_forward_deg, body.ultrasonic_x_m) == (
         G["lidar"]["x_m"], G["lidar"]["y_m"], G["lidar"]["forward_deg"], G["ultrasonic"]["x_m"])
     # D-422 gap policy: the CORE defaults equal the shared module's.
-    defaults = _yaml(SRC / "contracts" / "foundation" / "config" / "rosy_default.yaml")["line_follow"]
+    defaults = _yaml(SRC.parent / "contracts" / "foundation" / "config" / "rosy_default.yaml")["line_follow"]
     assert (defaults["obstacle_body_margin_m"], defaults["obstacle_latency_s"], defaults["obstacle_decel_mps2"],
             defaults["obstacle_resume_hysteresis_m"]) == (
         body_module.MARGIN_M, body_module.LATENCY_S, body_module.DECEL_MPS2, body_module.HYSTERESIS_M)

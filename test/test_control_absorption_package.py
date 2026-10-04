@@ -7,7 +7,7 @@ from pathlib import Path
 
 
 REPO = Path(__file__).resolve().parents[1]
-PACKAGE = REPO / "src" / "runtime" / "sensing"
+PACKAGE = REPO / "middleware" / "perception"
 
 
 def test_control_package_is_part_of_the_os_workspace() -> None:

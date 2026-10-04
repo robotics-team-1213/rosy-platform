@@ -210,7 +210,7 @@ def test_api_roots_are_flagged_and_named_api():
         root["api"] is not True or not root.get("import_prefix")
         or not all(prefix.endswith(".api") for prefix in root["import_prefix"]))]
     assert bad == [], f"api: true needs every import_prefix to end in .api: {bad}"
-    assert [root["path"] for root in roots if root.get("api")] == ["modules/skills/api"]
+    assert [root["path"] for root in roots if root.get("api")] == ["middleware/skills/api"]
 
 
 CONCERNS = ["learning", "decision", "control", "safety", "contracts", "other"]
@@ -409,6 +409,15 @@ def test_import_rules_only_shrink():
 #: (file, matched text) pairs the old-path scan reports that are not paths, e.g. a
 #: path-traversal rejection case like "../../etc/passwd". Stale entries fail.
 LEGACY_SCAN_ALLOWLIST: set[tuple[str, str]] = {
+    # D-446: installed pre-migration signed releases remain runnable after
+    # rollback. New archives use canonical roots; only pinned bootstrap paths
+    # and the regression fixture retain the old layout.
+    ("deploy/site/rosy_model_code.py", "src/runtime/sensing"),
+    ("deploy/site/rosy_model_code.py", "src/contracts/foundation"),
+    ("test/test_model_pc_autoupdate.py", "src/runtime/sensing"),
+    ("test/test_model_pc_autoupdate.py", "src/contracts/foundation"),
+    ("test/architecture/test_platform_parts.py", "src/runtime/sensing"),
+    ("test/architecture/test_platform_parts.py", "src/contracts/foundation"),
     # D-427 1-pre: the site model-watch wrapper falls back to the pre-move checkout
     # layout on purpose, so a site source copy older than wave 1 keeps working.
     ("deploy/site/rosy-model-watch", "$SRC/tools/perception"),

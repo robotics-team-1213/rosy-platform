@@ -15,7 +15,7 @@ import pytest
 import uvicorn
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "apps/agent/src"))
+sys.path.insert(0, str(ROOT / "middleware/apps/device/omx/agent/src"))
 
 
 @pytest.mark.parametrize("url", [

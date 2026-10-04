@@ -7,7 +7,7 @@ import threading
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "src/products/omx/adapter/test"))
+sys.path.insert(0, str(ROOT / "middleware/apps/device/omx/adapter/test"))
 from test_platform_cell_owner_assembly import _build, _docs, _grant, _submit
 from test_omx_pose_plan import _state
 from test_omx_pick_place_runner import _GoalPort, _event

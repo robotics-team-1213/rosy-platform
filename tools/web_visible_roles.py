@@ -31,13 +31,13 @@ from urllib.parse import urlsplit
 
 ROOT = Path(__file__).resolve().parents[1]
 for _entry in (
-    "src/runtime/gateway",
-    "src/runtime/api_web",
-    "src/contracts/foundation",
-    "src/runtime/events",
-    "src/runtime/services",
-    "src/hmi/web_common",
-    "src/contracts/interfaces",
+    "middleware/core/gateway",
+    "middleware/core/api_web",
+    "contracts/foundation",
+    "middleware/core/events",
+    "middleware/core/services",
+    "shared/web",
+    "contracts/ros_idl",
 ):
     _path = str(ROOT / _entry)
     if _path not in sys.path:
@@ -91,7 +91,7 @@ def build_client(tmp: Path):
     from core_api_web.api.app import create_app
     from core_common.profile import RobotProfile, robot_config_dir
 
-    cfgdir = ROOT / "src" / "contracts" / "foundation" / "config"
+    cfgdir = ROOT / "contracts" / "foundation" / "config"
     config = yaml.safe_load((cfgdir / "rosy_default.yaml").read_text(encoding="utf-8"))
     config["auth"] = {
         **config["auth"],

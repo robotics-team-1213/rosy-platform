@@ -14,7 +14,7 @@
 | `gateway/` | package `core`. Final `cmd_vel` (see `gateway/AGENTS.md`) |
 | `events/` | package `core_events` |
 | `services/` | package `core_features`, managers and `decision/` |
-| `api_web/` | package `core_api_web`. HTTP only; screens are `src/hmi/dashboard` |
+| `api_web/` | package `core_api_web`. HTTP only; screens are `middleware/ui/robot` |
 | `sensing/` | package `control`. Perception, calibration, local safety policy |
 | `navigation/` | Nav2/SLAM launch |
 

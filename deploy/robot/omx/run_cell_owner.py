@@ -17,9 +17,9 @@ import threading
 from pathlib import Path
 
 REPO = Path(os.environ.get("ROSY_SIM_REPO", "/repo"))
-for _part in ("src/contracts/foundation", "contracts/skill/src", "src/products/omx/adapter", "apps/agent/src",
-              "operations/execution/src", "operations/processes/palletizing/src", "modules/skills/api/src",
-              "modules/skills/manipulation/src", "integrations/robots/omx/src", "deploy/robot/omx"):
+for _part in ("contracts/foundation", "contracts/skill/src", "middleware/apps/device/omx/adapter", "middleware/apps/device/omx/agent/src",
+              "operations/execution/src", "operations/processes/palletizing/src", "middleware/skills/api/src",
+              "middleware/skills/manipulation/src", "integrations/robots/omx/src", "deploy/robot/omx"):
     sys.path.append(str(REPO / _part))
 
 from cell_sim_tools import refuse_second_owner  # noqa: E402
@@ -68,8 +68,8 @@ def main() -> None:
                           "gz-world-is-link0-v1", 0.001),
         runtime_factory=runtime_factory, goal_port_factory=RosArmPhaseGoalPort,
         http_app_factory=lambda runtime: create_pilot_sim_app(
-            runtime=PilotSimRuntime(runtime), pilot_root=REPO / "src/hmi/pilot",
-            common_root=REPO / "src/hmi/web_common", pairing_code=secrets.token_urlsafe(12)),
+            runtime=PilotSimRuntime(runtime), pilot_root=REPO / "middleware/ui/pilot",
+            common_root=REPO / "shared/web", pairing_code=secrets.token_urlsafe(12)),
         refuse_second_owner=lambda: None,  # checked above, before rclpy
         gripper_readback=gripper_readback,
         fleet_fence_current=fleet_fence,

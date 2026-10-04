@@ -27,7 +27,7 @@ LEARNED = PINKY / "image" / "learned-perception-requirements.txt"
 DEVICE_REQUIREMENTS = PINKY / "image" / "device-python-requirements.txt"
 STATE_RULES = PINKY / "native" / "tmpfiles-rosy-state.conf"
 LOCK = PINKY / "image" / "inputs.lock.yaml"
-RUNNER = ROOT / "src" / "runtime" / "sensing" / "control" / "sensing" / "perception" / "learned" / "runner.py"
+RUNNER = ROOT / "middleware" / "perception" / "control" / "sensing" / "perception" / "learned" / "runner.py"
 PINS = {"onnxruntime": "1.30.0", "ncnn": "1.0.20260526", "flatbuffers": "25.12.19",
         "packaging": "26.3", "protobuf": "7.36.2"}
 TARGET = "/opt/rosy/learned-perception/site-packages"

@@ -26,10 +26,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from candidate_signing import sign_manifest_bytes, verify_manifest_signature
 
 PREFIX = "learning/training/perception/"
-CODE_PREFIXES = (PREFIX, "src/runtime/sensing/control/", "src/contracts/foundation/core_common/")
+CODE_PREFIXES = (PREFIX, "middleware/perception/control/", "contracts/foundation/core_common/")
 LIMIT = 512 * 1024 * 1024
 FORBIDDEN = {"data", "private", "runs", "scratch", "checkpoints", "store", ".git", ".venv", "__pycache__", "secrets"}
 IMPORT_PATHS = (PREFIX.rstrip("/"), PREFIX + "model", PREFIX + "dataset", PREFIX + "training",
+                "middleware/perception", "contracts/foundation",
                 "src/runtime/sensing", "src/contracts/foundation")
 PATH_SETUP = ("import pathlib,sys,runpy;root=pathlib.Path(sys.argv.pop(1)).resolve();"
               f"sys.path[:0]=[str(root/p) for p in {IMPORT_PATHS!r}]")
@@ -55,10 +56,38 @@ def fingerprint(value):
     return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 
+def distribution_fingerprint(distribution):
+    metadata, version = distribution.metadata, distribution.version
+    name = metadata.get("Name")
+    if isinstance(name, str) and name and isinstance(version, str) and version:
+        return name.lower().replace("_", "-"), version
+    # An incomplete installed record still participates in the environment.
+    # PathDistribution's metadata entry identifies it without exposing its host path.
+    try:
+        entry = Path(distribution._path)
+        if not entry.name or entry.is_symlink(): raise ValueError("unidentified metadata entry")
+        if entry.is_file():
+            files = [(entry.name, digest(entry))]
+        elif entry.is_dir():
+            files, pending = [], [entry]
+            while pending:
+                for path in pending.pop().iterdir():
+                    if path.is_symlink(): raise ValueError("linked metadata entry")
+                    if path.is_dir(): pending.append(path)
+                    elif path.is_file(): files.append((path.relative_to(entry).as_posix(), digest(path)))
+                    else: raise ValueError("unreadable metadata member")
+            files.sort()
+        else:
+            raise ValueError("missing metadata entry")
+        record = {"metadata": sorted(metadata.items()), "version": version, "files": files}
+        return "<invalid-metadata>:" + entry.name, fingerprint(record)
+    except (AttributeError, OSError, TypeError, ValueError) as exc:
+        raise ValueError("environment package metadata unreadable or unidentified") from exc
+
+
 def environment_info():
     return {"python": f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}",
-            "packages": sorted((d.metadata["Name"].lower().replace("_", "-"), d.version)
-                               for d in importlib.metadata.distributions())}
+            "packages": sorted(distribution_fingerprint(d) for d in importlib.metadata.distributions())}
 
 
 def atomic_json(path, value):
@@ -129,15 +158,22 @@ def perception_edits(roots):
 
 
 def checkout_script_conflict(source, work_dir, script):
-    """The work tree copy is not what exec runs. Differing bytes must stop."""
+    """Protect local edits; a clean older checkout does not override signed code."""
     local = Path(work_dir) / script
     if local.is_symlink() or not local.is_file():
         return None
     signed = Path(source) / script
     try:
+        repo = subprocess.run(["git", "-C", str(work_dir), "rev-parse", "--is-inside-work-tree"],
+                              capture_output=True, text=True, timeout=15)
+        if repo.returncode == 0 and repo.stdout.strip() == "true":
+            status = subprocess.run(["git", "-C", str(work_dir), "status", "--porcelain", "--", script],
+                                    capture_output=True, text=True, timeout=15)
+            if status.returncode: return "checkout observation failed"
+            if not status.stdout.strip(): return None
         local_bytes = local.read_bytes()
         signed_bytes = signed.read_bytes() if signed.is_file() and not signed.is_symlink() else None
-    except OSError:
+    except (OSError, subprocess.SubprocessError):
         return "checkout script unreadable"
     if signed_bytes != local_bytes:
         return "work checkout script differs from the signed release"
@@ -200,7 +236,7 @@ def unpack(archive, dest):
                     shutil.copyfileobj(src, out)
                 if os.name == "posix": target.chmod(0o444)
     for required in (PREFIX + "model/watch.py", PREFIX + "rosy_ml.py",
-                     "src/runtime/sensing/control/__init__.py", "src/contracts/foundation/core_common/__init__.py"):
+                     "middleware/perception/control/__init__.py", "contracts/foundation/core_common/__init__.py"):
         if not (dest / required).is_file(): raise ValueError("missing model-code entry point or dependency")
 
 

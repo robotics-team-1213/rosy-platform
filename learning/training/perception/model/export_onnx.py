@@ -18,8 +18,8 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[4]
-for _p in (ROOT / "learning" / "training" / "perception" / "training", ROOT / "src" / "runtime" / "sensing",
-           ROOT / "src" / "contracts" / "foundation"):
+for _p in (ROOT / "learning" / "training" / "perception" / "training", ROOT / "middleware" / "perception",
+           ROOT / "contracts" / "foundation"):
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
 

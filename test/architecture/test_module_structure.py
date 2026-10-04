@@ -15,7 +15,7 @@ Honest holes, not oversights:
 - Dynamic imports (``importlib.import_module``, entry points) are invisible.
   The one intended case is core loading ``rosy.sensor_provider`` (D-126).
 - P6 budgets are per code type (D-362): 600 for production ``.py``/``.cpp``/``.hpp``/``.sh``
-  across ``src/`` packages and the ``deploy``/``tools``/``firmware`` roots, 800 for web
+  across ``src/`` packages and the ``deploy``/``tools``/``learning``/``operations/site_devices`` roots, 800 for web
   assets (``.js``/``.html``/``.css``) inside ``src/`` packages, zero growth allowance above
   1000. Test code and data files are exempt. Line counts are physical lines, blank
   lines and comments included.
@@ -32,8 +32,11 @@ import yaml
 ROOT = Path(__file__).resolve().parents[2]
 SRC = ROOT / "src"
 
-#: ``envs`` is the first folder under the ``learning`` colcon root (D-427 wave 1).
-DOMAINS = {"contracts", "runtime", "drivers", "products", "hmi", "site", "sim", "envs"}
+#: ``envs`` is the first folder under the ``learning`` colcon root (D-427 wave 1);
+#: ``apps``, ``vision`` and ``processes`` are under the ``operations`` root (D-427 wave 3b).
+DOMAINS = {"contracts", "runtime", "drivers", "products", "hmi", "site", "sim", "envs",
+           "apps", "vision", "processes", "fleet", "ui", "web", "core", "simulation",
+           "foundation", "ros_idl", "perception"}
 
 #: P2 library/contract tier: no process of their own (runtime gates N/A).
 LIBRARY_PACKAGES = {"core_common", "core_events", "core_features", "core_api_web", "web_common"}
@@ -69,15 +72,35 @@ REGROWTH_ALLOWANCE = 150
 FILE_BUDGET_WEB = 800
 WEB_SUFFIXES = {".js", ".html", ".css"}
 OPS_SUFFIXES = {".py", ".sh"}
-OPS_ROOTS = ("deploy", "tools", "firmware", "learning")  # learning: moved perception tooling (D-427 wave 1)
+OPS_ROOTS = ("deploy", "tools", "learning",  # learning: moved perception tooling (D-427 wave 1)
+             "operations/site_devices")  # site device firmware (D-427 wave 3b)
 HARD_TIER = 1_000  # a file above this gets zero growth allowance
 
 CONTROL_SPLIT = "docs/plans/2026-09-22-control-package-split-design.md"
 
 #: P6 verdicts: path (relative to src/) or package name -> (lines at verdict, verdict).
 SIZE_VERDICTS = {
+    "ui/pilot/styles.css": (
+        811,
+        "split: Pilot lobby, connection and drive responsive layouts share this surface stylesheet; "
+        "D-447 concurrent baseline work restores the existing 44px target floor on narrow screens. "
+        "Retain that correction; group the screen-specific rules into separately loaded assets "
+        "under docs/plans/2026-10-04-ui-release-and-live-refinement.md with installed and native "
+        "asset parity checks. Owner pilot; follow-up after device acceptance. Web ceiling and "
+        "growth allowance remain unchanged",
+    ),
+    "dashboard": (
+        10_148,
+        "split: D-447(b) adds a focused shared state-stream store to the already separated task "
+        "panels; package total crosses 10k on integration, while individual asset ceilings and "
+        "the +150 package allowance stay unchanged. The stream, REST fallback and scope teardown "
+        "remain one owner (five Node regressions pass). Group robot role resources by their "
+        "surface owner and identify remaining reusable assets for the existing shared/web owner "
+        "under docs/plans/2026-10-04-ui-release-and-live-refinement.md; do not split transport or "
+        "duplicate its socket. Owner hmi; source-boundary follow-up after device acceptance",
+    ),
     "fleet": (
-        29_657,
+        30_063,
         "split: server HTTP boundary, console, signals and the mission-control stores are separate owners "
         "today; re-judged 2026-10-03 at 28001 for D-413 internal Cell producer authentication: bounded "
         "schema, environment credential registry and evidence service are separate modules; goal completion "
@@ -170,9 +193,20 @@ SIZE_VERDICTS = {
         "docs/plans/2026-10-03-app-ownership-shared-transport-and-layout-migration.md moves their "
         "source ownership into ui/console with installed-resource acceptance. The server subpackage "
         "split remains open and the existing +150 package allowance stays unchanged"
-        "; re-judged 2026-10-04 at 29657 for D-438 phase 1: the stuck resolver is two new focused modules (stuck_resolver.py pure core, stuck_resolver_loop.py async loop) and the shared gather lives with the console routes it serves — verdict unchanged",
+        " Re-judged 2026-10-04 at 29264 after independently reviewed D-443 signal supervision "
+        "and D-442 U3 named-operator owner recovery: isolated HTTP routes reuse the existing "
+        "bounded UDS transport; OMX retains HOLD, local-stop and journal fencing. No new motion "
+        "publisher or owner. Existing split plan, budgets and +150 allowance remain unchanged."
+        "; re-judged 2026-10-04 at 29657 for D-438 phase 1: the stuck resolver is two new focused "
+        "modules (stuck_resolver.py pure core, stuck_resolver_loop.py async loop) and the shared gather "
+        "lives with the console routes it serves. Re-judged at 30063 after integrating the migrated "
+        "main: the incoming package was 29806; preserved signal routes/supervision/UI add 182, local "
+        "stop transport and owner recovery add 94, expiry worker adds 13, named-operator dispatch "
+        "adds 5 and console wiring adds 2, while shared app/console composition removes 39. These "
+        "are existing focused safety owners, not a duplicate command path. Independently counted "
+        "both parents and the union; the B2 server grouping remains open and +150 is unchanged",
     ),
-    "site/fleet/fleet/server/cell_job_store.py": (
+    "fleet/fleet/server/cell_job_store.py": (
         824,
         "accept: one owner (2026-10-02, C4b G3) for the ordered step ledger: Job, step, claim phase and "
         "event rows change in one SQLite transaction (submit promotes claims, outcomes return or pin "
@@ -183,7 +217,7 @@ SIZE_VERDICTS = {
         "one transaction. Split: move resume/cancel/hold_for_site_stop into a recovery module when "
         "D-420 v2 adds the CANCELLED status (schema change), before any further growth",
     ),
-    "site/fleet/fleet/server/proposal_store.py": (
+    "fleet/fleet/server/proposal_store.py": (
         730,
         "accept: one owner (the durable non-executable candidate ledger — proposal create, the fenced ER2 "
         "feedback replan candidate, recoverable resolution and the model tool-call result journal share one "
@@ -194,14 +228,14 @@ SIZE_VERDICTS = {
         "begin/complete/mark_unknown) is the only separable seam, so revisit it as a split if the store "
         "grows past 800",
     ),
-    "site/fleet/fleet/server/enrollment.py": (
+    "fleet/fleet/server/enrollment.py": (
         664,
         "accept: one owner (D-361 robot enrollment — exchange, binding, pinned-address gate, unenroll and "
         "pending logout share one state machine over the register), ROS-free, host-testable (X5); "
         "re-judged 2026-10-01 at 664 when move-address became a screen-code re-pairing on the same "
         "exchange and binding check",
     ),
-    "site/vision/rosy_vision/ingest.py": (
+    "vision/rosy_vision/ingest.py": (
         671,
         "accept: one owner (the rosy-overhead/1 receive endpoint — handshake, per-source connection "
         "lifecycle, latest-frame store and the direct preview/proposal reads share one connection map); "
@@ -209,14 +243,14 @@ SIZE_VERDICTS = {
         "same handshake and connection map (the digest store and sync thread live in pairing_sync.py). "
         "ROS-free, host-testable (X5)",
     ),
-    "site/fleet/fleet/server/mission_store.py": (
+    "fleet/fleet/server/mission_store.py": (
         887,
         "accept: one owner (the Fleet Mission SQLite ledger — missions, attempts, progress snapshots, "
         "fenced device phase snapshots, and their transitions in one transactional store), ROS-free, "
         "host-testable; correlated task evidence stays in task_store/task_results (X5). Re-judged "
         "2026-10-01 at 887 after idempotent per-attempt phase projection joined the Mission event transaction",
     ),
-    "contracts/foundation/core_common/protocol/schemas.py": (
+    "foundation/core_common/protocol/schemas.py": (
         1_324,
         "accept: the D-18 single contract source — every envelope, event and capability model in one "
         "importable place; re-judged 2026-10-03 at 1240 for the D-413 public CellGoalEvidenceSubmission "
@@ -249,7 +283,7 @@ SIZE_VERDICTS = {
         " Re-judged 2026-10-04 at 1322: bounded lane selection/readback models were split into "
         "protocol/lane_perception.py; one re-export preserves the single public schema import point.",
     ),
-    "site/fleet/fleet/server/task_store.py": (
+    "fleet/fleet/server/task_store.py": (
         1060,
         "accept: keep SQLite task, history, lease, reservation, and dispatch-claim transactions together; "
         "correlated CORE event projection lives in task_results.py. Re-judged 2026-09-29 at 1014 lines after "
@@ -257,15 +291,15 @@ SIZE_VERDICTS = {
         "2026-09-29-fleet-mission-control-arbitration-implementation.md); re-judged 2026-09-30 at 1060 "
         "under the D-362 zero-allowance tier — verdict unchanged",
     ),
-    "runtime/sensing/control/safety/node.py": (
+    "perception/control/safety/node.py": (
         795,
         "accept: legacy comparison-graph publisher pinned by test_module_separation; no new work (X3)",
     ),
-    "site/fleet/fleet/server/app.py": (
+    "fleet/fleet/server/app.py": (
         627,
         "accept: the FastAPI factory and lifespan own every background task and route install; D-438 added the resolver task, hub event fan-out and shared-gather wiring (2026-10-04) — the resolver logic itself lives in stuck_resolver*.py",
     ),
-    "site/fleet/fleet/server/console.py": (
+    "fleet/fleet/server/console.py": (
         1154,
         "accept: one owner (FleetConsole gather/scatter), host-testable (X5). Re-judged 2026-09-30 at 1013: "
         "D-361 roster mutation and pinned-address holds change the gather/traffic tables in place, so they "
@@ -285,12 +319,12 @@ SIZE_VERDICTS = {
         "same gather owner and records source provenance; test_server_gather_source.py checks "
         "fresh/stale/disconnected fallback. The zero-growth allowance remains unchanged.",
     ),
-    "runtime/sensing/control/sensing/perception/lane.py": (
+    "perception/control/sensing/perception/lane.py": (
         765,
         "accept: one concern (lane/IR line detection), ROS-free pure functions and trackers, host-testable (X5); "
         "the ground-geometry lane keeper already lives apart in lane_keep.py (D-364)",
     ),
-    "runtime/gateway/core/bridge/ros_bridge.py": (
+    "core/gateway/core/bridge/ros_bridge.py": (
         799,
         "accept: one CORE ROS executor integration point for publishers, subscriptions, lifecycle wiring, and "
         "service/action clients; extracted policy and callback logic lives in core/bridge modules, and "
@@ -299,23 +333,23 @@ SIZE_VERDICTS = {
         "(face-inputs hand-over on the 5 Hz power tick; payload and cadence live in bridge/display.py "
         "and core_common.face_screen, covered by test_face_inputs.py)",
     ),
-    "runtime/sensing/control/sensing/perception/lane_bev.py": (
+    "perception/control/sensing/perception/lane_bev.py": (
         611,
         "accept: one owner (LaneEdgeFollower + its bird's-eye helpers), ROS-free, host-testable (X5)",
     ),
-    "runtime/events/core_events/events/audit.py": (
+    "core/events/core_events/events/audit.py": (
         745,
-        "accept: one owner (svc.audit / FileAuditLog), ROS-free, covered by src/runtime/events/test/test_audit.py; "
+        "accept: one owner (svc.audit / FileAuditLog), ROS-free, covered by middleware/core/events/test/test_audit.py; "
         "about half the lines are the rationale comments the append/compaction/quarantine rules rest on (X5)",
     ),
-    "runtime/services/core_features/line_follow/manager.py": (
+    "core/services/core_features/line_follow/manager.py": (
         605,
         "accept: one line-follow decision and loss owner; recovery already lives in separate "
         "stuck/body mixins. The added low-light guards invalidate decisions and bypass autonomous "
         "recovery without introducing another writer. Configured back-off, active recovery and "
         "stale-decision tests plus independent reproduction cover this safety boundary.",
     ),
-    "runtime/services/core_features/docking/manager.py": (
+    "core/services/core_features/docking/manager.py": (
         663,
         "accept: 930 -> 663 after the parking-only phases moved to docking/parking_phases.py and the phase/"
         "executor/config definitions to docking/model.py (user decision 2026-09-24: split, not a size exception); "
@@ -323,19 +357,19 @@ SIZE_VERDICTS = {
         "default-dock phases, battery return, public API), ROS-free, covered by core_features/test/test_docking*.py "
         "and core/test/test_docking_*.py (X5)",
     ),
-    "runtime/services/core_features/traffic_policy/manager.py": (
+    "core/services/core_features/traffic_policy/manager.py": (
         609,
         "accept: one owner (the TrafficPolicyManager verdict state machine with its evidence contracts "
         "RoadEvidence/SignalHeadEvidence/config/decision), ROS-free, host-testable via core/test/test_traffic_policy.py; "
         "the D-337 measured-light fusion grew the dwell-complete branch (2026-09-29) and the observer transport "
         "already lives in traffic_policy/observer_source.py (X5)",
     ),
-    "sim/gz_sim/scripts/lane_live_view.py": (
+    "simulation/gazebo/scripts/lane_live_view.py": (
         709,
         "accept: sim-only read-only viewer server (HTTP handler + ROS subscriptions); the pure logic already lives in live_view_model.py and the page in lane_live_view.html, covered by test_lane_live_view*.py and test_live_view_model.py (X5)",
     ),
     "core_features": (
-        12_551,
+        12_723,
         "accept: the ROS-free CORE feature managers (command, safety, docking, line_follow, "
         "traffic_policy, navigation, swarm, ...) are already one subpackage per feature, each "
         "under the file budget; the package total is a sum of independent owners, not one "
@@ -365,7 +399,14 @@ SIZE_VERDICTS = {
         "Re-judged 2026-10-04 at 12551: the user-requested long testing dwell and bounded "
         "low-battery limits add 15 production lines within the existing power owner; "
         "docs/plans/2026-10-04-power-health-and-wake.md records the policy and safety review. "
-        "The split verdict, file budgets and 150 allowance are unchanged.",
+        "Re-judged 2026-10-04 at 12723 after the concurrent power-health merge: "
+        "independent production-line counts are 12662 for integration parent 8dfa7fe (73 files), "
+        "12701 for main parent 030323440 (73 files), and 12723 for the union (73 files). "
+        "The integration-parent delta is battery.py +22 and power/manager.py +39; "
+        "the main-parent delta retains 22 D-442 manual-owner and mode-locked command/watchdog lines. "
+        "Power policy remains in its existing owner and the command admission lock is preserved. "
+        "docs/validation/ui-release-integration-2026-10-04/README.md records the independent review. "
+        "The feature grouping, file budgets and 150 allowance are unchanged.",
     ),
     "control": (
         44_469,
@@ -447,7 +488,7 @@ SIZE_VERDICTS = {
         "separate and move with the existing P1a split; no new command writer.",
     ),
     # --- D-362 newly-covered files (web assets in src/ packages, ops roots). ---
-    "runtime/sensing/web/diagnostic.html": (
+    "perception/web/diagnostic.html": (
         1857,
         "accept: re-judged 2026-09-30 (D-362 P1) — the single HTML file with one IIFE is the "
         "recorded design, not an accident (web/AGENTS.md: dependency-free on purpose, no build "
@@ -459,7 +500,7 @@ SIZE_VERDICTS = {
     # hmi/dashboard/app.js (1338 -> 745) and styles.css (1119 -> 492): the P1
     # extraction landed — telemetry/teleop/state-socket modules and the
     # console-detail.css tail split — so these entries left with it.
-    "sim/gz_sim/scripts/lane_live_view.html": (
+    "simulation/gazebo/scripts/lane_live_view.html": (
         856,
         "accept: same owner as the accepted lane_live_view.py — the pure logic already lives in "
         "live_view_model.py and this is the read-only page it renders, covered by test_lane_live_view*.py "
@@ -535,13 +576,6 @@ SIZE_VERDICTS = {
         "accept: D-412 operator publish tool; rollout signing, the GitHub release I/O and the "
         "canary watch are one short sequential flow; split the canary watch out if it grows further",
     ),
-    "deploy/site/rosy_site_autoupdate.py": (
-        755,
-        "accept: D-441 site-host update transaction keeps candidate selection, trusted verification, "
-        "atomic switch, health gate and rollback in one reviewed host entry point; owner deploy, "
-        "covered by test/test_site_autoupdate.py. Split transport or retention into siblings if they "
-        "grow independently; the updater must never import executable code from a candidate",
-    ),
     "deploy/robot/pinky_pro/native/sync-image-layer.py": (
         1020,
         "split: D-388 image-layer sync — the allowlist/plan, the backup-record history (records, "
@@ -558,7 +592,7 @@ SIZE_VERDICTS = {
         "accept: single-entry hardware probe CLI the commissioning runbook drives top-to-bottom — "
         "splitting probe sequence from reporting would sever one diagnostic narrative (X5)",
     ),
-    "site/fleet/fleet/cli.py": (
+    "fleet/fleet/cli.py": (
         604,
         "accept: the Fleet composition root (2026-10-02, C4b G5) parses every console flag and "
         "assembles create_app once; the Cell Job compiler flag added 10 lines and the palletizing "
@@ -566,7 +600,7 @@ SIZE_VERDICTS = {
         "per-feature service builders (mission, pairing, localization) into a builder module "
         "before the next flag",
     ),
-    "products/omx/adapter/omx_adapter/action_store.py": (
+    "apps/device/omx/adapter/omx_adapter/action_store.py": (
         1_191,
         "accept: one owner for the durable local Action, per-attempt ROS phase journal, and semantic "
         "workflow terminal gate; they share SQLite transactions, identity fences, and restart-to-UNKNOWN "
@@ -579,14 +613,14 @@ SIZE_VERDICTS = {
         "completion is journaled per kind (PICK_PLACE names kept, CELL_TRANSFER its own) with "
         "net -3 lines. The hard-tier zero-growth rule prevents silent expansion",
     ),
-    "products/omx/adapter/omx_adapter/command_owner.py": (
+    "apps/device/omx/adapter/omx_adapter/command_owner.py": (
         621,
         "accept: one owner (2026-10-02, C3b review) for the single-writer arm command policy: "
         "config, joint-state intake, submit admission (limits, start window), poll timeouts on "
         "the owner and wall clocks, cancel and recovery share one lock and one HOLD latch; "
         "splitting admission from the watchdog would split that lock. ROS-free and host-testable",
     ),
-    "products/omx/adapter/omx_adapter/pose_plan.py": (
+    "apps/device/omx/adapter/omx_adapter/pose_plan.py": (
         714,
         "accept: one owner (2026-10-02, C3b) for the simulation cell profile and the analytic "
         "CELL_TRANSFER planner that reads it. C3b added the profile's width-matched jaw mapping, "
@@ -596,7 +630,7 @@ SIZE_VERDICTS = {
         "the profile loader out if MoveIt (D-402 follow-up) adds a second planner. Re-judged at 714 "
         "after the review's accepted-recipe item check, release rejection and fingertip overhang",
     ),
-    "hmi/dashboard/app.js": (
+    "ui/robot/app.js": (
         803,
         "split: the shell's session/auth/refresh cycle, the Escape e-stop handler, the goal "
         "tracking, the mode bindings and the formation cell wiring grew with D-383/D-385/D-396 "
@@ -631,7 +665,7 @@ MIN_PACKAGES = 27
 
 
 def _rel(path: Path) -> Path:
-    """``path`` relative to the colcon root that holds it (``src`` or ``learning``)."""
+    """``path`` relative to the colcon root that holds it (``src``, ``learning`` or ``operations``)."""
     return path.relative_to(next(root for root in COLCON_ROOTS if path.is_relative_to(root)))
 
 
@@ -654,34 +688,62 @@ def _packages():
 PACKAGES = _packages()
 
 
+#: D-427: packages leave the D-310 src/ domains for the D-427 parts, but the P4 direction
+#: table still judges each package by the D-310 role it had there (name -> (domain, family)).
+#: Package names are frozen (D-231), so this table does not move with the folders.
+D310_ROLE = {
+    "core": ("runtime", None), "core_events": ("runtime", None), "core_features": ("runtime", None),
+    "core_api_web": ("runtime", None), "control": ("runtime", None), "navigation": ("runtime", None),
+    "core_common": ("contracts", None), "interfaces": ("contracts", None),
+    "web_common": ("hmi", None), "emotion": ("hmi", None), "dashboard": ("hmi", None), "pilot": ("hmi", None),
+    "pinky_pro": ("products", "pinky_pro"), "bringup": ("products", "pinky_pro"),
+    "sensor_adc": ("products", "pinky_pro"), "lamp_control": ("products", "pinky_pro"),
+    "led": ("products", "pinky_pro"), "omx": ("products", "omx"), "omx_adapter": ("products", "omx"),
+    "imu_bno055": ("drivers", None), "description": ("sim", None), "gz_sim": ("sim", None),
+}
+
+
 def _domain(name: str) -> str:
+    if name in D310_ROLE:
+        return D310_ROLE[name][0]
     return _rel(PACKAGES[name]["dir"]).parts[0]
 
 
 def _family(name: str):
+    if name in D310_ROLE:
+        return D310_ROLE[name][1]
     parts = _rel(PACKAGES[name]["dir"]).parts
     return parts[1] if len(parts) == 3 and parts[0] == "products" else None
 
 
 # D-241 and D-242: the ROS package name stays. These directories use the role name.
 ROLE_DIR = {
-    "core": ("runtime", "gateway"),
-    "core_events": ("runtime", "events"),
-    "core_features": ("runtime", "services"),
-    "core_api_web": ("runtime", "api_web"),
-    "core_common": ("contracts", "foundation"),
-    "control": ("runtime", "sensing"),
-    "web_common": ("hmi", "web_common"),
-    "emotion": ("hmi", "face"),
-    "pinky_pro": ("products", "pinky_pro", "profile"),
-    "bringup": ("products", "pinky_pro", "bringup"),
-    "sensor_adc": ("products", "pinky_pro", "adc"),
-    "lamp_control": ("products", "pinky_pro", "lamp"),
-    "led": ("products", "pinky_pro", "led"),
-    "omx": ("products", "omx", "profile"),
-    "omx_adapter": ("products", "omx", "adapter"),
+    # D-427 wave 4d: middleware/core/<role>, contracts/foundation, contracts/ros_idl.
+    "core": ("core", "gateway"),
+    "core_events": ("core", "events"),
+    "core_features": ("core", "services"),
+    "core_api_web": ("core", "api_web"),
+    "core_common": ("foundation",),
+    "interfaces": ("ros_idl",),
+    "control": ("perception",),  # middleware/perception (D-427 wave 4e)
+    "web_common": ("web",),  # shared/web (D-427 wave 4b)
+    "emotion": ("ui", "face"),  # middleware/ui/face (D-427 wave 4b)
+    "dashboard": ("ui", "robot"),  # middleware/ui/robot (D-427 wave 4b)
+    # D-427 wave 4c: middleware/apps/device/<robot>/<role>, middleware/drivers/<robot>_<role>.
+    "pinky_pro": ("apps", "device", "pinky", "profile"),
+    "bringup": ("apps", "device", "pinky", "bringup"),
+    "description": ("apps", "device", "pinky", "description"),
+    "sensor_adc": ("drivers", "pinky_adc"),
+    "lamp_control": ("drivers", "pinky_lamp"),
+    "led": ("drivers", "pinky_led"),
+    "omx": ("apps", "device", "omx", "profile"),
+    "omx_adapter": ("apps", "device", "omx", "adapter"),
     "imu_bno055": ("drivers", "imu_bno055"),
+    "navigation": ("core", "navigation"),
+    "gz_sim": ("simulation", "gazebo"),
     "isaac_sim": ("envs", "isaac"),  # learning/envs/isaac (D-427 wave 1)
+    "rosy_vision": ("vision",),  # operations/vision (D-427 wave 3b)
+    "fleet": ("fleet",),  # operations/fleet (D-427 wave 3c)
 }
 
 
@@ -879,7 +941,7 @@ def test_core_chain_stays_one_way():
 
 
 def _is_prod_outside_src(path: Path) -> bool:
-    """Prod filter for the deploy/tools/firmware roots (D-362), same rule as _is_prod."""
+    """Prod filter for the OPS_ROOTS (D-362), same rule as _is_prod."""
     return not any(
         p in ("test", "tests", "build", "install", "log") or p.startswith(".")
         for p in path.relative_to(ROOT).parts
@@ -966,15 +1028,15 @@ def test_direction_table_rows_for_products_and_drivers(src_domain, src_family, d
 @pytest.mark.parametrize(
     "rel, name, ok",
     [
-        (("products", "pinky_pro", "bringup"), "bringup", True),
-        (("products", "pinky_pro", "profile"), "pinky_pro", True),
-        (("products", "omx", "adapter"), "omx_adapter", True),
+        (("apps", "device", "pinky", "bringup"), "bringup", True),
+        (("apps", "device", "pinky", "profile"), "pinky_pro", True),
+        (("apps", "device", "omx", "adapter"), "omx_adapter", True),
         (("drivers", "imu_bno055"), "imu_bno055", True),
         (("devices", "pinky_pro", "bringup"), "bringup", False),
         (("devices", "bringup"), "bringup", False),
         (("products", "pinky_pro"), "pinky_pro", False),
         (("products", "omx", "bringup"), "bringup", False),
-        (("runtime", "sensing"), "control", True),
+        (("perception",), "control", True),
         (("runtime", "control"), "control", False),
         (("core", "control"), "control", False),
         (("apps", "x", "control"), "control", False),

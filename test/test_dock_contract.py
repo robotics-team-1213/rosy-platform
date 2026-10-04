@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-DOCK = ROOT / "firmware" / "dock"
+DOCK = ROOT / "operations" / "site_devices" / "dock"
 README = DOCK / "README.md"
 
 
@@ -26,8 +26,8 @@ def _documented_example() -> dict:
 
 def test_the_documented_payload_parses_as_the_client_expects(monkeypatch):
     import sys
-    sys.path.insert(0, str(ROOT / "src" / "runtime" / "services"))
-    sys.path.insert(0, str(ROOT / "src" / "runtime" / "gateway"))
+    sys.path.insert(0, str(ROOT / "middleware" / "core" / "services"))
+    sys.path.insert(0, str(ROOT / "middleware" / "core" / "gateway"))
     from core_features.docking import agent
     from core_features.docking.agent import DockAgent, DockReachability
 
@@ -48,8 +48,8 @@ def test_the_documented_payload_parses_as_the_client_expects(monkeypatch):
 def test_the_required_fields_are_the_ones_the_client_requires():
     """클라이언트가 필수로 삼는 필드가 문서에도 필수로 적혀 있어야 한다."""
     import sys
-    sys.path.insert(0, str(ROOT / "src" / "runtime" / "services"))
-    sys.path.insert(0, str(ROOT / "src" / "runtime" / "gateway"))
+    sys.path.insert(0, str(ROOT / "middleware" / "core" / "services"))
+    sys.path.insert(0, str(ROOT / "middleware" / "core" / "gateway"))
     from core_features.docking.agent import _REQUIRED
 
     document = _documented_example()

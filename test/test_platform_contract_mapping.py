@@ -25,10 +25,10 @@ from rosy.skills.api import SkillContract, SkillInvocation  # noqa: E402
 from rosy.world.api import ObservationSnapshot, SnapshotValidity  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
-CELL_ROOT = ROOT / "src" / "site" / "cell"
+CELL_ROOT = ROOT / "operations" / "processes" / "cell"
 if str(CELL_ROOT) not in sys.path:
     sys.path.insert(0, str(CELL_ROOT))
-OMX_ADAPTER_ROOT = ROOT / "src" / "products" / "omx" / "adapter"
+OMX_ADAPTER_ROOT = ROOT / "middleware" / "apps" / "device" / "omx" / "adapter"
 if str(OMX_ADAPTER_ROOT) not in sys.path:
     sys.path.insert(0, str(OMX_ADAPTER_ROOT))
 
@@ -39,8 +39,8 @@ from rosy_cell.compiler import Job, Step  # noqa: E402
 def test_platform_api_packages_have_declared_build_metadata():
     package_files = (
         ROOT / "operations/world/pyproject.toml",
-        ROOT / "modules/skills/api/pyproject.toml",
-        ROOT / "modules/skills/manipulation/pyproject.toml",
+        ROOT / "middleware/skills/api/pyproject.toml",
+        ROOT / "middleware/skills/manipulation/pyproject.toml",
         ROOT / "operations/execution/pyproject.toml",
     )
     assert all(path.is_file() for path in package_files)

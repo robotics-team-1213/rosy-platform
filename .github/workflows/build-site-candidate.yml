@@ -25,14 +25,14 @@ on:
     branches: [main]
     paths:
       - deploy/site/**
-      - src/site/fleet/**
-      - src/site/vision/**
-      - src/site/games/**
-      - src/contracts/foundation/core_common/**
+      - operations/fleet/**
+      - operations/vision/**
+      - operations/apps/games/**
+      - contracts/foundation/core_common/**
       - operations/apps/fleet/**
-      - src/hmi/web_common/**
-      - src/runtime/sensing/map/map_v2_fleet/lane_graph.yaml
-      - src/runtime/sensing/map/map_v2_fleet/meshes/road_lines.stl
+      - shared/web/**
+      - middleware/perception/map/map_v2_fleet/lane_graph.yaml
+      - middleware/perception/map/map_v2_fleet/meshes/road_lines.stl
       - docs/reference/site-lan-discovery-profile.md
       - .github/workflows/build-site-candidate.yml
 

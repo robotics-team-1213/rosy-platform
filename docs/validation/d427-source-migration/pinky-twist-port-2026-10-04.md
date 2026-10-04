@@ -1,0 +1,18 @@
+# D-442 U2 Pinky §4(b) binding source/host proof — 2026-10-04
+
+Candidate: feat/d442-pinky-bind, parent 458e6ee60 (contract delivery), registered worktree d442-port. Task 2 type wheel is 25d2df4d8; earlier static publisher gate is da67f678a. Scope is the immediate handoff Pinky wrapper and construction first net, not the full D-442 producer/admission/profile/OMX migration.
+
+PinkyTwistPort is cycle-local inside the existing safety cmd_vel.py. It wraps the received writer callback; RosBridge source is unchanged, including the four-argument cmd_vel_cycle call, sole final publisher and publish-before-D-422 wheels_sent. No bridge import or second ROS/bus writer was introduced. The existing manager still chooses/clips a Twist; stage (b) records that implementation revision, not future Arbiter fields.
+
+The cycle snapshots both Twist values in immutable BaseTwist, creates a GuardedMotion with private module token, registers that original with one port, and submits once. Exact class/token/original `is` are required. An RLock makes consumption atomic before entering the writer; copied/replaced/forged/subclass/another-port objects are refused. Lost writer ACK/exception does not restore the original. The grant has a 300ms monotonic bound, rejects backwards time and expires when the cycle closes in finally. This is a trusted Python process invariant; reflection/private attribute manipulation is review-only, not a security boundary.
+
+Selection failure preserves the original ZERO fallback. Binding/guard construction failure and expired/refused grant send ZERO, support the existing optional warning callback and return without announcing stale output. Readiness HOLD submits zero. The writer still runs before power observation/announce. Port status is local acceptance, not physical motion evidence; E-stop readback is unknown, cancel-by-intent rejects because stage (b) has no header. No release/rearm API exists.
+
+Evidence (logs under X:/DevTemp/rosy-d427/resume):
+- New runtime cases initially **11 RED**. Independent review caught absent EstopStatus argument and binding construction outside the ZERO protection; **2 focused RED** regressions, then corrected.
+- Final unchanged cycle/watchdog/safety/OMX owner/stop/runtime plus binding regressions **137 passed, 1 skipped**, 3.80 s (port-binding-final.txt); known failures NEW0. The explicit skip is the existing ROS-only runtime boundary.
+- Actual Ubuntu Python3.12 using the installed release-tree wheel: **53 passed**, 25.12 s (port-binding-linux-sys.txt). DrvFS fd-capture initially failed in pytest capture, then the same tests ran with --capture=sys; no test was skipped for that environment issue.
+- Constructor/copy aliases were **7 RED** before the static helper. Final publisher/construction/safety/parts/budget structure **76 passed**, 60.07 s (port-binding-structure-final.txt). Scans cover >500 tracked production files, retain the existing Gazebo exclusion, and require exact writer symbols. Dynamic reflection/interprocedural aliases remain review-only; runtime identity is the second boundary.
+- Independent reviewer /root/d427_safety_review: **APPROVE Pinky source/host slice**, installed release-tree Ubuntu3.12 **28 passed**, 1.67 s; independent two-thread same-original submission emitted once and backwards clock was refused. Bridge byte identity and existing ordering verified. Production/tests flake8: zero findings.
+
+SOURCE/host and installed-Linux-wheel proof. Actual ARM64 native payload, final CORE Docker and SD build, full CI, ROS-SIM, DEVICE and FIELD are pending. Global profile binding selection, OMX typed port adapter and stage (c) producer/envelope admission remain separate work. This proof does not claim those features or physical stop acceptance.

@@ -6,7 +6,7 @@ source /opt/ros/jazzy/setup.bash
 source /opt/omx_ws/install/setup.bash
 set -u
 
-test -r /repo/src/products/omx/adapter/test/test_omx_fleet_ros_actionserver.py || {
+test -r /repo/middleware/apps/device/omx/adapter/test/test_omx_fleet_ros_actionserver.py || {
   echo "read-only /repo checkout is required" >&2
   exit 2
 }
@@ -30,7 +30,7 @@ if [[ -d /dev/serial/by-id ]] \
   exit 2
 fi
 
-export PYTHONPATH="/repo/src/contracts/foundation:/repo/src/site/fleet:/repo/src/site/fleet/test:/repo/src/products/omx/adapter:${PYTHONPATH:-}"
+export PYTHONPATH="/repo/contracts/foundation:/repo/operations/fleet:/repo/operations/fleet/test:/repo/middleware/apps/device/omx/adapter:${PYTHONPATH:-}"
 export PYTHONDONTWRITEBYTECODE=1
 export OMX_FLEET_VENDOR_SIM_ACTION=/arm_controller/follow_joint_trajectory
 export OMX_FLEET_VENDOR_SIM_JOINT_STATES=/joint_states
@@ -49,7 +49,7 @@ cleanup() {
 trap cleanup EXIT
 
 if ! python3 -m pytest \
-  /repo/src/products/omx/adapter/test/test_omx_fleet_ros_actionserver.py \
+  /repo/middleware/apps/device/omx/adapter/test/test_omx_fleet_ros_actionserver.py \
   -k generation-change -x -s -q -p no:cacheprovider \
   --basetemp "/tmp/rosy-fleet-vendor-pytest-$$"; then
   tail -n 80 /tmp/rosy-fleet-vendor-launch.log >&2

@@ -82,7 +82,7 @@ def test_labeller_yaw_is_the_accepted_record_else_180_not_robot_yaml(tmp_path):
     # Review M6: robot.yaml is never the default (it held 190 deg until D-397).
     import sys
     from pathlib import Path
-    sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "src" / "contracts" / "foundation"))
+    sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "contracts" / "foundation"))
     from core_common.calibration_store import CalibrationStore
     assert Lidar().forward_deg == 180.0
     assert labeller_lidar_yaw_deg(None)[0] == 180.0

@@ -20,11 +20,11 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 NATIVE = ROOT / "deploy/robot/pinky_pro/native"
 CORE_SRC = {
-    "core": ROOT / "src/runtime/gateway",
-    "core_common": ROOT / "src/contracts/foundation",
-    "core_events": ROOT / "src/runtime/events",
-    "core_features": ROOT / "src/runtime/services",
-    "core_api_web": ROOT / "src/runtime/api_web",
+    "core": ROOT / "middleware/core/gateway",
+    "core_common": ROOT / "contracts/foundation",
+    "core_events": ROOT / "middleware/core/events",
+    "core_features": ROOT / "middleware/core/services",
+    "core_api_web": ROOT / "middleware/core/api_web",
 }
 BOOT_ID = "0b1f5d2e-8c3a-4f6e-9d7b-1a2b3c4d5e6f"
 POSIX = pytest.mark.skipif(os.name != "posix", reason="POSIX modes, groups, symlinks and FIFOs")

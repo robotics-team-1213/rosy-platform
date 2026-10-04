@@ -11,15 +11,15 @@ ROOT = Path(__file__).parents[1]
 def test_io_image_contains_line_follow_runtime_without_polluting_core():
     dockerfile = (ROOT / "deploy/robot/pinky_pro/Dockerfile").read_text(encoding="utf-8")
     core, io = dockerfile.split("FROM runtime-common AS io-runtime", 1)
-    assert "COPY src/runtime/sensing" not in core
+    assert "COPY middleware/perception" not in core
     assert "python3-opencv" not in core
-    assert "COPY src/runtime/sensing ./src/runtime/sensing" in io
+    assert "COPY middleware/perception /opt/rosy_ws/src/runtime/sensing" in io
     assert "python3-opencv" in io
     assert "control" in io
 
 
 def test_hardware_launch_reaches_sensing_only_line_follow_launch():
-    launch = (ROOT / "src/runtime/navigation/launch/hardware.launch.py").read_text(
+    launch = (ROOT / "middleware/core/navigation/launch/hardware.launch.py").read_text(
         encoding="utf-8")
     assert 'get_package_share_directory("control")' in launch
     assert '"line_follow.launch.py"' in launch
@@ -58,9 +58,9 @@ def test_ir_calibration_is_an_external_runtime_profile_not_an_image_rebuild():
 
 
 def test_bridge_checks_original_sensor_age_not_only_receipt_age():
-    bridge = (ROOT / "src/runtime/gateway/core/bridge/ros_bridge.py").read_text(
+    bridge = (ROOT / "middleware/core/gateway/core/bridge/ros_bridge.py").read_text(
         encoding="utf-8")
-    gate = (ROOT / "src/runtime/gateway/core/bridge/traffic_gate.py").read_text(
+    gate = (ROOT / "middleware/core/gateway/core/bridge/traffic_gate.py").read_text(
         encoding="utf-8")
     assert "self._node.get_clock().now().nanoseconds" in bridge
     assert "source_now=source_now" in bridge
@@ -71,11 +71,11 @@ def test_bridge_checks_original_sensor_age_not_only_receipt_age():
 
 def test_semantic_road_launch_connects_real_gazebo_camera_to_dashboard():
     launch = (
-        ROOT / "src/sim/gz_sim/launch/semantic_road_dashboard.launch.py"
+        ROOT / "integrations/simulation/gazebo/launch/semantic_road_dashboard.launch.py"
     ).read_text(encoding="utf-8")
-    package = (ROOT / "src/sim/gz_sim/package.xml").read_text(encoding="utf-8")
+    package = (ROOT / "integrations/simulation/gazebo/package.xml").read_text(encoding="utf-8")
     config = yaml.safe_load((
-        ROOT / "src/sim/gz_sim/config/semantic_road_core.yaml"
+        ROOT / "integrations/simulation/gazebo/config/semantic_road_core.yaml"
     ).read_text(encoding="utf-8"))
 
     assert "map_260905_traffic.world" in launch

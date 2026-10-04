@@ -1,0 +1,263 @@
+# D-329 표면 레지스트리 — 표면 계약 적용 범위의 단일 출처.
+# 표면을 더하거나 빠는 커밋은 이 파일을 같은 커밋에서 고친다.
+# 코드를 담지 않는다: D-92 "어휘만 공유", D-75 무번들러.
+#
+# contracts 이름이 곧 시험 파일:
+#   shared_controls    = shared/web/test/test_shared_controls.py
+#   typography_focus   = shared/web/test/test_surface_typography_focus_contracts.py
+#   dialog             = test/test_web_dialog_contract.py
+#   token_parity       = shared/web/test/test_token_parity.py (D-345)
+# medium은 web·native·lcd 중 하나다. 웹은 위 세 계약을, 웹이 아닌 표면은
+# token_parity를 받는다 — token_copy 파일의 `# --이름 #hex` / `// --이름` 사본이 tokens.css와 같아야 한다.
+# 세 계약을 다 받지 않는 항목은 contract_reason, baseline이 없는 항목은
+# baseline_reason을 적는다.
+# app_name·app_name_en·short_name·icon은 D-377 이름 규칙(Rosy + 영어 한 단어, id = 그 단어 소문자)과
+# D-370 3항 아이콘이다(test_surface_icons.py, test/architecture/test_app_identity.py).
+# role은 D-370 1항 역할 표의 한 줄 요약, owns는 그 표면이 소유하는 조작(D-370 4항)이다. 한 조작은
+# 한 표면만 소유한다 — 겹침은 estop(모든 운용 표면)과 transitional 사유가 붙은 이행기 항목만
+# 허용한다(test/architecture/test_app_roles.py). 소유가 없으면 owns: []로 적는다.
+# api_owners는 D-425의 실제 API 제공자다. 화면 소유나 API 자격이 최종 writer를
+# 바꾸지 않는다. 이 선언은 test/test_app_ownership_contracts.py의 서버 거절/쓰기와 함께 검증한다.
+# ports는 표면을 서빙하거나(웹) 표면이 접속하는(네이티브) 기본 포트다. source 파일에 그 숫자가
+# 있어야 하고 두 표면이 같은 포트를 쓰면 안 된다 — 새 표면은 빈 포트를 여기서 고른다. 이유 없는 빈 칸은 등록되지 않는다.
+# themes는 그 표면이 따르는 테마다(D-359 §2·§3.3). 첫 값은 dark다. [dark, light] 웹 표면의
+# 모든 HTML은 tokens.css 바로 뒤에 /common/theme.js를 싣고, [dark] 웹 표면의 HTML은
+# <html data-theme-pin="dark">로 고정한다. [dark] 웹 표면은 theme_reason(한 줄)에 왜 테마를
+# 따르지 않는지 적는다. 웹이 아닌 사본(native·lcd)은 [dark]다(§3.4).
+# breakpoints는 D-359 §6.2의 허용 목록이다. 웹 표면의 @media 크기 조건은 범위 문법으로
+# 세 단 — compact (width < 30rem), medium (30rem <= width < 64rem), wide (width >= 64rem) —
+# 과 §6.5 높이 조건 (height >= 40rem)/(height < 40rem)만 쓴다. 그 밖의 값은 여기에
+# {value: 정수px|정수rem, reason: 한 줄}로 적는다. 세 단 값·쓰이지 않는 값은 적지 않는다.
+# container_breakpoints는 §6.3 칸 질의(@container)의 같은 형식 허용 목록이다 — 세 단 경계 밖의 칸 폭만 적는다.
+# 대조 시험은 shared/web/test/test_responsive_tiers.py다.
+# raw_colours는 D-359 §7.2 원시 색 금지 스캔(test_ui_token_contracts.py)의 예외다. [dark] 고정 웹
+# 표면만 가진다. {file: 표면 폴더 상대 파일, block: 최상위 선택자(없으면 파일 전체), reason: 한 줄}.
+# 가리는 원시 색이 없는 항목은 적지 않는다. 테마를 따르는 표면의 색은 tokens.css에서만 온다.
+surfaces:
+  - id: robot
+    api_owners: [CORE]
+    app_name: Rosy Robot
+    app_name_en: Rosy Robot
+    short_name: Rosy Robot
+    icon: shared/web/icons/robot.svg
+    path: middleware/ui/robot
+    themes: [dark, light]
+    surface: robot
+    medium: web
+    ports:
+      - {port: 8080, source: contracts/foundation/config/rosy_default.yaml}
+    audience: 운용자·장비 운용 (D-153 §7 — /dashboard·/console·/setup·/device)
+    role: 한 로봇의 상세 상태·작업 준비·설치·정비와 로봇 쪽 자격 관리 (D-370 1항)
+    owns:
+      - robot-detail
+      - robot-basic-ops
+      - robot-settings
+      - device-link-robot
+      - estop
+      - {id: manual-drive, transitional: "D-370 4항 1 — console.teleop, Pilot DEVICE 수용 뒤 링크 패널로"}
+    grammar: spatial
+    contracts: [shared_controls, typography_focus, dialog]
+    baseline: docs/validation/uiux-surfaces-2026-09-26/captures/console-operate-fresh-1366x768.png
+
+  - id: console
+    api_owners: [Fleet]
+    app_name: Rosy Console
+    app_name_en: Rosy Console
+    short_name: Rosy Console
+    icon: shared/web/icons/console.svg
+    path: operations/fleet/fleet/server/web
+    themes: [dark, light]
+    surface: site
+    medium: web
+    ports:
+      - {port: 8090, source: operations/fleet/fleet/cli.py}
+    audience: 사이트 관제자 (D-153 §7 — Fleet /console) · 설치자 (D-410 — /console/install 기기 등록·카메라 보정)
+    role: 사이트 로스터·여러 로봇 모니터링·Mission·사이트 정지 요청·기기 연결 승인 (D-370 1항)
+    owns: [site-monitoring, mission, overhead-camera-view, device-link-site, estop]
+    grammar: exception
+    contracts: [shared_controls, typography_focus, dialog]
+    breakpoints:
+      - value: 90rem
+        reason: 토큰·역할·테마·두 줄 비상 정지를 모두 편 머리의 자연 폭(약 1220–1300px)이 1440px 미만에 한 줄로 들지 않는다 — 비상 정지가 둘째 줄로 밀리거나 테마 이름표가 접히지 않게 그 아래에서 머리를 접는다
+      - value: 110rem
+        reason: 지도 칸은 main 폭의 43%라 그 안을 둘로 나누면 관제 카메라가 좁아진다(1440px에서 약 240px) — 지도 칸이 충분히 넓은 이 폭 이상에서만 카메라를 지도 옆에 둔다
+    baseline: docs/validation/uiux-surfaces-2026-09-26/captures/fleet-normal-1920x1080.png
+
+  - id: game-board
+    path: operations/apps/games/games/web
+    themes: [dark]
+    theme_reason: 경기장 녹색이 곧 바탕이다(D-359 §3.3)
+    surface: site
+    medium: web
+    ports:
+      - {port: 8765, source: operations/apps/games/games/cli.py}
+    audience: 게임 호스트 노트북 (D-153 §7 — /board)
+    role: 게임 호스트 보드 — D-370 역할 표 밖이다(8항)
+    owns: []
+    grammar: focal
+    contracts: [shared_controls, typography_focus, dialog]
+    raw_colours:
+      - file: styles.css
+        block: ":root"
+        reason: 경기장 녹색이 곧 바탕인 고정 표면(D-359 §3.3)의 경기장 팔레트 한 블록 — 캔버스도 이 블록을 읽는다
+    baseline: docs/validation/uiux-surfaces-2026-09-26/captures/games-play-1280x800.png
+
+  - id: control-diagnostic
+    path: middleware/perception/web/diagnostic.html
+    themes: [dark]
+    theme_reason: PARKED(D-266) 진단 한 파일 — 해제 회차 전까지 테마 도입 대상이 아니다(D-359 §3.3)
+    surface: robot
+    medium: web
+    ports:
+      - {port: 28181, source: middleware/perception/config/web.yaml}
+      - {port: 28182, source: middleware/perception/config/web.yaml}
+    audience: 제어 진단 (D-153 §7 — PARKED D-266)
+    role: 제어 진단 — PARKED(D-266), D-370 역할 표 밖이다
+    owns: []
+    grammar: procedure
+    contracts: [shared_controls]
+    breakpoints:
+      - value: 1279px
+        reason: PARKED(D-266) 한 파일 진단 표면(D-150)의 원래 배치 값 — 해제 회차에서 세 단으로 옮긴다
+      - value: 900px
+        reason: PARKED(D-266) 한 파일 진단 표면(D-150)의 원래 배치 값 — 해제 회차에서 세 단으로 옮긴다
+    raw_colours:
+      - file: diagnostic.html
+        reason: PARKED(D-266) 한 파일 진단 표면(D-150) — 자기 <style> 팔레트와 캔버스 색을 품는다. 해제 회차에서 tokens.css로 옮긴다
+    contract_reason: >
+      타이포·확인 계약은 이 표면에 도입된 적이 없다 — D-150이 한 파일 고정으로 두고
+      PARKED(D-266)라 새로 적용할 회차가 없었다. 두 계약을 받게 되는 날 이 문장을 지운다.
+    baseline_reason: >
+      저장소에 추적된 캡처가 없다. 진단 표면은 PARKED라 회차 G2 대상에서 빠져 있고,
+      해제 회차가 첫 셀을 남기면 이 문장을 baseline 경로로 바꾼다.
+
+  - id: pilot
+    api_owners: [CORE]
+    app_name: Rosy Pilot
+    app_name_en: Rosy Pilot
+    short_name: Rosy Pilot
+    icon: shared/web/icons/pilot.svg
+    path: middleware/ui/pilot
+    themes: [dark]
+    theme_reason: >
+      운전석 영상 위에 조종을 겹치는 PWA라 바탕이 곧 영상이다 — 영상 대비와 현장 눈부심을 지키려
+      어둡게 고정한다. 밝게는 DEVICE 수용 뒤 사람 관측(G3)으로 다시 판단한다.
+    surface: robot
+    medium: web
+    ports:
+      - {port: 8088, source: middleware/apps/device/omx/adapter/omx_adapter/pilot_sim_server.py}
+    audience: 현장 운전자 한 사람 (D-323 원격 조종 PWA — Pinky는 CORE /pilot, OMX 연습은 격리된 Gazebo 호스트 8088)
+    role: 한 로봇 직접 수동 운전·운전석 영상·누르는 동안만 가는 운전 보조 (D-370 1항, D-323·D-344)
+    owns: [manual-drive, driver-video, drive-assist, sim-arm-practice, estop]
+    grammar: focal
+    contracts: [shared_controls, typography_focus]
+    breakpoints:
+      - value: 48rem
+        reason: 태블릿 세로·휴대폰에서 스틱·페달·HUD 글자를 줄이는 주행 조작부 폭(D-363) — 세 단 값으로 옮기면 64rem 아래 태블릿 가로에서도 조작부가 작아진다
+    raw_colours:
+      - file: styles.css
+        block: "[data-drive-stage]"
+        reason: 운전석 영상 무대의 검은 띠(D-363) — 영상 비율 밖은 테마 바탕이 아니라 화면 밖 검정이다
+    contract_reason: >
+      dialog 계약만 받지 않는다 — 확인 대화상자가 없다(비상 정지·진행은 누르는 즉시, D-344).
+      게임형 HUD 의 큰 표적은 공용 종류(누르는 동안 채워지는 toggle·고르는 segment)와 size 속성,
+      표면 CSS 의 배치 규칙(min-height·폭)으로만 만들고, 영상 위 대비는 버튼이 아니라 조작부 판이
+      바탕을 가진다(D-363 부록 참조).
+    baseline: docs/validation/pilot-g2-baseline-2026-10-04/drive-tablet-land.png
+
+  - id: web-common
+    api_owners: []
+    path: shared/web
+    themes: [dark, light]
+    surface: robot
+    medium: web
+    audience: 라이브러리 — 사람이 여는 화면이 아니다
+    role: 공유 토큰·컨트롤·아이콘 라이브러리 — 조작을 소유하지 않는다
+    owns: []
+    grammar: spatial
+    contracts: [typography_focus]
+    container_breakpoints:
+      - value: 22rem
+        reason: 공용 부품(ui-form·ui-readout·ui-actions)이 한 열로 접히는 칸 폭 — 폰 한 열(320px 거터 안쪽)과 1366px 콘솔의 좁은 조작 열(약 23–25rem)을 가른다(D-359 §6.3)
+    contract_reason: >
+      tokens.css·components.css·ui.js가 계약의 원본이라 소비자 재도색·복제 검사의 대상이 아니다.
+      test_shared_controls는 COMMON 파일을 직접 읽으므로 이 폴더를 목록에 넣지 않는다.
+    baseline_reason: 렌더링되는 화면이 아니므로 기준선 셀이 없다.
+
+  - id: lane-live-view
+    path: integrations/simulation/gazebo/scripts/lane_live_view.html
+    themes: [dark]
+    theme_reason: 개발 도구(제품 표면 아님, D-359 §3.3) — 바탕이 곧 시뮬 영상이다
+    surface: sim
+    medium: web
+    ports:
+      - {port: 28183, source: integrations/simulation/gazebo/scripts/lane_live_view.py}
+    audience: Gazebo 레인 뷰어 — 제품 브라우저 표면이 아니다
+    role: 시뮬 레인 뷰어 — 제품 표면이 아니다(D-370 8항)
+    owns: []
+    contracts: []
+    breakpoints:
+      - value: 1000px
+        reason: 개발 도구(제품 표면 아님, contracts 없음) — 두 격자를 한 열로 접는 뷰어 고유 폭
+      - value: 640px
+        reason: 개발 도구(제품 표면 아님, contracts 없음) — 머리 줄을 접는 뷰어 고유 폭
+    raw_colours:
+      - file: lane_live_view.html
+        reason: 개발 도구(제품 표면 아님, contracts 없음) — 뷰어 고유 팔레트를 한 파일에 품는다
+    contract_reason: >
+      제품 셸·토큰·확인 문법의 대상이 아니다. 라인 예산과 판정은
+      test_web_budgets의 D-262 VERDICTS가 맡는다.
+    baseline_reason: 제품 표면이 아니므로 G2 기준선이 없다.
+
+  - id: robot-face
+    api_owners: []
+    path: middleware/ui/face
+    themes: [dark]
+    surface: robot
+    medium: lcd
+    audience: 로봇 주변 사람 — 얼굴 LCD와 정보 화면 (D-190)
+    role: 로봇 LCD — 부팅 단계·이름·로그인 코드 표시만, 입력과 명령이 없다 (D-370 1항)
+    owns: []
+    contracts: [token_parity]
+    token_copy: middleware/ui/face/emotion/info_screen.py
+    baseline_reason: >
+      LCD 화면은 브라우저 캡처 회차(G2) 대상이 아니다. 정보 화면 캡처는
+      test_info_screen_capture가 호스트에서 만들고 저장소에 기준선을 두지 않는다.
+
+  - id: pilot-shell
+    parent_app: pilot
+    api_owners: [CORE]
+    path: middleware/ui/pilot/android
+    themes: [dark]
+    surface: robot
+    medium: native
+    ports: []
+    audience: 태블릿 운전자 — Rosy Pilot의 자동 발견·장비 목록 접속 화면
+    role: Pilot의 신뢰된 대상 발견·연결만 소유하며 조종 화면과 명령은 기존 Pilot PWA를 사용한다
+    owns: [pilot-device-lobby]
+    contracts: [token_parity]
+    token_source: shared/web/tokens.css
+    token_generator: middleware/ui/pilot/android/app/build.gradle.kts
+    token_verification: middleware/ui/pilot/android/app/src/test/java/io/github/livsbittt/rosy/pilot/PilotColorsTest.kt
+    baseline_reason: 실제 태블릿 설치·렌더링은 D-432 장치 검증으로 기록한다; 조종 화면은 Pilot PWA 기준선을 재사용한다.
+
+  - id: cam
+    api_owners: [Fleet-pairing, Vision-ingest]
+    app_name: Rosy Cam
+    app_name_en: Rosy Cam
+    short_name: Rosy Cam
+    icon: shared/web/icons/cam.svg
+    path: operations/ui/cam
+    themes: [dark]
+    surface: site
+    medium: native
+    ports:
+      - {port: 8095, source: operations/vision/rosy_vision/cli.py}
+    audience: 천장 카메라 설치자 — 사이트 휴대폰·태블릿 앱 (D-261)
+    role: 카메라 캡처·프레임 송신·설치 위치 안내만 — 로봇 명령·정지·CORE 연결이 없다 (D-370 1항)
+    owns: [camera-physical-install]
+    contracts: [token_parity]
+    token_copy: operations/ui/cam/app/src/main/java/io/github/livsbittt/rosy/cam/ui/RosyTheme.kt
+    baseline_reason: >
+      네이티브 앱 화면은 브라우저 캡처 회차(G2) 대상이 아니다. 실제 폰 화면 확인은
+      D-261의 A3 실기기 회차에서 첫 캡처를 남긴다.
