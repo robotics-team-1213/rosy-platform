@@ -7,7 +7,7 @@ import pytest
 import rosy_harness as harness
 
 REPO = Path(__file__).resolve().parents[1]
-SOURCE = '429e13b8313484a25751a7c7896fe1b7aca41b92'
+SOURCE_COMMIT = '429e13b8313484a25751a7c7896fe1b7aca41b92'
 HEADING = (
     '## 2026-10-04 ? uncommitted ? fix(g2): preserve the total SIM AI'
     'D deadline while allowing RPC acknowledgement'
@@ -22,7 +22,7 @@ OLD_SHA256 = 'e2f80dbdfc41bdcff21a27d50ddd7ae909a32d02270c5db525808c6d9977883d'
 @pytest.fixture
 def original():
     text = subprocess.check_output(
-        ['git', 'show', SOURCE + ':deploy/logs.md'], cwd=REPO,
+        ['git', 'show', SOURCE_COMMIT + ':deploy/logs.md'], cwd=REPO,
         text=True, encoding='utf-8',
     )
     return text[text.index(HEADING):].split('\n## ', 1)[0].strip()

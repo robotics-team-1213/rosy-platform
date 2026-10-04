@@ -5728,3 +5728,10 @@ osy-d395-s1d\`.
 - 변경: 현행 모듈에 source-token 표시 추적과 승인 보정을 통합. 마커 명시 대응 우선, 없으면 익명 검출·신뢰 가능한 map pose 대조. UI/UX 리팩터링 없음.
 - 증거: 공유 벡터·Vision·Fleet·브라우저 전환 조건을 호스트에서 검증. 실제 사이트는 두 등록 로봇과 S21 영상 연결 조회만 확인. 후보 배포·빈 트랙 학습·실물 위치 오차는 미완료.
 - gate 변화: 없음. SOURCE/LOCAL 변경이며 DEVICE/FIELD 완료 주장 없음. 기존 등록·credentials 보존.
+
+
+## 2026-10-05 · uncommitted · fix(guards): judge shared component size and name public commit provenance
+
+- 변경: 최신 main에서 추가된 공용 components.css 814줄을 한 책임의 토큰 기반 공용 컴포넌트 스타일로 독립 검토하고 accept 판정을 기록했다. 기존 600줄 상한과 growth allowance는 유지한다. 감사 검사의 공개 SHA 상수명과 참조만 SOURCE_COMMIT으로 정정하여 값·감사 원문·대상을 보존했다.
+- 증거: 깨끗한 main 1b669c7cb에서 두 실패 재현. 관련 재검사 119 PASS 뒤 감사 문자열의 원문 보존을 바로잡고 감사·비밀값 검사 9 PASS. 추적 관련 최신 통합 776 PASS/known_failures 신규 0; Chromium 4 PASS. UI 스타일 내용이나 배치 변경 없음.
+- gate 변화: SOURCE/LOCAL 검사 정합. main 착지·push·CI·서명 후보 배포와 현장 좌표 오차는 이후 단계다.

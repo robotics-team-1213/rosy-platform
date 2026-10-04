@@ -80,6 +80,13 @@ CONTROL_SPLIT = "docs/plans/2026-09-22-control-package-split-design.md"
 
 #: P6 verdicts: path (relative to src/) or package name -> (lines at verdict, verdict).
 SIZE_VERDICTS = {
+    "web/components.css": (
+        814,
+        "accept: shared token-based component styles remain one web_common responsibility; "
+        "D-461 adds opt-in workspace primitives without another palette or runtime owner. "
+        "Splitting loading and deployment is a separate task. The 600-line ceiling and growth "
+        "allowance remain unchanged; re-judge when another component family expands this file",
+    ),
     "ui/pilot/styles.css": (
         811,
         "split: Pilot lobby, connection and drive responsive layouts share this surface stylesheet; "
