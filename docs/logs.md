@@ -5322,14 +5322,12 @@
 - Change: Normalize CRLF while installing pre-push from a Windows checkout. Keep the previous same-file refusal before output redirection, including tracked core.hooksPath layouts, to preserve source bytes.
 - Evidence: Real Windows installation exposed a byte mismatch; three forced-CRLF regressions failed before correction. Linux hook suite 8 passed after correction, including Bash parsing and tracked-source/config/ref preservation. Independent review approved the follow-up.
 - gate 변화: None. The live hook was restored to the exact published LF bytes and syntax-checked; device source switching remains guarded.
-<<<<<<< HEAD
 
 ## 2026-10-04 · uncommitted · D-450 Cell 초안 편집과 수동 슬립시트 선택
 
 - 변경: 구조 편집 계획과 작업자 삽입·확인 후 다음 층 진행 계획을 추가하고 D-450에 사용자 선택을 부록으로 남겼다. 수동 슬립시트는 canonical checkpoint로 정의하며 일반 resume 우회를 금지한다.
 - 증거: 구조 편집 Chromium 및 Cell API/store/job 23 통과, 독립 UI 검토 승인. 수동 checkpoint는 설계이며 구현·ROS-SIM·물리 작업자 접근 증거는 NOT_RUN이다.
 - gate 변화: G1 초안 편집만 보강했다. G1 티칭·G2 전체 fault matrix·G3·Isaac 실제 주행 수용은 미완료다.
-=======
 
 
 ## 2026-10-04 · uncommitted · D-427 wave5 signed native and actual offline SD readback
@@ -5337,4 +5335,3 @@
 - 변경: 소스 1722ca6ec6d7의 후보035 실제 ABI·서명·pack, SD image 내부 factory 전체 파일 bytes, site PC 실제 identity·dry-run·sudo 제약을 새 frozen 증거로 기록했다. 앞선 unsigned 기록과 제품 runtime은 유지한다.
 - 증거: 기존 ABI gate 공통314개 일치/불일치0/release-only28; signed tar2879members·2548SUMS·독립 APPROVE. SD readonly debugfs 실제 exit0 후2547manifest/2548SUMS와 native·SD Python/JS743개 실제 bytes 일치·독립 APPROVE. 실제 readonly SSH hostname/status exit0·current033/candidate null/idle. docs/validation/d427-source-migration/wave5-signed-and-offline-readback-2026-10-04.md.
 - gate 변화: 없음. 발행·자동 활성화·canary/secondary035 readback은 미완료이고 사용 세션 조율이 남았다. SD unsigned와 ELF 실행 동등성·부팅·FIELD는 별도다. site PC installer5files 일치/dry-run0이나 sudo 인증 거절로 실제 설치NOT_RUN; peer delivery NOT_SENT; firmwareS7 다음 개정/no flash·motion·E-Stop reset.
->>>>>>> main
