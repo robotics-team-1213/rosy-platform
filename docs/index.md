@@ -291,4 +291,3 @@
 - 2026-10-04 · uncommitted · D-450 Cell 초안 편집과 수동 슬립시트 선택
 - 2026-10-04 · uncommitted · fix: install Windows hooks with executable LF line endings
 - 2026-10-04 · uncommitted · fix: resolve hook installation through Git
-- 2026-10-04 · uncommitted · D-441 local update follow-up design
