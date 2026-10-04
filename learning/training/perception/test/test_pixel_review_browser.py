@@ -55,9 +55,18 @@ def test_brush_cancellation_coordinates_and_undo(browser_workspace):
     page.keyboard.press('Escape'); page.mouse.up()
     assert review_masks.get(store, 0)['version'] == 0
     page.mouse.move(*point(10, 12)); page.mouse.down(); page.mouse.move(*point(15, 12)); page.mouse.up()
+    page.mouse.move(*point(20, 5)); page.mouse.down(); page.mouse.up()
+    expect(page.locator('#pixel-draft')).to_contain_text('2획')
+    expect(page.locator('#pixel-next')).to_have_attribute('disabled', '')
+    assert review_masks.get(store, 0)['version'] == 0
+    page.locator('#pixel-undo').click()
+    expect(page.locator('#pixel-draft')).to_contain_text('1획')
+    page.locator('#pixel-save').click()
     expect(page.locator('#pixel-status')).to_contain_text('v1')
+    expect(page.locator('#pixel-draft')).to_have_text('')
     review = review_masks.get(store, 0)
     assert review_masks.pixels(store, review)[12, 10] == 4
+    assert review_masks.pixels(store, review)[5, 20] == 255
     page.locator('#pixel-undo').click()
     expect(page.locator('#pixel-status')).to_contain_text('v2')
     assert review_masks.pixels(store, review_masks.get(store, 0))[12, 10] == 255
