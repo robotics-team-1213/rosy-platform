@@ -70,8 +70,8 @@
 
 ## 최근 기록
 
+- 2026-10-04 · uncommitted · feat(ci): payload 부팅 스모크 — arm64 러너에서 D-444 P1.2 관측
 - 2026-10-04 · uncommitted · fix(camera): 시작 중 반복 부팅 보호
 - 2026-10-04 · uncommitted · fix(g2): reserved startup home before Cell admission
 - 2026-10-04 · uncommitted · fix(site): 서명된 후보의 제목·설명이 서명 상태를 말한다
 - 2026-10-04 · uncommitted · feat(omx): 정본 G2 격리 실행기
-- 2026-10-04 · uncommitted · fix(ci): 두 Android 앱의 실제 wrapper 선택
