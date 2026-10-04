@@ -19,6 +19,12 @@ def sha(raw):
     return hashlib.sha256(raw).hexdigest()
 
 
+def human_review(frame):
+    """Export provenance without modifying the stored operator decision."""
+    return dict(frame['review'], video=frame['source'].get('video'),
+                video_frame=frame['source'].get('video_frame'))
+
+
 def configure(store):
     with store.connect() as db:
         db.executescript('''CREATE TABLE IF NOT EXISTS frame_keys (
@@ -75,6 +81,8 @@ def snapshot(store):
             rows.append({'frame': frame['index'], 'review_uid': f'{workspace}:{frame["index"]}',
                          'identity': identity(source, legacy=frame['index']),
                          'image_sha256': source['image_sha256'],
+                         'source_sha256': sha(encoded(source)),
+                         'object_review_sha256': sha(encoded(human_review(frame))),
                          'width': source['width'], 'height': source['height'],
                          'representations_sha256': sha(encoded(representations.get(frame['index'], []))),
                          'source_session': source.get('source_session'),
@@ -238,7 +246,7 @@ def validate_authority(current):
                 raise ValueError('invalid authority decision')
         if type(row.get('frame_excluded')) is not bool or row['frame_excluded'] != (row['object_decision'] == 'excluded'):
             raise ValueError('invalid whole-frame exclusion tombstone')
-        for key in ('image_sha256', 'representations_sha256'):
+        for key in ('image_sha256', 'representations_sha256', 'source_sha256', 'object_review_sha256'):
             if not valid_digest(row.get(key)):
                 raise ValueError('invalid frame image or representation digest')
         if not valid_digest(row.get('mask_sha256'), nullable=True):
@@ -266,6 +274,13 @@ def validate_authority(current):
                     or row.get('pixel_approval') != expected or row.get('fixed_eval_overlap')
                     or not row['mask_sha256'] or not current['pixel_classes_sha256']):
                 raise ValueError('invalid exact pixel approval binding')
+            approval = row['pixel_approval']
+            for key in ('mask_version', 'width', 'height', 'ignore_index'):
+                if type(approval.get(key)) is not int:
+                    raise ValueError('invalid exact pixel approval scalar type')
+            for key in ('complete_frame_review', 'background_reviewed'):
+                if approval.get(key) is not True:
+                    raise ValueError('invalid exact pixel approval scalar type')
         elif row.get('pixel_approval') is not None:
             raise ValueError('pending or excluded mask cannot retain approval')
     return current
@@ -341,12 +356,18 @@ def verify_current(export, current):
     sources = [json.loads(line) for line in payload['inputs/source.jsonl'].splitlines() if line]
     if len(frames) != len(current['frames']) or sources != [f['source'] for f in frames]:
         raise ValueError('application/source snapshot differs')
+    human = [json.loads(line) for line in payload['inputs/human.jsonl'].splitlines() if line]
+    expected_human = [human_review(f) for f in frames if not any(b.get('label') is None for b in f['review']['boxes'])]
+    if human != expected_human:
+        raise ValueError('human object content differs from snapshot')
     representations = json.loads(payload['representations.json'])
     for frame, row in zip(frames, current['frames']):
         source = frame['source']
         if (frame['index'] != row['frame'] or frame['version'] != row['object_version']
                 or frame['status'] != row['object_decision'] or source['image_sha256'] != row['image_sha256']
                 or source['width'] != row['width'] or source['height'] != row['height']
+                or sha(encoded(source)) != row['source_sha256']
+                or sha(encoded(human_review(frame))) != row['object_review_sha256']
                 or identity(source, legacy=frame['index']) != row['identity']
                 or sha(encoded(representations.get(str(row['frame']), []))) != row['representations_sha256']):
             raise ValueError('frame snapshot differs from authority')

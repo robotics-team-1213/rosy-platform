@@ -70,6 +70,32 @@ def test_invalid_import_never_changes_legacy_or_adds_partial_frames(tmp_path):
     assert store.list_frames() == before
 
 
+def test_exact_legacy_primary_binding_keeps_human_decision_and_original_bytes(tmp_path):
+    store = open_store(tmp_path)
+    folder, classes, rows = catalog(tmp_path)
+    old = store.get(0)
+    source = dict(old['source'], video='teleop_bot_20260930T171014Z.mp4', video_frame=9)
+    with store.connect() as db:
+        db.execute('UPDATE frames SET source=? WHERE id=0', (json.dumps(source),))
+    raw = store.image(0).read_bytes()
+    Path(rows[0]['image']).write_bytes(raw)
+    rows[0]['image_sha256'] = hashlib.sha256(raw).hexdigest()
+    (folder/'verified-inputs.jsonl').write_text('\n'.join(json.dumps(r) for r in rows), encoding='utf-8')
+    result = review_ingest.import_frames(store, {'path':str(folder), 'classes':str(classes)})
+    after = store.get(0)
+    assert result['added'] == 0 and result['legacy_primary_bindings'] == 1
+    assert len(store.list_frames()) == 2 and store.image(0).read_bytes() == raw
+    assert (after['review'], after['status'], after['version']) == (old['review'], old['status'], old['version'])
+    assert after['source']['legacy_source'] == source
+    assert after['source']['image'] == source['image']
+    assert after['source']['original_video_verified'] is False
+    assert review_masks.get(store,0)['status'] == 'pending'
+    current = review_evidence.decisions(store)
+    assert current['frames'][0]['identity'] == 'video:' + '1'*64 + ':9'
+    assert review_ingest.import_frames(store, {'path':str(folder), 'classes':str(classes)})['added'] == 0
+    assert review_evidence.decisions(store) == current
+
+
 def test_mask_requires_full_background_review_and_never_restores_object_approval(tmp_path):
     store = open_store(tmp_path)
     review_masks.bind_classes(store, CLASSES)
@@ -211,3 +237,44 @@ def test_current_http_etag_detects_revocation_without_exporting_write_token(tmp_
         assert changed['generation'] == current['generation'] + 1
     finally:
         server.shutdown(); server.server_close(); thread.join()
+
+
+def test_resealed_changed_object_box_cannot_pass_unchanged_live_content_binding(tmp_path):
+    store = open_store(tmp_path)
+    current = review_evidence.decisions(store)
+    out = Path(store.prepare()['path'])
+    frames = json.loads((out/'application-snapshot.json').read_bytes())
+    frames[0]['review']['boxes'][0]['bbox_xyxy'][0] += 1
+    (out/'application-snapshot.json').write_bytes(review_evidence.encoded(frames))
+    (out/'inputs/human.jsonl').write_bytes(b''.join(review_evidence.encoded(review_evidence.human_review(f)) for f in frames))
+    manifest = json.loads((out/'manifest.json').read_bytes())
+    manifest['human_sha256'] = review_evidence.sha((out/'inputs/human.jsonl').read_bytes())
+    for item in manifest['files']:
+        raw = (out/item['path']).read_bytes()
+        item.update(sha256=review_evidence.sha(raw), bytes=len(raw))
+    raw = review_evidence.encoded(manifest)
+    (out/'manifest.json').write_bytes(raw)
+    (out/'COMPLETE').write_text(review_evidence.sha(raw), encoding='ascii')
+    contract = json.loads((out/'review-contract.json').read_bytes())
+    for item in contract['files']:
+        raw = (out/item['path']).read_bytes()
+        item.update(sha256=review_evidence.sha(raw), bytes=len(raw))
+    raw = review_evidence.encoded(contract)
+    (out/'review-contract.json').write_bytes(raw)
+    (out/'AUTHORITY_COMPLETE').write_text(review_evidence.sha(raw), encoding='ascii')
+    with pytest.raises(ValueError, match='frame snapshot differs'):
+        review_evidence.verify_current(out, current)
+
+
+@pytest.mark.parametrize('key,value',[('complete_frame_review',1),('width',32.0)])
+def test_pixel_approval_rejects_equal_but_wrong_scalar_types(tmp_path,key,value):
+    store = open_store(tmp_path)
+    review_masks.bind_classes(store,CLASSES)
+    review_masks.update(store,0,dict(version=0,action='fill',label=0),Conflict)
+    review_masks.update(store,0,dict(version=1,action='approve',complete_frame_review=True,background_reviewed=True),Conflict)
+    current = review_evidence.decisions(store)
+    current['frames'][0]['pixel_approval'][key] = value
+    del current['decision_sha256']
+    current['decision_sha256'] = review_evidence.sha(review_evidence.encoded(current))
+    with pytest.raises(ValueError,match='scalar type'):
+        review_evidence.validate_authority(current)

@@ -116,13 +116,38 @@ def import_frames(store, body):
         for source, data, suffix, mask in checked:
             source['image'] = freeze_image(store, data, suffix)
             frozen.append((source, review_masks.freeze(store, mask) if mask else None))
-        added, duplicates, aliases, draft_added = [], 0, 0, 0
+        added, duplicates, aliases, draft_added, legacy_linked = [], 0, 0, 0, 0
         with store.connect() as db:
             db.execute('BEGIN IMMEDIATE')
             next_id = db.execute('SELECT COALESCE(MAX(id),-1)+1 FROM frames').fetchone()[0]
             for source, mask in frozen:
                 key = review_evidence.identity(source)
                 found = db.execute('SELECT frame FROM frame_keys WHERE identity=?', (key,)).fetchone()
+                if not found:
+                    # Link only an exact primary image plus the same declared video/frame.
+                    # Never match by pixels alone across captures or replace human decisions.
+                    matches = []
+                    for candidate in db.execute('SELECT id,source FROM frames'):
+                        old = json.loads(candidate['source'])
+                        if (not old.get('source_video_sha256') and
+                                old['image_sha256'] == source['image_sha256'] and
+                                Path(old.get('video') or '').name == Path(source.get('video') or '').name and
+                                old.get('video_frame') == source['video_frame']):
+                            matches.append((candidate['id'], old))
+                    if len(matches) > 1:
+                        raise ValueError('ambiguous existing legacy primary image binding')
+                    if matches:
+                        index, old = matches[0]
+                        enriched = dict(old, legacy_source=old)
+                        for field in ('source_session', 'capture_group', 'source_video_sha256',
+                                      'original_video_verified', 'fixed_eval_overlap', 'map_revision',
+                                      'map_pose', 'source_session_declared', 'import_catalog_sha256',
+                                      'original_source_path', 'dataset_memberships_snapshot'):
+                            enriched[field] = source.get(field)
+                        db.execute('UPDATE frames SET source=? WHERE id=?', (json.dumps(enriched), index))
+                        db.execute('UPDATE frame_keys SET identity=? WHERE frame=?', (key, index))
+                        found = (index,)
+                        legacy_linked += 1
                 if found:
                     index = found[0]
                     previous = db.execute('SELECT source FROM frames WHERE id=?', (index,)).fetchone()
@@ -137,6 +162,7 @@ def import_frames(store, body):
                     next_id += 1
                     source['index'] = index
                     review = {'index': index, 'image_sha256': source['image_sha256'], 'boxes': [],
+                              'video': source.get('video'), 'video_frame': source.get('video_frame'),
                               'review_status': 'pending_human', 'complete_frame_review': False,
                               'review_origin': 'pinky_web_additional_import'}
                     db.execute('INSERT INTO frames VALUES (?,?,?,?,1)',
@@ -156,8 +182,9 @@ def import_frames(store, body):
                     db.execute('INSERT INTO masks(frame,version,status,path,sha256) VALUES (?,1,?,?,?)',
                                (index, 'pending', *mask))
                     draft_added += 1
-            if added or aliases:
+            if added or aliases or legacy_linked:
                 db.execute("UPDATE metadata SET value=CAST(value AS INTEGER)+1 WHERE key='generation'")
     return {'added': len(added), 'indices': added, 'duplicate_representations': duplicates,
             'new_representations': aliases, 'pixel_reviews_pending': draft_added,
+            'legacy_primary_bindings': legacy_linked,
             'catalog_sha256': review_masks.sha(raw), 'original_video_verified': False}

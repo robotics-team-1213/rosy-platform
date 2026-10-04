@@ -94,6 +94,12 @@ stop_line/crosswalk train/val 픽셀0은 2026-10-04 기존 학습 catalog snapsh
 객체/mask/import/CAD/class binding 변경은 generation을 올린다.
 ETag는 따옴표로 감싼 decision_sha256이며 If-None-Match가 같으면 304를 반환한다.
 frame_excluded는 사진 전체 제외 tombstone이고 객체 제외 동작과 함께 true가 된다.
+object_review_sha256는 video/video_frame을 원본과 맞춘 export human row의 encoded JSON SHA이며,
+source_sha256는 전체 frozen source row의 encoded JSON SHA다. 같은 revision의 박스 내용 변조도
+현재 authority와 비교해 거부한다. int와 bool 승인 필드는 타입까지 확인한다.
+기존 사진과 exact primary image SHA·선언 영상명/frame이 모두 같은 등록은 기존 review/version을
+유지하며 출처만 보강한다. legacy_source에 이전 source 전체를 남기고 primary image를 바꾸지 않는다.
+영상명만 같은 경우나 같은 픽셀을 서로 다른 촬영 세션에서 발견한 경우에는 합치지 않는다.
 
 `POST /api/prepare`는 같은 snapshot으로 기존 객체 COMPLETE/manifest와
 review-contract.json(schema rosy.pinky-review-export/2), AUTHORITY_COMPLETE를 동결한다.

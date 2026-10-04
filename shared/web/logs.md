@@ -610,3 +610,9 @@
 - 변경: 기존 Cell 링크를 보존하는 topbar 계약 기대값을 갱신한다. D-459·D-461 로컬 사진 검수 도구의 작업 화면 이름을 별도 설치 앱으로 등록한 metadata를 바로잡고, pytest 7이 ACT 테스트 준비 helper를 nose module setup으로 호출하는 이름 충돌을 없앤다. 제품 화면·로봇 명령·앱 설치 구조는 바꾸지 않는다.
 - 증거: 깨끗한 main 1b669c7cb에서 Fleet grid와 개발 도구 identity 실패 2건 재현, GitHub CI e9bc8634c의 learning-policy 오류 원인 확인. 관련 호스트 71 passed, known_failures 신규 0. 독립 읽기 검토와 정확한 후속 SHA CI는 별도 확인한다.
 - gate 변화: SOURCE 계약 복구. CI 성공·서명·관제 PC 배포·FIELD 수용을 주장하지 않는다.
+
+## 2026-10-05 · uncommitted · fix(learning): bind review content and existing source identities
+
+- 변경: 최신 결정에 object_review_sha256와 source_sha256를 추가하고 export human의 video/frame 출처를 원본과 맞춘다. 정확히 일치하는 legacy primary image SHA·영상명/frame만 연결하고 이미지·검수 decision/version과 legacy source를 보존한다. 승인 scalar 타입을 엄격히 확인한다. dev 작업 화면 title 범위를 검사하며 별도 앱 identity를 만들지 않는다.
+- 증거: reseal한 박스 변조 거부·잘못된 승인 bool/int·legacy exact-image 중복·latest ETag 및 기존 backend/title 18 passed, known_failures 신규0. root는 실제 SSH 소비 경로에서 human 출처 누락을 재현했고 producer가 보완했다. 실제 운영 state는 아직 읽기만 수행했다.
+- gate 변화: SOURCE/LOCAL 보강. root-owned bridge/adapter의 독립 수용·실제 human pixel 승인·장치 수용·CI는 별도다. push·배포·주행·HOLD 해제 없음.

@@ -200,7 +200,7 @@ class ReviewStore:
             # app snapshot; omit their pending human row from the training receiver.
             unclassified = [f['index'] for f in frames
                             if any(b.get('label') is None for b in f['review']['boxes'])]
-            human.write_bytes(review_return._jsonl(f['review'] for f in frames if f['index'] not in unclassified))
+            human.write_bytes(review_return._jsonl(review_evidence.human_review(f) for f in frames if f['index'] not in unclassified))
             (inputs / 'application-snapshot.json').write_text(json.dumps(frames, ensure_ascii=False, indent=2), encoding='utf-8')
             out = self.state / 'exports' / export_id
             receipt = review_return.receive_review(source, human, self.state, out)

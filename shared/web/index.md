@@ -46,8 +46,8 @@
 
 ## 최근 기록
 
+- 2026-10-05 · uncommitted · fix(learning): bind review content and existing source identities
 - 2026-10-05 · uncommitted · fix(contracts): repair inherited site release checks
 - 2026-10-05 · uncommitted · feat(learning): D-462 incremental pixel review
 - 2026-10-05 · uncommitted · fix(contracts): register existing review canvas and wordmark
 - 2026-10-04 · uncommitted · docs(learning): UX 착지 동기화 검증
-- 2026-10-04 · uncommitted · uiux(learning): D-461 작업 우선 공용 구성과 검수 편의
