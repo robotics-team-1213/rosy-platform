@@ -5773,3 +5773,9 @@ osy-d395-s1d\`.
 - 변경: producer helper는 v2 contract뿐 아니라 봉인된 pinky-review-receipt.json authority도 schema/digest/types로 검증하고 encoded JSON의 정확한 일치를 요구한다. Python dict의 False==0 동등성으로 변조 receipt를 수용하는 경로를 제거한다. Root consumer/adapter 경로는 고치지 않는다.
 - 증거: Root의 독립 합성 reseal 재현을 회귀로 옮겼다. 수정 전1failed/1passed 재현을 X:/DevTemp/pinky-review-cycle-20261005/receipt-red.txt에 보존하고, 수정 후 기존 snapshot/content/CAS와 receipt 두 변조 회귀를 함께 검증한다. 실제 사람 검수 상태는 변경하지 않는다.
 - gate 변화: SOURCE/LOCAL helper 보완. 실제 export의 격리 model-PC 소비 통과는 Root 증거이며 생산 학습 서비스 전환·human pixel qualification과 별개다. push·주행·HOLD 해제·정책 권한 변경 없음.
+
+## 2026-10-05 · uncommitted · test(learning): reject resealed embedded authority scalar aliases
+
+- 변경: 최종 producer helper는 이미 current·contract authority·receipt authority 각각을 validate_authority로 검증하고 encoded JSON을 비교한다. 독립 재현의 frame_excluded=False→0 및 original_video_verified=False→0를 봉인 contract에 적용하는 회귀를 추가했다. embedded decision digest 유지/재계산 두 경우 모두 바깥 봉인을 다시 계산해도 거부해야 한다.
+- 증거: 관련 producer/app 시험 출력은 X:/DevTemp/pinky-review-cycle-20261005/embedded-alias-exact-tests.txt에 보존한다. 기존 ignore_index255.0 및 receipt alias 회귀를 함께 실행한다. 실제 사람 검수 상태는 변경하지 않는다.
+- gate 변화: SOURCE/LOCAL 회귀 보강만 한다. 독립 producer 통합 수용과 학습 적격성은 root/policy 검증자의 판정으로 남는다. push·모델 활성화·주행·HOLD 해제 없음.

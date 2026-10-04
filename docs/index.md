@@ -298,8 +298,8 @@
 
 ## 최근 기록
 
+- 2026-10-05 · uncommitted · test(learning): reject resealed embedded authority scalar aliases
 - 2026-10-05 · uncommitted · fix(learning): validate sealed receipt authority exactly
 - 2026-10-05 · uncommitted · feat(fleet): D-463 차선 경로는 다음 짧은 점
 - 2026-10-05 · uncommitted · fix(learning): bind review content and existing source identities
 - 2026-10-05 · uncommitted · docs(validation): P2 페달 계측 실행 준비 완료 — 사용자 입회 대기
-- 2026-10-05 · uncommitted · feat(learning): D-462 incremental pixel review
