@@ -305,7 +305,7 @@ def test_skip_drops_paths_the_caller_already_ran(sample, monkeypatch):
 
 def test_full_ci_includes_learning_policy_registry_and_omx_helpers():
     suites = {'learning/registry/policy/test', 'learning/training/omx/test', 'learning/curation/omx/test',
-              'learning/curation/pinky/test'}
+              'learning/curation/pinky/test', 'learning/training/pinky/test'}
     entries = [e for e in affected.CI_FULL_MATRIX if e['name'] == 'learning-policy']
     assert len(entries) == 1
     assert {p for inv in entries[0]['invocations'] for p in inv} == suites

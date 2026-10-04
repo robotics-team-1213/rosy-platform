@@ -5024,3 +5024,8 @@
 - 변경: MCAP camera/명령/odom/JSON/scan 원본 대조와 전체 영상 decode 검사, 전후 dataset closure를 행동 입력 준비에 연결했다.
 - 증거: 실제 12개 bag/2,673프레임 직접 검증 통과. native 26 passed/skip 없음, 독립 리뷰 같은 26 passed. source 누락/JSON 타입 혼동을 RED 재현 후 수정했다. 상세 `validation/pinky-raw-derivation-2026-10-04.md`.
 - gate 변화: 연구 입력만 준비. expert 의미·고정 행동 평가·camera profile·task acceptance·owner/Fleet·DEVICE/FIELD 및 전체 목표 미완료.
+
+## 2026-10-04 · uncommitted · feat(learning): compare recorded Pinky velocity models offline
+- 변경: 2 train/1 eval 녹화의 원본 직접 검증, content-disjoint split, train-only 정규화, ridge/CNN 학습·모델 재로딩·단위별 전체/moving/stop 평가를 연결했다.
+- 증거: 실제 train1,068/eval222프레임, CNN40steps와 ridge 완료. 두 모델 모두 zero보다 오차가 컸다. native7pass와 독립40pass, 원본 중복 우회/CI torch 누락 수정. 상세 `validation/pinky-behavior-comparison-2026-10-04.md`.
+- gate 변화: 실제 모델 비교 증거 확보, 연구용으로만 유지. camera calibration/identity·expert 주행 의도·owner/독립 과제·Fleet·DEVICE/FIELD와 전체 목표 미완료.
