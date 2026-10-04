@@ -5271,3 +5271,28 @@
 - 변경: 과거 실제 영상 2개/24표본/2모델 48판정(마스크 재실행 별도)과 native 펌웨어·모델 변경 기록 감사를 docs/validation/road-video-and-update-records-2026-10-04에 기록했다. 원본 미디어는 비공개로 보존한다.
 - 증거: 중앙 원 흰 경계 검출, 바닥/벽 오분류와 API/UI 이력 연결 공백을 분리했다. updater·모델 계약 372 passed/25 skipped; 영상 정합성 및 독립 육안 검토 완료. 문서 계약 98 passed/1 skipped; harness lint 0 errors/16 기존 검증 경고.
 - gate 변화: 없음. 과거 영상 재생과 읽기 전용 장치 증거이며 실주행·신규 배포·모델 승격·반복 재부팅 원인 확정은 아니다.
+
+
+## 2026-10-04 · uncommitted · D-427 wave5 cleanup and CI compatibility
+
+- 변경: 추적 legacy src guide 10개와 manifest의 src colcon root를 정리했다. literal guard는 운영 소유 manifest를 읽으며 기존 검사 888개·backlog·안전 경계를 유지한다. D-443 Accepted 문장과 root AGENTS 이동 기간 규칙을 맞췄다. CI 임시 Gazebo 제외 파일의 수명은 먼저 반영된 peer 수정으로 보존하고 OpenCV 4.6 marker API와 작은 태그 코너 보정을 수정했다.
+- 증거: 구조·harness·literal 219 passed/1 skipped·NEW0, 현재 API 관련52 passed, 실제 Ubuntu/OpenCV4.6 관련43 passed. 초기 cleanup 및 추가 CI 수정 독립 APPROVE, 별도49/43 passed. docs/validation/d427-source-migration/wave5-cleanup-2026-10-04.md.
+- gate 변화: 없음. 코너 보정은 실제 sensing 변경이며 합성 7pose 한계만 확인했다. 기존 source CI 실패는 보존하고 최종 SHA의 전체 CI·ARM64·SD·artifact·release·DEVICE·FIELD는 후속이다. S7 firmware는 다음 개정이며 flash·motion·E-Stop reset을 실행하지 않았다.
+
+## 2026-10-04 · uncommitted · D-427 peer CI correction integration
+
+- 변경: wave5 후보를 origin/main의 CI 임시 Gazebo 제외 파일 수명 수정 위에 rebase했다. 원격 CI·실제 Bash 시험과 docs/logs 원문 prefix를 보존하고 이번 세션의 정리·인식 수정만 추가했다.
+- 증거: rebase 후보 6a7de04dc75c clean, 관련 CI/inventory 12 passed; 독립 peer prefix·source bytes 확인 및 CI 9 passed·APPROVE. docs/validation/d427-source-migration/wave5-rebase-independent-review-2026-10-04.md. 충돌 상태 push9는 lint3 errors·exit1이므로 수락 증거가 아니다.
+- gate 변화: 없음. 최종 push gate·원격 CI·ARM64·SD·release·실기는 후속이며 전체 legacy 인식 시험도 진행 중이다.
+
+## 2026-10-04 · uncommitted · D-427 wave5 final host and fixture corrections
+
+- 변경: 흡수 소유권 시험의 폐기된 src guide 참조를 정본 manifest로 옮기고, Git 영향 시험 fixture를 현행 perception 경로로 맞췄다. 알 수 없는 retired src의 REVIEW 우선 판정은 유지한다. production classifier·runtime·manifest·wheel 입력은 바꾸지 않았다.
+- 증거: push11 fast462 passed/2 skipped 이후 mapped2 failed/3664 passed/151 skipped라 원격 반영은 거부됐다. 실제 OpenCV4.6 전체2588 passed/107 skipped·NEW0, WSL package27 동일/CI build26 finished exit0. 수정 관련14 passed·독립14 passed·APPROVE. docs/validation/d427-source-migration/wave5-final-host-verification-2026-10-04.md.
+- gate 변화: 없음. 최종 SHA의 push·GitHub CI·ARM64·SD·release·DEVICE·FIELD는 후속이다. HOST·합성 결과를 실기 수락으로 바꾸지 않는다.
+
+## 2026-10-04 · uncommitted · merge: synchronize shared main with final remote migration
+
+- Change: Merge origin/main 1722ca6ec into shared main e79d8b01d; preserve the local legacy/current ArUco regression fixtures and remote two-pixel corner refinement. Preserve both histories and append-only records.
+- Evidence: Perception marker/dock suites 32 passed; architecture suites 51 passed. Independent review found no production safety regression; two stale tuning assertions were corrected and rerun. Fast contract validation is recorded in the integration receipt.
+- gate 변화: None. This Git integration does not activate devices or establish release/field acceptance.

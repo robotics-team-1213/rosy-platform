@@ -192,6 +192,7 @@ private fun StatusPanel(
 ) {
     val pairing = siteLink?.toPairing()
     val link = state.link
+    var showDiagnostics by rememberSaveable { mutableStateOf(false) }
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         val stateText = when {
             !state.running -> R.string.state_stopped
@@ -231,23 +232,7 @@ private fun StatusPanel(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        if (state.running && !state.previewOnly) {
-            when (val route = state.route) {
-                is SiteRoute.Discovered -> stringResource(
-                    R.string.target_route_mdns,
-                    route.sighting.addresses.joinToString { it.hostAddress.orEmpty() },
-                )
-                // An IP-only or unpinned record never browses, so it must not claim "자동 찾기로 못 찾음".
-                is SiteRoute.Manual -> stringResource(
-                    if (route.afterBrowse) R.string.target_route_manual else R.string.target_route_manual_only,
-                    route.address.hostAddress.orEmpty(),
-                )
-                else -> null
-            }?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
-        }
         if (state.running) {
-            val res = LocalContext.current.resources
-            state.lens?.let { LensText.line(res, it) }?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
             if (state.lensSwitchFailed) {
                 Text(stringResource(R.string.lens_switch_failed), color = RosyColors.StatusWarn, style = MaterialTheme.typography.bodyMedium)
             }
@@ -275,21 +260,43 @@ private fun StatusPanel(
             }
         }
         if (!state.previewOnly) {
-            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                Text(stringResource(R.string.stat_fps, link.sentFps))
-                Text(stringResource(R.string.stat_kbps, link.kbps))
-                Text(stringResource(R.string.stat_skipped, link.dropped))
+            Text(stringResource(R.string.stat_fps, link.sentFps), style = MaterialTheme.typography.bodyMedium)
+            TextButton(onClick = { showDiagnostics = !showDiagnostics }) {
+                Text(if (showDiagnostics) "연결·송출 정보 접기" else "연결·송출 정보 보기")
             }
-            Text(
-                stringResource(R.string.stat_config, link.config.fps, link.config.width, link.config.jpegQuality),
-                style = MaterialTheme.typography.bodySmall,
-            )
-            val sentQuality = link.sentQuality
-            if (state.running && sentQuality != null && sentQuality < link.config.jpegQuality) {
+            if (showDiagnostics) {
+                if (state.running) {
+                    when (val route = state.route) {
+                        is SiteRoute.Discovered -> stringResource(
+                            R.string.target_route_mdns,
+                            route.sighting.addresses.joinToString { it.hostAddress.orEmpty() },
+                        )
+                        is SiteRoute.Manual -> stringResource(
+                            if (route.afterBrowse) R.string.target_route_manual else R.string.target_route_manual_only,
+                            route.address.hostAddress.orEmpty(),
+                        )
+                        else -> null
+                    }?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+                    val res = LocalContext.current.resources
+                    state.lens?.let { LensText.line(res, it) }?.let {
+                        Text(it, style = MaterialTheme.typography.bodyMedium)
+                    }
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    Text(stringResource(R.string.stat_kbps, link.kbps))
+                    Text(stringResource(R.string.stat_skipped, link.dropped))
+                }
                 Text(
-                    stringResource(R.string.stat_quality_auto, sentQuality, link.config.jpegQuality),
+                    stringResource(R.string.stat_config, link.config.fps, link.config.width, link.config.jpegQuality),
                     style = MaterialTheme.typography.bodySmall,
                 )
+                val sentQuality = link.sentQuality
+                if (state.running && sentQuality != null && sentQuality < link.config.jpegQuality) {
+                    Text(
+                        stringResource(R.string.stat_quality_auto, sentQuality, link.config.jpegQuality),
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
             }
             if (link.dropped > 0) {
                 Text(

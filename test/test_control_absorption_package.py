@@ -5,6 +5,8 @@ from __future__ import annotations
 import importlib.util
 from pathlib import Path
 
+import yaml
+
 
 REPO = Path(__file__).resolve().parents[1]
 PACKAGE = REPO / "middleware" / "perception"
@@ -31,8 +33,13 @@ def test_control_tests_are_owned_by_the_os_workspace() -> None:
 
 
 def test_os_source_catalog_owns_the_absorbed_package() -> None:
-    catalog = (REPO / "src" / "AGENTS.md").read_text(encoding="utf-8")
-    assert "`control`" in catalog
+    catalog = yaml.safe_load(
+        (REPO / "tools/harness/platform_parts.yaml").read_text(encoding="utf-8"))
+    owners = [row for row in catalog["roots"]
+              if row["path"] == PACKAGE.relative_to(REPO).as_posix()]
+    assert len(owners) == 1
+    assert owners[0]["part"] == "middleware"
+    assert "control" in owners[0]["import_prefix"]
 
 
 def test_absorbed_metadata_and_device_guide_keep_core_command_authority() -> None:
