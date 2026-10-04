@@ -5849,3 +5849,9 @@ osy-d395-s1d\`.
 - 변경: 원래 sealed export와 trusted transport workspace/highwater, 원본 pixels 및 전체 eval inventory를 scratch 재구축해 저장 SHA와 대조한다. trainer는 captured train/eval/gate를 소비하고 Job/GPU 및 실제 READY marker 직전 fresh authority/TTL/source/recipe를 재확인한다. CLI boolean/build receipt는 권한이 아니다.
 - 증거: X:/DevTemp/ta에 RED12FAIL, initial24PASS, interleaving45PASS/NEW0 및 독립 정책 리뷰를 남긴다. 최종 affected/source 체크는 완료 보고서로 별도 고정한다. 실제 labels/meta 복구 후보16개는 원래2digest 일치0이어서 UNKNOWN을 유지한다.
 - gate 변화: 호스트 SOURCE/격리 검증만. 실제 마스크 승인0, eval rowbinding 결손은 HOLD이며 학습 요청/GPU/서비스 배포/모델 활성화/주행은 실행하지 않는다.
+
+## 2026-10-05 · uncommitted · fix(learning): owner admission의 더 짧은 승인 유효기간 유지
+
+- 변경: 기존 cycle의 pinned authority 유효기간과 producer owner 유효기간 중 최솟값을 transport 조회, dataset 재구축, IndexedReview에 동일하게 전달한다. 5초 정책을 90초 기본값으로 늘리지 않는다. 승인 발급자·highwater·출처·READY 조건은 그대로다.
+- 증거: X:/DevTemp/rosy-ui-ship/review-ttl에 새 경계 RED3FAIL3PASS, 수정 후 focused6PASS, 기존 관련5개 suite208PASS1SKIP50.05초 및 known_failures NEW0을 기록했다. stale20초/fresh2초, 양쪽5초/90초 설정, 느린 재구축 중 만료를 실제 synthetic admission/request 경계로 확인했다.
+- gate 변화: 호스트 SOURCE/격리 검증만. 실제 GPU·학습 요청·장치 설정·배포·모델 활성화·주행은 실행하지 않는다. 독립 소스 리뷰 후 이 수정만 커밋하며 native038/Android/배포 closure는 변경하지 않는다.

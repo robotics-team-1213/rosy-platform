@@ -350,6 +350,9 @@ STATE [--once]` accepts a private configuration with `cycle` (the existing cycle
 configuration) and `review`: `source_proof_files`, `staging_parent`,
 `dataset_name`, optionally `eval_companion_files` and `authority_max_age_s` (at
 most 90 seconds). Source paths and secrets stay outside this public repository.
+The effective freshness bound is the smaller of `cycle.authority.max_age_s`
+and `review.authority_max_age_s`; transport, reconstruction and trainer admission
+all use that same bound.
 
 This composition builds only explicitly approved indexed masks, checks persisted
 transport highwater and fresh source/eval-bound `IndexedReview`, then atomically

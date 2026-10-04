@@ -47,8 +47,19 @@ class ReviewPipeline:
                 or not 0 < self.authority_max_age_s <= 90):
             raise JobError('bounded owner pipeline freshness required')
 
+    def _max_age(self, config):
+        self.check_settings()
+        cfg = config.get('authority')
+        if not isinstance(cfg, dict):
+            raise JobError('owner pipeline requires pinned current transport')
+        pinned = cfg.get('max_age_s')
+        if type(pinned) is not int or not 1 <= pinned <= 3600:
+            raise JobError('bounded pinned transport freshness required')
+        return min(pinned, self.authority_max_age_s)
+
     def _transport(self, config, job):
         self.check_settings()
+        max_age = self._max_age(config)
         config_sha = _signature(config)
         cfg = config.get('authority')
         if not isinstance(cfg,dict):
@@ -67,7 +78,7 @@ class ReviewPipeline:
                 or set(highwater) != {'workspace_id','generation','decision_sha256'}):
             raise JobError('persisted transport authority highwater required')
         current,revision = _delivery(lambda:receipt,workspace,highwater,
-                                    self.authority_max_age_s,self.now)
+                                    max_age,self.now)
         if revision != highwater:
             raise JobError('transport revision differs from current authority')
         advance_revision(current,workspace_id=workspace,
@@ -82,7 +93,7 @@ class ReviewPipeline:
         return IndexedReview(export_root=export,fetch_current=fetch,
             workspace_id=previous['workspace_id'],previous_authority=previous,
             source_proof_files=self.source_proof_files,staging_parent=self.staging_parent,
-            authority_max_age_s=self.authority_max_age_s,now=self.now,
+            authority_max_age_s=self._max_age(config),now=self.now,
             eval_companion_files=self.eval_companion_files)
 
     def _evals(self, config):
@@ -152,7 +163,7 @@ class ReviewPipeline:
                 job._save()
                 return
             kwargs=dict(export_root=export,fetch_current=fetch,workspace_id=revision['workspace_id'],
-                previous_authority=revision,authority_max_age_s=self.authority_max_age_s,now=self.now,
+                previous_authority=revision,authority_max_age_s=self._max_age(config),now=self.now,
                 eval_folders=folders,gate_eval_refs=[{'name':evaluation.parent.name,'content_sha':evaluation.name}],
                 source_proof_files=self.source_proof_files,store=store,name=self.dataset_name,
                 staging_parent=self.staging_parent)

@@ -47,6 +47,64 @@ def test_build_request_and_owner_admission_reach_isolated_trainer_once(tmp_path)
     assert not list(args['store'].root.rglob('READY'))
 
 
+@pytest.mark.parametrize('cycle_ttl,owner_ttl', [(5, 90), (90, 5)])
+@pytest.mark.parametrize('age', [2, 20])
+def test_owner_composition_keeps_the_stricter_freshness_before_request_and_training(
+        tmp_path, monkeypatch, cycle_ttl, owner_ttl, age):
+    args, authority, built, config, owner, current, requests = setup(tmp_path)
+    config['authority']['max_age_s'] = cycle_ttl
+    owner = review_pipeline.ReviewPipeline(source_proof_files=args['source_proof_files'],
+        staging_parent=args['staging_parent'], dataset_name='indexed',
+        authority_max_age_s=owner_ttl, now=lambda: 100)
+    envelope = json.loads(current.read_text())
+    envelope['checked_at_unix'] = 100 - age
+    current.write_text(json.dumps(envelope))
+    monkeypatch.setattr(learning_cycle.time, 'time', lambda: 100)
+    limits, trained = [], []
+    original = review_pipeline.build_dataset
+    def build(*a, **kw):
+        limits.append(kw['authority_max_age_s'])
+        return original(*a, **kw)
+    monkeypatch.setattr(review_pipeline, 'build_dataset', build)
+    def train(cfg, out, *, indexed_review):
+        assert indexed_review.authority_max_age_s == 5
+        with indexed_review.open(cfg, args['store'].dataset_path(*cfg['dataset'].split('@')),
+                                 args['eval_folders'][0], []) as admitted:
+            trained.append(admitted.evidence)
+        return {'scope': 'synthetic; no GPU or READY'}
+    state = learning_cycle.run_once(config, tmp_path / 'cycle', trainer_fn=train, review_pipeline=owner)
+    if age == 20:
+        assert not trained
+        assert not list(requests.glob('*.json'))
+        assert state['review_autobuild']['status'] == 'held'
+    else:
+        assert len(trained) == 1 and len(list(requests.glob('*.json'))) == 1
+        assert limits == [5]
+    assert not list(args['store'].root.rglob('READY'))
+
+
+@pytest.mark.parametrize('cycle_ttl,owner_ttl', [(5, 90), (90, 5)])
+def test_slow_build_cannot_widen_pinned_ttl_before_request(tmp_path, monkeypatch, cycle_ttl, owner_ttl):
+    args, authority, built, config, old_owner, current, requests = setup(tmp_path)
+    config['authority']['max_age_s'] = cycle_ttl
+    clock = [100]
+    owner = review_pipeline.ReviewPipeline(source_proof_files=args['source_proof_files'],
+        staging_parent=args['staging_parent'], dataset_name='indexed',
+        authority_max_age_s=owner_ttl, now=lambda: clock[0])
+    monkeypatch.setattr(learning_cycle.time, 'time', lambda: clock[0])
+    original = review_pipeline.build_dataset
+    def slow(*a, **kw):
+        report = original(*a, **kw)
+        clock[0] = 120
+        return report
+    monkeypatch.setattr(review_pipeline, 'build_dataset', slow)
+    state = learning_cycle.run_once(config, tmp_path / 'cycle', review_pipeline=owner,
+        trainer_fn=lambda *a, **kw: pytest.fail('expired approval cannot enter trainer'))
+    assert state['review_autobuild']['status'] == 'held'
+    assert not list(requests.glob('*.json'))
+    assert not list(args['store'].root.rglob('READY'))
+
+
 @pytest.mark.parametrize('failure',['expired','workspace','missing_highwater','revoked'])
 def test_current_failure_creates_no_request_or_trainer(tmp_path,failure):
     args,authority,built,config,owner,current,requests=setup(tmp_path)
