@@ -319,13 +319,15 @@ def test_resealed_contract_authority_rejects_false_integer_alias(tmp_path,field,
         review_evidence.verify_current(out,current)
 
 
+@pytest.mark.parametrize('field',['frame_excluded','original_video_verified'])
 @pytest.mark.parametrize('recompute_digest',[False,True])
-def test_resealed_receipt_authority_rejects_false_integer_alias(tmp_path,recompute_digest):
+def test_resealed_receipt_authority_rejects_false_integer_alias(tmp_path,field,recompute_digest):
     store = open_store(tmp_path)
     current = review_evidence.decisions(store)
     out = Path(store.prepare()['path'])
     receipt = json.loads((out/'pinky-review-receipt.json').read_bytes())
-    receipt['authority']['frames'][0]['original_video_verified'] = 0
+    assert receipt['authority']['frames'][0][field] is False
+    receipt['authority']['frames'][0][field] = 0
     if recompute_digest:
         authority = receipt['authority']
         del authority['decision_sha256']
