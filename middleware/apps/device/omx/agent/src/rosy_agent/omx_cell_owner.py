@@ -6,7 +6,7 @@ store, the local stop latch and the accepted cell/recipe store, the CELL_TRANSFE
 (transfer Skill + analytic planner + PickPlaceRunner), the D-336 ``ActionApi``/``UnixActionServer``
 and the D-404 HTTP app from the same runtime. Only the UDS path uses the acceptance store today:
 the HTTP app is the unchanged Pilot simulation app and has no /cell routes, so it does not yet
-share the store with UDS; PUT/GET /cell and seat<->Action exclusion land with G9.
+share accepted documents with UDS; seat and Action admission share one in-process coordinator.
 
 ROS is injected (``runtime_factory``, ``goal_port_factory``) so this composition stays rclpy-free
 and host-testable; ``deploy/robot/omx/run_cell_owner.py`` supplies the real runtime. Before any
@@ -29,6 +29,7 @@ from omx_adapter.action_runner import ActionRunner
 from omx_adapter.action_store import ActionStore
 from omx_adapter.cell_acceptance import CellAcceptanceStore
 from omx_adapter.command_owner import TrajectoryCommand
+from omx_adapter.control_seat_admission import ControlSeatAdmission
 from omx_adapter.gripper_contract import GripperObservation
 from omx_adapter.journal_identity import journal_identity
 from omx_adapter.kinematics import OmxKinematics
@@ -126,6 +127,9 @@ def build_cell_owner(settings: CellOwnerSettings, *,
         calibration_revision=settings.calibration_revision, allowed_owners=ALLOWED_OWNERS))
 
     store = ActionStore(settings.journal_path)
+    admission = ControlSeatAdmission(runtime.owner, store)
+    runtime.owner.bind_control_admission(admission)
+    runtime.control_admission = admission
     stop = LocalStopController(store.path, workcell_id=settings.workcell_id,
                                instance_id=settings.instance_id)
     acceptance = CellAcceptanceStore(
@@ -186,7 +190,8 @@ def build_cell_owner(settings: CellOwnerSettings, *,
         store, _NoDirectDriver(), workcell_id=settings.workcell_id, instance_id=settings.instance_id,
         principal_for_peer=lambda uid: f"fleet-uid-{uid}", allowed_peer_uids={settings.fleet_peer_uid},
         current_fence=current_fence, capability_current=acceptance.capability_current,
-        submission_fence=stop, phase_runner_factories={"CELL_TRANSFER": phase_factory}, enabled=True)
+        submission_fence=stop, phase_runner_factories={"CELL_TRANSFER": phase_factory},
+        control_admission=admission, enabled=True)
     stop_api = LocalStopApi(stop, source_by_peer_uid={settings.fleet_peer_uid: StopRequestSource.FLEET},
                             cancel_active=lambda uid: runner.cancel_unresolved(peer_uid=uid),
                             fleet_fence_current=fleet_fence_current)

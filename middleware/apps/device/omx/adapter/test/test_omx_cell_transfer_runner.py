@@ -45,6 +45,7 @@ def test_direct_driver_path_rejects_every_kind_but_pick_place_before_journal(tmp
 
 
 def _action_runner(store, driver, base, **factories):
+    factories.setdefault("control_admission", base.control_admission)
     return ActionRunner(
         store, driver, workcell_id="omx-1", instance_id="omx-1-control",
         principal_for_peer=lambda uid: f"fleet-uid-{uid}", allowed_peer_uids={1001},

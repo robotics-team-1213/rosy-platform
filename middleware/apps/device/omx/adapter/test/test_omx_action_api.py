@@ -106,8 +106,16 @@ class FakePhaseExecution:
 
 def _runner(tmp_path, driver=None, phase_runner_factories=None,
             capability_current=None):
+    from dataclasses import replace
+    from test_omx_command_owner import FakeActionClient, make_config
+    from omx_adapter.command_owner import ArmCommandOwner
+    from omx_adapter.control_seat_admission import ControlSeatAdmission
     db = tmp_path / "actions.sqlite3"
     store = ActionStore(db)
+    owner = ArmCommandOwner(replace(make_config(), workcell_id="omx-1",
+                                   instance_id="omx-1-control"), FakeActionClient())
+    admission = ControlSeatAdmission(owner, store)
+    owner.bind_control_admission(admission)
     driver = driver or FakeDriver()
     stop = LocalStopController(db, workcell_id="omx-1", instance_id="omx-1-control")
     stop.rearm(authority_epoch=2, dispatch_generation=8, operator_confirmed=True,
@@ -120,6 +128,7 @@ def _runner(tmp_path, driver=None, phase_runner_factories=None,
                             (lambda grant: grant.config_revision == "cfg-1")),
         submission_fence=stop,
         phase_runner_factories=phase_runner_factories,
+        control_admission=admission,
         enabled=True,
     )
     runner.local_stop = stop

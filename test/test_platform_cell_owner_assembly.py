@@ -18,6 +18,7 @@ for relative in ("contracts/skill/src", "middleware/apps/device/omx/agent/src", 
 
 from core_common.protocol.schemas import FleetCellTransferGrant  # noqa: E402
 from omx_adapter.action_runner import action_grant_digest  # noqa: E402
+from omx_adapter.command_owner import ArmCommandOwner  # noqa: E402
 from rosy_agent.omx_cell_owner import CellOwnerSettings, build_cell_owner  # noqa: E402
 
 EXAMPLES = ROOT / "operations/processes/cell/examples/omx_sim"
@@ -27,7 +28,8 @@ FLEET_UID = 1001
 class FakeRuntime:
     def __init__(self, config):
         self.config = config
-        self.owner = SimpleNamespace(session_id="session-1", state="ready")
+        self.owner = ArmCommandOwner(config, SimpleNamespace(), monotonic=lambda: 100.0,
+                                     session_id="session-1")
         self.latest_joint_state = None
         self.monotonic = lambda: 100.0
 
@@ -62,6 +64,15 @@ def _build(tmp_path, **overrides):
     )
     kwargs.update(overrides)
     return build_cell_owner(_settings(tmp_path), **kwargs), calls
+
+
+def test_builder_shares_one_admission_for_http_and_fleet(tmp_path):
+    import time
+    owner, _ = _build(tmp_path)
+    assert owner.runner.control_admission is not None
+    assert owner.runtime.control_admission is owner.runner.control_admission
+    assert owner.runner.control_admission.owner is owner.runtime.owner
+    assert owner.runner.control_admission._clock is time.monotonic
 
 
 def _docs():

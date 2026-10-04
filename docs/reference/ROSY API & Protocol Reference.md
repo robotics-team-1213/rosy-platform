@@ -2,7 +2,7 @@
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.94
+**Version:** v1.95
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -139,7 +139,7 @@ Fleet 의 로봇 토큰은 operator 토큰이다(`robots.yaml` 의 `token`, 또�
 | `CALIBRATION_ACTIVE` | 409 | 다른 토큰이 보정 세션 lease 를 쥐고 있어 구동 쓰기를 거부함: `teleop`, `/mode`(IDLE 제외), `line-follow/mode`(OFF 제외)·`hold`, `navigation/goal`·`home`, `docking/dock`·`undock`, `swarm/follow`. 멈추기만 하는 것(`safety/stop`, `/mode` IDLE, line-follow OFF, 각종 cancel)은 막지 않는다. `detail: {session}` 은 `GET /calibration/session` 의 세션과 같다. `POST /calibration/session` 이 이미 세션이 있을 때도 같은 코드 (D-321 부록, v1.68). D-395 경로 `POST /localization/decision`·`suspect` 에서는 같은 코드를 **423** 으로 낸다(v1.72, 계약 `docs/plans/2026-10-01-d395-phase2-interfaces.md` §2) | 로봇 |
 | `LINE_FOLLOW_NOT_HELD` | 409 | `POST /line-follow/hold` 인데 운전자 확인(`hold_s`) 세션이 없음 (v1.63) | 로봇 |
 | `STUCK_ID_MISMATCH` | 409 | `POST /line-follow/stuck/decision` 의 `stuck_id` 가 지금 열린 막힘이 아님(늦은 답·이미 닫힌 막힘·막힘 없음). 늦은 답이 다음 막힘에 쓰이지 않게 한다 (D-407, v1.74) | 로봇 |
-| `STUCK_DECISION_REFUSED` | 409 | 막힘 답을 지금 실행할 수 없음 — `RESUME`: 경로 띠 안 물체가 `obstacle_stop_m` 안이거나 scan 이 `clearance_stale_s` 보다 오래되었거나 LiDAR 정지를 쓰는데 scan 이 없음; `BACK_AND_RETRY`: 로컬 복구 꺼짐·시도 소진·뒤 여유 부족·LiDAR 사각·몸 기하 미설정·scan stale; `YIELD`: 구간이 없거나 유한하지 않음·거리 밖(0.05–2.0 m)·회전이 π 를 넘음·회전 여유 없음(`turn_blocked`)·보정 중·몸 기하 미설정·scan 없음·scan stale·선속도 한도 0. 앞에 동료가 있는 것만으로는 거절하지 않는다. 메시지에 사유 (D-407, v1.74; YIELD 는 D-453, v1.94) | 로봇 |
+| `STUCK_DECISION_REFUSED` | 409 | 막힘 답을 지금 실행할 수 없음 — `RESUME`: 경로 띠 안 물체가 `obstacle_stop_m` 안이거나 scan 이 `clearance_stale_s` 보다 오래되었거나 LiDAR 정지를 쓰는데 scan 이 없음; `BACK_AND_RETRY`: 로컬 복구 꺼짐·시도 소진·뒤 여유 부족·LiDAR 사각·몸 기하 미설정·scan stale; `YIELD`: 구간이 없거나 유한하지 않음·거리 밖(0.05–2.0 m)·회전이 π 를 넘음·회전 여유 없음(`turn_blocked`)·보정 중·몸 기하 미설정·scan 없음·scan stale·선속도 한도 0. 앞에 동료가 있는 것만으로는 거절하지 않는다. 메시지에 사유 (D-407, v1.74; YIELD 는 D-453, v1.95) | 로봇 |
 | `LINE_FOLLOW_ACTIVE` | 409 | 라인 추종이 켜져 있어 도킹/언도킹을 시작하지 않음 — `line-follow/mode` 를 `OFF` 로 먼저 (v1.18) | 로봇 |
 | `IR_FALLBACK_NOT_READY` | 409 | 카메라 고장 상태, IR 라인 증거 최신성, 보정 revision, 또는 센서 안전 정책을 만족하지 못함 | 로봇 |
 | `NO_ODOMETRY` | 409 | 오도메트리가 없어 언도킹 후진 거리를 잴 수 없음 (v1.18) | 로봇 |
@@ -270,7 +270,7 @@ config `control.sensor_adapter.mode` 와 같은 문자열이다(D-400). 일반 �
 | GET | `/api/v1/line-follow` | Viewer | D-143 — 선택 모드, 상태, 증거 신뢰도·나이, 최종 선속도·각속도와 사유. `clearance_m`(정면 LiDAR 최소 거리, 없으면 null)과 정지 사유 `obstacle_ahead`·`obstacle_sensor_stale`·`driver_released` (D-344, v1.63). IR 이탈 감시(`line_follow.ir_guard_enabled`)가 켜지면 추종 사유 `lane_edge_left`·`lane_edge_right`(경계 반대로 비킴)와 정지 사유 `lane_departure`·`lane_guard_stale` (D-344 §12, v1.63). 공칭 지면(`ground: NOMINAL`) 카메라 증거는 `hold_s` 세션이 없으면 `nominal_ground_requires_driver` 로 멈춘다 (D-364 §3, v1.63). 정지 사유 `limit_level_too_low`(수동 한도 L1 미만)·`angular_limit_zero`(각속도 한도를 읽을 수 없음) (D-344 §13, feat/device-prep, v1.64). 몸 기준 정지(D-422, v1.84: `obstacle_mode: path` + 로봇 패키지 URDF 몸 기하)에서는 `body_gap_m`(의도한 차선 호를 따라 몸 윤곽이 닿기까지의 거리, 없으면 null)·`stop_gap_m`(그 속도의 정지 간격)·`clearance_source`(`lidar`·`memory`(LiDAR `range_min` 아래로 사라져 기억한 반환)·`ultrasonic`·`odometry_lost`(바퀴 값 적분 실패 — 다음 스캔까지 정지), 아무것도 없으면 null)가 오고 `clearance_m` 은 `body_gap_m` 과 같은 몸 간격이다. 그 밖에는 세 필드 모두 null |
 | PUT | `/api/v1/line-follow/mode` | Operator | D-143 — `{mode: OFF\|IR_LINE\|CAMERA_LINE, hold_s?}`. 소스는 상호 배타적이며 변경 즉시 이전 증거와 명령을 폐기. 도킹/언도킹 중에는 409 `DOCKING_ACTIVE` (v1.18). 요구 능력은 구동(`mobility.move`)이다 — Nav2 가 없는 `motor` 런타임에서도 켜진다(D-344 §7, v1.63). `hold_s`(0 < s ≤ 2)를 주면 운전자 확인 세션이다: `POST /line-follow/hold` 가 그 안에 계속 와야 하고, 끊기면 CORE 가 스스로 OFF(`reason: driver_released`)로 내리고 바퀴 명령을 지운다(D-344 §8, v1.63). OFF 가 아닌 모드는 D-395 로봇이 `LOCALIZED` 가 아니면 409 `NOT_LOCALIZED` (v1.72) |
 | POST | `/api/v1/line-follow/hold` | Operator | D-344 §8 — 운전자가 "진행"을 누르고 있다. 활성 `hold_s` 세션의 만료를 `hold_s` 만큼 미룬다. 세션이 없으면 409 `LINE_FOLLOW_NOT_HELD` (v1.63) |
-| POST | `/api/v1/line-follow/stuck/decision` | `STUCK_DECIDE` (operator·administrator·`stuck_resolver`, D-438 v1.91) | D-407 §2 / D-453 — `{stuck_id, decision: WAIT\|RESUME\|BACK_AND_RETRY\|MANUAL\|ABORT\|YIELD}`. `YIELD` 는 선택 필드 `yield_m`·`yield_turn_rad` 가 둘 다 있어야 하고, 다른 결정에 그 필드가 있으면 400 `VALIDATION_ERROR`. 한 답은 한 구간이다. CORE 는 회전을 확인한 뒤 그 거리만 앞으로 기어 가고, 끝나면 `YIELDED` 로 서며 차선 추종을 재개하지 않는다. 다음 `YIELD` 가 다음 구간이다. 열린 막힘(`GET /line-follow` 의 `stuck`)에 대한 관제 답. `WAIT` 그대로 HOLD·로컬 복구 안 함; `RESUME` 앞물체 정지를 한 번 풀어 `obstacle_stop_m` 까지 접근 허용·LOST 해제 후 차선 추종 재개; `BACK_AND_RETRY` 짧은 후진과 재판단을 즉시(로컬 복구가 켜져 있어야 함); `MANUAL` 차선 추종 OFF + MANUAL(D-342 한도); `ABORT` 차선 추종 OFF + IDLE. 응답은 line-follow 상태 + `outcome`(`hold\|back\|resume\|manual\|idle\|yield`). `RESUME`·`BACK_AND_RETRY`·`MANUAL`·`YIELD` 는 보정 lease 를, `RESUME`·`BACK_AND_RETRY`·`YIELD` 는 E-Stop 을 지킨다. `MANUAL`·`ABORT` 의 모드 전이는 `POST /mode` 와 같다(`MANUAL` 은 navigation·swarm 취소, `mode.changed`). 409 `STUCK_ID_MISMATCH`·`STUCK_DECISION_REFUSED`·`CALIBRATION_ACTIVE`·`EMERGENCY_ACTIVE`. 운용자 Fleet 경로의 다섯 단어와 추가 필드 422 는 그대로다 (v1.74, YIELD 는 v1.94) |
+| POST | `/api/v1/line-follow/stuck/decision` | `STUCK_DECIDE` (operator·administrator·`stuck_resolver`, D-438 v1.91) | D-407 §2 / D-453 — `{stuck_id, decision: WAIT\|RESUME\|BACK_AND_RETRY\|MANUAL\|ABORT\|YIELD}`. `YIELD` 는 선택 필드 `yield_m`·`yield_turn_rad` 가 둘 다 있어야 하고, 다른 결정에 그 필드가 있으면 400 `VALIDATION_ERROR`. 한 답은 한 구간이다. CORE 는 회전을 확인한 뒤 그 거리만 앞으로 기어 가고, 끝나면 `YIELDED` 로 서며 차선 추종을 재개하지 않는다. 다음 `YIELD` 가 다음 구간이다. 열린 막힘(`GET /line-follow` 의 `stuck`)에 대한 관제 답. `WAIT` 그대로 HOLD·로컬 복구 안 함; `RESUME` 앞물체 정지를 한 번 풀어 `obstacle_stop_m` 까지 접근 허용·LOST 해제 후 차선 추종 재개; `BACK_AND_RETRY` 짧은 후진과 재판단을 즉시(로컬 복구가 켜져 있어야 함); `MANUAL` 차선 추종 OFF + MANUAL(D-342 한도); `ABORT` 차선 추종 OFF + IDLE. 응답은 line-follow 상태 + `outcome`(`hold\|back\|resume\|manual\|idle\|yield`). `RESUME`·`BACK_AND_RETRY`·`MANUAL`·`YIELD` 는 보정 lease 를, `RESUME`·`BACK_AND_RETRY`·`YIELD` 는 E-Stop 을 지킨다. `MANUAL`·`ABORT` 의 모드 전이는 `POST /mode` 와 같다(`MANUAL` 은 navigation·swarm 취소, `mode.changed`). 409 `STUCK_ID_MISMATCH`·`STUCK_DECISION_REFUSED`·`CALIBRATION_ACTIVE`·`EMERGENCY_ACTIVE`. 운용자 Fleet 경로의 다섯 단어와 추가 필드 422 는 그대로다 (v1.74, YIELD 는 v1.95) |
 | GET | `/api/v1/traffic` | Viewer | D-151 — 교통 인식 증거, 정책 판정, active/staged 설정과 simulation signal capability readback |
 | POST | `/api/v1/traffic/policy/stage` | Operator | D-151 — 정책 모드·revision·거리·dwell·신뢰도 기준을 검증해 검토본으로 저장. 활성 정책은 바꾸지 않음 |
 | POST | `/api/v1/traffic/policy/apply` | Operator | D-151 — IDLE/EMERGENCY이고 line-follow가 꺼져 있으며, fresh 0 속도 또는 E-stop으로 정지가 증명된 경우에만 staged 정책을 원자 적용 |
@@ -2064,11 +2064,48 @@ and field acceptance require their own evidence.
 
 작업 화면의 승인·진행·복구는 기존 `/api/fleet/missions/{id}/admit`, `/api/fleet/cell-jobs/{id}`, `/reconcile`, `/resume`, `/cancel`을 사용한다. 승인/재승인은 현재 dispatch generation과 named operator가 필요하다. UNKNOWN의 자동 재시도는 없다. cancel은 기존 `HOLD/CANCELLED_BY_OPERATOR` 계약을 유지한다. 서비스 제안 성공·실행 성공·독립 목표 확인은 별개다.
 
+## Cell 수동 슬립시트 대기 (D-450)
+
+`rosy_cell.recipe/2`는 palletize의 작업자 간지 삽입을 명시한다. `slip_sheet`는
+`{handling:"operator",thickness:<positive metres>}`이며 로봇 공급 station을 받지 않는다.
+recipe/1의 자동 sheet·문서 해시·Job 직렬화는 유지한다. 수동 depalletize는 아직 거절한다.
+PROCESS가 간지 두께를 다음 층 높이에 포함하고 non-motion `operator_sheet` Job 단계와
+hash-bound checkpoint를 만든다. 실행 PlanBundle에는 box transfer만 들어간다.
+
+`GET /api/fleet/cell-jobs/{mission_id}`는 수동 Job에만 `job.operator_checkpoints`를 추가한다.
+각 행은 공유 `CellOperatorCheckpoint` 스키마이며 다음 필드를 가진다.
+
+| 필드 | 의미 |
+|---|---|
+| `checkpoint_id` | recipe/cell digests와 아래 canonical instruction을 결합한 SHA-256 |
+| `kind` | `operator_sheet` |
+| `before_transfer_ordinal` | 다음 box transfer의 1-based 순번 |
+| `pallet_id`, `layer_index` | 팔레트 ID와 0-based 층 번호 |
+| `sheet_pose_base` | 작성된 간지 top-face 배치 지시 `{x_m,y_m,z_m,yaw_rad}`. 실측 pose가 아님 |
+| `thickness_m` | 양수 두께(m) |
+| `status` | `WAITING` 또는 `WAITING_ACCESS` |
+| `updated_at` | timezone을 포함한 원장 변경 시각 |
+
+`checkpoint_id = SHA256(UTF8(canonicalJSON({recipe_sha256,cell_sha256,checkpoint:descriptor_without_id})))`.
+canonical JSON은 sorted keys·compact separators·`ensure_ascii=False`·`allow_nan=False`이며
+descriptor는 위 필드 중 `checkpoint_id`, `status`, `updated_at`을 제외한 여섯 지시 필드다.
+
+이전 box의 독립 목표 확인과 marker 원장 반영 후 다음 transfer를 READY로 만들기 전에
+같은 SQLite transaction에서 checkpoint와 Job/다음 step을 HOLD하고 CLAIMED 자원을 HELD로 보존한다.
+첫 층 간지도 admission에서 막는다. 재시작·start·일반 resume는 이 대기를 우회하지 못하며
+완료 box를 다시 하달하지 않는다. 수동 checkpoint가 없는 기존 Job의 응답 필드는 유지한다.
+
+현재 대기 이유는 `OPERATOR_SHEET_ACCESS_UNAVAILABLE`이며 일반 resume는 409다.
+작업자 삽입 확인 API와 owner-exclusive 접근 허가 계약은 아직 제공하지 않는다.
+owner ready, StopLocal ACK, caller 확인 boolean 또는 simulation pose만으로 다음 층을 열지 않는다.
+이 readback은 작업자의 안전 접근이나 간지 삽입 완료 증거가 아니다.
+
 # 11. 변경 이력
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
-| v1.94 | 2026-10-04 | Additive (D-453, feat/meet-algorithms): CORE `POST /api/v1/line-follow/stuck/decision` 에 `YIELD` 와 선택 필드 `yield_m`·`yield_turn_rad`. 한 답은 한 구간이고 outcome 에 `yield` 가 있다. 필드가 없거나 다른 결정에 붙으면 400. 보정 lease·E-Stop 은 `RESUME`·`BACK_AND_RETRY` 와 같다. `stuck_resolver` 의 `MANUAL` 은 403. 운용자 Fleet `POST /api/fleet/robots/{robot_id}/line-stuck/decision` 의 다섯 단어와 추가 필드 422 는 그대로다. 판단기가 로봇에 `YIELD` 를 직접 보낸다. envelope `protocol_version` 1.0 유지 |
+| v1.95 | 2026-10-04 | Additive (D-453, feat/meet-algorithms): CORE `POST /api/v1/line-follow/stuck/decision` 에 `YIELD` 와 선택 필드 `yield_m`·`yield_turn_rad`. 한 답은 한 구간이고 outcome 에 `yield` 가 있다. 필드가 없거나 다른 결정에 붙으면 400. 보정 lease·E-Stop 은 `RESUME`·`BACK_AND_RETRY` 와 같다. `stuck_resolver` 의 `MANUAL` 은 403. 운용자 Fleet `POST /api/fleet/robots/{robot_id}/line-stuck/decision` 의 다섯 단어와 추가 필드 422 는 그대로다. 판단기가 로봇에 `YIELD` 를 직접 보낸다. envelope `protocol_version` 1.0 유지 |
+| v1.94 | 2026-10-04 | Additive (D-450): recipe/2 작업자 간지 지시와 Cell Job의 optional read-only `operator_checkpoints`, 공유 `CellOperatorCheckpoint` 스키마. durable HOLD·재시작/재개 우회 차단; owner 접근·삽입 확인 API는 미제공. envelope 1.0 유지 |
 | v1.93 | 2026-10-04 | Additive (D-450): Fleet Console `/console/cell` 작업 화면의 revision 문서 저장·정본 compile·명시 service proposal API 및 `CellApp*Request` 스키마 추가. 기존 named operator admission/복구·원장을 재사용. envelope version 1.0 유지 |
 | v1.92 | 2026-10-04 | Additive: Viewer GET /api/v1/power/health; battery age/freshness, timestamped charging evidence, software sleep blockers and wake constraints. Read-only; envelope protocol_version 1.0 unchanged. |
 | v1.91 | 2026-10-04 | Additive (D-438 1단계, docs/d438-fleet-stuck-resolver): CORE 역할 `stuck_resolver`(순위 viewer)와 capability `STUCK_DECIDE`; `POST /api/v1/line-follow/stuck/decision` 은 `STUCK_DECIDE` 를 요구(operator·administrator 도 가짐), `stuck_resolver` 의 `MANUAL` 은 403. Site Fleet `POST /api/fleet/robots/{robot_id}/line-stuck/claim`(operator), 로봇 행 `line_stuck.resolver`, `robots.yaml` `resolver_token`, `fleet console --stuck-resolver`. `fleet_line_stuck_answers` 에 null 가능 열 `tier`·`rule`·`escalated`(옛 DB 는 열 때 추가), 판단기가 사람에게 올릴 때마다 `ESCALATE` 행. `GET /api/fleet/state` 와 판단기는 1 s 안에서 한 번의 gather 를 같이 쓴다. 로봇 이벤트·FleetAgent 프로토콜 변경 없음 |

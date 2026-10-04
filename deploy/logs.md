@@ -2352,3 +2352,9 @@
 - Change: Observe all signed payload code roots and enrolled previous layouts; include hidden untracked files and hold on unavailable or timed-out Git observations. Preserve signed archive roots, checkout bytes and data outside the payload.
 - Evidence: Initial regression 25 failed/4 passed; corrected closure/error/hook regressions 29 passed on Windows. Hidden-untracked regression 2 failed before correction, 5 focused checks passed after correction. Isolated model-PC Linux updater/hook suites 79 passed, including six real held-switch scenarios.
 - gate 변화: None. Production controller installation, activation and release/field acceptance are separate.
+
+## 2026-10-04 · uncommitted · feat(omx): 정본 G2 격리 실행기
+
+- 변경: 실제 Cell 문서 저장·compile·service proposal·별도 named simulation operator admission·Fleet grant·UDS·owner·Gazebo를 연결하는 박스 16회 하네스를 추가했다. 각 grant의 staging intent를 세계 변경 전에 fsync하고 재제출을 금지한다. 실제 측정 프로세스가 pose·gripper·진행 clock과 이전 배치를 검증한다.
+- 증거: 독립 source 검토 뒤 host preflight 16회/marker 8·16, 독립 15 tests 통과. 설치 패키지 shadow와 멈춘 clock의 반복 발행을 거절한다. read-only root/repo·network-none·no devices·bounded resource와 실제 컨테이너 ID/label·성공한 daemon 목록 기반 종료 검사를 준비했다.
+- gate 변화: SOURCE/LOCAL만 추가했다. SDK 이미지 preflight·전체 16회 ROS-SIM과 fault matrix는 NOT_RUN이며 full_g2=false다. 기존 narrow vendor 취소 증거를 전체 G2로 올리지 않는다. 수동 슬립시트 checkpoint·물리 파지는 별도다.

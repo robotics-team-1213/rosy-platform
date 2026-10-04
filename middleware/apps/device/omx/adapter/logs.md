@@ -382,3 +382,9 @@
 - 변경: Arbiter 전용 선점은 exact-goal cancel 후 HOLD를 유지한다. Fleet named operator 인증·감사와 bounded UDS recovery를 CellOwner owner/local-stop/journal에 연결했다. fresh post-HOLD readback과 PREPARED 포함 미해결 Action을 검사하고 잠금으로 stop·claim 경합을 직렬화한다. commit 실패는 HOLD 복원, ACK 유실은 자동 재전송 금지다.
 - 증거: RED 회귀 후 최종 관련 API/transport/owner/store/Cell/안전 구조 152 passed(43.14 s). 실제 호스트 HTTP→UDS frame→owner 연결과 SQLite commit 실패·claim/stop 경합 회귀 포함. X:/DevTemp/rosy-d427/resume/recovery-final.txt 및 docs/validation/d427-source-migration/omx-preempt-recovery-2026-10-04.md. Fleet 구조는 독립 재판정 29,264 줄이며 split·예산·+150은 유지했다.
 - gate 변화: 없음. SOURCE/호스트 후보 검증이다. 실제 UDS·ROS-SIM·CI·ARM64·DEVICE·FIELD는 NOT_RUN, motion/reset/profile enable은 실행하지 않았다.
+
+## 2026-10-04 · uncommitted · fix(omx): Pilot 운전석과 Cell 하달 상호 배제
+
+- 변경: 같은 owner·Action SQLite에 운전석 admission과 durable Pilot pending/goal/terminal fence를 결합했다. 최종 owner admission·gripper preload를 검사하고 실제 경과 시간 만료·원래 운전석에 한정한 해제 취소·retained CLI callback을 연결했다. 응답 유실과 재시작의 미해결 Pilot intent는 HOLD다.
+- 증거: 독립 검토가 이전 운전석 preload, wall/sim 만료 차이, 지연 취소의 다음 운전석 침범을 재현했고 수정 후 원래 repro 2개와 독립 22 tests 통과. 최종 owner/Pilot/API/builder/architecture 257 passed·기존 2 skips, 부모 통합 42 passed, fast462 passed·기존2 skips·NEW0.
+- gate 변화: SOURCE/LOCAL. 실제 ROS 경합과 장치 티칭 수락은 NOT_RUN이다. 재시작 exact-goal reconciliation API 없이 미해결 intent를 자동 해제하지 않는다.
