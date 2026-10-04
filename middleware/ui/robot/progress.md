@@ -16,7 +16,7 @@ gates:
     state: N/A
   ARTIFACT:
     state: HOLD
-    blocker: "share/dashboard 설치를 이미지에서 본 기록이 없다"
+    blocker: "share/dashboard 설치는 서명 payload에서 관측됐다(2026.10.04-034, docs/validation/web-artifact-observation-2026-10-04). 남은 것: 그 payload를 탄 기기에서 GET /dashboard 200+CSP(D-444 R1 뒤조항)"
   DEVICE:
     state: N/A
   FIELD:
