@@ -937,3 +937,10 @@
 - gate 변화: 없음. SOURCE/LOCAL. 브라우저 실화면 회귀(ROSY_RUN_BROWSER_TESTS)는 다음 회차.
 - 결정: D-447 (b). (a) Fleet gather 전환과 같은 원칙, 같은 ADR.
 - 교훈: none
+
+
+## 2026-10-04 · uncommitted · docs: provide the recorded artifact gate command
+
+- Change: Add the existing payload-boot-smoke workflow dispatch command to the ARTIFACT progress entry; preserve its state and evidence. No screen or runtime code changed.
+- Evidence: GitHub run 37200780702 was independently read back as completed/success at commit af0b3211384c9a8f2e5abbc2863c2fbcb54b0ca3. This records the command missing from the existing GO entry; it does not repeat the observation or claim device acceptance.
+- Gate: Metadata correction only; existing physical and field gates are unchanged.

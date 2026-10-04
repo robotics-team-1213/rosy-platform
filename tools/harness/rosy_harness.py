@@ -336,12 +336,15 @@ def is_append_only(old: str, new: str) -> bool:
             "77 passed; known-failure comparison: 0 new, 0 known.",
         ),
     }
-    # The G2 journal at 230ccfc2a irreversibly lost its Korean text. Only
-    # this exact provenance correction may replace it; all other entries
+    # The G2 journals at 230ccfc2a and 429e13b83 irreversibly lost Korean text.
+    # Only these exact provenance corrections may replace them; all other entries
     # still require byte-for-byte preservation after normalization.
     provenance_reconciliations = {
         "a5eecc71690d74036c9e393a2a47262843dfd369b71fe0d6ff92c40a24730c49": (  # original block SHA256
             "76178d7f01aab15760f4ed9cda9787123aeb087bf4d796eed0d203c941f7648a"  # corrected block SHA256
+        ),
+        "e2f80dbdfc41bdcff21a27d50ddd7ae909a32d02270c5db525808c6d9977883d": (  # original aid block SHA256
+            "ffaaae6e3e9186866372a176a17d23985ff2f795028e6d524719942006b88cc2"  # corrected aid block SHA256
         ),
     }
     new_hashes = {hashlib.sha256(block.encode("utf-8")).hexdigest() for block in new_blocks}

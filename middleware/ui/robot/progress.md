@@ -15,8 +15,9 @@ gates:
   ROS-SIM:
     state: N/A
   ARTIFACT:
-    state: HOLD
-    blocker: "share/dashboard 설치는 서명 payload에서 관측됐다(2026.10.04-034, docs/validation/web-artifact-observation-2026-10-04). 남은 것: 그 payload를 탄 기기에서 GET /dashboard 200+CSP(D-444 R1 뒤조항)"
+    state: GO
+    evidence: "share/dashboard 설치: 서명 payload 2026.10.04-034 안 관측 + arm64 러너 부팅 GET /dashboard 200+CSP (payload-boot-smoke run 37200780702, D-444 P1.2)"
+    cmd: "gh workflow run payload-boot-smoke.yml --ref main"
   DEVICE:
     state: N/A
   FIELD:

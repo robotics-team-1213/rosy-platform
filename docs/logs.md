@@ -5664,3 +5664,9 @@ osy-d395-s1d\`.
 - 변경: main에 이미 커밋된 손상 G2 저널과 검증된 수정본의 정규화 블록 SHA256 한 쌍만 로그 보존 검사에서 인정한다. 새 손상 heading·인코딩·임의 수정·삭제는 계속 거부한다. 원문은 비공개 병합 증거에 보존했다.
 - 증거: 정확한 교체 허용 회귀 RED 후 구현했다. 변형된 원문·수정본·삭제·다른 항목 유실은 거부하며 전체 harness 회귀와 독립 검토를 수행한다. 기존 광범위 검사 결과와 실패별 재검사는 X:/DevTemp/rosy-learning-audit-20261004/landing-*에 보존한다.
 - gate 변화: SOURCE/HOST 병합 수리만. 실제 관리자 설치·라벨·운영 승격·장치/현장 수용은 별도다.
+
+## 2026-10-04 · uncommitted · feat(fleet): D-455 양보 합류는 지도 자세
+
+- 변경: 방 안 대기는 그대로 두고, 막힘 판단기가 쓸 수 있는 지도 자세로 문까지 YIELD 한 뒤 선 위에서 RESUME 한다. 오도메트리 좌표와 지령 적분은 차선에 올리지 않는다. ADR docs/adr/D-455-yield-rejoin-by-map-pose.md. API 판과 운용자 다섯 단어는 그대로다.
+- 증거: 관련 호스트 시험 203 passed. test/known_failures.py 는 새 실패 0. 장치·ROS-SIM 은 돌리지 않았다.
+- gate 변화: 없음. SOURCE/LOCAL 판단 시험. DEVICE·ROS-SIM·FIELD 승격 아님.

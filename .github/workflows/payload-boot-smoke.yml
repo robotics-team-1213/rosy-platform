@@ -23,22 +23,28 @@ jobs:
     container: ros:jazzy-ros-base
     timeout-minutes: 30
     steps:
-      - name: Resolve the payload artifact
+      - name: Resolve the payload artifact (GitHub API, no gh needed)
         shell: bash
         run: |
           set -euo pipefail
           REPO="livsbittt/rosy-os"
+          TOKEN="${{ github.token }}"
+          AUTH="Authorization: Bearer $TOKEN"
           if [ -n "${{ inputs.build_run_id }}" ]; then
             RUN="${{ inputs.build_run_id }}"
           else
-            RUN=$(gh run list -R "$REPO" --workflow "Build Pinky Pro native payload" \
-              --status success --limit 1 --json databaseId --jq '.[0].databaseId')
+            RUN=$(curl -sf -H "$AUTH" \
+              "https://api.github.com/repos/$REPO/actions/workflows/build-native-payload.yml/runs?status=success&per_page=1" \
+              | python3 -c 'import json,sys; print(json.load(sys.stdin)["workflow_runs"][0]["id"])')
           fi
           echo "RUN=$RUN" >> "$GITHUB_ENV"
-          NAME=$(gh api "repos/$REPO/actions/runs/$RUN/artifacts" --jq '.artifacts[0].name')
-          gh run download -R "$REPO" "$RUN" --name "$NAME" --dir payload
-        env:
-          GH_TOKEN: ${{ github.token }}
+          ARTIFACT_URL=$(curl -sf -H "$AUTH" \
+            "https://api.github.com/repos/$REPO/actions/runs/$RUN/artifacts" \
+            | python3 -c 'import json,sys; print(json.load(sys.stdin)["artifacts"][0]["archive_download_url"])')
+          mkdir -p payload
+          curl -sfL -H "$AUTH" -o payload/artifact.zip "$ARTIFACT_URL"
+          python3 -m zipfile -e payload/artifact.zip payload/
+          ls payload/*.tar.gz
 
       - name: Unpack
         shell: bash
@@ -53,38 +59,42 @@ jobs:
           set -euo pipefail
           apt-get update -qq
           apt-get install -y -qq ros-jazzy-rmw-cyclonedds-cpp \
-            ros-jazzy-nav2-msgs ros-jazzy-tf2-msgs ros-jazzy-tf2-geometry-msgs curl jq >/dev/null
-          python3 -m ensurepip --upgrade >/dev/null 2>&1 || true
+            ros-jazzy-nav2-msgs ros-jazzy-tf2-msgs ros-jazzy-tf2-geometry-msgs \
+            curl jq python3-pip >/dev/null
           python3 -m pip install --quiet --no-cache-dir --break-system-packages \
             pydantic fastapi "uvicorn[standard]" httpx "websockets>=14" PyYAML jsonschema
 
       - name: Boot CORE from the payload install
         shell: bash
         run: |
-          set -euo pipefail
+          set -eo pipefail  # NOT -u: ROS setup.sh has unbound variables (repo convention)
           source /opt/ros/jazzy/setup.bash
           source "$GITHUB_WORKSPACE/release/install/setup.bash"
           export ROSY_ROBOT_NUMBER=1 RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
-          ros2 run core core > core.log 2>&1 &
+          setsid nohup ros2 run core core > core.log 2>&1 &
           echo $! > core.pid
           deadline=$((SECONDS+600))
           while [ $SECONDS -lt $deadline ]; do
-            grep -q "core up" core.log && break
+            grep -q "core up" core.log && grep -q "api server" core.log && break
             kill -0 "$(cat core.pid)" 2>/dev/null || { echo "core exited early"; tail -40 core.log; exit 1; }
             sleep 5
           done
-          grep -q "core up" core.log || { echo "no 'core up' in 600s"; tail -40 core.log; exit 1; }
-          echo "core up"
+          grep -q "core up" core.log && grep -q "api server" core.log \
+            || { echo "no 'core up' or 'api server' in 600s"; tail -40 core.log; exit 1; }
+          echo "core up, api server ready"
+          sleep 3
 
       - name: Probe the web surfaces (D-444 R1)
         shell: bash
         run: |
-          set -euo pipefail
+          set -eo pipefail
           for path in dashboard pilot console; do
-            code=$(curl -s -o /dev/null -w "%{http_code}" "http://127.0.0.1:8080/$path")
-            csp=$(curl -sI "http://127.0.0.1:8080/$path" | grep -ci content-security-policy)
+            code=$(curl -s -o /dev/null -w "%{http_code}" "http://127.0.0.1:8080/$path") \
+              || { echo "curl /$path exited $?"; tail -10 core.log; exit 1; }
+            csp=$(curl -s -D /tmp/hdrs -o /dev/null "http://127.0.0.1:8080/$path" \
+              && grep -ci content-security-policy /tmp/hdrs || true)
             echo "GET /$path -> $code (csp-header=$csp)"
-            [ "$code" = "200" ] || { echo "FAIL /$path"; exit 1; }
+            [ "$code" = "200" ] || { echo "FAIL /$path expected 200 got $code"; tail -5 core.log; exit 1; }
             [ "$csp" -ge 1 ] || { echo "FAIL /$path missing CSP"; exit 1; }
           done
 

@@ -379,3 +379,10 @@
 - 결정: D-432 추가 결정. 중단은 검색 tick만 취소하고 종료 완료 콜백을 보존한다. 주 프로세스나 제어 세션을 검색 복구 때문에 종료하지 않는다.
 - 증거: JVM 46 PASS·APK 빌드 성공, 동일 서명 install-r 및 설치 APK SHA 일치. 실제 태블릿에서 전용 검색 자식 장애 후 부모 PID 유지·새 자식·새 IPv4 응답·목록 복구를 확인했다. 연속 다시 찾기, background 정리와 resume 재검색도 확인했다. 독립 SOURCE SPEC·Safety·QUALITY PASS.
 - gate 변화: 이 Android 발견 복구의 실제 관측만 기록한다. 로봇 CORE 접속·정지 해제·주행·장치 릴리스 수락은 별개이며 실행하지 않았다.
+
+
+## 2026-10-04 · uncommitted · docs: provide the recorded artifact gate command
+
+- Change: Add the existing payload-boot-smoke workflow dispatch command to the ARTIFACT progress entry; preserve its state and evidence. No screen or runtime code changed.
+- Evidence: GitHub run 37200780702 was independently read back as completed/success at commit af0b3211384c9a8f2e5abbc2863c2fbcb54b0ca3. This records the command missing from the existing GO entry; it does not repeat the observation or claim device acceptance.
+- Gate: Metadata correction only; existing physical and field gates are unchanged.

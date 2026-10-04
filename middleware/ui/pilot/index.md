@@ -34,8 +34,8 @@
 
 ## 최근 기록
 
+- 2026-10-04 · uncommitted · docs: provide the recorded artifact gate command
 - 2026-10-04 · uncommitted · Android 로봇 검색 고착의 독립 복구
 - 2026-10-04 · uncommitted · feat(pilot): 크래프트 회차 1 — G2 기준선과 44px 바닥 회복
 - 2026-10-04 · uncommitted · fix(pilot): 시작 대상 확인 실패와 재시도
 - 2026-10-04 · uncommitted · fix: 과노출 판정 불가 안내
-- 2026-10-04 · uncommitted · feat: 기기 기록과 브라우저 영상 옵션

@@ -2428,6 +2428,11 @@
 - Evidence: Exact-pair acceptance initially failed before implementation; all six mutation variants pass after correction. Harness and selection suites 98 passed. Architecture and image-sync suites 104 passed, 6 platform skips. Independent review approved both narrowly scoped corrections.
 - Gate: SOURCE/LOCAL only; no native runtime or physical acceptance is inferred.
 
+## 2026-10-04 · 429e13b83 · docs: record unrecoverable G2 aid journal corruption
+
+- Change: Replace only the corrupted journal entry introduced in commit 429e13b8313484a25751a7c7896fe1b7aca41b92. Korean text was irreversibly converted to question marks; it is not reconstructed. The source commit title records acknowledgement budgeting within the existing aid deadline.
+- Evidence: The immutable original remains in deploy/logs.md at that commit. Normalized original block SHA256: e2f80dbdfc41bdcff21a27d50ddd7ae909a32d02270c5db525808c6d9977883d. Source paths are g2_aid.py and test_cell_g2_aid.py. No test or runtime result is inferred from damaged text.
+- Gate: Provenance correction only; ROS-SIM, DEVICE and FIELD acceptance are not established by this entry.
 ## 2026-10-04 · uncommitted · feat(ci): payload 부팅 스모크 — arm64 러너에서 D-444 P1.2 관측
 
 - 변경: `payload-boot-smoke.yml`(workflow_dispatch 전용, `ubuntu-24.04-arm`, GITHUB_TOKEN 한정 비밀 없음). payload artifact를 내려 압축을 풀고, ROS 핀(CycloneDDS·nav2-msgs·tf2)과 CI 부트 스모크의 파이썬 스택을 설치한 뒤, `release/install`에서 `ROSY_ROBOT_NUMBER=1`로 CORE를 부팅해 `GET /dashboard`·`/pilot`·`/console`의 200+CSP를 검사한다(실패 시 로그 업로드). 정의: `.github/workflows`의 `payload-boot-smoke.yml`과 `test/test_payload_boot_smoke_workflow.py`(6 계약).

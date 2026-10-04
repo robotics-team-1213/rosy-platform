@@ -584,3 +584,30 @@ def test_logs_only_reconcile_exact_unrecoverable_g2_record(mutation):
     elif mutation == "other_delete":
         corrected = new
     assert harness.is_append_only(baseline, corrected) is (mutation == "exact")
+
+
+@pytest.mark.parametrize("mutation", ["exact", "old", "new", "missing", "other_edit", "other_delete"])
+def test_logs_only_reconcile_exact_unrecoverable_aid_record(mutation):
+    old = """## 2026-10-04 ? uncommitted ? fix(g2): preserve the total SIM AID deadline while allowing RPC acknowledgement
+
+- ??: attach RPC? 150ms, ?? echo? ???? ???? ?? 200ms ??? ????. ?? transport ???Boolean ????? ??? ???? ??? attach/detach? ????. positive RPC? exact-model state echo? ?? ???? ????stop/reset? ??.
+- ??: r4 ?? startup home READY 9.264s, ????? ?? ROS status4/result0, held readback ? TRANSFER ??. ?? echo? true?? service_ok=false, 106.89ms? transfer ROS goal? ??? UNKNOWN/HOLD, ?? cleanup PASS. 100ms RPC ??? ?? ?? ???? timeout? negative reply? ?? receipt??? ??? ? ??. SDK request ?? ??? Gazebo queued-ack ??? ????: https://github.com/gazebosim/gz-sim/blob/gz-sim8/src/SystemManager.cc#L340-L351 .
+- gate ??: SOURCE/LOCAL deadline ?? RED?GREEN? ??. ?? 16? ???fault matrix??? checkpoint??? ??? HOLD/NOT_RUN?? full_g2=false. ?? ??? ??? ??? ???? ? ???????? ????."""
+    new = """## 2026-10-04 · 429e13b83 · docs: record unrecoverable G2 aid journal corruption
+
+- Change: Replace only the corrupted journal entry introduced in commit 429e13b8313484a25751a7c7896fe1b7aca41b92. Korean text was irreversibly converted to question marks; it is not reconstructed. The source commit title records acknowledgement budgeting within the existing aid deadline.
+- Evidence: The immutable original remains in deploy/logs.md at that commit. Normalized original block SHA256: e2f80dbdfc41bdcff21a27d50ddd7ae909a32d02270c5db525808c6d9977883d. Source paths are g2_aid.py and test_cell_g2_aid.py. No test or runtime result is inferred from damaged text.
+- Gate: Provenance correction only; ROS-SIM, DEVICE and FIELD acceptance are not established by this entry."""
+    baseline = GOOD_LOG + "\n\n" + old
+    corrected = GOOD_LOG + "\n\n" + new
+    if mutation == "old":
+        baseline = baseline.replace("total SIM AID", "altered SIM AID", 1)
+    elif mutation == "new":
+        corrected = corrected.replace("Provenance correction only", "Accepted in production", 1)
+    elif mutation == "missing":
+        corrected = GOOD_LOG
+    elif mutation == "other_edit":
+        corrected = corrected.replace("- 변경: a", "- 변경: altered")
+    elif mutation == "other_delete":
+        corrected = new
+    assert harness.is_append_only(baseline, corrected) is (mutation == "exact")
