@@ -70,8 +70,8 @@
 
 ## 최근 기록
 
+- 2026-10-04 · uncommitted · fix: protect the full model-PC code closure
 - 2026-10-04 · uncommitted · D-441 local maintenance and manual install safety
 - 2026-10-04 · uncommitted · D-446 clean older checkout permits signed execution
 - 2026-10-04 · uncommitted · D-446 remote integration after source migration
 - 2026-10-04 · uncommitted · 모델 PC 코드 갱신은 커밋하지 않은 perception 수정을 덮지 않는다
-- 2026-10-04 · uncommitted · D-446 모델 PC도 서명 코드 자동 업데이트에 포함하고 작업·GPU 환경·모델 승격을 분리한다

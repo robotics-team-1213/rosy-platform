@@ -27,6 +27,9 @@ from candidate_signing import sign_manifest_bytes, verify_manifest_signature
 
 PREFIX = "learning/training/perception/"
 CODE_PREFIXES = (PREFIX, "middleware/perception/control/", "contracts/foundation/core_common/")
+# Observe enrolled pre-migration checkouts too; new signed archives stay canonical.
+CHECKOUT_PREFIXES = CODE_PREFIXES + ("tools/perception/", "src/runtime/sensing/control/",
+                                    "src/contracts/foundation/core_common/")
 LIMIT = 512 * 1024 * 1024
 FORBIDDEN = {"data", "private", "runs", "scratch", "checkpoints", "store", ".git", ".venv", "__pycache__", "secrets"}
 IMPORT_PATHS = (PREFIX.rstrip("/"), PREFIX + "model", PREFIX + "dataset", PREFIX + "training",
@@ -110,7 +113,7 @@ def gpu_busy(*, runner=subprocess.run):
 
 
 def perception_edits(roots):
-    """Uncommitted perception files in an enrolled checkout. None when clean.
+    """Uncommitted payload code in an enrolled checkout. None when clean.
 
     Non-git legacy roots are ignored. A git failure holds the switch: an
     unreadable checkout is not treated as idle.
@@ -119,9 +122,12 @@ def perception_edits(roots):
         root = Path(root)
         if not (root / ".git").exists():
             continue
-        result = subprocess.run(
-            ["git", "-C", str(root), "status", "--porcelain", "--", "learning/training/perception"],
-            capture_output=True, text=True)
+        try:
+            result = subprocess.run(
+                ["git", "-C", str(root), "status", "--porcelain", "--untracked-files=all", "--", *CHECKOUT_PREFIXES],
+                capture_output=True, text=True, timeout=15)
+        except (OSError, subprocess.SubprocessError):
+            return "checkout observation failed"
         if result.returncode != 0:
             return "checkout observation failed"
         if result.stdout.strip():
@@ -139,7 +145,7 @@ def checkout_script_conflict(source, work_dir, script):
         repo = subprocess.run(["git", "-C", str(work_dir), "rev-parse", "--is-inside-work-tree"],
                               capture_output=True, text=True, timeout=15)
         if repo.returncode == 0 and repo.stdout.strip() == "true":
-            status = subprocess.run(["git", "-C", str(work_dir), "status", "--porcelain", "--", script],
+            status = subprocess.run(["git", "-C", str(work_dir), "status", "--porcelain", "--untracked-files=all", "--", script],
                                     capture_output=True, text=True, timeout=15)
             if status.returncode: return "checkout observation failed"
             if not status.stdout.strip(): return None

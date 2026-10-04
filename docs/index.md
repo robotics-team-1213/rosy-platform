@@ -277,8 +277,8 @@
 
 ## 최근 기록
 
+- 2026-10-04 · uncommitted · fix: resolve hook installation through Git
 - 2026-10-04 · uncommitted · D-441 local update follow-up design
 - 2026-10-04 · uncommitted · D-427 wave5 remote CI and ARM64 artifacts
 - 2026-10-04 · uncommitted · D-427 wave5 final host and fixture corrections
 - 2026-10-04 · uncommitted · D-427 peer CI correction integration
-- 2026-10-04 · uncommitted · D-427 wave5 cleanup and CI compatibility

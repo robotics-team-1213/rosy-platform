@@ -2272,3 +2272,10 @@
 - Change: Reconcile the verified actual signed installation before selection; add locked hold/resume with interrupted recovery first; check running Compose configuration hashes and read-only/nonprivileged roots; require exact-main CI and ci-result before automatic signing; add optional authenticated read-only Fleet state/Vision source gates.
 - Evidence: Original updater failed all 10 new behavior cases; initial signer failed all 8 CI cases. Updated isolated Linux updater/signer/verifier suites 108 passed, zero skipped. Real Docker Compose v5.6.0 matched the generated hash to a separately created, never-started container and detected a changed command; cleanup succeeded. Credentials, malformed holds and rollback behavior are covered. Final independent review APPROVE (45 passed, 43 Windows skips, zero new failures); affected/fast gates follow before commit.
 - gate 변화: SOURCE/LOCAL evidence only. Reviewed privileged updater and signing-station copies require separate installation; current site runtime does not yet include this follow-up. Camera listing is not advancing-frame or physical acceptance evidence.
+
+
+## 2026-10-04 · uncommitted · fix: protect the full model-PC code closure
+
+- Change: Observe all signed payload code roots and enrolled previous layouts; include hidden untracked files and hold on unavailable or timed-out Git observations. Preserve signed archive roots, checkout bytes and data outside the payload.
+- Evidence: Initial regression 25 failed/4 passed; corrected closure/error/hook regressions 29 passed on Windows. Hidden-untracked regression 2 failed before correction, 5 focused checks passed after correction. Isolated model-PC Linux updater/hook suites 79 passed, including six real held-switch scenarios.
+- gate 변화: None. Production controller installation, activation and release/field acceptance are separate.

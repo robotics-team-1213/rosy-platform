@@ -412,6 +412,20 @@ LEGACY_SCAN_ALLOWLIST: set[tuple[str, str]] = {
     # D-446: installed pre-migration signed releases remain runnable after
     # rollback. New archives use canonical roots; only pinned bootstrap paths
     # and the regression fixture retain the old layout.
+    # D-446 dirty-code guard observes the enrolled pre-wave-1 checkout too.
+    ("deploy/site/rosy_model_code.py", "tools/perception/"),
+    ("deploy/site/rosy_model_code.py", "src/runtime/sensing/control/"),
+    ("deploy/site/rosy_model_code.py", "src/contracts/foundation/core_common/"),
+    ("test/test_model_pc_autoupdate.py", "tools/perception/rosy_ml.py"),
+    ("test/test_model_pc_autoupdate.py", "src/runtime/sensing/control/model.py"),
+    ("test/test_model_pc_autoupdate.py", "src/contracts/foundation/core_common/model.py"),
+    # This closed registry names the same intentional guard/fixture strings.
+    ("test/architecture/test_platform_parts.py", "tools/perception/"),
+    ("test/architecture/test_platform_parts.py", "src/runtime/sensing/control/"),
+    ("test/architecture/test_platform_parts.py", "src/contracts/foundation/core_common/"),
+    ("test/architecture/test_platform_parts.py", "tools/perception/rosy_ml.py"),
+    ("test/architecture/test_platform_parts.py", "src/runtime/sensing/control/model.py"),
+    ("test/architecture/test_platform_parts.py", "src/contracts/foundation/core_common/model.py"),
     ("deploy/site/rosy_model_code.py", "src/runtime/sensing"),
     ("deploy/site/rosy_model_code.py", "src/contracts/foundation"),
     ("test/test_model_pc_autoupdate.py", "src/runtime/sensing"),
