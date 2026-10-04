@@ -34,4 +34,4 @@ Raw evidence는 작업 PC의 `X:/DevTemp/rosy-cell-isaac-20261004/` 아래 brows
 - I1: 정상 종료 및 실제 CORE 주행·명령 만료/pause/reset 후 물리 정지.
 - I2–I4: Nav2, 두 로봇 Fleet, 이동 후 정지 확인과 적재 연계.
 
-Gazebo/Nav2 설치는 확인했지만 joint trajectory controller, OMX vendor overlay와 hardware-less container 환경이 아직 필요하다. 모델 PC의 webcam 때문에 native owner의 장치 차단 guard를 우회하지 않는다. 운영 robttt Fleet와 실제 로봇은 이 검증에 사용하지 않았다.
+후속 실제 준비에서 Docker·joint trajectory controller·CycloneDDS 설치, OMX vendor 8 packages 및 이미지 3개 빌드를 확인했다. 최초 실제 pytest collection 실패와 수정은 [Gazebo bootstrap 기록](gazebo-bootstrap.md)에 분리했다. 실제 fault 시험과 full G2는 아직 수용 전이다. 모델 PC의 webcam 때문에 native owner의 장치 차단 guard를 우회하지 않는다. 운영 robttt Fleet와 실제 로봇은 이 검증에 사용하지 않았다.

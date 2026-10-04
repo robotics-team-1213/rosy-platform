@@ -70,8 +70,8 @@
 
 ## 최근 기록
 
+- 2026-10-04 · uncommitted · verify(sim): 모델 PC vendor fault retry 통과
+- 2026-10-04 · uncommitted · fix(sim): 실제 pytest 수집 후 vendor probe 시작
 - 2026-10-04 · uncommitted · fix: Windows SSH timeout 종료 경합
 - 2026-10-04 · uncommitted · fix(D-441): Windows 자동 서명기의 UTF-8 출력 처리
 - 2026-10-04 · uncommitted · verify(D-441): 최종 Linux 관련 suite 확인
-- 2026-10-04 · uncommitted · fix(D-441): 상대 symlink의 롤백 경로 보정
-- 2026-10-04 · uncommitted · verify(D-441): 추가 보정 Linux 회귀 확인

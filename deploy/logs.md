@@ -2242,3 +2242,16 @@
 - 변경: 두 Windows 검증 helper에서 taskkill 오류는 추적 프로세스 종료가 확인된 때만 시간 초과로 유지한다. 살아 있는 프로세스의 native 오류와 silent nonzero는 다시 throw하며 HOLD·재실행 금지를 보존한다.
 - 증거: Windows 원본 검증과 종료 경합 시험 22 passed; 독립 실행 22 passed, APPROVE. docs/validation/d427-source-migration/windows-ssh-timeout-cleanup-2026-10-04.md.
 - gate 변화: SOURCE/LOCAL Windows PowerShell 5.1. 기존 push gate는 1 failed이며 수정 후보 전체 gate·CI·ARM64·DEVICE·FIELD는 별도 검증한다.
+## 2026-10-04 · uncommitted · fix(sim): 실제 pytest 수집 후 vendor probe 시작
+
+- 변경: 지정한 단일 generation-change 시험을 plugin autoload 없이 collect-only로 확인한 뒤 Gazebo를 시작한다. 시험은 자체 rclpy executor를 가지며 launch_testing fixture를 사용하지 않는다. 기존 network/hardware 거절과 command 경계는 유지했다.
+- 증거: 모델 PC에서 vendor 8 packages와 이미지 3개 빌드 완료. 첫 probe는 launch_testing hook의 sibling HTTP import/httpx 부재로 collection 실패(exit 1), 소유 컨테이너 cleanup 검증 통과. 실제 shell collection block의 error/skip/zero/one 네 제어 흐름, Linux bash syntax와 독립 source/retry review 통과. 실제 retry는 아직 검증 전이다.
+- gate 변화: ROS-SIM HOLD 유지. 준비·spawn·수집·실행·semantic 수용·cleanup을 구분한다. full G2 및 실제 로봇 수용 증거가 아니다.
+- 교훈: Python module import 통과는 외부 pytest plugin이 개입한 실제 collection의 증거가 아니다. 수집이 실패하면 simulation을 시작하지 않고, 실패 로그와 정리 결과를 모두 보존한다.
+
+
+## 2026-10-04 · uncommitted · verify(sim): 모델 PC vendor fault retry 통과
+
+- 변경: 새 retry 증거를 기존 실패 기록과 분리해 보존했다. source와 실제 실행 probe의 SHA-256이 일치한다.
+- 증거: 실제 Gazebo exact node 1 collected, 1 passed in 6.62s. goal 접수·generation 변경·local latch·취소 callback과 시험의 parent HOLD/phase CANCELED/cancel ack/Fleet HOLD/stale grant 거절 assertions 통과. outer exit 0, cleanup exit 0, owned container absent true. source/harness 89 passed/13 기존 warnings. 독립 원격 증거 검토 완료.
+- gate 변화: 해당 vendor generation-change fault만 실제 ROS-SIM 증거를 추가한다. full 16-box G2·두 팔레트/층·Isaac 주행·실물 수용은 계속 미완료다.
