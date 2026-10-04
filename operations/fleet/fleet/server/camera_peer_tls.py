@@ -19,8 +19,13 @@ def configured_site_anchor(ca_pem, served_pem, hostname):
             raise ValueError('one site CA and bounded leaf chain required')
         root, now = roots[0], datetime.now(timezone.utc)
         constraints = root.extensions.get_extension_for_class(x509.BasicConstraints).value
-        usage = root.extensions.get_extension_for_class(x509.KeyUsage).value
-        if not constraints.ca or not usage.key_cert_sign or not root.not_valid_before_utc <= now <= root.not_valid_after_utc:
+        try:
+            usage = root.extensions.get_extension_for_class(x509.KeyUsage).value
+        except x509.ExtensionNotFound:
+            # RFC 5280: KeyUsage is optional on a CA; absent means unrestricted.
+            usage = None
+        if (not constraints.ca or (usage is not None and not usage.key_cert_sign)
+                or not root.not_valid_before_utc <= now <= root.not_valid_after_utc):
             raise ValueError('site CA authority or validity rejected')
         verified = (PolicyBuilder().store(Store(roots)).time(now).max_chain_depth(3)
                     .build_server_verifier(x509.DNSName(hostname)).verify(chain[0], chain[1:]))
