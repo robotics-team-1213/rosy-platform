@@ -29,8 +29,10 @@ def test_each_matrix_project_reaches_wrapper_java_with_its_own_unit_task(tmp_pat
            'RUNNER_TEMP': runner_temp.as_posix(),
            'JAVA_HOME': java.parent.parent.as_posix(), 'GRADLE_PROBE': probe.as_posix(),
            'JAVA_OPTS': '', 'GRADLE_OPTS': ''}
-    subprocess.run([bash, '-n', '-c', command], env=env, check=True, timeout=10)
-    subprocess.run([bash, '-c', command], cwd=ROOT / app, env=env, check=True, timeout=10)
+    # Git Bash startup on a busy Windows host can exceed10s before the Java probe.
+    launch_timeout = 60 if os.name == 'nt' else 10
+    subprocess.run([bash, '-n', '-c', command], env=env, check=True, timeout=launch_timeout)
+    subprocess.run([bash, '-c', command], cwd=ROOT / app, env=env, check=True, timeout=launch_timeout)
     args = probe.read_text('utf-8').splitlines()
     wrapper_jar = Path(args[args.index('-classpath') + 1])
     assert wrapper_jar.samefile(ROOT / 'operations/ui/cam/gradle/wrapper/gradle-wrapper.jar')

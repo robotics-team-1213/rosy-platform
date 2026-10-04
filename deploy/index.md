@@ -71,8 +71,8 @@
 
 ## 최근 기록
 
+- 2026-10-05 · uncommitted · fix(test): bound Windows wrapper startup without weakening argv checks
 - 2026-10-05 · uncommitted · fix(ci): integrate reviewed site checks with current main
 - 2026-10-05 · uncommitted · fix(provenance): preserve reviewed source-line bindings
 - 2026-10-05 · uncommitted · test(discovery): 최신 main 통합과 실제 Android 컴파일 확인
 - 2026-10-05 · uncommitted · fix(ci): LAN 배포 검사의 도구 설치와 Android 상태 경로 수정
-- 2026-10-05 · uncommitted · fix(discovery): 같은 LAN Model 발견에 설치된 Avahi D-Bus 사용

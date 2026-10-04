@@ -2506,3 +2506,10 @@
 - Change: preserve both parents exact journals and unchanged installer; retain main isolated raw-tool directory and Android scratch paths with ABI/argv checks. Keep new review interactions while restoring the registered developer-surface title contract, and update the Fleet header assertion for its existing cell column without changing stop behavior. No app-identity exception or credential/scanner policy change.
 - Evidence: prior topic full Linux CI37213888882 and Android37213888884 passed; concurrent main d77 has legacy ACT-helper, app-identity and stale header failures. Scoped integration193 passed, exact journal unions validated and independently approved. Final push and exact CI remain pending.
 - gate 변화: local source integration only; actual signed candidate delivery follows final green CI.
+
+
+## 2026-10-05 · uncommitted · fix(test): bound Windows wrapper startup without weakening argv checks
+
+- Change: allow60 seconds only for Git Bash startup on Windows in the Android fake-Java launcher test; Linux remains10 seconds, and all jar/project/build/Kotlin/unit-task assertions remain intact. Retain main independently-reviewed ACT helper, Fleet cell/stop header assertions and local review-tool classification. Production workflows, updater restart limits and robot authority are unchanged.
+- Evidence: preceding hook had3238 passes/259 skips and exactly2 Windows10-second subprocess timeouts. Same environment reproduced1 pass/1 timeout; corrected launcher2 passed, with independent2-pass verification and approval. Final normal hook and exact CI follow.
+- gate 변화: host test reliability repair only; no production acceptance claim.

@@ -8,6 +8,8 @@ const states = {unknown:'알 수 없음', red:'빨강', yellow:'노랑', green:'
 const statuses = {approved:'승인', excluded:'제외', pending:'검수 대기'};
 let workspace, frame, image, ready = false, busy = false, conflicted = false, loadSerial = 0, drawing = false;
 let gesture = null, selected = null, coordinatePreview = null;
+let undo = null;
+function visibleFrames() {return workspace?.frames.filter(item=>$('filter').value==='all'||item.status===$('filter').value)||[];}
 
 function error(message='') { $('error').textContent = message; $('error').hidden = !message; }
 function enable() {
@@ -20,16 +22,18 @@ function enable() {
   $('draw').disabled = $('add').disabled = locked || frame?.status === 'excluded';
   $('delete-selected').disabled = locked || frame?.status === 'excluded' || selected===null;
   $('candidates').disabled = locked || frame?.status === 'excluded';
+  $('undo').disabled = locked || !undo || frame?.status === 'excluded';
+  $('undo').reason=locked?'사진 저장과 불러오기를 마친 뒤 사용하세요.':!undo?'이 사진에서 저장한 라벨 수정이 없습니다.':frame?.status==='excluded'?'제외 사진은 수정할 수 없습니다.':'';
   $('prepare').disabled = busy || conflicted || !!gesture || !workspace;
   $('reload').disabled = busy || !!gesture;
   $('filter').disabled = busy || !!gesture;
   $('complete').disabled = locked || frame?.status === 'excluded';
   document.querySelectorAll('#boxes input, #boxes select, #boxes ui-button').forEach(el => el.disabled = locked || frame?.status === 'excluded');
   document.querySelectorAll('#frames ui-button').forEach(el => el.disabled = busy || !!gesture);
-  const position=workspace?.frames.findIndex(item=>item.index===frame?.index) ?? -1;
+  const visible=visibleFrames(),position=visible.findIndex(item=>item.index===frame?.index);
   for(const [id,available,reason] of [
-    ['prev-frame',position>0,'첫 번째 사진입니다.'],
-    ['next-frame',position>=0&&position<workspace.frames.length-1,'마지막 사진입니다.'],
+    ['prev-frame',position>0,'현재 필터의 첫 번째 사진입니다.'],
+    ['next-frame',position>=0&&position<visible.length-1,'현재 필터의 마지막 사진입니다.'],
     ['next-pending',workspace?.frames.some(item=>item.status==='pending'&&item.index!==frame?.index),'다른 검수 대기 사진이 없습니다.']
   ]) {
     $(id).reason=busy||gesture?'현재 작업을 마친 뒤 이동할 수 있습니다.':!ready?'사진을 불러오는 중입니다.':!available?reason:'';
@@ -49,7 +53,7 @@ function list() {
   const counts = workspace.frames.reduce((a,f) => {a[f.status]++; return a;}, {approved:0,excluded:0,pending:0});
   $('counts').textContent = `승인 ${counts.approved} · 제외 ${counts.excluded} · 대기 ${counts.pending}`;
   $('frames').replaceChildren();
-  const visible=workspace.frames.filter(f => $('filter').value === 'all' || f.status === $('filter').value);
+  const visible=visibleFrames();
   $('empty-frames').hidden=visible.length>0;
   visible.forEach(f => {
     const button = document.createElement('ui-button'); button.setAttribute('kind','segment'); button.setAttribute('aria-pressed',String(f.index === frame?.index));
@@ -87,7 +91,8 @@ function paint() {
 }
 async function select(index) {
   const serial = ++loadSerial;
-  cancelGesture(); selected=null; coordinatePreview=null;
+  cancelGesture(); selected=null; coordinatePreview=null; undo=null;
+  $('empty-review').hidden=true;$('review-content').hidden=false;
   ready = false; frame = structuredClone(workspace.frames.find(f => f.index === index));
   $('complete').checked = false; drawing = false; $('draw').setAttribute('aria-pressed','false');
   $('frame-title').textContent = `사진 ${index+1}`; $('status').textContent = statuses[frame.status];
@@ -145,13 +150,16 @@ function renderBoxes() {
   });
   enable();
 }
-async function mutate(action, extras={}) {
+async function mutate(action, extras={}, restoring=false) {
   if (busy || !ready || conflicted) return;
   busy=true; error(); $('complete').checked=false; $('save-status').textContent='서버에 저장 중…'; enable();
   const id=frame.index;
+  const previous=structuredClone(frame.review.boxes);
   try {
     const saved=await request(`/api/frames/${id}`,{version:frame.version,action,...extras});
     workspace.frames[workspace.frames.findIndex(f=>f.index===id)]=saved; frame=structuredClone(saved);
+    undo=restoring?null:['save','candidates'].includes(action)?{index:id,boxes:previous}:null;
+    if($('filter').value!=='all'&&frame.status!==$('filter').value) {$('filter').value='all';saveView();}
     $('status').textContent=statuses[frame.status]; $('save-status').textContent=`서버 저장됨 · v${frame.version}`;
     frameHeading();
     coordinatePreview=null; if (selected>=frame.review.boxes.length) selected=null;
@@ -170,6 +178,7 @@ $('candidates').onclick=()=> {if (window.confirm('현재 수정 라벨을 원본
 $('draw').onclick=()=> {drawing=!drawing; $('draw').setAttribute('aria-pressed',String(drawing));};
 $('add').onclick=()=>edit(boxes=>boxes.push({label:null,bbox_xyxy:[0,0,Math.min(40,frame.source.width),Math.min(40,frame.source.height)]}));
 $('delete-selected').onclick=()=> {if(selected!==null) {const index=selected; selected=null;edit(boxes=>boxes.splice(index,1));}};
+$('undo').onclick=()=> {if(undo?.index===frame?.index&&!$('undo').disabled) {selected=null;mutate('save',{boxes:undo.boxes},true);}};
 function point(event) {const rect=$('canvas').getBoundingClientRect(); return [Math.max(0,Math.min(frame.source.width,(event.clientX-rect.left)*frame.source.width/rect.width)),Math.max(0,Math.min(frame.source.height,(event.clientY-rect.top)*frame.source.height/rect.height))];}
 function canDrag() {return ready && !busy && !conflicted && frame.status!=='excluded';}
 function cancelGesture() {
@@ -231,16 +240,23 @@ document.addEventListener('keydown',event=> {
 });
 function frameHeading() {
   $('status').setAttribute('status',frame.status==='pending'?'warn':'neutral');
-  $('frame-progress').textContent=`${workspace.frames.findIndex(item=>item.index===frame.index)+1} / ${workspace.frames.length} · ${frame.source.width} × ${frame.source.height} · 박스 ${frame.review.boxes.length}개`;
+  const visible=visibleFrames();
+  $('frame-progress').textContent=`${visible.findIndex(item=>item.index===frame.index)+1} / ${visible.length} · ${frame.source.width} × ${frame.source.height} · 박스 ${frame.review.boxes.length}개`;
 }
 function saveView() {
-  const url=new URL(location.href);if(frame) url.searchParams.set('frame',frame.index);
+  const url=new URL(location.href);if(frame) url.searchParams.set('frame',frame.index);else url.searchParams.delete('frame');
   if($('filter').value==='all') url.searchParams.delete('filter');else url.searchParams.set('filter',$('filter').value);
   history.replaceState(null,'',url);
 }
-$('filter').onchange=()=> {list();saveView();};
-$('prev-frame').onclick=()=> {const index=workspace.frames.findIndex(item=>item.index===frame.index);if(index>0) select(workspace.frames[index-1].index);};
-$('next-frame').onclick=()=> {const index=workspace.frames.findIndex(item=>item.index===frame.index);if(index<workspace.frames.length-1) select(workspace.frames[index+1].index);};
+function applyFilter() {
+  const visible=visibleFrames();
+  if(visible.length) select(visible.some(item=>item.index===frame?.index)?frame.index:visible[0].index);
+  else {++loadSerial;cancelGesture();ready=false;frame=undefined;undo=null;selected=null;coordinatePreview=null;$('review-content').hidden=true;$('empty-review').hidden=false;list();saveView();enable();}
+}
+$('filter').onchange=applyFilter;
+$('show-all').onclick=()=> {$('filter').value='all';applyFilter();};
+$('prev-frame').onclick=()=> {const visible=visibleFrames(),index=visible.findIndex(item=>item.index===frame.index);if(index>0) select(visible[index-1].index);};
+$('next-frame').onclick=()=> {const visible=visibleFrames(),index=visible.findIndex(item=>item.index===frame.index);if(index<visible.length-1) select(visible[index+1].index);};
 $('next-pending').onclick=()=> {
   const position=workspace.frames.findIndex(item=>item.index===frame.index);
   const ordered=[...workspace.frames.slice(position+1),...workspace.frames.slice(0,position)];
@@ -264,8 +280,8 @@ async function load(index) {
     const params=new URLSearchParams(location.search);
     $('filter').value=params.get('filter')||'all';if(!$('filter').value) $('filter').value='all';
     const candidate=params.has('frame')?Number(params.get('frame')):undefined;
-    const visible=workspace.frames.filter(item=>$('filter').value==='all'||item.status===$('filter').value);
-    await select(index ?? (workspace.frames.some(item=>item.index===candidate)?candidate:visible[0]?.index??workspace.frames[0].index));
+    const visible=visibleFrames(),wanted=index??candidate;
+    if(visible.length) await select(visible.some(item=>item.index===wanted)?wanted:visible[0].index);else applyFilter();
   } catch(e) {error(e.message);}
 }
 load();

@@ -46,7 +46,7 @@ def observation(**changes):
     return InferenceObservation(**values)
 
 
-def _build_inference_case(tmp_path,monkeypatch):
+def inference_case(tmp_path,monkeypatch):
     root,doc,data=artifact(tmp_path);clock=[10.0];seen=[];loaded=[]
     def model(config,weights,stats,metadata):
         loaded.append((config,weights,stats))
@@ -60,7 +60,7 @@ def _build_inference_case(tmp_path,monkeypatch):
 
 
 def test_exact_bytes_and_raw_frame_are_consumed(tmp_path,monkeypatch):
-    engine,root,doc,data,clock,seen,loaded=_build_inference_case(tmp_path,monkeypatch)
+    engine,root,doc,data,clock,seen,loaded=inference_case(tmp_path,monkeypatch)
     obs=observation();result=engine.infer(obs)
     assert loaded[0][0]==data['policy/config.json'] and loaded[0][1]==data['policy/model.safetensors']
     assert seen==[obs] and result.source==obs and result.policy_revision==doc['revision']
@@ -71,7 +71,7 @@ def test_exact_bytes_and_raw_frame_are_consumed(tmp_path,monkeypatch):
 
 
 def test_queued_actions_keep_original_observation_and_generation_time(tmp_path,monkeypatch):
-    engine,_,_,_,clock,seen,_=_build_inference_case(tmp_path,monkeypatch)
+    engine,_,_,_,clock,seen,_=inference_case(tmp_path,monkeypatch)
     first=engine.infer(observation());clock[0]=10.1
     queued=engine.infer(observation(sequence=11,observed_at_ns=10_100_000_000,camera_received_at_ns=10_100_000_000,rgb=b'\x00'*192))
     assert len(seen)==1 and queued.source==first.source and queued.produced_at_ns==first.produced_at_ns
@@ -83,14 +83,14 @@ def test_queued_actions_keep_original_observation_and_generation_time(tmp_path,m
 
 @pytest.mark.parametrize('change',[dict(episode_id='next'),dict(lease_id='next')])
 def test_context_change_drops_old_queue(tmp_path,monkeypatch,change):
-    engine,_,_,_,_,seen,_=_build_inference_case(tmp_path,monkeypatch)
+    engine,_,_,_,_,seen,_=inference_case(tmp_path,monkeypatch)
     engine.infer(observation());changed=replace(observation(),**change)
     result=engine.infer(changed)
     assert len(seen)==2 and result.source==changed and result.chunk_index==0
 
 
 def test_explicit_reset_discards_queue_without_any_owner_call(tmp_path,monkeypatch):
-    engine,*rest=_build_inference_case(tmp_path,monkeypatch)
+    engine,*rest=inference_case(tmp_path,monkeypatch)
     engine.infer(observation());engine.reset('hold')
     assert engine.infer(observation()).chunk_index==0
     with pytest.raises(ValueError):engine.reset('automatic_rearm')
@@ -105,7 +105,7 @@ def test_mutable_caller_image_is_copied_before_consumption():
     dict(camera_calibration_sha256='b'*64),dict(camera_shape=(3,4,16)),
     dict(camera_received_at_ns=10_000_000_001)])
 def test_bad_binding_or_future_camera_never_infers(tmp_path,monkeypatch,change):
-    engine,_,_,_,_,seen,_=_build_inference_case(tmp_path,monkeypatch)
+    engine,_,_,_,_,seen,_=inference_case(tmp_path,monkeypatch)
     with pytest.raises(ValueError):engine.infer(observation(**change))
     assert not seen
 
@@ -120,13 +120,13 @@ def test_pin_or_changed_weight_refuses_model_loading(tmp_path,monkeypatch):
 
 
 def test_inference_uses_memory_snapshot_after_source_file_change(tmp_path,monkeypatch):
-    engine,root,_,_,_,seen,_=_build_inference_case(tmp_path,monkeypatch)
+    engine,root,_,_,_,seen,_=inference_case(tmp_path,monkeypatch)
     (root/'policy/model.safetensors').write_bytes(b'changed')
     assert engine.infer(observation()).positions==(.1,.2) and len(seen)==1
 
 
 def test_nonfinite_model_output_latches_until_explicit_reset(tmp_path,monkeypatch):
-    engine,*_=_build_inference_case(tmp_path,monkeypatch)
+    engine,*_=inference_case(tmp_path,monkeypatch)
     engine._predict=lambda _:[(float('nan'),0)]*4
     with pytest.raises(ValueError):engine.infer(observation())
     engine._predict=lambda _:[(.1,.2)]*4
