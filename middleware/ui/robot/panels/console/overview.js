@@ -60,5 +60,5 @@ export function mount(el, ctx) {
     summary.append(note);
   }
   el.append(head, summary);
-  return ctx.store.poll("/api/v1/robot/state", 1_000, render, fail);
+  return ctx.store.state(render, fail);
 }

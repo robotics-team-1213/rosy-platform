@@ -929,3 +929,11 @@
 - 증거: dashboard aggregate 9,999줄, 영향 browser 34통과/2실패 뒤 실제 도구 열기·초점 대기 exact 2통과, 자산/인식 수명 포함 최종 24통과. 실제 전달 수명 변이 2실패/원본 복원 2통과와 raw source/delivery hash 대조. 독립 SPEC/QUALITY와 실제 viewport 세 장 직접 확인.
 - gate 변화: SOURCE/LOCAL 통합과 main 착지 완료. 실제 영상 품질·열 관리·장치 수용은 미실행이며 합성 카메라를 사용했다.
 - 결정: D-439 §21. 크기 예산·권한·명령 소유자·REST payload는 기존 계약을 유지한다.
+
+## 2026-10-04 · uncommitted · feat(shell): D-447 (b) store subscribes /ws/state with REST fallback
+
+- 변경: `shell/store.js` `scope().state(onData, onError)` — 이미 열린 `/ws/state` 소켓을 재사용하는 공유 구독(토큰은 첫 메시지, D-193; 4401 whoami 재검사; 4403 재시도 없음; 접속 끊김 백오프 1→30 s + 10 s 안정 리셋은 state-socket.js와 같은 규칙). 소켓이 죽으면 그 범위는 `GET /api/v1/robot/state` 1 s 폴링으로 돌아가고, 소켓이 살아나면 폴백이 멈춘다. 마지막 구독자가 나가면 스트림 전체가 닫힌다. 소비자 2곳 전환: 셸 안전 상태 표시(shell.js)와 overview 패널(panels/console/overview.js) — 이제 한 표면에서 robot/state 폴링이 소켓 1개로 합쳐진다. 나머지 poll() 경로는 불변.
+- 증거: `node --test src/hmi/dashboard/test/web/store.test.mjs` 5 passed(첫 프레임 auth·프레임 전달·스코프 공유/마지막 구독 해제 종료·close→REST 폴백→소켓 부활 정지·4403 재접속 없음); `python -m pytest src/hmi/dashboard/test src/hmi/web_common/test -q` 297 passed/126 skipped — 실패 2건(test_surface_bridge app.js 브리지, test_responsive_tiers console-detail.css 40rem)은 main에서 동일하게 적색인 선재 실패(known_failures 미등록, 이 브랜치 소유 아님).
+- gate 변화: 없음. SOURCE/LOCAL. 브라우저 실화면 회귀(ROSY_RUN_BROWSER_TESTS)는 다음 회차.
+- 결정: D-447 (b). (a) Fleet gather 전환과 같은 원칙, 같은 ADR.
+- 교훈: none
