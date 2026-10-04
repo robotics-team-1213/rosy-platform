@@ -46,7 +46,9 @@ EXEMPT: dict[str, str] = {
         "operator policy/idempotency and goal authority, including legacy compatibility; fresh LOCALIZED finite map "
         "pose and lane band precede the short next point. Source review and 11 host "
         "route tests; no device acceptance. See docs/validation/"
-        "d463-route-independent-review-2026-10-05/README.md.",
+        "d463-route-independent-review-2026-10-05/README.md. Also independently reviewed "
+        "by the OpenCode GLM session on 2026-10-05: route uses the existing goal path; "
+        "non-LOCALIZED pose is refused and cancel/stop generation stays untouched.",
     "7e34baacebc02dd6103dbdd17c5e861b92a02945":  # git commit revision
         "Independently reviewed by Codex /root/pilot_review on 2026-10-04: D-432 "
         "device TXT metadata, bounded opt-in admission, verified TLS and key-only SSH; "

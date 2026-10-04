@@ -1,4 +1,4 @@
-﻿"""D-368 driver MJPEG stream: route contract on a real CoreServices (SOURCE tier).
+"""D-368 driver MJPEG stream: route contract on a real CoreServices (SOURCE tier).
 
 Judged here: auth 401, driver-only 409 (no seat lease, D-460), single stream,
 new-sequence-only parts, and the slot following the current driver.

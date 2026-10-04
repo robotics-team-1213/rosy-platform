@@ -63,7 +63,7 @@ export function createCameraPeerPanel({scope,headers,identity,locked,dialogs,onU
     const life=scope.capture(), owner=ownerKey(); life.check(); busy=true;
     try {
       const allowed=await dialogs.confirmIrreversible({
-        message:`${row.label}의 기억한 연결과 영상 자격을 해제합니다. 다시 사용하려면 이 화면에서 승인해야 합니다.`,
+        message:`${row.label}의 기억한 연결과 영상 자격을 해제할까요? 다시 사용하려면 이 화면에서 승인해야 합니다.`,
         action:'연결 해제',signal:life.signal}); life.check();
       if (!allowed || owner!==ownerKey() || locked()) return;
       await call(`${BASE}/relationships/${encodeURIComponent(row.relationship_id)}/revoke`,{method:'POST'});

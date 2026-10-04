@@ -373,7 +373,10 @@ SIZE_VERDICTS = {
         "kept beside _seen/_trusted, which it updates in the same gather — verdict unchanged. "
         "Re-judged 2026-10-04 at 1154: D-447 selects a fresh hub snapshot before REST in the "
         "same gather owner and records source provenance; test_server_gather_source.py checks "
-        "fresh/stale/disconnected fallback. The zero-growth allowance remains unchanged.",
+        "fresh/stale/disconnected fallback. Re-judged 2026-10-05 at 1159 for D-463: "
+        "trusted_map_pose is another fresh read in the same gather owner (map-frame "
+        "LOCALIZED check feeding the lane route); verdict unchanged. "
+        "The zero-growth allowance remains unchanged.",
     ),
     "perception/control/sensing/perception/lane.py": (
         765,

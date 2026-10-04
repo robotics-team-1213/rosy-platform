@@ -73,6 +73,10 @@ from fleet.server.task_dispatch_routes import (  # noqa: F401 — GoalRequest �
     fanout_local_omx_stops,
     install_task_dispatch_routes,
 )
+from fleet.server.lane_route_routes import (  # noqa: F401 — RouteRequest 재수출 (D-463)
+    RouteRequest,
+    install_lane_route_routes,
+)
 
 _LOG = logging.getLogger(__name__)
 _goal_evidence_expiry_loop = partial(goal_evidence_expiry_loop, logger=_LOG)
@@ -466,6 +470,9 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                                  require_operator=require_operator, require_named_operator=require_named_operator,
                                  read_guard=read_guard, operator_guard=operator_guard,
                                  drive_cancel=drive_cancel)
+    install_lane_route_routes(app, console=console, task_service=task_service,
+                              require_operator=require_operator,
+                              operator_guard=operator_guard)
 
     proposal_create = proposal_resolve = None
     if mission_service is not None:
