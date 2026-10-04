@@ -9,8 +9,7 @@ from pathlib import Path
 
 from core_common.protocol.schemas import Envelope, EnvelopeType, HelloPayload, HeartbeatPayload
 from core_common.link_retry import retry_delay
-from core_common.protocol.discovery_txt import HOSTNAME
-from .discovery import locate_fleet, DiscoveryConflict, DiscoveryUnavailable
+from .discovery import locate_fleet, approved_profile, DiscoveryConflict, DiscoveryUnavailable
 
 logger = logging.getLogger("fleet_agent")
 
@@ -58,17 +57,7 @@ def next_backoff(current: float) -> float:
 
 def _discovery_profile(fleet_cfg: dict) -> dict | None:
     """A declared trust profile must never fall back to a legacy URL."""
-    discovery = fleet_cfg.get("discovery")
-    if discovery is None or discovery == {}:
-        return None
-    if not isinstance(discovery, dict):
-        raise ValueError("fleet.discovery must be a mapping")
-    hostname, ca_file = discovery.get("expected_hostname"), discovery.get("ca_file")
-    if not isinstance(hostname, str) or not HOSTNAME.fullmatch(hostname.lower().rstrip(".")):
-        raise ValueError("fleet.discovery requires an approved .local hostname")
-    if not isinstance(ca_file, str) or not Path(ca_file).is_absolute():
-        raise ValueError("fleet.discovery requires an absolute site CA path")
-    return {"expected_hostname": hostname.lower().rstrip("."), "ca_file": ca_file}
+    return approved_profile(fleet_cfg)
 
 
 def fleet_link_configured(fleet_cfg: dict) -> bool:
@@ -238,7 +227,9 @@ class FleetAgent:
                 why = None
                 try:
                     current_hub = (await asyncio.to_thread(
-                        locate_fleet, discovery["expected_hostname"], ca_file)
+                        locate_fleet, discovery["expected_hostname"], ca_file,
+                        **({'approved_directory_url': discovery['approved_directory_url']}
+                           if 'approved_directory_url' in discovery else {}))
                         if discover else hub_url)
                     ws_url = urllib.parse.urljoin(current_hub, "/ws/robots").replace(
                         "http://", "ws://").replace("https://", "wss://")

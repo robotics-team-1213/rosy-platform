@@ -5354,3 +5354,9 @@
 - 변경: 소스 1722ca6ec6d7의 후보035 실제 ABI·서명·pack, SD image 내부 factory 전체 파일 bytes, site PC 실제 identity·dry-run·sudo 제약을 새 frozen 증거로 기록했다. 앞선 unsigned 기록과 제품 runtime은 유지한다.
 - 증거: 기존 ABI gate 공통314개 일치/불일치0/release-only28; signed tar2879members·2548SUMS·독립 APPROVE. SD readonly debugfs 실제 exit0 후2547manifest/2548SUMS와 native·SD Python/JS743개 실제 bytes 일치·독립 APPROVE. 실제 readonly SSH hostname/status exit0·current033/candidate null/idle. docs/validation/d427-source-migration/wave5-signed-and-offline-readback-2026-10-04.md.
 - gate 변화: 없음. 발행·자동 활성화·canary/secondary035 readback은 미완료이고 사용 세션 조율이 남았다. SD unsigned와 ELF 실행 동등성·부팅·FIELD는 별도다. site PC installer5files 일치/dry-run0이나 sudo 인증 거절로 실제 설치NOT_RUN; peer delivery NOT_SENT; firmwareS7 다음 개정/no flash·motion·E-Stop reset.
+
+## 2026-10-04 · uncommitted · D-452 승인 다른 망 경로와 선택 CLI
+
+- 변경: CORE는 명시적 승인 WSS directory를 광고 부재일 때만 사용하고 기존 TLS SNI/CA/health를 먼저 검증한다. 충돌·인증 실패에 우회하지 않는다. 모델 doctor는 전체 roster 문법 검증 후 선택한 논리 장비만 해석해 다른 offline peer의 영향에서 분리한다.
+- 증거: 병합 후 CORE85 PASS/모델 CLI63 PASS·기존 SKIP1/NEW0, 독립 source SPEC·Quality·Safety PASS. API Ref v1.94에 정확한 profile fields와 absence-only 경계를 기록했다.
+- gate 변화: focused SOURCE/LOCAL; 실제 다른 망 접속·서명 후보·기기 실행 수락 별도.

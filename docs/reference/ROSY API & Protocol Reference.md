@@ -1532,6 +1532,15 @@ MODEL은 `_rosy-model._tcp`, `product=rosy`, `role=model-host`, `proto=ssh/2`,
 추론 HTTP API가 아니다. `tls=none`은 SSH 호스트 키 인증을 생략한다는 뜻이 아니다.
 기존 승인 논리 이름의 HostKeyAlias·known_hosts·StrictHostKeyChecking이 계속 신원을 검증한다.
 
+CORE `fleet.discovery`의 기존 `expected_hostname`·`ca_file`은 신원 pin으로 유지한다.
+다른 망의 승인 경로는 선택적 `allow_dns_fallback: true`와 `approved_directory_url`
+(`wss://<approved DNS or IP>:<port>/ws/robots`, userinfo/query/fragment 없음)을 함께
+로컬 승인 profile에 명시한다. 기본은 fallback 없음이며 legacy `hub_url`을 대신 쓰지 않는다.
+일치하는 광고가 없을 때만 이 대상의 `/healthz`를 기존 CA와 expected_hostname SNI로
+검증한 뒤 같은 신원으로 WSS를 연다. 충돌·잘못된 일치 광고·인증서·health role·401/403
+실패는 이 경로로 우회하지 않는다. health 요청에는 Agent token을 넣지 않으며 신원 검증
+전 HELLO/credential을 전송하지 않는다. 이것은 새로운 등록/credential 생성 규약이 아니다.
+
 
 ## 10.10 Site Fleet intent interpretation and message boundaries (D-293 Accepted, D-316 Accepted)
 

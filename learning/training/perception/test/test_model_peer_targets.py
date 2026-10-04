@@ -174,3 +174,65 @@ def test_doctor_missing_approved_robot_reports_network_failure_not_config_crash(
     assert rosy_ml.main(['doctor', '--watch-config', str(cfg_path)]) == 77
     text = capsys.readouterr().out
     assert 'unavailable' in text and 'network' in text
+
+
+def test_selected_doctor_resolves_only_selected_peer_after_validating_whole_roster(tmp_path, monkeypatch):
+    import rosy_ml
+    import test_model_watch_inbox as ti
+    from core_common import discover
+    resolutions, observed = [], []
+    class SelectedCache(Cache):
+        def wait(self, kind, *, timeout_s):
+            resolutions.append(kind)
+            return [row()]
+    monkeypatch.setattr(discover, 'get_shared_cache', lambda: SelectedCache([]))
+    cfg_path = ti._config(tmp_path, robots=[{'name': 'offline', 'expected_hostname': 'offline.local'},
+                                          {'name': 'pinky', 'expected_hostname': 'pinky.local'}])
+    def doctor(cfg, robots, *args, **kwargs):
+        observed.append((cfg['robots'], robots, rosy_ml._ssh_argv(cfg, 'pinky')))
+        return 0
+    monkeypatch.setattr(rosy_ml, '_doctor', doctor)
+    assert rosy_ml.main(['doctor', 'pinky', '--watch-config', str(cfg_path)]) == 0
+    assert resolutions == ['_rosy._tcp']
+    assert observed[0][0:2] == ({'pinky': '192.168.1.21'}, ['pinky'])
+    assert observed[0][2][-2:] == ['--host-key-alias', 'pinky']
+    # An unselected peer's malformed configuration is still rejected locally.
+    import json
+    document = json.loads(cfg_path.read_text())
+    document['robots'][0]['expected_hostname'] = 'https://bad-profile'
+    cfg_path.write_text(json.dumps(document))
+    assert rosy_ml.main(['doctor', 'pinky', '--watch-config', str(cfg_path)]) == 2
+    assert len(resolutions) == 1 and len(observed) == 1
+
+
+def test_actual_doctor_contacts_only_selected_pinned_robot(tmp_path, monkeypatch):
+    import rosy_ml
+    import store
+    import test_model_watch_inbox as ti
+    from test_rosy_ml import Robot
+    from core_common import discover
+    monkeypatch.setattr(discover, 'get_shared_cache', lambda: Cache([row()]))
+    monkeypatch.setattr(rosy_ml, '_replay_clip_count', lambda _cfg: 1)
+    key, known = tmp_path / 'id', tmp_path / 'known_hosts'
+    key.write_text('fixture key')
+    key.chmod(0o600)
+    known.write_text('fixture pinned identities')
+    store.Store(tmp_path / 'store').ensure_layout()
+    cfg = ti._config(tmp_path, robots=[{'name': 'offline', 'expected_hostname': 'offline.local'},
+                                      {'name': 'pinky', 'expected_hostname': 'pinky.local'}],
+                     ssh={'identity': str(key), 'known_hosts': str(known)})
+    remote, connections = [], []
+    fake = Robot()
+    def runner(argv, **kwargs):
+        remote.append(argv)
+        return fake.runner(argv, **kwargs)
+    def connect(address, timeout):
+        connections.append(address)
+        return fake.connect(address, timeout)
+    assert rosy_ml.main(['doctor', 'pinky', '--watch-config', str(cfg)], runner=runner,
+                        connect=connect, find_spec=lambda _name: object()) == 0
+    assert connections == [('192.168.1.21', 22)]
+    ssh = [argv for argv in remote if argv[0] == 'ssh']
+    assert ssh and all('rosy@192.168.1.21' in argv and 'HostKeyAlias=pinky' in argv
+                       and 'StrictHostKeyChecking=yes' in argv for argv in ssh)
+    assert all('offline' not in ' '.join(argv) for argv in remote)
