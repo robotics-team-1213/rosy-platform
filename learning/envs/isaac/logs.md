@@ -36,3 +36,10 @@
 - gate 변화: ROS-SIM HOLD 유지. SDK close 반환 뒤 interpreter가 제한 120초를 넘어 exit 124로 종료됐다. 실제 바퀴 속도·주행 중 명령 단절 정지·Nav2·두 대 Fleet·GPU Torch 학습은 미검증이다.
 - 결정: 기존 모델 PC checkout/SDK/ML 환경을 보존하고 별도 검증 환경만 사용했다. 한 번의 무주행 graph 결과를 I1 주행 수용으로 승격하지 않는다.
 - 교훈: ScriptNode output은 graph가 멈춰도 남을 수 있으므로 graph 밖에서 USD drive target까지 0으로 만들고 읽어 확인해야 한다. SDK 정상 반환과 프로세스 정상 종료를 따로 기록한다.
+
+## 2026-10-04 · uncommitted · fix(isaac): CORE I1 경로 실측과 passive caster 검증
+
+- 변경: SDK CLI는 실제 runner cleanup 뒤 원래 종료 코드를 유지하며 종료한다. 명시적인 finite-positive `--wheel-damping`과 live USD readback 검증을 추가하고, URDF로 비구동 continuous caster임을 확인한 두 joint의 importer servo만 해제한다. wheel command·속도 제한·freshness·CORE 단일 publisher는 보존했다.
+- 증거: gain/passive 검사는 RED 후 구현했으며 host 69 passed/1 skipped, 신규 known failure 0, scoped Python lint·diff 통과. 독립 source review 후 모델 PC에서 실제 CORE auth API·단일 publisher·odom/joints/clock·applied gain/action을 관찰했다. A07은 1000 graph callback, 593 Twist receipt, 367 graph/USD target zero readback, SDK main 정상 반환·CORE/SDK exit 0·두 소유 PID 부재를 확인했다.
+- gate: I1 주행·물리 정지는 HOLD. CORE cmd_vel 만료는 약 0.4초에 zero지만 전진 추종 실패·회전 만료 후 actual yaw drift가 남았다. finite-frame 종료 후 SDK GUI callback traceback 2건과 native interrupt-close 오류도 close 반환·process 종료와 별도다. 세부 시도·hash·남은 일은 [I1 실측 기록](../../../docs/validation/cell-isaac-2026-10-04/isaac-core-drive.md)에 기록했다.
+- 교훈: command target zero를 실제 stop으로 승격하지 않는다. importer가 passive caster에 position drive를 만들 수 있으므로 actuator identity와 실제 tensor gains를 확인한다. 정상 SDK close·process 종료와 native interrupt-close 오류는 분리 기록한다.
