@@ -1661,6 +1661,23 @@
 - 증거: 실제 loop의 응답 유실·비정상 응답·취소 후 반복 폴링 회귀 및 관련 74 PASS. 독립 검토와 최종 통합 gate를 별도 실행한다.
 - gate 변화: SOURCE/LOCAL이며 물리 양보 실행·운용 수락은 하지 않았다.
 
+## 2026-10-04 · uncommitted · refactor(fleet): move periodic goal evidence worker out of app composition
+
+- 변경: 기존 goal-evidence grace reconciliation loop를 background_workers로 이동하고 app의 기존 이름과 logger를 partial로 보존했다. 실행 주기·예외 처리·dispatch 권한은 같다.
+- 증거: 깨끗한 origin/main에서 app.py 607줄의 size verdict gate 실패를 재현했다. 이동 뒤 app.py 599줄이고 동일 gate PASS. 관련 서버 app·goal-evidence 58 PASS, 독립 8개 suite 121 PASS와 이전 코드 differential trace 일치로 재검토 APPROVE.
+- gate 변화: SOURCE/LOCAL 구성 분리만 기록한다. 실제 새 이미지와 물리 수락은 별도다.
+
+
+## 2026-10-04 · uncommitted · fix(ci): preserve current admission and shared controls in regressions
+
+- 변경: CELL_TRANSFER 교환 시험에 기존 real shared-admission 도우미를 연결하고 재시작 시험은 새 owner/admission을 reopened store에 한 번만 bind한다. 기존 승인 거부·store identity·replay·직접 driver 거부·미해결 stop 검증은 유지한다. Slip sheet checkbox에 공용 field/check 클래스를 적용하고 장비 목록 조회 중 버튼에 사유를 표시한다. reset/finally에서 그 사유를 지운다.
+- 증거: 이전 두 CELL_TRANSFER 파일 18 FAIL/14 PASS를 재현했다. 수정 뒤 관련 Python 선택 94 PASS, Node 3 PASS와 독립 재검토 APPROVE. 새 runtime guard나 robot 명령은 없다.
+- gate 변화: SOURCE/LOCAL CI 복구만 기록한다. 새 이미지와 실제 UI/물리 수락은 별도다.
+## 2026-10-04 · uncommitted · docs: re-judge exact integrated Fleet size
+
+- Change: Record the independently counted 32481 production/web lines after inherited D-454 registry/permission wiring and D-455 map-pose extensions, plus four reviewed shared UI lines. Preserve B2/UI migration, all file limits and the package +150 allowance. No production code changed for this judgement.
+- Evidence: Independent accounting: recorded32162, current main32477, current branch32481. Registry owners remain bounded, resolver507, app600, Console777; no new final command publisher. Architecture and registry/meet/resolver regressions77passed.
+- Gate: SOURCE/LOCAL architecture judgement only; no robot, motion or physical acceptance.
 ## 2026-10-04 · uncommitted · feat(server): D-454 1단계 — 중앙 레지스트리 뷰 (/api/v1/fleet/robots)
 
 - 변경: `central_registry.py`(CentralRegistry 읽기 모델 — 로스터가 정본, hub 스냅샷·발견 주소는 보강, state/capabilities는 로봇이 만든 증거를 그대로 전달 D-309), `central_registry_routes.py`(`GET /api/v1/fleet/robots`·`/{id}`, Viewer 가드, 미등록 404 UNKNOWN_ROBOT), `app.py` `central_registry=` 마운트, `cli.py` `--central` 플래그(등록 저장소 필수 — 로스터가 정본이므로). 설계·실행 계획: `docs/plans/2026-10-04-central-fleet-step1{,-design}.md`. §10.1 나머지 7경로(PATCH/DELETE·페어링 토큰·승인 대기·폐기)는 뒤 작업.
@@ -1681,18 +1698,6 @@
 - gate 변화: 없음.
 - 결정: D-454 결정 2의 §10.1 확장. PATCH(이름·그룹)·페어링 토큰·승인 대기·토큰 폐기는 다음 회차.
 
-## 2026-10-04 · uncommitted · refactor(fleet): move periodic goal evidence worker out of app composition
-
-- 변경: 기존 goal-evidence grace reconciliation loop를 background_workers로 이동하고 app의 기존 이름과 logger를 partial로 보존했다. 실행 주기·예외 처리·dispatch 권한은 같다.
-- 증거: 깨끗한 origin/main에서 app.py 607줄의 size verdict gate 실패를 재현했다. 이동 뒤 app.py 599줄이고 동일 gate PASS. 관련 서버 app·goal-evidence 58 PASS, 독립 8개 suite 121 PASS와 이전 코드 differential trace 일치로 재검토 APPROVE.
-- gate 변화: SOURCE/LOCAL 구성 분리만 기록한다. 실제 새 이미지와 물리 수락은 별도다.
-
-
-## 2026-10-04 · uncommitted · fix(ci): preserve current admission and shared controls in regressions
-
-- 변경: CELL_TRANSFER 교환 시험에 기존 real shared-admission 도우미를 연결하고 재시작 시험은 새 owner/admission을 reopened store에 한 번만 bind한다. 기존 승인 거부·store identity·replay·직접 driver 거부·미해결 stop 검증은 유지한다. Slip sheet checkbox에 공용 field/check 클래스를 적용하고 장비 목록 조회 중 버튼에 사유를 표시한다. reset/finally에서 그 사유를 지운다.
-- 증거: 이전 두 CELL_TRANSFER 파일 18 FAIL/14 PASS를 재현했다. 수정 뒤 관련 Python 선택 94 PASS, Node 3 PASS와 독립 재검토 APPROVE. 새 runtime guard나 robot 명령은 없다.
-- gate 변화: SOURCE/LOCAL CI 복구만 기록한다. 새 이미지와 실제 UI/물리 수락은 별도다.
 ## 2026-10-04 · uncommitted · feat(fleet): D-455 양보 합류는 지도 자세
 
 - 변경: 양보 계획이 있는 동안, 선 밖 틈은 정차 점이나 선으로 보정한다. 동료가 문을 지나면 방에서 문으로 YIELD 하고, 진행 방향을 되찾으면 RESUME 한다. 오도메트리 프레임은 무응답이다.
@@ -1700,8 +1705,9 @@
 - gate 변화: 없음. 호스트 판단 시험. 장치·ROS-SIM 은 주장하지 않는다.
 
 
-## 2026-10-04 · uncommitted · docs: re-judge exact integrated Fleet size
+## 2026-10-04 · uncommitted · feat(server): D-454 1c — §10.1 쓰기 경로와 501 경계 명시
 
-- Change: Record the independently counted 32481 production/web lines after inherited D-454 registry/permission wiring and D-455 map-pose extensions, plus four reviewed shared UI lines. Preserve B2/UI migration, all file limits and the package +150 allowance. No production code changed for this judgement.
-- Evidence: Independent accounting: recorded32162, current main32477, current branch32481. Registry owners remain bounded, resolver507, app600, Console777; no new final command publisher. Architecture and registry/meet/resolver regressions77passed.
-- Gate: SOURCE/LOCAL architecture judgement only; no robot, motion or physical acceptance.
+- 변경: `central_registry_routes.py`에 §10.1 쓰기 4경로 추가(operator 가드, `enrollment` 주입). `PATCH …/{id}`(REG-003)는 등록 저장소의 `discovery_name`만 건드린다(그룹 개념은 뒤 작업) — 빈 이름 422, 미등록 404. `POST …/token/revoke`(SEC-203)는 상태를 `needs_new_code`로 전환해 재발급을 강제한다(폐기 계약의 등록측). `GET /pending-robots`(SEC-202)는 비-active 등록 목록을 돌려준다(D-361 등록 게이트와 연결 예정). `POST /pairing-tokens`(SEC-201)는 501로 명시한다 — D-341 승인 흐름 통합은 뒤 작업 설계가 소유하고, 구현되지 않은 것을 200으로 속이지 않는다. 저장소 없음(--central 없이)은 501. API Ref §10.1 나머지 중 `DELETE pairing-tokens/{token}`·`approve`·`/{id}/token/revoke`는 뒤 회차.
+- 증거: `test_central_registry_write.py` 신규 9 passed. fleet 전체(셀 앱 2파일 수집 오류 제외, main 선재) **1815 passed/7 skipped, known_failures 0 new**. flake8 0.
+- gate 변화: 없음. ROS-SIM/DEVICE/FIELD 주장 없음(D-454 결정 3).
+- 결정: D-454 결정 2 계속. 뒤는 pairing-tokens(2)와 §10.2 명령 상관·ACK(D-426 선행).

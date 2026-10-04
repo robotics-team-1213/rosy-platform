@@ -2380,34 +2380,11 @@
 - 변경: Cam의 정본 Gradle 8.11.1 wrapper에 matrix별 --project-dir를 전달한다. 별도 wrapper가 없는 Pilot도 같은 unit task를 실행하며 JDK 17·테스트 범위를 유지한다.
 - 증거: 실제 shell wrapper와 Java 실행 경계의 프로젝트/JAR/task 전달 2 PASS, 독립 source 리뷰 PASS. 통합 담당자 launcher 및 관련 Fleet 계약 24 PASS. 실제 Gradle 실행은 다음 원격 CI의 별도 증거다.
 - gate 변화: SOURCE/LOCAL launcher 검증; 원격 Android CI·APK·DEVICE 수락은 별도다.
-## 2026-10-04 · uncommitted · feat(omx): 정본 G2 격리 실행기
-
-- 변경: 실제 Cell 문서 저장·compile·service proposal·별도 named simulation operator admission·Fleet grant·UDS·owner·Gazebo를 연결하는 박스 16회 하네스를 추가했다. 각 grant의 staging intent를 세계 변경 전에 fsync하고 재제출을 금지한다. 실제 측정 프로세스가 pose·gripper·진행 clock과 이전 배치를 검증한다.
-- 증거: 독립 source 검토 뒤 host preflight 16회/marker 8·16, 독립 15 tests 통과. 설치 패키지 shadow와 멈춘 clock의 반복 발행을 거절한다. read-only root/repo·network-none·no devices·bounded resource와 실제 컨테이너 ID/label·성공한 daemon 목록 기반 종료 검사를 준비했다.
-- gate 변화: SOURCE/LOCAL만 추가했다. SDK 이미지 preflight·전체 16회 ROS-SIM과 fault matrix는 NOT_RUN이며 full_g2=false다. 기존 narrow vendor 취소 증거를 전체 G2로 올리지 않는다. 수동 슬립시트 checkpoint·물리 파지는 별도다.
-
-## 2026-10-04 · uncommitted · fix(site): 서명된 후보의 제목·설명이 서명 상태를 말한다
-
-- 변경: `auto_sign_candidates.py`가 서명 자산을 올린 뒤 릴리스를 다시 읽어 제목의 "(unsigned)"를 "(signed)"로, 설명의 "UNSIGNED"를 "SIGNED"로 고친다(D-437 3의 취지 — 사람은 목록의 제목을 읽는다). 교정 실패는 서명을 되돌리지 않고 감사에만 남긴다. 이미 바른 제목은 만지지 않는다.
-- 증거: `test/test_site_auto_sign.py` 25 passed — happy path가 제목·설명 교정을 단언(변이: 이미 바른 제목은 edit 호출 0건), `test_site_candidate_signing.py`·`test_site_candidate_workflow.py` 30 passed 회귀 없음. flake8 지적 2건(E128)은 main 선재.
-- gate 변화: 없음.
-- 결정: D-441 뒤 정리. 근거: 2026-10-04 관측 회차에서 서명 완료 후에도 제목이 "(unsigned)"로 남어 사람이 오독한 사실.
-
 ## 2026-10-04 · 230ccfc2a · docs: record unrecoverable G2 journal corruption
 
 - Change: Replace the corrupted journal entry introduced in commit 230ccfc2ae78116fc185688ed2627c9c2aeb211f. The original Korean text was irreversibly converted to question marks; this entry does not reconstruct it. The commit title records measured-home preparation through reserved Pilot admission.
 - Evidence: The immutable original remains in deploy/logs.md at that commit. Normalized original block SHA256: a5eecc71690d74036c9e393a2a47262843dfd369b71fe0d6ff92c40a24730c49. Source paths include g2_startup.py, g2_owner.py, g2_runner.py and test_cell_g2_startup.py. No test or runtime result is inferred from the damaged text.
 - Gate: Provenance correction only; ROS-SIM, DEVICE and FIELD acceptance are not established by this entry.
-## 2026-10-04 · uncommitted · fix(g2): reserved startup home before Cell admission
-
-- 변경: 커밋 230ccfc2a의 reserved Pilot admission을 통한 G2 시작 home 준비를 반영했다. 병합 중 발견한 인코딩 손상 원문은 X:/DevTemp/rosy-learning-audit-20261004/g2-imported-journal-original.txt에 보존했다. 복구 불가능한 원문을 실행 증거로 사용하지 않는다.
-- 증거: 해당 커밋의 Independent-Review는 48 passed·1 Unix-host skip이며 실제 ROS-SIM 재시도는 pending이다. 통합 담당자의 G2 startup·ports 검사 26 passed·1 skipped. SOURCE/HOST 근거만 보존한다.
-- gate 변화: box16 전체 실행·fault matrix·수동 간지·물리 수용은 HOLD/NOT_RUN이며 full_g2=false다. 실제 주행·HOLD 해제는 수행하지 않았다.
-## 2026-10-04 · uncommitted · fix(camera): 시작 중 반복 부팅 보호
-
-- 변경: 카메라 시작 전 fsync 기록, 두 번의 미확인 부팅 뒤 선택 서비스 보류, 별도 90초 관찰 타이머와 정상 종료 구분을 추가했다. 카메라 재시도를 10초·300초 내 3회로 제한하고 관찰 시간을 카메라 시작 완료와 분리했다. D-161의 CORE·호스트 권한 분리와 D-373의 선택 perception 설정을 유지한다.
-- 증거: 독립 host 194 PASS·1 POSIX skip, 실패 횟수 임계값 mutation RED 확인. Linux에서 fsync/rename 상태 전이·systemd-analyze verify PASS(의존 서비스는 검증용 stub). 격리 user systemd에서 시작 0.074초·재시작 0.103초, 2초로 축소한 관찰 타이머·정지 시 취소·미확인 부팅 후 시작 보류 PASS. 서명 payload·기기 적용은 별도다.
-- gate 변화: SOURCE/LOCAL 보호 로직만 확인했다. 원래 카메라 시작 관련 본체 재부팅의 전기·커널 원인은 미확정이며 물리 전원 초기화와 카메라 복구 수락은 미완료다.
 ## 2026-10-04 · uncommitted · D-441 dedicated functional verification setup
 
 - Change: Add config-only viewer provisioning with protected token, existing principal and Fleet group-access preservation, signed-runtime preflight, guarded Fleet restart, atomic journal recovery and exact timer-state restoration. GET gates select durable enrolled identities and configured Vision sources; no robot command or enrollment reset.
@@ -2433,6 +2410,29 @@
 - Change: Replace only the corrupted journal entry introduced in commit 429e13b8313484a25751a7c7896fe1b7aca41b92. Korean text was irreversibly converted to question marks; it is not reconstructed. The source commit title records acknowledgement budgeting within the existing aid deadline.
 - Evidence: The immutable original remains in deploy/logs.md at that commit. Normalized original block SHA256: e2f80dbdfc41bdcff21a27d50ddd7ae909a32d02270c5db525808c6d9977883d. Source paths are g2_aid.py and test_cell_g2_aid.py. No test or runtime result is inferred from damaged text.
 - Gate: Provenance correction only; ROS-SIM, DEVICE and FIELD acceptance are not established by this entry.
+## 2026-10-04 · uncommitted · feat(omx): 정본 G2 격리 실행기
+
+- 변경: 실제 Cell 문서 저장·compile·service proposal·별도 named simulation operator admission·Fleet grant·UDS·owner·Gazebo를 연결하는 박스 16회 하네스를 추가했다. 각 grant의 staging intent를 세계 변경 전에 fsync하고 재제출을 금지한다. 실제 측정 프로세스가 pose·gripper·진행 clock과 이전 배치를 검증한다.
+- 증거: 독립 source 검토 뒤 host preflight 16회/marker 8·16, 독립 15 tests 통과. 설치 패키지 shadow와 멈춘 clock의 반복 발행을 거절한다. read-only root/repo·network-none·no devices·bounded resource와 실제 컨테이너 ID/label·성공한 daemon 목록 기반 종료 검사를 준비했다.
+- gate 변화: SOURCE/LOCAL만 추가했다. SDK 이미지 preflight·전체 16회 ROS-SIM과 fault matrix는 NOT_RUN이며 full_g2=false다. 기존 narrow vendor 취소 증거를 전체 G2로 올리지 않는다. 수동 슬립시트 checkpoint·물리 파지는 별도다.
+
+## 2026-10-04 · uncommitted · fix(site): 서명된 후보의 제목·설명이 서명 상태를 말한다
+
+- 변경: `auto_sign_candidates.py`가 서명 자산을 올린 뒤 릴리스를 다시 읽어 제목의 "(unsigned)"를 "(signed)"로, 설명의 "UNSIGNED"를 "SIGNED"로 고친다(D-437 3의 취지 — 사람은 목록의 제목을 읽는다). 교정 실패는 서명을 되돌리지 않고 감사에만 남긴다. 이미 바른 제목은 만지지 않는다.
+- 증거: `test/test_site_auto_sign.py` 25 passed — happy path가 제목·설명 교정을 단언(변이: 이미 바른 제목은 edit 호출 0건), `test_site_candidate_signing.py`·`test_site_candidate_workflow.py` 30 passed 회귀 없음. flake8 지적 2건(E128)은 main 선재.
+- gate 변화: 없음.
+- 결정: D-441 뒤 정리. 근거: 2026-10-04 관측 회차에서 서명 완료 후에도 제목이 "(unsigned)"로 남어 사람이 오독한 사실.
+
+## 2026-10-04 · uncommitted · fix(g2): reserved startup home before Cell admission
+
+- 변경: 커밋 230ccfc2a의 reserved Pilot admission을 통한 G2 시작 home 준비를 반영했다. 병합 중 발견한 인코딩 손상 원문은 X:/DevTemp/rosy-learning-audit-20261004/g2-imported-journal-original.txt에 보존했다. 복구 불가능한 원문을 실행 증거로 사용하지 않는다.
+- 증거: 해당 커밋의 Independent-Review는 48 passed·1 Unix-host skip이며 실제 ROS-SIM 재시도는 pending이다. 통합 담당자의 G2 startup·ports 검사 26 passed·1 skipped. SOURCE/HOST 근거만 보존한다.
+- gate 변화: box16 전체 실행·fault matrix·수동 간지·물리 수용은 HOLD/NOT_RUN이며 full_g2=false다. 실제 주행·HOLD 해제는 수행하지 않았다.
+## 2026-10-04 · uncommitted · fix(camera): 시작 중 반복 부팅 보호
+
+- 변경: 카메라 시작 전 fsync 기록, 두 번의 미확인 부팅 뒤 선택 서비스 보류, 별도 90초 관찰 타이머와 정상 종료 구분을 추가했다. 카메라 재시도를 10초·300초 내 3회로 제한하고 관찰 시간을 카메라 시작 완료와 분리했다. D-161의 CORE·호스트 권한 분리와 D-373의 선택 perception 설정을 유지한다.
+- 증거: 독립 host 194 PASS·1 POSIX skip, 실패 횟수 임계값 mutation RED 확인. Linux에서 fsync/rename 상태 전이·systemd-analyze verify PASS(의존 서비스는 검증용 stub). 격리 user systemd에서 시작 0.074초·재시작 0.103초, 2초로 축소한 관찰 타이머·정지 시 취소·미확인 부팅 후 시작 보류 PASS. 서명 payload·기기 적용은 별도다.
+- gate 변화: SOURCE/LOCAL 보호 로직만 확인했다. 원래 카메라 시작 관련 본체 재부팅의 전기·커널 원인은 미확정이며 물리 전원 초기화와 카메라 복구 수락은 미완료다.
 ## 2026-10-04 · uncommitted · feat(ci): payload 부팅 스모크 — arm64 러너에서 D-444 P1.2 관측
 
 - 변경: `payload-boot-smoke.yml`(workflow_dispatch 전용, `ubuntu-24.04-arm`, GITHUB_TOKEN 한정 비밀 없음). payload artifact를 내려 압축을 풀고, ROS 핀(CycloneDDS·nav2-msgs·tf2)과 CI 부트 스모크의 파이썬 스택을 설치한 뒤, `release/install`에서 `ROSY_ROBOT_NUMBER=1`로 CORE를 부팅해 `GET /dashboard`·`/pilot`·`/console`의 200+CSP를 검사한다(실패 시 로그 업로드). 정의: `.github/workflows`의 `payload-boot-smoke.yml`과 `test/test_payload_boot_smoke_workflow.py`(6 계약).
