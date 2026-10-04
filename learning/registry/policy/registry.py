@@ -89,11 +89,15 @@ def pinky_assessment(report):
 
 
 class Registry:
-    def __init__(self, root, *, trusted=None):
+    def __init__(self, root, *, trusted=None, read_only=False):
         self.root = Path(root).resolve()
         if self.root.drive.upper() == 'F:':
             raise ValueError('registry output belongs outside source drive F:')
-        self.root.mkdir(parents=True, exist_ok=True)
+        if not isinstance(read_only, bool):
+            raise ValueError("read_only must be boolean")
+        self._read_only = read_only
+        if not read_only:
+            self.root.mkdir(parents=True, exist_ok=True)
         self.trusted = {}
         for principal, trust in (trusted or {}).items():
             if (not isinstance(principal, str) or not principal.strip() or not isinstance(trust, dict)
@@ -103,15 +107,26 @@ class Registry:
                 raise ValueError('invalid installed verifier trust')
             self.trusted[principal] = {'key': trust['key'], 'kinds': frozenset(trust['kinds'])}
         with self._db() as db:
+            if self._read_only:
+                db.execute('SELECT revision, stage FROM policies LIMIT 0')
+                db.execute('SELECT sequence, body FROM events LIMIT 0')
+                return
             db.execute('CREATE TABLE IF NOT EXISTS policies (revision TEXT PRIMARY KEY, stage TEXT NOT NULL)')
             db.execute('CREATE TABLE IF NOT EXISTS events (sequence INTEGER PRIMARY KEY, body TEXT NOT NULL)')
 
+    def _writable(self):
+        if self._read_only:
+            raise PermissionError("registry is read-only")
+
     @contextmanager
     def _db(self):
-        db = sqlite3.connect(self.root / 'registry.sqlite3', timeout=30)
-        db.execute('PRAGMA synchronous=FULL')
+        path = self.root / 'registry.sqlite3'
+        db = (sqlite3.connect(path.as_uri() + '?mode=ro', uri=True, timeout=30)
+              if self._read_only else sqlite3.connect(path, timeout=30))
+        if not self._read_only:
+            db.execute('PRAGMA synchronous=FULL')
         try:
-            db.execute('BEGIN IMMEDIATE')
+            db.execute('BEGIN' if self._read_only else 'BEGIN IMMEDIATE')
             yield db
             db.commit()
         except BaseException:
@@ -154,7 +169,7 @@ class Registry:
             if event['operation'] == 'promote':
                 promotion = event['data']['promotion']
                 _, policy = self._policy(event['policy_revision'])
-                DatasetStore(self.root / 'datasets').require_policy(policy)
+                DatasetStore(self.root / 'datasets', read_only=self._read_only).require_policy(policy)
                 validate_promotion(promotion, policy, root=self.root / 'evidence' / promotion['revision'])
         return events
 
@@ -201,6 +216,7 @@ class Registry:
                 os.replace(stage, destination)
 
     def register(self, source):
+        self._writable()
         source = Path(source).resolve()
         policy = validate_policy(read(source / 'policy-artifact.json'), root=source)
         revision = policy['revision']
@@ -242,6 +258,7 @@ class Registry:
         return act_assessment(reports[0][0]), reports[0][1]
 
     def assess_act(self, revision):
+        self._writable()
         with self._db() as db:
             events = self._audit(db)
             stage = db.execute('SELECT stage FROM policies WHERE revision=?', (revision,)).fetchone()
@@ -267,6 +284,7 @@ class Registry:
         return pinky_assessment(reports[0][0]), reports[0][1]
 
     def assess_pinky(self, revision):
+        self._writable()
         with self._db() as db:
             events = self._audit(db)
             stage = db.execute('SELECT stage FROM policies WHERE revision=?', (revision,)).fetchone()
@@ -296,6 +314,7 @@ class Registry:
             raise ValueError('verifier receipt binding/signature differs')
 
     def promote(self, promotion, evidence_root, receipts):
+        self._writable()
         evidence_root = Path(evidence_root).resolve()
         revision = promotion['policy_revision']
         with self._db() as db:
@@ -305,7 +324,7 @@ class Registry:
                 raise ValueError('promotion current stage differs')
             root, policy = self._policy(revision)
             promotion = validate_promotion(promotion, policy, root=evidence_root)
-            DatasetStore(self.root / 'datasets').require_policy(policy)
+            DatasetStore(self.root / 'datasets', read_only=self._read_only).require_policy(policy)
             if policy['profile'] == 'pinky_base_velocity_v1' and self._pinky(root, policy)[0]['verdict'] == 'reject':
                 raise ValueError('bound Pinky offline evaluation rejected')
             # A separate pass claim cannot override the artifact's failed ACT report.
@@ -335,6 +354,7 @@ class Registry:
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--root', required=True, type=Path)
+    parser.add_argument('--read-only', action='store_true', help='audit existing snapshots without writes')
     sub = parser.add_subparsers(dest='command', required=True)
     sub.add_parser('register').add_argument('source', type=Path)
     sub.add_parser('assess-act').add_argument('revision')
@@ -342,7 +362,7 @@ def main():
     sub.add_parser('show').add_argument('revision')
     sub.add_parser('history')
     args = parser.parse_args()
-    registry = Registry(args.root)
+    registry = Registry(args.root, read_only=args.read_only)
     if args.command == 'register':
         result = registry.register(args.source)
     elif args.command == 'assess-act':

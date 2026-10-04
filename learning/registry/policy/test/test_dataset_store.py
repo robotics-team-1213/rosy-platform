@@ -133,3 +133,30 @@ def test_unsupported_profile_cannot_bypass_body_validation(tmp_path, profile):
     (root / 'dataset-manifest.json').write_text(json.dumps(seal(doc)))
     with pytest.raises(ValueError, match='profile validator not implemented|Pinky recording metadata required'):
         DatasetStore(tmp_path / 'store').register(root)
+
+
+@pytest.mark.parametrize('existing_root', [False, True])
+def test_read_only_dataset_missing_database_never_creates_it(tmp_path, existing_root):
+    import sqlite3
+    root = tmp_path / 'missing'
+    if existing_root:
+        root.mkdir()
+    with pytest.raises(sqlite3.OperationalError):
+        DatasetStore(root, read_only=True)
+    assert root.exists() is existing_root
+    assert not (root / 'datasets.sqlite3').exists()
+
+
+def test_read_only_dataset_checks_closure_and_refuses_registration(tmp_path):
+    source = tmp_path / 'source'; doc = dataset(source)
+    writer = DatasetStore(tmp_path / 'store'); writer.register(source)
+    dbpath = writer.root / 'datasets.sqlite3'
+    before = (dbpath.read_bytes(), dbpath.stat().st_mtime_ns)
+    reader = DatasetStore(writer.root, read_only=True)
+    assert reader.require([doc['revision']]) == [doc['revision']]
+    with pytest.raises(PermissionError, match='read-only'):
+        reader.register(source)
+    assert (dbpath.read_bytes(), dbpath.stat().st_mtime_ns) == before
+    (writer.root / doc['revision'] / 'source/samples.jsonl').write_bytes(b'tamper')
+    with pytest.raises(ValueError, match='hash'):
+        reader.require([doc['revision']])
