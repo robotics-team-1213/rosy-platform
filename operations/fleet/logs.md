@@ -1667,3 +1667,10 @@
 - 증거: 신규 `test/test_central_registry.py` 6 passed(합산·정렬·증거 무계산·404·401·왕복). fleet 전체(셀 앱 2파일 수집 오류 제외 — `rosy.processes` 휠 미설치, main 선재·WSL/CI 전제) **1799 passed/7 skipped, known_failures 0 new**. flake8 0.
 - gate 변화: 없음. ROS-SIM/DEVICE/FIELD 주장 없음(D-454 결정 3).
 - 결정: D-454 결정 1·2 — 시드 위 성장, §10.1 읽기부터.
+
+## 2026-10-04 · uncommitted · feat(server): D-454 1b — 등록 해제 경로와 로스터 차단 전달
+
+- 변경: `DELETE /api/v1/fleet/robots/{id}`(REG-001a, operator 가드). 로스터 `remove()`의 진행 작업 차단(RosterConflict)은 409+task_ids로, 미등록은 404 UNKNOWN_ROBOT으로 내려온다. `CentralRegistry.roster` 속성으로 정본 로스터를 노출한다. 같은 회차의 시험 결함 수정: 증거 무계산 단언이 스냅샷을 두 번 만들어 자동 타임스탬프가 어긋났다 — 같은 객체에서 비교한다.
+- 증거: `test/test_central_registry.py` 8 passed(해제·차단 409+task_ids·미등록 404·operator 전용 403 포함). fleet 전체(셀 앱 2파일 제외, 사유 동일) 1800 passed/1 failed → 결함 수정 후 초록, known_failures 0 new. flake8 0.
+- gate 변화: 없음.
+- 결정: D-454 결정 2의 §10.1 확장. PATCH(이름·그룹)·페어링 토큰·승인 대기·토큰 폐기는 다음 회차.
