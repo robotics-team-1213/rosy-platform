@@ -1564,3 +1564,10 @@
 - gate 변화: SOURCE/LOCAL. 물리 정지·장치·배포·FIELD 수용을 주장하지 않는다. 최종 SPEC/QUALITY 및 부모 직접 화면 판단은 별도 기록한다.
 - 결정: D-439 §18. shell 자격 수명과 한 작업 소유권을 조합하고 오래된 finally가 새 작업을 해제하지 않는다.
 - 최종 수용: 독립 SPEC 및 QUALITY PASS, 부모의 실제 5개 viewport와 변이 hash 검증 PASS. 구조 예산 2 passed(0.96s), lint 0 errors/26 기존 warnings, diff check PASS. 배포/장치 수용은 포함하지 않는다.
+
+## 2026-10-04 · 6485f8a39 · refactor(ui): 통합 명렬 카드의 표현 재사용
+
+- 변경: 명렬 카드의 DOM 생성 열두 구간을 기존 roster 파일 안에서 재사용했다. 클래스·textContent·ARIA·동작과 지도/정지/공용 확인 소유자를 유지했다.
+- 증거: Fleet package 29,815줄의 초과를 29,806줄로 줄였다. 기존 verdict 29,657+150을 올리지 않았다. 실제 viewport·compact 정지 접근·공용 확인 generation 재검사 4통과(15.38초), 독립 SPEC→QUALITY 통과.
+- gate 변화: SOURCE/LOCAL과 main 착지 완료. 운용 허가·비상 정지 해제·물리 명령·배포·현장 수용은 실행하지 않았다.
+- 결정: D-439 §21과 D-201 화면 계약을 함께 유지한다. 반복 표현만 재사용하고 command owner나 서버 권한은 이동하지 않는다.

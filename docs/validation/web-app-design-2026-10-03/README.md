@@ -2,7 +2,8 @@
 
 결정: [D-439](../../adr/D-439-task-oriented-web-app-design.md).
 계획: [화면별 실행 순서](../../plans/2026-10-03-web-app-design-unification.md).
-전체 목표는 진행 중이며 이 기록은 전체 완료를 뜻하지 않는다.
+화면별 구현·유지 판정과 로컬 검증·main 통합은 완료했다. 실제 장치·CI·배포·현장 수용은
+이 기록의 완료 범위에 포함하지 않는다.
 
 ## 범위와 증거
 
@@ -663,4 +664,60 @@ page error 0을 캡처 보고서로 대조했다. 처음 mobile network 카드�
 raw-byte hash가 before/after와 일치함을 직접 검증했다. 일부 로그의 문자 인코딩은 UTF-8이
 아니므로 실패 node/요약은 ASCII byte로 정확히 검사했다. 해당 자료와 viewport 다섯 장은
 `X:\DevTemp\rosy-ui-unify\final-plan`에 있다. 독립 SPEC→QUALITY는 최종 통과했으며
-최신 main 기능 보존 통합·예산 확인·최종 quick·로컬 착지는 다음 단계다.
+해당 커밋의 증거이며, 아래 최종 통합 검증과 구별한다.
+
+## 최종 main 통합과 로컬 착지 — 2026-10-04
+
+제품 통합 커밋은 `6485f8a39`다. 부모 `6333f89`와 최신 main `518edcf80`의 카메라 원본/표시
+영상 저장·노출 경고·인식 방식과 공용 작업 배치·동일 정지 노드·요청 수명을 함께 유지했다.
+Pilot 서비스 워커는 두 부모 자산 합집합과 새 캐시 키를 사용한다. 독립 SPEC
+`pilot_review`와 후속 QUALITY `task2_spec` 모두 source 검토를 통과했다.
+
+기존 dashboard 표현 모듈의 textContent 생성 helper를 일곱 렌더러가 재사용하고,
+셸 복귀 링크와 영상 목록 오류 처리의 반복도 같은 소유자 안에서 합쳤다. Fleet 명렬 카드의
+반복 생성 열두 구간도 기존 파일 안에서 재사용했다. 권한·ID·ARIA·처리기·REST payload를
+유지하며 dashboard aggregate 9,999줄, Fleet package 29,806줄로 기존 예산을 올리지 않았다.
+통합 직후 Fleet 29,815줄의 초과를 해결한 결과이며 budget verdict를 완화하지 않았다.
+
+| 검사 | 실제 결과 | 해석 |
+|---|---|---|
+| 영상·인식·저장 API와 Fleet gather source | 32통과, 5.64초 | 이번 통합의 영향 계약 |
+| 패널·설정·카메라 browser 첫 묶음 | 34통과/2실패, 63제외, 120.02초 | 두 실패를 아래에서 별도 수정·재검증 |
+| 카메라 두 실패의 exact 재검사 | 2통과, 8.17초 | 저장 도구를 실제로 열고 fullscreen 이벤트의 초점 복귀를 기다림. 원래 저장·초점 단언 유지 |
+| Fleet 실제 viewport·정지/확인창·compact 배치 | 4통과, 15.38초 | D-201 제어 크기·접근을 숨김으로 대체하지 않음 |
+| Pilot 저조도·원본/표시 저장·OMX 수명·전체 화면 | 4통과, 13.31초 | 가짜 CORE를 사용한 실제 Chromium 동작 |
+| 공용/Pilot 자산·역할·예산·인식 수명 최종 묶음 | 24통과, 6.92초 | 앞선 자산 묶음의 22통과/옛 native-confirm 기대 1실패를 실제 공용 확인 검사로 교정 |
+| root AGENTS quick 최종 | 459통과/기존 2skip/경고 26건, 127.73초 | known-failure 비교 0 new/0 known. 제외·역사 경고를 전체 PASS로 바꾸지 않음 |
+| 완료 기록과 harness/affected 계약 | 91통과/경고 26건, 28.45초 | 완료 기록 작성·인덱스 생성 뒤 append-only·현재성·선택기 계약 재확인 |
+
+첫 통합 quick은 454통과/5실패/2skip/경고 26건(141.92초)이었다. 로그 날짜 순서와 생성
+인덱스, Fleet 예산, 옛 DOM 구현을 직접 기대하던 hardware 검사였다. 안전한 textContent
+helper 검사로 바꾸고 administrator·HTML 삽입 금지·요청 결과 대기 조건은 유지했다.
+첫 수정 묶음은 4통과/append-only 1실패(29.99초), 양 부모 본문 보존 뒤 기록 검사 두 건은
+2통과(12.79초)였다. 최초 quick 원본 로그는 같은 runner 경로의 최종 실행으로 덮어써졌으므로
+첫 결과는 당시 관측 기록이며 완전한 원본 로그 증거로 사용하지 않는다. 최종 원본은
+`X:\DevTemp\rosy-ui-unify\final\integrated-quick-final.log`로 별도 보존했다.
+
+작업 기록 일곱 파일은 양 부모의 모든 본문·중복 횟수와 main 기존 순서를 보존했다.
+D-441 동일 역사 제목의 이미 커밋된 두 본문도 모두 남겼고 harness는 그 정확한 제목만
+기존 역사 예외 방식으로 처리한다. append-only 본문 검사는 그대로다. 날짜 삽입과
+본문 보존 영수증은 `final/integrated-journal-final-receipt.json`이다. 역사 기록의 bare CR은
+수정하지 않았으며 제품 소스 공백 검사와 구별한다.
+
+새 인식 수명 행동 검사는 held PUT/GET 두 경로에서 종료 시 AbortSignal, 후속 GET 없음,
+연결된 이전 DOM의 변경 없음까지 확인한다. 원본 2통과(3.65초), 실제 전달 변이 2실패
+(5.35초), 원본 복원 2통과(5.30초)였고 주 담당자가 현재 raw source hash와 두 변이/두 원본
+delivery hash를 직접 대조했다. UTF-16 로그는 해당 인코딩으로 읽었다. 이 증거는
+`X:\DevTemp\rosy-ui-unify\integration`에 있으며 앞선 Task 6b 변이 증거와 합산하지 않는다.
+
+주 담당자는 통합 상태의 실제 viewport 다섯 장을 직접 보았다. 카메라의 desktop dark
+저장 도구와 확대, 390px light 저장 도구는 영상 contain·읽히는 동작·확대 중 동일 정지 접근을
+유지했다. Pilot의 2000×1200과 1200×2000에서는 원본 영상과 저조도 판정 불가 안내를
+함께 확인했다. Pilot은 기존 `data-theme-pin="dark"`에 따라 두 방향 모두 실제 dark이며
+light 검사로 세지 않는다. 가로 넘침은 다섯 장 모두 0, page error는 없었다. 합성 영상과
+가짜 CORE를 사용했으며 실제 카메라 품질·온도·물리 정지의 증거는 아니다.
+
+main에서 `git merge --ff-only feat/hmi-task-layout`가 성공했고 HEAD가 `6485f8a39`와
+일치함을 확인했다. 기존 다른 세션의 untracked `list.txt`는 그대로 남았다. 소스 통합 후
+이 완료 기록을 별도 커밋하여 같은 방식으로 main에 착지한다. 원격 push·CI·배포·실물
+운용은 실행하지 않았다. 최종 화면 목록의 모든 행에는 구현/유지 이유와 scoped 검증이 있다.

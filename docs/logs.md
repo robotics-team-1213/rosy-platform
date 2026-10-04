@@ -5085,3 +5085,11 @@
 - 관측: 이전 positive 요청의 finally가 새 OFF pending을 해제하는 결함을 독립 검토에서 발견하고 owner 조건으로 보완했다. 설정·교통·Fleet의 기존 요청 본문과 확인 뒤 신선도·자격/페이지/readback 소유권을 유지했다. mobile network 카드 8px 넘침은 최소 너비를 풀어 수정했다.
 - 검증: 기존 행동 10통과, 최종 영향 host 39통과·구조 2통과와 여섯 실제 전달 RED→원본 복원 GREEN을 구별해 기록한다. 현재 네 raw source hash와 여섯 전달 hash를 주 담당자가 직접 검사했으며 대표 desktop dark 두 장·390px light 세 장의 Stop 가시성/hit, 가로 넘침·page error 0을 확인했다. 초기 Fleet cancel-count 경합은 무효로 제외하며 처음 개별 로그가 덮어써진 한계를 남긴다.
 - gate 변화: 확인 후속 SOURCE/LOCAL 근거를 추가했다. 전체 목표는 최신 main의 차선 인식·노출·원본 녹화를 보존하는 통합, 실제 source 예산·최종 quick와 로컬 착지가 남아 있다. push·CI·물리 장치·배포 증거 승격 없음.
+
+## 2026-10-04 · 6485f8a39 · docs(ui): 공용 웹 디자인 통합 검증과 로컬 main 착지
+
+- 변경: D-439 §21과 화면별 계획·최종 검증 기록. 최신 main의 원본/표시 영상 저장·노출 경고·인식 방식과 공용 작업 배치·정지 접근을 보존했다. DOM 표현 재사용으로 dashboard 9,999줄/Fleet 29,806줄을 유지하며 기존 예산을 올리지 않았다.
+- 증거: API 32통과, browser 첫 34통과/2실패 뒤 두 exact 재검사 2통과, Fleet 4통과/Pilot 4통과, 자산·역할·예산·인식 수명 24통과. root quick 최종 459통과/기존 2skip/경고 26건(127.73초), known-failure 비교 0 new/0 known. 독립 SPEC→QUALITY 통과와 주 담당자 통합 viewport 다섯 장 직접 확인.
+- gate 변화: SOURCE/LOCAL 범위의 전체 화면 목표와 로컬 main fast-forward를 완료했다. main HEAD `6485f8a39` 확인, 다른 세션의 `list.txt` 보존. push·CI·배포·장치·현장 수용은 실행하거나 승격하지 않았다.
+- 결정: 양 부모 작업 기록 일곱 파일의 본문·중복 횟수·main 순서를 보존했다. D-441 정확한 역사 제목의 두 본문만 기존 예외 방식으로 유지하며 append-only 본문 검사는 계속 적용한다. 실제 전달 인식 수명 변이 두 실패와 원본 복원 두 통과의 hash를 직접 확인했다.
+- 검증: 이전 실패·수정 재실행·기존 skip/경고를 합산하지 않는다. 첫 통합 quick 원본이 최종 runner 실행으로 덮어써진 provenance 한계와 역사 bare CR 보존을 검증 기록에 명시했다. Pilot은 기존 dark 고정에 따라 두 방향 모두 dark이며 light 증거로 세지 않는다.

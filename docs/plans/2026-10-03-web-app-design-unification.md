@@ -35,7 +35,7 @@
 | 8 | Fleet 기기 등록·카메라 설치 | `src/site/fleet/fleet/server/web/{install.html,install.js,enrollment.js,camera-pairing.js}` | `21f5dd310`·`b42bcb12a` 완료; 세 작업·재검색·보정 프리뷰와 주소 힌트/대화 owner, SPEC/QUALITY 통과 |
 | 9 | 게임 보드 | `src/site/games/games/web/{index.html,board.js,styles.css}` | `e3f2bcd06` 완료; 관측 상태와 승인 구별·마커 상세, 독립 SPEC/QUALITY·직접 화면 확인 |
 | 10 | 진단·시뮬 도구·작성 틀과 Pilot 웹 실패 화면 | `src/runtime/sensing/web/diagnostic.html`, `src/sim/gz_sim/scripts/lane_live_view.html`, `src/hmi/dashboard/styleguide.html`, `src/hmi/web_common/template.html`, `src/hmi/pilot/` | `e3f2bcd06` 완료; 모바일 배치·실제 공용 선택·미확인 거리·Pilot 재시도, PARKED 유지 |
-| 11 | 전체 회귀·최신 main 통합·로컬 병합 | 영향받는 host/browser/node 계약과 quick tier | 진행; 교정 `b42bcb12a`와 공용 확인 `5cffc885d` 완료, 최신 main 기능 보존 통합·예산·최종 quick·로컬 병합 남음 |
+| 11 | 전체 회귀·최신 main 통합·로컬 병합 | 영향받는 host/browser/node 계약과 quick tier | 완료; `6485f8a39`에서 최신 main `518edcf80` 보존 통합, 예산·영향 검사·quick 459통과/기존 2skip, 독립 SPEC→QUALITY와 로컬 main fast-forward 확인. 실제 장치·CI·배포 수용은 별도 |
 
 ### Task 1: 전체 화면 기준선과 구현 우선순위
 

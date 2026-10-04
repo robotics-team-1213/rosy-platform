@@ -922,3 +922,10 @@
 - gate 변화: SOURCE/LOCAL. 배포·실제 장치·물리 정지·FIELD 수용을 주장하지 않는다.
 - 결정: D-439 §18·§20. 확인창부터 명령·readback 완료까지 한 작업 owner를 유지하고 즉시 OFF의 새 잠금을 옛 요청이 해제하지 않는다.
 - 최종 수용: 독립 SPEC 및 QUALITY PASS, 부모가 5개 실제 viewport와 6개 delivered/source hash를 직접 확인하여 PASS. 마지막 scoped CSS 후 구조 예산 2 passed(0.96s), lint 0 errors/26 기존 warnings, diff check PASS. source/장치 gate 구분은 유지하며 소스 commit은 Git 기록을 따른다.
+
+## 2026-10-04 · 6485f8a39 · fix(ui): 영상 증거와 공용 배치의 main 통합
+
+- 변경: 원본/표시 저장·노출 경고를 확대/동일 정지/접힌 저장 도구와 함께 유지했다. 일곱 렌더러의 DOM 표현과 복귀/목록 실패 처리를 기존 소유자 안에서 재사용했다. 새 인식 PUT/GET은 종료한 화면의 조회·DOM을 바꾸지 않는다.
+- 증거: dashboard aggregate 9,999줄, 영향 browser 34통과/2실패 뒤 실제 도구 열기·초점 대기 exact 2통과, 자산/인식 수명 포함 최종 24통과. 실제 전달 수명 변이 2실패/원본 복원 2통과와 raw source/delivery hash 대조. 독립 SPEC/QUALITY와 실제 viewport 세 장 직접 확인.
+- gate 변화: SOURCE/LOCAL 통합과 main 착지 완료. 실제 영상 품질·열 관리·장치 수용은 미실행이며 합성 카메라를 사용했다.
+- 결정: D-439 §21. 크기 예산·권한·명령 소유자·REST payload는 기존 계약을 유지한다.
