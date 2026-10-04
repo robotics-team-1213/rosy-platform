@@ -57,4 +57,9 @@ def teleop(body: TeleopRequest, auth: AuthContext = Depends(operator),
     except Exception:  # noqa: BLE001 - the command is already accepted; never answer it with a 500
         svc.pilot_recording.hook_errors += 1
         _log.exception("pilot recording seat-change hook failed")
+    try:
+        svc.vision_stream.on_teleop(auth.token_id)     # D-368: driver switch evicts the stream
+    except Exception:  # noqa: BLE001 - same rule: an accepted command never 500s on a hook
+        svc.vision_stream.hook_errors += 1
+        _log.exception("driver stream seat-change hook failed")
     return {"accepted": True}

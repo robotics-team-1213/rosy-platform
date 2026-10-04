@@ -47,6 +47,7 @@ from core_features.traffic_policy import (
     TrafficPolicyMode,
 )
 from core_features.vision import VisionFrameStore
+from core_features.vision.stream import DriverStreamGate
 from core_features.swarm import SwarmManager
 from core_features.power.battery import (
     BatteryConfig,
@@ -260,6 +261,7 @@ class CoreServices:
     calibration: CalibrationSessionManager
     adapter_registry: AdapterRegistry = field(default_factory=AdapterRegistry)
     pilot_recording: PilotRecordingGuard = field(default_factory=PilotRecordingGuard)  # D-411 A
+    vision_stream: DriverStreamGate = field(default_factory=DriverStreamGate)  # D-368
     started_at: float = field(default_factory=time.time)
     # Optional absorbed Control worker, owned by the RosyCoreNode lifecycle.
     # It is populated only when the explicit sensor adapter profile is enabled.
