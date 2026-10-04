@@ -41,10 +41,9 @@ def _cell_grant_document(now):
 @pytest.fixture
 def cell_exchange(tmp_path, monkeypatch):
     monkeypatch.syspath_prepend(str(OMX_ROOT))
+    monkeypatch.syspath_prepend(str(OMX_ROOT / 'test'))
     from omx_adapter.action_api import ActionApi, action_grant_digest
-    from omx_adapter.action_runner import ActionRunner
-    from omx_adapter.action_store import ActionStore
-    from omx_adapter.local_stop import LocalStopController
+    from test_omx_action_api import _runner
 
     document = _cell_grant_document(datetime.now(timezone.utc))
     document["request_digest"] = action_grant_digest(document)
@@ -73,19 +72,8 @@ def cell_exchange(tmp_path, monkeypatch):
         def cancel(self, action):
             raise AssertionError("CELL_TRANSFER cancel goes to the exact phase goal")
 
-    store = ActionStore(tmp_path / "actions.sqlite3")
-    stop = LocalStopController(store.path, workcell_id="omx-1", instance_id="omx-1-control")
-
-    def current(epoch, generation):
-        return (epoch, generation) == (2, 8)
-
-    stop.rearm(authority_epoch=2, dispatch_generation=8, operator_confirmed=True,
-               fleet_fence_current=current)
-    runner = ActionRunner(
-        store, NoDirectDriver(), workcell_id="omx-1", instance_id="omx-1-control",
-        principal_for_peer=lambda uid: f"fleet-uid-{uid}", allowed_peer_uids={1001},
-        current_fence=current, capability_current=lambda request: True,
-        submission_fence=stop, enabled=True,
+    store, _, runner = _runner(
+        tmp_path, driver=NoDirectDriver(),
         phase_runner_factories={"CELL_TRANSFER": lambda received, recorder: (
             seen.append(received) or Phases(recorder))},
     )

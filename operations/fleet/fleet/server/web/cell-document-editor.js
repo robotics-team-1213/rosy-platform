@@ -65,8 +65,9 @@ export function renderStructuredDocument(kind, document, root, change) {
     button(root, '층 추가', draft => (draft.layers ??= []).push({pattern: 'grid'}), 'recipe-layer-add');
     const sheet = group('슬립시트 설정');
     const enabled = window.document.createElement('input'); enabled.type = 'checkbox';
+    enabled.className = 'ui-field';
     enabled.id = 'recipe-sheet-enabled'; enabled.checked = Object.hasOwn(document, 'slip_sheet');
-    const label = window.document.createElement('label'); label.textContent = '슬립시트 설정 포함';
+    const label = window.document.createElement('label'); label.className = 'ui-check'; label.textContent = '슬립시트 설정 포함';
     enabled.addEventListener('change', () => change(draft => {
       if (enabled.checked) draft.slip_sheet = draft.schema === 'rosy_cell.recipe/2' ?
         {handling: 'operator', thickness: null} : {thickness: null, station: ''};

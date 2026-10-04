@@ -10,9 +10,13 @@ import pytest
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path[:0] = [str(ROOT / part) for part in (
-    "operations/processes/palletizing/src", "operations/execution/src", "contracts/skill/src",
-    "contracts/foundation", "operations/fleet")]
+sys.path[:0] = [
+    str(ROOT / "operations/processes/palletizing/src"),
+    str(ROOT / "operations/execution/src"),
+    str(ROOT / "contracts/skill/src"),
+    str(ROOT / "contracts/foundation"),
+    str(ROOT / "operations/fleet"),
+]
 
 from fleet.server.cell_compiler import PalletizingCellJobCompiler  # noqa: E402
 from rosy.execution.site.cell_submission import compile_cell_submission  # noqa: E402

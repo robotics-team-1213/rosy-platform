@@ -70,6 +70,7 @@
 
 ## 최근 기록
 
+- 2026-10-04 · uncommitted · D-441 functional activation and CI delivery repair
 - 2026-10-04 · uncommitted · D-441 dedicated functional verification setup
 - 2026-10-04 · uncommitted · fix(camera): 시작 중 반복 부팅 보호
 - 2026-10-04 · uncommitted · fix(site): 서명된 후보의 제목·설명이 서명 상태를 말한다

@@ -1680,3 +1680,10 @@
 - 변경: 기존 goal-evidence grace reconciliation loop를 background_workers로 이동하고 app의 기존 이름과 logger를 partial로 보존했다. 실행 주기·예외 처리·dispatch 권한은 같다.
 - 증거: 깨끗한 origin/main에서 app.py 607줄의 size verdict gate 실패를 재현했다. 이동 뒤 app.py 599줄이고 동일 gate PASS. 관련 서버 app·goal-evidence 58 PASS, 독립 8개 suite 121 PASS와 이전 코드 differential trace 일치로 재검토 APPROVE.
 - gate 변화: SOURCE/LOCAL 구성 분리만 기록한다. 실제 새 이미지와 물리 수락은 별도다.
+
+
+## 2026-10-04 · uncommitted · fix(ci): preserve current admission and shared controls in regressions
+
+- 변경: CELL_TRANSFER 교환 시험에 기존 real shared-admission 도우미를 연결하고 재시작 시험은 새 owner/admission을 reopened store에 한 번만 bind한다. 기존 승인 거부·store identity·replay·직접 driver 거부·미해결 stop 검증은 유지한다. Slip sheet checkbox에 공용 field/check 클래스를 적용하고 장비 목록 조회 중 버튼에 사유를 표시한다. reset/finally에서 그 사유를 지운다.
+- 증거: 이전 두 CELL_TRANSFER 파일 18 FAIL/14 PASS를 재현했다. 수정 뒤 관련 Python 선택 94 PASS, Node 3 PASS와 독립 재검토 APPROVE. 새 runtime guard나 robot 명령은 없다.
+- gate 변화: SOURCE/LOCAL CI 복구만 기록한다. 새 이미지와 실제 UI/물리 수락은 별도다.

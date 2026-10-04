@@ -43,3 +43,10 @@
 - 증거: gain/passive 검사는 RED 후 구현했으며 host 69 passed/1 skipped, 신규 known failure 0, scoped Python lint·diff 통과. 독립 source review 후 모델 PC에서 실제 CORE auth API·단일 publisher·odom/joints/clock·applied gain/action을 관찰했다. A07은 1000 graph callback, 593 Twist receipt, 367 graph/USD target zero readback, SDK main 정상 반환·CORE/SDK exit 0·두 소유 PID 부재를 확인했다.
 - gate: I1 주행·물리 정지는 HOLD. CORE cmd_vel 만료는 약 0.4초에 zero지만 전진 추종 실패·회전 만료 후 actual yaw drift가 남았다. finite-frame 종료 후 SDK GUI callback traceback 2건과 native interrupt-close 오류도 close 반환·process 종료와 별도다. 세부 시도·hash·남은 일은 [I1 실측 기록](../../../docs/validation/cell-isaac-2026-10-04/isaac-core-drive.md)에 기록했다.
 - 교훈: command target zero를 실제 stop으로 승격하지 않는다. importer가 passive caster에 position drive를 만들 수 있으므로 actuator identity와 실제 tensor gains를 확인한다. 정상 SDK close·process 종료와 native interrupt-close 오류는 분리 기록한다.
+
+
+## 2026-10-04 · uncommitted · fix(ci): keep physics regression sources plain UTF-8
+
+- 변경: passive-caster 및 wheel-damping Python 시험의 UTF-8 BOM만 제거했다. 모델과 시험 본문은 같다.
+- 증거: main CI의 source encoding guard가 두 파일을 지목했다. 수정 뒤 source guard PASS, 두 Isaac 시험 24 PASS, 독립 byte-only 검토 APPROVE.
+- gate 변화: SOURCE/LOCAL 형식 수정이다. 새 physics/device/field 증거를 주장하지 않는다.

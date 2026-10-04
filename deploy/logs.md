@@ -2396,3 +2396,10 @@
 - Change: Add config-only viewer provisioning with protected token, existing principal and Fleet group-access preservation, signed-runtime preflight, guarded Fleet restart, atomic journal recovery and exact timer-state restoration. GET gates select durable enrolled identities and configured Vision sources; no robot command or enrollment reset.
 - Evidence: Initial plan regressions 5 failed before implementation. Isolated Linux setup tests 22 passed, with actual bytes/modes/fsync and simulated root ownership only. Checksum, concurrent-edit and principal-collision mutations each caused the intended test failure. Windows API/helper checks pass; POSIX recovery tests run separately on Linux.
 - gate 변화: SOURCE/LOCAL evidence only. Root installation and live viewer readback remain separate; listing does not establish advancing frames or physical robot acceptance. Legacy camera marker references require physical identity confirmation before roster cleanup.
+
+
+## 2026-10-04 · uncommitted · D-441 functional activation and CI delivery repair
+
+- Change: Activated the independently reviewed config-only setup with a dedicated viewer; retained existing users and enrollment. Repaired pre-existing CI blockers and removed the new setup test's BOM so exact-main CI can gate automatic signing again.
+- Evidence: Installer exit 0; viewer Fleet/Vision GET 200; two JPEG sequences advanced with 160/520ms frame ages. Enrollment readback unchanged, three managed containers healthy, timer enabled/active and no recovery journal. The following scheduled updater cycle finished idle after configured functional checks. Isolated setup 22 passed; CI repair selection 94 passed, Isaac 24 passed and Node 3 passed; independent review APPROVE with 151 Python passes, 15 explicit POSIX skips and 3 Node passes.
+- gate 변화: Config activation and read-only runtime evidence only. Remote CI/merge/new image delivery are separate. Second robot power and physical marker identity remain unverified; no motion or E-Stop reset was used.

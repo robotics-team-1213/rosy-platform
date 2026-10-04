@@ -1,4 +1,4 @@
-﻿"""Minimal-authority configuration in deploy/site/site_functional_setup.py."""
+"""Minimal-authority configuration in deploy/site/site_functional_setup.py."""
 import importlib.util
 from pathlib import Path
 import copy

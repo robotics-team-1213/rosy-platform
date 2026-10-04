@@ -82,13 +82,14 @@ export function createPeerPicker({scope, el, call, isLocked, isActive, sources, 
     snapshot = null; robots = []; pending = null;
     gate.reset();
     message('접속 후 장비 목록을 확인하세요.', 'neutral', '접속 필요');
-    retry.removeAttribute('disabled');
+    retry.removeAttribute('disabled'); retry.removeAttribute('reason');
   }
 
   async function refresh() {
     const life = scope.capture(); life.check();
     if (isLocked() || !isActive() || pending || !gate.due()) return;
     const work = {}; pending = work;
+    retry.setAttribute('reason', '장비 목록을 확인하는 중입니다.');
     retry.setAttribute('disabled', '');
     if (!snapshot) message('장비 목록을 확인하고 있습니다.', 'neutral', '불러오는 중');
     try {
@@ -111,7 +112,9 @@ export function createPeerPicker({scope, el, call, isLocked, isActive, sources, 
           : '장비 목록을 확인하지 못했습니다. 연결을 확인한 뒤 다시 찾으세요.', 'warn',
         error.status === 401 || isLocked() ? '접속 필요' : absent ? '검색 미설정' : '목록 확인 실패');
     } finally {
-      if (life.current() && pending === work) { pending = null; retry.removeAttribute('disabled'); }
+      if (life.current() && pending === work) {
+        pending = null; retry.removeAttribute('disabled'); retry.removeAttribute('reason');
+      }
     }
   }
 
