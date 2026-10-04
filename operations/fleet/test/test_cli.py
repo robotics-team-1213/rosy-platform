@@ -532,7 +532,9 @@ def test_sighting_mapping_to_an_unenrolled_robot_warns_instead_of_refusing(tmp_p
 
 
 def _pairing_files(tmp_path, monkeypatch):
-    from pairing_fixtures import conformant_site_tls
+    from test_camera_peer_routes import certificates
+
+    site_ca, served_chain, private_key = certificates('fixture-site.local', with_key=True)
 
     robots = _write(tmp_path)
     config = tmp_path / "site-cameras.yaml"
@@ -541,11 +543,11 @@ def _pairing_files(tmp_path, monkeypatch):
         "credential": "paired", "robot_ids": ["rosy_01"], "map_id": "site-v1",
         "calibration_revision": "cal-v3", "corner_marker_ids": [30, 31, 32, 33],
     }]}), encoding="utf-8")
-    ca_pem, leaf_pem = conformant_site_tls()
-    (tmp_path / "site.crt").write_text(leaf_pem + ca_pem, encoding="utf-8")
-    (tmp_path / "site.key").write_text("private-key", encoding="utf-8")
-    (tmp_path / "site-ca.crt").write_text(ca_pem, encoding="utf-8")
-    (tmp_path / "leaf-only.crt").write_text(leaf_pem, encoding="utf-8")
+    (tmp_path / "site.crt").write_text(served_chain, encoding="utf-8")
+    (tmp_path / "site.key").write_text(private_key, encoding="utf-8")
+    (tmp_path / "site-ca.crt").write_text(site_ca, encoding="utf-8")
+    (tmp_path / "leaf-only.crt").write_text(served_chain.split('-----END CERTIFICATE-----', 1)[0]
+                                           + '-----END CERTIFICATE-----\n', encoding="utf-8")
     monkeypatch.setenv("ROSY_TEST_SIGHTING_TOKEN", "source-secret")
     monkeypatch.setenv("ROSY_SITE_OPERATOR_TOKEN", "operator-secret")
     monkeypatch.setenv("ROSY_TEST_PAIRING_SYNC", "sync-" + "secret-1")
@@ -555,7 +557,6 @@ def _pairing_files(tmp_path, monkeypatch):
 
 def test_console_wires_d341_pairing_only_with_tls(tmp_path, monkeypatch):
     from core_common.protocol import pairing
-    from pairing_fixtures import LEAF_SHA256
 
     base = _pairing_files(tmp_path, monkeypatch)
     captured = {}
@@ -574,7 +575,6 @@ def test_console_wires_d341_pairing_only_with_tls(tmp_path, monkeypatch):
     assert pending["paired_sources"] == [{"source_id": "ceiling_north", "has_credential": False}]
     assert pending["site_ca_fingerprint"] == pairing.site_fingerprint(
         (tmp_path / "site-ca.crt").read_text(encoding="utf-8"))
-    # The served chain leads with exactly the configured leaf (runtime-generated pair).
     assert pairing.der_sha256((tmp_path / "leaf-only.crt").read_text(encoding="utf-8")) == pairing.der_sha256(
         (tmp_path / "site.crt").read_text(encoding="utf-8"))
 

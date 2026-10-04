@@ -21,54 +21,6 @@ LEAF_SHA256 = pairing.der_sha256(LEAF_PEM)
 TLS_HOST = "fixture-site.local"
 
 
-def conformant_site_tls():
-    """Runtime-generated RFC 5280-conformant site CA + server leaf.
-
-    The public site-link vector certs carry only BasicConstraints; the strict
-    chain verifier (cryptography>=42 ``PolicyBuilder``) requires SKI/AKI/EKU,
-    so a test that actually verifies the chain generates its own pair instead
-    of weakening the verifier. No key or literal lands in the tree.
-    """
-    from datetime import datetime, timedelta, timezone
-
-    from cryptography import x509
-    from cryptography.hazmat.primitives import hashes, serialization
-    from cryptography.hazmat.primitives.asymmetric import ec
-    from cryptography.x509.oid import ExtendedKeyUsageOID, NameOID
-
-    now = datetime.now(timezone.utc)
-    ca_key = ec.generate_private_key(ec.SECP256R1())
-    ca_name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "Rosy test site CA")])
-    ca = (x509.CertificateBuilder().subject_name(ca_name).issuer_name(ca_name)
-          .public_key(ca_key.public_key()).serial_number(x509.random_serial_number())
-          .not_valid_before(now - timedelta(days=1)).not_valid_after(now + timedelta(days=365))
-          .add_extension(x509.BasicConstraints(ca=True, path_length=0), critical=True)
-          .add_extension(x509.KeyUsage(digital_signature=False, key_encipherment=False,
-                                       content_commitment=False, data_encipherment=False,
-                                       key_agreement=False, key_cert_sign=True, crl_sign=True,
-                                       encipher_only=False, decipher_only=False), critical=True)
-          .add_extension(x509.SubjectKeyIdentifier.from_public_key(ca_key.public_key()), critical=False)
-          .sign(ca_key, hashes.SHA256()))
-    leaf_key = ec.generate_private_key(ec.SECP256R1())
-    leaf = (x509.CertificateBuilder()
-            .subject_name(x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, TLS_HOST)]))
-            .issuer_name(ca.subject).public_key(leaf_key.public_key())
-            .serial_number(x509.random_serial_number())
-            .not_valid_before(now - timedelta(days=1)).not_valid_after(now + timedelta(days=90))
-            .add_extension(x509.BasicConstraints(ca=False, path_length=None), critical=True)
-            .add_extension(x509.KeyUsage(digital_signature=True, key_encipherment=False,
-                                         content_commitment=False, data_encipherment=False,
-                                         key_agreement=False, key_cert_sign=False, crl_sign=False,
-                                         encipher_only=False, decipher_only=False), critical=True)
-            .add_extension(x509.ExtendedKeyUsage([ExtendedKeyUsageOID.SERVER_AUTH]), critical=False)
-            .add_extension(x509.SubjectAlternativeName([x509.DNSName(TLS_HOST)]), critical=False)
-            .add_extension(x509.SubjectKeyIdentifier.from_public_key(leaf_key.public_key()), critical=False)
-            .add_extension(x509.AuthorityKeyIdentifier.from_issuer_public_key(ca_key.public_key()), critical=False)
-            .sign(ca_key, hashes.SHA256()))
-    pem = lambda cert: cert.public_bytes(serialization.Encoding.PEM).decode("ascii")  # noqa: E731
-    return pem(ca), pem(leaf)
-
-
 class FakeClock:
     """Monotonic and wall clocks that move only when a test says so."""
 

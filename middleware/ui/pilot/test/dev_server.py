@@ -34,6 +34,7 @@ PILOT_MIME = {
     "client.js": "application/javascript",
     "stick.js": "application/javascript",
     "link.js": "application/javascript",
+    "peer-approval.js": "application/javascript",
     "drivers/registry.js": "application/javascript",
     "drivers/pinky_core.js": "application/javascript",
     "drivers/omx_sim.js": "application/javascript",

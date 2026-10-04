@@ -388,3 +388,9 @@
 - 변경: 같은 owner·Action SQLite에 운전석 admission과 durable Pilot pending/goal/terminal fence를 결합했다. 최종 owner admission·gripper preload를 검사하고 실제 경과 시간 만료·원래 운전석에 한정한 해제 취소·retained CLI callback을 연결했다. 응답 유실과 재시작의 미해결 Pilot intent는 HOLD다.
 - 증거: 독립 검토가 이전 운전석 preload, wall/sim 만료 차이, 지연 취소의 다음 운전석 침범을 재현했고 수정 후 원래 repro 2개와 독립 22 tests 통과. 최종 owner/Pilot/API/builder/architecture 257 passed·기존 2 skips, 부모 통합 42 passed, fast462 passed·기존2 skips·NEW0.
 - gate 변화: SOURCE/LOCAL. 실제 ROS 경합과 장치 티칭 수락은 NOT_RUN이다. 재시작 exact-goal reconciliation API 없이 미해결 intent를 자동 해제하지 않는다.
+
+## 2026-10-05 · uncommitted · fix(peer-assets): Pilot 승인 모듈 정적 경로 일치
+
+- 변경: SIM·개발 서버 allowlist에 기존 peer-approval.js를 더해 CORE와 같은 정적 자산을 제공한다. API·제어 권한·UI 구성 변경 없음.
+- 증거: test_shell_assets.py 4 passed, known_failures NEW 0.
+- gate 변화: SOURCE/LOCAL. 실제 장치·FIELD 검증은 별도다.
