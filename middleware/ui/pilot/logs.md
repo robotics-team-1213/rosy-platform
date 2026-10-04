@@ -372,3 +372,10 @@
 - gate 변화: 없음. LOCAL 합성 증거. 사람 G3 시트·실물 태블릿 관측은 다음 회차(사다리 P2와 묶음).
 - 결정: DESIGN.md 조작 면적 바닥(44px, 모든 티어). D-280·D-405 계측 규율 준수.
 - 교훈: flex 채움용 `min-width: 0`은 좁은 티어에서 터치 바닥을 무력화한다 — 되돌림은 같은 특이도 + 파일 끝 배치로만 이긴다.
+
+## 2026-10-04 · uncommitted · Android 로봇 검색 고착의 독립 복구
+
+- 변경: private bound discovery 자식 프로세스, Binder 종료 fence, STARTED 확인 전 watchdog, 쿼리별 12초 제한 및 최대 3회/5분 재시도를 적용했다. 이전 세션의 응답을 차단하되 복구 중 후보의 원래 60초 TTL과 제어 권한을 보존한다.
+- 결정: D-432 추가 결정. 중단은 검색 tick만 취소하고 종료 완료 콜백을 보존한다. 주 프로세스나 제어 세션을 검색 복구 때문에 종료하지 않는다.
+- 증거: JVM 46 PASS·APK 빌드 성공, 동일 서명 install-r 및 설치 APK SHA 일치. 실제 태블릿에서 전용 검색 자식 장애 후 부모 PID 유지·새 자식·새 IPv4 응답·목록 복구를 확인했다. 연속 다시 찾기, background 정리와 resume 재검색도 확인했다. 독립 SOURCE SPEC·Safety·QUALITY PASS.
+- gate 변화: 이 Android 발견 복구의 실제 관측만 기록한다. 로봇 CORE 접속·정지 해제·주행·장치 릴리스 수락은 별개이며 실행하지 않았다.
