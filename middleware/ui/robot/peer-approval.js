@@ -35,13 +35,13 @@ export function createReceiverApprovals({root, api, isAdmin, captureLifetime, ru
         const detail = document.createElement('p');
         detail.className = 'host-note';
         detail.textContent = `${row.client_id} · ${row.role === 'operator' ? '조작 권한' : '조회 권한'} · 키 ${row.client_key_sha256.match(/.{1,4}/g).join(' ')}`;
-        const label = document.createElement('label');
+        const label = document.createElement('label'); label.className = 'ui-check';
         const remember = document.createElement('input');
         remember.type = 'checkbox'; remember.className='ui-field'; remember.checked = true;
         label.append(remember, document.createTextNode(' 연결 기억'));
         const act = action => {
           const button = document.createElement('ui-button');
-          button.setAttribute('kind', action === 'approve' ? 'primary' : 'quiet');
+          if (action === 'approve') button.setAttribute('kind', 'primary'); else button.setAttribute('kind', 'quiet');
           button.setAttribute('type', 'button'); button.textContent = action === 'approve' ? '승인' : '거절…';
           button.addEventListener('click', async () => {
             if (deciding) return;

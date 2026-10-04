@@ -1767,3 +1767,9 @@
 - 변경: API Ref1.99 검사 핀과 페어링 overlay의 --track을 정합했다. 배경 학습을 기존 공용 확인 소유자에 연결하고 운용자 권한 안내를 표시한다. UI/UX 리팩터링 없음.
 - 증거: affected 첫 묶음 7751 PASS/8 FAIL/15 ERROR와 perception 2626 PASS/109 SKIP. 발견 항목을 정리하여 관련 130 PASS 및 공유 palette 26 PASS. 부족한 motion 계약 경로를 호스트 환경에 추가한 직접 재검사도 포함한다. Chromium 확인·취소·수명 검증 4 PASS; 나머지 이전 scope 12 PASS. 최신 깨끗한 main에서 기존 확인 테스트의 숨은 작업 탭 클릭 실패를 재현한 뒤 실제 작업 탭 선택을 먼저 하도록 검사만 수정했다.
 - gate 변화: SOURCE/LOCAL 증거만 갱신. 현장 두 등록 로봇 online 및 S21 sequence 증가를 재확인했지만 서명 배포·배경 학습·좌표 오차는 미완료이며 관리자 인증이 없는 기존 정적 설정은 보존한다.
+
+## 2026-10-05 · uncommitted · feat(fleet): 무마커 시작점 위치·방향 저장
+
+- 변경: 승인 paint-fit의 source/map/revision에 묶인 reference-only x/y/yaw를 SQLite에 저장한다. viewer 읽기·operator 저장/삭제·revision CAS·범위/finite 검증·보정 변경 무효화를 추가했다. 기존 지도에서 선택하거나 입력해 저장하고 위치·방향을 다시 표시한다. 지도 선택은 goal 클릭과 분리하며 CORE 위치·신원·주행 승인을 바꾸지 않는다.
+- 증거: 관련 API/계약·공용 UI 149 passed, known_failures 신규 0; Node 좌표·여백·무효 표시 3 passed; 실제 Chromium 선택/저장/새로고침/보정 변경·토큰 변경·occupancy 표시/선택 중 지도 변경 3 passed. 독립 읽기 검토의 좌표 형식·JSON 헤더·map 변경 지적 3건을 수정했다.
+- gate 변화: SOURCE/LOCAL. 실제 카메라 보정 승인·두 로봇 신원 연결·현장 시작 위치/방향 일치·정확한 후보 CI/서명/배포 수용은 아직 별도다. UI/UX 리팩터링과 주행 없음.
