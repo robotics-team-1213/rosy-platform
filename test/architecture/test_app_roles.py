@@ -17,11 +17,12 @@ CAMERA_APP = ROOT / "operations/ui/cam/app/src/main/java"
 VISION = ROOT / "operations/vision/rosy_vision"
 REGISTRY = ROOT / "shared/web/surfaces.yaml"
 
-# 1. Rosy Cam (ceiling camera app): no CORE API, no Fleet user API (D-341 pairing/v1 excepted),
+# 1. Rosy Cam (ceiling camera app): no CORE API, no Fleet user API (the D-341 pairing
+#    namespace is the one exception; v1 wired, v2 is the D-456 camera-peer flow),
 #    no robot motion or stop (the user decided on 2026-09-30: no stop credential).
 CAMERA_FORBIDDEN = {
     "CORE API": re.compile(r"/api/v1/"),
-    "Fleet user API": re.compile(r"/api/fleet/(?!pairing/v1)"),
+    "Fleet user API": re.compile(r"/api/fleet/(?!pairing/v\d+)"),
     "cmd_vel": re.compile(r"cmd_vel"),
     "estop": re.compile(r"estop", re.IGNORECASE),
 }

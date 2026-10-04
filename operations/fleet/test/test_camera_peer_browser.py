@@ -1,7 +1,10 @@
 """Real shared UI component fixture only; API/SQLite is covered separately, no device claims."""
 from pathlib import Path
-from playwright.sync_api import sync_playwright
 import pytest
+
+pytest.importorskip("playwright.sync_api",
+                    reason="optional Chromium regression; install playwright to run")
+from playwright.sync_api import sync_playwright
 
 ROOT=Path(__file__).resolve().parents[3]
 WEB=ROOT/'operations/fleet/fleet/server/web'
