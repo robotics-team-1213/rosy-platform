@@ -308,6 +308,26 @@ class AutoSigner:
             shutil.rmtree(old, ignore_errors=True)
 
     # -- one candidate ------------------------------------------------------
+    def _retitle_signed(self, tag: str) -> None:
+        """사람은 릴리스 목록의 제목을 읽는다(D-437 3의 취지). 서명이 붙었으면 제목과
+        설명도 그렇게 말해야 한다 — "(unsigned)" 제목과 UNSIGNED 설명은 서명 뒤에
+        남기지 않는다. 교정 실패는 서명 자체를 되돌리지 않는다: 감사에만 남긴다."""
+        try:
+            view = json.loads(self._gh("release", "view", tag, "--repo", self.repo,
+                                       "--json", "name,body"))
+            name = view.get("name") or ""
+            edits: list[tuple[str, str]] = []
+            if name.endswith(" (unsigned)"):
+                edits.append(("--title", f"{name[:-len(' (unsigned)')]} (signed)"))
+            body = view.get("body") or ""
+            if "UNSIGNED" in body:
+                edits.append(("--notes", body.replace("UNSIGNED", "SIGNED")))
+            for flag, value in edits:
+                self._gh("release", "edit", tag, "--repo", self.repo, flag, value)
+        except (RuntimeError, OSError, json.JSONDecodeError) as error:
+            self._audit({"decision": "signed", "tag": tag,
+                         "title_update": "failed", "reason": str(error)})
+
     def _sign_one(self, tag: str, state: dict) -> str:
         work = self.state_dir / "work"
         work.mkdir(parents=True, exist_ok=True)
@@ -371,6 +391,7 @@ class AutoSigner:
             return "skipped"
         self._gh("release", "upload", tag, str(folder / SIGNATURE_FILENAME),
                  "--repo", self.repo)
+        self._retitle_signed(tag)
         self._keep_signed(tag, folder)
         self._audit({"decision": "signed", "tag": tag, "source_commit": commit,
                      "manifest_sha256": result["manifest_sha256"],
