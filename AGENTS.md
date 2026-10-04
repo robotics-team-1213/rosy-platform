@@ -1,5 +1,5 @@
 <!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-02 | Updated: 2026-10-01 -->
+<!-- Generated: 2026-09-02 | Updated: 2026-10-04 -->
 
 # ROSY
 
@@ -49,11 +49,33 @@ ROSY is a robot middleware and fleet-control platform (ROS 2 Jazzy, first hardwa
 
 1. **우선순위:** 폴더 이동 > main CI 초록불 > 안전(D-430 공백) > 기능. 충돌하면 앞이 이긴다.
 2. **이동 중 경로 동결:** wave를 시작하면 그 wave의 경로(계획의 wave 표, 매니페스트 `wave:`)를 고치지 않는다. 다른 경로 작업은 계속한다. 이동 뒤 미병합 브랜치는 주인이 rebase한다.
-3. **main 체크아웃에서 작업하지 않는다.** 모든 작업은 `.worktrees/<topic>`에서 한다. main 체크아웃에 커밋 안 된 변경을 남기면 다른 세션의 fast-forward와 pre-push가 막힌다. 스테이징·착지·푸시·ADR 번호·기존 실패 비교의 공개 기준은 이 저장소 `README.md`의 「같이 하는 깃」이다. 그 명령 절차는 `.claude/skills/rosy-land-on-main/SKILL.md`다.
+3. **main 체크아웃에서 작업하지 않는다.** 모든 작업은 `.worktrees/<topic>`에서 한다. main 체크아웃에 커밋 안 된 변경을 남기면 다른 세션의 fast-forward와 pre-push가 막힌다. 스테이징·착지·푸시·ADR 번호·기존 실패 비교의 전문은 아래 「같이 하는 깃」이다. `README.md`의 같은 제목 절은 같은 착수 순서를 적는다. 명령 카드는 `.claude/skills/rosy-land-on-main/SKILL.md`다.
 4. **push 전 순서:** `git fetch` → `origin/main` 위로 rebase → `python tools/harness/rosy_harness.py generate`(생성 문서가 바뀌면 커밋) → pre-push 검사(`tools/hooks/pre-push` 목록). force-push 하지 않는다.
 5. **새 코드는 D-427 목표 경로에만 둔다.** `tools/harness/platform_parts.yaml`의 `d427_target`을 따른다. 동결된 최상위 `modules/`·`apps/`·`ui/`와 이동 예정 `src/` 아래에 새 패키지를 만들지 않는다.
 6. **구조를 바꾸는 ADR은 D-427·D-429·D-430과의 관계를 표로 적는다.** ADR 없이 새 최상위 폴더를 만들지 않는다.
 7. **safety 태그 경로**(매니페스트 `concern: safety`, `safety_modules`, `safety_anchors`)를 바꾸거나 옮기는 커밋은 `Safety-Review:` trailer와 독립 리뷰가 필요하다(D-430 §5, CI가 검사).
+
+### 같이 하는 깃
+
+여러 세션이 이 저장소의 `main` 체크아웃 하나와 git 인덱스 하나를 같이 쓴다. 이 절이 에이전트가 따라 하는 전문이다. `README.md`의 「같이 하는 깃」은 같은 착수 순서를 적고, `.claude/skills/rosy-land-on-main/SKILL.md`는 같은 명령을 카드로 반복한다. 문구를 바꿀 때는 이 절과 README의 그 절을 한 커밋에서 같이 고친다. 실험실 PC 우산 `F:\Dev\Control\Robot\Rosy\Agents.md`도 같은 절차를 적는다. 브랜치 이름과 남의 미커밋을 지우지 않는 이유는 [D-372](docs/adr/D-372-topic-branch-names-and-shared-checkout-wip.md)다. 배경은 `docs/solutions/workflow-issues/adr-numbers-collide-between-concurrent-sessions-2026-09-25.md`다.
+
+제품 파일을 고치기 전에 1번과 2번이 끝나 있어야 한다. 끝난 기준은 `git worktree list`에 자신의 `.worktrees/<짧은이름>`이 있고, 그 디렉터리의 브랜치가 `main`이 아닌 것이다.
+
+1. **작업 위치를 만든다.** 저장소 루트에서 `git status --short --branch`와 `git worktree list`를 본 다음 `git worktree add --relative-paths .worktrees/<짧은이름> -b <type>/<topic> main`을 실행한다. `<type>`은 내용과 맞는 `feat`, `fix`, `refactor`, `docs`, `uiux` 가운데 하나다(D-372). 한 브랜치에는 한 주제만 둔다. worktree는 이 저장소의 `.worktrees/`에만 둔다. `.worktrees/`는 gitignore다. 공유 `main` 체크아웃은 `git merge --ff-only`로 착지할 때만 쓴다. 거기에 커밋되지 않은 변경을 남기면 다른 세션의 fast-forward가 거절된다. 스크래치, 로그, pytest 출력은 저장소 밖에 둔다. 실험실 PC에서는 `X:\DevTemp`다. `ListAgents`가 있으면 동료와 그 소유 경로를 본다. 백그라운드 실행기는 단계마다 자기 브랜치에 커밋한다. 그 브랜치에 40분 동안 새 커밋이 없으면 디스패처가 실행기를 확인한다.
+2. **자기 경로만 스테이징한다.** `git status --short`에서 이번 작업으로 만들거나 고친 경로만 `git add <path> ...`에 적는다. `git add -A`, `git add .`, 디렉터리 단위 add는 쓰지 않는다. 인덱스 하나가 모든 세션의 것이라 넓은 add 한 번이 다른 세션의 파일을 커밋에 넣는다. 잘못된 경로 하나가 `git add` 전체를 실패시키므로, 커밋 전에 exit code를 본다. 경로 없는 커밋 전에는 `git diff --cached --name-only`가 자신의 목록과 같아야 한다. 공유 인덱스에 동료가 이미 올려 둔 경로가 있으면, 파일이 전부 자신 것일 때만 `git commit --only <자신의 경로>`를 쓴다. `--only`는 작업 트리 내용을 기록하기 때문이다. 공유 체크아웃에서 `--amend`, `rebase`, `reset --hard`, `stash`는 쓰지 않는다. 그 사이 HEAD가 동료의 커밋이 될 수 있다. `git commit -- <공유 파일>`도 쓰지 않는다. 작업 트리 전체를 가져가 동료의 행이 들어간다. 이어 쓰는 파일 `docs/reference/ROSY ADR Log.md`와 `docs/logs.md`에 동료의 미커밋 행이 있을 수 있다. 자신의 행만 `git apply --cached --unidiff-zero my-row.patch`로 올리고, `git diff --cached -- <file>`이 자신의 행만 보여 주면 끝이다. 브랜치 이름을 적는 문서는 `git branch`가 출력한 이름을 그대로 쓴다. 자신이 쓰지 않은 경로는 그대로 둔다. stash, revert, checkout, restore, reset, clean, amend, 삭제로 치우지 않는다. 루트의 추적되지 않은 `list.txt`는 로컬 메모라 커밋하지 않는다. 머지나 체크아웃이 그 파일 때문에 거절되면 파일을 그대로 두고 거절 문구를 사용자에게 알린다.
+3. **계약을 읽고 고친다.** 제품 파일을 고치기 전에 `README.md`의 「핵심 계약」과 아래 Working In This Directory를 읽는다. 외부 API, 모드, 프로토콜 필드는 SRS, API reference, ADR에 있는 것만 쓴다. 읽기가 끝난 기준은 바꾸려는 경로의 모듈 `AGENTS.md` 또는 해당 ADR을 연 것이다.
+4. **ADR 번호는 파일을 만들기 직전에 다시 고른다.** 다른 세션이 몇 분 사이에 같은 번호를 가져간다. 조회는 세 곳이다. (1) main과 작업 트리의 `docs/adr`(`ls docs/adr`. 동료의 미추적 파일 포함)와 `git for-each-ref refs/heads`의 각 브랜치(`git ls-tree -r --name-only <branch> docs/adr`). (2) `docs/reference/ROSY ADR Log.md`의 `| D-nnn |` 행. 행이 파일보다 먼저 있을 수 있다. (3) `tools/harness/harness.yaml`의 `adr_gaps`. 예약되거나 건너뛴 번호다. 빈 번호의 다음을 쓴다. ADR 파일과 Log 행은 한 커밋이다. Log는 UTF-8 BOM과 CRLF를 유지한다. 그 다음 `python tools/harness/rosy_harness.py lint`를 돌린다. 충돌로 못 쓰게 된 번호는 이유와 함께 `adr_gaps`에 넣는다.
+5. **테스트는 기존 실패와 비교한다.** 워크트리에서 관련 pytest를 돌리고 저장소 밖의 로그와 비교한다. 실험실 PC 명령은 아래다.
+
+```bash
+python -m pytest <paths> -q -rfE -p no:cacheprovider > X:/DevTemp/<name>/run.txt
+python test/known_failures.py X:/DevTemp/<name>/run.txt
+```
+
+   exit 1의 `NEW`는 깨끗한 `main` 워크트리에서 달리 확인되기 전에는 그 브랜치의 실패다. 고친 실패의 줄은 같은 커밋에서 `test/known_failures.txt`에서 뺀다. 그 브랜치가 만든 실패를 그 파일에 넣지 않는다. 호스트 pytest 통과는 장치, ARM64 이미지, 현장 수용을 대신하지 않는다.
+6. **착지와 푸시는 사용자가 말한 뒤에만 한다.** 착지는 두 단계다. (1) 워크트리에서 `git merge main`을 하고 관련 테스트를 다시 돌린 다음 `known_failures`와 비교한다. `NEW`가 있으면 브랜치에서 고치고 이 단계를 반복한다. (2) `main` 체크아웃에서 `git merge --ff-only <브랜치>`를 한다. 그 사이에 main에 새 커밋이 있으면 (1)부터 다시 한다. 착지는 `--ff-only`만 한다. `--ff-only`가 동료의 미커밋 파일을 덮어써서 거절되면 그 파일을 그대로 두고 거절 문구를 알린다. stash, checkout, 삭제로 치운 뒤 다시 시도하지 않는다. 푸시는 사용자가 푸시를 말한 뒤에만 한다. 순서는 위의 D-427 4항이다. `git fetch` 하고 `origin/main` 위로 rebase 한 뒤 `python tools/harness/rosy_harness.py generate`를 하고, 생성 문서가 바뀌면 그 변경을 커밋하고, pre-push 검사(`tools/hooks/pre-push` 목록)를 통과한 다음에 push 한다. force-push는 하지 않는다. 로컬 `main`이 `origin/main`보다 앞에 있으면 그 커밋의 CI 증거는 아직 없다.
+
+멈추는 신호는 다음이다. `git add -A`로 다른 파일까지 넣으려 할 때, `test/known_failures.py` 없이 실패를 기존 실패로 부를 때, 조금 전에 비어 보였던 ADR 번호를 다시 보지 않고 쓸 때, 동료의 변경을 stash 했다가 머지 뒤에 되돌리려 할 때, amend가 새 커밋보다 빠르다고 여길 때.
 
 ### Working In This Directory
 

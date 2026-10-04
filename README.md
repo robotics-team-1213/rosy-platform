@@ -14,11 +14,12 @@ Pinky 주행은 CORE가, OMX 팔은 장치 수용을 마친 OMX 로컬 제어기
 ## 같이 하는 깃
 
 여러 세션이 이 저장소의 `main` 체크아웃 하나와 git 인덱스 하나를 같이 쓴다.
-GitHub에 보이는 이 절이 공동작업의 공개 기준이다. 실험실 PC의 우산 문서
-`F:\Dev\Control\Robot\Rosy\Agents.md`는 이 절로 보낸다. 명령의 예외(이어 쓰는
-파일을 한 줄만 스테이징하는 방법, ADR 번호를 다시 고르는 조회)는
-[`.claude/skills/rosy-land-on-main/SKILL.md`](.claude/skills/rosy-land-on-main/SKILL.md)에
-있다. 브랜치 이름과, 남의 미커밋을 지우지 않는 이유는
+GitHub에 보이는 이 절이 착수 순서의 공개 기준이다. 같은 규칙의 명령 전문은
+`AGENTS.md`의 「같이 하는 깃」에 적는다. 문구를 바꿀 때는 두 절을 한 커밋에서
+같이 고친다. 실험실 PC의 우산 문서 `F:\Dev\Control\Robot\Rosy\Agents.md`도
+같은 절차를 적는다. 명령 카드는
+[`.claude/skills/rosy-land-on-main/SKILL.md`](.claude/skills/rosy-land-on-main/SKILL.md)다.
+브랜치 이름과, 남의 미커밋을 지우지 않는 이유는
 [D-372](docs/adr/D-372-topic-branch-names-and-shared-checkout-wip.md)다.
 
 제품 파일을 고치기 전에 1번과 2번이 끝나 있어야 한다. 끝난 기준은 `git worktree list`에
@@ -46,8 +47,8 @@ GitHub에 보이는 이 절이 공동작업의 공개 기준이다. 실험실 PC
 4. **ADR 번호는 파일을 만들기 직전에 다시 고른다.** 다른 세션이 몇 분 사이에
    같은 번호를 가져간다. `docs/adr`, ADR Log의 `| D-nnn |` 행,
    `tools/harness/harness.yaml`의 `adr_gaps`, 다른 브랜치의 `docs/adr`를 보고
-   빈 번호의 다음을 쓴다. ADR 파일과 Log 행은 한 커밋이다. 조회 명령은 위의
-   스킬에 있다.
+   빈 번호의 다음을 쓴다. ADR 파일과 Log 행은 한 커밋이다. 조회 명령은
+   `AGENTS.md`의 「같이 하는 깃」 4번에 적혀 있다.
 5. **테스트는 기존 실패와 비교한다.** 워크트리에서 관련 pytest 결과를 저장소
    밖의 `run.txt`에 남기고 `python test/known_failures.py`에 그 파일을 넘긴다.
    실험실 PC의 경로는 `X:\DevTemp\<이름>\run.txt`다. exit 1의 `NEW`는 그
