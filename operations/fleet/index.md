@@ -83,8 +83,8 @@
 
 ## 최근 기록
 
+- 2026-10-04 · uncommitted · feat(server): D-454 1단계 — 중앙 레지스트리 뷰 (/api/v1/fleet/robots)
 - 2026-10-04 · uncommitted · fix(fleet): 불확실한 YIELD 재실행 차단
 - 2026-10-04 · uncommitted · feat(fleet): D-453 양보 한 구간
 - 2026-10-04 · uncommitted · feat(fleet): D-451 한 줄 교착 알고리즘 room_hold
 - 2026-10-04 · uncommitted · fix(cell): 수동 간지 확인 전 다음 층 보류
-- 2026-10-04 · uncommitted · feat(cell): 구조화된 초안 입력 확장
