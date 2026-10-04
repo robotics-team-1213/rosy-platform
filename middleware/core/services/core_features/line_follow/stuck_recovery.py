@@ -11,6 +11,9 @@ Phases while a stuck is open:
   WAITING_CONSOLE  HOLD, console answer only (WAIT, local disabled/refused/exhausted)
   BACKING          short straight back-off at min(D-342 manual linear, recovery_back_speed)
   SETTLING         stopped ``recovery_settle_s``, then lane + front re-judged
+  TURNING          timed yaw of one YIELD segment, then the crawl (D-453)
+  CRAWLING         timed forward creep of that segment
+  YIELDED          stopped off the line; a later YIELD is the next segment
 E-stop, IDLE, line-follow OFF and driver-hold loss reach the manager's ``set_mode(OFF)``,
 which calls ``reset``: the stuck closes and nothing here can move the wheels again.
 """
@@ -29,7 +32,15 @@ ASKING = "ASKING"
 WAITING_CONSOLE = "WAITING_CONSOLE"
 BACKING = "BACKING"
 SETTLING = "SETTLING"
-DECISIONS = ("WAIT", "RESUME", "BACK_AND_RETRY", "MANUAL", "ABORT")
+TURNING = "TURNING"
+CRAWLING = "CRAWLING"
+YIELDED = "YIELDED"
+DECISIONS = ("WAIT", "RESUME", "BACK_AND_RETRY", "MANUAL", "ABORT", "YIELD")
+_TURN_RATE = 0.3          # rad/s. One yield segment turns, then creeps forward.
+_TURN_SKIP = 0.15         # rad. Smaller than this and the crawl starts at once.
+_TURN_CLEAR_M = 0.02      # clearance outside the rotation radius a turn requires
+_YIELD_MIN_M = 0.05
+_YIELD_MAX_M = 2.0
 _SOURCE = "line_follow_manager"
 
 
@@ -70,8 +81,9 @@ class StuckInput:
 
 @dataclass(frozen=True)
 class StuckAction:
-    kind: str = "pass"     # pass (base decision) | hold (zero) | back | resume
+    kind: str = "pass"     # pass (base decision) | hold (zero) | back | resume | yield
     linear: float = 0.0
+    angular: float = 0.0
 
 
 class ForwardTrail:
@@ -162,6 +174,8 @@ class StuckRecovery:
         self._attempts = 0
         self._speed = 0.0
         self._until = 0.0
+        self._angular = 0.0
+        self._yield_m = 0.0
         self._last_answer: Optional[str] = None
 
     @property
@@ -185,6 +199,9 @@ class StuckRecovery:
             self._open(inp)
         if self._phase == BACKING:
             return self._backing(inp)
+        if self._phase in (TURNING, CRAWLING, YIELDED):
+            # A finished yield stays off the paint. A cleared cause must not resume the line.
+            return self._yielding(inp)
         if self._phase == SETTLING:
             return self._settling(inp)
         if inp.cause is None:
@@ -203,15 +220,16 @@ class StuckRecovery:
 
     # ---- console ----------------------------------------------------------------
     def answer(self, now: float, stuck_id: str, decision: str, by: str,
-               principal_ref: Optional[str] = None) -> str:
-        """Apply a console answer; returns hold | back | resume | manual | idle."""
+               principal_ref: Optional[str] = None, *,
+               yield_m: Optional[float] = None, yield_turn_rad: Optional[float] = None) -> str:
+        """Apply a console answer; returns hold | back | resume | manual | idle | yield."""
         if decision not in DECISIONS:
             raise AnswerRefused("VALIDATION_ERROR", f"unknown stuck decision {decision!r}")
         if self._id is None or stuck_id != self._id:
             self._answered(stuck_id, decision, by, principal_ref, False, "stuck_id_mismatch")
             raise AnswerRefused("STUCK_ID_MISMATCH",
                                 "no open stuck with this id (late or wrong answer)")
-        why = self._answer_refusal(decision, now)
+        why = self._answer_refusal(decision, now, yield_m, yield_turn_rad)
         if why is not None:
             self._answered(stuck_id, decision, by, principal_ref, False, why,
                            evidence=self._last_or(now) if decision == "BACK_AND_RETRY" else None)
@@ -219,10 +237,15 @@ class StuckRecovery:
         self._answered(stuck_id, decision, by, principal_ref, True, None)
         self._last_answer = decision
         if decision == "WAIT":
+            if self._phase == YIELDED:
+                return "hold"                     # already off the line; do not resume later
             if self._phase == BACKING:
                 self._result("aborted", "console_wait")
             self._console_only("console_wait", now)
             return "hold"
+        if decision == "YIELD":
+            self._start_yield(self._last_or(now), now, float(yield_m), float(yield_turn_rad))
+            return "yield"
         if decision == "BACK_AND_RETRY":
             self._start_back(replace(self._last_or(now), now=now), "console")
             return "back"
@@ -231,8 +254,11 @@ class StuckRecovery:
         self._close(reason, now)
         return {"RESUME": "resume", "MANUAL": "manual", "ABORT": "idle"}[decision]
 
-    def _answer_refusal(self, decision: str, now: float) -> Optional[str]:
+    def _answer_refusal(self, decision: str, now: float, yield_m: Optional[float] = None,
+                        yield_turn_rad: Optional[float] = None) -> Optional[str]:
         last = self._last_or(now)
+        if decision == "YIELD":
+            return self._yield_refusal(last, yield_m, yield_turn_rad)
         if decision == "RESUME":
             if last.scan_age_s is None and (last.lidar_expected or self._cause == "obstacle_ahead"):
                 return "no_scan"
@@ -253,6 +279,83 @@ class StuckRecovery:
         return self._last if self._last is not None else StuckInput(now=now)
 
     # ---- local recovery ---------------------------------------------------------
+    def _yield_refusal(self, inp: StuckInput, yield_m: Optional[float],
+                       yield_turn_rad: Optional[float]) -> Optional[str]:
+        # The peer is in front until the turn finishes, so the front band is not a reason to refuse.
+        unset = yield_m is None or yield_turn_rad is None
+        if unset or not math.isfinite(yield_m) or not math.isfinite(yield_turn_rad):
+            return "yield_unset"
+        if not _YIELD_MIN_M <= yield_m <= _YIELD_MAX_M:
+            return "yield_distance"
+        if abs(yield_turn_rad) > math.pi + 1e-6:
+            return "yield_turn"
+        if inp.calibration_active:
+            return "calibration_active"
+        if not inp.geometry_known:
+            return "body_geometry_unset"
+        if inp.scan_age_s is None:
+            return "no_scan"
+        if inp.scan_age_s > self._config.clearance_stale_s:
+            return "scan_stale"
+        if min(inp.linear_ceiling, self._config.recovery_back_speed) <= 0.0:
+            return "linear_limit_zero"
+        if abs(yield_turn_rad) > _TURN_SKIP and (inp.turn_m is None or inp.turn_m < _TURN_CLEAR_M):
+            return "turn_blocked"
+        return None
+
+    def _start_yield(self, inp: StuckInput, now: float, yield_m: float, yield_turn_rad: float) -> None:
+        self._speed = min(inp.linear_ceiling, self._config.recovery_back_speed)
+        self._yield_m = yield_m
+        self._deadline = None
+        if abs(yield_turn_rad) > _TURN_SKIP:
+            self._phase = TURNING
+            self._angular = math.copysign(_TURN_RATE, yield_turn_rad)
+            self._until = now + abs(yield_turn_rad) / _TURN_RATE
+        else:
+            self._phase = CRAWLING
+            self._angular = 0.0
+            self._until = now + yield_m / self._speed
+
+    def _yielding(self, inp: StuckInput) -> StuckAction:
+        if self._phase == YIELDED:
+            return StuckAction("hold")
+        why = self._yield_live_refusal(inp)
+        if why is not None:
+            self._result("aborted", why, inp=inp)
+            self._console_only("local_aborted", inp.now)
+            return StuckAction("hold")
+        if self._phase == TURNING:
+            if inp.now >= self._until:
+                self._phase = CRAWLING
+                self._angular = 0.0
+                self._until = inp.now + self._yield_m / self._speed
+                return StuckAction("hold")
+            return StuckAction("yield", 0.0, self._angular)
+        if inp.now >= self._until:
+            self._phase = YIELDED
+            self._angular = 0.0
+            return StuckAction("hold")
+        return StuckAction("yield", self._speed, 0.0)
+
+    def _yield_live_refusal(self, inp: StuckInput) -> Optional[str]:
+        if inp.calibration_active:
+            return "calibration_active"
+        if not inp.geometry_known:
+            return "body_geometry_unset"
+        if inp.scan_age_s is None:
+            return "no_scan"
+        if inp.scan_age_s > self._config.clearance_stale_s:
+            return "scan_stale"
+        if self._phase == TURNING and (inp.turn_m is None or inp.turn_m < _TURN_CLEAR_M):
+            return "turn_blocked"
+        if self._phase == CRAWLING:
+            stop = self._config.sector_stop_m if inp.front_stop_m is None else inp.front_stop_m
+            if inp.front_band_m is not None and inp.front_band_m < stop:
+                return "object_within_stop_distance"
+            if self._speed <= 0.0:
+                return "linear_limit_zero"
+        return None
+
     def _back_refusal(self, inp: StuckInput, starting: bool = True) -> Optional[str]:
         config = self._config
         if inp.calibration_active:

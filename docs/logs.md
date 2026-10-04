@@ -5237,3 +5237,9 @@
 - 변경: `docs/adr/D-451-fleet-lane-meet-decider.md` 와 ADR Log 행. 만나는 양보는 `operations/fleet/fleet/meet` 만 고르고, 로봇은 그 주문 하나를 실행하거나 CORE 재검사로 거부한다. `room_hold`·`wait_both` 와 260919 `track_v2` 숫자를 고정했다. D-448·D-449·D-450 은 다른 브랜치 번호라 `adr_gaps` 에 남겼다.
 - 증거: `operations/fleet/test/test_meet_algorithms.py`. 호스트 판단 시험. CORE 전달과 실차는 없다.
 - gate 변화: 없음. SOURCE/LOCAL 판단 시험. DEVICE·ROS-SIM·FIELD 승격 아님.
+
+## 2026-10-04 · uncommitted · feat(fleet): D-453 양보 한 구간
+
+- 변경: D-451 주문 하나를 기존 `POST /api/v1/line-follow/stuck/decision` 의 `YIELD` 한 구간으로 보낸다. CORE 는 회전을 확인한 뒤 앞으로만 기어 가고, 끝나면 선으로 돌아가지 않는다. 운용자 Fleet 경로의 다섯 단어는 그대로다. ADR `docs/adr/D-453-yield-one-segment.md`. D-452 는 integrate/ui-ship 번호라 `adr_gaps` 에 남겼다.
+- 증거: `operations/fleet/test/test_meet_place.py`, `test_stuck_resolver.py`, `test_transport.py`, `test_meet_algorithms.py`, `middleware/core/services/test/test_line_stuck_recovery.py`, `middleware/core/gateway/test/test_line_follow_stuck_api.py`.
+- gate 변화: 없음. 호스트 판단 시험. 장치·ROS-SIM 은 주장하지 않는다.

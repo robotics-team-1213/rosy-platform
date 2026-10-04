@@ -1606,3 +1606,9 @@
 - 변경: `operations/fleet/fleet/meet` 에 장면·주문·이름 등록과 `room_hold`·`wait_both`·`track_v2` 를 넣었다. 고리 같은 방향은 서지 않고, 찬 방의 문은 빼며, 핀이 비키는 쪽을 유지하고, 방 안은 `WAIT` 다. 콘솔·차선 추종·stuck 판단기에는 연결하지 않았다.
 - 증거: `operations/fleet/test/test_meet_algorithms.py`.
 - gate 변화: 없음. 호스트 판단 시험. 주문은 아직 바퀴로 나가지 않는다.
+
+## 2026-10-04 · uncommitted · feat(fleet): D-453 양보 한 구간
+
+- 변경: 판단기가 차선에 올린 자세로 `room_hold` 를 부르고, `SIDESTEP`·`RETREAT` 한 구간을 로봇 `YIELD` 로 직접 보낸다. 핀과 돌리기 전의 정책 방향은 판단기에 둔다. 운용자 경로에는 `YIELD` 를 넣지 않았다.
+- 증거: `operations/fleet/test/test_meet_place.py`, `test_stuck_resolver.py`, `test_transport.py`, `test_meet_algorithms.py`.
+- gate 변화: 없음. 호스트 판단 시험. 장치·ROS-SIM 은 주장하지 않는다.

@@ -38,6 +38,9 @@ class Answer:
     stuck_id: str
     decision: str
     rule: str
+    # D-453: one yield segment. None on WAIT / BACK_AND_RETRY / RESUME.
+    yield_m: Optional[float] = None
+    yield_turn_rad: Optional[float] = None
 
 
 @dataclass(frozen=True)
@@ -83,11 +86,23 @@ def _pose_of(row: Mapping) -> Optional[tuple[float, float, float]]:
         return None
 
 
+class _YieldPlan:
+    """Policy direction of a yielder. The manoeuvre yaw is not a new meet heading."""
+
+    def __init__(self, edge_id: str, direction: int, action: str,
+                 room_id: Optional[str], s_m: Optional[float]) -> None:
+        self.edge_id, self.direction, self.action = edge_id, direction, action
+        self.room_id, self.s_m = room_id, s_m
+
+
 class StuckResolver:
     def __init__(self, config: ResolverConfig) -> None:
         self.config = config
         self._chains: dict[str, _Chain] = {}
         self._claims: set[tuple[str, str]] = set()
+        self._pins: dict[str, str] = {}
+        self._plans: dict[str, _YieldPlan] = {}
+        self._sent_yield: dict[str, tuple] = {}
 
     # ---- inputs -----------------------------------------------------------------------
 
@@ -100,6 +115,9 @@ class StuckResolver:
         if chain is None:
             chain = self._chains[answer.robot_id] = _Chain(started_at=now, mode="")
         chain.answered.add(answer.stuck_id)
+        if answer.decision == "YIELD" and answer.yield_m is not None:
+            self._sent_yield[answer.robot_id] = (
+                answer.stuck_id, round(answer.yield_turn_rad or 0.0, 3), round(answer.yield_m, 3))
         if answer.rule.startswith("R") and chain.retries.get(answer.stuck_id, 0) == 0:
             chain.rule_answers += 1                   # a transport resend is the same answer
         if answer.decision == "RESUME":
@@ -174,13 +192,17 @@ class StuckResolver:
         if now - chain.started_at > self.config.escalate_after_s:
             return self._escalate(chain, rid, sid, "deadline")
         if sid in chain.answered:
-            return None
+            return self._next_segment(row, rows)
         rule = self._rule(row, stuck, rows, chain)
+        if rule is not None and rule[1] == "ESCALATE":
+            return self._escalate(chain, rid, sid, "meet")
         if rule is None:
             return self._escalate(chain, rid, sid, "no_rule")
         # §5: the one transport resend repeats an answer already counted; never block it.
         if chain.rule_answers >= self.config.rule_budget and chain.retries.get(sid) != 1:
             return self._escalate(chain, rid, sid, "rule_budget")
+        if len(rule) == 4:
+            return Answer(rid, sid, rule[1], rule[0], yield_m=rule[3], yield_turn_rad=rule[2])
         return Answer(rid, sid, rule[1], rule[0])
 
     def _escalate(self, chain: _Chain, rid: str, sid: str, reason: str) -> Escalate:
@@ -194,6 +216,10 @@ class StuckResolver:
         can_back = (bool(stuck.get("local_enabled"))
                     and int(stuck.get("attempts") or 0) < int(stuck.get("max_attempts") or 0))
         peer = cause == "obstacle_ahead" and self._peer_ahead(row, rows)
+        if peer and "meet" not in chain.retired:
+            meet = self._meet(row, rows)
+            if meet is not None:
+                return meet
         candidates = []
         if peer:
             candidates.append(("R1", "WAIT"))
@@ -207,6 +233,102 @@ class StuckResolver:
             if rule[0] not in chain.retired:
                 return rule
         return None
+
+    def _next_segment(self, row, rows) -> Optional[Answer]:
+        """The robot finished one segment and is holding off the resume path."""
+        stuck = _stuck_of(row)
+        if stuck is None or stuck.get("phase") != "YIELDED":
+            return None
+        meet = self._meet(row, rows)
+        if meet is None or len(meet) != 4:
+            return None
+        rid = str(row["robot_id"])
+        key = (str(stuck["stuck_id"]), round(meet[2], 3), round(meet[3], 3))
+        if self._sent_yield.get(rid) == key:
+            return None
+        return Answer(rid, str(stuck["stuck_id"]), "YIELD", "meet", yield_m=meet[3], yield_turn_rad=meet[2])
+
+    def _meet(self, row, rows):
+        """room_hold for poses on the painted track. None keeps R1/R2/R3."""
+        from fleet.meet import decide
+        from fleet.meet.place import painted_track, project, yield_move
+        from fleet.meet.scene import Action, Order, Pin, Robot
+
+        me = _pose_of(row)
+        if me is None:
+            return None
+        painted = painted_track()
+        rid = str(row["robot_id"])
+        placed: dict[str, object] = {}
+        robots: list[Robot] = []
+        for other in rows:
+            if not other.get("online", True):
+                continue
+            pose = _pose_of(other)
+            if pose is None:
+                continue
+            place = project(painted, pose[0], pose[1], pose[2])
+            if place is None:
+                continue
+            oid = str(other["robot_id"])
+            placed[oid] = place
+            plan = self._plans.get(oid)
+            if place.room_id:
+                self._plans.pop(oid, None)
+                plan = None
+            if plan is not None and place.edge_id == plan.edge_id:
+                direction, trusted = plan.direction, True
+            else:
+                direction, trusted = place.direction, place.trusted
+            robots.append(Robot(oid, place.edge_id, place.s_m, direction, trusted, room_id=place.room_id))
+        mine = placed.get(rid)
+        if mine is None or not any(other != rid for other in placed):
+            return None
+        pins = tuple(Pin(edge_id, yielder) for edge_id, yielder in self._pins.items())
+        scene = painted.scene(tuple(robots), pins)
+        orders = decide("room_hold", scene)
+        self._keep_pins(scene, orders)
+        order = next(item for item in orders if item.robot_id == rid)
+        if order.action is Action.ESCALATE:
+            self._plans.pop(rid, None)
+            return ("meet", "ESCALATE")
+        plan = self._plans.get(rid)
+        if order.action in (Action.SIDESTEP, Action.RETREAT):
+            robot = next(item for item in robots if item.id == rid)
+            self._plans[rid] = _YieldPlan(
+                order.edge_id or robot.edge_id or "", robot.direction, order.action.value,
+                order.room_id, order.s_m)
+            move = yield_move(mine, order, painted)
+        elif plan is not None and mine.edge_id == plan.edge_id:
+            move = yield_move(mine, Order(
+                rid, Action(plan.action), room_id=plan.room_id, edge_id=plan.edge_id, s_m=plan.s_m,
+            ), painted)
+        else:
+            self._plans.pop(rid, None)
+            move = None
+        if move is None:
+            return ("meet", "WAIT")
+        return ("meet", "YIELD", move[0], move[1])
+
+    def _keep_pins(self, scene, orders) -> None:
+        from fleet.meet.scene import Action, closing
+
+        kept: dict[str, str] = {}
+        for line in scene.edges:
+            group = [robot for robot in scene.robots if robot.edge_id == line.id]
+            if len(group) != 2:
+                continue
+            pair = closing(group[0], group[1])
+            if pair is None:
+                continue
+            ids = {pair[0].id, pair[1].id}
+            chosen = next((order.robot_id for order in orders
+                           if order.robot_id in ids and order.action in (Action.SIDESTEP, Action.RETREAT)), None)
+            if chosen is None and self._pins.get(line.id) in ids:
+                chosen = self._pins[line.id]
+            if chosen is not None:
+                kept[line.id] = chosen
+        self._pins = kept
 
     def _peer_ahead(self, row, rows) -> bool:
         me = _pose_of(row)

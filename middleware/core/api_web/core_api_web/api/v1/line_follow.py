@@ -90,10 +90,15 @@ class LineFollowModeRequest(BaseModel):
 
 
 class LineStuckDecisionRequest(BaseModel):
-    """D-407 §2: the console's answer to one open stuck, bound to its id."""
+    """D-407 §2: the console's answer to one open stuck, bound to its id.
+
+    YIELD (D-453) is one checked segment: turn `yield_turn_rad`, then creep `yield_m`.
+    """
 
     stuck_id: str = Field(min_length=1, max_length=64)
-    decision: str = Field(pattern="^(WAIT|RESUME|BACK_AND_RETRY|MANUAL|ABORT)$")
+    decision: str = Field(pattern="^(WAIT|RESUME|BACK_AND_RETRY|MANUAL|ABORT|YIELD)$")
+    yield_m: Optional[float] = None
+    yield_turn_rad: Optional[float] = None
 
 
 def _status(svc: CoreServicesLike) -> dict:
@@ -189,20 +194,25 @@ def hold_line_follow(auth: AuthContext = Depends(operator),
 def decide_line_stuck(body: LineStuckDecisionRequest,
                       auth: AuthContext = Depends(require_grant(STUCK_DECIDE)),
                       svc: CoreServicesLike = Depends(get_services)):
-    """D-407 §2: WAIT | RESUME | BACK_AND_RETRY | MANUAL | ABORT for the open stuck id."""
+    """D-407 §2 / D-453: WAIT | RESUME | BACK_AND_RETRY | MANUAL | ABORT | YIELD."""
     if body.decision == "MANUAL" and auth.role == "stuck_resolver":
         raise ApiError("FORBIDDEN", 403, "MANUAL is a human decision (D-438)")
-    if body.decision in ("RESUME", "BACK_AND_RETRY", "MANUAL"):
+    if body.decision == "YIELD" and (body.yield_m is None or body.yield_turn_rad is None):
+        raise ApiError("VALIDATION_ERROR", 400, "YIELD needs yield_m and yield_turn_rad")
+    if body.decision != "YIELD" and (body.yield_m is not None or body.yield_turn_rad is not None):
+        raise ApiError("VALIDATION_ERROR", 400, "yield_m and yield_turn_rad belong to YIELD")
+    if body.decision in ("RESUME", "BACK_AND_RETRY", "MANUAL", "YIELD"):
         # Answers that move the wheels (or hand them to a driver, MANUAL) respect the
         # calibration lease like POST /mode does; checked before the stuck is consumed.
         # WAIT holds and ABORT goes to IDLE, so they stay open like e-stop.
         require_calibration_owner(svc, auth, "line-follow stuck decision")
-    if body.decision in ("RESUME", "BACK_AND_RETRY") and (
+    if body.decision in ("RESUME", "BACK_AND_RETRY", "YIELD") and (
             svc.safety.estop or svc.modes.is_emergency):
         raise ApiError("EMERGENCY_ACTIVE", 409, "release emergency stop first")
     try:
         outcome = svc.line_follow.stuck_decision(
-            body.stuck_id, body.decision, by=auth.role, principal_ref=auth.principal_ref)
+            body.stuck_id, body.decision, by=auth.role, principal_ref=auth.principal_ref,
+            yield_m=body.yield_m, yield_turn_rad=body.yield_turn_rad)
     except LineStuckRefused as exc:
         raise ApiError(exc.code, 409, str(exc)) from exc
     if outcome in ("manual", "idle"):

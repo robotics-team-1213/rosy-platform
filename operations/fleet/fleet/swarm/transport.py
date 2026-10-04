@@ -124,7 +124,11 @@ class RobotClient(Protocol):
     ) -> dict: ...
 
     async def line_follow_mode(self, mode: str) -> dict: ...
-    async def line_stuck_decision(self, stuck_id: str, decision: str) -> dict: ...
+
+    async def line_stuck_decision(self, stuck_id: str, decision: str, *,
+                                  yield_m: float | None = None,
+                                  yield_turn_rad: float | None = None) -> dict: ...
+
     async def estop(self) -> dict: ...
     # D-395 Phase 2 (contract §2): Fleet-assisted localization.
     async def localization_candidates(self) -> Optional[CandidateReport]: ...
@@ -259,10 +263,16 @@ class HttpRobotClient:
             "/api/v1/line-follow/mode", json={"mode": mode}, headers=self._headers()
         ))
 
-    async def line_stuck_decision(self, stuck_id: str, decision: str) -> dict:
-        """D-407 §2: the operator's answer to one open stuck. CORE judges it (409 on refusal)."""
-        return await self._post("/api/v1/line-follow/stuck/decision",
-                                {"stuck_id": stuck_id, "decision": decision})
+    async def line_stuck_decision(self, stuck_id: str, decision: str, *,
+                                  yield_m: float | None = None,
+                                  yield_turn_rad: float | None = None) -> dict:
+        """D-407 §2: one stuck answer. YIELD carries one checked segment (D-453)."""
+        body: dict = {"stuck_id": stuck_id, "decision": decision}
+        if yield_m is not None:
+            body["yield_m"] = yield_m
+        if yield_turn_rad is not None:
+            body["yield_turn_rad"] = yield_turn_rad
+        return await self._post("/api/v1/line-follow/stuck/decision", body)
 
     async def estop(self) -> dict:
         return await self._post("/api/v1/safety/stop")

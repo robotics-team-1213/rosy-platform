@@ -169,6 +169,22 @@ def test_line_stuck_decision_posts_the_id_and_answer_and_keeps_cores_refusal():
     assert exc.value.message == "no open stuck with this id"
 
 
+def test_yield_posts_one_segment_and_a_plain_answer_does_not():
+    seen = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["body"] = json.loads(request.content)
+        return httpx.Response(200, json={"outcome": "yield"})
+
+    client = _client(handler)
+    assert run(client.line_stuck_decision(
+        "stuck-1", "YIELD", yield_m=0.32, yield_turn_rad=-1.2))["outcome"] == "yield"
+    assert seen["body"] == {"stuck_id": "stuck-1", "decision": "YIELD",
+                            "yield_m": 0.32, "yield_turn_rad": -1.2}
+    run(client.line_stuck_decision("stuck-1", "WAIT"))
+    assert seen["body"] == {"stuck_id": "stuck-1", "decision": "WAIT"}
+
+
 def test_socket_urls_point_at_the_robot_without_the_token():
     c = _client(lambda r: httpx.Response(200, json={}))
     assert c.pose_url() == "ws://robot:8080/ws/swarm/pose"

@@ -342,7 +342,7 @@ def test_a_human_claim_keeps_the_escalation_reason():
 
 
 class _HangingRobot(FakeRobot):
-    async def line_stuck_decision(self, stuck_id, decision):
+    async def line_stuck_decision(self, stuck_id, decision, **_extra):
         self._record("line_stuck_decision", stuck_id, decision)
         await asyncio.Event().wait()
 

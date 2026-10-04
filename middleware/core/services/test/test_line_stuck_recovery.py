@@ -113,6 +113,52 @@ def test_resume_refused_with_an_object_inside_stop_distance():
     assert bus.named("nav.line_stuck_closed")[0]["reason"] == "console_resume"
 
 
+def test_yield_turns_then_creeps_and_holds_when_the_cause_clears():
+    machine, _bus = _machine()
+    machine.step(_inp(0.0, turn_m=0.10, front_band_m=0.10))
+    assert machine.answer(1.0, "stuck-1", "YIELD", "stuck_resolver",
+                          yield_m=0.30, yield_turn_rad=0.6) == "yield"
+    turning = machine.step(_inp(1.1, turn_m=0.10, front_band_m=0.10))
+    assert (turning.kind, turning.linear) == ("yield", 0.0)
+    assert turning.angular == pytest.approx(0.3)
+    assert machine.step(_inp(1.2, cause=None, turn_m=0.10)).kind == "yield"
+    assert machine.stuck_id == "stuck-1"
+    assert machine.step(_inp(3.0, turn_m=0.10, front_band_m=0.40)).kind == "hold"
+    assert machine.phase == "CRAWLING"
+    creeping = machine.step(_inp(3.1, front_band_m=0.40))
+    assert creeping.linear == pytest.approx(0.03) and creeping.angular == 0.0
+    assert machine.step(_inp(13.0, cause=None, front_band_m=0.40)).kind == "hold"
+    assert machine.phase == "YIELDED" and machine.stuck_id == "stuck-1"
+
+
+def test_yield_refuses_a_turn_without_clearance_but_not_the_peer_in_front():
+    blocked, _bus = _machine()
+    blocked.step(_inp(0.0, turn_m=None, front_band_m=0.10))
+    with pytest.raises(AnswerRefused) as refused:
+        blocked.answer(1.0, "stuck-1", "YIELD", "stuck_resolver", yield_m=0.30, yield_turn_rad=0.6)
+    assert "turn_blocked" in str(refused.value)
+    clear, _bus = _machine()
+    clear.step(_inp(0.0, turn_m=0.10, front_band_m=0.10))
+    assert clear.answer(1.0, "stuck-1", "YIELD", "stuck_resolver",
+                        yield_m=0.30, yield_turn_rad=0.6) == "yield"
+
+
+def test_yield_crawl_stops_inside_the_stop_distance_and_the_next_segment_can_start():
+    machine, _bus = _machine()
+    machine.step(_inp(0.0, front_band_m=0.40))
+    machine.answer(1.0, "stuck-1", "YIELD", "stuck_resolver", yield_m=0.30, yield_turn_rad=0.0)
+    assert machine.step(_inp(1.1, front_band_m=0.05)).kind == "hold"
+    assert machine.phase == "WAITING_CONSOLE"
+    again, _bus = _machine()
+    again.step(_inp(0.0, turn_m=0.10, front_band_m=0.40))
+    again.answer(1.0, "stuck-1", "YIELD", "stuck_resolver", yield_m=0.30, yield_turn_rad=0.0)
+    again.step(_inp(11.0, turn_m=0.10, front_band_m=0.40))
+    assert again.phase == "YIELDED"
+    assert again.answer(12.0, "stuck-1", "YIELD", "stuck_resolver",
+                        yield_m=0.32, yield_turn_rad=0.4) == "yield"
+    assert again.phase == "TURNING"
+
+
 def test_resume_refused_on_a_stale_scan():
     machine, _ = _machine()
     machine.step(_inp(0.0, scan_age_s=2.0))
