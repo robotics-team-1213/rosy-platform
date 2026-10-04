@@ -2235,3 +2235,10 @@
 - 변경: GitHub CLI 표준 출력과 오류 출력을 UTF-8로 읽는다. 한국어 Windows 기본 cp949 때문에 정상 출처 증명을 영구 거절하는 문제를 보정했다.
 - 증거: 실제 GitHub 출처 증명에서 cp949 디코딩 오류를 재현했다. 실제 자식 프로세스의 UTF-8 JSON·오류 출력을 읽는 회귀가 기존 코드에서 RED, 수정 후 자동 서명 suite 16 passed다. Linux 관련 suite 78 passed/0 skipped. 수정 코드로 실제 GitHub manifest digest와 main 계보 검증이 통과했다. 검증 중 서명·업로드는 수행하지 않았다. X:/DevTemp/rosy-autosign-provenance-preflight/receipt.json, X:/DevTemp/rosy-rereview-linux-encoding-final.txt.
 - gate 변화: 기존 gate 유지. push를 중단하고 수정본 독립 검토와 필수 push 검사를 다시 진행한다. 예약 작업은 검토한 수정본 배치 전까지 비활성화했다.
+
+
+## 2026-10-04 · uncommitted · fix: Windows SSH timeout 종료 경합
+
+- 변경: 두 Windows 검증 helper에서 taskkill 오류는 추적 프로세스 종료가 확인된 때만 시간 초과로 유지한다. 살아 있는 프로세스의 native 오류와 silent nonzero는 다시 throw하며 HOLD·재실행 금지를 보존한다.
+- 증거: Windows 원본 검증과 종료 경합 시험 22 passed; 독립 실행 22 passed, APPROVE. docs/validation/d427-source-migration/windows-ssh-timeout-cleanup-2026-10-04.md.
+- gate 변화: SOURCE/LOCAL Windows PowerShell 5.1. 기존 push gate는 1 failed이며 수정 후보 전체 gate·CI·ARM64·DEVICE·FIELD는 별도 검증한다.
