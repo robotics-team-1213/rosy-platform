@@ -5297,6 +5297,18 @@
 - Evidence: Perception marker/dock suites 32 passed; architecture suites 51 passed. Independent review found no production safety regression; two stale tuning assertions were corrected and rerun. Fast contract validation is recorded in the integration receipt.
 - gate 변화: None. This Git integration does not activate devices or establish release/field acceptance.
 
+## 2026-10-04 · uncommitted · D-427 wave5 remote CI and ARM64 artifacts
+
+- 변경: 소스 1722ca6ec6d7의 실제 원격 push, 전체 GitHub CI, native/SD 035 산출물 검증과 남은 수용 조건을 기록했다. 제품 runtime·계약·manifest·시험 판정은 바꾸지 않았다.
+- 증거: push12 fast462 passed/2 skipped, mapped3667 passed/151 skipped·NEW0; GitHub 10matrix+scope+ci-result 모두 SUCCESS. 실제 ARM64 native/SD build28 packages 각각 SUCCESS. native 실제2547manifest/2548SUMS·독립 APPROVE; SD ZIP/외부14SUMS/전체XZ12869835264bytes·metadata21검사·독립 APPROVE. 공개 문서 배치/출판9 passed. docs/validation/d427-source-migration/wave5-arm64-artifact-verification-2026-10-04.md.
+- gate 변화: 없음. unsigned SD mounted verifier의 shape/config 검사와 서명·full factory SUMS·기기 부팅을 구분했다. 실제 prepare는 canary ABI SSH255 timeout으로 exit1, 서명·발행 전 종료했다. site PC NOT_RUN, peer 실제 delivery NOT_SENT, device/field 미검증이다. firmware S7은 다음 개정이며 flash·motion·E-Stop reset을 실행하지 않았다.
+
+## 2026-10-04 · uncommitted · D-441 local update follow-up design
+
+- 변경: 사용자 요청에 따라 수동 서명 설치 기록 동기화, 잠금 기반 보류/재개, 실행 설정 비교, 정확한 main CI 승인 후 서명, 선택적 Fleet/Vision 기능 검사 설계와 실행 계획을 기록했다. D-427 소스 소유권과 D-430 구동 권한을 변경하지 않는다.
+- 증거: 원본 updater 신규 사례 10개 RED, 원본 signer CI 사례 8개 RED; 수정본 격리 Linux 108 passed/0 skipped. 별도 생성 후 미실행 컨테이너의 Compose hash 일치와 명령 변경 감지를 실측했다. 현장 서비스는 전환하지 않았다.
+- gate 변화: 없음. 신규 설치·후보 CI·실제 프레임 수신은 별도 운영 검증이다.
+
 
 ## 2026-10-04 · uncommitted · fix: resolve hook installation through Git
 
@@ -5310,9 +5322,19 @@
 - Change: Normalize CRLF while installing pre-push from a Windows checkout. Keep the previous same-file refusal before output redirection, including tracked core.hooksPath layouts, to preserve source bytes.
 - Evidence: Real Windows installation exposed a byte mismatch; three forced-CRLF regressions failed before correction. Linux hook suite 8 passed after correction, including Bash parsing and tracked-source/config/ref preservation. Independent review approved the follow-up.
 - gate 변화: None. The live hook was restored to the exact published LF bytes and syntax-checked; device source switching remains guarded.
+<<<<<<< HEAD
 
 ## 2026-10-04 · uncommitted · D-450 Cell 초안 편집과 수동 슬립시트 선택
 
 - 변경: 구조 편집 계획과 작업자 삽입·확인 후 다음 층 진행 계획을 추가하고 D-450에 사용자 선택을 부록으로 남겼다. 수동 슬립시트는 canonical checkpoint로 정의하며 일반 resume 우회를 금지한다.
 - 증거: 구조 편집 Chromium 및 Cell API/store/job 23 통과, 독립 UI 검토 승인. 수동 checkpoint는 설계이며 구현·ROS-SIM·물리 작업자 접근 증거는 NOT_RUN이다.
 - gate 변화: G1 초안 편집만 보강했다. G1 티칭·G2 전체 fault matrix·G3·Isaac 실제 주행 수용은 미완료다.
+=======
+
+
+## 2026-10-04 · uncommitted · D-427 wave5 signed native and actual offline SD readback
+
+- 변경: 소스 1722ca6ec6d7의 후보035 실제 ABI·서명·pack, SD image 내부 factory 전체 파일 bytes, site PC 실제 identity·dry-run·sudo 제약을 새 frozen 증거로 기록했다. 앞선 unsigned 기록과 제품 runtime은 유지한다.
+- 증거: 기존 ABI gate 공통314개 일치/불일치0/release-only28; signed tar2879members·2548SUMS·독립 APPROVE. SD readonly debugfs 실제 exit0 후2547manifest/2548SUMS와 native·SD Python/JS743개 실제 bytes 일치·독립 APPROVE. 실제 readonly SSH hostname/status exit0·current033/candidate null/idle. docs/validation/d427-source-migration/wave5-signed-and-offline-readback-2026-10-04.md.
+- gate 변화: 없음. 발행·자동 활성화·canary/secondary035 readback은 미완료이고 사용 세션 조율이 남았다. SD unsigned와 ELF 실행 동등성·부팅·FIELD는 별도다. site PC installer5files 일치/dry-run0이나 sudo 인증 거절로 실제 설치NOT_RUN; peer delivery NOT_SENT; firmwareS7 다음 개정/no flash·motion·E-Stop reset.
+>>>>>>> main

@@ -72,6 +72,7 @@
 
 - 2026-10-04 · uncommitted · feat(omx): 정본 G2 격리 실행기
 - 2026-10-04 · uncommitted · fix: protect the full model-PC code closure
+- 2026-10-04 · uncommitted · D-441 local maintenance and manual install safety
 - 2026-10-04 · uncommitted · verify(D-441): 최초 설치와 실제 후속 자동 갱신 확인
 - 2026-10-04 · uncommitted · D-446 clean older checkout permits signed execution
 - 2026-10-04 · uncommitted · D-446 remote integration after source migration
