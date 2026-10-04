@@ -606,6 +606,26 @@ class FleetConsole:
         """A robot that reported localization and is null inside its grace (a CORE restart)."""
         return self._loc_null_since.get(robot_id) is not None
 
+    async def trusted_map_pose(self, robot_id: str) -> Optional[tuple[float, float]]:
+        """Fresh pose only when this snapshot is LOCALIZED in the map frame.
+
+        A legacy snapshot, an odom pose, and a lapsed D-395 robot are not a
+        lane-route pose (D-463). Remembering the row keeps a following goal
+        on the same verdict as the pose just read.
+        """
+        state, _source = await self._gather_state(robot_id)
+        self._remember([{"robot_id": robot_id, "state": state or {}}])
+        if self._verdict(robot_id) != trust.TRUSTED:
+            return None
+        pose = (state or {}).get("pose") or {}
+        try:
+            x, y = float(pose["x"]), float(pose["y"])
+        except (KeyError, TypeError, ValueError):
+            return None
+        if not math.isfinite(x) or not math.isfinite(y):
+            return None
+        return x, y
+
     def _verdict(self, robot_id: str) -> str:
         """`trust.classify`, except a lapsed D-395 robot is untrusted, not legacy."""
         verdict = trust.classify(self._seen.get(robot_id))

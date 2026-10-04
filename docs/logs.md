@@ -5748,3 +5748,10 @@ osy-d395-s1d\`.
 - 증거: 문서만. 코드·게이트 변화 없음.
 - gate 변화: 없음.
 - 결정: P2는 사용자 입회 대기. D-426은 Linux 환경 대기.
+
+## 2026-10-05 · uncommitted · feat(fleet): D-463 차선 경로는 다음 짧은 점
+
+- 변경: POST /api/fleet/robots/{robot_id}/route 가 저장된 차선 간선 순서를 폴리라인으로 펼치고, 지도에 LOCALIZED 된 자세일 때만 약 0.20 m 앞의 점을 기존 goal 로 보낸다. 위치 블록이 없거나 odom 이면 409 ROUTE_POSE_UNTRUSTED 이고 CORE navigation/goal 을 호출하지 않는다. GoalRequest 는 {x, y, yaw} 그대로다. ADR docs/adr/D-463-fleet-lane-route.md. D-462 는 review-cycle 작업 트리의 번호라 adr_gaps 에 남겼다.
+- 증거: operations/fleet/test/test_lane_route.py, test_task_contract_docs.py, test_server_app.py, test_line_follow_contract_docs.py, test_mission_progress.py 74 passed. test/known_failures.py 는 새 실패 0. harness lint 의 STATUS.md 와 pilot index stale 2건은 이 브랜치의 베이스에 이미 있다.
+- gate 변화: 없음. 호스트 시험. DEVICE, ROS-SIM, 실차 주행은 없다.
+- 결정: D-463 Accepted.
