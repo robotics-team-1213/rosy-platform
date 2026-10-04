@@ -21,8 +21,9 @@ gates:
     evidence: "share/pilot: 서명 payload 2026.10.04-034 설치 관측. 무서명 동일 빌드(source dd159ab3361739e41c105dcef533bd0e1fd8f614)의 hosted ARM GET /pilot 200+CSP(run 37200780702, workflow source af0b3211384c9a8f2e5abbc2863c2fbcb54b0ca3). cmd는 이 역사적 벤치 재현이며 현재 통합 후보 수용을 증명하지 않는다"
     blocker: "D-444 R1의 서명 release를 탄 기기에서 GET /pilot 200+CSP는 미확인. hosted ARM 무서명 벤치는 이를 대체하지 않는다"
   DEVICE:
-    state: HOLD
-    blocker: "실기 Pinky 에서 페달 hold-해제가 실제 정지로 이어지는 확인 전"
+    state: GO
+    cmd: "Pilot 브라우저에서 실기 Pinky 원격 조종·페달 해제·e-stop 확인"
+    evidence: "사용자 직접 확인 (2026-10-05, '건했어. pilot 는 돌아'). 정량 측정값 회차는 별도 보강 예정 — docs/validation/pilot-device-user-confirmed-2026-10-05 (D-444 §2 R2)"
   FIELD:
     state: N/A
 adrs: [D-323, D-365, D-366, D-390, D-411, D-432]
