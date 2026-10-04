@@ -5105,3 +5105,8 @@
 
 - 사용자 요청으로 별도 라벨 검토 세션 실행. 원본80image hash/bytes와 pending4frame7boxes 보존한 visual editor/JSONL 저장fallback 구현. 사용자 직접검수 담당이며 세션 초안을 실제 승인으로 승격하지 않는다. 별도76원본이미지zip/동일이름마스크zip CVAT 인계도 준비했다.
 - 증거: focused6pass/독립6pass, 실제Chromium 편집·승인해제·이미지로딩차단·4row JSONL표시 확인. 경로재진입/로딩전잘못된승인 RED수정. 자동download는도구에서취소되어성공미확인;복사fallback검증. 근거: validation/video-label-review-editor-2026-10-04.md. 실제humanreview/training/device/field와전체goal미완료.
+
+### 2026-10-04 · uncommitted · feat(learning): receive mixed-size human label reviews
+
+- 별도 라벨링 세션 구현과 독립 검토를 거쳐 source/human/image bytes 고정, 전체 입력 검증, 실제 크기별 export와 outer COMPLETE를 추가했다. 실제 pending 반환은 320×240 세 프레임/640×480 한 프레임, 확정 라벨0/대기4이다. Root 18개 파일 hash/크기와 COMPLETE를 확인했다.
+- 관련 최종56pass, 독립10pass, 문서15pass/1skip. 근거: validation/object-review-return-2026-10-04.md. 사용자 지적 횡단보도 오분류·회전교차로 미검증은 미해결이며 어두운 장면 대응은 이번 범위에서 제외하고 후속 ADR 항목으로 기록했다. 기존 평가/게이트 변경 없음. 실제 사람 검수·새 모델·DEVICE/FIELD 및 전체 목표 미완료.
