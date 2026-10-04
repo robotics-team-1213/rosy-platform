@@ -120,6 +120,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                stuck_resolver_clients: Optional[Mapping[str, object]] = None,
                pairing=None, pairing_sync_token: Optional[str] = None,
                localization_service=None, deployment_profile: str = "production",
+               central_registry=None,
                omx_cell_grant_revisions: Optional[Mapping[str, Mapping[str, str]]] = None,
                cell_item_pose_tolerance=None, cell_goal_registry=None,
                cell_app_service_id: str | None = None) -> FastAPI:
@@ -430,6 +431,13 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         install_pairing_routes(app, pairing, sync_token=pairing_sync_token,
                                require_viewer=require_viewer, require_operator=require_operator,
                                named_identity=bool(principals))
+
+    if central_registry is not None:
+        # D-454 1단계: 중앙 프로파일 마운트 — `/api/v1/fleet/*` (API Ref §10.1 읽기).
+        from fleet.server.central_registry_routes import install_central_registry_routes
+
+        install_central_registry_routes(app, central_registry,
+                                        require_viewer=require_viewer)
 
     install_ingest_routes(app, console=console, console_token=console_token, hub=hub,
                           sightings=sightings, policy_evidence=policy_evidence,
