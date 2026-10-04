@@ -5093,3 +5093,10 @@
 - gate 변화: SOURCE/LOCAL 범위의 전체 화면 목표와 로컬 main fast-forward를 완료했다. main HEAD `6485f8a39` 확인, 다른 세션의 `list.txt` 보존. push·CI·배포·장치·현장 수용은 실행하거나 승격하지 않았다.
 - 결정: 양 부모 작업 기록 일곱 파일의 본문·중복 횟수·main 순서를 보존했다. D-441 정확한 역사 제목의 두 본문만 기존 예외 방식으로 유지하며 append-only 본문 검사는 계속 적용한다. 실제 전달 인식 수명 변이 두 실패와 원본 복원 두 통과의 hash를 직접 확인했다.
 - 검증: 이전 실패·수정 재실행·기존 skip/경고를 합산하지 않는다. 첫 통합 quick 원본이 최종 runner 실행으로 덮어써진 provenance 한계와 역사 bare CR 보존을 검증 기록에 명시했다. Pilot은 기존 dark 고정에 따라 두 방향 모두 dark이며 light 증거로 세지 않는다.
+
+
+## 2026-10-04 · uncommitted · feat(power): fresh battery evidence and idle saving
+
+- 변경: 반복 저배터리 표본의 wake를 단계 변화로 제한하여 기존 IDLE/STANDBY 타이머가 동작한다. Viewer GET /api/v1/power/health와 공유 typed 응답에 배터리·충전 확인 age, 정책 상한·wake 근거, shutdown 요청, 진단 요약을 제공한다. API Ref v1.92, envelope 1.0 유지.
+- 검증: injected clock 회귀와 auth/read-only API, 기존 배터리·정지·sentinel 경로 검증. 최종 근거는 docs/plans/2026-10-04-power-health-and-wake.md. OS halt·EEPROM·GPIO·기본 LiDAR 모터 정책 변경 없음.
+- gate 변화: SOURCE/LOCAL; 실제 소비전력·충전·RTC/외부 버튼 wake와 배포는 미검증.

@@ -37,8 +37,8 @@
 
 ## 최근 기록
 
+- 2026-10-04 · uncommitted · feat(power): fresh battery evidence and idle saving
 - 2026-10-04 · uncommitted · fix(vision): preserve fresh overexposed quality
 - 2026-10-04 · uncommitted · feat(vision): 같은 capture의 bounded raw/annotation pair
 - 2026-10-04 · uncommitted · fix(line-follow): 저조도 정지와 recovery 차단
 - 2026-10-04 · uncommitted · feat(vision): 차선 입력의 실제 출처와 정지 설정 예약
-- 2026-10-03 · uncommitted · feat(link): D-432 주소 없는 장비 접속

@@ -30,8 +30,8 @@
 
 ## 최근 기록
 
+- 2026-10-04 · uncommitted · feat(power): fresh battery evidence and idle saving
 - 2026-10-04 · uncommitted · feat(ui): 어휘 갤러리 작업 선택 자산 허용
 - 2026-10-04 · uncommitted · feat(ui): 기본 dashboard 진입 자산 허용
 - 2026-10-04 · uncommitted · feat(recording): 원본과 검토 전 주석 옵션
 - 2026-10-04 · uncommitted · feat(api): fresh keeper source readback
-- 2026-10-04 · uncommitted · fix(api): serialize calibration and perception admission

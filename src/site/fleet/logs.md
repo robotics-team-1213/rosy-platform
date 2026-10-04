@@ -1571,3 +1571,10 @@
 - 증거: Fleet package 29,815줄의 초과를 29,806줄로 줄였다. 기존 verdict 29,657+150을 올리지 않았다. 실제 viewport·compact 정지 접근·공용 확인 generation 재검사 4통과(15.38초), 독립 SPEC→QUALITY 통과.
 - gate 변화: SOURCE/LOCAL과 main 착지 완료. 운용 허가·비상 정지 해제·물리 명령·배포·현장 수용은 실행하지 않았다.
 - 결정: D-439 §21과 D-201 화면 계약을 함께 유지한다. 반복 표현만 재사용하고 command owner나 서버 권한은 이동하지 않는다.
+
+
+## 2026-10-04 · uncommitted · feat(power): fresh battery evidence and idle saving
+
+- 변경: 반복 저배터리 표본의 wake를 단계 변화로 제한하여 기존 IDLE/STANDBY 타이머가 동작한다. Viewer GET /api/v1/power/health와 공유 typed 응답에 배터리·충전 확인 age, 정책 상한·wake 근거, shutdown 요청, 진단 요약을 제공한다. API Ref v1.92, envelope 1.0 유지.
+- 검증: injected clock 회귀와 auth/read-only API, 기존 배터리·정지·sentinel 경로 검증. 최종 근거는 docs/plans/2026-10-04-power-health-and-wake.md. OS halt·EEPROM·GPIO·기본 LiDAR 모터 정책 변경 없음.
+- gate 변화: SOURCE/LOCAL; 실제 소비전력·충전·RTC/외부 버튼 wake와 배포는 미검증.

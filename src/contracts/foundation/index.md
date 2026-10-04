@@ -36,8 +36,8 @@
 
 ## 최근 기록
 
+- 2026-10-04 · uncommitted · feat(power): fresh battery evidence and idle saving
 - 2026-10-04 · uncommitted · fix(vision): preserve fresh overexposed quality
 - 2026-10-04 · uncommitted · feat(protocol): recording start 옵션과 capture provenance
 - 2026-10-04 · uncommitted · feat: 명시적 저조도 보조 조명 수동 모드
 - 2026-10-04 · uncommitted · feat: 저조도 face handover 신선도
-- 2026-10-04 · uncommitted · feat(protocol): lane perception selection v1.90

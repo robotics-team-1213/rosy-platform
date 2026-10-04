@@ -467,3 +467,10 @@
 - 증거: 실제 UI 경로·CSP와 구조 예산 16 passed (8.21s). 공용 템플릿 CSS는 기존 shared-assets.json 소비 경로를 따른다.
 - gate 변화: SOURCE/LOCAL 정적 자산 계약만 보완했다.
 - 결정: D-439 Task5. 동작 소유자는 공용 작업 선택이며 서버 요청을 보내는 견본이 아니다.
+
+
+## 2026-10-04 · uncommitted · feat(power): fresh battery evidence and idle saving
+
+- 변경: 반복 저배터리 표본의 wake를 단계 변화로 제한하여 기존 IDLE/STANDBY 타이머가 동작한다. Viewer GET /api/v1/power/health와 공유 typed 응답에 배터리·충전 확인 age, 정책 상한·wake 근거, shutdown 요청, 진단 요약을 제공한다. API Ref v1.92, envelope 1.0 유지.
+- 검증: injected clock 회귀와 auth/read-only API, 기존 배터리·정지·sentinel 경로 검증. 최종 근거는 docs/plans/2026-10-04-power-health-and-wake.md. OS halt·EEPROM·GPIO·기본 LiDAR 모터 정책 변경 없음.
+- gate 변화: SOURCE/LOCAL; 실제 소비전력·충전·RTC/외부 버튼 wake와 배포는 미검증.

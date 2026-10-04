@@ -164,6 +164,7 @@ class PowerManager:
         self._info_until = 0.0
         self._last_wake_reason: Optional[str] = None
         self._hold_active = False       # 로봇 모드가 IDLE이 아닐 때 절전 금지
+        self._battery_alert = "ok"
 
         # LiDAR는 core 기동 시점에 이미 돌고 있다 — 스핀업 페널티 없이 시작한다.
         # None = 정상 회전 중, 실수 = 그 시각에 재기동을 요청했다.
@@ -293,8 +294,31 @@ class PowerManager:
 
     def on_battery_alert(self, state: str, now: Optional[float] = None) -> None:
         """SAF-005 임계 통과 — 로봇 본체에서 바로 보이도록 깨운다."""
-        if state in ("warning", "critical"):
+        with self._lock:
+            previous, self._battery_alert = self._battery_alert, state
+        if state != previous and state in ("warning", "critical", "deep"):
             self.wake(WAKE_BATTERY, now=now)
+
+    def health(self) -> dict:
+        with self._lock:
+            blockers = []
+            if not self._cfg.enabled:
+                blockers.append("power_policy_disabled")
+            if self._hold_active:
+                blockers.append("robot_mode_not_idle")
+            if self._clock() < self._info_until:
+                blockers.append("information_hold")
+            return {
+                "sleep_blockers": blockers,
+                "deepest_available_mode": "ACTIVE" if blockers else "STANDBY", "deepest_mode_basis": "policy_target",
+                "battery_alert": self._battery_alert,
+                "idle_after_s": self._cfg.idle_after_s, "standby_after_s": self._cfg.standby_after_s,
+                "wake_sources": ["api", "proximity", "contact", "activity", "battery_level_change"],
+                "wake_sources_basis": "policy_supported_not_hardware_verified",
+                "api_wake_requires_running_os": True,
+                "os_halt_remote_wake": "not_verified",
+                "lidar_standby_stop_enabled": self._cfg.lidar.standby_stop, "lidar_state_basis": "policy_intent",
+            }
 
     def wake(self, reason: str, now: Optional[float] = None) -> None:
         current = self._clock() if now is None else now

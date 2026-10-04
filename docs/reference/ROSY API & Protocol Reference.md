@@ -2,7 +2,7 @@
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.91
+**Version:** v1.92
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -240,8 +240,21 @@ config `control.sensor_adapter.mode` 와 같은 문자열이다(D-400). 일반 �
 | GET | `/api/v1/sensors` | Viewer | §12 |
 | GET | `/api/v1/sensors/{lidar\|imu\|ultrasonic\|battery\|encoder\|motor}` | Viewer | §12 |
 | GET | `/api/v1/power` | Viewer | PWR-001 (절전 모드·프레즌스·샘플링 주기) |
+| GET | `/api/v1/power/health` | Viewer | 전원 정책·절전 blockers·wake 제약·배터리 age/신선도/충전 확인·health 조회. 읽기 전용이며 깨우지 않음 |
 | POST | `/api/v1/power/wake` | Operator | PWR-004 (원격 웨이크 — 정보 화면 표시) |
 | POST | `/api/v1/power/mode` | Operator | PWR-001 (payload: `{mode: ACTIVE\|IDLE\|STANDBY}`) |
+
+`GET /power/health` 응답은 공유 `core_common.protocol.power_health.PowerHealthResponse` 계약이다. `power`는 기존 `PowerStatus`, `health`는 진단 요약이며 조회가 idle timer나 wake를 변경하지 않는다.
+
+| 영역 | 필드와 해석 |
+|------|-------------|
+| `battery` | `evidence`: missing/fresh/stale; `sample_age_s`, `stale_after_s`(5초), `level`, `percent`, `filtered_voltage`. 낡은 전압·잔량은 마지막 관측값이며 현재 측정으로 사용하지 않는다. |
+| 충전·종료 | `charging_state`: confirmed/unconfirmed. 전압과 충전 확인이 모두 5초 이내일 때만 confirmed; `charging_evidence_age_s`와 `charging_latched`는 마지막 확인의 age와 기존 정책 latch를 구분한다. `shutdown_armed`는 정책 조건, `shutdown_request_written`는 sentinel 기록이며 실제 OS 종료 완료가 아니다. |
+| 잔여 시간 | `remaining_runtime_s`는 null, `remaining_runtime_reason`는 current_and_capacity_not_measured. 전류·용량 측정 없이 시간을 추정하지 않는다. |
+| `policy` | `sleep_blockers`: power_policy_disabled/robot_mode_not_idle/information_hold; `deepest_available_mode`는 ACTIVE 또는 STANDBY 정책 상한(`deepest_mode_basis=policy_target`). 물리 절전 인증이나 POST 권한·보정 lease 허용을 뜻하지 않는다. `idle_after_s`, `standby_after_s`, `battery_alert` 포함. |
+| 깨우기 | `wake_sources`는 api/proximity/contact/activity/battery_level_change 정책 처리기(`wake_sources_basis=policy_supported_not_hardware_verified`). contact는 초음파 거리 임계값이며 별도 접촉 스위치 확인이 아니다. `api_wake_requires_running_os=true`, `os_halt_remote_wake=not_verified`. |
+| LiDAR | `lidar_standby_stop_enabled`는 설정이며 `lidar_state_basis=policy_intent`. 실제 모터 정지 증거와 구분한다. |
+| 권고 | `recommendation`: 배터리 missing/stale이면 restore_battery_telemetry; fresh 경고이면 charge_and_conserve; fresh 정상은 normal_idle_policy. 권고는 자동 운전·종료 명령이 아니다. |
 
 ## 5.3 Navigation·SLAM
 
@@ -2022,6 +2035,7 @@ and field acceptance require their own evidence.
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.92 | 2026-10-04 | Additive: Viewer GET /api/v1/power/health; battery age/freshness, timestamped charging evidence, software sleep blockers and wake constraints. Read-only; envelope protocol_version 1.0 unchanged. |
 | v1.91 | 2026-10-04 | Additive (D-438 1단계, docs/d438-fleet-stuck-resolver): CORE 역할 `stuck_resolver`(순위 viewer)와 capability `STUCK_DECIDE`; `POST /api/v1/line-follow/stuck/decision` 은 `STUCK_DECIDE` 를 요구(operator·administrator 도 가짐), `stuck_resolver` 의 `MANUAL` 은 403. Site Fleet `POST /api/fleet/robots/{robot_id}/line-stuck/claim`(operator), 로봇 행 `line_stuck.resolver`, `robots.yaml` `resolver_token`, `fleet console --stuck-resolver`. `fleet_line_stuck_answers` 에 null 가능 열 `tier`·`rule`·`escalated`(옛 DB 는 열 때 추가), 판단기가 사람에게 올릴 때마다 `ESCALATE` 행. `GET /api/fleet/state` 와 판단기는 1 s 안에서 한 번의 gather 를 같이 쓴다. 로봇 이벤트·FleetAgent 프로토콜 변경 없음 |
 | v1.90 | 2026-10-03 | Additive (D-432): LAN 장비 목록 접속, auth/connection·auth/development-session, 선택적 CORE TLS·발견 전송과 SSH 공개 키 등록. 기존 코드 규약·envelope 1.0 유지. |
 | v1.89 | 2026-10-03 | Additive (D-418, feat/d418-ssh-access): 로봇 SSH 접속 §5.8 — Admin 전용 `GET /host/ssh/host-keys`, `GET\|POST /host/ssh/keys`, `DELETE /host/ssh/keys/{label}`, `GET\|POST\|DELETE /host/ssh/password` 신설. 오류 코드 `SSH_INVALID`(422)·`SSH_LABEL_EXISTS`·`SSH_KEY_EXISTS`·`SSH_KEYS_FULL`(409)·`SSH_KEY_NOT_FOUND`(404)·`SSH_ACCESS_UNAVAILABLE`(503). 스키마 `Ssh*`(`schemas.py`). 기존 경로·필드 변화 없음. 브랜치에서 v1.84 로 적었으나 main 이 v1.84(D-422)–v1.88(D-423)을 먼저 써서 v1.89 로 재번호 |

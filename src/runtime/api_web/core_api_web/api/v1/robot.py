@@ -9,6 +9,7 @@ from core_api_web.api.v1.common import operator, require_calibration_owner, view
 from core_api_web.api.deps import AuthContext, get_services, CoreServicesLike
 from core_api_web.api.errors import ApiError
 from core_common.protocol.schemas import PowerMode
+from core_common.protocol.power_health import PowerHealthResponse
 
 
 robot_router = APIRouter(prefix="/api/v1/robot", tags=["robot"])
@@ -71,6 +72,22 @@ def power_wake(auth: AuthContext = Depends(operator), svc: CoreServicesLike = De
     svc.power.wake("api")
     svc.state.set_power(svc.power.status())
     return svc.power.status().model_dump()
+
+
+@power_router.get("/health", response_model=PowerHealthResponse)
+def power_health(_: AuthContext = Depends(viewer), svc: CoreServicesLike = Depends(get_services)):
+    """Read-only power decision evidence; never wakes a sleeping robot."""
+    battery = svc.battery.health()
+    policy = svc.power.health()
+    return {
+        "power": svc.power.status().model_dump(),
+        "battery": battery,
+        "policy": policy,
+        "recommendation": ("restore_battery_telemetry" if battery["evidence"] != "fresh"
+                           else "charge_and_conserve" if battery["level"] != "ok"
+                           else "normal_idle_policy"),
+        "health": svc.state.snapshot().diagnostics_summary,
+    }
 
 
 @power_router.post("/mode")

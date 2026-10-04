@@ -281,8 +281,8 @@
 
 ## 최근 기록
 
+- 2026-10-04 · uncommitted · feat(power): fresh battery evidence and idle saving
 - 2026-10-04 · 6485f8a39 · docs(ui): 공용 웹 디자인 통합 검증과 로컬 main 착지
 - 2026-10-04 · uncommitted · docs(ui): 남은 공용 확인과 실제 정지 접근 검증 기록
 - 2026-10-04 · uncommitted · docs(ui): Fleet 교정 커밋과 주소 대화 소유권 기록
 - 2026-10-04 · uncommitted · docs(ui): viewport 계약 보존과 남은 live 확인 이관 계획
-- 2026-10-04 · uncommitted · docs(ui): 게임·도구·Pilot 웹 판정과 최종 회귀 결함 기록

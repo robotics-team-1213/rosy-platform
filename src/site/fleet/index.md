@@ -75,8 +75,8 @@
 
 ## 최근 기록
 
+- 2026-10-04 · uncommitted · feat(power): fresh battery evidence and idle saving
 - 2026-10-04 · 6485f8a39 · refactor(ui): 통합 명렬 카드의 표현 재사용
 - 2026-10-04 · uncommitted · fix(web): 관제 확인과 명령의 공통 소유권
 - 2026-10-04 · uncommitted · fix(web): 관제 뷰포트와 주소 확인의 작업 소유권
 - 2026-10-04 · uncommitted · feat(web): D-439 Fleet 작업 탐색과 보정 미리보기 수명
-- 2026-10-04 · uncommitted · test: API v1.91 문서 계약 유지

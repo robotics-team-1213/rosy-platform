@@ -73,8 +73,8 @@
 
 ## 최근 기록
 
+- 2026-10-04 · uncommitted · feat(power): fresh battery evidence and idle saving
 - 2026-10-04 · uncommitted · test: 카메라 프레임 모듈의 실제 제공 경로
 - 2026-10-04 · uncommitted · fix(vision): preserve fresh overexposed quality
 - 2026-10-04 · uncommitted · feat(bridge): typed 녹화 시작과 원본 JPEG admission
 - 2026-10-04 · uncommitted · feat(vision): 원본 조도와 얼굴 handover
-- 2026-10-03 · e021264e6 · feat(face): D-433 CORE가 rosy-face에 얼굴 핸드오버를 쓴다
