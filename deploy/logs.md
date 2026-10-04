@@ -2428,3 +2428,9 @@
 - 변경: 실제 공개 git commit/tree와 이미 검토한 normalized journal 무결성 digest14개 행의 path/line SHA/value를 기존 public_provenance 정본에 추가했다. 일반 credential shape·알 수 없는 entropy·변경된 행은 계속 검출한다. scanner 규칙/전역 예외는 늘리지 않는다.
 - 증거: normal pre-push의13개 공개 해시 진단과 같은 알려진 hash가 있는1개 추가 행을 확인했다. 40자 값은 실제 git object의 commit/tree다. 정확한 결속·stale/변경/credential 거부 회귀와 protocol/event/rooms 포함114 PASS로 검사했다.
 - gate 변화: SOURCE/LOCAL 출처 정합. 실제 signing key·장치 자격은 읽거나 변경하지 않았다.
+
+## 2026-10-05 · uncommitted · fix(discovery): 같은 LAN Model 발견에 설치된 Avahi D-Bus 사용
+
+- 변경: 기존 Avahi 명령이 없는 Model 호스트에서도 이미 설치된 Avahi 서비스에 독립 D-Bus 연결로 SSH 서비스를 등록한다. 명령이 있으면 기존 경로를 우선하며 실제 LAN listener와 SSH banner를 확인한 뒤에만 광고한다. daemon 소유자 변경·충돌·listener 종료 시 자기 등록을 철회하고 연결을 닫는다. Bluetooth나 전체 포트 검색은 추가하지 않는다(D-452·D-456).
+- 증거: 독립 SPEC·Quality·Safety 소스 검토 PASS의 두 파일과 적용본 LF 정규화 해시가 같다. 적용 작업 트리의 Model 발견·canvas·화면 제목·Android launcher·site workflow 회귀 67 PASS, 디자인 범위·CI 의존성 14 PASS다. D-Bus 상태 시험은 주입한 버스로 확인했고 실제 등록은 아직 하지 않았다. 메서드 호출별 2초 한도와 주기적 상태 검사를 사용하며 전체 등록 시간이 정확히 10초라고 주장하지 않는다.
+- gate 변화: SOURCE/LOCAL 보완. 새 SHA의 CI·서명·bootstrap 설치·실제 LAN 목록과 접속은 NOT_RUN이며 기존 ARTIFACT/DEVICE HOLD를 유지한다. 검색 성공은 페어링 승인이나 로봇 조작 권한을 발급하지 않는다.

@@ -71,8 +71,8 @@
 
 ## 최근 기록
 
+- 2026-10-05 · uncommitted · fix(discovery): 같은 LAN Model 발견에 설치된 Avahi D-Bus 사용
 - 2026-10-04 · uncommitted · fix(provenance): 검토된 공개 출처 해시를 정확한 행에 결속
 - 2026-10-04 · uncommitted · feat(ci): payload 부팅 스모크 — arm64 러너에서 D-444 P1.2 관측
 - 2026-10-04 · uncommitted · fix(g2): SIM AID 승인 응답의 전체 시간 한도 유지
 - 2026-10-04 · uncommitted · fix(g2): startup 측정 검증과 자동 home HOLD
-- 2026-10-04 · uncommitted · fix(camera): 시작 중 반복 부팅 보호

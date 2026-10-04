@@ -62,7 +62,7 @@ def test_owned_publisher_withdraws_on_listener_loss_and_exit():
         child = Child()
         children.append(child)
         return child
-    pub = model.Publisher(22, 'approved-model', spawn=spawn)
+    pub = model.Publisher(22, 'approved-model', spawn=spawn, which=lambda _: '/fixture/avahi-publish-service')
     pub.update(False)
     assert children == []
     pub.update(True)
@@ -105,7 +105,7 @@ def test_real_owned_process_is_reaped_on_close():
         child = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(30)'], **kw)
         children.append(child)
         return child
-    pub = model.Publisher(22, 'approved-model', spawn=spawn)
+    pub = model.Publisher(22, 'approved-model', spawn=spawn, which=lambda _: '/fixture/avahi-publish-service')
     try:
         pub.update(True)
         assert children[0].poll() is None
@@ -113,3 +113,199 @@ def test_real_owned_process_is_reaped_on_close():
         assert children[0].poll() is not None
     finally:
         pub.close()
+
+class FakeDBus:
+    Int32 = staticmethod(lambda value: ('i', value))
+    UInt32 = staticmethod(lambda value: ('u', value))
+    UInt16 = staticmethod(lambda value: ('q', value))
+    ByteArray = staticmethod(lambda value: ('ay', value))
+    Array = staticmethod(lambda value, signature: ('a'+signature, value))
+
+    def __init__(self, fail=None):
+        self.calls, self.connections = [], []
+        self.fail, self.group_state = fail, 2
+        self.host = 'approved-model'
+
+    def SystemBus(self, private):
+        assert private is True
+        if self.fail == 'SystemBus': raise RuntimeError('fixture private bus unavailable')
+        owner = self
+        class Bus:
+            closed = False
+            def get_object(self, name, path, introspect):
+                assert name == 'org.freedesktop.Avahi' and introspect is False
+                return path
+            def close(self): self.closed = True; owner.calls.append(('close',))
+            def set_exit_on_disconnect(self, value): assert value is False
+            def call_blocking(self, dest, path, interface, method, signature, args, timeout):
+                assert timeout == 2
+                if method == 'GetNameOwner':
+                    owner.calls.append((method,args))
+                    if owner.fail == method: raise RuntimeError('fixture owner unavailable')
+                    return ':1.7'
+                assert dest == ':1.7'
+                return getattr(owner.Interface(path, interface), method)(*args, timeout=timeout)
+        bus = Bus(); self.connections.append(bus)
+        return bus
+
+    def Interface(self, proxy, dbus_interface):
+        owner = self
+        class Proxy:
+            def __getattr__(self, method):
+                def call(*args, timeout):
+                    assert timeout == 2
+                    owner.calls.append((method, args))
+                    if owner.fail == method: raise RuntimeError('fixture Avahi method failure')
+                    if method == 'EntryGroupNew': return '/Client1/EntryGroup1'
+                    if method == 'GetState': return owner.group_state
+                    if method == 'GetHostName': return owner.host
+                return call
+        assert dbus_interface in ('org.freedesktop.Avahi.Server', 'org.freedesktop.Avahi.EntryGroup')
+        return Proxy()
+
+
+def fallback(db):
+    return model.Publisher(22, 'approved-model', which=lambda _: None, dbus_loader=lambda: db)
+
+
+def test_dbus_listener_gate_and_dedicated_typed_registration():
+    db = FakeDBus(); pub = fallback(db)
+    pub.update(False)
+    assert not db.connections
+    pub.update(True); pub.update(True)
+    assert len(db.connections) == 1 and not db.connections[0].closed
+    assert [c[0] for c in db.calls].count('EntryGroupNew') == 1
+    args = next(c[1] for c in db.calls if c[0] == 'AddService')
+    assert args[:3] == (('i', -1), ('i', -1), ('u', 0))
+    assert args[3:8] == ('ROSY Model approved-model', '_rosy-model._tcp', '', '', ('q', 22))
+    assert args[8][0] == 'aay'
+    assert {v[1] for v in args[8][1]} == {b'product=rosy', b'role=model-host', b'proto=ssh/2', b'tls=none', b'transport=ssh'}
+    pub.update(False)
+    assert db.connections[0].closed
+    assert [c[0] for c in db.calls].count('Free') == 1
+    pub.update(True)
+    assert len(db.connections) == 2
+    pub.close(); pub.close()
+    assert db.connections[1].closed
+
+
+@pytest.mark.parametrize('method', ['GetNameOwner', 'EntryGroupNew', 'AddService', 'Commit', 'GetState', 'GetHostName'])
+def test_dbus_failure_closes_only_private_owner_and_never_retries_inline(method):
+    db = FakeDBus(method); pub = fallback(db)
+    with pytest.raises(RuntimeError): pub.update(True)
+    assert all(b.closed for b in db.connections)
+    count = len(db.connections)
+    pub.close()
+    assert len(db.connections) == count
+
+
+def test_dbus_free_failure_still_closes_owner():
+    db = FakeDBus(); pub = fallback(db); pub.update(True)
+    db.fail = 'Free'; pub.close()
+    assert db.connections[0].closed
+
+
+@pytest.mark.parametrize('state', [0, 3, 4, 99])
+def test_avahi_collision_failure_unknown_withdraws_and_exits_for_service_restart(state):
+    db = FakeDBus(); pub = fallback(db); pub.update(True); db.group_state = state
+    with pytest.raises(RuntimeError): pub.update(True)
+    assert db.connections[0].closed
+
+
+def test_cli_preferred_never_imports_dbus():
+    class Child:
+        def poll(self): return None
+        def terminate(self): pass
+        def wait(self, timeout): pass
+    def absent(): pytest.fail('CLI path must not import D-Bus')
+    pub = model.Publisher(22, 'approved-model', which=lambda _: '/usr/bin/avahi-publish-service', dbus_loader=absent, spawn=lambda *a, **k: Child())
+    pub.update(True); pub.close()
+
+
+def test_missing_dbus_dependency_truthfully_fails_without_advertisement():
+    def absent(): raise ImportError('dbus unavailable')
+    with pytest.raises(ImportError): model.Publisher(22, 'approved-model', which=lambda _: None, dbus_loader=absent)
+
+
+def test_host_identity_change_withdraws_no_stale_name_republication():
+    db = FakeDBus(); pub = fallback(db); pub.update(True); db.host = 'new-approved-model'
+    with pytest.raises(RuntimeError): pub.update(True)
+    assert db.connections[0].closed
+    assert [c[0] for c in db.calls].count('EntryGroupNew') == 1
+
+
+def test_daemon_owner_restart_withdraws_old_group_without_new_bus_inline():
+    db = FakeDBus(); pub = fallback(db); pub.update(True)
+    db.fail = 'GetState'  # Pinned old daemon object disappeared after restart.
+    with pytest.raises(RuntimeError): pub.update(True)
+    assert db.connections[0].closed and len(db.connections) == 1
+    replacement = FakeDBus(); new = fallback(replacement); new.update(True)
+    assert len(replacement.connections) == 1
+    new.close()
+
+
+def test_registration_stuck_registering_is_bounded(monkeypatch):
+    db = FakeDBus(); db.group_state = 1; pub = fallback(db)
+    now = [0]
+    monkeypatch.setattr(model.time, 'monotonic', lambda: now[0])
+    pub.update(True); now[0] = 10
+    with pytest.raises(RuntimeError): pub.update(True)
+    assert db.connections[0].closed
+
+
+def test_cli_exit_does_not_create_five_second_retry_loop():
+    class Child:
+        done = None
+        def poll(self): return self.done
+        def terminate(self): self.done = 0
+        def wait(self, timeout): return self.done
+    calls = []
+    def spawn(*a, **k): calls.append(Child()); return calls[-1]
+    pub = model.Publisher(22, 'approved-model', spawn=spawn, which=lambda _: '/fixture/cli')
+    pub.update(True); calls[0].done = 1
+    with pytest.raises(RuntimeError): pub.update(True)
+    assert len(calls) == 1
+    pub.close()
+
+
+def test_main_signal_withdraws_private_registration(monkeypatch):
+    db = FakeDBus(); handlers = {}
+    original = model.Publisher
+    class Stop:
+        value = False
+        def is_set(self): return self.value
+        def set(self): self.value = True
+        def wait(self, seconds):
+            assert seconds == 5
+            handlers[model.signal.SIGTERM](None, None)
+    monkeypatch.setattr(model.threading, 'Event', Stop)
+    monkeypatch.setattr(model.signal, 'signal', lambda signal, callback: handlers.__setitem__(signal, callback))
+    monkeypatch.setattr(model.shutil, 'which', lambda name: '/fixture/ss' if name == 'ss' else None)
+    monkeypatch.setattr(model.socket, 'gethostname', lambda: 'approved-model')
+    monkeypatch.setattr(model, 'ssh_ready', lambda port: True)
+    monkeypatch.setattr(model, 'Publisher', lambda port, name: original(port, name, which=lambda _: None, dbus_loader=lambda: db))
+    assert model.main([]) == 0
+    assert db.connections[0].closed and [c[0] for c in db.calls].count('Free') == 1
+
+
+def test_main_dependency_failure_reports_no_advertisement(monkeypatch, capsys):
+    monkeypatch.setattr(model.shutil, 'which', lambda name: '/fixture/ss' if name == 'ss' else None)
+    def unavailable(*args): raise ImportError('system dbus absent')
+    monkeypatch.setattr(model, 'Publisher', unavailable)
+    with pytest.raises(SystemExit) as result: model.main([])
+    assert result.value.code == 2
+    assert 'no service is advertised' in capsys.readouterr().err
+
+
+def test_dns_host_case_is_not_a_new_identity():
+    db = FakeDBus(); db.host = 'APPROVED-MODEL'; pub = fallback(db)
+    pub.update(True); pub.update(True)
+    assert not db.connections[0].closed
+    pub.close()
+
+
+def test_private_bus_connection_failure_has_no_advertisement():
+    db = FakeDBus('SystemBus'); pub = fallback(db)
+    with pytest.raises(RuntimeError): pub.update(True)
+    assert not db.connections and not db.calls
+    pub.close()
