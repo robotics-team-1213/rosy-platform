@@ -962,3 +962,9 @@
 - Change: Wrap the existing remember checkbox in label.ui-check so the common component supplies its accessible touch area. Approval requests, explicit consent and control authority are unchanged.
 - Evidence: The actual shared-controls guard failed before the class and passed afterwards. Real Chromium consent/cancel/owner-loss tests and integrated D-368 stream suites passed: 20 tests, 13.50 seconds. This is SOURCE/LOCAL evidence, not device pairing acceptance.
 - gate 변화: SOURCE/LOCAL follow-up only. Receiver consent and control authority remain unchanged; actual device pairing is separate.
+
+## 2026-10-05 · uncommitted · fix(ui): 연결 승인 공용 속성 계약 복구
+
+- 변경: 연결 기억 checkbox label에 ui-check를 지정하고 승인/거절 버튼 kind를 동등한 명시 분기로 쓴다. 기능·권한·화면 구성은 유지한다.
+- 증거: 깨끗한 main의 동일 peer-approval.js에서 발생한 공용 guard 두 실패의 원인이다. 시작점 영향 검증에 포함한 공용 guard와 기존 승인 브라우저 회귀를 포함해 149 passed, known_failures 신규 0.
+- gate 변화: SOURCE/LOCAL 계약 복구. 장치 승인·UI/UX 개편 수용 주장 없음.

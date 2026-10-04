@@ -37,8 +37,8 @@
 
 ## 최근 기록
 
+- 2026-10-05 · uncommitted · fix(ui): 연결 승인 공용 속성 계약 복구
 - 2026-10-05 · uncommitted · fix(robot): shared receiver consent touch target
 - 2026-10-05 · uncommitted · feat(robot): 기존 관리자 화면에서 LAN 연결 승인
 - 2026-10-04 · uncommitted · docs: provide the recorded artifact gate command
 - 2026-10-04 · uncommitted · fix(robot): 초기화 보호와 fullscreen 시험 동기화
-- 2026-10-04 · uncommitted · feat(shell): D-447 (b) store subscribes /ws/state with REST fallback

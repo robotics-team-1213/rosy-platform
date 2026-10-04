@@ -1773,3 +1773,9 @@
 - 변경: 기존 영상 자격 소유자에 HTTPS camera-peer 프로파일, source/key/issuer/generation 관계, 원자적 nonce 소비·자격 갱신, 정상 설치 화면 승인을 연결한다. Bluetooth·IP 입력은 기본 흐름에 넣지 않는다.
 - 증거: 독립 최종 35 경로 SPEC/Quality/Safety SOURCE PASS. 실제 부모 통합 peer/deploy/shared 133 PASS + 기존 CORE kind 1 FAIL 후 공용·CORE Chromium 29 PASS; v1 호환·namespace·API 계약 82 PASS. 인증 거절 브라우저 probe에서 보호 목록 제거·재조회 중단·POST 0. D-362 측정과 기존 분할 의무는 검토 기록 참조.
 - gate 변화: SOURCE/LOCAL이며 기존 기기 gate를 대체하지 않는다. Android 앱·signed site·실제 LAN 승인/오프라인 재연결은 추가 검증한다.
+
+## 2026-10-05 · uncommitted · feat(fleet): 무마커 시작점 위치·방향 저장
+
+- 변경: 승인 paint-fit의 source/map/revision에 묶인 reference-only x/y/yaw를 SQLite에 저장한다. viewer 읽기·operator 저장/삭제·revision CAS·범위/finite 검증·보정 변경 무효화를 추가했다. 기존 지도에서 선택하거나 입력해 저장하고 위치·방향을 다시 표시한다. 지도 선택은 goal 클릭과 분리하며 CORE 위치·신원·주행 승인을 바꾸지 않는다.
+- 증거: 관련 API/계약·공용 UI 149 passed, known_failures 신규 0; Node 좌표·여백·무효 표시 3 passed; 실제 Chromium 선택/저장/새로고침/보정 변경·토큰 변경·occupancy 표시/선택 중 지도 변경 3 passed. 독립 읽기 검토의 좌표 형식·JSON 헤더·map 변경 지적 3건을 수정했다.
+- gate 변화: SOURCE/LOCAL. 실제 카메라 보정 승인·두 로봇 신원 연결·현장 시작 위치/방향 일치·정확한 후보 CI/서명/배포 수용은 아직 별도다. UI/UX 리팩터링과 주행 없음.

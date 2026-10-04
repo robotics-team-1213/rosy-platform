@@ -12,6 +12,7 @@ import {
 } from "./site-layer.js";
 import { offsetLabel, preferMarkers } from "./tracking-layer.js";
 import { NO_MAP_RETRY_MS, createPollGate } from "./poll-gate.js";
+import {drawStartPointMarks} from './start-point-layer.js';
 
 export function createMapView({ scope, el, view, auth, call, onMapChanged, onMapUnavailable }) {
   // D-359 §4 — 색·글꼴은 ui.js(window.RosyPalette)가 어떤 CSS 색이든 풀어 캐시한다.
@@ -461,6 +462,7 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     ctx.restore();
 
     drawCameraTracking(ctx, toPx, Math.max(7, t.scale * 0.09), 1.5);
+    drawStartPointMarks(ctx, toPx, view.startPoints, view.siteMap.maps.map(row=>row.map_id), css('--series-secondary'), 2);
     if (layerOn("sightings")) {
       for (const s of view.sightings) drawSighting(ctx, s, toPx, Math.max(7, t.scale * 0.09), 1.5);
     }
@@ -491,6 +493,7 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     const canvas = el("map-canvas");
     const ctx = canvas.getContext("2d");
     paintGrid(grid);
+    drawStartPointMarks(ctx, (x,y)=>{const p=cellOf(grid,x,y);return {x:p.cx,y:p.cy};}, view.startPoints, [grid.map_id], css('--series-secondary'), .6);
     if (view.stateUnavailable) {
       el("map-tag").textContent = "로봇 위치 확인 불가";
       canvas.setAttribute("aria-label", "로봇 위치 확인 불가 — Fleet 상태 연결을 확인하세요");

@@ -107,8 +107,14 @@ SIZE_VERDICTS = {
         "duplicate its socket. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        34_792,
-        "split: D-456 independently re-judged at measured 34792 on 2026-10-05: "
+        35_137,
+        "split: independently re-judged after concurrent start-point integration at "
+        "35137 on 2026-10-05: 314 lines above34823 (134 reference backend,172 UI,8 "
+        "composition/static), plus earlier31 route extraction above34792; reference "
+        "coordinates never initialize pose or issue motion. Retain the B2/UI split "
+        "queue, all file thresholds and package150 allowance; see docs/validation/"
+        "d456-main-start-point-integration-2026-10-05/README.md. "
+        "D-456 independently re-judged at measured 34792 on 2026-10-05: "
         "camera peer owners add 926 lines (756 backend, 135 web, 35 existing wiring); "
         "bounded sibling modules keep app589 and console1159 unchanged. Retain "
         "the Fleet server/UI split queue and all file/package growth allowances; "
@@ -337,6 +343,15 @@ SIZE_VERDICTS = {
         "managed keys, temporary password status with lock_pending; API v1.89) on top of D-422; same verdict."
         " Re-judged 2026-10-04 at 1322: bounded lane selection/readback models were split into "
         "protocol/lane_perception.py; one re-export preserves the single public schema import point.",
+    ),
+    "fleet/fleet/server/app.py": (
+        602,
+        "accept: one existing composition/lifespan owner wires bounded route siblings; "
+        "camera identity/approval and calibrated reference persistence remain in their "
+        "dedicated modules. Independent review confirmed both mounts and cleanup, "
+        "no CORE/pose initialization/motion/grant authority change. Keep the600 threshold "
+        "and normal150 regrowth allowance; see docs/validation/"
+        "d456-main-start-point-integration-2026-10-05/README.md",
     ),
     "fleet/fleet/server/task_store.py": (
         1060,
