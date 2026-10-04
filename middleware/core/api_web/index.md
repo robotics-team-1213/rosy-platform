@@ -30,8 +30,8 @@
 
 ## 최근 기록
 
+- 2026-10-04 · uncommitted · fix(api): 실제 계약 판과 rooms 내부 저장 표현 정합
+- 2026-10-04 · uncommitted · fix(discovery): bounded LAN rooms와 TLS/FQDN 계약 정합
 - 2026-10-04 · uncommitted · feat(api): D-343 로비 잔여 — `GET /api/v1/site/rooms`
 - 2026-10-04 · uncommitted · fix(api): 현재 문서 버전 설명 정렬
 - 2026-10-04 · uncommitted · feat(power): fresh battery evidence and idle saving
-- 2026-10-04 · uncommitted · feat(ui): 어휘 갤러리 작업 선택 자산 허용
-- 2026-10-04 · uncommitted · feat(ui): 기본 dashboard 진입 자산 허용

@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="ko" data-theme="dark">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Pinky · 학습 검수</title><link rel="stylesheet" href="/common/tokens.css"><script src="/common/theme.js"></script>
+<link rel="stylesheet" href="/common/components.css"><link rel="stylesheet" href="/app.css">
+<script type="module" src="/app.js"></script></head>
+<body><a class="skip-link" href="#editor">사진 검수로 이동</a>
+<ui-shell grammar="procedure"><ui-topbar><span class="wordmark">ROSY</span><h1>Pinky 학습 검수</h1><span data-spacer></span>
+<a href="/learning">학습 작업</a>
+<label>화면 <select id="theme" class="ui-field"><option value="dark">어둡게</option><option value="light">밝게</option></select></label></ui-topbar>
+<div class="workspace"><aside aria-label="검수 작업 목록"><h2>객체 사진</h2><p id="counts">불러오는 중</p>
+<label>상태 <select id="filter" class="ui-field"><option value="all">전체</option><option value="pending">대기</option><option value="approved">승인</option><option value="excluded">제외</option></select></label>
+<nav id="frames" aria-label="사진 선택"></nav>
+<div class="scope"><h2>영역 검수</h2><p>벽 · 차선 · 횡단보도</p><p>픽셀 편집은 CVAT에서 진행합니다. 이 앱의 객체 승인은 영역 마스크 승인에 적용되지 않습니다.</p></div></aside>
+<main id="editor" tabindex="-1"><div class="frame-heading"><div><p class="eyebrow">OBJECT REVIEW</p><h2 id="frame-title">사진을 불러오는 중</h2></div><ui-tag id="status">대기</ui-tag></div>
+<p id="source-info" class="quiet"></p><div class="image-stage"><canvas id="canvas" tabindex="0" aria-label="객체 박스 편집 화면"></canvas><p id="image-message" role="status">사진을 불러오는 중</p></div>
+<div class="toolbar"><ui-button id="draw" kind="toggle" aria-pressed="false">박스 그리기</ui-button><ui-button id="add" kind="quiet">좌표로 추가</ui-button><ui-button id="delete-selected" kind="quiet">선택 박스 삭제</ui-button><ui-button id="reload" kind="quiet">최신 내용 불러오기</ui-button></div>
+<details><summary>자동·초안 라벨</summary><p id="candidate-source"></p><p>기존 자동 라벨링 결과 또는 시각 초안을 가져옵니다. 새 모델 추론을 실행하지 않으며, 가져온 결과는 수동 검수 전까지 미승인입니다.</p><ui-button id="candidates" kind="quiet">원본 초안으로 다시 검수</ui-button></details>
+<p id="drag-status" class="quiet" role="status">좌표의 박스가 사진 위에 자동으로 표시됩니다. 빈 곳을 드래그하면 새 박스, 박스 안쪽은 이동, 선택한 박스의 모서리·변은 크기 조절입니다. 놓으면 자동 저장됩니다. Esc로 취소할 수 있습니다.</p>
+<h3>객체 라벨</h3><div id="boxes"></div><p id="empty" hidden>객체가 없습니다. 사진 전체를 확인한 후에만 빈 라벨을 승인하세요.</p>
+<div class="review-actions"><label class="ui-check"><input id="complete" class="ui-field" type="checkbox">사진 전체와 모든 박스를 확인했습니다</label>
+<div class="toolbar"><ui-button id="approve" kind="primary" disabled>검수 승인</ui-button><ui-button id="exclude" kind="quiet">사진 제외</ui-button><ui-button id="reopen" kind="quiet">재검수로 돌리기</ui-button></div>
+<p id="save-status" role="status" aria-live="polite">서버에서 복원 중</p><p id="error" role="alert" hidden></p></div>
+</main></div>
+<section class="preparation" aria-label="학습 자료 준비"><div><h2>학습 자료 준비</h2><p>승인된 객체만 원본 크기 그대로 준비합니다. 제외 사진은 학습 라벨로 만들지 않습니다.</p></div><ui-button id="prepare" kind="primary">승인 자료 준비</ui-button>
+<p id="export-result" role="status" aria-live="polite">아직 준비하지 않았습니다.</p><details><summary>학습 세션 전달 정보</summary><pre id="export-details"></pre></details></section>
+</ui-shell></body></html>

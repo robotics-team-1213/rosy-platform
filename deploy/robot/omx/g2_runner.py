@@ -230,6 +230,8 @@ def execute(run, recipe, cell, profile, children):
     client = FleetClient(run, credentials)
     while True:
         children.assert_alive()
+        if (run / "startup-home-failure.json").exists():
+            raise RuntimeError("SIM startup is HOLD; no automatic homing or dispatch rearm")
         if time.monotonic() > deadline:
             raise RuntimeError("Fleet/UDS readiness timed out")
         if (run / "uds/omx_cell_sim_01/control.sock").exists():

@@ -71,12 +71,13 @@ def main() -> int:
         rows = []
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True)
-            context = browser.new_context(viewport={"width": VIEWPORTS[0][0],
-                                                    "height": VIEWPORTS[0][1]})
-            page = context.new_page()
-            page.on("pageerror", lambda e: errors.append(str(e)))
             for theme in THEMES:
+                context = browser.new_context(viewport={"width": VIEWPORTS[0][0],
+                                                        "height": VIEWPORTS[0][1]})
+                page = context.new_page()
+                page.on("pageerror", lambda e: errors.append(str(e)))
                 page.add_init_script(
+                    f"sessionStorage.setItem({TOKEN_KEY!r}, {token!r});"
                     f"localStorage.setItem({THEME_KEY!r}, {theme!r});")
                 for surface in surfaces:
                     for width, height in VIEWPORTS:
@@ -84,9 +85,17 @@ def main() -> int:
                         responses: list[tuple[str, int]] = []
 
                         def serve(route, _request):
-                            target = urlsplit(route.request.url).path
-                            response = client.get(
-                                target, headers={"Authorization": f"Bearer {token}"})
+                            request = route.request
+                            url = urlsplit(request.url)
+                            target = url.path + (f"?{url.query}" if url.query else "")
+                            headers = dict(request.headers)
+                            # Only HTML navigation receives the synthetic fixture credential.
+                            # API requests retain the browser's actual session credential.
+                            if request.resource_type == "document":
+                                headers["Authorization"] = f"Bearer {token}"
+                            response = client.request(
+                                request.method, target, headers=headers,
+                                content=request.post_data_buffer)
                             responses.append((target, response.status_code))
                             route.fulfill(
                                 status=response.status_code,
@@ -100,7 +109,24 @@ def main() -> int:
                         page.unroute_all()
                         page.route("**/*", serve)
                         page.goto(f"http://rosy.test/{surface}", wait_until="load")
-                        page.wait_for_timeout(700)
+                        try:
+                            page.wait_for_function("""() =>
+                                document.querySelector('#shell-role')?.title === 'administrator'
+                                && document.querySelector('#surface-main ui-section')
+                                && document.querySelector('#surface-status')?.textContent.trim() === ''
+                                && !document.querySelector('.surface-auth-link')""", timeout=10_000)
+                            content_ready = True
+                        except Exception as error:
+                            content_ready = False
+                            errors.append(f"{surface}/{theme}@{width}x{height}: "
+                                          f"authenticated content not ready: {type(error).__name__}")
+                        measurements = page.evaluate("""() => ({
+                            authGate: Boolean(document.querySelector('.surface-auth-link')),
+                            role: document.querySelector('#shell-role')?.title || null,
+                            panels: document.querySelectorAll('#surface-main ui-section').length,
+                            failedPanels: document.querySelectorAll('[data-failed=true]').length,
+                            overflow: Math.max(0, document.documentElement.scrollWidth - innerWidth)
+                        })""")
                         applied = page.evaluate(
                             "document.documentElement.getAttribute('data-theme')")
                         shot = args.out_dir / f"robot-{surface}-{theme}-{width}x{height}.png"
@@ -108,16 +134,21 @@ def main() -> int:
                         rows.append({"surface": surface, "theme": theme,
                                      "viewport": f"{width}x{height}",
                                      "data-theme": applied,
+                                     "contentReady": content_ready,
+                                     "measurements": measurements,
                                      "badResponses": [r for r in responses if r[1] >= 400][:3]})
-            context.close()
+                context.close()
             browser.close()
 
-    report = {"rows": rows, "pageErrors": errors, "generated": time.strftime("%F %T")}
+    report = {"tier": "LOCAL synthetic development-auth fixture; not operator/device acceptance",
+              "rows": rows, "pageErrors": errors, "generated": time.strftime("%F %T")}
     (args.out_dir / "report.json").write_text(
         json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     bad = [f"{r['surface']}/{r['theme']}@{r['viewport']}: data-theme={r['data-theme']!r} "
            f"bad={r['badResponses']}" for r in rows
-           if r["data-theme"] != r["theme"] or r["badResponses"]]
+           if r["data-theme"] != r["theme"] or r["badResponses"]
+           or not r["contentReady"] or r["measurements"]["authGate"]
+           or r["measurements"]["failedPanels"] or r["measurements"]["overflow"]]
     for line in bad:
         print(f"PROBLEM {line}", file=sys.stderr)
     if errors:

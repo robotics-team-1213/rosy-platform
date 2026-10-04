@@ -27,7 +27,7 @@ from core_common.protocol.evidence import EvidenceState, ValueEvidence
 from core_common.protocol.network_peers import DiscoveryScanPayload  # noqa: F401
 
 from core_common.protocol.access import LoginPairRequest, CameraPairApprovalRequest, SshPairRequest  # noqa: F401
-from core_common.protocol.access import ConnectionInfo  # noqa: F401
+from core_common.protocol.access import ConnectionInfo, SiteRoomsSnapshot  # noqa: F401
 from core_common.protocol.localization import LocalizationStatus
 from core_common.protocol.cell_goal_evidence import CellGoalEvidenceSubmission  # noqa: F401
 from core_common.protocol.cell_app import (  # noqa: F401

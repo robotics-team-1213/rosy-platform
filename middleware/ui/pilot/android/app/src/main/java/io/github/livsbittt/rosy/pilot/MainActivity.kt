@@ -126,21 +126,21 @@ class MainActivity : Activity() {
             if (attempt != version) return@execute
             try {
                 val offer = LobbyPairing.offer(candidate)
-                val saved = if (offer.mode == "paired") vault.load(candidate, offer, store) else null
+                val remembered = if (offer.mode == "paired") vault.inspect(candidate, offer, store) else SavedLogin(SavedLoginStatus.NONE)
+                val saved = remembered.session
                 val reused = saved?.takeIf { LobbyPairing.reuse(it) }
-                if (saved != null && reused == null) vault.erase(candidate)
                 main.post {
                     if (version != attempt || !foreground) return@post
                     if (reused != null) join(candidate, offer, store, version, null, reused)
                     else if (offer.mode == "development") join(candidate, offer, store, version, null)
-                    else pairingCode(candidate, offer, store, version)
+                    else pairingCode(candidate, offer, store, version, remembered.status)
                 }
             } catch (_: Exception) { failed(version, if (candidate.secure)
                 "연결할 수 없습니다. 로봇 전원·같은 Wi-Fi·신뢰된 HTTPS 연결을 확인한 뒤 다시 선택하세요."
                 else "연결할 수 없습니다. 로봇 전원과 같은 Wi-Fi 연결을 확인한 뒤 다시 선택하세요.") }
         }
     }
-    private fun pairingCode(candidate: Candidate, offer: LobbyOffer, store: CandidateStore, version: Long) {
+    private fun pairingCode(candidate: Candidate, offer: LobbyOffer, store: CandidateStore, version: Long, savedStatus: SavedLoginStatus) {
         window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         val input = EditText(this).apply {
             hint = "8자리 로그인 코드"; textSize = 28f; setSingleLine(); setTextColor(PilotColors.foreground)
@@ -149,7 +149,7 @@ class MainActivity : Activity() {
         }
         fun canceled() { if (version == attempt) { opening = false; refresh() } }
         val dialog = AlertDialog.Builder(this).setTitle("로봇 로그인 코드")
-            .setMessage("${candidate.name}에 표시된 숫자·영문 코드를 입력하세요.").setView(input)
+            .setMessage((if (savedStatus == SavedLoginStatus.EXPIRED) "저장된 연결 기록은 유지되어 있지만 로그인이 만료되었습니다. 새 코드가 필요합니다.\n\n" else "") + "${candidate.name}에 표시된 숫자·영문 코드를 입력하세요.").setView(input)
             .setPositiveButton("연결", null).setNegativeButton("취소") { _, _ -> canceled() }
             .setOnCancelListener { canceled() }.create()
         pairingDialog = dialog
@@ -168,11 +168,10 @@ class MainActivity : Activity() {
             var relay: PilotProxy? = null
             try {
                 val approved = reused ?: LobbyPairing.connect(candidate, offer, store, code)
-                if (offer.mode == "paired") approved.onInvalidated = { vault.erase(candidate) }
                 if (version != attempt) return@execute
                 relay = PilotProxy(approved, AssetBundle(assets)) { message -> main.post { if (version == attempt) status.text = message } }
                 relay.verifyIdentity(); relay.start(5000, false)
-                if (offer.mode == "paired" && version == attempt) vault.save(candidate, approved)
+                if (offer.mode == "paired" && version == attempt) vault.saveVerified(candidate, approved)
                 val ready = relay
                 main.post {
                     if (version != attempt || !foreground || web != null) { io.execute { ready.stop() }; return@post }
@@ -182,7 +181,7 @@ class MainActivity : Activity() {
                     bar.addView(button("로봇 목록") { returnToLobby() })
                     status = label("${candidate.name} · ${approved.target.id}", 18f).apply { setPadding(views.dp(20), 0, views.dp(20), 0); typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL); maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END }
                     bar.addView(status, LinearLayout.LayoutParams(0, -2, 1f))
-                    bar.addView(button("태블릿") { deviceDetails() })
+                    bar.addView(button("태블릿") { deviceDetails(candidate) })
                     root.addView(bar)
                     healthText = label("태블릿 상태 확인 중", 14f); lastHealth?.let { renderHealth(it) }
                     val view = WebView(this); web = view; view.setBackgroundColor(PilotColors.background)
@@ -231,7 +230,7 @@ class MainActivity : Activity() {
         if (version != attempt || !foreground) return@post
         opening = false; lastError = message; refresh(); status.text = message
     } }
-    private fun endSession(afterClosed: (() -> Unit)? = null) {
+    private fun endSession(forget: Candidate? = null, afterClosed: (() -> Unit)? = null) {
         // Resource-owning completion callbacks must run their stale-attempt cleanup.
         attempt++; screenSleep.revoke(); opening = false; main.removeCallbacks(refreshTick)
         val closingAttempt = attempt
@@ -243,7 +242,7 @@ class MainActivity : Activity() {
         discovery?.stop(clearCandidates = false); discovery = null
         // Serialize the cooling completion behind startup/stale relay cleanup and native zero.
         SessionShutdown.close(io, java.util.concurrent.Executor { main.post(it) },
-            { oldRelay?.stop(); oldCandidates.clear() }, afterClosed?.let { action -> { if (attempt == closingAttempt) action() } })
+            { oldRelay?.stop(); oldCandidates.clear(); forget?.let { vault.erase(it) } }, afterClosed?.let { action -> { if (attempt == closingAttempt) action() } })
         CookieManager.getInstance().removeAllCookies(null); WebStorage.getInstance().deleteAllData(); showLobby()
     }
     private fun renderHealth(value: DeviceHealth) {
@@ -256,12 +255,21 @@ class MainActivity : Activity() {
         if (foreground && cooling.requestSleep(value)) sleepScreen(askPermission = false)
         else if (foreground && !sleeping && !cooling.coolingRequired) { if (wasCooling) screenPower.restore(); startDiscovery() }
     }
-    private fun deviceDetails() {
+    private fun deviceDetails(candidate: Candidate? = null) {
         val thermal = when (lastHealth?.thermalStatus) { 0 -> "정상"; 1 -> "가벼운 발열"; 2 -> "발열 주의"; 3, 4, 5, 6 -> "발열 보호"; else -> "상태 확인 불가" }
         pairingDialog?.dismiss()
         pairingDialog = AlertDialog.Builder(this).setTitle("태블릿 상태")
             .setMessage("${healthText.text}\n발열: $thermal\n\n화면을 끄면 조종 연결을 닫습니다. 로봇은 다시 선택해 연결할 수 있습니다.")
-            .setPositiveButton("화면 끄기") { _, _ -> sleepScreen(true) }.setNegativeButton("닫기", null).create()
+            .setPositiveButton("화면 끄기") { _, _ -> sleepScreen(true) }.setNegativeButton("닫기", null)
+            .apply { if (candidate != null) setNeutralButton("이 앱의 연결 기록 지우기") { _, _ -> forgetConnection(candidate) } }.create()
+        pairingDialog!!.show()
+    }
+    private fun forgetConnection(candidate: Candidate) {
+        pairingDialog = AlertDialog.Builder(this).setTitle("이 앱의 연결 기록 지우기")
+            .setMessage("조종 연결을 닫고 이 태블릿에 저장된 로그인 정보만 지웁니다. 수신 장치의 승인이나 다른 앱의 연결은 해제하지 않습니다.")
+            .setNegativeButton("취소", null).setPositiveButton("지우기") { _, _ ->
+                endSession(forget = candidate) { opening = false; startDiscovery() }; opening = true
+            }.create()
         pairingDialog!!.show()
     }
     private fun returnToLobby() { endSession { opening = false; startDiscovery() }; opening = true }

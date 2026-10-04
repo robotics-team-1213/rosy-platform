@@ -93,8 +93,7 @@ UNITS = (
     "rosy-camera.service",
     "rosy-camera-healthy.service", "rosy-camera-healthy.timer",
     "rosy-navigation.service",
-    "rosy-boot-status.service",
-    "rosy-boot-status.timer",
+    "rosy-boot-status.service", "rosy-boot-status.timer",
     "rosy-boot-status-ready.service",
     # D-433: retired (see RETIRED_UNITS); rosy-face replaces it.
     "rosy-boot-display.service",
