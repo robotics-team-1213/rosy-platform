@@ -5658,3 +5658,9 @@ osy-d395-s1d\`.
 - 변경: D-451 주문 하나를 기존 `POST /api/v1/line-follow/stuck/decision` 의 `YIELD` 한 구간으로 보낸다. CORE 는 회전을 확인한 뒤 앞으로만 기어 가고, 끝나면 선으로 돌아가지 않는다. 운용자 Fleet 경로의 다섯 단어는 그대로다. ADR `docs/adr/D-453-yield-one-segment.md`. D-452 는 integrate/ui-ship 번호라 `adr_gaps` 에 남겼다.
 - 증거: `operations/fleet/test/test_meet_place.py`, `test_stuck_resolver.py`, `test_transport.py`, `test_meet_algorithms.py`, `middleware/core/services/test/test_line_stuck_recovery.py`, `middleware/core/gateway/test/test_line_follow_stuck_api.py`.
 - gate 변화: 없음. 호스트 판단 시험. 장치·ROS-SIM 은 주장하지 않는다.
+
+## 2026-10-04 · uncommitted · fix(harness): pin one committed G2 encoding repair
+
+- 변경: main에 이미 커밋된 손상 G2 저널과 검증된 수정본의 정규화 블록 SHA256 한 쌍만 로그 보존 검사에서 인정한다. 새 손상 heading·인코딩·임의 수정·삭제는 계속 거부한다. 원문은 비공개 병합 증거에 보존했다.
+- 증거: 정확한 교체 허용 회귀 RED 후 구현했다. 변형된 원문·수정본·삭제·다른 항목 유실은 거부하며 전체 harness 회귀와 독립 검토를 수행한다. 기존 광범위 검사 결과와 실패별 재검사는 X:/DevTemp/rosy-learning-audit-20261004/landing-*에 보존한다.
+- gate 변화: SOURCE/HOST 병합 수리만. 실제 관리자 설치·라벨·운영 승격·장치/현장 수용은 별도다.

@@ -291,8 +291,8 @@
 
 ## 최근 기록
 
+- 2026-10-04 · uncommitted · fix(harness): pin one committed G2 encoding repair
 - 2026-10-04 · uncommitted · feat(fleet): D-453 양보 한 구간
 - 2026-10-04 · uncommitted · docs(adr): D-451 한 줄 교착의 양보는 Fleet 알고리즘이 고른다
 - 2026-10-04 · uncommitted · docs(adr): D-454 중앙 Fleet 착수
 - 2026-10-04 · uncommitted · docs(validation): 웹 표면 ARTIFACT 관측 회차 — 서명 payload 안 share/ 확인 (D-444 P1)
-- 2026-10-04 · uncommitted · D-452 승인 다른 망 경로와 선택 CLI

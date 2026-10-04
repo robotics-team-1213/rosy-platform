@@ -14,6 +14,7 @@ half runs it against the modules listed in ``tools/harness/harness.yaml``.
 from __future__ import annotations
 
 import warnings
+from hashlib import sha256
 from pathlib import Path
 
 import pytest
@@ -270,6 +271,19 @@ def test_logs_allow_exact_reconciliation_of_concurrent_pending_evidence():
     assert harness.is_append_only(pending, verified)
     changed_scope = verified.replace("four phase snapshots", "three phase snapshots")
     assert not harness.is_append_only(pending, changed_scope)
+
+
+def test_encoding_repair_accepts_only_the_pinned_old_and_new_blocks(monkeypatch):
+    old = "## 2026-10-04 ? uncommitted ? broken encoding\n- Change: ??"
+    new = "## 2026-10-04 · uncommitted · recovered encoding\n- Change: verified source"
+    monkeypatch.setattr(harness, "KNOWN_LOG_ENCODING_REPAIRS", {
+        sha256(old.encode()).hexdigest(): sha256(new.encode()).hexdigest(),
+    }, raising=False)
+    assert harness.is_append_only(old, new)
+    assert not harness.is_append_only(old + " altered", new)
+    assert not harness.is_append_only(old, new + " altered")
+    assert not harness.is_append_only(old, "")
+    assert not harness.is_append_only(old + "\n## another entry\noriginal", new)
 
 
 def test_logs_tolerate_merge_reordering_but_not_loss_or_edits():
