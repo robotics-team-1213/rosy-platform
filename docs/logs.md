@@ -5232,3 +5232,14 @@
 - 변경: 정상 IDLE/STANDBY 기준을 600/1800초로 늘리고 warning60/300, critical/deep30/120초와 min을 취한다. YAML override·API effective timers에 연결한다. 기존 이동·정보 hold·disabled와 배터리 정지/종료 권한을 유지한다.
 - 증거: 주입 시계·설정 parser RED3 failed, 전원/배터리/bridge GREEN180 passed. 구조 재판정은 docs/plans/2026-10-04-power-health-and-wake.md에 기록한다.
 - gate 변화: SOURCE/LOCAL. 기기 소비전력·물리 wake·배포 검증은 별도다.
+## 2026-10-04 · uncommitted · verify(D-441): 최초 설치와 실제 후속 자동 갱신 확인
+
+- 변경: 검토된 93f66072c 후보를 일회성 설치 대상으로 고정하고, 이미 받은 후보를 서명·manifest 해시 검증 후 재사용했다. 기존 등록 키로 서명한 최초 설치와 후속 a24b6ca8a 후보의 자동 갱신을 완료했다.
+- 증거: 독립 설치기 Linux 재현 10개 통과. source 93f66072c CI 37176545073 및 실행 a24b6ca8a CI 37177384801 필수 검사 통과; 비필수 sensing 실패 5개는 기존 기준과 동일. 별도 SSH readback에서 서명·main 후손 계보·실제 컨테이너 3개의 불변 이미지 ID·HTTPS 200·타이머 active/enabled·서명된 롤백 후보 보존·중단 기록 없음 확인. 주소·계정·인증 정보가 포함된 실제 기록은 외부 운영 증거로 보관했다.
+- gate 변화: D-441 최초 설치와 실제 자동 갱신의 SITE_RUNTIME 검증 완료. 로봇 이동이나 FIELD 수용 상태는 변경하지 않았다.
+
+## 2026-10-04 · uncommitted · docs: additional road video and update record audit
+
+- 변경: 과거 실제 영상 2개/24표본/2모델 48판정(마스크 재실행 별도)과 native 펌웨어·모델 변경 기록 감사를 docs/validation/road-video-and-update-records-2026-10-04에 기록했다. 원본 미디어는 비공개로 보존한다.
+- 증거: 중앙 원 흰 경계 검출, 바닥/벽 오분류와 API/UI 이력 연결 공백을 분리했다. updater·모델 계약 372 passed/25 skipped; 영상 정합성 및 독립 육안 검토 완료. 문서 계약 98 passed/1 skipped; harness lint 0 errors/16 기존 검증 경고.
+- gate 변화: 없음. 과거 영상 재생과 읽기 전용 장치 증거이며 실주행·신규 배포·모델 승격·반복 재부팅 원인 확정은 아니다.

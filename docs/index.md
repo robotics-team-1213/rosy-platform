@@ -284,8 +284,8 @@
 
 ## 최근 기록
 
+- 2026-10-04 · uncommitted · docs: additional road video and update record audit
+- 2026-10-04 · uncommitted · verify(D-441): 최초 설치와 실제 후속 자동 갱신 확인
 - 2026-10-04 · uncommitted · feat(power): long testing dwell with low battery saving
 - 2026-10-04 · uncommitted · feat(power): fresh battery evidence and idle saving
 - 2026-10-04 · uncommitted · D-446 clean older checkout permits signed execution
-- 2026-10-04 · uncommitted · D-446 remote integration after source migration
-- 2026-10-04 · uncommitted · fix: CI Gazebo 제외 파일의 수명
