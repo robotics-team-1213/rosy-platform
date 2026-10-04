@@ -82,3 +82,18 @@ goal UUID와 receipt를 연결할 수 있다. export는 OMX/Pinky profile valida
 journal/driver goal을 보존된 owner receipt와 다시 비교한다. profile 변경이나
 같은 action/attempt의 다른 generation으로 우회하지 않는다. 구체 검증은
 `docs/validation/omx-owner-receipt-provenance-2026-10-04.md` 참조.
+
+
+For a read-only audit of an existing registry, use `Registry(root, read_only=True)`
+or `python learning/registry/policy/registry.py --root <root> --read-only history`
+(`show <revision>` is also supported). `DatasetStore(root, read_only=True)` permits
+`require`/`require_policy` with the same file and Episode closure validation.
+Missing databases or schemas fail instead of creating directories/tables. These
+objects reject registration, assessment recording, and promotion before processing
+inputs. The existing default remains writable for callers that publish records.
+
+Read-only connections use SQLite `mode=ro` and ordinary read transactions, so an
+audit keeps a consistent ledger snapshot and includes committed WAL records; it
+does not use `immutable=1` or reserve a writer lock. SQLite may use the database's
+WAL/shared-memory sidecars for coordination. Artifact files are still validated
+from their preserved snapshots; this is an integrity audit, not operating approval.
