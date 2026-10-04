@@ -108,17 +108,44 @@ def validate_request(request, trainer):
     return {"frames": len(frames), "train_sessions": sorted(train), "val_sessions": sorted(val)}
 
 
+def review_queue(exports):
+    """Do not infer revision order from immutable export names or arrival times."""
+    frames = {}
+    for export in exports:
+        for row in export["frames"]:
+            identity = {key: row[key] for key in ("video", "video_frame", "image_sha256")}
+            frame = frames.setdefault(signature(identity), {"identity": identity,
+                                                            "exports": set(), "variants": {}})
+            frame["exports"].add(export["manifest_sha"])
+            # Index is local to an export, not the original frame identity.
+            decision = {key: value for key, value in row.items() if key != "index"}
+            frame["variants"][signature(decision)] = decision
+    return [{"frame_id": key, "identity": frame["identity"],
+             "exports": sorted(frame["exports"]), "variants": len(frame["variants"]),
+             "status": "agreed" if len(frame["variants"]) == 1 else "conflict",
+             "decision": next(iter(frame["variants"].values()))
+                         if len(frame["variants"]) == 1 else None,
+             "training_dataset_qualified": False}
+            for key, frame in sorted(frames.items())]
+
+
 def scan_reviews(config, job):
     root = Path(config["reviews_dir"])
     progress = job.state.setdefault("reviews", {})
+    current, seen = [], set()
     for folder in sorted(root.glob("*")):
         if folder.name.startswith(".") or not folder.is_dir() or not (folder / "COMPLETE").is_file():
             continue
         try:
+            seen.add(str(folder))
             row = verified_export(folder)
             progress[str(folder)] = {"status": "verified", **row}
+            current.append(row)
         except (OSError, ValueError, KeyError) as error:
             progress[str(folder)] = {"status": "invalid", "error": str(error)}
+    for path in progress.keys() - seen:
+        progress[path]["status"] = "unavailable"
+    job.state["review_queue"] = review_queue(current)
     # Persist full per-frame decisions, including pending and excluded, before training.
     job._save()
 

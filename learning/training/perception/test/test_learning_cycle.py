@@ -134,3 +134,42 @@ def test_incomplete_export_is_not_counted(setup):
     (Path(config["reviews_dir"]) / "partial").mkdir(parents=True)
     state = cycle.run_once(config, out, trainer_fn=lambda cfg, path: {})
     assert state["reviews"] == {}
+
+
+def test_review_generations_do_not_resurrect_older_approval():
+    identity = {"index": 0, "video": "original.mp4", "video_frame": 12,
+                "image_sha256": "a" * 64}
+    approved = dict(identity, review_status="approved", complete_frame_review=True, boxes=[])
+    excluded = dict(identity, review_status="pending", complete_frame_review=False,
+                    disposition="excluded_by_user", boxes=[])
+    exports = [{"manifest_sha": "old", "frames": [approved]},
+               {"manifest_sha": "new", "frames": [excluded]}]
+    queue = cycle.review_queue(exports)
+    assert len(queue) == 1
+    assert queue[0]["status"] == "conflict"
+    assert queue[0]["decision"] is None
+    assert queue[0]["training_dataset_qualified"] is False
+    assert cycle.review_queue(list(reversed(exports))) == queue
+
+
+def test_identical_frame_decisions_deduplicate_across_export_local_indices():
+    row = {"index": 0, "video": "original.mp4", "video_frame": 12,
+           "image_sha256": "a" * 64, "review_status": "approved",
+           "complete_frame_review": True, "boxes": []}
+    queue = cycle.review_queue([{"manifest_sha": "a", "frames": [row]},
+                                {"manifest_sha": "b", "frames": [dict(row, index=42)]}])
+    assert len(queue) == 1 and queue[0]["status"] == "agreed"
+    assert queue[0]["decision"]["review_status"] == "approved"
+    assert queue[0]["exports"] == ["a", "b"]
+
+
+def test_removed_export_cannot_remain_current_verified_progress(setup):
+    import shutil
+    config, out, _ = setup
+    folder = make_review(Path(config["reviews_dir"]))
+    first = cycle.run_once(config, out, trainer_fn=lambda cfg, path: {})
+    assert first["review_queue"][0]["status"] == "agreed"
+    shutil.rmtree(folder)
+    second = cycle.run_once(config, out, trainer_fn=lambda cfg, path: {})
+    assert second["review_queue"] == []
+    assert second["reviews"][str(folder)]["status"] == "unavailable"
