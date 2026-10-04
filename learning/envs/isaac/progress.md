@@ -13,7 +13,7 @@ gates:
     evidence: "test_graph_contract·test_model_checks·test_prepare_urdf 통과 (2026-09-30 Windows)"
   ROS-SIM:
     state: HOLD
-    blocker: "Model-PC Isaac 5.1 installation is historical D-434 evidence; current runner uses 6.1 import APIs. Actual remote import/ROS graph, command freshness stop, sensors/Nav2 and two-robot Fleet acceptance remain unverified. Host 10 passed/1 skipped on 2026-10-04 does not promote runtime (D-322/D-434)."
+    blocker: "Model-PC Isaac 5.1 SDK imported the referenced robot and ran 120 graph callbacks; independent observer received 117 clock and 117 odom messages. Initial and 243 subsequent Gate/USD wheel-target zero checks passed without a Twist publisher. Process exceeded its 120-second bound after SDK close returned (exit 124). Normal shutdown, actual driving/physical freshness stop, Nav2 and two-robot Fleet acceptance remain unverified. Host 33 passed/1 skipped does not promote runtime (D-322/D-434)."
   ARTIFACT: { state: N/A }
   DEVICE: { state: N/A }
   FIELD: { state: N/A }

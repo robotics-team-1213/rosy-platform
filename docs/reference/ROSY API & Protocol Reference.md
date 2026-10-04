@@ -2,7 +2,7 @@
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.89
+**Version:** v1.90
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -2020,10 +2020,31 @@ This contract and host tests establish SOURCE/LOCAL composition. Independent
 Gazebo placement evaluation, the actual OMX owner/provider and ROS-SIM, device
 and field acceptance require their own evidence.
 
+## Fleet Cell 작업 화면 (D-450, v1.90)
+
+`/console/cell`은 기존 Fleet Console 프로세스·인증·포트의 작업 화면이다. 신규 실행 writer나 원장을 만들지 않는다. 운영자 입력 문서는 초안으로 저장할 수 있으며, 저장 성공이 실행 가능한 문서임을 뜻하지 않는다. `compile`은 설치된 정본 process compiler로 검증하고 계산한다.
+
+| 경로 | 권한 | 요청 · 응답 |
+|---|---|---|
+| `GET /api/fleet/cell-app/documents` | 기존 viewer | `{documents:[{kind,id,digest,updated_at}]}` |
+| `GET /api/fleet/cell-app/documents/{kind}/{identifier}` | 기존 viewer | `{kind,id,digest,document,updated_at}` |
+| `POST /api/fleet/cell-app/documents/{kind}/{identifier}` | named operator | `CellAppDocumentSaveRequest`: `{document,expected_digest:null 또는 sha256}` → 저장 문서. 생성은 null, 수정은 현재 digest가 필요 |
+| `POST /api/fleet/cell-app/compile` | named operator | `CellAppCompileRequest`: `{recipe_id,recipe_digest,cell_id,cell_digest}` → `{candidate,process_artifact_digest,summary:{transfer_count,pallet_markers}}`. 실행·제안·승인 부작용 없음 |
+| `POST /api/fleet/cell-app/proposals` | named operator | `CellAppProposalRequest`: compile 참조 + `{request_key,workcell_id,instance_id}` → 기존 proposal resolve 응답. 구성된 service principal이 제안·resolve하며 admit하지 않음 |
+
+`kind`는 `recipe|cell`, 문서 ID는 `[A-Za-z0-9][A-Za-z0-9_-]{0,63}`, digest는 소문자 sha256다. 문서는 finite JSON object, canonical JSON UTF-8 64 KiB 이하. 동일 DB의 문서 revision은 트랜잭션에서 비교한다. `request_key`는 160자 이하, `workcell_id`/`instance_id`는 96자 이하이며 공백 trim·제어문자 없는 기존 proposal 식별자 규칙을 따른다. 미리보기 candidate는 기존 `{kind:"cell_job",recipe,cell,recipe_sha256,cell_sha256,job}` 계약 그대로다. 저장 revision digest와 process의 recipe/cell hash는 각각 해당 canonical 표현의 해시다.
+
+제안 composition은 `--cell-app-service-id`로 지정한 실제 site-users `role=service` ID를 검증한다. 미구성이면 제안은 503; 존재하지 않거나 operator/viewer ID이면 서버 구성을 거절한다. 서비스 자격은 브라우저에 전달하지 않는다. HTTP를 시작한 named operator의 API audit와 proposal 원장의 service author를 함께 유지한다. 같은 request key 재시도는 기존 ProposalStore idempotency/충돌 규칙을 사용한다. UI는 실패 시 자동 재제안·승인·재실행하지 않는다.
+
+오류: `CELL_APP_UNCONFIGURED`(503), `CELL_APP_DOCUMENT_NOT_FOUND`(404), `CELL_APP_DOCUMENT_CHANGED`(409), `CELL_APP_DOCUMENT_INVALID`(422), `CELL_APP_COMPILE_INVALID`(422; `message`, `problems`). 문서 저장·compile·proposal POST는 기존 Fleet API audit를 받는다. 기존 proposal/admission 오류도 그대로 전달한다.
+
+작업 화면의 승인·진행·복구는 기존 `/api/fleet/missions/{id}/admit`, `/api/fleet/cell-jobs/{id}`, `/reconcile`, `/resume`, `/cancel`을 사용한다. 승인/재승인은 현재 dispatch generation과 named operator가 필요하다. UNKNOWN의 자동 재시도는 없다. cancel은 기존 `HOLD/CANCELLED_BY_OPERATOR` 계약을 유지한다. 서비스 제안 성공·실행 성공·독립 목표 확인은 별개다.
+
 # 11. 변경 이력
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.90 | 2026-10-04 | Additive (D-450): Fleet Console `/console/cell` 작업 화면의 revision 문서 저장·정본 compile·명시 service proposal API 및 `CellApp*Request` 스키마 추가. 기존 named operator admission/복구·원장을 재사용. envelope version 1.0 유지 |
 | v1.89 | 2026-10-03 | Additive (D-418, feat/d418-ssh-access): 로봇 SSH 접속 §5.8 — Admin 전용 `GET /host/ssh/host-keys`, `GET\|POST /host/ssh/keys`, `DELETE /host/ssh/keys/{label}`, `GET\|POST\|DELETE /host/ssh/password` 신설. 오류 코드 `SSH_INVALID`(422)·`SSH_LABEL_EXISTS`·`SSH_KEY_EXISTS`·`SSH_KEYS_FULL`(409)·`SSH_KEY_NOT_FOUND`(404)·`SSH_ACCESS_UNAVAILABLE`(503). 스키마 `Ssh*`(`schemas.py`). 기존 경로·필드 변화 없음. 브랜치에서 v1.84 로 적었으나 main 이 v1.84(D-422)–v1.88(D-423)을 먼저 써서 v1.89 로 재번호 |
 | v1.88 | 2026-10-03 | Additive (D-423, feat/d423-object-range-detection): `GET /api/v1/vision/models`(viewer, 읽기 전용) — 로봇 학습 모델 상태를 작업별로(`lane_seg` shadow, `object_det` active). §6.1.1 에 ROS `vision/detections`(DetectionEvidence 필드 + 추가 `ranges`)를 적음 — CORE 는 구독하지 않음. 카메라 관측 영역의 `s`(`L`/`G`)·`ground_source` 는 control 내부 증거(`camera/observation`)라 이 계약 밖. 쓰기 API·이벤트·FleetAgent 변경 없음. v1.82 는 main 의 D-403/D-413 행 |
 | v1.87 | 2026-10-03 | Additive (D-411 B+C, feat/d411bc-pilot-controls-gripper; A 는 v1.83 에서 먼저 들어감): B: capabilities `controls`(`rosy.controls/1`, §9.1), OMX SIM `GET /sim/omx/target` `controls`; Pilot 이 `controls` 로 주행·팔 조작부를 조립(필드 없음 = 구 서버 대체, 빈 `items` = 조작부 없음, 팔 조이스틱은 순차 제한 목표·떼면 새 목표만 멈춤). C: OMX SIM `POST /sim/omx/gripper`(`OmxSimGripperGoal`, 절대 위치·0.2–2.0 s), `/state` `gripper` readback(`open`·`closed`·`holding`·`moving`·`unknown`), `/target` `controls` 의 `gripper` 항목(그리퍼는 `joint_jog` 에서 빠짐, 선택 `max_velocity`(`GripperControl.max_velocity`), 409 `gripper_velocity_limit`), SIM 허용 범위 = 셀 프로필 ∩ URDF·알리는 범위는 0.02 rad 안쪽·목표 길이 상한 2.0 s, 쥔 채 팔 조그는 멈춘 위치 + preload, 시연 기록 `action.gripper` 열과 LeRobot 특성(선택, 이전 에피소드 유효). 기존 필드 변화 없음 |

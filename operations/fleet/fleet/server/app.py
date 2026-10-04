@@ -115,7 +115,8 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                pairing=None, pairing_sync_token: Optional[str] = None,
                localization_service=None, deployment_profile: str = "production",
                omx_cell_grant_revisions: Optional[Mapping[str, Mapping[str, str]]] = None,
-               cell_item_pose_tolerance=None, cell_goal_registry=None) -> FastAPI:
+               cell_item_pose_tolerance=None, cell_goal_registry=None,
+               cell_app_service_id: str | None = None) -> FastAPI:
     if deployment_profile not in DEPLOYMENT_PROFILES:
         raise ValueError(f"unsupported deployment_profile {deployment_profile!r}")
     mission_configured = mission_service is not None or proposal_store is not None
@@ -149,20 +150,8 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         cell_job_store.recover_after_startup()
     cell_job_resolver = None
     if cell_job_compiler is not None:
-        from rosy.execution.site.cell_submission import compile_cell_submission
-        from fleet.server.cell_goal_evidence import attach_goal_predicates
-
-        def compile_cell_job(candidate, *, workcell_id, instance_id):
-            submission = compile_cell_submission(
-                candidate, compiler=cell_job_compiler,
-                workcell_id=workcell_id, instance_id=instance_id,
-            )
-            document = submission.as_store_document()
-            if cell_item_pose_tolerance is not None:
-                attach_goal_predicates(document, cell_job_compiler.item_geometry(candidate["recipe"]),
-                                       cell_item_pose_tolerance)
-            return document
-        cell_job_resolver = compile_cell_job
+        from fleet.server.cell_goal_evidence import make_cell_job_resolver
+        cell_job_resolver = make_cell_job_resolver(cell_job_compiler, cell_item_pose_tolerance)
     if site_users is not None and task_service is None:
         raise ValueError("per-user site authorization requires persistent task/audit storage")
     if bool(discovery) != bool(discovery_token):
@@ -468,8 +457,9 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                                  read_guard=read_guard, operator_guard=operator_guard,
                                  drive_cancel=drive_cancel)
 
+    proposal_create = proposal_resolve = None
     if mission_service is not None:
-        install_mission_routes(app, mission_service=mission_service,
+        proposal_create, proposal_resolve = install_mission_routes(app, mission_service=mission_service,
                                proposal_store=proposal_store,
                                cell_job_store=cell_job_store,
                                cell_job_resolver=cell_job_resolver,
@@ -486,6 +476,12 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         install_cell_job_routes(app, cell_job_store=cell_job_store,
                                 require_named_operator=require_named_operator,
                                 operator_guard=operator_guard, read_guard=read_guard)
+
+    from fleet.server.cell_app_routes import install_cell_app_routes
+    install_cell_app_routes(app, mission_service=mission_service, compiler=cell_job_compiler,
+                            service_id=cell_app_service_id, principals=principals,
+                            proposal_create=proposal_create, proposal_resolve=proposal_resolve,
+                            require_viewer=require_viewer, require_named_operator=require_named_operator)
 
     install_intent_routes(app, console=console, task_service=task_service,
                           require_operator=require_operator,

@@ -64,6 +64,7 @@
 - [2026-09-29-policy-evidence-contract.md](../../docs/plans/2026-09-29-policy-evidence-contract.md)
 - [2026-10-01-model-tool-contract-implementation.md](../../docs/plans/2026-10-01-model-tool-contract-implementation.md)
 - [2026-10-02-platform-architecture-v02-migration.md](../../docs/plans/2026-10-02-platform-architecture-v02-migration.md)
+- [2026-10-04-cell-isaac-implementation.md](../../docs/plans/2026-10-04-cell-isaac-implementation.md)
 - [2026-10-04-d442-omx-preempt-recovery.md](../../docs/plans/2026-10-04-d442-omx-preempt-recovery.md)
 - [2026-10-04-d443-signal-supervision.md](../../docs/plans/2026-10-04-d443-signal-supervision.md)
 
@@ -77,8 +78,8 @@
 
 ## 최근 기록
 
+- 2026-10-04 · uncommitted · feat(cell): revisioned Console workspace
 - 2026-10-04 · uncommitted · fix: D-427 push5 통합 게이트 정합성
 - 2026-10-04 · uncommitted · D-442 U3 owner 선점과 named 운영 복구
 - 2026-10-04 · uncommitted · D-443 신호 감독 안전 수정
 - 2026-10-04 · uncommitted · D-427 shared asset path contract
-- 2026-10-03 · uncommitted · feat: read live Fleet fence on the simulation Cell owner

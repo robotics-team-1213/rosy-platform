@@ -488,3 +488,8 @@
 - 증거: Python 집중 35 passed, 추가 구조/Fleet 97 passed, Node 전체 109 passed. 실제 입력 누락·colcon 오배치·raw enum 표시 mutation 네 건 RED 뒤 원본 bytes 복원·GREEN. 알려진 실패 0 new, backlog 증가 없음. `docs/validation/d427-source-migration/push5-gate-corrections-2026-10-04.md`.
 - 독립 리뷰: d427_safety_review APPROVE source/host, 별도 Python 22 passed·Node 3 passed. Fleet +12 줄은 기존 +150·split 판정 안에 있고 예산·allowlist를 늘리지 않았다.
 - gate 변화: SOURCE/로컬 증거만 추가한다. 새 pre-push·원격 CI·ARM64·SD·기기·현장 수락은 후속이다.
+## 2026-10-04 · uncommitted · feat(web): Console Cell workspace ownership
+
+- 변경: Console의 `/console/cell` 작업 화면을 같은 프로세스/포트/CSP에 추가했다. cell-document/compile/proposal 소유를 기존 Console 표면에 등록하고 mission 승인·복구는 Console의 기존 Fleet API를 사용한다. 공용 token·request·controls를 재사용하며 별도 service 자격을 브라우저에 노출하지 않는다.
+- 검증: 공용 field/disabled reason 계약을 통과했다. PC/390px Chromium에서 canonical preview와 별도 승인, 모바일 가로 넘침 없음, 오류와 stale 응답 조작을 확인했다. 현장 UI 수용은 별도다.
+- gate 변화: 기존 표면 GO를 확장 수용으로 해석하지 않는다. Cell 전체 G1 및 실제 현장 수용은 미완료다.

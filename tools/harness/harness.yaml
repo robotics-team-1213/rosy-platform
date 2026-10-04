@@ -7,6 +7,10 @@ adr_log: docs/reference/ROSY ADR Log.md
 
 # IDs absent from the ADR log on purpose. Remove an entry once the ADR is written.
 adr_gaps:
+  D-446: "Allocated on origin/main to model-PC signed code updates; remove on integration"
+  D-447: "Allocated in the shared main checkout to web realtime socket reuse"
+  D-448: "Unused: model-PC code update ADR was renumbered to D-446 during concurrent work"
+  D-449: "Allocated on another branch to learning artifact and owner binding contracts"
   D-444: "Allocated in the shared main checkout to web surface release gates; not on origin/main"
   D-445: "Allocated in the shared main checkout to Fleet promotion preconditions; not on origin/main"
   D-438: "ADR written on branch docs/d438-fleet-stuck-resolver, not yet on main; remove when it lands"

@@ -191,7 +191,7 @@
 | D-432 | 모든 앱·장치는 공통 발견·연결 규약을 쓰고, 개발 모드에서는 코드 없이 연결한다 |
 | D-442 | 로봇 움직임 요청은 ROS 무의존 Motion Intent(`contracts/motion`, 목표형 `base.pose_goal`·`base.path_follow`·`arm.tcp_pose`와 서보형 `base.twist`·`arm.joint_trajectory`·`arm.gripper`; SI 단위·frame·출처·등록표가 정하는 우선순위 등급·`attempt_id`·`envelope_ref`·유효 기간·정지 의미)로, 장치 출력은 장치당 binding 하나인 DeviceControlPort(`capabilities`·`submit(GuardedMotion)`·`cancel`·`state`·`estop_status`, writer만 쥐고 Arbiter→Safety Guard 뒤; Pinky `/cmd_vel` Twist, OMX `ActionPort`)로; OMX 우선순위표(EMERGENCY>SAFETY>MANUAL>SKILL>POLICY)와 HOLD를 거치는 MANUAL 선점; 행동 불변 이행 a→b→c→d |
 | D-443 | `rosy.site-device/1` — 사이트 장치(신호등·도크, 나중에 컨베이어·문·PLC)의 공통 호스트 타입 계약: 식별·자격증명, measured/claimed를 가른 상태, heartbeat·`last_seq`, kind별 semantic 동사, ack와 관측된 효과의 분리, 버전; 지금 신호등·도크 HTTP는 wire 변경 없이 `signal/1`·`dock/1` profile; 장치별 단일 감독자(신호등은 Fleet), 로봇은 읽기만, ER2는 후보만, 장치 로컬 failsafe(신호 10 s 적색 점멸, 도크 0 V), 안전 회로 쓰기 금지; PLC/Modbus 어댑터 `integrations/fieldbus/modbus` 레지스터 맵·범위 단위 안전 주소 거부(시험은 D-430 소유)·변하는 watchdog·연결당 어댑터 하나; 재단언은 감독 연속성과 의도 나이 안에서만(현재 코드 위반, 이행 (b2)), seq 재동기화와 안전 방향 1회 재시도, non-agree 열거와 admission 술어; 동작 변경 없는 이행 (a)–(d); Fleet 상시 감독과 운영자 presence 동안만 수동 점등(떠나면 failsafe); Q1–Q10 결정(Q5·Q8·Q9 사용자 결정, 나머지 권고안; 2026-10-04); 코드 결함은 이전 직후 첫 안전 작업 |
-| D-446 | 팔레타이징 앱은 화면의 한 작업 흐름과 박스 전용 Gazebo 수용을 먼저 완성한다 |
+| D-450 | 팔레타이징 앱은 화면의 한 작업 흐름과 박스 전용 Gazebo 수용을 먼저 완성한다 |
 
 ## 계획·결과 문서
 
@@ -278,8 +278,8 @@
 
 ## 최근 기록
 
+- 2026-10-04 · uncommitted · docs(cell): 번호 충돌 정리와 검증 증거
+- 2026-10-04 · uncommitted · docs: Cell and Isaac implementation progress
 - 2026-10-04 · uncommitted · docs(cell): Isaac 주행 연계와 전체 완료 경계
 - 2026-10-04 · uncommitted · docs(cell): 모델 PC에서 Gazebo 수용
 - 2026-10-04 · uncommitted · docs(cell): 팔레타이징 앱 현황과 완료 목표
-- 2026-10-04 · uncommitted · fix: Windows SSH timeout 종료 경합
-- 2026-10-04 · uncommitted · fix: D-427 push5 통합 게이트 정합성

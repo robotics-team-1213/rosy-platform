@@ -20,7 +20,7 @@ gates:
     state: PARKED
   FIELD:
     state: PARKED
-adrs: [D-401, D-403, D-413, D-446]
+adrs: [D-401, D-403, D-413, D-450]
 plans:
   - docs/plans/2026-10-02-platform-architecture-v02-migration.md
   - docs/plans/2026-10-01-rosy-cell-completion.md

@@ -44,8 +44,8 @@
 
 ## 최근 기록
 
+- 2026-10-04 · uncommitted · feat(web): Console Cell workspace ownership
 - 2026-10-04 · uncommitted · fix: D-427 push5 통합 게이트 정합성
 - 2026-10-03 · uncommitted · refactor: D-425 page lifetime mechanics
 - 2026-10-03 · uncommitted · fix(web): SAFE_STOP 운용 말은 RobotMode 표 밖에 둔다
 - 2026-10-03 · uncommitted · refactor: D-425 Fleet response adapter
-- 2026-10-03 · uncommitted · refactor: scoped HTTP request와 화면 scope

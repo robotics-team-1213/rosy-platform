@@ -4982,3 +4982,14 @@
 - 변경: D-446과 현황 보고서에 Isaac 추가 검토를 연결했다. 모델 PC 한 대 주행→Nav2→두 대 Fleet→이동 후 적재를 분리하고, 고정 Cell 좌표를 이동 작업에 그대로 쓰지 않도록 검증 항목을 기록했다. 전체 앱·Gazebo·Isaac 개발은 아직 미완료임을 명시했다.
 - 증거: Isaac helper 10 passed/1 skipped, 소스의 6.1 importer·단일 로봇 그래프와 D-434의 5.1 기록, 기존 CORE/Nav2 명령 경계 및 NVIDIA 5.1 Navigation/Clock 공식 문서를 대조했다. 실제 모델 PC 접속·주행 결과는 없다.
 - gate 변화: 없음. 추가 검토·목표 문서이며 구현·runtime 승격·실물 구동은 진행하지 않았다.
+## 2026-10-04 · uncommitted · docs: Cell and Isaac implementation progress
+
+- 변경: 사용자 구현 요청에 따라 D-450 실행 계획과 API Ref v1.90 Cell workspace 요청 계약을 추가했다. 기존 proposal/원장/승인 경계를 보존한다. 모델 PC에서 ROS/GPU/Isaac 버전과 격리 실행 prerequisites를 확인했다.
+- 증거: 신규 Cell store/API 및 Chromium 오류·승인 시나리오 15 passed. Isaac source helper/runner 31 passed, xacro 1 skipped. 모델 PC에서 GPU/ROS/SDK 설치 baseline을 읽고 bounded no-motion import를 시도했으며 실제 그래프 수용은 미통과다.
+- gate 변화: Cell host API/브라우저는 부분 구현 검증이며 G1/G2/G3 전체 수용이 아니다. Gazebo/Nav2 설치 완료·격리된 OMX vendor runtime·original C6 sheet 취급은 확인 전이다. Isaac 실제 import/graph/정지 검증은 호스트 시험과 별도로 진행 중이며 ROS-SIM GO를 선언하지 않는다.
+
+## 2026-10-04 · uncommitted · docs(cell): 번호 충돌 정리와 검증 증거
+
+- 변경: main의 모델 PC 자동 갱신 ADR과 번호가 충돌해 팔레타이징 목표를 D-450으로 옮겼다. 이전 로그의 D-446은 당시 번호이며 append-only 이력을 보존한다. 현재 계획·progress·API 참조는 D-450으로 연결한다.
+- 증거: 브라우저/API 19 passed, optional import 회귀 수정 뒤 API 8 passed, fast gate 462 passed/2 skipped/12 기존 warnings. 독립 리뷰가 Cell fence와 CORE API 버전 설명만 변경된 것을 확인했다. Isaac host 33 passed/1 skipped와 모델 PC graph 관측은 별도 validation 문서에 기록했다.
+- gate 변화: SOURCE/LOCAL 부분 증거만 추가했다. Isaac 정상 종료·실제 주행, Gazebo OMX 격리 실행 및 G1 전체 기능 수용은 미완료다.

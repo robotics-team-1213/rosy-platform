@@ -1,6 +1,6 @@
 # 팔레타이징 앱 현황과 완료 우선순위
 
-작성: 2026-10-04. 기준: `origin/main`의 `f32643ffde593f84959b28e990b01120cefaeda1`. 조사 브랜치: `docs/palletizing-completion-review-20261004`.
+작성: 2026-10-04. 기준 commit SHA: `f32643ffde59` (`origin/main` 당시 snapshot). 격리 worktree에서 조사했다.
 
 ## 판단
 
@@ -75,7 +75,7 @@ Gazebo는 작업 PC 로컬/WSL에서 실행하지 않고 **모델 PC를 우선 �
 
 X:의 별도 venv에 기준 SHA로 빌드한 skill/execution/palletizing wheel 세 개를 설치한 뒤 `test/test_platform_palletizing_compat.py`, `test/test_cell_omx_sim_layout_contract.py`, `src/site/cell/test`를 함께 실행해 **174 passed, skip 없음**을 확인했다. 이는 설치한 계산 코어·호환층·레이아웃 회귀이며 Fleet 실행, 브라우저, ROS-SIM 수용은 아니다. 빌드 복사·wheel·venv·로그·pytest 출력은 X:에만 두었다. 기존 문서의 시험 수치는 과거 증거이며 이번 재실행 결과와 구분한다.
 
-완료 목표와 단계별 출구는 [D-446 초안](../adr/D-446-palletizing-app-completion-goals.md)에 정리했다.
+완료 목표와 단계별 출구는 [D-450 초안](../adr/D-450-palletizing-app-completion-goals.md)에 정리했다.
 
 문서·구조 관련 검사에서 127 passed / 1 skipped였고 ADR 연속성 관련 2건은 기존 브랜치가 선점한 D-438 예약 누락으로 실패했다. 예약을 보완한 뒤 해당 2건을 재실행해 2 passed를 확인했다. 최종 harness lint는 0 errors / 26 기존 warnings이고 상대 링크 검사와 diff whitespace 검사도 통과했다. 이 결과는 위 installed-wheel 회귀와 별개의 문서 검사다.
 

@@ -24,6 +24,7 @@
 
 ## 최근 기록
 
+- 2026-10-04 · uncommitted · fix(isaac): SDK 호환 import와 명령 만료 경계
 - 2026-10-04 · uncommitted · docs(isaac): 모델 PC의 주행·관제·적재 연계 검토
 - 2026-09-30 · uncommitted · fix(sim): isaac_sim을 D-310 target 표에 등록
 - 2026-09-30 · uncommitted · fix(sim): isaac_sim 등록 뒤끝 — functional surface·gate 정확화
