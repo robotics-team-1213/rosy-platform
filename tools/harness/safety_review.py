@@ -41,6 +41,12 @@ BASELINE = "46b8720c297db5729297de4442051a0265f097ea"  # git commit revision
 #: Reviewed historical commits after BASELINE that touch safety paths without a
 #: trailer, as full SHA -> reason. Add only with an independent review.
 EXEMPT: dict[str, str] = {
+    "f8165b2a44d01ff628d5bd75ec923953bd09d000":  # git commit revision
+        "Independently reviewed by Codex /root on 2026-10-05: D-463 retains existing "
+        "operator policy/idempotency and goal authority, including legacy compatibility; fresh LOCALIZED finite map "
+        "pose and lane band precede the short next point. Source review and 11 host "
+        "route tests; no device acceptance. See docs/validation/"
+        "d463-route-independent-review-2026-10-05/README.md.",
     "7e34baacebc02dd6103dbdd17c5e861b92a02945":  # git commit revision
         "Independently reviewed by Codex /root/pilot_review on 2026-10-04: D-432 "
         "device TXT metadata, bounded opt-in admission, verified TLS and key-only SSH; "

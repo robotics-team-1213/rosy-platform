@@ -107,8 +107,13 @@ SIZE_VERDICTS = {
         "duplicate its socket. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        33_657,
-        "split: D-457 re-judged at 33657 after integration with main 754c20ee3; bounded "
+        33_866,
+        "split: D-463 independently re-judged at measured 33866 on 2026-10-05: lane "
+        "math is a bounded sibling module, routes retain the existing dispatcher and "
+        "console retains its gather/trust accessor. Existing B2/UI split queue and "
+        "+150 package allowance stay unchanged; see docs/validation/"
+        "d463-route-independent-review-2026-10-05/README.md. "
+        "D-457 re-judged at 33657 after integration with main 754c20ee3; bounded "
         "display-only calibration, tracking routes/matcher and UI coordinates add 1188 to Fleet. "
         "The composition root stays below 600 after main's extraction; no command owner changes. "
         "split: independently re-judged 2026-10-04 at measured 32469 after main 387b19841: "
@@ -341,8 +346,13 @@ SIZE_VERDICTS = {
         "accept: legacy comparison-graph publisher pinned by test_module_separation; no new work (X3)",
     ),
     "fleet/fleet/server/console.py": (
-        1154,
-        "accept: one owner (FleetConsole gather/scatter), host-testable (X5). Re-judged 2026-09-30 at 1013: "
+        1159,
+        "accept: re-judged at measured 1159 on 2026-10-05 for D-463: the fresh map "
+        "pose accessor reads this owner's gather/trust tables; lane geometry stays "
+        "in lane_route.py. Zero growth allowance stays; independent source review "
+        "and 11 host route tests recorded in docs/validation/"
+        "d463-route-independent-review-2026-10-05/README.md. "
+        "One owner (FleetConsole gather/scatter), host-testable (X5). Re-judged 2026-09-30 at 1013: "
         "D-361 roster mutation and pinned-address holds change the gather/traffic tables in place, so they "
         "stay with their owner; the roster policy itself lives in roster.py; re-judged 2026-09-30 at 1021 "
         "under the D-362 zero-allowance tier — verdict unchanged; re-judged 2026-10-01 at 1063 for D-395 "
