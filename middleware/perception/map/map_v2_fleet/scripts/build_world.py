@@ -123,7 +123,8 @@ def write_tag_texture(path: Path) -> None:
     import cv2
 
     dictionary = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50)
-    marker = cv2.aruco.generateImageMarker(dictionary, DOCK_TAG_ID, 6 * DOCK_TAG_PX_PER_CELL)
+    draw = getattr(cv2.aruco, "generateImageMarker", None) or cv2.aruco.drawMarker
+    marker = draw(dictionary, DOCK_TAG_ID, 6 * DOCK_TAG_PX_PER_CELL)
     pad = DOCK_TAG_QUIET_CELLS * DOCK_TAG_PX_PER_CELL
     image = cv2.copyMakeBorder(marker, pad, pad, pad, pad, cv2.BORDER_CONSTANT, value=255)
     path.parent.mkdir(parents=True, exist_ok=True)

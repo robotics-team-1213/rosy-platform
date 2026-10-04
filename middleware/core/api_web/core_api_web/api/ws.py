@@ -281,7 +281,8 @@ async def ws_swarm_reference(websocket: WebSocket):
             reference = _reference_from(frame)
             if reference is None:
                 continue
-            if svc.calibration.blocking(token_id) is not None:
+            if (getattr(svc.modes, "motion_reserved", False)
+                    or svc.calibration.blocking(token_id) is not None):
                 # D-321 addendum: a leader pose from anyone but the calibration
                 # owner must not steer a follower during the lease. Drop the
                 # frame (like a malformed one); SWM-004 holds on silence.

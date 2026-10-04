@@ -150,20 +150,24 @@ function pairFailure(status, body, retryAfter) {
  * Resolves to the paired identity (without the token) or rejects with an Error
  * whose `message` is operator-facing and whose `retryAfter` is seconds or 0.
  */
-export async function pairWithCode(code, { label = "", persist = false } = {}) {
+export async function pairWithCode(code, { label = "", persist = false, signal } = {}) {
   let response;
   try {
     response = await fetch("/api/v1/auth/pair", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       cache: "no-store",
+      signal,
       body: JSON.stringify(label ? { code, label } : { code }),
     });
   } catch (_error) {
+    signal?.throwIfAborted();
     throw new Error("로봇에 닿지 못했습니다. 로봇과 같은 네트워크인지 확인하세요.");
   }
   let body = null;
   try { body = await response.json(); } catch (_error) { body = null; }
+  // Optional caller lifetime: an aborted exchange must never store a late key.
+  signal?.throwIfAborted();
   if (response.status !== 201 || typeof body?.token !== "string") {
     const retryAfter = response.headers.get("Retry-After");
     const error = new Error(pairFailure(response.status, body, retryAfter));
@@ -182,11 +186,11 @@ export async function pairWithCode(code, { label = "", persist = false } = {}) {
  * keeps it (409: card or manual tokens are revoked in settings) and it is only
  * forgotten here.
  */
-export async function logout() {
+export async function logout({ signal } = {}) {
   let deleted = false;
   if (session.token) {
     try {
-      await api("/api/v1/auth/logout", { method: "POST" });
+      await api("/api/v1/auth/logout", { method: "POST", signal });
       deleted = true;
     } catch (error) {
       // 401: already gone on the robot. 409: not a paired token, forget it locally.
@@ -194,6 +198,7 @@ export async function logout() {
       else if (error.status !== 409) throw error;
     }
   }
+  signal?.throwIfAborted();
   forgetToken();
   return deleted;
 }

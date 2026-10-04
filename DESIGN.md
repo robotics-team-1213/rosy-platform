@@ -295,6 +295,21 @@ D-280 다섯 원칙은 시각에서 이렇게 묶인다.
 
 모든 부품은 [`components.css`](src/hmi/web_common/components.css)가 그리고 [`ui.js`](src/hmi/web_common/ui.js)가 정의한다. 그림자 DOM을 쓰지 않는다. 견본은 [`styleguide.html`](src/hmi/dashboard/styleguide.html)이다.
 
+### 독립 작업의 선택 — `createTaskChooser()`
+
+[D-439](docs/adr/D-439-task-oriented-web-app-design.md): 서로 독립된 작업은 모두 펼치기보다
+작업 이름을 먼저 선택하고 현재 작업 하나에 집중한다. 제목 → 현재 근거 → 입력과 주 행동
+→ 결과/오류 → 다음 행동·복귀의 순서로 읽힌다. 지도·영상·정지를 함께 봐야 하는 운용 화면은
+기존 공간 문법을 유지한다.
+
+[`task-chooser.js`](src/hmi/web_common/task-chooser.js)와
+[`task-chooser.css`](src/hmi/web_common/task-chooser.css)는 기존 segment/field/status를 조합한다.
+큰 창은 세로 작업 목록, 64rem 미만은 네이티브 선택이다. 현재 작업과 선택은 중립 표현을 쓰며
+현재 역할의 장미색 위치 표식(D-277)과 구별한다. 새 팔레트나 간격 척도를 추가하지 않는다.
+모든 허용 작업은 mounted 상태로 입력·결과를 유지한다. 표면이 manifest, 권한, 요청과
+`beforeHide`/polling을 소유하고 공용 선택기는 표현·초점·전환 잠금만 소유한다. 전환·종료
+거절이나 시간 초과 뒤에는 현재 작업을 유지한다. 정지는 작업 선택 영역 밖에서 계속 접근한다.
+
 ### 버튼 — `<ui-button kind="…">`
 - **종류**: `primary`(ink 채움, 48px), `quiet`(테두리만, 조용한 글자), `irreversible`(위험 채움 + `ink-on-crit`, 58px), `segment`(여러 중 하나), `toggle`(켜지면 계열 파랑 채움). `kind`가 없으면 계약 표지(`data-kind-missing`, 위험색 윤곽)가 그려진다.
 - **상태**: `:hover`·`:active`·`:focus-visible`·비활성이 모두 `components.css`에 있다. 눌림은 `aria-pressed="true"`(또는 `aria-selected`, `.active`)의 공용 표현이다. 채움 종류는 누르는 동안 바탕색 안쪽 테를 얻는다.
@@ -382,3 +397,18 @@ D-280 다섯 원칙은 시각에서 이렇게 묶인다.
 - **Don't** 장식 전환·펄스·반짝임을 더한다([D-220](docs/adr/D-220-stillness-contract-zero-motion-budget.md)).
 - **Don't** 고정 높이 프레임을 낮은 창에 쓴다. `100vh` 대신 `dvh`다.
 - **Don't** 테마를 위해 표면 파일에 `[data-theme=…]` 분기를 둔다. 팔레트 블록 하나로 끝나야 한다.
+
+### 공용 동작과 native 색 출처 (D-432)
+
+동작 아이콘과 이름은 `web_common/ui.js`의 `actionIcon(button, name)`으로 함께 구성한다.
+아이콘 크기는 `.ui-icon`/`--text-value`, 색은 currentColor, 버튼 종류·터치 크기·비활성 사유는
+기존 공용 컨트롤을 따른다. 화면은 배치와 동작을 소유하며 공용 컴포넌트는 장비 명령을 보내지 않는다.
+
+Native Pilot의 Kotlin 색과 Android 색 리소스는 `tokens.css`의 dark 블록에서 build 시 생성한다.
+표면 registry의 token_source/token_generator/token_verification으로 출처와 런타임 비교 시험을
+연결한다. 수동 색 사본 대신 생성된 색을 시스템 바·버튼·목록·대화상자·vector·런처가 함께 쓴다.
+다른 native/LCD의 기존 token_copy는 parity 계약을 유지하며 실제 전환 때 생성 경로를 등록한다.
+
+화면 개선은 목적·주 동작·상태/오류·복귀·가로/세로 배치를 순차 확인한다. 보조 도구에서 설정이나
+녹화본을 열면 이전 패널을 접고, 닫으면 보이는 여는 동작으로 초점을 복귀한다. 같은 규칙을 쓰는
+화면을 이유 없이 다시 그리지 않으며, 실제 장비 확인과 브라우저 대역 확인은 구별해 기록한다.

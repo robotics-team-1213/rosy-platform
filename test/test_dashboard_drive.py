@@ -54,7 +54,7 @@ def page():
                 width=1366, height=900)
         except Exception as error:  # Chromium not installed
             pytest.skip(f"Playwright Chromium unavailable: {error}")
-        launched.goto("http://rosy.test/dashboard", wait_until="load")
+        launched.goto("http://rosy.test/dashboard#compatibility", wait_until="load")
         launched.wait_for_function("document.getElementById('robot-mode')?.textContent === '수동'")
         yield launched
         browser.close()

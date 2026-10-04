@@ -11,12 +11,14 @@ import importlib.util
 import math
 import xml.etree.ElementTree as ET
 from pathlib import Path
+from types import SimpleNamespace
 
 import cv2
 import numpy as np
 import pytest
 
 import dock_scene
+from control.sensing.dock_tag import _marker_detector
 
 ROOT = Path(__file__).resolve().parents[1]
 BUNDLE = ROOT / "map" / "map_v2_fleet"
@@ -86,19 +88,33 @@ def test_the_texture_decodes_to_id_7_with_a_white_quiet_zone():
                              image[:, :cell].ravel(), image[:, -cell:].ravel()])
     assert border.min() == 255                     # quiet zone
     assert image[cell:2 * cell, cell:-cell].max() == 0   # the marker's black border
-    detector = cv2.aruco.ArucoDetector(
-        cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50),
-        cv2.aruco.DetectorParameters())
-    _, ids, _ = detector.detectMarkers(cv2.copyMakeBorder(
+    _, ids, _ = _marker_detector(cv2.aruco)(cv2.copyMakeBorder(
         image, 40, 40, 40, 40, cv2.BORDER_CONSTANT, value=255))
     assert ids is not None and ids.flatten().tolist() == [7]
     assert np.array_equal(image, dock_scene.tag_texture())
 
 
-def test_the_builder_regenerates_the_same_texture(tmp_path):
+@pytest.mark.parametrize("legacy_api", [False, True])
+def test_the_builder_regenerates_the_same_texture(tmp_path, monkeypatch, legacy_api):
+    if legacy_api:
+        # Exercise the apt OpenCV interface with real marker pixels, not a fake id.
+        backend = cv2.aruco
+        draw = getattr(backend, "generateImageMarker", None) or backend.drawMarker
+        calls = []
+
+        def draw_marker(*args):
+            calls.append(args[1])
+            return draw(*args)
+
+        monkeypatch.setattr(cv2, "aruco", SimpleNamespace(
+            DICT_4X4_50=backend.DICT_4X4_50,
+            getPredefinedDictionary=backend.getPredefinedDictionary,
+            drawMarker=draw_marker))
     _build_world().build(SOURCE, tmp_path)
     rebuilt = cv2.imread(str(tmp_path / "textures" / "dock_tag_7.png"), cv2.IMREAD_GRAYSCALE)
     assert np.array_equal(rebuilt, cv2.imread(str(TEXTURE), cv2.IMREAD_GRAYSCALE))
+    if legacy_api:
+        assert calls == [7]
 
 
 def test_the_tag_white_stays_under_the_paint_threshold():

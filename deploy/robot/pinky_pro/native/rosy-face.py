@@ -594,7 +594,7 @@ class FaceDisplay:
                  battery_interval: float = BATTERY_INTERVAL_S,
                  faces: FaceFrames | None = None,
                  strip: Callable[[object, str, str], object] | None = None,
-                 core_owner: int | None = None) -> None:
+                 core_owner: int | None = None, low_light_assist: bool = False) -> None:
         self.root = root
         self.lcd = lcd
         self._render = render
@@ -615,6 +615,8 @@ class FaceDisplay:
         self._strip = strip
         self._core_owner = core_owner
         self._last_core: dict | None = None
+        self._low_light_enabled = low_light_assist
+        self._light_session = False
         self._mode: str | None = None
         self._drive_since: float | None = None
         self._testing: str | None = None
@@ -669,6 +671,13 @@ class FaceDisplay:
         request = read_test_request(self.root / TEST_REQUEST, self._wall())
         if request is None or request["request_id"] == self._tested:
             return None
+        if self._lamp is not None and self._lamp.pattern in ("emergency", "failed", "caution"):
+            return None
+        if self.screen and (self.screen["kind"] in ("stopped", "update", "shutdown")
+                            or self.screen["row"] == "failed" or self.screen.get("strip_tone") == "caution"):
+            return None  # Alarm outputs must never wait for a blocking bench test.
+        if self._lamp is not None and self._light_session:
+            self._lamp.show(None)
         self._tested = request["request_id"]
         # D-433 row 10: the strip names the test while it plays.
         self._testing, self._testing_until = request["action"], self._clock() + LAMP_TEST_S
@@ -711,12 +720,23 @@ class FaceDisplay:
             self._mode = mode
             self._drive_since = now if mode in robot_state.OPERATING_MODES else None
         login = "code" if view.get("login_code") else ("burned" if view.get("login_burned") else None)
-        return face_screen.screen_for(
+        quality = core.get("camera_quality") if core else None
+        expires = core.get("camera_quality_until") if core else None
+        fresh = quality is not None and expires is not None and self._wall() <= expires
+        if not self._low_light_enabled or not fresh or quality.get("reason") == "overexposed":
+            self._light_session = False
+        elif quality.get("valid") is False and quality.get("reason") == "low_light":
+            self._light_session = True
+        screen = face_screen.screen_for(
             stage=view["stage"], state=self.robot_state_of(view), todo=view.get("todo"),
             ap_mode=(view.get("network") or {}).get("mode") == "ap", login=login, core=core,
             update=read_update(self.root, self._wall()),
             test=self._testing if now < self._testing_until else None,
-            shutting_down=self.shutting_down, drive_since=self._drive_since, now=now)
+            shutting_down=self.shutting_down, drive_since=self._drive_since, now=now,
+            light_assist=self._light_session)
+        if screen["kind"] != "light":
+            self._light_session = False
+        return screen
 
     def _lcd_call(self, name: str, *args) -> None:
         action = getattr(self.lcd, name, None)
@@ -757,14 +777,17 @@ class FaceDisplay:
         if state != self._state:
             self._state = state
         pattern = self.lamp_pattern_for(view, state)
+        screen = self.screen = self.screen_of(view, now)
+        if screen and screen["kind"] == "light":
+            pattern = "illumination"
         self._announce(state, pattern, now)
         if self._lamp is not None:
             # D-380: a mode change switches the pattern without a sound; show() is
             # idempotent, so an unchanged pattern costs nothing.
             self._lamp.show(pattern)
             self._lamp.poll()
-        self.handle_test()
-        screen = self.screen = self.screen_of(view, now)
+        if self.handle_test() is not None:
+            screen = self.screen = self.screen_of(view, now)
         self._power(screen)
         kind = screen["kind"] if screen else "status"
         if kind == "face" and screen["overlay"] is None:
@@ -903,6 +926,8 @@ def card_renderer(info_screen) -> Callable[[dict], object]:
         if kind == "stopped":
             image = info_screen.render_stopped({"device_name": card.get("device_name"),
                                                 "cause": screen.get("cause"), "release": screen.get("release")})
+        elif kind == "light":
+            image = info_screen.render_light_assist()
         elif kind == "update":
             image = info_screen.render_notice("Updating", [f"to {screen.get('release') or '?'}",
                                                            f"now {card.get('release_id') or '?'}"], frame=frame)
@@ -1016,7 +1041,8 @@ def main(argv: list[str] | None = None) -> int:
     faces = FaceFrames(args.root / FACE_DIR, opener=Image.open, convert=face_converter(info_screen), log=log)
     display = FaceDisplay(args.root, lcd=lcd, render=card_renderer(info_screen), battery=battery,
                           buzzer=buzzer, clock=time.monotonic, lamp=lamp, faces=faces,
-                          strip=strip_painter(info_screen), core_owner=core_owner(log))
+                          strip=strip_painter(info_screen), core_owner=core_owner(log),
+                          low_light_assist=rosy_display_env.flag(dict(os.environ), rosy_display_env.LOW_LIGHT_KEY)[0])
     polls_per_step = max(1, round(POLL_S / TICK_S))
     tick = 0
     try:

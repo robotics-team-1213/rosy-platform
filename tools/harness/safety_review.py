@@ -40,7 +40,18 @@ import yaml
 BASELINE = "46b8720c297db5729297de4442051a0265f097ea"  # git commit revision
 #: Reviewed historical commits after BASELINE that touch safety paths without a
 #: trailer, as full SHA -> reason. Add only with an independent review.
-EXEMPT: dict[str, str] = {}
+EXEMPT: dict[str, str] = {
+    "7e34baacebc02dd6103dbdd17c5e861b92a02945":
+        "Independently reviewed by Codex /root/pilot_review on 2026-10-04: D-432 "
+        "device TXT metadata, bounded opt-in admission, verified TLS and key-only SSH; "
+        "moved firmware preserves handlers/interlocks. See docs/validation/"
+        "ui-release-integration-2026-10-04/README.md.",
+    "a4caeed0f5119df17f138203cd6e01eb373da671":
+        "Independently reviewed by Codex /root/pilot_review on 2026-10-04: D-447 "
+        "validated fresh bound heartbeat reuse, monotonic age and stale/offline REST fallback; "
+        "dispatch/traffic and CORE command ownership unchanged. See docs/validation/"
+        "ui-release-integration-2026-10-04/README.md.",
+}
 MANIFEST = "tools/harness/platform_parts.yaml"
 TRAILER = re.compile(r"^Safety-Review:[ \t]*\S", re.MULTILINE)
 ZERO = re.compile(r"^0*$")

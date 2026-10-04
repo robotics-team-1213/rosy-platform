@@ -228,6 +228,7 @@ def test_the_pre_4_7_aruco_api_detects_with_subpixel_corners():
     assert ids is not None and [int(i) for i in ids.flatten()] == [SPEC.tag_id]
     assert len(legacy.calls) == 1
     assert legacy.calls[0].cornerRefinementMethod == cv2.aruco.CORNER_REFINE_SUBPIX
+    assert legacy.calls[0].cornerRefinementWinSize == 3
 
 
 def test_the_current_aruco_api_detects_with_subpixel_corners():
@@ -235,6 +236,7 @@ def test_the_current_aruco_api_detects_with_subpixel_corners():
 
     assert _detector_parameters(cv2.aruco).cornerRefinementMethod \
         == cv2.aruco.CORNER_REFINE_SUBPIX
+    assert _detector_parameters(cv2.aruco).cornerRefinementWinSize == 3
     _, ids, _ = _marker_detector(cv2.aruco)(cv2.cvtColor(_marker_canvas(), cv2.COLOR_BGR2GRAY))
     assert [int(i) for i in ids.flatten()] == [SPEC.tag_id]
 

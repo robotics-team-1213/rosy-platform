@@ -44,6 +44,21 @@ class LineStuckBoard:
         self._answers: deque = deque(maxlen=history)
         self._log = log
         self._observed_at: Optional[float] = None
+        self._resolver: dict[tuple[str, str], dict] = {}
+
+    def note_resolver(self, robot_id: str, stuck_id: str, *, tier: str, rule: Optional[str],
+                      decision: Optional[str], escalated: Optional[str]) -> None:
+        """D-438: what the resolver did for this stuck (shown on the console row)."""
+        self._resolver[(robot_id, stuck_id)] = {
+            "tier": tier, "rule": rule, "decision": decision, "escalated": escalated,
+            "at": self._clock()}
+
+    def resolver_note(self, robot_id: str, stuck_id: str) -> Optional[dict]:
+        return self._resolver.get((robot_id, stuck_id))
+
+    def _drop_notes(self, robot_id: str, keep: Optional[str] = None) -> None:
+        for key in [k for k in self._resolver if k[0] == robot_id and k[1] != keep]:
+            del self._resolver[key]
 
     def observed_age_s(self) -> Optional[float]:
         """Seconds since the last gather (None = never gathered since start)."""
@@ -68,14 +83,18 @@ class LineStuckBoard:
             stuck = (state.get("line_follow") or {}).get("stuck")
             if not isinstance(stuck, dict) or not stuck.get("stuck_id"):
                 self._open.pop(robot_id, None)
+                self._drop_notes(robot_id)
                 continue
             previous = self._open.get(robot_id)
             entry = {"robot_id": robot_id, **{k: stuck.get(k) for k in _STATUS_KEYS},
                      "robot_online": True, "observed_at": now}
+            if previous is not None and previous["stuck_id"] != entry["stuck_id"]:
+                self._drop_notes(robot_id, keep=entry["stuck_id"])   # replaced stuck
             entry.update(self._opened(robot_id, entry["stuck_id"], previous, events_of))
             self._open[robot_id] = entry
         for robot_id in set(self._open) - seen:
             del self._open[robot_id]   # left the roster
+            self._drop_notes(robot_id)
 
     @staticmethod
     def _opened(robot_id: str, stuck_id: str, previous: Optional[dict], events_of) -> dict:
@@ -103,8 +122,10 @@ class LineStuckBoard:
         shown = dict(entry)
         shown["observed_age_s"] = round(max(0.0, self._clock() - shown.pop("observed_at")), 2)
         last = next((a for a in reversed(self._answers)
-                     if a["robot_id"] == robot_id and a["stuck_id"] == entry["stuck_id"]), None)
+                     if a["robot_id"] == robot_id and a["stuck_id"] == entry["stuck_id"]
+                     and a["decision"] != "ESCALATE"), None)
         shown["fleet_answer"] = last
+        shown["resolver"] = self._resolver.get((robot_id, entry["stuck_id"]))
         return shown
 
     def pending(self) -> list[dict]:
@@ -116,14 +137,18 @@ class LineStuckBoard:
     def record(self, *, robot_id: str, stuck_id: str, decision: str, principal_id: str,
                accepted: Optional[bool], outcome: Optional[str] = None,
                code: Optional[str] = None, message: Optional[str] = None,
-               audit_id: Optional[str] = None) -> dict:
+               audit_id: Optional[str] = None, tier: Optional[str] = None,
+               rule: Optional[str] = None, escalated: Optional[str] = None) -> dict:
         """Audit one forwarded answer (who, what, CORE's verdict; accepted None = unknown).
 
+        D-438 §8: ``tier`` (human / rule) and ``rule`` say who decided; a resolver hand-off to
+        a human is its own row with decision ``ESCALATE`` and the reason in ``escalated``.
         The row also goes to the durable log next to the API audit row (``audit_id``). The
         robot has already been asked, so a log failure is logged, never turned into an error."""
         row = {"robot_id": robot_id, "stuck_id": stuck_id, "decision": decision,
                "principal_id": principal_id, "accepted": accepted, "outcome": outcome,
                "code": code, "message": message, "audit_id": audit_id,
+               "tier": tier, "rule": rule, "escalated": escalated,
                "at": datetime.now(timezone.utc).isoformat(timespec="milliseconds")}
         self._answers.append(row)
         _LOG.info("line stuck answer robot=%s stuck=%s decision=%s by=%s accepted=%s code=%s",
@@ -150,17 +175,26 @@ class LineStuckAnswerLog:
                        stuck_id TEXT NOT NULL, decision TEXT NOT NULL,
                        principal_id TEXT NOT NULL, accepted INTEGER, outcome TEXT,
                        code TEXT, message TEXT)""")
+            # D-438: a database made before the resolver lacks these; CREATE IF NOT EXISTS
+            # does not add columns, so add each one missing (idempotent).
+            have = {row["name"] for row in connection.execute(
+                "PRAGMA table_info(fleet_line_stuck_answers)")}
+            for column in ("tier", "rule", "escalated"):
+                if column not in have:
+                    connection.execute(
+                        f"ALTER TABLE fleet_line_stuck_answers ADD COLUMN {column} TEXT")
 
     def append(self, row: dict) -> None:
         accepted = None if row["accepted"] is None else int(bool(row["accepted"]))
         with closing(self._connect()) as connection, connection:
             connection.execute(
                 """INSERT INTO fleet_line_stuck_answers (at, audit_id, robot_id, stuck_id,
-                   decision, principal_id, accepted, outcome, code, message)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                   decision, principal_id, accepted, outcome, code, message, tier, rule,
+                   escalated) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (row["at"], row["audit_id"], row["robot_id"], row["stuck_id"], row["decision"],
                  row["principal_id"], accepted, row["outcome"], row["code"],
-                 (row["message"] or "")[:512] or None))
+                 (row["message"] or "")[:512] or None, row.get("tier"), row.get("rule"),
+                 row.get("escalated")))
 
     def rows(self, limit: int = 100) -> list[dict]:
         with closing(self._connect()) as connection:

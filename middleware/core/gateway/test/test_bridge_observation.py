@@ -104,6 +104,24 @@ def _line_payload(**overrides) -> str:
     return json.dumps(payload)
 
 
+def test_camera_quality_and_raw_pair_require_fresh_ros_capture_clock():
+    from core_features.vision import VisionFrameStore
+    svc = SimpleNamespace(vision=VisionFrameStore())
+    msg = SimpleNamespace(header=SimpleNamespace(frame_id='front', stamp=SimpleNamespace(sec=10,nanosec=0)),
+        format='jpeg;width=8;height=8;quality_valid=false;quality_reason=low_light',
+        data=b'\xff\xd8frame\xff\xd9')
+    warnings = []
+    obs.camera_preview(svc, msg, warn=warnings.append, source_now=13.)
+    assert svc.vision.status()['available'] and svc.vision.status()['quality'] is None
+    obs.camera_preview(svc, msg, warn=warnings.append, raw=True, source_now=13.)
+    assert not svc.vision.status()['raw_available'] and warnings
+    msg.header.stamp.sec = 11
+    obs.camera_preview(svc, msg, warn=warnings.append, source_now=11.2)
+    frame = svc.vision.frame()
+    assert frame.quality == dict(valid=False, reason='low_light')
+    assert svc.vision.status(now=frame.received_at+1.9)['quality'] is None
+
+
 def test_a_well_formed_observation_reaches_the_manager_with_both_clocks():
     """The ROS clock and the receipt clock are different questions."""
     svc, calls = _services()
@@ -135,6 +153,20 @@ def test_a_string_visible_is_rejected_not_coerced():
     assert mirror["reason"] == "invalid_observation"
     assert "visible must be a boolean" in mirror["detail"]
     assert _calls(calls, "command.clear_navigation") == []
+
+
+def test_camera_low_light_marker_reaches_stop_evidence_and_rejects_visible_claim():
+    svc, calls = _services()
+    quality = dict(valid=False, reason='low_light')
+    obs.line_observation(svc, _line_payload(source='CAMERA_LINE', visible=False, error=None,
+                         confidence=0., quality=quality), source_now=12.5, received_at=50.)
+    observation = _calls(calls, 'line_follow.observe')[0][1][0]
+    assert observation.quality_reason == 'low_light' and not observation.visible
+    svc, calls = _services()
+    obs.line_observation(svc, _line_payload(source='CAMERA_LINE', quality=quality),
+                         source_now=12.5, received_at=50.)
+    assert not _calls(calls, 'line_follow.observe')
+    assert _calls(calls, 'line_follow.invalidate')
 
 
 def test_a_rejection_that_is_already_handled_does_not_clear_again():

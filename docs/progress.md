@@ -2,16 +2,24 @@
 module: docs
 logical_modules: []
 owner: 거버넌스
-last_verified: { commit: "bed604ef", date: 2026-09-30 }
+last_verified:
+  commit: bed604ef
+  date: 2026-09-30
 gates:
   SOURCE:
     state: GO
-    evidence: "D-61 Accepted, D-72/D-77/D-153/D-154 본문·색인 일치. SD 개인화 설계/실행 계획 정렬; focused ADR/network 계약 검증 (2026-09-21 Windows); D-169/D-170 추가 (2026-09-22); D-177/D-181 Proposed 추가 (2026-09-23, 구 D-176은 origin과 번호 충돌로 이명 — D-180은 perf/sd-single-verify 브랜치 선점); D-178 Accepted 승격 — 2차 회차 완료+기준선 갱신 (2026-09-23)"
-    cmd: "python tools/harness/rosy_harness.py lint"
+    evidence: D-61 Accepted, D-72/D-77/D-153/D-154 본문·색인 일치. SD 개인화 설계/실행 계획 정렬; focused
+      ADR/network 계약 검증 (2026-09-21 Windows); D-169/D-170 추가 (2026-09-22); D-177/D-181
+      Proposed 추가 (2026-09-23, 구 D-176은 origin과 번호 충돌로 이명 — D-180은 perf/sd-single-verify
+      브랜치 선점); D-178 Accepted 승격 — 2차 회차 완료+기준선 갱신 (2026-09-23)
+    cmd: python tools/harness/rosy_harness.py lint
   LOCAL:
     state: GO
-    evidence: "게이트 cmd 123 passed (2026-09-30 Windows): isaac_sim 스코어카드 잠정 행·fleet 크기 재판정·io closure D-84 예외·버전 핀 v1.59를 같은 회차에 정리. 이전 blocker(dashboard malformed heading)는 상류 커밋에서 이미 해소됐고, isaac_sim/fleet 2건도 이번 회차에 해소"
-    cmd: "python -m pytest test/test_network_topology_contracts.py test/test_harness_contracts.py test/test_module_scorecard.py test/architecture/test_module_structure.py -q"
+    evidence: '게이트 cmd 123 passed (2026-09-30 Windows): isaac_sim 스코어카드 잠정 행·fleet
+      크기 재판정·io closure D-84 예외·버전 핀 v1.59를 같은 회차에 정리. 이전 blocker(dashboard malformed
+      heading)는 상류 커밋에서 이미 해소됐고, isaac_sim/fleet 2건도 이번 회차에 해소'
+    cmd: python -m pytest test/test_network_topology_contracts.py test/test_harness_contracts.py
+      test/test_module_scorecard.py test/architecture/test_module_structure.py -q
   ROS-SIM:
     state: N/A
   ARTIFACT:
@@ -20,72 +28,261 @@ gates:
     state: N/A
   FIELD:
     state: N/A
-adrs: [D-17, D-18, D-45, D-61, D-72, D-75, D-77, D-78, D-79, D-80, D-81, D-82, D-83, D-84, D-85, D-86, D-87, D-88, D-89, D-90, D-91, D-92, D-93, D-94, D-95, D-96, D-97, D-98, D-99, D-100, D-101, D-102, D-103, D-104, D-105, D-106, D-107, D-108, D-109, D-110, D-111, D-112, D-113, D-114, D-115, D-116, D-117, D-118, D-119, D-120, D-121, D-122, D-123, D-124, D-129, D-130, D-131, D-132, D-133, D-141, D-144, D-145, D-151, D-152, D-153, D-154, D-155, D-156, D-157, D-158, D-159, D-163, D-164, D-165, D-166, D-167, D-169, D-170, D-172, D-177, D-178, D-181, D-182, D-183, D-184, D-186, D-246, D-256, D-263, D-265, D-271, D-272, D-273, D-274, D-275, D-276, D-281, D-282, D-283, D-284, D-285, D-286, D-287, D-288, D-291, D-292, D-293, D-294, D-295, D-296, D-297, D-298, D-299, D-300, D-301, D-302, D-304, D-305, D-306, D-307, D-308, D-309, D-310, D-311, D-312, D-313, D-314, D-315, D-316, D-317, D-318, D-319, D-320, D-321, D-322, D-323, D-325, D-326, D-327, D-328, D-330, D-331, D-332, D-333, D-334, D-335, D-336, D-339, D-340, D-345, D-348, D-352, D-353, D-354, D-355, D-357, D-358, D-359, D-360, D-361, D-363, D-364, D-365, D-366, D-367, D-368, D-369, D-370, D-371, D-374, D-375, D-376, D-377, D-382, D-390, D-413, D-425, D-426, D-431, D-432, D-442, D-443]
+adrs:
+- D-17
+- D-18
+- D-45
+- D-61
+- D-72
+- D-75
+- D-77
+- D-78
+- D-79
+- D-80
+- D-81
+- D-82
+- D-83
+- D-84
+- D-85
+- D-86
+- D-87
+- D-88
+- D-89
+- D-90
+- D-91
+- D-92
+- D-93
+- D-94
+- D-95
+- D-96
+- D-97
+- D-98
+- D-99
+- D-100
+- D-101
+- D-102
+- D-103
+- D-104
+- D-105
+- D-106
+- D-107
+- D-108
+- D-109
+- D-110
+- D-111
+- D-112
+- D-113
+- D-114
+- D-115
+- D-116
+- D-117
+- D-118
+- D-119
+- D-120
+- D-121
+- D-122
+- D-123
+- D-124
+- D-129
+- D-130
+- D-131
+- D-132
+- D-133
+- D-141
+- D-144
+- D-145
+- D-151
+- D-152
+- D-153
+- D-154
+- D-155
+- D-156
+- D-157
+- D-158
+- D-159
+- D-163
+- D-164
+- D-165
+- D-166
+- D-167
+- D-169
+- D-170
+- D-172
+- D-177
+- D-178
+- D-181
+- D-182
+- D-183
+- D-184
+- D-186
+- D-246
+- D-256
+- D-263
+- D-265
+- D-271
+- D-272
+- D-273
+- D-274
+- D-275
+- D-276
+- D-281
+- D-282
+- D-283
+- D-284
+- D-285
+- D-286
+- D-287
+- D-288
+- D-291
+- D-292
+- D-293
+- D-294
+- D-295
+- D-296
+- D-297
+- D-298
+- D-299
+- D-300
+- D-301
+- D-302
+- D-304
+- D-305
+- D-306
+- D-307
+- D-308
+- D-309
+- D-310
+- D-311
+- D-312
+- D-313
+- D-314
+- D-315
+- D-316
+- D-317
+- D-318
+- D-319
+- D-320
+- D-321
+- D-322
+- D-323
+- D-325
+- D-326
+- D-327
+- D-328
+- D-330
+- D-331
+- D-332
+- D-333
+- D-334
+- D-335
+- D-336
+- D-339
+- D-340
+- D-345
+- D-348
+- D-352
+- D-353
+- D-354
+- D-355
+- D-357
+- D-358
+- D-359
+- D-360
+- D-361
+- D-363
+- D-364
+- D-365
+- D-366
+- D-367
+- D-368
+- D-369
+- D-370
+- D-371
+- D-374
+- D-375
+- D-376
+- D-377
+- D-382
+- D-390
+- D-413
+- D-425
+- D-426
+- D-431
+- D-432
+- D-435
+- D-439
+- D-442
+- D-443
+- D-444
+- D-445
+- D-447
 plans:
-  - docs/plans/2026-10-04-d443-signal-supervision.md
-  - docs/plans/2026-10-03-pi-ncnn-opencv-implementation.md
-  - docs/plans/2026-10-03-app-ownership-shared-transport-and-layout-migration.md
-  - docs/plans/2026-10-02-platform-architecture-v02-migration.md
-  - docs/plans/2026-10-01-omx-demonstration-lerobot-design.md
-  - docs/plans/2026-10-01-pilot-omx-gazebo-practice.md
-  - docs/plans/2026-09-30-action-message-identity-design.md
-  - docs/plans/2026-09-30-action-message-identity.md
-  - docs/plans/2026-09-30-site-app-roles-and-shared-link-plan.md
-  - docs/plans/2026-09-30-app-identity-rename-plan.md
-  - docs/plans/2026-09-30-dock-device-implementation-plan.md
-  - docs/plans/2026-09-29-robot-fleet-protocol-conformance-plan.md
-  - docs/plans/2026-09-29-on-demand-activation-measurement-baseline.md
-  - docs/plans/2026-09-29-fleet-robot-code-enrollment-plan.md
-  - docs/plans/2026-09-15-module-harness-design.md
-  - docs/plans/2026-09-17-interface-design-implementation-design.md
-  - docs/plans/2026-09-17-remaining-gates-adr-plan.md
-  - docs/plans/2026-09-17-remaining-runtime-adr-plan.md
-  - docs/plans/2026-09-17-remaining-execution-adr-plan.md
-  - docs/plans/2026-09-18-rosy-games-remaining-adr-plan.md
-  - docs/plans/2026-09-20-ui-grammar-boundary-plan.md
-  - docs/plans/2026-09-20-fleet-console-ops-plan.md
-  - docs/plans/2026-09-21-hardware-mapping-g5-design.md
-  - docs/plans/2026-09-21-hardware-mapping-g5.md
-  - docs/plans/2026-09-21-semantic-road-control-design.md
-  - docs/plans/2026-09-21-semantic-road-control.md
-  - docs/plans/2026-09-21-camera-preview-dashboard-design.md
-  - docs/plans/2026-09-21-camera-preview-dashboard.md
-  - docs/plans/2026-09-21-rosy-sd-personalization-design.md
-  - docs/plans/2026-09-21-rosy-sd-personalization.md
-  - docs/plans/2026-09-21-module-coupling-consistency-plan.md
-  - docs/plans/2026-09-22-pinky-pro-flashable-image-design.md
-  - docs/plans/2026-09-22-pinky-pro-flashable-image.md
-  - docs/plans/2026-09-26-role-menu-rollout.md
-  - docs/plans/2026-09-26-role-aware-empty-state-recovery-plan.md
-  - docs/plans/2026-09-26-site-task-scheduling-and-broker-design.md
-  - docs/plans/2026-09-26-site-task-scheduling-and-broker-implementation.md
-  - docs/plans/2026-09-26-web-surface-video-role-boundaries.md
-  - docs/plans/2026-09-26-site-host-placement-design.md
-  - docs/plans/2026-09-26-site-host-placement-implementation.md
-  - docs/plans/2026-09-27-omx-lerobot-control-boundary-implementation-plan.md
-  - docs/plans/2026-09-27-product-source-layout-migration.md
-  - docs/plans/2026-09-27-rosy-platform-role-and-contract-implementation-plan.md
-  - docs/plans/2026-09-27-site-candidate-signing.md
-  - docs/plans/2026-09-27-site-registry-credential-separation.md
-  - docs/plans/2026-09-27-uiux-surface-closure.md
-  - docs/plans/2026-09-28-control-and-contract-boundary-audit.md
-  - docs/plans/2026-09-28-site-camera-preview-rectification.md
-  - docs/plans/2026-09-28-camera-fault-supervised-demo-design.md
-  - docs/plans/2026-09-28-camera-fault-supervised-demo.md
-  - docs/plans/2026-09-29-pinky-deployment-fast-path.md
-  - docs/plans/2026-09-29-embodied-reasoning-device-action-design.md
-  - docs/plans/2026-09-29-er2-manipulation-official-api-research.md
-  - docs/plans/2026-09-29-er2-isaac-sim-architecture-assessment.md
-  - docs/plans/2026-09-29-er2-semantic-actions-mission-implementation.md
-  - docs/plans/2026-09-29-er2-adr-consistency-review.md
-  - docs/plans/2026-09-29-fleet-mission-control-arbitration-implementation.md
-  - docs/plans/2026-09-29-er2-agent-loop-gap-map.md
-  - docs/plans/2026-09-29-d268-policy-evidence-disposition.md
-  - docs/plans/2026-09-29-policy-evidence-contract-design.md
-  - docs/plans/2026-09-29-policy-evidence-contract.md
-  - docs/plans/2026-09-30-goal-evidence-producer-and-verifier-design.md
-  - docs/plans/2026-09-30-goal-evidence-producer-and-verifier.md
-  - docs/plans/2026-09-30-er2-mission-feedback-loop.md
+- docs/plans/2026-10-04-d443-signal-supervision.md
+- docs/plans/2026-10-03-pi-ncnn-opencv-implementation.md
+- docs/plans/2026-10-03-app-ownership-shared-transport-and-layout-migration.md
+- docs/plans/2026-10-02-platform-architecture-v02-migration.md
+- docs/plans/2026-10-01-omx-demonstration-lerobot-design.md
+- docs/plans/2026-10-01-pilot-omx-gazebo-practice.md
+- docs/plans/2026-09-30-action-message-identity-design.md
+- docs/plans/2026-09-30-action-message-identity.md
+- docs/plans/2026-09-30-site-app-roles-and-shared-link-plan.md
+- docs/plans/2026-09-30-app-identity-rename-plan.md
+- docs/plans/2026-09-30-dock-device-implementation-plan.md
+- docs/plans/2026-09-29-robot-fleet-protocol-conformance-plan.md
+- docs/plans/2026-09-29-on-demand-activation-measurement-baseline.md
+- docs/plans/2026-09-29-fleet-robot-code-enrollment-plan.md
+- docs/plans/2026-09-15-module-harness-design.md
+- docs/plans/2026-09-17-interface-design-implementation-design.md
+- docs/plans/2026-09-17-remaining-gates-adr-plan.md
+- docs/plans/2026-09-17-remaining-runtime-adr-plan.md
+- docs/plans/2026-09-17-remaining-execution-adr-plan.md
+- docs/plans/2026-09-18-rosy-games-remaining-adr-plan.md
+- docs/plans/2026-09-20-ui-grammar-boundary-plan.md
+- docs/plans/2026-09-20-fleet-console-ops-plan.md
+- docs/plans/2026-09-21-hardware-mapping-g5-design.md
+- docs/plans/2026-09-21-hardware-mapping-g5.md
+- docs/plans/2026-09-21-semantic-road-control-design.md
+- docs/plans/2026-09-21-semantic-road-control.md
+- docs/plans/2026-09-21-camera-preview-dashboard-design.md
+- docs/plans/2026-09-21-camera-preview-dashboard.md
+- docs/plans/2026-09-21-rosy-sd-personalization-design.md
+- docs/plans/2026-09-21-rosy-sd-personalization.md
+- docs/plans/2026-09-21-module-coupling-consistency-plan.md
+- docs/plans/2026-09-22-pinky-pro-flashable-image-design.md
+- docs/plans/2026-09-22-pinky-pro-flashable-image.md
+- docs/plans/2026-09-26-role-menu-rollout.md
+- docs/plans/2026-09-26-role-aware-empty-state-recovery-plan.md
+- docs/plans/2026-09-26-site-task-scheduling-and-broker-design.md
+- docs/plans/2026-09-26-site-task-scheduling-and-broker-implementation.md
+- docs/plans/2026-09-26-web-surface-video-role-boundaries.md
+- docs/plans/2026-09-26-site-host-placement-design.md
+- docs/plans/2026-09-26-site-host-placement-implementation.md
+- docs/plans/2026-09-27-omx-lerobot-control-boundary-implementation-plan.md
+- docs/plans/2026-09-27-product-source-layout-migration.md
+- docs/plans/2026-09-27-rosy-platform-role-and-contract-implementation-plan.md
+- docs/plans/2026-09-27-site-candidate-signing.md
+- docs/plans/2026-09-27-site-registry-credential-separation.md
+- docs/plans/2026-09-27-uiux-surface-closure.md
+- docs/plans/2026-09-28-control-and-contract-boundary-audit.md
+- docs/plans/2026-09-28-site-camera-preview-rectification.md
+- docs/plans/2026-09-28-camera-fault-supervised-demo-design.md
+- docs/plans/2026-09-28-camera-fault-supervised-demo.md
+- docs/plans/2026-09-29-pinky-deployment-fast-path.md
+- docs/plans/2026-09-29-embodied-reasoning-device-action-design.md
+- docs/plans/2026-09-29-er2-manipulation-official-api-research.md
+- docs/plans/2026-09-29-er2-isaac-sim-architecture-assessment.md
+- docs/plans/2026-09-29-er2-semantic-actions-mission-implementation.md
+- docs/plans/2026-09-29-er2-adr-consistency-review.md
+- docs/plans/2026-09-29-fleet-mission-control-arbitration-implementation.md
+- docs/plans/2026-09-29-er2-agent-loop-gap-map.md
+- docs/plans/2026-09-29-d268-policy-evidence-disposition.md
+- docs/plans/2026-09-29-policy-evidence-contract-design.md
+- docs/plans/2026-09-29-policy-evidence-contract.md
+- docs/plans/2026-09-30-goal-evidence-producer-and-verifier-design.md
+- docs/plans/2026-09-30-goal-evidence-producer-and-verifier.md
+- docs/plans/2026-09-30-er2-mission-feedback-loop.md
+- docs/plans/2026-10-04-pilot-device-stop-contract-measurement.md
+- docs/plans/2026-10-04-web-gate-ladder-fleet-readiness-adr-plan.md
 ---
 ## 지금 상태
 

@@ -1,4 +1,5 @@
 import { MODE_LABEL, operatorModeLabel } from "/common/core_ui_logic.js";
+import { confirmIrreversible } from "/common/ui.js";
 
 function el(tag, cls, text) { const node = document.createElement(tag); if (cls) node.className = cls; if (text !== undefined) node.textContent = text; return node; }
 // D-359 US-009 — 운용자 글은 공용 MODE_LABEL이다. 열거값은 data-mode와 title에만 남는다.
@@ -9,10 +10,12 @@ const MODES = [
 ].map((mode) => ({...mode, label: MODE_LABEL[mode.id], prompt: `${MODE_LABEL[mode.id]} 모드로 바꿀까요? ${mode.prompt}`}));
 
 export function mount(root, ctx) {
+  const lifetime = new AbortController(); let disposed = false; let confirming = false;
   const head = el("ui-head", "", "운전 모드");
   const modeStatus = el("ui-status", "", "현재 모드를 불러오는 중입니다.");
   const capabilityStatus = el("ui-status", "", "내비게이션 기능을 확인하는 중입니다.");
   const actionStatus = el("ui-status");
+  modeStatus.setAttribute("state", "pending"); capabilityStatus.setAttribute("state", "pending"); actionStatus.setAttribute("state", "ready");
   actionStatus.setAttribute("role", "status");
   actionStatus.setAttribute("aria-live", "polite");
   const controls = el("ui-actions", "surface-actions");
@@ -42,8 +45,9 @@ export function mount(root, ctx) {
   }
   const stopState = ctx.store.poll("/api/v1/robot/state", 1_000, (state) => {
     current = state.mode || ""; setStatus(modeStatus, `현재 모드: ${operatorModeLabel(current, "확인 중")}`);
+    modeStatus.setAttribute("state", current ? "ready" : "unavailable");
     if (current) modeStatus.title = current; else modeStatus.removeAttribute("title"); update();
-  }, (error) => { current = ""; setStatus(modeStatus, `현재 모드를 읽지 못했습니다: ${error.message}`); update(); });
+  }, (error) => { current = ""; modeStatus.setAttribute("state", "error"); setStatus(modeStatus, `현재 모드를 읽지 못했습니다: ${error.message}`); update(); });
   const stopCapabilities = ctx.store.poll("/api/v1/system/capabilities", 5_000, (caps) => {
     navigationAvailable = caps?.navigation?.goal_navigation === true;
     capabilityStatus.textContent = navigationAvailable
@@ -60,19 +64,25 @@ export function mount(root, ctx) {
   for (const mode of MODES) {
     buttons.get(mode.id).addEventListener("click", async () => {
       const button = buttons.get(mode.id);
-      if (button.disabled || pending || (mode.id === "NAVIGATION" && !navigationAvailable)) return;
-      if (!window.confirm(mode.prompt)) return;
+      if (disposed || confirming || button.disabled || pending || (mode.id === "NAVIGATION" && !navigationAvailable)) return;
+      confirming = true; update();
+      const confirmed = await confirmIrreversible({message: mode.prompt, action: `${mode.label} 모드로 변경`, opener: button, signal: lifetime.signal});
+      confirming = false;
+      if (disposed) return;
+      update();
+      if (!confirmed || pending || !current || current === mode.id || (mode.id === "NAVIGATION" && !navigationAvailable)) return;
       pending = true; update();
       setStatus(actionStatus, `${mode.label} 모드 요청을 보내는 중입니다.`);
+      actionStatus.setAttribute("state", "pending");
       // Ask any active hold-to-drive panel to send zero before changing mode.
       window.dispatchEvent(new Event("rosy:stop-motion"));
       try {
         await ctx.api("/api/v1/mode", {method: "POST", body: JSON.stringify({mode: mode.id})});
-        setStatus(actionStatus, `${mode.label} 모드 요청을 CORE가 받았습니다. 현재 모드는 위에서 다시 확인하세요.`);
-      } catch (error) { setStatus(actionStatus, `모드 변경 실패: ${error.message}`); }
-      finally { pending = false; update(); }
+        if (!disposed) { actionStatus.setAttribute("state", "ready"); setStatus(actionStatus, `${mode.label} 모드 요청을 CORE가 받았습니다. 현재 모드는 위에서 다시 확인하세요.`); }
+      } catch (error) { if (!disposed) { actionStatus.setAttribute("state", "error"); setStatus(actionStatus, `모드 변경 실패: ${error.message}`); } }
+      finally { if (!disposed) { pending = false; update(); } }
     });
   }
   update();
-  return () => { stopState(); stopCapabilities(); };
+  return () => { disposed = true; lifetime.abort(); stopState(); stopCapabilities(); };
 }

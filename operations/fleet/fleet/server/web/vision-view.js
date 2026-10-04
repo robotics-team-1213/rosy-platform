@@ -89,7 +89,7 @@ const absentPanel = () => ({
   setAttribute: () => {},
 });
 
-export function createVisionView({ scope, el, call, auth }) {
+export function createVisionView({ scope, el, call, auth, isActive = () => true }) {
   const select = el("vision-source");
   const frame = el("vision-frame");
   const stage = el("vision-image-stage");
@@ -110,6 +110,7 @@ export function createVisionView({ scope, el, call, auth }) {
   let leaseExpiresAt = 0;
   let objectUrl = null;
   let busy = false;
+  let previewLifetime = new AbortController();
   let lastSourcesAt = 0;
   let refreshTimer = null;
   let viewMode = "adjusted";
@@ -120,7 +121,12 @@ export function createVisionView({ scope, el, call, auth }) {
   let currentLens = null;
   const proposalPolygon = el("vision-proposal-polygon");
   const frameListeners = [];
+  function pausePreview() {
+    previewLifetime.abort(); previewLifetime = new AbortController();
+    if (busy?.kind === "frame") busy = false;
+  }
   scope.onDispose(() => {
+    pausePreview();
     busy = false;
     refreshTimer?.();
     refreshTimer = null;
@@ -172,6 +178,17 @@ export function createVisionView({ scope, el, call, auth }) {
     const rounded = Math.round(value * 10) / 10;
     return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
   }
+
+  scope.subscribe(() => {
+    const life = scope.capture();
+    const observer = new ResizeObserver(() => {
+      if (!life.current()) return;
+      const bounds = stage.getBoundingClientRect();
+      if (bounds.width > 0 && bounds.height > 0) updateCornerOverlay();
+    });
+    observer.observe(stage);
+    return () => observer.disconnect();
+  });
 
   function updateCornerOverlay() {
     const width = image.naturalWidth;
@@ -260,7 +277,7 @@ export function createVisionView({ scope, el, call, auth }) {
       showState("인증 대기", "neutral", NO_SOURCE);
       return;
     }
-    busy = true;
+    const work = {kind: "sources"}; busy = work;
     try {
       const result = await call("/api/fleet/vision/sources");
       life.check();
@@ -285,14 +302,16 @@ export function createVisionView({ scope, el, call, auth }) {
       if (error.name === "AbortError") return;
       showState("영상 연결 불가", "warn", error.message);
     } finally {
-      if (life.current()) busy = false;
+      if (life.current() && busy === work) busy = false;
     }
   }
 
   async function refreshFrame() {
     const life = scope.capture();
     life.check();
-    if (busy) return;
+    const preview = previewLifetime;
+    const current = () => life.current() && preview === previewLifetime && !preview.signal.aborted && isActive();
+    if (busy || !isActive()) return;
     if (auth.locked || !auth.token) {
       // D-415 — 인증 안 됐으면 로그인 안내로 바로 연결한다.
       showState("인증 대기", "neutral", NO_SOURCE);
@@ -302,13 +321,15 @@ export function createVisionView({ scope, el, call, auth }) {
     }
     if (Date.now() - lastSourcesAt > 30000) await refreshSources();
     life.check();
+    if (!current()) return;
     const source = select.value;
     if (!source) return;
-    busy = true;
+    const work = {kind: "frame"}; busy = work;
     try {
       if (!lease || Date.now() >= leaseExpiresAt) {
         const issued = await call("/api/fleet/vision/lease", {
           method: "POST",
+          signals: [preview.signal],
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             source_id: source,
@@ -316,16 +337,18 @@ export function createVisionView({ scope, el, call, auth }) {
           }),
         });
         life.check();
+        if (!current() || source !== select.value) return;
         lease = issued;
         leaseExpiresAt = Date.now() + 45000;
       }
+      if (!current()) return;
       const response = await fetch(lease.frame_path, {
-        signal: life.signal, credentials: "omit", redirect: "error",
+        signal: AbortSignal.any([life.signal, preview.signal]), credentials: "omit", redirect: "error",
         headers: { Authorization: `Bearer ${lease.lease}` },
         cache: "no-store",
       });
       life.check();
-      if (source !== select.value) return;
+      if (!current() || source !== select.value) return;
       const lens = parseLensHeader(response.headers.get("X-Source-Lens"));
       if (response.ok && (lens?.kind ?? null) !== currentLens) {
         // 렌즈가 바뀌면 그 렌즈의 보정값으로 바꾸고, 다음 프레임부터 새 값으로 요청한다.
@@ -346,7 +369,7 @@ export function createVisionView({ scope, el, call, auth }) {
       }
       const blob = await response.blob();
       life.check();
-      if (source !== select.value) return;
+      if (!current() || source !== select.value) return;
       const nextUrl = URL.createObjectURL(blob);
       if (objectUrl) URL.revokeObjectURL(objectUrl);
       objectUrl = nextUrl;
@@ -359,6 +382,7 @@ export function createVisionView({ scope, el, call, auth }) {
       stage.hidden = false;
       await image.decode().catch(() => {});
       life.check();
+      if (!current() || source !== select.value) return;
       updateCornerOverlay();
       frame.dataset.state = "online";
       frame.dataset.editing = String(viewMode === "raw");
@@ -367,11 +391,11 @@ export function createVisionView({ scope, el, call, auth }) {
       const seq = response.headers.get("X-Frame-Seq");
       for (const listener of frameListeners) listener({ image, rectified, source, seq, url: nextUrl });
     } catch (error) {
-      if (error.name === "AbortError") return;
+      if (error.name === "AbortError" || !current()) return;
       lease = null;
       showState("영상 정지", "warn", error.message || "Vision에 연결할 수 없습니다.");
     } finally {
-      if (life.current()) busy = false;
+      if (life.current() && busy === work) busy = false;
     }
   }
 
@@ -546,7 +570,7 @@ export function createVisionView({ scope, el, call, auth }) {
   }
 
   return {
-    refreshSources, refreshFrame, reset, fetchFieldProposal, showProposal, acceptCorners,
+    refreshSources, refreshFrame, reset, pausePreview, fetchFieldProposal, showProposal, acceptCorners,
     fetchMapProposal: () => fetchFieldProposal("map-proposal"),
     // 지도 맞춤 행렬은 원본 프레임 픽셀 기준이라 화면 보정 미리보기에서는 원본으로 바꾼다.
     showRaw: () => { if (viewMode !== "raw") selectViewMode("raw"); },

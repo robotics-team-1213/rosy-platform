@@ -17,6 +17,8 @@ PILOT_RECORDING_ROOT = "/var/lib/rosy/pilot-recordings"
 MAX_DURATION_S = 600
 TELEOP_INTENT_TOPIC = "teleop/intent"
 SET_ACTIVE_SERVICE = "pilot_recorder/set_active"
+START_SERVICE = "pilot_recorder/start"
+RAW_PREVIEW_TOPIC = "camera/preview/raw/compressed"
 STATUS_TOPIC = "pilot_recorder/status"
 ACTIVE_TOPIC = "pilot_recorder/active"
 FETCHED_TOPIC = "pilot_recorder/fetched"
@@ -102,6 +104,7 @@ class RecorderStatus(_Wire):
     # arrives after a newer one it already adopted. 0 / "" means unsequenced.
     boot_id: str = Field("", max_length=64)
     seq: int = Field(0, ge=0)
+    preview_mode: Literal['raw', 'annotated'] = 'raw'
 
     @model_validator(mode="after")
     def id_when_active(self) -> "RecorderStatus":
@@ -143,11 +146,16 @@ class RecordingManifest(_Wire):
     # whether it had to be killed (its last split file may then be unindexed).
     bag_returncode: int | None = None
     writer_killed: bool = Field(False, strict=True)
+    preview_mode: Literal['raw', 'annotated'] = 'raw'
+    annotation_origin: Literal['none', 'model_unreviewed'] = 'none'
 
     @model_validator(mode="after")
     def _identity(self) -> "RecordingManifest":
         if not recording_id_ok(self.id):
             raise ValueError("invalid recording id")
+        expected = 'model_unreviewed' if self.preview_mode == 'annotated' else 'none'
+        if self.annotation_origin != expected:
+            raise ValueError('recording annotations must match their unreviewed provenance')
         paths = [item.path for item in self.files]
         if len(set(paths)) != len(paths):
             raise ValueError("duplicate manifest path")
@@ -164,3 +172,4 @@ class RecordingSummary(_Wire):
     status: Literal["recording", "complete", "incomplete"]
     manifest_sha256: str | None
     fetched: bool
+    preview_mode: Literal['raw', 'annotated'] = 'raw'

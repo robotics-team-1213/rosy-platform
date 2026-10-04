@@ -73,8 +73,8 @@
 
 ## 최근 기록
 
+- 2026-10-04 · uncommitted · test: 카메라 프레임 모듈의 실제 제공 경로
+- 2026-10-04 · uncommitted · fix(vision): preserve fresh overexposed quality
+- 2026-10-04 · uncommitted · feat(bridge): typed 녹화 시작과 원본 JPEG admission
+- 2026-10-04 · uncommitted · feat(vision): 원본 조도와 얼굴 handover
 - 2026-10-04 · uncommitted · fix: D-427 push5 통합 게이트 정합성
-- 2026-10-04 · uncommitted · D-442 U2 Pinky single-use binding
-- 2026-10-03 · e021264e6 · feat(face): D-433 CORE가 rosy-face에 얼굴 핸드오버를 쓴다
-- 2026-10-03 · f4c311569 · feat(bridge): D-423 모델 상태 두 토픽 latched 구독
-- 2026-10-03 · uncommitted · test(console): 지도 도구는 격자 밖에 둔다

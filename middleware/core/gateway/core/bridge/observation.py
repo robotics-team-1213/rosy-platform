@@ -39,6 +39,15 @@ def line_observation(services, raw: str, *, source_now: float,
         if type(data.get("visible")) is not bool:
             raise ValueError("visible must be a boolean")
         visible = data["visible"]
+        quality_reason = None
+        if source is LineFollowMode.CAMERA_LINE and data.get('quality') is not None:
+            quality = data['quality']
+            if not isinstance(quality, dict) or type(quality.get('valid')) is not bool:
+                raise ValueError('invalid camera quality')
+            if quality['valid'] is False:
+                if quality.get('reason') not in ('low_light', 'overexposed'):
+                    raise ValueError('unknown invalid camera quality')
+                quality_reason = quality['reason']
         calibrated = data.get("ir_calibrated", False)
         revision = data.get("calibration_revision")
         if source is LineFollowMode.IR_LINE and type(calibrated) is not bool:
@@ -52,6 +61,7 @@ def line_observation(services, raw: str, *, source_now: float,
             ir_calibrated=calibrated if source is LineFollowMode.IR_LINE else False,
             calibration_revision=revision if source is LineFollowMode.IR_LINE else None,
             ground=data.get("ground"),
+            quality_reason=quality_reason,
         )
         accepted = services.line_follow.observe(
             observation, received_at=received_at, source_now=source_now)
@@ -162,7 +172,7 @@ def detection_evidence(services, raw: str) -> None:
     services.advisory_feed.ingest(packet)
 
 
-def camera_preview(services, msg, *, warn: Warn) -> None:
+def camera_preview(services, msg, *, warn: Warn, raw: bool = False, source_now: float | None = None) -> None:
     """Store one display-only JPEG without coupling it to driving policy.
 
     `msg` is duck-typed (`format`, `header.stamp`, `frame_id`, `data`).
@@ -173,7 +183,17 @@ def camera_preview(services, msg, *, warn: Warn) -> None:
             float(msg.header.stamp.sec)
             + float(msg.header.stamp.nanosec) * 1e-9
         )
-        services.vision.publish(
+        source_age = None if source_now is None else source_now - stamp
+        fresh_source = (source_age is not None and math.isfinite(source_age) and math.isfinite(stamp)
+                        and stamp >= 0 and 0 <= source_age <= 2.)
+        if not fresh_source:
+            metadata.pop('quality', None)
+            if raw:
+                raise ValueError('raw preview source image is stale or clock is unavailable')
+        else:
+            metadata['source_age_s'] = source_age
+        store_frame = services.vision.publish_raw if raw else services.vision.publish
+        store_frame(
             bytes(msg.data),
             captured_at=stamp,
             frame_id=str(msg.header.frame_id),

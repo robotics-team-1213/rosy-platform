@@ -53,6 +53,10 @@ android {
                 "rosy.sitelink.vectors",
                 rootProject.file("../../../test/fixtures/protocol/site-link.v1.json").absolutePath,
             )
+            it.systemProperty(
+                "rosy.linkpolicy.vectors",
+                rootProject.file("../../../test/fixtures/protocol/link-policy.v1.json").absolutePath,
+            )
             // D-341 rosy-pair/1 shared vectors, also read by core_common pairing (Fleet, Vision).
             it.systemProperty(
                 "rosy.pairing.vectors",

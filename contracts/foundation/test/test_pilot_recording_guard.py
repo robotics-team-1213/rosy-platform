@@ -53,6 +53,41 @@ def test_start_records_the_owner_and_announces(rig):
     assert events.published[-1] == ("recording.started", {"id": RID, "owner": "tok-a"})
 
 
+def test_annotated_start_requires_live_typed_route_and_actual_mode_reply(rig):
+    guard, legacy, *_ = rig
+    assert guard.preview_modes() == ['raw']
+    with pytest.raises(RecordingRefused):
+        guard.start('tok-a', preview_mode='annotated')
+    assert legacy == []
+    typed = []
+    guard.start_available = lambda: True
+    def start(mode, wait):
+        typed.append((mode, wait))
+        payload = status('starting')
+        payload['preview_mode'] = mode
+        return True, json.dumps(dict(code='', status=payload))
+    guard.request_start = start
+    assert guard.preview_modes() == ['raw', 'annotated']
+    result = guard.start('tok-a', preview_mode='annotated')
+    assert result['preview_mode'] == 'annotated' and typed == [('annotated', True)]
+    assert legacy == []
+
+
+def test_unavailable_option_is_not_silently_started_raw_or_claimed_confirmed(rig):
+    guard, calls, *_ = rig
+    guard.request_start = lambda *_: (True, json.dumps(dict(status=status('starting'))))
+    guard.start_available = lambda: False
+    assert guard.preview_modes() == ['raw']
+    with pytest.raises(RecordingRefused):
+        guard.start('tok-a', preview_mode='annotated')
+    assert calls == []
+    guard.start_available = lambda: True
+    with pytest.raises(RecordingRefused) as exc:
+        guard.start('tok-a', preview_mode='annotated')  # success with raw reply is not annotation proof
+    assert exc.value.code == 'RECORDER_UNAVAILABLE' and guard.owner() is None
+    assert calls == [(False, False)]
+
+
 def test_second_start_is_busy(rig):
     guard, *_ = rig
     guard.start("tok-a")

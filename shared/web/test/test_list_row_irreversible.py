@@ -24,6 +24,7 @@ import re
 ROOT = Path(__file__).resolve().parents[3]  # repository root (D-427: keys are repo-relative)
 COMMON = ROOT / "shared" / "web"
 UI = COMMON / "ui.js"
+CONFIRMATION = COMMON / "confirmation.js"
 WEB_ROOTS = (
     ROOT / "middleware" / "ui" / "robot",
     COMMON,
@@ -87,7 +88,7 @@ def test_no_irreversible_button_inside_a_list_row_in_html():
 def test_only_the_shared_confirm_dialog_mints_an_irreversible_button_in_script():
     offenders = []
     for path in web_files(".js"):
-        if path == UI:
+        if path == CONFIRMATION:
             continue
         for match in SCRIPT_IRREVERSIBLE.finditer(path.read_text(encoding="utf-8")):
             offenders.append(f"{path.relative_to(ROOT)}: {match.group(0)}")
@@ -96,7 +97,8 @@ def test_only_the_shared_confirm_dialog_mints_an_irreversible_button_in_script()
         f"ui.js confirmIrreversible의 실행 버튼뿐이다: {offenders}"
     )
     source = UI.read_text(encoding="utf-8")
-    body = source.split("export function confirmIrreversible", 1)[1].split("\n}\n", 1)[0]
+    assert "createConfirmIrreversible(openLiveDialog)" in source
+    body = CONFIRMATION.read_text(encoding="utf-8")
     assert len(SCRIPT_IRREVERSIBLE.findall(body)) == 1, "확인 대화상자의 위험 채움은 실행 버튼 하나다"
     assert 'setAttribute("kind", "quiet")' in body, "취소는 조용한 버튼이다"
     assert "openLiveDialog(dialog" in body, "확인 대화상자도 공용 비모달 열기를 지난다"

@@ -19,6 +19,7 @@ WEB_ROOT = Path(__file__).resolve().parent / "web"
 CONSOLE_ASSETS = {
     "styles.css": "text/css",
     "console.js": "application/javascript",
+    "confirmed-action.js": "application/javascript",
     "install.js": "application/javascript",
     "address-drift.js": "application/javascript",
     "authorization.js": "application/javascript",

@@ -785,6 +785,20 @@
 - gate 변화: 없음. 실기 확인 전.
 - 결정: D-433 (Proposed)
 
+## 2026-10-03 · uncommitted · feat(link): D-432 주소 없는 장비 접속
+
+- 변경: 선택적 CORE TLS를 listener 이전에 검증하고 shutdown에서 공유 발견 캐시를 닫는다. 4자리 코드와 LAN 장비 목록 admission 시험을 추가했다.
+- 증거: 관련 Python 계약 시험·실제 loopback TLS HTTP/WS 시험을 실행했다. Pilot Android 설치·화면과 실제 로봇 연결·현장 트래픽 수용은 서로 다른 증거다.
+- gate 변화: 실제 장비의 제어·FIELD 관문은 이동하지 않는다.
+- 결정: D-432 2026-10-03 추가 결정.
+
+## 2026-10-03 · uncommitted · fix(link): 현재 접속과 후속 코드 규약 구별
+
+- 변경: 사용자 보정으로 4자리 코드 발급·Cam 표시 별칭은 이번 적용에서 제외했다. 현재 로봇 8자·Cam 6자리 규약을 유지하며 D-432에 추후 통합을 기록했다. 실제 Pinky 접속 수정은 진행한다.
+- 증거: 영향받는 Python 2345 passed/84 skipped, quick tier 459 passed/2 skipped, Pilot PWA 87 passed/58 skipped. 코드 규약 보정 뒤 해당 인증·페어링 시험을 다시 실행한다. 공개 검증 기록은 docs/validation/discovery-link-2026-10-03/README.md.
+- gate 변화: Android 설치·실제 CORE 인증 확인은 실제 주행·Cam 화면 off 연속 송출·현장 트래픽 수용과 별개다. DEVICE/FIELD 이동 없음.
+- 결정: D-432 후속 결정: 접속은 지금, 짧은 코드 통합은 추후 적용.
+
 ## 2026-10-04 · uncommitted · D-442 U2 Pinky single-use binding
 
 - 변경: cmd_vel_cycle에서 원본 GuardedMotion만 한 번 풀어 기존 send를 부르는 얇은 포트를 연결했다. private token·identity·불변 snapshot·300ms/주기 만료와 consume-before-send를 적용했고 생성 실패는ZERO다. bridge와 publish/D-422 순서는 유지했다.
@@ -798,3 +812,27 @@
 - 증거: Python 집중 35 passed, 추가 구조/Fleet 97 passed, Node 전체 109 passed. 실제 입력 누락·colcon 오배치·raw enum 표시 mutation 네 건 RED 뒤 원본 bytes 복원·GREEN. 알려진 실패 0 new, backlog 증가 없음. `docs/validation/d427-source-migration/push5-gate-corrections-2026-10-04.md`.
 - 독립 리뷰: d427_safety_review APPROVE source/host, 별도 Python 22 passed·Node 3 passed. Fleet +12 줄은 기존 +150·split 판정 안에 있고 예산·allowlist를 늘리지 않았다.
 - gate 변화: SOURCE/로컬 증거만 추가한다. 새 pre-push·원격 CI·ARM64·SD·기기·현장 수락은 후속이다.
+## 2026-10-04 · uncommitted · feat(vision): 원본 조도와 얼굴 handover
+
+- 변경: JPEG metadata의 원본 low_light quality를 기존 front/status에 전달한다. legacy·malformed·stale는 null이며 JPEG는 유지한다. face-inputs에 camera_quality와 JPEG 수신 나이를 전달하고 reader가 handover 나이를 더해 만료한다. read-only 표시로서 이동 권한은 아니다.
+- 증거: preview·bridge·schema·face handover·CORE focused 143 passed, 1 skipped; 회귀 55 passed.
+- gate 변화: SOURCE/LOCAL. 실제 조명 보조 동작은 별도 기기 증거다.
+
+## 2026-10-04 · uncommitted · feat(bridge): typed 녹화 시작과 원본 JPEG admission
+
+- 변경: pilot_recorder/start typed service에 RAW0/ANNOTATED1만 전달하며 legacy SetBool 정지는 유지한다. camera/preview/raw/compressed를 별도 read-only 구독하고 ROS capture clock을 검증한다. 오래된 원본은 거절, 기존 JPEG는 조도만 unknown으로 표시한다. final cmd_vel 소유권은 변경하지 않는다.
+- 증거: 실제 Bridge wiring registry와 typed0/1 transport, CORE API readback·원본/주석 header 및 source age 검증 포함162 passed,1 skipped.
+- gate 변화: SOURCE/LOCAL. ROS service 설치/실기 녹화 확인은 root 배포 단계에서 수행한다.
+
+## 2026-10-04 · uncommitted · fix(vision): preserve fresh overexposed quality
+- 변경: 원본 조도 invalid reason overexposed를 preview store, API protocol, face handover sanitizer에 전달한다. low_light 조명 허용 범위와 2초 촬영·수신·handover 신선도는 유지한다.
+- 검증: 과다 노출 관측을 버리는 RED 3 failed; API·handover·stale 회귀 포함 GREEN은 X:/DevTemp/rosy-lane-device-20261004/overexposed-api-green.txt. 배포·실주행 미검증, 명령 전송 없음.
+- 추가 검증: face handover integration RED 1 failed로 display whitelist 누락을 확인·수정. 최종 focused 129 passed, 3 skipped (overexposed-api-green.txt).
+
+- gate 변화: SOURCE/LOCAL. 실기 노출·조명·주행은 별도 검증이다.
+
+## 2026-10-04 · uncommitted · test: 카메라 프레임 모듈의 실제 제공 경로
+
+- 변경: Dashboard 카메라 계약을 분리된 shared frame 모듈의 import와 실제 제공 bytes, 인증·취소·late frame guard에 연결했다.
+- 증거: Dashboard·role surface·paired camera 회귀 47 passed. 기존 API·동작·권한 검사를 약화하지 않았다.
+- gate 변화: SOURCE/LOCAL. 실기 화면 검증은 별도다.

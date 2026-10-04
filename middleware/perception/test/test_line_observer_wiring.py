@@ -7,9 +7,31 @@ from types import SimpleNamespace
 import pytest
 
 import yaml
+import numpy as np
 
 
 ROOT = Path(__file__).parents[1]
+
+
+@pytest.mark.parametrize('brightness,reason', [(30, 'low_light'), (255, 'overexposed')])
+def test_invalid_exposure_resets_keeper_and_worker_before_publishing_invisible(brightness, reason):
+    from control.sensing.perception.camera_visibility import visibility_reason
+    tree = ast.parse((ROOT / 'control/line_observer_node.py').read_text(encoding='utf-8'))
+    method = next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name == '_on_camera')
+    namespace = dict(Image=object, image_msg_to_frame=lambda _: np.full((16, 16, 3), brightness, np.uint8),
+                     visibility_reason=visibility_reason)
+    exec(compile(ast.Module(body=[method], type_ignores=[]), '<camera-callback>', 'exec'), namespace)
+    resets, publications = [], []
+    node = SimpleNamespace(get_parameter=lambda _: SimpleNamespace(value=False),
+        _lane_keeper=SimpleNamespace(reset=lambda: resets.append('keeper')),
+        _between_keeper=SimpleNamespace(reset=lambda: resets.append('between')),
+        _paint_worker=SimpleNamespace(reset=lambda: resets.append('worker')),
+        _keep_last_stamp=9., _publish=lambda *args, **kwargs: publications.append((args, kwargs)),
+        _publish_debug=lambda *_: None)
+    msg = SimpleNamespace(header=SimpleNamespace(stamp=SimpleNamespace(sec=10, nanosec=0)))
+    namespace['_on_camera'](node, msg)
+    assert resets == ['keeper', 'between', 'worker'] and node._keep_last_stamp is None
+    assert publications == [(('CAMERA_LINE', None), dict(stamp=10., quality=dict(valid=False, reason=reason)))]
 
 
 @pytest.mark.parametrize('geometry', ['NOMINAL', 'GAZEBO', 'HOMOGRAPHY'])

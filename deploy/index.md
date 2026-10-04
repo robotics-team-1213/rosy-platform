@@ -70,8 +70,8 @@
 
 ## 최근 기록
 
-- 2026-10-04 · uncommitted · fix: Windows SSH timeout 종료 경합
-- 2026-10-04 · uncommitted · fix(D-441): Windows 자동 서명기의 UTF-8 출력 처리
-- 2026-10-04 · uncommitted · verify(D-441): 최종 Linux 관련 suite 확인
-- 2026-10-04 · uncommitted · fix(D-441): 상대 symlink의 롤백 경로 보정
-- 2026-10-04 · uncommitted · verify(D-441): 추가 보정 Linux 회귀 확인
+- 2026-10-04 · uncommitted · fix: native 차선 설정과 SSH 페어링 병합
+- 2026-10-04 · uncommitted · fix: 릴리스 전환에서 Host Agent 종료 대기
+- 2026-10-04 · uncommitted · fix: 과노출 보조 조명 해제
+- 2026-10-04 · uncommitted · feat: 경보 출력보다 늦게 하드웨어 시험 실행
+- 2026-10-04 · uncommitted · feat: 기존 rosy-face 조명 소유권 유지

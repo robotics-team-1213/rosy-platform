@@ -51,6 +51,7 @@ def fast(monkeypatch):
 
 
 def _record_backoff(monkeypatch, agent, sleeps, stop_after=4):
+    monkeypatch.setattr(agent_mod, 'retry_delay', lambda value, **kwargs: value)
     real_sleep = asyncio.sleep
 
     async def record_sleep(seconds):
@@ -186,7 +187,7 @@ def test_degraded_hub_resets_the_backoff(monkeypatch):
     assert sleeps == [1.0, 2.0, 1.0, 2.0]
 
 
-@pytest.mark.parametrize("code", ["SESSION_NOT_PAIRED", "PAIRING_INVALID"])
+@pytest.mark.parametrize("code", ["SESSION_NOT_PAIRED", "PAIRING_INVALID", 'IDENTITY_DRIFT'])
 def test_pairing_error_ends_the_session_at_once(fast, code):
     agent = _agent()
     agent.reply_timeout_s = 5.0              # the deadline is not what ends it
@@ -198,6 +199,7 @@ def test_pairing_error_ends_the_session_at_once(fast, code):
         return asyncio.get_running_loop().time() - start
     elapsed = asyncio.run(run())
     assert hub.aborted is True and agent.connected is False
+    assert agent.enabled is False
     assert elapsed < 0.5
 
 
@@ -637,6 +639,7 @@ def test_backoff_keeps_doubling_without_a_stable_session(monkeypatch):
 
     import core_features.fleet_agent.agent as module
     monkeypatch.setattr(module, "HELLO_TIMEOUT_S", 0.01)
+    monkeypatch.setattr(module, 'retry_delay', lambda current, **kwargs: current)
     monkeypatch.setattr(websockets, "connect", Connect)
     real_sleep = asyncio.sleep
 

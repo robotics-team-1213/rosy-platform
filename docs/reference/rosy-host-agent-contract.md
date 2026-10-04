@@ -161,6 +161,8 @@ Host Agent는 아래 명령만 안다. 임의 명령, 임의 경로, 임의 인�
 | command | 파라미터 | 역할 | 재확인 |
 |---|---|---|---|
 | `network.status` | — | viewer | 불필요 |
+| `lane_perception.status` | — | viewer | 불필요 |
+| `lane_perception.set` | `paint_source`: threshold / denoise / learned | administrator | 불필요 |
 | `network.apply_profile` | `profile_id` (등록된 프로파일 id만) | administrator | 필요 |
 | `network.set_mode` | `mode` (`SITE_STA` 또는 `RELAY_AP_STA`) | administrator | 필요 |
 | `network.connect` | `ssid`, `psk` (PSK는 감사·응답에 남기지 않음) | administrator | 필요 |
@@ -170,6 +172,7 @@ Host Agent는 아래 명령만 안다. 임의 명령, 임의 경로, 임의 인�
 | `release.clear_hold` | — | administrator | 필요 |
 | `service.status` | `unit` (고정 목록 내에서만) | viewer | 불필요 |
 | `system.reboot` | — | administrator | 필요 |
+| `ssh.register_key` | `public_key` (옵션 없는 Ed25519 공개키, 512자 이하) | administrator | 필요 |
 
 **`system.shutdown`은 이 표에 없고, 앞으로도 추가하지 않는다.** 저배터리 셧다운은
 사람이 없는 상태에서 발화하므로 인증할 administrator도 확인해 줄 operator도 없다.
@@ -192,6 +195,35 @@ Host Agent는 아래 명령만 안다. 임의 명령, 임의 경로, 임의 인�
   홀드 해제(`release.clear_hold`)는 별도의 의도적 행위다. 홀드를 통과해
   설치하면 성공을 보고한 뒤 다음 부팅이 그것을 뒤집는다 — 현장에서 복구 중인
   작업자에게 가장 나쁜 형태의 거짓말이다.
+
+차선 인식 설정은 `/etc/rosy/line_observer_overrides.yaml`의 기존 지면 기하를
+보존하고 `paint_source`만 선택한다. `learned`는 고정
+`/var/lib/rosy/models/shadow` 포인터의 lane_seg manifest·파일 해시·신뢰 서명을
+확인하고, CORE의 `/run/rosy/status-inputs.json`을 다시 읽어 3초 이내 fresh 정지,
+IDLE, line-follow OFF, navigation·docking·swarm·mission·calibration 비활성을
+확인한다. 속도나 상태가 없으면 거부한다. 파일을 원자 교체한 뒤
+`rosy-camera.service`만 재시작하며 실패하면 원래 설정과 런타임을 복구한다.
+`applied: true`는 설정 교체와 서비스 active 확인이며 실제 추론 성공이나
+주행 허가가 아니다. Host Agent의 `applied_paint_source`는 live 증거를 읽지 않으므로
+null이다. CORE는 별도로 실제 `line/keep_debug`의 validated `paint_source_used`를
+읽어 로컬 monotonic 수신 후 2초 이내에만 이 필드를 채운다. 값은 threshold /
+denoise / learned / denoise_fallback이며 `applied_source_age_s`가 수신 나이다.
+`applied_model_revision`은 실제 learned mask producer가 제공한 revision만
+표시한다. 설정 source·모델 revision 불일치, malformed packet, 카메라 clock reset,
+stale 수신 또는 camera 재시작 전 증거는 null이다. 이는 주행 정책에 입력하지 않는다.
+
+native `rosy-host-agent.service`는 이 표 중 `lane_perception.status/set`만
+활성화한다. peer는 `/etc/passwd`의 전용 `rosy-core` UID이며 소켓 그룹도
+`rosy-core`이다. 다른 Host 명령은 해당 runtime에서 COMMAND_UNKNOWN으로
+거부한다. 설치 helper는 release의 native 폴더에 함께 실려 저장소 없이
+실행되며 CORE가 1초마다 쓰는 실제 status 입력을 소비한다.
+CORE는 Host 변경 요청 동안 실제 ModeMachine의 IDLE 예약을 유지한다.
+같은 관리자도 주행 모드·teleop·navigation·line-follow를 시작할 수 없고,
+Host 응답 또는 실패 뒤 finally에서 예약을 해제한다. IDLE 전환과 E-stop은
+항상 가능하다. 이 예약은 보정 session을 만들거나 주행 상태를 꾸미지 않는다.
+보정 busy_check와 session 생성, perception의 보정 부재 확인과 IDLE 예약은
+같은 admission lock 아래에서 실행한다. 보정 검사와 session 생성 사이에
+설정 요청이 끼어들어 통과할 수 없다.
 
 ## 7. Host Agent가 갖지 않는 것
 
@@ -263,3 +295,22 @@ install 거부, idempotency, 요청 크기·스키마, 감사 redaction — 은
 ## 2026-09-08 delivery integration status
 
 `rosy-release` is now a separate root maintenance CLI for signed staging, installation, rollback and boot recovery. The systemd timer only checks/downloads/stages. This does not implement or change the socket API above: wiring the host-agent server or dashboard to this CLI requires a separate authorization/integration change. See `docs/deployment/github-updates.md`.
+
+## D-432 SSH 승인 보충 (2026-10-03)
+
+`POST /api/v1/host/ssh/pair`는 실제 HTTPS와 CORE TLS 구성, 관리자 세션, `confirmed: true`를 모두 요구한다. 사용자는 로봇 화면의 4자 관리자 코드로 임시 API 세션을 만든 뒤 자신의 공개키만 제출한다. Host Agent가 고정 계정 `rosy`의 `.ssh/authorized_keys`에 추가하며 기존 키를 보존한다. 옵션·암호·개인키·임의 계정·경로·명령은 받지 않는다. 최대 8개 키, 심볼릭 링크·하드 링크·비정규 파일·64 KiB 초과 저장소를 거부한다. 반환된 호스트 공개키와 SHA256 지문은 TLS로 확인한 뒤 클라이언트 known_hosts에 고정한다. 기존 호스트 키와 다르면 중단한다. 임시 API 세션은 작업 직후 로그아웃하며 SSH 암호 인증은 켜지 않는다. 실제 로봇 키 등록·SSH 접속은 별도 장치 증거가 필요하다.
+
+
+#### D-432 SSH 서비스 설치 경로
+
+`rosy-ssh-pairing.service`는 `/etc/rosy/ssh-pairing.enabled`가 있을 때만 실행한다.
+전용 `/run/rosy-host/ssh-pairing.sock`은 root:rosy-core 0660이며 kernel peer UID를 확인한다.
+이 서비스의 allowlist는 `ssh.register_key` 하나다. 기존 네트워크·릴리스·재부팅 명령은 열지 않는다.
+native payload는 Host Agent의 stdlib helper를 같이 설치하고 systemd unit을 image layer에 포함한다.
+기본 unit은 조건 미충족으로 실행하지 않는다. 실제 장비 키 등록·SSH 접속 증거는 별도다.
+
+
+SSH opt-in 설치 전제: 기존 SD/first-boot의 key-only 운영 계정 `rosy`가 `/home/rosy`와 로그인 shell을
+갖고 `/home/rosy/.ssh`가 rosy 소유 0700으로 존재해야 한다. 계정이 없는 장비는 SD 운영 계정
+provisioning을 먼저 수행한다. 전용 unit의 디렉터리 조건은 이 전제가 없으면 실행을 건너뛴다.
+이 서비스는 계정·sudo 권한·SSH 비밀번호 정책을 생성하거나 확대하지 않는다.

@@ -208,9 +208,8 @@ async function tick() {
     const vis = payload.visibility || {};
     const stair1 = document.getElementById("stair1");
     if (stair1) {
-      stair1.textContent = vis.ready
-        ? "계단 1 마커 보임 · 경기장 준비 전"
-        : "계단 1 아직 · 경기장 준비 전";
+      stair1.textContent = typeof vis.ready !== "boolean" ? "마커·공 관측 정보 대기 · 운용 승인 아님"
+        : `필수 마커·공 관측 ${vis.ready ? "완료" : "미완료"} · 운용 승인 아님`;
     }
     if (!payload.has_frame) {
       frame.hidden = true;

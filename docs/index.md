@@ -189,8 +189,13 @@
 | D-426 | Fleet–Gazebo 실제 REST/WS·Task/attempt·CORE 결과와 독립 운동/접촉 관측을 함께 검증; 두 로봇/한 Fleet부터 run별 GZ_PARTITION 격리, 진입 경계 grant 재검사·점유 해제 증거·재시작 이전 실행 대조·CORE 독립 base 명령 만료, M01–M08 반복 수용 및 증거 등급 분리 |
 | D-431 | 라즈베리파이 YOLO 추론은 NCNN을 목표로 하고 OpenCV 영상 처리와 학습 모델의 의미를 유지한다 |
 | D-432 | 모든 앱·장치는 공통 발견·연결 규약을 쓰고, 개발 모드에서는 코드 없이 연결한다 |
+| D-435 | 작업 오케스트레이션·Fleet·장치 실행을 역할과 권한으로 구분한다 |
+| D-439 | 웹 앱은 공용 디자인과 작업 중심 정보 위계로 순차 개선한다 |
 | D-442 | 로봇 움직임 요청은 ROS 무의존 Motion Intent(`contracts/motion`, 목표형 `base.pose_goal`·`base.path_follow`·`arm.tcp_pose`와 서보형 `base.twist`·`arm.joint_trajectory`·`arm.gripper`; SI 단위·frame·출처·등록표가 정하는 우선순위 등급·`attempt_id`·`envelope_ref`·유효 기간·정지 의미)로, 장치 출력은 장치당 binding 하나인 DeviceControlPort(`capabilities`·`submit(GuardedMotion)`·`cancel`·`state`·`estop_status`, writer만 쥐고 Arbiter→Safety Guard 뒤; Pinky `/cmd_vel` Twist, OMX `ActionPort`)로; OMX 우선순위표(EMERGENCY>SAFETY>MANUAL>SKILL>POLICY)와 HOLD를 거치는 MANUAL 선점; 행동 불변 이행 a→b→c→d |
 | D-443 | `rosy.site-device/1` — 사이트 장치(신호등·도크, 나중에 컨베이어·문·PLC)의 공통 호스트 타입 계약: 식별·자격증명, measured/claimed를 가른 상태, heartbeat·`last_seq`, kind별 semantic 동사, ack와 관측된 효과의 분리, 버전; 지금 신호등·도크 HTTP는 wire 변경 없이 `signal/1`·`dock/1` profile; 장치별 단일 감독자(신호등은 Fleet), 로봇은 읽기만, ER2는 후보만, 장치 로컬 failsafe(신호 10 s 적색 점멸, 도크 0 V), 안전 회로 쓰기 금지; PLC/Modbus 어댑터 `integrations/fieldbus/modbus` 레지스터 맵·범위 단위 안전 주소 거부(시험은 D-430 소유)·변하는 watchdog·연결당 어댑터 하나; 재단언은 감독 연속성과 의도 나이 안에서만(현재 코드 위반, 이행 (b2)), seq 재동기화와 안전 방향 1회 재시도, non-agree 열거와 admission 술어; 동작 변경 없는 이행 (a)–(d); Fleet 상시 감독과 운영자 presence 동안만 수동 점등(떠나면 failsafe); Q1–Q10 결정(Q5·Q8·Q9 사용자 결정, 나머지 권고안; 2026-10-04); 코드 결함은 이전 직후 첫 안전 작업 |
+| D-444 | 웹 표면 게이트는 release 이미지를 탄다 — dashboard·pilot ARTIFACT는 서명 release 안 share/ 설치 관측, pilot DEVICE는 실기 페달·e-stop 정지 계약 측정 |
+| D-445 | Fleet 승격 경로(ROS-SIM D-426 → ARTIFACT D-437 첫 실행·D-301 서명 → DEVICE 사이트 PC·2대)와 중앙 Fleet(8081) 착수 전제 3개를 고정한다. 착수 자체는 별도 ADR |
+| D-447 | 웹 표면의 실시간 상태는 이미 열린 소켓을 재사용한다 — Fleet gather는 hub-fresh 로봇을 registry 스냅샷으로 먼저 읽고(신선도 `hub_state_max_age_s`, REST 폴백), 로봇 셸 `store.js`의 `/ws/state` 전환이 그 뒤를 잇는다. 새 전송 계약 없음, 응답 스키마 불변, 행마다 `gather_source` |
 
 ## 계획·결과 문서
 
@@ -265,6 +270,8 @@
 - [2026-10-03-app-ownership-shared-transport-and-layout-migration.md](plans/2026-10-03-app-ownership-shared-transport-and-layout-migration.md)
 - [2026-10-03-pi-ncnn-opencv-implementation.md](plans/2026-10-03-pi-ncnn-opencv-implementation.md)
 - [2026-10-04-d443-signal-supervision.md](plans/2026-10-04-d443-signal-supervision.md)
+- [2026-10-04-pilot-device-stop-contract-measurement.md](plans/2026-10-04-pilot-device-stop-contract-measurement.md)
+- [2026-10-04-web-gate-ladder-fleet-readiness-adr-plan.md](plans/2026-10-04-web-gate-ladder-fleet-readiness-adr-plan.md)
 
 ## 교훈 (docs/solutions)
 
@@ -277,8 +284,8 @@
 
 ## 최근 기록
 
-- 2026-10-04 · uncommitted · fix: Windows SSH timeout 종료 경합
-- 2026-10-04 · uncommitted · fix: D-427 push5 통합 게이트 정합성
-- 2026-10-04 · uncommitted · D-427 push4 fast gate follow-up
-- 2026-10-04 · uncommitted · D-427 Pinky safety source integration
-- 2026-10-04 · uncommitted · D-427 push3 follow-up corrections
+- 2026-10-04 · uncommitted · docs: migrated UI release integration and device update
+- 2026-10-04 · 6485f8a39 · docs(ui): 공용 웹 디자인 통합 검증과 로컬 main 착지
+- 2026-10-04 · uncommitted · docs(ui): 남은 공용 확인과 실제 정지 접근 검증 기록
+- 2026-10-04 · uncommitted · docs(ui): Fleet 교정 커밋과 주소 대화 소유권 기록
+- 2026-10-04 · uncommitted · docs(ui): viewport 계약 보존과 남은 live 확인 이관 계획

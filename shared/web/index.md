@@ -44,8 +44,8 @@
 
 ## 최근 기록
 
-- 2026-10-04 · uncommitted · fix: D-427 push5 통합 게이트 정합성
-- 2026-10-03 · uncommitted · refactor: D-425 page lifetime mechanics
-- 2026-10-03 · uncommitted · fix(web): SAFE_STOP 운용 말은 RobotMode 표 밖에 둔다
-- 2026-10-03 · uncommitted · refactor: D-425 Fleet response adapter
-- 2026-10-03 · uncommitted · refactor: scoped HTTP request와 화면 scope
+- 2026-10-04 · uncommitted · fix(ui): 공용 템플릿 작은 상단 행
+- 2026-10-04 · uncommitted · fix(ui): 겹치는 정지 컨트롤의 실제 클릭 영역 보존
+- 2026-10-04 · uncommitted · feat(ui): 작업 상태의 공용 한국어 이름
+- 2026-10-04 · uncommitted · feat(ui): 생존 범위로 취소하는 공용 확인
+- 2026-10-04 · uncommitted · fix(ui): 교통 정책 운용자 이름 공유

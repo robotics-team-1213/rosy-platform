@@ -1,6 +1,8 @@
 // 빌드 없는 공용 조작 부품. 그림자는 쓰지 않는다 — 자식 글자와 기존 리스너가
 // 요소 자체에 남는다. 색과 크기는 components.css 가 tokens.css 로 그린다.
 
+import { createConfirmIrreversible } from "/common/confirmation.js";
+import { disjointRectangles } from "/common/live-dialog-geometry.js";
 const KINDS = ["primary", "quiet", "irreversible", "segment", "toggle"];
 const BUTTON_SIZES = ["secondary", "primary", "irreversible"];
 const KIND_SIZES = { primary: "primary", irreversible: "irreversible" };
@@ -314,28 +316,7 @@ for (const [name, ctor] of [
 // 취소·Esc는 false, 실행은 true. 닫히면 포커스는 누른 행 버튼으로 돌아간다. 목록은
 // 대화상자가 열린 동안 폴링으로 다시 그려질 수 있어 opener는 함수로도 받는다
 // (닫힐 때 불러 지금 화면에 있는 그 행의 버튼을 찾는다).
-export function confirmIrreversible({ message, action, opener = document.activeElement }) {
-  const dialog = document.createElement("dialog");
-  dialog.className = "ui-confirm";
-  const text = document.createElement("p");
-  text.id = `ui-confirm-${++reasonSerial}`;
-  text.textContent = message;
-  dialog.setAttribute("aria-labelledby", text.id);
-  const actions = document.createElement("ui-actions");
-  const cancel = document.createElement("ui-button");
-  cancel.setAttribute("kind", "quiet");
-  cancel.textContent = "취소";
-  cancel.addEventListener("click", () => dialog.close("cancel"));
-  const run = document.createElement("ui-button");
-  run.setAttribute("kind", "irreversible");
-  run.textContent = action;
-  run.addEventListener("click", () => dialog.close("confirm"));
-  actions.append(cancel, run);
-  dialog.append(text, actions);
-  return new Promise((resolve) => {
-    openLiveDialog(dialog, { initialFocus: cancel, opener, onClose: (value) => resolve(value === "confirm") });
-  });
-}
+export const confirmIrreversible = createConfirmIrreversible(openLiveDialog);
 
 // 모든 대화상자는 비모달이다(2026-09-30 US-010 측정: showModal()은 문서 전체를 inert로
 // 만들어 비상 정지까지 막았다 — D-280 원칙 2 위반). 그래서 모달은 여기서 흉내 낸다:
@@ -378,10 +359,9 @@ export function openLiveDialog(dialog, { initialFocus = null, opener = document.
     };
     walk(document.body);
   };
-  // 스크림은 화면 전체를 덮되, 보이는 정지 컨트롤 상자마다 evenodd 구멍을 낸다.
+  // 겹치는 정지 컨트롤도 교집합이 다시 덮이지 않도록 서로 겹치지 않는 구멍을 낸다.
   const punch = () => {
-    const holes = liveNodes().filter((node) => node.getClientRects().length > 0).map((node) => {
-      const r = node.getBoundingClientRect();
+    const holes = disjointRectangles(liveNodes().filter(node => node.getClientRects().length > 0).map(node => node.getBoundingClientRect()), innerWidth, innerHeight).map(r => {
       return `0 0, ${r.left}px ${r.top}px, ${r.right}px ${r.top}px, ${r.right}px ${r.bottom}px, ${r.left}px ${r.bottom}px, ${r.left}px ${r.top}px`;
     });
     scrim.style.clipPath = holes.length
@@ -566,3 +546,32 @@ const hangulObserver = new MutationObserver((records) => {
 });
 hangulObserver.observe(document.documentElement, { childList: true, characterData: true, subtree: true });
 markHangulTree(document.documentElement);
+
+// Shared labeled action icons. Keep handlers and button semantics on the original element.
+export function actionIcon(button, name) {
+  const paths = {
+    fit: "M4 4h16v16H4zM8 8h8v8H8z",
+    expand: "M9 3H3v6M15 3h6v6M3 15v6h6M21 15v6h-6",
+    tools: "M4 6h16M4 12h16M4 18h16M9 3v6M15 9v6M8 15v6",
+    back: "M15 5l-7 7 7 7",
+    refresh: "M20 7v5h-5M4 17v-5h5M6 7a7 7 0 0 1 12-1l2 2M18 17a7 7 0 0 1-12 1l-2-2",
+    download: "M12 3v12M7 10l5 5 5-5M4 17v4h16v-4",
+    close: "M6 6l12 12M18 6L6 18",
+    forward: "M12 20V4M5 11l7-7 7 7",
+    reverse: "M12 4v16M5 13l7 7 7-7",
+    left: "M4 8h9a7 7 0 0 1 7 7v4M9 3L4 8l5 5",
+    right: "M20 8h-9a7 7 0 0 0-7 7v4M15 3l5 5-5 5",
+  };
+  if (!paths[name]) throw new RangeError(`Unknown action icon: ${name}`);
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  for (const [key, value] of Object.entries({viewBox: "0 0 24 24", fill: "none", stroke: "currentColor",
+    "stroke-width": "2", "stroke-linecap": "round", "stroke-linejoin": "round", class: "ui-icon", "aria-hidden": "true", focusable: "false"})) svg.setAttribute(key, value);
+  const path = document.createElementNS(svg.namespaceURI, "path");
+  path.setAttribute("d", paths[name]); svg.append(path);
+  const label = document.createElement("span");
+  const details = [...button.querySelectorAll(":scope > small")];
+  label.textContent = [...button.childNodes].filter(node => node.nodeType === 3 ||
+    (node.nodeType === 1 && !node.matches(".ui-icon, small"))).map(node => node.textContent).join("");
+  button.replaceChildren(svg, label, ...details);
+  return button;
+}

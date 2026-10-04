@@ -303,7 +303,6 @@ class OverheadLink(
             pinRetryAvailable.set(true)
             val s = sensor
             webSocket.send(Protocol.hello(pairing.source, appVersion, device, s.width, s.height, s.rotationDeg, lens))
-            backoff.reset()
             Log.i(TAG, "connected to ${pairing.wsUrl}")
             _status.update { it.copy(state = LinkState.STREAMING, error = null, stopped = false) }
         }
@@ -312,10 +311,12 @@ class OverheadLink(
             if (!isCurrent(gen)) return
             when (val msg = Protocol.parseServerMessage(text)) {
                 is ServerMessage.Config -> {
+                    backoff.reset()
                     Log.i(TAG, "config ${msg.config}")
                     _status.update { it.copy(config = msg.config) }
                 }
                 is ServerMessage.Status -> {
+                    backoff.reset()
                     Log.d(TAG, "status $msg")
                     _status.update { it.copy(site = msg) }
                 }

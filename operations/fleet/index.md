@@ -44,6 +44,7 @@
 | D-392 | 모델 도구 호출은 provider 중립 메시지 계약과 Fleet 소유 allowlist를 따른다 |
 | D-407 | 차선 자율 막힘 복구: 앞물체·차선 상실이 이어지면 관제에 판단 요청(WAIT·RESUME·BACK_AND_RETRY·MANUAL·ABORT), 답이 없으면 뒤 여유 확인 후 짧은 후진과 재판단(최대 2회, 기본 꺼짐) |
 | D-413 | ROSY는 modules·integrations·apps·profiles로 책임을 나누고 고정 셀 한 흐름부터 이전한다 |
+| D-439 | 웹 앱은 공용 디자인과 작업 중심 정보 위계로 순차 개선한다 |
 | D-443 | `rosy.site-device/1` — 사이트 장치(신호등·도크, 나중에 컨베이어·문·PLC)의 공통 호스트 타입 계약: 식별·자격증명, measured/claimed를 가른 상태, heartbeat·`last_seq`, kind별 semantic 동사, ack와 관측된 효과의 분리, 버전; 지금 신호등·도크 HTTP는 wire 변경 없이 `signal/1`·`dock/1` profile; 장치별 단일 감독자(신호등은 Fleet), 로봇은 읽기만, ER2는 후보만, 장치 로컬 failsafe(신호 10 s 적색 점멸, 도크 0 V), 안전 회로 쓰기 금지; PLC/Modbus 어댑터 `integrations/fieldbus/modbus` 레지스터 맵·범위 단위 안전 주소 거부(시험은 D-430 소유)·변하는 watchdog·연결당 어댑터 하나; 재단언은 감독 연속성과 의도 나이 안에서만(현재 코드 위반, 이행 (b2)), seq 재동기화와 안전 방향 1회 재시도, non-agree 열거와 admission 술어; 동작 변경 없는 이행 (a)–(d); Fleet 상시 감독과 운영자 presence 동안만 수동 점등(떠나면 failsafe); Q1–Q10 결정(Q5·Q8·Q9 사용자 결정, 나머지 권고안; 2026-10-04); 코드 결함은 이전 직후 첫 안전 작업 |
 
 ## 계획·결과 문서
@@ -77,8 +78,8 @@
 
 ## 최근 기록
 
-- 2026-10-04 · uncommitted · fix: D-427 push5 통합 게이트 정합성
-- 2026-10-04 · uncommitted · D-442 U3 owner 선점과 named 운영 복구
-- 2026-10-04 · uncommitted · D-443 신호 감독 안전 수정
-- 2026-10-04 · uncommitted · D-427 shared asset path contract
-- 2026-10-03 · uncommitted · feat: read live Fleet fence on the simulation Cell owner
+- 2026-10-04 · 6485f8a39 · refactor(ui): 통합 명렬 카드의 표현 재사용
+- 2026-10-04 · uncommitted · fix(web): 관제 확인과 명령의 공통 소유권
+- 2026-10-04 · uncommitted · fix(web): 관제 뷰포트와 주소 확인의 작업 소유권
+- 2026-10-04 · uncommitted · feat(web): D-439 Fleet 작업 탐색과 보정 미리보기 수명
+- 2026-10-04 · uncommitted · test: API v1.91 문서 계약 유지

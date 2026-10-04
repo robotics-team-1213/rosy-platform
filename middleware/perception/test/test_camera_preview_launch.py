@@ -52,6 +52,26 @@ def test_new_actions_are_gated_by_their_switch():
     assert "cmd_vel" not in SRC  # camera unit never touches motion (test_camera_image_stack)
 
 
+def test_capture_rate_is_bounded_and_default_preserves_eight_hz(monkeypatch):
+    import os
+    tree = ast.parse(SRC)
+    function = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == '_env_rate')
+    warnings = []
+    namespace = {'os': os, 'get_logger': lambda _: types.SimpleNamespace(warning=warnings.append)}
+    exec(compile(ast.Module(body=[function], type_ignores=[]), str(LAUNCH), 'exec'), namespace)
+    read = lambda: namespace['_env_rate']('ROSY_CAMERA_FPS', '8.0', 4.0, 8.0)
+    monkeypatch.delenv('ROSY_CAMERA_FPS', raising=False)
+    assert read() == '8.0'
+    monkeypatch.setenv('ROSY_CAMERA_FPS', '4.0')
+    assert read() == '4.0'
+    for bad in ('0', '2', '9', 'nan', 'inf', 'fast'):
+        monkeypatch.setenv('ROSY_CAMERA_FPS', bad)
+        assert read() == '8.0'
+    assert len(warnings) == 6
+    assert _declared_defaults()['camera_fps'] == ('env', 'ROSY_CAMERA_FPS', '8.0', 4.0, 8.0)
+    assert "'fps': ParameterValue(LaunchConfiguration('camera_fps'), value_type=float)" in SRC
+
+
 def test_recorder_name_is_left_to_the_namespace():
     """record_session and capture_trigger_node both derive it from the namespace."""
     assert "--node-name" not in SRC and "snapshot_service" not in SRC

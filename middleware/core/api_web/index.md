@@ -30,8 +30,8 @@
 
 ## 최근 기록
 
-- 2026-10-04 · uncommitted · D-442 U1 MANUAL 보호
-- 2026-10-03 · 0e244456c · docs(api): D-418 재번호 항목의 커밋 기록 정정
-- 2026-10-03 · uncommitted · merge(main): D-418 SSH 접속 계약을 API Ref v1.89 로 재번호
-- 2026-10-03 · b84e72c55 · feat(api): D-423 `GET /api/v1/vision/models`(viewer, 읽기 전용), API Ref v1.83
-- 2026-10-03 · uncommitted · merge(main): D-411 B+C 계약을 API Ref v1.87 로 재번호
+- 2026-10-04 · uncommitted · feat(ui): 어휘 갤러리 작업 선택 자산 허용
+- 2026-10-04 · uncommitted · feat(ui): 기본 dashboard 진입 자산 허용
+- 2026-10-04 · uncommitted · feat(recording): 원본과 검토 전 주석 옵션
+- 2026-10-04 · uncommitted · feat(api): fresh keeper source readback
+- 2026-10-04 · uncommitted · fix(api): serialize calibration and perception admission

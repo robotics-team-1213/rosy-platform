@@ -326,7 +326,8 @@ def test_the_status_inputs_carry_only_the_threshold_the_states_and_the_mode(tmp_
     host_api.write_status_inputs(svc)
     written = json.loads((tmp_path / "run/rosy/status-inputs.json").read_text(encoding="utf-8"))
 
-    assert set(written) == SCHEMA_1_KEYS | SCHEMA_2_KEYS
+    assert set(written) == SCHEMA_1_KEYS | SCHEMA_2_KEYS | {"calibration_active"}
+    assert written["calibration_active"] is None  # missing service is unknown, not idle
     assert written["schema"] == 2
     assert written["battery_warning_percent"] == 25.0
     assert written["devices"] == [{"id": "camera", "state": "no_response", "product": True}]

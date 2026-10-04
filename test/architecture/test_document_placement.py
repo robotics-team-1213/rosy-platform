@@ -12,6 +12,9 @@ ROOT = Path(__file__).resolve().parents[2]
 
 # D-226 table "gitignore로 막는 것": sample paths that must never be committable.
 MUST_IGNORE = [
+    'private/development/rosy_01/key.pem',
+    'pilot-development.json',
+    'cam-development.json',
     "private/strategy-draft.md",
     ".env",
     "deploy/robot/pinky_pro/.env",
@@ -38,6 +41,7 @@ MUST_IGNORE = [
 
 # D-226 table "추적하는 것": templates and public material next to the secrets.
 MUST_TRACK = [
+    'tools/development-link.example.yaml',
     "deploy/robot/pinky_pro/.env.example",
     "deploy/site/discovery-token.template.txt",
     "deploy/robot/pinky_pro/native/rosy-runtime.env",

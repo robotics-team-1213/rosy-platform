@@ -441,8 +441,41 @@
 - 증거: `test_vision_models.py` 8 passed; `src/runtime/services/test` 포함 묶음 739 passed, 37 skipped.
 - gate 변화: 없음.
 
+## 2026-10-03 · uncommitted · feat(link): D-432 주소 없는 장비 접속
+
+- 변경: FleetAgent가 실제 SRV 주소·port·TLS DNS 이름을 보존한다. 인증/신원 충돌은 종료하고 일시 발견 실패는 jitter로 재시도한다.
+- 증거: 관련 Python 계약 시험·실제 loopback TLS HTTP/WS 시험을 실행했다. Pilot Android 설치·화면과 실제 로봇 연결·현장 트래픽 수용은 서로 다른 증거다.
+- gate 변화: 실제 장비의 제어·FIELD 관문은 이동하지 않는다.
+- 결정: D-432 2026-10-03 추가 결정.
+
 ## 2026-10-04 · uncommitted · D-442 U1 MANUAL 보호
 
 - 변경: 살아 있는 수동 세션의 NAVIGATION 전환을 ModeMachine에서 거부한다. teleop 입력과 watchdog 갱신은 같은 모드 잠금 안에서 다시 확인한 뒤 반영한다. API의 자율 진입은 부작용 전에 409 MODE_CONFLICT로 거부한다. 정지와 만료된 세션은 기존 전환을 유지한다.
 - 증거: 신규 회귀 시험에서 탈취 5 failed, 경합 1 failed, line-follow 취소 부작용 1 failed를 수정 전에 재현했다. 관련 시험 167 passed, known_failures 비교 NEW 0, lint 0 errors. 독립 재리뷰에서 경합 양방향과 교착 부재를 확인했고 코드 차단 사항 없이 승인했다. 근거는 docs/validation/d427-source-migration/manual-ownership-review-2026-10-04.md.
 - gate 변화: 없음. 호스트 검증이며 sim·장치·실주행 수용은 미실행이다.
+## 2026-10-04 · uncommitted · feat(vision): 차선 입력의 실제 출처와 정지 설정 예약
+
+- 변경: 읽기 전용 keeper paint 증거는 별도 vision store에서 camera stamp·requested source·실제 모델 판·receipt freshness를 검사한다. stale·잘못된 packet·다른 설정·다른 모델은 unknown이다. Motion 입력으로 소비하지 않는다.
+- 변경: ModeMachine의 원자 IDLE 예약은 설정 변경 동안 이동 모드 전환을 막고 정지·비상정지를 유지한다. 보정 admission과 설정 admission은 별도 RLock으로 묶고 내부 mode/docking lock 순서를 유지한다.
+- 증거: Host 요청이 정지해 있는 동안 주행 API·최종 전환 거절 및 finally 해제, 보정 admission 경합의 red/green을 포함한 82 passed. 독립 검토: docs/validation/learned-lane-modes-2026-10-04/README.md.
+- gate 변화: 없음. SOURCE/LOCAL 관측·admission 검증이며 실제 구동 수용은 별도다.
+
+## 2026-10-04 · uncommitted · fix(line-follow): 저조도 정지와 recovery 차단
+
+- 변경: CAMERA_LINE low_light 관측은 visible=false/confidence=0으로 검증하고 즉시 정지한다. LOST 이후에도 public tick에서 local recovery를 우회하고 기존 back-off를 취소한다. IR·LiDAR 한도는 변경하지 않는다.
+- 증거: 모든 후진 조건을 만족한 저조도 LOST에서 -0.03 m/s가 발생하는 RED를 재현한 뒤 차단했다. 이미 BACKING일 때 어두운 관측을 받으면 이전 command decision도 evidence revision으로 거절한다. focused CORE/preview/protocol 143 passed, 1 skipped; recovery API/active-backoff 55 passed. 로그는 X:/DevTemp/rosy-lane-device-20261004/lowlight-*.txt.
+- gate 변화: SOURCE/LOCAL. 사용자가 기기 곁에 없으므로 실제 이동은 시험하지 않았다.
+
+## 2026-10-04 · uncommitted · feat(vision): 같은 capture의 bounded raw/annotation pair
+
+- 변경: 최대4개 원본/주석 frame cache는 stamp·frame_id·크기가 일치할 때만 pair로 제공한다. viewer admission은 pair당 공유하며 각 variant를 한 번만 허용한다. stale/missing raw는 대체하지 않고 counterpart는 cache/TTL 안에서만 고정한다.
+- 변경: source image age와 monotonic 수신 나이를 합쳐 조도와 raw freshness를 제한한다. 얼굴 handover도 effective quality_age_ms를 전달해 지연된 사진이 추가2초 조명 권한을 받지 않는다. 이동 경로로 사용하지 않는다.
+- 증거: pair/malformed/dimension/stale/admission/capture-age와 API/Guard/Bridge/schema 포함162 passed,1 skipped.
+- gate 변화: SOURCE/LOCAL. 실제 기기의 capture pair 수신은 별도 증거다.
+
+## 2026-10-04 · uncommitted · fix(vision): preserve fresh overexposed quality
+- 변경: 원본 조도 invalid reason overexposed를 preview store, API protocol, face handover sanitizer에 전달한다. low_light 조명 허용 범위와 2초 촬영·수신·handover 신선도는 유지한다.
+- 검증: 과다 노출 관측을 버리는 RED 3 failed; API·handover·stale 회귀 포함 GREEN은 X:/DevTemp/rosy-lane-device-20261004/overexposed-api-green.txt. 배포·실주행 미검증, 명령 전송 없음.
+- 추가 검증: face handover integration RED 1 failed로 display whitelist 누락을 확인·수정. 최종 focused 129 passed, 3 skipped (overexposed-api-green.txt).
+
+- gate 변화: SOURCE/LOCAL. 실기 노출·조명·주행은 별도 검증이다.

@@ -55,17 +55,16 @@ h2 {
 }
 
 .demo {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   gap: var(--space-3);
   padding: var(--space-3);
   background: var(--surface-flat);
   min-height: var(--target-secondary);
+  max-width: 100%; flex-wrap: wrap;
 }
 
-.demo-wide { display: flex; width: 100%; }
-.demo-row { flex-wrap: wrap; }
-.type-demo { align-items: baseline; flex-wrap: wrap; }
+.type-demo { align-items: baseline; }
 /* 확인 대화상자 고정 그림 — 제품의 고정 가운데 배치를 풀어 칸 안에 둔다. */
 .dialog-demo dialog.ui-confirm { position: static; z-index: auto; margin: 0; }
 
@@ -77,6 +76,7 @@ h2 {
 }
 
 .gate code {
+  overflow-wrap: anywhere;
   font-family: var(--mono);
   color: var(--ink-quiet);
 }

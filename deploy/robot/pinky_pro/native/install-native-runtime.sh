@@ -22,6 +22,9 @@ find "$DESTINATION" -name '__pycache__' -type d -prune -exec rm -rf {} +
 rm -f -- "$DESTINATION/install-native-runtime.sh"
 # native_release.py imports signing; it is standard-library only.
 cp "$RELEASE_TOOLS/signing.py" "$DESTINATION/signing.py"
+for helper in host_agent.py host_agent_server.py host_lane_perception.py ssh_pairing.py; do
+    cp "$RELEASE_TOOLS/$helper" "$DESTINATION/$helper"
+done
 # D-388: the udev rules and modprobe options the image installs, carried in
 # every copy so sync-image-layer.py has a signed source for them on a robot
 # that only receives payload releases.

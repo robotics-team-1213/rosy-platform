@@ -1,4 +1,5 @@
 import { HeadlessState, NAVIGATION_LABEL, enumLabel, operatorModeLabel, EVIDENCE_LABEL, evidenceAgeText } from "/common/core_ui_logic.js";
+import { createNode } from "/assets/dom.js";
 
 function readout(state, channel, label, freshValue) {
   const evidence = new HeadlessState(state).evidenceOf(channel);
@@ -12,10 +13,8 @@ function readout(state, channel, label, freshValue) {
 }
 
 export function mount(el, ctx) {
-  const head = document.createElement("ui-head");
-  head.textContent = "로봇 상태";
-  const summary = document.createElement("dl");
-  summary.className = "ui-readout";
+  const head = createNode("ui-head", "", "로봇 상태");
+  const summary = createNode("dl", "ui-readout");
   // D-321 부록: 보정 세션이 살아 있는 동안 로봇 카드 맨 위에 경고 칩을 단다.
   const calibration = document.createElement("ui-tag");
   calibration.setAttribute("status", "warn");
@@ -48,10 +47,8 @@ export function mount(el, ctx) {
         Number.isFinite(battery?.percent) ? `${Math.round(battery.percent)}%` : null),
     };
     for (const field of fields) {
-      const label = document.createElement("dt");
-      label.textContent = ({mode:"운전 모드", navigation:"내비게이션", pose:"현재 위치", battery:"배터리"})[field];
-      const value = document.createElement("dd");
-      value.textContent = values[field]?.text ?? "수신 대기";
+      const label = createNode("dt", "", ({mode:"운전 모드", navigation:"내비게이션", pose:"현재 위치", battery:"배터리"})[field]);
+      const value = createNode("dd", "", values[field]?.text ?? "수신 대기");
       if (values[field]?.evidence) value.dataset.evidence = values[field].evidence;
       if (values[field]?.title) value.title = values[field].title;
       summary.append(label, value);
@@ -59,8 +56,7 @@ export function mount(el, ctx) {
   }
   function fail(error) {
     summary.replaceChildren();
-    const note = document.createElement("ui-empty");
-    note.textContent = `상태를 불러오지 못했습니다: ${error.message}`;
+    const note = createNode("ui-empty", "", `상태를 불러오지 못했습니다: ${error.message}`);
     summary.append(note);
   }
   el.append(head, summary);

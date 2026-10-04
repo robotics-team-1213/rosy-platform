@@ -663,7 +663,10 @@ def test_the_script_wires_the_buzzer_and_lamp_test_for_administrators_only():
     actions = script.split("function humanTestActions")[1].split("\nfunction ")[0]
     assert "!isAdmin()" in actions
     assert "innerHTML" not in actions and "outerHTML" not in actions
-    assert "textContent = test.detail" in actions
+    assert 'createNode("span", "device-test", test.detail)' in actions
+    factory = (WEB / "dom.js").read_text(encoding="utf-8").split("export function createNode")[1].split("\n}")[0]
+    assert "node.textContent = text" in factory
+    assert "innerHTML" not in factory and "outerHTML" not in factory
     # The card is read until it shows this request's outcome, bounded, not after a fixed pause.
     assert "const HW_TEST_WAIT_MS = 12000;" in script
     wait = script.split("async function waitForHardwareTest")[1].split("\n}\n")[0]

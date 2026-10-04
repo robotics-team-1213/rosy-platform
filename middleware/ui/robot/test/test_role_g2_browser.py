@@ -32,6 +32,18 @@ SCENARIOS = {
 }
 
 
+def _select_task(page, panel_id):
+    """Select through the shipped navigation at either responsive tier."""
+    page.locator('.ui-task-chooser[aria-busy="false"]').wait_for()
+    page.wait_for_function("() => [...document.styleSheets].some(sheet => sheet.href?.endsWith('/common/task-chooser.css'))")
+    chooser = page.get_by_role("combobox", name="작업 선택", exact=True)
+    if chooser.is_visible():
+        chooser.select_option(panel_id)
+    else:
+        page.locator(f'[role="tab"][aria-controls="procedure-{panel_id}"]').click()
+    page.locator(f'[id="procedure-{panel_id}"]:not([hidden])').wait_for()
+
+
 def _core_client(tmp_path):
     from fastapi.testclient import TestClient
     from core_api_web.api.app import create_app
@@ -162,13 +174,12 @@ def test_role_procedure_g2_local_matrix(tmp_path):
                         assert page.locator("#safety-mode-status").is_visible()
                         assert "물리 상태는 별도로" in page.locator("#safety-mode-status").inner_text()
                     if scenario == "confirm_cancel":
-                        def dismiss(dialog):
-                            dialogs.append(dialog.message)
-                            dialog.dismiss()
-                        page.on("dialog", dismiss)
                         if surface == "setup":
+                            _select_task(page, "setup.localization")
+                            page.get_by_text("SLAM 맵 준비", exact=True).click()
                             button = page.locator('[data-panel="setup.localization"] ui-button').filter(has_text="맵핑 시작")
                         else:
+                            _select_task(page, "host.operations")
                             button = page.get_by_role("button", name="이전 릴리스로 복귀", exact=True)
                             page.wait_for_function("""() => {
                               const cards = [...document.querySelectorAll('[data-panel="host.operations"] section.ui-readback')];
@@ -180,6 +191,10 @@ def test_role_procedure_g2_local_matrix(tmp_path):
                             }""")
                         assert button.is_enabled(), (role, surface, scenario)
                         button.click()
+                        dialog = page.locator('dialog.ui-confirm')
+                        dialog.wait_for()
+                        dialogs.append(dialog.locator('p').inner_text())
+                        dialog.get_by_role('button', name='취소', exact=True).click()
                         page.wait_for_timeout(100)
                     filename = f"{role}-{surface}-{scenario}-{width}x{height}.png"
                     page.screenshot(path=str(CAPTURES / filename), full_page=True)
@@ -213,6 +228,7 @@ def test_role_procedure_g2_local_matrix(tmp_path):
                     }:
                         expected = {"delayed": "지연", "disconnected": "연결 끊김",
                                     "unavailable": "정보 없음"}[scenario]
+                        _select_task(page, "host.operations")
                         card_status = page.locator("section.ui-readback ui-status").filter(has_text=expected).first.inner_text()
                         assert expected in card_status, records[-1]
                         assert page.get_by_role("button", name="사업장 Wi-Fi로 전환", exact=True).is_disabled(), records[-1]
@@ -249,6 +265,7 @@ def test_existing_dock_type_ignores_hidden_new_type_fields(tmp_path):
 
         page.route("**/*", serve)
         page.goto("http://rosy.test/setup", wait_until="domcontentloaded")
+        _select_task(page, "setup.dock_admin")
         form = page.locator('[data-panel="setup.dock_admin"] form')
         form.locator('ui-button[type="submit"]').wait_for(state="visible")
         page.wait_for_function("document.querySelector('[data-panel=\"setup.dock_admin\"] form ui-button[type=\"submit\"]')?.disabled === false")
@@ -277,6 +294,7 @@ def test_existing_dock_type_ignores_hidden_new_type_fields(tmp_path):
           form.querySelector('[name="tag_size_m"]').value = '';
         }""")
         form.locator('ui-button[type="submit"]').click()
+        page.locator('dialog.ui-confirm ui-button[kind="irreversible"]').click()
         page.wait_for_function("document.querySelector('[data-panel=\"setup.dock_admin\"] ui-status')?.textContent.includes('등록했습니다')")
         assert [write["path"] for write in writes] == ["/api/v1/docking/docks"]
         assert writes[0]["body"]["type"] == "known"
@@ -304,6 +322,7 @@ def test_device_host_cards_clear_old_values_on_forbidden_and_recover(tmp_path):
 
         page.route("**/*", serve)
         page.goto("http://rosy.test/device", wait_until="domcontentloaded")
+        _select_task(page, "host.operations")
         cards = page.locator('[data-panel="host.operations"] section.ui-readback')
         page.wait_for_function("""() => {
           const lines = document.querySelectorAll('[data-panel="host.operations"] .host-card-headline');
@@ -349,6 +368,7 @@ def test_device_procedure_places_status_and_actions_before_long_readouts(tmp_pat
               const lines = document.querySelectorAll('[data-panel="host.operations"] .host-card-headline');
               return lines[0]?.textContent.includes('site-fixture') && lines[1]?.textContent.includes('이전 r1');
             }""")
+            _select_task(page, "host.operations")
             result = page.evaluate("""() => {
               const host = document.querySelector('[data-panel="host.system"]');
               const operations = document.querySelector('[data-panel="host.operations"]');
@@ -367,9 +387,11 @@ def test_device_procedure_places_status_and_actions_before_long_readouts(tmp_pat
             if width == 390:
                 assert result["operationsTop"] < height, result
             button = page.get_by_role("button", name="사업장 Wi-Fi로 전환", exact=True)
+            page.keyboard.press("Tab")
             button.focus()
             assert button.evaluate("node => document.activeElement === node")
             assert button.evaluate("node => getComputedStyle(node).outlineStyle !== 'none' && parseFloat(getComputedStyle(node).outlineWidth) > 0")
+            _select_task(page, "host.system")
             disclosure = page.locator('[data-panel="host.system"] details > summary')
             disclosure.focus()
             assert disclosure.evaluate("node => document.activeElement === node")
@@ -525,6 +547,7 @@ def test_console_mode_feedback_full_shell_captures(tmp_path):
             )?.disabled === false""")
             with page.expect_response(lambda response: response.url.endswith("/api/v1/mode") and response.request.method == "POST"):
                 button.click()
+                page.locator('dialog.ui-confirm ui-button[kind="irreversible"]').click()
             page.wait_for_function("""document.querySelector(
               '[data-panel="console.mode"] [role="status"]:last-of-type'
             )?.textContent.length > 0""")
@@ -738,6 +761,7 @@ def test_console_line_follow_and_docking_feedback_full_shell_captures(tmp_path):
             page.wait_for_selector('[data-panel="console.line_follow"] ui-button')
             page.wait_for_function("document.querySelector('[data-panel=\"console.line_follow\"] ui-button')?.disabled === false")
             line_panel.locator("ui-button").first.click()
+            page.locator('dialog.ui-confirm ui-button[kind="irreversible"]').click()
             page.wait_for_function("document.querySelector('[data-panel=\"console.line_follow\"] ui-status[role=status]:last-of-type')?.textContent.includes('CORE')")
             page.wait_for_function("document.querySelector('[data-panel=\"console.line_follow\"] ui-status')?.textContent.includes('fixture line status unavailable')")
             line_filename = f"operator-console-line-follow-{width}x{height}.png"
@@ -761,6 +785,7 @@ def test_console_line_follow_and_docking_feedback_full_shell_captures(tmp_path):
             page.wait_for_selector('[data-panel="console.docking"] ui-button')
             dock_panel.locator("select").select_option("dock-b")
             dock_panel.locator("ui-button").first.click()
+            page.locator('dialog.ui-confirm ui-button[kind="irreversible"]').click()
             page.wait_for_function("document.querySelector('[data-panel=\"console.docking\"] ui-status[role=status]:last-of-type')?.textContent.includes('CORE')")
             page.wait_for_function("document.querySelector('[data-panel=\"console.docking\"] ui-status')?.textContent.includes('fixture docking status unavailable')")
             assert dock_panel.locator("select").input_value() == "dock-b"
@@ -934,6 +959,7 @@ def test_admin_hardware_refresh_feedback_full_shell_captures(tmp_path):
 
             page.route("**/*", serve)
             page.goto("http://rosy.test/device", wait_until="domcontentloaded")
+            _select_task(page, "host.hardware")
             panel = page.locator('[data-panel="host.hardware"]')
             page.wait_for_selector('[data-panel="host.hardware"] .hardware-refresh')
             page.wait_for_function("document.querySelector('[data-panel=\"host.hardware\"] .hardware-measured dd')?.textContent.length > 0")

@@ -189,18 +189,10 @@ body:is([data-surface="setup"], [data-surface="device"]) .procedure-panel {
     min-width: 0;
     white-space: nowrap;
   }
-  body[data-surface="setup"] .surface-slot[data-slot="main"],
-  body[data-surface="device"] .surface-slot[data-slot="main"] {
-    display: block;
-    columns: 2;
-    column-gap: var(--space-4);
-  }
-  body:is([data-surface="setup"], [data-surface="device"]) .surface-slot[data-slot="main"] > .procedure-panel {
-    break-inside: avoid;
-    margin: 0 0 var(--space-4);
-  }
-  body[data-surface="setup"] .procedure-panel:has(> [data-panel="setup.traffic_policy"]) {
-    column-span: all;
+  body:is([data-surface="setup"], [data-surface="device"]) .surface-slot[data-slot="main"].procedure-tasks {
+    display: grid;
+    grid-template-columns: minmax(13rem, 18rem) minmax(0, 1fr);
+    gap: var(--space-5);
   }
   body[data-surface="setup"] [data-panel="setup.traffic_policy"] {
     display: grid;
@@ -213,9 +205,11 @@ body:is([data-surface="setup"], [data-surface="device"]) .procedure-panel {
   }
   body[data-surface="setup"] [data-panel="setup.traffic_policy"] > form {
     grid-column: 2;
-    grid-row: 2 / span 3;
+    grid-row: 2;
     min-width: 0;
   }
+  body[data-surface="setup"] [data-panel="setup.traffic_policy"] > .traffic-policy-review { grid-column: 2; grid-row: 3; }
+  body[data-surface="setup"] [data-panel="setup.traffic_policy"] > .traffic-policy-simulation { grid-column: 1; grid-row: 3; }
 }
 
 /* D-359 §6.4 — 세로 예산: 붙박이 머리는 창 높이의 20% 이하다. 넓지 않은 창에서는 두 줄에

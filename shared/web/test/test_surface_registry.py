@@ -34,6 +34,24 @@ def test_registered_paths_exist():
     assert _under("path") == []
 
 
+def test_generated_native_tokens_require_canonical_source_and_verification(tmp_path):
+    common = tmp_path / "shared/web"
+    common.mkdir(parents=True)
+    (common / "tokens.css").write_text(":root {}", encoding="utf-8")
+    (common / "ui.js").write_text("const GRAMMARS = ['spatial'];", encoding="utf-8")
+    (tmp_path / "native").mkdir()
+    (tmp_path / registry.REGISTRY).write_text(
+        "surfaces:\n  - id: generated\n    path: native\n    medium: native\n"
+        "    surface: robot\n    themes: [dark]\n    contracts: [token_parity]\n"
+        "    audience: operator\n    role: lobby\n    owns: [lobby]\n"
+        "    baseline_reason: device capture\n    token_source: native/copied.css\n"
+        "    token_generator: native/build.gradle.kts\n", encoding="utf-8")
+    found = registry.problems_with(tmp_path, "path")
+    assert any("token_source must be canonical" in line for line in found)
+    assert any("missing token_generator" in line for line in found)
+    assert any("missing token_verification" in line for line in found)
+
+
 def test_registry_values_stay_in_their_domains():
     assert _under("value") == []
     assert _under("shape") == []

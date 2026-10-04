@@ -58,6 +58,7 @@ export const pinkyCore = {
   kind: KIND,
   profile: PROFILE,
   assessGate,
+  describeReason,
   // engage/disengage: 조속 화면 진입·이탈의 모드 전환. 실패(409 MODE_CONFLICT 등)는
   // 호출자(link/app)가 이유를 표시한다.
   engage: (post) => post("/api/v1/mode", {mode: "MANUAL"}),

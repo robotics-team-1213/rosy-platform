@@ -1,4 +1,4 @@
-import { setTagState } from "./dom.js";
+import { createNode, setTagState } from "./dom.js";
 
 // 호스트·릴리스·커미셔닝·하드웨어 카드 렌더 (D-262 세 번째 분해). 셸은
 // render*(payload) 호출만 남긴다. 역할 판단(isAdmin)과 커미셔닝 후속
@@ -174,8 +174,7 @@ export function createHostCards({
   function humanTestActions(device, test) {
     const words = HUMAN_TESTS[device.id];
     if (!words || !isAdmin()) return null;
-    const actions = document.createElement("div");
-    actions.className = "device-actions";
+    const actions = createNode("div", "device-actions");
     const start = hardwareButton(words.test, "test", device.id);
     // The probe already says why it cannot work (no driver, wrong lamp channel).
     if (device.state === "driver_missing") {
@@ -184,9 +183,7 @@ export function createHostCards({
     }
     actions.append(start);
     if (test && test.action === device.id) {
-      const outcome = document.createElement("span");
-      outcome.className = "device-test";
-      outcome.textContent = test.detail;
+      const outcome = createNode("span", "device-test", test.detail);
       actions.append(outcome);
       if (test.state === "done") {
         actions.append(hardwareButton(words.yes, "observed", device.id),
@@ -198,30 +195,20 @@ export function createHostCards({
 
   function deviceRow(device, test) {
     const known = DEVICE_STATES[device.state] || DEVICE_STATES.not_measured;
-    const item = document.createElement("li");
-    item.className = "device-row";
+    const item = createNode("li", "device-row");
     item.dataset.device = device.id;
     item.dataset.state = device.state;
-    const name = document.createElement("span");
-    name.className = "device-name";
-    const label = document.createElement("strong");
-    label.textContent = device.label;
-    const bus = document.createElement("span");
-    bus.className = "device-bus";
-    bus.textContent = device.bus;
+    const name = createNode("span", "device-name");
+    const label = createNode("strong", "", device.label);
+    const bus = createNode("span", "device-bus", device.bus);
     name.append(label, bus);
     if (device.product === false) {
-      const bench = document.createElement("ui-tag");
-      bench.textContent = "벤치 전용";
+      const bench = createNode("ui-tag", "", "벤치 전용");
       name.append(bench);
     }
-    const chip = document.createElement("ui-tag");
-    chip.className = "device-state";
-    chip.textContent = known.text;
+    const chip = createNode("ui-tag", "device-state", known.text);
     setTagState(chip, "status", known.status);
-    const evidence = document.createElement("p");
-    evidence.className = "device-evidence";
-    evidence.textContent = device.evidence;
+    const evidence = createNode("p", "device-evidence", device.evidence);
     item.append(name, chip, evidence);
     const actions = humanTestActions(device, test);
     if (actions) item.append(actions);

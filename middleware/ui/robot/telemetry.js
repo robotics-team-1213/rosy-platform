@@ -3,6 +3,7 @@
 // 셸 의존이 없어 어떤 셸 함수도 import 하지 않는다. 이 파일이 셸 싱글턴
 // (fieldMap·teleop·hostCards) 을 필요로 하게 되면 그 함수는 여기 있을 수 없다.
 import {
+  createNode,
   bytes,
   duration,
   elements,
@@ -142,11 +143,18 @@ export function renderTrafficStatus(status = {}) {
 let trafficPolicyReadback = null;
 let trafficFormDirty = false;
 let trafficPolicyPending = false;
+const actionHooks = {runConfirmed: async () => {}, captureLifetime: () => ({current: () => false})};
+export function initTelemetry(overrides) { Object.assign(actionHooks, overrides); }
+let trafficOwner = null;
+function trafficPending(pending) { trafficPolicyPending = pending; updateTrafficPolicyControls(); }
+function trafficInputSnapshot() {
+  return JSON.stringify(["traffic-policy-mode", "traffic-policy-revision-input", "traffic-approach-distance", "traffic-stop-distance", "traffic-stop-dwell", "traffic-min-confidence"].map(id => elements[id].value));
+}
 
 function updateTrafficPolicyControls() {
   setEnabled("traffic-policy-stage", !trafficPolicyPending);
-  setEnabled("traffic-policy-apply", !trafficPolicyPending && Boolean(trafficPolicyReadback?.staged),
-    trafficPolicyPending ? "" : "저장된 검토본 없음");
+  setEnabled("traffic-policy-apply", !trafficPolicyPending && !trafficFormDirty && Boolean(trafficPolicyReadback?.staged),
+    trafficPolicyPending ? "" : trafficFormDirty ? "입력 변경: 검토본을 다시 저장하세요" : "저장된 검토본 없음");
   const signalAvailable = trafficPolicyReadback?.simulation_signal?.available === true;
   document.querySelectorAll("[data-simulation-signal]").forEach((button) => {
     setOff(button, trafficPolicyPending || !signalAvailable, trafficPolicyPending ? "" : "시뮬레이션 신호 없음");
@@ -212,10 +220,8 @@ export function renderTriage() {
   context.forEach((fault) => {
     const item = document.createElement("li");
     item.dataset.category = fault.category;
-    const title = document.createElement("b");
-    title.textContent = fault.title;
-    const detail = document.createElement("span");
-    detail.textContent = fault.detail;
+    const title = createNode("b", "", fault.title);
+    const detail = createNode("span", "", fault.detail);
     item.append(title, detail);
     list.append(item);
   });
@@ -295,15 +301,12 @@ export function renderInventory(inventory) {
   );
   elements["capability-list"].replaceChildren();
   rows.forEach((row) => {
-    const item = document.createElement("div");
-    item.className = "capability-item";
+    const item = createNode("div", "capability-item");
     item.dataset.state = row.state;
     if (CONFIGURED_REASONS[row.reason]) item.dataset.cause = "runtime";
-    const label = document.createElement("span");
-    label.textContent = knownWord(CAPABILITY_LABEL, row.id);
+    const label = createNode("span", "", knownWord(CAPABILITY_LABEL, row.id));
     label.title = row.id;
-    const state = document.createElement("b");
-    state.textContent = knownWord(PRESENTATION_LABEL, row.state);
+    const state = createNode("b", "", knownWord(PRESENTATION_LABEL, row.state));
     state.title = row.state;
     item.append(label, state);
     if (row.reason) {
@@ -372,23 +375,16 @@ export function renderEvents(payload) {
   elements["event-list"].replaceChildren();
   if (!events.length) {
     const empty = document.createElement("li");
-    const note = document.createElement("ui-empty");
-    note.textContent = "수신된 이벤트가 없습니다.";
+    const note = createNode("ui-empty", "", "수신된 이벤트가 없습니다.");
     empty.append(note);
     elements["event-list"].append(empty);
     return;
   }
   events.forEach((event) => {
     const row = document.createElement("li");
-    const time = document.createElement("time");
-    time.className = "event-time";
-    time.textContent = event.ts ? new Date(event.ts).toLocaleTimeString("ko-KR") : "—";
-    const type = document.createElement("span");
-    type.className = "event-type";
-    type.textContent = event.type || "unknown.event";
-    const severity = document.createElement("span");
-    severity.className = `event-severity ${event.severity || "info"}`;
-    severity.textContent = (event.severity || "info").toUpperCase();
+    const time = createNode("time", "event-time", event.ts ? new Date(event.ts).toLocaleTimeString("ko-KR") : "—");
+    const type = createNode("span", "event-type", event.type || "unknown.event");
+    const severity = createNode("span", `event-severity ${event.severity || "info"}`, (event.severity || "info").toUpperCase());
     // D-396: 심각도 색 — 위험은 채움, 주의는 텍스트 색, info 는 뮤트.
     if (event.severity === "critical" || event.severity === "error") {
       severity.dataset.severity = "crit";
@@ -410,12 +406,18 @@ export function renderEvents(payload) {
   "traffic-min-confidence",
 ].forEach((id) => elements[id]?.addEventListener("input", () => {
   trafficFormDirty = true;
+  updateTrafficPolicyControls();
 }));
 
 elements["traffic-policy-stage"]?.addEventListener("click", async () => {
   if (trafficPolicyPending) return;
-  trafficPolicyPending = true;
-  updateTrafficPolicyControls();
+  const owner = actionHooks.captureLifetime();
+  if (!owner.current()) return;
+  trafficOwner = owner;
+  const clear = () => { if (trafficOwner === owner) { trafficOwner = null; trafficPending(false); } };
+  owner.signal.addEventListener("abort", clear, {once: true});
+  trafficPending(true);
+  const inputSnapshot = trafficInputSnapshot();
   const body = {
     mode: elements["traffic-policy-mode"].value,
     policy_revision: elements["traffic-policy-revision-input"].value.trim(),
@@ -428,35 +430,31 @@ elements["traffic-policy-stage"]?.addEventListener("click", async () => {
     const readback = await api("/api/v1/traffic/policy/stage", {
       method: "POST",
       body: JSON.stringify(body),
+      signal: owner.signal,
     });
-    trafficFormDirty = false;
+    if (trafficOwner !== owner || !owner.current()) return;
+    trafficFormDirty = inputSnapshot !== trafficInputSnapshot();
     renderTrafficPolicy(readback);
     setText("traffic-policy-message", `검토본 저장됨: ${body.policy_revision}`);
   } catch (error) {
-    setText("traffic-policy-message", `정책 검증 실패: ${error.message}`);
+    if (trafficOwner === owner && owner.current()) setText("traffic-policy-message", `정책 검증 실패: ${error.message}`);
   } finally {
-    trafficPolicyPending = false;
-    updateTrafficPolicyControls();
+    owner.signal.removeEventListener("abort", clear); clear();
   }
 });
 
 elements["traffic-policy-apply"]?.addEventListener("click", async () => {
-  if (trafficPolicyPending || !trafficPolicyReadback?.staged) return;
-  if (!window.confirm("로봇이 완전히 정지했습니까? 검토 중인 교통 정책을 적용합니다.")) return;
-  trafficPolicyPending = true;
-  updateTrafficPolicyControls();
-  try {
+  const staged = JSON.stringify(trafficPolicyReadback?.staged);
+  const snapshot = trafficInputSnapshot();
+  await actionHooks.runConfirmed("로봇이 완전히 정지했습니까? 검토 중인 교통 정책을 적용합니다.", elements["traffic-policy-apply"],
+    () => !trafficPolicyPending && !trafficFormDirty && Boolean(trafficPolicyReadback?.staged) && staged === JSON.stringify(trafficPolicyReadback.staged) && snapshot === trafficInputSnapshot(), async (active, owner) => {
     const readback = await api("/api/v1/traffic/policy/apply", {
-      method: "POST",
+      method: "POST", signal: owner.signal,
     });
+    if (!active()) return;
     renderTrafficPolicy(readback);
     setText("traffic-policy-message", "정지 상태에서 정책을 적용했습니다.");
-  } catch (error) {
-    setText("traffic-policy-message", `정책 적용 실패: ${error.message}`);
-  } finally {
-    trafficPolicyPending = false;
-    updateTrafficPolicyControls();
-  }
+  }, error => setText("traffic-policy-message", `정책 적용 실패: ${error.message}`), trafficPending);
 });
 
 document.querySelectorAll("[data-simulation-signal]").forEach((button) => {
