@@ -91,7 +91,8 @@ jobs:
           for path in dashboard pilot console; do
             code=$(curl -s -o /dev/null -w "%{http_code}" "http://127.0.0.1:8080/$path") \
               || { echo "curl /$path exited $?"; tail -10 core.log; exit 1; }
-            csp=$(curl -sI "http://127.0.0.1:8080/$path" 2>/dev/null | grep -ci content-security-policy || true)
+            csp=$(curl -s -D /tmp/hdrs -o /dev/null "http://127.0.0.1:8080/$path" \
+              && grep -ci content-security-policy /tmp/hdrs || true)
             echo "GET /$path -> $code (csp-header=$csp)"
             [ "$code" = "200" ] || { echo "FAIL /$path expected 200 got $code"; tail -5 core.log; exit 1; }
             [ "$csp" -ge 1 ] || { echo "FAIL /$path missing CSP"; exit 1; }
