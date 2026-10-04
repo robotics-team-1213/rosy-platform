@@ -84,8 +84,8 @@
 
 ## 최근 기록
 
+- 2026-10-05 · uncommitted · fix(cell-ui): 좁은 화면 상단 운영자 표시 줄바꿈
 - 2026-10-05 · uncommitted · feat(fleet): 승인된 추적 보정으로 카메라 영상을 편다
 - 2026-10-05 · uncommitted · fix(dialog-target): 카메라 승인·해제 대상 확인
 - 2026-10-05 · uncommitted · fix(ci): 카메라 브라우저 명시적 실행
 - 2026-10-05 · uncommitted · fix(pairing): 승인 대상 문구와 Cam 역할 경계 정합
-- 2026-10-05 · uncommitted · feat(fleet): 무마커 시작점 위치·방향 저장
