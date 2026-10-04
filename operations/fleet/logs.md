@@ -1686,3 +1686,16 @@
 - 변경: 양보 계획이 있는 동안, 선 밖 틈은 정차 점이나 선으로 보정한다. 동료가 문을 지나면 방에서 문으로 YIELD 하고, 진행 방향을 되찾으면 RESUME 한다. 오도메트리 프레임은 무응답이다.
 - 증거: operations/fleet/test/test_meet_place.py, test_stuck_resolver.py 포함 관련 호스트 203 passed. known_failures 새 실패 0.
 - gate 변화: 없음. 호스트 판단 시험. 장치·ROS-SIM 은 주장하지 않는다.
+
+## 2026-10-04 · uncommitted · feat(server): D-454 1c — §10.1 쓰기 경로와 501 경계 명시
+
+- 변경: `central_registry_routes.py`에 §10.1 쓰기 4경로 추가(operator 가드, `enrollment` 주입). `PATCH …/{id}`(REG-003)는 등록 저장소의 `discovery_name`만 건드린다(그룹 개념은 뒤 작업) — 빈 이름 422, 미등록 404. `POST …/token/revoke`(SEC-203)는 상태를 `needs_new_code`로 전환해 재발급을 강제한다(폐기 계약의 등록측). `GET /pending-robots`(SEC-202)는 비-active 등록 목록을 돌려준다(D-361 등록 게이트와 연결 예정). `POST /pairing-tokens`(SEC-201)는 501로 명시한다 — D-341 승인 흐름 통합은 뒤 작업 설계가 소유하고, 구현되지 않은 것을 200으로 속이지 않는다. 저장소 없음(--central 없이)은 501. API Ref §10.1 나머지 중 `DELETE pairing-tokens/{token}`·`approve`·`/{id}/token/revoke`는 뒤 회차.
+- 증거: `test_central_registry_write.py` 신규 9 passed. fleet 전체(셀 앱 2파일 수집 오류 제외, main 선재) **1815 passed/7 skipped, known_failures 0 new**. flake8 0.
+- gate 변화: 없음. ROS-SIM/DEVICE/FIELD 주장 없음(D-454 결정 3).
+- 결정: D-454 결정 2 계속. 뒤는 pairing-tokens(2)와 §10.2 명령 상관·ACK(D-426 선행).
+
+## 2026-10-04 · uncommitted · fix(registry): 중앙 1c 쓰기 보류와 실제 등록 원장 보존
+
+- 변경: 02dc934a7의 이력은 보존하되 기존 두 중앙 GET 정본을 유지한다. Admin·실명 actor·등록 소유자가 없는 중앙 쓰기와 저장소 직접 수정은 제공하지 않는다. 기존 사이트 등록·페어링·해제 경로를 유지한다.
+- 증거: 실제 앱·로스터·EnrollmentService·암호화 SQLite를 사용하는 미마운트·불변 회귀를 추가했다. 작성자 검사 22 PASS 및 독립 SPEC·Quality·Safety 검토 PASS이며 실제 통합 재검사는 별도 수행한다. fake 저장소가 숨긴 인터페이스·알 수 없는 항목·거짓 token 폐기 문제는 실행 승인 근거로 쓰지 않는다.
+- gate 변화: 중앙 1c 쓰기 적용은 HOLD다. 같은 장비의 identity·endpoint·살아 있는 연결·영구 credential·감사는 변경하지 않는다. 로봇 동작·토큰 폐기·등록 해제를 이 검증을 위해 요청하지 않는다.
