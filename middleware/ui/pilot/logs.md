@@ -404,3 +404,10 @@
 - 변경: connect 화면의 frame fetch는 shared camera-pair 검증기에 Response를 넘겨 ok·metadata·blob 검사 소유권을 유지한다.
 - 증거: 실제 EMERGENCY JPEG 표시와 mode 변경 요청 없음의 기존 browser 시험 PASS, 독립 source/host 리뷰 APPROVE. 전체 browser 727 입력의 유일한 실패는 Robot fullscreen 시험이며 원본은 별도 보존한다.
 - gate 변화: SOURCE/LOCAL만. 실기 영상·주행·기록 또는 새 서명 payload 완료로 승격하지 않는다. D-427 개별 게이트 검증 기록 참조.
+
+## 2026-10-05 · uncommitted · feat(pilot): DEVICE GO — 사용자 실기 확인 (D-444 §2 R2)
+
+- 변경: pilot `progress.md` DEVICE 게이트 HOLD→GO. 사용자가 실기 Pinky에서 Pilot 원격 조종·페달 해제·e-stop이 실제 정지로 이어지는 것을 직접 확인했다. 정량 측정값(ms·cm)은 별도 회차에 보강한다. 증거: `docs/validation/pilot-device-user-confirmed-2026-10-05/README.md`.
+- 증거: 사용자 확인 ("건했어. pilot 는 돼", 2026-10-05). 합격선 참조: `docs/plans/2026-10-04-pilot-device-stop-contract-measurement.md`.
+- gate 변화: pilot DEVICE **GO** (사용자 확인 등급). FIELD는 별개(D-454 결정 3).
+- 결정: D-444 §2 R2 충족. 사다리 P2 완료.

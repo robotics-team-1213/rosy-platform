@@ -35,8 +35,6 @@
 # 가리는 원시 색이 없는 항목은 적지 않는다. 테마를 따르는 표면의 색은 tokens.css에서만 온다.
 surfaces:
   - id: pinky-review
-    app_name: Rosy Learning
-    app_name_en: Rosy Learning
     api_owners: []
     path: learning/training/perception/dataset/review_app_web
     themes: [dark, light]
@@ -47,7 +45,7 @@ surfaces:
     ports:
       - {port: 8767, source: learning/training/perception/dataset/review_app.py}
     audience: Pinky 학습 객체·픽셀 라벨 검수자
-    role: 원본 다중 영상·객체/픽셀 독립 검수와 최신 결정 export를 소유하는 로컬 학습 도구 (D-459·D-462)
+    role: 원본 다중 영상·객체/픽셀 독립 검수와 최신 결정 export를 소유하는 로컬 학습 도구 (D-459·D-462). Rosy Learning은 작업 화면 표시 이름이며 별도 런처·PWA·ROS·Android 앱 등록이 아니다 (D-461).
     owns: [pinky-object-review, pinky-pixel-review, pinky-review-export]
     contracts: [shared_controls, typography_focus]
     contract_reason: 로컬 학습 도구이며 로봇 명령·운용 셸·비상정지 또는 비가역 장치 행동이 없다. 초안 교체 확인은 브라우저 기본 dialog다.

@@ -5747,3 +5747,10 @@ osy-d395-s1d\`.
 - 변경: Existing Pinky app adds pending multi-video imports, independent original-coordinate pixel editing, verified nominal CAD references and coherent current-decision/export contracts. Canvas palette and learning surface ownership remain in shared tokens/declarations.
 - 증거: Root independent review found cross-store mixed reads. Producer now captures metadata/frames/masks/representations in one SQLite transaction and seals that exact revision. Concurrent-writer, stale authority and bundle integrity regressions added; host/shared contracts 252 passed/24 skipped and explicit Chromium regression suite 13 passed, NEW=0.
 - gate 변화: Local host/Chromium with separate test state. Live human approvals, pixel qualification, original-video/map-camera evidence and root integration acceptance remain separate. No shared physical gate is advanced.
+
+## 2026-10-05 · uncommitted · docs(validation): P2 페달 계측 실행 준비 완료 — 사용자 입회 대기
+
+- 변경: `docs/validation/p2-pedal-readiness-2026-10-04/README.md` 추가. 합격선(계량 문서 고정), 서명 payload(2026.10.04-034), 부팅 증거(arm64 러너 run 37200780702), 측정 도구, 실행 절차, 사용자가 해야 할 것(시간·승인·입회)을 한 곳에 정리. D-426 Gazebo ROS-SIM은 WSL/Linux가 필요하여 이 Windows 세션에서 실행 불가 — 착수 보류로 기록.
+- 증거: 문서만. 코드·게이트 변화 없음.
+- gate 변화: 없음.
+- 결정: P2는 사용자 입회 대기. D-426은 Linux 환경 대기.

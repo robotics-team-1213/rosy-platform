@@ -604,3 +604,9 @@
 - 변경: Existing Pinky app adds pending multi-video imports, independent original-coordinate pixel editing, verified nominal CAD references and coherent current-decision/export contracts. Canvas palette and learning surface ownership remain in shared tokens/declarations.
 - 증거: Root independent review found cross-store mixed reads. Producer now captures metadata/frames/masks/representations in one SQLite transaction and seals that exact revision. Concurrent-writer, stale authority and bundle integrity regressions added; host/shared contracts 252 passed/24 skipped and explicit Chromium regression suite 13 passed, NEW=0.
 - gate 변화: Local host/Chromium with separate test state. Live human approvals, pixel qualification, original-video/map-camera evidence and root integration acceptance remain separate. No shared physical gate is advanced.
+
+## 2026-10-05 · uncommitted · fix(contracts): repair inherited site release checks
+
+- 변경: 기존 Cell 링크를 보존하는 topbar 계약 기대값을 갱신한다. D-459·D-461 로컬 사진 검수 도구의 작업 화면 이름을 별도 설치 앱으로 등록한 metadata를 바로잡고, pytest 7이 ACT 테스트 준비 helper를 nose module setup으로 호출하는 이름 충돌을 없앤다. 제품 화면·로봇 명령·앱 설치 구조는 바꾸지 않는다.
+- 증거: 깨끗한 main 1b669c7cb에서 Fleet grid와 개발 도구 identity 실패 2건 재현, GitHub CI e9bc8634c의 learning-policy 오류 원인 확인. 관련 호스트 71 passed, known_failures 신규 0. 독립 읽기 검토와 정확한 후속 SHA CI는 별도 확인한다.
+- gate 변화: SOURCE 계약 복구. CI 성공·서명·관제 PC 배포·FIELD 수용을 주장하지 않는다.
