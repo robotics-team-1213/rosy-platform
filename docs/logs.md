@@ -5566,3 +5566,10 @@
 - Evidence: Actual model-PC preparation5980files/287651840bytes; original before/after SHAequal; snapshot intakePASS/eval126/mIoU0.5185248134695789. Initial collector misused tuple return and exited1 after savingPASS; preserved and corrected verification without rerunning evaluation. Actual archive member/hash verification5980files exit0. See validation/model-watch-service-data-2026-10-04.md.
 - Gate: User-path data preparation and qualification only. Sudo import, service-user access, own-key enrollment, doctor, timer and real shadow/rollback remain pending; no motion or HOLD release.
 - Additional evidence: Independent review caught verifier reuse/extra-member gaps. Separate v2 uses copied input/returned report and full snapshot path-set/hash checks; actual nativev2 exit0/PASS/reasons empty. Corrected archive scanner rejects every link/special entry. Source review APPROVE; originalv1 retained.
+
+
+## 2026-10-04 · uncommitted · model-PC admin data import candidate
+
+- Change: Prepared private pinned source+data installation wrapper; root staging, skeleton quarantine, bottom-up grants and store rename repair reviewed copy-through-service-owned-directory race.
+- Evidence: Independent candidate review approved; actual model-PC verify-only5980files exit0; native non-root install exit1 before input/system writes; units not-found/inactive. Isolated Linux publication fixture reproduces copy2-preserved700/600 access gap. See validation/model-watch-admin-data-import-2026-10-04.md.
+- Gate: Candidate source approval only. No sudo install, timer activation, HOLD release, robot delivery or motion. Producer/store permission binding and key/doctor/owner/Fleet/field acceptance remain pending.
