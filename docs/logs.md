@@ -5807,6 +5807,12 @@ osy-d395-s1d\`.
 - 증거: X:/DevTemp/pinky-review-cycle-20261005/receipt-frame-excluded-tests.txt 및 최신 main 동기화 후 별도 시험 출력에 남긴다. 실제 사람 검수·이력과 기존 봉인 export는 변경하지 않는다.
 - gate 변화: SOURCE/LOCAL 회귀 보강. 모델PC 격리 소비 수용은 root 증거이며 생산 bridge/cycle 배포·학습 적격성과 별개다. push·주행·모델 활성화·HOLD 해제 없음.
 
+## 2026-10-05 · uncommitted · fix(release): 무마커 시작점의 검토 기록과 inherited CI fixture 복구
+
+- 변경: 독립 측정 Fleet 34211줄로 기존 split 판정을 재검토한다. reference-only 시작점의 store/routes/pure layer/view는 91/43/35/120줄이며 제한된 wiring이다. B2·UI 자원 분리 의무, +150 allowance, 개별 파일 상한은 그대로다. 시작점 인증 reset 안내도 지난 좌표를 지운다. 기존 review dataset 시험에서 BOM 세 바이트만 제거한다.
+- 증거: 최초 정상 pre-push FAST 475 passed/2 skipped/1 failed(새 P6 기록). 이전 main 9b73e91ac CI의 config_transaction child import 및 review dataset BOM 실패를 각각 재현했다. 수리 후 관련 42 passed, known_failures 신규 0. 실제 후보 CI·서명·현장 수용은 별도다.
+- gate 변화: SOURCE/LOCAL 정합 복구. 검사 무시·상한 완화·UI/UX 리팩터링·실물 주행 없음.
+
 ## 2026-10-05 · uncommitted · docs(learning): bind approved indexed masks to immutable dataset construction
 
 - 변경: D-464는 명시 승인된 Pinky indexed 픽셀을 원본 영상·바이트·최신 authority·촬영 component 및 실제 전체 eval version 분리 검증 후 dataset/1으로 만드는 책임을 정한다. D-379의 기존 자동 라벨과 고정 eval 신뢰 출처를 유지하며 CVAT origin으로 위장하지 않는다.
