@@ -1661,6 +1661,14 @@
 - 증거: 실제 loop의 응답 유실·비정상 응답·취소 후 반복 폴링 회귀 및 관련 74 PASS. 독립 검토와 최종 통합 gate를 별도 실행한다.
 - gate 변화: SOURCE/LOCAL이며 물리 양보 실행·운용 수락은 하지 않았다.
 
+## 2026-10-04 · uncommitted · feat(server): D-454 1단계 — 중앙 레지스트리 뷰 (/api/v1/fleet/robots)
+
+- 변경: `central_registry.py`(CentralRegistry 읽기 모델 — 로스터가 정본, hub 스냅샷·발견 주소는 보강, state/capabilities는 로봇이 만든 증거를 그대로 전달 D-309), `central_registry_routes.py`(`GET /api/v1/fleet/robots`·`/{id}`, Viewer 가드, 미등록 404 UNKNOWN_ROBOT), `app.py` `central_registry=` 마운트, `cli.py` `--central` 플래그(등록 저장소 필수 — 로스터가 정본이므로). 설계·실행 계획: `docs/plans/2026-10-04-central-fleet-step1{,-design}.md`. §10.1 나머지 7경로(PATCH/DELETE·페어링 토큰·승인 대기·폐기)는 뒤 작업.
+- 증거: 신규 `test/test_central_registry.py` 6 passed(합산·정렬·증거 무계산·404·401·왕복). fleet 전체(셀 앱 2파일 수집 오류 제외 — `rosy.processes` 휠 미설치, main 선재·WSL/CI 전제) **1799 passed/7 skipped, known_failures 0 new**. flake8 0.
+- gate 변화: 없음. ROS-SIM/DEVICE/FIELD 주장 없음(D-454 결정 3).
+- 결정: D-454 결정 1·2 — 시드 위 성장, §10.1 읽기부터.
+
+
 ## 2026-10-04 · uncommitted · refactor(fleet): move periodic goal evidence worker out of app composition
 
 - 변경: 기존 goal-evidence grace reconciliation loop를 background_workers로 이동하고 app의 기존 이름과 logger를 partial로 보존했다. 실행 주기·예외 처리·dispatch 권한은 같다.
@@ -1678,14 +1686,11 @@
 - Change: Record the independently counted 32481 production/web lines after inherited D-454 registry/permission wiring and D-455 map-pose extensions, plus four reviewed shared UI lines. Preserve B2/UI migration, all file limits and the package +150 allowance. No production code changed for this judgement.
 - Evidence: Independent accounting: recorded32162, current main32477, current branch32481. Registry owners remain bounded, resolver507, app600, Console777; no new final command publisher. Architecture and registry/meet/resolver regressions77passed.
 - Gate: SOURCE/LOCAL architecture judgement only; no robot, motion or physical acceptance.
-## 2026-10-04 · uncommitted · feat(server): D-454 1단계 — 중앙 레지스트리 뷰 (/api/v1/fleet/robots)
+## 2026-10-04 · uncommitted · fix(tools): restore cross-module capture ownership
 
-- 변경: `central_registry.py`(CentralRegistry 읽기 모델 — 로스터가 정본, hub 스냅샷·발견 주소는 보강, state/capabilities는 로봇이 만든 증거를 그대로 전달 D-309), `central_registry_routes.py`(`GET /api/v1/fleet/robots`·`/{id}`, Viewer 가드, 미등록 404 UNKNOWN_ROBOT), `app.py` `central_registry=` 마운트, `cli.py` `--central` 플래그(등록 저장소 필수 — 로스터가 정본이므로). 설계·실행 계획: `docs/plans/2026-10-04-central-fleet-step1{,-design}.md`. §10.1 나머지 7경로(PATCH/DELETE·페어링 토큰·승인 대기·폐기)는 뒤 작업.
-- 증거: 신규 `test/test_central_registry.py` 6 passed(합산·정렬·증거 무계산·404·401·왕복). fleet 전체(셀 앱 2파일 수집 오류 제외 — `rosy.processes` 휠 미설치, main 선재·WSL/CI 전제) **1799 passed/7 skipped, known_failures 0 new**. flake8 0.
-- gate 변화: 없음. ROS-SIM/DEVICE/FIELD 주장 없음(D-454 결정 3).
-- 결정: D-454 결정 1·2 — 시드 위 성장, §10.1 읽기부터.
-
-
+- Change: Move the inherited Fleet/Games capture tool to workspace tools, as required by tools/AGENTS.md. Update repository resolution and the run command; retain the historical capture entry unchanged. The initial architecture run rejected its Fleet-to-Games import with two failures.
+- Evidence: Corrected architecture and registry-write regressions42passed. Independently measured Fleet32543 consists of prior32481 plus62 inherited registry lines; retain +150 allowance, B2/UI migration and all individual file limits. The capture composes fake Fleet with local Games preview; it is not device or physical evidence.
+- Gate: SOURCE/LOCAL correction only. Signed installer5dbbe7 remains unchanged; physical marker identity stays HOLD.
 ## 2026-10-04 · uncommitted · fix(fleet): keep app composition within its line budget
 
 - 변경: 기존 goal evidence grace 유지보수 루프를 기존 background_workers 모듈로 이동했다. app의 private 호출은 동일 logger를 바인딩한 partial로 유지하며 grace 처리·예외·주기·Action 활성화 경계는 유지한다.
@@ -1711,3 +1716,10 @@
 - 증거: `test_central_registry_write.py` 신규 9 passed. fleet 전체(셀 앱 2파일 수집 오류 제외, main 선재) **1815 passed/7 skipped, known_failures 0 new**. flake8 0.
 - gate 변화: 없음. ROS-SIM/DEVICE/FIELD 주장 없음(D-454 결정 3).
 - 결정: D-454 결정 2 계속. 뒤는 pairing-tokens(2)와 §10.2 명령 상관·ACK(D-426 선행).
+
+## 2026-10-04 · uncommitted · feat(tools): Fleet·게임 캡처 회차 6셀 (D-359 §7.8)
+
+- 변경: `operations/fleet/tools/capture_console_games_round.py` 신설 — 실제 Fleet 앱(FakeRobot 2대) + 실제 games preview 서버를 Playwright로 찍는다. 회차 `docs/validation/fleet-games-capture-2026-10-04/`에 console 3셀(1920/390/320) + games 3셀(1280/390/320). 배치 규칙도구 위치: fleet 모듈 tools/(게임을 엮는 순수 측정) — tools/AGENTS.md 배치 규칙 준수.
+- 증거: 6셀 캡처(페이지 오류 0). flake8 0.
+- gate 변화: 없음. LOCAL 합성 증거. 게임 readback 2대·사람 G3는 다음 회차.
+- 결정: D-359 §7.8 역할 표면 나머지 캡처.

@@ -100,8 +100,12 @@ SIZE_VERDICTS = {
         "duplicate its socket. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        32_481,
-        "split: re-judged 2026-10-04 at 32481 after D-454 registry/permission wiring and D-455 "
+        32_543,
+        "split: re-judged 2026-10-04 at 32543 after inherited D-454 registry routes +62. "
+        "The cross-module fake/local capture tool belongs in workspace tools, not Fleet; "
+        "retain +150 allowance, B2/UI migration and 600 production/800 web/1000 zero-growth "
+        "file limits. Capture uses fake Fleet and local games preview, not device evidence. "
+        "Previously re-judged 2026-10-04 at 32481 after D-454 registry/permission wiring and D-455 "
         "map-pose meet/resolver extensions: inherited source counts 32477, plus four reviewed shared "
         "UI lines. Registry model/routes remain bounded; resolver is 507, app is 600 and web Console "
         "is 777. No new final command publisher. Independent production/web accounting confirms "
