@@ -1718,3 +1718,9 @@
 - 변경: Fleet와 games를 엮는 캡처는 tools/AGENTS.md 규칙에 따라 root tools/capture_console_games_round.py로 이동했다. REPO 계산과 현재 재현 경로를 맞췄다. Fleet 운영 runtime에 games import를 추가하지 않는다.
 - 증거: 실제 구조 검사에서 fleet→games 미선언/방향 위반2건이 재현됐다. 모듈의 dependency/방향 allowlist를 늘리지 않고 잘못된 배치를 수정해 다시 검사한다. 이전32605는 잘못 모듈에 들어간 캡처136행을 포함한 실측이며 이동 뒤 예상32469를 다시 측정한다.
 - gate 변화: 소스 배치 정합. 기존 캡처의 UX HOLD는 그대로이며 실제 역할/장치 수락을 주장하지 않는다.
+
+## 2026-10-04 · uncommitted · fix(fleet): Cell header와 등록 시험의 실제 작업 선택
+
+- 변경: Cell 링크를 기존 header grid의 named area에 넣어 implicit row를 제거했다. 등록 browser 시험은 실제 로봇 등록 tab을 선택하며 거부·확인·정지 단언은 유지한다.
+- 증거: 실제 viewport 3건·등록 절차 6건 PASS 및 독립 리뷰 APPROVE. 기존 높이 제한·링크·정지·상태를 유지했다. 전체 browser 원본과 수정 범위는 D-427 개별 게이트 검증 기록에 구분했다.
+- gate 변화: SOURCE/LOCAL만. site 배포·로봇 목표·DEVICE/FIELD 수용은 수행하지 않았다.

@@ -5710,3 +5710,9 @@ osy-d395-s1d\`.
 - gate 변화: 없음. 로컬 병합이며 push·배포·장치 수용은 별도다.
 
 - 동기화 검증: 관련 검사 196 passed/1 failed에서 main의 Pilot 다시 찾기 버튼 선언을 공용 helper 계약에 맞게 명시했다. 해당 계약과 생성 정합 2 passed; Pilot 실 서버 브라우저 72건은 NOT_RUN/skipped다. known_failures 신규 0. 이전 baseline 인코딩/field 오류는 최신 main에서 해소되어 재현되지 않았다.
+
+## 2026-10-04 · uncommitted · docs(d427): wave 5 개별 게이트와 브라우저 후속 증거
+
+- 변경: `docs/validation/d427-source-migration/wave5-named-gate-coverage-2026-10-04.md`에 실제 host build·Cam·lookup·Docker telemetry·브라우저 원본 실패/후속 시험과 미검증 범위를 동결 기록했다.
+- 증거: 전체 browser 727b60c63는 314 passed/1 failed·NEW 1. 원인을 분리한 카메라 panel 후속은 21 passed·NEW 0. AMD64 Docker 두 모델 각각 odometry 64개·증가 clock 10개·native EXIT0·cleanup PASS는 독립 확인했다.
+- gate 변화: 각 명시 범위만 SOURCE/LOCAL 증거다. 전체 browser PASS·lane·ARM OCI·중간 wave별 artifact·발행·기기·FIELD 완료로 승격하지 않는다. 기존 서명 1722/035에 새 UI 수정이 포함됐다고 표현하지 않는다.
