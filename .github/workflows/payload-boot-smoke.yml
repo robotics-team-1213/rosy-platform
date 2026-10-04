@@ -1,0 +1,103 @@
+name: Payload boot smoke (arm64)
+
+# D-444 P1.2 (container bench): boot the unsigned native payload artifact on
+# the same arm64 runner that builds it, and observe GET /dashboard /pilot
+# /console -> 200 + CSP. Native arm64 - no emulation. Manual only; uses only
+# the job token. Local emulation on Windows hosts is unreliable (binfmt churn,
+# 2026-10-04).
+
+"on":
+  workflow_dispatch:
+    inputs:
+      build_run_id:
+        description: "build-native-payload.yml run id (empty = latest successful)"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  boot-smoke:
+    runs-on: ubuntu-24.04-arm
+    container: ros:jazzy-ros-base
+    timeout-minutes: 30
+    steps:
+      - name: Resolve the payload artifact (GitHub API, no gh needed)
+        shell: bash
+        run: |
+          set -euo pipefail
+          REPO="livsbittt/rosy-os"
+          TOKEN="${{ github.token }}"
+          AUTH="Authorization: Bearer $TOKEN"
+          if [ -n "${{ inputs.build_run_id }}" ]; then
+            RUN="${{ inputs.build_run_id }}"
+          else
+            RUN=$(curl -sf -H "$AUTH" \
+              "https://api.github.com/repos/$REPO/actions/workflows/build-native-payload.yml/runs?status=success&per_page=1" \
+              | python3 -c 'import json,sys; print(json.load(sys.stdin)["workflow_runs"][0]["id"])')
+          fi
+          echo "RUN=$RUN" >> "$GITHUB_ENV"
+          ARTIFACT_URL=$(curl -sf -H "$AUTH" \
+            "https://api.github.com/repos/$REPO/actions/runs/$RUN/artifacts" \
+            | python3 -c 'import json,sys; print(json.load(sys.stdin)["artifacts"][0]["archive_download_url"])')
+          mkdir -p payload
+          curl -sfL -H "$AUTH" -o payload/artifact.zip "$ARTIFACT_URL"
+          python3 -m zipfile -e payload/artifact.zip payload/
+          ls payload/*.tar.gz
+
+      - name: Unpack
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release && tar -xzf payload/*.tar.gz -C release
+          ls release/install > /dev/null
+
+      - name: Deps (ROS pins + CI python stack)
+        shell: bash
+        run: |
+          set -euo pipefail
+          apt-get update -qq
+          apt-get install -y -qq ros-jazzy-rmw-cyclonedds-cpp \
+            ros-jazzy-nav2-msgs ros-jazzy-tf2-msgs ros-jazzy-tf2-geometry-msgs curl jq >/dev/null
+          python3 -m ensurepip --upgrade >/dev/null 2>&1 || true
+          python3 -m pip install --quiet --no-cache-dir --break-system-packages \
+            pydantic fastapi "uvicorn[standard]" httpx "websockets>=14" PyYAML jsonschema
+
+      - name: Boot CORE from the payload install
+        shell: bash
+        run: |
+          set -euo pipefail
+          source /opt/ros/jazzy/setup.bash
+          source "$GITHUB_WORKSPACE/release/install/setup.bash"
+          export ROSY_ROBOT_NUMBER=1 RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+          ros2 run core core > core.log 2>&1 &
+          echo $! > core.pid
+          deadline=$((SECONDS+600))
+          while [ $SECONDS -lt $deadline ]; do
+            grep -q "core up" core.log && break
+            kill -0 "$(cat core.pid)" 2>/dev/null || { echo "core exited early"; tail -40 core.log; exit 1; }
+            sleep 5
+          done
+          grep -q "core up" core.log || { echo "no 'core up' in 600s"; tail -40 core.log; exit 1; }
+          echo "core up"
+
+      - name: Probe the web surfaces (D-444 R1)
+        shell: bash
+        run: |
+          set -euo pipefail
+          for path in dashboard pilot console; do
+            code=$(curl -s -o /dev/null -w "%{http_code}" "http://127.0.0.1:8080/$path")
+            csp=$(curl -sI "http://127.0.0.1:8080/$path" | grep -ci content-security-policy)
+            echo "GET /$path -> $code (csp-header=$csp)"
+            [ "$code" = "200" ] || { echo "FAIL /$path"; exit 1; }
+            [ "$csp" -ge 1 ] || { echo "FAIL /$path missing CSP"; exit 1; }
+          done
+
+      - name: Upload the boot log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: payload-boot-smoke-log
+          path: core.log
+          if-no-files-found: ignore
