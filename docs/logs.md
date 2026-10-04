@@ -5830,3 +5830,9 @@ osy-d395-s1d\`.
 - 변경: 차선·바닥·벽 픽셀 우선, 기하/기존 모델과 로컬 분할 보완, 선택 OpenRouter 보조 판단을 D-462 검수와 D-464 builder 앞단에 연결하는 설계를 기록한다. RTX 5080 16 GB는 설계 기준이며 실제 GPU·처리량·라벨 품질은 미검증이다.
 - 증거: 생성 직전 main·작업 트리 ADR/Log와 전체 로컬 브랜치 ADR trees 및 harness adr_gaps에서 최고 번호 D-464를 확인했다. lint와 문서 계약 시험 결과는 X:/DevTemp/pixel-label-adr에 보존한다.
 - gate 변화: 설계 기록만 추가한다. 모델 설치·외부 API 호출·학습·승격·GPU/DEVICE/FIELD 수용은 별도다.
+
+## 2026-10-05 · uncommitted · test: fence app and web document ownership
+
+- 변경: Console 세 문서와 Robot 세 문서가 자기 모듈만 import하도록 `operations/fleet/test/test_document_imports.py`와 `test_panel_module_folder_matches_surface`를 고정했다. 목표와 검토 스냅샷은 `docs/plans/2026-10-05-app-web-srp.md`, `docs/assessments/2026-10-05-app-web-role-review.md`다. 새 앱, 폴더 이동, `console.teleop` 제거는 하지 않는다.
+- 증거: `enrollment.js`를 `console.js`에 넣으면 펜스가 `['enrollment.js']`로 실패하고, 되돌리면 통과한다. 제품 코드는 변하지 않았다.
+- gate 변화: 없음. 호스트 시험과 문서만이며 장치 수용은 없다.
