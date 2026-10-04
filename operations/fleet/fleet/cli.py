@@ -414,6 +414,7 @@ def run_console(args: argparse.Namespace) -> None:
     if sightings_db is not None and sightings_config is None:
         sys.exit("--sightings-db requires --sightings-config")
     sighting_service = None
+    tracking_service = None
     vision_sources = ()
     if sightings_config is not None:
         from fleet.server.sighting_store import SightingStore
@@ -432,6 +433,12 @@ def run_console(args: argparse.Namespace) -> None:
             sources, known_robot_ids=[rid for source in sources for rid in source.robot_ids]
             if enrollment_store is not None else console.robot_ids, store=store,
         )
+        from fleet.server.tracking import TrackingService
+        from fleet.server.tracking_calibration import TrackingCalibrationStore
+
+        # D-457: approved tracking calibrations live beside the sightings (memory without a DB).
+        tracking_service = TrackingService(
+            sighting_service.sources, calibrations=TrackingCalibrationStore(sightings_db))
     # The outbound CORE Agent route is enabled only for robots with a separate
     # pairing credential. REST-only console configurations remain unchanged.
     hub = console.hub if pairing_configured else None
@@ -521,7 +528,7 @@ def run_console(args: argparse.Namespace) -> None:
 
         central_registry = CentralRegistry(roster, console=console, discovery=discovery)
     app = create_app(console, console_token=console_token, web_common=args.web_common,
-                     hub=hub, sightings=sighting_service, task_service=task_service,
+                     hub=hub, sightings=sighting_service, tracking=tracking_service, task_service=task_service,
                      mission_service=mission_service, proposal_store=proposal_store,
                      cell_job_compiler=cell_job_compiler,
                      cell_app_service_id=getattr(args, "cell_app_service_id", None),

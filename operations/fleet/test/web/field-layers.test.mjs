@@ -88,3 +88,8 @@ test("rectified layout keeps the aspect and leaves a masked margin", () => {
   const tall = rectifiedLayout(0.25, 640, 400);
   assert.ok(tall.height <= 400 && tall.field.width < tall.field.height);
 });
+
+test("the overhead tracking layer is on by default and can be switched off", () => {
+  assert.equal(LAYER_DEFAULTS.tracking, true);
+  assert.equal(parseLayers(JSON.stringify({ tracking: false })).tracking, false);
+});

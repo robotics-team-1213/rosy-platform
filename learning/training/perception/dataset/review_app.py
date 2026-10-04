@@ -263,11 +263,22 @@ def make_server(store, port=8767):
                 self.send({'error': str(exc)}, 400)
 
         def do_POST(self):
+            # Consume bounded rejected bodies before responding; Windows may otherwise
+            # reset the connection while the client is still transmitting its request.
+            def deny():
+                try:
+                    length = int(self.headers.get('Content-Length', '0'))
+                    if 0 < length <= 1048576:
+                        self.connection.settimeout(5)
+                        self.rfile.read(length)
+                except (ValueError, OSError):
+                    pass
+                return self.send({'error': 'local workspace authorization required'}, 403)
             if not self.allowed_host() or self.headers.get('X-Pinky-Token') != token:
-                return self.send({'error': 'local workspace token required'}, 403)
+                return deny()
             origin = self.headers.get('Origin')
             if origin and origin not in (f'http://127.0.0.1:{self.server.server_port}', f'http://localhost:{self.server.server_port}'):
-                return self.send({'error': 'same origin required'}, 403)
+                return deny()
             try:
                 length = int(self.headers.get('Content-Length', '0'))
                 if not 0 < length <= 1048576:

@@ -53,6 +53,7 @@ PINNED_CONFIRMS = {
     "operations/fleet/fleet/server/web/console.js": 3,
     "operations/fleet/fleet/server/web/enrollment.js": 1,
     "operations/fleet/fleet/server/web/roster.js": 1,
+    "operations/fleet/fleet/server/web/tracking-view.js": 1,
 }
 CONFIRM_CALL = re.compile(
     r"\bconfirmIrreversible\s*\(|\bconfirmedAction\.run\s*\(|"

@@ -5,7 +5,7 @@
 import {
   MAP_FIT_PREFIX, multiply3, invert3, project, scale3, projectPolyline, projectTriangles,
   normalizeMapProposal, fitSummary, pickLanes, topDownLayout, parseMapDraft, draftFrom,
-  retryDelay, MAP_FIT_MAX_TRIES, canAccept, fitUsable, STALE_FIT_TEXT,
+  retryDelay, MAP_FIT_MAX_TRIES, canAccept, fitUsable, STALE_FIT_TEXT, calibrationRequest,
 } from "./map-fit.js";
 import { warpImage } from "./field-view.js";
 
@@ -36,6 +36,8 @@ export function createMapFitView({ scope, el, view, call, visionView, onChanged 
   const acceptButton = el("map-fit-accept");
   const dismissButton = el("map-fit-dismiss");
   const clearButton = el("map-fit-clear");
+  const applyButton = el("map-fit-apply");
+  let applying = false;      // "추적 보정 적용" 요청 진행 중 — 두 번 보내지 않는다
   const scratch = document.createElement("canvas");
   let lanes = null;          // /api/fleet/site-lanes 응답
   let lanesError = null;     // 마지막 읽기 실패 안내
@@ -197,6 +199,7 @@ export function createMapFitView({ scope, el, view, call, visionView, onChanged 
     const laneSet = lanes ? pickLanes(lanes, source) : null;
     const fit = usableFit(active(), lastFrame, laneSet);
     acceptButton.hidden = !canAccept(pending, source) || !fit || fit.kind !== "proposal";
+    applyButton.hidden = acceptButton.hidden;
     dismissButton.hidden = !(pending?.source === source);
     clearButton.hidden = !draftFor(source);
     renderOverlay(fit, laneSet, lastFrame);
@@ -296,6 +299,37 @@ export function createMapFitView({ scope, el, view, call, visionView, onChanged 
     render();
     onChanged();
   });
+  // D-457 1항: 같은 최신 제안을 Fleet 추적 보정 기록으로 승인한다(운용자). 관제 카메라 추적 표시에만 쓰인다.
+  // 위의 "맞춤 수락"(이 브라우저의 표시 초안)과 별개다 — 하나가 다른 하나를 대신하지 않는다.
+  scope.listen(applyButton, "click", async () => {
+    const life = scope.capture();
+    life.check();
+    const source = visionView.currentSource();
+    const laneSet = lanes ? pickLanes(lanes, source) : null;
+    const body = calibrationRequest(pending, source, laneSet, visionView.currentLensInfo());
+    if (!body) {
+      showSummary({ tone: "warn", guidance: null,
+        headline: "추적 보정을 적용할 수 없습니다 — 이 카메라의 최신 통과 제안과 사이트 차선 지도가 필요합니다." });
+      return;
+    }
+    if (applying) return;
+    applying = true;
+    try {
+      const record = await call("/api/fleet/calibrations", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signals: [life.signal],
+      });
+      life.check();
+      const lensNote = body.lens ? "" : " 렌즈 정보가 없어 렌즈 검사 없이 적용했습니다.";
+      showSummary({ tone: "good", guidance: null, headline: `추적 보정 ${record.calibration_revision} 적용 — `
+        + `관제 카메라 추적 표시에만 씁니다(관측·주행 아님). 렌즈를 바꾸면 다시 맞추세요.${lensNote}` });
+    } catch (error) {
+      if (error.name === "AbortError") return;
+      showSummary({ tone: "warn", guidance: null, headline: `추적 보정 적용 실패: ${error.message || error}` });
+    } finally {
+      applying = false;
+    }
+  });
+
   scope.listen(dismissButton, "click", () => {
     pending = null;
     showSummary({ tone: "neutral", guidance: null, headline: "제안을 버렸습니다. 저장한 맞춤은 그대로입니다." });

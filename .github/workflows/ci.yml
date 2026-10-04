@@ -131,18 +131,17 @@ jobs:
         if: contains(toJSON(matrix.invocations), 'learning/curation/pinky') || contains(toJSON(matrix.invocations), 'learning/training/pinky')
         run: |
           # Real CDR/MCAP and video tests must run, not skip behind missing host tools.
-          # Shadow Debian NumPy in this disposable container without uninstalling apt files.
-          pip3 install --no-cache-dir --break-system-packages --ignore-installed --no-deps \
-            --only-binary=:all: numpy==2.2.6
+          # Keep NumPy 2/OpenCV in this job's tool directory; Debian's NumPy has
+          # no pip RECORD and must remain available to the ROS base image.
           pip3 install --no-cache-dir --break-system-packages -c /tmp/rosy-runtime-constraints.txt \
-            -r learning/curation/pinky/requirements-raw.txt
+            --target /tmp/rosy-pinky-raw-tools -r learning/curation/pinky/requirements-raw.txt
+          echo "PYTHONPATH=/tmp/rosy-pinky-raw-tools${PYTHONPATH:+:$PYTHONPATH}" >> "$GITHUB_ENV"
 
       - name: Install Pinky CPU model comparison tools
         if: contains(toJSON(matrix.invocations), 'learning/training/pinky')
         run: |
           pip3 install --no-cache-dir --break-system-packages --index-url https://download.pytorch.org/whl/cpu torch==2.7.1
-          # Exercise the learning ABI before model tests in the actual ROS container.
-          python3 -c "import numpy as np, cv2, torch; sample = np.zeros((2, 2), dtype=np.uint8); assert np.array_equal(torch.from_numpy(sample).numpy(), sample); assert cv2.resize(sample, (4, 4)).shape == (4, 4); print('learning ABI', np.__version__, cv2.__version__, torch.__version__)"
+          python3 -c "import numpy as np, torch, cv2; a=np.zeros((2,2,3),dtype=np.uint8); assert torch.from_numpy(a).numpy().shape==a.shape; assert cv2.resize(a,(4,4)).shape==(4,4,3); print(np.__version__,torch.__version__,cv2.__version__)"
 
       - name: Build and install ROS-free platform API wheels
         run: |

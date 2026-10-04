@@ -119,18 +119,17 @@ def test_offline_wheel_install_matches_built_metadata_and_internal_dependencies(
                 assert installed.get(name) == version, f"offline wheelhouse missing {dependency}"
 
 
-def test_raw_numpy_shadow_precedes_requirements_without_uninstalling_debian():
+def test_raw_numpy_tools_are_isolated_from_debian_and_keep_runtime_constraints():
     import shlex
     import yaml
 
     steps = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))["jobs"]["test"]["steps"]
     script = next(s["run"] for s in steps if s["name"] == "Install Pinky raw verification tools")
-    pinned = next(line for line in (ROOT / "learning/curation/pinky/requirements-raw.txt").read_text().splitlines()
-                  if line.startswith("numpy=="))
     commands = [shlex.split(line) for line in script.replace("\\\n", " ").splitlines()
                 if line.strip() and not line.lstrip().startswith("#")]
-    shadow = next((i for i, args in enumerate(commands) if pinned in args), None)
-    requirements = next(i for i, args in enumerate(commands) if "-r" in args)
-    assert shadow is not None and shadow < requirements, "Debian NumPy must not be uninstalled"
-    assert {"--ignore-installed", "--no-deps", "--only-binary=:all:"} <= set(commands[shadow])
-    assert "-c" in commands[requirements], "retain runtime constraints for raw tools"
+    requirements = next(args for args in commands if "-r" in args)
+    target = requirements[requirements.index("--target") + 1]
+    assert target.startswith("/tmp/")
+    assert "-c" in requirements, "retain runtime constraints for raw tools"
+    assert 'PYTHONPATH='+target+'${PYTHONPATH:+:$PYTHONPATH}' in script
+    assert "numpy==2.2.6" in (ROOT / "learning/curation/pinky/requirements-raw.txt").read_text()

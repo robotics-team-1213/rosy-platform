@@ -230,6 +230,10 @@
   --gap-topbar: var(--space-3);
   --gap-brand: var(--space-3);
   --gap-section: var(--space-3);
+  --gap-workspace: var(--space-3);
+  --inset-workspace-bar: var(--space-4);
+  --inset-task-row: var(--space-5);
+  --gap-task-detail: var(--space-3);
   --inset-topbar: 0 var(--space-4);
   --inset-topbar-focal: var(--space-4) var(--space-5) var(--space-2);
   --gap-button-detail: var(--space-1);

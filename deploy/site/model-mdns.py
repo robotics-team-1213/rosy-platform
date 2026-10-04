@@ -78,17 +78,93 @@ def ssh_ready(port, *, runner=subprocess.run, connector=socket.create_connection
     return False
 
 
-class Publisher:
-    """Own one Avahi client process; withdraw its registration on loss/stop."""
+def _load_dbus():
+    import dbus  # Optional system Python dependency, only without the CLI.
+    return dbus
 
-    def __init__(self, port, name, *, spawn=subprocess.Popen):
+
+class DBusPublisher:
+    """Own a private connection and one Avahi group; no shared bus or callbacks."""
+
+    def __init__(self, port, name, profile, module):
+        self.port, self.name, self.profile, self.module = port, name, profile, module
+        self.bus = self.owner = self.group = None
+        self.started = None
+
+    def call(self, path, interface, method, signature='', args=()):
+        return self.bus.call_blocking(self.owner, path, interface, method,
+                                      signature, args, timeout=2)
+
+    def update(self, ready):
+        if not ready:
+            self.close()
+            return
+        server, group = 'org.freedesktop.Avahi.Server', 'org.freedesktop.Avahi.EntryGroup'
+        try:
+            if self.bus is None:
+                self.bus = self.module.SystemBus(private=True)
+                self.bus.set_exit_on_disconnect(False)
+                self.owner = str(self.bus.call_blocking(
+                    'org.freedesktop.DBus', '/org/freedesktop/DBus',
+                    'org.freedesktop.DBus', 'GetNameOwner', 's',
+                    ('org.freedesktop.Avahi',), timeout=2))
+                if not self.owner.startswith(':'):
+                    raise RuntimeError('Avahi owner unavailable')
+                if str(self.call('/', server, 'GetHostName')).casefold() != self.name.casefold():
+                    raise RuntimeError('Avahi host identity differs')
+                self.group = self.call('/', server, 'EntryGroupNew')
+                dbus = self.module
+                metadata = self.profile.REQUIRED[self.profile.MODEL]
+                txt = dbus.Array([dbus.ByteArray(f'{key}={value}'.encode('utf-8'))
+                                  for key, value in metadata.items()], signature='ay')
+                self.call(self.group, group, 'AddService', 'iiussssqaay',
+                          (dbus.Int32(-1), dbus.Int32(-1), dbus.UInt32(0),
+                           f'ROSY Model {self.name}', self.profile.MODEL, '', '',
+                           dbus.UInt16(self.port), txt))
+                self.call(self.group, group, 'Commit')
+                self.started = time.monotonic()
+            value = int(self.call(self.group, group, 'GetState'))
+            if value not in (1, 2) or (value == 1 and time.monotonic() - self.started >= 10):
+                raise RuntimeError('Avahi group not established')
+            if str(self.call('/', server, 'GetHostName')).casefold() != self.name.casefold():
+                raise RuntimeError('Avahi host identity changed')
+        except BaseException:
+            self.close()
+            raise  # The owned user service provides its existing 30s restart policy.
+
+    def close(self):
+        bus, owner, group = self.bus, self.owner, self.group
+        self.bus = self.owner = self.group = self.started = None
+        if bus is None:
+            return
+        try:
+            if group is not None:
+                try:
+                    bus.call_blocking(owner, group, 'org.freedesktop.Avahi.EntryGroup',
+                                      'Free', '', (), timeout=2)
+                except Exception:
+                    pass  # Closing this private owner also withdraws its groups.
+        finally:
+            bus.close()
+
+
+class Publisher:
+    """Own one CLI publisher or private D-Bus group; withdraw on loss/stop."""
+
+    def __init__(self, port, name, *, spawn=subprocess.Popen, which=shutil.which, dbus_loader=None):
         self.port, self.name, self.spawn = port, name, spawn
         self.child = None
         self.profile = policy()
+        self.dbus = None if which('avahi-publish-service') else DBusPublisher(
+            port, name, self.profile, (dbus_loader or _load_dbus)())
 
     def update(self, ready):
+        if self.dbus is not None:
+            self.dbus.update(ready)
+            return
         if self.child is not None and self.child.poll() is not None:
             self.child = None
+            raise RuntimeError('owned Avahi publisher exited')
         if not ready:
             self.close()
         elif self.child is None:
@@ -99,6 +175,9 @@ class Publisher:
                                     stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
 
     def close(self):
+        if self.dbus is not None:
+            self.dbus.close()
+            return
         child, self.child = self.child, None
         if child is None or child.poll() is not None:
             return
@@ -118,12 +197,15 @@ def main(argv=None):
     args = parser.parse_args(argv)
     if not 1 <= args.port <= 65535:
         parser.error('SSH port must be between 1 and 65535')
-    if not all(shutil.which(tool) for tool in ('ss', 'avahi-publish-service')):
-        parser.error('iproute2 and avahi-utils are required; no service is advertised')
+    if not shutil.which('ss'):
+        parser.error('iproute2 is required; no service is advertised')
     stopped = threading.Event()
     for kind in (signal.SIGINT, signal.SIGTERM):
         signal.signal(kind, lambda *_: stopped.set())
-    publisher = Publisher(args.port, socket.gethostname().split('.')[0])
+    try:
+        publisher = Publisher(args.port, socket.gethostname().split('.')[0])
+    except ImportError:
+        parser.error('avahi-utils or system Python dbus is required; no service is advertised')
     previous = None
     try:
         while not stopped.is_set():

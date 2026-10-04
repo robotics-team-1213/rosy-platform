@@ -77,3 +77,8 @@ def test_preview_secret_check_tolerates_paired_sources_without_a_phone_token(tmp
     env["ROSY_VISION_PREVIEW_SECRET"] = "preview-" + "x" * 32
     ingest, _ = _vision_ingest(_args(*SYNC_FLAGS), configs, environ=env)
     assert ingest.preview_signer is not None
+
+
+def test_vision_track_flag_is_off_by_default():
+    assert parse_args(["vision", "--config", "site-cameras.yaml"]).track is False
+    assert parse_args(["vision", "--config", "site-cameras.yaml", "--track"]).track is True

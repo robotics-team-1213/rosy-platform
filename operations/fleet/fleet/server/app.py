@@ -122,7 +122,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                stuck_resolver_clients: Optional[Mapping[str, object]] = None,
                pairing=None, pairing_sync_token: Optional[str] = None,
                localization_service=None, deployment_profile: str = "production",
-               central_registry=None,
+               central_registry=None, tracking=None,
                omx_cell_grant_revisions: Optional[Mapping[str, Mapping[str, str]]] = None,
                cell_item_pose_tolerance=None, cell_goal_registry=None,
                cell_app_service_id: str | None = None) -> FastAPI:
@@ -378,6 +378,9 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
 
         install_hub_routes(app, hub, hub_token=console_token)
 
+    if tracking is not None and (sightings is None
+                                 or tuple(tracking.sources) != tuple(sightings.sources)):
+        raise ValueError("overhead tracking must use the configured sighting sources")
     principals = parse_site_principals(site_users, console)
     if cell_goal_evidence_service is not None:
         from fleet.server.cell_goal_evidence_routes import (
@@ -434,7 +437,12 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                            require_viewer=require_viewer, read_guard=read_guard,
                            operator_guard=operator_guard, site_lanes=site_lanes,
                            require_operator=require_operator,
-                           answer_log_path=task_service.store.path if task_service else None)
+                           answer_log_path=task_service.store.path if task_service else None,
+                           tracking=tracking)
+    if tracking is not None and tracking.enabled:
+        from fleet.server.tracking_routes import install_tracking_routes
+        install_tracking_routes(app, tracking=tracking, require_operator=require_operator,
+                                read_guard=read_guard, operator_guard=operator_guard)
     install_signal_routes(app, signals=console._signals, require_viewer=require_viewer,
                           require_operator=require_operator, auth_configured=bool(principals or console_token))
 

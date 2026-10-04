@@ -2,7 +2,7 @@
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.98
+**Version:** v1.99
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -1368,6 +1368,38 @@ change sightings, navigation, mission acceptance, or robot motion.
 또는 제출 거절 사유의 전달. admission을 통과해도 `POLICY_DISPATCH_ENABLED`가 False인 한
 `HOLD(POLICY_NOT_ACCEPTED)`에 머문다 — 이 계약은 자동 실행을 열지 않는다.
 
+
+## 10.6.1 Site Fleet marker-priority tracking (D-457)
+
+지도 표시·대조 전용. source 설정이 있는 Fleet에 등록된다. 기존 sighting 계약은 유지한다.
+Vision `vision --track`은 모서리 마커 보정 우선, 없으면 승인 사각형·차선 맞춤 보정으로 투영한다.
+로봇 마커가 보이면 그것을 우선하고 없으면 익명 배경 blob으로 폴백한다.
+`robot_markers`는 `robot_ids`의 중복 없는 부분집합이며 빈 대응도 허용한다.
+
+| Method | Path | Credential | 내용 |
+|---|---|---|---|
+| POST | `/api/fleet/detections` | source Bearer | `OverheadDetectionsPayload` 제출. source/map/revision·1 s lease 검사 |
+| GET | `/api/fleet/detections/config` | source Bearer | 해당 source의 승인 calibration 또는 null, relearn_seq |
+| GET | `/api/fleet/tracking` | viewer 이상 | sources 상태·fps, robots 대조, unknown 위치 |
+| POST | `/api/fleet/tracking/relearn` | operator | `{source_id}`의 배경 재학습 번호 증가 |
+| GET | `/api/fleet/calibrations` | viewer 이상 | 승인 기록 목록과 `use: display-only` |
+| POST | `/api/fleet/calibrations` | operator | source_id/map_id, map_to_image(9), image(width,height), track_bounds_m, fit_score, lens 또는 null, frame_seq 또는 null을 승인·영속 기록 |
+| DELETE | `/api/fleet/calibrations/{source_id}` | operator | 승인 기록 철회·감사 |
+
+`OverheadDetectionsPayload`는 source_id/map_id/calibration_revision/processor_revision/captured_at/seq/status,
+`detections[{x,y,footprint_m,score,marker_id?}]`(최대 16)를 싣는다. x/y는 map metres,
+captured_at은 Vision 수신 시각 기반 Unix seconds다. status는 OK/LEARNING/CALIBRATION_REQUIRED/SCENE_CHANGED.
+OK 외에는 검출이 비어 있고 CALIBRATION_REQUIRED에서만 calibration_revision이 null이다.
+marker_id는 음이 아닌 strict 정수·프레임 내 유일이며 익명 검출에서는 생략한다. robot_id·영상은 싣지 않는다.
+공유 스키마는 `contracts/foundation/core_common/protocol/overhead_detections.py`, 벡터는
+`test/fixtures/protocol/overhead-detections.v1.json`이다. envelope protocol_version 1.0은 그대로다.
+
+Fleet은 인증된 source의 marker 대응으로 `MARKER` 이름을 확정하고 없으면 신선한 같은-map pose와 익명 검출을 대조한다.
+robots 상태는 MARKER/MATCHED/NO_DETECTION/NO_POSE/CAMERA_UNAVAILABLE이고 camera·pose·offset_m은 없으면 null이다.
+마커 관측은 pose 없이도 표시하며 익명 이름은 odom으로 추측하지 않는다. 남은 검출은 unknown이다.
+token 오류 401, source 불일치 403, map/revision/future/stale/out-of-order 409, 잘못된 body 422.
+보정과 검출은 CORE pose 주입·자동 작업·주행 명령의 입력이 아니다.
+
 ## 10.7 Site Fleet CORE Agent event history (D-269 Proposed)
 
 CORE Agent WebSocket의 pairing 및 `EventMessage` 검증을 통과한 이벤트는 Fleet SQLite의
@@ -2183,6 +2215,7 @@ owner ready, StopLocal ACK, caller 확인 boolean 또는 simulation pose만으�
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.99 | 2026-10-04 | D-457: 마커 우선·무마커 폴백 표시 추적, source-token 검출, operator 보정·재학습. 기존 sighting·envelope 1.0·주행 경계 유지 |
 | v1.98 | 2026-10-04 | Additive (D-343·D-432·D-452): 공개 LAN 로봇 발견 목록의 typed 64행 계약, FQDN/TLS 링크, 공용 cache와 제한된 singleflight fallback. 인증·승인·제어 부여 없음; 기존 v1.97 중앙 GET 정본과 envelope 1.0 유지 |
 | v1.97 | 2026-10-04 | Additive (D-454): 기존 등록 로스터를 읽는 opt-in 중앙 Fleet GET 목록·상세의 구현 상태와 응답을 명시. 기존 Viewer 인증·등록 정본·envelope 1.0 유지; 중앙 쓰기·명령·미션은 미구현 |
 | v1.96 | 2026-10-04 | Additive integration (D-452, D-450, D-453): 역할 발견·승인 directory, Cell 수동 간지 readback, CORE 단일 구간 YIELD 계약을 함께 보존. 기존 인증·HOLD·보정 lease·E-Stop 및 envelope 1.0 유지 |

@@ -42,4 +42,4 @@ def test_each_matrix_project_reaches_wrapper_java_with_its_own_unit_task(tmp_pat
     assert 'testDebugUnitTest' in args and '--no-daemon' in args
     assert not any(a in args for a in ('--dry-run', '--exclude-task', '-x'))
 
-    assert f'-Pkotlin.project.persistent.dir={runner_temp.as_posix()}/rosy-pilot-kotlin-state' in args
+    assert f'-Pkotlin.project.persistent.dir={runner_temp.as_posix()}/rosy-kotlin-state' in args

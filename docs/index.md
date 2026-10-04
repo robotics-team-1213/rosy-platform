@@ -205,6 +205,7 @@
 | D-456 | 같은 LAN에서 장비를 선택하고 상대 화면에서 승인한다 — 오프라인과 로그인 만료는 페어링 해제가 아니다 |
 | D-458 | 학습 앱·웹 공통 작업 화면과 결과 확인 경계 |
 | D-459 | Pinky 학습 검수는 저장되는 웹앱으로 제공하고 자동 초안·수동 정답·학습 수용을 분리한다 |
+| D-461 | ROSY 작업 화면은 상태·다음 작업·행동을 먼저 보여주고 공용 작업 부품으로 구성한다 |
 
 ## 계획·결과 문서
 
@@ -296,8 +297,8 @@
 
 ## 최근 기록
 
-- 2026-10-04 · uncommitted · fix(docs): Pinky 검수 ADR 번호 충돌 해결과 main 동기화
-- 2026-10-04 · uncommitted · docs(pairing): D-456 LAN 수신 승인과 지속 페어링
-- 2026-10-04 · uncommitted · feat(learning): D-458 공통 학습 작업 화면
-- 2026-10-04 · uncommitted · feat(learning): Pinky 박스 직접 선택·드래그 편집
-- 2026-10-04 · uncommitted · feat(learning): D-456 Pinky 영속 검수 웹앱
+- 2026-10-05 · uncommitted · fix(guards): judge shared component size and name public commit provenance
+- 2026-10-04 · uncommitted · fix(site): D-457 마커 우선·무마커 폴백
+- 2026-10-04 · uncommitted · docs(learning): UX 착지 동기화 검증
+- 2026-10-04 · uncommitted · uiux(learning): D-461 작업 우선 공용 구성과 검수 편의
+- 2026-10-04 · uncommitted · audit(d427): passive lane and release provenance

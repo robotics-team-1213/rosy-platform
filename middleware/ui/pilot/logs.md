@@ -403,3 +403,9 @@
 - 변경: 동적 다시 찾기 버튼의 quiet 종류를 생성 직후 명시해 공용 helper 계약 검사에서 확인할 수 있게 했다. 기존 클릭/재검색/인증 행동과 종류 값은 동일하다.
 - 증거: Pinky 학습 앱 main 동기화 중 공용 컴포넌트 검사가 이 위치를 지적했다. 해당 계약 및 Pilot 브라우저 소스 검사를 다시 수행한다.
 - gate 변화: 없음. 장치 연결·주행·페어링 수용을 수행하지 않는다.
+
+## 2026-10-04 · uncommitted · fix(pilot): 조종하지 않는 카메라의 frame Response 보존
+
+- 변경: connect 화면의 frame fetch는 shared camera-pair 검증기에 Response를 넘겨 ok·metadata·blob 검사 소유권을 유지한다.
+- 증거: 실제 EMERGENCY JPEG 표시와 mode 변경 요청 없음의 기존 browser 시험 PASS, 독립 source/host 리뷰 APPROVE. 전체 browser 727 입력의 유일한 실패는 Robot fullscreen 시험이며 원본은 별도 보존한다.
+- gate 변화: SOURCE/LOCAL만. 실기 영상·주행·기록 또는 새 서명 payload 완료로 승격하지 않는다. D-427 개별 게이트 검증 기록 참조.

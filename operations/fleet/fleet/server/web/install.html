@@ -183,6 +183,7 @@
           <ui-button kind="quiet" id="field-dismiss" type="button" hidden>제안 버리기</ui-button>
           <ui-button kind="quiet" id="map-fit-detect" type="button">맵 자동 맞춤</ui-button>
           <ui-button kind="quiet" id="map-fit-accept" type="button" hidden>맞춤 수락</ui-button>
+          <ui-button kind="quiet" id="map-fit-apply" type="button" hidden>추적 보정 적용</ui-button>
           <ui-button kind="quiet" id="map-fit-dismiss" type="button" hidden>맞춤 제안 버리기</ui-button>
           <ui-button kind="quiet" id="map-fit-clear" type="button" hidden>저장한 맞춤 지우기</ui-button>
         </div>
@@ -204,6 +205,7 @@
             <legend>경기장 크기(표시 축척, 이 브라우저만)</legend>
             <label for="field-width">가로 m <input class="ui-field" id="field-width" type="number" inputmode="decimal" min="0.05" max="100" step="0.01"></label>
             <label for="field-height">세로 m <input class="ui-field" id="field-height" type="number" inputmode="decimal" min="0.05" max="100" step="0.01"></label>
+            <label class="ui-check"><input class="ui-field" type="checkbox" data-layer="tracking" checked> 관제 카메라 추적</label>
           </fieldset>
           <fieldset class="layer-toggles">
             <legend>레이어</legend>

@@ -38,7 +38,7 @@
 ## 최근 기록
 
 - 2026-10-04 · uncommitted · docs: provide the recorded artifact gate command
+- 2026-10-04 · uncommitted · fix(robot): 초기화 보호와 fullscreen 시험 동기화
 - 2026-10-04 · uncommitted · feat(shell): D-447 (b) store subscribes /ws/state with REST fallback
 - 2026-10-04 · 6485f8a39 · fix(ui): 영상 증거와 공용 배치의 main 통합
 - 2026-10-04 · uncommitted · fix(web): 호환 설정의 확인과 요청 소유권
-- 2026-10-04 · uncommitted · test(web): 실제 작업 준비와 확인 대화상자 회귀 보완

@@ -53,6 +53,18 @@ class CameraMap:
             raise ValueError("robot marker ids must be non-negative integers")
 
 
+def marker_homography(camera: CameraMap, markers: Mapping[int, Sequence[Point]]):
+    """Image-to-map homography from the four corner markers, or None unless all four are in view."""
+
+    if any(marker_id not in markers for marker_id in camera.corner_marker_ids):
+        return None
+    try:
+        corner_centers = tuple(_center(markers[marker_id]) for marker_id in camera.corner_marker_ids)
+        return fit(corner_centers, camera.corner_world_m)
+    except (TypeError, ValueError, ZeroDivisionError):
+        return None
+
+
 def project_frame(
     camera: CameraMap,
     *,
@@ -65,12 +77,8 @@ def project_frame(
 
     if source_id != camera.source_id:
         return ()
-    if any(marker_id not in markers for marker_id in camera.corner_marker_ids):
-        return ()
-    try:
-        corner_centers = tuple(_center(markers[marker_id]) for marker_id in camera.corner_marker_ids)
-        homography = fit(corner_centers, camera.corner_world_m)
-    except (TypeError, ValueError, ZeroDivisionError):
+    homography = marker_homography(camera, markers)
+    if homography is None:
         return ()
 
     sightings = []

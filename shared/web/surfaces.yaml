@@ -40,6 +40,8 @@ surfaces:
     themes: [dark, light]
     surface: dev
     medium: web
+    breakpoints:
+      - {value: 90rem, reason: 사진 목록·캔버스·라벨 inspector의 세 칸을 좁은 데스크톱에서 압축한다 (D-461).}
     ports:
       - {port: 8767, source: learning/training/perception/dataset/review_app.py}
     audience: Pinky 학습 객체 라벨 검수자

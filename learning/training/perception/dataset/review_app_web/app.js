@@ -1,5 +1,6 @@
-import { cssColor, canvasFont as font, clearPalette } from '/common/ui.js';
+import { cssColor, canvasFont, clearPalette } from '/common/ui.js';
 import { drawnBox, dragBox, hitBox, boxHandles } from '/box-geometry.mjs';
+const font = (size, family) => canvasFont(size, family);
 
 const $ = id => document.getElementById(id);
 const names = {'':'클래스 선택 필요',robot:'로봇', obstacle_box:'장애물 상자', cone:'콘', traffic_light:'신호등', sign:'표지판', person_feet:'사람 발'};
@@ -25,6 +26,15 @@ function enable() {
   $('complete').disabled = locked || frame?.status === 'excluded';
   document.querySelectorAll('#boxes input, #boxes select, #boxes ui-button').forEach(el => el.disabled = locked || frame?.status === 'excluded');
   document.querySelectorAll('#frames ui-button').forEach(el => el.disabled = busy || !!gesture);
+  const position=workspace?.frames.findIndex(item=>item.index===frame?.index) ?? -1;
+  for(const [id,available,reason] of [
+    ['prev-frame',position>0,'첫 번째 사진입니다.'],
+    ['next-frame',position>=0&&position<workspace.frames.length-1,'마지막 사진입니다.'],
+    ['next-pending',workspace?.frames.some(item=>item.status==='pending'&&item.index!==frame?.index),'다른 검수 대기 사진이 없습니다.']
+  ]) {
+    $(id).reason=busy||gesture?'현재 작업을 마친 뒤 이동할 수 있습니다.':!ready?'사진을 불러오는 중입니다.':!available?reason:'';
+    $(id).disabled=busy||!!gesture||!ready||!available;
+  }
 }
 async function request(path, body) {
   const response = await fetch(path, body === undefined ? {} : {method:'POST', headers:{'Content-Type':'application/json', 'X-Pinky-Token':workspace.token}, body:JSON.stringify(body)});
@@ -39,10 +49,13 @@ function list() {
   const counts = workspace.frames.reduce((a,f) => {a[f.status]++; return a;}, {approved:0,excluded:0,pending:0});
   $('counts').textContent = `승인 ${counts.approved} · 제외 ${counts.excluded} · 대기 ${counts.pending}`;
   $('frames').replaceChildren();
-  workspace.frames.filter(f => $('filter').value === 'all' || f.status === $('filter').value).forEach(f => {
+  const visible=workspace.frames.filter(f => $('filter').value === 'all' || f.status === $('filter').value);
+  $('empty-frames').hidden=visible.length>0;
+  visible.forEach(f => {
     const button = document.createElement('ui-button'); button.setAttribute('kind','segment'); button.setAttribute('aria-pressed',String(f.index === frame?.index));
-    button.textContent = `사진 ${f.index + 1}`;
-    const badge = document.createElement('span'); badge.className = 'frame-badge'; badge.textContent = statuses[f.status]; button.append(badge);
+    const thumb=document.createElement('img');thumb.src=`/api/images/${f.index}`;thumb.alt='';thumb.loading='lazy';thumb.className='frame-thumb';
+    const name=document.createElement('span');name.className='frame-label';name.textContent=`사진 ${f.index+1}`;button.append(thumb,name);
+    const badge = document.createElement('span'); badge.className = 'frame-badge'; badge.textContent = statuses[f.status]; name.append(badge);
     button.onclick = () => { if (!busy && !gesture) select(f.index); }; $('frames').append(button);
   });
 }
@@ -78,6 +91,7 @@ async function select(index) {
   ready = false; frame = structuredClone(workspace.frames.find(f => f.index === index));
   $('complete').checked = false; drawing = false; $('draw').setAttribute('aria-pressed','false');
   $('frame-title').textContent = `사진 ${index+1}`; $('status').textContent = statuses[frame.status];
+  frameHeading();saveView();
   $('source-info').textContent = `${frame.source.width} × ${frame.source.height} · ${frame.source.video || '원본 사진'} · frame ${frame.source.video_frame ?? index}`;
   $('candidate-source').textContent = `원본 초안 출처: ${frame.source.annotation_source || '원본 라벨 자료'} · 초안은 정답 승인이 아닙니다.`;
   $('image-message').hidden = false; $('image-message').textContent = '사진을 불러오는 중';
@@ -104,13 +118,16 @@ function selectField(label, options, value, changed) {
 function renderBoxes() {
   $('boxes').replaceChildren(); $('empty').hidden = !!frame.review.boxes.length;
   frame.review.boxes.forEach((box,i) => {
-    const row=document.createElement('div'); row.className='box-row'; const top=document.createElement('div'); top.className='box-top';
+    const row=document.createElement('details'); row.className='box-row';row.open=selected===i||(selected===null&&i===0);
+    const heading=document.createElement('summary');heading.textContent=`박스 ${i+1} · ${names[box.label??'']||'클래스 선택 필요'}`;
+    heading.onclick=()=> {selected=i;paint();enable();};row.append(heading);
+    const top=document.createElement('div'); top.className='box-top';
     const number=document.createElement('span'); number.className='box-number'; number.textContent=`#${i+1}`; top.append(number);
     const pick=document.createElement('ui-button'); pick.setAttribute('kind','toggle'); pick.setAttribute('aria-pressed',String(selected===i)); pick.textContent=`박스 ${i+1} 선택`;
     pick.onclick=()=> {selected=i; drawing=false; $('draw').setAttribute('aria-pressed','false'); renderBoxes(); paint();}; top.append(pick);
     top.append(selectField(`박스 ${i+1} 클래스`,names,box.label,value => edit(boxes=> {boxes[i].label=value || null; if(value==='traffic_light') boxes[i].signal_state ??= 'unknown';})));
     if (box.label === 'traffic_light') top.append(selectField(`박스 ${i+1} 신호`,states,box.signal_state || 'unknown',value=>edit(boxes=>boxes[i].signal_state=value)));
-    const remove=document.createElement('ui-button'); remove.setAttribute('kind','quiet'); remove.textContent=`박스 ${i+1} 삭제`; remove.onclick=()=> {selected=null;edit(boxes=>boxes.splice(i,1));}; top.append(remove); row.append(top);
+    const remove=document.createElement('ui-button'); remove.setAttribute('kind','quiet'); remove.textContent=`박스 ${i+1} 삭제`; remove.onclick=()=> {selected=null;edit(boxes=>boxes.splice(i,1));}; top.insertBefore(remove,top.querySelector('label')); row.append(top);
     const coordinates=document.createElement('div'); coordinates.className='coordinates';
     ['x0','y0','x1','y1'].forEach((name,j) => {
       const label=document.createElement('label'); label.textContent=name;
@@ -136,6 +153,7 @@ async function mutate(action, extras={}) {
     const saved=await request(`/api/frames/${id}`,{version:frame.version,action,...extras});
     workspace.frames[workspace.frames.findIndex(f=>f.index===id)]=saved; frame=structuredClone(saved);
     $('status').textContent=statuses[frame.status]; $('save-status').textContent=`서버 저장됨 · v${frame.version}`;
+    frameHeading();
     coordinatePreview=null; if (selected>=frame.review.boxes.length) selected=null;
     renderBoxes(); list(); paint();
   } catch(e) {coordinatePreview=null; error(e.message); renderBoxes(); paint(); $('save-status').textContent='저장 실패 · 최신 내용 불러오기 후 다시 수정하세요';}
@@ -211,7 +229,23 @@ document.addEventListener('keydown',event=> {
     event.preventDefault(); $('delete-selected').click();
   }
 });
-$('filter').onchange=list;
+function frameHeading() {
+  $('status').setAttribute('status',frame.status==='pending'?'warn':'neutral');
+  $('frame-progress').textContent=`${workspace.frames.findIndex(item=>item.index===frame.index)+1} / ${workspace.frames.length} · ${frame.source.width} × ${frame.source.height} · 박스 ${frame.review.boxes.length}개`;
+}
+function saveView() {
+  const url=new URL(location.href);if(frame) url.searchParams.set('frame',frame.index);
+  if($('filter').value==='all') url.searchParams.delete('filter');else url.searchParams.set('filter',$('filter').value);
+  history.replaceState(null,'',url);
+}
+$('filter').onchange=()=> {list();saveView();};
+$('prev-frame').onclick=()=> {const index=workspace.frames.findIndex(item=>item.index===frame.index);if(index>0) select(workspace.frames[index-1].index);};
+$('next-frame').onclick=()=> {const index=workspace.frames.findIndex(item=>item.index===frame.index);if(index<workspace.frames.length-1) select(workspace.frames[index+1].index);};
+$('next-pending').onclick=()=> {
+  const position=workspace.frames.findIndex(item=>item.index===frame.index);
+  const ordered=[...workspace.frames.slice(position+1),...workspace.frames.slice(0,position)];
+  const next=ordered.find(item=>item.status==='pending');if(next) {$('filter').value='pending';select(next.index);}
+};
 $('reload').onclick=async()=> {if(!busy) await load(frame?.index);};
 $('theme').value=document.documentElement.dataset.theme || 'dark';
 $('theme').onchange=()=> {document.documentElement.dataset.theme=$('theme').value; try {localStorage.setItem('rosy.theme',$('theme').value);} catch {} clearPalette(); document.dispatchEvent(new CustomEvent('rosy:theme')); paint();};
@@ -227,7 +261,11 @@ async function load(index) {
   try {workspace=await request('/api/workspace'); conflicted=false; error();
     if(workspace.exports.length) receipt(workspace.exports[0]);
     if (!workspace.frames.length) throw new Error('등록된 사진이 없습니다');
-    await select(index ?? workspace.frames[0].index);
+    const params=new URLSearchParams(location.search);
+    $('filter').value=params.get('filter')||'all';if(!$('filter').value) $('filter').value='all';
+    const candidate=params.has('frame')?Number(params.get('frame')):undefined;
+    const visible=workspace.frames.filter(item=>$('filter').value==='all'||item.status===$('filter').value);
+    await select(index ?? (workspace.frames.some(item=>item.index===candidate)?candidate:visible[0]?.index??workspace.frames[0].index));
   } catch(e) {error(e.message);}
 }
 load();

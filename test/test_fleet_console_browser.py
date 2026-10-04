@@ -1205,6 +1205,7 @@ def test_fleet_control_groups_are_semantic_subheadings(console_url):
             assert page.get_by_role("heading", name=name, exact=True).count() == 1
         assert page.locator('.device-link a[href="/console/install"]').count() == 1
         page.goto(console_url.rsplit("/", 1)[0] + "/install.html", wait_until="networkidle")
+        page.get_by_role("tab", name="로봇 등록", exact=True).click()
         assert page.get_by_role("heading", name="로봇 등록", exact=True).count() == 1
         assert not errors
         browser.close()
@@ -1243,6 +1244,7 @@ def test_robot_enrollment_panel_enrolls_by_screen_code(console_url):
 
         page.route("**/api/fleet/enrollment/robots", enroll)
         page.goto(console_url.rsplit("/", 1)[0] + "/install.html", wait_until="networkidle")
+        page.get_by_role("tab", name="로봇 등록", exact=True).click()
         page.get_by_role("heading", name="로봇 등록", exact=True).wait_for()
         page.locator("#discovery-list ui-button", has_text="등록").first.click()
         assert not page.locator("#enroll-move-check").is_visible()
@@ -1283,6 +1285,7 @@ def test_enrollment_dialog_leaves_the_fleet_stop_live(console_url):
         browser, page, errors = _open_console(playwright, _enrollment_api(listing), posts)
         page.on("dialog", lambda dialog: dialog.accept())  # 전체 정지의 window.confirm
         page.goto(console_url.rsplit("/", 1)[0] + "/install.html", wait_until="networkidle")
+        page.get_by_role("tab", name="로봇 등록", exact=True).click()
         page.get_by_role("heading", name="로봇 등록", exact=True).wait_for()
         opener = page.locator("#discovery-list ui-button", has_text="등록").first
         opener.click()
@@ -1334,6 +1337,7 @@ def test_unenroll_is_a_quiet_row_action_confirmed_by_name(console_url):
 
         page.route("**/api/fleet/enrollment/robots/rosy_09", remove)
         page.goto(console_url.rsplit("/", 1)[0] + "/install.html", wait_until="networkidle")
+        page.get_by_role("tab", name="로봇 등록", exact=True).click()
         row_button = page.locator('#enrolled-list li[data-robot-id="rosy_09"] ui-button[data-action="unenroll"]')
         row_button.wait_for()
         assert row_button.inner_text() == "등록 해제…"
@@ -2386,6 +2390,7 @@ def test_offline_robots_say_why_and_each_move_asks_for_the_screen_code(console_u
         assert not page.locator("text=(전체)").count()
 
         page.goto(console_url.rsplit("/", 1)[0] + "/install.html", wait_until="networkidle")
+        page.get_by_role("tab", name="로봇 등록", exact=True).click()
         page.wait_for_function("() => document.querySelectorAll('#enrolled-list ui-button[data-action=move]').length === 2")
         page.locator('#enrolled-list li[data-robot-id="rosy_09"] ui-button[data-action="move"]').click()
         dialog = page.locator("#enroll-dialog")
@@ -2433,6 +2438,7 @@ def test_move_candidate_timeout_and_pagehide_keep_server_code_flow_owned(console
         browser, page, errors = _open_console(playwright, api)
         held = []
         page.goto(console_url.rsplit('/', 1)[0] + '/install.html', wait_until='networkidle')
+        page.get_by_role("tab", name="로봇 등록", exact=True).click()
         move = page.locator('#enrolled-list li[data-robot-id="rosy_09"] ui-button[data-action="move"]')
         move.wait_for()
         move.click()

@@ -118,7 +118,7 @@ body {
 /* 화면 테마(D-359 §2.5) — 이 브라우저의 선호. 누름은 /common/theme.js가 받는다.
    이름표는 한 줄이다 — 1366px에서 "화면 테마"가 두 줄로 접히던 것을 막는다. */
 .theme-choice { display: flex; align-items: center; gap: var(--space-1); }
-/* D-405 — 아이콘 세그먼트는 정사각 누름 면(44px)을 지킨다. */
+/* D-457 — 아이콘 세그먼트는 정사각 누름 면(44px)을 지킨다. */
 .theme-choice ui-button { min-width: var(--target-secondary); padding-inline: 0; justify-content: center; }
 #theme-choice-label { white-space: nowrap; }
 
@@ -382,7 +382,7 @@ main {
   .facts div[data-fact="safety"] { flex: 0 1 60px; }
 }
 .facts span { font-family: var(--mono); font-size: var(--text-micro); letter-spacing: var(--track-label); color: var(--ink-quiet); }
-/* D-405 — 측정 라벨 아이콘은 라벨 척도(label 단계)를 따른다. 값(1.125rem)과 같으면 무겁다. */
+/* D-457 — 측정 라벨 아이콘은 라벨 척도(label 단계)를 따른다. 값(1.125rem)과 같으면 무겁다. */
 .facts .ui-icon { width: var(--text-label); height: var(--text-label); }
 .facts strong { font-family: var(--mono); font-size: var(--text-label); font-weight: var(--weight-medium); }
 
@@ -512,8 +512,8 @@ main {
 @media (width < 90rem) {
   ui-topbar {
     display: grid;
-    grid-template-columns: auto minmax(0, 1fr) auto auto auto;
-    grid-template-areas: "brand pill clock more estop";
+    grid-template-columns: auto minmax(0, 1fr) auto auto auto auto;
+    grid-template-areas: "brand pill cell clock more estop";
     align-items: center;
     gap: var(--space-2);
     padding: var(--space-2) var(--space-3);
@@ -522,6 +522,7 @@ main {
   ui-topbar .spacer { display: none; }
   /* 연결 표지는 줄이 모자라면 말줄임으로 줄어든다 — 이름과 비상 정지는 줄지 않는다. */
   #online-pill { grid-area: pill; justify-self: start; min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  ui-topbar > a[href="/console/cell"] { grid-area: cell; }
   #clock { grid-area: clock; justify-self: end; }
   #topbar-more { display: inline-flex; grid-area: more; }
   #estop { grid-area: estop; }
@@ -552,7 +553,7 @@ main {
 @media (width < 30rem) {
   ui-topbar {
     grid-template-columns: minmax(0, 1fr) auto auto auto;
-    grid-template-areas: "brand brand more estop" "pill clock clock estop";
+    grid-template-areas: "brand cell more estop" "pill clock clock estop";
     gap: var(--space-1) var(--space-2);
     padding: var(--space-2);
   }
@@ -732,3 +733,8 @@ main {
 }
 #camera-approve-dialog label { display: block; margin-top: var(--space-2); }
 
+
+/* D-457 관제 카메라 추적 — 상태줄과 범례. 색은 토큰만(CSP style-src 'self'). */
+.tracking-bar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.tracking-state[data-state="warn"] { color: var(--status-warn); }
+.sw.tracking { background: transparent; border: 2px solid var(--series-primary); border-radius: 50%; }

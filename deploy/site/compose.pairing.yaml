@@ -65,6 +65,7 @@ services:
       - -m
       - rosy_vision.cli
       - vision
+      - --track
       - --config
       - /run/rosy-config/site-cameras.yaml
       - --host

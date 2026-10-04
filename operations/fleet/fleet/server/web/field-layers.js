@@ -2,9 +2,11 @@
 // 제안과 보정 뷰는 표시 전용이다. sighting·CameraMap·목표·cmd_vel 로 넘기지 않는다.
 
 // lanes·maptop: D-375 지도 맞춤의 카메라 위 차선 겹침과 지도 평면 뷰(map-fit-view.js).
-export const LAYER_KEYS = Object.freeze(["raw", "rectified", "site", "grid", "sightings", "poses", "lanes", "maptop"]);
+// tracking: D-457 관제 카메라 추적(map-view.js).
+export const LAYER_KEYS = Object.freeze(["raw", "rectified", "site", "grid", "sightings", "poses", "lanes", "maptop", "tracking"]);
 export const LAYER_DEFAULTS = Object.freeze({
   raw: true, rectified: true, site: true, grid: true, sightings: true, poses: true, lanes: true, maptop: true,
+  tracking: true,
 });
 export const LAYER_STORAGE_KEY = "rosy-console-layers";
 export const FIELD_SIZE_PREFIX = "rosy-field-size:";
