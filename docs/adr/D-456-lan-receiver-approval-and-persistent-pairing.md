@@ -100,7 +100,7 @@ SOURCE·LOCAL·CI·서명 배포·실기 두 화면 확인을 구분한다.
 
 ## 2026-10-05 CORE 구현 slice와 남은 수용 경계
 
-공유 typed 계약은 API Reference v1.100과 `core_common.protocol.peer_pairing`에 둔다.
+공유 typed 계약은 API Reference v1.101과 `core_common.protocol.peer_pairing`에 둔다.
 기존 CORE overlay의 한 atomic commit을 사용하며 별도 SQLite를 도입하지 않는다.
 명시적 연결 기억은 실제 현재 issuer record의 nonlegacy·nondevelopment·card/manual·
 만료 없는 administrator를 `is_durable_admin`으로 확인한 경우만 persistent 관계로

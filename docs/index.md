@@ -297,8 +297,8 @@
 
 ## 최근 기록
 
+- 2026-10-05 · uncommitted · feat(fleet): D-463 차선 경로는 다음 짧은 점
 - 2026-10-05 · uncommitted · docs(validation): P2 페달 계측 실행 준비 완료 — 사용자 입회 대기
 - 2026-10-05 · uncommitted · uiux(review): 필터 일치 이동과 마지막 라벨 복구
 - 2026-10-05 · uncommitted · fix(guards): judge shared component size and name public commit provenance
 - 2026-10-04 · uncommitted · fix(site): D-457 마커 우선·무마커 폴백
-- 2026-10-04 · uncommitted · docs(learning): UX 착지 동기화 검증
