@@ -217,5 +217,5 @@ provenance:
   record_rosy_package_inventory: true
 
 receiver_crypto:
-  requirements_sha256: c35e75883e936321317bb96e2aa18f71795d526f01c7b1a4c960ff9518990d27
+  requirements_sha256: d731e8863f4c4238cc756c027854c67e7f0ea201529bfc1558cf5c864fa54693
   verified: true

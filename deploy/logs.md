@@ -2523,3 +2523,9 @@
 - 변경: 닫힌 숫자 인자의 코드 호출은 따옴표 없는 참조만 인정한다. Kotlin nullable String 선언의 실제 기본값을 검사하며 camel/snake 슬롯은 정확한 이름만 허용한다. 공개 P256 시험 벡터는 한 경로·필드·정확한 값의 entropy 토큰만 예외로 두고 자격·개인키 검사는 유지한다.
 - 증거: 첫 정상 push는 474 PASS·2 SKIP·2 FAIL로 중단됐다. 독립 검사에서 따옴표 안 호출과 임의 underscore 슬롯의 과도한 허용을 확인해 고쳤고 실제 negative 검사 7 PASS다. 수정 전 실패와 중간 검사 원본은 보존했다. 최종 release/event/API 통합 및 정상 push 검사는 이어서 확인한다.
 - gate 변화: SOURCE/LOCAL 수정이며 CI·서명 배포·DEVICE를 승격하지 않는다.
+
+## 2026-10-05 · uncommitted · fix(release): ARM 수신 암호화 입력 잠금 해시 수정
+
+- 변경: receiver_crypto 요구사항 잠금값을 Linux checkout의 Git LF 파일 SHA-256으로 고친다. Windows CRLF checkout에서 계산한 값 때문에 실제 ARM 빌드가 거부한 원인을 바로잡는다. 라이브러리 버전·wheel 해시·require-hashes·빌더의 원시 파일 해시 검증은 유지한다.
+- 증거: 정확한 0548d2a00 ARM 실행의 실패를 원본 로그로 보존했다. Git LF 474바이트와 Windows CRLF 483바이트 차이를 독립 대조했다. 신규 Linux 바이트 회귀 검사는 수정 전 1 failed, 수정 후 관련 native payload·CI 의존성 검사 27 passed/7.58s다.
+- gate 변화: SOURCE/LOCAL. 이전 ARM 실패 결과물은 배포하지 않는다. 수정 소스의 원격 검사·ARM 빌드·서명·실기 검증은 이어서 수행한다.
