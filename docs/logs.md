@@ -5722,3 +5722,9 @@ osy-d395-s1d\`.
 - 변경: 429e13b83의 손상 journal 하나를 UNKNOWN으로 기록하고 정확한 원문·치환 해시와 원문 보존 위치를 별도 검증 문서에 남겼다. 읽을 수 없는 기술 내용을 복원하지 않았다.
 - 증거: 역사 블록 RED 뒤 source/target 변조·삭제·peer 기록 손실·새 corruption 거부 포함 focused 111 passed/1 skipped, NEW 0, lint 오류 0. 원문 바이트와 다른 기록은 보존한다.
 - gate 변화: 해당 G2 기록으로 수용을 부여하지 않는다. SOURCE/LOCAL 감사 메커니즘 검증만 기록한다.
+
+## 2026-10-04 · uncommitted · audit(d427): passive lane and release provenance
+
+- 변경: 새 dated 증거에 수동 명령 없는 AMD64 lane camera 관측과 기존 035 출처 충돌을 기록했다. 과거 frozen 결과는 보존한다.
+- 증거: Docker native EXIT0, odometry 10, advancing clock 10, image 4, valid visible lane 2, 수신 zero Twist 16, exact cleanup PASS 및 독립 리뷰 APPROVE. 전체 Chromium b657은 314 passed/1 failed; unchanged entry module 후속은 14 passed.
+- gate 변화: passive host scope만 PASS. closed-loop 주행·ARM·DEVICE/FIELD·전체 browser PASS·새 payload 발행은 미확정이다. 실제 035와 로컬 signed035는 보존하고 다음 후보 036은 잠정이다.
