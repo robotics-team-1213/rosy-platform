@@ -1698,3 +1698,10 @@
 - 변경: 양보 계획이 있는 동안, 선 밖 틈은 정차 점이나 선으로 보정한다. 동료가 문을 지나면 방에서 문으로 YIELD 하고, 진행 방향을 되찾으면 RESUME 한다. 오도메트리 프레임은 무응답이다.
 - 증거: operations/fleet/test/test_meet_place.py, test_stuck_resolver.py 포함 관련 호스트 203 passed. known_failures 새 실패 0.
 - gate 변화: 없음. 호스트 판단 시험. 장치·ROS-SIM 은 주장하지 않는다.
+
+
+## 2026-10-04 · uncommitted · docs: re-judge exact integrated Fleet size
+
+- Change: Record the independently counted 32481 production/web lines after inherited D-454 registry/permission wiring and D-455 map-pose extensions, plus four reviewed shared UI lines. Preserve B2/UI migration, all file limits and the package +150 allowance. No production code changed for this judgement.
+- Evidence: Independent accounting: recorded32162, current main32477, current branch32481. Registry owners remain bounded, resolver507, app600, Console777; no new final command publisher. Architecture and registry/meet/resolver regressions77passed.
+- Gate: SOURCE/LOCAL architecture judgement only; no robot, motion or physical acceptance.

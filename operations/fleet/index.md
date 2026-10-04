@@ -84,8 +84,8 @@
 
 ## 최근 기록
 
+- 2026-10-04 · uncommitted · docs: re-judge exact integrated Fleet size
 - 2026-10-04 · uncommitted · feat(fleet): D-455 양보 합류는 지도 자세
 - 2026-10-04 · uncommitted · fix(ci): preserve current admission and shared controls in regressions
 - 2026-10-04 · uncommitted · refactor(fleet): move periodic goal evidence worker out of app composition
 - 2026-10-04 · uncommitted · feat(server): D-454 1b — 등록 해제 경로와 로스터 차단 전달
-- 2026-10-04 · uncommitted · fix(fleet): keep app composition within its line budget

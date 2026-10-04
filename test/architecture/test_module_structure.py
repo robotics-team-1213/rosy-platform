@@ -100,8 +100,13 @@ SIZE_VERDICTS = {
         "duplicate its socket. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        32_162,
-        "split: re-judged 2026-10-04 at 32162 after integrating main 2ad047602 with D-452: "
+        32_481,
+        "split: re-judged 2026-10-04 at 32481 after D-454 registry/permission wiring and D-455 "
+        "map-pose meet/resolver extensions: inherited source counts 32477, plus four reviewed shared "
+        "UI lines. Registry model/routes remain bounded; resolver is 507, app is 600 and web Console "
+        "is 777. No new final command publisher. Independent production/web accounting confirms "
+        "319 above the recorded 32162; retain +150, B2/UI migration obligations and existing "
+        "600 production/800 web/1000 zero-growth file limits. Previously re-judged 2026-10-04 at 32162 after integrating main 2ad047602 with D-452: "
         "incoming main counts 31786, including focused meet subpackage 653 and existing "
         "resolver/loop/transport wiring 135 beyond its 30998 verdict; the approved "
         "Cell checkpoint/editor delta 377 and D-452 delta 376 both retain their owners. "
