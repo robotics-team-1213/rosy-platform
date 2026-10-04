@@ -77,8 +77,8 @@
 
 ## 최근 기록
 
+- 2026-10-04 · uncommitted · fix: D-427 push5 통합 게이트 정합성
 - 2026-10-04 · uncommitted · D-442 U3 owner 선점과 named 운영 복구
 - 2026-10-04 · uncommitted · D-443 신호 감독 안전 수정
 - 2026-10-04 · uncommitted · D-427 shared asset path contract
 - 2026-10-03 · uncommitted · feat: read live Fleet fence on the simulation Cell owner
-- 2026-10-03 · uncommitted · refactor: D-425 Console document lifetime

@@ -73,8 +73,8 @@
 
 ## 최근 기록
 
+- 2026-10-04 · uncommitted · fix: D-427 push5 통합 게이트 정합성
 - 2026-10-04 · uncommitted · D-442 U2 Pinky single-use binding
 - 2026-10-03 · e021264e6 · feat(face): D-433 CORE가 rosy-face에 얼굴 핸드오버를 쓴다
 - 2026-10-03 · f4c311569 · feat(bridge): D-423 모델 상태 두 토픽 latched 구독
 - 2026-10-03 · uncommitted · test(console): 지도 도구는 격자 밖에 둔다
-- 2026-10-02 · uncommitted · fix(core): D-419 착지 — console_linked 를 D-407 유예와 합침

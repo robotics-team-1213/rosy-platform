@@ -3,6 +3,17 @@
 // all_red 는 "명령된 정지"다 — 둘을 같은 색으로 뭉뜽그리면 운영자는 장비 고장을
 // 정지 성공으로 읽어 버린다.
 
+const SIGNAL_INTENT_LABEL = Object.freeze({
+  failsafe: "감독 중단", manual: "수동", cycle: "자동 순환",
+  hold: "유지", all_red: "전체 적색", flash_red: "적색 점멸",
+});
+
+export function signalIntentLabel(mode) {
+  if (mode == null || mode === "") return "없음";
+  return typeof mode === "string" && Object.hasOwn(SIGNAL_INTENT_LABEL, mode)
+    ? SIGNAL_INTENT_LABEL[mode] : "알 수 없는 의도";
+}
+
 export async function sendSignalPresence({ operator, visible, configured, call }) {
   if (operator && visible && configured) {
     await call("/api/fleet/signals/presence", { method: "POST" });
@@ -93,7 +104,7 @@ export function createSignals({ scope, el, view, log, call, refreshState, isOper
       const stale = document.createElement("p");
       stale.className = "hint";
       const age = row.intent_age_s == null ? "" : ` · ${Math.floor(row.intent_age_s)}s 전`;
-      stale.textContent = `재명령 필요 — 마지막 의도 ${row.intent?.mode || "없음"}${age}`;
+      stale.textContent = `재명령 필요 — 마지막 의도 ${signalIntentLabel(row.intent?.mode)}${age}`;
       node.appendChild(stale);
     }
 

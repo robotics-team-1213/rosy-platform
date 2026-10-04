@@ -373,6 +373,8 @@ def test_the_lint_catches_bare_enums_flowing_to_text():
     ("middleware/ui/robot/settings.js", "상태 ${enumLabel(DOCK_STATE_LABEL, state)}", "상태 ${state}"),
     ("middleware/ui/robot/panels/console/line-follow.js",
      '`차선 추종 ${enumLabel(LINE_MODE_LABEL, current.mode || "OFF")}`', '`차선 추종 ${current.mode || "OFF"}`'),
+    ("operations/fleet/fleet/server/web/signals.js",
+     "${signalIntentLabel(row.intent?.mode)}", '${row.intent?.mode || "없음"}'),
 ])
 def test_reverting_an_enum_text_fix_fails_the_lint(rel, fixed, regressed):
     """Mutation proof on the real files: undo one P1-1/P2-2 fix and the lint sees it."""

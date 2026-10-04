@@ -4950,3 +4950,11 @@
 - 변경: U1 순수 서비스 동작 시험을 services 소유 폴더로 나누고 gateway는 실제 HTTP 준비/거부를 검증한다. frozen 예외 집합은 늘리지 않았다. D-442의 정확한 writer 포트 타입 이름만 literal gate에서 허용하고 내부 revision은 장치 중립 이름으로 고쳤다.
 - 증거: push4 빠른검사2 failed/457 passed라 push는 거부됐다. 수정 후30 passed·flake0, robot 설정문자열은 계속 검출한다. docs/validation/d427-source-migration/push4-fast-gate-corrections-2026-10-04.md.
 - gate 변화: 없음. 다음 SHA 강제검사·CI·artifact·device는 별도 gate다.
+
+
+## 2026-10-04 · uncommitted · fix: D-427 push5 통합 게이트 정합성
+
+- 변경: 운영 시나리오에서 MANUAL 해제를 실제 IDLE API로 명시했다. Fleet 재명령 문구는 의도를 한국어로 표시하고, CORE image closure는 정확한 ROS 열 개와 계약 wheel 두 개를 분리 검증한다. 운영 MANUAL·신호 감독 가드는 바꾸지 않았다.
+- 증거: Python 집중 35 passed, 추가 구조/Fleet 97 passed, Node 전체 109 passed. 실제 입력 누락·colcon 오배치·raw enum 표시 mutation 네 건 RED 뒤 원본 bytes 복원·GREEN. 알려진 실패 0 new, backlog 증가 없음. `docs/validation/d427-source-migration/push5-gate-corrections-2026-10-04.md`.
+- 독립 리뷰: d427_safety_review APPROVE source/host, 별도 Python 22 passed·Node 3 passed. Fleet +12 줄은 기존 +150·split 판정 안에 있고 예산·allowlist를 늘리지 않았다.
+- gate 변화: SOURCE/로컬 증거만 추가한다. 새 pre-push·원격 CI·ARM64·SD·기기·현장 수락은 후속이다.

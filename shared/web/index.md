@@ -44,8 +44,8 @@
 
 ## 최근 기록
 
+- 2026-10-04 · uncommitted · fix: D-427 push5 통합 게이트 정합성
 - 2026-10-03 · uncommitted · refactor: D-425 page lifetime mechanics
 - 2026-10-03 · uncommitted · fix(web): SAFE_STOP 운용 말은 RobotMode 표 밖에 둔다
 - 2026-10-03 · uncommitted · refactor: D-425 Fleet response adapter
 - 2026-10-03 · uncommitted · refactor: scoped HTTP request와 화면 scope
-- 2026-10-03 · uncommitted · test: D-425 API owner와 공통 호출 경계
