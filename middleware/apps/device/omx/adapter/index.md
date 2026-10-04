@@ -46,8 +46,8 @@
 
 ## 최근 기록
 
+- 2026-10-04 · uncommitted · fix(omx): Pilot 운전석과 Cell 하달 상호 배제
 - 2026-10-04 · uncommitted · D-442 U3 owner 선점과 named 운영 복구
 - 2026-10-03 · uncommitted · fix: retain the UDS owner after a caller disconnects
 - 2026-10-03 · uncommitted · fix: install canonical OMX geometry for Cell owner composition
 - 2026-10-03 · uncommitted · fix(omx-sim): D-411 C 관문 수용 — probe 경합 두 개, 쥠 drift 보고
-- 2026-10-03 · uncommitted · fix(omx_adapter): D-411 C Gazebo 관문 뒤 — 조임 재발행·속도 여유·probe·Gazebo 전용 제약

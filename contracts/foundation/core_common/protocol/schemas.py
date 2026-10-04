@@ -24,13 +24,14 @@ from uuid import uuid4
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from core_common.protocol.evidence import EvidenceState, ValueEvidence
+from core_common.protocol.network_peers import DiscoveryScanPayload  # noqa: F401
 
 from core_common.protocol.access import LoginPairRequest, CameraPairApprovalRequest, SshPairRequest  # noqa: F401
 from core_common.protocol.access import ConnectionInfo  # noqa: F401
 from core_common.protocol.localization import LocalizationStatus
 from core_common.protocol.cell_goal_evidence import CellGoalEvidenceSubmission  # noqa: F401
 from core_common.protocol.cell_app import (  # noqa: F401
-    CellAppCompileRequest, CellAppDocumentSaveRequest, CellAppProposalRequest)
+    CellAppCompileRequest, CellAppDocumentSaveRequest, CellAppProposalRequest, CellOperatorCheckpoint)
 from core_common.protocol.lane_perception import LanePerceptionRequest, LanePerceptionStatus  # noqa: F401
 from core_common.protocol.vision_preview_status import VisionPreviewStatus  # noqa: F401
 from core_common.protocol.recording_start import RecordingStartRequest  # noqa: F401
@@ -48,12 +49,6 @@ class HostStatusEvidence(BaseModel):
     age_s: float | None = None
     stale_after_s: float = 15.0
     reason: str = ""
-
-
-class DiscoveryScanPayload(BaseModel):
-    """Site Fleet only: untrusted resolved mDNS observations, never credentials."""
-
-    devices: list[dict[str, Any]] = Field(max_length=64)
 
 
 def utc_now_iso() -> str:

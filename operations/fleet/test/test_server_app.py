@@ -484,6 +484,8 @@ def test_install_page_and_its_entry_are_served():
     assert page.status_code == 200 and "설치·보정" in page.text
     assert "default-src 'self'" in page.headers["content-security-policy"]
     assert client.get("/console/assets/install.js").status_code == 200
+    assert client.get("/console/assets/peer-picker.js").status_code == 200
+    assert 'id="peer-picker"' in page.text and 'id="peer-retry"' in page.text
     assert 'id="camera-install-heading"' in page.text
     assert 'id="robot-enrollment"' in page.text
     # 운용 화면은 이제 등록·보정 마크업을 들고 있지 않다 — 링크만 남는다.

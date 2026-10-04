@@ -46,6 +46,8 @@
 | D-413 | ROSY는 modules·integrations·apps·profiles로 책임을 나누고 고정 셀 한 흐름부터 이전한다 |
 | D-439 | 웹 앱은 공용 디자인과 작업 중심 정보 위계로 순차 개선한다 |
 | D-443 | `rosy.site-device/1` — 사이트 장치(신호등·도크, 나중에 컨베이어·문·PLC)의 공통 호스트 타입 계약: 식별·자격증명, measured/claimed를 가른 상태, heartbeat·`last_seq`, kind별 semantic 동사, ack와 관측된 효과의 분리, 버전; 지금 신호등·도크 HTTP는 wire 변경 없이 `signal/1`·`dock/1` profile; 장치별 단일 감독자(신호등은 Fleet), 로봇은 읽기만, ER2는 후보만, 장치 로컬 failsafe(신호 10 s 적색 점멸, 도크 0 V), 안전 회로 쓰기 금지; PLC/Modbus 어댑터 `integrations/fieldbus/modbus` 레지스터 맵·범위 단위 안전 주소 거부(시험은 D-430 소유)·변하는 watchdog·연결당 어댑터 하나; 재단언은 감독 연속성과 의도 나이 안에서만(현재 코드 위반, 이행 (b2)), seq 재동기화와 안전 방향 1회 재시도, non-agree 열거와 admission 술어; 동작 변경 없는 이행 (a)–(d); Fleet 상시 감독과 운영자 presence 동안만 수동 점등(떠나면 failsafe); Q1–Q10 결정(Q5·Q8·Q9 사용자 결정, 나머지 권고안; 2026-10-04); 코드 결함은 이전 직후 첫 안전 작업 |
+| D-451 | 한 줄에서 만나는 양보는 Fleet 알고리즘이 고르고, 로봇은 그 한 수를 실행하거나 거부한다 |
+| D-453 | 양보 한 구간은 기존 막힘 답 YIELD 로 보내고, CORE 는 돌려 확인한 뒤 앞으로만 간다 |
 
 ## 계획·결과 문서
 
@@ -66,6 +68,8 @@
 - [2026-10-01-model-tool-contract-implementation.md](../../docs/plans/2026-10-01-model-tool-contract-implementation.md)
 - [2026-10-02-platform-architecture-v02-migration.md](../../docs/plans/2026-10-02-platform-architecture-v02-migration.md)
 - [2026-10-04-cell-isaac-implementation.md](../../docs/plans/2026-10-04-cell-isaac-implementation.md)
+- [2026-10-04-cell-manual-slip-sheet-checkpoints.md](../../docs/plans/2026-10-04-cell-manual-slip-sheet-checkpoints.md)
+- [2026-10-04-cell-structured-draft-editing.md](../../docs/plans/2026-10-04-cell-structured-draft-editing.md)
 - [2026-10-04-d442-omx-preempt-recovery.md](../../docs/plans/2026-10-04-d442-omx-preempt-recovery.md)
 - [2026-10-04-d443-signal-supervision.md](../../docs/plans/2026-10-04-d443-signal-supervision.md)
 
@@ -79,8 +83,8 @@
 
 ## 최근 기록
 
-- 2026-10-04 · uncommitted · refactor(fleet): main 통합 시 HTTP composition 경계 유지
-- 2026-10-04 · uncommitted · feat(power): fresh battery evidence and idle saving
-- 2026-10-04 · 6485f8a39 · refactor(ui): 통합 명렬 카드의 표현 재사용
-- 2026-10-04 · uncommitted · fix(web): 관제 확인과 명령의 공통 소유권
-- 2026-10-04 · uncommitted · fix(web): 관제 뷰포트와 주소 확인의 작업 소유권
+- 2026-10-04 · uncommitted · feat(server): D-454 1단계 — 중앙 레지스트리 뷰 (/api/v1/fleet/robots)
+- 2026-10-04 · uncommitted · fix(fleet): 불확실한 YIELD 재실행 차단
+- 2026-10-04 · uncommitted · feat(fleet): D-453 양보 한 구간
+- 2026-10-04 · uncommitted · feat(fleet): D-451 한 줄 교착 알고리즘 room_hold
+- 2026-10-04 · uncommitted · fix(cell): 수동 간지 확인 전 다음 층 보류

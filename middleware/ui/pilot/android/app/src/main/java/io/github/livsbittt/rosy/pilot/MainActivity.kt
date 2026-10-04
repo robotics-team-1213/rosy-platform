@@ -119,6 +119,8 @@ class MainActivity : Activity() {
         opening = true
         val version = ++attempt; val store = candidates
         for (i in 0 until robots.childCount) robots.getChildAt(i).isEnabled = false
+        // The loading state changes the rendered cards; failure/cancel must rebuild them.
+        shownCandidates = null
         status.text = "${candidate.name} · 연결 확인 중…"
         io.execute {
             if (attempt != version) return@execute
@@ -133,7 +135,9 @@ class MainActivity : Activity() {
                     else if (offer.mode == "development") join(candidate, offer, store, version, null)
                     else pairingCode(candidate, offer, store, version)
                 }
-            } catch (_: Exception) { failed(version, "연결할 수 없습니다. 로봇 서비스·신뢰된 HTTPS 연결을 확인하세요.") }
+            } catch (_: Exception) { failed(version, if (candidate.secure)
+                "연결할 수 없습니다. 로봇 전원·같은 Wi-Fi·신뢰된 HTTPS 연결을 확인한 뒤 다시 선택하세요."
+                else "연결할 수 없습니다. 로봇 전원과 같은 Wi-Fi 연결을 확인한 뒤 다시 선택하세요.") }
         }
     }
     private fun pairingCode(candidate: Candidate, offer: LobbyOffer, store: CandidateStore, version: Long) {

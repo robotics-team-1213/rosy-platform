@@ -70,8 +70,8 @@
 
 ## 최근 기록
 
+- 2026-10-04 · uncommitted · feat(omx): 정본 G2 격리 실행기
+- 2026-10-04 · uncommitted · fix(ci): 두 Android 앱의 실제 wrapper 선택
+- 2026-10-04 · uncommitted · fix(g2): provision the per-instance IPC directory before startup
 - 2026-10-04 · uncommitted · model-watch installer CRLF config parsing
 - 2026-10-04 · uncommitted · fix(site): keep model delivery journal in service state
-- 2026-10-04 · uncommitted · fix: protect the full model-PC code closure
-- 2026-10-04 · uncommitted · D-441 local maintenance and manual install safety
-- 2026-10-04 · uncommitted · verify(D-441): 최초 설치와 실제 후속 자동 갱신 확인

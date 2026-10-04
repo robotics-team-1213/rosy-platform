@@ -445,3 +445,7 @@
 | D-446 | 모델 PC도 서명 코드 자동 업데이트에 포함하고 작업·GPU 환경·모델 승격을 분리한다 | Accepted (2026-10-04, implementation authorized; device acceptance tracked separately) |
 | D-447 | 웹 표면의 실시간 상태는 이미 열린 소켓을 재사용한다 — Fleet gather는 hub-fresh 로봇을 registry 스냅샷으로 먼저 읽고(신선도 `hub_state_max_age_s`, REST 폴백), 로봇 셸 `store.js`의 `/ws/state` 전환이 그 뒤를 잇는다. 새 전송 계약 없음, 응답 스키마 불변, 행마다 `gather_source` | Proposed (2026-10-04, 사용자 지시; (a) Fleet 출처 전환 구현 동반, 승격 무관) |
 | D-449 | 학습 산출물은 출처·시계·단위·owner binding과 승격 증거를 공용 계약으로 보존한다 | Proposed (2026-10-04, active learning closure implementation; 구조·wire 초안이며 runtime 활성화·장치 수용 승인 아님) |
+| D-451 | 한 줄에서 만나는 양보는 Fleet 알고리즘이 고르고, 로봇은 그 한 수를 실행하거나 거부한다 | Accepted (2026-10-04, 사용자 결정; Fleet 순수 판단과 room_hold·wait_both, CORE 전달·cmd_vel·막힘 어휘·DEVICE·ROS-SIM은 다음 결정) |
+| D-452 | 주소 대신 장비 신원과 역할로 네트워크 연결 대상을 찾는다 | Accepted (2026-10-04, 사용자 구현 요청; 공통 역할 발견·승인 신원 대상·기존 인증 보존, 구현 및 DEVICE/FIELD 증거 별도) |
+| D-453 | 양보 한 구간은 기존 막힘 답 YIELD 로 보내고, CORE 는 돌려 확인한 뒤 앞으로만 간다 | Accepted (2026-10-04, 사용자 결정; 한 구간 YIELD, CORE 는 확인 후 전진, 운용자 다섯 단어 유지, 합류·D-442·DEVICE·ROS-SIM은 다음) |
+| D-454 | 중앙 Fleet 착수 — 시드(`operations/fleet`) 위 성장, 단계 순서 §10.1 레지스트리 → §10.2 명령 추적·PRT-004 활성화(D-170·D-297 유보 해제) → §10.3 미션/대형 → §10.4 지도/백업 → §10.5 사건/감사. (2)단계 착공 전 D-426 ROS-SIM 선행 | Accepted (2026-10-04, 사용자 지시 "착수해"; 전제 ③ 관측·①② 병행, DEVICE/FIELD 승격 주장 없음) |

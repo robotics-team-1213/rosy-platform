@@ -68,11 +68,14 @@ class StuckRecoveryMixin:
         self._trail.clear()
 
     def stuck_decision(self, stuck_id: str, decision: str, *, by: str,
-                       principal_ref: Optional[str] = None, now: Optional[float] = None) -> str:
-        """Console answer (D-407 §2). Raises AnswerRefused; returns hold|back|resume|manual|idle."""
+                       principal_ref: Optional[str] = None, now: Optional[float] = None,
+                       yield_m: Optional[float] = None, yield_turn_rad: Optional[float] = None) -> str:
+        """Console answer (D-407 §2). Raises AnswerRefused; returns hold|back|resume|manual|idle|yield."""
         current = float(self._clock() if now is None else now)
         with self._lock:
-            outcome = self._recovery.answer(current, stuck_id, decision, by, principal_ref)
+            outcome = self._recovery.answer(
+                current, stuck_id, decision, by, principal_ref,
+                yield_m=yield_m, yield_turn_rad=yield_turn_rad)
             # Any accepted answer outdates a twist computed before it (e.g. a back-off
             # before WAIT): apply_if_current then rejects it (review L1).
             self._evidence_revision += 1
@@ -202,8 +205,12 @@ class StuckRecoveryMixin:
         if action.kind == "back":
             update.update(state="RECOVERING", reason="stuck_back_off",
                           linear=action.linear, angular=0.0)
+        elif action.kind == "yield":
+            update.update(state="RECOVERING", reason="stuck_yield",
+                          linear=action.linear, angular=action.angular)
         elif decision.linear != 0.0 or decision.angular != 0.0 or action.kind == "resume":
             phase = (self._recovery.phase or "resumed").lower()
             update.update(state="HOLD", reason=f"stuck_{phase}", linear=0.0, angular=0.0)
         self._status = self._status.model_copy(update=update)
-        return dataclasses.replace(decision, linear=action.linear, angular=0.0)
+        angular = action.angular if action.kind == "yield" else 0.0
+        return dataclasses.replace(decision, linear=action.linear, angular=angular)

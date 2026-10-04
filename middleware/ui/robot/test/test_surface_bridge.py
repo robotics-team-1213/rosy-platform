@@ -50,12 +50,16 @@ def test_the_bridge_draws_only_registered_role_surfaces_from_the_manifest():
 def test_the_shell_wires_the_bridge_to_the_callers_identity():
     app = (ROOT / "app.js").read_text(encoding="utf-8")
     assert 'import { completeDashboardAuthentication, dashboardSurfaceBridge } from "./surface-navigation.js";' in app
-    assert 'api("/api/v1/ui/surfaces/console")' in app, (
+    assert 'api("/api/v1/ui/surfaces/console", {signal: owner.signal})' in app, (
         "역할 추측 금지 — 목록은 console 매니페스트(viewer까지 200)가 말한다"
     )
-    assert "await refreshSurfaceBridge();" in app
-    identity = app.split("async function detectRole()", 1)[1]
-    assert "refreshSurfaceBridge()" in identity.split("async function refreshSurfaceBridge()", 1)[0]
+    identity = app.split("async function detectRole(owner = authTicket())", 1)[1]
+    identity = identity.split("async function refreshSurfaceBridge(owner = authTicket())", 1)[0]
+    assert "await refreshSurfaceBridge(owner);" in identity
+    assert identity.index('await api("/api/v1/auth/whoami"') < identity.index("await refreshSurfaceBridge(owner);")
+    bridge = app.split("async function refreshSurfaceBridge(owner = authTicket())", 1)[1].split("function renderIdentity()", 1)[0]
+    fetched = bridge.split('await api("/api/v1/ui/surfaces/console", {signal: owner.signal})', 1)[1]
+    assert fetched.index("if (!owner.current()) return;") < fetched.index("dashboardSurfaceBridge(nav, manifest?.surfaces)")
     render = app.split("function renderIdentity()", 1)[1].split("\n}", 1)[0]
     assert 'dashboardSurfaceBridge(elements["surface-bridge"], []);' in render, (
         "로그아웃·만료 뒤에는 목적지도 비워야 한다"

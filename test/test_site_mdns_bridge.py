@@ -193,7 +193,7 @@ def test_avahi_failure_posts_nothing_so_fleet_keeps_the_last_good_scan(tmp_path,
     def avahi_down(*args, **kwargs):
         raise subprocess.CalledProcessError(1, args[0])
 
-    monkeypatch.setattr(module.subprocess, "run", avahi_down)
+    monkeypatch.setattr(module, "scan_output", lambda: avahi_down("avahi-browse"))
     monkeypatch.setattr(module, "post_scan", lambda *args, **kwargs: posted.append(args) or 200)
     monkeypatch.setattr("sys.argv", ["mdns-bridge.py", "--tls-host", "site-pc.local",
                                      "--port", "8443", "--ca-file", str(tmp_path / "ca.crt"),
@@ -226,8 +226,7 @@ def _run_main(module, monkeypatch, tmp_path, token, *args, env=None):
     token_file = tmp_path / "discovery_token"
     token_file.write_bytes(token)
     posted = []
-    monkeypatch.setattr(module.subprocess, "run",
-                        lambda *a, **k: subprocess.CompletedProcess(a[0], 0, stdout="", stderr=""))
+    monkeypatch.setattr(module, "scan_output", lambda: "")
     monkeypatch.setattr(module, "post_scan", lambda devices, **kwargs: posted.append(kwargs) or 200)
     for key in ("ROSY_SITE_TLS_HOST", "ROSY_SITE_HTTPS_PORT"):
         monkeypatch.delenv(key, raising=False)

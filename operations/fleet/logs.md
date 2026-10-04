@@ -1608,8 +1608,62 @@
 - 검증: injected clock 회귀와 auth/read-only API, 기존 배터리·정지·sentinel 경로 검증. 최종 근거는 docs/plans/2026-10-04-power-health-and-wake.md. OS halt·EEPROM·GPIO·기본 LiDAR 모터 정책 변경 없음.
 - gate 변화: SOURCE/LOCAL; 실제 소비전력·충전·RTC/외부 버튼 wake와 배포는 미검증.
 
+## 2026-10-04 · uncommitted · D-452 승인 역할 목록과 신원 충돌
+
+- 변경: viewer peers catalogue·metadata-only 승인 directory·호스트 multi-role scanner를 기존 등록과 분리한다. 모든 소유 주장 충돌은 승인 해제/unknown으로 처리한다. 기존 command/credential/endpoint는 보존한다.
+- 증거: catalogue/API24 PASS, schema37 PASS, scanner Linux11 PASS 및 독립 source SPEC·Quality·Safety PASS. docs/validation/network-peer-discovery-2026-10-04/peer-backend-checkpoint.md.
+- gate 변화: focused SOURCE/LOCAL; 실제 인증 operator·container namespace·다른 망 연결·배포 수락 별도.
 ## 2026-10-04 · uncommitted · refactor(fleet): main 통합 시 HTTP composition 경계 유지
 
 - 변경: main의 stuck resolver·access·power 계약과 Cell workspace를 함께 보존했다. API Ref Cell additive 항목을 v1.93으로 올렸고 대응 metadata/version pin을 맞췄다. 동일 audit middleware를 site_auth, 동일 event fanout을 hub/server, healthz를 static route owner로 옮겨 app composition을 594줄로 유지했다.
 - 증거: 독립 source 검토는 auth/audit/fanout/health 동작 보존과 optional dependency guard를 확인했다. 구조 count Fleet 30621/schema 1319로 명시 재판정하고 기존 +150/zero allowance는 유지했다. 실제 vendor retry exit0/1passed와 컨테이너 정리 확인은 별도 deploy validation에 기록했다.
 - gate 변화: SOURCE 통합 검토이며 최종 통합 시험은 별도로 진행한다. full G1/G2 및 Isaac 주행·Nav2·두 로봇 수용은 미완료다.
+
+## 2026-10-04 · uncommitted · D-452 장비 찾기와 화면 소유 경계
+
+- 변경: 역할 목록·다시 찾기·승인/만료/오류 안내를 기존 작업 선택 화면에 연결했다. 로봇은 등록 상태 카드 포커스만, Cam은 기존 source 보정 화면만 연다. Cell 관제 복귀와 취소 의미를 보완했다.
+- 구조: catalogue/directory/routes와 picker를 별도 owner로 두고 composition factory로 app.py를 599줄로 유지한다. D-362 Fleet 패키지 30997줄(+376)을 독립 리뷰로 재판정하며 기존 flat server 분리 의무·파일 제한·+150 allowance를 유지한다.
+- 증거: docs/validation/network-peer-discovery-2026-10-04/peer-ui-checkpoint.md. 최종 통합 gate·원격 CI·서명 배포·실제 운영자 및 다른 망 연결은 별도 검증이다.
+- gate 변화: focused SOURCE/LOCAL 검증이며 최종 통합·CI·DEVICE·FIELD 수락은 보류한다.
+
+## 2026-10-04 · uncommitted · fix(test): API 문서 v1.94 계약 기대값
+
+- 변경: 오래된 v1.92 header 기대값 세 곳만 현재 API Ref v1.94와 맞췄다. endpoint·cursor 보존·권한·완료 증거 검증을 유지한다.
+- 증거: 실제 원격 실패 3개 RED 후 GREEN 3 PASS, 통합 담당자 관련 전체 24 PASS, 독립 source 리뷰 PASS.
+- gate 변화: focused LOCAL; 최종 통합 gate와 새 원격 CI는 별도다.
+## 2026-10-04 · uncommitted · feat(cell): 구조화된 초안 입력 확장
+
+- 변경: 같은 JSON 초안에 레시피·팔레트·층·슬립시트와 셀 프레임 세 점·스테이션·판정 한계를 편집하는 입력을 제공했다. 저장 후 재생성된 입력의 busy 잠금 누락을 실제 브라우저에서 재현하고 수정했다.
+- 증거: Chromium 구조 편집 RED 2 실패 뒤 GREEN 2 통과; busy RED 1 실패 뒤 전체 Cell browser/API/store/job 23 통과. 독립 UI 검토 승인.
+- gate 변화: SOURCE/LOCAL 편집 증거만 추가한다. 장치 TCP capture·owner 티칭 수락, G2 전체 적재와 G3 작업자 슬립시트 확인은 미완료다.
+- 결정: D-450. 사용자는 작업자가 슬립시트를 넣고 확인한 뒤 다음 층을 진행하도록 선택했다. durable checkpoint 설계를 별도 기록했다.
+
+## 2026-10-04 · uncommitted · fix(cell): 수동 간지 확인 전 다음 층 보류
+
+- 변경: 수동 취급 recipe/2 선택과 읽기 전용 checkpoint를 연결했다. 정본 Job 투영 누락은 롤백하며 간지 대기는 같은 SQLite Job 트랜잭션에서 start·resume·완료·복구·dispatch 전에 차단한다. 관제에 삽입 대기 사유를 표시하며 일반 재승인은 허용하지 않는다. 확인 API나 owner 접근 허용 provider는 추가하지 않았다.
+- 증거: PROCESS source 219 tests와 설치 wheel 호환 169 tests, Fleet 영향 105 tests 및 독립 48 tests를 통과했다. 통합 guard/store/dispatcher/API/schema/replay 101 passed, 실제 Chromium 9 passed. 숨겨진 preview 읽기를 수정하고 서버 graceful shutdown을 3초로 제한해 worker 종료 assertion을 보존했다. 독립 계약·UI·안전 guard 검토를 받았다.
+- gate 변화: SOURCE/LOCAL만 추가했다. owner-exclusive 접근·작업자 확인·ROS-SIM·현장 수용은 NOT_RUN이며 실제 진행은 OPERATOR_SHEET_ACCESS_UNAVAILABLE로 HOLD다. Fleet 30998의 기존 분리 계획과 +150 allowance는 유지하고 Job store959/schema1319의 기존 한계도 유지한다.
+## 2026-10-04 · uncommitted · feat(fleet): D-451 한 줄 교착 알고리즘 room_hold
+
+- 변경: `operations/fleet/fleet/meet` 에 장면·주문·이름 등록과 `room_hold`·`wait_both`·`track_v2` 를 넣었다. 고리 같은 방향은 서지 않고, 찬 방의 문은 빼며, 핀이 비키는 쪽을 유지하고, 방 안은 `WAIT` 다. 콘솔·차선 추종·stuck 판단기에는 연결하지 않았다.
+- 증거: `operations/fleet/test/test_meet_algorithms.py`.
+- gate 변화: 없음. 호스트 판단 시험. 주문은 아직 바퀴로 나가지 않는다.
+
+## 2026-10-04 · uncommitted · feat(fleet): D-453 양보 한 구간
+
+- 변경: 판단기가 차선에 올린 자세로 `room_hold` 를 부르고, `SIDESTEP`·`RETREAT` 한 구간을 로봇 `YIELD` 로 직접 보낸다. 핀과 돌리기 전의 정책 방향은 판단기에 둔다. 운용자 경로에는 `YIELD` 를 넣지 않았다.
+- 증거: `operations/fleet/test/test_meet_place.py`, `test_stuck_resolver.py`, `test_transport.py`, `test_meet_algorithms.py`.
+- gate 변화: 없음. 호스트 판단 시험. 장치·ROS-SIM 은 주장하지 않는다.
+
+## 2026-10-04 · uncommitted · fix(fleet): 불확실한 YIELD 재실행 차단
+
+- 변경: 양의 YIELD 결과가 불명확하거나 응답 대기 중 취소되면 기존 answered fence를 유지하고 운용자 확인으로 넘긴다. 다음 폴링이나 새 위치가 같은 grant의 재전송을 허용하지 않는다. 취소 예외와 unknown 원장 의미를 보존한다.
+- 증거: 실제 loop의 응답 유실·비정상 응답·취소 후 반복 폴링 회귀 및 관련 74 PASS. 독립 검토와 최종 통합 gate를 별도 실행한다.
+- gate 변화: SOURCE/LOCAL이며 물리 양보 실행·운용 수락은 하지 않았다.
+
+## 2026-10-04 · uncommitted · feat(server): D-454 1단계 — 중앙 레지스트리 뷰 (/api/v1/fleet/robots)
+
+- 변경: `central_registry.py`(CentralRegistry 읽기 모델 — 로스터가 정본, hub 스냅샷·발견 주소는 보강, state/capabilities는 로봇이 만든 증거를 그대로 전달 D-309), `central_registry_routes.py`(`GET /api/v1/fleet/robots`·`/{id}`, Viewer 가드, 미등록 404 UNKNOWN_ROBOT), `app.py` `central_registry=` 마운트, `cli.py` `--central` 플래그(등록 저장소 필수 — 로스터가 정본이므로). 설계·실행 계획: `docs/plans/2026-10-04-central-fleet-step1{,-design}.md`. §10.1 나머지 7경로(PATCH/DELETE·페어링 토큰·승인 대기·폐기)는 뒤 작업.
+- 증거: 신규 `test/test_central_registry.py` 6 passed(합산·정렬·증거 무계산·404·401·왕복). fleet 전체(셀 앱 2파일 수집 오류 제외 — `rosy.processes` 휠 미설치, main 선재·WSL/CI 전제) **1799 passed/7 skipped, known_failures 0 new**. flake8 0.
+- gate 변화: 없음. ROS-SIM/DEVICE/FIELD 주장 없음(D-454 결정 3).
+- 결정: D-454 결정 1·2 — 시드 위 성장, §10.1 읽기부터.

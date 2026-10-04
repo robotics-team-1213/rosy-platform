@@ -117,6 +117,8 @@ const view = {
   stateLoaded: false,
   addresses: {},  // robot_id -> GET /api/fleet/discovery/addresses 행(고정 주소 판정)
 };
+// A chooser deep link only reveals/focuses an existing card; it never arms a goal.
+let requestedRobotFocus = new URLSearchParams(location.search).get("robot");
 
 function log(text, kind) {
   const line = document.createElement("div");
@@ -291,6 +293,7 @@ async function refreshState() {
     const snapshot = await call("/api/fleet/state");
     life.check();
     view.robots = snapshot.robots;
+    if (requestedRobotFocus && view.robots.some(robot => robot.robot_id === requestedRobotFocus)) view.showAllRobots = true;
     view.stateUnavailable = false;
     view.stateLoaded = true;
     if (view.selected) {
@@ -305,6 +308,12 @@ async function refreshState() {
     pill.textContent = `${snapshot.fleet.online}/${snapshot.fleet.total} 연결`;
     pill.setAttribute("status", snapshot.fleet.online === snapshot.fleet.total ? "neutral" : "crit");
     render();
+    if (requestedRobotFocus) {
+      const card = [...el("roster").querySelectorAll("article")]
+        .find(node => node.dataset.robotId === requestedRobotFocus);
+      if (card) card.focus();
+      requestedRobotFocus = null;
+    }
   } catch (err) {
     if (err.name === "AbortError") return;
     // D-248: 잠금 pill(토큰 필요)을 서버 없음으로 덮지 않는다 — 401의 이유를 남긴다.

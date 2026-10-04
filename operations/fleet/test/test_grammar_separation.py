@@ -30,14 +30,16 @@ def test_the_console_region_grid_does_not_smuggle_into_fleet():
 
 def test_fleet_links_only_its_own_sheet_and_the_single_tokens_file():
     """D-129·D-130.1 — 참조할 수 있는 시트는 자기 것과 공용 토큰뿐이다."""
-    for page_name in ("index.html", "install.html"):
+    shared_sheets = ["/common/tokens.css", "/common/components.css"]
+    page_sheets = {
+        "index.html": [*shared_sheets, "/console/assets/styles.css"],
+        "install.html": [*shared_sheets, "/common/task-chooser.css",
+                         "/console/assets/styles.css"],
+    }
+    for page_name, expected_sheets in page_sheets.items():
         hrefs = re.findall(r'<link[^>]+href="([^"]+\.css)"',
                            (WEB / page_name).read_text(encoding="utf-8"))
-        assert hrefs == [
-            "/common/tokens.css",
-            "/common/components.css",
-            "/console/assets/styles.css",
-        ], (page_name, hrefs)
+        assert hrefs == expected_sheets, (page_name, hrefs)
 
 
 def test_no_stylesheet_imports():

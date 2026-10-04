@@ -44,15 +44,18 @@ PY
   chmod 0600 "$CONF"
 fi
 install -m 0644 "$HERE/rosy_model_code.py" "$HERE/candidate_signing.py" "$LIB/"
+install -m 0644 "$HERE/model-mdns.py" "$HERE/../../contracts/foundation/core_common/protocol/discovery_txt.py" "$LIB/"
 python3 -I "$LIB/rosy_model_code.py" --config "$CONF" status
 install -m 0644 "$HERE/rosy-model-code-update.service" "$HERE/rosy-model-code-update.timer" \
-  "$HERE/rosy-model-code-watch.service" "$HERE/rosy-model-code-watch.timer" "$UNITS/"
+  "$HERE/rosy-model-code-watch.service" "$HERE/rosy-model-code-watch.timer" \
+  "$HERE/rosy-model-advertise.service" "$UNITS/"
 if [ -n "$WATCH" ]; then
   [ -e "$(dirname "$CONF")/model-watch.yaml" ] || install -m 0600 "$WATCH" "$(dirname "$CONF")/model-watch.yaml"
 fi
 systemctl --user daemon-reload
 if [ "$ENABLE" = 1 ]; then
   systemctl --user enable --now rosy-model-code-update.timer
+  systemctl --user enable --now rosy-model-advertise.service
   if [ -e "$(dirname "$CONF")/model-watch.yaml" ]; then
     # Doctor is a readiness check, not a shadow push. Non-zero leaves watch disabled.
     python3 -I "$LIB/rosy_model_code.py" --config "$CONF" exec rosy_ml.py doctor --watch-config "$(dirname "$CONF")/model-watch.yaml"

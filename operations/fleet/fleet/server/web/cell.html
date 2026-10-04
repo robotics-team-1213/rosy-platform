@@ -29,6 +29,7 @@
         <label for="recipe-id">문서 이름</label><input class="ui-field" id="recipe-id" value="recipe-demo" maxlength="64">
         <label for="recipe-file">레시피 JSON 파일 불러오기</label><input class="ui-field" id="recipe-file" type="file" accept=".json,application/json">
         <div id="recipe-fields" class="scope" aria-label="박스와 적재 간격 편집"></div>
+        <div id="recipe-structure" aria-label="팔레트와 층 설정 편집"></div>
         <details><summary>레시피 문서 편집 · JSON</summary><label for="recipe-document">레시피 문서</label><textarea class="ui-field" id="recipe-document" rows="14" spellcheck="false"></textarea></details>
         <div class="actions"><ui-button id="recipe-load" kind="quiet">불러오기</ui-button><ui-button id="recipe-save" kind="primary">레시피 저장</ui-button></div>
         <ui-text id="recipe-revision" scale="label">저장 전</ui-text>
@@ -39,6 +40,8 @@
         <label for="cell-file">티칭된 셀 JSON 파일 불러오기</label><input class="ui-field" id="cell-file" type="file" accept=".json,application/json">
         <ui-text>프레임·스테이션·home은 승인된 장치 티칭값을 사용하세요. 파일을 불러온 뒤 설정과 미리보기를 확인합니다.</ui-text>
         <div id="cell-fields" class="scope" aria-label="셀 home과 도구 설정 편집"></div>
+        <ui-text>아래 좌표 입력은 셀 문서 초안입니다. 장치의 현재 좌표 측정이나 티칭 수락을 대신하지 않습니다.</ui-text>
+        <div id="cell-structure" aria-label="프레임과 스테이션 티칭값 입력"></div>
         <details><summary>셀 티칭 문서 편집 · JSON</summary><label for="cell-document">셀 문서</label><textarea class="ui-field" id="cell-document" rows="14" spellcheck="false"></textarea></details>
         <div class="actions"><ui-button id="cell-load" kind="quiet">불러오기</ui-button><ui-button id="cell-save" kind="primary">셀 저장</ui-button></div>
         <ui-text id="cell-revision" scale="label">저장 전</ui-text>
@@ -66,9 +69,12 @@
       <ui-head><ui-text id="mission-heading" scale="label">5 · 관제 승인·진행·복구</ui-text></ui-head>
       <label>제안 / 작업 ID<input class="ui-field" id="mission-id" autocomplete="off"></label>
       <ui-text>작업과 정지 세대를 다시 확인한 뒤 운영자가 승인합니다. HOLD 사유가 해결됐는지 확인하고 복구하세요.</ui-text>
+      <ui-text>작업 취소는 실행 중인 장치를 정지하지 않습니다. 실행 중인 작업이나 실제 상태가 확인되지 않은 작업은 취소할 수 없습니다.</ui-text>
+      <div class="actions"><a class="console-return" href="/console">관제 화면으로 돌아가기</a></div>
       <div class="actions"><ui-button id="read-job" kind="quiet">상태 확인</ui-button><ui-button id="admit" kind="primary" disabled>실행 승인</ui-button><ui-button id="reconcile" kind="quiet" disabled>실제 상태 대조</ui-button><ui-button id="resume" kind="primary" disabled>HOLD 재승인</ui-button><ui-button id="cancel" kind="irreversible" disabled>작업 취소</ui-button></div>
       <ui-text id="job-summary">작업 ID로 상태를 확인하세요.</ui-text>
       <ul id="step-progress" aria-label="단계별 실행과 목표 확인"></ul>
+      <ul id="sheet-progress" aria-label="작업자 슬립시트 삽입 확인"></ul>
       <details><summary>진행 원장 상세</summary><pre id="job-state" aria-label="작업 상태와 진행 원장"></pre></details>
     </ui-section>
     <ui-section aria-labelledby="saved-heading"><ui-head><ui-text id="saved-heading" scale="label">저장된 문서</ui-text></ui-head><ul id="saved"></ul></ui-section>

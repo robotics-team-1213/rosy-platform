@@ -1,4 +1,5 @@
 import {createFleetClient} from '/common/fleet-client.js';
+import {renderStructuredDocument} from '/console/assets/cell-document-editor.js';
 
 const $ = id => document.getElementById(id);
 const request = createFleetClient({credential: () => $('credential').value, origin: location.origin});
@@ -24,17 +25,23 @@ function refreshControls() {
     field.setAttribute('reason', busy ? '요청 처리 중 · 입력 잠시 잠금' : '');
     field.setAttribute('aria-describedby', 'notice');
   }
+  for (const control of document.querySelectorAll('[data-document-edit]')) {
+    control.disabled = busy;
+    control.setAttribute('reason', busy ? '요청 처리 중' : '');
+  }
   for (const id of ['connect', 'recipe-load', 'cell-load', 'read-job', 'new-proposal']) {
     $(id).disabled = busy;
     $(id).setAttribute('reason', busy ? '요청 처리 중' : '');
   }
   for (const id of commands) {
+    const sheetBlocked = id === 'resume' && job?.operator_checkpoints?.some(row => row.status === 'WAITING_ACCESS');
     const needsJob = ['admit', 'reconcile', 'resume', 'cancel'].includes(id);
     const jobAllowed = !needsJob || (job && job.mission_id === $('mission-id').value &&
       (id === 'admit' ? job.status === 'PROPOSED' : id === 'cancel' ? ['READY', 'ACTION_SUCCEEDED', 'HOLD'].includes(job.status) && job.reason !== 'CANCELLED_BY_OPERATOR' : job.status === 'HOLD' && job.reason !== 'CANCELLED_BY_OPERATOR'));
-    const allowed = role === 'operator' && !busy && jobAllowed && (id !== 'propose' || previewRefs !== null);
+    const allowed = role === 'operator' && !busy && jobAllowed && !sheetBlocked && (id !== 'propose' || previewRefs !== null);
     $(id).disabled = !allowed;
-    if (!allowed) $(id).setAttribute('reason', busy ? '요청 처리 중' : role !== 'operator' ? '운영자 접속 필요' : '저장 후 미리보기 필요');
+    if (!allowed) $(id).setAttribute('reason', busy ? '요청 처리 중' : role !== 'operator' ? '운영자 접속 필요' :
+      sheetBlocked ? '작업자 간지 삽입 확인 대기' : '저장 후 미리보기 필요');
     else $(id).removeAttribute('reason');
   }
 }
@@ -75,6 +82,7 @@ function loaded(kind, revision) {
   else cellFields(revision.document);
 }
 function cellFields(cell) {
+  structuredFields('cell', cell);
   $('cell-fields').replaceChildren();
   for (const [path, title] of [
     [['kinematics_revision'], '장치 URDF revision'],
@@ -100,6 +108,7 @@ function cellFields(cell) {
   }
 }
 function recipeFields(recipe) {
+  structuredFields('recipe', recipe);
   $('recipe-fields').replaceChildren();
   for (const [field, title, unit, parent] of [
     ['length', '박스 길이', 'm', 'box'], ['width', '박스 폭', 'm', 'box'],
@@ -125,12 +134,27 @@ function recipeFields(recipe) {
     label.append(input); $('recipe-fields').append(label);
   }
 }
+function structuredFields(kind, value) {
+  renderStructuredDocument(kind, value, $(kind + '-structure'), (mutate, redraw = false) => {
+    if (busy) return;
+    editEpoch++; invalidate();
+    try {
+      const draft = JSON.parse($(kind + '-document').value);
+      mutate(draft);
+      $(kind + '-document').value = JSON.stringify(draft, null, 2);
+      if (redraw) structuredFields(kind, draft);
+      $(kind + '-revision').textContent = '수정한 문서 · 저장 전';
+      refreshControls();
+    } catch { $('notice').textContent = '문서 구조를 확인한 뒤 불러오세요.'; }
+  });
+  refreshControls();
+}
 for (const kind of ['recipe', 'cell']) {
   for (const part of ['id', 'document']) $(kind + '-' + part).addEventListener('input', () => {
     editEpoch++; invalidate();
     if (part === 'document') {
       try { const document = JSON.parse($(kind + '-document').value); if (kind === 'recipe') recipeFields(document); else cellFields(document); }
-      catch { $(kind + '-fields').replaceChildren(); }
+      catch { $(kind + '-fields').replaceChildren(); $(kind + '-structure').replaceChildren(); }
     }
   });
   $(kind + '-file').addEventListener('change', async () => {
@@ -224,6 +248,7 @@ async function readJob() {
   job = null; jobGeneration = null;
   $('job-state').textContent = '현재 상태 확인 중';
   $('job-summary').textContent = '현재 상태 확인 중'; $('step-progress').replaceChildren();
+  $('sheet-progress').replaceChildren();
   const result = await api(`/api/fleet/cell-jobs/${encodeURIComponent(id)}`);
   const control = await api('/api/fleet/dispatch-control');
   jobGeneration = control.generation;
@@ -233,6 +258,13 @@ async function readJob() {
     const li = document.createElement('li');
     const inputs = step.step.inputs;
     li.textContent = `${step.step_index + 1} · ${inputs.pallet_id} · ${inputs.layer_index + 1}층 · ${inputs.item} · ${step.status}${step.reason ? ' · ' + step.reason : ''}`;
+    return li;
+  }));
+  $('sheet-progress').replaceChildren(...(job.operator_checkpoints ?? []).map(row => {
+    const li = document.createElement('li');
+    const instruction = row.status === 'WAITING_ACCESS' ?
+      '삽입 확인 대기 · 작업자 접근 허가가 확인되지 않아 아직 진행할 수 없습니다' : '간지 지점 도달 전';
+    li.textContent = `${row.pallet_id} · ${row.layer_index + 1}층 · ${row.thickness_m * 1000} mm · ${instruction}`;
     return li;
   }));
   $('notice').textContent = `작업 ${job.status} · ${job.reason || ''} · 확인한 정지 세대 ${jobGeneration}`;
@@ -247,6 +279,9 @@ $('new-proposal').addEventListener('click', () => {
 for (const command of ['admit', 'resume', 'reconcile', 'cancel']) {
   $(command).addEventListener('click', () => action(async () => {
     if (!job || job.mission_id !== $('mission-id').value) throw new Error('작업 상태를 먼저 확인하세요.');
+    if (command === 'resume' && job.operator_checkpoints?.some(row => row.status === 'WAITING_ACCESS')) {
+      throw new Error('작업자 간지 삽입 확인 대기 · 일반 재승인으로 진행할 수 없습니다.');
+    }
     const id = encodeURIComponent(job.mission_id);
     let body = {};
     if (command === 'admit' || command === 'resume') {

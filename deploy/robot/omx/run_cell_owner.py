@@ -3,8 +3,8 @@
 One process: the ROS runtime (one ArmCommandOwner), the D-336 UDS socket in a thread and the
 Pilot simulation HTTP app on the main thread, assembled by rosy_agent.omx_cell_owner. It refuses
 to start beside pilot_sim_server or the C3 probe. Simulation only; not a device entrypoint.
-Wave 1 gaps (see C4b logs): the Pilot HTTP app has no /cell routes or seat<->Action exclusion yet
-(G9), the Fleet stop chain (G7) still needs live ROS/UDS fault acceptance, while phase
+Wave 1 gaps (see C4b logs): the Pilot HTTP app has no /cell routes yet (G9),
+the Fleet stop chain (G7) still needs live ROS/UDS fault acceptance, while phase
 progression uses the existing locally gated Cell workflow.
 """
 
@@ -25,6 +25,13 @@ for _part in ("contracts/foundation", "contracts/skill/src", "middleware/apps/de
 from cell_sim_tools import refuse_second_owner  # noqa: E402
 
 WORKCELL_ID, INSTANCE_ID = "omx_cell_sim", "omx_cell_sim_01"
+
+
+def forward_pilot_event(holder, event):
+    """Forward only after assembly; the HTTP facade owns no independent ROS dispatcher."""
+    pilot = holder.get("pilot")
+    if pilot is not None:
+        pilot.on_goal_event(event)
 
 
 def main() -> None:
@@ -55,7 +62,14 @@ def main() -> None:
     def runtime_factory(config):
         return RosArmCommandRuntime(node, config, joint_state_topic="/joint_states",
                                     trajectory_action="/arm_controller/follow_joint_trajectory",
-                                    owner_clock="sim")
+                                    owner_clock="sim", on_goal_event=lambda event: forward_pilot_event(holder, event))
+
+    def http_app_factory(runtime):
+        pilot = PilotSimRuntime(runtime)
+        holder["pilot"] = pilot
+        return create_pilot_sim_app(
+            runtime=pilot, pilot_root=REPO / "middleware/ui/pilot",
+            common_root=REPO / "shared/web", pairing_code=secrets.token_urlsafe(12))
 
     def gripper_readback(grant):
         return sim_gripper_observation(holder["owner"], holder["owner"].runtime.latest_joint_state, grant)
@@ -67,9 +81,7 @@ def main() -> None:
                           REPO / "deploy/robot/omx/sim/cell_profile.yaml", "omx-f-gazebo-only-v1",
                           "gz-world-is-link0-v1", 0.001),
         runtime_factory=runtime_factory, goal_port_factory=RosArmPhaseGoalPort,
-        http_app_factory=lambda runtime: create_pilot_sim_app(
-            runtime=PilotSimRuntime(runtime), pilot_root=REPO / "middleware/ui/pilot",
-            common_root=REPO / "shared/web", pairing_code=secrets.token_urlsafe(12)),
+        http_app_factory=http_app_factory,
         refuse_second_owner=lambda: None,  # checked above, before rclpy
         gripper_readback=gripper_readback,
         fleet_fence_current=fleet_fence,

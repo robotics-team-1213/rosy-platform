@@ -320,7 +320,7 @@
 #compatibility-shell > ui-topbar { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; }
 #compatibility-shell .topbar-status { flex-wrap: wrap; justify-content: flex-end; }
 .compatibility-safety .stop-button { flex-direction: column; align-items: flex-start; }
-@media (width < 40rem) {
+@media (width < 64rem) {
   #compatibility-shell > ui-topbar { grid-template-columns: minmax(0, 1fr) auto; }
   #compatibility-shell .topbar-status { grid-column: 1 / -1; grid-row: 2; }
   .compatibility-safety { grid-column: 2; grid-row: 1; }

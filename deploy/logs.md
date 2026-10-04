@@ -2340,6 +2340,11 @@
 - 증거: 독립 설치기 Linux 재현 10개 통과. source 93f66072c CI 37176545073 및 실행 a24b6ca8a CI 37177384801 필수 검사 통과; 비필수 sensing 실패 5개는 기존 기준과 동일. 별도 SSH readback에서 서명·main 후손 계보·실제 컨테이너 3개의 불변 이미지 ID·HTTPS 200·타이머 active/enabled·서명된 롤백 후보 보존·중단 기록 없음 확인. 주소·계정·인증 정보가 포함된 실제 기록은 외부 운영 증거로 보관했다.
 - gate 변화: D-441 최초 설치와 실제 자동 갱신의 SITE_RUNTIME 검증 완료. 로봇 이동이나 FIELD 수용 상태는 변경하지 않았다.
 
+## 2026-10-04 · uncommitted · D-452 bounded scanner와 실제 모델 SSH 광고
+
+- 변경: canonical 여섯 역할의 host scan은 전체12초/1MiB/64개로 제한한다. 실제 SSH listener 광고와 Fleet zeroconf pin을 추가하고 기존 서명·가입·CA·배포 guard를 유지한다.
+- 증거: model199 PASS/22 platform SKIP, scanner Linux11 PASS, metadata/host source independent review PASS. network-peer-discovery-2026-10-04 validation records.
+- gate 변화: SOURCE/LOCAL focused; 실제 model 설치·signed candidate·container UID LAN 수락은 별도.
 ## 2026-10-04 · uncommitted · D-441 local maintenance and manual install safety
 
 - Change: Reconcile the verified actual signed installation before selection; add locked hold/resume with interrupted recovery first; check running Compose configuration hashes and read-only/nonprivileged roots; require exact-main CI and ci-result before automatic signing; add optional authenticated read-only Fleet state/Vision source gates.
@@ -2365,3 +2370,18 @@
 - Change: cfg_value removes carriage returns before quote/comment trimming, so LF and CRLF backend/store values select the same installation branch.
 - Evidence: Native Linux RED2fail4pass for plain/quoted CRLF; after fix LF/CRLF/plain/quoted/comment regressions and existing install/unit suites23pass. Independent source review requested. V2 source881file archive and CPUintake pass did not establish installation closure: dry-run exit0 omitted store/drop-in before this fix.
 - Gate: No privileged install or timer activation. Existing v2 bundle preserved; corrected committed source must be repackaged and reviewed before administrator request supersedes it. Producer config remains an inactive candidate; actual service UID/group/doctor/robot HOLD gates pending.
+## 2026-10-04 · uncommitted · fix(g2): provision the per-instance IPC directory before startup
+
+- Change: Move private run subdirectory provisioning into fresh_evidence and create uds/omx_cell_sim_01 before starting the owner. Preserve the UnixActionServer service-manager requirement, existing grants and failed-run receipts.
+- Evidence: Actual isolated Gazebo controllers and Fleet started, but the owner IPC thread failed because its parent was absent; readiness timed out before proposal/admission. Child groups and container removal were verified. Host directory regression failed before correction; 16 tests passed afterward with one explicit AF_UNIX host skip. Independent review reran the 16 tests. Model-PC Linux reproduced the original kernel bind failure and verified corrected bind, connect, data roundtrip, 0700 parent mode and reuse refusal.
+- gate 변화: SOURCE/LOCAL provisioning only. Prepare SDK import passed, but actual box16 placement remains HOLD; fault matrix, manual sheet runtime and physical acceptance remain NOT_RUN. Fresh retry uses the existing image and does not replay the previous run.
+## 2026-10-04 · uncommitted · fix(ci): 두 Android 앱의 실제 wrapper 선택
+
+- 변경: Cam의 정본 Gradle 8.11.1 wrapper에 matrix별 --project-dir를 전달한다. 별도 wrapper가 없는 Pilot도 같은 unit task를 실행하며 JDK 17·테스트 범위를 유지한다.
+- 증거: 실제 shell wrapper와 Java 실행 경계의 프로젝트/JAR/task 전달 2 PASS, 독립 source 리뷰 PASS. 통합 담당자 launcher 및 관련 Fleet 계약 24 PASS. 실제 Gradle 실행은 다음 원격 CI의 별도 증거다.
+- gate 변화: SOURCE/LOCAL launcher 검증; 원격 Android CI·APK·DEVICE 수락은 별도다.
+## 2026-10-04 · uncommitted · feat(omx): 정본 G2 격리 실행기
+
+- 변경: 실제 Cell 문서 저장·compile·service proposal·별도 named simulation operator admission·Fleet grant·UDS·owner·Gazebo를 연결하는 박스 16회 하네스를 추가했다. 각 grant의 staging intent를 세계 변경 전에 fsync하고 재제출을 금지한다. 실제 측정 프로세스가 pose·gripper·진행 clock과 이전 배치를 검증한다.
+- 증거: 독립 source 검토 뒤 host preflight 16회/marker 8·16, 독립 15 tests 통과. 설치 패키지 shadow와 멈춘 clock의 반복 발행을 거절한다. read-only root/repo·network-none·no devices·bounded resource와 실제 컨테이너 ID/label·성공한 daemon 목록 기반 종료 검사를 준비했다.
+- gate 변화: SOURCE/LOCAL만 추가했다. SDK 이미지 preflight·전체 16회 ROS-SIM과 fault matrix는 NOT_RUN이며 full_g2=false다. 기존 narrow vendor 취소 증거를 전체 G2로 올리지 않는다. 수동 슬립시트 checkpoint·물리 파지는 별도다.

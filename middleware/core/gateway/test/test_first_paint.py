@@ -56,7 +56,13 @@ def test_the_flag_flips_only_after_a_real_fetch():
     """요청이 돌아온 뒤에야 em dash가 '물었는데 없다'를 뜻한다."""
     app = APP.read_text(encoding="utf-8")
     assert "markRequested()" in app
-    order = app.index('await api("/api/v1/robot/state")'), app.index("markRequested()")
+    refresh = re.search(r"async function refreshRobotState\([^\n]*\).*?\n\}", app, re.DOTALL)
+    assert refresh, "refreshRobotState must own the first-paint transition"
+    body = refresh.group(0)
+    fetch = re.search(r'const state = await api\("/api/v1/robot/state"(?:,\s*\{[^\n]*\})?\);', body)
+    assert fetch, "first paint must follow the awaited robot-state request"
+    order = fetch.end(), body.index("markRequested()")
+    assert "if (!owner.current()) return;" in body[order[0]:order[1]]
     assert order[0] < order[1], "요청 전에 플래그를 세운다"
 
 

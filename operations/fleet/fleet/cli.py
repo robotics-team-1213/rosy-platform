@@ -77,6 +77,8 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
                          help="환경변수에서 관제 토큰을 읽는다(명령행 secret 노출 방지)")
     console.add_argument("--discovery-token-env", default=None,
                          help="host mDNS scanner credential environment variable")
+    console.add_argument("--approved-peer-directory-file", default=None, type=Path,
+                         help="admin-provisioned public peer metadata JSON; no credentials or enrollment")
     console.add_argument("--vision-preview-secret-env", default=None,
                          help="dedicated Fleet-to-Vision preview lease signing secret")
     console.add_argument("--users-file", default=None, type=Path,
@@ -127,6 +129,9 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
                          help="site TLS host name (<name>.local) the paired phone checks")
     console.add_argument("--pairing-sync-token-env", default=None,
                          help="environment variable holding Vision's dedicated credential-list token")
+    console.add_argument("--central", action="store_true", help=(
+        "mount the central Fleet registry (D-454 step 1): /api/v1/fleet/robots reads the "
+        "site roster as the source of truth; requires an enrollment store"))
     return parser.parse_args(argv)
 
 
@@ -506,6 +511,15 @@ def run_console(args: argparse.Namespace) -> None:
         if not stuck_resolver_clients:
             print("warning: --stuck-resolver set but no robot has a resolver_token; "
                   "every stuck will be escalated", file=sys.stderr)
+    central_registry = None
+    if getattr(args, "central", False):
+        # D-454 1단계: 중앙 프로파일 — 등록 로스터가 정본이므로 등록 저장소가 필요하다.
+        if enrollment is None:
+            sys.exit("--central requires an enrollment store (--enrollment-db); the central "
+                     "registry reads the site roster as its source of truth")
+        from fleet.server.central_registry import CentralRegistry
+
+        central_registry = CentralRegistry(roster, console=console, discovery=discovery)
     app = create_app(console, console_token=console_token, web_common=args.web_common,
                      hub=hub, sightings=sighting_service, task_service=task_service,
                      mission_service=mission_service, proposal_store=proposal_store,
@@ -514,13 +528,15 @@ def run_console(args: argparse.Namespace) -> None:
                      goal_evidence_service=goal_evidence_service,
                      site_users=site_users, discovery=discovery,
                      discovery_token=discovery_token,
+                     approved_peer_directory_file=getattr(args, 'approved_peer_directory_file', None),
                      start_task_dispatcher=not mission_api,
                      vision_lease_secret=vision_preview_secret,
                      vision_sources=vision_sources, enrollment=enrollment,
                      robot_credential_key=robot_key_text, site_lanes=site_lanes,
                      pairing=pairing_service, pairing_sync_token=pairing_sync_token,
                      localization_service=localization_service,
-                     stuck_resolver_clients=stuck_resolver_clients)
+                     stuck_resolver_clients=stuck_resolver_clients,
+                     central_registry=central_registry)
     signals_note = f", {len(signal_eps)} signals" if signal_console is not None else ""
     print(f"fleet console: http://{args.host}:{args.port}/console  "
           f"({len(console.robot_ids)} robots{signals_note})",

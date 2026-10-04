@@ -139,6 +139,62 @@ def test_unexpected_client_error_is_unknown_outcome_and_pass_survives():
     assert last["accepted"] is None and last["code"] == "STUCK_DECISION_OUTCOME_UNKNOWN"
 
 
+@pytest.mark.parametrize("error", [httpx.ReadTimeout("reply lost"), ValueError("reply lost"),
+                                  asyncio.CancelledError()])
+def test_applied_yield_with_lost_reply_is_escalated_without_replay(error):
+    from fleet.meet.place import painted_track, pose_on
+
+    painted = painted_track()
+    door = next(item for item in painted.doors if item.edge_id == "east")
+    state = _state(stuck={**STUCK, "decisions": ["WAIT", "YIELD"]})
+    state["pose"] = dict(zip(("x", "y", "yaw"), pose_on(painted, "east", 1.2, direction=1)))
+    peer = {"robot_id": "peer", "online": True, "state": {
+        "pose": dict(zip(("x", "y", "yaw"), pose_on(painted, "east", 1.45, direction=-1)))}}
+    board = LineStuckBoard(clock=FakeClock())
+    applied = []
+
+    async def snapshot():
+        rows = [{"robot_id": "rosy_01", "online": True, "state": state}, peer]
+        board.observe(rows)
+        return {"robots": rows}
+
+    async def decision(stuck_id, answer, **segment):
+        applied.append((stuck_id, answer, segment))  # CORE applied it before the reply was lost.
+        if isinstance(error, asyncio.CancelledError):
+            await asyncio.Event().wait()
+        raise error
+
+    robot = type("Robot", (), {})()
+    robot.line_stuck_decision = decision
+    loop = StuckResolverLoop(snapshot, board, StuckResolver(ResolverConfig()),
+                             clients=lambda: {"rosy_01": robot}, clock=FakeClock())
+    if isinstance(error, asyncio.CancelledError):
+        async def cancelled_reply():
+            task = asyncio.create_task(loop.run_once())
+            while not applied:
+                await asyncio.sleep(0)
+            task.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await task
+        asyncio.run(asyncio.wait_for(cancelled_reply(), 5))
+    else:
+        asyncio.run(loop.run_once())
+    for phase in ("ASKING", "YIELDING", "YIELDED"):
+        state["line_follow"]["stuck"]["phase"] = phase
+        if phase == "YIELDED":
+            state["pose"] = dict(zip(("x", "y", "yaw"),
+                                     pose_on(painted, "east", door.s_m, direction=-1)))
+        for _ in range(3):
+            asyncio.run(loop.run_once())
+    assert len(applied) == 1 and applied[0][1] == "YIELD"
+    assert applied[0][2]["yield_m"] > 0
+    answers = board.answers()
+    assert answers[0]["accepted"] is None
+    assert answers[0]["code"] == "STUCK_DECISION_OUTCOME_UNKNOWN"
+    assert [row["decision"] for row in answers] == ["YIELD", "ESCALATE"]
+    assert board.view("rosy_01")["resolver"]["escalated"] == "core:STUCK_DECISION_OUTCOME_UNKNOWN"
+
+
 def test_run_wakes_early_and_stops_on_cancel():
     loop, board, robot = _setup(config=ResolverConfig(poll_s=60))
 
@@ -342,7 +398,7 @@ def test_a_human_claim_keeps_the_escalation_reason():
 
 
 class _HangingRobot(FakeRobot):
-    async def line_stuck_decision(self, stuck_id, decision):
+    async def line_stuck_decision(self, stuck_id, decision, **_extra):
         self._record("line_stuck_decision", stuck_id, decision)
         await asyncio.Event().wait()
 

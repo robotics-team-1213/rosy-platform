@@ -6,6 +6,16 @@
 .install-workspace, .install-task { min-width: 0; }
 .install-task[hidden], #discovery-list[hidden], #discovery-empty[hidden] { display: none; }
 .install-task > h2 { margin-top: 0; }
+.peer-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); }
+.peer-toolbar select { min-width: 0; max-width: 100%; }
+#peer-status { min-width: 0; max-width: 100%; white-space: normal; }
+.peer-list { list-style: none; padding: 0; margin: var(--space-4) 0; }
+.peer-list[hidden] { display: none; }
+.peer-list li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-3); padding: var(--space-3) 0; border-bottom: 1px solid var(--line-10); }
+.peer-identity { min-width: 0; flex: 1 1 14rem; display: grid; gap: var(--space-1); overflow-wrap: anywhere; }
+.peer-identity small, .peer-owner-note { color: var(--ink-quiet); }
+.peer-owner-note { max-width: 100%; overflow-wrap: anywhere; }
+.peer-owner-link { min-height: var(--target-secondary); display: inline-flex; align-items: center; padding: var(--space-3); }
 #camera-calibration .vision-preview { margin-top: var(--space-3); }
 #discovery-retry { margin-top: var(--space-2); }
 .roster-block { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--space-3); }

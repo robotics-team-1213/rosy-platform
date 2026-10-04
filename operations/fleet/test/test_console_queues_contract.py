@@ -55,7 +55,8 @@ def test_the_queues_panel_is_pinned_to_the_left_column():
     큐는 첫 행, 지도는 둘째 행이다."""
     styles = (WEB / "styles.css").read_text(encoding="utf-8")
     assert ".queues-panel { grid-column: 1; grid-row: 1; }" in styles
-    assert 'main > .panel[aria-labelledby="map-heading"] {\n    grid-column: 1;\n    grid-row: 2;' in styles
+    assert ".console-primary { grid-column: 1; }" in styles
+    assert '.console-primary > .panel[aria-labelledby="map-heading"] {\n    grid-column: 1;\n    grid-row: 2;' in styles
 
 
 def test_both_queues_exist_in_the_markup():

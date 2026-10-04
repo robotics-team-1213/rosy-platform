@@ -33,7 +33,7 @@ LOG_FIELDS = ("변경", "증거", "gate 변화")
 LOG_FIELD_ALIASES = {
     "변경": ("Change",),
     "증거": ("근거", "검증", "정적 확인", "장치 근거", "Evidence", "Local evidence"),
-    "gate 변화": ("Gate",),
+    "gate 변화": ("Gate", "gate"),
 }
 RECENT_LOGS = 5
 UNCOMMITTED = "uncommitted"

@@ -88,11 +88,18 @@ class StuckResolverLoop:
                       rule=answer.rule)
         code: Optional[str] = None
         try:
-            result = await client.line_stuck_decision(answer.stuck_id, answer.decision)
+            extra = {}
+            if answer.yield_m is not None and answer.yield_turn_rad is not None:
+                extra = {"yield_m": answer.yield_m, "yield_turn_rad": answer.yield_turn_rad}
+            result = await client.line_stuck_decision(answer.stuck_id, answer.decision, **extra)
         except asyncio.CancelledError:
             # Fleet is stopping mid-request: the robot may have applied the answer.
             self._board.record(**record, accepted=None, code="STUCK_DECISION_OUTCOME_UNKNOWN",
                                message="resolver stopped before the robot replied")
+            if answer.decision == "YIELD":
+                escalation = self._resolver.result(answer, code="STUCK_DECISION_OUTCOME_UNKNOWN")
+                if escalation is not None:
+                    self._escalated(escalation)
             raise
         except RobotApiError as exc:
             code = exc.code

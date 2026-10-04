@@ -53,12 +53,13 @@ class PairRequest(BaseModel):
 
 
 class _Sessions:
-    def __init__(self, code: str, *, clock=time.monotonic) -> None:
+    def __init__(self, code: str, *, clock=time.monotonic, control_admission=None) -> None:
         if not code or len(code) < 8:
             raise ValueError("an operator-provided one-time pairing code is required")
         self._code = code
         self._code_deadline = clock() + 600
         self._clock = clock
+        self._admission = control_admission
         self._tokens: dict[str, float] = {}
         self._seat: tuple[str, str, float] | None = None
         self._lock = threading.RLock()
@@ -87,9 +88,14 @@ class _Sessions:
             if self._seat and self._clock() < self._seat[2]:
                 if self._seat[0] != token:
                     raise HTTPException(409, "seat occupied")
-                self._seat = (token, self._seat[1], self._clock() + SEAT_TTL_S)
-                return self._seat[1]
-            seat_id = secrets.token_urlsafe(16)
+                seat_id = self._seat[1]
+            else:
+                seat_id = secrets.token_urlsafe(16)
+            if self._admission is not None:
+                try:
+                    self._admission.acquire(token, seat_id, ttl_s=SEAT_TTL_S)
+                except PermissionError as exc:
+                    raise HTTPException(409, str(exc)) from exc
             self._seat = (token, seat_id, self._clock() + SEAT_TTL_S)
             return seat_id
 
@@ -101,30 +107,41 @@ class _Sessions:
                 raise HTTPException(409, "seat missing or expired")
 
     def release(self, token: str, seat_id: str) -> None:
-        self.check_seat(token, seat_id)
         with self._lock:
+            self.check_seat(token, seat_id)
+            if self._admission is not None:
+                self._admission.release(token, seat_id)
             self._seat = None
 
-    def expire_seat(self) -> bool:
+    def expire_seat(self) -> str | None:
         with self._lock:
             if self._seat is None or self._clock() < self._seat[2]:
-                return False
+                return None
+            seat_id = self._seat[1]
+            if self._admission is not None:
+                self._admission.revoke_expired_seat(self._seat[0], self._seat[1])
             self._seat = None
-            return True
+            return seat_id
 
 
 def create_pilot_sim_app(*, runtime: Any, pilot_root: Path, common_root: Path,
                          pairing_code: str) -> FastAPI:
     """Construct a SIM-only HTTP surface; runtime is the sole action owner."""
-    sessions = _Sessions(pairing_code)
+    sessions = _Sessions(pairing_code, control_admission=getattr(runtime, "control_admission", None))
+    def cancel_released_seat(seat_id):
+        if getattr(runtime, "control_admission", None) is None:
+            runtime.cancel_active()
+        else:
+            runtime.cancel_active(seat_id=seat_id)
     common_assets = json.loads((common_root / "shared-assets.json").read_text(encoding="utf-8"))["shared_assets"]
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         async def watch_seat():
             while True:
                 await asyncio.sleep(0.1)
-                if sessions.expire_seat():
-                    runtime.cancel_active()
+                expired_seat = sessions.expire_seat()
+                if expired_seat is not None:
+                    cancel_released_seat(expired_seat)
                 runtime.on_watchdog()
 
         task = asyncio.create_task(watch_seat())
@@ -216,7 +233,7 @@ def create_pilot_sim_app(*, runtime: Any, pilot_root: Path, common_root: Path,
     @app.delete(f"{PREFIX}/seat/{{seat_id}}", status_code=204, response_class=Response)
     def release_seat(seat_id: str, authorization: str | None = Header(None)) -> Response:
         sessions.release(auth(authorization), seat_id)
-        runtime.cancel_active()
+        cancel_released_seat(seat_id)
         return Response(status_code=204)
 
     @app.get(f"{PREFIX}/state")

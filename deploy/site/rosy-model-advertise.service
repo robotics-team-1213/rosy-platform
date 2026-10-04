@@ -1,0 +1,17 @@
+[Unit]
+Description=Advertise the actual model host SSH listener (D-452)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 -I %h/.local/lib/rosy-model-code/model-mdns.py
+Restart=on-failure
+RestartSec=30
+KillMode=control-group
+TimeoutStopSec=5
+NoNewPrivileges=yes
+UMask=0077
+
+[Install]
+WantedBy=default.target

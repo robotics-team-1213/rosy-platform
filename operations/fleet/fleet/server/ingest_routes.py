@@ -17,6 +17,7 @@ from fastapi import Header, HTTPException, Query
 
 from core_common.protocol.policy_evidence import PolicyEvidencePayload
 from core_common.protocol.schemas import DiscoveryScanPayload
+from core_common.protocol.network_peers import PeerObservation
 from core_common.protocol.sightings import SiteSightingPayload
 from fleet.server.address_drift import classify_addresses
 from fleet.server.policy_evidence import PolicyEvidenceError, status_code_for
@@ -53,7 +54,7 @@ def address_reasons(*, console, hub, discovery, enrollment) -> dict:
 
 
 def install_discovery_routes(app, *, console, hub, discovery, discovery_token,
-                             enrollment, principals, require_viewer, read_guard) -> None:
+                             enrollment, principals, require_viewer, read_guard, catalogue=None) -> None:
     if principals and any(hmac.compare_digest(
             sha256(discovery_token.encode("utf-8")).hexdigest(), digest)
             for digest in principals):
@@ -66,7 +67,16 @@ def install_discovery_routes(app, *, console, hub, discovery, discovery_token,
         if not authorization or not hmac.compare_digest(authorization, expected):
             raise HTTPException(status_code=401, detail={"code": "UNAUTHORIZED"})
         try:
+            if catalogue is not None:
+                services = catalogue.validate_scan(body.services, services_only=True)
             discovery.replace_scan(body.devices)
+            if catalogue is not None:
+                robots = [PeerObservation(name=row['name'], role='robot',
+                          transport=row.get('transport', 'http'), service_type='_rosy._tcp',
+                          hostname=row['hostname'], address=row['address'], port=row['port'])
+                          for row in discovery.rows() if row['hostname']]
+                services.extend(robots)
+                catalogue.replace_scan(services)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail={"code": "INVALID_SCAN",
                                                          "message": str(exc)}) from exc

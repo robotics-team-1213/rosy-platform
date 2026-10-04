@@ -38,3 +38,9 @@
 - 변경: 현황 보고서와 D-446 목표 초안에서 정본 process 재사용, 전용 앱 흐름, 박스 전용 중간 수용과 슬립시트 후속 목표를 구분했다. 예전 grasp depth 미지원 설명과 현재 코드의 차이도 기록했다. process 코드는 바꾸지 않았다.
 - 증거: 기준 main f32643ffd에서 복사·빌드한 설치 wheel로 compatibility·Cell·layout 174 passed, skip 없음. 슬립시트 거절도 의도된 시험이며 전체 적재 성공으로 해석하지 않는다.
 - gate 변화: SOURCE GO 유지, ROS-SIM/ARTIFACT HOLD와 DEVICE/FIELD PARKED 유지. 목표 문서는 수용 승격 근거가 아니다.
+
+## 2026-10-04 · uncommitted · feat(palletizing): 작업자 수동 간지 checkpoint
+
+- 변경: `recipe/2`는 `handling: operator`인 palletize만 받는다. 간지는 별도 `OperatorSheetStep`으로 Job에 남기고, PlanBundle에는 상자 transfer만 넣는다. 층 높이에는 실제 간지 두께를 포함하며 간지 station과 held-item hang에는 넣지 않는다. 두꺼운 작업자 간지의 carry 회귀도 RED→GREEN으로 검증했다. 16상자 예제의 확인 경계는 다음 transfer 5/13, 기존 pallet ledger는 8/16이다. 첫 층 간지도 경계 1을 지원한다.
+- 증거: SOURCE 경로로 process/호환성/submission/Fleet compiler/dependency 검사 210 passed; canonical owner/coordinator를 주입한 기존 compiler/runtime replay 검사 9 passed. `recipe/1`의 recipe/cell/Job hash와 checkpoint가 없는 저장 envelope는 이전 값 그대로다. 독립 Fleet guard 후보가 실제 출력의 경계 5/13 및 1/5/9/13과 checkpoint hash를 수락했다. X:에서 빌드·설치한 palletizing/execution wheel의 실제 import 경로를 검증하고 호환성·legacy 검사 169 passed 및 수동 16상자/경계 5/13 컴파일을 확인했다. ROS-SIM은 이번 변경에서 실행하지 않았다.
+- gate 변화: 확인 metadata는 권한을 주지 않는다. Fleet의 durable checkpoint guard가 없으면 새 envelope는 거절된다. 작업자 안전 접근 증명·인증 확인 API·실제 간지 작업 수용은 HOLD이며 전체 목표 완료로 해석하지 않는다.

@@ -45,9 +45,8 @@ def open_dashboard(playwright, base_url: str, token: str, width: int = 1366, hei
     page = browser.new_page(viewport={"width": width, "height": height})
     page.set_default_timeout(15_000)
     page.add_init_script(script=token_init_script(token))
-    # Mode changes and other irreversible actions go through window.confirm; an
-    # unhandled dialog is dismissed and the action silently does not happen.
-    page.on("dialog", lambda dialog: dialog.accept())
+    # Confirm only the explicitly requested mode through its shipped control.
+    # Unrelated browser dialogs must never be approved by a global handler.
     # "load", never "networkidle": the dashboard polls and streams, so the
     # network is never idle and networkidle waits until the timeout.
     page.goto(base_url.rstrip("/") + "/dashboard#compatibility", wait_until="load")
@@ -78,7 +77,28 @@ def _robot_state(page) -> dict:
 
 
 def set_mode(page, mode: str, timeout_s: float = 5.0) -> dict:
-    page.locator(f'.mode-control [data-mode="{mode}"]').click()
+    if page.locator("dialog.ui-confirm[open]").count():
+        raise RuntimeError("close the existing confirmation before requesting a mode")
+    button = page.locator(f'.mode-control [data-mode="{mode}"]')
+    label = button.inner_text().strip()
+    button.click()
+    confirmation = page.locator("dialog.ui-confirm[open]")
+    confirmation.wait_for(state="visible")
+    # Capture the actual dialog, not a locator which could resolve to a later
+    # unrelated confirmation after this prompt has been inspected.
+    owned = confirmation.element_handle()
+    prompt = owned.query_selector("p")
+    action = owned.query_selector('ui-button[kind="irreversible"]')
+    if not action:
+        raise RuntimeError("the requested mode confirmation has no action")
+    if not prompt or f"{label} 모드로 변경" not in prompt.inner_text():
+        raise RuntimeError("the confirmation does not match the requested mode")
+    if button.get_attribute("data-mode") != mode or button.inner_text().strip() != label:
+        raise RuntimeError("the requested mode control changed")
+    if not owned.evaluate("(el, action) => el.isConnected && el.open && action.isConnected && action.closest('dialog') === el && action.getAttribute('kind') === 'irreversible'", action):
+        raise RuntimeError("the requested mode confirmation was closed or replaced")
+    action.click()
+    owned.wait_for_element_state("hidden")
     deadline = time.monotonic() + timeout_s
     current = None
     while time.monotonic() < deadline:

@@ -85,6 +85,8 @@ adrs:
 - D-413
 - D-439
 - D-443
+- D-451
+- D-453
 plans:
 - docs/plans/2026-10-04-d442-omx-preempt-recovery.md
 - docs/plans/2026-10-04-d443-signal-supervision.md
