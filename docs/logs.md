@@ -5034,3 +5034,8 @@
 - 변경: 계약0.1.5 unknown calibration 보존/known-profile 모순 거절, 실제 모델/영상 replay·원본 MCAP 직접 재검증 exporter, Pinky 원장 평가 및 bound reject 승격 거절을 연결했다.
 - 증거: 실제 CNN/ridge 공통 artifact 2개와 원래3datasets 검증, 원장 snapshot/거절/별도 CLI 재독출, native94pass/0skip·독립68pass. wheel stdlib/dependency 없음 검증. 상세 `validation/pinky-policy-artifact-2026-10-04.md`.
 - gate 변화: 연구 산출물/거절 이력이 실제 보존됨. expert/camera·owner 집행·독립SIM/Fleet·rollback·DEVICE/FIELD 및 전체 목표 미완료, 운영 승격 없음.
+
+## 2026-10-04 · uncommitted · feat(learning): export exact Fleet Episode bindings
+- 변경: 기존 D-18 receipt와 단일 action/attempt/instance 일치만 연결하는 오프라인 export. unknown·unmatched·Action/과제 결과 분리와 원본 hash 보존.
+- 증거: host68pass, 독립12pass; 실제5Dataset/10Episode closure 감사에서 join-ready=0. 상세 validation/learning-fleet-export-2026-10-04.md.
+- gate 변화: 연결 도구 확보. 실제 receipt 연결·owner/rollback·독립SIM·DEVICE/FIELD 및 전체 목표 미완료.

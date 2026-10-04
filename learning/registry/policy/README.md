@@ -55,5 +55,23 @@ Pilot은 본문 검증기가 없어 등록을 거부한다. 라벨/과제·MCAP 
 승격과 이력 조회는 Dataset Episode profile·robot/environment와 정책의 일치를
 같은 검증된 Episode 객체로 판정한다. 설치·camera/joint/runtime owner binding은 후속이다.
 rollback/stop-readback,
-owner binding/lease/generation/stale/HOLD, Fleet join·운영 배포는 후속이다.
+owner binding/lease/generation/stale/HOLD, 실제 Fleet join·운영 배포는 후속이다.
 torch/ROS/network/actuator는 사용하지 않는다. 모든 DB·산출물은 X에 둔다.
+
+## 오프라인 Fleet receipt 연결
+
+`python learning/registry/policy/fleet_join.py <episode-manifest.json> <receipt.json> <new-export.json>`
+은 기존 D-18 `DeviceActionReceipt` validator(Pydantic)를 재사용하는 별도 도구다.
+Registry 자체에는 새 import나 실행 권한을 추가하지 않는다. Episode 원본 파일의
+SHA/bytes와 입력 manifest/receipt hash를 기록하고, 단일 action/attempt 및 device와
+receipt.instance_id가 모두 일치할 때만 mission/step/request/epoch/generation을 연결한다.
+키 없음·여러 키·불일치·terminal 결과 충돌은 binding=null의 unmatched로 남긴다.
+Episode outcome evidence의 상대 경로는 원래 Episode root에 속하며 export 디렉터리의
+파일로 해석하지 않는다. source archive는 Episode revision으로 별도 보존해야 한다.
+
+task outcome/judge와 policy null을 보존한다. receipt.state=SUCCEEDED가 독립 과제
+성공이나 policy 실행 증거를 만들지 않는다. 구조 검증·해시는 receipt 진위나 Fleet
+수신 원장 readback을 증명하지 않는다. 운영 권한·승격·physical/sim receipt identity
+수용은 별도다. 2026-10-04 실제 snapshot Episode10개는 모두 상관 키가 없었다.
+따라서 실제 연결은 미실행이며 다음 recorder/export에서 기존 owner의 정확한 키를
+보존해야 한다. `docs/validation/learning-fleet-export-2026-10-04.md` 참조.
