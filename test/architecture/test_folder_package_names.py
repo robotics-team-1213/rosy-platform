@@ -17,7 +17,7 @@ from colcon_roots import colcon_roots  # noqa: E402
 SKIP_DIRS = {"build", "install", "log", ".worktrees", ".git", "node_modules", "__pycache__"}
 
 # Repo-relative folder (D-427: every colcon root, so moves rewrite these as plain paths)
-# -> ROS package name. Mirrored in src/AGENTS.md.
+# -> ROS package name. Physical ownership is recorded in platform_parts.yaml.
 FOLDER_TO_PACKAGE = {
     "contracts/foundation": "core_common",
     "middleware/ui/face": "emotion",
