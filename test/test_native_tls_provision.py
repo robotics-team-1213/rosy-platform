@@ -45,8 +45,8 @@ def store(tmp_path):
             if not valid or (not directory and info.st_nlink != 1):
                 raise tls.Hold('PATH_UNSAFE')
 
-        def read(self, relative):
-            result = super().read(relative)
+        def read(self, relative, **kwargs):
+            result = super().read(relative, **kwargs)
             if drvfs and result is not None and relative in self.modes:
                 data, meta = result
                 result = data, (*meta[:4], self.modes[relative], meta[-1])
@@ -76,6 +76,32 @@ def store(tmp_path):
 def apply(store, **kwargs):
     return tls.provision(store, 'fixture', 'robot-test.local', yaml, fence=lambda: None,
                          stage_parent=store.root.parent, **kwargs)
+
+
+def test_release_metadata_size_does_not_expand_configuration_read_limit(store):
+    # Native release 037 contains a 520894-byte manifest and 383685-byte sums.
+    for name, size in [('manifest.json', 520894), ('SHA256SUMS', 383685)]:
+        data = b'x' * size
+        (store.root / name).write_bytes(data)
+        with pytest.raises(tls.Hold, match='FILE_TOO_LARGE'):
+            store.read(name)
+        assert store.read(name, max_bytes=tls.RELEASE_METADATA_LIMIT)[0] == data
+    (store.root / tls.CONFIG).write_bytes(b'x' * 131073)
+    with pytest.raises(tls.Hold, match='FILE_TOO_LARGE'):
+        store.read(tls.CONFIG)
+
+
+def test_release_metadata_still_has_a_finite_read_boundary(store):
+    path = store.root / 'manifest.json'
+    path.write_bytes(b'x' * tls.RELEASE_METADATA_LIMIT)
+    assert len(store.read('manifest.json', max_bytes=tls.RELEASE_METADATA_LIMIT)[0]) == tls.RELEASE_METADATA_LIMIT
+    with path.open('ab') as output:
+        output.write(b'x')
+    with pytest.raises(tls.Hold, match='FILE_TOO_LARGE'):
+        store.read('manifest.json', max_bytes=tls.RELEASE_METADATA_LIMIT)
+    for invalid in [0, -1, tls.RELEASE_METADATA_LIMIT + 1, 'unbounded']:
+        with pytest.raises(tls.Hold, match='READ_LIMIT_INVALID'):
+            store.read('manifest.json', max_bytes=invalid)
 
 
 def test_real_openssl_chain_hostname_keys_and_idempotent_ca(store):

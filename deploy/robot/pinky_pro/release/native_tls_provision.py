@@ -35,6 +35,7 @@ UNITS = ('rosy-runtime.target', 'rosy-core.service', 'rosy-io.service',
          'rosy-camera.service', 'rosy-host-agent.service', 'rosy-ssh-pairing.service',
          'rosy-navigation.service')
 ENV_KEYS = ('ROSY_API_TLS', 'ROSY_API_TLS_HOST', 'ROSY_API_TLS_CA_FILE')
+RELEASE_METADATA_LIMIT = 4 * 1024 * 1024
 
 
 class Hold(RuntimeError):
@@ -100,7 +101,9 @@ class Store:
         finally:
             os.close(fd)
 
-    def read(self, relative):
+    def read(self, relative, *, max_bytes=131072):
+        if not isinstance(max_bytes, int) or not 0 < max_bytes <= RELEASE_METADATA_LIMIT:
+            raise Hold('READ_LIMIT_INVALID')
         with self.parent(relative) as (parent, name):
             try:
                 fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW, dir_fd=parent)
@@ -109,15 +112,15 @@ class Store:
             try:
                 info = os.fstat(fd)
                 self.check(info, core_owned=relative.startswith('var/lib/rosy/core/'))
-                if info.st_size > 131072:
+                if info.st_size > max_bytes:
                     raise Hold('FILE_TOO_LARGE')
                 data = b''
-                while len(data) <= 131072:
-                    block = os.read(fd, 131073 - len(data))
+                while len(data) <= max_bytes:
+                    block = os.read(fd, max_bytes + 1 - len(data))
                     if not block:
                         break
                     data += block
-                if len(data) > 131072 or metadata(os.fstat(fd)) != metadata(info):
+                if len(data) > max_bytes or metadata(os.fstat(fd)) != metadata(info):
                     raise Hold('FILE_CHANGED')
                 return data, metadata(info)
             finally:
@@ -499,13 +502,15 @@ def signed_source(store, public_key):
         if count > 512 or stat.S_ISLNK(info.st_mode) or info.st_uid != 0 or info.st_mode & 0o022:
             raise Hold('VERIFIER_IMPORT_UNTRUSTED')
     metadata_files = ('manifest.json', 'SHA256SUMS', 'SHA256SUMS.sig')
-    before = {name: store.read(str((current / name).relative_to('/'))) for name in metadata_files}
+    before = {name: store.read(str((current / name).relative_to('/')),
+                              max_bytes=RELEASE_METADATA_LIMIT) for name in metadata_files}
     if any(value is None for value in before.values()):
         raise Hold('SIGNED_METADATA_MISSING')
     command(['/usr/bin/python3', '-E', '-s', '/opt/rosy/native-runtime/native_release.py',
              '--public-key', str(public_key), 'verify', '--release-id', current.name], timeout=60)
     manifest = json.loads((current / 'manifest.json').read_bytes())
-    if any(store.read(str((current / name).relative_to('/'))) != value
+    if any(store.read(str((current / name).relative_to('/')),
+                      max_bytes=RELEASE_METADATA_LIMIT) != value
            for name, value in before.items()):
         raise Hold('SIGNED_METADATA_CHANGED')
     entries = [e for e in manifest['files'] if e['path'] == relative]
