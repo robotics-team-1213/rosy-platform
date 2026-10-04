@@ -146,17 +146,39 @@ class BoundedTrial:
             # Durable unresolved send is committed BEFORE bridge can submit.
             self._write(state)
         if reason is not None:return False
-        # A FULL durable commit can be slow. Re-read STOP and sample after it,
-        # then take the final clock; never send using the pre-commit freshness.
-        with self._lock:
-            latest=self._read();tail=time.monotonic() if now is None else now
-            pose=latest['pose']
+        # This public predicate is not a submission capability. Production
+        # must use submit_fenced so no STOP can commit before its writer call.
+        with self._transaction():
+            return self._fresh_for_submit(now=now)
+
+    def _fresh_for_submit(self,*,now=None):
+        # Caller owns both the process lock and SQLite write transaction.
+        latest=self._read();tail=time.monotonic() if now is None else now
+        if latest['halted']:return False
+        pose=latest['pose']
+        valid=type(tail) in (int,float) and math.isfinite(tail) and pose is not None
+        if valid:
             age=pose['source_age_s']+tail-pose['received_at']
             reserve=(self.bounds.measurement_error_m+self.bounds.speed_max_mps*(age+self.bounds.latency_max_s)
                      +self.bounds.speed_max_mps**2/(2*self.bounds.decel_min_mps2))
-            if (type(tail) not in (int,float) or not math.isfinite(tail)
-                    or latest['halted'] or tail>=latest['deadline'] or tail<pose['received_at']
-                    or age>self.bounds.source_age_max_s or latest['path_upper_m']+reserve>=.20):
-                self.stop('final_freshness_or_stop')
-                return False
-            return True
+            valid=(tail<latest['deadline'] and tail>=pose['received_at']
+                   and age<=self.bounds.source_age_max_s and latest['path_upper_m']+reserve<.20)
+        if not valid:
+            latest.update(halted=True,reason='final_freshness_or_stop');self._write(latest)
+        return valid
+
+    def submit_fenced(self,linear,angular,submit,*,now=None):
+        """Return the sole port decision, or None when the trial denies it.
+
+        Durable unresolved intent precedes the callback. Final freshness and
+        the actual writer share BEGIN IMMEDIATE and the owner RLock: other
+        ledger STOP/reopen transactions commit before or after this send,
+        never between its final check and callback. A busy fence fails closed.
+        """
+        if not self.permits(linear,angular,now=now):return None
+        with self._transaction():
+            # Zero remains safe even when permits latched selected_zero_stop.
+            # Read again to retain immutable owner/envelope validation.
+            self._read()
+            if (linear!=0 or angular!=0) and not self._fresh_for_submit(now=now):return None
+            return submit()

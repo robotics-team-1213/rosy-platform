@@ -163,21 +163,19 @@ def cmd_vel_cycle(command: _Command, power: _Power, send: Callable[[Any], None],
             warn(f"cmd_vel guard failed: {exc}")
         return
     try:
-        if trial_guard is not None:
-            from core_features.command.bounded_trial import BoundedTrial
-            try:
-                if type(trial_guard) is not BoundedTrial or not trial_guard.permits(
-                        guarded.payload.linear_mps,guarded.payload.angular_radps,now=now):
+        try:
+            if trial_guard is None:
+                decision = port.submit(guarded)
+            else:
+                from core_features.command.bounded_trial import BoundedTrial
+                if type(trial_guard) is not BoundedTrial:
+                    raise ValueError('exact bounded trial owner required')
+                decision = trial_guard.submit_fenced(
+                    guarded.payload.linear_mps,guarded.payload.angular_radps,
+                    lambda:port.submit(guarded),now=now)
+                if decision is None:
                     send(ZERO)
                     return
-            except Exception as exc:
-                try:trial_guard.stop('trial_guard_failed')
-                except Exception:pass
-                send(ZERO)
-                if warn is not None:warn(f'bounded trial failed: {exc}')
-                return
-        try:
-            decision = port.submit(guarded)
         except Exception as exc:
             if trial_guard is None:raise
             try:trial_guard.stop('submission_unknown')

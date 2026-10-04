@@ -201,3 +201,74 @@ def test_second_connection_cannot_clobber_stop_from_old_read(tmp_path,monkeypatc
     restarted=guard(tmp_path)
     assert restarted.status()['halted'] is True
     assert cycle(g,Twist(.04,0),10.1)==Twist()
+
+
+def test_committed_second_connection_stop_after_permits_prevents_submission(tmp_path,monkeypatch):
+    import json
+    import sqlite3
+    g=guard(tmp_path);sample(g);permits=g.permits
+    def stop_after_check(*args,**kwargs):
+        allowed=permits(*args,**kwargs)
+        with sqlite3.connect(tmp_path/'one-trial.sqlite') as other:
+            other.execute('BEGIN IMMEDIATE')
+            state=json.loads(other.execute('SELECT body FROM trial WHERE id=1').fetchone()[0])
+            state.update(halted=True,reason='independent_owner_stop')
+            other.execute('UPDATE trial SET body=? WHERE id=1',(json.dumps(state),))
+        return allowed
+    monkeypatch.setattr(g,'permits',stop_after_check)
+    assert cycle(g,Twist(.04,0))==Twist()
+    assert g.status()['halted'] is True
+    assert cycle(g,Twist(.04,0))==Twist()
+
+
+def test_actual_writer_holds_ledger_fence_against_reopen(tmp_path):
+    import sqlite3
+    g=guard(tmp_path);sample(g);sent=[]
+    def writer(out):
+        if out.linear:
+            with pytest.raises(sqlite3.OperationalError,match='locked'):
+                guard(tmp_path)
+        sent.append(out)
+    cmd=SimpleNamespace(select_output=lambda:Twist(.04,0),announce_pending=lambda:None)
+    cmd_vel_cycle(cmd,SimpleNamespace(on_activity=lambda _:None),writer,trial_guard=g,now=10.)
+    assert sent==[Twist(.04,0)]
+    restarted=guard(tmp_path)
+    assert restarted.status()['halted'] is True
+    assert cycle(g,Twist(.04,0))==Twist()
+
+
+@pytest.mark.parametrize('same_owner',[False,True])
+def test_stop_waits_for_actual_writer_then_denies_next_positive(tmp_path,same_owner):
+    import json
+    import sqlite3
+    import threading
+    g=guard(tmp_path);sample(g);attempted=threading.Event();committed=threading.Event()
+    errors=[];sent=[]
+    def stop():
+        try:
+            if same_owner:
+                attempted.set();g.stop('threaded_owner_stop')
+            else:
+                with sqlite3.connect(tmp_path/'one-trial.sqlite',timeout=1.) as other:
+                    attempted.set();other.execute('BEGIN IMMEDIATE')
+                    state=json.loads(other.execute('SELECT body FROM trial WHERE id=1').fetchone()[0])
+                    state.update(halted=True,reason='threaded_owner_stop')
+                    other.execute('UPDATE trial SET body=? WHERE id=1',(json.dumps(state),))
+            committed.set()
+        except Exception as exc:errors.append(exc)
+    worker=threading.Thread(target=stop)
+    def writer(out):
+        worker.start()
+        assert attempted.wait(1.)
+        # STOP cannot commit while the actual final writer is in its fence.
+        assert not committed.wait(.02)
+        sent.append(out)
+    cmd=SimpleNamespace(select_output=lambda:Twist(.04,0),announce_pending=lambda:None)
+    try:
+        cmd_vel_cycle(cmd,SimpleNamespace(on_activity=lambda _:None),writer,trial_guard=g,now=10.)
+    finally:
+        worker.join(2.)
+    assert not worker.is_alive() and not errors
+    assert committed.is_set() and sent==[Twist(.04,0)]
+    assert g.status()['halted'] is True
+    assert cycle(g,Twist(.04,0))==Twist()
