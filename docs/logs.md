@@ -5232,3 +5232,9 @@
 - 변경: 정상 IDLE/STANDBY 기준을 600/1800초로 늘리고 warning60/300, critical/deep30/120초와 min을 취한다. YAML override·API effective timers에 연결한다. 기존 이동·정보 hold·disabled와 배터리 정지/종료 권한을 유지한다.
 - 증거: 주입 시계·설정 parser RED3 failed, 전원/배터리/bridge GREEN180 passed. 구조 재판정은 docs/plans/2026-10-04-power-health-and-wake.md에 기록한다.
 - gate 변화: SOURCE/LOCAL. 기기 소비전력·물리 wake·배포 검증은 별도다.
+
+## 2026-10-04 · uncommitted · docs: additional road video and update record audit
+
+- 변경: 과거 실제 영상 2개/24표본/2모델 48판정(마스크 재실행 별도)과 native 펌웨어·모델 변경 기록 감사를 docs/validation/road-video-and-update-records-2026-10-04에 기록했다. 원본 미디어는 비공개로 보존한다.
+- 증거: 중앙 원 흰 경계 검출, 바닥/벽 오분류와 API/UI 이력 연결 공백을 분리했다. updater·모델 계약 372 passed/25 skipped; 영상 정합성 및 독립 육안 검토 완료. 문서 계약 98 passed/1 skipped; harness lint 0 errors/16 기존 검증 경고.
+- gate 변화: 없음. 과거 영상 재생과 읽기 전용 장치 증거이며 실주행·신규 배포·모델 승격·반복 재부팅 원인 확정은 아니다.

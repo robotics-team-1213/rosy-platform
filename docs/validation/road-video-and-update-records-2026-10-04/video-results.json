@@ -1,0 +1,1112 @@
+{
+  "scope": "historical recorded video replay; not live device",
+  "videos": [
+    {
+      "video": "teleop_rosy-pinky-9dfk_20261001T131825Z.mp4",
+      "video_sha256": "4ed44d155fa8afd65ec6b96156ad58cc2da11cd475916528599bcedb49f1a1bb",
+      "frame_count": 9649,
+      "fps": 7.953,
+      "sample_selection": "12 evenly spaced frame indices incl endpoints",
+      "timestamp_basis": "video relative only; filename UTC not authenticated capture stamp",
+      "samples": [
+        {
+          "frame_index": 0,
+          "video_time_s": 0.0,
+          "decoded_image_sha256": "033a987427284ebf19e79dea60b761c2f036aa19eb3289f7ebd5ed95c4c2c3aa",
+          "brightness_mean": 115.63114583333333,
+          "results": [
+            {
+              "model_revision": "lane-seg-20261004-72799466",
+              "evidence": {
+                "visible": true,
+                "error": -0.062109375,
+                "confidence": 0.4305236041545868,
+                "class_fractions": {
+                  "floor": 0.5963932291666667,
+                  "lane_line": 0.049296875,
+                  "wall": 0.35430989583333333,
+                  "drivable": 0.0,
+                  "stop_line": 0.0,
+                  "crosswalk": 0.0
+                },
+                "wall_fraction": 0.0
+              },
+              "latency_ms_model_pc": 85.33788999193348
+            },
+            {
+              "model_revision": "lane-seg-20261004-f21a7a97",
+              "evidence": {
+                "visible": true,
+                "error": 0.5388028996865204,
+                "confidence": 0.10066206008195877,
+                "class_fractions": {
+                  "floor": 0.5555208333333334,
+                  "lane_line": 0.04609375,
+                  "wall": 0.3741276041666667,
+                  "drivable": 0.0242578125,
+                  "stop_line": 0.0,
+                  "crosswalk": 0.0
+                },
+                "wall_fraction": 0.065234375
+              },
+              "latency_ms_model_pc": 20.663413000875153
+            }
+          ]
+        },
+        {
+          "frame_index": 877,
+          "video_time_s": 110.27285301144222,
+          "decoded_image_sha256": "3505d77be499be0d2f909cf2810aaf92dc9737a3b08bf885e8ce45913c947855",
+          "brightness_mean": 93.78478298611111,
+          "results": [
+            {
+              "model_revision": "lane-seg-20261004-72799466",
+              "evidence": {
+                "visible": true,
+                "error": -0.10523435176925364,
+                "confidence": 0.411073237657547,
+                "class_fractions": {
+                  "floor": 0.46555989583333335,
+                  "lane_line": 0.017083333333333332,
+                  "wall": 0.4296744791666667,
+                  "drivable": 0.08768229166666666,
+                  "stop_line": 0.0,
+                  "crosswalk": 0.0
+                },
+                "wall_fraction": 0.0
+              },
+              "latency_ms_model_pc": 60.74665000778623
+            },
+            {
+              "model_revision": "lane-seg-20261004-f21a7a97",
+              "evidence": {
+                "visible": true,
+                "error": 0.05241839477726575,
+                "confidence": 0.4273079037666321,
+                "class_fractions": {
+                  "floor": 0.4964453125,
+                  "lane_line": 0.019544270833333332,
+                  "wall": 0.4344140625,
+                  "drivable": 0.04959635416666667,
+                  "stop_line": 0.0,
+                  "crosswalk": 0.0
+                },
+                "wall_fraction": 0.0
+              },
+              "latency_ms_model_pc": 21.98516100179404
+            }
+          ]
+        },
+        {
+          "frame_index": 1754,
+          "video_time_s": 220.54570602288445,
+          "decoded_image_sha256": "decf804424b8f2149faaec4a5935a65b5c10f62638ecae7590152e101157d89d",
+          "brightness_mean": 94.1489453125,
+          "results": [
+            {
+              "model_revision": "lane-seg-20261004-72799466",
+              "evidence": {
+                "visible": true,
+                "error": -0.07192638266068752,
+                "confidence": 0.25387102365493774,
+                "class_fractions": {
+                  "floor": 0.5185416666666667,
+                  "lane_line": 0.0173046875,
+                  "wall": 0.4289322916666667,
+                  "drivable": 0.03522135416666667,
+                  "stop_line": 0.0,
+                  "crosswalk": 0.0
+                },
+                "wall_fraction": 0.0
+              },
+              "latency_ms_model_pc": 41.51538301084656
+            },
+            {
+              "model_revision": "lane-seg-20261004-f21a7a97",
+              "evidence": {
+                "visible": true,
+                "error": 0.021894045200609467,
+                "confidence": 0.2629372477531433,
+                "class_fractions": {
+                  "floor": 0.5151692708333333,
+                  "lane_line": 0.019557291666666667,
+                  "wall": 0.43298177083333333,
+                  "drivable": 0.03229166666666667,
+                  "stop_line": 0.0,
+                  "crosswalk": 0.0
+                },
+                "wall_fraction": 0.0
+              },
+              "latency_ms_model_pc": 20.466043992200866
+            }
+          ]
+        },
+        {
+          "frame_index": 2631,
+          "video_time_s": 330.81855903432665,
+          "decoded_image_sha256": "9ae2187408ac7f70eb6dd79eaf90231ca5bfa70c5251622c14069341461da834",
+          "brightness_mean": 94.49043402777778,
+          "results": [
+            {
+              "model_revision": "lane-seg-20261004-72799466",
+              "evidence": {
+                "visible": true,
+                "error": -0.03532419655104846,
+                "confidence": 0.4022762179374695,
+                "class_fractions": {
+                  "floor": 0.4856770833333333,
+                  "lane_line": 0.017174479166666666,
+                  "wall": 0.43061197916666666,
+                  "drivable": 0.06653645833333334,
+                  "stop_line": 0.0,
+                  "crosswalk": 0.0
+                },
+                "wall_fraction": 0.0
+              },
+              "latency_ms_model_pc": 49.45947199303191
+            },
+            {
+              "model_revision": "lane-seg-20261004-f21a7a97",
+              "evidence": {
+                "visible": true,
+                "error": 0.0413855215004574,
+                "confidence": 0.44234153628349304,
+                "class_fractions": {
+                  "floor": 0.49657552083333334,
+                  "lane_line": 0.0194140625,
+                  "wall": 0.43537760416666665,
+                  "drivable": 0.0486328125,
+                  "stop_line": 0.0,
+                  "crosswalk": 0.0
+                },
+                "wall_fraction": 0.0008463541666666667
+              },
+              "latency_ms_model_pc": 18.568215004052036
+            }
+          ]
+        },
+        {
+          "frame_index": 3508,
+          "video_time_s": 441.0914120457689,
+          "decoded_image_sha256": "782eb0eb6c439589abb6ab7c0aa6d5a63d0abc0df22ad2dc2ccee828e21a25c9",
+          "brightness_mean": 93.52016493055555,
+          "results": [
+            {
+              "model_revision": "lane-seg-20261004-72799466",
+              "evidence": {
+                "visible": true,
+                "error": -0.11378573102155584,
+                "confidence": 0.35679134726524353,
+                "class_fractions": {
+                  "floor": 0.48477864583333335,
+                  "lane_line": 0.017317708333333334,
+                  "wall": 0.4283723958333333,
+                  "drivable": 0.06953125,
+                  "stop_line": 0.0,
+                  "crosswalk": 0.0
+                },
+                "wall_fraction": 0.0
+              },
+              "latency_ms_model_pc": 40.61820100469049
+            },
+            {
+              "model_revision": "lane-seg-20261004-f21a7a97",
+              "evidence": {
+                "visible": true,
+                "error": 0.05361068991660343,
+                "confidence": 0.34214746952056885,
+                "class_fractions": {
+                  "floor": 0.5059635416666667,
+                  "lane_line": 0.019192708333333332,
+                  "wall": 0.43384114583333333,
+                  "drivable": 0.041002604166666665,
+                  "stop_line": 0.0,
+                  "crosswalk": 0.0
+                },
+                "wall_fraction": 0.0
+              },
+              "latency_ms_model_pc": 18.929382000351325
+            }
+          ]
+        },
+        {
+          "frame_index": 4385,
+          "video_time_s": 551.3642650572111,
+          "decoded_image_sha256": "d4616da41db6925d388a70ca728e10d95bbccb81077a1fe51b505465c73abb5e",
+          "brightness_mean": 93.92012152777778,
+          "results": [
+            {
+              "model_revision": "lane-seg-20261004-72799466",
+              "evidence": {
+                "visible": true,
+                "error": -0.0749981585150266,
+                "confidence": 0.2141573578119278,
+                "class_fractions": {
+                  "floor": 0.5331640625,
+                  "lane_line": 0.0173046875,
+                  "wall": 0.4269661458333333,
+                  "drivable": 0.022565104166666666,
+                  "stop_line": 0.0,
+                  "crosswalk": 0.0
+                },
+                "wall_fraction": 0.0
+              },
+              "latency_ms_model_pc": 50.59338398859836
+            },
+            {
+              "model_revision": "lane-seg-20261004-f21a7a97",
+              "evidence": {
+                "visible": true,
+                "error": -0.005854079008882707,
+                "confidence": 0.28787651658058167,
+                "class_fractions": {
+                  "floor": 0.5124348958333333,
+                  "lane_line": 0.019322916666666665,
+                  "wall": 0.4354557291666667,
+                  "drivable": 0.03278645833333333,
+                  "stop_line": 0.0,
+                  "crosswalk": 0.0
+                },
+                "wall_fraction": 0.0
+              },
+              "latency_ms_model_pc": 21.885282010771334
+            }
+          ]
+        },
+        {
+          "frame_index": 5262,
+          "video_time_s": 661.6371180686533,
+          "decoded_image_sha256": "75533c1ac361f26302f5d926e84d37234c45ae4d16b63addf74c423b21abb9f7",
+          "brightness_mean": 95.3241796875,
+          "results": [
+            {
+              "model_revision": "lane-seg-20261004-72799466",
+              "evidence": {
+                "visible": true,
+                "error": -0.15397142470205855,
+                "confidence": 0.4256238341331482,
+                "class_fractions": {
+                  "floor": 0.4830078125,
+                  "lane_line": 0.017239583333333332,
+                  "wall": 0.42756510416666665,
+                  "drivable": 0.0721875,
+                  "stop_line": 0.0,
+                  "crosswalk": 0.0
+                },
+                "wall_fraction": 0.0
+              },
+              "latency_ms_model_pc": 43.98422900703736
+            },
+            {
+              "model_revision": "lane-seg-20261004-f21a7a97",
+              "evidence": {
+                "visible": true,
+                "error": 0.050600351060651326,
+                "confidence": 0.42704322934150696,
+                "class_fractions": {
+                  "floor": 0.4909765625,
+                  "lane_line": 0.019375,
+                  "wall": 0.44115885416666667,
+                  "drivable": 0.048489583333333336,
+                  "stop_line": 0.0,
+                  "crosswalk": 0.0
+                },
+                "wall_fraction": 0.0
+              },
+              "latency_ms_model_pc": 15.761680988362059
+            }
+          ]
+        },
+        {
+          "frame_index": 6139,
+          "video_time_s": 771.9099710800955,
+          "decoded_image_sha256": "9a4ba593d947ac1617069aa4309091385b39a2511778b2b44b6825c2460675ad",
+          "brightness_mean": 116.04069010416667,
+          "results": [
+            {
+              "model_revision": "lane-seg-20261004-72799466",
+              "evidence": {
+                "visible": true,
+                "error": 0.28716069489685125,
+                "confidence": 0.2883538007736206,
+                "class_fractions": {
+                  "floor": 0.4992578125,
+                  "lane_line": 0.08298177083333333,
+                  "wall": 0.3935416666666667,
+                  "drivable": 0.02421875,
+                  "stop_line": 0.0,
+                  "crosswalk": 0.0
+                },
+                "wall_fraction": 0.0
+              },
+              "latency_ms_model_pc": 43.15311800746713
+            },
+            {
+              "model_revision": "lane-seg-20261004-f21a7a97",
+              "evidence": {
+                "visible": true,
+                "error": -0.1021819526627219,
+                "confidence": 0.13961105048656464,
+                "class_fractions": {
+                  "floor": 0.430625,
+                  "lane_line": 0.0873828125,
+                  "wall": 0.37798177083333334,
+                  "drivable": 0.10401041666666666,
+                  "stop_line": 0.0,
+                  "crosswalk": 0.0
+                },
+                "wall_fraction": 0.009733072916666667
+              },
+              "latency_ms_model_pc": 16.708836003090255
+            }
+          ]
+        },
+        {
+          "frame_index": 7016,
+          "video_time_s": 882.1828240915378,
+          "decoded_image_sha256": "7e758dca7bfec164065a738e5d61bbadfd6ae926ebfbdb0baef7e6d145243573",
+          "brightness_mean": 129.43795572916667,
+          "results": [
+            {
+              "model_revision": "lane-seg-20261004-72799466",
+              "evidence": {
+                "visible": true,
+                "error": -0.15320680628272249,
+                "confidence": 0.6417858600616455,
+                "class_fractions": {
+                  "floor": 0.4986848958333333,
+                  "lane_line": 0.10233072916666666,
+                  "wall": 0.3434765625,
+                  "drivable": 0.0555078125,
+                  "stop_line": 0.0,
+                  "crosswalk": 0.0
+                },
+                "wall_fraction": 0.0
+              },
+              "latency_ms_model_pc": 50.688835995970294
+            },
+            {
+              "model_revision": "lane-seg-20261004-f21a7a97",
+              "evidence": {
+                "visible": true,
+                "error": -0.4839180424528302,
+                "confidence": 0.1426844596862793,
+                "class_fractions": {
+                  "floor": 0.4895833333333333,
+                  "lane_line": 0.09875,
+                  "wall": 0.3329036458333333,
+                  "drivable": 0.07876302083333334,
+                  "stop_line": 0.0,
+                  "crosswalk": 0.0
+                },
+                "wall_fraction": 0.0
+              },
+              "latency_ms_model_pc": 15.685922000557184
+            }
+          ]
+        },
+        {
+          "frame_index": 7893,
+          "video_time_s": 992.45567710298,
+          "decoded_image_sha256": "0b7b8f8d12c230a0ea954e22c51ba4b03c7f342b4213b3b418fa4dddffbd4946",
+          "brightness_mean": 120.32523003472222,
+          "results": [
+            {
+              "model_revision": "lane-seg-20261004-72799466",
+              "evidence": {
+                "visible": true,
+                "error": -0.1895171608970731,
+                "confidence": 0.8371703028678894,
+                "class_fractions": {
+                  "floor": 0.27389322916666664,
+                  "lane_line": 0.09153645833333333,
+                  "wall": 0.3555598958333333,
+                  "drivable": 0.27901041666666665,
+                  "stop_line": 0.0,
+                  "crosswalk": 0.0
+                },
+                "wall_fraction": 0.0023111979166666667
+              },
+              "latency_ms_model_pc": 42.751755987410434
+            },
+            {
+              "model_revision": "lane-seg-20261004-f21a7a97",
+              "evidence": {
+                "visible": true,
+                "error": -0.18088924381028146,
+                "confidence": 0.6024136543273926,
+                "class_fractions": {
+                  "floor": 0.33805989583333335,
+                  "lane_line": 0.06255208333333333,
+                  "wall": 0.42604166666666665,
+                  "drivable": 0.17334635416666666,
+                  "stop_line": 0.0,
+                  "crosswalk": 0.0
+                },
+                "wall_fraction": 0.026432291666666666
+              },
+              "latency_ms_model_pc": 15.032888011774048
+            }
+          ]
+        },
+        {
+          "frame_index": 8770,
+          "video_time_s": 1102.7285301144223,
+          "decoded_image_sha256": "6ce45be930e0191cf80fbb5d7aa96ab8310aeaaf8883064b4d78f6bfa4b8bb43",
+          "brightness_mean": 126.07620225694444,
+          "results": [
+            {
+              "model_revision": "lane-seg-20261004-72799466",
+              "evidence": {
+                "visible": true,
+                "error": -0.0023409612442630845,
+                "confidence": 0.836120069026947,
+                "class_fractions": {
+                  "floor": 0.2923307291666667,
+                  "lane_line": 0.08583333333333333,
+                  "wall": 0.3833723958333333,
+                  "drivable": 0.23846354166666667,
+                  "stop_line": 0.0,
+                  "crosswalk": 0.0
+                },
+                "wall_fraction": 0.010026041666666667
+              },
+              "latency_ms_model_pc": 42.005698996945284
+            },
+            {
+              "model_revision": "lane-seg-20261004-f21a7a97",
+              "evidence": {
+                "visible": true,
+                "error": -0.03718238834773011,
+                "confidence": 0.47341081500053406,
+                "class_fractions": {
+                  "floor": 0.40515625,
+                  "lane_line": 0.07307291666666667,
+                  "wall": 0.36234375,
+                  "drivable": 0.15942708333333333,
+                  "stop_line": 0.0,
+                  "crosswalk": 0.0
+                },
+                "wall_fraction": 0.0030598958333333333
+              },
+              "latency_ms_model_pc": 17.35673099756241
+            }
+          ]
+        },
+        {
+          "frame_index": 9648,
+          "video_time_s": 1213.1271218408147,
+          "decoded_image_sha256": "c1e1ead28f0a1443c047259865d11ed35f71d3c2158ed2405340c294f8dcb49f",
+          "brightness_mean": 125.29898003472222,
+          "results": [
+            {
+              "model_revision": "lane-seg-20261004-72799466",
+              "evidence": {
+                "visible": true,
+                "error": 0.1321920789206441,
+                "confidence": 0.827236533164978,
+                "class_fractions": {
+                  "floor": 0.34,
+                  "lane_line": 0.08903645833333333,
+                  "wall": 0.384765625,
+                  "drivable": 0.18619791666666666,
+                  "stop_line": 0.0,
+                  "crosswalk": 0.0
+                },
+                "wall_fraction": 0.006705729166666666
+              },
+              "latency_ms_model_pc": 51.25021499407012
+            },
+            {
+              "model_revision": "lane-seg-20261004-f21a7a97",
+              "evidence": {
+                "visible": true,
+                "error": 0.036823074974670786,
+                "confidence": 0.5125396847724915,
+                "class_fractions": {
+                  "floor": 0.413828125,
+                  "lane_line": 0.07403645833333333,
+                  "wall": 0.364609375,
+                  "drivable": 0.14752604166666666,
+                  "stop_line": 0.0,
+                  "crosswalk": 0.0
+                },
+                "wall_fraction": 0.00810546875
+              },
+              "latency_ms_model_pc": 15.514914994128048
+            }
+          ]
+        }
+      ],
+      "scope": "historical video replay on model PC; no live Pi acceptance or labelled accuracy; column order raw/wall-v2/lighting-base8"
+    },
+    {
+      "video": "teleop_rosy-pinky-8kcn_20261001T130842Z.mp4",
+      "video_sha256": "38876a5d83ee916d8300c81a41210cc18803b4f08d3bc5791b84e4d25a0d44e4",
+      "frame_count": 14240,
+      "fps": 7.967,
+      "sample_selection": "12 evenly spaced frame indices incl endpoints",
+      "timestamp_basis": "video relative only; filename UTC not authenticated capture stamp",
+      "samples": [
+        {
+          "frame_index": 0,
+          "video_time_s": 0.0,
+          "decoded_image_sha256": "e79958b7140feacc998c948d1a8ac36e443103888b616b6c412f9bdf7ff538f5",
+          "brightness_mean": 110.50516059027778,
+          "results": [
+            {
+              "model_revision": "lane-seg-20261004-72799466",
+              "evidence": {
+                "visible": true,
+                "error": 0.04499347004557066,
+                "confidence": 0.9291847348213196,
+                "class_fractions": {
+                  "floor": 0.1798046875,
+                  "lane_line": 0.08243489583333333,
+                  "wall": 0.4599479166666667,
+                  "drivable": 0.2778125,
+                  "stop_line": 0.0,
+                  "crosswalk": 0.0
+                },
+                "wall_fraction": 0.11155598958333333
+              },
+              "latency_ms_model_pc": 42.5453999923775
+            },
+            {
+              "model_revision": "lane-seg-20261004-f21a7a97",
+              "evidence": {
+                "visible": true,
+                "error": -0.21395986332109346,
+                "confidence": 0.7175080180168152,
+                "class_fractions": {
+                  "floor": 0.2634765625,
+                  "lane_line": 0.07479166666666667,
+                  "wall": 0.5894140625,
+                  "drivable": 0.07231770833333333,
+                  "stop_line": 0.0,
+                  "crosswalk": 0.0
+                },
+                "wall_fraction": 0.37086588541666665
+              },
+              "latency_ms_model_pc": 15.727034988231026
+            }
+          ]
+        },
+        {
+          "frame_index": 1294,
+          "video_time_s": 162.4199824275135,
+          "decoded_image_sha256": "4daee1cec67506dfd608f0f83f19012ca7556925d325665bc238b21b0d19d949",
+          "brightness_mean": 118.36974392361111,
+          "results": [
+            {
+              "model_revision": "lane-seg-20261004-72799466",
+              "evidence": {
+                "visible": true,
+                "error": 0.026286480479319606,
+                "confidence": 0.7706483602523804,
+                "class_fractions": {
+                  "floor": 0.3389453125,
+                  "lane_line": 0.118046875,
+                  "wall": 0.3951171875,
+                  "drivable": 0.147890625,
+                  "stop_line": 0.0,
+                  "crosswalk": 0.0
+                },
+                "wall_fraction": 0.0
+              },
+              "latency_ms_model_pc": 44.63153598771896
+            },
+            {
+              "model_revision": "lane-seg-20261004-f21a7a97",
+              "evidence": {
+                "visible": true,
+                "error": 0.5825713995668652,
+                "confidence": 0.29654988646507263,
+                "class_fractions": {
+                  "floor": 0.47248697916666665,
+                  "lane_line": 0.114140625,
+                  "wall": 0.353515625,
+                  "drivable": 0.059856770833333336,
+                  "stop_line": 0.0,
+                  "crosswalk": 0.0
+                },
+                "wall_fraction": 0.0
+              },
+              "latency_ms_model_pc": 15.897411009063944
+            }
+          ]
+        },
+        {
+          "frame_index": 2588,
+          "video_time_s": 324.839964855027,
+          "decoded_image_sha256": "04ca862ae8d86095b6758a986564f8f07a4cb26f2088f314a79d668f85031789",
+          "brightness_mean": 190.68724826388888,
+          "results": [
+            {
+              "model_revision": "lane-seg-20261004-72799466",
+              "evidence": {
+                "visible": true,
+                "error": 0.7860022189349113,
+                "confidence": 0.7639813423156738,
+                "class_fractions": {
+                  "floor": 0.14684895833333333,
+                  "lane_line": 0.0635546875,
+                  "wall": 0.7895963541666666,
+                  "drivable": 0.0,
+                  "stop_line": 0.0,
+                  "crosswalk": 0.0
+                },
+                "wall_fraction": 0.7276041666666667
+              },
+              "latency_ms_model_pc": 54.67426200630143
+            },
+            {
+              "model_revision": "lane-seg-20261004-f21a7a97",
+              "evidence": {
+                "visible": true,
+                "error": 0.5732330741079597,
+                "confidence": 0.7685995697975159,
+                "class_fractions": {
+                  "floor": 0.4819791666666667,
+                  "lane_line": 0.09986979166666667,
+                  "wall": 0.4101692708333333,
+                  "drivable": 0.007981770833333334,
+                  "stop_line": 0.0,
+                  "crosswalk": 0.0
+                },
+                "wall_fraction": 0.004720052083333333
+              },
+              "latency_ms_model_pc": 15.916096992441453
+            }
+          ]
+        },
+        {
+          "frame_index": 3883,
+          "video_time_s": 487.38546504330367,
+          "decoded_image_sha256": "45ba3c3b87f149018389d47a40cce6cd36fc90c391d07427a470d12cab20f611",
+          "brightness_mean": 177.1744965277778,
+          "results": [
+            {
+              "model_revision": "lane-seg-20261004-72799466",
+              "evidence": {
+                "visible": true,
+                "error": 0.3128488016095172,
+                "confidence": 0.6738159656524658,
+                "class_fractions": {
+                  "floor": 0.10584635416666667,
+                  "lane_line": 0.13717447916666667,
+                  "wall": 0.6790364583333334,
+                  "drivable": 0.07794270833333333,
+                  "stop_line": 0.0,
+                  "crosswalk": 0.0
+                },
+                "wall_fraction": 0.3922526041666667
+              },
+              "latency_ms_model_pc": 43.561059996136464
+            },
+            {
+              "model_revision": "lane-seg-20261004-f21a7a97",
+              "evidence": {
+                "visible": true,
+                "error": 0.12616087909552381,
+                "confidence": 0.2530383765697479,
+                "class_fractions": {
+                  "floor": 0.32264322916666666,
+                  "lane_line": 0.036536458333333334,
+                  "wall": 0.5806119791666666,
+                  "drivable": 0.060208333333333336,
+                  "stop_line": 0.0,
+                  "crosswalk": 0.0
+                },
+                "wall_fraction": 0.19306640625
+              },
+              "latency_ms_model_pc": 16.42799499677494
+            }
+          ]
+        },
+        {
+          "frame_index": 5177,
+          "video_time_s": 649.8054474708172,
+          "decoded_image_sha256": "2a44428c1558f6d300ff59a96550c42b7b98e6f9653356227c94ebd981e1091b",
+          "brightness_mean": 166.65125,
+          "results": [
+            {
+              "model_revision": "lane-seg-20261004-72799466",
+              "evidence": {
+                "visible": true,
+                "error": 0.22549332815588824,
+                "confidence": 0.3909913897514343,
+                "class_fractions": {
+                  "floor": 0.04670572916666667,
+                  "lane_line": 0.183671875,
+                  "wall": 0.7219661458333333,
+                  "drivable": 0.04765625,
+                  "stop_line": 0.0,
+                  "crosswalk": 0.0
+                },
+                "wall_fraction": 0.78544921875
+              },
+              "latency_ms_model_pc": 53.66094499186147
+            },
+            {
+              "model_revision": "lane-seg-20261004-f21a7a97",
+              "evidence": {
+                "visible": true,
+                "error": 0.38348270907649623,
+                "confidence": 0.6941153407096863,
+                "class_fractions": {
+                  "floor": 0.3001171875,
+                  "lane_line": 0.09005208333333334,
+                  "wall": 0.29756510416666665,
+                  "drivable": 0.312265625,
+                  "stop_line": 0.0,
+                  "crosswalk": 0.0
+                },
+                "wall_fraction": 0.018131510416666666
+              },
+              "latency_ms_model_pc": 15.733154999907129
+            }
+          ]
+        },
+        {
+          "frame_index": 6472,
+          "video_time_s": 812.3509476590938,
+          "decoded_image_sha256": "eb42d011ec9fc2d640b9096482b1d5f7150d73d4028e483ccb0df0e7522e5ad9",
+          "brightness_mean": 167.5008984375,
+          "results": [
+            {
+              "model_revision": "lane-seg-20261004-72799466",
+              "evidence": {
+                "visible": true,
+                "error": 0.210408386327504,
+                "confidence": 0.2172287255525589,
+                "class_fractions": {
+                  "floor": 0.0532421875,
+                  "lane_line": 0.1911328125,
+                  "wall": 0.6967838541666667,
+                  "drivable": 0.05884114583333333,
+                  "stop_line": 0.0,
+                  "crosswalk": 0.0
+                },
+                "wall_fraction": 0.7535481770833333
+              },
+              "latency_ms_model_pc": 52.413213008549064
+            },
+            {
+              "model_revision": "lane-seg-20261004-f21a7a97",
+              "evidence": {
+                "visible": true,
+                "error": 0.34485727990153486,
+                "confidence": 0.7377752661705017,
+                "class_fractions": {
+                  "floor": 0.27208333333333334,
+                  "lane_line": 0.09212239583333333,
+                  "wall": 0.30299479166666665,
+                  "drivable": 0.3327994791666667,
+                  "stop_line": 0.0,
+                  "crosswalk": 0.0
+                },
+                "wall_fraction": 0.035319010416666664
+              },
+              "latency_ms_model_pc": 17.6343790080864
+            }
+          ]
+        },
+        {
+          "frame_index": 7766,
+          "video_time_s": 974.7709300866073,
+          "decoded_image_sha256": "ac40313c76820a93fc462a008f9e7f72290657098279ca06ad29cedf091756c0",
+          "brightness_mean": 171.33591145833333,
+          "results": [
+            {
+              "model_revision": "lane-seg-20261004-72799466",
+              "evidence": {
+                "visible": true,
+                "error": 0.20361786590978834,
+                "confidence": 0.4167696237564087,
+                "class_fractions": {
+                  "floor": 0.0361328125,
+                  "lane_line": 0.2008984375,
+                  "wall": 0.726171875,
+                  "drivable": 0.036796875,
+                  "stop_line": 0.0,
+                  "crosswalk": 0.0
+                },
+                "wall_fraction": 0.8234049479166666
+              },
+              "latency_ms_model_pc": 43.1660010071937
+            },
+            {
+              "model_revision": "lane-seg-20261004-f21a7a97",
+              "evidence": {
+                "visible": true,
+                "error": 0.2945143433970232,
+                "confidence": 0.6422723531723022,
+                "class_fractions": {
+                  "floor": 0.3384505208333333,
+                  "lane_line": 0.08766927083333333,
+                  "wall": 0.3209375,
+                  "drivable": 0.2529427083333333,
+                  "stop_line": 0.0,
+                  "crosswalk": 0.0
+                },
+                "wall_fraction": 0.00029296875
+              },
+              "latency_ms_model_pc": 16.357632994186133
+            }
+          ]
+        },
+        {
+          "frame_index": 9061,
+          "video_time_s": 1137.316430274884,
+          "decoded_image_sha256": "8875de8871f00ad5d8d56253be0f4e8883f0d9dc97fbb6b88932318341d9c5f9",
+          "brightness_mean": 170.72338107638888,
+          "results": [
+            {
+              "model_revision": "lane-seg-20261004-72799466",
+              "evidence": {
+                "visible": true,
+                "error": 0.2073238487321481,
+                "confidence": 0.4580799341201782,
+                "class_fractions": {
+                  "floor": 0.035859375,
+                  "lane_line": 0.2071484375,
+                  "wall": 0.7156510416666667,
+                  "drivable": 0.041341145833333336,
+                  "stop_line": 0.0,
+                  "crosswalk": 0.0
+                },
+                "wall_fraction": 0.808984375
+              },
+              "latency_ms_model_pc": 47.17632199754007
+            },
+            {
+              "model_revision": "lane-seg-20261004-f21a7a97",
+              "evidence": {
+                "visible": true,
+                "error": 0.3030568300996329,
+                "confidence": 0.6440563201904297,
+                "class_fractions": {
+                  "floor": 0.3422135416666667,
+                  "lane_line": 0.0911328125,
+                  "wall": 0.30149739583333335,
+                  "drivable": 0.26515625,
+                  "stop_line": 0.0,
+                  "crosswalk": 0.0
+                },
+                "wall_fraction": 0.00042317708333333335
+              },
+              "latency_ms_model_pc": 17.876607991638593
+            }
+          ]
+        },
+        {
+          "frame_index": 10355,
+          "video_time_s": 1299.7364127023975,
+          "decoded_image_sha256": "1789b629452259533dd44a618155e236308b8e7bdb862018c98facdcf135a88f",
+          "brightness_mean": 175.26567274305555,
+          "results": [
+            {
+              "model_revision": "lane-seg-20261004-72799466",
+              "evidence": {
+                "visible": true,
+                "error": 0.19171540904865197,
+                "confidence": 0.4196873605251312,
+                "class_fractions": {
+                  "floor": 0.0377734375,
+                  "lane_line": 0.20381510416666668,
+                  "wall": 0.73609375,
+                  "drivable": 0.022317708333333332,
+                  "stop_line": 0.0,
+                  "crosswalk": 0.0
+                },
+                "wall_fraction": 0.8322265625
+              },
+              "latency_ms_model_pc": 46.201940000173636
+            },
+            {
+              "model_revision": "lane-seg-20261004-f21a7a97",
+              "evidence": {
+                "visible": true,
+                "error": 0.276043371522095,
+                "confidence": 0.6087678670883179,
+                "class_fractions": {
+                  "floor": 0.35180989583333333,
+                  "lane_line": 0.08904947916666667,
+                  "wall": 0.30346354166666667,
+                  "drivable": 0.25567708333333333,
+                  "stop_line": 0.0,
+                  "crosswalk": 0.0
+                },
+                "wall_fraction": 0.0013671875
+              },
+              "latency_ms_model_pc": 16.89230500778649
+            }
+          ]
+        },
+        {
+          "frame_index": 11650,
+          "video_time_s": 1462.281912890674,
+          "decoded_image_sha256": "f911f2948a3509b9df3e78eaddaf0359fcd9b6f918e36450b668afc8d1e7dd4b",
+          "brightness_mean": 180.50989583333333,
+          "results": [
+            {
+              "model_revision": "lane-seg-20261004-72799466",
+              "evidence": {
+                "visible": true,
+                "error": 0.0679877928919641,
+                "confidence": 0.7080051302909851,
+                "class_fractions": {
+                  "floor": 0.11552083333333334,
+                  "lane_line": 0.22912760416666667,
+                  "wall": 0.6455989583333334,
+                  "drivable": 0.009752604166666666,
+                  "stop_line": 0.0,
+                  "crosswalk": 0.0
+                },
+                "wall_fraction": 0.6356770833333333
+              },
+              "latency_ms_model_pc": 54.17862099420745
+            },
+            {
+              "model_revision": "lane-seg-20261004-f21a7a97",
+              "evidence": {
+                "visible": true,
+                "error": 0.08195008833922265,
+                "confidence": 0.30498719215393066,
+                "class_fractions": {
+                  "floor": 0.37149739583333335,
+                  "lane_line": 0.0881640625,
+                  "wall": 0.46501302083333335,
+                  "drivable": 0.07532552083333334,
+                  "stop_line": 0.0,
+                  "crosswalk": 0.0
+                },
+                "wall_fraction": 0.04772135416666667
+              },
+              "latency_ms_model_pc": 18.768910013022833
+            }
+          ]
+        },
+        {
+          "frame_index": 12944,
+          "video_time_s": 1624.7018953181876,
+          "decoded_image_sha256": "f5a94a33f3b43894f193be9487771c051b82909ce0944df3227d84d1929688a0",
+          "brightness_mean": 115.04038628472222,
+          "results": [
+            {
+              "model_revision": "lane-seg-20261004-72799466",
+              "evidence": {
+                "visible": true,
+                "error": 0.021968499180568913,
+                "confidence": 0.882328987121582,
+                "class_fractions": {
+                  "floor": 0.1998828125,
+                  "lane_line": 0.06233072916666667,
+                  "wall": 0.3667708333333333,
+                  "drivable": 0.371015625,
+                  "stop_line": 0.0,
+                  "crosswalk": 0.0
+                },
+                "wall_fraction": 0.0
+              },
+              "latency_ms_model_pc": 42.23415099841077
+            },
+            {
+              "model_revision": "lane-seg-20261004-f21a7a97",
+              "evidence": {
+                "visible": true,
+                "error": 0.04183038176166835,
+                "confidence": 0.7898253798484802,
+                "class_fractions": {
+                  "floor": 0.15533854166666666,
+                  "lane_line": 0.04701822916666667,
+                  "wall": 0.48845052083333335,
+                  "drivable": 0.30919270833333334,
+                  "stop_line": 0.0,
+                  "crosswalk": 0.0
+                },
+                "wall_fraction": 0.062272135416666666
+              },
+              "latency_ms_model_pc": 15.866978996200487
+            }
+          ]
+        },
+        {
+          "frame_index": 14239,
+          "video_time_s": 1787.2473955064643,
+          "decoded_image_sha256": "d96815ec34aed5b5151cb55467546c246b71b78d494032f294980c1703147f5f",
+          "brightness_mean": 123.75645399305556,
+          "results": [
+            {
+              "model_revision": "lane-seg-20261004-72799466",
+              "evidence": {
+                "visible": true,
+                "error": 0.20593297890883733,
+                "confidence": 0.8172501921653748,
+                "class_fractions": {
+                  "floor": 0.3068359375,
+                  "lane_line": 0.118125,
+                  "wall": 0.33541666666666664,
+                  "drivable": 0.23962239583333333,
+                  "stop_line": 0.0,
+                  "crosswalk": 0.0
+                },
+                "wall_fraction": 0.01318359375
+              },
+              "latency_ms_model_pc": 45.11336800351273
+            },
+            {
+              "model_revision": "lane-seg-20261004-f21a7a97",
+              "evidence": {
+                "visible": true,
+                "error": 0.30432915057915066,
+                "confidence": 0.5907641649246216,
+                "class_fractions": {
+                  "floor": 0.46341145833333336,
+                  "lane_line": 0.11088541666666667,
+                  "wall": 0.2796223958333333,
+                  "drivable": 0.14608072916666667,
+                  "stop_line": 0.0,
+                  "crosswalk": 0.0
+                },
+                "wall_fraction": 0.00458984375
+              },
+              "latency_ms_model_pc": 15.821694993064739
+            }
+          ]
+        }
+      ],
+      "scope": "historical video replay on model PC; no live Pi acceptance or labelled accuracy; column order raw/wall-v2/lighting-base8"
+    }
+  ],
+  "model_files": {
+    "runner_sha256": "94de4904b3925c23f1f550fa72db46a9109fb10195136aae6ff2fb937b791e6e",
+    "models": [
+      {
+        "run": "wall-v2-expanded-20261004-seed42704",
+        "checkpoint_sha256": "aea25fe10408562df65619408b1f9312d1a6133bb8e79481ca5023d57243b571",
+        "manifest_sha256": "8ffc9180e20297f580b021cdac312df0372041835f649e3a22b5bed72cca03e9",
+        "onnx_sha256": "7279946684b095f5878c1a2554dcfa654c1a911b29b8fd55ecf86c9289442a8a"
+      },
+      {
+        "run": "lighting-dice-base8-20261004-seed42704",
+        "checkpoint_sha256": "d9187328acb3d4f61aba5ef17de6f78aea91df0a7de6014cd2188116e0de1456",
+        "manifest_sha256": "b814f5f7a9567131720b1ecf301084925e81d7515e7e481353a56fc1f94cfd40",
+        "onnx_sha256": "f21a7a9711bb1b3051b23f7bcc3b52db648fa3b666eaff8a46b17bdbbab55a2b"
+      }
+    ]
+  },
+  "verification_scope": {
+    "historical_video_replay": true,
+    "live_robot": false,
+    "labelled_accuracy": false,
+    "model_promoted": false,
+    "firmware_deployed": false,
+    "sampled_frames": 24,
+    "review": "qualitative segmentation; repeated stationary scenes included; not all video frames assessed",
+    "model_evaluations": 48,
+    "mask_render_backend_runs": 48,
+    "warmup_excluded": true
+  }
+}
