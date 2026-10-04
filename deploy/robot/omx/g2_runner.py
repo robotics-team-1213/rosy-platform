@@ -225,6 +225,8 @@ def execute(run, recipe, cell, profile, children):
                              "--run", str(run)], env=env)
     children.start("fleet", [sys.executable, str(Path(__file__).with_name("g2_fleet.py")),
                              "--run", str(run)], env=env)
+    # Includes the owner's bounded, durable Pilot-seat startup homing and measured settling.
+    deadline = time.monotonic()+300
     client = FleetClient(run, credentials)
     while True:
         children.assert_alive()
