@@ -5824,3 +5824,9 @@ osy-d395-s1d\`.
 - 변경: D-456 수신 TLS 검증 시험에 서명 payload와 동일한 해시 고정 crypto 집합을 CI 전용 디렉터리로 설치한다. 검증 API import와 버전 49.0.0을 실제 확인한다. 기존 런타임 pin·wheel hash를 바꾸지 않으며 API v1.104 변경 이력과 앱 설명을 일치시킨다.
 - 증거: 원격 core-domain 수집 실패는 이전 컨테이너 crypto의 verification 모듈 부재였다. 신규 CI 계약 시험의 실패를 먼저 재현했고 기존 hash 집합의 AMD64 wheel 다운로드를 검증했다. 정상 pre-push 474 passed/2 skipped/2 failed의 버전 불일치도 수리 대상으로 남긴다.
 - gate 변화: SOURCE/LOCAL 수리. 신규 원격 CI·서명 배포·기기 연결 수용은 별도다.
+
+## 2026-10-05 · uncommitted · docs(learning): 모델 PC 픽셀 자동 라벨 초안 파이프라인 D-465
+
+- 변경: 차선·바닥·벽 픽셀 우선, 기하/기존 모델과 로컬 분할 보완, 선택 OpenRouter 보조 판단을 D-462 검수와 D-464 builder 앞단에 연결하는 설계를 기록한다. RTX 5080 16 GB는 설계 기준이며 실제 GPU·처리량·라벨 품질은 미검증이다.
+- 증거: 생성 직전 main·작업 트리 ADR/Log와 전체 로컬 브랜치 ADR trees 및 harness adr_gaps에서 최고 번호 D-464를 확인했다. lint와 문서 계약 시험 결과는 X:/DevTemp/pixel-label-adr에 보존한다.
+- gate 변화: 설계 기록만 추가한다. 모델 설치·외부 API 호출·학습·승격·GPU/DEVICE/FIELD 수용은 별도다.
