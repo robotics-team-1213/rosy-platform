@@ -5773,3 +5773,30 @@ osy-d395-s1d\`.
 - 변경: producer helper는 v2 contract뿐 아니라 봉인된 pinky-review-receipt.json authority도 schema/digest/types로 검증하고 encoded JSON의 정확한 일치를 요구한다. Python dict의 False==0 동등성으로 변조 receipt를 수용하는 경로를 제거한다. Root consumer/adapter 경로는 고치지 않는다.
 - 증거: Root의 독립 합성 reseal 재현을 회귀로 옮겼다. 수정 전1failed/1passed 재현을 X:/DevTemp/pinky-review-cycle-20261005/receipt-red.txt에 보존하고, 수정 후 기존 snapshot/content/CAS와 receipt 두 변조 회귀를 함께 검증한다. 실제 사람 검수 상태는 변경하지 않는다.
 - gate 변화: SOURCE/LOCAL helper 보완. 실제 export의 격리 model-PC 소비 통과는 Root 증거이며 생산 학습 서비스 전환·human pixel qualification과 별개다. push·주행·HOLD 해제·정책 권한 변경 없음.
+
+## 2026-10-05 · uncommitted · docs(reference): API Ref v1.100 — D-368 운전자 MJPEG 스트림
+
+- 변경: `ROSY API & Protocol Reference.md` v1.99→v1.100. §5 경로 표에 `GET /api/v1/vision/front/stream`(operator, multipart boundary `frame`, `?overlay=`) 행 추가, 카메라 preview 전송 규칙에 스트림 조항(운전자 = 마지막 수락 teleop 토큰, D-460 임대 없음·409 코드 두 종·동시 하나·새 sequence만·헤더 인증 D-193) 추가, 버전 이력 행 추가.
+- 증거: 문서와 구현(`api/v1/vision.py`, `core_features/vision/stream.py`) 동일 커밋. envelope `protocol_version` 1.0 불변(PRT-006 additive). schemas.py 신규 페이로드 없음(멀티파트는 JSON envelope 아님).
+- gate 변화: 없음.
+- 결정: D-368 §1~3·5의 CORE·클라이언트 계약 확정. §4(발행 12 fps 상향)는 로봇 측 ROS-SIM/DEVICE 사항으로 남는다.
+
+## 2026-10-05 · uncommitted · docs(reference): D-368 행 v1.100→v1.101 재번호
+
+- 변경: main 병합에서 D-463(차선 경로)이 v1.100을 먼저 썼다. D-368 스트림의 이력 행·경로 표·전송 규칙 조항·문서 Version 표기를 v1.101로 옮기고, app.py 계약 표기와 세 문서 시험 핀을 같이 올렸다.
+- 증거: lint 재검사 0 error(재번호 전 append-only 위반 1건 수정 — 커밋된 앞 항목은 원문 유지).
+- gate 변화: 없음.
+- 결정: API 문서 버전 충돌은 늦게 착지한 쪽이 재번호한다.
+
+## 2026-10-05 · uncommitted · docs(reference): D-368 행 v1.101→v1.102 재번호
+
+- 변경: 착지 직전 main이 D-456(LAN 수신 승인)로 v1.101을 썼다. D-368 스트림 표기를 v1.102로 옮기고 app.py 계약 표기와 세 문서 시험 핀을 같이 올렸다.
+- 증거: lint 재검사. 재번호 규칙은 앞 항목과 동일.
+- gate 변화: 없음.
+- 결정: 같은 규칙 지속 — 늦게 착지한 쪽이 재번호한다.
+
+## 2026-10-05 · uncommitted · test(learning): reject resealed embedded authority scalar aliases
+
+- 변경: 최종 producer helper는 이미 current·contract authority·receipt authority 각각을 validate_authority로 검증하고 encoded JSON을 비교한다. 독립 재현의 frame_excluded=False→0 및 original_video_verified=False→0를 봉인 contract에 적용하는 회귀를 추가했다. embedded decision digest 유지/재계산 두 경우 모두 바깥 봉인을 다시 계산해도 거부해야 한다.
+- 증거: 관련 producer/app 시험 출력은 X:/DevTemp/pinky-review-cycle-20261005/embedded-alias-exact-tests.txt에 보존한다. 기존 ignore_index255.0 및 receipt alias 회귀를 함께 실행한다. 실제 사람 검수 상태는 변경하지 않는다.
+- gate 변화: SOURCE/LOCAL 회귀 보강만 한다. 독립 producer 통합 수용과 학습 적격성은 root/policy 검증자의 판정으로 남는다. push·모델 활성화·주행·HOLD 해제 없음.

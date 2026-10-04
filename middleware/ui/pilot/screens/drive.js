@@ -6,6 +6,7 @@
 // 한다 — 변환은 stick.js 한 곳에서만 한다.
 
 import {postJson, whoami, api as apiGet, authHeaders, token} from "../client.js";
+import {createDriverStream, STREAM_STALE_WARN_MS} from "../vision.js";
 import {createDeviceSession} from "../link.js";
 import {createModelStatus, renderModels} from "../models.js";
 import {driverFor} from "../drivers/registry.js";
@@ -151,7 +152,51 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
   session.open();
 
   // --- 영상: 인증 JPEG 폴링 --------------------------------------------------
-  const {capture, vision} = mountBrowserRecording({element, apiGet, authHeaders});
+  const {capture, vision, acceptPreview} = mountBrowserRecording({element, apiGet, authHeaders});
+
+  // --- D-368: 운전자 MJPEG 스트림(폴링 대체, 끊기면 자동 복귀) ----------------
+  // 운전자 판정은 서버가 한다(409 = 운전자 아님·이미 열림). 이 화면은 결과만 따른다:
+  // 스트림이 붙으면 폴링을 끊고, 끊기면 폴링으로 돌아가 잠시 뒤 다시 시도한다.
+  // 주석 쌍(annotated) 캡처는 원본 짝이 필요해 폴링만 가능하다 — raw 모드에서만 스트림.
+  const videoFact = el("span", "영상 폴링", {"data-drive-fact": "video"});
+  root.querySelector("[data-drive-facts]")?.append(videoFact);
+  let streamAlive = true;
+  let streaming = false;
+  let retryCancel = null;
+  function tryStream() {
+    if (!streamAlive || streaming) return;
+    if (capture.state().previewMode !== "raw") return;
+    stream.start(false);
+  }
+  function scheduleStreamRetry(ms = 3000) {
+    if (!streamAlive) return;
+    retryCancel?.();
+    retryCancel = setTimeout(tryStream, ms);
+  }
+  const stream = createDriverStream({
+    headers: () => authHeaders(),
+    onFrame: (url, meta) => {
+      if (!streaming) {
+        streaming = true;
+        vision.stop();   // 스트림이 붙었다 — 폴링의 대역폭을 돌려준다
+      }
+      acceptPreview(url, {blob: meta.blob, rawBlob: meta.blob, sequence: meta.seq,
+                          source: meta.source, capturedAt: meta.capturedAt, previewMode: "raw"});
+    },
+    onStats: ({fps, ageMs}) => {
+      videoFact.hidden = false;
+      videoFact.textContent = `영상 ${fps}fps${ageMs == null ? "" : ` · ${Math.round(ageMs)}ms`}`;
+      videoFact.dataset.stale = String(ageMs != null && ageMs > STREAM_STALE_WARN_MS);
+    },
+    onLost: ({status}) => {
+      streaming = false;
+      videoFact.textContent = status === 409 ? "영상 폴링 · 운전자 아님" : "영상 폴링";
+      videoFact.dataset.stale = "false";
+      vision.start();    // 폴링 복귀(D-368 §5) — start()는 이미 돌면 아무것도 안 한다
+      scheduleStreamRetry();
+    },
+  });
+  tryStream();
 
   // --- 모델(D-423 §3.6): 읽기 전용 상태, 교체는 rosy_ml CLI ------------------
   const modelPanel = document.createElement("details");
@@ -456,7 +501,13 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
   browserLabel.append(browserMode); element.browserMode = browserMode;
   browserMode.addEventListener("change", () => {
     if (!capture.setPreviewMode(browserMode.value)) browserMode.value = capture.state().previewMode;
-    else { vision.stop(); vision.start(); }
+    else {
+      streaming = false;
+      stream.stop();       // 주석 쌍 모드는 스트림이 못 섬긴다 — 폴링 짝으로 갈아탄다
+      vision.stop(); vision.start();
+      if (browserMode.value === "raw") scheduleStreamRetry(500);
+      else videoFact.textContent = "영상 폴링";
+    }
   });
   const shotButton = el("ui-button", "촬영", {type: "button", "data-evidence-shot": ""});
   shotButton.setAttribute("kind", "quiet");
@@ -620,6 +671,9 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
     if (modeHeld && !calibrationLocked) gate.disengage(postJson).catch(() => {});
     modeHeld = false;
     clearTimeout(whoamiTimer);
+    streamAlive = false;
+    retryCancel?.();
+    stream.stop();
     vision.stop();
     models.stop();
     perception.dispose();

@@ -421,8 +421,15 @@
 - 변경: 같은 LAN 목록에서 선택한 장비에 수신 승인을 요청하고 P256 키·TLS 신원 확인 뒤 기존 조종 세션으로 연결한다. 승인 기록은 일반 세션과 별도로 암호화해 보관한다. 승인 직후 연결 실패에도 기록을 남기고, 키 변경·폐기·발급자 만료 시 기록을 보존한 채 접속을 차단한다. 마지막 선택 장비의 연결 정보를 실패 화면에서도 열 수 있다.
 - 증거: 최종 Kotlin 컴파일과 실제 JVM 검사 81 PASS·0 SKIP. 승인 뒤 challenge 실패의 저장 순서와 실패한 재연결에서 기존 암호화 바이트 보존을 회귀 검사했다. 실제 Android 대화상자 표시·APK 설치·상대 화면 승인·DHCP 재연결은 아직 확인하지 않았다.
 - gate 변화: 새 페어링 변경의 SOURCE/LOCAL 증거다. 기존 D-444 사용자 실기 확인 DEVICE GO는 보존하며 이를 새 페어링 수용으로 대신하지 않는다. Bluetooth·주소 입력·개발 설정은 기본 연결 흐름에 추가하지 않는다.
+
 ## 2026-10-05 · uncommitted · refactor(pairing): 발급 세션 변수와 시험 이름 명확화
 
 - 변경: 발급된 단기 세션 변수명을 accessToken으로 명확히 하고 세 시험 이름을 줄였다. wire 필드와 검증 단언은 유지한다.
 - 증거: 세 파일의 독립 source 검토에서 이름 변경만 확인했다. 변경한 실제 snapshot의 Kotlin 컴파일과 JVM 검사 81 PASS·0 SKIP를 다시 확인했다.
 - gate 변화: SOURCE/LOCAL만. 실제 설치·LAN 승인 수용은 별도다.
+
+## 2026-10-05 · uncommitted · feat(drive): D-368 운전자 MJPEG 스트림 클라이언트
+
+- 변경: `vision.js`에 `createDriverStream`(fetch 스트림 + multipart 증분 파서 + fps·age 통계, 헤더 인증만·URL 토큰 없음 D-193) 추가. `drive.js` 조종 화면에서 스트림 시도 — 붙으면 폴링 정지, 끊기면 폴링 복귀 후 3 s 재시도, HUD에 `영상 Nfps · Mms` fact(1 s 초과 경고색). 주석 쌍(annotated) 캡처는 원본 짝이 필요해 raw 모드에서만 스트림. `robot-recording.js`의 미리보기 수락 경로(acceptPreview)를 폴링·스트림 공용으로 추출. `sw.js` 캐시 키 갱신.
+- 증거: `test/test_vision_stream_client.py` 3 PASS(분할 청크 재조립·몸통 분할 대기·프레임/통계/종료 폴백). pilot 전체 90 PASS. ADR이 명시한 createImageBitmap·캔버스 대신 기존 img+objectURL 파이프라인을 재사용했다 — 계약의 실질(헤더 인증·멀티파트·URL 토큰 금지)은 동일하고 녹화 캡처가 한 경로를 유지한다.
+- gate 변화: SOURCE. 실기 태블릿에서의 fps ≥ 10·지연 실측은 DEVICE 별도 회차(D-368 Validation).

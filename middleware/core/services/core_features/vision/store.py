@@ -200,6 +200,21 @@ class VisionFrameStore:
             return None
         return frame
 
+    def latest_frame(self, *, overlay: bool = True,
+                     now: Optional[float] = None) -> Optional[VisionFrame]:
+        """Latest fresh frame for the driver stream (D-368), without viewer
+        rate limiting — the stream gate is that path's limiter. The raw
+        variant is None until a fresh raw pair for the current frame exists."""
+        current = time.monotonic() if now is None else float(now)
+        frame = self.frame(now=current)
+        if frame is None or overlay:
+            return frame
+        with self._lock:
+            raw = self._pairs.raw_for(frame)
+        if raw is None or not 0 <= current - raw.received_at + raw.source_age_s <= self._stale_after_s:
+            return None
+        return raw
+
     def frame_for_viewer(
             self, viewer_id: str, *, expected_sequence: Optional[int] = None,
             now: Optional[float] = None, overlay: bool = True) -> Optional[VisionFrame]:
