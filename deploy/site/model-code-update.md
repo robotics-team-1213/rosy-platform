@@ -64,3 +64,5 @@ model-watch도 같은 실행기와 lock을 사용한다. 평가 후 shadow까지
 - 잘못된 서명·payload 경로·hash·환경은 source를 바꾸지 않는다. 실패 sequence는 자동 재시도하지 않는다. 수정한 코드를 더 큰 sequence의 새 서명 후보로 공급한다.
 - 전환 뒤 검사 실패는 이전 symlink로 복귀한다. 전환 중 중단되어 pending이 남으면 다음 run이 먼저 이전 symlink를 복구한다. 데이터와 checkpoints는 복구 대상에서 제외된다.
 - `status`의 desired_commit/source_commit/sequence/result와 user journal을 함께 읽는다. 후보·receipt는 별도 상태 경로에 보존되며 자동 pruning은 하지 않는다. 운영자가 보존할 후보를 확인한 후 releases/inbox만 정리한다.
+
+The installed bootstrap also supports the previous signed release layout for rollback. New candidates contain only the current source layout.

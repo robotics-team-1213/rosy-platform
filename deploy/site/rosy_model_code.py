@@ -30,7 +30,8 @@ CODE_PREFIXES = (PREFIX, "middleware/perception/control/", "contracts/foundation
 LIMIT = 512 * 1024 * 1024
 FORBIDDEN = {"data", "private", "runs", "scratch", "checkpoints", "store", ".git", ".venv", "__pycache__", "secrets"}
 IMPORT_PATHS = (PREFIX.rstrip("/"), PREFIX + "model", PREFIX + "dataset", PREFIX + "training",
-                "middleware/perception", "contracts/foundation")
+                "middleware/perception", "contracts/foundation",
+                "src/runtime/sensing", "src/contracts/foundation")
 PATH_SETUP = ("import pathlib,sys,runpy;root=pathlib.Path(sys.argv.pop(1)).resolve();"
               f"sys.path[:0]=[str(root/p) for p in {IMPORT_PATHS!r}]")
 
@@ -129,15 +130,22 @@ def perception_edits(roots):
 
 
 def checkout_script_conflict(source, work_dir, script):
-    """The work tree copy is not what exec runs. Differing bytes must stop."""
+    """Protect local edits; a clean older checkout does not override signed code."""
     local = Path(work_dir) / script
     if local.is_symlink() or not local.is_file():
         return None
     signed = Path(source) / script
     try:
+        repo = subprocess.run(["git", "-C", str(work_dir), "rev-parse", "--is-inside-work-tree"],
+                              capture_output=True, text=True, timeout=15)
+        if repo.returncode == 0 and repo.stdout.strip() == "true":
+            status = subprocess.run(["git", "-C", str(work_dir), "status", "--porcelain", "--", script],
+                                    capture_output=True, text=True, timeout=15)
+            if status.returncode: return "checkout observation failed"
+            if not status.stdout.strip(): return None
         local_bytes = local.read_bytes()
         signed_bytes = signed.read_bytes() if signed.is_file() and not signed.is_symlink() else None
-    except OSError:
+    except (OSError, subprocess.SubprocessError):
         return "checkout script unreadable"
     if signed_bytes != local_bytes:
         return "work checkout script differs from the signed release"

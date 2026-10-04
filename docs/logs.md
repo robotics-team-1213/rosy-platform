@@ -5210,3 +5210,14 @@
 - 변경: CI colcon 빌드에서만 만든 Gazebo `COLCON_IGNORE`는 성공·실패 종료 때 제거한다. 기존 제외 파일은 보존하여 빌드 뒤 소스 구조 검사가 실제 패키지를 계속 볼 수 있게 했다.
 - 증거: main bcf1010b의 CI 37174760531에서 구조 시험 두 건이 임시 제외 파일 때문에 실패했다. 실제 Bash 빌드 단계 회귀는 수정 전 2 failed/2 passed, 수정 후 관련 시험 12 passed다. 성공·종료 코드 42에서 빌드 중 제외와 종료 뒤 복원, 기존 파일 bytes 보존을 검증했다.
 - gate 변화: SOURCE/LOCAL 증거만 추가한다. 원격 CI 재검증과 서명 후보의 실제 제어 PC 설치·HTTPS·타이머 수락은 아직 남아 있다.
+## 2026-10-04 · uncommitted · D-446 remote integration after source migration
+
+- Change: Rebase model-PC signed updates onto remote main; preserve committed records and use middleware/perception and contracts/foundation source closure.
+- Evidence: Model-PC Linux tests 34 passed; Windows tests 13 passed, 21 Linux-only skips. Rollback bootstrap supports the already installed previous layout; its regression test failed before the fix. Remote CI and first migrated-source activation are pending.
+- gate 변화: None. Existing data, credentials, GPU environment and model promotion remain separate.
+
+## 2026-10-04 · uncommitted · D-446 clean older checkout permits signed execution
+
+- Change: Protect uncommitted entrypoint edits without blocking an approved update from a clean older checkout.
+- Evidence: Regression failed before the fix. Windows 14 passed, 21 Linux-only skips; model-PC Linux 35 passed.
+- gate 변화: None. Remote CI and migrated-source device activation remain separate.

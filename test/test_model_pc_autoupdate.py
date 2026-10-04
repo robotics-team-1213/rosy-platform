@@ -440,3 +440,33 @@ def test_idle_clears_the_previous_hold_reason(tmp_path, keys):
     u.busy = lambda: None
     result = u.run()
     assert result["result"] == "idle" and result["reason"] is None
+
+
+def test_bootstrap_can_run_previous_layout_after_rollback(tmp_path):
+    m = module()
+    root = tmp_path / "previous"
+    for folder, package in [("src/runtime/sensing", "control"), ("src/contracts/foundation", "core_common")]:
+        path = root / folder / package
+        path.mkdir(parents=True)
+        (path / "__init__.py").write_text("PINNED = True\n")
+    script = root / "job.py"
+    script.write_text("import control,core_common; assert control.PINNED and core_common.PINNED\n")
+    result = subprocess.run(m.bootstrap_command(sys.executable, root, script, []), capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
+
+
+def test_clean_older_checkout_does_not_block_signed_script(tmp_path):
+    m = module()
+    checkout = tmp_path / "checkout"
+    checkout.mkdir()
+    subprocess.run(["git", "init", str(checkout)], check=True, capture_output=True)
+    (checkout / "job.py").write_text("OLD = True\n")
+    subprocess.run(["git", "-C", str(checkout), "add", "job.py"], check=True)
+    subprocess.run(["git", "-C", str(checkout), "-c", "user.name=Test", "-c", "user.email=test@example.invalid",
+                    "commit", "-m", "clean old source"], check=True, capture_output=True)
+    signed = tmp_path / "signed"
+    signed.mkdir()
+    (signed / "job.py").write_text("NEW = True\n")
+    assert m.checkout_script_conflict(signed, checkout, "job.py") is None
+    (checkout / "job.py").write_text("LOCAL = True\n")
+    assert m.checkout_script_conflict(signed, checkout, "job.py") is not None

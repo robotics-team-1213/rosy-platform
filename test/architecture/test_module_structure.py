@@ -80,6 +80,16 @@ CONTROL_SPLIT = "docs/plans/2026-09-22-control-package-split-design.md"
 
 #: P6 verdicts: path (relative to src/) or package name -> (lines at verdict, verdict).
 SIZE_VERDICTS = {
+    "dashboard": (
+        10_148,
+        "split: D-447(b) adds a focused shared state-stream store to the already separated task "
+        "panels; package total crosses 10k on integration, while individual asset ceilings and "
+        "the +150 package allowance stay unchanged. The stream, REST fallback and scope teardown "
+        "remain one owner (five Node regressions pass). Group robot role resources by their "
+        "surface owner and identify remaining reusable assets for the existing shared/web owner "
+        "under docs/plans/2026-10-04-ui-release-and-live-refinement.md; do not split transport or "
+        "duplicate its socket. Owner hmi; source-boundary follow-up after device acceptance",
+    ),
     "fleet": (
         30_063,
         "split: server HTTP boundary, console, signals and the mission-control stores are separate owners "

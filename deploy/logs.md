@@ -2310,3 +2310,14 @@
 - 변경: 병렬 main의 SSH pairing unit과 차선 Host Agent 설치·target 의존성·닫힌 명령 검증을 함께 보존했다. 두 PartOf unit을 릴리스 전환의 동기 종료 목록에 포함하고 중복 allowlist 초기화를 제거했다.
 - 증거: 독립 native/API 병합 검사 191 passed; 통합 native/API 검사 162 passed, 7 skipped. docs/validation/learned-lane-modes-2026-10-04/release-lifecycle.md.
 - gate 변화: SOURCE/LOCAL. 기존 서명 ARM64 후보와 이번 병합 SHA는 별개이며 새 배포·서비스 실행·실기 조명·주행은 미검증.
+## 2026-10-04 · uncommitted · D-446 remote integration after source migration
+
+- Change: Rebase model-PC signed updates onto remote main; preserve committed records and use middleware/perception and contracts/foundation source closure.
+- Evidence: Model-PC Linux tests 34 passed; Windows tests 13 passed, 21 Linux-only skips. Rollback bootstrap supports the already installed previous layout; its regression test failed before the fix. Remote CI and first migrated-source activation are pending.
+- gate 변화: None. Existing data, credentials, GPU environment and model promotion remain separate.
+
+## 2026-10-04 · uncommitted · D-446 clean older checkout permits signed execution
+
+- Change: Protect uncommitted entrypoint edits without blocking an approved update from a clean older checkout.
+- Evidence: Regression failed before the fix. Windows 14 passed, 21 Linux-only skips; model-PC Linux 35 passed.
+- gate 변화: None. Remote CI and migrated-source device activation remain separate.
