@@ -5818,3 +5818,9 @@ osy-d395-s1d\`.
 - 변경: D-464는 명시 승인된 Pinky indexed 픽셀을 원본 영상·바이트·최신 authority·촬영 component 및 실제 전체 eval version 분리 검증 후 dataset/1으로 만드는 책임을 정한다. D-379의 기존 자동 라벨과 고정 eval 신뢰 출처를 유지하며 CVAT origin으로 위장하지 않는다.
 - 증거: 새 번호 생성 직전 main/작업 트리/430 branch ADR trees, ADR Log 및 harness gaps를 조회했다. 문서 lint 결과와 계약 회귀 출력은 로컬 임시 증거로 보존한다. 실제 승인0·eval source/group 미확정은 HOLD이며 새로운 데이터 게시·학습·모델 승격을 의미하지 않는다.
 - gate 변화: 문서 계약만 기록한다. 사용자 승인된 builder 소스 구현·격리 roundtrip 및 실제 trainer admission 검증은 각각 별도 단계다.
+
+## 2026-10-05 · uncommitted · fix(pairing): TLS CI 의존성과 통합 버전 기록
+
+- 변경: D-456 수신 TLS 검증 시험에 서명 payload와 동일한 해시 고정 crypto 집합을 CI 전용 디렉터리로 설치한다. 검증 API import와 버전 49.0.0을 실제 확인한다. 기존 런타임 pin·wheel hash를 바꾸지 않으며 API v1.104 변경 이력과 앱 설명을 일치시킨다.
+- 증거: 원격 core-domain 수집 실패는 이전 컨테이너 crypto의 verification 모듈 부재였다. 신규 CI 계약 시험의 실패를 먼저 재현했고 기존 hash 집합의 AMD64 wheel 다운로드를 검증했다. 정상 pre-push 474 passed/2 skipped/2 failed의 버전 불일치도 수리 대상으로 남긴다.
+- gate 변화: SOURCE/LOCAL 수리. 신규 원격 CI·서명 배포·기기 연결 수용은 별도다.

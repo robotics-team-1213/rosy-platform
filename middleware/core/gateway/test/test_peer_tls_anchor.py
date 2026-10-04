@@ -91,3 +91,17 @@ class TLSAnchor(unittest.TestCase):
             del self.config['network']['tls']['key_file']
             with self.assertRaises(ValueError): guard.server_tls_options(self.config)
         self.assertEqual({},configured_tls_anchor({'network':{'tls':{'cert_file':'existing-public-cert','key_file':'existing-public-key'}}}))
+
+
+    def test_missing_chain_verifier_refuses_before_new_certificate_attributes(self):
+        from types import SimpleNamespace
+        from core_api_web.api.peer_pairing import tls_anchor
+
+        legacy_root = SimpleNamespace(extensions=SimpleNamespace(
+            get_extension_for_class=lambda _: SimpleNamespace(
+                value=SimpleNamespace(ca=True, key_cert_sign=True))))
+        with patch.object(tls_anchor, "PolicyBuilder", None), \
+                patch.object(tls_anchor.x509, "load_pem_x509_certificates", return_value=[legacy_root]), \
+                patch("socket.gethostname", return_value="fixture"):
+            with self.assertRaises(ValueError):
+                configured_tls_anchor(self.config)

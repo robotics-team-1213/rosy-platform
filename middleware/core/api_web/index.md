@@ -30,8 +30,8 @@
 
 ## 최근 기록
 
+- 2026-10-05 · uncommitted · fix(pairing): 구버전 TLS 검증 거절 순서
+- 2026-10-05 · uncommitted · fix(api): 통합 계약 v1.104 설명 정합
 - 2026-10-05 · uncommitted · docs(api): 무마커 시작점 계약 v1.103 표시
 - 2026-10-05 · uncommitted · feat(vision): D-368 운전자 MJPEG 스트림 라우트와 teleop 훅
 - 2026-10-05 · uncommitted · feat(auth): LAN 수신 승인과 키 결속 로그인
-- 2026-10-04 · uncommitted · docs(api): D-457 site display contract v1.97
-- 2026-10-04 · uncommitted · fix(api): 실제 계약 판과 rooms 내부 저장 표현 정합

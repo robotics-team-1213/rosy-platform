@@ -527,3 +527,15 @@
 - 변경: Fleet 전용 시작점 API의 additive 계약 버전 v1.103을 API reference와 CORE 앱 설명 metadata에 맞춘다. CORE route/envelope/로봇 동작 변경 없음.
 - 증거: 현행 버전 pin과 Fleet API 관련 검증 묶음 149 passed, known_failures 신규 0. 전체 CORE/ARM/현장 수용은 별도다.
 - gate 변화: 계약 설명 정합만 보강한다.
+
+## 2026-10-05 · uncommitted · fix(api): 통합 계약 v1.104 설명 정합
+
+- 변경: Cam peer와 시작점 통합 후 FastAPI 설명을 현행 계약 v1.104에 맞춘다. 라우트·인증·envelope 1.0 변경 없음.
+- 증거: 정상 pre-push의 버전 설명·변경 이력 두 실패를 재현하고 관련 계약 시험으로 확인한다. TLS CI 의존성 복구와 별도로 실행 상태를 기록한다.
+- gate 변화: SOURCE 정합 수리. 실기 승인·재연결 수용은 배포 후 별도다.
+
+## 2026-10-05 · uncommitted · fix(pairing): 구버전 TLS 검증 거절 순서
+
+- 변경: 체인 verifier 부재를 인증서의 신규 날짜 API 접근 전에 거절한다. 검증할 수 없는 CA를 공개하지 않으며 기존 49.0.0 체인·호스트·만료 검증을 유지한다.
+- 증거: verifier와 신규 날짜 속성이 없는 구버전 형태에서 AttributeError를 재현했다. 수리 후 CI 의존성·TLS·버전 관련 19 passed, 실패 0이다.
+- gate 변화: SOURCE/LOCAL. 구버전 지원이 인증서 신뢰나 연결 승인을 대신하지 않는다.

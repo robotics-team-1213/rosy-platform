@@ -33,6 +33,9 @@ def configured_tls_anchor(config):
             raise ValueError('TLS public material exceeds its bound')
         return value
     try:
+        if PolicyBuilder is None:
+            # Refuse before accessing certificate APIs absent on older libraries.
+            raise ValueError('cryptography>=42 chain verification is required')
         roots = x509.load_pem_x509_certificates(read('ca_file', 8192))
         chain = x509.load_pem_x509_certificates(read('cert_file', 32768))
         if len(roots) != 1 or not 1 <= len(chain) <= 5:
@@ -42,10 +45,6 @@ def configured_tls_anchor(config):
         usage = root.extensions.get_extension_for_class(x509.KeyUsage).value
         if not constraints.ca or not usage.key_cert_sign or not root.not_valid_before_utc <= now <= root.not_valid_after_utc:
             raise ValueError('bootstrap CA authority or validity failed')
-        if PolicyBuilder is None:
-            # Fail closed: without the chain verifier this CORE cannot promise the
-            # configured CA really anchors the leaf, so no anchor is published.
-            raise ValueError('cryptography>=42 chain verification is required')
         verified = (PolicyBuilder().store(Store(roots)).time(now).max_chain_depth(3)
                     .build_server_verifier(x509.DNSName(hostname)).verify(chain[0], chain[1:]))
         if verified[-1].fingerprint(hashes.SHA256()) != root.fingerprint(hashes.SHA256()):

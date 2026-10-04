@@ -862,3 +862,9 @@
 - 변경: `core/services.py` `CoreServices`에 `vision_stream: DriverStreamGate` 필드(default_factory) 추가. `gateway/test/test_vision_stream.py` 추가 — core_client 팩토리로 실제 CoreServices 위에서 스트림 라우트 계약(401·409·새 sequence만·운전자 교체·연결 종료)을 검증. 무한 응답을 TestClient portal과 함께 쓰면 교착이라 생성기 직접 반복으로 검증한다(파일 머리말에 근거 기록).
 - 증거: test_vision_stream 8 PASS + 게이트 단위 5 PASS + test_api·v1 import boundary·api_web 155 PASS. known_failures 대비 신규 실패 0.
 - gate 변화: SOURCE. 로봇 위 동작(arm64 부팅·실기 영상)은 주장하지 않는다.
+
+## 2026-10-05 · uncommitted · test(pairing): 구버전 인증서 API 거절 회귀
+
+- 변경: verifier와 신규 UTC 날짜 속성이 없는 인증서 형태를 주입해 명시적 ValueError 거절을 확인한다. 유효한 인증서 검증 시험은 그대로 유지한다.
+- 증거: 수리 전 1 failed/3 passed로 검사 순서 문제를 재현했고 수리 후 관련 TLS·CI·버전 19 passed를 확인했다.
+- gate 변화: SOURCE/LOCAL 회귀 증거. DEVICE 연결 수용은 별도다.
