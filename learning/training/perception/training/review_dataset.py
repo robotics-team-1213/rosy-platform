@@ -9,6 +9,9 @@ import json
 import math
 import re
 import struct
+import os
+import stat
+import tempfile
 from pathlib import Path, PurePosixPath
 import time
 import sys
@@ -44,6 +47,7 @@ def source_components(rows, representation_hashes):
     for row in rows:
         i = row['frame']
         keys = [('session', row.get('source_session')), ('group', row.get('capture_group')),
+                ('video', row.get('source_video_sha256')),
                 ('image', row.get('image_sha256'))]
         if row.get('source_video_sha256') is not None and row.get('video_frame') is not None:
             keys.append(('video-frame', (row['source_video_sha256'], row['video_frame'])))
@@ -191,7 +195,7 @@ def inspect_candidates(export_root, *, fetch_current, workspace_id,
         hashes = {frame['image_sha256'], *representations.get(frame['frame'], [])}
         if (frame['fixed_eval_overlap'] is True or frame['source_session'] in sessions
                 or frame['capture_group'] in groups or hashes & eval_images
-                or (frame['source_video_sha256'], frame['video_frame']) in videos):
+                or frame['source_video_sha256'] in {sha for sha, _ in videos}):
             blockers.append('fixed_eval_overlap')
         mask = masks.get(frame['frame'])
         if mask:
@@ -218,3 +222,295 @@ def inspect_candidates(export_root, *, fetch_current, workspace_id,
             'authority': revision,
             'approved_masks': len(masks), 'frames': diagnostics,
             'source_components': components, 'disjoint_from': refs}
+
+
+def _stable_bytes(path):
+    path = Path(path).absolute()
+    for part in [path, *path.parents]:
+        if part.is_symlink() or (hasattr(part, 'is_junction') and part.is_junction()):
+            raise ValueError('source proof links refused')
+    before = path.stat()
+    if not stat.S_ISREG(before.st_mode):
+        raise ValueError('regular source proof artifact required')
+    raw = path.read_bytes()
+    after = path.stat()
+    if (before.st_size, before.st_mtime_ns, before.st_ino) != (after.st_size, after.st_mtime_ns, after.st_ino):
+        raise ValueError('source proof artifact changed while captured')
+    return raw
+
+
+def _proof_path(value, proof):
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError('source proof artifact path required')
+    path = Path(value)
+    if '..' in path.parts:
+        raise ValueError('source proof path traversal refused')
+    if not path.is_absolute():
+        if '..' in path.parts:
+            raise ValueError('source proof path traversal refused')
+        path = proof.parent / path
+    return path.absolute()
+
+
+def _capture_proofs(paths):
+    proofs, observed = {}, {}
+    for value in paths:
+        path = Path(value).absolute(); raw = _stable_bytes(path); observed[path] = raw
+        doc = json.loads(raw)
+        if not isinstance(doc, dict) or doc.get('schema') != 'rosy.pinky-review-source-proof/1':
+            raise ValueError('source proof schema required')
+        for name in ('source_session', 'capture_group'):
+            if not isinstance(doc.get(name), str) or not doc[name].strip():
+                raise ValueError('source proof session/group required')
+        if not isinstance(doc.get('video_sha256'), str) or re.fullmatch('[0-9a-f]{64}', doc['video_sha256']) is None:
+            raise ValueError('source proof video digest required')
+        video_path = _proof_path(doc.get('video_path'), path)
+        video = _stable_bytes(video_path); observed[video_path] = video
+        if hashlib.sha256(video).hexdigest() != doc['video_sha256']:
+            raise ValueError('source proof actual video hash differs')
+        side_fields = {'sidecar_path', 'sidecar_sha256'} & set(doc)
+        if side_fields:
+            if side_fields != {'sidecar_path', 'sidecar_sha256'}:
+                raise ValueError('source proof sidecar pair required')
+            side_path = _proof_path(doc['sidecar_path'], path)
+            side = _stable_bytes(side_path); observed[side_path] = side
+            if (not isinstance(doc['sidecar_sha256'], str)
+                    or re.fullmatch('[0-9a-f]{64}', doc['sidecar_sha256']) is None
+                    or hashlib.sha256(side).hexdigest() != doc['sidecar_sha256']):
+                raise ValueError('source proof actual sidecar hash differs')
+        key = (doc['source_session'], doc['capture_group'], doc['video_sha256'])
+        if key in proofs:
+            raise ValueError('duplicate source proof binding')
+        proofs[key] = {'record': doc, 'bytes': raw, 'sha256': hashlib.sha256(raw).hexdigest(), 'video': video,
+                       'suffix': video_path.suffix}
+    return proofs, observed
+
+
+def _verify_video_requests(requests, scratch):
+    """One sequential decode per video; retain only the current decoded frame."""
+    import cv2
+    import numpy as np
+    grouped = {}
+    for proof, index, raw in requests:
+        if type(index) is not int or index < 0:
+            raise ValueError('source proof exact video frame required')
+        if not raw.startswith(b'\x89PNG\r\n\x1a\n'):
+            raise ValueError('source pixel proof requires original PNG; JPEG conversion unverified')
+        digest = proof['record']['video_sha256']
+        group = grouped.setdefault(digest, dict(proof=proof, frames={}))
+        group['frames'].setdefault(index, []).append(raw)
+    for digest, group in grouped.items():
+        proof, targets = group['proof'], group['frames']
+        path = scratch / ('source-' + digest + proof['suffix'])
+        path.write_bytes(proof['video'])
+        reader = cv2.VideoCapture(str(path))
+        try:
+            for index in range(max(targets) + 1):
+                ok, pixels = reader.read()
+                if not ok:
+                    raise ValueError('source video frame unavailable')
+                for raw in targets.get(index, []):
+                    image = cv2.imdecode(np.frombuffer(raw, np.uint8), cv2.IMREAD_UNCHANGED)
+                    if image is None or image.ndim != 3 or image.shape[2] != 3 or image.dtype != np.uint8:
+                        raise ValueError('source PNG pixel layout not proven')
+                    if pixels.shape != image.shape or not np.array_equal(pixels, image):
+                        raise ValueError('source decoded frame pixels differ from approved PNG')
+        finally:
+            reader.release()
+
+
+def _video_pixels(proof, index, image_bytes, scratch):
+    _verify_video_requests([(proof, index, image_bytes)], scratch)
+
+
+def _active_eval(store, folders, gate_eval_refs):
+    supplied = {Path(p).absolute() for p in folders}
+    inventory = store.evalsets()
+    required = {store.evalset_path(name, sha).absolute() for name, versions in inventory.items() for sha in versions}
+    if not gate_eval_refs:
+        raise ValueError('configured gate eval refs required')
+    pinned = set()
+    for ref in gate_eval_refs:
+        if not isinstance(ref, dict) or set(ref) != {'name', 'content_sha'}:
+            raise ValueError('exact gate eval ref required')
+        pinned.add(store.evalset_path(ref['name'], ref['content_sha']).absolute())
+    if not pinned <= required or not required or supplied != required:
+        raise ValueError('all store eval versions must be supplied; active inventory incomplete')
+    return inventory
+
+
+def build_dataset(export_root, *, fetch_current, workspace_id, eval_folders,
+                  source_proof_files, store, name, staging_parent, gate_eval_refs=(),
+                  authority_max_age_s=90, previous_authority=None, now=time.time):
+    """Publish verified bytes only; always return training_admission=False.
+
+    Publication is immutable content storage, never authorization to train.
+    Group/session metadata is a configured operator collection assertion.
+    """
+    published = None
+    result = {'status': 'HOLD', 'training_admission': False, 'training_dataset_qualified': False}
+    try:
+        if (type(authority_max_age_s) not in (int, float) or not math.isfinite(authority_max_age_s)
+                or not 0 < authority_max_age_s <= 90):
+            raise ValueError('bounded authority freshness required')
+        current, revision = _delivery(fetch_current, workspace_id, previous_authority, authority_max_age_s, now)
+        verified = verify_bundle(export_root, current, workspace_id=workspace_id, capture_files=True)
+        files = verified['captured_files']
+        masks = [json.loads(line) for line in files['pixel-reviews.jsonl'].splitlines() if line.strip()]
+        if not masks:
+            latest, _ = _delivery(fetch_current, workspace_id, revision, authority_max_age_s, now)
+            if latest != current:
+                raise ValueError('current authority changed during build audit')
+            return dict(result, blockers=['no_approved_masks'], authority=revision)
+        folders = tuple(eval_folders)
+        inventory = _active_eval(store, folders, gate_eval_refs)
+        refs, sessions, groups, videos, eval_images, complete = _eval_inventory(folders)
+        if not complete:
+            raise ValueError('eval source group/video/frame inventory incomplete')
+        proofs, observed = _capture_proofs(source_proof_files)
+        eval_captured = {}
+        for folder in folders:
+            root = Path(folder).absolute()
+            snapshot = {p.relative_to(root).as_posix(): _stable_bytes(p) for p in sorted(root.rglob('*')) if p.is_file()}
+            lines = [relative + '\0' + hashlib.sha256(raw).hexdigest() + '\n' for relative, raw in snapshot.items()]
+            if hashlib.sha256(''.join(sorted(lines)).encode()).hexdigest() != root.name:
+                raise ValueError('eval changed during immutable byte capture')
+            eval_captured[root] = snapshot
+            observed.update({root / relative: raw for relative, raw in snapshot.items()})
+        indices = _classes(files['pixel-classes.yaml'], current)
+        representations = json.loads(files['representations.json'])
+        hashes = {int(i): [r['image_sha256'] for r in rows] for i, rows in representations.items()}
+        components = source_components(current['frames'], hashes)
+        selected = {m['frame']: m for m in masks}
+        image_bytes = {hashlib.sha256(raw).hexdigest(): raw for key, raw in files.items() if key.startswith('inputs/images/')}
+        by_frame = {r['frame']: r for r in current['frames']}
+        eligible_components = []
+        for component in components:
+            approved = [i for i in component if i in selected]
+            if not approved:
+                continue
+            for i in component:
+                frame = by_frame[i]
+                if (frame['source_session'] is None or frame['capture_group'] is None
+                        or frame['source_video_sha256'] is None or frame['video_frame'] is None
+                        or frame['fixed_eval_overlap'] is None):
+                    raise ValueError('source component provenance UNKNOWN')
+                images = {frame['image_sha256'], *hashes.get(i, [])}
+                if (frame['fixed_eval_overlap'] is True or frame['source_session'] in sessions
+                        or frame['capture_group'] in groups or images & eval_images
+                        or frame['source_video_sha256'] in {sha for sha, _ in videos}):
+                    raise ValueError('source component overlaps fixed evaluation')
+            eligible_components.append(component)
+        if len(eligible_components) < 2:
+            raise ValueError('at least two disconnected source components required')
+        scratch_parent = Path(staging_parent).absolute()
+        if os.name == 'nt' and scratch_parent.drive.upper() != 'X:':
+            raise ValueError('scratch staging must be on X:')
+        if any(part.is_symlink() or (hasattr(part, 'is_junction') and part.is_junction())
+               for part in [scratch_parent, *scratch_parent.parents]):
+            raise ValueError('scratch staging links refused')
+        scratch_parent = scratch_parent.resolve()
+        if os.name == 'nt' and not scratch_parent.is_relative_to(Path('X:/DevTemp').resolve()):
+            raise ValueError('scratch staging must remain within X:/DevTemp')
+        scratch_parent.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(prefix='indexed-dataset-', dir=scratch_parent) as temp:
+            scratch = Path(temp); dataset = scratch / 'dataset'
+            # Eval frames need the same independent original video proof as candidates.
+            eval_provenance = []
+            video_requests = []
+            for folder in folders:
+                snapshot = eval_captured[Path(folder).absolute()]
+                manifest = json.loads(snapshot['manifest.json'])
+                for frame in manifest['frames']:
+                    key = (frame['session'], frame['capture_group'], frame['source_video_sha256'])
+                    if key not in proofs:
+                        raise ValueError('eval original source proof unavailable')
+                    raw = snapshot[frame['image']]
+                    video_requests.append((proofs[key], frame['video_frame'], raw))
+                    eval_provenance.append(dict(eval_revision=Path(folder).name, session=frame['session'],
+                                                capture_group=frame['capture_group'], video_sha256=frame['source_video_sha256'],
+                                                video_frame=frame['video_frame'], image_sha256=hashlib.sha256(raw).hexdigest(),
+                                                source_proof_sha256=proofs[key]['sha256']))
+            for i, mask in selected.items():
+                frame = by_frame[i]
+                proof_key = (frame['source_session'], frame['capture_group'], frame['source_video_sha256'])
+                if proof_key not in proofs:
+                    raise ValueError('approved original source proof unavailable')
+                mask_errors = mask_blockers(files[mask['mask']], width=frame['width'], height=frame['height'], indices=indices)
+                if mask_errors:
+                    raise ValueError('approved mask integrity: ' + ','.join(mask_errors))
+                video_requests.append((proofs[proof_key], frame['video_frame'], image_bytes[frame['image_sha256']]))
+            _verify_video_requests(video_requests, scratch)
+            from dataset.build import assign_splits, load_classes
+            component_keys = {tuple(component): hashlib.sha256(json.dumps(sorted({(by_frame[i]['source_session'], by_frame[i]['capture_group'], by_frame[i]['source_video_sha256']) for i in component})).encode()).hexdigest()
+                              for component in eligible_components}
+            splits = assign_splits(component_keys.values())
+            entries, sources = [], []
+            dataset.mkdir()
+            for component in eligible_components:
+                component_key = component_keys[tuple(component)]
+                for i in component:
+                    if i not in selected:
+                        continue
+                    frame, mask = by_frame[i], selected[i]
+                    proof_key = (frame['source_session'], frame['capture_group'], frame['source_video_sha256'])
+                    if proof_key not in proofs:
+                        raise ValueError('approved original source proof unavailable')
+                    proof = proofs[proof_key]; image_raw = image_bytes[frame['image_sha256']]; mask_raw = files[mask['mask']]
+                    image_name, mask_name = f'images/{i:06d}.png', f'masks/{i:06d}.png'
+                    for relative, raw in [(image_name, image_raw), (mask_name, mask_raw)]:
+                        path = dataset / relative; path.parent.mkdir(parents=True, exist_ok=True); path.write_bytes(raw)
+                    proof_name = 'evidence/source-proofs/' + proof['sha256'] + '.json'
+                    path = dataset / proof_name; path.parent.mkdir(parents=True, exist_ok=True); path.write_bytes(proof['bytes'])
+                    entries.append(dict(image=image_name, mask=mask_name, session=frame['source_session'],
+                                        split=splits[component_key], source_component=component_key))
+                    sources.append(dict(annotation_origin='human_reviewed_pinky_indexed', session=frame['source_session'],
+                                        capture_group=frame['capture_group'], group_basis='operator_collection_assertion',
+                                        source_video_sha256=frame['source_video_sha256'], video_frame=frame['video_frame'],
+                                        producer_original_video_verified=frame['original_video_verified'],
+                                        independent_source_pixels_verified=True, source_proof=proof_name,
+                                        source_proof_sha256=proof['sha256'], approval=copy.deepcopy(frame),
+                                        export_contract_sha256=verified['contract_sha'], authority=revision,
+                                        image_sha256=frame['image_sha256'], mask_sha256=frame['mask_sha256'],
+                                        classes_sha256=current['pixel_classes_sha256'], classes_signature=current['classes_signature']))
+            evidence = dataset / 'evidence'; evidence.mkdir(exist_ok=True)
+            for proof in proofs.values():
+                path = evidence / 'source-proofs' / (proof['sha256'] + '.json')
+                path.parent.mkdir(exist_ok=True); path.write_bytes(proof['bytes'])
+            for root, snapshot in eval_captured.items():
+                (evidence / ('eval-' + root.name + '.json')).write_bytes(snapshot['manifest.json'])
+            (evidence / 'eval-provenance.json').write_text(json.dumps(eval_provenance, sort_keys=True), encoding='utf-8')
+            for relative in ['pixel-classes.yaml', 'pixel-reviews.jsonl', 'review-contract.json', 'AUTHORITY_COMPLETE']:
+                (evidence / relative).write_bytes(files[relative])
+            (evidence / 'current-decisions.json').write_text(json.dumps(current, sort_keys=True), encoding='utf-8')
+            manifest = dict(schema='rosy.perception.dataset/1', builder='review_dataset.py (D-464)',
+                            classes=load_classes('captured', require_color=False, source_bytes=files['pixel-classes.yaml']),
+                            frames=entries, sources=sources, ignore_index=255, disjoint_from=refs)
+            (dataset / 'manifest.json').write_text(json.dumps(manifest, sort_keys=True, indent=2), encoding='utf-8')
+            latest, _ = _delivery(fetch_current, workspace_id, revision, authority_max_age_s, now)
+            if latest != current:
+                raise ValueError('current authority changed before publication')
+            if _active_eval(store, folders, gate_eval_refs) != inventory or _eval_inventory(folders) != (refs, sessions, groups, videos, eval_images, complete):
+                raise ValueError('eval inventory changed before publication')
+            if any(_stable_bytes(path) != raw for path, raw in observed.items()):
+                raise ValueError('source proof artifacts changed before publication')
+            published, sha = store.put_dataset(dataset, name)
+            result.update(dataset_path=str(published), dataset_revision=sha, authority=revision, frames=len(entries))
+            from store import content_sha
+            if content_sha(published) != sha:
+                raise ValueError('published immutable content hash differs')
+            latest, _ = _delivery(fetch_current, workspace_id, revision, authority_max_age_s, now)
+            if latest != current:
+                raise ValueError('current authority changed after immutable publication')
+            if _active_eval(store, folders, gate_eval_refs) != inventory or _eval_inventory(folders) != (refs, sessions, groups, videos, eval_images, complete):
+                raise ValueError('eval changed after immutable publication')
+            if any(_stable_bytes(path) != raw for path, raw in observed.items()):
+                raise ValueError('source proofs changed after immutable publication')
+            result.update(status='PUBLISHED_CONTENT_NOT_ADMITTED', build_integrity_verified=True,
+                          blockers=['trainer_fresh_authority_admission_required'])
+            return result
+    except (ValueError, OSError, KeyError, TypeError) as error:
+        result['blockers'] = [str(error)]
+        if published is not None:
+            result['published_content_exists'] = True
+        return result
