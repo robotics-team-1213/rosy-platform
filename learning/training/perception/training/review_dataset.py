@@ -355,6 +355,7 @@ def validate_eval_companions(eval_folders, companion_files):
             require(isinstance(name, str) and name in payloads, 'resource reference missing')
             return payloads[name]
         eval_doc = parse(eval_raw); sources = {}
+        require(eval_doc.get('builder') == 'build.py --auto-labels (D-379)', 'D-379 extraction builder required')
         require(isinstance(doc['sources'], list) and doc['sources'], 'original sources required')
         for source in doc['sources']:
             require(isinstance(source, dict) and set(source) == {'session', 'labels', 'meta', 'video', 'sidecar', 'pts', 'labels_digest'}
@@ -390,6 +391,14 @@ def validate_eval_companions(eval_folders, companion_files):
             row_keys.add(identity); source, labels, side = sources[row['session']]
             require(type(row['sample_index']) is int and row['sample_index'] in labels and type(row['video_frame']) is int
                     and 0 <= row['video_frame'] < len(side), 'exact selected index and original ordinal required')
+            # D-379 copies frames/{selected-index}.jpg and masks/conf bearing
+            # that same selected label index. This is not a video-frame guess:
+            # the original ordinal is still independently joined through t.
+            session = row['session']; selected = row['sample_index']
+            require(re.fullmatch(r'[A-Za-z0-9_.-]+', session) is not None, 'canonical session path required')
+            for kind, directory, suffix in [('image', 'images', 'jpg'), ('mask', 'masks', 'png'), ('conf', 'conf', 'png')]:
+                require(expected_rows[identity].get(kind) == f'{directory}/{session}/{session}__{selected:06d}.{suffix}',
+                        'eval image/extraction selected label index differs')
             label = labels[row['sample_index']]
             matches = [i for i, sample in enumerate(side) if sample['t'] == label['t']]
             require(matches == [row['video_frame']], 'unique exact timestamp ordinal required')
