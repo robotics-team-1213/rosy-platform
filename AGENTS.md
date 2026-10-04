@@ -11,7 +11,7 @@ ROSY is a robot middleware and fleet-control platform (ROS 2 Jazzy, first hardwa
 
 | File | Description |
 |------|-------------|
-| `README.md` | Repo overview, colcon/sim launch, Pi 5 runtime, phase roadmap |
+| `README.md` | Repo overview, shared-checkout start rules (`같이 하는 깃`), colcon/sim launch, Pi 5 runtime, phase roadmap |
 | `LICENSE` | Apache License 2.0 |
 | `env.sh` | Dev env: source ROS 2 Jazzy then workspace `install/setup.bash` |
 | `CONCEPTS.md` | Shared domain vocabulary — entities, named processes, status concepts with project-specific meaning |
@@ -49,7 +49,7 @@ ROSY is a robot middleware and fleet-control platform (ROS 2 Jazzy, first hardwa
 
 1. **우선순위:** 폴더 이동 > main CI 초록불 > 안전(D-430 공백) > 기능. 충돌하면 앞이 이긴다.
 2. **이동 중 경로 동결:** wave를 시작하면 그 wave의 경로(계획의 wave 표, 매니페스트 `wave:`)를 고치지 않는다. 다른 경로 작업은 계속한다. 이동 뒤 미병합 브랜치는 주인이 rebase한다.
-3. **main 체크아웃에서 작업하지 않는다.** 모든 작업은 `.worktrees/<topic>`에서 한다. main 체크아웃에 커밋 안 된 변경을 남기면 다른 세션의 fast-forward와 pre-push가 막힌다. 스테이징·착지·푸시·ADR 번호·기존 실패 비교의 규율은 우산 `F:\Dev\Control\Robot\Rosy\AGENTS.md`의 「같이 하는 깃」이다. 그 명령 절차는 `.claude/skills/rosy-land-on-main/SKILL.md`다.
+3. **main 체크아웃에서 작업하지 않는다.** 모든 작업은 `.worktrees/<topic>`에서 한다. main 체크아웃에 커밋 안 된 변경을 남기면 다른 세션의 fast-forward와 pre-push가 막힌다. 스테이징·착지·푸시·ADR 번호·기존 실패 비교의 공개 기준은 이 저장소 `README.md`의 「같이 하는 깃」이다. 그 명령 절차는 `.claude/skills/rosy-land-on-main/SKILL.md`다.
 4. **push 전 순서:** `git fetch` → `origin/main` 위로 rebase → `python tools/harness/rosy_harness.py generate`(생성 문서가 바뀌면 커밋) → pre-push 검사(`tools/hooks/pre-push` 목록). force-push 하지 않는다.
 5. **새 코드는 D-427 목표 경로에만 둔다.** `tools/harness/platform_parts.yaml`의 `d427_target`을 따른다. 동결된 최상위 `modules/`·`apps/`·`ui/`와 이동 예정 `src/` 아래에 새 패키지를 만들지 않는다.
 6. **구조를 바꾸는 ADR은 D-427·D-429·D-430과의 관계를 표로 적는다.** ADR 없이 새 최상위 폴더를 만들지 않는다.

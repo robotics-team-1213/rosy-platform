@@ -1,14 +1,15 @@
 ---
 name: rosy-land-on-main
-description: Use when starting, committing, or merging work in rosy-platform while other agent sessions share the checkout — creating a branch or worktree, staging files, picking an ADR number, adding an ADR Log row, fast-forwarding local main, or when git status shows files you did not touch, a merge is blocked by someone else's uncommitted file, or a test fails and you cannot tell whether your change caused it. The rules live in the umbrella AGENTS.md section 「같이 하는 깃」.
+description: Use when starting, committing, or merging work in rosy-platform while other agent sessions share the checkout — creating a branch or worktree, staging files, picking an ADR number, adding an ADR Log row, fast-forwarding local main, or when git status shows files you did not touch, a merge is blocked by someone else's uncommitted file, or a test fails and you cannot tell whether your change caused it. The rules live in README.md section 「같이 하는 깃」.
 ---
 
 # Landing work on local main in a shared checkout
 
 ## Overview
 
-The rules are the umbrella `F:\Dev\Control\Robot\Rosy\AGENTS.md` section 「같이 하는 깃」.
-This file is only the commands for that section. If the two disagree, the umbrella section wins.
+The rules are the repository `README.md` section 「같이 하는 깃」.
+This file is only the commands for that section. If the two disagree, the README section wins.
+The lab umbrella `F:\Dev\Control\Robot\Rosy\Agents.md` only points at that section.
 The repo is `F:\Dev\Control\Robot\Rosy\rosy-platform` (no space). One `.git/index` serves the
 shared `main` checkout. A path you did not write belongs to another session.
 
