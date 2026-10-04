@@ -850,3 +850,9 @@
 - 변경: 정상 IDLE/STANDBY 기준을 600/1800초로 늘리고 warning60/300, critical/deep30/120초와 min을 취한다. YAML override·API effective timers에 연결한다. 기존 이동·정보 hold·disabled와 배터리 정지/종료 권한을 유지한다.
 - 증거: 주입 시계·설정 parser RED3 failed, 전원/배터리/bridge GREEN180 passed. 구조 재판정은 docs/plans/2026-10-04-power-health-and-wake.md에 기록한다.
 - gate 변화: SOURCE/LOCAL. 기기 소비전력·물리 wake·배포 검증은 별도다.
+
+## 2026-10-05 · uncommitted · feat(services): D-368 vision_stream 배선
+
+- 변경: `core/services.py` `CoreServices`에 `vision_stream: DriverStreamGate` 필드(default_factory) 추가. `gateway/test/test_vision_stream.py` 추가 — core_client 팩토리로 실제 CoreServices 위에서 스트림 라우트 계약(401·409·새 sequence만·운전자 교체·연결 종료)을 검증. 무한 응답을 TestClient portal과 함께 쓰면 교착이라 생성기 직접 반복으로 검증한다(파일 머리말에 근거 기록).
+- 증거: test_vision_stream 8 PASS + 게이트 단위 5 PASS + test_api·v1 import boundary·api_web 155 PASS. known_failures 대비 신규 실패 0.
+- gate 변화: SOURCE. 로봇 위 동작(arm64 부팅·실기 영상)은 주장하지 않는다.

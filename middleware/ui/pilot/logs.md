@@ -411,3 +411,9 @@
 - 증거: 사용자 확인 ("건했어. pilot 는 돼", 2026-10-05). 합격선 참조: `docs/plans/2026-10-04-pilot-device-stop-contract-measurement.md`.
 - gate 변화: pilot DEVICE **GO** (사용자 확인 등급). FIELD는 별개(D-454 결정 3).
 - 결정: D-444 §2 R2 충족. 사다리 P2 완료.
+
+## 2026-10-05 · uncommitted · feat(drive): D-368 운전자 MJPEG 스트림 클라이언트
+
+- 변경: `vision.js`에 `createDriverStream`(fetch 스트림 + multipart 증분 파서 + fps·age 통계, 헤더 인증만·URL 토큰 없음 D-193) 추가. `drive.js` 조종 화면에서 스트림 시도 — 붙으면 폴링 정지, 끊기면 폴링 복귀 후 3 s 재시도, HUD에 `영상 Nfps · Mms` fact(1 s 초과 경고색). 주석 쌍(annotated) 캡처는 원본 짝이 필요해 raw 모드에서만 스트림. `robot-recording.js`의 미리보기 수락 경로(acceptPreview)를 폴링·스트림 공용으로 추출. `sw.js` 캐시 키 갱신.
+- 증거: `test/test_vision_stream_client.py` 3 PASS(분할 청크 재조립·몸통 분할 대기·프레임/통계/종료 폴백). pilot 전체 90 PASS. ADR이 명시한 createImageBitmap·캔버스 대신 기존 img+objectURL 파이프라인을 재사용했다 — 계약의 실질(헤더 인증·멀티파트·URL 토큰 금지)은 동일하고 녹화 캡처가 한 경로를 유지한다.
+- gate 변화: SOURCE. 실기 태블릿에서의 fps ≥ 10·지연 실측은 DEVICE 별도 회차(D-368 Validation).

@@ -509,3 +509,9 @@
 - 변경: 사이트 표시 전용 추적 계약과 FastAPI 설명 버전을 일치시켰다. 로봇 endpoint·wire envelope·주행 행위 변경 없음.
 - 증거: protocol_version_alignment 시험 통과. DEVICE/FIELD 변화 없음.
 - gate 변화: 없음. 사이트 표시 계약 문서 정합이며 로봇 wire/주행 경계는 유지한다.
+
+## 2026-10-05 · uncommitted · feat(vision): D-368 운전자 MJPEG 스트림 라우트와 teleop 훅
+
+- 변경: `api/v1/vision.py`에 `GET /api/v1/vision/front/stream`(operator, multipart boundary `frame`, `?overlay=`) 추가 — 새 sequence만 내보내고, 운전자 교체·클라이언트 끊김에 슬롯 해제. `deps.py`에 `VisionStreamRefused` 재수출과 `CoreServicesLike.vision_stream` 추가. `control.py` teleop 수락 뒤 `vision_stream.on_teleop` 훅(pilot_recording 훅과 같은 실패 무시 규약).
+- 증거: `middleware/core/gateway/test/test_vision_stream.py` 8 PASS(401·미운전 409·BUSY·새 sequence만·운전자 교체·관전 폴링 불변·연결 종료 해제·driver 불투명 id). API Ref v1.100(D-18).
+- gate 변화: SOURCE. 발행 주기 상항(12 fps 요청)은 로봇 측 ROS-SIM/DEVICE 사항으로 이 경로 밖.

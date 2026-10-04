@@ -5748,3 +5748,10 @@ osy-d395-s1d\`.
 - 증거: 문서만. 코드·게이트 변화 없음.
 - gate 변화: 없음.
 - 결정: P2는 사용자 입회 대기. D-426은 Linux 환경 대기.
+
+## 2026-10-05 · uncommitted · docs(reference): API Ref v1.100 — D-368 운전자 MJPEG 스트림
+
+- 변경: `ROSY API & Protocol Reference.md` v1.99→v1.100. §5 경로 표에 `GET /api/v1/vision/front/stream`(operator, multipart boundary `frame`, `?overlay=`) 행 추가, 카메라 preview 전송 규칙에 스트림 조항(운전자 = 마지막 수락 teleop 토큰, D-460 임대 없음·409 코드 두 종·동시 하나·새 sequence만·헤더 인증 D-193) 추가, 버전 이력 행 추가.
+- 증거: 문서와 구현(`api/v1/vision.py`, `core_features/vision/stream.py`) 동일 커밋. envelope `protocol_version` 1.0 불변(PRT-006 additive). schemas.py 신규 페이로드 없음(멀티파트는 JSON envelope 아님).
+- gate 변화: 없음.
+- 결정: D-368 §1~3·5의 CORE·클라이언트 계약 확정. §4(발행 12 fps 상향)는 로봇 측 ROS-SIM/DEVICE 사항으로 남는다.

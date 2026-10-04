@@ -38,6 +38,7 @@ from core_features.navigation.manager import NavigationError
 from core_features.swarm import SwarmError
 from core_features.waypoints.manager import Waypoint
 from core_features.vision import VisionFrameAdvanced, VisionPullRateLimited
+from core_features.vision.stream import StreamRefused as VisionStreamRefused
 from core_common.protocol.schemas import VisionPreviewStatus, VisionEvidenceRecord, VisionEvidenceList
 
 #: 라우터용 재수출 면. __all__ 선언으로 재수출임을 명시한다(F401 진정).
@@ -60,6 +61,7 @@ __all__ = [
     "VisionEvidenceList",
     "VisionFrameAdvanced",
     "VisionPullRateLimited",
+    "VisionStreamRefused",
 ]
 
 
@@ -100,6 +102,7 @@ class CoreServicesLike(Protocol):
     swarm: Any
     traffic_policy: Any
     vision: Any
+    vision_stream: Any
     waypoints: Any
 
 

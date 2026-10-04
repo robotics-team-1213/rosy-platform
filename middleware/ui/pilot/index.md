@@ -34,8 +34,8 @@
 
 ## 최근 기록
 
+- 2026-10-05 · uncommitted · feat(drive): D-368 운전자 MJPEG 스트림 클라이언트
+- 2026-10-05 · uncommitted · feat(pilot): DEVICE GO — 사용자 실기 확인 (D-444 §2 R2)
 - 2026-10-04 · uncommitted · fix(pilot): 조종하지 않는 카메라의 frame Response 보존
 - 2026-10-04 · uncommitted · fix(ui): LAN 재검색 버튼의 공용 kind 선언 정합
 - 2026-10-04 · uncommitted · fix(pilot): LAN 목록 재검색과 저장 연결 기록 보존
-- 2026-10-04 · uncommitted · feat(pilot): 로비 방 목록 — `GET /api/v1/site/rooms` 소비 (D-343 2.2-3)
-- 2026-10-04 · uncommitted · Android 로봇 검색 고착의 독립 복구

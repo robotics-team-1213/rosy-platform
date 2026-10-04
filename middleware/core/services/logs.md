@@ -505,3 +505,9 @@
 - 변경: TURNING/CRAWLING 중 새 YIELD 답변은 기존 거절 계약으로 처리하여 같은 또는 다른 구간이 현재 deadline·phase·twist를 재설정하지 못하게 한다. YIELDED 후 다음 구간과 기존 단일 command publisher·lease·E-Stop 경계를 유지한다.
 - 증거: 신규 4개 RED→GREEN, 상태 머신·manager·API 관련 115 PASS. main 병합 후 Fleet/CORE ownership 재판정에서 기존 파일/패키지 예산과 분할 의무는 유지한다.
 - gate 변화: SOURCE/LOCAL. 실제 장비 구동·모드 변경·정지 해제·DEVICE/FIELD 수락은 실행하지 않았다.
+
+## 2026-10-05 · uncommitted · feat(vision): D-368 운전자 스트림 게이트와 latest_frame
+
+- 변경: `core_features/vision/stream.py` 추가 — `DriverStreamGate`(마지막 수락 teleop 토큰이 조종 소유권, D-460 임대 없음). 단일 슬롯, 운전자 교체 시 즉시 슬롯 해제, `close` 멱등. `VisionFrameStore.latest_frame(overlay=)` 추가 — 스트림 경로용, viewer 폴링 속도 제한 없이 raw pair 신선도(수신+source age) 검사.
+- 증거: `test/test_vision_stream_gate.py` 5 PASS(미운전 409·단일 슬롯·교체 퇴거·멱등 close·빈 토큰 무시). 스토어 회귀는 기존 시험 유지.
+- gate 변화: SOURCE. ROS-SIM fps·지연 측정과 DEVICE 영상 수용은 별개(D-368 Validation 참조).
