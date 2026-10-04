@@ -33,8 +33,8 @@
 
 ## 최근 기록
 
+- 2026-10-04 · uncommitted · Cam 송출 화면의 운영 정보 우선 표시
 - 2026-10-04 · uncommitted · D-427 preserve remote Cam changes
 - 2026-10-04 · uncommitted · fix(cam): 필요할 때만 요청하는 촬영 조명
 - 2026-10-04 · uncommitted · feat(cam): 자동 조명·사진 공유의 실제 S21 운용 확인
 - 2026-10-04 · uncommitted · feat(cam): 시간 제한 자동 조명과 송출 사진 저장·공유
-- 2026-10-04 · 03ea9b522 · fix(cam): 실제 관제 PC의 자체 키로 원격 깨우기 확인

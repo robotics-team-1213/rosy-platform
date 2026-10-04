@@ -71,3 +71,33 @@ REST fallback을 확인했다. 펌웨어 interlock·기존 dispatch·CORE 최종
   IPv4로 154 ms에 해석돼 1대 목록과 활성 연결 버튼을 확인했다. 검색 복구 증거이며
   CORE 연결·장비 배포·물리 동작 수락을 대신하지 않는다. D-432의 앱 내부 복구는 별도
   구현과 자식 종료·재바인딩 검증을 진행한다.
+
+### 푸시 검사와 실제 네트워크 경계
+
+main에 통합 commit SHA `6a549b980`와 provenance 표기 수정 commit SHA `1eb219940`를
+fast-forward로 반영했다. 첫 pre-push는 461 PASS, 2 Linux SKIP였고 공개 커밋 SHA 네 줄을
+high-entropy-token으로 판단한 한 검사가 실패했다. SHA에 commit revision 문맥을 추가한 뒤
+그 실패 검사만 재실행해 1 PASS, 94.16초를 확인했다. 검사기를 완화하지 않았다.
+
+모델 PC·관제 PC·같은 Wi-Fi의 태블릿에서 광고 주소의 SSH 연결을 확인했으나 현재는
+시간 초과 또는 네트워크 경로 오류였다. 단발성 hostname 응답을 안정된 배포 경로로
+기록하지 않는다. 로봇 배포는 접속·장비 식별·ABI·유지보수 전제가 충족된 후 진행한다.
+
+Cam 기존 설정과 실제 3 fps 송출을 확인했다. 실제 캡처의 preview는 black였으며 원인은
+  미확인이다. 새 진단 접힘 UI의 기본/펼침 상태와 영상 보기 검증은 별도로 진행한다.
+
+### Android 최종 소스와 실기 관측
+
+Pilot 기능 소스 6개 파일의 독립 SPEC·Safety·QUALITY PASS, JVM 46 PASS, APK 자산
+20개 공용/29개 Pilot 일치, 기존 서명과 설치 APK SHA 일치를 확인했다. 실제 전용 검색 자식
+장애 후 주 프로세스 PID 유지·새 자식 PID·새 IPv4 resolve·로봇 목록 복구를 확인했다.
+연속 '다시 찾기' 두 번, background 자식 정리, resume 재검색도 확인했다. 로봇을
+선택하거나 제어 명령을 보내지 않았다. 상세 로그·사진·개인 주소는 X 드라이브에 보관한다.
+
+Cam 진단 접힘 UI는 JVM 341 PASS·APK 빌드 성공·동일 서명이며 업데이트 전후 설정
+파일 SHA-256이 같다. 새 카메라 시작 후 실제 preview에서 경기장 전체가 표시되는 것을
+직접 확인했다. 기존 black 캡처의 근본 원인은 확정하지 않았다. 자연 발열 40.1°C에서
+경고와 1.5 fps 송출을 관측했다. 관제 Vision의 runtime debug frame:read lease를 사용한
+두 HTTPS 프레임은 200/200, sequence 94→100, age 335→184 ms였다. 일반 operator
+인증 API 검증과 구분하며 기존 CA 검증을 유지했다. 수신기의 기존 실행 SHA는 이번
+소스 SHA와 다르므로 새 사이트 배포 수락으로 주장하지 않는다.
