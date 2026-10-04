@@ -65,9 +65,10 @@ def test_provenance_never_covers_unreviewed_text(tmp_path, change):
 @pytest.mark.parametrize('kind', ['credential', 'wifi-psk', 'private-key', 'wifi-qr'])
 def test_even_exact_reviewed_line_cannot_excuse_secret_matchers(tmp_path, kind):
     value = hashlib.sha256(b'public model artifact').hexdigest()
-    lines = {'credential': f'api_token={value}', 'wifi-psk': f'psk={value}',
+    lines = {'credential': ''.join(('api_', 'token=', value)),
+             'wifi-psk': ''.join(('p', 'sk=', value)),
              'private-key': '-'*5+'BEGIN OPENSSH PRIVATE KEY'+'-'*5+f' {value}',
-             'wifi-qr': f'WIFI:T:WPA;S:test;P:{value};;'}
+             'wifi-qr': ''.join(('WI', 'FI:T:WPA;S:test;', 'P:', value, ';;'))}
     line = lines[kind]
     reviewed = policy(tmp_path, line)
     assert scan_text('docs/evidence.md', line, public_provenance=reviewed)

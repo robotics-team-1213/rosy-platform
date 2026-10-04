@@ -5553,3 +5553,9 @@
 - Change: Preserve frozen learning evidence; explicitly bind87 independently reviewed public digest lines to path/line SHA/token for repository entropy checks only. Classify two D-449 contract profile files in robot-literal backlog and read CLI child help as UTF-8.
 - Evidence: New regression RED then15pass; inventory/release/literal99pass; affected717pass59skip with1encoding warning, corrected CLI12pass with thread warnings promoted to errors. Main baseline two failing guards2pass. See validation/learning-integration-guard-repair-2026-10-04.md.
 - Gate: HOST repair; raw/image scanner and credential/key/PSK/QR checks unchanged. Final independent code review and tracked inventory scan precede commit. CI, installation, human labels, shadow/rollback and owner/Fleet/device/field remain pending.
+
+## 2026-10-04 · uncommitted · test(learning): assemble credential samples at runtime
+
+- Change: Preserve scanner strictness; assemble intentional credential/PSK/QR samples at runtime so tracked test source itself does not ship credential-shaped fixtures.
+- Evidence: Earlier pre-stage99pass excluded the untracked test source. Tracked scan then17pass1fail; corrected complete provenance/release/robot suite99pass. Commit6eae392c6 preceded observation of that failure; no main landing. See validation/learning-tracked-fixture-check-2026-10-04.md.
+- Gate: Corrected HOST tracked-source verification; no broad exception or known-failure entry. Administrator installation, real labels, shadow/rollback and owner/Fleet/device/field remain incomplete.
