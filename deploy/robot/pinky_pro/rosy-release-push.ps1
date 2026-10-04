@@ -250,9 +250,11 @@ function Get-CoreReadyArguments([string]$CoreReadyProbe) {
     # plain non-login SSH command runs no unit and no shell profile, so
     # without this the probe would run with none of that and silently fall
     # back to its own hardcoded default port. Source the same file the unit
-    # loads, then run the existing bounded probe unchanged.
+    # loads, then run the existing bounded probe unchanged. The private 0600
+    # runtime env belongs to root; read it through the existing operator sudo
+    # path so TLS settings cannot silently fall back to plain HTTP.
     return @(
-        "bash", "-lc",
+        "sudo", "-n", "bash", "-lc",
         "'set -a; [ -f /etc/rosy/runtime.env ] && . /etc/rosy/runtime.env; set +a; exec python3 -B $CoreReadyProbe'"
     )
 }

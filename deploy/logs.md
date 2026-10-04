@@ -2547,3 +2547,9 @@
 - 변경: D-456 boot-status가 공개 설정의 TLS 호스트 이름을 상태와 LAN TXT 광고에 전달한다. TLS 필수 모드에서 유효한 단일 `.local` 호스트만 표시하며 IP·외부 도메인·빈 이름·일반 HTTP의 TLS 이름 광고를 거절한다. 광고로 자격을 발급하거나 인증서 검증을 우회하지 않는다.
 - 증거: 실제 두 로봇의 정확한 ca1484c5b 서명 릴리스 038 배포·TLS 설치·CORE 준비 통과. 기존 운영자 기록을 보존했다. 관제의 실제 multicast 응답은 HTTPS 필수지만 인증서 이름 필드가 빠졌고 Tablet Pilot은 secure_host_missing으로 거절했다. 회귀 검사 수정 전 1 failed/0.21s, 최종 boot-status/state/TLS 관련 Windows 53 passed/3 기존 POSIX skip/0.82s. 기존 Cam의 승인된 ceiling_north 연결은 실제 앱에서 2.5–3.0fps 송출과 정지됨/0.0fps 복귀를 확인했다. 마커 인식은 수신기에서 보고되지 않았다.
 - gate 변화: SOURCE/LOCAL 및 명시된 038 TLS·기존 Cam 송출 DEVICE 증거. 새 검색 필드의 서명 배포 후 실제 Pilot 승인·기억된 관계 재접속과 관제 신규 Camera Peer 승인은 별도다.
+
+## 2026-10-05 · uncommitted · fix(release): 비공개 TLS 환경을 읽는 준비 상태 검사
+
+- 변경: 기존 운영자 sudo 경로로 설치된 bounded CORE 준비 검사를 실행해 root 소유 0600 runtime.env의 TLS·포트 설정을 읽는다. 파일 권한·sudoers·SSH 신원·서명·claim·교정 가드와 주행 권한은 유지한다. 두 교정 테스트의 PowerShell 경고 줄바꿈만 정규화하며 인증 미전송과 종료·시간 제한 단언은 유지한다.
+- 증거: 기존 실제 push는 환경 파일 읽기 거절을 기록했다. TLS 전환 뒤 평문 기본값 검사는 정상 CORE도 거절할 수 있으므로 준비 계획을 수정했다. 수정 전 계획 회귀 1 failed/0.74s; 실제 push·claim·교정 관련 99 passed와 경고 줄바꿈 2 failed 원본을 보존했다. 같은 두 교정 검사에서 문자 의미와 가드를 유지한 정규화 뒤 2 passed/8.82s다. 독립 안전 검토가 변경 범위와 기존 교정 실행 소스 무변경을 확인했다.
+- gate 변화: SOURCE/LOCAL. 두 로봇의 038 TLS 준비는 별도 운영자 경로에서 이미 확인했다. 수정된 정규 배포 경로의 다음 서명 릴리스 검증은 이어서 수행한다.
