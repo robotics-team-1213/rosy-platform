@@ -5075,3 +5075,8 @@
 - 변경: guarded capture metadata와 bounded camera history, 원SHA/수신시각 candidate binding. ACT큐도 원timestamp를 보존한다. provider 후 HOLD/stop과 renewal검사를 보완하고 stop read 지연 후 시간 예산을 검사한다. wheel0.1.4.
 - 증거: 관련host110pass/native16pass/독립86pass D430source 승인. 실제12frame ACT replay에서12timestamp binding 일치, 품질reject 재현, 이번 HOST observation age10/12위반. 상세 validation/policy-camera-source-binding-2026-10-04.md.
 - gate 변화: SOURCE/HOST 추론 원frame 보존과 final safety 검사 보완. 실제 입력 타이밍/품질·trusted capture/issuer/scheduler·owner ROS/독립SIM·Fleet/shadow/rollback·사람 라벨/new training·modelPC·DEVICE/FIELD 및 전체 목표 미완료.
+
+## 2026-10-04 · uncommitted · docs(validation): compare ACT40 and400 steps
+- 변경: 같은train5/validation1/seed42751/1-action/모델/optimizer의 사전고정400step 실제학습 비교. 기존artifact와gate를 유지하고 별도policy/원장 register+reject2events를 보존했다.
+- 증거: history400개/첫40loss·config·정규화·Dataset·135reader 동일. MAE.029368→.009403 약68%감소하나 상수.005990보다 나빠reject. 독립weightreload12frame/원장10events5unregistered 검증. wrapper terminalexit1/실제검증산출물은 별도기록. 상세 validation/act-training-length-study-2026-10-04.md.
+- gate 변화: 연구실험과데이터fitness 증거 확보. 각Episode1target/1command, persistence.000705로 실제task시연/독립평가 보강 필요. optimizerdefault metadata 불일치도 후속수정 필요. timing/trust/ownerROS/Fleet/shadow/rollback/새클래스/DEVICE/FIELD와 전체 목표 미완료.
