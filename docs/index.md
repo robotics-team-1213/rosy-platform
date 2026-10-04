@@ -299,8 +299,8 @@
 
 ## 최근 기록
 
+- 2026-10-05 · uncommitted · docs: SRP 검토 커밋 식별자 단축
 - 2026-10-05 · uncommitted · test: fence app and web document ownership
 - 2026-10-05 · uncommitted · docs(learning): 모델 PC 픽셀 자동 라벨 초안 파이프라인 D-465
 - 2026-10-05 · uncommitted · fix(pairing): TLS CI 의존성과 통합 버전 기록
 - 2026-10-05 · uncommitted · docs(learning): bind approved indexed masks to immutable dataset construction
-- 2026-10-05 · uncommitted · fix(release): 무마커 시작점의 검토 기록과 inherited CI fixture 복구

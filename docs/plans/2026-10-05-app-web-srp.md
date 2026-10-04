@@ -8,7 +8,7 @@
 
 **Tech Stack:** 기존 정적 ES 모듈, pytest, `panels.yaml`. 번들러·새 서버·새 포트 없음.
 
-**기준 트리:** 검토 스냅샷은 로컬 main `cf7d4f5b62c2228b2163429154a33431a907098c`다. 시험은 `feat/app-web-srp-fence`에서 main `cb6c42f46` 위로 고정한다.
+**기준 트리:** 검토 스냅샷은 로컬 main `cf7d4f5b62c2`다. 시험은 `feat/app-web-srp-fence`에서 main `cb6c42f46` 위로 고정한다.
 
 ---
 

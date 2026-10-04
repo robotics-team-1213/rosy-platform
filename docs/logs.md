@@ -5836,3 +5836,9 @@ osy-d395-s1d\`.
 - 변경: Console 세 문서와 Robot 세 문서가 자기 모듈만 import하도록 `operations/fleet/test/test_document_imports.py`와 `test_panel_module_folder_matches_surface`를 고정했다. 목표와 검토 스냅샷은 `docs/plans/2026-10-05-app-web-srp.md`, `docs/assessments/2026-10-05-app-web-role-review.md`다. 새 앱, 폴더 이동, `console.teleop` 제거는 하지 않는다.
 - 증거: `enrollment.js`를 `console.js`에 넣으면 펜스가 `['enrollment.js']`로 실패하고, 되돌리면 통과한다. 제품 코드는 변하지 않았다.
 - gate 변화: 없음. 호스트 시험과 문서만이며 장치 수용은 없다.
+
+## 2026-10-05 · uncommitted · docs: SRP 검토 커밋 식별자 단축
+
+- 변경: 앱·웹 SRP 계획의 검토 스냅샷을 확인 가능한 짧은 커밋 식별자로 표기한다. 긴 식별자를 고엔트로피 비밀값으로 탐지한 push 검사를 해결하며 비밀값 검출 규칙은 유지한다.
+- 증거: 기존 커밋 객체를 직접 조회했다. 비밀값 검사를 재실행하고 결과를 X:/DevTemp/rosy-ui-ship/secret-doc-sha-fix.log에 기록한다.
+- gate 변화: 없음. 문서 표기만 변경한다.
