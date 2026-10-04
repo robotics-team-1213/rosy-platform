@@ -2416,6 +2416,12 @@
 - Evidence: Main387b and PR run37205556518 reproduced stale local0.1.0 and Debian NumPy RECORD failures. Four regression failures before repair; final13passed. Built and resolved12 actual offline wheels outside source. Disposable ROS Jazzy amd64 container passed NumPy/Torch roundtrip and OpenCV resize with versions2.2.6/4.12.0/2.7.1+cpu. Independent scope review APPROVE.
 - Gate: SOURCE/LOCAL and CI environment repair only; final GitHub CI and signed site candidate delivery remain pending. Installer5dbbe7 unchanged; physical marker identity HOLD.
 
+## 2026-10-04 · uncommitted · fix(ci): avoid legacy xunit alias in ACT test helper
+
+- Change: Rename only the ACT inference test helper and seven calls from setup to _build_inference_case. CI pytest7.4.4 treated setup as its legacy module callback; preserve every assertion, production code, dependency and pytest hook.
+- Evidence: PR CI37207709987 reached actual tests: all other gating suites passed, but learning had14 setup errors. Same-version Ubuntu reproduction14errors before repair; afterward both pytest7.4.4 and local8.4.2 passed23tests with one existing optional native skip. Independent exact-diff review APPROVE.
+- Gate: Test harness compatibility only; final GitHub CI and signed delivery pending. No learning runtime or device acceptance claim.
+
 ## 2026-10-04 · uncommitted · feat(omx): 정본 G2 격리 실행기
 
 - 변경: 실제 Cell 문서 저장·compile·service proposal·별도 named simulation operator admission·Fleet grant·UDS·owner·Gazebo를 연결하는 박스 16회 하네스를 추가했다. 각 grant의 staging intent를 세계 변경 전에 fsync하고 재제출을 금지한다. 실제 측정 프로세스가 pose·gripper·진행 clock과 이전 배치를 검증한다.
