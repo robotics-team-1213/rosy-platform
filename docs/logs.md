@@ -5148,3 +5148,9 @@
 - 변경: 관제 상시 watch 설치 후보가 D-434 및 계획 M1.5와 충돌한 것을 확인하고 요청을 철회했다. 원본과 SHA를 보존한 관제 installer는 즉시 중단한다. 기존 관제 intake는 과거 별도 재현 증거로 명시했다. 모델 PC용 pinned source/offline dependency 설치 후보를 준비했다.
 - 증거: 모델 PC system unit/경로 not-found 확인, 온라인 PyPI timeout terminal 확인 후 offline wheel10개/archive SHA 검증, 별도 venv sync/check/CPU imports/journal fsync/installer dry-run exit0. Python base는 /usr/bin/python3.12다. 실제 sudo와 물리 명령은 미실행이다. 근거: validation/model-watch-placement-correction-2026-10-04.md.
 - gate 변화: D-434 배치를 복구했다. 실제 모델 PC system 설치·canonical store/eval/history 연결·robot shadow/rollback·사람 라벨·owner/Fleet/DEVICE/FIELD와 전체 목표는 미완료다.
+
+## 2026-10-04 · uncommitted · docs(validation): prove model-PC watcher READY and HOLD handling
+
+- 변경: 모델 PC의 기존 READY inbox와 canonical history snapshot을 별도 CPU watcher 실행에 연결했다. 원래 이력은 SHA 비교로 보존했고 source/store/eval 버전을 고정했다.
+- 증거: 실제 replay380/eval126, disjoint true, mIoU0.5185248134695789/PASS→accepted, content/READY SHA 재확인. 재실행은 report SHA/평가횟수 그대로였고 실제 로봇 HOLD를 읽어 pending/attempts0/exit0을 유지했다. 실제 status exit0도 확인했다. 근거: validation/model-pc-watch-ready-acceptance-2026-10-04.md.
+- gate 변화: 모델 PC user watcher의 READY/intake/accepted/retry/HOLD 실증. systemd 설치·실제 shadow/rollback·사람 라벨·owner/Fleet/DEVICE/FIELD 및 전체 목표는 미완료다. 기존 HOLD·포인터와 물리 제어는 변경하지 않았다.
