@@ -122,7 +122,7 @@ def test_print_commands_verifies_locally_and_builds_the_full_push_plan(release):
     # existing on-device bounded probe unchanged.
     assert plan[6]["role"] == "core-release-check"
     ready_args = plan[7]["arguments"]
-    assert ready_args[-3:-1] == ["bash", "-lc"]
+    assert ready_args[-5:-1] == ["sudo", "-n", "bash", "-lc"]
     assert "/etc/rosy/runtime.env" in ready_args[-1]
     assert "wait-core-ready.py" in ready_args[-1]
     for step in plan:
@@ -145,7 +145,7 @@ def test_rollback_plan_skips_the_release_and_only_rolls_back_and_waits(release):
     assert plan[0]["arguments"][-1] == "/opt/rosy/native-runtime/rollback-release.sh"
     assert "sudo" in plan[0]["arguments"] and "-n" in plan[0]["arguments"]
     ready_args = plan[-1]["arguments"]
-    assert ready_args[-3:-1] == ["bash", "-lc"]
+    assert ready_args[-5:-1] == ["sudo", "-n", "bash", "-lc"]
     assert "wait-core-ready.py" in ready_args[-1]
 
 

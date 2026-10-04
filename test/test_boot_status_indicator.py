@@ -132,6 +132,30 @@ def test_ready_device_shows_a_heartbeat(tmp_path):
     assert (root / "sys/class/leds/ACT/trigger").read_text(encoding="ascii") == "heartbeat"
 
 
+def test_ready_tls_advertises_the_configured_certificate_hostname(tmp_path):
+    module = _module()
+    root = _device(tmp_path)
+    (root / 'etc/rosy/runtime.env').write_text(
+        'ROSY_API_TLS=required\nROSY_API_TLS_HOST=rosy-pinky-e4us.local\n', encoding='utf-8')
+    ready = {unit: 'active\n' for unit in FAILED_CARD_UNITS}
+    record, errors, _calls = _render(module, root, ready)
+    assert errors == []
+    assert record['api_tls_host'] == 'rosy-pinky-e4us.local'
+    avahi = xml.dom.minidom.parse(str(root / 'etc/avahi/services/rosy.service'))
+    txt = {node.firstChild.data for node in avahi.getElementsByTagName('txt-record')}
+    assert 'tls=required' in txt
+    assert 'tls_host=rosy-pinky-e4us.local' in txt
+
+
+@pytest.mark.parametrize('tls_mode,host', [('none', 'robot.local'), ('required', '192.168.1.201'),
+                                        ('required', 'foreign.example.com'), ('required', '')])
+def test_plain_or_invalid_tls_hostname_is_not_advertised(tls_mode, host):
+    module = _module()
+    tree = xml.dom.minidom.parseString(module.render_avahi(
+        {'stage': 'CORE_READY', 'api_tls': tls_mode, 'api_tls_host': host}))
+    assert not any(node.firstChild.data.startswith('tls_host=') for node in tree.getElementsByTagName('txt-record'))
+
+
 def test_one_broken_sink_never_stops_the_others(tmp_path):
     module = _module()
     root = _device(tmp_path)

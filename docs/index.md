@@ -299,8 +299,8 @@
 
 ## 최근 기록
 
+- 2026-10-05 · uncommitted · fix(integration): 등록 TLS 전송과 배포 검사 통합
+- 2026-10-05 · uncommitted · fix(integration): 실제 LAN 연결의 HTTPS 등록 경계 기록
+- 2026-10-05 · uncommitted · refactor(learning): 데이터셋 출처 검증 owner 분리
 - 2026-10-05 · uncommitted · fix(learning): owner admission의 더 짧은 승인 유효기간 유지
 - 2026-10-05 · uncommitted · feat(learning): indexed trainer 독립 admission D-464
-- 2026-10-05 · uncommitted · docs: SRP 검토 커밋 식별자 단축
-- 2026-10-05 · uncommitted · test: fence app and web document ownership
-- 2026-10-05 · uncommitted · docs(learning): 모델 PC 픽셀 자동 라벨 초안 파이프라인 D-465

@@ -5855,3 +5855,21 @@ osy-d395-s1d\`.
 - 변경: 기존 cycle의 pinned authority 유효기간과 producer owner 유효기간 중 최솟값을 transport 조회, dataset 재구축, IndexedReview에 동일하게 전달한다. 5초 정책을 90초 기본값으로 늘리지 않는다. 승인 발급자·highwater·출처·READY 조건은 그대로다.
 - 증거: X:/DevTemp/rosy-ui-ship/review-ttl에 새 경계 RED3FAIL3PASS, 수정 후 focused6PASS, 기존 관련5개 suite208PASS1SKIP50.05초 및 known_failures NEW0을 기록했다. stale20초/fresh2초, 양쪽5초/90초 설정, 느린 재구축 중 만료를 실제 synthetic admission/request 경계로 확인했다.
 - gate 변화: 호스트 SOURCE/격리 검증만. 실제 GPU·학습 요청·장치 설정·배포·모델 활성화·주행은 실행하지 않는다. 독립 소스 리뷰 후 이 수정만 커밋하며 native038/Android/배포 closure는 변경하지 않는다.
+
+## 2026-10-05 · uncommitted · refactor(learning): 데이터셋 출처 검증 owner 분리
+
+- 변경: 674줄 review_dataset의 stable bytes·source proof·sealed eval companion 검증4함수를 review_provenance로 그대로 옮겼다. 기존 import는 re-export로 유지하고 새 owner를 trainer 입력 코드 hash에 포함한다. dataset474줄·provenance209줄이며 P6 제한·verdict 예외는 변경하지 않는다.
+- 증거: X:/DevTemp/rosy-ui-ship/review-budget에 기존 P6/새 owner 결속 RED2FAIL, 수정 후2PASS, 기존 관련5개 suite와 module_structure 전체242PASS1SKIP65.34초/NEW0을 기록했다. 네 함수 AST 동일성과 새 owner가 변경되면 학습 import/GPU 전 거절하는 경계를 확인했다.
+- gate 변화: SOURCE/격리 검증만. 승인·출처 bytes·dataset SHA·최신성·게시 규약은 유지하며 배포·native·Android·자격증명·실제 GPU/장치 실행은 변경하지 않는다. 독립 리뷰 후 이 변경만 커밋한다.
+
+## 2026-10-05 · uncommitted · fix(integration): 실제 LAN 연결의 HTTPS 등록 경계 기록
+
+- 변경: D-456에 기존 관제 encrypted enrollment의 공개 TLS binding과 단일 REST/WS endpoint owner를 기록한다. 같은 LAN의 발견 이름을 사용하고 기존 자격·발급자·만료·철회를 보존한다. static roster 중복이나 평문 fallback으로 접속 실패를 숨기지 않는다.
+- 증거: 두 로봇의 실제 038 HTTPS identity를 SSH로 확인한 CA와 호스트 이름으로 검증했다. 관제 DB에는 기존 active 승인 두 행이 있고, 기존 enrollment client는 HTTP를 재구성한다. 관련 최신 main 통합 검사는 199 passed/64.92초/NEW0이다. source companion 분리 충돌은 stable reader와 두 코드 owner fingerprint를 보존해 통합했다.
+- gate 변화: 실제 HTTPS identity와 기존 등록 상태만 확인했다. Pilot 승인·연결과 관제 HTTPS 등록 경로·새 Camera Peer 승인은 아직 수용하지 않는다. 최신 main의 bounded-trial STOP/send 경합은 독립 source 모의 실행으로 재현되어 수정 전 릴리스를 HOLD한다. 주행·정지 해제·등록 초기화는 수행하지 않는다.
+
+## 2026-10-05 · uncommitted · fix(integration): 등록 TLS 전송과 배포 검사 통합
+
+- 변경: 승인된 등록 ID의 공개 CA·호스트 binding을 기존 REST/WSS endpoint owner에 결속하고 동일 등록부의 transport marker로 재시작·설정 누락 때 HTTP 복귀를 거절한다. CLI의 기존 다음 옵션 전 조립 분리 조건을 이행해 586줄로 줄이고 91줄 feature builder에 지연 import·생성 순서를 보존한다. 독립 재판정에 따라 Fleet split 기록만 35606줄로 갱신하고 사라진 CLI 예외를 제거한다. 예산·허용량·기존 B2/UI 분리 대기열은 유지한다.
+- 증거: 전송 통합의 원본 관련207PASS2WindowsSKIP57.04초/NEW0, 조립 분리의 원본CLI·TLS55PASS1WindowsSKIP34.83초 및 독립 AST·구조·안전 SOURCE PASS를 기록했다. 기존 P6는35581>35137+150로 실제 RED였다. bounded-trial 경합은 별도 writer fence 수정과 원본43PASS 및 독립 양수 전송 거절 재현으로 source HOLD를 해소했다. 두 실제 TLS calibration 읽기는 활성 세션 없음으로 PASS다.
+- gate 변화: SOURCE/읽기 증거다. 새 서명 릴리스·실제 Pilot 승인/재연결·관제 HTTPS/WSS·새 Camera Peer/발열 수용은 아직 완료하지 않는다. 관제 공개 설정은 준비했지만 SSH sudo-n은 관리자 인증을 요구해 실제 적용하지 않았다. 기존 승인·발급자·키·CA·만료·주행·정지 상태는 보존한다.
