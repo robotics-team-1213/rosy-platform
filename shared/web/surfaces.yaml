@@ -163,7 +163,7 @@ surfaces:
       게임형 HUD 의 큰 표적은 공용 종류(누르는 동안 채워지는 toggle·고르는 segment)와 size 속성,
       표면 CSS 의 배치 규칙(min-height·폭)으로만 만들고, 영상 위 대비는 버튼이 아니라 조작부 판이
       바탕을 가진다(D-363 부록 참조).
-    baseline: docs/validation/pilot-g2-baseline-2026-10-04/drive-tablet-land.png
+    baseline: docs/validation/pilot-g2-baseline-2026-10-04/pilot-drive-2000x1200.png
 
   - id: web-common
     api_owners: []

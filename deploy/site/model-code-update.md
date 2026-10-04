@@ -66,3 +66,8 @@ model-watch도 같은 실행기와 lock을 사용한다. 평가 후 shadow까지
 - `status`의 desired_commit/source_commit/sequence/result와 user journal을 함께 읽는다. 후보·receipt는 별도 상태 경로에 보존되며 자동 pruning은 하지 않는다. 운영자가 보존할 후보를 확인한 후 releases/inbox만 정리한다.
 
 The installed bootstrap also supports the previous signed release layout for rollback. New candidates contain only the current source layout.
+
+
+## 작업 중인 코드 보호 범위
+
+수정 보호 검사는 서명 후보에 포함되는 세 코드 경로와 등록된 이전 경로를 모두 확인한다. 수정·스테이징·삭제·미추적 파일이 있으면 전환을 보류하며, Git 설정으로 미추적 파일을 숨겨도 보호한다. 코드 경로 밖의 데이터셋·체크포인트 변경은 이 검사의 보류 사유가 아니다. Git 관찰 실패나 시간 초과도 업데이트를 보류한다. 서명 후보에는 현재 소스 경로만 포함한다.

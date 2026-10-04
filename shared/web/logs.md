@@ -559,3 +559,11 @@
 - 증거: 비활성 사유·복사 위치 검출·SW·예산 8 passed (2.48s), API UI 경로/구조 16 passed (8.21s). 공용 UI/helper 동작은 변경하지 않았다.
 - gate 변화: SOURCE/LOCAL 라이브러리 자산만 보완한다. DEVICE/FIELD 수용은 소비 런타임에 남긴다.
 - 결정: D-439 Task5, D-359. 일반 허용 수를 넓히지 않고 실제 위치를 구별한다.
+
+## 2026-10-04 · uncommitted · feat(test): D-329 전환 4 — matrix.json 스키마와 보존 시험, 40rem 정식 경계
+
+- 변경: (1) `test/test_baseline_matrix.py` 신설 — 회차 폴더의 `matrix.json`(스키마 `rosy.g2-matrix/1`)이 선언한 셀마다 파일이 있고 추적돼 있는지 판정한다. 파일명 규칙 `<surface>-<state>-<가로>x<세로>.png`도 여기서 지킨다. 합성 오류 매트릭스(스키마·미등록 id·round 불일치·규약 위반·중복·없는 파일·깨진 json)로 변이 확인을 포함한다. 실행 계획은 `docs/plans/2026-10-04-d329-matrix-schema.md`. 첫 적용: `docs/validation/pilot-g2-baseline-2026-10-04/`의 셀 9장을 규약명으로 옮기고 matrix.json을 남겼다. (2) `surface_registry.py`에 `NARROW_WIDTH = ("(width < 40rem)",)` 추가 — 템플릿·Pilot 접속 머리·호환 셸 머리 접기가 같은 값으로 쓰는 폭 40rem(640px)을 세 단 외 체계 경계로 승인한다. 이로써 main을 막던 `test_responsive_tiers` 선재 실패(console-detail.css 40rem, 표면 등재와 TIER_VALUES 등재 금지가 양립 불가였던 교착)이 해소된다.
+- 증거: `python -m pytest shared/web/test -q` **218 passed/24 skipped (0 failed)** — 회귀 전멸. 변이 확인 9케이스 포함 2 passed. known_failures 비교 상동.
+- gate 변화: 없음. 문서·시험 자산.
+- 결정: D-329 Decision 4·Transition 4(스키마를 실행 계획에서 정하고 시험을 그 뒤에 연다). 40rem 승인의 근거는 세 표면의 실사용(template.css·pilot styles.css·console-detail.css)과 TIER_VALUES의 기존 분류.
+- 교훈: "등재 금지 목록에만 값 두기"는 그 값을 쓰는 조건 형태를 허용 목록에 함께 두지 않으면 교착한다 — 둘은 한 커밋이어야 한다.
