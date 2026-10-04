@@ -5044,3 +5044,8 @@
 - 변경: sample goal 전체와 동일 실행 identity/세대/journal receipt를 공통 Episode sources로 보존. 근거 없는 correlations·profile 변경·다른 receipt 세대 우회를 거절한다. 계약0.1.6은 stdlib만 사용한다.
 - 증거: host91pass와 parts18pass, isolated wheel 실제5Dataset/10Episode 재검증. 리뷰 우회2건은 RED9건 후 수정. 상세 validation/omx-owner-receipt-provenance-2026-10-04.md.
 - gate 변화: HOST provenance/Fleet export 고리 보강. 실제 receipt 수집/인증·owner 정책 실행·독립SIM·rollback·DEVICE/FIELD 및 전체 목표 미완료.
+
+## 2026-10-04 · uncommitted · feat(execution): verify pinned policy installation bindings
+- 변경: 고정 profile/controller/envelope/camera/정규화/행동 범위/주기/stale budget과 PolicyArtifact 파일을 대조하는 ROS-free loader와 재검증 경로. middleware→contracts만 사용한다.
+- 증거: host54pass·독립17pass, isolated0.1.1 wheel 실제3정책 integrity/미설정 binding 거절. camera bool alias는 RED3 후 수정. 상세 validation/owner-policy-install-binding-2026-10-04.md.
+- gate 변화: owner 실행 전 설치 호환성 검사 확보. 프로세스 wiring·승격 trust·lease/HOLD/rollback·독립SIM·DEVICE/FIELD는 미완료. 모델 PC는 Tailscale 추가 인증 대기.
