@@ -46,7 +46,8 @@ def snapshot_intake(artifact, report):
 def publish_ready(folder, store_root, job_name):
     """Recover our partial copy or a watcher move; never overwrite different content."""
     import handover
-    from store import Store, content_sha, safe_name
+    from store import (Store, content_sha, safe_name, publication_group,
+                       publication_directory, shared_publication_permissions, refuse_publication_links)
     from control.sensing.perception.learned.manifest import load_manifest, verify_files
     folder = Path(folder)
     manifest = load_manifest(folder)
@@ -59,6 +60,9 @@ def publish_ready(folder, store_root, job_name):
     if not safe_name(job_name):
         raise JobError("job directory basename must be a safe store name")
     store = Store(store_root)
+    group = publication_group(store.root)
+    if group is not None:
+        refuse_publication_links(folder)
     store.ensure_layout()
     revision, names = handover._files(folder)
     target = store.inbox / f"{revision}__{job_name}"
@@ -70,7 +74,8 @@ def publish_ready(folder, store_root, job_name):
                    for name in names):
                 return location
             raise JobError("existing store revision has different content")
-    target.mkdir(parents=True, exist_ok=True)
+    publication_directory(target)
+    refuse_publication_links(target)
     allowed = {*names, *(name + ".part" for name in names), "READY"}
     if any(p.name not in allowed or not p.is_file() for p in target.iterdir()):
         raise JobError("existing inbox has unexpected content")
@@ -81,7 +86,10 @@ def publish_ready(folder, store_root, job_name):
                 raise JobError("existing inbox file differs; use a new job")
             continue
         part = target / (name + ".part")
-        shutil.copyfile(folder / name, part)
+        if part.exists():
+            part.unlink()  # recover only a checked regular partial file
+        with (folder / name).open('rb') as source, part.open('xb') as destination:
+            shutil.copyfileobj(source, destination)
         if sha(part) != sha(folder / name):
             raise JobError("copy hash differs")
         os.replace(part, dest)
@@ -91,7 +99,10 @@ def publish_ready(folder, store_root, job_name):
         if ready.read_text().strip() != digest:
             raise JobError("existing READY digest differs")
     else:
+        shared_publication_permissions(target, group)
         ready.write_text(digest, encoding="utf-8")  # always last
+    if group is not None:
+        ready.chmod(0o640)  # recover interruption after READY write, before chmod
     return target
 
 

@@ -423,6 +423,9 @@ def build_auto_dataset(label_dirs, store, name, min_labelled: float = 0.05, *,
     else:
         splits = assign_splits(m["session"] for _, m in metas)
     tmp = Path(store) / ("evalsets" if eval_set else "datasets") / name / f".staging-{os.getpid()}"
+    from store import publication_group, publication_directory, shared_publication_permissions
+    shared_group = publication_group(Path(store))
+    publication_directory(tmp.parent)
     if tmp.exists():
         shutil.rmtree(tmp)
     try:
@@ -486,6 +489,7 @@ def build_auto_dataset(label_dirs, store, name, min_labelled: float = 0.05, *,
         if final.exists():
             shutil.rmtree(tmp)
         else:
+            shared_publication_permissions(tmp, shared_group)
             os.replace(tmp, final)
     except BaseException:
         shutil.rmtree(tmp, ignore_errors=True)

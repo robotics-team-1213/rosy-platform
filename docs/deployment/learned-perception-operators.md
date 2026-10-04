@@ -248,3 +248,16 @@ deliver, `harvest`는 harvest). 사이트 자동 반영(watch)은 journal에 남
   나온다. 그 사람과 확인한 뒤 `rosy_ml release-hold <robot>`.
 
 > **참고 (2026-10-03, D-434):** 이 문서의 "사이트 PC"(모델 watch·store·사이트 SSH 키)는 모델 PC를 뜻한다. 관제 PC는 사이트 스택만 돌린다.
+
+모델 PC에서 학습 producer와 `rosy-model-watch`가 다른 계정이면 동일 store 경로와
+공유 그룹을 사용해야 한다. 관리자 설치 뒤 producer를 해당 그룹에 등록하고 새 로그인에서
+멤버십을 확인한다. store와 기존 하위 폴더는 그룹이 접근할 수 있어야 한다.
+setgid 공유 대상에 새로 발행하는 dataset/evalset/model은 디렉터리 2770,
+파일과 READY 0640으로 준비한다. 비공유 대상이나 기존 버전은 자동으로 바꾸지 않는다.
+`copy2`의 원본 0700/0600 권한이나 producer의 umask 077이 새 발행물을 숨기지 않게 한다.
+단순한 그룹 등록만으로 기존 파일 권한을 복구했다고 판단하지 않는다.
+
+producer의 `store` 설정과 watcher의 `store`가 같고, 새 READY를 실제 서비스 계정이
+읽고 처리할 수 있는지 확인한 뒤 상시 운영을 수용한다. 권한 수정 코드가 설치 source에
+포함됐는지도 확인한다. 원본 홈 데이터 이동, timer 활성화와 로봇 HOLD 해제는
+이 문서 추가나 HOST 검사 결과로 실행되지 않는다.

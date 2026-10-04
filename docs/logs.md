@@ -5573,3 +5573,10 @@
 - Change: Prepared private pinned source+data installation wrapper; root staging, skeleton quarantine, bottom-up grants and store rename repair reviewed copy-through-service-owned-directory race.
 - Evidence: Independent candidate review approved; actual model-PC verify-only5980files exit0; native non-root install exit1 before input/system writes; units not-found/inactive. Isolated Linux publication fixture reproduces copy2-preserved700/600 access gap. See validation/model-watch-admin-data-import-2026-10-04.md.
 - Gate: Candidate source approval only. No sudo install, timer activation, HOLD release, robot delivery or motion. Producer/store permission binding and key/doctor/owner/Fleet/field acceptance remain pending.
+
+
+## 2026-10-04 · uncommitted · shared store publication permissions
+
+- Change: New POSIX setgid publication normalizes new dataset/eval/model parents and files before rename/READY; source and existing versions unchanged. Reject ancestor/source/partial symlinks and repair interrupted READY chmod on retry.
+- Evidence: Native model-PC corrected RED4fail, evalRED1fail, linkRED2fail, retryRED1fail; final5suites59pass0skip. See validation/shared-store-publication-2026-10-04.md.
+- Gate: Nonprivileged source/Linux evidence. Actual service UID access, membership/config binding, updated pinned installer source, system service, robot HOLD and owner/Fleet/field gates remain pending.
