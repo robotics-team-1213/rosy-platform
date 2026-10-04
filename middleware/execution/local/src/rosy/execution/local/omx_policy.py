@@ -113,7 +113,7 @@ class OwnerPolicySession:
     """One lease/episode; all faults latch HOLD and never release owner/local stop."""
     def __init__(self,policy,owner,fence,lease,*,authority_current,owner_identity,monotonic=time.monotonic,
                  enabled=False,max_lease_duration_ns=1_000_000_000,camera_current=None,
-                 observation_history_capacity=64):
+                 observation_history_capacity=64,execution_journal=None):
         if not isinstance(policy,InstalledPolicy) or not isinstance(owner,ArmCommandOwner):
             raise ValueError('installed policy and existing OMX owner required')
         if not isinstance(fence,LocalStopController) or not isinstance(lease,PolicyLease):
@@ -129,6 +129,11 @@ class OwnerPolicySession:
         self._identity=owner_identity
         if camera_current is not None and not callable(camera_current):raise ValueError('local camera provider required')
         self._cameras=camera_current
+        if execution_journal is not None:
+            from .policy_journal import PolicyExecutionJournal
+            if not isinstance(execution_journal,PolicyExecutionJournal):
+                raise ValueError('native policy execution journal required')
+        self._execution_journal=execution_journal
         self.enabled=enabled;self._ttl=max_lease_duration_ns
         self._lock=threading.RLock();self._snapshot=None;self._active_command=None
         self._history=OrderedDict();self._history_capacity=observation_history_capacity
@@ -335,6 +340,8 @@ class OwnerPolicySession:
                         calibration_revision=cfg.calibration_revision,joint_names=cfg.joint_names,
                         expected_start_state_positions=dict(source.positions),
                         start_state_tolerances=dict(cfg.max_start_state_tolerances))
+                    if self._execution_journal is not None:
+                        self._execution_journal.prepare(self.lease,candidate,command)
                     self._stop_open()
                     final_now=self._now()
                     self._lease_time(self.lease,final_now)

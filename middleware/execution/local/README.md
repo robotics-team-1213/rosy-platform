@@ -65,6 +65,33 @@ stopped proof. Actual research policies remain unqualified and unactivated.
 
 Host tests:
 
+`PolicyExecutionJournal` is optional private SIM evidence. When supplied to
+`OwnerPolicySession`, it commits the exact lease/AttemptIdentity, candidate and
+generated command before the owner is called. Storage latency is included in the
+final freshness/lease checks; failed storage cannot dispatch. Composition must
+also supply `journal.observe` to the actual ROS transport event sink. Without
+that wiring, an intent alone supplies no accepted goal or result evidence.
+
+The WAL/FULL journal records original callback UUIDs, sequences, times and result
+facts; unknown commands, changed goal/phase, duplicate/out-of-order events and
+events after terminal are rejected transactionally. Readback uses one snapshot.
+Reopening the journal offers inspection only, with no replay or recovery API.
+The AttemptIdentity/Episode/policy/source-sequence intent key is durable and
+exclusive; another command UUID or renewed lease ID cannot repeat that intent.
+An intent committed before a later freshness rejection remains consumed. Unknown
+callback outcomes remain unresolved and are not promoted by later events here.
+The private journal does not authenticate callbacks or issue authority. An
+installed composition must restrict its sink to the trusted transport. The
+transport's existing sink-failure cancellation remains a request, not stop proof.
+
+These records are not `DeviceActionReceipt`, an authenticated Fleet Action or a
+policy-bound common Episode. A scoped policy lease does not create an ActionStore
+parent. Native D-18/Fleet correlation still requires the existing authorized
+Action context and truthful original goal IDs. The existing four semantic
+PICK_PLACE phases must not be assigned to arbitrary learned commands. Tests use
+synthetic installed policy/authority and fake callbacks; no ROS/SIM/device,
+training, promotion or physical acceptance follows from their results.
+
 ```powershell
 python -B -m pytest middleware/execution/local/test/test_policy_install.py -q -p no:cacheprovider --basetemp X:/DevTemp/policy-install-tests
 ```
