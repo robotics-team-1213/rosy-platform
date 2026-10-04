@@ -9,7 +9,7 @@ from fleet.server.site_auth import build_authorize, build_role_guards, SitePrinc
 from fleet.server.sightings import SightingSource
 from fleet.server.tracking import TrackingService, TrackingError
 from fleet.server.tracking_calibration import TrackingCalibrationStore
-from fleet.server.start_points import StartPointService
+from fleet.server.start_points import StartPointService, StartPointError
 from fleet.server.start_point_routes import install_start_point_routes
 from test_overhead_tracking_api import APPROVAL
 
@@ -19,7 +19,7 @@ def service(tmp_path):
                             calibration_revision="corners", corner_marker_ids=(30, 31, 32, 33))
     tracking = TrackingService([source], calibrations=TrackingCalibrationStore(tmp_path / "cal.sqlite3"))
     tracking.approve({**APPROVAL, "source_id": "north", "map_id": "track"}, approved_by="operator")
-    return StartPointService(tracking), tracking
+    return StartPointService(sources=tracking.sources, calibrations=tracking.calibrations), tracking
 
 
 def body(tracking, **changes):
@@ -32,7 +32,7 @@ def test_restart_and_calibration_change_keep_reference_but_invalidate_use(tmp_pa
     saved = points.save("north", body(tracking), principal_id="op")
     assert saved["valid"] is True
     assert saved["use"] == "reference-only"
-    restarted = StartPointService(tracking)
+    restarted = StartPointService(sources=tracking.sources, calibrations=tracking.calibrations)
     assert restarted.listing()["start_points"] == [saved]
     tracking.approve({**APPROVAL, "source_id": "north", "map_id": "track", "frame_seq": 99}, approved_by="op")
     assert restarted.listing()["start_points"][0]["valid"] is False
@@ -43,11 +43,11 @@ def test_outside_stale_calibration_and_concurrent_edit_are_rejected(tmp_path):
     for changes, code in [({"x": -1}, "START_POINT_OUT_OF_BOUNDS"),
                           ({"calibration_revision": "old"}, "CALIBRATION_CHANGED"),
                           ({"map_id": "other"}, "MAP_MISMATCH")]:
-        with pytest.raises(TrackingError) as error:
+        with pytest.raises(StartPointError) as error:
             points.save("north", body(tracking, **changes), principal_id="op")
         assert error.value.code == code
     saved = points.save("north", body(tracking), principal_id="op")
-    with pytest.raises(TrackingError) as error:
+    with pytest.raises(StartPointError) as error:
         points.save("north", body(tracking, x=2), principal_id="other")
     assert error.value.code == "START_POINT_CHANGED"
     updated = points.save("north", body(tracking, expected_revision=saved["revision"], x=2), principal_id="op")

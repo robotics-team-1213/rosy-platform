@@ -5,7 +5,7 @@ from fastapi import Depends, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field
 
 from fleet.server.site_auth import SitePrincipal
-from fleet.server.tracking import TrackingError
+from fleet.server.start_points import StartPointError
 
 
 class StartPointRequest(BaseModel):
@@ -31,7 +31,7 @@ def install_start_point_routes(app, *, service, read_guard, require_operator):
     async def save(source_id: str, body: StartPointRequest, principal: SitePrincipal = Depends(require_operator)):
         try:
             return service.save(source_id, body.model_dump(), principal_id=principal.principal_id)
-        except TrackingError as exc:
+        except StartPointError as exc:
             raise fail(exc) from exc
 
     @app.delete("/api/fleet/start-points/{source_id}", tags=["start-points"])
@@ -39,5 +39,5 @@ def install_start_point_routes(app, *, service, read_guard, require_operator):
                      principal: SitePrincipal = Depends(require_operator)):
         try:
             return service.delete(source_id, expected_revision=expected_revision, principal_id=principal.principal_id)
-        except TrackingError as exc:
+        except StartPointError as exc:
             raise fail(exc) from exc

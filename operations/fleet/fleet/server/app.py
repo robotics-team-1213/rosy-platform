@@ -454,7 +454,8 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                                 read_guard=read_guard, operator_guard=operator_guard)
         from fleet.server.start_points import StartPointService
         from fleet.server.start_point_routes import install_start_point_routes
-        install_start_point_routes(app, service=StartPointService(tracking),
+        install_start_point_routes(app, service=StartPointService(sources=tracking.sources,
+                                                              calibrations=tracking.calibrations),
                                    read_guard=read_guard, require_operator=require_operator)
     install_signal_routes(app, signals=console._signals, require_viewer=require_viewer,
                           require_operator=require_operator, auth_configured=bool(principals or console_token))
