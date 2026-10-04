@@ -511,3 +511,9 @@
 - 변경: `core_features/vision/stream.py` 추가 — `DriverStreamGate`(마지막 수락 teleop 토큰이 조종 소유권, D-460 임대 없음). 단일 슬롯, 운전자 교체 시 즉시 슬롯 해제, `close` 멱등. `VisionFrameStore.latest_frame(overlay=)` 추가 — 스트림 경로용, viewer 폴링 속도 제한 없이 raw pair 신선도(수신+source age) 검사.
 - 증거: `test/test_vision_stream_gate.py` 5 PASS(미운전 409·단일 슬롯·교체 퇴거·멱등 close·빈 토큰 무시). 스토어 회귀는 기존 시험 유지.
 - gate 변화: SOURCE. ROS-SIM fps·지연 측정과 DEVICE 영상 수용은 별개(D-368 Validation 참조).
+
+## 2026-10-05 · uncommitted · feat(command): cumulative bounded trial
+
+- 변경: private trial ledger, original odom stamp/frame and final CORE port restriction; no second publisher/API/config activation.
+- 증거: synthetic guard26PASS, installed geometry/CORE independent180PASS/NEW0. Actual measurement/braking UNKNOWN, no motion or push.
+- gate 변화: SOURCE/LOCAL only; HOLD/readiness retained. Plan docs/plans/2026-10-05-core-bounded-camera-trial.md.

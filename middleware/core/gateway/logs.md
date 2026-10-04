@@ -868,3 +868,9 @@
 - 변경: verifier와 신규 UTC 날짜 속성이 없는 인증서 형태를 주입해 명시적 ValueError 거절을 확인한다. 유효한 인증서 검증 시험은 그대로 유지한다.
 - 증거: 수리 전 1 failed/3 passed로 검사 순서 문제를 재현했고 수리 후 관련 TLS·CI·버전 19 passed를 확인했다.
 - gate 변화: SOURCE/LOCAL 회귀 증거. DEVICE 연결 수용은 별도다.
+
+## 2026-10-05 · uncommitted · feat(command): cumulative bounded trial
+
+- 변경: private trial ledger, original odom stamp/frame and final CORE port restriction; no second publisher/API/config activation.
+- 증거: synthetic guard26PASS, installed geometry/CORE independent180PASS/NEW0. Actual measurement/braking UNKNOWN, no motion or push.
+- gate 변화: SOURCE/LOCAL only; HOLD/readiness retained. Plan docs/plans/2026-10-05-core-bounded-camera-trial.md.

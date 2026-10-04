@@ -44,3 +44,21 @@ def odom_owns_pose(map_pose_ts: float, now: float,
     구성에서는 화면에 무엇이라도 띄워야 하므로 - 폴백으로 쓴다.
     """
     return (now - map_pose_ts) >= ttl_s
+
+
+def observe_bounded_trial(bridge, msg, sample, *, now=None):
+    """Optional private trial input; original ROS clock/frame, never fake seq."""
+    guard=getattr(bridge,'_bounded_trial_guard',None)
+    if guard is None:return
+    try:
+        from core_features.command.bounded_trial import BoundedTrial
+        if type(guard) is not BoundedTrial:raise ValueError('exact trial guard required')
+        stamp=msg.header.stamp
+        if type(stamp.sec) is not int or type(stamp.nanosec) is not int or not 0<=stamp.nanosec<1000000000:
+            raise ValueError('invalid original odom timestamp')
+        guard.observe(x=sample['x'],y=sample['y'],stamp_ns=stamp.sec*1000000000+stamp.nanosec,
+                      source_now_ns=bridge._node.get_clock().now().nanoseconds,
+                      frame_id=msg.header.frame_id,now=now)
+    except Exception:
+        try:guard.stop('odom_adapter_failed')
+        except Exception:pass

@@ -18,9 +18,8 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from review_authority import advance_revision, validate_current, verify_bundle
-from review_provenance import (
-    _stable_bytes, _proof_path, _capture_proofs, validate_eval_companions,
-)
+from review_provenance import _stable_bytes, _proof_path, _capture_proofs
+from review_eval_companion import capture_eval_companions
 
 
 def _delivery(fetch, workspace, previous, max_age, now):
@@ -224,6 +223,12 @@ def inspect_candidates(export_root, *, fetch_current, workspace_id,
             'authority': revision,
             'approved_masks': len(masks), 'frames': diagnostics,
             'source_components': components, 'disjoint_from': refs}
+
+
+def validate_eval_companions(eval_folders, companion_files):
+    """Preserve the public companion API and dataset-owned stable reader."""
+    return capture_eval_companions(eval_folders, companion_files, read_bytes=_stable_bytes)
+
 
 
 def _verify_video_requests(requests, scratch):
