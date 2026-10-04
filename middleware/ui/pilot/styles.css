@@ -798,3 +798,14 @@ body[data-pilot-screen="drive"] ui-brand small { display: none; }
   body[data-pilot-screen="connect"] #pilot-notice { flex: 1 1 100%; overflow-wrap: anywhere; }
   body[data-pilot-screen="connect"] ui-topbar [data-spacer] { display: none; }
 }
+
+/* 좁은 티어(전화)의 조작 면적 바닥(DESIGN.md: 44px). 넓은 화면의 레이아웃 규칙이
+   flex 채움을 위해 min-width: 0 을 주는데, 좁은 티어에서는 그대로 두면 프리셋이
+   내용 폭으로 줄어 바닥을 뚫는다. 같은 특이도로 되돌리고 내용 폭 + 바닥으로 잡는다. */
+@media (width < 30rem) {
+  .pilot-drive[data-drive-layout] [data-drive-presets] ui-actions ui-button,
+  .pilot-drive[data-drive-layout] [data-drive-presets] [data-drive-fine] {
+    min-width: 2.75rem;
+    flex: 0 1 auto;
+  }
+}
