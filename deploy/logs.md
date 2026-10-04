@@ -2266,3 +2266,9 @@
 - Change: Protect uncommitted entrypoint edits without blocking an approved update from a clean older checkout.
 - Evidence: Regression failed before the fix. Windows 14 passed, 21 Linux-only skips; model-PC Linux 35 passed.
 - gate 변화: None. Remote CI and migrated-source device activation remain separate.
+
+## 2026-10-04 · uncommitted · D-441 local maintenance and manual install safety
+
+- Change: Reconcile the verified actual signed installation before selection; add locked hold/resume with interrupted recovery first; check running Compose configuration hashes and read-only/nonprivileged roots; require exact-main CI and ci-result before automatic signing; add optional authenticated read-only Fleet state/Vision source gates.
+- Evidence: Original updater failed all 10 new behavior cases; initial signer failed all 8 CI cases. Updated isolated Linux updater/signer/verifier suites 108 passed, zero skipped. Real Docker Compose v5.6.0 matched the generated hash to a separately created, never-started container and detected a changed command; cleanup succeeded. Credentials, malformed holds and rollback behavior are covered. Final independent review APPROVE (45 passed, 43 Windows skips, zero new failures); affected/fast gates follow before commit.
+- gate 변화: SOURCE/LOCAL evidence only. Reviewed privileged updater and signing-station copies require separate installation; current site runtime does not yet include this follow-up. Camera listing is not advancing-frame or physical acceptance evidence.
