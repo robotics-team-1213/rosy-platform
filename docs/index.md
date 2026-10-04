@@ -286,8 +286,8 @@
 
 ## 최근 기록
 
+- 2026-10-04 · uncommitted · docs(validation): 웹 표면 ARTIFACT 관측 회차 — 서명 payload 안 share/ 확인 (D-444 P1)
 - 2026-10-04 · uncommitted · D-427 wave5 signed native and actual offline SD readback
 - 2026-10-04 · uncommitted · fix: install Windows hooks with executable LF line endings
 - 2026-10-04 · uncommitted · fix: resolve hook installation through Git
 - 2026-10-04 · uncommitted · D-441 local update follow-up design
-- 2026-10-04 · uncommitted · D-427 wave5 remote CI and ARM64 artifacts
