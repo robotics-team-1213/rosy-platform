@@ -5016,3 +5016,10 @@
 - 변경: 흡수 소유권 시험의 폐기된 src guide 참조를 정본 manifest로 옮기고, Git 영향 시험 fixture를 현행 perception 경로로 맞췄다. 알 수 없는 retired src의 REVIEW 우선 판정은 유지한다. production classifier·runtime·manifest·wheel 입력은 바꾸지 않았다.
 - 증거: push11 fast462 passed/2 skipped 이후 mapped2 failed/3664 passed/151 skipped라 원격 반영은 거부됐다. 실제 OpenCV4.6 전체2588 passed/107 skipped·NEW0, WSL package27 동일/CI build26 finished exit0. 수정 관련14 passed·독립14 passed·APPROVE. docs/validation/d427-source-migration/wave5-final-host-verification-2026-10-04.md.
 - gate 변화: 없음. 최종 SHA의 push·GitHub CI·ARM64·SD·release·DEVICE·FIELD는 후속이다. HOST·합성 결과를 실기 수락으로 바꾸지 않는다.
+
+
+## 2026-10-04 · uncommitted · D-427 wave5 remote CI and ARM64 artifacts
+
+- 변경: 소스 1722ca6ec6d7의 실제 원격 push, 전체 GitHub CI, native/SD 035 산출물 검증과 남은 수용 조건을 기록했다. 제품 runtime·계약·manifest·시험 판정은 바꾸지 않았다.
+- 증거: push12 fast462 passed/2 skipped, mapped3667 passed/151 skipped·NEW0; GitHub 10matrix+scope+ci-result 모두 SUCCESS. 실제 ARM64 native/SD build28 packages 각각 SUCCESS. native 실제2547manifest/2548SUMS·독립 APPROVE; SD ZIP/외부14SUMS/전체XZ12869835264bytes·metadata21검사·독립 APPROVE. 공개 문서 배치/출판9 passed. docs/validation/d427-source-migration/wave5-arm64-artifact-verification-2026-10-04.md.
+- gate 변화: 없음. unsigned SD mounted verifier의 shape/config 검사와 서명·full factory SUMS·기기 부팅을 구분했다. 실제 prepare는 canary ABI SSH255 timeout으로 exit1, 서명·발행 전 종료했다. site PC NOT_RUN, peer 실제 delivery NOT_SENT, device/field 미검증이다. firmware S7은 다음 개정이며 flash·motion·E-Stop reset을 실행하지 않았다.
