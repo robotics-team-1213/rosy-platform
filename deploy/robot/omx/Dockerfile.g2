@@ -1,0 +1,9 @@
+# Private validation image only; source is supplied as a read-only run mount.
+ARG OMX_SIM_IMAGE=rosy-omx-pilot-sim:local
+FROM ${OMX_SIM_IMAGE}
+USER root
+COPY deploy/site/requirements-fleet.txt /tmp/g2-requirements.txt
+RUN python3 -m venv --system-site-packages /opt/rosy-g2-venv \
+    && /opt/rosy-g2-venv/bin/pip install --no-cache-dir -r /tmp/g2-requirements.txt \
+    && rm /tmp/g2-requirements.txt
+ENV PATH="/opt/rosy-g2-venv/bin:${PATH}" PYTHONDONTWRITEBYTECODE=1
