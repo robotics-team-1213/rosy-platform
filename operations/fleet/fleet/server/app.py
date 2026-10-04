@@ -50,6 +50,7 @@ from fleet.server.task_service import FleetTaskService
 
 from fleet.server.console_routes import install_console_routes
 from fleet.server.background_workers import proposal_expiry_loop as _proposal_expiry_loop
+from fleet.server.background_workers import goal_evidence_expiry_loop
 from fleet.server.signal_routes import install_signal_routes
 from fleet.server.ingest_routes import install_discovery_routes, install_ingest_routes
 from fleet.server.intent_routes import install_intent_routes
@@ -74,6 +75,7 @@ from fleet.server.task_dispatch_routes import (  # noqa: F401 â€” GoalRequest ìž
 )
 
 _LOG = logging.getLogger(__name__)
+_goal_evidence_expiry_loop = partial(goal_evidence_expiry_loop, logger=_LOG)
 DEPLOYMENT_PROFILES = frozenset({"production", "simulation"})
 
 
@@ -555,16 +557,6 @@ async def _task_dispatch_loop(console: FleetConsole, task_service: FleetTaskServ
             # A status read failure cannot establish availability. Leave work queued.
             pass
         await asyncio.sleep(0.25)
-
-
-async def _goal_evidence_expiry_loop(service: GoalEvidenceService) -> None:
-    """Apply registered grace deadlines without enabling Action dispatch."""
-    while True:
-        try:
-            service.hold_expired_without_evidence()
-        except (OSError, ValueError):
-            _LOG.exception("goal evidence grace reconciliation failed")
-        await asyncio.sleep(1.0)
 
 
 async def _mission_feedback_schedule_loop(scheduler: MissionModelTurnScheduler) -> None:

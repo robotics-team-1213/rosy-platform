@@ -33,7 +33,7 @@ def test_cli_help_with_clean_pythonpath(cli):
     env = {k: v for k, v in os.environ.items() if k != "PYTHONPATH"}
     env["PYTHONIOENCODING"] = "utf-8"  # help text has non-cp949 characters on Windows
     proc = subprocess.run([sys.executable, str(ROOT / cli), "--help"], cwd=ROOT, env=env,
-                          capture_output=True, text=True, timeout=120)
+                          capture_output=True, text=True, encoding="utf-8", timeout=120)
     err = proc.stderr
     if proc.returncode != 0 and "ModuleNotFoundError" in err and "core_common" not in err:
         missing = err.strip().splitlines()[-1]

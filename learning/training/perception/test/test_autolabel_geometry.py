@@ -219,7 +219,7 @@ def test_fit_pitch_recovers_a_remounted_camera():
 
 def test_classes_follow_the_shared_contract():
     roles = {c["role"] for c in L.CLASSES}
-    assert roles <= {"background", "lane_marking", "drivable", "stop_line", "ignore"}
+    assert roles <= {"background", "lane_marking", "drivable", "stop_line", "ignore", "wall"}
     assert [c["index"] for c in L.CLASSES] == list(range(len(L.CLASSES)))
     assert sum(c["role"] == "lane_marking" for c in L.CLASSES) >= 1
     # unlabelled is loss-masked, not a class (role ignore = an unused output channel)

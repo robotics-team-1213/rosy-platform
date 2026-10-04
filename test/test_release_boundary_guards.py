@@ -27,7 +27,7 @@ from pathlib import Path, PurePosixPath
 
 import pytest
 import yaml
-from secret_scan import iter_tracked_files, scan_files, scan_text  # via test/conftest.py
+from secret_scan import iter_tracked_files, load_public_provenance, scan_files, scan_text  # via test/conftest.py
 
 ROOT = Path(__file__).resolve().parents[1]
 COMPOSE = ROOT / "deploy" / "robot" / "pinky_pro" / "compose.yaml"
@@ -258,7 +258,8 @@ def test_runtime_mode_wrapper_falls_back_to_core():
 
 
 def test_no_secrets_in_tracked_files():
-    findings = scan_files(iter_tracked_files(ROOT), root=ROOT)
+    provenance = load_public_provenance(ROOT / "deploy/robot/pinky_pro/release/public_provenance.json")
+    findings = scan_files(iter_tracked_files(ROOT), root=ROOT, public_provenance=provenance)
     assert not findings, "secrets found in tracked files:\n" + "\n".join(
         str(f) for f in findings
     )

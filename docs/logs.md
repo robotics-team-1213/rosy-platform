@@ -5362,6 +5362,270 @@ osy-d395-s1d\`.
 - 증거: 기존 ABI gate 공통314개 일치/불일치0/release-only28; signed tar2879members·2548SUMS·독립 APPROVE. SD readonly debugfs 실제 exit0 후2547manifest/2548SUMS와 native·SD Python/JS743개 실제 bytes 일치·독립 APPROVE. 실제 readonly SSH hostname/status exit0·current033/candidate null/idle. docs/validation/d427-source-migration/wave5-signed-and-offline-readback-2026-10-04.md.
 - gate 변화: 없음. 발행·자동 활성화·canary/secondary035 readback은 미완료이고 사용 세션 조율이 남았다. SD unsigned와 ELF 실행 동등성·부팅·FIELD는 별도다. site PC installer5files 일치/dry-run0이나 sudo 인증 거절로 실제 설치NOT_RUN; peer delivery NOT_SENT; firmwareS7 다음 개정/no flash·motion·E-Stop reset.
 
+## 2026-10-04 · uncommitted · fix(learning): preserve wall role in automatic datasets
+
+- 변경: D-373 wall 역할을 자동 라벨 CLASSES에 반영하고 d379-auto/2로 새 라벨 세대를 만든다. 기존 데이터셋·모델은 덮어쓰지 않는다. 평가 manifest가 wall 역할을 유지하는 회귀를 추가했다.
+- 증거: 평가 manifest 시험 RED(ignore vs wall) 확인 뒤 관련 autolabel/dataset/evalset/training contract 83 passed, 3 skipped(Windows torch/onnxruntime 부재). 실제 평가·전달·DEVICE/FIELD는 미완료다.
+- 계획: docs/plans/2026-10-04-learning-pipeline-closure.md. 모델 PC sudo 비대화형 불가, 미사용 세션과 LiDAR sidecar 확인. 서비스 설치와 실제 평가 증거는 후속이다.
+
+- gate 변화: SOURCE/LOCAL 수정과 시험만. 실제 데이터 평가·자동 전달·DEVICE/FIELD는 미완료.
+
+## 2026-10-04 · uncommitted · feat(learning): require verified fixed evaluation for deployment gates
+
+- 변경: intake require_eval 옵션으로 고정 평가·유효한 차선 IoU 하한·확인된 학습 세션 비겹침·클래스 역할 일치를 요구한다. 기본 연구 접수는 유지한다. 평가 판정 순수 함수를 intake_eval_gate.py로 분리해 intake를 540줄로 유지했다.
+- 증거: 신규 7시험 RED 후 관련 intake/watch와 파일 예산 시험 137 passed, 6 skipped(Windows symlink·torch/onnx/onnxruntime 부재). 모델 PC의 실제 126프레임 평가에서 기존 모델 lane IoU 0.25607, mIoU 0.10458, 학습 세션 비겹침을 확인했다.
+- gate 변화: SOURCE/LOCAL만. 실제 정확도 하한을 비워 둔 pass를 배포 수용으로 사용하지 않는다. model-watch 서비스·새 정책 실행·DEVICE/FIELD는 미완료다.
+
+## 2026-10-04 · uncommitted · verify(learning): fixed evaluation and actual model PC inbox rejection
+
+- 변경: docs/validation/learning-pipeline-2026-10-04/result.md에 실제 고정 평가·READY 거부·재실행 증거를 기록했다. 모델 PC 기존 store에 신규 126프레임 평가 세트를 추가했고 기존 학습 버전·원본은 보존했다.
+- 증거: d78be8339 archive, 모델 PC 실제 관련 suite 142 passed/0 skipped. lane IoU 0.25607·mIoU 0.10458, 학습과 공유 세션 0. wall role 불일치 후보 rejected, accepted 0, 2회 watcher state 해시 동일.
+- gate 변화: LOCAL의 실제 데이터 평가·거부 경로 증거만. 통과 후보·로봇 shadow 전달·rollback·서비스 설치·DEVICE/FIELD는 미완료. LiDAR yaw 승인 기록과 원본 CameraProfile revision 미확인.
+
+## 2026-10-04 · uncommitted · feat(learning): compare supervised recipes and plan perception classes
+
+- 변경: 외부 pinky-lane-segmentation 443f63f의 조명 증강·CE+Dice·AdamW 접근을 현행 6-class manifest에 맞췄다. 기본 trainer는 유지하고 선택적 loss/optimizer hook을 추가했다. 벽·신호등·장애물 라벨과 현재 고정 object_det 계약의 차이를 설계에 기록했다.
+- 증거: 모델 PC 원본 외부 suite 17 passed(torch 2.11, 외부 pin 2.9.1 환경과 다름). 새 recipe 5 passed, 기존 training_model 19 passed. Windows 문서·학습 계약 57 passed, 3 skipped. 실제 GPU 기준 2회 학습의 고정 평가 fail을 learning-gpu-2026-10-04.md에 기록했다. 개선 recipe base16/base8 GPU 비교는 진행 중이다.
+- gate 변화: SOURCE/LOCAL 학습 recipe 및 실제 GPU 거절 증거. 고정 평가 lane IoU는 보강 기준 모델도 0.21407로 부족하다. 신규 물체/신호 상태 학습·장치 전달·주행·DEVICE/FIELD 승격 없음.
+
+## 2026-10-04 · uncommitted · verify(learning): compare baseline and lighting Dice model candidates
+
+- 변경: perception-model-comparison-2026-10-04.md에 동일 데이터·고정 평가의 3개 모델 비교를 추가했다. 외부 recipe의 부분 라벨 의미는 가져오지 않고 현행 클래스 의미를 유지했다.
+- 증거: 실제 GPU 30에폭, base16 개선 lane IoU 0.79448/mIoU 0.51486, base8 0.76222/0.50522. 두 후보 intake pass. 별도 순차 CPU 평가 p95 51.22/18.91ms, ONNX 7773729/1952379bytes. 원본 JSON/log/config는 X와 모델 PC에 보존했다.
+- gate 변화: 인식 shadow 후보의 고정 평가 선별 통과. drivable IoU 약 0.00042/0.00241와 신호/물체 정답 공백은 남는다. READY watcher→accepted→로봇 전달·rollback, 시스템 timer, 실제 주행, DEVICE/FIELD는 미완료다.
+
+## 2026-10-04 · uncommitted · verify(learning): prepare recorded-video labels and accept READY candidate
+
+- 변경: 기존 영상 19개 목록과 샘플을 확인하고 5개 영상의 76프레임 도로 mask/CVAT 초안 및 4프레임 물체 box 7개 검수 패키지를 만들었다. 동일 녹화 part를 capture group으로 묶고 기존 평가 세션은 제외했다. 통과 소형 후보의 실제 canonical accepted 이동과 9dfk 기존 manual hold를 확인했다.
+- 증거: 76 JPEG SHA/CVAT mask·7 box 경계·group 비겹침 검증. bundle SHA e1b245a7cfd1969923e42de32c029153d62ebf1ce461f0e5a681231725b2f365. READY f21a7a97 intake pass/attempt1/accepted ONNX SHA 확인. 8kcn DNS exit77·push0; 9dfk 기존 pin/hostname 검증 후 같은 키의 alias 추가, watcher held/push0. 상세 recorded-video-review-2026-10-04.md 및 model-store-accepted-2026-10-04.md.
+- gate 변화: 실제 라벨 초안/접수/hold 존중 증거. 검수 완료 ground truth·물체/신호 학습·장치 shadow 교체/rollback·system timer·DEVICE/FIELD는 미완료. 401 robot state를 idle 증거로 사용하지 않는다.
+
+## 2026-10-04 · uncommitted · feat(learning): resume GPU training through qualified READY
+
+- 변경: train_job.py/job_state.py로 immutable 데이터→GPU→ONNX→strict intake→READY 단계를 연결했다. 입력·소스·단계 파일 SHA, 단일 작성자/GPU 잠금, 재시도 이력, terminal 품질 거절, 부분 복사와 accepted 이동 회복을 구현했다. 수집/검수/build와 watcher·로봇 전달은 별도다.
+- 증거: 신규 상태/READY 시험 Windows/native 10 passed, Windows handover 합계18 passed. 실제 모델 PC GPU 잠금 거절/재시도, seed42707 base8 mIoU0.4917 terminal reject 및 재실행 횟수 불변. seed42705 base16 ed0f9e71 lane0.724265/wall0.829824/mIoU0.518525 pass, canonical READY와 ONNX SHA 확인. 동일 job 재실행 각 attempt1 유지. 상세 training-job-2026-10-04.md.
+- gate 변화: SOURCE/LOCAL 실제 GPU→고정 평가→READY 및 재개 증거. 새 영상은 검수 초안이며 확장 클래스 추가 학습 아님. system timer·harvest부터의 자동 연결·새 후보 accepted/device shadow·rollback·OMX/SIM/Fleet·DEVICE/FIELD는 미완료.
+
+## 2026-10-04 · uncommitted · feat(learning): connect recording curation to resumable model jobs
+
+- 변경: recording_job.py가 선택적 harvest→출처 catalog→autolabel→store build→train_job을 연결한다. 평가 session 제외, SHA 재개 검사, 부분 라벨 attempt, parent/child job 결과를 기록한다. idle 우회 옵션을 받지 않고 기존 원본/catalog를 보존한다.
+- 증거: TDD로 중단/변조/heldout/identity/harvest CLI·재시도/parent READY를 검증하고 실제 합성 MP4→autolabel CLI→build 왕복을 실행했다. 필터 후 train1/val1, dataset15c6bd04. 상세 recording-job-2026-10-04.md. 모델 PC SSH 추가 인증이 필요해 실제 녹화의 전체 재실행은 대기한다.
+- gate 변화: SOURCE/LOCAL 앞단 연결 증거. 실제 장치 harvest·실데이터 전체 job·shadow/rollback·system timer·Episode/PolicyArtifact/OMX/Pinky/Fleet·DEVICE/FIELD는 미완료이며 목표active다.
+
+## 2026-10-04 · uncommitted · feat(learning): define shared artifacts and wrap OMX Episodes
+
+- 변경: D-449 Proposed와 stdlib contracts/learning wheel에 Episode/DatasetManifest/PolicyArtifact/PromotionRecord 초안을 구현했다. OMX validated 시연 원본 bytes를 공통 Episode로 감싸고 clock/rad/unknown·operator 과제 표시를 보존했다. owner final command와 runtime 승격은 별도다.
+- 증거: 공통 계약16pass, OMX 변환+export 관련22pass1skip. 소유/import/문서/harness108pass1skip·26기존warn. X에서wheel빌드 SHA8ab5c517. learning-contracts-2026-10-04.md에 검증 범위와 잔여 gate를 기록했다.
+- gate 변화: SOURCE/LOCAL 계약·테스트 시연 변환 증거. 기존 middleware validator 의존/Q6, 정책학습·registry/owner enforcement·OMX/Pinky/Fleet·SIM/DEVICE/FIELD는 미완료. SSH 추가 인증 대기와 기존 operator hold를 유지하며 전체목표active다.
+
+## 2026-10-04 · uncommitted · feat(learning): execute ACT on stored OMX demonstrations
+- 변경: OMX ACT 연구 학습 CLI, export snapshot/DatasetManifest/PolicyArtifact, 카메라 rig 계약 0.1.1과 미확인 camera profile의 L1 승격 거절을 추가했다. D-449는 Proposed다.
+- 증거: 저장된 Gazebo 시연 26 train/12 eval 프레임으로 CPU ACT 40 steps와 저장·재로딩 추론 완료. 영향 검사 78 passed/1 skipped. 상세는 `validation/omx-act-offline-2026-10-04.md`.
+- gate 변화: ACT MAE 0.01621 rad > 상수 기준 0.000081 rad, 목표 cluster 2로 연구 승격 거절. owner 실행·새 SIM·DEVICE/FIELD 검증 없음. 전체 목표 active.
+
+## 2026-10-04 · uncommitted · docs(learning): verify fresh diverse Gazebo recordings and ACT
+- 변경: 새 격리 Gazebo에서 6개 완료 시연/75프레임을 수집해 LeRobot export와 ACT 40 steps 고정 평가를 실제 실행했다. 상세는 `validation/omx-diverse-sim-act-2026-10-04.md`.
+- 증거: 목표 cluster 5, train 63/eval 12, native ACT exit 0/save-reload 추론 일치. 실패 녹화 2개 보존/제외. 원본·로그·산출물 zip SHA 4cacbad620a5e448c83ce3217d9044d4cafbcbd10939e6405d92d2a7a87ae16d.
+- gate 변화: 다양성 부족 해소, MAE 0.02964rad > 상수 0.00599rad로 승격 거절. ACT owner/SIM 실행·DEVICE/FIELD·전체 목표 미완료. 전용 SIM 종료, 다른 실행 변경 없음.
+
+## 2026-10-04 · uncommitted · feat(learning): persist policy registration and verified promotion metadata
+- 변경: learning/registry/policy SQLite snapshot/hash-chain/CAS 원장과 ACT 연구 gate 재계산, scoped signed verifier receipt·실제 report binding 승격 API를 구현했다. D-449 Proposed 보강.
+- 증거: 실제 seed42751 정책 register/assess/show 별도 프로세스 재독출, 재실행 이력 2개 유지. metadata unregistered, 평가 reject. registry/공통 계약 36 passed, ownership/구조 51 passed. 상세 `validation/policy-registry-2026-10-04.md`.
+- gate 변화: 내구성 있는 실제 거절 기록 확보. 합성 서명 시험은 운영 승격 증거가 아님. runtime trust 설치·owner·rollback·DEVICE/FIELD 및 전체 목표 미완료.
+- 최종 보강: 독립 리뷰에서 reset object/list 검증 오류를 RED 재현·수정해 계약 0.1.2 wheel을 빌드/isolated 검증했다. 최종 회귀 81 passed/1 skipped, reviewer 수정 확인 6 passed/잔여 findings 없음. 실제 정책은 계속 unregistered/reject다. 모델 PC SSH 72212는 인증 실패 exit 1로 종료했다.
+
+## 2026-10-04 · uncommitted · feat(learning): bind policy promotion to stored dataset closure
+- 변경: DatasetManifest/공통 Episode/원본 file closure를 보존하는 DatasetStore와 promote/history의 데이터 등록·무결성 gate를 연결했다.
+- 증거: 실제 ACT dataset 6 Episodes/234 files 등록·재등록·정책 참조 재독출, 원래 unregistered/reject 유지. 영향 42 passed, 구조 51 passed, 독립 리뷰 41 passed/read-only 실제 closure 확인. 상세 `validation/policy-dataset-closure-2026-10-04.md`.
+- gate 변화: 누락/손상 데이터에서는 승격 거절. sample profile/라벨 진위·owner/rollback·DEVICE/FIELD 및 전체 목표 미완료.
+
+## 2026-10-04 · uncommitted · feat(learning): verify Pinky raw messages before behavior inputs
+- 변경: MCAP camera/명령/odom/JSON/scan 원본 대조와 전체 영상 decode 검사, 전후 dataset closure를 행동 입력 준비에 연결했다.
+- 증거: 실제 12개 bag/2,673프레임 직접 검증 통과. native 26 passed/skip 없음, 독립 리뷰 같은 26 passed. source 누락/JSON 타입 혼동을 RED 재현 후 수정했다. 상세 `validation/pinky-raw-derivation-2026-10-04.md`.
+- gate 변화: 연구 입력만 준비. expert 의미·고정 행동 평가·camera profile·task acceptance·owner/Fleet·DEVICE/FIELD 및 전체 목표 미완료.
+
+## 2026-10-04 · uncommitted · feat(learning): compare recorded Pinky velocity models offline
+- 변경: 2 train/1 eval 녹화의 원본 직접 검증, content-disjoint split, train-only 정규화, ridge/CNN 학습·모델 재로딩·단위별 전체/moving/stop 평가를 연결했다.
+- 증거: 실제 train1,068/eval222프레임, CNN40steps와 ridge 완료. 두 모델 모두 zero보다 오차가 컸다. native7pass와 독립40pass, 원본 중복 우회/CI torch 누락 수정. 상세 `validation/pinky-behavior-comparison-2026-10-04.md`.
+- gate 변화: 실제 모델 비교 증거 확보, 연구용으로만 유지. camera calibration/identity·expert 주행 의도·owner/독립 과제·Fleet·DEVICE/FIELD와 전체 목표 미완료.
+
+## 2026-10-04 · uncommitted · feat(learning): bind Pinky models to artifacts and durable rejection
+- 변경: 계약0.1.5 unknown calibration 보존/known-profile 모순 거절, 실제 모델/영상 replay·원본 MCAP 직접 재검증 exporter, Pinky 원장 평가 및 bound reject 승격 거절을 연결했다.
+- 증거: 실제 CNN/ridge 공통 artifact 2개와 원래3datasets 검증, 원장 snapshot/거절/별도 CLI 재독출, native94pass/0skip·독립68pass. wheel stdlib/dependency 없음 검증. 상세 `validation/pinky-policy-artifact-2026-10-04.md`.
+- gate 변화: 연구 산출물/거절 이력이 실제 보존됨. expert/camera·owner 집행·독립SIM/Fleet·rollback·DEVICE/FIELD 및 전체 목표 미완료, 운영 승격 없음.
+
+## 2026-10-04 · uncommitted · feat(learning): export exact Fleet Episode bindings
+- 변경: 기존 D-18 receipt와 단일 action/attempt/instance 일치만 연결하는 오프라인 export. unknown·unmatched·Action/과제 결과 분리와 원본 hash 보존.
+- 증거: host68pass, 독립12pass; 실제5Dataset/10Episode closure 감사에서 join-ready=0. 상세 validation/learning-fleet-export-2026-10-04.md.
+- gate 변화: 연결 도구 확보. 실제 receipt 연결·owner/rollback·독립SIM·DEVICE/FIELD 및 전체 목표 미완료.
+
+## 2026-10-04 · uncommitted · feat(learning): preserve OMX owner receipt provenance
+- 변경: sample goal 전체와 동일 실행 identity/세대/journal receipt를 공통 Episode sources로 보존. 근거 없는 correlations·profile 변경·다른 receipt 세대 우회를 거절한다. 계약0.1.6은 stdlib만 사용한다.
+- 증거: host91pass와 parts18pass, isolated wheel 실제5Dataset/10Episode 재검증. 리뷰 우회2건은 RED9건 후 수정. 상세 validation/omx-owner-receipt-provenance-2026-10-04.md.
+- gate 변화: HOST provenance/Fleet export 고리 보강. 실제 receipt 수집/인증·owner 정책 실행·독립SIM·rollback·DEVICE/FIELD 및 전체 목표 미완료.
+
+## 2026-10-04 · uncommitted · feat(execution): verify pinned policy installation bindings
+- 변경: 고정 profile/controller/envelope/camera/정규화/행동 범위/주기/stale budget과 PolicyArtifact 파일을 대조하는 ROS-free loader와 재검증 경로. middleware→contracts만 사용한다.
+- 증거: host54pass·독립17pass, isolated0.1.1 wheel 실제3정책 integrity/미설정 binding 거절. camera bool alias는 RED3 후 수정. 상세 validation/owner-policy-install-binding-2026-10-04.md.
+- gate 변화: owner 실행 전 설치 호환성 검사 확보. 프로세스 wiring·승격 trust·lease/HOLD/rollback·독립SIM·DEVICE/FIELD는 미완료. 모델 PC는 Tailscale 추가 인증 대기.
+
+## 2026-10-04 · uncommitted · feat(execution): fence OMX policy candidates at existing owner
+- 변경: default-disabled SIM owner session의 설치/lease/세대/관측/카메라/행동 시각 최종검사와 HOLD/cancel. 기존 stop fence와 writer를 사용한다. 영상 라벨 보완 및 독립 평가 계획도 기록했다.
+- 증거: 관련 host153pass·독립38pass, D-430 소스 리뷰 승인. 0.1.2 isolated wheel은 실제3정책 integrity를 검증하고 미설정 binding을 거절했다. 영상 초안80이미지 SHA 재검증; 라벨76프레임/7박스는 검수 대기. 상세 validation/omx-policy-owner-session-2026-10-04.md.
+- gate 변화: SOURCE/HOST session 검사 확보. 실제 issuer/capture/scheduler/ROS·독립SIM·rollback·Pinky·새 객체 학습·DEVICE/FIELD와 전체 목표는 미완료. SSH handle은 인증 실패로 종료, 원격 실행 증거 없음.
+
+## 2026-10-04 · uncommitted · feat(learning): bind ACT inference to immutable observations
+- 변경: 고정 config/weights/정규화/RGB 관측 bytes로 ACT를 계산하고 queue의 최초 관측·생성 시각을 보존한다. 큐 길이 1..4의 별도 연구 설정을 추가했다.
+- 증거: native73pass·host48pass1torch-skip·독립24pass. 실제 동일 train5/eval1 seed42751/40steps의 4행동/1행동 비교는 같은 weights/history를 재현했다. queue age/관측 위반9→0이나 MAE는 상수 기준보다 커 둘 다 reject. 새 정책 unregistered·2events, 새 Dataset6Episodes/234refs. 상세 validation/act-inference-binding-2026-10-04.md.
+- gate 변화: SOURCE/HOST 추론 소비·큐 provenance 공백 해소. 실제 capture/issuer/scheduler/owner composition·독립SIM·주행 품질·라벨·rollback·DEVICE/FIELD와 전체 목표 미완료. push/merge/deploy/물리 활성화 없음.
+
+## 2026-10-04 · uncommitted · fix(execution): preserve bounded policy source observations
+- 변경: 추론 중 관절 갱신 시 원관측 sequence/시각/시작 자세를 bounded history에서 검증하고 설치 tolerance·나이를 final fence에서 재검사한다. owner config/session을 고정해 callback 중 tolerance 교체를 거절한다. wheel0.1.3.
+- 증거: RED11 및 독립 발견 envelope 교체 RED1 후 host145pass. wheel source bytes 대조 일치. 상세 validation/policy-source-history-2026-10-04.md.
+- gate 변화: SOURCE/HOST 원관측 제출 공백 보완. 실제 issuer/capture/scheduler/ROS·독립SIM·Fleet 실제 receipt·shadow/rollback·라벨/새 객체 학습·DEVICE/FIELD 및 전체 목표 미완료. 카메라10Hz/관측budget50ms는 실제 watchdog 확인 필요.
+
+## 2026-10-04 · uncommitted · docs(validation): measure actual OMX SIM capture freshness
+- 변경: 기존 ACT50ms 예산과 pinned Gazebo10Hz world/camera를 격리 network-none SIM capture에서 대조했다. 수신만 수행하며 기존 정책/운영 gate는 변경하지 않았다.
+- 증거: 약15초130frame/658sample 중 camera stale370, 수신간격 median109.223ms. 실제RGB bytes/calibration/capture stamp 확인. v1 import 실패 보존, v2 terminal exit0. 상세 validation/omx-live-camera-timing-2026-10-04.md.
+- gate 변화: 실제 SIM capture 타이밍 불일치 확인. 빠른 입력의 별도 profile 실험이 필요하며 owner HOLD/정지·독립 과제·정책 실행/승격·Fleet·shadow/rollback·영상 검수/새 학습·DEVICE/FIELD 및 전체 목표 미완료.
+- 추가 실험: 사전고정30Hz 연구world/기존50ms 예산. raw302개 저장한 v3의 계측시점 불일치2개를 보존하고, 동일시점 finalv4를 실행했다. v4 frame252/sample527/stale92, mismatch0; 수신median51.250ms. 원자료252개 SHA/calibration/stamp재검증, terminalexit0. zero-stale 목표는 실패이며 원자료 I/O/soft-rendering/부하가 포함돼 rate만의 인과 효과를 주장하지 않는다.
+
+## 2026-10-04 · uncommitted · fix(execution): bind camera candidates to original receipt times
+- 변경: guarded capture metadata와 bounded camera history, 원SHA/수신시각 candidate binding. ACT큐도 원timestamp를 보존한다. provider 후 HOLD/stop과 renewal검사를 보완하고 stop read 지연 후 시간 예산을 검사한다. wheel0.1.4.
+- 증거: 관련host110pass/native16pass/독립86pass D430source 승인. 실제12frame ACT replay에서12timestamp binding 일치, 품질reject 재현, 이번 HOST observation age10/12위반. 상세 validation/policy-camera-source-binding-2026-10-04.md.
+- gate 변화: SOURCE/HOST 추론 원frame 보존과 final safety 검사 보완. 실제 입력 타이밍/품질·trusted capture/issuer/scheduler·owner ROS/독립SIM·Fleet/shadow/rollback·사람 라벨/new training·modelPC·DEVICE/FIELD 및 전체 목표 미완료.
+
+## 2026-10-04 · uncommitted · docs(validation): compare ACT40 and400 steps
+- 변경: 같은train5/validation1/seed42751/1-action/모델/optimizer의 사전고정400step 실제학습 비교. 기존artifact와gate를 유지하고 별도policy/원장 register+reject2events를 보존했다.
+- 증거: history400개/첫40loss·config·정규화·Dataset·135reader 동일. MAE.029368→.009403 약68%감소하나 상수.005990보다 나빠reject. 독립weightreload12frame/원장10events5unregistered 검증. wrapper terminalexit1/실제검증산출물은 별도기록. 상세 validation/act-training-length-study-2026-10-04.md.
+- gate 변화: 연구실험과데이터fitness 증거 확보. 각Episode1target/1command, persistence.000705로 실제task시연/독립평가 보강 필요. optimizerdefault metadata 불일치도 후속수정 필요. timing/trust/ownerROS/Fleet/shadow/rollback/새클래스/DEVICE/FIELD와 전체 목표 미완료.
+
+### 2026-10-04 · uncommitted · fix(learning): record actual ACT optimizer settings
+
+- 저장 ACTConfig lr/backbone lr0.001/weight_decay0.0001과 실제 single-group AdamW를 일치시키고 보고서에 실제 optimizer groups/options/clip1.0을 기록했다. 기존 artifact와 gate는 보존한다.
+- 실제40-step seed42751 대조 exit0: weights/history/normalization byte-identical,135원본 입력 unchanged, MAE0.0293680454/reject 유지. 독립 검토 승인. 영향 검사209pass/1skip/1secret-scan fail이며 기존82검출 대비 새 검출0; 문서 검사15pass/1skip. 근거: docs/validation/act-optimizer-provenance-2026-10-04.md. 전체 gate와 목표는 미완료다.
+
+### 2026-10-04 · uncommitted · fix(learning): require complete approved object review
+
+- 변경: human 행 존재만으로 partial/empty label을 export하던 문제와 기존 출력의 stale txt 재사용을 RED11로 재현했다. approved+complete_frame_review bool true+명시 boxes만 export하며 불명확 상태는 원 review와 사유를 대기열에 남긴다. index/geometry 검증 후 새 출력만 생성한다.
+- 증거: 독립 검토의 none/reject 이미지 밖 박스 우회 RED1 재현 후 merge 이전 geometry 검사로 수정했다. 최종 object33pass, 관련 autolabel/review65pass. 실제4영상 초안 프레임/7박스/4image SHA 확인, v1/v2 training txt0/pending4. 문서15pass/1skip. 근거: validation/object-review-export-2026-10-04.md. 사람 승인·image binding·새 모델 품질과 전체 장치/운영 목표는 미완료다.
+
+### 2026-10-04 · uncommitted · fix(learning): bind approved object labels to image bytes
+
+- 변경: 동일 index의 다른 사진에 승인 라벨을 적용하는 문제를 RED6으로 재현했다. source/review/실제 image SHA와 크기/상대 경로를 검증한 뒤 검증 bytes를 snapshot하고 실제 파싱한 입력·모든 output hash manifest를 보존한다.
+- 증거: object39pass/관련71pass. 실제4pending frame/7draft boxes/4image SHA 확인, txt0/queue4/3manifest ref 검증. 실제 승인 export는 아직 없고 positive snapshot 증거는 unit fixture이다. 근거: validation/object-review-image-binding-2026-10-04.md. 사람 인증/검수·group provenance·새 dataset/model/device/field와 전체 목표는 미완료다.
+
+### 2026-10-04 · uncommitted · fix(learning): verify excluded evaluation content
+
+- 변경: --exclude-eval의 manifest 변경으로 heldout 세션이 빠지는 문제와 image/mask/추가 파일 미검출을 RED4+강화CVAT RED1로 재현했다. 폴더 content_sha/버전 이름과 파싱 전후 manifest bytes를 검사하고 변경·읽기 오류를 출력 작성 전 거절한다.
+- 증거: 독립 검토의 ABA 우회 RED1 후 파싱 manifest bytes를 직접 content hash에 포함해 수정했다. 최종53pass/1skip, 정상/변조2frame 및 ABA host fixture를 X v1/v2에 보존하고 원본 불변·변조 거절 확인. 실제126frame 모델PC평가 수용이 아니다. 근거: validation/eval-exclusion-integrity-2026-10-04.md. 객체group/사람검수/실제modelPC wholejob/shadowrollback와 전체운영목표 미완료.
+
+### 2026-10-04 · uncommitted · feat(learning): prepare offline human label review editor
+
+- 사용자 요청으로 별도 라벨 검토 세션 실행. 원본80image hash/bytes와 pending4frame7boxes 보존한 visual editor/JSONL 저장fallback 구현. 사용자 직접검수 담당이며 세션 초안을 실제 승인으로 승격하지 않는다. 별도76원본이미지zip/동일이름마스크zip CVAT 인계도 준비했다.
+- 증거: focused6pass/독립6pass, 실제Chromium 편집·승인해제·이미지로딩차단·4row JSONL표시 확인. 경로재진입/로딩전잘못된승인 RED수정. 자동download는도구에서취소되어성공미확인;복사fallback검증. 근거: validation/video-label-review-editor-2026-10-04.md. 실제humanreview/training/device/field와전체goal미완료.
+
+### 2026-10-04 · uncommitted · feat(learning): receive mixed-size human label reviews
+
+- 별도 라벨링 세션 구현과 독립 검토를 거쳐 source/human/image bytes 고정, 전체 입력 검증, 실제 크기별 export와 outer COMPLETE를 추가했다. 실제 pending 반환은 320×240 세 프레임/640×480 한 프레임, 확정 라벨0/대기4이다. Root 18개 파일 hash/크기와 COMPLETE를 확인했다.
+- 관련 최종56pass, 독립10pass, 문서15pass/1skip. 근거: validation/object-review-return-2026-10-04.md. 사용자 지적 횡단보도 오분류·회전교차로 미검증은 미해결이며 어두운 장면 대응은 이번 범위에서 제외하고 후속 ADR 항목으로 기록했다. 기존 평가/게이트 변경 없음. 실제 사람 검수·새 모델·DEVICE/FIELD 및 전체 목표 미완료.
+
+### 2026-10-04 · uncommitted · docs(learning): record model PC job and site intake
+
+- 현 소스로 실제5세션/404프레임 GPU30epoch→ONNX→intake→READY를 실행했다. 분리된 intake 이력의 최고 모델 비교 누락을 확인하고 canonical 이력으로 재검사했다. 후보는 최고 모델 대비 성능 하락으로 rejected이며 resume도 재승격을 거절했다.
+- 관제 PC에 독립 venv와 입력을 준비해 1617파일 hash/크기/coverage를 확인했다. 실제 READY→intake→rejected, pip check와 import 통과. 상시 watcher·일반 OpenSSH 서버 설치는 sudo 인증 필요로 관리자 스크립트 인계 단계다. 모델 PC 전용 키 로그인은 실제 Server accepts key 확인, 관제 별칭은 Tailscale SSH 접속까지 확인했다.
+- 근거: validation/model-pc-recording-job-and-site-intake-2026-10-04.md. 로봇 전달/주행/HOLD 해제 없음. 사람 라벨·새 클래스 평가·상시화·shadow/rollback·owner/Fleet·DEVICE/FIELD 및 전체 목표 미완료.
+
+### 2026-10-04 · uncommitted · docs(learning): verify site accepted model path
+
+- 관제 PC에서 기존 최고 모델/학습 데이터1894파일 검증 후 실제 READY→intake pass→accepted를 확인했다. 고정126평가 mIoU0.518525, manifest/model hashes/READY/pass report 재확인. 이전 rejected 후보를 보존했다.
+- 로봇 SSH/TCP 응답 없음. 관제 등록 주소는 기존과 같고 active enrollment2는 연결 증거가 아니다. 실제 서비스 UID의 readonly DB: CORE audit 비어 있음, Fleet dispatch PROCESS_RESTARTED/disabled. enrollment/credentials/dispatch/HOLD/로봇 변경 없음. 근거: validation/site-champion-acceptance-2026-10-04.md. 전체 목표 미완료.
+
+### 2026-10-04 · uncommitted · feat(learning): quarantine historical edge candidates for review
+
+- 인계된279 PNG/6영상·sidecar 해시를 모델 PC에서 재검증하고 provenance queue/CVAT원본PNG ZIP/gallery/receipt를 생성했다. 기존 학습 manifest snapshot의 세션 중복183, 고정평가 세션 중복0, 사람승인0/train qualified false다. 새홀드아웃으로 승인하지 않는다.
+- CVAT이름충돌 실패를 독립검토에서 재현 후 차단했다. 실제279 ZIPentry bytehash/CRC 독립확인. 근거: validation/edge-candidate-review-intake-2026-10-04.md. CVAT마스크 반환→PNG바인딩/사람승인/학습형식연결은 남아 있으며 어두운장면 개선은 후속ADR범위다. 전체목표 미완료.
+
+### 2026-10-04 · uncommitted · feat(learning): bind human CVAT masks to original PNG datasets
+
+- receipt 검증→image/mask hash·전체화면/배경 명시 승인→고정eval버전/세션 검증→원본PNG/frames.jsonl 반환→기존builder 입력을 연결했다. builder에서도 human mask/labelmap/classes 바인딩을 재검증하며 승인자료변경·eval재읽기교체·메타누락을 거절한다.
+- root관련73pass/1skip, 독립64pass/1skip, 합성2세션 승인반환→PNGdataset/session split/fixedeval분리 positive 검증. 실제모델PC279 pending반환 exit0/export0/queue279/trainfalse/라벨입력없음. 근거: validation/edge-mask-return-and-png-build-2026-10-04.md. 실제사람검수·학습/장치/Fleet/전체목표 미완료.
+
+### 2026-10-04 · uncommitted · feat(learning): journal shadow delivery and rollback attempts
+
+- 모델 전달CLI에시도별private JSONL/초기·step fsync/model·intake SHA/단계·종료 기록을연결했다. 저장실패는network전차단, timeout·중단·변경실패는원격unknown 보존. remote pointer/HOLD script와기존exit코드그대로다. pytest합성이력은별도tmp_path에격리한다.
+- Windows관련184pass18skip/독립72pass18skip, Linux전달3suite89pass. 실제host강제종료는start/step만보존, 실제로봇status는exit78/원격unknown이었다. Linux6suite첫pack누락도별도보존했다. 근거: validation/model-delivery-attempt-journal-2026-10-04.md. 실제shadow/rollback·최신watch설치·정책/Fleet/DEVICE/FIELD 및전체목표미완료.
+
+## 2026-10-04 · uncommitted · fix(learning): synchronize pointer history before acknowledgement
+
+- 변경: history append 뒤 lock 안에서 sync-f를 수행하고 실패 시 exit3/durability unknown을 보고한다.
+- 증거: Linux scratch 실패 주입에서 변경된 pointer와 유지된 HOLD를 확인했다. Linux 관련 6 suites 208pass/0skip, 독립 호스트 검토77pass/19skip. 실제 관제 전용 키 publickey 인증·host pin·LAN 기본 별칭도 검증했다. 근거: validation/model-delivery-attempt-journal-2026-10-04.md.
+- gate 변화: model-watch는 아직 not-found이며 실제 로봇 전달/rollback·사람 라벨·정책/Fleet/DEVICE/FIELD 및 전체 목표는 미완료다.
+
+## 2026-10-04 · uncommitted · fix(learning): restore model-watch placement to Accepted D-434
+
+- 변경: 관제 상시 watch 설치 후보가 D-434 및 계획 M1.5와 충돌한 것을 확인하고 요청을 철회했다. 원본과 SHA를 보존한 관제 installer는 즉시 중단한다. 기존 관제 intake는 과거 별도 재현 증거로 명시했다. 모델 PC용 pinned source/offline dependency 설치 후보를 준비했다.
+- 증거: 모델 PC system unit/경로 not-found 확인, 온라인 PyPI timeout terminal 확인 후 offline wheel10개/archive SHA 검증, 별도 venv sync/check/CPU imports/journal fsync/installer dry-run exit0. Python base는 /usr/bin/python3.12다. 실제 sudo와 물리 명령은 미실행이다. 근거: validation/model-watch-placement-correction-2026-10-04.md.
+- gate 변화: D-434 배치를 복구했다. 실제 모델 PC system 설치·canonical store/eval/history 연결·robot shadow/rollback·사람 라벨·owner/Fleet/DEVICE/FIELD와 전체 목표는 미완료다.
+
+## 2026-10-04 · uncommitted · docs(validation): prove model-PC watcher READY and HOLD handling
+
+- 변경: 모델 PC의 기존 READY inbox와 canonical history snapshot을 별도 CPU watcher 실행에 연결했다. 원래 이력은 SHA 비교로 보존했고 source/store/eval 버전을 고정했다.
+- 증거: 실제 replay380/eval126, disjoint true, mIoU0.5185248134695789/PASS→accepted, content/READY SHA 재확인. 재실행은 report SHA/평가횟수 그대로였고 실제 로봇 HOLD를 읽어 pending/attempts0/exit0을 유지했다. 실제 status exit0도 확인했다. 근거: validation/model-pc-watch-ready-acceptance-2026-10-04.md.
+- gate 변화: 모델 PC user watcher의 READY/intake/accepted/retry/HOLD 실증. systemd 설치·실제 shadow/rollback·사람 라벨·owner/Fleet/DEVICE/FIELD 및 전체 목표는 미완료다. 기존 HOLD·포인터와 물리 제어는 변경하지 않았다.
+
+## 2026-10-04 · uncommitted · merge(learning): preserve learning closure across D-427 main
+
+- Change: Resolve nine conflicts in an isolated integration worktree; preserve main and learning logs, safety tags, Proposed D-449 and learning CI suites; update ten code/test files to migrated paths.
+- Evidence: HOST policy211pass14skip, perception235pass14skip; initial guard117pass1fail then legacy allowlist restored and failed test passed; independent review131pass and90pass1skip APPROVE; lint0errors8warnings. See validation/learning-main-integration-2026-10-04.md.
+- Gate: Source integration candidate only. Fast/affected checks, remote CI, privileged installation, human labels, shadow/rollback and authenticated owner/Fleet/device/field acceptance remain separate.
+
+## 2026-10-04 · uncommitted · fix(learning): bind reviewed public digests to exact repository lines
+
+- Change: Preserve frozen learning evidence; explicitly bind87 independently reviewed public digest lines to path/line SHA/token for repository entropy checks only. Classify two D-449 contract profile files in robot-literal backlog and read CLI child help as UTF-8.
+- Evidence: New regression RED then15pass; inventory/release/literal99pass; affected717pass59skip with1encoding warning, corrected CLI12pass with thread warnings promoted to errors. Main baseline two failing guards2pass. See validation/learning-integration-guard-repair-2026-10-04.md.
+- Gate: HOST repair; raw/image scanner and credential/key/PSK/QR checks unchanged. Final independent code review and tracked inventory scan precede commit. CI, installation, human labels, shadow/rollback and owner/Fleet/device/field remain pending.
+
+## 2026-10-04 · uncommitted · test(learning): assemble credential samples at runtime
+
+- Change: Preserve scanner strictness; assemble intentional credential/PSK/QR samples at runtime so tracked test source itself does not ship credential-shaped fixtures.
+- Evidence: Earlier pre-stage99pass excluded the untracked test source. Tracked scan then17pass1fail; corrected complete provenance/release/robot suite99pass. Commit6eae392c6 preceded observation of that failure; no main landing. See validation/learning-tracked-fixture-check-2026-10-04.md.
+- Gate: Corrected HOST tracked-source verification; no broad exception or known-failure entry. Administrator installation, real labels, shadow/rollback and owner/Fleet/device/field remain incomplete.
+
+## 2026-10-04 · uncommitted · docs(learning): qualify model-PC service data snapshot
+
+- Change: Prepare a private immutable service-data archive with verified store/eval/models, three canonical intake reports, state, nineteen MP4 replays, unchanged thresholds and public host pin; preserve original source data and private keys.
+- Evidence: Actual model-PC preparation5980files/287651840bytes; original before/after SHAequal; snapshot intakePASS/eval126/mIoU0.5185248134695789. Initial collector misused tuple return and exited1 after savingPASS; preserved and corrected verification without rerunning evaluation. Actual archive member/hash verification5980files exit0. See validation/model-watch-service-data-2026-10-04.md.
+- Gate: User-path data preparation and qualification only. Sudo import, service-user access, own-key enrollment, doctor, timer and real shadow/rollback remain pending; no motion or HOLD release.
+- Additional evidence: Independent review caught verifier reuse/extra-member gaps. Separate v2 uses copied input/returned report and full snapshot path-set/hash checks; actual nativev2 exit0/PASS/reasons empty. Corrected archive scanner rejects every link/special entry. Source review APPROVE; originalv1 retained.
+
+
+## 2026-10-04 · uncommitted · model-PC admin data import candidate
+
+- Change: Prepared private pinned source+data installation wrapper; root staging, skeleton quarantine, bottom-up grants and store rename repair reviewed copy-through-service-owned-directory race.
+- Evidence: Independent candidate review approved; actual model-PC verify-only5980files exit0; native non-root install exit1 before input/system writes; units not-found/inactive. Isolated Linux publication fixture reproduces copy2-preserved700/600 access gap. See validation/model-watch-admin-data-import-2026-10-04.md.
+- Gate: Candidate source approval only. No sudo install, timer activation, HOLD release, robot delivery or motion. Producer/store permission binding and key/doctor/owner/Fleet/field acceptance remain pending.
+
+
+## 2026-10-04 · uncommitted · shared store publication permissions
+
+- Change: New POSIX setgid publication normalizes new dataset/eval/model parents and files before rename/READY; source and existing versions unchanged. Reject ancestor/source/partial symlinks and repair interrupted READY chmod on retry.
+- Evidence: Native model-PC corrected RED4fail, evalRED1fail, linkRED2fail, retryRED1fail; final5suites59pass0skip. See validation/shared-store-publication-2026-10-04.md.
+- Gate: Nonprivileged source/Linux evidence. Actual service UID access, membership/config binding, updated pinned installer source, system service, robot HOLD and owner/Fleet/field gates remain pending.
+
+
+## 2026-10-04 · uncommitted · model-watch installer CRLF config parsing
+
+- Change: cfg_value removes carriage returns before quote/comment trimming, so LF and CRLF backend/store values select the same installation branch.
+- Evidence: Native Linux RED2fail4pass for plain/quoted CRLF; after fix LF/CRLF/plain/quoted/comment regressions and existing install/unit suites23pass. Independent source review requested. V2 source881file archive and CPUintake pass did not establish installation closure: dry-run exit0 omitted store/drop-in before this fix.
+- Gate: No privileged install or timer activation. Existing v2 bundle preserved; corrected committed source must be repackaged and reviewed before administrator request supersedes it. Producer config remains an inactive candidate; actual service UID/group/doctor/robot HOLD gates pending.
+
+
+## 2026-10-04 · uncommitted · model-PC source v3 and producer candidate
+
+- Change: Prepared pinned current-path source882files with shared publication and CRLF installer fixes; updated private administrator request. Candidate producer config rebinds only store/gate/replay, preserving originals.
+- Evidence: V2CPUintake126framesPASS; v2dryrun lacked store dueCRLF and was withheld. V3exact882manifest, dryrunstore/dropin verified, native150pass0skip, runtime484files byte-equal CPUproof linkage, four unitguards mutation0, verify-only5980systemwrites0. Independent v3 review approved. See validation/model-watch-source-refresh-2026-10-04.md.
+- Gate: Installed service/timer stillnot-found/inactive. No sudo, config activation, timer, robot delivery or motion. Service UID/group/doctor/HOLD/shadow/rollback and humanlabels/policy-owner/Fleet/device/field remain pending.
 ## 2026-10-04 · uncommitted · D-452 승인 다른 망 경로와 선택 CLI
 
 - 변경: CORE는 명시적 승인 WSS directory를 광고 부재일 때만 사용하고 기존 TLS SNI/CA/health를 먼저 검증한다. 충돌·인증 실패에 우회하지 않는다. 모델 doctor는 전체 roster 문법 검증 후 선택한 논리 장비만 해석해 다른 offline peer의 영향에서 분리한다.
@@ -5394,3 +5658,9 @@ osy-d395-s1d\`.
 - 변경: D-451 주문 하나를 기존 `POST /api/v1/line-follow/stuck/decision` 의 `YIELD` 한 구간으로 보낸다. CORE 는 회전을 확인한 뒤 앞으로만 기어 가고, 끝나면 선으로 돌아가지 않는다. 운용자 Fleet 경로의 다섯 단어는 그대로다. ADR `docs/adr/D-453-yield-one-segment.md`. D-452 는 integrate/ui-ship 번호라 `adr_gaps` 에 남겼다.
 - 증거: `operations/fleet/test/test_meet_place.py`, `test_stuck_resolver.py`, `test_transport.py`, `test_meet_algorithms.py`, `middleware/core/services/test/test_line_stuck_recovery.py`, `middleware/core/gateway/test/test_line_follow_stuck_api.py`.
 - gate 변화: 없음. 호스트 판단 시험. 장치·ROS-SIM 은 주장하지 않는다.
+
+## 2026-10-04 · uncommitted · fix(harness): pin one committed G2 encoding repair
+
+- 변경: main에 이미 커밋된 손상 G2 저널과 검증된 수정본의 정규화 블록 SHA256 한 쌍만 로그 보존 검사에서 인정한다. 새 손상 heading·인코딩·임의 수정·삭제는 계속 거부한다. 원문은 비공개 병합 증거에 보존했다.
+- 증거: 정확한 교체 허용 회귀 RED 후 구현했다. 변형된 원문·수정본·삭제·다른 항목 유실은 거부하며 전체 harness 회귀와 독립 검토를 수행한다. 기존 광범위 검사 결과와 실패별 재검사는 X:/DevTemp/rosy-learning-audit-20261004/landing-*에 보존한다.
+- gate 변화: SOURCE/HOST 병합 수리만. 실제 관리자 설치·라벨·운영 승격·장치/현장 수용은 별도다.

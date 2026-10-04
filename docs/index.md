@@ -196,6 +196,7 @@
 | D-444 | 웹 표면 게이트는 release 이미지를 탄다 — dashboard·pilot ARTIFACT는 서명 release 안 share/ 설치 관측, pilot DEVICE는 실기 페달·e-stop 정지 계약 측정 |
 | D-445 | Fleet 승격 경로(ROS-SIM D-426 → ARTIFACT D-437 첫 실행·D-301 서명 → DEVICE 사이트 PC·2대)와 중앙 Fleet(8081) 착수 전제 3개를 고정한다. 착수 자체는 별도 ADR |
 | D-447 | 웹 표면의 실시간 상태는 이미 열린 소켓을 재사용한다 — Fleet gather는 hub-fresh 로봇을 registry 스냅샷으로 먼저 읽고(신선도 `hub_state_max_age_s`, REST 폴백), 로봇 셸 `store.js`의 `/ws/state` 전환이 그 뒤를 잇는다. 새 전송 계약 없음, 응답 스키마 불변, 행마다 `gather_source` |
+| D-449 | 학습 산출물은 출처·시계·단위·owner binding과 승격 증거를 공용 계약으로 보존한다 |
 | D-450 | 팔레타이징 앱은 화면의 한 작업 흐름과 박스 전용 Gazebo 수용을 먼저 완성한다 |
 | D-451 | 한 줄에서 만나는 양보는 Fleet 알고리즘이 고르고, 로봇은 그 한 수를 실행하거나 거부한다 |
 | D-453 | 양보 한 구간은 기존 막힘 답 YIELD 로 보내고, CORE 는 돌려 확인한 뒤 앞으로만 간다 |
@@ -290,8 +291,8 @@
 
 ## 최근 기록
 
+- 2026-10-04 · uncommitted · fix(harness): pin one committed G2 encoding repair
 - 2026-10-04 · uncommitted · feat(fleet): D-453 양보 한 구간
 - 2026-10-04 · uncommitted · docs(adr): D-451 한 줄 교착의 양보는 Fleet 알고리즘이 고른다
 - 2026-10-04 · uncommitted · docs(adr): D-454 중앙 Fleet 착수
 - 2026-10-04 · uncommitted · docs(validation): 웹 표면 ARTIFACT 관측 회차 — 서명 payload 안 share/ 확인 (D-444 P1)
-- 2026-10-04 · uncommitted · D-452 승인 다른 망 경로와 선택 CLI

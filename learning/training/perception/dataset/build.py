@@ -41,7 +41,7 @@ import shutil
 import sys
 import tempfile
 import zipfile
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 
 import cv2
 import numpy as np
@@ -66,12 +66,12 @@ class BuildError(ValueError):
     pass
 
 
-def load_classes(path, require_color: bool = True) -> list[dict]:
+def load_classes(path, require_color: bool = True, *, source_bytes=None) -> list[dict]:
     try:
         import yaml
     except ImportError as exc:
         raise BuildError("PyYAML is required to read classes.yaml (pip install pyyaml)") from exc
-    doc = yaml.safe_load(Path(path).read_text(encoding="utf-8"))
+    doc = yaml.safe_load(source_bytes if source_bytes is not None else Path(path).read_bytes())
     classes = doc.get("classes") if isinstance(doc, dict) else None
     if not classes:
         raise BuildError("classes.yaml: no classes")
@@ -107,11 +107,12 @@ def label_to_index(classes) -> dict[str, int]:
             for c in classes}
 
 
-def parse_labelmap(path: Path, classes) -> dict[tuple[int, int, int], int]:
+def parse_labelmap(path: Path, classes, *, source_bytes=None) -> dict[tuple[int, int, int], int]:
     """labelmap.txt -> colour -> class index. Unknown label name -> BuildError."""
     names = label_to_index(classes)
     lut, seen = {}, set()
-    for line in Path(path).read_text(encoding="utf-8").splitlines():
+    text = source_bytes.decode('utf-8') if source_bytes is not None else Path(path).read_text(encoding="utf-8")
+    for line in text.splitlines():
         if not line.strip() or line.startswith("#"):
             continue
         name, _, rest = line.partition(":")
@@ -172,8 +173,8 @@ def assign_splits(sessions) -> dict[str, str]:
     return out
 
 
-def _read_frames(dirs) -> dict[tuple[str, int], tuple[Path, dict | None]]:
-    """(session, index) -> (jpg path, session.json contents or None)."""
+def _read_frames(dirs) -> dict[tuple[str, int], tuple[Path, dict | None, dict]]:
+    """Frame path and metadata; explicit PNG/JPEG paths require a byte hash."""
     found = {}
     for d in map(Path, dirs):
         sj = d / "session.json"
@@ -183,7 +184,22 @@ def _read_frames(dirs) -> dict[tuple[str, int], tuple[Path, dict | None]]:
                 continue
             row = json.loads(line)
             key = (str(row.get("session") or d.name), int(row["index"]))
-            found[key] = (d / "frames" / f"{int(row['index']):06d}.jpg", meta)
+            if key in found:
+                raise BuildError(f"duplicate frame identity {key}")
+            if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]*', key[0]):
+                raise BuildError('invalid session path')
+            path, expected = d / "frames" / f"{int(row['index']):06d}.jpg", None
+            if 'image' in row:
+                name, expected = row['image'], row.get('image_sha256')
+                if (not isinstance(name, str) or '\\' in name or PureWindowsPath(name).drive
+                        or Path(name).is_absolute() or '..' in Path(name).parts):
+                    raise BuildError('image must remain within frame directory')
+                path = (d / name).resolve()
+                if not path.is_relative_to(d.resolve()) or path.suffix.lower() not in ('.png', '.jpg', '.jpeg'):
+                    raise BuildError('invalid original image path')
+                if not isinstance(expected, str) or re.fullmatch(r'[0-9a-f]{64}', expected) is None:
+                    raise BuildError('explicit image requires image_sha256')
+            found[key] = (path, meta, row)
     return found
 
 
@@ -228,19 +244,51 @@ def build_dataset(export, frame_dirs, classes, out, deleted_indexes=(), exclude_
     labelmaps = sorted(export.rglob("labelmap.txt"))
     if not labelmaps:
         raise BuildError(f"{export}: labelmap.txt missing from the CVAT export")
-    lut = parse_labelmap(labelmaps[0], classes)
+    labelmap_bytes = labelmaps[0].read_bytes()
+    lut = parse_labelmap(labelmaps[0], classes, source_bytes=labelmap_bytes)
     masks = sorted((export / "SegmentationClass").rglob("*.png"))
     if not masks:
         raise BuildError(f"{export}: no SegmentationClass/*.png")
 
     kept = []
+    captured = {}
     for p in masks:
         session, index = _resolve(p.stem, frames, p.name)
         if (session, index) in deleted:
             continue
-        bgr = cv2.imread(str(p), cv2.IMREAD_COLOR)
+        mask_bytes = p.read_bytes()
+        src, meta, binding = frames[(session, index)]
+        human_metadata = meta is not None and meta.get('annotation_origin') == 'human_reviewed_cvat'
+        human_binding = any(name in binding for name in ('human_review', 'mask_sha256',
+                                                         'labelmap_sha256', 'classes_signature'))
+        if human_metadata or human_binding:
+            if not human_metadata:
+                raise BuildError('human frame metadata missing or inconsistent')
+            human = binding.get('human_review', {})
+            if (human.get('review_status') != 'approved' or human.get('complete_frame_review') is not True
+                    or human.get('background_reviewed') is not True):
+                raise BuildError('human mask approval required')
+            if (human.get('image_sha256') != binding.get('image_sha256')
+                    or human.get('mask_sha256') != binding.get('mask_sha256')):
+                raise BuildError('human approval and frame binding differ')
+            if hashlib.sha256(mask_bytes).hexdigest() != binding.get('mask_sha256'):
+                raise BuildError('approved mask hash mismatch')
+            if hashlib.sha256(labelmap_bytes).hexdigest() != binding.get('labelmap_sha256'):
+                raise BuildError('approved labelmap hash mismatch')
+            signature = hashlib.sha256(json.dumps(classes, sort_keys=True).encode()).hexdigest()
+            if signature != binding.get('classes_signature'):
+                raise BuildError('approved classes differ')
+        bgr = cv2.imdecode(np.frombuffer(mask_bytes, np.uint8), cv2.IMREAD_COLOR)
         if bgr is None:
             raise BuildError(f"{p.name}: unreadable PNG")
+        expected = binding.get('image_sha256') if 'image' in binding else None
+        raw = src.read_bytes()
+        if expected is not None and hashlib.sha256(raw).hexdigest() != expected:
+            raise BuildError('original image hash mismatch')
+        original = cv2.imdecode(np.frombuffer(raw, np.uint8), cv2.IMREAD_COLOR)
+        if original is None or original.shape[:2] != bgr.shape[:2]:
+            raise BuildError('mask and original image dimensions differ or image unreadable')
+        captured[(session, index)] = raw
         kept.append(((session, index), colors_to_indices(bgr[..., ::-1], lut, p.name)))
     disjoint = []
     for folder in exclude_eval:
@@ -254,12 +302,12 @@ def build_dataset(export, frame_dirs, classes, out, deleted_indexes=(), exclude_
 
     entries, sources = [], []
     for (session, index), mask in kept:
-        src, meta = frames[(session, index)]
-        img_rel, mask_rel = (f"images/{session}/{session}__{index:06d}.jpg",
+        src, meta, _ = frames[(session, index)]
+        img_rel, mask_rel = (f"images/{session}/{session}__{index:06d}{src.suffix.lower()}",
                              f"masks/{session}/{session}__{index:06d}.png")
         (out / img_rel).parent.mkdir(parents=True, exist_ok=True)
         (out / mask_rel).parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(src, out / img_rel)
+        (out / img_rel).write_bytes(captured[(session, index)])
         cv2.imwrite(str(out / mask_rel), mask)
         entries.append({"image": img_rel, "mask": mask_rel, "session": session,
                         "split": splits[session]})
@@ -276,7 +324,7 @@ def build_dataset(export, frame_dirs, classes, out, deleted_indexes=(), exclude_
     return manifest
 
 
-def content_sha(folder) -> str:
+def content_sha(folder, *, manifest_bytes=None) -> str:
     """D-373 decision 8 store version: sha256 over sorted "relpath\\0filesha256\\n" lines.
 
     Minimal stand-in until learning/training/perception/store.py (feat/d373-learning-loop-lap2)
@@ -286,25 +334,37 @@ def content_sha(folder) -> str:
     for p in folder.rglob("*"):
         if p.is_file():
             h = hashlib.sha256()
-            with open(p, "rb") as fh:
-                for chunk in iter(lambda: fh.read(1 << 20), b""):
-                    h.update(chunk)
+            if manifest_bytes is not None and p.relative_to(folder).as_posix() == "manifest.json":
+                h.update(manifest_bytes)
+            else:
+                with open(p, "rb") as fh:
+                    for chunk in iter(lambda: fh.read(1 << 20), b""):
+                        h.update(chunk)
             lines.append(f"{p.relative_to(folder).as_posix()}\0{h.hexdigest()}\n")
     return hashlib.sha256("".join(sorted(lines)).encode("utf-8")).hexdigest()
 
 
-def read_eval_set(folder) -> tuple[dict, set[str]]:
+def read_eval_set(folder, *, with_manifest=False) -> tuple:
     """An eval set version folder -> (ref {"name", "content_sha"}, its sessions)."""
     folder = Path(folder)
     try:
-        manifest = json.loads((folder / "manifest.json").read_text(encoding="utf-8"))
+        manifest_bytes = (folder / "manifest.json").read_bytes()
+        manifest = json.loads(manifest_bytes.decode("utf-8"))
     except (OSError, ValueError) as exc:
         raise BuildError(f"--exclude-eval {folder}: no readable manifest.json ({exc})") from exc
     if manifest.get("purpose") != "eval":
         raise BuildError(f"--exclude-eval {folder}: not an eval set (purpose != 'eval')")
+    try:
+        digest = content_sha(folder, manifest_bytes=manifest_bytes)
+        stable_manifest = (folder / "manifest.json").read_bytes() == manifest_bytes
+    except OSError as exc:
+        raise BuildError(f"--exclude-eval {folder}: cannot verify eval content hash ({exc})") from exc
+    if digest != folder.name or not stable_manifest:
+        raise BuildError(f"--exclude-eval {folder}: eval content hash differs from fixed version")
     sessions = ({f["session"] for f in manifest.get("frames", [])}
                 | {v["session"] for v in manifest.get("labels", [])})
-    return {"name": folder.parent.name, "content_sha": folder.name}, sessions
+    result = ({"name": folder.parent.name, "content_sha": folder.name}, sessions)
+    return (*result, manifest_bytes) if with_manifest else result
 
 
 def build_auto_dataset(label_dirs, store, name, min_labelled: float = 0.05, *,
@@ -363,6 +423,9 @@ def build_auto_dataset(label_dirs, store, name, min_labelled: float = 0.05, *,
     else:
         splits = assign_splits(m["session"] for _, m in metas)
     tmp = Path(store) / ("evalsets" if eval_set else "datasets") / name / f".staging-{os.getpid()}"
+    from store import publication_group, publication_directory, shared_publication_permissions
+    shared_group = publication_group(Path(store))
+    publication_directory(tmp.parent)
     if tmp.exists():
         shutil.rmtree(tmp)
     try:
@@ -426,6 +489,7 @@ def build_auto_dataset(label_dirs, store, name, min_labelled: float = 0.05, *,
         if final.exists():
             shutil.rmtree(tmp)
         else:
+            shared_publication_permissions(tmp, shared_group)
             os.replace(tmp, final)
     except BaseException:
         shutil.rmtree(tmp, ignore_errors=True)

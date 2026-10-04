@@ -25,6 +25,7 @@ import hashlib
 import os
 import re
 import shutil
+import stat
 from pathlib import Path
 
 READY = "READY"
@@ -37,6 +38,65 @@ _REF = re.compile(r"^(?:store:)?(?P<name>[A-Za-z0-9][A-Za-z0-9._-]*)@(?P<sha>[0-
 
 class StoreError(ValueError):
     """The store refuses: bad name, a version that would change, a clash."""
+
+
+def publication_group(path: Path) -> int | None:
+    """An existing setgid destination opts into a shared POSIX publication group."""
+    if os.name != 'posix':
+        return None
+    path = Path(path).absolute()
+    for ancestor in [*reversed(path.parents), path]:
+        if ancestor.is_symlink():
+            raise StoreError('publication path refuses a symlink ancestor')
+    while not path.exists() and not path.is_symlink():
+        path = path.parent
+    info = path.lstat()
+    if not stat.S_ISDIR(info.st_mode):
+        raise StoreError('publication parent must be a directory, never a symlink')
+    if not info.st_mode & stat.S_ISGID:
+        return None
+    if info.st_gid not in {*os.getgroups(), os.getegid()}:
+        raise StoreError('publisher is not a member of the destination group')
+    return info.st_gid
+
+
+def publication_directory(path: Path, *, exist_ok=True) -> int | None:
+    """Create missing destination ancestors without a private umask hiding them."""
+    path = Path(path)
+    group = publication_group(path)
+    missing = []
+    cursor = path
+    while not cursor.exists() and not cursor.is_symlink():
+        missing.append(cursor)
+        cursor = cursor.parent
+    path.mkdir(parents=True, exist_ok=exist_ok)
+    if group is not None:
+        for directory in reversed(missing):
+            if directory.stat().st_gid != group:
+                os.chown(directory, -1, group)
+            directory.chmod(0o2770)
+    return group
+
+
+def refuse_publication_links(root: Path) -> None:
+    """Permissions must never apply through source/destination links."""
+    for path in [Path(root), *Path(root).rglob('*')]:
+        if path.is_symlink():
+            raise StoreError('shared publication refuses a symlink')
+        if not (path.is_file() or path.is_dir()):
+            raise StoreError('shared publication refuses a special file')
+
+
+def shared_publication_permissions(root: Path, group: int | None) -> None:
+    """Prepare new artifact bytes for group reading before publishing READY/rename."""
+    if group is None:
+        return
+    refuse_publication_links(root)
+    paths = sorted(Path(root).rglob('*'), key=lambda p: len(p.parts), reverse=True) + [Path(root)]
+    for path in paths:
+        if path.stat().st_gid != group:
+            os.chown(path, -1, group)
+        path.chmod(0o2770 if path.is_dir() else 0o640)
 
 
 def _sha256(path: Path) -> str:
@@ -98,7 +158,7 @@ class Store:
 
     def ensure_layout(self) -> None:
         for d in self.layout():
-            d.mkdir(parents=True, exist_ok=True)
+            publication_directory(d)
 
     # --- datasets ---------------------------------------------------------------------------
 
@@ -125,19 +185,23 @@ class Store:
         The same content again is a no-op; a different folder at that sha is refused."""
         if not safe_name(name):
             raise StoreError(f"dataset name {name!r}: expected [A-Za-z0-9][A-Za-z0-9._-]*")
+        group = publication_group(self.root)
+        if group is not None:
+            refuse_publication_links(Path(src_dir))
         sha = content_sha(src_dir)
         dest = self.dataset_path(name, sha)
         if dest.exists():
             if content_sha(dest) != sha:
                 raise StoreError(f"{dest} exists and its content differs: never overwritten")
             return dest, sha
-        dest.parent.mkdir(parents=True, exist_ok=True)
+        publication_directory(dest.parent)
         tmp = dest.parent / f".tmp-{sha[:12]}-{os.getpid()}"
         shutil.rmtree(tmp, ignore_errors=True)
         try:
             shutil.copytree(src_dir, tmp, ignore=shutil.ignore_patterns(*IGNORED, READY))
             if content_sha(tmp) != sha:
                 raise StoreError(f"{src_dir} changed while it was copied")
+            shared_publication_permissions(tmp, group)
             os.rename(tmp, dest)
         finally:
             shutil.rmtree(tmp, ignore_errors=True)

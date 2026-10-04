@@ -37,6 +37,9 @@ def test_eval_set_layout_split_purpose_and_trusted_sources(tmp_path):
     assert final.name == store.content_sha(final) == build.content_sha(final)
     assert manifest["purpose"] == "eval" and manifest["schema"] == build.SCHEMA
     assert manifest["trusted_sources"] == ["lidar", "trajectory"]
+    # D-373: the wall channel must survive export as a wall role, so device
+    # postprocessing can distinguish wall evidence from ignored crosswalks.
+    assert {c["name"]: c["role"] for c in manifest["classes"]}["wall"] == "wall"
     assert {f["split"] for f in manifest["frames"]} == {"eval"}
     assert [f["image"].rsplit("__", 1)[1] for f in manifest["frames"]] == ["000000.jpg", "000001.jpg"]
     (gone,) = manifest["excluded"]
@@ -82,6 +85,81 @@ def test_exclude_eval_needs_an_eval_manifest(tmp_path):
         build.build_auto_dataset([a, b], tmp_path / "store", "x", exclude_eval=[ds])
     with pytest.raises(build.BuildError, match="no readable manifest"):
         build.build_auto_dataset([a, b], tmp_path / "store", "x", exclude_eval=[tmp_path / "nope"])
+
+
+@pytest.mark.parametrize("target", ["manifest", "image", "mask", "extra"])
+def test_exclude_eval_refuses_changed_fixed_evaluation(tmp_path, target):
+    _, ev = _eval_set(tmp_path)
+    if target == "manifest":
+        path = ev / "manifest.json"
+        manifest = json.loads(path.read_text())
+        manifest["frames"] = []
+        manifest["labels"] = []
+        path.write_text(json.dumps(manifest))
+    elif target == "extra":
+        (ev / "unexpected.txt").write_text("not part of the fixed version")
+    else:
+        path = next((ev / ("images" if target == "image" else "masks")).rglob("*.*"))
+        path.write_bytes(b"changed content")
+    with pytest.raises(build.BuildError, match="content hash"):
+        build.read_eval_set(ev)
+
+
+def test_cvat_build_refuses_modified_eval_before_writing_training_outputs(tmp_path):
+    from test_dataset_build import CLASSES, _export, _frames_dir, _mask
+    _, ev = _eval_set(tmp_path, session="s1")
+    manifest = json.loads((ev / "manifest.json").read_text())
+    manifest["frames"] = []
+    manifest["labels"] = []
+    (ev / "manifest.json").write_text(json.dumps(manifest))
+    a = _frames_dir(tmp_path / "f", "s1", [0])
+    b = _frames_dir(tmp_path / "f", "s2", [0])
+    exp = _export(tmp_path, {"s1__000000": _mask(), "s2__000000": _mask()})
+    out = tmp_path / "dataset"
+    with pytest.raises(build.BuildError, match="content hash"):
+        build.build_dataset(exp, [a, b], CLASSES, out, exclude_eval=[ev])
+    assert not out.exists()
+
+
+def test_manifest_cannot_change_between_parsing_and_content_hash(tmp_path, monkeypatch):
+    _, ev = _eval_set(tmp_path)
+    real_hash = build.content_sha
+
+    def mutate_after_hash(folder, **kwargs):
+        digest = real_hash(folder, **kwargs)
+        path = folder / "manifest.json"
+        manifest = json.loads(path.read_text())
+        manifest["frames"] = []
+        manifest["labels"] = []
+        path.write_text(json.dumps(manifest))
+        return digest
+
+    monkeypatch.setattr(build, "content_sha", mutate_after_hash)
+    with pytest.raises(build.BuildError, match="content hash"):
+        build.read_eval_set(ev)
+
+
+def test_parsed_manifest_is_part_of_the_verified_digest_despite_aba(tmp_path, monkeypatch):
+    _, ev = _eval_set(tmp_path)
+    path = ev / "manifest.json"
+    original = path.read_bytes()
+    changed = json.loads(original)
+    changed["frames"] = []
+    changed["labels"] = []
+    altered = json.dumps(changed).encode()
+    path.write_bytes(altered)
+    real_hash = build.content_sha
+
+    def restore_original_only_during_hash(folder, **kwargs):
+        path.write_bytes(original)
+        try:
+            return real_hash(folder, **kwargs)
+        finally:
+            path.write_bytes(altered)
+
+    monkeypatch.setattr(build, "content_sha", restore_original_only_during_hash)
+    with pytest.raises(build.BuildError, match="content hash"):
+        build.read_eval_set(ev)
 
 
 def test_cli_eval_set_and_exclude(tmp_path, capsys):

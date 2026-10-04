@@ -10,15 +10,19 @@ merge_review        human boxes win; a human box labelled "none" rejects the aut
 to_yolo_lines       labelled boxes in the object_det contract class order (manifest
                     OBJECT_CLASSES), normalised centre-size.
 
-CLI: object_boxes.py <labels.jsonl> --human <human.jsonl> --out <dir> --size W H
-writes <dir>/<index>.txt only for frames a person reviewed (an empty file means "nothing
-there", which only a person may claim) and <dir>/review_queue.jsonl for the rest."""
+CLI: object_boxes.py <labels.jsonl> --human <human.jsonl> --out <new-dir> --size W H
+writes <dir>/<index>.txt only for review_status="approved", complete_frame_review=true
+and an explicit boxes list. An empty file means "nothing there", which only a person's
+complete approved review may claim. Other rows remain in review_queue.jsonl.
+These review flags describe annotation completion, not authenticated reviewer identity."""
 
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
+import re
 import sys
 from pathlib import Path
 
@@ -114,34 +118,107 @@ def to_yolo_lines(boxes, size):
     return lines
 
 
-def _rows(path):
-    return [json.loads(line) for line in Path(path).read_text(encoding="utf-8").splitlines() if line.strip()]
+def _indexed_rows(path):
+    data = Path(path).read_bytes()
+    rows = {}
+    for line in data.decode("utf-8").splitlines():
+        if not line.strip():
+            continue
+        row = json.loads(line)
+        if not isinstance(row, dict) or type(row.get("index")) is not int or row["index"] < 0:
+            raise ValueError("review/source index must be a nonnegative integer")
+        if row["index"] in rows:
+            raise ValueError("duplicate review/source index")
+        rows[row["index"]] = row
+    return rows, data
+
+
+def _bound_image(source, review, image_root, size):
+    digest, name = source.get("image_sha256"), source.get("image")
+    if (not isinstance(digest, str) or not re.fullmatch("[0-9a-f]{64}", digest)
+            or review.get("image_sha256") != digest):
+        raise ValueError("approved review image hash must match source image hash")
+    if not isinstance(name, str) or not name or Path(name).is_absolute():
+        raise ValueError("relative source image path required")
+    path = (image_root / name).resolve()
+    if not path.is_relative_to(image_root):
+        raise ValueError("source image path escapes image root")
+    data = path.read_bytes()
+    if hashlib.sha256(data).hexdigest() != digest:
+        raise ValueError("source image bytes differ from approved review")
+    import cv2
+    decoded = cv2.imdecode(np.frombuffer(data, np.uint8), cv2.IMREAD_COLOR)
+    if decoded is None or (decoded.shape[1], decoded.shape[0]) != tuple(size):
+        raise ValueError("source image dimensions differ from export size")
+    suffix = path.suffix.lower()
+    if suffix not in (".jpg", ".jpeg", ".png"):
+        raise ValueError("source image extension must be jpg, jpeg or png")
+    return data, suffix
 
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("labels", help="autolabel labels.jsonl (rows carry 'objects' with --object-boxes)")
-    ap.add_argument("--human", help="human review rows: {index, boxes: [{bbox_xyxy, label}]}")
+    ap.add_argument("--human", help='rows: {index, review_status:"approved", complete_frame_review:true, '
+                                   'image_sha256, boxes:[{bbox_xyxy,label}]} (pending/partial rows stay queued)')
+    ap.add_argument("--images", type=Path, help="image root; default source labels JSONL directory")
     ap.add_argument("--out", required=True)
     ap.add_argument("--size", type=int, nargs=2, required=True, metavar=("W", "H"))
     args = ap.parse_args(argv)
-    human = {row["index"]: row.get("boxes", []) for row in (_rows(args.human) if args.human else [])}
     out = Path(args.out)
-    out.mkdir(parents=True, exist_ok=True)
-    queue = []
-    for row in _rows(args.labels):
+    if out.exists():
+        raise ValueError("new output directory required; prior labels are never reused or overwritten")
+    if any(v <= 0 for v in args.size):
+        raise ValueError("positive image size required")
+    source, source_bytes = _indexed_rows(args.labels)
+    human, human_bytes = _indexed_rows(args.human) if args.human else ({}, b"")
+    image_root = (args.images or Path(args.labels).parent).resolve()
+    if set(human) - set(source):
+        raise ValueError("human review index absent from source labels")
+    queue, exports, images = [], {}, {}
+    for row in source.values():
         auto = row.get("objects", [])
-        if row["index"] not in human:
-            queue.append({"index": row["index"], "objects": auto})
+        review = human.get(row["index"])
+        if (review is None or review.get("review_status") != "approved"
+                or review.get("complete_frame_review") is not True):
+            queue.append({"index": row["index"], "objects": auto, "review": review,
+                          "reason": "complete_approved_review_required"})
             continue
-        merged = merge_review(auto, human[row["index"]])
+        if not isinstance(review.get("boxes"), list):
+            raise ValueError("complete approved review requires an explicit boxes list")
+        for box in review["boxes"]:
+            _check_human_box(box)
+            x0, y0, x1, y1 = box["bbox_xyxy"]
+            if not (0 <= x0 < x1 <= args.size[0] and 0 <= y0 < y1 <= args.size[1]):
+                raise ValueError("review box outside image bounds")
+        merged = merge_review(auto, review["boxes"])
         if needs_review(merged):
-            queue.append({"index": row["index"], "objects": merged})
+            queue.append({"index": row["index"], "objects": merged, "review": review,
+                          "reason": "unlabelled_candidate_boxes"})
             continue
-        lines = to_yolo_lines(merged, args.size)
-        (out / f"{row['index']:06d}.txt").write_text("".join(f"{line}\n" for line in lines), encoding="utf-8")
+        for box in merged:
+            _check_human_box(box)
+            x0, y0, x1, y1 = box["bbox_xyxy"]
+            if not (0 <= x0 < x1 <= args.size[0] and 0 <= y0 < y1 <= args.size[1]):
+                raise ValueError("review box outside image bounds")
+        images[row["index"]] = _bound_image(row, review, image_root, args.size)
+        exports[row["index"]] = to_yolo_lines(merged, args.size)
+    out.mkdir(parents=True, exist_ok=False)
+    for index, lines in exports.items():
+        (out / f"{index:06d}.txt").write_text("".join(f"{line}\n" for line in lines), encoding="utf-8")
+    (out / "images").mkdir()
+    for index, (data, suffix) in images.items():
+        (out / "images" / f"{index:06d}{suffix}").write_bytes(data)
+    (out / "source.jsonl").write_bytes(source_bytes)
+    (out / "human.jsonl").write_bytes(human_bytes)
     (out / "review_queue.jsonl").write_text("".join(json.dumps(q) + "\n" for q in queue), encoding="utf-8")
-    print(f"{len(human)} reviewed, {len(queue)} waiting in {out / 'review_queue.jsonl'}")
+    files = [{"path": p.relative_to(out).as_posix(), "sha256": hashlib.sha256(p.read_bytes()).hexdigest(),
+              "bytes": p.stat().st_size} for p in sorted(out.rglob("*")) if p.is_file()]
+    (out / "manifest.json").write_text(json.dumps({"schema": "rosy.object-review-export/1",
+        "classes": list(OBJECT_CLASSES), "size_wh": args.size, "exported_indices": list(exports),
+        "queued_indices": [row["index"] for row in queue], "reviewer_authentication": "unverified",
+        "files": files}, indent=2, allow_nan=False), encoding="utf-8")
+    print(f"{len(exports)} complete approved frames exported, {len(queue)} waiting in {out / 'review_queue.jsonl'}")
     return 0
 
 

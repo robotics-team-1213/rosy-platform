@@ -171,11 +171,13 @@ def _mean_iou(val_iou: dict) -> float:
 
 
 def train(model, train_ds, val_ds, *, epochs, lr, batch_size, device, ignore_index=None,
-          num_workers=None, log=print, on_epoch: Callable[[dict], None] | None = None) -> dict:
+          num_workers=None, log=print, on_epoch: Callable[[dict], None] | None = None,
+          loss_fn=None, optimizer_factory=None) -> dict:
     """Adam + cross-entropy; the model ends with the best epoch's weights (mean non-None val IoU).
     ignore_index defaults to the dataset's (manifest ignore_index): those pixels count in
     neither the loss nor the IoU. on_epoch (e.g. an experiment tracker) gets each history
     row plus "mean_val_iou" (None when no class has an IoU yet).
+    Optional loss_fn and optimizer_factory(parameters, lr=...) select a training recipe.
 
     Returns {history: [{epoch, train_loss, val_loss, val_iou{name: iou}}], best_epoch, val_iou}."""
     if ignore_index is None:
@@ -183,8 +185,9 @@ def train(model, train_ds, val_ds, *, epochs, lr, batch_size, device, ignore_ind
     names = [c["name"] for c in sorted(val_ds.classes, key=lambda c: c["index"])]
     n = len(names)
     model = model.to(device)
-    opt = torch.optim.Adam(model.parameters(), lr=lr)
-    loss_fn = nn.CrossEntropyLoss(ignore_index=-100 if ignore_index is None else ignore_index)
+    opt = (optimizer_factory or torch.optim.Adam)(model.parameters(), lr=lr)
+    if loss_fn is None:
+        loss_fn = nn.CrossEntropyLoss(ignore_index=-100 if ignore_index is None else ignore_index)
     if num_workers is None:
         num_workers = 0 if os.name == "nt" else 2
     loader = dict(batch_size=batch_size, num_workers=num_workers,
