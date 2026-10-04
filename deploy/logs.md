@@ -2470,3 +2470,9 @@
 - 변경: 실제 공개 git commit/tree와 이미 검토한 normalized journal 무결성 digest14개 행의 path/line SHA/value를 기존 public_provenance 정본에 추가했다. 일반 credential shape·알 수 없는 entropy·변경된 행은 계속 검출한다. scanner 규칙/전역 예외는 늘리지 않는다.
 - 증거: normal pre-push의13개 공개 해시 진단과 같은 알려진 hash가 있는1개 추가 행을 확인했다. 40자 값은 실제 git object의 commit/tree다. 정확한 결속·stale/변경/credential 거부 회귀와 protocol/event/rooms 포함114 PASS로 검사했다.
 - gate 변화: SOURCE/LOCAL 출처 정합. 실제 signing key·장치 자격은 읽거나 변경하지 않았다.
+
+## 2026-10-05 · uncommitted · fix(provenance): preserve reviewed source-line bindings
+
+- Change: restore the four main-reviewed journal digest lines exactly, including their source text, rather than changing approved provenance metadata. Add the existing provenance inventory and mutation suite to the always-on affected guard set so a source/comment edit cannot leave stale bindings undetected locally. No digest pair, scanner rule or credential exception changed.
+- Evidence: GitHub root-test-1of3 isolated one stale-binding failure among1393 passes and118 skips; local repaired provenance/scanner/harness suites93 passed. All other GitHub test jobs and Android passed. Independent review and final hook follow.
+- gate 변화: source integrity repair only; deployed code remains the signed existing candidate until final green CI and delivery.
