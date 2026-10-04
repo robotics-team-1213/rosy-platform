@@ -86,6 +86,47 @@ def _pose_of(row: Mapping) -> Optional[tuple[float, float, float]]:
         return None
 
 
+def _map_pose(row: Mapping) -> Optional[tuple[float, float, float]]:
+    """Painted-map xy. A legacy snapshot has no localization block (D-395).
+
+    LOCALIZED + map is the same xy. An odom-frame pose is not the painted track,
+    and the twist integrator in body_stop is the command, not this pose.
+    """
+    from fleet.localization.trust import LEGACY, TRUSTED, classify
+
+    state = row.get("state") if isinstance(row.get("state"), Mapping) else None
+    if classify(state) not in (LEGACY, TRUSTED):
+        return None
+    return _pose_of(row)
+
+
+def _hold_xy(plan, painted):
+    room = next((item for item in painted.rooms if item.id == plan.room_id), None)
+    return None if room is None else room.hold_xy
+
+
+def _door_xy(plan, painted):
+    if plan.s_m is None:
+        return None
+    x, y, _tangent = painted.line(plan.edge_id).point_at(plan.s_m)
+    return (x, y)
+
+
+def _gap_target(plan, painted, x: float, y: float):
+    """Off the paint while still entering: the hold if the door is the nearest point, else the line."""
+    from fleet.meet.place import ALONG_FIRST_M, MAX_OFF_M
+
+    line = painted.line(plan.edge_id)
+    _dist, s_m, _tangent = line.project(x, y)
+    near_door = plan.s_m is not None and abs(s_m - plan.s_m) <= ALONG_FIRST_M + MAX_OFF_M
+    if plan.action == "sidestep" and near_door:
+        hold = _hold_xy(plan, painted)
+        if hold is not None:
+            return hold
+    px, py, _tangent = line.point_at(s_m)
+    return (px, py)
+
+
 class _YieldPlan:
     """Policy direction of a yielder. The manoeuvre yaw is not a new meet heading."""
 
@@ -93,6 +134,7 @@ class _YieldPlan:
                  room_id: Optional[str], s_m: Optional[float]) -> None:
         self.edge_id, self.direction, self.action = edge_id, direction, action
         self.room_id, self.s_m = room_id, s_m
+        self.returning = False
 
 
 class StuckResolver:
@@ -120,17 +162,29 @@ class StuckResolver:
                 answer.stuck_id, round(answer.yield_turn_rad or 0.0, 3), round(answer.yield_m, 3))
         if answer.rule.startswith("R") and chain.retries.get(answer.stuck_id, 0) == 0:
             chain.rule_answers += 1                   # a transport resend is the same answer
-        if answer.decision == "RESUME":
+        if answer.decision == "RESUME" and answer.rule != "meet":
             chain.resume_id = answer.stuck_id
 
     def result(self, answer: Answer, *, code: Optional[str]) -> Optional[Escalate]:
         """CORE's reply: None code = accepted. Returns an escalation when one is due."""
         chain = self._chains.get(answer.robot_id)
-        if chain is None or code is None or code == MISMATCH:
+        if chain is None:
+            return None
+        if code is None:
+            if answer.decision == "RESUME" and answer.rule == "meet":
+                chain.resume_id = answer.stuck_id
+                self._plans.pop(answer.robot_id, None)
+                self._pins = {edge: yielder for edge, yielder in self._pins.items()
+                              if yielder != answer.robot_id}
+            return None
+        if code == MISMATCH:
             return None
         if answer.stuck_id != chain.stuck_id and answer.stuck_id not in chain.answered:
             return None                               # late reply from an older chain
         if code == REFUSED:
+            # The robot is still in YIELDED. Retry the return on the next poll.
+            if answer.decision == "RESUME" and answer.rule == "meet":
+                return None
             chain.retired.add(answer.rule)
             chain.answered.discard(answer.stuck_id)
             return None
@@ -173,6 +227,7 @@ class StuckResolver:
                 self._claims = {c for c in self._claims if c[0] != rid}
             chain = None
         if stuck is None:
+            self._plans.pop(rid, None)
             if chain is not None and chain.closed_at is None:
                 chain.closed_at, chain.stuck_id = now, None
             return None
@@ -199,6 +254,8 @@ class StuckResolver:
         rule = self._rule(row, stuck, rows, chain)
         if rule is not None and rule[1] == "ESCALATE":
             return self._escalate(chain, rid, sid, "meet")
+        if rule is not None and rule[1] == "RESUME":
+            rule = ("meet", "WAIT")                   # resume only after a finished segment
         if rule is None:
             return self._escalate(chain, rid, sid, "no_rule")
         # §5: the one transport resend repeats an answer already counted; never block it.
@@ -243,13 +300,18 @@ class StuckResolver:
         if stuck is None or stuck.get("phase") != "YIELDED":
             return None
         meet = self._meet(row, rows)
-        if meet is None or len(meet) != 4:
+        if meet is None:
             return None
         rid = str(row["robot_id"])
-        key = (str(stuck["stuck_id"]), round(meet[2], 3), round(meet[3], 3))
+        sid = str(stuck["stuck_id"])
+        if meet[1] == "RESUME":
+            return Answer(rid, sid, "RESUME", "meet")
+        if len(meet) != 4:
+            return None
+        key = (sid, round(meet[2], 3), round(meet[3], 3))
         if self._sent_yield.get(rid) == key:
             return None
-        return Answer(rid, str(stuck["stuck_id"]), "YIELD", "meet", yield_m=meet[3], yield_turn_rad=meet[2])
+        return Answer(rid, sid, "YIELD", "meet", yield_m=meet[3], yield_turn_rad=meet[2])
 
     def _meet(self, row, rows):
         """room_hold for poses on the painted track. None keeps R1/R2/R3."""
@@ -257,7 +319,7 @@ class StuckResolver:
         from fleet.meet.place import painted_track, project, yield_move
         from fleet.meet.scene import Action, Order, Pin, Robot
 
-        me = _pose_of(row)
+        me = _map_pose(row)
         if me is None:
             return None
         painted = painted_track()
@@ -267,7 +329,7 @@ class StuckResolver:
         for other in rows:
             if not other.get("online", True):
                 continue
-            pose = _pose_of(other)
+            pose = _map_pose(other)
             if pose is None:
                 continue
             place = project(painted, pose[0], pose[1], pose[2])
@@ -277,15 +339,25 @@ class StuckResolver:
             placed[oid] = place
             plan = self._plans.get(oid)
             if place.room_id:
-                self._plans.pop(oid, None)
-                plan = None
-            if plan is not None and place.edge_id == plan.edge_id:
+                if plan is not None and plan.room_id == place.room_id:
+                    plan.returning = True
+                else:
+                    self._plans.pop(oid, None)
+                    plan = None
+            if plan is not None and place.edge_id == plan.edge_id and not plan.returning:
                 direction, trusted = plan.direction, True
             else:
                 direction, trusted = place.direction, place.trusted
             robots.append(Robot(oid, place.edge_id, place.s_m, direction, trusted, room_id=place.room_id))
         mine = placed.get(rid)
-        if mine is None or not any(other != rid for other in placed):
+        plan = self._plans.get(rid)
+        if mine is None:
+            if plan is None:
+                return None
+            return self._off_paint(me, plan, painted, rows, rid)
+        if plan is not None and plan.returning:
+            return self._rejoin(row, mine, plan, painted, rows, rid)
+        if not any(other != rid for other in placed):
             return None
         pins = tuple(Pin(edge_id, yielder) for edge_id, yielder in self._pins.items())
         scene = painted.scene(tuple(robots), pins)
@@ -302,7 +374,7 @@ class StuckResolver:
                 order.edge_id or robot.edge_id or "", robot.direction, order.action.value,
                 order.room_id, order.s_m)
             move = yield_move(mine, order, painted)
-        elif plan is not None and mine.edge_id == plan.edge_id:
+        elif plan is not None and mine.edge_id == plan.edge_id and not plan.returning:
             move = yield_move(mine, Order(
                 rid, Action(plan.action), room_id=plan.room_id, edge_id=plan.edge_id, s_m=plan.s_m,
             ), painted)
@@ -312,6 +384,89 @@ class StuckResolver:
         if move is None:
             return ("meet", "WAIT")
         return ("meet", "YIELD", move[0], move[1])
+
+    def _off_paint(self, pose, plan, painted, rows, rid):
+        """A usable pose that project() rejected. The timer already ended; this xy is the rest."""
+        from fleet.meet.place import steer_toward
+
+        x, y, yaw = pose
+        if plan.returning:
+            clear = self._door_clear(plan, painted, rows, rid)
+            target = _door_xy(plan, painted) if clear else _hold_xy(plan, painted)
+        else:
+            target = _gap_target(plan, painted, x, y)
+        if target is None:
+            return ("meet", "WAIT")
+        move = steer_toward(x, y, yaw, target)
+        if move is None:
+            return ("meet", "WAIT")
+        return ("meet", "YIELD", move[0], move[1])
+
+    def _rejoin(self, row, mine, plan, painted, rows, rid):
+        """Back to the door, then face the stored travel direction. RESUME only on the paint."""
+        from fleet.meet.place import ALONG_FIRST_M, along_to, steer_toward
+
+        if not self._door_clear(plan, painted, rows, rid):
+            if mine.room_id:
+                return ("meet", "WAIT")
+            hold = _hold_xy(plan, painted)
+            if hold is None:
+                return ("meet", "WAIT")
+            move = steer_toward(mine.x, mine.y, mine.yaw, hold)
+            if move is None:
+                return ("meet", "WAIT")
+            return ("meet", "YIELD", move[0], move[1])
+        if mine.room_id or mine.edge_id != plan.edge_id:
+            target = _door_xy(plan, painted)
+            if target is None:
+                return ("meet", "WAIT")
+            move = steer_toward(mine.x, mine.y, mine.yaw, target)
+            if move is None:
+                return ("meet", "WAIT")
+            return ("meet", "YIELD", move[0], move[1])
+        if plan.s_m is None or abs(mine.s_m - plan.s_m) > ALONG_FIRST_M:
+            if plan.s_m is None:
+                return ("meet", "WAIT")
+            move = along_to(mine, painted, plan.s_m)
+            if move is None:
+                return ("meet", "WAIT")
+            return ("meet", "YIELD", move[0], move[1])
+        if mine.trusted and mine.direction == plan.direction:
+            if self._peer_ahead(row, rows):
+                return ("meet", "WAIT")
+            return ("meet", "RESUME")
+        line = painted.line(plan.edge_id)
+        hop = 0.15 if plan.direction > 0 else -0.15
+        target_s = min(max(mine.s_m + hop, 0.0), line.length_m)
+        move = along_to(mine, painted, target_s)
+        if move is None:
+            return ("meet", "WAIT")
+        return ("meet", "YIELD", move[0], move[1])
+
+    def _door_clear(self, plan, painted, rows, rid) -> bool:
+        """The passer has gone past the door. An unusable pose blocks the return."""
+        from fleet.meet.place import project
+
+        if plan.s_m is None:
+            return False
+        door_x, door_y, _tangent = painted.line(plan.edge_id).point_at(plan.s_m)
+        clearance = self.config.peer_reach_m + self.config.peer_radius_m
+        for other in rows:
+            if str(other.get("robot_id")) == rid or not other.get("online", True):
+                continue
+            pose = _map_pose(other)
+            if pose is None:
+                return False
+            place = project(painted, pose[0], pose[1], pose[2])
+            if place is not None and place.edge_id == plan.edge_id:
+                passed = (plan.s_m - place.s_m) * plan.direction
+                if passed <= clearance:
+                    return False
+            elif place is not None and place.room_id == plan.room_id:
+                return False
+            elif math.hypot(pose[0] - door_x, pose[1] - door_y) <= clearance:
+                return False
+        return True
 
     def _keep_pins(self, scene, orders) -> None:
         from fleet.meet.scene import Action, closing
