@@ -5767,3 +5767,9 @@ osy-d395-s1d\`.
 - 증거: operations/fleet/test/test_lane_route.py, test_task_contract_docs.py, test_server_app.py, test_line_follow_contract_docs.py, test_mission_progress.py 74 passed. test/known_failures.py 는 새 실패 0. harness lint 의 STATUS.md 와 pilot index stale 2건은 이 브랜치의 베이스에 이미 있다.
 - gate 변화: 없음. 호스트 시험. DEVICE, ROS-SIM, 실차 주행은 없다.
 - 결정: D-463 Accepted.
+
+## 2026-10-05 · uncommitted · fix(learning): validate sealed receipt authority exactly
+
+- 변경: producer helper는 v2 contract뿐 아니라 봉인된 pinky-review-receipt.json authority도 schema/digest/types로 검증하고 encoded JSON의 정확한 일치를 요구한다. Python dict의 False==0 동등성으로 변조 receipt를 수용하는 경로를 제거한다. Root consumer/adapter 경로는 고치지 않는다.
+- 증거: Root의 독립 합성 reseal 재현을 회귀로 옮겼다. 수정 전1failed/1passed 재현을 X:/DevTemp/pinky-review-cycle-20261005/receipt-red.txt에 보존하고, 수정 후 기존 snapshot/content/CAS와 receipt 두 변조 회귀를 함께 검증한다. 실제 사람 검수 상태는 변경하지 않는다.
+- gate 변화: SOURCE/LOCAL helper 보완. 실제 export의 격리 model-PC 소비 통과는 Root 증거이며 생산 학습 서비스 전환·human pixel qualification과 별개다. push·주행·HOLD 해제·정책 권한 변경 없음.

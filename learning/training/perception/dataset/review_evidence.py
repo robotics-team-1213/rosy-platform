@@ -356,7 +356,8 @@ def verify_current(export, current):
             or sha(payload['inputs/human.jsonl']) != manifest['human_sha256']):
         raise ValueError('object source binding differs')
     receipt = json.loads(payload['pinky-review-receipt.json'])
-    if receipt.get('authority') != current or receipt.get('export_id') != doc.get('export_id'):
+    validate_authority(receipt.get('authority'))
+    if encoded(receipt['authority']) != encoded(current) or receipt.get('export_id') != doc.get('export_id'):
         raise ValueError('receipt authority differs')
     frames = json.loads(payload['application-snapshot.json'])
     sources = [json.loads(line) for line in payload['inputs/source.jsonl'].splitlines() if line]

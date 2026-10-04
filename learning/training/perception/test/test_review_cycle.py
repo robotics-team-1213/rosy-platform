@@ -297,3 +297,27 @@ def test_ignore_float_and_resealed_embedded_authority_fail_strict_validation(tmp
     (out/'AUTHORITY_COMPLETE').write_text(review_evidence.sha(raw),encoding='ascii')
     with pytest.raises(ValueError,match='digest'):
         review_evidence.verify_current(out,current)
+
+
+@pytest.mark.parametrize('recompute_digest',[False,True])
+def test_resealed_receipt_authority_rejects_false_integer_alias(tmp_path,recompute_digest):
+    store = open_store(tmp_path)
+    current = review_evidence.decisions(store)
+    out = Path(store.prepare()['path'])
+    receipt = json.loads((out/'pinky-review-receipt.json').read_bytes())
+    receipt['authority']['frames'][0]['original_video_verified'] = 0
+    if recompute_digest:
+        authority = receipt['authority']
+        del authority['decision_sha256']
+        authority['decision_sha256'] = review_evidence.sha(review_evidence.encoded(authority))
+    raw = review_evidence.encoded(receipt)
+    (out/'pinky-review-receipt.json').write_bytes(raw)
+    contract = json.loads((out/'review-contract.json').read_bytes())
+    for item in contract['files']:
+        if item['path']=='pinky-review-receipt.json':
+            item.update(bytes=len(raw),sha256=review_evidence.sha(raw))
+    raw = review_evidence.encoded(contract)
+    (out/'review-contract.json').write_bytes(raw)
+    (out/'AUTHORITY_COMPLETE').write_text(review_evidence.sha(raw),encoding='ascii')
+    with pytest.raises(ValueError):
+        review_evidence.verify_current(out,current)
