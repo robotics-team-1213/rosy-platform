@@ -5716,3 +5716,9 @@ osy-d395-s1d\`.
 - 변경: `docs/validation/d427-source-migration/wave5-named-gate-coverage-2026-10-04.md`에 실제 host build·Cam·lookup·Docker telemetry·브라우저 원본 실패/후속 시험과 미검증 범위를 동결 기록했다.
 - 증거: 전체 browser 727b60c63는 314 passed/1 failed·NEW 1. 원인을 분리한 카메라 panel 후속은 21 passed·NEW 0. AMD64 Docker 두 모델 각각 odometry 64개·증가 clock 10개·native EXIT0·cleanup PASS는 독립 확인했다.
 - gate 변화: 각 명시 범위만 SOURCE/LOCAL 증거다. 전체 browser PASS·lane·ARM OCI·중간 wave별 artifact·발행·기기·FIELD 완료로 승격하지 않는다. 기존 서명 1722/035에 새 UI 수정이 포함됐다고 표현하지 않는다.
+
+## 2026-10-04 · uncommitted · audit(d427): imported journal encoding loss
+
+- 변경: 429e13b83의 손상 journal 하나를 UNKNOWN으로 기록하고 정확한 원문·치환 해시와 원문 보존 위치를 별도 검증 문서에 남겼다. 읽을 수 없는 기술 내용을 복원하지 않았다.
+- 증거: 역사 블록 RED 뒤 source/target 변조·삭제·peer 기록 손실·새 corruption 거부 포함 focused 111 passed/1 skipped, NEW 0, lint 오류 0. 원문 바이트와 다른 기록은 보존한다.
+- gate 변화: 해당 G2 기록으로 수용을 부여하지 않는다. SOURCE/LOCAL 감사 메커니즘 검증만 기록한다.
