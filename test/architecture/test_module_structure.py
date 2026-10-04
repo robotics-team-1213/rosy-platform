@@ -443,8 +443,16 @@ SIZE_VERDICTS = {
         "accept: sim-only read-only viewer server (HTTP handler + ROS subscriptions); the pure logic already lives in live_view_model.py and the page in lane_live_view.html, covered by test_lane_live_view*.py and test_live_view_model.py (X5)",
     ),
     "core_features": (
-        12_926,
-        "accept: re-judged 2026-10-04 at 12926 after D-452/D-453 integration: "
+        13_202,
+        "accept: re-judged 2026-10-05 at 13202 for the private cumulative trial "
+        "restriction in docs/plans/2026-10-05-core-bounded-camera-trial.md. "
+        "The new ROS-free command/bounded_trial.py owns one durable trial ledger "
+        "and has no publisher, API, deployment unit or feature-cross imports; "
+        "CORE bridge adapts original pose clocks and restricts its existing final "
+        "output. Each file remains below600; all existing file limits and the "
+        "+150 package re-review allowance remain unchanged. No new package is "
+        "justified for this command-owner policy. Previously re-judged "
+        "2026-10-04 at 12926 after D-452/D-453 integration: "
         "D-452 adds 93 discovery owner/helper lines (agent 16, helper 77); D-453 adds "
         "110 to the existing stuck recovery/wiring seam (103 and 7). These remain "
         "independent feature subpackages below file budgets, with CORE's existing "

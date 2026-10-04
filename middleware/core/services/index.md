@@ -37,8 +37,8 @@
 
 ## 최근 기록
 
+- 2026-10-05 · uncommitted · feat(command): cumulative bounded trial
 - 2026-10-05 · uncommitted · feat(vision): D-368 운전자 스트림 게이트와 latest_frame
 - 2026-10-04 · uncommitted · fix(safety): 활성 양보 구간 기한 보존
 - 2026-10-04 · uncommitted · D-452 승인 Fleet 발견 우선
 - 2026-10-04 · uncommitted · feat(power): long testing dwell with low battery saving
-- 2026-10-04 · uncommitted · feat(power): fresh battery evidence and idle saving

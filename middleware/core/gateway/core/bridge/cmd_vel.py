@@ -121,7 +121,8 @@ class _Readiness(Protocol):
 
 def cmd_vel_cycle(command: _Command, power: _Power, send: Callable[[Any], None],
                   readiness: Optional[_Readiness] = None,
-                  warn: Optional[Callable[[str], None]] = None) -> None:
+                  warn: Optional[Callable[[str], None]] = None,
+                  *, trial_guard=None, now=None) -> None:
     """값을 고르고, 바퀴로 내보내고, 그 뒤에 알린다.
 
     `readiness` 가 HOLD 이면 고른 값 대신 0 을 내보낸다 — 최종 발행자는
@@ -137,6 +138,9 @@ def cmd_vel_cycle(command: _Command, power: _Power, send: Callable[[Any], None],
     except Exception as exc:
         # 고르기가 예외를 내면 (안전 정책 평가 등) 0 을 내보낸다. 예외가 rclpy
         # 타이머 밖으로 새면 50 Hz 최종 발행자가 멈추고, 바퀴는 마지막 값을 쥔다.
+        if trial_guard is not None:
+            try:trial_guard.stop('selection_failed')
+            except Exception:pass
         send(ZERO)
         if warn is not None:
             warn(f"cmd_vel output failed: {exc}")
@@ -151,13 +155,41 @@ def cmd_vel_cycle(command: _Command, power: _Power, send: Callable[[Any], None],
     except Exception as exc:
         if port is not None:
             port.close()
+        if trial_guard is not None:
+            try:trial_guard.stop('port_binding_failed')
+            except Exception:pass
         send(ZERO)
         if warn is not None:
             warn(f"cmd_vel guard failed: {exc}")
         return
     try:
-        decision = port.submit(guarded)
+        if trial_guard is not None:
+            from core_features.command.bounded_trial import BoundedTrial
+            try:
+                if type(trial_guard) is not BoundedTrial or not trial_guard.permits(
+                        guarded.payload.linear_mps,guarded.payload.angular_radps,now=now):
+                    send(ZERO)
+                    return
+            except Exception as exc:
+                try:trial_guard.stop('trial_guard_failed')
+                except Exception:pass
+                send(ZERO)
+                if warn is not None:warn(f'bounded trial failed: {exc}')
+                return
+        try:
+            decision = port.submit(guarded)
+        except Exception as exc:
+            if trial_guard is None:raise
+            try:trial_guard.stop('submission_unknown')
+            except Exception:pass
+            try:send(ZERO)
+            except Exception:pass  # Physical stop remains UNKNOWN, never retry motion.
+            if warn is not None:warn(f'bounded trial delivery unknown: {exc}')
+            return
         if not decision.accepted:
+            if trial_guard is not None:
+                try:trial_guard.stop('submission_rejected')
+                except Exception:pass
             send(ZERO)
             if warn is not None:
                 warn(f"cmd_vel guard refused: {decision.reason}")

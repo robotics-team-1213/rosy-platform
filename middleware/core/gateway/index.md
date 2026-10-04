@@ -73,8 +73,8 @@
 
 ## 최근 기록
 
+- 2026-10-05 · uncommitted · feat(command): cumulative bounded trial
 - 2026-10-05 · uncommitted · test(pairing): 구버전 인증서 API 거절 회귀
 - 2026-10-05 · uncommitted · feat(services): D-368 vision_stream 배선
 - 2026-10-05 · uncommitted · feat(core): 수신 승인용 신뢰 anchor와 보조 runtime
 - 2026-10-04 · uncommitted · feat(power): long testing dwell with low battery saving
-- 2026-10-04 · uncommitted · feat(power): fresh battery evidence and idle saving

@@ -324,6 +324,7 @@ class RosBridge:
     def _on_odom(self, msg: Odometry) -> None:
         self._last_odom_ts = time.monotonic()
         sample = translate.odom_sample(msg)
+        odometry.observe_bounded_trial(self, msg, sample)
         if odometry.odom_owns_pose(self._map_pose_ts, self._line_clock()):
             # map 프레임 pose 가 없을 때만 odom 이 보고 pose 를 쓴다 (규칙은 odometry.py).
             self._svc.state.set_pose(sample["x"], sample["y"], sample["yaw"])
@@ -469,7 +470,8 @@ class RosBridge:
         # 순서(고르기 → HOLD 면 0 → 바퀴 → 절전 관측·SAF-002 알림)는
         # cmd_vel_cycle 이 정한다 (rclpy 없이 검사되는 자리).
         cmd_vel_cycle(self._svc.command, self._svc.power, self._send_twist,
-                      self._readiness, warn=self._node.get_logger().error)
+                      self._readiness, warn=self._node.get_logger().error,
+                      trial_guard=getattr(self, '_bounded_trial_guard', None))
 
     def _send_twist(self, out: CoreTwist) -> None:
         msg = Twist()
