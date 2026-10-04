@@ -18,6 +18,8 @@ from .dispatch_admission import normalize_resources
 from .mission_store import MissionConflict, _nonempty, _now
 from .sqlite_policy import configure_connection, enable_wal
 from .step_action_kinds import step_action_kind, step_grant_digest
+from . import cell_sheet_checkpoints as sheets
+from . import cell_job_read_model as read_model
 
 _MIGRATION_VERSION = 1
 _IDENTIFIER_HASH_FIELDS = ("recipe_digest", "cell_digest", "process_artifact_digest")
@@ -154,6 +156,7 @@ class CellJobStore:
             ).fetchone()[0]
             if applied > _MIGRATION_VERSION:
                 raise RuntimeError(f"unsupported Cell Job journal migration version {applied}")
+            sheets.migrate(connection)
             connection.commit()
 
     def _connect(self) -> sqlite3.Connection:
@@ -195,7 +198,7 @@ class CellJobStore:
             "job_id", "workcell_id", "instance_id", "recipe_digest", "cell_digest",
             "process_artifact_digest", "job", "steps", "resources", "ledger_markers",
         }
-        if set(submission) != required:
+        if set(submission) - {"operator_checkpoints"} != required:
             raise ValueError("compiled Cell Job submission has an invalid shape")
         steps = submission["steps"]
         resources = submission["resources"]
@@ -238,40 +241,12 @@ class CellJobStore:
                    VALUES (?, ?, ?, 'CELL_TRANSFER', ?, 'WAITING', ?)""",
                 (mission_id, index, step_id, _json(dict(step)), now),
             )
+        sheets.insert(connection, mission_id, submission, now)
         return CellJobStore._get(connection, mission_id)
 
     @staticmethod
     def _get(connection: sqlite3.Connection, mission_id: str) -> dict[str, Any] | None:
-        row = connection.execute(
-            "SELECT * FROM fleet_cell_jobs WHERE mission_id=?", (mission_id,),
-        ).fetchone()
-        if row is None:
-            return None
-        job = dict(row)
-        for source, target in (("job_json", "job"), ("resources_json", "resources"),
-                               ("ledger_markers_json", "ledger_markers")):
-            job[target] = json.loads(job.pop(source))
-        job["steps"] = []
-        for step_row in connection.execute(
-                "SELECT * FROM fleet_cell_steps WHERE mission_id=? ORDER BY step_index",
-                (mission_id,)):
-            step = dict(step_row)
-            step["step"] = json.loads(step.pop("step_json"))
-            for source, target in (("grant_json", "grant"), ("result_json", "result"),
-                                   ("goal_evidence_json", "goal_evidence")):
-                raw = step.pop(source)
-                step[target] = json.loads(raw) if raw is not None else None
-            job["steps"].append(step)
-        job["events"] = [
-            {**dict(event), "detail": json.loads(event["detail_json"])}
-            for event in connection.execute(
-                "SELECT * FROM fleet_cell_events WHERE mission_id=? ORDER BY event_id",
-                (mission_id,),
-            )
-        ]
-        for event in job["events"]:
-            event.pop("detail_json", None)
-        return job
+        return read_model.read_cell_job(connection, mission_id)
 
     def get(self, mission_id: str) -> dict[str, Any] | None:
         with closing(self._connect()) as connection:
@@ -280,11 +255,7 @@ class CellJobStore:
     def jobs(self, status: str) -> list[dict[str, Any]]:
         """Every Job in ``status``, oldest update first (the dispatcher visits each, 1b B1)."""
         with closing(self._connect()) as connection:
-            rows = connection.execute(
-                "SELECT mission_id FROM fleet_cell_jobs WHERE status=? ORDER BY updated_at, mission_id",
-                (status,),
-            ).fetchall()
-            return [self._get(connection, row["mission_id"]) for row in rows]
+            return read_model.jobs_by_status(connection, status)
 
     def recover_after_startup(self) -> int:
         """Fence obsolete admitted Jobs while preserving attempts and occupancy claims."""
@@ -324,8 +295,9 @@ class CellJobStore:
                                 "authority_epoch": control["authority_epoch"],
                                 "dispatch_generation": control["generation"],
                             })
+            checkpoint_holds = sheets.recover_ready(connection, now, self._event)
             connection.commit()
-        return len(rows)
+        return len(rows) + checkpoint_holds
 
     def admit(self, mission_id: str, *, actor_id: str, expected_generation: int) -> dict[str, Any]:
         actor_id = _nonempty("actor_id", actor_id, limit=96)
@@ -367,9 +339,19 @@ class CellJobStore:
             self._event(connection, mission_id, None, "CELL_JOB_ADMITTED", actor_id,
                         {"authority_epoch": control["authority_epoch"],
                          "dispatch_generation": expected_generation})
+            sheets.hold_due(connection, self._require(connection, mission_id), 0, now, self._event)
             result = self._get(connection, mission_id)
             connection.commit()
         return result
+
+    def guard_sheet_checkpoint(self, mission_id: str, *, step_index: int) -> dict[str, Any]:
+        """Fence due manual work before identity discovery or grant creation; final start repeats it."""
+        with closing(self._connect()) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            sheets.guard_ready(connection, mission_id, step_index, _now(), self._event)
+            result = self._get(connection, mission_id)
+            connection.commit()
+            return result
 
     def start_step(self, mission_id: str, *, step_index: int, action_id: str,
                    attempt_id: str, grant: Mapping[str, Any],
@@ -400,6 +382,10 @@ class CellJobStore:
             if (job["status"] != "READY" or step["status"] != "READY"
                     or job["current_step_index"] != step_index):
                 raise MissionConflict("only the current READY Cell Job step may start")
+            if sheets.hold_due(connection, job, step_index, now, self._event):
+                result = self._get(connection, mission_id)
+                connection.commit()
+                return result
             control = connection.execute(
                 "SELECT authority_epoch, generation, dispatch_enabled "
                 "FROM fleet_dispatch_control WHERE control_id=1",
@@ -528,12 +514,7 @@ class CellJobStore:
     def next_unresolved(self) -> list[dict[str, Any]]:
         """HOLD Jobs whose claims are UNKNOWN: the dispatcher keeps reading them back."""
         with closing(self._connect()) as connection:
-            rows = connection.execute(
-                "SELECT DISTINCT j.mission_id FROM fleet_cell_jobs j JOIN fleet_action_claims c "
-                "ON c.owner_kind='mission' AND c.owner_id=j.mission_id AND c.generation=j.dispatch_generation "
-                "WHERE j.status='HOLD' AND c.phase IN ('UNKNOWN', 'DISPATCHING') "
-                "ORDER BY j.updated_at, j.mission_id").fetchall()
-            return [self._get(connection, row["mission_id"]) for row in rows]
+            return read_model.unresolved_jobs(connection)
 
     def note_device_receipt(self, mission_id: str, step_index: int, action_id: str, attempt_id: str) -> None:
         """Remember that the owner journaled this attempt (1c item 3: a later 404 is not 'never ran')."""
@@ -596,6 +577,8 @@ class CellJobStore:
                 raise MissionConflict("only a held, uncancelled Cell Job can resume")
             if phases & {"DISPATCHING", "UNKNOWN"}:
                 raise MissionConflict("resume is refused while a claim is DISPATCHING or UNKNOWN")
+            if sheets.due(connection, mission_id, job["current_step_index"]):
+                raise MissionConflict("operator sheet checkpoint requires an unavailable owner access contract")
             control = connection.execute(
                 "SELECT authority_epoch, generation, dispatch_enabled FROM fleet_dispatch_control "
                 "WHERE control_id=1").fetchone()
@@ -609,6 +592,8 @@ class CellJobStore:
             index = connection.execute(
                 "SELECT MIN(step_index) FROM fleet_cell_steps WHERE mission_id=? AND status!='GOAL_CONFIRMED'",
                 (mission_id,)).fetchone()[0]
+            if index is not None and sheets.due(connection, mission_id, index):
+                raise MissionConflict("operator sheet checkpoint requires an unavailable owner access contract")
             last = connection.execute(
                 "SELECT event_type FROM fleet_cell_events WHERE mission_id=? AND step_index=? "
                 "AND event_type LIKE 'CELL_STEP_ACTION_%' ORDER BY event_id DESC LIMIT 1",
@@ -932,6 +917,7 @@ class CellJobStore:
                     ("READY" if can_continue else "HOLD", next_index,
                      None if can_continue else "SITE_AUTHORITY_CHANGED", now, mission_id),
                 )
+                sheets.hold_due(connection, self._require(connection, mission_id), next_index, now, self._event)
                 event_type = "CELL_STEP_GOAL_CONFIRMED"
             else:
                 connection.execute(
