@@ -5677,3 +5677,9 @@ osy-d395-s1d\`.
 - 증거: r4/r5 startup READY와 seat reconciliation. r5 첫 박스 placement receipt 후 두 번째 이송의 item_lost_in_transit으로 LOCAL_ACTION_HOLD; run exit 1, cleanup exit 0, full_g2 false, fault matrix NOT_RUN. frontmatter/schema와 소스 정의를 확인한다. vocabulary 신규 용어 없음, solutions 발견성 gap 없음.
 - 검증: ce-compound frontmatter와 claims 검사 PASS. harness 59 passed, 2 failed. 두 실패는 깨끗한 main 6a37dd732 worktree에서도 같은 기존 deploy/logs.md 인코딩 손상으로 재현됐다. 저장소 known_failures 목록은 변경하지 않았고, 실측 baseline 비교의 신규 실패는 0이다. 증거는 X:/DevTemp/rosy-ce-g2-home-20261004-d94a/의 baseline-tests.txt, candidate-tests.txt, comparison.json에 있다.
 - gate 변화: 없음. 초기 홈 해결만 기록했으며 box16·fault matrix·직접 실행 경로의 설치 수용·장치/현장 승격을 주장하지 않는다.
+
+## 2026-10-04 · uncommitted · docs(pairing): D-456 LAN 수신 승인과 지속 페어링
+
+- 변경: 사용자는 상대 화면 승인 기본·QR/코드 보조·LAN 우선을 선택했다. 기존 승인/SQLite 보존과 실제 공백(Pilot IP 슬롯·실패 삭제, CORE 일반 상대 승인·지속 신원 증명/세션 갱신 미구현)을 분리해 D-456에 기록했다.
+- 증거: 기존 소스·API·저장/만료/발견 경로와 공식 Android 문서를 확인했다. 새 범용 승인 거래·장치 재연결은 아직 검증하지 않았다. 초기 저널 형식 실패는 헤딩과 필수 항목을 수정하고 다시 검사한다.
+- gate 변화: 구조 결정. 기존 만료·권한·키/CA pin을 우회하지 않으며 전체 구현·배포·장치 수락을 주장하지 않는다.
