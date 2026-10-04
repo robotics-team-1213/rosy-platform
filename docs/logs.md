@@ -5587,3 +5587,10 @@
 - Change: cfg_value removes carriage returns before quote/comment trimming, so LF and CRLF backend/store values select the same installation branch.
 - Evidence: Native Linux RED2fail4pass for plain/quoted CRLF; after fix LF/CRLF/plain/quoted/comment regressions and existing install/unit suites23pass. Independent source review requested. V2 source881file archive and CPUintake pass did not establish installation closure: dry-run exit0 omitted store/drop-in before this fix.
 - Gate: No privileged install or timer activation. Existing v2 bundle preserved; corrected committed source must be repackaged and reviewed before administrator request supersedes it. Producer config remains an inactive candidate; actual service UID/group/doctor/robot HOLD gates pending.
+
+
+## 2026-10-04 · uncommitted · model-PC source v3 and producer candidate
+
+- Change: Prepared pinned current-path source882files with shared publication and CRLF installer fixes; updated private administrator request. Candidate producer config rebinds only store/gate/replay, preserving originals.
+- Evidence: V2CPUintake126framesPASS; v2dryrun lacked store dueCRLF and was withheld. V3exact882manifest, dryrunstore/dropin verified, native150pass0skip, runtime484files byte-equal CPUproof linkage, four unitguards mutation0, verify-only5980systemwrites0. Independent v3 review approved. See validation/model-watch-source-refresh-2026-10-04.md.
+- Gate: Installed service/timer stillnot-found/inactive. No sudo, config activation, timer, robot delivery or motion. Service UID/group/doctor/HOLD/shadow/rollback and humanlabels/policy-owner/Fleet/device/field remain pending.

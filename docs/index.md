@@ -287,8 +287,8 @@
 
 ## 최근 기록
 
+- 2026-10-04 · uncommitted · model-PC source v3 and producer candidate
 - 2026-10-04 · uncommitted · model-watch installer CRLF config parsing
 - 2026-10-04 · uncommitted · shared store publication permissions
 - 2026-10-04 · uncommitted · model-PC admin data import candidate
 - 2026-10-04 · uncommitted · docs(learning): qualify model-PC service data snapshot
-- 2026-10-04 · uncommitted · test(learning): assemble credential samples at runtime
