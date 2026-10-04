@@ -79,6 +79,9 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
                          help="host mDNS scanner credential environment variable")
     console.add_argument("--approved-peer-directory-file", default=None, type=Path,
                          help="admin-provisioned public peer metadata JSON; no credentials or enrollment")
+    console.add_argument("--enrolled-tls-bindings-file",
+                         default=os.environ.get("ROSY_ENROLLED_TLS_BINDINGS_FILE") or None, type=Path,
+                         help="public approved TLS bindings for existing encrypted enrollments")
     console.add_argument("--vision-preview-secret-env", default=None,
                          help="dedicated Fleet-to-Vision preview lease signing secret")
     console.add_argument("--users-file", default=None, type=Path,
@@ -366,6 +369,8 @@ def run_console(args: argparse.Namespace) -> None:
     if args.host not in LOOPBACK_HOSTS and tasks_db is None:
         sys.exit("--tasks-db is required when the Fleet control surface is externally reachable")
     key_file = getattr(args, "robot_credential_key_file", None)
+    if getattr(args, "enrolled_tls_bindings_file", None) is not None and key_file is None:
+        sys.exit("--enrolled-tls-bindings-file requires --robot-credential-key-file")
     if key_file is not None and tasks_db is None:
         sys.exit("--tasks-db is required with --robot-credential-key-file")
     if args.robots is None and key_file is None:
@@ -481,9 +486,12 @@ def run_console(args: argparse.Namespace) -> None:
         from fleet.server.roster import SiteRoster
 
         roster = SiteRoster(console, task_service=task_service, sightings=sighting_service)
+        from fleet.server.enrollment_tls import EnrolledTlsBindings
+        tls_file = getattr(args, "enrolled_tls_bindings_file", None)
         enrollment = EnrollmentService(enrollment_store, roster, key=robot_key,
                                        key_error=robot_key_error,
-                                       fleet_name=console.fleet_name, discovery=discovery)
+                                       fleet_name=console.fleet_name, discovery=discovery,
+                                       tls_bindings=EnrolledTlsBindings(tls_file) if tls_file else None)
         enrollment.load()
         roster.sync()
     from fleet.server.site_lanes import parse_lane_graph_flags, unmatched_map_ids

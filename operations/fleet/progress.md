@@ -88,6 +88,7 @@ adrs:
 - D-451
 - D-453
 - D-455
+- D-456
 plans:
 - docs/plans/2026-10-04-d442-omx-preempt-recovery.md
 - docs/plans/2026-10-04-d443-signal-supervision.md
@@ -109,6 +110,8 @@ plans:
 - docs/plans/2026-10-01-model-tool-contract-implementation.md
 ---
 ## 현재 상태 (2026-09-27)
+
+- 2026-10-05 D-456 등록 TLS 전송: 기존 암호화 등록 ID만 공개 origin·CA DER 지문에 묶어 HTTPS/WSS 발견 주소를 인증한다. 주소·ciphertext·principal·만료는 바꾸지 않는다. 공개 downgrade 방지 기록은 설정 누락·교체·재시작에도 남으며, 정상 로그아웃이 확인된 등록 행 삭제에만 함께 지운다. 관련 기존 회귀 206 passed/Windows 파일 권한·symlink 2 skipped, 마지막 새 테스트 23 passed/symlink 1 skipped, 독립 tail 5 passed와 SOURCE Safety 검토를 기록했다. TLS marker·CA·신원·WSS·await 경계 6개 실제 소스 변이는 각각 RED 뒤 원본 GREEN으로 확인했다. 실제 사이트 관리자 설정·TLS/WSS handshake·장기 승인 갱신·운용 수용은 별도다.
 
 - D-306의 Fleet 목표 지정 개선으로 지도에 키보드 좌표 선택, 대상·좌표 확인, 취소 후 포커스 복귀를 추가했다. 브라우저 회귀 18건과 확인 계약 3건을 LOCAL에서 검증했다. 지도 1920/390/320 상태별 G2 판정과 실물 이동은 아직 별도다.
 - Formation geometry(FOR-001), slot assignment(FOR-002), relay(D-31), formation session(FOR-004), 그리고 SiteHub의 HELLO/HEARTBEAT/EVENT 수집과 REST scatter(D-59)는 CORE API 경계를 유지한다. Browser/SiteHub는 DDS/ROS에 직접 연결하지 않는다.
