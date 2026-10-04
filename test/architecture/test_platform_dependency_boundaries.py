@@ -11,24 +11,24 @@ ROOT = Path(__file__).resolve().parents[2]
 POLICY = ROOT / "tools" / "harness" / "platform_dependencies.yaml"
 
 CURRENT_COMPONENTS = {
-    "contracts": ("src/contracts/foundation/core_common", "core_common"),
-    "cell_process_compat": ("src/site/cell/rosy_cell", "rosy_cell"),
+    "contracts": ("contracts/foundation/core_common", "core_common"),
+    "cell_process_compat": ("operations/processes/cell/rosy_cell", "rosy_cell"),
     "palletizing_process": (
         "operations/processes/palletizing/src/rosy/processes/palletizing",
         "rosy.processes.palletizing",
     ),
-    "fleet_site": ("src/site/fleet/fleet", "fleet"),
-    "omx_device_adapter": ("src/products/omx/adapter/omx_adapter", "omx_adapter"),
+    "fleet_site": ("operations/fleet/fleet", "fleet"),
+    "omx_device_adapter": ("middleware/apps/device/omx/adapter/omx_adapter", "omx_adapter"),
     "world_api": ("operations/world/src/rosy/world/api", "rosy.world.api"),
     "skill_contracts": ("contracts/skill/src/rosy/contracts/skill", "rosy.contracts.skill"),
-    "skill_api": ("modules/skills/api/src/rosy/skills/api", "rosy.skills.api"),
+    "skill_api": ("middleware/skills/api/src/rosy/skills/api", "rosy.skills.api"),
     "execution_api": ("operations/execution/src/rosy/execution/api", "rosy.execution.api"),
     "omx_transfer_integration": (
         "integrations/robots/omx/src/rosy/integrations/robots/omx",
         "rosy.integrations.robots.omx",
     ),
     "gateway_app": ("operations/apps/fleet/src/rosy_gateway", "rosy_gateway"),
-    "agent_app": ("apps/agent/src/rosy_agent", "rosy_agent"),
+    "agent_app": ("middleware/apps/device/omx/agent/src/rosy_agent", "rosy_agent"),
 }
 
 
@@ -111,7 +111,7 @@ def test_prefix_matching_does_not_reject_similar_unrelated_packages():
 def test_platform_python_roots_are_not_ament_packages():
     package_xml = [
         str(path.relative_to(ROOT))
-        for root in ("modules", "integrations", "apps", "profiles", "operations/world",
+        for root in ("modules", "integrations/robots", "apps", "profiles", "operations/world",
                      "operations/processes/palletizing", "operations/execution",
                      "operations/apps/fleet")
         for path in (ROOT / root).rglob("package.xml")

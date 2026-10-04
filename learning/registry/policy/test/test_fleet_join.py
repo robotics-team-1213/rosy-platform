@@ -7,7 +7,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[4]
 sys.path[:0] = [str(ROOT / 'learning/registry/policy'), str(ROOT / 'contracts/learning/src'),
-               str(ROOT / 'src/contracts/foundation'), str(ROOT / 'test')]
+               str(ROOT / 'contracts/foundation'), str(ROOT / 'test')]
 from fleet_join import join, export
 from rosy.contracts.learning import seal
 from test_learning_artifact_contracts import episode
@@ -80,8 +80,8 @@ def test_episode_revision_tampering_rejected():
 
 
 def test_export_verifies_original_files_and_does_not_overwrite(tmp_path):
-    sys.path[:0] = [str(ROOT / 'src/products/omx/adapter'),
-                   str(ROOT / 'src/products/omx/adapter/test'), str(ROOT / 'learning/curation/omx')]
+    sys.path[:0] = [str(ROOT / 'middleware/apps/device/omx/adapter'),
+                   str(ROOT / 'middleware/apps/device/omx/adapter/test'), str(ROOT / 'learning/curation/omx')]
     from test_demonstration import complete_episode
     from common_episode import convert
     original = tmp_path / 'recordings'

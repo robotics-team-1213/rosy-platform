@@ -1,0 +1,21 @@
+{
+  "schema": "rosy.g2-matrix/1",
+  "round": "2026-10-04",
+  "tier": "LOCAL-synthetic",
+  "surfaces": [
+    {
+      "id": "pilot",
+      "cells": [
+        {"state": "connect", "viewport": "2000x1200", "file": "pilot-connect-2000x1200.png"},
+        {"state": "connect", "viewport": "1200x2000", "file": "pilot-connect-1200x2000.png"},
+        {"state": "connect", "viewport": "390x844", "file": "pilot-connect-390x844.png"},
+        {"state": "lobby", "viewport": "2000x1200", "file": "pilot-lobby-2000x1200.png"},
+        {"state": "lobby", "viewport": "1200x2000", "file": "pilot-lobby-1200x2000.png"},
+        {"state": "lobby", "viewport": "390x844", "file": "pilot-lobby-390x844.png"},
+        {"state": "drive", "viewport": "2000x1200", "file": "pilot-drive-2000x1200.png"},
+        {"state": "drive", "viewport": "1200x2000", "file": "pilot-drive-1200x2000.png"},
+        {"state": "drive", "viewport": "390x844", "file": "pilot-drive-390x844.png"}
+      ]
+    }
+  ]
+}

@@ -77,7 +77,7 @@ def test_camera_capture_and_preview_start_on_first_boot_without_motor_access():
     unit = (ROOT / "deploy/robot/pinky_pro/native/rosy-camera.service").read_text(encoding="utf-8")
     target = (ROOT / "deploy/robot/pinky_pro/native/rosy-runtime.target").read_text(encoding="utf-8")
     payload = (IMAGE / "build-native-payload.sh").read_text(encoding="utf-8")
-    launch = (ROOT / "src/runtime/sensing/launch/camera_preview.launch.py").read_text(encoding="utf-8")
+    launch = (ROOT / "middleware/perception/launch/camera_preview.launch.py").read_text(encoding="utf-8")
     assert "Wants=rosy-io.service rosy-camera.service" in target
     assert 'cp "$NATIVE_RUNTIME_SOURCE/rosy-camera.service"' in payload
     assert "User=rosy-camera" in unit

@@ -2,7 +2,7 @@
 
 **대상:** 바닥을 보는 좌·중·우 IR 세 개를 이 로봇의 카펫·흰 테이프에 맞춰 교정하고, CORE 의 IR 이탈 감시(`line_follow.ir_guard_enabled`)를 켤 준비를 한다.
 **근거:** D-143(IR 증거·교정 해시), D-344 §12(카메라 + IR 두 겹 경계), D-342(수동 한도 계단).
-**도구:** `src/runtime/sensing/tools/device/ir_line_calibrate.py` — `ir_sensor/range` 를 구독만 한다. 바퀴 명령을 내지 않고 설정 파일도 쓰지 않는다. 결과 YAML 은 사람이 붙인다.
+**도구:** `middleware/perception/tools/device/ir_line_calibrate.py` — `ir_sensor/range` 를 구독만 한다. 바퀴 명령을 내지 않고 설정 파일도 쓰지 않는다. 결과 YAML 은 사람이 붙인다.
 
 ## 0. 전제
 

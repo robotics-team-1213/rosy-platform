@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Rosy Console · Cell</title>
+  <link rel="icon" type="image/svg+xml" href="/common/icons/console.svg">
+  <link rel="stylesheet" href="/common/tokens.css">
+  <script src="/common/theme.js"></script>
+  <link rel="stylesheet" href="/common/components.css">
+  <link rel="stylesheet" href="/console/assets/cell.css">
+  <script type="module" src="/common/ui.js"></script>
+  <script type="module" src="/console/assets/cell.js"></script>
+</head>
+<body>
+<ui-shell grammar="procedure">
+  <ui-topbar>
+    <ui-brand href="/console" aria-label="Rosy Console 관제 홈"><b>Rosy Console</b><small>Cell · 팔레타이징 작업 준비</small></ui-brand>
+    <span data-spacer></span>
+    <ui-field id="credential" type="password" placeholder="운영자 토큰" aria-label="관제 운영자 토큰"></ui-field>
+    <ui-button id="connect" kind="primary">접속</ui-button>
+    <ui-tag id="session">접속 전</ui-tag>
+  </ui-topbar>
+  <main>
+    <ui-text id="notice" role="status" aria-live="polite">운영자 계정으로 접속해 저장된 레시피와 셀을 준비하세요.</ui-text>
+    <div class="documents">
+      <ui-section aria-labelledby="recipe-heading">
+        <ui-head><ui-text id="recipe-heading" scale="label">1 · 레시피</ui-text></ui-head>
+        <label for="recipe-id">문서 이름</label><input class="ui-field" id="recipe-id" value="recipe-demo" maxlength="64">
+        <label for="recipe-file">레시피 JSON 파일 불러오기</label><input class="ui-field" id="recipe-file" type="file" accept=".json,application/json">
+        <div id="recipe-fields" class="scope" aria-label="박스와 적재 간격 편집"></div>
+        <details><summary>레시피 문서 편집 · JSON</summary><label for="recipe-document">레시피 문서</label><textarea class="ui-field" id="recipe-document" rows="14" spellcheck="false"></textarea></details>
+        <div class="actions"><ui-button id="recipe-load" kind="quiet">불러오기</ui-button><ui-button id="recipe-save" kind="primary">레시피 저장</ui-button></div>
+        <ui-text id="recipe-revision" scale="label">저장 전</ui-text>
+      </ui-section>
+      <ui-section aria-labelledby="cell-heading">
+        <ui-head><ui-text id="cell-heading" scale="label">2 · 셀 설정</ui-text></ui-head>
+        <label for="cell-id">문서 이름</label><input class="ui-field" id="cell-id" value="cell-demo" maxlength="64">
+        <label for="cell-file">티칭된 셀 JSON 파일 불러오기</label><input class="ui-field" id="cell-file" type="file" accept=".json,application/json">
+        <ui-text>프레임·스테이션·home은 승인된 장치 티칭값을 사용하세요. 파일을 불러온 뒤 설정과 미리보기를 확인합니다.</ui-text>
+        <div id="cell-fields" class="scope" aria-label="셀 home과 도구 설정 편집"></div>
+        <details><summary>셀 티칭 문서 편집 · JSON</summary><label for="cell-document">셀 문서</label><textarea class="ui-field" id="cell-document" rows="14" spellcheck="false"></textarea></details>
+        <div class="actions"><ui-button id="cell-load" kind="quiet">불러오기</ui-button><ui-button id="cell-save" kind="primary">셀 저장</ui-button></div>
+        <ui-text id="cell-revision" scale="label">저장 전</ui-text>
+      </ui-section>
+    </div>
+    <ui-section aria-labelledby="preview-heading">
+      <ui-head><ui-text id="preview-heading" scale="label">3 · 적재 계획 확인</ui-text><ui-button id="compile" kind="primary">미리보기</ui-button></ui-head>
+      <ui-text id="summary">저장한 레시피와 셀을 기준으로 계획을 계산합니다.</ui-text>
+      <details><summary>계산된 계획 상세</summary><pre id="preview" aria-label="컴파일된 적재 계획"></pre></details>
+      <label for="layout-layer">팔레트 · 층 선택</label><select class="ui-field" id="layout-layer" aria-label="팔레트와 층"></select>
+      <svg id="layout" viewBox="0 0 800 320" role="img" aria-label="적재 위치 평면도 · base 좌표"></svg>
+    </ui-section>
+    <ui-section aria-labelledby="proposal-heading">
+      <ui-head><ui-text id="proposal-heading" scale="label">4 · 작업 제안</ui-text></ui-head>
+      <div class="scope">
+        <label>작업 셀 ID<input class="ui-field" id="workcell" autocomplete="off"></label>
+        <label>실행 인스턴스 ID<input class="ui-field" id="instance" autocomplete="off"></label>
+        <label>요청 키<input class="ui-field" id="request-key" autocomplete="off"></label>
+      </div>
+      <ui-text>작업을 제안한 뒤 관제에서 운영자가 별도로 승인합니다. 통신 오류가 나면 같은 요청 키로 결과를 확인하세요.</ui-text>
+      <div class="actions"><ui-button id="propose" kind="primary" disabled>작업 제안</ui-button><ui-button id="new-proposal" kind="quiet">새 작업 준비</ui-button></div>
+      <pre id="proposal" aria-label="작업 제안 결과"></pre>
+    </ui-section>
+    <ui-section aria-labelledby="mission-heading">
+      <ui-head><ui-text id="mission-heading" scale="label">5 · 관제 승인·진행·복구</ui-text></ui-head>
+      <label>제안 / 작업 ID<input class="ui-field" id="mission-id" autocomplete="off"></label>
+      <ui-text>작업과 정지 세대를 다시 확인한 뒤 운영자가 승인합니다. HOLD 사유가 해결됐는지 확인하고 복구하세요.</ui-text>
+      <div class="actions"><ui-button id="read-job" kind="quiet">상태 확인</ui-button><ui-button id="admit" kind="primary" disabled>실행 승인</ui-button><ui-button id="reconcile" kind="quiet" disabled>실제 상태 대조</ui-button><ui-button id="resume" kind="primary" disabled>HOLD 재승인</ui-button><ui-button id="cancel" kind="irreversible" disabled>작업 취소</ui-button></div>
+      <ui-text id="job-summary">작업 ID로 상태를 확인하세요.</ui-text>
+      <ul id="step-progress" aria-label="단계별 실행과 목표 확인"></ul>
+      <details><summary>진행 원장 상세</summary><pre id="job-state" aria-label="작업 상태와 진행 원장"></pre></details>
+    </ui-section>
+    <ui-section aria-labelledby="saved-heading"><ui-head><ui-text id="saved-heading" scale="label">저장된 문서</ui-text></ui-head><ul id="saved"></ul></ui-section>
+  </main>
+</ui-shell>
+</body>
+</html>

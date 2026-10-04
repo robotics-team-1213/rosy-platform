@@ -10,8 +10,8 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[4]
 sys.path[:0] = [str(ROOT / p) for p in (
-    'contracts/learning/src', 'src/products/omx/adapter',
-    'src/products/omx/adapter/test', 'src/contracts/foundation', 'learning/curation/omx')]
+    'contracts/learning/src', 'middleware/apps/device/omx/adapter',
+    'middleware/apps/device/omx/adapter/test', 'contracts/foundation', 'learning/curation/omx')]
 from test_demonstration import complete_episode
 from rosy.contracts.learning.omx import validate_demonstration, validate_profile
 from rosy.contracts.learning import seal

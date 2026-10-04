@@ -6,8 +6,8 @@ import sys
 import pytest
 
 ROOT = Path(__file__).resolve().parents[4]
-for path in (ROOT / "contracts/learning/src", ROOT / "src/products/omx/adapter",
-             ROOT / "src/contracts/foundation", ROOT / "src/products/omx/adapter/test",
+for path in (ROOT / "contracts/learning/src", ROOT / "middleware/apps/device/omx/adapter",
+             ROOT / "contracts/foundation", ROOT / "middleware/apps/device/omx/adapter/test",
              ROOT / "learning/curation/omx"):
     sys.path.insert(0, str(path))
 

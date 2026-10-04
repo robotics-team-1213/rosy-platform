@@ -25,7 +25,7 @@ for _path in (ROOT / "src" / "runtime" / name for name in
 
 httpx = pytest.importorskip("httpx")
 
-CONFIG_DIR = ROOT / "src" / "contracts" / "foundation" / "config"
+CONFIG_DIR = ROOT / "contracts" / "foundation" / "config"
 BOOT_ID = "7d4c1f0e-0a52-4a8e-9a3e-2f6f1b1c0d11"
 CODE = "7KXM" + "P3QA"  # assembled: the tracked-file scanner sees no literal
 CODE_ID = "0123456789abcdef"

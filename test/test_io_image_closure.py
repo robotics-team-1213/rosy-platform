@@ -7,7 +7,7 @@ import xml.etree.ElementTree as ET
 
 import pytest
 
-from robot_contracts import ROOT, hardware_packages, source_manifests
+from robot_contracts import COLCON_ROOTS, ROOT, hardware_packages, source_manifests
 
 
 DOCKERFILE = ROOT / "deploy" / "robot" / "pinky_pro" / "Dockerfile"
@@ -60,7 +60,7 @@ def test_io_build_copies_and_selects_its_internal_dependency_closure():
 
     copied = {
         ROOT / line.split()[1] for line in build.splitlines()
-        if line.startswith("COPY src/")
+        if line.startswith("COPY ") and line.split()[1].split("/")[0] in COLCON_ROOTS
     }
     assert copied == {packages[name][0] for name in selected}
     admitted = set((ROOT / ".dockerignore").read_text(encoding="utf-8").splitlines())

@@ -57,8 +57,8 @@ import cv2
 import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "src" / "runtime" / "sensing"))
-sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "src" / "contracts" / "foundation"))  # core_common (D-424)
+sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "middleware" / "perception"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "contracts" / "foundation"))  # core_common (D-424)
 
 from frames import FrameSelector  # noqa: E402
 from control.recording import (  # noqa: E402

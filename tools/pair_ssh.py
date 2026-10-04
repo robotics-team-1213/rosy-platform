@@ -13,7 +13,7 @@ import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
-for folder in ('src/contracts/foundation', 'src/site/fleet', 'deploy/robot/pinky_pro/release'):
+for folder in ('contracts/foundation', 'operations/fleet', 'deploy/robot/pinky_pro/release'):
     sys.path.insert(0, str(ROOT / folder))
 
 import httpx  # noqa: E402 - standalone workspace entry point sets package paths first

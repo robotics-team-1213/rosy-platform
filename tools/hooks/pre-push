@@ -72,13 +72,13 @@ FAST_SUITES=(
   test/test_module_scorecard.py
   test/test_release_boundary_guards.py
   test/test_robot_literals.py
-  src/runtime/gateway/test/test_protocol_version_alignment.py
-  src/runtime/gateway/test/test_event_catalogue.py
-  src/runtime/gateway/test/test_console_layout.py
-  src/runtime/gateway/test/test_host_cards.py
-  src/runtime/gateway/test/test_host_hardware.py
-  src/runtime/gateway/test/test_triage_contract.py
-  src/runtime/gateway/test/test_host_status_summary.py
+  middleware/core/gateway/test/test_protocol_version_alignment.py
+  middleware/core/gateway/test/test_event_catalogue.py
+  middleware/core/gateway/test/test_console_layout.py
+  middleware/core/gateway/test/test_host_cards.py
+  middleware/core/gateway/test/test_host_hardware.py
+  middleware/core/gateway/test/test_triage_contract.py
+  middleware/core/gateway/test/test_host_status_summary.py
 )
 echo "[pre-push] fast contract suites"
 "$PY" -m pytest "${FAST_SUITES[@]}" -q

@@ -5,7 +5,7 @@
 
 ## Purpose
 
-Developer-side half of the D-356 perception learning loop: turn robot recordings into datasets, hand them to a trainer that lives outside this repository, and check and deliver the returned model. Not installed on the robot and not a ROS package. The robot side is `src/runtime/sensing/control/sensing/perception/learned/`.
+Developer-side half of the D-356 perception learning loop: turn robot recordings into datasets, hand them to a trainer that lives outside this repository, and check and deliver the returned model. Not installed on the robot and not a ROS package. The robot side is `middleware/perception/control/sensing/perception/learned/`.
 
 ## Key Files
 
@@ -56,7 +56,7 @@ Needs `onnxruntime`, `torch` and `mcap`; use a venv that has them. Tests skip cl
 
 ### Internal
 
-- `src/runtime/sensing/control/sensing/perception/learned/manifest.py` (manifest contract)
+- `middleware/perception/control/sensing/perception/learned/manifest.py` (manifest contract)
 
 ### External
 

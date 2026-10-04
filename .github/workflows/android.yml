@@ -1,29 +1,34 @@
 name: android
 
-# Rosy Cam ceiling camera phone app (src/site/cam, D-377). JVM unit tests only;
+# Rosy Cam ceiling camera phone app (operations/ui/cam, D-377). JVM unit tests only;
 # no emulator, no signing. Runs when the app tree changes, or the shared
 # inputs its tests read: discovery TXT vectors and the D-370 icon SVGs.
 on:
   push:
     branches: [main]
     paths:
-      - "src/site/cam/**"
+      - "operations/ui/cam/**"
+      - "middleware/ui/pilot/**"
       - ".github/workflows/android.yml"
       - "test/fixtures/protocol/**"
-      - "src/hmi/web_common/icons/**"
+      - "shared/web/**"
   pull_request:
     paths:
-      - "src/site/cam/**"
+      - "operations/ui/cam/**"
+      - "middleware/ui/pilot/**"
       - ".github/workflows/android.yml"
       - "test/fixtures/protocol/**"
-      - "src/hmi/web_common/icons/**"
+      - "shared/web/**"
 
 jobs:
   android-unit:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        app: [operations/ui/cam, middleware/ui/pilot/android]
     defaults:
       run:
-        working-directory: src/site/cam
+        working-directory: ${{ matrix.app }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4

@@ -30,7 +30,9 @@ ALLOWED_LICENCES = {"Apache-2.0", "Proprietary"}
 def _manifests() -> list[Path]:
     return sorted(
         path
-        for path in (ROOT / "src").rglob("package.xml")
+        # D-427: every package root, not only src/ (site apps moved to operations/).
+        for base in ("src", "learning", "operations")
+        for path in (ROOT / base).rglob("package.xml")
         if not SKIP_DIRS.intersection(path.relative_to(ROOT).parts)
     )
 

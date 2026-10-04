@@ -4,7 +4,7 @@ Safety-tagged files are the Python files under a ``concern: safety`` root plus t
 ``safety_modules`` list in ``tools/harness/platform_parts.yaml``. Each test says
 whether it is structural (static AST over tracked files) or behavioural. The
 behavioural invariants 3b and 4 need ``core_features`` on ``sys.path`` and live in
-``src/runtime/services/test/test_safety_behaviour.py``.
+``middleware/core/services/test/test_safety_behaviour.py``.
 
 KNOWN_SAFETY_VIOLATIONS is checked by set equality like ``KNOWN_VIOLATIONS`` in
 ``test_platform_parts.py``: a new edge fails, a listed edge that no longer occurs
@@ -32,6 +32,13 @@ from test_platform_parts import ROOT, _is_test_file, _owner, _package_of, _track
 from test_platform_parts import _manifest as _read_manifest
 
 SAFETY = "safety"
+
+
+def test_charging_confirmation_is_safety_tagged():
+    """D-443 Q8: charging evidence controls D-27 discharge-stop suppression."""
+    path = "middleware/core/services/core_features/docking/charging.py"
+    assert path in _manifest()["safety_modules"]
+    assert _concern_of(path) == SAFETY
 
 #: One parse per session; the tests below only read it.
 _manifest = functools.lru_cache(maxsize=1)(_read_manifest)
@@ -244,36 +251,36 @@ def _under_kind(root: dict, kind: str) -> bool:
 #: safety internal. Shrink-only; the Fleet stop-path carve removes the mixed files.
 KNOWN_SAFETY_VIOLATIONS = {
     # safety -> decision, cancel_all.py
-    ("1", "src/site/fleet/fleet/server/cancel_all.py", "fleet.server.console_view"): "error text helper",
-    ("1", "src/site/fleet/fleet/server/cancel_all.py", "fleet.swarm.transport"): "RobotApiError",
+    ("1", "operations/fleet/fleet/server/cancel_all.py", "fleet.server.console_view"): "error text helper",
+    ("1", "operations/fleet/fleet/server/cancel_all.py", "fleet.swarm.transport"): "RobotApiError",
     # mixed file console.py (estop_all) -> decision
-    ("1", "src/site/fleet/fleet/server/console.py", "fleet.formation.geometry"): "mixed file",
-    ("1", "src/site/fleet/fleet/server/console.py", "fleet.hub.hub"): "mixed file",
-    ("1", "src/site/fleet/fleet/server/console.py", "fleet.localization.trust"): "mixed file",
-    ("1", "src/site/fleet/fleet/server/console.py", "fleet.server.bays"): "mixed file",
-    ("1", "src/site/fleet/fleet/server/console.py", "fleet.server.console_view"): "mixed file",
-    ("1", "src/site/fleet/fleet/server/console.py", "fleet.server.traffic"): "mixed file",
-    ("1", "src/site/fleet/fleet/server/console.py", "fleet.swarm.robots"): "mixed file",
-    ("1", "src/site/fleet/fleet/server/console.py", "fleet.swarm.session"): "mixed file",
-    ("1", "src/site/fleet/fleet/server/console.py", "fleet.swarm.transport"): "mixed file",
+    ("1", "operations/fleet/fleet/server/console.py", "fleet.formation.geometry"): "mixed file",
+    ("1", "operations/fleet/fleet/server/console.py", "fleet.hub.hub"): "mixed file",
+    ("1", "operations/fleet/fleet/server/console.py", "fleet.localization.trust"): "mixed file",
+    ("1", "operations/fleet/fleet/server/console.py", "fleet.server.bays"): "mixed file",
+    ("1", "operations/fleet/fleet/server/console.py", "fleet.server.console_view"): "mixed file",
+    ("1", "operations/fleet/fleet/server/console.py", "fleet.server.traffic"): "mixed file",
+    ("1", "operations/fleet/fleet/server/console.py", "fleet.swarm.robots"): "mixed file",
+    ("1", "operations/fleet/fleet/server/console.py", "fleet.swarm.session"): "mixed file",
+    ("1", "operations/fleet/fleet/server/console.py", "fleet.swarm.transport"): "mixed file",
     # mixed file task_dispatch_routes.py (rearm handler) -> decision
-    ("1", "src/site/fleet/fleet/server/task_dispatch_routes.py", "fleet.hub.hub"): "mixed file",
-    ("1", "src/site/fleet/fleet/server/task_dispatch_routes.py", "fleet.server.http_errors"): "mixed file",
-    ("1", "src/site/fleet/fleet/server/task_dispatch_routes.py", "fleet.server.site_auth"): "mixed file",
-    ("1", "src/site/fleet/fleet/server/task_dispatch_routes.py", "fleet.server.task_store"): "mixed file",
-    ("1", "src/site/fleet/fleet/server/task_dispatch_routes.py", "fleet.swarm.transport"): "mixed file",
+    ("1", "operations/fleet/fleet/server/task_dispatch_routes.py", "fleet.hub.hub"): "mixed file",
+    ("1", "operations/fleet/fleet/server/task_dispatch_routes.py", "fleet.server.http_errors"): "mixed file",
+    ("1", "operations/fleet/fleet/server/task_dispatch_routes.py", "fleet.server.site_auth"): "mixed file",
+    ("1", "operations/fleet/fleet/server/task_dispatch_routes.py", "fleet.server.task_store"): "mixed file",
+    ("1", "operations/fleet/fleet/server/task_dispatch_routes.py", "fleet.swarm.transport"): "mixed file",
     # decision -> safety internals
-    ("2", "src/site/fleet/fleet/server/task_store.py", "fleet.server.cancel_all_store.ensure_schema"): (
+    ("2", "operations/fleet/fleet/server/task_store.py", "fleet.server.cancel_all_store.ensure_schema"): (
         "schema setup behind the store"),
-    ("2", "src/site/fleet/fleet/server/cell_job_store.py", "fleet.server.dispatch_admission.normalize_resources"): (
+    ("2", "operations/fleet/fleet/server/cell_job_store.py", "fleet.server.dispatch_admission.normalize_resources"): (
         "resource normalisation before reserve"),
     # app assembly imports non-anchor names of the mixed task_dispatch_routes.py
     # (missing from the D-430 §3 grep)
-    ("2", "src/site/fleet/fleet/server/app.py", "fleet.server.task_dispatch_routes.GoalRequest"): (
+    ("2", "operations/fleet/fleet/server/app.py", "fleet.server.task_dispatch_routes.GoalRequest"): (
         "request model re-export"),
-    ("2", "src/site/fleet/fleet/server/app.py", "fleet.server.task_dispatch_routes.cancel_pending_task_queue"): (
+    ("2", "operations/fleet/fleet/server/app.py", "fleet.server.task_dispatch_routes.cancel_pending_task_queue"): (
         "queue cancel helper"),
-    ("2", "src/site/fleet/fleet/server/app.py", "fleet.server.task_dispatch_routes.fanout_local_omx_stops"): (
+    ("2", "operations/fleet/fleet/server/app.py", "fleet.server.task_dispatch_routes.fanout_local_omx_stops"): (
         "OMX local stop fan-out; a public entry point once the stop path is carved"),
 }
 
@@ -303,14 +310,14 @@ def test_decision_and_learning_use_only_safety_public_api():
 #: new exception cannot appear silently. ``test``/``tests`` folders are out as well:
 #: they build fake graphs (e.g. gateway test_absorption_output_graph.py).
 CMD_VEL_SCOPE_EXCLUDED = {
-    "src/runtime/sensing/tools/gz/": "Gazebo bench driver; drives the sim robot, never a device run path",
+    "middleware/perception/tools/gz/": "Gazebo bench driver; drives the sim robot, never a device run path",
 }
 CMD_VEL_TOPICS = {"cmd_vel", "/cmd_vel"}
 #: The single writer (D-2, D-38).
-CMD_VEL_PUBLISHER = "src/runtime/gateway/core/bridge/ros_bridge.py"
+CMD_VEL_PUBLISHER = "middleware/core/gateway/core/bridge/ros_bridge.py"
 #: ``declare_parameter`` defaults of "cmd_vel": the legacy D-208 standalone safety node only.
-CMD_VEL_PARAMETER_ALLOWLIST = {"src/runtime/sensing/control/safety/node.py"}
-OMX_SCOPE = ("src/products/omx/", "integrations/robots/omx/", "apps/agent/")
+CMD_VEL_PARAMETER_ALLOWLIST = {"middleware/perception/control/safety/node.py"}
+OMX_SCOPE = ("middleware/apps/device/omx/", "integrations/robots/omx/")
 
 
 def _is_cmd_vel(node: ast.AST | None, constants: dict) -> bool:
@@ -369,7 +376,7 @@ def test_cmd_vel_publisher_is_single_and_only_send_twist_touches_it():
     assert found["parameters"] == CMD_VEL_PARAMETER_ALLOWLIST
     assert found["pub_users"] == {(CMD_VEL_PUBLISHER, "__init__"), (CMD_VEL_PUBLISHER, "_send_twist")}
     assert {entry for entry in found["send_goal"] if entry[1] != "<module>"} == {
-        ("src/products/omx/adapter/omx_adapter/command_owner.py", "ArmCommandOwner")}
+        ("middleware/apps/device/omx/adapter/omx_adapter/command_owner.py", "ArmCommandOwner")}
 
 
 def test_each_separation_rule_checks_at_least_one_importer():
@@ -389,7 +396,7 @@ def test_each_separation_rule_checks_at_least_one_importer():
 #: else is a recorded exception that needs a per-robot approval record.
 FLEET_LOSS_FAIL_CLOSED = {"STOP", "HOLD"}
 APPROVAL_FIELDS = ("robot", "approver", "evidence")
-DEFAULT_CONFIG = "src/contracts/foundation/config/rosy_default.yaml"
+DEFAULT_CONFIG = "contracts/foundation/config/rosy_default.yaml"
 
 
 def _fleet_loss_problems(safety: dict) -> list[str]:

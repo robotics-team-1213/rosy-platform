@@ -7,8 +7,8 @@ import pytest
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
-for relative in ("contracts/skill/src", "apps/agent/src", "operations/processes/palletizing/src", "operations/execution/src",
-                 "modules/skills/api/src", "src/products/omx/adapter"):
+for relative in ("contracts/skill/src", "middleware/apps/device/omx/agent/src", "operations/processes/palletizing/src", "operations/execution/src",
+                 "middleware/skills/api/src", "middleware/apps/device/omx/adapter"):
     path = str(ROOT / relative)
     if path not in sys.path:
         sys.path.insert(0, path)
@@ -18,7 +18,7 @@ from rosy.processes.palletizing.cell import load_cell  # noqa: E402
 from rosy.processes.palletizing.recipe import load_recipe  # noqa: E402
 from rosy_agent.omx_cell_documents import PalletizingCellDocumentValidator  # noqa: E402
 
-EXAMPLES = ROOT / "src/site/cell/examples/omx_sim"
+EXAMPLES = ROOT / "operations/processes/cell/examples/omx_sim"
 
 
 def _docs():

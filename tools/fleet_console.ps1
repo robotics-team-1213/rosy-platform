@@ -59,7 +59,7 @@ $webCommon = Join-Path $repo "src\core\web_common"
 #       -LocalPort 8090 -Protocol TCP -Action Allow -Profile Private
 # 타워 자신의 브라우저(127.0.0.1)는 규칙 없이도 된다.
 $env:PYTHONPATH = @(
-    (Join-Path $repo "src\site\fleet"),
+    (Join-Path $repo "operations\fleet"),
     (Join-Path $repo "src\core\core_common"),
     (Join-Path $repo "src\core\core_features")
 ) -join ";"

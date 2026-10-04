@@ -11,15 +11,15 @@ import pytest
 
 
 ROOT = Path(__file__).resolve().parents[1]
-WEB = ROOT / "src" / "hmi" / "dashboard"
+WEB = ROOT / "middleware" / "ui" / "robot"
 #: Production serves `/common/*` from the web_common package (core_api_web
 #: mounts it; `test_ui_route.py` pins the 200s). The harness must mirror that
 #: mount — app.js imports `/common/core_ui_logic.js` absolutely, and a request
 #: with no route escapes to real DNS (rosy.test does not resolve) and kills the
 #: boot before the first assertion.
-WEB_COMMON = ROOT / "src" / "hmi" / "web_common"
+WEB_COMMON = ROOT / "shared" / "web"
 
-from browser_harness import DECLINE_CONFIRM, accept_confirm, open_page  # noqa: E402
+from browser_harness import open_page  # noqa: E402
 
 #: F-09 — 정상 상태의 따뜻한 색 예산 스캔(D-82: 따뜻한 것이 보이면 언제나
 #: 무언가 잘못된 것이다). 캔버스 fillStyle 정규화로 토큰·계산색을 같은 형식으로
@@ -186,6 +186,7 @@ window.fetch = async (input, options = {}) => {
       frame_id: 'front_camera_link', captured_at: 42.25,
       age_ms: 80, width: 640, height: 360,
       overlay: 'semantic-road-v1', sequence: window.__cameraSequence,
+      raw_available: true, raw_sequence: window.__cameraSequence,
     },
     '/api/v1/waypoints': {waypoints: []},
     '/api/v1/docking/status': {state: 'UNDOCKED', dock_id: null, supported: false},
@@ -306,8 +307,10 @@ window.fetch = async (input, options = {}) => {
       status: 200,
       headers: {
         'Content-Type': 'image/jpeg',
-        'X-Rosy-Camera-Sequence': String(window.__cameraSequence),
+        'X-Rosy-Camera-Sequence': url.searchParams.get('sequence') || String(window.__cameraSequence),
         'X-Rosy-Camera-Captured-At': '42.25',
+        'X-Rosy-Camera-Frame-Id': 'front_camera_link',
+        'X-Rosy-Camera-Variant': url.searchParams.get('overlay') === 'true' ? 'annotated' : 'raw',
       },
     });
   }
@@ -376,6 +379,10 @@ def _launch_page(playwright, extra_init="", width=390, height=844, real_map=Fals
     html = (WEB / "index.html").read_text(encoding="utf-8")
     page.route(
         "http://rosy.test/dashboard",
+        lambda route: route.fulfill(status=200, content_type="text/html", body=html),
+    )
+    page.route(
+        "http://rosy.test/dashboard?*",
         lambda route: route.fulfill(status=200, content_type="text/html", body=html),
     )
 
@@ -454,7 +461,7 @@ def test_delayed_positive_request_cannot_arrive_after_release_zero():
             browser, page = _launch_page(playwright)
         except Exception as error:
             pytest.skip(f"Playwright Chromium unavailable: {error}")
-        page.goto("http://rosy.test/dashboard", wait_until="domcontentloaded", timeout=5_000)
+        page.goto("http://rosy.test/dashboard#compatibility", wait_until="domcontentloaded", timeout=5_000)
         page.wait_for_function(
             "document.getElementById('robot-mode')?.textContent === '수동'"
         )
@@ -510,7 +517,7 @@ def test_field_settings_save_limits_waypoint_and_dock_without_navigation():
             browser, page = _launch_page(playwright)
         except Exception as error:
             pytest.skip(f"Playwright Chromium unavailable: {error}")
-        page.goto("http://rosy.test/dashboard", wait_until="domcontentloaded", timeout=5_000)
+        page.goto("http://rosy.test/dashboard#compatibility", wait_until="domcontentloaded", timeout=5_000)
         page.wait_for_function(
             "document.getElementById('robot-mode')?.textContent === '수동'"
         )
@@ -604,7 +611,7 @@ def test_waypoint_delete_dialog_keeps_the_estop_out_of_the_inert_region():
             browser, page = _launch_page(playwright, extra_init=WAYPOINT_ROW_INIT, width=1366, height=768)
         except Exception as error:
             pytest.skip(f"Playwright Chromium unavailable: {error}")
-        page.goto("http://rosy.test/dashboard", wait_until="domcontentloaded", timeout=5_000)
+        page.goto("http://rosy.test/dashboard#compatibility", wait_until="domcontentloaded", timeout=5_000)
         page.wait_for_function("document.getElementById('robot-mode')?.textContent === '수동'")
         page.locator("#view-inspect").click()
         delete = page.locator('li[data-name="zone_a"] [data-waypoint-action="delete"]')
@@ -640,11 +647,12 @@ def test_traffic_policy_is_staged_before_stopped_only_apply():
         except Exception as error:
             pytest.skip(f"Playwright Chromium unavailable: {error}")
         page.goto(
-            "http://rosy.test/dashboard",
+            "http://rosy.test/dashboard#compatibility",
             wait_until="domcontentloaded",
             timeout=5_000,
         )
         # D-201 — 정책 편집은 점검 뷰(절차 문법)의 현장 설정 카드에 산다.
+        page.wait_for_selector('#compatibility-shell[data-ready="true"]')
         page.locator("#view-inspect").click()
         page.locator("#traffic-policy-revision-input").fill(
             "traffic-policy-v2")
@@ -655,6 +663,7 @@ def test_traffic_policy_is_staged_before_stopped_only_apply():
             " && !document.getElementById('traffic-policy-apply').disabled"
         )
         page.locator("#traffic-policy-apply").click()
+        page.locator('dialog.ui-confirm ui-button[kind=irreversible]').click()
         page.wait_for_function(
             "document.getElementById('traffic-policy-message')"
             "?.textContent === '정지 상태에서 정책을 적용했습니다.'"
@@ -688,7 +697,7 @@ def test_live_camera_preview_is_visible_beside_the_map():
         except Exception as error:
             pytest.skip(f"Playwright Chromium unavailable: {error}")
         page.goto(
-            "http://rosy.test/dashboard",
+            "http://rosy.test/dashboard#compatibility",
             wait_until="domcontentloaded",
             timeout=5_000,
         )
@@ -714,7 +723,7 @@ def test_live_camera_preview_is_visible_beside_the_map():
         call for call in calls
         if call["path"] == "/api/v1/vision/front/frame"
     )
-    assert frame_call["search"] == "?sequence=7"
+    assert frame_call["search"] == "?sequence=7&overlay=false"
 
 
 def test_unavailable_camera_keeps_missing_timestamps_missing():
@@ -730,7 +739,7 @@ def test_unavailable_camera_keeps_missing_timestamps_missing():
             )
         except Exception as error:
             pytest.skip(f"Playwright Chromium unavailable: {error}")
-        page.goto("http://rosy.test/dashboard", wait_until="domcontentloaded", timeout=5_000)
+        page.goto("http://rosy.test/dashboard#compatibility", wait_until="domcontentloaded", timeout=5_000)
         page.wait_for_function(
             "window.__apiCalls?.some((call) => call.path === '/api/v1/vision/front/status')"
         )
@@ -750,7 +759,7 @@ def test_camera_preview_is_cleared_when_reauthentication_fails():
         except Exception as error:
             pytest.skip(f"Playwright Chromium unavailable: {error}")
         page.goto(
-            "http://rosy.test/dashboard",
+            "http://rosy.test/dashboard#compatibility",
             wait_until="domcontentloaded",
             timeout=5_000,
         )
@@ -788,7 +797,7 @@ def test_rate_limited_camera_never_leaves_an_old_frame_live():
         except Exception as error:
             pytest.skip(f"Playwright Chromium unavailable: {error}")
         page.goto(
-            "http://rosy.test/dashboard",
+            "http://rosy.test/dashboard#compatibility",
             wait_until="domcontentloaded",
             timeout=5_000,
         )
@@ -797,7 +806,7 @@ def test_rate_limited_camera_never_leaves_an_old_frame_live():
         )
         page.evaluate("window.__cameraSequence = 8; window.__cameraFrameStatus = 429")
         page.wait_for_function(
-            "document.getElementById('vision-empty')?.textContent.includes('속도 제한')"
+            "document.getElementById('vision-empty')?.textContent.includes('camera raw 429')"
         )
         assert page.locator("#vision-frame").is_hidden()
         assert page.locator("#vision-status").inner_text() == "수신 대기"
@@ -900,7 +909,7 @@ def test_console_state_matrix_renders_each_state(state):
         except Exception as error:
             pytest.skip(f"Playwright Chromium unavailable: {error}")
         page.goto(
-            "http://rosy.test/dashboard",
+            "http://rosy.test/dashboard#compatibility",
             wait_until="domcontentloaded",
             timeout=5_000,
         )
@@ -1004,7 +1013,239 @@ def test_console_state_matrix_renders_each_state(state):
         browser.close()
 
 
-DECLINE_MODE_CONFIRM = DECLINE_CONFIRM
+def test_compatibility_settings_confirmation_preserves_stop_and_rechecks_named_targets():
+    from playwright.sync_api import sync_playwright, expect
+
+    with sync_playwright() as playwright:
+        browser, page = _launch_page(playwright, extra_init=WAYPOINT_ROW_INIT)
+        page.goto('http://rosy.test/dashboard#compatibility')
+        page.wait_for_selector('#compatibility-shell[data-ready="true"]')
+        page.locator('#view-inspect').click()
+        page.locator('li[data-name="zone_a"]').wait_for()
+        page.evaluate("async()=>{const {session}=await import('/dashboard/assets/client.js');clearInterval(session.refreshTimer);session.refreshTimer=null;}")
+        page.locator('#waypoint-name').fill('zone_a')
+        page.locator('#waypoint-save').click()
+        dialog = page.locator('dialog.ui-confirm')
+        expect(dialog).to_have_count(1, timeout=3000)
+        assert '"zone_a"' in dialog.inner_text()
+        page.locator('#emergency-stop').click()
+        assert page.evaluate("__apiCalls.some(c=>c.path==='/api/v1/safety/stop')")
+        if dialog.count():
+            dialog.locator('ui-button[kind=quiet]').click()
+        page.locator('#view-inspect').click()
+        page.locator('#waypoint-save').click()
+        page.evaluate("async()=>{const {session}=await import('/dashboard/assets/client.js');session.robotState.pose.x=9;session.robotState.map_id='changed-map';}")
+        dialog.locator('ui-button[kind=irreversible]').click()
+        assert page.evaluate("__apiCalls.filter(c=>c.method==='PUT'&&c.path.includes('/waypoints/')).length") == 0
+        page.locator('li[data-name="zone_a"] [data-waypoint-action=go]').click()
+        page.evaluate("async()=>{const {session}=await import('/dashboard/assets/client.js');session.waypoints=[];}")
+        dialog.locator('ui-button[kind=irreversible]').click()
+        assert page.evaluate("__apiCalls.filter(c=>c.path==='/api/v1/navigation/goal').length") == 0
+        browser.close()
+
+
+def test_compatibility_traffic_confirmation_abort_releases_new_owner_without_old_readback():
+    from playwright.sync_api import sync_playwright, expect
+
+    with sync_playwright() as playwright:
+        browser, page = _launch_page(playwright)
+        page.goto('http://rosy.test/dashboard#compatibility')
+        page.wait_for_selector('#compatibility-shell[data-ready="true"]')
+        page.locator('#view-inspect').click()
+        page.locator('#traffic-policy-revision-input').fill('guarded-policy-a')
+        page.locator('#traffic-policy-stage').click()
+        page.wait_for_function('() => !document.querySelector("#traffic-policy-apply").disabled')
+        page.evaluate("""() => {const previous=fetch;window.fetch=(url,options={})=>String(url).endsWith('/api/v1/traffic/policy/apply')?new Promise(resolve=>window.finishOldPolicy=()=>resolve(new Response(JSON.stringify(__trafficReadback)))):previous(url,options);}""")
+        page.locator('#traffic-policy-apply').click()
+        dialog = page.locator('dialog.ui-confirm')
+        expect(dialog).to_have_count(1, timeout=3000)
+        dialog.locator('ui-button[kind=irreversible]').click()
+        page.wait_for_function('() => typeof finishOldPolicy === "function"')
+        page.evaluate('() => dispatchEvent(new PageTransitionEvent("pagehide"))')
+        page.evaluate('() => dispatchEvent(new PageTransitionEvent("pageshow", {persisted:true}))')
+        page.wait_for_function('() => !document.querySelector("#traffic-policy-stage").disabled', timeout=3000)
+        page.locator('#traffic-policy-revision-input').fill('guarded-policy-b')
+        page.locator('#traffic-policy-stage').click()
+        page.wait_for_function('() => document.querySelector("#traffic-policy-message").textContent.includes("guarded-policy-b")')
+        message = page.locator('#traffic-policy-message').inner_text()
+        page.evaluate('() => finishOldPolicy()')
+        page.wait_for_timeout(100)
+        assert page.locator('#traffic-policy-message').inner_text() == message
+        browser.close()
+
+
+def test_compatibility_confirmation_keeps_stop_live_and_owns_command_completion():
+    from playwright.sync_api import sync_playwright, expect
+
+    with sync_playwright() as playwright:
+        browser, page = _launch_page(playwright)
+        page.goto('http://rosy.test/dashboard#compatibility')
+        page.wait_for_function("document.querySelector('#robot-mode').textContent==='수동'")
+        page.locator('[data-mode=IDLE]').click()
+        dialog = page.locator('dialog.ui-confirm')
+        expect(dialog).to_have_count(1)
+        expect(dialog.get_by_role('button', name='요청 전송', exact=True)).to_be_visible()
+        page.locator('[data-mode=IDLE]').dispatch_event('click')
+        expect(dialog).to_have_count(1)
+        page.locator('#emergency-stop').click()
+        expect(dialog).to_have_count(0)
+        assert page.evaluate("__apiCalls.filter(c=>c.path==='/api/v1/mode').length") == 0
+        assert page.evaluate("__apiCalls.filter(c=>c.path==='/api/v1/safety/stop').length") == 1
+        page.evaluate("""() => { const prior=fetch;window.fetch=(url,options={})=>String(url).endsWith('/api/v1/mode')?new Promise(resolve=>{window.finishMode=()=>resolve(new Response('{}'));window.modeBody=JSON.parse(options.body);}):prior(url,options); }""")
+        page.locator('[data-mode=IDLE]').click()
+        dialog.locator('ui-button[kind=irreversible]').click()
+        page.wait_for_function("typeof finishMode==='function'")
+        page.locator('#dds-cyclone-apply').dispatch_event('click')
+        expect(dialog).to_have_count(0)
+        assert page.evaluate('window.modeBody') == {'mode': 'IDLE'}
+        page.evaluate('finishMode()')
+        page.wait_for_function("document.querySelector('[data-mode=IDLE]').disabled===false")
+        page.locator('[data-line-mode=IR_LINE]').click()
+        page.locator('[data-line-mode=OFF]').evaluate("button=>button.scrollIntoView({block:'end'})")
+        page.locator('#emergency-stop').click(position={'x':62,'y':60}, timeout=3_000)
+        expect(dialog).to_have_count(0)
+        page.wait_for_function("__apiCalls.filter(c=>c.path==='/api/v1/safety/stop').length===2")
+        page.locator('[data-line-mode=IR_LINE]').click()
+        page.locator('[data-line-mode=OFF]').evaluate("button=>button.scrollIntoView({block:'end'})")
+        page.mouse.move(380, 680)
+        page.mouse.wheel(0, 150)
+        page.wait_for_function("document.querySelector('[data-line-mode=OFF]').getBoundingClientRect().top<750")
+        page.locator('[data-line-mode=OFF]').click()
+        expect(dialog).to_have_count(0)
+        page.wait_for_function("__apiCalls.some(c=>c.path==='/api/v1/line-follow/mode' && c.body.mode==='OFF')")
+        page.evaluate("""() => {const prior=fetch;window.fetch=(url,options={})=>String(url).endsWith('/api/v1/line-follow/mode')?new Promise(resolve=>{const finish=()=>resolve(new Response(JSON.stringify({mode:JSON.parse(options.body).mode,state:'FOLLOW'})));if(JSON.parse(options.body).mode==='OFF')window.finishOff=finish;else window.finishLine=finish;}):prior(url,options);}""")
+        page.locator('[data-line-mode=IR_LINE]').click()
+        dialog.locator('ui-button[kind=irreversible]').click()
+        page.wait_for_function("typeof finishLine==='function'")
+        expect(page.locator('[data-line-mode=OFF]')).to_be_enabled()
+        page.locator('[data-line-mode=OFF]').click()
+        page.wait_for_function("typeof finishOff==='function'")
+        page.evaluate('finishLine()')
+        page.wait_for_timeout(80)
+        expect(page.locator('[data-line-mode=IR_LINE]')).to_be_disabled()
+        page.evaluate('finishOff()')
+        page.wait_for_function("!document.querySelector('[data-line-mode=IR_LINE]').disabled")
+        expect(page.locator('[data-line-mode=OFF]')).to_have_attribute('aria-pressed','true')
+        browser.close()
+
+
+def test_compatibility_confirmation_rechecks_capability_and_network_targets():
+    from playwright.sync_api import sync_playwright, expect
+
+    with sync_playwright() as playwright:
+        browser, page = _launch_page(playwright)
+        page.goto('http://rosy.test/dashboard#compatibility')
+        page.wait_for_function("document.querySelector('#robot-mode').textContent==='수동'")
+        page.locator('[data-mode=NAVIGATION]').click()
+        dialog = page.locator('dialog.ui-confirm')
+        page.evaluate("async()=>{const {session}=await import('/dashboard/assets/client.js');session.capabilities.navigation.goal_navigation=false;}")
+        dialog.locator('ui-button[kind=irreversible]').click()
+        assert page.evaluate("__apiCalls.filter(c=>c.path==='/api/v1/mode').length") == 0
+        page.locator('#view-inspect').click()
+        page.evaluate("async()=>{const {session}=await import('/dashboard/assets/client.js');clearInterval(session.refreshTimer);session.refreshTimer=null;document.querySelector('#network-card').dataset.available='true';document.querySelector('#network-connect').disabled=false;document.querySelector('#network-apply').disabled=false;}")
+        page.locator('#network-ssid-input').fill('fixture-a')
+        page.locator('#network-psk-input').fill('fixture-secret')
+        page.locator('#network-connect').click()
+        page.locator('#network-ssid-input').evaluate("input=>input.value='fixture-b'")
+        dialog.locator('ui-button[kind=irreversible]').click()
+        assert page.evaluate("__apiCalls.filter(c=>c.path==='/api/v1/host/network/connect').length") == 0
+        assert page.locator('#network-psk-input').input_value() == 'fixture-secret'
+        page.locator('#network-connect').click()
+        dialog.locator('ui-button[kind=irreversible]').click()
+        page.wait_for_function("__apiCalls.some(c=>c.path==='/api/v1/host/network/connect')")
+        body=page.evaluate("__apiCalls.find(c=>c.path==='/api/v1/host/network/connect').body")
+        assert body['ssid']=='fixture-b' and body['psk']=='fixture-secret' and body['confirmed'] is True
+        assert body['idempotency_key']
+        expect(page.locator('#network-psk-input')).to_have_value('')
+        browser.close()
+
+
+def test_compatibility_old_auth_and_pagehide_cancel_confirmation_and_readbacks():
+    from playwright.sync_api import sync_playwright, expect
+
+    with sync_playwright() as playwright:
+        browser, page = _launch_page(playwright, real_map=True, extra_init="const interval=setInterval;window.setInterval=(fn,ms)=>{if(ms===5000)window.slowTick=fn;return interval(fn,ms);};")
+        page.goto('http://rosy.test/dashboard#compatibility')
+        page.wait_for_function("document.querySelector('#robot-mode').textContent==='수동'")
+        page.evaluate("""async()=>{const {session}=await import('/dashboard/assets/client.js');clearInterval(session.refreshTimer);session.refreshTimer=null;const prior=fetch;window.fetch=(url,options={})=>String(url).endsWith('/api/v1/mode')?new Promise(resolve=>window.finishOldMode=()=>resolve(new Response('{}'))):prior(url,options);}""")
+        page.locator('[data-mode=IDLE]').click()
+        page.locator('dialog.ui-confirm ui-button[kind=irreversible]').click()
+        page.wait_for_function("typeof finishOldMode==='function'")
+        page.locator('#open-auth').click()
+        page.locator('#auth-tab-token').click()
+        page.locator('#token-input').fill('replacement-fixture-token')
+        page.locator('#auth-form').evaluate('form=>form.requestSubmit()')
+        page.wait_for_function("document.querySelector('#auth-message').textContent==='연결되었습니다.'")
+        before=page.evaluate("__apiCalls.filter(c=>c.path==='/api/v1/robot/state').length")
+        page.evaluate('finishOldMode()')
+        page.wait_for_timeout(80)
+        assert page.evaluate("__apiCalls.filter(c=>c.path==='/api/v1/robot/state').length") == before
+        assert '모드 요청을 전송했습니다' not in page.locator('#action-message').inner_text()
+        page.locator('[data-map-click=goal]').click()
+        page.locator('#map-canvas').focus()
+        page.locator('#map-canvas').press('Enter')
+        expect(page.locator('dialog.ui-confirm')).to_have_count(1)
+        page.locator('#token-input').evaluate("input=>input.value='map-replacement-fixture-token'")
+        page.locator('#auth-form').evaluate('form=>form.requestSubmit()')
+        expect(page.locator('dialog.ui-confirm')).to_have_count(0)
+        page.wait_for_function("document.querySelector('#auth-message').textContent==='연결되었습니다.'")
+        assert page.evaluate("__apiCalls.filter(c=>c.path==='/api/v1/navigation/goal').length") == 0
+        page.evaluate("""() => {const prior=fetch;let first=true;window.fetch=(url,options={})=>String(url).endsWith('/api/v1/auth/whoami')&&first?(first=false,new Promise(resolve=>window.finishRefusal=()=>resolve(new Response('{"detail":"old identity revoked"}',{status:401})))):prior(url,options);__sockets.at(-1).dispatchEvent(new CloseEvent('close',{code:4401}));}""")
+        page.wait_for_function("typeof finishRefusal==='function'")
+        page.locator('#token-input').evaluate("input=>input.value='post-refusal-fixture-token'")
+        page.locator('#auth-form').evaluate('form=>form.requestSubmit()')
+        page.wait_for_function("document.querySelector('#auth-message').textContent==='연결되었습니다.'")
+        page.evaluate('finishRefusal()')
+        page.wait_for_timeout(80)
+        assert page.evaluate("sessionStorage.getItem('rosy.dashboard.token')") == 'post-refusal-fixture-token'
+        assert page.locator('#robot-mode').inner_text() == '수동'
+        for failed in (False, True):
+            page.evaluate("""() => {const prior=fetch;let first=true;window.fetch=(url,options={})=>String(url).endsWith('/api/v1/map')&&first?(first=false,new Promise((resolve,reject)=>{window.finishMap=()=>resolve(new Response(JSON.stringify({width:2,height:2,resolution:1,origin:{x:0,y:0,yaw:0},data:[100,100,100,100],map_id:'obsolete-map'})));window.failMap=()=>reject(new Error('obsolete map failure'));})):prior(url,options);slowTick();}""")
+            page.wait_for_function("typeof finishMap==='function'")
+            page.locator('#open-auth').click()
+            page.locator('#auth-tab-token').click()
+            page.locator('#token-input').fill(f'next-fixture-token-{failed}')
+            page.locator('#auth-form').evaluate('form=>form.requestSubmit()')
+            page.wait_for_function("document.querySelector('#auth-message').textContent==='연결되었습니다.'")
+            snapshot=page.locator('#field-map-panel').inner_html()
+            raster=page.locator('#map-canvas').evaluate('canvas=>canvas.toDataURL()')
+            page.evaluate('failMap()' if failed else 'finishMap()')
+            page.wait_for_timeout(80)
+            assert page.locator('#field-map-panel').inner_html()==snapshot
+            assert page.locator('#map-canvas').evaluate('canvas=>canvas.toDataURL()')==raster
+            page.evaluate('delete window.finishMap;delete window.failMap')
+        page.evaluate("""() => {const prior=fetch;window.fetch=(url,options={})=>String(url).endsWith('/api/v1/navigation/goal')&&options.method==='POST'?new Promise(resolve=>window.finishGoal=()=>resolve(new Response('{}'))):prior(url,options);}""")
+        page.locator('#map-canvas').focus()
+        page.locator('#map-canvas').press('Enter')
+        page.locator('dialog.ui-confirm ui-button[kind=irreversible]').click()
+        page.wait_for_function("typeof finishGoal==='function'")
+        page.locator('[data-mode=IDLE]').click()
+        page.locator('dialog.ui-confirm').wait_for()
+        page.evaluate("""() => {window.oldSocket=__sockets.at(-1);const prior=fetch;let first=true;window.fetch=(url,options={})=>String(url).endsWith('/api/v1/auth/whoami')&&first?(first=false,new Promise(resolve=>window.finishHiddenRefusal=()=>resolve(new Response('{"role":"administrator"}')))):prior(url,options);oldSocket.dispatchEvent(new CloseEvent('close',{code:4401}));}""")
+        page.wait_for_function("typeof finishHiddenRefusal==='function'")
+        page.evaluate("window.dispatchEvent(new PageTransitionEvent('pagehide'))")
+        expect(page.locator('dialog.ui-confirm')).to_have_count(0)
+        snapshot=page.locator('#connection-badge').inner_html()
+        calls=page.evaluate('__apiCalls.length')
+        count=page.evaluate('__sockets.length')
+        map_snapshot=page.locator('#field-map-panel').inner_html()
+        map_raster=page.locator('#map-canvas').evaluate('canvas=>canvas.toDataURL()')
+        action=page.locator('#action-message').inner_html()
+        page.evaluate('finishGoal()')
+        page.evaluate('finishHiddenRefusal()')
+        page.evaluate("oldSocket.dispatchEvent(new MessageEvent('message',{data:JSON.stringify({mode:'NAVIGATION'})}));oldSocket.dispatchEvent(new CloseEvent('close',{code:1006}))")
+        page.wait_for_timeout(1_150)
+        assert page.locator('#connection-badge').inner_html()==snapshot
+        assert page.evaluate('__apiCalls.length')==calls
+        assert page.evaluate('__sockets.length')==count
+        assert page.locator('#field-map-panel').inner_html()==map_snapshot
+        assert page.locator('#map-canvas').evaluate('canvas=>canvas.toDataURL()')==map_raster
+        assert page.locator('#action-message').inner_html()==action
+        page.evaluate("window.dispatchEvent(new PageTransitionEvent('pageshow',{persisted:true}))")
+        page.wait_for_function('__sockets.length>'+str(count))
+        page.evaluate("oldSocket.dispatchEvent(new MessageEvent('message',{data:JSON.stringify({mode:'NAVIGATION'})}))")
+        assert page.locator('#robot-mode').inner_text()=='수동'
+        browser.close()
 
 
 def test_irreversible_mode_change_needs_confirm_and_decline_blocks_it():
@@ -1014,11 +1255,11 @@ def test_irreversible_mode_change_needs_confirm_and_decline_blocks_it():
 
     with sync_playwright() as playwright:
         try:
-            browser, page = _launch_page(playwright, extra_init=DECLINE_MODE_CONFIRM)
+            browser, page = _launch_page(playwright)
         except Exception as error:
             pytest.skip(f"Playwright Chromium unavailable: {error}")
         page.goto(
-            "http://rosy.test/dashboard",
+            "http://rosy.test/dashboard#compatibility",
             wait_until="domcontentloaded",
             timeout=5_000,
         )
@@ -1026,22 +1267,23 @@ def test_irreversible_mode_change_needs_confirm_and_decline_blocks_it():
             "document.getElementById('robot-mode')?.textContent === '수동'"
         )
         page.locator('[data-mode="IDLE"]').click()
-        page.wait_for_function("window.__confirms.length === 1")
+        dialog = page.locator("dialog.ui-confirm")
+        dialog.wait_for()
+        prompt = dialog.locator("p").inner_text()
+        dialog.locator("ui-button[kind=quiet]").click()
         declined_calls = page.evaluate(
             "window.__apiCalls.filter((call) => call.path === '/api/v1/mode')"
         )
-        accept_confirm(page)
         page.locator('[data-mode="IDLE"]').click()
+        dialog.locator("ui-button[kind=irreversible]").click()
         page.wait_for_function(
             "window.__apiCalls.some((call) => call.path === '/api/v1/mode')"
         )
-        confirms = page.evaluate("window.__confirms")
         browser.close()
 
     # D-359 US-009 (P2-2 review) — the confirm names the mode in Korean, never the enum.
-    assert "대기 모드로 변경할까요" in confirms[0] and "IDLE" not in confirms[0]
+    assert "대기 모드로 변경할까요" in prompt and "IDLE" not in prompt
     assert declined_calls == []
-    assert len(confirms) == 2
 
 
 def test_irreversible_cyclone_apply_needs_confirm_and_decline_blocks_it():
@@ -1051,11 +1293,11 @@ def test_irreversible_cyclone_apply_needs_confirm_and_decline_blocks_it():
 
     with sync_playwright() as playwright:
         try:
-            browser, page = _launch_page(playwright, extra_init=DECLINE_CONFIRM)
+            browser, page = _launch_page(playwright)
         except Exception as error:
             pytest.skip(f"Playwright Chromium unavailable: {error}")
         page.goto(
-            "http://rosy.test/dashboard",
+            "http://rosy.test/dashboard#compatibility",
             wait_until="domcontentloaded",
             timeout=5_000,
         )
@@ -1064,23 +1306,24 @@ def test_irreversible_cyclone_apply_needs_confirm_and_decline_blocks_it():
         )
         page.locator("#view-inspect").click()
         page.locator("#dds-cyclone-apply").click()
-        page.wait_for_function("window.__confirms.length === 1")
+        dialog = page.locator("dialog.ui-confirm")
+        dialog.wait_for()
+        prompt = dialog.locator("p").inner_text()
+        dialog.locator("ui-button[kind=quiet]").click()
         declined = page.evaluate(
             "window.__apiCalls.filter((call) =>"
             " call.path === '/api/v1/system/dds/cyclone')"
         )
-        accept_confirm(page)
         page.locator("#dds-cyclone-apply").click()
+        dialog.locator("ui-button[kind=irreversible]").click()
         page.wait_for_function(
             "window.__apiCalls.some((call) =>"
             " call.path === '/api/v1/system/dds/cyclone')"
         )
-        confirms = page.evaluate("window.__confirms")
         browser.close()
 
-    assert "CycloneDDS를 저장하고 로봇을 재부팅할까요" in confirms[0]
+    assert "CycloneDDS를 저장하고 로봇을 재부팅할까요" in prompt
     assert declined == []
-    assert len(confirms) == 2
 
 
 # US-010 — rosy-pinky-e4us, release 005, CORE-only, viewer token. The page
@@ -1130,7 +1373,7 @@ def test_core_only_viewer_sees_the_truth_and_probes_nothing_forbidden():
             browser, page = _launch_page(playwright, extra_init=CORE_ONLY_VIEWER_INIT)
         except Exception as error:
             pytest.skip(f"Playwright Chromium unavailable: {error}")
-        page.goto("http://rosy.test/dashboard", wait_until="domcontentloaded", timeout=5_000)
+        page.goto("http://rosy.test/dashboard#compatibility", wait_until="domcontentloaded", timeout=5_000)
         page.wait_for_function(
             "document.getElementById('safety-label')?.textContent === 'HW OFF'"
         )
@@ -1187,7 +1430,7 @@ def test_hardware_runtime_with_a_silent_safety_source_never_claims_ready():
             browser, page = _launch_page(playwright, extra_init=init)
         except Exception as error:
             pytest.skip(f"Playwright Chromium unavailable: {error}")
-        page.goto("http://rosy.test/dashboard", wait_until="domcontentloaded", timeout=5_000)
+        page.goto("http://rosy.test/dashboard#compatibility", wait_until="domcontentloaded", timeout=5_000)
         page.wait_for_function(
             "document.getElementById('triage-title')?.textContent === '안전 회로 수신 끊김'"
         )
@@ -1245,7 +1488,7 @@ def test_no_motion_hardware_runtime_is_on_and_says_the_drive_is_off():
             browser, page = _launch_page(playwright, extra_init=NO_MOTION_INIT, real_map=True)
         except Exception as error:
             pytest.skip(f"Playwright Chromium unavailable: {error}")
-        page.goto("http://rosy.test/dashboard", wait_until="domcontentloaded", timeout=5_000)
+        page.goto("http://rosy.test/dashboard#compatibility", wait_until="domcontentloaded", timeout=5_000)
         page.wait_for_function(
             "document.getElementById('safety-label')?.textContent === 'NO DRIVE'"
         )
@@ -1289,7 +1532,7 @@ def test_map_snapshots_are_asked_for_when_the_server_has_them():
             browser, page = _launch_page(playwright, extra_init=init, real_map=True)
         except Exception as error:
             pytest.skip(f"Playwright Chromium unavailable: {error}")
-        page.goto("http://rosy.test/dashboard", wait_until="domcontentloaded", timeout=5_000)
+        page.goto("http://rosy.test/dashboard#compatibility", wait_until="domcontentloaded", timeout=5_000)
         page.wait_for_function(
             "window.__apiCalls.some((call) => call.path === '/api/v1/map/costmap')"
         )
@@ -1316,7 +1559,7 @@ def test_fault_after_configured_reason_still_raises_a_blocked_fault():
             browser, page = _launch_page(playwright, extra_init=init)
         except Exception as error:
             pytest.skip(f"Playwright Chromium unavailable: {error}")
-        page.goto("http://rosy.test/dashboard", wait_until="domcontentloaded", timeout=5_000)
+        page.goto("http://rosy.test/dashboard#compatibility", wait_until="domcontentloaded", timeout=5_000)
         page.wait_for_function("document.getElementById('triage')?.dataset.category === 'blocked' && document.getElementById('triage-context')?.textContent.includes('하드웨어 런타임 켜짐')")
         assert "고장" in page.locator("#triage-detail").inner_text()
         assert "하드웨어 런타임 켜짐 · 구동 꺼짐 (무동작)" in page.locator("#triage-context").text_content()
@@ -1345,7 +1588,7 @@ def test_api_estop_does_not_claim_a_motor_power_cut():
             browser, page = _launch_page(playwright, extra_init=init)
         except Exception as error:
             pytest.skip(f"Playwright Chromium unavailable: {error}")
-        page.goto("http://rosy.test/dashboard", wait_until="domcontentloaded", timeout=5_000)
+        page.goto("http://rosy.test/dashboard#compatibility", wait_until="domcontentloaded", timeout=5_000)
         page.wait_for_function(
             "document.getElementById('triage-title')?.textContent === 'API 비상정지 (operator)'"
         )
@@ -1401,7 +1644,7 @@ def test_operate_view_fits_and_does_not_crush(viewport, state):
         except Exception as error:
             pytest.skip(f"Playwright Chromium unavailable: {error}")
         page.goto(
-            "http://rosy.test/dashboard",
+            "http://rosy.test/dashboard#compatibility",
             wait_until="domcontentloaded",
             timeout=5_000,
         )
@@ -1433,7 +1676,7 @@ def test_wide_but_short_operate_view_keeps_three_columns():
 
     with sync_playwright() as playwright:
         browser, page = _launch_page(playwright, width=1366, height=600)
-        page.goto("http://rosy.test/dashboard", wait_until="domcontentloaded", timeout=5_000)
+        page.goto("http://rosy.test/dashboard#compatibility", wait_until="domcontentloaded", timeout=5_000)
         page.wait_for_function("document.getElementById('robot-mode')?.textContent !== undefined")
         page.wait_for_timeout(700)
         probe = page.evaluate("""() => {
@@ -1484,7 +1727,7 @@ def test_visible_type_scale_is_closed(state_init):
         except Exception as error:
             pytest.skip(f"Playwright Chromium unavailable: {error}")
         page.goto(
-            "http://rosy.test/dashboard",
+            "http://rosy.test/dashboard#compatibility",
             wait_until="domcontentloaded",
             timeout=5_000,
         )
@@ -1562,7 +1805,7 @@ def test_visible_text_meets_the_contrast_floor(state_init):
         except Exception as error:
             pytest.skip(f"Playwright Chromium unavailable: {error}")
         page.goto(
-            "http://rosy.test/dashboard",
+            "http://rosy.test/dashboard#compatibility",
             wait_until="domcontentloaded",
             timeout=5_000,
         )
@@ -1610,7 +1853,7 @@ def test_no_visible_element_moves():
         except Exception as error:
             pytest.skip(f"Playwright Chromium unavailable: {error}")
         page.goto(
-            "http://rosy.test/dashboard",
+            "http://rosy.test/dashboard#compatibility",
             wait_until="domcontentloaded",
             timeout=5_000,
         )
@@ -1629,7 +1872,8 @@ def test_no_visible_element_moves():
 
 def _open_dashboard(playwright, extra_init=""):
     browser, page = _launch_page(playwright, extra_init=extra_init)
-    page.goto("http://rosy.test/dashboard", wait_until="domcontentloaded", timeout=5_000)
+    page.goto("http://rosy.test/dashboard#compatibility", wait_until="domcontentloaded", timeout=5_000)
+    page.wait_for_selector('#compatibility-shell[data-ready="true"]')
     return browser, page
 
 
@@ -1651,12 +1895,31 @@ def test_legacy_dashboard_refresh_and_back_keep_the_tab_token():
         except Exception as error:
             pytest.skip(f"Playwright Chromium unavailable: {error}")
         assert page.evaluate("sessionStorage.getItem('rosy.dashboard.token')") == "operator-test-token"
-        page.goto("http://rosy.test/dashboard#compatibility", wait_until="domcontentloaded", timeout=5_000)
+        page.goto("http://rosy.test/dashboard", wait_until="domcontentloaded", timeout=5_000)
         page.reload(wait_until="domcontentloaded", timeout=5_000)
         page.go_back(wait_until="domcontentloaded", timeout=5_000)
-        assert page.url == "http://rosy.test/dashboard"
+        assert page.url == "http://rosy.test/dashboard?view=compatibility#compatibility"
         assert page.evaluate("sessionStorage.getItem('rosy.dashboard.token')") == "operator-test-token"
         browser.close()
+
+def test_legacy_dashboard_skip_link_keeps_owner_after_fragment_and_refresh():
+    from playwright.sync_api import sync_playwright
+    with sync_playwright() as playwright:
+        browser, page = _open_dashboard(playwright)
+        try:
+            page.keyboard.press("Tab")
+            assert page.locator(":focus").get_attribute("href") == "#dashboard-main"
+            page.keyboard.press("Enter")
+            assert page.locator(":focus").get_attribute("id") == "dashboard-main"
+            assert page.url.endswith("?view=compatibility#dashboard-main")
+            assert page.locator("#compatibility-shell").is_visible()
+            page.reload(wait_until="domcontentloaded")
+            page.wait_for_selector('#compatibility-shell[data-ready="true"]')
+            assert page.locator("#compatibility-shell").is_visible()
+            assert page.locator("#entry-shell").is_hidden()
+        finally:
+            browser.close()
+
 
 def test_login_code_pairs_this_tab_and_shows_who_is_logged_in():
     pytest.importorskip("playwright.sync_api")
@@ -2005,7 +2268,7 @@ def test_inspect_view_lists_every_device_with_its_state_and_bench_tag():
             browser, page = _launch_page(playwright, extra_init=HARDWARE_INIT, width=1366, height=768)
         except Exception as error:
             pytest.skip(f"Playwright Chromium unavailable: {error}")
-        page.goto("http://rosy.test/dashboard", wait_until="domcontentloaded", timeout=5_000)
+        page.goto("http://rosy.test/dashboard#compatibility", wait_until="domcontentloaded", timeout=5_000)
         page.locator("#view-inspect").click()
         page.wait_for_function("document.querySelectorAll('#hardware-list .device-row').length === 6")
         rows = page.evaluate(
@@ -2061,7 +2324,7 @@ def test_a_viewer_sees_the_device_card_but_cannot_rerun_the_probe():
             browser, page = _launch_page(playwright, extra_init=CORE_ONLY_VIEWER_INIT + HARDWARE_INIT)
         except Exception as error:
             pytest.skip(f"Playwright Chromium unavailable: {error}")
-        page.goto("http://rosy.test/dashboard", wait_until="domcontentloaded", timeout=5_000)
+        page.goto("http://rosy.test/dashboard#compatibility", wait_until="domcontentloaded", timeout=5_000)
         page.locator("#view-inspect").click()
         page.wait_for_function("document.querySelectorAll('#hardware-list .device-row').length === 6")
         assert page.locator("#hardware-refresh").is_disabled()
@@ -2077,7 +2340,7 @@ def test_no_probe_result_yet_is_said_not_blanked():
             browser, page = _launch_page(playwright)
         except Exception as error:
             pytest.skip(f"Playwright Chromium unavailable: {error}")
-        page.goto("http://rosy.test/dashboard", wait_until="domcontentloaded", timeout=5_000)
+        page.goto("http://rosy.test/dashboard#compatibility", wait_until="domcontentloaded", timeout=5_000)
         page.locator("#view-inspect").click()
         page.wait_for_function(
             "document.getElementById('hardware-card')?.dataset.available === 'false'")
@@ -2096,7 +2359,7 @@ def test_an_administrator_tests_the_buzzer_and_records_what_was_heard():
             browser, page = _launch_page(playwright, extra_init=HARDWARE_INIT, width=1366, height=768)
         except Exception as error:
             pytest.skip(f"Playwright Chromium unavailable: {error}")
-        page.goto("http://rosy.test/dashboard", wait_until="domcontentloaded", timeout=5_000)
+        page.goto("http://rosy.test/dashboard#compatibility", wait_until="domcontentloaded", timeout=5_000)
         page.locator("#view-inspect").click()
         page.wait_for_function("document.querySelectorAll('#hardware-list .device-row').length === 6")
         # Only the buzzer and the lamp have a test, and the lamp without a driver cannot start one.
@@ -2154,7 +2417,7 @@ def test_a_viewer_gets_no_buzzer_or_lamp_test():
             browser, page = _launch_page(playwright, extra_init=CORE_ONLY_VIEWER_INIT + HARDWARE_INIT)
         except Exception as error:
             pytest.skip(f"Playwright Chromium unavailable: {error}")
-        page.goto("http://rosy.test/dashboard", wait_until="domcontentloaded", timeout=5_000)
+        page.goto("http://rosy.test/dashboard#compatibility", wait_until="domcontentloaded", timeout=5_000)
         page.locator("#view-inspect").click()
         page.wait_for_function("document.querySelectorAll('#hardware-list .device-row').length === 6")
         assert page.locator("#hardware-list .device-actions").count() == 0
@@ -2178,7 +2441,7 @@ def test_the_test_buttons_keep_the_inspect_view_inside_the_screen_width(viewport
             browser, page = _launch_page(playwright, extra_init=outcome, width=viewport[0], height=viewport[1])
         except Exception as error:
             pytest.skip(f"Playwright Chromium unavailable: {error}")
-        page.goto("http://rosy.test/dashboard", wait_until="domcontentloaded", timeout=5_000)
+        page.goto("http://rosy.test/dashboard#compatibility", wait_until="domcontentloaded", timeout=5_000)
         page.locator("#view-inspect").click()
         page.wait_for_function(
             "document.querySelectorAll(\"#hardware-list [data-hw-action='observed']\").length === 1")
@@ -2213,7 +2476,7 @@ def test_core_only_operate_view_says_why_it_cannot_move_and_still_fits(viewport)
                 browser, page = _launch_page(playwright, extra_init=init, width=viewport[0], height=viewport[1])
             except Exception as error:
                 pytest.skip(f"Playwright Chromium unavailable: {error}")
-            page.goto("http://rosy.test/dashboard", wait_until="domcontentloaded", timeout=5_000)
+            page.goto("http://rosy.test/dashboard#compatibility", wait_until="domcontentloaded", timeout=5_000)
             page.wait_for_function(
                 "document.getElementById('capability-count')?.textContent === '0 / 5'")
             if label == "reason":
@@ -2252,7 +2515,7 @@ def test_map_keyboard_crosshair_posts_a_goal_with_the_same_confirm():
         )
         errors = []
         page.on("pageerror", lambda exc: errors.append(str(exc)))
-        page.goto("http://rosy.test/dashboard", wait_until="domcontentloaded",
+        page.goto("http://rosy.test/dashboard#compatibility", wait_until="domcontentloaded",
                   timeout=5_000)
         page.wait_for_function(
             "document.getElementById('robot-mode')?.textContent === '수동'")
@@ -2265,6 +2528,7 @@ def test_map_keyboard_crosshair_posts_a_goal_with_the_same_confirm():
         page.click('[data-map-click="goal"]')
         canvas.focus()
         canvas.press("Enter")
+        page.locator("dialog.ui-confirm ui-button[kind=irreversible]").click()
         page.wait_for_function(
             "() => window.__apiCalls.some((call) => call.path === "
             "'/api/v1/navigation/goal' && call.method === 'POST')",
@@ -2312,7 +2576,7 @@ SUMMARY_PROBE = """() => {
 
 def _summary_page(playwright, extra_init, width=1366, height=768):
     browser, page = _launch_page(playwright, extra_init=extra_init, width=width, height=height)
-    page.goto("http://rosy.test/dashboard", wait_until="domcontentloaded", timeout=5_000)
+    page.goto("http://rosy.test/dashboard#compatibility", wait_until="domcontentloaded", timeout=5_000)
     page.wait_for_function("document.getElementById('status-summary')?.dataset.state !== 'unknown'")
     return browser, page
 
@@ -2468,7 +2732,7 @@ def test_the_home_bridge_offers_the_caller_role_surfaces(role, expected):
         page.route("http://rosy.test/console", lambda route: route.fulfill(
             status=200, content_type="text/html",
             body="<!doctype html><html lang=ko><body data-console=1></body></html>"))
-        page.goto("http://rosy.test/dashboard", wait_until="domcontentloaded", timeout=5000)
+        page.goto("http://rosy.test/dashboard#compatibility", wait_until="domcontentloaded", timeout=5000)
         page.wait_for_function(
             "() => document.querySelectorAll('#surface-bridge a').length === " + str(len(expected)))
         drawn = page.evaluate(

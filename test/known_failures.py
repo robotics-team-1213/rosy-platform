@@ -42,7 +42,7 @@ def failed_ids(report: str) -> list[str]:
 
 
 def _matches(failed: str, known: str) -> bool:
-    # A run started inside a module (cd src/runtime/gateway) prints a shorter
+    # A run started inside a module (cd middleware/core/gateway) prints a shorter
     # node id; accept it when it is a path-boundary suffix of the listed id.
     return failed == known or known.endswith("/" + failed)
 

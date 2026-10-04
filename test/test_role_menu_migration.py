@@ -1,12 +1,13 @@
 """D-263 migration inventory stays attached to role-owned surfaces."""
 
 from pathlib import Path
+import re
 
 import yaml
 
 
 ROOT = Path(__file__).resolve().parents[1]
-WEB = ROOT / "src" / "hmi" / "dashboard"
+WEB = ROOT / "middleware" / "ui" / "robot"
 
 
 def test_device_surface_contains_system_and_host_readbacks():
@@ -86,7 +87,8 @@ def test_setup_surface_contains_staged_traffic_policy_actions():
     assert {"/api/v1/traffic", "/api/v1/traffic/policy/stage", "/api/v1/traffic/policy/apply",
             "/api/v1/traffic/simulation/signal"} <= set(
         __import__("re").findall(r'"(/api/v1/[^"?]+)', source))
-    assert "window.confirm" in source
+    assert 'import { confirmIrreversible } from "/common/ui.js"' in source
+    assert "await confirmIrreversible(" in source and "signal: lifetime.signal" in source
 
 
 def test_console_surface_contains_a_keyboard_accessible_map_panel():
@@ -147,8 +149,19 @@ def test_console_surface_contains_a_stoppable_live_camera_panel():
     source = (WEB / panel["module"]).read_text(encoding="utf-8")
     vision = (WEB / "vision.js").read_text(encoding="utf-8")
     assert "createVisionPreview" in source and "preview.stop" in source
+    assert 'import { createVisionPreview } from "/assets/vision.js"' in source
     assert "/api/v1/vision/front/status" in vision
-    assert "/api/v1/vision/front/frame" in vision
+    assert re.search(r'import\s*\{\s*fetchCameraPair\s*\}\s*from\s*"/common/evidence.js"', vision)
+    frames = (WEB.parent / "web_common" / "evidence.js").read_text(encoding="utf-8")
+    assert "export async function fetchCameraPair" in frames
+    assert "/api/v1/vision/front/frame?sequence=" in frames
+    assert "await fetchFrame(" in frames
+    assert "fetchFrame: (path) => fetch(path, {headers: authHeaders(), cache: \"no-store\", signal: controller.signal})" in vision
+    # Unmount/stop must cancel the request and discard an already-decoded frame.
+    assert "aborter?.abort()" in vision
+    assert "generation += 1" in vision
+    assert "gen !== generation || !hasToken()" in vision
+    assert "URL.revokeObjectURL" in vision
 
 
 def test_console_surface_contains_operator_docking_actions():

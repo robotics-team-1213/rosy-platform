@@ -12,6 +12,7 @@
 | D-401 | Rosy Cell 애플리케이션: 셀 설정·레시피 분리, 해시로 묶은 Job(Step 목록), 팔레타이징 패턴 v1 |
 | D-403 | Fleet Cell Job 경로: Rosy Cell Job → Fleet 제안(재컴파일 검증)·승인 → Step마다 `CELL_TRANSFER` Action 하나, 정지 세대 의미, D-330 §2 하달 보류는 simulation에서만 ROS-SIM 정지 세대 시험 후 개방, 셀 해시 검사는 OMX owner |
 | D-413 | ROSY는 modules·integrations·apps·profiles로 책임을 나누고 고정 셀 한 흐름부터 이전한다 |
+| D-450 | 팔레타이징 앱은 화면의 한 작업 흐름과 박스 전용 Gazebo 수용을 먼저 완성한다 |
 
 ## 계획·결과 문서
 
@@ -29,8 +30,8 @@
 
 ## 최근 기록
 
+- 2026-10-04 · uncommitted · docs(palletizing): 앱 완료 목표를 현재 구현과 대조
 - 2026-10-02 · uncommitted · feat(palletizing): `job_document(job)` (C4b G5)
 - 2026-10-02 · c07896af · feat(palletizing): port C3b grasp depth and tool fingertip overhang (merge)
 - 2026-10-02 · uncommitted · feat(process): include taught home pose in transfer plan
 - 2026-10-02 · d9e70f71 · docs(test): refresh Task 3 evidence after latest-main sync
-- 2026-10-02 · 9da93450 · refactor: extract palletizing process with legacy imports

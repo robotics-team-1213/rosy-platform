@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#101214">
+  <title>Rosy Console — 설치·보정</title>
+  <link rel="icon" type="image/svg+xml" href="/common/icons/console.svg">
+  <link rel="stylesheet" href="/common/tokens.css">
+  <script src="/common/theme.js"></script>
+  <link rel="stylesheet" href="/common/components.css">
+  <link rel="stylesheet" href="/common/task-chooser.css">
+  <link rel="stylesheet" href="/console/assets/styles.css">
+  <script type="module" src="/common/ui.js"></script>
+  <script type="module" src="/console/assets/install.js"></script>
+
+</head>
+<body>
+  <a class="skip-link" href="#install-main">본문으로 건너뛰기</a>
+  <ui-shell grammar="procedure">
+  <ui-topbar>
+    <ui-brand><b>ROSY FLEET</b><small id="fleet-name">설치·보정</small></ui-brand>
+    <div class="spacer"></div>
+    <!-- D-359 §6.4 — 좁은 창에서 접속·역할·테마는 이 토글 뒤로 접힌다. 넓은 창에서는 토글이 숨고 줄에 선다. -->
+    <ui-button kind="quiet" id="topbar-more" type="button" aria-expanded="false" aria-controls="topbar-extra" title="설정"><svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4 7h16M4 12h16M4 17h16M9 5v4M15 10v4M7 15v4"/></svg><span class="sr-only">설정</span></ui-button>
+    <div id="topbar-extra" class="topbar-extra" data-open="false">
+      <input id="console-token" class="ui-field token" type="password" placeholder="관제 토큰"
+             autocomplete="off" aria-label="관제 토큰">
+      <ui-button kind="quiet" id="token-save" type="button">접속</ui-button>
+      <ui-tag id="user-role" status="neutral">인증 필요</ui-tag>
+      <div id="theme-choice" class="theme-choice" role="group" aria-labelledby="theme-choice-label">
+        <ui-text id="theme-choice-label" scale="label" class="sr-only">화면 테마</ui-text>
+        <ui-button kind="segment" type="button" data-theme-choice="dark" aria-pressed="true" title="어둡게"><svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg><span class="sr-only">어둡게</span></ui-button>
+        <ui-button kind="segment" type="button" data-theme-choice="light" aria-pressed="false" title="밝게"><svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="4"/><path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8"/></svg><span class="sr-only">밝게</span></ui-button>
+        <ui-button kind="segment" type="button" data-theme-choice="system" aria-pressed="false" title="시스템"><svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8.5 20h7M12 16v4"/></svg><span class="sr-only">시스템</span></ui-button>
+      </div>
+    </div>
+    <ui-tag id="online-pill" status="neutral">연결 대기</ui-tag>
+    <ui-text id="clock" scale="value">--:--:--</ui-text>
+    <ui-button kind="irreversible" id="estop" data-always-live class="estop" type="button" aria-label="전체 비상 정지 (래치 · 로봇별 관리자 해제)" title="전체 비상 정지 (래치 · 로봇별 관리자 해제)"><svg class="estop-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 2 19.1 4.9 22 12 19.1 19.1 12 22 4.9 19.1 2 12 4.9 4.9Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><rect x="8" y="8" width="8" height="8" rx="1" fill="currentColor"/></svg><span class="sr-only">전체 비상 정지 (래치 · 로봇별 관리자 해제)</span></ui-button>
+  </ui-topbar>
+
+  <main id="install-main" tabindex="-1">
+    <h1 class="sr-only">Rosy Fleet — 설치·보정</h1>
+    <!-- D-410 — 설치 화면. 운용(감시·목표·정지)은 /console에 있다. -->
+    <section class="panel install-nav" aria-labelledby="install-nav-heading">
+      <h2 id="install-nav-heading">설치·보정 화면</h2>
+      <p class="hint">기기 등록·카메라 연결 승인·경기장/맵 보정을 합니다. 로봇 감시·목표 지정·전체 정지는
+        <a href="/console">운용 화면</a>에 있습니다.</p>
+    </section>
+
+    <div class="install-tasks">
+      <nav id="install-chooser" aria-label="설치 작업"></nav>
+      <div class="install-workspace">
+            <section id="robot-enrollment" class="panel install-task" aria-labelledby="discovery-heading">
+            <div class="robot-head">
+              <h2 id="discovery-heading">로봇 등록</h2>
+              <ui-tag id="discovery-status" status="neutral">검색 대기</ui-tag>
+            </div>
+            <p class="hint" title="등록은 로봇 화면의 8자리 코드로 Fleet이 직접 확인합니다">발견 목록</p>
+            <p id="enroll-unavailable" class="hint bad" hidden>자격 키를 읽을 수 없음 — 등록을 쓸 수 없습니다.</p>
+            <p id="enroll-alarm" class="enroll-alarm" role="alert" hidden></p>
+            <ul id="discovery-list" class="discovery-list" aria-live="polite" hidden></ul>
+            <ui-empty id="discovery-empty">발견 목록을 확인하고 있습니다.</ui-empty>
+            <ui-button id="discovery-retry" kind="quiet" type="button">발견 목록 다시 확인</ui-button>
+            <div id="enroll-controls" hidden>
+              <div class="enroll-address">
+                <label for="enroll-address">주소로 추가</label>
+                <input class="ui-field" id="enroll-address" inputmode="decimal" autocomplete="off" placeholder="로봇 화면의 IP:8080">
+                <ui-button id="enroll-address-add" kind="quiet" type="button">추가</ui-button>
+              </div>
+              <div id="enroll-result" class="enroll-result" aria-live="polite"></div>
+              <ul id="enrolled-list" class="enrolled-list"></ul>
+              <details class="enroll-help"><summary>등록 도움말</summary><ul id="enroll-help"></ul></details>
+              <dialog id="enroll-dialog" aria-labelledby="enroll-target">
+                <p>로봇 <b id="enroll-target"></b> 화면의 코드</p>
+                <div id="enroll-move-check" class="enroll-move-check" hidden>
+                  <p class="enroll-move-address-label">새 주소 후보</p>
+                  <p id="enroll-move-address" class="enroll-move-address"></p>
+                  <p id="enroll-move-note" class="hint"></p>
+                </div>
+                <input class="ui-field" id="enroll-code" autocomplete="off" autocapitalize="characters" maxlength="12" placeholder="ABCD-EFGH">
+                <div class="enroll-dialog-actions">
+                  <ui-button id="enroll-submit" kind="primary" type="button">등록</ui-button>
+                  <ui-button id="enroll-cancel" kind="quiet" type="button">취소</ui-button>
+                </div>
+              </dialog>
+            </div>
+          </section>
+          <!-- D-341 3–5·11: 콘솔은 6자리 코드를 모른다. 운용자가 폰 화면의 코드를 입력하고,
+               설치자가 폰과 이 화면의 사이트 지문·자격 ID를 맞춰 본다. -->
+          <section id="camera-link" class="panel install-task camera-link" aria-labelledby="camera-link-heading" data-role-lock>
+            <div class="robot-head">
+              <h2 id="camera-link-heading">카메라 연결 승인</h2>
+            </div>
+            <p class="hint">폰의 Rosy Cam이 보낸 연결 요청입니다. 폰 화면에 뜬 숫자 6자리를 입력해 승인합니다.</p>
+            <p id="camera-link-unavailable" class="hint" role="status" hidden>이 Fleet에는 카메라 연결 승인이 설정되지 않았습니다.</p>
+            <ui-status id="camera-role-lock" class="role-lock-note" state="forbidden" hidden>운용자 권한이 필요합니다</ui-status>
+            <div id="camera-link-controls" hidden>
+              <p id="camera-identity-note" class="hint" hidden>이름 있는 운용자 계정으로만 카메라 연결을 승인·거절·폐기할 수 있습니다 — 공용 관제 토큰으로는 할 수 없습니다(site-users.yaml).</p>
+              <p class="hint">이 사이트의 지문 <code id="camera-site-fingerprint" class="camera-id">—</code></p>
+              <p id="camera-queue-health" class="hint" hidden></p>
+              <div id="camera-result" class="enroll-result" aria-live="polite"></div>
+              <section id="camera-confirm" class="camera-confirm" aria-labelledby="camera-confirm-title" hidden>
+                <p id="camera-confirm-title"><b>폰 화면과 이 지문·자격 ID가 같은지 확인하세요</b></p>
+                <p id="camera-confirm-device" class="hint"></p>
+                <dl class="camera-confirm-values">
+                  <dt>사이트 지문</dt><dd id="camera-confirm-fingerprint"></dd>
+                  <dt>자격 ID</dt><dd id="camera-confirm-credential"></dd>
+                </dl>
+                <p id="camera-confirm-clock"></p>
+                <ui-button id="camera-confirm-close" kind="quiet" type="button">닫기</ui-button>
+              </section>
+              <h5 id="camera-requests-heading">대기 중인 요청</h5>
+              <ul id="camera-requests" class="enrolled-list camera-list" aria-labelledby="camera-requests-heading"></ul>
+              <h5 id="camera-credentials-heading">연결된 카메라</h5>
+              <ul id="camera-credentials" class="enrolled-list camera-list" aria-labelledby="camera-credentials-heading"></ul>
+              <dialog id="camera-approve-dialog" aria-labelledby="camera-approve-title">
+                <p id="camera-approve-title">카메라 <b id="camera-approve-target"></b> 연결 승인</p>
+                <label for="camera-approve-source">카메라 자리</label>
+                <select class="ui-field" id="camera-approve-source"></select>
+                <label for="camera-approve-code">폰 화면의 숫자 6자리</label>
+                <input class="ui-field" id="camera-approve-code" inputmode="numeric" autocomplete="off" maxlength="7">
+                <div id="camera-approve-error" class="enroll-result" aria-live="polite"></div>
+                <div class="enroll-dialog-actions">
+                  <ui-button id="camera-approve-submit" kind="primary" type="button">승인</ui-button>
+                  <ui-button id="camera-approve-cancel" kind="quiet" type="button">취소</ui-button>
+                </div>
+              </dialog>
+            </div>
+          </section>
+
+    <section id="camera-calibration" class="panel install-task" aria-labelledby="camera-install-heading">
+      <h2 id="camera-install-heading">카메라 설치·보정</h2>
+      <!-- field-view가 말하는 상태 줄 — 지도가 없는 이 화면에서도 같은 id로 제공한다. -->
+      <p class="field-mismatch" id="field-mismatch" role="status" hidden></p>
+      <span class="hint layer-hint" id="map-layer-hint" role="status" hidden></span>
+<section class="vision-preview" aria-labelledby="vision-heading">
+        <div class="map-head">
+          <h2 id="vision-heading">관제 카메라</h2>
+          <span class="spacer"></span>
+          <ui-tag id="vision-state" status="neutral">인증 대기</ui-tag>
+        </div>
+        <div class="vision-controls">
+          <label for="vision-source">카메라</label>
+          <select class="ui-field" id="vision-source" disabled aria-label="관제 카메라 선택"></select>
+          <ui-button kind="quiet" id="vision-refresh" type="button" title="영상 새로고침"><svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M21 12a9 9 0 1 1-2.64-6.36L21 8"/><path d="M21 3v5h-5"/></svg><span class="sr-only">영상 새로고침</span></ui-button>
+        </div>
+        <div class="vision-frame" id="vision-frame" data-state="waiting">
+          <div class="vision-image-stage" id="vision-image-stage" hidden>
+            <img id="vision-image" alt="선택한 관제 카메라의 최신 영상" hidden>
+            <svg id="vision-corner-overlay" class="vision-corner-overlay" viewBox="0 0 100 75"
+                 preserveAspectRatio="none" role="group" aria-label="원본 영상 바닥 사각 영역 모서리 조정"
+                 aria-describedby="vision-corner-hint" hidden>
+              <polygon id="vision-corner-polygon" points="0,0 100,0 100,100 0,100" aria-hidden="true"></polygon>
+              <polygon id="vision-proposal-polygon" class="vision-proposal-polygon" points="0,0 0,0 0,0 0,0" aria-hidden="true" hidden></polygon>
+              <circle data-corner-handle="0" cx="0" cy="0" r="7" tabindex="0" role="button" aria-label="왼쪽 위 모서리, X 0%, Y 0%"></circle>
+              <circle data-corner-handle="1" cx="100" cy="0" r="7" tabindex="0" role="button" aria-label="오른쪽 위 모서리, X 100%, Y 0%"></circle>
+              <circle data-corner-handle="2" cx="100" cy="100" r="7" tabindex="0" role="button" aria-label="오른쪽 아래 모서리, X 100%, Y 100%"></circle>
+              <circle data-corner-handle="3" cx="0" cy="100" r="7" tabindex="0" role="button" aria-label="왼쪽 아래 모서리, X 0%, Y 100%"></circle>
+            </svg>
+            <!-- D-375: 지도 맞춤 제안·수락한 맞춤으로 사이트 차선을 원본 위에 겹친다. 표시 전용. -->
+            <canvas id="vision-lane-overlay" class="vision-lane-overlay" width="16" height="9" aria-hidden="true" hidden></canvas>
+          </div>
+          <p id="vision-message" role="status">관제 사용자 인증 후 카메라를 선택하세요.</p>
+        </div>
+        <p class="hint" id="vision-meta" title="화면에 보이는 카메라의 최신 프레임입니다. 실제 시야 범위는 현장 설치에서 확인해야 합니다"></p>
+
+        <div class="field-tools">
+          <ui-button kind="quiet" id="field-detect" type="button">경기장 자동 찾기</ui-button>
+          <ui-button kind="quiet" id="field-accept" type="button" hidden>제안 수락</ui-button>
+          <ui-button kind="quiet" id="field-dismiss" type="button" hidden>제안 버리기</ui-button>
+          <ui-button kind="quiet" id="map-fit-detect" type="button">맵 자동 맞춤</ui-button>
+          <ui-button kind="quiet" id="map-fit-accept" type="button" hidden>맞춤 수락</ui-button>
+          <ui-button kind="quiet" id="map-fit-dismiss" type="button" hidden>맞춤 제안 버리기</ui-button>
+          <ui-button kind="quiet" id="map-fit-clear" type="button" hidden>저장한 맞춤 지우기</ui-button>
+        </div>
+        <p class="hint" id="field-proposal-state" role="status">경기장 윤곽을 Vision이 제안합니다. 제안은 확인 전까지 적용되지 않습니다.</p>
+        <p class="hint field-storage-state" id="field-storage-state" role="status" hidden></p>
+        <p class="hint map-fit-state" id="map-fit-state" role="status">Vision이 차선 페인트로 카메라를 사이트 지도에 맞춰 봅니다. 확인 전까지 적용되지 않고, 관측·주행에는 쓰지 않습니다.</p>
+        <p class="map-fit-guidance" id="map-fit-guidance" role="status" hidden></p>
+        <figure class="field-rectified map-fit-figure" id="map-fit-figure" hidden>
+          <canvas id="map-fit-canvas" width="640" height="300" role="img" aria-label="지도 좌표로 편 카메라 영상과 사이트 차선"></canvas>
+          <figcaption class="hint" id="map-fit-caption"></figcaption>
+        </figure>
+        <figure class="field-rectified" id="field-rectified" hidden>
+          <canvas id="field-canvas" width="640" height="360" role="img" aria-label="위에서 본 경기장"></canvas>
+          <figcaption class="hint" id="field-rectified-caption"></figcaption>
+        </figure>
+        <details class="field-options" id="field-options">
+          <summary>경기장 크기·레이어</summary>
+          <fieldset class="field-size">
+            <legend>경기장 크기(표시 축척, 이 브라우저만)</legend>
+            <label for="field-width">가로 m <input class="ui-field" id="field-width" type="number" inputmode="decimal" min="0.05" max="100" step="0.01"></label>
+            <label for="field-height">세로 m <input class="ui-field" id="field-height" type="number" inputmode="decimal" min="0.05" max="100" step="0.01"></label>
+          </fieldset>
+          <fieldset class="layer-toggles">
+            <legend>레이어</legend>
+            <label class="ui-check"><input class="ui-field" type="checkbox" data-layer="raw" checked> 원본 카메라</label>
+            <label class="ui-check"><input class="ui-field" type="checkbox" data-layer="rectified" checked> 보정 경기장</label>
+            <label class="ui-check"><input class="ui-field" type="checkbox" data-layer="site" checked> 사이트 사각형</label>
+            <label class="ui-check"><input class="ui-field" type="checkbox" data-layer="grid" checked> 격자</label>
+            <label class="ui-check"><input class="ui-field" type="checkbox" data-layer="sightings" checked> 카메라 관측</label>
+            <label class="ui-check"><input class="ui-field" type="checkbox" data-layer="poses" checked> CORE 로봇 위치</label>
+            <label class="ui-check"><input class="ui-field" type="checkbox" data-layer="lanes" checked> 카메라 위 차선</label>
+            <label class="ui-check"><input class="ui-field" type="checkbox" data-layer="maptop" checked> 지도 맞춤 평면</label>
+          </fieldset>
+        </details>
+        <details id="vision-adjustments" class="vision-adjustments" data-role-lock>
+          <summary>왜곡 및 사각 보정</summary>
+          <ui-status id="vision-role-lock" class="role-lock-note" state="forbidden" hidden>운용자 권한이 필요합니다</ui-status>
+          <p class="hint">화면 미리보기만 보정합니다. 원본과 로봇 위치 인식은 그대로 유지됩니다. 현장 실측 전에는 보정된 위치 증거로 사용할 수 없습니다.</p>
+          <div id="vision-corner-modes" class="vision-corner-modes" role="group" aria-label="영역 조정 화면" hidden>
+            <ui-button kind="segment" id="vision-edit-corners" type="button" aria-pressed="false">원본에서 영역 조정</ui-button>
+            <ui-button kind="segment" id="vision-preview-adjusted" type="button" aria-pressed="true">보정 결과 미리보기</ui-button>
+          </div>
+          <p id="vision-corner-hint" class="hint" hidden>네 모서리를 드래그하세요. 키보드는 모서리에 초점을 두고 방향키로 이동합니다.</p>
+          <div class="adjustment-columns">
+            <fieldset>
+              <legend>평면 모서리와 출력 비율</legend>
+              <p class="hint">원본 영상에서 바닥 영역의 네 모서리를 0–100%로 지정합니다.</p>
+              <div class="corner-grid">
+                <label>왼쪽 위 X<input class="ui-field" data-corner="0" data-axis="0" type="number" min="0" max="100" step="0.1" value="0" aria-label="왼쪽 위 X (%)"></label>
+                <label>왼쪽 위 Y<input class="ui-field" data-corner="0" data-axis="1" type="number" min="0" max="100" step="0.1" value="0" aria-label="왼쪽 위 Y (%)"></label>
+                <label>오른쪽 위 X<input class="ui-field" data-corner="1" data-axis="0" type="number" min="0" max="100" step="0.1" value="100" aria-label="오른쪽 위 X (%)"></label>
+                <label>오른쪽 위 Y<input class="ui-field" data-corner="1" data-axis="1" type="number" min="0" max="100" step="0.1" value="0" aria-label="오른쪽 위 Y (%)"></label>
+                <label>오른쪽 아래 X<input class="ui-field" data-corner="2" data-axis="0" type="number" min="0" max="100" step="0.1" value="100" aria-label="오른쪽 아래 X (%)"></label>
+                <label>오른쪽 아래 Y<input class="ui-field" data-corner="2" data-axis="1" type="number" min="0" max="100" step="0.1" value="100" aria-label="오른쪽 아래 Y (%)"></label>
+                <label>왼쪽 아래 X<input class="ui-field" data-corner="3" data-axis="0" type="number" min="0" max="100" step="0.1" value="0" aria-label="왼쪽 아래 X (%)"></label>
+                <label>왼쪽 아래 Y<input class="ui-field" data-corner="3" data-axis="1" type="number" min="0" max="100" step="0.1" value="100" aria-label="왼쪽 아래 Y (%)"></label>
+              </div>
+              <label class="aspect-control" for="vision-aspect">출력 비율
+                <select class="ui-field" id="vision-aspect" data-rect="output_aspect">
+                  <option value="0">자동</option><option value="1">정사각형 1:1</option>
+                  <option value="0.75">세로 3:4</option><option value="1.333333">가로 4:3</option>
+                  <option value="1.777778">가로 16:9</option>
+                </select>
+              </label>
+            </fieldset>
+            <fieldset>
+              <legend>렌즈 보정 계수</legend>
+              <p class="hint">카메라 보정 결과를 알고 있다면 입력합니다. 모르면 기본값을 유지하세요.</p>
+              <div class="lens-grid">
+                <label>초점 X<input class="ui-field" data-rect="fx" type="number" min="0.25" max="4" step="0.01" value="1"></label>
+                <label>초점 Y<input class="ui-field" data-rect="fy" type="number" min="0.25" max="4" step="0.01" value="1"></label>
+                <label>중심 X<input class="ui-field" data-rect="cx" type="number" min="0" max="1" step="0.01" value="0.5"></label>
+                <label>중심 Y<input class="ui-field" data-rect="cy" type="number" min="0" max="1" step="0.01" value="0.5"></label>
+                <label>방사 k1<input class="ui-field" data-rect="k1" type="number" min="-1" max="1" step="0.01" value="0"></label>
+                <label>방사 k2<input class="ui-field" data-rect="k2" type="number" min="-1" max="1" step="0.01" value="0"></label>
+                <label>접선 p1<input class="ui-field" data-rect="p1" type="number" min="-0.5" max="0.5" step="0.01" value="0"></label>
+                <label>접선 p2<input class="ui-field" data-rect="p2" type="number" min="-0.5" max="0.5" step="0.01" value="0"></label>
+                <label>방사 k3<input class="ui-field" data-rect="k3" type="number" min="-1" max="1" step="0.01" value="0"></label>
+              </div>
+            </fieldset>
+          </div>
+          <div class="adjustment-actions">
+            <span id="vision-adjustment-state" role="status">현재 브라우저에 조정값을 저장합니다.</span>
+            <ui-button kind="quiet" id="vision-reset-adjustments" type="button">조정 초기화</ui-button>
+          </div>
+        </details>
+    </section>
+
+      </div>
+    </div>
+
+    <section class="panel install-history" aria-labelledby="install-log-heading">
+      <h2 id="install-log-heading">설치 기록</h2>
+        <div id="log" class="log" role="status" aria-live="polite" aria-label="최근 설치 이벤트">
+          <ui-empty>최근 이벤트가 없습니다 — 등록·승인·보정 요청과 결과가 여기에 표시됩니다.</ui-empty>
+        </div>
+
+    </section>
+  </main>
+
+  </ui-shell>
+</body>
+</html>

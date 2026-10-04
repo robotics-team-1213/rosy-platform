@@ -1,11 +1,11 @@
 **
-!src/site/vision/rosy_vision/**
-!src/site/vision/setup.py
-!src/site/games/games/**
-!src/site/games/setup.py
-!src/contracts/foundation/core_common/**
+!operations/vision/rosy_vision/**
+!operations/vision/setup.py
+!operations/apps/games/games/**
+!operations/apps/games/setup.py
+!contracts/foundation/core_common/**
 !deploy/site/requirements-vision.txt
 !deploy/site/secret_exec.py
-!src/runtime/sensing/map/map_v2_fleet/meshes/road_lines.stl
+!middleware/perception/map/map_v2_fleet/meshes/road_lines.stl
 **/__pycache__
 **/.pytest_cache

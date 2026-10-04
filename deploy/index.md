@@ -71,7 +71,7 @@
 ## 최근 기록
 
 - 2026-10-04 · uncommitted · fix(site): keep model delivery journal in service state
-- 2026-10-03 · uncommitted · fix(site): order Avahi before the Fleet stack
-- 2026-10-03 · uncommitted · fix(site): Fleet NSS mDNS resolver closure
-- 2026-10-03 · uncommitted · fix: publish readable public DNS-SD XML
-- 2026-10-03 · fcda72b78 · feat(deploy): D-433 rosy-boot-display → rosy-face 이주
+- 2026-10-04 · uncommitted · fix: protect the full model-PC code closure
+- 2026-10-04 · uncommitted · D-441 local maintenance and manual install safety
+- 2026-10-04 · uncommitted · verify(D-441): 최초 설치와 실제 후속 자동 갱신 확인
+- 2026-10-04 · uncommitted · D-446 clean older checkout permits signed execution

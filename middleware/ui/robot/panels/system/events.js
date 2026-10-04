@@ -1,0 +1,53 @@
+// D-204 system.events — 설치·정비 화면. "방금 무슨 일이 있었나"를 최신순 10개로 본다.
+// 서버가 붙인 severity만 색이 된다. info는 정상이므로 색이 없다(D-82).
+
+import { SEVERITY_LABEL, enumLabel } from "/common/core_ui_logic.js";
+import { createNode } from "/assets/dom.js";
+const LIMIT = 10;
+const REFRESH_MS = 5_000;
+
+function text(scale, value) {
+  const node = document.createElement("ui-text");
+  node.setAttribute("scale", scale);
+  node.textContent = value;
+  return node;
+}
+
+function emptyRow(message) {
+  const row = document.createElement("li");
+  const note = createNode("ui-empty", "", message);
+  row.append(note);
+  return row;
+}
+
+function eventRow(event) {
+  const row = document.createElement("li");
+  const time = createNode("time", "event-time", event.ts ? new Date(event.ts).toLocaleTimeString("ko-KR") : "—");
+  const type = createNode("span", "event-type", event.type || "이벤트 유형 미확인");
+  const severity = document.createElement("span");
+  const level = event.severity;
+  severity.className = `event-severity${Object.hasOwn(SEVERITY_LABEL, level) ? ` ${level}` : ""}`;
+  severity.textContent = enumLabel(SEVERITY_LABEL, level);
+  severity.title = level || "";
+  row.append(time, type, severity);
+  return row;
+}
+
+export function mount(el, ctx) {
+  const head = document.createElement("ui-head");
+  head.append(text("label", "최근 이벤트"));
+  const list = createNode("ol", "event-list");
+  list.append(emptyRow("불러오는 중입니다."));
+  el.append(head, list);
+
+  function render(payload) {
+    const events = [...(payload.events || [])].reverse().slice(0, LIMIT);
+    list.replaceChildren(...(events.length ? events.map(eventRow) : [emptyRow("수신된 이벤트가 없습니다.")]));
+  }
+
+  function fail(error) {
+    list.replaceChildren(emptyRow(`이벤트를 받지 못했습니다: ${error.message}`));
+  }
+
+  return ctx.store.poll(`/api/v1/events?limit=${LIMIT}`, REFRESH_MS, render, fail);
+}

@@ -27,7 +27,7 @@ The trainer-side contract of the D-356/D-373 learned loop. Training itself runs 
 
 - Edit `gen_notebook.py`, never the `.ipynb`; regenerate and commit both.
 - `export_cell.py` must stay torch-free at import time; only `rosy_lane_model.py` may import torch at module level.
-- The manifest contract is defined on the robot side in `src/runtime/sensing/control/sensing/perception/learned/manifest.py`; change both sides together.
+- The manifest contract is defined on the robot side in `middleware/perception/control/sensing/perception/learned/manifest.py`; change both sides together.
 - Do not commit weights, datasets or Colab outputs. Do not put tokens or Drive paths in the notebook.
 - Local run records + TensorBoard are the default tracking (D-356 addendum 2026-10-03); keep `run_log.py` torch-free at import and never write secret-looking config keys.
 - W&B is optional (D-356 addendum 2026-10-03): the key comes only from Colab Secrets / env `WANDB_API_KEY`, is never printed or written (no `wandb.login`, which writes `~/.netrc`); site and robot tools never depend on wandb.
@@ -50,7 +50,7 @@ Needs `torch` and `onnxruntime`; tests skip where missing.
 
 ### Internal
 
-- `../store.py`, `../model/` (intake, deliver, watch), `src/runtime/sensing/control/sensing/perception/learned/manifest.py`
+- `../store.py`, `../model/` (intake, deliver, watch), `middleware/perception/control/sensing/perception/learned/manifest.py`
 
 ### External
 

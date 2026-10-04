@@ -1,0 +1,37 @@
+/* Authentication and navigation are a procedure, using the existing vocabulary. */
+body[data-dashboard-entry] { overflow: auto; }
+.entry-topbar { display: flex; flex-wrap: wrap; }
+.entry-topbar ui-brand { flex: 1; min-width: max-content; }
+.entry-topbar #entry-stop-notice { flex-basis: 100%; }
+.entry-main { width: min(100%, 46rem); margin: 0 auto; padding: var(--space-5); display: grid; gap: var(--space-4); }
+.entry-heading h1 { margin: 0 0 var(--space-2); font: var(--weight-strong) var(--text-title)/var(--leading-dense) var(--body); }
+.entry-heading p, .entry-main p { margin: 0; color: var(--ink-quiet); line-height: var(--leading-copy); }
+.entry-main h2 { margin: 0; font: var(--weight-strong) var(--text-title)/var(--leading-dense) var(--body); }
+body[data-dashboard-entry] #auth-drawer {
+  display: grid; position: static; width: 100%; min-width: 0; padding: 0;
+  border: 0; background: transparent; gap: var(--space-4);
+}
+body[data-dashboard-entry] #auth-drawer > div:first-child h2 { display: none; }
+body[data-dashboard-entry] #close-auth { display: none; }
+body[data-dashboard-entry] .auth-tabs { flex-wrap: wrap; }
+body[data-dashboard-entry] .auth-row { flex-wrap: wrap; min-width: 0; }
+body[data-dashboard-entry] .auth-row input { min-width: 0; width: 100%; }
+body[data-dashboard-entry] .auth-drawer label { font: var(--weight-label) var(--text-label)/var(--leading-copy) var(--body); text-transform: none; }
+body[data-dashboard-entry] .auth-drawer .bench-confirmation { font-weight: var(--weight-regular); align-items: start; }
+#entry-destinations { display: grid; gap: var(--space-3); }
+#entry-navigation { display: grid; }
+#entry-navigation a { display: flex; align-items: center; gap: var(--space-3); min-height: var(--target-primary); padding: var(--space-3) 0; border-bottom: 1px solid var(--surface-line); color: var(--ink); text-decoration: none; font-weight: var(--weight-label); }
+#entry-navigation a:hover { text-decoration: underline; text-underline-offset: var(--space-1); }
+#entry-navigation a:focus-visible, .entry-compatibility a:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
+.entry-compatibility { padding-top: var(--space-4); border-top: 1px solid var(--surface-line); }
+.entry-compatibility a { color: var(--ink-quiet); }
+@media (width < 30rem) {
+  .entry-main { padding: var(--space-4); }
+  .entry-topbar { gap: var(--space-2); }
+  .entry-topbar { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: "brand role stop" "logout logout stop" "notice notice notice"; }
+  .entry-topbar ui-brand { grid-area: brand; }
+  .entry-topbar #entry-role { grid-area: role; min-width: 0; white-space: normal; overflow-wrap: anywhere; justify-self: start; }
+  .entry-topbar #entry-stop { grid-area: stop; align-self: stretch; }
+  .entry-topbar #entry-logout { grid-area: logout; justify-self: start; }
+  .entry-topbar #entry-stop-notice { grid-area: notice; }
+}

@@ -913,7 +913,7 @@ beside the reviewed verifier from a reviewed checkout, never from a candidate:
 sudo install -o root -g root -m 0755 deploy/site/rosy_site_autoupdate.py \
   /usr/local/lib/rosy-site/rosy_site_autoupdate.py
 sudo install -o root -g root -m 0644 deploy/site/verify_candidate.py \
-  deploy/site/candidate_signing.py /usr/local/lib/rosy-site/
+  deploy/site/candidate_signing.py deploy/site/site_update_io.py /usr/local/lib/rosy-site/
 sudo install -o root -g root -m 0644 deploy/site/rosy-site-autoupdate.service \
   deploy/site/rosy-site-autoupdate.timer /etc/systemd/system/
 sudoedit /etc/rosy/site/autoupdate.conf   # JSON below, mode 0644, owner root
@@ -935,7 +935,13 @@ sudo systemctl enable --now rosy-site-autoupdate.timer
 ```
 
 Each run (every 15 minutes, randomized by up to 5) picks the newest signed
-`site-*` release created after the installed one and:
+`site-*` release whose commit is a strict descendant of the running commit.
+Release creation time only orders eligible candidates; rebuilding an old
+commit cannot authorize a downgrade. The running signed manifest must match
+`site.env`. Running container tags and immutable image identities must also
+match the signed archive before release selection. A network error, including
+an incomplete HTTP body, postpones the attempt without blacklisting it.
+Each eligible candidate:
 
 1. refuses without changing anything when `ROSY_SITE_PAIRING_COMPOSE` names a
    file other than the candidate's `compose.pairing.yaml`, when `site.env`
@@ -948,8 +954,10 @@ Each run (every 15 minutes, randomized by up to 5) picks the newest signed
    `fetch_candidate.sh`, and moves the result to
    `/opt/rosy/candidates/<commit>`;
 3. runs the installed verifier with the enrolled key (signature and hashes),
-   `docker image load`, then the full verifier (loaded image IDs);
-4. backs up `site.env` to `site.env.autoupdate-prev`, writes the new
+   `docker image load`, then the full verifier (loaded image IDs). The signed
+   `source_commit` must match the selected full commit before loading;
+4. backs up `site.env` to `site.env.autoupdate-prev`, durably records the
+   previous folder and commit in the state file, then writes the new
    `ROSY_SITE_IMAGE_TAG`, swaps the `/opt/rosy/candidate` symlink (an
    existing real directory there is moved once to
    `/opt/rosy/candidates/<its commit>`), and restarts
@@ -957,18 +965,87 @@ Each run (every 15 minutes, randomized by up to 5) picks the newest signed
 5. waits up to `health_timeout_s` for `healthz` 200 and all three containers
    running, healthy, and on the new image. Otherwise it restores the previous
    symlink and `site.env`, restarts, and records the tag as failed. A failed
-   tag is never retried automatically;
+   tag is never retried automatically. Any exception during switching also
+   triggers rollback. Restart failures and timeouts remain retryable. On the
+   next run an interrupted switch is undone before contacting GitHub. Failed
+   rollback keeps its recovery record and blocks updates and pruning;
 6. keeps the newest `keep` candidate folders (always the running and previous
-   ones) and removes older `rosy-site-*` images that no container uses.
+   ones) and removes older `rosy-site-*` images that no container uses. Commits
+   from retained manifests protect rollback images even in renamed folders.
+   Failed inventory commands defer pruning.
 
 Every step is one JSON line in `journalctl -u rosy-site-autoupdate`. The
 state is in `/var/lib/rosy/site-autoupdate.json`
 (`sudo python3 -I /usr/local/lib/rosy-site/rosy_site_autoupdate.py status`).
 After fixing the cause of a failed tag, allow it again with
 `sudo python3 -I /usr/local/lib/rosy-site/rosy_site_autoupdate.py forget-failed site-<sha12>`.
-When `verify_candidate.py` or `candidate_signing.py` change on `main`, the
+This command takes the updater lock. An unreadable or malformed state file
+blocks changes and is preserved for operator recovery. Interrupted rollback
+requires the backup environment and signed previous candidate to match the journal.
+When `verify_candidate.py`, `candidate_signing.py`, or `site_update_io.py` change on `main`, the
 administrator reinstalls them by the same reviewed path; the updater never
 copies them from a candidate.
+
+### Local maintenance and manual installation (D-441 follow-up)
+
+Local Git edits and commits are source work: they do not replace the running
+signed images. Publish, pass CI, build and sign a candidate to deploy that code.
+The signing station now requires the newest `ci.yml` run for the exact main
+commit and its `ci-result` gate to succeed. Pending, failed or unavailable CI
+proof postpones signing; the same manifest is checked again next time.
+
+Before changing the site deployment locally, use:
+
+```bash
+sudo python3 -I /usr/local/lib/rosy-site/rosy_site_autoupdate.py hold 'local maintenance'
+# Finish and verify the local work, then explicitly resume.
+sudo python3 -I /usr/local/lib/rosy-site/rosy_site_autoupdate.py resume
+```
+
+Both commands take the updater lock. Hold prevents new downloads, switches and
+pruning. It does not stop recovery of an already interrupted switch; recovery
+runs first. `status` shows the hold and `last_run.result=held`. Resume permits
+checks again; it does not bypass signature or runtime verification.
+
+A manually installed signed version is accepted only when its manifest,
+environment tag and actual running image identities agree. After verification,
+the updater reconciles `installed` with that real commit and marks its origin
+`manual`. It clears uncertain previous history rather than inventing it. The
+next automatic switch records this actual installation as `previous` and keeps
+its rollback folder/images. A dry run does not adopt the manual installation.
+
+The current Compose hashes must agree with the running containers' configuration
+labels, and their root filesystems must remain read-only and unprivileged. An
+ordinary local deployment/configuration mismatch blocks a switch; restore the
+approved settings or keep the host on hold. This detects ordinary operational
+drift; it does not defend against a root administrator forging Docker labels.
+It also does not inspect every mutable database/configuration file's contents.
+
+For a functional gate, add `functional_checks` to host `autoupdate.conf`:
+
+```json
+"functional_checks": [
+  {"path": "/api/fleet/state", "token_file": "/etc/rosy/site/secrets/<viewer-token-file>",
+   "required_ids": ["<robot-id>"]},
+  {"path": "/api/fleet/vision/sources", "token_file": "/etc/rosy/site/secrets/<viewer-token-file>",
+   "required_ids": ["<camera-source-id>"]}
+]
+```
+
+Use an enrolled viewer credential in a separate absolute regular file protected
+by host permissions. It is read at request time and never placed in command
+arguments or logs. Only these GET APIs on the health URL's HTTPS origin are
+allowed; authenticated redirects are refused. The gate checks response structure
+and required IDs before staging and after switching. A failing preflight leaves
+the current installation in place; failure after switching triggers rollback.
+Hosts without this setting retain the liveness-only gate. Listing a camera is
+not proof of advancing frames, and listing a robot is not physical acceptance.
+Record actual camera frame reception separately without sending motion.
+
+The administrator must reinstall the reviewed updater, I/O and verifier modules
+outside candidate folders to activate these changes; a new signed image alone
+does not replace those privileged tools. Upgrade the signing station's reviewed
+script separately as well, preserving its existing enrolled key.
 
 **Pause.** Host: `sudo systemctl disable --now rosy-site-autoupdate.timer`.
 Signing PC: `Disable-ScheduledTask -TaskName RosySiteAutoSign`. Either one
@@ -1165,7 +1242,7 @@ processed once:
 ### Install
 
 The watcher needs a reviewed source checkout (it imports the manifest contract
-and runner from `src/runtime/sensing`) and a Python venv with `onnxruntime`,
+and runner from `middleware/perception`) and a Python venv with `onnxruntime`,
 `onnx` (intake reads the graph's precision with it), `opencv-python-headless`,
 `numpy` and `PyYAML`; NCNN intake additionally needs `ncnn==1.0.20260526`
 (D-431; CPython 3.12 ARM64/x86_64 wheel hashes are pinned in
@@ -1351,6 +1428,9 @@ Windows 등 다른 PC의 개인 키를 복사하지 않는다. `cam-screen.json.
 ```bash
 python3 deploy/site/rosy_cam_screen.py status --config /private/path/cam-screen.json
 python3 deploy/site/rosy_cam_screen.py wake --config /private/path/cam-screen.json
+python3 deploy/site/rosy_cam_screen.py light-status --config /private/path/cam-screen.json
+python3 deploy/site/rosy_cam_screen.py light-request --config /private/path/cam-screen.json
+python3 deploy/site/rosy_cam_screen.py light-cancel --config /private/path/cam-screen.json
 ```
 
 CLI는 이미 인증된 연결을 먼저 검사하고, 없으면 ADB mDNS 및 Avahi의
@@ -1367,3 +1447,15 @@ ADB 연결 목록을 확인한다. 발견된 오래된 포트가 응답하지 �
 증가하는 sequence·freshness를 별도로 확인한다. ADB가 끊기거나 무선 디버깅이
 꺼진 경우에는 공식 재연결·페어링 경로를 사용한다. 충전 중 화면 유지와 화면
 제한시간은 전화의 OS 설정이며, 앱의 화면 유지 해제만으로 설정을 덮어쓰지 않는다.
+
+조명은 기본 꺼짐이며 요청 없이 반복 점등하지 않는다. `light-request`는 실행 중인
+Rosy Cam의 공식 `촬영 조명 요청` 버튼만 조작한다. 그 요청 안에서만 저조도를
+판단하고, 요청부터 최대 30초 후 요청과 조명을 모두 종료한다. 이미 요청 중이면
+시간을 연장하지 않으며, `light-cancel`은 즉시 취소한다. 재시작·렌즈 교체·발열
+제한 시 취소하고, 어둡거나 온도가 회복돼도 새 요청 없이 재개하지 않는다.
+
+`light-status`는 화면을 깨우지 않고 서비스의 boolean 상태만 읽는다. 제어 결과의
+`light_requested`는 요청 수락 상태이며 실제 점등은 `torch_on`으로 따로 확인한다.
+조작은 검증된 장치·앱의 최신 UI를 확인하며, 잠긴 보안 화면·미지원 렌즈·발열
+제한·중복/변경 UI는 거절한다. 보안 잠금을 우회하거나 송출을 자동 시작하지 않는다.
+화면 방향 등 UI 배치가 인식 범위를 벗어나면 수동 조작이 필요하다.

@@ -1,0 +1,10 @@
+[Unit]
+Description=Model-PC shadow delivery check (D-373, D-446)
+
+[Timer]
+OnBootSec=3min
+OnUnitInactiveSec=10min
+Unit=rosy-model-code-watch.service
+
+[Install]
+WantedBy=timers.target

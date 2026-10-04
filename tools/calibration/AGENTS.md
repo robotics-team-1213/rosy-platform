@@ -5,7 +5,7 @@
 
 ## Purpose
 
-Developer-side half of the D-47 addendum (2026-10-01) calibration protocol: drive a robot through a fixed motion protocol, fit wheel, LiDAR-yaw and camera values from the recording, and manage per-robot accepted calibration records. Runs on the PC, not on the robot. The store implementation is `core_common/calibration_store.py` (`src/contracts/foundation`); the PC mirror is `data/calibration/` (gitignored).
+Developer-side half of the D-47 addendum (2026-10-01) calibration protocol: drive a robot through a fixed motion protocol, fit wheel, LiDAR-yaw and camera values from the recording, and manage per-robot accepted calibration records. Runs on the PC, not on the robot. The store implementation is `core_common/calibration_store.py` (`contracts/foundation`); the PC mirror is `data/calibration/` (gitignored).
 
 ## Key Files
 
@@ -14,7 +14,7 @@ Developer-side half of the D-47 addendum (2026-10-01) calibration protocol: driv
 | `run_calibration.py` | One command, protocol v1: per robot (one thread each) pair with a login code, drive the protocol through CORE teleop at 10 Hz, record on the robot over SSH (`~/rosy_rec.sh`), pull the session, analyse, write candidate records, repeat while the repeat rule fails. `--dry-run` prints the protocol and touches nothing; `--offline SESSION_DIR...` only analyses existing sessions |
 | `analyze_session.py` | Fits from D-356 recordings (`session.json` + `bag/*.mcap`): wheel radius/separation, per-wheel scale, gain per speed, LiDAR mount yaw check, camera pitch/roll/height; across runs the mean, spread and 95 % interval. Writes `candidate.json` and `report.md` per robot and candidate records into the store mirror. Never applies anything |
 | `store_cli.py` | Operator view of the store: `list`, `show`, `accept`, `reject`, `pin` (rollback/unpin), `sync` (merge another copy). `accept` refuses implausible values with the runtime's own check and needs `--actor` |
-| `urdf_nominal.py` | Evaluates the fixed-joint chain of `src/sim/description/urdf/rosy.urdf.xacro` without ROS (stdlib only) and writes `src/products/pinky_pro/profile/config/geometry.yaml`; `--check` exits 1 on drift (D-397). Unsupported xacro raises instead of being guessed |
+| `urdf_nominal.py` | Evaluates the fixed-joint chain of `middleware/apps/device/pinky/description/urdf/rosy.urdf.xacro` without ROS (stdlib only) and writes `middleware/apps/device/pinky/profile/config/geometry.yaml`; `--check` exits 1 on drift (D-397). Unsupported xacro raises instead of being guessed |
 
 ## Subdirectories
 
@@ -43,14 +43,14 @@ Needs numpy, PyYAML and `mcap` for the analysis path; tests inject fakes for COR
 
 ### Common Patterns
 
-- Scripts put `src/contracts/foundation`, `src/runtime/sensing` and `learning/training/perception/dataset` on `sys.path` instead of installing packages.
+- Scripts put `contracts/foundation`, `middleware/perception` and `learning/training/perception/dataset` on `sys.path` instead of installing packages.
 - Candidate and record JSON go through `json_safe` so NaN/inf do not break the store.
 
 ## Dependencies
 
 ### Internal
 
-- `src/contracts/foundation/core_common/calibration_store.py`, `src/runtime/sensing` (`odometry_fit`, `camera_extrinsic`), `learning/training/perception/dataset/autolabel.py`, `src/sim/description`, `docs/adr/D-47-core-sensor-adapter-calibration-binding.md`
+- `contracts/foundation/core_common/calibration_store.py`, `middleware/perception` (`odometry_fit`, `camera_extrinsic`), `learning/training/perception/dataset/autolabel.py`, `middleware/apps/device/pinky/description`, `docs/adr/D-47-core-sensor-adapter-calibration-binding.md`
 
 ### External
 

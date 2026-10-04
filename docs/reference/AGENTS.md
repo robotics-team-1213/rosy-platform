@@ -30,7 +30,7 @@ None.
 
 ### Testing Requirements
 
-Protocol tests: `src/runtime/gateway/test/test_protocol_schemas.py`. Host Agent: `test/test_host_agent.py`.
+Protocol tests: `middleware/core/gateway/test/test_protocol_schemas.py`. Host Agent: `test/test_host_agent.py`.
 
 ### Common Patterns
 
@@ -40,8 +40,8 @@ API versioning is path-based (`/api/v1`). Additive schema changes bump protocol 
 
 ### Internal
 
-- `src/contracts/foundation/core_common/protocol/schemas.py`
-- `src/runtime/api_web/core_api_web/api/`
+- `contracts/foundation/core_common/protocol/schemas.py`
+- `middleware/core/api_web/core_api_web/api/`
 - `deploy/robot/pinky_pro/release/host_agent.py`
 
 ### External

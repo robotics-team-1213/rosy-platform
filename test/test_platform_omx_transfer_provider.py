@@ -10,12 +10,12 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 for package_root in (
     ROOT / "contracts/skill/src",
-    ROOT / "modules/skills/api/src",
-    ROOT / "modules/skills/manipulation/src",
-    ROOT / "src/contracts/foundation",
-    ROOT / "src/products/omx/adapter",
+    ROOT / "middleware/skills/api/src",
+    ROOT / "middleware/skills/manipulation/src",
+    ROOT / "contracts/foundation",
+    ROOT / "middleware/apps/device/omx/adapter",
     ROOT / "integrations/robots/omx/src",
-    ROOT / "src/products/omx/adapter/test",
+    ROOT / "middleware/apps/device/omx/adapter/test",
 ):
     if str(package_root) not in sys.path:
         sys.path.insert(0, str(package_root))

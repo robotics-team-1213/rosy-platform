@@ -16,13 +16,13 @@ RUN apt-get update \
 
 COPY deploy/site/requirements-vision.txt /opt/rosy/requirements.txt
 COPY deploy/site/secret_exec.py /opt/rosy/secret_exec.py
-COPY src/site/vision/rosy_vision/ /opt/rosy/src/site/vision/rosy_vision/
-COPY src/site/vision/setup.py /opt/rosy/src/site/vision/setup.py
-COPY src/site/games/games/ /opt/rosy/src/site/games/games/
-COPY src/site/games/setup.py /opt/rosy/src/site/games/setup.py
-COPY src/contracts/foundation/core_common/ /opt/rosy/src/contracts/foundation/core_common/
+COPY operations/vision/rosy_vision/ /opt/rosy/src/site/vision/rosy_vision/
+COPY operations/vision/setup.py /opt/rosy/src/site/vision/setup.py
+COPY operations/apps/games/games/ /opt/rosy/src/site/games/games/
+COPY operations/apps/games/setup.py /opt/rosy/src/site/games/setup.py
+COPY contracts/foundation/core_common/ /opt/rosy/src/contracts/foundation/core_common/
 # D-375 map-proposal: the site lane paint in map metres (--map-paint).
-COPY src/runtime/sensing/map/map_v2_fleet/meshes/road_lines.stl /opt/rosy/maps/map_v2_fleet/road_lines.stl
+COPY middleware/perception/map/map_v2_fleet/meshes/road_lines.stl /opt/rosy/maps/map_v2_fleet/road_lines.stl
 
 RUN python3 -m venv /opt/rosy-venv \
     && /opt/rosy-venv/bin/pip install --no-cache-dir -r /opt/rosy/requirements.txt \

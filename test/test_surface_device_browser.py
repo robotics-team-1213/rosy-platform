@@ -10,7 +10,7 @@ from browser_harness import open_page
 
 
 ROOT = Path(__file__).resolve().parents[1]
-WEB = ROOT / "src" / "hmi" / "dashboard"
+WEB = ROOT / "middleware" / "ui" / "robot"
 
 
 def test_hardware_panel_marks_last_snapshot_stale_after_access_failure():

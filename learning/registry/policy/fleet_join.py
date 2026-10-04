@@ -12,7 +12,7 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[3]
 sys.path[:0] = [str(ROOT / 'contracts/learning/src'),
-               str(ROOT / 'src/contracts/foundation')]
+               str(ROOT / 'contracts/foundation')]
 
 from core_common.protocol.schemas import DeviceActionReceipt  # noqa: E402
 from rosy.contracts.learning import seal, validate_episode  # noqa: E402

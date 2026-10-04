@@ -87,13 +87,20 @@ case "${1:-status}" in
     echo "$bpid $rpid $folder" > "$STATE"
     # Both must stay alive for the whole window; poll so an early exit is caught as soon as it happens.
     deadline=$((SECONDS + ${REC_START_WAIT:-3}))
-    while alive "$bpid" && alive "$rpid"; do
+    while :; do
+      if ! alive "$bpid" || ! alive "$rpid"; then
+        # Confirm disappearance once: a process visibility/exec transition
+        # must not produce FAILED () while both children are actually alive.
+        sleep 0.2
+        why=""
+        alive "$bpid" || why="recorder exited"
+        alive "$rpid" || why="${why:+$why; }relay exited"
+        [ -n "$why" ] && break
+      fi
       [ "$SECONDS" -ge "$deadline" ] && { echo "recording: $folder"; exit 0; }
       sleep 0.2
     done
-    alive "$bpid" || why="recorder exited"
-    alive "$rpid" || why="${why:+$why; }relay exited"
-    echo "FAILED ($why):"; tail -5 "$folder/record.log" "$folder/relay.log"
+    echo "FAILED ($why):"; tail -n 5 "$folder/record.log" "$folder/relay.log"
     stop_pid "$bpid" 10; stop_pid "$rpid" 5
     REC_FAILURE="start failed: $why" meta "$folder" "d['ended_at'] = now; d['failure'] = env('REC_FAILURE')"
     rm -f "$STATE"
@@ -116,6 +123,6 @@ case "${1:-status}" in
     ;;
   status)
     if [ -f "$STATE" ]; then read -r bpid rpid folder < "$STATE"; ours "$bpid" "$BAG_MARK" && echo "recording $folder $(du -sh "$folder" | cut -f1)" || echo "stale state $folder"; else echo "idle"; fi
-    ls -1 "$ROOT" | tail -5; df -h "$ROOT" | tail -1
+    ls -1 "$ROOT" | tail -n 5; df -h "$ROOT" | tail -n 1
     ;;
 esac

@@ -141,7 +141,16 @@ exit [int]`$exitCode
         $null = $process.Handle
         if (-not $process.WaitForExit($TimeoutSec * 1000)) {
             if ($env:OS -eq "Windows_NT") {
-                & taskkill.exe /PID $process.Id /T /F 2>&1 | Out-Null
+                try {
+                    & taskkill.exe /PID $process.Id /T /F 2>&1 | Out-Null
+                    if ($LASTEXITCODE -ne 0 -and -not $process.HasExited) {
+                        throw "Unable to stop the timed-out SSH process."
+                    }
+                }
+                catch {
+                    # Natural exit after the deadline still counts as timeout.
+                    if (-not $process.HasExited) { throw }
+                }
             }
             elseif (-not $process.HasExited) {
                 $process.Kill()

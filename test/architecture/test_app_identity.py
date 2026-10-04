@@ -23,13 +23,13 @@ import pytest
 import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
-REGISTRY = ROOT / "src/hmi/web_common/surfaces.yaml"
+REGISTRY = ROOT / "shared/web/surfaces.yaml"
 ANDROID_PREFIX = "io.github.livsbittt.rosy."
 WORD = re.compile(r"^[a-z]+$")
 
 #: Rows not yet moved, keyed by registry id (plan 2026-09-30-app-identity-rename-plan.md §3).
 PENDING = {
-    "robot": "D-374 stage 3: src/hmi/dashboard -> src/hmi/robot, package rosy_robot (D-362 gate)",
+    "robot": "D-374 stage 3: middleware/ui/robot -> src/hmi/robot, package rosy_robot (D-362 gate)",
     "console": "D-374 stage 4: fleet/server/web -> src/site/console, package rosy_console (D-362 gate)",
 }
 
@@ -41,7 +41,7 @@ PACKAGE_KEPT = {
 
 #: Participants that are not surfaces (no `app_name`, no icon) but still take a D-377 word.
 NON_SURFACE_PARTICIPANTS = [
-    {"id": "vision", "path": "src/site/vision", "console_script": True},
+    {"id": "vision", "path": "operations/vision", "console_script": True},
 ]
 
 
@@ -122,14 +122,14 @@ def test_android_app_is_not_a_colcon_package():
 
 
 def test_rule_catches_each_mismatch(tmp_path):
-    app = tmp_path / "src/site/cam"
+    app = tmp_path / "operations/ui/cam"
     (app / "app").mkdir(parents=True)
     (app / "app/build.gradle.kts").write_text(
         'namespace = "io.github.livsbittt.rosy.cam"\n'
         'applicationId = "io.github.livsbittt.rosy.ceilingcamera"\n', encoding="utf-8")
     (app / "settings.gradle.kts").write_text('rootProject.name = "rosy-ceiling-camera"\n', encoding="utf-8")
-    row = {"id": "cam", "path": "src/site/cam", "app_name": "Rosy 천장 카메라",
-           "icon": "src/hmi/web_common/icons/ceiling-camera.svg"}
+    row = {"id": "cam", "path": "operations/ui/cam", "app_name": "Rosy 천장 카메라",
+           "icon": "shared/web/icons/ceiling-camera.svg"}
     problems = identity_problems(row, tmp_path)
     assert len(problems) == 4, problems
     assert any("applicationId" in p for p in problems)
@@ -137,10 +137,10 @@ def test_rule_catches_each_mismatch(tmp_path):
     assert any("icon" in p for p in problems)
     assert any("app_name" in p for p in problems)
 
-    ros = tmp_path / "src/site/vision"
+    ros = tmp_path / "operations/vision"
     ros.mkdir(parents=True)
     (ros / "package.xml").write_text("<package><name>site_vision</name></package>", encoding="utf-8")
-    row = {"id": "vision", "path": "src/site/vision", "icon": "icons/vision.svg"}
+    row = {"id": "vision", "path": "operations/vision", "icon": "icons/vision.svg"}
     assert identity_problems(row, tmp_path) == ["package.xml <name> 'site_vision' should be 'rosy_vision'"]
     assert identity_problems({"id": "site-vision", "path": "x", "icon": None}, tmp_path)
     assert identity_problems({"id": "Pilot", "path": "x", "icon": None}, tmp_path)

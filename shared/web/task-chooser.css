@@ -1,0 +1,13 @@
+/* Shared procedure chooser: neutral segment controls and a native compact field. */
+.ui-task-chooser { min-width: 0; display: grid; align-content: start; gap: var(--space-3); }
+.ui-task-rail { display: grid; gap: var(--space-2); }
+.ui-task-rail ui-button { width: 100%; min-width: 0; white-space: normal; text-align: start; }
+.ui-task-compact { display: grid; gap: var(--space-2); font-weight: var(--weight-label); }
+.ui-task-compact select { width: 100%; min-width: 0; max-width: 100%; }
+.ui-task-chooser ui-status { font-size: var(--text-label); line-height: var(--leading-copy); }
+@media (width >= 64rem) {
+  .ui-task-compact { display: none; }
+}
+@media (width < 64rem) {
+  .ui-task-rail { display: none; }
+}

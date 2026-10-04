@@ -1,324 +1,48 @@
 #!/usr/bin/env python3
-"""Site host automatic updater for signed site candidates (D-441).
+"""Install signed site candidates whose commits strictly descend from the running one.
 
-Runs from rosy-site-autoupdate.timer as root. It is installed by the operator
-into /usr/local/lib/rosy-site next to the reviewed verify_candidate.py and
-candidate_signing.py and never runs code from the candidate it is about to
-verify (D-301 3). One ``run``:
-
-1. takes a non-blocking lock and reads ROSY_SITE_IMAGE_TAG from site.env;
-2. lists the public releases (HTTPS, no token, paginated) and picks the newest
-   ``site-<12 hex>`` release created after the installed one that carries
-   ``release.json.sig`` and has not failed here before;
-3. refuses, without changing anything, when the stack unit or site.env adds a
-   Compose file beyond the candidate's ``compose.yaml``/``compose.pairing.yaml``
-   or when ``docker compose config`` with the new tag does not resolve every
-   site service to ``rosy-site-<service>:<commit>`` (an override pinning an
-   image would otherwise keep the old code running "healthy");
-4. downloads the assets, checks SHA256SUMS, joins the parts, checks every tar
-   member, extracts into /opt/rosy/candidates/<commit>, and adds the signature;
-5. verifies signature and file hashes with the installed verifier and the
-   trusted key from /etc/rosy/site/autoupdate.conf, runs ``docker image load``,
-   then the full verifier (loaded image IDs);
-6. switches: site.env tag written atomically (backup kept), /opt/rosy/candidate
-   swapped atomically to the new folder (a real directory there is migrated
-   to /opt/rosy/candidates/<its commit> once), rosy-site-stack.service
-   restarted;
-7. health gate: healthz returns 200 and every site container is running,
-   healthy and on the new image within the timeout; otherwise rolls back
-   (previous link, site.env backup, restart) and records the tag as failed
-   (never retried automatically);
-8. keeps the newest ``keep`` candidate folders and removes older rosy-site
-   images that no container uses.
-
-Every decision is one JSON line on stdout (the journal) and the state is in
-/var/lib/rosy/site-autoupdate.json.
-
-    rosy_site_autoupdate.py run [--dry-run]
-    rosy_site_autoupdate.py status
-    rosy_site_autoupdate.py forget-failed <site-tag>
-
-Standard library only.
+The reviewed updater, I/O ports and verifier are installed together outside
+candidate folders. Switching exceptions roll back; a durable switch journal
+is recovered before selecting another candidate. See deploy/site/README.md.
 """
 
 from __future__ import annotations
-
 import argparse
-import contextlib
 import datetime as _dt
-import hashlib
 import json
 import os
 from pathlib import Path
 import re
 import shlex
 import shutil
-import ssl
 import subprocess
 import sys
-import tarfile
 import time
-import urllib.error
-import urllib.request
-from typing import Callable, Iterator
+from typing import Callable
 
-# The unit runs python3 -I: the reviewed verifier sits beside this file.
+# Import only the reviewed modules installed beside this script, never candidate code.
 SCRIPT_DIR = Path(__file__).resolve().parent
 if __package__:
     from .verify_candidate import CandidateVerificationError, verify_candidate
-else:  # pragma: no cover - the installed host CLI
+    from .site_update_io import (
+        ConfigError, EXIT_CONFIG, EXIT_FAILED, EXIT_LOCKED, EXIT_OK, Http, Paths,
+        PROJECT, Refused, Rejected, Runner, SERVICES, SIGNATURE, STACK_UNIT, Transient,
+        _COMMIT, _LIST_LIMIT, _MAX_PAGES, _PART, _SMALL_LIMIT, _TAG, _now,
+        containers_reason, forget_failed, functional_reason, load_config, load_update_state, log, read_env,
+        run_lock, runtime_reason, safe_extract, set_hold, swap_link, write_env_tag,
+    )
+else:  # pragma: no cover - installed host CLI
     if str(SCRIPT_DIR) not in sys.path:
         sys.path.insert(0, str(SCRIPT_DIR))
     from verify_candidate import CandidateVerificationError, verify_candidate
+    from site_update_io import (
+        ConfigError, EXIT_CONFIG, EXIT_FAILED, EXIT_LOCKED, EXIT_OK, Http, Paths,
+        PROJECT, Refused, Rejected, Runner, SERVICES, SIGNATURE, STACK_UNIT, Transient,
+        _COMMIT, _LIST_LIMIT, _MAX_PAGES, _PART, _SMALL_LIMIT, _TAG, _now,
+        containers_reason, forget_failed, functional_reason, load_config, load_update_state, log, read_env,
+        run_lock, runtime_reason, safe_extract, set_hold, swap_link, write_env_tag,
+    )
 
-Runner = Callable[..., subprocess.CompletedProcess]
-
-SERVICES = ("fleet", "vision", "proxy")
-PROJECT = "rosy-site"
-STACK_UNIT = "rosy-site-stack.service"
-SIGNATURE = "release.json.sig"
-EXIT_OK = 0
-EXIT_FAILED = 1
-EXIT_CONFIG = 2
-EXIT_LOCKED = 3
-
-_TAG = re.compile(r"^site-[0-9a-f]{12}$")
-_COMMIT = re.compile(r"^[0-9a-f]{40}$")
-_REPO = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]*/[A-Za-z0-9][A-Za-z0-9_.-]*$")
-_KEY_ID = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
-_PART = re.compile(r"^rosy-site-candidate-([0-9a-f]{40})\.tar\.part(\d{2})$")
-_MAX_PAGES = 10
-_LIST_LIMIT = 16 * 1024 * 1024
-_SMALL_LIMIT = 8 * 1024 * 1024
-
-
-class Transient(Exception):
-    """Try again on the next timer run; nothing is recorded as failed."""
-
-
-class Rejected(Exception):
-    """This candidate is not installed; recorded as failed for its tag."""
-
-
-class Refused(Exception):
-    """Host configuration forbids automatic updates; nothing is changed."""
-
-
-class ConfigError(ValueError):
-    """autoupdate.conf is unusable."""
-
-
-def _now() -> str:
-    return _dt.datetime.now(_dt.timezone.utc).replace(microsecond=0).isoformat()
-
-
-def log(event: str, **fields) -> None:
-    print(json.dumps({"time": _now(), "event": event, **fields}, sort_keys=True), flush=True)
-
-
-class Paths:
-    """Host paths; ``root`` is "/" on the host and a temporary folder in tests."""
-
-    def __init__(self, root: Path = Path("/")):
-        root = Path(root)
-        self.site_env = root / "etc/rosy/site/site.env"
-        self.env_backup = root / "etc/rosy/site/site.env.autoupdate-prev"
-        self.config = root / "etc/rosy/site/autoupdate.conf"
-        self.candidates = root / "opt/rosy/candidates"
-        self.link = root / "opt/rosy/candidate"
-        self.state = root / "var/lib/rosy/site-autoupdate.json"
-        self.lock = root / "run/lock/rosy-site-autoupdate.lock"
-
-
-def load_config(path: Path) -> dict:
-    try:
-        raw = json.loads(Path(path).read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as error:
-        raise ConfigError(f"cannot read {path}: {type(error).__name__}") from None
-    if not isinstance(raw, dict):
-        raise ConfigError("config must be a JSON object")
-    allowed = {"repo", "key_id", "public_key", "keep", "health_url", "health_ca",
-               "health_timeout_s"}
-    if set(raw) - allowed:
-        raise ConfigError(f"unknown config keys: {sorted(set(raw) - allowed)}")
-    if not isinstance(raw.get("repo"), str) or not _REPO.fullmatch(raw["repo"]):
-        raise ConfigError("repo must be owner/repository")
-    if not isinstance(raw.get("key_id"), str) or not _KEY_ID.fullmatch(raw["key_id"]):
-        raise ConfigError("key_id is malformed")
-    if not isinstance(raw.get("public_key"), str) or not Path(raw["public_key"]).is_file():
-        raise ConfigError("public_key must name the enrolled public key file")
-    url = raw.get("health_url")
-    if not isinstance(url, str) or not url.startswith("https://"):
-        raise ConfigError("health_url must be an https:// URL")
-    ca = raw.get("health_ca")
-    if ca is not None and (not isinstance(ca, str) or not Path(ca).is_file()):
-        raise ConfigError("health_ca must name a CA file")
-    keep = raw.get("keep", 3)
-    if type(keep) is not int or not 2 <= keep <= 20:
-        raise ConfigError("keep must be an integer from 2 to 20")
-    timeout = raw.get("health_timeout_s", 300)
-    if type(timeout) is not int or not 30 <= timeout <= 1800:
-        raise ConfigError("health_timeout_s must be an integer from 30 to 1800")
-    return {"repo": raw["repo"], "key_id": raw["key_id"], "public_key": Path(raw["public_key"]),
-            "keep": keep, "health_url": url, "health_ca": ca, "health_timeout_s": timeout}
-
-
-# -- HTTPS ----------------------------------------------------------------------
-
-class _HttpsOnly(urllib.request.HTTPRedirectHandler):
-    def redirect_request(self, req, fp, code, msg, headers, newurl):
-        if not newurl.startswith("https://"):
-            raise urllib.error.HTTPError(newurl, code, "refusing a non-https redirect",
-                                         headers, fp)
-        return super().redirect_request(req, fp, code, msg, headers, newurl)
-
-
-class Http:
-    """Unauthenticated HTTPS GETs; release assets are public (D-437)."""
-
-    def __init__(self, timeout: int = 60):
-        self.timeout = timeout
-        self.opener = urllib.request.build_opener(
-            _HttpsOnly, urllib.request.HTTPSHandler(context=ssl.create_default_context()))
-
-    def _open(self, url: str):
-        if not url.startswith("https://"):
-            raise Transient(f"refusing a non-https URL: {url}")
-        request = urllib.request.Request(url, headers={
-            "Accept": "application/vnd.github+json", "User-Agent": "rosy-site-autoupdate"})
-        try:
-            return self.opener.open(request, timeout=self.timeout)
-        except (OSError, urllib.error.URLError) as error:
-            raise Transient(f"GET {url} failed: {error}") from None
-
-    def get(self, url: str, limit: int) -> bytes:
-        with self._open(url) as response:
-            data = response.read(limit + 1)
-        if len(data) > limit:
-            raise Transient(f"GET {url} exceeded {limit} bytes")
-        return data
-
-    def download(self, url: str, destination: Path) -> str:
-        digest = hashlib.sha256()
-        try:
-            with self._open(url) as response, destination.open("wb") as stream:
-                for chunk in iter(lambda: response.read(1024 * 1024), b""):
-                    digest.update(chunk)
-                    stream.write(chunk)
-        except OSError as error:
-            raise Transient(f"download {url} failed: {error}") from None
-        return digest.hexdigest()
-
-    def status(self, url: str, ca_file: str | None) -> int:
-        context = ssl.create_default_context(cafile=ca_file)
-        try:
-            with urllib.request.urlopen(url, timeout=5, context=context) as response:
-                return response.status
-        except urllib.error.HTTPError as error:
-            return error.code
-        except (OSError, urllib.error.URLError):
-            return 0
-
-
-# -- helpers ----------------------------------------------------------------------
-
-def _sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as stream:
-        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
-
-
-def read_env(path: Path) -> dict[str, str]:
-    values = {}
-    for line in path.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        key, _, value = line.partition("=")
-        value = value.strip()
-        if len(value) >= 2 and value[0] == value[-1] and value[0] in "'\"":
-            value = value[1:-1]
-        values[key.strip()] = value
-    return values
-
-
-def write_env_tag(path: Path, commit: str) -> None:
-    """Replace the ROSY_SITE_IMAGE_TAG line atomically, keeping mode and owner."""
-    lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
-    out, found = [], False
-    for line in lines:
-        if line.strip().startswith("ROSY_SITE_IMAGE_TAG="):
-            out.append(f"ROSY_SITE_IMAGE_TAG={commit}\n")
-            found = True
-        else:
-            out.append(line)
-    if not found:
-        raise Refused("site.env has no ROSY_SITE_IMAGE_TAG line")
-    temporary = path.with_name(path.name + ".autoupdate-new")
-    with temporary.open("w", encoding="utf-8", newline="\n") as stream:
-        stream.writelines(out)
-        stream.flush()
-        os.fsync(stream.fileno())
-    info = path.stat()
-    os.chmod(temporary, info.st_mode & 0o7777)
-    if hasattr(os, "chown"):
-        with contextlib.suppress(PermissionError):
-            os.chown(temporary, info.st_uid, info.st_gid)
-    os.replace(temporary, path)
-
-
-def swap_link(link: Path, target: Path) -> None:
-    """Point ``link`` at ``target`` with one rename (never a missing link)."""
-    temporary = link.with_name(link.name + ".autoupdate-new")
-    with contextlib.suppress(FileNotFoundError):
-        temporary.unlink()
-    os.symlink(target, temporary, target_is_directory=True)
-    os.replace(temporary, link)
-
-
-def safe_extract(archive: Path, destination: Path, commit: str) -> None:
-    """Same member rules as fetch_candidate.sh (D-437): only regular files and
-    directories under <commit>/, then tarfile's ``data`` filter."""
-    if sys.version_info < (3, 12):
-        raise Rejected("python3 >= 3.12 is required (tarfile data extraction filter)")
-    try:
-        with tarfile.open(archive, "r:") as bundle:
-            members = bundle.getmembers()
-            for member in members:
-                name = member.name
-                if not (member.isfile() or member.isdir()):
-                    raise Rejected(f"refusing non-regular archive member: {name}")
-                if (name.startswith("/") or ".." in name.split("/")
-                        or not (name == commit or name.startswith(commit + "/"))):
-                    raise Rejected(f"unexpected archive member: {name}")
-            bundle.extractall(destination, members=members, filter="data")
-    except tarfile.TarError as error:
-        raise Rejected(f"candidate archive is unreadable: {error}") from None
-
-
-@contextlib.contextmanager
-def run_lock(path: Path) -> Iterator[None]:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    stream = path.open("a+b")
-    try:
-        try:
-            if os.name == "nt":
-                import msvcrt
-                stream.seek(0)
-                msvcrt.locking(stream.fileno(), msvcrt.LK_NBLCK, 1)
-            else:
-                import fcntl
-                fcntl.flock(stream.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except OSError:
-            raise BlockingIOError("another rosy-site-autoupdate run holds the lock") from None
-        yield
-    finally:
-        stream.close()
-
-
-# -- updater ---------------------------------------------------------------------
 
 class SiteUpdater:
     def __init__(self, config: dict, *, paths: Paths | None = None,
@@ -334,25 +58,26 @@ class SiteUpdater:
         self.sleep = sleep
         self.clock = clock
         self.dry_run = dry_run
+        self._accepted_images = {}
 
     # state
     def load_state(self) -> dict:
-        try:
-            state = json.loads(self.paths.state.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
-            state = {}
-        if not isinstance(state, dict):
-            state = {}
-        if not isinstance(state.get("failed"), dict):
-            state["failed"] = {}
-        return state
+        return load_update_state(self.paths)
 
     def save_state(self, state: dict) -> None:
         self.paths.state.parent.mkdir(parents=True, exist_ok=True)
         temporary = self.paths.state.with_name(self.paths.state.name + ".new")
-        temporary.write_text(json.dumps(state, indent=2, sort_keys=True) + "\n",
-                             encoding="utf-8")
+        with temporary.open('w', encoding='utf-8') as stream:
+            stream.write(json.dumps(state, indent=2, sort_keys=True) + "\n")
+            stream.flush()
+            os.fsync(stream.fileno())
         os.replace(temporary, self.paths.state)
+        if os.name != 'nt':
+            descriptor = os.open(self.paths.state.parent, os.O_RDONLY)
+            try:
+                os.fsync(descriptor)
+            finally:
+                os.close(descriptor)
 
     # commands
     def _run(self, args: list[str], *, timeout: int = 120, env: dict | None = None,
@@ -404,21 +129,28 @@ class SiteUpdater:
                 if isinstance(row.get("tag_name"), str) and _TAG.fullmatch(row["tag_name"])
                 and not row.get("draft")]
         site.sort(key=lambda row: str(row.get("created_at") or ""), reverse=True)
-        floor = str((state.get("installed") or {}).get("created_at") or "")
         for row in site:
-            if row["tag_name"] == f"site-{current[:12]}":
-                floor = max(floor, str(row.get("created_at") or ""))
-        for row in site:
-            if floor and str(row.get("created_at") or "") <= floor:
-                break  # never install an older candidate than the running one
+            if row['tag_name'] == f'site-{current[:12]}':
+                continue
             names = {asset.get("name") for asset in row.get("assets") or []
                      if isinstance(asset, dict)}
             if not {"release.json", SIGNATURE, "SHA256SUMS"} <= names:
                 continue  # not signed yet
             if row["tag_name"] in state["failed"]:
                 continue
+            if not self.is_newer(current, row['tag_name']):
+                continue
             return row
         return None
+
+    def is_newer(self, current: str, candidate: str) -> bool:
+        url = f"https://api.github.com/repos/{self.config['repo']}/compare/{current}...{candidate}"
+        try:
+            comparison = json.loads(self.http.get(url, _LIST_LIMIT))
+            return (comparison['status'] == 'ahead'
+                    and comparison['merge_base_commit']['sha'] == current)
+        except (json.JSONDecodeError, KeyError, TypeError):
+            raise Transient('commit comparison is malformed') from None
 
     def _asset_url(self, release: dict, name: str) -> str:
         tag = release["tag_name"]
@@ -473,7 +205,7 @@ class SiteUpdater:
         """Return the installed candidate folder, migrating a real directory once."""
         link = self.paths.link
         if link.is_symlink():
-            return Path(os.readlink(link))
+            return link.resolve(strict=True)
         if not link.is_dir():
             raise Refused(f"{link} does not exist; install the first candidate by hand")
         try:
@@ -487,9 +219,21 @@ class SiteUpdater:
         if name is None or destination.exists():
             stamp = _dt.datetime.now(_dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
             destination = self.paths.candidates / f"prev-{stamp}"
-        os.rename(link, destination)
-        swap_link(link, destination)
-        log("migrated", from_dir=str(link), to_dir=str(destination))
+        # Migration also renames the active path: journal it before the first rename.
+        shutil.copy2(self.paths.site_env, self.paths.env_backup)
+        with self.paths.env_backup.open('rb') as stream:
+            os.fsync(stream.fileno())
+        current = read_env(self.paths.site_env)['ROSY_SITE_IMAGE_TAG']
+        self._state['switch'] = {'previous': str(destination.resolve()), 'current': current,
+                                 'commit': current, 'tag': f'site-{current[:12]}', 'migration': True}
+        self.save_state(self._state)
+        try:
+            os.rename(link, destination)
+            swap_link(link, destination)
+            log("migrated", from_dir=str(link), to_dir=str(destination))
+        except BaseException:
+            self.rollback(self._state)
+            raise
         return destination
 
     # download + verify
@@ -541,7 +285,7 @@ class SiteUpdater:
             shutil.copyfile(download / SIGNATURE, folder / SIGNATURE)
             target = self.paths.candidates / commit
             if target.exists():
-                if self.paths.link.is_symlink() and Path(os.readlink(self.paths.link)) == target:
+                if self.paths.link.is_symlink() and self.paths.link.resolve() == target.resolve():
                     raise Rejected("refusing to replace the running candidate folder")
                 shutil.rmtree(target)
             os.replace(folder, target)
@@ -549,11 +293,16 @@ class SiteUpdater:
         finally:
             shutil.rmtree(staging, ignore_errors=True)
 
-    def _verify(self, folder: Path, *, loaded: bool) -> dict:
+    def _verify(self, folder: Path, *, loaded: bool, expected_commit: str | None = None) -> dict:
         try:
-            return self.verifier(folder, trusted_key_id=self.config["key_id"],
-                                 trusted_public_key=self.config["public_key"],
-                                 runner=self.runner, inspect_loaded_images=loaded)
+            manifest = self.verifier(folder, trusted_key_id=self.config["key_id"],
+                                     trusted_public_key=self.config["public_key"],
+                                     runner=self.runner, inspect_loaded_images=loaded)
+            if manifest.get('source_commit') != (expected_commit or folder.name):
+                raise Rejected('signed manifest commit differs from candidate commit')
+            if loaded:
+                self._accepted_images[manifest['source_commit']] = manifest.get('accepted_image_ids', {})
+            return manifest
         except (CandidateVerificationError, OSError) as error:
             raise Rejected(f"verification failed: {error}") from None
 
@@ -566,6 +315,8 @@ class SiteUpdater:
             reason = f"healthz returned {status}"
             if status == 200:
                 reason = self._containers_reason(env, commit)
+                if reason == '':
+                    reason = functional_reason(self.config, self.http)
                 if reason == "":
                     return True, "healthy"
             if self.clock() >= deadline:
@@ -582,40 +333,80 @@ class SiteUpdater:
                 json.loads(line) for line in out.splitlines() if line.strip()]
         except json.JSONDecodeError:
             return "docker compose ps output is not JSON"
-        by_service = {row.get("Service"): row for row in rows if isinstance(row, dict)}
-        for service in SERVICES:
-            row = by_service.get(service)
-            if row is None:
-                return f"{service} container is missing"
-            if row.get("Image") != f"rosy-site-{service}:{commit}":
-                return f"{service} runs {row.get('Image')!r}"
-            if row.get("State") != "running" or row.get("Health") != "healthy":
-                return f"{service} is {row.get('State')}/{row.get('Health') or 'no health'}"
-        return ""
+        reason = containers_reason(rows, commit, self._accepted_images.get(commit, {}), self._run)
+        if reason:
+            return reason
+        try:
+            output = self._compose(env, 'config', '--hash', '*', tag=commit).stdout
+            hashes = dict(line.split() for line in output.splitlines() if line.strip())
+            return runtime_reason(rows, hashes, self._run)
+        except Transient as error:
+            return str(error)
+        except ValueError:
+            return 'Compose configuration hashes cannot be verified'
 
     def _restart(self) -> None:
-        self._run(["systemctl", "restart", STACK_UNIT], timeout=300, check=False)
+        self._run(["systemctl", "restart", STACK_UNIT], timeout=300)
 
     def switch(self, env: dict[str, str], previous: Path, target: Path, commit: str,
                current: str) -> tuple[bool, str]:
         shutil.copy2(self.paths.site_env, self.paths.env_backup)
-        write_env_tag(self.paths.site_env, commit)
-        swap_link(self.paths.link, target)
-        log("switched", commit=commit, previous=current)
-        self._restart()
-        ok, reason = self.healthy(env, commit)
-        if ok:
-            return True, reason
+        with self.paths.env_backup.open('rb') as stream:
+            os.fsync(stream.fileno())
+        state = self._state
+        state['switch'] = {'previous': str(previous.resolve()), 'current': current,
+                           'commit': commit, 'tag': f'site-{commit[:12]}'}
+        self.save_state(state)
+        try:
+            write_env_tag(self.paths.site_env, commit)
+            swap_link(self.paths.link, target)
+            log("switched", commit=commit, previous=current)
+            self._restart()
+            ok, reason = self.healthy(env, commit)
+            if ok:
+                return True, reason  # journal cleared with installed state, before pruning
+        except BaseException:
+            self.rollback(state)
+            raise
         log("health-failed", commit=commit, reason=reason)
+        self.rollback(state)
+        return False, f'{reason}; rollback healthy'
+
+    def rollback(self, state: dict) -> None:
+        transaction = state['switch']
+        previous = Path(transaction['previous'])
+        if (not self.paths.env_backup.is_file()
+                or read_env(self.paths.env_backup).get('ROSY_SITE_IMAGE_TAG') != transaction['current']):
+            raise Refused('rollback backup does not match journal commit')
+        verification_path = previous if previous.exists() else self.paths.link
+        self._verify(verification_path, loaded=True, expected_commit=transaction['current'])
+        if (transaction.get('migration') and not previous.exists()
+                and self.paths.link.is_dir() and not self.paths.link.is_symlink()):
+            os.rename(self.paths.link, previous)
+        if not previous.is_dir() or not self.paths.env_backup.is_file():
+            raise Transient('interrupted switch has no rollback folder or environment backup')
+        restored = self.paths.site_env.with_name(self.paths.site_env.name + '.restore')
+        shutil.copy2(self.paths.env_backup, restored)
+        with restored.open('rb') as stream:
+            os.fsync(stream.fileno())
+        os.replace(restored, self.paths.site_env)
         swap_link(self.paths.link, previous)
-        os.replace(self.paths.env_backup, self.paths.site_env)
         self._restart()
-        back, back_reason = self.healthy(env, current)
-        log("rolled-back", commit=current, healthy=back, reason=back_reason)
-        return False, f"{reason}; rollback {'healthy' if back else 'UNHEALTHY: ' + back_reason}"
+        ok, reason = self.healthy(read_env(self.paths.site_env), transaction['current'])
+        log('rolled-back', commit=transaction['current'], healthy=ok, reason=reason)
+        if not ok:
+            raise Transient(f'rollback is unhealthy: {reason}')
+        state.pop('switch')
+        self.save_state(state)
 
     # pruning
     def prune(self, keep_dirs: set[Path]) -> None:
+        if self.load_state().get('switch'):
+            raise Transient('pruning forbidden while a switch needs recovery')
+        # Both inventories must succeed before any destructive operation.
+        listed = self._run(['docker', 'image', 'ls', '--format',
+                            '{{.Repository}}:{{.Tag}}']).stdout or ''
+        used = set((self._run(['docker', 'ps', '--all', '--format', '{{.Image}}']).stdout or '').split())
         folders = sorted(
             (path for path in self.paths.candidates.iterdir()
              if path.is_dir() and not path.is_symlink() and not path.name.startswith(".")),
@@ -626,10 +417,15 @@ class SiteUpdater:
                 shutil.rmtree(folder, ignore_errors=True)
                 log("pruned-candidate", folder=folder.name)
         kept_commits = {folder.name for folder in kept}
-        listed = self._run(["docker", "image", "ls", "--format",
-                            "{{.Repository}}:{{.Tag}}"], check=False).stdout or ""
-        used = set((self._run(["docker", "ps", "--all", "--format", "{{.Image}}"],
-                              check=False).stdout or "").split())
+        for folder in kept:
+            try:
+                commit = json.loads((folder / 'release.json').read_text(encoding='utf-8'))['source_commit']
+            except (OSError, ValueError, KeyError, TypeError):
+                # An unidentified rollback directory cannot authorize image deletion.
+                return
+            if not isinstance(commit, str) or not _COMMIT.fullmatch(commit):
+                return
+            kept_commits.add(commit)
         for reference in listed.split():
             match = re.fullmatch(r"rosy-site-(?:fleet|vision|proxy):([0-9a-f]{40})", reference)
             if match and match.group(1) not in kept_commits and reference not in used:
@@ -644,11 +440,31 @@ class SiteUpdater:
         except BlockingIOError as error:
             log("locked", reason=str(error))
             return EXIT_LOCKED
+        except Refused as error:
+            log('state-refused', reason=str(error))
+            return EXIT_FAILED
 
     def _run_locked(self) -> int:
         state = self.load_state()
+        self._state = state
         state["last_run"] = {"time": _now()}
         try:
+            if state.get('switch'):
+                if self.dry_run:
+                    state['last_run']['result'] = 'recovery-required'
+                    return EXIT_FAILED
+                try:
+                    self.rollback(state)
+                except Exception as error:
+                    log('recovery-pending', reason=str(error))
+                    state['last_run']['result'] = 'recovery-pending'
+                    return EXIT_FAILED
+                state['last_run']['result'] = 'recovered'
+                return EXIT_FAILED
+            if state.get('hold'):
+                log('held')
+                state['last_run']['result'] = 'held'
+                return EXIT_OK
             return self._update(state)
         finally:
             self.save_state(state)
@@ -662,7 +478,23 @@ class SiteUpdater:
             state["last_run"]["result"] = "refused"
             return EXIT_FAILED
         try:
+            self._verify(self.paths.link, loaded=True, expected_commit=current)
+            reason = self._containers_reason(env, current)
+            if not reason:
+                reason = functional_reason(self.config, self.http)
+            if reason:
+                raise Rejected(reason)
+            installed = state.get('installed')
+            if not self.dry_run and (not isinstance(installed, dict) or installed.get('commit') != current):
+                state['installed'] = {'commit': current, 'tag': f'site-{current[:12]}',
+                                      'origin': 'manual', 'time': _now()}
+                state.pop('previous', None)  # never invent rollback history for a manual switch
+                log('adopted-current', commit=current)
             release = self.select(self.list_releases(), current, state)
+        except Rejected as error:
+            log('refused', reason=f'running candidate verification failed: {error}')
+            state['last_run']['result'] = 'refused'
+            return EXIT_FAILED
         except Transient as error:
             log("error", reason=str(error))
             state["last_run"]["result"] = "error"
@@ -680,12 +512,13 @@ class SiteUpdater:
             if len(commits) != 1 or not next(iter(commits)).startswith(tag[5:]):
                 raise Rejected("SHA256SUMS part names do not match the tag")
             commit = commits.pop()
+            if not self.is_newer(current, commit):
+                raise Rejected('candidate commit is not a strict descendant of the running commit')
             self.check_overrides(env, commit)
             if self.dry_run:
                 log("would-install", tag=tag, commit=commit, current=current)
                 state["last_run"]["result"] = "dry-run"
                 return EXIT_OK
-            previous = self._prior_target()
             log("staging", tag=tag, commit=commit)
             target = self.stage(release, commit, sums)
             self._verify(target, loaded=False)
@@ -694,6 +527,7 @@ class SiteUpdater:
             if load.returncode != 0:
                 raise Rejected("docker image load failed")
             self._verify(target, loaded=True)
+            previous = self._prior_target()
             ok, reason = self.switch(env, previous, target, commit, current)
         except Refused as error:
             log("refused", tag=tag, reason=str(error))
@@ -703,10 +537,14 @@ class SiteUpdater:
             log("error", tag=tag, reason=str(error))
             state["last_run"]["result"] = "error"
             return EXIT_FAILED
-        except (Rejected, OSError) as error:
+        except Rejected as error:
             state["failed"][tag] = {"time": _now(), "reason": str(error)}
             log("rejected", tag=tag, reason=str(error))
             state["last_run"]["result"] = "rejected"
+            return EXIT_FAILED
+        except Exception as error:
+            log('error', tag=tag, reason=str(error))
+            state['last_run']['result'] = 'error'
             return EXIT_FAILED
         if not ok:
             state["failed"][tag] = {"time": _now(), "reason": reason}
@@ -716,8 +554,13 @@ class SiteUpdater:
         state["installed"] = {"tag": tag, "commit": commit, "time": _now(),
                               "created_at": release.get("created_at")}
         state["last_run"]["result"] = "installed"
+        state.pop('switch', None)
+        self.save_state(state)
         log("installed", tag=tag, commit=commit, previous=current)
-        self.prune({target, previous})
+        try:
+            self.prune({target, previous})
+        except (Transient, OSError) as error:
+            log('prune-deferred', reason=str(error))
         return EXIT_OK
 
 
@@ -731,6 +574,9 @@ def main(argv: list[str] | None = None) -> int:
     commands.add_parser("status", help="print the state file")
     forget = commands.add_parser("forget-failed", help="allow a failed tag to be tried again")
     forget.add_argument("tag")
+    hold = commands.add_parser('hold', help='pause new updates during local maintenance')
+    hold.add_argument('reason')
+    commands.add_parser('resume', help='allow updates after local maintenance')
     args = parser.parse_args(argv)
     paths = Paths()
     if args.command == "status":
@@ -743,11 +589,9 @@ def main(argv: list[str] | None = None) -> int:
         return EXIT_CONFIG
     updater = SiteUpdater(config, paths=paths, dry_run=getattr(args, "dry_run", False))
     if args.command == "forget-failed":
-        state = updater.load_state()
-        removed = state["failed"].pop(args.tag, None)
-        updater.save_state(state)
-        log("forget-failed", tag=args.tag, removed=removed is not None)
-        return EXIT_OK
+        return forget_failed(updater, args.tag)
+    if args.command in {'hold', 'resume'}:
+        return set_hold(updater, args.reason if args.command == 'hold' else None)
     return updater.run()
 
 

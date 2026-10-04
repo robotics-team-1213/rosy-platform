@@ -4,15 +4,15 @@ schema: rosy.platform-parts.v1
 # colcon, rosdep, payload and image consumer reads this one line through
 # tools/harness/colcon_roots.py (stdlib-only, so keep it a one-line flow list).
 # Checked by test/architecture/test_colcon_roots.py.
-colcon_roots: [src, learning, operations]
+colcon_roots: [learning, operations, middleware, contracts, integrations, shared]
 
-# D-427 §6 "지금(C)" ownership manifest: every tracked source root maps to one
-# D-427 part. No folder moves; `d427_target` is where the root goes in step B.
+# D-427 ownership manifest after wave 5: every tracked source root maps to one
+# D-427 part. `legacy` fields stay for one release to guard rebasing branches.
 # Checked by test/architecture/test_platform_parts.py.
 #
 # Coverage: each tracked file resolves to its deepest matching entry, so a
 # nested entry carves a subtree out of its parent. Exempt: files at the repo
-# root and Markdown folder notes in directories no entry covers (src/AGENTS.md).
+# root and Markdown folder notes in directories no entry covers.
 #
 # `import_prefix` lists the Python top-level names a root installs, so an
 # imported module can be traced back to its owner. Script folders that put
@@ -88,15 +88,17 @@ roots:
     concern: contracts
     note: D-449 draft artifact schemas; stdlib only, no runtime authority.
   # --- contracts -----------------------------------------------------------
-  - path: src/contracts/foundation
+  - path: contracts/foundation
     part: contracts
     d427_target: contracts/foundation
+    legacy: src/contracts/foundation
     wave: "4d"
     import_prefix: [core_common]
     concern: contracts
-  - path: src/contracts/interfaces
+  - path: contracts/ros_idl
     part: contracts
     d427_target: contracts/ros_idl
+    legacy: src/contracts/interfaces
     wave: "4d"
     import_prefix: [interfaces]
     concern: contracts
@@ -112,57 +114,76 @@ roots:
       (D-429 §4 rule 1 needs an .api prefix); contracts are importable by every part.
     concern: contracts
 
+  - path: contracts/motion
+    part: contracts
+    d427_target: contracts/motion
+    wave: none
+    import_prefix: [rosy.contracts.motion]
+    concern: contracts
+    note: >-
+      D-442(a) ROS-free Motion Intent and DeviceControlPort shapes. The Pinky B
+      writer binding consumes GuardedMotion carrying BaseTwist; full producer admission and the
+      OMX DeviceControlPort remain deferred.
+
   # --- middleware: Pinky/OMX device code, skills, drivers, device UI ---------
-  - path: src/runtime/gateway
+  - path: middleware/core/gateway
     part: middleware
     d427_target: middleware/core/gateway
+    legacy: src/runtime/gateway
     wave: "4d"
     import_prefix: [core]
     concern: control
-  - path: src/runtime/services
+  - path: middleware/core/services
     part: middleware
     d427_target: middleware/core/services
+    legacy: src/runtime/services
     wave: "4d"
     import_prefix: [core_features]
     concern: control
-  - path: src/runtime/services/core_features/safety
+  - path: middleware/core/services/core_features/safety
     part: middleware
     d427_target: middleware/core/services/core_features/safety
+    legacy: src/runtime/services/core_features/safety
     wave: "4d"
     import_prefix: [core_features.safety]
     note: D-430 §1 CORE Safety Guard (SAF-001/003/004/005/006, D-400 shadow); moves with CORE.
     concern: safety
-  - path: src/runtime/services/core_features/decision
+  - path: middleware/core/services/core_features/decision
     part: middleware
     d427_target: middleware/core/services/core_features/decision
+    legacy: src/runtime/services/core_features/decision
     wave: "4d"
     import_prefix: [core_features.decision]
     note: >-
       D-429 §1 "device local rules" (lane, router, contract), not deliberative decision.
       Tagged so D-430 invariant 2 has a robot-side importer to check.
     concern: decision
-  - path: src/runtime/events
+  - path: middleware/core/events
     part: middleware
     d427_target: middleware/core/events
+    legacy: src/runtime/events
     wave: "4d"
     import_prefix: [core_events]
     concern: control
-  - path: src/runtime/api_web
+  - path: middleware/core/api_web
     part: middleware
     d427_target: middleware/core/api_web
+    legacy: src/runtime/api_web
     wave: "4d"
     import_prefix: [core_api_web]
     note: Pinky Device API web layer and host-agent client.
     concern: control
-  - path: src/runtime/navigation
+  - path: middleware/core/navigation
     part: middleware
     d427_target: middleware/core/navigation
+    legacy: src/runtime/navigation
     wave: "4c"
     import_prefix: [navigation]
     concern: control
-  - path: src/runtime/sensing
+  - path: middleware/perception
     part: middleware
     d427_target: middleware/perception
+    legacy: src/runtime/sensing
     wave: "4e"
     import_prefix: [control]
     note: >-
@@ -170,76 +191,88 @@ roots:
       sim tooling (tools/gz) and map assets the Fleet image copies. They move with the
       package in 4e and their split is deferred (D-427 plan Q2); not separate roots yet.
     concern: control
-  - path: src/drivers/imu_bno055
+  - path: middleware/drivers/imu_bno055
     part: middleware
     d427_target: middleware/drivers/imu_bno055
+    legacy: src/drivers/imu_bno055
     wave: "4c"
     concern: control
-  - path: src/products/pinky_pro/adc
+  - path: middleware/drivers/pinky_adc
     part: middleware
     d427_target: middleware/drivers/pinky_adc
+    legacy: src/products/pinky_pro/adc
     wave: "4c"
     concern: control
-  - path: src/products/pinky_pro/lamp
+  - path: middleware/drivers/pinky_lamp
     part: middleware
     d427_target: middleware/drivers/pinky_lamp
+    legacy: src/products/pinky_pro/lamp
     wave: "4c"
     concern: control
-  - path: src/products/pinky_pro/led
+  - path: middleware/drivers/pinky_led
     part: middleware
     d427_target: middleware/drivers/pinky_led
+    legacy: src/products/pinky_pro/led
     wave: "4c"
     import_prefix: [led]
     concern: control
-  - path: src/products/pinky_pro/bringup
+  - path: middleware/apps/device/pinky/bringup
     part: middleware
     d427_target: middleware/apps/device/pinky/bringup
+    legacy: src/products/pinky_pro/bringup
     wave: "4c"
     import_prefix: [bringup, rosylib]
     concern: control
-  - path: src/products/pinky_pro/profile
+  - path: middleware/apps/device/pinky/profile
     part: middleware
     d427_target: middleware/apps/device/pinky/profile
+    legacy: src/products/pinky_pro/profile
     wave: "4c"
     concern: control
-  - path: src/products/omx/adapter
+  - path: middleware/apps/device/omx/adapter
     part: middleware
     d427_target: middleware/apps/device/omx/adapter
+    legacy: src/products/omx/adapter
     wave: "4c"
     import_prefix: [omx_adapter]
     note: >-
       demonstration.py and lerobot_export.py are learning-flavoured (future
       learning/curation); kept at package granularity until the B move.
     concern: control
-  - path: src/products/omx/profile
+  - path: middleware/apps/device/omx/profile
     part: middleware
     d427_target: middleware/apps/device/omx/profile
+    legacy: src/products/omx/profile
     wave: "4c"
     note: OMX composition config the adapter validates, not an installation pin (profiles/).
     concern: control
-  - path: src/sim/description
+  - path: middleware/apps/device/pinky/description
     part: middleware
     d427_target: middleware/apps/device/pinky/description
+    legacy: src/sim/description
     wave: "4c"
     note: Pinky URDF used by both the real robot and Gazebo; could also be integrations/robots/pinky.
     concern: control
-  - path: apps/agent
+  - path: middleware/apps/device/omx/agent
     part: middleware
     d427_target: middleware/apps/device/omx/agent
+    legacy: apps/agent
     wave: "4a"
     import_prefix: [rosy_agent]
     note: OMX cell local Action owner composition (device side of the D-401 cell).
     concern: control
-  - path: modules/skills/api
+  - path: middleware/skills/api
     part: middleware
     d427_target: middleware/skills/api
+    legacy: modules/skills/api
     wave: "4a"
     import_prefix: [rosy.skills.api]
     concern: control
     api: true
-  - path: modules/skills/manipulation
+  - path: middleware/skills/manipulation
     part: middleware
     d427_target: middleware/skills/manipulation
+    legacy: modules/skills/manipulation
     wave: "4a"
     import_prefix: [rosy.skills.manipulation]
     concern: control
@@ -279,62 +312,71 @@ roots:
     wave: "3a"
     import_prefix: [rosy.execution.site]
     concern: other
-  - path: src/hmi/dashboard
+  - path: middleware/ui/robot
     part: middleware
     d427_target: middleware/ui/robot
+    legacy: src/hmi/dashboard
     wave: "4b"
     note: Robot dashboard screens served by core_api_web on the device.
     concern: other
-  - path: src/hmi/pilot
+  - path: middleware/ui/pilot
     part: middleware
     d427_target: middleware/ui/pilot
+    legacy: src/hmi/pilot
     wave: "4b"
     concern: other
-  - path: apps/pilot
+  - path: middleware/ui/pilot/android
     part: middleware
     d427_target: middleware/ui/pilot/android
+    legacy: apps/pilot
     wave: "4b"
     note: D-432 native discovery shell reuses the CORE-served Pilot UI; no command authority.
     concern: other
-  - path: src/hmi/face
+  - path: middleware/ui/face
     part: middleware
     d427_target: middleware/ui/face
+    legacy: src/hmi/face
     wave: "4b"
     import_prefix: [emotion]
     concern: other
   # D-429 §2: site devices (signal, dock) are operations-owned, listed here so the
   # firmware entries stay together.
-  - path: firmware/dock
+  - path: operations/site_devices/dock
     part: operations
     d427_target: operations/site_devices/dock
+    legacy: firmware/dock
     wave: "3b"
     note: >-
       D-429 §2 site device owner: firmware and device contract only. The robot keeps
       polling the dock /status directly (core_features/docking stays middleware).
     concern: control
-  - path: firmware/dock/firmware
+  - path: operations/site_devices/dock/firmware
     part: operations
     d427_target: operations/site_devices/dock/firmware
+    legacy: firmware/dock/firmware
     wave: "3b"
     note: D-430 §1 dock firmware owns the limit-switch interlock and 0 V boot (layer 2).
     concern: safety
-  - path: firmware/signal
+  - path: operations/site_devices/signal
     part: operations
     d427_target: operations/site_devices/signal
+    legacy: firmware/signal
     wave: "3b"
     note: >-
       D-429 §2 site device owner: firmware, device contract and the driver library Fleet
       imports. Fleet stays the only command path and the signal sequence owner (D-337 §2).
     concern: control
-  - path: firmware/signal/firmware
+  - path: operations/site_devices/signal/firmware
     part: operations
     d427_target: operations/site_devices/signal/firmware
+    legacy: firmware/signal/firmware
     wave: "3b"
     note: D-430 §1 signal firmware owns the boot and supervision-loss failsafe (layer 2).
     concern: safety
-  - path: firmware/signal/observer
+  - path: operations/vision/signal_observer
     part: operations
     d427_target: operations/vision/signal_observer
+    legacy: firmware/signal/observer
     wave: "3b"
     note: >-
       D-163 read-only observation plane, carved out of the site device owner (D-429 §2).
@@ -342,23 +384,26 @@ roots:
     concern: other
 
   # --- operations: Fleet, world, processes, vision, Console/Cam -------------
-  - path: src/site/fleet
+  - path: operations/fleet
     part: operations
     d427_target: operations/fleet
+    legacy: src/site/fleet
     wave: "3c"
     import_prefix: [fleet]
     concern: decision
-  - path: src/site/fleet/fleet/ai
+  - path: operations/fleet/fleet/ai
     part: operations
     d427_target: operations/decision
+    legacy: src/site/fleet/fleet/ai
     wave: "3c"
     deferred: D-429 §5 carve fleet.ai to rosy.decision
     import_prefix: [fleet.ai]
     note: ER2/VLM deliberative decision (D-429 §1); the carve renames it to rosy.decision.
     concern: decision
-  - path: src/site/fleet/fleet/server/web
+  - path: operations/fleet/fleet/server/web
     part: operations
     d427_target: operations/ui/console
+    legacy: src/site/fleet/fleet/server/web
     wave: "3c"
     deferred: D-425 Task 9
     concern: other
@@ -383,26 +428,30 @@ roots:
     wave: "3a"
     import_prefix: [rosy.processes.palletizing]
     concern: other
-  - path: src/site/cell
+  - path: operations/processes/cell
     part: operations
     d427_target: operations/processes/cell
+    legacy: src/site/cell
     wave: "3b"
     import_prefix: [rosy_cell]
     concern: other
-  - path: src/site/vision
+  - path: operations/vision
     part: operations
     d427_target: operations/vision
+    legacy: src/site/vision
     wave: "3b"
     import_prefix: [rosy_vision]
     concern: other
-  - path: src/site/cam
+  - path: operations/ui/cam
     part: operations
     d427_target: operations/ui/cam
+    legacy: src/site/cam
     wave: "3b"
     concern: other
-  - path: src/site/games
+  - path: operations/apps/games
     part: operations
     d427_target: operations/apps/games
+    legacy: src/site/games
     wave: "3b"
     import_prefix: [games]
     note: Laptop game host (D-90) with an overhead camera; a site app, not a process.
@@ -457,34 +506,38 @@ roots:
     wave: none
     import_prefix: [rosy.integrations.robots.omx]
     concern: control
-  - path: src/sim/gz_sim
+  - path: integrations/simulation/gazebo
     part: integrations
     integration: simulation
     d427_target: integrations/simulation/gazebo
+    legacy: src/sim/gz_sim
     wave: "4c"
     note: Worlds, models, plugins and Gazebo params; launch/ and scripts/ are mapped on their own.
     concern: other
-  - path: src/sim/gz_sim/launch
+  - path: integrations/simulation/gazebo/launch
     part: middleware
     d427_target: middleware/apps/device/sim
+    legacy: src/sim/gz_sim/launch
     wave: "4c"
     deferred: gz_sim split follow-up
     note: Launch files start the sim device owner on the same middleware pipeline (D-427 §5).
     concern: control
   # Same target as the tools/sim root below: when the gz_sim split lands, the
   # scripts move into tools/sim and this root is removed (not given a path).
-  - path: src/sim/gz_sim/scripts
+  - path: integrations/simulation/gazebo/scripts
     part: tools
     d427_target: tools/sim
+    legacy: src/sim/gz_sim/scripts
     wave: "4c"
     deferred: gz_sim split follow-up
     note: Sim benches, acceptance harnesses and world/map converters (swarm_bench drives Fleet).
     concern: other
 
   # --- shared web -----------------------------------------------------------
-  - path: src/hmi/web_common
+  - path: shared/web
     part: shared_web
     d427_target: shared/web
+    legacy: src/hmi/web_common
     wave: "4b"
     concern: other
 
@@ -582,23 +635,27 @@ roots:
 # roots above are the directory form.
 safety_modules:
   - middleware/execution/local/src/rosy/execution/local/omx_policy.py
-  - src/runtime/gateway/core/fleet_loss_wiring.py
-  - src/runtime/gateway/core/bridge/cmd_vel.py
-  - src/runtime/services/core_features/command/manager.py
-  - src/runtime/services/core_features/command/arbitration.py
-  - src/runtime/services/core_features/line_follow/body_stop.py
-  - src/runtime/services/core_features/line_follow/clearance.py
-  - src/runtime/api_web/core_api_web/api/v1/safety.py
-  - src/contracts/foundation/core_common/robot_body.py
-  - src/products/omx/adapter/omx_adapter/command_owner.py
-  - src/products/omx/adapter/omx_adapter/local_stop.py
-  - src/products/omx/adapter/omx_adapter/action_api.py
-  - src/site/fleet/fleet/server/dispatch_admission.py
-  - src/site/fleet/fleet/server/cancel_all.py
-  - src/site/fleet/fleet/server/cancel_all_store.py
-  - src/site/fleet/fleet/server/local_stop_transport.py
-  - src/site/fleet/fleet/server/task_dispatch_routes.py
-  - src/site/fleet/fleet/server/console.py
+  - middleware/core/gateway/core/fleet_loss_wiring.py
+  - middleware/core/gateway/core/bridge/cmd_vel.py
+  - middleware/core/services/core_features/command/manager.py
+  - middleware/core/services/core_features/command/arbitration.py
+  - middleware/core/services/core_features/docking/charging.py
+  - middleware/core/services/core_features/line_follow/body_stop.py
+  - middleware/core/services/core_features/line_follow/clearance.py
+  - middleware/core/api_web/core_api_web/api/v1/safety.py
+  - contracts/foundation/core_common/robot_body.py
+  - middleware/apps/device/omx/adapter/omx_adapter/command_owner.py
+  - middleware/apps/device/omx/adapter/omx_adapter/local_stop.py
+  - middleware/apps/device/omx/adapter/omx_adapter/action_api.py
+  - middleware/apps/device/omx/adapter/omx_adapter/owner_recovery_api.py
+  - middleware/apps/device/omx/adapter/omx_adapter/action_store_readback.py
+  - operations/fleet/fleet/server/dispatch_admission.py
+  - operations/fleet/fleet/server/cancel_all.py
+  - operations/fleet/fleet/server/cancel_all_store.py
+  - operations/fleet/fleet/server/local_stop_transport.py
+  - operations/fleet/fleet/server/task_dispatch_routes.py
+  - operations/fleet/fleet/server/owner_recovery_routes.py
+  - operations/fleet/fleet/server/console.py
 
 # D-430 §1 drift anchors and §3 public entry points. `symbol` is the dotted module
 # path plus the (possibly nested) definition; each must resolve to a safety file.
@@ -620,7 +677,9 @@ safety_anchors:
   - {symbol: core_features.safety.shadow.ShadowLog}
   - {symbol: core.fleet_loss_wiring.build_fleet_loss}
   - {symbol: core.bridge.cmd_vel.cmd_vel_cycle}
+  - {symbol: core.bridge.cmd_vel.PinkyTwistPort}
   - {symbol: core_features.command.manager.CommandManager}
+  - {symbol: core_features.docking.charging.ChargingConfirmation}
   - {symbol: core_features.command.arbitration.ModeMachine.release_emergency, public: true}
   - {symbol: core_features.command.arbitration.ModeMachine.is_emergency, public: true}
   - {symbol: core_features.command.arbitration._ALLOWED}
@@ -632,6 +691,8 @@ safety_anchors:
   - {symbol: omx_adapter.command_owner.ArmCommandOwner}
   - {symbol: omx_adapter.local_stop.LocalStopController, public: true}
   - {symbol: omx_adapter.action_api.LocalStopApi.dispatch}
+  - {symbol: omx_adapter.owner_recovery_api.OwnerRecoveryApi.dispatch}
+  - {symbol: omx_adapter.action_store_readback.ActionStoreReadback.run_if_no_unresolved}
   - {string: StopLocal, in: omx_adapter.action_api.LocalStopApi.dispatch, public: true}
   - {string: RearmLocal, in: omx_adapter.action_api.LocalStopApi.dispatch, public: true}
   - {symbol: fleet.server.dispatch_admission.reserve, public: true}
@@ -645,3 +706,4 @@ safety_anchors:
   - {symbol: fleet.server.local_stop_transport.UnixLocalStopTransport, public: true}
   - {symbol: fleet.server.console.FleetConsole.estop_all, public: true}
   - {symbol: fleet.server.task_dispatch_routes.install_task_dispatch_routes.dispatch_rearm, public: true}
+  - {symbol: fleet.server.owner_recovery_routes.install_owner_recovery_routes.recover_owner, public: true}

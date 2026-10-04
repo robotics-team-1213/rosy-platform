@@ -279,6 +279,28 @@ class SubprocessCommands:
         device_show = device.stdout
         return parse_network_status(active.stdout, device_show=device_show, wifi_show=wifi_show)
 
+    def lane_perception_status(self) -> dict:
+        from host_lane_perception import LanePerceptionConfig
+        return LanePerceptionConfig().get()
+
+    def set_lane_perception(self, paint_source: str) -> dict:
+        from host_lane_perception import LanePerceptionConfig
+
+        def restart() -> None:
+            def run(argv):
+                if self.runner is _run:
+                    timeout = 25 if "restart" in argv else 5
+                    return subprocess.run(argv, capture_output=True, text=True, check=False, timeout=timeout)
+                return self.runner(argv)
+
+            argv = ["systemctl", "restart", "rosy-camera.service"]
+            self._json_or_text(run(argv), argv)
+            result = run(["systemctl", "is-active", "rosy-camera.service"])
+            if result.returncode or result.stdout.strip() != "active":
+                raise RuntimeError("camera failed to become active")
+
+        return LanePerceptionConfig(restart=restart).set(paint_source)
+
     def apply_network_profile(self, profile_id: str) -> dict:
         argv = ["nmcli", "connection", "up", "id", profile_id]
         return self._json_or_text(self.runner(argv), argv)

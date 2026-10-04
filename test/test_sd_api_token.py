@@ -31,11 +31,11 @@ SCHEMA = json.loads((ROOT / "deploy/robot/pinky_pro/sd/provision.schema.json").r
 # D-231/D-241: src/core/<group>/<group>/<pkg> became one role dir per package.
 # These are each package's *import parent* — the dir whose child is the package.
 PKG_PARENT = {
-    "core": ROOT / "src" / "runtime" / "gateway",
-    "core_api_web": ROOT / "src" / "runtime" / "api_web",
-    "core_common": ROOT / "src" / "contracts" / "foundation",
-    "core_events": ROOT / "src" / "runtime" / "events",
-    "core_features": ROOT / "src" / "runtime" / "services",
+    "core": ROOT / "middleware" / "core" / "gateway",
+    "core_api_web": ROOT / "middleware" / "core" / "api_web",
+    "core_common": ROOT / "contracts" / "foundation",
+    "core_events": ROOT / "middleware" / "core" / "events",
+    "core_features": ROOT / "middleware" / "core" / "services",
 }
 
 # Secret-shaped keywords and values are assembled at runtime so the tracked-file

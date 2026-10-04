@@ -18,7 +18,7 @@ from fleet.server.task_store import FleetTaskStore
 
 @pytest.fixture
 def exchange(tmp_path, monkeypatch):
-    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[1] / "src/products/omx/adapter"))
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[1] / "middleware/apps/device/omx/adapter"))
     from omx_adapter.action_api import ActionApi, action_grant_digest
     from omx_adapter.action_runner import ActionRunner, DriverSubmission
     from omx_adapter.action_store import ActionStore
@@ -80,7 +80,7 @@ def exchange(tmp_path, monkeypatch):
 
 
 def test_lost_submit_response_restarts_fleet_and_reads_same_device_action(tmp_path, monkeypatch):
-    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[1] / "src/products/omx/adapter"))
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[1] / "middleware/apps/device/omx/adapter"))
     from omx_adapter.action_api import ActionApi
     from omx_adapter.action_runner import ActionRunner, DriverSubmission
     from omx_adapter.action_store import ActionStore

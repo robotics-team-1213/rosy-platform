@@ -9,8 +9,8 @@ ROOT = Path(__file__).resolve().parents[4]
 sys.path[:0] = [str(ROOT / 'learning/registry/policy'), str(ROOT / 'contracts/learning/src'), str(ROOT / 'test')]
 from dataset_store import DatasetStore, closure
 from rosy.contracts.learning import seal
-sys.path[:0] = [str(ROOT / p) for p in ('learning/curation/omx', 'src/products/omx/adapter',
-    'src/products/omx/adapter/test', 'src/contracts/foundation')]
+sys.path[:0] = [str(ROOT / p) for p in ('learning/curation/omx', 'middleware/apps/device/omx/adapter',
+    'middleware/apps/device/omx/adapter/test', 'contracts/foundation')]
 from test_demonstration import complete_episode
 from common_episode import convert
 

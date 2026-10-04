@@ -1,0 +1,811 @@
+/* Rosy Pilot — NFS 모바일 컨트롤러 레이아웃.
+ * 좌하단 페달 | 우하단 조이스틱 | 상단 미니멀 HUD | 중앙 카메라.
+ */
+
+:root { color-scheme: dark; }
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+
+html { min-width: 320px; background: var(--ground-deep); }
+
+body {
+  margin: 0;
+  min-height: 100dvh;
+  overflow-x: hidden;
+  color: var(--ink);
+  background: var(--ground);
+  font-family: var(--body);
+  font-size: var(--text-body);
+}
+
+input, select { font: inherit; }
+ui-button, a { -webkit-tap-highlight-color: transparent; }
+
+/* ---- 게이트 ---- */
+
+.pilot-main {
+  display: grid;
+  gap: var(--space-4);
+  align-content: start;
+  max-width: 48rem;
+  margin-inline: auto;
+  padding: var(--space-5);
+}
+
+.pilot-panel {
+  display: grid;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.pilot-panel ui-head { margin: 0; }
+
+form[data-pilot-token-form] {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gap-form);
+  max-width: 30rem;
+}
+
+form[data-pilot-token-form] ui-field { flex: 1 1 14rem; }
+
+[data-recent-list] { display: grid; gap: var(--space-2); }
+[data-recent-item] { display: flex; gap: var(--space-1); align-items: center; }
+[data-recent-item] ui-button[data-recent-connect] { flex: 1; }
+
+.sr-only {
+  position: absolute;
+  width: 1px; height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* ================================================================
+   주행 — NFS 미니멀 오버레이
+   상단: 속도+상태 한 줄 | 좌하단: 페달 | 우하단: 조이스틱
+   ================================================================ */
+
+/* 주행 화면은 세로로 셋: 상단 바 | HUD 한 줄 | 카메라 영역. 카메라는 원본 비율 그대로 전부 보인다
+   (contain) — 잘라 채우면(cover) 4:3 카메라의 위아래가 사라져 운전자가 못 본 장애물이 생긴다.
+   상단 바·HUD 는 영상 위에 겹치지 않는다. */
+body[data-pilot-screen="drive"] ui-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  overflow: hidden;
+}
+
+body[data-pilot-screen="drive"] ui-topbar {
+  position: static;
+  flex: none;
+}
+
+body[data-pilot-screen="drive"] .pilot-main {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;               /* grid 행 높이가 없으면 아래 height:100% 가 0 이 된다(태블릿 실측) */
+  flex-direction: column;
+  max-width: none;
+  width: 100%;
+  padding: 0;
+  gap: 0;
+  overflow: hidden;
+}
+body[data-pilot-screen="preview"] ui-shell { display: flex; flex-direction: column; height: 100dvh; overflow: hidden; }
+body[data-pilot-screen="preview"] ui-topbar { position: static; flex: none; }
+body[data-pilot-screen="preview"] .pilot-main {
+  display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0;
+  max-width: none; width: 100%; padding: 0; gap: 0; overflow: hidden;
+}
+body[data-pilot-screen="preview"] [data-screen="connect"] {
+  display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0;
+}
+.pilot-drive[data-readonly-camera] { min-height: 0; height: 100%; }
+.pilot-drive[data-readonly-camera] [data-drive-stage] { position: absolute; inset: 0; height: 100%; }
+
+.pilot-drive {
+  position: relative;
+  flex: 1 1 auto;
+  width: 100%;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+[data-drive-stage] {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  background: #000;
+  overflow: hidden;
+}
+
+/* 영상 틀 — 확대 때 넘치는 부분은 여기서만 잘린다 */
+[data-drive-view] {
+  grid-row: 2;
+  position: relative;
+  min-height: 0;
+  overflow: hidden;
+}
+
+[data-drive-frame] {
+  display: block;
+  transform-origin: 50% 50%;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  object-fit: contain;          /* 원본 비율, 잘림 없음 — 남는 곳은 검은 띠 */
+  object-position: center;
+}
+
+[data-drive-frame][src] { opacity: 1; }
+
+/* 카메라·HUD 를 길게 눌러도 이미지 메뉴·선택·드래그가 뜨지 않게(태블릿 실측) */
+.pilot-drive, .pilot-drive * {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+[data-drive-frame] { pointer-events: none; -webkit-user-drag: none; }
+[data-drive-frame]:not([src]) { opacity: 0; }
+
+[data-drive-stage] ui-empty {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+
+/* ---- 상단 HUD — 한 줄 스트립: 게이지 | 동작 | 상한 | 링크 사실 | 액션 ---- */
+[data-drive-hud] {
+  grid-row: 1;
+  position: relative;
+  margin: var(--space-1) var(--space-3);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  padding: var(--space-1) var(--space-3);
+  background: color-mix(in srgb, var(--ground-deep) 72%, transparent);
+  border-radius: var(--radius-panel);
+  z-index: 15;
+  backdrop-filter: blur(6px);
+}
+
+[data-drive-gauge] { display: flex; align-items: baseline; gap: var(--space-1); }
+
+/* 실측 속도 — HUD 의 주인공 */
+[data-drive-hud] [data-drive-fact=speed] {
+  font-family: var(--mono);
+  font-size: var(--text-display);
+  font-weight: var(--weight-strong);
+  font-variant-numeric: tabular-nums;
+  line-height: var(--leading-flat);
+  min-width: 4ch;
+  text-align: right;
+}
+
+[data-drive-hud] [data-drive-fact=turn] {
+  font-family: var(--mono);
+  font-size: var(--text-value);
+  font-variant-numeric: tabular-nums;
+  min-width: 7ch;
+  color: var(--nominal-quiet);
+}
+
+/* 지금 보내는 동작 — 제자리 회전은 눈에 띄게 */
+[data-drive-motion] {
+  font-size: var(--text-label);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-flag);
+  border: 1px solid var(--line-14);
+  color: var(--nominal-quiet);
+  min-width: 7.5em;
+  text-align: center;
+}
+[data-drive-motion][data-kind=drive] { color: var(--nominal); border-color: var(--line-30); }
+[data-drive-motion][data-kind=pivot] { color: var(--ground-deep); background: var(--status-warn); border-color: var(--status-warn); }
+
+[data-drive-hud] [data-drive-fact=cap] { font-size: var(--text-label); font-family: var(--mono); color: var(--nominal-quiet); }
+
+[data-drive-facts] { display: flex; gap: var(--space-2); font-size: var(--text-label); font-family: var(--mono); color: var(--nominal-quiet); }
+[data-drive-fact=link][data-state=BLOCKED],
+[data-drive-fact=link][data-state=OFFLINE],
+[data-drive-fact=link][data-state=FORBIDDEN] { color: var(--status-crit); }
+[data-drive-fact=link][data-state=RETRYING] { color: var(--status-warn); }
+[data-drive-fact=latency][data-slow=true] { color: var(--status-warn); }
+[data-drive-fact=activity] { color: var(--status-warn); }
+[data-drive-fact=activity][hidden] { display: none; }
+
+/* HUD 액션은 공용 quiet 버튼 그대로(표적 --target-secondary). 자리만 오른쪽 끝. */
+[data-drive-hud] ui-actions { flex-wrap: wrap; align-items: center; gap: var(--space-1); margin-left: auto; }
+[data-drive-hud] ui-actions ui-button { white-space: nowrap; }
+.pilot-drive[data-zoomed="true"] [data-drive-view] { touch-action: none; cursor: grab; }
+.pilot-drive[data-zoomed="true"] [data-drive-view]:active { cursor: grabbing; }
+html[data-pilot-shell="android"] ui-topbar [data-goto] { display: none; }
+html[data-pilot-shell="android"] ui-topbar ui-brand { display: none; }
+[data-drive-tools-panel] {
+  position: absolute;
+  top: calc(var(--topbar-height) + var(--space-3));
+  right: var(--space-3);
+  z-index: 24;
+  width: min(25rem, calc(100% - var(--space-3) * 2));
+  padding: var(--space-4);
+  background: var(--ground-raise);
+  border: 1px solid var(--surface-line);
+  border-radius: var(--radius-panel);
+}
+[data-drive-tools-panel] ui-actions { margin-top: var(--space-3); flex-wrap: wrap; }
+
+/* ---- 차단 안내 — 카메라 위 중앙 ---- */
+[data-drive-blocked] {
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  display: grid;
+  gap: var(--space-3);
+  justify-items: center;
+  max-width: min(32rem, calc(100vw - var(--space-4) * 2));
+  padding: var(--space-4);
+  text-align: center;
+  background: color-mix(in srgb, var(--ground-raise) 94%, transparent);
+  border: 1px solid var(--status-crit);
+  border-radius: var(--radius-panel);
+  z-index: 26;
+}
+
+/* ---- 하단 컨트롤 — 좌: 속도·페달·제자리 회전 / 우: 주행 스틱 ---- */
+[data-drive-controls] {
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: var(--space-4);
+  padding: 0 var(--space-4) calc(var(--space-4) + env(safe-area-inset-bottom, 0));
+  z-index: 20;
+  pointer-events: none;
+}
+[data-drive-controls] > * { pointer-events: auto; }
+
+/* 조작부 판: 영상 위(확대·전체화면)에서도 누를 곳이 보이게 버튼이 아니라 판이 바탕을 갖는다.
+   버튼의 면·글자·테두리는 components.css 가 그린다(shared_controls). */
+[data-drive-left] {
+  display: grid;
+  gap: var(--space-2);
+  justify-items: start;
+  padding: var(--space-2);
+  background: color-mix(in srgb, var(--ground-deep) 78%, transparent);
+  border-radius: var(--radius-panel);
+  backdrop-filter: blur(4px);
+}
+
+[data-drive-presets] {
+  display: flex;
+  gap: var(--space-1);
+  align-items: center;
+  border: 1px solid var(--surface-line);
+  border-radius: var(--radius-button);
+}
+[data-drive-presets] ui-actions { flex-wrap: nowrap; gap: 0; }
+[data-drive-presets] ui-button { min-width: 3rem; }
+[data-drive-presets] > ui-text { padding-inline: var(--space-2); }
+
+[data-drive-pedals], [data-drive-pivots] { display: flex; gap: var(--space-2); }
+
+/* 게임형 큰 표적: 크기는 배치 규칙, 면은 toggle 종류(누르는 동안 .active 로 채움) */
+[data-drive-pedals] ui-button { min-height: 5rem; min-width: 6rem; }
+[data-drive-pivots] ui-button { min-height: 3.5rem; min-width: 6rem; }
+
+[data-drive-pedals] ui-button, [data-drive-pivots] ui-button {
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+/* 우하단: 2 축 주행 스틱 — 노브가 손가락을 따라간다 */
+/* 손가락 잡기 구역(태블릿 실측 2026-10-02: 링이 작아 잡기 어렵다): 보이는 링은 그대로 두고
+   보이지 않는 원(링 반지름의 ~1.8 배)이 터치를 받는다 — 가상 요소의 터치는 스틱 자신의 것이라
+   링 밖에서 누르면 그 자리가 0(떠 있는 원점, drive.js)이고 편향은 링 반지름에서 잘린다. 오른쪽 칸 밖(왼쪽 버튼·영상)은 overflow 가
+   잘라 훔치지 않는다. */
+[data-drive-right] {
+  display: grid; place-items: center;
+  /* clip (not hidden): the knob shadow and the active ring border get a small margin. */
+  overflow: clip; overflow-clip-margin: var(--space-2);
+}
+[data-drive-stick]::before {
+  content: "";
+  position: absolute;
+  inset: -40%;
+  border-radius: 50%;
+}
+
+[data-drive-stick] {
+  position: relative;
+  width: min(26vw, 13rem);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  border: 2px solid var(--line-30);
+  background:
+    linear-gradient(var(--line-14), var(--line-14)) center / 1px 100% no-repeat,
+    linear-gradient(var(--line-14), var(--line-14)) center / 100% 1px no-repeat,
+    color-mix(in srgb, var(--ground-deep) 70%, transparent);
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: grab;
+  backdrop-filter: blur(4px);
+}
+/* D-277: 장미색은 이름 식별에만 쓴다 — 조종 인터랙션은 계열 파랑(포커스 링과
+   같은 상호작용 색, DESIGN.md "포커스는 상태가 아니라 상호작용이다"). */
+[data-drive-stick].active { border-color: var(--focus-ring); cursor: grabbing; }
+
+[data-drive-stick-knob] {
+  position: absolute;
+  top: 50%; left: 50%;
+  width: 38%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--focus-ring) 85%, var(--ground-deep));
+  box-shadow: 0 2px 10px color-mix(in srgb, var(--ground-deep) 70%, transparent);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+/* ---- 입력 조정 패널 ---- */
+[data-inputs-panel] {
+  position: absolute;
+  top: calc(var(--topbar-height) + 4.5rem);
+  right: var(--space-3);
+  width: min(20rem, calc(100vw - var(--space-3) * 2));
+  max-height: calc(100dvh - var(--topbar-height) - 16rem);
+  overflow-y: auto;
+  padding: var(--space-3);
+  display: grid;
+  gap: var(--space-2);
+  background: color-mix(in srgb, var(--ground-raise) 94%, transparent);
+  border: 1px solid var(--line-30);
+  border-radius: var(--radius-panel);
+  z-index: 25;
+  backdrop-filter: blur(6px);
+}
+
+/* ---- D-411 A 로봇 녹화: HUD 칩과 "녹화본" 시트(입력 조정 패널과 같은 자리·여백) ---- */
+[data-drive-fact=recording] { font-size: var(--text-label); font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(--nominal-quiet); }
+[data-drive-fact=recording][data-state=recording],
+[data-drive-fact=recording][data-state=stopping] { color: var(--status-warn); }
+[data-drive-fact=recording][data-state=refused] { color: var(--status-crit); }
+/* 녹화 준비 중: 버튼은 따로 꾸미지 않는다. 표면이 공용 부품을 다시 칠하는 것은
+   계약 위반이다(test_surfaces_do_not_repaint_shared_controls, D-194/D-359).
+   준비 상태는 HUD 칩([data-drive-fact=recording], 위 규칙)과 토글 눌림이 이미 말한다. */
+[data-drive-fact=recording][hidden] { display: none; }
+[data-recordings-sheet] {
+  position: absolute;
+  /* HUD 바로 아래: robot-recording.js 가 HUD 아래끝을 재어 두 변수에 넣는다 */
+  top: calc(var(--recordings-top, 0px) + var(--space-2));
+  right: var(--space-3);
+  width: min(24rem, calc(100vw - var(--space-3) * 2));
+  max-height: calc(100dvh - var(--recordings-viewport-top, 0px) - var(--space-2) * 2);
+  overflow-y: auto;
+  padding: var(--space-3);
+  display: grid;
+  gap: var(--space-2);
+  background: color-mix(in srgb, var(--ground-raise) 94%, transparent);
+  border: 1px solid var(--line-30);
+  border-radius: var(--radius-panel);
+  z-index: 25;
+  backdrop-filter: blur(6px);
+}
+[data-recordings-sheet] [data-recordings-notice][hidden] { display: none; }
+[data-recordings-list] { display: grid; gap: var(--space-2); }
+[data-recordings-list] [data-recording-id] {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding-block: var(--space-1);
+  border-top: 1px solid var(--line-14);
+}
+[data-recording-facts] { display: grid; gap: var(--space-1); min-width: 0; }
+[data-recording-status] { color: var(--status-warn); }
+
+/* 조작 버튼·상단 버튼은 한 줄을 지킨다 — 쪼개진 "제자 리" 는 누를 곳을 흐린다 */
+[data-drive-left] ui-button,
+body[data-pilot-screen="drive"] ui-topbar ui-button { white-space: nowrap; }
+[data-drive-presets] { flex-wrap: nowrap; }
+
+/* 휴대폰 세로: 게이트 안내문·속도 라벨은 뺀다(상태는 HUD 가 말한다) */
+@media (width < 30rem) {
+  [data-drive-presets] > ui-text { display: none; }
+  [data-drive-controls] { padding-left: var(--space-3); padding-right: var(--space-3); gap: var(--space-2); }
+  [data-drive-presets] ui-button { min-width: 2.5rem; padding: 0 var(--space-1); }
+  [data-drive-pivots] ui-button { min-width: 0; padding: 0 var(--space-2); }
+  /* HUD 액션 7개(D-411 로봇 녹화·녹화본 포함)는 한 줄에 들지 않는다 — 줄을 넘기되 글자는 쪼개지 않는다 */
+  [data-drive-hud] ui-actions { flex-wrap: wrap; justify-content: flex-end; margin-left: 0; }
+  [data-drive-hud] ui-actions ui-button { white-space: nowrap; }
+}
+
+/* 태블릿 세로·휴대폰 */
+@media (width <= 48rem) {
+  [data-drive-stick] { width: min(40vw, 11rem); }
+  [data-drive-pedals] ui-button { min-height: 4.2rem; min-width: 4.6rem; }
+  [data-drive-pivots] ui-button { min-width: 4.6rem; }
+  [data-drive-hud] [data-drive-fact=cap] { display: none; }
+}
+
+/* ---- 배치(D-363) — 조작부는 영상을 덮지 않는다 ---- */
+/* side: 가로 태블릿. 영상 좌우 검은 띠(--band)에 조작부를 넣는다. */
+.pilot-drive[data-drive-layout="side"] [data-drive-controls] {
+  padding: 0 var(--space-2) calc(var(--space-3) + env(safe-area-inset-bottom, 0));
+}
+.pilot-drive[data-drive-layout="side"] [data-drive-left],
+.pilot-drive[data-drive-layout="side"] [data-drive-right] {
+  width: calc(var(--band) - var(--space-3));
+}
+.pilot-drive[data-drive-layout="side"] [data-drive-pedals],
+.pilot-drive[data-drive-layout="side"] [data-drive-pivots] {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  width: 100%;
+}
+.pilot-drive[data-drive-layout="side"] [data-drive-pedals] ui-button,
+.pilot-drive[data-drive-layout="side"] [data-drive-pivots] ui-button { min-width: 0; width: 100%; }
+.pilot-drive[data-drive-layout="side"] [data-drive-presets] { flex-wrap: nowrap; width: 100%; }
+.pilot-drive[data-drive-layout="side"] [data-drive-presets] > ui-text { display: none; }
+.pilot-drive[data-drive-layout="side"] [data-drive-presets] ui-actions { flex: 3 1 0; }
+.pilot-drive[data-drive-layout="side"] [data-drive-presets] ui-actions ui-button { flex: 1 1 0; min-width: 0; }
+.pilot-drive[data-drive-layout="side"] [data-drive-presets] [data-drive-fine] { flex: 1.3 1 0; min-width: 0; }
+.pilot-drive[data-drive-layout="side"] [data-drive-stick] { width: min(100%, 13rem); }
+/* 잡기 구역이 들어설 자리: 오른쪽 검은 띠 안에서 스틱 위로 칸을 키운다(영상은 덮지 않는다). */
+.pilot-drive[data-drive-layout="side"] [data-drive-right] { min-height: min(24rem, 45dvh); place-items: end center; }
+
+/* below: 세로 태블릿·휴대폰. 영상은 위(원본 비율), 조작부는 그 아래 남는 공간. */
+.pilot-drive[data-drive-layout="below"] {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+}
+.pilot-drive[data-drive-layout="below"] [data-drive-stage] {
+  position: relative;
+  inset: auto;
+  min-height: 0;
+}
+
+.pilot-drive[data-drive-layout="below"] [data-drive-controls] {
+  position: relative;
+  align-items: center;
+  padding: var(--space-3) var(--space-3) calc(var(--space-3) + env(safe-area-inset-bottom, 0));
+  background: var(--ground-deep);
+}
+
+/* ---- 영상 키우기(D-363 §5): 주행 중 머리를 얇게 ---- */
+body[data-pilot-screen="drive"] ui-topbar {
+  min-height: 0;
+  padding-top: var(--space-1);
+  padding-bottom: var(--space-1);
+}
+body[data-pilot-screen="drive"] #pilot-notice,
+body[data-pilot-screen="drive"] [data-gate-state],
+body[data-pilot-screen="drive"] ui-brand small { display: none; }
+[data-drive-hud] { margin: var(--space-1) var(--space-3); padding: 0 var(--space-3); }
+[data-drive-hud] [data-drive-fact=zoom] {
+  font-size: var(--text-label);
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-flag);
+  color: var(--ground-deep);
+  background: var(--status-warn);
+}
+[data-drive-hud] [data-drive-fact=zoom][hidden] { display: none; }
+/* 확대 중에는 조작부가 영상 위에 올라온다 — 판 바탕을 더 짙게 */
+.pilot-drive[data-zoomed="true"] [data-drive-left],
+.pilot-drive[data-zoomed="true"] [data-drive-stick] {
+  background-color: color-mix(in srgb, var(--ground-deep) 88%, transparent);
+}
+/* below 배치에서는 영상 틀이 비율 상자를 갖는다 */
+.pilot-drive[data-drive-layout="below"] [data-drive-view] {
+  aspect-ratio: auto;
+  max-height: none;
+}
+/* 세로 확대: drive.js 가 높이를 정하므로 비율 고정을 푼다 */
+.pilot-drive[data-drive-layout="below"][data-zoomed="true"] [data-drive-view] {
+  aspect-ratio: auto;
+  max-height: none;
+}
+.pilot-drive[data-drive-layout="below"][data-view-mode="full"] [data-drive-view] { grid-row: 1 / span 2; }
+/* 세로 전체화면: 영상이 무대 높이를 다 쓴다. 조작부는 가로 전체화면처럼 아래에 겹쳐 뜨고, 크기 컨테이너가
+   0 이 되지 않게 높이를 정해 준다(스틱이 cq 단위로 잰다). */
+.pilot-drive[data-drive-layout="below"][data-view-mode="full"] [data-drive-controls] {
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  height: min(40dvh, 28rem);
+  background: transparent;
+}
+
+/* ---- 전체화면(D-363 §5): 영상이 무대 전체를 채운다(cover, 잘림 표시). 비상 정지가 있는 상단 바는 남는다 ---- */
+/* 같은 칸에 겹쳐 놓으려면 열도 명시해야 한다 — 안 하면 격자 자동 배치가 옆 칸으로 밀어낸다 */
+[data-drive-view], [data-drive-hud] { grid-column: 1; }
+.pilot-drive[data-view-mode="full"] [data-drive-view] {
+  grid-row: 1 / span 2;
+}
+.pilot-drive[data-view-mode="full"] [data-drive-frame] {
+  object-fit: cover;
+  transform: none;
+}
+.pilot-drive[data-view-mode="full"] [data-drive-hud] {
+  grid-row: 1;
+  align-self: start;
+  background: color-mix(in srgb, var(--ground-deep) 60%, transparent);
+}
+
+/* 세로 화면: 영상 아래 남는 공간 전체가 엄지 조종기다. 왼쪽 절반 = 속도 줄·페달·제자리(높이를 다 쓴다),
+   오른쪽 절반 = 스틱(지름 = min(폭의 45%, 남은 높이의 80%)). 조작부 칸이 크기 컨테이너라 cq 단위로 잰다. */
+.pilot-drive[data-drive-layout="below"] [data-drive-controls] {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: stretch;
+  min-height: 0;
+  gap: var(--space-3);
+  container-type: size;
+  height: clamp(18rem, 30dvh, 28rem);
+}
+.pilot-drive[data-drive-layout="below"] [data-drive-left] {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  min-height: 0;
+  width: 100%;
+}
+.pilot-drive[data-drive-layout="below"] [data-drive-presets] { width: 100%; }
+.pilot-drive[data-drive-layout="below"] [data-drive-presets] ui-actions { flex: 3 1 0; }
+.pilot-drive[data-drive-layout="below"] [data-drive-presets] ui-actions ui-button { flex: 1 1 0; min-width: 0; }
+.pilot-drive[data-drive-layout="below"] [data-drive-presets] [data-drive-fine] { flex: 1.3 1 0; min-width: 0; }
+.pilot-drive[data-drive-layout="below"] [data-drive-pedals] { flex: 2 1 0; }
+.pilot-drive[data-drive-layout="below"] [data-drive-pivots] { flex: 1 1 0; }
+.pilot-drive[data-drive-layout="below"] [data-drive-pedals],
+.pilot-drive[data-drive-layout="below"] [data-drive-pivots] {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  min-height: 5.5rem;
+}
+.pilot-drive[data-drive-layout="below"] [data-drive-pedals] ui-button,
+.pilot-drive[data-drive-layout="below"] [data-drive-pivots] ui-button {
+  min-width: 0;
+  min-height: 5.5rem;
+  height: 100%;
+}
+.pilot-drive[data-drive-layout="below"][data-auto-mode="on"] [data-drive-go] { flex: 1 1 0; min-height: 7rem; }
+.pilot-drive[data-drive-layout="below"] [data-drive-right] { min-height: 0; }
+.pilot-drive[data-drive-layout="below"] [data-drive-stick] { width: min(45cqw, 80cqh); }
+
+/* ---- 보조 자율(D-344): 차선 자동 모드면 페달·제자리 대신 "진행" 하나 ---- */
+[data-drive-go] { display: none; }
+.pilot-drive[data-auto-mode="on"] [data-drive-pedals],
+.pilot-drive[data-auto-mode="on"] [data-drive-pivots] { display: none; }
+/* 진행: toggle 종류 — 누르는 동안 .active 로 채워진다(components.css). 여기서는 자리와 크기만. */
+.pilot-drive[data-auto-mode="on"] [data-drive-go] {
+  display: inline-flex;
+  width: 100%;
+  min-height: 7rem;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+[data-drive-motion][data-kind=auto] { color: var(--ground-deep); background: var(--status-good); border-color: var(--status-good); }
+[data-drive-motion][data-kind=warn] { color: var(--ground-deep); background: var(--status-warn); border-color: var(--status-warn); }
+
+[data-drive-left] [data-drive-auto] { width: 100%; }
+
+/* ---- 자동 의도 띠(D-364 §6): 영상 아래쪽에 겨누는 점과 실제 조향 방향 ---- */
+[data-drive-intent] {
+  position: absolute;          /* left·width·top 은 drive.js 가 그려진 영상에 맞춘다 */
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-flag);
+  background: color-mix(in srgb, var(--ground-deep) 62%, transparent);
+  pointer-events: none;
+  z-index: 2;
+}
+[data-drive-intent][hidden] { display: none; }
+[data-intent-track] {
+  position: relative;
+  flex: 1;
+  height: 6px;
+  border-radius: var(--radius-flag);
+  background: color-mix(in srgb, var(--nominal-quiet) 55%, transparent);
+}
+[data-intent-centre] {
+  position: absolute;
+  left: 50%;
+  top: -7px;
+  width: 2px;
+  height: 18px;
+  transform: translateX(-50%);
+  background: var(--nominal-quiet);
+}
+[data-intent-target] {
+  position: absolute;
+  top: 50%;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  background: var(--status-good);
+  box-shadow: 0 0 0 2px var(--ground-deep);
+}
+[data-intent-steer] {
+  min-width: 8.5em;
+  text-align: right;
+  font-family: var(--mono);
+  font-size: var(--text-value);
+  font-weight: var(--weight-label);
+  color: var(--status-good);
+  white-space: nowrap;
+}
+[data-drive-intent][data-state="guard"] [data-intent-target],
+[data-drive-intent][data-state="hold"] [data-intent-target] { background: var(--status-warn); }
+[data-drive-intent][data-state="guard"] [data-intent-steer],
+[data-drive-intent][data-state="hold"] [data-intent-steer] { color: var(--status-warn); }
+
+[data-screen="arm"] { width: 100%; max-width: 72rem; margin: 0 auto; padding: var(--space-4); min-width: 0; }
+[data-screen="arm"] label { display: block; margin-block: var(--space-3); }
+[data-screen="arm"] input, [data-screen="arm"] select { display: flex; width: 100%; }
+[data-screen="arm"] h2, [data-screen="arm"] h3 { margin: 0; }
+.arm-head p { margin: var(--space-1) 0 0; color: var(--ink-quiet); }
+.sim-jog { display: flex; gap: var(--space-2); margin-block: var(--space-2); }
+.sim-jog ui-button { flex: 1 1 0; }
+[data-sim-readback] { overflow: auto; max-height: 20rem; margin: 0; padding: var(--space-3);
+  font-family: var(--mono); font-size: var(--text-label); background: var(--ground-deep);
+  border: 1px solid var(--line-10); border-radius: var(--radius-panel); }
+.arm-hint { margin: 0; font-size: var(--text-label); color: var(--ink-quiet); }
+
+/* D-411 B·C 팔 조작 콘솔: 위 작업 공간(영상·readback), 가운데 조작부 그리드(왼손 joint_jog,
+   오른손 gripper), 아래 취소·시연 기록. 좁은 화면은 한 줄로 쌓인다. */
+.arm-console { display: grid; gap: var(--space-4); min-width: 0; }
+.arm-console[hidden] { display: none; }
+.arm-view { display: grid; gap: var(--space-3); grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr)); }
+.arm-camera { margin: 0; display: grid; gap: var(--space-1); }
+.arm-camera[hidden] { display: none; }
+.arm-camera img { width: 100%; height: auto; border-radius: var(--radius-panel); background: var(--ground-deep); }
+.arm-camera figcaption { font-size: var(--text-label); color: var(--ink-quiet); }
+.arm-controls { display: grid; gap: var(--space-4); grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr)); }
+.arm-controls > section {
+  display: grid; gap: var(--space-3); align-content: start; min-width: 0;
+  padding: var(--space-4); background: var(--surface-raised); border: 1px solid var(--line-10);
+  border-radius: var(--radius-panel);
+}
+.arm-controls > section[data-control="joint_jog"] { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.arm-controls > section[data-control="joint_jog"] > h3 { grid-column: 1 / -1; }
+.arm-pad-box, .arm-buttons { display: grid; gap: var(--space-2); align-content: start; min-width: 0; }
+.arm-axes { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-2); }
+[data-screen="arm"] .arm-axes label { margin: 0; font-size: var(--text-label); }
+.arm-readout { margin: 0; font-family: var(--mono); font-size: var(--text-label); color: var(--ink-quiet); }
+[data-control-unsupported], [data-controls-empty] { margin: 0; color: var(--ink-quiet); }
+.arm-controls > section[data-control-unsupported] { border-style: dashed; }
+.arm-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-4); }
+
+/* D-411 C 그리퍼 — 오른손 칸: 상태 배지, 열기/반/닫기, 열림 % 슬라이더(놓을 때 한 번 보낸다). */
+.gripper-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2); }
+.gripper-presets { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-2); }
+[data-screen="arm"] .gripper-slider { display: grid; gap: var(--space-1); margin: 0; }
+[data-gripper-readout] { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+[data-screen="arm"] [data-gripper-percent] { display: block; width: 100%; min-height: 2.75rem; padding: 0; border: 0; background: none; accent-color: var(--ink); }
+[data-gripper-percent]:disabled { opacity: var(--disabled-opacity); }
+@media (width >= 30rem) {
+  .arm-controls:has(> [data-control="gripper"]) { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); }
+}
+
+/* 팔 조이스틱 — 주행 스틱과 같은 판. 포커스 파랑은 포커스·잡은 테두리에만, 손잡이는 중립색.
+   축 끝 관절 이름은 손잡이 위에 떠서 가려지지 않는다. */
+[data-arm-pad] {
+  position: relative; justify-self: center;
+  width: min(100%, 15rem); aspect-ratio: 1; border-radius: 50%;
+  border: 2px solid var(--line-30);
+  background:
+    linear-gradient(var(--line-14), var(--line-14)) center / 1px 100% no-repeat,
+    linear-gradient(var(--line-14), var(--line-14)) center / 100% 1px no-repeat,
+    color-mix(in srgb, var(--ground-deep) 70%, transparent);
+  touch-action: none; user-select: none; -webkit-user-select: none; cursor: grab;
+}
+[data-arm-pad]:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset); }
+[data-arm-pad].active { border-color: var(--focus-ring); cursor: grabbing; }
+[data-arm-pad][data-disabled] { opacity: var(--disabled-opacity); cursor: not-allowed; }
+[data-arm-pad-knob] {
+  position: absolute; top: 50%; left: 50%; width: 38%; aspect-ratio: 1; border-radius: 50%;
+  background: color-mix(in srgb, var(--ink) 72%, var(--ground-deep));
+  box-shadow: 0 2px 10px color-mix(in srgb, var(--ground-deep) 70%, transparent);
+  transform: translate(-50%, -50%); pointer-events: none;
+}
+[data-arm-pad].active [data-arm-pad-knob] { background: var(--ink); }
+[data-arm-pad-label] {
+  position: absolute; z-index: 1; font-family: var(--mono); font-size: var(--text-micro); color: var(--ink);
+  padding: 0 var(--space-1); border-radius: var(--radius-flag);
+  background: color-mix(in srgb, var(--ground-deep) 80%, transparent);
+  pointer-events: none; white-space: nowrap;
+}
+[data-arm-pad-label="up"] { top: var(--space-2); left: 50%; transform: translateX(-50%); }
+[data-arm-pad-label="down"] { bottom: var(--space-2); left: 50%; transform: translateX(-50%); }
+[data-arm-pad-label="left"] { left: var(--space-2); top: 50%; transform: translateY(-50%); }
+[data-arm-pad-label="right"] { right: var(--space-2); top: 50%; transform: translateY(-50%); }
+[data-arm-pad-status] { margin: 0; text-align: center; font-size: var(--text-label); }
+@media (width < 30rem) {
+  .arm-controls > section[data-control="joint_jog"] { grid-template-columns: minmax(0, 1fr); }
+  [data-screen="arm"] { padding: var(--space-3); }
+  body[data-pilot-screen="arm"] .pilot-main { padding: var(--space-2); }
+  /* 휴대폰: 작은 영상 → 조이스틱 → readback 순. 영상은 화면 높이의 1/4 안으로 줄인다. */
+  .arm-view { display: contents; }
+  .arm-camera { order: 0; }
+  .arm-camera img { max-height: 25dvh; width: auto; max-width: 100%; justify-self: center; object-fit: contain; }
+  .arm-controls { order: 1; }
+  [data-sim-readback] { order: 2; max-height: 10rem; }
+  .arm-actions { order: 3; }
+  .arm-console > [data-sim-record-panel] { order: 4; }
+}
+/* 태블릿 가로: 왼쪽 작업 공간(영상·readback), 오른쪽 조작부 — 컨트롤러처럼 한 화면에 */
+@media (width >= 64rem) {
+  body[data-pilot-screen="arm"] .pilot-main { max-width: 84rem; }
+  .arm-console {
+    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+    grid-template-areas: "view controls" "view actions" "record record";
+    align-items: start;
+  }
+  .arm-view { grid-area: view; grid-template-columns: minmax(0, 1fr); }
+  .arm-controls { grid-area: controls; }
+  .arm-actions { grid-area: actions; }
+  .arm-console > [data-sim-record-panel] { grid-area: record; }
+}
+
+/* 주행 화면에서 그리지 못하는 조작부(D-411 B) — 영상 왼쪽 위, 입력을 막지 않는다. */
+[data-drive-unsupported] {
+  grid-row: 2; grid-column: 1; align-self: start; justify-self: start; z-index: 2;
+  display: grid; gap: var(--space-1); margin: var(--space-2) var(--space-3);
+  padding: var(--space-1) var(--space-3); pointer-events: none;
+  background: color-mix(in srgb, var(--ground-deep) 72%, transparent); border-radius: var(--radius-panel);
+  font-size: var(--text-label); color: var(--ink-quiet);
+}
+
+/* 보정 중 띠(D-321 부록): 영상 위쪽 가운데의 경고 판. 판만 칠하고, 사유 글자색은 공용 경고 상태 요소가 정한다. */
+[data-drive-calibration] {
+  position: absolute;
+  top: var(--space-3);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 3;
+  display: grid;
+  gap: var(--space-1);
+  width: max-content;
+  max-width: min(40rem, calc(100% - var(--space-4) * 2));
+  padding: var(--space-3) var(--space-4);
+  background: color-mix(in srgb, var(--ground-raise) 94%, transparent);
+  border: 1px solid var(--status-warn);
+  border-radius: var(--radius-panel);
+}
+[data-drive-calibration][hidden] { display: none; }
+/* 남의 보정 중에는 주행 조작부 전체가 입력을 받지 않는다. 비상 정지(상단 막대)는 이 밖에 있다. */
+[data-drive-controls][data-locked] {
+  pointer-events: none;
+  opacity: var(--disabled-opacity);
+}
+@media (width < 40rem) {
+  body[data-pilot-screen="connect"] ui-topbar { flex-wrap: wrap; gap: var(--space-2); }
+  body[data-pilot-screen="connect"] ui-brand { flex: 1 1 100%; min-width: 0; }
+  body[data-pilot-screen="connect"] #pilot-notice { flex: 1 1 100%; overflow-wrap: anywhere; }
+  body[data-pilot-screen="connect"] ui-topbar [data-spacer] { display: none; }
+}
+
+/* 좁은 티어(전화)의 조작 면적 바닥(DESIGN.md: 44px). 넓은 화면의 레이아웃 규칙이
+   flex 채움을 위해 min-width: 0 을 주는데, 좁은 티어에서는 그대로 두면 프리셋이
+   내용 폭으로 줄어 바닥을 뚫는다. 같은 특이도로 되돌리고 내용 폭 + 바닥으로 잡는다. */
+@media (width < 30rem) {
+  .pilot-drive[data-drive-layout] [data-drive-presets] ui-actions ui-button,
+  .pilot-drive[data-drive-layout] [data-drive-presets] [data-drive-fine] {
+    min-width: 2.75rem;
+    flex: 0 1 auto;
+  }
+}

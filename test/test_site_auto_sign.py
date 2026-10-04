@@ -1,10 +1,11 @@
-"""Automatic manifest-only signer on the signing PC (D-441), against a fake gh."""
+"""deploy/site/auto_sign_candidates.py: signing-PC policy (D-441), against a fake gh."""
 
 from __future__ import annotations
 
 import hashlib
 import json
 import subprocess
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -18,6 +19,22 @@ KEY_ID = "rosy-site-test-1"
 COMMIT = "ab" * 20
 TAG = f"site-{COMMIT[:12]}"
 WORKFLOW = f"{REPO}/.github/workflows/build-site-candidate.yml"
+
+
+def test_gh_utf8_output_survives_windows_legacy_locale(tmp_path, monkeypatch):
+    """Exercise real pipe decoding, including gh's Unicode progress on stderr."""
+    monkeypatch.setattr(subprocess, "_text_encoding", lambda: "cp949")
+    output = json.dumps({"verified": "\u2713"}, ensure_ascii=False) + "\n"
+    progress = "\u2713 Verification succeeded\n"
+    script = ("import sys; sys.stdout.buffer.write(" + repr(output.encode("utf-8"))
+              + "); sys.stderr.buffer.write(" + repr(progress.encode("utf-8")) + ")")
+
+    def run_child(argv, **kwargs):
+        return subprocess.run([sys.executable, "-c", script], **kwargs)
+
+    signer = auto.AutoSigner({"repo": REPO, "gh": "gh", "state_dir": tmp_path},
+                             runner=run_child)
+    assert json.loads(signer._gh("attestation", "verify")) == {"verified": "\u2713"}
 
 
 def _keys(directory: Path) -> tuple[Path, Path]:
@@ -57,6 +74,9 @@ class FakeGh:
             self.assets.append("release.json.sig")
         self.uploads: list[bytes] = []
         self.calls: list[list[str]] = []
+        self.ci_runs = [{"id": 101, "head_sha": COMMIT, "head_branch": "main",
+                         "event": "push", "status": "completed", "conclusion": "success"}]
+        self.ci_jobs = [{"name": "ci-result", "status": "completed", "conclusion": "success"}]
 
     def _ok(self, stdout: str = "") -> SimpleNamespace:
         return SimpleNamespace(returncode=0, stdout=stdout, stderr="")
@@ -64,6 +84,10 @@ class FakeGh:
     def __call__(self, argv, **kwargs):
         args = list(argv[1:])
         self.calls.append(args)
+        if args[0] == "api" and "/actions/workflows/ci.yml/runs?" in args[1]:
+            return self._ok(json.dumps({"workflow_runs": self.ci_runs}))
+        if args[0] == "api" and "/actions/runs/101/jobs?" in args[1]:
+            return self._ok(json.dumps({"jobs": self.ci_jobs}))
         if args[:2] == ["api", "--paginate"]:
             rows = [
                 {"tag": self.tag, "draft": False, "created_at": "2026-10-04T01:00:00Z",
@@ -120,6 +144,36 @@ def _audit(tmp_path: Path) -> list[dict]:
     return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
 
 
+@pytest.mark.parametrize("case", ["failed", "pending", "missing", "wrong-sha", "missing-gate", "failed-gate",
+                                  "newer-pending", "wrong-event"])
+def test_ci_must_pass_before_signing_and_remains_retryable(tmp_path, keys, case):
+    gh = FakeGh()
+    if case == "failed":
+        gh.ci_runs[0]["conclusion"] = "failure"
+    elif case == "pending":
+        gh.ci_runs[0]["status"] = "in_progress"
+    elif case == "missing":
+        gh.ci_runs = []
+    elif case == "wrong-sha":
+        gh.ci_runs[0]["head_sha"] = "ff" * 20
+    elif case == "missing-gate":
+        gh.ci_jobs = []
+    elif case == "failed-gate":
+        gh.ci_jobs[0]["conclusion"] = "failure"
+    elif case == "newer-pending":
+        gh.ci_runs.insert(0, {**gh.ci_runs[0], "id": 102, "status": "queued"})
+    elif case == "wrong-event":
+        gh.ci_runs[0]["event"] = "pull_request"
+    signer = auto.AutoSigner(_config(tmp_path, keys), runner=gh)
+    assert signer.run() == auto.EXIT_REFUSED
+    assert gh.uploads == []
+    assert json.loads((tmp_path / "state/auto-sign-state.json").read_text())["refused"] == []
+    gh.ci_runs = [{"id": 101, "head_sha": COMMIT, "head_branch": "main", "event": "push",
+                   "status": "completed", "conclusion": "success"}]
+    gh.ci_jobs = [{"name": "ci-result", "status": "completed", "conclusion": "success"}]
+    assert signer.run() == auto.EXIT_SIGNED
+
+
 def test_happy_path_signs_uploads_and_audits(tmp_path, keys):
     gh = FakeGh()
     signer = auto.AutoSigner(_config(tmp_path, keys), runner=gh)
@@ -163,7 +217,8 @@ def test_build_from_another_ref_is_refused(tmp_path, keys):
 
     assert auto.AutoSigner(_config(tmp_path, keys), runner=gh).run() == auto.EXIT_REFUSED
     assert gh.uploads == []
-    assert "provenance check failed" in _audit(tmp_path)[-1]["reason"]
+    assert "source ref mismatch" in _audit(tmp_path)[-1]["reason"]
+    assert _audit(tmp_path)[-1]['decision'] == 'error'
 
 
 @pytest.mark.parametrize("status", ["behind", "diverged", ""])
@@ -241,3 +296,18 @@ def test_a_second_run_does_not_wait_for_the_lock(tmp_path, keys):
         with pytest.raises(auto.ConfigError, match="holds the lock"):
             with auto._run_lock(config["state_dir"]):
                 pass
+
+
+@pytest.mark.parametrize('operation', ['attestation', 'compare'])
+def test_network_failure_is_retried_on_next_run(tmp_path, keys, operation):
+    gh = FakeGh()
+
+    def unavailable(argv, **kwargs):
+        if (operation == 'attestation' and argv[1] == 'attestation') or (
+                operation == 'compare' and '/compare/' in ' '.join(argv)):
+            raise subprocess.TimeoutExpired(argv, 120)
+        return gh(argv, **kwargs)
+    config = _config(tmp_path, keys)
+    assert auto.AutoSigner(config, runner=unavailable).run() == auto.EXIT_REFUSED
+    assert json.loads((tmp_path / 'state/auto-sign-state.json').read_text())['refused'] == []
+    assert auto.AutoSigner(config, runner=gh).run() == auto.EXIT_SIGNED

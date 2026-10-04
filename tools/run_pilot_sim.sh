@@ -10,6 +10,6 @@ source install/setup.bash
 export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
 export ROSY_DEV_AUTH=1
 killall -9 ruby gz python3 parameter_bridge create 2>/dev/null || true
-MAP_YAML="$PWD/src/runtime/sensing/map/map_260905_update_v2/maps/map_260905.yaml"
+MAP_YAML="$PWD/middleware/perception/map/map_260905_update_v2/maps/map_260905.yaml"
 exec ros2 launch gz_sim gz_multi.launch.py robots:=1 mode:=nav core:=true \
   headless:=false world_name:=rosy_factory.world map:="$MAP_YAML" spawn_x:=-0.5

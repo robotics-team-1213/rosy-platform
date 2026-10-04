@@ -164,7 +164,7 @@ class AutoSigner:
     def _gh(self, *args: str, timeout: int = 120) -> str:
         try:
             result = self.runner([self.config["gh"], *args], capture_output=True, text=True,
-                                 check=False, timeout=timeout)
+                                 encoding="utf-8", check=False, timeout=timeout)
         except (OSError, subprocess.SubprocessError) as error:
             raise RuntimeError(f"gh {args[0]} could not run: {type(error).__name__}") from None
         if result.returncode != 0:
@@ -203,14 +203,11 @@ class AutoSigner:
     # -- checks ---------------------------------------------------------
     def _attested_digest(self, manifest: Path, actual: str) -> str:
         workflow = f"{self.repo}/{WORKFLOW_PATH}"
-        try:
-            out = self._gh(
-                "attestation", "verify", str(manifest), "--repo", self.repo,
-                "--signer-workflow", workflow, "--source-ref", SOURCE_REF,
-                "--format", "json", timeout=180,
-            )
-        except RuntimeError as error:
-            raise Refused(f"provenance check failed: {error}") from None
+        out = self._gh(
+            "attestation", "verify", str(manifest), "--repo", self.repo,
+            "--signer-workflow", workflow, "--source-ref", SOURCE_REF,
+            "--format", "json", timeout=180,
+        )
         try:
             results = json.loads(out)
         except json.JSONDecodeError:
@@ -248,13 +245,29 @@ class AutoSigner:
         return actual
 
     def _require_on_main(self, commit: str) -> None:
-        try:
-            status = self._gh("api", f"repos/{self.repo}/compare/{commit}...main",
-                              "--jq", ".status").strip()
-        except RuntimeError as error:
-            raise Refused(f"main ancestry check failed: {error}") from None
+        status = self._gh("api", f"repos/{self.repo}/compare/{commit}...main",
+                          "--jq", ".status").strip()
         if status not in {"ahead", "identical"}:
             raise Refused(f"source commit is not on main (compare status {status or 'empty'})")
+
+    def _require_ci(self, commit: str) -> None:
+        """Use the newest exact-main run; a later retry must never reuse old green."""
+        try:
+            data = json.loads(self._gh("api", f"repos/{self.repo}/actions/workflows/ci.yml/runs"
+                                      f"?head_sha={commit}&branch=main&per_page=100"))
+            runs = [row for row in data["workflow_runs"]
+                    if row.get("head_sha") == commit and row.get("head_branch") == "main"
+                    and row.get("event") in {"push", "workflow_dispatch", "schedule"}]
+            latest = max(runs, key=lambda row: row["id"])
+            if latest.get("status") != "completed" or latest.get("conclusion") != "success":
+                raise RuntimeError("CI is not successful yet")
+            jobs = json.loads(self._gh("api", f"repos/{self.repo}/actions/runs/{latest['id']}/jobs"
+                                      "?filter=latest&per_page=100"))["jobs"]
+            gates = [job for job in jobs if job.get("name") == "ci-result"]
+            if len(gates) != 1 or gates[0].get("status") != "completed" or gates[0].get("conclusion") != "success":
+                raise RuntimeError("ci-result is not successful yet")
+        except (ValueError, KeyError, TypeError, AttributeError):
+            raise RuntimeError("exact-main CI proof is missing or malformed; retry later") from None
 
     # -- state ------------------------------------------------------------
     def _state_path(self) -> Path:
@@ -338,6 +351,7 @@ class AutoSigner:
         if tag != f"site-{commit[:12]}":
             raise Refused(f"tag {tag} does not name source commit {commit[:12]}")
         self._require_on_main(commit)
+        self._require_ci(commit)
         if self.dry_run:
             self._audit({"decision": "would-sign", "tag": tag, "source_commit": commit,
                          "manifest_sha256": attested})

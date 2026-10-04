@@ -28,7 +28,7 @@ def test_docs_tests_and_external_robot_products_need_no_pinky_artifact():
 
 def test_ros_workspace_changes_choose_native_payload():
     report = classify_paths(
-        ["src/runtime/gateway/core/api.py", "learning/envs/isaac/bridge.py"]
+        ["middleware/core/gateway/core/api.py", "learning/envs/isaac/bridge.py"]
     )
 
     assert report.impact == "native-payload"
@@ -50,7 +50,7 @@ def test_every_manifest_colcon_root_chooses_native_payload():
 def test_image_or_host_foundation_changes_choose_flashable_image():
     report = classify_paths(
         [
-            "src/products/pinky_pro/bringup/launch/robot.launch.py",
+            "middleware/apps/device/pinky/bringup/launch/robot.launch.py",
             "deploy/robot/pinky_pro/image/inputs.lock.yaml",
         ]
     )
@@ -61,7 +61,7 @@ def test_image_or_host_foundation_changes_choose_flashable_image():
 def test_unclassified_pinky_paths_force_review_even_with_payload_changes():
     report = classify_paths(
         [
-            "src/runtime/gateway/core/api.py",
+            "middleware/core/gateway/core/api.py",
             "deploy/robot/pinky_pro/release/updater.py",
         ]
     )
@@ -94,9 +94,11 @@ def test_selector_reads_changed_paths_from_the_git_merge_base(tmp_path: Path):
     git("commit", "-qm", "base")
     base = git("rev-parse", "HEAD")
 
-    (tmp_path / "src").mkdir()
-    (tmp_path / "src" / "node.py").write_text("def run(): pass\n", encoding="utf-8")
-    git("add", "src/node.py")
+    runtime_path = "middleware/perception/control/node.py"
+    runtime_file = tmp_path / runtime_path
+    runtime_file.parent.mkdir(parents=True)
+    runtime_file.write_text("def run(): pass\n", encoding="utf-8")
+    git("add", runtime_path)
     git("commit", "-qm", "runtime change")
     head = git("rev-parse", "HEAD")
 
@@ -105,7 +107,7 @@ def test_selector_reads_changed_paths_from_the_git_merge_base(tmp_path: Path):
     assert report.base == base
     assert report.head == head
     assert report.impact == "native-payload"
-    assert [item.path for item in report.paths] == ["src/node.py"]
+    assert [item.path for item in report.paths] == [runtime_path]
 
     release_tool = tmp_path / "deploy" / "robot" / "pinky_pro" / "release" / "updater.py"
     release_tool.parent.mkdir(parents=True)
@@ -131,3 +133,12 @@ def test_selector_reads_changed_paths_from_the_git_merge_base(tmp_path: Path):
 
     assert command.returncode == 3
     assert command.stdout.startswith("PINKY_ARTIFACT=review")
+
+
+def test_retired_source_root_requires_review_instead_of_implicit_payload():
+    report = classify_paths(["src/node.py", "middleware/perception/control/node.py"])
+    assert report.impact == "review"
+    assert {item.path: item.impact for item in report.paths} == {
+        "src/node.py": "review",
+        "middleware/perception/control/node.py": "native-payload",
+    }

@@ -7,7 +7,7 @@ import xml.etree.ElementTree as ET
 
 import pytest
 
-from robot_contracts import ROOT, source_manifests
+from robot_contracts import COLCON_ROOTS, ROOT, source_manifests
 
 
 DOCKERFILE = ROOT / "deploy" / "robot" / "pinky_pro" / "Dockerfile"
@@ -69,9 +69,20 @@ def test_core_build_copies_its_declared_package_closure():
     build = _core_build_section()
     copied = {
         ROOT / line.split()[1] for line in build.splitlines()
-        if line.startswith("COPY src/")
+        if line.startswith(tuple(f"COPY {root}/" for root in COLCON_ROOTS))
     }
-    assert copied == {packages[name][0] for name in required}
+    wheel_sources = {ROOT / "contracts" / name for name in ("skill", "motion")}
+    ros_copied = {
+        ROOT / line.split()[1] for line in build.splitlines()
+        if line.startswith(tuple(f"COPY {root}/" for root in COLCON_ROOTS))
+        and line.split()[2].startswith("/opt/rosy_ws/src/")
+    }
+    assert ros_copied == {packages[name][0] for name in required}
+    assert copied - ros_copied == wheel_sources
+    for source in wheel_sources:
+        assert (source / "COLCON_IGNORE").is_file()
+        assert not (source / "package.xml").exists()
+        assert f"COPY contracts/{source.name} /opt/rosy_ws/contracts/{source.name}" in build
     assert "--packages-up-to core pinky_pro web_common dashboard pilot" in build
 
     admitted = set((ROOT / ".dockerignore").read_text(encoding="utf-8").splitlines())

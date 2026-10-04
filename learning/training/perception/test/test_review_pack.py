@@ -86,7 +86,7 @@ def test_traversal_reentering_source_is_rejected(tmp_path):
 
 def test_preview_classes_match_export_contract():
     root = Path(__file__).resolve().parents[4]
-    sys.path.insert(0, str(root / 'src' / 'runtime' / 'sensing'))
-    sys.path.insert(0, str(root / 'src' / 'contracts' / 'foundation'))
+    sys.path.insert(0, str(root / 'middleware' / 'perception'))
+    sys.path.insert(0, str(root / 'contracts' / 'foundation'))
     from control.sensing.perception.learned.manifest import OBJECT_CLASSES
     assert review_pack.CLASSES == OBJECT_CLASSES

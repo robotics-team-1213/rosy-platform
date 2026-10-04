@@ -7,8 +7,8 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 DEPLOY = ROOT / "deploy" / "robot" / "pinky_pro"
-NAV_LAUNCH = ROOT / "src" / "runtime" / "navigation" / "launch"
-NAV_PARAMS = ROOT / "src" / "runtime" / "navigation" / "params" / "nav2_params.yaml"
+NAV_LAUNCH = ROOT / "middleware" / "core" / "navigation" / "launch"
+NAV_PARAMS = ROOT / "middleware" / "core" / "navigation" / "params" / "nav2_params.yaml"
 
 
 def compose() -> dict:

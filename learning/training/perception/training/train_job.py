@@ -20,8 +20,8 @@ from job_state import Job, JobError, Rejected, receipt, sha
 HERE = Path(__file__).resolve().parent
 PERCEPTION = HERE.parent
 ROOT = HERE.parents[3]
-for path in (PERCEPTION, PERCEPTION / "model", ROOT / "src/runtime/sensing",
-             ROOT / "src/contracts/foundation"):
+for path in (PERCEPTION, PERCEPTION / "model", ROOT / "middleware/perception",
+             ROOT / "contracts/foundation"):
     if str(path) not in sys.path:
         sys.path.insert(0, str(path))
 

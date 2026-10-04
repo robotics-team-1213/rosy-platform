@@ -27,7 +27,7 @@ def convert(source, output, *, owner_receipts=()):
     receipt_payloads, receipts = {}, []
     if owner_receipts:
         # The optional offline input uses the existing wire validator; the contracts wheel stays stdlib-only.
-        sys.path.insert(0, str(ROOT / 'src/contracts/foundation'))
+        sys.path.insert(0, str(ROOT / 'contracts/foundation'))
         from core_common.protocol.schemas import DeviceActionReceipt
         for index, file in enumerate(owner_receipts):
             payload = Path(file).read_bytes()

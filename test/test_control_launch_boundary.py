@@ -25,13 +25,13 @@ def test_operational_compose_does_not_serve_the_control_console():
     assert "web_node" not in text
     assert "diagnostic.html" not in text
     assert "dashboard.html" not in text
-    html = (ROOT / "src" / "runtime" / "sensing" / "web" / "diagnostic.html").read_text(encoding="utf-8")
+    html = (ROOT / "middleware" / "perception" / "web" / "diagnostic.html").read_text(encoding="utf-8")
     assert "<title>pinky console</title>" not in html
     assert "<title>Rosy 로봇 — 제어 진단</title>" in html
 
 
 def test_hardware_launch_does_not_start_safety_as_final_publisher():
-    nav = ROOT / "src" / "runtime" / "navigation" / "launch" / "hardware.launch.py"
+    nav = ROOT / "middleware" / "core" / "navigation" / "launch" / "hardware.launch.py"
     text = nav.read_text(encoding="utf-8")
     assert "runtime/sensing" not in text
     assert "safety_node" not in text
@@ -62,7 +62,7 @@ def test_core_launches_do_not_reference_the_control_stack():
     그래프에서 만난다. launch 파일 이름 개명(rosy_core → core)에도 견디도록
     디렉터리를 glob 한다.
     """
-    core_launch_dir = ROOT / "src" / "runtime" / "gateway" / "launch"
+    core_launch_dir = ROOT / "middleware" / "core" / "gateway" / "launch"
     launches = sorted(core_launch_dir.glob("*.launch.py"))
     assert launches, "core launch directory unexpectedly empty — guard lost its scope"
     offenders = []

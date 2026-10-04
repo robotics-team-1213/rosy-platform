@@ -21,12 +21,12 @@ None.
 
 ### Working In This Directory
 
-- The swarm lesson constrains `src/site/fleet/fleet/swarm/` (`session.py`, `relay.py`, `transport.py`). Do not add an await in the session without a post-await safety re-check.
+- The swarm lesson constrains `operations/fleet/fleet/swarm/` (`session.py`, `relay.py`, `transport.py`). Do not add an await in the session without a post-await safety re-check.
 - A liveness number derived from the last N samples must go to 0 Hz / grow age when samples stop. Do not hold the last frame.
 
 ### Testing Requirements
 
-None here. The code tests that lock the lesson live in `src/site/fleet/test/`.
+None here. The code tests that lock the lesson live in `operations/fleet/test/`.
 
 ### Common Patterns
 
@@ -36,7 +36,7 @@ YAML frontmatter `problem_type: design_pattern`, `applies_when` lists.
 
 ### Internal
 
-- `src/site/fleet/fleet/swarm/`
+- `operations/fleet/fleet/swarm/`
 
 ### External
 

@@ -23,14 +23,14 @@ export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
 export ROS_DOMAIN_ID=$(( (RANDOM % 100) + 20 ))
 
 # Nav2 의 정적 점유 맵(map_server) — mode:=nav 는 map:= 인자를 요구한다.
-MAP_YAML="$PWD/src/runtime/sensing/map/map_260905_update_v2/maps/map_260905.yaml"
+MAP_YAML="$PWD/middleware/perception/map/map_260905_update_v2/maps/map_260905.yaml"
 
 # 2. Cleanup previous processes
 killall -9 ruby gz python3 parameter_bridge create 2>/dev/null || true
 
 # 3. Start gz_multi.launch.py in the background
 echo "[1/3] Starting Gazebo Multi-Robot Environment (core+nav2)..."
-ros2 launch src/sim/gz_sim/launch/gz_multi.launch.py robots:=$ROBOTS world_name:=/tmp/map_260905.world map:="$MAP_YAML" mode:=nav core:=true headless:=true spawn_x:=-0.5 spawn_spacing:=1.0 > /tmp/rosy_gz.log 2>&1 &
+ros2 launch integrations/simulation/gazebo/launch/gz_multi.launch.py robots:=$ROBOTS world_name:=/tmp/map_260905.world map:="$MAP_YAML" mode:=nav core:=true headless:=true spawn_x:=-0.5 spawn_spacing:=1.0 > /tmp/rosy_gz.log 2>&1 &
 GZ_PID=$!
 
 echo "Waiting for robots.yaml to be generated..."
@@ -75,7 +75,7 @@ done
 
 # 5. Start Fleet Server
 echo "[3/3] Starting Fleet Console..."
-export PYTHONPATH="$PYTHONPATH:$(pwd)/src/site/fleet:$(pwd)/src/contracts/foundation:$(pwd)/src/runtime/services"
+export PYTHONPATH="$PYTHONPATH:$(pwd)/operations/fleet:$(pwd)/contracts/foundation:$(pwd)/middleware/core/services"
 
 echo ""
 echo "========================================================="
@@ -90,7 +90,7 @@ done
 echo "========================================================="
 echo "Press Ctrl+C to stop all processes."
 
-python3 src/site/fleet/fleet/cli.py console --robots "$ROBOTS_YAML"
+python3 operations/fleet/fleet/cli.py console --robots "$ROBOTS_YAML"
 
 # Cleanup on exit
 kill $(jobs -p) 2>/dev/null || true

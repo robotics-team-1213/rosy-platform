@@ -9,15 +9,16 @@ gates:
     evidence: "structure scan sees the package; D-73 functional surface declared (3 host tests)"
   LOCAL:
     state: GO
-    cmd: "python -m pytest src/sim/isaac_sim/test -q"
+    cmd: "python -m pytest learning/envs/isaac/test -q"
     evidence: "test_graph_contract·test_model_checks·test_prepare_urdf 통과 (2026-09-30 Windows)"
   ROS-SIM:
     state: HOLD
-    blocker: "Isaac Sim 6.1 실행·USD import·ROS graph는 GPU 호스트에서 미실행. 명령 신선도 watchdog 부재로 장시간 주행·Nav2 수용 전 (D-322)"
+    blocker: "Model-PC Isaac 5.1 SDK imported the referenced robot and ran 120 graph callbacks; independent observer received 117 clock and 117 odom messages. Initial and 243 subsequent Gate/USD wheel-target zero checks passed without a Twist publisher. Process exceeded its 120-second bound after SDK close returned (exit 124). Normal shutdown, actual driving/physical freshness stop, Nav2 and two-robot Fleet acceptance remain unverified. Host 33 passed/1 skipped does not promote runtime (D-322/D-434)."
   ARTIFACT: { state: N/A }
   DEVICE: { state: N/A }
   FIELD: { state: N/A }
-plans: []
+plans:
+  - docs/plans/2026-10-04-isaac-navigation-integration-review.md
 ---
 ## 2026-09-30 initial marker
 

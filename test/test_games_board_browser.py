@@ -20,7 +20,7 @@ pytestmark = pytest.mark.skipif(
 )
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "src" / "site" / "games"))
+sys.path.insert(0, str(ROOT / "operations" / "apps" / "games"))
 
 from browser_harness import open_page, save_temp_screenshot  # noqa: E402
 
@@ -75,7 +75,7 @@ def test_match_board_renders_published_play_state():
             assert page.locator("#phase").inner_text() == "경기 진행"
             assert page.locator("#away-score").inner_text() == "1"
             assert page.locator("#lost").is_hidden()
-            assert "아직" in page.locator("#stair1").inner_text()
+            assert "필수 마커·공 관측 미완료" in page.locator("#stair1").inner_text()
             assert page.locator("#markers li.on").count() == 4
             assert not errors, f"페이지 오류: {errors}"
             save_temp_screenshot(page, "games_board_play.png")
@@ -96,9 +96,9 @@ def test_match_board_names_server_judged_delay():
     try:
         with sync_playwright() as playwright:
             browser, page, errors = _launch_board_page(playwright, url)
-            page.wait_for_function("document.getElementById('phase')?.dataset.phase === 'play'")
+            page.wait_for_function("() => document.getElementById('phase')?.dataset.phase === 'play'")
             now[0] += 3.0
-            page.wait_for_function("document.getElementById('connection')?.textContent.includes('마지막 생성 3.0초 전')")
+            page.wait_for_function("() => document.getElementById('connection')?.textContent.includes('마지막 생성 3.0초 전')")
             assert page.locator("#home-score").inner_text() == "2"
             assert "마지막 수신" in page.locator("#connection").inner_text()
             assert page.locator("#phase").inner_text() == "마지막 수신 단계 · 경기 진행"
@@ -108,7 +108,7 @@ def test_match_board_names_server_judged_delay():
             assert page.locator(".score").get_attribute("aria-label") == "마지막 수신 점수"
             assert page.locator("#score-evidence").is_visible()
             announcement = page.locator("#match-announcement")
-            page.wait_for_function("document.getElementById('match-announcement')?.textContent.includes('지연')")
+            page.wait_for_function("() => document.getElementById('match-announcement')?.textContent.includes('지연')")
             assert "마지막 수신 단계" in announcement.inner_text()
             assert "마지막 생성 3.0초 전" in announcement.inner_text()
             assert page.evaluate(
@@ -122,7 +122,7 @@ def test_match_board_names_server_judged_delay():
               )).observe(document.getElementById('match-announcement'), {childList: true});
             }""")
             now[0] += 0.5
-            page.wait_for_function("document.getElementById('connection')?.textContent.includes('마지막 생성 3.5초 전')")
+            page.wait_for_function("() => document.getElementById('connection')?.textContent.includes('마지막 생성 3.5초 전')")
             assert "마지막 생성 3.0초 전" in announcement.inner_text()
             assert page.evaluate("window.__announcementChanges") == []
             assert not errors
@@ -170,7 +170,7 @@ def test_first_overlay_failure_has_no_last_match_claim():
             browser, page, errors = open_page(playwright, 1280, 800)
             page.route("**/overlay.json", lambda route: route.fulfill(status=503))
             page.goto(url, wait_until="domcontentloaded")
-            page.wait_for_function("document.getElementById('connection')?.textContent.includes('연결 오류')")
+            page.wait_for_function("() => document.getElementById('connection')?.textContent.includes('연결 오류')")
             assert "경기 정보 없음" in page.locator("#connection").inner_text()
             assert "마지막 수신 값" not in page.locator("#match-announcement").inner_text()
             assert page.locator("#home-score").inner_text() == "—"
@@ -182,7 +182,7 @@ def test_first_overlay_failure_has_no_last_match_claim():
             save_temp_screenshot(page, "games_board_first_error.png")
             page.unroute("**/overlay.json")
             board.publish(_play_payload(), jpeg=None)
-            page.wait_for_function("document.getElementById('phase')?.dataset.phase === 'play'")
+            page.wait_for_function("() => document.getElementById('phase')?.dataset.phase === 'play'")
             assert page.locator("#connection").inner_text() == "호스트 연결됨"
             assert "경기 정보가 없습니다" not in page.locator("#match-announcement").inner_text()
             assert not errors
@@ -345,7 +345,7 @@ def test_match_layout_uses_desktop_width_and_keeps_narrow_status_separate():
     try:
         with sync_playwright() as playwright:
             browser, page, errors = _launch_board_page(playwright, url)
-            page.wait_for_function("document.getElementById('phase')?.dataset.phase === 'play'")
+            page.wait_for_function("() => document.getElementById('phase')?.dataset.phase === 'play'")
             desktop = page.evaluate("""() => {
               const rect = (s) => document.querySelector(s).getBoundingClientRect();
               return {field: rect('#pitch').toJSON(), details: rect('.field-details').toJSON(),
@@ -359,7 +359,7 @@ def test_match_layout_uses_desktop_width_and_keeps_narrow_status_separate():
 
             page.set_viewport_size({"width": 390, "height": 800})
             now[0] += 3.0
-            page.wait_for_function("document.getElementById('connection')?.dataset.evidence === 'delayed'")
+            page.wait_for_function("() => document.getElementById('connection')?.dataset.evidence === 'delayed'")
             narrow = page.evaluate("""() => {
               const rect = (s) => document.querySelector(s).getBoundingClientRect();
               return {brand: rect('ui-brand').toJSON(), phase: rect('#phase').toJSON(),
@@ -438,7 +438,7 @@ def test_match_state_is_announced_only_when_it_changes():
         with sync_playwright() as playwright:
             browser, page, errors = _launch_board_page(playwright, url)
             announcement = page.locator("#match-announcement")
-            page.wait_for_function("document.getElementById('phase')?.dataset.phase === 'play'")
+            page.wait_for_function("() => document.getElementById('phase')?.dataset.phase === 'play'")
             assert announcement.get_attribute("role") == "status"
             assert "rosy_01 2" in announcement.inner_text()
             assert "rosy_02 1" in announcement.inner_text()
@@ -452,7 +452,7 @@ def test_match_state_is_announced_only_when_it_changes():
             page.wait_for_timeout(700)
             assert page.evaluate("window.__announcements") == []
             board.publish(_lost_payload(), jpeg=None)
-            page.wait_for_function("document.getElementById('phase')?.dataset.phase === 'hold'")
+            page.wait_for_function("() => document.getElementById('phase')?.dataset.phase === 'hold'")
             assert "공을 잃음" in announcement.inner_text()
             assert len(page.evaluate("window.__announcements")) == 1
             assert not errors, f"페이지 오류: {errors}"
@@ -513,9 +513,9 @@ def test_overlay_failure_marks_last_received_match_as_stale():
     try:
         with sync_playwright() as playwright:
             browser, page, errors = _launch_board_page(playwright, url)
-            page.wait_for_function("document.getElementById('phase')?.dataset.phase === 'play'")
+            page.wait_for_function("() => document.getElementById('phase')?.dataset.phase === 'play'")
             page.route("**/overlay.json", lambda route: route.fulfill(status=503))
-            page.wait_for_function("document.getElementById('connection')?.textContent.includes('연결 오류')")
+            page.wait_for_function("() => document.getElementById('connection')?.textContent.includes('연결 오류')")
             assert page.locator("#home-score").inner_text() == "2"
             assert page.locator("#phase").inner_text() == "마지막 수신 단계 · 경기 진행"
             assert page.locator("#field-evidence").is_visible()
@@ -528,7 +528,7 @@ def test_overlay_failure_marks_last_received_match_as_stale():
             save_temp_screenshot(page, "games_board_host_disconnected.png")
             page.unroute("**/overlay.json")
             board.publish(_play_payload(), jpeg=None)
-            page.wait_for_function("document.getElementById('connection')?.dataset.evidence === 'fresh'")
+            page.wait_for_function("() => document.getElementById('connection')?.dataset.evidence === 'fresh'")
             assert page.locator("#field-evidence").is_hidden()
             assert page.locator("#phase").inner_text() == "경기 진행"
             assert "마지막 수신 단계" not in page.locator("#match-announcement").inner_text()
@@ -552,9 +552,9 @@ def test_missing_overlay_after_play_marks_cached_score_as_last_received():
     try:
         with sync_playwright() as playwright:
             browser, page, errors = _launch_board_page(playwright, url)
-            page.wait_for_function("document.getElementById('phase')?.dataset.phase === 'play'")
+            page.wait_for_function("() => document.getElementById('phase')?.dataset.phase === 'play'")
             board.publish({}, jpeg=None)
-            page.wait_for_function("document.getElementById('connection')?.textContent.includes('마지막 경기 정보')")
+            page.wait_for_function("() => document.getElementById('connection')?.textContent.includes('마지막 경기 정보')")
             assert page.locator("#home-score").inner_text() == "2"
             assert page.locator("#phase").inner_text() == "마지막 수신 단계 · 경기 진행"
             assert "마지막 수신 값" in page.locator("#match-announcement").inner_text()
@@ -575,7 +575,7 @@ def test_stalled_stop_request_recovers_for_retry():
     try:
         with sync_playwright() as playwright:
             browser, page, errors = _launch_board_page(playwright, url)
-            page.wait_for_function("document.getElementById('phase')?.dataset.phase === 'play'")
+            page.wait_for_function("() => document.getElementById('phase')?.dataset.phase === 'play'")
             page.evaluate("""() => {
               const original = window.fetch;
               window.fetch = (url, options) => url === '/stop'
@@ -585,7 +585,7 @@ def test_stalled_stop_request_recovers_for_retry():
             }""")
             page.locator("#halt").click()
             page.wait_for_function(
-                "document.getElementById('halt-status')?.dataset.state === 'error'",
+                "() => document.getElementById('halt-status')?.dataset.state === 'error'",
                 timeout=8_000,
             )
             assert "시간 초과" in page.locator("#halt-status").inner_text()
@@ -613,7 +613,9 @@ def test_compact_board_keeps_header_budget_stop_and_chips_in_view(width, height)
         with sync_playwright() as playwright:
             browser, page, errors = open_page(playwright, width, height)
             page.goto(url, wait_until="domcontentloaded")
-            page.wait_for_function("document.querySelectorAll('#markers li').length === 8")
+            page.wait_for_function("() => document.querySelectorAll('#markers li').length === 8")
+            page.get_by_text('마커 ID 자세히', exact=True).click()
+            assert page.locator('#markers li').first.is_visible()
             fit = page.evaluate("""() => ({
               overflow: document.documentElement.scrollWidth - innerWidth,
               topbar: document.querySelector('ui-topbar').getBoundingClientRect().height,
@@ -631,3 +633,28 @@ def test_compact_board_keeps_header_budget_stop_and_chips_in_view(width, height)
     halt = fit["halt"]
     assert halt["top"] >= 0 and halt["bottom"] <= height and halt["right"] <= width, fit
     assert fit["chips"] == [], fit
+def test_visibility_observations_are_not_operational_approval():
+    from playwright.sync_api import sync_playwright, expect
+    board = PreviewBoard(clock=lambda: 100.0)
+    payload = _play_payload()
+    payload.pop('visibility')
+    board.publish(payload, jpeg=None)
+    server = PreviewServer(board, port=0)
+    url = server.start()
+    try:
+        with sync_playwright() as playwright:
+            browser, page, errors = open_page(playwright, 390, 844)
+            page.goto(url)
+            expect(page.locator('#phase')).to_have_text('경기 진행')
+            expect(page.locator('#stair1')).to_have_text('마커·공 관측 정보 대기 · 운용 승인 아님')
+            for ready, word in [(False, '미완료'), (True, '완료')]:
+                payload['visibility'] = {'ready': ready, 'ball': ready}
+                board.publish(payload, jpeg=None)
+                expect(page.locator('#stair1')).to_have_text(f'필수 마커·공 관측 {word} · 운용 승인 아님')
+            disclosure = page.get_by_text('마커 ID 자세히', exact=True)
+            disclosure.click()
+            assert page.locator('#markers li').first.is_visible()
+            assert errors == []
+            browser.close()
+    finally:
+        server.close()

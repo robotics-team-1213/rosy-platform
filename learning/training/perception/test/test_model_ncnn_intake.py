@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "src/runtime/sensing/test"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "middleware/perception/test"))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "model"))
 from test_learned_manifest_ncnn import ncnn_doc, write_doc  # noqa: E402
 from control.sensing.perception.learned.manifest import ManifestError, load_manifest  # noqa: E402

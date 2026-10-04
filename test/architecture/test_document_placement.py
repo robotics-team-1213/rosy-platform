@@ -20,7 +20,7 @@ MUST_IGNORE = [
     "deploy/robot/pinky_pro/.env",
     "deploy/robot/pinky_pro/.env.site",
     "deploy/robot/pinky_pro/site.local.env",
-    "src/site/games/config/match.local.yaml",
+    "operations/apps/games/config/match.local.yaml",
     "deploy/robot/pinky_pro/sd/provision.json",
     "deploy/robot/pinky_pro/sd/rosy-config.yaml",
     "id_ed25519",
@@ -49,7 +49,7 @@ MUST_TRACK = [
     "deploy/robot/pinky_pro/sd/rosy-config.template.yaml",
     "deploy/robot/pinky_pro/sd/provision.schema.json",
     "deploy/robot/pinky_pro/release/public-keys/rosy-release-2026-01.pem",
-    "firmware/signal/observer/config.example.json",
+    "operations/vision/signal_observer/config.example.json",
     "data/teleop/learning/teleop_20260919_151213_part01.mp4",
 ]
 
@@ -60,7 +60,7 @@ ROOT_FILES = {
 }
 MODULE_ROOT_DOCS = {"README.md", "AGENTS.md", "CLAUDE.md", "progress.md", "logs.md", "index.md"}
 # Accepted ADRs that name a module-root file keep it there until superseded.
-MODULE_ROOT_EXCEPTIONS = {"src/runtime/sensing/STEPS.txt"}
+MODULE_ROOT_EXCEPTIONS = {"middleware/perception/STEPS.txt"}
 
 
 def _git(*args: str) -> str:

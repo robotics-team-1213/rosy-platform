@@ -9,8 +9,8 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[4]
 sys.path[:0] = [str(ROOT/'middleware/execution/local/src'),str(ROOT/'contracts/learning/src'),
-               str(ROOT/'contracts/skill/src'),str(ROOT/'src/products/omx/adapter'),
-               str(ROOT/'src/products/omx/adapter/test'),str(ROOT/'src/contracts/foundation'),str(ROOT/'test')]
+               str(ROOT/'contracts/skill/src'),str(ROOT/'middleware/apps/device/omx/adapter'),
+               str(ROOT/'middleware/apps/device/omx/adapter/test'),str(ROOT/'contracts/foundation'),str(ROOT/'test')]
 from rosy.execution.local.omx_policy import PolicyLease, PolicyCandidate, CameraSnapshot, OwnerPolicySession, owner_binding
 from rosy.execution.local.policy_install import InstallBinding,load_policy
 from rosy.contracts.skill import AttemptIdentity

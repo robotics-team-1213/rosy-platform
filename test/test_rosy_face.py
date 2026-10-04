@@ -19,7 +19,7 @@ ROOT = Path(__file__).resolve().parents[1]
 NATIVE = ROOT / "deploy/robot/pinky_pro/native"
 IMAGE = ROOT / "deploy/robot/pinky_pro/image"
 UNIT = NATIVE / "rosy-face.service"
-FOUNDATION = ROOT / "src/contracts/foundation"
+FOUNDATION = ROOT / "contracts/foundation"
 PW = "pass" + "word"  # assembled so the tracked-file secret scanner sees no literal
 AP_VALUE = "Kx7" + "mQ2vR9tLpZq"
 
@@ -605,7 +605,7 @@ def test_the_display_shows_the_key_and_never_logs_it(tmp_path, capsys):
 
 
 def test_the_lcd_draws_the_join_qr_only_while_the_ap_is_open_and_never_logs_it(tmp_path, capsys):
-    sys.path.insert(0, str(ROOT / "src/hmi/face"))
+    sys.path.insert(0, str(ROOT / "middleware/ui/face"))
     info_screen = pytest.importorskip("emotion.info_screen")
     module = _display()
     _status(tmp_path, "CORE_READY")
@@ -717,7 +717,7 @@ def test_a_malformed_login_hand_off_shows_nothing(tmp_path, content):
 
 
 def test_the_boot_card_rows_for_the_login_line():
-    sys.path.insert(0, str(ROOT / "src/hmi/face"))
+    sys.path.insert(0, str(ROOT / "middleware/ui/face"))
     info_screen = pytest.importorskip("emotion.info_screen")
     base = {"stage": "CORE_READY", "ipv4": ["192.168.1.201"], "battery_percent": 80, "battery_voltage": 7.9}
 
@@ -790,7 +790,7 @@ def test_no_product_unit_or_launch_starts_emotion_server():
     from robot_contracts import COLCON_ROOTS
 
     launches = [launch for root in COLCON_ROOTS for launch in (ROOT / root).rglob("*.launch.py")
-                if "src/hmi/face" not in launch.as_posix()]
+                if "middleware/ui/face" not in launch.as_posix()]
     # D-427: an empty walk would pass; today the roots hold 25 *.launch.py outside the face.
     assert len(launches) >= 25, launches  # update when a launch file is legitimately removed
     for launch in launches:
@@ -912,7 +912,7 @@ def test_the_probe_requires_rpi_lgpio_to_honour_the_chip_variable(tmp_path):
 def test_the_probe_renders_every_stage_from_the_source_tree(tmp_path, monkeypatch):
     # The CI container has no Pillow; the image build runs this same render check in-image.
     pytest.importorskip("PIL")
-    monkeypatch.syspath_prepend(str(ROOT / "src/hmi/face"))
+    monkeypatch.syspath_prepend(str(ROOT / "middleware/ui/face"))
     probe = _load("probe_display_runtime_render", IMAGE / "probe-display-runtime.py")
 
     failures = probe.check_render(tmp_path)
@@ -1265,7 +1265,7 @@ def test_the_helper_knows_every_pattern_the_table_can_ask_for():
     import re
 
     module = _display()
-    source = (ROOT / "src/products/pinky_pro/lamp/src/lamp_pattern.c").read_text(encoding="utf-8")
+    source = (ROOT / "middleware/drivers/pinky_lamp/src/lamp_pattern.c").read_text(encoding="utf-8")
     names_block = source.split("static const char *names[]")[1].split("};")[0]
     known = set(re.findall(r'"([a-z]+)"', names_block))
 
@@ -1274,7 +1274,7 @@ def test_the_helper_knows_every_pattern_the_table_can_ask_for():
                for mode in [*module.robot_state.ROBOT_MODES, None]
                for nav in [*module.robot_state.NAV_STATES, None]}
 
-    assert askable <= known, sorted(askable - known)
+    assert askable | {"illumination"} <= known, sorted(askable - known)
 
 
 @pytest.mark.parametrize("tree,message", [
@@ -1386,6 +1386,19 @@ def _answer(root: Path):
     return json.loads(path.read_text(encoding="utf-8")) if path.exists() else None
 
 
+def test_queued_hardware_test_cannot_delay_or_replace_emergency_when_core_missing(tmp_path):
+    module = _display()
+    _lamp_tree(tmp_path)
+    _status(tmp_path, "CORE_READY", robot_mode="EMERGENCY", estop=True, runtime_mode="hardware")
+    spawn = FakeSpawn()
+    display, lamp, _clock, _rendered, _lines = _state_loop(module, tmp_path, spawn=spawn)
+    _hand_over(tmp_path)
+    display._buzzer.test = lambda: pytest.fail("blocking bench test reached emergency")
+    display.step()
+    assert lamp.pattern == "emergency"
+    assert _answer(tmp_path) is None and display._tested is None
+
+
 def test_the_display_plays_a_handed_over_buzzer_test_once(tmp_path):
     module = _display()
     gpio = FakeGPIO()
@@ -1467,7 +1480,7 @@ def test_an_oversized_hand_over_is_not_read(tmp_path):
 
 # --- D-433: rosy-face — the situation table drives the LCD -----------------------------
 
-FACE = ROOT / "src/hmi/face"
+FACE = ROOT / "middleware/ui/face"
 WALL = 1_790_000_000.0  # any fixed wall clock; the hand-over's written_at follows it
 
 
@@ -1554,6 +1567,41 @@ def _face_loop(module, root, *, gifs=None, logs=None):
 
 def _screen_row(rendered):
     return rendered[-1]["screen"]["row"]
+
+
+def test_low_light_opt_in_holds_recovery_and_clears_stale_or_alarm(tmp_path):
+    module = _display()
+    _status(tmp_path, "CORE_READY", runtime_mode="hardware")
+    _face_inputs(tmp_path, power_mode="standby", camera_quality={"valid": False, "reason": "low_light"}, camera_quality_age_s=0)
+    display, lcd, clock, rendered, _opened, _lines = _face_loop(module, tmp_path)
+    _lamp_tree(tmp_path)
+    spawn = FakeSpawn()
+    display._lamp = module.Lamp(tmp_path, True, module.Log(lambda _message: None), spawn=spawn)
+    display.step()
+    assert display.screen["kind"] == "sleep"  # opt-in is off by default
+    display._low_light_enabled = True
+    display.step()
+    assert display.screen["kind"] == "light" and display.screen["backlight"] == 100
+    assert spawn.patterns[-1] == "illumination"
+    _face_inputs(tmp_path, power_mode="standby", camera_quality={"valid": True, "reason": "usable"}, camera_quality_age_s=0)
+    display.step()
+    assert display.screen["kind"] == "light"  # own illumination must not oscillate
+    _face_inputs(tmp_path, power_mode="standby", camera_quality={"valid": False, "reason": "overexposed"}, camera_quality_age_s=0)
+    display.step()
+    assert display.screen["kind"] == "sleep" and display._lamp.pattern != "illumination"
+    _face_inputs(tmp_path, power_mode="standby", camera_quality={"valid": False, "reason": "low_light"}, camera_quality_age_s=0)
+    display.step()
+    assert display.screen["kind"] == "light"
+    (tmp_path / "run/rosy/face-inputs.json").write_text("{", encoding="utf-8")
+    display._wall = lambda: WALL + 2.1
+    display.step()
+    assert display.screen["kind"] == "sleep"  # cached quality expires before CORE envelope
+    assert display._lamp.pattern != "illumination"
+    display._wall = lambda: WALL
+    _face_inputs(tmp_path, estop=True, camera_quality={"valid": False, "reason": "low_light"}, camera_quality_age_s=0)
+    display.step()
+    assert display.screen["kind"] == "stopped" and not display._light_session
+    assert display._lamp.pattern != "illumination"
 
 
 def test_face_owns_the_screen_with_a_fresh_handover(tmp_path):

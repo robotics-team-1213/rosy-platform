@@ -136,7 +136,7 @@ def export(source, output, *, model='tiny_cnn'):
             raise ValueError('fresh raw derivation source changed')
     replay_model(source, model, roots[-1], read(source / f'raw-verification-{len(sources)-1}.json'),
                  config['stride'], predictions[model])
-    profile = ROOT / 'src/products/pinky_pro/profile/config/profile.yaml'
+    profile = ROOT / 'middleware/apps/device/pinky/profile/config/profile.yaml'
     profile_bytes = profile.read_bytes(); values = yaml.safe_load(profile_bytes)['profile']
     limits = [[-values['max_linear_velocity'], values['max_linear_velocity']],
               [-values['max_angular_velocity'], values['max_angular_velocity']]]

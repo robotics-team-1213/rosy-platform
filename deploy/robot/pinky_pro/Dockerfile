@@ -22,7 +22,7 @@ RUN apt-get -o Acquire::Retries=5 update \
         ros-jazzy-rmw-cyclonedds-cpp \
     && rm -rf /var/lib/apt/lists/*
 
-COPY src/products/pinky_pro/bringup/config/cyclonedds_localhost.xml /etc/rosy/cyclonedds.xml
+COPY middleware/apps/device/pinky/bringup/config/cyclonedds_localhost.xml /etc/rosy/cyclonedds.xml
 
 FROM runtime-common AS core-runtime
 
@@ -46,30 +46,38 @@ RUN apt-get -o Acquire::Retries=5 update \
 
 FROM core-runtime AS core-build
 
+RUN apt-get -o Acquire::Retries=5 update \
+    && apt-get install -y --no-install-recommends python3-setuptools python3-wheel \
+    && rm -rf /var/lib/apt/lists/*
+COPY contracts/skill /opt/rosy_ws/contracts/skill
+COPY contracts/motion /opt/rosy_ws/contracts/motion
+COPY deploy/robot/pinky_pro/image/install-motion-contracts.sh /opt/rosy_ws/install-motion-contracts.sh
+
 COPY deploy/robot/pinky_pro/restore-hollow-toolchain.sh /tmp/restore-hollow-toolchain.sh
 RUN apt-get -o Acquire::Retries=5 update \
     && bash /tmp/restore-hollow-toolchain.sh \
     && rm -f /tmp/restore-hollow-toolchain.sh \
     && rm -rf /var/lib/apt/lists/*
 
-COPY src/contracts/foundation /opt/rosy_ws/src/contracts/foundation
-COPY src/runtime/events /opt/rosy_ws/src/runtime/events
-COPY src/runtime/services /opt/rosy_ws/src/runtime/services
-COPY src/runtime/api_web /opt/rosy_ws/src/runtime/api_web
-COPY src/hmi/web_common /opt/rosy_ws/src/hmi/web_common
-COPY src/hmi/dashboard /opt/rosy_ws/src/hmi/dashboard
+COPY contracts/foundation /opt/rosy_ws/src/contracts/foundation
+COPY middleware/core/events /opt/rosy_ws/src/runtime/events
+COPY middleware/core/services /opt/rosy_ws/src/runtime/services
+COPY middleware/core/api_web /opt/rosy_ws/src/runtime/api_web
+COPY shared/web /opt/rosy_ws/src/hmi/web_common
+COPY middleware/ui/robot /opt/rosy_ws/src/hmi/dashboard
 # D-323: CORE serves the Rosy Pilot teleop surface at /pilot (core_api_web exec_depends pilot).
-COPY src/hmi/pilot /opt/rosy_ws/src/hmi/pilot
+COPY middleware/ui/pilot /opt/rosy_ws/src/hmi/pilot
 
 WORKDIR /opt/rosy_ws
 # omx/imu/vision/control belong to optional slices, not this core image.
-COPY src/contracts/interfaces ./src/contracts/interfaces
-COPY src/runtime/gateway ./src/runtime/gateway
+COPY contracts/ros_idl /opt/rosy_ws/src/contracts/interfaces
+COPY middleware/core/gateway /opt/rosy_ws/src/runtime/gateway
 # D-196: CORE reads the robot profile from share/<robot.model>/config.
-COPY src/products/pinky_pro/profile ./src/products/pinky_pro/profile
+COPY middleware/apps/device/pinky/profile /opt/rosy_ws/src/products/pinky_pro/profile
 RUN set -eo pipefail \
     && source /opt/ros/jazzy/setup.bash \
     && colcon build --merge-install --packages-up-to core pinky_pro web_common dashboard pilot \
+    && bash /opt/rosy_ws/install-motion-contracts.sh /opt/rosy_ws /opt/rosy_ws/install \
     && test -d /opt/rosy_ws/install
 
 FROM core-runtime AS core
@@ -126,16 +134,16 @@ RUN git clone https://github.com/Slamtec/sllidar_ros2.git src/sllidar_ros2 \
     && cd src/sllidar_ros2 \
     && git checkout --detach ${SLLIDAR_COMMIT} \
     && rm -rf .git
-COPY src/contracts/interfaces ./src/contracts/interfaces
-COPY src/contracts/foundation ./src/contracts/foundation
-COPY src/sim/description ./src/sim/description
-COPY src/products/pinky_pro/bringup ./src/products/pinky_pro/bringup
-COPY src/runtime/navigation ./src/runtime/navigation
-COPY src/products/omx/adapter ./src/products/omx/adapter
-COPY src/products/omx/profile ./src/products/omx/profile
-COPY src/runtime/sensing ./src/runtime/sensing
-COPY src/hmi/web_common ./src/hmi/web_common
-RUN mkdir -p src/sim/description/meshes
+COPY contracts/ros_idl /opt/rosy_ws/src/contracts/interfaces
+COPY contracts/foundation /opt/rosy_ws/src/contracts/foundation
+COPY middleware/apps/device/pinky/description /opt/rosy_ws/src/sim/description
+COPY middleware/apps/device/pinky/bringup /opt/rosy_ws/src/products/pinky_pro/bringup
+COPY middleware/core/navigation /opt/rosy_ws/src/runtime/navigation
+COPY middleware/apps/device/omx/adapter /opt/rosy_ws/src/products/omx/adapter
+COPY middleware/apps/device/omx/profile /opt/rosy_ws/src/products/omx/profile
+COPY middleware/perception /opt/rosy_ws/src/runtime/sensing
+COPY shared/web /opt/rosy_ws/src/hmi/web_common
+RUN mkdir -p /opt/rosy_ws/src/sim/description/meshes
 RUN set -eo pipefail \
     && source /opt/ros/jazzy/setup.bash \
     && colcon build --merge-install \

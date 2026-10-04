@@ -14,7 +14,7 @@ from fleet.server.local_action_transport import (
     LocalActionRejected, LocalActionUnavailable, UnixLocalActionTransport,
 )
 
-OMX_ROOT = Path(__file__).resolve().parents[1] / "src/products/omx/adapter"
+OMX_ROOT = Path(__file__).resolve().parents[1] / "middleware/apps/device/omx/adapter"
 
 
 def _cell_grant_document(now):

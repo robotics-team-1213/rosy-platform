@@ -15,6 +15,6 @@ pkill -9 -f "sim_jpeg_relay" 2>/dev/null || true
 pkill -9 -f "image_transport" 2>/dev/null || true
 pkill -9 -f "lib/core/core" 2>/dev/null || true
 sleep 2
-MAP_YAML="$PWD/src/runtime/sensing/map/map_260905_update_v2/maps/map_260905.yaml"
+MAP_YAML="$PWD/middleware/perception/map/map_260905_update_v2/maps/map_260905.yaml"
 exec ros2 launch gz_sim gz_multi.launch.py robots:=1 mode:=nav core:=true \
   headless:=true world_name:=rosy_factory.world map:="$MAP_YAML" spawn_x:=-0.5

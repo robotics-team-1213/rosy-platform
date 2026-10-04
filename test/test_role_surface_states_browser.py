@@ -10,11 +10,17 @@ from browser_harness import open_page
 
 
 ROOT = Path(__file__).resolve().parents[1]
-WEB = ROOT / "src" / "hmi" / "dashboard"
+WEB = ROOT / "middleware" / "ui" / "robot"
 
 
 def _module_page(playwright, modules: dict[str, Path], width: int = 390):
     browser, page, errors = open_page(playwright, width, 844)
+    confirmation = ROOT / "shared" / "web" / "confirmation.js"
+    page.route("http://rosy.test/common/confirmation.js", lambda route: route.fulfill(
+        status=200, content_type="application/javascript", body=confirmation.read_text(encoding="utf-8")))
+    geometry = ROOT / "shared" / "web" / "live-dialog-geometry.js"
+    page.route("http://rosy.test/common/live-dialog-geometry.js", lambda route: route.fulfill(
+        status=200, content_type="application/javascript", body=geometry.read_text(encoding="utf-8")))
     page.route(
         "http://rosy.test/panel-test",
         lambda route: route.fulfill(
@@ -23,7 +29,7 @@ def _module_page(playwright, modules: dict[str, Path], width: int = 390):
             body="<!doctype html><html><head></head><body></body></html>",
         ),
     )
-    for url, path in modules.items():
+    for url, path in {"/common/ui.js": ROOT / "shared" / "web" / "ui.js", **modules}.items():
         page.route(
             f"http://rosy.test{url}",
             lambda route, _request, path=path: route.fulfill(
@@ -40,7 +46,7 @@ def test_shared_components_apply_button_size_palette_and_status_contracts():
     pytest.importorskip("playwright.sync_api")
     from playwright.sync_api import sync_playwright
 
-    shared = ROOT / "src" / "hmi" / "web_common"
+    shared = ROOT / "shared" / "web"
     with sync_playwright() as playwright:
         try:
             browser, page, errors = _module_page(playwright, {
@@ -109,7 +115,7 @@ def test_dashboard_api_preserves_structured_http_errors_and_network_failures():
                 "/assets/dom.js": WEB / "dom.js",
                 "/assets/camera-capture.js": WEB / "camera-capture.js",
                 # camera-capture.js re-exports the promoted web_common module (D-323 T9).
-                "/common/evidence.js": ROOT / "src" / "hmi" / "web_common" / "evidence.js",
+                "/common/evidence.js": ROOT / "shared" / "web" / "evidence.js",
             })
         except Exception as error:
             pytest.skip(f"Playwright Chromium unavailable: {error}")
@@ -165,7 +171,7 @@ def test_console_map_distinguishes_empty_forbidden_error_and_ready_by_role():
             browser, page, errors = _module_page(playwright, {
                 "/assets/panels/console/map.js": WEB / "panels" / "console" / "map.js",
                 "/assets/map.js": WEB / "map.js",
-                "/assets/ui.js": ROOT / "src" / "hmi" / "web_common" / "ui.js",
+                "/assets/ui.js": ROOT / "shared" / "web" / "ui.js",
             })
         except Exception as error:
             pytest.skip(f"Playwright Chromium unavailable: {error}")
@@ -241,7 +247,7 @@ def test_operator_sees_setup_recovery_only_when_manifest_allows_it():
             browser, page, errors = _module_page(playwright, {
                 "/assets/panels/console/map.js": WEB / "panels" / "console" / "map.js",
                 "/assets/map.js": WEB / "map.js",
-                "/assets/ui.js": ROOT / "src" / "hmi" / "web_common" / "ui.js",
+                "/assets/ui.js": ROOT / "shared" / "web" / "ui.js",
             })
         except Exception as error:
             pytest.skip(f"Playwright Chromium unavailable: {error}")
@@ -281,8 +287,8 @@ def test_host_agent_recovery_is_text_only_and_unavailable_controls_stay_blocked(
         try:
             browser, page, errors = _module_page(playwright, {
                 "/assets/panels/host/operations.js": WEB / "panels" / "host" / "operations.js",
-                "/assets/ui.js": ROOT / "src" / "hmi" / "web_common" / "ui.js",
-                "/common/core_ui_logic.js": ROOT / "src" / "hmi" / "web_common" / "core_ui_logic.js",
+                "/assets/ui.js": ROOT / "shared" / "web" / "ui.js",
+                "/common/core_ui_logic.js": ROOT / "shared" / "web" / "core_ui_logic.js",
             })
         except Exception as error:
             pytest.skip(f"Playwright Chromium unavailable: {error}")

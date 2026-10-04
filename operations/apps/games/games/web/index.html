@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="ko" data-theme="dark" data-theme-pin="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Rosy 사이트 — 경기 보드</title>
+  <link rel="stylesheet" href="/common/tokens.css">
+  <link rel="stylesheet" href="/common/components.css">
+  <link rel="stylesheet" href="/styles.css">
+  <script type="module" src="/common/ui.js"></script>
+  <script type="module" src="/board.js"></script>
+</head>
+<body>
+  <ui-shell grammar="focal">
+  <ui-topbar>
+    <ui-brand>
+      <small>노트북 게임 호스트</small>
+      <b>1v1 피치</b>
+    </ui-brand>
+    <p id="phase">대기</p>
+    <p id="connection">경기 데이터 대기 중</p>
+  </ui-topbar>
+  <section class="score" aria-label="점수">
+    <span id="score-evidence" hidden>마지막 수신 점수</span>
+    <div>
+      <span id="home-name">홈</span>
+      <strong id="home-score">—</strong>
+    </div>
+    <div>
+      <span id="away-name">원정</span>
+      <strong id="away-score">—</strong>
+    </div>
+  </section>
+  <p id="match-announcement" class="sr-only" role="status" aria-live="polite"></p>
+  <main class="match-layout" aria-label="경기 필드와 관측">
+    <div class="field-media">
+      <div class="pitch-wrap" id="pitch-wrap">
+        <canvas id="pitch" width="720" height="480" aria-label="필드 미터 보드"></canvas>
+        <p id="field-evidence" hidden></p>
+      </div>
+    </div>
+    <aside class="field-details" aria-label="필드 관측">
+      <h2>필드 관측</h2>
+      <p id="stair1">마커·공 관측 정보 대기 · 운용 승인 아님</p>
+      <details><summary>마커 ID 자세히</summary>
+        <ul id="markers" class="chips" aria-label="보이는 마커"></ul>
+      </details>
+      <p id="lost" class="lost" hidden>유실</p>
+      <img id="frame" alt="천장 프레임" hidden>
+    </aside>
+  </main>
+  <p class="halt-row">
+    <ui-button id="halt" kind="irreversible" data-always-live type="button">정지</ui-button>
+    <span>스페이스 키로도 두 로봇을 세웁니다</span>
+    <span id="halt-status" role="status" aria-live="polite"></span>
+  </p>
+  </ui-shell>
+</body>
+</html>

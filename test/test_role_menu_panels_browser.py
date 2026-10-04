@@ -9,15 +9,21 @@ import pytest
 from browser_harness import open_page
 
 ROOT = Path(__file__).resolve().parents[1]
-WEB = ROOT / "src" / "hmi" / "dashboard"
+WEB = ROOT / "middleware" / "ui" / "robot"
 
 
 def _route_panel_test(page) -> None:
     """Load shared elements used by the dashboard shell."""
-    ui_source = (ROOT / "src" / "hmi" / "web_common" / "ui.js").read_text(encoding="utf-8")
+    ui_source = (ROOT / "shared" / "web" / "ui.js").read_text(encoding="utf-8")
     page.route("http://rosy.test/common/ui.js", lambda route: route.fulfill(
         status=200, content_type="application/javascript", body=ui_source))
-    logic_source = (ROOT / "src" / "hmi" / "web_common" / "core_ui_logic.js").read_text(encoding="utf-8")
+    logic_source = (ROOT / "shared" / "web" / "core_ui_logic.js").read_text(encoding="utf-8")
+    confirmation_source = (ROOT / "shared" / "web" / "confirmation.js").read_text(encoding="utf-8")
+    page.route("http://rosy.test/common/confirmation.js", lambda route: route.fulfill(
+        status=200, content_type="application/javascript", body=confirmation_source))
+    geometry_source = (ROOT / "shared" / "web" / "live-dialog-geometry.js").read_text(encoding="utf-8")
+    page.route("http://rosy.test/common/live-dialog-geometry.js", lambda route: route.fulfill(
+        status=200, content_type="application/javascript", body=geometry_source))
     page.route("http://rosy.test/common/core_ui_logic.js", lambda route: route.fulfill(
         status=200, content_type="application/javascript", body=logic_source))
     pose_source = (WEB / "panels" / "setup" / "pose-evidence.js").read_text(encoding="utf-8")
@@ -124,7 +130,7 @@ def test_setup_localization_preserves_pending_pose_and_slam_actions_during_capab
         page.wait_for_function("window.__calls.length === 1")
         pose_button = page.locator("main form ui-button[type=submit]")
         assert pose_button.is_disabled()
-        pose_status = page.locator("main > ui-status[role=status]").nth(1)
+        pose_status = page.locator("main > section.ui-readback ui-status[role=status]")
         pending_pose_feedback = pose_status.inner_text()
         page.evaluate("window.__callbacks['/api/v1/system/capabilities'].onData({navigation:{goal_navigation:true},slam:true})")
         page.locator("main form").evaluate("node => node.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}))")
@@ -134,22 +140,26 @@ def test_setup_localization_preserves_pending_pose_and_slam_actions_during_capab
         page.evaluate("window.__pending['/api/v1/localization/initialpose'].resolve({accepted:true})")
         page.wait_for_function("document.querySelector('main form ui-button[type=submit]').disabled === false")
 
-        slam_buttons = page.locator("main section.ui-readback ui-button")
+        page.locator("main details summary").click()
+        slam_status = page.locator("main details ui-status[role=status]")
+        slam_buttons = page.locator("main details ui-button")
         start = slam_buttons.nth(0)
         start.click()
+        page.locator("dialog.ui-confirm ui-button[kind=irreversible]").click()
         page.wait_for_function("window.__calls.length === 2")
-        pending_slam_feedback = pose_status.inner_text()
+        pending_slam_feedback = slam_status.inner_text()
         assert slam_buttons.evaluate_all("nodes => nodes.every(node => node.disabled)")
         page.evaluate("window.__callbacks['/api/v1/system/capabilities'].onData({navigation:{goal_navigation:true},slam:true})")
         start.dispatch_event("click")
         assert slam_buttons.evaluate_all("nodes => nodes.every(node => node.disabled)")
-        assert pose_status.inner_text() == pending_slam_feedback
+        assert slam_status.inner_text() == pending_slam_feedback
+        assert "초기 위치 설정 요청을 CORE가 받았습니다" in pose_status.inner_text()
         assert page.evaluate("window.__calls") == [
             {"path": "/api/v1/localization/initialpose", "method": "POST"},
             {"path": "/api/v1/slam/start", "method": "POST"},
         ]
         page.evaluate("window.__pending['/api/v1/slam/start'].resolve({accepted:true})")
-        page.wait_for_function("[...document.querySelectorAll('main section.ui-readback ui-button')].every(node => !node.disabled)")
+        page.wait_for_function("[...document.querySelectorAll('main details ui-button')].every(node => !node.disabled)")
         _unmount_panel(page)
         assert errors == []
         browser.close()
@@ -194,6 +204,7 @@ def test_console_line_follow_readback_failure_and_action_feedback_are_independen
           window.confirm=()=>true;
           document.querySelector('main:last-of-type ui-button').click();
         }""")
+        page.locator('dialog.ui-confirm ui-button[kind="irreversible"]').click()
         page.wait_for_function("window.__calls.length === 1")
         action = panel.locator('ui-status[role="status"]').last
         page.evaluate("""() => {
@@ -249,6 +260,7 @@ def test_console_docking_locks_pending_commands_and_preserves_selected_dock():
         }""")
         panel = page.locator("main").last
         assert panel.locator("select").input_value() == "dock-b"
+        page.locator('dialog.ui-confirm ui-button[kind="irreversible"]').click()
         assert page.evaluate("window.__calls") == [{"path":"/api/v1/docking/dock","method":"POST"}]
         assert panel.locator("select").is_disabled()
         assert panel.locator("ui-button").evaluate_all("nodes=>nodes.every(node=>node.disabled)")
@@ -290,7 +302,7 @@ def test_setup_docking_refuses_teach_without_fresh_pose():
             pytest.skip(f"Playwright Chromium unavailable: {error}")
         _route_panel_test(page)
         source = (WEB / "panels" / "setup" / "docking.js").read_text(encoding="utf-8")
-        state_logic = (ROOT / "src" / "hmi" / "web_common" / "core_ui_logic.js").read_text(encoding="utf-8")
+        state_logic = (ROOT / "shared" / "web" / "core_ui_logic.js").read_text(encoding="utf-8")
         page.route("http://rosy.test/assets/panels/setup/docking.js", lambda route: route.fulfill(
             status=200, content_type="application/javascript", body=source))
         page.route("http://rosy.test/common/core_ui_logic.js", lambda route: route.fulfill(
@@ -498,6 +510,7 @@ def test_console_mode_feedback_survives_state_and_capability_polling():
         assert "대기" in status.nth(0).inner_text()
         assert "내비게이션" in status.nth(1).inner_text()
         page.locator('[data-mode="MANUAL"]').click()
+        page.locator('dialog.ui-confirm ui-button[kind="irreversible"]').click()
         page.wait_for_function("window.__calls.length === 1")
         pending_feedback = status.nth(2).inner_text()
         page.evaluate("window.__callbacks['/api/v1/robot/state'].onData({mode:'IDLE'})")
@@ -531,8 +544,8 @@ def test_console_teleop_keeps_readiness_reasons_separate_from_action_feedback():
             pytest.skip(f"Playwright Chromium unavailable: {error}")
         _route_panel_test(page)
         module = (WEB / "panels" / "console" / "teleop.js").read_text(encoding="utf-8")
-        state_logic = (ROOT / "src" / "hmi" / "web_common" / "core_ui_logic.js").read_text(encoding="utf-8")
-        ticker = (ROOT / "src" / "hmi" / "web_common" / "hold-ticker.js").read_text(encoding="utf-8")
+        state_logic = (ROOT / "shared" / "web" / "core_ui_logic.js").read_text(encoding="utf-8")
+        ticker = (ROOT / "shared" / "web" / "hold-ticker.js").read_text(encoding="utf-8")
         page.route("http://rosy.test/assets/panels/console/teleop.js", lambda route: route.fulfill(
             status=200, content_type="application/javascript", body=module))
         page.route("http://rosy.test/common/core_ui_logic.js", lambda route: route.fulfill(
@@ -610,8 +623,8 @@ def test_console_teleop_timeout_and_failed_stop_feedback_survive_polling():
             pytest.skip(f"Playwright Chromium unavailable: {error}")
         _route_panel_test(page)
         module = (WEB / "panels" / "console" / "teleop.js").read_text(encoding="utf-8")
-        state_logic = (ROOT / "src" / "hmi" / "web_common" / "core_ui_logic.js").read_text(encoding="utf-8")
-        ticker = (ROOT / "src" / "hmi" / "web_common" / "hold-ticker.js").read_text(encoding="utf-8")
+        state_logic = (ROOT / "shared" / "web" / "core_ui_logic.js").read_text(encoding="utf-8")
+        ticker = (ROOT / "shared" / "web" / "hold-ticker.js").read_text(encoding="utf-8")
         page.route("http://rosy.test/assets/panels/console/teleop.js", lambda route: route.fulfill(
             status=200, content_type="application/javascript", body=module))
         page.route("http://rosy.test/common/core_ui_logic.js", lambda route: route.fulfill(
@@ -879,8 +892,8 @@ def test_console_teleop_sends_repeated_hold_and_terminal_zero(hold_ms, release):
             pytest.skip(f"Playwright Chromium unavailable: {error}")
         _route_panel_test(page)
         module = (WEB / "panels" / "console" / "teleop.js").read_text(encoding="utf-8")
-        state_logic = (ROOT / "src" / "hmi" / "web_common" / "core_ui_logic.js").read_text(encoding="utf-8")
-        ticker = (ROOT / "src" / "hmi" / "web_common" / "hold-ticker.js").read_text(encoding="utf-8")
+        state_logic = (ROOT / "shared" / "web" / "core_ui_logic.js").read_text(encoding="utf-8")
+        ticker = (ROOT / "shared" / "web" / "hold-ticker.js").read_text(encoding="utf-8")
         page.route("http://rosy.test/assets/panels/console/teleop.js", lambda route: route.fulfill(
             status=200, content_type="application/javascript", body=module))
         page.route("http://rosy.test/common/core_ui_logic.js", lambda route: route.fulfill(
@@ -996,6 +1009,7 @@ def test_console_mode_requires_navigation_capability_and_stops_held_motion():
           window.__capabilities({navigation:{goal_navigation:true}});
           window.__navButton.click();
         }""")
+        page.locator('dialog[open] ui-button[kind="irreversible"]').click()
         page.wait_for_timeout(30)
         assert page.evaluate("window.__calls") == [{"path":"/api/v1/mode","body":{"mode":"NAVIGATION"}}]
         assert page.evaluate("window.__stoppedMotion") == 1
@@ -1047,7 +1061,7 @@ def test_admin_dock_registration_requires_loaded_types_and_fresh_pose():
             pytest.skip(f"Playwright Chromium unavailable: {error}")
         _route_panel_test(page)
         source = (WEB / "panels" / "setup" / "dock-admin.js").read_text(encoding="utf-8")
-        logic = (WEB.parent / "web_common" / "core_ui_logic.js").read_text(encoding="utf-8")
+        logic = (ROOT / "shared" / "web" / "core_ui_logic.js").read_text(encoding="utf-8")
         page.route("http://rosy.test/assets/panels/setup/dock-admin.js", lambda route: route.fulfill(
             status=200, content_type="application/javascript", body=source))
         page.route("http://rosy.test/common/core_ui_logic.js", lambda route: route.fulfill(
@@ -1076,6 +1090,7 @@ def test_admin_dock_registration_requires_loaded_types_and_fresh_pose():
           window.confirm=()=>true;
           document.querySelector('form').requestSubmit();
         }""")
+        page.locator("dialog.ui-confirm ui-button[kind=irreversible]").click()
         page.wait_for_timeout(30)
         assert page.evaluate("window.__calls") == [{
             "path":"/api/v1/docking/docks","method":"POST",
@@ -1111,7 +1126,7 @@ def test_setup_traffic_policy_stages_before_confirmed_apply():
             if(path.endsWith('/apply'))return {active:{policy_revision:'candidate'},status:{state:'ENFORCED'}};
             return {};
           }});
-          callbacks['/api/v1/traffic']({active:{policy_revision:'old',mode:'ADVISORY',approach_distance_m:1,stop_distance_m:.3,stop_dwell_s:1,min_confidence:.8},simulation_signal:{available:false},status:{state:'DISABLED'}});
+          callbacks['/api/v1/traffic']({active:{policy_revision:'old',mode:'MONITOR_ONLY',approach_distance_m:1,stop_distance_m:.3,stop_dwell_s:1,min_confidence:.8},simulation_signal:{available:false},status:{state:'DISABLED'}});
           window.confirm=()=>true;
         }""")
         page.locator('[name="policy_revision"]').fill("candidate")
@@ -1120,6 +1135,7 @@ def test_setup_traffic_policy_stages_before_confirmed_apply():
         assert page.evaluate("window.__calls[0].path") == "/api/v1/traffic/policy/stage"
         assert not page.locator("ui-button").filter(has_text="정지 상태에서 적용").is_disabled()
         page.locator("ui-button").filter(has_text="정지 상태에서 적용").click()
+        page.locator("dialog.ui-confirm ui-button[kind=irreversible]").click()
         page.wait_for_function("window.__calls.length === 2")
         assert page.evaluate("window.__calls[1].path") == "/api/v1/traffic/policy/apply"
         _unmount_panel(page)
@@ -1268,6 +1284,12 @@ def test_console_map_readiness_freshness_and_action_feedback_are_independent():
         page.evaluate("window.__polls['/api/v1/system/capabilities'].onData({navigation:{goal_navigation:true}}); window.__polls['/api/v1/host/commissioning'].onData({runtime_mode:'hardware'}); window.__polls['/api/v1/robot/state'].onData({pose:{x:.5,y:.5,yaw:0}})")
         page.locator('[data-map-click="goal"]').click()
         page.locator("canvas").click(position={"x":30,"y":30})
+        page.evaluate("window.__polls['/api/v1/system/capabilities'].onData({navigation:{goal_navigation:false}})")
+        page.locator("dialog.ui-confirm ui-button[kind=irreversible]").click()
+        assert page.evaluate("window.__calls.filter(call=>call.method==='POST')") == []
+        page.evaluate("window.__polls['/api/v1/system/capabilities'].onData({navigation:{goal_navigation:true}})")
+        page.locator("canvas").click(position={"x":30,"y":30})
+        page.locator("dialog.ui-confirm ui-button[kind=irreversible]").click()
         page.wait_for_function("window.__calls.some(call=>call.method==='POST')")
         page.wait_for_function("[...document.querySelectorAll('#map-test-panel ui-status[role=status]')].at(-1)?.textContent.includes('CORE')")
         accepted = action.inner_text()
@@ -1279,6 +1301,7 @@ def test_console_map_readiness_freshness_and_action_feedback_are_independent():
         page.wait_for_function("[...document.querySelectorAll('#map-test-panel ui-status[role=status]')].at(-1)?.textContent.includes('CORE')")
         page.locator('[data-map-click="goal"]').click()
         page.locator("canvas").click(position={"x":45,"y":45})
+        page.locator("dialog.ui-confirm ui-button[kind=irreversible]").click()
         page.wait_for_function("[...document.querySelectorAll('#map-test-panel ui-status[role=status]')].at(-1)?.textContent.includes('fixture goal rejected')")
         failed = action.inner_text()
         page.evaluate("window.__intervals[10000]()")

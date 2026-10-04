@@ -71,6 +71,8 @@ ALLOWLIST: dict[str, CommandSpec] = {
     spec.name: spec
     for spec in (
         CommandSpec("network.status", Role.VIEWER, False),
+        CommandSpec("lane_perception.status", Role.VIEWER, False),
+        CommandSpec("lane_perception.set", Role.ADMINISTRATOR, False, frozenset({"paint_source"})),
         CommandSpec("network.apply_profile", Role.ADMINISTRATOR, True, frozenset({"profile_id"})),
         CommandSpec("network.set_mode", Role.ADMINISTRATOR, True, frozenset({"mode"})),
         CommandSpec("network.connect", Role.ADMINISTRATOR, True, frozenset({"ssid", "psk"})),
@@ -107,6 +109,8 @@ class HostCommands(Protocol):
     """The privileged actions, injected so refusals can be tested in isolation."""
 
     def network_status(self) -> dict: ...
+    def lane_perception_status(self) -> dict: ...
+    def set_lane_perception(self, paint_source: str) -> dict: ...
     def register_ssh_key(self, public_key: str) -> dict: ...
     def apply_network_profile(self, profile_id: str) -> dict: ...
     def set_network_mode(self, mode: str) -> dict: ...
@@ -351,6 +355,10 @@ class HostAgent:
             )
 
         for name, value in params.items():
+            if name == "paint_source":
+                if not isinstance(value, str) or value not in {"threshold", "denoise", "learned"}:
+                    return ("HOST_AGENT_PARAM_INVALID", "unknown paint_source", "threshold, denoise, learned 중 선택하십시오.")
+                continue
             if name == 'public_key':
                 from ssh_pairing import public_key
                 try:
@@ -408,6 +416,8 @@ class HostAgent:
 
     def _execute(self, request_id: str, spec: CommandSpec, params: dict, actor: dict) -> dict:
         actions: dict[str, Callable[[], dict]] = {
+            "lane_perception.status": lambda: self._commands.lane_perception_status(),
+            "lane_perception.set": lambda: self._commands.set_lane_perception(params["paint_source"]),
             "network.status": self._commands.network_status,
             "network.apply_profile": lambda: self._commands.apply_network_profile(params["profile_id"]),
             "network.set_mode": lambda: self._commands.set_network_mode(params["mode"]),
