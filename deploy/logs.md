@@ -2403,3 +2403,10 @@
 - 변경: 카메라 시작 전 fsync 기록, 두 번의 미확인 부팅 뒤 선택 서비스 보류, 별도 90초 관찰 타이머와 정상 종료 구분을 추가했다. 카메라 재시도를 10초·300초 내 3회로 제한하고 관찰 시간을 카메라 시작 완료와 분리했다. D-161의 CORE·호스트 권한 분리와 D-373의 선택 perception 설정을 유지한다.
 - 증거: 독립 host 194 PASS·1 POSIX skip, 실패 횟수 임계값 mutation RED 확인. Linux에서 fsync/rename 상태 전이·systemd-analyze verify PASS(의존 서비스는 검증용 stub). 격리 user systemd에서 시작 0.074초·재시작 0.103초, 2초로 축소한 관찰 타이머·정지 시 취소·미확인 부팅 후 시작 보류 PASS. 서명 payload·기기 적용은 별도다.
 - gate 변화: SOURCE/LOCAL 보호 로직만 확인했다. 원래 카메라 시작 관련 본체 재부팅의 전기·커널 원인은 미확정이며 물리 전원 초기화와 카메라 복구 수락은 미완료다.
+
+## 2026-10-04 · uncommitted · feat(ci): payload 부팅 스모크 — arm64 러너에서 D-444 P1.2 관측
+
+- 변경: `payload-boot-smoke.yml`(workflow_dispatch 전용, `ubuntu-24.04-arm`, GITHUB_TOKEN 한정 비밀 없음). payload artifact를 내려 압축을 풀고, ROS 핀(CycloneDDS·nav2-msgs·tf2)과 CI 부트 스모크의 파이썬 스택을 설치한 뒤, `release/install`에서 `ROSY_ROBOT_NUMBER=1`로 CORE를 부팅해 `GET /dashboard`·`/pilot`·`/console`의 200+CSP를 검사한다(실패 시 로그 업로드). 정의: `.github/workflows`의 `payload-boot-smoke.yml`과 `test/test_payload_boot_smoke_workflow.py`(6 계약).
+- 증거: `test_payload_boot_smoke_workflow.py` 6 passed(수동 전용·arm 러너·비밀 부재·3 프로브·CSP·부팅 핀·로그 업로드), `test_ci_dependencies.py` 9 passed 회귀 없음. Windows Docker 호스트의 arm64 에뮬레이션 벤치는 binfmt 유실로 반복 불능이었다(2026-10-04 3회 유실 — 벤치 로그 X:/DevTemp/opencode/p12-bench) — payload 파이썬 진입점이 노드 구축까지 도달했음은 확인했다.
+- gate 변화: dashboard·pilot ARTIFACT의 "기기 GET 200" 조항이 이 워크플로 실행으로 관측될 수 있게 되었다(첫 실행은 별도).
+- 결정: D-444 P1.2, D-161(native arm64). 로컬 에뮬레이션은 폐기하고 러너 벤치가 정본이다.
