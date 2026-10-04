@@ -133,7 +133,7 @@ components:
 
 > 계약은 ADR과 계약 시험이 소유한다. 이 문서는 안내다. 이 문서와 ADR이 다르면 ADR이 이긴다.
 > 근거: [D-359](docs/adr/D-359-theme-ready-tokens-shared-controls-and-responsive-tiers.md) §8.
-> 값의 원본은 [`tokens.css`](src/hmi/web_common/tokens.css), 부품은 [`components.css`](src/hmi/web_common/components.css)·[`ui.js`](src/hmi/web_common/ui.js), 표면 목록은 [`surfaces.yaml`](src/hmi/web_common/surfaces.yaml), 살아 있는 견본은 [`styleguide.html`](src/hmi/dashboard/styleguide.html)이다.
+> 값의 원본은 [`tokens.css`](shared/web/tokens.css), 부품은 [`components.css`](shared/web/components.css)·[`ui.js`](shared/web/ui.js), 표면 목록은 [`surfaces.yaml`](shared/web/surfaces.yaml), 살아 있는 견본은 [`styleguide.html`](src/hmi/dashboard/styleguide.html)이다.
 > 위 frontmatter의 색은 기본(어둡게) 테마 값이다. 밝게 값은 `tokens.css`의 `[data-theme="light"]` 블록에 있다.
 
 ## Overview
@@ -194,9 +194,9 @@ D-280 다섯 원칙은 시각에서 이렇게 묶인다.
 
 - 테마는 `tokens.css`의 `[data-theme="이름"]` 팔레트 블록 **하나**다. 기본(어둡게)은 `:root, [data-theme="dark"]`, 밝게는 `[data-theme="light"]`다.
 - 새 블록은 dark와 **같은 키 집합**을 모두 정의하고 자기 `color-scheme`을 가진다. 값만 둔다.
-- 선택지는 [`theme.js`](src/hmi/web_common/theme.js)의 `CHOICES`에 `{ value, label }` **한 줄**을 `system` 앞에 더한다. 이것이 선택지의 단일 출처다(`RosyTheme.choices`): 로봇 `/device` 화면 패널은 여기서 버튼을 그린다. Fleet `설정`의 버튼은 첫 그림 전에 있어야 해서 `index.html` 정적 마크업이고, `test_theme_choices.py`가 같은 순서·값·이름인지 대조하므로 시험이 알려 주는 대로 한 줄을 맞춘다.
+- 선택지는 [`theme.js`](shared/web/theme.js)의 `CHOICES`에 `{ value, label }` **한 줄**을 `system` 앞에 더한다. 이것이 선택지의 단일 출처다(`RosyTheme.choices`): 로봇 `/device` 화면 패널은 여기서 버튼을 그린다. Fleet `설정`의 버튼은 첫 그림 전에 있어야 해서 `index.html` 정적 마크업이고, `test_theme_choices.py`가 같은 순서·값·이름인지 대조하므로 시험이 알려 주는 대로 한 줄을 맞춘다.
 - 그 밖의 파일은 고치지 않는다. 고쳐야 한다면 어딘가 팔레트 이름을 역할 대신 쓰고 있다는 뜻이다.
-- `python -m pytest src/hmi/web_common/test -q`를 돌린다. 팔레트 게이트(`test_palette_gates.py`)가 테마마다 돈다: 글자 대비 ≥ 4.5:1, 위험 채움 위 `ink-on-crit` 대비, 주의·위험 색약 대비, 장미 대 위험 거리, status 따뜻한 띠·series 차가운 띠, 래스터 단조, 로봇 사다리. 범위 게이트(`test_design_scope_gates.py`, D-398)가 정지(D-220)·장미색 범위(D-277)·역할 우선·`100vh` 금지를 지킨다.
+- `python -m pytest shared/web/test -q`를 돌린다. 팔레트 게이트(`test_palette_gates.py`)가 테마마다 돈다: 글자 대비 ≥ 4.5:1, 위험 채움 위 `ink-on-crit` 대비, 주의·위험 색약 대비, 장미 대 위험 거리, status 따뜻한 띠·series 차가운 띠, 래스터 단조, 로봇 사다리. 범위 게이트(`test_design_scope_gates.py`, D-398)가 정지(D-220)·장미색 범위(D-277)·역할 우선·`100vh` 금지를 지킨다.
 - 바꾸면 안 되는 것: D-82 의미 집합, D-277 장미색 범위, **주 명령 = ink 채움**, **위험 채움 위 글자 = `ink-on-crit`**(테마와 무관하게 밝다).
 
 **The One Block Rule.** 테마 하나는 팔레트 블록 하나다. 표면 파일에 테마 분기가 생기면 구조가 틀린 것이다.
@@ -206,7 +206,7 @@ D-280 다섯 원칙은 시각에서 이렇게 묶인다.
 ### 테마 선택
 
 - 기본은 어둡게다(관제실·현장 조명 계약). 밝게는 존재하지만 사람 G3·현장 조명 관측 전까지 운용 권장 테마가 아니다.
-- [`theme.js`](src/hmi/web_common/theme.js)를 `<head>`에서 `tokens.css` 바로 뒤에 동기로 싣는다(CSP 준수 외부 스크립트). 첫 그림 전에 `<html data-theme>`과 `meta[name=theme-color]`(해당 테마 `--ground`)를 정한다.
+- [`theme.js`](shared/web/theme.js)를 `<head>`에서 `tokens.css` 바로 뒤에 동기로 싣는다(CSP 준수 외부 스크립트). 첫 그림 전에 `<html data-theme>`과 `meta[name=theme-color]`(해당 테마 `--ground`)를 정한다.
 - 선호는 `localStorage` `rosy.theme` = `dark|light|system`. 없거나 읽기 실패면 `dark`. `system`은 `prefers-color-scheme`을 따른다.
 - API: `window.RosyTheme.get()`·`set(pref)`·`resolved()`. 바뀌면 `document`에 `rosy:theme` 이벤트(`{theme, preference}`)가 난다.
 - 선택 UI는 `data-theme-choice` segment 버튼이다(`RosyTheme.choices` — 지금은 어둡게·밝게·시스템 셋). 로봇 `/device` 화면 설정 패널과 Fleet `설정` 안에 있다.
@@ -282,18 +282,18 @@ D-280 다섯 원칙은 시각에서 이렇게 묶인다.
 
 ## 표면 문법
 
-모든 웹 표면은 `ui-shell`의 `grammar` 네 가지 중 하나로 시작한다(D-292 §5, [`template.html`](src/hmi/web_common/template.html)). 문법은 화면의 읽는 순서와 첫 화면이 무엇인지를 정한다.
+모든 웹 표면은 `ui-shell`의 `grammar` 네 가지 중 하나로 시작한다(D-292 §5, [`template.html`](shared/web/template.html)). 문법은 화면의 읽는 순서와 첫 화면이 무엇인지를 정한다.
 
 - **spatial** — 로봇 콘솔. 감각→관찰→조작 세 지역(`robot`, 견본 `web-common`)
 - **exception** — 사이트 관제. 예외가 먼저, 지도·대형은 뒤(`console`)
 - **focal** — 경기 보드·조종. 하나의 초점(공, 주행 무대)이 화면을 지배(`game-board`, `pilot`)
 - **procedure** — 점검·진단. 단계가 순서대로(`control-diagnostic`)
 
-등록부(`surfaces.yaml`)의 `grammar` 칸이 [`ui.js`](src/hmi/web_common/ui.js)의 `GRAMMARS`와 같은지 계약 시험이 대조한다. 웹이 아닌 다섯째 문법 **intent**(로봇 얼굴, concept 16 §7.4)은 LCD 표면이 소유한다.
+등록부(`surfaces.yaml`)의 `grammar` 칸이 [`ui.js`](shared/web/ui.js)의 `GRAMMARS`와 같은지 계약 시험이 대조한다. 웹이 아닌 다섯째 문법 **intent**(로봇 얼굴, concept 16 §7.4)은 LCD 표면이 소유한다.
 
 ## Components
 
-모든 부품은 [`components.css`](src/hmi/web_common/components.css)가 그리고 [`ui.js`](src/hmi/web_common/ui.js)가 정의한다. 그림자 DOM을 쓰지 않는다. 견본은 [`styleguide.html`](src/hmi/dashboard/styleguide.html)이다.
+모든 부품은 [`components.css`](shared/web/components.css)가 그리고 [`ui.js`](shared/web/ui.js)가 정의한다. 그림자 DOM을 쓰지 않는다. 견본은 [`styleguide.html`](src/hmi/dashboard/styleguide.html)이다.
 
 ### 독립 작업의 선택 — `createTaskChooser()`
 
@@ -302,8 +302,8 @@ D-280 다섯 원칙은 시각에서 이렇게 묶인다.
 → 결과/오류 → 다음 행동·복귀의 순서로 읽힌다. 지도·영상·정지를 함께 봐야 하는 운용 화면은
 기존 공간 문법을 유지한다.
 
-[`task-chooser.js`](src/hmi/web_common/task-chooser.js)와
-[`task-chooser.css`](src/hmi/web_common/task-chooser.css)는 기존 segment/field/status를 조합한다.
+[`task-chooser.js`](shared/web/task-chooser.js)와
+[`task-chooser.css`](shared/web/task-chooser.css)는 기존 segment/field/status를 조합한다.
 큰 창은 세로 작업 목록, 64rem 미만은 네이티브 선택이다. 현재 작업과 선택은 중립 표현을 쓰며
 현재 역할의 장미색 위치 표식(D-277)과 구별한다. 새 팔레트나 간격 척도를 추가하지 않는다.
 모든 허용 작업은 mounted 상태로 입력·결과를 유지한다. 표면이 manifest, 권한, 요청과
@@ -361,11 +361,30 @@ D-280 다섯 원칙은 시각에서 이렇게 묶인다.
 ### 테마 선택
 - `role="group"` 안에 `RosyTheme.choices` 하나마다 `ui-button kind="segment" data-theme-choice="값"`(지금은 어둡게·밝게·시스템). `theme.js`가 누름을 받아 `aria-pressed`를 맞춘다. 로봇은 `/device` 화면 설정 패널, Fleet은 `설정` 안이다.
 
+## 작업 화면의 기본 원칙 (D-461)
+
+상태를 읽고 다음 일을 찾아 행동하는 순서를 공용 디자인의 기준으로 삼는다.
+공용 작업 부품은 기존 `ui-*` 조작과 토큰을 합성하며 표면이 선택해 적용한다.
+예제 소비자는 학습 작업 `/learning`과 사진 검수다. 기존 운용 화면이 이번 변경으로
+전환·설치·현장 수용되었다고 계산하지 않는다.
+
+- 상태와 이유를 같은 자리에서 읽는다. 실패·거절·미확인은 한국어 텍스트로 표시하며 색만으로 구분하지 않는다.
+- 반복 작업을 첫 화면에 둔다. 등록 폼은 필요할 때 펼치고, 목록의 검색·종류·확인 필요 필터를 가까이 둔다.
+- 다음 행동에는 대상을 붙인다. 검수 대기 사진 열기·연결 저장·이 작업 연결 해제처럼 실제 결과를 말한다.
+- 사용자의 맥락을 보존한다. 선택한 사진과 검색/필터를 URL로 복원하며 수정 내용을 별도 승인 없이 확정하지 않는다.
+- 증거 상세는 펼쳐 본다. 한국어 상태와 핵심 실패 이유를 먼저, 단계·SHA·경로·기술 JSON을 상세에 둔다.
+- 마우스·키보드·터치에서 같은 작업을 마친다. 포커스·비활성 이유·빈 상태·실패 후 재시도를 기능과 함께 검증한다.
+
+`/common/workspace.js`의 `taskRow()`는 작업 제목·종류·상태·다음 작업을 텍스트 DOM으로
+합성한다. `.ui-task-row`는 선으로 나눈 목록이며 중첩 카드로 쓰지 않는다.
+`.ui-workspace-bar`는 검색/필터/행동을 묶는다. 상태 판단은 소비자가 계약에 맞게
+전달한다. 부품은 보고서 통과를 실행 권한·정책 승격으로 바꾸지 않는다.
+
 ## 운용자 말 (Copy)
 
 - **운용자가 읽는 글은 한국어 평문이다.** 용어는 [`CONCEPTS.md`](CONCEPTS.md)를 따른다: 실행 모드(profile 아님), 기능·도킹 기능(capability 아님), 하드웨어 실행 모드, 내비게이션, 호스트 에이전트. `test_operator_copy.py`가 대시보드·Fleet·games의 한글 문자열에서 `profile|capability|hardware 모드|Navigation|프로필`과 맨 열거값(`IDLE`·`MANUAL`·`RUNNING`·`HOLDING`·`UNDOCKED`·`WAITING`·`STALE` 등)을 막는다.
-- **열거값은 `title`에만 둔다.** 보이는 글은 공용 표의 한국어이고 원래 값은 `title`·`data-*`에 남는다. 공용 표는 [`core_ui_logic.js`](src/hmi/web_common/core_ui_logic.js)의 `MODE_LABEL`(대기·수동·내비게이션·도킹·비상 정지), `NAVIGATION_LABEL`, `DOCK_STATE_LABEL`과 `enumLabel()`이다 — 로봇 대시보드와 Fleet이 `/common/`에서 같은 파일을 싣는다. 모르는 값은 받은 그대로 보인다.
-- **증거 어휘도 공용 표다.** 네 상태의 한국어(최신·지연·연결 끊김·정보 없음)와 나이 뒤처리(` · N초 전`)는 [`core_ui_logic.js`](src/hmi/web_common/core_ui_logic.js)의 `EVIDENCE_LABEL`·`evidenceAgeText()`가 단일 출처다(D-398). 주어를 앞에 붙인 문장(`릴레이 끊김`·`위치 지연`)은 이 표를 참조해 조립한다.
+- **열거값은 `title`에만 둔다.** 보이는 글은 공용 표의 한국어이고 원래 값은 `title`·`data-*`에 남는다. 공용 표는 [`core_ui_logic.js`](shared/web/core_ui_logic.js)의 `MODE_LABEL`(대기·수동·내비게이션·도킹·비상 정지), `NAVIGATION_LABEL`, `DOCK_STATE_LABEL`과 `enumLabel()`이다 — 로봇 대시보드와 Fleet이 `/common/`에서 같은 파일을 싣는다. 모르는 값은 받은 그대로 보인다.
+- **증거 어휘도 공용 표다.** 네 상태의 한국어(최신·지연·연결 끊김·정보 없음)와 나이 뒤처리(` · N초 전`)는 [`core_ui_logic.js`](shared/web/core_ui_logic.js)의 `EVIDENCE_LABEL`·`evidenceAgeText()`가 단일 출처다(D-398). 주어를 앞에 붙인 문장(`릴레이 끊김`·`위치 지연`)은 이 표를 참조해 조립한다.
 - **증거가 있는 값은 증거와 함께 말한다.** 지연은 `지연 · N초 전`, 끊김은 `연결 끊김`, 모름은 `정보 없음`이고 `data-evidence`를 단다. 카드에 홀로 붙는 알약은 무엇의 증거인지 말한다(`릴레이 끊김`).
 - **한 원인은 한 번 말한다.** 같은 원인이 여러 버튼을 막으면 원인과 다음 할 일은 묶음 상태 한 줄에 두고, 버튼 사유는 짧은 `위 사유`로 `aria-describedby`가 그 줄을 가리킨다.
 - **빈 목록·읽기 실패는 `ui-empty`다.** 목록 밖 한 줄로 두고(목록은 숨김), 지도 같은 무대에서는 무대 위에 얹고 다시 시도를 곁에 둔다.

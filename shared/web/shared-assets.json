@@ -8,6 +8,7 @@
     "core_ui_logic.js": "text/javascript",
     "hold-ticker.js": "text/javascript",
     "ui.js": "text/javascript",
+    "workspace.js": "text/javascript",
     "confirmation.js": "text/javascript",
     "live-dialog-geometry.js": "text/javascript",
     "theme.js": "text/javascript",
