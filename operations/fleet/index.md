@@ -83,8 +83,8 @@
 
 ## 최근 기록
 
+- 2026-10-04 · uncommitted · feat(server): D-454 1b — 등록 해제 경로와 로스터 차단 전달
 - 2026-10-04 · uncommitted · fix(fleet): keep app composition within its line budget
 - 2026-10-04 · uncommitted · feat(server): D-454 1단계 — 중앙 레지스트리 뷰 (/api/v1/fleet/robots)
 - 2026-10-04 · uncommitted · fix(fleet): 불확실한 YIELD 재실행 차단
 - 2026-10-04 · uncommitted · feat(fleet): D-453 양보 한 구간
-- 2026-10-04 · uncommitted · feat(fleet): D-451 한 줄 교착 알고리즘 room_hold
