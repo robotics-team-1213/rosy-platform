@@ -2212,3 +2212,9 @@
 - Change: add avahi-daemon.service to both Requires and After for the host Avahi socket used by Fleet NSS. Existing Docker, network and firewall dependencies remain.
 - Evidence: baseline dependency regression RED; focused deployment tests 19 passed. Removing only Avahi ordering while preserving Requires was RED; restored tests 2 passed.
 - Gate: SOURCE/LOCAL verified. Separate on-site administrator installation and actual PC boot acceptance remain pending. No robot motion, CORE or camera configuration changes.
+
+## 2026-10-04 · uncommitted · fix(site): keep model delivery journal in service state
+
+- 변경: model-watch의 전달 이력 경로를 기존 StateDirectory 아래로 명시했다. ProtectHome와 기존 hardening·권한·timer 활성화 조건은 유지한다.
+- 증거: 서비스 경로 회귀 RED 후 관련 호스트53pass, 독립47pass. 관제 운영 venv에서 실제 JSONL 생성/fsync와 installer dry-run exit0. 운영 venv에는 pytest가 없어 첫 회귀 실행 실패를 보존했다. 별도 source 후보의 해시를 확인했으며 관리자 설치는 실행하지 않았다.
+- gate 변화: SOURCE/LOCAL 보강. 실제 systemd 서비스 실행·관리자 설치·로봇 shadow/rollback·DEVICE/FIELD는 미검증이다.

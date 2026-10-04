@@ -17,6 +17,7 @@ StateDirectoryMode=0750
 WorkingDirectory=/var/lib/rosy-model-watch
 Environment=HF_TOKEN_FILE=/etc/rosy/site/secrets/hf_token
 Environment=HF_HOME=/var/lib/rosy-model-watch/hf
+Environment=ROSY_MODEL_DELIVERY_JOURNAL_DIR=/var/lib/rosy-model-watch/model-delivery
 # The wrapper finds model/watch.py in the source copy before or after the D-427 move.
 ExecStart=/opt/rosy/model-watch/bin/rosy-model-watch watch --config /etc/rosy/model-watch.yaml
 TimeoutStartSec=6h
