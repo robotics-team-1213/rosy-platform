@@ -2440,3 +2440,9 @@
 - 변경: Pinky MCAP·영상 도구를 CI 작업 전용 경로에 설치하고 해당 작업의 PYTHONPATH에만 연결한다. Debian NumPy를 제거하거나 ROS 런타임 패키지와 바꾸지 않는다. 두 Android 작업은 Kotlin 영속 상태 경로를 RUNNER_TEMP의 독립 경로로 명시해 Pilot의 Windows 경로 기본값을 덮어쓴다.
 - 증거: 두 workflow 독립 SPEC·Quality·Safety 검토 PASS. 실제 Linux의 동일 pins·constraints·pip --target 설치 성공, NumPy 2.2.6·OpenCV 4.12·MCAP 1.5 import와 배열·JPEG 실행 성공, Debian NumPy 1.26.4 파일과 RECORD 부재 상태 불변. 두 앱·공백 포함 Windows/Unix 경로의 실제 wrapper 인자 전달 4건 PASS. 관련 CI·화면 계약 81 PASS. wrapper 검사는 Gradle/Kotlin 컴파일 증거가 아니며 실제 컴파일과 exact SHA의 GitHub 전체 CI는 별도 확인한다.
 - gate 변화: SOURCE/LOCAL 오류 보완. unsigned 후보를 배포하지 않으며 exact SHA의 ci-result·Android CI·서명·실기 배포는 미확인이다.
+
+## 2026-10-05 · uncommitted · test(discovery): 최신 main 통합과 실제 Android 컴파일 확인
+
+- 변경: 다른 세션의 최신 main을 작업 브랜치에 병합하고 검토된 Model 발견·CI 변경을 보존했다. 사용자 승인 범위의 연결·앱 검증 기록을 추가한다.
+- 증거: 통합본의 관련 host 검사에서 67 PASS와 Android launcher 1건의 10초 subprocess 관측 시간 초과를 확인했다. launcher 두 건을 재검사해 2 PASS, known_failures NEW 0을 확인했다. 실제 Gradle의 compileDebugKotlin·compileDebugUnitTestKotlin·testDebugUnitTest가 Pilot 58 PASS·Cam 341 PASS·SKIP 0으로 끝났으며 두 작업의 Kotlin 상태 경로가 명시한 독립 X 경로임을 확인했다. Android 증거는 f27 시작 시점의 추적 파일 snapshot이고 이후 병합된 web connect.js를 포함한 앱 배포 증거는 아니다. 현재 실기 SSH 읽기에서는 CORE active, TLS 설정 없음·광고 none을 확인했으며 인증서·설정·토큰을 바꾸지 않았다.
+- gate 변화: SOURCE/LOCAL 통합·컴파일 확인. generic 승인·신원 증명 client/server는 별도 미통합 후보이며 HTTPS 최초 신원 확인·새 SHA CI·서명 배포·장비 재연결은 미완료다. Bluetooth·개발 모드·주소 입력을 일반 연결 흐름에 추가하지 않는다.
