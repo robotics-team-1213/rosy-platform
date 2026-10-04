@@ -1,0 +1,97 @@
+// D-457 관제 카메라 추적 층. DOM 없는 순수 계산 — map-view.js 가 그리고 tracking-view.js 가 상태줄을 쓴다.
+// 표시·교차확인 전용이다. 목표·교통정리·미션 입력이 아니다.
+
+export const OFFSET_WARN_M = 0.15;
+export const TRACKING_STATUS_TEXT = Object.freeze({
+  OK: "추적 중",
+  LEARNING: "배경 학습 중",
+  CALIBRATION_REQUIRED: "보정 필요",
+  SCENE_CHANGED: "장면 변화 — 배경 다시 학습",
+  STALE: "오래됨",
+  NONE: "수신 없음",
+});
+// Fleet 이 마지막 검출을 거절한 이유(tracking.py last_error). 성공하면 Fleet 이 지운다.
+const ERROR_TEXT = Object.freeze({
+  CALIBRATION_MISMATCH: "보정 불일치",
+  MAP_MISMATCH: "지도 불일치",
+  DETECTION_STALE: "검출 지연(거부)",
+  DETECTION_FUTURE: "검출 시각 오류(거부)",
+  DETECTION_OUT_OF_ORDER: "검출 순서 오류(거부)",
+});
+
+const finite = (value) => typeof value === "number" && Number.isFinite(value);
+
+// A current marker measurement wins over the inferred position for that robot.
+// Only the one-second server lease counts; delayed display ghosts never block fallback.
+export function preferMarkers(tracking, sightings) {
+  const measured = new Set((sightings || []).filter(row => row.state === "fresh"
+    && finite(row.age_ms) && row.age_ms <= 1000 && finite(row.x) && finite(row.y))
+    .map(row => row.robot_id));
+  return { ...tracking, robots: tracking.robots.filter(row => !measured.has(row.robotId)) };
+}
+
+// GET /api/fleet/tracking → 그릴 것만. MATCHED 만 고리·선을 그리고, 형식이 틀린 행은 버린다.
+// 응답이 없으면 빈 층이다 — 지난 값을 남기지 않는다.
+export function classifyTracking(body) {
+  const robots = [];
+  for (const row of body?.robots || []) {
+    if (!row || typeof row.robot_id !== "string" || !["MATCHED", "MARKER"].includes(row.status)) continue;
+    const camera = row.camera;
+    const pose = row.pose;
+    if (!camera || ![camera.x, camera.y].every(finite)) continue;
+    if (row.status === "MATCHED" && (!pose || ![pose.x, pose.y, row.offset_m].every(finite))) continue;
+    robots.push({
+      robotId: row.robot_id,
+      camera: { x: camera.x, y: camera.y },
+      pose: pose && finite(pose.x) && finite(pose.y) ? { x: pose.x, y: pose.y } : null,
+      ...(row.status === "MARKER" ? { measured: true } : {}),
+      offsetM: row.offset_m,
+      warn: row.offset_m > OFFSET_WARN_M,
+      verified: row.pose_frame_verified === true,
+    });
+  }
+  const unknown = [];
+  for (const item of body?.unknown || []) {
+    if (item && finite(item.x) && finite(item.y)) unknown.push({ x: item.x, y: item.y });
+  }
+  robots.sort((a, b) => a.robotId.localeCompare(b.robotId));
+  return { robots, unknown };
+}
+
+// 상태줄: source 마다 한 조각. Fleet 409(보정·지도 불일치, 검출 거부)가 검출기 상태보다 먼저다.
+export function trackingStatusLine(body) {
+  const sources = Array.isArray(body?.sources) ? body.sources : [];
+  if (!sources.length) return { state: "none", text: "관제 카메라 추적 소스 없음" };
+  let state = "ok";
+  const parts = sources.map((source) => {
+    const error = ERROR_TEXT[source.last_error];
+    const label = error || TRACKING_STATUS_TEXT[source.status] || `알 수 없음(${source.status})`;
+    if (error || source.status !== "OK") state = "warn";
+    const fps = !error && source.status === "OK" && finite(source.fps) ? ` · ${source.fps.toFixed(1)} fps` : "";
+    return `${source.source_id} ${label}${fps}`;
+  });
+  const unverified = (body.robots || [])
+    .filter((row) => row?.status === "MATCHED" && row.pose_frame_verified !== true).length;
+  const note = unverified ? ` · 위치 상태 미보고 ${unverified}대` : "";
+  return { state, text: `관제 카메라 추적: ${parts.join(" / ")}${note}` };
+}
+
+export function offsetLabel(row) {
+  if (row.measured && !row.pose) return `${row.robotId} · 마커 관측`;
+  return `${row.robotId} · 차이 ${Math.round(row.offsetM * 100)} cm`;
+}
+
+// Display resolution is a centimetre; it is not a measured accuracy claim.
+export function positionRows(tracking) {
+  return [...tracking.robots.map(row => ({ name: row.robotId, x: row.camera.x.toFixed(2),
+    y: row.camera.y.toFixed(2), basis: row.measured ? "마커 관측" : "무마커 추론" })),
+  ...tracking.unknown.map((row, index) => ({ name: `미확인 ${index + 1}`, x: row.x.toFixed(2),
+    y: row.y.toFixed(2), basis: "무마커 추론 · 이름 미확정" }))];
+}
+
+export function displayLeaseMs(body, elapsedMs = 0) {
+  const lease = finite(body?.lease_s) ? Math.min(1000, Math.max(0, body.lease_s * 1000)) : 1000;
+  const ages = (body?.sources || []).filter(row => row.status === "OK")
+    .map(row => finite(row.age_ms) ? Math.max(0, row.age_ms) : 0);
+  return Math.max(0, lease - Math.max(0, ...ages) - elapsedMs);
+}

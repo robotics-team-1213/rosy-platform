@@ -30,6 +30,8 @@ from rosy_vision.map_register import load_map_paint
 from rosy_vision.pairing_sync import PairedCredentials, PairingSync
 from rosy_vision.publish import SightingPublishError, SightingPublisher
 from rosy_vision.vision_config import load_vision_sources
+from rosy_vision.track.fleet_client import TrackClient
+from rosy_vision.track.worker import TrackWorker
 from rosy_vision.worker import VisionWorker
 from core_common.protocol.vision_preview import VisionLeaseSigner
 
@@ -292,21 +294,30 @@ async def _run_vision(args: argparse.Namespace) -> int:
     configs = load_vision_sources(args.config)
     ingest, sync_settings = _vision_ingest(args, configs)
     workers = []
+    trackers = []
     async with AsyncExitStack() as stack:
         for config in configs:
             publisher = await stack.enter_async_context(
                 SightingPublisher(config.fleet_base_url, config.sighting_token)
             )
+            tracker = None
+            if getattr(args, "track", False):
+                client = await stack.enter_async_context(
+                    TrackClient(config.fleet_base_url, config.sighting_token))
+                tracker = TrackWorker(camera=config.camera, ingest=ingest, client=client)
+                trackers.append(tracker)
             workers.append(VisionWorker(
                 source_id=config.camera.source_id,
                 ingest=ingest,
                 camera=config.camera,
                 publisher=publisher,
+                tracker=tracker,
             ))
         ws_server = await ingest.start(args.host, args.port,
                                        ssl_context=_server_ssl_context(args.tls_cert, args.tls_key))
         print(f"vision pipeline listening on {args.host}:{args.port}{protocol.WS_PATH} "
-              f"for {len(workers)} configured sources", flush=True)
+              f"for {len(workers)} configured sources"
+              f"{' with markerless tracking' if trackers else ''}", flush=True)
         sync = None
         if sync_settings is not None:
             loop = asyncio.get_running_loop()
@@ -315,6 +326,9 @@ async def _run_vision(args: argparse.Namespace) -> int:
                                on_cycle=lambda: loop.call_soon_threadsafe(
                                    ingest.enforce_paired_credentials))
             sync.start()
+        stop_tracking = asyncio.Event()
+        config_tasks = [asyncio.create_task(tracker.run_config_sync(stop_tracking))
+                        for tracker in trackers]
         try:
             while True:
                 for worker in workers:
@@ -328,6 +342,10 @@ async def _run_vision(args: argparse.Namespace) -> int:
                         logger.error("vision frame failed error_type=%s", type(exc).__name__)
                 await asyncio.sleep(0.03)
         finally:
+            stop_tracking.set()
+            await asyncio.gather(*config_tasks, return_exceptions=True)
+            for tracker in trackers:
+                tracker.close()
             if sync is not None:
                 sync.stop()
             ws_server.close()
@@ -371,6 +389,9 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     vision.add_argument("--map-paint", type=Path, default=None,
                         help="site map lane paint STL in map metres (e.g. road_lines.stl); "
                              "enables the D-375 map-proposal view")
+    vision.add_argument("--track", action="store_true",
+                        help="D-457 markerless tracking: publish anonymous floor detections to Fleet "
+                             "(needs an approved paint-fit calibration or all four corner markers)")
 
     link = sub.add_parser(
         "pair-link",

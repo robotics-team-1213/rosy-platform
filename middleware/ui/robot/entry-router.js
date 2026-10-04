@@ -14,6 +14,8 @@ const legacy = document.getElementById("compatibility-shell");
 const drawer = document.getElementById("auth-drawer");
 // Neither route may let an unbound native credential form submit into a URL.
 drawer.inert = true;
+// Keep controls unavailable until their operational listeners are bound.
+legacy.inert = true;
 window.addEventListener("hashchange", () => {
   if (compatibilityRoute() !== compatibility) window.location.reload();
 });
@@ -22,6 +24,7 @@ if (compatibility) {
   entry.hidden = true;
   legacy.hidden = false;
   await import("./app.js");
+  legacy.inert = false;
   drawer.inert = false;
   legacy.dataset.ready = "true";
 } else {

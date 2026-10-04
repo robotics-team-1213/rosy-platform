@@ -80,6 +80,13 @@ CONTROL_SPLIT = "docs/plans/2026-09-22-control-package-split-design.md"
 
 #: P6 verdicts: path (relative to src/) or package name -> (lines at verdict, verdict).
 SIZE_VERDICTS = {
+    "web/components.css": (
+        814,
+        "accept: shared token-based component styles remain one web_common responsibility; "
+        "D-461 adds opt-in workspace primitives without another palette or runtime owner. "
+        "Splitting loading and deployment is a separate task. The 600-line ceiling and growth "
+        "allowance remain unchanged; re-judge when another component family expands this file",
+    ),
     "ui/pilot/styles.css": (
         811,
         "split: Pilot lobby, connection and drive responsive layouts share this surface stylesheet; "
@@ -100,7 +107,10 @@ SIZE_VERDICTS = {
         "duplicate its socket. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        32_469,
+        33_657,
+        "split: D-457 re-judged at 33657 after integration with main 754c20ee3; bounded "
+        "display-only calibration, tracking routes/matcher and UI coordinates add 1188 to Fleet. "
+        "The composition root stays below 600 after main's extraction; no command owner changes. "
         "split: independently re-judged 2026-10-04 at measured 32469 after main 387b19841: "
         "307 since the previous 32162 consists of prior integration 7, D-455 meet/resolver "
         "181, central read projection/routes/CLI 123, app/worker extraction -11 and web 7; "
@@ -282,7 +292,9 @@ SIZE_VERDICTS = {
         "2026-10-01 at 887 after idempotent per-attempt phase projection joined the Mission event transaction",
     ),
     "foundation/core_common/protocol/schemas.py": (
-        1_319,
+        1_315,
+        "accept: D-457 re-judged at 1315 after current schema extraction: one bounded OverheadDetectionsPayload re-export; model lives in "
+        "overhead_detections.py, display-only, no version pin or runtime ownership change. "
         "accept: re-judged 2026-10-04 at 1319 after main's model extractions: Cell request models live in protocol/cell_app.py; only "
         "two public re-export lines join the canonical schema entrypoint. Zero-growth allowance unchanged. "
         "the D-18 single contract source — every envelope, event and capability model in one "

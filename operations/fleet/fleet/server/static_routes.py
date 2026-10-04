@@ -41,6 +41,8 @@ CONSOLE_ASSETS = {
     "enrollment.js": "application/javascript",
     "signals.js": "application/javascript",
     "site-layer.js": "application/javascript",
+    "tracking-layer.js": "application/javascript",
+    "tracking-view.js": "application/javascript",
     "vision-view.js": "application/javascript",
 }
 

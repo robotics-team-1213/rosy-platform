@@ -64,6 +64,7 @@ def _serve_api(route):
 
 
 @pytest.mark.parametrize("document,held", [("index.html", "/api/fleet/state"),
+                                            ("index.html", "/api/fleet/tracking"),
                                             ("install.html", "/api/fleet/discovery"),
                                             ("install.html", "/api/fleet/pairing/v1/pending"),
                                             ("index.html", "/api/vision/sources/camera/frame")])
@@ -165,6 +166,7 @@ def test_pending_confirmation_is_cancelled_and_cannot_submit_after_restore(conso
                 _serve_api(route)
         page.route("**/api/**", serve)
         page.goto(f"{base}/install.html", wait_until="domcontentloaded")
+        page.get_by_role("tab", name="카메라 연결 승인", exact=True).click()
         page.locator('#camera-requests ui-button[data-action="reject"]').first.click()
         page.locator("dialog.ui-confirm").wait_for()
         page.evaluate("window.__oldConfirmation = document.querySelector('dialog.ui-confirm ui-button[kind=irreversible]')")

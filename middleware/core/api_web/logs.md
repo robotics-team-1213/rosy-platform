@@ -503,3 +503,9 @@
 - 변경: FastAPI 설명의 이전1.96 판을 현재 API Ref1.98로 맞췄다. rooms 내부의 목록 tuple/dict 저장을 명시적 signature/room record로 바꿔 이벤트 발행 검사기의 구조 오인을 피한다. 검사기/이벤트 목록/분류 규칙은 바꾸지 않는다.
 - 증거: 정상 pre-push3 실패 중 protocol/event2 원인을 실제로 확인하고 해당 검사·secret provenance·rooms22를 합친 실제114 PASS로 재검증했다.
 - gate 변화: SOURCE/LOCAL gate 수리. 원격 push/CI/서명 배포·장치 수락은 별도다.
+
+## 2026-10-04 · uncommitted · docs(api): D-457 site display contract v1.97
+
+- 변경: 사이트 표시 전용 추적 계약과 FastAPI 설명 버전을 일치시켰다. 로봇 endpoint·wire envelope·주행 행위 변경 없음.
+- 증거: protocol_version_alignment 시험 통과. DEVICE/FIELD 변화 없음.
+- gate 변화: 없음. 사이트 표시 계약 문서 정합이며 로봇 wire/주행 경계는 유지한다.

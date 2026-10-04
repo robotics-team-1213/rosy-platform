@@ -119,6 +119,7 @@ export function createVisionView({ scope, el, call, auth, isActive = () => true 
   let proposalCorners = null;
   // 선택한 source 가 마지막 프레임에서 알린 렌즈 종류(wide/standard). 옛 앱이면 null.
   let currentLens = null;
+  let currentLensInfo = null;
   const proposalPolygon = el("vision-proposal-polygon");
   const frameListeners = [];
   function pausePreview() {
@@ -350,6 +351,7 @@ export function createVisionView({ scope, el, call, auth, isActive = () => true 
       life.check();
       if (!current() || source !== select.value) return;
       const lens = parseLensHeader(response.headers.get("X-Source-Lens"));
+      if (response.ok) currentLensInfo = lens;
       if (response.ok && (lens?.kind ?? null) !== currentLens) {
         // 렌즈가 바뀌면 그 렌즈의 보정값으로 바꾸고, 다음 프레임부터 새 값으로 요청한다.
         currentLens = lens?.kind ?? null;
@@ -401,6 +403,7 @@ export function createVisionView({ scope, el, call, auth, isActive = () => true 
 
   function reset() {
     currentLens = null;
+    currentLensInfo = null;
     lease = null;
     leaseExpiresAt = 0;
     lastSourcesAt = 0;
@@ -415,6 +418,7 @@ export function createVisionView({ scope, el, call, auth, isActive = () => true 
     lease = null;
     proposalCorners = null;
     currentLens = null;
+    currentLensInfo = null;
     loadProfile(select.value);
     showState("카메라 전환", "neutral", "선택한 영상의 최신 프레임을 기다립니다.");
     refreshFrame();
@@ -575,6 +579,7 @@ export function createVisionView({ scope, el, call, auth, isActive = () => true 
     // 지도 맞춤 행렬은 원본 프레임 픽셀 기준이라 화면 보정 미리보기에서는 원본으로 바꾼다.
     showRaw: () => { if (viewMode !== "raw") selectViewMode("raw"); },
     currentSource: () => select.value,
+    currentLensInfo: () => currentLensInfo,
     currentCorners: () => readProfile().corners,
     onFrame(listener) {
       frameListeners.push(listener);

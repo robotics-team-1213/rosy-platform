@@ -275,3 +275,26 @@ export function draftFrom(norm, laneSet, now = Date.now()) {
     paint_sha256: laneSet?.paintSha ?? null, accepted_at: new Date(now).toISOString(), use: "display-only",
   });
 }
+
+// D-457 1항: 통과한 최신 제안 → Fleet 추적 보정 기록 요청 본문. 행렬은 원본 프레임 픽셀 기준이다.
+// 관제 카메라 추적 표시에만 쓰인다 — sighting·CameraMap·주행에 쓰지 않는다.
+// 제안을 받을 때 찍은 지도 도장(pending.stamp)이 지금 지도와 다르면 다른 지도의 맞춤이라 보내지 않는다.
+export function calibrationRequest(pending, source, laneSet, lens) {
+  if (!canAccept(pending, source) || !laneSet?.bounds) return null;
+  if (pending.stamp && (pending.stamp.mapId ?? null) !== (laneSet.mapId ?? null)) return null;
+  const { fit, image, seq } = pending.norm;
+  if (fit.score == null || fit.precision == null) return null;
+  const b = laneSet.bounds;
+  const lensBody = lens && typeof lens.kind === "string" && finite(lens.focal_mm) && finite(lens.hfov_deg)
+    ? { kind: lens.kind, focal_mm: lens.focal_mm, hfov_deg: lens.hfov_deg } : null;
+  return {
+    source_id: source,
+    ...(laneSet.mapId ? { map_id: laneSet.mapId } : {}),
+    map_to_image: fit.mapToImage.map((v) => Number(v.toPrecision(10))),
+    image: { width: image.width, height: image.height },
+    track_bounds_m: { min_x: b.min_x, min_y: b.min_y, max_x: b.max_x, max_y: b.max_y },
+    fit_score: Math.round(fit.score * fit.precision * 1000) / 1000,
+    lens: lensBody,
+    frame_seq: Number.isInteger(seq) ? seq : null,
+  };
+}

@@ -82,9 +82,11 @@ def load_vision_sources(path: Path | str, *, environ: Mapping[str, str] | None =
         robot_ids = row["robot_ids"]
         robot_markers = row["robot_markers"]
         if (not isinstance(robot_ids, list) or not robot_ids
+                or any(not isinstance(robot_id, str) or not robot_id.strip() for robot_id in robot_ids)
+                or len(set(robot_ids)) != len(robot_ids)
                 or not isinstance(robot_markers, dict)
-                or set(robot_ids) != set(robot_markers)):
-            raise ValueError(f"sources[{index}] robot_ids must match robot_markers")
+                or set(robot_markers) - set(robot_ids)):
+            raise ValueError(f"sources[{index}] robot_markers must be a subset of unique robot_ids")
         if not isinstance(row["fleet_base_url"], str) or not row["fleet_base_url"].strip():
             raise ValueError(f"sources[{index}].fleet_base_url is required")
         corners = row["corner_world_m"]

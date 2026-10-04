@@ -898,6 +898,35 @@ CONSOLE_STATE_INIT = {
 }
 
 
+def test_compatibility_controls_wait_for_their_handlers():
+    """A delayed module must not expose a clickable control that loses its click."""
+    pytest.importorskip("playwright.sync_api")
+    from playwright.sync_api import TimeoutError as PlaywrightTimeoutError, sync_playwright
+
+    with sync_playwright() as playwright:
+        browser, page = _launch_page(playwright, extra_init=CONSOLE_STATE_INIT["rmw-mismatch"])
+        held = []
+        page.route("**/app.js", lambda route: held.append(route))
+        try:
+            page.goto("http://rosy.test/dashboard#compatibility", wait_until="commit")
+            inspect = page.locator("#view-inspect")
+            inspect.wait_for(state="visible")
+            page.wait_for_function("!document.getElementById('compatibility-shell').hidden")
+            assert len(held) == 1, "The actual module request must remain pending"
+            with pytest.raises(PlaywrightTimeoutError):
+                inspect.click(timeout=250)
+
+            held.pop().fallback()
+            inspect.click()
+            page.wait_for_function("!document.getElementById('view-inspect-panel').hidden")
+            assert page.locator("#dds-rmw").is_visible()
+            assert page.locator("#ros-risk-list").is_visible()
+        finally:
+            for route in held:
+                route.fallback()
+            browser.close()
+
+
 @pytest.mark.parametrize("state", list(CONSOLE_STATE_INIT))
 def test_console_state_matrix_renders_each_state(state):
     pytest.importorskip("playwright.sync_api")

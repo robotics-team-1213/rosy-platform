@@ -328,6 +328,7 @@
 - gate 변화: 없음.
 - 결정: D-371 Refinement(2026-09-30), D-280 원칙 2.
 - 교훈: 네이티브 모달은 "E-stop 항상 도달" 계약과 충돌한다 — 모달 흉내는 살릴 요소를 명시한 inert + 구멍 난 막으로 한다. z-index로 정지를 막 위로 올리는 방법은 붙박이 상단바의 쌓임 맥락(z-index 10) 안에 갇혀 통하지 않는다.
+
 ## 2026-09-30 · uncommitted · fix(harness): 역할 표면 검증을 저장소 안 도구로 — LOCAL cmd 재현 가능화
 
 - 변경: design-system-polish worktree의 평가 스크립트(visible_roles.py)가 X:\DevTemp 임시 경로에만 있어 LOCAL gate cmd가 다른 호스트에서 재현 불가능했다. 같은 측정(실 CORE TestClient + Chromium, 역할×표면×뷰포트, kind 누락·페이지 오류·수평 오버플로·첫 응답 실패 검사)을 `tools/web_visible_roles.py`로 저장소 안에 들였다 — headless, 루트 자체 위치 계산, 위반 시 exit 1. LOCAL cmd를 이 도구로 교체했다.
@@ -351,7 +352,6 @@
 - gate 변화: 없음. G2 사용자 확인 대기, DEVICE(실제 런처)는 별도 회차.
 - 결정: D-358 2·3항. Pilot 이름·아이콘 PNG·버튼 문구는 Pilot이 main에 없어 착지 회차로 미룬다(`pilot.svg`만 먼저 둠).
 - 교훈: SVG·Android XML 주석에 `--`를 쓰면 파서가 거절한다(토큰 이름을 주석에 적지 말 것).
-
 
 ## 2026-09-30 · uncommitted · docs(adr): D-358 앱 역할 ADR을 D-370으로 재번호
 
@@ -423,7 +423,6 @@
 - 증거: 변이 증명 2종(pilot 에 :root 토큰·인라인 커스텀 엘리먼트 주입 시 각각 빨강).
 - gate 변화: 없음.
 
-
 ## 2026-10-01 · uncommitted · D-398 증거 어휘 단일 출처 + 범위 게이트 4종
 
 - 변경: core_ui_logic.js에 EVIDENCE_LABEL·evidenceAgeText() 추가(증거 한국어와 ' · N초 전' 규격의 단일 출처). test_token_parity.py가 RGBA 4-튜플·소문자 이름 사본도 비교. test_design_scope_gates.py 신규 — 정지(D-220)·장미색 부정(D-277)·역할 우선(ground-soft/card 두 쌍)·100vh 금지.
@@ -481,7 +480,6 @@
 - 증거: request/scope/page-scope/Fleet/authorization/poll gate Node 56 passed. 현재 자산 bytes를 확인한 X: 사본 Chromium 14 passed; disposal 변이 8 red, raw camera/Vision guard 변이 4 red, bytes 복원 후 14 green.
 - gate 변화: SOURCE/LOCAL 수명 계약 강화. installed-only·DEVICE/FIELD는 consumer 단위의 후속 gate.
 
-
 ## 2026-10-03 · uncommitted · feat(link): D-432 주소 없는 장비 접속
 
 - 변경: 기존 Pilot의 native wrapper를 parent_app으로 등록한다. wrapper는 listen port를 소유하지 않고 기존 조종 화면을 사용한다.
@@ -502,11 +500,13 @@
 - 증거: Python 집중 35 passed, 추가 구조/Fleet 97 passed, Node 전체 109 passed. 실제 입력 누락·colcon 오배치·raw enum 표시 mutation 네 건 RED 뒤 원본 bytes 복원·GREEN. 알려진 실패 0 new, backlog 증가 없음. `docs/validation/d427-source-migration/push5-gate-corrections-2026-10-04.md`.
 - 독립 리뷰: d427_safety_review APPROVE source/host, 별도 Python 22 passed·Node 3 passed. Fleet +12 줄은 기존 +150·split 판정 안에 있고 예산·allowlist를 늘리지 않았다.
 - gate 변화: SOURCE/로컬 증거만 추가한다. 새 pre-push·원격 CI·ARM64·SD·기기·현장 수락은 후속이다.
+
 ## 2026-10-04 · uncommitted · feat(web): Console Cell workspace ownership
 
 - 변경: Console의 `/console/cell` 작업 화면을 같은 프로세스/포트/CSP에 추가했다. cell-document/compile/proposal 소유를 기존 Console 표면에 등록하고 mission 승인·복구는 Console의 기존 Fleet API를 사용한다. 공용 token·request·controls를 재사용하며 별도 service 자격을 브라우저에 노출하지 않는다.
 - 검증: 공용 field/disabled reason 계약을 통과했다. PC/390px Chromium에서 canonical preview와 별도 승인, 모바일 가로 넘침 없음, 오류와 stale 응답 조작을 확인했다. 현장 UI 수용은 별도다.
 - gate 변화: 기존 표면 GO를 확장 수용으로 해석하지 않는다. Cell 전체 G1 및 실제 현장 수용은 미완료다.
+
 ## 2026-10-04 · uncommitted · feat: 원본 픽셀 보존과 같은 촬영 시점의 표시본
 
 - 변경: fetchCameraPair가 variant·sequence·captured_at·frame_id를 검증한다. 원본 canvas에는 drawImage만 사용하고 조작 문구는 표시본에만 넣는다. 원본/표시본 녹화기와 파일·공통 pair_group_id를 분리하고 종료 시 두 stream을 해제한다. PC sidecar에서 표시본을 model_unreviewed로 구분한다.
@@ -592,3 +592,9 @@
 - 변경: 최신 main의 학습 cycle/review bridge와 D-460 본문을 병합하고 임시 D-460 예약을 제거했다.
 - 증거: 검수·객체 반환·새 학습 연결·harness 재검증 131 passed, known_failures 신규 0. 뒤이은 저널 검사는 기존 entry 안에 추가한 행을 append-only 위반으로 발견하여 별도 새 heading으로 기록을 분리했다.
 - gate 변화: 로컬 fast-forward 착지 대상이며 push·배포·장치 수용은 수행하지 않는다.
+
+## 2026-10-05 · uncommitted · fix(contracts): register existing review canvas and wordmark
+
+- 변경: 최신 main의 검수 캔버스를 기존 팔레트 검사에 포함하고 공용 모듈에서 직접 가져온 canvasFont 바인딩을 검증한다. 기존 ROSY 워드마크 CSS를 목록에 포함하되 rose 참조가 그 규칙 한 곳뿐임을 별도 검증한다. 화면·색·배치 변경 없음.
+- 증거: 깨끗한 main 50f2c7374에서 동일한 목록 누락 2건 재현(21 passed, 2 failed). 검증 범위를 보강했으며 재검사 진행 중이다.
+- gate 변화: 없음. SOURCE 계약 검증 보강이며 DEVICE/FIELD 수용 주장이 아니다.

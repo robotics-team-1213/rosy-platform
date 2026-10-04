@@ -84,8 +84,8 @@
 
 ## 최근 기록
 
+- 2026-10-05 · uncommitted · fix(site): complete candidate contract and owned relearn guards
+- 2026-10-04 · uncommitted · fix(site): D-457 마커 우선·무마커 폴백
+- 2026-10-04 · uncommitted · fix(fleet): Cell header와 등록 시험의 실제 작업 선택
 - 2026-10-04 · uncommitted · fix(tools): 교차 모듈 캡처를 workspace tools에 배치
 - 2026-10-04 · uncommitted · docs(ux): 기존 캡처의 미완료 화면을 HOLD로 분리
-- 2026-10-04 · uncommitted · feat(tools): Fleet·게임 캡처 회차 6셀 (D-359 §7.8)
-- 2026-10-04 · uncommitted · fix(registry): 중앙 1c 쓰기 보류와 실제 등록 원장 보존
-- 2026-10-04 · uncommitted · feat(server): D-454 1c — §10.1 쓰기 경로와 501 경계 명시

@@ -329,7 +329,7 @@ function showCamera(root, onBack) {
     fetchFrame: async (path) => {
       const response = await fetch(path, {headers: authHeaders(), cache: "no-store"});
       if (!response.ok) throw new Error("camera frame unavailable");
-      return response.blob();
+      return response;
     },
     onFrame: (url, meta) => {
       frame.src = url; frame.hidden = false; empty.hidden = true;

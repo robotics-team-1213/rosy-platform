@@ -436,3 +436,9 @@
 - 변경: access의 RoomDiscoveryHint/SiteRoomsSnapshot을 schemas로 재노출한다. 공개 로봇 힌트 기존5필드와64행 상한·extra 금지·port/FQDN 형식을 API Ref1.98과 맞춘다. CORE 성공응답은 실제 model 검증을 거친다.
 - 증거: producer의 canonical service/role/TLS/identity 분류는 그대로이며 body에 secret/승인/제어 권한을 추가하지 않는다. 실제 producer·구조 검사는 root 수행 중이다.
 - gate 변화: 통신 typed 계약. 신원 승인·제어 포트·장치 수락 변경 없음.
+
+## 2026-10-04 · uncommitted · fix(site): D-457 마커 우선·무마커 폴백
+
+- 변경: 현행 모듈에 source-token 표시 추적과 승인 보정을 통합. 마커 명시 대응 우선, 없으면 익명 검출·신뢰 가능한 map pose 대조. UI/UX 리팩터링 없음.
+- 증거: 공유 벡터·Vision·Fleet·브라우저 전환 조건을 호스트에서 검증. 실제 사이트는 두 등록 로봇과 S21 영상 연결 조회만 확인. 후보 배포·빈 트랙 학습·실물 위치 오차는 미완료.
+- gate 변화: 없음. SOURCE/LOCAL 변경이며 DEVICE/FIELD 완료 주장 없음. 기존 등록·credentials 보존.

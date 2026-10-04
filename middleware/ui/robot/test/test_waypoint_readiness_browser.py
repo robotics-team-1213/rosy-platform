@@ -25,6 +25,8 @@ class _Handler(SimpleHTTPRequestHandler):
     def translate_path(self, path):
         if path.startswith("/common/"):
             return str(REPO / "shared/web" / path.removeprefix("/common/"))
+        if path == "/assets/dom.js":
+            return str(REPO / "middleware/ui/robot/dom.js")
         return super().translate_path(path)
 
     def log_message(self, _format, *_args):
