@@ -196,7 +196,8 @@ def _run(config, out, indexed_review, admission_stack):
     source_files += [PERCEPTION / "model" / name for name in ("intake.py", "intake_eval_gate.py")]
     source_files += [PERCEPTION / "store.py"]
     if indexed:
-        source_files += [HERE / name for name in ("review_admission.py", "review_dataset.py", "review_authority.py")]
+        source_files += [HERE / name for name in ("review_admission.py", "review_dataset.py", "review_authority.py",
+                                                "review_eval_companion.py")]
         source_files += [PERCEPTION / "dataset" / "build.py"]
     inputs = {"config": config, "dataset_sha": dataset.name, "eval_sha": evalset.name,
               "gate_sha": hashlib.sha256(gate_raw).hexdigest(), "camera_sha": hashlib.sha256(camera_raw).hexdigest(),
