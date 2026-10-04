@@ -394,3 +394,9 @@
 - 변경: OMX Pilot 정적 자산 목록에 peer-approval.js를 포함한다. 요청·운전석·명령 수락 동작은 바꾸지 않는다.
 - 증거: pre-push에서 자산 집합 불일치를 재현했고 Pilot shell·CI 계약 16 passed로 확인했다.
 - gate 변화: SOURCE/LOCAL 정적 제공 수리. OMX 실기·운전석 수용은 별도다.
+
+## 2026-10-05 · uncommitted · fix(peer-assets): Pilot 승인 모듈 정적 경로 일치
+
+- 변경: SIM·개발 서버 allowlist에 기존 peer-approval.js를 더해 CORE와 같은 정적 자산을 제공한다. API·제어 권한·UI 구성 변경 없음.
+- 증거: test_shell_assets.py 4 passed, known_failures NEW 0.
+- gate 변화: SOURCE/LOCAL. 실제 장치·FIELD 검증은 별도다.

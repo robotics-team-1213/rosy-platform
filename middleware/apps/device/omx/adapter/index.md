@@ -46,8 +46,8 @@
 
 ## 최근 기록
 
+- 2026-10-05 · uncommitted · fix(peer-assets): Pilot 승인 모듈 정적 경로 일치
 - 2026-10-05 · uncommitted · fix(pilot): 승인 화면 자산 제공 정합
 - 2026-10-04 · uncommitted · fix(omx): Pilot 운전석과 Cell 하달 상호 배제
 - 2026-10-04 · uncommitted · D-442 U3 owner 선점과 named 운영 복구
 - 2026-10-03 · uncommitted · fix: retain the UDS owner after a caller disconnects
-- 2026-10-03 · uncommitted · fix: install canonical OMX geometry for Cell owner composition

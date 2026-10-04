@@ -439,3 +439,9 @@
 - 변경: 시험 서버의 peer-approval.js 제공을 CORE·OMX 목록과 일치시킨다. 실제 앱 번들·통신 권한은 바꾸지 않는다.
 - 증거: 기존 shell 자산 불일치 실패를 수리한 뒤 관련 16 passed. 설치된 Pilot에서 같은 LAN 로봇 목록과 선택 뒤 기존 로그인 코드 창을 직접 확인했다.
 - gate 변화: SOURCE/LOCAL 및 앱 설치 관찰. 새 수신 승인·장기 재연결의 DEVICE 수용은 배포 후 별도다.
+
+## 2026-10-05 · uncommitted · fix(peer-assets): Pilot 승인 모듈 정적 경로 일치
+
+- 변경: SIM·개발 서버 allowlist에 기존 peer-approval.js를 더해 CORE와 같은 정적 자산을 제공한다. API·제어 권한·UI 구성 변경 없음.
+- 증거: test_shell_assets.py 4 passed, known_failures NEW 0.
+- gate 변화: SOURCE/LOCAL. 실제 장치·FIELD 검증은 별도다.
