@@ -1791,3 +1791,8 @@
 - 변경: Playwright를 브라우저 fixture의 명시적 opt-in 뒤에 불러온다. opt-in 중 의존성 누락은 오류로 남기며 Fleet CI는 도구 설치 후 ROSY_BROWSER_TESTS=1을 명시한다.
 - 증거: 실제 부모 Chromium에서 카메라 7·시작점 3·픽셀 편집 3 합계 13 passed/201.85s. 후보에서 opt-out 7 SKIP과 의존성 없는 opt-in 7 ERROR를 구분해 확인했다. 런타임 TLS 검사는 완화하지 않았다.
 - gate 변화: SOURCE/LOCAL 브라우저 증거. CI 성공·서명 배포·실제 양쪽 승인과 재연결은 별도다.
+## 2026-10-05 · uncommitted · fix(dialog-target): 카메라 승인·해제 대상 확인
+
+- 변경: 기존 승인·해제 대화상자의 기기 이름과 확인 문자를 따옴표로 구분하고 승인 여부를 질문한다. 레이아웃·UI/UX 리팩터링·API·권한 변경 없음.
+- 증거: irreversible 행 행동 검사와 실제 Chromium 카메라 승인 확인 검사 12 passed, known_failures NEW 0.
+- gate 변화: SOURCE/LOCAL. 장치·현장 수락은 별도다.

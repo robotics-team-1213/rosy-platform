@@ -117,6 +117,24 @@ def from_color(raw, width, height, labelmap_raw, binding):
     return encode(result)
 
 
+def flood_region(store, index, review, seed, tolerance):
+    """4-connected photo region around `seed` within RGB distance `tolerance`.
+
+    The mask follows the photo's own colour boundary: only the connected area
+    of similar pixels is selected, so a wall click does not spill onto the
+    floor. Pure photo similarity, never a training label by itself; the
+    reviewer's explicit approve still claims the result.
+    """
+    raw = store.image(index).read_bytes()
+    photo = cv2.imdecode(np.frombuffer(raw, np.uint8), cv2.IMREAD_COLOR)
+    if photo is None or (photo.shape[1], photo.shape[0]) != (review['width'], review['height']):
+        raise ValueError('source image dimensions differ')
+    target = photo[seed[1], seed[0]].astype(np.int32)
+    inside = (np.sqrt(((photo.astype(np.int32) - target) ** 2).sum(axis=2)) <= float(tolerance))
+    _, labels = cv2.connectedComponents(inside.astype(np.uint8), connectivity=4)
+    return labels == labels[seed[1], seed[0]]
+
+
 def update(store, index, body, conflict):
     with store.lock, store.connect() as db:
         db.execute('BEGIN IMMEDIATE')
@@ -133,12 +151,23 @@ def update(store, index, body, conflict):
         action = body.get('action')
         complete = background = 0
         status = 'pending'
-        if action in ('paint', 'fill'):
+        if action in ('paint', 'fill', 'flood'):
             value = body.get('label')
             if type(value) is not int or value not in allowed:
                 raise ValueError('known mask index required')
             if action == 'fill':
                 image[:] = value
+            elif action == 'flood':
+                seed = body.get('seed')
+                if (not isinstance(seed, list) or len(seed) != 2
+                        or any(type(v) is not int for v in seed)
+                        or not 0 <= seed[0] < review['width']
+                        or not 0 <= seed[1] < review['height']):
+                    raise ValueError('flood seed outside original image')
+                tolerance = body.get('tolerance', 16)
+                if type(tolerance) is not int or not 0 <= tolerance <= 100:
+                    raise ValueError('bounded flood tolerance required')
+                image[flood_region(store, index, review, seed, tolerance)] = value
             else:
                 points, radius = body.get('points'), body.get('radius')
                 if type(radius) is not int or not 1 <= radius <= 128:
@@ -162,8 +191,8 @@ def update(store, index, body, conflict):
             last = db.execute('SELECT action, review FROM pixel_events WHERE frame=? ORDER BY id DESC LIMIT 1', (index,)).fetchone()
             target = None
             if last and review['status'] == 'pending' and json.loads(last[1]).get('saved_version') == review['version']:
-                want = review['version'] if last[0] in ('paint', 'fill') else json.loads(last[1]).get('restored_version')
-                target = db.execute("SELECT review FROM pixel_events WHERE frame=? AND version=? AND action IN ('paint','fill')", (index, want)).fetchone()
+                want = review['version'] if last[0] in ('paint', 'fill', 'flood') else json.loads(last[1]).get('restored_version')
+                target = db.execute("SELECT review FROM pixel_events WHERE frame=? AND version=? AND action IN ('paint','fill','flood')", (index, want)).fetchone()
             if not target:
                 raise ValueError('되돌릴 픽셀 수정이 없습니다.')
             prior = json.loads(target[0])
