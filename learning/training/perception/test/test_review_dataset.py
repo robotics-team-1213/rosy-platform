@@ -466,3 +466,38 @@ def test_windows_junction_staging_holds(tmp_path):
     result = target.build_dataset(**args)
     assert result['status'] == 'HOLD' and 'links refused' in result['blockers'][0]
     assert not (destination / 'scratch').exists() and not args['store'].datasets_dir.exists()
+
+
+@pytest.mark.parametrize('invent_alias_identity', [False, True])
+def test_duplicate_approved_source_frame_holds_before_staging(tmp_path, invent_alias_identity):
+    from review_authority import validate_current
+    np = pytest.importorskip('numpy'); cv2 = pytest.importorskip('cv2')
+    args, authority = build_fixture(tmp_path)
+    proofs, _ = target._capture_proofs(args['source_proof_files'])
+    original = authority['frames'][0]
+    source_proof = proofs[(original['source_session'], original['capture_group'], original['source_video_sha256'])]
+    raw = (args['export_root'] / 'inputs/images/000000.png').read_bytes()
+    pixels = cv2.imdecode(np.frombuffer(raw, np.uint8), cv2.IMREAD_UNCHANGED)
+    ok, alternate = cv2.imencode('.png', pixels, [cv2.IMWRITE_PNG_COMPRESSION, 9]); assert ok
+    alternate_raw = alternate.tobytes(); assert alternate_raw != raw
+    scratch = tmp_path / 'pixel-proof'; scratch.mkdir()
+    target._video_pixels(source_proof, 0, raw, scratch)
+    target._video_pixels(source_proof, 0, alternate_raw, scratch)
+    # Preserve a third distinct source component and independent per-row decisions.
+    third = copy.deepcopy(authority['frames'][1]); third.update(frame=2, review_uid=args['workspace_id'] + ':2')
+    alias = copy.deepcopy(original)
+    alias.update(frame=1, review_uid=args['workspace_id'] + ':1', source_session='operator-alias-session',
+                 capture_group='operator-alias-group', image_sha256=hashlib.sha256(alternate_raw).hexdigest())
+    ok, contradictory = cv2.imencode('.png', np.zeros((16, 16), np.uint8)); assert ok
+    alias['mask_sha256'] = hashlib.sha256(contradictory.tobytes()).hexdigest()
+    alias['pixel_approval'].update(image_sha256=alias['image_sha256'], mask_sha256=alias['mask_sha256'])
+    if invent_alias_identity:
+        alias['identity'] = 'legacy:1:' + alias['image_sha256']
+    modified = copy.deepcopy(authority); modified['frames'] = [original, alias, third]; modified = digest(modified)
+    expected = 'source identity binding differs' if invent_alias_identity else 'duplicate frame identity or UID'
+    with pytest.raises(ValueError, match=expected): validate_current(modified)
+    args['fetch_current'] = lambda: delivery(modified)
+    result = target.build_dataset(**args)
+    assert result['status'] == 'HOLD' and expected in result['blockers'][0]
+    assert result['training_admission'] is False
+    assert not args['staging_parent'].exists() and not args['store'].datasets_dir.exists()
