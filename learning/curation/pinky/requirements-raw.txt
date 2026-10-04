@@ -1,0 +1,5 @@
+# Host-only MCAP/sidecar verification. Never install into device runtime.
+mcap==1.5.0
+mcap-ros2-support==0.5.7
+numpy==2.2.6
+opencv-python-headless==4.12.0.88

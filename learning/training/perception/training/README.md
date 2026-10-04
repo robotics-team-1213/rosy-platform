@@ -141,3 +141,115 @@ python check_manifest.py out/model_folder      # OK lane-seg-YYYYMMDD-xxxxxxxx �
 3. 손으로 접수하려면 `rosy_ml intake store-inbox:<폴더>`(또는 폴더 경로).
 4. (선택) HF를 쓰는 팀: 폴더를 HF private model 저장소에 한 commit으로 올리고 **40자 hex SHA**를
    넘긴다. 접수는 `hf:<org/repo>@<sha>`다. 사이트 PC는 `backend: hf`일 때만 HF를 본다.
+# 모델 비교 recipe (2026-10-04)
+
+`recipes.py`는 `now2466/pinky-lane-segmentation@443f63fd4a5f6a4929775cecbda01c7b0a4557fe`의
+조명 증강·CE+Dice·AdamW 접근을 ROSY manifest에 맞춘 학습용 helper다.
+기존 `train()`의 기본 Adam/CE 동작은 유지하고, `loss_fn`과
+`optimizer_factory`를 전달한 비교 run에서만 사용한다.
+
+`LightingDataset(train_ds)`는 mask와 geometry를 보존하고 RGB 밝기/대비만 변경한다.
+`pixel_counts(train_ds)`는 255를 제외한 클래스별 학습 픽셀을 집계한다.
+`make_loss(counts, device=...)`는 weighted CE와 관측된 foreground의 masked Dice를 사용한다.
+미관측 클래스는 학습됐다고 표시하지 않으며 foreground 정답이 전혀 없으면 거절한다.
+이 helper는 배경 index 0을 사용하는 현행 자동 라벨 데이터용이다.
+
+외부 모델의 4/5-class 이름을 현행 6-class 이름으로 바꾸거나 partial-label
+background를 임의 변환하지 않는다. 클래스 개선 계획은
+[인식 클래스 설계](../../../../docs/plans/2026-10-04-perception-class-expansion-design.md)를 따른다.
+같은 데이터·세션 분할·seed·에폭으로 base16 기준/개선 recipe와 base8 소형 모델을
+비교하고, 고정 평가의 클래스별 IoU·CPU 지연·모델 크기를 함께 기록한다.
+검증 세션의 높은 수치만으로 전달하거나 주행을 활성화하지 않는다.
+
+## 모델 PC의 재시작 가능한 학습 job
+
+Linux CUDA 모델 PC에서 `python training/train_job.py config.json --out <job-dir>`로
+기존 immutable store 데이터셋을 학습하고 ONNX 내보내기, 고정 평가 intake,
+canonical inbox의 READY 생성까지 실행한다. 수집·라벨 검수·데이터셋 생성과
+watcher 실행은 별도다. 로봇에 명령을 보내지 않는다.
+
+설정은 다음 키만 받는다. 호스트 경로를 채운 설정은 공개 저장소에 넣지 않는다.
+
+```json
+{
+  "store": "<store-root>",
+  "dataset": "<dataset-name>@<content-sha>",
+  "gate": "<require-eval-gate.yaml>",
+  "replay_root": "<recording-root>",
+  "intake_out": "<shared-qualified-models>",
+  "camera_profile": "<camera-provenance.json>",
+  "training": {
+    "seed": 42705, "epochs": 30, "lr": 0.0003,
+    "batch_size": 16, "base": 16, "recipe": "enhanced"
+  }
+}
+```
+
+camera provenance에는 `accepted` boolean을 명시한다. false는 잠정 캘리브레이션을
+기록하며 장치 승인을 뜻하지 않는다. job은 데이터·평가·설정·소스 SHA와 픽셀
+coverage를 기록하고, 검증에만 있는 클래스는 학습 전에 거절한다.
+`baseline`/`enhanced`, base 8/16을 지원한다. 현행 recipe의 배경 채널은 index 0이다.
+
+같은 설정·소스·job 경로로 재실행하면 완료 단계의 파일 SHA를 확인하고 건너뛴다.
+실패 단계는 새 attempt 폴더에서 재시도하며 이전 오류를 보존한다. 품질 탈락은
+terminal rejected이고 READY를 만들지 않는다. 입력/소스 변경이나 파일 변조는
+재개를 거절한다. 변경 실험에는 새 job 경로를 사용한다.
+자체 intake 증거를 고정하므로 공유 intake 보고서의 후속 지연 측정이 재개를
+깨뜨리지 않는다. watcher가 accepted로 옮긴 동일 모델도 다시 복사하지 않는다.
+
+`job_state.py`가 단일 작성자 잠금과 원자적 상태 저장을 맡는다. GPU job들은
+`~/.cache/rosy-learning/gpu.lock`을 공유하고 시작 시 다른 GPU 프로세스가 있으면
+거절한다. 다른 Isaac 실행기가 이 잠금을 사용하지 않으면 학습 시작 이후의
+동시 실행까지 막지는 못한다. 현장 전달·rollback·주행 승인은 별도 gate다.
+실행 증거는 [학습 job 검증](../../../../docs/validation/training-job-2026-10-04.md)에 있다.
+
+## 녹화부터 시작하는 반복 job
+
+`python training/recording_job.py <config.json> --out <job-dir>`는 선택한 녹화의
+수거(선택), 출처 catalog, 자동 라벨, store 빌드와 위 train_job을 연결한다.
+`--prepare-only`는 학습 전에 멈추고 dataset ref와 생성된 training-config 경로를
+반환한다. 이때 부모 상태는 running이며 모델 READY 완료를 뜻하지 않는다.
+`state.json`에는 앞단 단계가, `model-job/state.json`에는 학습 이후 단계가 남는다.
+
+설정의 정확한 키는 `store`, `name`, `recordings`, `harvest`, `label`, `trainer`다.
+`trainer`는 위 학습 설정에서 store/dataset을 뺀 `gate`, `replay_root`,
+`intake_out`, `camera_profile`, `training`이다. store/dataset은 빌드 결과로 채운다.
+
+```json
+{
+  "store": "<store-root>",
+  "name": "recorded-auto-v2",
+  "recordings": [
+    {"session": "<recording-session-a>", "video": "<bag-to-video.mp4>", "pitch_deg": 11.5},
+    {"session": "<recording-session-b>", "raw": "<completed-session-dir>"}
+  ],
+  "harvest": [],
+  "label": {"min_interval": 0.5, "max_frames": 140, "lidar_yaw_deg": 180.0},
+  "trainer": {
+    "gate": "<require-eval-gate.yaml>", "replay_root": "<recording-root>",
+    "intake_out": "<shared-qualified-models>", "camera_profile": "<provenance.json>",
+    "training": {"seed": 42705, "epochs": 30, "lr": 0.0003,
+                 "batch_size": 16, "base": 16, "recipe": "enhanced"}
+  }
+}
+```
+
+수치는 설정 형식 예시이며 해당 마운트의 보정 승인을 뜻하지 않는다.
+video는 bag_to_video의 metadata JSON·clock sidecar JSONL을 필요로 한다.
+metadata가 선언한 scan NPZ의 누락이나 session identity 불일치는 거절한다.
+raw는 ended_at이 있는 session.json과 bag의 MCAP을 필요로 한다.
+각 recording은 session과 video/raw 중 하나만 지정한다.
+scan이 없는 입력의 pitch는 같은 마운트의 LiDAR 녹화 근거에서 명시한다.
+
+`harvest` 요소는 `host`, `core_token_file`, `identity`, `known_hosts`, `dest`,
+`host_key_alias`를 필수로, `user`, `remote_root`, `core_url`, `timeout`,
+`status_timeout`을 선택값으로 받는다. 기존 harvest.py를 호출해 CORE idle 확인과
+SSH pin을 유지한다. assume_idle이나 임의 CLI 인자는 받지 않는다.
+학습에 쓸 수집 대상은 recordings에 명시하고 원본 데이터를 삭제하지 않는다.
+
+job별 catalog-source.jsonl과 catalog-curated.jsonl을 보존하며 기존 catalog를
+덮어쓰지 않는다. video만 있는 입력에서 raw 데이터나 운전자 근거를 만들지 않는다.
+설정·소스·gate 변경에는 새 job이 필요하고, 원본/label/dataset 변경은 재개를 거절한다.
+부분 라벨은 새 attempt에서 만들고 성공한 소스의 처리는 반복하지 않는다.
+CVAT/model 예측의 검수 대기 mask를 이 자동 라벨 경로에 섞지 않는다.
+Windows scratch/output은 X 드라이브에 둔다.

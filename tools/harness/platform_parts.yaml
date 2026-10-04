@@ -52,6 +52,41 @@ import_rules:
 concerns: [learning, decision, control, safety, contracts, other]
 
 roots:
+  - path: learning/training/pinky
+    part: learning
+    d427_target: learning/training/pinky
+    wave: none
+    import_prefix: []
+    concern: learning
+    note: D-449 offline recorded velocity comparison; no runtime authority.
+  - path: learning/curation/pinky
+    part: learning
+    d427_target: learning/curation/pinky
+    wave: none
+    import_prefix: []
+    concern: learning
+    note: D-449 recorded Pinky source snapshots and Episode conversion; no control authority.
+  - path: learning/registry/policy
+    part: learning
+    d427_target: learning/registry/policy
+    wave: none
+    import_prefix: []
+    concern: learning
+    note: D-449 policy artifact snapshots and transactional metadata ledger; no runtime authority.
+  - path: learning/training/omx
+    part: learning
+    d427_target: learning/training/omx
+    wave: none
+    import_prefix: []
+    concern: learning
+    note: D-449 offline ACT study; no deployment or execution authority.
+  - path: contracts/learning
+    part: contracts
+    d427_target: contracts/learning
+    wave: none
+    import_prefix: [rosy.contracts.learning]
+    concern: contracts
+    note: D-449 draft artifact schemas; stdlib only, no runtime authority.
   # --- contracts -----------------------------------------------------------
   - path: contracts/foundation
     part: contracts
@@ -453,8 +488,8 @@ roots:
     legacy: src/products/omx/adapter/omx_adapter/lerobot_export.py
     wave: "1"
     note: >-
-      Offline LeRobot export of OMX demonstrations (D-427 1c, Q6). Imports
-      omx_adapter.demonstration until 2b moves that check to the Episode profile.
+      Offline LeRobot export of OMX demonstrations (D-427 1c, Q6).
+      OMX body validation belongs to contracts/learning; no middleware import.
     concern: learning
   - path: data
     part: learning
@@ -599,6 +634,7 @@ roots:
 # split. A mixed file is safety as a whole (§5 change control); `concern: safety`
 # roots above are the directory form.
 safety_modules:
+  - middleware/execution/local/src/rosy/execution/local/omx_policy.py
   - middleware/core/gateway/core/fleet_loss_wiring.py
   - middleware/core/gateway/core/bridge/cmd_vel.py
   - middleware/core/services/core_features/command/manager.py
@@ -630,6 +666,7 @@ safety_modules:
 # PUT or device overlays): a robot config whose safety.fleet_loss_policy is not
 # STOP/HOLD carries safety.fleet_loss_policy_approval {robot, approver, evidence}.
 safety_anchors:
+  - {symbol: rosy.execution.local.omx_policy.OwnerPolicySession}
   - {symbol: core_features.safety.manager.SafetyManager}
   - {symbol: core_features.safety.manager.SafetyManager.trigger_estop, public: true}
   - {symbol: core_features.safety.manager.SafetyManager.release, public: true}

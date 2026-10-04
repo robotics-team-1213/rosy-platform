@@ -86,3 +86,7 @@ middleware/perception/control/control/lidar_guard.py
 middleware/perception/control/control/safety_profile.py
 # (a) comment-only: Pinky example distances in a docstring (D-424); the values already come from config/URDF body, reword when the Pinky profile owns them.
 middleware/core/services/core_features/localization/mission.py
+# D-449: exact Episode/PolicyArtifact profile discriminants and owner kind; contract identity, no actuator defaults. Move to registered product profiles when that registry is accepted.
+contracts/learning/src/rosy/contracts/learning/artifacts.py
+# D-449: preserved recording schema and Episode body validator; binds Pinky provenance only, grants no command authority. Product-profile registration remains the eventual owner.
+contracts/learning/src/rosy/contracts/learning/pinky.py

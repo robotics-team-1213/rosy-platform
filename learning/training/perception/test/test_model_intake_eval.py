@@ -122,6 +122,50 @@ def test_eval_set_null_keeps_the_old_report(tmp_path, monkeypatch):
     assert "trainer_val_iou" not in report
 
 
+@pytest.mark.parametrize("gate_extra", [
+    {"require_eval": True},
+    {"require_eval": True, "eval_set": EVAL_REL},
+    {"require_eval": "false"},
+    {"require_eval": True, "eval_set": EVAL_REL, "min_lane_marking_iou": float("nan")},
+])
+def test_required_eval_with_missing_or_invalid_quality_gate_is_configuration_error(
+        tmp_path, monkeypatch, gate_extra):
+    _eval_set(tmp_path)
+    rc, report = _run(tmp_path, monkeypatch, _model(_pred()), gate_extra)
+    assert rc == intake.CONFIG_EXIT
+    assert report["config_error"] is True
+    assert not list((tmp_path / "out").glob("*/intake_report.json"))
+
+
+def test_required_eval_refuses_unverified_training_provenance(tmp_path, monkeypatch):
+    _eval_set(tmp_path)
+    rc, report = _run(tmp_path, monkeypatch, _model(_pred()),
+                      {"require_eval": True, "eval_set": EVAL_REL, "min_lane_marking_iou": 0.5})
+    assert rc == 1
+    assert any("verified training dataset" in r for r in report["reasons"])
+
+
+def test_required_eval_refuses_same_name_with_different_role(tmp_path, monkeypatch):
+    _eval_set(tmp_path, classes=(("floor", "background"), ("lane", "ignore")))
+    _store_dataset(tmp_path, ["t", "u"])
+    rc, report = _run(tmp_path, monkeypatch, _model(_pred(), dataset_revision=DS_SHA),
+                      {"require_eval": True, "eval_set": EVAL_REL, "min_lane_marking_iou": 0.5},
+                      store=tmp_path / "store")
+    assert rc == 1
+    assert report["eval"]["role_mismatches"] == {
+        "lane": {"model": "lane_marking", "eval": "ignore"}}
+
+
+def test_required_eval_passes_verified_disjoint_data_and_matching_roles(tmp_path, monkeypatch):
+    _eval_set(tmp_path)
+    _store_dataset(tmp_path, ["t", "u"])
+    rc, report = _run(tmp_path, monkeypatch, _model(_pred(), dataset_revision=DS_SHA),
+                      {"require_eval": True, "eval_set": EVAL_REL, "min_lane_marking_iou": 0.5},
+                      store=tmp_path / "store")
+    assert rc == 0, report["reasons"]
+    assert report["eval"]["role_mismatches"] == {}
+
+
 def test_eval_pass_then_regression_against_the_champion_fails(tmp_path, monkeypatch):
     _eval_set(tmp_path)
     rc, first = _run(tmp_path, monkeypatch, _model(_pred(), val_iou={"lane": 0.9}),

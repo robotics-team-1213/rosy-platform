@@ -21,19 +21,19 @@ import numpy as np
 
 from geometry import WALL_HEIGHT_M, Camera, to_frame
 
-LABEL_VERSION = "d379-auto/1"
+LABEL_VERSION = "d379-auto/2"
 
 FLOOR, LANE, WALL, DRIVABLE, STOP_LINE, CROSSWALK = range(6)
 # Unlabelled pixels are not a class: in the masks they hold IGNORE_INDEX, which
 # training masks out of the loss (manifest "ignore_index"). role is the closed
-# D-356 list, where "ignore" means an output channel nobody post-processes; wall
-# stays its own class with that role until the contract gets a wall role.
+# D-356/D-373 list: "ignore" is an output channel nobody post-processes;
+# "wall" is a distinct evidence role used by device postprocessing.
 IGNORE_INDEX = 255
 UNKNOWN = IGNORE_INDEX
 CLASSES = [
     {"index": FLOOR, "name": "floor", "role": "background", "color": [90, 90, 90]},
     {"index": LANE, "name": "lane_line", "role": "lane_marking", "color": [255, 255, 255]},
-    {"index": WALL, "name": "wall", "role": "ignore", "color": [220, 60, 60]},
+    {"index": WALL, "name": "wall", "role": "wall", "color": [220, 60, 60]},
     {"index": DRIVABLE, "name": "drivable", "role": "drivable", "color": [60, 200, 60]},
     {"index": STOP_LINE, "name": "stop_line", "role": "stop_line", "color": [250, 200, 0]},
     {"index": CROSSWALK, "name": "crosswalk", "role": "ignore", "color": [0, 160, 255]},

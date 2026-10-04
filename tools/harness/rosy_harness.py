@@ -20,6 +20,7 @@ import re
 import subprocess
 import sys
 from dataclasses import dataclass
+from hashlib import sha256
 from pathlib import Path
 from urllib.parse import quote
 
@@ -37,6 +38,15 @@ LOG_FIELD_ALIASES = {
 }
 RECENT_LOGS = 5
 UNCOMMITTED = "uncommitted"
+
+# Exact G2 journal encoding repair: original at a720a036e, correction at
+# e4fe8107a. Both normalized entry bodies are pinned; no other edits qualify.
+# The original is retained in the private landing evidence, and the corrected
+# entry cites its source commit without claiming the lost prose was recovered.
+KNOWN_LOG_ENCODING_REPAIRS = {
+    "a5eecc71690d74036c9e393a2a47262843dfd369b71fe0d6ff92c40a24730c49":
+        "4c3461ed3910dfe42491970e5d0aa7b12a8d9bbb4b044ffc11dbc8e235d0178a",
+}
 
 ADR_ID = re.compile(r"^D-(\d+)$")
 COMMIT = re.compile(rf"^(?:[0-9a-f]{{7,40}}|{UNCOMMITTED})$")
@@ -327,6 +337,11 @@ def is_append_only(old: str, new: str) -> bool:
     }
     for block in old_blocks:
         if block in new_blocks:
+            continue
+        repaired_hash = KNOWN_LOG_ENCODING_REPAIRS.get(sha256(block.encode("utf-8")).hexdigest())
+        if repaired_hash is not None and any(
+            sha256(candidate.encode("utf-8")).hexdigest() == repaired_hash for candidate in new_blocks
+        ):
             continue
         lines = block.splitlines()
         replacement = evidence_reconciliations.get(lines[0])

@@ -8,6 +8,7 @@ push: [--allow-unsigned] [--check KEYS_DIR]  object_det must be signed (sign_mod
 deliver.py release-hold <host>   (removes the hold file; the pointer is not changed)
 deliver.py status <host>
 common: [--task lane_seg|object_det] [--user rosy] [--identity KEY] [--known-hosts FILE]
+        [--journal-dir DIR] (private local attempt files, fsynced before each network step)
         [--root /var/lib/rosy/models]  (the task's pointers live under learned/slots.task_root:
         lane_seg keeps the flat D-373 root, object_det uses <root>/object_det)
         [--timeout S]  (per ssh/scp step; 600 for push, 60 for rollback/status)
@@ -67,6 +68,7 @@ for _p in (ROOT / "middleware" / "perception",
         sys.path.insert(0, str(_p))
 
 import operator_ssh  # noqa: E402
+import delivery_journal  # noqa: E402
 from control.sensing.perception.learned.manifest import (  # noqa: E402
     MANIFEST_NAME, TASKS, ManifestError, check_revision, load_manifest, verify_files)
 from control.sensing.perception.learned.slots import FLAT_TASKS, task_root  # noqa: E402
@@ -188,6 +190,8 @@ def remote_script(action: str, rev: str | None, root: str = REMOTE_ROOT, *,
             f"{q(json.dumps(a.get('operator')))} {q(json.dumps(a.get('host_of_operator')))} "
             f"{q(json.dumps(a.get('tool_commit')))} | tee -a {hist} >/dev/null"
             f" || {{ echo 'pointer changed, history not written' >&2; exit {HISTORY_EXIT}; }}",
+            f"sync -f {hist} || {{ echo 'pointer changed; history durability unknown' >&2;"
+            f" exit {HISTORY_EXIT}; }}",
         ]
 
     def write_hold(act: str, revision_expr: str) -> list[str]:
@@ -441,6 +445,9 @@ def _push(args, ssh, scp, runner) -> int:
     if (folder / SIGNATURE_NAME).is_file():  # D-423: the robot verifies it before opening
         checks.append((_sha256(folder / SIGNATURE_NAME), SIGNATURE_NAME))
     report_check = (_sha256(folder / REPORT_NAME), REPORT_NAME)
+    args.delivery_attempt.write('model_verified', revision=rev,
+                                manifest_sha256=next(sha for sha, name in checks if name == MANIFEST_NAME),
+                                intake_report_sha256=report_check[0])
     t = args.timeout
     r = _run(runner, [*ssh, target, remote_script("prepare", rev)], t)
     if r.returncode != 0:
@@ -479,6 +486,19 @@ def _audit(args) -> dict:
             "tool_commit": _tool_commit()}
 
 
+def _dispatch(args, ssh, scp, runner):
+    if args.action == 'push':
+        return _push(args, ssh, scp, runner)
+    extra = ({'history': max(args.history, 0)} if args.action == 'status' else {'audit': _audit(args)})
+    action = 'rollback-active' if getattr(args, 'slot', 'shadow') == 'active' else args.action
+    result = _run(runner, [*ssh, f'{args.user}@{args.host}',
+                           remote_script(action, None, args.root, **extra)], args.timeout)
+    if result.returncode != 0:
+        return _remote_rc(result)
+    print(result.stdout or '', end='')
+    return 0
+
+
 def main(argv=None, runner=subprocess.run) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="action", required=True)
@@ -501,6 +521,8 @@ def main(argv=None, runner=subprocess.run) -> int:
                                 "without it a push is manual and holds the robot")
         p.add_argument("--user", default=operator_ssh.USER)
         p.add_argument("--root", default=REMOTE_ROOT)
+        p.add_argument('--journal-dir', type=Path, default=delivery_journal.default_root(),
+                       help='private local durable attempt directory (never a robot acceptance claim)')
         operator_ssh.add_arguments(p)
         if name in ("push", "rollback", "promote", "release-hold"):
             p.add_argument("--operator", default=getpass.getuser(),
@@ -532,17 +554,19 @@ def main(argv=None, runner=subprocess.run) -> int:
         print(f"refused: {exc}", file=sys.stderr)
         return 2
     ssh, scp = ["ssh", *opts, "--"], ["scp", "-r", *opts, "--"]
-    if args.action == "push":
-        return _push(args, ssh, scp, runner)
-    extra = ({"history": max(args.history, 0)} if args.action == "status"
-             else {"audit": _audit(args)})
-    action = "rollback-active" if getattr(args, "slot", "shadow") == "active" else args.action
-    r = _run(runner, [*ssh, f"{args.user}@{args.host}",
-                      remote_script(action, None, args.root, **extra)], args.timeout)
-    if r.returncode != 0:
-        return _remote_rc(r)
-    print(r.stdout or "", end="")
-    return 0
+    try:
+        attempt = delivery_journal.Attempt(args.journal_dir, args)
+        args.delivery_attempt = attempt
+        try:
+            code = _dispatch(args, ssh, scp, attempt.runner(runner))
+        except BaseException as exc:
+            attempt.interrupted(exc)
+            raise
+        attempt.finish(code)
+        return code
+    except delivery_journal.JournalError as exc:
+        print(str(exc), file=sys.stderr)
+        return HISTORY_EXIT
 
 
 if __name__ == "__main__":

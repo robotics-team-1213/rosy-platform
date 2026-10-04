@@ -2358,6 +2358,18 @@
 - Evidence: Initial regression 25 failed/4 passed; corrected closure/error/hook regressions 29 passed on Windows. Hidden-untracked regression 2 failed before correction, 5 focused checks passed after correction. Isolated model-PC Linux updater/hook suites 79 passed, including six real held-switch scenarios.
 - gate 변화: None. Production controller installation, activation and release/field acceptance are separate.
 
+## 2026-10-04 · uncommitted · fix(site): keep model delivery journal in service state
+
+- 변경: model-watch의 전달 이력 경로를 기존 StateDirectory 아래로 명시했다. ProtectHome와 기존 hardening·권한·timer 활성화 조건은 유지한다.
+- 증거: 서비스 경로 회귀 RED 후 관련 호스트53pass, 독립47pass. 관제 운영 venv에서 실제 JSONL 생성/fsync와 installer dry-run exit0. 운영 venv에는 pytest가 없어 첫 회귀 실행 실패를 보존했다. 별도 source 후보의 해시를 확인했으며 관리자 설치는 실행하지 않았다.
+- gate 변화: SOURCE/LOCAL 보강. 실제 systemd 서비스 실행·관리자 설치·로봇 shadow/rollback·DEVICE/FIELD는 미검증이다.
+
+
+## 2026-10-04 · uncommitted · model-watch installer CRLF config parsing
+
+- Change: cfg_value removes carriage returns before quote/comment trimming, so LF and CRLF backend/store values select the same installation branch.
+- Evidence: Native Linux RED2fail4pass for plain/quoted CRLF; after fix LF/CRLF/plain/quoted/comment regressions and existing install/unit suites23pass. Independent source review requested. V2 source881file archive and CPUintake pass did not establish installation closure: dry-run exit0 omitted store/drop-in before this fix.
+- Gate: No privileged install or timer activation. Existing v2 bundle preserved; corrected committed source must be repackaged and reviewed before administrator request supersedes it. Producer config remains an inactive candidate; actual service UID/group/doctor/robot HOLD gates pending.
 ## 2026-10-04 · uncommitted · fix(g2): provision the per-instance IPC directory before startup
 
 - Change: Move private run subdirectory provisioning into fresh_evidence and create uds/omx_cell_sim_01 before starting the owner. Preserve the UnixActionServer service-manager requirement, existing grants and failed-run receipts.
@@ -2381,11 +2393,11 @@
 - gate 변화: 없음.
 - 결정: D-441 뒤 정리. 근거: 2026-10-04 관측 회차에서 서명 완료 후에도 제목이 "(unsigned)"로 남어 사람이 오독한 사실.
 
-## 2026-10-04 ? uncommitted ? fix(g2): reserved startup home before Cell admission
+## 2026-10-04 · uncommitted · fix(g2): reserved startup home before Cell admission
 
-- ??: G2 ?? ?? ??? ?? owner? ?? Pilot seat? ???? ???? ??? ??? ???. ??? ROS goal UUID? ?? ??? ?? ? ??? 0.5? ???? ???? seat ???reconciliation? ??? ? UDS? ????. stop/reset??? ???Fleet grant ??? ??? ???.
-- ??: r3 SDK prepare PASS ? ? Action? PHASE_RUNNER_START_UNKNOWN?? HOLD, phase goal ??? 0??? cleanup? PASS??. spawn ?? HOME_DEVIATION???? ?? gripper GRIPPER_NOT_OPEN? planner? ????? r3? ?? ??? ????? ????. ?? ?? ??? ????? exact UUID ?? RED, 10Hz ?? poll ?? RED?GREEN, ?? SQLite ??? intent ??? ????.
-- gate ??: SOURCE/LOCAL?. box16 ?? ???fault matrix??? ??????? ??? ?? HOLD/NOT_RUN, full_g2=false?. ?? ?? ??? ???? ? ????? ?????.
+- 변경: 커밋 230ccfc2a의 reserved Pilot admission을 통한 G2 시작 home 준비를 반영했다. 병합 중 발견한 인코딩 손상 원문은 X:/DevTemp/rosy-learning-audit-20261004/g2-imported-journal-original.txt에 보존했다. 복구 불가능한 원문을 실행 증거로 사용하지 않는다.
+- 증거: 해당 커밋의 Independent-Review는 48 passed·1 Unix-host skip이며 실제 ROS-SIM 재시도는 pending이다. 통합 담당자의 G2 startup·ports 검사 26 passed·1 skipped. SOURCE/HOST 근거만 보존한다.
+- gate 변화: box16 전체 실행·fault matrix·수동 간지·물리 수용은 HOLD/NOT_RUN이며 full_g2=false다. 실제 주행·HOLD 해제는 수행하지 않았다.
 ## 2026-10-04 · uncommitted · fix(camera): 시작 중 반복 부팅 보호
 
 - 변경: 카메라 시작 전 fsync 기록, 두 번의 미확인 부팅 뒤 선택 서비스 보류, 별도 90초 관찰 타이머와 정상 종료 구분을 추가했다. 카메라 재시도를 10초·300초 내 3회로 제한하고 관찰 시간을 카메라 시작 완료와 분리했다. D-161의 CORE·호스트 권한 분리와 D-373의 선택 perception 설정을 유지한다.

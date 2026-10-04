@@ -21,10 +21,12 @@ from __future__ import annotations
 import base64
 import binascii
 import csv
+import hashlib
+import json
 import re
 from collections.abc import Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 
 @dataclass(frozen=True)
@@ -450,7 +452,45 @@ def _is_a_passed_reference(line: str, match: re.Match[str], value: str) -> bool:
     return reference.lower() in match.group("name").lower()
 
 
-def scan_text(path: str, text: str) -> list[Finding]:
+def load_public_provenance(path: Path) -> frozenset[tuple[str, str, str]]:
+    """Load explicitly reviewed repository integrity tuples; malformed policy raises.
+
+    No automatic discovery: image/runtime scans retain their default strict policy.
+    Every tuple binds one token to one exact UTF-8 line and repository path.
+    """
+    doc = json.loads(path.read_text(encoding="utf-8"))
+    if (not isinstance(doc, dict) or set(doc) != {"schema", "records"}
+            or doc["schema"] != "rosy.public-provenance/1"
+            or not isinstance(doc["records"], list)):
+        raise ValueError("invalid public provenance inventory")
+    result = set()
+    records = set()
+    for record in doc["records"]:
+        if not isinstance(record, dict) or set(record) != {"path", "line_sha256", "values", "reason"}:
+            raise ValueError("invalid public provenance record")
+        name, line_hash = record["path"], record["line_sha256"]
+        if (not isinstance(name, str) or not name or "\\" in name or ":" in name
+                or PurePosixPath(name).is_absolute() or ".." in PurePosixPath(name).parts
+                or PurePosixPath(name).as_posix() != name
+                or not isinstance(line_hash, str) or not re.fullmatch(r"[0-9a-f]{64}", line_hash)
+                or not isinstance(record["reason"], str) or not record["reason"].strip()
+                or not isinstance(record["values"], list) or not record["values"]):
+            raise ValueError("invalid public provenance binding")
+        if (name, line_hash) in records:
+            raise ValueError("duplicate public provenance line")
+        records.add((name, line_hash))
+        for value in record["values"]:
+            if not isinstance(value, str) or not re.fullmatch(r"(?:[0-9a-f]{40}|[0-9a-f]{64})", value):
+                raise ValueError("public provenance requires exact hex digest")
+            item = (name, line_hash, value)
+            if item in result:
+                raise ValueError("duplicate public provenance token")
+            result.add(item)
+    return frozenset(result)
+
+
+def scan_text(path: str, text: str, *,
+              public_provenance: frozenset[tuple[str, str, str]] = frozenset()) -> list[Finding]:
     """Return every suspected secret in ``text``.
 
     Split out from file walking so tests can prove the matchers fire on a
@@ -527,6 +567,10 @@ def scan_text(path: str, text: str) -> list[Finding]:
 
         for match in _BARE_TOKEN.finditer(entropy_line):
             value = match.group("value")
+            # Only this exact reviewed token is excused. Earlier private-key,
+            # credential, PSK and QR checks remain active even on the same line.
+            if (path, hashlib.sha256(line.encode("utf-8")).hexdigest(), value) in public_provenance:
+                continue
             if _PUBLIC_PATH_TOKEN.fullmatch(value):
                 continue
             if _is_ed25519_public_key_body(value):
@@ -621,6 +665,7 @@ def scan_files(
     *,
     root: Path,
     excluded_names: Sequence[str] = (),
+    public_provenance: frozenset[tuple[str, str, str]] = frozenset(),
 ) -> list[Finding]:
     """Scan each readable text file, reporting paths relative to ``root``."""
     excluded = set(DEFAULT_EXCLUDED_NAMES) | set(excluded_names)
@@ -651,7 +696,7 @@ def scan_files(
         in_fixtures = relative.startswith(FIXTURE_ROOT) or "/test/" in f"/{relative}"
         prose_quotes = KNOWN_PROSE_QUOTES.get(relative, frozenset())
         findings.extend(
-            f for f in scan_text(relative, text)
+            f for f in scan_text(relative, text, public_provenance=public_provenance)
             if not (in_fixtures and any(fixture in f.excerpt for fixture in KNOWN_FIXTURES))
             and not any(quote in f.excerpt for quote in prose_quotes)
         )
