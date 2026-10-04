@@ -2357,3 +2357,9 @@
 - Change: Observe all signed payload code roots and enrolled previous layouts; include hidden untracked files and hold on unavailable or timed-out Git observations. Preserve signed archive roots, checkout bytes and data outside the payload.
 - Evidence: Initial regression 25 failed/4 passed; corrected closure/error/hook regressions 29 passed on Windows. Hidden-untracked regression 2 failed before correction, 5 focused checks passed after correction. Isolated model-PC Linux updater/hook suites 79 passed, including six real held-switch scenarios.
 - gate 변화: None. Production controller installation, activation and release/field acceptance are separate.
+
+## 2026-10-04 · uncommitted · fix(ci): 두 Android 앱의 실제 wrapper 선택
+
+- 변경: Cam의 정본 Gradle 8.11.1 wrapper에 matrix별 --project-dir를 전달한다. 별도 wrapper가 없는 Pilot도 같은 unit task를 실행하며 JDK 17·테스트 범위를 유지한다.
+- 증거: 실제 shell wrapper와 Java 실행 경계의 프로젝트/JAR/task 전달 2 PASS, 독립 source 리뷰 PASS. 통합 담당자 launcher 및 관련 Fleet 계약 24 PASS. 실제 Gradle 실행은 다음 원격 CI의 별도 증거다.
+- gate 변화: SOURCE/LOCAL launcher 검증; 원격 Android CI·APK·DEVICE 수락은 별도다.

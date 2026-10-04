@@ -4,8 +4,7 @@
 
 ## Cam 화면 보호와 영상 지속
 
-최종 진단 UI APK SHA-256:
-`6c297ace0ffc7c2f677f31baf35a0bc1086bfd77d327f61be2661ca974ada9ab`.
+최종 진단 UI APK SHA-256: `6c297ace0ffc7c2f677f31baf35a0bc1086bfd77d327f61be2661ca974ada9ab`.
 기존 서명을 유지해 업데이트했고 설치 전후 설정 파일 SHA-256이 같다.
 실제 기본·진단 펼침 사진을 직접 확인했다. 경기장 전체 영상과 상태가 보이고
 진단 버튼 및 하단 화면 끄기·설정·중지 접근이 유지된다.
@@ -29,8 +28,7 @@ terminal refresh에서 현재 후보·TTL·주소 충돌·발열 정책에 따�
 수정했다. HTTP 후보에는 전원·같은 Wi-Fi·재시도 안내를 표시하고 secure 후보에는
 기존 신뢰된 HTTPS 확인 안내도 유지한다. 신뢰 정책을 완화하지 않는다.
 
-최종 Pilot APK SHA-256:
-`ebfc297a0332c4c366381e27374a18e5c256ca8fbebf40b82ff9fda8baef4701`.
+최종 Pilot APK SHA-256: `ebfc297a0332c4c366381e27374a18e5c256ca8fbebf40b82ff9fda8baef4701`.
 JVM 46 PASS, 기존 서명, 공용 20개·Pilot 29개 자산 일치 및 설치 APK hash 일치를
 확인했다. 독립 source SPEC·QUALITY PASS 이후 실제 실패→활성 카드→같은 카드
 직접 재시도→다시 실패해도 활성 상태→다시 찾기로 목록 복귀를 확인했다.

@@ -39,6 +39,7 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      # gradlew is committed without the executable bit.
+      # Both apps use AGP 8.7.2; the committed Cam wrapper pins Gradle 8.11.1.
+      # Select the matrix project explicitly; Pilot has no separate wrapper.
       - name: Unit tests
-        run: bash ./gradlew testDebugUnitTest --no-daemon
+        run: bash "$GITHUB_WORKSPACE/operations/ui/cam/gradlew" --project-dir "$GITHUB_WORKSPACE/${{ matrix.app }}" testDebugUnitTest --no-daemon
