@@ -107,8 +107,13 @@ SIZE_VERDICTS = {
         "duplicate its socket. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        35_137,
-        "split: independently re-judged after concurrent start-point integration at "
+        35_606,
+        "split: independently re-judged at measured35606 on 2026-10-05 after enrolled "
+        "TLS transport and required feature-builder extraction; CLI586 removes its stale "
+        "file verdict. Previous35137 + concurrent80 + TLS364 + builder25. Retain the "
+        "B2/UI queue and all thresholds/allowances; see docs/validation/"
+        "d456-enrolled-tls-integration-2026-10-05/README.md. "
+        "Independently re-judged after concurrent start-point integration at "
         "35137 on 2026-10-05: 314 lines above34823 (134 reference backend,172 UI,8 "
         "composition/static), plus earlier31 route extraction above34792; reference "
         "coordinates never initialize pose or issue motion. Retain the B2/UI split "
@@ -679,14 +684,6 @@ SIZE_VERDICTS = {
         641,
         "accept: single-entry hardware probe CLI the commissioning runbook drives top-to-bottom — "
         "splitting probe sequence from reporting would sever one diagnostic narrative (X5)",
-    ),
-    "fleet/fleet/cli.py": (
-        604,
-        "accept: the Fleet composition root (2026-10-02, C4b G5) parses every console flag and "
-        "assembles create_app once; the Cell Job compiler flag added 10 lines and the palletizing "
-        "import stays lazy here so a site install without that wheel still starts. Split the "
-        "per-feature service builders (mission, pairing, localization) into a builder module "
-        "before the next flag",
     ),
     "apps/device/omx/adapter/omx_adapter/action_store.py": (
         1_191,

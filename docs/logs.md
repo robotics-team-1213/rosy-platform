@@ -5867,3 +5867,9 @@ osy-d395-s1d\`.
 - 변경: D-456에 기존 관제 encrypted enrollment의 공개 TLS binding과 단일 REST/WS endpoint owner를 기록한다. 같은 LAN의 발견 이름을 사용하고 기존 자격·발급자·만료·철회를 보존한다. static roster 중복이나 평문 fallback으로 접속 실패를 숨기지 않는다.
 - 증거: 두 로봇의 실제 038 HTTPS identity를 SSH로 확인한 CA와 호스트 이름으로 검증했다. 관제 DB에는 기존 active 승인 두 행이 있고, 기존 enrollment client는 HTTP를 재구성한다. 관련 최신 main 통합 검사는 199 passed/64.92초/NEW0이다. source companion 분리 충돌은 stable reader와 두 코드 owner fingerprint를 보존해 통합했다.
 - gate 변화: 실제 HTTPS identity와 기존 등록 상태만 확인했다. Pilot 승인·연결과 관제 HTTPS 등록 경로·새 Camera Peer 승인은 아직 수용하지 않는다. 최신 main의 bounded-trial STOP/send 경합은 독립 source 모의 실행으로 재현되어 수정 전 릴리스를 HOLD한다. 주행·정지 해제·등록 초기화는 수행하지 않는다.
+
+## 2026-10-05 · uncommitted · fix(integration): 등록 TLS 전송과 배포 검사 통합
+
+- 변경: 승인된 등록 ID의 공개 CA·호스트 binding을 기존 REST/WSS endpoint owner에 결속하고 동일 등록부의 transport marker로 재시작·설정 누락 때 HTTP 복귀를 거절한다. CLI의 기존 다음 옵션 전 조립 분리 조건을 이행해 586줄로 줄이고 91줄 feature builder에 지연 import·생성 순서를 보존한다. 독립 재판정에 따라 Fleet split 기록만 35606줄로 갱신하고 사라진 CLI 예외를 제거한다. 예산·허용량·기존 B2/UI 분리 대기열은 유지한다.
+- 증거: 전송 통합의 원본 관련207PASS2WindowsSKIP57.04초/NEW0, 조립 분리의 원본CLI·TLS55PASS1WindowsSKIP34.83초 및 독립 AST·구조·안전 SOURCE PASS를 기록했다. 기존 P6는35581>35137+150로 실제 RED였다. bounded-trial 경합은 별도 writer fence 수정과 원본43PASS 및 독립 양수 전송 거절 재현으로 source HOLD를 해소했다. 두 실제 TLS calibration 읽기는 활성 세션 없음으로 PASS다.
+- gate 변화: SOURCE/읽기 증거다. 새 서명 릴리스·실제 Pilot 승인/재연결·관제 HTTPS/WSS·새 Camera Peer/발열 수용은 아직 완료하지 않는다. 관제 공개 설정은 준비했지만 SSH sudo-n은 관리자 인증을 요구해 실제 적용하지 않았다. 기존 승인·발급자·키·CA·만료·주행·정지 상태는 보존한다.
