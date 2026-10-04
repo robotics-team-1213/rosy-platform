@@ -5794,3 +5794,9 @@ osy-d395-s1d\`.
 - 증거: lint 재검사. 재번호 규칙은 앞 항목과 동일.
 - gate 변화: 없음.
 - 결정: 같은 규칙 지속 — 늦게 착지한 쪽이 재번호한다.
+
+## 2026-10-05 · uncommitted · test(learning): reject resealed embedded authority scalar aliases
+
+- 변경: 최종 producer helper는 이미 current·contract authority·receipt authority 각각을 validate_authority로 검증하고 encoded JSON을 비교한다. 독립 재현의 frame_excluded=False→0 및 original_video_verified=False→0를 봉인 contract에 적용하는 회귀를 추가했다. embedded decision digest 유지/재계산 두 경우 모두 바깥 봉인을 다시 계산해도 거부해야 한다.
+- 증거: 관련 producer/app 시험 출력은 X:/DevTemp/pinky-review-cycle-20261005/embedded-alias-exact-tests.txt에 보존한다. 기존 ignore_index255.0 및 receipt alias 회귀를 함께 실행한다. 실제 사람 검수 상태는 변경하지 않는다.
+- gate 변화: SOURCE/LOCAL 회귀 보강만 한다. 독립 producer 통합 수용과 학습 적격성은 root/policy 검증자의 판정으로 남는다. push·모델 활성화·주행·HOLD 해제 없음.

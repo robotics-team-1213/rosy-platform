@@ -299,6 +299,26 @@ def test_ignore_float_and_resealed_embedded_authority_fail_strict_validation(tmp
         review_evidence.verify_current(out,current)
 
 
+@pytest.mark.parametrize('field',['frame_excluded','original_video_verified'])
+@pytest.mark.parametrize('recompute_digest',[False,True])
+def test_resealed_contract_authority_rejects_false_integer_alias(tmp_path,field,recompute_digest):
+    store = open_store(tmp_path)
+    review_masks.bind_classes(store,CLASSES)
+    current = review_evidence.decisions(store)
+    out = Path(store.prepare()['path'])
+    doc = json.loads((out/'review-contract.json').read_bytes())
+    assert doc['authority']['frames'][0][field] is False
+    doc['authority']['frames'][0][field] = 0
+    if recompute_digest:
+        value = {k:v for k,v in doc['authority'].items() if k != 'decision_sha256'}
+        doc['authority']['decision_sha256'] = review_evidence.sha(review_evidence.encoded(value))
+    raw = review_evidence.encoded(doc)
+    (out/'review-contract.json').write_bytes(raw)
+    (out/'AUTHORITY_COMPLETE').write_text(review_evidence.sha(raw),encoding='ascii')
+    with pytest.raises(ValueError):
+        review_evidence.verify_current(out,current)
+
+
 @pytest.mark.parametrize('recompute_digest',[False,True])
 def test_resealed_receipt_authority_rejects_false_integer_alias(tmp_path,recompute_digest):
     store = open_store(tmp_path)
