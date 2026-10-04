@@ -34,8 +34,8 @@
 
 ## 최근 기록
 
+- 2026-10-04 · uncommitted · fix(pilot): 조종하지 않는 카메라의 frame Response 보존
 - 2026-10-04 · uncommitted · fix(ui): LAN 재검색 버튼의 공용 kind 선언 정합
 - 2026-10-04 · uncommitted · fix(pilot): LAN 목록 재검색과 저장 연결 기록 보존
 - 2026-10-04 · uncommitted · feat(pilot): 로비 방 목록 — `GET /api/v1/site/rooms` 소비 (D-343 2.2-3)
 - 2026-10-04 · uncommitted · Android 로봇 검색 고착의 독립 복구
-- 2026-10-04 · uncommitted · feat(pilot): 크래프트 회차 1 — G2 기준선과 44px 바닥 회복

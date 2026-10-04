@@ -55,8 +55,9 @@ def test_review_app_rose_is_confined_to_its_wordmark():
     path = registry.REPO / "learning/training/perception/dataset/review_app_web/app.css"
     css = path.read_text(encoding="utf-8")
     wordmark = re.search(r"(?m)^\.wordmark\s*\{([^}]*)\}", css)
-    assert wordmark and _ROSE.search(wordmark[1])
-    assert len(_ROSE.findall(css)) == len(_ROSE.findall(wordmark[1])) == 1
+    uses = _ROSE.findall(css)
+    if uses:
+        assert wordmark and len(uses) == len(_ROSE.findall(wordmark[1])) == 1
 
 
 def _web_rows() -> list[dict]:

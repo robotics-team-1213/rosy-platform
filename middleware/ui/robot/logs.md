@@ -937,3 +937,9 @@
 - gate 변화: 없음. SOURCE/LOCAL. 브라우저 실화면 회귀(ROSY_RUN_BROWSER_TESTS)는 다음 회차.
 - 결정: D-447 (b). (a) Fleet gather 전환과 같은 원칙, 같은 ADR.
 - 교훈: none
+
+## 2026-10-04 · uncommitted · fix(robot): 초기화 보호와 fullscreen 시험 동기화
+
+- 변경: compatibility shell은 app import 동안 inert로 보호하고, panel fixture의 store.state/dom.js와 G2 직접 action status 선택을 실제 인터페이스에 맞췄다. 카메라 fullscreen 시험은 같은 owned controls 조건의 bounded wait 2줄만 추가했다.
+- 증거: 초기화 보호 baseline/mutation RED 뒤 관련 5건·Dashboard 전체 79건 PASS. 실제 fullscreen 이벤트 지연 RED/수정 GREEN/복원 차단 RED와 정상 panel 전체 21건·NEW 0. 기존 정지 호출·피드백·identity·focus 단언을 유지했고 독립 리뷰 APPROVE.
+- gate 변화: 이 입력의 SOURCE/LOCAL 후속 증거. 전체 browser 727 입력은 314 passed/1 failed 원본이며 새 전체 PASS나 DEVICE 완료를 부여하지 않는다. `docs/validation/d427-source-migration/wave5-named-gate-coverage-2026-10-04.md` 참조.

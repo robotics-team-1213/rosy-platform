@@ -98,7 +98,7 @@ def test_http_blocks_foreign_hosts_and_tokenless_writes(tmp_path):
         assert error.value.code == 409
         with urllib.request.urlopen(url + '/box-geometry.mjs') as response:
             assert response.headers.get_content_type() == 'text/javascript'
-        for headers in ({}, {'X-Pinky-Token': workspace['token'], 'Origin': 'https://foreign.example'}):
+        for headers in ({}, {'X-Pinky-Token': workspace['token'], 'Origin': 'https://foreign.example'}) * 5:
             request = urllib.request.Request(url + '/api/prepare', b'{}', headers=headers)
             with pytest.raises(urllib.error.HTTPError) as error:
                 urllib.request.urlopen(request)

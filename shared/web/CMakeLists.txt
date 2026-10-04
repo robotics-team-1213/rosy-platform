@@ -13,6 +13,7 @@ install(FILES
   core_ui_logic.js
   hold-ticker.js
   ui.js
+  workspace.js
   confirmation.js
   live-dialog-geometry.js
   task-chooser.js

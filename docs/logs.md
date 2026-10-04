@@ -4502,10 +4502,12 @@ osy-d395-s1d\`.
 - 변경: Add a ROS-free `pallet.transfer` Skill contract with injected planner, phase execution and evidence ports. Validate work item, poses, heights and carry clearance; require phase success, gripper release evidence and destination pose evidence before reporting success. Move shared `AttemptIdentity` and `ReceiptBinding` to `execution/local/receipts.py` while preserving `rosy.execution.api` imports. Add the manipulation wheel to CI build/install.
 - 증거: Platform transfer boundary, contract mapping, Cell submission and CI dependency tests: 25 passed. The forbidden-import guard failed under a temporary `sqlite3` import and passed after restoration. New modules passed flake8, py_compile and diff checks. Built three wheels and installed them offline into a fresh X: venv; import smoke passed.
 - gate 변화: None. OMX provider wiring to the existing Action owner remains. This does not establish ROS-SIM, Gazebo or device acceptance.
+
 ## 2026-10-02 · uncommitted · feat(platform): bind OMX transfer Skill to device owner
 - Change: Add `integrations/robots/omx` to map validated `FleetCellTransferGrant` data into `pallet.transfer`, resolve grasp geometry from the accepted recipe, adapt the existing analytic Cell planner, and wrap `PickPlaceRunner` start/exact cancellation. Register the import boundary and build/install the integration wheel in CI.
 - Evidence: Provider/owner boundary 12 passed; dependency boundary 5 passed; platform mapping/submission/compatibility 27 passed; OMX adapter regression 333 passed, 5 skipped. New provider passed flake8 and py_compile. Six platform wheels built; Skill and integration wheels installed offline into a fresh X: venv; installed provider import smoke passed.
 - Gate: SOURCE only; ROS-SIM HOLD and DEVICE/FIELD PARKED.
+
 ## 2026-10-02 · uncommitted · feat(platform): add installation profiles and app compositions
 - Change: Add `rosy-app-agent` and `rosy-app-gateway`, strict allowlisted `omx_cell_sim` and `site_cell` profiles, wheel installation in CI, gateway composition delegation from the existing Fleet CLI, and the gateway composition path to the site image. Hardware dispatch remains disabled in both profiles.
 - Evidence: Profile/entrypoint tests 7 passed; Fleet CLI tests 31 passed; dependency-boundary tests 5 passed; app flake8 and py_compile passed. Built eight platform wheels and installed them offline in a fresh X: venv without repository `PYTHONPATH`; fake profile lifecycle smoke passed for both apps.
@@ -4555,7 +4557,6 @@ osy-d395-s1d\`.
 - 증거: 가지 `fix/perception-postproc-nms`, 실제 프레임 506장 재스캔 거짓 20 → 0, `src/runtime/sensing/logs.md`·`src/site/fleet/logs.md`의 같은 날 항목.
 - gate 변화: 없음(Proposed).
 
-
 ## 2026-10-02 · 8ab939265 · docs(adr): D-415 SAF-003 Fleet 링크 상실 정책, API Ref v1.80
 - 변경: ADR D-415(Accepted, 사용자 승인 범위 한정 구현)와 ADR Log 행. CORE SRS SAF-003 에 D-415 참조 한 줄. API Ref v1.80 — §5.5 `safety/state.fleet_link`·`safety/limits` 정책 값, §7.6 판정 규칙, §8 `safety.fleet_lost`·`safety.fleet_restored`, 변경 이력. 권고안과 다른 점: RETURN_HOME 은 `__home__` waypoint 로 정의할 수 있어 PUT 에서 거절하지 않고 적용 시 home 이 없으면 선 채로(`applied: STOP`); `fleet.enabled` 는 존중하면 기존 페어링 로봇의 Agent 가 꺼져 문서화만.
 - 증거: 구현 8dd300c52, `test_fleet_loss.py`·`test_fleet_loss_wiring.py`.
@@ -4592,18 +4593,15 @@ osy-d395-s1d\`.
 - Evidence: full Fleet regression 1451 passed/7 skipped, known-failure comparison 0 new/0 known before the final phase-history correction. Final dispatcher/API/store/legacy/app/replay suites 107 passed; integrated-main localization regression 54 passed; architecture/dependency boundary suites 38 passed. Independent review found and then verified fixes for in-process stop, phase-history conflicts and superseded phase-success evidence; final review 31 passed with no remaining Important/Critical checkpoint findings. Changed runtime and dispatcher/API test Python files pass flake8. Align the FastAPI contract description with API Reference v1.82 (3 protocol-version tests passed); harness lint reports 0 errors/24 existing freshness warnings.
 - Gate: SOURCE/LOCAL only. Default dispatch is disabled. Registered/fresh Cell goal production and held-success goal recovery, actual OMX owner/provider integration, Gazebo, device and field acceptance remain open; D-413 Tasks 4-5 and 7 stay IN PROGRESS.
 
-
 ## 2026-10-03 · uncommitted · fix(fleet): require durable Cell success for goal recovery
 - Change: move Cell goal completion into its own journal module and require the latest terminal SUCCEEDED event for the exact step, Action and attempt inside the SQLite completion transaction. Permit independently confirmed held success, preserve next-step WAITING/HOLD after authority changes, reject rewritten goal evidence and empty provenance, and keep claims until every ordered goal is confirmed. Dispatch is not rearmed by goal confirmation.
 - Evidence: CellJob/Mission/phase-contract regression 89 passed; independent review 42 passed with no remaining Important/Critical checkpoint findings. Current-main platform contract checks pass 26 tests with explicit source paths (not installed-artifact proof). Quick tier 96 passed/24 existing freshness warnings. Changed Python files pass flake8. Full Fleet regression 1468 passed/7 skipped, known-failure comparison 0 new/0 known; final log/generated-record checks 3 passed and harness lint 0 errors/24 existing freshness warnings.
 - Gate: SOURCE/LOCAL only. Public registered/fresh Cell goal production, actual two-ledger Cell replay, real OMX owner/provider composition and ROS-SIM remain required. Tasks 4-5 and 7 remain IN PROGRESS.
 
-
 ## 2026-10-03 · uncommitted · docs: record internal Cell evidence checkpoint
 - Change: append D-413 progress for pinned producer authentication, observation freshness, rejected-evidence persistence protection and atomic terminal identity fencing. Keep Tasks 4-5 and 7 IN PROGRESS and record public ingress/app callback/evaluator/ROS-SIM as remaining work.
 - Evidence: focused Cell service/store/dispatcher 48 passed, registry 10 passed; independent review 44 passed; quick tier 96 passed/24 existing freshness warnings, harness lint 0 errors/24 existing freshness warnings. Full Fleet regression is running and not claimed complete.
 - Gate: SOURCE/LOCAL only; no ROS-SIM, artifact, device or field promotion.
-
 
 ## 2026-10-03 · uncommitted · docs: record public Cell evidence contract and progress
 - Change: Document strict CellGoalEvidenceSubmission, producer credential isolation, initial/final/gripper provenance, pending terminal callback reconciliation and atomic latest-terminal proof in API Reference v1.84. Append D-413 progress while retaining incomplete OMX/Gazebo/two-ledger gates.
@@ -4615,18 +4613,15 @@ osy-d395-s1d\`.
 - 증거: `X:\DevTemp\rosy-lane-meas\report.md`.
 - gate 변화: 없음(코드 변경 없음).
 
-
 ## 2026-10-03 · uncommitted · fix: preserve live Cell phase cancellation through Skill adapter
 - Change: forward the existing OMX coordinator active_phase_id through both Skill integration layers so ActionRunner exact-phase cancel reaches the journaled goal. Reject a mismatched phase and retain separate phase cancel and parent terminal meanings.
 - Evidence: red reproduction on real ActionApi/ActionRunner/ActionStore before the fix; focused provider/Skill/API/Cell/PickPlaceRunner regression 68 passed. Independent review: 4 passed, no Critical/Important findings. Quick tier: 96 passed / 25 freshness warnings.
 - Gate: SOURCE/LOCAL only. Full runtime composition, Cell two-ledger replay and ROS-SIM remain unproven.
 
-
 ## 2026-10-03 · uncommitted · feat: compose Cell Skill with actual OMX planner and phase runner
 - Change: construct existing PickPlaceRunner with Skill-bound analytic planning and accepted profile/state/geometry; preserve existing owner ports, grant-scoped phase gates, local stop fencing and exact cancellation. Advance remains an explicit local workflow operation.
 - Evidence: missing-factory red regression; focused actual planner/API/runner/journal/Skill/boundary tests 75 passed. Four phases and denied transfer covered; persisted local replay does not submit again, and unresolved parent blocks rearm. Full OMX adapter plus provider/Skill/boundaries: 353 passed / 5 skipped. Quick tier: 96 passed / 25 freshness warnings. Independent review: 6 passed, no Critical/Important findings.
 - Gate: SOURCE/LOCAL only; no second owner or ROS loop added. Parent terminal workflow, Fleet/OMX two-ledger replay and ROS-SIM remain open.
-
 
 ## 2026-10-03 · uncommitted · docs: D-426 Fleet–Gazebo 실제 통신·주행 수용 설계
 
@@ -4645,7 +4640,6 @@ osy-d395-s1d\`.
 - 증거: 작성 전 문서 계약 81 passed. 변경 후 문서 계약·quick tier 120 passed/25 기존 freshness warnings; harness lint와 색인/BOM/CRLF/부분 대체 링크를 확인. 한글이 손상된 신규 로그·색인 행은 UTF-8로 정정하고 검증을 재실행.
 - gate 변화: 없음 — 구조 결정 수용과 구현·설치·DEVICE/FIELD 수용은 별개.
 
-
 ## 2026-10-03 · uncommitted · test: verify real Cell runtime two-ledger replay
 - Change: exercise canonical Cell grants through actual analytic Skill, ActionApi, durable phase/workflow journals and Fleet/OMX stores. Confirm independent goal gating and claim release; lost/expired submit recovery preserves identity and restart-stop HOLD without extra motion.
 - Evidence: related replay/dispatcher/public-goal regression 47 passed; independent review 3 passed, no remaining Critical/Important findings. Restart-stop mutation failed at expected HOLD versus ACTION_SUCCEEDED; original source restored byte-for-byte. Quick tier plus new replay: 99 passed / 25 existing freshness warnings; harness lint 0 errors / 25 warnings.
@@ -4656,7 +4650,6 @@ osy-d395-s1d\`.
 - 증거: 계획의 기존 파일 경로·공개 route·Fleet 진입 문서를 소스와 대조. 문서 계약·quick tier 120 passed/25 기존 freshness warnings; 로그·색인 추가 후 문서 회귀 27 passed, harness lint 0 errors/25 기존 warnings. 신규 로그 행의 줄바꿈을 정리하고 diff 검사를 통과.
 - gate 변화: 없음 — 계획만 작성; 코드·폴더·설치·DEVICE/FIELD 이전은 시작하지 않음.
 
-
 ## 2026-10-03 · uncommitted · feat: bind actual palletizing compiler at gateway composition
 - Change: adapt canonical Recipe/Cell/Job/PlanBundle through the app-supplied Fleet compiler port; declare actual process/execution wheel dependencies. Original18-transfer demo crosses public proposal/resolve/operator admit and actual Skill/API/two ledgers. Four box transfers complete; original thin sheet is refused without motion and claims remain.
 - Evidence: new compiler/public-ingress plus prior replay 9 passed. Thin-sheet safety mutation fails HOLD versus ACTION_SUCCEEDED; planner restored byte-for-byte. Four real wheels built/installed in X: venv; imports verified site-packages, 18 transfers/two markers and pip check 0. Final compiler/API/replay/compatibility/install/boundary regression 45 passed; independent review 14 passed, no Critical/Important findings. Quick tier 96 passed / 25 existing freshness warnings; harness lint 0 errors / 25 warnings; new adapter flake8 passes.
@@ -4666,7 +4659,6 @@ osy-d395-s1d\`.
 - 변경: refactor/ui-ownership worktree에서 화면/API/자격 audience/상태 정본/writer 표와 소스/설치/caller/목표 경로 표를 작성. 과거 web-transport의 미착지 구현과 충돌은 보존하고 재사용·의존 범위를 기록. Task 0 상태와 실제 teleop 경로 예시를 정렬.
 - 증거: 역할/shared/Robot/Pilot/API/Fleet 별도 기준선 합계 1939 passed/139 skipped; 각 known-failure 판정 0 new/0 known. Python 3.14.5, Node v24.15.0 Windows 호스트. 로그·pytest 임시 폴더는 X:/DevTemp/rosy-ui-ownership/baseline.
 - gate 변화: Task 0 SOURCE 기준선만 완료. 코드·폴더 이전 없음; skip·브라우저·installed-only·ROS-SIM·DEVICE/FIELD는 미수용.
-
 
 ## 2026-10-03 · uncommitted · test: align compiler and replay with current Cell execution path
 - Change: preserve incoming C4b owner/Fleet changes and port host replay to StepJobDispatcher, simulation identity, persistent journal identity and stored item_at_pose predicates. Reuse canonical process job_document and expose recipe geometry at the app compiler port. Producers report model-centre observations without satisfied claims.
@@ -4689,12 +4681,10 @@ osy-d395-s1d\`.
 - 증거: Node 18 passed, static/ownership/manifest 재검사 53 passed. 화면 잠금 변이는 독점 서버에서 red, bytes 복원 후 Chromium session/origin 3 passed.
 - gate 변화: Task 3 HTTP 체크포인트. 종료/토큰 교체 scope와 Tasks 4–13은 미완료.
 
-
 ## 2026-10-03 · uncommitted · feat: connect Cell owner phase progression and semantic completion
 - Change: bind existing accepted Cell owner to durable Skill workflow and add advance_pending on its live in-memory executions. Use the existing ROS node timer; preserve one owner, exact cancel, terminal cleanup and restart-stop closure. Correct simulation gripper generation and OPEN/contact classification.
 - Evidence: missing advance_pending/readback-generation red; semantic opt-in removal mutation fails ACCEPTED versus SUCCEEDED, original source restored byte-for-byte. Owner/provider/replay 38 passed; owner/compiler/boundary integration 23 passed. Independent review 38 passed and updated restart suite 5 passed, no Critical/Important findings. Production flake8 passes. Quick tier 96 passed / 26 existing freshness warnings; harness lint 0 errors / 26 warnings. Eight actual wheels built/installed in X: venv; owner/workflow imports verified site-packages with no ROS import, pip check 0. Updated restart suite 5 passed.
 - Gate: SOURCE/LOCAL only. ROS/sensor ports are host substitutes; live ROS timer, Fleet fence/seat integration, accepted thin-sheet geometry and whole recipe Gazebo remain open. No automatic rearm/replay or physical dispatch added.
-
 
 ## 2026-10-03 · uncommitted · fix: install canonical OMX geometry for Cell owner composition
 - Change: install the existing canonical kinematics YAML under share/omx_adapter/config. Default loading resolves the source asset, installed Python prefix or lazy ament package share; explicit paths stay exact and missing assets refuse. No geometry values or approval hashes changed.
@@ -4720,26 +4710,22 @@ osy-d395-s1d\`.
 - gate 변화: Tasks 0–3 SOURCE/LOCAL 완료. 전체 목표는 계속 실행하며 Tasks 4–13, 기존 browser 20개 실패, D-413 의존/DEVICE gate를 남김. 폴더 이동은 아직 실제 디스크에 없으며 사용자가 당분간 기존 경로 작업을 지정함.
 - 추가 증거: map-fit wiring 검사 수정 후 Fleet 전체 1585 passed/7 skipped. lint 0 errors/26 warnings. 선택 운용 browser 11 passed/1 기존 OPEN 실패/55 deselected이며 전체 무실패로 표현하지 않음.
 
-
 ## 2026-10-03 · uncommitted · feat: read live Fleet fence on the simulation Cell owner
 - Change: replace the entrypoint unconditional Fleet-current callback with uncached authenticated GET /api/fleet/dispatch-control on an explicitly configured literal loopback endpoint. Require a separately provisioned viewer secret before ROS loads. Direct HTTP avoids proxies/redirects; status, 8 KiB body, strict generation types and finite JSON checks refuse on uncertainty. Existing Action/stop/rearm stays on UDS. Offload async Fleet rearm I/O so the event loop can answer the owner's reverse readback; preserve operator guard and rollback.
 - Evidence: actual loopback Fleet server plus persistent Fleet/owner stores reproduced LOCAL_WORKCELL_REARM_FAILED before offload and passed after. Offload-removal mutation fails again; original bytes restored. Final readback suite 18 passed; combined Fleet stop/rearm, owner/provider/replay/boundaries regression 96 passed before the additional finite-JSON case. Independent review 48 passed / 1 skipped and final readback 18 passed, no Critical/Important findings. Production flake8 passes. Final agent wheel rebuilt and force-installed from X: copy; site-packages adapter reads changed loopback state without caching, pip check passes.
 - Final checks: quick tier 96 passed / 26 existing warnings; harness lint 0 errors / 26 warnings. Entry configuration regression guards the ROS import directly and passed.
 - Gate: SOURCE/LOCAL only. Host HTTP is real; ROS and UDS credential transport are substituted. Live ROS/UDS (a)-(i), seat exclusion, thin-sheet handling and full two-layer/two-pallet vendor Gazebo acceptance remain open. Socket timeout bounds inactivity, not an end-to-end stop deadline. No viewer credential registration, service deployment, physical enablement or push performed.
 
-
 ## 2026-10-03 · uncommitted · fix: retain the UDS owner after a caller disconnects
 - Change: real Linux Fleet HTTP-to-UDS tests derive peer UID from SO_PEERCRED, assert 0660 and wait for identity readback. A closed caller now ends only its connection; the owner and durable journal remain live without replay.
 - Evidence: deterministic disconnect regression failed with BrokenPipeError before fix 6fab54172. Windows focused 44 passed / 2 skipped; adapter/owner/readback 377 passed / 7 skipped; production flake8 passed. Broad Linux ROS 28 passed / 2 failed, no server thread exception. Existing UDS .5 s timeout also failed on main; slow ROS feedback freshness remains unresolved.
 - Gate: partial Linux transport proof only; broad Linux suite is not green. See docs/validation/cell-fleet-uds-2026-10-03/README.md. G7/G9, ROS Cell composition, thin sheets and full two-layer/two-pallet Gazebo acceptance remain open. No deploy, credential registration, physical enablement or push.
-
 
 ## 2026-10-03 · uncommitted · docs(adr): propose D-431 NCNN inference with OpenCV
 - Change: target NCNN for Pi YOLO object_det, keep OpenCV/NumPy processing, distinguish weight reuse from numerical identity, require backend/manifest/delivery/device gates; lane_seg has a separate migration gate. D-430 is reserved by the existing safety ADR worktree.
 - Evidence: official Ultralytics NCNN/Pi and Tencent OpenCV interoperability references; current ONNX-only exporter/loader and cv2 source inspected.
 - Gate: documentation only. No actual trained-model NCNN conversion, ARM64 installation or device inference performed.
 - Validation: network/harness contracts 82 passed, 1 history-lint test deselected; standalone full harness lint 0 errors / 26 existing staleness warnings. Initial new-record encoding failure corrected and regenerated before final checks.
-
 
 ## 2026-10-03 · uncommitted · docs(plan): schedule D-431 NCNN migration
 - Change: user-approved D-431 architecture marked Accepted; T0-T7 plan registered for model/baseline, manifest, adapter, export/parity, delivery/rollback, ARM64 dependency, device acceptance, and independent lane-model evaluation.
@@ -4758,7 +4744,6 @@ osy-d395-s1d\`.
 - 변경: 모든 앱·장치의 발견/호환성/승인/세션/재연결 책임을 공통 계약으로 기록. 개발 모드 코드 생략, 운영 코드 승인 확장, Fleet→CORE 인증 전환과 현 pin 예외, 트래픽/자원 제한, 역할별 이행 순서·실 AP 수용 기준을 명시. D-431은 다른 브랜치의 미착지 ADR로 gap 등록.
 - 증거: 현재 mDNS/NSD·FleetAgent·주소 변경·개발 인증 소스 대조와 기존 ADR 교차 검토. 검증 명령: harness generate/lint, test_network_topology_contracts.py 및 test_harness_contracts.py. 최초 검색·DHCP 변경·실 AP 트래픽 수용은 후속 단계.
 - gate 변화: 구조 결정만 Accepted. 개발 모드·wire·runtime·credential 설치는 변경하지 않음. ARTIFACT/DEVICE/FIELD 수용 없음.
-
 
 ## 2026-10-03 · uncommitted · docs: automatic-update state bootstrap plan
 
@@ -4968,12 +4953,10 @@ osy-d395-s1d\`.
 - 증거: 누락 회귀 RED 1 failed, safety separation·trailer 검사 12 passed. 독립 리뷰에서 소스 차단 사항 없음. docs/validation/d427-source-migration/charging-safety-tag-2026-10-04.md.
 - gate 변화: 없음. safety 분류만 강화했으며 실기·FIELD 수용은 별도다.
 
-
 ## 2026-10-04 · uncommitted · D-442 POLICY 운영 설정 guard
 - 변경: tracked OMX 운영 코드·YAML의 allowed_owners 선언과 기본값에서 learned_policy를 금지하는 구조 시험을 추가했다. KNOWN_OWNERS 이름 예약은 유지한다.
 - 증거: 실제 pilot owner 목록, ArmCommandConfig annotated 기본값, 셀 annotated 상수에 금지 값을 주입하면 각각 실패했다. 원본 복원 후 1 passed, 독립 리뷰 APPROVE. docs/validation/d427-source-migration/omx-policy-config-2026-10-04.md.
 - gate 변화: 없음. 정적 선언만 검사하며 동적 overlay·런타임 엔벌로프 admission은 후속이다.
-
 
 ## 2026-10-04 · uncommitted · D-442 U3 owner 선점과 named 운영 복구
 
@@ -5029,7 +5012,6 @@ osy-d395-s1d\`.
 - 증거: push4 빠른검사2 failed/457 passed라 push는 거부됐다. 수정 후30 passed·flake0, robot 설정문자열은 계속 검출한다. docs/validation/d427-source-migration/push4-fast-gate-corrections-2026-10-04.md.
 - gate 변화: 없음. 다음 SHA 강제검사·CI·artifact·device는 별도 gate다.
 
-
 ## 2026-10-04 · uncommitted · fix: D-427 push5 통합 게이트 정합성
 
 - 변경: 운영 시나리오에서 MANUAL 해제를 실제 IDLE API로 명시했다. Fleet 재명령 문구는 의도를 한국어로 표시하고, CORE image closure는 정확한 ROS 열 개와 계약 wheel 두 개를 분리 검증한다. 운영 MANUAL·신호 감독 가드는 바꾸지 않았다.
@@ -5037,12 +5019,12 @@ osy-d395-s1d\`.
 - 독립 리뷰: d427_safety_review APPROVE source/host, 별도 Python 22 passed·Node 3 passed. Fleet +12 줄은 기존 +150·split 판정 안에 있고 예산·allowlist를 늘리지 않았다.
 - gate 변화: SOURCE/로컬 증거만 추가한다. 새 pre-push·원격 CI·ARM64·SD·기기·현장 수락은 후속이다.
 
-
 ## 2026-10-04 · uncommitted · fix: Windows SSH timeout 종료 경합
 
 - 변경: 두 Windows 검증 helper에서 taskkill 오류는 추적 프로세스 종료가 확인된 때만 시간 초과로 유지한다. 살아 있는 프로세스의 native 오류와 silent nonzero는 다시 throw하며 HOLD·재실행 금지를 보존한다.
 - 증거: Windows 원본 검증과 종료 경합 시험 22 passed; 독립 실행 22 passed, APPROVE. docs/validation/d427-source-migration/windows-ssh-timeout-cleanup-2026-10-04.md.
 - gate 변화: SOURCE/LOCAL Windows PowerShell 5.1. 기존 push gate는 1 failed이며 수정 후보 전체 gate·CI·ARM64·DEVICE·FIELD는 별도 검증한다.
+
 ## 2026-10-04 · uncommitted · docs(cell): 팔레타이징 앱 현황과 완료 목표
 
 - 변경: 기준 main f32643ffd의 코어·Fleet·OMX·웹 표면·기존 계획을 대조하고 현황 보고서와 D-446 Proposed 초안을 작성했다. 앱 LOCAL, 박스 전용 ROS-SIM, 슬립시트 포함 원래 C6를 구분해 순서·책임·수용 증거를 명시했다. 다른 브랜치와 공유 main에서 선점한 ADR 번호는 gaps로 기록했다.
@@ -5060,6 +5042,7 @@ osy-d395-s1d\`.
 - 변경: D-446과 현황 보고서에 Isaac 추가 검토를 연결했다. 모델 PC 한 대 주행→Nav2→두 대 Fleet→이동 후 적재를 분리하고, 고정 Cell 좌표를 이동 작업에 그대로 쓰지 않도록 검증 항목을 기록했다. 전체 앱·Gazebo·Isaac 개발은 아직 미완료임을 명시했다.
 - 증거: Isaac helper 10 passed/1 skipped, 소스의 6.1 importer·단일 로봇 그래프와 D-434의 5.1 기록, 기존 CORE/Nav2 명령 경계 및 NVIDIA 5.1 Navigation/Clock 공식 문서를 대조했다. 실제 모델 PC 접속·주행 결과는 없다.
 - gate 변화: 없음. 추가 검토·목표 문서이며 구현·runtime 승격·실물 구동은 진행하지 않았다.
+
 ## 2026-10-04 · uncommitted · docs: Cell and Isaac implementation progress
 
 - 변경: 사용자 구현 요청에 따라 D-450 실행 계획과 API Ref v1.90 Cell workspace 요청 계약을 추가했다. 기존 proposal/원장/승인 경계를 보존한다. 모델 PC에서 ROS/GPU/Isaac 버전과 격리 실행 prerequisites를 확인했다.
@@ -5071,6 +5054,7 @@ osy-d395-s1d\`.
 - 변경: main의 모델 PC 자동 갱신 ADR과 번호가 충돌해 팔레타이징 목표를 D-450으로 옮겼다. 이전 로그의 D-446은 당시 번호이며 append-only 이력을 보존한다. 현재 계획·progress·API 참조는 D-450으로 연결한다.
 - 증거: 브라우저/API 19 passed, optional import 회귀 수정 뒤 API 8 passed, fast gate 462 passed/2 skipped/12 기존 warnings. 독립 리뷰가 Cell fence와 CORE API 버전 설명만 변경된 것을 확인했다. Isaac host 33 passed/1 skipped와 모델 PC graph 관측은 별도 validation 문서에 기록했다.
 - gate 변화: SOURCE/LOCAL 부분 증거만 추가했다. Isaac 정상 종료·실제 주행, Gazebo OMX 격리 실행 및 G1 전체 기능 수용은 미완료다.
+
 ## 2026-10-04 · uncommitted · docs(plan): 웹 게이트 사다리·Fleet 승격 ADR 계획
 
 - 변경: `docs/plans/2026-10-04-web-gate-ladder-fleet-readiness-adr-plan.md` 추가. dashboard/pilot ARTIFACT·pilot DEVICE(페달 정지 계약)·fleet ROS-SIM(D-87→D-426)의 게이트를 release 이미지 관측 → 실기 증거 사다리로 묶고, Fleet 사이트 시드 승격과 중앙(8081) 착수 전제, 수용됨-미구현(D-368·D-361·WS 전환) 순서를 정했다. 신규 ADR D-439(웹 표면 게이트는 release 이미지를 탄다)·D-440(Fleet 승격 경로와 중앙 착수 전제) 배정표를 포함하되 착지는 이 계획 승인 뒤로 미뤘다. origin/main과의 분기(ahead 45/behind 91)와 D-427 이동(follow-ups P1)을 선행으로 명시했다.
@@ -5234,11 +5218,13 @@ osy-d395-s1d\`.
 - 변경: D-439 공용 UI와 D-432 발견·발열 대응을 최신 D-427 구조로 통합했다. 독립 검토한 두 부모의 정지 권한·신호 감독·복구 계약을 보존하고 Pilot Android 입력, 운영 도구 및 registry 경로를 맞췄다. CI ArUco 4.6 경계 오류는 위치 허용치를 유지한 채 실제 backend에서 수정했다.
 - 증거: migration/harness/구조 110 PASS, 나머지 quick 370 PASS/2 Linux SKIP, ArUco 동일 범위 실제 4.6/5.0 각 45 PASS, Pilot 30 JVM PASS 및 Cam 341 JVM PASS. 기존 설치본과 새 APK 인증서가 일치하고 무선 ADB update 둘 다 성공했다. 첫 실패와 재검사 로그, 독립 SPEC/QUALITY·안전 검토를 보존했다. 상세: docs/validation/ui-release-integration-2026-10-04/README.md.
 - gate 변화: SOURCE/LOCAL scoped 증거 갱신. 원격 CI·정식 이미지 배포·현재 기기 화면 및 현장 수용은 별도 진행 중이며 올려 기록하지 않는다.
+
 ## 2026-10-04 · uncommitted · fix: CI Gazebo 제외 파일의 수명
 
 - 변경: CI colcon 빌드에서만 만든 Gazebo `COLCON_IGNORE`는 성공·실패 종료 때 제거한다. 기존 제외 파일은 보존하여 빌드 뒤 소스 구조 검사가 실제 패키지를 계속 볼 수 있게 했다.
 - 증거: main bcf1010b의 CI 37174760531에서 구조 시험 두 건이 임시 제외 파일 때문에 실패했다. 실제 Bash 빌드 단계 회귀는 수정 전 2 failed/2 passed, 수정 후 관련 시험 12 passed다. 성공·종료 코드 42에서 빌드 중 제외와 종료 뒤 복원, 기존 파일 bytes 보존을 검증했다.
 - gate 변화: SOURCE/LOCAL 증거만 추가한다. 원격 CI 재검증과 서명 후보의 실제 제어 PC 설치·HTTPS·타이머 수락은 아직 남아 있다.
+
 ## 2026-10-04 · uncommitted · D-446 remote integration after source migration
 
 - Change: Rebase model-PC signed updates onto remote main; preserve committed records and use middleware/perception and contracts/foundation source closure.
@@ -5250,6 +5236,7 @@ osy-d395-s1d\`.
 - Change: Protect uncommitted entrypoint edits without blocking an approved update from a clean older checkout.
 - Evidence: Regression failed before the fix. Windows 14 passed, 21 Linux-only skips; model-PC Linux 35 passed.
 - gate 변화: None. Remote CI and migrated-source device activation remain separate.
+
 ## 2026-10-04 · uncommitted · feat(power): fresh battery evidence and idle saving
 
 - 변경: 반복 저배터리 표본의 wake를 단계 변화로 제한하여 기존 IDLE/STANDBY 타이머가 동작한다. Viewer GET /api/v1/power/health와 공유 typed 응답에 배터리·충전 확인 age, 정책 상한·wake 근거, shutdown 요청, 진단 요약을 제공한다. API Ref v1.92, envelope 1.0 유지.
@@ -5261,6 +5248,7 @@ osy-d395-s1d\`.
 - 변경: 정상 IDLE/STANDBY 기준을 600/1800초로 늘리고 warning60/300, critical/deep30/120초와 min을 취한다. YAML override·API effective timers에 연결한다. 기존 이동·정보 hold·disabled와 배터리 정지/종료 권한을 유지한다.
 - 증거: 주입 시계·설정 parser RED3 failed, 전원/배터리/bridge GREEN180 passed. 구조 재판정은 docs/plans/2026-10-04-power-health-and-wake.md에 기록한다.
 - gate 변화: SOURCE/LOCAL. 기기 소비전력·물리 wake·배포 검증은 별도다.
+
 ## 2026-10-04 · uncommitted · verify(D-441): 최초 설치와 실제 후속 자동 갱신 확인
 
 - 변경: 검토된 93f66072c 후보를 일회성 설치 대상으로 고정하고, 이미 받은 후보를 서명·manifest 해시 검증 후 재사용했다. 기존 등록 키로 서명한 최초 설치와 후속 a24b6ca8a 후보의 자동 갱신을 완료했다.
@@ -5272,7 +5260,6 @@ osy-d395-s1d\`.
 - 변경: 과거 실제 영상 2개/24표본/2모델 48판정(마스크 재실행 별도)과 native 펌웨어·모델 변경 기록 감사를 docs/validation/road-video-and-update-records-2026-10-04에 기록했다. 원본 미디어는 비공개로 보존한다.
 - 증거: 중앙 원 흰 경계 검출, 바닥/벽 오분류와 API/UI 이력 연결 공백을 분리했다. updater·모델 계약 372 passed/25 skipped; 영상 정합성 및 독립 육안 검토 완료. 문서 계약 98 passed/1 skipped; harness lint 0 errors/16 기존 검증 경고.
 - gate 변화: 없음. 과거 영상 재생과 읽기 전용 장치 증거이며 실주행·신규 배포·모델 승격·반복 재부팅 원인 확정은 아니다.
-
 
 ## 2026-10-04 · uncommitted · D-427 wave5 cleanup and CI compatibility
 
@@ -5298,13 +5285,11 @@ osy-d395-s1d\`.
 - Evidence: Perception marker/dock suites 32 passed; architecture suites 51 passed. Independent review found no production safety regression; two stale tuning assertions were corrected and rerun. Fast contract validation is recorded in the integration receipt.
 - gate 변화: None. This Git integration does not activate devices or establish release/field acceptance.
 
-
 ## 2026-10-04 · uncommitted · D-432 Pilot failure retry and Cam thermal screen sleep
 
 - 변경: Pilot 연결 시 목록 cache를 무효화하여 실패·취소 후 현재 TTL·충돌·발열 정책에 따라 카드를 다시 구성한다. HTTP와 secure 후보의 오류 안내를 구분한다. 기존 신뢰·가입·CORE 명령 권한은 유지한다. D-432에 결정과 후속 실기 기록을 추가했다.
 - 증거: 독립 source SPEC·QUALITY PASS, Pilot JVM46 PASS·동일 서명·설치 hash 일치, 실제 실패→같은 카드 직접 재시도→목록 복귀 PASS. Cam thermal status3/Dozing에서 깨우기 없이 수신 seq2126→2132·HTTP200/200·실제 밝은 영상 확인. docs/validation/ui-release-integration-2026-10-04/live-followup.md.
 - gate 변화: 없음. 로봇 SSH·CORE TCP는 여전히 시간 초과/경로 오류이며 정상 연결과 native 배포는 미검증이다. 기존 사이트 수신기를 이번 통합 revision 배포 수락으로 기록하지 않는다. 최종 원격 push·CI·서명 후보 전달과 인증된 전체 웹 화면 확인은 후속이다.
-
 
 ## 2026-10-04 · uncommitted · D-359 responsive header and owned mode confirmation
 
@@ -5323,6 +5308,7 @@ osy-d395-s1d\`.
 - 변경: 승인 논리 이름으로 매 관찰·배포 전에 주소를 해석한다. 실제 SSH listener만 광고하고 종료·손실 시 소유 광고 child를 회수한다. CLI doctor도 같은 profile을 사용한다. Dock·Signal active consumer는 충전 판단·watchdog/credential 경계를 확인해 재지정하지 않는다.
 - 증거: 모델199 PASS/22 기존 platform SKIP/NEW0, 독립 SPEC·Quality·Safety source PASS. docs/validation/network-peer-discovery-2026-10-04/source-checkpoint.md.
 - gate 변화: SOURCE/LOCAL focused; 실제 모델 PC 설치·광고·다른 망 연결·서명 배포는 별도 미검증.
+
 ## 2026-10-04 · uncommitted · D-427 wave5 remote CI and ARM64 artifacts
 
 - 변경: 소스 1722ca6ec6d7의 실제 원격 push, 전체 GitHub CI, native/SD 035 산출물 검증과 남은 수용 조건을 기록했다. 제품 runtime·계약·manifest·시험 판정은 바꾸지 않았다.
@@ -5335,13 +5321,11 @@ osy-d395-s1d\`.
 - 증거: 원본 updater 신규 사례 10개 RED, 원본 signer CI 사례 8개 RED; 수정본 격리 Linux 108 passed/0 skipped. 별도 생성 후 미실행 컨테이너의 Compose hash 일치와 명령 변경 감지를 실측했다. 현장 서비스는 전환하지 않았다.
 - gate 변화: 없음. 신규 설치·후보 CI·실제 프레임 수신은 별도 운영 검증이다.
 
-
 ## 2026-10-04 · uncommitted · fix: resolve hook installation through Git
 
 - Change: Install the existing pre-push gate at the path Git resolves for linked worktrees and default, relative or absolute core.hooksPath. Preserve hook contents and repository configuration/refs.
 - Evidence: Three real linked-worktree installer regressions failed before correction and passed afterwards on Windows and model-PC Linux. Independent review caught hidden-untracked Git configuration in the model-PC code guard; both affected status calls now request all untracked files.
 - gate 변화: None. Tests install only in disposable repositories; the shared checkout hook and device runtime are unchanged.
-
 
 ## 2026-10-04 · uncommitted · fix: install Windows hooks with executable LF line endings
 
@@ -5354,7 +5338,6 @@ osy-d395-s1d\`.
 - 변경: 구조 편집 계획과 작업자 삽입·확인 후 다음 층 진행 계획을 추가하고 D-450에 사용자 선택을 부록으로 남겼다. 수동 슬립시트는 canonical checkpoint로 정의하며 일반 resume 우회를 금지한다.
 - 증거: 구조 편집 Chromium 및 Cell API/store/job 23 통과, 독립 UI 검토 승인. 수동 checkpoint는 설계이며 구현·ROS-SIM·물리 작업자 접근 증거는 NOT_RUN이다.
 - gate 변화: G1 초안 편집만 보강했다. G1 티칭·G2 전체 fault matrix·G3·Isaac 실제 주행 수용은 미완료다.
-
 
 ## 2026-10-04 · uncommitted · D-427 wave5 signed native and actual offline SD readback
 
@@ -5599,13 +5582,11 @@ osy-d395-s1d\`.
 - Gate: User-path data preparation and qualification only. Sudo import, service-user access, own-key enrollment, doctor, timer and real shadow/rollback remain pending; no motion or HOLD release.
 - Additional evidence: Independent review caught verifier reuse/extra-member gaps. Separate v2 uses copied input/returned report and full snapshot path-set/hash checks; actual nativev2 exit0/PASS/reasons empty. Corrected archive scanner rejects every link/special entry. Source review APPROVE; originalv1 retained.
 
-
 ## 2026-10-04 · uncommitted · model-PC admin data import candidate
 
 - Change: Prepared private pinned source+data installation wrapper; root staging, skeleton quarantine, bottom-up grants and store rename repair reviewed copy-through-service-owned-directory race.
 - Evidence: Independent candidate review approved; actual model-PC verify-only5980files exit0; native non-root install exit1 before input/system writes; units not-found/inactive. Isolated Linux publication fixture reproduces copy2-preserved700/600 access gap. See validation/model-watch-admin-data-import-2026-10-04.md.
 - Gate: Candidate source approval only. No sudo install, timer activation, HOLD release, robot delivery or motion. Producer/store permission binding and key/doctor/owner/Fleet/field acceptance remain pending.
-
 
 ## 2026-10-04 · uncommitted · shared store publication permissions
 
@@ -5613,19 +5594,18 @@ osy-d395-s1d\`.
 - Evidence: Native model-PC corrected RED4fail, evalRED1fail, linkRED2fail, retryRED1fail; final5suites59pass0skip. See validation/shared-store-publication-2026-10-04.md.
 - Gate: Nonprivileged source/Linux evidence. Actual service UID access, membership/config binding, updated pinned installer source, system service, robot HOLD and owner/Fleet/field gates remain pending.
 
-
 ## 2026-10-04 · uncommitted · model-watch installer CRLF config parsing
 
 - Change: cfg_value removes carriage returns before quote/comment trimming, so LF and CRLF backend/store values select the same installation branch.
 - Evidence: Native Linux RED2fail4pass for plain/quoted CRLF; after fix LF/CRLF/plain/quoted/comment regressions and existing install/unit suites23pass. Independent source review requested. V2 source881file archive and CPUintake pass did not establish installation closure: dry-run exit0 omitted store/drop-in before this fix.
 - Gate: No privileged install or timer activation. Existing v2 bundle preserved; corrected committed source must be repackaged and reviewed before administrator request supersedes it. Producer config remains an inactive candidate; actual service UID/group/doctor/robot HOLD gates pending.
 
-
 ## 2026-10-04 · uncommitted · model-PC source v3 and producer candidate
 
 - Change: Prepared pinned current-path source882files with shared publication and CRLF installer fixes; updated private administrator request. Candidate producer config rebinds only store/gate/replay, preserving originals.
 - Evidence: V2CPUintake126framesPASS; v2dryrun lacked store dueCRLF and was withheld. V3exact882manifest, dryrunstore/dropin verified, native150pass0skip, runtime484files byte-equal CPUproof linkage, four unitguards mutation0, verify-only5980systemwrites0. Independent v3 review approved. See validation/model-watch-source-refresh-2026-10-04.md.
 - Gate: Installed service/timer stillnot-found/inactive. No sudo, config activation, timer, robot delivery or motion. Service UID/group/doctor/HOLD/shadow/rollback and humanlabels/policy-owner/Fleet/device/field remain pending.
+
 ## 2026-10-04 · uncommitted · D-452 승인 다른 망 경로와 선택 CLI
 
 - 변경: CORE는 명시적 승인 WSS directory를 광고 부재일 때만 사용하고 기존 TLS SNI/CA/health를 먼저 검증한다. 충돌·인증 실패에 우회하지 않는다. 모델 doctor는 전체 roster 문법 검증 후 선택한 논리 장비만 해석해 다른 offline peer의 영향에서 분리한다.
@@ -5697,6 +5677,7 @@ osy-d395-s1d\`.
 - gate 변화: 없음. segmentation 승인·학습 qualification·GPU job 실행·정책 승격·장치·물리 모바일·현장 수용은 주장하지 않는다. 착지·push·배포는 수행하지 않았다.
 - 추가 검사: harness/affected 91 passed/3 failed에서 생성 색인을 갱신한 뒤 실패 대상과 최종 backend를 다시 검사했다. 10 passed/2 failed이며 두 실패는 clean baseline에 재현된 deploy/logs.md 인코딩/heading 및 전체 lint다. known_failures.py는 미등록 기존 실패를 2 NEW로 보고하므로 전체 green을 주장하지 않는다. D-457은 동료 fix/site-markerless-live-map에 예약된 본문이어서 이 브랜치 adr_gaps에 임시 예약 이유를 기록했다. 실제 4개 결과 연결과 서버 재시작 후 사진 state/연결 목록 동일, PC/모바일 viewport page error 0을 확인했다.
 - 최종 확인: shared_controls 24 passed/2 failed는 기존 baseline의 cell-document-editor.js field와 peer-picker.js disabled reason 두 건이며 이번 학습 표면의 신규 오류는 없다. 현재 운영 state로 새 receiver export를 만들어 승인 2장만 내보냈고, 제외 source 2와 미분류 pending source 3은 학습 라벨에서 제외했다. COMPLETE/manifest 모든 파일 hash·byte 수와 검수 state 불변을 확인했다. 초기 3장 승인은 역사적 import/export에 보존되며 현재 4번 재검수 대기를 승인으로 되돌리지 않았다.
+
 ## 2026-10-04 · uncommitted · docs(pairing): D-456 LAN 수신 승인과 지속 페어링
 
 - 변경: 사용자는 상대 화면 승인 기본·QR/코드 보조·LAN 우선을 선택했다. 기존 승인/SQLite 보존과 실제 공백(Pilot IP 슬롯·실패 삭제, CORE 일반 상대 승인·지속 신원 증명/세션 갱신 미구현)을 분리해 D-456에 기록했다.
@@ -5710,6 +5691,37 @@ osy-d395-s1d\`.
 - gate 변화: 없음. 로컬 병합이며 push·배포·장치 수용은 별도다.
 
 - 동기화 검증: 관련 검사 196 passed/1 failed에서 main의 Pilot 다시 찾기 버튼 선언을 공용 helper 계약에 맞게 명시했다. 해당 계약과 생성 정합 2 passed; Pilot 실 서버 브라우저 72건은 NOT_RUN/skipped다. known_failures 신규 0. 이전 baseline 인코딩/field 오류는 최신 main에서 해소되어 재현되지 않았다.
+
+## 2026-10-04 · uncommitted · docs(d427): wave 5 개별 게이트와 브라우저 후속 증거
+
+- 변경: `docs/validation/d427-source-migration/wave5-named-gate-coverage-2026-10-04.md`에 실제 host build·Cam·lookup·Docker telemetry·브라우저 원본 실패/후속 시험과 미검증 범위를 동결 기록했다.
+- 증거: 전체 browser 727b60c63는 314 passed/1 failed·NEW 1. 원인을 분리한 카메라 panel 후속은 21 passed·NEW 0. AMD64 Docker 두 모델 각각 odometry 64개·증가 clock 10개·native EXIT0·cleanup PASS는 독립 확인했다.
+- gate 변화: 각 명시 범위만 SOURCE/LOCAL 증거다. 전체 browser PASS·lane·ARM OCI·중간 wave별 artifact·발행·기기·FIELD 완료로 승격하지 않는다. 기존 서명 1722/035에 새 UI 수정이 포함됐다고 표현하지 않는다.
+
+## 2026-10-04 · uncommitted · audit(d427): imported journal encoding loss
+
+- 변경: 429e13b83의 손상 journal 하나를 UNKNOWN으로 기록하고 정확한 원문·치환 해시와 원문 보존 위치를 별도 검증 문서에 남겼다. 읽을 수 없는 기술 내용을 복원하지 않았다.
+- 증거: 역사 블록 RED 뒤 source/target 변조·삭제·peer 기록 손실·새 corruption 거부 포함 focused 111 passed/1 skipped, NEW 0, lint 오류 0. 원문 바이트와 다른 기록은 보존한다.
+- gate 변화: 해당 G2 기록으로 수용을 부여하지 않는다. SOURCE/LOCAL 감사 메커니즘 검증만 기록한다.
+
+## 2026-10-04 · uncommitted · audit(d427): passive lane and release provenance
+
+- 변경: 새 dated 증거에 수동 명령 없는 AMD64 lane camera 관측과 기존 035 출처 충돌을 기록했다. 과거 frozen 결과는 보존한다.
+- 증거: Docker native EXIT0, odometry 10, advancing clock 10, image 4, valid visible lane 2, 수신 zero Twist 16, exact cleanup PASS 및 독립 리뷰 APPROVE. 전체 Chromium b657은 314 passed/1 failed; unchanged entry module 후속은 14 passed.
+- gate 변화: passive host scope만 PASS. closed-loop 주행·ARM·DEVICE/FIELD·전체 browser PASS·새 payload 발행은 미확정이다. 실제 035와 로컬 signed035는 보존하고 다음 후보 036은 잠정이다.
+
+## 2026-10-04 · uncommitted · uiux(learning): D-461 작업 우선 공용 구성과 검수 편의
+
+- 변경: 사용자 commit/merge 및 ROSY 디자인 개선 지시로 상태·다음 행동·증거 펼치기 원칙을 DESIGN.md에 기록했다. 공용 작업 행과 역할 간격 토큰을 등록하고 학습 검색·확인 필요 필터·URL 복원 및 검수 thumbnail·이전/다음·대기 이동·라벨 inspector를 적용했다.
+- 증거: 첫 실제 Chromium 검사 PC/모바일 4폭·2테마·2표면에서 overflow/page error 0, 검색·빈 상태·키보드·검수 이동 8 시나리오를 확인했다. 발견한 공용 계약 선언과 배치 문제를 묶어 수정하고 최종 관련 pytest/브라우저 확인을 진행한다.
+- gate 변화: SOURCE/LOCAL 변경이며 물리 모바일·학습 qualification·장치·현장·CI 수용을 주장하지 않는다. 로봇·모델 활성화·push·배포 없음.
+- 최종 확인: 관련 호스트 287 passed/24 skipped, known_failures 신규 0. Node 좌표 기하 4 passed. 실제 Chromium 최종 PC/모바일 4폭×2테마×2표면에서 page error/가로 넘침 0; 검색·이동 8, 좌표 preview/drag/resize/cancel/delete 8, 터치 4, 결과 연결·오류·변경·손상·누락·해제 6 및 키보드 Delete 보호·명시 승인·자료 준비·재검수 흐름을 별도 test state에서 확인했다. 운영 사진과 4개 결과 연결은 수정하지 않았다. 증거는 X:/DevTemp/pinky-web-ux-20261004에 저장했다. skipped는 해당 외부 런타임 NOT_RUN이며 CI·물리 전화기 검증이 아니다.
+
+## 2026-10-04 · uncommitted · docs(learning): UX 착지 동기화 검증
+
+- 변경: 최신 main의 학습 cycle/review bridge와 D-460 본문을 병합하고 임시 D-460 예약을 제거했다.
+- 증거: 검수·객체 반환·새 학습 연결·harness 재검증 131 passed, known_failures 신규 0. 뒤이은 저널 검사는 기존 entry 안에 추가한 행을 append-only 위반으로 발견하여 별도 새 heading으로 기록을 분리했다.
+- gate 변화: 로컬 fast-forward 착지 대상이며 push·배포·장치 수용은 수행하지 않는다.
 
 ## 2026-10-04 · uncommitted · fix(site): D-457 마커 우선·무마커 폴백
 

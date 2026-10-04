@@ -421,6 +421,40 @@ ui-tag {
 
 ui-tag[hidden] { display: none; }
 
+/* D-461: task-first workspace compositions. Opt-in; no existing surface override. */
+.ui-workspace-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--gap-workspace);
+  padding-block: var(--inset-workspace-bar);
+}
+.ui-workspace-bar > [data-spacer] { flex: 1; }
+.ui-workspace-bar .ui-field { min-width: 0; }
+.ui-task-row {
+  padding-block: var(--inset-task-row);
+  border-top: 1px solid var(--surface-line);
+  min-width: 0;
+}
+.ui-task-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--gap-workspace);
+}
+.ui-task-heading h3 {
+  margin: 0;
+  font: var(--weight-strong) var(--text-title)/var(--leading-body) var(--body);
+  overflow-wrap: anywhere;
+}
+.ui-task-meta { color: var(--ink-quiet); font-size: var(--text-label); }
+.ui-task-next { max-width: 70ch; line-height: var(--leading-copy); }
+.ui-task-row details { margin-top: var(--inset-workspace-bar); }
+.ui-task-row summary { cursor: pointer; color: var(--ink-quiet); }
+.ui-task-row p { overflow-wrap: anywhere; }
+.ui-task-row details > :not(summary) { margin-top: var(--gap-task-detail); }
+
 /* 상태 어휘: neutral(조용한 글자) · active(정상 진행 — 색이 아니라 ink, D-82) ·
    warn(글자) · crit(채움). active는 D-359 §5.2에서 Fleet `.tag.nav/.ok`와
    dashboard `[data-status="OK"]` 사본을 받으려고 더했다. */
