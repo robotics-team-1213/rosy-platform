@@ -46,6 +46,7 @@ PINNED_CONFIRMS = {
     "middleware/ui/robot/panels/setup/localization.js": 1,
     "middleware/ui/robot/panels/setup/traffic-policy.js": 1,
     "middleware/ui/robot/panels/system/security.js": 1,
+    "middleware/ui/robot/peer-approval.js": 2,
     "middleware/ui/robot/settings.js": 2,
     "middleware/ui/robot/telemetry.js": 1,
     "operations/fleet/fleet/server/web/camera-pairing.js": 2,

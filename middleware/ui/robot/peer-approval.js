@@ -35,20 +35,22 @@ export function createReceiverApprovals({root, api, isAdmin, captureLifetime, ru
         const detail = document.createElement('p');
         detail.className = 'host-note';
         detail.textContent = `${row.client_id} · ${row.role === 'operator' ? '조작 권한' : '조회 권한'} · 키 ${row.client_key_sha256.match(/.{1,4}/g).join(' ')}`;
-        const label = document.createElement('label');
+        const label = document.createElement('label'); label.className = 'ui-check';
         const remember = document.createElement('input');
         remember.type = 'checkbox'; remember.className='ui-field'; remember.checked = true;
         label.append(remember, document.createTextNode(' 연결 기억'));
         const act = action => {
           const button = document.createElement('ui-button');
-          button.setAttribute('kind', action === 'approve' ? 'primary' : 'quiet');
-          button.setAttribute('type', 'button'); button.textContent = action === 'approve' ? '승인' : '거절';
+          if (action === 'approve') button.setAttribute('kind', 'primary'); else button.setAttribute('kind', 'quiet');
+          button.setAttribute('type', 'button'); button.textContent = action === 'approve' ? '승인' : '거절…';
           button.addEventListener('click', async () => {
             if (deciding) return;
             deciding = true;
             const requested = remember.checked;
             const active = () => owner.current() && isAdmin() && generation === epoch && item.isConnected && item.getClientRects().length > 0;
-            try { await runConfirmed(`${row.label} (${row.display_code}) 연결을 ${action === 'approve' ? '승인' : '거절'}하시겠습니까?`,
+            try { await runConfirmed(action === 'approve'
+              ? `${row.label} (${row.display_code}) 연결을 승인하시겠습니까?`
+              : `${row.label} (${row.display_code}) 연결을 거절하시겠습니까?`,
               button, active, async (_current, ticket) => {
                 const result = await api(`/api/v1/auth/peer-pairing/requests/${encodeURIComponent(row.request_id)}/decision`,
                   {method: 'POST', signal: ticket.signal, body: JSON.stringify({action, revision: row.revision, persist_requested: requested})});

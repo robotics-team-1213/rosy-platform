@@ -956,3 +956,9 @@
 - 변경: 정상 /device 보안 절차와 기존 대시보드에 공용 수신 승인 컴포넌트를 연결한다. 요청 이름·4문자 확인값·역할·키와 공용 CA 확인값을 표시하고 명시 승인/거절·연결 기억·처리 결과를 제공한다. 세션/표면 lifetime이 끝나면 늦은 응답과 쓰기를 취소한다.
 - 증거: 실제 Chromium에서 공용 dialog와 승인 컴포넌트 3 PASS; 서버·저장소 통합 32 PASS. 브라우저 fixture는 실제 상대 화면이나 LAN TLS 수용이 아니다. 공용 tokens/components와 같은 출처 API·CSP를 사용한다.
 - gate 변화: 이 컴포넌트 SOURCE/LOCAL 증거. 기기 승인은 자동 조종·정지 해제·mode 변경을 시작하지 않는다. 실제 앱과 로봇 화면의 최초 승인·오프라인 재연결은 별도 확인한다.
+
+## 2026-10-05 · uncommitted · fix(ui): 연결 승인 공용 속성 계약 복구
+
+- 변경: 연결 기억 checkbox label에 ui-check를 지정하고 승인/거절 버튼 kind를 동등한 명시 분기로 쓴다. 기능·권한·화면 구성은 유지한다.
+- 증거: 깨끗한 main의 동일 peer-approval.js에서 발생한 공용 guard 두 실패의 원인이다. 시작점 영향 검증에 포함한 공용 guard와 기존 승인 브라우저 회귀를 포함해 149 passed, known_failures 신규 0.
+- gate 변화: SOURCE/LOCAL 계약 복구. 장치 승인·UI/UX 개편 수용 주장 없음.

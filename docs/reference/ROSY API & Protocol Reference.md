@@ -2,7 +2,7 @@
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.102
+**Version:** v1.103
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -1388,6 +1388,12 @@ Vision `vision --track`은 모서리 마커 보정 우선, 없으면 승인 사�
 | GET | `/api/fleet/calibrations` | viewer 이상 | 승인 기록 목록과 `use: display-only` |
 | POST | `/api/fleet/calibrations` | operator | source_id/map_id, map_to_image(9), image(width,height), track_bounds_m, fit_score, lens 또는 null, frame_seq 또는 null을 승인·영속 기록 |
 | DELETE | `/api/fleet/calibrations/{source_id}` | operator | 승인 기록 철회·감사 |
+| GET | `/api/fleet/start-points` | viewer 이상 | `{start_points, persistent}`. 저장한 무마커 시작 위치·방향, `use: reference-only`; 주행·로봇 위치 증거가 아니다 |
+| PUT | `/api/fleet/start-points/{source_id}` | operator | `{map_id, calibration_revision, expected_revision: string 또는 null, x, y, yaw}`. 승인된 paint-fit 지도 내부 좌표(m), yaw(rad, -π~π). 새 기록은 expected_revision null, 수정은 읽은 revision. 응답은 저장 기록 |
+| DELETE | `/api/fleet/start-points/{source_id}?expected_revision=...` | operator | 읽은 revision과 일치할 때만 삭제. 보정이 철회돼도 기록 삭제 가능 |
+
+무마커 시작점(v1.103)은 `source_id`, `map_id`, `calibration_revision`, `revision`, `x`, `y`, `yaw`, `saved_by`, `saved_at`(Unix초), `valid`, `use: reference-only`를 반환한다. 승인된 보정이 현재 source/map과 일치하고 기록 revision과 같을 때만 valid=true다. 좌표는 지도 원점을 바꾸지 않으며, 저장은 goal·initialpose·로봇 신원 대응·주행 승인에 쓰지 않는다. 시작점에 마커는 요구하지 않는다. SQLite는 보정 DB와 같은 writable 데이터 디렉터리의 start-points.sqlite3에 저장한다. 보정이 메모리 전용이면 persistent=false이며 서버 재시작 시 사라진다. 미등록 source는 404 UNKNOWN_SOURCE, 보정 미승인은 409 CALIBRATION_REQUIRED, 지도 불일치는 409 MAP_MISMATCH, 보정 변경은 409 CALIBRATION_CHANGED, 동시 편집은 409 START_POINT_CHANGED, 범위 밖은 400 START_POINT_OUT_OF_BOUNDS다. bool/NaN/Infinity·추가 필드는 거절한다.
+
 
 `OverheadDetectionsPayload`는 source_id/map_id/calibration_revision/processor_revision/captured_at/seq/status,
 `detections[{x,y,footprint_m,score,marker_id?}]`(최대 16)를 싣는다. x/y는 map metres,
@@ -2320,6 +2326,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 | 버전 | 일자 | 내용 |
 |---|---|---|
 | v1.102 | 2026-10-05 | Additive (D-368, feat/d368-driver-mjpeg-stream): 운전자 전용 MJPEG 스트림 `GET /api/v1/vision/front/stream`(operator, `multipart/x-mixed-replace; boundary=frame`, `?overlay=`). 조종 소유권은 수락 teleop 토큰(D-460 — 임대 없음). 운전자 아님 409 `CAMERA_STREAM_NOT_DRIVER`, 이미 열림 409 `CAMERA_STREAM_BUSY`, 새 수락 teleop가 열린 스트림을 끝낸다. 관전자·관제는 기존 0.4 s 폴링 유지. envelope 1.0 유지. v1.100(D-463)·v1.101(D-456)을 main이 먼저 써 v1.102로 재번호 |
+| v1.103 | 2026-10-05 | Additive: 사용자 승인 무마커 시작점. Fleet `/api/fleet/start-points` GET·PUT·DELETE, 승인 보정 revision에 묶인 지도 x/y/yaw 참조 저장과 동시 편집 거절. 로봇 API·envelope·주행 권한 변경 없음 |
 | v1.101 | 2026-10-05 | D-456: LAN 수신 승인·P256 관계·명시적 연결 기억·issuer-bound 단기 세션·선택적 CA first-contact. D-460 조작 게이트 유지; 실기 수용 별도 |
 | v1.100 | 2026-10-05 | Additive (D-463): POST `/api/fleet/robots/{robot_id}/route` expands stored lane-graph edge ids into that polyline and submits only the next point about 0.20 m ahead through the existing goal path. The far junction is not one goal. A pose that is not LOCALIZED in the map frame, or is more than 0.08 m off the polyline, does not call CORE. GoalRequest stays {x, y, yaw}. envelope 1.0 unchanged |
 | v1.99 | 2026-10-04 | D-457: 마커 우선·무마커 폴백 표시 추적, source-token 검출, operator 보정·재학습. 기존 sighting·envelope 1.0·주행 경계 유지 |

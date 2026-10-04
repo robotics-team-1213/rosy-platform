@@ -73,6 +73,10 @@ from fleet.server.task_dispatch_routes import (  # noqa: F401 — GoalRequest �
     fanout_local_omx_stops,
     install_task_dispatch_routes,
 )
+from fleet.server.lane_route_routes import (  # noqa: F401 — RouteRequest 재수출 (D-463)
+    RouteRequest,
+    install_lane_route_routes,
+)
 
 _LOG = logging.getLogger(__name__)
 _goal_evidence_expiry_loop = partial(goal_evidence_expiry_loop, logger=_LOG)
@@ -338,6 +342,8 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
             close_observation_source = getattr(post_action_observation_source, "aclose", None)
             if callable(close_observation_source):
                 await close_observation_source()
+            if getattr(app.state, "start_points", None) is not None:
+                app.state.start_points.close()
 
     app = FastAPI(
         title="ROSY Fleet",
@@ -443,6 +449,10 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         from fleet.server.tracking_routes import install_tracking_routes
         install_tracking_routes(app, tracking=tracking, require_operator=require_operator,
                                 read_guard=read_guard, operator_guard=operator_guard)
+        from fleet.server.start_points import StartPointService
+        from fleet.server.start_point_routes import install_start_point_routes
+        install_start_point_routes(app, service=StartPointService(tracking),
+                                   read_guard=read_guard, require_operator=require_operator)
     install_signal_routes(app, signals=console._signals, require_viewer=require_viewer,
                           require_operator=require_operator, auth_configured=bool(principals or console_token))
 
@@ -463,6 +473,9 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                                  require_operator=require_operator, require_named_operator=require_named_operator,
                                  read_guard=read_guard, operator_guard=operator_guard,
                                  drive_cancel=drive_cancel)
+    install_lane_route_routes(app, console=console, task_service=task_service,
+                              require_operator=require_operator,
+                              operator_guard=operator_guard)
 
     proposal_create = proposal_resolve = None
     if mission_service is not None:
