@@ -5977,6 +5977,13 @@ osy-d395-s1d\`.
 - Evidence: source-pinned host tests and independent local Linux ROS normal/revocation execution. Original freshness/lease/grant limits remain. Shared-path stale failures and Destroyable diagnostics are retained.
 - Gate: SOURCE/HOST/isolated only. No installed-device, model-inference, receiver, task or physical acceptance; total physical movement stays at most 0.20m across all robots, attempts and coast.
 
+## 2026-10-05 · uncommitted · feat(validation): D-426 T6 회차 보고서 생성기·증거 골격
+
+- 변경: (1) `tools/validation/fleet_gazebo/report.py` — 회차별 verdicts.json을 읽어 result.md 공개 보고서를 쓴다. 시나리오 판정과 주행 판정을 별도 필드로 유지하고, 대표 판정은 가장 나쁜 회차(평균 상쇄 금지)이며 crash/timeout/관측 누락 회차가 하나라도 있으면 수용 GO가 아니다. M08 의도적 관측 누락은 주행 INCONCLUSIVE가 시나리오 PASS보다 우선한다. 회차가 없으면 exit 2. (2) `docs/validation/fleet-gazebo-conformance-2026-10-05/README.md` — T1–T6 구현 요약과 WSL 회차 실행 절차·남은 것 기록.
+- 증거: test/test_fleet_gazebo_report_contracts.py 7개 계약(최악 판정 대표·crash/timeout 수용 차단·시나리오/주행 분리·M08 관측 누락 우선·두 판정 열·verdicts.json 로딩·빈 디렉터리 exit 2 + 정상 작성).
+- gate 변화: 없음(SOURCE/LOCAL). 실제 WSL Gazebo 회차(M01–M08 × seed 3 × 3회)·ROS-SIM 승격은 아직 — colcon 빌드 진행 중.
+- 결정: 원본은 X:에 두고 보고서는 판정 요약·hash·재현 입력만 담는다(계획 T6 항목 4).
+
 ## 2026-10-05 · uncommitted · feat(validation): D-426 T5 장애 주입 시나리오·sim base watchdog
 
 - 변경: (1) `tools/validation/fleet_gazebo/scenarios.py` — M01–M08 수용 행렬의 선언적 정의(필수 판정·blackout 주입·재시작 대상). 주입은 run 소유 경계만(scope="run" 강제), REST/WS/둘 다 blackhole은 별도 회차로 구분. D-419 정책 적용 시한(5.2 s window)과 실제 정지(≤0.50 sim s·이동 ≤0.05 m·회전 ≤0.25 rad)를 같은 시한으로 쓰지 않는 분리 판정 `stop_policy_checks`. 시뮬 profile 0.15 m/s·0.5 rad/s·CORE kill 입력 만료 0.30 s 고정. (2) `integrations/simulation/gazebo/scripts/command_watchdog.py` — CORE와 별도 수명의 sim base 명령 감시 bridge. 최신 cmd_vel 재발행 + 0.30 monotonic s 만료 시 0. CORE writer 불증식, clock pause에도 만료, rclpy 부재 시 안내 후 exit 3.
