@@ -6307,3 +6307,9 @@ osy-d395-s1d\`.
 - 변경: 객체 검수 작업 영역을 전체 가용 폭으로 펴고 자동 세로 여백을 제거했다. [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)에 빈 상태 3폭 판정을 남겼다.
 - 증거: Chromium 1440·800·390px 빈 필터 화면, 복귀 동작, 13 passed와 `known_failures.py` 0 NEW. 캡처 원본은 X:에 둔다.
 - gate 변화: 학습 검수 LOCAL G2 부분 근거 추가. 다른 상태·검수자 G3와 제품 전체는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(learning): 작업·자료 화면 위쪽 정렬
+
+- 변경: 학습 작업 목록과 자료 등록의 자동 세로 여백을 없애 머리 아래에서 시작하게 했다. [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)에 두 경로 3폭 근거를 남겼다.
+- 증거: Chromium 두 경로 × 1440·800·390px 6 passed, 가로 넘침 0, `known_failures.py` 0 NEW. 캡처·로그는 X:에 둔다.
+- gate 변화: 학습 도구 LOCAL G2 부분 근거 추가. 실제 작업 완료 G3와 제품 전체는 HOLD다.

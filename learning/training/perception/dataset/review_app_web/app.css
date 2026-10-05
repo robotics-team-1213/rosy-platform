@@ -51,7 +51,7 @@ summary { cursor: pointer; }
 #save-status { font-size: var(--text-label); }
 .preparation { border-top: 1px solid var(--surface-line); margin-top: var(--space-6); padding-top: var(--space-5); }
 pre { white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink-quiet); font-size: var(--text-label); }
-.learning-main { width: 100%; max-width: 78rem; margin: auto; }
+.learning-main { width: 100%; max-width: 78rem; margin-inline: auto; }
 .workspace-heading { display: flex; justify-content: space-between; gap: var(--space-5); align-items: center; margin-block: var(--space-2) var(--space-4); }
 .workspace-heading p { color: var(--ink-quiet); margin-bottom: 0; max-width: 70ch; }
 .workspace-heading h2 { font-size: var(--text-title); }

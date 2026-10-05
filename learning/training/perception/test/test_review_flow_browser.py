@@ -75,6 +75,22 @@ def test_empty_review_can_recover_at_declared_widths(browser_workspace, width):
     expect(page.locator('#frame-title')).to_have_text('사진 1')
 
 
+@pytest.mark.parametrize('route,main', [('/learning', '#learning-main'), ('/catalog', '#catalog-main')])
+@pytest.mark.parametrize('width', [1440, 800, 390])
+def test_learning_pages_start_below_topbar(browser_workspace, route, main, width):
+    page, _, _ = browser_workspace
+    page.set_viewport_size({'width': width, 'height': 1000})
+    page.goto(page.url.split('?')[0].rstrip('/') + route, wait_until='networkidle')
+    topbar = page.locator('ui-topbar').bounding_box()
+    assert page.locator(main).bounding_box()['y'] == topbar['y'] + topbar['height']
+    assert page.evaluate('document.documentElement.scrollWidth - innerWidth') == 0
+    if output := os.getenv('ROSY_UIUX_SCREENSHOT_DIR'):
+        from pathlib import Path
+        target = Path(output) / f'learning-{route.strip("/")}-{width}.png'
+        target.parent.mkdir(parents=True, exist_ok=True)
+        page.screenshot(path=str(target), full_page=True)
+
+
 def test_arrow_keys_move_between_photos(browser_workspace):
     page, store, expect = browser_workspace
 

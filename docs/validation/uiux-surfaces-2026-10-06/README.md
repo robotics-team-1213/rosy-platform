@@ -86,6 +86,8 @@
 
 객체 검수의 빈 필터 상태를 1440·800·390px에서 추가 재생했다. 처음에는 `.workspace`의 자동 여백 때문에 데스크톱 내용이 좁은 열에 모이고 작은 화면의 작업 목록이 머리 아래로 밀렸다. 현재는 작업 영역이 가용 폭을 채우고 머리 바로 아래에서 시작한다. 세 폭 모두 가로 넘침 없이 「전체 사진 보기」로 검수 화면에 복귀한다. 현재 트리의 객체 브라우저 **13 passed**, `known_failures.py` **0 NEW**이며 캡처 원본 `learning-objects-empty-{1440,800,390}.png`는 X: `2026-10-06--032913--uiux-quality--199bc9/captures/`에 둔다. 이는 빈 상태의 LOCAL G2 부분 근거다.
 
+작업 목록(`/learning`)과 자료 등록(`/catalog`)도 같은 자동 세로 여백으로 짧은 내용이 머리 아래에서 밀렸다. `.learning-main`을 가로 방향으로만 가운데 정렬해 두 경로가 머리 바로 아래에서 시작하게 했다. 두 경로 × 1440·800·390px **6 passed**, 가로 넘침 0, `known_failures.py` **0 NEW**다. 전후 측정은 `X:\DevTemp\projects\rosy-platform\2026-10-06--032913--uiux-quality--199bc9\logs\learning-pages-{baseline,three-widths}.txt`, 최종 캡처는 같은 X:의 `captures/learning-{learning,catalog}-{1440,800,390}.png`다. 실제 자료 등록·작업 연결의 G3는 남는다.
+
 Pilot 팔 화면은 카메라 없는 Gazebo fixture에서 빈 영상 자리 때문에 두 조작 창이 오른쪽 좁은 칸에 2:1로 압축됐다. 현재 CSS는 영상이 없을 때 조작부를 먼저 배치하고 동등한 팔·그리퍼 창을 같은 폭으로 쓴다. 영상이 있으면 영상·조작부 병렬 구조를 유지한다. 태블릿 2종·전화·영상 있는 경로의 브라우저 **5 passed**, `known_failures.py` **0 NEW**였다. 명령 경로는 가짜 CORE fixture이며 실기 조작 증거가 아니다.
 
 Pilot 대상 발견 오류에서는 내부 `invalid simulation target`을 운용자에게 그대로 보여 주던 경로를 없앴다. [390px 캡처](captures/pilot-target-error-390x844.png)는 조종 대상 확인, 연결 점검, 다시 확인 버튼과 첫 화면 비상 정지를 보여 준다. 현재 트리의 브라우저 재시도 1 passed, 가로 넘침 0, `known_failures.py` 0 NEW다. 실제 Pilot Android 셸과 장치 연결의 품질 판정은 이 웹 fixture로 대신하지 않는다.
@@ -159,7 +161,7 @@ Windows의 TCP 예약 범위 `5541–5640`이 에뮬레이터 기본 콘솔·ADB
 
 | 표면과 먼저 답할 질문 | 선언 뷰포트 | G2에서 채울 상태와 현재 근거 |
 |---|---|---|
-| `pinky-review`: 검수자는 원본과 라벨을 대조하고 승인·제외·내보내기를 정확히 끝낼 수 있는가? | 웹 1440·800·390px, 객체·픽셀 검수 각각 | 두 편집 창의 폭은 [객체 캡처](captures/learning-width/learning-objects-1440.png)·[픽셀 캡처](captures/learning-width/learning-pixels-1440.png) 등에서 부분 확인. 각 폭의 최초 기동·불러오는 중·지연·연결 끊김·사용 불가, 미등록, 저장 충돌·권한 거부, 승인·제외·자료 준비 결과를 채운다. 로봇 SAFE_STOP은 이 개발 도구의 조작 상태가 아니다. |
+| `pinky-review`: 검수자는 원본과 라벨을 대조하고 승인·제외·내보내기를 정확히 끝낼 수 있는가? | 웹 1440·800·390px, 객체·픽셀 검수·작업 목록·자료 등록 | 두 편집 창의 폭은 [객체 캡처](captures/learning-width/learning-objects-1440.png)·[픽셀 캡처](captures/learning-width/learning-pixels-1440.png) 등에서 부분 확인. 각 폭의 최초 기동·불러오는 중·지연·연결 끊김·사용 불가, 미등록, 저장 충돌·권한 거부, 승인·제외·자료 준비 결과를 채운다. 로봇 SAFE_STOP은 이 개발 도구의 조작 상태가 아니다. |
 | `pilot-shell`: 운전자는 올바른 로봇을 찾아 연결 상태를 확인할 수 있는가? | 네이티브 가로 1000·600·400dp, 400·600dp 글자 130% | 빈 발견·기기 상태는 위 에뮬레이터 캡처로 부분 확인. 각 폭의 최초 기동·발견 중·지연·연결 끊김·사용 불가, 후보·선택·승인·거부·연결 실패·재접속을 채운다. SAFE_STOP·주행 명령은 연결 로비가 아닌 Pilot PWA에서 평가한다. |
 | `cam`: 설치자는 카메라를 올바른 수신기에 연결하고 송출 상태를 확인할 수 있는가? | 네이티브 세로 320×640·390×844, 390px 글자 130% | LAN 빈 목록·설정은 위 에뮬레이터 캡처로 부분 확인. 각 폭의 최초 기동·탐색 중·지연·연결 끊김·사용 불가, Pairing·Peer 승인/거부, 권한/입력 오류, 송출 시작·중지·실패를 채운다. SAFE_STOP·로봇 명령은 Cam의 소유 범위 밖이다. |
 
