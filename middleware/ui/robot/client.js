@@ -181,6 +181,60 @@ export async function pairWithCode(code, { label = "", persist = false, signal }
 }
 
 /**
+ * D-432 연결 모드 조회(인증 없음, LAN 안에서만 200). 개발 모드가 아니면 null.
+ * 로그인 서랍이 개발 연결 버튼을 보일지 판단하는 데만 쓴다.
+ */
+export async function connectionOffer() {
+  try {
+    const response = await fetch("/api/v1/auth/connection", {cache: "no-store"});
+    if (!response.ok) return null;
+    const body = await response.json();
+    return body?.mode === "development" ? body : null;
+  } catch (_error) { return null; }
+}
+
+/**
+ * D-432 개발 연결: 코드 없이 이 브라우저 전용 1시간 운전자 세션을 받는다.
+ * 로봇이 개발 배포+개발 연결 모드일 때만 CORE가 201로 답한다(D-471).
+ */
+export async function developmentSession({signal} = {}) {
+  let response;
+  try {
+    response = await fetch("/api/v1/auth/development-session", {
+      method: "POST", headers: {"Content-Type": "application/json"},
+      cache: "no-store", signal, body: "{}",
+    });
+  } catch (_error) {
+    signal?.throwIfAborted();
+    throw new Error("로봇에 닿지 못했습니다. 로봇과 같은 네트워크인지 확인하세요.");
+  }
+  let body = null;
+  try { body = await response.json(); } catch (_error) { body = null; }
+  signal?.throwIfAborted();
+  if (response.status !== 201 || typeof body?.token !== "string") {
+    const retryAfter = response.headers.get("Retry-After");
+    const error = new Error(devFailure(response.status, body, retryAfter));
+    error.status = response.status;
+    error.retryAfter = response.status === 429 ? Math.max(1, Number.parseInt(retryAfter || "60", 10) || 60) : 0;
+    throw error;
+  }
+  rememberToken(body.token, {expiresAt: body.expires_at, persist: false});
+  const {token: _token, ...identity} = body;
+  return identity;
+}
+
+function devFailure(status, _body, retryAfter) {
+  if (status === 403) return "이 로봇은 개발 연결 모드가 아닙니다. 로봇 화면 코드로 로그인하세요.";
+  if (status === 429) {
+    const seconds = Number.parseInt(retryAfter || "", 10);
+    return Number.isFinite(seconds) && seconds > 0
+      ? `시도가 너무 많습니다. ${seconds}초 뒤에 다시 하세요.`
+      : "시도가 너무 많습니다. 1분 뒤에 다시 하세요.";
+  }
+  return `개발 연결 실패: ${_body?.error?.message || status}`;
+}
+
+/**
  * Always asks CORE to log this token out; CORE decides what may be deleted.
  * Resolves true when the token no longer works on the robot, false when CORE
  * keeps it (409: card or manual tokens are revoked in settings) and it is only
