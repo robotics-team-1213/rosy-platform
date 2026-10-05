@@ -6103,3 +6103,8 @@ osy-d395-s1d\`.
 - 변경: 로봇·Pilot·공용 화면 스크립트가 요소 스타일을 쓰지 않는다. 연속 값은 속성이고 스타일시트의 typed attr()가 읽는다. 캔버스 색 탐침은 채택 스타일시트 규칙 하나다. 확인창의 정지 구멍은 그대로 눌린다.
 - 증거: 호스트 178 passed, 72 skipped, known_failures 0 new. Chromium 주행 이동·복귀와 캔버스 팔레트 통과. 스크림 구멍은 정지 버튼을 맞춘다. 호스트·브라우저 시험이며 장치 수용은 없다.
 - gate 변화: 없음.
+
+## 2026-10-05 · uncommitted · docs(lane): straight departure pipeline proposal
+- Change: record user-confirmed straight white-boundary crossing and stop; propose synchronized recording, reviewed failure labels, geometry/control replay and closed-loop evaluation.
+- Evidence: source inspection; departure-time synchronized trace unavailable. Focused suite: 109 passed and 2 log-format failures; both repaired checks passed on rerun (21 warnings), known_failures: 0 NEW for repaired checks.
+- Gate: no runtime change; departure root cause and FIELD acceptance remain unproven. Design status Proposed.

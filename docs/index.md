@@ -300,8 +300,8 @@
 
 ## 최근 기록
 
+- 2026-10-05 · uncommitted · docs(lane): straight departure pipeline proposal
 - 2026-10-05 · uncommitted · uiux: keep measured geometry in stylesheets
 - 2026-10-05 · uncommitted · docs(camera): record applied checkerboard geometry
 - 2026-10-05 · uncommitted · fix(fleet): 목표·대형 지원 기능 확인
 - 2026-10-05 · uncommitted · feat(camera): validate automatic checkerboard pose candidates
-- 2026-10-05 · uncommitted · feat(camera): replace manual camera measurement with automatic capture
