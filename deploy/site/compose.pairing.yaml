@@ -18,7 +18,7 @@ services:
       - --host
       - 0.0.0.0
       - --port
-      - "8090"
+      - "${ROSY_FLEET_PORT:?set ROSY_FLEET_PORT}"
       - --web-common
       - /opt/rosy/web-common
       - --token-env
@@ -74,7 +74,7 @@ services:
       - --host
       - 0.0.0.0
       - --port
-      - "8095"
+      - "${ROSY_VISION_PORT:?set ROSY_VISION_PORT}"
       - --tls-cert
       - /run/secrets/site_cert
       - --tls-key
@@ -84,7 +84,7 @@ services:
       - /opt/rosy/maps/map_v2_fleet/road_lines.stl
       # D-341 12: Vision reads issued credentials from Fleet over verified HTTPS, with its own token.
       - --pairing-sync-url
-      - https://fleet:8090
+      - https://fleet:${ROSY_FLEET_PORT:?set ROSY_FLEET_PORT}
       - --pairing-sync-ca
       - /run/secrets/site_ca
       - --pairing-sync-token-env

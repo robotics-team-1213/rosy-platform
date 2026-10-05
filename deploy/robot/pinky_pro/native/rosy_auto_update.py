@@ -72,7 +72,7 @@ API_BASE = "https://api.github.com"
 # GitHub). Content is still trusted only through the release key signatures.
 API_BASE_URL = re.compile(r"^https?://[A-Za-z0-9.:\[\]-]+(/[A-Za-z0-9._~/-]*)?$")
 USER_AGENT = "rosy-auto-update/1 (D-412)"
-DEFAULT_REPO = "livsbittt/rosy-os"
+DEFAULT_REPO = "robotics-team-1213/rosy-platform"
 REPO = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 RELEASE_ID = re.compile(r"^[0-9]{4}\.[0-9]{2}\.[0-9]{2}-[0-9]{3}$")
 TAG = re.compile(r"^payload-([0-9]{4}\.[0-9]{2}\.[0-9]{2}-[0-9]{3})$")

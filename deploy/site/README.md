@@ -27,7 +27,7 @@ For an operator PC on another machine, the default loopback bind in
 site FQDN and LAN interface, issue a certificate with that FQDN, open the
 proxy to the LAN as described in [LAN access](#lan-access) (wildcard bind plus
 the interface firewall, never a literal LAN IP), and provision separate
-named user credentials. Keep Fleet 8090 and Vision 8095 unpublished. From the
+named user credentials. Keep the Fleet and Vision listen ports unpublished. From the
 operator PC, verify the trusted `https://<site-fqdn>:8443/healthz`, open
 `/console`, confirm a viewer cannot submit work, and confirm an operator's
 request appears in task history with its real status. An HTTP acceptance is
@@ -502,7 +502,7 @@ Off by default: with nothing below set, the stack, the DNS-SD record and the pho
 plus its overlay key, both in the one `/etc/rosy/site/site.env`; `site_preflight.py` checks that the
 switch, the overlay, the advertisement and the sync token agree.
 
-1. **Sync token.** Vision reads the credentials Fleet issued over `https://fleet:8090`, authenticated
+1. **Sync token.** Vision reads the credentials Fleet issued over `https://fleet:${ROSY_FLEET_PORT}`, authenticated
    by its own token (D-341 12). Make it a new random value, distinct from every other secret in
    `secrets/` (`discovery-token.template.txt` shows the shape; this one is
    `pairing-sync-token.template.txt`):
@@ -517,7 +517,7 @@ switch, the overlay, the advertisement and the sync token agree.
    `rosy-site-stack.service` appends that word list after `-f compose.yaml` (an empty value adds
    nothing). The overlay gives Fleet `--pairing-ca /run/secrets/site_ca` (the CA, never the leaf),
    `--pairing-tls-host ${ROSY_SITE_TLS_HOST}` and the sync token, and gives Vision
-   `--pairing-sync-url https://fleet:8090`, `--pairing-sync-ca /run/secrets/site_ca` and the same
+   `--pairing-sync-url https://fleet:${ROSY_FLEET_PORT}`, `--pairing-sync-ca /run/secrets/site_ca` and the same
    token. Vision refuses a plain `http` URL or a missing CA.
 4. **Advertisement.** Nothing more to set: `ROSY_SITE_PAIRING` is set once in
    `/etc/rosy/site/site.env`; `site-firewall.py apply` copies it into
@@ -631,8 +631,8 @@ Copy `.env.example` to a private operator-controlled env file and set
 `ROSY_SITE_CONFIG_DIR` and `ROSY_SITE_SECRETS_DIR`. Leave the bind address at
 `127.0.0.1` when access is through a local trusted reverse proxy or SSH tunnel;
 otherwise bind `0.0.0.0` and limit the port to the LAN interface with
-`rosy-site-firewall.service` ([LAN access](#lan-access)). Do not expose Fleet's
-8090/8095 ports; only the HTTPS proxy port is published.
+`rosy-site-firewall.service` ([LAN access](#lan-access)). Do not publish the
+Fleet or Vision listen ports; only the HTTPS proxy port is published.
 
 ## Build and start
 

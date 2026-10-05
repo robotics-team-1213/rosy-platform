@@ -460,3 +460,13 @@
 - 변경: peer_pairing.Relationship.session_ids max_length 4에서 8 - 발급부(receiver_repository.issue)·API 레퍼런스와 동시 변경(D-18). 저장 레코드 검증 상한만 같은 값으로 올랐고 필드·모양은 그대로다.
 - 증거: contracts/foundation + peer pairing 시험 761 passed 5 skipped, known_failures NEW 0.
 - gate 변화: 없음(계약 문서·스키마 동시 정합).
+
+## 2026-10-05 · uncommitted · feat(protocol): D-468 image-bound lane containment
+- 변경: optional LaneContainmentEvidence. finite·고유 side·관측 구간·geometry identity·unknown uncertainty를 명시하고 API v1.106과 함께 추가한다.
+- 증거: 계약 및 관측 입구 회귀 시험 포함 76 PASS, 0 NEW. NOMINAL 출처 누락/모순과 원본 시각 불일치를 거절한다.
+- gate 변화: additive 계약만. 자동 복구 활성화·장치 수용 없음.
+
+## 2026-10-05 · uncommitted · refactor(protocol): keep containment in its leaf contract
+- 변경: 사용되지 않는 schemas 재수출을 제거한다. 소비자는 별도 lane_containment leaf를 직접 import하며 API v1.106 계약은 그대로다. schemas의 기존 1315줄 판정/무성장 한도를 유지한다.
+- 증거: SOURCE 구조 검사 포함 109 PASS, 0 NEW. 새 계약 모듈/입구 shape 변경 없음.
+- gate 변화: 계약 소유 경계만. 런타임 수용 없음.

@@ -51,7 +51,7 @@ if str(RELEASE_TOOLS) not in sys.path:
     sys.path.insert(0, str(RELEASE_TOOLS))
 import signing  # noqa: E402
 
-REPO = "livsbittt/rosy-os"
+REPO = "robotics-team-1213/rosy-platform"
 REPO_NAME = re.compile(r"[\w.-]+/[\w.-]+")
 KEY_NAME = re.compile(r"[\w.-]+")
 CANARY_HOSTNAME = re.compile(r"rosy-[a-z0-9-]+")

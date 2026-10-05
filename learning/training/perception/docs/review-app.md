@@ -117,3 +117,14 @@ indexed PNG는 기존 RGB CVAT builder의 직접 입력이 아니다. 학습 루
 정확한 signature·approval binding, 모든 고정 평가 세션 제외 및 독립 integration을 소유한다.
 이 앱은 training_dataset_qualified=false를 유지한다. 실제 사용자 픽셀 승인·훈련·모델 활성화는
 브라우저 테스트 상태의 합성 승인과 별개다.
+
+### 이미지 재검증 캐싱 (D-469)
+
+`GET /api/images/<index>`와 `GET /api/mask-images/<index>`는 `Cache-Control: no-cache`와
+ETag(원본은 `image_sha256`, 마스크는 인코딩된 PNG 바이트 sha256)로 응답한다. `If-None-Match`가
+일치하면 304로 본문을 보내지 않는다. 서버는 매 요청마다 디스크 바이트를 읽어 hash를 검증하므로
+변조된 파일은 일치하는 ETag로도 거부된다. 재검증은 전송만 줄이고 검사를 건너뛰지 않는다.
+나머지 응답은 기존 `no-store`를 유지한다. 화면은 이 재검증에 맞춰 사진 목록 구성원이 그대로면
+thumbnail을 다시 만들지 않고, 픽셀 검수의 마스크 오버레이 채색을 마스크 version·불투명도·테마가
+바뀔 때만 다시 계산한다. 서버 검증 오류는 화면에서 한국어 안내로 바꿔 보여주며, 미분류 박스가
+있으면 승인을 화면에서 먼저 막는다. 서버 검증은 그대로 최종 방어다.

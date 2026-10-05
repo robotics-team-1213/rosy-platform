@@ -28,7 +28,7 @@ from signing import sign_checksums
 
 ROOT = Path(__file__).resolve().parents[1]
 NATIVE = ROOT / "deploy" / "robot" / "pinky_pro" / "native"
-REPO = "livsbittt/rosy-os"
+REPO = "robotics-team-1213/rosy-platform"
 HOST = "rosy-pinky-8kcn"
 OTHER = "rosy-pinky-9dfk"
 CURRENT = "2026.10.01-021"

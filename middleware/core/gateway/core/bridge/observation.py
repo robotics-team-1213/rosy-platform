@@ -25,6 +25,7 @@ from core_features.line_follow import LineFollowMode, LineObservation
 from core_features.line_follow.clearance import front_clearance as _front_clearance
 from core_features.line_follow.clearance import scan_points as _scan_points
 from core_features.vision import accept_preview
+from core_common.protocol.lane_containment import LaneContainmentEvidence
 
 Warn = Callable[[str], None]
 
@@ -62,6 +63,8 @@ def line_observation(services, raw: str, *, source_now: float,
             calibration_revision=revision if source is LineFollowMode.IR_LINE else None,
             ground=data.get("ground"),
             quality_reason=quality_reason,
+            containment=(LaneContainmentEvidence.model_validate(data["containment"])
+                         if data.get("containment") is not None else None),
         )
         accepted = services.line_follow.observe(
             observation, received_at=received_at, source_now=source_now)

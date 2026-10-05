@@ -887,3 +887,24 @@
 - 변경: ledger·envelope·pose freshness·재개장 순수 정책 검사 10개를 services의 `test_bounded_trial_owner.py`로 옮겼다. 소유자 검사 helper는 실제 `submit_fenced`와 합성 callback만 사용하고 gateway를 import하지 않는다. 기존 테스트 함수 20개의 AST·단언은 모두 보존하며, bridge 최종 제출·준비 상태·미확정 응답·odometry·camera mux·STOP 경합 및 envelope 변조의 bridge 예외 처리는 gateway의 나머지 10개 함수가 검증한다. runtime·frozen 예외 목록·소유권 검사 구현은 바꾸지 않는다.
 - 증거: 정규 push의 D-184 실패를 exact RED 1 FAIL로 재현했다. 최종 소유자·gateway 제한 시험·기존 cmd_vel·D-184 검사 44 PASS/2.16초, services 단독 19 PASS/1.13초. 중간 envelope 변조 검사는 owner 예외를 bridge의 ZERO와 혼동하여 1 FAIL이었고 gateway에 원문 그대로 되돌렸다. 원본 실패와 최종 로그는 X:/DevTemp/rosy-ui-ship/trial-fence/ownership-*.log에 보존한다.
 - gate 변화: SOURCE/LOCAL 검사 배치만. runtime bytes·권한·서명·실기 bounds·장치 상태·배포 수용은 변경하지 않는다.
+
+## 2026-10-05 · uncommitted · feat(bridge): validate optional lane containment
+- 변경: CAMERA_LINE 원본 영상 시각과 지면 출처에 맞는 optional containment만 LineObservation에 허용한다.
+- 증거: 관련 source 입구/manager/새 계약·정책 76 PASS, 0 NEW.
+- gate 변화: 파싱 입구 추가만. 실제 pose 연결·자동 복구 명령·배포/현장 수용은 아직 없음.
+
+## 2026-10-05 · uncommitted · feat(bridge): preserve odom source identity for lane return
+- 변경: 원본 odom header·정규화 quaternion·동일 planar body frame을 검증하여 lane manager에 전달한다. 시간·자세 변환을 추정 명령 적분으로 대체하지 않는다.
+- 증거: 관련 기존 bounded-trial/bridge/line-follow/새 evidence 및 구조 검사 109 PASS, 0 NEW. 원본 rotation 무효화 세 경우를 RED로 재현하고 검증 추가 후 통과했다.
+- gate 변화: source callback 연결. 장치 설치·자동 복귀 명령·실제 복구 수용은 아직 없음.
+
+## 2026-10-05 · uncommitted · fix(bridge): D-468 구조 검사 정렬
+
+- 변경: 공통 odometry 브리지의 프레임 전제에서 기종명을 제거하고, 원본 헤더가 실제 관리자까지 전달되는 교차 경계 시험을 D-184 예외 목록에 근거와 함께 등록했다.
+- 증거: 동작 시험 소유 및 로봇 리터럴 계약 검사 재실행. 제어 동작 변경 없음.
+- gate 변화: 없음.
+
+## 2026-10-05 · uncommitted · feat(bridge): query leased current floor evidence for return
+- 변경: enforce sensor adapter에서만 LiDAR·IMU·IR 유효 기간에 묶인 현재 바닥·후보 제한 판정을 조회한다. 부분 stream 설정·shadow/off·종료·예외·비 boolean 허가는 거부한다.
+- 증거: 신규 query와 기존 adapter/구조 검사 105 PASS, 0 NEW. 독립 SOURCE/크기 검토도 105 PASS, 0 NEW.
+- gate 변화: 센서 판정 seam만. CORE swept path·바닥 경로 검증 전에는 실제 복귀 이동 공급자로 연결하지 않는다.

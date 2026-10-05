@@ -30,6 +30,14 @@ if [ -z "$PY" ]; then
   exit 1
 fi
 
+# 2026-10-05: ~5100 commits were authored with a repo-local identity whose email
+# belongs to another person's GitHub account, so GitHub credited them to him.
+case "$(git config user.email)" in
+  *@pinklab.art)
+    echo "[pre-push] git user.email $(git config user.email) is not yours; set your own GitHub email (docs/reference/team-guide.md §1)" >&2
+    exit 1 ;;
+esac
+
 echo "[pre-push] harness lint (ADR duplicates, mojibake, append-only, staleness)"
 "$PY" tools/harness/rosy_harness.py lint
 

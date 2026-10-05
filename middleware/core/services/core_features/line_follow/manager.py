@@ -12,6 +12,7 @@ from core_common.protocol.schemas import LineFollowStatus
 from core_features.line_follow.body_stop import BodyStopMixin
 from core_features.line_follow.clearance import Point, path_clearance
 from core_features.line_follow.stuck_wiring import StuckRecoveryMixin
+from core_features.line_follow.lane_return_wiring import LaneReturnMixin
 from core_features.line_follow.model import (  # noqa: F401 — re-exported
     LineFollowConfig,
     LineFollowDecision,
@@ -23,7 +24,7 @@ from core_features.decision.contract import DecisionRequest
 from core_features.decision.lane import FOLLOW, LANE_ACTIONS, STOP, lane_recovery_rule
 
 
-class LineFollowManager(BodyStopMixin, StuckRecoveryMixin):
+class LineFollowManager(BodyStopMixin, StuckRecoveryMixin, LaneReturnMixin):
     def __init__(self, events, *, config: Optional[LineFollowConfig] = None,
                  clock: Callable[[], float] = time.monotonic,
                  angular_ceiling: Optional[Callable[[], float]] = None) -> None:
@@ -61,6 +62,7 @@ class LineFollowManager(BodyStopMixin, StuckRecoveryMixin):
         self._escalated = False
         self._init_body_stop()  # D-422 (body_stop.py)
         self._init_recovery()  # D-407 (stuck_wiring.py)
+        self._init_lane_return()  # D-468 source-time odometry and corridor evidence.
 
     def bind_clock(self, clock: Callable[[], float]) -> None:
         """Use the bridge's line clock for defaults (mode change, loss start)."""
@@ -108,6 +110,7 @@ class LineFollowManager(BodyStopMixin, StuckRecoveryMixin):
             previous = self._mode
             default = "mode_off" if selected is LineFollowMode.OFF else "mode_changed"
             self._recovery_reset(reason or default, self._clock())
+            self._reset_lane_return()
             self._generation += 1
             self._mode = selected
             self._observation = None
@@ -160,6 +163,8 @@ class LineFollowManager(BodyStopMixin, StuckRecoveryMixin):
                 self._ir_received_at = effective_received_at
             if observation.source is not self._mode:
                 return False
+            if not self._observe_return_lane(observation, effective_received_at):
+                return False  # Source-clock replay cannot refresh steering authority.
             self._invalid_observation = False
             self._observation = observation
             self._received_at = effective_received_at
@@ -213,6 +218,7 @@ class LineFollowManager(BodyStopMixin, StuckRecoveryMixin):
                 error=None, confidence=0.0)
             self._received_at = float(now)
             self._invalid_observation = True
+            self._return_evidence.invalidate_lane()
             self._evidence_revision += 1
             if self._loss_started_at is None:
                 self._loss_started_at = float(now)
@@ -363,6 +369,10 @@ class LineFollowManager(BodyStopMixin, StuckRecoveryMixin):
                     or decision.mode is not self._mode
                     or self._mode is LineFollowMode.OFF):
                 return False
+            if (self._return_controller is not None and self._return_controller.phase != 'tracking'
+                    and (decision.linear or decision.angular)
+                    and not self._return_submission_valid(self._clock(),decision)):
+                return False
             apply(decision)
             return True
 
@@ -379,7 +389,8 @@ class LineFollowManager(BodyStopMixin, StuckRecoveryMixin):
                         and self._observation.quality_reason in ('low_light', 'overexposed')):
                     self._recovery_reset('camera_' + self._observation.quality_reason, current)
                     return decision  # LOST must also bypass recovery's autonomous back-off.
-                return self._apply_recovery(current, decision)
+                local = self._apply_lane_return(current, decision)
+                return local if local is not None else self._apply_recovery(current, decision)
             finally:
                 if not self._path_evaluated:
                     # 풀림 지연은 연속으로 잰 틱만 센다 — LiDAR 끊김·계단 정지·OFF 틱이 끼면 처음부터.

@@ -530,3 +530,23 @@
 - 변경: ledger·envelope·pose freshness·재개장 순수 정책 검사 10개를 services의 `test_bounded_trial_owner.py`로 옮겼다. 소유자 검사 helper는 실제 `submit_fenced`와 합성 callback만 사용하고 gateway를 import하지 않는다. 기존 테스트 함수 20개의 AST·단언은 모두 보존하며, bridge 최종 제출·준비 상태·미확정 응답·odometry·camera mux·STOP 경합 및 envelope 변조의 bridge 예외 처리는 gateway의 나머지 10개 함수가 검증한다. runtime·frozen 예외 목록·소유권 검사 구현은 바꾸지 않는다.
 - 증거: 정규 push의 D-184 실패를 exact RED 1 FAIL로 재현했다. 최종 소유자·gateway 제한 시험·기존 cmd_vel·D-184 검사 44 PASS/2.16초, services 단독 19 PASS/1.13초. 중간 envelope 변조 검사는 owner 예외를 bridge의 ZERO와 혼동하여 1 FAIL이었고 gateway에 원문 그대로 되돌렸다. 원본 실패와 최종 로그는 X:/DevTemp/rosy-ui-ship/trial-fence/ownership-*.log에 보존한다.
 - gate 변화: SOURCE/LOCAL 검사 배치만. runtime bytes·권한·서명·실기 bounds·장치 상태·배포 수용은 변경하지 않는다.
+
+## 2026-10-05 · uncommitted · feat(lane): D-468 local return building blocks
+- 변경: ROS-free 차체 경계 여유·실제 자세 경로·동일 차로 비교·제한된 역추적/탐색/정렬/검증 정책과 optional containment 관측 입구 추가.
+- 증거: 정책/계약/기존 bridge 및 line-follow 관련 76 PASS, 0 NEW. 독립 리뷰에서 발견한 후진 회전 여유·odom 초기화·후보 일관성·시각 재전송·정렬 상한·지면 출처 결함을 회귀 시험으로 고쳤다.
+- gate 변화: 아직 manager의 주행 결정에 연결하지 않은 구성 요소. SOURCE 시험 외 SIM/DEVICE/FIELD 수용 없음.
+
+## 2026-10-05 · uncommitted · feat(lane): bind original pose ledger to image geometry
+- 변경: 순수 source-time 증거 ledger와 lock-owner mixin. 실제 자세 보간·projection uncertainty/관측 범위·연속성 epoch·시각 재전송을 검증하며 무효 관측/모드 종료는 경계를 폐기한다.
+- 증거: source 관련 회귀/구조 검사 109 PASS, 0 NEW. 독립 리뷰가 발견한 잘못된 quaternion과 source/receipt 시각 비교를 고쳤다. 패키지 13717줄 재판정은 기존 소유/모듈 분리와 모든 한도를 유지한다.
+- gate 변화: SOURCE evidence admission 연결만. ReturnController의 이동 제안 적용은 아직 없음.
+
+## 2026-10-05 · uncommitted · fix(lane): normal return anchor and measured fallback approach
+- 변경: 원본 영상 시각·연속성 epoch로 복구 검증을 제한한다. 정상 기준 위치는 차체 여유 25mm·방향 오차 0.12rad 이내일 때만 저장한다. 기준 경로가 없으면 동일 차로 후보로 저속 접근하고 실제 이동·회전·시간 한도를 적용한다.
+- 증거: 경계 직전 기준 위치를 계속 덮어써 복귀하지 못하던 폐루프 실패를 재현·수정했다. 정지 바퀴·20% 미끄러짐·증거 만료·양방향 탐색 후 Fleet 요청을 시험했다. 독립 리뷰의 복구 직후 기준 저장 조건 누락도 회귀 시험으로 수정했다.
+- gate 변화: 순수 정책과 합성 평면 운동 시험만. 실제 명령 판단 연결·배포·실기 복구는 미완료다.
+
+## 2026-10-05 · uncommitted · feat(lane): arbitrate measured return before ordinary following
+- 변경: 실제 매니저가 typed containment·실측 자세 ledger를 복구 정책에 연결하고 일반 추종보다 먼저 판단한다. 같은 generation/evidence_revision과 최종 CORE 경로를 사용하며, 제출 순간의 권한·자세 신선함·이동 공간 판정을 다시 검사한다.
+- 증거: 매니저 폐루프에서 접근·세 영상 검증·정상 추종 재개를 시험했다. 독립 리뷰에서 재현한 운전자 권한 만료, 순수 회전 중 live linear ceiling 철회, Fleet RESUME 뒤 stuck 재생성을 각각 회귀 시험으로 수정했다.
+- gate 변화: 명령 제안 연결의 호스트 증거만. 실제 바닥·swept path 공급자는 아직 런타임에 연결하지 않았고 장치 배포·주행은 수행하지 않았다.

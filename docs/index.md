@@ -300,8 +300,8 @@
 
 ## 최근 기록
 
-- 2026-10-05 · uncommitted · fix(lane): preserve source-frame departure diagnostics
-- 2026-10-05 · uncommitted · docs(adr): D-467 worktree retirement and X: scratch capacity
-- 2026-10-05 · uncommitted · docs(lane): straight departure pipeline proposal
-- 2026-10-05 · uncommitted · fix(site): published HTTPS port comes only from the site setting
-- 2026-10-05 · uncommitted · uiux: keep measured geometry in stylesheets
+- 2026-10-05 · uncommitted · docs(team): onboarding guide, PR template, CODEOWNERS, author guard
+- 2026-10-05 · uncommitted · fix(docs): D-468 API 변경 이력 행 보완
+- 2026-10-05 · uncommitted · feat(lane): synchronize real pose and containment evidence
+- 2026-10-05 · uncommitted · fix(site): Fleet and Vision listen ports come from the site setting
+- 2026-10-05 · uncommitted · feat(lane): local-first departure return decision

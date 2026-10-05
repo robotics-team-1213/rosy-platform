@@ -1,6 +1,6 @@
 # Colab에서 학습하고 로봇 쪽으로 넘기기 (D-356, D-373)
 
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/livsbittt/rosy-os/blob/main/learning/training/perception/training/rosy_lane_training.ipynb)
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/robotics-team-1213/rosy-platform/blob/main/learning/training/perception/training/rosy_lane_training.ipynb)
 
 **바로 실행하는 노트북(D-373):** 위 배지로 [`rosy_lane_training.ipynb`](rosy_lane_training.ipynb)를 연다. 입력 칸만 채우면 기준 모델(LaneUNet)로 학습, export, 검사, store inbox로 넘기기까지 끝난다. 5b 셀에서 자기 모델로 바꿔 끼울 수 있다. 아래 절차는 자기 노트북을 쓰는 사람을 위한 것이다.
 
@@ -59,7 +59,7 @@ store는 경로 하나다. 지금은 사이트 PC의 로컬 폴더이고, 팀이
 저장소 전체(지도·영상 포함)는 크다. 학습 도구와 로봇 쪽 검사 코드만 sparse checkout으로 받는다.
 
 ```python
-!git clone --depth 1 --filter=blob:none --sparse https://github.com/livsbittt/rosy-os.git rosy
+!git clone --depth 1 --filter=blob:none --sparse https://github.com/robotics-team-1213/rosy-platform.git rosy
 !cd rosy && git sparse-checkout set learning/training/perception/training src/runtime/sensing/control src/contracts/foundation/core_common
 !pip -q install onnx onnxruntime
 

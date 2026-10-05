@@ -320,6 +320,19 @@ class ControlSensorAdapter:
             safety.bind_control_policy(self.policy)
         return True
 
+    def return_sensor_allowed(self, now, linear, angular):
+        """D-468 current sensor/floor evidence only; CORE must also prove swept space."""
+        if (self._closed or self.config.mode!='enforce'
+                or not {'lidar','imu','ir'}.issubset(self.config.required)):
+            return False
+        evaluate=getattr(self.policy,'local_return_allowed',None)
+        if not callable(evaluate):
+            return False
+        try:
+            return evaluate(linear,angular,now) is True
+        except Exception:
+            return False
+
     def attach(self, executor: Any) -> bool:
         if self.node is None or self._closed or self._executor is not None:
             return False

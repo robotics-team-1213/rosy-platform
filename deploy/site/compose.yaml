@@ -22,7 +22,7 @@ services:
       - --host
       - 0.0.0.0
       - --port
-      - "8090"
+      - "${ROSY_FLEET_PORT:?set ROSY_FLEET_PORT}"
       - --web-common
       - /opt/rosy/web-common
       - --token-env
@@ -85,7 +85,7 @@ services:
     cap_add: [SETUID, SETGID]
     restart: unless-stopped
     healthcheck:
-      test: [CMD, python3, -c, "import urllib.request; urllib.request.urlopen('https://fleet:8090/healthz', timeout=2).read()"]
+      test: [CMD, python3, -c, "import urllib.request; urllib.request.urlopen('https://fleet:${ROSY_FLEET_PORT:?set ROSY_FLEET_PORT}/healthz', timeout=2).read()"]
       interval: 15s
       timeout: 3s
       retries: 3
@@ -111,7 +111,7 @@ services:
       - --host
       - 0.0.0.0
       - --port
-      - "8095"
+      - "${ROSY_VISION_PORT:?set ROSY_VISION_PORT}"
       - --tls-cert
       - /run/secrets/site_cert
       - --tls-key
@@ -141,7 +141,7 @@ services:
     cap_add: [SETUID, SETGID]
     restart: unless-stopped
     healthcheck:
-      test: [CMD, python3, -c, "import urllib.request; urllib.request.urlopen('https://vision:8095/healthz', timeout=2).read()"]
+      test: [CMD, python3, -c, "import urllib.request; urllib.request.urlopen('https://vision:${ROSY_VISION_PORT:?set ROSY_VISION_PORT}/healthz', timeout=2).read()"]
       interval: 15s
       timeout: 3s
       retries: 3
@@ -167,8 +167,10 @@ services:
     environment:
       XDG_CONFIG_HOME: /config
       XDG_DATA_HOME: /data
-      # Caddyfile site address is :{$ROSY_SITE_HTTPS_PORT} with no default.
+      # Caddyfile addresses use these names with no default.
       ROSY_SITE_HTTPS_PORT: ${ROSY_SITE_HTTPS_PORT:?set ROSY_SITE_HTTPS_PORT}
+      ROSY_FLEET_PORT: ${ROSY_FLEET_PORT:?set ROSY_FLEET_PORT}
+      ROSY_VISION_PORT: ${ROSY_VISION_PORT:?set ROSY_VISION_PORT}
     read_only: true
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=32m,uid=10001,gid=10001

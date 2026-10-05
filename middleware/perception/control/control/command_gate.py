@@ -34,6 +34,7 @@ class GateInputs:
     can_rotate: bool = True
     bounded_motion: bool = False
     legacy_tilt_recovery: bool = False
+    floor_observed: bool = False
 
 
 @dataclass(frozen=True)
@@ -95,6 +96,8 @@ class CommandPolicy:
         The producer supplies its actually applied revision. Never label sensor
         state with a requested revision merely because CORE has bound it.
         """
+        if getattr(inputs,'floor_observed',False) is True:
+            required=tuple(dict.fromkeys((*required,'lidar','imu','ir')))
         window = observations.policy_window(required, now)
         if window is None or applied_revision != self.revision:
             self.invalidate()
@@ -136,6 +139,17 @@ class CommandPolicy:
                 return False
             self._snapshot = snapshot
         return True
+
+    def local_return_allowed(self, linear, angular, now):
+        """Fresh positive floor plus an unchanged candidate; no authority or sweep proof."""
+        output=self.evaluate(linear,angular,now)
+        if output is None:
+            return False
+        snapshot,result=output
+        state=snapshot.inputs
+        return (state.floor_observed is True and state.cliff is False and state.tilt is False
+                and state.pickup is False and not result.discard
+                and result.reason=='allow' and result.linear==linear and result.angular==angular)
 
     def evaluate(self, linear, angular, now, *, allow_bounded_sweep=False):
         with self._lock:

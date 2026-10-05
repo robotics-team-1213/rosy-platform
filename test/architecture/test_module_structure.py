@@ -476,8 +476,20 @@ SIZE_VERDICTS = {
         "accept: sim-only read-only viewer server (HTTP handler + ROS subscriptions); the pure logic already lives in live_view_model.py and the page in lane_live_view.html, covered by test_lane_live_view*.py and test_live_view_model.py (X5)",
     ),
     "core_features": (
-        13_202,
-        "accept: re-judged 2026-10-05 at 13202 for the private cumulative trial "
+        13_933,
+        "accept: independently re-judged 2026-10-05 at 13933 for D-468 manager arbitration: "
+        "216 above13717 are policy+37, approach51, arbitration112, wiring+9, manager+5 and stuck+2. "
+        "Existing line_follow leaves separate pure policy, measured approach, evidence and "
+        "arbitration under one manager lock/generation and CORE final publisher. No extra "
+        "package or deploy unit is justified; all file thresholds and package+150 remain. "
+        "See docs/validation/lane-return-2026-10-05/README.md. "
+        "Previously independently re-judged 2026-10-05 at 13717 for D-468 source-time lane return: "
+        "515 lines above13202 are peer bounded_trial+22 and line_follow policy/admission/mixin+493. "
+        "Each new source is below600, owns no publisher or deploy unit and depends only on "
+        "its own feature and core_common. Existing feature subpackages preserve the split; "
+        "every file threshold and package+150 growth allowance remain unchanged. "
+        "See docs/validation/lane-return-2026-10-05/README.md. "
+        "Re-judged 2026-10-05 at 13202 for the private cumulative trial "
         "restriction in docs/plans/2026-10-05-core-bounded-camera-trial.md. "
         "The new ROS-free command/bounded_trial.py owns one durable trial ledger "
         "and has no publisher, API, deployment unit or feature-cross imports; "

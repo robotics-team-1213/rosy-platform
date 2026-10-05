@@ -1,0 +1,39 @@
+"""D-468 line manager's synchronized evidence seam; motion arbitration follows separately."""
+from core_features.line_follow.lane_return import Footprint
+from core_features.line_follow.lane_return_evidence import LaneReturnEvidence
+from core_features.line_follow.lane_return_decision import LaneReturnDecisionMixin
+
+
+class LaneReturnMixin(LaneReturnDecisionMixin):
+    def _init_lane_return(self):
+        self._return_evidence = LaneReturnEvidence()
+        self._return_controller = None
+        self._return_motion = None
+
+    def _reset_lane_return(self):
+        self._return_evidence.reset()
+        self._return_controller = None
+
+    def observe_return_pose(self, **sample):
+        with self._lock:
+            self._evidence_revision += 1
+            return self._return_evidence.observe_pose(**sample)
+
+    def invalidate_return_pose(self):
+        with self._lock:
+            self._evidence_revision += 1
+            self._return_evidence.reset()
+
+    def _observe_return_lane(self, observation, received_at):
+        if observation.containment is None or not observation.visible or observation.quality_reason:
+            self._return_evidence.invalidate_lane()
+            return True
+        else:
+            return self._return_evidence.observe_lane(observation.containment, received_at=received_at)
+
+    def return_evidence(self, *, now=None):
+        with self._lock:
+            c = self._config
+            body = (None if None in (c.body_front_x_m, c.body_rear_x_m, c.body_half_width_m)
+                    else Footprint(c.body_front_x_m, c.body_rear_x_m, c.body_half_width_m))
+            return self._return_evidence.snapshot(now=self._clock() if now is None else now, body=body)

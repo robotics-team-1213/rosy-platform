@@ -6124,3 +6124,30 @@ osy-d395-s1d\`.
 - Change: include keeper diagnostics in raw Pilot recordings and preserve them through MCAP conversion/frame extraction; no label authority or motion changes.
 - Evidence: related 206 PASS, independent 87 PASS, 0 NEW; installed annotated stationary recording yielded 149 matched frames, all zero commands. docs/validation/lane-evidence-2026-10-05/result.md.
 - Gate: SOURCE regression verified; new recorder deployment and physical departure fix/ FIELD acceptance remain unverified.
+
+## 2026-10-05 · uncommitted · feat(lane): local-first departure return decision
+- 변경: D-468 채택. 차체 침범 감지·실제 자세 복귀·센서 재탐색을 Fleet 지원보다 먼저 수행한다. 구현은 feat/lane-return.
+- 증거: docs/plans/2026-10-05-lane-return.md. 설계 결정만 사용자 승인; SOURCE/SIM/DEVICE/FIELD 검증은 별도.
+- gate 변화: ADR 결정과 실행 목표만 채택. 런타임 배포·현장 복구 수용은 아직 없음.
+
+## 2026-10-05 · uncommitted · fix(site): Fleet and Vision listen ports come from the site setting
+- 변경: Fleet과 Vision의 컨테이너 수신 포트가 ROSY_FLEET_PORT와 ROSY_VISION_PORT다. Compose 명령, 헬스체크, Caddy 업스트림, 페어링 동기화 주소가 그 값을 쓴다. 코드 기본값은 없다. 두 포트는 공개하지 않는다.
+- 증거: test/test_site_firewall.py test/test_site_preflight.py test/test_site_pairing_deploy.py test/test_site_task_queue_deploy.py test/test_site_map_fit_deploy.py — 113 passed. known_failures 0 new. 호스트 시험이며 현장 배포는 없다.
+- gate 변화: 없음. 현장 site.env에 두 키가 생기기 전에는 다음 배포가 거부된다. 아직 배포하지 않았다.
+
+## 2026-10-05 · uncommitted · feat(lane): synchronize real pose and containment evidence
+- 변경: D-468 실제 odometry/원본 영상 시각 보간·현재 차체 좌표 변환을 manager와 ROS callback에 연결했다. source-clock high-water, 원본 quaternion, 초기화 epoch와 projection uncertainty를 검증한다.
+- 증거: 관련 기존 bounded-trial/bridge/line-follow 및 구조 검사 109 PASS, 0 NEW. source/receipt 시각이 다른 무효화 후 복구 회귀 36 PASS. docs/validation/lane-return-2026-10-05/README.md.
+- gate 변화: 실제 자세 센서 경로의 SOURCE 연결만. 복귀 명령/폐루프/배포/현장 수용은 아직 없음. 장치 read-only SSH probe는 timeout.
+
+## 2026-10-05 · uncommitted · fix(docs): D-468 API 변경 이력 행 보완
+
+- 변경: API Reference v1.106 헤더와 D-468 본문에 맞는 변경 이력 행을 추가했다.
+- 증거: 계약 버전 및 Fleet 문서 검사 36 PASS. 현장 수용은 별도다.
+- gate 변화: 없음.
+
+## 2026-10-05 · uncommitted · docs(team): onboarding guide, PR template, CODEOWNERS, author guard
+
+- 변경: 팀 가이드 `docs/reference/team-guide.md`(첫날 설정, 공유 범위, 작업 방식, 작업 영역), `CONTRIBUTING.md`, PR 템플릿, CODEOWNERS, pre-push에 잘못된 작성자 이메일 거절. 저장소는 `robotics-team-1213/rosy-platform`으로 이전됨.
+- 증거: harness lint, pre-push 훅 계약 시험.
+- gate 변화: 없음.
