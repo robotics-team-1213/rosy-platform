@@ -6199,3 +6199,9 @@ osy-d395-s1d\`.
 - 변경: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)에 열린 확인창 6장과 행동별 실행 버튼을 연결했다. 취소 뒤 캡처만 있던 G2 공백을 채웠다.
 - 증거: 절차 60셀 1 passed, 관련 작업 브라우저 10 passed, `known_failures.py` 0 NEW. 확인 취소 6셀의 쓰기 요청 0, 참조 이미지 누락 0.
 - gate 변화: LOCAL 증거 확장. 제품 전체 UI/UX와 장치·현장 수용은 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(docs): 절차 G3 항목별 근거와 잔여 범위
+
+- 변경: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)에 웨이포인트 저장 작업의 API·화면 왕복 증거와 D-153 G3 여덟 항목의 근거·남은 판정 범위를 기록했다.
+- 증거: 390px FastAPI/Chromium 1 passed, `known_failures.py` 0 NEW, 저장 201·목록 readback·가로 넘침 0. 여덟 항목은 모두 부분 근거로 남긴다.
+- gate 변화: G3 GO 아님. 제품 전체 UI/UX와 장치·현장 수용은 HOLD다.

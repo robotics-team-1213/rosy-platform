@@ -260,6 +260,53 @@ def test_role_procedure_g2_local_matrix(tmp_path):
     (CAPTURES / "matrix.json").write_text(json.dumps(records, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
+def test_operator_waypoint_task_reaches_saved_readback(tmp_path):
+    client = _core_client(tmp_path)
+    CAPTURES.mkdir(parents=True, exist_ok=True)
+    posts = []
+    errors = []
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        page = browser.new_page(viewport={"width": 390, "height": 844})
+        page.on("pageerror", lambda error: errors.append(str(error)))
+        page.add_init_script("sessionStorage.setItem('rosy.dashboard.token', 'rosy-dev-operator')")
+
+        def serve(route):
+            request = route.request
+            path = urlsplit(request.url).path
+            if request.method == "POST" and path == "/api/v1/waypoints":
+                response = client.post(path, json=request.post_data_json,
+                                       headers={"Authorization": f"Bearer {TOKENS['operator']}"})
+                posts.append({"path": path, "status": response.status_code})
+            elif request.method == "GET":
+                response = _response(client, path, TOKENS["operator"], "normal", "setup")
+            else:
+                route.fulfill(status=501, content_type="application/json", body='{"detail":"fixture blocks writes"}')
+                return
+            route.fulfill(status=response.status_code, headers={
+                "content-type": response.headers.get("content-type", "application/octet-stream"),
+                "cache-control": "no-store",
+            }, body=response.content if hasattr(response, "content") else response.body)
+
+        page.route("**/*", serve)
+        page.goto("http://rosy.test/setup", wait_until="domcontentloaded")
+        _select_task(page, "setup.waypoints")
+        field = page.get_by_role("textbox", name="웨이포인트 이름")
+        save = page.get_by_role("button", name="현재 위치 저장", exact=True)
+        page.wait_for_function("document.querySelector('[data-panel=\"setup.waypoints\"] ui-button')?.disabled === false")
+        field.fill("도크 접근")
+        save.click()
+        page.get_by_text("도크 접근 웨이포인트를 저장했습니다.", exact=True).wait_for()
+        page.get_by_text("도크 접근: 1.20, 0.30", exact=True).wait_for(timeout=10_000)
+        assert posts == [{"path": "/api/v1/waypoints", "status": 201}]
+        assert field.input_value() == ""
+        assert errors == []
+        assert page.evaluate("document.documentElement.scrollWidth - innerWidth") == 0
+        assert page.locator("#shell-estop").is_visible()
+        page.screenshot(path=str(CAPTURES / "operator-setup-waypoint-saved-390x844.png"), full_page=True)
+        browser.close()
+
+
 def test_existing_dock_type_ignores_hidden_new_type_fields(tmp_path):
     """An administrator can reuse a type after exploring the observation detector."""
     from fastapi import Response

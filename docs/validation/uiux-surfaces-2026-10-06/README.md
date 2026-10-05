@@ -20,6 +20,23 @@
 
 불가역 확인은 이전 캡처가 대화상자를 닫은 뒤 화면만 남겼으므로 열린 상태를 1366/390px 각 3장씩 다시 찍었다. 맵핑 시작·중지·저장과 호스트 작업의 실행 버튼은 선택한 행동 이름을 말한다. 이 변경 뒤 절차 60셀 **1 passed**, 관련 작업 브라우저 **10 passed**, `known_failures.py` **0 NEW**였다. 6개 확인 셀은 취소 뒤 쓰기 요청이 0이다. 이는 확인창과 취소의 LOCAL 증거이지 실제 명령 완료 증거가 아니다.
 
+운용자 작업 준비의 [웨이포인트 저장 390×844](captures/operator-setup-waypoint-saved-390x844.png)은 현재 FastAPI의 `POST /api/v1/waypoints`가 201을 돌려주고, 다음 목록 조회가 저장된 이름과 좌표를 화면에 표시한 LOCAL 작업 경로다. 브라우저 1 passed, `known_failures.py` 0 NEW였다. 이 테스트 인스턴스의 저장이며 실물 로봇의 위치 정확도는 검증하지 않는다.
+
+### 장비·작업 준비 G3 독회 — LOCAL 진행 중
+
+| D-153 항목 | 현재 근거 | 남은 판정 범위 |
+|---|---|---|
+| 1. 정직 | [위치 정보 없음](captures/roles-procedure/operator-setup-unavailable-390x844.png)에서 저장을 막고, [관리자 호스트 지연](captures/roles-procedure/administrator-device-delayed-host-operations-390x844.png)에서 쓰기를 막는다. | 나머지 작업 패널의 결측값·실제 기능 가용성. |
+| 2. 증거 상태 | [60셀 매트릭스](captures/roles-procedure/matrix.json)에 정상·지연·끊김·정보 없음의 화면을 분리했고 지연에는 22초 나이를 표시한다. | 모든 세부 값과 실장 Host Agent 전환. |
+| 3. 색 | 해당 모바일 캡처에서 정상은 중립, 지연은 주의색, 비상 정지는 위험색이다. G1 팔레트 시험은 통과했다. | 선택되지 않은 작업 패널·현장 조명. |
+| 4. 위계 | [웨이포인트 저장](captures/operator-setup-waypoint-saved-390x844.png)은 읽기 내용과 실행 버튼을 구분한다. | 다른 작업의 첫 화면과 긴 진단 내용. |
+| 5. 불가역 | [맵핑](captures/roles-procedure/operator-setup-confirm-dialog-390x844.png)·[릴리스 복귀](captures/roles-procedure/administrator-device-confirm-dialog-390x844.png) 확인창에 대상 행동·취소·비상 정지가 보이고 취소 POST는 0이다. | 맵 리셋·언독 등 다른 종류와 실제 실행 readback. |
+| 6. 어휘 | 운용자 작업은 한국어 평문이며 관리자 화면은 `CORE`·`Wi-Fi` 같은 장비 용어를 쓴다. | 나머지 절차의 현장 사용자 독해. |
+| 7. 표면 질문 | 웨이포인트 이름 입력→201 저장→목록 readback을 재생했고, 막힌 위치·호스트 작업의 이유가 보인다. | 다른 작업의 완료·복구·재확인 경로. |
+| 8. 표면 문법 | 1366px 작업 레일과 390px 작업 선택 후 한 절차가 펼쳐진다. | 모든 작업의 순서·스크롤 독회. |
+
+여덟 항목 모두 현재는 **부분 근거**다. 각 항목의 남은 범위를 확인하기 전에는 장비·작업 준비 표면을 G3 GO로 쓰지 않는다.
+
 현재 트리의 관련 G1 팔레트·토큰·반응형·Fleet 문법 시험은 **83 passed**다. Fleet 지도 적합·키보드 목표 확인 2 passed, 전화 기본 예외·넘침 검사 2 passed이고 세 실행 모두 `known_failures.py`가 0 NEW를 보고했다. 이는 이 회차에서 실행한 범위의 증거이며 D-153 G1 전체를 대체하지 않는다.
 
 D-153이 이름 붙인 G1 시험 중 팔레트·토큰(스타일가이드 포함)·문법 **74 passed**, CORE 증거 **7 passed**를 현재 브랜치에서 다시 실행했고 `known_failures.py`는 0 NEW였다. `test_styleguide.py` 독립 파일은 현재 트리에 없고 스타일가이드 검사는 `shared/web/test/test_ui_token_contracts.py`에 있다. 이는 G1 코드 계약의 LOCAL 결과이며 G2/G3 판정은 별도다.
