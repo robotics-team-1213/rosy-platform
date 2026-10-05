@@ -329,7 +329,7 @@ export const confirmIrreversible = createConfirmIrreversible(openLiveDialog);
 // * 마크업에 있던 대화상자는 열린 동안 body 끝으로 옮겨(조상의 쌓임 맥락을 벗어남)
 //   닫히면 제자리로 돌아간다. 만들어 넘긴 대화상자는 닫히면 지운다.
 // aria-modal은 달지 않는다: 달면 보조기기가 살아 있는 정지를 못 찾는다(inert가 나머지를 숨긴다).
-// 닫기는 dialog.close(value)로 한다. onClose(returnValue, { byStop })가 정리 뒤에 불린다.
+// 반환한 close(value)는 즉시 정리한다. native close도 같은 정리를 거친다.
 const ALWAYS_LIVE = "[data-always-live]";
 const DIALOG_FOCUSABLE = "input:not([type=hidden]), select, textarea, button, ui-button, a[href], [tabindex]:not([tabindex='-1'])";
 
@@ -341,7 +341,7 @@ export function openLiveDialog(dialog, { initialFocus = null, opener = document.
   scrim.setAttribute("aria-hidden", "true");
 
   const inerted = new Set();
-  let byStop = false;
+  let byStop = false, finished = false;
   const liveNodes = () => [...document.querySelectorAll(ALWAYS_LIVE)];
   const shown = (node) => node.getClientRects().length > 0 && !node.disabled;
   // 살릴 노드(정지·대화상자)의 조상 사슬만 타고 내려가며 곁가지를 inert로 만든다.
@@ -372,7 +372,7 @@ export function openLiveDialog(dialog, { initialFocus = null, opener = document.
   const onKey = (event) => {
     if (event.key === "Escape") {
       event.preventDefault();
-      dialog.close("cancel");
+      close("cancel");
       return;
     }
     if (event.key !== "Tab") return;
@@ -387,10 +387,13 @@ export function openLiveDialog(dialog, { initialFocus = null, opener = document.
   const onClick = (event) => {
     if (!event.target.closest?.(ALWAYS_LIVE)) return;
     byStop = true;
-    dialog.close("cancel");
+    close("cancel");
   };
 
-  dialog.addEventListener("close", () => {
+  const finish = () => {
+    if (finished) return;
+    finished = true;
+    dialog.removeEventListener("close", onNativeClose);
     observer.disconnect();
     document.removeEventListener("keydown", onKey, true);
     document.removeEventListener("click", onClick, true);
@@ -406,7 +409,10 @@ export function openLiveDialog(dialog, { initialFocus = null, opener = document.
       if (back?.isConnected && typeof back.focus === "function") back.focus();
     }
     onClose?.(dialog.returnValue, { byStop });
-  }, { once: true });
+  };
+  const close = value => { if (finished) return; if (dialog.open) dialog.close(value); finish(); };
+  const onNativeClose = () => { if (!dialog.open) finish(); };
+  dialog.addEventListener("close", onNativeClose);
   document.body.append(scrim, dialog);
   seal();
   punch();
@@ -418,6 +424,7 @@ export function openLiveDialog(dialog, { initialFocus = null, opener = document.
   dialog.returnValue = "";
   dialog.show();
   (initialFocus || [...dialog.querySelectorAll(DIALOG_FOCUSABLE)].find(shown))?.focus();
+  return close;
 }
 
 // D-359 §4 — 캔버스 색·글꼴. 캔버스는 CSS 변수를 못 쓰므로 여기서 한 번 풀어

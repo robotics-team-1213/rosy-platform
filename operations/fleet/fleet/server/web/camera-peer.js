@@ -109,8 +109,11 @@ export function createCameraPeerPanel({scope,headers,identity,locked,dialogs,onU
         || identity()?.role!=='operator' || !el('camera-peer-panel')) return;
     inFlight=true; const life=scope.capture(), owner=ownerKey();
     try {
-      const [requests,relationships,listing,anchor]=await Promise.all([
-        call(BASE+'/pending'),call(BASE+'/relationships'),call('/api/fleet/pairing/v1/pending'),call(BASE+'/identity')]);
+      const [requests,relationships,anchor]=await Promise.all([
+        call(BASE+'/pending'),call(BASE+'/relationships'),call(BASE+'/identity')]);
+      life.check();
+      if (owner!==ownerKey() || locked()) {clear(); return;}
+      const listing=await call('/api/fleet/pairing/v1/pending');
       life.check();
       if (owner!==ownerKey() || locked()) {clear(); return;}
       sources=(listing.paired_sources || []).filter(row=>!row.has_credential).map(row=>row.source_id);

@@ -85,8 +85,8 @@
 
 ## 최근 기록
 
+- 2026-10-05 · uncommitted · fix(ui): 목표 취소·관제 적합·미지원 카메라 조회 복구
 - 2026-10-05 · uncommitted · fix(test): T2 exact-source import 격리
 - 2026-10-05 · uncommitted · fix(fleet): T4 해제 근거·Task 트랜잭션 경계
 - 2026-10-05 · uncommitted · feat(server): D-426 T4 공유 구간 진입 허가·점유
 - 2026-10-05 · uncommitted · fix(discovery): LAN 이름 조회 작업과 대기 상한
-- 2026-10-05 · uncommitted · fix(fleet): DNS-SD가 비면 저장한 HTTPS 이름의 호스트 Avahi 주소

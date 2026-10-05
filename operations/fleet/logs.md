@@ -1875,3 +1875,9 @@
 - 변경: T2 probe 테스트가 전역 sys.path 앞에 Gazebo 경로를 넣어 Vision observer를 가리던 문제를 private exact-file 모듈 로더로 닫았다. probe 판정 함수와 런타임은 바꾸지 않았다.
 - 증거: 원래 probe-first/Vision collection 1 ERROR 재현 후 T2/T5/T3/Vision 양방향 각 105 PASS. 기존 generic observer/probe/scenarios 및 sys.path를 보존하는 fresh-process 회귀 포함.
 - gate 변화: 없음. HOST collection 증거이며 ROS/SIM/기기 실행 수용은 아니다.
+## 2026-10-05 · uncommitted · fix(ui): 목표 취소·관제 적합·미지원 카메라 조회 복구
+
+- 변경: 시작점 설정을 기본 접힌 disclosure로 묶고 모든 입력·저장·상태·지도 표시는 유지했다. wide 지도42dvh 규칙이 뒤의 기본54dvh 규칙에 덮이지 않도록 실제 CSS 우선순위를 바로잡았다. v2 카메라의 인증된 지원 조회가 성공하기 전에는 legacy source 목록을 추가 조회하지 않는다.
+- 증거: 원래 세 브라우저 회귀3 FAIL14.85s를 재현했다. 첫 수정은2 PASS1 FAIL21.55s(문서 overflow258→4px)이었고 최종12 PASS79.54s에서 원래 viewport·키보드·카메라404 횟수와 시작점 저장/재로드/토큰 교체/지도 변경, Stop·확인·Abort 계약을 유지했다.
+- 경계: fixture·로컬 Chromium SOURCE/LOCAL 보완만. 서버 권한·API·자동 페어링·실제 로봇 명령을 추가하지 않는다. 정적 계약39 PASS1 inherited P6 FAIL을 보존했고 package 예산이나 기존 거대 파일 verdict를 바꾸지 않았다. 기존 게이트/HOLD·장치 수용은 그대로다.
+- gate 변화: 없음. 기본 화면과 기존 조작 계약 복구이며 실제 연결·제어 수용은 별도다.
