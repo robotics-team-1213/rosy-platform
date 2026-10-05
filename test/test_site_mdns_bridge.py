@@ -218,7 +218,8 @@ def test_bridge_unit_targets_tls_host_and_loopback_only():
     assert "IPAddressDeny=any" in unit and "IPAddressAllow=localhost" in unit
     for name in ("rosy-fleet-advertise.service", "rosy-overhead-advertise.service"):
         advertise = (ROOT / "deploy/site" / name).read_text(encoding="utf-8")
-        assert "EnvironmentFile=-/run/rosy-site/site-public.env" in advertise
+        assert "EnvironmentFile=/run/rosy-site/site-public.env" in advertise
+        assert "Environment=ROSY_SITE_HTTPS_PORT=" not in advertise
         assert "/etc/rosy/site/.env" not in advertise
 
 
@@ -238,14 +239,15 @@ def _run_main(module, monkeypatch, tmp_path, token, *args, env=None):
     return posted
 
 
-def test_tls_host_and_port_come_from_the_environment_with_the_compose_default(tmp_path, monkeypatch):
+def test_tls_host_and_port_come_from_the_environment(tmp_path, monkeypatch):
     module = _module()
-    posted = _run_main(module, monkeypatch, tmp_path, b"scanner-secret\n",
-                       env={"ROSY_SITE_TLS_HOST": "Site-PC.local."})
-    assert (posted[0]["tls_host"], posted[0]["port"]) == ("site-pc.local", 8443)
+    with pytest.raises(SystemExit) as missing:
+        _run_main(module, monkeypatch, tmp_path, b"scanner-secret\n",
+                  env={"ROSY_SITE_TLS_HOST": "Site-PC.local."})
+    assert missing.value.code == 2
     posted = _run_main(module, monkeypatch, tmp_path, b"scanner-secret",
                        env={"ROSY_SITE_TLS_HOST": "site-pc.local", "ROSY_SITE_HTTPS_PORT": "9443"})
-    assert posted[0]["port"] == 9443
+    assert (posted[0]["tls_host"], posted[0]["port"]) == ("site-pc.local", 9443)
 
 
 @pytest.mark.parametrize("token", [b"", b"abc\r\nX-Injected: 1", b"two words", b"tab\there",

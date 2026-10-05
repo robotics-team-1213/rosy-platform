@@ -157,7 +157,7 @@ services:
     ports:
       # 127.0.0.1 (default) or the 0.0.0.0 wildcard; LAN exposure is limited by interface in
       # mangle PREROUTING (site-firewall.py), so no LAN IP is ever written here.
-      - "${ROSY_SITE_BIND_ADDRESS:-127.0.0.1}:${ROSY_SITE_HTTPS_PORT:-8443}:8443"
+      - "${ROSY_SITE_BIND_ADDRESS:-127.0.0.1}:${ROSY_SITE_HTTPS_PORT:?set ROSY_SITE_HTTPS_PORT}:${ROSY_SITE_HTTPS_PORT:?set ROSY_SITE_HTTPS_PORT}"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
     secrets:
@@ -167,6 +167,8 @@ services:
     environment:
       XDG_CONFIG_HOME: /config
       XDG_DATA_HOME: /data
+      # Caddyfile site address is :{$ROSY_SITE_HTTPS_PORT} with no default.
+      ROSY_SITE_HTTPS_PORT: ${ROSY_SITE_HTTPS_PORT:?set ROSY_SITE_HTTPS_PORT}
     read_only: true
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=32m,uid=10001,gid=10001

@@ -67,14 +67,14 @@ address:
   (`-m addrtype --dst-type LOCAL -j DROP`). After that only traffic on Docker
   bridges (`-i br+`, `-i docker0`, container to container) returns, and an
   unconditional `-j DROP` ends the chain, so a packet routed straight to a
-  container IP from any other interface is dropped too. When the published
-  port differs from the proxy's container port 8443, a second jump
-  `-p tcp --dport 8443 -m addrtype ! --dst-type LOCAL` sends such routed
-  packets to the chain; it skips local destinations, so a host service on
-  8443 is untouched. It matches interface names only, never an IP or subnet.
+  container IP from any other interface is dropped too. The proxy listens on
+  the same `ROSY_SITE_HTTPS_PORT` it publishes, so that one jump covers the
+  host port and a packet routed straight to the container on that port. It
+  matches interface names only, never an IP or subnet.
   The chain is written in one `iptables-restore -w --noflush` transaction
-  (declaring the chain flushes and refills it atomically), and the jumps are
-  inserted once and kept; re-running changes nothing. A named interface that
+  (declaring the chain flushes and refills it atomically). The jump is
+  inserted once and kept; a jump for any other port is removed, and
+  re-running with the same port changes nothing. A named interface that
   does not exist yet is admitted by name with a warning.
 - **Docker Engine 28 or later.** Older engines accept packets routed
   directly to a container address from any interface; the chain's final drop
@@ -197,7 +197,7 @@ and group `rosy-mdns` with no login shell. Grant that group read access to
 `discovery_token`; `site-ca.crt` is already public to the host service.
 
 The bridge needs no URL, FQDN or LAN address. Its unit reads
-`ROSY_SITE_TLS_HOST` and `ROSY_SITE_HTTPS_PORT` (default 8443, as in Compose)
+`ROSY_SITE_TLS_HOST` and `ROSY_SITE_HTTPS_PORT` (both required; neither is defaulted in code)
 from `/run/rosy-site/site-public.env`, which `site-firewall.py apply` writes
 from `docker compose config`. It connects to the proxy on this host's
 loopback (`127.0.0.1`, then `::1`) at that port and sets the TLS server name,
@@ -489,7 +489,8 @@ It reads `ROSY_SITE_TLS_HOST` (flag `--tls-host`, else the shell, else
 a CA; the leaf has a DNS SAN equal to `tls_host` (exact, case-insensitive, a
 wildcard does not count); `tls_host` is a `<name>.local` name; the
 `--tls-host` that the advertise units publish equals it; and the Caddyfile
-site address names no other host (a port-only `:8443` address passes). Only the
+site address names no other host (a port-only address such as
+`:{$ROSY_SITE_HTTPS_PORT}` passes). Only the
 first Caddyfile site block's addresses are read. IP SANs are not checked: they
 go stale on renumber, and an IP SAN is needed only for a `manual_host`
 fallback link, which this preflight does not cover.
