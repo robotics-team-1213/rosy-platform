@@ -46,8 +46,8 @@
 
 ## 최근 기록
 
+- 2026-10-06 · uncommitted · test(omx): 좌석 정리 검사의 관절 상태 갱신
 - 2026-10-05 · uncommitted · test(omx): 좌석 교체 검사 시간 독립화
 - 2026-10-05 · 814e5571e · fix(omx): 단계 상태와 이벤트 ID의 읽기 일관성
 - 2026-10-05 · uncommitted · fix(omx): provider 후 최종 local STOP 재확인
 - 2026-10-05 · uncommitted · feat(learning): 동일 정책 실행 Episode와 Fleet export
-- 2026-10-05 · uncommitted · feat(omx): 검증된 Action parent와 정책 원본 사실 연결
