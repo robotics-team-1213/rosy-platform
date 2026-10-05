@@ -187,6 +187,16 @@ class ReturnController:
     def _fresh(now, stamp, ttl=.3):
         return stamp is not None and 0 <= now-stamp <= ttl
 
+    def restart_verification(self, now):
+        """Accepted console RESUME rechecks the lane; it does not resume old motion."""
+        self.phase, self._opened = 'departure_stop', now
+        self._count = self._search_attempt = 0
+        self._last_evidence = self._candidate = None
+        self._search_start = self._search_pose = None
+        self._align_start = self._align_pose = None
+        self._path.clear()
+        self._approach = CorridorApproach()
+
     def _hold(self, reason):
         return ReturnAction(self.phase, reason)
 
