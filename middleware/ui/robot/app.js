@@ -24,6 +24,8 @@ import {
   api,
   apiMaybe,
   authHeaders,
+  connectionOffer,
+  developmentSession,
   expiryLabel,
   forgetToken,
   isAdmin,
@@ -428,6 +430,10 @@ function signOut(message) {
   setConnection("unknown", "인증 대기");
   setText("auth-notice", message);
   elements["auth-drawer"].classList.add("open");
+  // 로그아웃 뒤에는 개발 연결 모드를 다시 확인해 보여준다.
+  devEntryChecked = false;
+  elements["dev-connect-row"].hidden = true;
+  revealDevelopmentEntry();
 }
 
 function showConnectionError(error) {
@@ -488,6 +494,48 @@ pageScope.listen(elements["auth-form"], "submit", async (event) => {
 });
 
 let codeRetryTimer = null;
+
+// D-432/D-471: 개발 연결 모드 로봇은 로그인 서랍에 코드 없는 입장을 보여준다.
+let devEntryChecked = false;
+async function revealDevelopmentEntry() {
+  if (devEntryChecked || session.token) return;
+  devEntryChecked = true;
+  const offer = await connectionOffer();
+  if (!offer || session.token || !pageScope.capture().current()) return;
+  elements["dev-connect-row"].hidden = false;
+}
+let devRetryTimer = null;
+pageScope.listen(elements["dev-connect"], "click", async () => {
+  if (elements["dev-connect"].disabled) return;
+  invalidateAuth();
+  const lifetime = authLifetime;
+  setText("dev-message", "개발 연결 확인 중…");
+  elements["dev-connect"].disabled = true;
+  let identity = null;
+  try {
+    identity = await developmentSession({signal: AbortSignal.any([lifetime.signal, pageScope.signal])});
+  } catch (error) {
+    if (lifetime !== authLifetime || lifetime.signal.aborted || !pageScope.capture().current()) return;
+    setText("dev-message", error.message || "로봇에 닿지 못했습니다.");
+    clearTimeout(devRetryTimer);
+    devRetryTimer = setTimeout(() => {
+      if (lifetime === authLifetime && !lifetime.signal.aborted && pageScope.capture().current()) elements["dev-connect"].disabled = false;
+    }, (error.retryAfter || 0) * 1000);
+    return;
+  }
+  if (lifetime !== authLifetime || lifetime.signal.aborted || !pageScope.capture().current()) return;
+  const owner = authTicket();
+  elements["dev-connect"].disabled = false;
+  stopVisionPreview("카메라 재인증 중");
+  try {
+    if (!await connect(owner)) return;
+    setText("dev-message", `${identity.role} 로 로그인했습니다 · ${expiryLabel(identity.expires_at)}`);
+  } catch (error) {
+    if (!owner.current()) return;
+    setText("dev-message", `로그인은 되었지만 연결하지 못했습니다: ${error.message}`);
+    showConnectionError(error);
+  }
+});
 
 pageScope.listen(elements["code-form"], "submit", async (event) => {
   event.preventDefault();
@@ -829,4 +877,4 @@ pageScope.interval(() => setText("clock", new Date().toLocaleTimeString("ko-KR",
 setText("clock", new Date().toLocaleTimeString("ko-KR", { hour12: false }));
 
 if (session.token) restoreConnection();
-else elements["auth-drawer"].classList.add("open");
+else { elements["auth-drawer"].classList.add("open"); revealDevelopmentEntry(); }

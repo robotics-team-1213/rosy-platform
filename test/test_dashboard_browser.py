@@ -452,6 +452,65 @@ def _launch_page(playwright, extra_init="", width=390, height=844, real_map=Fals
     return browser, page
 
 
+DEV_ENTRY_INIT = """
+sessionStorage.removeItem('rosy.dashboard.token');
+window.__devSessions = 0;
+const stubbed = window.fetch;
+window.fetch = async (input, options = {}) => {
+  const url = new URL(typeof input === 'string' ? input : input.url, location.href);
+  if (url.pathname === '/api/v1/auth/connection') {
+    window.__apiCalls.push({method: 'GET', path: url.pathname, search: '', body: null});
+    return new Response(JSON.stringify({mode: 'development', robot_id: 'rosy_01', transport: 'http'}),
+      {status: 200, headers: {'Content-Type': 'application/json'}});
+  }
+  if (url.pathname === '/api/v1/auth/development-session') {
+    window.__devSessions += 1;
+    window.__apiCalls.push({method: 'POST', path: url.pathname, search: '', body: null});
+    return new Response(JSON.stringify({id: 'dev-1', token: 'dev-session-token', role: 'operator',
+      label: 'Pilot development session', source: 'pair-development',
+      expires_at: new Date(Date.now() + 3600000).toISOString()}),
+      {status: 201, headers: {'Content-Type': 'application/json'}});
+  }
+  if (url.pathname === '/api/v1/ui/surfaces/console') {
+    window.__apiCalls.push({method: 'GET', path: url.pathname, search: '', body: null});
+    return new Response(JSON.stringify({surfaces: []}),
+      {status: 200, headers: {'Content-Type': 'application/json'}});
+  }
+  return stubbed(input, options);
+};
+"""
+
+def test_development_entry_logs_in_without_a_code():
+    """D-432/D-471: 개발 모드 로봇은 로그인 서랍에 코드 없는 입장이 열리고, 누르면 세션이 든다."""
+    pytest.importorskip("playwright.sync_api")
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as playwright:
+        try:
+            browser, page = _launch_page(playwright, extra_init=DEV_ENTRY_INIT)
+        except Exception as error:
+            pytest.skip(f"Playwright Chromium unavailable: {error}")
+        page.goto("http://rosy.test/dashboard", wait_until="domcontentloaded", timeout=5_000)
+        # 토큰 없이 부팅 → 서랍 열림 + 개발 연결 모드 조사 후 버튼 등장.
+        page.wait_for_function("!document.getElementById('dev-connect-row').hidden")
+        page.wait_for_function(
+            "window.__apiCalls.some((call) => call.path === '/api/v1/auth/connection')")
+        # 코드 폼은 그대로 있고, 개발 입장은 세션을 받아 화면에 들어간다.
+        assert page.locator("#code-form").is_visible()
+        page.click("#dev-connect")
+        page.wait_for_function(
+            "window.__apiCalls.some((call) => call.path === '/api/v1/auth/development-session')")
+        page.wait_for_function("window.__devSessions === 1")
+        # 엔트리 경로(/dashboard)에서는 로봇 상태 패널이 없으므로 목적지 영역으로 확인한다.
+        page.wait_for_function("!document.getElementById('entry-destinations').hidden")
+        assert sessionStorage_token(page) == "dev-session-token"
+        page.wait_for_function(
+            "document.querySelector('.entry-heading h1')?.textContent === '작업을 선택하세요'")
+        browser.close()
+
+def sessionStorage_token(page):
+    return page.evaluate("sessionStorage.getItem('rosy.dashboard.token')")
+
 def test_delayed_positive_request_cannot_arrive_after_release_zero():
     pytest.importorskip("playwright.sync_api")
     from playwright.sync_api import sync_playwright
