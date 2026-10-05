@@ -428,6 +428,26 @@ def test_outward_splay_requires_an_observed_common_stretch():
     assert not is_pair(left, right, 2 * HALF, SIDE_X_M)
 
 
+def test_crosswalk_blob_does_not_erase_a_continuous_lane_boundary():
+    # Several wide bars produce the largest RANSAC diagonal, which is a blob.
+    # The continuous left boundary is still supported by thin paint and a
+    # dark flank; it must survive the failed diagonal hypothesis.
+    image = _render([(0.09, 0.0)])
+    for centre in (-0.08, -0.02, 0.04):
+        bars = np.isfinite(X) & (X > 0.18) & (X < 0.30) & (np.abs(Y - centre) <= 0.02)
+        image[bars] = 195
+    obs, last = _keep(image)
+    assert obs is not None and last['strategy'] == 'left_only'
+    assert abs(last['target_m'][1]) < 0.02
+
+
+def test_blob_retry_does_not_invent_a_boundary_on_a_solid_patch():
+    from control.sensing.perception.lane_keep_lines import extract_lines
+    x, y = np.meshgrid(np.arange(0.15, 0.45, 0.005), np.arange(-0.10, 0.10, 0.005))
+    fitted, blobs = extract_lines(np.column_stack((x.ravel(), y.ravel())), np.random.default_rng(0))
+    assert not fitted and blobs
+
+
 def _render_corner(line_x, open_side):
     """An L-corner: the outer boundary of the next lane runs across at
     x = line_x from the closed side's lane line toward the open side; the
