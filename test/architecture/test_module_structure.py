@@ -97,14 +97,16 @@ SIZE_VERDICTS = {
         "growth allowance remain unchanged",
     ),
     "dashboard": (
-        10_148,
+        10_473,
         "split: D-447(b) adds a focused shared state-stream store to the already separated task "
         "panels; package total crosses 10k on integration, while individual asset ceilings and "
         "the +150 package allowance stay unchanged. The stream, REST fallback and scope teardown "
         "remain one owner (five Node regressions pass). Group robot role resources by their "
         "surface owner and identify remaining reusable assets for the existing shared/web owner "
         "under docs/plans/2026-10-04-ui-release-and-live-refinement.md; do not split transport or "
-        "duplicate its socket. Owner hmi; source-boundary follow-up after device acceptance",
+        "duplicate its socket. Re-judged at 10473 after the dashboard development entry and "
+        "temporary SSH credential view joined the same robot UI owner; the planned role-resource "
+        "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
         36_444,
