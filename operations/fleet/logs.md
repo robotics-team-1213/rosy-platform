@@ -1912,9 +1912,3 @@
 - 변경: CAP-001 표시와 전송 직전 재확인, 미지원 목표·대형 버튼 사유, 교체·대형 편입 경합 차단, ARMING 팔로워 예약. CORE 계약과 최종 제어 권한은 유지한다.
 - 증거: 관련 Python 180 PASS, Node 3 PASS, Chromium 2 PASS, 독립 리뷰 54 PASS와 scoped safety PASS. 기능 허용 변이 RED 후 복원 GREEN을 확인했다. docs/validation/fleet-navigation-support-2026-10-05.md.
 - gate 변화: 소스 회귀만 확인. 실기 두 대의 짧은 수동 진단과 최종 IDLE·속도 0을 읽었다. 새 후보 배포·목표·대형 실동작은 NOT_RUN, 독립 FIELD 수용은 HOLD.
-## 2026-10-05 · uncommitted · uiux/live-console: 관제 접속·좌표·시작점 준비 흐름
-
-- 변경: 관제 접속 → 카메라·지도 보정 → X/Y 좌표 확인 → 시작점 설정 안내와 접속 입력 포커스를 추가했다. 인증 상실 시 이전 지도·로봇·좌표·시작점을 지우며 지연된 일반 조회 성공이 인증을 다시 열지 않는다. 승인된 보정이 없는 첫 조회는 설치·보정 화면에서 해야 할 일을 안내한다. 시작점 입력을 PC·모바일 격자로 정리했다.
-- 증거: 새 Chromium 두 시나리오 2 FAIL 재현 후 기존 저장·재로드·인증 교체·지도 변경 포함 5 PASS. API/색상/기능 계약 62 PASS. 독립 리뷰의 D-359 breakpoint 위반 1 FAIL 재현 후 표준 구간으로 수정했고 반응형·Chromium·표시 계약 재검사 33 PASS, known_failures NEW 0. PC·모바일 브라우저 화면과 키보드 접속·가로 넘침을 확인했다.
-- 경계: API·역할·주행·보정 승인 계약은 그대로다. 브라우저 시험은 가짜 로봇 transport이며 실제 지도 좌표 오차나 현장 수용을 증명하지 않는다. CI·서명 후보·배포 readback은 이어 확인한다.
-- gate 변화: 없음. SOURCE/LOCAL UX 보완이며 원래 장치·현장 HOLD는 유지한다.
