@@ -342,6 +342,10 @@ class OwnerPolicySession:
                         start_state_tolerances=dict(cfg.max_start_state_tolerances))
                     if self._execution_journal is not None:
                         self._execution_journal.prepare(self.lease,candidate,command)
+                        # Storage can block while authority, installed bytes or
+                        # owner/camera identity changes. Re-admit after commit
+                        # inside the existing final submission fence.
+                        _,_,final_cameras=self._guard()
                     self._stop_open()
                     final_now=self._now()
                     self._lease_time(self.lease,final_now)
