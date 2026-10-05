@@ -77,6 +77,7 @@ class RosBridge:
     def __init__(self, node: Node, services) -> None:
         self._node = node
         self._svc = services
+        self._bounded_trial_guard = None
         self._readiness = getattr(services, "readiness", None)
         cfg = services.config
         self._frame_prefix = str(cfg.get("robot", {}).get("frame_prefix", ""))
@@ -471,7 +472,7 @@ class RosBridge:
         # cmd_vel_cycle 이 정한다 (rclpy 없이 검사되는 자리).
         cmd_vel_cycle(self._svc.command, self._svc.power, self._send_twist,
                       self._readiness, warn=self._node.get_logger().error,
-                      trial_guard=getattr(self, '_bounded_trial_guard', None))
+                      trial_guard=self._bounded_trial_guard)
 
     def _send_twist(self, out: CoreTwist) -> None:
         msg = Twist()

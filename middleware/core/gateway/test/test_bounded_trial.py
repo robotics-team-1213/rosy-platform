@@ -176,3 +176,42 @@ def test_replacing_bounds_after_binding_cannot_widen_trial(tmp_path):
     g=guard(tmp_path);sample(g)
     g.bounds=bounds(angular_max_radps=2.)
     assert cycle(g,Twist(.04,1.))==Twist()
+
+
+def actual_publish_method():
+    # Execute only the real ROS-free delegate method, not a stub ROS runtime.
+    import ast
+    from pathlib import Path
+    source=Path(__file__).parents[1]/'core/bridge/ros_bridge.py'
+    tree=ast.parse(source.read_text(encoding='utf-8'))
+    cls=next(n for n in tree.body if isinstance(n,ast.ClassDef) and n.name=='RosBridge')
+    method=next(n for n in cls.body if isinstance(n,ast.FunctionDef) and n.name=='_publish_cmd_vel')
+    scope={'cmd_vel_cycle':lambda *args,**kwargs:cmd_vel_cycle(*args,**kwargs,now=10.)}
+    exec(compile(ast.Module(body=[method],type_ignores=[]),str(source),'exec'),scope)
+    return scope['_publish_cmd_vel']
+
+
+def test_actual_bridge_requires_declared_trial_binding_before_writer(tmp_path):
+    sent=[]
+    bridge=SimpleNamespace(_svc=SimpleNamespace(
+        command=SimpleNamespace(select_output=lambda:Twist(.04,0),announce_pending=lambda:None),
+        power=SimpleNamespace(on_activity=lambda _:None)),_send_twist=sent.append,
+        _readiness=None,_node=SimpleNamespace(get_logger=lambda:SimpleNamespace(error=lambda _:None)))
+    publish=actual_publish_method()
+    with pytest.raises(AttributeError):publish(bridge)
+    assert sent==[]
+    bridge._bounded_trial_guard=None
+    publish(bridge)
+    assert sent==[Twist(.04,0)]
+    g=guard(tmp_path);sample(g);bridge._bounded_trial_guard=g
+    publish(bridge)
+    assert sent[-1]==Twist(.04,0) and g.status()['issued']
+    g.stop('owner_stop')
+    publish(bridge)
+    assert sent[-1]==Twist()
+
+
+def test_odometry_requires_declared_trial_binding_but_none_remains_inactive():
+    from core.bridge.odometry import observe_bounded_trial
+    with pytest.raises(AttributeError):observe_bounded_trial(SimpleNamespace(),None,None)
+    observe_bounded_trial(SimpleNamespace(_bounded_trial_guard=None),None,None)
