@@ -6175,3 +6175,9 @@ osy-d395-s1d\`.
 - 변경: D-153 회차 카드에 게임 최초·진행·지연·HOLD 1280px과 지연 390px 캡처를 연결하고 관측 카드의 내용 높이 변경을 기록했다.
 - 증거: 브라우저 18 passed, 게임 모듈 113 passed, 변경 후 관련 5 passed, known_failures 0 NEW. LOCAL PreviewServer fixture다.
 - gate 변화: 제품 UI/UX HOLD 유지. 게임 전체 상태 행렬·G3·실물 수용은 미완료다.
+
+## 2026-10-06 · uncommitted · uiux(docs): 로봇 얼굴 LOCAL 렌더와 실물 판정 경계
+
+- 변경: 현재 정보 카드 렌더러의 첫 기동·정상·E-STOP·배터리 위험 320×240 캡처를 D-153 회차 카드에 더했다. D-433 rosy-face 호스트 시험과 실제 설치·LCD 출력의 증거 계층을 분리했다.
+- 증거: PIL 렌더러 169 passed, 캡처 1 passed, rosy-face 호스트 153 passed/1 skipped, known_failures 0 NEW. 캡처는 직접 PIL 호출이다.
+- gate 변화: 로봇 얼굴 UI/UX HOLD. D-433 Proposed, 설치·실물 LCD 판독·카드 만료 뒤 GIF 복귀는 확인되지 않았다.
