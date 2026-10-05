@@ -131,8 +131,8 @@ export function mountJointJog(slot, control, session) {
   }
   function moveKnob(axes) {
     // the knob (38% wide) stays inside the ring: its centre travels at most 31% from the middle
-    knob.style.left = `${50 + axes.x * 31}%`;
-    knob.style.top = `${50 - axes.y * 31}%`;
+    knob.setAttribute("data-knob-x", `${50 + axes.x * 31}%`);
+    knob.setAttribute("data-knob-y", `${50 - axes.y * 31}%`);
   }
   function axesFor(event) {
     const box = pad.getBoundingClientRect();

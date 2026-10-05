@@ -233,15 +233,17 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
     const mag = Math.hypot(dx, dy);
     if (mag > 1) { dx /= mag; dy /= mag; }
     setStickInput(dx, -dy);        // 화면 y 는 아래가 + — 위로 밀면 전진
-    element.knob.style.transform =
-      `translate(calc(-50% + ${dx * radius * 0.62}px), calc(-50% + ${dy * radius * 0.62}px))`;
+    element.knob.setAttribute("data-knob-x", `${dx * radius * 0.62}px`);
+    element.knob.setAttribute("data-knob-y", `${dy * radius * 0.62}px`);
   }
   function releaseStick() {
     stickPointer = null;
     origin = null;
     setStickInput(0, 0);
-    element.knob.style.transform = "translate(-50%, -50%)";
-    stick.style.translate = "";
+    element.knob.removeAttribute("data-knob-x");
+    element.knob.removeAttribute("data-knob-y");
+    stick.removeAttribute("data-float-x");
+    stick.removeAttribute("data-float-y");
     stick.classList.remove("active", "floating");
   }
   stick.addEventListener("pointerdown", (event) => {
@@ -262,7 +264,8 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
       const tx = clamp(event.clientX - centre.x, column.left - rect.left, column.right - rect.right);
       const ty = clamp(event.clientY - centre.y, column.top - rect.top, column.bottom - rect.bottom);
       stick.classList.add("floating");
-      stick.style.translate = `${tx}px ${ty}px`;
+      stick.setAttribute("data-float-x", `${tx}px`);
+      stick.setAttribute("data-float-y", `${ty}px`);
     }
     applyStick(event);
   });
