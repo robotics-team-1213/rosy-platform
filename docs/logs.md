@@ -6271,3 +6271,9 @@ osy-d395-s1d\`.
 - 변경: Cam 송출 화면의 짝을 이룬 조작 버튼은 같은 너비, 단독 조작 버튼은 본문 너비로 맞췄다.
 - 증거: Android `:app:compileDebugKotlin` 성공. 네이티브 화면 캡처와 작업 독회는 없다.
 - gate 변화: Cam LOCAL 소스 부분 근거. 제품 전체 G2/G3는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(cam): 연결·설정 화면 조작 너비
+
+- 변경: Cam LAN 연결과 설정 화면의 단독 조작은 본문 너비로, 설정의 뒤로·저장은 동등한 너비로 맞췄다.
+- 증거: Android `:app:compileDebugKotlin` 성공. 네이티브 화면 캡처와 설치자 독회는 없다.
+- gate 변화: Cam LOCAL 소스 부분 근거. 제품 전체 G2/G3는 HOLD다.

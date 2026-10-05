@@ -123,7 +123,7 @@ fun SettingsScreen(
         Text(stringResource(R.string.settings_title), style = MaterialTheme.typography.headlineSmall)
         if (development != null) {
             Text(stringResource(R.string.settings_development_active, development.siteName, development.expiresAt.toString()))
-            OutlinedButton(onClick = onDevelopmentRevoke, enabled = !locked) {
+            OutlinedButton(onClick = onDevelopmentRevoke, enabled = !locked, modifier = Modifier.fillMaxWidth()) {
                 Text(stringResource(R.string.settings_development_revoke))
             }
         }
@@ -135,6 +135,7 @@ fun SettingsScreen(
         Text(stringResource(R.string.settings_mdns_intro), style = MaterialTheme.typography.bodyMedium)
         OutlinedButton(
             enabled = !locked,
+            modifier = Modifier.fillMaxWidth(),
             onClick = {
                 discovery.stop()
                 overheadServices = emptyList()
@@ -252,6 +253,7 @@ fun SettingsScreen(
                 saved = false
             },
             enabled = link.isNotBlank() && !locked && development == null && !importingDevelopment,
+            modifier = Modifier.fillMaxWidth(),
         ) {
             Text(stringResource(R.string.settings_link_apply))
         }
@@ -305,10 +307,11 @@ fun SettingsScreen(
         invalid?.let { CritMessage(invalidText(it)) }
         if (saved) Text(stringResource(R.string.settings_saved), color = MaterialTheme.colorScheme.primary)
 
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            OutlinedButton(onClick = onBack) { Text(stringResource(R.string.settings_back)) }
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+            OutlinedButton(onClick = onBack, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.settings_back)) }
             Button(
                 enabled = !locked && development == null,
+                modifier = Modifier.weight(1f),
                 onClick = {
                     val trimmedHost = host.trim()
                     val portNumber = port.trim().toIntOrNull() ?: -1

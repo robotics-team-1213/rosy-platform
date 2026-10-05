@@ -42,9 +42,9 @@ fun CameraLanScreen(onSelect: (OverheadServiceRecord) -> Unit, onSettings: () ->
                 Column { Text(saved.tlsHost); Text("승인 기록 유지 · 다시 연결 확인") }
             }
         }
-        OutlinedButton(onClick = { records = emptyList(); scan++ }) { Text("다시 찾기") }
-        onCurrent?.let { TextButton(onClick = it) { Text("연결 기록 · 촬영 화면") } }
-        TextButton(onClick = onSettings) { Text("기존 연결 · 수동 설정") }
+        OutlinedButton(onClick = { records = emptyList(); scan++ }, modifier = Modifier.fillMaxWidth()) { Text("다시 찾기") }
+        onCurrent?.let { TextButton(onClick = it, modifier = Modifier.fillMaxWidth()) { Text("연결 기록 · 촬영 화면") } }
+        TextButton(onClick = onSettings, modifier = Modifier.fillMaxWidth()) { Text("기존 연결 · 수동 설정") }
     }
 }
 
@@ -63,24 +63,24 @@ fun CameraPeerScreen(state: CameraPeerState, onCertificate: (Boolean) -> Unit, o
             is CameraPeerState.Certificate -> {
                 Text(state.site.serviceName); Text("상대 기기의 연결 화면에 표시된 인증서 확인 값과 같을 때만 연결하세요.")
                 Text(state.offer.sha256.chunked(8).joinToString(" "))
-                Button(onClick = { onCertificate(true) }) { Text("같은 값 · 연결") }
-                OutlinedButton(onClick = { onCertificate(false) }) { Text("다른 값 · 중단") }
+                Button(onClick = { onCertificate(true) }, modifier = Modifier.fillMaxWidth()) { Text("같은 값 · 연결") }
+                OutlinedButton(onClick = { onCertificate(false) }, modifier = Modifier.fillMaxWidth()) { Text("다른 값 · 중단") }
             }
             is CameraPeerState.Connected -> {
                 Text("연결 기록을 저장했습니다. 촬영은 시작 버튼을 눌러 시작합니다.")
-                Button(onClick = onDone) { Text("촬영 화면") }
-                TextButton(onClick = { forgetting = state.site }) { Text("이 앱의 연결 기록 지우기") }
+                Button(onClick = onDone, modifier = Modifier.fillMaxWidth()) { Text("촬영 화면") }
+                TextButton(onClick = { forgetting = state.site }, modifier = Modifier.fillMaxWidth()) { Text("이 앱의 연결 기록 지우기") }
             }
             is CameraPeerState.Failed -> {
                 Text(state.site.serviceName); Text("연결을 확인할 수 없습니다. 상대 기기의 승인 상태와 Wi-Fi를 확인하고 다시 시도하세요.")
                 if (state.retained) Text("이 앱의 승인 기록은 유지했습니다. 상대가 연결을 해제했다면 새 승인이 필요합니다.")
-                Button(onClick = { onRetry(state.site) }) { Text("다시 연결") }
-                TextButton(onClick = { forgetting = state.site }) { Text("이 앱의 연결 기록 지우기") }
+                Button(onClick = { onRetry(state.site) }, modifier = Modifier.fillMaxWidth()) { Text("다시 연결") }
+                TextButton(onClick = { forgetting = state.site }, modifier = Modifier.fillMaxWidth()) { Text("이 앱의 연결 기록 지우기") }
             }
             is CameraPeerState.Forgetting -> Text("이 앱의 연결 기록을 지우고 있습니다…")
             CameraPeerState.Idle -> Unit
         }
-        TextButton(onClick = onCancel, enabled = state !is CameraPeerState.Forgetting) { Text("목록으로") }
+        TextButton(onClick = onCancel, enabled = state !is CameraPeerState.Forgetting, modifier = Modifier.fillMaxWidth()) { Text("목록으로") }
     }
     forgetting?.let { site -> AlertDialog(onDismissRequest = { forgetting = null }, title = { Text("이 앱의 연결 기록 지우기") },
         text = { Text("${site.serviceName}\n${site.tlsHost}\n이 앱에 저장한 연결만 지웁니다. 상대 기기의 승인을 해제하지는 않습니다.") },
