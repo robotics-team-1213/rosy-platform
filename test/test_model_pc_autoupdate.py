@@ -324,6 +324,22 @@ def test_unrelated_sandboxed_process_does_not_block_updates(tmp_path, monkeypatc
     assert m.legacy_busy([str(tmp_path)], proc=proc) is None
 
 
+def test_review_ui_does_not_block_code_update_but_training_does(tmp_path, monkeypatch):
+    m = module()
+    proc = tmp_path / "proc"
+    entry = proc / "999999"
+    entry.mkdir(parents=True)
+    (entry / "comm").write_text("python", encoding="utf-8")
+    (entry / "cmdline").write_bytes(b"python\x00/app/learning/training/perception/dataset/review_app.py\x00")
+    monkeypatch.setattr(m.os, "getuid", lambda: entry.stat().st_uid, raising=False)
+    original = Path.resolve
+    monkeypatch.setattr(Path, "resolve", lambda path, *a, **kw:
+                        tmp_path if path == entry / "cwd" else original(path, *a, **kw))
+    assert m.legacy_busy([str(tmp_path)], proc=proc) is None
+    (entry / "cmdline").write_bytes(b"python\x00/app/learning/training/perception/training/train_job.py\x00")
+    assert m.legacy_busy([str(tmp_path)], proc=proc) == "legacy work pid 999999"
+
+
 @pytest.mark.skipif(os.name == "nt", reason="Linux job receipt and flock")
 def test_real_job_records_pinned_source_and_redacts_arguments(tmp_path, keys, monkeypatch):
     m = module()
