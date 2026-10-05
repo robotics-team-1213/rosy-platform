@@ -185,7 +185,7 @@ published here.
   (rosy-pinky-9dfk, 2026.10.02-026) committed on 2026-10-02. To keep one robot off (bench
   work), write `false`:
   ```bash
-  rssh 'sudo -n install -d -m 0755 /var/lib/rosy/updates && echo "{\"enabled\": false, \"repo\": \"livsbittt/rosy-os\"}" | sudo -n tee /var/lib/rosy/updates/config.json'
+  rssh 'sudo -n install -d -m 0755 /var/lib/rosy/updates && echo "{\"enabled\": false, \"repo\": \"robotics-team-1213/rosy-platform\"}" | sudo -n tee /var/lib/rosy/updates/config.json'
   ```
   For a test or drive, put a hold on the robot instead (`rosy-update-hold.ps1 -Robot <ip> -Hold ...`).
 
@@ -193,7 +193,7 @@ published here.
   ```powershell
   python tools/release/publish_payload_release.py --tarball <P>\<id>.tar.gz --canary <canary-ip> --robot <other-ip>
   ```
-  It creates GitHub Release `payload-<id>` on `livsbittt/rosy-os` (tag on the tarball's
+  It creates GitHub Release `payload-<id>` on `robotics-team-1213/rosy-platform` (tag on the tarball's
   `source-revision.txt`) with the tarball, `rollout.json` and `rollout.json.sig`. The rollout
   names the canary by hostname (`ssh hostname`) and is signed with the release key, then
   verified before upload. An existing tag is refused; `--resume` re-attaches to it.

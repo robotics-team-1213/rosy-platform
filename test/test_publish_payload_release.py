@@ -33,7 +33,7 @@ REVISION = "b" * 40
 CANARY_IP = "192.168.1.202"
 OTHER_IP = "192.168.1.201"
 CANARY = "rosy-pinky-8kcn"
-REPO = "livsbittt/rosy-os"
+REPO = "robotics-team-1213/rosy-platform"
 START = dt.datetime(2026, 10, 1, 15, 0, 0, tzinfo=dt.timezone.utc)
 
 pytestmark = pytest.mark.skipif(shutil.which("openssl") is None, reason="openssl is required")
@@ -940,7 +940,7 @@ def test_ctrl_c_prints_the_resume_and_withdraw_commands(tarball, keys, tmp_path,
 
 
 @pytest.mark.parametrize("flag, value", [
-    ("--repo", "livsbittt/rosy-os;x"), ("--repo", "noslash"), ("--repo", "a/b/c"),
+    ("--repo", "robotics-team-1213/rosy-platform;x"), ("--repo", "noslash"), ("--repo", "a/b/c"),
     ("--key-name", "../evil"), ("--key-name", "a b"),
 ])
 def test_repo_and_key_name_are_validated(tarball, keys, tmp_path, flag, value):

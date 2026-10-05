@@ -29,7 +29,7 @@ md("""
 - HF에 올리고 싶은 사람만 마지막 10단계(선택)를 쓴다.
 
 런타임 유형은 GPU(T4 이상)를 권장한다. CPU로도 돌지만 느리다.
-약속의 전체 정의는 [README.md](https://github.com/livsbittt/rosy-os/blob/main/learning/training/perception/training/README.md)에 있다.
+약속의 전체 정의는 [README.md](https://github.com/robotics-team-1213/rosy-platform/blob/main/learning/training/perception/training/README.md)에 있다.
 """)
 
 md("""
@@ -43,7 +43,7 @@ code('''
 #@title 1. 학습 도구 받기
 import os, subprocess, sys
 
-REPO_URL = "https://github.com/livsbittt/rosy-os.git"
+REPO_URL = "https://github.com/robotics-team-1213/rosy-platform.git"
 ROSY = os.environ.get("ROSY_REPO_DIR") or os.path.abspath("rosy")
 if not os.path.exists(os.path.join(ROSY, ".git")):
     subprocess.run(["git", "clone", "--depth", "1", "--filter=blob:none", "--sparse", REPO_URL, ROSY],

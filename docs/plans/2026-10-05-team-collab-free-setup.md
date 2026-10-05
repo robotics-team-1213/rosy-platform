@@ -160,9 +160,20 @@ OAuth로 각자 로그인해 수정 기록이 사람별로 남는다. 단 **게�
 | 3 | 팀 PR 착지 규칙 ADR + PR 템플릿 · CODEOWNERS · CONTRIBUTING | AGENTS.md·README 같은 절 동시 수정 |
 | 4 | Notion 워크스페이스 + 게스트 초대 + 연동 토큰 + `private/` 이관 + GitHub Projects 연결 | |
 
-## 7. 열린 결정
+## 7. 실행 기록 (2026-10-05)
 
-- [ ] Org 이름, 저장소 이름 유지(`rosy-os`) 또는 변경(`rosy-platform`)
+- [x] org `robotics-team-1213` (Free) 생성 — 사용자
+- [x] `livsbittt/rosy-os` → **`robotics-team-1213/rosy-platform`** transfer + 이름 변경. 옛 주소 API는 301 리다이렉트 확인 (`releases` 조회 성공)
+- [x] org 기본 저장소 권한 `write` → `read`
+- [x] 팀 `core` 생성, `rosy-platform`에 **write** 부여 (팀원 초대는 나중에)
+- [x] main ruleset `main-protection`: PR 필수(승인 0), force-push·삭제 금지. 저장소 admin은 bypass — 로컬 `--ff-only` 착지 후 push 경로 유지. CI 필수 검사는 3.2 녹색 뒤
+- [x] 동작 경로의 `livsbittt/rosy-os` → `robotics-team-1213/rosy-platform` (자동 업데이트 `DEFAULT_REPO`, 릴리스 도구, 테스트, Colab, 스킬, AGENTS). 날짜 기록 문서·ADR·Android `applicationId`(`io.github.livsbittt.*`)는 그대로
+- [ ] `demo-repository` 삭제 — gh 토큰에 `delete_repo` 없음. 웹에서 삭제
+- [ ] 로봇 `/var/lib/rosy/updates` 설정의 `repo` 값은 리다이렉트로 동작. 다음 릴리스 때 새 경로로 갱신
+- [ ] 2.4 착지 규칙 ADR, PR 템플릿·CODEOWNERS·CONTRIBUTING, 4번 정리, Notion
+
+## 8. 열린 결정
+
 - [ ] 하드코딩 Bearer 토큰이 운영에서 쓰이는 값인지
 - [ ] Notion 팀원 10명 이내인지 (넘으면 교육 플랜 또는 GitHub Discussions/Wiki)
 - [ ] MCP 방식: 연동 토큰(5.3) / 호스팅 OAuth(5.4)

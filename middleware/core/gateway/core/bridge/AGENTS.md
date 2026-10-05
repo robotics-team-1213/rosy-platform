@@ -57,7 +57,7 @@ None.
 
 ### Testing Requirements
 
-Host pytest does not import `ros_bridge.py` (optional ROS). CI boot smoke + the SaveMap guard are what *should* cover it — **and `origin` exists (`github.com/livsbittt/rosy-os.git`) with CI firing on `push: [main]` and pull requests, so check the latest run (`gh run list`)**. A local `main` ahead of `origin/main` has no CI evidence at all; until a branch is pushed, construction-time correctness in this file stays unverified.
+Host pytest does not import `ros_bridge.py` (optional ROS). CI boot smoke + the SaveMap guard are what *should* cover it — **and `origin` exists (`github.com/robotics-team-1213/rosy-platform.git`) with CI firing on `push: [main]` and pull requests, so check the latest run (`gh run list`)**. A local `main` ahead of `origin/main` has no CI evidence at all; until a branch is pushed, construction-time correctness in this file stays unverified.
 One exception, deliberately narrow — `test/test_bridge_timers.py` stubs `rclpy` in `sys.modules` to build
 the bridge against a recording node and assert **what it registers**: seven timers at fixed periods, twenty-four
 subscriptions with their callbacks and QoS, five publishers with QoS, four service clients, the action
