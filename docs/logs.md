@@ -6283,3 +6283,9 @@ osy-d395-s1d\`.
 - 변경: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)에 Android 에뮬레이터 320px·390px/글자 130% 화면과 미검증 상태를 기록했다.
 - 증거: 현재 브랜치 debug APK 빌드·설치·실행, ADB 연결과 설정 뒤로·저장 동일 173px UI bounds 확인. 캡처 원본은 X:에 둔다.
 - gate 변화: Cam LOCAL 네이티브 G2 부분 근거. Peer·Pairing·송출 상태와 G3·실제 폰 수용은 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(pilot): 태블릿 로비 좁은 폭 복구
+
+- 변경: Pilot Shell의 좁은 가로 화면에서 로봇 목록을 전폭으로 배치해 다시 찾기·상태·기기 연결을 복구하고, [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)에 네이티브 화면 결과를 기록했다.
+- 증거: Android JVM 89 passed, debug APK 빌드·에뮬레이터 3폭 캡처와 기기 대화상자 스크롤 확인. 캡처 원본은 X:에 둔다.
+- gate 변화: Pilot Shell LOCAL G2 부분 근거. 실제 태블릿·로봇 연결·G3와 제품 전체 UI/UX는 HOLD다.
