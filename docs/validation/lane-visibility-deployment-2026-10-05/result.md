@@ -43,8 +43,8 @@
 
 | 파일 | SHA256 |
 |---|---|
-| `final-comparison-summary.json` | `f81f3088e6cab4167015eb4affb9ea7064946418766748181c5c014ab5eb897d` |
-| `review-debug.json` | `5f2c0e86e6f1f07c3afee8d878e068f3c3cf02a2bf21fea1194246df2357ceea` |
-| `recovered-0.png` | `0b1a8c8ec261386ea5b9f2830272244738ac0dfdb9b52849f51ccd6e88eabb65` |
-| `recovered-1.png` | `6db4e107bb2b8a0f5b8c75bd9ff20c21b4e51bcc0e36fcf08d8ef5fec1c106ae` |
-| `focused.txt` | `cfaf532db2c52cb79a7e6bbe9be132844b5b2cc15d06ba42c47bcc01f0e7add9` |
+| `final-comparison-summary.json` | SHA256: `f81f3088e6cab4167015eb4affb9ea7064946418766748181c5c014ab5eb897d` |
+| `review-debug.json` | SHA256: `5f2c0e86e6f1f07c3afee8d878e068f3c3cf02a2bf21fea1194246df2357ceea` |
+| `recovered-0.png` | SHA256: `0b1a8c8ec261386ea5b9f2830272244738ac0dfdb9b52849f51ccd6e88eabb65` |
+| `recovered-1.png` | SHA256: `6db4e107bb2b8a0f5b8c75bd9ff20c21b4e51bcc0e36fcf08d8ef5fec1c106ae` |
+| `focused.txt` | SHA256: `cfaf532db2c52cb79a7e6bbe9be132844b5b2cc15d06ba42c47bcc01f0e7add9` |
