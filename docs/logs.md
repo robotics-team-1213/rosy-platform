@@ -6157,3 +6157,9 @@ osy-d395-s1d\`.
 - 변경: 고정 로컬 signer가 main push CI, native unsigned build, ABI, 서명, 기존 카나리 발행을 연결한다. 개인키는 로컬에 둔다. 로봇의 MANUAL/hold/보정/claim을 해제하지 않는다.
 - 검증: 거부/재개 시험과 기존 prepare/publish/native workflow 시험. 장치 installed SHA·updater committed·내비게이션 현장 수용은 별도다.
 - gate 변화: 구현 검증 중. DEVICE/FIELD 완료로 기록하지 않는다.
+
+## 2026-10-05 · uncommitted · fix(docs): C6 선택 센서 공급자 연결 판정
+
+- 변경: 차선 복귀 정책의 선택 메서드 조회가 구 공급자에서 실패 닫힘으로 동작하는 이유와 소유 경계를 분리 기준 문서에 기록했다.
+- 증거: C6 목록 동일성 및 센서 연결 검사. 장치 수용은 별도다.
+- gate 변화: 없음.

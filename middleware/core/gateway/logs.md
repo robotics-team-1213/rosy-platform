@@ -908,3 +908,9 @@
 - 변경: enforce sensor adapter에서만 LiDAR·IMU·IR 유효 기간에 묶인 현재 바닥·후보 제한 판정을 조회한다. 부분 stream 설정·shadow/off·종료·예외·비 boolean 허가는 거부한다.
 - 증거: 신규 query와 기존 adapter/구조 검사 105 PASS, 0 NEW. 독립 SOURCE/크기 검토도 105 PASS, 0 NEW.
 - gate 변화: 센서 판정 seam만. CORE swept path·바닥 경로 검증 전에는 실제 복귀 이동 공급자로 연결하지 않는다.
+
+## 2026-10-05 · uncommitted · fix(bridge): C6 센서 공급자 선택 기능 판정 기록
+
+- 변경: `local_return_allowed`의 동적 조회를 D-468/C6 예외 목록에 명시하고, 구 공급자에 메서드가 없을 때 복귀 후보를 거부하는 검사를 추가했다.
+- 증거: C6 구조 검사와 차선 복귀 센서 검사. 최종 명령 권한 변경 없음.
+- gate 변화: 없음.
