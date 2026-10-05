@@ -12,7 +12,7 @@
 | 게임 보드: 경기장·공·로봇·골이 보이는가? | [진행 1280×800](captures/games-play-1280x800.png), [최초 1280×800](captures/games-initial-1280x800.png), [최초 390×800](captures/games-g3/games-initial-390x800.png), [지연 1280×800](captures/games-delayed-1280x800.png), [HOLD 1280×800](captures/games-hold-1280x800.png), [지연 390×800](captures/games-delayed-390x800.png), [G3 독회](#게임-보드-g3-독회--local-진행-중) | 최초·연결 오류 때 빈 피치에 이유를 표시한다. 데스크톱에서는 피치가 초점이라 관측보다 넓고, 전화에서는 점수·피치·관측이 같은 가용 폭으로 쌓인다. 지연 화면은 마지막 수신 정보임을 밝히고 정지가 첫 화면에 있다. | 현재 트리의 전체 상태 G2, 실물 카메라·경기 readback, G3 전체 근거 검토. |
 | 로봇 얼굴: 의도·주의·위험이 즉시 구분되는가? | [첫 기동](captures/face-first-boot-320x240.png), [정상](captures/face-nominal-320x240.png), [E-STOP](captures/face-estop-320x240.png), [배터리 위험](captures/face-battery-critical-320x240.png) (모두 320×240) | 현재 `emotion.info_screen` PIL 렌더러의 정보 카드 네 장에서 정상·위험의 형태·문구가 구분된다. | D-433 `rosy-face` 실제 설치·LCD 경로, 1.5m/각도/조도 판독, 만료 후 의도 GIF 복귀, G3 전체 근거 검토. |
 | 학습 검수: 원본과 편집 내용을 함께 볼 수 있는가? | [객체 1440px](captures/learning-width/learning-objects-1440.png), [객체 800px](captures/learning-width/learning-objects-800.png), [객체 390px](captures/learning-width/learning-objects-390.png), [픽셀 1440px](captures/learning-width/learning-pixels-1440.png), [픽셀 800px](captures/learning-width/learning-pixels-800.png), [픽셀 390px](captures/learning-width/learning-pixels-390.png) | 두 편집 화면의 캔버스·검수 창을 데스크톱에서 같은 폭으로 맞췄다. 좁은 화면에서는 두 창이 같은 가용 폭으로 쌓이고 가로 넘침이 없다. | 개발 도구의 다른 상태·실제 검수자 G3 독회. 로봇 현장 수용과 별도다. |
-| Pilot: 운전·팔 조작 상태와 정지가 보이는가? | [팔 2000×1200](captures/pilot-arm/pilot-arm-gripper-2000x1200.png), [팔 1200×2000](captures/pilot-arm/pilot-arm-gripper-1200x2000.png), [팔 390×844](captures/pilot-arm/pilot-arm-gripper-390x844.png), [대상 확인 실패 390×844](captures/pilot-target-error-390x844.png), [기존 주행 기준선](../pilot-g2-baseline-2026-10-04/README.md) | 영상 없는 Gazebo 연습에서 빈 영상 칸 대신 조작부가 가용 폭을 쓰고 팔·그리퍼 창은 같은 폭이다. 전화에서는 같은 폭으로 쌓인다. 대상 확인 실패는 내부 영문 오류 없이 연결 확인과 재시도를 안내한다. E-stop은 세 폭 모두 첫 화면에 있다. | 주행·연결의 현재 트리 G2 전체 재확인, 실제 운전자 G3 독회. 기존 DEVICE 기능 확인을 UI/UX GO로 승격하지 않는다. |
+| Pilot: 운전·팔 조작 상태와 정지가 보이는가? | [주행 2000×1200](captures/pilot-drive-current-2000x1200.png), [주행 1200×2000](captures/pilot-drive-current-1200x2000.png), [주행 390×844](captures/pilot-drive-current-390x844.png), [전화 회전 조작](captures/pilot-drive-turn-controls-390x844.png), [팔 390×844](captures/pilot-arm/pilot-arm-gripper-390x844.png), [대상 확인 실패 390×844](captures/pilot-target-error-390x844.png) | 현재 트리의 주행 화면에서 카메라 비율·조작부 분리·정지 첫 화면을 확인했다. 390px은 전진·후진과 스틱이 첫 화면에 있으며 회전 조작은 아래 조작 칸에서 스크롤해 닿는다. Gazebo 팔·그리퍼 창은 같은 폭이다. | 선언 상태 전체 G2, 전화에서 회전 조작 발견 가능성 G3, 실제 운전자 독회·장치 readback. 기존 DEVICE 기능 확인을 UI/UX GO로 승격하지 않는다. |
 
 로봇·Fleet 캡처는 FastAPI/Playwright fixture, 게임 캡처는 실제 PreviewServer와 fixture payload를 쓴 LOCAL 증거다. Fleet 전화의 `fleet_console_mobile_{width}.png`는 시험이 **전체 로봇 보기**를 누른 뒤 찍는 캡처여서 기본 예외 목록의 근거로 쓰지 않는다. 기본 목록은 위 `fleet-console-320x844.png`와 해당 브라우저 단언으로 확인했다.
 
@@ -88,6 +88,8 @@ Pilot 팔 화면은 카메라 없는 Gazebo fixture에서 빈 영상 자리 때�
 
 Pilot 대상 발견 오류에서는 내부 `invalid simulation target`을 운용자에게 그대로 보여 주던 경로를 없앴다. [390px 캡처](captures/pilot-target-error-390x844.png)는 조종 대상 확인, 연결 점검, 다시 확인 버튼과 첫 화면 비상 정지를 보여 준다. 현재 트리의 브라우저 재시도 1 passed, 가로 넘침 0, `known_failures.py` 0 NEW다. 실제 Pilot Android 셸과 장치 연결의 품질 판정은 이 웹 fixture로 대신하지 않는다.
 
+현재 트리의 Pilot 주행 화면을 2000×1200·1333×760·1200×2000·390×844에서 다시 재생했다. 390px 원본은 회전 버튼이 고정 높이 조작 칸 아래에 잘려 있었다. 지금은 영상 면적을 유지하면서 전진·후진을 첫 화면에 두고 회전 버튼을 조작 칸 안에서 스크롤해 접근한다. [첫 화면](captures/pilot-drive-current-390x844.png)과 [회전 버튼](captures/pilot-drive-turn-controls-390x844.png)을 나눠 보관했다. 영상·조작 배치 4 passed, 스틱·페달 접촉 2 passed, `known_failures.py` 0 NEW다. 이 재실행에서 발견된 스트림 재시도 타이머의 런타임 오류도 수정해 페이지 오류 0으로 확인했다. 좁은 화면에서 회전 버튼 발견이 쉬운지와 실제 운전자의 손 위치는 G3에서 남는다.
+
 ### 장비·작업 준비 G3 독회 — LOCAL 진행 중
 
 | D-153 항목 | 현재 근거 | 남은 판정 범위 |
@@ -120,7 +122,7 @@ D-153이 이름 붙인 G1 시험 중 팔레트·토큰(스타일가이드 포함
 | `robot` | `/dashboard`·`/console`·`/setup`·`/device` 중 운용·작업 준비 LOCAL 부분 근거 | 역할·상태 G2 잔여 셀, 작업 완료 G3, 실물 readback |
 | `console` | Fleet LOCAL 부분 근거 | 선언 상태 G2 잔여 셀, 사이트 PC·카메라 readback, G3 |
 | `game-board` | LOCAL 부분 근거 | 모든 상태 G2, 실제 경기 관측, G3 |
-| `pilot` | 팔 LOCAL 부분 근거와 [2026-10-04 주행 기준선](../pilot-g2-baseline-2026-10-04/README.md) | 현재 트리의 접속·주행 G2, 운전자 G3; [DEVICE 기능 확인](../pilot-device-user-confirmed-2026-10-05/README.md)은 별도 |
+| `pilot` | 현재 트리의 주행 4폭·팔·대상 오류 LOCAL 부분 근거 | 선언 상태 전체 G2, 전화 회전 조작 발견 가능성·운전자 G3; [DEVICE 기능 확인](../pilot-device-user-confirmed-2026-10-05/README.md)은 별도 |
 | `robot-face` | 호스트 PIL 이미지 부분 근거 | 실제 설치 LCD 사진·거리/각도/조도 판독, G3 |
 | `pinky-review` | 객체·픽셀 너비 LOCAL 부분 근거 | 개발 도구의 선언 상태·역할별 작업 G2/G3 |
 | `pilot-shell` | 이 회차 UI 캡처 없음 | 네이티브 태블릿 접속 화면 캡처와 역할·상태 독회 |

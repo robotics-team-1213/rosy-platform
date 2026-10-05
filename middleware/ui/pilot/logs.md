@@ -501,3 +501,9 @@
 - 변경: Pilot 대상 발견 실패 화면에서 내부 영문 예외를 제거하고 연결 확인·재시도만 표시한다. 다른 알림이 갱신된 경우 그 문구는 유지한다.
 - 증거: 390×844 FastAPI/Chromium 재시도 1 passed, 가로 넘침 0, `known_failures.py` 0 NEW. 캡처는 [UI/UX 회차](../../../docs/validation/uiux-surfaces-2026-10-06/README.md)에 보관했다.
 - gate 변화: LOCAL 오류 화면 부분 근거. 실제 Android 셸·장치 readback·운전자 G3는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(pilot): 전화 주행 조작 도달성과 영상 재시도
+
+- 변경: 390px 주행 화면의 잘린 페달·회전 버튼을 조작 칸 안에서 접근 가능하게 하고, 영상 재시도 타이머를 `clearTimeout`으로 정리해 런타임 오류를 없앴다.
+- 증거: 현재 FastAPI/Chromium 2000×1200·1333×760·1200×2000·390×844 영상·조작 4 passed, 스틱·페달 접촉 2 passed, `known_failures.py` 0 NEW. 첫 화면과 스크롤 후 캡처는 [UI/UX 회차](../../../docs/validation/uiux-surfaces-2026-10-06/README.md)에 있다.
+- gate 변화: LOCAL 주행 G2 부분 근거. 전화 회전 조작의 발견 가능성, 전체 선언 상태·운전자 G3·장치 수용은 HOLD다.

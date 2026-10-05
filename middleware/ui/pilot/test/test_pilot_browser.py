@@ -692,12 +692,38 @@ def test_camera_keeps_aspect_and_controls_never_cover_it(base_url, viewport):
             page.wait_for_function("document.querySelector('[data-drive-frame]').naturalWidth > 0")
             page.wait_for_timeout(300)
             m = page.evaluate(MEASURE_VIDEO)
+            controls = page.evaluate("""() => ({
+              viewport: innerHeight,
+              boxes: ['[data-drive-pedal=forward]', '[data-drive-pedal=reverse]',
+                      '[data-drive-pivot=left]', '[data-drive-pivot=right]', '[data-drive-stick]']
+                .map(selector => ({selector, bottom: document.querySelector(selector).getBoundingClientRect().bottom}))
+            })""")
+            if os.environ.get("ROSY_SHOT_DIR"):
+                shot_dir = Path(os.environ["ROSY_SHOT_DIR"])
+                shot_dir.mkdir(parents=True, exist_ok=True)
+                page.screenshot(path=str(shot_dir / f"pilot-drive-current-{viewport[0]}x{viewport[1]}.png"))
+            if viewport[0] < 480:
+                scrolled = page.evaluate("""() => ({
+                  panel: (() => { const panel = document.querySelector('[data-drive-controls]');
+                    panel.scrollTop = panel.scrollHeight; return panel.scrollTop; })(),
+                  pivotBottom: document.querySelector('[data-drive-pivot=right]').getBoundingClientRect().bottom,
+                  viewport: innerHeight,
+                  page: document.documentElement.scrollTop
+                })""")
+                if os.environ.get("ROSY_SHOT_DIR"):
+                    page.screenshot(path=str(shot_dir / f"pilot-drive-turn-controls-{viewport[0]}x{viewport[1]}.png"))
         finally:
             browser.close()
     assert m["fit"] == "contain", m
     assert abs(m["shown"] - m["ratio"]) / m["ratio"] < 0.01, m
     assert m["overlaps"] == 0, m
     assert m["videoArea"] > 0.2, f"영상이 너무 작다: {m}"
+    if viewport[0] < 480:
+        assert all(box["bottom"] <= controls["viewport"] for box in controls["boxes"]
+                   if "pedal" in box["selector"] or "stick" in box["selector"]), controls
+        assert scrolled["panel"] > 0 and scrolled["pivotBottom"] <= scrolled["viewport"] + 1 and scrolled["page"] == 0, scrolled
+    else:
+        assert all(box["bottom"] <= controls["viewport"] for box in controls["boxes"]), controls
 
 
 CONTROL_BOXES = """(() => {

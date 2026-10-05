@@ -162,7 +162,7 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
   root.querySelector("[data-drive-facts]")?.append(videoFact);
   let streamAlive = true;
   let streaming = false;
-  let retryCancel = null;
+  let retryTimer = null;
   function tryStream() {
     if (!streamAlive || streaming) return;
     if (capture.state().previewMode !== "raw") return;
@@ -170,8 +170,8 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
   }
   function scheduleStreamRetry(ms = 3000) {
     if (!streamAlive) return;
-    retryCancel?.();
-    retryCancel = setTimeout(tryStream, ms);
+    clearTimeout(retryTimer);
+    retryTimer = setTimeout(tryStream, ms);
   }
   const stream = createDriverStream({
     headers: () => authHeaders(),
@@ -675,7 +675,7 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
     modeHeld = false;
     clearTimeout(whoamiTimer);
     streamAlive = false;
-    retryCancel?.();
+    clearTimeout(retryTimer);
     stream.stop();
     vision.stop();
     models.stop();

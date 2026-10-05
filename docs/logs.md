@@ -6247,3 +6247,9 @@ osy-d395-s1d\`.
 - 변경: Pilot 대상 발견 실패 화면의 내부 영문 예외를 운용자 문구로 바꾸고 [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)에 390px 화면을 기록했다.
 - 증거: 현재 트리 브라우저 재시도 1 passed, 가로 넘침 0, `known_failures.py` 0 NEW.
 - gate 변화: Pilot LOCAL 오류 화면 부분 근거. 제품 전체 UI/UX와 실제 장치·현장 수용은 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(pilot): 현재 주행 화면과 전화 조작 도달성
+
+- 변경: Pilot 390px 주행 화면에서 잘리던 조작을 접근 가능하게 하고, 영상 재시도 타이머 오류를 수정했다. [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)에 현재 트리 태블릿·전화 첫 화면과 전화 회전 버튼 캡처를 연결했다.
+- 증거: 영상·조작 브라우저 4 passed, 스틱·페달 접촉 2 passed, `known_failures.py` 0 NEW. ADB 장치 목록이 비어 있어 네이티브 화면은 여전히 미검증이다.
+- gate 변화: Pilot LOCAL G2 부분 근거. 제품 전체 G2/G3와 실제 장치·현장 수용은 HOLD다.
