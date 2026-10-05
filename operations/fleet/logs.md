@@ -1844,6 +1844,12 @@
 - 증거: 기존 원래 경로에서 19 FAIL/12 PASS, 두 로봇 중 한 응답 누락 회귀 1 FAIL을 재현했다. 중간 분기 연결 오류 4 FAIL도 보존했고 수정 후 probe·기존 traffic·boundary 91 PASS(5.41s)다. 모든 HELLO의 응답이 없으면 세션 전체는 INCONCLUSIVE이며 정상 세션 PASS도 유지한다. 실제 HTTP/WS·ROS-SIM·기기 실행은 없고 입력 관측 목록을 판정한 host 증거다.
 - gate 변화: T2 판정 source 보완이며 T3 관측기나 실제 회차 수용을 추가하지 않는다.
 
+## 2026-10-05 · uncommitted · fix(fleet): DNS-SD가 비면 저장한 HTTPS 이름의 호스트 Avahi 주소
+
+- 변경: DNS-SD에 저장한 로봇 이름이 없으면 `socket.getaddrinfo`로 사설 LAN IPv4 하나를 고르고, 저장한 URL 포트와 TLS 이름·CA 검증을 유지한다. 그 이름의 광고가 있는데 분류에 실패하거나, 사설 LAN IPv4가 없거나 둘 이상이면 기존 연결 실패를 유지한다. HTTP로 내려가지 않는다.
+- 증거: discovery transport와 enrolled TLS 32 passed, 1 skipped, 7.34s. Windows symlink 1 skipped. flake8 0. known_failures 0 NEW. 호스트 조회는 테스트에서 대체했고 실기기 연결은 하지 않았다.
+- gate 변화: SOURCE/LOCAL. 서명된 사이트 이미지와 현장 연결은 이 커밋만으로 바뀌지 않는다. 주행 없음.
+
 ## 2026-10-05 · uncommitted · feat(server): D-426 T4 공유 구간 진입 허가·점유
 
 - 변경: `traffic_reservations.py`·`segment_store.py` 추가 — 같은 Task DB 에 구간 정의(구간 ID·지도 revision·진입/출구·안전 대기점·반경)와 `fleet_segment_grants` 표. 상태는 FREE(행 없)→RESERVED→OCCUPIED→RELEASING→FREE, 불명 UNKNOWN. Fleet만 writer. `request`는 활성 상태(RESERVED 포함)면 재할당을 거부하고, `verify_grant`는 수락 측 일치·만료·세대를 검증하며, `confirm_entry`는 신뢰 위치가 구간 안일 때만 만료를 경계에서 재검사해 받아들인다. `begin_release`는 신선한(≤2 s) 출구 이탈 관측과 종단 실행 결과 둘 다 대조한 뒤 RELEASING을 열고 `confirm_exit`로만 FREE가 된다. 시간 만료·링크 상실(`mark_unknown`)만으로는 FREE가 되지 않는다. `waiting_seconds`는 RESERVED가 60 s 이상 진입 못 하면 운영자 대조로 남긴다(자동 후반전 없음).
