@@ -207,10 +207,10 @@ const noop = () => {};
 const fleetClient = createFleetClient({origin: 'https://plane.test', credential: () => token, fetchImpl: fetch});
 const pageScope = createPageScope({events: new EventTarget()});
 const request = new Function('fetch', 'authHeaders', 'session', 'classifyOperation',
-  'window', 'CustomEvent', 'httpError', 'markLocked', 'markUnlocked', 'fleetClient', 'pageScope',
+  'window', 'CustomEvent', 'httpError', 'markLocked', 'markUnlocked', 'fleetClient', 'pageScope', 'auth',
   'return (' + match[0].replace(/^export /, '') + ');')(
   fetch, () => ({Authorization: 'Bearer ' + token}), {token}, () => null,
-  {dispatchEvent: noop}, class {}, () => new Error('unexpected HTTP failure'), noop, noop, fleetClient, pageScope);
+  {dispatchEvent: noop}, class {}, () => new Error('unexpected HTTP failure'), noop, noop, fleetClient, pageScope, {token, locked: false});
 await request(path);
 pageScope.dispose();
 console.log(JSON.stringify(calls));
