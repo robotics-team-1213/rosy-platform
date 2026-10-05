@@ -40,6 +40,106 @@ from preflight import (  # noqa: E402
 import run as run_cli  # noqa: E402
 
 
+def _parts():
+    import importlib.util
+    path = TOOLS.parents[2] / "integrations/simulation/gazebo/launch/gz_multi_parts.py"
+    spec = importlib.util.spec_from_file_location("sim_parts", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_launch_spec_requires_valid_domain_and_matching_robot_namespaces(tmp_path):
+    import yaml
+    parts = _parts()
+    spec = {"run_id": "d426-unit", "core_config_dir": str(tmp_path),
+            "fleet_manifest": str(tmp_path / "robots.yaml"), "hub_url": "http://127.0.0.1:32001",
+            "gz_partition": "d426-unit", "ros_domain_id": 150,
+            "robots": [{"namespace": "rosy_01", "api_port": 31001}]}
+    path = tmp_path / "run_spec.yaml"
+    for domain in (None, True, "150", 119, 200):
+        path.write_text(yaml.safe_dump({**spec, "ros_domain_id": domain}), encoding="utf-8")
+        with pytest.raises(RuntimeError, match="domain"):
+            parts.load_run_spec(str(path))
+    path.write_text(yaml.safe_dump(spec), encoding="utf-8")
+    loaded = parts.load_run_spec(str(path))
+    parts.validate_run_identity(loaded, 1, "rosy")
+    for robots, prefix in ((2, "rosy"), (1, "other")):
+        with pytest.raises(RuntimeError, match="namespace"):
+            parts.validate_run_identity(loaded, robots, prefix)
+
+
+def test_domain_action_precedes_every_launch_participant():
+    import ast
+    path = TOOLS.parents[2] / "integrations/simulation/gazebo/launch/gz_multi.launch.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    setup = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "_launch_setup")
+    calls = [n for n in ast.walk(setup) if isinstance(n, ast.Call)]
+    domain = next(n for n in calls if isinstance(n.func, ast.Name) and
+                  n.func.id == "SetEnvironmentVariable" and n.args and
+                  isinstance(n.args[0], ast.Constant) and n.args[0].value == "ROS_DOMAIN_ID")
+    participants = [n.lineno for n in calls if isinstance(n.func, ast.Name) and
+                    n.func.id in {"Node", "IncludeLaunchDescription", "ExecuteProcess"}]
+    assert participants and domain.lineno < min(participants)
+
+
+def test_runner_refuses_existing_domain_reservation_before_writing(tmp_path):
+    old = _reservations()
+    write_manifest(tmp_path / "old", old, versions={}, hashes={}, argv=[])
+    with pytest.raises(PreflightError, match="conflict"):
+        run_cli.check_reservations(tmp_path, old)
+
+
+@pytest.mark.parametrize("field,value", [("ros_domain_id", "150"), ("robots", True),
+                                         ("api_ports", []), ("namespaces", ["other_01"])])
+def test_runner_refuses_corrupted_recorded_reservations(tmp_path, field, value):
+    path = write_manifest(tmp_path / "old", _reservations(), versions={}, hashes={}, argv=[])
+    data = json.loads(path.read_text(encoding="utf-8"))
+    data["reservations"][field] = value
+    path.write_text(json.dumps(data), encoding="utf-8")
+    with pytest.raises(PreflightError, match="invalid reservation"):
+        run_cli.check_reservations(tmp_path, _reservations("d426-unit-2"))
+
+
+def test_manifest_claim_cannot_overwrite_a_concurrent_single_use_run(tmp_path, monkeypatch):
+    import preflight
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Barrier
+    rendezvous = Barrier(2)
+    original = preflight.validate_run_root
+    def checked(root):
+        original(root)
+        rendezvous.wait(timeout=3)
+    monkeypatch.setattr(preflight, "validate_run_root", checked)
+    def claim(marker):
+        try:
+            write_manifest(tmp_path / "run", _reservations(), versions={"claim": marker},
+                           hashes={}, argv=[])
+            return marker
+        except PreflightError:
+            return None
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(claim, ("first", "second")))
+    winners = [result for result in results if result is not None]
+    assert len(winners) == 1
+    assert json.loads((tmp_path / "run" / MANIFEST_NAME).read_text(encoding="utf-8"))["versions"] == {
+        "claim": winners[0]}
+
+
+@pytest.mark.parametrize("role", ["api", "console"])
+def test_runner_refuses_an_occupied_reserved_listener(tmp_path, role):
+    import socket
+    from dataclasses import replace
+    with socket.socket() as listener:
+        listener.bind(("127.0.0.1", 0))
+        listener.listen()
+        port = listener.getsockname()[1]
+        reserved = replace(_reservations(), **({"console_port": port} if role == "console" else
+                                               {"api_ports": (port,)}))
+        with pytest.raises(PreflightError, match="port"):
+            run_cli.check_reservations(tmp_path, reserved)
+
+
 def _reservations(run_id="d426-unit", robots=2, started=1_700_000_000.0):
     return Reservations.derive(run_id, robots, started_at=started)
 
@@ -164,7 +264,7 @@ def test_cli_refuses_missing_world_and_map_and_exits_nonzero(tmp_path):
     assert "world" in (result.stdout + result.stderr)
 
 
-def test_cli_generates_matching_overlays_and_manifest(tmp_path):
+def test_cli_generates_matching_overlays_and_manifest(tmp_path, capsys):
     world = tmp_path / "course.world"; world.write_text("<sdf/>", encoding="utf-8")
     map_yaml = tmp_path / "course.yaml"; map_yaml.write_text("image: x.png", encoding="utf-8")
     profile = tmp_path / "profile.yaml"; profile.write_text("robot: {}", encoding="utf-8")
@@ -173,9 +273,13 @@ def test_cli_generates_matching_overlays_and_manifest(tmp_path):
                            "--run-id", "d426-gen", "--world", str(world), "--map", str(map_yaml),
                            "--profile", str(profile)])
     assert result == 0
+    output_text = capsys.readouterr().out
     root = output / "d426-gen"
     import yaml
     manifest = json.loads((root / MANIFEST_NAME).read_text(encoding="utf-8"))
+    domain_env = f"env ROS_DOMAIN_ID={manifest['reservations']['ros_domain_id']} "
+    assert f"gz launch:  {domain_env}" in output_text
+    assert f"fleet:      {domain_env}" in output_text
     assert manifest["hashes"]["world"] and manifest["hashes"]["map"]
     robots_yaml = yaml.safe_load((root / "robots.yaml").read_text(encoding="utf-8"))
     overlays = {}
