@@ -155,7 +155,7 @@ class OverlayRepository:
             grant["used_challenges"] = (grant["used_challenges"] + [challenge_id])[-64:]
             grant["session_ids"] = [item for item in grant.get("session_ids", [])
                                     if any(r["id"] == item and not deps.is_expired(r) for r in tokens)]
-            if len(grant["session_ids"]) >= 4:
+            if len(grant["session_ids"]) >= 8:
                 raise RepositoryDenied("active session limit reached")
             grant["session_ids"].append(record["id"])
             return {"id": record["id"], "token": token, "role": grant["role"], "expires_at": expiry}

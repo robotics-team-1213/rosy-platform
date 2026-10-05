@@ -6109,6 +6109,11 @@ osy-d395-s1d\`.
 - 증거: test/test_site_firewall.py test/test_site_mdns_bridge.py test/test_site_preflight.py test/test_site_user_discovery.py test/test_site_fleet_mdns.py — 309 passed, 3 skipped. known_failures 0 new. 호스트 시험이며 현장 배포는 없다.
 - gate 변화: 없음. 현장 스택에는 아직 배포하지 않았다.
 
+## 2026-10-05 · uncommitted · docs(lane): straight departure pipeline proposal
+- Change: record user-confirmed straight white-boundary crossing and stop; propose synchronized recording, reviewed failure labels, geometry/control replay and closed-loop evaluation.
+- Evidence: source inspection; departure-time synchronized trace unavailable. Focused suite: 109 passed and 2 log-format failures; both repaired checks passed on rerun (21 warnings), known_failures: 0 NEW for repaired checks.
+- Gate: no runtime change; departure root cause and FIELD acceptance remain unproven. Design status Proposed.
+
 ## 2026-10-05 · uncommitted · fix(site): Fleet and Vision listen ports come from the site setting
 - 변경: Fleet과 Vision의 컨테이너 수신 포트가 ROSY_FLEET_PORT와 ROSY_VISION_PORT다. Compose 명령, 헬스체크, Caddy 업스트림, 페어링 동기화 주소가 그 값을 쓴다. 코드 기본값은 없다. 두 포트는 공개하지 않는다.
 - 증거: test/test_site_firewall.py test/test_site_preflight.py test/test_site_pairing_deploy.py test/test_site_task_queue_deploy.py test/test_site_map_fit_deploy.py — 113 passed. known_failures 0 new. 호스트 시험이며 현장 배포는 없다.
