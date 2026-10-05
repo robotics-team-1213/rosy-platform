@@ -285,3 +285,10 @@
 - 변경: 현행 모듈에 source-token 표시 추적과 승인 보정을 통합. 마커 명시 대응 우선, 없으면 익명 검출·신뢰 가능한 map pose 대조. UI/UX 리팩터링 없음.
 - 증거: 공유 벡터·Vision·Fleet·브라우저 전환 조건을 호스트에서 검증. 실제 사이트는 두 등록 로봇과 S21 영상 연결 조회만 확인. 후보 배포·빈 트랙 학습·실물 위치 오차는 미완료.
 - gate 변화: 없음. SOURCE/LOCAL 변경이며 DEVICE/FIELD 완료 주장 없음. 기존 등록·credentials 보존.
+
+
+## 2026-10-05 · uncommitted · fix(test): signal observer exact-source collection
+
+- 변경: signal observer 테스트는 private exact-file 로더로 자신의 실제 소스를 읽는다. 다른 테스트가 generic observer를 먼저 읽어도 관측 타입을 섞지 않는다. 프로덕션 standalone CLI 및 카메라/명령 경로 변경 없음.
+- 증거: 실제 Gazebo observer가 generic observer를 차지한 fresh-process에서 기존 모듈과 검색 경로 보존, ObserverConfig/make_source 타입 동일성 확인. T2/T5/T3/Vision 양방향 각 105 PASS.
+- gate 변화: 없음. SOURCE/LOCAL 테스트 수선만. 실제 카메라·ROS·기기 수용 주장 없음.
