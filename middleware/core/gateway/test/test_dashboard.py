@@ -93,9 +93,9 @@ def test_dashboard_shell_is_served_with_accessible_landmarks(dashboard_client):
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("text/html")
     assert 'lang="ko"' in response.text
-    assert "Rosy OS" in response.text
+    assert "Rosy Robot" in response.text
     assert "<main" in response.text
-    assert 'aria-label="Rosy OS 상태"' in response.text
+    assert 'aria-label="Rosy Robot 상태"' in response.text
     assert 'data-mode="NAVIGATION" disabled' in response.text
     assert "https://" not in response.text
 

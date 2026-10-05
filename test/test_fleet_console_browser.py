@@ -1590,8 +1590,11 @@ def test_mobile_console_has_no_horizontal_overflow(console_url, width):
           status: document.querySelector('#online-pill').getBoundingClientRect().toJSON(),
           operator: document.querySelector('#user-role').getBoundingClientRect().toJSON(),
           clock: document.querySelector('#clock').getBoundingClientRect().toJSON(),
-          stopScopeHidden: !document.querySelector('#estop small')
-            && [...document.querySelectorAll('#estop span')].every(s => s.classList.contains('sr-only')),
+          stopScopeHidden: (() => {
+            const small = document.querySelector('#estop small');
+            return !!small && getComputedStyle(small).display === 'none';
+          })(),
+          stopVerb: [...document.querySelectorAll('#estop span')].filter(node => !node.classList.contains('sr-only')).map(node => node.textContent).join(''),
           stopAccessibleName: document.querySelector('#estop').getAttribute('aria-label'),
         })""")
         browser.close()
@@ -1608,8 +1611,9 @@ def test_mobile_console_has_no_horizontal_overflow(console_url, width):
         status, clock = layout["status"], layout["clock"]
         assert min(status["bottom"], clock["bottom"]) - max(status["top"], clock["top"]) > 1, layout
         assert layout["stopScopeHidden"], layout
-        # 아이콘만 보이는 정지 — 래치 뜻은 접근 이름이 말한다(D-421).
-        assert layout["stopAccessibleName"] == "전체 비상 정지 (래치 · 로봇별 관리자 해제)", layout
+        # 보이는 동사는 비상 정지. 래치 부제는 이 폭에서 숨고, 접근 이름은 보이는 글이다.
+        assert layout["stopVerb"] == "비상 정지", layout
+        assert layout["stopAccessibleName"] is None, layout
 
 
 @pytest.mark.parametrize("width", [320, 390, 1366])

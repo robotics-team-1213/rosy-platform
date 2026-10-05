@@ -6006,3 +6006,15 @@ osy-d395-s1d\`.
 - Change: private return-only ACT/owner adapter freezes original joint and exact RGB capture, uses identical owner clock/policy, and preserves queued source timestamps. Inference runs outside the owner lock; no submit, scheduler, issuer or default runtime wiring.
 - Evidence: host13 PASS/1torchSKIP, actual CPU model14 PASS, independent13 PASS/1torchSKIP/0NEW. Actual CPU fixture is synthetic and uses a fixed host clock, not device timing or learned task quality. X:/DevTemp/act-owner-capture/.
 - gate 변화: SOURCE/HOST study composition verified; operational trusted capture/install/ROS/device/physical acceptance remains HOLD.
+
+## 2026-10-05 · uncommitted · uiux: align surface names, stop label, and icons
+
+- 변경: 네 표면의 보이는 이름을 Rosy Robot, Rosy Pilot, Rosy Console로 맞추고 한국어는 부제로 두었다. Fleet 정지에 보이는 비상 정지를 붙였고, Pilot 탭과 Android 런처는 pilot.svg를, Fleet 크롬·테마·명렬 측정 아이콘은 actionIcon을 쓴다.
+- 증거: 표시명·파비콘·actionIcon·테마 선택 계약과 Fleet 페이지 서빙 시험 59 passed, 1 skipped. known_failures 0 new. Chromium 워드마크·머리 넘침 5 passed. Pilot LauncherIconParityTest 4 passed.
+- gate 변화: 없음. 호스트 시험이며 장치 수용은 없다.
+
+## 2026-10-05 · uncommitted · docs: give the header and sidebar one layout each
+
+- 변경: D-466. 머리 자리는 brand·cluster·estop이고, 절차를 고르는 열은 --sidebar-track 하나다. 로봇 절차 칸과 Fleet 설치 칸이 그 트랙을 쓴다.
+- 증거: test_chrome_layout.py와 토큰 계약 37 passed. 호스트 계약이며 장치 수용은 없다.
+- gate 변화: 없음.

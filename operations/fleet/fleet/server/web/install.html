@@ -19,10 +19,10 @@
   <a class="skip-link" href="#install-main">본문으로 건너뛰기</a>
   <ui-shell grammar="procedure">
   <ui-topbar>
-    <ui-brand><b>ROSY FLEET</b><small id="fleet-name">설치·보정</small></ui-brand>
+    <ui-brand><b>Rosy Console</b><small id="fleet-name">설치·보정</small></ui-brand>
     <div class="spacer"></div>
     <!-- D-359 §6.4 — 좁은 창에서 접속·역할·테마는 이 토글 뒤로 접힌다. 넓은 창에서는 토글이 숨고 줄에 선다. -->
-    <ui-button kind="quiet" id="topbar-more" type="button" aria-expanded="false" aria-controls="topbar-extra" title="설정"><svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4 7h16M4 12h16M4 17h16M9 5v4M15 10v4M7 15v4"/></svg><span class="sr-only">설정</span></ui-button>
+    <ui-button kind="quiet" id="topbar-more" type="button" aria-expanded="false" aria-controls="topbar-extra" title="설정" data-action-icon="settings"><span class="sr-only">설정</span></ui-button>
     <div id="topbar-extra" class="topbar-extra" data-open="false">
       <input id="console-token" class="ui-field token" type="password" placeholder="관제 토큰"
              autocomplete="off" aria-label="관제 토큰">
@@ -30,18 +30,18 @@
       <ui-tag id="user-role" status="neutral">인증 필요</ui-tag>
       <div id="theme-choice" class="theme-choice" role="group" aria-labelledby="theme-choice-label">
         <ui-text id="theme-choice-label" scale="label" class="sr-only">화면 테마</ui-text>
-        <ui-button kind="segment" type="button" data-theme-choice="dark" aria-pressed="true" title="어둡게"><svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg><span class="sr-only">어둡게</span></ui-button>
-        <ui-button kind="segment" type="button" data-theme-choice="light" aria-pressed="false" title="밝게"><svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="4"/><path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8"/></svg><span class="sr-only">밝게</span></ui-button>
-        <ui-button kind="segment" type="button" data-theme-choice="system" aria-pressed="false" title="시스템"><svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8.5 20h7M12 16v4"/></svg><span class="sr-only">시스템</span></ui-button>
+        <ui-button kind="segment" type="button" data-theme-choice="dark" aria-pressed="true" title="어둡게" data-action-icon="theme-dark"><span class="sr-only">어둡게</span></ui-button>
+        <ui-button kind="segment" type="button" data-theme-choice="light" aria-pressed="false" title="밝게" data-action-icon="theme-light"><span class="sr-only">밝게</span></ui-button>
+        <ui-button kind="segment" type="button" data-theme-choice="system" aria-pressed="false" title="시스템" data-action-icon="theme-system"><span class="sr-only">시스템</span></ui-button>
       </div>
     </div>
     <ui-tag id="online-pill" status="neutral">연결 대기</ui-tag>
     <ui-text id="clock" scale="value">--:--:--</ui-text>
-    <ui-button kind="irreversible" id="estop" data-always-live class="estop" type="button" aria-label="전체 비상 정지 (래치 · 로봇별 관리자 해제)" title="전체 비상 정지 (래치 · 로봇별 관리자 해제)"><svg class="estop-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 2 19.1 4.9 22 12 19.1 19.1 12 22 4.9 19.1 2 12 4.9 4.9Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><rect x="8" y="8" width="8" height="8" rx="1" fill="currentColor"/></svg><span class="sr-only">전체 비상 정지 (래치 · 로봇별 관리자 해제)</span></ui-button>
+    <ui-button kind="irreversible" id="estop" data-always-live class="estop" type="button" data-action-icon="estop"><span>비상 정지</span><small>래치 · 로봇별 관리자 해제</small></ui-button>
   </ui-topbar>
 
   <main id="install-main" tabindex="-1">
-    <h1 class="sr-only">Rosy Fleet — 설치·보정</h1>
+    <h1 class="sr-only">Rosy Console — 설치·보정</h1>
     <!-- D-410 — 설치 화면. 운용(감시·목표·정지)은 /console에 있다. -->
     <section class="panel install-nav" aria-labelledby="install-nav-heading">
       <h2 id="install-nav-heading">설치·보정 화면</h2>
@@ -164,7 +164,7 @@
         <div class="vision-controls">
           <label for="vision-source">카메라</label>
           <select class="ui-field" id="vision-source" disabled aria-label="관제 카메라 선택"></select>
-          <ui-button kind="quiet" id="vision-refresh" type="button" title="영상 새로고침"><svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M21 12a9 9 0 1 1-2.64-6.36L21 8"/><path d="M21 3v5h-5"/></svg><span class="sr-only">영상 새로고침</span></ui-button>
+          <ui-button kind="quiet" id="vision-refresh" type="button" title="영상 새로고침" data-action-icon="refresh"><span class="sr-only">영상 새로고침</span></ui-button>
         </div>
         <div class="vision-frame" id="vision-frame" data-state="waiting">
           <div class="vision-image-stage" id="vision-image-stage" hidden>

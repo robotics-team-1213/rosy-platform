@@ -17,7 +17,7 @@
   <a class="skip-link" href="#surface-main">본문으로 건너뛰기</a>
   <ui-shell grammar="{{grammar}}">
     <ui-topbar>
-      <ui-brand href="/dashboard" aria-label="Rosy OS 대시보드 홈"><b>ROSY</b><small>{{title}}</small></ui-brand>
+      <ui-brand href="/dashboard" aria-label="Rosy Robot 홈"><b>Rosy Robot</b><small>{{title}}</small></ui-brand>
       <nav id="surface-switch" class="surface-switch" aria-label="화면 전환"></nav>
       <span data-spacer></span>
       <ui-text id="shell-notice" scale="label" role="status"></ui-text>
@@ -25,7 +25,7 @@
       <ui-button kind="irreversible" id="shell-estop" data-always-live type="button">비상 정지</ui-button>
     </ui-topbar>
     <main id="surface-main" class="surface-main" tabindex="-1">
-      <h1 class="sr-only">Rosy OS — {{title}}</h1>
+      <h1 class="sr-only">Rosy Robot — {{title}}</h1>
       <ui-empty id="surface-status">화면을 불러오는 중입니다.</ui-empty>
       <ui-status id="safety-mode-status" role="status" hidden></ui-status>
 {{slots}}

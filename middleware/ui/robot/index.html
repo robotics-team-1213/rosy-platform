@@ -19,7 +19,7 @@
   <ui-shell id="entry-shell" grammar="procedure">
     <a class="skip-link" href="#entry-main">로그인과 작업 화면으로 건너뛰기</a>
     <ui-topbar class="entry-topbar">
-      <ui-brand><a href="/dashboard" aria-label="ROSY 홈"><b>ROSY</b></a></ui-brand>
+      <ui-brand><a href="/dashboard" aria-label="Rosy Robot 홈"><b>Rosy Robot</b></a></ui-brand>
       <ui-tag id="entry-role" hidden></ui-tag>
       <ui-button kind="quiet" id="entry-logout" hidden>로그아웃</ui-button>
       <ui-button kind="irreversible" id="entry-stop" data-always-live disabled reason="로그인 후 사용할 수 있습니다.">비상 정지</ui-button>
@@ -42,9 +42,9 @@
   <a class="skip-link" href="#dashboard-main">상태 화면으로 건너뛰기</a>
   <ui-topbar>
     <ui-brand>
-    <a class="brand" href="/dashboard" aria-label="Rosy OS 대시보드 홈">
+    <a class="brand" href="/dashboard" aria-label="Rosy Robot 홈">
       <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
-      <span><b>ROSY</b><small>Field runtime</small></span>
+      <span><b>Rosy Robot</b><small>로봇 운용</small></span>
     </a>
     </ui-brand>
     <div class="topbar-status">
@@ -66,7 +66,7 @@
     </div>
     <div class="compatibility-safety">
       <ui-button kind="irreversible" id="emergency-stop" data-always-live class="stop-button" type="button" aria-keyshortcuts="Escape">
-        <span>즉시 정지</span><small>모든 역할 · Esc</small>
+        <span>비상 정지</span><small>즉시 · 모든 역할 · Esc</small>
       </ui-button>
     </div>
   </ui-topbar>
@@ -114,7 +114,7 @@
     <ui-button kind="quiet" id="close-auth" class="drawer-close" type="button" aria-label="접속 키 창 닫기">×</ui-button>
   </aside>
 
-  <main id="dashboard-main" class="dashboard" aria-label="Rosy OS 상태" tabindex="-1">
+  <main id="dashboard-main" class="dashboard" aria-label="Rosy Robot 상태" tabindex="-1">
     <!-- 운용 — 공간 문법(concept 16 §7.1). 스크롤하지 않는다: 위치가 기억이다.
          내용이 넘치면 감지 영역만 스크롤하고 관측·조작은 고정된다. -->
     <div id="view-operate-panel" class="console">

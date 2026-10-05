@@ -372,7 +372,8 @@ def test_cancel_all_contract_is_documented_and_wired_to_the_console():
     assert "`FLEET_CANCEL_ALL_DURING_DISPATCH`" in reference and "CORE_REPLY_ONLY" in reference
     assert "D-421" in srs and "전체 주행 취소" in srs and "전체 비상 정지" in srs
     assert '"/api/fleet/cancel-all"' in console_js and "물리 정지 미확인" in console_js
-    assert 'id="cancel-all"' in index and "전체 비상 정지" in index
+    assert 'id="cancel-all"' in index and ">비상 정지</span>" in index
+    assert "전체 비상 정지" not in index
 
 
 # --- review round 1: CORE-evidenced release, fence edges, held robots -----------------

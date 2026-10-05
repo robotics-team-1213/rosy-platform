@@ -18,7 +18,9 @@ THEME_JS = SRC.parent / "shared" / "web" / "theme.js"
 DISPLAY_JS = SRC.parent / "middleware" / "ui" / "robot" / "panels" / "system" / "display.js"
 FLEET_HTML = SRC.parent / "operations" / "fleet" / "fleet" / "server" / "web" / "index.html"
 
-CHOICE = re.compile(r"""\{\s*value:\s*"([\w-]+)",\s*label:\s*"([^"]+)"(?:,\s*icon:\s*ICONS\.\w+)?\s*\}""")
+CHOICE = re.compile(
+    r"""\{\s*value:\s*"([\w-]+)",\s*label:\s*"([^"]+)"(?:,\s*icon:\s*(?:ICONS\.\w+|"[^"]+"))?\s*\}"""
+)
 
 
 def theme_choices(source: str) -> list[tuple[str, str]]:
@@ -79,6 +81,6 @@ def test_a_drifted_selector_is_caught():
     html = FLEET_HTML.read_text(encoding="utf-8")
     assert markup_choices(html.replace(">밝게<", ">라이트<", 1)) != choices
     grown = THEME_JS.read_text(encoding="utf-8").replace(
-        '{ value: "system", label: "시스템", icon: ICONS.system },',
-        '{ value: "contrast", label: "고대비", icon: ICONS.light },\n    { value: "system", label: "시스템", icon: ICONS.system },', 1)
+        '{ value: "system", label: "시스템", icon: "theme-system" },',
+        '{ value: "contrast", label: "고대비", icon: "theme-light" },\n    { value: "system", label: "시스템", icon: "theme-system" },', 1)
     assert theme_choices(grown) != choices and markup_choices(html) != theme_choices(grown)

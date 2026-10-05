@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- D-370 3항: tokens.css ground token, the plate of every Rosy icon. -->
+<resources>
+    <color name="ic_launcher_background">#FF101214</color>
+</resources>

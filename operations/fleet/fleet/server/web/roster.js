@@ -4,6 +4,7 @@
 // D-359 §5.2 — 카드의 짧은 값은 공용 <ui-tag>다. 주행(nav)·도착(ok)은 색이 아니라
 // ink인 active, 나머지는 태그의 warn/crit 어휘 그대로다.
 import { MODE_LABEL, enumLabel, EVIDENCE_LABEL } from "/common/core_ui_logic.js";
+import { actionIcon } from "/common/ui.js";
 import { addressReason } from "./address-drift.js";
 import { localizationTag, localizationUrgent, untrustedQueuedReason } from "./localization-badge.js";
 
@@ -16,15 +17,6 @@ const REACH_LABEL = Object.freeze({
   ConnectTimeout: "접속 시간 초과",
   TimeoutException: "응답 시간 초과",
   ReadTimeout: "응답 시간 초과",
-});
-
-// D-405 — 카드 측정 라벨의 얼굴은 아이콘이다. 한국어 이름은 sr-only·title로 남는다.
-// 색은 currentColor(.facts span의 ink-quiet를 상속), 크기는 공용 .ui-icon.
-const FACT_ICONS = Object.freeze({
-  pose: '<svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="7"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>',
-  yaw: '<svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9"/><path d="m15.5 8.5-2.1 4.9-4.9 2.1 2.1-4.9z"/></svg>',
-  battery: '<svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3" y="8" width="15" height="8" rx="1.5"/><path d="M21 10.5v3M6.5 10.5v3M10 10.5v3M13.5 10.5v3"/></svg>',
-  safety: '<svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 3l7 3v5c0 4.4-3 7.5-7 9-4-1.5-7-4.6-7-9V6z"/></svg>',
 });
 
 function nodeWithText(tagName, className = "", text) {
@@ -149,21 +141,21 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
     const battery = state.battery && typeof state.battery.percent === "number"
       ? `${Math.round(state.battery.percent)}%` : "—";
     const rows = [
-      ["pose", "위치", FACT_ICONS.pose, pose ? `${pose.x.toFixed(2)}, ${pose.y.toFixed(2)}` : "—"],
-      ["yaw", "방향", FACT_ICONS.yaw, pose ? `${(pose.yaw * 180 / Math.PI).toFixed(0)}°` : "—"],
-      ["battery", "배터리", FACT_ICONS.battery, battery],
-      ["safety", "안전", FACT_ICONS.safety, safetyLabel],
+      ["pose", "위치", pose ? `${pose.x.toFixed(2)}, ${pose.y.toFixed(2)}` : "—"],
+      ["yaw", "방향", pose ? `${(pose.yaw * 180 / Math.PI).toFixed(0)}°` : "—"],
+      ["battery", "배터리", battery],
+      ["safety", "안전", safetyLabel],
     ];
-    rows.forEach(([key, label, icon, value]) => {
+    rows.forEach(([key, label, value]) => {
       const cellEl = document.createElement("div");
       // D-409 — 컴팩트에서 위치·방향은 지도가 말한다. 칸에 이름을 달아 표면이 접는다.
       cellEl.dataset.fact = key;
       const labelEl = document.createElement("span");
-      // D-405 — 라벨의 얼굴은 아이콘, 한국어 이름은 스크린리더와 title에 남는다.
+      // D-405 — 라벨의 얼굴은 actionIcon, 한국어 이름은 스크린리더와 title에 남는다.
       labelEl.title = label;
-      labelEl.innerHTML = icon;
       const srLabel = nodeWithText("span", "sr-only", label);
       labelEl.appendChild(srLabel);
+      actionIcon(labelEl, key);
       let valueEl;
       if (label === "안전" && value === "비상 정지") {
         // D-202 — 위험은 채움이다. 정지 사실은 카드의 다른 측정값과 같은
