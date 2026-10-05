@@ -5963,11 +5963,13 @@ osy-d395-s1d\`.
 - 증거: 실제 getaddrinfo를 멈춰 원래 대기 상한 실패를 재현했다. 동시 요청·시간 초과 재시도·루프 종료·작업 상한·캐시 만료 DHCP 변경을 회귀 검증한다. 모든 fixture는 호스트 합성이며 실제 컨테이너·기기 접속은 미검증이다.
 - gate 변화: 없음. SOURCE/LOCAL 자원 경계 보완이며 현장 연동이나 제어 수용은 통과 처리하지 않는다.
 
+
 ## 2026-10-05 · uncommitted · fix(learning): 터치 픽셀 허용치 직접 입력
 
 - 변경: 기존 D-359 공용 폼으로 허용치 방식을 자동 제안·직접 입력 중 선택한다. 기본 자동 제안과 Shift 입력 보조를 유지하며 직접 입력은 터치에서도 입력값을 그대로 쓴다. 로딩·저장·제외 상태의 기존 편집 잠금에 같은 선택 항목을 포함했다. OpenCV 8-bit Lab 거리 설명은 인코딩된 색 거리 휴리스틱으로 정정했으며 계산은 바꾸지 않았다.
 - 증거: 실제 Chromium touch POST에서 입력 37이 4로 바뀌는 원래 실패를 재현했다. 수정 후 원래 픽셀 브라우저 3건과 터치 자동·직접 입력 2건, flood 및 공용 폼 시험 합계 37 PASS(25.40s)다. 첫 요청 URL predicate와 완료 필드 fixture 오류, 최초 없는 시험 경로 오류는 로그에 보존했다. Node 문법·Python 오류 검사는 통과했다.
 - gate 변화: 합성 로컬 검수 자료의 UI/LOCAL 회귀만. 픽셀 승인·학습 입장·장치 전달 권한을 변경하거나 실제 태블릿 수용을 증명하지 않는다.
+
 
 ## 2026-10-05 · uncommitted · test(execution): same-attempt native evidence chain
 
@@ -5987,3 +5989,10 @@ osy-d395-s1d\`.
 - 변경: CI 통과 source58d246ab3의 signed ARM64 release2026.10.05-040을 9dfk→8kcn 순차 설치하고 실제 CORE/camera cwd·파일 SHA256·live 카메라·정지 상태를 확인했다. source 수정은 없다.
 - 증거: 장치 각각148장 재생 비가시17/복구87–90/MAE0.0518586, keeper p95 14.02/18.31ms, 카메라각80장/10초·정지cmd501/497개다. CI37268067397/build37268633475 success, 두314패키지 ABI PASS, 관측 parameter와 model pointer 경로·존재 유지(내용 전후 해시는 미검증), fresh session logout204·token 제거. docs/validation/lane-visibility-deployment-2026-10-05/deployment.md.
 - gate 변화: DEVICE 소프트웨어 설치·정지 관측·장치 재생 PASS. motor bench·line/threshold·line OFF·화면 안전회로UNVERIFIED를 유지했다. keeper 제어 적용·독립 사람 라벨·R1/R2 현장 주행은 HOLD다.
+
+
+## 2026-10-05 · uncommitted · fix(validation): T5 정지 근거 유효성
+
+- 변경: 정지 판정은 유한·음이 아닌 시각/이동/회전과 수신→정책 적용→정지의 시간 순서를 요구한다. NaN·역순·음수 값은 정상 성공이 아니다. watchdog 명령·실제 수동 SIM 경계와 STEADY clock 보완은 gz_sim journal에 기록했다. 시나리오·CORE 정책 시한·정지 상한을 완화하지 않았다.
+- 검증: 원래 T5 순수 함수 반례와 합성 ROS entrypoint 경계 실패를 재현한 뒤 watchdog/scenario/Fleet-loss 71 PASS(7.38s)다. 실제 주행·Gazebo 회차·장치 장애 주입 없이 HOST 근거만 추가했다.
+- gate 변화: T5 전체 ROS-SIM 수용은 HOLD다. 이번 SOURCE/LOCAL 검증을 물리 정지 시한이나 설치된 base watchdog 증거로 쓰지 않는다.
