@@ -6042,3 +6042,9 @@ osy-d395-s1d\`.
 - 변경: Fleet Dockerfile이 복사하는 `contracts/learning/src/**`를 site candidate push 경로에 추가했다. 기존 이미지 소스와 trigger 일치 계약을 유지한다.
 - 증거: origin CI `37276307702`의 root-test-1of3가 누락 경로 `contracts/learning/src`로 실패했다. 수정 후 `test/test_site_candidate_workflow.py` 14 PASS, known_failures 0 NEW (`X:/DevTemp/line-remote-20261005/site-paths.txt`).
 - gate 변화: HOST 경로 계약만 PASS. 새 후보 CI와 ARM64 빌드, 장치 배포는 별도 검증한다. 자동 차선 추종과 FIELD 수용은 미실행이다.
+
+## 2026-10-05 · uncommitted · fix(validation): T6 부족 근거 수용 차단
+
+- 변경: 한두 임의 PASS 회차를 GO로 표시하던 보고서를 seed 3개 ×3회 정확한 조합과 M01..M08 전체로 제한했다. 명시적 failure flags·유효 판정·실제 원본 SHA 결속이 없으면 HOLD. 주행/시나리오/최악 판정 분리는 그대로다. 새 T6 테스트도 private exact-file loader로 읽어 observer 검색 경로를 오염시키지 않는다.
+- 증거: 원래 4 FAIL/6 PASS 반례 보존 후 T6 및 T2/T3/T5/Vision 원래 회귀 127 PASS. digest 확인은 보고 입력 증거만이며 실제 실행·원본 판정 진실성을 인증하지 않는다.
+- gate 변화: 없음. HOST 보고 생성 수선만이며 실제 ROS-SIM/기기 수용은 HOLD.
