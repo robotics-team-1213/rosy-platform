@@ -6163,3 +6163,9 @@ osy-d395-s1d\`.
 - 변경: D-472와 ADR Log에 실제 Vision 프레임 기반 현장지도, 단독 소유 LED 점멸 신원 대조, 안전 선점·만료·주행 분리 결정을 기록했다.
 - 증거: 현장 두 로봇의 `rosy-face`와 램프 런타임 조회. 식별 점멸 API와 실제 영상 대조는 아직 없다.
 - gate 변화: 없음. 문서 제안이며 DEVICE/FIELD 수용이 아니다.
+
+## 2026-10-06 · uncommitted · D-472 호스트 구현
+
+- 변경: Fleet→CORE→호스트→rosy-face의 단기 LED 식별 요청과 Rosy Cam 최신 원본 프레임의 현장지도 표시를 구현했다. 색/영상만으로 robot ID나 주행 좌표를 확정하지 않는다.
+- 증거: 호스트 pytest 274 passed/3 skipped, 웹 Node 135 passed. 장치 설치·현장 영상 식별은 미확인.
+- gate 변화: SOURCE/LOCAL 코드 검증. DEVICE/FIELD 수용은 아니다.

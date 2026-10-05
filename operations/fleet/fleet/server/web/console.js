@@ -730,7 +730,22 @@ function refreshDiagnostics() {
 const signals = createSignals({ scope: pageScope, el, view, log, call, refreshState,
   isOperator: () => auth.role === "operator" && !auth.locked });
 // D-410 — 운용 화면의 카메라는 영상 프리뷰만 띄운다. 경기장/맵 보정 뷰는 설치 화면이 가진다.
-const visionView = createVisionView({ scope: pageScope, el, call });
+const visionView = createVisionView({ scope: pageScope, el, call, rawOnly: true });
+// The map panel shows the same authenticated Vision frame; Fleet does not relay image bytes.
+let cancelMapCameraExpiry = () => {};
+pageScope.subscribe(() => visionView.onFrame(pageScope.guard((frame) => {
+  const panel = el("map-camera");
+  cancelMapCameraExpiry();
+  mapView.setCameraFrame(frame);
+  if (frame.state !== "live" || !Number.isFinite(frame.ageMs) || frame.ageMs < 0 || frame.ageMs > 3000) {
+    panel.hidden = true; mapView.setCameraFrame(null); return;
+  }
+  el("map-camera-image").src = frame.url;
+  el("map-camera-meta").textContent = `Rosy Cam ${frame.source} · seq ${frame.seq || "?"} · age ${Number.isFinite(frame.ageMs) ? frame.ageMs : "?"} ms · 영상 관측 전용`;
+  panel.hidden = false;
+  cancelMapCameraExpiry = pageScope.timeout(() => { panel.hidden = true; mapView.setCameraFrame(null); },
+    Math.max(0, 3000 - frame.ageMs));
+})));
 
 // --- 신호등 (ROSY-SIGNAL-001) --------------------------------------------------
 
