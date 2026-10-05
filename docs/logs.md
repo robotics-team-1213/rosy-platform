@@ -6349,3 +6349,9 @@ osy-d395-s1d\`.
 - 변경: 객체·픽셀 검수의 편집 칸에 컨테이너 폭을 선언하고 390px 전화의 작업 버튼을 각 칸의 전폭으로 쌓았다. 표면별 24rem 경계를 `surfaces.yaml`에 이유와 함께 기록했다.
 - 증거: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)의 390px 전후 캡처와 Chromium 358px 측정, 객체·픽셀 폭 및 반응형 계약 15 passed, `known_failures.py` 0 NEW. 캡처 원본은 X:에 둔다.
 - gate 변화: 학습 검수 LOCAL G2 너비 일부 추가. 실제 검수자 G3와 제품 전체는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(learning): 픽셀 사진 이동 너비
+
+- 변경: 전화 픽셀 검수의 사진·상태 선택을 전폭으로 놓고 이전·다음 사진을 동등한 두 칸, 최신 내용 불러오기를 전폭으로 놓았다.
+- 증거: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)의 390·320px 캡처와 Chromium 버튼 너비, 객체·픽셀 폭·반응형 계약 17 passed, `known_failures.py` 0 NEW. 캡처 원본은 X:에 둔다.
+- gate 변화: 학습 검수 LOCAL G2 너비 일부 추가. 실제 검수자 G3와 제품 전체는 HOLD다.

@@ -37,7 +37,7 @@ def browser_workspace(tmp_path):
 
 @pytest.mark.parametrize('route,left,right', [('/', '.review-stage', '.label-inspector'),
                                                    ('/pixels', '.pixel-layout > section', '.pixel-layout > aside')])
-@pytest.mark.parametrize('width', [1440, 800, 390])
+@pytest.mark.parametrize('width', [1440, 800, 390, 320])
 def test_review_editor_peer_widths(browser_workspace, route, left, right, width):
     page, _, _ = browser_workspace
     page.set_viewport_size({'width': width, 'height': 1000})
@@ -46,12 +46,19 @@ def test_review_editor_peer_widths(browser_workspace, route, left, right, width)
     assert all(box and box['width'] > 0 for box in boxes)
     assert abs(boxes[0]['width'] - boxes[1]['width']) <= 1
     assert page.evaluate('document.documentElement.scrollWidth - innerWidth') == 0
-    if width == 390:
+    if width <= 390:
         for pane in (left, right):
             actions = page.locator(f'{pane} ui-actions').first
             action_width = actions.bounding_box()['width']
             assert all(abs(button.bounding_box()['width'] - action_width) <= 1
                        for button in actions.locator('ui-button').all())
+        if route == '/pixels':
+            previous = page.locator('#pixel-prev').bounding_box()
+            following = page.locator('#pixel-next').bounding_box()
+            reload = page.locator('#pixel-reload').bounding_box()
+            assert abs(previous['width'] - following['width']) <= 1
+            assert previous['y'] == following['y']
+            assert abs(reload['width'] - page.locator('.ui-workspace-bar').first.bounding_box()['width']) <= 1
     if output := os.getenv('ROSY_UIUX_SCREENSHOT_DIR'):
         from pathlib import Path
         target = Path(output) / f'learning-{route.strip("/") or "objects"}-{width}.png'

@@ -86,6 +86,8 @@
 
 390px 검수 화면에서는 두 창의 폭은 같아도 작업 버튼이 내용 길이만큼만 차지했다. 객체·픽셀 편집 칸을 컨테이너로 선언하고, 24rem 미만에서는 기존 공용 `ui-actions` 동작처럼 버튼을 각 칸의 전폭으로 쌓았다. 현재 Chromium 측정에서 두 칸의 폭은 각각 358px, 첫 작업 버튼도 각각 358px이고 가로 넘침은 0이다. 객체·픽셀 1440/800/390px 브라우저 6건과 반응형 계약 9건 **15 passed**, `known_failures.py` **0 NEW**다. 전후 캡처는 X: `captures/learning-width-container{,-final}/learning-{objects,pixels}-390.png`에 둔다. 실제 검수자 G3 독회는 남는다.
 
+픽셀 검수의 사진 이동은 390px에서 이전 249px·다음 86px로 달라져 긴 비활성 이유가 이동 칸을 밀었다. 현재는 사진·상태 선택을 각 전폭으로 놓고 이전·다음을 173px씩, 최신 내용 불러오기를 358px로 놓는다. 320px도 같은 구조이며 가로 넘침이 없다. 객체·픽셀 1440/800/390/320px와 반응형 계약 **17 passed**, `known_failures.py` **0 NEW**다. 최종 캡처 `learning-nav-final/learning-pixels-{390,320}.png`는 같은 X: `captures/`에 둔다. 실제 검수자 작업 독회는 남는다.
+
 객체 검수의 빈 필터 상태를 1440·800·390px에서 추가 재생했다. 처음에는 `.workspace`의 자동 여백 때문에 데스크톱 내용이 좁은 열에 모이고 작은 화면의 작업 목록이 머리 아래로 밀렸다. 현재는 작업 영역이 가용 폭을 채우고 머리 바로 아래에서 시작한다. 세 폭 모두 가로 넘침 없이 「전체 사진 보기」로 검수 화면에 복귀한다. 현재 트리의 객체 브라우저 **13 passed**, `known_failures.py` **0 NEW**이며 캡처 원본 `learning-objects-empty-{1440,800,390}.png`는 X: `2026-10-06--032913--uiux-quality--199bc9/captures/`에 둔다. 이는 빈 상태의 LOCAL G2 부분 근거다.
 
 작업 목록(`/learning`)과 자료 등록(`/catalog`)도 같은 자동 세로 여백으로 짧은 내용이 머리 아래에서 밀렸다. `.learning-main`을 가로 방향으로만 가운데 정렬해 두 경로가 머리 바로 아래에서 시작하게 했다. 두 경로 × 1440·800·390px **6 passed**, 가로 넘침 0, `known_failures.py` **0 NEW**다. 전후 측정은 `X:\DevTemp\projects\rosy-platform\2026-10-06--032913--uiux-quality--199bc9\logs\learning-pages-{baseline,three-widths}.txt`, 최종 캡처는 같은 X:의 `captures/learning-{learning,catalog}-{1440,800,390}.png`다. 실제 자료 등록·작업 연결의 G3는 남는다.
@@ -202,7 +204,7 @@ G3 여덟 항목은 세 표면 모두 **미완료**다. 아래는 이번 회차�
 | `game-board` | LOCAL 부분 근거 | 모든 상태 G2, 실제 경기 관측, G3 |
 | `pilot` | 현재 트리의 주행 4폭·팔·대상 오류 LOCAL 부분 근거 | 선언 상태 전체 G2, 전화 회전 조작 발견 가능성·운전자 G3; [DEVICE 기능 확인](../pilot-device-user-confirmed-2026-10-05/README.md)은 별도 |
 | `robot-face` | 웨이크·주행 카드 호스트 PIL 이미지와 [G3 부분 독회](#로봇-얼굴-g3-독회--local-진행-중) | 실제 설치 LCD 사진·거리/각도/조도 판독, 카드 전이·G3 |
-| `pinky-review` | 객체·픽셀 편집 창과 390px 작업 버튼 너비 LOCAL 부분 근거 | 개발 도구의 선언 상태·역할별 작업 G2/G3 |
+| `pinky-review` | 객체·픽셀 편집 창과 전화 작업·사진 이동 너비 LOCAL 부분 근거 | 개발 도구의 선언 상태·역할별 작업 G2/G3 |
 | `pilot-shell` | [에뮬레이터 가로 3폭의 빈 발견·기기 상태 G2 부분 근거](#pilot-shell-네이티브-g2--태블릿-너비-부분-근거) | 실제 후보·페어링·승인·오류 화면, Lenovo 태블릿과 사용자 독회 |
 | `cam` | Pairing·송출·LAN 연결·설정의 조작 너비 소스 정리, Android APK 빌드 성공, [LAN·설정·송출 대기 에뮬레이터 G2 부분 근거](#cam-네이티브-g2--에뮬레이터-부분-근거) | Pairing·Peer·실제 송출 상태 캡처, 실제 폰과 설치자 작업 독회 |
 | `control-diagnostic` | D-266 PARKED | 재개 결정 뒤 카드 작성 |
