@@ -59,7 +59,11 @@ def main(argv=None) -> int:
 
     rclpy.init(args=argv)
     node = rclpy.create_node("sim_base_command_watchdog")
-    namespace = node.get_namespace() or ""
+    namespace = node.get_namespace().rstrip("/")
+    if namespace and namespace != "/":
+        namespace += "/"
+    else:
+        namespace = ""
     state = {"last": None, "value": ZERO}
 
     def on_command(message):

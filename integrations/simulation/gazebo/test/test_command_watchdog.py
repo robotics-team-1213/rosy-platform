@@ -77,7 +77,12 @@ def test_ros_entrypoint_absence_is_reported_not_crashed():
     import subprocess
 
     script = str(SCRIPT)
-    result = subprocess.run([sys.executable, script], capture_output=True,
-                            text=True, encoding="utf-8")
-    # rclpy 가 있으면 실행되고, 없으면 안내 후 exit 3 — 어느 쪽이든 crash는 아니다.
-    assert result.returncode in (0, 3)
+    try:
+        result = subprocess.run([sys.executable, script], capture_output=True,
+                                text=True, encoding="utf-8", timeout=15)
+    except subprocess.TimeoutExpired:
+        # rclpy 가 있고 spin 중 — 크래시 없이 살아 있다는 뜻이다.
+        return
+    # rclpy 가 없으면 안내 후 exit 3. 그 외의 즉시 종료 코드는 크래시다.
+    assert result.returncode == 3, (
+        f"returncode={result.returncode}, stderr={result.stderr[-400:]}")
