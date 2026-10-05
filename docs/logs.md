@@ -5949,3 +5949,9 @@ osy-d395-s1d\`.
 - 변경: T3 시험은 정확한 파일을 고유 private package/module ID로 불러오며 전역 `observer`·`assertions` 이름과 sys.path를 덮지 않는다. T3 observer의 package import는 상대 assertions를 쓰고 기존 standalone import는 유지한다. 판정·수집·권한 로직은 변경하지 않았다.
 - 증거: 실제 Vision observer 시험을 먼저 수집한 상태의 원래 ImportError를 재현했다. 수정 후 같은 invocation에서 Vision+T3 58 PASS(5.45s), 새 interpreter에서 기존 generic module 보존·PoseSample type identity 및 standalone import PASS를 확인했다. 최초 standalone shell quoting 오류도 로그에 보존했다. owned flake8 0이며 hook 범위·검사 예외는 바꾸지 않았다.
 - gate 변화: host collection/source 격리만. 실제 ROS/SIM·장치·endpoint 소유권·운동 수용은 추가하지 않는다.
+
+## 2026-10-05 · uncommitted · fix(learning): 터치 픽셀 허용치 직접 입력
+
+- 변경: 기존 D-359 공용 폼으로 허용치 방식을 자동 제안·직접 입력 중 선택한다. 기본 자동 제안과 Shift 입력 보조를 유지하며 직접 입력은 터치에서도 입력값을 그대로 쓴다. 로딩·저장·제외 상태의 기존 편집 잠금에 같은 선택 항목을 포함했다. OpenCV 8-bit Lab 거리 설명은 인코딩된 색 거리 휴리스틱으로 정정했으며 계산은 바꾸지 않았다.
+- 증거: 실제 Chromium touch POST에서 입력 37이 4로 바뀌는 원래 실패를 재현했다. 수정 후 원래 픽셀 브라우저 3건과 터치 자동·직접 입력 2건, flood 및 공용 폼 시험 합계 37 PASS(25.40s)다. 첫 요청 URL predicate와 완료 필드 fixture 오류, 최초 없는 시험 경로 오류는 로그에 보존했다. Node 문법·Python 오류 검사는 통과했다.
+- gate 변화: 합성 로컬 검수 자료의 UI/LOCAL 회귀만. 픽셀 승인·학습 입장·장치 전달 권한을 변경하거나 실제 태블릿 수용을 증명하지 않는다.
