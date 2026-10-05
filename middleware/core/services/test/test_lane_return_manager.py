@@ -1,6 +1,7 @@
 """D-468 real manager arbitration; no ROS or physical motion in this test."""
 import pytest
 import math
+from core_common.robot_body import ScanView
 from core_features.line_follow.manager import LineFollowManager
 from core_features.line_follow.model import LineFollowConfig, LineFollowMode, LineObservation
 from core_common.protocol.lane_containment import LaneContainmentEvidence
@@ -35,6 +36,10 @@ def frame(r,t,y=0.,uncertainty=.001,ground='CALIBRATED',x=0.,yaw=0.):
     manager.observe(LineObservation(LineFollowMode.CAMERA_LINE,t,True,0.,.9,
         ground='NOMINAL' if ground=='NOMINAL' else None,containment=containment),received_at=t,source_now=t)
     return manager.tick(t)
+
+
+def scan_view(*points):
+    return ScanView(tuple(points),(),.03)
 
 
 def test_departure_blocks_normal_forward_before_attempting_local_return():
@@ -77,6 +82,38 @@ def test_actual_curved_candidate_is_checked_after_straight_space_probes():
     assert r[2].status().reason=='lane_return_motion_unconfirmed'
 
 
+def test_local_return_requires_fresh_body_clearance_for_each_motion_candidate():
+    _,_,manager=rig(body_lidar_x_m=0.,body_rotation_radius_m=.1)
+    manager.observe_return_scan(scan_view((.6, .4)),source_age_s=0.,source_stamp_ns=1_000_000_000,received_at=1.)
+    assert manager.return_body_clear(1.1,.03,0.)
+    assert not manager.return_body_clear(1.51,.03,0.)
+    manager.observe_return_scan(scan_view((.10, 0.)),source_age_s=0.,source_stamp_ns=1_520_000_000,received_at=1.52)
+    assert not manager.return_body_clear(1.53,.03,0.)
+
+
+def test_local_return_checks_reverse_in_the_rear_body_frame():
+    _,_,manager=rig(body_lidar_x_m=0.,body_rotation_radius_m=.1)
+    manager.observe_return_scan(scan_view((-.6, .4)),source_age_s=0.,source_stamp_ns=1_000_000_000,received_at=1.)
+    assert manager.return_body_clear(1.1,-.03,0.)
+    manager.observe_return_scan(scan_view((-.10, 0.)),source_age_s=0.,source_stamp_ns=1_110_000_000,received_at=1.11)
+    assert not manager.return_body_clear(1.12,-.03,0.)
+
+
+def test_local_return_clearance_covers_motion_since_the_measured_scan():
+    _,_,manager=rig(body_lidar_x_m=0.,body_rotation_radius_m=.1)
+    manager.observe_return_scan(scan_view((.5, 0.)),source_age_s=0.,source_stamp_ns=1_000_000_000,received_at=1.)
+    assert manager.return_body_clear(1.1,.03,0.)
+    assert not manager.return_body_clear(1.5,.03,0.)
+
+
+def test_replayed_scan_stamp_cannot_refresh_receipt_age():
+    _,_,manager=rig(body_lidar_x_m=0.,body_rotation_radius_m=.1)
+    view=scan_view((.6,.4))
+    manager.observe_return_scan(view,source_age_s=0.,source_stamp_ns=1_000_000_000,received_at=1.)
+    manager.observe_return_scan(view,source_age_s=0.,source_stamp_ns=1_000_000_000,received_at=9.)
+    assert not manager.return_body_clear(9.1,.03,0.)
+
+
 def test_unknown_projection_cannot_resume_normal_following():
     r=rig(lambda now,v,w:False)
     action=frame(r,1.,uncertainty=None)
@@ -94,11 +131,21 @@ def test_nominal_without_driver_and_expired_driver_stay_zero():
 
 
 def test_local_exhaustion_opens_existing_stuck_only_as_last_resort():
-    r=rig(lambda now,v,w: v==0)
-    for step in range(101): frame(r,1.+step*.05,.055)
+    r=rig(lambda now,v,w: v==0,body_lidar_x_m=0.,body_rotation_radius_m=.1)
+    for step in range(101):
+        now=1.+step*.05
+        r[2].observe_body_points(((.6,.6),),range_min=.03,received_at=now)
+        frame(r,now,.055)
     assert 'nav.line_stuck_opened' in r[1].events
-    assert r[2].status().stuck is not None
+    stuck=r[2].status().stuck
+    assert stuck is not None
     assert r[2].status().linear==r[2].status().angular==0
+    assert r[2]._recovery._last.geometry_known
+    assert r[2].stuck_decision(stuck.stuck_id,'YIELD',by='operator',now=6.1,
+                               yield_m=.1,yield_turn_rad=0.)=='yield'
+    r[2].observe_body_points(((.6,.6),),range_min=.03,received_at=6.15)
+    action=frame(r,6.15,.055)
+    assert action.linear>0 and action.angular==0
 
 
 def test_new_pose_and_expired_space_reject_precomputed_return_command():

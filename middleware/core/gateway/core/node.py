@@ -73,6 +73,7 @@ class RosyCoreNode(Node):
 
         from core.bridge.control_sensor_adapter import ControlSensorConfig, build_control_adapter
         from core.lidar_mount import resolve_lidar_forward_deg
+        from core.line_follow_wiring import bind_lane_return_motion
         from core.safety_params import resolve_safety_params
         from core.safety_policy_status import safety_policy_block
         from core_common.config import local_overlay
@@ -111,6 +112,7 @@ class RosyCoreNode(Node):
         self.core.control_adapter = self.control_adapter
         self.control_adapter.bind_safety(self.core.safety)
         self.core.line_follow.use_lidar_forward(forward_deg, forward_source)
+        bind_lane_return_motion(self.core.line_follow, self.control_adapter)
         log = self.get_logger().warning if forward_warn else self.get_logger().info
         log(f"line_follow LiDAR forward {forward_deg:.2f} deg from {forward_source}")
         self.get_logger().info(f"safety policy mode {configured_mode} (effective "

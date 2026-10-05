@@ -9,10 +9,13 @@ existing CORE line-follow -> CommandManager path (D-2); there is no new publishe
 from __future__ import annotations
 
 import dataclasses
+import math
 from typing import Callable, Optional
 
 from core_common.protocol.schemas import LineStuckStatus
-from core_features.line_follow.clearance import Point, body_clearances, self_mask_rear_blind_m
+from core_common.robot_body import ScanView, RobotBody
+from core_features.line_follow.clearance import (Point, body_clearances, body_envelope_gap,
+                                                 self_mask_rear_blind_m)
 from core_features.line_follow.model import LineFollowDecision, LineFollowMode
 from core_features.line_follow.stuck_recovery import ForwardTrail, StuckInput, StuckRecovery
 
@@ -29,6 +32,10 @@ class StuckRecoveryMixin:
         self._body_points: Optional[tuple[Point, ...]] = None
         self._body_at: Optional[float] = None
         self._range_min: Optional[float] = None
+        self._return_view: Optional[ScanView] = None
+        self._return_at: Optional[float] = None
+        self._return_source_age: Optional[float] = None
+        self._return_source_high_water_ns: Optional[int] = None
         self._trail = ForwardTrail()
 
     def bind_recovery(self, **providers: Callable[[], object]) -> None:
@@ -50,6 +57,76 @@ class StuckRecoveryMixin:
             self._body_at = float(now)
             self._range_min = None if range_min is None else max(0.0, float(range_min))
 
+    def observe_return_scan(self, view, *, source_age_s: Optional[float],
+                            source_stamp_ns: Optional[int], received_at: float) -> None:
+        """Store validated body-frame scan plus source age; unknown rays stay unknown."""
+        with self._lock:
+            fresh_sequence = (type(source_stamp_ns) is int and source_stamp_ns >= 0
+                and (self._return_source_high_water_ns is None
+                     or source_stamp_ns > self._return_source_high_water_ns))
+            if fresh_sequence:
+                self._return_source_high_water_ns = source_stamp_ns
+            self._return_view = view if isinstance(view, ScanView) and fresh_sequence else None
+            self._return_at = float(received_at)
+            self._return_source_age = source_age_s
+
+    def return_body_clear(self, now: float, linear: float, angular: float) -> bool:
+        """D-468 candidate sweep over the latest body-referenced LiDAR returns.
+
+        The caller separately checks the calibrated live floor/control policy. This check only
+        admits the short local-return motion when the current scan is fresh and its measured
+        points do not intersect the swept footprint plus stopping margin.
+        """
+        with self._lock:
+            c = self._config
+            values = (now, linear, angular, self._return_at, self._return_source_age,
+                      c.body_lidar_x_m, c.body_front_x_m, c.body_rear_x_m,
+                      c.body_half_width_m, c.body_rotation_radius_m)
+            if (self._return_view is None
+                    or not all(isinstance(v, (int, float)) and math.isfinite(v) for v in values)):
+                return False
+            envelope = self._envelope()
+            if envelope is None:
+                return False
+            max_linear, max_angular, scale_floor = envelope
+            if abs(linear) > max_linear or abs(angular) > max_angular:
+                return False
+            age = now - self._return_at + self._return_source_age
+            if age < 0.0 or age > min(c.clearance_stale_s, .25):
+                return False
+            points = self._return_view.points
+            if not points or any(not all(math.isfinite(v) for v in p) for p in points):
+                return False
+            body = RobotBody(front_x_m=c.body_front_x_m,rear_x_m=c.body_rear_x_m,
+                half_width_m=c.body_half_width_m,rotation_radius_m=c.body_rotation_radius_m,
+                lidar_x_m=c.body_lidar_x_m,margin_m=c.obstacle_body_margin_m)
+            horizon = min(c.obstacle_path_horizon_m, max(.15, c.recovery_back_m))
+            # Use immutable configured maxima: the live cap may have been lowered after
+            # the scan, but that cannot undo motion already performed since its source pose.
+            age_pad = c.max_linear * age + c.body_rotation_radius_m * c.max_angular * age
+            margin = c.obstacle_body_margin_m + c.derived_stop_gap_m(abs(linear))
+            if abs(linear) <= 1e-6:
+                return body.rotation_reason(self._return_view, margin + age_pad) is None
+            if body.unknown_blocks(self._return_view, reverse=linear < 0,
+                                   pad_m=body.sweep_pad_m + age_pad):
+                return False
+            body_points = list(points)
+            if linear < 0.0:
+                body_points = [(-x, -y) for x, y in body_points]
+                front_x, rear_x = -c.body_rear_x_m, -c.body_front_x_m
+            else:
+                front_x, rear_x = c.body_front_x_m, c.body_rear_x_m
+            # The scan is expressed at its source pose. Inflate every footprint axis by
+            # maximum possible translation plus yaw displacement since that pose.
+            front_x += age_pad
+            rear_x -= age_pad
+            half_width = c.body_half_width_m + age_pad
+            gap = body_envelope_gap(body_points, linear=abs(linear), angular=angular,
+                scale_floor=scale_floor, front_x_m=front_x,
+                rear_x_m=rear_x, half_width_m=half_width,
+                rotation_radius_m=c.body_rotation_radius_m + age_pad, horizon_m=horizon)
+            return gap is None or gap > margin
+
     @property
     def wants_body_points(self) -> bool:
         """Sector mode: build body points only while a stuck is open or could open soon."""
@@ -57,6 +134,15 @@ class StuckRecoveryMixin:
             return (self._mode is not LineFollowMode.OFF
                     and (self._recovery.stuck_id is not None or self._obstacle_blocked
                          or self._lost_latched or self._loss_started_at is not None))
+
+    @property
+    def wants_return_scan(self) -> bool:
+        """Keep full scan evidence current throughout local lane reacquisition."""
+        with self._lock:
+            return (self._mode is LineFollowMode.CAMERA_LINE
+                    and self._config.recovery_local_enabled
+                    and self._return_controller is not None
+                    and self._return_controller.phase != "tracking")
 
     def note_issued(self, linear: float, angular: float, now: float) -> None:
         """The twist CORE actually handed the CommandManager (after the traffic gate)."""

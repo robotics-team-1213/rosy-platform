@@ -58,6 +58,9 @@ ALLOWED = Counter({
     # load_snapshot) to load; a missing provider or factory fails closed with
     # an install hint instead of an ImportError. No private field is reached.
     ("bridge/control_sensor_adapter.py", "getattr", "provider", "attr"): 1,
+    # Accepted (D-468): an optional explicit policy hook must return strict True;
+    # absence, errors, or any other value deny autonomous local-return candidates.
+    ("bridge/control_sensor_adapter.py", "getattr", "self.policy", "'local_return_allowed'"): 1,
     ("bridge/control_sensor_adapter.py", "hasattr", "observations", '"max_age"'): 1,
     ("node.py", "getattr", "self", '"get_namespace"'): 1,
     # Accepted (core-shutdown 2026-09-23): rclpy Jazzy's MultiThreadedExecutor never
@@ -69,6 +72,10 @@ ALLOWED = Counter({
     ("bridge/ros_bridge.py", "getattr", "msg", '"goal_state"'): 1,
     ("bridge/ros_bridge.py", "getattr", "goal", '"id"'): 1,
     ("bridge/ros_bridge.py", "getattr", "goal", '"label"'): 1,
+    # Accepted (D-468): preserve public LaserScan angular resolution and source stamp;
+    # missing source time becomes zero and therefore cannot pass the freshness gate.
+    ("bridge/translate.py", "getattr", "msg", '"angle_increment"'): 1,
+    ("bridge/translate.py", "getattr", "msg.header", '"stamp"'): 1,
 })
 
 

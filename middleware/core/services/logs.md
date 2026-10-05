@@ -550,3 +550,13 @@
 - 변경: 실제 매니저가 typed containment·실측 자세 ledger를 복구 정책에 연결하고 일반 추종보다 먼저 판단한다. 같은 generation/evidence_revision과 최종 CORE 경로를 사용하며, 제출 순간의 권한·자세 신선함·이동 공간 판정을 다시 검사한다.
 - 증거: 매니저 폐루프에서 접근·세 영상 검증·정상 추종 재개를 시험했다. 독립 리뷰에서 재현한 운전자 권한 만료, 순수 회전 중 live linear ceiling 철회, Fleet RESUME 뒤 stuck 재생성을 각각 회귀 시험으로 수정했다.
 - gate 변화: 명령 제안 연결의 호스트 증거만. 실제 바닥·swept path 공급자는 아직 런타임에 연결하지 않았고 장치 배포·주행은 수행하지 않았다.
+
+## 2026-10-05 · uncommitted · feat(lane): require complete scan and swept-body clearance for D-468
+- Change: validate complete fine-resolution 360-degree scan coverage and valid ranges; self-masked, stale, partial, or malformed evidence denies return. Sweep the candidate against body geometry, blind range, braking margin, and downstream linear scaling.
+- Evidence: lane manager/stuck recovery checks 89 PASS, 0 NEW; gateway and architecture checks recorded in the bridge log. Host source only.
+- Gate: source provider available; physical floor extent and device/field behavior remain unverified.
+
+## 2026-10-05 · uncommitted · fix(lane): retain scan provenance and operator fallback authority
+- Change: preserve LiDAR source stamps, reject replayed/non-increasing scans, keep no-return rays unknown, and expand the full body sweep for worst-case motion since scan acquisition. Local exhaustion holds for operator input with actual geometry evidence; accepted operator YIELD retains CORE arbitration through its active phases.
+- Evidence: services suite 871 PASS, 0 NEW; D-468 focused manager/scan/API checks 53 PASS, 0 NEW. Full gateway suite is running with contract source paths configured.
+- Gate: host-only source evidence; signed deployment, device readback, and field recovery remain unverified.

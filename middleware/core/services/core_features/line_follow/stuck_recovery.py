@@ -218,6 +218,19 @@ class StuckRecovery:
             self._close(reason, now)
         self._recovered = None               # a new line-follow session starts fresh
 
+    def require_operator(self, inp: StuckInput) -> None:
+        """Open/hold the existing stuck contract without starting another automatic attempt.
+
+        D-468 has already exhausted its local candidates. Keep real geometry, scan age and
+        limits in `_last` so an operator's qualified YIELD remains available.
+        """
+        self._last = inp
+        if self._id is None:
+            if inp.cause is None or inp.calibration_active:
+                return
+            self._open(inp)
+        self._console_only("local_candidates_exhausted", inp.now)
+
     # ---- console ----------------------------------------------------------------
     def answer(self, now: float, stuck_id: str, decision: str, by: str,
                principal_ref: Optional[str] = None, *,

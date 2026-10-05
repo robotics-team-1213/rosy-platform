@@ -2,6 +2,7 @@
 from types import SimpleNamespace
 import pytest
 from core.bridge.control_sensor_adapter import ControlSensorAdapter, ControlSensorConfig
+from core.line_follow_wiring import bind_lane_return_motion
 from control.control.command_gate import CommandPolicy, GateInputs, GateSnapshot
 
 
@@ -44,3 +45,16 @@ def test_absent_failing_or_nonboolean_provider_denies_return():
     def failure(*args): raise RuntimeError('unavailable')
     a.policy=SimpleNamespace(local_return_allowed=failure)
     assert not a.return_sensor_allowed(1.1,.02,0.)
+
+
+def test_core_binds_each_return_candidate_to_both_live_proofs():
+    seen=[]
+    line=SimpleNamespace(return_body_clear=lambda *args:seen.append(('body',args)) or True,
+                         bind_return_motion=lambda provider:setattr(line,'provider',provider))
+    sensor=SimpleNamespace(return_sensor_allowed=lambda *args:seen.append(('sensor',args)) or True)
+    bind_lane_return_motion(line,sensor)
+    assert line.provider(1.1,.02,.1) is True
+    assert seen==[('sensor',(1.1,.02,.1)),('body',(1.1,.02,.1))]
+    sensor.return_sensor_allowed=lambda *args:False
+    assert line.provider(1.1,.02,.1) is False
+    assert len(seen)==2  # no geometric result can override a rejected sensor lease

@@ -126,3 +126,15 @@ def bind_stuck_recovery(line_follow, *, safety, calibration, fleet_agent, vision
         linear_ceiling=lambda: float(safety.limits.manual_linear),
         preview_seq=lambda: vision.status().get("sequence"),
     )
+
+
+def bind_lane_return_motion(line_follow, sensor_adapter) -> None:
+    """D-468: recheck live floor policy and measured body sweep for every candidate."""
+    def allowed(now, linear, angular) -> bool:
+        try:
+            return (sensor_adapter.return_sensor_allowed(now, linear, angular) is True
+                    and line_follow.return_body_clear(now, linear, angular) is True)
+        except Exception:  # noqa: BLE001 - missing runtime evidence denies motion
+            return False
+
+    line_follow.bind_return_motion(allowed)
