@@ -53,6 +53,28 @@ def test_review_editor_peer_widths(browser_workspace, route, left, right, width)
         page.screenshot(path=str(target), full_page=True)
 
 
+@pytest.mark.parametrize('width', [1440, 800, 390])
+def test_empty_review_can_recover_at_declared_widths(browser_workspace, width):
+    page, _, expect = browser_workspace
+    page.set_viewport_size({'width': width, 'height': 844})
+    assert page.locator('.workspace').bounding_box()['width'] == width
+    topbar = page.locator('ui-topbar').bounding_box()
+    assert page.locator('.workspace').bounding_box()['y'] == topbar['y'] + topbar['height']
+    page.locator('#filter').select_option('pending')
+    expect(page.locator('#empty-review')).to_be_visible()
+    expect(page.locator('#review-content')).to_be_hidden()
+    action = page.locator('#show-all')
+    assert action.bounding_box()['width'] > 0
+    assert page.evaluate('document.documentElement.scrollWidth - innerWidth') == 0
+    if output := os.getenv('ROSY_UIUX_SCREENSHOT_DIR'):
+        from pathlib import Path
+        target = Path(output) / f'learning-objects-empty-{width}.png'
+        target.parent.mkdir(parents=True, exist_ok=True)
+        page.screenshot(path=str(target), full_page=True)
+    action.click()
+    expect(page.locator('#frame-title')).to_have_text('사진 1')
+
+
 def test_arrow_keys_move_between_photos(browser_workspace):
     page, store, expect = browser_workspace
 

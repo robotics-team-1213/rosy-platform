@@ -6301,3 +6301,9 @@ osy-d395-s1d\`.
 - 변경: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)에 학습 검수·Pilot Shell·Cam의 표면 질문, 뷰포트, G2 잔여 상태, D-153 여덟 G3 항목을 선언했다.
 - 증거: 기존 브라우저·에뮬레이터 LOCAL 캡처와 활성 표면 등록을 대조했다.
 - gate 변화: 세 표면과 제품 전체는 G2/G3 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(learning): 빈 검수 화면 폭 복구
+
+- 변경: 객체 검수 작업 영역을 전체 가용 폭으로 펴고 자동 세로 여백을 제거했다. [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)에 빈 상태 3폭 판정을 남겼다.
+- 증거: Chromium 1440·800·390px 빈 필터 화면, 복귀 동작, 13 passed와 `known_failures.py` 0 NEW. 캡처 원본은 X:에 둔다.
+- gate 변화: 학습 검수 LOCAL G2 부분 근거 추가. 다른 상태·검수자 G3와 제품 전체는 HOLD다.

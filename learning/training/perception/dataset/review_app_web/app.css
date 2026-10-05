@@ -10,7 +10,7 @@ a { color: var(--ink); text-underline-offset: var(--space-1); }
 .workspace-tabs a { font-size: var(--text-label); text-decoration: none; color: var(--ink-quiet); padding-block: var(--space-3); }
 .workspace-tabs a[aria-current] { color: var(--ink); border-bottom: 1px solid var(--ink); }
 .theme-label { display: flex; align-items: center; gap: var(--space-2); }
-.workspace { display: grid; grid-template-columns: 13rem minmax(0, 1fr); max-width: 112rem; margin: auto; }
+.workspace { display: grid; grid-template-columns: 13rem minmax(0, 1fr); width: 100%; max-width: 112rem; margin-inline: auto; }
 .photo-sidebar { padding: var(--space-5); border-right: 1px solid var(--surface-line); }
 #frames { display: flex; flex-direction: column; gap: var(--space-2); margin: var(--space-5) 0; }
 #frames ui-button { justify-content: flex-start; text-align: left; width: 100%; gap: var(--space-3); }
