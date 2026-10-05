@@ -72,7 +72,7 @@ def observe_lane_return(bridge, msg, sample, *, now=None):
         if (type(stamp.sec) is not int or stamp.sec < 0 or type(stamp.nanosec) is not int
                 or not 0 <= stamp.nanosec < 1_000_000_000):
             raise ValueError("invalid original odometry timestamp")
-        # Current Pinky base_link and base_footprint share the planar origin.
+        # Accepted body frames share the planar origin; other transforms need resolution.
         if msg.child_frame_id not in ("base_link", "base_footprint"):
             raise ValueError("unresolved odometry body frame")
         q = msg.pose.pose.orientation

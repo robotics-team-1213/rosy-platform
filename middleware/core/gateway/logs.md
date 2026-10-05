@@ -897,3 +897,9 @@
 - 변경: 원본 odom header·정규화 quaternion·동일 planar body frame을 검증하여 lane manager에 전달한다. 시간·자세 변환을 추정 명령 적분으로 대체하지 않는다.
 - 증거: 관련 기존 bounded-trial/bridge/line-follow/새 evidence 및 구조 검사 109 PASS, 0 NEW. 원본 rotation 무효화 세 경우를 RED로 재현하고 검증 추가 후 통과했다.
 - gate 변화: source callback 연결. 장치 설치·자동 복귀 명령·실제 복구 수용은 아직 없음.
+
+## 2026-10-05 · uncommitted · fix(bridge): D-468 구조 검사 정렬
+
+- 변경: 공통 odometry 브리지의 프레임 전제에서 기종명을 제거하고, 원본 헤더가 실제 관리자까지 전달되는 교차 경계 시험을 D-184 예외 목록에 근거와 함께 등록했다.
+- 증거: 동작 시험 소유 및 로봇 리터럴 계약 검사 재실행. 제어 동작 변경 없음.
+- gate 변화: 없음.

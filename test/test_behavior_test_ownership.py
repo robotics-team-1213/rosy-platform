@@ -30,6 +30,9 @@ KNOWN_EXTERNAL_BEHAVIOR_TESTS = frozenset({
     # CORE HTTP-to-Host seam and atomic mode/calibration admission integration;
     # the pure mask, observer and Host configuration tests stay with their owners.
     "middleware/core/gateway/test/test_lane_perception_api.py",
+    # D-468 gateway contract: original odometry time/frame must reach the real
+    # line-follow manager unchanged; pure manager behavior stays in services/test.
+    "middleware/core/gateway/test/test_lane_return_odometry.py",
     "middleware/core/gateway/test/test_line_follow_body_stop.py",
     "middleware/core/gateway/test/test_line_follow_ir_guard.py",
     "middleware/core/gateway/test/test_line_follow_obstacle.py",
