@@ -1,5 +1,6 @@
 // 사이트 관제 화면. 서버(Fleet)만 본다 — 로봇 API 를 직접 부르지 않는다.
 //
+import { createConnectionView } from "./connection-view.js";
 import { createFormation } from "./formation.js";
 import { createMapView } from "./map-view.js";
 import { createRoster } from "./roster.js";
@@ -67,25 +68,13 @@ function authHeaders() {
 
 // D-359 §6.4 — compact·medium에서 접속·역할·테마는 토글 뒤에 접힌다(세로 예산).
 // 넓은 창에서는 CSS가 토글을 숨기고 항목을 줄에 세운다. 잠기면 토큰 칸을 연다.
-function setTopbarOpen(open) {
-  el("topbar-more").setAttribute("aria-expanded", String(open));
-  el("topbar-extra").dataset.open = String(open);
-}
-pageScope.listen(el("topbar-more"), "click", () => {
-  setTopbarOpen(el("topbar-more").getAttribute("aria-expanded") !== "true");
-});
-for (const id of ["workflow-connect", "connection-guide-action"]) {
-  pageScope.listen(el(id), "click", event => {
-    event.preventDefault(); setTopbarOpen(true); el("console-token").focus();
-  });
-}
-pageScope.listen(el("workflow-start"), "click", () => { el("start-point-tools").open = true; });
+const connectionView = createConnectionView({scope: pageScope, el});
 
 function markLocked(reason = "auth") {
   confirmedAction.cancel();
   const firstLock = !auth.locked;
   auth.locked = true;
-  setTopbarOpen(true);
+  connectionView.open();
   auth.role = null;
   el("user-role").textContent = "인증 필요";
   el("user-role").setAttribute("status", "crit");
@@ -94,35 +83,18 @@ function markLocked(reason = "auth") {
   pill.textContent = "토큰 필요";
   pill.setAttribute("status", "crit");
   if (auth.token && reason === "auth") el("console-token").setAttribute("aria-invalid", "true");
-  el("connection-guide").hidden = false;
-  const title = reason === "auth" ? "관제 접속 필요" : "관제 연결 확인 필요";
-  el("connection-guide-title").textContent = title;
-  el("connection-guide-detail").textContent = reason !== "auth"
-    ? "관제 PC의 연결 상태를 확인한 뒤 다시 접속하세요."
-    : auth.token ? "관제 토큰이 확인되지 않았습니다. 토큰을 확인한 뒤 다시 접속하세요."
-      : "관제 토큰으로 접속하면 로봇·카메라·지도 상태를 확인할 수 있습니다.";
+  connectionView.show(reason, auth.token);
   if (firstLock) {
     Object.assign(view, {robots: [], map: null, siteMap: null, sightings: [], cameraTracking: {robots: [], unknown: []},
       stateLoaded: false, stateUnavailable: false, selected: null, cursor: null, formation: null, signals: {}});
     visionView.reset(); trackingView.reset(); startPointView.reset();
   }
-  el("map-stage").dataset.mapState = "auth";
-  const canvas = el("map-canvas");
-  canvas.getContext("2d").clearRect(0, 0, canvas.width, canvas.height);
-  canvas.setAttribute("aria-hidden", "true"); canvas.tabIndex = -1; canvas.classList.add("idle");
-  el("map-empty").hidden = false; el("map-legend").hidden = true;
-  el("map-empty-title").textContent = title;
-  el("map-empty-detail").textContent = "관제에 접속하면 지도와 로봇 좌표를 확인할 수 있습니다.";
-  el("map-tag").textContent = "접속 필요";
-  el("dispatch-control-title").textContent = title;
-  el("dispatch-control-detail").textContent = "관제에 접속하면 대기 작업과 발행 상태를 확인할 수 있습니다.";
-  el("dispatch-rearm").hidden = true;
   render();
 }
 
 function markUnlocked() {
   auth.locked = false;
-  el("connection-guide").hidden = true;
+  connectionView.hide();
   el("console-token").removeAttribute("aria-invalid");
 }
 
