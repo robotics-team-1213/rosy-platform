@@ -542,6 +542,6 @@
 
 ## 2026-10-05 · uncommitted · fix(api): align description with Fleet CAP-001 contract version
 
-- Change: app factory metadata names API Ref v1.105; routes, envelope 1.0 and control behavior stay unchanged.
-- Evidence: version alignment RED 1 FAIL then GREEN 3 PASS; X:/DevTemp/rosy-fleet-browser/api-description-green.txt.
-- Gate change: none; source metadata only, no robot release activation.
+- 변경: app factory metadata names API Ref v1.105; routes, envelope 1.0 and control behavior stay unchanged.
+- 증거: version alignment RED 1 FAIL then GREEN 3 PASS; X:/DevTemp/rosy-fleet-browser/api-description-green.txt.
+- gate 변화: none; source metadata only, no robot release activation.
