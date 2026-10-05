@@ -114,10 +114,17 @@ rosy_ml intake <모델 폴더>                   # 아무 폴더나 검사 (HF�
 rosy_ml deliver pinky-005 <model_revision>  # 섀도에 넣기 (intake 통과본만)
 rosy_ml rollback pinky-005                  # 바로 전 섀도로 되돌리기
 rosy_ml release-hold pinky-005              # 이 로봇의 자동 반영을 다시 켜기 (포인터는 그대로)
-rosy_ml harvest pinky-005                   # 끝난 녹화 세션 가져오기
+rosy_ml harvest pinky-005                   # 끝난 녹화 세션 가져오기 (SSH, camera recordings)
+rosy_ml fetch pinky-005 --http --ca-file device-ca.pem --only <recording-id>
+                                         # Pilot 녹화를 CORE에서 가져오기
 ```
 
 - `deliver`는 intake 보고서가 `pass`이고 파일 해시가 manifest와 같을 때만 보낸다.
+- `fetch --http`는 Pilot 녹화(`/api/v1/recordings`)를 가져온다. 호스트, 포트, TLS는 그 로봇의
+  `_rosy._tcp` 광고에서만 읽는다. `tls=required`이면 `tls_host`와 광고된 포트로 `https`이고
+  `--ca-file`에 장치 CA가 필요하다. 그 외에는 광고된 호스트와 포트로 `http`다. 설정의
+  `<hostname>.local`은 어느 광고인지 고르는 데만 쓴다. 로봇이 서 있지 않으면 종료 코드 4이고,
+  이미 받아 둔 세션은 다시 받지 않는다.
 - `harvest`는 로봇이 **서 있을 때만** 가져온다(D-136). 로봇 CORE의 `/api/v1/robot/state`를
   보고 모드 IDLE, 주행 없음, line follow OFF, 속도 0, 그리고 속도 값이 **최신(fresh)** 일
   때만 idle로 본다. 오도메트리가 끊겨 속도 값이 오래되었으면 idle이 아니라고 보고 멈춘다

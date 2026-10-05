@@ -10,7 +10,7 @@
   rosy_ml rollback ROBOT [--slot active] back to shadow.previous, or active <- previous (holds)
   rosy_ml release-hold ROBOT             remove the hold: site auto delivery resumes
   rosy_ml harvest ROBOT                  pull finished recordings (only while idle)
-  rosy_ml fetch ROBOT --http             pull Pilot recordings over CORE HTTP (D-411, operator token)
+  rosy_ml fetch ROBOT --http             pull Pilot recordings (D-411). The URL is the robot's _rosy._tcp advertisement
   rosy_ml intake SOURCE                  check a model folder, store-inbox:<folder>
                                          or (optional HF) hf:org/repo@<sha>
 
@@ -508,10 +508,64 @@ def _store_status(cfg: dict, init: bool) -> int:
     return 0
 
 
+def _foundation():
+    path = ROOT / "contracts" / "foundation"
+    if str(path) not in sys.path:
+        sys.path.insert(0, str(path))
+
+
+def _browse_robots():
+    """Current `_rosy._tcp` records. Host, port and TLS are whatever the robot advertises."""
+    _foundation()
+    from core_common import discover
+    from core_common.protocol.discovery_txt import ROBOT
+    return discover.get_shared_cache().wait(ROBOT, timeout_s=3)
+
+
+def core_base(configured_host, rows) -> str:
+    """CORE origin for one robot.
+
+    ``configured_host`` only picks the advertisement (its `.local` name). The
+    scheme, name and port come from that `_rosy._tcp` record: `tls=required`
+    uses `tls_host`, anything else uses the advertised host. Nothing here
+    fills in a port or an address the advertisement did not carry.
+    """
+    _foundation()
+    from core_common.protocol.discovery_txt import ROBOT, HOSTNAME, Accepted, classify, normalize_host
+    wanted = normalize_host(str(configured_host))
+    if not HOSTNAME.fullmatch(wanted):
+        raise ValueError("fetch selects a robot by its mDNS name (<hostname>.local), "
+                         f"not {configured_host!r}")
+    chosen = []
+    for row in rows:
+        accepted = classify(getattr(row, "service_type", ""), getattr(row, "host", None),
+                            None, getattr(row, "port", None), list(getattr(row, "txt", ()) or ()))
+        if not isinstance(accepted, Accepted) or accepted.service_type != ROBOT or not accepted.host:
+            continue
+        names = {accepted.host}
+        tls_host = accepted.txt.get("tls_host")
+        if isinstance(tls_host, str):
+            names.add(normalize_host(tls_host))
+        if wanted in names:
+            chosen.append((accepted, row.port))
+    if not chosen:
+        raise LookupError(f"no _rosy._tcp advertisement for {wanted}")
+    if len(chosen) > 1:
+        raise LookupError(f"more than one _rosy._tcp advertisement for {wanted}")
+    accepted, port = chosen[0]
+    if accepted.txt.get("tls") == "required":
+        tls_host = accepted.txt.get("tls_host")
+        if not isinstance(tls_host, str) or normalize_host(tls_host) != accepted.host:
+            raise LookupError(f"{wanted} advertises tls=required without a matching tls_host")
+        return f"https://{normalize_host(tls_host)}:{port}"
+    return f"http://{accepted.host}:{port}"
+
+
 # --- main -----------------------------------------------------------------------------------
 
 def main(argv=None, *, runner=subprocess.run, connect=socket.create_connection,
-         find_spec=importlib.util.find_spec, resolve=socket.getaddrinfo) -> int:
+         find_spec=importlib.util.find_spec, resolve=socket.getaddrinfo,
+         discover=None) -> int:
     try:
         sys.stdout.reconfigure(errors="replace")
     except (AttributeError, ValueError):
@@ -548,12 +602,14 @@ def main(argv=None, *, runner=subprocess.run, connect=socket.create_connection,
     p.add_argument("robot")
     p.add_argument("--dest")
     p.add_argument("--assume-idle", action="store_true")
-    p = sub.add_parser("fetch", help="D-411: pull Pilot recordings over CORE HTTP")
+    p = sub.add_parser("fetch", help="D-411: pull Pilot recordings over CORE")
     p.add_argument("robot")
     p.add_argument("--http", action="store_true", required=True,
-                   help="CORE HTTP; the SSH path stays `harvest`")
+                   help="CORE archive; the SSH path stays `harvest`")
     p.add_argument("--dest")
-    p.add_argument("--port", type=int, default=8080)
+    p.add_argument("--video-out")
+    p.add_argument("--only", help="one recording id")
+    p.add_argument("--ca-file", help="device CA; required when the advertisement says tls=required")
     sub.add_parser("intake").add_argument("source")
     p = sub.add_parser("store-status")
     p.add_argument("--init", action="store_true", help="create the layout folders")
@@ -618,9 +674,26 @@ def main(argv=None, *, runner=subprocess.run, connect=socket.create_connection,
         if not cfg.get("core_operator_token_file"):
             print("✗ fetch --http needs an Operator token — fix: rosy_ml init --core-operator-token-file <file>")
             return 2
-        argv = [f"http://{hosts[0]}:{args.port}", "--token-file", cfg["core_operator_token_file"]]
+        try:
+            base = core_base(hosts[0], (discover or _browse_robots)())
+        except (ValueError, LookupError) as exc:
+            print(f"✗ fetch: {exc}")
+            return 2
+        if base.startswith("https://") and not args.ca_file:
+            print("✗ fetch: this robot advertises TLS — fix: pass --ca-file <device CA>")
+            return 2
+        if args.ca_file and not base.startswith("https://"):
+            print("✗ fetch: this robot does not advertise TLS; --ca-file does not apply")
+            return 2
+        argv = [base, "--token-file", cfg["core_operator_token_file"]]
+        if args.ca_file:
+            argv += ["--ca-file", args.ca_file]
         if args.dest:
             argv += ["--dest", args.dest]
+        if args.video_out:
+            argv += ["--video-out", args.video_out]
+        if args.only:
+            argv += ["--only", args.only]
         return fetch_http.main(argv)
     if args.cmd == "intake":
         import intake
