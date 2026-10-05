@@ -73,4 +73,3 @@
 - 2026-10-05 · uncommitted · feat(safety): distinguish positive floor observation from no cliff
 - 2026-10-05 · uncommitted · feat(perception): emit image-bound selected lane geometry
 - 2026-10-05 · uncommitted · feat(camera): validate automatic checkerboard pose candidates
-- 2026-10-05 · uncommitted · feat(camera): replace manual camera measurement with automatic capture
