@@ -84,7 +84,7 @@ fun StreamScreen(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .weight(1f)
+                .weight(0.75f)
                 .background(RosyColors.GroundDeep),
             contentAlignment = Alignment.Center,
         ) {
@@ -115,11 +115,11 @@ fun StreamScreen(
                     light.dark -> R.string.light_dark
                     else -> R.string.light_ready
                 }), style = MaterialTheme.typography.bodySmall)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                    OutlinedButton(onClick = { StreamService.requestLight(!light.requested) }, modifier = Modifier.weight(1f)) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                    OutlinedButton(onClick = { StreamService.requestLight(!light.requested) }, modifier = Modifier.fillMaxWidth()) {
                         Text(stringResource(if (light.requested) R.string.light_disable else R.string.light_enable))
                     }
-                    Button(onClick = { StreamService.savePhoto() }, modifier = Modifier.weight(1f),
+                    Button(onClick = { StreamService.savePhoto() }, modifier = Modifier.fillMaxWidth(),
                         enabled = !state.previewOnly && !state.photoSaving) {
                         Text(stringResource(if (state.photoSaving) R.string.photo_saving else R.string.photo_save))
                     }
@@ -150,11 +150,11 @@ fun StreamScreen(
 
         if (state.running) OutlinedButton(onClick = onScreenOff, modifier = Modifier.fillMaxWidth()) { Text("화면 끄기 · 촬영 유지") }
 
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
             // Opens read-only while the camera runs; the settings screen says how to unlock it.
             OutlinedButton(
                 onClick = onOpenSettings,
-                modifier = Modifier.weight(1f).height(72.dp),
+                modifier = Modifier.fillMaxWidth().height(64.dp),
             ) {
                 Text(stringResource(R.string.button_settings))
             }
@@ -162,7 +162,7 @@ fun StreamScreen(
                 Button(
                     // Stopping is routine and reversible: neutral primary, not the crit fill (D-277 3).
                     onClick = onStop,
-                    modifier = Modifier.weight(1f).height(72.dp),
+                    modifier = Modifier.fillMaxWidth().height(64.dp),
                 ) {
                     Text(stringResource(R.string.button_stop), fontSize = 22.sp)
                 }
@@ -170,7 +170,7 @@ fun StreamScreen(
                 Button(
                     onClick = onStart,
                     enabled = CameraSessionPlan.from(pairing).startCamera,
-                    modifier = Modifier.weight(1f).height(72.dp),
+                    modifier = Modifier.fillMaxWidth().height(64.dp),
                 ) {
                     Text(stringResource(R.string.button_start), fontSize = 22.sp)
                 }

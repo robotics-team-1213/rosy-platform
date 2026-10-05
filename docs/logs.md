@@ -6337,3 +6337,9 @@ osy-d395-s1d\`.
 - 변경: Cam 설정의 뒤로·저장을 전폭 두 줄로 배치해 320px/글자 200%에서 버튼 글자 줄바꿈을 복구했다.
 - 증거: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)의 Android 35 에뮬레이터 320·390px 캡처와 UI bounds, Gradle JVM 366 passed·APK 빌드 성공. 원본은 X:에 둔다.
 - gate 변화: Cam LOCAL 네이티브 G2 일부 추가. Pairing·Peer·송출과 실물 폰·G3, 제품 전체는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(cam): 송출 대기 화면 전폭 조작
+
+- 변경: Cam 대기 화면의 잘린 반폭 버튼을 전폭으로 정리하고 연결·송출 정보가 좁은 화면에서도 보이게 했다.
+- 증거: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)의 격리 Android 35 에뮬레이터 320·390px 캡처와 UI bounds, Gradle JVM 366 passed·APK 빌드 성공. 원본은 X:에 둔다.
+- gate 변화: Cam LOCAL 송출 대기 G2 일부 추가. Pairing·Peer·실제 송출·실물 폰·G3와 제품 전체는 HOLD다.
