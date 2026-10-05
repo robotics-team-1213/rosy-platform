@@ -301,7 +301,7 @@
 ## 최근 기록
 
 - 2026-10-05 · uncommitted · fix(site): published HTTPS port comes only from the site setting
+- 2026-10-05 · uncommitted · docs(camera): record applied checkerboard geometry
+- 2026-10-05 · uncommitted · fix(fleet): 목표·대형 지원 기능 확인
+- 2026-10-05 · uncommitted · feat(camera): validate automatic checkerboard pose candidates
 - 2026-10-05 · uncommitted · feat(camera): replace manual camera measurement with automatic capture
-- 2026-10-05 · uncommitted · uiux: keep one robot entry and quiet the cell link
-- 2026-10-05 · uncommitted · docs(line): record signed 042 deployment and automatic HOLD
-- 2026-10-05 · uncommitted · test(execution): preserve extracted runtime annotation semantics

@@ -150,6 +150,7 @@ class _DegradedSession:
     state = "RUNNING"
     spec = _DegradedSpec()
     assignment = ["rosy_02"]
+    follower_ids = frozenset({"rosy_02"})
 
 
 def test_degraded_member_actually_triggers_auto_speed_reform():

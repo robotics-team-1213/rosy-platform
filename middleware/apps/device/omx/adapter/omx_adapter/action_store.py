@@ -935,10 +935,25 @@ class ActionStore(ActionStoreReadback):
 
     def action_phase_receipts(self, action_id: str, attempt_id: str) -> list[dict[str, Any]]:
         """Return bounded phase snapshots with each phase's latest local event ID."""
-        phases = self.action_phases(action_id, attempt_id)
+        action_id = _nonempty("action_id", action_id)
+        attempt_id = _nonempty("attempt_id", attempt_id)
+        with closing(self._connect()) as connection:
+            connection.execute("BEGIN")
+            phase_rows = connection.execute(
+                "SELECT * FROM omx_action_phases WHERE action_id=? AND attempt_id=? ORDER BY ordinal",
+                (action_id, attempt_id),
+            ).fetchall()
+            event_rows = connection.execute(
+                "SELECT * FROM omx_action_events WHERE action_id=? AND attempt_id=? "
+                "AND event_type LIKE 'ACTION_PHASE_%' ORDER BY event_id",
+                (action_id, attempt_id),
+            ).fetchall()
+        phases = [self._phase_dict(row) for row in phase_rows]
         if len(phases) > 4:
             raise InvalidActionTransition("pick-place phase journal exceeds its fixed bound")
-        history = self.history(action_id)
+        history = [dict(row) for row in event_rows]
+        for event in history:
+            event["detail"] = json.loads(event.pop("detail_json"))
         result = []
         for phase in phases:
             matching = [event for event in history

@@ -7,6 +7,7 @@ export const FORMATION_STATE_LABEL = {
   IDLE: "대기", ARMING: "무장 중", RUNNING: "진행 중", HOLDING: "유지 중", STOPPED: "해제됨",
 };
 const stateLabel = (state) => FORMATION_STATE_LABEL[state] || state || "—";
+import { formationReason } from "./motion-readiness.js";
 
 export function createFormation({ scope, el, view, log, call, render }) {
   function setOff(id, off, reason) {
@@ -20,7 +21,7 @@ export function createFormation({ scope, el, view, log, call, render }) {
     const select = el("formation-leader");
     const ids = view.robots.map((r) => r.robot_id);
     const current = select.value;
-    if (select.dataset.ids === ids.join(",")) return;
+    if (select.dataset.ids === ids.join(",")) { syncPendingSummary(); return; }
     select.dataset.ids = ids.join(",");
     select.replaceChildren(...ids.map((id) => {
       const option = document.createElement("option");
@@ -58,6 +59,12 @@ export function createFormation({ scope, el, view, log, call, render }) {
     const spacing = Number(el("formation-spacing").value);
     const members = [...el("formation-members").querySelectorAll("input:checked")]
       .map((b) => b.value);
+    const reason = view.stateUnavailable ? "Fleet 상태 확인 불가" : formationReason(view.robots, leader, members);
+    setOff("formation-start", Boolean(reason), reason);
+    if (reason) {
+      el("formation-detail").textContent = reason;
+      return;
+    }
     el("formation-detail").textContent = members.length
       ? `리더 ${leader} · ${shape} ${spacing}m · ${members.length}대 — 무장하면 슬롯으로 따라붙습니다.`
       : "포함 로봇을 고르세요.";

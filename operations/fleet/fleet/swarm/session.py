@@ -35,7 +35,7 @@ from fleet.swarm.arming import (
     plan_assignment,
 )
 from fleet.swarm.relay import Relay
-from fleet.swarm.transport import RobotApiError, RobotClient
+from fleet.swarm.transport import RobotApiError, RobotClient, require_capability
 
 #: `from fleet.swarm.session import ArmingFailed` 는 계속 된다 — 정의만 옮겼다.
 __all__ = [
@@ -117,6 +117,11 @@ class FormationSession:
 
     # --- 운영자 명령 --------------------------------------------------------------
 
+    @property
+    def follower_ids(self) -> frozenset[str]:
+        """Reserved followers, including the interval before arming finishes."""
+        return frozenset(robot.robot_id for robot in self._followers)
+
     async def start(self) -> None:
         if self.state is not SessionState.IDLE:
             raise SessionError(f"cannot start from {self.state.value}")
@@ -127,6 +132,8 @@ class FormationSession:
             self.state = SessionState.STOPPED
             self.reason = (f"arming_failed:{exc}", getattr(exc, "robot_id", None))
             raise
+        if self.state is SessionState.STOPPED:
+            raise SessionError("session stopped during start planning")
         # D-132 — 무장은 스트림이 연 뒤에 한다. follow 의 1 s 시계는 명령 시점에
         # 시작하므로, 릴레이 기동을 그 시계와 경주시키지 않는다. 무장 전에 흐르는
         # 프레임은 매니저가 버린다(on_reference_pose 의 params-None 드롭) — 안전하다.
@@ -376,7 +383,7 @@ class FormationSession:
             raise ArmingFailed(robot.robot_id, "TRANSPORT", str(exc)) from exc
 
     async def _plan(self, spec: FormationSpec) -> dict[str, SlotOffset]:
-        """사전 점검과 배정. 로봇에게 `state()` 말고는 아무것도 보내지 않는다."""
+        """상태·지원 기능을 읽고 배정한다. 동작 명령은 보내지 않는다."""
         leader_state = await self._state_of(self._leader)
         check_leader_ready(leader_state, self._leader.robot_id)
         # 팔로워는 동시에 묻는다. 한 대씩 물으면 로봇 수 × 타임아웃(5 s)이 그대로
@@ -399,6 +406,15 @@ class FormationSession:
                 states[follower.robot_id] = result
         if failure is not None:
             raise failure
+        # CAP-001 is checked before any pose/reference socket opens or follow is sent.
+        members = [(self._leader, "lead"), *((f, "follow") for f in self._followers)]
+        results = await asyncio.gather(*(require_capability(robot, f"swarm.{role}") for robot, role in members),
+                                       return_exceptions=True)
+        for (robot, _), result in zip(members, results):
+            if isinstance(result, RobotApiError):
+                raise ArmingFailed(robot.robot_id, result.code, result.message) from result
+            if isinstance(result, BaseException):
+                raise ArmingFailed(robot.robot_id, "TRANSPORT", str(result)) from result
         return plan_assignment(leader_state, states, spec, self._assigner,
                                leader_id=self._leader.robot_id)
 

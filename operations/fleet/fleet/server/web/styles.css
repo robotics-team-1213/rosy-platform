@@ -538,7 +538,7 @@ main {
 }
 
 /* Cell 이동은 머리 cluster의 링크다. href와 격자 자리는 그대로 두고 조용한 버튼과 같은 면으로 둔다. */
-ui-topbar > a[href="/console/cell"] {
+.topbar-cell-link {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -552,8 +552,8 @@ ui-topbar > a[href="/console/cell"] {
   text-decoration: none;
   white-space: nowrap;
 }
-ui-topbar > a[href="/console/cell"]:hover { color: var(--ink); border-color: var(--ink); }
-ui-topbar > a[href="/console/cell"]:focus-visible {
+.topbar-cell-link:hover { color: var(--ink); border-color: var(--ink); }
+.topbar-cell-link:focus-visible {
   outline: var(--focus-ring-width) solid var(--focus-ring);
   outline-offset: var(--focus-ring-offset-outer);
 }
