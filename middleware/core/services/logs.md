@@ -540,3 +540,8 @@
 - 변경: 순수 source-time 증거 ledger와 lock-owner mixin. 실제 자세 보간·projection uncertainty/관측 범위·연속성 epoch·시각 재전송을 검증하며 무효 관측/모드 종료는 경계를 폐기한다.
 - 증거: source 관련 회귀/구조 검사 109 PASS, 0 NEW. 독립 리뷰가 발견한 잘못된 quaternion과 source/receipt 시각 비교를 고쳤다. 패키지 13717줄 재판정은 기존 소유/모듈 분리와 모든 한도를 유지한다.
 - gate 변화: SOURCE evidence admission 연결만. ReturnController의 이동 제안 적용은 아직 없음.
+
+## 2026-10-05 · uncommitted · fix(lane): normal return anchor and measured fallback approach
+- 변경: 원본 영상 시각·연속성 epoch로 복구 검증을 제한한다. 정상 기준 위치는 차체 여유 25mm·방향 오차 0.12rad 이내일 때만 저장한다. 기준 경로가 없으면 동일 차로 후보로 저속 접근하고 실제 이동·회전·시간 한도를 적용한다.
+- 증거: 경계 직전 기준 위치를 계속 덮어써 복귀하지 못하던 폐루프 실패를 재현·수정했다. 정지 바퀴·20% 미끄러짐·증거 만료·양방향 탐색 후 Fleet 요청을 시험했다. 독립 리뷰의 복구 직후 기준 저장 조건 누락도 회귀 시험으로 수정했다.
+- gate 변화: 순수 정책과 합성 평면 운동 시험만. 실제 명령 판단 연결·배포·실기 복구는 미완료다.

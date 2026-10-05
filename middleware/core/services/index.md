@@ -37,8 +37,8 @@
 
 ## 최근 기록
 
+- 2026-10-05 · uncommitted · fix(lane): normal return anchor and measured fallback approach
 - 2026-10-05 · uncommitted · feat(lane): bind original pose ledger to image geometry
 - 2026-10-05 · uncommitted · feat(lane): D-468 local return building blocks
 - 2026-10-05 · uncommitted · test(core): D-184 제한 시험 소유 경계 복구
 - 2026-10-05 · uncommitted · fix(core): 제한 시험 STOP와 최종 제출 직렬화
-- 2026-10-05 · uncommitted · feat(command): cumulative bounded trial

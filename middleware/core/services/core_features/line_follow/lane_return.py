@@ -8,6 +8,7 @@ from __future__ import annotations
 import math
 from collections import deque
 from dataclasses import dataclass
+from core_features.line_follow.lane_return_approach import CorridorApproach
 
 
 def _finite(*values):
@@ -142,6 +143,8 @@ class ReturnInput:
     authorized: bool = False
     linear_limit: float = 0
     angular_limit: float = 0
+    corridor_stamp_ns: int | None = None
+    epoch: int = 0
 
 
 @dataclass(frozen=True)
@@ -177,6 +180,8 @@ class ReturnController:
         self._reference_invalid = False
         self._align_start = None
         self._align_pose = None
+        self._epoch = None
+        self._approach = CorridorApproach()
 
     @staticmethod
     def _fresh(now, stamp, ttl=.3):
@@ -204,6 +209,17 @@ class ReturnController:
 
     def tick(self, inp):
         _finite(inp.now, inp.linear_limit, inp.angular_limit)
+        if type(inp.epoch) is not int or inp.epoch < 0:
+            raise ValueError("valid pose continuity epoch required")
+        if self._epoch is not None and self._epoch != inp.epoch:
+            self._path.clear()
+            self.trail.samples.clear()
+            self._count = 0
+            self._last_evidence = self._candidate = self._last_pose = None
+            self._reference_invalid = self.checkpoint is not None
+            self.phase, self._opened = "departure_stop", inp.now
+            self._approach.finished = True
+        self._epoch = inp.epoch
         if inp.linear_limit < 0 or inp.angular_limit < 0:
             raise ValueError("nonnegative live limits required")
         p = inp.pose
@@ -219,7 +235,9 @@ class ReturnController:
                 if self.phase == "tracking":
                     self.phase, self._opened = "departure_stop", inp.now
             self._last_pose = p
-        lane = inp.corridor if self._fresh(inp.now, inp.corridor_at) else None
+        source_stamp = inp.corridor_stamp_ns
+        lane = (inp.corridor if self._fresh(inp.now, inp.corridor_at)
+                and type(source_stamp) is int and source_stamp >= 0 else None)
         inside = lane is not None and lane.margin(self.body) >= .015
         same = (self.checkpoint is None or (not self._reference_invalid and
                 (fresh_pose and lane is not None and lane.matches(self.checkpoint[1], self.checkpoint[0], p)))
@@ -231,10 +249,10 @@ class ReturnController:
                     self._candidate = (p, lane)
                     self._count = 0
                     self._last_evidence = None
-                if self._last_evidence is None or inp.corridor_at > self._last_evidence:
+                if self._last_evidence is None or source_stamp > self._last_evidence:
                     self._count += 1
-                    self._last_evidence = inp.corridor_at
-                if self._count >= 3:
+                    self._last_evidence = source_stamp
+                if self._count >= 3 and lane.margin(self.body) >= .025 and abs(lane.heading) <= .12:
                     self.checkpoint = (p, lane)
                     self._candidate = None
                 return ReturnAction(self.phase, "contained")
@@ -265,19 +283,28 @@ class ReturnController:
                 self._candidate = (p, lane)
                 self._count = 0
                 self._last_evidence = None
-            if self._last_evidence is None or inp.corridor_at > self._last_evidence:
+            if self._last_evidence is None or source_stamp > self._last_evidence:
                 self._count += 1
-                self._last_evidence = inp.corridor_at
+                self._last_evidence = source_stamp
             if self._count >= 3 and inp.front_clear:
                 self.phase = "tracking"
-                self.checkpoint = (p, lane)
+                if lane.margin(self.body) >= .025:
+                    self.checkpoint = (p, lane)
                 self._opened = self._search_start = self._search_pose = None
                 self._search_attempt = 0
                 self._candidate = None
+                self._align_start = self._align_pose = None
+                self._approach = CorridorApproach()
                 return ReturnAction(self.phase, "corridor_verified", recovered=True)
             return self._hold("corridor_verifying")
         self._count = 0
         self._candidate = None
+        if (self.checkpoint is None and lane is not None and not inside and
+                inp.front_clear and inp.turn_clear):
+            twist = self._approach.step(inp, lane)
+            if twist is not None:
+                self.phase = "approach"
+                return ReturnAction(self.phase, "sensor_corridor_approach", *twist)
         if self.checkpoint and self._path and inp.rear_clear:
             target = self._path[-1]
             while len(self._path) > 1 and math.hypot(target.x-p.x, target.y-p.y) <= .008:

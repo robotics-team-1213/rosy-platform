@@ -22,6 +22,8 @@ def inp(t, **kwargs):
                   clearance_at=t, floor_safe=True, authorized=True,
                   linear_limit=.04, angular_limit=.15)
     values.update(kwargs)
+    values['corridor_stamp_ns'] = (None if values['corridor_at'] is None
+                                  else round(values['corridor_at']*1e9))
     return ReturnInput(**values)
 
 
@@ -167,3 +169,23 @@ def test_initial_checkpoint_requires_consistent_world_corridor():
     for t, y in ((1., 0), (1.1, .02), (1.2, .04)):
         ctl.tick(inp(t, pose=pose(t, y=y)))
     assert ctl.checkpoint is None
+
+
+def test_receipt_time_cannot_count_repeated_source_image_as_new_verification():
+    ctl = ReturnController(BODY)
+    ctl.tick(inp(1., corridor=None))
+    for t in (1.1,1.2,1.3):
+        from dataclasses import replace
+        action = ctl.tick(replace(inp(t), corridor_stamp_ns=100000000000))
+    assert not action.recovered
+    assert action.phase == "verify"
+
+
+def test_continuity_epoch_change_invalidates_path_even_if_coordinates_do_not_jump():
+    from dataclasses import replace
+    ctl = ReturnController(BODY)
+    for t in (1.,1.1,1.2): ctl.tick(inp(t))
+    for t in (1.3,1.4,1.5,1.6):
+        action = ctl.tick(replace(inp(t), epoch=1))
+    assert not action.recovered
+    assert action.phase != "tracking"

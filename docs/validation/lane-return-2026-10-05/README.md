@@ -25,6 +25,18 @@ Independent verdict: accept/re-judge this aggregate because line-follow retains 
 
 ## Remaining proof
 
-Actual command arbitration, observed support/uncertainty admission in the moving controller, verified swept-motion/floor clearance, no-checkpoint approach, closed-loop scenarios, signed release installation/readback and real departure recovery remain pending. The original incident lacks a complete synchronized trace; this work cannot establish its exact cause.
+Actual command arbitration, observed support/uncertainty admission through that arbitration, verified swept-motion/floor clearance, signed release installation/readback and real departure recovery remain pending. The original incident lacks a complete synchronized trace; this work cannot establish its exact cause.
 
 The first architecture regression run found a missing namespace dependency in the host environment; the rerun supplies the existing motion/skill package source paths. The combined evidence/bridge/legacy line-follow/bounded-trial/architecture check then passed 109 tests, 0 NEW. That run is host source verification, not ROS or field proof. A pinned read-only device SSH probe timed out; no device state change or installed-readback proof was obtained.
+
+## Local fallback closed loop increment
+
+The controller now counts distinct original camera stamps and invalidates a previous return reference on continuity-epoch changes. The current-corridor candidate approaches at at most 0.03 m/s, respects lower live limits, and measures its own accumulated travel and yaw. It ends after 0.15 m, 1.4 rad or 8 s; stationary translation ends that candidate after 1 s. The overall local sequence remains bounded at 12 s.
+
+A continuous steering disturbance reproduced a real policy failure: refreshing the checkpoint at every contained pose left the frozen target only 2 mm behind a boundary invasion, inside the 8 mm waypoint tolerance. A normal checkpoint now requires 25 mm body margin and heading error at most 0.12 rad. The closed loop then retraces the measured path and reacquires the heading before verifying containment on three distinct source frames.
+
+Host results: 30 controller/closed-loop tests pass, including 20 percent slip, nonmoving wheels, stale proof, normal checkpoint retention and both search directions before Fleet. The broader controller/evidence/odometry/legacy/architecture/contract run passes 130 tests with 0 NEW after merging current main. Logs are under `X:/DevTemp/lane-return-20261005/` (`policy-review-fixed.txt`, `approach-merged.txt`). Initial collection-path mistakes ran no tests and are not counted as verification. All output commands move only synthetic planar poses in these tests; the physical robot has received no motion from this increment.
+
+Independent review approved this source increment after 45 PASS, 0 NEW (`X:/DevTemp/lane-return-review/tests-controller-final.txt`). The review found a second checkpoint write in the recovery-success branch that lacked the 25 mm guard; its regression now permits recovery at 20 mm but leaves the normal checkpoint unset until the stricter margin is reached. Review approval covers source only.
+
+Read-only device access recovered. CORE, I/O, camera and Host Agent services are active on installed release `2026.10.05-042`; boot readback reports MANUAL/IDLE. These service/status observations do not prove live lane-return capability, sensor freshness or field recovery. No release or motion was changed.
