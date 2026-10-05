@@ -365,3 +365,18 @@ collection-group qualification. Missing actual approvals remain HOLD.
 See `docs/plans/2026-10-05-pinky-pipeline-completion.md` for scope and isolated
 verification. A real eligible invocation can train; no real GPU or robot command
 is part of the synthetic composition tests.
+
+## Pi harvest to auto-label
+
+A recording can refer to one configured `harvest` entry instead of repeating its local `raw` path:
+
+```json
+{
+  "recordings": [{"session": "<session-id>", "harvest": 0}],
+  "harvest": [{"host": "<robot>", "dest": "<local-harvest-root>", "core_token_file": "<private-token>",
+               "identity": "<private-key>", "known_hosts": "<private-known-hosts>",
+               "host_key_alias": "<pinned-robot-id>"}]
+}
+```
+
+The recording's `harvest` value is a zero-based index into the configured harvest list. After the idle-gated, checksum-verified harvest completes, the job resolves that session ID to exactly one `<dest>/<device>/<session>` folder and passes the folder to the existing LiDAR auto-label stage. Missing or duplicate matches fail before cataloging or labeling. Existing `raw` and `video` recording entries remain supported. Harvest references select recordings explicitly; they do not mark other harvested sessions for labeling.

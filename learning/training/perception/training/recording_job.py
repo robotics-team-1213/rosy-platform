@@ -26,14 +26,21 @@ def validate_config(cfg):
         raise JobError("recording config needs store/name/recordings/harvest/label/trainer")
     if not safe_name(cfg["name"]) or not isinstance(cfg["recordings"], list) or not cfg["recordings"]:
         raise JobError("safe dataset name and nonempty recordings required")
+    if not isinstance(cfg["harvest"], list):
+        raise JobError("harvest must be a list")
     sessions = []
     for row in cfg["recordings"]:
         if not isinstance(row, dict) or not {"session"} <= row.keys():
             raise JobError("recording session required")
-        if not safe_name(row["session"]) or ("video" in row) == ("raw" in row):
-            raise JobError("safe session and exactly one video/raw required")
-        if set(row) - {"session", "video", "raw", "pitch_deg"}:
+        source_keys = set(row) & {"video", "raw", "harvest"}
+        if not safe_name(row["session"]) or len(source_keys) != 1:
+            raise JobError("safe session and exactly one video/raw/harvest source required")
+        if set(row) - {"session", "video", "raw", "harvest", "pitch_deg"}:
             raise JobError("unknown recording option")
+        if "harvest" in row:
+            index = row["harvest"]
+            if type(index) is not int or not 0 <= index < len(cfg["harvest"]):
+                raise JobError("recording harvest index must reference a configured harvest entry")
         if "pitch_deg" in row and (type(row["pitch_deg"]) not in (int, float)
                                    or not math.isfinite(row["pitch_deg"])):
             raise JobError("finite camera pitch required")
@@ -52,8 +59,6 @@ def validate_config(cfg):
         raise JobError("positive frame interval required")
     if set(cfg["trainer"]) != {"gate", "replay_root", "intake_out", "camera_profile", "training"}:
         raise JobError("trainer gate/replay_root/intake_out/camera_profile/training required")
-    if not isinstance(cfg["harvest"], list):
-        raise JobError("harvest must be a list")
     required = {"host", "core_token_file", "identity", "known_hosts", "dest", "host_key_alias"}
     optional = {"user", "remote_root", "core_url", "timeout", "status_timeout"}
     for h in cfg["harvest"]:
@@ -139,6 +144,28 @@ def catalog_source(row, out, store):
     return result, source_files
 
 
+def resolve_recordings(cfg):
+    """Resolve explicit harvest references to one verified local session folder."""
+    resolved = []
+    for row in cfg["recordings"]:
+        if "harvest" not in row:
+            resolved.append(row)
+            continue
+        dest = Path(cfg["harvest"][row["harvest"]]["dest"]).resolve()
+        matches = []
+        if dest.is_dir():
+            for candidate in dest.glob(f"*/{row['session']}"):
+                path = candidate.resolve()
+                if path.name == row["session"] and path.parent.parent == dest:
+                    matches.append(path)
+        if len(matches) != 1:
+            raise JobError(
+                f"harvested session {row['session']!r} resolved to {len(matches)} folders; expected one")
+        resolved.append({**row, "raw": str(matches[0])})
+        resolved[-1].pop("harvest")
+    return resolved
+
+
 def prepare(cfg, out, *, runner=execute, builder=None):
     import catalog
     from build import build_auto_dataset
@@ -164,9 +191,11 @@ def prepare(cfg, out, *, runner=execute, builder=None):
                 return receipt({"destination": h["dest"]}, raw_files)
             job.step(f"harvest-{index}", harvest_stage)
 
+        recordings = resolve_recordings(cfg)
+
         def catalog_stage(attempt):
             rows, raw_files = [], []
-            for row in cfg["recordings"]:
+            for row in recordings:
                 item, paths = catalog_source(row, out, cfg["store"])
                 rows.append(item)
                 raw_files += paths
@@ -175,7 +204,7 @@ def prepare(cfg, out, *, runner=execute, builder=None):
             return receipt({"catalog": str(target)}, [target, *raw_files])
         original = job.step("catalog", catalog_stage)
         labelled = []
-        for index, row in enumerate(cfg["recordings"]):
+        for index, row in enumerate(recordings):
             def label_stage(attempt, row=row, index=index):
                 target = out / f"labels-{index}-{attempt}" / row["session"]
                 argv = [PERCEPTION / "dataset/autolabel.py"]
