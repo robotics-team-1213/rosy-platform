@@ -204,8 +204,9 @@ function renderTokenForm(root, onConnect, message) {
 // --- 연동 코드 보여주기 (D-193 §5 등록 코드) ---
 // 화면이 없는 상대 기기와 연동할 때: 이 태블릿이 코드를 보여 주고 상대 기기에서
 // 입력한다. 반대 방향(상대 화면 코드 → 이 태블릿 입력)은 접속 폼의 pairWithCode.
-// 발급은 관리자만(CORE 403), 표시 역할은 운전자(operator) 고정.
-function mountShowCode(root) {
+// 발급은 관리자만(CORE 403) — 운영자 화면에서는 항목을 보여 주되, 발급 거절 시
+// 관리자 코드로 전환하는 길(기존 토큰 폼)을 바로 제공한다.
+function mountShowCode(root, onSwitchCredential) {
   const section = el("div", null, {"data-enroll-section": ""});
   section.append(el("ui-text", "연동 코드 보여주기", {scale: "label"}));
   section.append(el("p", "입력 화면이 있는 상대 기기는 이 코드를 보고 그 화면에서 입력합니다. " +
@@ -227,11 +228,19 @@ function mountShowCode(root) {
     button.disabled = false;
     if (!result || result.status !== 201 || typeof result.body?.code !== "string") {
       stopTick(); timer.hidden = true;
-      status.textContent = result?.status === 403
-        ? "관리자 권한이 필요합니다."
-        : "코드를 발급할 수 없습니다. 연결을 확인하세요.";
+      if (result?.status === 403) {
+        status.textContent = "발급은 관리자 권한이 필요합니다.";
+        section.querySelector("[data-enroll-upgrade]")?.remove();
+        const upgrade = el("ui-button", "관리자 코드로 전환", {type: "button", "data-enroll-upgrade": ""});
+        upgrade.setAttribute("kind", "quiet");
+        upgrade.addEventListener("click", () => onSwitchCredential?.());
+        section.insertBefore(upgrade, timer);
+      } else {
+        status.textContent = "코드를 발급할 수 없습니다. 연결을 확인하세요.";
+      }
       return;
     }
+    section.querySelector("[data-enroll-upgrade]")?.remove();
     const code = el("ui-text", result.body.code, {scale: "display", "data-enroll-code": ""});
     const role = {viewer: "조회용", operator: "운전자용"}[result.body.role] ?? `${result.body.role}용`;
     status.textContent = `${role} 코드입니다. 상대 기기에서 입력하세요.`;
@@ -344,7 +353,12 @@ async function check(root, onReady, onEnter) {
       : "먼저 카메라를 확인하세요. 주행을 시작하면 누르는 동안만 로봇을 조종합니다.", {"data-ready-guidance": ""}),
     actions,
   );
-  if (me.body?.role === "administrator") mountShowCode(root);
+  // 연동 코드 보여주기: 운영자에게도 항목을 보여 준다(발급은 관리자 — 거절 시 전환 길 제공).
+  mountShowCode(root, () => {
+    clearToken();
+    renderTokenForm(root, () => check(root, onReady, onEnter),
+      "관리자 코드를 입력하면 연동 코드를 발급할 수 있습니다.");
+  });
   onReady?.({role: me.body?.role});
 }
 
