@@ -6036,3 +6036,9 @@ osy-d395-s1d\`.
 - 변경: T2 및 T5 계약 테스트의 전역 Gazebo sys.path 삽입을 private exact-file 로더로 교체했다. Vision 테스트도 자기 observer 파일을 직접 읽어 원래 normal push collection 충돌을 닫는다. 판정 함수·생산 standalone CLI·hook 선택 범위는 그대로다.
 - 증거: 원래 T2-first/Vision 35 collected/1 ERROR 보존. 양방향 T2/T5/T3/Vision 각 105 PASS, fresh-process generic alias/type identity 회귀 포함. 원래 affected selector 전체 collect-only exit 0.
 - gate 변화: 없음. HOST collection 증거만이며 T3/T5 실제 ROS/SIM/물리 수용은 미실행이다.
+
+## 2026-10-05 · uncommitted · fix(ci): include learning contracts in site candidate triggers
+
+- 변경: Fleet Dockerfile이 복사하는 `contracts/learning/src/**`를 site candidate push 경로에 추가했다. 기존 이미지 소스와 trigger 일치 계약을 유지한다.
+- 증거: origin CI `37276307702`의 root-test-1of3가 누락 경로 `contracts/learning/src`로 실패했다. 수정 후 `test/test_site_candidate_workflow.py` 14 PASS, known_failures 0 NEW (`X:/DevTemp/line-remote-20261005/site-paths.txt`).
+- gate 변화: HOST 경로 계약만 PASS. 새 후보 CI와 ARM64 빌드, 장치 배포는 별도 검증한다. 자동 차선 추종과 FIELD 수용은 미실행이다.

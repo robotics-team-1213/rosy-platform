@@ -29,6 +29,7 @@ on:
       - operations/vision/**
       - operations/apps/games/**
       - contracts/foundation/core_common/**
+      - contracts/learning/src/**
       - operations/apps/fleet/**
       - shared/web/**
       - middleware/perception/map/map_v2_fleet/lane_graph.yaml
