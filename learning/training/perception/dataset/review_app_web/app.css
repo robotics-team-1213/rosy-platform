@@ -72,7 +72,8 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink-quiet); f
 #capabilities p { max-width: 70ch; }
 [hidden] { display: none !important; }
 .pixel-layout { display: grid; grid-template-columns: minmax(0, 1fr) 22rem; gap: var(--space-5); }
-.pixel-stage { padding: var(--space-3); border: 1px solid var(--surface-line); border-radius: var(--radius-control); background: var(--ground); }
+.pixel-stage { position: relative; padding: var(--space-3); border: 1px solid var(--surface-line); border-radius: var(--radius-control); background: var(--ground); }
+.pixel-brush { position: absolute; border: 1px solid var(--ink); border-radius: 50%; pointer-events: none; transform: translate(-50%, -50%); opacity: .7; }
 #pixel-canvas { display: block; width: 100%; height: auto; max-width: 48rem; margin-inline: auto; touch-action: none; cursor: crosshair; }
 .pixel-layout aside { border-left: 1px solid var(--surface-line); padding-left: var(--space-5); }
 .pixel-layout .ui-check { margin-block: var(--space-3); }

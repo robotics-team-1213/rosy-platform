@@ -256,6 +256,11 @@ document.addEventListener('keydown',event=> {
   if(event.key==='Delete' && document.activeElement===$('canvas') && selected!==null && canDrag() && !gesture) {
     event.preventDefault(); $('delete-selected').click();
   }
+  // Arrow keys move between photos; number fields keep their native stepping.
+  if((event.key==='ArrowLeft'||event.key==='ArrowRight') && !['INPUT','SELECT','TEXTAREA'].includes(event.target?.tagName)) {
+    const button=$(event.key==='ArrowLeft'?'prev-frame':'next-frame');
+    if(button && !button.disabled) {event.preventDefault(); button.click();}
+  }
 });
 function frameHeading() {
   $('status').setAttribute('status',frame.status==='pending'?'warn':'neutral');
