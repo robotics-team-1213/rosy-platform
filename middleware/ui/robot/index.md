@@ -37,8 +37,8 @@
 
 ## 최근 기록
 
+- 2026-10-06 · uncommitted · uiux: 모바일 운용 조작을 관측보다 먼저 배치
 - 2026-10-06 · uncommitted · feat(dashboard): 개발 모드 로봇은 코드 없는 입장, 관리자는 임시 SSH 비밀번호를 화면에서 확인
 - 2026-10-05 · uncommitted · uiux: meter and map cursor stay in the stylesheet
 - 2026-10-05 · uncommitted · uiux: drop the compatibility link from the default entry
 - 2026-10-05 · uncommitted · fix(dashboard): 차선 추종 시작 조건을 구동 준비에 맞춤
-- 2026-10-05 · uncommitted · fix(ui): Wi-Fi 라벨 변수의 비밀값 검사 오인 해소

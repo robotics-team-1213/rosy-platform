@@ -1004,3 +1004,9 @@
 - 변경: 개발 연결 모드(D-432) 로봇을 열면 로그인 서랍에 코드 없이 1시간 운전자 세션을 받는 '개발 연결로 계속'을 보여준다(프로덕션 paired 모드로선 누르는 경로가 없다). 대시보드 보안 패널에 임시 SSH 비밀번호 구역을 추가해 administrator가 분(1~60)을 정해 발급·표시·회수한다(응답 No-Store, 모듈이 저장하지 않음). 엔트리 경로는 dashboard-entry.js, 호환 경로는 app.js가 같은 두 기능을 보여준다.
 - 증거: 브라우저 신규 시험 test_development_entry_logs_in_without_a_code — 코드 폼 병행 표시, 한 번의 POST로 세션, 목적지 영역 전환. test_dashboard_browser 전체 79 passed 1 known. react중 노 --check 3 파일 통과.
 - gate 변화: SOURCE/LOCAL. 실기(8kcn, 모드 학장 driver) 검증은 별도.
+
+## 2026-10-06 · uncommitted · uiux: 모바일 운용 조작을 관측보다 먼저 배치
+
+- 변경: `uiux/rosy-operate-quality`에서 64rem 미만 운용 화면의 배너 다음에 조작, 로봇 상태·카메라, 지도를 순서대로 둔다. 데스크톱의 감지·관측·조작 3영역과 상단 비상 정지는 유지한다. 역할 G2 시험의 현재 폴더 import 경로를 바로잡고 캡처 위치를 환경 변수로 지정할 수 있게 했다.
+- 증거: 390×844 조작 위치가 수정 전 y=1013에서 수정 후 y=149로 올라갔다. 레이아웃·헤더 예산 브라우저 11 passed, 실제 FastAPI fixture의 운전 모드 피드백 1 passed, 각각 known_failures 0 new. 캡처는 X: 세션 evidence에 둔다.
+- gate 변화: 없음. 이는 모바일 조작 발견성의 LOCAL 개선이며 화면 전체의 현대성·가독성, G3 사람 평가, 실기 수용은 여전히 미완료다.

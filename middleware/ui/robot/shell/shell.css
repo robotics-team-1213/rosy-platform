@@ -217,6 +217,14 @@ body:is([data-surface="setup"], [data-surface="device"]) .procedure-panel {
    화면 전환은 cluster이지 사이드바가 아니다. 붙박이 머리는 창 높이의 20% 이하다.
    알림은 글이 있을 때만 셋째 줄에 나온다(비상 정지 결과). */
 @media (width < 64rem) {
+  body[data-surface="console"] .surface-main {
+    grid-template-areas: "status" "banner" "act" "sense" "observe";
+  }
+  body[data-surface="console"] #surface-status { grid-area: status; }
+  body[data-surface="console"] .surface-slot[data-slot="banner"] { grid-area: banner; }
+  body[data-surface="console"] .surface-slot[data-slot="act"] { grid-area: act; }
+  body[data-surface="console"] .surface-slot[data-slot="sense"] { grid-area: sense; }
+  body[data-surface="console"] .surface-slot[data-slot="observe"] { grid-area: observe; }
   ui-topbar {
     display: grid;
     grid-template-columns: auto minmax(0, 1fr) auto;

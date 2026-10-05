@@ -15,9 +15,9 @@ from playwright.sync_api import sync_playwright
 
 
 ROOT = Path(__file__).resolve().parents[4]
-SRC = ROOT / "src"
-for package in ("runtime/api_web", "runtime/gateway", "runtime/events", "runtime/services", "contracts/foundation"):
-    sys.path.insert(0, str(SRC / package))
+for package in ("middleware/core/api_web", "middleware/core/gateway", "middleware/core/events",
+                "middleware/core/services", "contracts/foundation"):
+    sys.path.insert(0, str(ROOT / package))
 
 pytestmark = pytest.mark.skipif(
     os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
@@ -25,7 +25,7 @@ pytestmark = pytest.mark.skipif(
 )
 
 TOKENS = {"operator": "rosy-dev-operator", "administrator": "rosy-dev-admin"}
-CAPTURES = Path("X:/DevTemp/rosy-uiux-d306-roles-g2")
+CAPTURES = Path(os.environ.get("ROSY_SCREENSHOT_DIR", "X:/DevTemp/rosy-uiux-d306-roles-g2"))
 SCENARIOS = {
     "setup": ("normal", "empty", "delayed", "disconnected", "unavailable", "unsupported", "forbidden", "error", "safe_stop", "confirm_cancel"),
     "device": ("normal", "empty", "delayed", "disconnected", "unavailable", "forbidden", "error", "safe_stop", "confirm_cancel"),
@@ -50,7 +50,7 @@ def _core_client(tmp_path):
     from core_common.profile import RobotProfile, robot_config_dir
     from core.services import CoreServices
 
-    config_dir = SRC.parent / "contracts/foundation/config"
+    config_dir = ROOT / "contracts/foundation/config"
     config = yaml.safe_load((config_dir / "rosy_default.yaml").read_text(encoding="utf-8"))
     config["auth"] = {**config["auth"], **yaml.safe_load(
         (config_dir / "rosy_dev_auth.yaml").read_text(encoding="utf-8"))["auth"]}
