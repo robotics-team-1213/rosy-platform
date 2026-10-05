@@ -55,7 +55,10 @@ CLI의 명시적 `--enrolled-tls-bindings-file` 값이 환경 기본값보다 �
 기존 공개 HTTPS identity의 `receiver_id`를 등록 ID와 대조한 뒤에만 자격이나 코드를
 보낸다. HTTP와 WSS는 같은 신원·CA·새 발견 경로를 쓴다. DHCP 변경은 암호화 등록
 주소나 자격을 다시 쓰지 않는다. 코드 기반 기존 주소 이동은 TLS-bound 로봇에는
-적용하지 않는다. 발견 누락·충돌·인증 실패는 연결 실패로 남으며 HTTP로 내려가지 않는다.
+적용하지 않는다. DNS-SD에 저장한 이름의 광고가 없으면 그 HTTPS 이름의 호스트
+Avahi 주소 하나를 쓰고, 저장한 포트와 CA 검증은 유지한다. 광고가 있는데
+받아들이지 못하거나, 사설 LAN 주소가 하나가 아니거나, 인증에 실패하면 연결은
+실패로 남고 HTTP로 내려가지 않는다.
 기존 expiry/needs_new_code/address_changed 안전 HOLD를 자동 해제하지 않는다.
 
 등록부와 동일한 ID 수, 자격 지문·만료·principal 보존, HTTPS 상태 GET 및 WSS 상태
