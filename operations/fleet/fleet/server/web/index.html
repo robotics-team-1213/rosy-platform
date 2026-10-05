@@ -39,6 +39,20 @@
     <ui-button kind="irreversible" id="estop" data-always-live class="estop" type="button" data-action-icon="estop"><span>비상 정지</span><small>래치 · 로봇별 관리자 해제</small></ui-button>
   </ui-topbar>
 
+  <nav id="console-workflow" class="console-workflow" aria-label="관제 준비 순서">
+    <ol>
+      <li><a id="workflow-connect" href="#console-token"><span>1</span>관제 접속</a></li>
+      <li><a href="/console/install"><span>2</span>카메라·지도 보정</a></li>
+      <li><a href="#map-heading"><span>3</span>X/Y 좌표 확인</a></li>
+      <li><a id="workflow-start" href="#start-point-tools"><span>4</span>시작점 설정</a></li>
+    </ol>
+  </nav>
+  <section id="connection-guide" class="connection-guide" aria-labelledby="connection-guide-title" hidden>
+    <div><h2 id="connection-guide-title">관제 접속 필요</h2>
+      <p id="connection-guide-detail">관제 토큰으로 접속하면 로봇·카메라·지도 상태를 확인할 수 있습니다.</p></div>
+    <a id="connection-guide-action" href="#console-token">관제 접속</a>
+  </section>
+
   <section id="dispatch-control" class="dispatch-control" role="status"
            aria-live="polite" aria-labelledby="dispatch-control-title">
     <div>
@@ -124,10 +138,12 @@
       <section aria-labelledby="start-point-heading">
         <h3 id="start-point-heading">시작점 · 무마커 지도 기준</h3>
         <p class="hint">위치와 방향을 저장합니다. 지도 원점과 로봇 위치는 바뀌지 않으며 로봇은 움직이지 않습니다. 방향 0°는 +X, 90°는 +Y입니다.</p>
-        <label>보정 카메라 <select class="ui-field" id="start-point-source" disabled aria-label="시작점 보정 카메라"></select></label>
+        <div class="start-point-fields">
+        <label class="start-point-camera">보정 카메라 <select class="ui-field" id="start-point-source" disabled aria-label="시작점 보정 카메라"></select></label>
         <label>X (m) <input class="ui-field" id="start-point-x" type="number" step="0.001" required disabled></label>
         <label>Y (m) <input class="ui-field" id="start-point-y" type="number" step="0.001" required disabled></label>
         <label>방향 (°) <input class="ui-field" id="start-point-yaw" type="number" min="-180" max="180" step="0.1" value="0" required disabled></label>
+        </div>
         <ui-actions><ui-button kind="quiet" id="start-point-pick" type="button" disabled>지도에서 시작 위치 선택</ui-button>
           <ui-button kind="primary" id="start-point-save" type="button" disabled>시작점 저장</ui-button>
           <ui-button kind="quiet" id="start-point-delete" type="button" disabled>시작점 지우기</ui-button></ui-actions>
