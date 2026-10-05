@@ -6,18 +6,30 @@
 
 from __future__ import annotations
 
+import importlib.util
+import sys
+from pathlib import Path
+
 import cv2
 import numpy as np
 import pytest
 from fastapi.testclient import TestClient
 
-from observer import (
+_spec = importlib.util.spec_from_file_location(
+    "_rosy_signal_observer_test_source", Path(__file__).resolve().parents[1] / "observer.py"
+)
+_observer = importlib.util.module_from_spec(_spec)
+sys.modules[_spec.name] = _observer
+_spec.loader.exec_module(_observer)
+
+from _rosy_signal_observer_test_source import (  # noqa: E402
     ObserverConfig,
     ObserverConfigError,
     Roi,
     classify_frame,
     create_app,
     load_config,
+    make_source,
 )
 
 #: BGR 색 — 판정은 HSV 에서 하니까 여기선 "그 색으로 보이는 BGR"만 맞으면 된다.
@@ -25,6 +37,47 @@ RED_BGR = (0, 0, 255)
 ORANGE_BGR = (0, 140, 255)
 GREEN_BGR = (80, 220, 80)
 BLACK_BGR = (10, 10, 10)
+
+
+def test_exact_test_loaders_preserve_generic_modules_and_search_path():
+    import subprocess
+
+    script = """
+import importlib.util, runpy, sys, types
+from pathlib import Path
+root = Path(sys.argv[1])
+sys.path[:0] = [str(root / 'operations/fleet'), str(root / 'contracts/foundation')]
+import cv2, numpy, pytest
+from fastapi.testclient import TestClient
+from fleet.server.traffic_reservations import segment_state
+spec = importlib.util.spec_from_file_location('observer', root / 'tools/validation/fleet_gazebo/observer.py')
+# The production standalone observer deliberately requires its sibling import.
+sibling = importlib.util.spec_from_file_location('assertions', root / 'tools/validation/fleet_gazebo/assertions.py')
+assertions = importlib.util.module_from_spec(sibling)
+sys.modules['assertions'] = assertions
+sibling.loader.exec_module(assertions)
+observer = importlib.util.module_from_spec(spec)
+sys.modules['observer'] = observer
+spec.loader.exec_module(observer)
+sentinels = {'observer': observer, 'assertions': assertions,
+             'probe': types.ModuleType('probe'), 'scenarios': types.ModuleType('scenarios')}
+sys.modules.update(sentinels)
+before = list(sys.path)
+probe = runpy.run_path(str(root / 'operations/fleet/test/test_gazebo_protocol_probe.py'))
+scenarios = runpy.run_path(str(root / 'test/test_fleet_gazebo_scenario_contracts.py'))
+vision = runpy.run_path(str(root / 'operations/vision/signal_observer/test/test_observer.py'))
+assert sys.path == before
+assert all(sys.modules[name] is value for name, value in sentinels.items())
+assert probe['Observation'].__module__ == '_rosy_fleet_gazebo_t2_probe'
+assert scenarios['Blackout'].__module__ == '_rosy_fleet_gazebo_t5_scenarios'
+assert vision['ObserverConfig'] is sys.modules[vision['make_source'].__module__].ObserverConfig
+assert hasattr(observer, 'Recorder') and not hasattr(observer, 'ObserverConfig')
+"""
+    root = Path(__file__).resolve().parents[4]
+    result = subprocess.run([sys.executable, "-c", script, str(root)],
+                            capture_output=True, text=True, timeout=30)
+    assert result.returncode == 0, result.stderr
+
 
 SIZE = (240, 320)  # (h, w)
 
@@ -145,7 +198,6 @@ def test_file_source_replays_recorded_frames(tmp_path):
     """벤치에서 촬영한 프레임을 기록해 두면 같은 분류기가 그대로 재생 판정한다 —
     Pi 배치(picamera2)도 이 소스 경계 뒤에 있는 것과 같은 이치다."""
     import cv2
-    from observer import ObserverConfig, make_source
     for i, color in enumerate((RED_BGR, GREEN_BGR)):
         frame = np.full((120, 160, 3), BLACK_BGR, dtype=np.uint8)
         cv2.circle(frame, (80, 60), 30, color, -1)
@@ -160,7 +212,6 @@ def test_file_source_replays_recorded_frames(tmp_path):
 
 
 def test_unknown_source_type_is_refused(tmp_path):
-    from observer import ObserverConfig, make_source
     cfg = ObserverConfig(rois=(Roi("a", 1, 1, 2, 2),),
                          source={"type": "banana"})
     with pytest.raises(ObserverConfigError):
@@ -170,7 +221,6 @@ def test_unknown_source_type_is_refused(tmp_path):
 def test_picamera2_outside_pi_is_a_clear_refusal():
     """picamera2 가 없는 호스트에서는 'Pi 용'이라고 명확히 거절한다 — 알 수 없는
     ImportError 로 관측이 죽지 않게."""
-    from observer import ObserverConfig, make_source
     cfg = ObserverConfig(rois=(Roi("a", 1, 1, 2, 2),),
                          source={"type": "picamera2"})
     try:

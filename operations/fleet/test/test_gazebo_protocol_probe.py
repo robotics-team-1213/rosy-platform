@@ -13,15 +13,18 @@ fake 관측 목록으로 LOCAL 판정만 증명한다. 실제 프로세스 사�
 
 from __future__ import annotations
 
+import importlib.util
 import sys
 import pytest
 from pathlib import Path
 
 TOOLS = Path(__file__).resolve().parents[3] / "tools" / "validation" / "fleet_gazebo"
-if str(TOOLS) not in sys.path:
-    sys.path.insert(0, str(TOOLS))
+_spec = importlib.util.spec_from_file_location("_rosy_fleet_gazebo_t2_probe", TOOLS / "probe.py")
+_probe = importlib.util.module_from_spec(_spec)
+sys.modules[_spec.name] = _probe
+_spec.loader.exec_module(_probe)
 
-from probe import (  # noqa: E402
+from _rosy_fleet_gazebo_t2_probe import (  # noqa: E402
     Observation,
     dispatch_chain_verdict,
     session_verdict,

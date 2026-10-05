@@ -6001,3 +6001,10 @@ osy-d395-s1d\`.
 - 변경: 정지 판정은 유한·음이 아닌 시각/이동/회전과 수신→정책 적용→정지의 시간 순서를 요구한다. NaN·역순·음수 값은 정상 성공이 아니다. watchdog 명령·실제 수동 SIM 경계와 STEADY clock 보완은 gz_sim journal에 기록했다. 시나리오·CORE 정책 시한·정지 상한을 완화하지 않았다.
 - 검증: 원래 T5 순수 함수 반례와 합성 ROS entrypoint 경계 실패를 재현한 뒤 watchdog/scenario/Fleet-loss 71 PASS(7.38s)다. 실제 주행·Gazebo 회차·장치 장애 주입 없이 HOST 근거만 추가했다.
 - gate 변화: T5 전체 ROS-SIM 수용은 HOLD다. 이번 SOURCE/LOCAL 검증을 물리 정지 시한이나 설치된 base watchdog 증거로 쓰지 않는다.
+
+
+## 2026-10-05 · uncommitted · fix(test): D-426 T2/T5 import 경계
+
+- 변경: T2 및 T5 계약 테스트의 전역 Gazebo sys.path 삽입을 private exact-file 로더로 교체했다. Vision 테스트도 자기 observer 파일을 직접 읽어 원래 normal push collection 충돌을 닫는다. 판정 함수·생산 standalone CLI·hook 선택 범위는 그대로다.
+- 증거: 원래 T2-first/Vision 35 collected/1 ERROR 보존. 양방향 T2/T5/T3/Vision 각 105 PASS, fresh-process generic alias/type identity 회귀 포함. 원래 affected selector 전체 collect-only exit 0.
+- gate 변화: 없음. HOST collection 증거만이며 T3/T5 실제 ROS/SIM/물리 수용은 미실행이다.
