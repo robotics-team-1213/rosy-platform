@@ -1843,3 +1843,9 @@
 - 나이: 기존 시험의 수신 시점 지연 나이 고정을 현재 source-clock 나이로 수정했다. now를 인접 clock 표본 사이에서 보간하고 pause는 보존한다. 표본 밖·rollback·비유한/손상 표본은 unknown이며 extrapolation하지 않는다.
 - 증거: 기존 원래 경로에서 19 FAIL/12 PASS, 두 로봇 중 한 응답 누락 회귀 1 FAIL을 재현했다. 중간 분기 연결 오류 4 FAIL도 보존했고 수정 후 probe·기존 traffic·boundary 91 PASS(5.41s)다. 모든 HELLO의 응답이 없으면 세션 전체는 INCONCLUSIVE이며 정상 세션 PASS도 유지한다. 실제 HTTP/WS·ROS-SIM·기기 실행은 없고 입력 관측 목록을 판정한 host 증거다.
 - gate 변화: T2 판정 source 보완이며 T3 관측기나 실제 회차 수용을 추가하지 않는다.
+
+## 2026-10-05 · uncommitted · fix(fleet): DNS-SD가 비면 저장한 HTTPS 이름의 호스트 Avahi 주소
+
+- 변경: DNS-SD에 저장한 로봇 이름이 없으면 `socket.getaddrinfo`로 사설 LAN IPv4 하나를 고르고, 저장한 URL 포트와 TLS 이름·CA 검증을 유지한다. 그 이름의 광고가 있는데 분류에 실패하거나, 사설 LAN IPv4가 없거나 둘 이상이면 기존 연결 실패를 유지한다. HTTP로 내려가지 않는다.
+- 증거: discovery transport와 enrolled TLS 32 passed, 1 skipped, 7.34s. Windows symlink 1 skipped. flake8 0. known_failures 0 NEW. 호스트 조회는 테스트에서 대체했고 실기기 연결은 하지 않았다.
+- gate 변화: SOURCE/LOCAL. 서명된 사이트 이미지와 현장 연결은 이 커밋만으로 바뀌지 않는다. 주행 없음.
