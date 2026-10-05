@@ -16,6 +16,18 @@ import org.json.JSONObject
 
 internal interface PeerVaultStorage : VaultStorage { fun endpointKeys(): Set<String> }
 
+/** 발급받은 피어 세션(≤1시간). 재연결마다 새 발급하지 않고 자연 만료까지 재사용한다(2026-10-06). */
+data class PeerSessionRecord(val origin: String, val relationshipId: String, val token: String,
+    val role: String, val expiresAt: Instant) {
+    init {
+        require(Regex("https://[a-z0-9-]+\\.local:[0-9]{1,5}").matches(origin))
+        require(Regex("[A-Za-z0-9_-]{32}").matches(relationshipId) && role in setOf("viewer", "operator"))
+        require(token.length in 16..1024 && expiresAt > Instant.EPOCH)
+    }
+    internal fun json() = JSONObject().put("origin", origin).put("relationship_id", relationshipId)
+        .put("token", token).put("role", role).put("expires_at", expiresAt.toString())
+}
+
 data class PeerRelationship(val origin: String, val receiverId: String, val receiverPublicKey: String,
     val clientId: String, val clientKeySha256: String, val id: String, val role: String, val generation: Long,
     val persistent: Boolean, val authorizationExpiresAt: Instant?, val caPem: String? = null) {
@@ -59,9 +71,26 @@ class PeerRelationshipVault internal constructor(private val storage: PeerVaultS
         val cipher = Cipher.getInstance("AES/GCM/NoPadding").apply { init(Cipher.ENCRYPT_MODE, key(true)) }
         storage.write(slot(candidate), Base64.getEncoder().encodeToString(cipher.iv + cipher.doFinal(record.json().toString().toByteArray(Charsets.UTF_8))), emptySet())
     }
+    /** 마지막 발급 세션 — 같은 열쇠로 암호화해 슬롯 하나만 저장한다. 저장 실패가 이미 성립한 연결을 깨지 않게 호출자가 감싼다. */
+    @Synchronized fun rememberSession(candidate: Candidate, record: PeerSessionRecord) {
+        require(record.origin == origin(candidate))
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding").apply { init(Cipher.ENCRYPT_MODE, key(true)) }
+        storage.write("session|" + slot(candidate), Base64.getEncoder().encodeToString(cipher.iv + cipher.doFinal(record.json().toString().toByteArray(Charsets.UTF_8))), emptySet())
+    }
+    @Synchronized fun readSession(candidate: Candidate): PeerSessionRecord? {
+        val encoded = storage.get("session|" + slot(candidate)) ?: return null
+        val bytes = Base64.getDecoder().decode(encoded); require(bytes.size in 29..8192)
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding").apply { init(Cipher.DECRYPT_MODE, key(false), GCMParameterSpec(128, bytes.copyOfRange(0, 12))) }
+        val row = JSONObject(cipher.doFinal(bytes.copyOfRange(12, bytes.size)).toString(Charsets.UTF_8))
+        val result = PeerSessionRecord(row.getString("origin"), row.getString("relationship_id"), row.getString("token"),
+            row.getString("role"), Instant.parse(row.getString("expires_at")))
+        require(result.origin == origin(candidate))
+        return result
+    }
+    fun eraseSession(candidate: Candidate) { storage.write("session|" + slot(candidate), "", setOf("session|" + slot(candidate))) }
     @Synchronized fun erase(candidate: Candidate) {
         if (slot(candidate) !in storage.endpointKeys() && storage.endpointKeys().size >= 64) return
-        storage.write("fence|" + slot(candidate), UUID.randomUUID().toString(), setOf(slot(candidate)))
+        storage.write("fence|" + slot(candidate), UUID.randomUUID().toString(), setOf(slot(candidate), "session|" + slot(candidate)))
     }
     companion object {
         fun origin(candidate: Candidate): String {
@@ -73,7 +102,8 @@ class PeerRelationshipVault internal constructor(private val storage: PeerVaultS
             val prefs = context.applicationContext.getSharedPreferences("pilot-peer-relationships", Context.MODE_PRIVATE)
             return object : PeerVaultStorage {
                 override fun get(id: String) = prefs.getString(id, null)
-                override fun endpointKeys() = prefs.all.keys.map { it.removePrefix("fence|") }.toSet()
+                override fun endpointKeys() = prefs.all.keys
+                    .filterNot { it.startsWith("session|") }.map { it.removePrefix("fence|") }.toSet()
                 override fun write(id: String, value: String, remove: Set<String>) {
                     check(prefs.edit().apply { putString(id, value); remove.forEach { remove(it) } }.commit()) { "approval storage unavailable" }
                 }

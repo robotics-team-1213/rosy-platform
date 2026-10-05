@@ -476,3 +476,9 @@
 - 변경: 네이티브 PilotProxy가 상단 배너를 오류 문구로 바꾼 뒤 회복 신호가 없어, 일시 끊김 후 연결·영상·조종이 모두 정상이어도 TLS 또는 연결을 확인하세요 가 화면에 남았다(2026-10-05 9dfk 실주행 중 관찰 — 배너와 달리 영상 80ms·속도 명령 살아 있음). PilotProxy에 recovery 콜백을 추가: 실패를 한 번 알렸으면 다음 성공 응답에 회복을 알리고, MainActivity는 배너를 정상 연결 문구(connectedLabel)로 되돌린다. 세션 종료 시 배너 상태를 비운다.
 - 증거: JVM 신규 시험 transientFailureThenSuccessReportsFailureThenRecovery — 재시도 없는 주입 client로 첫 요청을 응답 없음(NO_RESPONSE)으로 실패시키면 502+failure 1회, 다음 성공에서 recovery 정확히 1회, 이후 성공은 중복 알림 없음. 전체 87 tests passed(빌드 2026-10-05). 설치 뒤 8kcn 재연결로 정상 배너 회귀 확인.
 - gate 변화: SOURCE/LOCAL. 실기에서 일시 끊김 유도 관찰은 별도.
+
+## 2026-10-06 · uncommitted · feat(pilot): 피어 세션을 저장해 자연 만료까지 재사용한다
+
+- 변경: 사용자 결정(2026-10-06)으로 발급받은 피어 세션(만료 상한 1시간)을 PeerRelationshipVault 에 슬롯 하나로 암호화 저장하고, 재연결 때 새 발급(challenge·session POST) 없이 whoami·system/info 확인만으로 그대로 재사용한다. 만료 임박(60초 미만)·401·형식 불일치면 저장분을 지우고 기존 발급 경로로 내려간다. 승인 기억 삭제(기기·연결)는 저장 세션도 함께 지운다. 세션 수명은 서버 계약(최대 1시간) 그대로 — 저장 수명을 늘리는 것이 아니라 발급 낭비를 없앤 것. 종료 시 반납(같은 날 초안)은 재사용과 충돌해 폐기했다.
+- 증거: JVM 신규 2건 - mintedSessionIsStoredAndReusedUntilNaturalExpiry(재연결이 challenge·session POST 0회, Bearer 확인 2회), storedSessionPastExpiryIsDiscardedAndFreshMintReplacesIt - 전체 89 passed. 실기 8kcn: 연결 발급 1개 → 로봇 목록 복귀 → 재연결에도 발급 수 1 그대로(재사용 확인, 2026-10-06).
+- gate 변화: SOURCE/LOCAL 및 실기 관찰. FIELD는 별도.
