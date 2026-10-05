@@ -214,7 +214,9 @@ def _launch_setup(context):
     api_port_base = int(LaunchConfiguration("api_port_base").perform(context))
     map_yaml = LaunchConfiguration("map").perform(context)
     loc_assist = LaunchConfiguration("loc_assist").perform(context).lower() in ("true", "1")
-    run_spec = _load_run_spec(LaunchConfiguration("run_spec").perform(context))
+    # bare-context 단위 시험에서도 돌아간다: 선언되지 않은 launch configuration 은
+    # LaunchConfiguration.perform 가 아닌 dict 조회로 기본값을 받는다.
+    run_spec = _load_run_spec(context.launch_configurations.get("run_spec", ""))
     spawn_spacing_raw = LaunchConfiguration("spawn_spacing").perform(context)
     profile = resolve_world(
         world_name,
