@@ -40,6 +40,10 @@ class RouteRequest(BaseModel):
 
 def install_lane_route_routes(app, *, console, task_service,
                               require_operator, operator_guard) -> None:
+    # One process remembers how far each robot has followed each edge list.
+    # A closed lap starts and ends on one point; without this the end is the start.
+    followed: dict[tuple[str, tuple[str, ...]], float] = {}
+
     @app.post("/api/fleet/robots/{robot_id}/route", dependencies=operator_guard,
               tags=["fleet"])
     async def fleet_lane_route(
@@ -66,10 +70,13 @@ def install_lane_route_routes(app, *, console, task_service,
                 "code": "ROUTE_POSE_UNTRUSTED",
                 "message": "lane route needs a LOCALIZED map pose",
             })
+        route_key = (robot_id, tuple(body.edges))
         try:
-            step = next_step(lines, pose[0], pose[1])
+            step = next_step(lines, pose[0], pose[1], along_m=followed.get(route_key, 0.0))
         except LaneRouteError as exc:
             raise HTTPException(status_code=409, detail={"code": str(exc)}) from exc
+        if step is not None:
+            followed[route_key] = step.at_m
         if step is None:
             return {"accepted": False, "queued": False, "reason": "ROUTE_COMPLETE",
                     "goal": None, "edges": list(body.edges)}

@@ -27,7 +27,7 @@ class TrustedProxyTest {
             val config = profile(ca, remote.port)
             val store = CandidateStore(); val version = store.found("robot")!!
             store.resolved("robot", version, Candidate("robot-a.local", remote.port, listOf("127.0.0.1")))
-            val proxy = PilotProxy(config, config.robots.single(), store) {}
+            val proxy = PilotProxy(config, config.robots.single(), store, {})
             try {
                 proxy.start(5000, false)
                 OkHttpClient().newCall(Request.Builder().url("${proxy.origin}/api/v1/auth/whoami")
@@ -48,7 +48,7 @@ class TrustedProxyTest {
             val config = profile(ca, remote.port)
             val store = CandidateStore(); val version = store.found("robot")!!
             store.resolved("robot", version, Candidate("robot-a.local", remote.port, listOf("127.0.0.1")))
-            val proxy = PilotProxy(config, config.robots.single(), store) {}
+            val proxy = PilotProxy(config, config.robots.single(), store, {})
             try {
                 proxy.start(5000, false)
                 OkHttpClient().newCall(Request.Builder().url("${proxy.origin}/api/v1/auth/whoami")
@@ -61,7 +61,7 @@ class TrustedProxyTest {
     @Test fun privateOriginRejectsCrossSiteBeforeDial() {
         val ca = HeldCertificate.Builder().certificateAuthority(1).build()
         val config = profile(ca, 8080)
-        val proxy = PilotProxy(config, config.robots.single(), CandidateStore()) {}
+        val proxy = PilotProxy(config, config.robots.single(), CandidateStore(), {})
         try {
             proxy.start(5000, false)
             OkHttpClient().newCall(Request.Builder().url("${proxy.origin}/api/v1/auth/whoami")
@@ -83,7 +83,7 @@ class TrustedProxyTest {
             })); remote.start()
             val config = profile(ca, remote.port); val store = CandidateStore(); val version = store.found("robot")!!
             store.resolved("robot", version, Candidate("robot-a.local", remote.port, listOf("127.0.0.1")))
-            val proxy = PilotProxy(config, config.robots.single(), store) {}
+            val proxy = PilotProxy(config, config.robots.single(), store, {})
             val browser = OkHttpClient()
             try {
                 proxy.start(5000, false)
@@ -108,7 +108,7 @@ class TrustedProxyTest {
             remote.start()
             val config = profile(ca, remote.port); val store = CandidateStore(); val version = store.found("robot")!!
             store.resolved("robot", version, Candidate("robot-a.local", remote.port, listOf("127.0.0.1")))
-            val proxy = PilotProxy(config, config.robots.single(), store) {}
+            val proxy = PilotProxy(config, config.robots.single(), store, {})
             try {
                 remote.enqueue(MockResponse().setBody("{\"robot_id\":\"rosy_02\"}"))
                 assertThrows(IllegalStateException::class.java) { proxy.verifyIdentity() }
@@ -130,7 +130,7 @@ class TrustedProxyTest {
             remote.start(); remote.enqueue(MockResponse().setBody("{\"robot_id\":\"rosy_01\"}"))
             val config = profile(ca, remote.port); val store = CandidateStore(); val version = store.found("robot")!!
             store.resolved("robot", version, Candidate("robot-a.local", remote.port, listOf("127.0.0.1")))
-            val proxy = PilotProxy(config, config.robots.single(), store) {}
+            val proxy = PilotProxy(config, config.robots.single(), store, {})
             proxy.verifyIdentity(); remote.takeRequest(1, TimeUnit.SECONDS)
             remote.enqueue(MockResponse().setBody("{}"))
             proxy.stop()
@@ -156,7 +156,7 @@ class TrustedProxyTest {
                 .setBody("FRAME"))
             val config = profile(ca, remote.port); val store = CandidateStore(); val version = store.found("robot")!!
             store.resolved("robot", version, Candidate("robot-a.local", remote.port, listOf("127.0.0.1")))
-            val proxy = PilotProxy(config, config.robots.single(), store) {}
+            val proxy = PilotProxy(config, config.robots.single(), store, {})
             try {
                 proxy.start(5000, false)
                 OkHttpClient().newCall(Request.Builder().url("${proxy.origin}/api/v1/vision/front/frame?sequence=6569&overlay=false")
@@ -173,6 +173,54 @@ class TrustedProxyTest {
             } finally { proxy.stop() }
         }
     }
+    @Test fun transientFailureThenSuccessReportsFailureThenRecovery() {
+        val ca = HeldCertificate.Builder().certificateAuthority(1).build()
+        val leaf = HeldCertificate.Builder().addSubjectAlternativeName("robot-a.local").signedBy(ca).build()
+        val failures = java.util.concurrent.CopyOnWriteArrayList<String>()
+        val recoveries = java.util.concurrent.atomic.AtomicInteger()
+        MockWebServer().use { remote ->
+            remote.useHttps(HandshakeCertificates.Builder().heldCertificate(leaf, ca.certificate).build().sslSocketFactory(), false)
+            remote.dispatcher = object : okhttp3.mockwebserver.Dispatcher() {
+                var calls = 0
+                override fun dispatch(request: okhttp3.mockwebserver.RecordedRequest): MockResponse {
+                    calls += 1
+                    // 첫 요청은 응답 없음(프록시 client 의 읽기 시한 2초에 걸림): failure 를 알리고 502 를 내야 한다.
+                    if (calls == 1) return MockResponse().setSocketPolicy(okhttp3.mockwebserver.SocketPolicy.NO_RESPONSE)
+                    return MockResponse().setBody("{}")
+                }
+            }
+            remote.start()
+            // 재시도 없는 짧은 클라이언트로 실패를 결정적으로 만든다(운영 client 은 연결 실패를 재시도한다).
+            val connection = object : PilotConnection {
+                override val target = RobotTarget("rosy_01", "robot-a.local", remote.port, "private-token-value")
+                override val secure = true
+                override fun authorized() = true
+                override fun client() = OkHttpClient.Builder()
+                    .dns(object : okhttp3.Dns {
+                        override fun lookup(hostname: String): List<java.net.InetAddress> =
+                            listOf(java.net.InetAddress.getByAddress(byteArrayOf(127, 0, 0, 1)))
+                    })
+                    .sslSocketFactory(HandshakeCertificates.Builder().addTrustedCertificate(ca.certificate).build().sslSocketFactory(),
+                        HandshakeCertificates.Builder().addTrustedCertificate(ca.certificate).build().trustManager)
+                    .retryOnConnectionFailure(false).connectTimeout(2, TimeUnit.SECONDS).readTimeout(2, TimeUnit.SECONDS)
+                    .build()
+            }
+            val proxy = PilotProxy(connection, null,
+                { failures.add(it) }, { recoveries.incrementAndGet() })
+            try {
+                proxy.start(5000, false)
+                val call = { OkHttpClient().newCall(Request.Builder().url("${proxy.origin}/api/v1/auth/whoami")
+                    .header("Cookie", "rosy-shell=${proxy.capability}").header("Authorization", "Bearer private-token-value")
+                    .build()).execute().use { it.code } }
+                assertEquals(502, call())   // 일시 실패 — 배너에 오류 문구
+                assertEquals(200, call())   // 회복 — 배너가 정상 문구로 돌아감
+                assertEquals(listOf("TLS 또는 연결을 확인하세요"), failures)
+                assertEquals(1, recoveries.get())
+                call()                      // 이후 성공은 회복을 중복 알리지 않는다
+                assertEquals(1, recoveries.get())
+            } finally { proxy.stop() }
+        }
+    }
     @Test fun recordingDownloadLargerThanHtmlCapStreamsIntact() {
         val ca = HeldCertificate.Builder().certificateAuthority(1).build()
         val leaf = HeldCertificate.Builder().addSubjectAlternativeName("robot-a.local").signedBy(ca).build()
@@ -182,7 +230,7 @@ class TrustedProxyTest {
             remote.start(); remote.enqueue(MockResponse().addHeader("Content-Type", "application/x-tar").setBody(okio.Buffer().write(content)))
             val config = profile(ca, remote.port); val store = CandidateStore(); val version = store.found("robot")!!
             store.resolved("robot", version, Candidate("robot-a.local", remote.port, listOf("127.0.0.1")))
-            val proxy = PilotProxy(config, config.robots.single(), store) {}
+            val proxy = PilotProxy(config, config.robots.single(), store, {})
             try {
                 proxy.start(5000, false)
                 OkHttpClient().newCall(Request.Builder().url("${proxy.origin}/api/v1/recordings/sample/file")
