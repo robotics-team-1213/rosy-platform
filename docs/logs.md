@@ -6229,3 +6229,9 @@ osy-d395-s1d\`.
 - 변경: 안전 상태 결측·비상 정지 중 `NAVIGATING`을 물리적 주행으로 보이게 하던 Fleet 배지를 `목표 남음`으로 바꾸고 [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)에 확인창·안전 상태 캡처와 G3 여덟 항목의 남은 판정 범위를 기록했다.
 - 증거: Fleet 브라우저 3 passed, 서버·팔레트 60 passed, 웹 Node 134 passed, Python `known_failures.py` 0 NEW. Cam APK 로컬 빌드는 성공했지만 에뮬레이터가 ADB에 나타나지 않아 네이티브 화면은 미검증이다.
 - gate 변화: Fleet G3와 제품 전체 UI/UX, 장치·현장 수용은 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(games): 최초 경기 보드 상태와 G3 독회
+
+- 변경: 정보가 없는 경기 피치에 대기·첫 연결 오류를 표시하고, [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)에 1280/390px 최초 캡처와 G3 여덟 항목의 근거·잔여 범위를 기록했다. Fleet 즉시 비상 정지의 결정 참조를 D-414로 바로잡았다.
+- 증거: 게임 보드 브라우저 19 passed, 게임 모듈 113 passed, `known_failures.py` 0 NEW. Stop 재시도 시험의 CSP 관찰 경합은 DOM locator로 확인한다.
+- gate 변화: LOCAL 부분 근거. 제품 전체 UI/UX와 장치·현장 수용은 HOLD다.

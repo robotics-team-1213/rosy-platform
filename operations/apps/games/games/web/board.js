@@ -37,16 +37,19 @@ function setTextIfChanged(element, value) {
 
 function setFieldEvidence(evidence) {
   const stale = hasMatch && evidence !== "fresh";
-  const message = evidence === "delayed"
+  const waiting = !hasMatch;
+  const message = waiting
+    ? evidence === "disconnected" ? "호스트 연결 오류 · 경기장 정보 없음" : "경기장 정보 대기 중"
+    : evidence === "delayed"
     ? "지연 · 마지막 수신 위치 · 현재 위치 아님"
     : evidence === "disconnected"
       ? "연결 오류 · 마지막 수신 위치 · 현재 위치 아님"
       : "데이터 대기 · 마지막 수신 위치 · 현재 위치 아님";
-  fieldEvidence.hidden = !stale;
-  if (stale) {
+  fieldEvidence.hidden = !(stale || waiting);
+  if (stale || waiting) {
     setTextIfChanged(fieldEvidence, message);
     canvas.setAttribute("aria-describedby", "field-evidence");
-    pitchWrap.dataset.evidence = evidence;
+    pitchWrap.dataset.evidence = waiting && evidence !== "disconnected" ? "waiting" : evidence;
     frame.dataset.evidence = evidence;
   } else {
     canvas.removeAttribute("aria-describedby");

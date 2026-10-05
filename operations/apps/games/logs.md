@@ -312,3 +312,9 @@
 - 변경: 경기 보드에서 프레임이 없는 관측 카드를 내용 높이로 맞춰 피치를 주 초점으로 둔다. 데스크톱·전화 상태 캡처 5장을 D-153 회차에 보존한다.
 - 증거: 게임 브라우저 18 passed, 게임 모듈 113 passed, 변경 후 진행·최초·HOLD·정지 4 passed, 데스크톱·390px 배치 1 passed, known_failures 0 NEW. Impeccable CSS 검사 새 경고 0.
 - gate 변화: LOCAL UI 증거만 추가. 실제 카메라·로봇 readback과 전체 G2/G3는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(games): 최초 피치 대기·연결 오류 문구
+
+- 변경: 경기 정보가 없을 때 빈 피치 중앙에 대기·연결 오류 이유를 표시한다. 기존 마지막 수신 위치 경고는 유지하고, 정지 재시도 브라우저 시험은 CSP와 충돌하지 않는 DOM 대기로 관찰한다.
+- 증거: [UI/UX 회차](../../../docs/validation/uiux-surfaces-2026-10-06/README.md)의 최초 1280/390px·첫 오류·끊김·정지 실패 캡처. 브라우저 19 passed, 모듈 113 passed, `known_failures.py` 0 NEW.
+- gate 변화: 게임 보드 G3 부분 근거. 실제 경기·정지 readback과 전체 G2/G3는 HOLD다.

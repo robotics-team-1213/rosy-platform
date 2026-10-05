@@ -152,7 +152,7 @@ h1 {
   max-width: calc(100% - 2 * var(--space-4));
   margin: 0;
   padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--status-warn);
+  border: 1px solid var(--mute);
   border-radius: var(--radius-button);
   background: var(--score-well);
   color: var(--pitch-ink);
@@ -161,6 +161,8 @@ h1 {
   pointer-events: none;
 }
 
+.pitch-wrap[data-evidence="delayed"] #field-evidence,
+.pitch-wrap[data-evidence="unavailable"] #field-evidence { border-color: var(--status-warn); }
 .pitch-wrap[data-evidence="disconnected"] #field-evidence { border-color: var(--status-crit); }
 
 @media (width < 30rem) {

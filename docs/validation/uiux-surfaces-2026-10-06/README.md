@@ -9,7 +9,7 @@
 | 로봇 운용: 지금 움직여도 되는가? | [1366×768](captures/robot-console-1366x768.png), [390×844](captures/robot-console-390x844.png) | 데스크톱 감지·관측·조작이 같은 폭이다. 390px에서 조작이 카메라·지도보다 먼저 오고 비상 정지가 첫 화면에 있다. | 선언된 역할·상태 전체 G2, 실제 CORE/장치 상태, G3 전체 근거 검토. |
 | 장비·작업 준비: 다음 절차와 막힌 이유를 알 수 있는가? | [60셀 매트릭스](captures/roles-procedure/matrix.json), [첫 기동 6셀](captures/roles-first-boot/first-boot-matrix.json), [운용자 작업 준비 390×844](captures/roles-procedure/operator-setup-normal-390x844.png), [맵핑 시작 확인](captures/roles-procedure/operator-setup-confirm-dialog-390x844.png), [릴리스 복귀 확인](captures/roles-procedure/administrator-device-confirm-dialog-390x844.png), [관리자 장비 지연 390×844](captures/roles-procedure/administrator-device-delayed-host-operations-390x844.png), [권한 거부 390×844](captures/roles-procedure/operator-device-forbidden-390x844.png) | `/setup`·`/device`를 역할 2개·1366/390px·상태별 60셀과 첫 기동 6셀로 현재 FastAPI/Chromium에서 재생했다. 390px 패널 안의 입력·행동은 같은 가용 폭을 쓰며, 페이지 오류·가로 넘침 0, 쓰기 차단 fixture에서 확인 취소 POST 0이다. 첫 기동에는 상태 확인 대기가 표시되고 비상 정지가 두 폭에서 보인다. 확인창 6장에는 선택한 행동 이름이 실행 버튼에 보이고 비상 정지가 대화상자 위에 남는다. 관리자 호스트 지연·끊김·결측의 실제 작업 패널 6장을 별도로 저장했다. | 절차를 현장 사용자가 완료할 수 있는지 G3 작업 독회, 실제 Host Agent/장치 readback. |
 | Fleet: 어느 로봇에 주의가 필요한가? | [1920×1080](captures/fleet-console-1920x1080.png), [320×844](captures/fleet-console-320x844.png), [상태 캡처](#fleet-g2-상태-확인--local-진행-중), [G3 독회](#fleet-g3-독회--local-진행-중) | 데스크톱 현장·개입 칸이 같은 폭이다. 전화의 **기본** 목록은 릴레이 오류가 있는 `rosy_03`부터 보여 주며 비상 정지가 첫 화면에 있다. 빈 목록·서버 실패에서도 320/390px 패널 폭과 다음 단계가 유지된다. | 선언된 상태 전체 G2, 연결된 카메라·실제 사이트 PC/로봇 readback, G3 전체 근거 검토. |
-| 게임 보드: 경기장·공·로봇·골이 보이는가? | [진행 1280×800](captures/games-play-1280x800.png), [최초 1280×800](captures/games-initial-1280x800.png), [지연 1280×800](captures/games-delayed-1280x800.png), [HOLD 1280×800](captures/games-hold-1280x800.png), [지연 390×800](captures/games-delayed-390x800.png) | 관측 정보가 적을 때 관측 카드를 내용 높이로 줄여 피치를 초점으로 둔다. 지연 화면은 마지막 수신 정보임을 밝히고 모바일에서도 정지가 보인다. | 현재 트리의 전체 상태 G2, 실물 카메라·경기 readback, G3 전체 근거 검토. |
+| 게임 보드: 경기장·공·로봇·골이 보이는가? | [진행 1280×800](captures/games-play-1280x800.png), [최초 1280×800](captures/games-initial-1280x800.png), [최초 390×800](captures/games-g3/games-initial-390x800.png), [지연 1280×800](captures/games-delayed-1280x800.png), [HOLD 1280×800](captures/games-hold-1280x800.png), [지연 390×800](captures/games-delayed-390x800.png), [G3 독회](#게임-보드-g3-독회--local-진행-중) | 최초·연결 오류 때 빈 피치에 이유를 표시한다. 데스크톱에서는 피치가 초점이라 관측보다 넓고, 전화에서는 점수·피치·관측이 같은 가용 폭으로 쌓인다. 지연 화면은 마지막 수신 정보임을 밝히고 정지가 첫 화면에 있다. | 현재 트리의 전체 상태 G2, 실물 카메라·경기 readback, G3 전체 근거 검토. |
 | 로봇 얼굴: 의도·주의·위험이 즉시 구분되는가? | [첫 기동](captures/face-first-boot-320x240.png), [정상](captures/face-nominal-320x240.png), [E-STOP](captures/face-estop-320x240.png), [배터리 위험](captures/face-battery-critical-320x240.png) (모두 320×240) | 현재 `emotion.info_screen` PIL 렌더러의 정보 카드 네 장에서 정상·위험의 형태·문구가 구분된다. | D-433 `rosy-face` 실제 설치·LCD 경로, 1.5m/각도/조도 판독, 만료 후 의도 GIF 복귀, G3 전체 근거 검토. |
 | 학습 검수: 원본과 편집 내용을 함께 볼 수 있는가? | [객체 1440px](captures/learning-width/learning-objects-1440.png), [객체 800px](captures/learning-width/learning-objects-800.png), [객체 390px](captures/learning-width/learning-objects-390.png), [픽셀 1440px](captures/learning-width/learning-pixels-1440.png), [픽셀 800px](captures/learning-width/learning-pixels-800.png), [픽셀 390px](captures/learning-width/learning-pixels-390.png) | 두 편집 화면의 캔버스·검수 창을 데스크톱에서 같은 폭으로 맞췄다. 좁은 화면에서는 두 창이 같은 가용 폭으로 쌓이고 가로 넘침이 없다. | 개발 도구의 다른 상태·실제 검수자 G3 독회. 로봇 현장 수용과 별도다. |
 | Pilot: 운전·팔 조작 상태와 정지가 보이는가? | [팔 2000×1200](captures/pilot-arm/pilot-arm-gripper-2000x1200.png), [팔 1200×2000](captures/pilot-arm/pilot-arm-gripper-1200x2000.png), [팔 390×844](captures/pilot-arm/pilot-arm-gripper-390x844.png), [기존 주행 기준선](../pilot-g2-baseline-2026-10-04/README.md) | 영상 없는 Gazebo 연습에서 빈 영상 칸 대신 조작부가 가용 폭을 쓰고 팔·그리퍼 창은 같은 폭이다. 전화에서는 같은 폭으로 쌓인다. E-stop은 세 폭 모두 첫 화면에 있다. | 주행·연결의 현재 트리 G2 전체 재확인, 실제 운전자 G3 독회. 기존 DEVICE 기능 확인을 UI/UX GO로 승격하지 않는다. |
@@ -45,12 +45,27 @@
 | 2. 증거 상태 | 느린 첫 응답, 수신 후 끊김, 로봇 연결 끊김, 안전 결측을 위 G2 캡처로 구분했다. | 각 값의 정상·지연·끊김·결측 전이 전체. |
 | 3. 색 | 정상 카드는 중립이고 안전 정지는 빨강, 영상 연결 불가는 주의색이다. | 다른 경보·현장 조명. |
 | 4. 위계 | [목표 확인창](captures/fleet-g3/fleet_goal_confirm_open.png)에서 보고 영역은 뒤로 물러나고 전송 선택이 올라온다. | 긴 목록과 현장 관제자의 시선 이동. |
-| 5. 불가역 | [목표 선택](captures/fleet-g3/fleet_goal_preconfirm.png)→[로봇·좌표 확인](captures/fleet-g3/fleet_goal_confirm_open.png)→취소를 재생했고 취소 전송 0을 단언한다. 비상 정지는 Accepted D-413의 즉시 접근 예외로 확인창 위에 남는다. | 실제 목표·정지 readback, 취소·전체 취소의 현장 절차. |
+| 5. 불가역 | [목표 선택](captures/fleet-g3/fleet_goal_preconfirm.png)→[로봇·좌표 확인](captures/fleet-g3/fleet_goal_confirm_open.png)→취소를 재생했고 취소 전송 0을 단언한다. 비상 정지는 Accepted D-414의 즉시 접근 예외로 확인창 위에 남는다. | 실제 목표·정지 readback, 취소·전체 취소의 현장 절차. |
 | 6. 어휘 | 탐색 상태를 원시 `NAVIGATING` 대신 `목표 활성`/`목표 남음`으로 구분한다. | 나머지 메시지의 운용자 독해. |
 | 7. 표면 질문 | 320px 기본 예외 목록에서 오류 로봇이 먼저 나오고 결측·정지 카드에서 개입 불가 이유가 보인다. | 현장 관제자가 여러 로봇의 다음 행동을 고르는 작업. |
 | 8. 표면 문법 | 기본 목록은 주의가 필요한 로봇부터 보여 주며 전체 목록은 별도 선택이다. | 모든 선언 상태에서 정상 숨김과 예외 우선순위. |
 
 여덟 항목 모두 **부분 근거**다. 이번 변경의 Fleet 브라우저 **3 passed**, Fleet 서버·팔레트 **60 passed**, Fleet 웹 Node **134 passed**, 각 Python 실행의 `known_failures.py` **0 NEW**였다. 실제 사이트 PC·카메라·로봇 readback과 현장 사용자 독회가 없어 G3는 HOLD다.
+
+### 게임 보드 G3 독회 — LOCAL 진행 중
+
+| D-153 항목 | 현재 근거 | 남은 판정 범위 |
+|---|---|---|
+| 1. 정직 | [최초](captures/games-initial-1280x800.png)는 점수를 `—`로 두고 피치에 대기를 말한다. [첫 연결 오류](captures/games-g3/games_board_first_error.png)는 이전 경기 정보가 있는 척하지 않는다. | 실제 카메라·로봇값의 결측과 정지 readback. |
+| 2. 증거 상태 | 최초 대기, [지연](captures/games-delayed-1280x800.png), [수신 후 연결 오류](captures/games-g3/games_board_host_disconnected.png)를 구분한다. 지연은 마지막 생성 나이를, 끊김은 현재 위치가 아님을 말한다. | 선언 상태와 각 값의 전이 전체. |
+| 3. 색 | 최초 대기는 중립 테두리, 연결 오류·정지는 위험색, 지연은 주의색이다. 경기장·공 팔레트는 고정 시각화 색이다. | 실제 조명에서 경고와 공 색의 구분, 나머지 상태. |
+| 4. 위계 | 1280px 피치가 관측 카드보다 넓고, 390px에서는 같은 가용 폭으로 쌓인다. 정지는 첫 화면에 있다. | 노트북 현장 관찰과 정보량 많은 관측. |
+| 5. 불가역 | [정지 실패·재시도](captures/games-g3/games_board_stop_retry.png)는 요청 실패를 알리고 재시도를 허용한다. 성공 문구도 요청 접수와 실제 정지 확인을 구분한다. D-306의 게임 정지 즉시 실행 예외를 유지한다. | 실제 두 로봇 정지 readback과 현장 조작. |
+| 6. 어휘 | 대기·지연·연결 오류·정지 결과를 한국어 평문으로 말한다. | 게임 호스트 운용자의 독해. |
+| 7. 표면 질문 | [진행](captures/games-play-1280x800.png)은 점수·피치·로봇·공을 보이고, 결측에는 답을 아는 척하지 않는다. | 실물 경기 관측과 모든 선언 상태. |
+| 8. 표면 문법 | `game-board`의 focal 문법에 따라 피치를 초점으로 두고, 정지 행은 1280/390px 첫 화면에 남는다. | 실제 노트북 사용 환경의 시선·거리. |
+
+여덟 항목 모두 **부분 근거**다. 현재 트리의 게임 보드 브라우저 **19 passed**, 게임 모듈 **113 passed**, `known_failures.py` **0 NEW**다. 캡처는 PreviewServer와 fixture payload의 LOCAL 증거이며 G3 GO나 실제 정지 증거가 아니다.
 
 학습 검수는 D-461의 병렬 원본·inspector 구조를 유지하면서 두 편집 창의 너비만 같게 했다. 현재 로컬 Chromium의 객체 작업 브라우저 **10 passed**, 픽셀 작업·반응형 계약 **14 passed**, 각 `known_failures.py` **0 NEW**였다. 1440/800/390px에서 두 창 너비와 가로 넘침을 검사했다. 이 캡처는 합성 검수 자료를 사용한 개발 도구 LOCAL 증거다.
 
@@ -75,7 +90,7 @@ Pilot 팔 화면은 카메라 없는 Gazebo fixture에서 빈 영상 자리 때�
 
 D-153이 이름 붙인 G1 시험 중 팔레트·토큰(스타일가이드 포함)·문법 **74 passed**, CORE 증거 **7 passed**를 현재 브랜치에서 다시 실행했고 `known_failures.py`는 0 NEW였다. `test_styleguide.py` 독립 파일은 현재 트리에 없고 스타일가이드 검사는 `shared/web/test/test_ui_token_contracts.py`에 있다. 이는 G1 코드 계약의 LOCAL 결과이며 G2/G3 판정은 별도다.
 
-게임 보드 브라우저 전체는 **18 passed**, 게임 모듈은 **113 passed**였다. 관측 카드 축소 뒤 진행·최초·HOLD·정지 적합 4 passed와 데스크톱·390px 배치 1 passed를 다시 확인했다. 이 화면들은 관측 frame 없는 fixture이며 실제 카메라와 로봇 상태를 나타내지 않는다.
+게임 보드 브라우저 전체는 현재 **19 passed**, 게임 모듈은 **113 passed**였다. 최초 1280/390px와 첫 연결 오류에서 피치 안의 명시적 대기·오류 문구를 확인했고, 정지 실패 뒤 재시도 시험의 관찰은 CSP에 걸리는 스크립트 대기 대신 DOM locator를 쓴다. 이 화면들은 관측 frame 없는 fixture이며 실제 카메라와 로봇 상태를 나타내지 않는다.
 
 얼굴 PIL 렌더러는 **169 passed**, 정보 카드 캡처 1 passed(기존 Pillow 사용 중단 예고 5건), `rosy-face` 호스트 시험은 **153 passed / 1 skipped**다. 모두 `known_failures.py` 0 NEW였다. 이 네 이미지는 렌더러 직접 호출이며 `rosy-face`의 설치·입력·실물 LCD 출력을 통과한 사진이 아니다. D-433은 현재 **Proposed**이므로 실행 경로의 최종 결정·수용으로 읽지 않는다.
 

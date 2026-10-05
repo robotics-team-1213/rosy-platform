@@ -175,6 +175,7 @@ def test_first_overlay_failure_has_no_last_match_claim():
             assert "마지막 수신 값" not in page.locator("#match-announcement").inner_text()
             assert page.locator("#home-score").inner_text() == "—"
             assert page.locator("#score-evidence").is_hidden()
+            assert page.locator("#field-evidence").inner_text() == "호스트 연결 오류 · 경기장 정보 없음"
             assert page.evaluate(
                 "document.documentElement.scrollWidth <= innerWidth && "
                 "document.documentElement.scrollHeight <= innerHeight"
@@ -184,6 +185,7 @@ def test_first_overlay_failure_has_no_last_match_claim():
             board.publish(_play_payload(), jpeg=None)
             page.wait_for_function("() => document.getElementById('phase')?.dataset.phase === 'play'")
             assert page.locator("#connection").inner_text() == "호스트 연결됨"
+            assert page.locator("#field-evidence").is_hidden()
             assert "경기 정보가 없습니다" not in page.locator("#match-announcement").inner_text()
             assert not errors
             browser.close()
@@ -243,7 +245,8 @@ def test_match_board_shows_lost_hold_state():
         server.close()
 
 
-def test_match_board_initial_state_before_any_publish():
+@pytest.mark.parametrize("width,height", [(1280, 800), (390, 800)])
+def test_match_board_initial_state_before_any_publish(width, height):
     """최초 기동 — publish 전 보드는 기본 안내만 보이고 아무 상태도 그리지 않는다."""
     pytest.importorskip("playwright.sync_api")
     from playwright.sync_api import sync_playwright
@@ -253,16 +256,19 @@ def test_match_board_initial_state_before_any_publish():
     url = server.start()
     try:
         with sync_playwright() as playwright:
-            browser, page, errors = _launch_board_page(playwright, url)
+            browser, page, errors = open_page(playwright, width, height)
+            page.goto(url, wait_until="domcontentloaded")
             page.wait_for_function(
                 "document.getElementById('phase')?.textContent === '대기'"
             )
             assert page.locator("#home-score").inner_text() == "—"
             assert page.locator("#connection").inner_text() == "경기 데이터 대기 중"
+            assert page.locator("#field-evidence").inner_text() == "경기장 정보 대기 중"
+            assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
             assert page.locator("#lost").is_hidden()
             assert page.locator("#markers li").count() == 0
             assert not errors, f"페이지 오류: {errors}"
-            save_temp_screenshot(page, "games_board_initial.png")
+            save_temp_screenshot(page, f"games_board_initial_{width}x{height}.png")
             browser.close()
     finally:
         server.close()
@@ -494,7 +500,7 @@ def test_stop_failure_is_visible_and_can_be_retried():
             save_temp_screenshot(page, "games_board_stop_retry.png")
             page.locator("#halt").focus()
             page.keyboard.press("Space")
-            page.wait_for_function("document.getElementById('halt-status')?.dataset.state === 'sent'")
+            page.locator('#halt-status[data-state="sent"]').wait_for()
             assert "접수" in page.locator("#halt-status").inner_text()
             assert page.evaluate("document.activeElement?.id") == "halt"
             assert calls == ["POST", "POST"]
