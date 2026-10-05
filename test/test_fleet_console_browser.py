@@ -959,6 +959,54 @@ def test_map_surface_explains_missing_map_and_recovers_without_stale_canvas(cons
         browser.close()
 
 
+def test_fresh_rosy_cam_frame_becomes_site_map_background_then_expires(console_url):
+    from playwright.sync_api import sync_playwright
+
+    api = {
+        "/api/fleet/state": EMPTY_SNAPSHOT,
+        "/api/fleet/map": (503, {"detail": {"code": "MAP_UNAVAILABLE"}}),
+        "/api/fleet/site-map": {"maps": [{"map_id": "map_v2_fleet",
+                                      "polygon_m": [[0, 0], [1, 0], [1, 1], [0, 1]],
+                                      "bounds_m": {"min_x": 0, "min_y": 0,
+                                                   "max_x": 1, "max_y": 1}}]},
+        "/api/fleet/calibrations": {"calibrations": [{
+            "source_id": "ceiling_north", "map_id": "map_v2_fleet",
+            "calibration_revision": "paint-test", "image": {"width": 1280, "height": 720},
+            "lens": {"kind": "wide", "focal_mm": 2.2, "hfov_deg": 104.1},
+            "map_to_image": [1000, 0, 100, 0, 600, 50, 0, 0, 1]}]},
+        "/api/fleet/vision/sources": {"sources": ["ceiling_north"]},
+        "/api/fleet/vision/lease": {"source_id": "ceiling_north", "lease": "test-lease",
+                                     "frame_path": "/api/vision/sources/ceiling_north/frame", "expires_in_s": 60},
+    }
+    frame_age = {"ms": "20"}
+    with sync_playwright() as playwright:
+        browser, page, errors = _open_console(
+            playwright, api,
+            init_script="sessionStorage.setItem('rosy-console-token', 'test-token')")
+
+        def serve_frame(route):
+            route.fulfill(status=200, content_type="image/svg+xml",
+                          body='<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720">'
+                               '<rect width="1280" height="720" fill="#bf2030"/></svg>',
+                          headers={"X-Frame-Rectified": "false", "X-Frame-Seq": "42",
+                                   "X-Frame-Age-Ms": frame_age["ms"],
+                                   "X-Source-Lens": "kind=wide;focal_mm=2.2;hfov_deg=104.1"})
+
+        page.route("**/api/vision/sources/ceiling_north/frame", serve_frame)
+        page.goto(console_url, wait_until="networkidle")
+        page.wait_for_function("() => document.querySelector('#map-tag')?.textContent.includes('paint-test')")
+        assert page.locator("#map-camera").is_visible()
+        assert page.evaluate("() => { const c = document.querySelector('#map-canvas'); "
+                             "const p = c.getContext('2d').getImageData(10, 10, 1, 1).data; "
+                             "return p[0] > 150 && p[1] < 100 && p[2] < 100; }")
+        frame_age["ms"] = "4000"
+        page.wait_for_function("() => document.querySelector('#map-camera').hidden", timeout=7000)
+        page.wait_for_function("() => !document.querySelector('#map-tag')?.textContent.includes('paint-test')",
+                               timeout=7000)
+        assert not errors
+        browser.close()
+
+
 # --- D-224: 예외 문법의 키보드 어휘 — ↑/↓ 순회 · Enter 목표 · Escape 해소 ----
 
 def test_keyboard_traverses_the_roster_and_arms_a_goal(console_url):
