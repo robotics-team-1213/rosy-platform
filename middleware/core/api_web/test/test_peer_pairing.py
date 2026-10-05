@@ -170,10 +170,10 @@ class BoundedPeer(unittest.TestCase):
             self.receiver.session(grant, fields, self.sign("session-request", fields))
         self.assertEqual(1, len(deps.auth_entries(self.svc.config)))
 
-    def test_explicit_revoke_cancels_issued_sessions_and_four_session_limit(self):
+    def test_explicit_revoke_cancels_issued_sessions_and_eight_session_limit(self):
         _, grant = self.grant()
         ids = []
-        for _ in range(4):
+        for _ in range(8):
             fields = self.receiver.challenge(grant)["fields"]
             ids.append(self.receiver.session(grant, fields, self.sign("session-request", fields))["id"])
         fields = self.receiver.challenge(grant)["fields"]

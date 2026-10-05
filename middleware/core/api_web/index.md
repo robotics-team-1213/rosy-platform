@@ -30,8 +30,8 @@
 
 ## 최근 기록
 
+- 2026-10-05 · uncommitted · fix(peer-pairing): 관계당 활성 세션 상한 4→8
 - 2026-10-05 · uncommitted · fix(api): align description with Fleet CAP-001 contract version
 - 2026-10-05 · uncommitted · fix(pairing): 구버전 TLS 검증 거절 순서
 - 2026-10-05 · uncommitted · fix(api): 통합 계약 v1.104 설명 정합
 - 2026-10-05 · uncommitted · docs(api): 무마커 시작점 계약 v1.103 표시
-- 2026-10-05 · uncommitted · feat(vision): D-368 운전자 MJPEG 스트림 라우트와 teleop 훅

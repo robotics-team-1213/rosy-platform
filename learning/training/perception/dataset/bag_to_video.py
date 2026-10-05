@@ -21,6 +21,8 @@ stamp (when the image was captured) and the bag log time (when the recorder got 
       teleop/intent               CORE's teleop decision (rosy.teleop.intent/1 JSON, D-411)
       odom                        {"x" m, "y" m, "yaw" rad}
       scan                        {"stamp_ns"}; the ranges are row i of .scan.npz
+      line/keep_debug            selected boundaries, strategy, target and paint source
+                                  (unreviewed diagnostics, never ground truth)
       line/observation,
       perception/learned/shadow   the decoded JSON payload plus "stamp_ns" (int ns, the
                                   payload's own "stamp", = its source image's header stamp)
@@ -55,7 +57,7 @@ import cv2
 import numpy as np
 
 import extract
-from control.recording import CAMERA_TOPIC, SHADOW_TOPIC, SIDE_TOPICS
+from control.recording import CAMERA_TOPIC, KEEP_DEBUG_TOPIC, SHADOW_TOPIC, SIDE_TOPICS
 
 SCHEMA = "rosy.teleop.video/1"
 ODOM_TOPIC = "odom"
@@ -65,7 +67,7 @@ SCAN_TOPIC = "scan"
 INTENT_TOPIC = "teleop/intent"
 PIX_FMT = "yuv420p"
 # Evidence stamped with its source image's header stamp (see the module docstring).
-STAMPED_TOPICS = ("line/observation", SHADOW_TOPIC)
+STAMPED_TOPICS = ("line/observation", SHADOW_TOPIC, KEEP_DEBUG_TOPIC)
 STAMP_TOL_NS = 1_000             # payload stamp vs frame header stamp
 # Only this payload "source" is a frame's stamped evidence (IR_LINE shares the topic).
 STAMPED_SOURCES = {"line/observation": "CAMERA_LINE"}
@@ -105,7 +107,7 @@ def _stamp_ns(msg) -> int:
 
 
 def _side_name(topic: str):
-    return next((n for n in (*SIDE_TOPICS, ODOM_TOPIC, SCAN_TOPIC, INTENT_TOPIC)
+    return next((n for n in (*SIDE_TOPICS, KEEP_DEBUG_TOPIC, ODOM_TOPIC, SCAN_TOPIC, INTENT_TOPIC)
                  if extract._topic_is(topic, n)), None)
 
 
@@ -421,7 +423,7 @@ def main(argv=None) -> int:
                   "duration_s": round(duration, 3), "bytes": video.stat().st_size,
                   "encode_s": round(encode_s, 2)},
         "sidecar": {"file": rows_path.name,
-                    "match": "stamped evidence: payload stamp = frame header stamp (+-1 ms), "
+                    "match": "stamped evidence: payload stamp = frame header stamp (+-1 us), "
                              "logged after the capture and <= 0.5 s after the frame's "
                              "log time; other topics: latest at or "
                              "before the frame's bag log time",

@@ -82,6 +82,9 @@ A hold is evaluated before the runtime starts, and its verdict is specifically "
 
 v1 maps the concept OS objects onto CORE + D-62 slices (D-65). Code names below are the types that will hold this data; they are not a second runtime.
 
+### Frame provenance headers
+The `X-Rosy-*` response headers CORE attaches to each pulled camera frame — source, sequence, capture time, frame id, and variant — proving which sensor produced the frame and which display variant (raw or annotated) it is (the MJPEG driver stream carries the same provenance per part inside the multipart body). Operator screens validate each pulled frame against them, so any relay between CORE and a screen must preserve them verbatim: a 200 response carrying an intact JPEG but no provenance headers is a contract failure the consuming screen rejects, not a working frame.
+
 ### Node
 The computer that runs CORE — hostname, architecture, OS, software version, runtime mode, and active slices.
 
