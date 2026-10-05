@@ -6067,6 +6067,10 @@ osy-d395-s1d\`.
 - 증거: candidate840 Fleet CI 16 FAIL을 보존했다. 호스트 red는 동일 TrajectoryCommand NameError, 명시 flag 후 관련 108 PASS·1 SKIP·0 NEW다. 새 독립 회귀도 PASS. 041은 ABI314 양쪽 PASS와 서명까지 확인했으나 활성화하지 않았다. docs/validation/line-release-2026-10-05/ci-followup.md.
 - gate 변화: HOST 회귀만 PASS. 수정된 정확한 SHA의 CI·ARM64 빌드·새 장치 배포를 다시 확인한다. 자동 차선 주행은 NOT_RUN, FIELD 수용은 HOLD다.
 
+## 2026-10-05 · uncommitted · docs(line): record signed 042 deployment and automatic HOLD
+- 변경: docs/validation/line-remote-2026-10-05/deployment.md records both installed runtimes, manual steering and actual automatic-mode API trial separately.
+- 증거: CI 37282901412 and ARM64 build 37282981358 success at 07dc89f20; both process cwd 042; eight automatic-state samples HOLD nominal_ground_requires_driver with zero velocity, then OFF/IDLE; own sessions logout 204.
+- gate 변화: DEVICE signed install verified; automatic motion and FIELD remain unverified. Console line-follow tab absent remains unresolved.
 ## 2026-10-05 · uncommitted · uiux: keep one robot entry and quiet the cell link
 
 - 변경: 기본 /dashboard에서 기존 종합 화면 안내를 거두었다. #compatibility 경로와 종합 화면은 유지한다. 관제 머리의 Cell 작업 링크는 같은 주소와 격자 자리에서 조용한 버튼 면을 쓴다.
