@@ -611,3 +611,29 @@ def test_logs_only_reconcile_exact_unrecoverable_aid_record(mutation):
     elif mutation == "other_delete":
         corrected = new
     assert harness.is_append_only(baseline, corrected) is (mutation == "exact")
+
+
+@pytest.mark.parametrize("mutation", ["exact", "old", "new", "missing", "other_edit", "other_delete", "unknown_pair"])
+def test_logs_only_reconcile_exact_committed_omx_runtime_record(mutation):
+    old = '## 2026-10-05 · feat/omx-policy-runtime-journal · 정책 세션과 원본 runtime 결선\n\n- 변경: 단독 SIM learned_policy owner에만 연결, 단일 관측 전달과 watchdog lease 검증, callback 선등록과 늦은 원본 이벤트 보존, 설치 파일 바이트 기록, I/O 후 전체 권한/원본 source 경계 검증.\n- 검증: 관련 HOST 585 PASS/4 SKIP/NEW0; 격리 Jazzy 기존 runtime 6 PASS. 새 실제 ROS 정책 결선은 관측 만료로 거부돼 수용 보류. 근거 X:/DevTemp/policy-runtime/.\n- 범위: SOURCE/HOST 개발. 설치·추론·Fleet 부모 결과·장치·물리 수용은 별도이며 운영 설정 변경 없음.'
+    new = '## 2026-10-05 · c2425e6ea · 정책 세션과 원본 runtime 결선\n\n- 변경: 단독 SIM learned_policy owner에만 연결, 단일 관측 전달과 watchdog lease 검증, callback 선등록과 늦은 원본 이벤트 보존, 설치 파일 바이트 기록, I/O 후 전체 권한/원본 source 경계 검증.\n- 검증: 관련 HOST 585 PASS/4 SKIP/NEW0; 격리 Jazzy 기존 runtime 6 PASS. 새 실제 ROS 정책 결선은 관측 만료로 거부돼 수용 보류. 근거 X:/DevTemp/policy-runtime/.\n- gate 변화: SOURCE/HOST 개발. 설치·추론·Fleet 부모 결과·장치·물리 수용은 별도이며 운영 설정 변경 없음.'
+    baseline = GOOD_LOG + "\n\n" + old
+    corrected = GOOD_LOG + "\n\n" + new
+    if mutation == "old":
+        baseline = baseline.replace("585 PASS", "999 PASS")
+    elif mutation == "new":
+        corrected = corrected.replace("수용 보류", "수용 완료")
+    elif mutation == "missing":
+        corrected = GOOD_LOG
+    elif mutation == "other_edit":
+        corrected = corrected.replace("- 변경: a", "- 변경: altered")
+    elif mutation == "other_delete":
+        corrected = new
+    elif mutation == "unknown_pair":
+        baseline = baseline.replace("585 PASS", "999 PASS")
+        corrected = corrected.replace("585 PASS", "999 PASS")
+    assert harness.is_append_only(baseline, corrected) is (mutation == "exact")
+    assert harness.validate_log(new) == []
+    assert any("malformed heading" in error for error in harness.validate_log(old))
+    assert any("missing '- gate 변화:'" in error
+               for error in harness.validate_log(new.replace("- gate 변화:", "- 범위:")))

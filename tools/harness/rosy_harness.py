@@ -45,6 +45,9 @@ UNCOMMITTED = "uncommitted"
 # The original is retained in the private landing evidence, and the corrected
 # entry cites its source commit without claiming the lost prose was recovered.
 KNOWN_LOG_ENCODING_REPAIRS = {
+    # Exact committed c2425 OMX heading/field repair; body evidence unchanged.
+    "a982ed57cb8e69bbc509ba636d3c5e3cf96d441c23c010304ffbc18ab67a4b19":
+        "33858a56f2c9d58edbcae2370a6898b0989ad525e9d49214ee6846d182bfbdf5",
     # Exact imported SIM AID journal repair; no execution evidence inferred.
     "e2f80dbdfc41bdcff21a27d50ddd7ae909a32d02270c5db525808c6d9977883d":
         "d0cee132dfe7dc874ae52e59707f932d496f5b16c62975e8bf3733bacc891556",

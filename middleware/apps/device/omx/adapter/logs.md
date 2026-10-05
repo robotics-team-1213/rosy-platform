@@ -401,8 +401,14 @@
 - 증거: test_shell_assets.py 4 passed, known_failures NEW 0.
 - gate 변화: SOURCE/LOCAL. 실제 장치·FIELD 검증은 별도다.
 
-## 2026-10-05 · feat/omx-policy-runtime-journal · 정책 세션과 원본 runtime 결선
+## 2026-10-05 · c2425e6ea · 정책 세션과 원본 runtime 결선
 
 - 변경: 단독 SIM learned_policy owner에만 연결, 단일 관측 전달과 watchdog lease 검증, callback 선등록과 늦은 원본 이벤트 보존, 설치 파일 바이트 기록, I/O 후 전체 권한/원본 source 경계 검증.
 - 검증: 관련 HOST 585 PASS/4 SKIP/NEW0; 격리 Jazzy 기존 runtime 6 PASS. 새 실제 ROS 정책 결선은 관측 만료로 거부돼 수용 보류. 근거 X:/DevTemp/policy-runtime/.
-- 범위: SOURCE/HOST 개발. 설치·추론·Fleet 부모 결과·장치·물리 수용은 별도이며 운영 설정 변경 없음.
+- gate 변화: SOURCE/HOST 개발. 설치·추론·Fleet 부모 결과·장치·물리 수용은 별도이며 운영 설정 변경 없음.
+
+## 2026-10-05 · uncommitted · fix(harness): OMX 커밋 저널의 정확한 형식 복구
+
+- 변경: c2425e6ea의 이미 커밋된 저널에 한정해 branch 이름 헤딩을 원본 커밋으로 바꾸고 범위 필드를 gate 변화로 정정했다. 기존 본문 증거·수용 보류·운영 설정 미변경 사실은 그대로 보존한다. 기존 정확한 SHA 쌍 복구 장치에 새 예외를 등록했으며 검사 무변경으로 주장하지 않는다.
+- 증거: 불변 원문은 c2425e6eac860d3f670cef0520377e4e4c2042d5와 a41b149db083ca18d3de7bab4ad59d6d76b11c63의 logs.md에 남는다. 정규화 원본 블록 SHA256: `a982ed57cb8e69bbc509ba636d3c5e3cf96d441c23c010304ffbc18ab67a4b19`. 정규화 정정 블록 SHA256: `33858a56f2c9d58edbcae2370a6898b0989ad525e9d49214ee6846d182bfbdf5`. 정확한 쌍만 허용하고 원문·정정 변형, 다른 항목 수정·삭제, 알 수 없는 쌍을 거부하는 실제 회귀 검증을 수행한다.
+- gate 변화: SOURCE/LOCAL 감사 형식 정정. 원래 HOST 수치와 ROS 수용 보류를 승격하지 않으며 DEVICE/FIELD 수용이나 자동 활성화 근거를 추가하지 않는다.
