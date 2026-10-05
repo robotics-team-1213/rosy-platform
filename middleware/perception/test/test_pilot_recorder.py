@@ -126,7 +126,8 @@ def test_bag_command_records_the_d411_topics_namespaced_and_dies_with_its_parent
     assert cmd[4:7] == ["ros2", "bag", "record"]
     topics = cmd[cmd.index("--topics") + 1:]
     assert topics == ["/rosy_01/camera/front/compressed", "/rosy_01/cmd_vel", "/rosy_01/odom",
-                      "/rosy_01/scan", "/rosy_01/line/observation", "/rosy_01/teleop/intent"]
+                      "/rosy_01/scan", "/rosy_01/line/observation", "/rosy_01/teleop/intent",
+                      "/rosy_01/line/keep_debug"]
 
 
 def test_annotated_recording_preserves_raw_and_separates_model_evidence(tmp_path):
@@ -146,6 +147,19 @@ def test_annotated_recording_preserves_raw_and_separates_model_evidence(tmp_path
     rig.rec.stop('requested')
     rig.finish()
     assert _manifest(tmp_path / rid).preview_mode == 'annotated'
+
+
+@pytest.mark.parametrize('preview_mode', ['raw', 'annotated'])
+def test_lane_diagnostics_survive_recording_without_annotated_preview(tmp_path, preview_mode):
+    rig = Rig(tmp_path)
+    ok, rid = rig.rec.start(preview_mode=preview_mode)
+    assert ok
+    topics = rig.cmds[-1][rig.cmds[-1].index('--topics') + 1:]
+    assert topics.count('/rosy_01/line/keep_debug') == 1
+    assert 'line/keep_debug' in _meta(tmp_path / rid)['topics']
+    if preview_mode == 'raw':
+        assert '/rosy_01/camera/preview/compressed' not in topics
+        assert _meta(tmp_path / rid)['annotation_origin'] == 'none'
 
 
 def test_raw_default_and_unknown_recording_options_cannot_add_annotations(tmp_path):

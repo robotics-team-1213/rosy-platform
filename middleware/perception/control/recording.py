@@ -27,6 +27,7 @@ SCHEMA = "rosy.recording.session/1"
 # Must equal control.sensing.perception.learned.shadow.TOPIC (not imported
 # here: that package pulls numpy/cv2; a test asserts the two stay equal).
 SHADOW_TOPIC = "perception/learned/shadow"
+KEEP_DEBUG_TOPIC = "line/keep_debug"  # source-image diagnostics, never training labels
 SHADOW_SCHEMA = "rosy.perception.learned_shadow/1"  # == shadow.SHADOW_SCHEMA
 
 # camera/front is the raw sensor_msgs/Image published by

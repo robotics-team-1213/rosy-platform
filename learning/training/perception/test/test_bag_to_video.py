@@ -116,7 +116,8 @@ def _write_session(root, name="20260930T124745Z_rosy-pinky-test", lidar=False,
                 for topic, key in (("line/observation", "error"),
                                    ("perception/learned/shadow", "error_delta")):
                     events.append((t + log_off, NS + topic, st_s, {"data": json.dumps(
-                        {key: i / 10, "visible": True, "stamp": t + stamp_off})}))
+                        {key: i / 10, "visible": True, "stamp": t + stamp_off,
+                         **({'source': 'CAMERA_LINE'} if topic == 'line/observation' else {})})}))
             for k, t in enumerate(SCAN_S if lidar else []):
                 events.append((t, NS + "scan", sc_s, {
                     "header": {"stamp": {"sec": 1, "nanosec": _ns(t) - 1_000_000_000},
@@ -234,7 +235,7 @@ def test_stamped_evidence_attaches_by_payload_stamp_within_half_a_second(tmp_pat
         2: (0.2, 0.0),        # logged after frame 3's image (1.376 s), 0.199 s after frame 2
         3: (0.004, 0.005),    # payload stamp 5 ms off every frame stamp -> null
         4: (0.6, 0.0),        # logged 0.599 s after its frame -> null
-        1: (0.0005, 0.0009),  # stamp within 1 ms, logged after the capture but 0.5 ms
+        1: (0.0005, 0.0000004),  # stamp within 1 us, logged after capture but 0.5 ms
                               # before the image itself reached the bag -> still frame 1's
         5: (-0.002, 0.0),     # logged before its frame was even captured -> null
     }
@@ -251,7 +252,7 @@ def test_stamped_evidence_attaches_by_payload_stamp_within_half_a_second(tmp_pat
     assert rows[2]["dt"]["line/observation"] == pytest.approx(0.199, abs=1e-4)
     # frame 3 must not borrow frame 2's late observation, which is logged after frame 3
     for i in (3, 4, 5):
-        for topic in b2v.STAMPED_TOPICS:
+        for topic in ('line/observation', 'perception/learned/shadow'):
             assert rows[i]["side"][topic] is None and rows[i]["dt"][topic] is None, (i, topic)
 
 
@@ -371,9 +372,11 @@ def test_extract_session_uses_header_stamps_and_the_two_class_clock_rule(tmp_pat
         assert [r["t"] for r in rows] == pytest.approx(FRAME_S, abs=1e-9)
         assert [r["log_ns"] for r in rows] == [_ns(t + 0.001) for t in FRAME_S]
         for i, r in enumerate(rows):
-            # this fixture's line/observation has no source: not CAMERA_LINE, never
-            # evidence of an image (audit 2026-10-01); the shadow result is
-            assert r["side"].get("line/observation") is None
+            # CAMERA_LINE evidence uses the same source-image clock rule as shadow.
+            if i in (2, 3):
+                assert r["side"].get("line/observation") is None
+            else:
+                assert r['side']['line/observation']['error'] == pytest.approx(i / 10)
             for topic, key in (("perception/learned/shadow", "error_delta"),):
                 value = r["side"].get(topic)
                 if i in (2, 3):
@@ -506,3 +509,19 @@ def test_teleop_intent_is_a_side_topic():
     side = {"teleop/intent": ([900_000_000], [{"accepted": True, "linear": 0.1}])}
     (row,) = list(b2v.sidecar_rows(frames, side, 0.5))
     assert row["side"]["teleop/intent"]["accepted"] is True
+
+
+@pytest.mark.parametrize('stamp', [1.0, 0.9, None])
+def test_keep_debug_is_bound_to_its_source_image_not_arrival(stamp):
+    assert b2v._side_name('/rosy_01/line/keep_debug') == 'line/keep_debug'
+    frames = [{'log_ns': 1_000_000_000, 'stamp_ns': 1_000_000_000}]
+    debug = {'stamp': stamp, 'target_m': [0.22, -0.04], 'strategy': 'right_only',
+             'paint_source_used': 'threshold', 'confidence': 0.6}
+    side = {'line/keep_debug': ([1_040_000_000], [debug])}
+    row = next(b2v.sidecar_rows(frames, side, 0.5))
+    if stamp == 1.0:
+        assert row['side']['line/keep_debug']['target_m'] == [0.22, -0.04]
+        assert row['side']['line/keep_debug']['stamp_ns'] == 1_000_000_000
+        assert row['dt']['line/keep_debug'] == pytest.approx(0.04)
+    else:
+        assert row['side']['line/keep_debug'] is None

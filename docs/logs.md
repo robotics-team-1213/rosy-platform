@@ -6114,6 +6114,17 @@ osy-d395-s1d\`.
 - Evidence: source inspection; departure-time synchronized trace unavailable. Focused suite: 109 passed and 2 log-format failures; both repaired checks passed on rerun (21 warnings), known_failures: 0 NEW for repaired checks.
 - Gate: no runtime change; departure root cause and FIELD acceptance remain unproven. Design status Proposed.
 
+## 2026-10-05 · uncommitted · docs(adr): D-467 worktree retirement and X: scratch capacity
+
+- 변경: D-372의 병합·청결 worktree 종료 원칙을 경로·잠금·프로세스·현재 main 조상 확인으로 구체화하고, X:의 원본 증거와 재생성 임시 파일을 구분하는 용량 정리 절차를 D-467로 기록한다.
+- 증거: 병합된 깨끗한 F: worktree 35개를 Git으로 제거했다. X:의 불완전 ZIP 네 개는 자동 승인 검토가 거부해 삭제하지 않았으며 여유 용량 확보로 계산하지 않는다.
+- gate 변화: 저장소 작업 절차만 채택. 제품 런타임·기기·현장 수용 변경 없음.
+
+## 2026-10-05 · uncommitted · fix(lane): preserve source-frame departure diagnostics
+- Change: include keeper diagnostics in raw Pilot recordings and preserve them through MCAP conversion/frame extraction; no label authority or motion changes.
+- Evidence: related 206 PASS, independent 87 PASS, 0 NEW; installed annotated stationary recording yielded 149 matched frames, all zero commands. docs/validation/lane-evidence-2026-10-05/result.md.
+- Gate: SOURCE regression verified; new recorder deployment and physical departure fix/ FIELD acceptance remain unverified.
+
 ## 2026-10-05 · uncommitted · fix(site): Fleet and Vision listen ports come from the site setting
 - 변경: Fleet과 Vision의 컨테이너 수신 포트가 ROSY_FLEET_PORT와 ROSY_VISION_PORT다. Compose 명령, 헬스체크, Caddy 업스트림, 페어링 동기화 주소가 그 값을 쓴다. 코드 기본값은 없다. 두 포트는 공개하지 않는다.
 - 증거: test/test_site_firewall.py test/test_site_preflight.py test/test_site_pairing_deploy.py test/test_site_task_queue_deploy.py test/test_site_map_fit_deploy.py — 113 passed. known_failures 0 new. 호스트 시험이며 현장 배포는 없다.
