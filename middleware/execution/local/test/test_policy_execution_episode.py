@@ -210,6 +210,30 @@ def test_captured_source_hash_is_checked_after_first_manifest_verification(tmp_p
     with pytest.raises(ValueError):omx_execution.validate_profile(doc,root=root)
 
 
+def test_profile_checks_every_reference_from_one_captured_file_read(tmp_path,monkeypatch):
+    doc,root,_,_=produce(tmp_path)
+    from collections import Counter
+    from rosy.contracts.learning.omx_execution import validate_profile
+    opened=[]
+    original=Path.open
+    original_read=Path.read_bytes
+    reading=False
+    def capture(file,*args,**kwargs):
+        if not reading and file.is_relative_to(root) and args and args[0]=='rb':
+            opened.append(file.relative_to(root).as_posix())
+        return original(file,*args,**kwargs)
+    def capture_bytes(file):
+        nonlocal reading
+        if file.is_relative_to(root):opened.append(file.relative_to(root).as_posix())
+        reading=True
+        try:return original_read(file)
+        finally:reading=False
+    monkeypatch.setattr(Path,'open',capture)
+    monkeypatch.setattr(Path,'read_bytes',capture_bytes)
+    validate_profile(doc,root=root)
+    assert Counter(opened)==Counter({ref['path']:1 for ref in doc['sources']})
+
+
 @pytest.mark.parametrize('mutation', ['negative_time','duration','start_tolerance','observed_clock',
                                     'binding_normalization','binding_timing','native_clock','native_feedback',
                                     'binding_camera_scalar'])

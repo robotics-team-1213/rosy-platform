@@ -19,7 +19,9 @@ def sha(value):
 
 
 def _validate_profile(doc, *, root):
-    value = validate_episode(doc, root=root)
+    # Validate reference metadata first; capture and hash each source once
+    # below. Streams/outcomes must then match those exact captured references.
+    value = validate_episode(doc)
     if value['profile'] != 'omx_policy_execution_v1':
         raise ValueError('OMX execution profile required')
     root = Path(root).resolve()
@@ -31,8 +33,11 @@ def _validate_profile(doc, *, root):
     payloads = {}
     for name in refs:
         path = root/name
-        if path.is_symlink() or any(parent.is_symlink() for parent in path.parents if parent != root):
+        if path.is_symlink() or any(parent.is_symlink() for parent in path.parents):
             raise ValueError('execution source symlink rejected')
+        resolved = path.resolve()
+        if not resolved.is_relative_to(root) or not resolved.is_file():
+            raise ValueError('execution source escapes root or is missing')
         payloads[name] = path.read_bytes()
         if len(payloads[name]) != refs[name]['bytes'] or sha(payloads[name]) != refs[name]['sha256']:
             raise ValueError('captured original execution source changed')
