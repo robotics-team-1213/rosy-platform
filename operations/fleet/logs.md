@@ -1887,3 +1887,9 @@
 - 변경: 내부 증거 수신기의 기존 세 profile validator 매핑을 learning artifact 계약이 소유한다. Fleet의 로봇 이름 예외를 추가하지 않으며 검증·wire 의미를 유지한다.
 - 증거: 기존 main 두 차단을 재현했다. 독립 규모 검토에서 Fleet 36,234줄을 승인했고 모든 파일/패키지 기준을 유지한다. 수신기·literal·artifact 검사 43 PASS, 1 SKIP, 차단 회귀 2 PASS. docs/validation/line-release-2026-10-05/result.md에 책임별 증가를 기록했다.
 - gate 변화: SOURCE 배포 검사 차단 수정이며 기기·FIELD 수용은 별도다. 차선 자동 주행은 NOT_RUN을 유지한다.
+
+## 2026-10-05 · uncommitted · fix(test): bootstrap Fleet cell process before collection
+
+- 변경: Fleet 공통 테스트 초기화에 palletizing source 경로를 추가한다. 다른 테스트가 나중에 추가하던 경로에 의존하지 않는다. 제품 코드나 검사 제외는 바꾸지 않는다.
+- 증거: shared main과 작업 트리에서 cell app 두 파일 단독 수집이 모두 2 ERROR로 재현됐다. 수정 후 API·실제 로컬 Chromium·compiler 회귀 30 PASS, known_failures 0 NEW (`X:/DevTemp/line-remote-20261005/cell-green.txt`). 배포 gate 증거는 docs/validation/line-release-2026-10-05/ci-followup.md에 기록했다.
+- gate 변화: HOST 수집 및 회귀 PASS. 새 CI·서명 릴리스와 기기·자동 주행·FIELD 수용은 별도 검증한다.
