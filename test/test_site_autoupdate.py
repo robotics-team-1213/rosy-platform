@@ -872,9 +872,25 @@ def test_truncated_http_body_is_retryable(tmp_path, operation):
     response = http.client.HTTPResponse(Socket())
     response.begin()
     client = upd.Http()
-    client._open = lambda url: response
+    client._open = lambda url, **kwargs: response
     with pytest.raises(upd.Transient):
         if operation == 'get':
             client.get('https://example.invalid', 100)
         else:
             client.download('https://example.invalid', tmp_path / 'download')
+
+
+def test_large_asset_download_gets_longer_idle_timeout(tmp_path):
+    class Opener:
+        def __init__(self):
+            self.timeouts = []
+
+        def open(self, request, timeout):
+            self.timeouts.append(timeout)
+            return io.BytesIO(b'ok')
+
+    client = upd.Http()
+    client.opener = Opener()
+    client.get('https://example.invalid/release.json', 100)
+    client.download('https://example.invalid/part00', tmp_path / 'part00')
+    assert client.opener.timeouts == [60, 300]
