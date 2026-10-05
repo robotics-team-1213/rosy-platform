@@ -17,6 +17,7 @@ import re
 import subprocess
 import sys
 import tarfile
+import tempfile
 import time
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -304,12 +305,20 @@ def load_config(path):
     return config
 
 
+def configure_environment(folder):
+    folder = Path(folder)
+    folder.mkdir(parents=True, exist_ok=True)
+    os.environ.update(TEMP=str(folder), TMP=str(folder), PYTHONDONTWRITEBYTECODE="1")
+    tempfile.tempdir = str(folder)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", type=Path, required=True)
     args = parser.parse_args()
     try:
         config = load_config(args.config)
+        configure_environment(config["state_dir"])
         sys.path.insert(0, str(ROOT / "tools/release"))
         with locked(Path(config["state_dir"])):
             coordinator = Coordinator(config)
