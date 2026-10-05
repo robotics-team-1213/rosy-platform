@@ -1942,3 +1942,9 @@
 - 변경: Caddy가 사설망 발신자의 Fleet 카메라 source·lease 요청에만 내부 표시를 붙이고, Fleet는 해당 두 경로에서만 토큰 없는 viewer lease를 발급한다. 콘솔은 인증된 관제 세션이 없어도 카메라를 갱신한다.
 - 증거: Fleet 권한 경계 테스트, Caddyfile adapt, 브라우저 JS 구문 및 관련 테스트. 실사이트 배포·영상 readback은 별도 확인이 필요하다.
 - gate 변화: LOCAL 검증만 추가. SITE/FIELD 상태는 그대로 둔다.
+
+## 2026-10-06 · uncommitted · uiux(fleet): 동등한 창 너비 통일
+
+- 변경: Fleet 현장 지도와 개입 영역을 같은 폭으로 맞췄다. 넓은 화면에서 나란한 지도·카메라 창도 같은 폭이다. 320px 상단바는 Cell 작업을 설정 안으로 옮겨 브랜드와 비상 정지의 가독성을 확보했다.
+- 증거: 1920×1080 Fleet 브라우저 71 passed, 너비 단언 포함 적합 검사 1 passed, known_failures 0 new. 320px 화면에서 가로 넘침과 상단바 겹침이 없고 Cell 작업 접근 가능. 캡처는 X: 관리 세션 evidence에 있다.
+- gate 변화: LOCAL UI 증거만 추가. D-153 G3 사람 평가 및 SITE/FIELD 수용은 미완료.

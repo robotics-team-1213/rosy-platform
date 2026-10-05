@@ -178,7 +178,7 @@ body {
 
 main {
   display: grid;
-  grid-template-columns: minmax(0, 0.43fr) minmax(0, 0.57fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--space-4);
   padding: var(--space-4) var(--space-5) var(--space-6);
   align-items: start;
@@ -187,9 +187,9 @@ main {
 /* 현장과 개입 영역을 나눈다. 로봇 목록은 오른쪽에서 독립적으로 스크롤한다.
    두 열은 wide 단에서만이다 — 그 아래는 한 열이다(62rem 겹침에서 생기던 암시적 열을 없앤다). */
 @media (width >= 64rem) {
-  /* 지도 칸은 main 폭의 43%뿐이다. 그 안을 다시 둘로 나누면 카메라가 좁아져
-     제목이 줄바꿈되고 영상이 작아진다(1440px에서 약 240px). 그래서 카메라를
-     지도 아래에 쌓고, 지도 칸이 충분히 넓은 110rem 이상에서만 옆에 둔다. */
+  main { padding-bottom: var(--space-4); }
+  /* 지도와 개입 칸은 같은 폭이다. 카메라는 지도 아래에 쌓고,
+     지도 칸이 충분히 넓은 110rem 이상에서만 옆에 둔다. */
   .console-primary > .panel[aria-labelledby="map-heading"] {
     grid-column: 1;
     grid-row: 2;
@@ -215,7 +215,7 @@ main {
     display: grid;
     /* 2026-10-02 회차 — 1fr:1fr에서는 1920 관제 PC에서 지도가 374px(로스터 1058px)로
        목표를 찍는 표면이 폰 폭이 된다. 지도가 카메라보다 크게 균형을 잡는다. */
-    grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     column-gap: var(--space-4);
     align-items: start;
   }
@@ -553,6 +553,7 @@ main {
   white-space: nowrap;
 }
 .topbar-cell-link:hover { color: var(--ink); border-color: var(--ink); }
+.topbar-extra .topbar-cell-link { display: none; }
 .topbar-cell-link:focus-visible {
   outline: var(--focus-ring-width) solid var(--focus-ring);
   outline-offset: var(--focus-ring-offset-outer);
@@ -606,13 +607,16 @@ main {
    컨테이너로 두면 components.css의 워드마크가 칸에 맞게 줄어든다(title 크기가 상한). */
 @media (width < 30rem) {
   ui-topbar {
-    grid-template-columns: minmax(0, 1fr) auto auto auto;
-    grid-template-areas: "brand cell more estop" "pill clock clock estop";
-    gap: var(--space-1) var(--space-2);
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    grid-template-areas: "brand more estop" "pill clock estop";
+    gap: var(--space-1);
     padding: var(--space-2);
   }
   ui-topbar ui-brand { container-type: inline-size; }
-  #estop { align-self: stretch; }
+  ui-topbar > .topbar-cell-link { display: none; }
+  .topbar-extra .topbar-cell-link { display: inline-flex; }
+  #estop { align-self: stretch; padding-inline: var(--space-2); gap: var(--space-1); }
+  #estop .ui-icon { width: var(--space-5); height: var(--space-5); }
   .topbar-extra { grid-row: 3; }
   main { gap: var(--space-3); padding: var(--space-3); }
   .dispatch-control { align-items: flex-start; flex-direction: column; margin: var(--space-2) var(--space-3) 0; padding: var(--space-3); }

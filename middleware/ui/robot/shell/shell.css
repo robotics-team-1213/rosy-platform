@@ -85,7 +85,7 @@ body:is([data-surface="setup"], [data-surface="device"]) .procedure-panel {
    프레임만 풀어 페이지가 스크롤한다 — US-008 전에는 두 규칙이 한 조건에 묶여 열까지 접혔다. */
 @media (width >= 64rem) {
   body[data-surface="console"] .surface-main {
-    grid-template-columns: minmax(15rem, 0.9fr) minmax(0, 1.35fr) minmax(20rem, 1fr);
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     grid-template-areas:
       "status status status"
       "banner banner banner"

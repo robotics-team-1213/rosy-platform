@@ -1162,6 +1162,8 @@ FLEET_FIT_PROBE = """() => {
   };
   return {
     docOverflow: document.documentElement.scrollHeight - window.innerHeight,
+    primary: inside('.console-primary'),
+    secondary: inside('.console-secondary'),
     mapPanel: inside('.panel[aria-labelledby="map-heading"]'),
     mapCanvas: inside('#map-canvas'),
     visionFrame: inside('#vision-frame'),
@@ -1200,13 +1202,15 @@ def test_console_fits_the_declared_viewport(console_url):
         f"문서가 {fit['docOverflow']}px 스크롤된다 — 예외 문법은 한눈에 다"
         " 보인다(D-201): " + str(fit)
     )
+    assert abs(fit["primary"]["width"] - fit["secondary"]["width"]) <= 1, fit
     for name in ("signals", "formation", "rosterPanel"):
         box = fit[name]
         assert box is not None and box["bottom"] <= fit["vh"] and box["top"] >= 0, (
             f"{name} 이(가) 뷰포트 밖이다(D-201): {box}"
         )
-    for name in ("mapCanvas", "visionFrame", "visionPreview", "signals", "formation", "roster", "rosterPanel", "stop"):
+    for name in ("mapCanvas", "visionPreview", "signals", "formation", "roster", "rosterPanel", "stop"):
         assert fit[name]["width"] > 0 and fit[name]["height"] > 0, fit
+    assert fit["visionFrame"]["height"] == 0, fit  # No camera source in this fixture.
     assert fit["stop"]["width"] >= 58 and fit["stop"]["height"] >= 58, fit
     assert fit["stop"]["top"] >= 0 and fit["stop"]["bottom"] <= fit["vh"], fit
     assert fit["roster"]["top"] - fit["rosterHeading"]["bottom"] <= 24, fit
@@ -1617,6 +1621,7 @@ def test_mobile_console_has_no_horizontal_overflow(console_url, width):
             ).map(b => [a.selector, b.selector]));
           })(),
           brand: document.querySelector('ui-brand').getBoundingClientRect().toJSON(),
+          brandSize: parseFloat(getComputedStyle(document.querySelector('ui-brand b')).fontSize),
           stop: document.querySelector('#estop').getBoundingClientRect().toJSON(),
           status: document.querySelector('#online-pill').getBoundingClientRect().toJSON(),
           operator: document.querySelector('#user-role').getBoundingClientRect().toJSON(),
@@ -1628,11 +1633,15 @@ def test_mobile_console_has_no_horizontal_overflow(console_url, width):
           stopVerb: [...document.querySelectorAll('#estop span')].filter(node => !node.classList.contains('sr-only')).map(node => node.textContent).join(''),
           stopAccessibleName: document.querySelector('#estop').getAttribute('aria-label'),
         })""")
+        if width <= 320:
+            page.locator("#topbar-more").click()
+            assert page.locator('#topbar-extra a[href="/console/cell"]').is_visible()
         browser.close()
     assert errors == []
     assert layout["overflow"] == 0, layout["outside"]
     assert layout["stop"]["right"] <= width, layout
     assert layout["status"]["right"] <= width, layout
+    assert layout["brand"]["left"] >= 0 and layout["brandSize"] >= 12, layout
     assert layout["brand"]["right"] <= layout["status"]["left"] or layout["brand"]["bottom"] <= layout["status"]["top"], layout
     assert layout["headerRows"] <= 4, layout
     assert layout["headerOverlaps"] == [], layout

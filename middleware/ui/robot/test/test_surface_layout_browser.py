@@ -113,8 +113,8 @@ def test_desktop_console_keeps_three_regions_and_active_controls_inside_viewport
         }""")
         result = page.evaluate("""() => {
           const rect = (selector) => {
-            const {x, y, right, bottom} = document.querySelector(selector).getBoundingClientRect();
-            return {x, y, right, bottom};
+            const {x, y, right, bottom, width} = document.querySelector(selector).getBoundingClientRect();
+            return {x, y, right, bottom, width};
           };
           return {
             documentHeight: document.documentElement.scrollHeight,
@@ -135,6 +135,9 @@ def test_desktop_console_keeps_three_regions_and_active_controls_inside_viewport
     assert result["sense"]["bottom"] <= 768
     assert result["sense"]["right"] <= result["observe"]["x"]
     assert result["observe"]["right"] <= result["act"]["x"]
+    assert max(result[slot]["width"] for slot in ("sense", "observe", "act")) - min(
+        result[slot]["width"] for slot in ("sense", "observe", "act")
+    ) <= 1
     assert result["act"]["bottom"] <= 768
     assert result["activeBottom"] <= result["act"]["bottom"]
     assert result["estop"]["bottom"] <= result["topbar"]["bottom"]
