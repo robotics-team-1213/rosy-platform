@@ -111,6 +111,34 @@ def test_one_line_under_the_robot_is_classified_by_ground_side():
     assert last["target_m"][1] < -0.04 and obs.error > 0.02  # steer right, away from the line
 
 
+def test_tracked_side_flips_after_persistent_wrong_side():
+    # 20261005T134540Z (9dfk, frames 329-367): a boundary tracked 'left' slid
+    # under the robot to y -0.05..-0.07 and kept its stale side while the robot
+    # drove along it, so the one-sided target sat a half-width past the right
+    # tape (error pinned at +1.0 toward the next lane). A crossing is through
+    # in a frame or two; SIDE_FLIP_FRAMES of contradicting sides must hand the
+    # line back to its ground side.
+    keeper = LaneKeeper(camera_x_offset_m=X_OFFSET, smoothing=0.0)
+    for y in (0.03, 0.01, -0.01, -0.04, -0.05, -0.05, -0.05, -0.05):
+        obs = keeper.update(_render([(y, 0.0)]), GROUND, lane_half_width_m=HALF)
+        assert obs is not None
+    last = keeper.last
+    assert last["boundaries"][0]["side"] == "right"
+    assert last["target_m"][1] > -HALF + 0.02  # target back inside the lane, not past the tape
+    assert last["error"] < -0.2  # steer left, away from the neighbour lane
+
+
+def test_momentary_cross_under_the_robot_keeps_its_side():
+    # The tracking rule exists for this: a boundary passing under the camera
+    # for a frame or two is still the boundary it was (within SIDE_FLIP_M),
+    # including one frame clearly on the other side.
+    keeper = LaneKeeper(camera_x_offset_m=X_OFFSET, smoothing=0.0)
+    for y in (0.06, 0.02, -0.02, -0.06):
+        obs = keeper.update(_render([(y, 0.0)]), GROUND, lane_half_width_m=HALF)
+        assert obs is not None
+    assert keeper.last["boundaries"][0]["side"] == "left"
+
+
 def test_transverse_stop_line_is_ignored():
     obs, last = _keep(_render([(HALF, 0.0), (-HALF, 0.0)], transverse_x=0.25))
     assert last["strategy"] == "both" and abs(obs.error) < 0.1

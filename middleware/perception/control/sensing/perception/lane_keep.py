@@ -27,7 +27,8 @@ robot is in, never the tape. Per frame, no odometry:
                 position; a line almost under the robot takes its side from the
                 previous target, and a line continuing one seen last frame
                 (close in offset and heading) keeps that side until it lies
-                clearly on the other side
+                clearly on the other side, and no longer than SIDE_FLIP_FRAMES
+                frames of sitting on the wrong side of the robot
   pairs         lane_keep_pairs: near-parallel and a lane width apart along
                 their common stretch; a close skew couple that is no pair
                 drops the weaker line ('pair_conflict')
@@ -139,6 +140,15 @@ AMBIGUOUS_LATERAL_M = 0.03
 TRACK_LATERAL_M = 0.06
 TRACK_HEADING_RAD = math.radians(20.0)
 SIDE_FLIP_M = 0.08
+#: ... and for at most this many frames while its lateral offset sits on the
+#: other side of the robot beyond AMBIGUOUS_LATERAL_M. A line crossing under
+#: the camera is through in a frame or two at the 8 fps camera, but session
+#: 20261005T134540Z (9dfk, frames 329-367) held a boundary at y -0.05..-0.07
+#: on its stale 'left' side while the robot drove along it: the one-sided
+#: target landed a half-width past the right tape and the error pinned at
+#: +1.0 toward the next lane for 20+ frames. Past this many contradicting
+#: frames the fresh ground side wins.
+SIDE_FLIP_FRAMES = 4
 #: Junctions fail closed (HOLD): a lone boundary with a line across the path
 #: within JUNCTION_AHEAD_M that is not a latched corner, or two boundaries on
 #: the followed side splitting by more than FORK_MIN_ANGLE_RAD. Steering of at
@@ -341,10 +351,20 @@ class LaneKeeper:
             side = "left" if lateral > reference else "right"
             # The same boundary as last frame keeps its side while it stays
             # near the robot: a line drifting across under the camera is still
-            # the boundary it was, not the next lane's.
+            # the boundary it was, not the next lane's. Kept only while the
+            # contradiction is momentary (SIDE_FLIP_FRAMES): a boundary that
+            # sits on the other side of the robot frame after frame has a
+            # stale side, and its one-sided target would land outside the
+            # lane (20261005T134540Z, frames 329-367).
             tracked = self._track(lateral, heading)
-            if tracked is not None and abs(lateral) < SIDE_FLIP_M:
-                side = tracked
+            wrong_side = 0
+            if tracked is not None:
+                tracked_side, carried = tracked
+                beyond = ((lateral > AMBIGUOUS_LATERAL_M and tracked_side == "right")
+                          or (lateral < -AMBIGUOUS_LATERAL_M and tracked_side == "left"))
+                wrong_side = carried + 1 if beyond else 0
+                if abs(lateral) < SIDE_FLIP_M and wrong_side < SIDE_FLIP_FRAMES:
+                    side = tracked_side
             inward = (np.array([direction[1], -direction[0]]) if side == "left"
                       else np.array([-direction[1], direction[0]]))
             point, along = _pursuit_point(centre + inward * half, direction, self._lookahead)
@@ -353,7 +373,9 @@ class LaneKeeper:
                 self.last["candidates"].append(dict(record, side=side, y_at_side_x_m=round(lateral, 3),
                                                     rejected=True, reason="extrapolation"))
                 continue
-            record.update(side=side, y_at_side_x_m=round(lateral, 3), tracked=tracked == side,
+            record.update(side=side, y_at_side_x_m=round(lateral, 3),
+                          tracked=tracked is not None and tracked[0] == side,
+                          _wrong_side=wrong_side,
                           pursuit_m=[round(float(point[0]), 3), round(float(point[1]), 3)],
                           centre=centre, direction=direction)
             (left if side == "left" else right).append(record)
@@ -363,7 +385,8 @@ class LaneKeeper:
         for record in conflicts:
             (left if record["side"] == "left" else right).remove(record)
             self.last["candidates"].append(
-                dict({k: v for k, v in record.items() if k not in ("centre", "direction")},
+                dict({k: v for k, v in record.items()
+                      if k not in ("centre", "direction", "_wrong_side")},
                      rejected=True, reason="pair_conflict"))
         target, strategy = self._choose(left, right, half)
         # A lane seen on both sides is followed; a corner is only looked for
@@ -379,13 +402,15 @@ class LaneKeeper:
                     else _junction(strategy, transverse, seen_left, seen_right, half, self._corner_turning))
         if junction is not None:
             target = None
-        self._tracked = [(r["y_at_side_x_m"], math.radians(r["heading_deg"]), r["side"])
+        self._tracked = [(r["y_at_side_x_m"], math.radians(r["heading_deg"]), r["side"],
+                          r.get("_wrong_side", 0))
                          for r in left + right + conflicts]
         for record in left + right:
             if target is None or strategy.startswith('corner'):
                 record['selected'] = False
             record.pop("direction")
             record.pop("centre")
+            record.pop("_wrong_side", None)
             self.last["boundaries"].append(record)
             self.last["candidates"].append(dict(record, rejected=False, reason=None))
         if target is None:
@@ -504,14 +529,16 @@ class LaneKeeper:
         return point, f"corner_{side}"
 
     def _track(self, lateral, heading):
-        """Side of the last frame's boundary this line continues, or None."""
+        """(side, wrong-side frames) of the last boundary this line continues,
+        or None. The count is this line's carried streak of consecutive
+        frames on the far side of its own tracked side."""
         best = None
-        for previous_lateral, previous_heading, side in self._tracked:
+        for previous_lateral, previous_heading, side, wrong_side in self._tracked:
             gap = abs(lateral - previous_lateral)
             if (gap <= TRACK_LATERAL_M and abs(heading - previous_heading) <= TRACK_HEADING_RAD
                     and (best is None or gap < best[0])):
-                best = (gap, side)
-        return None if best is None else best[1]
+                best = (gap, side, wrong_side)
+        return None if best is None else best[1:]
 
     def _choose(self, left, right, half):
         """Target (x, y) and strategy from the side-classified boundaries."""
