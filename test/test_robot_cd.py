@@ -2,6 +2,7 @@
 import importlib.util
 import io
 import json
+import os
 from pathlib import Path
 import tarfile
 import hashlib
@@ -215,6 +216,20 @@ def test_transient_publish_failure_keeps_verified_transaction_pending(tmp_path, 
               "robots": ["robot-a"], "canary": "robot-a", "key_name": "release-key"}
     assert tool.Coordinator(config, gh=github).tick() == "rollout_pending"
     assert json.loads((tmp_path / "state.json").read_text())["phase"] == "publishing"
+
+
+def test_signer_temporary_files_stay_in_managed_state(tmp_path, monkeypatch):
+    import tempfile
+    tool = module()
+    for name in ("TEMP", "TMP", "PYTHONDONTWRITEBYTECODE"):
+        monkeypatch.setenv(name, "previous")
+    monkeypatch.setattr(tempfile, "tempdir", None)
+    folder = tmp_path / "managed-state"
+    tool.configure_environment(folder)
+    with tempfile.TemporaryDirectory() as temporary:
+        assert Path(temporary).parent == folder
+    assert os.environ["TEMP"] == os.environ["TMP"] == str(folder)
+    assert os.environ["PYTHONDONTWRITEBYTECODE"] == "1"
 
 
 def test_next_release_has_independent_attempt_and_canary_state(tmp_path, monkeypatch):
