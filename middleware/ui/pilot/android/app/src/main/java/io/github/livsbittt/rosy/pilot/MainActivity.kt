@@ -32,6 +32,8 @@ class MainActivity : Activity() {
     private var candidates = CandidateStore()
     private var discovery: RobotDiscovery? = null
     private var proxy: PilotProxy? = null
+    /** 세션 상단 배너의 정상 문구 — 일시 실패 뒤 회복 콜백이 이 값으로 되돌린다. */
+    @Volatile private var connectedLabel: String? = null
     private var web: WebView? = null
     private var pairingDialog: AlertDialog? = null
     @Volatile private var session: LobbySession? = null
@@ -182,7 +184,9 @@ class MainActivity : Activity() {
             try {
                 val approved = reused ?: LobbyPairing.connect(candidate, offer, store, code)
                 if (version != attempt) return@execute
-                relay = PilotProxy(approved, AssetBundle(assets)) { message -> main.post { if (version == attempt) status.text = message } }
+                relay = PilotProxy(approved, AssetBundle(assets),
+                    { message -> main.post { if (version == attempt) status.text = message } },
+                    { main.post { if (version == attempt) connectedLabel?.let { status.text = it } } })
                 relay.verifyIdentity(); relay.start(5000, false)
                 if (offer.mode == "paired" && version == attempt) vault.saveVerified(candidate, approved)
                 val ready = relay
@@ -225,7 +229,8 @@ class MainActivity : Activity() {
                         }
                     }
                     val connectionLabel = when (approved.peerApproval?.persistent) { true -> "승인 유지 · 연결됨"; false -> "기간 제한 승인 · 연결됨"; null -> if (offer.mode == "development") "개발 연결" else "연결됨" }
-                    status.text = "${candidate.name} · ${approved.target.id} · $connectionLabel"
+                    connectedLabel = "${candidate.name} · ${approved.target.id} · $connectionLabel"
+                    status.text = connectedLabel
                 }
             } catch (error: Exception) {
                 // Exception messages and HTTP bodies can contain credentials; log class and locations only.
@@ -247,6 +252,7 @@ class MainActivity : Activity() {
     private fun endSession(forget: Candidate? = null, afterClosed: (() -> Unit)? = null) {
         // Resource-owning completion callbacks must run their stale-attempt cleanup.
         attempt++; peerUi.close(); screenSleep.revoke(); opening = false; main.removeCallbacks(refreshTick)
+        connectedLabel = null
         val closingAttempt = attempt
         pairingDialog?.dismiss(); pairingDialog = null
         web?.evaluateJavascript("window.dispatchEvent(new Event('blur')); sessionStorage.clear();", null)

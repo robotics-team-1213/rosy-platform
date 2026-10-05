@@ -34,8 +34,8 @@
 
 ## 최근 기록
 
+- 2026-10-05 · uncommitted · fix(pilot): 일시 연결 실패 배너가 회복 뒤에도 남던 것
 - 2026-10-05 · uncommitted · fix(pilot): 태블릿 카메라 오류 — 프록시가 X-Rosy-* 증명 헤더를 지움
 - 2026-10-05 · uncommitted · feat(pilot): 보여준 코드의 남은 유효 시간 표시
 - 2026-10-05 · uncommitted · feat(pilot): 연동 코드 보여주기(양방향)
 - 2026-10-05 · uncommitted · uiux: drive geometry stays in the stylesheet
-- 2026-10-05 · uncommitted · fix(peer-assets): Pilot 승인 모듈 정적 경로 일치

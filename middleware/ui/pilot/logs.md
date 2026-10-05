@@ -470,3 +470,9 @@
 - 변경: `PilotProxy.kt`에 `forwardRosyHeaders` — CORE 응답의 `x-rosy-*` 접두사 헤더를 바이트 경로와 스트리밍 경로 모두 그대로 붙인다. 같은 결함군으로 D-368 운전자 MJPEG 스트림(`multipart/x-mixed-replace`)이 본문 버퍼링 경로로 흘러 응답이 통째로 도착할 때까지 화면이 멈추던 것을 스트리밍 경로(녹화본 `x-tar`와 같은 bounded 통과)로 통과시킨다. 요청 방향·경로 검사·자격 규칙은 그대로. android README에 전달 규칙 한 줄 추가.
 - 증거: JVM 신규 시험 `cameraProvenanceHeadersReachTheBundledScreens`(MockWebServer가 다섯 헤더를 내고 프록시 응답에 그대로 오는지) — 빌드 결과는 커밋 메시지에 기록. multipart 통과는 기존 `x-tar` 스트리밍 경로의 조건 확장이라 별도 시험 없다(이 MockWebServer엔 열린 원본을 위한 chunked 오버로드가 없다). 태블릿 재설치 뒤 CDP로 헤더 도착·카메라 화면 프레임 표시를 확인할 예정.
 - gate 변화: LOCAL(프록시 결함은 JVM 시험으로 판정). 실기 태블릿 확인은 별도. main
+
+## 2026-10-05 · uncommitted · fix(pilot): 일시 연결 실패 배너가 회복 뒤에도 남던 것
+
+- 변경: 네이티브 PilotProxy가 상단 배너를 오류 문구로 바꾼 뒤 회복 신호가 없어, 일시 끊김 후 연결·영상·조종이 모두 정상이어도 TLS 또는 연결을 확인하세요 가 화면에 남았다(2026-10-05 9dfk 실주행 중 관찰 — 배너와 달리 영상 80ms·속도 명령 살아 있음). PilotProxy에 recovery 콜백을 추가: 실패를 한 번 알렸으면 다음 성공 응답에 회복을 알리고, MainActivity는 배너를 정상 연결 문구(connectedLabel)로 되돌린다. 세션 종료 시 배너 상태를 비운다.
+- 증거: JVM 신규 시험 transientFailureThenSuccessReportsFailureThenRecovery — 재시도 없는 주입 client로 첫 요청을 응답 없음(NO_RESPONSE)으로 실패시키면 502+failure 1회, 다음 성공에서 recovery 정확히 1회, 이후 성공은 중복 알림 없음. 전체 87 tests passed(빌드 2026-10-05). 설치 뒤 8kcn 재연결로 정상 배너 회귀 확인.
+- gate 변화: SOURCE/LOCAL. 실기에서 일시 끊김 유도 관찰은 별도.
