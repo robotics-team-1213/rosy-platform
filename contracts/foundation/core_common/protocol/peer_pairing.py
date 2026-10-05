@@ -121,7 +121,7 @@ class Relationship(Strict):
     persist_requested: bool
     expires_at: str | None = Field(max_length=64)
     used_challenges: list[str] = Field(max_length=64)
-    session_ids: list[str] = Field(default_factory=list, max_length=4)
+    session_ids: list[str] = Field(default_factory=list, max_length=8)
 
     @model_validator(mode='after')
     def persistent_authority_shape(self):

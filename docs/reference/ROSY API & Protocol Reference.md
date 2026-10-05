@@ -2283,7 +2283,7 @@ administrator일 때만 허용한다. issuer ID/digest/source/named principal/sc
 권한 기간을 늘리거나 관계를 중복 생성하지 않는다. nonce 소비·token digest·관계·
 감사는 CORE의 기존 config overlay 한 번의 atomic commit에 포함한다. 최대 관계
 128개, pending 16개/300초(상태 보관 600초), source 128개·신청 30회/분(잘못된
-증명도 crypto 실행 전에 포함), challenge 64개/60초, 관계당 활성 세션 4개, audit
+증명도 crypto 실행 전에 포함), challenge 64개/60초, 관계당 활성 세션 8개, audit
 256개를 넘기지 않는다. 용량이 가득 차면 기존 관계를 암묵적으로 삭제하지 않는다.
 
 API 오류: 실제 HTTPS 또는 최초 LAN 조건 불충족 403, 기존 인증 없음 401,
