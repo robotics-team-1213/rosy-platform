@@ -37,8 +37,8 @@
 
 ## 최근 기록
 
+- 2026-10-05 · uncommitted · fix(dashboard): 차선 추종 시작 조건을 구동 준비에 맞춤
 - 2026-10-05 · uncommitted · fix(ui): Wi-Fi 라벨 변수의 비밀값 검사 오인 해소
 - 2026-10-05 · uncommitted · fix(ui): 네트워크 설치 작업을 연결 중심으로 정리
 - 2026-10-05 · uncommitted · fix(ui): 연결 승인 공용 속성 계약 복구
 - 2026-10-05 · uncommitted · fix(robot): shared receiver consent touch target
-- 2026-10-05 · uncommitted · feat(robot): 기존 관리자 화면에서 LAN 연결 승인
