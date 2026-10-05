@@ -330,11 +330,11 @@ class RosArmCommandRuntime:
     remote action/service endpoint or claim DDS access control. Deployment must
     admit exactly one local command source and isolate the vendor action graph.
 
-    Callback groups (C3b A2): joint-state intake and the watchdog share one mutually
-    exclusive group; the action client (goal response, feedback, result, and every goal
-    event sink, including a phase runner's journal writes) uses another. Spin the node on
-    a MultiThreadedExecutor with at least two threads, or slow goal-event handling can
-    still delay joint states past max_joint_state_age_s (C3 run2-run7).
+    Joint-state intake, the watchdog and the action client each use a separate
+    mutually exclusive callback group. Slow policy guard I/O must not exclude
+    joint callback entry. Owner/session locks still serialize accepted state and
+    control; separate groups do not waive freshness or stop checks. Use a
+    MultiThreadedExecutor; three workers permit all three groups to make progress.
     """
 
     def __init__(
@@ -371,6 +371,7 @@ class RosArmCommandRuntime:
             raise ValueError("on_goal_event must be callable when provided")
         self._observer_goal_event = on_goal_event
         self.state_callback_group = MutuallyExclusiveCallbackGroup()
+        self.watchdog_callback_group = MutuallyExclusiveCallbackGroup()
         self.action_callback_group = MutuallyExclusiveCallbackGroup()
         self.action_port = RosTrajectoryActionPort(
             node, trajectory_action, self._dispatch_goal_event,
@@ -405,7 +406,7 @@ class RosArmCommandRuntime:
             poll_period_s,
             self._watchdog_tick,
             clock=self._steady_clock,
-            callback_group=self.state_callback_group,
+            callback_group=self.watchdog_callback_group,
         )
 
     def _on_joint_state(self, message: JointState) -> None:

@@ -1070,3 +1070,9 @@
 - 증거: 호스트 영향 묶음에서 palette/부품 계약이 통과했으며 실제 구조 예산/API 경로 16 passed (8.21s). 부모 검증자의 GET 실패 상태 화면 검토를 사용한다.
 - gate 변화: PARKED 경계를 유지한다. 런타임 활성화·장치 접속은 하지 않았다.
 - 결정: D-439 Task5. 내부 toolbar 잘림만 줄인다.
+
+## 2026-10-05 · uncommitted · fix(perception): 차선 짝 splay와 전체 차로 횡단 표시 회귀 수정
+
+- 변경: fix/lane-keep-replay에서 바깥으로 벌어진 경계의 개별 heading 한도·공통 구간 폭 검사를 유지하며 짝을 보완하고, 급경사 paint가 차로 전체를 가로지르면 단독 경계에서 제외한다. 짧은 곡선 반례와 기존 chord/junction/corner 회귀를 검증한다.
+- 증거: 148프레임 baseline/후보 직진 평균 절대 error 0.150088→0.051813, 튐0.014→0.007, 비가시14→21이다. 독립 코드 리뷰는 중대 결함 없음, lane test57PASS/NEW0이다. 별도7녹화2252프레임 영향과 전체 검증 결과는 docs/validation/lane-keep-regression-2026-10-05/result.md에 기록한다. 앞선 실기 정지 관측 기록도 원본 그대로 보존한다.
+- gate 변화: 직진 수치 조건은 통과하나 비가시 정답·추가 곡선/교차로·장치 source 일치·현장 R1/R2는 미검증으로 주행 HOLD다. 장치 설정·모델 hold·서비스·주행 명령을 바꾸지 않았다.

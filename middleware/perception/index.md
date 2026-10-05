@@ -68,8 +68,8 @@
 
 ## 최근 기록
 
+- 2026-10-05 · uncommitted · fix(perception): 차선 짝 splay와 전체 차로 횡단 표시 회귀 수정
 - 2026-10-04 · uncommitted · fix(ui): PARKED 진단 지도 도구 행 감싸기
 - 2026-10-04 · uncommitted · fix(perception): 밝기 양극단의 원본 관측
 - 2026-10-04 · uncommitted · recording: raw originals and optional model display
 - 2026-10-04 · uncommitted · fix(lane): 저조도 keeper 무효화와 mask 원자성
-- 2026-10-04 · uncommitted · fix(perception): 운영자 차선 모델 선택과 관측 출처 표시
