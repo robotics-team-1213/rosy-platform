@@ -68,6 +68,24 @@ class PeerClient internal constructor(private val candidate: Candidate, private 
             require(receiverFingerprint == string(identity, "receiver_key_sha256", 64))
             if (remembered != null && (remembered.receiverId != receiverId || remembered.receiverPublicKey != receiverKey)) throw PeerKeyChanged()
             checkAlive()
+            // 저장 세션 재사용(2026-10-06 사용자 결정): 발급받은 세션은 자연 만료까지 재연결마다 그대로 쓴다.
+            // whoami·system/info 로 살아있음을 확인하고, 못 쓰면 지우고 새 발급 경로로 내려간다.
+            if (remembered != null) {
+                val stored = vault.readSession(candidate)
+                if (stored != null && stored.relationshipId == remembered.id && stored.role == remembered.role
+                    && stored.expiresAt.isAfter(now().plusSeconds(60))) {
+                    val reused = runCatching {
+                        val who = call("/api/v1/auth/whoami", "GET", bearer = stored.token)
+                        require(string(who, "role", 32) == remembered.role)
+                        val info = call("/api/v1/system/info", "GET", bearer = stored.token)
+                        require(string(info, "robot_id", 64) == remembered.receiverId)
+                        LobbySession(RobotTarget(remembered.receiverId, candidate.host, candidate.port, stored.token), true,
+                            stored.expiresAt, candidate, store, remembered.caPem, remembered)
+                    }.getOrNull()
+                    if (reused != null) { checkAlive(); return reused }
+                    runCatching { vault.eraseSession(candidate) }
+                }
+            }
             val bootstrap = if (!trusted) PeerCaOffer(string(identity, "tls_ca_pem", 8192), string(identity, "tls_ca_sha256", 64),
                 string(identity, "tls_hostname", 253)).also { PeerTls.bind(it, firstContact?.leaf ?: error("first-contact leaf unavailable"), candidate.host) } else null
             var caPem = remembered?.caPem
@@ -135,6 +153,8 @@ class PeerClient internal constructor(private val candidate: Candidate, private 
             require(string(who, "role", 32) == relationship.role)
             val info = call("/api/v1/system/info", "GET", bearer = accessToken); require(string(info, "robot_id", 64) == receiverId)
             checkAlive()
+            // 발급 세션을 저장해 다음 재연결에서 재사용한다(저장 실패가 연결을 깨지 않게 감싼다).
+            runCatching { vault.rememberSession(candidate, PeerSessionRecord(origin, relationship.id, accessToken, relationship.role, sessionExpiry)) }
             return LobbySession(RobotTarget(receiverId, candidate.host, candidate.port, accessToken), true, sessionExpiry, candidate, store, caPem, relationship)
         } finally {
             if (!approved && requestId != null && requestSecret != null) cleanupCancel()

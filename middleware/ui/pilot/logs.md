@@ -482,3 +482,9 @@
 - 변경: 연동 코드 보여주기는 관리자만 쓸 수 있어 현장 태블릿(피어 승인 = 운영자)에는 항목 자체가 안 보였다(2026-10-06 사용자 보고). 항목은 운영자에게도 보이게 하고, 발급 요청이 CORE 403이면 관리자 코드로 전환 버튼(기존 토큰 폼 재사용)을 그 자리에 제공한다. 관리자 코드를 입력하면 세션이 교체되어 발급이 가능해진다. CORE 계약(관리자만 발급)은 그대로다. sw.js 캐시 키 갱신.
 - 증거: 브라우저 시험 갱신 - 운영자(devtoken)는 항목 표시 + 403 안내 + 전환 폼 진입, 관리자(devadmintoken)는 DEMO-C0DE 발급·카운트다운. 전체 92 passed 73 skipped, known_failures NEW 0.
 - gate 변화: SOURCE. 실기 태블릿 확인은 별도.
+
+## 2026-10-06 · uncommitted · feat(pilot): 피어 세션을 저장해 자연 만료까지 재사용한다
+
+- 변경: 사용자 결정(2026-10-06)으로 발급받은 피어 세션(만료 상한 1시간)을 PeerRelationshipVault 에 슬롯 하나로 암호화 저장하고, 재연결 때 새 발급(challenge·session POST) 없이 whoami·system/info 확인만으로 그대로 재사용한다. 만료 임박(60초 미만)·401·형식 불일치면 저장분을 지우고 기존 발급 경로로 내려간다. 승인 기억 삭제(기기·연결)는 저장 세션도 함께 지운다. 세션 수명은 서버 계약(최대 1시간) 그대로 — 저장 수명을 늘리는 것이 아니라 발급 낭비를 없앤 것. 종료 시 반납(같은 날 초안)은 재사용과 충돌해 폐기했다.
+- 증거: JVM 신규 2건 - mintedSessionIsStoredAndReusedUntilNaturalExpiry(재연결이 challenge·session POST 0회, Bearer 확인 2회), storedSessionPastExpiryIsDiscardedAndFreshMintReplacesIt - 전체 89 passed. 실기 8kcn: 연결 발급 1개 → 로봇 목록 복귀 → 재연결에도 발급 수 1 그대로(재사용 확인, 2026-10-06).
+- gate 변화: SOURCE/LOCAL 및 실기 관찰. FIELD는 별도.
