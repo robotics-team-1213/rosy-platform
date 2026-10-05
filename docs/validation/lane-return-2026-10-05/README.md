@@ -54,3 +54,11 @@ Final independent source approval: 50 policy/manager/loop tests PASS, 0 NEW (`X:
 After merging current main, controller/manager/source evidence/odometry/legacy line-follow/stuck/IR guard/bounded-trial/architecture/contract checks passed 174 tests with 0 NEW (`X:/DevTemp/lane-return-20261005/manager-merged-final.txt`). Harness lint has 0 errors and 21 existing verification-freshness warnings. These host results restore the actual package guard; the earlier failed run is retained above and is not counted as passing evidence.
 
 Runtime floor/swept-space provider, signed release/readback and physical recovery remain pending. The fallback seam defaults to no moving permission until that provider is connected.
+
+## Positive current floor observation
+
+The existing cliff classifier deliberately reports false for two saturated IR channels. A new internal floor_observed bit starts false and requires three valid raw channels, at least two nonsaturated channels, fresh enabled IR and no classified cliff/tilt/pickup. It is produced by the sensor-only worker and passed through the existing policy lease. It records current observation, not a guarantee about future swept floor or a measured camera/IR calibration acceptance.
+
+The local-return sensor query preserves existing candidate restrictions and requires the exact unchanged candidate and reason allow. Off/shadow/closed adapters, missing streams, callback failures and nonboolean results deny it. Positive floor snapshots add LiDAR/IMU/IR to the original observation deadline calculation even if the configured required set was smaller. A pure producer reproduced stale IMU/LiDAR surviving an IR-only lease; dependency closure fixes that false admission.
+
+Host perception floor/gate/handoff/provider checks: 47 PASS, 0 NEW. Adapter/legacy/architecture checks: 105 PASS, 0 NEW. Independent review: 105 PASS, 0 NEW (`X:/DevTemp/lane-return-review/tests-floor-final-independent.txt`). No size thresholds changed. Runtime motion binding still awaits signed swept-space and floor-path verification; no motor command or release was activated.

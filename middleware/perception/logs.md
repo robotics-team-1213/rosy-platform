@@ -1102,3 +1102,8 @@
 - 변경: keep 선택 경계의 원본 영상 시각·실제 관측 구간·rig geometry digest를 optional containment에 보낸다. projection uncertainty는 미검증이므로 null이다.
 - 증거: 생산자/keeper 시험 62 PASS, 0 NEW. geometry 변경 identity 무효화와 미선택 경계 제외를 검증했다.
 - gate 변화: 추가 센서 증거만. CALIBRATED 승격·자동 복귀 명령·장치 수용 없음.
+
+## 2026-10-05 · uncommitted · feat(safety): distinguish positive floor observation from no cliff
+- 변경: sensor-only 생산자가 신선하고 유효한 IR 관측과 cliff=false를 구분한다. 현재 바닥 증거는 LiDAR·IMU·IR 중 가장 먼저 만료되는 원본 유효 기간을 사용한다. 기존 cliff 검출·주행 제한은 보존한다.
+- 증거: 포화·누락·잘못된 원시 IR, hazard, 후보 변경, IR-only 설정에서 만료 IMU가 허용되던 사례를 시험했다. perception 47 PASS, 독립 통합/크기 검토 105 PASS, 모두 0 NEW.
+- gate 변화: 현재 센서 관측의 SOURCE 증거만. 미래 swept floor·실제 이동 공급자 연결·배포·장치 주행은 미완료다.
