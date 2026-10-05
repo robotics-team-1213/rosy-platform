@@ -3,7 +3,7 @@
 ## 결과
 
 Pinky `9dfk`에 서명 릴리스 **2026.10.06-043**을 배포했다. 설치·실행 source revision은
-`5bc111a98ceb988bac8d85bc862eb332b0d296a3`다. 포함 내용: keep 경계의 추적 측면이
+배포 revision `5bc111a98ceb988bac8d85bc862eb332b0d296a3`이다. 포함 내용: keep 경계의 추적 측면이
 반대쪽에 머무르면 최대 SIDE_FLIP_FRAMES(4) 프레임 뒤에 지면 기준 측면으로 되돌리는
 수정(`8be56d0f4`), junction HOLD 규칙 분리(`ada948ac0`), CSS 토큰 수정. 장치 자체
 재생으로 수정 동작을 확인했다. **DEVICE 소프트웨어 설치·정지 관측·장치 재생 PASS,
