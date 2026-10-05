@@ -454,3 +454,9 @@
 - 변경: config_transaction 동시 프로세스 시험이 contracts/foundation 경로를 자식 PYTHONPATH에 전달하며 기존 환경을 보존한다. config writer와 locking 구현 변경 없음.
 - 증거: main CI core-domain의 ModuleNotFoundError를 호스트에서 재현했다. 수리 후 config transaction·source encoding·시작점·review dataset·P6 묶음 42 passed, known_failures 신규 0.
 - gate 변화: LOCAL fixture 복구만. 실물 설정·주행·배포 수용 변경 없음.
+
+## 2026-10-05 · uncommitted · fix(protocol): peer 관계 활성 세션 상한 8
+
+- 변경: peer_pairing.Relationship.session_ids max_length 4에서 8 - 발급부(receiver_repository.issue)·API 레퍼런스와 동시 변경(D-18). 저장 레코드 검증 상한만 같은 값으로 올랐고 필드·모양은 그대로다.
+- 증거: contracts/foundation + peer pairing 시험 761 passed 5 skipped, known_failures NEW 0.
+- gate 변화: 없음(계약 문서·스키마 동시 정합).

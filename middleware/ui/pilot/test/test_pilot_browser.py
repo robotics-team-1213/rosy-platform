@@ -1882,3 +1882,40 @@ def test_startup_target_failure_retries_without_pinky_fallback(tablet_page):
     expect(page.locator('#pilot-notice')).to_have_text('정지 요청을 보냈습니다')
     assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')
     assert errors == []
+
+
+@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1", reason="browser opt-in")
+def test_show_code_hidden_for_operator_and_shown_for_admin(tablet_page):
+    """양방향 연동(D-193 §5): 운전자는 보여주기 없음, 관리자는 발급·표시."""
+    base_url, page, errors = tablet_page
+    page.goto(f"{base_url}/pilot")
+    page.wait_for_selector("form[data-pilot-token-form] ui-field input")
+    page.fill("form[data-pilot-token-form] ui-field input", "devtoken")
+    page.click("form[data-pilot-token-form] ui-button")
+    page.wait_for_selector("[data-drive-enter]")
+    assert page.locator("[data-show-code]").count() == 0
+    assert page.locator("[data-enroll-section]").count() == 0
+    page.evaluate("sessionStorage.clear()")
+    page.goto(f"{base_url}/pilot")
+    page.wait_for_selector("form[data-pilot-token-form] ui-field input")
+    page.fill("form[data-pilot-token-form] ui-field input", "devadmintoken")
+    page.click("form[data-pilot-token-form] ui-button")
+    page.wait_for_selector("[data-drive-enter]")
+    page.locator("[data-show-code]").wait_for(state="visible")
+    page.click("[data-show-code]")
+    page.wait_for_selector("[data-enroll-code]")
+    assert page.inner_text("[data-enroll-code]") == "DEMO-C0DE"
+    assert "상대 기기에서 입력하세요" in page.inner_text("[data-enroll-status]")
+    assert page.inner_text("[data-enroll-timer]").startswith("유효 05:0")
+    page.wait_for_timeout(1500)
+    assert page.inner_text("[data-enroll-timer]") != "유효 05:00"
+    assert page.locator("[data-show-code]").is_enabled()
+    overflow = page.evaluate(
+        "document.documentElement.scrollWidth - document.documentElement.clientWidth")
+    assert overflow <= 0, f"가로 넘침 {overflow}px"
+    page.evaluate("sessionStorage.clear()")
+    page.goto(f"{base_url}/pilot")  # 재진입: 카운트다운 타이머가 정리된다
+    page.wait_for_selector("form[data-pilot-token-form] ui-field input")
+    page.wait_for_timeout(1200)
+    assert page.locator("[data-enroll-timer]").count() == 0
+    assert errors == [], errors
