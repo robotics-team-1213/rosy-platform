@@ -88,7 +88,7 @@ function markLocked(reason = "auth") {
   if (firstLock) {
     Object.assign(view, {robots: [], map: null, siteMap: null, sightings: [], cameraTracking: {robots: [], unknown: []},
       stateLoaded: false, stateUnavailable: false, selected: null, cursor: null, formation: null, signals: {}});
-    visionView.reset(); trackingView.reset(); startPointView.reset();
+    visionView.reset(); visionView.refreshSources(); trackingView.reset(); startPointView.reset();
   }
   render();
 }
@@ -144,15 +144,18 @@ const fleetClient = createFleetClient({ credential: () => auth.token });
 async function call(path, options = {}) {
   const task = pageScope.capture();
   task.check();
+  const cameraPreview = path === "/api/fleet/vision/sources" || path === "/api/fleet/vision/lease";
   try {
     const body = await fleetClient(path, {...options, signals: [...(options.signals || []), task.signal]});
     task.check();
-    if (auth.locked && path !== "/api/fleet/session") throw new DOMException("Authentication changed", "AbortError");
+    if (auth.locked && path !== "/api/fleet/session" && !cameraPreview) {
+      throw new DOMException("Authentication changed", "AbortError");
+    }
     if (path === "/api/fleet/session") markUnlocked();
     return body;
   } catch (error) {
     task.check();
-    if (error.status === 401) markLocked();
+    if (error.status === 401 && !cameraPreview) markLocked();
     throw error;
   }
 }
@@ -727,7 +730,7 @@ function refreshDiagnostics() {
 const signals = createSignals({ scope: pageScope, el, view, log, call, refreshState,
   isOperator: () => auth.role === "operator" && !auth.locked });
 // D-410 — 운용 화면의 카메라는 영상 프리뷰만 띄운다. 경기장/맵 보정 뷰는 설치 화면이 가진다.
-const visionView = createVisionView({ scope: pageScope, el, call, auth, authHeaders });
+const visionView = createVisionView({ scope: pageScope, el, call });
 
 // --- 신호등 (ROSY-SIGNAL-001) --------------------------------------------------
 

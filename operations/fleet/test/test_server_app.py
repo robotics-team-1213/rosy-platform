@@ -58,6 +58,38 @@ def test_vision_lease_is_source_scoped_and_fleet_returns_no_frame_bytes():
     assert rejected.status_code == 404
 
 
+def test_lan_camera_proxy_grant_only_opens_preview_routes(tmp_path):
+    console = FleetConsole(
+        [RobotEndpoint("rosy_01", "http://127.0.0.1:8080", "robot-token")],
+        [FakeRobot("rosy_01")],
+    )
+    tasks = FleetTaskService(FleetTaskStore(tmp_path / "tasks.sqlite"), robot_ids=("rosy_01",))
+    client = TestClient(create_app(
+        console, task_service=tasks,
+        site_users={sha256(b"viewer-token").hexdigest(): {
+            "principal_id": "viewer", "role": "viewer"}},
+        vision_lease_secret="v" * 32, vision_sources=("ceiling-north",),
+        lan_camera_proxy=True,
+    ))
+    proxy_grant = {"X-Rosy-Lan-Camera": "1"}
+    lease_path = "/api/fleet/vision/lease"
+    source_path = "/api/fleet/vision/sources"
+
+    assert client.get(source_path).status_code == 401
+    assert client.post(lease_path, json={"source_id": "ceiling-north"}).status_code == 401
+    assert client.get(source_path, headers=proxy_grant).json() == {"sources": ["ceiling-north"]}
+    issued = client.post(lease_path, json={"source_id": "ceiling-north"}, headers=proxy_grant)
+    assert issued.status_code == 200
+    assert VisionLeaseSigner("v" * 32).verify(
+        issued.json()["lease"], source_id="ceiling-north")["sub"] == "lan-camera"
+    assert client.get("/api/fleet/state", headers=proxy_grant).status_code == 401
+    assert client.post("/api/fleet/estop", headers=proxy_grant).status_code == 401
+    assert client.get(source_path, headers={**proxy_grant,
+                                            "Authorization": "Bearer wrong"}).status_code == 401
+    assert _client(FakeRobot("rosy_01"), token="secret").get(
+        source_path, headers=proxy_grant).status_code == 401
+
+
 def test_vision_lease_accepts_only_bounded_preview_rectification():
     client = TestClient(create_app(
         FleetConsole([RobotEndpoint("rosy_01", "http://127.0.0.1:8080", "robot-token")],

@@ -22,7 +22,7 @@ class PeerClientTest {
     private class Memory : PeerVaultStorage {
         val rows = mutableMapOf<String, String>()
         override fun get(id: String) = rows[id]
-        override fun endpointKeys() = rows.keys.map { it.removePrefix("fence|") }.toSet()
+        override fun endpointKeys() = rows.keys.filterNot { it.startsWith("session|") }.map { it.removePrefix("fence|") }.toSet()
         override fun write(id: String, value: String, remove: Set<String>) { rows[id] = value; remove.forEach { rows.remove(it) } }
     }
     private class Signer : PeerSigner {
@@ -119,6 +119,33 @@ class PeerClientTest {
             PeerProof.fingerprint(mobile.publicKey), "A".repeat(32), "operator", 0, true, null)
         fun json(body: JSONObject) = MockResponse().setHeader("Content-Type", "application/json").setBody(body.toString())
         override fun close() { statusHold?.countDown(); identityHold?.countDown(); server.close() }
+    }
+    @Test fun mintedSessionIsStoredAndReusedUntilNaturalExpiry() {
+        Fixture().use { f ->
+            val first = f.flow().connect({}, { false })!!
+            assertEquals("fixture-short-session", first.target.credential)
+            assertNotNull(f.records.readSession(f.candidate))
+            f.requests.clear()
+            val second = f.flow().connect({ fail("no consent on reuse") }, { fail("no CA on reuse"); false })!!
+            assertEquals(first.target.credential, second.target.credential)
+            assertTrue(second.authorized())
+            assertEquals("rosy_01", second.target.id)
+            // 재사용은 새 발급(challenge·session) 없이 whoami·system/info 확인만 한다.
+            assertEquals(0, f.requests.count { it.path!!.endsWith("/challenge") || it.path!!.endsWith("/session") })
+            assertEquals(2, f.requests.count { it.getHeader("Authorization") != null })
+            assertTrue(f.requests.first().path!!.endsWith("/identity"))
+        }
+    }
+    @Test fun storedSessionPastExpiryIsDiscardedAndFreshMintReplacesIt() {
+        Fixture().use { f ->
+            f.records.remember(f.candidate, f.saved(), f.records.fence(f.candidate))
+            f.records.rememberSession(f.candidate, PeerSessionRecord(PeerRelationshipVault.origin(f.candidate),
+                "A".repeat(32), "stale-but-long-token-value", "operator", java.time.Instant.now().minusSeconds(1)))
+            val session = f.flow().connect({ fail("approval exists") }, { false })!!
+            assertEquals("fixture-short-session", session.target.credential)
+            assertEquals("fixture-short-session", f.records.readSession(f.candidate)!!.token)
+            assertEquals(1, f.requests.count { it.path!!.endsWith("/session") })
+        }
     }
     @Test fun realTlsApprovalProofWhoamiIdentityAndDhcpReconnectDoNotReplayCommandsOrPairAgain() {
         Fixture().use { f ->

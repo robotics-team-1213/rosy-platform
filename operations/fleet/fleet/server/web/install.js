@@ -97,14 +97,15 @@ const fleetClient = createFleetClient({ credential: () => auth.token });
 async function call(path, options = {}) {
   const task = pageScope.capture();
   task.check();
+  const cameraPreview = path === "/api/fleet/vision/sources" || path === "/api/fleet/vision/lease";
   try {
     const body = await fleetClient(path, {...options, signals: [...(options.signals || []), task.signal]});
     task.check();
-    markUnlocked();
+    if (!cameraPreview) markUnlocked();
     return body;
   } catch (error) {
     task.check();
-    if (error.status === 401) markLocked();
+    if (error.status === 401 && !cameraPreview) markLocked();
     throw error;
   }
 }
@@ -157,7 +158,7 @@ const cameraPeer = createCameraPeerPanel({scope:pageScope,headers:authHeaders,
   dialogs:{confirmIrreversible},onUnauthorized:markLocked});
 
 // 카메라 설치·보정 체인 (D-360/D-375). 지도가 없으니 레이어 변경은 맵 맞춤 뷰만 다시 그린다.
-const visionView = createVisionView({ scope: pageScope, el, call, auth, authHeaders,
+const visionView = createVisionView({ scope: pageScope, el, call,
   isActive: () => !el("camera-calibration").hidden });
 let mapFit = null;
 const fieldView = createFieldView({ scope: pageScope, el, view, visionView,
@@ -324,7 +325,7 @@ refreshAuthorization();
 visionView.refreshSources();
 pageScope.interval(refreshDiscovery, MAP_MS);
 pageScope.interval(() => peerPicker.refresh(), MAP_MS);
-pageScope.interval(() => { if (!auth.locked) visionView.refreshFrame(); }, STATE_MS + 500);
+pageScope.interval(() => visionView.refreshFrame(), STATE_MS + 500);
 
 pageScope.onResume(() => {
   visionView.reset();
