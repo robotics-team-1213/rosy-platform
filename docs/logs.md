@@ -6265,3 +6265,9 @@ osy-d395-s1d\`.
 - 변경: Cam 페어링 화면의 본문 너비와 동등한 선택 버튼 너비를 정리하고, [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)에 미검증 범위를 기록했다.
 - 증거: Android `:app:compileDebugKotlin` 성공. ADB 장치가 없어 네이티브 캡처는 없다.
 - gate 변화: Cam LOCAL 소스 부분 근거. 제품 전체 G2/G3와 실제 장치·현장 수용은 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(cam): 송출 화면 조작 너비
+
+- 변경: Cam 송출 화면의 짝을 이룬 조작 버튼은 같은 너비, 단독 조작 버튼은 본문 너비로 맞췄다.
+- 증거: Android `:app:compileDebugKotlin` 성공. 네이티브 화면 캡처와 작업 독회는 없다.
+- gate 변화: Cam LOCAL 소스 부분 근거. 제품 전체 G2/G3는 HOLD다.

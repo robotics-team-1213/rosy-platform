@@ -300,8 +300,8 @@
 
 ## 최근 기록
 
+- 2026-10-06 · uncommitted · uiux(cam): 송출 화면 조작 너비
 - 2026-10-06 · uncommitted · uiux(cam): 페어링 화면 너비 통일
 - 2026-10-06 · uncommitted · uiux(face): 주행 카드와 얼굴 G3 부분 근거
 - 2026-10-06 · uncommitted · uiux(pilot): 현재 주행 화면과 전화 조작 도달성
 - 2026-10-06 · uncommitted · uiux(pilot): 대상 발견 오류 캡처
-- 2026-10-06 · uncommitted · uiux(robot): 운용 오류 문구와 G3 독회

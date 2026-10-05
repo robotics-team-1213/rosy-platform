@@ -116,10 +116,10 @@ fun StreamScreen(
                     else -> R.string.light_ready
                 }), style = MaterialTheme.typography.bodySmall)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                    OutlinedButton(onClick = { StreamService.requestLight(!light.requested) }) {
+                    OutlinedButton(onClick = { StreamService.requestLight(!light.requested) }, modifier = Modifier.weight(1f)) {
                         Text(stringResource(if (light.requested) R.string.light_disable else R.string.light_enable))
                     }
-                    Button(onClick = { StreamService.savePhoto() },
+                    Button(onClick = { StreamService.savePhoto() }, modifier = Modifier.weight(1f),
                         enabled = !state.previewOnly && !state.photoSaving) {
                         Text(stringResource(if (state.photoSaving) R.string.photo_saving else R.string.photo_save))
                     }
@@ -143,18 +143,18 @@ fun StreamScreen(
                     } catch (_: Exception) {
                         Toast.makeText(context, R.string.photo_share_failed, Toast.LENGTH_LONG).show()
                     }
-                }) { Text(stringResource(R.string.photo_share)) }
+                }, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.photo_share)) }
             }
 
         }
 
-        if (state.running) OutlinedButton(onClick = onScreenOff) { Text("화면 끄기 · 촬영 유지") }
+        if (state.running) OutlinedButton(onClick = onScreenOff, modifier = Modifier.fillMaxWidth()) { Text("화면 끄기 · 촬영 유지") }
 
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
             // Opens read-only while the camera runs; the settings screen says how to unlock it.
             OutlinedButton(
                 onClick = onOpenSettings,
-                modifier = Modifier.height(72.dp),
+                modifier = Modifier.weight(1f).height(72.dp),
             ) {
                 Text(stringResource(R.string.button_settings))
             }
