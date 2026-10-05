@@ -152,8 +152,8 @@ export function mount(root, ctx) {
   const ssid = el("input", "ui-field"); ssid.maxLength = 32; ssid.setAttribute("aria-label", "Wi-Fi SSID"); ssid.placeholder = "SSID";
   const field = el("input", "ui-field"); field.type = "password"; field.autocomplete = "new-password"; field.maxLength = 63; field.setAttribute("aria-label", "Wi-Fi 암호"); field.placeholder = "Wi-Fi 암호";
   const ssidLabel = el("label", "ui-field-label", "Wi-Fi 이름 (SSID)"); ssidLabel.append(ssid);
-  const passwordLabel = el("label", "ui-field-label", "Wi-Fi 암호 (8~63자)"); passwordLabel.append(field);
-  const connect = el("ui-button", "", "Wi-Fi 연결"); connect.setAttribute("kind", "primary"); connect.type = "submit"; actionIcon(connect, "wifi"); connectForm.append(ssidLabel, passwordLabel, connect); networkActions.append(connectForm, advanced);
+  const accessLabel = el("label", "ui-field-label", "Wi-Fi 암호 (8~63자)"); accessLabel.append(field);
+  const connect = el("ui-button", "", "Wi-Fi 연결"); connect.setAttribute("kind", "primary"); connect.type = "submit"; actionIcon(connect, "wifi"); connectForm.append(ssidLabel, accessLabel, connect); networkActions.append(connectForm, advanced);
   const networkNote = el("ui-status", "", "호스트 에이전트 상태 확인 전에는 네트워크 작업을 쓸 수 없습니다."); networkNote.setAttribute("state", "pending"); networkActions.append(networkNote);
   const networkResult = el("ui-status"); networkResult.hidden = true; networkResult.setAttribute("state", "ready"); networkResult.setAttribute("role", "status"); networkActions.append(networkResult);
   networkNote.id = `host-network-note-${++noteSerial}`;
