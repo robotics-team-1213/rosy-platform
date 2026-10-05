@@ -47,7 +47,7 @@ export function createStartPointView({scope, el, view, call, auth, onChanged}) {
       const [calibrations, saved]=await Promise.all([call('/api/fleet/calibrations'),call('/api/fleet/start-points')]);
       if (!life.current() || epoch!==serial) return;
       gate.ok();
-      const prior=JSON.stringify(points), sourcesBefore=records.map(row=>`${row.source_id}:${row.calibration_revision}`).join('|');
+      const wasReady=ready, prior=JSON.stringify(points), sourcesBefore=records.map(row=>`${row.source_id}:${row.calibration_revision}`).join('|');
       records=calibrations.calibrations; points=saved.start_points;
       ready=true; view.startPoints=points;
       const sourcesAfter=records.map(row=>`${row.source_id}:${row.calibration_revision}`).join('|');
@@ -56,7 +56,7 @@ export function createStartPointView({scope, el, view, call, auth, onChanged}) {
         source.replaceChildren(...records.map(row=>{const option=document.createElement('option'); option.value=row.source_id; option.textContent=`${row.source_id} · ${row.map_id}`; return option;}));
         if (records.some(row=>row.source_id===selected)) source.value=selected;
       }
-      if (prior!==JSON.stringify(points) || sourcesBefore!==sourcesAfter) {
+      if (!wasReady || prior!==JSON.stringify(points) || sourcesBefore!==sourcesAfter) {
         populate();
         if (!saved.persistent) message.textContent+=' · 임시 저장: 서버 재시작 시 사라집니다.';
       }
@@ -113,8 +113,8 @@ export function createStartPointView({scope, el, view, call, auth, onChanged}) {
     } finally {if (life.current() && epoch===serial) {busy=false;controls();await refresh();}}
   }
   scope.listen(save,'click',()=>mutate('PUT')); scope.listen(remove,'click',()=>mutate('DELETE'));
-  function reset() {serial++; busy=false; loading=false; ready=false; records=[]; points=[];gate.reset();view.startPoints=[];source.replaceChildren();fields.forEach(field=>field.value='');message.textContent='인증 후 시작점 상태를 다시 확인하세요.';stopPicking();controls();onChanged();}
+  function reset() {serial++; busy=false; loading=false; ready=false; records=[]; points=[];gate.reset();view.startPoints=[];source.replaceChildren();fields.forEach(field=>field.value='');message.textContent='관제에 접속하면 시작점 상태를 확인할 수 있습니다.';stopPicking();controls();onChanged();}
   scope.onDispose(reset); scope.onResume(refresh); scope.interval(refresh,3000);
   controls(); refresh();
-  return {refresh,reset};
+  return {refresh,reset,updateAuthorization:controls};
 }

@@ -1,5 +1,22 @@
 * { box-sizing: border-box; }
 
+.console-workflow, .connection-guide { margin: var(--space-3) var(--space-4); }
+.console-workflow ol { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-2); padding: 0; margin: 0; list-style: none; }
+.console-workflow a { display: flex; align-items: center; gap: var(--space-2); min-height: var(--target-secondary); padding: var(--space-2); color: var(--ink); text-decoration: none; border-bottom: 1px solid var(--line-14); }
+.console-workflow span { color: var(--ink-quiet); font-family: var(--mono); }
+.connection-guide { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-3); padding: var(--space-4); border: 1px solid var(--line-14); border-radius: var(--radius-panel); background: var(--surface-flat); }
+.connection-guide[hidden] { display: none; }
+.connection-guide > div { flex: 1 1 16rem; min-width: 0; }
+.connection-guide h2 { margin: 0 0 var(--space-2); font-size: var(--text-title); }
+.connection-guide p { margin: 0; color: var(--ink-quiet); }
+.connection-guide a { display: inline-flex; align-items: center; min-height: var(--target-secondary); padding: var(--space-2) var(--space-3); border: 1px solid var(--line-14); border-radius: var(--radius-button); color: var(--ink); }
+.console-workflow a:focus-visible, .connection-guide a:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
+.start-point-fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-3); margin: var(--space-3) 0; }
+.start-point-fields label { display: grid; gap: var(--space-2); min-width: 0; }
+.start-point-fields .ui-field { width: 100%; min-width: 0; }
+.start-point-camera { grid-column: 1 / -1; }
+@media (width < 64rem) { .console-workflow ol { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
 /* Fleet task owners remain mounted; visibility is navigation-owned. */
 #install-main { grid-template-columns: minmax(0, 1fr); }
 .install-tasks { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-4); }
@@ -518,6 +535,27 @@ main {
   /* 접힌 머리가 좁아지면 부제와 정지의 래치 부제를 숨긴다. 보이는 동사 비상 정지는 남는다. */
   ui-topbar ui-brand small { display: none; }
   #estop small { display: none; }
+}
+
+/* Cell 이동은 머리 cluster의 링크다. href와 격자 자리는 그대로 두고 조용한 버튼과 같은 면으로 둔다. */
+ui-topbar > a[href="/console/cell"] {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--target-secondary);
+  padding-inline: var(--space-2);
+  border: 1px solid var(--surface-line);
+  border-radius: var(--radius-button);
+  color: var(--nominal-quiet);
+  background: transparent;
+  font: var(--weight-label) var(--text-label)/var(--leading-control) var(--body);
+  text-decoration: none;
+  white-space: nowrap;
+}
+ui-topbar > a[href="/console/cell"]:hover { color: var(--ink); border-color: var(--ink); }
+ui-topbar > a[href="/console/cell"]:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring);
+  outline-offset: var(--focus-ring-offset-outer);
 }
 
 /* D-466 — 바깥 자리는 brand | cluster | estop. cluster는 연결·Cell·시계·설정이다.

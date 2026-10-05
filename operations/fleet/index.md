@@ -85,8 +85,8 @@
 
 ## 최근 기록
 
+- 2026-10-05 · uncommitted · uiux: give the cell header link the quiet control face
+- 2026-10-05 · uncommitted · uiux/live-console: 관제 접속·좌표·시작점 준비 흐름
 - 2026-10-05 · uncommitted · fix(test): bootstrap Fleet cell process before collection
 - 2026-10-05 · uncommitted · fix(fleet): 증거 프로파일 매핑을 canonical 계약으로 이동
 - 2026-10-05 · uncommitted · fix(ui): 목표 취소·관제 적합·미지원 카메라 조회 복구
-- 2026-10-05 · uncommitted · fix(test): T2 exact-source import 격리
-- 2026-10-05 · uncommitted · fix(fleet): T4 해제 근거·Task 트랜잭션 경계

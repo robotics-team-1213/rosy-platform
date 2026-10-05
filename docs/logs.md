@@ -6071,3 +6071,8 @@ osy-d395-s1d\`.
 - 변경: docs/validation/line-remote-2026-10-05/deployment.md records both installed runtimes, manual steering and actual automatic-mode API trial separately.
 - 증거: CI 37282901412 and ARM64 build 37282981358 success at 07dc89f20; both process cwd 042; eight automatic-state samples HOLD nominal_ground_requires_driver with zero velocity, then OFF/IDLE; own sessions logout 204.
 - gate 변화: DEVICE signed install verified; automatic motion and FIELD remain unverified. Console line-follow tab absent remains unresolved.
+## 2026-10-05 · uncommitted · uiux: keep one robot entry and quiet the cell link
+
+- 변경: 기본 /dashboard에서 기존 종합 화면 안내를 거두었다. #compatibility 경로와 종합 화면은 유지한다. 관제 머리의 Cell 작업 링크는 같은 주소와 격자 자리에서 조용한 버튼 면을 쓴다.
+- 증거: 머리·토큰·관제 페이지 계약 100 passed. known_failures 0 new. 호스트 시험이며 장치 수용은 없다.
+- gate 변화: 없음.
