@@ -1885,16 +1885,22 @@ def test_startup_target_failure_retries_without_pinky_fallback(tablet_page):
 
 
 @pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1", reason="browser opt-in")
-def test_show_code_hidden_for_operator_and_shown_for_admin(tablet_page):
-    """양방향 연동(D-193 §5): 운전자는 보여주기 없음, 관리자는 발급·표시."""
+def test_show_code_visible_for_operator_with_upgrade_path_and_working_for_admin(tablet_page):
+    """양방향 연동(D-193 §5): 운영자에게도 항목이 보이고 전환 길을 제공, 관리자는 발급·표시."""
     base_url, page, errors = tablet_page
     page.goto(f"{base_url}/pilot")
     page.wait_for_selector("form[data-pilot-token-form] ui-field input")
     page.fill("form[data-pilot-token-form] ui-field input", "devtoken")
     page.click("form[data-pilot-token-form] ui-button")
     page.wait_for_selector("[data-drive-enter]")
-    assert page.locator("[data-show-code]").count() == 0
-    assert page.locator("[data-enroll-section]").count() == 0
+    # 운영자: 항목은 보이지만 발급은 CORE 403 — 전환 안내가 떠야 한다.
+    page.locator("[data-show-code]").wait_for(state="visible")
+    page.click("[data-show-code]")
+    page.wait_for_selector("[data-enroll-upgrade]")
+    assert "관리자 권한이 필요합니다" in page.inner_text("[data-enroll-status]")
+    page.click("[data-enroll-upgrade]")
+    page.wait_for_selector("form[data-pilot-token-form] ui-field input")
+    page.get_by_text("관리자 코드를 입력하면 연동 코드를 발급할 수 있습니다.").wait_for(state="visible")
     page.evaluate("sessionStorage.clear()")
     page.goto(f"{base_url}/pilot")
     page.wait_for_selector("form[data-pilot-token-form] ui-field input")
