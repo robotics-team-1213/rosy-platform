@@ -300,8 +300,8 @@
 
 ## 최근 기록
 
+- 2026-10-05 · uncommitted · fix(lane): preserve source-frame departure diagnostics
+- 2026-10-05 · uncommitted · docs(adr): D-467 worktree retirement and X: scratch capacity
 - 2026-10-05 · uncommitted · docs(lane): straight departure pipeline proposal
 - 2026-10-05 · uncommitted · fix(site): published HTTPS port comes only from the site setting
 - 2026-10-05 · uncommitted · uiux: keep measured geometry in stylesheets
-- 2026-10-05 · uncommitted · docs(camera): record applied checkerboard geometry
-- 2026-10-05 · uncommitted · fix(fleet): 목표·대형 지원 기능 확인

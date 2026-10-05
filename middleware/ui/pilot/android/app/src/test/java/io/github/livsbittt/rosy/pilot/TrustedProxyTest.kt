@@ -141,6 +141,38 @@ class TrustedProxyTest {
             assertEquals("Bearer private-token-value", stop.getHeader("Authorization"))
         }
     }
+    @Test fun cameraProvenanceHeadersReachTheBundledScreens() {
+        val ca = HeldCertificate.Builder().certificateAuthority(1).build()
+        val leaf = HeldCertificate.Builder().addSubjectAlternativeName("robot-a.local").signedBy(ca).build()
+        MockWebServer().use { remote ->
+            remote.useHttps(HandshakeCertificates.Builder().heldCertificate(leaf, ca.certificate).build().sslSocketFactory(), false)
+            remote.start(); remote.enqueue(MockResponse()
+                .addHeader("Content-Type", "image/jpeg")
+                .addHeader("X-Rosy-Camera-Source", "ROSY")
+                .addHeader("X-Rosy-Camera-Sequence", "6569")
+                .addHeader("X-Rosy-Camera-Captured-At", "1791195119.5")
+                .addHeader("X-Rosy-Camera-Frame-Id", "camera_link")
+                .addHeader("X-Rosy-Camera-Variant", "raw")
+                .setBody("FRAME"))
+            val config = profile(ca, remote.port); val store = CandidateStore(); val version = store.found("robot")!!
+            store.resolved("robot", version, Candidate("robot-a.local", remote.port, listOf("127.0.0.1")))
+            val proxy = PilotProxy(config, config.robots.single(), store) {}
+            try {
+                proxy.start(5000, false)
+                OkHttpClient().newCall(Request.Builder().url("${proxy.origin}/api/v1/vision/front/frame?sequence=6569&overlay=false")
+                    .header("Cookie", "rosy-shell=${proxy.capability}").header("Authorization", "Bearer private-token-value")
+                    .build()).execute().use { response ->
+                    assertEquals(200, response.code)
+                    // evidence.js fetchCameraPair 검증이 이 다섯 헤더를 필요로 한다.
+                    assertEquals("ROSY", response.header("X-Rosy-Camera-Source"))
+                    assertEquals("6569", response.header("X-Rosy-Camera-Sequence"))
+                    assertEquals("1791195119.5", response.header("X-Rosy-Camera-Captured-At"))
+                    assertEquals("camera_link", response.header("X-Rosy-Camera-Frame-Id"))
+                    assertEquals("raw", response.header("X-Rosy-Camera-Variant"))
+                }
+            } finally { proxy.stop() }
+        }
+    }
     @Test fun recordingDownloadLargerThanHtmlCapStreamsIntact() {
         val ca = HeldCertificate.Builder().certificateAuthority(1).build()
         val leaf = HeldCertificate.Builder().addSubjectAlternativeName("robot-a.local").signedBy(ca).build()

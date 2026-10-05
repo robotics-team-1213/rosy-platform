@@ -33,7 +33,8 @@ from fleet.hub.hub import HubError, SiteHub
 from fleet.localization import trust
 from fleet.server import bays, traffic
 from fleet.server.console_view import (
-    CapabilityDisplay, _error_of, _formation_stream_evidence, _shown, _stream_evidence,  # noqa: F401
+    CapabilityDisplay, _error_of, _formation_stream_evidence, _shown,
+    _stream_evidence,  # noqa: F401
 )
 from fleet.swarm.session import (
     FormationSession,
