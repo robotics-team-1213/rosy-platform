@@ -85,6 +85,8 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
                          help="public approved TLS bindings for existing encrypted enrollments")
     console.add_argument("--vision-preview-secret-env", default=None,
                          help="dedicated Fleet-to-Vision preview lease signing secret")
+    console.add_argument("--lan-camera-proxy", action="store_true",
+                         help="trust the site Caddy proxy's LAN camera header for preview only")
     console.add_argument("--users-file", default=None, type=Path,
                          help="개인별 Fleet API 토큰 digest 및 역할을 담은 root 관리 파일")
     console.add_argument("--stuck-resolver", action="store_true",
@@ -521,7 +523,9 @@ def run_console(args: argparse.Namespace) -> None:
                      approved_peer_directory_file=getattr(args, 'approved_peer_directory_file', None),
                      start_task_dispatcher=not mission_api,
                      vision_lease_secret=vision_preview_secret,
-                     vision_sources=vision_sources, enrollment=enrollment,
+                     vision_sources=vision_sources,
+                     lan_camera_proxy=getattr(args, "lan_camera_proxy", False),
+                     enrollment=enrollment,
                      robot_credential_key=robot_key_text, site_lanes=site_lanes,
                      pairing=pairing_service, pairing_sync_token=pairing_sync_token,
                      localization_service=localization_service,

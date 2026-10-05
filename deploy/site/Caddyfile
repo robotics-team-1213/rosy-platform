@@ -5,24 +5,38 @@
 :{$ROSY_SITE_HTTPS_PORT} {
 	tls /run/secrets/site_cert /run/secrets/site_key
 
+	@lan_camera {
+		remote_ip private_ranges
+		path /api/fleet/vision/sources /api/fleet/vision/lease
+	}
 	@camera path /overhead/v1/frames
-	reverse_proxy @camera https://vision:{$ROSY_VISION_PORT} {
-		transport http {
-			tls_trust_pool file /run/secrets/site_ca
-			tls_server_name vision
-		}
-	}
 	@vision_preview path /api/vision/sources/*
-	reverse_proxy @vision_preview https://vision:{$ROSY_VISION_PORT} {
-		transport http {
-			tls_trust_pool file /run/secrets/site_ca
-			tls_server_name vision
+	route {
+		reverse_proxy @lan_camera https://fleet:{$ROSY_FLEET_PORT} {
+			header_up X-Rosy-Lan-Camera 1
+			transport http {
+				tls_trust_pool file /run/secrets/site_ca
+				tls_server_name fleet
+			}
 		}
-	}
-	reverse_proxy https://fleet:{$ROSY_FLEET_PORT} {
-		transport http {
-			tls_trust_pool file /run/secrets/site_ca
-			tls_server_name fleet
+		reverse_proxy @camera https://vision:{$ROSY_VISION_PORT} {
+			transport http {
+				tls_trust_pool file /run/secrets/site_ca
+				tls_server_name vision
+			}
+		}
+		reverse_proxy @vision_preview https://vision:{$ROSY_VISION_PORT} {
+			transport http {
+				tls_trust_pool file /run/secrets/site_ca
+				tls_server_name vision
+			}
+		}
+		reverse_proxy https://fleet:{$ROSY_FLEET_PORT} {
+			header_up -X-Rosy-Lan-Camera
+			transport http {
+				tls_trust_pool file /run/secrets/site_ca
+				tls_server_name fleet
+			}
 		}
 	}
 }
