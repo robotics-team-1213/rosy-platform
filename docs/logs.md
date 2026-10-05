@@ -6361,3 +6361,9 @@ osy-d395-s1d\`.
 - 변경: 제품 CSS는 유지하고 Pilot 전화의 조작 칸·영상 면적 실험 결과를 UI/UX 회차에 기록했다. 390×844에서 조작 칸 높이를 키우면 영상 표시 면적이 0.126으로 줄어 기존 `>0.2` 계약 시험이 실패했다. 실험 CSS는 되돌렸고 4셀 재시험은 통과했다.
 - 증거: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)의 실패 캡처와 X:의 전후 pytest 로그. 카메라 표시 면적을 유지한 채 조작 칸 내부 배치로 회전 발견성을 해결해야 한다.
 - gate 변화: 없음. 전화 회전 조작 발견성 G3와 제품 전체 UI/UX는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(pilot): 전화 회전 조작 위치 안내
+
+- 변경: Pilot 전화 주행 화면의 스틱 아래에 회전 조작 안내를 놓아 첫 화면에서 아래 조작을 알 수 있게 했다. 피벗이 없는 프로필에는 숨긴다.
+- 증거: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)의 390px 캡처와 카메라·터치·프로필 브라우저 7 passed, `known_failures.py` 0 NEW. 원본은 X:에 둔다.
+- gate 변화: Pilot LOCAL G2 부분 근거 추가. 실제 운전자 G3와 제품 전체 UI/UX는 HOLD다.

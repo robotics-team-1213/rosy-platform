@@ -519,3 +519,9 @@
 - 변경: UI/UX 회차의 Pilot Shell 400dp 가로·글자 130% G2 셀을 채웠다.
 - 증거: 현재 APK의 800×600/320dpi 에뮬레이터에서 로봇 선택·다시 찾기·상태·빈 목록 안내·배터리·기기 연결 UI bounds가 모두 `[32,32]`–`[768,568]` 안에 있다. 캡처와 UI 계층 원본은 X:에 둔다.
 - gate 변화: Pilot Shell LOCAL G2 한 셀 추가. 실제 로봇 후보·페어링·오류·Lenovo 태블릿·운전자 G3는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(pilot): 전화 회전 조작 안내
+
+- 변경: 전화의 고정된 주행 조작 칸에서 스틱 아래 빈 곳에 회전 조작 안내를 표시했다. 피벗이 없는 로봇 프로필에는 안내를 만들지 않는다.
+- 증거: [UI/UX 회차](../../../docs/validation/uiux-surfaces-2026-10-06/README.md)의 390×844 전후 캡처, 카메라·조작부·기능 없는 프로필·스틱 접촉 브라우저 7 passed, `known_failures.py` 0 NEW. 원본은 X:에 둔다.
+- gate 변화: Pilot 전화 LOCAL G2 부분 근거 추가. 실제 운전자에게 안내가 충분한지 G3와 제품 전체는 HOLD다.

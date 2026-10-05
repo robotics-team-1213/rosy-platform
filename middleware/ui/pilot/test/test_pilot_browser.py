@@ -703,6 +703,8 @@ def test_camera_keeps_aspect_and_controls_never_cover_it(base_url, viewport):
                 shot_dir.mkdir(parents=True, exist_ok=True)
                 page.screenshot(path=str(shot_dir / f"pilot-drive-current-{viewport[0]}x{viewport[1]}.png"))
             if viewport[0] < 480:
+                cue = page.locator("[data-drive-scroll-cue]").bounding_box()
+                stick = page.locator("[data-drive-stick]").bounding_box()
                 scrolled = page.evaluate("""() => ({
                   panel: (() => { const panel = document.querySelector('[data-drive-controls]');
                     panel.scrollTop = panel.scrollHeight; return panel.scrollTop; })(),
@@ -721,6 +723,7 @@ def test_camera_keeps_aspect_and_controls_never_cover_it(base_url, viewport):
     if viewport[0] < 480:
         assert all(box["bottom"] <= controls["viewport"] for box in controls["boxes"]
                    if "pedal" in box["selector"] or "stick" in box["selector"]), controls
+        assert cue["y"] >= stick["y"] + stick["height"] and cue["y"] + cue["height"] <= viewport[1]
         assert scrolled["panel"] > 0 and scrolled["pivotBottom"] <= scrolled["viewport"] + 1 and scrolled["page"] == 0, scrolled
     else:
         assert all(box["bottom"] <= controls["viewport"] for box in controls["boxes"]), controls
@@ -1716,6 +1719,7 @@ def test_a_base_without_pivot_or_fine_draws_neither_and_ignores_q_e(tablet_page)
     base_url, page, errors = tablet_page
     _enter_drive_with(page, base_url, [{**dev_server._BASE_CONTROL, "pivot": False, "fine": False}])
     assert page.locator("[data-drive-pivot]").count() == 0
+    assert page.locator("[data-drive-scroll-cue]").count() == 0
     assert page.locator("[data-drive-fine]").count() == 0
     page.wait_for_function("document.querySelector('[data-drive-fact=cap]')?.textContent.includes('0.10')")
     dev_server.TELEOP_LOG.clear()

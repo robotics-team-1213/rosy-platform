@@ -106,6 +106,8 @@ Pilot 대상 발견 오류에서는 내부 `invalid simulation target`을 운용
 
 Pilot 390×844에서 회전 조작을 첫 화면에 올리려고 아래 조작 칸 높이를 `38dvh`에서 `45dvh`로 키운 **임시 실험은 채택하지 않았다**. 회전 버튼은 일부 드러났지만 카메라 실제 표시 면적이 화면의 `0.126`으로 줄어 `>0.2` 영상 계약 시험이 실패했다(4셀 중 전화 1 failed). 원래 `38dvh`로 되돌린 같은 4셀 시험은 **4 passed**, `known_failures.py` 0 NEW다. 실패 화면은 X: `captures/pilot-height/pilot-drive-current-390x844.png`, 시험 로그는 X: `logs/pilot-height-{pytest,reverted-pytest}.txt`에 둔다. 회전 조작 발견 가능성을 개선하려면 영상 높이를 빼는 방식 대신 고정된 조작 칸 안의 모드·페달·회전 배치를 검토해야 한다. 이 항목은 G3 HOLD다.
 
+고정된 조작 칸의 스틱 아래 빈 곳에 전화 폭에서만 「↓ 회전 조작」 안내를 넣었다. 피벗 기능이 없는 프로필에는 표시하지 않는다. 390×844 첫 화면에서 안내는 스틱 아래와 화면 안에 있고, 스크롤하면 좌·우회전 버튼에 닿는다. 카메라 면적·분리 4폭, 기능 없는 프로필, 스틱 인접 터치 2폭의 브라우저 **7 passed**, `known_failures.py` **0 NEW**다. 원본은 X: `captures/pilot-turn-cue/pilot-drive-{current,turn-controls}-390x844.png`에 둔다. 실제 운전자가 안내를 발견하고 이해하는지는 G3 HOLD다.
+
 ### 장비·작업 준비 G3 독회 — LOCAL 진행 중
 
 | D-153 항목 | 현재 근거 | 남은 판정 범위 |
