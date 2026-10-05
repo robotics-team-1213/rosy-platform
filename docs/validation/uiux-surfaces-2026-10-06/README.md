@@ -12,6 +12,7 @@
 | 게임 보드: 경기장·공·로봇·골이 보이는가? | [진행 1280×800](captures/games-play-1280x800.png), [최초 1280×800](captures/games-initial-1280x800.png), [지연 1280×800](captures/games-delayed-1280x800.png), [HOLD 1280×800](captures/games-hold-1280x800.png), [지연 390×800](captures/games-delayed-390x800.png) | 관측 정보가 적을 때 관측 카드를 내용 높이로 줄여 피치를 초점으로 둔다. 지연 화면은 마지막 수신 정보임을 밝히고 모바일에서도 정지가 보인다. | 현재 트리의 전체 상태 G2, 실물 카메라·경기 readback, G3 전체 근거 검토. |
 | 로봇 얼굴: 의도·주의·위험이 즉시 구분되는가? | [첫 기동](captures/face-first-boot-320x240.png), [정상](captures/face-nominal-320x240.png), [E-STOP](captures/face-estop-320x240.png), [배터리 위험](captures/face-battery-critical-320x240.png) (모두 320×240) | 현재 `emotion.info_screen` PIL 렌더러의 정보 카드 네 장에서 정상·위험의 형태·문구가 구분된다. | D-433 `rosy-face` 실제 설치·LCD 경로, 1.5m/각도/조도 판독, 만료 후 의도 GIF 복귀, G3 전체 근거 검토. |
 | 학습 검수: 원본과 편집 내용을 함께 볼 수 있는가? | [객체 1440px](captures/learning-width/learning-objects-1440.png), [객체 800px](captures/learning-width/learning-objects-800.png), [객체 390px](captures/learning-width/learning-objects-390.png), [픽셀 1440px](captures/learning-width/learning-pixels-1440.png), [픽셀 800px](captures/learning-width/learning-pixels-800.png), [픽셀 390px](captures/learning-width/learning-pixels-390.png) | 두 편집 화면의 캔버스·검수 창을 데스크톱에서 같은 폭으로 맞췄다. 좁은 화면에서는 두 창이 같은 가용 폭으로 쌓이고 가로 넘침이 없다. | 개발 도구의 다른 상태·실제 검수자 G3 독회. 로봇 현장 수용과 별도다. |
+| Pilot: 운전·팔 조작 상태와 정지가 보이는가? | [팔 2000×1200](captures/pilot-arm/pilot-arm-gripper-2000x1200.png), [팔 1200×2000](captures/pilot-arm/pilot-arm-gripper-1200x2000.png), [팔 390×844](captures/pilot-arm/pilot-arm-gripper-390x844.png), [기존 주행 기준선](../pilot-g2-baseline-2026-10-04/README.md) | 영상 없는 Gazebo 연습에서 빈 영상 칸 대신 조작부가 가용 폭을 쓰고 팔·그리퍼 창은 같은 폭이다. 전화에서는 같은 폭으로 쌓인다. E-stop은 세 폭 모두 첫 화면에 있다. | 주행·연결의 현재 트리 G2 전체 재확인, 실제 운전자 G3 독회. 기존 DEVICE 기능 확인을 UI/UX GO로 승격하지 않는다. |
 
 로봇·Fleet 캡처는 FastAPI/Playwright fixture, 게임 캡처는 실제 PreviewServer와 fixture payload를 쓴 LOCAL 증거다. Fleet 전화의 `fleet_console_mobile_{width}.png`는 시험이 **전체 로봇 보기**를 누른 뒤 찍는 캡처여서 기본 예외 목록의 근거로 쓰지 않는다. 기본 목록은 위 `fleet-console-320x844.png`와 해당 브라우저 단언으로 확인했다.
 
@@ -36,6 +37,8 @@
 기존 상태 브라우저 **9 passed**, 320/390px 빈 목록·서버 실패 **4 passed**, 수정한 연결 끊김 **1 passed**였고 각 실행의 `known_failures.py`는 **0 NEW**였다. 이들은 fixture 기반 화면 검사다. Fleet의 선언 상태 전부와 카메라 연결, 실제 사이트 PC/로봇 readback, G3 사용자 독회는 남아 있어 G2/G3 GO로 판정하지 않는다.
 
 학습 검수는 D-461의 병렬 원본·inspector 구조를 유지하면서 두 편집 창의 너비만 같게 했다. 현재 로컬 Chromium의 객체 작업 브라우저 **10 passed**, 픽셀 작업·반응형 계약 **14 passed**, 각 `known_failures.py` **0 NEW**였다. 1440/800/390px에서 두 창 너비와 가로 넘침을 검사했다. 이 캡처는 합성 검수 자료를 사용한 개발 도구 LOCAL 증거다.
+
+Pilot 팔 화면은 카메라 없는 Gazebo fixture에서 빈 영상 자리 때문에 두 조작 창이 오른쪽 좁은 칸에 2:1로 압축됐다. 현재 CSS는 영상이 없을 때 조작부를 먼저 배치하고 동등한 팔·그리퍼 창을 같은 폭으로 쓴다. 영상이 있으면 영상·조작부 병렬 구조를 유지한다. 태블릿 2종·전화·영상 있는 경로의 브라우저 **5 passed**, `known_failures.py` **0 NEW**였다. 명령 경로는 가짜 CORE fixture이며 실기 조작 증거가 아니다.
 
 ### 장비·작업 준비 G3 독회 — LOCAL 진행 중
 
@@ -62,6 +65,21 @@ D-153이 이름 붙인 G1 시험 중 팔레트·토큰(스타일가이드 포함
 
 ## 제품 범위와 판정 경계
 
-D-153의 여섯 카드 중 운용자 콘솔·장비 런타임·Fleet·게임 보드·로봇 얼굴에 이 회차의 새 캡처가 있다. control 레거시 진단은 D-153에 따라 PARKED다. `shared/web/surfaces.yaml`에 이후 추가된 Cam·학습 검수 같은 활성 표면은 각자 질문·선언 뷰포트·상태 카드를 정해야 제품 전체 GO를 논할 수 있다. 이전 [2026-09-29 회차](../uiux-surfaces-2026-09-29/README.md)의 LOCAL 결과는 현재 트리 전체 G3나 DEVICE/FIELD 판정으로 승격하지 않는다.
+현재 `shared/web/surfaces.yaml`의 표면을 제품 UI/UX 목표와 대조하면 다음과 같다. **부분 근거는 GO가 아니다.** 신규 표면의 선언 상태·뷰포트 카드는 D-153 재평가 트리거로 채워야 한다.
+
+| 등록 표면 | 이번 회차의 범위 | 다음 판정 증거 |
+|---|---|---|
+| `robot` | `/dashboard`·`/console`·`/setup`·`/device` 중 운용·작업 준비 LOCAL 부분 근거 | 역할·상태 G2 잔여 셀, 작업 완료 G3, 실물 readback |
+| `console` | Fleet LOCAL 부분 근거 | 선언 상태 G2 잔여 셀, 사이트 PC·카메라 readback, G3 |
+| `game-board` | LOCAL 부분 근거 | 모든 상태 G2, 실제 경기 관측, G3 |
+| `pilot` | 팔 LOCAL 부분 근거와 [2026-10-04 주행 기준선](../pilot-g2-baseline-2026-10-04/README.md) | 현재 트리의 접속·주행 G2, 운전자 G3; [DEVICE 기능 확인](../pilot-device-user-confirmed-2026-10-05/README.md)은 별도 |
+| `robot-face` | 호스트 PIL 이미지 부분 근거 | 실제 설치 LCD 사진·거리/각도/조도 판독, G3 |
+| `pinky-review` | 객체·픽셀 너비 LOCAL 부분 근거 | 개발 도구의 선언 상태·역할별 작업 G2/G3 |
+| `pilot-shell` | 이 회차 UI 캡처 없음 | 네이티브 태블릿 접속 화면 캡처와 역할·상태 독회 |
+| `cam` | 이 회차 UI 캡처 없음 | 네이티브 폰 설치·연결 상태 캡처와 설치자 작업 독회 |
+| `control-diagnostic` | D-266 PARKED | 재개 결정 뒤 카드 작성 |
+| `web-common`, `lane-live-view` | 라이브러리 / 제품 밖 시뮬 뷰어 | 제품 UI/UX G2 카드 대상 아님 |
+
+D-153의 여섯 카드 중 운용자 콘솔·장비 런타임·Fleet·게임 보드·로봇 얼굴에 이 회차의 새 캡처가 있다. control 레거시 진단은 D-153에 따라 PARKED다. 이후 추가된 Pilot·Cam·학습 검수 등 활성 표면도 각자 질문·선언 뷰포트·상태 카드를 정해야 제품 전체 GO를 논할 수 있다. 이전 [2026-09-29 회차](../uiux-surfaces-2026-09-29/README.md)의 LOCAL 결과는 현재 트리 전체 G3나 DEVICE/FIELD 판정으로 승격하지 않는다.
 
 **다음 판정 작업:** 각 활성 표면의 선언 상태·뷰포트 G2를 현재 트리에서 채우고, D-153의 여덟 G3 항목에 근거 셀을 적는다. 실제 장치·현장 수용은 LOCAL 캡처와 분리한다. 이 증거가 없으면 디자인이 마음에 들어 보이더라도 GO로 쓰지 않는다.

@@ -300,8 +300,8 @@
 
 ## 최근 기록
 
+- 2026-10-06 · uncommitted · uiux(pilot): 팔 조작 창 너비와 제품 표면 범위
 - 2026-10-06 · uncommitted · uiux(learning): 객체·픽셀 편집 창 너비 통일
 - 2026-10-06 · uncommitted · uiux(docs): Fleet 상태별 모바일 폭과 연결 끊김 근거
 - 2026-10-06 · uncommitted · uiux(docs): 절차 G3 항목별 근거와 잔여 범위
 - 2026-10-06 · uncommitted · uiux(docs): 맵핑·롤백 확인창 증거
-- 2026-10-06 · uncommitted · uiux(docs): 작업 준비·장비 첫 기동 6셀과 G1 재실행

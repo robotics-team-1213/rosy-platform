@@ -6217,3 +6217,9 @@ osy-d395-s1d\`.
 - 변경: Rosy Learning 객체·픽셀 검수의 원본 캔버스와 inspector를 데스크톱에서 같은 폭으로 맞췄다. 390px에서는 두 창이 같은 가용 폭으로 쌓인다. [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)에 1440/800/390px 캡처를 남겼다.
 - 증거: 객체 브라우저 10 passed, 픽셀 브라우저·반응형 계약 14 passed, 각 `known_failures.py` 0 NEW. 브라우저 가로 넘침 0.
 - gate 변화: 개발 도구 LOCAL 너비 근거만 추가. 제품 전체 UI/UX G3와 장치·현장 수용은 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(pilot): 팔 조작 창 너비와 제품 표면 범위
+
+- 변경: Pilot Gazebo 연습의 영상 없는 화면에서 빈 영상 칸을 빼고 팔·그리퍼 조작 창을 같은 폭으로 맞췄다. [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)에 태블릿·전화 캡처와 등록 표면별 남은 판정 증거를 추가했다.
+- 증거: Pilot 브라우저 5 passed(카메라 있는 경로 포함), `known_failures.py` 0 NEW. 실기 명령·현장 행동을 수행하지 않았다.
+- gate 변화: Pilot LOCAL 부분 근거. 제품 전체 UI/UX G2/G3는 HOLD다.

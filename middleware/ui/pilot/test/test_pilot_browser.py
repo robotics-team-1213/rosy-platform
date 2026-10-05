@@ -227,6 +227,9 @@ def test_omx_recording_retry_outcome_stale_camera_and_disposal(tablet_page):
     page.fill("[data-sim-code]", "test-only")
     page.click("[data-sim-connect]")
     page.wait_for_selector("[data-sim-record-panel]")
+    view = page.locator(".arm-view").bounding_box()
+    controls = page.locator(".arm-controls").bounding_box()
+    assert controls["x"] >= view["x"] + view["width"]
     page.fill("[data-sim-task]", "관절 이동 시연")
     page.click("[data-sim-record-start]")
     page.wait_for_function("document.querySelector('[data-sim-record-status]').textContent.includes('기록 시작 실패')")
@@ -1618,7 +1621,7 @@ def test_arm_gripper_presets_slider_and_badge(tablet_page):
 
 
 @pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1", reason="ROSY_RUN_BROWSER_TESTS=1")
-@pytest.mark.parametrize("viewport", [(2000, 1200), (390, 844)])
+@pytest.mark.parametrize("viewport", [(2000, 1200), (1200, 2000), (390, 844)])
 def test_arm_gripper_sits_in_the_right_hand_slot(base_url, viewport):
     shots = Path(os.environ.get("ROSY_SHOT_DIR", "X:/DevTemp/d411-c"))
     with playwright_sync.sync_playwright() as playwright:
@@ -1634,9 +1637,11 @@ def test_arm_gripper_sits_in_the_right_hand_slot(base_url, viewport):
             assert overflow <= 0, f"가로 넘침 {overflow}px"
             if viewport[0] >= 1024:
                 assert grip["x"] >= jog["x"] + jog["width"] and abs(grip["y"] - jog["y"]) < 2, (jog, grip)
-                assert grip["width"] < jog["width"]
+                assert abs(grip["width"] - jog["width"]) <= 1, (jog, grip)
+                assert page.locator(".arm-controls").bounding_box()["width"] > 900
             else:
                 assert grip["y"] >= jog["y"] + jog["height"], (jog, grip)
+                assert abs(grip["width"] - jog["width"]) <= 1, (jog, grip)
             for name in ("open", "half", "close"):
                 box = page.locator(f"[data-gripper-preset='{name}']").bounding_box()
                 assert box["height"] >= 40 and box["x"] + box["width"] <= viewport[0], (name, box)
