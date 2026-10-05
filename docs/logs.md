@@ -5951,6 +5951,12 @@ osy-d395-s1d\`.
 - 증거: 원래 실제 함수 반례 5 FAIL을 재현한 뒤 T3와 기존 T1/T2 시험 80 PASS/Windows symlink 2 SKIP(1.82s), owned flake8 0이다. 실제 ROS endpoint 결속을 생성하거나 SIM·장치·주행을 실행하지 않았다.
 - gate 변화: host SOURCE/LOCAL 판정 수정만. 실제 observer 수집·ROS-SIM 수용·실물 안전을 증명하지 않는다.
 
+## 2026-10-05 · uncommitted · test(execution): same-attempt native evidence chain
+
+- Change: `feat/omx-policy-native-chain` adds isolated actual Action API to native journal, sealed Episode and offline Fleet correlation. Preparation permits real observation/poll; final session/stop checks delegate to the genuine fence. Stop, lost authority and expiry preserve durable uncertain attempts without retry.
+- Evidence: source-pinned host tests and independent local Linux ROS normal/revocation execution. Original freshness/lease/grant limits remain. Shared-path stale failures and Destroyable diagnostics are retained.
+- Gate: SOURCE/HOST/isolated only. No installed-device, model-inference, receiver, task or physical acceptance; total physical movement stays at most 0.20m across all robots, attempts and coast.
+
 ## 2026-10-05 · uncommitted · feat(validation): D-426 T5 장애 주입 시나리오·sim base watchdog
 
 - 변경: (1) `tools/validation/fleet_gazebo/scenarios.py` — M01–M08 수용 행렬의 선언적 정의(필수 판정·blackout 주입·재시작 대상). 주입은 run 소유 경계만(scope="run" 강제), REST/WS/둘 다 blackhole은 별도 회차로 구분. D-419 정책 적용 시한(5.2 s window)과 실제 정지(≤0.50 sim s·이동 ≤0.05 m·회전 ≤0.25 rad)를 같은 시한으로 쓰지 않는 분리 판정 `stop_policy_checks`. 시뮬 profile 0.15 m/s·0.5 rad/s·CORE kill 입력 만료 0.30 s 고정. (2) `integrations/simulation/gazebo/scripts/command_watchdog.py` — CORE와 별도 수명의 sim base 명령 감시 bridge. 최신 cmd_vel 재발행 + 0.30 monotonic s 만료 시 0. CORE writer 불증식, clock pause에도 만료, rclpy 부재 시 안내 후 exit 3.
