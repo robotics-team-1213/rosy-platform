@@ -24,7 +24,6 @@ export function createConnectionView({scope, el}) {
         : "관제 토큰으로 접속하면 로봇·카메라·지도 상태를 확인할 수 있습니다.";
     el("map-stage").dataset.mapState = "auth";
     const canvas = el("map-canvas");
-    canvas.getContext("2d").clearRect(0, 0, canvas.width, canvas.height);
     canvas.setAttribute("aria-hidden", "true"); canvas.tabIndex = -1; canvas.classList.add("idle");
     el("map-empty").hidden = false; el("map-legend").hidden = true;
     el("map-empty-title").textContent = title;
