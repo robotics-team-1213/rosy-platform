@@ -161,6 +161,7 @@ def test_remove_refuses_a_formation_member(tmp_path):
     class Session:
         state = "RUNNING"
         assignment = {"rosy_09": object()}
+        follower_ids = frozenset({"rosy_09"})
 
     console._formation = Session()
     with pytest.raises(HubError) as refused:

@@ -86,6 +86,9 @@ class FakeCore:
                 self.logged_out.append(bearer)
                 self.known.discard(bearer)
             return httpx.Response(self.logout_status)
+        if path == "/api/v1/system/capabilities":
+            return httpx.Response(200, json={"navigation": {"goal_navigation": True},
+                                             "swarm": {"lead": True, "follow": True}})
         if path == "/api/v1/robot/state":
             return httpx.Response(200, json={"robot_id": self.robot_id, "navigation": self.navigation,
                                              "pose": {"x": self.pose[0], "y": self.pose[1],

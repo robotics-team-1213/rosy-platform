@@ -1899,3 +1899,9 @@
 - 변경: /console 머리의 Cell 작업은 주소와 격자 자리를 유지하고, 조용한 버튼과 같은 면·높이·포커스를 쓴다.
 - 증거: test_site_map_api.py를 포함한 호스트 계약 100 passed, known_failures 0 new.
 - gate 변화: 없음.
+
+## 2026-10-05 · uncommitted · fix(fleet): 목표·대형 지원 기능 확인
+
+- 변경: CAP-001 표시와 전송 직전 재확인, 미지원 목표·대형 버튼 사유, 교체·대형 편입 경합 차단, ARMING 팔로워 예약. CORE 계약과 최종 제어 권한은 유지한다.
+- 증거: 관련 Python 180 PASS, Node 3 PASS, Chromium 2 PASS, 독립 리뷰 54 PASS와 scoped safety PASS. 기능 허용 변이 RED 후 복원 GREEN을 확인했다. docs/validation/fleet-navigation-support-2026-10-05.md.
+- gate 변화: 소스 회귀만 확인. 실기 두 대의 짧은 수동 진단과 최종 IDLE·속도 0을 읽었다. 새 후보 배포·목표·대형 실동작은 NOT_RUN, 독립 FIELD 수용은 HOLD.

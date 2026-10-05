@@ -219,6 +219,37 @@ def test_normal_robot_is_reachable_from_the_exception_first_roster(console_url):
         browser.close()
 
 
+@pytest.mark.parametrize("supported", [False, True])
+def test_motion_buttons_follow_live_robot_capabilities(console_url, supported):
+    from playwright.sync_api import sync_playwright
+
+    caps = {"navigation": {"goal_navigation": supported},
+            "swarm": {"lead": supported, "follow": supported},
+            "runtime": {"mode": "hardware" if supported else "motor"}}
+    robots = [_robot(name, {"x": x, "y": 1.0, "yaw": 0.0}, capabilities=caps)
+              for name, x in [("robot-a", 1.0), ("robot-b", 0.5)]]
+    api = {"/api/fleet/state": {"fleet": {"name": "site", "online": 2, "total": 2},
+                                "robots": robots, "ts": 0.0},
+           "/api/fleet/map": MAP_GRID,
+           "/api/fleet/formation": {"active": False, "state": "IDLE"}}
+    with sync_playwright() as playwright:
+        browser, page, errors = _open_console(playwright, api)
+        page.goto(console_url, wait_until="networkidle")
+        page.locator("#roster-toggle").click()
+        goals = page.locator("#roster ui-button[data-goal-robot-id]")
+        assert goals.count() == 2
+        for goal in goals.all():
+            assert goal.get_attribute("disabled") == (None if supported else "")
+            if not supported:
+                assert goal.get_attribute("reason") == "수동 주행만 지원"
+        arm = page.locator("#formation-start")
+        assert arm.get_attribute("disabled") == (None if supported else "")
+        if not supported:
+            assert "수동 주행만 지원" in page.inner_text("#formation-detail")
+        assert not errors
+        browser.close()
+
+
 def _open_console(playwright, api, posts=None, init_script=""):
     """D-153 회차4 — 상태별 Fleet G2 셀. api 값은 (status, body) 또는 body."""
     browser, page, errors = open_page(playwright, 1920, 1080)

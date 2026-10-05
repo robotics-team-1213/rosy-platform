@@ -85,8 +85,8 @@
 
 ## 최근 기록
 
+- 2026-10-05 · uncommitted · fix(fleet): 목표·대형 지원 기능 확인
 - 2026-10-05 · uncommitted · uiux: give the cell header link the quiet control face
 - 2026-10-05 · uncommitted · fix(test): bootstrap Fleet cell process before collection
 - 2026-10-05 · uncommitted · fix(fleet): 증거 프로파일 매핑을 canonical 계약으로 이동
 - 2026-10-05 · uncommitted · fix(ui): 목표 취소·관제 적합·미지원 카메라 조회 복구
-- 2026-10-05 · uncommitted · fix(test): T2 exact-source import 격리
