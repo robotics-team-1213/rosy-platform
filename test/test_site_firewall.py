@@ -328,6 +328,7 @@ def test_real_compose_resolves_export_comments_and_interpolation(tmp_path):
     env = tmp_path / "site.env"
     dirs = "".join(f"{key}={tmp_path}\n" for key in ("ROSY_SITE_CONFIG_DIR", "ROSY_SITE_SECRETS_DIR"))
     env.write_text(dirs + "BASE=9\nROSY_SITE_HTTPS_PORT=${BASE}443\n"
+                   "ROSY_FLEET_PORT=8090\nROSY_VISION_PORT=8095\n"
                    "ROSY_SITE_BIND_ADDRESS=0.0.0.0 # LAN\n"
                    "ROSY_SITE_LAN_IFACE=wlan0 # Wi-Fi\nROSY_SITE_TLS_HOST=site-pc.local\n",
                    encoding="utf-8")
@@ -417,7 +418,8 @@ def test_real_compose_publishes_the_same_proxy_binding_with_the_pairing_overlay(
     env = tmp_path / "site.env"
     dirs = "".join(f"{key}={tmp_path}\n" for key in ("ROSY_SITE_CONFIG_DIR", "ROSY_SITE_SECRETS_DIR"))
     env.write_text(dirs + "ROSY_SITE_BIND_ADDRESS=0.0.0.0\nROSY_SITE_LAN_IFACE=wlan0\n"
-                   "ROSY_SITE_TLS_HOST=site-pc.local\nROSY_SITE_HTTPS_PORT=8443\n", encoding="utf-8")
+                   "ROSY_SITE_TLS_HOST=site-pc.local\nROSY_SITE_HTTPS_PORT=8443\n"
+                   "ROSY_FLEET_PORT=8090\nROSY_VISION_PORT=8095\n", encoding="utf-8")
     overlay = ["-f", str(ROOT / "deploy/site/compose.pairing.yaml")]
     settings = module.compose_settings(module.compose_config(
         env, ROOT / "deploy/site/compose.yaml", "rosy-fw-test", module._run, overlay))

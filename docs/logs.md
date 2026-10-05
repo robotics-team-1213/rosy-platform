@@ -6129,3 +6129,8 @@ osy-d395-s1d\`.
 - 변경: D-468 채택. 차체 침범 감지·실제 자세 복귀·센서 재탐색을 Fleet 지원보다 먼저 수행한다. 구현은 feat/lane-return.
 - 증거: docs/plans/2026-10-05-lane-return.md. 설계 결정만 사용자 승인; SOURCE/SIM/DEVICE/FIELD 검증은 별도.
 - gate 변화: ADR 결정과 실행 목표만 채택. 런타임 배포·현장 복구 수용은 아직 없음.
+
+## 2026-10-05 · uncommitted · fix(site): Fleet and Vision listen ports come from the site setting
+- 변경: Fleet과 Vision의 컨테이너 수신 포트가 ROSY_FLEET_PORT와 ROSY_VISION_PORT다. Compose 명령, 헬스체크, Caddy 업스트림, 페어링 동기화 주소가 그 값을 쓴다. 코드 기본값은 없다. 두 포트는 공개하지 않는다.
+- 증거: test/test_site_firewall.py test/test_site_preflight.py test/test_site_pairing_deploy.py test/test_site_task_queue_deploy.py test/test_site_map_fit_deploy.py — 113 passed. known_failures 0 new. 호스트 시험이며 현장 배포는 없다.
+- gate 변화: 없음. 현장 site.env에 두 키가 생기기 전에는 다음 배포가 거부된다. 아직 배포하지 않았다.
