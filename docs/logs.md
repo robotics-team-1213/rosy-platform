@@ -5885,3 +5885,9 @@ osy-d395-s1d\`.
 - 변경: 실제 bridge 생성자에 비활성 optional guard를 선언하고 writer·odometry를 직접 field 접근으로 변경했다. 누락 field가 제한 없는 제출로 넘어가지 않으며 기존 None·실제 guard·STOP 경로를 보존한다. C6 예외·P6 예산·검사 범위는 유지한다.
 - 증거: 원본 C6 실패 재현 뒤 독립 Safety SOURCE PASS와 부모 통합101PASS/18.88초/기존 ROS 필수10SKIP/NEW0이다. 원본과 같은 명령·대상 경로로 후보83d633의10893개를 수집한 선택 재현에서 영상 저장2PASS, 다운로드는 필요1GiB 대비0.9GiB로 실제 UPDATE_INSUFFICIENT_SPACE를 확인했다. 원본 중단의 모든 후반 오류를 같은 원인으로 단정하지 않는다.
 - gate 변화: 두 실제 로봇의 기존 CA·키·HTTPS identity와 두 앱 ADB를 재확인했다. 기존 관제 named 인증은401, 새 pending은404다. 원격 push·후보 CI·서명039·앱 승인/재접속·관제 수신·새 Cam/발열은 미완료다. 상세 기록은 docs/validation/d456-push-diagnostics-2026-10-05/README.md이며 실기 연동 완료로 표시하지 않는다.
+
+## 2026-10-05 · uncommitted · docs(learning): D-465 모델 PC 픽셀 처리 파이프라인 구축 계획
+
+- 변경: 환경/입력 doctor·기존 baseline·indexed 255 import와 초안 revision·최신 승인 builder/admission·선택 SAM/외부 보조·실 GPU 파일럿을 7개 구현 task로 분해한다. 기존 색상 ZIP의 미라벨 보존 한계와 기존 앱 소유 경계를 기록한다.
+- 증거: 기존 prelabel/autolabel·Job·D-446 실행기·review_ingest/review_masks·review_dataset/learning_cycle 소스 및 D-462/D-464 계약을 확인했다. 문서 lint/계약 테스트는 X:/DevTemp/pixel-plan에 보존한다.
+- gate 변화: 구축 계획만 추가한다. 제품 구현·원격 환경 변경·외부 API·실 학습·GPU/품질 수용은 NOT_RUN이다.

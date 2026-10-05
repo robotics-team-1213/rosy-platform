@@ -285,6 +285,7 @@
 - [2026-10-04-d443-signal-supervision.md](plans/2026-10-04-d443-signal-supervision.md)
 - [2026-10-04-pilot-device-stop-contract-measurement.md](plans/2026-10-04-pilot-device-stop-contract-measurement.md)
 - [2026-10-04-web-gate-ladder-fleet-readiness-adr-plan.md](plans/2026-10-04-web-gate-ladder-fleet-readiness-adr-plan.md)
+- [2026-10-05-model-pc-pixel-label-pipeline.md](plans/2026-10-05-model-pc-pixel-label-pipeline.md)
 
 ## 교훈 (docs/solutions)
 
@@ -299,8 +300,8 @@
 
 ## 최근 기록
 
+- 2026-10-05 · uncommitted · docs(learning): D-465 모델 PC 픽셀 처리 파이프라인 구축 계획
 - 2026-10-05 · uncommitted · fix(integration): 정상 푸시의 C6와 저장 공간 실패 재현
 - 2026-10-05 · uncommitted · fix(integration): 동시 실행 기록과 정상 푸시 검사 보완
 - 2026-10-05 · uncommitted · fix(integration): 등록 TLS 전송과 배포 검사 통합
 - 2026-10-05 · uncommitted · fix(integration): 실제 LAN 연결의 HTTPS 등록 경계 기록
-- 2026-10-05 · uncommitted · refactor(learning): 데이터셋 출처 검증 owner 분리
