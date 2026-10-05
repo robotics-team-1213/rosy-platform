@@ -6277,3 +6277,9 @@ osy-d395-s1d\`.
 - 변경: Cam LAN 연결과 설정 화면의 단독 조작은 본문 너비로, 설정의 뒤로·저장은 동등한 너비로 맞췄다.
 - 증거: Android `:app:compileDebugKotlin` 성공. 네이티브 화면 캡처와 설치자 독회는 없다.
 - gate 변화: Cam LOCAL 소스 부분 근거. 제품 전체 G2/G3는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(cam): 네이티브 LAN·설정 화면 부분 확인
+
+- 변경: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)에 Android 에뮬레이터 320px·390px/글자 130% 화면과 미검증 상태를 기록했다.
+- 증거: 현재 브랜치 debug APK 빌드·설치·실행, ADB 연결과 설정 뒤로·저장 동일 173px UI bounds 확인. 캡처 원본은 X:에 둔다.
+- gate 변화: Cam LOCAL 네이티브 G2 부분 근거. Peer·Pairing·송출 상태와 G3·실제 폰 수용은 HOLD다.
