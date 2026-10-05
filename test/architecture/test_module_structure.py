@@ -107,7 +107,12 @@ SIZE_VERDICTS = {
         "duplicate its socket. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        36_234,
+        36_444,
+        "split: independently re-judged at 36444 on 2026-10-05 for Fleet CAP-001 support: "
+        "101 production/web lines from this patch and 109 from integrated main above 36234. "
+        "Transport, formation lifecycle, console gather/dispatch and UI readiness keep their "
+        "existing owners. Retain B2/server/UI split obligations and every threshold, including "
+        "package +150; see docs/validation/fleet-navigation-support-2026-10-05.md. "
         "split: independently re-judged at 36234 on 2026-10-05, after moving profile dispatch "
         "to canonical learning contracts. Since measured35878: evidence bundle106, receiver97, "
         "trusted discovery88, reservations33, segment store23, styles16, roster-8, setup1. "
@@ -380,8 +385,21 @@ SIZE_VERDICTS = {
         795,
         "accept: legacy comparison-graph publisher pinned by test_module_separation; no new work (X3)",
     ),
+    "fleet/fleet/swarm/session.py": (
+        616,
+        "accept: independently reviewed on 2026-10-05: one formation lifecycle owns planning, "
+        "arming, relay opening, stop and rollback. Sixteen CAP-001/reservation lines retain "
+        "that lifecycle; transport and assignment policy stay separate. Capability and ARMING "
+        "regressions are host-testable. Retain the normal +150 allowance and every threshold; "
+        "see docs/validation/fleet-navigation-support-2026-10-05.md",
+    ),
     "fleet/fleet/server/console.py": (
-        1159,
+        1198,
+        "accept: independently re-judged at 1198 on 2026-10-05: CAP-001 presentation cache "
+        "and live dispatch fences add 39 lines beside this owner's mutable roster and goal "
+        "bookkeeping; transport still owns capability interpretation. Client replacement and "
+        "formation races are host-tested. Retain zero growth allowance; see "
+        "docs/validation/fleet-navigation-support-2026-10-05.md. "
         "accept: re-judged at measured 1159 on 2026-10-05 for D-463: the fresh map "
         "pose accessor reads this owner's gather/trust tables; lane geometry stays "
         "in lane_route.py. Zero growth allowance stays; independent source review "
