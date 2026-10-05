@@ -119,9 +119,9 @@ FIT_STRIDE = 2
 TRANSVERSE_MIN_ANGLE_RAD = math.radians(65.0)
 #: A line steeper than this whose extrapolated offset at SIDE_X_M lies beyond
 #: STEEP_MAX_LATERAL_FRACTION of the lane width is a diagonal mark (a junction
-#: mouth, a crosswalk edge) read far outside the lane, not a boundary. Real
-#: 124745Z frames sided 60-64 deg lines at y -0.30..-0.42 m. Both ends of the
-#: seen paint must also lie beyond the lane half width plus STEEP_PAINT_MARGIN_M.
+#: mouth, a crosswalk edge) when its paint is outside the lane or meets the path.
+#: Paint spanning both lane edges is a crossing even without that far offset.
+#: Real 124745Z frames projected transverse marks at 60-64 deg.
 STEEP_MIN_ANGLE_RAD = math.radians(45.0)
 STEEP_MAX_LATERAL_FRACTION = 1.0
 STEEP_PAINT_MARGIN_M = 0.03
@@ -328,9 +328,10 @@ class LaneKeeper:
             low, high = sorted(float(p[1]) for p in ends)
             paint_outside = low > half + STEEP_PAINT_MARGIN_M or high < -(half + STEEP_PAINT_MARGIN_M)
             paint_crosses = low <= STEEP_PATH_M and high >= -STEEP_PATH_M
+            paint_spans_lane = low < -half and high > half
+            far_lateral = abs(lateral) > STEEP_MAX_LATERAL_FRACTION * 2.0 * half
             if (abs(heading) > STEEP_MIN_ANGLE_RAD and self._corner_side is None
-                    and (paint_outside or paint_crosses)
-                    and abs(lateral) > STEEP_MAX_LATERAL_FRACTION * 2.0 * half):
+                    and (paint_spans_lane or ((paint_crosses or paint_outside) and far_lateral))):
                 self.last["candidates"].append(dict(record, y_at_side_x_m=round(lateral, 3), rejected=True,
                                                     reason="steep_crossing" if paint_crosses else "steep_far"))
                 continue

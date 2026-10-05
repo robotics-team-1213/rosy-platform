@@ -300,8 +300,8 @@
 
 ## 최근 기록
 
+- 2026-10-05 · uncommitted · fix(perception): 차선 짝 splay와 전체 차로 횡단 표시 회귀 수정
 - 2026-10-05 · uncommitted · feat(validation): D-426 T1 실행 격리·preflight runner 착수
 - 2026-10-05 · uncommitted · docs(learning): D-465 모델 PC 픽셀 처리 파이프라인 구축 계획
 - 2026-10-05 · uncommitted · fix(integration): 정상 푸시의 C6와 저장 공간 실패 재현
 - 2026-10-05 · uncommitted · fix(integration): 동시 실행 기록과 정상 푸시 검사 보완
-- 2026-10-05 · uncommitted · fix(integration): 등록 TLS 전송과 배포 검사 통합
