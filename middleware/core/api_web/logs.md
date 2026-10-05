@@ -551,3 +551,9 @@
 - 변경: receiver_repository.issue 의 활성 세션 상한을 4에서 8로 올리고, 계약 스키마(Relationship.session_ids max_length)와 API 레퍼런스의 같은 문장을 한 커밋에 맞췄다(D-18). 현장 태블릿이 연결마다 새 세션을 발급받는데 종료 시 반납하지 않아 1시간 세션 수명 창 안에 재연결 4회면 승인이 일시 잠겼다(2026-10-05 실기 - 재설치 시험 4회로 재현, 세션 토큰 삭제로 복구). 8은 기존 개발 세션 상한(살아 있는 세션 8개)과 같은 규모다.
 - 증거: test_peer_pairing + contracts/foundation 전체 761 passed 5 skipped, known_failures NEW 0(X:/DevTemp/peer-sessions/run.txt). 시험 \	est_explicit_revoke_cancels_issued_sessions_and_eight_session_limit\이 9번째 발급 거부로 갱신.
 - gate 변화: SOURCE. 기존 로봇(구 이미지)에는 새 릴리스로 배포되기 전까지 반영되지 않고, 구 이미지가 5개 이상 저장된 overlay를 읽으면 관계 기록이 무효로 보이는 다운그레이드 주의는 남는다.
+
+## 2026-10-05 · uncommitted · fix(api): D-468 계약 버전 표시 정렬
+
+- 변경: 앱 설명의 API 계약 버전을 문서의 v1.106과 맞췄다.
+- 증거: 계약 버전 정렬 검사 통과. 장치 배포는 하지 않았다.
+- gate 변화: 없음.

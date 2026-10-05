@@ -374,14 +374,16 @@ def test_delayed_old_seat_cleanup_does_not_cancel_new_seat_goal(tmp_path):
     from omx_adapter.pilot_sim_runtime import PilotSimRuntime
     arm = Arm()
     arm.owner.run_admission_policy = lambda operation: operation(arm.owner.state)
-    admission = ControlSeatAdmission(arm.owner, ActionStore(tmp_path / "cleanup.sqlite3"))
+    admission = ControlSeatAdmission(arm.owner, ActionStore(tmp_path / "cleanup.sqlite3"),
+                                     monotonic=lambda: 10.0)
     arm.control_admission = admission
     admission.acquire("a", "seat-a", ttl_s=10)
     admission.release("a", "seat-a")
     admission.acquire("b", "seat-b", ttl_s=10)
     runtime = PilotSimRuntime(arm)
     runtime.snapshot()
-    assert runtime.submit(jog().model_copy(update={"seat_id": "seat-b"}))["state"] == "LOCAL_ACCEPTED"
+    result = runtime.submit(jog().model_copy(update={"seat_id": "seat-b"}))
+    assert result["state"] == "LOCAL_ACCEPTED", result
     runtime.cancel_active(seat_id="seat-a")
     assert runtime.goal("request")["state"] == "LOCAL_ACCEPTED"
     assert arm.owner.state == "active"
