@@ -305,4 +305,3 @@
 - 2026-10-05 · uncommitted · fix(ci): include learning contracts in site candidate triggers
 - 2026-10-05 · uncommitted · fix(test): D-426 T2/T5 import 경계
 - 2026-10-05 · uncommitted · fix(learning): invert guarded ACT input dependencies
-- 2026-10-05 · uncommitted · docs: give the header and sidebar one layout each
