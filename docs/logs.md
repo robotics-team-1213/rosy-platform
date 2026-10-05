@@ -5951,6 +5951,12 @@ osy-d395-s1d\`.
 - 증거: 원래 실제 함수 반례 5 FAIL을 재현한 뒤 T3와 기존 T1/T2 시험 80 PASS/Windows symlink 2 SKIP(1.82s), owned flake8 0이다. 실제 ROS endpoint 결속을 생성하거나 SIM·장치·주행을 실행하지 않았다.
 - gate 변화: host SOURCE/LOCAL 판정 수정만. 실제 observer 수집·ROS-SIM 수용·실물 안전을 증명하지 않는다.
 
+## 2026-10-05 · uncommitted · test(execution): same-attempt native evidence chain
+
+- Change: `feat/omx-policy-native-chain` adds isolated actual Action API to native journal, sealed Episode and offline Fleet correlation. Preparation permits real observation/poll; final session/stop checks delegate to the genuine fence. Stop, lost authority and expiry preserve durable uncertain attempts without retry.
+- Evidence: source-pinned host tests and independent local Linux ROS normal/revocation execution. Original freshness/lease/grant limits remain. Shared-path stale failures and Destroyable diagnostics are retained.
+- Gate: SOURCE/HOST/isolated only. No installed-device, model-inference, receiver, task or physical acceptance; total physical movement stays at most 0.20m across all robots, attempts and coast.
+
 ## 2026-10-05 · uncommitted · validation: 차선 개선040 두 실기 배포·source 일치
 
 - 변경: CI 통과 source58d246ab3의 signed ARM64 release2026.10.05-040을 9dfk→8kcn 순차 설치하고 실제 CORE/camera cwd·파일 SHA256·live 카메라·정지 상태를 확인했다. source 수정은 없다.

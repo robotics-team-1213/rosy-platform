@@ -301,7 +301,7 @@
 ## 최근 기록
 
 - 2026-10-05 · uncommitted · validation: 차선 개선040 두 실기 배포·source 일치
+- 2026-10-05 · uncommitted · test(execution): same-attempt native evidence chain
 - 2026-10-05 · uncommitted · fix(validation): D-426 T3 관측 누락·교차 footprint 성공 판정 차단
 - 2026-10-05 · uncommitted · fix(perception): blob에 지워진 차선 경계 한 번 복구
 - 2026-10-05 · uncommitted · fix(ui): 네트워크 설치 작업을 연결 중심으로 정리
-- 2026-10-05 · uncommitted · feat(fleet): D-426 T4 공유 구간 진입 허가·점유
