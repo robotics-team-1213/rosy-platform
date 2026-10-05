@@ -376,7 +376,27 @@ def test_packaged_layers_leave_the_stop_unset_and_know_the_body():
     assert not default.body_stop_known
     pinky = _merged(PINKY_LAYER)
     assert pinky.body_stop_known and not pinky.obstacle_override
+    assert pinky.obstacle_mode == "path"
     assert pinky.body_front_x_m == 0.04205 and pinky.body_ultrasonic_x_m == 0.0267
+
+
+def test_pinky_drives_past_a_return_off_the_path_and_stops_on_the_path():
+    """A sector stop holds for any return inside 0.20 m and ±20°. The packaged
+    path stop holds only when the body would meet the return on the commanded path."""
+    pinky = _merged(PINKY_LAYER)
+    m = LineFollowManager(_Events(), config=pinky, clock=lambda: T)
+    m.set_mode(LineFollowMode.CAMERA_LINE)
+    # 10 cm to the side and 0.16 m from the LiDAR: inside the old 0.20 m sector
+    # once the heading swings it into ±20°, and clear of the body half-width.
+    assert _step(m, [(0.16, 0.10)])[1].state == "TRACKING"
+    # Straight ahead, still more than 10 cm in front of the body. Sector would
+    # hold (0.17 m < 0.20 m); the body gap is past the stop gap.
+    ahead = 0.11 + (pinky.body_front_x_m - pinky.body_lidar_x_m)
+    assert _step(m, [(ahead, 0.0)], t=T + 0.1)[1].state == "TRACKING"
+    stop = pinky.derived_stop_gap_m(min(pinky.cruise_speed, pinky.max_linear))
+    close = (stop - 0.01) + (pinky.body_front_x_m - pinky.body_lidar_x_m)
+    held = _step(m, [(close, 0.0)], t=T + 0.2)[1]
+    assert (held.state, held.reason) == ("HOLD", "obstacle_ahead")
 
 
 def test_old_overlay_keeps_its_lidar_origin_meaning():
