@@ -5891,3 +5891,10 @@ osy-d395-s1d\`.
 - 변경: 환경/입력 doctor·기존 baseline·indexed 255 import와 초안 revision·최신 승인 builder/admission·선택 SAM/외부 보조·실 GPU 파일럿을 7개 구현 task로 분해한다. 기존 색상 ZIP의 미라벨 보존 한계와 기존 앱 소유 경계를 기록한다.
 - 증거: 기존 prelabel/autolabel·Job·D-446 실행기·review_ingest/review_masks·review_dataset/learning_cycle 소스 및 D-462/D-464 계약을 확인했다. 문서 lint/계약 테스트는 X:/DevTemp/pixel-plan에 보존한다.
 - gate 변화: 구축 계획만 추가한다. 제품 구현·원격 환경 변경·외부 API·실 학습·GPU/품질 수용은 NOT_RUN이다.
+
+## 2026-10-05 · uncommitted · feat(validation): D-426 T1 실행 격리·preflight runner 착수
+
+- 변경: `tools/validation/fleet_gazebo/{preflight,run}.py`와 `test/test_fleet_gazebo_run_contracts.py` 추가(실패 시험 선행). run별 예약(포트·ROS domain 120–199·GZ_PARTITION·namespace)을 run_id에서 결정론 도출하고, run root 단일 사용(살아 있는/오래된 manifest 모두 거부)·root 밖 symlink 거부·world/map/profile sha256 고정·CORE 오버레이와 fleet robots.yaml의 hub_url·pairing_token 일치 검사·READY는 7개 탐침(clock/scan/odom/tf/nav2/core_http/ws_welcome) 전부 확인일 때만. run.py는 런타임 생성 토큰(운영자·페어링)으로 오버레이·robots.yaml·run_spec.yaml을 만들고 실행 명령만 출력한다(실행 배선은 T5–T6). gz_multi.launch.py에 `run_spec` 인자(러너 소유 오버레이·manifest·partition 소비).
+- 증거: test_fleet_gazebo_run_contracts 12 passed(2 skip — Windows symlink 권한), test_gz_multi_run_spec 3 + test_gz_multi_core 회귀 통과(Linux CI에서 실행), `run.py --help` exit 0, 폴더 계약 9 passed. X:/DevTemp/opencode/d426.
+- gate 변화: 없음. T1 구현이지 실제 Gazebo 회차·ROS-SIM이 아니다(T6·M01–M08 뒤).
+- 결정: WSL Ubuntu에 Jazzy+Gazebo+colcon 확인 — D-426 실행 환경 확보. T2(통신 상관)부터 이어 간다.

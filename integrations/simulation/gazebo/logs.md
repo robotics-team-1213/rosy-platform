@@ -238,3 +238,10 @@
 - 증거: null 수명 원본 제공 1 passed (2.54s), 기존 키보드 탭과 경기 보드 2 passed (4.54s). X 제공 null 거리 정리 제거 변이가 이전 2.0m를 남겨 실제 단언 RED, 동일 원본 제공 GREEN·제품 SHA256 불변을 확인했다.
 - gate 변화: SOURCE/LOCAL 읽기 전용 뷰어이며 Gazebo/장치/물리 gate는 움직이지 않는다.
 - 결정: D-439 Task5. 미수신을 측정 0으로 표시하지 않는다.
+
+## 2026-10-05 · uncommitted · feat(launch): D-426 T1 run_spec — 검증 runner 소유 실행 입력
+
+- 변경: `gz_multi.launch.py`에 `run_spec` 인자 추가(645→538줄, D-362 예산 유지를 위해 비-launch 부품을 `gz_multi_parts.py`로 분리 — 브리지 매핑·CORE 오버라이드·robots.yaml·run_spec 판독). 검증 runner(`tools/validation/fleet_gazebo/run.py`)가 run별로 만든 CORE 오버레이·robots.yaml·GZ_PARTITION을 런치가 그대로 소비한다 — 런치가 예약·토큰을 새로 만들지 않는다(불일치는 곧 READY 거절 사유). run_spec 이 없으면 기존 자체 생성 동작(임시 디렉터리·개발 토큰)이 그대로다. 필수 필드 누락·오버레이 부재는 즉시 실패.
+- 증거: `test/test_gz_multi_run_spec.py` 3개(빈 spec 레거시·필드 누락 RuntimeError·로봇별 오버레이 부재/존재). Windows skip, Linux CI에서 실행. `test_gz_multi_core.py` 기존 회귀 통과(분리 후 `_core_config` 등 import 별칭 유지). 크기 판정 시험 통과(538 < 600).
+- gate 변화: 없음(SOURCE). 실제 Gazebo 실행·ROS-SIM은 T6 회차 뒤.
+- 결정: D-426 T1의 런치 절반. 예약·manifest·READY 판정은 runner 쪽 `preflight.py`(test/test_fleet_gazebo_run_contracts.py 12개).
