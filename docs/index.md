@@ -300,8 +300,8 @@
 
 ## 최근 기록
 
+- 2026-10-05 · uncommitted · uiux: keep one robot entry and quiet the cell link
 - 2026-10-05 · uncommitted · test(execution): preserve extracted runtime annotation semantics
 - 2026-10-05 · uncommitted · fix(test): Python 3.12 런타임 추출 규칙 보존
 - 2026-10-05 · uncommitted · fix(test): 공용 확인창 종료 계약 정합
 - 2026-10-05 · uncommitted · fix(validation): T6 부족 근거 수용 차단
-- 2026-10-05 · uncommitted · fix(ci): include learning contracts in site candidate triggers

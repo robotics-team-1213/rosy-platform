@@ -1893,3 +1893,9 @@
 - 변경: Fleet 공통 테스트 초기화에 palletizing source 경로를 추가한다. 다른 테스트가 나중에 추가하던 경로에 의존하지 않는다. 제품 코드나 검사 제외는 바꾸지 않는다.
 - 증거: shared main과 작업 트리에서 cell app 두 파일 단독 수집이 모두 2 ERROR로 재현됐다. 수정 후 API·실제 로컬 Chromium·compiler 회귀 30 PASS, known_failures 0 NEW (`X:/DevTemp/line-remote-20261005/cell-green.txt`). 배포 gate 증거는 docs/validation/line-release-2026-10-05/ci-followup.md에 기록했다.
 - gate 변화: HOST 수집 및 회귀 PASS. 새 CI·서명 릴리스와 기기·자동 주행·FIELD 수용은 별도 검증한다.
+
+## 2026-10-05 · uncommitted · uiux: give the cell header link the quiet control face
+
+- 변경: /console 머리의 Cell 작업은 주소와 격자 자리를 유지하고, 조용한 버튼과 같은 면·높이·포커스를 쓴다.
+- 증거: test_site_map_api.py를 포함한 호스트 계약 100 passed, known_failures 0 new.
+- gate 변화: 없음.
