@@ -5911,9 +5911,16 @@ osy-d395-s1d\`.
 - 변경: fix/lane-keep-replay에서 바깥으로 벌어진 경계의 개별 heading 한도·공통 구간 폭 검사를 유지하며 짝을 보완하고, 급경사 paint가 차로 전체를 가로지르면 단독 경계에서 제외한다. 짧은 곡선 반례와 기존 chord/junction/corner 회귀를 검증한다.
 - 증거: 148프레임 baseline/후보 직진 평균 절대 error 0.150088→0.051813, 튐0.014→0.007, 비가시14→21이다. 독립 코드 리뷰는 중대 결함 없음, lane test57PASS/NEW0이다. 별도7녹화2252프레임 영향과 전체 검증 결과는 docs/validation/lane-keep-regression-2026-10-05/result.md에 기록한다. 앞선 실기 정지 관측 기록도 원본 그대로 보존한다.
 - gate 변화: 직진 수치 조건은 통과하나 비가시 정답·추가 곡선/교차로·장치 source 일치·현장 R1/R2는 미검증으로 주행 HOLD다. 장치 설정·모델 hold·서비스·주행 명령을 바꾸지 않았다.
+
+## 2026-10-05 · uncommitted · feat(validation): D-426 T3 독립 관측기·수치 판정기
+
+- 변경: `tools/validation/fleet_gazebo/assertions.py` 추가 — 관측 기록에 대한 순수 수치 판정(도착 0.10 m/10°·정지 |v|0.01·|w|0.03 1 s 연속·footprint 경계 여유 0.10 m 중심 거리 아님·contact 0 양성 대조 통과시만 단언·빈 구간 >0.15 s 충돌 INCONCLUSIVE·map/odom 혼용·stale pose monotonic INCONCLUSIVE·pause/reset epoch 분리·성공빛무 이동·명령받지 않은 로봇 이동). 단언 기록은 관측원·단위·시계·임계값·원본 위치를 남긴다. `observer.py` 추가 — 주입 공급원 기록 계층(epoch·빈 구간·20 Hz·publisher endpoint/GID/pid 소유권 검사). 실제 gz-transport 연결은 T6 회차가 주입한다.
+- 증거: test/test_fleet_gazebo_assertions.py 15개 판정 계약(실패 시험 선행 + 변이 3종: 어긋난 목표·이동 삭제·로봇 겹침이 모두 FAIL). 회귀 run_contracts 12개 통과. URDF 접촉 센서 배선은 양성 대조와 함께 T6에서 착수한다(계획 자체 규칙 — 대조 없이 contact-0 단언 금지).
+- gate 변화: 없음(SOURCE/LOCAL 판정 모듈). 실측 임계값은 시뮬 수용 목표이며 실물 안전 기준이 아니다.
+- 결정: observer truth는 Fleet/CORE 판단에 주입하지 않는다(D-426 결정 2). 이상적 오도메트리 전제는 manifest 기록 사항(T6).
+
 ## 2026-10-05 · uncommitted · fix(perception): blob에 지워진 차선 경계 한 번 복구
 
 - 변경: fix/lane-visibility에서 원래 선 승인 0/blob 존재에 한해 원본 paint를 forward support로 한 번 재시도한다. 기존 flank/길이/셀 수·pair/junction/급경사 한도를 유지한다.
 - 증거: 실제148장 비가시21→17, 직진 error0.0518125/jump0.007 유지, on_paint0.063→0.084 한계를 기록한다. 추가7영상2252장 재생·복구 접촉 시트 검토, 관련150PASS/1SKIP/NEW0, 독립 리뷰59PASS/NEW0이다. docs/validation/lane-visibility-deployment-2026-10-05/result.md.
 - gate 변화: SOURCE/LOCAL. 잔여17장의 경로 모호성·실제 keeper 제어·R1/R2는 HOLD다. 배포 증거는 실제 수행 뒤 별도로 기록한다.
-
