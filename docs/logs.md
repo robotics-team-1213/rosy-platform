@@ -6081,3 +6081,8 @@ osy-d395-s1d\`.
 - 변경: tools/calibration/camera_auto.py and read-only camera_capture.py collect stationary camera/LiDAR/odometry and reuse the installed fitter; guide replaces manual height/pitch entry. No drive, mode, apply or calibration-session changes.
 - 증거: related 87 PASS, known failures 0 NEW; final 042-device capture 40 scans/15 frames/121 odometry, eight wall returns, REJECTED too few wall returns, applied false. docs/validation/camera-auto-2026-10-05/result.md.
 - gate 변화: SOURCE/LOCAL command verified; DEVICE capture and automatic fit executed, calibration acceptance and automatic movement remain unverified.
+
+## 2026-10-05 · uncommitted · feat(camera): validate automatic checkerboard pose candidates
+- 변경: PC-only two-image checkerboard fit; original-pixel reprojection checks, signed pitch and explicit input/thickness/intrinsics provenance; no runtime writes.
+- 증거: 95 PASS, known_failures 0 NEW. Device images: 20/54 corners, board height 53.908mm, pitch 12.117deg; approximate operator 1mm board gives estimated floor height 54.908mm. docs/validation/camera-board-2026-10-05/result.md.
+- gate 변화: LOCAL and real-image candidate comparison PASS; intrinsic calibration, runtime apply and automatic driving acceptance unverified.
