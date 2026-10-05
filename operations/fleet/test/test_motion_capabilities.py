@@ -67,6 +67,41 @@ def test_capability_failure_does_not_hide_online_telemetry():
     assert snapshot['robots'][0]['capabilities'] is None
 
 
+def test_slow_capability_read_does_not_delay_state_and_is_shared():
+    async def exercise():
+        robot = CapRobot('one')
+        robot.cap_gate = asyncio.Event()
+        fleet = console(robot)
+        try:
+            snapshots = await asyncio.wait_for(
+                asyncio.gather(fleet.snapshot(), fleet.snapshot()), timeout=0.2)
+            assert all(s['robots'][0]['online'] for s in snapshots)
+            assert all(s['robots'][0]['capabilities'] is None for s in snapshots)
+            assert robot.cap_reads == 1
+            robot.cap_gate.set()
+            await asyncio.sleep(0)
+            assert (await fleet.snapshot())['robots'][0]['capabilities'] == robot.caps
+        finally:
+            await fleet.aclose()
+    asyncio.run(exercise())
+
+
+def test_expired_display_is_unknown_until_refresh_and_close_cancels_it():
+    async def exercise():
+        robot, clock = CapRobot('one'), FakeClock()
+        fleet = console(robot, clock)
+        assert (await fleet.snapshot())['robots'][0]['capabilities'] == robot.caps
+        clock.advance(6)
+        robot.cap_gate = asyncio.Event()
+        assert (await fleet.snapshot())['robots'][0]['capabilities'] is None
+        pending = list(fleet._capability_display.pending.values())
+        assert len(pending) == 1
+        await fleet.aclose()
+        assert pending[0].cancelled()
+        assert not fleet._capability_display.pending
+    asyncio.run(exercise())
+
+
 def test_cached_display_is_not_permission_to_dispatch_after_runtime_change():
     robot = CapRobot('one')
     fleet = console(robot)

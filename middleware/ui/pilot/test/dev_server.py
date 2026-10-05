@@ -8,7 +8,8 @@
     adb reverse tcp:8642 tcp:8642
     adb shell am start -a android.intent.action.VIEW -d "http://localhost:8642/pilot/"
 
-토큰: Bearer "devtoken" 을 operator 로 받는다. 그 외 401.
+토큰: Bearer "devtoken" 을 operator 로 받는다. Bearer "devadmintoken" 을
+administrator 로 받는다(등록 코드 발급 시험용). 그 외 401.
 """
 
 from __future__ import annotations
@@ -27,6 +28,7 @@ PILOT = Path(__file__).resolve().parents[1]          # .../middleware/ui/pilot
 WEB_COMMON = (PILOT.parents[2] / "shared") / "web"             # .../shared/web
 
 DEV_TOKEN = "devtoken"
+DEV_ADMIN_TOKEN = "devadmintoken"
 
 PILOT_MIME = {
     "styles.css": "text/css",
@@ -131,6 +133,8 @@ def _role(request: Request) -> str | None:
     auth = request.headers.get("authorization", "")
     if auth == f"Bearer {DEV_TOKEN}":
         return "operator"
+    if auth == f"Bearer {DEV_ADMIN_TOKEN}":
+        return "administrator"
     return None
 
 
@@ -262,6 +266,19 @@ async def pair(request: Request):
                             status_code=401)
     return JSONResponse({"id": "pair-1", "token": "devtoken", "role": "operator", "label": body.get("label", ""),
                          "source": "pair-physical", "expires_at": None}, status_code=201)
+
+
+#: D-193 §5 등록 코드(CORE 와 같은 모양). 관리자만 발급한다.
+@app.post("/api/v1/auth/enrollment-codes", status_code=201)
+async def enrollment_codes(request: Request):
+    if _role(request) != "administrator":
+        return JSONResponse({"detail": "administrator required"}, status_code=403)
+    body = await request.json()
+    role = str(body.get("role", "operator"))
+    if role not in ("viewer", "operator"):
+        return JSONResponse({"detail": "role must be viewer or operator"}, status_code=400)
+    return JSONResponse({"code": "DEMO-C0DE", "code_id": "dev-enroll-1", "role": role,
+                         "expires_in_s": 300}, status_code=201)
 
 
 @app.get("/api/v1/safety/state")

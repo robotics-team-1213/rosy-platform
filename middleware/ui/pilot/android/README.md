@@ -23,7 +23,8 @@ shared/web의 canonical allowlist 자산을 APK 안에 묶는다. 로봇에서 U
 로봇이 없어도 앱의 선택 화면은 실행되며 bundled 화면은 네트워크 없이 제공된다.
 private loopback proxy는 무작위 HttpOnly
 cookie, 정확한 Host/Origin 검사, 경로 allowlist로 제한한다. JS bridge·외부 탐색·파일
-접근은 없다. PWA의 sessionStorage 자격을 URL·로그에 넣지 않고 쿠키를 CORE로 전달하지
+접근은 없다. CORE 응답의 `X-Rosy-*` 카메라 증명 헤더(출처·시퀀스·촬영시각·변형)는
+번들 화면의 프레임 검증(web_common evidence.js)을 위해 그대로 전달한다. PWA의 sessionStorage 자격을 URL·로그에 넣지 않고 쿠키를 CORE로 전달하지
 않는다. CORE로는 API와 WS만 전달하며 API는 PWA의 Authorization을 사용한다.
 HTML에는 CSP를 보낸다. 원본 JS는 복제 구현하지 않고 X:의 generated assets에서 묶는다.
 

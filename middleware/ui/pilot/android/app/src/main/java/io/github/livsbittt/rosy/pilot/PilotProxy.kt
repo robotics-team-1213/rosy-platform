@@ -85,7 +85,7 @@ class PilotProxy(private val connection: PilotConnection, private val assets: Bu
                     (response.isSuccessful && session.uri == "/api/v1/auth/logout")) connection.invalidateCredential()
                 if (response.isRedirect) return reply(502, "text/plain", "Redirect refused".toByteArray())
                 val mime = response.header("Content-Type") ?: "application/octet-stream"
-                if (session.uri.startsWith("/api/v1/") && (mime.startsWith("video/") || mime.startsWith("application/octet-stream") || mime.startsWith("application/x-tar"))) {
+                if (session.uri.startsWith("/api/v1/") && (mime.startsWith("video/") || mime.startsWith("multipart/x-mixed-replace") || mime.startsWith("application/octet-stream") || mime.startsWith("application/x-tar"))) {
                     val length = response.body?.contentLength() ?: 0
                     if (length > 256L * 1024 * 1024) return reply(413, "text/plain", "Response too large".toByteArray())
                     val input = response.body?.byteStream() ?: ByteArray(0).inputStream()
@@ -104,6 +104,7 @@ class PilotProxy(private val connection: PilotConnection, private val assets: Bu
                     val result = if (length >= 0) newFixedLengthResponse(status, mime, bounded, length)
                         else newChunkedResponse(status, mime, bounded)
                     response.header("Content-Range")?.let { result.addHeader("Content-Range", it) }
+                    forwardRosyHeaders(response, result)
                     streaming = true
                     return secure(result)
                 }
@@ -114,6 +115,7 @@ class PilotProxy(private val connection: PilotConnection, private val assets: Bu
                 }
                 return reply(response.code, mime, bytes).apply {
                     response.header("Content-Range")?.let { addHeader("Content-Range", it) }
+                    forwardRosyHeaders(response, this)
                 }
             } finally { if (!streaming) response.close() }
         } catch (_: Exception) {
@@ -125,6 +127,15 @@ class PilotProxy(private val connection: PilotConnection, private val assets: Bu
             override fun getRequestStatus() = code
             override fun getDescription() = Response.Status.lookup(code)?.description ?: "$code Upstream response"
         }
+    /** CORE가 내보내는 X-Rosy-* 증명 헤더(카메라 출처·시퀀스·변형)를 그대로 전달한다.
+     *  web_common evidence.js가 프레임 반입 검증에 쓴다 — 이 전달이 없으면 번들 화면의
+     *  카메라가 항상 "확인할 수 없음"으로 실패한다(2026-10-05 태블릿 실기 확인). */
+    private fun forwardRosyHeaders(response: okhttp3.Response, to: Response) {
+        for (name in response.headers.names()) {
+            if (!name.startsWith("x-rosy-", ignoreCase = true)) continue
+            for (value in response.headers.values(name)) to.addHeader(name, value)
+        }
+    }
     private fun reply(code: Int, mime: String, bytes: ByteArray): Response = secure(newFixedLengthResponse(
         status(code), mime, bytes.inputStream(), bytes.size.toLong()))
     private fun secure(response: Response): Response = response.apply {
