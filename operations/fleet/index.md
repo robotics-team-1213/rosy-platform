@@ -90,4 +90,3 @@
 - 2026-10-05 · uncommitted · fix(discovery): LAN 이름 조회 작업과 대기 상한
 - 2026-10-05 · uncommitted · fix(fleet): DNS-SD가 비면 저장한 HTTPS 이름의 호스트 Avahi 주소
 - 2026-10-05 · uncommitted · fix(validation): D-426 T2 판정 근거와 현재 원본 나이
-- 2026-10-05 · uncommitted · test(validation): D-426 T2 통신·결과 상관 탐침 판정 계약

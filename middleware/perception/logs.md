@@ -1081,4 +1081,9 @@
 - 변경: fix/lane-visibility에서 원래 선 승인 0/blob 존재에 한해 원본 paint를 forward support로 한 번 재시도한다. 기존 flank/길이/셀 수·pair/junction/급경사 한도를 유지한다.
 - 증거: 실제148장 비가시21→17, 직진 error0.0518125/jump0.007 유지, on_paint0.063→0.084 한계를 기록한다. 추가7영상2252장 재생·복구 접촉 시트 검토, 관련150PASS/1SKIP/NEW0, 독립 리뷰59PASS/NEW0이다. docs/validation/lane-visibility-deployment-2026-10-05/result.md.
 - gate 변화: SOURCE/LOCAL. 잔여17장의 경로 모호성·실제 keeper 제어·R1/R2는 HOLD다. 배포 증거는 실제 수행 뒤 별도로 기록한다.
+## 2026-10-05 · uncommitted · validation: 차선 개선040 두 실기 배포·source 일치
+
+- 변경: CI 통과 source58d246ab3의 signed ARM64 release2026.10.05-040을 9dfk→8kcn 순차 설치하고 실제 CORE/camera cwd·파일 SHA256·live 카메라·정지 상태를 확인했다. source 수정은 없다.
+- 증거: 장치 각각148장 재생 비가시17/복구87–90/MAE0.0518586, keeper p95 14.02/18.31ms, 카메라각80장/10초·정지cmd501/497개다. CI37268067397/build37268633475 success, 두314패키지 ABI PASS, 관측 parameter와 model pointer 경로·존재 유지(내용 전후 해시는 미검증), fresh session logout204·token 제거. docs/validation/lane-visibility-deployment-2026-10-05/deployment.md.
+- gate 변화: DEVICE 소프트웨어 설치·정지 관측·장치 재생 PASS. motor bench·line/threshold·line OFF·화면 안전회로UNVERIFIED를 유지했다. keeper 제어 적용·독립 사람 라벨·R1/R2 현장 주행은 HOLD다.
 

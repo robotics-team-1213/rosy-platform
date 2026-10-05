@@ -239,6 +239,13 @@
 - gate 변화: SOURCE/LOCAL 읽기 전용 뷰어이며 Gazebo/장치/물리 gate는 움직이지 않는다.
 - 결정: D-439 Task5. 미수신을 측정 0으로 표시하지 않는다.
 
+## 2026-10-05 · uncommitted · feat(scripts): D-426 T5 sim base command watchdog
+
+- 변경: `scripts/command_watchdog.py` 추가 — CORE와 별도 수명의 ROS 노드. 최신 cmd_vel을 구독·재발행하다 0.30 monotonic s 만료 시 base 입력을 0으로 만든다. CORE의 operational cmd_vel writer를 늘리지 않는다(재발행은 시뮬 base 입력에만). 순수 판정(`gate`)은 호스트 시험이 돌리고 rclpy 배선은 얇다. clock pause에도 만료 작동(판정은 monotonic). 시계 역행은 stale 명령이 아니라 0으로 처리.
+- 증거: test/test_command_watchdog.py 8개 계약 — 무명령 즉시 0·신선 명령 통과·0.30 s 경계·clock pause 만료·시계 역행 0·CORE kill 경로 0.29/0.31 s 분기·--help·rclpy 부재 시 안내 후 exit 3.
+- gate 변화: SOURCE/LOCAL(순수 판정). 실제 Gazebo 회차에서의 bridge 수명·프로세스 크래시 정지는 T6이 증명한다(bridge 자체 사망 시 actuator 정지 보장은 별도 한계).
+- 결정: bridge는 CORE의 명령 흐름에 의존하지만 죽지 않는 한 CORE 사망을 0.30 s 안에 base 정지로 바꾼다(D-426 결정 5).
+
 ## 2026-10-05 · uncommitted · feat(launch): D-426 T1 run_spec — 검증 runner 소유 실행 입력
 
 - 변경: `gz_multi.launch.py`에 `run_spec` 인자 추가(645→538줄, D-362 예산 유지를 위해 비-launch 부품을 `gz_multi_parts.py`로 분리 — 브리지 매핑·CORE 오버라이드·robots.yaml·run_spec 판독). 검증 runner(`tools/validation/fleet_gazebo/run.py`)가 run별로 만든 CORE 오버레이·robots.yaml·GZ_PARTITION을 런치가 그대로 소비한다 — 런치가 예약·토큰을 새로 만들지 않는다(불일치는 곧 READY 거절 사유). run_spec 이 없으면 기존 자체 생성 동작(임시 디렉터리·개발 토큰)이 그대로다. 필수 필드 누락·오버레이 부재는 즉시 실패.
