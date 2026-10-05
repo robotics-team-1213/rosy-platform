@@ -19,6 +19,7 @@ Fleet/CORE 프로세스 사이의 관측은 ROS-SIM 회차(T6)가 만든다.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import math
 
 VERDICTS = ("PASS", "FAIL", "NOT_RUN", "INCONCLUSIVE")
 
@@ -76,11 +77,19 @@ def session_verdict(observations) -> dict:
                 verdicts["contract"] = "FAIL"
                 reasons.append(f"welcome refused with unknown code: {code}")
     if welcomed:
-        if verdicts["welcome"] != "FAIL":
+        mismatched = [w for w in welcomed if not any(
+            h.robot_id == w.robot_id and h.at_monotonic <= w.at_monotonic for h in hellos)]
+        if mismatched:
+            verdicts["welcome"] = "FAIL"
+            reasons.append("WELCOME has no preceding HELLO for its robot")
+        elif verdicts["welcome"] != "FAIL":
             verdicts["welcome"] = "PASS"
-    elif not refused and hellos:
+    unanswered = [h for h in hellos if not any(
+        response.robot_id == h.robot_id and response.at_monotonic >= h.at_monotonic
+        for response in welcomed + refused)]
+    if unanswered and verdicts["welcome"] != "FAIL":
         verdicts["welcome"] = "INCONCLUSIVE"
-        reasons.append("hello sent but no WELCOME or refusal was observed")
+        reasons.append("an announced robot has no matching session response")
     if not hellos:
         for key in verdicts:
             verdicts[key] = "NOT_RUN"
@@ -121,6 +130,16 @@ def dispatch_chain_verdict(observations) -> dict:
             results[attempt] = {"verdict": "NOT_RUN", "reasons": [], "robot_id": observation.robot_id}
 
     for attempt, result in results.items():
+        chain = [o for o in observations if o.kind in
+                 ("goal", "goal_accepted", "core_event", "task") and _attempt_key(o) == attempt]
+        if len({o.robot_id for o in chain}) != 1:
+            result.update(verdict="FAIL", reasons=["robot identity conflict for one attempt"])
+            continue
+        if any(not o.robot_id or type(o.at_monotonic) not in (int, float) or
+               not math.isfinite(o.at_monotonic) for o in chain):
+            result.update(verdict="INCONCLUSIVE", reasons=["missing identity or valid observation time"])
+            continue
+        requests = [o for o in chain if o.kind == "goal"]
         accepted = [o for o in _events(observations, "goal_accepted")
                     if _attempt_key(o) == attempt]
         events = [o for o in _events(observations, "core_event")
@@ -140,18 +159,35 @@ def dispatch_chain_verdict(observations) -> dict:
         if len(terminals) > 1:
             verdict = "FAIL"
             reasons.append(f"{len(terminals)} terminal projections for one attempt")
+        justification = [o for o in events if o.fields.get("event_type") in
+                         {"nav.completed", "nav.failed"}]
         if terminals and events:
             first_terminal = min(o.at_monotonic for o in terminals)
-            justification = [o for o in events
-                             if o.fields.get("event_type", "").startswith("nav.")
-                             and o.fields.get("event_type") != "nav.started"]
             if justification and first_terminal < min(o.at_monotonic for o in justification):
                 verdict = "FAIL"
                 reasons.append("terminal projection precedes its CORE evidence")
-        if not terminals and events:
+        mapped = {"nav.completed": "COMPLETED", "nav.failed": "FAILED"}
+        if terminals and justification and any(
+                mapped[o.fields["event_type"]] != t.fields["status"]
+                for o in justification for t in terminals):
+            verdict = "FAIL"
+            reasons.append("terminal status contradicts its CORE evidence")
+        if accepted and requests and min(o.at_monotonic for o in accepted) < min(
+                o.at_monotonic for o in requests):
+            verdict = "FAIL"
+            reasons.append("acceptance precedes its goal request")
+        if accepted and events and min(o.at_monotonic for o in events) < min(
+                o.at_monotonic for o in accepted):
+            verdict = "FAIL"
+            reasons.append("CORE event precedes acceptance")
+        if verdict != "FAIL" and (not requests or not accepted or
+                                  (terminals and not justification)):
+            verdict = "INCONCLUSIVE"
+            reasons.append("missing goal/acceptance/terminal CORE evidence (query, do not resend)")
+        if verdict != "FAIL" and not terminals and events:
             verdict = "INCONCLUSIVE"
             reasons.append("CORE events observed but no terminal projection (query, do not resend)")
-        if not terminals and accepted and not events:
+        if verdict != "FAIL" and not terminals and accepted and not events:
             verdict = "INCONCLUSIVE"
             reasons.append("accepted with no terminal and no CORE event (timeout is a comparison subject)")
         result["verdict"] = verdict
@@ -163,21 +199,26 @@ def source_age_seconds(observation: Observation, now_monotonic: float,
                        clock_samples: list[tuple[float, float]]) -> float | None:
     """원본 나이(초). 시계 변환이 불가능하면 None — 미지이지 신선함이 아니다.
 
-    ``clock_samples`` 는 (monotonic, source_clock) 표본. 원본 시각은 두 표본
-    사이의 선형 보간으로 변환하고, 표본 밖이거나 아예 없으면 None.
+    ``clock_samples`` 는 (monotonic, source_clock) 표본. 현재 시각을 인접 표본
+    사이에서 보간한 source_clock에서 원본 시각을 뺀다. 수신 지연만의 나이가
+    아니다. 표본 밖·reset·비유한 값은 None이며 pause 중 원본 나이는 증가하지 않는다.
     """
-    if observation.source_clock is None:
+    values = [observation.source_clock, observation.at_monotonic, now_monotonic]
+    if any(type(v) not in (int, float) or not math.isfinite(v) for v in values):
+        return None
+    if (len(clock_samples) < 2 or
+            any(not isinstance(pair, (tuple, list)) or len(pair) != 2 for pair in clock_samples)):
+        return None
+    if any(type(v) not in (int, float) or not math.isfinite(v) for pair in clock_samples for v in pair):
         return None
     samples = sorted(clock_samples)
-    if len(samples) < 2:
+    if any(m1 <= m0 or s1 < s0 for (m0, s0), (m1, s1) in zip(samples, samples[1:])):
         return None
-    (m0, s0), (m1, s1) = samples[0], samples[-1]
-    span = m1 - m0
-    if span <= 0:
+    if not samples[0][0] <= observation.at_monotonic <= now_monotonic <= samples[-1][0]:
         return None
-    frac = (observation.at_monotonic - m0) / span
-    if not 0.0 <= frac <= 1.0:
-        return None
-    converted = s0 + frac * (s1 - s0)
-    age = converted - observation.source_clock
-    return age if age >= 0 else None
+    for (m0, s0), (m1, s1) in zip(samples, samples[1:]):
+        if m0 <= now_monotonic <= m1:
+            converted = s0 + (now_monotonic - m0) / (m1 - m0) * (s1 - s0)
+            age = converted - observation.source_clock
+            return age if math.isfinite(age) and age >= 0 else None
+    return None
