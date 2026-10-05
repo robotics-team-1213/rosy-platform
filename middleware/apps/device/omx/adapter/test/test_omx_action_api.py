@@ -182,6 +182,35 @@ def test_provider_delay_cannot_extend_original_grant_expiry(tmp_path):
     assert driver.submissions == []
 
 
+@pytest.mark.parametrize("generation_offset", [0, 1])
+def test_post_prepare_provider_local_stop_prevents_driver_submission(tmp_path, generation_offset):
+    from core_common.protocol.schemas import LocalStopRequest, StopRequestSource
+    calls = [0]
+
+    def capability_current(grant):
+        calls[0] += 1
+        if calls[0] == 2:
+            runner.local_stop.trip(LocalStopRequest(
+                workcell_id=grant.workcell_id, instance_id=grant.instance_id,
+                authority_epoch=grant.authority_epoch,
+                dispatch_generation=grant.dispatch_generation + generation_offset,
+                requested_at=datetime.now(timezone.utc), reason="operator_stop",
+            ), source=StopRequestSource.OPERATOR_LOCAL)
+        return True
+
+    store, driver, runner = _runner(tmp_path, capability_current=capability_current)
+    grant = FleetActionGrant.model_validate(_grant())
+    receipt = runner.submit(grant, peer_uid=1001)
+    assert calls[0] == 2
+    assert not runner.local_stop.is_open(authority_epoch=grant.authority_epoch,
+                                         dispatch_generation=grant.dispatch_generation)
+    assert driver.submissions == []
+    assert receipt["state"] == "HOLD"
+    assert receipt["driver_goal_id"] is None
+    assert receipt["reason"] == "STOP_GENERATION_FENCED"
+    assert store.get_action(grant.action_id)["state"] == "HOLD"
+
+
 @pytest.mark.parametrize("change", ["principal", "fence", "provider"])
 def test_final_capability_callback_cannot_invalidate_checked_authority(tmp_path, change):
     principal = ["fleet-uid-1001"]

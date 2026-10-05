@@ -280,6 +280,8 @@ class ActionRunner:
                 raise RuntimeError("phase runner removed its Action journal")
             return self._receipt(current, created=created["created"])
 
+        submission_fence = self.submission_fence
+
         def _fenced_submission() -> dict[str, object]:
             # Durable preparation may outlive the checked authority. Recheck
             # under the same fence that protects driver submission/recording.
@@ -299,6 +301,12 @@ class ActionRunner:
                     providers, (self.principal_for_peer, self.current_fence,
                                 self.capability_current, self.now))):
                 raise PermissionError("authority providers changed during validation")
+            # Providers can reenter the owner lock and latch STOP. Read the
+            # same local fence after every provider, immediately before submit.
+            if self.submission_fence is not submission_fence or not submission_fence.is_open(
+                    authority_epoch=grant.authority_epoch,
+                    dispatch_generation=grant.dispatch_generation):
+                raise LocalStopBlocked("local stop latch or generation changed during validation")
             # The driver call AND its ACCEPTED recording stay inside the
             # stop fence: a stop latched while the driver call blocks must
             # find this attempt in ACCEPTED (never a lost in-flight
@@ -313,7 +321,7 @@ class ActionRunner:
             )
 
         try:
-            recorded = self.submission_fence.run_if_open(
+            recorded = submission_fence.run_if_open(
                 authority_epoch=grant.authority_epoch,
                 dispatch_generation=grant.dispatch_generation,
                 fleet_fence_current=lambda: self.current_fence(
