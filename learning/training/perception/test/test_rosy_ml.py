@@ -463,21 +463,74 @@ def test_doctor_local_onnx_is_advisory_for_an_operator(tmp_path, monkeypatch, ca
     assert "onnx importable" in capsys.readouterr().out
 
 
-def test_fetch_http_uses_the_operator_token_and_port(tmp_path, monkeypatch):
-    # harvest's core_token_file is a viewer token; fetch needs its own Operator token key.
-    cfg, rc = _init(tmp_path, "--core-token-file", str(tmp_path / "core.token"),
-                    "--core-operator-token-file", str(tmp_path / "op.token"), monkeypatch=monkeypatch)
-    assert rc == 0 and yaml.safe_load(cfg.read_text())["core_operator_token_file"] == str(tmp_path / "op.token")
+def _advert(host="pinky-b.local", port=9091, **txt):
+    from core_common.discover import DiscoveredDevice
+    from core_common.protocol.discovery_txt import ROBOT, REQUIRED
+    return DiscoveredDevice("ROSY", ROBOT, host, port, (), tuple({**REQUIRED[ROBOT], **txt}.items()))
+
+
+def _fake_fetch(monkeypatch):
     seen = []
     fake = types.ModuleType("fetch_http")
     fake.main = lambda argv: seen.append(argv) or 0
     monkeypatch.setitem(sys.modules, "fetch_http", fake)
-    assert rosy_ml.main(["fetch", "pinky-a", "--http", "--dest", str(tmp_path / "raw")]) == 0
-    assert seen[0][0] == "http://10.0.0.11:8080"
+    return seen
+
+
+def test_fetch_http_uses_the_operator_token_and_the_advertised_endpoint(tmp_path, monkeypatch):
+    # harvest's core_token_file is a viewer token; fetch needs its own Operator token key.
+    cfg, rc = _init(tmp_path, "--core-token-file", str(tmp_path / "core.token"),
+                    "--core-operator-token-file", str(tmp_path / "op.token"), monkeypatch=monkeypatch)
+    assert rc == 0 and yaml.safe_load(cfg.read_text())["core_operator_token_file"] == str(tmp_path / "op.token")
+    seen = _fake_fetch(monkeypatch)
+    assert rosy_ml.main(["fetch", "pinky-b", "--http", "--dest", str(tmp_path / "raw")],
+                        discover=lambda: [_advert(port=9091)]) == 0
+    assert seen[0][0] == "http://pinky-b.local:9091"
     assert seen[0][seen[0].index("--token-file") + 1] == str(tmp_path / "op.token")
     assert seen[0][seen[0].index("--dest") + 1] == str(tmp_path / "raw")
     with pytest.raises(SystemExit):
-        rosy_ml.main(["fetch", "pinky-a"])          # --http is required: SSH stays `harvest`
+        rosy_ml.main(["fetch", "pinky-b"])          # --http is required: SSH stays `harvest`
+
+
+def test_fetch_https_uses_the_advertised_tls_host_and_port(tmp_path, monkeypatch):
+    _init(tmp_path, "--core-operator-token-file", str(tmp_path / "op.token"), monkeypatch=monkeypatch)
+    ca = tmp_path / "ca.pem"
+    ca.write_text("not a real cert\n", encoding="utf-8")
+    seen = _fake_fetch(monkeypatch)
+    rows = [_advert(port=9443, tls="required", tls_host="pinky-b.local")]
+    assert rosy_ml.main(["fetch", "pinky-b", "--http", "--ca-file", str(ca),
+                         "--only", "20261005T150437Z_rosy_26",
+                         "--video-out", str(tmp_path / "video")], discover=lambda: rows) == 0
+    argv = seen[0]
+    assert argv[0] == "https://pinky-b.local:9443"
+    assert ":8080" not in argv[0]
+    assert argv[argv.index("--ca-file") + 1] == str(ca)
+    assert argv[argv.index("--only") + 1] == "20261005T150437Z_rosy_26"
+    assert argv[argv.index("--video-out") + 1] == str(tmp_path / "video")
+
+
+def test_fetch_refuses_a_configured_address_or_a_missing_advertisement(tmp_path, monkeypatch, capsys):
+    _init(tmp_path, "--core-operator-token-file", str(tmp_path / "op.token"), monkeypatch=monkeypatch)
+    seen = _fake_fetch(monkeypatch)
+    assert rosy_ml.main(["fetch", "pinky-a", "--http"], discover=lambda: [_advert()]) == 2
+    assert "mDNS" in capsys.readouterr().out
+    assert rosy_ml.main(["fetch", "pinky-b", "--http"], discover=lambda: []) == 2
+    assert "no _rosy._tcp" in capsys.readouterr().out
+    assert seen == []
+
+
+def test_fetch_ca_follows_the_advertised_tls_flag(tmp_path, monkeypatch, capsys):
+    _init(tmp_path, "--core-operator-token-file", str(tmp_path / "op.token"), monkeypatch=monkeypatch)
+    ca = tmp_path / "ca.pem"
+    ca.write_text("not a real cert\n", encoding="utf-8")
+    seen = _fake_fetch(monkeypatch)
+    secure = [_advert(port=9443, tls="required", tls_host="pinky-b.local")]
+    assert rosy_ml.main(["fetch", "pinky-b", "--http"], discover=lambda: secure) == 2
+    assert "--ca-file" in capsys.readouterr().out
+    assert rosy_ml.main(["fetch", "pinky-b", "--http", "--ca-file", str(ca)],
+                        discover=lambda: [_advert()]) == 2
+    assert "does not advertise TLS" in capsys.readouterr().out
+    assert seen == []
 
 
 def test_fetch_http_needs_an_operator_token(tmp_path, monkeypatch, capsys):
