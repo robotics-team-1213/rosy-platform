@@ -103,6 +103,8 @@ class StuckRecoveryMixin:
 
     def _release_stuck(self, now: float) -> None:
         """RESUME / recovered: lift the obstacle latch once (re-blocks below the stop distance)."""
+        if self._return_controller is not None and self._return_controller.phase == 'fleet':
+            self._return_controller.restart_verification(now)
         self._obstacle_blocked = False
         self._clear_since = None
         self._blocked_since = None

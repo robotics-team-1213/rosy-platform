@@ -110,7 +110,7 @@ class LineFollowManager(BodyStopMixin, StuckRecoveryMixin, LaneReturnMixin):
             previous = self._mode
             default = "mode_off" if selected is LineFollowMode.OFF else "mode_changed"
             self._recovery_reset(reason or default, self._clock())
-            self._return_evidence.reset()
+            self._reset_lane_return()
             self._generation += 1
             self._mode = selected
             self._observation = None
@@ -369,6 +369,10 @@ class LineFollowManager(BodyStopMixin, StuckRecoveryMixin, LaneReturnMixin):
                     or decision.mode is not self._mode
                     or self._mode is LineFollowMode.OFF):
                 return False
+            if (self._return_controller is not None and self._return_controller.phase != 'tracking'
+                    and (decision.linear or decision.angular)
+                    and not self._return_submission_valid(self._clock(),decision)):
+                return False
             apply(decision)
             return True
 
@@ -385,7 +389,8 @@ class LineFollowManager(BodyStopMixin, StuckRecoveryMixin, LaneReturnMixin):
                         and self._observation.quality_reason in ('low_light', 'overexposed')):
                     self._recovery_reset('camera_' + self._observation.quality_reason, current)
                     return decision  # LOST must also bypass recovery's autonomous back-off.
-                return self._apply_recovery(current, decision)
+                local = self._apply_lane_return(current, decision)
+                return local if local is not None else self._apply_recovery(current, decision)
             finally:
                 if not self._path_evaluated:
                     # 풀림 지연은 연속으로 잰 틱만 센다 — LiDAR 끊김·계단 정지·OFF 틱이 끼면 처음부터.

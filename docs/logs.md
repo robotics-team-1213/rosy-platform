@@ -6145,3 +6145,9 @@ osy-d395-s1d\`.
 - 변경: API Reference v1.106 헤더와 D-468 본문에 맞는 변경 이력 행을 추가했다.
 - 증거: 계약 버전 및 Fleet 문서 검사 36 PASS. 현장 수용은 별도다.
 - gate 변화: 없음.
+
+## 2026-10-05 · uncommitted · docs(team): onboarding guide, PR template, CODEOWNERS, author guard
+
+- 변경: 팀 가이드 `docs/reference/team-guide.md`(첫날 설정, 공유 범위, 작업 방식, 작업 영역), `CONTRIBUTING.md`, PR 템플릿, CODEOWNERS, pre-push에 잘못된 작성자 이메일 거절. 저장소는 `robotics-team-1213/rosy-platform`으로 이전됨.
+- 증거: harness lint, pre-push 훅 계약 시험.
+- gate 변화: 없음.
