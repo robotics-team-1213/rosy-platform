@@ -7,7 +7,7 @@ from pathlib import Path
 from omx_adapter.policy_parent import encoded
 from rosy.contracts.learning import seal
 from rosy.contracts.learning.omx_execution import validate_profile
-from .policy_parent import correlate_parent
+from .policy_parent import correlate_parent, _capture_parent
 
 
 def publish(parent, api, journal, command_id, output):
@@ -17,10 +17,8 @@ def publish(parent, api, journal, command_id, output):
     receipt_bytes = parent.owner_receipt(api)
     receipt = json.loads(receipt_bytes)
     runner_receipt = {name: value for name, value in receipt.items() if name != 'journal_id'}
-    proof = correlate_parent(parent, journal, command_id, encoded(runner_receipt))
-    before = parent.snapshot()
-    native = journal.read(command_id)
-    source = journal.read_source(proof['source_revision'])
+    proof, before, native, source = _capture_parent(
+        parent, journal, command_id, encoded(runner_receipt))
     if (hashlib.sha256(encoded(before)).hexdigest() != proof['parent_snapshot_sha256']
             or hashlib.sha256(encoded(native)).hexdigest() != proof['native_snapshot_sha256']
             or receipt['journal_id'] != before['journal_id']):
