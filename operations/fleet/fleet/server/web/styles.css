@@ -213,8 +213,7 @@ main {
 @media (width >= 110rem) {
   .console-primary > .panel[aria-labelledby="map-heading"] {
     display: grid;
-    /* 2026-10-02 회차 — 1fr:1fr에서는 1920 관제 PC에서 지도가 374px(로스터 1058px)로
-       목표를 찍는 표면이 폰 폭이 된다. 지도가 카메라보다 크게 균형을 잡는다. */
+    /* 현장 지도와 연결된 카메라는 같은 폭을 쓴다. 카메라가 대기 중이면 지도만 한 열을 쓴다. */
     grid-template-columns: repeat(2, minmax(0, 1fr));
     column-gap: var(--space-4);
     align-items: start;
@@ -311,7 +310,7 @@ main {
   image-rendering: pixelated;
   border-radius: var(--radius-button);
   border: 1px solid var(--line-14);
-  background: var(--ground-deep);
+  background: var(--raster-unknown);
   cursor: crosshair;
 }
 #map-canvas.idle { cursor: default; }

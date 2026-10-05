@@ -1948,3 +1948,9 @@
 - 변경: Fleet 현장 지도와 개입 영역을 같은 폭으로 맞췄다. 넓은 화면에서 나란한 지도·카메라 창도 같은 폭이다. 320px 상단바는 Cell 작업을 설정 안으로 옮겨 브랜드와 비상 정지의 가독성을 확보했다.
 - 증거: 1920×1080 Fleet 브라우저 71 passed, 너비 단언 포함 적합 검사 1 passed, known_failures 0 new. 320px 화면에서 가로 넘침과 상단바 겹침이 없고 Cell 작업 접근 가능. 캡처는 X: 관리 세션 evidence에 있다.
 - gate 변화: LOCAL UI 증거만 추가. D-153 G3 사람 평가 및 SITE/FIELD 수용은 미완료.
+
+## 2026-10-06 · uncommitted · uiux(fleet): 기본 예외 목록 증거와 지도 바탕
+
+- 변경: 320/390px 브라우저 시험에서 전체 목록을 열기 전 기본 예외 목록을 단언하고 캡처한다. 지도의 레터박스는 미관측 raster 토큰으로 표시하고, 지도·카메라 동일 너비 주석과 110rem 이유를 현재 배치에 맞춘다.
+- 증거: Fleet 지도 적합·목표 2 passed, 모바일 기본 예외·넘침 2 passed, 관련 G1 83 passed, known_failures 0 NEW. 320px 기본 목록에서 오류 로봇 rosy_03이 첫 카드다.
+- gate 변화: LOCAL 증거만 추가. Fleet G2 전체 상태·G3와 SITE/FIELD readback은 미완료다.

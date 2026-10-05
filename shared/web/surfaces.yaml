@@ -96,7 +96,7 @@ surfaces:
       - value: 90rem
         reason: 토큰·역할·테마·두 줄 비상 정지를 모두 편 머리의 자연 폭(약 1220–1300px)이 1440px 미만에 한 줄로 들지 않는다 — 비상 정지가 둘째 줄로 밀리거나 테마 이름표가 접히지 않게 그 아래에서 머리를 접는다
       - value: 110rem
-        reason: 지도 칸은 main 폭의 43%라 그 안을 둘로 나누면 관제 카메라가 좁아진다(1440px에서 약 240px) — 지도 칸이 충분히 넓은 이 폭 이상에서만 카메라를 지도 옆에 둔다
+        reason: 지도와 개입 칸을 같은 폭으로 두어도 좁은 화면에서는 지도·관제 카메라가 작아진다 — 지도 칸이 충분히 넓은 이 폭 이상에서만 카메라를 지도 옆에 둔다
     baseline: docs/validation/uiux-surfaces-2026-09-26/captures/fleet-normal-1920x1080.png
 
   - id: game-board
