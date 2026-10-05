@@ -107,8 +107,14 @@ SIZE_VERDICTS = {
         "duplicate its socket. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        35_878,
-        "split: D-426 T4 re-judged at 35878 — segment grants/definitions add 272 "
+        36_234,
+        "split: independently re-judged at 36234 on 2026-10-05, after moving profile dispatch "
+        "to canonical learning contracts. Since measured35878: evidence bundle106, receiver97, "
+        "trusted discovery88, reservations33, segment store23, styles16, roster-8, setup1. "
+        "Receiver, transport, reservation and UI owners stay separate; retain B2 server/UI "
+        "split obligations and all 600/800, 1000 zero-growth and package150 allowances. "
+        "See docs/validation/line-release-2026-10-05/result.md. "
+        "D-426 T4 re-judged at 35878 — segment grants/definitions add 272 "
         "(traffic_reservations.py + segment_store.py) with a dedicated contract suite; "
         "no command owner changes; the release path still requires fresh exit "
         "observation plus a terminal result. "

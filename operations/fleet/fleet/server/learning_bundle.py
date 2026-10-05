@@ -7,14 +7,10 @@ from pathlib import Path
 
 from core_common.protocol.schemas import DeviceActionReceipt
 from rosy.contracts.learning import validate_episode
+from rosy.contracts.learning.artifacts import episode_profile_validators
 from rosy.contracts.learning.fleet_export import encoded, export_metadata
-from rosy.contracts.learning.omx import validate_profile as validate_omx
-from rosy.contracts.learning.omx_execution import validate_profile as validate_execution
-from rosy.contracts.learning.pinky import validate_profile as validate_pinky
 
-PROFILES = {'omx_demonstration_v1': validate_omx,
-            'omx_policy_execution_v1': validate_execution,
-            'pinky_recording_session_v1': validate_pinky}
+PROFILES = episode_profile_validators()
 
 
 def _unique(pairs):
