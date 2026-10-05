@@ -245,3 +245,10 @@
 - 증거: `test/test_gz_multi_run_spec.py` 3개(빈 spec 레거시·필드 누락 RuntimeError·로봇별 오버레이 부재/존재). Windows skip, Linux CI에서 실행. `test_gz_multi_core.py` 기존 회귀 통과(분리 후 `_core_config` 등 import 별칭 유지). 크기 판정 시험 통과(538 < 600).
 - gate 변화: 없음(SOURCE). 실제 Gazebo 실행·ROS-SIM은 T6 회차 뒤.
 - 결정: D-426 T1의 런치 절반. 예약·manifest·READY 판정은 runner 쪽 `preflight.py`(test/test_fleet_gazebo_run_contracts.py 12개).
+
+## 2026-10-05 · uncommitted · fix(sim): D-426 T1 domain 적용과 예약 preflight
+
+- 변경: runner 명세의 정수 ROS domain을 참여 프로세스 앞에서 적용하고 Gazebo/Fleet 안내 명령에 같은 환경을 넣었다. robots/prefix·명세 namespace와 CORE 오버레이의 identity/loopback API 포트 불일치는 거부한다. 명세 없는 기존 경로는 domain을 변경하지 않는다.
+- 예약: 기존 run manifest의 결정적 profile을 검증하고 최대 256개 기록의 충돌 및 실제 loopback listener 점유를 확인한다. 손상된 기록은 실패하고 stale 기록은 보존한다. 계획 snapshot이며 수동 launch까지 유지되는 포트 lease·동시 planner 배타 예약의 증거는 아니다.
+- 검증: 최초 누락 회귀 4 FAIL, 손상된 예약 회귀 4 FAIL을 실제 소스로 재현했다. 기존 전체 Gazebo 시험의 blanket ROS_DOMAIN_ID 금지는 D-114의 같은 run/여러 namespace 원칙을 유지하면서 명세 domain action으로 정확히 바꿨다. 최종 결과는 별도 영수증에 기록한다. ROS 의존 시험 skip은 CI에서 확인하며 실제 SIM/장치/주행은 실행하지 않았다.
+- gate 변화: D-426 실제 ROS-SIM 수용은 계속 미검증이다. 기존 단일 로봇 회차 증거를 이번 다중 격리 수용으로 승격하지 않는다.

@@ -46,8 +46,8 @@
 
 ## 최근 기록
 
+- 2026-10-05 · uncommitted · fix(sim): D-426 T1 domain 적용과 예약 preflight
 - 2026-10-05 · uncommitted · feat(launch): D-426 T1 run_spec — 검증 runner 소유 실행 입력
 - 2026-10-04 · uncommitted · fix(ui): 경로 뷰어의 미수신 거리
 - 2026-10-02 · uncommitted · feat(sim): gz_multi sim-only physics_step / real_time_factor / gpu (D-395 S2 rerun)
 - 2026-10-02 · d8f96fb8 · feat(sim): omx_cell_workcell world (Rosy Cell C3)
-- 2026-10-02 · uncommitted · fix(sim): gz_multi Nav2 가 직진하지 않던 D-395 R4

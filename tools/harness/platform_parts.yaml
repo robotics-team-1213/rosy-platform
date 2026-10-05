@@ -558,6 +558,12 @@ roots:
     wave: none
     note: Loose scripts directly in tools/ only; every tools/<subfolder> needs its own root.
     concern: other
+  - path: tools/validation
+    part: tools
+    d427_target: tools/validation
+    wave: none
+    note: D-426 Fleet-Gazebo conformance runner (preflight, run planning); host-side only, never installed on a robot.
+    concern: other
   - path: tools/calibration
     part: tools
     d427_target: tools/calibration

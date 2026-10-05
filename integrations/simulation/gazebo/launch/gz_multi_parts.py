@@ -60,11 +60,37 @@ def load_run_spec(path_text: str) -> dict:
         return {}
     with open(path, encoding="utf-8") as f:
         spec = yaml.safe_load(f) or {}
+    if not isinstance(spec, dict):
+        raise RuntimeError("run_spec must be a mapping")
     required = ("run_id", "core_config_dir", "fleet_manifest", "hub_url", "gz_partition")
     missing = [key for key in required if not spec.get(key)]
     if missing:
         raise RuntimeError(f"run_spec is missing runner fields: {', '.join(missing)}")
+    domain = spec.get("ros_domain_id")
+    if type(domain) is not int or not 120 <= domain <= 199:
+        raise RuntimeError("run_spec ros_domain_id must be an integer in 120..199")
+    rows = spec.get("robots")
+    if not isinstance(rows, list) or not 1 <= len(rows) <= 8:
+        raise RuntimeError("run_spec robots must contain 1..8 namespace reservations")
+    names, ports = set(), set()
+    for row in rows:
+        if not isinstance(row, dict) or not isinstance(row.get("namespace"), str):
+            raise RuntimeError("run_spec robot namespace is missing")
+        port = row.get("api_port")
+        if type(port) is not int or not 31000 <= port <= 31999:
+            raise RuntimeError("run_spec robot api_port must be in 31000..31999")
+        if row["namespace"] in names or port in ports:
+            raise RuntimeError("run_spec duplicate namespace or API port")
+        names.add(row["namespace"])
+        ports.add(port)
     return spec
+
+
+def validate_run_identity(spec: dict, robots: int, prefix: str) -> None:
+    """Reject launch arguments detached from the runner's reservations."""
+    expected = [f"{prefix}_{i:02d}" for i in range(1, robots + 1)]
+    if [row["namespace"] for row in spec["robots"]] != expected:
+        raise RuntimeError("run_spec namespace reservations differ from robots/prefix arguments")
 
 
 def run_spec_overlay(spec: dict, ns: str) -> str:
@@ -73,6 +99,14 @@ def run_spec_overlay(spec: dict, ns: str) -> str:
     if not os.path.isfile(path):
         raise RuntimeError(
             f"run_spec has no CORE overlay for {ns}: {path} is missing")
+    with open(path, encoding="utf-8") as stream:
+        overlay = yaml.safe_load(stream)
+    row = next((row for row in spec.get("robots", []) if row["namespace"] == ns), None)
+    if row is not None and (not isinstance(overlay, dict) or
+                            overlay.get("robot", {}).get("id") != ns or
+                            overlay.get("network", {}).get("api_host") != "127.0.0.1" or
+                            overlay.get("network", {}).get("api_port") != row["api_port"]):
+        raise RuntimeError(f"run_spec CORE overlay identity/port mismatch for {ns}")
     return path
 
 

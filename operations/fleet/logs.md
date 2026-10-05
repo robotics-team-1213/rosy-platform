@@ -1829,3 +1829,10 @@
 - 변경: 기존 P6 before-next-flag 의무에 맞춰 Mission·Cell compiler·proposal/evidence, 카메라 pairing, 등록 TLS 생성만 lazy console builder로 옮겼다. CLI의 기존 거절·alias·옵션, 동일한 load→roster.sync 순서, 한 번의 create_app 및 기존 localization builder 위임을 유지한다. 런타임·권한·새 background owner는 추가하지 않는다.
 - 증거: Mission·pairing 본문 AST 동등과 등록 생성의 명시적 config 인수 외 동등, 새 interpreter에서 비활성 optional dependency 미로드·alias 동등을 확인했다. 기존 CLI/TLS 55 passed/Windows symlink 1 skipped(34.83s), owned Python 2파일 flake8 0, known_failures 0 NEW. 실제 동일 P6 filter에서 CLI652→586, 새 builder91, Fleet35581→35606(+25)이다. 600/800/1000 및 +150 제한은 수정하지 않았다.
 - gate 변화: SOURCE/LOCAL 구조 후속만. 실기·사이트 설정·운용 수용은 이전 NOT_RUN을 유지한다. CLI stale verdict와 Fleet package 재판정은 통합 owner가 별도로 처리한다.
+
+## 2026-10-05 · uncommitted · test(validation): D-426 T2 통신·결과 상관 탐침 판정 계약
+
+- 변경: `operations/fleet/test/test_gazebo_protocol_probe.py` 추가 — `tools/validation/fleet_gazebo/probe.py` 판정기의 계약을 고정한다. 실제 wire 형태(HELLO 거부 코드 4종, nav.* 이벤트 correlation_id==attempt_id, 종단 상태 COMPLETED/FAILED/HOLD)를 그대로 쓴 관측 목록으로 LOCAL 판정만 증명하고, 실제 프로세스 사이 관측은 T6 ROS-SIM 회차가 만든다.
+- 증거: 13개 판정 계약(WELCOME 거절·identity 충돌·계약 불일치·수락 없는 완료·다른 attempt·중복·역순·유실·timeout INCONCLUSIVE·나이/시계 분리 5종). test_server_traffic·test_boundaries 회귀 포함 68 passed.
+- gate 변화: 없음(SOURCE/LOCAL). probe는 판정 모듈이며 Fleet 서버 코드를 바꾸지 않는다.
+- 결정: timeout은 자동 실패/성공이 아니라 조회·이벤트 대조 대상(계획 T2 항목 3). 부작용 재전송 금지를 판정기 수준에서 고정했다.

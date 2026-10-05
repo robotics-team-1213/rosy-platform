@@ -32,7 +32,7 @@ from gz_multi_args import (apply_nav_composition, apply_sim_speed, nav_compositi
 from gz_multi_parts import (SIM_OPERATOR_TOKEN, bridge_config as _bridge_config,
                             core_config as _core_config, load_run_spec as _load_run_spec,
                             robots_manifest as _robots_manifest,
-                            run_spec_overlay as _run_spec_overlay)
+                            run_spec_overlay as _run_spec_overlay, validate_run_identity as _validate_run_identity)
 from world_profiles import (parse_spawn_poses, resolve_asset_path, resolve_world, resolve_world_path,
                             spawn_xy, world_share_parent)
 
@@ -214,7 +214,15 @@ def _launch_setup(context):
     api_port_base = int(LaunchConfiguration("api_port_base").perform(context))
     map_yaml = LaunchConfiguration("map").perform(context)
     loc_assist = LaunchConfiguration("loc_assist").perform(context).lower() in ("true", "1")
-    run_spec = _load_run_spec(LaunchConfiguration("run_spec").perform(context))
+    # bare-context 단위 시험에서도 돌아간다: 선언되지 않은 launch configuration 은
+    # LaunchConfiguration.perform 가 아닌 dict 조회로 기본값을 받는다.
+    run_spec = _load_run_spec(context.launch_configurations.get("run_spec", ""))
+    if run_spec:
+        _validate_run_identity(run_spec, robots, prefix)
+        if not core:
+            raise RuntimeError("run_spec requires core:=true")
+        for row in run_spec["robots"]:
+            _run_spec_overlay(run_spec, row["namespace"])
     spawn_spacing_raw = LaunchConfiguration("spawn_spacing").perform(context)
     profile = resolve_world(
         world_name,
@@ -257,6 +265,7 @@ def _launch_setup(context):
     if run_spec:
         # D-426: 같은 고유 partition을 모든 Gazebo 참여 프로세스에 전달한다(계획 규칙 2).
         actions.append(SetEnvironmentVariable("GZ_PARTITION", str(run_spec["gz_partition"])))
+        actions.append(SetEnvironmentVariable("ROS_DOMAIN_ID", str(run_spec["ros_domain_id"])))
 
     # per-robot bridge config를 런치 시점 생성 (physics_step 의 월드 사본도 여기)
     bridge_dir = tempfile.mkdtemp(prefix="rosy_gz_multi_")

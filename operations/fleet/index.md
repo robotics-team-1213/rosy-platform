@@ -85,8 +85,8 @@
 
 ## 최근 기록
 
+- 2026-10-05 · uncommitted · test(validation): D-426 T2 통신·결과 상관 탐침 판정 계약
 - 2026-10-05 · uncommitted · refactor(fleet): CLI feature 생성 경계 분리
 - 2026-10-05 · uncommitted · fix(fleet): 기존 등록의 승인 TLS 전송과 downgrade 기록
 - 2026-10-05 · uncommitted · fix(cell-ui): 문서 패널의 내용 높이 유지
 - 2026-10-05 · uncommitted · fix(cell-ui): 좁은 화면 상단 운영자 표시 줄바꿈
-- 2026-10-05 · uncommitted · feat(fleet): 승인된 추적 보정으로 카메라 영상을 편다
