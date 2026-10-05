@@ -5905,3 +5905,9 @@ osy-d395-s1d\`.
 - 증거: operations/fleet/test/test_gazebo_protocol_probe.py 13개 판정 계약 + test_server_traffic·test_boundaries 회귀 68 passed. 실제 wire 형태는 fleet/hub/hub.py·task_results.py·task_service.py 원문 대조.
 - gate 변화: 없음(SOURCE/LOCAL 판정 모듈). 실제 프로세스 사이 관측·ROS-SIM은 T6.
 - 결정: fake HTTP/WS는 LOCAL만 증명한다 — probe는 그 LOCAL 판정 규칙의 정본이고, T6 회차 기록이 같은 판정기를 지나야 ROS-SIM 판정이 된다.
+
+## 2026-10-05 · uncommitted · uiux: align surface names, stop label, and icons
+
+- 변경: 네 표면의 보이는 이름을 Rosy Robot, Rosy Pilot, Rosy Console로 맞추고 한국어는 부제로 두었다. Fleet 정지에 보이는 비상 정지를 붙였고, Pilot 탭과 Android 런처는 pilot.svg를, Fleet 크롬·테마·명렬 측정 아이콘은 actionIcon을 쓴다.
+- 증거: 표시명·파비콘·actionIcon·테마 선택 계약과 Fleet 페이지 서빙 시험 59 passed, 1 skipped. known_failures 0 new. Chromium 워드마크·머리 넘침 5 passed. Pilot LauncherIconParityTest 4 passed.
+- gate 변화: 없음. 호스트 시험이며 장치 수용은 없다.
