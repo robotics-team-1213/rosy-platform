@@ -6241,3 +6241,9 @@ osy-d395-s1d\`.
 - 변경: 로봇 운용의 공통 HTTP 오류 문구를 운용자용 한국어 상태와 재확인 안내로 바꿨다. 한국어 서버 사유와 오류 코드는 유지한다. [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)에 모드·수동·차선 추종·도킹·지도 캡처와 G3 부분 근거를 추가했다.
 - 증거: FastAPI/Chromium 운용 브라우저 4 passed, 고급 네트워크 작업 disclosure 확인 2 passed, 운용자 문구 18 passed. 통과 실행의 `known_failures.py`는 0 NEW다. 실패했던 전체 역할 실행 2건은 닫힌 disclosure의 숨은 버튼을 찾던 시험 오류였고, disclosure를 연 뒤 별도 재실행에서 통과했다.
 - gate 변화: 로봇 운용 LOCAL G3 부분 근거. 실제 CORE/장치 readback·현장 독회와 제품 전체 UI/UX는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(pilot): 대상 발견 오류 캡처
+
+- 변경: Pilot 대상 발견 실패 화면의 내부 영문 예외를 운용자 문구로 바꾸고 [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)에 390px 화면을 기록했다.
+- 증거: 현재 트리 브라우저 재시도 1 passed, 가로 넘침 0, `known_failures.py` 0 NEW.
+- gate 변화: Pilot LOCAL 오류 화면 부분 근거. 제품 전체 UI/UX와 실제 장치·현장 수용은 HOLD다.

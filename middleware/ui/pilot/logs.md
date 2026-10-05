@@ -1,5 +1,6 @@
 # pilot logs
 
+
 ## 2026-09-29 · 8f4ecfe2 · feat(hmi): pilot 골격과 /pilot 라우트 (실행 계획 T1)
 - 변경: 패키지 `pilot`(ament_cmake)·`index.html`(ui-shell spatial)·`styles.css`·`core_api_web` `/pilot`·`/pilot/assets` 라우트와 MIME allowlist·`core_api_web` package.xml `pilot` 의존성. 실패 테스트 선행.
 - 증거: `test_pilot_route.py` 2 passed(404→200 확인). api_web 전체 72 passed·web_common 3 failed 는 `known_failures.py` 판정 0 new(기존 fleet 카메라 코너 스타일·system.js 결함, 2026-09-29 Windows).
@@ -494,3 +495,9 @@
 - 변경: Gazebo 팔 연습에서 영상이 없으면 빈 영상 칸 대신 조작부를 먼저 전폭으로 보이고 팔·그리퍼 창을 같은 폭으로 맞췄다. 영상이 있으면 기존 영상·조작부 병렬 배치를 유지한다.
 - 증거: 태블릿 2000×1200·1200×2000, 전화 390×844, 영상 있는 경로 포함 브라우저 5 passed, `known_failures.py` 0 NEW. 캡처는 [UI/UX 회차](../../../docs/validation/uiux-surfaces-2026-10-06/README.md)에 있다.
 - gate 변화: LOCAL 레이아웃 근거만 추가. 운전자 G3·장치/현장 UI/UX 수용은 미완료다.
+
+## 2026-10-06 · uncommitted · uiux(pilot): 대상 발견 오류의 운용자 문구
+
+- 변경: Pilot 대상 발견 실패 화면에서 내부 영문 예외를 제거하고 연결 확인·재시도만 표시한다. 다른 알림이 갱신된 경우 그 문구는 유지한다.
+- 증거: 390×844 FastAPI/Chromium 재시도 1 passed, 가로 넘침 0, `known_failures.py` 0 NEW. 캡처는 [UI/UX 회차](../../../docs/validation/uiux-surfaces-2026-10-06/README.md)에 보관했다.
+- gate 변화: LOCAL 오류 화면 부분 근거. 실제 Android 셸·장치 readback·운전자 G3는 HOLD다.

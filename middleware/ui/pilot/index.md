@@ -34,8 +34,8 @@
 
 ## 최근 기록
 
+- 2026-10-06 · uncommitted · uiux(pilot): 대상 발견 오류의 운용자 문구
 - 2026-10-06 · uncommitted · uiux(pilot): 영상 없는 연습 화면의 조작 창 너비 통일
 - 2026-10-06 · uncommitted · feat(pilot): 피어 세션을 저장해 자연 만료까지 재사용한다
 - 2026-10-06 · uncommitted · fix(pilot): 운영자 화면에서도 연동 코드 보여주기 항목을 보인다
 - 2026-10-05 · uncommitted · fix(pilot): 일시 연결 실패 배너가 회복 뒤에도 남던 것
-- 2026-10-05 · uncommitted · fix(pilot): 태블릿 카메라 오류 — 프록시가 X-Rosy-* 증명 헤더를 지움

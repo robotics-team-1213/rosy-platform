@@ -1851,7 +1851,13 @@ def test_startup_target_failure_retries_without_pinky_fallback(tablet_page):
     assert not page.locator('[data-pilot-token-form]').count()
     state.update(status=200, body={"kind": "invalid"})
     retry.click()
-    expect(page.locator('[data-screen=connect]')).to_contain_text('invalid simulation target')
+    expect(page.locator('[data-screen=connect]')).to_contain_text('연결과 대상 정보를 확인한 뒤 다시 시도하세요')
+    expect(page.locator('[data-screen=connect]')).not_to_contain_text('invalid simulation target')
+    assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')
+    if os.environ.get('ROSY_SHOT_DIR'):
+        shot_dir = Path(os.environ['ROSY_SHOT_DIR'])
+        shot_dir.mkdir(parents=True, exist_ok=True)
+        page.screenshot(path=str(shot_dir / 'pilot-target-error-390x844.png'))
     state['status'] = None
     retry.click()
     page.wait_for_function("document.querySelector('[data-discovery-retry]').disabled")
