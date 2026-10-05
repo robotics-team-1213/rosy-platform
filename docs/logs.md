@@ -6092,3 +6092,8 @@ osy-d395-s1d\`.
 - 변경: CAP-001 표시와 전송 직전 재확인, 미지원 목표·대형 버튼 사유, 교체·대형 편입 경합 차단, ARMING 팔로워 예약. CORE 계약과 최종 제어 권한은 유지한다.
 - 증거: 관련 Python 180 PASS, Node 3 PASS, Chromium 2 PASS, 독립 리뷰 54 PASS와 scoped safety PASS. 기능 허용 변이 RED 후 복원 GREEN을 확인했다. docs/validation/fleet-navigation-support-2026-10-05.md.
 - gate 변화: 소스 회귀만 확인. 실기 두 대의 짧은 수동 진단과 최종 IDLE·속도 0을 읽었다. 새 후보 배포·목표·대형 실동작은 NOT_RUN, 독립 FIELD 수용은 HOLD.
+
+## 2026-10-05 · uncommitted · docs(camera): record applied checkerboard geometry
+- 변경: Record user-authorized estimated camera height/pitch operator overlay on the photographed device; preserve the earlier frozen candidate record.
+- 증거: Live parameters match 54.908mm/12.117deg; camera profile log reports operator overrides; 80 advancing frames and 501 zero commands in 10s. docs/validation/camera-board-applied-2026-10-05/result.md.
+- gate 변화: DEVICE estimated perception geometry application verified; intrinsic calibration acceptance and autonomous lane driving remain unverified.
