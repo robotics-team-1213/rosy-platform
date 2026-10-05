@@ -1912,3 +1912,9 @@
 - 변경: CAP-001 표시와 전송 직전 재확인, 미지원 목표·대형 버튼 사유, 교체·대형 편입 경합 차단, ARMING 팔로워 예약. CORE 계약과 최종 제어 권한은 유지한다.
 - 증거: 관련 Python 180 PASS, Node 3 PASS, Chromium 2 PASS, 독립 리뷰 54 PASS와 scoped safety PASS. 기능 허용 변이 RED 후 복원 GREEN을 확인했다. docs/validation/fleet-navigation-support-2026-10-05.md.
 - gate 변화: 소스 회귀만 확인. 실기 두 대의 짧은 수동 진단과 최종 IDLE·속도 0을 읽었다. 새 후보 배포·목표·대형 실동작은 NOT_RUN, 독립 FIELD 수용은 HOLD.
+
+## 2026-10-05 · uncommitted · fix(fleet): 기능 표시 조회의 상태 응답 대기 제한
+
+- 변경: 기능 표시를 50ms만 기다리고 조회 작업을 공유한다. 미완료·만료 증거는 unknown이며, 교체·종료 때 작업을 취소한다. 전송 직전 CAP-001 검사는 유지한다.
+- 증거: 느린 CAP 조회로 상태 응답이 막히는 RED 재현 후 GREEN. 독립 리뷰 81 PASS·known_failures 0 NEW, 30개 동시 조회 공유·종료 취소 확인. 첫 서명 후보의 CI는 PASS였지만 현장 최종 기능 검사 실패로 정상 롤백했다.
+- gate 변화: 소스 지연 문제 수정만 확인. 보완 후보의 실제 5초 기능 검사와 최종 배포는 검증 중이며, 목표·대형 실주행과 FIELD 수용은 HOLD다.
