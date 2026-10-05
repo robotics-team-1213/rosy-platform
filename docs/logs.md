@@ -6259,3 +6259,9 @@ osy-d395-s1d\`.
 - 변경: 320×240 주행 카드의 저배터리 숫자를 위험 채움 위 밝은 글자로 바꾸고, [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)에 수동·내비게이션·정지 캡처와 G3 여덟 항목의 남은 판정 범위를 추가했다.
 - 증거: 현재 트리 정보·주행 카드·팔레트 71 passed, `known_failures.py` 0 NEW. 캡처는 PIL 직접 출력이다.
 - gate 변화: 로봇 얼굴 LOCAL 부분 근거. D-433 설치 LCD·현장 판독과 제품 전체 UI/UX는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(cam): 페어링 화면 너비 통일
+
+- 변경: Cam 페어링 화면의 본문 너비와 동등한 선택 버튼 너비를 정리하고, [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)에 미검증 범위를 기록했다.
+- 증거: Android `:app:compileDebugKotlin` 성공. ADB 장치가 없어 네이티브 캡처는 없다.
+- gate 변화: Cam LOCAL 소스 부분 근거. 제품 전체 G2/G3와 실제 장치·현장 수용은 HOLD다.

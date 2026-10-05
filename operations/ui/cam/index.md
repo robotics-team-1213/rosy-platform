@@ -33,8 +33,8 @@
 
 ## 최근 기록
 
+- 2026-10-06 · uncommitted · uiux(cam): 페어링 선택 너비 통일
 - 2026-10-05 · uncommitted · feat(cam): LAN 수신 선택·상대 승인·기억한 연결 갱신
 - 2026-10-04 · uncommitted · Cam 송출 화면의 운영 정보 우선 표시
 - 2026-10-04 · uncommitted · D-427 preserve remote Cam changes
 - 2026-10-04 · uncommitted · fix(cam): 필요할 때만 요청하는 촬영 조명
-- 2026-10-04 · uncommitted · feat(cam): 자동 조명·사진 공유의 실제 S21 운용 확인

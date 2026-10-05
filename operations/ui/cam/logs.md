@@ -211,3 +211,9 @@
 - 변경: LAN 목록 선택을 앱의 정상 연결 시작으로 두고 camera-peer 프로파일의 Keystore 신원·암호화 관계 기록·same-origin TLS·fresh proof 갱신을 기존 OverheadLink에 연결한다. legacy rollback과 같은 값 재선택을 보존하고 marker 누락 자격은 fail closed한다. Bluetooth·IP 입력·자동 촬영은 추가하지 않는다.
 - 증거: 독립 최종 22 경로 SOURCE PASS; JVM 366 PASS, 최종 marked guard RED/복원 12 PASS. 부모 정규화 소스 일치와 server/native golden 바이트 일치 확인. 실제 widget·Keystore·LAN·APK 업데이트는 별도 검증한다.
 - gate 변화: SOURCE/LOCAL. 기존 capture·Stop·thermal·screen sleep 소유자는 유지한다. 실제 signed 배포와 receiver 두 화면 승인은 완료로 표시하지 않는다.
+
+## 2026-10-06 · uncommitted · uiux(cam): 페어링 선택 너비 통일
+
+- 변경: 페어링 절차를 최대 560dp의 가운데 본문에 배치하고, 지문 확인·거부 후 선택 버튼은 각각 같은 너비로, 단독 버튼은 본문 너비로 맞췄다.
+- 증거: `:app:compileDebugKotlin` 성공. ADB 장치가 없어 네이티브 렌더링·터치 확인은 미실행이다.
+- gate 변화: Cam SOURCE/LOCAL 부분 근거. 네이티브 G2/G3와 제품 전체 UI/UX는 HOLD다.
