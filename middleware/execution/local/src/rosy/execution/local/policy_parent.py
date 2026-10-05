@@ -92,6 +92,16 @@ def correlate_parent(parent, journal, command_id, receipt_bytes):
     No wire journal_id is filled from a path/digest. Episode/Fleet qualification
     awaits a separately defined provenance profile and lawful task semantics.
     """
+    return _capture_parent(parent, journal, command_id, receipt_bytes)[0]
+
+
+def _capture_parent(parent, journal, command_id, receipt_bytes):
+    """Private checked inputs for serialization, with the same final guards.
+
+    The returned snapshots are those hashed into the proof, not a permission
+    or a cache usable for another execution. Publication must still reread
+    all original inputs and authority after writing its pending artifact.
+    """
     if (not isinstance(parent, _ParentCapability) or parent not in _MINTED
             or not isinstance(journal, PolicyExecutionJournal)):
         raise PermissionError('actual runner capability and native journal required')
@@ -163,4 +173,4 @@ def correlate_parent(parent, journal, command_id, receipt_bytes):
         inference_consumption_verified=False)
     result['revision'] = _sha(encoded(result))
     parent.validate()  # LAST: after all slow proof reads, hashing and JSON work.
-    return result
+    return result, before, native, source

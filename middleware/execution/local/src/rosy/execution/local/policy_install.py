@@ -6,6 +6,7 @@ from pathlib import Path
 import re
 
 from rosy.contracts.learning import validate_policy
+from rosy.contracts.learning.artifacts import _ref
 
 
 def _encoded(value):
@@ -80,7 +81,17 @@ def _checked(root, binding, expected_bytes=None):
     payload = file.read_bytes()
     if expected_bytes is not None and payload != expected_bytes:
         raise ValueError('installed policy manifest changed')
-    doc = validate_policy(json.loads(payload), root=root)
+    doc = validate_policy(json.loads(payload))
+    # Model, normalization and evaluation roles may name the same artifact.
+    # Check every declared reference structurally, reject cross-role conflicts,
+    # and hash each distinct installed file with the same containment verifier.
+    refs = {}
+    for ref in doc['files'] + [doc['normalization']] + doc['evaluations']:
+        previous = refs.setdefault(ref['path'], ref)
+        if _encoded(previous) != _encoded(ref):
+            raise ValueError('same installed file has conflicting references')
+    for ref in refs.values():
+        _ref(ref, root)
     for name in ('profile', 'robot_type', 'environment', 'device_profile_revision', 'camera_profile_revision'):
         if doc[name] != getattr(binding, name):
             raise ValueError(f'installed {name} binding differs')

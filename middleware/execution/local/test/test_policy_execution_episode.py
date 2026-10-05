@@ -65,6 +65,25 @@ def test_full_profile_validation_once_after_all_pending_writes(tmp_path,monkeypa
     assert calls==[output]
 
 
+def test_publication_reuses_the_verified_capture_before_writing(tmp_path,monkeypatch):
+    parent,api,journal,command,_,_=setup(tmp_path)
+    counts=dict(parent=0,native=0,source=0)
+    for instance,name,key in [(parent,'snapshot','parent'),
+                              (journal,'read','native'),
+                              (journal,'read_source','source')]:
+        original=getattr(instance,name)
+        def counted(*args,_original=original,_key=key,**kwargs):
+            counts[_key]+=1
+            return _original(*args,**kwargs)
+        monkeypatch.setattr(instance,name,counted)
+    module=importlib.import_module('rosy.execution.local.policy_episode')
+    module.publish(parent,api,journal,command,tmp_path/'episode')
+    # Correlation rereads every original input before returning its captured
+    # bytes and again after pending I/O; no extra serialization-only snapshot.
+    # API snapshots live inside the capability reader, not parent.snapshot.
+    assert counts==dict(parent=4,native=4,source=4)
+
+
 @pytest.mark.parametrize('mutation', ['missing', 'api_id', 'database_id', 'other_runner'])
 def test_actual_owner_api_requires_existing_same_journal(tmp_path, mutation):
     parent, api, journal, command, _, _ = setup(tmp_path)
