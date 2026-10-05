@@ -1843,3 +1843,10 @@
 - 나이: 기존 시험의 수신 시점 지연 나이 고정을 현재 source-clock 나이로 수정했다. now를 인접 clock 표본 사이에서 보간하고 pause는 보존한다. 표본 밖·rollback·비유한/손상 표본은 unknown이며 extrapolation하지 않는다.
 - 증거: 기존 원래 경로에서 19 FAIL/12 PASS, 두 로봇 중 한 응답 누락 회귀 1 FAIL을 재현했다. 중간 분기 연결 오류 4 FAIL도 보존했고 수정 후 probe·기존 traffic·boundary 91 PASS(5.41s)다. 모든 HELLO의 응답이 없으면 세션 전체는 INCONCLUSIVE이며 정상 세션 PASS도 유지한다. 실제 HTTP/WS·ROS-SIM·기기 실행은 없고 입력 관측 목록을 판정한 host 증거다.
 - gate 변화: T2 판정 source 보완이며 T3 관측기나 실제 회차 수용을 추가하지 않는다.
+
+## 2026-10-05 · uncommitted · feat(server): D-426 T4 공유 구간 진입 허가·점유
+
+- 변경: `traffic_reservations.py`·`segment_store.py` 추가 — 같은 Task DB 에 구간 정의(구간 ID·지도 revision·진입/출구·안전 대기점·반경)와 `fleet_segment_grants` 표. 상태는 FREE(행 없)→RESERVED→OCCUPIED→RELEASING→FREE, 불명 UNKNOWN. Fleet만 writer. `request`는 활성 상태(RESERVED 포함)면 재할당을 거부하고, `verify_grant`는 수락 측 일치·만료·세대를 검증하며, `confirm_entry`는 신뢰 위치가 구간 안일 때만 만료를 경계에서 재검사해 받아들인다. `begin_release`는 신선한(≤2 s) 출구 이탈 관측과 종단 실행 결과 둘 다 대조한 뒤 RELEASING을 열고 `confirm_exit`로만 FREE가 된다. 시간 만료·링크 상실(`mark_unknown`)만으로는 FREE가 되지 않는다. `waiting_seconds`는 RESERVED가 60 s 이상 진입 못 하면 운영자 대조로 남긴다(자동 후반전 없음).
+- 증거: test/test_traffic_reservations.py 10개 계약 — 동시 진입·빈/못난 식별자·다른 지도 revision·위치 미확정·만료 경계 재검사·UNKNOWN도 재진입 거부·시한만 지난 RESERVED 재할당 금지·출구 관측/종단/낡은 관측별 해제 거부·결속·세대·만료 검증·Fleet 재시작 후에도 grants 잔존·대기 보고. 기존 traffic/boundary 포함 47·33 PASS.
+- gate 변화: SOURCE/LOCAL 판정 모듈. 실제 로봇 진입·Nav2 경로 제약·robot-side gate 미구현으로 T4 전체 수용은 HOLD다(계획 T4 항목 4·5).
+- 결정: competing dispatcher를 만들지 않는다. grant 만료는 실제 footprint 진입 시한이며 시한 경과만으로 구간을 풀지 않는다(D-426 결정 3).

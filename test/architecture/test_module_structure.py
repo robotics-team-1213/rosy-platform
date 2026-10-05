@@ -107,7 +107,11 @@ SIZE_VERDICTS = {
         "duplicate its socket. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        35_606,
+        35_878,
+        "split: D-426 T4 re-judged at 35878 — segment grants/definitions add 272 "
+        "(traffic_reservations.py + segment_store.py) with a dedicated contract suite; "
+        "no command owner changes; the release path still requires fresh exit "
+        "observation plus a terminal result. "
         "split: independently re-judged at measured35606 on 2026-10-05 after enrolled "
         "TLS transport and required feature-builder extraction; CLI586 removes its stale "
         "file verdict. Previous35137 + concurrent80 + TLS364 + builder25. Retain the "

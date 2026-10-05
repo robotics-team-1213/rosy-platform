@@ -5926,6 +5926,13 @@ osy-d395-s1d\`.
 - gate 변화: 없음(SOURCE/LOCAL 판정 모듈). 실측 임계값은 시뮬 수용 목표이며 실물 안전 기준이 아니다.
 - 결정: observer truth는 Fleet/CORE 판단에 주입하지 않는다(D-426 결정 2). 이상적 오도메트리 전제는 manifest 기록 사항(T6).
 
+## 2026-10-05 · uncommitted · feat(fleet): D-426 T4 공유 구간 진입 허가·점유
+
+- 변경: `operations/fleet/fleet/server/traffic_reservations.py`·`segment_store.py` 추가 — 같은 Task DB에 구간 정의(구간 ID·지도 revision·진입/출구·안전 대기점·반경)와 grants 표. 상태 FREE(행 없)→RESERVED→OCCUPIED→RELEASING→FREE, 불명 UNKNOWN, Fleet 단일 writer. (1) request는 활성 상태 전부 재할당 거부 — 시한만 지난 RESERVED도 이전 실행의 밖-비활성·정지 확인 전 재할당 금지. (2) verify_grant는 수락 측 결속(Task/attempt·robot·구간·지도 revision)·세대·만료 검증. (3) confirm_entry는 신뢰 위치가 구간 안일 때만, 만료는 경계에서 재검사(밖 정지). (4) begin_release는 신선한(≤2 s) 출구 이탈 관측+종단 실행 결과 대조, confirm_exit로만 FREE. (5) mark_unknown(링크 상실)·시간 만료만으로 FREE 아님. (6) RESERVED 60 s 초과 대기는 운영자 대조 보고(자동 후반전 금지). Fleet 크기 판정 35878 재기록.
+- 증거: test_traffic_reservations 10개 계약(동시 진입·식별자·지도 revision·위치 미확정·만료 경계·UNKNOWN 재진입 거부·시한만 지난 RESERVED·해제 근거 3종 거부·결속/세대/만료·재시작 잔존·대기 보고) + 기존 traffic·boundary·구조 포함 90 PASS.
+- gate 변화: SOURCE/LOCAL. T4 전체 수용은 HOLD — 실제 로봇 진입·Nav2 경로 제약·robot-side gate 미구현(계획 T4 항목 4·5, goal 분할만으로 진입 gate 주장 불가).
+- 결정: D-426 결정 3 준수 — 통신 timeout은 공간이 비었다는 증명이 아니다.
+
 ## 2026-10-05 · uncommitted · fix(ui): 네트워크 설치 작업을 연결 중심으로 정리
 
 - 변경: Wi-Fi 이름·암호의 지속 라벨과 공용 Wi-Fi 아이콘을 사용하고, 프로파일·AP·모드 전환은 기본 접힌 고급 작업으로 묶는다. 연결만 primary이며 결과·차단 안내는 접힌 영역 밖에 유지한다. D-432 추가 결정에 근거와 검증 범위를 기록했다.
