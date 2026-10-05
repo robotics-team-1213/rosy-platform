@@ -531,3 +531,9 @@
 - 변경: 차선 자동 모드가 수동 회전 버튼을 숨기는 동안 전화의 회전 안내도 숨기고, 수동 복귀 때 다시 표시한다.
 - 증거: [UI/UX 회차](../../../docs/validation/uiux-surfaces-2026-10-06/README.md)의 390×844 자동·수동 캡처, 모드 전환 브라우저 1 passed, `known_failures.py` 0 NEW. 원본은 X:에 둔다.
 - gate 변화: Pilot LOCAL G2 모드 상태 일부 추가. 실제 운전자 G3와 제품 전체는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(pilot): 320px 주행 머리 겹침
+
+- 변경: 320px 주행 화면에서 이름과 이동 버튼이 겹쳐 22rem 미만의 중복 이름을 숨겼다. 이동·비상 정지는 남긴다.
+- 증거: [UI/UX 회차](../../../docs/validation/uiux-surfaces-2026-10-06/README.md)의 320px 전후 캡처, 320/390px 자동·수동 브라우저 2 passed, `known_failures.py` 0 NEW.
+- gate 변화: Pilot LOCAL G2 부분 근거 추가. 실기 전화·운전자 G3와 제품 전체는 HOLD다.

@@ -34,8 +34,8 @@
 
 ## 최근 기록
 
+- 2026-10-06 · uncommitted · uiux(pilot): 320px 주행 머리 겹침
 - 2026-10-06 · uncommitted · uiux(pilot): 자동 모드의 회전 안내 제거
 - 2026-10-06 · uncommitted · uiux(pilot): 전화 회전 조작 안내
 - 2026-10-06 · uncommitted · uiux(pilot): 작은 태블릿의 확대 글자 재판정
 - 2026-10-06 · uncommitted · uiux(pilot): 네이티브 로비의 좁은 가로 폭
-- 2026-10-06 · uncommitted · uiux(pilot): 전화 주행 조작 도달성과 영상 재시도

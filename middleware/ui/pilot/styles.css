@@ -436,6 +436,10 @@ html[data-pilot-shell="android"] ui-topbar ui-brand { display: none; }
 body[data-pilot-screen="drive"] ui-topbar ui-button { white-space: nowrap; }
 [data-drive-presets] { flex-wrap: nowrap; }
 
+@media (width < 22rem) {
+  body[data-pilot-screen="drive"] ui-topbar ui-brand { display: none; }
+}
+
 /* 휴대폰 세로: 게이트 안내문·속도 라벨은 뺀다(상태는 HUD 가 말한다) */
 @media (width < 30rem) {
   [data-drive-presets] > ui-text { display: none; }

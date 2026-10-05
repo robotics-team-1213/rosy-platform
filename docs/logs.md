@@ -6379,3 +6379,9 @@ osy-d395-s1d\`.
 - 변경: 게임 보드의 최초·지연 320×568에서 점수·피치·관측이 같은 가용 폭을 쓰고 정지가 첫 화면에 남는지 브라우저 계약에 추가했다.
 - 증거: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)의 X: 캡처 2장, 브라우저 4 passed, `known_failures.py` 0 NEW.
 - gate 변화: 게임 보드 LOCAL G2 부분 근거 추가. 실제 경기·정지 readback과 제품 전체 G2/G3는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(pilot): 320px 머리 겹침 해소
+
+- 변경: 주행 머리 320px에서 제품 이름을 숨겨 「Rosy Robot」 이동과 비상 정지가 겹치지 않게 했다.
+- 증거: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)의 320px 전후 X: 캡처와 320/390px 브라우저 2 passed, `known_failures.py` 0 NEW.
+- gate 변화: Pilot LOCAL G2 부분 근거 추가. 실제 운전자 G3와 제품 전체는 HOLD다.

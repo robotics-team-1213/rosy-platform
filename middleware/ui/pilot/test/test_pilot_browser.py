@@ -935,19 +935,28 @@ def test_stick_takes_over_auto(tablet_page):
 
 @pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
                     reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
-def test_turn_cue_follows_manual_mode_on_phone(tablet_page):
+@pytest.mark.parametrize("width,height", [(390, 844), (320, 568)])
+def test_turn_cue_follows_manual_mode_on_phone(tablet_page, width, height):
     base_url, page, errors = tablet_page
-    page.set_viewport_size({"width": 390, "height": 844})
+    page.set_viewport_size({"width": width, "height": height})
     _arm_auto(page, base_url)
+    robot = page.locator('ui-topbar [data-goto="/dashboard"]').bounding_box()
+    stop = page.locator('ui-topbar [data-estop]').bounding_box()
+    assert robot and stop and robot["x"] + robot["width"] <= stop["x"]
+    if page.locator("ui-topbar ui-brand").is_visible():
+        brand = page.locator("ui-topbar ui-brand").bounding_box()
+        assert brand["x"] + brand["width"] <= robot["x"]
+    assert stop["x"] + stop["width"] <= width
+    assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
     assert not page.locator("[data-drive-scroll-cue]").is_visible()
     if output := os.environ.get("ROSY_SHOT_DIR"):
         Path(output).mkdir(parents=True, exist_ok=True)
-        page.screenshot(path=str(Path(output) / "pilot-turn-cue-auto-390x844.png"))
+        page.screenshot(path=str(Path(output) / f"pilot-turn-cue-auto-{width}x{height}.png"))
     page.click("[data-drive-manual]")
     page.wait_for_selector("[data-drive-pivots]", state="visible")
     assert page.locator("[data-drive-scroll-cue]").is_visible()
     if output:
-        page.screenshot(path=str(Path(output) / "pilot-turn-cue-manual-390x844.png"))
+        page.screenshot(path=str(Path(output) / f"pilot-turn-cue-manual-{width}x{height}.png"))
     assert errors == [], errors
 
 

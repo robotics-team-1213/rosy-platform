@@ -112,6 +112,8 @@ Pilot 390×844에서 회전 조작을 첫 화면에 올리려고 아래 조작 �
 
 차선 자동 모드에서는 수동 회전 버튼이 숨겨지므로 안내도 숨긴다. 390×844에서 자동 진입→안내 없음→수동 복귀→안내 표시를 브라우저 **1 passed**, `known_failures.py` **0 NEW**로 확인했다. X: `captures/pilot-turn-cue-mode/pilot-turn-cue-{auto,manual}-390x844.png`에 두 상태를 보관했다. 실제 운전자 G3는 그대로 HOLD다.
 
+320×568 추가 확인에서 주행 머리의 `Rosy Pilot` 이름이 「Rosy Robot」 이동 버튼과 겹쳤다. 22rem 미만 주행 화면에서는 중복 이름을 숨겨 이동·비상 정지 버튼을 분리했다. 320/390px의 자동·수동 화면 브라우저 **2 passed**, `known_failures.py` **0 NEW**다. 겹침 전후 원본은 X: `captures/pilot-320/`와 `captures/pilot-320-fixed/`에 있다. 실제 전화와 운전자 G3는 여전히 HOLD다.
+
 ### 장비·작업 준비 G3 독회 — LOCAL 진행 중
 
 | D-153 항목 | 현재 근거 | 남은 판정 범위 |
