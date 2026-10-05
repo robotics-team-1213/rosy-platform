@@ -34,8 +34,8 @@
 
 ## 최근 기록
 
+- 2026-10-06 · uncommitted · uiux(pilot): 작은 태블릿의 확대 글자 재판정
 - 2026-10-06 · uncommitted · uiux(pilot): 네이티브 로비의 좁은 가로 폭
 - 2026-10-06 · uncommitted · uiux(pilot): 전화 주행 조작 도달성과 영상 재시도
 - 2026-10-06 · uncommitted · uiux(pilot): 대상 발견 오류의 운용자 문구
 - 2026-10-06 · uncommitted · uiux(pilot): 영상 없는 연습 화면의 조작 창 너비 통일
-- 2026-10-06 · uncommitted · feat(pilot): 피어 세션을 저장해 자연 만료까지 재사용한다

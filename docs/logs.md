@@ -6289,3 +6289,9 @@ osy-d395-s1d\`.
 - 변경: Pilot Shell의 좁은 가로 화면에서 로봇 목록을 전폭으로 배치해 다시 찾기·상태·기기 연결을 복구하고, [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)에 네이티브 화면 결과를 기록했다.
 - 증거: Android JVM 89 passed, debug APK 빌드·에뮬레이터 3폭 캡처와 기기 대화상자 스크롤 확인. 캡처 원본은 X:에 둔다.
 - gate 변화: Pilot Shell LOCAL G2 부분 근거. 실제 태블릿·로봇 연결·G3와 제품 전체 UI/UX는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(pilot): 400dp 확대 글자 확인
+
+- 변경: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)에 Pilot Shell 400dp/글자 130% 네이티브 화면 판정을 추가했다.
+- 증거: 격리 Android 에뮬레이터 캡처·UI bounds에서 제목·다시 찾기·상태·기기 버튼이 화면 안에 있음을 확인했다. 원본은 X:에 둔다.
+- gate 변화: Pilot Shell LOCAL G2 부분 근거만 추가. 제품 전체 UI/UX는 HOLD다.

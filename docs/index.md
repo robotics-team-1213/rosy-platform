@@ -300,8 +300,8 @@
 
 ## 최근 기록
 
+- 2026-10-06 · uncommitted · uiux(pilot): 400dp 확대 글자 확인
 - 2026-10-06 · uncommitted · uiux(pilot): 태블릿 로비 좁은 폭 복구
 - 2026-10-06 · uncommitted · uiux(cam): 네이티브 LAN·설정 화면 부분 확인
 - 2026-10-06 · uncommitted · uiux(cam): 연결·설정 화면 조작 너비
 - 2026-10-06 · uncommitted · uiux(cam): 송출 화면 조작 너비
-- 2026-10-06 · uncommitted · uiux(cam): 페어링 화면 너비 통일
