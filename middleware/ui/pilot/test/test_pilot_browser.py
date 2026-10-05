@@ -957,6 +957,19 @@ def test_turn_cue_follows_manual_mode_on_phone(tablet_page, width, height):
     assert page.locator("[data-drive-scroll-cue]").is_visible()
     if output:
         page.screenshot(path=str(Path(output) / f"pilot-turn-cue-manual-{width}x{height}.png"))
+    page.locator('[data-drive-pivot="left"]').scroll_into_view_if_needed()
+    pivot = page.locator('[data-drive-pivot="left"]').bounding_box()
+    assert pivot and pivot["y"] >= page.locator("ui-topbar").bounding_box()["height"]
+    assert pivot["y"] + pivot["height"] <= height + 1
+    pivot_widths = page.evaluate("""() => [...document.querySelectorAll('[data-drive-pivots] ui-button')]
+      .map(button => [button.clientWidth, button.scrollWidth])""")
+    assert all(scroll <= client + 1 for client, scroll in pivot_widths), pivot_widths
+    page.locator('[data-drive-pivot="right"]').scroll_into_view_if_needed()
+    right = page.locator('[data-drive-pivot="right"]').bounding_box()
+    assert right and right["y"] >= page.locator("ui-topbar").bounding_box()["height"]
+    assert right["y"] + right["height"] <= height + 1
+    if output:
+        page.screenshot(path=str(Path(output) / f"pilot-turn-controls-{width}x{height}.png"))
     assert errors == [], errors
 
 

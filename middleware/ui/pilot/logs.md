@@ -537,3 +537,9 @@
 - 변경: 320px 주행 화면에서 이름과 이동 버튼이 겹쳐 22rem 미만의 중복 이름을 숨겼다. 이동·비상 정지는 남긴다.
 - 증거: [UI/UX 회차](../../../docs/validation/uiux-surfaces-2026-10-06/README.md)의 320px 전후 캡처, 320/390px 자동·수동 브라우저 2 passed, `known_failures.py` 0 NEW.
 - gate 변화: Pilot LOCAL G2 부분 근거 추가. 실기 전화·운전자 G3와 제품 전체는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(pilot): 320px 회전 버튼 너비
+
+- 변경: 320px에서 제자리 좌·우회전 버튼의 내용이 반폭 칸을 넘쳐, 22rem 미만에서는 두 버튼을 조작 열 전폭으로 쌓았다.
+- 증거: [UI/UX 회차](../../../docs/validation/uiux-surfaces-2026-10-06/README.md)의 전후 X: 캡처와 실제 내용 폭 57/66px, 320/390px 브라우저 2 passed, `known_failures.py` 0 NEW.
+- gate 변화: Pilot LOCAL G2 부분 근거 추가. 실기 운전자 G3와 제품 전체는 HOLD다.

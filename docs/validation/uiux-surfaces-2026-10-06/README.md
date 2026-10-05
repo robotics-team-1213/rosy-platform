@@ -114,6 +114,8 @@ Pilot 390×844에서 회전 조작을 첫 화면에 올리려고 아래 조작 �
 
 320×568 추가 확인에서 주행 머리의 `Rosy Pilot` 이름이 「Rosy Robot」 이동 버튼과 겹쳤다. 22rem 미만 주행 화면에서는 중복 이름을 숨겨 이동·비상 정지 버튼을 분리했다. 320/390px의 자동·수동 화면 브라우저 **2 passed**, `known_failures.py` **0 NEW**다. 겹침 전후 원본은 X: `captures/pilot-320/`와 `captures/pilot-320-fixed/`에 있다. 실제 전화와 운전자 G3는 여전히 HOLD다.
 
+같은 320px 수동 화면의 제자리 회전 버튼은 각각 57px 칸에 66px 내용이 넘쳤다. 22rem 미만에서는 좌·우회전을 각각 조작 열의 전폭으로 쌓아 글자 잘림을 없앴다. 첫 화면의 「↓ 회전 조작」 안내에서 스크롤해 두 버튼 모두 화면 안으로 가져올 수 있다. 320/390px 브라우저 **2 passed**, `known_failures.py` **0 NEW**이며 전후 원본은 X: `captures/pilot-320-fixed/`와 `captures/pilot-320-pivots/`에 있다. 실제 운전자 발견·조작은 G3 HOLD다.
+
 ### 장비·작업 준비 G3 독회 — LOCAL 진행 중
 
 | D-153 항목 | 현재 근거 | 남은 판정 범위 |

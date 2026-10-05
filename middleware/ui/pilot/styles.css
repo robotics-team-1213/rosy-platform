@@ -860,3 +860,6 @@ body[data-pilot-screen="drive"] ui-brand small { display: none; }
     flex: 0 1 auto;
   }
 }
+@media (width < 22rem) {
+  .pilot-drive[data-drive-layout="below"] [data-drive-pivots] { grid-template-columns: minmax(0, 1fr); }
+}

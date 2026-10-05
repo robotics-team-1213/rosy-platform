@@ -300,8 +300,8 @@
 
 ## 최근 기록
 
+- 2026-10-06 · uncommitted · uiux(pilot): 320px 회전 버튼 전폭
 - 2026-10-06 · uncommitted · uiux(pilot): 320px 머리 겹침 해소
 - 2026-10-06 · uncommitted · uiux(games): 320px 패널 동일 폭
 - 2026-10-06 · uncommitted · uiux(pilot): 자동 모드 안내 정합성
 - 2026-10-06 · uncommitted · uiux(pilot): 전화 회전 조작 위치 안내
-- 2026-10-06 · uncommitted · uiux(pilot): 전화 회전 조작과 영상 면적의 경계 확인
