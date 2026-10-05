@@ -8,7 +8,7 @@ const states = {unknown:'알 수 없음', red:'빨강', yellow:'노랑', green:'
 const statuses = {approved:'승인', excluded:'제외', pending:'검수 대기'};
 const serverReasons = {'known object class required':'모든 박스에 클래스를 지정하세요.','box outside original image':'박스가 원본 사진 범위를 벗어났습니다.','unknown signal state':'신호 상태가 올바르지 않습니다.','boxes must be a list':'박스 목록이 올바르지 않습니다.','unknown review action':'지원하지 않는 동작입니다.'};
 function readableError(message) {return serverReasons[message] || message;}
-let workspace, frame, image, ready = false, busy = false, conflicted = false, loadSerial = 0, drawing = false;
+let workspace, frame, image, ready = false, busy = false, conflicted = false, loadFailed = false, loadSerial = 0, drawing = false;
 let gesture = null, selected = null, coordinatePreview = null;
 let undo = null;
 function visibleFrames() {return workspace?.frames.filter(item=>$('filter').value==='all'||item.status===$('filter').value)||[];}
@@ -280,7 +280,7 @@ function applyFilter() {
   else {++loadSerial;cancelGesture();ready=false;frame=undefined;undo=null;selected=null;coordinatePreview=null;$('review-content').hidden=true;$('empty-review').hidden=false;const firstUse=!workspace.frames.length;$('empty-review').querySelector('h2').textContent=firstUse?'등록된 사진이 없습니다':'이 상태의 사진이 없습니다';$('empty-review').querySelector('p').textContent=firstUse?'자료 등록에서 원본 사진을 추가하세요.':'전체 사진을 열거나 다른 검수 상태를 선택하세요.';$('show-all').textContent=firstUse?'자료 등록 열기':'전체 사진 보기';list();saveView();enable();}
 }
 $('filter').onchange=applyFilter;
-$('show-all').onclick=()=> {if(!workspace.frames.length){location.assign('/catalog');return;}$('filter').value='all';applyFilter();};
+$('show-all').onclick=()=> {if(loadFailed){load();return;}if(!workspace.frames.length){location.assign('/catalog');return;}$('filter').value='all';applyFilter();};
 $('prev-frame').onclick=()=> {const visible=visibleFrames(),index=visible.findIndex(item=>item.index===frame.index);if(index>0) select(visible[index-1].index);};
 $('next-frame').onclick=()=> {const visible=visibleFrames(),index=visible.findIndex(item=>item.index===frame.index);if(index<visible.length-1) select(visible[index+1].index);};
 $('next-pending').onclick=()=> {
@@ -300,7 +300,7 @@ $('prepare').onclick=async()=> {
   try {receipt(await request('/api/prepare',{}));} catch(e) {error(e.message); $('export-result').textContent='자료 준비 실패';} finally {busy=false; enable();}
 };
 async function load(index) {
-  try {workspace=await request('/api/workspace'); conflicted=false; error();
+  try {workspace=await request('/api/workspace'); loadFailed=false; conflicted=false; error();
     if(workspace.exports.length) receipt(workspace.exports[0]);
     if (!workspace.frames.length) {applyFilter();return;}
     const params=new URLSearchParams(location.search);
@@ -308,6 +308,6 @@ async function load(index) {
     const candidate=params.has('frame')?Number(params.get('frame')):undefined;
     const visible=visibleFrames(),wanted=index??candidate;
     if(visible.length) await select(visible.some(item=>item.index===wanted)?wanted:visible[0].index);else applyFilter();
-  } catch(e) {error(e.message);}
+  } catch(e) {loadFailed=true;workspace=undefined;frame=undefined;ready=false;listKey='';$('frames').replaceChildren();$('counts').textContent='상태를 확인할 수 없습니다.';$('filter').parentElement.hidden=true;$('empty-frames').textContent='사진 목록을 불러오지 못했습니다.';$('empty-frames').hidden=false;$('review-content').hidden=true;$('empty-review').hidden=false;$('empty-review').querySelector('h2').textContent='검수 내용을 불러오지 못했습니다';$('empty-review').querySelector('p').textContent='연결을 확인하고 다시 시도하세요.';$('show-all').textContent='다시 불러오기';enable();}
 }
 load();

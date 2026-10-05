@@ -158,6 +158,49 @@ def test_object_review_first_use_leads_to_data_registration(browser_workspace):
     assert page.url.endswith('/catalog')
 
 
+@pytest.mark.parametrize('route,empty,retry,content', [('/', '#empty-review', '#show-all', '#review-content'),
+                                                       ('/pixels', '#pixel-empty', '#pixel-reload', '#pixel-content')])
+@pytest.mark.parametrize('width', [1440, 390])
+def test_workspace_disconnect_shows_reachable_retry(browser_workspace, route, empty, retry, content, width):
+    page, _, expect = browser_workspace
+    page.set_viewport_size({'width': width, 'height': 844})
+    page.route('**/api/workspace', lambda request: request.abort())
+    page.goto(page.url.split('?')[0].rstrip('/') + route, wait_until='networkidle')
+    expect(page.locator(empty)).to_be_visible()
+    expect(page.locator(content)).to_be_hidden()
+    expect(page.locator(retry)).to_be_visible()
+    if route == '/':
+        expect(page.locator('#empty-review h2')).to_have_text('검수 내용을 불러오지 못했습니다')
+    else:
+        expect(page.locator('#pixel-status')).to_contain_text('검수 내용을 불러오지 못했습니다')
+        expect(page.locator('#pixel-frame').locator('..')).to_be_hidden()
+    assert page.locator(retry).bounding_box()['y'] < 844
+    assert page.evaluate('document.documentElement.scrollWidth - innerWidth') == 0
+    if output := os.getenv('ROSY_UIUX_SCREENSHOT_DIR'):
+        from pathlib import Path
+        target = Path(output) / f'learning-{"objects" if route == "/" else "pixels"}-disconnect-{width}.png'
+        target.parent.mkdir(parents=True, exist_ok=True)
+        page.screenshot(path=str(target), full_page=True)
+    page.unroute('**/api/workspace')
+    page.locator(retry).click()
+    expect(page.locator(content)).to_be_visible()
+
+
+@pytest.mark.parametrize('route,reload,content', [('/', '#reload', '#review-content'),
+                                                 ('/pixels', '#pixel-reload', '#pixel-content')])
+def test_workspace_disconnect_hides_stale_review(browser_workspace, route, reload, content):
+    page, _, expect = browser_workspace
+    page.set_viewport_size({'width': 390, 'height': 844})
+    page.goto(page.url.split('?')[0].rstrip('/') + route, wait_until='networkidle')
+    expect(page.locator(content)).to_be_visible()
+    page.route('**/api/workspace', lambda request: request.abort())
+    page.locator(reload).click()
+    expect(page.locator(content)).to_be_hidden()
+    page.unroute('**/api/workspace')
+    page.locator('#show-all' if route == '/' else '#pixel-reload').click()
+    expect(page.locator(content)).to_be_visible()
+
+
 def test_arrow_keys_move_between_photos(browser_workspace):
     page, store, expect = browser_workspace
 

@@ -6325,3 +6325,9 @@ osy-d395-s1d\`.
 - 변경: 객체·픽셀 검수의 사진 0장 상태를 빈 필터와 구분하고 기존 자료 등록 화면으로 이어지는 행동을 표시했다.
 - 증거: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)의 390px 두 경로 캡처·이동, 객체·픽셀 브라우저 24 passed, `known_failures.py` 0 NEW. 캡처·로그는 X:에 둔다.
 - gate 변화: 학습 도구 LOCAL 최초 사용 G2 부분 근거 추가. 실제 등록·검수자 G3와 제품 전체는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(learning): 검수 연결 끊김 복구
+
+- 변경: 객체·픽셀 검수의 작업 목록 요청 실패 때 로딩·오래된 편집을 숨기고 실패 이유와 다시 불러오기 행동을 표시했다.
+- 증거: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)의 1440·390px 연결 실패 캡처, 정상 후 실패·복구 포함 브라우저 6 passed, `known_failures.py` 0 NEW. 캡처·로그는 X:에 둔다.
+- gate 변화: 학습 도구 LOCAL 연결 끊김 G2 일부 추가. 지연·거부·검수자 G3와 제품 전체는 HOLD다.
