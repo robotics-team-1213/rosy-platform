@@ -48,7 +48,7 @@ def odom_owns_pose(map_pose_ts: float, now: float,
 
 def observe_bounded_trial(bridge, msg, sample, *, now=None):
     """Optional private trial input; original ROS clock/frame, never fake seq."""
-    guard=getattr(bridge,'_bounded_trial_guard',None)
+    guard=bridge._bounded_trial_guard
     if guard is None:return
     try:
         from core_features.command.bounded_trial import BoundedTrial

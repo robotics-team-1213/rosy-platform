@@ -1,0 +1,12 @@
+# Exact normalized journal block pairs. This is historical reference data,
+# not a general permission to rewrite logs or change execution evidence.
+# Originals and corrections remain in the corresponding immutable git commits.
+
+# 8669ef8db native callback heading/field repair; body evidence unchanged.
+"ed55535bed54123338dad2db22c24fc159009907552540b7a3beb83274365973": "95d2f5a14fc08506ecb646845926ac48bdcb839609a7ef50929111d71be5921d"
+# c2425 OMX heading/field repair; body evidence unchanged.
+"a982ed57cb8e69bbc509ba636d3c5e3cf96d441c23c010304ffbc18ab67a4b19": "33858a56f2c9d58edbcae2370a6898b0989ad525e9d49214ee6846d182bfbdf5"
+# Imported SIM AID record; no recovered prose or execution evidence inferred.
+"e2f80dbdfc41bdcff21a27d50ddd7ae909a32d02270c5db525808c6d9977883d": "d0cee132dfe7dc874ae52e59707f932d496f5b16c62975e8bf3733bacc891556"
+# First G2 encoding repair: a720a036e original, e4fe8107a correction.
+"a5eecc71690d74036c9e393a2a47262843dfd369b71fe0d6ff92c40a24730c49": "4c3461ed3910dfe42491970e5d0aa7b12a8d9bbb4b044ffc11dbc8e235d0178a"

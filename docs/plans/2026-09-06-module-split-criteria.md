@@ -101,6 +101,8 @@ A criterion the codebase reinvents unprompted is describing something real. **C1
 
 A dependency reached through `hasattr`/`getattr` instead of a declared member, **or** a Protocol member that is not that Protocol's concern.
 
+2026-10-05 해결 기록: 제한 시험의 `_bounded_trial_guard`는 실제 `RosBridge.__init__`에서 publisher·subscription·timer 등록 전에 `None`으로 선언한다. 최종 writer와 odometry는 선언된 멤버에 직접 접근하며, 누락된 binding을 정상 비활성 기본값으로 추측하지 않는다. `None`은 기존 정상 경로를 유지하고 명시적으로 주입된 같은 소유자의 guard만 제한 시험에 참여한다. C6 목록·검사·크기 한도를 완화하지 않았다. 선언 누락·자동 fallback·C6의 두 미기록 reach RED 4 FAIL 뒤 관련 호스트 검사 101 PASS와 기존 ROS 필수 검사 10 SKIP를 확인했다. 이 구조 검사와 합성 writer 시험은 ROS·장치 이동 또는 제한 시험 활성화 승인이 아니다.
+
 **C6 is a test, not a rule you have to remember:** [`src/rosy_core/test/test_module_criteria.py`](../../src/rosy_core/test/test_module_criteria.py) asserts **set equality** between the reaches in the package and the triage below. Add a reach — including a line-wrapped one, which a per-line scan would miss at `--max-line-length=120` — and it fails, naming the new one. That keeps this table true instead of true-on-the-day-it-was-written.
 
 *What it does not catch, stated so the guarantee is not oversold:* a reach whose receiver is itself a call or a subscript (`getattr(obj["k"], ...)`, `getattr(self.dep(), ...)`), and anything reaching an attribute without `getattr`/`hasattr` at all. It gates the syntax C6 names, not every possible way to dodge a contract.

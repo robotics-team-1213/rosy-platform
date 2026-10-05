@@ -360,3 +360,8 @@ def test_lifecycle_transition_parser_accepts_active_id_and_label(registered):
     assert registered.bridge._lifecycle_active(active_id) is True
     assert registered.bridge._lifecycle_active(inactive) is False
     assert registered.bridge._lifecycle_active(label_only) is True
+
+
+def test_constructor_declares_inactive_trial_before_registered_callbacks(registered):
+    # Structural constructor contract only; no stub motion semantics.
+    assert registered.bridge._bounded_trial_guard is None

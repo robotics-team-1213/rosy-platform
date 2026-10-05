@@ -5879,3 +5879,9 @@ osy-d395-s1d\`.
 - 변경: 순수 bounded-trial 시험10개를 services 소유자로 옮기고 실제 CORE writer 시험10개는 gateway에 유지한다. 기존20개 시험 본문·단언 AST를 보존하며 예외 목록은 늘리지 않는다. 공개 review SHA256은 같은 행에 종류를 표시해 비밀 검사 규칙을 유지한다. 동시 OMX 실행 기록 변경은 저장 중 권한 철회 경합을 재현한 뒤 기존 최종 fence 안에서 authority·설치 bytes·소유자·카메라 결속을 다시 검증한다.
 - 증거: 부모 통합의 원본 bounded-trial·writer·소유권44PASS1.79초, 동시 local execution 전체107PASS6.74초다. 독립 검토는 권한·소유자·모델 철회3상황 모두 전송0을 확인했다. 정상 푸시의 기본476PASS2SKIP 뒤 추가 검사는 약64%에서 오류와 함께 중단되었고 상세 실패 로그가 완성되지 않았다. X 공간 고갈을 확인했으며 실패 원인을 전부 확정하거나 NEW0으로 처리하지 않는다. 소스 트리에 생긴1바이트 lock은 X로 이동해 보존했다.
 - gate 변화: 로컬 소스 통합과 focused 검증만 완료했다. 원격 main은 기존 커밋이며 정상 푸시·정확한 후보 CI·새 서명039·실제 Pilot 승인/재연결은 미완료다. 관제 root 설정 적용과 유효한 named operator 인증도 미완료다. 자세한 경계는 docs/validation/d456-final-integration-2026-10-05/README.md에 기록한다. 주행·정지 해제·새 실기 활성화는 수행하지 않는다.
+
+## 2026-10-05 · uncommitted · fix(integration): 정상 푸시의 C6와 저장 공간 실패 재현
+
+- 변경: 실제 bridge 생성자에 비활성 optional guard를 선언하고 writer·odometry를 직접 field 접근으로 변경했다. 누락 field가 제한 없는 제출로 넘어가지 않으며 기존 None·실제 guard·STOP 경로를 보존한다. C6 예외·P6 예산·검사 범위는 유지한다.
+- 증거: 원본 C6 실패 재현 뒤 독립 Safety SOURCE PASS와 부모 통합101PASS/18.88초/기존 ROS 필수10SKIP/NEW0이다. 원본과 같은 명령·대상 경로로 후보83d633의10893개를 수집한 선택 재현에서 영상 저장2PASS, 다운로드는 필요1GiB 대비0.9GiB로 실제 UPDATE_INSUFFICIENT_SPACE를 확인했다. 원본 중단의 모든 후반 오류를 같은 원인으로 단정하지 않는다.
+- gate 변화: 두 실제 로봇의 기존 CA·키·HTTPS identity와 두 앱 ADB를 재확인했다. 기존 관제 named 인증은401, 새 pending은404다. 원격 push·후보 CI·서명039·앱 승인/재접속·관제 수신·새 Cam/발열은 미완료다. 상세 기록은 docs/validation/d456-push-diagnostics-2026-10-05/README.md이며 실기 연동 완료로 표시하지 않는다.
