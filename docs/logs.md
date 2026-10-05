@@ -6193,3 +6193,9 @@ osy-d395-s1d\`.
 - 변경: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)에 `/setup`·`/device` 첫 기동 6셀과 두 폭의 캡처를 추가했다. 비상 정지의 렌더된 가시성 단언을 강화했다.
 - 증거: 첫 기동 1 passed, 절차 60셀 재실행 1 passed, D-153 G1 팔레트·토큰·문법 74 passed와 CORE 증거 7 passed, `known_failures.py` 0 NEW. 첫 기동 셀은 페이지 오류·가로 넘침 0이다.
 - gate 변화: LOCAL 증거 확장. 제품 전체 및 장치·현장 UI/UX는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(docs): 맵핑·롤백 확인창 증거
+
+- 변경: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)에 열린 확인창 6장과 행동별 실행 버튼을 연결했다. 취소 뒤 캡처만 있던 G2 공백을 채웠다.
+- 증거: 절차 60셀 1 passed, 관련 작업 브라우저 10 passed, `known_failures.py` 0 NEW. 확인 취소 6셀의 쓰기 요청 0, 참조 이미지 누락 0.
+- gate 변화: LOCAL 증거 확장. 제품 전체 UI/UX와 장치·현장 수용은 HOLD다.

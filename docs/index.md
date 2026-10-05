@@ -300,8 +300,8 @@
 
 ## 최근 기록
 
+- 2026-10-06 · uncommitted · uiux(docs): 맵핑·롤백 확인창 증거
 - 2026-10-06 · uncommitted · uiux(docs): 작업 준비·장비 첫 기동 6셀과 G1 재실행
 - 2026-10-06 · uncommitted · uiux(docs): 작업 준비·장비 60셀 보존
 - 2026-10-06 · uncommitted · uiux(docs): 로봇 얼굴 LOCAL 렌더와 실물 판정 경계
 - 2026-10-06 · uncommitted · uiux(docs): 게임 보드 현재 LOCAL 캡처 추가
-- 2026-10-06 · uncommitted · uiux(docs): ROSY 디자인 목표와 현재 LOCAL 판정 경계

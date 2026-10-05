@@ -136,6 +136,7 @@ def test_role_procedure_g2_local_matrix(tmp_path):
                     errors = []
                     posts = []
                     dialogs = []
+                    confirm_image = None
                     page.on("pageerror", lambda error: errors.append(str(error)))
                     token = TOKENS[role]
                     page.add_init_script(f"sessionStorage.setItem('rosy.dashboard.token', {token!r})")
@@ -190,10 +191,15 @@ def test_role_procedure_g2_local_matrix(tmp_path):
                                 && rollback && !rollback.disabled;
                             }""")
                         assert button.is_enabled(), (role, surface, scenario)
+                        action_label = button.inner_text().strip()
                         button.click()
                         dialog = page.locator('dialog.ui-confirm')
                         dialog.wait_for()
+                        assert dialog.is_visible()
+                        assert dialog.get_by_role('button', name=action_label, exact=True).is_visible()
                         dialogs.append(dialog.locator('p').inner_text())
+                        confirm_image = f"{role}-{surface}-confirm-dialog-{width}x{height}.png"
+                        page.screenshot(path=str(CAPTURES / confirm_image), full_page=True)
                         dialog.get_by_role('button', name='취소', exact=True).click()
                         page.wait_for_timeout(100)
                     filename = f"{role}-{surface}-{scenario}-{width}x{height}.png"
@@ -208,6 +214,8 @@ def test_role_procedure_g2_local_matrix(tmp_path):
                     records.append({"role": role, "surface": surface, "scenario": scenario,
                                     "viewport": f"{width}x{height}", "image": filename,
                                     "posts": posts, "dialogs": dialogs, "errors": errors, **measure})
+                    if confirm_image:
+                        records[-1]["confirmImage"] = confirm_image
                     assert errors == [], records[-1]
                     assert measure["overflowX"] == 0, records[-1]
                     assert measure["eStopVisible"], records[-1]

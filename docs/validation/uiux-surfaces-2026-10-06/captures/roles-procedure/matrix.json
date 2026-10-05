@@ -343,7 +343,8 @@
       "초기 위치와 SLAM 기능을 사용할 수 있습니다.",
       "위치를 읽었습니다. 실제 도크 위치에서 현재 위치 기록을 사용할 수 있습니다."
     ],
-    "eStopVisible": true
+    "eStopVisible": true,
+    "confirmImage": "operator-setup-confirm-dialog-1366x768.png"
   },
   {
     "role": "operator",
@@ -363,7 +364,8 @@
       "초기 위치와 SLAM 기능을 사용할 수 있습니다.",
       "위치를 읽었습니다. 실제 도크 위치에서 현재 위치 기록을 사용할 수 있습니다."
     ],
-    "eStopVisible": true
+    "eStopVisible": true,
+    "confirmImage": "operator-setup-confirm-dialog-390x844.png"
   },
   {
     "role": "administrator",
@@ -734,7 +736,8 @@
       "위치를 읽었습니다. 실제 도크 위치에서 현재 위치 기록을 사용할 수 있습니다.",
       "현재 위치를 읽었습니다. 유형과 ID를 확인한 뒤 등록하세요."
     ],
-    "eStopVisible": true
+    "eStopVisible": true,
+    "confirmImage": "administrator-setup-confirm-dialog-1366x768.png"
   },
   {
     "role": "administrator",
@@ -755,7 +758,8 @@
       "위치를 읽었습니다. 실제 도크 위치에서 현재 위치 기록을 사용할 수 있습니다.",
       "현재 위치를 읽었습니다. 유형과 ID를 확인한 뒤 등록하세요."
     ],
-    "eStopVisible": true
+    "eStopVisible": true,
+    "confirmImage": "administrator-setup-confirm-dialog-390x844.png"
   },
   {
     "role": "administrator",
@@ -1270,7 +1274,8 @@
       "안전 정책 현재값을 읽었습니다.",
       "선택: 어둡게 · 현재 화면: 어둡게"
     ],
-    "eStopVisible": true
+    "eStopVisible": true,
+    "confirmImage": "administrator-device-confirm-dialog-1366x768.png"
   },
   {
     "role": "administrator",
@@ -1301,7 +1306,8 @@
       "안전 정책 현재값을 읽었습니다.",
       "선택: 어둡게 · 현재 화면: 어둡게"
     ],
-    "eStopVisible": true
+    "eStopVisible": true,
+    "confirmImage": "administrator-device-confirm-dialog-390x844.png"
   },
   {
     "role": "operator",
