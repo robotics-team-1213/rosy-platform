@@ -5951,6 +5951,26 @@ osy-d395-s1d\`.
 - 증거: 원래 실제 함수 반례 5 FAIL을 재현한 뒤 T3와 기존 T1/T2 시험 80 PASS/Windows symlink 2 SKIP(1.82s), owned flake8 0이다. 실제 ROS endpoint 결속을 생성하거나 SIM·장치·주행을 실행하지 않았다.
 - gate 변화: host SOURCE/LOCAL 판정 수정만. 실제 observer 수집·ROS-SIM 수용·실물 안전을 증명하지 않는다.
 
+## 2026-10-05 · uncommitted · fix(validation): T3·Vision observer 시험 import 격리
+
+- 변경: T3 시험은 정확한 파일을 고유 private package/module ID로 불러오며 전역 `observer`·`assertions` 이름과 sys.path를 덮지 않는다. T3 observer의 package import는 상대 assertions를 쓰고 기존 standalone import는 유지한다. 판정·수집·권한 로직은 변경하지 않았다.
+- 증거: 실제 Vision observer 시험을 먼저 수집한 상태의 원래 ImportError를 재현했다. 수정 후 같은 invocation에서 Vision+T3 58 PASS(5.45s), 새 interpreter에서 기존 generic module 보존·PoseSample type identity 및 standalone import PASS를 확인했다. 최초 standalone shell quoting 오류도 로그에 보존했다. owned flake8 0이며 hook 범위·검사 예외는 바꾸지 않았다.
+- gate 변화: host collection/source 격리만. 실제 ROS/SIM·장치·endpoint 소유권·운동 수용은 추가하지 않는다.
+
+## 2026-10-05 · uncommitted · fix(discovery): LAN 이름 조회 작업과 대기 상한
+
+- 변경: 발견·이름 조회 총 4초, NSS 스레드 4개·진행/완료 항목 64개·완료 캐시 2초로 제한한다. 같은 이름·포트 조회를 공유하고 시간 초과·호출자 루프 종료 후에도 원래 작업이 끝날 때까지 소유권을 유지한다. TLS 이름·CA·등록 정책·만료·회수 검사는 유지한다. D-432에 자원 상한과 멈춘 OS 조회를 강제 종료하지 못하는 한계를 기록했다.
+- 증거: 실제 getaddrinfo를 멈춰 원래 대기 상한 실패를 재현했다. 동시 요청·시간 초과 재시도·루프 종료·작업 상한·캐시 만료 DHCP 변경을 회귀 검증한다. 모든 fixture는 호스트 합성이며 실제 컨테이너·기기 접속은 미검증이다.
+- gate 변화: 없음. SOURCE/LOCAL 자원 경계 보완이며 현장 연동이나 제어 수용은 통과 처리하지 않는다.
+
+
+## 2026-10-05 · uncommitted · fix(learning): 터치 픽셀 허용치 직접 입력
+
+- 변경: 기존 D-359 공용 폼으로 허용치 방식을 자동 제안·직접 입력 중 선택한다. 기본 자동 제안과 Shift 입력 보조를 유지하며 직접 입력은 터치에서도 입력값을 그대로 쓴다. 로딩·저장·제외 상태의 기존 편집 잠금에 같은 선택 항목을 포함했다. OpenCV 8-bit Lab 거리 설명은 인코딩된 색 거리 휴리스틱으로 정정했으며 계산은 바꾸지 않았다.
+- 증거: 실제 Chromium touch POST에서 입력 37이 4로 바뀌는 원래 실패를 재현했다. 수정 후 원래 픽셀 브라우저 3건과 터치 자동·직접 입력 2건, flood 및 공용 폼 시험 합계 37 PASS(25.40s)다. 첫 요청 URL predicate와 완료 필드 fixture 오류, 최초 없는 시험 경로 오류는 로그에 보존했다. Node 문법·Python 오류 검사는 통과했다.
+- gate 변화: 합성 로컬 검수 자료의 UI/LOCAL 회귀만. 픽셀 승인·학습 입장·장치 전달 권한을 변경하거나 실제 태블릿 수용을 증명하지 않는다.
+
+
 ## 2026-10-05 · uncommitted · test(execution): same-attempt native evidence chain
 
 - Change: `feat/omx-policy-native-chain` adds isolated actual Action API to native journal, sealed Episode and offline Fleet correlation. Preparation permits real observation/poll; final session/stop checks delegate to the genuine fence. Stop, lost authority and expiry preserve durable uncertain attempts without retry.
@@ -5969,6 +5989,19 @@ osy-d395-s1d\`.
 - 변경: CI 통과 source58d246ab3의 signed ARM64 release2026.10.05-040을 9dfk→8kcn 순차 설치하고 실제 CORE/camera cwd·파일 SHA256·live 카메라·정지 상태를 확인했다. source 수정은 없다.
 - 증거: 장치 각각148장 재생 비가시17/복구87–90/MAE0.0518586, keeper p95 14.02/18.31ms, 카메라각80장/10초·정지cmd501/497개다. CI37268067397/build37268633475 success, 두314패키지 ABI PASS, 관측 parameter와 model pointer 경로·존재 유지(내용 전후 해시는 미검증), fresh session logout204·token 제거. docs/validation/lane-visibility-deployment-2026-10-05/deployment.md.
 - gate 변화: DEVICE 소프트웨어 설치·정지 관측·장치 재생 PASS. motor bench·line/threshold·line OFF·화면 안전회로UNVERIFIED를 유지했다. keeper 제어 적용·독립 사람 라벨·R1/R2 현장 주행은 HOLD다.
+
+## 2026-10-05 · uncommitted · feat(fleet): preserve learning evidence in internal receiver
+- Change: stdlib export binding calculation shared with producer; captured-byte profile verification and atomic SQLite receiver/readback; wheel 0.1.8 and CI/local dependency pins aligned. No HTTP route or activation.
+- Evidence: affected 83 PASS / 1 Windows symlink SKIP / 0 NEW; independent receiver 35 PASS / 1 SKIP and packaging 13 PASS. Local wheel build and isolated import PASS; preserved native normal/revoked bundles receive, duplicate and restart PASS. X:/DevTemp/fleet-learning-receiver/.
+- Scope: SOURCE/HOST/isolated metadata only. Authentication, large-video capacity, task success, GT, production delivery and physical acceptance remain unverified.
+- gate 변화: SOURCE/HOST receiver integrity verified; DEVICE/FIELD/HUMAN GT remain HOLD.
+
+## 2026-10-05 · uncommitted · fix(validation): T5 정지 근거 유효성
+
+- 변경: 정지 판정은 유한·음이 아닌 시각/이동/회전과 수신→정책 적용→정지의 시간 순서를 요구한다. NaN·역순·음수 값은 정상 성공이 아니다. watchdog 명령·실제 수동 SIM 경계와 STEADY clock 보완은 gz_sim journal에 기록했다. 시나리오·CORE 정책 시한·정지 상한을 완화하지 않았다.
+- 검증: 원래 T5 순수 함수 반례와 합성 ROS entrypoint 경계 실패를 재현한 뒤 watchdog/scenario/Fleet-loss 71 PASS(7.38s)다. 실제 주행·Gazebo 회차·장치 장애 주입 없이 HOST 근거만 추가했다.
+- gate 변화: T5 전체 ROS-SIM 수용은 HOLD다. 이번 SOURCE/LOCAL 검증을 물리 정지 시한이나 설치된 base watchdog 증거로 쓰지 않는다.
+
 ## 2026-10-05 · uncommitted · uiux: align surface names, stop label, and icons
 
 - 변경: 네 표면의 보이는 이름을 Rosy Robot, Rosy Pilot, Rosy Console로 맞추고 한국어는 부제로 두었다. Fleet 정지에 보이는 비상 정지를 붙였고, Pilot 탭과 Android 런처는 pilot.svg를, Fleet 크롬·테마·명렬 측정 아이콘은 actionIcon을 쓴다.

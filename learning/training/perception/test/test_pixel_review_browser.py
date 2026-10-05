@@ -18,6 +18,41 @@ def open_pixels(page, store, expect, index=0):
     expect(page.locator('#pixel-status')).to_contain_text('v0')
 
 
+@pytest.mark.parametrize('mode', ['manual', 'auto'])
+def test_touch_flood_respects_explicit_tolerance_mode(browser_workspace, mode):
+    original_page, store, expect = browser_workspace
+    context = original_page.context.browser.new_context(
+        has_touch=True, viewport={'width': 800, 'height': 1000})
+    page = context.new_page()
+    try:
+        page.goto(original_page.url, wait_until='networkidle')
+        open_pixels(page, store, expect)
+        selector = page.locator('#pixel-tolerance-mode')
+        expect(selector).to_have_value('auto')
+        selector.select_option(mode)
+        page.locator('#pixel-class').select_option('4')
+        page.locator('#pixel-tolerance').fill('37')
+        page.locator('#pixel-flood').click()
+        with page.expect_request(lambda request: request.method == 'POST'
+                                 and request.url.endswith('/api/masks/0')) as sent:
+            page.locator('#pixel-canvas').tap(position={'x': 10, 'y': 10})
+        payload = sent.value.post_data_json
+        assert payload['action'] == 'flood'
+        assert payload['label'] == 4 and payload['version'] == 0
+        if mode == 'manual':
+            assert payload['tolerance'] == 37
+        else:
+            assert 4 <= payload['tolerance'] <= 48
+        expect(page.locator('#pixel-status')).to_contain_text('v1')
+        review = review_masks.get(store, 0)
+        assert review['version'] == 1 and review['status'] == 'pending'
+        assert not review['complete'] and not review['background']
+        expect(page.locator('#pixel-class')).to_have_value('4')
+        expect(page.locator('#pixel-tolerance-mode')).to_have_value(mode)
+    finally:
+        context.close()
+
+
 def test_unknown_pixels_cannot_be_approved_and_explicit_fill_persists(browser_workspace):
     page, store, expect = browser_workspace
     original = store.get(0)

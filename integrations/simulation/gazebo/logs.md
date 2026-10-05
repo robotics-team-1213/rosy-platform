@@ -259,3 +259,9 @@
 - 예약: 기존 run manifest의 결정적 profile을 검증하고 최대 256개 기록의 충돌 및 실제 loopback listener 점유를 확인한다. 손상된 기록은 실패하고 stale 기록은 보존한다. 계획 snapshot이며 수동 launch까지 유지되는 포트 lease·동시 planner 배타 예약의 증거는 아니다.
 - 검증: 최초 누락 회귀 4 FAIL, 손상된 예약 회귀 4 FAIL을 실제 소스로 재현했다. 기존 전체 Gazebo 시험의 blanket ROS_DOMAIN_ID 금지는 D-114의 같은 run/여러 namespace 원칙을 유지하면서 명세 domain action으로 정확히 바꿨다. 최종 결과는 별도 영수증에 기록한다. ROS 의존 시험 skip은 CI에서 확인하며 실제 SIM/장치/주행은 실행하지 않았다.
 - gate 변화: D-426 실제 ROS-SIM 수용은 계속 미검증이다. 기존 단일 로봇 회차 증거를 이번 다중 격리 수용으로 승격하지 않는다.
+
+## 2026-10-05 · uncommitted · fix(sim): T5 명령·시계와 수동 SIM 경계
+
+- 변경: watchdog의 비유한 시각·잘못된 만료·비유한/비평면/0.15 m/s·0.5 rad/s 초과 명령은 zero로 닫는다. 수동 `--sim-only` 동의, 격리 ROS domain 120~199·localhost·D426 partition, 실제 ROS context domain·namespace·remap 이후 topic을 command publisher 생성 전에 대조한다. CORE/hardware runtime mode를 SIM이라는 새 값으로 덮지 않는다. 명시 STEADY_TIME clock으로 50 ms timer를 만들고 logger에 완성된 문자열을 준다. 동시 3779 namespace 정규화와 bounded entrypoint 시험의 의도를 보존했다.
+- 검증: 실제 순수 함수·합성 ROS port를 쓰는 원래 entrypoint 반례 8+10+2 FAIL을 재현했다. 원래 watchdog/scenario와 Fleet-loss 포함 최종 71 PASS(7.38s), owned flake8 0, known_failures 0 NEW다. 동의 없는 실행은 ROS import 전에 거부하고, 유효 SIM 동의 뒤 ROS dependency를 명시 차단한 별도 subprocess는 15 s 안에 안내·exit 3을 확인했다. 최초 관련 시험 파일명 오류와 중간 formatting 실패 로그를 보존했다.
+- gate 변화: SOURCE/HOST callback wiring만. 실제 DDS·STEADY timer scheduling·Gazebo base 연결·pause 장애 주입·CORE kill·장치 publisher·실물 정지는 실행하지 않았다. 0.30 s 입력 expiry 판정과 50 ms polling·scheduling/물리 정지 지연은 구분하며 T5 회차 수용은 HOLD다.

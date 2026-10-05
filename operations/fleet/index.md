@@ -85,8 +85,8 @@
 
 ## 최근 기록
 
+- 2026-10-05 · uncommitted · fix(fleet): T4 해제 근거·Task 트랜잭션 경계
 - 2026-10-05 · uncommitted · feat(server): D-426 T4 공유 구간 진입 허가·점유
+- 2026-10-05 · uncommitted · fix(discovery): LAN 이름 조회 작업과 대기 상한
 - 2026-10-05 · uncommitted · fix(fleet): DNS-SD가 비면 저장한 HTTPS 이름의 호스트 Avahi 주소
 - 2026-10-05 · uncommitted · fix(validation): D-426 T2 판정 근거와 현재 원본 나이
-- 2026-10-05 · uncommitted · test(validation): D-426 T2 통신·결과 상관 탐침 판정 계약
-- 2026-10-05 · uncommitted · refactor(fleet): CLI feature 생성 경계 분리

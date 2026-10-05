@@ -16,15 +16,24 @@
 from __future__ import annotations
 
 import math
+import importlib.util
 import sys
+import types
 import pytest
 from pathlib import Path
 
 TOOLS = Path(__file__).resolve().parents[1] / "tools" / "validation" / "fleet_gazebo"
-if str(TOOLS) not in sys.path:
-    sys.path.insert(0, str(TOOLS))
+PACKAGE = "_rosy_fleet_gazebo_t3_contract"
+package = types.ModuleType(PACKAGE)
+package.__path__ = [str(TOOLS)]
+sys.modules[PACKAGE] = package
+for name in ("assertions", "observer"):
+    spec = importlib.util.spec_from_file_location(f"{PACKAGE}.{name}", TOOLS / f"{name}.py")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
 
-from assertions import (  # noqa: E402
+from _rosy_fleet_gazebo_t3_contract.assertions import (  # noqa: E402
     ARRIVAL_HEADING_DEG,
     ARRIVAL_POSITION_M,
     ContactEvent,
@@ -43,7 +52,7 @@ from assertions import (  # noqa: E402
     standstill,
     wrong_robot_motion,
 )
-from observer import Recorder, check_publisher_ownership  # noqa: E402
+from _rosy_fleet_gazebo_t3_contract.observer import Recorder, check_publisher_ownership  # noqa: E402
 
 #: 핑키 실측 footprint 근사(URDF 0.172 m 차체, mm 단위 근사 사각형).
 FOOTPRINT = [(-0.086, -0.062), (0.086, -0.062), (0.086, 0.062), (-0.086, 0.062)]
@@ -260,6 +269,28 @@ def test_publisher_evidence_rejects_duplicates_and_foreign_gid():
     assert check_publisher_ownership([{**row, "gid": "other-run"}], expected)["ok"] is False
     assert check_publisher_ownership([{**row, "pid": True}], expected)["ok"] is False
     assert check_publisher_ownership([], {})["ok"] is False
+
+
+def test_exact_source_imports_do_not_replace_other_observers():
+    import subprocess
+    script = """
+import importlib.util, runpy, sys, types
+spec = importlib.util.spec_from_file_location('observer', sys.argv[2])
+vision = importlib.util.module_from_spec(spec)
+sys.modules['observer'] = vision
+spec.loader.exec_module(vision)
+generic_assertions = types.ModuleType('assertions')
+sys.modules['assertions'] = generic_assertions
+loaded = runpy.run_path(sys.argv[1])
+assert sys.modules['observer'] is vision
+assert sys.modules['assertions'] is generic_assertions
+assert loaded['PoseSample'] is sys.modules[loaded['Recorder'].__module__].PoseSample
+assert hasattr(vision, 'ObserverConfig')
+"""
+    vision = TOOLS.parents[2] / "operations/vision/signal_observer/observer.py"
+    result = subprocess.run([sys.executable, "-c", script, __file__, str(vision)],
+                            capture_output=True, text=True, timeout=30)
+    assert result.returncode == 0, result.stderr
 
 
 def test_intentional_bad_run_fails_the_judge_mutation_style():

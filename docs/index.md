@@ -302,6 +302,6 @@
 
 - 2026-10-05 · uncommitted · docs: give the header and sidebar one layout each
 - 2026-10-05 · uncommitted · uiux: align surface names, stop label, and icons
+- 2026-10-05 · uncommitted · fix(validation): T5 정지 근거 유효성
+- 2026-10-05 · uncommitted · feat(fleet): preserve learning evidence in internal receiver
 - 2026-10-05 · uncommitted · validation: 차선 개선040 두 실기 배포·source 일치
-- 2026-10-05 · uncommitted · feat(validation): D-426 T5 장애 주입 시나리오·sim base watchdog
-- 2026-10-05 · uncommitted · test(execution): same-attempt native evidence chain

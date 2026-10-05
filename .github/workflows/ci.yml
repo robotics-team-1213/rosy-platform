@@ -177,7 +177,7 @@ jobs:
             contracts/skill contracts/motion contracts/learning operations/world middleware/skills/api middleware/skills/manipulation operations/execution middleware/execution/local operations/processes/palletizing integrations/robots/omx middleware/apps/device/omx/agent operations/apps/fleet
           pip3 install --break-system-packages --no-cache-dir --no-index \
             --find-links "$wheelhouse" \
-            rosy-contracts-skill==0.1.0 rosy-contracts-motion==0.1.0 rosy-contracts-learning==0.1.7 rosy-world==0.1.0 rosy-skill-api==0.1.0 rosy-skill-manipulation==0.1.0 rosy-execution==0.1.0 rosy-execution-local==0.1.4 rosy-palletizing==0.1.0 rosy-integration-robot-omx==0.1.0 rosy-app-agent==0.1.0 rosy-app-gateway==0.1.0
+            rosy-contracts-skill==0.1.0 rosy-contracts-motion==0.1.0 rosy-contracts-learning==0.1.8 rosy-world==0.1.0 rosy-skill-api==0.1.0 rosy-skill-manipulation==0.1.0 rosy-execution==0.1.0 rosy-execution-local==0.1.4 rosy-palletizing==0.1.0 rosy-integration-robot-omx==0.1.0 rosy-app-agent==0.1.0 rosy-app-gateway==0.1.0
 
       - name: Build (colcon)
         if: matrix.kind == 'smoke' || matrix.ros == 'overlay'
