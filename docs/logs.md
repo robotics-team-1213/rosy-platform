@@ -5873,3 +5873,9 @@ osy-d395-s1d\`.
 - 변경: 승인된 등록 ID의 공개 CA·호스트 binding을 기존 REST/WSS endpoint owner에 결속하고 동일 등록부의 transport marker로 재시작·설정 누락 때 HTTP 복귀를 거절한다. CLI의 기존 다음 옵션 전 조립 분리 조건을 이행해 586줄로 줄이고 91줄 feature builder에 지연 import·생성 순서를 보존한다. 독립 재판정에 따라 Fleet split 기록만 35606줄로 갱신하고 사라진 CLI 예외를 제거한다. 예산·허용량·기존 B2/UI 분리 대기열은 유지한다.
 - 증거: 전송 통합의 원본 관련207PASS2WindowsSKIP57.04초/NEW0, 조립 분리의 원본CLI·TLS55PASS1WindowsSKIP34.83초 및 독립 AST·구조·안전 SOURCE PASS를 기록했다. 기존 P6는35581>35137+150로 실제 RED였다. bounded-trial 경합은 별도 writer fence 수정과 원본43PASS 및 독립 양수 전송 거절 재현으로 source HOLD를 해소했다. 두 실제 TLS calibration 읽기는 활성 세션 없음으로 PASS다.
 - gate 변화: SOURCE/읽기 증거다. 새 서명 릴리스·실제 Pilot 승인/재연결·관제 HTTPS/WSS·새 Camera Peer/발열 수용은 아직 완료하지 않는다. 관제 공개 설정은 준비했지만 SSH sudo-n은 관리자 인증을 요구해 실제 적용하지 않았다. 기존 승인·발급자·키·CA·만료·주행·정지 상태는 보존한다.
+
+## 2026-10-05 · uncommitted · fix(integration): 동시 실행 기록과 정상 푸시 검사 보완
+
+- 변경: 순수 bounded-trial 시험10개를 services 소유자로 옮기고 실제 CORE writer 시험10개는 gateway에 유지한다. 기존20개 시험 본문·단언 AST를 보존하며 예외 목록은 늘리지 않는다. 공개 review SHA256은 같은 행에 종류를 표시해 비밀 검사 규칙을 유지한다. 동시 OMX 실행 기록 변경은 저장 중 권한 철회 경합을 재현한 뒤 기존 최종 fence 안에서 authority·설치 bytes·소유자·카메라 결속을 다시 검증한다.
+- 증거: 부모 통합의 원본 bounded-trial·writer·소유권44PASS1.79초, 동시 local execution 전체107PASS6.74초다. 독립 검토는 권한·소유자·모델 철회3상황 모두 전송0을 확인했다. 정상 푸시의 기본476PASS2SKIP 뒤 추가 검사는 약64%에서 오류와 함께 중단되었고 상세 실패 로그가 완성되지 않았다. X 공간 고갈을 확인했으며 실패 원인을 전부 확정하거나 NEW0으로 처리하지 않는다. 소스 트리에 생긴1바이트 lock은 X로 이동해 보존했다.
+- gate 변화: 로컬 소스 통합과 focused 검증만 완료했다. 원격 main은 기존 커밋이며 정상 푸시·정확한 후보 CI·새 서명039·실제 Pilot 승인/재연결은 미완료다. 관제 root 설정 적용과 유효한 named operator 인증도 미완료다. 자세한 경계는 docs/validation/d456-final-integration-2026-10-05/README.md에 기록한다. 주행·정지 해제·새 실기 활성화는 수행하지 않는다.

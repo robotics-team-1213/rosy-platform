@@ -355,6 +355,10 @@ class OwnerPolicySession:
                     try:
                         if self._runtime_binding is not None:
                             self._runtime_binding.prepare(command);registered=True
+                        if self._execution_journal is not None:
+                            # Storage and sink registration can block: retain
+                            # main's complete re-admission after durable intent.
+                            _,_,final_cameras=self._guard()
                         self._stop_open()
                         final_now=self._now()
                         self._lease_time(self.lease,final_now)

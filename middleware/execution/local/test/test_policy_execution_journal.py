@@ -175,3 +175,25 @@ def test_existing_schema_without_actual_constraints_is_rejected(tmp_path, missin
                    ('' if missing == 'event_pk' else ', PRIMARY KEY(command_id,sequence)') + ')')
     with pytest.raises(RuntimeError):
         journal_type()(path)
+
+
+@pytest.mark.parametrize('fault',['authority_revoked','identity_changed','artifact_changed'])
+def test_post_prepare_authority_or_binding_loss_never_dispatches(tmp_path,fault):
+    journal=journal_type()(tmp_path/'policy.sqlite3')
+    session,client,clock,authority,root=setup_session(tmp_path,execution_journal=journal)
+    prepare=journal.prepare
+    recorded=[]
+    def invalidate(*args,**kwargs):
+        prepare(*args,**kwargs)
+        recorded.append(args[2].command_id)
+        if fault=='authority_revoked':authority[0]=False
+        elif fault=='identity_changed':session._identity=lambda:{'simulation':False}
+        else:(root/'model.bin').write_bytes(b'changed-after-durable-intent')
+    journal.prepare=invalidate
+    with pytest.raises(PermissionError):session.submit(candidate(session))
+    assert len(recorded)==1 and not client.commands and session.hold_reason
+    assert journal.read(recorded[0])['driver_goal_id'] is None
+    assert journal.read(recorded[0])['events']==[]
+    # Durable intent remains evidence only; a later attempt never resumes it.
+    with pytest.raises(PermissionError):session.submit(candidate(session))
+    assert not client.commands
