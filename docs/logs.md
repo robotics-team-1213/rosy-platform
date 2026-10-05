@@ -6151,3 +6151,9 @@ osy-d395-s1d\`.
 - 변경: 팀 가이드 `docs/reference/team-guide.md`(첫날 설정, 공유 범위, 작업 방식, 작업 영역), `CONTRIBUTING.md`, PR 템플릿, CODEOWNERS, pre-push에 잘못된 작성자 이메일 거절. 저장소는 `robotics-team-1213/rosy-platform`으로 이전됨.
 - 증거: harness lint, pre-push 훅 계약 시험.
 - gate 변화: 없음.
+
+## 2026-10-05 · uncommitted · feat(release): main CI to guarded robot CD
+
+- 변경: 고정 로컬 signer가 main push CI, native unsigned build, ABI, 서명, 기존 카나리 발행을 연결한다. 개인키는 로컬에 둔다. 로봇의 MANUAL/hold/보정/claim을 해제하지 않는다.
+- 검증: 거부/재개 시험과 기존 prepare/publish/native workflow 시험. 장치 installed SHA·updater committed·내비게이션 현장 수용은 별도다.
+- gate 변화: 구현 검증 중. DEVICE/FIELD 완료로 기록하지 않는다.
