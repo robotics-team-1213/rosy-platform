@@ -6001,3 +6001,8 @@ osy-d395-s1d\`.
 - 변경: 정지 판정은 유한·음이 아닌 시각/이동/회전과 수신→정책 적용→정지의 시간 순서를 요구한다. NaN·역순·음수 값은 정상 성공이 아니다. watchdog 명령·실제 수동 SIM 경계와 STEADY clock 보완은 gz_sim journal에 기록했다. 시나리오·CORE 정책 시한·정지 상한을 완화하지 않았다.
 - 검증: 원래 T5 순수 함수 반례와 합성 ROS entrypoint 경계 실패를 재현한 뒤 watchdog/scenario/Fleet-loss 71 PASS(7.38s)다. 실제 주행·Gazebo 회차·장치 장애 주입 없이 HOST 근거만 추가했다.
 - gate 변화: T5 전체 ROS-SIM 수용은 HOLD다. 이번 SOURCE/LOCAL 검증을 물리 정지 시한이나 설치된 base watchdog 증거로 쓰지 않는다.
+
+## 2026-10-05 · uncommitted · feat(learning): bind ACT input to guarded owner capture
+- Change: private return-only ACT/owner adapter freezes original joint and exact RGB capture, uses identical owner clock/policy, and preserves queued source timestamps. Inference runs outside the owner lock; no submit, scheduler, issuer or default runtime wiring.
+- Evidence: host13 PASS/1torchSKIP, actual CPU model14 PASS, independent13 PASS/1torchSKIP/0NEW. Actual CPU fixture is synthetic and uses a fixed host clock, not device timing or learned task quality. X:/DevTemp/act-owner-capture/.
+- gate 변화: SOURCE/HOST study composition verified; operational trusted capture/install/ROS/device/physical acceptance remains HOLD.
