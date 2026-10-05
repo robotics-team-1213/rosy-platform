@@ -9,16 +9,19 @@
 
 from __future__ import annotations
 
+import importlib.util
 import sys
 from pathlib import Path
 
 import pytest
 
 TOOLS = Path(__file__).resolve().parents[1] / "tools" / "validation" / "fleet_gazebo"
-if str(TOOLS) not in sys.path:
-    sys.path.insert(0, str(TOOLS))
+_spec = importlib.util.spec_from_file_location("_rosy_fleet_gazebo_t5_scenarios", TOOLS / "scenarios.py")
+_scenarios = importlib.util.module_from_spec(_spec)
+sys.modules[_spec.name] = _scenarios
+_spec.loader.exec_module(_scenarios)
 
-from scenarios import (  # noqa: E402
+from _rosy_fleet_gazebo_t5_scenarios import (  # noqa: E402
     CORE_KILL_INPUT_EXPIRY_S,
     FLEET_LOSS_POLICY_WINDOW_S,
     SIM_PROFILE,

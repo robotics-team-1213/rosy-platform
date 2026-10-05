@@ -6023,3 +6023,9 @@ osy-d395-s1d\`.
 - Change: common stdlib inference DTOs and explicit owner capture_inference_input port replace the initial forbidden learning-to-safety imports. ACT reexports the same DTO types; pure infer_captured never accesses owner internals. Isolated caller composes post-lease validation and candidate creation. Contract wheel/pins 0.1.9.
 - Evidence: correction: earlier 252 PASS untracked-source run omitted new-module architecture scan. Committed scan found 2 NEW dependency failures; original failure log retained. Tracked corrected architecture/pin selection3 PASS. Final CPU17 PASS and independentSafety22 PASS/1torchSKIP/0NEW; dependency-exemption and public-anchor lists unchanged.
 - gate 변화: SOURCE/HOST/isolated numerical input only; trusted capture issuer, actual installed artifact, native inference task and physical acceptance remain HOLD.
+
+## 2026-10-05 · uncommitted · fix(test): D-426 T2/T5 import 경계
+
+- 변경: T2 및 T5 계약 테스트의 전역 Gazebo sys.path 삽입을 private exact-file 로더로 교체했다. Vision 테스트도 자기 observer 파일을 직접 읽어 원래 normal push collection 충돌을 닫는다. 판정 함수·생산 standalone CLI·hook 선택 범위는 그대로다.
+- 증거: 원래 T2-first/Vision 35 collected/1 ERROR 보존. 양방향 T2/T5/T3/Vision 각 105 PASS, fresh-process generic alias/type identity 회귀 포함. 원래 affected selector 전체 collect-only exit 0.
+- gate 변화: 없음. HOST collection 증거만이며 T3/T5 실제 ROS/SIM/물리 수용은 미실행이다.
