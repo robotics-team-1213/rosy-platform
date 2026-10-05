@@ -1836,3 +1836,10 @@
 - 증거: 13개 판정 계약(WELCOME 거절·identity 충돌·계약 불일치·수락 없는 완료·다른 attempt·중복·역순·유실·timeout INCONCLUSIVE·나이/시계 분리 5종). test_server_traffic·test_boundaries 회귀 포함 68 passed.
 - gate 변화: 없음(SOURCE/LOCAL). probe는 판정 모듈이며 Fleet 서버 코드를 바꾸지 않는다.
 - 결정: timeout은 자동 실패/성공이 아니라 조회·이벤트 대조 대상(계획 T2 항목 3). 부작용 재전송 금지를 판정기 수준에서 고정했다.
+
+## 2026-10-05 · uncommitted · fix(validation): D-426 T2 판정 근거와 현재 원본 나이
+
+- 변경: 시도별 판정에서 robot ID까지 결속하고 goal·수락·정확한 CORE terminal event/status·시간순서를 확인한다. `nav.completed`는 COMPLETED, `nav.failed`는 FAILED의 근거다. `nav.canceled`는 기본 UNKNOWN이며 이 입력에 cancel-all 정산 권한 증거가 없으므로 HOLD 성공 근거로 쓰지 않는다. 근거 부족은 INCONCLUSIVE, 모순·다른 로봇·역순은 FAIL이며 재전송하지 않는다. HELLO/WELCOME도 같은 로봇과 순서가 필요하다.
+- 나이: 기존 시험의 수신 시점 지연 나이 고정을 현재 source-clock 나이로 수정했다. now를 인접 clock 표본 사이에서 보간하고 pause는 보존한다. 표본 밖·rollback·비유한/손상 표본은 unknown이며 extrapolation하지 않는다.
+- 증거: 기존 원래 경로에서 19 FAIL/12 PASS, 두 로봇 중 한 응답 누락 회귀 1 FAIL을 재현했다. 중간 분기 연결 오류 4 FAIL도 보존했고 수정 후 probe·기존 traffic·boundary 91 PASS(5.41s)다. 모든 HELLO의 응답이 없으면 세션 전체는 INCONCLUSIVE이며 정상 세션 PASS도 유지한다. 실제 HTTP/WS·ROS-SIM·기기 실행은 없고 입력 관측 목록을 판정한 host 증거다.
+- gate 변화: T2 판정 source 보완이며 T3 관측기나 실제 회차 수용을 추가하지 않는다.

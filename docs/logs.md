@@ -5906,6 +5906,13 @@ osy-d395-s1d\`.
 - gate 변화: 없음(SOURCE/LOCAL 판정 모듈). 실제 프로세스 사이 관측·ROS-SIM은 T6.
 - 결정: fake HTTP/WS는 LOCAL만 증명한다 — probe는 그 LOCAL 판정 규칙의 정본이고, T6 회차 기록이 같은 판정기를 지나야 ROS-SIM 판정이 된다.
 
+## 2026-10-05 · uncommitted · fix(validation): D-426 T2 근거 없는 PASS 거부
+
+- 변경: 통신 상관 판정은 robot+attempt·실제 goal·수락·CORE terminal mapping·시간순서를 모두 대조한다. 다른 로봇 결과, 정확한 상태와 모순되는 CORE event, 역순은 FAIL이다. goal/CORE 근거 누락과 취소 HOLD의 정산 권한 근거 부족은 INCONCLUSIVE다. 기존 Fleet의 취소 권한·실행 API는 변경하지 않았다.
+- 시계: 현재 source-clock 나이는 now의 유효한 인접 표본 보간값에서 원본 timestamp를 뺀다. 수신 지연과 구분하며 pause 때 가상의 나이를 늘리지 않는다. 표본 밖·rollback·손상·비유한 값은 unknown이다.
+- 증거: 원래 probe 계약 경로 19 FAIL과 두 로봇 중 응답 누락 1 FAIL을 재현했다. 중간 분기 오류를 고친 최종 관련 기존 traffic/boundary 포함 91 PASS(5.41s)다. 실제 프로세스 통신·SIM·기기·주행은 NOT_RUN이다.
+- gate 변화: host SOURCE/LOCAL 판정 보완만이며 실제 ROS-SIM 회차와 T3 구현은 추가하지 않는다.
+
 ## 2026-10-05 · uncommitted · fix(perception): 차선 짝 splay와 전체 차로 횡단 표시 회귀 수정
 
 - 변경: fix/lane-keep-replay에서 바깥으로 벌어진 경계의 개별 heading 한도·공통 구간 폭 검사를 유지하며 짝을 보완하고, 급경사 paint가 차로 전체를 가로지르면 단독 경계에서 제외한다. 짧은 곡선 반례와 기존 chord/junction/corner 회귀를 검증한다.

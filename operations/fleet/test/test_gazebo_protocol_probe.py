@@ -14,6 +14,7 @@ fake 관측 목록으로 LOCAL 판정만 증명한다. 실제 프로세스 사�
 from __future__ import annotations
 
 import sys
+import pytest
 from pathlib import Path
 
 TOOLS = Path(__file__).resolve().parents[3] / "tools" / "validation" / "fleet_gazebo"
@@ -121,7 +122,7 @@ def test_result_for_another_attempt_is_its_own_verdict_not_a_pass():
          core_event(attempt="att-2", event_type="nav.completed"),
          terminal(attempt="att-2", status="COMPLETED")])
     assert verdicts["att-1"]["verdict"] == "INCONCLUSIVE"
-    assert verdicts["att-2"]["verdict"] == "PASS"
+    assert verdicts["att-2"]["verdict"] == "INCONCLUSIVE"
 
 
 def test_duplicate_terminals_for_one_attempt_fail():
@@ -160,13 +161,65 @@ def test_source_age_needs_a_clock_mapping_and_stays_unknown_without_one():
     assert source_age_seconds(event, 6.0, [(5.0, 10.0)]) is None  # 표본 하나 → 미지
     samples = [(4.0, 8.0), (6.0, 12.0)]
     age = source_age_seconds(event, 6.0, samples)                # 5.0 → 시뮬 10.0
-    assert age == 0.0
+    assert age == 2.0
     stale = Observation("core_event", 4.5, "rosy_01", {}, source_clock=8.0)
     # monotonic 4.5 는 시뮬 9.0 에 해당 — 원본 표본은 8.0 이니 사실이 1 시뮬초 묵었다.
-    assert source_age_seconds(stale, 6.0, samples) == 1.0
+    assert source_age_seconds(stale, 6.0, samples) == 4.0
     fresher = Observation("core_event", 6.0, "rosy_01", {}, source_clock=10.0)
     assert source_age_seconds(fresher, 6.0, samples) == 2.0      # 시뮬 시각이 2초 뒤
     outside = Observation("core_event", 9.0, "rosy_01", {}, source_clock=20.0)
     assert source_age_seconds(outside, 9.0, samples) is None     # 표본 밖 → 미지
     no_clock = Observation("core_event", 5.0, "rosy_01", {}, source_clock=None)
     assert source_age_seconds(no_clock, 6.0, samples) is None
+
+
+@pytest.mark.parametrize("facts,expected", [
+    ([goal(), accepted(), terminal()], "INCONCLUSIVE"),
+    ([goal(), accepted(), core_event(event_type="nav.started"), terminal()], "INCONCLUSIVE"),
+    ([goal(), accepted(), core_event(event_type="nav.failed"), terminal()], "FAIL"),
+    ([goal(), accepted(), core_event(robot="rosy_02"), terminal()], "FAIL"),
+    ([goal(), accepted(robot="rosy_02"), core_event(), terminal()], "FAIL"),
+    ([goal(), accepted(), core_event(), terminal(robot="rosy_02")], "FAIL"),
+    ([goal(), accepted(at=2), core_event(), terminal()], "FAIL"),
+    ([goal(), accepted(at=5.5), core_event(), terminal()], "FAIL"),
+    ([accepted(), core_event(), terminal()], "INCONCLUSIVE"),
+    ([goal(), accepted(), core_event(event_type="nav.failed"), terminal(status="FAILED")], "PASS"),
+    ([goal(), accepted(), core_event(event_type="nav.canceled"), terminal(status="HOLD")], "INCONCLUSIVE"),
+    ([goal(), accepted(), core_event(at=float("nan")), terminal()], "INCONCLUSIVE"),
+])
+def test_chain_requires_exact_robot_request_and_terminal_evidence(facts, expected):
+    assert dispatch_chain_verdict(facts)["att-1"]["verdict"] == expected
+
+
+@pytest.mark.parametrize("facts", [[hello(), welcome(robot="rosy_02")], [hello(), welcome(at=.5)]])
+def test_welcome_cannot_be_borrowed_from_another_robot_or_precede_hello(facts):
+    assert session_verdict(facts)["verdicts"]["welcome"] == "FAIL"
+
+
+def test_two_announced_robots_require_both_session_responses():
+    facts = [hello(), hello(robot="rosy_02"), welcome()]
+    assert session_verdict(facts)["verdicts"]["welcome"] == "INCONCLUSIVE"
+    assert session_verdict(facts + [welcome(robot="rosy_02")])["verdicts"]["welcome"] == "PASS"
+
+
+def test_age_uses_current_piecewise_clock_and_respects_pause():
+    event = Observation("core_event", 5., "rosy_01", {}, source_clock=10.)
+    samples = [(4., 8.), (5., 10.), (6., 10.), (7., 14.)]
+    assert source_age_seconds(event, 5., samples) == 0.
+    assert source_age_seconds(event, 6., samples) == 0.
+    assert source_age_seconds(event, 6.5, samples) == 2.
+    assert source_age_seconds(event, 600., samples) is None
+
+
+@pytest.mark.parametrize("now,samples", [
+    (4., [(4., 8.), (6., 12.)]),
+    (float("nan"), [(4., 8.), (6., 12.)]),
+    (6., [(4., 8.), (5., 7.), (6., 12.)]),
+    (6., [(4., 8.), (4., 9.), (6., 12.)]),
+    (6., [(4., float("inf")), (6., 12.)]),
+    (6., [(4., "unknown"), (6., 12.)]),
+    (6., [(4.,), (6., 12.)]),
+])
+def test_invalid_clock_mapping_never_reports_freshness(now, samples):
+    event = Observation("core_event", 5., "rosy_01", {}, source_clock=10.)
+    assert source_age_seconds(event, now, samples) is None
