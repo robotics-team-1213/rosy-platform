@@ -1,4 +1,4 @@
-"""D-468 provider mode/lifetime and real classified sensor lease."""
+"""D-468 gateway admission and provider contract; sensor logic has its own tests."""
 from types import SimpleNamespace
 import pytest
 from core.bridge.control_sensor_adapter import ControlSensorAdapter, ControlSensorConfig
@@ -9,14 +9,34 @@ from control.control.command_gate import CommandPolicy, GateInputs, GateSnapshot
 def adapter(mode='enforce',required=('lidar','imu','ir'),floor=True):
     a=ControlSensorAdapter()
     a.config=ControlSensorConfig.from_mapping(dict(mode=mode,required=list(required)))
-    a.policy=CommandPolicy('rig-a')
-    assert a.policy.update(GateSnapshot(a.policy.session,1,a.policy.revision,1.,1.3,
-        GateInputs(floor_observed=floor)))
+    a.policy=SimpleNamespace(local_return_allowed=lambda linear,angular,now: floor)
     return a
 
 
-def test_enforced_floor_proof_uses_real_policy_source_deadline():
+def real_policy_adapter():
+    a=ControlSensorAdapter()
+    a.config=ControlSensorConfig.from_mapping(dict(mode='enforce',required=['lidar','imu','ir']))
+    a.policy=CommandPolicy('rig-a')
+    assert a.policy.update(GateSnapshot(a.policy.session,1,a.policy.revision,1.,1.3,
+        GateInputs(floor_observed=True)))
+    return a
+
+
+def test_enforced_adapter_forwards_candidate_and_original_clock_to_provider():
     a=adapter()
+    calls=[]
+    def evaluate(linear,angular,now):
+        calls.append((linear,angular,now))
+        return True
+    a.policy=SimpleNamespace(local_return_allowed=evaluate)
+    assert a.return_sensor_allowed(1.1,.02,.1)
+    assert calls == [(.02,.1,1.1)]
+    a.policy=SimpleNamespace(local_return_allowed=lambda *args: False)
+    assert not a.return_sensor_allowed(1.1,.02,.1)
+
+
+def test_enforced_floor_proof_uses_real_policy_source_deadline():
+    a=real_policy_adapter()
     assert a.return_sensor_allowed(1.1,.02,.1)
     assert not a.return_sensor_allowed(1.31,.02,.1)
     a.policy.invalidate()

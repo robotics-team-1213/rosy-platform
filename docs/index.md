@@ -300,8 +300,8 @@
 
 ## 최근 기록
 
+- 2026-10-05 · uncommitted · feat(release): main CI to guarded robot CD
 - 2026-10-05 · uncommitted · docs(team): onboarding guide, PR template, CODEOWNERS, author guard
 - 2026-10-05 · uncommitted · fix(docs): D-468 API 변경 이력 행 보완
 - 2026-10-05 · uncommitted · feat(lane): synchronize real pose and containment evidence
 - 2026-10-05 · uncommitted · fix(site): Fleet and Vision listen ports come from the site setting
-- 2026-10-05 · uncommitted · feat(lane): local-first departure return decision

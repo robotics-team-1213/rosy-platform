@@ -1,4 +1,4 @@
-﻿"""Package frozen D-379 evaluation lineage; never approval or admission.
+"""Package frozen D-379 evaluation lineage; never approval or admission.
 
 All inputs carry caller-pinned raw hashes. Selection indices bind D-379 output
 paths; original video ordinals are derived only by unique exact timestamp joins.
