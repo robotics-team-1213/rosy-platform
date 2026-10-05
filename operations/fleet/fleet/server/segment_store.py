@@ -3,13 +3,32 @@
 from __future__ import annotations
 
 import sqlite3
+from functools import wraps
+from uuid import uuid4
+
+
+def atomic(operation):
+    """Commit only a helper-owned transaction; preserve an existing caller's one."""
+    @wraps(operation)
+    def wrapped(connection, *args, **kwargs):
+        name = 'segment_' + uuid4().hex
+        connection.execute(f'SAVEPOINT {name}')
+        try:
+            result = operation(connection, *args, **kwargs)
+        except BaseException:
+            connection.execute(f'ROLLBACK TO {name}')
+            connection.execute(f'RELEASE {name}')
+            raise
+        connection.execute(f'RELEASE {name}')
+        return result
+    return wrapped
 
 
 def prepare(connection: sqlite3.Connection) -> None:
     """Row 접근을 이름으로 쓸 수 있게 하고 구간 표가 없으면 만든다(멱등)."""
     if connection.row_factory is None:
         connection.row_factory = sqlite3.Row
-    connection.executescript(
+    connection.execute(
         """
         CREATE TABLE IF NOT EXISTS fleet_segments (
             segment_id TEXT PRIMARY KEY,
@@ -19,7 +38,11 @@ def prepare(connection: sqlite3.Connection) -> None:
             entry_x REAL NOT NULL, entry_y REAL NOT NULL,
             exit_x REAL NOT NULL, exit_y REAL NOT NULL,
             wait_x REAL NOT NULL, wait_y REAL NOT NULL
-        );
+        )
+        """
+    )
+    connection.execute(
+        """
         CREATE TABLE IF NOT EXISTS fleet_segment_grants (
             segment_id TEXT PRIMARY KEY REFERENCES fleet_segments(segment_id),
             state TEXT NOT NULL CHECK(state IN ('RESERVED','OCCUPIED','RELEASING','UNKNOWN')),
@@ -33,6 +56,6 @@ def prepare(connection: sqlite3.Connection) -> None:
             entry_confirmed_at TEXT,
             exit_observed_at TEXT,
             terminal_status TEXT
-        );
+        )
         """
     )
