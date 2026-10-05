@@ -283,6 +283,31 @@ class OwnerPolicySession:
                 raise
             except Exception as exc:self._fail('policy_capture_validation:'+type(exc).__name__)
 
+    def capture_inference_input(self, rgb, camera):
+        """Freeze exact guarded data for an external numerical caller, not a grant.
+
+        No model SDK or inference callback runs in this owner. The caller must
+        preserve this input's provenance and use submit's final guards later.
+        """
+        from rosy.contracts.learning.inference import InferenceObservation
+        with self._lock:
+            lease = self.lease
+            doc, _, cameras = self._guard()
+            self._check_hold()
+            if self.lease is not lease or doc['revision'] != lease.policy_revision:
+                self._fail('policy_inference_capture_lease_changed')
+            if (type(camera) is not CameraSnapshot or len(cameras) != 1 or cameras[0] != camera
+                    or type(rgb) not in (bytes, bytearray, memoryview)):
+                raise ValueError('exact original guarded RGB capture required')
+            raw = bytes(rgb)
+            if hashlib.sha256(raw).hexdigest() != camera.frame_sha256:
+                raise ValueError('RGB bytes differ from guarded camera capture')
+            names = tuple(doc['joint_names'])
+            return InferenceObservation(lease.episode_id, lease.lease_id, names,
+                tuple(self._snapshot.positions[name] for name in names), self._snapshot.sequence,
+                int(self._snapshot.received_at*1e9), camera.identity, camera.calibration_sha256,
+                camera.source_shape, camera.received_at_ns, raw)
+
     def _camera_source(self,candidate,doc,now,current):
         if candidate.camera_received_at_ns:
             if (len(candidate.camera_frames)!=len(doc['cameras'])

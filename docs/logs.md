@@ -6009,6 +6009,11 @@ osy-d395-s1d\`.
 - 검증: 원래 T5 순수 함수 반례와 합성 ROS entrypoint 경계 실패를 재현한 뒤 watchdog/scenario/Fleet-loss 71 PASS(7.38s)다. 실제 주행·Gazebo 회차·장치 장애 주입 없이 HOST 근거만 추가했다.
 - gate 변화: T5 전체 ROS-SIM 수용은 HOLD다. 이번 SOURCE/LOCAL 검증을 물리 정지 시한이나 설치된 base watchdog 증거로 쓰지 않는다.
 
+## 2026-10-05 · uncommitted · feat(learning): bind ACT input to guarded owner capture
+- Change: private return-only ACT/owner adapter freezes original joint and exact RGB capture, uses identical owner clock/policy, and preserves queued source timestamps. Inference runs outside the owner lock; no submit, scheduler, issuer or default runtime wiring.
+- Evidence: host13 PASS/1torchSKIP, actual CPU model14 PASS, independent13 PASS/1torchSKIP/0NEW. Actual CPU fixture is synthetic and uses a fixed host clock, not device timing or learned task quality. X:/DevTemp/act-owner-capture/.
+- gate 변화: SOURCE/HOST study composition verified; operational trusted capture/install/ROS/device/physical acceptance remains HOLD.
+
 ## 2026-10-05 · uncommitted · uiux: align surface names, stop label, and icons
 
 - 변경: 네 표면의 보이는 이름을 Rosy Robot, Rosy Pilot, Rosy Console로 맞추고 한국어는 부제로 두었다. Fleet 정지에 보이는 비상 정지를 붙였고, Pilot 탭과 Android 런처는 pilot.svg를, Fleet 크롬·테마·명렬 측정 아이콘은 actionIcon을 쓴다.
@@ -6020,6 +6025,11 @@ osy-d395-s1d\`.
 - 변경: D-466. 머리 자리는 brand·cluster·estop이고, 절차를 고르는 열은 --sidebar-track 하나다. 로봇 절차 칸과 Fleet 설치 칸이 그 트랙을 쓴다.
 - 증거: test_chrome_layout.py와 토큰 계약 37 passed. 호스트 계약이며 장치 수용은 없다.
 - gate 변화: 없음.
+
+## 2026-10-05 · uncommitted · fix(learning): invert guarded ACT input dependencies
+- Change: common stdlib inference DTOs and explicit owner capture_inference_input port replace the initial forbidden learning-to-safety imports. ACT reexports the same DTO types; pure infer_captured never accesses owner internals. Isolated caller composes post-lease validation and candidate creation. Contract wheel/pins 0.1.9.
+- Evidence: correction: earlier 252 PASS untracked-source run omitted new-module architecture scan. Committed scan found 2 NEW dependency failures; original failure log retained. Tracked corrected architecture/pin selection3 PASS. Final CPU17 PASS and independentSafety22 PASS/1torchSKIP/0NEW; dependency-exemption and public-anchor lists unchanged.
+- gate 변화: SOURCE/HOST/isolated numerical input only; trusted capture issuer, actual installed artifact, native inference task and physical acceptance remain HOLD.
 
 ## 2026-10-05 · uncommitted · fix(test): D-426 T2/T5 import 경계
 

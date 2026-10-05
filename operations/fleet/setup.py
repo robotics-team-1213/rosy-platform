@@ -14,7 +14,7 @@ setup(
         ('share/' + package_name, ['package.xml']),
     ],
     install_requires=['setuptools'],
-    extras_require={'learning': ['rosy-contracts-learning>=0.1.8']},
+    extras_require={'learning': ['rosy-contracts-learning>=0.1.9']},
     zip_safe=True,
     maintainer='rosy',
     maintainer_email='dev@rosy.local',
