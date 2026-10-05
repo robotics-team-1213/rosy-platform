@@ -46,8 +46,8 @@
 
 ## 최근 기록
 
+- 2026-10-05 · uncommitted · fix(ui): 네트워크 설치 작업을 연결 중심으로 정리
 - 2026-10-05 · uncommitted · fix(learning): bind review content and existing source identities
 - 2026-10-05 · uncommitted · fix(contracts): name registered developer page scopes
 - 2026-10-05 · uncommitted · fix(contracts): repair inherited site release checks
 - 2026-10-05 · uncommitted · feat(learning): D-462 incremental pixel review
-- 2026-10-05 · uncommitted · fix(contracts): register existing review canvas and wordmark

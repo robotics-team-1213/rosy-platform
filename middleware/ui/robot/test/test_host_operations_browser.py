@@ -63,6 +63,15 @@ def test_network_action_reports_rejection_and_success_beside_controls():
               window.confirm = () => true;
               root.querySelector('input[aria-label="네트워크 프로파일 ID"]').value = 'site-a';
             }""")
+            advanced = page.locator("details").filter(has=page.get_by_text("고급 네트워크 작업", exact=True))
+            assert advanced.get_attribute("open") is None
+            expect(page.get_by_text("Wi-Fi 이름 (SSID)", exact=True)).to_be_visible()
+            expect(page.get_by_text("Wi-Fi 암호 (8~63자)", exact=True)).to_be_visible()
+            page.get_by_role("textbox", name="Wi-Fi SSID", exact=True).fill("site")
+            expect(page.get_by_text("Wi-Fi 이름 (SSID)", exact=True)).to_be_visible()
+            expect(page.get_by_text("프로파일 적용", exact=True)).to_be_hidden()
+            expect(page.get_by_text("Wi-Fi 연결", exact=True)).to_be_visible()
+            page.get_by_text("고급 네트워크 작업", exact=True).click()
             page.locator("form").filter(has=page.locator('input[aria-label="네트워크 프로파일 ID"]')).evaluate(
                 "form => form.dispatchEvent(new Event('submit', {bubbles:true,cancelable:true}))"
             )
@@ -146,6 +155,7 @@ def test_host_actions_stay_locked_during_request_and_status_poll():
               callbacks['/api/v1/host/release'].onData({available:true,ok:true,
                 evidence:{evidence:'fresh',age_s:0},data:{state:'IDLE',previous:'r1'}});
             }""")
+            page.get_by_text("고급 네트워크 작업", exact=True).click()
             page.get_by_text("사업장 Wi-Fi로 전환", exact=True).click()
             page.locator("dialog.ui-confirm ui-button[kind=irreversible]").click()
             page.evaluate("""() => {
@@ -238,8 +248,8 @@ def test_host_status_cards_render_only_server_evidence_and_block_untrusted_actio
                 assert "old-" not in section.inner_text()
                 assert "확인할 수 없음" in section.locator("dl").text_content()
                 assert section.locator("details").first.get_attribute("open") is None
-                assert section.locator("details").nth(1).is_hidden()
-                assert section.locator("details").nth(2).is_hidden()
+                assert section.locator("details.surface-disclosure").nth(1).is_hidden()
+                assert section.locator("details.surface-disclosure").nth(2).is_hidden()
             assert "호스트 에이전트 연결을 확인" in page.locator("section.ui-readback").nth(0).inner_text()
             assert "관리자 권한을 확인" in page.locator("section.ui-readback").nth(1).inner_text()
             assert errors == []
