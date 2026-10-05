@@ -5969,3 +5969,9 @@ osy-d395-s1d\`.
 - 변경: CI 통과 source58d246ab3의 signed ARM64 release2026.10.05-040을 9dfk→8kcn 순차 설치하고 실제 CORE/camera cwd·파일 SHA256·live 카메라·정지 상태를 확인했다. source 수정은 없다.
 - 증거: 장치 각각148장 재생 비가시17/복구87–90/MAE0.0518586, keeper p95 14.02/18.31ms, 카메라각80장/10초·정지cmd501/497개다. CI37268067397/build37268633475 success, 두314패키지 ABI PASS, 관측 parameter와 model pointer 경로·존재 유지(내용 전후 해시는 미검증), fresh session logout204·token 제거. docs/validation/lane-visibility-deployment-2026-10-05/deployment.md.
 - gate 변화: DEVICE 소프트웨어 설치·정지 관측·장치 재생 PASS. motor bench·line/threshold·line OFF·화면 안전회로UNVERIFIED를 유지했다. keeper 제어 적용·독립 사람 라벨·R1/R2 현장 주행은 HOLD다.
+
+## 2026-10-05 · uncommitted · feat(fleet): preserve learning evidence in internal receiver
+- Change: stdlib export binding calculation shared with producer; captured-byte profile verification and atomic SQLite receiver/readback; wheel 0.1.8 and CI/local dependency pins aligned. No HTTP route or activation.
+- Evidence: affected 83 PASS / 1 Windows symlink SKIP / 0 NEW; independent receiver 35 PASS / 1 SKIP and packaging 13 PASS. Local wheel build and isolated import PASS; preserved native normal/revoked bundles receive, duplicate and restart PASS. X:/DevTemp/fleet-learning-receiver/.
+- Scope: SOURCE/HOST/isolated metadata only. Authentication, large-video capacity, task success, GT, production delivery and physical acceptance remain unverified.
+- gate 변화: SOURCE/HOST receiver integrity verified; DEVICE/FIELD/HUMAN GT remain HOLD.

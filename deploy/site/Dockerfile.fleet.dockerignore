@@ -1,6 +1,7 @@
 **
 !operations/fleet/**
 !contracts/foundation/core_common/**
+!contracts/learning/src/**
 !operations/apps/fleet/src/**
 !shared/web/**
 !deploy/site/requirements-fleet.txt
