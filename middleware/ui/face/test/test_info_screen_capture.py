@@ -1,9 +1,9 @@
-"""D-153 G2 — 로봇 얼굴 웨이크 카드 캡처를 저장소에서 재현한다 (옵트인).
+"""D-153 G2 — 로봇 얼굴 웨이크·주행 카드를 저장소에서 재현한다 (옵트인).
 
-ROSY_FACE_CAPTURE_DIR 가 가리키는 폴더에 카드 4종을 PNG으로 쓴다. LCD 실물
+ROSY_FACE_CAPTURE_DIR 가 가리키는 폴더에 카드 7종을 PNG으로 쓴다. LCD 실물
 사진(BENCH)을 대체하지 않는다 — render() PIL의 LOCAL 렌더 경로 증거다.
-실행: PYTHONPATH=src/apps/emotion ROSY_FACE_CAPTURE_DIR=<폴더> python -m pytest
-src/apps/emotion/test/test_info_screen_capture.py -q
+실행: PYTHONPATH=middleware/ui/face ROSY_FACE_CAPTURE_DIR=<폴더> python -m pytest
+middleware/ui/face/test/test_info_screen_capture.py -q
 """
 
 import os
@@ -18,7 +18,7 @@ pytestmark = pytest.mark.skipif(
 
 from PIL import Image  # noqa: E402
 
-from emotion.info_screen import render  # noqa: E402
+from emotion.info_screen import render, render_card  # noqa: E402
 
 _BASE = {
     "robot_id": "rosy_01",
@@ -53,8 +53,26 @@ def test_face_captures_write_all_four_cards():
         written = Image.open(out / name)
         assert written.size == (320, 240)
         assert written.mode == "RGB"
-        pixels = set(written.getdata())
+        pixels = {color for _count, color in written.getcolors(maxcolors=1 << 16)}
         assert len(pixels) > 1, "검정/빈 카드가 아니어야 한다"
     empty = Image.open(out / "robot-face_info-card_320x240_first-boot-empty-local.png")
     # F-04 — 결측 배터리가 0% 위경보(crit 색)로 보이면 안 된다.
-    assert (196, 9, 33) not in set(empty.getdata())
+    assert (196, 9, 33) not in {color for _count, color in empty.getcolors(maxcolors=1 << 16)}
+
+
+def test_face_captures_write_operating_cards():
+    out = Path(os.environ["ROSY_FACE_CAPTURE_DIR"])
+    out.mkdir(parents=True, exist_ok=True)
+    cards = {
+        "robot-face_drive-manual-320x240.png": dict(_BASE, kind="drive", mode="MANUAL", speed=0.12),
+        "robot-face_drive-navigation-320x240.png": dict(
+            _BASE, kind="drive", mode="NAVIGATION", navigation="NAVIGATING",
+            speed=0.08, battery_percent=15.0),
+        "robot-face_drive-estop-320x240.png": dict(
+            _BASE, kind="drive", mode="EMERGENCY", estop=True, speed=0.0),
+    }
+    for name, payload in cards.items():
+        image = render_card(payload)
+        assert image.size == (320, 240) and image.mode == "RGB"
+        assert any(low != high for low, high in image.getextrema())
+        image.save(out / name)

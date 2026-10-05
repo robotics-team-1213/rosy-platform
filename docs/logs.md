@@ -6253,3 +6253,9 @@ osy-d395-s1d\`.
 - 변경: Pilot 390px 주행 화면에서 잘리던 조작을 접근 가능하게 하고, 영상 재시도 타이머 오류를 수정했다. [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)에 현재 트리 태블릿·전화 첫 화면과 전화 회전 버튼 캡처를 연결했다.
 - 증거: 영상·조작 브라우저 4 passed, 스틱·페달 접촉 2 passed, `known_failures.py` 0 NEW. ADB 장치 목록이 비어 있어 네이티브 화면은 여전히 미검증이다.
 - gate 변화: Pilot LOCAL G2 부분 근거. 제품 전체 G2/G3와 실제 장치·현장 수용은 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(face): 주행 카드와 얼굴 G3 부분 근거
+
+- 변경: 320×240 주행 카드의 저배터리 숫자를 위험 채움 위 밝은 글자로 바꾸고, [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)에 수동·내비게이션·정지 캡처와 G3 여덟 항목의 남은 판정 범위를 추가했다.
+- 증거: 현재 트리 정보·주행 카드·팔레트 71 passed, `known_failures.py` 0 NEW. 캡처는 PIL 직접 출력이다.
+- gate 변화: 로봇 얼굴 LOCAL 부분 근거. D-433 설치 LCD·현장 판독과 제품 전체 UI/UX는 HOLD다.
