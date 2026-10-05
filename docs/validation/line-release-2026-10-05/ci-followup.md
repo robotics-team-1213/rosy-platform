@@ -7,3 +7,11 @@ Two additional inherited integration issues were corrected before activation.
 - Fresh Fleet API, actual local Chromium browser, and compiler regressions: 30 PASS, known_failures 0 NEW. Private logs: `X:/DevTemp/line-remote-20261005/shared-main-cell-collection.txt`, `release-before-cell-collection.txt`, `cell-green.txt`. The original failed normal push is preserved in `push-integrated.txt`.
 
 These are host release gate results. Candidate CI, native ARM64 build and signed device activation remain separate evidence. Automatic lane driving is NOT_RUN; FIELD acceptance remains HOLD.
+
+## Python annotation semantics follow-up
+
+Source `840570637289b43644f8bc41b6241b9a94020dc1` passed the normal push gate (490 fast tests; 3,660 affected tests, followed by 2,790 on the concurrent-ref retry). ARM64 build `37280335400` succeeded. Payload 041 was signed and both devices matched 314 shared ROS package versions, but it was not activated: CI `37280340298` failed 16 Fleet receiver cases through the HOST runtime extractor's missing postponed-annotation compiler flag. Every other CI matrix entry passed.
+
+The real production runtime has `from __future__ import annotations`. Its extracted test class lost that setting: Python 3.12 evaluated `TrajectoryCommand` eagerly, while Python 3.14 concealed the issue until annotations were inspected. `annotations-red.txt` reproduces the same NameError on the host. The independently landed peer fix `df5359613` explicitly preserves the production compiler flag and disables caller flag inheritance; it is reused without duplicate production changes. A new isolated regression verifies the extracted method's original string annotations. Related runtime/parent/episode/receiver regressions: 108 PASS, 1 SKIP, 0 NEW (`annotations-green.txt`).
+
+Payload 041 and its failed exact-source CI remain historical evidence. Deployment will use a fresh exact-source CI and ARM64 build; no red CI result is reported as release acceptance.
