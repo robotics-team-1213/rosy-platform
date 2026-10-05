@@ -5950,3 +5950,10 @@ osy-d395-s1d\`.
 - 변경: footprint edge 교차·접촉·포함 관계의 여유를 0으로 판정한다. 정지는 기존 1초·20Hz·최대 0.15초 간격과 두 시계의 연속 관측을 확인한다. publisher 소유권은 모든 기대 topic에 하나의 관측과 정확한 positive PID·endpoint·GID 결속을 요구하며 이름만 같거나 필수 증거가 없으면 검증되지 않는다.
 - 증거: 원래 실제 함수 반례 5 FAIL을 재현한 뒤 T3와 기존 T1/T2 시험 80 PASS/Windows symlink 2 SKIP(1.82s), owned flake8 0이다. 실제 ROS endpoint 결속을 생성하거나 SIM·장치·주행을 실행하지 않았다.
 - gate 변화: host SOURCE/LOCAL 판정 수정만. 실제 observer 수집·ROS-SIM 수용·실물 안전을 증명하지 않는다.
+
+## 2026-10-05 · uncommitted · feat(validation): D-426 T5 장애 주입 시나리오·sim base watchdog
+
+- 변경: (1) `tools/validation/fleet_gazebo/scenarios.py` — M01–M08 수용 행렬의 선언적 정의(필수 판정·blackout 주입·재시작 대상). 주입은 run 소유 경계만(scope="run" 강제), REST/WS/둘 다 blackhole은 별도 회차로 구분. D-419 정책 적용 시한(5.2 s window)과 실제 정지(≤0.50 sim s·이동 ≤0.05 m·회전 ≤0.25 rad)를 같은 시한으로 쓰지 않는 분리 판정 `stop_policy_checks`. 시뮬 profile 0.15 m/s·0.5 rad/s·CORE kill 입력 만료 0.30 s 고정. (2) `integrations/simulation/gazebo/scripts/command_watchdog.py` — CORE와 별도 수명의 sim base 명령 감시 bridge. 최신 cmd_vel 재발행 + 0.30 monotonic s 만료 시 0. CORE writer 불증식, clock pause에도 만료, rclpy 부재 시 안내 후 exit 3.
+- 증거: test/test_fleet_gazebo_scenario_contracts.py 6개 계약(행렬 온전성·run 경계·주입 종류별 분리·알 수 없는 종류/범위 거부·임계값 고정·정책/정지 분리 판정 4종) + test_command_watchdog.py 8개 계약 + 기존 test_fleet_loss 31개 = 45 PASS.
+- gate 변화: SOURCE/LOCAL. 실제 장애 주입 회차·blackhole 실측·재시작 대조는 T6 WSL 회차.
+- 결정: shutdown 시험을 packet blackhole 증거로 쓰지 않는다(계획 T5 항목 1).
