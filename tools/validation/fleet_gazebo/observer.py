@@ -16,8 +16,10 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass
 
-from assertions import (ContactEvent, PoseSample, observation_gaps,
-                        observation_rate_hz)
+if __package__:
+    from .assertions import ContactEvent, PoseSample, observation_gaps, observation_rate_hz
+else:
+    from assertions import ContactEvent, PoseSample, observation_gaps, observation_rate_hz
 
 #: 관측 빈 구간 판정 한계(assertions.MAX_GAP_S 와 같은 값).
 MAX_GAP_S = 0.15

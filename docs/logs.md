@@ -5943,3 +5943,9 @@ osy-d395-s1d\`.
 - 변경: footprint edge 교차·접촉·포함 관계의 여유를 0으로 판정한다. 정지는 기존 1초·20Hz·최대 0.15초 간격과 두 시계의 연속 관측을 확인한다. publisher 소유권은 모든 기대 topic에 하나의 관측과 정확한 positive PID·endpoint·GID 결속을 요구하며 이름만 같거나 필수 증거가 없으면 검증되지 않는다.
 - 증거: 원래 실제 함수 반례 5 FAIL을 재현한 뒤 T3와 기존 T1/T2 시험 80 PASS/Windows symlink 2 SKIP(1.82s), owned flake8 0이다. 실제 ROS endpoint 결속을 생성하거나 SIM·장치·주행을 실행하지 않았다.
 - gate 변화: host SOURCE/LOCAL 판정 수정만. 실제 observer 수집·ROS-SIM 수용·실물 안전을 증명하지 않는다.
+
+## 2026-10-05 · uncommitted · fix(validation): T3·Vision observer 시험 import 격리
+
+- 변경: T3 시험은 정확한 파일을 고유 private package/module ID로 불러오며 전역 `observer`·`assertions` 이름과 sys.path를 덮지 않는다. T3 observer의 package import는 상대 assertions를 쓰고 기존 standalone import는 유지한다. 판정·수집·권한 로직은 변경하지 않았다.
+- 증거: 실제 Vision observer 시험을 먼저 수집한 상태의 원래 ImportError를 재현했다. 수정 후 같은 invocation에서 Vision+T3 58 PASS(5.45s), 새 interpreter에서 기존 generic module 보존·PoseSample type identity 및 standalone import PASS를 확인했다. 최초 standalone shell quoting 오류도 로그에 보존했다. owned flake8 0이며 hook 범위·검사 예외는 바꾸지 않았다.
+- gate 변화: host collection/source 격리만. 실제 ROS/SIM·장치·endpoint 소유권·운동 수용은 추가하지 않는다.
