@@ -6082,6 +6082,11 @@ osy-d395-s1d\`.
 - 증거: related 87 PASS, known failures 0 NEW; final 042-device capture 40 scans/15 frames/121 odometry, eight wall returns, REJECTED too few wall returns, applied false. docs/validation/camera-auto-2026-10-05/result.md.
 - gate 변화: SOURCE/LOCAL command verified; DEVICE capture and automatic fit executed, calibration acceptance and automatic movement remain unverified.
 
+## 2026-10-05 · uncommitted · feat(camera): validate automatic checkerboard pose candidates
+- 변경: PC-only two-image checkerboard fit; original-pixel reprojection checks, signed pitch and explicit input/thickness/intrinsics provenance; no runtime writes.
+- 증거: 95 PASS, known_failures 0 NEW. Device images: 20/54 corners, board height 53.908mm, pitch 12.117deg; approximate operator 1mm board gives estimated floor height 54.908mm. docs/validation/camera-board-2026-10-05/result.md.
+- gate 변화: LOCAL and real-image candidate comparison PASS; intrinsic calibration, runtime apply and automatic driving acceptance unverified.
+
 ## 2026-10-05 · uncommitted · fix(fleet): 목표·대형 지원 기능 확인
 
 - 변경: CAP-001 표시와 전송 직전 재확인, 미지원 목표·대형 버튼 사유, 교체·대형 편입 경합 차단, ARMING 팔로워 예약. CORE 계약과 최종 제어 권한은 유지한다.

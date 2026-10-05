@@ -49,6 +49,21 @@ python tools/calibration/camera_auto.py --robot rosy-pinky-9dfk --output X:/DevT
 NOMINAL 추종의 진행 확인, 장애물 정지, 일반 보정 작업의 소유권 잠금은 그대로 유지합니다.
 사용자의 수동 카메라 수치 입력 없이 계산할 수 있다는 뜻이지 자동 주행 수용을 뜻하지 않습니다.
 
+### 바닥 체커보드로 자동 자세 추정
+
+서로 다른 위치에서 촬영한 체커보드 영상 두 장과 인쇄된 칸 크기로 높이·하향각을 자동 계산합니다.
+카메라 높이나 각도를 직접 입력하지 않습니다. 판에 붙인 보드라면 표면 높이를 더해야 하며,
+두께를 추정했다면 `--board-elevation-estimated`로 표시합니다. 모르면 두께 옵션을 생략합니다.
+
+```powershell
+python tools/calibration/camera_board.py --reference X:/DevTemp/board/near.png --validation X:/DevTemp/board/far.png --camera-profile middleware/apps/device/pinky/profile/config/camera_nominal.yaml --square-mm 17 --board-elevation-mm 1 --board-elevation-estimated --output X:/DevTemp/board/candidate.json
+```
+
+원본 픽셀 재투영 오차와 두 영상의 자세 일치도를 검사합니다. 종료 코드 0은 이 일치도 검사를
+통과했다는 뜻이며 적용·수용 완료가 아닙니다. 기존 내부값을 사용하고 왜곡을 0으로 가정하므로
+새 내부 보정으로 취급하지 않습니다. 결과는 항상 후보이며 자동 적용하지 않습니다.
+영상·프로필 해시와 내부 행렬, 두께 출처를 결과에 기록합니다.
+
 ## 선택형 ChArUco/호모그래피 프로필
 
 기존 핀홀 모델 대신 검증된 이미지→지면 행렬을 쓰려면 `camera.yaml`에서 모드를 명시적으로
