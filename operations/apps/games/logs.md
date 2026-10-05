@@ -318,3 +318,9 @@
 - 변경: 경기 정보가 없을 때 빈 피치 중앙에 대기·연결 오류 이유를 표시한다. 기존 마지막 수신 위치 경고는 유지하고, 정지 재시도 브라우저 시험은 CSP와 충돌하지 않는 DOM 대기로 관찰한다.
 - 증거: [UI/UX 회차](../../../docs/validation/uiux-surfaces-2026-10-06/README.md)의 최초 1280/390px·첫 오류·끊김·정지 실패 캡처. 브라우저 19 passed, 모듈 113 passed, `known_failures.py` 0 NEW.
 - gate 변화: 게임 보드 G3 부분 근거. 실제 경기·정지 readback과 전체 G2/G3는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(games): 320px 동일 폭 확인
+
+- 변경: 경기 보드의 320×568 최초·지연 화면에서 점수·피치·관측 패널이 같은 폭을 쓰는지 브라우저 계약에 추가했다.
+- 증거: [UI/UX 회차](../../../docs/validation/uiux-surfaces-2026-10-06/README.md)의 X: 원본 캡처 2장, 브라우저 4 passed, `known_failures.py` 0 NEW.
+- gate 변화: LOCAL G2 부분 근거 추가. 실제 경기·정지 readback과 전체 G2/G3는 HOLD다.

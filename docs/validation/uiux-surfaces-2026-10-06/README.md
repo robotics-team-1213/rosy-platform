@@ -82,6 +82,8 @@
 
 여덟 항목 모두 **부분 근거**다. 현재 트리의 게임 보드 브라우저 **19 passed**, 게임 모듈 **113 passed**, `known_failures.py` **0 NEW**다. 캡처는 PreviewServer와 fixture payload의 LOCAL 증거이며 G3 GO나 실제 정지 증거가 아니다.
 
+추가로 320×568에서 최초 대기와 지연 상태를 확인했다. 점수·피치·관측 패널의 시작점과 폭이 각각 같고, 가로 넘침 없이 정지가 첫 화면에 남는다. 두 브라우저 시험의 4개 셀은 통과했고 `known_failures.py`는 0 NEW다. 원본 캡처는 `X:\DevTemp\projects\rosy-platform\2026-10-06--032913--uiux-quality--199bc9\captures\game-320\games_board_initial_320x568.png`와 같은 폴더의 `games_board_delayed_320x568.png`에 있다. 이 fixture 검사는 실제 경기·정지 readback이나 전체 G2/G3 판정이 아니다.
+
 학습 검수는 D-461의 병렬 원본·inspector 구조를 유지하면서 두 편집 창의 너비만 같게 했다. 현재 로컬 Chromium의 객체 작업 브라우저 **10 passed**, 픽셀 작업·반응형 계약 **14 passed**, 각 `known_failures.py` **0 NEW**였다. 1440/800/390px에서 두 창 너비와 가로 넘침을 검사했다. 이 캡처는 합성 검수 자료를 사용한 개발 도구 LOCAL 증거다.
 
 390px 검수 화면에서는 두 창의 폭은 같아도 작업 버튼이 내용 길이만큼만 차지했다. 객체·픽셀 편집 칸을 컨테이너로 선언하고, 24rem 미만에서는 기존 공용 `ui-actions` 동작처럼 버튼을 각 칸의 전폭으로 쌓았다. 현재 Chromium 측정에서 두 칸의 폭은 각각 358px, 첫 작업 버튼도 각각 358px이고 가로 넘침은 0이다. 객체·픽셀 1440/800/390px 브라우저 6건과 반응형 계약 9건 **15 passed**, `known_failures.py` **0 NEW**다. 전후 캡처는 X: `captures/learning-width-container{,-final}/learning-{objects,pixels}-390.png`에 둔다. 실제 검수자 G3 독회는 남는다.

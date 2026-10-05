@@ -6373,3 +6373,9 @@ osy-d395-s1d\`.
 - 변경: Pilot 전화에서 차선 자동 모드가 수동 회전 버튼을 숨길 때 회전 안내도 숨겼다. 수동 복귀 때 안내가 다시 보인다.
 - 증거: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)의 390px 자동·수동 캡처와 모드 전환 브라우저 1 passed, `known_failures.py` 0 NEW. 원본은 X:에 둔다.
 - gate 변화: Pilot LOCAL G2 일부 추가. 실제 운전자 G3와 제품 전체는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(games): 320px 패널 동일 폭
+
+- 변경: 게임 보드의 최초·지연 320×568에서 점수·피치·관측이 같은 가용 폭을 쓰고 정지가 첫 화면에 남는지 브라우저 계약에 추가했다.
+- 증거: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)의 X: 캡처 2장, 브라우저 4 passed, `known_failures.py` 0 NEW.
+- gate 변화: 게임 보드 LOCAL G2 부분 근거 추가. 실제 경기·정지 readback과 제품 전체 G2/G3는 HOLD다.

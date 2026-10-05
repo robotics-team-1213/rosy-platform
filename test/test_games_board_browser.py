@@ -245,7 +245,7 @@ def test_match_board_shows_lost_hold_state():
         server.close()
 
 
-@pytest.mark.parametrize("width,height", [(1280, 800), (390, 800)])
+@pytest.mark.parametrize("width,height", [(1280, 800), (390, 800), (320, 568)])
 def test_match_board_initial_state_before_any_publish(width, height):
     """최초 기동 — publish 전 보드는 기본 안내만 보이고 아무 상태도 그리지 않는다."""
     pytest.importorskip("playwright.sync_api")
@@ -267,6 +267,12 @@ def test_match_board_initial_state_before_any_publish(width, height):
             assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
             assert page.locator("#lost").is_hidden()
             assert page.locator("#markers li").count() == 0
+            if width <= 390:
+                panels = [page.locator(selector).bounding_box() for selector in
+                          (".score", ".pitch-wrap", ".field-details")]
+                assert max(box["width"] for box in panels) - min(box["width"] for box in panels) <= 1
+                assert max(box["x"] for box in panels) - min(box["x"] for box in panels) <= 1
+                assert page.locator("#halt").bounding_box()["y"] + page.locator("#halt").bounding_box()["height"] <= height
             assert not errors, f"페이지 오류: {errors}"
             save_temp_screenshot(page, f"games_board_initial_{width}x{height}.png")
             browser.close()
@@ -380,6 +386,15 @@ def test_match_layout_uses_desktop_width_and_keeps_narrow_status_separate():
             assert narrow["scrollWidth"] <= 390
             assert narrow["halt"]["bottom"] <= 800 and narrow["sticky"] == "sticky"
             save_temp_screenshot(page, "games_board_delayed_390x800.png")
+            page.set_viewport_size({"width": 320, "height": 568})
+            small = page.evaluate("""() => {
+              const rect = (s) => document.querySelector(s).getBoundingClientRect();
+              return {panels: ['.score', '.pitch-wrap', '.field-details'].map(s => rect(s).toJSON()),
+                halt: rect('#halt').toJSON(), scrollWidth: document.documentElement.scrollWidth};
+            }""")
+            assert max(r["width"] for r in small["panels"]) - min(r["width"] for r in small["panels"]) <= 1
+            assert small["scrollWidth"] <= 320 and small["halt"]["bottom"] <= 568
+            save_temp_screenshot(page, "games_board_delayed_320x568.png")
             page.set_viewport_size({"width": 600, "height": 800})
             page.evaluate("window.scrollTo(0, document.documentElement.scrollHeight)")
             page.wait_for_timeout(100)
