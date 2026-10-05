@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import math
 import sys
+import pytest
 from pathlib import Path
 
 TOOLS = Path(__file__).resolve().parents[1] / "tools" / "validation" / "fleet_gazebo"
@@ -105,6 +106,33 @@ def test_clearance_uses_footprint_boundaries_not_centers():
     assert gap < 0.10, "rotation must shrink the boundary gap below the threshold"
     ok = clearance([(a, rotated)], {"rosy_01": FOOTPRINT, "rosy_02": FOOTPRINT})
     assert ok["verdict"] == "FAIL" and ok["evidence"][0]["min_gap_m"] < 0.10
+
+
+@pytest.mark.parametrize("other_shape,yaw", [
+    ([(-1, -1), (1, -1), (1, 1), (-1, 1)], math.pi / 4),
+    ([(-.2, -.2), (.2, -.2), (.2, .2), (-.2, .2)], 0),
+])
+def test_crossing_or_contained_footprints_have_no_clearance(other_shape, yaw):
+    square = [(-1, -1), (1, -1), (1, 1), (-1, 1)]
+    a, b = pose("a"), pose("b", yaw=yaw)
+    assert footprint_clearance_m(a, b, square, other_shape) == 0.
+    assert clearance([(a, b)], {"a": square, "b": other_shape})["verdict"] == "FAIL"
+
+
+def test_standstill_cannot_bridge_a_missing_quiet_second():
+    assert standstill([pose(), pose(t=1, mono=1)], robot_id="rosy_01")["verdict"] == "INCONCLUSIVE"
+    quiet = [pose(t=i * .05, mono=i * .05) for i in range(21)]
+    holed = [p for p in quiet if not .3 < p.t < .6]
+    assert standstill(holed, robot_id="rosy_01")["verdict"] == "INCONCLUSIVE"
+    slow = [pose(t=i * .1, mono=i * .1) for i in range(11)]
+    assert standstill(slow, robot_id="rosy_01")["verdict"] == "INCONCLUSIVE"
+
+
+@pytest.mark.parametrize("observed", [[], [{"topic": "a/cmd_vel", "publisher": "/a/core"}]])
+def test_publisher_evidence_cannot_be_missing(observed):
+    expected = {"a/cmd_vel": {"publisher": "/a/core", "pid": 4242,
+                              "gid": "run-gid", "endpoint": "run-endpoint"}}
+    assert check_publisher_ownership(observed, expected)["ok"] is False
 
 
 def test_contacts_zero_requires_positive_control():
@@ -197,9 +225,10 @@ def test_recorder_keeps_epochs_and_gaps_per_robot():
 
 
 def test_publisher_ownership_checks_name_and_pid():
-    expected = {"rosy_01/cmd_vel": {"publisher": "/rosy_01/core", "pid": 4242}}
+    expected = {"rosy_01/cmd_vel": {"publisher": "/rosy_01/core", "pid": 4242,
+                                    "endpoint": "endpoint-1", "gid": "gid-1"}}
     ok = check_publisher_ownership(
-        [{"topic": "rosy_01/cmd_vel", "publisher": "/rosy_01/core", "pid": 4242}],
+        [{"topic": "rosy_01/cmd_vel", **expected["rosy_01/cmd_vel"]}],
         expected)
     assert ok["ok"] is True
     foreign = check_publisher_ownership(
@@ -211,6 +240,26 @@ def test_publisher_ownership_checks_name_and_pid():
     unexpected = check_publisher_ownership(
         [{"topic": "rosy_02/cmd_vel", "publisher": "/rosy_02/core"}], expected)
     assert unexpected["ok"] is False
+
+
+@pytest.mark.parametrize("field", ["publisher", "pid", "endpoint", "gid"])
+def test_each_expected_and_observed_binding_field_is_required(field):
+    binding = {"publisher": "/a/core", "pid": 4242, "endpoint": "endpoint-1", "gid": "gid-1"}
+    expected, observed = {"a/cmd_vel": dict(binding)}, [{"topic": "a/cmd_vel", **binding}]
+    del observed[0][field]
+    assert check_publisher_ownership(observed, expected)["ok"] is False
+    observed = [{"topic": "a/cmd_vel", **binding}]
+    del expected["a/cmd_vel"][field]
+    assert check_publisher_ownership(observed, expected)["ok"] is False
+
+
+def test_publisher_evidence_rejects_duplicates_and_foreign_gid():
+    binding = {"publisher": "/a/core", "pid": 4242, "endpoint": "endpoint-1", "gid": "gid-1"}
+    expected, row = {"a/cmd_vel": binding}, {"topic": "a/cmd_vel", **binding}
+    assert check_publisher_ownership([row, row], expected)["ok"] is False
+    assert check_publisher_ownership([{**row, "gid": "other-run"}], expected)["ok"] is False
+    assert check_publisher_ownership([{**row, "pid": True}], expected)["ok"] is False
+    assert check_publisher_ownership([], {})["ok"] is False
 
 
 def test_intentional_bad_run_fails_the_judge_mutation_style():

@@ -1,4 +1,4 @@
-import { confirmIrreversible } from "/common/ui.js";
+import { actionIcon, confirmIrreversible } from "/common/ui.js";
 import { NETWORK_MODE_LABEL, enumLabel, EVIDENCE_LABEL } from "/common/core_ui_logic.js";
 
 // D-359 §5.3 — 끌 때 이유를 같이 준다. 켜거나 짧은 요청 중 잠금이면 이유를 지운다.
@@ -136,17 +136,24 @@ export function mount(root, ctx) {
 
   const networkActions = el("div", "ui-readback");
   networkActions.append(el("h4", "", "네트워크 작업"));
+  const advanced = el("details");
+  advanced.append(el("summary", "", "고급 네트워크 작업"));
+  const advancedActions = el("div", "ui-readback");
+  advanced.append(advancedActions);
   const modeActions = el("ui-actions", "surface-actions");
   const sta = el("ui-button", "", "사업장 Wi-Fi로 전환"); sta.setAttribute("kind", "quiet"); sta.type = "button";
   const relay = el("ui-button", "", "릴레이 AP 켜기"); relay.setAttribute("kind", "quiet"); relay.type = "button";
-  modeActions.append(sta, relay); networkActions.append(modeActions);
+  modeActions.append(sta, relay); advancedActions.append(modeActions);
   const applyForm = el("form", "ui-form");
   const profile = el("input", "ui-field"); profile.maxLength = 64; profile.autocomplete = "off"; profile.setAttribute("aria-label", "네트워크 프로파일 ID"); profile.placeholder = "프로파일 ID";
-  const applyProfile = el("ui-button", "", "프로파일 적용"); applyProfile.setAttribute("kind", "primary"); applyProfile.type = "submit"; applyForm.append(profile, applyProfile); networkActions.append(applyForm);
+  const profileLabel = el("label", "ui-field-label", "저장된 네트워크 프로파일 ID"); profileLabel.append(profile);
+  const applyProfile = el("ui-button", "", "프로파일 적용"); applyProfile.setAttribute("kind", "quiet"); applyProfile.type = "submit"; applyForm.append(profileLabel, applyProfile); advancedActions.append(applyForm);
   const connectForm = el("form", "ui-form");
   const ssid = el("input", "ui-field"); ssid.maxLength = 32; ssid.setAttribute("aria-label", "Wi-Fi SSID"); ssid.placeholder = "SSID";
   const field = el("input", "ui-field"); field.type = "password"; field.autocomplete = "new-password"; field.maxLength = 63; field.setAttribute("aria-label", "Wi-Fi 암호"); field.placeholder = "Wi-Fi 암호";
-  const connect = el("ui-button", "", "Wi-Fi 연결"); connect.setAttribute("kind", "primary"); connect.type = "submit"; connectForm.append(ssid, field, connect); networkActions.append(connectForm);
+  const ssidLabel = el("label", "ui-field-label", "Wi-Fi 이름 (SSID)"); ssidLabel.append(ssid);
+  const accessLabel = el("label", "ui-field-label", "Wi-Fi 암호 (8~63자)"); accessLabel.append(field);
+  const connect = el("ui-button", "", "Wi-Fi 연결"); connect.setAttribute("kind", "primary"); connect.type = "submit"; actionIcon(connect, "wifi"); connectForm.append(ssidLabel, accessLabel, connect); networkActions.append(connectForm, advanced);
   const networkNote = el("ui-status", "", "호스트 에이전트 상태 확인 전에는 네트워크 작업을 쓸 수 없습니다."); networkNote.setAttribute("state", "pending"); networkActions.append(networkNote);
   const networkResult = el("ui-status"); networkResult.hidden = true; networkResult.setAttribute("state", "ready"); networkResult.setAttribute("role", "status"); networkActions.append(networkResult);
   networkNote.id = `host-network-note-${++noteSerial}`;

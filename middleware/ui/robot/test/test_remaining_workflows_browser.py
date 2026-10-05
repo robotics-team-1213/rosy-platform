@@ -28,6 +28,7 @@ def test_host_terminal_result_survives_outage_and_missing_hold_is_unknown(panel)
       __callbacks['/api/v1/host/commissioning'].onData({runtime_mode:'core',motor_hold:true,lidar_hold:false});
       window.__api=async()=>({available:true,ok:true}); window.confirm=()=>true;
     }""")
+    page.get_by_text('고급 네트워크 작업',exact=True).click()
     page.get_by_role('button',name='사업장 Wi-Fi로 전환',exact=True).click()
     dialog=page.locator('dialog.ui-confirm')
     if dialog.count(): dialog.locator('ui-button[kind=irreversible]').click()

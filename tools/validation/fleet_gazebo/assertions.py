@@ -102,17 +102,26 @@ def standstill(samples: list[PoseSample], *, robot_id: str,
     end = owned[-1]
     window = [s for s in owned if end.t - s.t <= hold_s + 1e-9]
     span = end.t - window[0].t
+    gaps = [b.t - a.t for a, b in zip(window, window[1:])]
+    mono_gaps = [b.mono - a.mono for a, b in zip(window, window[1:])]
+    valid = all(type(v) in (int, float) and math.isfinite(v)
+                for s in window for v in (s.t, s.mono, s.v, s.w))
+    max_gap = max(gaps + mono_gaps, default=math.inf)
+    rate = (len(window) - 1) / span if span > 0 else 0.
+    continuous = (valid and all(g > 0 for g in gaps + mono_gaps) and
+                  max_gap <= MAX_GAP_S and rate >= MIN_OBSERVATION_HZ)
     worst_v = max(abs(s.v) for s in window)
     worst_w = max(abs(s.w) for s in window)
     complete = span >= hold_s - 1e-9
-    ok = complete and worst_v <= STANDSTILL_LINEAR_MPS and worst_w <= STANDSTILL_ANGULAR_RADPS
-    verdict = "PASS" if ok else ("INCONCLUSIVE" if not complete else "FAIL")
+    ok = complete and continuous and worst_v <= STANDSTILL_LINEAR_MPS and worst_w <= STANDSTILL_ANGULAR_RADPS
+    verdict = "PASS" if ok else ("INCONCLUSIVE" if not complete or not continuous else "FAIL")
     return _verdict("standstill", verdict, observer=OBSERVER_POSE, unit="m/s",
                     clock="sim", threshold={"linear_mps": STANDSTILL_LINEAR_MPS,
                                             "angular_radps": STANDSTILL_ANGULAR_RADPS,
                                             "hold_s": hold_s},
                     evidence=[{"window_s": round(span, 3), "worst_v": worst_v,
-                               "worst_w": worst_w, "samples": len(window)}])
+                               "worst_w": worst_w, "samples": len(window),
+                               "max_gap_s": max_gap, "rate_hz": rate}])
 
 
 def _polygon_edges(polygon: list[tuple[float, float]]):
@@ -130,6 +139,29 @@ def _point_segment_distance(px, py, ax, ay, bx, by) -> float:
     return math.hypot(px - (ax + t * dx), py - (ay + t * dy))
 
 
+def _segments_intersect(a, b, c, d) -> bool:
+    def cross(p, q, r):
+        return (q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0])
+    values = cross(a, b, c), cross(a, b, d), cross(c, d, a), cross(c, d, b)
+    if values[0] * values[1] < 0 and values[2] * values[3] < 0:
+        return True
+    for value, p, q, r in ((values[0], a, b, c), (values[1], a, b, d),
+                           (values[2], c, d, a), (values[3], c, d, b)):
+        if (abs(value) <= 1e-12 and min(p[0], q[0]) <= r[0] <= max(p[0], q[0]) and
+                min(p[1], q[1]) <= r[1] <= max(p[1], q[1])):
+            return True
+    return False
+
+
+def _inside_polygon(point, polygon) -> bool:
+    x, y = point
+    inside = False
+    for (ax, ay), (bx, by) in _polygon_edges(polygon):
+        if (ay > y) != (by > y) and x < ax + (y - ay) * (bx - ax) / (by - ay):
+            inside = not inside
+    return inside
+
+
 def footprint_clearance_m(pose: PoseSample, other: PoseSample,
                           footprint: list[tuple[float, float]],
                           other_footprint: list[tuple[float, float]]) -> float:
@@ -140,6 +172,12 @@ def footprint_clearance_m(pose: PoseSample, other: PoseSample,
 
     a = [world(point, pose) for point in footprint]
     b = [world(point, other) for point in other_footprint]
+    if len(a) < 3 or len(b) < 3 or any(not math.isfinite(v) for p in a + b for v in p):
+        raise ValueError("footprints must contain finite polygons")
+    if (any(_segments_intersect(start, end, other_start, other_end)
+            for start, end in _polygon_edges(a) for other_start, other_end in _polygon_edges(b)) or
+            _inside_polygon(a[0], b) or _inside_polygon(b[0], a)):
+        return 0.
     best = math.inf
     for point in a:
         for start, end in _polygon_edges(b):
