@@ -6343,3 +6343,9 @@ osy-d395-s1d\`.
 - 변경: Cam 대기 화면의 잘린 반폭 버튼을 전폭으로 정리하고 연결·송출 정보가 좁은 화면에서도 보이게 했다.
 - 증거: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)의 격리 Android 35 에뮬레이터 320·390px 캡처와 UI bounds, Gradle JVM 366 passed·APK 빌드 성공. 원본은 X:에 둔다.
 - gate 변화: Cam LOCAL 송출 대기 G2 일부 추가. Pairing·Peer·실제 송출·실물 폰·G3와 제품 전체는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(learning): 전화 검수 조작 전폭
+
+- 변경: 객체·픽셀 검수의 편집 칸에 컨테이너 폭을 선언하고 390px 전화의 작업 버튼을 각 칸의 전폭으로 쌓았다. 표면별 24rem 경계를 `surfaces.yaml`에 이유와 함께 기록했다.
+- 증거: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)의 390px 전후 캡처와 Chromium 358px 측정, 객체·픽셀 폭 및 반응형 계약 15 passed, `known_failures.py` 0 NEW. 캡처 원본은 X:에 둔다.
+- gate 변화: 학습 검수 LOCAL G2 너비 일부 추가. 실제 검수자 G3와 제품 전체는 HOLD다.

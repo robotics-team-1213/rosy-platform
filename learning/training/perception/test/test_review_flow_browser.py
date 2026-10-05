@@ -46,6 +46,12 @@ def test_review_editor_peer_widths(browser_workspace, route, left, right, width)
     assert all(box and box['width'] > 0 for box in boxes)
     assert abs(boxes[0]['width'] - boxes[1]['width']) <= 1
     assert page.evaluate('document.documentElement.scrollWidth - innerWidth') == 0
+    if width == 390:
+        for pane in (left, right):
+            actions = page.locator(f'{pane} ui-actions').first
+            action_width = actions.bounding_box()['width']
+            assert all(abs(button.bounding_box()['width'] - action_width) <= 1
+                       for button in actions.locator('ui-button').all())
     if output := os.getenv('ROSY_UIUX_SCREENSHOT_DIR'):
         from pathlib import Path
         target = Path(output) / f'learning-{route.strip("/") or "objects"}-{width}.png'
