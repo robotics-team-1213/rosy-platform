@@ -6223,3 +6223,9 @@ osy-d395-s1d\`.
 - 변경: Pilot Gazebo 연습의 영상 없는 화면에서 빈 영상 칸을 빼고 팔·그리퍼 조작 창을 같은 폭으로 맞췄다. [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)에 태블릿·전화 캡처와 등록 표면별 남은 판정 증거를 추가했다.
 - 증거: Pilot 브라우저 5 passed(카메라 있는 경로 포함), `known_failures.py` 0 NEW. 실기 명령·현장 행동을 수행하지 않았다.
 - gate 변화: Pilot LOCAL 부분 근거. 제품 전체 UI/UX G2/G3는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(fleet): 목표 상태 문구와 G3 독회
+
+- 변경: 안전 상태 결측·비상 정지 중 `NAVIGATING`을 물리적 주행으로 보이게 하던 Fleet 배지를 `목표 남음`으로 바꾸고 [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)에 확인창·안전 상태 캡처와 G3 여덟 항목의 남은 판정 범위를 기록했다.
+- 증거: Fleet 브라우저 3 passed, 서버·팔레트 60 passed, 웹 Node 134 passed, Python `known_failures.py` 0 NEW. Cam APK 로컬 빌드는 성공했지만 에뮬레이터가 ADB에 나타나지 않아 네이티브 화면은 미검증이다.
+- gate 변화: Fleet G3와 제품 전체 UI/UX, 장치·현장 수용은 HOLD다.

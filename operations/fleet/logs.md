@@ -1960,3 +1960,9 @@
 - 변경: 320/390px의 빈 목록·서버 실패에서 E-stop과 다음 단계가 보이고 가로 넘침이 없음을 브라우저로 확인했다. 연결 끊김 fixture를 실제 Fleet API의 `state: null` 계약에 맞춰 고쳤다.
 - 증거: 기존 상태 9 passed, 모바일 상태 4 passed, 연결 끊김 재실행 1 passed, 각 `known_failures.py` 0 NEW. 캡처는 [UI/UX 회차](../../docs/validation/uiux-surfaces-2026-10-06/README.md)에 있다.
 - gate 변화: LOCAL G2 부분 근거. Fleet G2/G3와 SITE/FIELD는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(fleet): 정지 중 목표 상태 문구와 G3 근거
+
+- 변경: 탐색 상태가 NAVIGATING으로 남아도 안전 상태가 결측이거나 E-stop이면 주행 중이라고 표현하지 않고 목표가 남았음을 알린다. 기존 공용 탐색 상태 번역을 재사용한다.
+- 증거: 안전 결측·정지와 목표 확인 브라우저 3 passed, Fleet 서버·팔레트 60 passed, 웹 Node 134 passed, `known_failures.py` 0 NEW. [G3 독회](../../docs/validation/uiux-surfaces-2026-10-06/README.md)는 LOCAL 부분 근거다.
+- gate 변화: Fleet G3·SITE/FIELD HOLD 유지.

@@ -760,9 +760,12 @@ def test_goal_is_unavailable_when_safety_is_unknown_or_stopped(console_url, safe
         # visible value and goal dispatch remains disabled.
         assert expected in safety_row.inner_text()
         assert reason in card.inner_text()
+        assert "목표 남음" in card.inner_text()
+        assert "NAVIGATING" not in card.inner_text()
         assert card.locator("ui-button[data-goal-robot-id]").evaluate("node => node.disabled")
         assert not card.locator("ui-button").nth(1).evaluate("node => node.disabled")
         assert not errors
+        save_temp_screenshot(page, "fleet_safety_stopped.png" if safety else "fleet_safety_unknown.png")
         browser.close()
 
 
@@ -1065,6 +1068,7 @@ def test_fleet_map_keyboard_goal_requires_confirmation_and_can_cancel(console_ur
         dialog = page.locator('dialog.ui-confirm')
         dialog.wait_for()
         assert "rosy_02" in dialog.inner_text()
+        save_temp_screenshot(page, "fleet_goal_confirm_open.png")
         dialog.locator('ui-button[kind=quiet]').click()
         assert not any(method == "POST" and path == goal_path for method, path in posts)
         page.keyboard.press("Escape")

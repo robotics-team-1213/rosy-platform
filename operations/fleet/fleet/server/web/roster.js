@@ -3,7 +3,7 @@
 
 // D-359 §5.2 — 카드의 짧은 값은 공용 <ui-tag>다. 주행(nav)·도착(ok)은 색이 아니라
 // ink인 active, 나머지는 태그의 warn/crit 어휘 그대로다.
-import { MODE_LABEL, enumLabel, EVIDENCE_LABEL } from "/common/core_ui_logic.js";
+import { MODE_LABEL, NAVIGATION_LABEL, enumLabel, EVIDENCE_LABEL } from "/common/core_ui_logic.js";
 import { actionIcon } from "/common/ui.js";
 import { addressReason } from "./address-drift.js";
 import { localizationTag, localizationUrgent, untrustedQueuedReason } from "./localization-badge.js";
@@ -54,10 +54,12 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
   function navTag(state) {
     const nav = state && state.navigation;
     if (!nav) return { text: "—", cls: "" };
-    if (nav === "NAVIGATING") return { text: nav, cls: "nav" };
-    if (nav === "ARRIVED") return { text: nav, cls: "ok" };
-    if (nav === "FAILED") return { text: nav, cls: "crit" };
-    return { text: nav, cls: "" };
+    if (nav === "NAVIGATING") {
+      return { text: state.safety?.estop === false ? "목표 활성" : "목표 남음", cls: "nav" };
+    }
+    if (nav === "ARRIVED") return { text: enumLabel(NAVIGATION_LABEL, nav), cls: "ok" };
+    if (nav === "FAILED") return { text: enumLabel(NAVIGATION_LABEL, nav), cls: "crit" };
+    return { text: enumLabel(NAVIGATION_LABEL, nav), cls: "" };
   }
 
   // 대기에는 세 가지 이유가 있고, 운영자가 할 일이 저마다 다르다. "대기 중" 한 마디로
