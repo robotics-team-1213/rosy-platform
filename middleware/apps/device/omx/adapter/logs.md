@@ -424,3 +424,9 @@
 - 변경: 이미 커밋된8669ef8db 항목의 branch 헤더를 해당 커밋으로, gate 필드를 gate 변화로 정정한다. 본문과8 PASS의 제한된 transport 범위는 변경하지 않는다. 기존 SHA 쌍 복구 규칙에 이 정확한 쌍만 등록했다.
 - 증거: 원문은8669ef8db의 logs.md에 보존. 정규화 원문 SHA256 ed55535bed54123338dad2db22c24fc159009907552540b7a3beb83274365973, 정정 SHA256 95d2f5a14fc08506ecb646845926ac48bdcb839609a7ef50929111d71be5921d. exact/old/new/missing/other-edit/delete/unknown-pair7개 회귀로 다른 변경은 거부한다.
 - gate 변화: SOURCE/LOCAL 기록 형식 수리만. 실행 시간·장치·물리 수용을 추가하지 않는다.
+
+## 2026-10-05 · uncommitted · feat(omx): 검증된 Action parent와 정책 원본 사실 연결
+
+- 변경: 실제 runner가 peer·원본 grant·저장된 attempt를 검증한 뒤 읽기 전용 capability를 발급한다. parent/events/phases 단일 SQLite snapshot과 current D18·lease·실제 goal·전체 설치 byte closure를 대조하고 마지막 provider 호출 뒤 만료를 재확인한다. 기존 Action 종류와 허용 동작, 공개 API는 바꾸지 않는다.
+- 증거: capability 누락 RED1, 직접 구성한 capability와 reseal manifest RED2, final-read/source/전체 intent RED9, 마지막 provider 만료 RED1 후 HOST33 PASS/NEW0. WAL 교차 store·terminal 후 새 발급 거절·restart·허위 SUCCEEDED·원본 source 변경 거절 포함. 합성 driver/model/authority HOST 범위이며 별도 native transport 결과를 대신하지 않는다.
+- gate 변화: private SOURCE/HOST 상관관계만. execution_authorized/episode_fleet_qualified/inference 검증 false, task unknown 및 wire journal_id 미발명. 실제50ms/500ms·모델·DEVICE/FIELD·GT 수용 보류와 모든 시도 합계 물리0.20m 상한 유지. no push/활성화/주행.

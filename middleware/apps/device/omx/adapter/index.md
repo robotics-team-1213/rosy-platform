@@ -46,8 +46,8 @@
 
 ## 최근 기록
 
+- 2026-10-05 · uncommitted · feat(omx): 검증된 Action parent와 정책 원본 사실 연결
 - 2026-10-05 · uncommitted · fix(harness): native callback 저널 한 항목의 형식 정정
 - 2026-10-05 · uncommitted · fix(harness): OMX 커밋 저널의 정확한 형식 복구
 - 2026-10-05 · 8669ef8db · native 정책 callback 순서·실패 수렴
 - 2026-10-05 · c2425e6ea · 정책 세션과 원본 runtime 결선
-- 2026-10-05 · uncommitted · fix(peer-assets): Pilot 승인 모듈 정적 경로 일치
