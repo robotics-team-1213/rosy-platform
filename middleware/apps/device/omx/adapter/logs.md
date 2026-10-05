@@ -450,7 +450,7 @@
 - 증거: 실제 SQLite LocalStopController를 capability callback 두 번째 호출에서 trip한 same/new generation 2 FAIL을 재현했다. 최종 기존 API/store/stop fence/ROS runtime/vendor SIM 시험 56 PASS/ROS 의존 2 SKIP(8.56s), driver 제출 0·HOLD 원장·goal ID 없음 확인. 처음 잘못 지정한 시험 경로의 collection 실패도 보존했다. owned flake8의 기존 E306/E128 두 항목은 HEAD blob에서도 동일하며 이번 변경이 추가한 항목은 없다.
 - gate 변화: SOURCE/HOST direct submission fence 보완만. 실제 arm·ROS action server·기기 STOP·운동·수용·활성화는 실행하지 않았다.
 
-## 2026-10-05 · fix(omx): 단계 상태와 이벤트 ID의 읽기 일관성
+## 2026-10-05 · 814e5571e · fix(omx): 단계 상태와 이벤트 ID의 읽기 일관성
 
 - 변경: Action 단계 receipt의 상태와 최종 이벤트 ID를 동일한 SQLite 읽기 트랜잭션에서 조회한다. 다른 writer가 중간에 단계를 갱신해도 하나의 시점에 해당하는 receipt를 반환한다.
 - 증거: writer가 단계 조회 직후 갱신하는 회귀 시험에서 기존 event ID 불일치를 재현했고, 수정 후 ActionStore 24건과 OMX adapter 전체 시험을 실행했다.
