@@ -33,7 +33,8 @@ from fleet.hub.hub import HubError, SiteHub
 from fleet.localization import trust
 from fleet.server import bays, traffic
 from fleet.server.console_view import (
-    _error_of, _formation_stream_evidence, _shown, _stream_evidence,  # noqa: F401
+    CapabilityDisplay, _error_of, _formation_stream_evidence, _shown,
+    _stream_evidence,  # noqa: F401
 )
 from fleet.swarm.session import (
     FormationSession,
@@ -43,7 +44,6 @@ from fleet.swarm.session import (
 )
 from fleet.swarm.robots import RobotEndpoint
 from fleet.swarm.transport import RobotClient, require_capability
-from fleet.server.capability_display import CapabilityDisplay
 
 logger = logging.getLogger("fleet.console")
 
