@@ -46,6 +46,7 @@ class RosTrajectoryActionHandle(ActionHandle):
         self._command = command
         self._event_sink = event_sink
         self._lock = threading.RLock()
+        self._event_delivery_lock = threading.RLock()
         self._goal_handle: Any | None = None
         self._done = False
         self._succeeded = False
@@ -57,6 +58,7 @@ class RosTrajectoryActionHandle(ActionHandle):
         self._feedback_sequence = 0
         self._early_feedback = 0
         self._acceptance_emitted = False
+        self._pending_cancel_acks: list[bool] = []
         self._observation_failed = False
 
         goal = FollowJointTrajectory.Goal()
@@ -80,6 +82,12 @@ class RosTrajectoryActionHandle(ActionHandle):
         future.add_done_callback(self._on_goal_response)
 
     def _emit(self, kind: str, *, goal_id: str | None = None, **facts: Any) -> bool:
+        # Sequence allocation, timestamp and durable delivery form one ordered
+        # stream. Do not hold the general handle state lock through a sink.
+        with self._event_delivery_lock:
+            return self._emit_serialized(kind, goal_id=goal_id, **facts)
+
+    def _emit_serialized(self, kind: str, *, goal_id: str | None = None, **facts: Any) -> bool:
         if self._event_sink is None:
             return True
         with self._lock:
@@ -99,9 +107,10 @@ class RosTrajectoryActionHandle(ActionHandle):
         except Exception:
             # Telemetry is not allowed to break the ROS executor or imply success.
             with self._lock:
+                first_failure = not self._observation_failed
                 self._observation_failed = True
                 goal_handle = self._goal_handle
-            if goal_handle is not None:
+            if first_failure and goal_handle is not None:
                 try:
                     self._request_cancel(goal_handle)
                 except Exception:
@@ -177,12 +186,15 @@ class RosTrajectoryActionHandle(ActionHandle):
         # after this point is emitted live, so none can precede GOAL_ACCEPTED (N1).
         with self._lock:
             self._acceptance_emitted = True
+            early_cancel_acks, self._pending_cancel_acks = self._pending_cancel_acks, []
             early_feedback = self._early_feedback
             if early_feedback:
                 self._feedback_sequence += 1
                 feedback_sequence = self._feedback_sequence
         if early_feedback:
             self._emit("RUNNING_FEEDBACK", goal_id=goal_id, feedback_sequence=feedback_sequence)
+        for acknowledged in early_cancel_acks:
+            self._emit("CANCEL_ACK", goal_id=goal_id, cancel_acknowledged=acknowledged)
         try:
             result_future = goal_handle.get_result_async()
             result_future.add_done_callback(self._on_result)
@@ -232,9 +244,15 @@ class RosTrajectoryActionHandle(ActionHandle):
             acknowledged = bool(response.goals_canceling)
         except Exception:
             acknowledged = False
+        self._report_cancel(acknowledged)
+
+    def _report_cancel(self, acknowledged: bool) -> None:
         with self._lock:
             self._cancel_acknowledged = acknowledged
             goal_id = self._goal_id
+            if goal_id is not None and not self._acceptance_emitted:
+                self._pending_cancel_acks.append(acknowledged)
+                return
         if goal_id is not None:
             self._emit("CANCEL_ACK", goal_id=goal_id, cancel_acknowledged=acknowledged)
 
@@ -243,11 +261,7 @@ class RosTrajectoryActionHandle(ActionHandle):
             future = goal_handle.cancel_goal_async()
             future.add_done_callback(self._on_cancel_response)
         except Exception:
-            with self._lock:
-                self._cancel_acknowledged = False
-                goal_id = self._goal_id
-            if goal_id is not None:
-                self._emit("CANCEL_ACK", goal_id=goal_id, cancel_acknowledged=False)
+            self._report_cancel(False)
 
     def cancel(self) -> None:
         with self._lock:

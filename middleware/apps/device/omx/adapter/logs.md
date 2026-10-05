@@ -406,3 +406,9 @@
 - 변경: 단독 SIM learned_policy owner에만 연결, 단일 관측 전달과 watchdog lease 검증, callback 선등록과 늦은 원본 이벤트 보존, 설치 파일 바이트 기록, I/O 후 전체 권한/원본 source 경계 검증.
 - 검증: 관련 HOST 585 PASS/4 SKIP/NEW0; 격리 Jazzy 기존 runtime 6 PASS. 새 실제 ROS 정책 결선은 관측 만료로 거부돼 수용 보류. 근거 X:/DevTemp/policy-runtime/.
 - 범위: SOURCE/HOST 개발. 설치·추론·Fleet 부모 결과·장치·물리 수용은 별도이며 운영 설정 변경 없음.
+
+## 2026-10-05 · feat/omx-policy-runtime-journal · native 정책 callback 순서·실패 수렴
+
+- 변경: 원본 handle event 전달을 별도 lock으로 직렬화, acceptance 이전 cancel ACK 보존, 저장 실패 시 내부 취소 한 번으로 재귀 요청 제한. 일반 state lock은 sink I/O에서 해제한다.
+- 증거: 결정적 HOST 순서2개 및 재귀 취소1개 RED 확인 후 PASS. 실제 localhost Jazzy transport 8 PASS(기존6+정책세션2), 완료·권한철회 CANCELED 및 종료 확인. fixture는 명시적 관측2초/lease12초이며 원래50ms/500ms 실패와 구분.
+- gate: native transport/journal 결선만 확인. 실제 model inference/vendor task/Fleet grant/장치/물리 정지 및50ms 성능은 미수용. 기존 운영 설정과0.20m 전체 물리거리 제한 유지.
