@@ -97,7 +97,7 @@ class FakeHttp:
 
     def get(self, url: str, limit: int) -> bytes:
         if '/compare/' in url:
-            base, head = url.rsplit('/', 1)[-1].split('...')
+            base, head = url.rsplit('/', 1)[-1].split('?', 1)[0].split('...')
             commit = next((c for c in (OLD, NEW, NEWER) if head == _tag(c)), head)
             return json.dumps({'status': 'ahead' if commit > base else 'behind',
                                'merge_base_commit': {'sha': base}}).encode()
@@ -365,6 +365,18 @@ def test_local_runtime_drift_blocks_switch(host, field):
 
 
 # -- selection ------------------------------------------------------------------
+
+def test_commit_comparison_skips_large_first_page(tmp_path):
+    class RecordingHttp(FakeHttp):
+        def get(self, url, limit):
+            self.url = url
+            return super().get(url, limit)
+
+    http = RecordingHttp([], {})
+    updater = upd.SiteUpdater({"repo": REPO}, paths=upd.Paths(tmp_path), http=http)
+    assert updater.is_newer(OLD, _tag(NEW))
+    assert http.url.endswith("?per_page=1&page=2")
+
 
 def test_selection_picks_the_newest_signed_newer_candidate(tmp_path):
     old_assets, new_assets, newer_assets = _bundle(OLD), _bundle(NEW), _bundle(NEWER)
