@@ -300,8 +300,8 @@
 
 ## 최근 기록
 
+- 2026-10-06 · uncommitted · uiux(learning): 사진 없는 최초 사용 안내
 - 2026-10-06 · uncommitted · uiux(learning): 빈 픽셀 검수 상태 정직성
 - 2026-10-06 · uncommitted · uiux(learning): 작업·자료 화면 위쪽 정렬
 - 2026-10-06 · uncommitted · uiux(learning): 빈 검수 화면 폭 복구
 - 2026-10-06 · uncommitted · uiux: 추가 활성 표면 평가 카드
-- 2026-10-06 · uncommitted · uiux(pilot): 400dp 확대 글자 확인

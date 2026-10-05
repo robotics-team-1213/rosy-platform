@@ -56,6 +56,8 @@ function list() {
   const counts = workspace.frames.reduce((a,f) => {a[f.status]++; return a;}, {approved:0,excluded:0,pending:0});
   $('counts').textContent = `승인 ${counts.approved} · 제외 ${counts.excluded} · 대기 ${counts.pending}`;
   const visible=visibleFrames();
+  $('filter').parentElement.hidden=!workspace.frames.length;
+  $('empty-frames').textContent=workspace.frames.length?'이 상태의 사진이 없습니다.':'등록된 사진이 없습니다.';
   $('empty-frames').hidden=visible.length>0;
   const key=visible.map(f=>f.index).join(',');
   if (key===listKey) {
@@ -275,10 +277,10 @@ function saveView() {
 function applyFilter() {
   const visible=visibleFrames();
   if(visible.length) select(visible.some(item=>item.index===frame?.index)?frame.index:visible[0].index);
-  else {++loadSerial;cancelGesture();ready=false;frame=undefined;undo=null;selected=null;coordinatePreview=null;$('review-content').hidden=true;$('empty-review').hidden=false;list();saveView();enable();}
+  else {++loadSerial;cancelGesture();ready=false;frame=undefined;undo=null;selected=null;coordinatePreview=null;$('review-content').hidden=true;$('empty-review').hidden=false;const firstUse=!workspace.frames.length;$('empty-review').querySelector('h2').textContent=firstUse?'등록된 사진이 없습니다':'이 상태의 사진이 없습니다';$('empty-review').querySelector('p').textContent=firstUse?'자료 등록에서 원본 사진을 추가하세요.':'전체 사진을 열거나 다른 검수 상태를 선택하세요.';$('show-all').textContent=firstUse?'자료 등록 열기':'전체 사진 보기';list();saveView();enable();}
 }
 $('filter').onchange=applyFilter;
-$('show-all').onclick=()=> {$('filter').value='all';applyFilter();};
+$('show-all').onclick=()=> {if(!workspace.frames.length){location.assign('/catalog');return;}$('filter').value='all';applyFilter();};
 $('prev-frame').onclick=()=> {const visible=visibleFrames(),index=visible.findIndex(item=>item.index===frame.index);if(index>0) select(visible[index-1].index);};
 $('next-frame').onclick=()=> {const visible=visibleFrames(),index=visible.findIndex(item=>item.index===frame.index);if(index<visible.length-1) select(visible[index+1].index);};
 $('next-pending').onclick=()=> {
@@ -300,7 +302,7 @@ $('prepare').onclick=async()=> {
 async function load(index) {
   try {workspace=await request('/api/workspace'); conflicted=false; error();
     if(workspace.exports.length) receipt(workspace.exports[0]);
-    if (!workspace.frames.length) throw new Error('등록된 사진이 없습니다');
+    if (!workspace.frames.length) {applyFilter();return;}
     const params=new URLSearchParams(location.search);
     $('filter').value=params.get('filter')||'all';if(!$('filter').value) $('filter').value='all';
     const candidate=params.has('frame')?Number(params.get('frame')):undefined;

@@ -6319,3 +6319,9 @@ osy-d395-s1d\`.
 - 변경: 픽셀 필터 결과가 없을 때 이전 사진 제목·상태를 지우고 빈 선택기·이동 버튼을 숨겼다. 전체 보기 복귀는 유지했다.
 - 증거: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)의 Chromium 1440·800·390px 캡처와 빈 상태 3 passed, 관련 픽셀 브라우저 11 passed, `known_failures.py` 0 NEW. 캡처·로그는 X:에 둔다.
 - gate 변화: 학습 도구 LOCAL G2/G3 부분 근거 추가. 전체 G2/G3와 제품 전체는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(learning): 사진 없는 최초 사용 안내
+
+- 변경: 객체·픽셀 검수의 사진 0장 상태를 빈 필터와 구분하고 기존 자료 등록 화면으로 이어지는 행동을 표시했다.
+- 증거: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)의 390px 두 경로 캡처·이동, 객체·픽셀 브라우저 24 passed, `known_failures.py` 0 NEW. 캡처·로그는 X:에 둔다.
+- gate 변화: 학습 도구 LOCAL 최초 사용 G2 부분 근거 추가. 실제 등록·검수자 G3와 제품 전체는 HOLD다.

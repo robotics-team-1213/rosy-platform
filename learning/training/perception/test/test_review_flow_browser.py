@@ -118,6 +118,46 @@ def test_empty_pixel_review_can_recover_at_declared_widths(browser_workspace, wi
     expect(page.locator('#pixel-next')).to_be_visible()
 
 
+def test_pixel_review_first_use_leads_to_data_registration(browser_workspace):
+    page, store, expect = browser_workspace
+    page.set_viewport_size({'width': 390, 'height': 844})
+    with store.connect() as db:
+        db.execute('DELETE FROM frames')
+    page.goto(page.url.split('?')[0].rstrip('/') + '/pixels', wait_until='networkidle')
+    expect(page.locator('#pixel-empty')).to_be_visible()
+    expect(page.locator('#pixel-status')).to_contain_text('등록된 사진 0장')
+    expect(page.locator('#pixel-filter').locator('..')).to_be_hidden()
+    expect(page.locator('#pixel-all')).to_have_text('자료 등록 열기')
+    assert page.evaluate('document.documentElement.scrollWidth - innerWidth') == 0
+    if output := os.getenv('ROSY_UIUX_SCREENSHOT_DIR'):
+        from pathlib import Path
+        target = Path(output) / 'learning-pixels-first-use-390.png'
+        target.parent.mkdir(parents=True, exist_ok=True)
+        page.screenshot(path=str(target), full_page=True)
+    page.locator('#pixel-all').click()
+    assert page.url.endswith('/catalog')
+
+
+def test_object_review_first_use_leads_to_data_registration(browser_workspace):
+    page, store, expect = browser_workspace
+    page.set_viewport_size({'width': 390, 'height': 844})
+    with store.connect() as db:
+        db.execute('DELETE FROM frames')
+    page.reload(wait_until='networkidle')
+    expect(page.locator('#empty-review')).to_be_visible()
+    expect(page.locator('#review-content')).to_be_hidden()
+    expect(page.locator('#filter').locator('..')).to_be_hidden()
+    expect(page.locator('#show-all')).to_have_text('자료 등록 열기')
+    assert page.evaluate('document.documentElement.scrollWidth - innerWidth') == 0
+    if output := os.getenv('ROSY_UIUX_SCREENSHOT_DIR'):
+        from pathlib import Path
+        target = Path(output) / 'learning-objects-first-use-390.png'
+        target.parent.mkdir(parents=True, exist_ok=True)
+        page.screenshot(path=str(target), full_page=True)
+    page.locator('#show-all').click()
+    assert page.url.endswith('/catalog')
+
+
 def test_arrow_keys_move_between_photos(browser_workspace):
     page, store, expect = browser_workspace
 
