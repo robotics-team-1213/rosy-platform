@@ -7,11 +7,14 @@
 | 표면·질문 | 현재 LOCAL 캡처 | 확인한 것 | 남은 것 |
 |---|---|---|---|
 | 로봇 운용: 지금 움직여도 되는가? | [1366×768](captures/robot-console-1366x768.png), [390×844](captures/robot-console-390x844.png) | 데스크톱 감지·관측·조작이 같은 폭이다. 390px에서 조작이 카메라·지도보다 먼저 오고 비상 정지가 첫 화면에 있다. | 선언된 역할·상태 전체 G2, 실제 CORE/장치 상태, G3 전체 근거 검토. |
+| 장비·작업 준비: 다음 절차와 막힌 이유를 알 수 있는가? | [60셀 매트릭스](captures/roles-procedure/matrix.json), [운용자 작업 준비 390×844](captures/roles-procedure/operator-setup-normal-390x844.png), [관리자 장비 지연 390×844](captures/roles-procedure/administrator-device-delayed-host-operations-390x844.png), [권한 거부 390×844](captures/roles-procedure/operator-device-forbidden-390x844.png) | `/setup`·`/device`를 역할 2개·1366/390px·상태별로 현재 FastAPI/Chromium에서 60셀 재생했다. 390px 패널 안의 입력·행동은 같은 가용 폭을 쓰며, 페이지 오류·가로 넘침 0, 쓰기 차단 fixture에서 확인 취소 POST 0이다. 관리자 호스트 지연·끊김·결측의 실제 작업 패널 6장을 별도로 저장했다. | 절차를 현장 사용자가 완료할 수 있는지 G3 작업 독회, 실제 Host Agent/장치 readback. |
 | Fleet: 어느 로봇에 주의가 필요한가? | [1920×1080](captures/fleet-console-1920x1080.png), [320×844](captures/fleet-console-320x844.png) | 데스크톱 현장·개입 칸이 같은 폭이다. 전화의 **기본** 목록은 릴레이 오류가 있는 `rosy_03`부터 보여 주며 비상 정지가 첫 화면에 있다. | 선언된 상태 전체 G2, 연결된 카메라·실제 사이트 PC/로봇 readback, G3 전체 근거 검토. |
 | 게임 보드: 경기장·공·로봇·골이 보이는가? | [진행 1280×800](captures/games-play-1280x800.png), [최초 1280×800](captures/games-initial-1280x800.png), [지연 1280×800](captures/games-delayed-1280x800.png), [HOLD 1280×800](captures/games-hold-1280x800.png), [지연 390×800](captures/games-delayed-390x800.png) | 관측 정보가 적을 때 관측 카드를 내용 높이로 줄여 피치를 초점으로 둔다. 지연 화면은 마지막 수신 정보임을 밝히고 모바일에서도 정지가 보인다. | 현재 트리의 전체 상태 G2, 실물 카메라·경기 readback, G3 전체 근거 검토. |
 | 로봇 얼굴: 의도·주의·위험이 즉시 구분되는가? | [첫 기동](captures/face-first-boot-320x240.png), [정상](captures/face-nominal-320x240.png), [E-STOP](captures/face-estop-320x240.png), [배터리 위험](captures/face-battery-critical-320x240.png) (모두 320×240) | 현재 `emotion.info_screen` PIL 렌더러의 정보 카드 네 장에서 정상·위험의 형태·문구가 구분된다. | D-433 `rosy-face` 실제 설치·LCD 경로, 1.5m/각도/조도 판독, 만료 후 의도 GIF 복귀, G3 전체 근거 검토. |
 
 로봇·Fleet 캡처는 FastAPI/Playwright fixture, 게임 캡처는 실제 PreviewServer와 fixture payload를 쓴 LOCAL 증거다. Fleet 전화의 `fleet_console_mobile_{width}.png`는 시험이 **전체 로봇 보기**를 누른 뒤 찍는 캡처여서 기본 예외 목록의 근거로 쓰지 않는다. 기본 목록은 위 `fleet-console-320x844.png`와 해당 브라우저 단언으로 확인했다.
+
+작업 준비·장비 캡처는 같은 FastAPI fixture에서 생성했다. 첫 시도는 고급 네트워크 작업의 닫힌 disclosure 안에 있는 버튼을 바로 찾으려다 시험이 멈췄다. shipped UI대로 disclosure를 열어 비활성 버튼과 이유를 확인했다. 모바일 패널의 실제 내용 폭을 공용 폼의 container query가 읽도록 수정한 뒤 다시 실행해 **60셀 1 passed**, 반응형·셸 브라우저 **18 passed**, 별도 작업 패널 **6장**, `known_failures.py` **0 NEW**를 얻었다. 첫 실패를 제품 결함으로 분류하지 않는다.
 
 현재 트리의 관련 G1 팔레트·토큰·반응형·Fleet 문법 시험은 **83 passed**다. Fleet 지도 적합·키보드 목표 확인 2 passed, 전화 기본 예외·넘침 검사 2 passed이고 세 실행 모두 `known_failures.py`가 0 NEW를 보고했다. 이는 이 회차에서 실행한 범위의 증거이며 D-153 G1 전체를 대체하지 않는다.
 
@@ -21,6 +24,6 @@
 
 ## 제품 범위와 판정 경계
 
-D-153의 여섯 카드 중 운용자 콘솔·Fleet·게임 보드·로봇 얼굴에 이 회차의 새 캡처가 있다. 장비 런타임(`/setup`·`/device`)은 이전 [2026-09-29 회차](../uiux-surfaces-2026-09-29/README.md)의 LOCAL 검토를 현재 트리 전체 검증으로 승격하지 않는다. control 레거시 진단은 D-153에 따라 PARKED다. `shared/web/surfaces.yaml`에 이후 추가된 Cam·학습 검수 같은 활성 표면은 각자 질문·선언 뷰포트·상태 카드를 정해야 제품 전체 GO를 논할 수 있다.
+D-153의 여섯 카드 중 운용자 콘솔·장비 런타임·Fleet·게임 보드·로봇 얼굴에 이 회차의 새 캡처가 있다. control 레거시 진단은 D-153에 따라 PARKED다. `shared/web/surfaces.yaml`에 이후 추가된 Cam·학습 검수 같은 활성 표면은 각자 질문·선언 뷰포트·상태 카드를 정해야 제품 전체 GO를 논할 수 있다. 이전 [2026-09-29 회차](../uiux-surfaces-2026-09-29/README.md)의 LOCAL 결과는 현재 트리 전체 G3나 DEVICE/FIELD 판정으로 승격하지 않는다.
 
 **다음 판정 작업:** 각 활성 표면의 선언 상태·뷰포트 G2를 현재 트리에서 채우고, D-153의 여덟 G3 항목에 근거 셀을 적는다. 실제 장치·현장 수용은 LOCAL 캡처와 분리한다. 이 증거가 없으면 디자인이 마음에 들어 보이더라도 GO로 쓰지 않는다.

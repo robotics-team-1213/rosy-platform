@@ -74,6 +74,7 @@ body:is([data-surface="setup"], [data-surface="device"]) .surface-slot[data-slot
   gap: var(--space-4);
 }
 body:is([data-surface="setup"], [data-surface="device"]) .procedure-panel {
+  container-type: inline-size;
   padding: var(--space-4);
   border: 1px solid var(--surface-line);
   border-radius: var(--radius-panel);

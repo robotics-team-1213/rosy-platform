@@ -213,6 +213,16 @@ def test_role_procedure_g2_local_matrix(tmp_path):
                     if scenario == "confirm_cancel":
                         assert posts == [], records[-1]
                         assert len(dialogs) == 1, records[-1]
+                    if (role, surface, scenario, width) == ("operator", "setup", "normal", 390):
+                        widths = page.evaluate("""() => {
+                          const panel = document.querySelector('[id="procedure-setup.waypoints"]');
+                          const form = panel.querySelector('form.ui-form');
+                          return {form: form.getBoundingClientRect().width,
+                            input: form.querySelector('input').getBoundingClientRect().width,
+                            action: form.querySelector('ui-button').getBoundingClientRect().width};
+                        }""")
+                        assert abs(widths["form"] - widths["input"]) <= 1, widths
+                        assert abs(widths["input"] - widths["action"]) <= 1, widths
                     if role == "operator" and surface == "device":
                         assert page.locator('#surface-status a[href="/console"]').is_visible(), records[-1]
                         assert page.locator('#shell-role').inner_text() == "권한 제한", records[-1]
@@ -231,7 +241,11 @@ def test_role_procedure_g2_local_matrix(tmp_path):
                         _select_task(page, "host.operations")
                         card_status = page.locator("section.ui-readback ui-status").filter(has_text=expected).first.inner_text()
                         assert expected in card_status, records[-1]
+                        page.get_by_text("고급 네트워크 작업", exact=True).click()
                         assert page.get_by_role("button", name="사업장 Wi-Fi로 전환", exact=True).is_disabled(), records[-1]
+                        task_image = f"administrator-device-{scenario}-host-operations-{width}x{height}.png"
+                        page.screenshot(path=str(CAPTURES / task_image), full_page=True)
+                        records[-1]["hostOperationsImage"] = task_image
                     context.close()
         browser.close()
     (CAPTURES / "matrix.json").write_text(json.dumps(records, ensure_ascii=False, indent=2), encoding="utf-8")

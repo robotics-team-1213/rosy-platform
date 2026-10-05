@@ -6181,3 +6181,9 @@ osy-d395-s1d\`.
 - 변경: 현재 정보 카드 렌더러의 첫 기동·정상·E-STOP·배터리 위험 320×240 캡처를 D-153 회차 카드에 더했다. D-433 rosy-face 호스트 시험과 실제 설치·LCD 출력의 증거 계층을 분리했다.
 - 증거: PIL 렌더러 169 passed, 캡처 1 passed, rosy-face 호스트 153 passed/1 skipped, known_failures 0 NEW. 캡처는 직접 PIL 호출이다.
 - gate 변화: 로봇 얼굴 UI/UX HOLD. D-433 Proposed, 설치·실물 LCD 판독·카드 만료 뒤 GIF 복귀는 확인되지 않았다.
+
+## 2026-10-06 · uncommitted · uiux(docs): 작업 준비·장비 60셀 보존
+
+- 변경: D-153 회차에 /setup·/device의 역할·상태·뷰포트 60셀 matrix와 PNG 66장을 연결했다. 390px 패널의 입력·행동 폭을 통일한 결과를 보존하고, 첫 시험의 닫힌 고급 작업 버튼 조회 실패를 원인과 함께 구분했다.
+- 증거: shipped disclosure 경로를 연 재실행 1 passed, 반응형·셸 18 passed, matrix 셀 60개·이미지 66개 누락 0, 페이지 오류 0·가로 넘침 0, known_failures 0 NEW.
+- gate 변화: LOCAL G2만 진전. G3 작업 독회와 실제 Host Agent/장치 수용은 HOLD다.
