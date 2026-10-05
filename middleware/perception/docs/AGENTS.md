@@ -11,7 +11,7 @@ Operator-facing notes for camera ground calibration, localization, and narrow-pa
 
 | File | Description |
 |------|-------------|
-| `camera-ground-calibration.md` | Measure camera height/pitch/focal length so region bottom edges become meters; do not invent defaults |
+| `camera-ground-calibration.md` | Automatic stationary camera/LiDAR fitting replaces manual height/pitch entry; weak candidates and unobservable geometry stay unapplied |
 | `localization.md` | Localization notes for the desk-maze robot |
 | `narrow-passage-navigation.md` | Narrow-passage behavior and limits |
 

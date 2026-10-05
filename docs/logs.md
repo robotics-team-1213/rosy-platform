@@ -6082,3 +6082,7 @@ osy-d395-s1d\`.
 - 변경: docs/validation/line-remote-2026-10-05/deployment.md records both installed runtimes, manual steering and actual automatic-mode API trial separately.
 - 증거: CI 37282901412 and ARM64 build 37282981358 success at 07dc89f20; both process cwd 042; eight automatic-state samples HOLD nominal_ground_requires_driver with zero velocity, then OFF/IDLE; own sessions logout 204.
 - gate 변화: DEVICE signed install verified; automatic motion and FIELD remain unverified. Console line-follow tab absent remains unresolved.
+## 2026-10-05 · uncommitted · feat(camera): replace manual camera measurement with automatic capture
+- 변경: tools/calibration/camera_auto.py and read-only camera_capture.py collect stationary camera/LiDAR/odometry and reuse the installed fitter; guide replaces manual height/pitch entry. No drive, mode, apply or calibration-session changes.
+- 증거: related 87 PASS, known failures 0 NEW; final 042-device capture 40 scans/15 frames/121 odometry, eight wall returns, REJECTED too few wall returns, applied false. docs/validation/camera-auto-2026-10-05/result.md.
+- gate 변화: SOURCE/LOCAL command verified; DEVICE capture and automatic fit executed, calibration acceptance and automatic movement remain unverified.
