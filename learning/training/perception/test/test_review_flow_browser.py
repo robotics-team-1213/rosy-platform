@@ -35,6 +35,24 @@ def browser_workspace(tmp_path):
             thread.join(timeout=5)
 
 
+@pytest.mark.parametrize('route,left,right', [('/', '.review-stage', '.label-inspector'),
+                                                   ('/pixels', '.pixel-layout > section', '.pixel-layout > aside')])
+@pytest.mark.parametrize('width', [1440, 800, 390])
+def test_review_editor_peer_widths(browser_workspace, route, left, right, width):
+    page, _, _ = browser_workspace
+    page.set_viewport_size({'width': width, 'height': 1000})
+    page.goto(page.url.split('?')[0].rstrip('/') + route, wait_until='networkidle')
+    boxes = [page.locator(selector).bounding_box() for selector in (left, right)]
+    assert all(box and box['width'] > 0 for box in boxes)
+    assert abs(boxes[0]['width'] - boxes[1]['width']) <= 1
+    assert page.evaluate('document.documentElement.scrollWidth - innerWidth') == 0
+    if output := os.getenv('ROSY_UIUX_SCREENSHOT_DIR'):
+        from pathlib import Path
+        target = Path(output) / f'learning-{route.strip("/") or "objects"}-{width}.png'
+        target.parent.mkdir(parents=True, exist_ok=True)
+        page.screenshot(path=str(target), full_page=True)
+
+
 def test_arrow_keys_move_between_photos(browser_workspace):
     page, store, expect = browser_workspace
 

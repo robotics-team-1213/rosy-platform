@@ -11,6 +11,7 @@
 | Fleet: 어느 로봇에 주의가 필요한가? | [1920×1080](captures/fleet-console-1920x1080.png), [320×844](captures/fleet-console-320x844.png), [상태 캡처](#fleet-g2-상태-확인--local-진행-중) | 데스크톱 현장·개입 칸이 같은 폭이다. 전화의 **기본** 목록은 릴레이 오류가 있는 `rosy_03`부터 보여 주며 비상 정지가 첫 화면에 있다. 빈 목록·서버 실패에서도 320/390px 패널 폭과 다음 단계가 유지된다. | 선언된 상태 전체 G2, 연결된 카메라·실제 사이트 PC/로봇 readback, G3 전체 근거 검토. |
 | 게임 보드: 경기장·공·로봇·골이 보이는가? | [진행 1280×800](captures/games-play-1280x800.png), [최초 1280×800](captures/games-initial-1280x800.png), [지연 1280×800](captures/games-delayed-1280x800.png), [HOLD 1280×800](captures/games-hold-1280x800.png), [지연 390×800](captures/games-delayed-390x800.png) | 관측 정보가 적을 때 관측 카드를 내용 높이로 줄여 피치를 초점으로 둔다. 지연 화면은 마지막 수신 정보임을 밝히고 모바일에서도 정지가 보인다. | 현재 트리의 전체 상태 G2, 실물 카메라·경기 readback, G3 전체 근거 검토. |
 | 로봇 얼굴: 의도·주의·위험이 즉시 구분되는가? | [첫 기동](captures/face-first-boot-320x240.png), [정상](captures/face-nominal-320x240.png), [E-STOP](captures/face-estop-320x240.png), [배터리 위험](captures/face-battery-critical-320x240.png) (모두 320×240) | 현재 `emotion.info_screen` PIL 렌더러의 정보 카드 네 장에서 정상·위험의 형태·문구가 구분된다. | D-433 `rosy-face` 실제 설치·LCD 경로, 1.5m/각도/조도 판독, 만료 후 의도 GIF 복귀, G3 전체 근거 검토. |
+| 학습 검수: 원본과 편집 내용을 함께 볼 수 있는가? | [객체 1440px](captures/learning-width/learning-objects-1440.png), [객체 800px](captures/learning-width/learning-objects-800.png), [객체 390px](captures/learning-width/learning-objects-390.png), [픽셀 1440px](captures/learning-width/learning-pixels-1440.png), [픽셀 800px](captures/learning-width/learning-pixels-800.png), [픽셀 390px](captures/learning-width/learning-pixels-390.png) | 두 편집 화면의 캔버스·검수 창을 데스크톱에서 같은 폭으로 맞췄다. 좁은 화면에서는 두 창이 같은 가용 폭으로 쌓이고 가로 넘침이 없다. | 개발 도구의 다른 상태·실제 검수자 G3 독회. 로봇 현장 수용과 별도다. |
 
 로봇·Fleet 캡처는 FastAPI/Playwright fixture, 게임 캡처는 실제 PreviewServer와 fixture payload를 쓴 LOCAL 증거다. Fleet 전화의 `fleet_console_mobile_{width}.png`는 시험이 **전체 로봇 보기**를 누른 뒤 찍는 캡처여서 기본 예외 목록의 근거로 쓰지 않는다. 기본 목록은 위 `fleet-console-320x844.png`와 해당 브라우저 단언으로 확인했다.
 
@@ -33,6 +34,8 @@
 | 로봇 연결 끊김 | [1920px](captures/fleet-states/fleet_console_unreachable.png) | 실제 Fleet API의 `online: false, state: null` 계약으로 재촬영했다. 이전 fixture의 모순된 좌표·주행 상태를 제거했고, 해당 로봇 카드에 현재 좌표·NAVIGATING이 없음을 단언한다. |
 
 기존 상태 브라우저 **9 passed**, 320/390px 빈 목록·서버 실패 **4 passed**, 수정한 연결 끊김 **1 passed**였고 각 실행의 `known_failures.py`는 **0 NEW**였다. 이들은 fixture 기반 화면 검사다. Fleet의 선언 상태 전부와 카메라 연결, 실제 사이트 PC/로봇 readback, G3 사용자 독회는 남아 있어 G2/G3 GO로 판정하지 않는다.
+
+학습 검수는 D-461의 병렬 원본·inspector 구조를 유지하면서 두 편집 창의 너비만 같게 했다. 현재 로컬 Chromium의 객체 작업 브라우저 **10 passed**, 픽셀 작업·반응형 계약 **14 passed**, 각 `known_failures.py` **0 NEW**였다. 1440/800/390px에서 두 창 너비와 가로 넘침을 검사했다. 이 캡처는 합성 검수 자료를 사용한 개발 도구 LOCAL 증거다.
 
 ### 장비·작업 준비 G3 독회 — LOCAL 진행 중
 
