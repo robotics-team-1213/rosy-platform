@@ -8,6 +8,7 @@ from collections.abc import Mapping
 from contextlib import closing
 from dataclasses import fields, is_dataclass, asdict
 import json
+import hashlib
 from pathlib import Path
 import sqlite3
 
@@ -35,7 +36,7 @@ class PolicyExecutionJournal:
         with closing(self._connect()) as db:
             if db.execute('PRAGMA journal_mode=WAL').fetchone()[0].lower() != 'wal':
                 raise RuntimeError('policy execution journal requires WAL')
-            if db.execute('PRAGMA user_version').fetchone()[0] not in {0, 1}:
+            if db.execute('PRAGMA user_version').fetchone()[0] not in {0, 1, 2}:
                 raise RuntimeError('unsupported policy execution journal version')
             db.executescript('''
                 CREATE TABLE IF NOT EXISTS policy_commands (
@@ -45,12 +46,17 @@ class PolicyExecutionJournal:
                     command_id TEXT NOT NULL REFERENCES policy_commands(command_id),
                     sequence INTEGER NOT NULL, payload TEXT NOT NULL,
                     PRIMARY KEY(command_id,sequence));
+                CREATE TABLE IF NOT EXISTS policy_sources (
+                    revision TEXT PRIMARY KEY, header TEXT NOT NULL);
+                CREATE TABLE IF NOT EXISTS policy_source_files (
+                    revision TEXT NOT NULL REFERENCES policy_sources(revision),
+                    path TEXT NOT NULL, payload BLOB NOT NULL, PRIMARY KEY(revision,path));
             ''')
             if {row[1] for row in db.execute('PRAGMA table_info(policy_commands)')} != {
                     'command_id', 'intent', 'intent_key', 'driver_goal_id'}:
                 raise RuntimeError('unsupported policy command table')
             self._schema(db)
-            db.execute('PRAGMA user_version=1')
+            db.execute('PRAGMA user_version=2')
 
     @staticmethod
     def _schema(db):
@@ -61,9 +67,14 @@ class PolicyExecutionJournal:
                                 ('intent_key', 'TEXT', 1, 0), ('driver_goal_id', 'TEXT', 0, 0)],
             'policy_goal_events': [('command_id', 'TEXT', 1, 1), ('sequence', 'INTEGER', 1, 2),
                                    ('payload', 'TEXT', 1, 0)],
+            'policy_sources': [('revision', 'TEXT', 0, 1), ('header', 'TEXT', 1, 0)],
+            'policy_source_files': [('revision', 'TEXT', 1, 1), ('path', 'TEXT', 1, 2),
+                                    ('payload', 'BLOB', 1, 0)],
         }
         expected_indexes = {'policy_commands': {('command_id',), ('intent_key',), ('driver_goal_id',)},
-                            'policy_goal_events': {('command_id', 'sequence')}}
+                            'policy_goal_events': {('command_id', 'sequence')},
+                            'policy_sources': {('revision',)},
+                            'policy_source_files': {('revision', 'path')}}
         for table, expected in expected_columns.items():
             columns = list(db.execute('PRAGMA table_info(' + table + ')'))
             if [(row[1], row[2], row[3], row[5]) for row in columns] != expected:
@@ -83,6 +94,12 @@ class PolicyExecutionJournal:
         if len(foreign) != 1 or foreign[0][2:] != (
                 'policy_commands', 'command_id', 'command_id', 'NO ACTION', 'NO ACTION', 'NONE'):
             raise RuntimeError('missing or unsupported policy event foreign key')
+        if list(db.execute('PRAGMA foreign_key_list(policy_sources)')):
+            raise RuntimeError('unsupported policy source foreign key')
+        foreign = list(db.execute('PRAGMA foreign_key_list(policy_source_files)'))
+        if len(foreign) != 1 or foreign[0][2:] != (
+                'policy_sources', 'revision', 'revision', 'NO ACTION', 'NO ACTION', 'NONE'):
+            raise RuntimeError('missing or unsupported policy source file foreign key')
 
     def _connect(self):
         db = sqlite3.connect(self.path, isolation_level=None, timeout=5)
@@ -90,7 +107,7 @@ class PolicyExecutionJournal:
         db.execute('PRAGMA foreign_keys=ON')
         return db
 
-    def prepare(self, lease, candidate, command):
+    def prepare(self, lease, candidate, command, *, source_revision=None):
         # This records the already validated session's inputs. It creates no
         # authority and does not claim the lease's Action exists in ActionStore.
         if ((candidate.lease_id, candidate.episode_id, candidate.policy_revision) !=
@@ -99,8 +116,14 @@ class PolicyExecutionJournal:
                 or command.source_state_sequence != candidate.sequence
                 or tuple(command.positions[name] for name in command.joint_names) != candidate.positions):
             raise ValueError('policy execution intent scope differs')
-        payload = _json(dict(lease=lease, candidate=candidate, command=command,
-                             policy_revision=lease.policy_revision))
+        intent = dict(lease=lease, candidate=candidate, command=command, policy_revision=lease.policy_revision)
+        if source_revision is not None:
+            with closing(self._connect()) as db:
+                header = self._source_header(db, source_revision)
+                if header['policy_revision'] != lease.policy_revision:
+                    raise ValueError('source snapshot differs from policy lease')
+            intent['source_revision'] = source_revision
+        payload = _json(intent)
         key = _json(dict(identity=lease.identity, episode_id=lease.episode_id,
                          policy_revision=lease.policy_revision, sequence=candidate.sequence))
         with closing(self._connect()) as db:
@@ -162,3 +185,53 @@ class PolicyExecutionJournal:
                                 (command_id,)).fetchall()
             return dict(intent=json.loads(row[0]), driver_goal_id=row[1],
                         events=[json.loads(event[0]) for event in events])
+
+    @staticmethod
+    def _source_header(db, revision):
+        row = db.execute('SELECT header FROM policy_sources WHERE revision=?', (revision,)).fetchone()
+        if row is None or hashlib.sha256(row[0].encode('utf-8')).hexdigest() != revision:
+            raise ValueError('source snapshot missing or corrupt')
+        return json.loads(row[0])
+
+    def store_source(self, header, payloads):
+        refs = header['files']
+        if {ref['path'] for ref in refs} != set(payloads) or len(refs) != len(payloads):
+            raise ValueError('source file coverage differs')
+        for ref in refs:
+            raw = payloads[ref['path']]
+            if type(raw) is not bytes or len(raw) != ref['bytes'] or hashlib.sha256(raw).hexdigest() != ref['sha256']:
+                raise ValueError('source payload differs')
+        encoded = _json(header)
+        revision = hashlib.sha256(encoded.encode('utf-8')).hexdigest()
+        with closing(self._connect()) as db:
+            db.execute('BEGIN IMMEDIATE')
+            try:
+                existing = db.execute('SELECT header FROM policy_sources WHERE revision=?', (revision,)).fetchone()
+                if existing is None:
+                    db.execute('INSERT INTO policy_sources VALUES (?,?)', (revision, encoded))
+                    for path, raw in payloads.items():
+                        db.execute('INSERT INTO policy_source_files VALUES (?,?,?)', (revision, path, raw))
+                else:
+                    # Existing source storage must be exact; never overwrite corruption.
+                    old = dict(db.execute('SELECT path,payload FROM policy_source_files WHERE revision=?',
+                                          (revision,)))
+                    if existing[0] != encoded or old != payloads:
+                        raise ValueError('existing source snapshot differs')
+                db.commit()
+            except Exception:
+                db.rollback()
+                raise
+        return revision
+
+    def read_source(self, revision):
+        with closing(self._connect()) as db:
+            db.execute('BEGIN')
+            header = self._source_header(db, revision)
+            payloads = dict(db.execute('SELECT path,payload FROM policy_source_files WHERE revision=?', (revision,)))
+            if {ref['path'] for ref in header['files']} != set(payloads) or len(header['files']) != len(payloads):
+                raise ValueError('source snapshot file coverage differs')
+            for ref in header['files']:
+                raw = payloads[ref['path']]
+                if len(raw) != ref['bytes'] or hashlib.sha256(raw).hexdigest() != ref['sha256']:
+                    raise ValueError('stored source snapshot corrupt')
+            return dict(header=header, payloads=payloads)

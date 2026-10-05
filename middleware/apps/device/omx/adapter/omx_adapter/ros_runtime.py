@@ -346,6 +346,9 @@ class RosArmCommandRuntime:
             raise ValueError("joint-state topic and trajectory action must be explicit")
 
         self._node = node
+        self.owner_clock = owner_clock
+        self.poll_period_s = poll_period_s
+        self._policy_binding = None
         self._sequence = 0
         self._goal_event_lock = threading.RLock()
         self._phase_event_sinks: dict[str, Callable[[RosGoalEvent], bool]] = {}
@@ -408,9 +411,35 @@ class RosArmCommandRuntime:
             calibration_revision=self.owner.config.calibration_revision,
         )
         self.latest_joint_state = snapshot
-        self.owner.observe_joint_state(snapshot)
+        def deliver_owner(state):
+            binding = self._policy_binding
+            if binding is None:
+                self.owner.observe_joint_state(snapshot)
+            return binding
+        binding = self.owner.run_admission_policy(deliver_owner)
+        if binding is not None:
+            try:
+                binding.observe(snapshot)
+            except Exception:
+                self.last_decision = binding.poll()
 
     def submit(self, command: TrajectoryCommand) -> CommandDecision:
+        if self._policy_binding is not None:
+            return CommandDecision(False,self.owner.state,'policy_session_required',command.command_id)
+        return self._submit_policy(command,None)
+
+    def bind_policy_driver(self, binding: Any) -> None:
+        def install(state):
+            if binding.owner is not self.owner or self._policy_binding is not None or state != 'ready':
+                raise ValueError('policy runtime owner differs, not ready or already bound')
+            binding.adopt(self.owner._joint_state)
+            self.owner.bind_control_admission(binding)
+            self._policy_binding = binding
+        self.owner.run_admission_policy(install)
+
+    def _submit_policy(self, command: TrajectoryCommand, binding: Any) -> CommandDecision:
+        if binding is not self._policy_binding or (binding is not None and binding.check_command(command) is not True):
+            raise PermissionError('policy runtime command scope required')
         self.last_decision = self.owner.submit(command)
         if self.last_decision.reason not in {"submitted", "duplicate_ignored"}:
             self.last_terminal_decision = self.last_decision
@@ -450,7 +479,7 @@ class RosArmCommandRuntime:
     def _watchdog_tick(self) -> None:
         # Steady-clock timer: it keeps polling (and the wall bound keeps working) when sim
         # time is frozen.
-        self.last_decision = self.owner.poll()
+        self.last_decision = (self.owner.poll() if self._policy_binding is None else self._policy_binding.poll())
         if self.last_decision.reason in {"action_timeout", "joint_state_stale",
                                          "action_wall_timeout", "joint_state_stale_wall_clock"}:
             handle = self.action_port.last_handle
