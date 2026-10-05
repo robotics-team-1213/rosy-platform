@@ -106,6 +106,14 @@ from .lane_keep_pairs import (  # noqa: F401 — re-exported; patch constants on
     is_pair,
     pair_conflicts,
 )
+from .lane_keep_junction import (  # noqa: F401 — re-exported; patch constants on lane_keep_junction
+    DIVERGE_MIN_RAD,
+    FORK_MIN_ANGLE_RAD,
+    FORK_MIN_LENGTH_M,
+    JUNCTION_AHEAD_M,
+    _across_path,
+    _junction,
+)
 
 #: Lookahead from base_link where the lane centre is read.
 LOOKAHEAD_M = 0.25
@@ -149,17 +157,11 @@ SIDE_FLIP_M = 0.08
 #: +1.0 toward the next lane for 20+ frames. Past this many contradicting
 #: frames the fresh ground side wins.
 SIDE_FLIP_FRAMES = 4
-#: Junctions fail closed (HOLD): a lone boundary with a line across the path
-#: within JUNCTION_AHEAD_M that is not a latched corner, or two boundaries on
-#: the followed side splitting by more than FORK_MIN_ANGLE_RAD. Steering of at
+#: Junctions fail closed (HOLD) when corner turning is on; the rules and their
+#: constants live in lane_keep_junction (patch them there). Steering of at
 #: least FLIP_MIN_ERROR that reverses FLIP_MAX_REVERSALS times within
 #: FLIP_WINDOW_FRAMES frames holds too. A corner's open side must have no
 #: boundary running past the corner line (less CORNER_PAST_MARGIN_M).
-JUNCTION_AHEAD_M = 0.45
-FORK_MIN_ANGLE_RAD = math.radians(30.0)
-DIVERGE_MIN_RAD = math.radians(15.0)
-#: Both branches of a fork are real paint, not a far fragment.
-FORK_MIN_LENGTH_M = 0.12
 FLIP_MIN_ERROR = 0.5
 FLIP_MAX_REVERSALS = 2
 FLIP_WINDOW_FRAMES = 16
@@ -399,7 +401,9 @@ class LaneKeeper:
             target, strategy = corner
         seen_left, seen_right = ([b for b in left + right + conflicts if b["side"] == s] for s in ("left", "right"))
         junction = (None if corner is not None
-                    else _junction(strategy, transverse, seen_left, seen_right, half, self._corner_turning))
+                    else _junction(strategy, transverse, seen_left, seen_right, half,
+                                   self._corner_turning,
+                                   ONE_MAX_DISTANCE_FRACTION * 2.0 * half))
         if junction is not None:
             target = None
         self._tracked = [(r["y_at_side_x_m"], math.radians(r["heading_deg"]), r["side"],
@@ -569,40 +573,6 @@ class LaneKeeper:
                                                 -r["length_m"]))
         record['selected'] = True
         return np.asarray(record["pursuit_m"], float), f"{record['side']}_only"
-
-
-def _across_path(ends, half):
-    """Ahead distance where a (transverse) line crosses the path, or None."""
-    ys = sorted(float(p[1]) for p in ends)
-    if ys[0] > half or ys[1] < -half:
-        return None
-    (x0, y0), (x1, y1) = ((float(p[0]), float(p[1])) for p in ends)
-    ahead = x0 if y1 == y0 else x0 + (x1 - x0) * (0.0 - y0) / (y1 - y0)
-    return ahead if 0.0 < ahead <= JUNCTION_AHEAD_M else None
-
-
-def _junction(strategy, transverse, left, right, half, corner_turning):
-    """Reason to HOLD at a junction, or None. Only with corner turning: there
-    the corner reading can pull the robot out of the lane at a junction mouth.
-    Without it (the device default) both rules held 5-10 % more of the real
-    replay frames (pilot none 0.32 -> 0.36-0.43), so the plain keeper goes on
-    along its lone boundary as the bench measures."""
-    if not corner_turning or strategy not in ("left_only", "right_only"):
-        return None
-    side = left if strategy == "left_only" else right
-    # The lone boundary bends away out of the lane (a mouth opening on its
-    # side) while a line crosses the path ahead: which lane goes on is unknown.
-    outward = 1.0 if strategy == "left_only" else -1.0
-    diverging = any(outward * math.radians(r["heading_deg"]) > DIVERGE_MIN_RAD for r in side)
-    if diverging and any(not steep and _across_path(ends, half) is not None
-                         for _, _, ends, steep in transverse):
-        return "junction_transverse"
-    headings = [math.radians(r["heading_deg"]) for r in side
-                if abs(r["y_at_side_x_m"]) <= ONE_MAX_DISTANCE_FRACTION * 2.0 * half
-                and r["length_m"] >= FORK_MIN_LENGTH_M]
-    if headings and max(headings) - min(headings) > FORK_MIN_ANGLE_RAD:
-        return "junction_fork"
-    return None
 
 
 def _runs_past(boundaries, open_left, ahead):

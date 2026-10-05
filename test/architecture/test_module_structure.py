@@ -80,13 +80,6 @@ CONTROL_SPLIT = "docs/plans/2026-09-22-control-package-split-design.md"
 
 #: P6 verdicts: path (relative to src/) or package name -> (lines at verdict, verdict).
 SIZE_VERDICTS = {
-    "perception/control/sensing/perception/lane_keep.py": (
-        626,
-        "split: the pure LaneKeeper and its boundary/pursuit helpers reached 626 lines "
-        "after the keep-side correction. Keep decision logic in perception; separate "
-        "geometry helpers from policy state under docs/plans/2026-09-22-control-package-split-design.md "
-        "before further growth. The 600-line budget and +150 re-judgment allowance remain",
-    ),
     "web/components.css": (
         814,
         "accept: shared token-based component styles remain one web_common responsibility; "
@@ -549,7 +542,7 @@ SIZE_VERDICTS = {
         "The feature grouping, file budgets and 150 allowance are unchanged.",
     ),
     "control": (
-        44_469,
+        44_646,
         f"split: deploy closure needs only sensing + safety provider (P1a); {CONTROL_SPLIT} "
         "(re-judged 2026-09-30 at 33090 after D-356 added the ROS-free learned perception backend "
         "(sensing/perception/learned), the shadow node and the recording CLI; the learned backend sits "
@@ -625,7 +618,11 @@ SIZE_VERDICTS = {
         "-- launch-side config, no node logic, moves with the P1a split, verdict unchanged). "
         "Re-judged 2026-10-04 at 44469 for shared raw road-ROI visibility, invalid camera "
         "evidence/reset and optional raw/annotated recording: observation-only subjects stay "
-        "separate and move with the existing P1a split; no new command writer.",
+        "separate and move with the existing P1a split; no new command writer. "
+        "Re-judged 2026-10-06 at 44646 for the keep side-flip fix (SIDE_FLIP_FRAMES bounded "
+        "side tracking in lane_keep.py) with the junction HOLD policy split out to "
+        "lane_keep_junction.py to stay under the file budget — same subjects inside "
+        "sensing/perception, they move with the P1a split; verdict unchanged.",
     ),
     # --- D-362 newly-covered files (web assets in src/ packages, ops roots). ---
     "perception/web/diagnostic.html": (
