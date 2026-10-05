@@ -29,3 +29,12 @@
 - 실제 WSL Gazebo 회차 실행(M01–M08 × seed 3 × 3회)·원본 보존
 - URDF 접촉 센서 배선 + 양성 대조(T3 계획 항목 2)
 - ROS-SIM 게이트 승격 — 회차 판정 전부 PASS일 때만
+
+
+## T6 보고서 입력 경계 (HOST)
+
+각 verdicts.json에는 scenario_id(M01..M08), seed(0..2147483647 정수), repeat(1..3), scenario_verdict/driving_verdict(PASS/FAIL/NOT_RUN/INCONCLUSIVE), crashed/timed_out/observation_lost(명시적 boolean), source_files 배열을 기록한다. source_files 각 항목은 path와 sha256 두 필드이며 상대 path는 해당 verdicts.json 디렉터리 기준이다. 원본 파일이 없거나 digest가 다르면 수용하지 않는다. 명시되지 않은 실패 flag는 false로 추정하지 않는다.
+
+시나리오마다 같은 고정 seed 3개 × 반복 3회인 서로 다른 9개 조합을 모두 요구한다. M01..M08 전체와 같은 seed 집합이 없으면 전체 HOLD다. 주행/시나리오 판정과 최악 회차는 계속 별도 표시한다. source_files에는 해당 회차 원본 run manifest와 관측/판정 원본을 보존 담당자가 결속해야 한다.
+
+이 생성기는 파일 digest와 보고 입력 완결성을 확인한다. 파일 내용이 실제 ROS-SIM 실행에서 생성됐는지, 판정 단언이 물리적으로 참인지 인증하지 않는다. 합성 회귀의 GO는 보고 입력 판정이며 실제 ROS-SIM/DEVICE/FIELD 수용 증거가 아니다. 실제 Linux 회차와 독립 원본 대조는 여전히 미실행/HOLD다.
