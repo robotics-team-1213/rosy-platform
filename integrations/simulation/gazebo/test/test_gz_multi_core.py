@@ -329,6 +329,32 @@ def _set_env(actions, context):
             for a in actions if isinstance(a, SetEnvironmentVariable)}
 
 
+def test_validation_domain_is_delivered_before_all_participants(tmp_path):
+    import yaml
+    from launch.actions import SetEnvironmentVariable, IncludeLaunchDescription
+    spec = {"run_id": "d426-test", "core_config_dir": str(tmp_path),
+            "fleet_manifest": str(tmp_path / "robots.yaml"), "hub_url": "http://127.0.0.1:32001",
+            "gz_partition": "d426-test", "ros_domain_id": 150,
+            "robots": [{"namespace": "rosy_01", "api_port": 31001}]}
+    (tmp_path / "core_rosy_01.yaml").write_text(yaml.safe_dump({
+        "robot": {"id": "rosy_01"}, "network": {"api_host": "127.0.0.1", "api_port": 31001}}),
+        encoding="utf-8")
+    path = tmp_path / "run_spec.yaml"
+    path.write_text(yaml.safe_dump(spec), encoding="utf-8")
+    actions, context = _setup(_module(), robots="1", run_spec=str(path))
+    applied = False
+    for action in actions:
+        if isinstance(action, SetEnvironmentVariable):
+            action.execute(context)
+            if _text(action.name, context) == "ROS_DOMAIN_ID":
+                applied = True
+        elif isinstance(action, (IncludeLaunchDescription, Node, TimerAction)):
+            assert applied and context.environment["ROS_DOMAIN_ID"] == "150"
+    assert applied and _set_env(actions, context)["GZ_PARTITION"] == "d426-test"
+    legacy, context = _setup(_module(), robots="1", core="false")
+    assert "ROS_DOMAIN_ID" not in _set_env(legacy, context)
+
+
 def test_launch_defaults_keep_the_catalog_world_and_the_software_renderer():
     mod = _module()
     actions, context = _setup(mod, robots="1", core="false")

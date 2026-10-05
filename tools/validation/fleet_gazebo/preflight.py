@@ -16,9 +16,11 @@ invents reservations of its own. Rules this module enforces (plan §공통 실�
 from __future__ import annotations
 
 import hashlib
+import itertools
 import json
 import os
 import re
+import socket
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -106,6 +108,37 @@ def port_conflicts(a: Reservations, b: Reservations) -> bool:
     return bool(set(a.api_ports) & set(b.api_ports))
 
 
+def check_reservations(output_root: Path, reservations: Reservations) -> None:
+    """Refuse recorded overlaps and occupied listeners before creating a run.
+
+    This is a bounded planning snapshot, not a lifetime port reservation. Stale
+    manifests remain reserved until the operator chooses a different output root.
+    """
+    manifests = list(itertools.islice(output_root.glob(f"*/{MANIFEST_NAME}"), 257))
+    if len(manifests) > 256:
+        raise PreflightError("reservation catalogue exceeds 256 manifests")
+    for path in manifests:
+        try:
+            if path.is_symlink() or path.parent.is_symlink() or path.stat().st_size > 65536:
+                raise ValueError("untrusted manifest")
+            data = json.loads(path.read_text(encoding="utf-8"))["reservations"]
+            if not isinstance(data, dict) or type(data.get("robots")) is not int:
+                raise ValueError("invalid robot count")
+            old = Reservations.derive(data["run_id"], data["robots"], started_at=0.0)
+            if data != old.as_dict():
+                raise ValueError("reservations differ from the deterministic runner profile")
+        except (OSError, ValueError, KeyError, TypeError) as exc:
+            raise PreflightError(f"invalid reservation manifest: {path}") from exc
+        if port_conflicts(reservations, old):
+            raise PreflightError(f"reservation conflict with {path.parent.name}")
+    for port in (*reservations.api_ports, reservations.console_port):
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+                probe.bind(("127.0.0.1", port))
+        except OSError as exc:
+            raise PreflightError(f"reserved port {port} is unavailable") from exc
+
+
 def validate_run_root(root: Path) -> None:
     """A run root must be a fresh directory, never a symlink, never a reuse."""
     if root.is_symlink():
@@ -155,7 +188,11 @@ def write_manifest(root: Path, reservations: Reservations, *, versions: dict,
         "argv": list(argv),
     }
     path = root / MANIFEST_NAME
-    path.write_text(json.dumps(manifest, indent=2, sort_keys=True), encoding="utf-8")
+    try:
+        with path.open("x", encoding="utf-8") as stream:
+            stream.write(json.dumps(manifest, indent=2, sort_keys=True))
+    except FileExistsError as exc:
+        raise PreflightError("run manifest was claimed concurrently; use a new run_id") from exc
     return path
 
 

@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import argparse
 import secrets
+import shlex
 import sys
 import time
 from pathlib import Path
@@ -22,7 +23,7 @@ from pathlib import Path
 import yaml
 
 from preflight import (MANIFEST_NAME, PreflightError, Reservations,
-                       check_no_symlink_escape, check_overlays,
+                       check_no_symlink_escape, check_overlays, check_reservations,
                        require_file_hashes, validate_run_root, write_manifest)
 
 
@@ -68,6 +69,7 @@ def main(argv=None) -> int:
         })
         root = output_root / run_id
         validate_run_root(root)
+        check_reservations(output_root, reservations)
         write_manifest(root, reservations, versions={}, hashes=hashes,
                        argv=[parser.prog] + sys.argv[1:])
 
@@ -124,11 +126,14 @@ def main(argv=None) -> int:
 
     print(f"run root:   {root}")
     print(f"run spec:   {run_spec}")
-    print(f"gz launch:  ros2 launch gz_sim gz_multi.launch.py robots:={args.robots} "
-          f"core:=true run_spec:={run_spec}")
-    print(f"fleet:      python operations/fleet/fleet/cli.py console "
-          f"--robots {robots_path} --port {reservations.console_port} "
-          f"--tasks-db {root / 'tasks.sqlite3'} --events-db {root / 'events.sqlite3'}")
+    environment = (f"env ROS_DOMAIN_ID={reservations.ros_domain_id} "
+                   f"GZ_PARTITION={shlex.quote(reservations.gz_partition)}")
+    print(f"gz launch:  {environment} ros2 launch gz_sim gz_multi.launch.py robots:={args.robots} "
+          f"prefix:=rosy core:=true {shlex.quote('run_spec:=' + str(run_spec))}")
+    print(f"fleet:      {environment} python operations/fleet/fleet/cli.py console "
+          f"--robots {shlex.quote(str(robots_path))} --port {reservations.console_port} "
+          f"--tasks-db {shlex.quote(str(root / 'tasks.sqlite3'))} "
+          f"--events-db {shlex.quote(str(root / 'events.sqlite3'))}")
     print("READY is decided by preflight probes (clock/scan/odom/tf/nav2/"
           "core_http/ws_welcome) — not by this planner.")
     return 0

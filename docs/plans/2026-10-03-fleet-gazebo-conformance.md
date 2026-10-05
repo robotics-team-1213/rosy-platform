@@ -115,3 +115,10 @@
 - goal 분할의 corridor 준수는 T4 반증 시험이다. 실패하면 로봇 측 진입 gate부터 보완하며 데모로 우회하지 않는다.
 - 수치 임계값은 시뮬 수용 목표이며 실물 안전 기준이 아니다. T3에서 센서 주기·footprint·속도를 기록하고 임계값을 몰래 완화하지 않는다.
 - 문서 완료는 ADR/계획/검토/harness다. 구현 완료는 T1–T6와 M01–M08 전 회차 증거다. 서로 구분한다.
+
+### 2026-10-05 T1 격리 수정
+
+- `run_spec.ros_domain_id`는 정수 120..199로 검증한 뒤 모든 ROS/Gazebo 참여 launch action보다 앞서 환경에 적용한다. 안내하는 Gazebo와 Fleet 명령도 동일 domain/partition을 명시한다. 명세 없는 기존 launch는 domain을 변경하지 않는다.
+- robots/prefix와 명세의 namespace 목록, CORE 오버레이의 robot ID·loopback API 포트가 일치하지 않으면 실행 준비를 거부한다. 명세 경로는 `core:=true`를 요구한다.
+- planner는 같은 output root에 기록된 최대 256개 manifest의 결정적 예약 값을 검증하고 domain/API/console 충돌 및 현재 loopback 포트 점유를 확인한다. 손상된 기록과 stale 기록도 자동으로 무시하지 않는다. 이 검사는 계획 시점 snapshot이며, 이후 수동 launch까지 포트를 확보하는 lease나 동시 planner의 원자적 배타 예약은 아니다. 자동 실행 owner는 시작 직전 재검사와 수명 예약을 별도로 구현해야 한다.
+- host 회귀와 launch action 검증은 SOURCE/LOCAL 증거이며 실제 ROS-SIM 회차·통신 READY·주행 완료를 대신하지 않는다.
