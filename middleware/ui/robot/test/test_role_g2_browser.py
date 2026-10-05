@@ -403,6 +403,7 @@ def test_device_host_cards_clear_old_values_on_forbidden_and_recover(tmp_path):
           .slice(0, 2).every(card => card.querySelector('ui-status')?.textContent.includes('권한'))""", timeout=30_000)
         assert "site-fixture" not in cards.nth(0).locator("dl").text_content()
         assert "r1" not in cards.nth(1).locator("dl").text_content()
+        cards.nth(0).get_by_text("고급 네트워크 작업", exact=True).click()
         assert page.get_by_role("button", name="사업장 Wi-Fi로 전환", exact=True).is_disabled()
         assert page.get_by_role("button", name="이전 릴리스로 복귀", exact=True).is_disabled()
         phase["scenario"] = "normal"
@@ -439,6 +440,8 @@ def test_device_procedure_places_status_and_actions_before_long_readouts(tmp_pat
               return lines[0]?.textContent.includes('site-fixture') && lines[1]?.textContent.includes('이전 r1');
             }""")
             _select_task(page, "host.operations")
+            page.locator('[data-panel="host.operations"] section.ui-readback').first.get_by_text(
+                "고급 네트워크 작업", exact=True).click()
             result = page.evaluate("""() => {
               const host = document.querySelector('[data-panel="host.system"]');
               const operations = document.querySelector('[data-panel="host.operations"]');
@@ -726,8 +729,8 @@ def test_console_teleop_feedback_full_shell_captures(tmp_path):
             readiness_status = panel.locator("ui-status").first
             release_text = action_feedback.inner_text()
             phase["fail_state"] = True
-            page.wait_for_function("document.querySelector('[data-panel=\"console.teleop\"] ui-status')?.textContent.includes('fixture robot state unavailable')")
-            assert readiness_status.inner_text().find("fixture robot state unavailable") >= 0
+            page.wait_for_function("document.querySelector('[data-panel=\"console.teleop\"] ui-status')?.textContent.includes('서버가 요청을 처리하지 못했습니다')")
+            assert "fixture robot state unavailable" not in readiness_status.inner_text()
             assert action_feedback.inner_text() == release_text
             filename = f"operator-console-teleop-feedback-{width}x{height}.png"
             page.screenshot(path=str(CAPTURES / filename), full_page=True)
@@ -784,11 +787,11 @@ def test_console_line_follow_and_docking_feedback_full_shell_captures(tmp_path):
                     response = _response(client, path, TOKENS["operator"], "normal", "console")
                     manifest = response.json() if hasattr(response, "json") else json.loads(response.body)
                     additions = (
-                        {"id":"console.docking", "title":"Docking", "slot":"act", "order":40,
+                        {"id":"console.docking", "title":"도킹 운용", "slot":"act", "order":40,
                          "module":"/assets/panels/console/docking.js",
                          "css":["/assets/panels/surface-panels.css"], "action_group":"docking",
                          "state":"available", "reason":None},
-                        {"id":"console.line_follow", "title":"Line follow", "slot":"act", "order":50,
+                        {"id":"console.line_follow", "title":"차선 추종", "slot":"act", "order":50,
                          "module":"/assets/panels/console/line-follow.js",
                          "css":["/assets/panels/surface-panels.css"], "action_group":"line_follow",
                          "state":"available", "reason":None},
@@ -798,8 +801,8 @@ def test_console_line_follow_and_docking_feedback_full_shell_captures(tmp_path):
                     groups = manifest.setdefault("action_groups", [])
                     group_ids = {group["id"] for group in groups}
                     groups.extend(group for group in (
-                        {"id":"docking", "title":"Docking", "order":20},
-                        {"id":"line_follow", "title":"Line follow", "order":30},
+                        {"id":"docking", "title":"도킹", "order":20},
+                        {"id":"line_follow", "title":"차선 추종", "order":30},
                     ) if group["id"] not in group_ids)
                     response = Response(content=json.dumps(manifest), media_type="application/json")
                 elif path == "/api/v1/line-follow":
@@ -809,14 +812,14 @@ def test_console_line_follow_and_docking_feedback_full_shell_captures(tmp_path):
                     response = Response(content='{"mode":"OFF","state":"IDLE"}', media_type="application/json")
                 elif path == "/api/v1/docking/status":
                     if phase["docking_failed"]:
-                        route.fulfill(status=503, content_type="application/json", body='{"detail":"fixture docking status unavailable"}')
+                        route.fulfill(status=503, content_type="application/json", body='{"detail":"도킹 컨트롤러가 준비되지 않았습니다."}')
                         return
                     response = Response(content='{"supported":true,"state":"UNDOCKED"}', media_type="application/json")
                 elif path == "/api/v1/docking/docks":
                     response = Response(content='{"docks":[{"id":"dock-a","type":"charger"},{"id":"dock-b","type":"charger"}]}',
                                         media_type="application/json")
                 elif path == "/api/v1/system/capabilities":
-                    response = Response(content='{"navigation":{"goal_navigation":true}}', media_type="application/json")
+                    response = Response(content='{"navigation":{"goal_navigation":true},"teleop":true,"runtime":{"drive":"ready"}}', media_type="application/json")
                 else:
                     response = _response(client, path, TOKENS["operator"], "normal", "console")
                 route.fulfill(status=response.status_code, headers={
@@ -833,7 +836,7 @@ def test_console_line_follow_and_docking_feedback_full_shell_captures(tmp_path):
             line_panel.locator("ui-button").first.click()
             page.locator('dialog.ui-confirm ui-button[kind="irreversible"]').click()
             page.wait_for_function("document.querySelector('[data-panel=\"console.line_follow\"] ui-status[role=status]:last-of-type')?.textContent.includes('CORE')")
-            page.wait_for_function("document.querySelector('[data-panel=\"console.line_follow\"] ui-status')?.textContent.includes('fixture line status unavailable')")
+            page.wait_for_function("document.querySelector('[data-panel=\"console.line_follow\"] ui-status')?.textContent.includes('서버가 요청을 처리하지 못했습니다')")
             line_filename = f"operator-console-line-follow-{width}x{height}.png"
             page.screenshot(path=str(capture_dir / line_filename), full_page=True)
             line_measured = page.evaluate("""() => ({
@@ -843,7 +846,7 @@ def test_console_line_follow_and_docking_feedback_full_shell_captures(tmp_path):
               action: [...document.querySelectorAll('[data-panel="console.line_follow"] > ui-status[role="status"]')].at(-1)?.textContent || '',
             })""")
             assert line_measured["overflowX"] == 0 and line_measured["eStopVisible"]
-            assert "fixture line status unavailable" in line_measured["readback"] and "CORE" in line_measured["action"]
+            assert "서버가 요청을 처리하지 못했습니다" in line_measured["readback"] and "CORE" in line_measured["action"]
             records.append({"surface":"line_follow", "viewport":f"{width}x{height}",
                             "image":line_filename, "posts":list(posts), "errors":list(errors), **line_measured})
 
@@ -857,7 +860,7 @@ def test_console_line_follow_and_docking_feedback_full_shell_captures(tmp_path):
             dock_panel.locator("ui-button").first.click()
             page.locator('dialog.ui-confirm ui-button[kind="irreversible"]').click()
             page.wait_for_function("document.querySelector('[data-panel=\"console.docking\"] ui-status[role=status]:last-of-type')?.textContent.includes('CORE')")
-            page.wait_for_function("document.querySelector('[data-panel=\"console.docking\"] ui-status')?.textContent.includes('fixture docking status unavailable')")
+            page.wait_for_function("document.querySelector('[data-panel=\"console.docking\"] ui-status')?.textContent.includes('도킹 컨트롤러가 준비되지 않았습니다')")
             assert dock_panel.locator("select").input_value() == "dock-b"
             assert len(posts) == 1, posts
             filename = f"operator-console-docking-{width}x{height}.png"
@@ -869,7 +872,7 @@ def test_console_line_follow_and_docking_feedback_full_shell_captures(tmp_path):
               dockAction: [...document.querySelectorAll('[data-panel="console.docking"] ui-status[role="status"]')].at(-1)?.textContent || '',
             })""")
             assert measured["overflowX"] == 0 and measured["eStopVisible"] and errors == [], measured
-            assert "fixture docking status unavailable" in measured["dockReadback"] and "CORE" in measured["dockAction"]
+            assert "도킹 컨트롤러가 준비되지 않았습니다" in measured["dockReadback"] and "CORE" in measured["dockAction"]
             records.append({"surface":"docking", "viewport": f"{width}x{height}", "image": filename,
                             "posts": list(posts), "errors": list(errors), **measured})
             context.close()
@@ -957,13 +960,13 @@ def test_console_map_data_and_action_feedback_full_shell_captures(tmp_path):
                 overflowX:Math.max(0,document.documentElement.scrollWidth-innerWidth),
                 eStopVisible:document.querySelector('#shell-estop')?.getBoundingClientRect().right<=innerWidth,
                 mapData:document.querySelector('#map-status')?.textContent||'',
-                readiness:statuses.find(text=>text.includes('fixture robot state unavailable'))||'',
+                readiness:statuses.find(text=>text.includes('서버가 요청을 처리하지 못했습니다'))||'',
                 action:statuses.at(-1)||'',
               };
             }""")
             assert measured["overflowX"] == 0 and measured["eStopVisible"] and errors == [], measured
             assert page.locator('[data-panel="console.map"] ui-empty').is_visible()
-            assert "fixture robot state unavailable" in measured["readiness"]
+            assert "서버가 요청을 처리하지 못했습니다" in measured["readiness"]
             assert measured["action"] and not posts
             records.append({"viewport":f"{width}x{height}", "image":filename,
                             "posts":posts, "errors":errors, **measured})

@@ -1040,3 +1040,9 @@
 - 변경: 390px `/setup`에서 운용자 이름 입력→FastAPI 201 저장→목록 readback까지 한 작업을 브라우저 시험으로 재생했다.
 - 증거: 1 passed, `known_failures.py` 0 NEW, 저장 POST 한 번, 입력 초기화·화면 목록·비상 정지 확인, 페이지 오류·가로 넘침 0. LOCAL 캡처를 UI/UX 회차에 보존했다.
 - gate 변화: G3 표면 질문의 한 작업 근거. 나머지 절차·실물 위치 정확도·현장 수용은 미완료다.
+
+## 2026-10-06 · uncommitted · uiux(robot): 운용 오류 문구와 G3 재생
+
+- 변경: HTTP 오류의 영문 전용 상세를 운용자용 한국어 상태·다음 확인으로 바꾸고, 한국어 서버 사유는 유지한다. 차선 추종 시험 fixture에 실제 구동 준비 필드를 넣고 닫힌 고급 네트워크 작업은 UI로 열어 검증한다.
+- 증거: [UI/UX 회차](../../../docs/validation/uiux-surfaces-2026-10-06/README.md)에 모드·수동·차선/도킹·지도 근거 1366/390px 캡처와 4개 매트릭스를 보존했다. 해당 브라우저 4 passed, 장비 disclosure 2 passed, 운용자 어휘 18 passed, `known_failures.py` 0 NEW.
+- gate 변화: 운용 G3 부분 근거. 실제 로봇 readback·사용자 독회와 전체 G2/G3는 HOLD다.

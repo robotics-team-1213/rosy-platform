@@ -6,7 +6,7 @@
 
 | 표면·질문 | 현재 LOCAL 캡처 | 확인한 것 | 남은 것 |
 |---|---|---|---|
-| 로봇 운용: 지금 움직여도 되는가? | [1366×768](captures/robot-console-1366x768.png), [390×844](captures/robot-console-390x844.png) | 데스크톱 감지·관측·조작이 같은 폭이다. 390px에서 조작이 카메라·지도보다 먼저 오고 비상 정지가 첫 화면에 있다. | 선언된 역할·상태 전체 G2, 실제 CORE/장치 상태, G3 전체 근거 검토. |
+| 로봇 운용: 지금 움직여도 되는가? | [1366×768](captures/robot-console-1366x768.png), [390×844](captures/robot-console-390x844.png), [G3 독회](#로봇-운용-g3-독회--local-진행-중) | 데스크톱 감지·관측·조작이 같은 폭이다. 390px에서 조작이 카메라·지도보다 먼저 오고 비상 정지가 첫 화면에 있다. 모드·수동 주행·차선 추종·도킹·지도 근거의 요청/접수/재확인을 두 폭에서 재생했다. | 선언된 역할·상태 전체 G2, 실제 CORE/장치 상태, G3 전체 근거 검토. |
 | 장비·작업 준비: 다음 절차와 막힌 이유를 알 수 있는가? | [60셀 매트릭스](captures/roles-procedure/matrix.json), [첫 기동 6셀](captures/roles-first-boot/first-boot-matrix.json), [운용자 작업 준비 390×844](captures/roles-procedure/operator-setup-normal-390x844.png), [맵핑 시작 확인](captures/roles-procedure/operator-setup-confirm-dialog-390x844.png), [릴리스 복귀 확인](captures/roles-procedure/administrator-device-confirm-dialog-390x844.png), [관리자 장비 지연 390×844](captures/roles-procedure/administrator-device-delayed-host-operations-390x844.png), [권한 거부 390×844](captures/roles-procedure/operator-device-forbidden-390x844.png) | `/setup`·`/device`를 역할 2개·1366/390px·상태별 60셀과 첫 기동 6셀로 현재 FastAPI/Chromium에서 재생했다. 390px 패널 안의 입력·행동은 같은 가용 폭을 쓰며, 페이지 오류·가로 넘침 0, 쓰기 차단 fixture에서 확인 취소 POST 0이다. 첫 기동에는 상태 확인 대기가 표시되고 비상 정지가 두 폭에서 보인다. 확인창 6장에는 선택한 행동 이름이 실행 버튼에 보이고 비상 정지가 대화상자 위에 남는다. 관리자 호스트 지연·끊김·결측의 실제 작업 패널 6장을 별도로 저장했다. | 절차를 현장 사용자가 완료할 수 있는지 G3 작업 독회, 실제 Host Agent/장치 readback. |
 | Fleet: 어느 로봇에 주의가 필요한가? | [1920×1080](captures/fleet-console-1920x1080.png), [320×844](captures/fleet-console-320x844.png), [상태 캡처](#fleet-g2-상태-확인--local-진행-중), [G3 독회](#fleet-g3-독회--local-진행-중) | 데스크톱 현장·개입 칸이 같은 폭이다. 전화의 **기본** 목록은 릴레이 오류가 있는 `rosy_03`부터 보여 주며 비상 정지가 첫 화면에 있다. 빈 목록·서버 실패에서도 320/390px 패널 폭과 다음 단계가 유지된다. | 선언된 상태 전체 G2, 연결된 카메라·실제 사이트 PC/로봇 readback, G3 전체 근거 검토. |
 | 게임 보드: 경기장·공·로봇·골이 보이는가? | [진행 1280×800](captures/games-play-1280x800.png), [최초 1280×800](captures/games-initial-1280x800.png), [최초 390×800](captures/games-g3/games-initial-390x800.png), [지연 1280×800](captures/games-delayed-1280x800.png), [HOLD 1280×800](captures/games-hold-1280x800.png), [지연 390×800](captures/games-delayed-390x800.png), [G3 독회](#게임-보드-g3-독회--local-진행-중) | 최초·연결 오류 때 빈 피치에 이유를 표시한다. 데스크톱에서는 피치가 초점이라 관측보다 넓고, 전화에서는 점수·피치·관측이 같은 가용 폭으로 쌓인다. 지연 화면은 마지막 수신 정보임을 밝히고 정지가 첫 화면에 있다. | 현재 트리의 전체 상태 G2, 실물 카메라·경기 readback, G3 전체 근거 검토. |
@@ -23,6 +23,21 @@
 불가역 확인은 이전 캡처가 대화상자를 닫은 뒤 화면만 남겼으므로 열린 상태를 1366/390px 각 3장씩 다시 찍었다. 맵핑 시작·중지·저장과 호스트 작업의 실행 버튼은 선택한 행동 이름을 말한다. 이 변경 뒤 절차 60셀 **1 passed**, 관련 작업 브라우저 **10 passed**, `known_failures.py` **0 NEW**였다. 6개 확인 셀은 취소 뒤 쓰기 요청이 0이다. 이는 확인창과 취소의 LOCAL 증거이지 실제 명령 완료 증거가 아니다.
 
 운용자 작업 준비의 [웨이포인트 저장 390×844](captures/operator-setup-waypoint-saved-390x844.png)은 현재 FastAPI의 `POST /api/v1/waypoints`가 201을 돌려주고, 다음 목록 조회가 저장된 이름과 좌표를 화면에 표시한 LOCAL 작업 경로다. 브라우저 1 passed, `known_failures.py` 0 NEW였다. 이 테스트 인스턴스의 저장이며 실물 로봇의 위치 정확도는 검증하지 않는다.
+
+### 로봇 운용 G3 독회 — LOCAL 진행 중
+
+| D-153 항목 | 현재 근거 | 남은 판정 범위 |
+|---|---|---|
+| 1. 정직 | [모드 요청](captures/robot-g3/operator-console-mode-feedback-390x844.png)은 CORE 접수와 현재 모드를 분리한다. [지도 근거 결측](captures/robot-g3/operator-console-map-data-action-390x844.png)은 위치·목표 전송 0이다. | 실제 주행 가능성·물리 정지·지도/자세 readback. |
+| 2. 증거 상태 | [수동 운전 상태 읽기 실패](captures/robot-g3/operator-console-teleop-feedback-390x844.png), [차선 추종 읽기 실패](captures/robot-g3/operator-console-line-follow-390x844.png), [도킹 읽기 실패](captures/robot-g3/operator-console-docking-390x844.png)를 요청 접수와 분리했다. | 선언 상태 전체의 값별 fresh/delayed/disconnected/unavailable 전이. |
+| 3. 색 | 상태 결측·읽기 실패는 주의색 문구, 비상 정지는 위험색이며 정상 숫자는 중립이다. | 장치 조명·나머지 상태와 대비 독회. |
+| 4. 위계 | 데스크톱 [운전 모드](captures/robot-g3/operator-console-mode-feedback-1366x768.png)의 감지·관측·조작은 같은 폭이다. 390px은 조작을 먼저 보이고 세 칸이 가용 폭을 채운다. | 지도보다 긴 카메라 영역이 모바일 작업 발견에 미치는 영향. |
+| 5. 불가역 | 모드·차선 추종·도킹의 확인 뒤 요청을 보내며, [지도 근거 결측](captures/robot-g3/console-map-data-action-matrix.json)에서 POST 0이다. 비상 정지는 두 폭 첫 화면에 있다. | 실제 명령·정지 readback, 현장 확인/취소 작업. |
+| 6. 어휘 | 영문 서버 오류 설명은 HTTP 상태와 다음 확인을 말하는 한국어로 보이며, 한국어 서버 사유는 유지한다. 테스트 manifest의 도킹·차선 추종 이름도 실제 등록 값과 같다. | 다른 오류·네트워크 실패 문구와 운용자 독해. |
+| 7. 표면 질문 | 모드·수동·차선·도킹·지도 결측의 [재생 기록](captures/robot-g3/console-line-follow-docking-matrix.json)은 요청, 읽기 실패, 막힌 조작을 분리한다. | 실물 로봇에서 지금 움직여도 되는지 한눈에 답할 수 있는지. |
+| 8. 표면 문법 | 공간형 데스크톱 3열과 모바일 조작→감지→관측 순서를 유지하며 가로 넘침은 0이다. | 모바일 긴 화면의 작업 순서·스크롤 독회. |
+
+모든 항목은 **부분 근거**다. 현재 FastAPI/Chromium의 모드·수동·차선/도킹·지도 시험 **4 passed**, `known_failures.py` **0 NEW**였다. 첫 차선/도킹 시도는 fixture가 실제 버튼 준비 계약인 `teleop: true`·`runtime.drive: ready`를 빼서 막혔다. fixture를 계약에 맞춘 뒤 재실행했다. 이는 LOCAL 요청·화면 증거이고 장치가 움직이거나 멈췄다는 증거가 아니다.
 
 ### Fleet G2 상태 확인 — LOCAL 진행 중
 

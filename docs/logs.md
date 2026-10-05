@@ -6235,3 +6235,9 @@ osy-d395-s1d\`.
 - 변경: 정보가 없는 경기 피치에 대기·첫 연결 오류를 표시하고, [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)에 1280/390px 최초 캡처와 G3 여덟 항목의 근거·잔여 범위를 기록했다. Fleet 즉시 비상 정지의 결정 참조를 D-414로 바로잡았다.
 - 증거: 게임 보드 브라우저 19 passed, 게임 모듈 113 passed, `known_failures.py` 0 NEW. Stop 재시도 시험의 CSP 관찰 경합은 DOM locator로 확인한다.
 - gate 변화: LOCAL 부분 근거. 제품 전체 UI/UX와 장치·현장 수용은 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(robot): 운용 오류 문구와 G3 독회
+
+- 변경: 로봇 운용의 공통 HTTP 오류 문구를 운용자용 한국어 상태와 재확인 안내로 바꿨다. 한국어 서버 사유와 오류 코드는 유지한다. [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)에 모드·수동·차선 추종·도킹·지도 캡처와 G3 부분 근거를 추가했다.
+- 증거: FastAPI/Chromium 운용 브라우저 4 passed, 고급 네트워크 작업 disclosure 확인 2 passed, 운용자 문구 18 passed. 통과 실행의 `known_failures.py`는 0 NEW다. 실패했던 전체 역할 실행 2건은 닫힌 disclosure의 숨은 버튼을 찾던 시험 오류였고, disclosure를 연 뒤 별도 재실행에서 통과했다.
+- gate 변화: 로봇 운용 LOCAL G3 부분 근거. 실제 CORE/장치 readback·현장 독회와 제품 전체 UI/UX는 HOLD다.
