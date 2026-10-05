@@ -457,3 +457,10 @@
 - 변경: 연동 코드 발급 뒤 남은 수명을 `유효 MM:SS` 카운트다운으로 같이 보여 주고, 만료 시 "다시 발급해 주세요" 안내만 바꾼다(자동 재발급 없음 — 코드 소모 없이 끝난다). 화면 재진입·재확인 때 카운트다운 타이머를 정리한다(`__enrollDispose`). 역할 문구는 조회용/운전자용으로 읽힌다.
 - 증거: `ROSY_RUN_BROWSER_TESTS=1 -k show_code` 1 passed(카운트다운 진행·재발급 버튼 유지·재진입 정리); 전체 `middleware/ui/pilot/test` + `test_pilot_route` 92 passed 73 skipped, known_failures NEW 0.
 - gate 변화: SOURCE 유지. 태블릿 재설치·실기 확인은 별도.
+
+## 2026-10-05 · uncommitted · fix(pilot): 태블릿 카메라 오류 — 프록시가 X-Rosy-* 증명 헤더를 지움
+
+- 원인(실기 재현): Lenovo 태블릿의 네이티브 앱에서 "카메라 보기"가 계속 실패했다. WebView(CDP) 안에서 상태→프레임 반입을 재현한 결과 `GET /api/v1/vision/front/frame?sequence=N` 은 200인데 응답의 `X-Rosy-Camera-Source/Sequence/Captured-At/Frame-Id/Variant` 헤더가 모두 사라져 있었다. CORE는 다섯 헤더를 정상적으로 내보낸다(PC 직접 반입으로 확인). `PilotProxy.serveHttp`가 본문·Content-Range만 전달하고 나머지 헤더를 버려서, web_common `evidence.js fetchCameraPair`의 프레임 출처 검증이 항상 실패했다. PC에서 두 요청을 나눠 보내면 지연으로 409 CAMERA_FRAME_ADVANCED가 나는 별개의 정상 레이스도 확인했다(페이지 내 70 ms 주기는 200).
+- 변경: `PilotProxy.kt`에 `forwardRosyHeaders` — CORE 응답의 `x-rosy-*` 접두사 헤더를 바이트 경로와 스트리밍 경로 모두 그대로 붙인다. 같은 결함군으로 D-368 운전자 MJPEG 스트림(`multipart/x-mixed-replace`)이 본문 버퍼링 경로로 흘러 응답이 통째로 도착할 때까지 화면이 멈추던 것을 스트리밍 경로(녹화본 `x-tar`와 같은 bounded 통과)로 통과시킨다. 요청 방향·경로 검사·자격 규칙은 그대로. android README에 전달 규칙 한 줄 추가.
+- 증거: JVM 신규 시험 `cameraProvenanceHeadersReachTheBundledScreens`(MockWebServer가 다섯 헤더를 내고 프록시 응답에 그대로 오는지) — 빌드 결과는 커밋 메시지에 기록. multipart 통과는 기존 `x-tar` 스트리밍 경로의 조건 확장이라 별도 시험 없다(이 MockWebServer엔 열린 원본을 위한 chunked 오버로드가 없다). 태블릿 재설치 뒤 CDP로 헤더 도착·카메라 화면 프레임 표시를 확인할 예정.
+- gate 변화: LOCAL(프록시 결함은 JVM 시험으로 판정). 실기 태블릿 확인은 별도.
