@@ -6151,3 +6151,9 @@ osy-d395-s1d\`.
 - 변경: 팀 가이드 `docs/reference/team-guide.md`(첫날 설정, 공유 범위, 작업 방식, 작업 영역), `CONTRIBUTING.md`, PR 템플릿, CODEOWNERS, pre-push에 잘못된 작성자 이메일 거절. 저장소는 `robotics-team-1213/rosy-platform`으로 이전됨.
 - 증거: harness lint, pre-push 훅 계약 시험.
 - gate 변화: 없음.
+
+## 2026-10-05 · uncommitted · docs(readme): short README, developer guide, verified team guide
+
+- 변경: README를 소개·시작 위치 표·문서 지도·「같이 하는 깃」·「핵심 계약」으로 줄이고 구조·빌드·테스트·관제 배치·Pi 런타임·로드맵을 `docs/reference/developer-guide.md`로 옮겼다(옛 `src/` 트리는 현재 폴더 표로 교체). 팀 가이드를 첫날 명령·이슈에서 머지까지·막혔을 때 표로 다시 썼다. 루트 허용 목록 밖이던 `CONTRIBUTING.md`를 `.github/`로 옮겼다.
+- 증거: Windows 새 클론 + Python 3.12 venv에서 가이드 §1 명령 리허설, 문서 링크 검사 0 깨짐, README·문서 배치·harness·pre-push 계약 시험.
+- gate 변화: 없음.
