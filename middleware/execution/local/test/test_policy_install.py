@@ -70,6 +70,30 @@ def test_file_change_after_load_rejected(tmp_path):
         loaded.recheck()
 
 
+def test_recheck_hashes_each_distinct_installed_file_once(tmp_path,monkeypatch):
+    _,binding=installed(tmp_path)
+    loaded=load_policy(tmp_path,binding)
+    opened=[]
+    original=Path.open
+    def capture(file,*args,**kwargs):
+        if file.name=='weights.bin' and args==('rb',):opened.append(file)
+        return original(file,*args,**kwargs)
+    monkeypatch.setattr(Path,'open',capture)
+    loaded.recheck()
+    # Shared references still have identical canonical size/SHA metadata;
+    # the same bytes need not be rehashed for each declared semantic role.
+    assert opened==[tmp_path/'weights.bin']
+
+
+@pytest.mark.parametrize('field',['normalization','evaluations'])
+def test_shared_install_reference_cannot_have_conflicting_metadata(tmp_path,field):
+    doc,binding=installed(tmp_path)
+    ref=dict(doc['files'][0],sha256='b'*64)
+    doc[field]=[ref] if field=='evaluations' else ref
+    (tmp_path/'policy-artifact.json').write_text(json.dumps(seal(doc)),encoding='utf-8')
+    with pytest.raises(ValueError):load_policy(tmp_path,binding)
+
+
 def test_manifest_reseal_cannot_replace_installed_revision(tmp_path):
     doc,binding = installed(tmp_path)
     loaded = load_policy(tmp_path,binding)
