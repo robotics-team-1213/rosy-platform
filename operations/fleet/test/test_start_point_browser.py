@@ -59,6 +59,7 @@ def test_markerless_map_pick_save_reload_and_recalibration(browser_site):
     from playwright.sync_api import expect
     page, robot, tracking=browser_site
     errors=[];page.on('pageerror',lambda error:errors.append(str(error)))
+    page.locator('#start-point-tools > summary').click()
     expect(page.locator('#start-point-pick')).to_be_enabled(timeout=15000)
     expect(page.locator('#map-stage')).to_have_attribute('data-map-state','site',timeout=15000)
     page.locator('#start-point-pick').click()
@@ -69,6 +70,7 @@ def test_markerless_map_pick_save_reload_and_recalibration(browser_site):
     expect(page.locator('#start-point-state')).to_contain_text('방향 90.0°',timeout=10000)
     assert not [call for call in robot.calls if call[0]=='navigation_goal']
     page.reload()
+    page.locator('#start-point-tools > summary').click()
     expect(page.locator('#start-point-state')).to_contain_text('방향 90.0°',timeout=15000)
     tracking.approve({**APPROVAL,'source_id':'north','map_id':'track','frame_seq':99},approved_by='op')
     expect(page.locator('#start-point-state')).to_contain_text('보정이 바뀌었습니다',timeout=10000)
@@ -80,6 +82,7 @@ def test_token_switch_clears_start_reference_and_blocks_edits(browser_site):
     from playwright.sync_api import expect
     page, robot, tracking=browser_site
     expect(page.locator('#start-point-save')).to_be_enabled(timeout=15000)
+    page.locator('#start-point-tools > summary').click()
     for field,value in [('x','1'),('y','.5'),('yaw','0')]:page.locator('#start-point-'+field).fill(value)
     page.locator('#start-point-save').click()
     expect(page.locator('#start-point-state')).to_contain_text('X 1.00',timeout=10000)
@@ -98,6 +101,7 @@ def test_map_changed_during_pick_is_cancelled_and_grid_marker_is_drawn(browser_s
     state={'grid':grid}
     page.route('**/api/fleet/map',lambda route:route.fulfill(status=200,content_type='application/json',body=json.dumps(state['grid'])))
     page.reload()
+    page.locator('#start-point-tools > summary').click()
     expect(page.locator('#map-stage')).to_have_attribute('data-map-state','ready',timeout=15000)
     expect(page.locator('#start-point-pick')).to_be_enabled(timeout=15000)
     page.evaluate("""() => {

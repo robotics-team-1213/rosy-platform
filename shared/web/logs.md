@@ -634,3 +634,10 @@
 - 변경: Wi-Fi 이름·암호의 지속 라벨과 공용 Wi-Fi 아이콘을 사용하고, 프로파일·AP·모드 전환은 기본 접힌 고급 작업으로 묶는다. 연결만 primary이며 결과·차단 안내는 접힌 영역 밖에 유지한다. D-432 추가 결정에 근거와 검증 범위를 기록했다.
 - 검증: 실제 Chromium fixture 1366×768·390×844에서 작업 순서와 라벨을 확인했다. 원본 상태·권한·확인·요청 중 잠금·암호 지우기와 API는 유지한다. 관련 브라우저 및 공용 아이콘·자산·토큰 계약 검증은 커밋 전 실행한다.
 - gate 변화: 없음. 화면 SOURCE/LOCAL 보완과 관련 검사 85 PASS이며 실제 네트워크 설정 변경·네이티브 페어링·기기 배포·현장 수용은 이 증거로 통과 처리하지 않는다.
+
+## 2026-10-05 · uncommitted · fix(ui): 확인창 닫기의 동기 소유권과 재사용 경계
+
+- 변경: 공용 live dialog가 반환하는 닫기 함수는 native close와 같은 idempotent 정리를 즉시 수행한다. 이전 닫기 핸들과 늦은 native close는 같은 DOM의 새 소유자를 닫지 못하며, 취소·실행·Abort·정지의 기존 권한과 정지 click 처리기는 유지한다.
+- 증거: 원래 Fleet 목표 취소 직후 Escape 실패를 실제 Chromium에서 재현했다. 원래 세 실패와 시작점·Fleet 정지·로봇 삭제/정지·Abort 소비 회귀 12 PASS79.54s, 강화한 같은 DOM 재사용/native B close 1 PASS3.48s. 독립 검토자는 실제 stale handle RED 후 재사용1 PASS2.57s·긴급 정지1 PASS5.23s를 확인했다.
+- 한계: 첫 확장 실행6 PASS3 SKIP2 canonical import prerequisite 실패를 보존했다. 두 opt-in과 정본 package path로 최종12건은 전부 실행했다. 호스트 정적39 PASS 및 기존 Fleet package 예산1 FAIL을 별도 기록하고 예산을 완화하지 않았다. 실제 기기나 제어 명령 증거는 없다.
+- gate 변화: 없음. 공용 SOURCE/LOCAL 회귀 보완이며 장치·현장 수용은 별도다.

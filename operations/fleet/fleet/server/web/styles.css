@@ -177,7 +177,7 @@ main {
     grid-column: 1;
     grid-row: 2;
   }
-  #map-canvas { height: min(42dvh, 30rem); }
+  .map-stage #map-canvas { height: min(42dvh, 30rem); }
   /* 2026-10-02 회차 계측 — 큐가 채워지는 순간 지도 아래 칸은 '예외가 먼저'(D-201)를
      위반한다(1920에서 큐 상단 963px). 예외 큐는 첫 행, 지도는 그 아래. */
   .queues-panel { grid-column: 1; grid-row: 1; }

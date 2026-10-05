@@ -126,6 +126,10 @@ plans:
 
 ## 다음 gate
 
+- 2026-10-05: 목표 취소 직후 Escape·1920×1080 기본 화면 적합·카메라 미지원 중복
+  조회를 수정했다. 기존 시작점 저장·재로드·권한 변경·지도 교체 회귀를 유지했다.
+  실제 Chromium fixture 증거이며 현장 명령·연결 수용이나 기존 HOLD 해제를 뜻하지 않는다.
+
 1. Ubuntu 24.04 현장 호스트에 immutable candidate를 설치하고 Docker/Compose, 재부팅 복구, loaded image ID, TLS/FQDN/firewall 및 RTX 5080 driver를 확인한다.
 2. 실제 CORE와 천장 phone을 연결해 pairing/authentication, reconnect, event/task correlation, timestamp/freshness 및 sighting 품질을 관찰·기록한다.
 3. D-268 evidence 형식과 freshness/false-trigger 수치를 합의·측정하기 전까지 자동 policy task 생성을 비활성으로 둔다. 통과 이후에도 운영자 승인과 CORE 안전 조건을 확인하는 별도 제한 시험이 필요하다.

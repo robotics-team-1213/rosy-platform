@@ -1868,3 +1868,10 @@
 - 변경: 진입·해제 시작·최종 해제는 현재 task/attempt/robot/map revision/generation 전체 결속을 대조한다. 미래·비유한 위치와 시간대 없는 시각은 해제 근거가 아니며, 진입 이후 관측의 나이 0~2 s를 최종 삭제에서도 다시 검사한다. 활성 grant의 구간 정의를 덮어쓰지 않는다. 모든 쓰기 helper는 자신의 SAVEPOINT만 닫고 호출자의 기존 Task DB 트랜잭션과 rollback을 보존한다. 표 준비는 implicit commit을 일으키는 executescript를 쓰지 않는다.
 - 증거: 원래 실제 SQLite 미래/NaN/Infinity 위치 해제, 오래된 최종 해제, 읽기·쓰기 중 pending audit 조기 commit 반례 6 FAIL을 재현했다. 기존 10건과 결속·관측·정의·rollback 회귀 31건, TaskStore/dispatch/traffic 관련 시험 합계 106 PASS(6.47s), known_failures 0 NEW, owned flake8 0이다. 원래 성공 fixture의 5 s 최종 대기는 기존 2 s 계약에 맞는 1 s로 정정했다.
 - gate 변화: SQLite 순수 helper SOURCE/LOCAL 보완만. 이 helper는 실제 dispatcher·driver와 연결되지 않았고 robot-side 진입 fence·실제 ROS/SIM·장치 수용은 HOLD를 유지한다. UNKNOWN·RESERVED를 시한만으로 풀거나 motion·승인 역할·전송 경로를 추가하지 않았다.
+
+## 2026-10-05 · uncommitted · fix(ui): 목표 취소·관제 적합·미지원 카메라 조회 복구
+
+- 변경: 시작점 설정을 기본 접힌 disclosure로 묶고 모든 입력·저장·상태·지도 표시는 유지했다. wide 지도42dvh 규칙이 뒤의 기본54dvh 규칙에 덮이지 않도록 실제 CSS 우선순위를 바로잡았다. v2 카메라의 인증된 지원 조회가 성공하기 전에는 legacy source 목록을 추가 조회하지 않는다.
+- 증거: 원래 세 브라우저 회귀3 FAIL14.85s를 재현했다. 첫 수정은2 PASS1 FAIL21.55s(문서 overflow258→4px)이었고 최종12 PASS79.54s에서 원래 viewport·키보드·카메라404 횟수와 시작점 저장/재로드/토큰 교체/지도 변경, Stop·확인·Abort 계약을 유지했다.
+- 경계: fixture·로컬 Chromium SOURCE/LOCAL 보완만. 서버 권한·API·자동 페어링·실제 로봇 명령을 추가하지 않는다. 정적 계약39 PASS1 inherited P6 FAIL을 보존했고 package 예산이나 기존 거대 파일 verdict를 바꾸지 않았다. 기존 게이트/HOLD·장치 수용은 그대로다.
+- gate 변화: 없음. 기본 화면과 기존 조작 계약 복구이며 실제 연결·제어 수용은 별도다.

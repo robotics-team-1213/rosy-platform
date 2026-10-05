@@ -108,6 +108,34 @@ def page():
         browser.close()
 
 
+def test_closed_dialog_handle_cannot_close_a_new_owner(page):
+    page.goto(f"{HOST}/button")
+    page.evaluate("""async () => {
+      const {openLiveDialog}=await import('/common/ui.js');
+      const opener=document.createElement('button');opener.id='opener';opener.textContent='open';
+      const dialog=document.createElement('dialog');dialog.innerHTML='<button id="close-owner">close</button>';
+      document.body.append(opener,dialog);window.closedA=0;window.closedB=0;
+      const closeA=openLiveDialog(dialog,{opener,onClose:()=>window.closedA++});
+      closeA('cancel');
+      window.closeB=openLiveDialog(dialog,{opener,onClose:()=>window.closedB++});
+      closeA('confirm');
+      document.querySelector('#close-owner').addEventListener('click',()=>dialog.close('cancel'));
+      window.frames=0;requestAnimationFrame(()=>requestAnimationFrame(()=>window.frames=2));
+    }""")
+    page.wait_for_function('window.frames===2')
+    assert page.locator('dialog[open]').count() == 1
+    assert page.locator('.ui-confirm-scrim').count() == 1
+    assert page.locator('#opener').evaluate('(node)=>node.inert')
+    assert page.evaluate('[window.closedA,window.closedB]') == [1, 0]
+    page.locator('#close-owner').click()
+    page.wait_for_function('window.closedB===1')
+    assert page.locator('dialog[open]').count() == 0
+    assert page.locator('.ui-confirm-scrim').count() == 0
+    assert not page.locator('#opener').evaluate('(node)=>node.inert')
+    assert page.evaluate('document.activeElement.id') == 'opener'
+    assert page.evaluate('[window.closedA,window.closedB]') == [1, 1]
+
+
 def test_reason_renders_visible_text_linked_by_describedby(page):
     page.goto(f"{HOST}/button")
     page.wait_for_function("() => customElements.get('ui-button') && document.querySelector('#go small')")
