@@ -135,6 +135,78 @@ def _runner(tmp_path, driver=None, phase_runner_factories=None,
     return store, driver, runner
 
 
+@pytest.mark.parametrize("revocation", ["expiry", "capability", "principal"])
+def test_direct_submission_rechecks_authority_after_durable_preparation(
+        tmp_path, monkeypatch, revocation):
+    grant = FleetActionGrant.model_validate(_grant())
+    clock = [grant.issued_at]
+    current = [True]
+    principal = ["fleet-uid-1001"]
+    store, driver, runner = _runner(
+        tmp_path, capability_current=lambda grant: current[0],
+    )
+    runner.now = lambda: clock[0]
+    runner.principal_for_peer = lambda uid: principal[0]
+    original = store.begin_submission
+
+    def prepare(*args, **kwargs):
+        result = original(*args, **kwargs)
+        if revocation == "expiry":
+            clock[0] = grant.expires_at
+        elif revocation == "capability":
+            current[0] = False
+        else:
+            principal[0] = "different-principal"
+        return result
+
+    monkeypatch.setattr(store, "begin_submission", prepare)
+    receipt = runner.submit(grant, peer_uid=1001)
+    assert driver.submissions == []
+    assert receipt["state"] == "UNKNOWN"
+    assert receipt["driver_goal_id"] is None
+
+
+def test_provider_delay_cannot_extend_original_grant_expiry(tmp_path):
+    grant = FleetActionGrant.model_validate(_grant())
+    clock = [grant.issued_at]
+
+    def capability_current(value):
+        clock[0] = grant.expires_at
+        return True
+
+    store, driver, runner = _runner(tmp_path, capability_current=capability_current)
+    runner.now = lambda: clock[0]
+    with pytest.raises(PermissionError, match="expired"):
+        runner.submit(grant, peer_uid=1001)
+    assert store.get_action(grant.action_id) is None
+    assert driver.submissions == []
+
+
+@pytest.mark.parametrize("change", ["principal", "fence", "provider"])
+def test_final_capability_callback_cannot_invalidate_checked_authority(tmp_path, change):
+    principal = ["fleet-uid-1001"]
+    fence = [True]
+    calls = [0]
+
+    def capability_current(grant):
+        calls[0] += 1
+        if calls[0] == 2:
+            if change == "principal":
+                principal[0] = "different-principal"
+            elif change == "fence":
+                fence[0] = False
+            else:
+                runner.capability_current = lambda grant: False
+        return True
+
+    store, driver, runner = _runner(tmp_path, capability_current=capability_current)
+    runner.principal_for_peer = lambda uid: principal[0]
+    runner.current_fence = lambda epoch, generation: fence[0]
+    receipt = runner.submit(FleetActionGrant.model_validate(_grant()), peer_uid=1001)
+    assert driver.submissions == []
+    assert receipt["state"] == "UNKNOWN"
+
+
 def test_cell_transfer_uds_grant_reaches_only_its_phase_runner(tmp_path):
     seen = []
 
