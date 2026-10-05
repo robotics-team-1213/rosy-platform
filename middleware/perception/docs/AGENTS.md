@@ -11,7 +11,7 @@ Operator-facing notes for camera ground calibration, localization, and narrow-pa
 
 | File | Description |
 |------|-------------|
-| `camera-ground-calibration.md` | Automatic stationary camera/LiDAR fitting replaces manual height/pitch entry; weak candidates and unobservable geometry stay unapplied |
+| `camera-ground-calibration.md` | Automatic stationary camera/LiDAR fitting and two-image checkerboard pose candidates replace manual height/pitch entry; thickness/intrinsics provenance stays explicit and candidates stay unapplied |
 | `localization.md` | Localization notes for the desk-maze robot |
 | `narrow-passage-navigation.md` | Narrow-passage behavior and limits |
 

@@ -585,7 +585,8 @@ def test_a_formation_near_the_mover_is_stopped():
     leader = _mover()
     console = _console(leader, mover)
     run(console.snapshot())
-    console._formation = SimpleNamespace(state="RUNNING", assignment={"rosy_03": "slot"})
+    console._formation = SimpleNamespace(state="RUNNING", assignment={"rosy_03": "slot"},
+                                         follower_ids=frozenset({"rosy_03"}))
     console._formation_leader = "rosy_01"
     stopped = []
 

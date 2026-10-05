@@ -539,3 +539,9 @@
 - 변경: 체인 verifier 부재를 인증서의 신규 날짜 API 접근 전에 거절한다. 검증할 수 없는 CA를 공개하지 않으며 기존 49.0.0 체인·호스트·만료 검증을 유지한다.
 - 증거: verifier와 신규 날짜 속성이 없는 구버전 형태에서 AttributeError를 재현했다. 수리 후 CI 의존성·TLS·버전 관련 19 passed, 실패 0이다.
 - gate 변화: SOURCE/LOCAL. 구버전 지원이 인증서 신뢰나 연결 승인을 대신하지 않는다.
+
+## 2026-10-05 · uncommitted · fix(api): align description with Fleet CAP-001 contract version
+
+- 변경: app factory metadata names API Ref v1.105; routes, envelope 1.0 and control behavior stay unchanged.
+- 증거: version alignment RED 1 FAIL then GREEN 3 PASS; X:/DevTemp/rosy-fleet-browser/api-description-green.txt.
+- gate 변화: none; source metadata only, no robot release activation.

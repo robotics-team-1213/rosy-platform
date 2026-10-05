@@ -112,6 +112,7 @@ class RobotClient(Protocol):
     robot_id: str
 
     async def state(self) -> dict: ...
+    async def capabilities(self) -> dict: ...
     async def map(self) -> dict: ...
     async def swarm_state(self) -> dict: ...
     async def follow(self, params: SwarmFollowParams) -> dict: ...
@@ -145,6 +146,15 @@ class RobotClient(Protocol):
     def pose_stream(self) -> AsyncIterator[str]: ...
     async def open_reference_sink(self) -> ReferenceSink: ...
     def events(self, types: Sequence[str]) -> AsyncIterator[dict]: ...
+
+
+async def require_capability(client: RobotClient, feature: str) -> None:
+    """Fresh CAP-001 preflight; cached presentation never authorizes a command."""
+    value = await client.capabilities()
+    for part in feature.split("."):
+        value = value.get(part) if isinstance(value, dict) else None
+    if value is not True:
+        raise RobotApiError(client.robot_id, 501, "NOT_SUPPORTED", f"{feature} is not advertised")
 
 
 class _WebsocketSink:
@@ -228,6 +238,9 @@ class HttpRobotClient:
 
     async def state(self) -> dict:
         return await self._get("/api/v1/robot/state")
+
+    async def capabilities(self) -> dict:
+        return await self._get("/api/v1/system/capabilities")
 
     async def map(self) -> dict:
         """점유 격자. 관제 화면이 N대를 한 좌표계 위에 그리려면 이것 하나가 필요하다."""
