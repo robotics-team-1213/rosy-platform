@@ -1,5 +1,6 @@
 """Existing encrypted enrollment must select authenticated transport, not another roster."""
 import asyncio
+import socket
 
 import httpx
 import pytest
@@ -124,6 +125,11 @@ def test_dhcp_rest_bearer_follows_only_verified_receiver(tmp_path, monkeypatch):
             await client.state()
         assert len(calls) == 1 and 'Authorization' not in calls[0].headers
         calls.clear()
+
+        def missing(*args, **kwargs):
+            raise socket.gaierror(8, 'fixture')
+
+        monkeypatch.setattr('fleet.swarm.discovery_transport.socket.getaddrinfo', missing)
         rows.clear()
         with pytest.raises(ValueError, match='not_discovered'):
             await client.state()
