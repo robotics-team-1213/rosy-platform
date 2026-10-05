@@ -6295,3 +6295,9 @@ osy-d395-s1d\`.
 - 변경: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)에 Pilot Shell 400dp/글자 130% 네이티브 화면 판정을 추가했다.
 - 증거: 격리 Android 에뮬레이터 캡처·UI bounds에서 제목·다시 찾기·상태·기기 버튼이 화면 안에 있음을 확인했다. 원본은 X:에 둔다.
 - gate 변화: Pilot Shell LOCAL G2 부분 근거만 추가. 제품 전체 UI/UX는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux: 추가 활성 표면 평가 카드
+
+- 변경: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)에 학습 검수·Pilot Shell·Cam의 표면 질문, 뷰포트, G2 잔여 상태, D-153 여덟 G3 항목을 선언했다.
+- 증거: 기존 브라우저·에뮬레이터 LOCAL 캡처와 활성 표면 등록을 대조했다.
+- gate 변화: 세 표면과 제품 전체는 G2/G3 HOLD다.
