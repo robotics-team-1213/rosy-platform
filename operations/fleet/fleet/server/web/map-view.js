@@ -614,6 +614,7 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     } catch (err) {
       if (err.name === "AbortError") return;
       view.map = null;
+      if (auth.locked) return;
       if (!auth.locked) mapFailure = mapGate.fail(err.status, err.code);
       if (view.siteMap && !auth.locked) {
         // 점유 격자 없이 카메라 사각형만 있다 — 관측 전용 뷰. 목표 지정은 계속 막힌다.

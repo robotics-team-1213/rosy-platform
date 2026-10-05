@@ -22,6 +22,15 @@ pytestmark = pytest.mark.skipif(os.environ.get('ROSY_BROWSER_TESTS') != '1', rea
 ROOT = Path(__file__).resolve().parents[3]
 
 
+def capture_console(page, name):
+    directory = os.environ.get('ROSY_UX_EVIDENCE_DIR')
+    if directory:
+        target = Path(directory)
+        target.mkdir(parents=True, exist_ok=True)
+        page.evaluate('window.scrollTo(0, 0)')
+        page.screenshot(path=str(target / name), full_page=True)
+
+
 @pytest.fixture
 def browser_site(tmp_path):
     from playwright.sync_api import sync_playwright
@@ -92,6 +101,50 @@ def test_token_switch_clears_start_reference_and_blocks_edits(browser_site):
     expect(page.locator('#start-point-save')).to_be_disabled()
     assert page.locator('#start-point-x').input_value()==''
     assert not [call for call in robot.calls if call[0]=='navigation_goal']
+
+
+def test_connection_guide_replaces_loading_and_recovers(browser_site):
+    from playwright.sync_api import expect
+    page, robot, tracking = browser_site
+    errors = []; page.on('pageerror', lambda error: errors.append(str(error)))
+    expect(page.locator('#start-point-save')).to_be_enabled(timeout=15000)
+    if page.locator('#topbar-more').is_visible(): page.locator('#topbar-more').click()
+    page.locator('#console-token').fill('')
+    page.locator('#token-save').click()
+    expect(page.locator('#connection-guide')).to_be_visible()
+    expect(page.locator('#roster')).to_contain_text('관제에 접속하면')
+    expect(page.locator('#map-empty-title')).to_have_text('관제 접속 필요')
+    expect(page.locator('#dispatch-control-title')).to_have_text('관제 접속 필요')
+    expect(page.locator('#start-point-state')).to_contain_text('관제에 접속')
+    expect(page.locator('#start-point-save')).to_be_disabled()
+    capture_console(page, 'connection-desktop.png')
+    page.locator('#connection-guide-action').click()
+    expect(page.locator('#console-token')).to_be_focused()
+    page.locator('#console-token').fill('operator-secret')
+    page.locator('#console-token').press('Enter')
+    expect(page.locator('#connection-guide')).to_be_hidden()
+    expect(page.locator('#start-point-save')).to_be_enabled(timeout=15000)
+    capture_console(page, 'connected-desktop.png')
+    assert not [call for call in robot.calls if call[0] == 'navigation_goal']
+    assert not errors
+
+
+def test_missing_calibration_shows_next_action_on_mobile(browser_site):
+    from playwright.sync_api import expect
+    page, robot, tracking = browser_site
+    errors = []; page.on('pageerror', lambda error: errors.append(str(error)))
+    page.route('**/api/fleet/calibrations', lambda route: route.fulfill(
+        status=200, content_type='application/json', body='{"calibrations":[]}'))
+    page.set_viewport_size({'width':390,'height':844})
+    page.reload()
+    page.locator('#start-point-tools > summary').click()
+    expect(page.locator('#start-point-state')).to_contain_text('보정을 먼저 적용', timeout=15000)
+    expect(page.locator('#console-workflow')).to_be_visible()
+    expect(page.locator('#start-point-save')).to_be_disabled()
+    assert page.evaluate('document.documentElement.scrollWidth <= window.innerWidth')
+    capture_console(page, 'calibration-mobile.png')
+    assert not [call for call in robot.calls if call[0] == 'navigation_goal']
+    assert not errors
 
 
 def test_map_changed_during_pick_is_cancelled_and_grid_marker_is_drawn(browser_site):

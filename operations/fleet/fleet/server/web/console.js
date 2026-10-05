@@ -74,9 +74,16 @@ function setTopbarOpen(open) {
 pageScope.listen(el("topbar-more"), "click", () => {
   setTopbarOpen(el("topbar-more").getAttribute("aria-expanded") !== "true");
 });
+for (const id of ["workflow-connect", "connection-guide-action"]) {
+  pageScope.listen(el(id), "click", event => {
+    event.preventDefault(); setTopbarOpen(true); el("console-token").focus();
+  });
+}
+pageScope.listen(el("workflow-start"), "click", () => { el("start-point-tools").open = true; });
 
-function markLocked() {
+function markLocked(reason = "auth") {
   confirmedAction.cancel();
+  const firstLock = !auth.locked;
   auth.locked = true;
   setTopbarOpen(true);
   auth.role = null;
@@ -86,11 +93,36 @@ function markLocked() {
   const pill = el("online-pill");
   pill.textContent = "토큰 필요";
   pill.setAttribute("status", "crit");
-  el("console-token").setAttribute("aria-invalid", "true");
+  if (auth.token && reason === "auth") el("console-token").setAttribute("aria-invalid", "true");
+  el("connection-guide").hidden = false;
+  const title = reason === "auth" ? "관제 접속 필요" : "관제 연결 확인 필요";
+  el("connection-guide-title").textContent = title;
+  el("connection-guide-detail").textContent = reason !== "auth"
+    ? "관제 PC의 연결 상태를 확인한 뒤 다시 접속하세요."
+    : auth.token ? "관제 토큰이 확인되지 않았습니다. 토큰을 확인한 뒤 다시 접속하세요."
+      : "관제 토큰으로 접속하면 로봇·카메라·지도 상태를 확인할 수 있습니다.";
+  if (firstLock) {
+    Object.assign(view, {robots: [], map: null, siteMap: null, sightings: [], cameraTracking: {robots: [], unknown: []},
+      stateLoaded: false, stateUnavailable: false, selected: null, cursor: null, formation: null, signals: {}});
+    visionView.reset(); trackingView.reset(); startPointView.reset();
+  }
+  el("map-stage").dataset.mapState = "auth";
+  const canvas = el("map-canvas");
+  canvas.getContext("2d").clearRect(0, 0, canvas.width, canvas.height);
+  canvas.setAttribute("aria-hidden", "true"); canvas.tabIndex = -1; canvas.classList.add("idle");
+  el("map-empty").hidden = false; el("map-legend").hidden = true;
+  el("map-empty-title").textContent = title;
+  el("map-empty-detail").textContent = "관제에 접속하면 지도와 로봇 좌표를 확인할 수 있습니다.";
+  el("map-tag").textContent = "접속 필요";
+  el("dispatch-control-title").textContent = title;
+  el("dispatch-control-detail").textContent = "관제에 접속하면 대기 작업과 발행 상태를 확인할 수 있습니다.";
+  el("dispatch-rearm").hidden = true;
+  render();
 }
 
 function markUnlocked() {
   auth.locked = false;
+  el("connection-guide").hidden = true;
   el("console-token").removeAttribute("aria-invalid");
 }
 
@@ -142,7 +174,8 @@ async function call(path, options = {}) {
   try {
     const body = await fleetClient(path, {...options, signals: [...(options.signals || []), task.signal]});
     task.check();
-    markUnlocked();
+    if (auth.locked && path !== "/api/fleet/session") throw new DOMException("Authentication changed", "AbortError");
+    if (path === "/api/fleet/session") markUnlocked();
     return body;
   } catch (error) {
     task.check();
@@ -179,6 +212,7 @@ async function refreshDispatchControl(life = pageScope.capture()) {
     return state;
   } catch (err) {
     if (err.name === "AbortError") return;
+    if (auth.locked) return;
     view.dispatchControl = null;
     if (dispatchGate.fail(err.status, err.code) === "absent") {
       // 작업 대기열이 없는 Fleet — 발행 래치 자체가 없다. 오류가 아니다.
@@ -239,7 +273,8 @@ function render() {
     empty.textContent = `개입할 로봇 없음 · 정상 ${normalCount}대`;
     rosterBox.replaceChildren(empty);
   } else {
-    const message = view.stateUnavailable ? "Fleet 상태를 확인할 수 없습니다. 연결을 확인하세요."
+    const message = auth.locked ? "관제에 접속하면 등록 로봇과 연결 상태를 확인할 수 있습니다."
+      : view.stateUnavailable ? "Fleet 상태를 확인할 수 없습니다. 연결을 확인하세요."
       : view.stateLoaded ? "등록된 로봇이 없습니다. 발견 목록에서 페어링 상태를 확인하세요."
         : "로봇 목록 불러오는 중";
     if (rosterBox.childElementCount !== 1 ||
@@ -266,6 +301,7 @@ function render() {
   formation.fillLeaders();
   mapView.draw();
   applyRoleToControls(auth.role, operatorControls());
+  startPointView.updateAuthorization();
   const hint = el("hint");
   const point = view.selected && view.cursor && view.map
     ? mapView.toWorld(view.map, view.cursor.col, view.cursor.row) : null;
@@ -455,7 +491,7 @@ async function refreshAuthorization() {
     render();
   } catch (_err) {
     if (_err.name === "AbortError") return;
-    if (!auth.locked) markLocked();
+    if (!auth.locked) markLocked(_err.status === 401 ? "auth" : "connection");
   }
 }
 

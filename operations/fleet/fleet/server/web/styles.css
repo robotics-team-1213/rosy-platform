@@ -1,5 +1,22 @@
 * { box-sizing: border-box; }
 
+.console-workflow, .connection-guide { margin: var(--space-3) var(--space-4); }
+.console-workflow ol { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-2); padding: 0; margin: 0; list-style: none; }
+.console-workflow a { display: flex; align-items: center; gap: var(--space-2); min-height: var(--target-secondary); padding: var(--space-2); color: var(--ink); text-decoration: none; border-bottom: 1px solid var(--line-14); }
+.console-workflow span { color: var(--ink-quiet); font-family: var(--mono); }
+.connection-guide { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-3); padding: var(--space-4); border: 1px solid var(--line-14); border-radius: var(--radius-panel); background: var(--surface-flat); }
+.connection-guide[hidden] { display: none; }
+.connection-guide > div { flex: 1 1 16rem; min-width: 0; }
+.connection-guide h2 { margin: 0 0 var(--space-2); font-size: var(--text-title); }
+.connection-guide p { margin: 0; color: var(--ink-quiet); }
+.connection-guide a { display: inline-flex; align-items: center; min-height: var(--target-secondary); padding: var(--space-2) var(--space-3); border: 1px solid var(--line-14); border-radius: var(--radius-button); color: var(--ink); }
+.console-workflow a:focus-visible, .connection-guide a:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
+.start-point-fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-3); margin: var(--space-3) 0; }
+.start-point-fields label { display: grid; gap: var(--space-2); min-width: 0; }
+.start-point-fields .ui-field { width: 100%; min-width: 0; }
+.start-point-camera { grid-column: 1 / -1; }
+@media (width < 64rem) { .console-workflow ol { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
 /* Fleet task owners remain mounted; visibility is navigation-owned. */
 #install-main { grid-template-columns: minmax(0, 1fr); }
 .install-tasks { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-4); }
