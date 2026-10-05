@@ -77,3 +77,23 @@ def test_flood_preserves_high_contrast_photo_boundary(tmp_path):
     store = SimpleNamespace(image=lambda index: image)
     region = review_masks.flood_region(store, 0, {'width': 3, 'height': 1}, [0, 0], 16)
     assert region.tolist() == [[True, False, False]]
+
+
+def test_flood_lab_distance_and_four_connectivity():
+    pytest.importorskip('cv2')
+    grey = np.full((4, 6, 3), 120, dtype=np.uint8)
+    grey[:, 3:] = 200
+    left = review_masks.flood_region_photo(grey, [0, 0], 10)
+    assert left[:, :3].all() and not left[:, 3:].any()
+    diagonal = np.array([[[10, 10, 10], [200, 200, 200]],
+                         [[200, 200, 200], [10, 10, 10]]], dtype=np.uint8)
+    region = review_masks.flood_region_photo(diagonal, [0, 0], 0)
+    assert region.tolist() == [[True, False], [False, False]]
+
+
+def test_flood_one_pixel_barrier_blocks_region():
+    pytest.importorskip('cv2')
+    photo = np.full((5, 5, 3), 100, dtype=np.uint8)
+    photo[2, :] = (0, 0, 255)
+    region = review_masks.flood_region_photo(photo, [0, 0], 10)
+    assert region[:2].all() and not region[2:].any()
