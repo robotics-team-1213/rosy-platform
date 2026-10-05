@@ -6018,3 +6018,8 @@ osy-d395-s1d\`.
 - 변경: D-466. 머리 자리는 brand·cluster·estop이고, 절차를 고르는 열은 --sidebar-track 하나다. 로봇 절차 칸과 Fleet 설치 칸이 그 트랙을 쓴다.
 - 증거: test_chrome_layout.py와 토큰 계약 37 passed. 호스트 계약이며 장치 수용은 없다.
 - gate 변화: 없음.
+
+## 2026-10-05 · uncommitted · fix(learning): invert guarded ACT input dependencies
+- Change: common stdlib inference DTOs and explicit owner capture_inference_input port replace the initial forbidden learning-to-safety imports. ACT reexports the same DTO types; pure infer_captured never accesses owner internals. Isolated caller composes post-lease validation and candidate creation. Contract wheel/pins 0.1.9.
+- Evidence: correction: earlier 252 PASS untracked-source run omitted new-module architecture scan. Committed scan found 2 NEW dependency failures; original failure log retained. Tracked corrected architecture/pin selection3 PASS. Final CPU17 PASS and independentSafety22 PASS/1torchSKIP/0NEW; dependency-exemption and public-anchor lists unchanged.
+- gate 변화: SOURCE/HOST/isolated numerical input only; trusted capture issuer, actual installed artifact, native inference task and physical acceptance remain HOLD.

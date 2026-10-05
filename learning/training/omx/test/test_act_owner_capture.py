@@ -1,5 +1,5 @@
 """Private learning composition; fake predictor/clock are not inference/device proof."""
-from dataclasses import replace
+from dataclasses import dataclass, replace
 import hashlib
 import json
 from pathlib import Path
@@ -13,9 +13,32 @@ sys.path[:0] = [str(ROOT/p) for p in ('learning/training/omx',
 from test_omx_policy_session import setup_session, CameraSnapshot
 from test_act_inference import artifact
 from act_inference import ACTInference
-from act_owner_capture import CapturedRGB, infer_for_owner
+from act_owner_capture import infer_captured
+from rosy.execution.local.omx_policy import PolicyCandidate
 from rosy.execution.local.policy_install import InstallBinding, load_policy
 from rosy.contracts.learning import seal
+
+
+@dataclass(frozen=True)
+class CapturedRGB:
+    # Test caller's retained capture pair, not a trust/owner API.
+    metadata: CameraSnapshot
+    rgb: bytes
+
+
+def infer_for_owner(engine, session, packet):
+    # Explicit isolated caller; no production scheduler or default activation.
+    with session._lock:
+        lease = session.lease
+        doc = session.policy.recheck()
+        if engine.metadata != doc: raise ValueError('different installed policy')
+        observation = session.capture_inference_input(packet.rgb, packet.metadata)
+    result = infer_captured(engine, observation, expected_revision=lease.policy_revision,
+                            monotonic=session._clock)
+    with session._lock:
+        if session.lease is not lease or session.policy.recheck() != doc:
+            raise ValueError('lease or model changed during inference')
+    return PolicyCandidate(**result.candidate_fields()), result
 
 
 def case(tmp_path, monkeypatch, *, enabled=True):
@@ -67,7 +90,7 @@ def test_exact_capture_and_candidate_reaches_existing_owner(tmp_path, monkeypatc
 def test_replaced_capture_rejected_before_predict(tmp_path, monkeypatch, change):
     session, engine, packet, client, _, _, _, seen, _ = case(tmp_path, monkeypatch)
     if change == 'bytes':
-        with pytest.raises(ValueError): CapturedRGB(packet.metadata, b'\0'*192)
+        with pytest.raises(ValueError): session.capture_inference_input(b'\0'*192, packet.metadata)
         return
     metadata = replace(packet.metadata, **({'received_at_ns': 10_000_000_001}
                        if change == 'timestamp' else {'identity': 'other-camera'}))
@@ -119,9 +142,9 @@ def test_disabled_owner_rejects_before_predict(tmp_path, monkeypatch):
 
 
 def test_capture_buffer_is_frozen(tmp_path, monkeypatch):
-    _, _, packet, *_ = case(tmp_path, monkeypatch)
+    session, _, packet, *_ = case(tmp_path, monkeypatch)
     mutable = bytearray(packet.rgb)
-    frozen = CapturedRGB(packet.metadata, mutable)
+    frozen = session.capture_inference_input(mutable, packet.metadata)
     mutable[0] ^= 255
     assert frozen.rgb == packet.rgb
 
@@ -148,6 +171,31 @@ def test_queued_old_source_is_not_refreshed_to_pass_owner(tmp_path, monkeypatch)
     candidate, result = infer_for_owner(engine, session, CapturedRGB(cameras[0], packet.rgb))
     assert not result.consumed_current and candidate.sequence == 10
     with pytest.raises(PermissionError): session.submit(candidate)
+    assert not client.commands
+
+
+def test_common_dto_identity_preserves_learning_api():
+    from act_inference import InferenceObservation, InferenceResult
+    from rosy.contracts.learning import inference
+    assert InferenceObservation is inference.InferenceObservation
+    assert InferenceResult is inference.InferenceResult
+
+
+def test_reentrant_camera_callback_lease_change_is_denied(tmp_path, monkeypatch):
+    session, _, packet, client, *_ = case(tmp_path, monkeypatch)
+    def replaced():
+        session._lease = replace(session.lease, lease_id='new-lease')
+        return (packet.metadata,)
+    session._cameras = replaced
+    with pytest.raises(PermissionError): session.capture_inference_input(packet.rgb, packet.metadata)
+    assert session.hold_reason and not client.commands
+
+
+def test_same_hash_wrong_rgb_dimensions_is_rejected(tmp_path, monkeypatch):
+    session, _, packet, client, _, _, cameras, _, _ = case(tmp_path, monkeypatch)
+    rgb = b'short'
+    cameras[0] = replace(cameras[0], frame_sha256=hashlib.sha256(rgb).hexdigest())
+    with pytest.raises(ValueError): session.capture_inference_input(rgb, cameras[0])
     assert not client.commands
 
 
