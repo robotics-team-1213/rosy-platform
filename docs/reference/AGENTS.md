@@ -14,6 +14,7 @@ Shared contracts: REST/WS/protocol, architecture decisions, and the Host Agent u
 | `ROSY API & Protocol Reference.md` | ROSY-API-REF-001 — only shared robot/fleet/SDK interface; `/api/v1`, envelope, events |
 | `ROSY ADR Log.md` | ROSY-ADR-001 — append-only decisions through D-247 (D-19 superseded by D-26, D-6 by D-33, D-22 by D-161; D-161/D-197 qualified by D-246; gaps D-29, D-35, D-204, D-223, D-234–D-240, D-244) |
 | `rosy-host-agent-contract.md` | ROSY-HOSTAGENT-001 — `/run/rosy/host-agent.sock`, no arbitrary shell |
+| `team-guide.md` | 새 팀원 안내: 첫날 설정, 공유 범위(공개 저장소 / Notion / 비공개), 작업 방식, 작업 영역. 규칙 원본은 README·AGENTS·ADR |
 | `ROSY Module Operational Acceptance Criteria.md` | ROSY-MODULE-ACCEPTANCE-001 — per-package operational GO criteria, evidence gates, and M01–M14 traceability |
 
 ## Subdirectories
