@@ -95,6 +95,7 @@ h1 {
 .field-details {
   display: flex;
   flex-direction: column;
+  align-self: start;
   min-width: 0;
   padding: var(--space-4);
   border: 1px solid var(--score-gap);

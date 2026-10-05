@@ -300,8 +300,8 @@
 
 ## 최근 기록
 
+- 2026-10-06 · uncommitted · uiux(docs): 게임 보드 현재 LOCAL 캡처 추가
 - 2026-10-06 · uncommitted · uiux(docs): ROSY 디자인 목표와 현재 LOCAL 판정 경계
 - 2026-10-05 · uncommitted · fix(docs): C6 선택 센서 공급자 연결 판정
 - 2026-10-05 · uncommitted · feat(release): main CI to guarded robot CD
 - 2026-10-05 · uncommitted · docs(team): onboarding guide, PR template, CODEOWNERS, author guard
-- 2026-10-05 · uncommitted · fix(docs): D-468 API 변경 이력 행 보완

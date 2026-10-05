@@ -306,3 +306,9 @@
 - 검증: 최초 remaining batch는 7 passed/7 failed(38.36s)였고 실패 모두 CSP EvalError로 실제 조건 전에 멈췄다. 정확한 실패 7개만 재실행하여 7 passed(18.99s). host 문구와 실제 구조 예산은 합동 35 passed(16.68s). 근거 X:/DevTemp/rosy-ui-unify/final/games_remaining.log 및 final-plan/games-csp.log, task6-host.log.
 - gate 변화: SOURCE/LOCAL 검증 복구이며 관측 완전성을 게임 운용 승인으로 해석하지 않는다.
 - 결정: D-439 Task6. 실제 CSP를 풀거나 실패 조건을 약화하지 않고 실행 가능한 함수로 검증한다.
+
+## 2026-10-06 · uncommitted · uiux(games): 관측 카드가 빈 높이를 차지하지 않음
+
+- 변경: 경기 보드에서 프레임이 없는 관측 카드를 내용 높이로 맞춰 피치를 주 초점으로 둔다. 데스크톱·전화 상태 캡처 5장을 D-153 회차에 보존한다.
+- 증거: 게임 브라우저 18 passed, 게임 모듈 113 passed, 변경 후 진행·최초·HOLD·정지 4 passed, 데스크톱·390px 배치 1 passed, known_failures 0 NEW. Impeccable CSS 검사 새 경고 0.
+- gate 변화: LOCAL UI 증거만 추가. 실제 카메라·로봇 readback과 전체 G2/G3는 HOLD다.

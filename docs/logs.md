@@ -6169,3 +6169,9 @@ osy-d395-s1d\`.
 - 변경: 현대성·사용성·정돈·구조·통일성을 상태·다음 행동·표면 문법·너비·증거 어휘로 관찰 가능한 목표에 묶었다. D-153 회차 카드에 로봇/Fleet 데스크톱·전화 캡처와 남은 G2/G3 범위를 기록했다.
 - 증거: 관련 G1 83 passed, Fleet 적합·목표 2 passed, 모바일 기본 예외·넘침 2 passed, 각각 known_failures 0 NEW. 캡처 4장은 LOCAL fixture다.
 - gate 변화: UI/UX 전체 HOLD. 다른 활성 표면의 현재 G2/G3와 장치·현장 readback은 미검증이다.
+
+## 2026-10-06 · uncommitted · uiux(docs): 게임 보드 현재 LOCAL 캡처 추가
+
+- 변경: D-153 회차 카드에 게임 최초·진행·지연·HOLD 1280px과 지연 390px 캡처를 연결하고 관측 카드의 내용 높이 변경을 기록했다.
+- 증거: 브라우저 18 passed, 게임 모듈 113 passed, 변경 후 관련 5 passed, known_failures 0 NEW. LOCAL PreviewServer fixture다.
+- gate 변화: 제품 UI/UX HOLD 유지. 게임 전체 상태 행렬·G3·실물 수용은 미완료다.

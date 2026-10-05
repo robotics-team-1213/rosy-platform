@@ -354,6 +354,7 @@ def test_match_layout_uses_desktop_width_and_keeps_narrow_status_separate():
             }""")
             assert desktop["field"]["width"] >= 680
             assert desktop["details"]["left"] > desktop["field"]["right"]
+            assert desktop["details"]["height"] < desktop["field"]["height"] / 2
             assert desktop["halt"]["bottom"] <= 800
             assert desktop["scrollWidth"] <= 1280 and desktop["scrollHeight"] <= 800
 
@@ -372,6 +373,7 @@ def test_match_layout_uses_desktop_width_and_keeps_narrow_status_separate():
             assert narrow["scoreEvidence"]["bottom"] <= narrow["awayName"]["top"]
             assert narrow["scrollWidth"] <= 390
             assert narrow["halt"]["bottom"] <= 800 and narrow["sticky"] == "sticky"
+            save_temp_screenshot(page, "games_board_delayed_390x800.png")
             page.set_viewport_size({"width": 600, "height": 800})
             page.evaluate("window.scrollTo(0, document.documentElement.scrollHeight)")
             page.wait_for_timeout(100)
