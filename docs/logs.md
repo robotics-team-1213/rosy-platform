@@ -6076,3 +6076,8 @@ osy-d395-s1d\`.
 - 변경: 기본 /dashboard에서 기존 종합 화면 안내를 거두었다. #compatibility 경로와 종합 화면은 유지한다. 관제 머리의 Cell 작업 링크는 같은 주소와 격자 자리에서 조용한 버튼 면을 쓴다.
 - 증거: 머리·토큰·관제 페이지 계약 100 passed. known_failures 0 new. 호스트 시험이며 장치 수용은 없다.
 - gate 변화: 없음.
+
+## 2026-10-05 · uncommitted · feat(camera): replace manual camera measurement with automatic capture
+- 변경: tools/calibration/camera_auto.py and read-only camera_capture.py collect stationary camera/LiDAR/odometry and reuse the installed fitter; guide replaces manual height/pitch entry. No drive, mode, apply or calibration-session changes.
+- 증거: related 87 PASS, known failures 0 NEW; final 042-device capture 40 scans/15 frames/121 odometry, eight wall returns, REJECTED too few wall returns, applied false. docs/validation/camera-auto-2026-10-05/result.md.
+- gate 변화: SOURCE/LOCAL command verified; DEVICE capture and automatic fit executed, calibration acceptance and automatic movement remain unverified.
