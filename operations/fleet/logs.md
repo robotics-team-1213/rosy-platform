@@ -1894,6 +1894,13 @@
 - 증거: shared main과 작업 트리에서 cell app 두 파일 단독 수집이 모두 2 ERROR로 재현됐다. 수정 후 API·실제 로컬 Chromium·compiler 회귀 30 PASS, known_failures 0 NEW (`X:/DevTemp/line-remote-20261005/cell-green.txt`). 배포 gate 증거는 docs/validation/line-release-2026-10-05/ci-followup.md에 기록했다.
 - gate 변화: HOST 수집 및 회귀 PASS. 새 CI·서명 릴리스와 기기·자동 주행·FIELD 수용은 별도 검증한다.
 
+## 2026-10-05 · uncommitted · uiux/live-console: 관제 접속·좌표·시작점 준비 흐름
+
+- 변경: 관제 접속 → 카메라·지도 보정 → X/Y 좌표 확인 → 시작점 설정 안내와 접속 입력 포커스를 추가했다. 인증 상실 시 이전 지도·로봇·좌표·시작점을 지우며 지연된 일반 조회 성공이 인증을 다시 열지 않는다. 승인된 보정이 없는 첫 조회는 설치·보정 화면에서 해야 할 일을 안내한다. 시작점 입력을 PC·모바일 격자로 정리했다.
+- 증거: 새 Chromium 두 시나리오 2 FAIL 재현 후 기존 저장·재로드·인증 교체·지도 변경 포함 5 PASS. API/색상/기능 계약 62 PASS. 독립 리뷰의 D-359 breakpoint 위반 1 FAIL 재현 후 표준 구간으로 수정했고 반응형·Chromium·표시 계약 재검사 33 PASS, known_failures NEW 0. PC·모바일 브라우저 화면과 키보드 접속·가로 넘침을 확인했다.
+- 경계: API·역할·주행·보정 승인 계약은 그대로다. 브라우저 시험은 가짜 로봇 transport이며 실제 지도 좌표 오차나 현장 수용을 증명하지 않는다. CI·서명 후보·배포 readback은 이어 확인한다.
+- gate 변화: 없음. SOURCE/LOCAL UX 보완이며 원래 장치·현장 HOLD는 유지한다.
+
 ## 2026-10-05 · uncommitted · uiux: give the cell header link the quiet control face
 
 - 변경: /console 머리의 Cell 작업은 주소와 격자 자리를 유지하고, 조용한 버튼과 같은 면·높이·포커스를 쓴다.
