@@ -57,13 +57,14 @@ def publish(parent, api, journal, command_id, output):
             stream.write(raw)
             stream.flush()
             os.fsync(stream.fileno())
-    validate_profile(doc, root=output)
     payload = (json.dumps(doc, ensure_ascii=False, allow_nan=False, indent=2)+'\n').encode()
     pending = output/'.manifest.pending'
     with pending.open('xb') as stream:
         stream.write(payload)
         stream.flush()
         os.fsync(stream.fileno())
+    # Validate every persisted payload once, after all pending writes. A second
+    # full pass before the pending manifest cannot improve this final closure.
     validate_profile(doc, root=output)
     # This full reread is deliberately after every payload/manifest write.
     if (correlate_parent(parent, journal, command_id, encoded(runner_receipt)) != proof

@@ -49,6 +49,22 @@ def test_original_native_execution_to_episode_to_fleet(tmp_path):
     assert result['episode_outcome']['task'] == 'unknown'
 
 
+def test_full_profile_validation_once_after_all_pending_writes(tmp_path,monkeypatch):
+    parent,api,journal,command,_,_=setup(tmp_path)
+    module=importlib.import_module('rosy.execution.local.policy_episode')
+    original=module.validate_profile
+    calls=[]
+    output=tmp_path/'episode'
+    def validate(doc,*,root):
+        calls.append(root)
+        assert (root/'.manifest.pending').is_file()
+        assert not (root/'manifest.json').exists()
+        return original(doc,root=root)
+    monkeypatch.setattr(module,'validate_profile',validate)
+    module.publish(parent,api,journal,command,output)
+    assert calls==[output]
+
+
 @pytest.mark.parametrize('mutation', ['missing', 'api_id', 'database_id', 'other_runner'])
 def test_actual_owner_api_requires_existing_same_journal(tmp_path, mutation):
     parent, api, journal, command, _, _ = setup(tmp_path)
