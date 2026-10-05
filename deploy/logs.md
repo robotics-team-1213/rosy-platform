@@ -2559,3 +2559,9 @@
 - 변경: 운영자가 공개 CA·호스트를 확인한 뒤 `-ApiTlsHost`·`-ApiCaFile`을 함께 지정하면 보정 가드는 stdlib HTTPS helper의 실제 CA·호스트 검증 완료 후에만 Bearer를 보낸다. 토큰은 비공개 stdin JSON으로만 전달하며 응답 크기·소켓·프로세스 시간을 제한하고 리다이렉트·인증 실패·잘못된 응답을 거부한다. 로그에는 세션 ID·토큰 대신 제한된 보정 메타데이터만 남긴다. 두 CORE 재시작 도구는 모든 비영 종료를 거부하며 Force는 확인된 활성 세션만 기존 정책대로 재정의한다. 기존 HTTP 기본값은 TLS 자동 감지가 아니다.
 - 증거: 새 보안 경로 미지원 RED 1 FAIL. 실제 로컬 TLS 서버와 기존 보정·release push·dev sync 네 suite 129 PASS/104.76초. 잘못된 CA·호스트에서 Authorization 미전송, idle·active 3·Force, 401/403·리다이렉트·시간 초과·응답 크기·누락된 credential·paired parameter·두 caller의 원격 쓰기 전 거부를 확인했다. 엄격 JSON의 중복·scalar session 추가 검사 2 PASS/2.92초. 변경된 소스·검사 5개 파일 secret scan 0 findings. 원본 실패 및 최종 로그는 X:/DevTemp/rosy-ui-ship/cal-tls에 보존한다.
 - gate 변화: SOURCE/LOCAL만. 실제 로봇의 인증서·보정 상태 조회·서명 배포·재시작은 이번 작업에서 실행하지 않았다. 이미 TLS를 사용하는 로봇의 다음 정규 배포는 검증된 공개 CA와 hostname을 명시해야 하며 인증서 검증 생략이나 HTTP fallback은 없다.
+
+## 2026-10-06 · uncommitted · fix(release): 변수 참조를 비밀값으로 오인하지 않기
+
+- 변경: 비밀 탐지기가 함수 호출의 닫는 괄호가 붙은 dotted 변수 참조를 실제 값으로 오인하던 규칙을 바로잡았다. 완결된 함수 호출과 리터럴 검사는 그대로 유지한다.
+- 증거: Pilot 세션 재사용 코드의 오탐을 재현한 검사와 전체 추적 파일 비밀 검사가 통과했다. 로봇 런타임 변경은 없다.
+- gate 변화: 없음.

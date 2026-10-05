@@ -80,6 +80,13 @@ CONTROL_SPLIT = "docs/plans/2026-09-22-control-package-split-design.md"
 
 #: P6 verdicts: path (relative to src/) or package name -> (lines at verdict, verdict).
 SIZE_VERDICTS = {
+    "perception/control/sensing/perception/lane_keep.py": (
+        626,
+        "split: the pure LaneKeeper and its boundary/pursuit helpers reached 626 lines "
+        "after the keep-side correction. Keep decision logic in perception; separate "
+        "geometry helpers from policy state under docs/plans/2026-09-22-control-package-split-design.md "
+        "before further growth. The 600-line budget and +150 re-judgment allowance remain",
+    ),
     "web/components.css": (
         814,
         "accept: shared token-based component styles remain one web_common responsibility; "

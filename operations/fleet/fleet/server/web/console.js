@@ -148,9 +148,7 @@ async function call(path, options = {}) {
   try {
     const body = await fleetClient(path, {...options, signals: [...(options.signals || []), task.signal]});
     task.check();
-    if (auth.locked && path !== "/api/fleet/session" && !cameraPreview) {
-      throw new DOMException("Authentication changed", "AbortError");
-    }
+    if (auth.locked && path !== "/api/fleet/session" && !cameraPreview) throw new DOMException("Authentication changed", "AbortError");
     if (path === "/api/fleet/session") markUnlocked();
     return body;
   } catch (error) {
