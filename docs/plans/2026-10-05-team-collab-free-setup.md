@@ -15,9 +15,9 @@
 | main 보호 | **없음** (Branch not protected) |
 | 협업 파일 | PR 템플릿 · 이슈 템플릿 · `CODEOWNERS` · `CONTRIBUTING.md` **없음** |
 | 로컬 | 로컬 `main`이 `origin/main`보다 13커밋 앞섬 → 그 커밋들의 CI 증거 없음 |
-| 최근 CI | main 최근 8회 중 1회 실패 (merge 커밋) |
+| 최근 CI | 최근 200회 실행 기준 `ci` 107회 중 **57회 실패**, `Payload boot smoke (arm64)` 10회 중 **9회 실패**. 가장 긴 작업은 이미지 빌드 27분, 캐시 사용 0 |
 | 비공개 자료 | `private/`는 gitignore → 팀원에게 전달 경로 없음 |
-| 비밀값 | gitleaks 이력 스캔(4068커밋) 93건. 대부분 테스트 픽스처·스캐너 패턴. 단 `tools/*.sh`, `docs/plans/*`에 **하드코딩된 Bearer 토큰 문자열(`rosy…`)** 있음 |
+| 비밀값 | gitleaks 이력 스캔(4068커밋) 93건. 대부분 테스트 픽스처·스캐너 패턴. 단 `tools/*.sh`, `docs/plans/*`에 **하드코딩된 Bearer 토큰 문자열** 있음 |
 | 저장소 경로 하드코딩 | `livsbittt/rosy-os`가 main의 22개 파일에 있음. 특히 로봇 자동 업데이트 `deploy/robot/pinky_pro/native/rosy_auto_update.py:75` `DEFAULT_REPO` |
 
 ---
@@ -68,12 +68,36 @@
 - **로봇·사이트 PC를 self-hosted runner로 붙이지 않는다.** 공개 저장소라 누구나 PR로 장치에서 코드를 실행시킬 수 있다. 장치 게이트는 지금처럼 사람이 수동 실행.
 - CD 범위: CI가 unsigned 후보를 prerelease로 올림 → **서명·배포는 사람이 로컬에서** (D-437 유지).
 
+### 3.1 공개 저장소에도 남는 제한
+
+분(minute) 총량은 무제한이지만 다음은 남는다. 막히는 게 아니라 팀이 커지면 **대기가 길어지는** 정도다.
+
+| 제한 | 공개 저장소 무료 | 현재 Rosy |
+|---|---|---|
+| 실행 분 총량 | 무제한 (표준·ARM64) | 무관 |
+| job 1개 최대 시간 | 6시간 | 최장 27분 (이미지 빌드) |
+| 동시 job | 20개 (Free 계정·Org 동일) | 팀원 동시 push 시 큐 대기 |
+| 캐시 | 저장소당 10GB | 0 |
+| artifact 보관 | 최대 90일 | 오래 둘 것은 Release로 |
+| Release 파일 1개 | 2GB | 이미지가 커지면 압축·분할 |
+| 큰 러너 (다코어·GPU) | **유료** | 미사용. 모델 학습은 OMEN PC |
+| self-hosted 러너 | 무료지만 보안상 미사용 | 미사용 |
+
+> 6시간 · 20개 · 10GB · 2GB · 90일은 작성 시점의 GitHub 기준으로 적었고 조회해서 확인한 값이 아니다. 정책이 바뀔 수 있으니 GitHub 문서에서 확인한다.
+
+### 3.2 실제 문제는 실패율
+
+PR에 `ci` 통과를 필수로 걸면, 지금 실패율로는 팀원 PR이 계속 빨간불로 막힌다. ruleset을 켜기 **전에** 다음을 확인한다.
+
+- `ci` 실패 57/107이 브랜치 push가 많아서 생긴 착시인지, main에서 실제로 깨진 것인지 (`gh run list --branch main --workflow ci`)
+- `Payload boot smoke (arm64)` 9/10 실패의 원인 — 고치거나, 고칠 때까지 필수 검사에서 뺀다
+
 ---
 
 ## 4. 공개 전 정리 (가장 먼저)
 
 1. 하드코딩 Bearer 토큰이 로봇·사이트에서 **실제로 쓰이는 값이면 교체**. 이미 공개됐으므로 이력 삭제는 의미 없다. 개발용 기본값이면 스크립트가 환경변수를 읽도록만 바꾼다.
-2. 실패한 CI 1건 확인.
+2. CI 실패율 정리 (3.2) — `ci` 57/107, `Payload boot smoke` 9/10. 필수 검사로 걸 workflow를 녹색으로 만든 뒤 ruleset을 켠다.
 3. 로컬 13커밋 push → CI 증거 확보.
 
 ---
@@ -131,7 +155,7 @@ OAuth로 각자 로그인해 수정 기록이 사람별로 남는다. 단 **게�
 
 | # | 할 일 | 비고 |
 |---|---|---|
-| 1 | 토큰 확인·교체, CI 실패 정리, 13커밋 push | 공개 위험 먼저 |
+| 1 | 토큰 확인·교체, CI 실패율 정리(3.2), 13커밋 push | 공개 위험 먼저, ruleset 전 녹색 |
 | 2 | 무료 Org 생성 → Transfer → ruleset | 같은 때 `DEFAULT_REPO` 갱신 릴리스, 자동 업데이트 실측 |
 | 3 | 팀 PR 착지 규칙 ADR + PR 템플릿 · CODEOWNERS · CONTRIBUTING | AGENTS.md·README 같은 절 동시 수정 |
 | 4 | Notion 워크스페이스 + 게스트 초대 + 연동 토큰 + `private/` 이관 + GitHub Projects 연결 | |
