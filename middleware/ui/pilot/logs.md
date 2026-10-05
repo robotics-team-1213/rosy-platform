@@ -445,3 +445,9 @@
 - 변경: SIM·개발 서버 allowlist에 기존 peer-approval.js를 더해 CORE와 같은 정적 자산을 제공한다. API·제어 권한·UI 구성 변경 없음.
 - 증거: test_shell_assets.py 4 passed, known_failures NEW 0.
 - gate 변화: SOURCE/LOCAL. 실제 장치·FIELD 검증은 별도다.
+
+## 2026-10-05 · uncommitted · uiux: drive geometry stays in the stylesheet
+
+- 변경: 스틱·영상 이동·확대·좌우 띠·녹화 시트·자동 의도·팔 노브가 요소 스타일 대신 속성과 typed attr()를 쓴다. 쓰이지 않던 --video-ratio는 뺐다.
+- 증거: 호스트 178 passed, 72 skipped, known_failures 0 new. Chromium 주행 화면 이동·복귀 2 viewport 통과. 노브 변환과 띠 너비는 계산값과 같다. 장치 수용은 없다.
+- gate 변화: 없음.

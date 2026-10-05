@@ -79,7 +79,8 @@ export function mountAutoMode({drive, element, apiGet, releaseAll, onIdle, block
     element.intent.dataset.state = view.tracking ? (view.guard ? "guard" : "tracking") : "hold";
     element.intent.dataset.dir = view.dir;
     element.intentTarget.hidden = view.target == null;
-    if (view.target != null) element.intentTarget.style.left = `${view.target}%`;
+    if (view.target != null) element.intentTarget.setAttribute("data-target", `${view.target}%`);
+    else element.intentTarget.removeAttribute("data-target");
     element.intentSteer.textContent = view.text;
     placeIntent();
   }
@@ -95,9 +96,9 @@ export function mountAutoMode({drive, element, apiGet, releaseAll, onIdle, block
     const visibleLeft = Math.max(left, 0), visibleRight = Math.min(left + width, view.width);
     const visibleBottom = Math.min(top + height, view.height);
     const inset = (visibleRight - visibleLeft) * 0.06;
-    strip.style.left = `${visibleLeft + inset}px`;
-    strip.style.width = `${Math.max(0, visibleRight - visibleLeft - 2 * inset)}px`;
-    strip.style.top = `${Math.max(0, visibleBottom - strip.offsetHeight - 10)}px`;
+    strip.setAttribute("data-strip-left", `${visibleLeft + inset}px`);
+    strip.setAttribute("data-strip-width", `${Math.max(0, visibleRight - visibleLeft - 2 * inset)}px`);
+    strip.setAttribute("data-strip-top", `${Math.max(0, visibleBottom - strip.offsetHeight - 10)}px`);
   }
   function takeover() {
     if (auto.active()) auto.release("takeover");

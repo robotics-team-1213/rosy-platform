@@ -6081,3 +6081,9 @@ osy-d395-s1d\`.
 - 변경: tools/calibration/camera_auto.py and read-only camera_capture.py collect stationary camera/LiDAR/odometry and reuse the installed fitter; guide replaces manual height/pitch entry. No drive, mode, apply or calibration-session changes.
 - 증거: related 87 PASS, known failures 0 NEW; final 042-device capture 40 scans/15 frames/121 odometry, eight wall returns, REJECTED too few wall returns, applied false. docs/validation/camera-auto-2026-10-05/result.md.
 - gate 변화: SOURCE/LOCAL command verified; DEVICE capture and automatic fit executed, calibration acceptance and automatic movement remain unverified.
+
+## 2026-10-05 · uncommitted · uiux: keep measured geometry in stylesheets
+
+- 변경: 로봇·Pilot·공용 화면 스크립트가 요소 스타일을 쓰지 않는다. 연속 값은 속성이고 스타일시트의 typed attr()가 읽는다. 캔버스 색 탐침은 채택 스타일시트 규칙 하나다. 확인창의 정지 구멍은 그대로 눌린다.
+- 증거: 호스트 178 passed, 72 skipped, known_failures 0 new. Chromium 주행 이동·복귀와 캔버스 팔레트 통과. 스크림 구멍은 정지 버튼을 맞춘다. 호스트·브라우저 시험이며 장치 수용은 없다.
+- gate 변화: 없음.

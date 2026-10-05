@@ -992,3 +992,9 @@
 - 변경: 기본 입구는 로그인과 역할 화면만 안내한다. #compatibility 종합 화면은 그대로 연다.
 - 증거: 호스트 계약 100 passed, known_failures 0 new. 브라우저·장치 수용은 없다.
 - gate 변화: 없음.
+
+## 2026-10-05 · uncommitted · uiux: meter and map cursor stay in the stylesheet
+
+- 변경: 게이지 폭은 data-meter 속성이고, 목표를 둘 수 있는 지도 캔버스는 data-goal-cursor로 십자 커서를 낸다.
+- 증거: 호스트 계약 178 passed, 72 skipped, known_failures 0 new. Chromium에서 40% 게이지가 80px이다. 브라우저·장치 수용은 없다.
+- gate 변화: 없음.

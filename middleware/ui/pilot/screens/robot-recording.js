@@ -111,8 +111,8 @@ export function mountRobotRecording({toggle, detail, openButton, sheetHost, anch
   function placeSheet() {
     // HUD 바로 아래에 붙인다(고정 오프셋 없음). 시트는 sheetHost 기준 absolute 다.
     const below = anchor.getBoundingClientRect().bottom;
-    sheet.style.setProperty("--recordings-top", `${Math.round(below - sheetHost.getBoundingClientRect().top)}px`);
-    sheet.style.setProperty("--recordings-viewport-top", `${Math.round(below)}px`);
+    sheet.setAttribute("data-recordings-top", `${Math.round(below - sheetHost.getBoundingClientRect().top)}px`);
+    sheet.setAttribute("data-recordings-viewport-top", `${Math.round(below)}px`);
   }
 
   function onKey(event) {

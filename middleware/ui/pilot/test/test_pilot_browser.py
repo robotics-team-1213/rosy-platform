@@ -717,18 +717,22 @@ def test_camera_direct_views_pan_crop_and_restore_whole_frame(base_url, viewport
             page.click("[data-drive-fill]")
             page.wait_for_function("document.querySelector('[data-screen=drive]').dataset.viewMode === 'full'")
             assert "잘림" in page.inner_text("[data-drive-fact=zoom]")
-            before = page.locator("[data-drive-frame]").evaluate("e => e.style.objectPosition")
+            frame = page.locator("[data-drive-frame]")
+            before = frame.evaluate("e => getComputedStyle(e).objectPosition")
             box = page.locator("[data-drive-view]").bounding_box()
             page.mouse.move(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
             page.mouse.down()
             page.mouse.move(box["x"] + box["width"] / 2 + 100, box["y"] + box["height"] / 2 + 100)
             page.mouse.up()
-            assert page.locator("[data-drive-frame]").evaluate("e => e.style.objectPosition") != before
+            assert frame.evaluate("e => getComputedStyle(e).objectPosition") != before
+            assert frame.evaluate("e => e.style.objectPosition") == ""
+            assert frame.evaluate("e => e.style.transform") == ""
             page.click("[data-drive-fit]")
             page.wait_for_function("getComputedStyle(document.querySelector('[data-drive-frame]')).objectFit === 'contain'")
             assert page.locator("[data-drive-fact=zoom]").is_hidden()
-            assert page.locator("[data-drive-frame]").evaluate("e => e.style.objectPosition") == ""
-            assert page.locator("[data-drive-frame]").evaluate("e => e.style.transform") == ""
+            assert frame.evaluate("e => e.getAttribute('data-pan-x')") is None
+            assert frame.evaluate("e => e.style.objectPosition") == ""
+            assert frame.evaluate("e => e.style.transform") == ""
         finally:
             browser.close()
 
