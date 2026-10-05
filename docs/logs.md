@@ -5898,3 +5898,10 @@ osy-d395-s1d\`.
 - 증거: test_fleet_gazebo_run_contracts 12 passed(2 skip — Windows symlink 권한), test_gz_multi_run_spec 3 + test_gz_multi_core 회귀 통과(Linux CI에서 실행), `run.py --help` exit 0, 폴더 계약 9 passed. X:/DevTemp/opencode/d426.
 - gate 변화: 없음. T1 구현이지 실제 Gazebo 회차·ROS-SIM이 아니다(T6·M01–M08 뒤).
 - 결정: WSL Ubuntu에 Jazzy+Gazebo+colcon 확인 — D-426 실행 환경 확보. T2(통신 상관)부터 이어 간다.
+
+## 2026-10-05 · uncommitted · feat(validation): D-426 T2 통신·결과 상관 탐침
+
+- 변경: `tools/validation/fleet_gazebo/probe.py` 추가 — 회차 기록(관측 목록)에 대한 순수 판정기. 세 판정면: (1) 세션 — WELCOME 거부·identity 충돌(DUPLICATE_IDENTITY/IDENTITY_DRIFT)·계약 불일치(PROTOCOL_UNSUPPORTED·알 수 없는 거부 코드) 분리, (2) 하달 사슬 — 시도별 수락 없는 완료·다른 attempt 결과·중복 종단·역순(종단이 근거 CORE 이벤트보다 먼저 기록)은 FAIL, 유실 투영·수락-무-종단(timeout)은 INCONCLUSIVE로 조회 대조 대상으로 남김, (3) 나이 — 원본(시뮬 시계)과 표시(monotonic) 분리, 시계 변환 불가·표본 밖은 미지(None). 판정 어휘 PASS/FAIL/NOT_RUN/INCONCLUSIVE(T3 재사용).
+- 증거: operations/fleet/test/test_gazebo_protocol_probe.py 13개 판정 계약 + test_server_traffic·test_boundaries 회귀 68 passed. 실제 wire 형태는 fleet/hub/hub.py·task_results.py·task_service.py 원문 대조.
+- gate 변화: 없음(SOURCE/LOCAL 판정 모듈). 실제 프로세스 사이 관측·ROS-SIM은 T6.
+- 결정: fake HTTP/WS는 LOCAL만 증명한다 — probe는 그 LOCAL 판정 규칙의 정본이고, T6 회차 기록이 같은 판정기를 지나야 ROS-SIM 판정이 된다.
