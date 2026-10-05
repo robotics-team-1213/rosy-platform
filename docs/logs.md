@@ -6054,3 +6054,9 @@ osy-d395-s1d\`.
 - 변경: dashboard 계약 검사가 직접 native close 대신 공용 확인창이 반환하는 종료 함수를 통해 취소·확정하도록 요구한다. 종료 소유 결속도 확인하며 기존 Abort·확정 결과 검사는 유지한다.
 - 증거: 정상 푸시의 기존 문자열 계약 실패를 보존했다. dashboard 전체 27 PASS이며 실제 브라우저 종료·포커스·비상 정지 근거는 앞선 D-439 수정 검증을 유지한다.
 - gate 변화: 없음. 테스트 계약만 정합하며 제품 코드·권한·푸시 검사 범위를 바꾸지 않는다.
+
+## 2026-10-05 · uncommitted · fix(test): Python 3.12 런타임 추출 규칙 보존
+
+- 변경: HOST 시험이 추출하는 기존 런타임 메서드에 원본 future annotations compiler flag를 명시하고 호출자의 compiler flag 상속을 끊었다. 메서드 AST·범위·판정·제품 런타임은 유지한다. 학습 계약 이미지 COPY 변경 감지 수정은 동시 작업의 fcb3b0e72를 그대로 통합했다.
+- 증거: 기존 Linux CI의 TrajectoryCommand NameError를 CPython 3.12.14에서도 재현했다. 명시적 flag로 기존 8개 메서드가 로드되며 HOST 관련 56 PASS, Windows symlink 1 SKIP다. 정상 푸시 검사와 해당 SHA CI는 별도 완료 확인한다.
+- gate 변화: 없음. 실제 ROS/DDS·설치·주행 근거를 추가하지 않았다.

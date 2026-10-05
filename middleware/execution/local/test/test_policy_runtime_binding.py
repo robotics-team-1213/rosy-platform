@@ -1,4 +1,5 @@
 """HOST composition using unchanged runtime methods; no ROS/DDS acceptance."""
+import __future__
 import ast
 from dataclasses import replace
 from pathlib import Path
@@ -25,7 +26,8 @@ def runtime_methods(session, client):
     cls.body = [node for node in cls.body if isinstance(node, ast.FunctionDef) and node.name in names]
     scope = dict(RosGoalEvent=RosGoalEvent, Callable=Callable, JointStateSnapshot=JointStateSnapshot,
                  CommandDecision=CommandDecision, JointState=Any)
-    exec(compile(ast.Module(body=[cls], type_ignores=[]), str(file), 'exec'), scope)
+    exec(compile(ast.Module(body=[cls], type_ignores=[]), str(file), 'exec',
+                 flags=__future__.annotations.compiler_flag, dont_inherit=True), scope)
     runtime = scope['RosArmCommandRuntime'].__new__(scope['RosArmCommandRuntime'])
     runtime.owner = session.owner
     runtime.action_port = client
