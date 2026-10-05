@@ -6113,3 +6113,8 @@ osy-d395-s1d\`.
 - Change: record user-confirmed straight white-boundary crossing and stop; propose synchronized recording, reviewed failure labels, geometry/control replay and closed-loop evaluation.
 - Evidence: source inspection; departure-time synchronized trace unavailable. Focused suite: 109 passed and 2 log-format failures; both repaired checks passed on rerun (21 warnings), known_failures: 0 NEW for repaired checks.
 - Gate: no runtime change; departure root cause and FIELD acceptance remain unproven. Design status Proposed.
+
+## 2026-10-05 · uncommitted · fix(lane): preserve source-frame departure diagnostics
+- Change: include keeper diagnostics in raw Pilot recordings and preserve them through MCAP conversion/frame extraction; no label authority or motion changes.
+- Evidence: related 206 PASS, independent 87 PASS, 0 NEW; installed annotated stationary recording yielded 149 matched frames, all zero commands. docs/validation/lane-evidence-2026-10-05/result.md.
+- Gate: SOURCE regression verified; new recorder deployment and physical departure fix/ FIELD acceptance remain unverified.
