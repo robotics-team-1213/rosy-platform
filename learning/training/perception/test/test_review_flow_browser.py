@@ -35,6 +35,36 @@ def browser_workspace(tmp_path):
             thread.join(timeout=5)
 
 
+def test_arrow_keys_move_between_photos(browser_workspace):
+    page, store, expect = browser_workspace
+
+    def photo_loaded(title):
+        expect(page.locator('#frame-title')).to_have_text(title)
+        expect(page.locator('#image-message')).to_be_hidden()
+        expect(page.locator('#save-status')).to_contain_text('서버 저장됨')
+
+    photo_loaded('사진 1')
+    # Number fields keep their native arrow behaviour and never move between photos.
+    page.locator('input[aria-label="박스 1 x0"]').focus()
+    page.keyboard.press('ArrowRight')
+    photo_loaded('사진 1')
+    page.locator('#canvas').focus()
+    expect(page.locator('#next-frame')).not_to_have_attribute('disabled', '')
+    page.keyboard.press('ArrowRight')
+    photo_loaded('사진 2')
+    expect(page.locator('#prev-frame')).not_to_have_attribute('disabled', '')
+    page.keyboard.press('ArrowLeft')
+    photo_loaded('사진 1')
+    page.locator('#filter').select_option('excluded')
+    photo_loaded('사진 2')
+    expect(page.locator('#prev-frame')).to_have_attribute('disabled', '')
+    page.locator('#canvas').focus()
+    page.keyboard.press('ArrowLeft')
+    page.keyboard.press('ArrowRight')
+    photo_loaded('사진 2')
+    assert [row['status'] for row in store.list_frames()] == ['approved', 'excluded']
+
+
 def test_filter_selection_empty_recovery_and_reload(browser_workspace):
     page, store, expect = browser_workspace
     page.locator('#filter').select_option('excluded')

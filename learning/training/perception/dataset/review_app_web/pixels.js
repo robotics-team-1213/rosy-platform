@@ -53,7 +53,7 @@ function paint(){if(!ready)return;const canvas=$('pixel-canvas'),ctx=canvas.getC
   for(const line of lines)if(line.label!==255){ctx.globalAlpha=opacity;trace(ctx,line,cssColor(classToken(line.label)));ctx.globalAlpha=1;}
   const erasers=lines.filter(line=>line.label===255);if(erasers.length)eraserLines(ctx,erasers);
 }
-async function select(index){const ticket=++serial;ready=false;stroke=null;draft=[];flood=false;$('pixel-flood').setAttribute('aria-pressed','false');frame=workspace.frames.find(row=>row.index===Number(index));error();$('pixel-complete').checked=$('pixel-background').checked=false;options();url();enable();if(!frame)return;
+async function select(index){const ticket=++serial;ready=false;stroke=null;draft=[];flood=false;brush.hidden=true;$('pixel-flood').setAttribute('aria-pressed','false');frame=workspace.frames.find(row=>row.index===Number(index));error();$('pixel-complete').checked=$('pixel-background').checked=false;options();url();enable();if(!frame)return;
  $('pixel-title').textContent=`사진 ${frame.index+1} 픽셀 검수`;$('pixel-object').href=`/?frame=${frame.index}`;
  try{const next=await request(`/api/masks/${frame.index}`);const [photo,pixels]=await Promise.all([image(`/api/images/${frame.index}`),image(`/api/mask-images/${frame.index}?v=${next.version}`)]);if(ticket!==serial)return;if(photo.naturalWidth!==frame.source.width||photo.naturalHeight!==frame.source.height||pixels.naturalWidth!==photo.naturalWidth||pixels.naturalHeight!==photo.naturalHeight)throw new Error('원본과 마스크 크기가 다릅니다.');review=next;original=photo;maskImage=pixels;const canvas=$('pixel-canvas');canvas.width=photo.naturalWidth;canvas.height=photo.naturalHeight;
  $('pixel-class').replaceChildren();for(const cls of next.classes?.classes||[]){const option=document.createElement('option');option.value=cls.index;option.textContent=names[cls.name]||cls.name;$('pixel-class').append(option);}const unknown=document.createElement('option');unknown.value=255;unknown.textContent='미검수로 지우기';$('pixel-class').append(unknown);$('pixel-status').setAttribute('state',next.status==='approved'?'ready':'warning');$('pixel-status').textContent=`${states[next.status]} · v${next.version} · ${photo.naturalWidth} × ${photo.naturalHeight} · 객체 ${frame.status==='excluded'?'제외':frame.status==='approved'?'승인':'대기'}`;$('pixel-source').textContent=JSON.stringify({source:frame.source,mask:next,map_reference:workspace.map_reference},null,2);legend();ready=true;paint();}
@@ -73,10 +73,28 @@ $('pixel-approve').onclick=()=>mutate('approve',{complete_frame_review:$('pixel-
 for(const id of ['pixel-complete','pixel-background'])$(id).onchange=enable;$('pixel-opacity').oninput=paint;
 function point(event){const box=$('pixel-canvas').getBoundingClientRect();return [Math.max(0,Math.min(frame.source.width-1,Math.floor((event.clientX-box.left)*frame.source.width/box.width))),Math.max(0,Math.min(frame.source.height-1,Math.floor((event.clientY-box.top)*frame.source.height/box.height)))];}
 function suggestTolerance(x,y){const r=4,x0=Math.max(0,x-r),y0=Math.max(0,y-r),w=Math.min(original.naturalWidth,x+r+1)-x0,h=Math.min(original.naturalHeight,y+r+1)-y0;const scratch=document.createElement('canvas');scratch.width=w;scratch.height=h;const ctx=scratch.getContext('2d',{willReadFrequently:true});ctx.drawImage(original,x0,y0,w,h,0,0,w,h);const data=ctx.getImageData(0,0,w,h).data,n=w*h,mean=[0,0,0];for(let i=0;i<data.length;i+=4){mean[0]+=data[i];mean[1]+=data[i+1];mean[2]+=data[i+2];}mean[0]/=n;mean[1]/=n;mean[2]/=n;let peak=0;for(let i=0;i<data.length;i+=4){peak=Math.max(peak,Math.abs(data[i]-mean[0]),Math.abs(data[i+1]-mean[1]),Math.abs(data[i+2]-mean[2]));}return Math.max(4,Math.min(48,Math.round(peak*1.5)+4));}
+// Brush size preview: a circle follows the pointer at the current radius in screen scale.
+const brush=$('pixel-brush');
+function brushAt(event){
+  if(!ready||busy||conflicted||flood||!review?.classes||frame?.status==='excluded'||review?.status==='excluded'){brush.hidden=true;return;}
+  const box=canvas.getBoundingClientRect(),stage=brush.parentElement.getBoundingClientRect();
+  const size=2*Number($('pixel-radius').value)*box.width/frame.source.width;
+  if(!Number.isFinite(size)||size<3){brush.hidden=true;return;}
+  brush.style.width=brush.style.height=size+'px';
+  brush.style.left=(event.clientX-stage.left)+'px';
+  brush.style.top=(event.clientY-stage.top)+'px';
+  brush.hidden=false;
+}
 const canvas=$('pixel-canvas');canvas.onpointerdown=event=>{if(!ready||busy||conflicted||!review.classes||frame.status==='excluded'||review.status==='excluded'||event.button!==0)return;if(flood){const [x,y]=point(event);const automatic=$('pixel-tolerance-mode').value==='auto'&&!event.shiftKey;const tolerance=automatic?suggestTolerance(x,y):Number($('pixel-tolerance').value);if(!Number.isInteger(tolerance)||tolerance<0||tolerance>100){error('비슷한 색 허용치는 0~100 사이 정수입니다.');return;}$('pixel-tolerance').value=tolerance;if(automatic)$('pixel-draft').textContent=`비슷한 색 허용치 자동 제안: ${tolerance} (Shift+클릭은 입력값 사용)`;mutate('flood',{label:Number($('pixel-class').value),seed:[x,y],tolerance});return;}const radius=Number($('pixel-radius').value);if(!Number.isInteger(radius)||radius<1||radius>128){error('브러시 반지름은 1~128 사이 정수입니다.');return;}stroke={id:event.pointerId,points:[point(event)],radius,label:Number($('pixel-class').value)};canvas.setPointerCapture(event.pointerId);event.preventDefault();enable();paint();};
-canvas.onpointermove=event=>{if(!stroke||stroke.id!==event.pointerId||stroke.points.length>=2048)return;stroke.points.push(point(event));paint();};
+canvas.onpointermove=event=>{if(!stroke){brushAt(event);return;}brush.hidden=true;if(stroke.id!==event.pointerId||stroke.points.length>=2048)return;stroke.points.push(point(event));paint();};
 canvas.onpointerup=event=>{if(!stroke||stroke.id!==event.pointerId)return;const finished=stroke;stroke=null;if(canvas.hasPointerCapture(event.pointerId))canvas.releasePointerCapture(event.pointerId);draft.push(finished);paint();enable();};
-function cancel(){if(!stroke)return;const id=stroke.id;stroke=null;if(canvas.hasPointerCapture(id))canvas.releasePointerCapture(id);paint();enable();}canvas.onpointercancel=cancel;canvas.onlostpointercapture=cancel;document.addEventListener('keydown',event=>{if(event.key==='Escape'&&stroke){event.preventDefault();cancel();}});
+function cancel(){if(!stroke)return;const id=stroke.id;stroke=null;if(canvas.hasPointerCapture(id))canvas.releasePointerCapture(id);paint();enable();}canvas.onpointercancel=cancel;canvas.onlostpointercapture=cancel;canvas.addEventListener('pointerleave',()=>{brush.hidden=true;});
+document.addEventListener('keydown',event=>{if(event.key==='Escape'&&stroke){event.preventDefault();cancel();}
+  // Arrow keys move between photos; number fields keep their native stepping.
+  if((event.key==='ArrowLeft'||event.key==='ArrowRight')&&!['INPUT','SELECT','TEXTAREA'].includes(event.target?.tagName)){
+    const button=$(event.key==='ArrowLeft'?'pixel-prev':'pixel-next');
+    if(button&&!button.disabled){event.preventDefault();button.click();}
+  }});
 $('pixel-theme').value=document.documentElement.dataset.theme||'dark';$('pixel-theme').onchange=()=>{document.documentElement.dataset.theme=$('pixel-theme').value;try{localStorage.setItem('rosy.theme',$('pixel-theme').value);}catch{}clearPalette();document.dispatchEvent(new CustomEvent('rosy:theme'));if(review){legend();paint();}};
 async function load(){const index=frame?.index;workspace=await request('/api/workspace');conflicted=false;const params=new URLSearchParams(location.search);$('pixel-filter').value=params.get('filter')||'all';if(!$('pixel-filter').value)$('pixel-filter').value='all';options();const rows=visible(),wanted=index??Number(params.get('frame'));if(rows.length)await select(rows.some(row=>row.index===wanted)?wanted:rows[0].index);else filter();}
 $('pixel-reload').onclick=()=>load().catch(value=>error(value.message));
