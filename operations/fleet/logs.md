@@ -1856,3 +1856,9 @@
 - 증거: test/test_traffic_reservations.py 10개 계약 — 동시 진입·빈/못난 식별자·다른 지도 revision·위치 미확정·만료 경계 재검사·UNKNOWN도 재진입 거부·시한만 지난 RESERVED 재할당 금지·출구 관측/종단/낡은 관측별 해제 거부·결속·세대·만료 검증·Fleet 재시작 후에도 grants 잔존·대기 보고. 기존 traffic/boundary 포함 47·33 PASS.
 - gate 변화: SOURCE/LOCAL 판정 모듈. 실제 로봇 진입·Nav2 경로 제약·robot-side gate 미구현으로 T4 전체 수용은 HOLD다(계획 T4 항목 4·5).
 - 결정: competing dispatcher를 만들지 않는다. grant 만료는 실제 footprint 진입 시한이며 시한 경과만으로 구간을 풀지 않는다(D-426 결정 3).
+
+## 2026-10-05 · uncommitted · fix(fleet): T4 해제 근거·Task 트랜잭션 경계
+
+- 변경: 진입·해제 시작·최종 해제는 현재 task/attempt/robot/map revision/generation 전체 결속을 대조한다. 미래·비유한 위치와 시간대 없는 시각은 해제 근거가 아니며, 진입 이후 관측의 나이 0~2 s를 최종 삭제에서도 다시 검사한다. 활성 grant의 구간 정의를 덮어쓰지 않는다. 모든 쓰기 helper는 자신의 SAVEPOINT만 닫고 호출자의 기존 Task DB 트랜잭션과 rollback을 보존한다. 표 준비는 implicit commit을 일으키는 executescript를 쓰지 않는다.
+- 증거: 원래 실제 SQLite 미래/NaN/Infinity 위치 해제, 오래된 최종 해제, 읽기·쓰기 중 pending audit 조기 commit 반례 6 FAIL을 재현했다. 기존 10건과 결속·관측·정의·rollback 회귀 31건, TaskStore/dispatch/traffic 관련 시험 합계 106 PASS(6.47s), known_failures 0 NEW, owned flake8 0이다. 원래 성공 fixture의 5 s 최종 대기는 기존 2 s 계약에 맞는 1 s로 정정했다.
+- gate 변화: SQLite 순수 helper SOURCE/LOCAL 보완만. 이 helper는 실제 dispatcher·driver와 연결되지 않았고 robot-side 진입 fence·실제 ROS/SIM·장치 수용은 HOLD를 유지한다. UNKNOWN·RESERVED를 시한만으로 풀거나 motion·승인 역할·전송 경로를 추가하지 않았다.
