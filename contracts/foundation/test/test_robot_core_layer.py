@@ -82,4 +82,6 @@ def test_layer_values_merge_under_the_defaults(monkeypatch, robot_share):
 
 
 def test_pinky_pro_layer_is_shipped(no_ament_share):
-    assert load_config()["line_follow"]["lidar_forward_deg"] == 180.0
+    line_follow = load_config()["line_follow"]
+    assert line_follow["lidar_forward_deg"] == 180.0
+    assert line_follow["obstacle_mode"] == "path"
