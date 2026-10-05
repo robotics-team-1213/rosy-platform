@@ -364,9 +364,11 @@ export function openLiveDialog(dialog, { initialFocus = null, opener = document.
     const holes = disjointRectangles(liveNodes().filter(node => node.getClientRects().length > 0).map(node => node.getBoundingClientRect()), innerWidth, innerHeight).map(r => {
       return `0 0, ${r.left}px ${r.top}px, ${r.right}px ${r.top}px, ${r.right}px ${r.bottom}px, ${r.left}px ${r.bottom}px, ${r.left}px ${r.top}px`;
     });
-    scrim.style.clipPath = holes.length
+    const polygon = holes.length
       ? `polygon(evenodd, 0 0, 100% 0, 100% 100%, 0 100%, ${holes.join(", ")}, 0 0)`
       : "";
+    if (polygon) scrim.setAttribute("data-clip", polygon);
+    else scrim.removeAttribute("data-clip");
   };
   const observer = new MutationObserver(() => { seal(); punch(); });
   const onKey = (event) => {
@@ -438,6 +440,21 @@ const colourCache = new Map();
 const fontCache = new Map();
 let colourProbe = null;
 let colourRaster = null;
+let colourSheet = null;
+
+function probeColourValue(name) {
+  if (name.startsWith("--")) return /^--[A-Za-z0-9_-]+$/.test(name) ? `var(${name})` : "";
+  if (!name || /[{};<>\\]|\/\*|\*\//.test(name)) return "";
+  return name;
+}
+
+function paintColourProbe(value) {
+  if (!colourSheet) {
+    colourSheet = new CSSStyleSheet();
+    document.adoptedStyleSheets = [...document.adoptedStyleSheets, colourSheet];
+  }
+  colourSheet.replaceSync(`[data-rosy-colour-probe] { color: ${value}; }`);
+}
 
 function probeElement() {
   if (!colourProbe || !colourProbe.isConnected) {
@@ -468,10 +485,10 @@ export function readColour(name) {
   const declared = isToken
     ? getComputedStyle(document.documentElement).getPropertyValue(name).trim()
     : name;
-  if (declared) {
+  const painted = probeColourValue(name);
+  if (declared && painted) {
     const probe = probeElement();
-    probe.style.color = "";
-    probe.style.color = isToken ? `var(${name})` : name;
+    paintColourProbe(painted);
     const resolved = getComputedStyle(probe).color;
     const ctx = rasterContext();
     ctx.clearRect(0, 0, 1, 1);

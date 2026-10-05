@@ -42,13 +42,27 @@ export function mountDriveView(drive, element) {
     const yLimit = Math.max(0, (height - box.height) / 2);
     pan.x = Math.max(-xLimit, Math.min(xLimit, pan.x));
     pan.y = Math.max(-yLimit, Math.min(yLimit, pan.y));
+    const frame = element.frame;
     if (cover) {
       const x = xLimit ? 50 - pan.x / (2 * xLimit) * 100 : 50;
       const y = yLimit ? 50 - pan.y / (2 * yLimit) * 100 : 50;
-      element.frame.style.objectPosition = `${x}% ${y}%`;
+      frame.setAttribute("data-pan-x", `${x}%`);
+      frame.setAttribute("data-pan-y", `${y}%`);
+      frame.removeAttribute("data-shift-x");
+      frame.removeAttribute("data-shift-y");
+      frame.removeAttribute("data-frame-scale");
     } else {
-      element.frame.style.objectPosition = "";
-      element.frame.style.transform = scale > 1.001 ? `translate(${pan.x}px, ${pan.y}px) scale(${scale})` : "";
+      frame.removeAttribute("data-pan-x");
+      frame.removeAttribute("data-pan-y");
+      if (scale > 1.001) {
+        frame.setAttribute("data-shift-x", `${pan.x}px`);
+        frame.setAttribute("data-shift-y", `${pan.y}px`);
+        frame.setAttribute("data-frame-scale", String(scale));
+      } else {
+        frame.removeAttribute("data-shift-x");
+        frame.removeAttribute("data-shift-y");
+        frame.removeAttribute("data-frame-scale");
+      }
     }
     return xLimit > 0 || yLimit > 0;
   }
@@ -79,8 +93,11 @@ export function mountDriveView(drive, element) {
     const band = (width - videoHeight * ratio) / 2;
     const side = band >= SIDE_MIN_BAND_PX;
     drive.dataset.driveLayout = side ? "side" : "below";
-    drive.style.setProperty("--band", `${Math.max(0, Math.floor(band))}px`);
-    drive.style.setProperty("--video-ratio", String(ratio));
+    // attr()는 자기 속성만 읽는다. 좌우 칸이 각각 data-band를 갖는다.
+    const bandPx = `${Math.max(0, Math.floor(band))}px`;
+    for (const sideColumn of drive.querySelectorAll("[data-drive-left], [data-drive-right]")) {
+      sideColumn.setAttribute("data-band", bandPx);
+    }
   }
   function zoomValue(step) {
     const box = element.view.getBoundingClientRect();
@@ -107,7 +124,7 @@ export function mountDriveView(drive, element) {
     const full = step === "full";
     const below = drive.dataset.driveLayout === "below";
     drive.dataset.viewMode = full ? "full" : "fit";
-    element.view.style.height = "";
+    element.view.removeAttribute("data-view-height");
     let crop;
     if (below) {
       // 세로 화면: 영상이 이미 폭을 채운다. 확대는 영상 높이를 늘리고 좌우를 자른다(cover).
@@ -117,16 +134,16 @@ export function mountDriveView(drive, element) {
       const fitHeight = width / ratio;
       const fill = Math.max(1, maxHeight / fitHeight);
       const z = full || step === "fill" ? fill : Math.min(Number(step) || 1, fill);
-      element.frame.style.transform = "";
-      element.frame.style.objectFit = z > 1.001 ? "cover" : "";
-      if (z > 1.001) element.view.style.height = `${Math.round(fitHeight * z)}px`;
+      if (z > 1.001) {
+        element.frame.setAttribute("data-fit", "cover");
+        element.view.setAttribute("data-view-height", `${Math.round(fitHeight * z)}px`);
+      } else element.frame.removeAttribute("data-fit");
       drive.dataset.zoomed = String(z > 1.001);
       crop = {axis: "좌우", percent: Math.round((1 - 1 / z) * 100), z};
     } else {
-      element.frame.style.objectFit = "";
+      element.frame.removeAttribute("data-fit");
       const z = full ? 1 : zoomValue(step);
       scale = z;
-      element.frame.style.transform = z > 1.001 ? `scale(${z.toFixed(3)})` : "";
       drive.dataset.zoomed = String(full || z > 1.001);
       crop = full ? {...coverCrop(), z: 1} : {axis: "위아래", percent: Math.round((1 - 1 / z) * 100), z};
     }
@@ -181,8 +198,13 @@ export function mountDriveView(drive, element) {
       syncFullscreen(false);
       // 같은 section 에 다시 마운트된다 — 지난 배치·배율 표시를 남기지 않는다.
       for (const key of ["driveLayout", "viewMode", "zoomed"]) delete drive.dataset[key];
-      drive.style.removeProperty("--band");
-      drive.style.removeProperty("--video-ratio");
+      for (const sideColumn of drive.querySelectorAll("[data-drive-left], [data-drive-right]")) {
+        sideColumn.removeAttribute("data-band");
+      }
+      element.view.removeAttribute("data-view-height");
+      for (const name of ["data-fit", "data-pan-x", "data-pan-y", "data-shift-x", "data-shift-y", "data-frame-scale"]) {
+        element.frame.removeAttribute(name);
+      }
     },
   };
 }

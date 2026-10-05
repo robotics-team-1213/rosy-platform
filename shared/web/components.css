@@ -794,6 +794,9 @@ ui-section > [role="status"]:empty { display: contents; }
   inset: 0;
   background: var(--scrim);
 }
+.ui-confirm-scrim[data-clip] {
+  clip-path: attr(data-clip type(*), none);
+}
 
 dialog.ui-live-dialog,
 dialog.ui-confirm {

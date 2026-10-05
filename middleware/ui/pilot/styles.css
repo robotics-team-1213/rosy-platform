@@ -140,6 +140,14 @@ body[data-pilot-screen="preview"] [data-screen="connect"] {
   object-fit: contain;          /* 원본 비율, 잘림 없음 — 남는 곳은 검은 띠 */
   object-position: center;
 }
+[data-drive-frame][data-fit="cover"] { object-fit: cover; }
+[data-drive-frame][data-pan-x] {
+  object-position: attr(data-pan-x type(<percentage>), 50%) attr(data-pan-y type(<percentage>), 50%);
+}
+[data-drive-frame][data-shift-x] {
+  transform: translate(attr(data-shift-x type(<length>), 0px), attr(data-shift-y type(<length>), 0px)) scale(attr(data-frame-scale type(<number>), 1));
+}
+[data-drive-view][data-view-height] { height: attr(data-view-height type(<length>)); }
 
 [data-drive-frame][src] { opacity: 1; }
 
@@ -356,6 +364,15 @@ html[data-pilot-shell="android"] ui-topbar ui-brand { display: none; }
   transform: translate(-50%, -50%);
   pointer-events: none;
 }
+[data-drive-stick-knob][data-knob-x] {
+  transform: translate(
+    calc(-50% + attr(data-knob-x type(<length>), 0px)),
+    calc(-50% + attr(data-knob-y type(<length>), 0px))
+  );
+}
+[data-drive-stick][data-float-x] {
+  translate: attr(data-float-x type(<length>), 0px) attr(data-float-y type(<length>), 0px);
+}
 
 /* ---- 입력 조정 패널 ---- */
 [data-inputs-panel] {
@@ -386,11 +403,11 @@ html[data-pilot-shell="android"] ui-topbar ui-brand { display: none; }
 [data-drive-fact=recording][hidden] { display: none; }
 [data-recordings-sheet] {
   position: absolute;
-  /* HUD 바로 아래: robot-recording.js 가 HUD 아래끝을 재어 두 변수에 넣는다 */
-  top: calc(var(--recordings-top, 0px) + var(--space-2));
+  /* HUD 바로 아래: robot-recording.js 가 HUD 아래끝을 재어 두 속성에 넣는다 */
+  top: calc(attr(data-recordings-top type(<length>), 0px) + var(--space-2));
   right: var(--space-3);
   width: min(24rem, calc(100vw - var(--space-3) * 2));
-  max-height: calc(100dvh - var(--recordings-viewport-top, 0px) - var(--space-2) * 2);
+  max-height: calc(100dvh - attr(data-recordings-viewport-top type(<length>), 0px) - var(--space-2) * 2);
   overflow-y: auto;
   padding: var(--space-3);
   display: grid;
@@ -439,13 +456,13 @@ body[data-pilot-screen="drive"] ui-topbar ui-button { white-space: nowrap; }
 }
 
 /* ---- 배치(D-363) — 조작부는 영상을 덮지 않는다 ---- */
-/* side: 가로 태블릿. 영상 좌우 검은 띠(--band)에 조작부를 넣는다. */
+/* side: 가로 태블릿. 영상 좌우 검은 띠(data-band)에 조작부를 넣는다. */
 .pilot-drive[data-drive-layout="side"] [data-drive-controls] {
   padding: 0 var(--space-2) calc(var(--space-3) + env(safe-area-inset-bottom, 0));
 }
-.pilot-drive[data-drive-layout="side"] [data-drive-left],
-.pilot-drive[data-drive-layout="side"] [data-drive-right] {
-  width: calc(var(--band) - var(--space-3));
+.pilot-drive[data-drive-layout="side"] [data-drive-left][data-band],
+.pilot-drive[data-drive-layout="side"] [data-drive-right][data-band] {
+  width: calc(attr(data-band type(<length>), 0px) - var(--space-3));
 }
 .pilot-drive[data-drive-layout="side"] [data-drive-pedals],
 .pilot-drive[data-drive-layout="side"] [data-drive-pivots] {
@@ -602,7 +619,7 @@ body[data-pilot-screen="drive"] ui-brand small { display: none; }
 
 /* ---- 자동 의도 띠(D-364 §6): 영상 아래쪽에 겨누는 점과 실제 조향 방향 ---- */
 [data-drive-intent] {
-  position: absolute;          /* left·width·top 은 drive.js 가 그려진 영상에 맞춘다 */
+  position: absolute;          /* left·width·top 은 그려진 영상 속성이 정한다 */
   display: flex;
   align-items: center;
   gap: var(--space-2);
@@ -611,6 +628,11 @@ body[data-pilot-screen="drive"] ui-brand small { display: none; }
   background: color-mix(in srgb, var(--ground-deep) 62%, transparent);
   pointer-events: none;
   z-index: 2;
+}
+[data-drive-intent][data-strip-left] {
+  left: attr(data-strip-left type(<length>));
+  width: attr(data-strip-width type(<length>));
+  top: attr(data-strip-top type(<length>));
 }
 [data-drive-intent][hidden] { display: none; }
 [data-intent-track] {
@@ -629,6 +651,7 @@ body[data-pilot-screen="drive"] ui-brand small { display: none; }
   transform: translateX(-50%);
   background: var(--nominal-quiet);
 }
+[data-intent-target][data-target] { left: attr(data-target type(<percentage>)); }
 [data-intent-target] {
   position: absolute;
   top: 50%;
@@ -721,6 +744,10 @@ body[data-pilot-screen="drive"] ui-brand small { display: none; }
   background: color-mix(in srgb, var(--ink) 72%, var(--ground-deep));
   box-shadow: 0 2px 10px color-mix(in srgb, var(--ground-deep) 70%, transparent);
   transform: translate(-50%, -50%); pointer-events: none;
+}
+[data-arm-pad-knob][data-knob-x] {
+  left: attr(data-knob-x type(<percentage>), 50%);
+  top: attr(data-knob-y type(<percentage>), 50%);
 }
 [data-arm-pad].active [data-arm-pad-knob] { background: var(--ink); }
 [data-arm-pad-label] {
