@@ -5949,3 +5949,9 @@ osy-d395-s1d\`.
 - 변경: T3 시험은 정확한 파일을 고유 private package/module ID로 불러오며 전역 `observer`·`assertions` 이름과 sys.path를 덮지 않는다. T3 observer의 package import는 상대 assertions를 쓰고 기존 standalone import는 유지한다. 판정·수집·권한 로직은 변경하지 않았다.
 - 증거: 실제 Vision observer 시험을 먼저 수집한 상태의 원래 ImportError를 재현했다. 수정 후 같은 invocation에서 Vision+T3 58 PASS(5.45s), 새 interpreter에서 기존 generic module 보존·PoseSample type identity 및 standalone import PASS를 확인했다. 최초 standalone shell quoting 오류도 로그에 보존했다. owned flake8 0이며 hook 범위·검사 예외는 바꾸지 않았다.
 - gate 변화: host collection/source 격리만. 실제 ROS/SIM·장치·endpoint 소유권·운동 수용은 추가하지 않는다.
+
+## 2026-10-05 · uncommitted · fix(discovery): LAN 이름 조회 작업과 대기 상한
+
+- 변경: 발견·이름 조회 총 4초, NSS 스레드 4개·진행/완료 항목 64개·완료 캐시 2초로 제한한다. 같은 이름·포트 조회를 공유하고 시간 초과·호출자 루프 종료 후에도 원래 작업이 끝날 때까지 소유권을 유지한다. TLS 이름·CA·등록 정책·만료·회수 검사는 유지한다. D-432에 자원 상한과 멈춘 OS 조회를 강제 종료하지 못하는 한계를 기록했다.
+- 증거: 실제 getaddrinfo를 멈춰 원래 대기 상한 실패를 재현했다. 동시 요청·시간 초과 재시도·루프 종료·작업 상한·캐시 만료 DHCP 변경을 회귀 검증한다. 모든 fixture는 호스트 합성이며 실제 컨테이너·기기 접속은 미검증이다.
+- gate 변화: 없음. SOURCE/LOCAL 자원 경계 보완이며 현장 연동이나 제어 수용은 통과 처리하지 않는다.

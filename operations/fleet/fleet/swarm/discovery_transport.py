@@ -4,6 +4,9 @@ import asyncio
 import ipaddress
 import socket
 import ssl
+import threading
+import time
+from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import urlsplit
 
 import httpx
@@ -11,6 +14,57 @@ import httpx
 from core_common.discover import get_shared_cache
 from core_common.protocol.discovery_txt import ROBOT, Accepted, _lan_ipv4, classify
 from fleet.swarm.robots import RobotEndpoint, _endpoint
+
+RESOLVE_TIMEOUT_S = 4.0
+
+
+class _HostLookups:
+    """Keep timed-out NSS work owned across callers and event loops."""
+
+    def __init__(self, *, workers=4, max_hosts=64, ttl_s=2.0, clock=time.monotonic):
+        self.executor = ThreadPoolExecutor(max_workers=workers, thread_name_prefix='rosy-host-dns')
+        self.max_hosts = max_hosts
+        self.ttl_s = ttl_s
+        self.clock = clock
+        self.lock = threading.Lock()
+        self.entries = {}
+
+    def get(self, host, port):
+        key = (host, port)
+        with self.lock:
+            now = self.clock()
+            expired = [name for name, (_, finished) in self.entries.items()
+                       if finished is not None and now - finished >= self.ttl_s]
+            for name in expired:
+                del self.entries[name]
+            if key in self.entries:
+                return self.entries[key][0]
+            if len(self.entries) >= self.max_hosts:
+                raise ValueError('not_discovered: host lookup capacity reached')
+            future = self.executor.submit(_host_lan, host, port)
+            self.entries[key] = (future, None)
+
+        def finished(done):
+            with self.lock:
+                if self.entries.get(key, (None,))[0] is done:
+                    self.entries[key] = (done, self.clock())
+
+        # Register outside the lock: completed futures invoke this synchronously.
+        future.add_done_callback(finished)
+        return future
+
+
+_HOST_LOOKUPS = _HostLookups()
+
+
+async def _resolve_host(host, port, remaining):
+    if remaining <= 0:
+        raise TimeoutError('robot discovery deadline exceeded')
+    future = _HOST_LOOKUPS.get(host, port)
+    # Cancelling a caller must not cancel or forget queued/running NSS work.
+    wrapped = asyncio.wrap_future(future)
+    wrapped.add_done_callback(lambda done: None if done.cancelled() else done.exception())
+    return await asyncio.wait_for(asyncio.shield(wrapped), timeout=remaining)
 
 
 def tls_context(endpoint: RobotEndpoint) -> ssl.SSLContext | None:
@@ -67,6 +121,7 @@ def _host_lan(host: str, port: int) -> str:
 
 
 async def resolve_robot(endpoint: RobotEndpoint, finder=None) -> tuple[str, int]:
+    deadline = time.monotonic() + RESOLVE_TIMEOUT_S
     if endpoint.link_policy_file:
         # Re-read policy for expiry/revocation before each new outbound connection.
         _endpoint(endpoint.robot_id, endpoint.base_url, endpoint.token, 'robot endpoint',
@@ -74,7 +129,8 @@ async def resolve_robot(endpoint: RobotEndpoint, finder=None) -> tuple[str, int]
                   endpoint.link_policy_file)
     finder = finder or get_shared_cache().wait
     records = tuple(await asyncio.wait_for(
-        asyncio.to_thread(finder, ROBOT, timeout_s=3.0), timeout=4.0))
+        asyncio.to_thread(finder, ROBOT, timeout_s=3.0),
+        timeout=max(0.0, deadline - time.monotonic())))
     try:
         return select_robot(endpoint, records)
     except ValueError as exc:
@@ -87,7 +143,7 @@ async def resolve_robot(endpoint: RobotEndpoint, finder=None) -> tuple[str, int]
         if (host is None or port is None
                 or any(record.host.lower().rstrip('.') == host for record in records)):
             raise
-        return await asyncio.to_thread(_host_lan, host, port), port
+        return await _resolve_host(host, port, deadline - time.monotonic()), port
 
 
 class DiscoveryTransport(httpx.AsyncBaseTransport):

@@ -1849,3 +1849,9 @@
 - 변경: DNS-SD에 저장한 로봇 이름이 없으면 `socket.getaddrinfo`로 사설 LAN IPv4 하나를 고르고, 저장한 URL 포트와 TLS 이름·CA 검증을 유지한다. 그 이름의 광고가 있는데 분류에 실패하거나, 사설 LAN IPv4가 없거나 둘 이상이면 기존 연결 실패를 유지한다. HTTP로 내려가지 않는다.
 - 증거: discovery transport와 enrolled TLS 32 passed, 1 skipped, 7.34s. Windows symlink 1 skipped. flake8 0. known_failures 0 NEW. 호스트 조회는 테스트에서 대체했고 실기기 연결은 하지 않았다.
 - gate 변화: SOURCE/LOCAL. 서명된 사이트 이미지와 현장 연결은 이 커밋만으로 바뀌지 않는다. 주행 없음.
+
+## 2026-10-05 · uncommitted · fix(discovery): LAN 이름 조회 작업과 대기 상한
+
+- 변경: 발견·이름 조회 총 4초, NSS 스레드 4개·진행/완료 항목 64개·완료 캐시 2초로 제한한다. 같은 이름·포트 조회를 공유하고 시간 초과·호출자 루프 종료 후에도 원래 작업이 끝날 때까지 소유권을 유지한다. TLS 이름·CA·등록 정책·만료·회수 검사는 유지한다. D-432에 자원 상한과 멈춘 OS 조회를 강제 종료하지 못하는 한계를 기록했다.
+- 증거: 실제 getaddrinfo를 멈춰 원래 대기 상한 실패를 재현했다. 동시 요청·시간 초과 재시도·루프 종료·작업 상한·캐시 만료 DHCP 변경을 회귀 검증한다. 모든 fixture는 호스트 합성이며 실제 컨테이너·기기 접속은 미검증이다.
+- gate 변화: 없음. SOURCE/LOCAL 자원 경계 보완이며 현장 연동이나 제어 수용은 통과 처리하지 않는다.
