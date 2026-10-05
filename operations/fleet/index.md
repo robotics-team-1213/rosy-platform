@@ -85,8 +85,8 @@
 
 ## 최근 기록
 
+- 2026-10-06 · uncommitted · uiux(fleet): 빈 목록·서버 실패의 모바일 폭과 연결 끊김 증거
 - 2026-10-06 · uncommitted · uiux(fleet): 기본 예외 목록 증거와 지도 바탕
 - 2026-10-06 · uncommitted · uiux(fleet): 동등한 창 너비 통일
 - 2026-10-06 · uncommitted · feat(fleet): 내부망 카메라 미리보기
 - 2026-10-05 · uncommitted · fix(fleet): D-468 계약 문서 버전 검사 정렬
-- 2026-10-05 · uncommitted · fix(fleet): 기능 표시의 안전 경계 의존성 복구

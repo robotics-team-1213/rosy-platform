@@ -6205,3 +6205,9 @@ osy-d395-s1d\`.
 - 변경: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)에 웨이포인트 저장 작업의 API·화면 왕복 증거와 D-153 G3 여덟 항목의 근거·남은 판정 범위를 기록했다.
 - 증거: 390px FastAPI/Chromium 1 passed, `known_failures.py` 0 NEW, 저장 201·목록 readback·가로 넘침 0. 여덟 항목은 모두 부분 근거로 남긴다.
 - gate 변화: G3 GO 아님. 제품 전체 UI/UX와 장치·현장 수용은 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(docs): Fleet 상태별 모바일 폭과 연결 끊김 근거
+
+- 변경: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)에 Fleet 빈 목록·서버 실패의 320/390px, 느린 응답·회복·끊김·HOLD와 오프라인 캡처를 연결했다. 오프라인 fixture를 실제 API의 `state: null` 계약에 맞췄다.
+- 증거: 기존 상태 9 passed, 모바일 상태 4 passed, 오프라인 재실행 1 passed, 각 `known_failures.py` 0 NEW.
+- gate 변화: Fleet G2 일부만 LOCAL 확인. 제품 전체 UI/UX와 장치·현장 수용은 HOLD다.

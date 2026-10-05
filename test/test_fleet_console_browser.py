@@ -368,6 +368,31 @@ def test_gather_failure_names_itself_on_the_pill(console_url):
         browser.close()
 
 
+@pytest.mark.parametrize("width", [320, 390])
+@pytest.mark.parametrize("scenario", ["empty", "gather-error"])
+def test_mobile_fleet_empty_and_failure_keep_next_step_visible(console_url, width, scenario):
+    from playwright.sync_api import sync_playwright
+
+    api = {
+        "/api/fleet/state": EMPTY_SNAPSHOT if scenario == "empty" else (500, {"detail": "gather failed"}),
+        "/api/fleet/map": MAP_GRID,
+        "/api/fleet/formation": {"active": False, "state": "IDLE"},
+    }
+    expected = "등록된 로봇이 없습니다" if scenario == "empty" else "Fleet 상태를 확인할 수 없습니다"
+    with sync_playwright() as playwright:
+        browser, page, errors = _open_console(playwright, api)
+        page.set_viewport_size({"width": width, "height": 844})
+        page.goto(console_url, wait_until="networkidle")
+        page.get_by_text(expected).first.wait_for()
+        stop = page.locator("#estop").bounding_box()
+        assert stop and stop["width"] > 0 and stop["x"] + stop["width"] <= width
+        assert stop["y"] + stop["height"] <= 844
+        assert page.evaluate("document.documentElement.scrollWidth - innerWidth") == 0
+        assert errors == []
+        save_temp_screenshot(page, f"fleet_console_{scenario}_{width}.png")
+        browser.close()
+
+
 def test_slow_initial_gather_does_not_spawn_overlapping_polls(console_url):
     """The loading state keeps one state request in flight until it resolves."""
     from playwright.sync_api import sync_playwright
@@ -652,7 +677,7 @@ UNREACHABLE_SNAPSHOT = {
         SNAPSHOT["robots"][1],
         _robot(
             "rosy_03", {"x": 0.45, "y": 0.4, "yaw": 0.0},
-            online=False,
+            online=False, state=None,
             error={"reachable": False, "code": "CONNECT_ERROR"},
         ),
     ],
@@ -701,6 +726,9 @@ def test_unreachable_robot_is_never_drawn_healthy(console_url):
         assert "닿지 않음: CONNECT_ERROR" in roster
         assert "오프라인" in roster
         assert "OFFLINE" not in roster
+        offline = page.locator("#roster .robot.offline")
+        assert "NAVIGATING" not in offline.inner_text()
+        assert "0.45" not in offline.inner_text()
         assert page.locator("#roster .robot.offline ui-tag[status=crit]", has_text="오프라인").first.get_attribute("title") == "OFFLINE"
         assert not errors
         save_temp_screenshot(page, "fleet_console_unreachable.png")

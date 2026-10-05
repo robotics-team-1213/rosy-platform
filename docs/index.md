@@ -300,8 +300,8 @@
 
 ## 최근 기록
 
+- 2026-10-06 · uncommitted · uiux(docs): Fleet 상태별 모바일 폭과 연결 끊김 근거
 - 2026-10-06 · uncommitted · uiux(docs): 절차 G3 항목별 근거와 잔여 범위
 - 2026-10-06 · uncommitted · uiux(docs): 맵핑·롤백 확인창 증거
 - 2026-10-06 · uncommitted · uiux(docs): 작업 준비·장비 첫 기동 6셀과 G1 재실행
 - 2026-10-06 · uncommitted · uiux(docs): 작업 준비·장비 60셀 보존
-- 2026-10-06 · uncommitted · uiux(docs): 로봇 얼굴 LOCAL 렌더와 실물 판정 경계
