@@ -25,7 +25,7 @@
 .ops-block > h2, .ops-block > .discovery, .ops-block > .console-diagnostics, .ops-block > .log-panel { grid-column: 1 / -1; margin: 0; }
 .ops-block > .formation, .ops-block > .signals { margin: 0; }
 @media (width >= 64rem) {
-  .install-tasks { grid-template-columns: minmax(12rem, .22fr) minmax(0, 1fr); }
+  .install-tasks { grid-template-columns: var(--sidebar-track) minmax(0, 1fr); }
   #install-chooser { position: sticky; top: var(--space-4); }
   .ops-block { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
@@ -520,7 +520,8 @@ main {
   #estop small { display: none; }
 }
 
-/* 머리 한 줄: 이름 | 연결 | 시계 | 설정 | 정지. 접속·역할·테마는 설정 뒤에 접힌다.
+/* D-466 — 바깥 자리는 brand | cluster | estop. cluster는 연결·Cell·시계·설정이다.
+   머리 한 줄: 이름 | 연결 | 시계 | 설정 | 정지. 접속·역할·테마는 설정 뒤에 접힌다.
    90rem은 surfaces.yaml console breakpoints에 적힌 값이다 — 모든 항목을 편 머리의
    자연 폭(약 1220–1300px, 주체 이름에 따라)이 1440px 미만 창에서 한 줄에 들지 않아,
    비상 정지가 둘째 줄로 밀리거나 이름표가 두 줄로 접히지 않도록 접는다. */

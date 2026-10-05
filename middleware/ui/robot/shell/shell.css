@@ -191,7 +191,7 @@ body:is([data-surface="setup"], [data-surface="device"]) .procedure-panel {
   }
   body:is([data-surface="setup"], [data-surface="device"]) .surface-slot[data-slot="main"].procedure-tasks {
     display: grid;
-    grid-template-columns: minmax(13rem, 18rem) minmax(0, 1fr);
+    grid-template-columns: var(--sidebar-track) minmax(0, 1fr);
     gap: var(--space-5);
   }
   body[data-surface="setup"] [data-panel="setup.traffic_policy"] {
@@ -212,8 +212,9 @@ body:is([data-surface="setup"], [data-surface="device"]) .procedure-panel {
   body[data-surface="setup"] [data-panel="setup.traffic_policy"] > .traffic-policy-simulation { grid-column: 1; grid-row: 3; }
 }
 
-/* D-359 §6.4 — 세로 예산: 붙박이 머리는 창 높이의 20% 이하다. 넓지 않은 창에서는 두 줄에
-   모은다 — 이름·역할 / 화면 전환. 비상 정지는 두 줄을 차지하며 늘 오른쪽 위에 보인다.
+/* D-466 — 머리 자리는 brand | cluster | estop. D-359 §6.4의 두 줄 접기다.
+   이름·역할 / 화면 전환. 비상 정지는 두 줄을 차지하며 늘 오른쪽 위에 보인다.
+   화면 전환은 cluster이지 사이드바가 아니다. 붙박이 머리는 창 높이의 20% 이하다.
    알림은 글이 있을 때만 셋째 줄에 나온다(비상 정지 결과). */
 @media (width < 64rem) {
   ui-topbar {

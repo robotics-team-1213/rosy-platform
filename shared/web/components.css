@@ -703,6 +703,9 @@ ui-shell[data-grammar-missing] {
   outline: var(--contract-mark-width) solid var(--status-crit);
 }
 
+/* D-466 — 머리의 자리는 brand, cluster, estop이다. cluster 안의 순서는 표면이 정한다.
+   64rem 미만은 두 줄(이름·상태 / 화면 전환)이고 비상 정지는 두 줄을 차지한다.
+   30rem 미만은 그 두 줄의 여백과 부제만 줄인다. 새 머리 격자는 만들지 않는다. */
 ui-topbar {
   display: flex;
   align-items: center;
@@ -723,6 +726,13 @@ ui-shell[grammar="focal"] ui-topbar {
 
 ui-topbar [data-spacer],
 ui-topbar .spacer { flex: 1; }
+
+/* D-466 — 절차 작업을 고르는 열. 폭은 부모 격자의 --sidebar-track이다.
+   64rem 미만에서 레일을 숨기는 규칙은 task-chooser.css가 유지한다. */
+.ui-sidebar {
+  min-width: 0;
+  align-content: start;
+}
 
 ui-brand {
   display: flex;
