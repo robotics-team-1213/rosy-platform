@@ -108,6 +108,8 @@ Pilot 390×844에서 회전 조작을 첫 화면에 올리려고 아래 조작 �
 
 고정된 조작 칸의 스틱 아래 빈 곳에 전화 폭에서만 「↓ 회전 조작」 안내를 넣었다. 피벗 기능이 없는 프로필에는 표시하지 않는다. 390×844 첫 화면에서 안내는 스틱 아래와 화면 안에 있고, 스크롤하면 좌·우회전 버튼에 닿는다. 카메라 면적·분리 4폭, 기능 없는 프로필, 스틱 인접 터치 2폭의 브라우저 **7 passed**, `known_failures.py` **0 NEW**다. 원본은 X: `captures/pilot-turn-cue/pilot-drive-{current,turn-controls}-390x844.png`에 둔다. 실제 운전자가 안내를 발견하고 이해하는지는 G3 HOLD다.
 
+차선 자동 모드에서는 수동 회전 버튼이 숨겨지므로 안내도 숨긴다. 390×844에서 자동 진입→안내 없음→수동 복귀→안내 표시를 브라우저 **1 passed**, `known_failures.py` **0 NEW**로 확인했다. X: `captures/pilot-turn-cue-mode/pilot-turn-cue-{auto,manual}-390x844.png`에 두 상태를 보관했다. 실제 운전자 G3는 그대로 HOLD다.
+
 ### 장비·작업 준비 G3 독회 — LOCAL 진행 중
 
 | D-153 항목 | 현재 근거 | 남은 판정 범위 |

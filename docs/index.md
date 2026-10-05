@@ -300,8 +300,8 @@
 
 ## 최근 기록
 
+- 2026-10-06 · uncommitted · uiux(pilot): 자동 모드 안내 정합성
 - 2026-10-06 · uncommitted · uiux(pilot): 전화 회전 조작 위치 안내
 - 2026-10-06 · uncommitted · uiux(pilot): 전화 회전 조작과 영상 면적의 경계 확인
 - 2026-10-06 · uncommitted · uiux(learning): 픽셀 사진 이동 너비
 - 2026-10-06 · uncommitted · uiux(learning): 전화 검수 조작 전폭
-- 2026-10-06 · uncommitted · uiux(cam): 송출 대기 화면 전폭 조작

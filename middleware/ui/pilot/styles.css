@@ -845,6 +845,7 @@ body[data-pilot-screen="drive"] ui-brand small { display: none; }
     text-align: center;
     pointer-events: none;
   }
+  .pilot-drive[data-auto-mode="on"] [data-drive-scroll-cue] { display: none; }
   .pilot-drive[data-drive-layout="below"] [data-drive-pedals],
   .pilot-drive[data-drive-layout="below"] [data-drive-pivots],
   .pilot-drive[data-drive-layout="below"] [data-drive-pedals] ui-button,

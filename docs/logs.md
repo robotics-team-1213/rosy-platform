@@ -6367,3 +6367,9 @@ osy-d395-s1d\`.
 - 변경: Pilot 전화 주행 화면의 스틱 아래에 회전 조작 안내를 놓아 첫 화면에서 아래 조작을 알 수 있게 했다. 피벗이 없는 프로필에는 숨긴다.
 - 증거: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)의 390px 캡처와 카메라·터치·프로필 브라우저 7 passed, `known_failures.py` 0 NEW. 원본은 X:에 둔다.
 - gate 변화: Pilot LOCAL G2 부분 근거 추가. 실제 운전자 G3와 제품 전체 UI/UX는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(pilot): 자동 모드 안내 정합성
+
+- 변경: Pilot 전화에서 차선 자동 모드가 수동 회전 버튼을 숨길 때 회전 안내도 숨겼다. 수동 복귀 때 안내가 다시 보인다.
+- 증거: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)의 390px 자동·수동 캡처와 모드 전환 브라우저 1 passed, `known_failures.py` 0 NEW. 원본은 X:에 둔다.
+- gate 변화: Pilot LOCAL G2 일부 추가. 실제 운전자 G3와 제품 전체는 HOLD다.

@@ -935,6 +935,24 @@ def test_stick_takes_over_auto(tablet_page):
 
 @pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
                     reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
+def test_turn_cue_follows_manual_mode_on_phone(tablet_page):
+    base_url, page, errors = tablet_page
+    page.set_viewport_size({"width": 390, "height": 844})
+    _arm_auto(page, base_url)
+    assert not page.locator("[data-drive-scroll-cue]").is_visible()
+    if output := os.environ.get("ROSY_SHOT_DIR"):
+        Path(output).mkdir(parents=True, exist_ok=True)
+        page.screenshot(path=str(Path(output) / "pilot-turn-cue-auto-390x844.png"))
+    page.click("[data-drive-manual]")
+    page.wait_for_selector("[data-drive-pivots]", state="visible")
+    assert page.locator("[data-drive-scroll-cue]").is_visible()
+    if output:
+        page.screenshot(path=str(Path(output) / "pilot-turn-cue-manual-390x844.png"))
+    assert errors == [], errors
+
+
+@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+                    reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
 def test_reenter_resets_auto_mode(tablet_page):
     """주행 화면은 같은 section 에 다시 마운트된다 — 나갔다 들어오면 수동(페달)으로 시작한다."""
     base_url, page, errors = tablet_page
