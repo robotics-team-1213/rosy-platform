@@ -78,6 +78,18 @@ def test_camera_app_has_no_robot_or_fleet_user_calls():
     assert _hits(CAMERA_APP, (".kt", ".java"), CAMERA_FORBIDDEN) == []
 
 
+def test_camera_pairing_namespace_exemption_keeps_user_routes_forbidden():
+    forbidden = CAMERA_FORBIDDEN["Fleet user API"]
+    for path in ("/api/fleet/pairing/v1/requests", "/api/fleet/pairing/v2/requests",
+                 '/api/fleet/pairing/v2$path"'):
+        assert forbidden.search(path) is None
+    for path in ("/api/fleet/robots/robot/route", "/api/fleet/users",
+                 "/api/fleet/tasks", "/api/fleet/pairing/v20/requests",
+                 "/api/fleet/pairing/v2admin", "/api/fleet/pairing/v3/requests"):
+        assert forbidden.search(path), path
+    assert CAMERA_FORBIDDEN["CORE API"].search("/api/v1/control/teleop")
+
+
 def test_camera_pairing_exception_keeps_the_version_boundary():
     rule = CAMERA_FORBIDDEN["Fleet user API"]
     for path in ('/api/fleet/pairing/v1/pending', '/api/fleet/pairing/v2/pending',

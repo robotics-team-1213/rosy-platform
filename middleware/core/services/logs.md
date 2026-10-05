@@ -511,3 +511,22 @@
 - 변경: `core_features/vision/stream.py` 추가 — `DriverStreamGate`(마지막 수락 teleop 토큰이 조종 소유권, D-460 임대 없음). 단일 슬롯, 운전자 교체 시 즉시 슬롯 해제, `close` 멱등. `VisionFrameStore.latest_frame(overlay=)` 추가 — 스트림 경로용, viewer 폴링 속도 제한 없이 raw pair 신선도(수신+source age) 검사.
 - 증거: `test/test_vision_stream_gate.py` 5 PASS(미운전 409·단일 슬롯·교체 퇴거·멱등 close·빈 토큰 무시). 스토어 회귀는 기존 시험 유지.
 - gate 변화: SOURCE. ROS-SIM fps·지연 측정과 DEVICE 영상 수용은 별개(D-368 Validation 참조).
+
+## 2026-10-05 · uncommitted · feat(command): cumulative bounded trial
+
+- 변경: private trial ledger, original odom stamp/frame and final CORE port restriction; no second publisher/API/config activation.
+- 증거: synthetic guard26PASS, installed geometry/CORE independent180PASS/NEW0. Actual measurement/braking UNKNOWN, no motion or push.
+- gate 변화: SOURCE/LOCAL only; HOLD/readiness retained. Plan docs/plans/2026-10-05-core-bounded-camera-trial.md.
+
+
+## 2026-10-05 · uncommitted · fix(core): 제한 시험 STOP와 최종 제출 직렬화
+
+- 변경: 소유자가 미확정 양수 제출 의도를 먼저 영속화한 뒤, canonical SQLite `BEGIN IMMEDIATE`와 같은 소유자의 `RLock` 안에서 최종 STOP·신선도 확인부터 기존 `PinkyTwistPort.submit` 콜백까지 유지한다. 공개 `permits` 판정은 제출 권한이 아니며 production bridge는 `submit_fenced`를 사용한다. 다른 연결의 STOP·재개장은 제출 전후로 직렬화되고 잠금 실패는 양수 제출을 거부한다.
+- 증거: 실제 SQLite에서 허가 확인 뒤 확정된 STOP에도 0.04가 제출되던 회귀와 writer 중 재개장 허용 회귀 RED 2 FAIL. 동일 소유자·별도 연결의 실제 threaded STOP, 기존 bounded/cmd_vel 시험 GREEN 43 PASS 2.44초 (`X:/DevTemp/rosy-ui-ship/trial-fence/final-tests.log`). 미확정 송신·영속화 실패는 기존 정지 래치를 유지하고 양수 재시도하지 않는다.
+- gate 변화: 이 변경의 SOURCE/LOCAL 검증만. 실기 이동·제동·거리 bounds, ARM 산출물·배포·FIELD 수용은 미실행이며 기존 제한 시험은 안전 승인이나 public API/config 활성화가 아니다.
+
+## 2026-10-05 · uncommitted · test(core): D-184 제한 시험 소유 경계 복구
+
+- 변경: ledger·envelope·pose freshness·재개장 순수 정책 검사 10개를 services의 `test_bounded_trial_owner.py`로 옮겼다. 소유자 검사 helper는 실제 `submit_fenced`와 합성 callback만 사용하고 gateway를 import하지 않는다. 기존 테스트 함수 20개의 AST·단언은 모두 보존하며, bridge 최종 제출·준비 상태·미확정 응답·odometry·camera mux·STOP 경합 및 envelope 변조의 bridge 예외 처리는 gateway의 나머지 10개 함수가 검증한다. runtime·frozen 예외 목록·소유권 검사 구현은 바꾸지 않는다.
+- 증거: 정규 push의 D-184 실패를 exact RED 1 FAIL로 재현했다. 최종 소유자·gateway 제한 시험·기존 cmd_vel·D-184 검사 44 PASS/2.16초, services 단독 19 PASS/1.13초. 중간 envelope 변조 검사는 owner 예외를 bridge의 ZERO와 혼동하여 1 FAIL이었고 gateway에 원문 그대로 되돌렸다. 원본 실패와 최종 로그는 X:/DevTemp/rosy-ui-ship/trial-fence/ownership-*.log에 보존한다.
+- gate 변화: SOURCE/LOCAL 검사 배치만. runtime bytes·권한·서명·실기 bounds·장치 상태·배포 수용은 변경하지 않는다.

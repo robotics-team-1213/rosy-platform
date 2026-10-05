@@ -56,6 +56,7 @@ services:
       - --pairing-sync-token-env
       - ROSY_SITE_PAIRING_SYNC_TOKEN
     environment:
+      ROSY_ENROLLED_TLS_BINDINGS_FILE: "${ROSY_SITE_ENROLLED_TLS_BINDINGS_FILE:-}"
       ROSY_CREDENTIAL_PATHS: '{"ROSY_SITE_REGISTRY_TOKEN":"/run/secrets/registry_token","ROSY_FLEET_CEILING_NORTH_TOKEN":"/run/secrets/fleet_sighting_token","ROSY_SITE_DISCOVERY_TOKEN":"/run/secrets/discovery_token","ROSY_VISION_PREVIEW_SECRET":"/run/secrets/vision_preview_secret","ROSY_SITE_PAIRING_SYNC_TOKEN":"/run/secrets/pairing_sync_token"}'
     secrets:
       - pairing_sync_token

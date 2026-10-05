@@ -1780,8 +1780,52 @@
 - 증거: 관련 API/계약·공용 UI 149 passed, known_failures 신규 0; Node 좌표·여백·무효 표시 3 passed; 실제 Chromium 선택/저장/새로고침/보정 변경·토큰 변경·occupancy 표시/선택 중 지도 변경 3 passed. 독립 읽기 검토의 좌표 형식·JSON 헤더·map 변경 지적 3건을 수정했다.
 - gate 변화: SOURCE/LOCAL. 실제 카메라 보정 승인·두 로봇 신원 연결·현장 시작 위치/방향 일치·정확한 후보 CI/서명/배포 수용은 아직 별도다. UI/UX 리팩터링과 주행 없음.
 
+## 2026-10-05 · uncommitted · fix(pairing): 승인 대상 문구와 Cam 역할 경계 정합
+
+- 변경: 카메라 승인·해제 대화상자에서 대상 이름을 따옴표로 구분하고 승인 결과를 명확히 묻는다. 기존 D-341 v1과 D-456 v2 카메라 페어링 namespace만 역할 검사에서 허용하고 v20·v2admin·로봇·사용자·작업 경로는 계속 거절한다.
+- 증거: 기존 문구·역할 검사 두 실패를 재현했다. 수리 후 두 관련 suite 14 passed이고 독립 SOURCE 검토에서 owner·lifetime·abort·POST 흐름 불변을 확인했다. 태블릿의 실제 LAN 로봇 목록 및 선택 뒤 기존 로그인 코드 창을 확인했으며 Pilot/Cam APK는 기존 서명으로 업데이트했다.
+- gate 변화: SOURCE/LOCAL 및 앱 설치 증거. 새 상대 승인·관제/로봇 배포·승인 유지 재연결의 DEVICE 수용은 아직 별도다.
+
+## 2026-10-05 · uncommitted · fix(ci): 카메라 브라우저 명시적 실행
+
+- 변경: Playwright를 브라우저 fixture의 명시적 opt-in 뒤에 불러온다. opt-in 중 의존성 누락은 오류로 남기며 Fleet CI는 도구 설치 후 ROSY_BROWSER_TESTS=1을 명시한다.
+- 증거: 실제 부모 Chromium에서 카메라 7·시작점 3·픽셀 편집 3 합계 13 passed/201.85s. 후보에서 opt-out 7 SKIP과 의존성 없는 opt-in 7 ERROR를 구분해 확인했다. 런타임 TLS 검사는 완화하지 않았다.
+- gate 변화: SOURCE/LOCAL 브라우저 증거. CI 성공·서명 배포·실제 양쪽 승인과 재연결은 별도다.
 ## 2026-10-05 · uncommitted · fix(dialog-target): 카메라 승인·해제 대상 확인
 
 - 변경: 기존 승인·해제 대화상자의 기기 이름과 확인 문자를 따옴표로 구분하고 승인 여부를 질문한다. 레이아웃·UI/UX 리팩터링·API·권한 변경 없음.
 - 증거: irreversible 행 행동 검사와 실제 Chromium 카메라 승인 확인 검사 12 passed, known_failures NEW 0.
 - gate 변화: SOURCE/LOCAL. 장치·현장 수락은 별도다.
+
+## 2026-10-05 · uncommitted · feat(fleet): 승인된 추적 보정으로 카메라 영상을 편다
+
+- 변경: 검토 중 제안이 없으면 관제 화면은 승인된 Fleet 추적 보정(D-457, 같은 source·지도·렌즈)으로 천장 영상을 트랙 미터에 편다. 기록이 없거나 렌즈가 다르면 이 브라우저의 표시 초안을 쓴다. 표시 전용이며 관측·CameraMap·주행에 넣지 않는다. 예시 카메라 주석은 바닥에 있는 등록 로봇만 robot_ids에 두고, 마커가 없으면 robot_markers가 {}일 수 있다고 적는다.
+- 증거: Node map-fit 17 passed (렌즈 일치·행렬 왕복 포함). pytest 콘솔 추적·카메라 예시·페어링 16 passed, known_failures 신규 0.
+- gate 변화: SOURCE/LOCAL. 서명된 사이트 이미지의 콘솔 JS는 이 커밋만으로 바뀌지 않는다. 주행 없음.
+
+
+## 2026-10-05 · uncommitted · fix(cell-ui): 좁은 화면 상단 운영자 표시 줄바꿈
+
+- 변경: D-359 좁은 화면 tier에서 셀 준비 화면 상단 바의 줄바꿈을 허용한다. 기존 구성 요소와 토큰·표시 순서·접속·승인·정지 세대 동작을 유지한다.
+- 증거: 정확한 cb6 CI에서 모바일 폭 검사 3개가 실패했다. 실제 Linux 두 시나리오에서 운영자 표시 오른쪽 390.65625px와 문서 폭 391px/화면 390px를 재현했다. Windows 원본 브라우저 9 passed/46.56s, 관련 웹 계약 59 passed/11.30s. 실제 CSS를 쓰는 Linux 세 시나리오는 초기 화면 요소 대기만 분리한 진단에서 3 passed/287.82s와 문서 폭 390px를 확인했다. 기존 세대 충돌·취소·작업자 확인 대기·구조화 초안 저장/재읽기 단언은 유지했다. 원본 Linux fixture 시간 초과는 따로 보존하며 전체 Linux CI 성공으로 표시하지 않는다.
+- gate 변화: SOURCE/LOCAL. 독립 검토가 한 줄 CSS의 콘텐츠·CSP·권한·동작 불변을 확인했다. 새 정확한 소스의 원격 CI·서명 배포·앱/관제/로봇의 실제 승인과 재연결은 아직 별도다.
+
+## 2026-10-05 · uncommitted · fix(cell-ui): 문서 패널의 내용 높이 유지
+
+- 변경: D-359 공용 토큰과 반응형 열을 유지하며 문서 그리드를 위쪽 정렬한다. 긴 레시피 때문에 오른쪽 셀 입력란까지 늘어나는 배치를 바로잡는다.
+- 증거: 준비된 동일 DOM에서 이전 CSS 기준 셀 입력란 176.78125px가 실제 수정 CSS에서 44px로 줄었다. 390/800px 입력란 높이와 390px 좌표, 모든 화면 폭과 컨트롤 상태·운영자 세션을 유지했다. 데스크톱 진단 1 passed/39.12s, 최종 원본 Windows 브라우저 9 passed/32.28s. 독립 검토가 두 CSS 변경의 CSP·포커스·순서·권한·저장·세대 동작 불변을 확인했다.
+- gate 변화: SOURCE/LOCAL. 최종 원격 Linux CI, 서명 배포와 실제 앱·관제·로봇 승인 및 재접속 검증은 별도다.
+
+
+## 2026-10-05 · uncommitted · fix(fleet): 기존 등록의 승인 TLS 전송과 downgrade 기록
+
+- 변경: 공개 sidecar를 기존 등록 ID·정본 .local 이름·CA DER 지문에 묶는다. 기존 encrypted credentials/principal/expiry/address를 유지하며 bounded nofollow 파일 검증과 같은 TLS 위치의 anonymous identity 확인 뒤에만 코드·Bearer·WSS auth를 보낸다. 기존 hold/expiry를 await 뒤에도 검사한다. 공개 origin/CA marker는 같은 등록부에 원자 저장하고 설정 누락·교체·재시작의 HTTP downgrade를 막는다. 정상 로그아웃 확인 후 실제 등록 행 삭제에만 marker를 함께 지운다. CLI와 두 기존 Compose는 기존 RO config의 선택적 공개 파일만 전달한다. 새 roster·권한·token 갱신·TLS 무시는 없다.
+- 증거: 최종 기존 affected 206 passed/2 Windows filesystem skipped(49.27s), 마지막 새 테스트 23 passed/1 symlink skipped(2.77s), 독립 tail 5 passed(1.61s). restart/CA DER/receiver ID/WS identity/REST await/WS await 6개 X compiled-byte 변이는 모두 실제 RED이며 원본 복원 GREEN과 production hash 불변을 확인했다. owned Python 6파일 flake8 0, diff check 및 known_failures 0 NEW. 초기 namespace prerequisite 실패와 pending logout retry RED는 별도 원본 로그로 보존했다. 공개 runbook은 CA/origin rotation 및 실제 관리자 적용을 미구현·미실행으로 밝힌다.
+- gate 변화: SOURCE/LOCAL만. 독립 SPEC/Quality/Safety source PASS. 실제 TLS handshake/WSS·사이트 설정·기기·운용 승인은 NOT_RUN이며 기존 ARTIFACT/DEVICE/FIELD gate를 올리지 않는다.
+
+
+## 2026-10-05 · uncommitted · refactor(fleet): CLI feature 생성 경계 분리
+
+- 변경: 기존 P6 before-next-flag 의무에 맞춰 Mission·Cell compiler·proposal/evidence, 카메라 pairing, 등록 TLS 생성만 lazy console builder로 옮겼다. CLI의 기존 거절·alias·옵션, 동일한 load→roster.sync 순서, 한 번의 create_app 및 기존 localization builder 위임을 유지한다. 런타임·권한·새 background owner는 추가하지 않는다.
+- 증거: Mission·pairing 본문 AST 동등과 등록 생성의 명시적 config 인수 외 동등, 새 interpreter에서 비활성 optional dependency 미로드·alias 동등을 확인했다. 기존 CLI/TLS 55 passed/Windows symlink 1 skipped(34.83s), owned Python 2파일 flake8 0, known_failures 0 NEW. 실제 동일 P6 filter에서 CLI652→586, 새 builder91, Fleet35581→35606(+25)이다. 600/800/1000 및 +150 제한은 수정하지 않았다.
+- gate 변화: SOURCE/LOCAL 구조 후속만. 실기·사이트 설정·운용 수용은 이전 NOT_RUN을 유지한다. CLI stale verdict와 Fleet package 재판정은 통합 owner가 별도로 처리한다.

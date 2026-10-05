@@ -46,8 +46,8 @@
 
 ## 최근 기록
 
-- 2026-10-05 · uncommitted · fix(peer-assets): Pilot 승인 모듈 정적 경로 일치
-- 2026-10-04 · uncommitted · fix(omx): Pilot 운전석과 Cell 하달 상호 배제
-- 2026-10-04 · uncommitted · D-442 U3 owner 선점과 named 운영 복구
-- 2026-10-03 · uncommitted · fix: retain the UDS owner after a caller disconnects
-- 2026-10-03 · uncommitted · fix: install canonical OMX geometry for Cell owner composition
+- 2026-10-05 · uncommitted · feat(learning): 동일 정책 실행 Episode와 Fleet export
+- 2026-10-05 · uncommitted · feat(omx): 검증된 Action parent와 정책 원본 사실 연결
+- 2026-10-05 · uncommitted · fix(release): 공개 journal SHA 경로 검증 기록 이동
+- 2026-10-05 · uncommitted · fix(harness): native callback 저널 한 항목의 형식 정정
+- 2026-10-05 · uncommitted · fix(harness): OMX 커밋 저널의 정확한 형식 복구

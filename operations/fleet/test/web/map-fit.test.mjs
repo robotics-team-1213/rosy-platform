@@ -5,7 +5,7 @@ import {
   flatMatrix, multiply3, invert3, project, scale3, projectPolyline, projectTriangles,
   normalizeMapProposal, reasonText, cutGuidance, fitSummary, pickLanes, topDownLayout,
   parseMapDraft, draftFrom, fieldToMap, retryDelay, MAP_FIT_MAX_TRIES, canAccept, fitUsable,
-  orientHomography, calibrationRequest,
+  orientHomography, calibrationRequest, lensesMatch, fitFromCalibration,
 } from "../../fleet/server/web/map-fit.js";
 
 test("the field fallback maps the field rectangle onto the map rectangle, y up", () => {
@@ -264,4 +264,33 @@ test("an applied fit becomes a Fleet calibration request; previous or other-sour
   assert.equal(calibrationRequest(stamped, "ceiling_north", laneSet, lens), null);
   const sameMap = { ...pending, stamp: { mapId: "map_v2_fleet", laneSha: null, paintSha: null } };
   assert.equal(calibrationRequest(sameMap, "ceiling_north", laneSet, lens).map_id, "map_v2_fleet");
+});
+
+test("an approved tracking calibration is a display fit only when the lens matches", () => {
+  const lens = { kind: "standard", focal_mm: 5.4, hfov_deg: 67.8 };
+  const record = {
+    source_id: "ceiling_north", map_id: "map_v2_fleet", calibration_revision: "paint-daccc3e53522",
+    map_to_image: MAP_TO_IMAGE, image: { width: 1280, height: 720 }, frame_seq: 14992,
+    use: "display-only", lens,
+  };
+  assert.equal(lensesMatch(null, null), true);
+  assert.equal(lensesMatch(lens, null), false);
+  assert.equal(lensesMatch(null, lens), false);
+  assert.equal(lensesMatch(lens, { kind: "standard", focal_mm: 5.41, hfov_deg: 67.8 }), false);
+  assert.equal(lensesMatch(lens, { kind: "wide", focal_mm: 5.4, hfov_deg: 67.8 }), false);
+  assert.equal(lensesMatch(lens, { kind: "standard", focal_mm: 5.4001, hfov_deg: 67.803 }), true);
+  const fit = fitFromCalibration(record, lens);
+  assert.equal(fit.revision, "paint-daccc3e53522");
+  assert.equal(fit.mapId, "map_v2_fleet");
+  const shown = project(fit.mapToImage, -0.3357, 0.0011);
+  const expected = project(MAP_TO_IMAGE, -0.3357, 0.0011);
+  close(shown[0], expected[0], 1e-4);
+  close(shown[1], expected[1], 1e-4);
+  assert.equal(fitFromCalibration(record, null), null);
+  assert.equal(fitFromCalibration({ ...record, lens: null }, lens), null);
+  const bare = fitFromCalibration({ ...record, lens: null }, null);
+  assert.equal(bare.revision, "paint-daccc3e53522");
+  assert.equal(fitFromCalibration({ ...record, calibration_revision: 3 }, lens).revision, null);
+  assert.equal(fitFromCalibration({ ...record, map_to_image: [1, 2, 3] }, lens), null);
+  assert.equal(fitFromCalibration(null, lens), null);
 });

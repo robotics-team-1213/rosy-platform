@@ -20,6 +20,7 @@ import threading
 from pathlib import Path
 from typing import Callable, Optional, Sequence
 
+from fleet.server.console_builders import build_pairing as _build_pairing
 from fleet.formation.geometry import DEFAULT_SPACING, Formation, FormationError
 from fleet.swarm.relay import Relay
 from fleet.swarm.robots import RobotEndpoint, load_robots
@@ -79,6 +80,9 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
                          help="host mDNS scanner credential environment variable")
     console.add_argument("--approved-peer-directory-file", default=None, type=Path,
                          help="admin-provisioned public peer metadata JSON; no credentials or enrollment")
+    console.add_argument("--enrolled-tls-bindings-file",
+                         default=os.environ.get("ROSY_ENROLLED_TLS_BINDINGS_FILE") or None, type=Path,
+                         help="public approved TLS bindings for existing encrypted enrollments")
     console.add_argument("--vision-preview-secret-env", default=None,
                          help="dedicated Fleet-to-Vision preview lease signing secret")
     console.add_argument("--users-file", default=None, type=Path,
@@ -366,6 +370,8 @@ def run_console(args: argparse.Namespace) -> None:
     if args.host not in LOOPBACK_HOSTS and tasks_db is None:
         sys.exit("--tasks-db is required when the Fleet control surface is externally reachable")
     key_file = getattr(args, "robot_credential_key_file", None)
+    if getattr(args, "enrolled_tls_bindings_file", None) is not None and key_file is None:
+        sys.exit("--enrolled-tls-bindings-file requires --robot-credential-key-file")
     if key_file is not None and tasks_db is None:
         sys.exit("--tasks-db is required with --robot-credential-key-file")
     if args.robots is None and key_file is None:
@@ -449,43 +455,20 @@ def run_console(args: argparse.Namespace) -> None:
 
         task_service = FleetTaskService(FleetTaskStore(tasks_db),
                                         robot_ids=console.robot_ids)
-    mission_service = None
-    proposal_store = None
-    goal_evidence_service = None
-    cell_job_compiler = None
-    if cell_job_tol_m is not None:  # the palletizing wheel is needed only with this flag
-        from fleet.server.cell_compiler import PalletizingCellJobCompiler
-        cell_job_compiler = PalletizingCellJobCompiler(tol_m=cell_job_tol_m)
-    if mission_api:
-        from fleet.server.mission_service import MissionService
-        from fleet.server.mission_store import MissionStore
-        from fleet.server.proposal_store import ProposalStore
+    from fleet.server.console_builders import build_enrollment, build_mission_services
 
-        mission_service = MissionService(MissionStore(tasks_db))
-        proposal_store = ProposalStore(tasks_db)
-        if goal_evidence_config is not None:
-            from fleet.server.goal_evidence_registry import load_goal_evidence_registry
-            from fleet.server.goal_evidence_service import GoalEvidenceService
-            from fleet.server.goal_evidence_store import GoalEvidenceStore
-
-            registry = load_goal_evidence_registry(goal_evidence_config)
-            goal_evidence_service = GoalEvidenceService(
-                mission_service, registry, GoalEvidenceStore(tasks_db),
-            )
+    mission_service, proposal_store, goal_evidence_service, cell_job_compiler = build_mission_services(
+        mission_api=mission_api, tasks_db=tasks_db, goal_evidence_config=goal_evidence_config,
+        cell_job_tol_m=cell_job_tol_m)
     from fleet.server.discovery import DiscoveryStore
 
     discovery = DiscoveryStore() if discovery_token is not None else None
     enrollment = None
     if enrollment_store is not None:
-        from fleet.server.enrollment import EnrollmentService
-        from fleet.server.roster import SiteRoster
-
-        roster = SiteRoster(console, task_service=task_service, sightings=sighting_service)
-        enrollment = EnrollmentService(enrollment_store, roster, key=robot_key,
-                                       key_error=robot_key_error,
-                                       fleet_name=console.fleet_name, discovery=discovery)
-        enrollment.load()
-        roster.sync()
+        enrollment, roster = build_enrollment(
+            console=console, task_service=task_service, sighting_service=sighting_service,
+            enrollment_store=enrollment_store, robot_key=robot_key, robot_key_error=robot_key_error,
+            discovery=discovery, tls_file=getattr(args, "enrolled_tls_bindings_file", None))
     from fleet.server.site_lanes import parse_lane_graph_flags, unmatched_map_ids
 
     try:
@@ -551,47 +534,6 @@ def run_console(args: argparse.Namespace) -> None:
     tls_options = ({"ssl_certfile": str(tls_cert), "ssl_keyfile": str(tls_key)}
                    if tls_cert is not None else {})
     uvicorn.run(app, host=args.host, port=args.port, log_level="warning", **tls_options)
-
-
-def _build_pairing(args: argparse.Namespace, *, tls_cert, tasks_db, sighting_service, site_name):
-    """D-341 2: pairing exists only on a TLS Fleet with a site CA and a durable store."""
-    pairing_ca = getattr(args, "pairing_ca", None)
-    sync_env = getattr(args, "pairing_sync_token_env", None)
-    if pairing_ca is None:
-        if sync_env is not None:
-            sys.exit("--pairing-sync-token-env requires --pairing-ca")
-        return None, None
-    if tls_cert is None:
-        sys.exit("--pairing-ca requires --tls-cert: pairing routes exist only over TLS (D-341 2)")
-    if tasks_db is None:
-        sys.exit("--pairing-ca requires --tasks-db for credential digests and the pairing audit")
-    tls_host = getattr(args, "pairing_tls_host", None)
-    if not tls_host:
-        sys.exit("--pairing-ca requires --pairing-tls-host (the <name>.local in the site certificate)")
-    from core_common.protocol.pairing import der_sha256
-    from fleet.server.pairing import PairingService
-    from fleet.server.pairing_store import PairingStore
-
-    sources = ({source.source_id: source.credential for source in sighting_service.sources}
-               if sighting_service is not None else {})
-    if "paired" not in sources.values():
-        print("warning: D-341 pairing is on but no sighting source is credential: paired; "
-              "requests can be listed but not approved", file=sys.stderr)
-    try:
-        served_leaf_pem = Path(tls_cert).read_text(encoding="utf-8-sig")
-        leaf_sha256 = der_sha256(served_leaf_pem)
-        site_ca_pem = Path(pairing_ca).read_text(encoding="utf-8-sig")
-        service = PairingService(PairingStore(tasks_db), leaf_cert_sha256=leaf_sha256,
-                                 site_ca_pem=site_ca_pem, tls_host=tls_host,
-                                 site_name=site_name, sources=sources, served_leaf_pem=served_leaf_pem)
-    except (OSError, UnicodeDecodeError, ValueError) as exc:
-        sys.exit(f"D-341 pairing configuration refused: {exc}")
-    sync_token = None
-    if sync_env is not None:
-        sync_token = os.environ.get(sync_env)
-        if not sync_token:
-            sys.exit(f"pairing sync token environment variable {sync_env} is required")
-    return service, sync_token
 
 
 def _relax_retired_sighting_targets(sources, *, known: set, retired: set):

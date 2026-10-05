@@ -216,6 +216,7 @@ def gather(root: Path, run: Runner) -> dict:
         "boot_id": boot_id,
         "api_port": _api_port(root),
         "api_tls": 'required' if _runtime_env(root, 'ROSY_API_TLS') == 'required' else 'none',
+        "api_tls_host": _runtime_env(root, 'ROSY_API_TLS_HOST'),
         "runtime_mode": _runtime_mode(root),
         # D-260 M1: CORE's inputs win while it keeps them fresh; otherwise the probe's rows
         # and the SAF-005 default (the display's), e.g. when CORE is down.
@@ -240,6 +241,7 @@ def status_record(facts: dict, stage: Stage, now: datetime) -> dict:
         "boot_id": facts.get("boot_id"),
         "api_port": facts.get("api_port", DEFAULT_API_PORT),
         "api_tls": facts.get("api_tls", 'none'),
+        "api_tls_host": facts.get("api_tls_host"),
         "network": facts.get("network") or {},
         # D-260: the boot display's other two inputs, which it cannot read itself.
         "runtime_mode": facts.get("runtime_mode"),
@@ -289,6 +291,10 @@ def render_avahi(record: dict) -> str:
         "name": str(record.get("device_name") or ""),
         "network": str((record.get("network") or {}).get("mode") or "sta"),
     }
+    host = record.get('api_tls_host')
+    if (txt['tls'] == 'required' and isinstance(host, str)
+            and re.fullmatch(r'[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.local', host)):
+        txt['tls_host'] = host
     records = "".join(
         f"    <txt-record>{escape(key)}={escape(value)}</txt-record>\n" for key, value in txt.items()
     )

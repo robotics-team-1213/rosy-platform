@@ -1,11 +1,13 @@
 // D-375 지도 자동 맞춤: Vision 이 차선 페인트로 제안한 homography 로 사이트 차선을 카메라 위에 겹치고,
-// 카메라 영상을 지도 좌표(m) 평면으로 펴서 차선과 함께 보여 준다. 운용자가 수락해야 이 브라우저의
-// 표시 초안(localStorage, source 마다)이 된다. 어떤 값도 sighting·CameraMap·주행에 쓰지 않는다.
+// 카메라 영상을 지도 좌표(m) 평면으로 펴서 차선과 함께 보여 준다. 검토 중 제안이 없을 때 화면은
+// Fleet 에 승인된 추적 보정(D-457, 같은 source·지도·렌즈)으로 편다. 그 기록이 없으면 이 브라우저의
+// 표시 초안(localStorage)을 쓴다. 어떤 값도 sighting·CameraMap·주행에 쓰지 않는다.
 
 import {
   MAP_FIT_PREFIX, multiply3, invert3, project, scale3, projectPolyline, projectTriangles,
   normalizeMapProposal, fitSummary, pickLanes, topDownLayout, parseMapDraft, draftFrom,
   retryDelay, MAP_FIT_MAX_TRIES, canAccept, fitUsable, STALE_FIT_TEXT, calibrationRequest,
+  fitFromCalibration,
 } from "./map-fit.js";
 import { warpImage } from "./field-view.js";
 
@@ -24,6 +26,7 @@ function storageRemove(key) {
 const KIND_LABEL = {
   proposal: "제안(검토 중)", previous: "이전 결과(최신 결과를 기다리는 중)",
   rejected: "거부된 최선 적합(참고용)", draft: "수락한 맞춤(이 브라우저)",
+  calibration: "추적 보정(Fleet)",
 };
 
 export function createMapFitView({ scope, el, view, call, visionView, onChanged = () => {} }) {
@@ -42,6 +45,9 @@ export function createMapFitView({ scope, el, view, call, visionView, onChanged 
   let lanes = null;          // /api/fleet/site-lanes 응답
   let lanesError = null;     // 마지막 읽기 실패 안내
   let lanesAt = 0;
+  let calibrations = [];     // /api/fleet/calibrations — 승인된 추적 보정
+  let calibrationsAt = 0;
+  let announcedRevision = null;
   let pending = null;        // { source, norm } 검토 중인 Vision 응답
   let lastFrame = null;
   let warped = null;         // { key, data }
@@ -67,11 +73,37 @@ export function createMapFitView({ scope, el, view, call, visionView, onChanged 
     return lanes;
   }
 
+  async function ensureCalibrations({ force = false } = {}) {
+    const life = scope.capture();
+    life.check();
+    if (!force && calibrationsAt !== 0 && Date.now() - calibrationsAt < 30000) return calibrations;
+    calibrationsAt = Date.now();
+    try {
+      const result = await call("/api/fleet/calibrations", { signals: [life.signal] });
+      life.check();
+      calibrations = Array.isArray(result?.calibrations) ? result.calibrations : [];
+    } catch (error) {
+      if (error.name === "AbortError") throw error;
+      calibrations = [];
+    }
+    return calibrations;
+  }
+
   function draftFor(source) {
     return source ? parseMapDraft(storageGet(`${MAP_FIT_PREFIX}${source}`)) : null;
   }
 
-  // 지금 그릴 맞춤: 검토 중 제안 → 수락한 초안 순서.
+  // 승인된 추적 보정. 렌즈·지도가 이 프레임과 같아야 한다. 없으면 null.
+  function fleetFit(source) {
+    if (!source) return null;
+    const record = calibrations.find((row) => row?.source_id === source);
+    if (!record) return null;
+    const laneSet = lanes ? pickLanes(lanes, source) : null;
+    if (laneSet?.mapId && record.map_id && record.map_id !== laneSet.mapId) return null;
+    return fitFromCalibration(record, visionView.currentLensInfo());
+  }
+
+  // 지금 그릴 맞춤: 검토 중 제안 → Fleet 추적 보정 → 이 브라우저 초안.
   function active() {
     const source = visionView.currentSource();
     const fit = pending?.source === source ? pending.norm.fit : null;
@@ -80,6 +112,8 @@ export function createMapFitView({ scope, el, view, call, visionView, onChanged 
       return { kind, mapToImage: fit.mapToImage, imageToMap: fit.imageToMap, image: pending.norm.image,
         stamp: pending.stamp };
     }
+    const fromFleet = fleetFit(source);
+    if (fromFleet) return { kind: "calibration", ...fromFleet };
     const draft = draftFor(source);
     return draft ? { kind: "draft", ...draft } : null;
   }
@@ -299,8 +333,8 @@ export function createMapFitView({ scope, el, view, call, visionView, onChanged 
     render();
     onChanged();
   });
-  // D-457 1항: 같은 최신 제안을 Fleet 추적 보정 기록으로 승인한다(운용자). 관제 카메라 추적 표시에만 쓰인다.
-  // 위의 "맞춤 수락"(이 브라우저의 표시 초안)과 별개다 — 하나가 다른 하나를 대신하지 않는다.
+  // D-457 1항: 같은 최신 제안을 Fleet 추적 보정 기록으로 승인한다(운용자). 승인 뒤에는 그 기록이
+  // 이 카메라 영상을 편다. "맞춤 수락"은 기록이 없을 때의 이 브라우저 초안이다.
   scope.listen(applyButton, "click", async () => {
     const life = scope.capture();
     life.check();
@@ -318,6 +352,8 @@ export function createMapFitView({ scope, el, view, call, visionView, onChanged 
       const record = await call("/api/fleet/calibrations", {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signals: [life.signal],
       });
+      life.check();
+      await ensureCalibrations({ force: true });
       life.check();
       const lensNote = body.lens ? "" : " 렌즈 정보가 없어 렌즈 검사 없이 적용했습니다.";
       showSummary({ tone: "good", guidance: null, headline: `추적 보정 ${record.calibration_revision} 적용 — `
@@ -345,24 +381,28 @@ export function createMapFitView({ scope, el, view, call, visionView, onChanged 
   scope.subscribe(() => visionView.onFrame(scope.guard((frame) => {
     if (lastFrame?.source !== frame.source && pending && pending.source !== frame.source) pending = null;
     lastFrame = frame;
-    if (!lanes && draftFor(frame.source)) {
-      const life = scope.capture();
-      ensureLanes().then(() => {
+    const life = scope.capture();
+    Promise.all([ensureLanes(), ensureCalibrations()]).then(() => {
       life.check();
-        render();
-        onChanged();
-      }).catch(error => { if (error.name !== "AbortError") throw error; });
-    }
+      const fromFleet = fleetFit(frame.source);
+      if (!pending && fromFleet && announcedRevision !== fromFleet.revision) {
+        announcedRevision = fromFleet.revision;
+        showSummary({ tone: "good", guidance: null, headline: `추적 보정 ${fromFleet.revision}으로 `
+          + "이 카메라 영상을 트랙 미터에 맞춥니다. 표시 전용이며 주행에는 쓰지 않습니다." });
+      }
+      render();
+      onChanged();
+    }).catch(error => { if (error.name !== "AbortError") throw error; });
     render();
   })));
 
-  // D-360 경기장 뷰 대체 경로: 운용자가 수락한 지도 맞춤이 있을 때만, 지도 사각형을 그 homography 로 편다.
+  // 경기장 뷰: 승인된 추적 보정이 있으면 그것으로, 없으면 이 브라우저 초안으로 지도 사각형을 편다.
   view.mapFieldFallback = (frame) => {
-    const draft = frame && !frame.rectified ? draftFor(frame.source) : null;
-    const laneSet = draft && lanes ? pickLanes(lanes, frame.source) : null;
+    const fit = frame && !frame.rectified ? (fleetFit(frame.source) || draftFor(frame.source)) : null;
+    const laneSet = fit && lanes ? pickLanes(lanes, frame.source) : null;
     if (!laneSet || !frame.image?.naturalWidth
-        || !fitUsable(draft, frame.image.naturalWidth, frame.image.naturalHeight, laneSet).ok) return null;
-    return { mapToShown: displayMatrices(draft, frame.image).mapToShown, bounds: laneSet.bounds };
+        || !fitUsable(fit, frame.image.naturalWidth, frame.image.naturalHeight, laneSet).ok) return null;
+    return { mapToShown: displayMatrices(fit, frame.image).mapToShown, bounds: laneSet.bounds };
   };
 
   function reset() {
@@ -371,6 +411,9 @@ export function createMapFitView({ scope, el, view, call, visionView, onChanged 
     detectButton.removeAttribute("reason");
     lanes = null;
     lanesAt = 0;
+    calibrations = [];
+    calibrationsAt = 0;
+    announcedRevision = null;
     pending = null;
     lastFrame = null;
     warped = null;

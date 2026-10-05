@@ -301,7 +301,7 @@
 ## 최근 기록
 
 - 2026-10-05 · uncommitted · docs(learning): D-465 모델 PC 픽셀 처리 파이프라인 구축 계획
-- 2026-10-05 · uncommitted · docs(learning): 모델 PC 픽셀 자동 라벨 초안 파이프라인 D-465
-- 2026-10-05 · uncommitted · fix(pairing): TLS CI 의존성과 통합 버전 기록
-- 2026-10-05 · uncommitted · docs(learning): bind approved indexed masks to immutable dataset construction
-- 2026-10-05 · uncommitted · fix(release): 무마커 시작점의 검토 기록과 inherited CI fixture 복구
+- 2026-10-05 · uncommitted · fix(integration): 정상 푸시의 C6와 저장 공간 실패 재현
+- 2026-10-05 · uncommitted · fix(integration): 동시 실행 기록과 정상 푸시 검사 보완
+- 2026-10-05 · uncommitted · fix(integration): 등록 TLS 전송과 배포 검사 통합
+- 2026-10-05 · uncommitted · fix(integration): 실제 LAN 연결의 HTTPS 등록 경계 기록

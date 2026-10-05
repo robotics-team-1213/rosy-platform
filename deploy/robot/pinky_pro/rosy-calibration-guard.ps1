@@ -4,6 +4,9 @@ param(
     [string]$Action = "this operation",
     [int]$ApiPort = 8080,
     [string]$ApiToken = "",
+    [string]$ApiTlsHost = "",
+    [string]$ApiCaFile = "",
+    [string]$PythonExe = "python",
     [string]$CredentialPath = "",
     [int]$TimeoutSec = 5,
     [string]$RosyUser = "rosy",
@@ -20,6 +23,7 @@ param(
 #   exit 0  no active session, or -Force given (loud warning), or the check
 #           could not be made (no token, CORE down, older CORE) -> loud warning
 #   exit 3  an active session was found and -Force was not given
+#   exit 2  explicit TLS check failed (including absent token); Force cannot bypass
 #
 # Read-only: one GET /api/v1/calibration/session. It never ends a session and
 # never touches the robot otherwise. Token order: -ApiToken, $env:ROSY_API_TOKEN,
@@ -36,6 +40,13 @@ $ErrorActionPreference = "Stop"
 
 if ($Robot -notmatch '^[A-Za-z0-9.-]+$') {
     throw "Robot must be a hostname or IPv4 address without shell characters."
+}
+
+# TLS mode is explicit: both trust parameters are required, with no HTTP fallback.
+$secureApi = [bool]$ApiTlsHost -or [bool]$ApiCaFile
+if ($secureApi -and (-not $ApiTlsHost -or -not $ApiCaFile -or $TimeoutSec -lt 1 -or $TimeoutSec -gt 30)) {
+    [Console]::Error.WriteLine("Secure calibration check failed: both TLS host and CA file are required.")
+    exit 2
 }
 
 function Write-Loud([string]$Message) {
@@ -229,6 +240,10 @@ if (-not $token) {
         }
     }
 }
+if (-not $token -and $secureApi) {
+    [Console]::Error.WriteLine("Secure calibration check failed: no device credential.")
+    exit 2
+}
 if (-not $token) {
     $where = "looked for: none"
     if ($lookedFor.Count -gt 0) { $where = "looked for: " + ($lookedFor -join ", ") }
@@ -239,6 +254,45 @@ if (-not $token) {
     exit 0
 }
 
+if ($secureApi) {
+    $process = $null
+    try {
+        $helper = Join-Path $PSScriptRoot "calibration_tls_read.py"
+        $command = Get-Command $PythonExe -CommandType Application -ErrorAction Stop | Select-Object -First 1
+        foreach ($value in @($helper, $Robot, $ApiTlsHost, $ApiCaFile)) {
+            if ($value -match '["\r\n]' -or $value.EndsWith('\')) { throw "Unsupported argument." }
+        }
+        $info = New-Object System.Diagnostics.ProcessStartInfo
+        $info.FileName = $command.Path
+        $arguments = @("-I", $helper, "--address", $Robot, "--hostname", $ApiTlsHost,
+                       "--port", "$ApiPort", "--ca-file", $ApiCaFile, "--timeout", "$TimeoutSec")
+        $info.Arguments = ($arguments | ForEach-Object { Format-NativeArgument $_ }) -join " "
+        $info.UseShellExecute = $false
+        $info.CreateNoWindow = $true
+        $info.RedirectStandardInput = $true
+        $info.RedirectStandardOutput = $true
+        $info.RedirectStandardError = $true
+        $process = [System.Diagnostics.Process]::Start($info)
+        $stdout = $process.StandardOutput.ReadToEndAsync()
+        [void]$process.StandardError.ReadToEndAsync()
+        # The bearer exists only in the private child stdin, never its argv or logs.
+        $process.StandardInput.Write((@{ token = $token } | ConvertTo-Json -Compress))
+        $process.StandardInput.Close()
+        if (-not $process.WaitForExit(($TimeoutSec + 5) * 1000)) {
+            & taskkill.exe /T /F /PID $process.Id *> $null
+            try { if (-not $process.HasExited) { $process.Kill() } } catch { }
+            throw "Probe timed out."
+        }
+        if ($process.ExitCode -ne 0 -or -not $stdout.Wait(2000)) { throw "Probe failed." }
+        $reply = $stdout.Result | ConvertFrom-Json -ErrorAction Stop
+        if ($null -eq $reply -or -not ($reply.PSObject.Properties.Name -contains "session")) { throw "Invalid probe reply." }
+    } catch {
+        [Console]::Error.WriteLine("Secure calibration check failed; operation refused.")
+        exit 2
+    } finally {
+        if ($null -ne $process) { $process.Dispose() }
+    }
+} else {
 $url = "http://${Robot}:${ApiPort}/api/v1/calibration/session"
 try {
     $reply = Invoke-RestMethod -Uri $url -Headers @{ Authorization = "Bearer $token" } `
@@ -259,6 +313,8 @@ try {
                     "be down. Make sure nobody is calibrating before $Action.")
     }
     exit 0
+}
+
 }
 
 # Read the reply defensively: StrictMode throws on a missing property, and an

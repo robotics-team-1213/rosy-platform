@@ -10,7 +10,6 @@ import math
 import re
 import struct
 import os
-import stat
 import tempfile
 from pathlib import Path, PurePosixPath
 import time
@@ -19,6 +18,8 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from review_authority import advance_revision, validate_current, verify_bundle
+from review_provenance import _stable_bytes, _proof_path, _capture_proofs
+from review_eval_companion import capture_eval_companions
 
 
 def _delivery(fetch, workspace, previous, max_age, now):
@@ -224,66 +225,10 @@ def inspect_candidates(export_root, *, fetch_current, workspace_id,
             'source_components': components, 'disjoint_from': refs}
 
 
-def _stable_bytes(path):
-    path = Path(path).absolute()
-    for part in [path, *path.parents]:
-        if part.is_symlink() or (hasattr(part, 'is_junction') and part.is_junction()):
-            raise ValueError('source proof links refused')
-    before = path.stat()
-    if not stat.S_ISREG(before.st_mode):
-        raise ValueError('regular source proof artifact required')
-    raw = path.read_bytes()
-    after = path.stat()
-    if (before.st_size, before.st_mtime_ns, before.st_ino) != (after.st_size, after.st_mtime_ns, after.st_ino):
-        raise ValueError('source proof artifact changed while captured')
-    return raw
+def validate_eval_companions(eval_folders, companion_files):
+    """Preserve the public companion API and dataset-owned stable reader."""
+    return capture_eval_companions(eval_folders, companion_files, read_bytes=_stable_bytes)
 
-
-def _proof_path(value, proof):
-    if not isinstance(value, str) or not value.strip():
-        raise ValueError('source proof artifact path required')
-    path = Path(value)
-    if '..' in path.parts:
-        raise ValueError('source proof path traversal refused')
-    if not path.is_absolute():
-        if '..' in path.parts:
-            raise ValueError('source proof path traversal refused')
-        path = proof.parent / path
-    return path.absolute()
-
-
-def _capture_proofs(paths):
-    proofs, observed = {}, {}
-    for value in paths:
-        path = Path(value).absolute(); raw = _stable_bytes(path); observed[path] = raw
-        doc = json.loads(raw)
-        if not isinstance(doc, dict) or doc.get('schema') != 'rosy.pinky-review-source-proof/1':
-            raise ValueError('source proof schema required')
-        for name in ('source_session', 'capture_group'):
-            if not isinstance(doc.get(name), str) or not doc[name].strip():
-                raise ValueError('source proof session/group required')
-        if not isinstance(doc.get('video_sha256'), str) or re.fullmatch('[0-9a-f]{64}', doc['video_sha256']) is None:
-            raise ValueError('source proof video digest required')
-        video_path = _proof_path(doc.get('video_path'), path)
-        video = _stable_bytes(video_path); observed[video_path] = video
-        if hashlib.sha256(video).hexdigest() != doc['video_sha256']:
-            raise ValueError('source proof actual video hash differs')
-        side_fields = {'sidecar_path', 'sidecar_sha256'} & set(doc)
-        if side_fields:
-            if side_fields != {'sidecar_path', 'sidecar_sha256'}:
-                raise ValueError('source proof sidecar pair required')
-            side_path = _proof_path(doc['sidecar_path'], path)
-            side = _stable_bytes(side_path); observed[side_path] = side
-            if (not isinstance(doc['sidecar_sha256'], str)
-                    or re.fullmatch('[0-9a-f]{64}', doc['sidecar_sha256']) is None
-                    or hashlib.sha256(side).hexdigest() != doc['sidecar_sha256']):
-                raise ValueError('source proof actual sidecar hash differs')
-        key = (doc['source_session'], doc['capture_group'], doc['video_sha256'])
-        if key in proofs:
-            raise ValueError('duplicate source proof binding')
-        proofs[key] = {'record': doc, 'bytes': raw, 'sha256': hashlib.sha256(raw).hexdigest(), 'video': video,
-                       'suffix': video_path.suffix}
-    return proofs, observed
 
 
 def _verify_video_requests(requests, scratch):
@@ -341,7 +286,8 @@ def _active_eval(store, folders, gate_eval_refs):
 
 def build_dataset(export_root, *, fetch_current, workspace_id, eval_folders,
                   source_proof_files, store, name, staging_parent, gate_eval_refs=(),
-                  authority_max_age_s=90, previous_authority=None, now=time.time):
+                  authority_max_age_s=90, previous_authority=None, now=time.time,
+                  eval_companion_files=()):
     """Publish verified bytes only; always return training_admission=False.
 
     Publication is immutable content storage, never authorization to train.
@@ -365,9 +311,21 @@ def build_dataset(export_root, *, fetch_current, workspace_id, eval_folders,
         folders = tuple(eval_folders)
         inventory = _active_eval(store, folders, gate_eval_refs)
         refs, sessions, groups, videos, eval_images, complete = _eval_inventory(folders)
+        eval_inventory = (list(refs), set(sessions), set(groups), set(videos), set(eval_images), complete)
+        companions = (validate_eval_companions(folders, eval_companion_files)
+                      if eval_companion_files else None)
         if not complete:
             raise ValueError('eval source group/video/frame inventory incomplete')
         proofs, observed = _capture_proofs(source_proof_files)
+        if companions is not None:
+            observed.update(companions['observed'])
+            # Additional lineage can exclude candidates, never replace the
+            # manifest's group fields or original PNG pixel-proof requirement.
+            for row in companions['frames']:
+                sessions.add(row['session'])
+                videos.add((row['source_video_sha256'], row['video_frame']))
+                if row['capture_group'] is not None:
+                    groups.add(row['capture_group'])
         eval_captured = {}
         for folder in folders:
             root = Path(folder).absolute()
@@ -474,6 +432,11 @@ def build_dataset(export_root, *, fetch_current, workspace_id, eval_folders,
                                         image_sha256=frame['image_sha256'], mask_sha256=frame['mask_sha256'],
                                         classes_sha256=current['pixel_classes_sha256'], classes_signature=current['classes_signature']))
             evidence = dataset / 'evidence'; evidence.mkdir(exist_ok=True)
+            if companions is not None:
+                for digest, payloads in companions['captured_files'].items():
+                    for relative, raw in payloads.items():
+                        path = evidence / 'eval-companions' / digest / relative
+                        path.parent.mkdir(parents=True, exist_ok=True); path.write_bytes(raw)
             for proof in proofs.values():
                 path = evidence / 'source-proofs' / (proof['sha256'] + '.json')
                 path.parent.mkdir(exist_ok=True); path.write_bytes(proof['bytes'])
@@ -490,7 +453,7 @@ def build_dataset(export_root, *, fetch_current, workspace_id, eval_folders,
             latest, _ = _delivery(fetch_current, workspace_id, revision, authority_max_age_s, now)
             if latest != current:
                 raise ValueError('current authority changed before publication')
-            if _active_eval(store, folders, gate_eval_refs) != inventory or _eval_inventory(folders) != (refs, sessions, groups, videos, eval_images, complete):
+            if _active_eval(store, folders, gate_eval_refs) != inventory or _eval_inventory(folders) != eval_inventory:
                 raise ValueError('eval inventory changed before publication')
             if any(_stable_bytes(path) != raw for path, raw in observed.items()):
                 raise ValueError('source proof artifacts changed before publication')
@@ -502,7 +465,7 @@ def build_dataset(export_root, *, fetch_current, workspace_id, eval_folders,
             latest, _ = _delivery(fetch_current, workspace_id, revision, authority_max_age_s, now)
             if latest != current:
                 raise ValueError('current authority changed after immutable publication')
-            if _active_eval(store, folders, gate_eval_refs) != inventory or _eval_inventory(folders) != (refs, sessions, groups, videos, eval_images, complete):
+            if _active_eval(store, folders, gate_eval_refs) != inventory or _eval_inventory(folders) != eval_inventory:
                 raise ValueError('eval changed after immutable publication')
             if any(_stable_bytes(path) != raw for path, raw in observed.items()):
                 raise ValueError('source proofs changed after immutable publication')

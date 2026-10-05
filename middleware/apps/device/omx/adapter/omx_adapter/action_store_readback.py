@@ -17,6 +17,36 @@ def _nonempty(name: str, value: object, *, maximum: int = 192) -> str:
 class ActionStoreReadback:
     """Public journal read operations, inherited by its sole ActionStore owner."""
 
+    def attempt_snapshot(self, action_id: str, attempt_id: str) -> dict[str, Any]:
+        """One coherent parent/event/phase read; supplies no execution permission."""
+        with closing(self._connect()) as connection:
+            connection.execute("BEGIN")
+            row = connection.execute("SELECT * FROM omx_actions WHERE action_id=?",
+                                     (action_id,)).fetchone()
+            if row is None or row['attempt_id'] != attempt_id:
+                raise PermissionError('original Action attempt is absent')
+            events = [dict(event) for event in connection.execute(
+                "SELECT * FROM omx_action_events WHERE action_id=? ORDER BY event_id",
+                (action_id,))]
+            phases = [self._phase_dict(phase) for phase in connection.execute(
+                "SELECT * FROM omx_action_phases WHERE action_id=? AND attempt_id=? ORDER BY ordinal",
+                (action_id, attempt_id))]
+            action = self._dict(row)
+            action['journal_event_id'] = events[-1]['event_id'] if events else None
+            for event in events:
+                event['detail'] = json.loads(event.pop('detail_json'))
+            # Read an existing owner identity in this same snapshot. Never mint
+            # a missing journal identity just to satisfy a provenance verifier.
+            identity = None
+            if connection.execute("SELECT 1 FROM sqlite_master WHERE type='table' "
+                                  "AND name='omx_journal_identity'").fetchone():
+                identities = connection.execute('SELECT singleton,journal_id FROM omx_journal_identity').fetchall()
+                if (len(identities) != 1 or identities[0][0] != 1
+                        or not isinstance(identities[0][1], str) or not identities[0][1].strip()):
+                    raise PermissionError('original owner journal identity is malformed')
+                identity = identities[0][1]
+            return dict(action=action, events=events, phases=phases, journal_id=identity)
+
     def unresolved_actions(self, *, workcell_id: str | None = None) -> list[dict[str, Any]]:
         with closing(self._connect()) as connection:
             if workcell_id is None:

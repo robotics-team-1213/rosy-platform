@@ -298,3 +298,30 @@ export function calibrationRequest(pending, source, laneSet, lens) {
     frame_seq: Number.isInteger(seq) ? seq : null,
   };
 }
+
+// Vision same_lens (D-457): both absent matches; a reported lens must match kind and the two
+// numbers within 1e-4 relative. The console reads the lens from X-Source-Lens.
+function closeRel(a, b) {
+  const x = Number(a);
+  const y = Number(b);
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return false;
+  return Math.abs(x - y) <= 1e-4 * Math.max(Math.abs(x), Math.abs(y));
+}
+
+export function lensesMatch(recordLens, frameLens) {
+  if (recordLens == null || frameLens == null) return recordLens == null && frameLens == null;
+  return recordLens.kind === frameLens.kind
+    && closeRel(recordLens.focal_mm, frameLens.focal_mm)
+    && closeRel(recordLens.hfov_deg, frameLens.hfov_deg);
+}
+
+// An approved Fleet tracking calibration as the same display fit a browser draft is.
+// null when the lens or the matrix does not match this frame. Display only.
+export function fitFromCalibration(record, frameLens) {
+  if (!record || typeof record !== "object" || !lensesMatch(record.lens ?? null, frameLens ?? null)) return null;
+  const fit = parseMapDraft(JSON.stringify({
+    map_to_image: record.map_to_image, image: record.image, frame_seq: record.frame_seq ?? null,
+    map_id: record.map_id ?? null, use: record.use ?? "display-only",
+  }));
+  return fit ? { ...fit, revision: typeof record.calibration_revision === "string" ? record.calibration_revision : null } : null;
+}

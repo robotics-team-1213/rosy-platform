@@ -107,8 +107,13 @@ SIZE_VERDICTS = {
         "duplicate its socket. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        35_137,
-        "split: independently re-judged after concurrent start-point integration at "
+        35_606,
+        "split: independently re-judged at measured35606 on 2026-10-05 after enrolled "
+        "TLS transport and required feature-builder extraction; CLI586 removes its stale "
+        "file verdict. Previous35137 + concurrent80 + TLS364 + builder25. Retain the "
+        "B2/UI queue and all thresholds/allowances; see docs/validation/"
+        "d456-enrolled-tls-integration-2026-10-05/README.md. "
+        "Independently re-judged after concurrent start-point integration at "
         "35137 on 2026-10-05: 314 lines above34823 (134 reference backend,172 UI,8 "
         "composition/static), plus earlier31 route extraction above34792; reference "
         "coordinates never initialize pose or issue motion. Retain the B2/UI split "
@@ -443,8 +448,16 @@ SIZE_VERDICTS = {
         "accept: sim-only read-only viewer server (HTTP handler + ROS subscriptions); the pure logic already lives in live_view_model.py and the page in lane_live_view.html, covered by test_lane_live_view*.py and test_live_view_model.py (X5)",
     ),
     "core_features": (
-        12_926,
-        "accept: re-judged 2026-10-04 at 12926 after D-452/D-453 integration: "
+        13_202,
+        "accept: re-judged 2026-10-05 at 13202 for the private cumulative trial "
+        "restriction in docs/plans/2026-10-05-core-bounded-camera-trial.md. "
+        "The new ROS-free command/bounded_trial.py owns one durable trial ledger "
+        "and has no publisher, API, deployment unit or feature-cross imports; "
+        "CORE bridge adapts original pose clocks and restricts its existing final "
+        "output. Each file remains below600; all existing file limits and the "
+        "+150 package re-review allowance remain unchanged. No new package is "
+        "justified for this command-owner policy. Previously re-judged "
+        "2026-10-04 at 12926 after D-452/D-453 integration: "
         "D-452 adds 93 discovery owner/helper lines (agent 16, helper 77); D-453 adds "
         "110 to the existing stuck recovery/wiring seam (103 and 7). These remain "
         "independent feature subpackages below file budgets, with CORE's existing "
@@ -671,14 +684,6 @@ SIZE_VERDICTS = {
         641,
         "accept: single-entry hardware probe CLI the commissioning runbook drives top-to-bottom — "
         "splitting probe sequence from reporting would sever one diagnostic narrative (X5)",
-    ),
-    "fleet/fleet/cli.py": (
-        604,
-        "accept: the Fleet composition root (2026-10-02, C4b G5) parses every console flag and "
-        "assembles create_app once; the Cell Job compiler flag added 10 lines and the palletizing "
-        "import stays lazy here so a site install without that wheel still starts. Split the "
-        "per-feature service builders (mission, pairing, localization) into a builder module "
-        "before the next flag",
     ),
     "apps/device/omx/adapter/omx_adapter/action_store.py": (
         1_191,

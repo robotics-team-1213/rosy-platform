@@ -1,5 +1,6 @@
 import hashlib
 import json
+import os
 from pathlib import Path
 import sys
 
@@ -101,3 +102,66 @@ def test_export_verifies_original_files_and_does_not_overwrite(tmp_path):
     (source / 'source/samples.jsonl').write_bytes(b'corrupt')
     with pytest.raises(ValueError, match='hash/size'):
         export(manifest, wire, tmp_path / 'new.json')
+
+
+def export_inputs(tmp_path):
+    sys.path[:0] = [str(ROOT / 'middleware/apps/device/omx/adapter'),
+                   str(ROOT / 'middleware/apps/device/omx/adapter/test'), str(ROOT / 'learning/curation/omx')]
+    from test_demonstration import complete_episode
+    from common_episode import convert
+    original = tmp_path / 'recordings'
+    recorded = complete_episode(original)
+    source = tmp_path / 'episode'
+    doc = convert(original / recorded['episode_id'], source)
+    manifest = source / 'manifest.json'
+    manifest.write_text(json.dumps(doc), encoding='utf-8')
+    wire = tmp_path / 'receipt.json'
+    wire.write_text(json.dumps(receipt()), encoding='utf-8')
+    return manifest, wire
+
+
+def test_storage_sync_failure_leaves_no_export_and_retry_succeeds(tmp_path, monkeypatch):
+    manifest, wire = export_inputs(tmp_path)
+    output = tmp_path / 'published' / 'binding.json'
+    def failed_sync(fd):
+        raise OSError('storage sync failed')
+    with monkeypatch.context() as patch:
+        patch.setattr(os, 'fsync', failed_sync)
+        with pytest.raises(OSError, match='storage sync failed'):
+            export(manifest, wire, output)
+    assert not output.exists()
+    assert not list(output.parent.iterdir())
+    result = export(manifest, wire, output)
+    assert json.loads(output.read_bytes()) == result
+
+
+def test_competing_export_at_sync_is_never_overwritten(tmp_path, monkeypatch):
+    manifest, wire = export_inputs(tmp_path)
+    output = tmp_path / 'published' / 'binding.json'
+    original_sync = os.fsync
+    competing = b'preserved competing owner bytes'
+    def compete(fd):
+        assert not output.exists(), 'partial result became visible before durable sync'
+        original_sync(fd)
+        output.write_bytes(competing)
+    monkeypatch.setattr(os, 'fsync', compete)
+    with pytest.raises(FileExistsError):
+        export(manifest, wire, output)
+    assert output.read_bytes() == competing
+    assert list(output.parent.iterdir()) == [output]
+
+
+def test_receipt_change_during_storage_is_rejected_before_publication(tmp_path, monkeypatch):
+    manifest, wire = export_inputs(tmp_path)
+    output = tmp_path / 'published' / 'binding.json'
+    original_sync = os.fsync
+    def change_receipt(fd):
+        original_sync(fd)
+        changed = receipt()
+        changed['dispatch_generation'] += 1
+        wire.write_text(json.dumps(changed), encoding='utf-8')
+    monkeypatch.setattr(os, 'fsync', change_receipt)
+    with pytest.raises(ValueError, match='input changed'):
+        export(manifest, wire, output)
+    assert not output.exists()
+    assert not list(output.parent.iterdir())

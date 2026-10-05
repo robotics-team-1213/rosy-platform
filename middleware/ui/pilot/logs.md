@@ -434,6 +434,12 @@
 - 증거: `test/test_vision_stream_client.py` 3 PASS(분할 청크 재조립·몸통 분할 대기·프레임/통계/종료 폴백). pilot 전체 90 PASS. ADR이 명시한 createImageBitmap·캔버스 대신 기존 img+objectURL 파이프라인을 재사용했다 — 계약의 실질(헤더 인증·멀티파트·URL 토큰 금지)은 동일하고 녹화 캡처가 한 경로를 유지한다.
 - gate 변화: SOURCE. 실기 태블릿에서의 fps ≥ 10·지연 실측은 DEVICE 별도 회차(D-368 Validation).
 
+## 2026-10-05 · uncommitted · fix(pilot): 승인 화면 시험 서버 자산 정합
+
+- 변경: 시험 서버의 peer-approval.js 제공을 CORE·OMX 목록과 일치시킨다. 실제 앱 번들·통신 권한은 바꾸지 않는다.
+- 증거: 기존 shell 자산 불일치 실패를 수리한 뒤 관련 16 passed. 설치된 Pilot에서 같은 LAN 로봇 목록과 선택 뒤 기존 로그인 코드 창을 직접 확인했다.
+- gate 변화: SOURCE/LOCAL 및 앱 설치 관찰. 새 수신 승인·장기 재연결의 DEVICE 수용은 배포 후 별도다.
+
 ## 2026-10-05 · uncommitted · fix(peer-assets): Pilot 승인 모듈 정적 경로 일치
 
 - 변경: SIM·개발 서버 allowlist에 기존 peer-approval.js를 더해 CORE와 같은 정적 자산을 제공한다. API·제어 권한·UI 구성 변경 없음.

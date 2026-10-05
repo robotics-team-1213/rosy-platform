@@ -2523,3 +2523,39 @@
 - 변경: 닫힌 숫자 인자의 코드 호출은 따옴표 없는 참조만 인정한다. Kotlin nullable String 선언의 실제 기본값을 검사하며 camel/snake 슬롯은 정확한 이름만 허용한다. 공개 P256 시험 벡터는 한 경로·필드·정확한 값의 entropy 토큰만 예외로 두고 자격·개인키 검사는 유지한다.
 - 증거: 첫 정상 push는 474 PASS·2 SKIP·2 FAIL로 중단됐다. 독립 검사에서 따옴표 안 호출과 임의 underscore 슬롯의 과도한 허용을 확인해 고쳤고 실제 negative 검사 7 PASS다. 수정 전 실패와 중간 검사 원본은 보존했다. 최종 release/event/API 통합 및 정상 push 검사는 이어서 확인한다.
 - gate 변화: SOURCE/LOCAL 수정이며 CI·서명 배포·DEVICE를 승격하지 않는다.
+
+## 2026-10-05 · uncommitted · fix(release): ARM 수신 암호화 입력 잠금 해시 수정
+
+- 변경: receiver_crypto 요구사항 잠금값을 Linux checkout의 Git LF 파일 SHA-256으로 고친다. Windows CRLF checkout에서 계산한 값 때문에 실제 ARM 빌드가 거부한 원인을 바로잡는다. 라이브러리 버전·wheel 해시·require-hashes·빌더의 원시 파일 해시 검증은 유지한다.
+- 증거: 정확한 0548d2a00 ARM 실행의 실패를 원본 로그로 보존했다. Git LF 474바이트와 Windows CRLF 483바이트 차이를 독립 대조했다. 신규 Linux 바이트 회귀 검사는 수정 전 1 failed, 수정 후 관련 native payload·CI 의존성 검사 27 passed/7.58s다.
+- gate 변화: SOURCE/LOCAL. 이전 ARM 실패 결과물은 배포하지 않는다. 수정 소스의 원격 검사·ARM 빌드·서명·실기 검증은 이어서 수행한다.
+
+## 2026-10-05 · uncommitted · fix(discovery): 사용자 검색 서비스의 검증된 카메라 기능 표시
+
+- 변경: 일반 계정 검색 서비스가 명시적으로 설정한 카메라 페어링 기능을 표시할 수 있게 한다. 기존 CA와 인증서 이름으로 제한된 HTTPS 신원 응답을 검사하고, 설치 전과 광고 시작 전에 저장된 수신 신원과 다시 대조한다. 기본 기능 비활성화와 기존 자격·CA를 보존하며 광고만으로 승인하지 않는다.
+- 증거: 독립 원본 검사 36 passed/1 기존 POSIX skip, 작성자 관련 검사 156 passed/3 기존 skip, 변경 두 경로 비밀값 검사 0 findings. 병합한 학습 승인·native payload 검사도 짧은 X 경로에서 152 passed/1 skip다. 긴 Windows 임시 경로의 쓰기 실패는 원본 로그로 남겼으며 긴 경로 지원 완료로 표시하지 않는다.
+- gate 변화: SOURCE/LOCAL. 실제 관제는 서명된 0548d2a00으로 갱신해 세 서비스 정상·HTTPS 정상과 Fleet 실행 계정의 두 로봇 이름 해석을 확인했다. 현재 실제 카메라 신원 경로는 설정 비활성화로 404이며 새 광고도 이를 거부한다. 관리자 설정과 기존 운영자 로그인이 필요한 승인·재접속은 아직 미검증이다.
+
+## 2026-10-05 · uncommitted · fix(release): 실제 서명 목록 크기에 맞춘 TLS 설치 읽기 경계
+
+- 변경: D-456 서명 설치기의 일반 파일 기본 128KiB 제한은 유지하고 릴리스 manifest·checksum·서명 전후 비교에만 유한한 4MiB 제한을 적용한다. 경로·소유권·서명·claim·정지·동일 소스·기존 CA 보호는 유지한다.
+- 증거: 정확한 8a0929575의 ARM 빌드 성공, 두 로봇 각각 314개 ABI 일치, 2913개 서명 파일 검증, 실제 037 배포와 CORE 준비 성공. 실제 TLS 설치 전 검사는 일반 계정 소유 경로와 manifest 520894바이트/SHA256SUMS 383685바이트를 거절했다. 서명과 일치하는 기존 76파일·5경로만 root 소유로 보호했고 기존 root 소유 폐기 파일을 보존했다. 설정을 바꾸기 전 거절됐으므로 런타임을 복구하고 claim을 해제했다. 수정본의 실제 POSIX/OpenSSL 회귀 검사 32 passed/1 기존 skip, 크기 경계·일반 설정 기본 제한·4MiB 초과 거절을 포함한다.
+- gate 변화: SOURCE/LOCAL. 로봇 037 배포는 확인했지만 TLS·앱 승인·기억된 관계 재접속과 관제 카메라 승인은 아직 미검증이다. 서명 소스를 우회하는 파일 덮어쓰기로 실기 연결을 승격하지 않는다.
+
+## 2026-10-05 · uncommitted · fix(discovery): TLS 인증서 이름을 포함하는 로봇 검색 광고
+
+- 변경: D-456 boot-status가 공개 설정의 TLS 호스트 이름을 상태와 LAN TXT 광고에 전달한다. TLS 필수 모드에서 유효한 단일 `.local` 호스트만 표시하며 IP·외부 도메인·빈 이름·일반 HTTP의 TLS 이름 광고를 거절한다. 광고로 자격을 발급하거나 인증서 검증을 우회하지 않는다.
+- 증거: 실제 두 로봇의 정확한 ca1484c5b 서명 릴리스 038 배포·TLS 설치·CORE 준비 통과. 기존 운영자 기록을 보존했다. 관제의 실제 multicast 응답은 HTTPS 필수지만 인증서 이름 필드가 빠졌고 Tablet Pilot은 secure_host_missing으로 거절했다. 회귀 검사 수정 전 1 failed/0.21s, 최종 boot-status/state/TLS 관련 Windows 53 passed/3 기존 POSIX skip/0.82s. 기존 Cam의 승인된 ceiling_north 연결은 실제 앱에서 2.5–3.0fps 송출과 정지됨/0.0fps 복귀를 확인했다. 마커 인식은 수신기에서 보고되지 않았다.
+- gate 변화: SOURCE/LOCAL 및 명시된 038 TLS·기존 Cam 송출 DEVICE 증거. 새 검색 필드의 서명 배포 후 실제 Pilot 승인·기억된 관계 재접속과 관제 신규 Camera Peer 승인은 별도다.
+
+## 2026-10-05 · uncommitted · fix(release): 비공개 TLS 환경을 읽는 준비 상태 검사
+
+- 변경: 기존 운영자 sudo 경로로 설치된 bounded CORE 준비 검사를 실행해 root 소유 0600 runtime.env의 TLS·포트 설정을 읽는다. 파일 권한·sudoers·SSH 신원·서명·claim·교정 가드와 주행 권한은 유지한다. 두 교정 테스트의 PowerShell 경고 줄바꿈만 정규화하며 인증 미전송과 종료·시간 제한 단언은 유지한다.
+- 증거: 기존 실제 push는 환경 파일 읽기 거절을 기록했다. TLS 전환 뒤 평문 기본값 검사는 정상 CORE도 거절할 수 있으므로 준비 계획을 수정했다. 수정 전 계획 회귀 1 failed/0.74s; 실제 push·claim·교정 관련 99 passed와 경고 줄바꿈 2 failed 원본을 보존했다. 같은 두 교정 검사에서 문자 의미와 가드를 유지한 정규화 뒤 2 passed/8.82s다. 독립 안전 검토가 변경 범위와 기존 교정 실행 소스 무변경을 확인했다.
+- gate 변화: SOURCE/LOCAL. 두 로봇의 038 TLS 준비는 별도 운영자 경로에서 이미 확인했다. 수정된 정규 배포 경로의 다음 서명 릴리스 검증은 이어서 수행한다.
+
+## 2026-10-05 · uncommitted · fix(release): TLS 보정 확인 전 인증서 검증과 실패 시 배포 거절
+
+- 변경: 운영자가 공개 CA·호스트를 확인한 뒤 `-ApiTlsHost`·`-ApiCaFile`을 함께 지정하면 보정 가드는 stdlib HTTPS helper의 실제 CA·호스트 검증 완료 후에만 Bearer를 보낸다. 토큰은 비공개 stdin JSON으로만 전달하며 응답 크기·소켓·프로세스 시간을 제한하고 리다이렉트·인증 실패·잘못된 응답을 거부한다. 로그에는 세션 ID·토큰 대신 제한된 보정 메타데이터만 남긴다. 두 CORE 재시작 도구는 모든 비영 종료를 거부하며 Force는 확인된 활성 세션만 기존 정책대로 재정의한다. 기존 HTTP 기본값은 TLS 자동 감지가 아니다.
+- 증거: 새 보안 경로 미지원 RED 1 FAIL. 실제 로컬 TLS 서버와 기존 보정·release push·dev sync 네 suite 129 PASS/104.76초. 잘못된 CA·호스트에서 Authorization 미전송, idle·active 3·Force, 401/403·리다이렉트·시간 초과·응답 크기·누락된 credential·paired parameter·두 caller의 원격 쓰기 전 거부를 확인했다. 엄격 JSON의 중복·scalar session 추가 검사 2 PASS/2.92초. 변경된 소스·검사 5개 파일 secret scan 0 findings. 원본 실패 및 최종 로그는 X:/DevTemp/rosy-ui-ship/cal-tls에 보존한다.
+- gate 변화: SOURCE/LOCAL만. 실제 로봇의 인증서·보정 상태 조회·서명 배포·재시작은 이번 작업에서 실행하지 않았다. 이미 TLS를 사용하는 로봇의 다음 정규 배포는 검증된 공개 CA와 hostname을 명시해야 하며 인증서 검증 생략이나 HTTP fallback은 없다.

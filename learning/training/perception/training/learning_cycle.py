@@ -19,6 +19,15 @@ sys.path.insert(0, str(HERE.parent))
 from store import Store, content_sha, parse_dataset_ref  # noqa: E402
 
 
+def _request_pairs(items):
+    result = {}
+    for key, value in items:
+        if key in result:
+            raise JobError('duplicate request key')
+        result[key] = value
+    return result
+
+
 def signature(value):
     return hashlib.sha256(json.dumps(value, sort_keys=True, allow_nan=False).encode()).hexdigest()
 
@@ -111,7 +120,13 @@ def validate_request(request, trainer):
             evaluation = json.loads((path / "manifest.json").read_text())
             if sessions & {f["session"] for f in evaluation["frames"]}:
                 raise JobError("training overlaps a fixed eval session")
-    return {"frames": len(frames), "train_sessions": sorted(train), "val_sessions": sorted(val)}
+    sources = doc.get('sources', [])
+    sources = sources if isinstance(sources, list) else [sources]
+    indexed = (doc.get('builder') == 'review_dataset.py (D-464)'
+               or any(isinstance(row, dict) and row.get('annotation_origin') == 'human_reviewed_pinky_indexed'
+                      for row in sources))
+    return {"frames": len(frames), "train_sessions": sorted(train), "val_sessions": sorted(val),
+            "indexed_review": indexed}
 
 
 def review_queue(exports):
@@ -209,24 +224,41 @@ def scan_reviews(config, job):
     job._save()
 
 
-def run_once(config, out, *, trainer_fn=None):
+def run_once(config, out, *, trainer_fn=None, review_pipeline=None):
     validate_config(config)
+    if review_pipeline is not None:
+        from review_pipeline import ReviewPipeline
+        if type(review_pipeline) is not ReviewPipeline:
+            raise JobError('trusted owner review pipeline required')
+        review_pipeline.check_settings()
     out = Path(out).resolve()
     if trainer_fn is None:
         from train_job import run as trainer_fn
-    with Job(out, config) as job:
+    inputs = config if review_pipeline is None else dict(config, owner_review_pipeline=review_pipeline.signature)
+    with Job(out, inputs) as job:
         scan_reviews(config, job)
+        if review_pipeline is not None:
+            review_pipeline.prepare(config, job)
         cycles = job.state.setdefault("cycles", {})
         requests = job.state.setdefault("requests", {})
         for path in sorted(Path(config["requests_dir"]).glob("*.json")):
             digest = None
             try:
-                digest = sha(path)
+                from review_dataset import _stable_bytes
+                raw = _stable_bytes(path)
+                if len(raw) > 1024 * 1024:
+                    raise JobError('research request too large')
+                digest = hashlib.sha256(raw).hexdigest()
                 prior = requests.get(str(path))
                 if prior and prior["sha256"] != digest:
                     raise JobError("processed request changed; use a new request path")
-                request = json.loads(path.read_text())
+                request = json.loads(raw, object_pairs_hook=_request_pairs)
                 evidence = validate_request(request, config["trainer"])
+                indexed_context = None
+                if evidence['indexed_review']:
+                    if review_pipeline is None:
+                        raise JobError('indexed request needs owner review pipeline')
+                    indexed_context = review_pipeline.for_dataset(config, job, request['dataset'])
                 requests[str(path)] = {"sha256": digest, "status": "validated", **evidence}
                 job._save()
             except (OSError, ValueError, KeyError) as error:
@@ -237,7 +269,8 @@ def run_once(config, out, *, trainer_fn=None):
                 continue
             for recipe in config["recipes"]:
                 cfg = {**config["trainer"], "dataset": request["dataset"], "training": recipe}
-                key = signature(cfg)
+                key = (signature(cfg) if indexed_context is None else
+                       review_pipeline.cycle_key(config,job,request['dataset'],recipe))
                 row = cycles.setdefault(key, {"dataset": request["dataset"], "recipe": recipe,
                                                "attempts": 0, "status": "pending"})
                 if row["status"] in ("ready", "rejected", "gave_up"):
@@ -247,9 +280,16 @@ def run_once(config, out, *, trainer_fn=None):
                     job._save()
                     continue
                 row.update(status="running", attempts=row["attempts"] + 1)
+                row['dataset'] = request['dataset']
                 job._save()
                 try:
-                    result = trainer_fn(cfg, out / "jobs" / key)
+                    if indexed_context is None:
+                        result = trainer_fn(cfg, out / "jobs" / key)
+                    else:
+                        # Byte provenance may advance while logical GT remains
+                        # identical. Keep the shared attempt budget but never
+                        # reuse a Job directory for different immutable inputs.
+                        result = trainer_fn(cfg, out / "jobs" / key / signature(cfg), indexed_review=indexed_context)
                     row.update(status="ready", result=result)
                 except Rejected as error:
                     row.update(status="rejected", error=str(error))

@@ -40,17 +40,9 @@ LOG_FIELD_ALIASES = {
 RECENT_LOGS = 5
 UNCOMMITTED = "uncommitted"
 
-# First exact G2 journal encoding repair: original at a720a036e, correction at
-# e4fe8107a. Both normalized entry bodies are pinned; no other edits qualify.
-# The original is retained in the private landing evidence, and the corrected
-# entry cites its source commit without claiming the lost prose was recovered.
-KNOWN_LOG_ENCODING_REPAIRS = {
-    # Exact imported SIM AID journal repair; no execution evidence inferred.
-    "e2f80dbdfc41bdcff21a27d50ddd7ae909a32d02270c5db525808c6d9977883d":
-        "d0cee132dfe7dc874ae52e59707f932d496f5b16c62975e8bf3733bacc891556",
-    "a5eecc71690d74036c9e393a2a47262843dfd369b71fe0d6ff92c40a24730c49":
-        "4c3461ed3910dfe42491970e5d0aa7b12a8d9bbb4b044ffc11dbc8e235d0178a",
-}
+# Historical reference data is separate from the generic harness implementation.
+KNOWN_LOG_ENCODING_REPAIRS = yaml.safe_load(
+    Path(__file__).with_name("log_repairs.yaml").read_text(encoding="utf-8"))
 
 ADR_ID = re.compile(r"^D-(\d+)$")
 COMMIT = re.compile(rf"^(?:[0-9a-f]{{7,40}}|{UNCOMMITTED})$")

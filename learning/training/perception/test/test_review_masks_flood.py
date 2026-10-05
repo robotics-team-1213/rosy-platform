@@ -65,3 +65,15 @@ def test_flood_is_undoable_and_approvable(tmp_path):
                                               'background_reviewed': True}, Conflict)
     assert approved['status'] == 'approved'
     assert np.all(review_masks.pixels(store, approved) == 3)
+
+
+def test_flood_preserves_high_contrast_photo_boundary(tmp_path):
+    from types import SimpleNamespace
+    import cv2
+
+    photo = np.array([[[0, 0, 0], [255, 255, 32], [255, 255, 32]]], dtype=np.uint8)
+    image = tmp_path / 'high-contrast.png'
+    assert cv2.imwrite(str(image), photo)
+    store = SimpleNamespace(image=lambda index: image)
+    region = review_masks.flood_region(store, 0, {'width': 3, 'height': 1}, [0, 0], 16)
+    assert region.tolist() == [[True, False, False]]

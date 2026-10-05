@@ -497,6 +497,11 @@ class ActionRunner:
             self.store, action_id=grant.action_id, attempt_id=grant.attempt_id,
         )
 
+    def _policy_parent_for_validated_grant(self, grant: ActionGrant, *, peer_uid: int):
+        """Mint read-only correlation capability, never a learned executor grant."""
+        from .policy_parent import mint_parent
+        return mint_parent(self, grant, peer_uid=peer_uid)
+
     def cancel_unresolved(self, *, peer_uid: int) -> list[dict[str, object]]:
         """Best-effort cancel fanout after the persistent local stop latch is set."""
         principal_id = self._principal(peer_uid)

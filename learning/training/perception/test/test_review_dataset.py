@@ -501,3 +501,194 @@ def test_duplicate_approved_source_frame_holds_before_staging(tmp_path, invent_a
     assert result['status'] == 'HOLD' and expected in result['blockers'][0]
     assert result['training_admission'] is False
     assert not args['staging_parent'].exists() and not args['store'].datasets_dir.exists()
+
+# Sealed companion tests are synthetic provenance evidence, never approval.
+def companion_fixture(tmp_path):
+    from store import content_sha
+    root = tmp_path / 'eval-stage'; root.mkdir()
+    entries = []
+    for kind in ('image', 'mask', 'conf'):
+        folder = {'image': 'images', 'mask': 'masks', 'conf': 'conf'}[kind]
+        suffix = 'jpg' if kind == 'image' else 'png'
+        name = f'{folder}/session-eval/session-eval__000001.{suffix}'
+        path = root / name; path.parent.mkdir(parents=True, exist_ok=True); path.write_bytes(kind.encode()); entries.append(name)
+    record = dict(index=1, t=10.0, session='session-eval', sources=['lidar'])
+    labels = (json.dumps(record, sort_keys=True) + '\n').encode()
+    label_digest = hashlib.sha256(labels).hexdigest()
+    manifest = dict(purpose='eval', builder='build.py --auto-labels (D-379)', frames=[dict(session='session-eval', image=entries[0], mask=entries[1], conf=entries[2])],
+                    labels=[dict(session='session-eval', labels_digest=label_digest)])
+    raw = json.dumps(manifest).encode(); (root / 'manifest.json').write_bytes(raw)
+    root.rename(root.with_name(content_sha(root))); root = next(tmp_path.glob('[0-9a-f]' * 64))
+    bundle = tmp_path / 'companion'; bundle.mkdir()
+    payloads = {'labels.jsonl': labels, 'meta.json': json.dumps(dict(session='session-eval', source=dict(sha256=dict(video=hashlib.sha256(b'video').hexdigest(), sidecar=hashlib.sha256(b'{"index":0,"t":10.0}\n').hexdigest())))).encode(),
+                'video.bin': b'video', 'sidecar.jsonl': b'{"index":0,"t":10.0}\n', 'pts.json': b'[{"video_frame":0,"pts":0,"time_base":"1/5"}]'}
+    payloads.update({kind+'.bin': (root / name).read_bytes() for kind,name in zip(('image','mask','conf'),entries)})
+    for name, data in payloads.items(): (bundle / name).write_bytes(data)
+    doc = dict(schema='rosy.pinky-fixed-eval-companion/1', eval_ref=dict(name=root.parent.name, content_sha=root.name),
+               eval_manifest_sha256=hashlib.sha256(raw).hexdigest(), eval_files={p.relative_to(root).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest() for p in root.rglob('*') if p.is_file()},
+               resources={name: hashlib.sha256(data).hexdigest() for name, data in payloads.items()},
+               sources=[dict(session='session-eval', labels='labels.jsonl', meta='meta.json', video='video.bin', sidecar='sidecar.jsonl', pts='pts.json', labels_digest=label_digest)],
+               frames=[dict(session='session-eval', image=entries[0], sample_index=1, video_frame=0, capture_group=None,
+                            group_basis=None, decoded_video_pixels_verified=False, extraction=dict(image='image.bin', mask='mask.bin', conf='conf.bin'))])
+    seal_companion(bundle, doc)
+    return root, bundle, doc
+
+
+def seal_companion(bundle, doc):
+    raw = json.dumps(doc, sort_keys=True, allow_nan=False).encode()
+    (bundle / 'manifest.json').write_bytes(raw)
+    (bundle / 'COMPLETE').write_text(hashlib.sha256(raw).hexdigest())
+
+
+def test_sealed_companion_keeps_sample_index_distinct_and_never_grants(tmp_path):
+    root, bundle, _ = companion_fixture(tmp_path)
+    result = target.validate_eval_companions([root], [bundle])
+    assert result['training_admission'] is False
+    assert result['frames'][0]['sample_index'] == 1 and result['frames'][0]['video_frame'] == 0
+    assert 'eval_group_assertion_unknown' in result['blockers']
+    assert 'eval_decoded_pixels_unverified' in result['blockers']
+    assert result['observed'] and result['captured_files']
+
+
+@pytest.mark.parametrize('mutation', ['seal', 'label', 'omitted_eval', 'extraction', 'ordinal', 'extra_file', 'duplicate_t',
+                                      'decoded_claim', 'group_claim', 'missing_frame', 'pts_ordinal'])
+def test_sealed_companion_rejects_integrity_or_identity_changes(tmp_path, mutation):
+    root, bundle, doc = companion_fixture(tmp_path)
+    if mutation == 'seal': (bundle / 'COMPLETE').write_text('0' * 64)
+    elif mutation == 'label':
+        (bundle / 'labels.jsonl').write_text('{"index":1,"t":11,"session":"session-eval"}\n')
+        doc['resources']['labels.jsonl'] = hashlib.sha256((bundle / 'labels.jsonl').read_bytes()).hexdigest(); seal_companion(bundle, doc)
+    elif mutation == 'omitted_eval': doc['eval_files'].pop(next(n for n in doc['eval_files'] if n.startswith('conf/'))); seal_companion(bundle, doc)
+    elif mutation == 'extraction':
+        (bundle / 'mask.bin').write_bytes(b'changed'); doc['resources']['mask.bin'] = hashlib.sha256(b'changed').hexdigest(); seal_companion(bundle, doc)
+    elif mutation == 'ordinal': doc['frames'][0]['video_frame'] = True; seal_companion(bundle, doc)
+    elif mutation == 'extra_file': (bundle / 'rogue').write_bytes(b'x')
+    elif mutation == 'duplicate_t':
+        data=b'{"index":0,"t":10.0}\n{"index":1,"t":10.0}\n'; (bundle/'sidecar.jsonl').write_bytes(data)
+        doc['resources']['sidecar.jsonl']=hashlib.sha256(data).hexdigest()
+        meta=json.loads((bundle/'meta.json').read_bytes()); meta['source']['sha256']['sidecar']=doc['resources']['sidecar.jsonl']
+        raw=json.dumps(meta).encode(); (bundle/'meta.json').write_bytes(raw); doc['resources']['meta.json']=hashlib.sha256(raw).hexdigest()
+        raw=b'[{"video_frame":0,"pts":0,"time_base":"1/5"},{"video_frame":1,"pts":1,"time_base":"1/5"}]'
+        (bundle/'pts.json').write_bytes(raw); doc['resources']['pts.json']=hashlib.sha256(raw).hexdigest(); seal_companion(bundle,doc)
+    elif mutation == 'decoded_claim': doc['frames'][0]['decoded_video_pixels_verified']=True; seal_companion(bundle,doc)
+    elif mutation == 'group_claim': doc['frames'][0].update(capture_group='derived',group_basis='camera_pose'); seal_companion(bundle,doc)
+    elif mutation == 'missing_frame': doc['frames']=[]; seal_companion(bundle,doc)
+    elif mutation == 'pts_ordinal':
+        raw=b'[{"video_frame":true,"pts":0,"time_base":"1/5"}]'; (bundle/'pts.json').write_bytes(raw)
+        doc['resources']['pts.json']=hashlib.sha256(raw).hexdigest(); seal_companion(bundle,doc)
+    with pytest.raises(ValueError): target.validate_eval_companions([root], [bundle])
+
+
+def attach_build_companion(args, tmp_path):
+    from store import content_sha
+    fixture = tmp_path / 'cf'; fixture.mkdir()
+    _, bundle, doc = companion_fixture(fixture)
+    eval_root = args['eval_folders'][0]
+    manifest = json.loads((eval_root / 'manifest.json').read_bytes())
+    row = manifest['frames'][0]
+    image_bytes = (eval_root / row['image']).read_bytes()
+    for kind in ('image', 'mask', 'conf'):
+        folder = {'image': 'images', 'mask': 'masks', 'conf': 'conf'}[kind]
+        suffix = 'jpg' if kind == 'image' else 'png'
+        row[kind] = f'{folder}/{row["session"]}/{row["session"]}__000001.{suffix}'
+        path=eval_root/row[kind]; path.parent.mkdir(parents=True,exist_ok=True); path.write_bytes(image_bytes)
+    # D-379 copies bytes unchanged; this isolated source .jpg path deliberately
+    # carries PNG bytes so the separate decoded-pixel proof remains meaningful.
+    manifest['builder'] = 'build.py --auto-labels (D-379)'
+    labels = (json.dumps(dict(index=1, t=10.0, session=row['session'], sources=['lidar']), sort_keys=True)+'\n').encode()
+    digest = hashlib.sha256(labels).hexdigest()
+    manifest['labels'] = [dict(session=row['session'], labels_digest=digest)]
+    (eval_root / 'manifest.json').write_text(json.dumps(manifest))
+    new = eval_root.with_name(content_sha(eval_root)); eval_root.rename(new); eval_root = new
+    args['eval_folders'] = [eval_root]; args['gate_eval_refs'][0]['content_sha'] = eval_root.name
+    proof = json.loads(Path(args['source_proof_files'][2]).read_bytes())
+    video = Path(proof['video_path']).read_bytes()
+    payloads = {name: (bundle / name).read_bytes() for name in doc['resources']}
+    payloads['video.bin'] = video; payloads['labels.jsonl'] = labels
+    payloads['meta.json'] = json.dumps(dict(session=row['session'], source=dict(sha256=dict(video=hashlib.sha256(video).hexdigest(), sidecar=hashlib.sha256(payloads['sidecar.jsonl']).hexdigest())))).encode()
+    for kind in ('image','mask','conf'): payloads[kind+'.bin'] = (eval_root / row[kind]).read_bytes()
+    for name,data in payloads.items(): (bundle/name).write_bytes(data)
+    doc['resources'] = {name:hashlib.sha256(data).hexdigest() for name,data in payloads.items()}
+    doc['eval_ref'] = dict(name=eval_root.parent.name, content_sha=eval_root.name)
+    doc['eval_manifest_sha256'] = hashlib.sha256((eval_root/'manifest.json').read_bytes()).hexdigest()
+    doc['eval_files'] = {p.relative_to(eval_root).as_posix():hashlib.sha256(p.read_bytes()).hexdigest() for p in eval_root.rglob('*') if p.is_file()}
+    doc['sources'][0].update(session=row['session'], labels_digest=digest)
+    doc['frames'][0].update(session=row['session'], image=row['image'])
+    seal_companion(bundle, doc); args['eval_companion_files'] = [bundle]
+    return bundle,doc
+
+
+def test_build_captures_companion_but_uses_independent_png_proof(tmp_path):
+    args,_ = build_fixture(tmp_path)
+    bundle,doc = attach_build_companion(args,tmp_path)
+    result = target.build_dataset(**args)
+    assert result['status'] == 'PUBLISHED_CONTENT_NOT_ADMITTED',result
+    assert result['training_admission'] is False
+    digest = hashlib.sha256((bundle/'manifest.json').read_bytes()).hexdigest()
+    published=Path(result['dataset_path'])
+    assert (published/'evidence'/'eval-companions'/digest/'manifest.json').read_bytes()==(bundle/'manifest.json').read_bytes()
+    assert doc['frames'][0]['decoded_video_pixels_verified'] is False
+
+
+def test_companion_resources_changed_before_publication_hold(tmp_path,monkeypatch):
+    args,_=build_fixture(tmp_path); bundle,_=attach_build_companion(args,tmp_path)
+    original=target._verify_video_requests
+    def change(requests,scratch):
+        original(requests,scratch); (bundle/'labels.jsonl').write_bytes(b'edited')
+    monkeypatch.setattr(target,'_verify_video_requests',change)
+    result=target.build_dataset(**args)
+    assert result['status']=='HOLD' and 'changed' in result['blockers'][0]
+    assert not list(args['store'].datasets_dir.rglob('manifest.json'))
+
+
+def test_companion_cannot_fill_missing_eval_group_fields(tmp_path):
+    args,_=build_fixture(tmp_path); bundle,doc=attach_build_companion(args,tmp_path)
+    from store import content_sha
+    root=args['eval_folders'][0]; manifest=json.loads((root/'manifest.json').read_bytes())
+    manifest['frames'][0].pop('capture_group'); (root/'manifest.json').write_text(json.dumps(manifest))
+    new=root.with_name(content_sha(root)); root.rename(new); args['eval_folders']=[new]; args['gate_eval_refs'][0]['content_sha']=new.name
+    doc['eval_ref']['content_sha']=new.name; doc['eval_manifest_sha256']=hashlib.sha256((new/'manifest.json').read_bytes()).hexdigest()
+    doc['eval_files']['manifest.json']=doc['eval_manifest_sha256']; doc['frames'][0].update(capture_group='group2',group_basis='operator_collection_assertion'); seal_companion(bundle,doc)
+    result=target.build_dataset(**args)
+    assert result['status']=='HOLD' and 'inventory incomplete' in result['blockers'][0]
+    assert not args['staging_parent'].exists()
+
+
+def test_pending_masks_ignore_companion_before_any_staging(tmp_path):
+    value=current(); bundle=tmp_path/'bundle'; seal_bundle(bundle,value)
+    class UnreadStore: pass
+    scratch=tmp_path/'scratch'
+    report=target.build_dataset(bundle,fetch_current=lambda:delivery(value),workspace_id='fixture',eval_folders=[],
+        source_proof_files=[],store=UnreadStore(),name='unused',staging_parent=scratch,now=lambda:100,
+        eval_companion_files=[tmp_path/'nonexistent'])
+    assert report['blockers']==['no_approved_masks'] and not scratch.exists()
+
+
+def test_companion_omitted_version_or_path_traversal_refused(tmp_path):
+    root,bundle,doc=companion_fixture(tmp_path)
+    with pytest.raises(ValueError,match='all active'): target.validate_eval_companions([root],[])
+    doc['sources'][0]['labels']='../outside'; seal_companion(bundle,doc)
+    with pytest.raises(ValueError):target.validate_eval_companions([root],[bundle])
+
+
+def test_companion_resealed_other_valid_label_cannot_rebind_eval_image(tmp_path):
+    from store import content_sha
+    root,bundle,doc=companion_fixture(tmp_path)
+    records=[json.loads((bundle/'labels.jsonl').read_bytes()),dict(index=2,t=20.0,session='session-eval',sources=['lidar'])]
+    raw=''.join(json.dumps(r,sort_keys=True)+'\n' for r in records).encode()
+    (bundle/'labels.jsonl').write_bytes(raw); doc['resources']['labels.jsonl']=hashlib.sha256(raw).hexdigest()
+    digest=hashlib.sha256(raw).hexdigest(); doc['sources'][0]['labels_digest']=digest
+    manifest=json.loads((root/'manifest.json').read_bytes()); manifest['labels'][0]['labels_digest']=digest
+    (root/'manifest.json').write_text(json.dumps(manifest)); new=root.with_name(content_sha(root)); root.rename(new);root=new
+    doc['eval_ref']['content_sha']=root.name; doc['eval_manifest_sha256']=hashlib.sha256((root/'manifest.json').read_bytes()).hexdigest()
+    doc['eval_files']['manifest.json']=doc['eval_manifest_sha256']
+    side=b'{"index":0,"t":10.0}\n{"index":1,"t":20.0}\n'; (bundle/'sidecar.jsonl').write_bytes(side)
+    doc['resources']['sidecar.jsonl']=hashlib.sha256(side).hexdigest()
+    meta=json.loads((bundle/'meta.json').read_bytes());meta['source']['sha256']['sidecar']=doc['resources']['sidecar.jsonl']
+    raw=json.dumps(meta).encode();(bundle/'meta.json').write_bytes(raw);doc['resources']['meta.json']=hashlib.sha256(raw).hexdigest()
+    raw=b'[{"video_frame":0,"pts":0,"time_base":"1/5"},{"video_frame":1,"pts":1,"time_base":"1/5"}]'
+    (bundle/'pts.json').write_bytes(raw);doc['resources']['pts.json']=hashlib.sha256(raw).hexdigest()
+    # Every digest and t-to-ordinal is valid; only image-to-selected-row changes.
+    doc['frames'][0].update(sample_index=2,video_frame=1);seal_companion(bundle,doc)
+    with pytest.raises(ValueError,match='selected label index'):
+        target.validate_eval_companions([root],[bundle])

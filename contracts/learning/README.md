@@ -61,3 +61,10 @@ journal만 단일 상관 pair로 보존한다. Receipt 없는 legacy source는 e
 correlations만 허용한다. schema 구조가 맞더라도 임의 상관 키는 profile 검증에서
 거절한다. 이것은 goal/identity 근거 검증이며 receipt 인증이나 독립 과제·정책 실행
 검증이 아니다. action outcome unknown과 policy revision null을 유지한다.
+
+0.1.7은 `omx_policy_execution_v1`과 stdlib `omx_execution.validate_profile`을
+추가한다. 원본 native intent/callback, policy 설치 byte closure, 기존 Action parent,
+실제 ActionAPI v2 receipt/journal identity를 대조한다. observation은 metadata-only이고
+raw camera/inference 확인이 없어 status incomplete/task unknown을 유지한다.
+기존 demonstration 계약을 바꾸지 않으며 DatasetStore/승격/학습에는 받지 않는다.
+body/file 검증은 인증·실행 권한·장치/과제/물리 수용을 부여하지 않는다.

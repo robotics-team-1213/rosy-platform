@@ -325,3 +325,43 @@ indexed PNG를 기존 CVAT RGB builder에 바로 넣지 않는다. 별도 adapte
 기존 Job은 입력 signature가 바뀌면 거절한다. 기존 서비스 설정만 바꿔 같은 상태 디렉터리에
 덮어 실행하지 않는다. 신규 상태/기존 dedup history 이관을 검증한 후 서비스 전환한다.
 이번 host 구현·테스트는 실제 GUI/SSH 전달이나 현장 수용 완료를 뜻하지 않는다.
+
+### D-464 indexed trainer의 독립 admission
+
+`review_dataset.py`의 게시 결과와 producer 큐는 계속 admission/qualification false다.
+`train_job.run(..., indexed_review=...)`의 내부 owner 경로만 `review_admission.IndexedReview`를
+받는다. 일반 CLI/config의 boolean이나 build receipt로 indexed 학습을 허용하지 않는다.
+owner는 기존 transport ledger의 고정 workspace/highwater, fresh current provider, 원래 봉인
+export, 실제 원본 proof와 X scratch를 공급해야 한다. 새 Job의 빈 상태로 highwater를 초기화하지 않는다.
+
+admission은 모든 실제 Store eval version/gate ref와 원본 pixels를 다시 검사해 데이터셋을
+scratch에 재구축하고, 저장된 content SHA와 정확히 같아야 허용한다. Store에는 다시 게시하지
+않는다. trainer는 캡처한 dataset/eval/gate 사본을 소비하며 Job, GPU, export/intake와 READY 경계에서
+authority·TTL·recipe/소스·실제 eval inventory·사본 bytes를 다시 검증한다. 느린 검사 후 만료도 거절한다.
+
+실제 마스크 승인0, 평가 frame/group UNKNOWN과 부족한 source proof는 구현 뒤에도 HOLD다.
+격리 synthetic 시험은 실제 사람 정답·GPU 학습·서비스 전환 수용이 아니다. 이 owner 경로를
+기존 서비스에 연결하거나 실제 학습을 실행하는 작업은 별도 실행 범위다.
+# Indexed review producer composition
+
+The default `learning_cycle.py` CLI keeps indexed requests on HOLD without an
+owner context. The trusted producer entrypoint `review_pipeline.py CONFIG --out
+STATE [--once]` accepts a private configuration with `cycle` (the existing cycle
+configuration) and `review`: `source_proof_files`, `staging_parent`,
+`dataset_name`, optionally `eval_companion_files` and `authority_max_age_s` (at
+most 90 seconds). Source paths and secrets stay outside this public repository.
+The effective freshness bound is the smaller of `cycle.authority.max_age_s`
+and `review.authority_max_age_s`; transport, reconstruction and trainer admission
+all use that same bound.
+
+This composition builds only explicitly approved indexed masks, checks persisted
+transport highwater and fresh source/eval-bound `IndexedReview`, then atomically
+publishes a research request and injects the owner context into the trainer. No
+receipt or caller boolean grants training. Equivalent generation-only refreshes
+preserve terminal work and recipe attempt budgets. Companions are evaluation
+provenance/exclusion evidence; they do not grant GT, JPEG pixel equivalence or
+collection-group qualification. Missing actual approvals remain HOLD.
+
+See `docs/plans/2026-10-05-pinky-pipeline-completion.md` for scope and isolated
+verification. A real eligible invocation can train; no real GPU or robot command
+is part of the synthetic composition tests.

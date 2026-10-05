@@ -389,8 +389,57 @@
 - 증거: 독립 검토가 이전 운전석 preload, wall/sim 만료 차이, 지연 취소의 다음 운전석 침범을 재현했고 수정 후 원래 repro 2개와 독립 22 tests 통과. 최종 owner/Pilot/API/builder/architecture 257 passed·기존 2 skips, 부모 통합 42 passed, fast462 passed·기존2 skips·NEW0.
 - gate 변화: SOURCE/LOCAL. 실제 ROS 경합과 장치 티칭 수락은 NOT_RUN이다. 재시작 exact-goal reconciliation API 없이 미해결 intent를 자동 해제하지 않는다.
 
+## 2026-10-05 · uncommitted · fix(pilot): 승인 화면 자산 제공 정합
+
+- 변경: OMX Pilot 정적 자산 목록에 peer-approval.js를 포함한다. 요청·운전석·명령 수락 동작은 바꾸지 않는다.
+- 증거: pre-push에서 자산 집합 불일치를 재현했고 Pilot shell·CI 계약 16 passed로 확인했다.
+- gate 변화: SOURCE/LOCAL 정적 제공 수리. OMX 실기·운전석 수용은 별도다.
+
 ## 2026-10-05 · uncommitted · fix(peer-assets): Pilot 승인 모듈 정적 경로 일치
 
 - 변경: SIM·개발 서버 allowlist에 기존 peer-approval.js를 더해 CORE와 같은 정적 자산을 제공한다. API·제어 권한·UI 구성 변경 없음.
 - 증거: test_shell_assets.py 4 passed, known_failures NEW 0.
 - gate 변화: SOURCE/LOCAL. 실제 장치·FIELD 검증은 별도다.
+
+## 2026-10-05 · c2425e6ea · 정책 세션과 원본 runtime 결선
+
+- 변경: 단독 SIM learned_policy owner에만 연결, 단일 관측 전달과 watchdog lease 검증, callback 선등록과 늦은 원본 이벤트 보존, 설치 파일 바이트 기록, I/O 후 전체 권한/원본 source 경계 검증.
+- 검증: 관련 HOST 585 PASS/4 SKIP/NEW0; 격리 Jazzy 기존 runtime 6 PASS. 새 실제 ROS 정책 결선은 관측 만료로 거부돼 수용 보류. 근거 X:/DevTemp/policy-runtime/.
+- gate 변화: SOURCE/HOST 개발. 설치·추론·Fleet 부모 결과·장치·물리 수용은 별도이며 운영 설정 변경 없음.
+
+## 2026-10-05 · 8669ef8db · native 정책 callback 순서·실패 수렴
+
+- 변경: 원본 handle event 전달을 별도 lock으로 직렬화, acceptance 이전 cancel ACK 보존, 저장 실패 시 내부 취소 한 번으로 재귀 요청 제한. 일반 state lock은 sink I/O에서 해제한다.
+- 증거: 결정적 HOST 순서2개 및 재귀 취소1개 RED 확인 후 PASS. 실제 localhost Jazzy transport 8 PASS(기존6+정책세션2), 완료·권한철회 CANCELED 및 종료 확인. fixture는 명시적 관측2초/lease12초이며 원래50ms/500ms 실패와 구분.
+- gate 변화: native transport/journal 결선만 확인. 실제 model inference/vendor task/Fleet grant/장치/물리 정지 및50ms 성능은 미수용. 기존 운영 설정과0.20m 전체 물리거리 제한 유지.
+
+## 2026-10-05 · uncommitted · fix(harness): OMX 커밋 저널의 정확한 형식 복구
+
+- 변경: c2425e6ea의 이미 커밋된 저널에 한정해 branch 이름 헤딩을 원본 커밋으로 바꾸고 범위 필드를 gate 변화로 정정했다. 기존 본문 증거·수용 보류·운영 설정 미변경 사실은 그대로 보존한다. 기존 정확한 SHA 쌍 복구 장치에 새 예외를 등록했으며 검사 무변경으로 주장하지 않는다.
+- 증거: 불변 원문은 c2425e6eac860d3f670cef0520377e4e4c2042d5와 a41b149db083ca18d3de7bab4ad59d6d76b11c63의 logs.md에 남는다. 정규화 원본 블록 SHA256: `a982ed57cb8e69bbc509ba636d3c5e3cf96d441c23c010304ffbc18ab67a4b19`. 정규화 정정 블록 SHA256: `33858a56f2c9d58edbcae2370a6898b0989ad525e9d49214ee6846d182bfbdf5`. 정확한 쌍만 허용하고 원문·정정 변형, 다른 항목 수정·삭제, 알 수 없는 쌍을 거부하는 실제 회귀 검증을 수행한다.
+- gate 변화: SOURCE/LOCAL 감사 형식 정정. 원래 HOST 수치와 ROS 수용 보류를 승격하지 않으며 DEVICE/FIELD 수용이나 자동 활성화 근거를 추가하지 않는다.
+
+## 2026-10-05 · uncommitted · fix(harness): native callback 저널 한 항목의 형식 정정
+
+- 변경: 이미 커밋된8669ef8db 항목의 branch 헤더를 해당 커밋으로, gate 필드를 gate 변화로 정정한다. 본문과8 PASS의 제한된 transport 범위는 변경하지 않는다. 기존 SHA 쌍 복구 규칙에 이 정확한 쌍만 등록했다.
+- 증거: 원문은8669ef8db의 logs.md에 보존. 정규화 원문 SHA256 ed55535bed54123338dad2db22c24fc159009907552540b7a3beb83274365973, 정정 SHA256 95d2f5a14fc08506ecb646845926ac48bdcb839609a7ef50929111d71be5921d. exact/old/new/missing/other-edit/delete/unknown-pair7개 회귀로 다른 변경은 거부한다.
+- gate 변화: SOURCE/LOCAL 기록 형식 수리만. 실행 시간·장치·물리 수용을 추가하지 않는다.
+
+## 2026-10-05 · uncommitted · fix(release): 공개 journal SHA 경로 검증 기록 이동
+
+- 변경: harness log-map 추출 뒤 남은 네 공개 digest 기록을 실제 YAML의 정확한 행 SHA와 여덟 값으로 이동했다. 비밀 scanner 규칙과 나머지 record 내용·순서는 변경하지 않았다.
+- 검증: 기존 main에서 두 guard 실패를 재현한 뒤 관련 guard 103 PASS/NEW0, 독립 정책 검토 16 PASS/NEW0. 근거 X:/DevTemp/policy-parent/provenance-migration-pass.txt 및 provenance-migration-independent-review.md.
+- gate 변화: SOURCE/LOCAL 감사 기록 보정만이며 실행·장치·물리 수용은 추가하지 않는다.
+
+
+## 2026-10-05 · uncommitted · feat(omx): 검증된 Action parent와 정책 원본 사실 연결
+
+- 변경: 실제 runner가 peer·원본 grant·저장된 attempt를 검증한 뒤 읽기 전용 capability를 발급한다. parent/events/phases 단일 SQLite snapshot과 current D18·lease·실제 goal·전체 설치 byte closure를 대조하고 마지막 provider 호출 뒤 만료를 재확인한다. 기존 Action 종류와 허용 동작, 공개 API는 바꾸지 않는다.
+- 증거: capability 누락 RED1, 직접 구성한 capability와 reseal manifest RED2, final-read/source/전체 intent RED9, 마지막 provider 만료 RED1 후 HOST33 PASS/NEW0. WAL 교차 store·terminal 후 새 발급 거절·restart·허위 SUCCEEDED·원본 source 변경 거절 포함. 합성 driver/model/authority HOST 범위이며 별도 native transport 결과를 대신하지 않는다.
+- gate 변화: private SOURCE/HOST 상관관계만. execution_authorized/episode_fleet_qualified/inference 검증 false, task unknown 및 wire journal_id 미발명. 실제50ms/500ms·모델·DEVICE/FIELD·GT 수용 보류와 모든 시도 합계 물리0.20m 상한 유지. no push/활성화/주행.
+
+## 2026-10-05 · uncommitted · feat(learning): 동일 정책 실행 Episode와 Fleet export
+
+- 변경: 기존 owner journal singleton을 parent 원장과 같은 BEGIN에서 읽고 실제 ActionAPI v2 receipt를 검증한다. 별도 execution profile에 원본 설치 byte closure·intent·native callback·D18를 보존하며 Fleet에서 동일 tuple/journal/goal와 전체 receipt를 비교한다. 관측은 metadata-only, status incomplete/task unknown이고 기존 시연·DatasetStore·승격 허용은 유지한다.
+- 증거: producer 부재 RED1, false0 RED1, reseal trajectory/clock/install RED6 및 native scalar RED2 후 관련61 PASS/NEW0. captured bytes 재검산·manifest fsync 뒤 source/native/API 재검증과 마지막 TTL을 유지한다. 합성 model/driver HOST 범위, X:/DevTemp/policy-episode/ 근거.
+- gate 변화: SOURCE/HOST 공용 실행 증거 연결. raw RGB/inference/task/원래50ms500ms/DEVICE/FIELD는 미수용이며 새 실행 권한이나 GT는 만들지 않는다. 모든 로봇·시도 합계0.20m 상한 유지, push/배포/활성화/주행 없음.

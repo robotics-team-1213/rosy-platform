@@ -129,8 +129,8 @@ def flood_region(store, index, review, seed, tolerance):
     photo = cv2.imdecode(np.frombuffer(raw, np.uint8), cv2.IMREAD_COLOR)
     if photo is None or (photo.shape[1], photo.shape[0]) != (review['width'], review['height']):
         raise ValueError('source image dimensions differ')
-    target = photo[seed[1], seed[0]].astype(np.int16)
-    inside = (np.sqrt(((photo.astype(np.int16) - target) ** 2).sum(axis=2)) <= float(tolerance))
+    target = photo[seed[1], seed[0]].astype(np.int32)
+    inside = (np.sqrt(((photo.astype(np.int32) - target) ** 2).sum(axis=2)) <= float(tolerance))
     _, labels = cv2.connectedComponents(inside.astype(np.uint8), connectivity=4)
     return labels == labels[seed[1], seed[0]]
 
