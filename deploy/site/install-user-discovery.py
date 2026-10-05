@@ -233,7 +233,7 @@ def main():
     parser.add_argument("--enable-user-fallback", action="store_true")
     parser.add_argument("--runtime", choices=("fleet", "overhead", "bridge"))
     parser.add_argument("--tls-host")
-    parser.add_argument("--port", type=int, default=8443)
+    parser.add_argument("--port", type=int)
     parser.add_argument("--ca-file", type=Path)
     parser.add_argument("--token-file", type=Path)
     parser.add_argument("--pair", action="store_true", help="advertise explicitly configured overhead pairing")
@@ -247,8 +247,9 @@ def main():
             config = json.loads((SOURCE / "config.json").read_text())
             argv = runtime_command(args.runtime, SOURCE, config)
             os.execv(argv[0], argv)
-        if not args.enable_user_fallback or not args.tls_host or not args.ca_file or not args.token_file:
-            parser.error("pass --enable-user-fallback --tls-host --ca-file --token-file explicitly")
+        if (not args.enable_user_fallback or not args.tls_host or args.port is None
+                or not args.ca_file or not args.token_file):
+            parser.error("pass --enable-user-fallback --tls-host --port --ca-file --token-file explicitly")
         install(Path.home(), args.ca_file, args.token_file, args.tls_host, args.port,
                 pair=args.pair, camera_peer=args.camera_peer)
         print("ROSY user discovery installed; inspect systemctl --user status rosy-user-mdns-bridge.service")

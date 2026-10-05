@@ -6081,3 +6081,8 @@ osy-d395-s1d\`.
 - 변경: tools/calibration/camera_auto.py and read-only camera_capture.py collect stationary camera/LiDAR/odometry and reuse the installed fitter; guide replaces manual height/pitch entry. No drive, mode, apply or calibration-session changes.
 - 증거: related 87 PASS, known failures 0 NEW; final 042-device capture 40 scans/15 frames/121 odometry, eight wall returns, REJECTED too few wall returns, applied false. docs/validation/camera-auto-2026-10-05/result.md.
 - gate 변화: SOURCE/LOCAL command verified; DEVICE capture and automatic fit executed, calibration acceptance and automatic movement remain unverified.
+
+## 2026-10-05 · uncommitted · fix(site): published HTTPS port comes only from the site setting
+- 변경: 공개 포트와 프록시 수신 포트가 ROSY_SITE_HTTPS_PORT 하나다. Compose는 그 값을 호스트 포트와 컨테이너 포트에 같이 쓰고, Caddy는 {$ROSY_SITE_HTTPS_PORT}로 듣는다. 방화벽은 그 포트 점프 하나만 두고, 두 포트가 다르면 거부한다. mDNS 광고와 사용자 발견 설치도 코드 기본 포트를 두지 않는다. Fleet 8090과 Vision 8095는 컨테이너 안 수신 포트로 둔다.
+- 증거: test/test_site_firewall.py test/test_site_mdns_bridge.py test/test_site_preflight.py test/test_site_user_discovery.py test/test_site_fleet_mdns.py — 309 passed, 3 skipped. known_failures 0 new. 호스트 시험이며 현장 배포는 없다.
+- gate 변화: 없음. 현장 스택에는 아직 배포하지 않았다.
