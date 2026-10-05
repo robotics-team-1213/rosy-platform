@@ -6,6 +6,8 @@ const $ = id => document.getElementById(id);
 const names = {'':'클래스 선택 필요',robot:'로봇', obstacle_box:'장애물 상자', cone:'콘', traffic_light:'신호등', sign:'표지판', person_feet:'사람 발'};
 const states = {unknown:'알 수 없음', red:'빨강', yellow:'노랑', green:'초록', off:'꺼짐'};
 const statuses = {approved:'승인', excluded:'제외', pending:'검수 대기'};
+const serverReasons = {'known object class required':'모든 박스에 클래스를 지정하세요.','box outside original image':'박스가 원본 사진 범위를 벗어났습니다.','unknown signal state':'신호 상태가 올바르지 않습니다.','boxes must be a list':'박스 목록이 올바르지 않습니다.','unknown review action':'지원하지 않는 동작입니다.'};
+function readableError(message) {return serverReasons[message] || message;}
 let workspace, frame, image, ready = false, busy = false, conflicted = false, loadSerial = 0, drawing = false;
 let gesture = null, selected = null, coordinatePreview = null;
 let undo = null;
@@ -14,8 +16,9 @@ function visibleFrames() {return workspace?.frames.filter(item=>$('filter').valu
 function error(message='') { $('error').textContent = message; $('error').hidden = !message; }
 function enable() {
   const locked = !ready || busy || conflicted || !!gesture;
-  $('approve').disabled = locked || !$('complete').checked || frame?.status === 'excluded';
-  const reason = !ready ? '사진을 불러온 뒤 승인할 수 있습니다.' : busy ? '저장을 마친 뒤 승인할 수 있습니다.' : conflicted ? '최신 내용을 불러온 뒤 다시 확인하세요.' : frame?.status === 'excluded' ? '제외 사진은 재검수로 돌려야 합니다.' : !$('complete').checked ? '사진 전체 확인에 체크하세요.' : '';
+  const unclassified = frame?.review.boxes.some(box => box.label == null);
+  $('approve').disabled = locked || !$('complete').checked || frame?.status === 'excluded' || unclassified;
+  const reason = !ready ? '사진을 불러온 뒤 승인할 수 있습니다.' : busy ? '저장을 마친 뒤 승인할 수 있습니다.' : conflicted ? '최신 내용을 불러온 뒤 다시 확인하세요.' : frame?.status === 'excluded' ? '제외 사진은 재검수로 돌려야 합니다.' : unclassified ? '클래스가 없는 박스가 있습니다. 모든 박스의 클래스를 지정하세요.' : !$('complete').checked ? '사진 전체 확인에 체크하세요.' : '';
   if (reason) $('approve').setAttribute('reason',reason); else $('approve').removeAttribute('reason');
   $('exclude').disabled = locked || frame?.status === 'excluded';
   $('reopen').disabled = locked;
@@ -45,36 +48,52 @@ async function request(path, body) {
   const value = await response.json();
   if (!response.ok) {
     if (response.status === 409) conflicted = true;
-    throw new Error(value.error || '저장하지 못했습니다');
+    throw new Error(readableError(value.error || '저장하지 못했습니다'));
   }
   return value;
 }
 function list() {
   const counts = workspace.frames.reduce((a,f) => {a[f.status]++; return a;}, {approved:0,excluded:0,pending:0});
   $('counts').textContent = `승인 ${counts.approved} · 제외 ${counts.excluded} · 대기 ${counts.pending}`;
-  $('frames').replaceChildren();
   const visible=visibleFrames();
   $('empty-frames').hidden=visible.length>0;
+  const key=visible.map(f=>f.index).join(',');
+  if (key===listKey) {
+    // Same membership (D-469): refresh badges and selection in place instead of
+    // rebuilding every thumbnail, which would refetch all original images.
+    for (const button of $('frames').children) {
+      const item=workspace.frames.find(f=>f.index===Number(button.dataset.index));
+      button.setAttribute('aria-pressed',String(item.index===frame?.index));
+      button.querySelector('.frame-badge').textContent=statuses[item.status];
+    }
+    return;
+  }
+  listKey=key;
+  $('frames').replaceChildren();
   visible.forEach(f => {
-    const button = document.createElement('ui-button'); button.setAttribute('kind','segment'); button.setAttribute('aria-pressed',String(f.index === frame?.index));
+    const button = document.createElement('ui-button'); button.setAttribute('kind','segment'); button.dataset.index=f.index; button.setAttribute('aria-pressed',String(f.index === frame?.index));
     const thumb=document.createElement('img');thumb.src=`/api/images/${f.index}`;thumb.alt='';thumb.loading='lazy';thumb.className='frame-thumb';
     const name=document.createElement('span');name.className='frame-label';name.textContent=`사진 ${f.index+1}`;button.append(thumb,name);
     const badge = document.createElement('span'); badge.className = 'frame-badge'; badge.textContent = statuses[f.status]; name.append(badge);
     button.onclick = () => { if (!busy && !gesture) select(f.index); }; $('frames').append(button);
   });
 }
+let listKey='';
 function paint() {
   const canvas = $('canvas'), ctx = canvas.getContext('2d');
   ctx.clearRect(0,0,canvas.width,canvas.height);
   if (!ready) return;
   ctx.drawImage(image,0,0);
-  ctx.strokeStyle = cssColor('--series-primary'); ctx.fillStyle = cssColor('--ink');
+  ctx.fillStyle = cssColor('--ink');
   ctx.lineWidth = Math.max(1,canvas.width/320); ctx.font = font(14,'mono');
   const boxes = coordinatePreview || frame.review.boxes;
   const marker = 8 * canvas.width / Math.max(1,canvas.getBoundingClientRect().width);
   boxes.forEach((box,i) => {
     const bounds = gesture?.index === i ? gesture.preview : box.bbox_xyxy;
-    const [x0,y0,x1,y1] = bounds; ctx.strokeRect(x0,y0,x1-x0,y1-y0);
+    const [x0,y0,x1,y1] = bounds;
+    // Unclassified boxes block approval (D-469): keep them visibly distinct on the canvas.
+    ctx.strokeStyle = box.label == null ? cssColor('--status-warn') : cssColor('--series-primary');
+    ctx.strokeRect(x0,y0,x1-x0,y1-y0);
     ctx.fillText(String(i+1),x0+3,Math.max(14,y0-3));
     if (i === selected) {
       for (const [x,y] of Object.values(boxHandles(bounds))) {

@@ -70,6 +70,49 @@ def test_candidates_are_pending_and_require_classification(tmp_path):
     assert store.prepare()['exported_frames'] == 0
 
 
+def test_http_images_revalidate_with_etag_and_tamper_guard(tmp_path):
+    import threading
+    import urllib.request
+    import urllib.error
+    from review_app import make_server
+    store = open_store(tmp_path)
+    server = make_server(store, 0)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    url = f'http://127.0.0.1:{server.server_port}'
+    try:
+        etag = '"' + store.get(0)['source']['image_sha256'] + '"'
+        with urllib.request.urlopen(url + '/api/images/0') as response:
+            assert response.headers['Cache-Control'] == 'no-cache'
+            assert response.headers['ETag'] == etag
+            assert response.read()
+        request = urllib.request.Request(url + '/api/images/0', headers={'If-None-Match': etag})
+        with pytest.raises(urllib.error.HTTPError) as error:
+            urllib.request.urlopen(request)
+        assert error.value.code == 304
+        request = urllib.request.Request(url + '/api/images/0', headers={'If-None-Match': '"stale"'})
+        with urllib.request.urlopen(request) as response:
+            assert response.status == 200 and response.read()
+        with urllib.request.urlopen(url + '/api/mask-images/0') as response:
+            mask_etag = response.headers['ETag']
+            assert response.headers['Cache-Control'] == 'no-cache'
+            assert response.read()
+        request = urllib.request.Request(url + '/api/mask-images/0', headers={'If-None-Match': mask_etag})
+        with pytest.raises(urllib.error.HTTPError) as error:
+            urllib.request.urlopen(request)
+        assert error.value.code == 304
+        # Revalidation never skips the on-disk hash check: a tampered file is refused even with a matching ETag.
+        store.image(0).write_bytes(b'tampered')
+        request = urllib.request.Request(url + '/api/images/0', headers={'If-None-Match': etag})
+        with pytest.raises(urllib.error.HTTPError) as error:
+            urllib.request.urlopen(request)
+        assert error.value.code == 400
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join()
+
+
 def test_http_blocks_foreign_hosts_and_tokenless_writes(tmp_path):
     import threading
     import urllib.request
