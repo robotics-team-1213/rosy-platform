@@ -13,7 +13,7 @@ Ubuntu site-host stack: Caddy TLS proxy, Fleet console and task SQLite, and Visi
 |------|-------------|
 | `README.md` | Roles, LAN access, bring-up, firewall, pairing, candidate flow. Read first |
 | `compose.yaml`, `compose.pairing.yaml` | Site stack and the pairing overlay |
-| `Caddyfile`, `Dockerfile.proxy` | TLS proxy; Fleet 8090 and Vision 8095 stay unpublished |
+| `Caddyfile`, `Dockerfile.proxy` | TLS proxy; Fleet and Vision listen on `ROSY_FLEET_PORT` and `ROSY_VISION_PORT` and stay unpublished |
 | `Dockerfile.fleet`, `Dockerfile.vision`, `requirements-*.txt` | Fleet and Vision images (each has a `.dockerignore` sibling) |
 | `site_preflight.py` | Stops cert, TXT host, or Caddy host mismatches before start |
 | `site-firewall.py`, `rosy-site-firewall*.service/.timer` | Interface firewall, fail-closed and periodic check units |

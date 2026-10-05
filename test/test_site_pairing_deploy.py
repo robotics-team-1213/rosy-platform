@@ -74,7 +74,7 @@ def test_fleet_enables_pairing_with_the_site_ca_and_tls_host(overlay):
 
 def test_vision_syncs_over_https_with_the_site_ca(overlay):
     flags = _flags(overlay["services"]["vision"]["command"])
-    assert flags["--pairing-sync-url"] == "https://fleet:8090"
+    assert flags["--pairing-sync-url"] == "https://fleet:${ROSY_FLEET_PORT:?set ROSY_FLEET_PORT}"
     assert flags["--pairing-sync-ca"] == "/run/secrets/site_ca"
     assert flags["--pairing-sync-token-env"] == SYNC_ENV
     assert "site_ca" in _load("compose.yaml")["services"]["vision"]["secrets"]

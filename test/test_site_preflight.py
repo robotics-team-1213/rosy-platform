@@ -212,7 +212,9 @@ def test_caddy_address_naming_tls_host_passes(site, address):
 
 def test_shipped_caddyfile_port_only_address_passes(site):
     text = (SITE_DIR / "Caddyfile").read_text(encoding="utf-8")
-    assert ":{$ROSY_SITE_HTTPS_PORT}" in text and ":8443" not in text
+    assert ":{$ROSY_SITE_HTTPS_PORT}" in text and "https://fleet:{$ROSY_FLEET_PORT}" in text
+    assert "https://vision:{$ROSY_VISION_PORT}" in text
+    assert ":8443" not in text and ":8090" not in text and ":8095" not in text
     assert _run(site, caddyfile=SITE_DIR / "Caddyfile") == 0
 
 
