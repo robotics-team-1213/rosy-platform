@@ -51,6 +51,10 @@ class _ParentCapability:
         """Final authority check, with no SQLite read or result construction."""
         self._validator()
 
+    def owner_receipt(self, api):
+        """Original v2 API receipt bound to this runner's existing journal."""
+        return self._api_reader(api)
+
 
 def mint_parent(runner, grant, *, peer_uid):
     """Requires the actual validated runner/store; identity text is insufficient."""
@@ -123,4 +127,25 @@ def mint_parent(runner, grant, *, peer_uid):
         # Terminal readback is permitted only through the preterminal capability.
         return snapshot
 
-    return _ParentCapability(pinned_read, validate, token=_MINT_TOKEN)
+    def api_read(api):
+        from .action_api import ActionApi
+        if not isinstance(api, ActionApi) or api.runner is not runner:
+            raise PermissionError('original parent ActionAPI required')
+        before = pinned_read()
+        identity = before['journal_id']
+        if not identity or not api.identity or api.identity.get('journal_id') != identity:
+            raise PermissionError('existing owner journal identity required')
+        response = api.dispatch(dict(version=2, operation='GetAction', action_id=grant.action_id),
+                                peer_uid=peer_uid)
+        expected = dict(projection(before), journal_id=identity)
+        if encoded(response) != encoded(dict(version=2, status=200, receipt=expected)):
+            raise PermissionError('original API receipt differs from parent')
+        if encoded(pinned_read()) != encoded(before):
+            raise PermissionError('original parent changed during API readback')
+        payload = api._encode(response['receipt'])
+        validate()
+        return payload
+
+    capability = _ParentCapability(pinned_read, validate, token=_MINT_TOKEN)
+    capability._api_reader = api_read
+    return capability

@@ -35,7 +35,17 @@ class ActionStoreReadback:
             action['journal_event_id'] = events[-1]['event_id'] if events else None
             for event in events:
                 event['detail'] = json.loads(event.pop('detail_json'))
-            return dict(action=action, events=events, phases=phases)
+            # Read an existing owner identity in this same snapshot. Never mint
+            # a missing journal identity just to satisfy a provenance verifier.
+            identity = None
+            if connection.execute("SELECT 1 FROM sqlite_master WHERE type='table' "
+                                  "AND name='omx_journal_identity'").fetchone():
+                identities = connection.execute('SELECT singleton,journal_id FROM omx_journal_identity').fetchall()
+                if (len(identities) != 1 or identities[0][0] != 1
+                        or not isinstance(identities[0][1], str) or not identities[0][1].strip()):
+                    raise PermissionError('original owner journal identity is malformed')
+                identity = identities[0][1]
+            return dict(action=action, events=events, phases=phases, journal_id=identity)
 
     def unresolved_actions(self, *, workcell_id: str | None = None) -> list[dict[str, Any]]:
         with closing(self._connect()) as connection:

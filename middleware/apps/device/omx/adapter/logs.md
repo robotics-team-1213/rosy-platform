@@ -437,3 +437,9 @@
 - 변경: 실제 runner가 peer·원본 grant·저장된 attempt를 검증한 뒤 읽기 전용 capability를 발급한다. parent/events/phases 단일 SQLite snapshot과 current D18·lease·실제 goal·전체 설치 byte closure를 대조하고 마지막 provider 호출 뒤 만료를 재확인한다. 기존 Action 종류와 허용 동작, 공개 API는 바꾸지 않는다.
 - 증거: capability 누락 RED1, 직접 구성한 capability와 reseal manifest RED2, final-read/source/전체 intent RED9, 마지막 provider 만료 RED1 후 HOST33 PASS/NEW0. WAL 교차 store·terminal 후 새 발급 거절·restart·허위 SUCCEEDED·원본 source 변경 거절 포함. 합성 driver/model/authority HOST 범위이며 별도 native transport 결과를 대신하지 않는다.
 - gate 변화: private SOURCE/HOST 상관관계만. execution_authorized/episode_fleet_qualified/inference 검증 false, task unknown 및 wire journal_id 미발명. 실제50ms/500ms·모델·DEVICE/FIELD·GT 수용 보류와 모든 시도 합계 물리0.20m 상한 유지. no push/활성화/주행.
+
+## 2026-10-05 · uncommitted · feat(learning): 동일 정책 실행 Episode와 Fleet export
+
+- 변경: 기존 owner journal singleton을 parent 원장과 같은 BEGIN에서 읽고 실제 ActionAPI v2 receipt를 검증한다. 별도 execution profile에 원본 설치 byte closure·intent·native callback·D18를 보존하며 Fleet에서 동일 tuple/journal/goal와 전체 receipt를 비교한다. 관측은 metadata-only, status incomplete/task unknown이고 기존 시연·DatasetStore·승격 허용은 유지한다.
+- 증거: producer 부재 RED1, false0 RED1, reseal trajectory/clock/install RED6 및 native scalar RED2 후 관련61 PASS/NEW0. captured bytes 재검산·manifest fsync 뒤 source/native/API 재검증과 마지막 TTL을 유지한다. 합성 model/driver HOST 범위, X:/DevTemp/policy-episode/ 근거.
+- gate 변화: SOURCE/HOST 공용 실행 증거 연결. raw RGB/inference/task/원래50ms500ms/DEVICE/FIELD는 미수용이며 새 실행 권한이나 GT는 만들지 않는다. 모든 로봇·시도 합계0.20m 상한 유지, push/배포/활성화/주행 없음.

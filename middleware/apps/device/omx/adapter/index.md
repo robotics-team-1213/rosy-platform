@@ -46,8 +46,8 @@
 
 ## 최근 기록
 
+- 2026-10-05 · uncommitted · feat(learning): 동일 정책 실행 Episode와 Fleet export
 - 2026-10-05 · uncommitted · feat(omx): 검증된 Action parent와 정책 원본 사실 연결
 - 2026-10-05 · uncommitted · fix(release): 공개 journal SHA 경로 검증 기록 이동
 - 2026-10-05 · uncommitted · fix(harness): native callback 저널 한 항목의 형식 정정
 - 2026-10-05 · uncommitted · fix(harness): OMX 커밋 저널의 정확한 형식 복구
-- 2026-10-05 · 8669ef8db · native 정책 callback 순서·실패 수렴

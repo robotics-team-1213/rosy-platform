@@ -83,7 +83,8 @@ def validate_episode(doc, *, root=None):
                   "task skill revisions sources streams correlations status outcome")
     for field in ("episode_id", "device", "robot_type", "clock_domain", "task"):
         _text(value[field])
-    if value["profile"] not in {"omx_demonstration_v1", "pinky_recording_session_v1", "pilot_recording_v1"}:
+    if value["profile"] not in {"omx_demonstration_v1", "omx_policy_execution_v1",
+                              "pinky_recording_session_v1", "pilot_recording_v1"}:
         raise ValueError("unknown Episode profile")
     if value["environment"] not in {"sim", "real"}:
         raise ValueError("explicit sim/real environment required")

@@ -90,3 +90,10 @@ goal UUID와 receipt를 연결할 수 있다. export는 OMX/Pinky profile valida
 journal/driver goal을 보존된 owner receipt와 다시 비교한다. profile 변경이나
 같은 action/attempt의 다른 generation으로 우회하지 않는다. 구체 검증은
 `docs/validation/omx-owner-receipt-provenance-2026-10-04.md` 참조.
+
+`omx_policy_execution_v1`은 native 정책 실행의 설치 원본/intent/callback과 실제
+owner API receipt를 보존하는 별도 evidence profile이다. Fleet export는 전용 body
+validator를 호출하고 원본 receipt 전체와 다른 watermark/state/goal/journal을 거부한다.
+정책 revision을 결과에 보존하지만 metadata-only 관측은 demonstration이나 training
+GT가 아니다. DatasetStore/승격 호환 매핑은 확대하지 않는다. 파일 해시 검증은
+Fleet 수신 원장·receipt 인증·실제 추론/task/physical 결과를 증명하지 않는다.
