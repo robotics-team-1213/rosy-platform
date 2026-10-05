@@ -210,7 +210,8 @@ class Http:
             opener = urllib.request.build_opener(_NoCredentialRedirect,
                 urllib.request.HTTPSHandler(context=ssl.create_default_context(cafile=ca_file)))
             request = urllib.request.Request(url, headers={'Authorization': 'Bearer ' + token})
-            with opener.open(request, timeout=5) as response:
+            # Fleet state can wait for an offline robot probe before returning the online roster.
+            with opener.open(request, timeout=15) as response:
                 data = response.read(_SMALL_LIMIT + 1)
             if len(data) > _SMALL_LIMIT:
                 raise Transient('functional response exceeds size limit')
