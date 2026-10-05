@@ -445,3 +445,9 @@
 - 변경: SIM·개발 서버 allowlist에 기존 peer-approval.js를 더해 CORE와 같은 정적 자산을 제공한다. API·제어 권한·UI 구성 변경 없음.
 - 증거: test_shell_assets.py 4 passed, known_failures NEW 0.
 - gate 변화: SOURCE/LOCAL. 실제 장치·FIELD 검증은 별도다.
+
+## 2026-10-05 · uncommitted · feat(pilot): 연동 코드 보여주기(양방향)
+
+- 변경: 기기에 화면이 없을 때 Pilot이 코드를 보여 주고 상대 기기에서 입력한다(D-193 §5 등록 코드, 기존 CORE `POST /api/v1/auth/enrollment-codes` 그대로 사용 — 새 API·모드·필드 없음). `client.js` `requestEnrollmentCode(role)`, 접속 화면의 관리자 전용 "연동 코드 보여주기"(코드 발급 → `scale="display"` 큰 표시 + 유효분 안내, 403은 권한 문구). 반대 방향(상대 화면 코드 → Pilot 입력)은 기존 폼 그대로. `sw.js` 캐시 키 갱신. 개발 서버에 canned 발급 + `devadmintoken`(administrator) 추가.
+- 증거: `python -m pytest middleware/ui/pilot/test middleware/core/api_web/test/test_pilot_route.py -q` 92 passed 73 skipped; `ROSY_RUN_BROWSER_TESTS=1 -k "show_code or gate_panel or bad_token or lobby_lists"` 4 passed(신규: 운전자는 버튼 없음·관리자는 DEMO-C0DE 표시·가로 넘침 0); known_failures NEW 0.
+- gate 변화: SOURCE 유지. ARTIFACT(새 APK 빌드·서명)·DEVICE(실 태블릿 표시·상대 기기 입력)·FIELD는 별도.

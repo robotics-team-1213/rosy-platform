@@ -95,3 +95,10 @@ export async function pairWithCode(code, label = "Rosy Pilot") {
   if (response.status === 201 && body.token) setToken(body.token);
   return {status: response.status, body};
 }
+
+// 등록 코드 발급(D-193 §5, 관리자만). 화면이 없는 상대 기기와 연동할 때
+// 이 태블릿에 코드를 크게 보여 주고 상대 기기에서 입력한다.
+// 입력 방향(상대 화면 코드 → 이 태블릿 입력)은 pairWithCode 가 맡는다.
+export async function requestEnrollmentCode(role = "operator") {
+  return postJson("/api/v1/auth/enrollment-codes", {role});
+}
