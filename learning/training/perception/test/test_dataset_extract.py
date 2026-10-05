@@ -311,6 +311,7 @@ def _write_stamped(tmp_path, events):
 
 
 def test_keep_debug_mcap_conversion_and_extraction_have_the_same_source_frame(tmp_path):
+    pytest.importorskip('mcap_ros2')
     import bag_to_video as b2v
     session = _write_stamped(tmp_path, [
         (1.0, 'raw', 1.0), (1.04, 'keep', 1.0), (1.1, 'raw', 1.1),
