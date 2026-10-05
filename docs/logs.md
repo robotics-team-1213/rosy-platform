@@ -5926,11 +5926,31 @@ osy-d395-s1d\`.
 - gate 변화: 없음(SOURCE/LOCAL 판정 모듈). 실측 임계값은 시뮬 수용 목표이며 실물 안전 기준이 아니다.
 - 결정: observer truth는 Fleet/CORE 판단에 주입하지 않는다(D-426 결정 2). 이상적 오도메트리 전제는 manifest 기록 사항(T6).
 
+## 2026-10-05 · uncommitted · feat(fleet): D-426 T4 공유 구간 진입 허가·점유
+
+- 변경: `operations/fleet/fleet/server/traffic_reservations.py`·`segment_store.py` 추가 — 같은 Task DB에 구간 정의(구간 ID·지도 revision·진입/출구·안전 대기점·반경)와 grants 표. 상태 FREE(행 없)→RESERVED→OCCUPIED→RELEASING→FREE, 불명 UNKNOWN, Fleet 단일 writer. (1) request는 활성 상태 전부 재할당 거부 — 시한만 지난 RESERVED도 이전 실행의 밖-비활성·정지 확인 전 재할당 금지. (2) verify_grant는 수락 측 결속(Task/attempt·robot·구간·지도 revision)·세대·만료 검증. (3) confirm_entry는 신뢰 위치가 구간 안일 때만, 만료는 경계에서 재검사(밖 정지). (4) begin_release는 신선한(≤2 s) 출구 이탈 관측+종단 실행 결과 대조, confirm_exit로만 FREE. (5) mark_unknown(링크 상실)·시간 만료만으로 FREE 아님. (6) RESERVED 60 s 초과 대기는 운영자 대조 보고(자동 후반전 금지). Fleet 크기 판정 35878 재기록.
+- 증거: test_traffic_reservations 10개 계약(동시 진입·식별자·지도 revision·위치 미확정·만료 경계·UNKNOWN 재진입 거부·시한만 지난 RESERVED·해제 근거 3종 거부·결속/세대/만료·재시작 잔존·대기 보고) + 기존 traffic·boundary·구조 포함 90 PASS.
+- gate 변화: SOURCE/LOCAL. T4 전체 수용은 HOLD — 실제 로봇 진입·Nav2 경로 제약·robot-side gate 미구현(계획 T4 항목 4·5, goal 분할만으로 진입 gate 주장 불가).
+- 결정: D-426 결정 3 준수 — 통신 timeout은 공간이 비었다는 증명이 아니다.
+
+## 2026-10-05 · uncommitted · fix(ui): 네트워크 설치 작업을 연결 중심으로 정리
+
+- 변경: Wi-Fi 이름·암호의 지속 라벨과 공용 Wi-Fi 아이콘을 사용하고, 프로파일·AP·모드 전환은 기본 접힌 고급 작업으로 묶는다. 연결만 primary이며 결과·차단 안내는 접힌 영역 밖에 유지한다. D-432 추가 결정에 근거와 검증 범위를 기록했다.
+- 검증: 실제 Chromium fixture 1366×768·390×844에서 작업 순서와 라벨을 확인했다. 원본 상태·권한·확인·요청 중 잠금·암호 지우기와 API는 유지한다. 관련 브라우저 및 공용 아이콘·자산·토큰 계약 검증은 커밋 전 실행한다.
+- gate 변화: 없음. 화면 SOURCE/LOCAL 보완과 관련 검사 85 PASS이며 실제 네트워크 설정 변경·네이티브 페어링·기기 배포·현장 수용은 이 증거로 통과 처리하지 않는다.
+
 ## 2026-10-05 · uncommitted · fix(perception): blob에 지워진 차선 경계 한 번 복구
 
 - 변경: fix/lane-visibility에서 원래 선 승인 0/blob 존재에 한해 원본 paint를 forward support로 한 번 재시도한다. 기존 flank/길이/셀 수·pair/junction/급경사 한도를 유지한다.
 - 증거: 실제148장 비가시21→17, 직진 error0.0518125/jump0.007 유지, on_paint0.063→0.084 한계를 기록한다. 추가7영상2252장 재생·복구 접촉 시트 검토, 관련150PASS/1SKIP/NEW0, 독립 리뷰59PASS/NEW0이다. docs/validation/lane-visibility-deployment-2026-10-05/result.md.
 - gate 변화: SOURCE/LOCAL. 잔여17장의 경로 모호성·실제 keeper 제어·R1/R2는 HOLD다. 배포 증거는 실제 수행 뒤 별도로 기록한다.
+
+## 2026-10-05 · uncommitted · fix(validation): D-426 T3 관측 누락·교차 footprint 성공 판정 차단
+
+- 변경: footprint edge 교차·접촉·포함 관계의 여유를 0으로 판정한다. 정지는 기존 1초·20Hz·최대 0.15초 간격과 두 시계의 연속 관측을 확인한다. publisher 소유권은 모든 기대 topic에 하나의 관측과 정확한 positive PID·endpoint·GID 결속을 요구하며 이름만 같거나 필수 증거가 없으면 검증되지 않는다.
+- 증거: 원래 실제 함수 반례 5 FAIL을 재현한 뒤 T3와 기존 T1/T2 시험 80 PASS/Windows symlink 2 SKIP(1.82s), owned flake8 0이다. 실제 ROS endpoint 결속을 생성하거나 SIM·장치·주행을 실행하지 않았다.
+- gate 변화: host SOURCE/LOCAL 판정 수정만. 실제 observer 수집·ROS-SIM 수용·실물 안전을 증명하지 않는다.
+
 ## 2026-10-05 · uncommitted · validation: 차선 개선040 두 실기 배포·source 일치
 
 - 변경: CI 통과 source58d246ab3의 signed ARM64 release2026.10.05-040을 9dfk→8kcn 순차 설치하고 실제 CORE/camera cwd·파일 SHA256·live 카메라·정지 상태를 확인했다. source 수정은 없다.

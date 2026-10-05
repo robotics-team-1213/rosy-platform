@@ -443,3 +443,9 @@
 - 변경: 기존 owner journal singleton을 parent 원장과 같은 BEGIN에서 읽고 실제 ActionAPI v2 receipt를 검증한다. 별도 execution profile에 원본 설치 byte closure·intent·native callback·D18를 보존하며 Fleet에서 동일 tuple/journal/goal와 전체 receipt를 비교한다. 관측은 metadata-only, status incomplete/task unknown이고 기존 시연·DatasetStore·승격 허용은 유지한다.
 - 증거: producer 부재 RED1, false0 RED1, reseal trajectory/clock/install RED6 및 native scalar RED2 후 관련61 PASS/NEW0. captured bytes 재검산·manifest fsync 뒤 source/native/API 재검증과 마지막 TTL을 유지한다. 합성 model/driver HOST 범위, X:/DevTemp/policy-episode/ 근거.
 - gate 변화: SOURCE/HOST 공용 실행 증거 연결. raw RGB/inference/task/원래50ms500ms/DEVICE/FIELD는 미수용이며 새 실행 권한이나 GT는 만들지 않는다. 모든 로봇·시도 합계0.20m 상한 유지, push/배포/활성화/주행 없음.
+
+## 2026-10-05 · uncommitted · fix(omx): provider 후 최종 local STOP 재확인
+
+- 변경: durable 준비 뒤 provider가 owner RLock에 재진입해 STOP을 걸 수 있으므로, direct driver submit 직전에 같은 captured submission fence의 local latch·epoch/generation을 다시 읽는다. fence 객체 교체도 거부한다. provider·만료·principal 검증과 기존 driver ACCEPTED 원장 기록의 잠금 범위는 유지한다.
+- 증거: 실제 SQLite LocalStopController를 capability callback 두 번째 호출에서 trip한 same/new generation 2 FAIL을 재현했다. 최종 기존 API/store/stop fence/ROS runtime/vendor SIM 시험 56 PASS/ROS 의존 2 SKIP(8.56s), driver 제출 0·HOLD 원장·goal ID 없음 확인. 처음 잘못 지정한 시험 경로의 collection 실패도 보존했다. owned flake8의 기존 E306/E128 두 항목은 HEAD blob에서도 동일하며 이번 변경이 추가한 항목은 없다.
+- gate 변화: SOURCE/HOST direct submission fence 보완만. 실제 arm·ROS action server·기기 STOP·운동·수용·활성화는 실행하지 않았다.

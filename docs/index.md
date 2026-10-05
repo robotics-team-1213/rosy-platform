@@ -301,7 +301,7 @@
 ## 최근 기록
 
 - 2026-10-05 · uncommitted · validation: 차선 개선040 두 실기 배포·source 일치
+- 2026-10-05 · uncommitted · fix(validation): D-426 T3 관측 누락·교차 footprint 성공 판정 차단
 - 2026-10-05 · uncommitted · fix(perception): blob에 지워진 차선 경계 한 번 복구
-- 2026-10-05 · uncommitted · feat(validation): D-426 T3 독립 관측기·수치 판정기
-- 2026-10-05 · uncommitted · fix(perception): 차선 짝 splay와 전체 차로 횡단 표시 회귀 수정
-- 2026-10-05 · uncommitted · fix(validation): D-426 T2 근거 없는 PASS 거부
+- 2026-10-05 · uncommitted · fix(ui): 네트워크 설치 작업을 연결 중심으로 정리
+- 2026-10-05 · uncommitted · feat(fleet): D-426 T4 공유 구간 진입 허가·점유

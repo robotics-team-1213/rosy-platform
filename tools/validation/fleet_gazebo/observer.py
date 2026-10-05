@@ -108,19 +108,25 @@ class Recorder:
 def check_publisher_ownership(observed: list[dict], expected: dict) -> dict:
     """최종 cmd_vel publisher 검사 — 이름뿐 아니라 endpoint/GID·프로세스 소유권.
 
-    ``observed``: [{topic, publisher, endpoint, gid}] (관측된 것)
-    ``expected``: {topic: {"publisher": str, "pid": int}} (run이 시작한 CORE 프로세스)
+    ``observed``: [{topic, publisher, pid, endpoint, gid}] (관측된 것)
+    ``expected``: {topic: {publisher, pid, endpoint, gid}} (run 소유 프로세스와 endpoint 결속)
     """
     problems: list[str] = []
+    if not expected:
+        problems.append("expected run-owned publishers are missing")
+    for topic in expected:
+        if sum(row.get("topic") == topic for row in observed) != 1:
+            problems.append(f"{topic}: exactly one observed publisher is required")
     for row in observed:
         topic = row.get("topic", "")
         want = expected.get(topic)
         if want is None:
             problems.append(f"{topic}: unexpected publisher {row.get('publisher')!r}")
             continue
-        if row.get("publisher") != want["publisher"]:
-            problems.append(f"{topic}: publisher {row.get('publisher')!r} != {want['publisher']!r}")
-        if row.get("pid") is not None and row.get("pid") != want.get("pid"):
-            problems.append(f"{topic}: publisher pid {row.get('pid')} is not this run's CORE "
-                            f"pid {want.get('pid')}")
+        for field in ("publisher", "endpoint", "gid"):
+            if not want.get(field) or not row.get(field) or row[field] != want[field]:
+                problems.append(f"{topic}: {field} missing or != this run's binding")
+        if (type(want.get("pid")) is not int or want["pid"] <= 0 or
+                type(row.get("pid")) is not int or row["pid"] != want["pid"]):
+            problems.append(f"{topic}: publisher pid missing or not this run's CORE pid")
     return {"ok": not problems, "problems": problems}

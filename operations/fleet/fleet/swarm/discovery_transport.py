@@ -2,13 +2,14 @@
 
 import asyncio
 import ipaddress
+import socket
 import ssl
 from urllib.parse import urlsplit
 
 import httpx
 
 from core_common.discover import get_shared_cache
-from core_common.protocol.discovery_txt import ROBOT, Accepted, classify
+from core_common.protocol.discovery_txt import ROBOT, Accepted, _lan_ipv4, classify
 from fleet.swarm.robots import RobotEndpoint, _endpoint
 
 
@@ -47,6 +48,24 @@ def select_robot(endpoint: RobotEndpoint, records) -> tuple[str, int]:
     return min(matches, key=lambda item: (ipaddress.ip_address(item[0]).version, item[0]))
 
 
+def _host_lan(host: str, port: int) -> str:
+    """One private LAN IPv4 for a saved name whose DNS-SD browse is empty."""
+    try:
+        infos = socket.getaddrinfo(host, port, socket.AF_INET, socket.SOCK_STREAM)
+    except socket.gaierror:
+        raise ValueError('not_discovered: trusted robot name not found') from None
+    found = []
+    for info in infos:
+        address = info[4][0]
+        if _lan_ipv4(address) and address not in found:
+            found.append(address)
+    if not found:
+        raise ValueError('not_discovered: trusted robot name not found')
+    if len(found) > 1:
+        raise ValueError('conflict: robot name is advertised at disjoint locations')
+    return found[0]
+
+
 async def resolve_robot(endpoint: RobotEndpoint, finder=None) -> tuple[str, int]:
     if endpoint.link_policy_file:
         # Re-read policy for expiry/revocation before each new outbound connection.
@@ -54,8 +73,21 @@ async def resolve_robot(endpoint: RobotEndpoint, finder=None) -> tuple[str, int]
                   endpoint.fleet_pairing_token, endpoint.tls_ca_file, endpoint.discovery,
                   endpoint.link_policy_file)
     finder = finder or get_shared_cache().wait
-    records = await asyncio.wait_for(asyncio.to_thread(finder, ROBOT, timeout_s=3.0), timeout=4.0)
-    return select_robot(endpoint, records)
+    records = tuple(await asyncio.wait_for(
+        asyncio.to_thread(finder, ROBOT, timeout_s=3.0), timeout=4.0))
+    try:
+        return select_robot(endpoint, records)
+    except ValueError as exc:
+        if str(exc) != 'not_discovered: trusted robot name not found':
+            raise
+        parts = urlsplit(endpoint.base_url)
+        host, port = parts.hostname, parts.port
+        # A record for this name that fails classification stays a refusal.
+        # An empty browse uses host Avahi and keeps the saved HTTPS port.
+        if (host is None or port is None
+                or any(record.host.lower().rstrip('.') == host for record in records)):
+            raise
+        return await asyncio.to_thread(_host_lan, host, port), port
 
 
 class DiscoveryTransport(httpx.AsyncBaseTransport):
