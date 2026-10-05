@@ -2,7 +2,7 @@
 
 Run: python review_app.py --state <persistent-directory> --source source.jsonl
      --human human.jsonl --images <image-root> [--port 8767]
-Restart with the same --state only. Local HTTP contract: review_app.md.
+Restart with the same --state only. Local HTTP contract: docs/review-app.md.
 """
 from __future__ import annotations
 
@@ -230,13 +230,13 @@ def make_server(store, port=8767):
     learning = Workspace(store.db)
 
     class Handler(BaseHTTPRequestHandler):
-        def send(self, data, code=200, mime='application/json; charset=utf-8', etag=None):
+        def send(self, data, code=200, mime='application/json; charset=utf-8', etag=None, cache='no-store'):
             if isinstance(data, (dict, list)):
                 data = json.dumps(data, ensure_ascii=False).encode('utf-8')
             self.send_response(code)
             self.send_header('Content-Type', mime)
             self.send_header('Content-Length', str(len(data)))
-            self.send_header('Cache-Control', 'no-store')
+            self.send_header('Cache-Control', cache)
             if etag:
                 self.send_header('ETag', etag)
             self.send_header('X-Content-Type-Options', 'nosniff')
@@ -271,7 +271,14 @@ def make_server(store, port=8767):
                                       'map_reference': review_evidence.map_reference(store), 'token': token})
                 if path.startswith('/api/mask-images/'):
                     review = review_masks.get(store, int(path.rsplit('/', 1)[1]))
-                    return self.send(review_masks.encode(review_masks.pixels(store, review)), mime='image/png')
+                    pixels = review_masks.encode(review_masks.pixels(store, review))
+                    # Store-and-revalidate (D-469): every request still decodes and the
+                    # image endpoints below re-read and re-hash the bytes on disk, so a
+                    # matching If-None-Match only skips the transfer, never the check.
+                    etag = '"' + hashlib.sha256(pixels).hexdigest() + '"'
+                    if self.headers.get('If-None-Match') == etag:
+                        return self.send(b'', 304, etag=etag, cache='no-cache')
+                    return self.send(pixels, mime='image/png', etag=etag, cache='no-cache')
                 if path.startswith('/api/masks/'):
                     return self.send(review_masks.get(store, int(path.rsplit('/', 1)[1])))
                 if path == '/api/learning':
@@ -279,8 +286,13 @@ def make_server(store, port=8767):
                                       'counts': {state: sum(f['status'] == state for f in store.list_frames())
                                                  for state in ('approved', 'pending', 'excluded')}})
                 if path.startswith('/api/images/'):
-                    image = store.image(int(path.rsplit('/', 1)[1]))
-                    return self.send(image.read_bytes(), mime=mimetypes.guess_type(image.name)[0])
+                    index = int(path.rsplit('/', 1)[1])
+                    image = store.image(index)
+                    etag = '"' + store.get(index)['source']['image_sha256'] + '"'
+                    if self.headers.get('If-None-Match') == etag:
+                        return self.send(b'', 304, etag=etag, cache='no-cache')
+                    return self.send(image.read_bytes(), mime=mimetypes.guess_type(image.name)[0],
+                                     etag=etag, cache='no-cache')
                 files = {'/': 'index.html', '/app.js': 'app.js', '/app.css': 'app.css',
                          '/box-geometry.mjs': 'box-geometry.mjs', '/learning': 'learning.html',
                          '/learning.js': 'learning.js', '/pixels': 'pixels.html', '/pixels.js': 'pixels.js',
