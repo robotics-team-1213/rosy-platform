@@ -8,4 +8,6 @@ async function perform(id,path,body,done){if(busy)return;busy=true;show('catalog
 function register(event){event.preventDefault();if(!$('import-form').reportValidity())return;perform('import','/api/import',{path:$('catalog-path').value},value=>{$('result').setAttribute('state','ready');show('result',`새 사진 ${value.added}장 · 중복 표현 ${value.duplicate_representations}개 · 새 픽셀 검수 대기 ${value.pixel_reviews_pending}장. 기존 승인·제외는 유지됩니다.`);});}
 function registerMap(event){event.preventDefault();if(!$('cad-form').reportValidity())return;perform('cad','/api/cad',{path:$('cad-path').value},map);}
 $('import-form').onsubmit=register;$('import').onclick=register;$('cad-form').onsubmit=registerMap;$('cad').onclick=registerMap;
+$('theme').value=document.documentElement.dataset.theme||'dark';
+$('theme').onchange=()=> {document.documentElement.dataset.theme=$('theme').value;try{localStorage.setItem('rosy.theme',$('theme').value);}catch{} document.dispatchEvent(new CustomEvent('rosy:theme'));};
 request('/api/catalog').then(value=>{token=value.token;$('catalog-path').value=value.catalog||'';$('cad-path').value=value.cad_catalog||'';map(value.map_reference);}).catch(error=>show('catalog-error',error.message));
