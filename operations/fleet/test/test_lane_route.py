@@ -7,10 +7,11 @@ from hashlib import sha256
 from pathlib import Path
 
 import pytest
+import yaml
 from fastapi.testclient import TestClient
 
 from fakes import FakeRobot
-from fleet.lane_route import LaneRouteError, next_step, route_lines
+from fleet.lane_route import STEP_M, LaneRouteError, next_step, route_lines
 from fleet.meet.place import painted_track
 from fleet.server.app import GoalRequest, create_app
 from fleet.server.console import FleetConsole
@@ -76,6 +77,25 @@ def test_a_step_near_the_end_of_ring_s_continues_on_ring_e():
     assert math.dist((step.x, step.y), (far[0], far[1])) > 0.15
 
 
+def test_a_finished_lap_is_the_end_and_a_fresh_lap_is_the_start():
+    close = painted_track().line("ring_w").point_at(painted_track().line("ring_w").length_m)
+    lines = route_lines(RING)
+    started = next_step(lines, close[0], close[1], along_m=0.0)
+    finished = next_step(lines, close[0], close[1], along_m=1.5)
+
+    assert started is not None and started.s_m == pytest.approx(STEP_M)
+    assert finished is None
+
+
+def test_the_lane_step_sits_outside_the_device_goal_ball():
+    """RPP does not drive to a point it already counts as arrived."""
+    params = ROOT / "middleware/core/navigation/params/nav2_params.yaml"
+    data = yaml.safe_load(params.read_text(encoding="utf-8"))
+    tolerance = data["controller_server"]["ros__parameters"]["general_goal_checker"][
+        "xy_goal_tolerance"]
+    assert STEP_M > tolerance
+
+
 def test_the_ring_centre_and_the_route_end_do_not_dispatch():
     centre = (-0.3357, 0.0011)
     with pytest.raises(LaneRouteError, match="ROUTE_OFF_LANE"):
@@ -113,6 +133,25 @@ def test_legacy_and_odom_poses_do_not_call_core(state):
     assert response.status_code == 409
     assert response.json()["detail"]["code"] == "ROUTE_POSE_UNTRUSTED"
     assert _goals(robot) == []
+
+
+def test_following_the_ring_to_its_close_does_not_start_another_lap():
+    west = painted_track().line("ring_w")
+    before = west.point_at(west.length_m - 0.15)
+    close = west.point_at(west.length_m)
+    client, robot = _client(_localized(before[0], before[1]))
+
+    moving = client.post("/api/fleet/robots/rosy_60/route", json={"edges": list(RING)})
+    robot._state["pose"]["x"] = close[0]
+    robot._state["pose"]["y"] = close[1]
+    done = client.post("/api/fleet/robots/rosy_60/route", json={"edges": list(RING)})
+
+    assert moving.status_code == 200, moving.text
+    assert moving.json()["goal"] is not None
+    assert done.status_code == 200, done.text
+    assert done.json()["reason"] == "ROUTE_COMPLETE"
+    assert done.json()["goal"] is None
+    assert len(_goals(robot)) == 1
 
 
 def test_off_lane_and_finished_routes_do_not_call_core():
