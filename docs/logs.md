@@ -6139,3 +6139,9 @@ osy-d395-s1d\`.
 - 변경: D-468 실제 odometry/원본 영상 시각 보간·현재 차체 좌표 변환을 manager와 ROS callback에 연결했다. source-clock high-water, 원본 quaternion, 초기화 epoch와 projection uncertainty를 검증한다.
 - 증거: 관련 기존 bounded-trial/bridge/line-follow 및 구조 검사 109 PASS, 0 NEW. source/receipt 시각이 다른 무효화 후 복구 회귀 36 PASS. docs/validation/lane-return-2026-10-05/README.md.
 - gate 변화: 실제 자세 센서 경로의 SOURCE 연결만. 복귀 명령/폐루프/배포/현장 수용은 아직 없음. 장치 read-only SSH probe는 timeout.
+
+## 2026-10-05 · uncommitted · fix(docs): D-468 API 변경 이력 행 보완
+
+- 변경: API Reference v1.106 헤더와 D-468 본문에 맞는 변경 이력 행을 추가했다.
+- 증거: 계약 버전 및 Fleet 문서 검사 36 PASS. 현장 수용은 별도다.
+- gate 변화: 없음.

@@ -2349,6 +2349,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.106 | 2026-10-05 | Additive (D-468): CAMERA_LINE 관측에 원본 시각과 같은 optional containment 경계 증거, geometry/ground source/uncertainty를 추가. 명령·자동 복구 활성화·envelope 1.0은 변경 없음 |
 | v1.102 | 2026-10-05 | Additive (D-368, feat/d368-driver-mjpeg-stream): 운전자 전용 MJPEG 스트림 `GET /api/v1/vision/front/stream`(operator, `multipart/x-mixed-replace; boundary=frame`, `?overlay=`). 조종 소유권은 수락 teleop 토큰(D-460 — 임대 없음). 운전자 아님 409 `CAMERA_STREAM_NOT_DRIVER`, 이미 열림 409 `CAMERA_STREAM_BUSY`, 새 수락 teleop가 열린 스트림을 끝낸다. 관전자·관제는 기존 0.4 s 폴링 유지. envelope 1.0 유지. v1.100(D-463)·v1.101(D-456)을 main이 먼저 써 v1.102로 재번호 |
 | v1.105 | 2026-10-05 | Additive: Fleet 상태 로봇 행의 선택 capabilities(CAP-001 원문 또는 null), 표시 캐시 5초. 목표·양보 및 대형 전송 전에 지원 기능 재확인. CORE 계약·최종 안전 판정·envelope 1.0 유지 |
 | v1.104 | 2026-10-05 | Additive: D-456 Fleet/Cam LAN 수신 승인 프로파일과 typed field handoff. CORE 운영자 로그인과 Fleet 영상 자격을 분리하고 envelope 1.0 유지 |
