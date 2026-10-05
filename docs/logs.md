@@ -6313,3 +6313,9 @@ osy-d395-s1d\`.
 - 변경: 학습 작업 목록과 자료 등록의 자동 세로 여백을 없애 머리 아래에서 시작하게 했다. [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)에 두 경로 3폭 근거를 남겼다.
 - 증거: Chromium 두 경로 × 1440·800·390px 6 passed, 가로 넘침 0, `known_failures.py` 0 NEW. 캡처·로그는 X:에 둔다.
 - gate 변화: 학습 도구 LOCAL G2 부분 근거 추가. 실제 작업 완료 G3와 제품 전체는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(learning): 빈 픽셀 검수 상태 정직성
+
+- 변경: 픽셀 필터 결과가 없을 때 이전 사진 제목·상태를 지우고 빈 선택기·이동 버튼을 숨겼다. 전체 보기 복귀는 유지했다.
+- 증거: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)의 Chromium 1440·800·390px 캡처와 빈 상태 3 passed, 관련 픽셀 브라우저 11 passed, `known_failures.py` 0 NEW. 캡처·로그는 X:에 둔다.
+- gate 변화: 학습 도구 LOCAL G2/G3 부분 근거 추가. 전체 G2/G3와 제품 전체는 HOLD다.

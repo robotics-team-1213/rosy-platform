@@ -88,6 +88,8 @@
 
 작업 목록(`/learning`)과 자료 등록(`/catalog`)도 같은 자동 세로 여백으로 짧은 내용이 머리 아래에서 밀렸다. `.learning-main`을 가로 방향으로만 가운데 정렬해 두 경로가 머리 바로 아래에서 시작하게 했다. 두 경로 × 1440·800·390px **6 passed**, 가로 넘침 0, `known_failures.py` **0 NEW**다. 전후 측정은 `X:\DevTemp\projects\rosy-platform\2026-10-06--032913--uiux-quality--199bc9\logs\learning-pages-{baseline,three-widths}.txt`, 최종 캡처는 같은 X:의 `captures/learning-{learning,catalog}-{1440,800,390}.png`다. 실제 자료 등록·작업 연결의 G3는 남는다.
 
+픽셀 검수의 결과 없는 필터에서도 이전 사진 제목·상태와 빈 사진 선택기가 남아 있던 것을 발견했다. 현재는 「픽셀 승인 0장 · 필터 결과가 없습니다」를 표시하고 사진 선택·이전/다음 이동을 숨긴다. 「전체 보기」로 원래 검수 화면에 복귀한다. 1440·800·390px 빈 상태 **3 passed**, 관련 픽셀 브라우저 **11 passed**(이동 버튼 숨김 전), 최종 빈 상태 재검사 **3 passed**, 각 실행의 `known_failures.py` **0 NEW**다. 최종 캡처 `learning-pixels-empty-{1440,800,390}.png`는 같은 X: `captures/`에 둔다. 이는 합성 자료의 LOCAL G2 일부와 G3 정직 항목의 부분 근거이며 실제 검수자 작업 수용은 남는다.
+
 Pilot 팔 화면은 카메라 없는 Gazebo fixture에서 빈 영상 자리 때문에 두 조작 창이 오른쪽 좁은 칸에 2:1로 압축됐다. 현재 CSS는 영상이 없을 때 조작부를 먼저 배치하고 동등한 팔·그리퍼 창을 같은 폭으로 쓴다. 영상이 있으면 영상·조작부 병렬 구조를 유지한다. 태블릿 2종·전화·영상 있는 경로의 브라우저 **5 passed**, `known_failures.py` **0 NEW**였다. 명령 경로는 가짜 CORE fixture이며 실기 조작 증거가 아니다.
 
 Pilot 대상 발견 오류에서는 내부 `invalid simulation target`을 운용자에게 그대로 보여 주던 경로를 없앴다. [390px 캡처](captures/pilot-target-error-390x844.png)는 조종 대상 확인, 연결 점검, 다시 확인 버튼과 첫 화면 비상 정지를 보여 준다. 현재 트리의 브라우저 재시도 1 passed, 가로 넘침 0, `known_failures.py` 0 NEW다. 실제 Pilot Android 셸과 장치 연결의 품질 판정은 이 웹 fixture로 대신하지 않는다.

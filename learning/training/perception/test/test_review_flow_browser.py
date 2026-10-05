@@ -91,6 +91,33 @@ def test_learning_pages_start_below_topbar(browser_workspace, route, main, width
         page.screenshot(path=str(target), full_page=True)
 
 
+@pytest.mark.parametrize('width', [1440, 800, 390])
+def test_empty_pixel_review_can_recover_at_declared_widths(browser_workspace, width):
+    page, _, expect = browser_workspace
+    page.set_viewport_size({'width': width, 'height': 844})
+    page.goto(page.url.split('?')[0].rstrip('/') + '/pixels', wait_until='networkidle')
+    page.locator('#pixel-filter').select_option('approved')
+    expect(page.locator('#pixel-empty')).to_be_visible()
+    expect(page.locator('#pixel-content')).to_be_hidden()
+    expect(page.locator('#pixel-title')).to_have_text('픽셀 검수')
+    expect(page.locator('#pixel-status')).to_contain_text('픽셀 승인 0장')
+    expect(page.locator('#pixel-frame').locator('..')).to_be_hidden()
+    expect(page.locator('#pixel-prev')).to_be_hidden()
+    expect(page.locator('#pixel-next')).to_be_hidden()
+    action = page.locator('#pixel-all')
+    assert action.bounding_box()['x'] + action.bounding_box()['width'] <= width
+    assert page.evaluate('document.documentElement.scrollWidth - innerWidth') == 0
+    if output := os.getenv('ROSY_UIUX_SCREENSHOT_DIR'):
+        from pathlib import Path
+        target = Path(output) / f'learning-pixels-empty-{width}.png'
+        target.parent.mkdir(parents=True, exist_ok=True)
+        page.screenshot(path=str(target), full_page=True)
+    action.click()
+    expect(page.locator('#pixel-content')).to_be_visible()
+    expect(page.locator('#pixel-frame').locator('..')).to_be_visible()
+    expect(page.locator('#pixel-next')).to_be_visible()
+
+
 def test_arrow_keys_move_between_photos(browser_workspace):
     page, store, expect = browser_workspace
 
