@@ -114,6 +114,60 @@ def test_harvest_never_allows_assume_idle_or_arbitrary_arguments(tmp_path):
     validate_config(cfg)
 
 
+def test_harvested_recording_reference_flows_into_autolabel_without_manual_raw_path(tmp_path):
+    cfg = config(tmp_path)
+    dest = tmp_path / "pi-harvest"
+    cfg["recordings"][0] = {"session": "train-a", "harvest": 0}
+    cfg["harvest"] = [{"host": "robot.local", "core_token_file": "private/token",
+                       "identity": "private/key", "known_hosts": "private/hosts",
+                       "dest": str(dest), "host_key_alias": "robot-id"}]
+    raw = dest / "rosy-pinky-9dfk" / "train-a"
+    label_inputs = []
+
+    def runner(argv, log):
+        if str(argv[0]).endswith("harvest.py"):
+            (raw / "bag").mkdir(parents=True)
+            (raw / "session.json").write_text(json.dumps({"ended_at": "2026-10-05T00:00:00Z"}))
+            (raw / "bag" / "0.mcap").write_bytes(b"verified mcap fixture")
+            return 0
+        if argv[1] != "--video":
+            label_inputs.append(Path(argv[1]))
+        return fake_labels(argv, log)
+
+    prepare(cfg, tmp_path / "job", runner=runner, builder=fake_build)
+
+    assert label_inputs == [raw]
+
+
+def test_harvested_recording_reference_requires_valid_harvest_index(tmp_path):
+    cfg = config(tmp_path)
+    cfg["recordings"][0] = {"session": "train-a", "harvest": 0}
+    with pytest.raises(JobError, match="harvest index"):
+        validate_config(cfg)
+
+
+def test_harvested_recording_reference_rejects_non_list_harvest_config(tmp_path):
+    cfg = config(tmp_path)
+    cfg["recordings"][0] = {"session": "train-a", "harvest": 0}
+    cfg["harvest"] = None
+    with pytest.raises(JobError, match="harvest must be a list"):
+        validate_config(cfg)
+
+
+@pytest.mark.parametrize("devices", [[], ["rosy-pinky-9dfk", "rosy-pinky-8kcn"]])
+def test_harvested_recording_reference_refuses_missing_or_ambiguous_session(tmp_path, devices):
+    from recording_job import resolve_recordings
+
+    cfg = config(tmp_path)
+    dest = tmp_path / "pi-harvest"
+    cfg["recordings"][0] = {"session": "train-a", "harvest": 0}
+    cfg["harvest"] = [{"dest": str(dest)}]
+    for device in devices:
+        (dest / device / "train-a").mkdir(parents=True)
+    with pytest.raises(JobError, match="expected one"):
+        resolve_recordings(cfg)
+
+
 def test_changed_pipeline_configuration_needs_new_job(tmp_path):
     cfg = config(tmp_path)
     out = tmp_path / "job"
