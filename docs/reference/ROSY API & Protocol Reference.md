@@ -2,7 +2,7 @@
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.105
+**Version:** v1.106
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -15,6 +15,20 @@
 ---
 
 # 1. 버저닝 및 폐기 정책
+
+### D-468 추가 차선 경계 증거 (v1.106)
+
+내부 `line/observation`의 CAMERA_LINE 증거는 optional `containment`를 포함할 수 있다.
+원본 영상 `stamp`와 1us 이내로 일치하는 `stamp`, `geometry_id`,
+`ground_source`(NOMINAL/CALIBRATED/GAZEBO), optional `uncertainty_m`와
+`boundaries`(0~2개)를 보낸다. 각 경계는 `side`(left/right), `slope`,
+`intercept_m`, 실제 관측 구간 `observed_x_min_m`/`observed_x_max_m`를 갖는다.
+좌표는 base footprint 기준 x 전방/y 좌측, 직선 y=slope*x+intercept_m이다.
+CALIBRATED는 실제 승인된 calibration이 있을 때만 사용한다. unknown uncertainty는
+null이며 임의의 안전 여유로 대체하지 않는다. 누락/단일 경계로 전체 차체 containment를
+증명할 수 없고 관측 구간 밖으로 무제한 외삽하지 않는다. 명령 필드는 없다.
+기존 관측 메시지와 공개 mode/route는 보존한다. 이 계약의 추가는 자동 복구 활성화나
+장치/현장 수용을 뜻하지 않는다.
 
 ### API-001 경로 버저닝
 

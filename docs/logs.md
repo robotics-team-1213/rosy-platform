@@ -6124,3 +6124,8 @@ osy-d395-s1d\`.
 - Change: include keeper diagnostics in raw Pilot recordings and preserve them through MCAP conversion/frame extraction; no label authority or motion changes.
 - Evidence: related 206 PASS, independent 87 PASS, 0 NEW; installed annotated stationary recording yielded 149 matched frames, all zero commands. docs/validation/lane-evidence-2026-10-05/result.md.
 - Gate: SOURCE regression verified; new recorder deployment and physical departure fix/ FIELD acceptance remain unverified.
+
+## 2026-10-05 · uncommitted · feat(lane): local-first departure return decision
+- 변경: D-468 채택. 차체 침범 감지·실제 자세 복귀·센서 재탐색을 Fleet 지원보다 먼저 수행한다. 구현은 feat/lane-return.
+- 증거: docs/plans/2026-10-05-lane-return.md. 설계 결정만 사용자 승인; SOURCE/SIM/DEVICE/FIELD 검증은 별도.
+- gate 변화: ADR 결정과 실행 목표만 채택. 런타임 배포·현장 복구 수용은 아직 없음.

@@ -1097,3 +1097,8 @@
 - 변경: PC-only two-image checkerboard fit; original-pixel reprojection checks, signed pitch and explicit input/thickness/intrinsics provenance; no runtime writes.
 - 증거: 95 PASS, known_failures 0 NEW. Device images: 20/54 corners, board height 53.908mm, pitch 12.117deg; approximate operator 1mm board gives estimated floor height 54.908mm. docs/validation/camera-board-2026-10-05/result.md.
 - gate 변화: LOCAL and real-image candidate comparison PASS; intrinsic calibration, runtime apply and automatic driving acceptance unverified.
+
+## 2026-10-05 · uncommitted · feat(perception): emit image-bound selected lane geometry
+- 변경: keep 선택 경계의 원본 영상 시각·실제 관측 구간·rig geometry digest를 optional containment에 보낸다. projection uncertainty는 미검증이므로 null이다.
+- 증거: 생산자/keeper 시험 62 PASS, 0 NEW. geometry 변경 identity 무효화와 미선택 경계 제외를 검증했다.
+- gate 변화: 추가 센서 증거만. CALIBRATED 승격·자동 복귀 명령·장치 수용 없음.

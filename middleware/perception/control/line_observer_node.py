@@ -38,6 +38,7 @@ from .sensing.perception.lane_bev import LaneEdgeFollower, pose_if_fresh
 from .sensing.perception.lane_boundaries import LaneBoundaryTracker
 from .sensing.perception.lane_keep import LaneKeeper, clean_learned_mask, denoise_white_mask
 from .sensing.perception.lane_debug import next_publish_due, render_debug
+from .sensing.perception.lane_containment import containment_payload
 from .sensing.perception.paint_localizer import PaintMap
 from .sensing.perception.route_camera import RouteCameraFollower
 from .sensing.perception.route_hybrid import RouteHybridFollower
@@ -308,7 +309,7 @@ class LineObserverNode(Node):
     def _stamp(self) -> float:
         return self.get_clock().now().nanoseconds * 1e-9
 
-    def _publish(self, source, observation, *, stamp=None, quality=None) -> None:
+    def _publish(self, source, observation, *, stamp=None, quality=None, containment=None) -> None:
         payload = line_observation_payload(
             source, self._stamp() if stamp is None else stamp, observation,
             ir_calibrated=(source == 'IR_LINE' and self._ir_calibration is not None),
@@ -319,6 +320,8 @@ class LineObserverNode(Node):
         )
         if quality is not None:
             payload['quality'] = quality
+        if containment is not None:
+            payload['containment'] = containment
         self.observation_pub.publish(String(data=json.dumps(payload, sort_keys=True)))
 
     def _on_ir(self, msg: UInt16MultiArray) -> None:
@@ -386,6 +389,8 @@ class LineObserverNode(Node):
     def _on_camera(self, msg: Image) -> None:
         observation = None
         frame = None
+        mode = None
+        ground = None
         if (bool(self.get_parameter(
                 'require_camera_controls_stable').value)
                 and not self._camera_controls_stable):
@@ -500,10 +505,17 @@ class LineObserverNode(Node):
             else:
                 raise ValueError(f'unsupported camera_lane_mode {mode!r}')
         except ValueError as exc:
+            observation = None
             self.get_logger().warning(f'invalid camera line frame: {exc}')
         source_stamp = (float(msg.header.stamp.sec)
                         + float(msg.header.stamp.nanosec) * 1e-9)
-        self._publish('CAMERA_LINE', observation, stamp=source_stamp)
+        containment = None
+        if mode == 'keep' and observation is not None:
+            containment = containment_payload(
+                self._lane_keeper.last, ground, stamp=source_stamp,
+                source=str(self.get_parameter('camera_ground_source').value).upper(),
+                camera_x=self._lane_keeper._x_offset)
+        self._publish('CAMERA_LINE', observation, stamp=source_stamp, containment=containment)
         self._publish_debug(msg, frame, observation)
 
     def _publish_debug(self, msg, frame, observation) -> None:

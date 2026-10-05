@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 from core_common.robot_body import stop_gap_m
+from core_common.protocol.lane_containment import LaneContainmentEvidence
 
 #: Pre-D-422 LiDAR-origin defaults: sector mode and path mode without the URDF outline.
 SECTOR_STOP_M = 0.20
@@ -37,8 +38,17 @@ class LineObservation:
     # D-364 §3: camera evidence computed on an estimated (NOMINAL) floor model.
     ground: Optional[str] = None
     quality_reason: Optional[str] = None
+    containment: Optional[LaneContainmentEvidence] = None
 
     def __post_init__(self) -> None:
+        if self.containment is not None and (
+                self.source is not LineFollowMode.CAMERA_LINE or
+                not isinstance(self.containment, LaneContainmentEvidence) or
+                abs(self.containment.stamp-self.stamp) > .000001):
+            raise ValueError("containment must match original camera image stamp")
+        if self.containment is not None and (
+                (self.containment.ground_source == "NOMINAL") != (self.ground == "NOMINAL")):
+            raise ValueError("containment and observation ground provenance must agree")
         if self.quality_reason is not None and (self.source is not LineFollowMode.CAMERA_LINE
                 or self.quality_reason not in ('low_light', 'overexposed') or self.visible or self.confidence != 0):
             raise ValueError('invalid camera quality requires invisible evidence with zero confidence')

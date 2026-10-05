@@ -530,3 +530,8 @@
 - 변경: ledger·envelope·pose freshness·재개장 순수 정책 검사 10개를 services의 `test_bounded_trial_owner.py`로 옮겼다. 소유자 검사 helper는 실제 `submit_fenced`와 합성 callback만 사용하고 gateway를 import하지 않는다. 기존 테스트 함수 20개의 AST·단언은 모두 보존하며, bridge 최종 제출·준비 상태·미확정 응답·odometry·camera mux·STOP 경합 및 envelope 변조의 bridge 예외 처리는 gateway의 나머지 10개 함수가 검증한다. runtime·frozen 예외 목록·소유권 검사 구현은 바꾸지 않는다.
 - 증거: 정규 push의 D-184 실패를 exact RED 1 FAIL로 재현했다. 최종 소유자·gateway 제한 시험·기존 cmd_vel·D-184 검사 44 PASS/2.16초, services 단독 19 PASS/1.13초. 중간 envelope 변조 검사는 owner 예외를 bridge의 ZERO와 혼동하여 1 FAIL이었고 gateway에 원문 그대로 되돌렸다. 원본 실패와 최종 로그는 X:/DevTemp/rosy-ui-ship/trial-fence/ownership-*.log에 보존한다.
 - gate 변화: SOURCE/LOCAL 검사 배치만. runtime bytes·권한·서명·실기 bounds·장치 상태·배포 수용은 변경하지 않는다.
+
+## 2026-10-05 · uncommitted · feat(lane): D-468 local return building blocks
+- 변경: ROS-free 차체 경계 여유·실제 자세 경로·동일 차로 비교·제한된 역추적/탐색/정렬/검증 정책과 optional containment 관측 입구 추가.
+- 증거: 정책/계약/기존 bridge 및 line-follow 관련 76 PASS, 0 NEW. 독립 리뷰에서 발견한 후진 회전 여유·odom 초기화·후보 일관성·시각 재전송·정렬 상한·지면 출처 결함을 회귀 시험으로 고쳤다.
+- gate 변화: 아직 manager의 주행 결정에 연결하지 않은 구성 요소. SOURCE 시험 외 SIM/DEVICE/FIELD 수용 없음.
