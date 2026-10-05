@@ -20,7 +20,6 @@ outbound WS(heartbeat/event)지만, 그 에이전트는 Fleet 서버가 생긴 �
 from __future__ import annotations
 
 import asyncio
-import copy
 import hmac
 from hashlib import sha256
 import logging
@@ -44,13 +43,13 @@ from fleet.swarm.session import (
 )
 from fleet.swarm.robots import RobotEndpoint
 from fleet.swarm.transport import RobotClient, require_capability
+from fleet.server.capability_display import CapabilityDisplay
 
 logger = logging.getLogger("fleet.console")
 
 #: 맵은 로봇마다 다시 받을 이유가 없다 — 한 사이트는 한 맵을 공유한다. 그래도 SLAM 으로
 #: 맵이 바뀔 수 있으므로 무한정 붙들지는 않는다.
 MAP_TTL_S = 10.0
-CAPABILITY_TTL_S = 5.0
 
 
 class FleetConsole:
@@ -85,7 +84,8 @@ class FleetConsole:
         self._map_ttl_s = map_ttl_s
         self._map: Optional[dict] = None
         self._map_at = 0.0
-        self._capability_cache: dict[str, tuple[float, Optional[dict]]] = {}
+        self._capability_display = CapabilityDisplay(self._clients, self._clock)
+        self._capability_cache = self._capability_display.cache
         self._hub_state_max_age_s = hub_state_max_age_s
         # 하달한 목표는 Fleet 이 기억한다. 로봇 상태 스냅샷에는 목표가 없고, 있어서도 안 된다
         # — 미션은 Fleet 쪽 개념이고 로봇은 원자 액션만 받는다 (D-12). 화면의 목표 표시는
@@ -192,7 +192,7 @@ class FleetConsole:
         client = self._clients.pop(robot_id)
         self._order.remove(robot_id)
         self._registered_endpoints.pop(robot_id, None)
-        self._capability_cache.pop(robot_id, None)
+        self._capability_display.invalidate(robot_id)
         self._rest_tokens.pop(robot_id, None)
         self._agent_pairing_tokens.pop(robot_id, None)
         self._hub.drop(robot_id)
@@ -206,7 +206,7 @@ class FleetConsole:
         robot_id = endpoint.robot_id
         old = self._clients[robot_id]
         self._clients[robot_id] = client
-        self._capability_cache.pop(robot_id, None)
+        self._capability_display.invalidate(robot_id)
         self._registered_endpoints[robot_id] = endpoint.base_url
         self._rest_tokens[robot_id] = endpoint.token
         self._hub.set_client(robot_id, client)
@@ -228,24 +228,7 @@ class FleetConsole:
     # --- gather ---------------------------------------------------------------
 
     async def _shown_capabilities(self, robot_id: str) -> Optional[dict]:
-        now = self._clock()
-        cached = self._capability_cache.get(robot_id)
-        if cached is not None and now - cached[0] < CAPABILITY_TTL_S:
-            return copy.deepcopy(cached[1])
-        client = self._clients.get(robot_id)
-        if client is None:
-            return None
-        try:
-            capabilities = await client.capabilities()
-            if not isinstance(capabilities, dict):
-                capabilities = None
-        except Exception:
-            capabilities = None
-        if self._clients.get(robot_id) is not client:
-            return None
-        # Display evidence only. Commands read CAP-001 again and CORE remains final authority.
-        self._capability_cache[robot_id] = (self._clock(), copy.deepcopy(capabilities))
-        return capabilities
+        return await self._capability_display.shown(robot_id)
 
     async def _gather_state(self, robot_id: str) -> tuple[dict, str]:
         """D-447: 이미 열린 소켓이 먼저다. hub heartbeat(1 Hz, PRT-003)가 신선하면
@@ -1190,6 +1173,7 @@ class FleetConsole:
         return status
 
     async def aclose(self) -> None:
+        await self._capability_display.aclose()
         for client in list(self._clients.values()):
             closer: Any = getattr(client, "aclose", None)
             if closer is not None:
