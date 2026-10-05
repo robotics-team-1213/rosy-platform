@@ -74,15 +74,19 @@ def test_cli_help_works_without_ros():
 
 
 def test_ros_entrypoint_absence_is_reported_not_crashed():
+    """ROS 부재 환경에서의 진입점 계약만 고정한다(안내 후 exit 3).
+
+    rclpy 가 있는 CI/WSL 에서의 실제 spin 동작은 T6 회차가 증명한다 — 여기서
+    무인 subprocess 로 ROS 노드를 띄우는 것은 회차 밖 실행이다.
+    """
+    import importlib.util
     import subprocess
 
+    if importlib.util.find_spec("rclpy") is not None:
+        return  # rclpy present: the live spin belongs to a T6 run
     script = str(SCRIPT)
-    try:
-        result = subprocess.run([sys.executable, script], capture_output=True,
-                                text=True, encoding="utf-8", timeout=15)
-    except subprocess.TimeoutExpired:
-        # rclpy 가 있고 spin 중 — 크래시 없이 살아 있다는 뜻이다.
-        return
-    # rclpy 가 없으면 안내 후 exit 3. 그 외의 즉시 종료 코드는 크래시다.
+    result = subprocess.run([sys.executable, script], capture_output=True,
+                            text=True, encoding="utf-8", timeout=30)
     assert result.returncode == 3, (
         f"returncode={result.returncode}, stderr={result.stderr[-400:]}")
+    assert "needs ROS 2" in result.stderr
