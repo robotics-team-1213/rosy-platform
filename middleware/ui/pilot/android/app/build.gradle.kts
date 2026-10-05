@@ -65,6 +65,10 @@ android {
             it.inputs.dir(layout.buildDirectory.dir("generated/pilot-assets"))
             it.systemProperty("rosy.discovery.vectors", rootProject.file("../../../../test/fixtures/protocol/discovery-txt.v1.json").absolutePath)
             it.systemProperty("rosy.pilot.assets", layout.buildDirectory.dir("generated/pilot-assets").get().asFile.absolutePath)
+            it.systemProperty(
+                "rosy.icons.dir",
+                rootProject.file("../../../../shared/web/icons").absolutePath,
+            )
         }
     }
 }

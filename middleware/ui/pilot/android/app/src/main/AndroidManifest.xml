@@ -3,7 +3,7 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
-    <application android:allowBackup="false" android:label="Rosy Pilot" android:icon="@drawable/ic_pilot" android:theme="@style/PilotTheme"
+    <application android:allowBackup="false" android:label="Rosy Pilot" android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher_round" android:theme="@style/PilotTheme"
         android:networkSecurityConfig="@xml/network_security" android:usesCleartextTraffic="false">
         <receiver android:name="io.github.livsbittt.rosy.cam.health.ScreenLockReceiver" android:permission="android.permission.BIND_DEVICE_ADMIN" android:exported="true">
             <meta-data android:name="android.app.device_admin" android:resource="@xml/screen_lock_policy" />
