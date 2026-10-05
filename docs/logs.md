@@ -6026,3 +6026,10 @@ osy-d395-s1d\`.
 - 변경: T2 및 T5 계약 테스트의 전역 Gazebo sys.path 삽입을 private exact-file 로더로 교체했다. Vision 테스트도 자기 observer 파일을 직접 읽어 원래 normal push collection 충돌을 닫는다. 판정 함수·생산 standalone CLI·hook 선택 범위는 그대로다.
 - 증거: 원래 T2-first/Vision 35 collected/1 ERROR 보존. 양방향 T2/T5/T3/Vision 각 105 PASS, fresh-process generic alias/type identity 회귀 포함. 원래 affected selector 전체 collect-only exit 0.
 - gate 변화: 없음. HOST collection 증거만이며 T3/T5 실제 ROS/SIM/물리 수용은 미실행이다.
+
+
+## 2026-10-05 · uncommitted · fix(validation): T6 부족 근거 수용 차단
+
+- 변경: 한두 임의 PASS 회차를 GO로 표시하던 보고서를 seed 3개 ×3회 정확한 조합과 M01..M08 전체로 제한했다. 명시적 failure flags·유효 판정·실제 원본 SHA 결속이 없으면 HOLD. 주행/시나리오/최악 판정 분리는 그대로다. 새 T6 테스트도 private exact-file loader로 읽어 observer 검색 경로를 오염시키지 않는다.
+- 증거: 원래 4 FAIL/6 PASS 반례 보존 후 T6 및 T2/T3/T5/Vision 원래 회귀 127 PASS. digest 확인은 보고 입력 증거만이며 실제 실행·원본 판정 진실성을 인증하지 않는다.
+- gate 변화: 없음. HOST 보고 생성 수선만이며 실제 ROS-SIM/기기 수용은 HOLD.

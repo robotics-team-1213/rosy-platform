@@ -300,8 +300,8 @@
 
 ## 최근 기록
 
+- 2026-10-05 · uncommitted · fix(validation): T6 부족 근거 수용 차단
 - 2026-10-05 · uncommitted · fix(test): D-426 T2/T5 import 경계
 - 2026-10-05 · uncommitted · docs: give the header and sidebar one layout each
 - 2026-10-05 · uncommitted · uiux: align surface names, stop label, and icons
 - 2026-10-05 · uncommitted · fix(validation): T5 정지 근거 유효성
-- 2026-10-05 · uncommitted · feat(fleet): preserve learning evidence in internal receiver
