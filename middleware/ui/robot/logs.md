@@ -985,4 +985,4 @@
 
 - 변경: D-344 MOVE 계약에 맞춰 Nav2 대신 teleop와 runtime.drive ready를 읽는다. OFF 정지와 확인 대화상자는 유지한다.
 - 증거: motor ready/Nav2 absent 회귀의 red→green, 독립 브라우저 3 PASS와 패널/API 36 PASS. 실제 9dfk 원격 수동 직진과 keeper 관측은 docs/validation/line-remote-2026-10-05/result.md에 기록한다.
-- 범위: 자동 차선 주행은 NOT_RUN이며 FIELD 수용은 보류한다.
+- gate 변화: SOURCE 수정과 장치 수동 직진·keeper 관측 확인. 자동 차선 주행은 NOT_RUN이며 FIELD 수용은 보류한다.
