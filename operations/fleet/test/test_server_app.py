@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from hashlib import sha256
+from pathlib import Path
 import sqlite3
 
 import pytest
@@ -469,7 +470,12 @@ def test_estop_fanout_survives_dispatch_latch_and_queue_storage_failures(tmp_pat
 def test_console_page_and_its_assets_are_served():
     client = _client(FakeRobot("rosy_01"))
     page = client.get("/console")
-    assert page.status_code == 200 and "ROSY FLEET" in page.text
+    assert page.status_code == 200
+    assert "Rosy Console" in page.text
+    assert "ROSY FLEET" not in page.text
+    assert "SITE CONSOLE" not in page.text
+    script = (Path(__file__).resolve().parents[1] / "fleet" / "server" / "web" / "console.js").read_text(encoding="utf-8")
+    assert 'el("fleet-name").textContent = snapshot.fleet.name || "사이트";' in script
     assert client.get("/console/assets/console.js").status_code == 200
     assert client.get("/console/assets/authorization.js").status_code == 200
     assert client.get("/console/assets/styles.css").status_code == 200

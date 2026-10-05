@@ -306,7 +306,7 @@ async function refreshState() {
       }
     }
     view.signals = snapshot.signals || {};
-    el("fleet-name").textContent = (snapshot.fleet.name || "site").toUpperCase();
+    el("fleet-name").textContent = snapshot.fleet.name || "사이트";
     const pill = el("online-pill");
     pill.textContent = `${snapshot.fleet.online}/${snapshot.fleet.total} 연결`;
     pill.setAttribute("status", snapshot.fleet.online === snapshot.fleet.total ? "neutral" : "crit");
