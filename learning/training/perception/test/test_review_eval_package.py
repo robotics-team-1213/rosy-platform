@@ -66,6 +66,29 @@ def test_existing_output_refused_and_no_overwrite(tmp_path):
     assert (out/'operator-wip').read_bytes()==b'preserve'
 
 
+def test_distinct_selected_indices_cannot_duplicate_original_frame(tmp_path):
+    import review_eval_package as target
+    from store import content_sha
+    root,sources,out=package_inputs(tmp_path);source=sources[0]
+    labels_path=Path(source['labels']['path'])
+    first=json.loads(labels_path.read_bytes());second=dict(first,index=2)
+    raw=''.join(json.dumps(r,sort_keys=True)+'\n' for r in [first,second]).encode()
+    labels_path.write_bytes(raw);source['labels']['sha256']=hashlib.sha256(raw).hexdigest()
+    manifest=json.loads((root/'manifest.json').read_bytes())
+    manifest['labels'][0]['labels_digest']=source['labels']['sha256']
+    alternate=copy.deepcopy(manifest['frames'][0])
+    for kind in ('image','mask','conf'):
+        alternate[kind]=alternate[kind].replace('__000001.','__000002.')
+        (root/alternate[kind]).write_bytes((root/manifest['frames'][0][kind]).read_bytes())
+    manifest['frames'].append(alternate)
+    (root/'manifest.json').write_text(json.dumps(manifest))
+    source['extractions'][alternate['image']]=copy.deepcopy(next(iter(source['extractions'].values())))
+    new=root.with_name(content_sha(root));root.rename(new)
+    with pytest.raises(ValueError,match='duplicate original frame'):
+        target.package_eval_companion(new,sources,out)
+    assert not out.exists()
+
+
 def test_concurrent_same_output_has_one_exclusive_seal(tmp_path,monkeypatch):
     import review_eval_package as target
     from concurrent.futures import ThreadPoolExecutor

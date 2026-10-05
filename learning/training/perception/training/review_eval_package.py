@@ -92,7 +92,7 @@ def _prepare(eval_folder, source_records):
             _require(_relative(row.get(kind)) in eval_bytes,'complete evaluation file references required')
         rows[identity]=row
     _require(isinstance(source_records,list) and source_records,'original source records required')
-    resources={};sources=[];frames=[];sessions=set()
+    resources={};sources=[];frames=[];sessions=set();original_frames=set()
     def capture(binding):
         _require(isinstance(binding,dict) and set(binding)=={'path','sha256'},'pinned source path/hash pair required')
         _require(isinstance(binding['path'],str) and Path(binding['path']).is_absolute()
@@ -108,6 +108,7 @@ def _prepare(eval_folder, source_records):
                  and session not in sessions,'unique canonical source session required')
         sessions.add(session)
         originals={kind:capture(record[kind]) for kind in ('labels','meta','video','sidecar','pts')}
+        video_digest=_sha(originals['video'])
         labels=[_json(line) for line in originals['labels'].splitlines() if line.strip()]
         _require(labels and all(isinstance(r,dict) and r.get('session')==session
                  and type(r.get('index')) is int and r['index']>=0
@@ -119,7 +120,7 @@ def _prepare(eval_folder, source_records):
         _require(len(versions)==1 and versions[0].get('labels_digest')==digest,'original full-row digest differs from evaluation')
         meta=_json(originals['meta'])
         _require(isinstance(meta,dict) and meta.get('session')==session and isinstance(meta.get('source'),dict)
-                 and meta['source'].get('sha256')=={'video':_sha(originals['video']),'sidecar':_sha(originals['sidecar'])},'original metadata video/sidecar hashes differ')
+                 and meta['source'].get('sha256')=={'video':video_digest,'sidecar':_sha(originals['sidecar'])},'original metadata video/sidecar hashes differ')
         side=[_json(line) for line in originals['sidecar'].splitlines() if line.strip()]
         _require(side and all(isinstance(r,dict) and type(r.get('index')) is int and r['index']==i
                  and type(r.get('t')) in (int,float) and math.isfinite(r['t']) for i,r in enumerate(side)),'explicit sequential sidecar indices required')
@@ -142,6 +143,9 @@ def _prepare(eval_folder, source_records):
                 _require(row[kind]==f'{directory}/{session}/{session}__{index:06d}.{suffix}','canonical selected index references differ')
             ordinal=[i for i,r in enumerate(side) if r['t']==by_index[index]['t']]
             _require(len(ordinal)==1,'unique exact label timestamp to sidecar required')
+            original_identity=(video_digest,ordinal[0])
+            _require(original_identity not in original_frames,'duplicate original frame mapping')
+            original_frames.add(original_identity)
             extraction=record['extractions'][image]
             _require(isinstance(extraction,dict) and set(extraction)=={'image','mask','conf'},'all original extraction resources required')
             refs={}
