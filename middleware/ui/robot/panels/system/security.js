@@ -61,7 +61,7 @@ export function mount(root, ctx) {
     if (disposed) return;
     try {
       const status = await ctx.api("/api/v1/host/ssh/password", {signal: lifetime.signal});
-      setOff(sshIssue, false); setOff(sshOff, !status.enabled, "발급된 임시 비밀번호가 없습니다.");
+      setOff(sshIssue, false, ""); setOff(sshOff, !status.enabled, "발급된 임시 비밀번호가 없습니다.");
       setStatus(sshStatus, status.enabled
         ? `임시 비밀번호 켜짐 · 만료 ${status.expires_at ?? "알 수 없음"}${status.lock_pending ? " · 잠금 지연 중" : ""}`
         : "임시 비밀번호는 꺼져 있습니다(키 로그인만 가능).");
@@ -85,7 +85,7 @@ export function mount(root, ctx) {
       setStatus(sshStatus, `임시 비밀번호가 발급되었습니다(rosy@로봇, ${issued.expires_at}까지).`);
     } catch (error) {
       setStatus(sshStatus, error.message || "발급에 실패했습니다.");
-    } finally { setOff(sshIssue, false); await loadSshStatus(); }
+    } finally { setOff(sshIssue, false, ""); await loadSshStatus(); }
   });
   sshOff.addEventListener("click", async () => {
     if (sshOff.disabled) return;
