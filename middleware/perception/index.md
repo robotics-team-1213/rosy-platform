@@ -68,8 +68,8 @@
 
 ## 최근 기록
 
+- 2026-10-06 · uncommitted · fix(perception): flip a keep boundary's stale side after persistent contradiction
 - 2026-10-05 · uncommitted · feat(safety): distinguish positive floor observation from no cliff
 - 2026-10-05 · uncommitted · feat(perception): emit image-bound selected lane geometry
 - 2026-10-05 · uncommitted · feat(camera): validate automatic checkerboard pose candidates
 - 2026-10-05 · uncommitted · feat(camera): replace manual camera measurement with automatic capture
-- 2026-10-05 · uncommitted · validation: 차선 개선040 두 실기 배포·source 일치
