@@ -326,6 +326,7 @@ class RosBridge:
         self._last_odom_ts = time.monotonic()
         sample = translate.odom_sample(msg)
         odometry.observe_bounded_trial(self, msg, sample)
+        odometry.observe_lane_return(self, msg, sample)
         if odometry.odom_owns_pose(self._map_pose_ts, self._line_clock()):
             # map 프레임 pose 가 없을 때만 odom 이 보고 pose 를 쓴다 (규칙은 odometry.py).
             self._svc.state.set_pose(sample["x"], sample["y"], sample["yaw"])

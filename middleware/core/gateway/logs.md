@@ -892,3 +892,8 @@
 - 변경: CAMERA_LINE 원본 영상 시각과 지면 출처에 맞는 optional containment만 LineObservation에 허용한다.
 - 증거: 관련 source 입구/manager/새 계약·정책 76 PASS, 0 NEW.
 - gate 변화: 파싱 입구 추가만. 실제 pose 연결·자동 복구 명령·배포/현장 수용은 아직 없음.
+
+## 2026-10-05 · uncommitted · feat(bridge): preserve odom source identity for lane return
+- 변경: 원본 odom header·정규화 quaternion·동일 planar body frame을 검증하여 lane manager에 전달한다. 시간·자세 변환을 추정 명령 적분으로 대체하지 않는다.
+- 증거: 관련 기존 bounded-trial/bridge/line-follow/새 evidence 및 구조 검사 109 PASS, 0 NEW. 원본 rotation 무효화 세 경우를 RED로 재현하고 검증 추가 후 통과했다.
+- gate 변화: source callback 연결. 장치 설치·자동 복귀 명령·실제 복구 수용은 아직 없음.

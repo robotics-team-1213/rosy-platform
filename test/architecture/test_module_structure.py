@@ -476,8 +476,14 @@ SIZE_VERDICTS = {
         "accept: sim-only read-only viewer server (HTTP handler + ROS subscriptions); the pure logic already lives in live_view_model.py and the page in lane_live_view.html, covered by test_lane_live_view*.py and test_live_view_model.py (X5)",
     ),
     "core_features": (
-        13_202,
-        "accept: re-judged 2026-10-05 at 13202 for the private cumulative trial "
+        13_717,
+        "accept: independently re-judged 2026-10-05 at 13717 for D-468 source-time lane return: "
+        "515 lines above13202 are peer bounded_trial+22 and line_follow policy/admission/mixin+493. "
+        "Each new source is below600, owns no publisher or deploy unit and depends only on "
+        "its own feature and core_common. Existing feature subpackages preserve the split; "
+        "every file threshold and package+150 growth allowance remain unchanged. "
+        "See docs/validation/lane-return-2026-10-05/README.md. "
+        "Re-judged 2026-10-05 at 13202 for the private cumulative trial "
         "restriction in docs/plans/2026-10-05-core-bounded-camera-trial.md. "
         "The new ROS-free command/bounded_trial.py owns one durable trial ledger "
         "and has no publisher, API, deployment unit or feature-cross imports; "

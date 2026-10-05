@@ -12,6 +12,7 @@ from core_common.protocol.schemas import LineFollowStatus
 from core_features.line_follow.body_stop import BodyStopMixin
 from core_features.line_follow.clearance import Point, path_clearance
 from core_features.line_follow.stuck_wiring import StuckRecoveryMixin
+from core_features.line_follow.lane_return_wiring import LaneReturnMixin
 from core_features.line_follow.model import (  # noqa: F401 — re-exported
     LineFollowConfig,
     LineFollowDecision,
@@ -23,7 +24,7 @@ from core_features.decision.contract import DecisionRequest
 from core_features.decision.lane import FOLLOW, LANE_ACTIONS, STOP, lane_recovery_rule
 
 
-class LineFollowManager(BodyStopMixin, StuckRecoveryMixin):
+class LineFollowManager(BodyStopMixin, StuckRecoveryMixin, LaneReturnMixin):
     def __init__(self, events, *, config: Optional[LineFollowConfig] = None,
                  clock: Callable[[], float] = time.monotonic,
                  angular_ceiling: Optional[Callable[[], float]] = None) -> None:
@@ -61,6 +62,7 @@ class LineFollowManager(BodyStopMixin, StuckRecoveryMixin):
         self._escalated = False
         self._init_body_stop()  # D-422 (body_stop.py)
         self._init_recovery()  # D-407 (stuck_wiring.py)
+        self._init_lane_return()  # D-468 source-time odometry and corridor evidence.
 
     def bind_clock(self, clock: Callable[[], float]) -> None:
         """Use the bridge's line clock for defaults (mode change, loss start)."""
@@ -108,6 +110,7 @@ class LineFollowManager(BodyStopMixin, StuckRecoveryMixin):
             previous = self._mode
             default = "mode_off" if selected is LineFollowMode.OFF else "mode_changed"
             self._recovery_reset(reason or default, self._clock())
+            self._return_evidence.reset()
             self._generation += 1
             self._mode = selected
             self._observation = None
@@ -160,6 +163,8 @@ class LineFollowManager(BodyStopMixin, StuckRecoveryMixin):
                 self._ir_received_at = effective_received_at
             if observation.source is not self._mode:
                 return False
+            if not self._observe_return_lane(observation, effective_received_at):
+                return False  # Source-clock replay cannot refresh steering authority.
             self._invalid_observation = False
             self._observation = observation
             self._received_at = effective_received_at
@@ -213,6 +218,7 @@ class LineFollowManager(BodyStopMixin, StuckRecoveryMixin):
                 error=None, confidence=0.0)
             self._received_at = float(now)
             self._invalid_observation = True
+            self._return_evidence.invalidate_lane()
             self._evidence_revision += 1
             if self._loss_started_at is None:
                 self._loss_started_at = float(now)

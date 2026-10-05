@@ -55,7 +55,8 @@ class Pose:
 
     def __post_init__(self):
         _finite(self.received_at, self.x, self.y, self.yaw)
-        if type(self.stamp_ns) is not int or self.stamp_ns < 0 or not self.frame:
+        if (type(self.stamp_ns) is not int or self.stamp_ns < 0 or
+                not isinstance(self.frame, str) or not self.frame.strip()):
             raise ValueError("original pose timestamp and frame required")
 
 

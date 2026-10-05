@@ -110,6 +110,7 @@ def test_return_verifies_several_new_frames_and_geometry_identity():
 def test_nonfinite_sensor_values_are_rejected():
     with pytest.raises(ValueError): Boundary(math.nan, .1)
     with pytest.raises(ValueError): pose(1, x=math.inf)
+    with pytest.raises(ValueError): pose(1, frame=True)
 
 
 def test_curved_retrace_requires_rotation_clearance():

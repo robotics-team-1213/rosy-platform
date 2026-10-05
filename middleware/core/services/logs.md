@@ -535,3 +535,8 @@
 - 변경: ROS-free 차체 경계 여유·실제 자세 경로·동일 차로 비교·제한된 역추적/탐색/정렬/검증 정책과 optional containment 관측 입구 추가.
 - 증거: 정책/계약/기존 bridge 및 line-follow 관련 76 PASS, 0 NEW. 독립 리뷰에서 발견한 후진 회전 여유·odom 초기화·후보 일관성·시각 재전송·정렬 상한·지면 출처 결함을 회귀 시험으로 고쳤다.
 - gate 변화: 아직 manager의 주행 결정에 연결하지 않은 구성 요소. SOURCE 시험 외 SIM/DEVICE/FIELD 수용 없음.
+
+## 2026-10-05 · uncommitted · feat(lane): bind original pose ledger to image geometry
+- 변경: 순수 source-time 증거 ledger와 lock-owner mixin. 실제 자세 보간·projection uncertainty/관측 범위·연속성 epoch·시각 재전송을 검증하며 무효 관측/모드 종료는 경계를 폐기한다.
+- 증거: source 관련 회귀/구조 검사 109 PASS, 0 NEW. 독립 리뷰가 발견한 잘못된 quaternion과 source/receipt 시각 비교를 고쳤다. 패키지 13717줄 재판정은 기존 소유/모듈 분리와 모든 한도를 유지한다.
+- gate 변화: SOURCE evidence admission 연결만. ReturnController의 이동 제안 적용은 아직 없음.

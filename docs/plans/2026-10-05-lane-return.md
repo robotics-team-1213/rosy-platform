@@ -36,5 +36,6 @@ Use normal signed release/CI path; verify installed source SHA and live readback
 
 - ADR: D-468 accepted; user local-first/Fleet-last instruction incorporated.
 - SOURCE: unwired ROS-free policy, optional contract/parser and selected-boundary producer implemented; 76 core-related and 62 perception tests pass. Independent review corrections included.
-- Remaining: timestamp-aligned actual odometry integration, uncertainty/support admission, swept-motion clearance, no-checkpoint approach planner, manager command arbitration and synthetic closed-loop tests. Current code does not activate autonomous return.
+- SOURCE increment: original odometry header/validated quaternion now feeds the manager; source-time interpolation, epoch reset, replay admission, bounded support/uncertainty and current-body transforms are implemented. Related legacy/architecture checks 109 PASS, 0 NEW; final independent evidence scope 72 PASS, 0 NEW. Package size re-judged at 13717 with unchanged thresholds.
+- Remaining: apply admitted geometry/epoch/source progression to the moving controller, swept-motion/floor clearance, no-checkpoint approach planner, manager command arbitration and synthetic closed-loop tests. Current code does not activate autonomous return.
 - SIM / DEVICE / FIELD: pending; no acceptance inferred from this plan.

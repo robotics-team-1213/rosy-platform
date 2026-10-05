@@ -6134,3 +6134,8 @@ osy-d395-s1d\`.
 - 변경: Fleet과 Vision의 컨테이너 수신 포트가 ROSY_FLEET_PORT와 ROSY_VISION_PORT다. Compose 명령, 헬스체크, Caddy 업스트림, 페어링 동기화 주소가 그 값을 쓴다. 코드 기본값은 없다. 두 포트는 공개하지 않는다.
 - 증거: test/test_site_firewall.py test/test_site_preflight.py test/test_site_pairing_deploy.py test/test_site_task_queue_deploy.py test/test_site_map_fit_deploy.py — 113 passed. known_failures 0 new. 호스트 시험이며 현장 배포는 없다.
 - gate 변화: 없음. 현장 site.env에 두 키가 생기기 전에는 다음 배포가 거부된다. 아직 배포하지 않았다.
+
+## 2026-10-05 · uncommitted · feat(lane): synchronize real pose and containment evidence
+- 변경: D-468 실제 odometry/원본 영상 시각 보간·현재 차체 좌표 변환을 manager와 ROS callback에 연결했다. source-clock high-water, 원본 quaternion, 초기화 epoch와 projection uncertainty를 검증한다.
+- 증거: 관련 기존 bounded-trial/bridge/line-follow 및 구조 검사 109 PASS, 0 NEW. source/receipt 시각이 다른 무효화 후 복구 회귀 36 PASS. docs/validation/lane-return-2026-10-05/README.md.
+- gate 변화: 실제 자세 센서 경로의 SOURCE 연결만. 복귀 명령/폐루프/배포/현장 수용은 아직 없음. 장치 read-only SSH probe는 timeout.
