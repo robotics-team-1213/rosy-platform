@@ -30,12 +30,13 @@ from core_common.protocol.recording import (
     FETCHED_NAME, MANIFEST_NAME, MANIFEST_SCHEMA, MAX_DURATION_S, SESSION_NAME, STATUS_SCHEMA,
     TELEOP_INTENT_TOPIC, recording_id_ok)
 from control.recording import (
-    COMPRESSED_CAMERA_TOPIC, ODOM_TOPIC, SCAN_TOPIC, _iso, _ns_topics, _read_meta, _sessions,
+    COMPRESSED_CAMERA_TOPIC, KEEP_DEBUG_TOPIC, ODOM_TOPIC, SCAN_TOPIC, _iso, _ns_topics, _read_meta, _sessions,
     _total_bytes, _write_meta, new_session)
 
 PILOT_TOPICS = (COMPRESSED_CAMERA_TOPIC, "cmd_vel", ODOM_TOPIC, SCAN_TOPIC, "line/observation",
-                TELEOP_INTENT_TOPIC)
-ANNOTATED_TOPICS = ('camera/preview/compressed', 'camera/observation', 'line/keep_debug',
+                TELEOP_INTENT_TOPIC, KEEP_DEBUG_TOPIC)
+# Targets and selected boundaries are needed even when no annotated preview is requested.
+ANNOTATED_TOPICS = ('camera/preview/compressed', 'camera/observation',
                     'perception/learned/shadow', 'perception/learned/status')
 DEFAULT_QUOTA_BYTES = 4 * 1024 ** 3
 # Headroom kept free inside the quota so a started session can run its full length.

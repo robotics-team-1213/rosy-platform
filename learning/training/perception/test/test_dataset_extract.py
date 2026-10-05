@@ -233,7 +233,7 @@ def test_namespaced_session_extracts_frames_and_side_data(tmp_path):
     rows = [json.loads(l) for l in (out / "frames.jsonl").read_text().splitlines()]
     assert len(rows) == 1
     assert rows[0]["side"] == {SHADOW_TOPIC: {"stamp": 8e-7, "error_delta": 0.1},
-                               "line/observation": None}
+                                   "line/observation": None, "line/keep_debug": None}
 
 
 COMPRESSED_DEF = """std_msgs/Header header
@@ -288,6 +288,10 @@ def _write_stamped(tmp_path, events):
             elif kind == "shadow":
                 w.write_message("/" + SHADOW_TOPIC, str_s, {"data": json.dumps(
                     {"stamp": stamp, "error_delta": stamp})}, ns, ns)
+            elif kind == 'keep':
+                w.write_message('/line/keep_debug', str_s, {'data': json.dumps(
+                    {'stamp': stamp, 'target_m': [0.22, -0.04],
+                     'strategy': 'right_only', 'paint_source_used': 'threshold'})}, ns, ns)
             elif kind in ("line", "irline"):
                 source = "CAMERA_LINE" if kind == "line" else "IR_LINE"
                 w.write_message("/line/observation", str_s, {"data": json.dumps(
@@ -304,6 +308,21 @@ def _write_stamped(tmp_path, events):
                     "intensities": [1.0, 2.0, 3.0, 4.0]}, ns, ns)
         w.finish()
     return tmp_path / "sess"
+
+
+def test_keep_debug_mcap_conversion_and_extraction_have_the_same_source_frame(tmp_path):
+    pytest.importorskip('mcap_ros2')
+    import bag_to_video as b2v
+    session = _write_stamped(tmp_path, [
+        (1.0, 'raw', 1.0), (1.04, 'keep', 1.0), (1.1, 'raw', 1.1),
+        (1.12, 'keep', 1.0), (1.2, 'raw', 1.2), (1.24, 'keep', 1.2)])
+    frames, side, _, _, _ = b2v.first_pass(extract._mcap_files(session))
+    converted = list(b2v.sidecar_rows(frames, side, 0.5))
+    direct = [{'side': row[2]} for row in extract._mcap_frames(extract._mcap_files(session))]
+    for rows in (converted, direct):
+        assert rows[0]['side']['line/keep_debug']['target_m'] == [0.22, -0.04]
+        assert rows[1]['side']['line/keep_debug'] is None
+        assert rows[2]['side']['line/keep_debug']['strategy'] == 'right_only'
 
 
 SCAN_DEF = """std_msgs/Header header
