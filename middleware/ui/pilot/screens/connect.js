@@ -208,7 +208,8 @@ function renderTokenForm(root, onConnect, message) {
 function mountShowCode(root) {
   const section = el("div", null, {"data-enroll-section": ""});
   section.append(el("ui-text", "연동 코드 보여주기", {scale: "label"}));
-  section.append(el("p", "화면이 없는 기기는 이 태블릿의 코드를 보고 입력합니다.",
+  section.append(el("p", "입력 화면이 있는 상대 기기는 이 코드를 보고 그 화면에서 입력합니다. " +
+    "입력 수단이 없는 로봇은 로봇 화면의 코드를 이 태블릿 접속 폼에 입력하세요.",
     {"data-enroll-guidance": ""}));
   const button = el("ui-button", "코드 발급", {type: "button", "data-show-code": ""});
   button.setAttribute("kind", "segment");
