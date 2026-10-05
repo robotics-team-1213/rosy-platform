@@ -75,11 +75,12 @@ class PeerClient internal constructor(private val candidate: Candidate, private 
                 if (stored != null && stored.relationshipId == remembered.id && stored.role == remembered.role
                     && stored.expiresAt.isAfter(now().plusSeconds(60))) {
                     val reused = runCatching {
-                        val who = call("/api/v1/auth/whoami", "GET", bearer = stored.token)
+                        val accessToken = stored.token
+                        val who = call("/api/v1/auth/whoami", "GET", bearer = accessToken)
                         require(string(who, "role", 32) == remembered.role)
-                        val info = call("/api/v1/system/info", "GET", bearer = stored.token)
+                        val info = call("/api/v1/system/info", "GET", bearer = accessToken)
                         require(string(info, "robot_id", 64) == remembered.receiverId)
-                        LobbySession(RobotTarget(remembered.receiverId, candidate.host, candidate.port, stored.token), true,
+                        LobbySession(RobotTarget(remembered.receiverId, candidate.host, candidate.port, accessToken), true,
                             stored.expiresAt, candidate, store, remembered.caPem, remembered)
                     }.getOrNull()
                     if (reused != null) { checkAlive(); return reused }
