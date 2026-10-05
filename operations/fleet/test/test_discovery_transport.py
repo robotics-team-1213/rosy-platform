@@ -2,12 +2,53 @@
 
 import asyncio
 import socket
+import threading
 
 import pytest
 
 from fleet.swarm.robots import RobotEndpoint, RobotsFileError, load_robots, write_robots
 from fleet.swarm.discovery_transport import resolve_robot, select_robot
 from core_common.discover import DiscoveredDevice
+
+
+@pytest.fixture(autouse=True)
+def isolated_host_lookups(monkeypatch):
+    import fleet.swarm.discovery_transport as transport
+    pool = transport._HostLookups()
+    monkeypatch.setattr(transport, '_HOST_LOOKUPS', pool)
+    yield pool
+    pool.executor.shutdown(wait=True)
+
+
+def test_blocked_host_lookup_times_out_and_retries_share_one_lookup(monkeypatch):
+    import fleet.swarm.discovery_transport as transport
+    monkeypatch.setattr(transport, 'RESOLVE_TIMEOUT_S', 0.04, raising=False)
+    release = threading.Event()
+    calls = []
+
+    def blocked(*args, **kwargs):
+        calls.append(args)
+        release.wait()
+        return [_addr('192.168.1.50')]
+
+    monkeypatch.setattr(transport.socket, 'getaddrinfo', blocked)
+
+    async def run():
+        tasks = []
+        try:
+            for _ in range(2):
+                batch = [asyncio.create_task(resolve_robot(endpoint(), lambda *a, **k: []))
+                         for _ in range(3)]
+                tasks.extend(batch)
+                _, pending = await asyncio.wait(batch, timeout=1.0)
+                assert not pending, 'DNS fallback exceeded its total deadline'
+                assert all(isinstance(task.exception(), TimeoutError) for task in batch)
+            assert len(calls) == 1, 'timed-out requests restarted the outstanding DNS lookup'
+        finally:
+            release.set()
+            await asyncio.gather(*tasks, return_exceptions=True)
+
+    asyncio.run(run())
 
 
 def endpoint(ca='ca.pem'):
@@ -80,18 +121,99 @@ def test_empty_discovery_uses_one_saved_host_address(monkeypatch):
     assert asyncio.run(resolve_robot(endpoint(), lambda *a, **k: [])) == ('192.168.1.50', 8443)
     assert asyncio.run(resolve_robot(endpoint(), lambda *a, **k: [record(host='other.local')])) == (
         '192.168.1.50', 8443)
-    assert calls == [('robot-a.local', 8443), ('robot-a.local', 8443)]
+    assert calls == [('robot-a.local', 8443)]
 
 
-def test_unusable_or_split_host_address_stays_a_connection_failure(monkeypatch):
-    for answers in ([], [_addr('8.8.8.8')], [_addr('127.0.0.1')], [_addr('169.254.1.1')],
-                    [_addr('0.0.0.0')], socket.gaierror(8, 'fixture')):
-        _patch_lookup(monkeypatch, answers)
-        with pytest.raises(ValueError, match='not_discovered'):
-            asyncio.run(resolve_robot(endpoint(), lambda *a, **k: []))
+@pytest.mark.parametrize('answers', [
+    [], [_addr('8.8.8.8')], [_addr('127.0.0.1')], [_addr('169.254.1.1')],
+    [_addr('0.0.0.0')], socket.gaierror(8, 'fixture'),
+])
+def test_unusable_host_address_stays_a_connection_failure(monkeypatch, answers):
+    _patch_lookup(monkeypatch, answers)
+    with pytest.raises(ValueError, match='not_discovered'):
+        asyncio.run(resolve_robot(endpoint(), lambda *a, **k: []))
+
+
+def test_split_host_address_stays_a_connection_failure(monkeypatch):
     _patch_lookup(monkeypatch, [_addr('192.168.1.10'), _addr('192.168.1.11')])
     with pytest.raises(ValueError, match='conflict: robot name is advertised at disjoint locations'):
         asyncio.run(resolve_robot(endpoint(), lambda *a, **k: []))
+
+
+def test_lookup_capacity_does_not_restart_timed_out_work(monkeypatch):
+    import fleet.swarm.discovery_transport as transport
+    release = threading.Event()
+    started = threading.Event()
+    calls = []
+
+    def blocked(host, *_args):
+        calls.append(host)
+        started.set()
+        release.wait()
+        return [_addr('192.168.1.50')]
+
+    monkeypatch.setattr(transport.socket, 'getaddrinfo', blocked)
+    pool = transport._HostLookups(workers=1, max_hosts=2)
+    try:
+        first = pool.get('a.local', 8443)
+        assert started.wait(1)
+        second = pool.get('b.local', 8443)
+        assert pool.get('a.local', 8443) is first
+        with pytest.raises(ValueError, match='capacity'):
+            pool.get('c.local', 8443)
+        assert calls == ['a.local']
+        assert not second.done()
+    finally:
+        release.set()
+        pool.executor.shutdown(wait=True)
+
+
+def test_timeout_keeps_lookup_owned_after_caller_event_loop_closes(monkeypatch):
+    import fleet.swarm.discovery_transport as transport
+    monkeypatch.setattr(transport, 'RESOLVE_TIMEOUT_S', 0.1)
+    release = threading.Event()
+    calls = []
+
+    def blocked(*args):
+        calls.append(args)
+        release.wait()
+        return [_addr('192.168.1.50')]
+
+    monkeypatch.setattr(transport.socket, 'getaddrinfo', blocked)
+    try:
+        for _ in range(2):
+            with pytest.raises(TimeoutError):
+                asyncio.run(resolve_robot(endpoint(), lambda *a, **k: []))
+        assert len(calls) == 1
+    finally:
+        release.set()
+
+
+def test_lookup_cache_expires_and_dhcp_address_changes(monkeypatch):
+    import fleet.swarm.discovery_transport as transport
+    now = [0.0]
+    finished = threading.Event()
+    answers = ['192.168.1.50']
+    calls = []
+
+    def lookup(*args):
+        calls.append(args)
+        return [_addr(answers[0])]
+
+    monkeypatch.setattr(transport.socket, 'getaddrinfo', lookup)
+    pool = transport._HostLookups(clock=lambda: now[0])
+    try:
+        first = pool.get('a.local', 8443)
+        first.add_done_callback(lambda _: finished.set())
+        assert first.result(timeout=1) == '192.168.1.50'
+        assert finished.wait(1)
+        answers[0] = '192.168.1.51'
+        assert pool.get('a.local', 8443).result(timeout=1) == '192.168.1.50'
+        now[0] = 2.01
+        assert pool.get('a.local', 8443).result(timeout=1) == '192.168.1.51'
+        assert len(calls) == 2
+    finally:
+        pool.executor.shutdown(wait=True)
 
 
 def test_advertised_name_does_not_fall_back_to_host_lookup(monkeypatch):

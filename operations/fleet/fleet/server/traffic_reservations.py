@@ -18,7 +18,7 @@ import math
 import re
 import sqlite3
 
-from fleet.server.segment_store import prepare as _prepare
+from fleet.server.segment_store import atomic, prepare as _prepare
 
 OK = "OK"
 GRANT_REFUSED = "REFUSED"
@@ -34,7 +34,10 @@ _TERMINAL = frozenset({"COMPLETED", "FAILED", "HOLD"})
 def _now(value: str):
     from datetime import datetime
 
-    return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    result = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    if result.utcoffset() is None:
+        raise ValueError('timezone-aware timestamp required')
+    return result
 
 
 def _age_s(later: str, earlier: str) -> float:
@@ -46,6 +49,27 @@ def _inside(segment, position) -> bool:
                       position[1] - segment["center_y"]) <= float(segment["radius_m"])
 
 
+def _finite_point(point) -> bool:
+    return (isinstance(point, (list, tuple)) and len(point) == 2
+            and all(type(value) in (int, float) and math.isfinite(value) for value in point))
+
+
+def _bound(row, task_id, attempt_id, robot_id, map_revision, generation) -> bool:
+    return (row is not None and type(generation) is int
+            and (row['task_id'], row['attempt_id'], row['robot_id'],
+                 row['map_revision'], row['generation']) ==
+            (task_id, attempt_id, robot_id, map_revision, generation))
+
+
+def _fresh_exit(row, observed_at, now) -> bool:
+    try:
+        return (0 <= _age_s(now, observed_at) <= OBSERVATION_MAX_AGE_S
+                and _age_s(observed_at, row['entry_confirmed_at']) >= 0)
+    except (ValueError, TypeError, AttributeError, OverflowError):
+        return False
+
+
+@atomic
 def define_segments(connection: sqlite3.Connection, segments: list[dict]) -> None:
     """구간 ID·지도 revision·진입/출구·안전 대기점·반경을 명시한다."""
     _prepare(connection)
@@ -53,8 +77,13 @@ def define_segments(connection: sqlite3.Connection, segments: list[dict]) -> Non
         for key in ("segment_id", "map_revision"):
             if not _IDENTIFIER.fullmatch(str(segment.get(key, ""))):
                 raise ValueError(f"segment {key} is invalid")
-        if float(segment["radius_m"]) <= 0:
+        radius = segment['radius_m']
+        if type(radius) not in (int, float) or not math.isfinite(radius) or radius <= 0:
             raise ValueError("segment radius must be positive")
+        if not all(_finite_point(segment.get(key)) for key in ('center', 'entry', 'exit', 'waiting_point')):
+            raise ValueError('segment coordinates must be finite pairs')
+        if _grant_row(connection, segment['segment_id']) is not None:
+            raise ValueError('active segment geometry is immutable')
         connection.execute(
             """INSERT OR REPLACE INTO fleet_segments
                (segment_id, map_revision, center_x, center_y, radius_m,
@@ -66,7 +95,6 @@ def define_segments(connection: sqlite3.Connection, segments: list[dict]) -> Non
              segment["exit"][0], segment["exit"][1],
              segment["waiting_point"][0], segment["waiting_point"][1]),
         )
-    connection.commit()
 
 
 def _segment_row(connection, segment_id: str):
@@ -86,6 +114,7 @@ def segment_state(connection: sqlite3.Connection, segment_id: str) -> str:
     return row["state"] if row is not None else "FREE"
 
 
+@atomic
 def request(connection: sqlite3.Connection, *, segment_id: str, task_id: str,
             attempt_id: str, robot_id: str, map_revision: str, generation: int,
             entry_deadline: str, now: str) -> str:
@@ -111,7 +140,6 @@ def request(connection: sqlite3.Connection, *, segment_id: str, task_id: str,
         (segment_id, task_id, attempt_id, robot_id, map_revision,
          int(generation), entry_deadline, now),
     )
-    connection.commit()
     return OK
 
 
@@ -133,19 +161,21 @@ def verify_grant(connection: sqlite3.Connection, *, segment_id: str, task_id: st
     return OK
 
 
+@atomic
 def confirm_entry(connection: sqlite3.Connection, *, segment_id: str, task_id: str,
-                  attempt_id: str, position, pose_trusted: bool, now: str) -> str:
+                  attempt_id: str, robot_id: str, map_revision: str, generation: int,
+                  position, pose_trusted: bool, now: str) -> str:
     """RESERVED→OCCUPIED. 신뢰 위치가 구간 안일 때만, 만료는 경계에서 재검사."""
     _prepare(connection)
     row = _grant_row(connection, segment_id)
-    if row is None or row["task_id"] != task_id or row["attempt_id"] != attempt_id:
+    if not _bound(row, task_id, attempt_id, robot_id, map_revision, generation):
         return f"{GRANT_REFUSED}: no matching grant"
     if row["state"] != "RESERVED":
         return f"{GRANT_REFUSED}: segment is {row['state']}, not RESERVED"
     if _age_s(now, row["entry_deadline"]) > 0:
         # 만료된 grant — 진입 경계에서 다시 검사해 밖에서 정지한다.
         return f"{GRANT_REFUSED}: grant expired before entry; stop outside the segment"
-    if not pose_trusted:
+    if pose_trusted is not True or not _finite_point(position):
         return f"{GRANT_REFUSED}: position is not trusted (unconfirmed localization)"
     segment = _segment_row(connection, segment_id)
     if not _inside(segment, position):
@@ -154,26 +184,27 @@ def confirm_entry(connection: sqlite3.Connection, *, segment_id: str, task_id: s
         "UPDATE fleet_segment_grants SET state='OCCUPIED', entry_confirmed_at=? "
         "WHERE segment_id=?",
         (now, segment_id))
-    connection.commit()
     return OK
 
 
+@atomic
 def begin_release(connection: sqlite3.Connection, *, segment_id: str, task_id: str,
-                  attempt_id: str, exit_position, pose_trusted: bool,
+                  attempt_id: str, robot_id: str, map_revision: str, generation: int,
+                  exit_position, pose_trusted: bool,
                   observed_at: str, terminal_status: str, now: str) -> str:
     """OCCUPIED→RELEASING. 신선한 출구 이탈 관측 + 종단 실행 결과 둘 다 필요."""
     _prepare(connection)
     row = _grant_row(connection, segment_id)
-    if row is None or row["task_id"] != task_id or row["attempt_id"] != attempt_id:
+    if not _bound(row, task_id, attempt_id, robot_id, map_revision, generation):
         return f"{GRANT_REFUSED}: no matching grant"
     if row["state"] != "OCCUPIED":
         return f"{GRANT_REFUSED}: segment is {row['state']}, not OCCUPIED"
     if terminal_status not in _TERMINAL:
         return f"{GRANT_REFUSED}: execution is not terminal ({terminal_status})"
-    if not pose_trusted or exit_position is None:
+    if pose_trusted is not True or not _finite_point(exit_position):
         return f"{GRANT_REFUSED}: release needs a fresh trusted exit observation"
-    if _age_s(now, observed_at) > OBSERVATION_MAX_AGE_S:
-        return f"{GRANT_REFUSED}: exit observation is stale"
+    if not _fresh_exit(row, observed_at, now):
+        return f"{GRANT_REFUSED}: exit observation is stale or invalid"
     segment = _segment_row(connection, segment_id)
     if _inside(segment, exit_position):
         return f"{GRANT_REFUSED}: robot is still inside the segment"
@@ -181,25 +212,28 @@ def begin_release(connection: sqlite3.Connection, *, segment_id: str, task_id: s
         "UPDATE fleet_segment_grants SET state='RELEASING', exit_observed_at=?, "
         "terminal_status=? WHERE segment_id=?",
         (observed_at, terminal_status, segment_id))
-    connection.commit()
     return OK
 
 
+@atomic
 def confirm_exit(connection: sqlite3.Connection, *, segment_id: str, task_id: str,
+                 attempt_id: str, robot_id: str, map_revision: str, generation: int,
                  now: str) -> str:
     """RELEASING→FREE. 관측·종단 대조가 끝난 해제만 확인한다."""
     _prepare(connection)
     row = _grant_row(connection, segment_id)
-    if row is None or row["task_id"] != task_id:
+    if not _bound(row, task_id, attempt_id, robot_id, map_revision, generation):
         return f"{GRANT_REFUSED}: no matching grant"
     if row["state"] != "RELEASING":
         return f"{GRANT_REFUSED}: segment is {row['state']}, not RELEASING"
+    if row['terminal_status'] not in _TERMINAL or not _fresh_exit(row, row['exit_observed_at'], now):
+        return f"{GRANT_REFUSED}: release evidence is stale or invalid"
     connection.execute("DELETE FROM fleet_segment_grants WHERE segment_id=?",
                        (segment_id,))
-    connection.commit()
     return OK
 
 
+@atomic
 def mark_unknown(connection: sqlite3.Connection, *, segment_id: str, reason: str) -> str:
     """링크 상실 등 불명 — UNKNOWN은 FREE가 아니며 자동 해제도 하지 않는다."""
     _prepare(connection)
@@ -209,7 +243,6 @@ def mark_unknown(connection: sqlite3.Connection, *, segment_id: str, reason: str
     connection.execute(
         "UPDATE fleet_segment_grants SET state='UNKNOWN' WHERE segment_id=?",
         (segment_id,))
-    connection.commit()
     return OK
 
 

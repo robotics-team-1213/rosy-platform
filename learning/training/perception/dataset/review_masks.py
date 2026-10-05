@@ -118,11 +118,11 @@ def from_color(raw, width, height, labelmap_raw, binding):
 
 
 def flood_region_photo(photo_bgr, seed, tolerance):
-    """4-connected region around `seed` within perceptual distance `tolerance`.
+    """4-connected region around `seed` within encoded Lab distance `tolerance`.
 
-    Distance is Euclidean in CIELAB, so one tolerance step means roughly one
-    just-noticeable colour step anywhere: bright walls and dim carpets compare
-    on the same scale, unlike RGB where bright areas spread further per step.
+    Distance is Euclidean in OpenCV's 8-bit COLOR_BGR2Lab encoding: L is scaled
+    by 255/100 and a/b are offset by 128. This is a colour-distance heuristic,
+    not true Delta E or a just-noticeable-difference unit.
     4-connectivity (not 8) keeps diagonal leaks out; the seed's own component
     is the region, so a tolerance that reaches across the photo still cannot
     jump a one-pixel boundary of a different colour.

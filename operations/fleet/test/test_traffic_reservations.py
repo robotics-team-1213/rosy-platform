@@ -46,6 +46,147 @@ INSIDE = (0.0, 0.0)
 OUTSIDE = (0.0, 3.0)
 
 
+@pytest.mark.parametrize('position,observed', [
+    (OUTSIDE, '2026-01-01T01:02:00Z'),
+    ((float('nan'), 0), '2026-01-01T00:02:00Z'),
+    ((float('inf'), 0), '2026-01-01T00:02:00Z'),
+])
+def test_release_rejects_future_or_nonfinite_observation(store, position, observed):
+    assert _grant(store) == OK
+    assert confirm_entry(store,
+                         robot_id="rosy_01", map_revision="map-v3", generation=7,
+                         segment_id='corridor-north', task_id='task-1',
+                         attempt_id='att-1', position=INSIDE, pose_trusted=True,
+                         now='2026-01-01T00:00:10Z') == OK
+    result = begin_release(store,
+                           robot_id="rosy_01", map_revision="map-v3", generation=7,
+                           segment_id='corridor-north', task_id='task-1',
+                           attempt_id='att-1', exit_position=position, pose_trusted=True,
+                           observed_at=observed, terminal_status='COMPLETED',
+                           now='2026-01-01T00:02:00Z')
+    assert result.startswith(GRANT_REFUSED)
+    assert segment_state(store, 'corridor-north') == 'OCCUPIED'
+
+
+def test_exit_rechecks_age_before_freeing(store):
+    assert _grant(store) == OK
+    assert confirm_entry(store,
+                         robot_id="rosy_01", map_revision="map-v3", generation=7,
+                         segment_id='corridor-north', task_id='task-1',
+                         attempt_id='att-1', position=INSIDE, pose_trusted=True,
+                         now='2026-01-01T00:00:10Z') == OK
+    assert begin_release(store,
+                         robot_id="rosy_01", map_revision="map-v3", generation=7,
+                         segment_id='corridor-north', task_id='task-1',
+                         attempt_id='att-1', exit_position=OUTSIDE, pose_trusted=True,
+                         observed_at='2026-01-01T00:02:00Z', terminal_status='COMPLETED',
+                         now='2026-01-01T00:02:00Z') == OK
+    result = confirm_exit(store,
+                          attempt_id="att-1", robot_id="rosy_01", map_revision="map-v3", generation=7,
+                          segment_id='corridor-north', task_id='task-1',
+                          now='2026-01-02T00:02:00Z')
+    assert result.startswith(GRANT_REFUSED)
+    assert segment_state(store, 'corridor-north') == 'RELEASING'
+
+
+@pytest.mark.parametrize('write', [False, True])
+def test_helpers_preserve_caller_task_transaction(store, write):
+    store.execute('CREATE TABLE audit(value TEXT)')
+    store.commit()
+    store.execute("INSERT INTO audit VALUES ('pending')")
+    if write:
+        assert _grant(store) == OK
+    else:
+        assert segment_state(store, 'corridor-north') == 'FREE'
+    assert store.in_transaction
+    store.rollback()
+    assert store.execute('SELECT COUNT(*) FROM audit').fetchone()[0] == 0
+    assert segment_state(store, 'corridor-north') == 'FREE'
+
+
+@pytest.mark.parametrize('stage', ['entry', 'release', 'exit'])
+@pytest.mark.parametrize('field,value', [
+    ('task_id', 'other-task'), ('attempt_id', 'other-attempt'),
+    ('robot_id', 'other-robot'), ('map_revision', 'other-map'), ('generation', 8),
+])
+def test_state_transition_requires_the_complete_current_binding(store, stage, field, value):
+    binding = dict(segment_id='corridor-north', task_id='task-1', attempt_id='att-1',
+                   robot_id='rosy_01', map_revision='map-v3', generation=7)
+    assert _grant(store) == OK
+    if stage != 'entry':
+        assert confirm_entry(store, **binding, position=INSIDE, pose_trusted=True,
+                             now='2026-01-01T00:00:10Z') == OK
+    if stage == 'exit':
+        assert begin_release(store, **binding, exit_position=OUTSIDE, pose_trusted=True,
+                             observed_at='2026-01-01T00:02:00Z', terminal_status='COMPLETED',
+                             now='2026-01-01T00:02:00Z') == OK
+    original = segment_state(store, 'corridor-north')
+    binding[field] = value
+    if stage == 'entry':
+        result = confirm_entry(store, **binding, position=INSIDE, pose_trusted=True,
+                               now='2026-01-01T00:00:10Z')
+    elif stage == 'release':
+        result = begin_release(store, **binding, exit_position=OUTSIDE, pose_trusted=True,
+                               observed_at='2026-01-01T00:02:00Z', terminal_status='COMPLETED',
+                               now='2026-01-01T00:02:00Z')
+    else:
+        result = confirm_exit(store, **binding, now='2026-01-01T00:02:01Z')
+    assert result.startswith(GRANT_REFUSED)
+    assert segment_state(store, 'corridor-north') == original
+
+
+@pytest.mark.parametrize('observed,now', [
+    ('not-a-time', '2026-01-01T00:02:00Z'),
+    ('2026-01-01T00:02:00', '2026-01-01T00:02:00Z'),
+    ('2026-01-01T00:00:09Z', '2026-01-01T00:00:10Z'),
+    ('2026-01-01T00:02:00Z', 'invalid-now'),
+])
+def test_release_time_must_be_aware_and_after_entry(store, observed, now):
+    binding = dict(segment_id='corridor-north', task_id='task-1', attempt_id='att-1',
+                   robot_id='rosy_01', map_revision='map-v3', generation=7)
+    assert _grant(store) == OK
+    assert confirm_entry(store, **binding, position=INSIDE, pose_trusted=True,
+                         now='2026-01-01T00:00:10Z') == OK
+    result = begin_release(store, **binding, exit_position=OUTSIDE, pose_trusted=True,
+                           observed_at=observed, terminal_status='COMPLETED', now=now)
+    assert result.startswith(GRANT_REFUSED)
+    assert segment_state(store, 'corridor-north') == 'OCCUPIED'
+
+
+def test_active_segment_cannot_be_retargeted(store):
+    assert _grant(store) == OK
+    with pytest.raises(ValueError, match='immutable'):
+        define_segments(store, [{**SEGMENT, 'center': (50, 50)}])
+    row = store.execute('SELECT center_x,center_y FROM fleet_segments').fetchone()
+    assert tuple(row) == (0, 0)
+    assert segment_state(store, 'corridor-north') == 'RESERVED'
+
+
+@pytest.mark.parametrize('field,value', [
+    ('radius_m', float('nan')), ('radius_m', float('inf')),
+    ('center', (float('nan'), 0)), ('exit', (0, float('inf'))),
+])
+def test_geometry_definition_must_be_finite(store, field, value):
+    with pytest.raises(ValueError):
+        define_segments(store, [{**SEGMENT, field: value}])
+    row = store.execute('SELECT center_x,center_y,radius_m FROM fleet_segments').fetchone()
+    assert tuple(row) == (0, 0, 0.5)
+
+
+def test_failed_batch_rolls_back_only_its_owned_changes(store):
+    store.execute('CREATE TABLE audit(value TEXT)')
+    store.commit()
+    store.execute("INSERT INTO audit VALUES ('pending')")
+    with pytest.raises(ValueError):
+        define_segments(store, [{**SEGMENT, 'segment_id': 'new'},
+                                {**SEGMENT, 'radius_m': float('nan')}])
+    assert store.in_transaction
+    assert store.execute('SELECT COUNT(*) FROM audit').fetchone()[0] == 1
+    assert store.execute("SELECT COUNT(*) FROM fleet_segments WHERE segment_id='new'").fetchone()[0] == 0
+    store.rollback()
+    assert store.execute('SELECT COUNT(*) FROM audit').fetchone()[0] == 0
+
+
 @pytest.fixture
 def store(tmp_path):
     import sqlite3
@@ -86,11 +227,15 @@ def test_bad_identifiers_and_map_revisions_are_refused(store):
 
 def test_entry_needs_a_trusted_position_inside_the_segment(store):
     assert _grant(store) == OK
-    untrusted = confirm_entry(store, segment_id="corridor-north", task_id="task-1",
+    untrusted = confirm_entry(store,
+                              robot_id="rosy_01", map_revision="map-v3", generation=7,
+                              segment_id="corridor-north", task_id="task-1",
                               attempt_id="att-1", position=INSIDE, pose_trusted=False,
                               now="2026-01-01T00:01:00Z")
     assert untrusted.startswith(GRANT_REFUSED)
-    outside = confirm_entry(store, segment_id="corridor-north", task_id="task-1",
+    outside = confirm_entry(store,
+                            robot_id="rosy_01", map_revision="map-v3", generation=7,
+                            segment_id="corridor-north", task_id="task-1",
                             attempt_id="att-1", position=OUTSIDE, pose_trusted=True,
                             now="2026-01-01T00:01:00Z")
     assert outside.startswith(GRANT_REFUSED)
@@ -99,7 +244,9 @@ def test_entry_needs_a_trusted_position_inside_the_segment(store):
 
 def test_entry_past_the_deadline_is_rejected_and_stays_outside(store):
     assert _grant(store, deadline="2026-01-01T00:00:30Z") == OK
-    late = confirm_entry(store, segment_id="corridor-north", task_id="task-1",
+    late = confirm_entry(store,
+                         robot_id="rosy_01", map_revision="map-v3", generation=7,
+                         segment_id="corridor-north", task_id="task-1",
                          attempt_id="att-1", position=INSIDE, pose_trusted=True,
                          now="2026-01-01T00:05:00Z")   # 진입 시한 4.5 분 초과
     assert late.startswith(GRANT_REFUSED)
@@ -124,37 +271,49 @@ def test_reserved_segment_is_not_reassigned_after_deadline_alone(store):
 
 def test_release_needs_fresh_exit_observation_and_terminal_result(store):
     assert _grant(store) == OK
-    assert confirm_entry(store, segment_id="corridor-north", task_id="task-1",
+    assert confirm_entry(store,
+                         robot_id="rosy_01", map_revision="map-v3", generation=7,
+                         segment_id="corridor-north", task_id="task-1",
                          attempt_id="att-1", position=INSIDE, pose_trusted=True,
                          now="2026-01-01T00:00:10Z") == OK
     assert segment_state(store, "corridor-north") == "OCCUPIED"
     # 관측 없는 해제 요청 — 거부
-    only_result = begin_release(store, segment_id="corridor-north", task_id="task-1",
+    only_result = begin_release(store,
+                                robot_id="rosy_01", map_revision="map-v3", generation=7,
+                                segment_id="corridor-north", task_id="task-1",
                                 attempt_id="att-1", exit_position=None, pose_trusted=False,
                                 observed_at="2026-01-01T00:02:00Z",
                                 terminal_status="COMPLETED", now="2026-01-01T00:02:00Z")
     assert only_result.startswith(GRANT_REFUSED)
     # 관측만 있고 실행 미종단 — 거부
-    only_exit = begin_release(store, segment_id="corridor-north", task_id="task-1",
+    only_exit = begin_release(store,
+                              robot_id="rosy_01", map_revision="map-v3", generation=7,
+                              segment_id="corridor-north", task_id="task-1",
                               attempt_id="att-1", exit_position=OUTSIDE, pose_trusted=True,
                               observed_at="2026-01-01T00:02:00Z",
                               terminal_status="RUNNING", now="2026-01-01T00:02:00Z")
     assert only_exit.startswith(GRANT_REFUSED)
     # 낡은 관측(빈 구간) — 거부
-    stale = begin_release(store, segment_id="corridor-north", task_id="task-1",
+    stale = begin_release(store,
+                          robot_id="rosy_01", map_revision="map-v3", generation=7,
+                          segment_id="corridor-north", task_id="task-1",
                           attempt_id="att-1", exit_position=OUTSIDE, pose_trusted=True,
                           observed_at="2026-01-01T00:00:05Z",
                           terminal_status="COMPLETED", now="2026-01-01T00:05:00Z")
     assert stale.startswith(GRANT_REFUSED)
     assert segment_state(store, "corridor-north") == "OCCUPIED"
     # 둘 다 신선 — RELEASING, 이어 출구 확인으로 FREE
-    assert begin_release(store, segment_id="corridor-north", task_id="task-1",
+    assert begin_release(store,
+                         robot_id="rosy_01", map_revision="map-v3", generation=7,
+                         segment_id="corridor-north", task_id="task-1",
                          attempt_id="att-1", exit_position=OUTSIDE, pose_trusted=True,
                          observed_at="2026-01-01T00:02:00Z",
                          terminal_status="COMPLETED", now="2026-01-01T00:02:00Z") == OK
     assert segment_state(store, "corridor-north") == "RELEASING"
-    assert confirm_exit(store, segment_id="corridor-north", task_id="task-1",
-                        now="2026-01-01T00:02:05Z") == OK
+    assert confirm_exit(store,
+                        attempt_id="att-1", robot_id="rosy_01", map_revision="map-v3", generation=7,
+                        segment_id="corridor-north", task_id="task-1",
+                        now="2026-01-01T00:02:01Z") == OK
     assert segment_state(store, "corridor-north") == "FREE"
     assert _grant(store, robot="rosy_02", attempt="att-2", task="task-2") == OK
 
@@ -211,13 +370,19 @@ def test_waiting_time_is_stable_and_flags_operator_attention(store):
     assert waiting_seconds(store, now="2026-01-01T00:00:30Z") == []
     # 소유자가 RELEASING 을 마치면 다음 대기자가 들어온다 — 승인 순서·robot ID 안정은
     # 호출자(스케줄러)가 request 재시도 순서로 지킨다.
-    assert confirm_entry(store, segment_id="corridor-north", task_id="task-2",
+    assert confirm_entry(store,
+                         robot_id="rosy_02", map_revision="map-v3", generation=7,
+                         segment_id="corridor-north", task_id="task-2",
                          attempt_id="att-2", position=INSIDE, pose_trusted=True,
                          now="2026-01-01T00:00:10Z") == OK
-    assert begin_release(store, segment_id="corridor-north", task_id="task-2",
+    assert begin_release(store,
+                         robot_id="rosy_02", map_revision="map-v3", generation=7,
+                         segment_id="corridor-north", task_id="task-2",
                          attempt_id="att-2", exit_position=OUTSIDE, pose_trusted=True,
                          observed_at="2026-01-01T00:01:00Z",
                          terminal_status="COMPLETED", now="2026-01-01T00:01:00Z") == OK
-    assert confirm_exit(store, segment_id="corridor-north", task_id="task-2",
-                        now="2026-01-01T00:01:05Z") == OK
+    assert confirm_exit(store,
+                        attempt_id="att-2", robot_id="rosy_02", map_revision="map-v3", generation=7,
+                        segment_id="corridor-north", task_id="task-2",
+                        now="2026-01-01T00:01:01Z") == OK
     assert _grant(store, robot="rosy_03", attempt="att-3", task="task-3") == OK
