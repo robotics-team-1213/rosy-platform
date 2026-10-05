@@ -136,7 +136,7 @@ def _largest_piece(along: np.ndarray, max_gap: float) -> np.ndarray:
     return keep
 
 
-def extract_lines(points: np.ndarray, rng: np.random.Generator):
+def extract_lines(points: np.ndarray, rng: np.random.Generator, *, _prefer_forward=False):
     """Thin straight paint lines in `points` (N x 2, metres). Returns
     (lines, blobs): each a dict with centre, direction, along range, cells."""
     lines, blobs = [], []
@@ -154,7 +154,10 @@ def extract_lines(points: np.ndarray, rng: np.random.Generator):
         normal = np.stack([-delta[good, 1], delta[good, 0]], axis=1) / norm[good, None]
         offsets = np.einsum("ij,ij->i", normal, remaining[first[good]])
         distance = np.abs(remaining @ normal.T - offsets[None, :])
-        best = int(np.argmax((distance <= CORE_HALF_M).sum(axis=0)))
+        support = (distance <= CORE_HALF_M).sum(axis=0)
+        if _prefer_forward:
+            support = support * normal[:, 1] ** 2
+        best = int(np.argmax(support))
         inliers = remaining[distance[:, best] <= CORE_HALF_M]
         if len(inliers) < MIN_LINE_CELLS:
             break
@@ -197,6 +200,12 @@ def extract_lines(points: np.ndarray, rng: np.random.Generator):
                 lines.append(entry)
             drop = piece | ((along >= lo) & (along <= hi) & (across <= FLANK_INNER_M))
         remaining = remaining[~drop]
+    if not lines and blobs and not _prefer_forward:
+        # A crosswalk chord can swallow a real boundary during blob removal.
+        # Retry the original paint once, favouring support along the heading;
+        # keep every flank/length check and never replace an accepted line.
+        recovered, _ = extract_lines(points, rng, _prefer_forward=True)
+        return recovered, blobs
     return lines, blobs
 
 
