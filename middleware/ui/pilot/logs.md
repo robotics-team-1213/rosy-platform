@@ -476,3 +476,9 @@
 - 변경: 네이티브 PilotProxy가 상단 배너를 오류 문구로 바꾼 뒤 회복 신호가 없어, 일시 끊김 후 연결·영상·조종이 모두 정상이어도 TLS 또는 연결을 확인하세요 가 화면에 남았다(2026-10-05 9dfk 실주행 중 관찰 — 배너와 달리 영상 80ms·속도 명령 살아 있음). PilotProxy에 recovery 콜백을 추가: 실패를 한 번 알렸으면 다음 성공 응답에 회복을 알리고, MainActivity는 배너를 정상 연결 문구(connectedLabel)로 되돌린다. 세션 종료 시 배너 상태를 비운다.
 - 증거: JVM 신규 시험 transientFailureThenSuccessReportsFailureThenRecovery — 재시도 없는 주입 client로 첫 요청을 응답 없음(NO_RESPONSE)으로 실패시키면 502+failure 1회, 다음 성공에서 recovery 정확히 1회, 이후 성공은 중복 알림 없음. 전체 87 tests passed(빌드 2026-10-05). 설치 뒤 8kcn 재연결로 정상 배너 회귀 확인.
 - gate 변화: SOURCE/LOCAL. 실기에서 일시 끊김 유도 관찰은 별도.
+
+## 2026-10-06 · uncommitted · fix(pilot): 운영자 화면에서도 연동 코드 보여주기 항목을 보인다
+
+- 변경: 연동 코드 보여주기는 관리자만 쓸 수 있어 현장 태블릿(피어 승인 = 운영자)에는 항목 자체가 안 보였다(2026-10-06 사용자 보고). 항목은 운영자에게도 보이게 하고, 발급 요청이 CORE 403이면 관리자 코드로 전환 버튼(기존 토큰 폼 재사용)을 그 자리에 제공한다. 관리자 코드를 입력하면 세션이 교체되어 발급이 가능해진다. CORE 계약(관리자만 발급)은 그대로다. sw.js 캐시 키 갱신.
+- 증거: 브라우저 시험 갱신 - 운영자(devtoken)는 항목 표시 + 403 안내 + 전환 폼 진입, 관리자(devadmintoken)는 DEMO-C0DE 발급·카운트다운. 전체 92 passed 73 skipped, known_failures NEW 0.
+- gate 변화: SOURCE. 실기 태블릿 확인은 별도.
