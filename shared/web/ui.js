@@ -548,11 +548,40 @@ hangulObserver.observe(document.documentElement, { childList: true, characterDat
 markHangulTree(document.documentElement);
 
 // Shared labeled action icons. Keep handlers and button semantics on the original element.
+// A string draws one stroke. An array draws one path per entry so a filled mark can sit
+// on a stroked outline. .sr-only stays a screen-reader label and is not copied into the visible span.
 export function actionIcon(button, name) {
   const paths = {
     fit: "M4 4h16v16H4zM8 8h8v8H8z",
     expand: "M9 3H3v6M15 3h6v6M3 15v6h6M21 15v6h-6",
     tools: "M4 6h16M4 12h16M4 18h16M9 3v6M15 9v6M8 15v6",
+    settings: "M4 7h16M4 12h16M4 17h16M9 5v4M15 10v4M7 15v4",
+    "theme-dark": "M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z",
+    "theme-light": [
+      {d: "M12,8 A4,4 0 1,1 12,16 A4,4 0 1,1 12,8 Z"},
+      {d: "M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8"},
+    ],
+    "theme-system": [
+      {d: "M5 4H19A2 2 0 0 1 21 6V14A2 2 0 0 1 19 16H5A2 2 0 0 1 3 14V6A2 2 0 0 1 5 4Z"},
+      {d: "M8.5 20h7M12 16v4"},
+    ],
+    estop: [
+      {d: "M12 2 19.1 4.9 22 12 19.1 19.1 12 22 4.9 19.1 2 12 4.9 4.9Z"},
+      {d: "M9 8H15A1 1 0 0 1 16 9V15A1 1 0 0 1 15 16H9A1 1 0 0 1 8 15V9A1 1 0 0 1 9 8Z", fill: "currentColor", stroke: "none"},
+    ],
+    pose: [
+      {d: "M12,5 A7,7 0 1,1 12,19 A7,7 0 1,1 12,5 Z"},
+      {d: "M12 2v3M12 19v3M2 12h3M19 12h3"},
+    ],
+    yaw: [
+      {d: "M12,3 A9,9 0 1,1 12,21 A9,9 0 1,1 12,3 Z"},
+      {d: "m15.5 8.5-2.1 4.9-4.9 2.1 2.1-4.9z"},
+    ],
+    battery: [
+      {d: "M4.5 8H16.5A1.5 1.5 0 0 1 18 9.5V14.5A1.5 1.5 0 0 1 16.5 16H4.5A1.5 1.5 0 0 1 3 14.5V9.5A1.5 1.5 0 0 1 4.5 8Z"},
+      {d: "M21 10.5v3M6.5 10.5v3M10 10.5v3M13.5 10.5v3"},
+    ],
+    safety: "M12 3l7 3v5c0 4.4-3 7.5-7 9-4-1.5-7-4.6-7-9V6z",
     back: "M15 5l-7 7 7 7",
     refresh: "M20 7v5h-5M4 17v-5h5M6 7a7 7 0 0 1 12-1l2 2M18 17a7 7 0 0 1-12 1l-2-2",
     download: "M12 3v12M7 10l5 5 5-5M4 17v4h16v-4",
@@ -562,16 +591,32 @@ export function actionIcon(button, name) {
     left: "M4 8h9a7 7 0 0 1 7 7v4M9 3L4 8l5 5",
     right: "M20 8h-9a7 7 0 0 0-7 7v4M15 3l5 5-5 5",
   };
-  if (!paths[name]) throw new RangeError(`Unknown action icon: ${name}`);
+  const spec = paths[name];
+  if (!spec) throw new RangeError(`Unknown action icon: ${name}`);
   const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
   for (const [key, value] of Object.entries({viewBox: "0 0 24 24", fill: "none", stroke: "currentColor",
     "stroke-width": "2", "stroke-linecap": "round", "stroke-linejoin": "round", class: "ui-icon", "aria-hidden": "true", focusable: "false"})) svg.setAttribute(key, value);
-  const path = document.createElementNS(svg.namespaceURI, "path");
-  path.setAttribute("d", paths[name]); svg.append(path);
-  const label = document.createElement("span");
+  for (const part of Array.isArray(spec) ? spec : [{d: spec}]) {
+    const path = document.createElementNS(svg.namespaceURI, "path");
+    path.setAttribute("d", part.d);
+    if (part.fill) path.setAttribute("fill", part.fill);
+    if (part.stroke) path.setAttribute("stroke", part.stroke);
+    svg.append(path);
+  }
   const details = [...button.querySelectorAll(":scope > small")];
-  label.textContent = [...button.childNodes].filter(node => node.nodeType === 3 ||
-    (node.nodeType === 1 && !node.matches(".ui-icon, small"))).map(node => node.textContent).join("");
-  button.replaceChildren(svg, label, ...details);
+  const quiet = [...button.querySelectorAll(":scope > .sr-only")];
+  const visible = [...button.childNodes].filter(node => node.nodeType === 3 ||
+    (node.nodeType === 1 && !node.matches(".ui-icon, small, .sr-only"))).map(node => node.textContent).join("").trim();
+  const children = [svg];
+  if (visible) {
+    const label = document.createElement("span");
+    label.textContent = visible;
+    children.push(label);
+  }
+  button.replaceChildren(...children, ...quiet, ...details);
   return button;
+}
+
+for (const button of document.querySelectorAll("[data-action-icon]")) {
+  if (!button.querySelector(":scope > .ui-icon")) actionIcon(button, button.getAttribute("data-action-icon"));
 }

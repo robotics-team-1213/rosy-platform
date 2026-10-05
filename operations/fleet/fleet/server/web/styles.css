@@ -447,9 +447,24 @@ main {
 .log .good { color: var(--nominal-quiet); }
 .log-panel:not([open]) .log { max-height: calc(var(--text-micro) * var(--leading-copy) * 8); }
 
-/* D-414 — 비상 정지: 팔각형 아이콘 하나로 깔끔하게. 텍스트 없이 아이콘만. */
-.estop { width: var(--target-irreversible); height: var(--target-irreversible); padding: 0; display: inline-flex; align-items: center; justify-content: center; }
-.estop-icon { width: calc(var(--target-irreversible) * 0.55); height: calc(var(--target-irreversible) * 0.55); }
+/* D-414 — 비상 정지: 팔각 아이콘과 보이는 동사. 래치 부제는 아이콘 줄 아래로 접힌다. */
+.estop {
+  min-width: var(--target-irreversible);
+  min-height: var(--target-irreversible);
+  width: auto;
+  height: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.estop .ui-icon {
+  width: calc(var(--target-irreversible) * 0.55);
+  height: calc(var(--target-irreversible) * 0.55);
+  flex: none;
+}
+.estop span { white-space: nowrap; }
+.estop small { flex-basis: 100%; text-align: center; }
 
 /* D-417 — 카메라 컴팩트 모드: 소스 없거나 연결 불가면 한 줄로 접는다. */
 .vision-preview:has(> .vision-frame[data-state="waiting"]) .vision-controls,
@@ -500,7 +515,7 @@ main {
   .panel[aria-labelledby="roster-heading"] { order: 1; }
   .panel[aria-labelledby="map-heading"] { order: 2; }
   .ops-block { order: 3; }
-  /* 접힌 머리가 좁아지면 부제와 정지 범위를 숨긴다. 정지의 이름(aria-label)은 그대로다. */
+  /* 접힌 머리가 좁아지면 부제와 정지의 래치 부제를 숨긴다. 보이는 동사 비상 정지는 남는다. */
   ui-topbar ui-brand small { display: none; }
   #estop small { display: none; }
 }
