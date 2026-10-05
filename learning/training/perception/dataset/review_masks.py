@@ -117,8 +117,25 @@ def from_color(raw, width, height, labelmap_raw, binding):
     return encode(result)
 
 
+def flood_region_photo(photo_bgr, seed, tolerance):
+    """4-connected region around `seed` within perceptual distance `tolerance`.
+
+    Distance is Euclidean in CIELAB, so one tolerance step means roughly one
+    just-noticeable colour step anywhere: bright walls and dim carpets compare
+    on the same scale, unlike RGB where bright areas spread further per step.
+    4-connectivity (not 8) keeps diagonal leaks out; the seed's own component
+    is the region, so a tolerance that reaches across the photo still cannot
+    jump a one-pixel boundary of a different colour.
+    """
+    lab = cv2.cvtColor(photo_bgr, cv2.COLOR_BGR2Lab).astype(np.int32)
+    target = lab[seed[1], seed[0]]
+    inside = (np.sqrt(((lab - target) ** 2).sum(axis=2)) <= float(tolerance))
+    _, labels = cv2.connectedComponents(inside.astype(np.uint8), connectivity=4)
+    return labels == labels[seed[1], seed[0]]
+
+
 def flood_region(store, index, review, seed, tolerance):
-    """4-connected photo region around `seed` within RGB distance `tolerance`.
+    """Load the frame photo and select the flood region on it.
 
     The mask follows the photo's own colour boundary: only the connected area
     of similar pixels is selected, so a wall click does not spill onto the
@@ -129,10 +146,7 @@ def flood_region(store, index, review, seed, tolerance):
     photo = cv2.imdecode(np.frombuffer(raw, np.uint8), cv2.IMREAD_COLOR)
     if photo is None or (photo.shape[1], photo.shape[0]) != (review['width'], review['height']):
         raise ValueError('source image dimensions differ')
-    target = photo[seed[1], seed[0]].astype(np.int32)
-    inside = (np.sqrt(((photo.astype(np.int32) - target) ** 2).sum(axis=2)) <= float(tolerance))
-    _, labels = cv2.connectedComponents(inside.astype(np.uint8), connectivity=4)
-    return labels == labels[seed[1], seed[0]]
+    return flood_region_photo(photo, seed, tolerance)
 
 
 def update(store, index, body, conflict):

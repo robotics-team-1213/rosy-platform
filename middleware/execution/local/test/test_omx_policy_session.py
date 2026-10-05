@@ -2,6 +2,8 @@ import hashlib
 import json
 from pathlib import Path
 import sys
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
 from datetime import datetime,timezone
 
@@ -470,3 +472,38 @@ def test_final_stop_read_latency_cannot_expire_lease_then_dispatch(tmp_path):
     session.fence.is_open=delayed
     with pytest.raises(PermissionError):session.submit(candidate(session))
     assert not client.commands and session.hold_reason
+
+
+def test_queued_observation_cannot_reopen_revoked_poll_or_repeat_cancel(tmp_path, monkeypatch):
+    session, client, clock, authority, _ = setup_session(tmp_path)
+    assert session.submit(candidate(session)).accepted
+    entered, release, observation_started = threading.Event(), threading.Event(), threading.Event()
+    original = session._binding
+    def delayed_binding():
+        entered.set()
+        assert release.wait(3)
+        return original()
+    monkeypatch.setattr(session, '_binding', delayed_binding)
+    def queued_observation():
+        observation_started.set()
+        session.observe(JointStateSnapshot({'joint_1': .1, 'joint_2': 0.}, 11, clock[0], 'cal-7'))
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        poll = executor.submit(session.poll)
+        try:
+            assert entered.wait(2)
+            observation = executor.submit(queued_observation)
+            assert observation_started.wait(2)
+            assert not observation.done()
+            authority[0] = False
+        finally:
+            release.set()
+        with pytest.raises(PermissionError, match='policy_authority_stale'):
+            poll.result(timeout=3)
+        with pytest.raises(PermissionError, match='policy_authority_stale'):
+            observation.result(timeout=3)
+    assert session.hold_reason == 'policy_authority_stale'
+    assert session._snapshot.sequence == 10
+    assert len(client.commands) == 1 and client.handles[0].cancel_calls == 1
+    with pytest.raises(PermissionError, match='policy_authority_stale'):
+        session.poll()
+    assert client.handles[0].cancel_calls == 1

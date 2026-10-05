@@ -302,6 +302,6 @@
 
 - 2026-10-05 · uncommitted · docs: give the header and sidebar one layout each
 - 2026-10-05 · uncommitted · uiux: align surface names, stop label, and icons
-- 2026-10-05 · uncommitted · feat(validation): D-426 T2 통신·결과 상관 탐침
-- 2026-10-05 · uncommitted · feat(validation): D-426 T1 실행 격리·preflight runner 착수
-- 2026-10-05 · uncommitted · docs(learning): D-465 모델 PC 픽셀 처리 파이프라인 구축 계획
+- 2026-10-05 · uncommitted · validation: 차선 개선040 두 실기 배포·source 일치
+- 2026-10-05 · uncommitted · feat(validation): D-426 T5 장애 주입 시나리오·sim base watchdog
+- 2026-10-05 · uncommitted · test(execution): same-attempt native evidence chain

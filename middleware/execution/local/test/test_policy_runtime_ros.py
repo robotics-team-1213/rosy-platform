@@ -7,8 +7,10 @@ Run only with domain199 and localhost discovery, with basetemp on X:.
 import hashlib
 import json
 import os
+import sys
 import threading
 import time
+import traceback
 from dataclasses import replace, asdict
 from uuid import uuid4
 
@@ -27,6 +29,7 @@ from omx_adapter.ros_runtime import RosArmCommandRuntime
 from rosy.execution.local.policy_install import InstallBinding, load_policy
 from rosy.execution.local.policy_journal import PolicyExecutionJournal
 from rosy.contracts.learning import seal
+from native_parent_chain import submit_parent, export_parent
 
 pytestmark = pytest.mark.skipif(
     os.environ.get('ROS_DOMAIN_ID') != '199' or not (
@@ -60,7 +63,8 @@ def install_transport_fixture(session, runtime, policy_root):
 
 
 @pytest.mark.parametrize('revoke', [False, True])
-def test_native_session_goal_facts_and_revocation(tmp_path, revoke):
+@pytest.mark.parametrize('with_parent',[False,True],ids=['native_only','parent_episode_fleet'])
+def test_native_session_goal_facts_and_revocation(tmp_path, revoke, with_parent):
     journal = PolicyExecutionJournal(tmp_path/'policy.sqlite3')
     session, _, _, authority, policy_root = setup_session(
         tmp_path,execution_journal=journal,max_lease_duration_ns=15_000_000_000)
@@ -68,12 +72,13 @@ def test_native_session_goal_facts_and_revocation(tmp_path, revoke):
     prefix = '/isolated_policy_'+suffix
     rclpy.init()
     nodes = [Node('policy_'+role+'_'+suffix) for role in ('owner','server','feedback')]
-    received, server_canceled = threading.Event(), threading.Event()
+    received, server_canceled, fixture_shutdown = threading.Event(), threading.Event(), threading.Event()
     def execute(handle):
         received.set()
         if revoke:
             deadline = time.monotonic()+6
-            while not handle.is_cancel_requested and time.monotonic()<deadline:
+            while (not handle.is_cancel_requested and not fixture_shutdown.is_set()
+                   and time.monotonic()<deadline):
                 time.sleep(.005)
             if handle.is_cancel_requested:
                 server_canceled.set();handle.canceled()
@@ -118,17 +123,23 @@ def test_native_session_goal_facts_and_revocation(tmp_path, revoke):
         session._lease = replace(session.lease,issued_at_ns=now,expires_at_ns=now+12_000_000_000)
         session.bind_runtime(runtime)
         state, _ = session.capture_observation()
-        result = session.submit(candidate(session,sequence=state.sequence,
-            observed_at_ns=int(state.received_at*1e9),produced_at_ns=int(runtime.monotonic()*1e9)))
-        assert result.accepted and received.wait(3)
+        action_candidate = candidate(session,sequence=state.sequence,
+            observed_at_ns=int(state.received_at*1e9),produced_at_ns=int(runtime.monotonic()*1e9))
+        if with_parent:
+            command,runner,api,parent=submit_parent(session,journal,tmp_path)
+        else:
+            result=session.submit(action_candidate)
+            assert result.accepted
+            command=result.command_id
+        assert received.wait(3)
         if revoke:authority[0] = False
         deadline = time.monotonic()+7
-        record = journal.read(result.command_id)
+        record = journal.read(command)
         while not record['events'] or record['events'][-1]['kind'] != 'TERMINAL_RESULT':
             assert time.monotonic()<deadline,record
-            time.sleep(.005);record = journal.read(result.command_id)
+            time.sleep(.005);record = journal.read(command)
         assert record['events'][0]['kind'] == 'GOAL_ACCEPTED'
-        assert record['driver_goal_id'] != result.command_id
+        assert record['driver_goal_id'] != command
         assert record['events'][-1]['status'] == (5 if revoke else 4)
         assert all(event['goal_id'] == record['driver_goal_id'] for event in record['events'])
         if revoke:
@@ -136,23 +147,56 @@ def test_native_session_goal_facts_and_revocation(tmp_path, revoke):
             assert runtime.owner.state == 'hold'
         source = journal.read_source(record['intent']['source_revision'])
         assert source['payloads']['policy/model.bin'] == b'host-fixture'
+        if with_parent:
+            export_parent(tmp_path,journal,command,runner,api,parent,revoke=revoke)
         files = ['middleware/execution/local/src/rosy/execution/local/'+name+'.py'
-                 for name in ('omx_policy','policy_runtime','policy_source','policy_journal')]
+                 for name in ('omx_policy','policy_runtime','policy_source','policy_journal','policy_install')]
+        files += ['contracts/learning/src/rosy/contracts/learning/artifacts.py']
         files += ['middleware/apps/device/omx/adapter/omx_adapter/'+name+'.py'
                   for name in ('command_owner','ros_runtime')]
+        if with_parent:
+            files += ['middleware/execution/local/src/rosy/execution/local/'+name+'.py'
+                      for name in ('policy_parent','policy_episode')]
+            files += ['middleware/apps/device/omx/adapter/omx_adapter/'+name+'.py'
+                      for name in ('policy_parent','action_store_readback','action_api',
+                                   'action_runner','action_store','journal_identity')]
+            files += ['contracts/learning/src/rosy/contracts/learning/'+name+'.py'
+                      for name in ('omx_execution','omx_execution_intent')]
+            files += ['learning/registry/policy/fleet_join.py',
+                      'middleware/execution/local/test/native_parent_chain.py',
+                      'middleware/execution/local/test/test_policy_runtime_ros.py']
         proof = dict(scope='isolated actual ROS transport; synthetic policy/authority; no inference/task/hardware/Fleet',
-            fixture_budgets=dict(source_ns=2_000_000_000,joint_s=2.0,lease_ns=12_000_000_000),
+            fixture_budgets=dict(source_ns=2_000_000_000,joint_s=2.0,lease_ns=12_000_000_000,
+                                poll_period_s=.01),
             short_deadline_acceptance=False,revoke=revoke,journal=record,
+            parent_chain_verified=with_parent,
             source_revision=record['intent']['source_revision'],
             loaded_source_sha256={path:hashlib.sha256((ROOT/path).read_bytes()).hexdigest() for path in files})
         (tmp_path/'transport-receipt.json').write_text(json.dumps(proof,indent=2),encoding='utf-8')
     finally:
+        primary_error=repr(sys.exc_info()[1]) if sys.exc_info()[1] is not None else None
+        fixture_shutdown.set()  # Tear down only this synthetic server; never a robot command.
         publisher_timer.cancel();runtime._timer.cancel()
         stopped = executor.shutdown(timeout_sec=5)
         spinner.join(3)
+        workers_drained = threading.Event()
+        def drain_workers():
+            executor._executor.shutdown(wait=True)
+            workers_drained.set()
+        drainer = threading.Thread(target=drain_workers,daemon=True)
+        drainer.start()
+        workers_stopped = workers_drained.wait(5)
+        (tmp_path/'native-events.json').write_text(json.dumps(dict(events=native_events,
+            server_canceled=server_canceled.is_set(),hold=session.hold_reason,
+            executor_stopped=stopped,workers_stopped=workers_stopped,
+            spinner_alive=spinner.is_alive(),primary_error=primary_error,
+            remaining_thread_stacks={} if workers_stopped else {
+                str(ident):traceback.format_stack(frame)
+                for ident,frame in sys._current_frames().items()}),indent=2),encoding='utf-8')
+        # Destroying ROS entities with live callbacks can hide the original
+        # failure or block forever. The isolated subprocess supervisor owns
+        # termination when this bounded drain fails.
+        assert stopped and workers_stopped and not spinner.is_alive(),'isolated executor did not shut down'
         runtime.destroy();server.destroy()
         for node in nodes:node.destroy_node()
-        rclpy.shutdown()
-        (tmp_path/'native-events.json').write_text(json.dumps(dict(events=native_events,
-            server_canceled=server_canceled.is_set(),hold=session.hold_reason),indent=2),encoding='utf-8')
-        assert stopped and not spinner.is_alive(),'isolated executor did not shut down'
+        rclpy.try_shutdown()

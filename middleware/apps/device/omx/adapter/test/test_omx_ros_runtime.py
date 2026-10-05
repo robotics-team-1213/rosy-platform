@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import threading
 import time
+from uuid import uuid4
 from concurrent.futures import ThreadPoolExecutor
 import re
 
@@ -18,6 +19,66 @@ from sensor_msgs.msg import JointState  # noqa: E402
 from omx_adapter.command_owner import ArmCommandConfig, TrajectoryCommand  # noqa: E402
 from omx_adapter.manipulation_plan import JointTrajectoryPoint  # noqa: E402
 from omx_adapter.ros_runtime import RosArmCommandRuntime, RosArmPhaseGoalPort  # noqa: E402
+
+
+def test_slow_watchdog_does_not_exclude_joint_callback_delivery():
+    """Actual DDS intake can run while a synthetic watchdog is blocked."""
+    from omx_adapter.command_owner import CommandDecision
+
+    rclpy.init()
+    suffix = uuid4().hex[:10]
+    owner_node = Node('slow_watchdog_owner_' + suffix)
+    source_node = Node('slow_watchdog_source_' + suffix)
+    entered, release, observed = threading.Event(), threading.Event(), threading.Event()
+    config = ArmCommandConfig(
+        enabled=True, workcell_id='test_cell', instance_id='test_instance',
+        joint_names=('joint1',), position_limits={'joint1': (-1., 1.)},
+        velocity_limits={'joint1': 1.}, acceleration_limits={'joint1': 2.},
+        allowed_owners=('moveit',), calibration_revision='test_calibration',
+        max_joint_state_age_s=.5, max_goal_duration_s=2., action_timeout_s=3.,
+    )
+    topic = '/isolated_watchdog_' + suffix + '/joint_states'
+    runtime = RosArmCommandRuntime(
+        owner_node, config, joint_state_topic=topic,
+        trajectory_action='/isolated_watchdog_' + suffix + '/trajectory',
+        poll_period_s=.01,
+    )
+    class SlowBinding:
+        def poll(self):
+            entered.set()
+            assert release.wait(5), 'synthetic watchdog was not released'
+            return CommandDecision(True, 'ready', 'ready')
+        def observe(self, snapshot):
+            assert runtime.owner.observe_joint_state(snapshot)
+            observed.set()
+    runtime._policy_binding = SlowBinding()
+    publisher = source_node.create_publisher(JointState, topic, 1)
+    executor = MultiThreadedExecutor(num_threads=3)
+    executor.add_node(owner_node); executor.add_node(source_node)
+    spinner = threading.Thread(target=executor.spin, daemon=True)
+    spinner.start()
+    try:
+        assert entered.wait(3)
+        assert runtime._subscription.callback_group.can_execute(runtime._subscription), (
+            'watchdog excludes joint intake before any owner/session lock'
+        )
+        deadline = time.monotonic() + 2
+        while not observed.is_set() and time.monotonic() < deadline:
+            message = JointState(); message.name = ['joint1']; message.position = [0.]
+            publisher.publish(message)
+            observed.wait(.01)
+        assert observed.is_set(), 'joint snapshot not delivered while watchdog blocked'
+        assert not release.is_set()
+        assert runtime.owner._joint_state is runtime.latest_joint_state
+    finally:
+        release.set()
+        runtime._timer.cancel()
+        assert executor.shutdown(timeout_sec=5)
+        spinner.join(3)
+        assert not spinner.is_alive()
+        runtime.destroy()
+        source_node.destroy_node(); owner_node.destroy_node()
+        rclpy.try_shutdown()
 
 
 def test_runtime_subscribes_to_feedback_and_submits_through_one_ros_action_client():

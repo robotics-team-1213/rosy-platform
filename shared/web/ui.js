@@ -552,6 +552,7 @@ markHangulTree(document.documentElement);
 // on a stroked outline. .sr-only stays a screen-reader label and is not copied into the visible span.
 export function actionIcon(button, name) {
   const paths = {
+    wifi: "M2 8a16 16 0 0 1 20 0M5 12a11 11 0 0 1 14 0M8 16a6 6 0 0 1 8 0M12 20h.01",
     fit: "M4 4h16v16H4zM8 8h8v8H8z",
     expand: "M9 3H3v6M15 3h6v6M3 15v6h6M21 15v6h-6",
     tools: "M4 6h16M4 12h16M4 18h16M9 3v6M15 9v6M8 15v6",

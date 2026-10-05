@@ -9,7 +9,7 @@ import yaml
 from control.sensing.perception.camera_ground import nominal_ground_plane
 from control.sensing.perception.lane_keep import CORNER_MAX_ERROR as CORNER_CAP, FLIP_WINDOW_FRAMES as FLIP_WINDOW, LaneKeeper
 from control.sensing.perception.lane_keep import SIDE_X_M
-from control.sensing.perception.lane_keep_pairs import pair_conflicts
+from control.sensing.perception.lane_keep_pairs import is_pair, pair_conflicts
 
 PKG = Path(__file__).resolve().parents[1]
 PROFILE = yaml.safe_load((Path(__file__).resolve().parents[3] / "middleware" / "apps" / "device" / "pinky" / "profile" / "config" / "camera_nominal.yaml").read_text(encoding="utf-8"))
@@ -376,6 +376,76 @@ def test_lane_lines_splayed_by_the_nominal_ground_still_pair():
     obs, last = _keep(_render([(HALF, 0.09), (-HALF, -0.09)]))
     assert last["strategy"] == "both" and abs(obs.error) < 0.1
     assert not _conflicts(last)
+
+
+def test_outward_splay_keeps_both_boundaries_within_the_seen_lane_width():
+    # Replay: nominal projection splays the left/right lines by 27/-8 deg.
+    # Each is within the boundary heading limit; their common stretch stays
+    # a lane wide. Dropping the left line adds a rightward steering bias.
+    left = _record(0.10, 27.0, 0.10, "left")
+    right = _record(-0.111, -8.0, 0.23, "right")
+    assert is_pair(left, right, 2 * HALF, SIDE_X_M)
+    assert pair_conflicts([left], [right], HALF, SIDE_X_M) == []
+    target, strategy = _keeper()._choose([left], [right], HALF)
+    assert strategy == "both" and abs(target[1]) < 0.02
+
+
+def test_outward_splay_does_not_relax_the_seen_width_or_individual_heading():
+    right = _record(-0.111, -8.0, 0.23, "right")
+    assert not is_pair(_record(0.20, 27.0, 0.114, "left"), right, 2 * HALF, SIDE_X_M)
+    assert not is_pair(_record(0.10, 35.0, 0.10, "left"), right, 2 * HALF, SIDE_X_M)
+    # A closing chord gets no outward-splay exception.
+    left = _record(0.09, -27.0, 0.06, "left")
+    right = _record(-0.09, 8.0, 0.06, "right")
+    assert not is_pair(left, right, 2 * HALF, SIDE_X_M)
+
+
+def test_steep_crossing_near_the_path_is_not_a_lone_lane_boundary():
+    # Replay: a transverse marking projects to 61 deg, spanning both sides
+    # of the path, but its extrapolated offset is less than one lane width.
+    slope = math.tan(math.radians(61.0))
+    image = _segment(_render(), -0.121 - 0.241 * slope, slope, 0.241, 0.434)
+    obs, last = _keep(image)
+    assert obs is None and last['target_m'] is None
+    assert any(c['reason'] == 'steep_crossing' for c in last['candidates'])
+
+
+def test_short_steep_boundary_near_the_path_is_not_a_full_lane_crossing():
+    # A curve approaches the path but does not span the lane. Mere contact
+    # with the path tolerance is insufficient evidence of a transverse mark.
+    image = _segment(_render(), 0.04 - 0.22 * 1.5, 1.5, 0.20, 0.27)
+    obs, last = _keep(image)
+    assert obs is not None
+    assert not any(c['reason'] == 'steep_crossing' for c in last['candidates'])
+
+
+def test_outward_splay_requires_an_observed_common_stretch():
+    left = _record(0.10, 27.0, 0.10, "left")
+    right = _record(-0.111, -8.0, 0.05, "right")
+    shift = 0.4 * right['direction']
+    right['centre'] += shift
+    right['ends_m'] = [(np.asarray(end) + shift).tolist() for end in right['ends_m']]
+    assert not is_pair(left, right, 2 * HALF, SIDE_X_M)
+
+
+def test_crosswalk_blob_does_not_erase_a_continuous_lane_boundary():
+    # Several wide bars produce the largest RANSAC diagonal, which is a blob.
+    # The continuous left boundary is still supported by thin paint and a
+    # dark flank; it must survive the failed diagonal hypothesis.
+    image = _render([(0.09, 0.0)])
+    for centre in (-0.08, -0.02, 0.04):
+        bars = np.isfinite(X) & (X > 0.18) & (X < 0.30) & (np.abs(Y - centre) <= 0.02)
+        image[bars] = 195
+    obs, last = _keep(image)
+    assert obs is not None and last['strategy'] == 'left_only'
+    assert abs(last['target_m'][1]) < 0.02
+
+
+def test_blob_retry_does_not_invent_a_boundary_on_a_solid_patch():
+    from control.sensing.perception.lane_keep_lines import extract_lines
+    x, y = np.meshgrid(np.arange(0.15, 0.45, 0.005), np.arange(-0.10, 0.10, 0.005))
+    fitted, blobs = extract_lines(np.column_stack((x.ravel(), y.ravel())), np.random.default_rng(0))
+    assert not fitted and blobs
 
 
 def _render_corner(line_x, open_side):

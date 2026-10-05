@@ -5906,6 +5906,69 @@ osy-d395-s1d\`.
 - gate 변화: 없음(SOURCE/LOCAL 판정 모듈). 실제 프로세스 사이 관측·ROS-SIM은 T6.
 - 결정: fake HTTP/WS는 LOCAL만 증명한다 — probe는 그 LOCAL 판정 규칙의 정본이고, T6 회차 기록이 같은 판정기를 지나야 ROS-SIM 판정이 된다.
 
+## 2026-10-05 · uncommitted · fix(validation): D-426 T2 근거 없는 PASS 거부
+
+- 변경: 통신 상관 판정은 robot+attempt·실제 goal·수락·CORE terminal mapping·시간순서를 모두 대조한다. 다른 로봇 결과, 정확한 상태와 모순되는 CORE event, 역순은 FAIL이다. goal/CORE 근거 누락과 취소 HOLD의 정산 권한 근거 부족은 INCONCLUSIVE다. 기존 Fleet의 취소 권한·실행 API는 변경하지 않았다.
+- 시계: 현재 source-clock 나이는 now의 유효한 인접 표본 보간값에서 원본 timestamp를 뺀다. 수신 지연과 구분하며 pause 때 가상의 나이를 늘리지 않는다. 표본 밖·rollback·손상·비유한 값은 unknown이다.
+- 증거: 원래 probe 계약 경로 19 FAIL과 두 로봇 중 응답 누락 1 FAIL을 재현했다. 중간 분기 오류를 고친 최종 관련 기존 traffic/boundary 포함 91 PASS(5.41s)다. 실제 프로세스 통신·SIM·기기·주행은 NOT_RUN이다.
+- gate 변화: host SOURCE/LOCAL 판정 보완만이며 실제 ROS-SIM 회차와 T3 구현은 추가하지 않는다.
+
+## 2026-10-05 · uncommitted · fix(perception): 차선 짝 splay와 전체 차로 횡단 표시 회귀 수정
+
+- 변경: fix/lane-keep-replay에서 바깥으로 벌어진 경계의 개별 heading 한도·공통 구간 폭 검사를 유지하며 짝을 보완하고, 급경사 paint가 차로 전체를 가로지르면 단독 경계에서 제외한다. 짧은 곡선 반례와 기존 chord/junction/corner 회귀를 검증한다.
+- 증거: 148프레임 baseline/후보 직진 평균 절대 error 0.150088→0.051813, 튐0.014→0.007, 비가시14→21이다. 독립 코드 리뷰는 중대 결함 없음, lane test57PASS/NEW0이다. 별도7녹화2252프레임 영향과 전체 검증 결과는 docs/validation/lane-keep-regression-2026-10-05/result.md에 기록한다. 앞선 실기 정지 관측 기록도 원본 그대로 보존한다.
+- gate 변화: 직진 수치 조건은 통과하나 비가시 정답·추가 곡선/교차로·장치 source 일치·현장 R1/R2는 미검증으로 주행 HOLD다. 장치 설정·모델 hold·서비스·주행 명령을 바꾸지 않았다.
+
+## 2026-10-05 · uncommitted · feat(validation): D-426 T3 독립 관측기·수치 판정기
+
+- 변경: `tools/validation/fleet_gazebo/assertions.py` 추가 — 관측 기록에 대한 순수 수치 판정(도착 0.10 m/10°·정지 |v|0.01·|w|0.03 1 s 연속·footprint 경계 여유 0.10 m 중심 거리 아님·contact 0 양성 대조 통과시만 단언·빈 구간 >0.15 s 충돌 INCONCLUSIVE·map/odom 혼용·stale pose monotonic INCONCLUSIVE·pause/reset epoch 분리·성공빛무 이동·명령받지 않은 로봇 이동). 단언 기록은 관측원·단위·시계·임계값·원본 위치를 남긴다. `observer.py` 추가 — 주입 공급원 기록 계층(epoch·빈 구간·20 Hz·publisher endpoint/GID/pid 소유권 검사). 실제 gz-transport 연결은 T6 회차가 주입한다.
+- 증거: test/test_fleet_gazebo_assertions.py 15개 판정 계약(실패 시험 선행 + 변이 3종: 어긋난 목표·이동 삭제·로봇 겹침이 모두 FAIL). 회귀 run_contracts 12개 통과. URDF 접촉 센서 배선은 양성 대조와 함께 T6에서 착수한다(계획 자체 규칙 — 대조 없이 contact-0 단언 금지).
+- gate 변화: 없음(SOURCE/LOCAL 판정 모듈). 실측 임계값은 시뮬 수용 목표이며 실물 안전 기준이 아니다.
+- 결정: observer truth는 Fleet/CORE 판단에 주입하지 않는다(D-426 결정 2). 이상적 오도메트리 전제는 manifest 기록 사항(T6).
+
+## 2026-10-05 · uncommitted · feat(fleet): D-426 T4 공유 구간 진입 허가·점유
+
+- 변경: `operations/fleet/fleet/server/traffic_reservations.py`·`segment_store.py` 추가 — 같은 Task DB에 구간 정의(구간 ID·지도 revision·진입/출구·안전 대기점·반경)와 grants 표. 상태 FREE(행 없)→RESERVED→OCCUPIED→RELEASING→FREE, 불명 UNKNOWN, Fleet 단일 writer. (1) request는 활성 상태 전부 재할당 거부 — 시한만 지난 RESERVED도 이전 실행의 밖-비활성·정지 확인 전 재할당 금지. (2) verify_grant는 수락 측 결속(Task/attempt·robot·구간·지도 revision)·세대·만료 검증. (3) confirm_entry는 신뢰 위치가 구간 안일 때만, 만료는 경계에서 재검사(밖 정지). (4) begin_release는 신선한(≤2 s) 출구 이탈 관측+종단 실행 결과 대조, confirm_exit로만 FREE. (5) mark_unknown(링크 상실)·시간 만료만으로 FREE 아님. (6) RESERVED 60 s 초과 대기는 운영자 대조 보고(자동 후반전 금지). Fleet 크기 판정 35878 재기록.
+- 증거: test_traffic_reservations 10개 계약(동시 진입·식별자·지도 revision·위치 미확정·만료 경계·UNKNOWN 재진입 거부·시한만 지난 RESERVED·해제 근거 3종 거부·결속/세대/만료·재시작 잔존·대기 보고) + 기존 traffic·boundary·구조 포함 90 PASS.
+- gate 변화: SOURCE/LOCAL. T4 전체 수용은 HOLD — 실제 로봇 진입·Nav2 경로 제약·robot-side gate 미구현(계획 T4 항목 4·5, goal 분할만으로 진입 gate 주장 불가).
+- 결정: D-426 결정 3 준수 — 통신 timeout은 공간이 비었다는 증명이 아니다.
+
+## 2026-10-05 · uncommitted · fix(ui): 네트워크 설치 작업을 연결 중심으로 정리
+
+- 변경: Wi-Fi 이름·암호의 지속 라벨과 공용 Wi-Fi 아이콘을 사용하고, 프로파일·AP·모드 전환은 기본 접힌 고급 작업으로 묶는다. 연결만 primary이며 결과·차단 안내는 접힌 영역 밖에 유지한다. D-432 추가 결정에 근거와 검증 범위를 기록했다.
+- 검증: 실제 Chromium fixture 1366×768·390×844에서 작업 순서와 라벨을 확인했다. 원본 상태·권한·확인·요청 중 잠금·암호 지우기와 API는 유지한다. 관련 브라우저 및 공용 아이콘·자산·토큰 계약 검증은 커밋 전 실행한다.
+- gate 변화: 없음. 화면 SOURCE/LOCAL 보완과 관련 검사 85 PASS이며 실제 네트워크 설정 변경·네이티브 페어링·기기 배포·현장 수용은 이 증거로 통과 처리하지 않는다.
+
+## 2026-10-05 · uncommitted · fix(perception): blob에 지워진 차선 경계 한 번 복구
+
+- 변경: fix/lane-visibility에서 원래 선 승인 0/blob 존재에 한해 원본 paint를 forward support로 한 번 재시도한다. 기존 flank/길이/셀 수·pair/junction/급경사 한도를 유지한다.
+- 증거: 실제148장 비가시21→17, 직진 error0.0518125/jump0.007 유지, on_paint0.063→0.084 한계를 기록한다. 추가7영상2252장 재생·복구 접촉 시트 검토, 관련150PASS/1SKIP/NEW0, 독립 리뷰59PASS/NEW0이다. docs/validation/lane-visibility-deployment-2026-10-05/result.md.
+- gate 변화: SOURCE/LOCAL. 잔여17장의 경로 모호성·실제 keeper 제어·R1/R2는 HOLD다. 배포 증거는 실제 수행 뒤 별도로 기록한다.
+
+## 2026-10-05 · uncommitted · fix(validation): D-426 T3 관측 누락·교차 footprint 성공 판정 차단
+
+- 변경: footprint edge 교차·접촉·포함 관계의 여유를 0으로 판정한다. 정지는 기존 1초·20Hz·최대 0.15초 간격과 두 시계의 연속 관측을 확인한다. publisher 소유권은 모든 기대 topic에 하나의 관측과 정확한 positive PID·endpoint·GID 결속을 요구하며 이름만 같거나 필수 증거가 없으면 검증되지 않는다.
+- 증거: 원래 실제 함수 반례 5 FAIL을 재현한 뒤 T3와 기존 T1/T2 시험 80 PASS/Windows symlink 2 SKIP(1.82s), owned flake8 0이다. 실제 ROS endpoint 결속을 생성하거나 SIM·장치·주행을 실행하지 않았다.
+- gate 변화: host SOURCE/LOCAL 판정 수정만. 실제 observer 수집·ROS-SIM 수용·실물 안전을 증명하지 않는다.
+
+## 2026-10-05 · uncommitted · test(execution): same-attempt native evidence chain
+
+- Change: `feat/omx-policy-native-chain` adds isolated actual Action API to native journal, sealed Episode and offline Fleet correlation. Preparation permits real observation/poll; final session/stop checks delegate to the genuine fence. Stop, lost authority and expiry preserve durable uncertain attempts without retry.
+- Evidence: source-pinned host tests and independent local Linux ROS normal/revocation execution. Original freshness/lease/grant limits remain. Shared-path stale failures and Destroyable diagnostics are retained.
+- Gate: SOURCE/HOST/isolated only. No installed-device, model-inference, receiver, task or physical acceptance; total physical movement stays at most 0.20m across all robots, attempts and coast.
+
+## 2026-10-05 · uncommitted · feat(validation): D-426 T5 장애 주입 시나리오·sim base watchdog
+
+- 변경: (1) `tools/validation/fleet_gazebo/scenarios.py` — M01–M08 수용 행렬의 선언적 정의(필수 판정·blackout 주입·재시작 대상). 주입은 run 소유 경계만(scope="run" 강제), REST/WS/둘 다 blackhole은 별도 회차로 구분. D-419 정책 적용 시한(5.2 s window)과 실제 정지(≤0.50 sim s·이동 ≤0.05 m·회전 ≤0.25 rad)를 같은 시한으로 쓰지 않는 분리 판정 `stop_policy_checks`. 시뮬 profile 0.15 m/s·0.5 rad/s·CORE kill 입력 만료 0.30 s 고정. (2) `integrations/simulation/gazebo/scripts/command_watchdog.py` — CORE와 별도 수명의 sim base 명령 감시 bridge. 최신 cmd_vel 재발행 + 0.30 monotonic s 만료 시 0. CORE writer 불증식, clock pause에도 만료, rclpy 부재 시 안내 후 exit 3.
+- 증거: test/test_fleet_gazebo_scenario_contracts.py 6개 계약(행렬 온전성·run 경계·주입 종류별 분리·알 수 없는 종류/범위 거부·임계값 고정·정책/정지 분리 판정 4종) + test_command_watchdog.py 8개 계약 + 기존 test_fleet_loss 31개 = 45 PASS.
+- gate 변화: SOURCE/LOCAL. 실제 장애 주입 회차·blackhole 실측·재시작 대조는 T6 WSL 회차.
+- 결정: shutdown 시험을 packet blackhole 증거로 쓰지 않는다(계획 T5 항목 1).
+
+## 2026-10-05 · uncommitted · validation: 차선 개선040 두 실기 배포·source 일치
+
+- 변경: CI 통과 source58d246ab3의 signed ARM64 release2026.10.05-040을 9dfk→8kcn 순차 설치하고 실제 CORE/camera cwd·파일 SHA256·live 카메라·정지 상태를 확인했다. source 수정은 없다.
+- 증거: 장치 각각148장 재생 비가시17/복구87–90/MAE0.0518586, keeper p95 14.02/18.31ms, 카메라각80장/10초·정지cmd501/497개다. CI37268067397/build37268633475 success, 두314패키지 ABI PASS, 관측 parameter와 model pointer 경로·존재 유지(내용 전후 해시는 미검증), fresh session logout204·token 제거. docs/validation/lane-visibility-deployment-2026-10-05/deployment.md.
+- gate 변화: DEVICE 소프트웨어 설치·정지 관측·장치 재생 PASS. motor bench·line/threshold·line OFF·화면 안전회로UNVERIFIED를 유지했다. keeper 제어 적용·독립 사람 라벨·R1/R2 현장 주행은 HOLD다.
 ## 2026-10-05 · uncommitted · uiux: align surface names, stop label, and icons
 
 - 변경: 네 표면의 보이는 이름을 Rosy Robot, Rosy Pilot, Rosy Console로 맞추고 한국어는 부제로 두었다. Fleet 정지에 보이는 비상 정지를 붙였고, Pilot 탭과 Android 런처는 pilot.svg를, Fleet 크롬·테마·명렬 측정 아이콘은 actionIcon을 쓴다.

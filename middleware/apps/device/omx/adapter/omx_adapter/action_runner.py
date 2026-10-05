@@ -170,6 +170,18 @@ class ActionRunner:
             raise PermissionError("authority epoch or dispatch generation is stale")
         if not self.capability_current(grant):
             raise PermissionError("workcell capability or configuration is stale")
+        # Provider callbacks may block. They cannot extend the original lease.
+        self._validate_time(grant)
+
+    def _validate_time(self, grant: ActionGrant) -> None:
+        final_now = self.now()
+        if final_now.tzinfo is None or final_now.utcoffset() is None:
+            raise RuntimeError("local clock must return an aware timestamp")
+        final_current = final_now.astimezone(timezone.utc)
+        if grant.expires_at.astimezone(timezone.utc) <= final_current:
+            raise PermissionError("grant is expired")
+        if grant.issued_at.astimezone(timezone.utc) > final_current:
+            raise PermissionError("grant issuance time is in the future")
 
     def _receipt(self, action: Mapping[str, object], *, created: bool,
                  reason: str | None = None) -> dict[str, object]:
@@ -268,7 +280,33 @@ class ActionRunner:
                 raise RuntimeError("phase runner removed its Action journal")
             return self._receipt(current, created=created["created"])
 
+        submission_fence = self.submission_fence
+
         def _fenced_submission() -> dict[str, object]:
+            # Durable preparation may outlive the checked authority. Recheck
+            # under the same fence that protects driver submission/recording.
+            providers = (self.principal_for_peer, self.current_fence,
+                         self.capability_current, self.now)
+            if self._principal(peer_uid) != principal_id:
+                raise PermissionError("peer principal changed during preparation")
+            self._validate(grant)
+            if not self.current_fence(grant.authority_epoch, grant.dispatch_generation):
+                raise PermissionError("authority epoch or dispatch generation is stale")
+            if self._principal(peer_uid) != principal_id:
+                raise PermissionError("peer principal changed during validation")
+            if not self.enabled:
+                raise PermissionError("local Action capability is disabled")
+            self._validate_time(grant)
+            if any(before is not after for before, after in zip(
+                    providers, (self.principal_for_peer, self.current_fence,
+                                self.capability_current, self.now))):
+                raise PermissionError("authority providers changed during validation")
+            # Providers can reenter the owner lock and latch STOP. Read the
+            # same local fence after every provider, immediately before submit.
+            if self.submission_fence is not submission_fence or not submission_fence.is_open(
+                    authority_epoch=grant.authority_epoch,
+                    dispatch_generation=grant.dispatch_generation):
+                raise LocalStopBlocked("local stop latch or generation changed during validation")
             # The driver call AND its ACCEPTED recording stay inside the
             # stop fence: a stop latched while the driver call blocks must
             # find this attempt in ACCEPTED (never a lost in-flight
@@ -283,7 +321,7 @@ class ActionRunner:
             )
 
         try:
-            recorded = self.submission_fence.run_if_open(
+            recorded = submission_fence.run_if_open(
                 authority_epoch=grant.authority_epoch,
                 dispatch_generation=grant.dispatch_generation,
                 fleet_fence_current=lambda: self.current_fence(
