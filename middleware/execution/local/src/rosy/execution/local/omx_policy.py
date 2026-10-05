@@ -134,6 +134,7 @@ class OwnerPolicySession:
             if not isinstance(execution_journal,PolicyExecutionJournal):
                 raise ValueError('native policy execution journal required')
         self._execution_journal=execution_journal
+        self._runtime_binding=None
         self.enabled=enabled;self._ttl=max_lease_duration_ns
         self._lock=threading.RLock();self._snapshot=None;self._active_command=None
         self._history=OrderedDict();self._history_capacity=observation_history_capacity
@@ -145,6 +146,12 @@ class OwnerPolicySession:
 
     @property
     def lease(self): return self._lease
+
+    def bind_runtime(self,runtime):
+        with self._lock:
+            if self._runtime_binding is not None:raise ValueError('runtime already bound')
+            from .policy_runtime import PolicyRuntimeBinding
+            self._runtime_binding=PolicyRuntimeBinding(self,runtime)
 
     def _owner_current(self):
         self._check_hold()
@@ -214,6 +221,7 @@ class OwnerPolicySession:
 
     def _guard(self):
         if self.hold_reason: raise PermissionError(self.hold_reason)
+        if self._runtime_binding is not None:self._runtime_binding.guard()
         if not self.enabled: self._fail('policy_session_disabled')
         doc=self._binding()
         self._check_lease(self.lease,self._now())
@@ -341,21 +349,33 @@ class OwnerPolicySession:
                         expected_start_state_positions=dict(source.positions),
                         start_state_tolerances=dict(cfg.max_start_state_tolerances))
                     if self._execution_journal is not None:
-                        self._execution_journal.prepare(self.lease,candidate,command)
-                        # Storage can block while authority, installed bytes or
-                        # owner/camera identity changes. Re-admit after commit
-                        # inside the existing final submission fence.
-                        _,_,final_cameras=self._guard()
-                    self._stop_open()
-                    final_now=self._now()
-                    self._lease_time(self.lease,final_now)
-                    self._fresh(doc,final_now,final_cameras)
-                    self._source(candidate,doc,final_now)
-                    self._camera_source(candidate,doc,final_now,final_cameras)
-                    if final_now-candidate.produced_at_ns>doc['timing']['max_action_age_ns']:
-                        self._fail('policy_action_stale_at_submit')
-                    self._check_hold()
-                    decision=self.owner.submit(command)
+                        kwargs={} if self._runtime_binding is None else dict(source_revision=self._runtime_binding.source_revision)
+                        self._execution_journal.prepare(self.lease,candidate,command,**kwargs)
+                    registered=False;submission_started=False
+                    try:
+                        if self._runtime_binding is not None:
+                            self._runtime_binding.prepare(command);registered=True
+                        if self._execution_journal is not None:
+                            # Storage and sink registration can block: retain
+                            # main's complete re-admission after durable intent.
+                            _,_,final_cameras=self._guard()
+                        self._stop_open()
+                        final_now=self._now()
+                        self._lease_time(self.lease,final_now)
+                        self._fresh(doc,final_now,final_cameras)
+                        self._source(candidate,doc,final_now)
+                        self._camera_source(candidate,doc,final_now,final_cameras)
+                        if final_now-candidate.produced_at_ns>doc['timing']['max_action_age_ns']:
+                            self._fail('policy_action_stale_at_submit')
+                        self._check_hold()
+                        submission_started=True
+                        decision=(self.owner.submit(command) if self._runtime_binding is None
+                                  else self._runtime_binding.submit(command,candidate))
+                    except Exception:
+                        if registered and not submission_started:self._runtime_binding.abandon(command)
+                        raise
+                    # Once submission starts, transport outcome may be unknown even on
+                    # rejection. Retain the sink for original late goal/cancel facts.
                     if not decision.accepted: self._fail('owner_rejected:'+decision.reason)
                     self._active_command=command.command_id;self._last_submit=final_now
                     return decision

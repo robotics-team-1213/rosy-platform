@@ -568,6 +568,14 @@ class ArmCommandOwner:
             self._last_command_state_sequence = self._joint_state.sequence
             self._active = (command, handle, now)
             self._active_wall = None if self._wall is None else self._wall()
+            post = getattr(self._control_admission, 'check_after_submission', None)
+            try:
+                admitted = post is None or post(command) is True
+            except Exception:
+                admitted = False
+            if not admitted:
+                canceled = self._enter_hold('control_admission_lost')
+                return self._decision(False, 'control_admission_lost', command_id, canceled)
             self._state = "active"
             return self._decision(True, "submitted", command_id)
 
