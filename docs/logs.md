@@ -5980,3 +5980,9 @@ osy-d395-s1d\`.
 - 변경: CI 통과 source58d246ab3의 signed ARM64 release2026.10.05-040을 9dfk→8kcn 순차 설치하고 실제 CORE/camera cwd·파일 SHA256·live 카메라·정지 상태를 확인했다. source 수정은 없다.
 - 증거: 장치 각각148장 재생 비가시17/복구87–90/MAE0.0518586, keeper p95 14.02/18.31ms, 카메라각80장/10초·정지cmd501/497개다. CI37268067397/build37268633475 success, 두314패키지 ABI PASS, 관측 parameter와 model pointer 경로·존재 유지(내용 전후 해시는 미검증), fresh session logout204·token 제거. docs/validation/lane-visibility-deployment-2026-10-05/deployment.md.
 - gate 변화: DEVICE 소프트웨어 설치·정지 관측·장치 재생 PASS. motor bench·line/threshold·line OFF·화면 안전회로UNVERIFIED를 유지했다. keeper 제어 적용·독립 사람 라벨·R1/R2 현장 주행은 HOLD다.
+
+## 2026-10-05 · uncommitted · fix(validation): T5 정지 근거 유효성
+
+- 변경: 정지 판정은 유한·음이 아닌 시각/이동/회전과 수신→정책 적용→정지의 시간 순서를 요구한다. NaN·역순·음수 값은 정상 성공이 아니다. watchdog 명령·실제 수동 SIM 경계와 STEADY clock 보완은 gz_sim journal에 기록했다. 시나리오·CORE 정책 시한·정지 상한을 완화하지 않았다.
+- 검증: 원래 T5 순수 함수 반례와 합성 ROS entrypoint 경계 실패를 재현한 뒤 watchdog/scenario/Fleet-loss 71 PASS(7.38s)다. 실제 주행·Gazebo 회차·장치 장애 주입 없이 HOST 근거만 추가했다.
+- gate 변화: T5 전체 ROS-SIM 수용은 HOLD다. 이번 SOURCE/LOCAL 검증을 물리 정지 시한이나 설치된 base watchdog 증거로 쓰지 않는다.

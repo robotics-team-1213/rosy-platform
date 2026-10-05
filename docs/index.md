@@ -300,8 +300,8 @@
 
 ## 최근 기록
 
+- 2026-10-05 · uncommitted · fix(validation): T5 정지 근거 유효성
 - 2026-10-05 · uncommitted · validation: 차선 개선040 두 실기 배포·source 일치
 - 2026-10-05 · uncommitted · feat(validation): D-426 T5 장애 주입 시나리오·sim base watchdog
 - 2026-10-05 · uncommitted · test(execution): same-attempt native evidence chain
 - 2026-10-05 · uncommitted · fix(learning): 터치 픽셀 허용치 직접 입력
-- 2026-10-05 · uncommitted · fix(validation): T3·Vision observer 시험 import 격리

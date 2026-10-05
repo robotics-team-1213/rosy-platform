@@ -12,6 +12,8 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+import pytest
+
 TOOLS = Path(__file__).resolve().parents[1] / "tools" / "validation" / "fleet_gazebo"
 if str(TOOLS) not in sys.path:
     sys.path.insert(0, str(TOOLS))
@@ -85,3 +87,15 @@ def test_m06_restarts_are_named_processes():
     scenarios = {row.scenario_id: row for row in acceptance_matrix()}
     restarts = scenarios["M06"].restarts
     assert "fleet" in restarts and any(r.startswith("core:") for r in restarts)
+
+
+@pytest.mark.parametrize('values', [
+    (float('nan'),)*5, (10, 0, -10, -1, -1),
+    (0, 5, 5.3, -1, .1), (0, 5, 5.3, .01, -1),
+    (0, float('inf'), float('inf'), .01, .1),
+])
+def test_nonfinite_reversed_or_negative_stop_facts_do_not_pass(values):
+    result = stop_policy_checks(**dict(zip(
+        ('last_hub_receipt_mono', 'policy_applied_mono', 'stopped_at_mono',
+         'travel_m', 'rotation_rad'), values)))
+    assert result['ok'] is False and result['problems']

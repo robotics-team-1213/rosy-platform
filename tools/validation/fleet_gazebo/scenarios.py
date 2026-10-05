@@ -18,6 +18,7 @@ probe(T2)·assertions(T3)가 내린다 — 이 모듈은 시나리오의 형태�
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import math
 
 #: 시뮬 profile 상한(장치 프로필이 아니라 검증 회차의 상한).
 SIM_PROFILE = {"v_max_mps": 0.15, "w_max_radps": 0.5}
@@ -101,6 +102,11 @@ def stop_policy_checks(*, last_hub_receipt_mono: float, policy_applied_mono: flo
                        stopped_at_mono: float, travel_m: float, rotation_rad: float):
     """D-419 정책 적용 시한과 실제 정지를 나눠 판정(같은 시한으로 쓰지 않는다)."""
     problems = []
+    values = (last_hub_receipt_mono, policy_applied_mono, stopped_at_mono, travel_m, rotation_rad)
+    if not all(type(value) in (int, float) and math.isfinite(value) and value >= 0 for value in values):
+        return {'ok': False, 'problems': ['stop facts must be finite and nonnegative']}
+    if not last_hub_receipt_mono <= policy_applied_mono <= stopped_at_mono:
+        return {'ok': False, 'problems': ['stop timeline is reversed']}
     applied_after = policy_applied_mono - last_hub_receipt_mono
     if applied_after > FLEET_LOSS_POLICY_WINDOW_S:
         problems.append(
