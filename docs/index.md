@@ -300,6 +300,7 @@
 
 ## 최근 기록
 
+- 2026-10-05 · uncommitted · fix(test): 공용 확인창 종료 계약 정합
 - 2026-10-05 · uncommitted · fix(validation): T6 부족 근거 수용 차단
 - 2026-10-05 · uncommitted · fix(ci): include learning contracts in site candidate triggers
 - 2026-10-05 · uncommitted · fix(test): D-426 T2/T5 import 경계
