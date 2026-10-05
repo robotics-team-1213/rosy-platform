@@ -537,6 +537,27 @@ main {
   #estop small { display: none; }
 }
 
+/* Cell 이동은 머리 cluster의 링크다. href와 격자 자리는 그대로 두고 조용한 버튼과 같은 면으로 둔다. */
+ui-topbar > a[href="/console/cell"] {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--target-secondary);
+  padding-inline: var(--space-2);
+  border: 1px solid var(--surface-line);
+  border-radius: var(--radius-button);
+  color: var(--nominal-quiet);
+  background: transparent;
+  font: var(--weight-label) var(--text-label)/var(--leading-control) var(--body);
+  text-decoration: none;
+  white-space: nowrap;
+}
+ui-topbar > a[href="/console/cell"]:hover { color: var(--ink); border-color: var(--ink); }
+ui-topbar > a[href="/console/cell"]:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring);
+  outline-offset: var(--focus-ring-offset-outer);
+}
+
 /* D-466 — 바깥 자리는 brand | cluster | estop. cluster는 연결·Cell·시계·설정이다.
    머리 한 줄: 이름 | 연결 | 시계 | 설정 | 정지. 접속·역할·테마는 설정 뒤에 접힌다.
    90rem은 surfaces.yaml console breakpoints에 적힌 값이다 — 모든 항목을 편 머리의

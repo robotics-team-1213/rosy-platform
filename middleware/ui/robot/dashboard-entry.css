@@ -22,9 +22,7 @@ body[data-dashboard-entry] .auth-drawer .bench-confirmation { font-weight: var(-
 #entry-navigation { display: grid; }
 #entry-navigation a { display: flex; align-items: center; gap: var(--space-3); min-height: var(--target-primary); padding: var(--space-3) 0; border-bottom: 1px solid var(--surface-line); color: var(--ink); text-decoration: none; font-weight: var(--weight-label); }
 #entry-navigation a:hover { text-decoration: underline; text-underline-offset: var(--space-1); }
-#entry-navigation a:focus-visible, .entry-compatibility a:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
-.entry-compatibility { padding-top: var(--space-4); border-top: 1px solid var(--surface-line); }
-.entry-compatibility a { color: var(--ink-quiet); }
+#entry-navigation a:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
 @media (width < 30rem) {
   .entry-main { padding: var(--space-4); }
   .entry-topbar { gap: var(--space-2); }

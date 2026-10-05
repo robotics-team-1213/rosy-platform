@@ -6066,3 +6066,9 @@ osy-d395-s1d\`.
 - 변경: 동시 세션의 `df5359613` compiler flag 수정을 통합하고 독립 회귀를 추가한다. 추출한 submit의 원본 postponed annotation 문자열을 확인해 Python 3.14에서 숨었던 Python 3.12 실패를 잡는다.
 - 증거: candidate840 Fleet CI 16 FAIL을 보존했다. 호스트 red는 동일 TrajectoryCommand NameError, 명시 flag 후 관련 108 PASS·1 SKIP·0 NEW다. 새 독립 회귀도 PASS. 041은 ABI314 양쪽 PASS와 서명까지 확인했으나 활성화하지 않았다. docs/validation/line-release-2026-10-05/ci-followup.md.
 - gate 변화: HOST 회귀만 PASS. 수정된 정확한 SHA의 CI·ARM64 빌드·새 장치 배포를 다시 확인한다. 자동 차선 주행은 NOT_RUN, FIELD 수용은 HOLD다.
+
+## 2026-10-05 · uncommitted · uiux: keep one robot entry and quiet the cell link
+
+- 변경: 기본 /dashboard에서 기존 종합 화면 안내를 거두었다. #compatibility 경로와 종합 화면은 유지한다. 관제 머리의 Cell 작업 링크는 같은 주소와 격자 자리에서 조용한 버튼 면을 쓴다.
+- 증거: 머리·토큰·관제 페이지 계약 100 passed. known_failures 0 new. 호스트 시험이며 장치 수용은 없다.
+- gate 변화: 없음.
