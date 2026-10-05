@@ -67,20 +67,20 @@ python tools/lane_replay.py --frames <repo>/data/perception/frames/real-drive-1/
 
 | 증거 (scratch 기준) | SHA-256 |
 |---|---|
-| `history-summary.json` | `fe5d8ec2d670b2d940c3d4795d06ac67aa2b127aac704499e1e4f5dc88817391` |
-| `final-comparison-summary.json` | `adc90a8920cf61b46b1f736f6ef170fc993ddf9ad2efe039aef27e1863e3cef6` |
-| `final-replay.py` | `0ac80a0e5533264cbec48680057a376e74c2ab1809e017380e8b16335a8bb8af` |
-| `history.py` | `cef2ec75b5d740dd92affbfd30b6e22fd3404dee2ef071b7a1b283c0f4fb16f7` |
-| `final-comparison/real-drive-1/fixed/frames.json` | `724eab75469fcceebed1946b65f9eed6e040f3a8de17d6be188e74b628e9b3ad` |
-| `final-comparison/real-drive-1/fixed/metrics.json` | `5a895680c61f84c87c763bab11fc6939a34f49f70255b469df0532891dcfbd02` |
-| `history/HEAD/lane.py` | `392d2eb289e90ed0889e25821d969968e9b7ce2137987aacedf3a265e8f21f68` |
-| `history/HEAD/lane_bev.py` | `259c1c0543f7b212d353d1a5fb642812a4c0402020ef1c84c131af0071d1277c` |
-| `history/HEAD/lane_keep.py` | `b6cc6db8f97429a136050dce1a8156d4286219f97a8eebddfea976bbd93ee485` |
-| `history/HEAD/lane_keep_lines.py` | `098704deb2ed1ee18e0c1f798d7a1665c6ee617413cf8785811a1b764bb5182d` |
-| `history/HEAD/lane_keep_pairs.py` | `233e10ac1075a870ead1783d8062259b6de64327adcc89f328e5102d653fe79f` |
-| `input-sha256.json` | `c9f51112248cdf5cff6e2cb8cae09e31196c11b80fab4cf99b68957f61db1f41` |
+| `history-summary.json` | SHA256: `fe5d8ec2d670b2d940c3d4795d06ac67aa2b127aac704499e1e4f5dc88817391` |
+| `final-comparison-summary.json` | SHA256: `adc90a8920cf61b46b1f736f6ef170fc993ddf9ad2efe039aef27e1863e3cef6` |
+| `final-replay.py` | SHA256: `0ac80a0e5533264cbec48680057a376e74c2ab1809e017380e8b16335a8bb8af` |
+| `history.py` | SHA256: `cef2ec75b5d740dd92affbfd30b6e22fd3404dee2ef071b7a1b283c0f4fb16f7` |
+| `final-comparison/real-drive-1/fixed/frames.json` | SHA256: `724eab75469fcceebed1946b65f9eed6e040f3a8de17d6be188e74b628e9b3ad` |
+| `final-comparison/real-drive-1/fixed/metrics.json` | SHA256: `5a895680c61f84c87c763bab11fc6939a34f49f70255b469df0532891dcfbd02` |
+| `history/HEAD/lane.py` | SHA256: `392d2eb289e90ed0889e25821d969968e9b7ce2137987aacedf3a265e8f21f68` |
+| `history/HEAD/lane_bev.py` | SHA256: `259c1c0543f7b212d353d1a5fb642812a4c0402020ef1c84c131af0071d1277c` |
+| `history/HEAD/lane_keep.py` | SHA256: `b6cc6db8f97429a136050dce1a8156d4286219f97a8eebddfea976bbd93ee485` |
+| `history/HEAD/lane_keep_lines.py` | SHA256: `098704deb2ed1ee18e0c1f798d7a1665c6ee617413cf8785811a1b764bb5182d` |
+| `history/HEAD/lane_keep_pairs.py` | SHA256: `233e10ac1075a870ead1783d8062259b6de64327adcc89f328e5102d653fe79f` |
+| `input-sha256.json` | SHA256: `c9f51112248cdf5cff6e2cb8cae09e31196c11b80fab4cf99b68957f61db1f41` |
 
-| `run.txt` | `05fcc6568d28a381580bd50869a0f65217dcd06b08b0e3bde3c367eb85e50195` |
-| `docs-tests.txt` | `796f32197e0bf175e6068cddb306ecd3c4d78acc2dc7555a02fe59af4edeac77` |
-| `architecture.txt` | `1620b57ac8f55b7b55264558e71676e393b0dc427c02ef2eb5e55e705b200460` |
-| `lint.txt` | `30ce4c30ab45a1b0a74bfbe21a4a27d840c8d81e5f7c8e19837483613a7f2c7c` |
+| `run.txt` | SHA256: `05fcc6568d28a381580bd50869a0f65217dcd06b08b0e3bde3c367eb85e50195` |
+| `docs-tests.txt` | SHA256: `796f32197e0bf175e6068cddb306ecd3c4d78acc2dc7555a02fe59af4edeac77` |
+| `architecture.txt` | SHA256: `1620b57ac8f55b7b55264558e71676e393b0dc427c02ef2eb5e55e705b200460` |
+| `lint.txt` | SHA256: `30ce4c30ab45a1b0a74bfbe21a4a27d840c8d81e5f7c8e19837483613a7f2c7c` |

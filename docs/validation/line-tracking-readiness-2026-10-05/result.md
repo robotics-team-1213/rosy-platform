@@ -60,16 +60,16 @@ python tools/lane_replay.py --frames data/perception/frames/real-drive-1/frames 
 
 | 파일 (원본 위치 기준) | SHA-256 |
 |---|---|
-| `observe.py` | `5c5af3ca639df83782ba4641c9187777b7c050fb35e7757a5a8bd4cd72adb4e5` |
-| `live-collect.py` | `6a94537907801d34f03b0df96c2ba83edb8616a39f15ab23751db1e63b62450f` |
-| `profile-comparison.py` | `739211da5bcb1b3660dbcd3f9f5cfc7f69ae9d29c3ea7ee3a469fa720ed0ab1d` |
-| `profile-comparison.json` | `f98d9c745b95f5cdc17daa568738f855ede8692da4bf5377dc983a50274ca828` |
-| `rosy-pinky-8kcn-readiness.json` | `7942e13e3ff086b52dc118114a752b5e20cffa2b73352f150648618b5e1e8e13` |
-| `rosy-pinky-9dfk-readiness.json` | `02aefd4453c197d7de0a1a85bc5b5e87085633bfa97c88ec8d304d237bf4bc9a` |
-| `rosy-pinky-8kcn-observe.json` | `b134675106bef54279ec5d6440d45790f608e7339162d0af235f6f1c7109c186` |
-| `rosy-pinky-9dfk-observe.json` | `44b5b2ddaf70d8ae905628531785c0b652130b45186b91ebe4230229cac74d5b` |
-| `rosy-pinky-8kcn-live.png` | `989f5905ca937e8fa39577d91358a0690391a4a4e504b2c78ea5c683979abdd3` |
-| `rosy-pinky-9dfk-live.png` | `b1ef0863d3c4b8c22f66ebace8dd7fb894605c6fc531e6bc55f6649077cc67f2` |
-| `replay-real-drive-1/frames.json` | `bd1074850374eaef62fe0ae941283b0e9224d785bf8f807231691266d1c65b8c` |
-| `replay-real-drive-1/metrics.json` | `deb19e5335e45ecfbfe9b6104dac6f894a57c13a864797ef06d92314a413a04d` |
-| `input-frame-sha256.json` | `434435faeb90d4a1f232000359e4783562c329b87bae09b1d160d14e2f17e9db` |
+| `observe.py` | SHA256: `5c5af3ca639df83782ba4641c9187777b7c050fb35e7757a5a8bd4cd72adb4e5` |
+| `live-collect.py` | SHA256: `6a94537907801d34f03b0df96c2ba83edb8616a39f15ab23751db1e63b62450f` |
+| `profile-comparison.py` | SHA256: `739211da5bcb1b3660dbcd3f9f5cfc7f69ae9d29c3ea7ee3a469fa720ed0ab1d` |
+| `profile-comparison.json` | SHA256: `f98d9c745b95f5cdc17daa568738f855ede8692da4bf5377dc983a50274ca828` |
+| `rosy-pinky-8kcn-readiness.json` | SHA256: `7942e13e3ff086b52dc118114a752b5e20cffa2b73352f150648618b5e1e8e13` |
+| `rosy-pinky-9dfk-readiness.json` | SHA256: `02aefd4453c197d7de0a1a85bc5b5e87085633bfa97c88ec8d304d237bf4bc9a` |
+| `rosy-pinky-8kcn-observe.json` | SHA256: `b134675106bef54279ec5d6440d45790f608e7339162d0af235f6f1c7109c186` |
+| `rosy-pinky-9dfk-observe.json` | SHA256: `44b5b2ddaf70d8ae905628531785c0b652130b45186b91ebe4230229cac74d5b` |
+| `rosy-pinky-8kcn-live.png` | SHA256: `989f5905ca937e8fa39577d91358a0690391a4a4e504b2c78ea5c683979abdd3` |
+| `rosy-pinky-9dfk-live.png` | SHA256: `b1ef0863d3c4b8c22f66ebace8dd7fb894605c6fc531e6bc55f6649077cc67f2` |
+| `replay-real-drive-1/frames.json` | SHA256: `bd1074850374eaef62fe0ae941283b0e9224d785bf8f807231691266d1c65b8c` |
+| `replay-real-drive-1/metrics.json` | SHA256: `deb19e5335e45ecfbfe9b6104dac6f894a57c13a864797ef06d92314a413a04d` |
+| `input-frame-sha256.json` | SHA256: `434435faeb90d4a1f232000359e4783562c329b87bae09b1d160d14e2f17e9db` |
