@@ -980,3 +980,9 @@
 - 변경: 암호 값이 아닌 라벨 DOM 노드의 이름을 accessLabel로 명확하게 한다. 비밀값 검사 규칙·표시·DOM 구조·동작은 유지한다.
 - 증거: 영향 검사에서 해당 라벨 대입을 credential로 보고한 실패를 확인했다. 비밀값 검사와 관련 동작 검사를 다시 실행한다.
 - gate 변화: 없음. SOURCE 검사 보완이며 실제 기기 수용은 별도다.
+
+## 2026-10-05 · uncommitted · fix(dashboard): 차선 추종 시작 조건을 구동 준비에 맞춤
+
+- 변경: D-344 MOVE 계약에 맞춰 Nav2 대신 teleop와 runtime.drive ready를 읽는다. OFF 정지와 확인 대화상자는 유지한다.
+- 증거: motor ready/Nav2 absent 회귀의 red→green, 독립 브라우저 3 PASS와 패널/API 36 PASS. 실제 9dfk 원격 수동 직진과 keeper 관측은 docs/validation/line-remote-2026-10-05/result.md에 기록한다.
+- gate 변화: SOURCE 수정과 장치 수동 직진·keeper 관측 확인. 자동 차선 주행은 NOT_RUN이며 FIELD 수용은 보류한다.

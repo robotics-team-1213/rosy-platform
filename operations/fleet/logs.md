@@ -1881,3 +1881,9 @@
 - 증거: 원래 세 브라우저 회귀3 FAIL14.85s를 재현했다. 첫 수정은2 PASS1 FAIL21.55s(문서 overflow258→4px)이었고 최종12 PASS79.54s에서 원래 viewport·키보드·카메라404 횟수와 시작점 저장/재로드/토큰 교체/지도 변경, Stop·확인·Abort 계약을 유지했다.
 - 경계: fixture·로컬 Chromium SOURCE/LOCAL 보완만. 서버 권한·API·자동 페어링·실제 로봇 명령을 추가하지 않는다. 정적 계약39 PASS1 inherited P6 FAIL을 보존했고 package 예산이나 기존 거대 파일 verdict를 바꾸지 않았다. 기존 게이트/HOLD·장치 수용은 그대로다.
 - gate 변화: 없음. 기본 화면과 기존 조작 계약 복구이며 실제 연결·제어 수용은 별도다.
+
+## 2026-10-05 · uncommitted · fix(fleet): 증거 프로파일 매핑을 canonical 계약으로 이동
+
+- 변경: 내부 증거 수신기의 기존 세 profile validator 매핑을 learning artifact 계약이 소유한다. Fleet의 로봇 이름 예외를 추가하지 않으며 검증·wire 의미를 유지한다.
+- 증거: 기존 main 두 차단을 재현했다. 독립 규모 검토에서 Fleet 36,234줄을 승인했고 모든 파일/패키지 기준을 유지한다. 수신기·literal·artifact 검사 43 PASS, 1 SKIP, 차단 회귀 2 PASS. docs/validation/line-release-2026-10-05/result.md에 책임별 증가를 기록했다.
+- gate 변화: SOURCE 배포 검사 차단 수정이며 기기·FIELD 수용은 별도다. 차선 자동 주행은 NOT_RUN을 유지한다.

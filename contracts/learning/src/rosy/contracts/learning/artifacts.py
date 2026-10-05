@@ -11,6 +11,17 @@ def _json(doc):
                       allow_nan=False).encode("utf-8")
 
 
+def episode_profile_validators():
+    """Canonical profile dispatch; imports stay lazy to avoid validator cycles."""
+    from .omx import validate_profile as demonstration
+    from .omx_execution import validate_profile as execution
+    from .pinky import validate_profile as recording
+
+    return {"omx_demonstration_v1": demonstration,
+            "omx_policy_execution_v1": execution,
+            "pinky_recording_session_v1": recording}
+
+
 def seal(doc):
     result = json.loads(_json(doc))
     result.pop("revision", None)

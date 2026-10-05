@@ -24,7 +24,7 @@ export function mount(root, ctx) {
   const lifetime = new AbortController(); let disposed = false; let confirming = false;
   const head = el("ui-head", "", "차선 추종");
   const modeStatus = el("ui-status", "", "차선 추종 상태를 읽는 중입니다.");
-  const capabilityStatus = el("ui-status", "", "내비게이션 기능을 확인하는 중입니다.");
+  const capabilityStatus = el("ui-status", "", "구동 준비를 확인하는 중입니다.");
   const actionStatus = el("ui-status");
   modeStatus.setAttribute("state", "pending"); capabilityStatus.setAttribute("state", "pending"); actionStatus.setAttribute("state", "ready");
   actionStatus.setAttribute("role", "status");
@@ -55,7 +55,7 @@ export function mount(root, ctx) {
 
   let current = null;
   let statusKnown = false;
-  let navigationAvailable = false;
+  let driveAvailable = false;
   let pending = false;
   let perception = null, robot = null, robotAt = 0, perceptionDirty = false;
   perceptionSelect.addEventListener("change", () => { perceptionDirty = true; });
@@ -73,8 +73,8 @@ export function mount(root, ctx) {
     } else facts.replaceChildren(el("dt", "", "상태"), el("dd", "", "확인 불가 · 다시 확인 중"));
     // 요청 중(pending)은 짧은 잠금이라 사유 없이 끈다.
     const known = pending ? "" : !statusKnown ? "상태 확인 중" : "";
-    setOff(start, pending || !statusKnown || !navigationAvailable || current?.mode !== "OFF",
-      known || (pending ? "" : !navigationAvailable ? "내비게이션을 쓸 수 없음" : "이미 추종 중"));
+    setOff(start, pending || !statusKnown || !driveAvailable || current?.mode !== "OFF",
+      known || (pending ? "" : !driveAvailable ? "구동 준비가 확인되지 않음" : "이미 추종 중"));
     setOff(stop, pending || !statusKnown || current?.mode === "OFF", known || (pending ? "" : "추종 중 아님"));
     const velocity = robot?.velocity;
     const stationary = Date.now() - robotAt < 2000 && robot?.mode === "IDLE" && velocity?.linear === 0 && velocity?.angular === 0;
@@ -123,26 +123,26 @@ export function mount(root, ctx) {
     setStatus(modeStatus, `차선 추종 상태를 읽지 못했습니다: ${error.message}`); render();
   });
   const stopCapabilities = ctx.store.poll("/api/v1/system/capabilities", 5_000, (data) => {
-    navigationAvailable = data?.navigation?.goal_navigation === true;
-    setStatus(capabilityStatus, navigationAvailable
-      ? "내비게이션 기능을 쓸 수 있습니다."
-      : `내비게이션을 쓸 수 없습니다.${data?.navigation?.reason ? ` ${data.navigation.reason}` : " 현재 실행 모드에서 막혔거나 이 로봇에 없는 기능입니다."}`);
-    capabilityStatus.setAttribute("state", navigationAvailable ? "ready" : "warning");
+    driveAvailable = data?.teleop === true && data?.runtime?.drive === "ready";
+    setStatus(capabilityStatus, driveAvailable
+      ? "구동 준비가 확인되었습니다. 차선 추종은 Nav2 없이 사용할 수 있습니다."
+      : "구동 준비가 확인되지 않았습니다. 현재 구동 상태와 조작 권한을 확인하세요.");
+    capabilityStatus.setAttribute("state", driveAvailable ? "ready" : "warning");
     render();
   }, (error) => {
-    navigationAvailable = false;
-    capabilityStatus.textContent = `내비게이션 기능을 확인할 수 없습니다: ${error.message}`;
+    driveAvailable = false;
+    capabilityStatus.textContent = `구동 준비를 확인할 수 없습니다: ${error.message}`;
     capabilityStatus.setAttribute("state", "error"); render();
   });
   async function setMode(mode) {
-    if (disposed || confirming || pending || !statusKnown || (mode !== "OFF" && (!navigationAvailable || current?.mode !== "OFF"))) return;
+    if (disposed || confirming || pending || !statusKnown || (mode !== "OFF" && (!driveAvailable || current?.mode !== "OFF"))) return;
     if (mode !== "OFF") {
       confirming = true; render();
       const confirmed = await confirmIrreversible({message: "차선 추종을 시작할까요? 주변 안전을 확인하세요.", action: "추종 시작", opener: start, signal: lifetime.signal});
       confirming = false;
       if (disposed) return;
       render();
-      if (!confirmed || pending || !statusKnown || !navigationAvailable || current?.mode !== "OFF" || select.value !== mode) return;
+      if (!confirmed || pending || !statusKnown || !driveAvailable || current?.mode !== "OFF" || select.value !== mode) return;
     }
     pending = true; render();
     setStatus(actionStatus, mode === "OFF" ? "차선 추종 중지 요청을 보내는 중입니다." : `${enumLabel(LINE_MODE_LABEL, mode)} 추종 시작 요청을 보내는 중입니다.`);
