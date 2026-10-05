@@ -26,7 +26,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from candidate_signing import sign_manifest_bytes, verify_manifest_signature
 
 PREFIX = "learning/training/perception/"
-CODE_PREFIXES = (PREFIX, "middleware/perception/control/", "contracts/foundation/core_common/")
+CAMERA_PROFILE = "middleware/apps/device/pinky/profile/config/camera_nominal.yaml"
+CODE_PREFIXES = (PREFIX, "middleware/perception/control/", "contracts/foundation/core_common/", CAMERA_PROFILE)
 # Observe enrolled pre-migration checkouts too; new signed archives stay canonical.
 CHECKOUT_PREFIXES = CODE_PREFIXES + ("tools/perception/", "src/runtime/sensing/control/",
                                     "src/contracts/foundation/core_common/")
@@ -224,7 +225,7 @@ def unpack(archive, dest):
                 raise ValueError("unsafe archive path")
             ancestors = {str(p) for prefix in CODE_PREFIXES for p in PurePosixPath(prefix).parents}
             if item.isdir() and (name in ancestors or any(name == prefix.rstrip("/") for prefix in CODE_PREFIXES)): continue
-            if not any(name.startswith(prefix) for prefix in CODE_PREFIXES) or not (item.isfile() or item.isdir()):
+            if not any(name == prefix or (prefix.endswith("/") and name.startswith(prefix)) for prefix in CODE_PREFIXES) or not (item.isfile() or item.isdir()):
                 raise ValueError("archive must contain only approved model-code dependencies, without links")
             relative = path
             if set(relative.parts) & FORBIDDEN or any(p.startswith(".env") for p in relative.parts):

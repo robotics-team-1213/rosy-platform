@@ -164,7 +164,8 @@ def test_restart_recovers_pending_before_observing_new_candidates(tmp_path, keys
 
 
 @pytest.mark.parametrize("name,link", [("../escape", False), ("learning/training/perception/x", True),
-                                      ("private/key", False), ("learning/training/perception/data/key", False)])
+                                      ("private/key", False), ("learning/training/perception/data/key", False),
+                                      ("middleware/apps/device/pinky/profile/config/camera_nominal.yaml.extra", False)])
 def test_archive_rejects_traversal_links_and_non_code_payload(tmp_path, name, link):
     m = module()
     p = tmp_path / "bad.tar"
@@ -219,12 +220,13 @@ def test_build_only_uses_committed_source(tmp_path, keys):
     (code / "model").mkdir(parents=True)
     (code / "model/watch.py").write_text("print('committed')\n")
     (code / "rosy_ml.py").write_text("print('committed')\n")
-    for name in ["middleware/perception/control/__init__.py", "contracts/foundation/core_common/__init__.py"]:
+    profile = "middleware/apps/device/pinky/profile/config/camera_nominal.yaml"
+    for name in ["middleware/perception/control/__init__.py", "contracts/foundation/core_common/__init__.py", profile]:
         dep = repo / name
         dep.parent.mkdir(parents=True)
         dep.write_text("PINNED = True\n")
     git("add", "learning/training/perception/model/watch.py", "learning/training/perception/rosy_ml.py",
-        "middleware/perception/control/__init__.py", "contracts/foundation/core_common/__init__.py")
+        "middleware/perception/control/__init__.py", "contracts/foundation/core_common/__init__.py", profile)
     git("-c", "user.name=Test", "-c", "user.email=test@example.invalid", "commit", "-m", "fixture")
     sha = git("rev-parse", "HEAD")
     (code / "rosy_ml.py").write_text("print('dirty')\n")
@@ -236,6 +238,7 @@ def test_build_only_uses_committed_source(tmp_path, keys):
     assert not (tmp_path / "result/learning/training/perception/secret").exists()
     assert (tmp_path / "result/middleware/perception/control/__init__.py").read_text() == "PINNED = True\n"
     assert (tmp_path / "result/contracts/foundation/core_common/__init__.py").read_text() == "PINNED = True\n"
+    assert (tmp_path / "result" / profile).read_text() == "PINNED = True\n"
 
 
 def test_uncommitted_perception_edits_are_kept(tmp_path):
