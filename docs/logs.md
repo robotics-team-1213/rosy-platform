@@ -5962,3 +5962,21 @@ osy-d395-s1d\`.
 - 변경: 기존 D-359 공용 폼으로 허용치 방식을 자동 제안·직접 입력 중 선택한다. 기본 자동 제안과 Shift 입력 보조를 유지하며 직접 입력은 터치에서도 입력값을 그대로 쓴다. 로딩·저장·제외 상태의 기존 편집 잠금에 같은 선택 항목을 포함했다. OpenCV 8-bit Lab 거리 설명은 인코딩된 색 거리 휴리스틱으로 정정했으며 계산은 바꾸지 않았다.
 - 증거: 실제 Chromium touch POST에서 입력 37이 4로 바뀌는 원래 실패를 재현했다. 수정 후 원래 픽셀 브라우저 3건과 터치 자동·직접 입력 2건, flood 및 공용 폼 시험 합계 37 PASS(25.40s)다. 첫 요청 URL predicate와 완료 필드 fixture 오류, 최초 없는 시험 경로 오류는 로그에 보존했다. Node 문법·Python 오류 검사는 통과했다.
 - gate 변화: 합성 로컬 검수 자료의 UI/LOCAL 회귀만. 픽셀 승인·학습 입장·장치 전달 권한을 변경하거나 실제 태블릿 수용을 증명하지 않는다.
+## 2026-10-05 · uncommitted · test(execution): same-attempt native evidence chain
+
+- Change: `feat/omx-policy-native-chain` adds isolated actual Action API to native journal, sealed Episode and offline Fleet correlation. Preparation permits real observation/poll; final session/stop checks delegate to the genuine fence. Stop, lost authority and expiry preserve durable uncertain attempts without retry.
+- Evidence: source-pinned host tests and independent local Linux ROS normal/revocation execution. Original freshness/lease/grant limits remain. Shared-path stale failures and Destroyable diagnostics are retained.
+- Gate: SOURCE/HOST/isolated only. No installed-device, model-inference, receiver, task or physical acceptance; total physical movement stays at most 0.20m across all robots, attempts and coast.
+
+## 2026-10-05 · uncommitted · feat(validation): D-426 T5 장애 주입 시나리오·sim base watchdog
+
+- 변경: (1) `tools/validation/fleet_gazebo/scenarios.py` — M01–M08 수용 행렬의 선언적 정의(필수 판정·blackout 주입·재시작 대상). 주입은 run 소유 경계만(scope="run" 강제), REST/WS/둘 다 blackhole은 별도 회차로 구분. D-419 정책 적용 시한(5.2 s window)과 실제 정지(≤0.50 sim s·이동 ≤0.05 m·회전 ≤0.25 rad)를 같은 시한으로 쓰지 않는 분리 판정 `stop_policy_checks`. 시뮬 profile 0.15 m/s·0.5 rad/s·CORE kill 입력 만료 0.30 s 고정. (2) `integrations/simulation/gazebo/scripts/command_watchdog.py` — CORE와 별도 수명의 sim base 명령 감시 bridge. 최신 cmd_vel 재발행 + 0.30 monotonic s 만료 시 0. CORE writer 불증식, clock pause에도 만료, rclpy 부재 시 안내 후 exit 3.
+- 증거: test/test_fleet_gazebo_scenario_contracts.py 6개 계약(행렬 온전성·run 경계·주입 종류별 분리·알 수 없는 종류/범위 거부·임계값 고정·정책/정지 분리 판정 4종) + test_command_watchdog.py 8개 계약 + 기존 test_fleet_loss 31개 = 45 PASS.
+- gate 변화: SOURCE/LOCAL. 실제 장애 주입 회차·blackhole 실측·재시작 대조는 T6 WSL 회차.
+- 결정: shutdown 시험을 packet blackhole 증거로 쓰지 않는다(계획 T5 항목 1).
+
+## 2026-10-05 · uncommitted · validation: 차선 개선040 두 실기 배포·source 일치
+
+- 변경: CI 통과 source58d246ab3의 signed ARM64 release2026.10.05-040을 9dfk→8kcn 순차 설치하고 실제 CORE/camera cwd·파일 SHA256·live 카메라·정지 상태를 확인했다. source 수정은 없다.
+- 증거: 장치 각각148장 재생 비가시17/복구87–90/MAE0.0518586, keeper p95 14.02/18.31ms, 카메라각80장/10초·정지cmd501/497개다. CI37268067397/build37268633475 success, 두314패키지 ABI PASS, 관측 parameter와 model pointer 경로·존재 유지(내용 전후 해시는 미검증), fresh session logout204·token 제거. docs/validation/lane-visibility-deployment-2026-10-05/deployment.md.
+- gate 변화: DEVICE 소프트웨어 설치·정지 관측·장치 재생 PASS. motor bench·line/threshold·line OFF·화면 안전회로UNVERIFIED를 유지했다. keeper 제어 적용·독립 사람 라벨·R1/R2 현장 주행은 HOLD다.

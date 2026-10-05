@@ -68,8 +68,8 @@
 
 ## 최근 기록
 
+- 2026-10-05 · uncommitted · validation: 차선 개선040 두 실기 배포·source 일치
 - 2026-10-05 · uncommitted · fix(perception): blob에 지워진 차선 경계 한 번 복구
 - 2026-10-05 · uncommitted · fix(perception): 차선 짝 splay와 전체 차로 횡단 표시 회귀 수정
 - 2026-10-04 · uncommitted · fix(ui): PARKED 진단 지도 도구 행 감싸기
 - 2026-10-04 · uncommitted · fix(perception): 밝기 양극단의 원본 관측
-- 2026-10-04 · uncommitted · recording: raw originals and optional model display
