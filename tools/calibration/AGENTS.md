@@ -15,6 +15,7 @@ Developer-side half of the D-47 addendum (2026-10-01) calibration protocol: driv
 | `analyze_session.py` | Fits from D-356 recordings (`session.json` + `bag/*.mcap`): wheel radius/separation, per-wheel scale, gain per speed, LiDAR mount yaw check, camera pitch/roll/height; across runs the mean, spread and 95 % interval. Writes `candidate.json` and `report.md` per robot and candidate records into the store mirror. Never applies anything |
 | `store_cli.py` | Operator view of the store: `list`, `show`, `accept`, `reject`, `pin` (rollback/unpin), `sync` (merge another copy). `accept` refuses implausible values with the runtime's own check and needs `--actor` |
 | `camera_auto.py` / `camera_capture.py` | Read-only stationary camera/LiDAR auto fit over a pinned SSH alias. No drive, mode change or candidate promotion. New local evidence JSON; exit 2 for rejected fit, 0 for a recommended candidate only |
+| `camera_board.py` | Offline two-image checkerboard pose candidate with printed square scale, original-pixel reprojection and cross-view checks. Board elevation and its estimate provenance are explicit; existing intrinsics remain a seed. Never applies a result |
 | `urdf_nominal.py` | Evaluates the fixed-joint chain of `middleware/apps/device/pinky/description/urdf/rosy.urdf.xacro` without ROS (stdlib only) and writes `middleware/apps/device/pinky/profile/config/geometry.yaml`; `--check` exits 1 on drift (D-397). Unsupported xacro raises instead of being guessed |
 
 ## Subdirectories

@@ -15,6 +15,7 @@ _DYNAMIC = re.compile(r"(?<![\w.])import\s*\(")
 
 ALLOWED = {
     "console.js": {
+        "connection-view.js",
         "formation.js",
         "map-view.js",
         "roster.js",

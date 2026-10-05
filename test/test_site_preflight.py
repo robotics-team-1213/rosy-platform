@@ -211,6 +211,8 @@ def test_caddy_address_naming_tls_host_passes(site, address):
 
 
 def test_shipped_caddyfile_port_only_address_passes(site):
+    text = (SITE_DIR / "Caddyfile").read_text(encoding="utf-8")
+    assert ":{$ROSY_SITE_HTTPS_PORT}" in text and ":8443" not in text
     assert _run(site, caddyfile=SITE_DIR / "Caddyfile") == 0
 
 
@@ -310,6 +312,10 @@ def test_every_top_level_caddy_site_block_is_checked_and_snippets_are_skipped():
     assert _module().caddy_site_hosts(text) == [HOST, "other.local"]
 
 
+def test_caddy_port_placeholder_names_no_host():
+    assert _module().caddy_site_hosts(":{$ROSY_SITE_HTTPS_PORT} {\n}\n") == []
+
+
 # --- D-341 pairing consistency -------------------------------------------------------------
 
 OVERLAY_ARG = "-f /opt/rosy/candidate/deploy/site/compose.pairing.yaml"
@@ -398,7 +404,8 @@ def test_shipped_units_wire_the_pairing_switch():
     unit = (SITE_DIR / "rosy-overhead-advertise.service").read_text(encoding="utf-8")
     assert "Environment=ROSY_SITE_PAIRING=0" in unit and "--pair=${ROSY_SITE_PAIRING}" in unit
     # the switch arrives through the file site-firewall.py apply writes from site.env
-    assert "EnvironmentFile=-/run/rosy-site/site-public.env" in unit and "/etc/rosy/site/.env" not in unit
+    assert "EnvironmentFile=/run/rosy-site/site-public.env" in unit and "/etc/rosy/site/.env" not in unit
+    assert "Environment=ROSY_SITE_HTTPS_PORT=" not in unit
     stack = (SITE_DIR / "rosy-site-stack.service").read_text(encoding="utf-8")
     # unbraced $VAR is zero words when empty, so "off" adds nothing to up and down
     assert stack.count(" $ROSY_SITE_PAIRING_COMPOSE ") == 2

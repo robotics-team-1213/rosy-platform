@@ -21,7 +21,7 @@ def _module():
 
 def _config(bind="0.0.0.0", port="8443", lan_iface="wlan0", allow="", tls_host="site-pc.local"):
     """`docker compose config --format json` as Compose renders the site file."""
-    ports = [{"mode": "ingress", "target": 8443, "published": port, "protocol": "tcp"}]
+    ports = [{"mode": "ingress", "target": int(port), "published": port, "protocol": "tcp"}]
     if bind is not None:
         ports[0]["host_ip"] = bind
     return {"services": {"proxy": {"ports": ports}},
@@ -93,11 +93,8 @@ def test_restore_payload_is_one_mangle_transaction_by_interface_name():
         "COMMIT\n")
     assert module.jump_rules(8443) == {
         ("8443", False): ["-p", "tcp", "--dport", "8443", "-j", "ROSY-SITE-INGRESS"]}
-    # A different published port adds the container port, for packets routed to a container IP.
     assert module.jump_rules(9443) == {
-        ("9443", False): ["-p", "tcp", "--dport", "9443", "-j", "ROSY-SITE-INGRESS"],
-        ("8443", True): ["-p", "tcp", "--dport", "8443", "-m", "addrtype", "!", "--dst-type", "LOCAL",
-                         "-j", "ROSY-SITE-INGRESS"]}
+        ("9443", False): ["-p", "tcp", "--dport", "9443", "-j", "ROSY-SITE-INGRESS"]}
     # Never an address or subnet: the LAN may renumber (2026-10-01 192.168.1.0/24 -> 10.16.36.0/24).
     rules = [token for rule in module.chain_rules(plan["ifaces"]) for token in rule]
     assert not {"-s", "-d", "--src", "--dst"} & set(rules)
@@ -127,9 +124,8 @@ def test_apply_replaces_a_changed_interface_atomically_and_moves_the_port():
     changes = [argv for argv, _ in host.calls[before:] if argv[0] == "iptables-restore"
                or argv[4] in ("-I", "-D")]
     assert [argv[0] if argv[0] == "iptables-restore" else argv[4] for argv in changes] == \
-        ["iptables-restore", "-I", "-I", "-D"]  # new jumps before the old one goes: no open gap
-    assert sorted(line for line in host.chains["PREROUTING"] if line.endswith("ROSY-SITE-INGRESS")) == [
-        "-A PREROUTING -p tcp --dport 8443 -m addrtype ! --dst-type LOCAL -j ROSY-SITE-INGRESS",
+        ["iptables-restore", "-I", "-D"]  # the new jump goes in before the old one leaves
+    assert [line for line in host.chains["PREROUTING"] if line.endswith("ROSY-SITE-INGRESS")] == [
         "-A PREROUTING -p tcp --dport 9443 -j ROSY-SITE-INGRESS"]
     assert module.apply(plan, run=host) == []
     module.check(plan, run=host)
@@ -156,11 +152,15 @@ def test_parser_reads_real_iptables_nft_listings():
         "-A ROSY-SITE-INGRESS -i docker0 -j RETURN",
         "-A ROSY-SITE-INGRESS -j DROP"]
     hook = ("-P PREROUTING ACCEPT\n"
-            "-A PREROUTING -p tcp -m tcp --dport 8443 -m addrtype ! --dst-type LOCAL -j ROSY-SITE-INGRESS\n"
             "-A PREROUTING -p tcp -m tcp --dport 18448 -j ROSY-SITE-INGRESS\n")
     assert {module._key(line) for line in module._jumps(hook)} == set(module.jump_rules(18448))
-    # apply/check against that format: idempotent, and a port change deletes the listed line.
-    host = NftHost()
+    legacy = ("-A PREROUTING -p tcp -m tcp --dport 8443 -m addrtype ! --dst-type LOCAL "
+              "-j ROSY-SITE-INGRESS")
+    assert module._key(legacy) == ("8443", True)
+    # An older container-port jump is not part of the plan, so apply removes it.
+    host = NftHost(chains={
+        "PREROUTING": [legacy, hook.splitlines()[1]],
+        "ROSY-SITE-INGRESS": module.chain_listing(["lan0"])[1:]})
     module.apply(_plan(module, port="18448", lan_iface="lan0"), run=host)
     assert host.chains["PREROUTING"] == hook.splitlines()[1:]
     plan = _plan(module, port="18450", lan_iface="lan0")
@@ -171,7 +171,7 @@ def test_parser_reads_real_iptables_nft_listings():
 
 
 @pytest.mark.parametrize("damage", ["no_chain", "wrong_iface", "no_jump", "jump_after_accept",
-                                    "no_container_port_jump", "no_final_drop"])
+                                    "no_final_drop"])
 def test_check_refuses_a_missing_or_bypassed_filter(damage):
     module = _module()
     plan = _plan(module, port="9443")
@@ -185,8 +185,6 @@ def test_check_refuses_a_missing_or_bypassed_filter(damage):
         host.chains["PREROUTING"].clear()
     elif damage == "jump_after_accept":
         host.chains["PREROUTING"].insert(0, "-A PREROUTING -j ACCEPT")
-    elif damage == "no_container_port_jump":
-        host.chains["PREROUTING"] = [line for line in host.chains["PREROUTING"] if "--dst-type" not in line]
     else:
         host.chains["ROSY-SITE-INGRESS"].pop()
     with pytest.raises(RuntimeError, match="rosy-site-firewall.service"):
@@ -307,6 +305,18 @@ def test_bind_comes_from_compose_not_from_reading_the_env_file(tmp_path, capsys)
     assert argv[argv.index("--env-file") + 1] == str(env) and argv[argv.index("-f") + 1] == "c.yaml"
 
 
+def test_a_split_proxy_publish_is_refused():
+    module = _module()
+    split = _config(port="9443")
+    split["services"]["proxy"]["ports"][0]["target"] = 8443
+    with pytest.raises(module.ConfigError, match="both must be ROSY_SITE_HTTPS_PORT"):
+        module.compose_settings(split)
+    empty = _config()
+    empty["services"]["proxy"]["ports"] = []
+    with pytest.raises(module.ConfigError, match="exactly one TCP port"):
+        module.compose_settings(empty)
+
+
 def test_real_compose_resolves_export_comments_and_interpolation(tmp_path):
     """The same env through the real Compose CLI, when Docker is installed (no daemon needed)."""
     import shutil
@@ -407,7 +417,7 @@ def test_real_compose_publishes_the_same_proxy_binding_with_the_pairing_overlay(
     env = tmp_path / "site.env"
     dirs = "".join(f"{key}={tmp_path}\n" for key in ("ROSY_SITE_CONFIG_DIR", "ROSY_SITE_SECRETS_DIR"))
     env.write_text(dirs + "ROSY_SITE_BIND_ADDRESS=0.0.0.0\nROSY_SITE_LAN_IFACE=wlan0\n"
-                   "ROSY_SITE_TLS_HOST=site-pc.local\n", encoding="utf-8")
+                   "ROSY_SITE_TLS_HOST=site-pc.local\nROSY_SITE_HTTPS_PORT=8443\n", encoding="utf-8")
     overlay = ["-f", str(ROOT / "deploy/site/compose.pairing.yaml")]
     settings = module.compose_settings(module.compose_config(
         env, ROOT / "deploy/site/compose.yaml", "rosy-fw-test", module._run, overlay))
@@ -462,7 +472,8 @@ def test_units_filter_before_docker_fail_closed_and_recheck():
 def test_compose_and_env_never_require_a_lan_ip():
     compose = (ROOT / "deploy/site/compose.yaml").read_text(encoding="utf-8")
     env = (ROOT / "deploy/site/.env.example").read_text(encoding="utf-8")
-    assert '- "${ROSY_SITE_BIND_ADDRESS:-127.0.0.1}:${ROSY_SITE_HTTPS_PORT:-8443}:8443"' in compose
+    published = "${ROSY_SITE_HTTPS_PORT:?set ROSY_SITE_HTTPS_PORT}"
+    assert f'- "${{ROSY_SITE_BIND_ADDRESS:-127.0.0.1}}:{published}:{published}"' in compose
     assert "ROSY_SITE_BIND_ADDRESS:?" not in compose
     assert 'lan_iface: "${ROSY_SITE_LAN_IFACE:-}"' in compose
     settings = dict(line.split("=", 1) for line in env.splitlines() if line and not line.startswith("#"))

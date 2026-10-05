@@ -152,6 +152,10 @@ class FakeRobot:
             raise self.map_error
         return dict(self._map) if self._map is not None else {}
 
+    async def capabilities(self) -> dict:
+        return {"navigation": {"goal_navigation": True},
+                "swarm": {"lead": True, "follow": True}}
+
     async def swarm_state(self) -> dict:
         self._record("swarm_state")
         if self.swarm_state_gate is not None:

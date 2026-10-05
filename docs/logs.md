@@ -6081,3 +6081,35 @@ osy-d395-s1d\`.
 - 변경: tools/calibration/camera_auto.py and read-only camera_capture.py collect stationary camera/LiDAR/odometry and reuse the installed fitter; guide replaces manual height/pitch entry. No drive, mode, apply or calibration-session changes.
 - 증거: related 87 PASS, known failures 0 NEW; final 042-device capture 40 scans/15 frames/121 odometry, eight wall returns, REJECTED too few wall returns, applied false. docs/validation/camera-auto-2026-10-05/result.md.
 - gate 변화: SOURCE/LOCAL command verified; DEVICE capture and automatic fit executed, calibration acceptance and automatic movement remain unverified.
+
+## 2026-10-05 · uncommitted · feat(camera): validate automatic checkerboard pose candidates
+- 변경: PC-only two-image checkerboard fit; original-pixel reprojection checks, signed pitch and explicit input/thickness/intrinsics provenance; no runtime writes.
+- 증거: 95 PASS, known_failures 0 NEW. Device images: 20/54 corners, board height 53.908mm, pitch 12.117deg; approximate operator 1mm board gives estimated floor height 54.908mm. docs/validation/camera-board-2026-10-05/result.md.
+- gate 변화: LOCAL and real-image candidate comparison PASS; intrinsic calibration, runtime apply and automatic driving acceptance unverified.
+
+## 2026-10-05 · uncommitted · fix(fleet): 목표·대형 지원 기능 확인
+
+- 변경: CAP-001 표시와 전송 직전 재확인, 미지원 목표·대형 버튼 사유, 교체·대형 편입 경합 차단, ARMING 팔로워 예약. CORE 계약과 최종 제어 권한은 유지한다.
+- 증거: 관련 Python 180 PASS, Node 3 PASS, Chromium 2 PASS, 독립 리뷰 54 PASS와 scoped safety PASS. 기능 허용 변이 RED 후 복원 GREEN을 확인했다. docs/validation/fleet-navigation-support-2026-10-05.md.
+- gate 변화: 소스 회귀만 확인. 실기 두 대의 짧은 수동 진단과 최종 IDLE·속도 0을 읽었다. 새 후보 배포·목표·대형 실동작은 NOT_RUN, 독립 FIELD 수용은 HOLD.
+
+## 2026-10-05 · uncommitted · docs(camera): record applied checkerboard geometry
+- 변경: Record user-authorized estimated camera height/pitch operator overlay on the photographed device; preserve the earlier frozen candidate record.
+- 증거: Live parameters match 54.908mm/12.117deg; camera profile log reports operator overrides; 80 advancing frames and 501 zero commands in 10s. docs/validation/camera-board-applied-2026-10-05/result.md.
+- gate 변화: DEVICE estimated perception geometry application verified; intrinsic calibration acceptance and autonomous lane driving remain unverified.
+
+## 2026-10-05 · uncommitted · uiux: keep measured geometry in stylesheets
+
+- 변경: 로봇·Pilot·공용 화면 스크립트가 요소 스타일을 쓰지 않는다. 연속 값은 속성이고 스타일시트의 typed attr()가 읽는다. 캔버스 색 탐침은 채택 스타일시트 규칙 하나다. 확인창의 정지 구멍은 그대로 눌린다.
+- 증거: 호스트 178 passed, 72 skipped, known_failures 0 new. Chromium 주행 이동·복귀와 캔버스 팔레트 통과. 스크림 구멍은 정지 버튼을 맞춘다. 호스트·브라우저 시험이며 장치 수용은 없다.
+- gate 변화: 없음.
+
+## 2026-10-05 · uncommitted · fix(site): published HTTPS port comes only from the site setting
+- 변경: 공개 포트와 프록시 수신 포트가 ROSY_SITE_HTTPS_PORT 하나다. Compose는 그 값을 호스트 포트와 컨테이너 포트에 같이 쓰고, Caddy는 {$ROSY_SITE_HTTPS_PORT}로 듣는다. 방화벽은 그 포트 점프 하나만 두고, 두 포트가 다르면 거부한다. mDNS 광고와 사용자 발견 설치도 코드 기본 포트를 두지 않는다. Fleet 8090과 Vision 8095는 컨테이너 안 수신 포트로 둔다.
+- 증거: test/test_site_firewall.py test/test_site_mdns_bridge.py test/test_site_preflight.py test/test_site_user_discovery.py test/test_site_fleet_mdns.py — 309 passed, 3 skipped. known_failures 0 new. 호스트 시험이며 현장 배포는 없다.
+- gate 변화: 없음. 현장 스택에는 아직 배포하지 않았다.
+
+## 2026-10-05 · uncommitted · docs(lane): straight departure pipeline proposal
+- Change: record user-confirmed straight white-boundary crossing and stop; propose synchronized recording, reviewed failure labels, geometry/control replay and closed-loop evaluation.
+- Evidence: source inspection; departure-time synchronized trace unavailable. Focused suite: 109 passed and 2 log-format failures; both repaired checks passed on rerun (21 warnings), known_failures: 0 NEW for repaired checks.
+- Gate: no runtime change; departure root cause and FIELD acceptance remain unproven. Design status Proposed.

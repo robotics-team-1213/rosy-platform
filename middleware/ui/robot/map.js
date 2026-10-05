@@ -181,7 +181,7 @@ export function createFieldMap(options) {
 
   function syncCursor() {
     if (!canvas) return;
-    canvas.style.cursor = canGoal?.() ? "crosshair" : "default";
+    canvas.toggleAttribute("data-goal-cursor", Boolean(canGoal?.()));
   }
 
   function rebuildRaster() {

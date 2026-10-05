@@ -446,6 +446,12 @@
 - 증거: test_shell_assets.py 4 passed, known_failures NEW 0.
 - gate 변화: SOURCE/LOCAL. 실제 장치·FIELD 검증은 별도다.
 
+## 2026-10-05 · uncommitted · uiux: drive geometry stays in the stylesheet
+
+- 변경: 스틱·영상 이동·확대·좌우 띠·녹화 시트·자동 의도·팔 노브가 요소 스타일 대신 속성과 typed attr()를 쓴다. 쓰이지 않던 --video-ratio는 뺐다.
+- 증거: 호스트 178 passed, 72 skipped, known_failures 0 new. Chromium 주행 화면 이동·복귀 2 viewport 통과. 노브 변환과 띠 너비는 계산값과 같다. 장치 수용은 없다.
+- gate 변화: 없음.
+
 ## 2026-10-05 · uncommitted · feat(pilot): 연동 코드 보여주기(양방향)
 
 - 변경: 기기에 화면이 없을 때 Pilot이 코드를 보여 주고 상대 기기에서 입력한다(D-193 §5 등록 코드, 기존 CORE `POST /api/v1/auth/enrollment-codes` 그대로 사용 — 새 API·모드·필드 없음). `client.js` `requestEnrollmentCode(role)`, 접속 화면의 관리자 전용 "연동 코드 보여주기"(코드 발급 → `scale="display"` 큰 표시 + 유효분 안내, 403은 권한 문구). 반대 방향(상대 화면 코드 → Pilot 입력)은 기존 폼 그대로. `sw.js` 캐시 키 갱신. 개발 서버에 canned 발급 + `devadmintoken`(administrator) 추가.
@@ -463,4 +469,4 @@
 - 원인(실기 재현): Lenovo 태블릿의 네이티브 앱에서 "카메라 보기"가 계속 실패했다. WebView(CDP) 안에서 상태→프레임 반입을 재현한 결과 `GET /api/v1/vision/front/frame?sequence=N` 은 200인데 응답의 `X-Rosy-Camera-Source/Sequence/Captured-At/Frame-Id/Variant` 헤더가 모두 사라져 있었다. CORE는 다섯 헤더를 정상적으로 내보낸다(PC 직접 반입으로 확인). `PilotProxy.serveHttp`가 본문·Content-Range만 전달하고 나머지 헤더를 버려서, web_common `evidence.js fetchCameraPair`의 프레임 출처 검증이 항상 실패했다. PC에서 두 요청을 나눠 보내면 지연으로 409 CAMERA_FRAME_ADVANCED가 나는 별개의 정상 레이스도 확인했다(페이지 내 70 ms 주기는 200).
 - 변경: `PilotProxy.kt`에 `forwardRosyHeaders` — CORE 응답의 `x-rosy-*` 접두사 헤더를 바이트 경로와 스트리밍 경로 모두 그대로 붙인다. 같은 결함군으로 D-368 운전자 MJPEG 스트림(`multipart/x-mixed-replace`)이 본문 버퍼링 경로로 흘러 응답이 통째로 도착할 때까지 화면이 멈추던 것을 스트리밍 경로(녹화본 `x-tar`와 같은 bounded 통과)로 통과시킨다. 요청 방향·경로 검사·자격 규칙은 그대로. android README에 전달 규칙 한 줄 추가.
 - 증거: JVM 신규 시험 `cameraProvenanceHeadersReachTheBundledScreens`(MockWebServer가 다섯 헤더를 내고 프록시 응답에 그대로 오는지) — 빌드 결과는 커밋 메시지에 기록. multipart 통과는 기존 `x-tar` 스트리밍 경로의 조건 확장이라 별도 시험 없다(이 MockWebServer엔 열린 원본을 위한 chunked 오버로드가 없다). 태블릿 재설치 뒤 CDP로 헤더 도착·카메라 화면 프레임 표시를 확인할 예정.
-- gate 변화: LOCAL(프록시 결함은 JVM 시험으로 판정). 실기 태블릿 확인은 별도.
+- gate 변화: LOCAL(프록시 결함은 JVM 시험으로 판정). 실기 태블릿 확인은 별도. main

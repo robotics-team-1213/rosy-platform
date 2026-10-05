@@ -641,3 +641,9 @@
 - 증거: 원래 Fleet 목표 취소 직후 Escape 실패를 실제 Chromium에서 재현했다. 원래 세 실패와 시작점·Fleet 정지·로봇 삭제/정지·Abort 소비 회귀 12 PASS79.54s, 강화한 같은 DOM 재사용/native B close 1 PASS3.48s. 독립 검토자는 실제 stale handle RED 후 재사용1 PASS2.57s·긴급 정지1 PASS5.23s를 확인했다.
 - 한계: 첫 확장 실행6 PASS3 SKIP2 canonical import prerequisite 실패를 보존했다. 두 opt-in과 정본 package path로 최종12건은 전부 실행했다. 호스트 정적39 PASS 및 기존 Fleet package 예산1 FAIL을 별도 기록하고 예산을 완화하지 않았다. 실제 기기나 제어 명령 증거는 없다.
 - gate 변화: 없음. 공용 SOURCE/LOCAL 회귀 보완이며 장치·현장 수용은 별도다.
+
+## 2026-10-05 · uncommitted · uiux: scrim holes and canvas colours leave element style
+
+- 변경: 확인창 스크림 구멍은 data-clip을 typed attr()가 읽는다. 캔버스 색 탐침은 채택 스타일시트 규칙 하나로 토큰과 color-mix를 푼다.
+- 증거: 호스트 178 passed, 72 skipped, known_failures 0 new. Chromium에서 구멍은 정지 버튼을 맞추고 바깥은 스크림을 맞춘다. 팔레트 브라우저 시험 통과. 장치 수용은 없다.
+- gate 변화: 없음.

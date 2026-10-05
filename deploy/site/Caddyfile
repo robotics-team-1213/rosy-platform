@@ -2,7 +2,7 @@
 	admin localhost:2019
 }
 
-:8443 {
+:{$ROSY_SITE_HTTPS_PORT} {
 	tls /run/secrets/site_cert /run/secrets/site_key
 
 	@camera path /overhead/v1/frames

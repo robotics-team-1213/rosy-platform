@@ -16,9 +16,8 @@ WEB_ROOT = (Path(__file__).resolve().parents[3] / "middleware" / "ui") / "robot"
 TOKENS = (Path(__file__).parents[3] / "shared") / "web" / "tokens.css"
 
 DECLARATION = re.compile(r"^\s*(--[a-z0-9-]+)\s*:", re.MULTILINE)
-# 폴백 없는 참조만 위험하다. `var(--x, <fallback>)`는 의도적인 선택 오버라이드이고
-# (호스트 카드의 테마 훅), `--meter`처럼 JS가 런타임에 넣는 값도 이 형태를 쓴다.
-# 폴백이 없는 `var(--x)`가 선언되지 않으면 그 속성은 조용히 값을 잃는다.
+# 폴백 없는 참조만 위험하다. `var(--x, <fallback>)`는 의도적인 선택 오버라이드다
+# (호스트 카드의 테마 훅). 폴백이 없는 `var(--x)`가 선언되지 않으면 그 속성은 조용히 값을 잃는다.
 REFERENCE = re.compile(r"var\(\s*(--[a-z0-9-]+)\s*\)")
 
 

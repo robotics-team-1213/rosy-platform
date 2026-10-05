@@ -42,7 +42,8 @@ from fleet.swarm.session import (
     SessionState,
 )
 from fleet.swarm.robots import RobotEndpoint
-from fleet.swarm.transport import RobotClient
+from fleet.swarm.transport import RobotClient, require_capability
+from fleet.server.capability_display import CapabilityDisplay
 
 logger = logging.getLogger("fleet.console")
 
@@ -83,6 +84,8 @@ class FleetConsole:
         self._map_ttl_s = map_ttl_s
         self._map: Optional[dict] = None
         self._map_at = 0.0
+        self._capability_display = CapabilityDisplay(self._clients, self._clock)
+        self._capability_cache = self._capability_display.cache
         self._hub_state_max_age_s = hub_state_max_age_s
         # 하달한 목표는 Fleet 이 기억한다. 로봇 상태 스냅샷에는 목표가 없고, 있어서도 안 된다
         # — 미션은 Fleet 쪽 개념이고 로봇은 원자 액션만 받는다 (D-12). 화면의 목표 표시는
@@ -189,6 +192,7 @@ class FleetConsole:
         client = self._clients.pop(robot_id)
         self._order.remove(robot_id)
         self._registered_endpoints.pop(robot_id, None)
+        self._capability_display.invalidate(robot_id)
         self._rest_tokens.pop(robot_id, None)
         self._agent_pairing_tokens.pop(robot_id, None)
         self._hub.drop(robot_id)
@@ -202,6 +206,7 @@ class FleetConsole:
         robot_id = endpoint.robot_id
         old = self._clients[robot_id]
         self._clients[robot_id] = client
+        self._capability_display.invalidate(robot_id)
         self._registered_endpoints[robot_id] = endpoint.base_url
         self._rest_tokens[robot_id] = endpoint.token
         self._hub.set_client(robot_id, client)
@@ -221,6 +226,9 @@ class FleetConsole:
         return client
 
     # --- gather ---------------------------------------------------------------
+
+    async def _shown_capabilities(self, robot_id: str) -> Optional[dict]:
+        return await self._capability_display.shown(robot_id)
 
     async def _gather_state(self, robot_id: str) -> tuple[dict, str]:
         """D-447: 이미 열린 소켓이 먼저다. hub heartbeat(1 Hz, PRT-003)가 신선하면
@@ -255,6 +263,11 @@ class FleetConsole:
                                "queued": _shown(queued), "error": None,
                                "state": state, "gather_source": source})
         self._remember(robots)
+        shown = await asyncio.gather(*(self._shown_capabilities(r["robot_id"])
+                                       for r in robots if r["online"]))
+        caps = iter(shown)
+        for row in robots:
+            row["capabilities"] = next(caps) if row["online"] else None
         await self._handoff_dead_leader(robots)
         await self._run_traffic(robots)
         await self._manage_swarm_speed(robots)
@@ -344,6 +357,10 @@ class FleetConsole:
         달리는 로봇이 아니라 **서 있는 로봇**이 길을 막고 있으면 순서로는 풀리지 않는다.
         그때는 `bays` 로 비켜설 자리를 찾아 그 로봇을 먼저 치운다 (`_make_room`).
         """
+        client = self._client(robot_id)
+        await require_capability(client, "navigation.goal_navigation")
+        if self._clients.get(robot_id) is not client:
+            raise RuntimeError("robot connection changed during capability check")
         if robot_id in self._formation_members():
             # 팔로워는 리더 pose 를 따라가는 중이다. 여기에 목표를 따로 내리면 로봇 안에서
             # 두 임자가 같은 바퀴를 두고 다툰다 - 대형을 풀고 보내라고 돌려준다.
@@ -362,7 +379,6 @@ class FleetConsole:
             return {"accepted": False, "queued": True, "dispatch_attempted": False,
                     "cancel_confirmed": False, "blocked_by": yielding["for"],
                     "waiting_on": [yielding["for"]], "reason": "YIELDED"}
-        client = self._client(robot_id)
         if self._verdict(robot_id) == trust.UNTRUSTED:
             # D-395: an unlocalized robot gets no goal (CORE would refuse it); it waits for LOCALIZED.
             self._claims.pop(robot_id, None)
@@ -560,6 +576,12 @@ class FleetConsole:
 
     async def _send_to_bay(self, robot_id: str, bay: tuple, mover: str) -> None:
         """한 대를 비켜설 자리로. 제 미션이 있었다면 대기열에 넣어 돌아오게 한다."""
+        client = self._client(robot_id)
+        await require_capability(client, "navigation.goal_navigation")
+        if self._clients.get(robot_id) is not client:
+            raise RuntimeError("robot connection changed during capability check")
+        if robot_id in self._formation_members():
+            raise HubError("FORMATION_ACTIVE", f"{robot_id} joined a formation while planning a yield")
         own = self._goals.pop(robot_id, None)
         if own is not None and robot_id not in self._queued:
             # 비켜서는 것은 잠깐 물러나는 것이지 미션 취소가 아니다. 지나가는 대가 끝나면
@@ -567,7 +589,7 @@ class FleetConsole:
             self._queued[robot_id] = {**own, "blocked_by": mover, "waiting_on": [mover],
                                       "reason": "YIELDED"}
         self._claims.pop(robot_id, None)
-        await self._client(robot_id).navigation_goal(bay[0], bay[1], 0.0)
+        await client.navigation_goal(bay[0], bay[1], 0.0)
         self._yielding[robot_id] = {"bay": {"x": bay[0], "y": bay[1]}, "for": mover}
 
     async def _observe(self) -> None:
@@ -993,7 +1015,7 @@ class FleetConsole:
         session = self._formation
         if session is None or session.state in (SessionState.STOPPED, SessionState.IDLE):
             return set()
-        return set(session.assignment)
+        return set(session.follower_ids)
 
     def formation_status(self) -> dict:
         """화면이 읽는 대형 상태. 세션이 없으면 `active: False` 하나다."""
@@ -1151,6 +1173,7 @@ class FleetConsole:
         return status
 
     async def aclose(self) -> None:
+        await self._capability_display.aclose()
         for client in list(self._clients.values()):
             closer: Any = getattr(client, "aclose", None)
             if closer is not None:

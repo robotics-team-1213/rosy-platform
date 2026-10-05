@@ -83,6 +83,7 @@ function markLocked(reason = "auth") {
   pill.textContent = "토큰 필요";
   pill.setAttribute("status", "crit");
   if (auth.token && reason === "auth") el("console-token").setAttribute("aria-invalid", "true");
+  const canvas = el("map-canvas"); canvas.getContext("2d").clearRect(0, 0, canvas.width, canvas.height);
   connectionView.show(reason, auth.token);
   if (firstLock) {
     Object.assign(view, {robots: [], map: null, siteMap: null, sightings: [], cameraTracking: {robots: [], unknown: []},
