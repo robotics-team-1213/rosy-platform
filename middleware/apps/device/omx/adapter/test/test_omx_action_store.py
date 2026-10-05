@@ -468,3 +468,44 @@ def test_action_schema_v1_database_upgrades_additively_to_phase_ledger_v2(tmp_pa
     assert "omx_action_events" in tables
     assert "omx_action_phases" in tables
     assert upgraded.get_action(action["action_id"])["state"] == "PREPARED"
+
+
+def test_phase_receipt_state_and_event_share_one_snapshot_during_a_writer_update(tmp_path, monkeypatch):
+    store = ActionStore(tmp_path / "actions.sqlite3")
+    writer = ActionStore(store.path)
+    action_id, attempt_id = start_running(store)
+    store.begin_phase(action_id, attempt_id, phase_id="approach", ordinal=0, command_digest="a" * 64)
+    store.record_phase_submission(action_id, attempt_id, phase_id="approach",
+                                  accepted=True, driver_goal_id="ros-goal-1")
+    before = store.action_phase_receipts(action_id, attempt_id)[0]
+    original_connect = store._connect
+    changed = []
+
+    class Cursor:
+        def __init__(self, cursor):
+            self.cursor = cursor
+
+        def fetchall(self):
+            rows = self.cursor.fetchall()
+            if not changed:
+                changed.append(True)
+                writer.mark_phase_running(action_id, attempt_id, phase_id="approach",
+                                          driver_goal_id="ros-goal-1")
+            return rows
+
+    class Connection:
+        def __init__(self):
+            self.connection = original_connect()
+
+        def execute(self, query, *args):
+            cursor = self.connection.execute(query, *args)
+            return Cursor(cursor) if "SELECT * FROM omx_action_phases" in query else cursor
+
+        def close(self):
+            self.connection.close()
+
+    monkeypatch.setattr(store, "_connect", Connection)
+    observed = store.action_phase_receipts(action_id, attempt_id)[0]
+    assert changed == [True]
+    assert observed == before
+    assert writer.action_phase_receipts(action_id, attempt_id)[0]["state"] == "RUNNING"
