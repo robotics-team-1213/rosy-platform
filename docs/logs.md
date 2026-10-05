@@ -6157,3 +6157,9 @@ osy-d395-s1d\`.
 - 변경: 고정 로컬 signer가 main push CI, native unsigned build, ABI, 서명, 기존 카나리 발행을 연결한다. 개인키는 로컬에 둔다. 로봇의 MANUAL/hold/보정/claim을 해제하지 않는다.
 - 검증: 거부/재개 시험과 기존 prepare/publish/native workflow 시험. 장치 installed SHA·updater committed·내비게이션 현장 수용은 별도다.
 - gate 변화: 구현 검증 중. DEVICE/FIELD 완료로 기록하지 않는다.
+
+## 2026-10-06 · uncommitted · docs(adr): Rosy Cam 지도와 후면 LED 식별 경계
+
+- 변경: D-472와 ADR Log에 실제 Vision 프레임 기반 현장지도, 단독 소유 LED 점멸 신원 대조, 안전 선점·만료·주행 분리 결정을 기록했다.
+- 증거: 현장 두 로봇의 `rosy-face`와 램프 런타임 조회. 식별 점멸 API와 실제 영상 대조는 아직 없다.
+- gate 변화: 없음. 문서 제안이며 DEVICE/FIELD 수용이 아니다.
