@@ -40,7 +40,7 @@ def test_missing_ir_unknown_floor_and_closed_worker_cannot_authorize_return():
 
 def test_absent_failing_or_nonboolean_provider_denies_return():
     a=adapter()
-    for p in (None,SimpleNamespace(local_return_allowed=lambda *args:1)):
+    for p in (None, SimpleNamespace(), SimpleNamespace(local_return_allowed=lambda *args: 1)):
         a.policy=p
         assert not a.return_sensor_allowed(1.1,.02,0.)
     def failure(*args): raise RuntimeError('unavailable')
