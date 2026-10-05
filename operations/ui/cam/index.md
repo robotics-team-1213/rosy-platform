@@ -33,8 +33,8 @@
 
 ## 최근 기록
 
+- 2026-10-06 · uncommitted · uiux(cam): 확대 글자 설정 하단 조작
 - 2026-10-06 · uncommitted · uiux(cam): 에뮬레이터 LAN·설정 화면 독회
 - 2026-10-06 · uncommitted · uiux(cam): LAN 연결·설정 조작 너비
 - 2026-10-06 · uncommitted · uiux(cam): 송출 화면 동등한 조작 너비
 - 2026-10-06 · uncommitted · uiux(cam): 페어링 선택 너비 통일
-- 2026-10-05 · uncommitted · feat(cam): LAN 수신 선택·상대 승인·기억한 연결 갱신

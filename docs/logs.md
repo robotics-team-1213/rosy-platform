@@ -6331,3 +6331,9 @@ osy-d395-s1d\`.
 - 변경: 객체·픽셀 검수의 작업 목록 요청 실패 때 로딩·오래된 편집을 숨기고 실패 이유와 다시 불러오기 행동을 표시했다.
 - 증거: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)의 1440·390px 연결 실패 캡처, 정상 후 실패·복구 포함 브라우저 6 passed, `known_failures.py` 0 NEW. 캡처·로그는 X:에 둔다.
 - gate 변화: 학습 도구 LOCAL 연결 끊김 G2 일부 추가. 지연·거부·검수자 G3와 제품 전체는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(cam): 확대 글자 설정 버튼 너비
+
+- 변경: Cam 설정의 뒤로·저장을 전폭 두 줄로 배치해 320px/글자 200%에서 버튼 글자 줄바꿈을 복구했다.
+- 증거: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)의 Android 35 에뮬레이터 320·390px 캡처와 UI bounds, Gradle JVM 366 passed·APK 빌드 성공. 원본은 X:에 둔다.
+- gate 변화: Cam LOCAL 네이티브 G2 일부 추가. Pairing·Peer·송출과 실물 폰·G3, 제품 전체는 HOLD다.

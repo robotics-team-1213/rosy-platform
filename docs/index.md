@@ -300,8 +300,8 @@
 
 ## 최근 기록
 
+- 2026-10-06 · uncommitted · uiux(cam): 확대 글자 설정 버튼 너비
 - 2026-10-06 · uncommitted · uiux(learning): 검수 연결 끊김 복구
 - 2026-10-06 · uncommitted · uiux(learning): 사진 없는 최초 사용 안내
 - 2026-10-06 · uncommitted · uiux(learning): 빈 픽셀 검수 상태 정직성
 - 2026-10-06 · uncommitted · uiux(learning): 작업·자료 화면 위쪽 정렬
-- 2026-10-06 · uncommitted · uiux(learning): 빈 검수 화면 폭 복구

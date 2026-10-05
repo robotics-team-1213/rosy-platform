@@ -235,3 +235,9 @@
 - 변경: Cam LAN·설정 화면의 네이티브 캡처와 너비 판정을 UI/UX 회차에 추가했다.
 - 증거: Windows 예약 포트 범위를 피해 Android 35 격리 AVD를 `5662,5663`에 부팅, ADB device 확인, 현재 브랜치 debug APK 빌드·설치·실행. 320×640과 390×844(글자 130%) LAN·설정 화면 캡처는 X: 작업 캡처 폴더에 둔다. 설정 하단 뒤로·저장 UI bounds는 각각 173px이다.
 - gate 변화: Cam 네이티브 에뮬레이터 G2 부분 근거. 실제 수신 기기가 없어 Pairing·Peer·송출 상태, 설치자 G3와 실물 폰 수용은 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(cam): 확대 글자 설정 하단 조작
+
+- 변경: 설정 하단의 뒤로·저장을 전폭으로 쌓아 320px/글자 200%에서 「돌아가기」가 한 줄로 읽히게 했다.
+- 증거: Android 35 AVD 320×640/글자 200%와 390×844/글자 130% 네이티브 캡처·UI bounds, Gradle JVM 366 passed, debug APK 빌드 성공. 원본은 X: `captures/`에 둔다.
+- gate 변화: Cam LOCAL 네이티브 G2 부분 근거 추가. 실제 수신기·폰·설치자 G3와 제품 전체 UI/UX는 HOLD다.

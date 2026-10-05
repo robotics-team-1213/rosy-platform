@@ -307,11 +307,11 @@ fun SettingsScreen(
         invalid?.let { CritMessage(invalidText(it)) }
         if (saved) Text(stringResource(R.string.settings_saved), color = MaterialTheme.colorScheme.primary)
 
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-            OutlinedButton(onClick = onBack, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.settings_back)) }
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+            OutlinedButton(onClick = onBack, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.settings_back)) }
             Button(
                 enabled = !locked && development == null,
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.fillMaxWidth(),
                 onClick = {
                     val trimmedHost = host.trim()
                     val portNumber = port.trim().toIntOrNull() ?: -1
