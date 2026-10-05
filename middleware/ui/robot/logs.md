@@ -1022,3 +1022,9 @@
 - 변경: 작업 패널을 너비 컨테이너로 만들어 390px에서 입력·행동이 같은 폭을 쓴다. 역할 절차 G2 시험이 닫힌 고급 네트워크 작업을 실제 UI처럼 연 뒤 지연·연결 끊김·결측에서 비활성 버튼을 확인하고 작업 패널 6장을 별도로 저장한다.
 - 증거: 현재 FastAPI/Chromium 60셀 1 passed, 반응형·셸 브라우저 18 passed, 390px 웨이포인트 입력·행동 너비 차 ≤1px, 페이지 오류·가로 넘침 0, 확인 취소 POST 0, known_failures 0 NEW, Impeccable 검사 새 경고 0. 이미지 66장과 matrix.json을 2026-10-06 검증 회차에 보존했다.
 - gate 변화: LOCAL G2 증거만 추가. 절차의 현장 사용성 G3 및 실제 Host Agent·장치 readback은 미완료다.
+
+## 2026-10-06 · uncommitted · uiux(robot): 작업 준비·장비 첫 기동 셀 확인
+
+- 변경: `/setup`·`/device` 첫 기동 6셀의 현재 캡처를 보존하고, G2 비상 정지 단언에 렌더된 너비 확인을 더했다. 숨겨진 0폭 요소가 화면 안 좌표로 오판되지 않는다.
+- 증거: FastAPI/Chromium 첫 기동 1 passed, 절차 60셀 재실행 1 passed, D-153 G1 팔레트·토큰·문법 74 passed, CORE 증거 7 passed, `known_failures.py` 모두 0 NEW. 첫 기동 1366/390px의 비상 정지·상태 대기·가로 넘침 0을 캡처했다.
+- gate 변화: LOCAL G1/G2 증거. G3 현장 작업 독회와 실제 장치 readback은 미완료다.

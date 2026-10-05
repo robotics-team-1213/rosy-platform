@@ -37,8 +37,8 @@
 
 ## 최근 기록
 
+- 2026-10-06 · uncommitted · uiux(robot): 작업 준비·장비 첫 기동 셀 확인
 - 2026-10-06 · uncommitted · uiux(robot): 작업 준비·장비 절차 60셀 현재 캡처
 - 2026-10-06 · uncommitted · uiux(robot): 운용 영역 너비 통일
 - 2026-10-06 · uncommitted · uiux: 모바일 운용 조작을 관측보다 먼저 배치
 - 2026-10-06 · uncommitted · feat(dashboard): 개발 모드 로봇은 코드 없는 입장, 관리자는 임시 SSH 비밀번호를 화면에서 확인
-- 2026-10-05 · uncommitted · uiux: meter and map cursor stay in the stylesheet

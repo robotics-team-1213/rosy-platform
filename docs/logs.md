@@ -6187,3 +6187,9 @@ osy-d395-s1d\`.
 - 변경: D-153 회차에 /setup·/device의 역할·상태·뷰포트 60셀 matrix와 PNG 66장을 연결했다. 390px 패널의 입력·행동 폭을 통일한 결과를 보존하고, 첫 시험의 닫힌 고급 작업 버튼 조회 실패를 원인과 함께 구분했다.
 - 증거: shipped disclosure 경로를 연 재실행 1 passed, 반응형·셸 18 passed, matrix 셀 60개·이미지 66개 누락 0, 페이지 오류 0·가로 넘침 0, known_failures 0 NEW.
 - gate 변화: LOCAL G2만 진전. G3 작업 독회와 실제 Host Agent/장치 수용은 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(docs): 작업 준비·장비 첫 기동 6셀과 G1 재실행
+
+- 변경: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)에 `/setup`·`/device` 첫 기동 6셀과 두 폭의 캡처를 추가했다. 비상 정지의 렌더된 가시성 단언을 강화했다.
+- 증거: 첫 기동 1 passed, 절차 60셀 재실행 1 passed, D-153 G1 팔레트·토큰·문법 74 passed와 CORE 증거 7 passed, `known_failures.py` 0 NEW. 첫 기동 셀은 페이지 오류·가로 넘침 0이다.
+- gate 변화: LOCAL 증거 확장. 제품 전체 및 장치·현장 UI/UX는 HOLD다.

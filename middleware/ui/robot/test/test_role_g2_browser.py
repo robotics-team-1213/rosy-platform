@@ -203,13 +203,14 @@ def test_role_procedure_g2_local_matrix(tmp_path):
                       panelCount: document.querySelectorAll('ui-section[data-panel]').length,
                       status: document.querySelector('#surface-status')?.textContent || '',
                       notices: [...document.querySelectorAll('ui-status')].map(node => node.textContent.trim()).filter(Boolean).slice(0, 18),
-                      eStopVisible: (() => { const node=document.querySelector('#shell-estop'); return !!node && node.getBoundingClientRect().right <= innerWidth; })(),
+                      eStopVisible: (() => { const rect=document.querySelector('#shell-estop')?.getBoundingClientRect(); return !!rect && rect.width > 0 && rect.right <= innerWidth; })(),
                     })""")
                     records.append({"role": role, "surface": surface, "scenario": scenario,
                                     "viewport": f"{width}x{height}", "image": filename,
                                     "posts": posts, "dialogs": dialogs, "errors": errors, **measure})
                     assert errors == [], records[-1]
                     assert measure["overflowX"] == 0, records[-1]
+                    assert measure["eStopVisible"], records[-1]
                     if scenario == "confirm_cancel":
                         assert posts == [], records[-1]
                         assert len(dialogs) == 1, records[-1]
@@ -478,7 +479,7 @@ def test_role_procedure_first_boot_full_screen(tmp_path):
                   safetyVisible: !document.querySelector('#safety-mode-status')?.hidden,
                   panelCount: document.querySelectorAll('ui-section[data-panel]').length,
                   overflowX: Math.max(0, document.documentElement.scrollWidth - innerWidth),
-                  eStopVisible: document.querySelector('#shell-estop').getBoundingClientRect().right <= innerWidth,
+                  eStopVisible: (() => { const rect=document.querySelector('#shell-estop')?.getBoundingClientRect(); return !!rect && rect.width > 0 && rect.right <= innerWidth; })(),
                 })""")
                 records.append({"role": role, "surface": surface, "viewport": f"{width}x{height}",
                                 "image": filename, "pending": page.evaluate("window.__pendingRequests"),
