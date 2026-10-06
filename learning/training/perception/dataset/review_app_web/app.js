@@ -289,7 +289,7 @@ document.addEventListener('keydown',event=> {
   // Number keys set the selected box's class, A approves, X excludes (D-485). Approval
   // stays explicit (D-461): A only clicks an enabled 승인, never ticks 사진 전체 확인.
   // Physical keys (event.code) so a Korean IME layout still works; checkboxes keep working.
-  if(event.target?.matches?.(TEXT_ENTRY) || event.isComposing || event.keyCode===229 || event.ctrlKey || event.metaKey || event.altKey || busy || gesture) return;
+  if(event.target?.matches?.(TEXT_ENTRY) || event.isComposing || event.ctrlKey || event.metaKey || event.altKey || busy || gesture) return;
   const key=shortcut(event);
   const cls=workspace?.object_class_set.classes.find(c=>c.hotkey===key);
   const field=cls && selected!==null ? $('boxes').children[selected]?.querySelector('select') : null;

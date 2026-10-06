@@ -1,5 +1,7 @@
 """Versioned class sets: same names in the same order always give the same sha."""
 import pytest
+from pathlib import Path
+
 
 import class_sets
 from object_boxes import OBJECT_CLASSES
@@ -102,3 +104,33 @@ def test_data_yaml_display_falls_back_to_default_korean_then_name():
     assert [c['display'] for c in record['classes']] == ['Car', '신호등', '왼쪽 차선']
     plain = class_sets.from_data_yaml(b'names: [car, traffic_light, lane_left]\n', 'detect')
     assert plain['sha256'] == record['sha256'] and plain['classes'][0]['display'] == 'car'
+
+
+def test_lane_lr5_file_binds_in_model_order_with_korean_display(tmp_path):
+    import review_masks
+    raw = (Path(__file__).resolve().parents[1] / 'classes' / 'lane_lr5.yaml').read_bytes()
+    raw.decode('utf-8')
+    store = open_store(tmp_path)
+    binding = review_masks.bind_classes(store, raw)
+    classes = binding['classes'] if isinstance(binding, dict) and 'classes' in binding else binding
+    assert tuple(c['name'] for c in classes) == ('background', 'lane_left', 'lane_right', 'crosswalk', 'speed_bump')
+    assert classes[1]['display'] == '왼쪽 차선'
+
+
+def test_export_class_names_writes_a_data_yaml(tmp_path, monkeypatch):
+    import sys
+    import types
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'model'))
+    import export_class_names
+
+    class FakeYOLO:
+        task = 'detect'
+        names = {0: 'car', 1: 'person'}
+
+        def __init__(self, path):
+            pass
+
+    monkeypatch.setitem(sys.modules, 'ultralytics', types.SimpleNamespace(YOLO=FakeYOLO))
+    out = tmp_path / 'data.yaml'
+    assert export_class_names.main([str(tmp_path / 'best.pt'), '--out', str(out)]) == 0
+    assert [c['name'] for c in class_sets.from_data_yaml(out.read_bytes(), 'detect')['classes']] == ['car', 'person']

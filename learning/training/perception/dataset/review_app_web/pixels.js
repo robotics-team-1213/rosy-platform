@@ -107,7 +107,7 @@ document.addEventListener('keydown',event=>{if(event.key==='Escape'&&stroke){eve
   }
   // Number keys pick the n-th class, A approves, X excludes (D-485); approval checks stay manual (D-461).
   // Physical keys (event.code) so a Korean IME layout still works; checkboxes keep working.
-  if(event.target?.matches?.('input:not([type=checkbox]):not([type=radio]), textarea, select')||event.isComposing||event.keyCode===229||event.ctrlKey||event.metaKey||event.altKey||busy||stroke)return;
+  if(event.target?.matches?.('input:not([type=checkbox]):not([type=radio]), textarea, select')||event.isComposing||event.ctrlKey||event.metaKey||event.altKey||busy||stroke)return;
   const digit=/^(?:Digit|Numpad)([1-9])$/.exec(event.code||''),key=digit?digit[1]:{KeyA:'a',KeyX:'x'}[event.code]||(/^[1-9ax]$/i.test(event.key)?event.key.toLowerCase():null);
   const option=/^[1-9]$/.test(key)?[...$('pixel-class').options].filter(o=>o.value!=='255')[Number(key)-1]:null;
   if(option&&!$('pixel-class').disabled){event.preventDefault();$('pixel-class').value=option.value;}
