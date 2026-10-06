@@ -8,14 +8,14 @@ const states = {unknown:'알 수 없음', red:'빨강', yellow:'노랑', green:'
 const statuses = {approved:'승인', excluded:'제외', pending:'검수 대기'};
 const serverReasons = {'known object class required':'모든 박스에 클래스를 지정하세요.','box outside original image':'박스가 원본 사진 범위를 벗어났습니다.','unknown signal state':'신호 상태가 올바르지 않습니다.','boxes must be a list':'박스 목록이 올바르지 않습니다.','unknown review action':'지원하지 않는 동작입니다.'};
 function readableError(message) {return serverReasons[message] || message;}
-let workspace, frame, image, ready = false, busy = false, conflicted = false, forbidden = false, loadFailed = false, loadSerial = 0, drawing = false;
+let workspace, frame, image, ready = false, busy = false, loading = true, conflicted = false, forbidden = false, loadFailed = false, loadSerial = 0, drawing = false;
 let gesture = null, selected = null, coordinatePreview = null;
 let undo = null;
 function visibleFrames() {return workspace?.frames.filter(item=>$('filter').value==='all'||item.status===$('filter').value)||[];}
 
 function error(message='') { $('error').textContent = message; $('error').hidden = !message; }
 function enable() {
-  const locked = !ready || busy || conflicted || forbidden || !!gesture;
+  const locked = !ready || busy || loading || conflicted || forbidden || !!gesture;
   const unclassified = frame?.review.boxes.some(box => box.label == null);
   $('approve').disabled = locked || !$('complete').checked || frame?.status === 'excluded' || unclassified;
   const reason = forbidden ? '검수 권한이 거부되었습니다. 최신 내용을 다시 불러오세요.' : !ready ? '사진을 불러온 뒤 승인할 수 있습니다.' : busy ? '저장을 마친 뒤 승인할 수 있습니다.' : conflicted ? '최신 내용을 불러온 뒤 다시 확인하세요.' : frame?.status === 'excluded' ? '제외 사진은 재검수로 돌려야 합니다.' : unclassified ? '클래스가 없는 박스가 있습니다. 모든 박스의 클래스를 지정하세요.' : !$('complete').checked ? '사진 전체 확인에 체크하세요.' : '';
@@ -27,12 +27,13 @@ function enable() {
   $('candidates').disabled = locked || frame?.status === 'excluded';
   $('undo').disabled = locked || !undo || frame?.status === 'excluded';
   $('undo').reason=locked?'사진 저장과 불러오기를 마친 뒤 사용하세요.':!undo?'이 사진에서 저장한 라벨 수정이 없습니다.':frame?.status==='excluded'?'제외 사진은 수정할 수 없습니다.':'';
-  $('prepare').disabled = busy || conflicted || forbidden || !!gesture || !workspace;
-  $('reload').disabled = busy || !!gesture;
-  $('filter').disabled = busy || !!gesture;
+  $('prepare').disabled = busy || loading || conflicted || forbidden || !!gesture || !workspace;
+  $('prepare').reason = loading ? '검수 내용을 불러오는 중입니다.' : forbidden ? '검수 권한이 거부되었습니다. 최신 내용을 다시 불러오세요.' : '';
+  $('reload').disabled = busy || loading || !!gesture;
+  $('filter').disabled = busy || loading || !!gesture;
   $('complete').disabled = locked || frame?.status === 'excluded';
   document.querySelectorAll('#boxes input, #boxes select, #boxes ui-button').forEach(el => el.disabled = locked || frame?.status === 'excluded');
-  document.querySelectorAll('#frames ui-button').forEach(el => el.disabled = busy || !!gesture);
+  document.querySelectorAll('#frames ui-button').forEach(el => el.disabled = busy || loading || !!gesture);
   const visible=visibleFrames(),position=visible.findIndex(item=>item.index===frame?.index);
   for(const [id,available,reason] of [
     ['prev-frame',position>0,'현재 필터의 첫 번째 사진입니다.'],
@@ -202,7 +203,7 @@ $('add').onclick=()=>edit(boxes=>boxes.push({label:null,bbox_xyxy:[0,0,Math.min(
 $('delete-selected').onclick=()=> {if(selected!==null) {const index=selected; selected=null;edit(boxes=>boxes.splice(index,1));}};
 $('undo').onclick=()=> {if(undo?.index===frame?.index&&!$('undo').disabled) {selected=null;mutate('save',{boxes:undo.boxes},true);}};
 function point(event) {const rect=$('canvas').getBoundingClientRect(); return [Math.max(0,Math.min(frame.source.width,(event.clientX-rect.left)*frame.source.width/rect.width)),Math.max(0,Math.min(frame.source.height,(event.clientY-rect.top)*frame.source.height/rect.height))];}
-function canDrag() {return ready && !busy && !conflicted && !forbidden && frame.status!=='excluded';}
+function canDrag() {return ready && !busy && !loading && !conflicted && !forbidden && frame.status!=='excluded';}
 function cancelGesture() {
   if (!gesture) return;
   const id=gesture.pointerId; gesture=null;
@@ -301,7 +302,8 @@ $('prepare').onclick=async()=> {
   try {receipt(await request('/api/prepare',{}));} catch(e) {error(e.message); $('export-result').textContent=`자료 준비 실패 · ${e.message}`;$('export-result').scrollIntoView({block:'center'});} finally {busy=false; enable();}
 };
 async function load(index) {
-  try {workspace=await request('/api/workspace'); loadFailed=false; conflicted=false; forbidden=false; error();
+  loading=true;ready=false;++loadSerial;cancelGesture();$('counts').textContent='불러오는 중';$('frames').replaceChildren();listKey='';$('filter').parentElement.hidden=true;$('empty-frames').hidden=true;$('review-content').hidden=true;$('empty-review').hidden=false;$('empty-review').querySelector('h2').textContent='검수 내용을 확인하는 중';$('empty-review').querySelector('p').textContent='현재 사진과 결정 내용을 불러오고 있습니다.';$('show-all').hidden=true;enable();
+  try {workspace=await request('/api/workspace'); loading=false; loadFailed=false; conflicted=false; forbidden=false; error();$('show-all').hidden=false;
     if(workspace.exports.length) receipt(workspace.exports[0]);
     if (!workspace.frames.length) {applyFilter();return;}
     const params=new URLSearchParams(location.search);
@@ -309,6 +311,6 @@ async function load(index) {
     const candidate=params.has('frame')?Number(params.get('frame')):undefined;
     const visible=visibleFrames(),wanted=index??candidate;
     if(visible.length) await select(visible.some(item=>item.index===wanted)?wanted:visible[0].index);else applyFilter();
-  } catch(e) {loadFailed=true;workspace=undefined;frame=undefined;ready=false;listKey='';$('frames').replaceChildren();$('counts').textContent='상태를 확인할 수 없습니다.';$('filter').parentElement.hidden=true;$('empty-frames').textContent='사진 목록을 불러오지 못했습니다.';$('empty-frames').hidden=false;$('review-content').hidden=true;$('empty-review').hidden=false;$('empty-review').querySelector('h2').textContent=forbidden?'검수 권한이 거부되었습니다':'검수 내용을 불러오지 못했습니다';$('empty-review').querySelector('p').textContent=forbidden?'이 작업대의 접근 권한을 확인한 뒤 다시 불러오세요.':'연결을 확인하고 다시 시도하세요.';$('show-all').textContent='다시 불러오기';enable();}
+  } catch(e) {loading=false;loadFailed=true;workspace=undefined;frame=undefined;ready=false;listKey='';$('frames').replaceChildren();$('counts').textContent='상태를 확인할 수 없습니다.';$('filter').parentElement.hidden=true;$('empty-frames').textContent='사진 목록을 불러오지 못했습니다.';$('empty-frames').hidden=false;$('review-content').hidden=true;$('empty-review').hidden=false;$('empty-review').querySelector('h2').textContent=forbidden?'검수 권한이 거부되었습니다':'검수 내용을 불러오지 못했습니다';$('empty-review').querySelector('p').textContent=forbidden?'이 작업대의 접근 권한을 확인한 뒤 다시 불러오세요.':'연결을 확인하고 다시 시도하세요.';$('show-all').hidden=false;$('show-all').textContent='다시 불러오기';enable();}
 }
-load();
+enable();load();

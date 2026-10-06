@@ -6469,3 +6469,9 @@ osy-d395-s1d\`.
 - 변경: 객체·픽셀 검수의 403을 연결 실패와 구분하고, 자료 준비 거부 이유를 버튼 옆 화면 안에 표시했다. 권한 거부 뒤 편집·자료 준비를 막고 최신 작업영역을 다시 읽으면 복구한다.
 - 증거: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)의 1440/390px 객체·픽셀 권한 캡처, 관련 브라우저 43 passed와 결과 가시성 재검사 4 passed, 각 `known_failures.py` 0 NEW. 원본은 X: `captures/learning-permission/`.
 - gate 변화: `pinky-review` LOCAL G2 부분 근거 추가. 선언 상태 전체와 실제 검수자 G3는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(pinky-review): 응답 대기 중 오래된 편집 숨김
+
+- 변경: 객체·픽셀 검수의 첫 기동과 작업영역 다시 읽기에서 이전 편집을 내리고 응답 대기 상태를 표시했다. 최신 내용이 올 때까지 편집·자료 준비를 막는다.
+- 증거: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)의 1440/390px 응답 보류 브라우저 4 passed, `known_failures.py` 0 NEW. 관련 전체 실행은 46 passed/1 임의 unsafe port setup ERROR, 해당 셀 별도 재실행 1 passed다. X: `captures/learning-waiting/`.
+- gate 변화: `pinky-review` LOCAL G2 일부 추가. 800px, 나머지 선언 상태와 실제 검수자 G3는 HOLD다.

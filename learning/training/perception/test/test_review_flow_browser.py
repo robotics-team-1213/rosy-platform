@@ -261,6 +261,44 @@ def test_review_permission_denial_blocks_work_until_reload(
     expect(page.locator(prepare)).to_be_enabled()
 
 
+@pytest.mark.parametrize('route,reload,content,empty,prepare,pending_text', [
+    ('/', '#reload', '#review-content', '#empty-review', '#prepare', '검수 내용을 확인하는 중'),
+    ('/pixels', '#pixel-reload', '#pixel-content', '#pixel-empty', '#pixel-export', '검수 내용을 확인하는 중'),
+])
+@pytest.mark.parametrize('width', [1440, 390])
+def test_review_waiting_workspace_hides_stale_editing(
+    browser_workspace, route, reload, content, empty, prepare, pending_text, width
+):
+    page, _, expect = browser_workspace
+    page.set_viewport_size({'width': width, 'height': 844})
+    pending = []
+    page.route('**/api/workspace', lambda request: pending.append(request))
+    with page.expect_request('**/api/workspace'):
+        page.goto(page.url.split('?')[0].rstrip('/') + route, wait_until='domcontentloaded')
+    expect(page.locator(empty)).to_be_visible()
+    expect(page.locator(content)).to_be_hidden()
+    expect(page.locator(empty if route == '/' else '#pixel-status')).to_contain_text(pending_text)
+    expect(page.locator(prepare)).to_be_disabled()
+    assert pending
+    pending.pop().continue_()
+    expect(page.locator(content)).to_be_visible()
+    expect(page.locator(prepare)).to_be_enabled()
+
+    page.locator(reload).click()
+    expect(page.locator(empty)).to_be_visible()
+    expect(page.locator(content)).to_be_hidden()
+    expect(page.locator(prepare)).to_be_disabled()
+    assert pending
+    if output := os.getenv('ROSY_UIUX_SCREENSHOT_DIR'):
+        from pathlib import Path
+        target = Path(output) / f'learning-{"objects" if route == "/" else "pixels"}-waiting-{width}.png'
+        target.parent.mkdir(parents=True, exist_ok=True)
+        page.screenshot(path=str(target))
+    pending.pop().continue_()
+    expect(page.locator(content)).to_be_visible()
+    expect(page.locator(prepare)).to_be_enabled()
+
+
 def test_arrow_keys_move_between_photos(browser_workspace):
     page, store, expect = browser_workspace
 
