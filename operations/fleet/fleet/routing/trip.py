@@ -1,9 +1,10 @@
 """D-485 6·7·8 / D-486 2: one trip request -> one plan, or a ``PlanError``.
 
-Legs through ``via`` places are solved in order; a leg starts on the arc the previous leg
-ended on, so a via place is never a U-turn. Excluded arcs (robot kind, drive mode,
-blocked) are left out; on ``TRIP_NO_ROUTE`` one more search without the blocks tells the
-console whether unblocking would help.
+``via`` places are solved in the same layered A* as the goal (``planner.search``), so the
+route is optimal over the whole trip and the arc that reaches a via carries on (no U-turn
+there). Excluded arcs (robot kind, drive mode, blocked) are left out; on ``TRIP_NO_ROUTE``
+one more search without the blocks, against the same goal, tells the console whether
+unblocking would help.
 """
 
 from __future__ import annotations
@@ -12,7 +13,7 @@ import math
 from dataclasses import dataclass, field
 from typing import Mapping
 
-from fleet.routing.cost import STOP, RoutingConfig, classify, speed, turn_deg
+from fleet.routing.cost import STOP, RoutingConfig, classify, speed, transition_cost, turn_deg
 from fleet.routing.graph import Arc, Graph
 from fleet.routing.planner import Goal, search
 from fleet.routing.snap import PlanError, heading_ok, snap_goal, snap_start
@@ -46,13 +47,33 @@ class Plan:
     map_version: int | None
 
 
+#: A robot this close to its goal place (and facing the arrive yaw) is already there.
+ARRIVED_M = 0.05
+
+
+def prepare(graph: Graph, config: RoutingConfig) -> None:
+    """Build every tangent and successor once; raises if the map cannot be planned on."""
+    for arc in graph.arcs.values():
+        if not (arc.length_m > 0.0 and math.isfinite(arc.start_tangent) and math.isfinite(arc.end_tangent)):
+            raise ValueError(f"lane {arc.id} has no direction")
+    graph.successors(config, lambda arc, nxt, kind: transition_cost(
+        turn_deg(arc.end_tangent, nxt.start_tangent), kind, config))
+
+
 def plan_trip(graph: Graph, request: PlanRequest, config: RoutingConfig) -> Plan:
     if request.map_version != graph.version:
         raise PlanError("TRIP_NO_ACTIVE_MAP", {"map_version": graph.version})
-    targets = [*request.via, request.goal]
-    for target in targets:
+    if request.max_speed_mps is not None and not (math.isfinite(request.max_speed_mps)
+                                                  and request.max_speed_mps > 0.0):
+        raise ValueError("max_speed_mps must be a positive finite speed")
+    if any(not math.isfinite(v) or v < 0.0 for v in request.extra_cost.values()):
+        raise ValueError("extra_cost must be finite and nonnegative")
+    for target in [*request.via, request.goal]:
         if isinstance(target, str) and target not in graph.places:
             raise PlanError("TRIP_UNKNOWN_PLACE", {"place": target})
+    arrived = _arrived(graph, request, config)
+    if arrived is not None:
+        return arrived
 
     def allowed(arc: Arc, blocked=request.blocked_edges) -> bool:
         return ((arc.robot_kinds is None or request.robot_kind in arc.robot_kinds)
@@ -62,33 +83,40 @@ def plan_trip(graph: Graph, request: PlanRequest, config: RoutingConfig) -> Plan
         return speed(arc.speed_cap_mps, request.max_speed_mps, request.speed_cap)
 
     at = snap_start(graph, *request.start_pose, config)
-    segments: list[tuple[str, float, float]] = []
-    eta = 0.0
-    for index, target in enumerate(targets):
-        last = index == len(targets) - 1
-        goal, loose = _goal(graph, target, request.arrive_yaw if last else None, last, config)
-        kwargs = dict(speed=arc_speed, extra_cost=request.extra_cost)
-        found = search(graph, at, goal, config, allowed=allowed, **kwargs)
-        if found is None:
-            if loose is not None and search(graph, at, loose, config, allowed=allowed, **kwargs):
-                raise PlanError("TRIP_ARRIVE_YAW_UNREACHABLE", {"segment": index})
-            unblocked = search(graph, at, loose or goal, config,
-                               allowed=lambda arc: allowed(arc, frozenset()), **kwargs)
-            raise PlanError("TRIP_NO_ROUTE", {"segment": index, "unblock_would_help": unblocked is not None})
-        cost, leg = found
-        eta += cost
-        for item in leg:  # a later leg starts with the zero-length end of the previous arc
-            if item[2] > item[1] or not segments:
-                segments.append(item)
-        at = (segments[-1][0], segments[-1][2])
+    goal, loose = _goal(graph, request.goal, request.arrive_yaw, config)
+    kwargs = dict(speed=arc_speed, extra_cost=request.extra_cost, via=tuple(request.via))
+    stats: dict = {}
+    found = search(graph, at, goal, config, allowed=allowed, stats=stats, **kwargs)
+    if found is None:
+        if search(graph, at, goal, config, allowed=lambda arc: allowed(arc, frozenset()), **kwargs):
+            raise PlanError("TRIP_NO_ROUTE", {"segment": stats["layer"], "unblock_would_help": True})
+        if loose is not None and search(graph, at, loose, config, allowed=allowed, **kwargs):
+            raise PlanError("TRIP_ARRIVE_YAW_UNREACHABLE", {"segment": stats["layer"]})
+        raise PlanError("TRIP_NO_ROUTE", {"segment": stats["layer"], "unblock_would_help": False})
+    eta, segments = found
     return _assemble(graph, segments, eta, config)
 
 
-def _goal(graph: Graph, target, arrive_yaw, last: bool, config: RoutingConfig) -> tuple[Goal, Goal | None]:
-    """The leg goal and, when an arrive yaw narrows it, the same goal without it."""
+def _arrived(graph: Graph, request: PlanRequest, config: RoutingConfig) -> Plan | None:
+    """D-485 부록: already standing on the goal place, facing its arrive yaw -> an empty plan."""
+    if request.via or not isinstance(request.goal, str):
+        return None
+    x, y, yaw = request.start_pose
+    if math.dist((x, y), graph.place_xy(request.goal)) > ARRIVED_M:
+        return None
+    want = request.arrive_yaw if request.arrive_yaw is not None else getattr(
+        graph.places[request.goal], "yaw", None)
+    if want is not None and not heading_ok(yaw, want, config):
+        return None
+    return Plan(segments=(), places=(request.goal,), actions=((request.goal, STOP, 0.0),),
+                length_m=0.0, eta_s=0.0, map_version=graph.version)
+
+
+def _goal(graph: Graph, target, arrive_yaw, config: RoutingConfig) -> tuple[Goal, Goal | None]:
+    """The goal and, when an arrive yaw narrows a place goal, the same goal without it."""
     if isinstance(target, str):
         place = graph.places[target]
-        yaw = arrive_yaw if arrive_yaw is not None else (getattr(place, "yaw", None) if last else None)
+        yaw = arrive_yaw if arrive_yaw is not None else getattr(place, "yaw", None)
         loose = Goal(graph.place_xy(target), place=target)
         if yaw is None:
             return loose, None

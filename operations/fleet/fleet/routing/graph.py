@@ -12,8 +12,9 @@ import math
 from dataclasses import dataclass, field
 from functools import cached_property
 
-#: Tangents are read over this much polyline, so a 1 cm wiggle at a node is not a turn.
-TANGENT_M = 0.05
+#: Tangents are read over max(this, lane width), at most half the arc (D-485 부록), so a
+#: few-cm wiggle or a pinned end at a node is not read as a turn.
+TANGENT_MIN_M = 0.15
 
 Point = tuple[float, float]
 
@@ -23,6 +24,16 @@ def _knots(points: tuple[Point, ...]) -> tuple[float, ...]:
     for a, b in zip(points, points[1:]):
         knots.append(knots[-1] + math.dist(a, b))
     return tuple(knots)
+
+
+def pinned(polyline, start: Point, end: Point) -> tuple[Point, ...]:
+    points = [(float(x), float(y)) for x, y in polyline]
+    points[0], points[-1] = (float(start[0]), float(start[1])), (float(end[0]), float(end[1]))
+    return tuple(points)
+
+
+def polyline_length(points) -> float:
+    return sum(math.dist(a, b) for a, b in zip(points, points[1:]))
 
 
 @dataclass(frozen=True)
@@ -44,19 +55,23 @@ class Arc:
         return self.knots[-1]
 
     def point_at(self, s_m: float) -> tuple[float, float, float]:
-        """``(x, y, tangent)`` at ``s_m`` along the direction of travel."""
+        """``(x, y, segment heading)`` at ``s_m`` along the direction of travel."""
         s_m = min(max(s_m, 0.0), self.length_m)
-        last = len(self.polyline) - 2
-        for index in range(last + 1):
-            end = self.knots[index + 1]
-            span = end - self.knots[index]
-            if (s_m > end and index < last) or span == 0.0:
+        found = None
+        for index in range(len(self.polyline) - 1):
+            span = self.knots[index + 1] - self.knots[index]
+            if span == 0.0:
                 continue
-            t = (s_m - self.knots[index]) / span
-            (ax, ay), (bx, by) = self.polyline[index], self.polyline[index + 1]
-            return ax + t * (bx - ax), ay + t * (by - ay), math.atan2(by - ay, bx - ax)
-        x, y = self.polyline[-1]
-        return x, y, self.end_tangent
+            found = index
+            if s_m <= self.knots[index + 1]:
+                break
+        if found is None:  # the schema refuses zero-length lanes; never recurse on one
+            x, y = self.polyline[-1]
+            return x, y, 0.0
+        (ax, ay), (bx, by) = self.polyline[found], self.polyline[found + 1]
+        span = self.knots[found + 1] - self.knots[found]
+        t = min(max((s_m - self.knots[found]) / span, 0.0), 1.0)
+        return ax + t * (bx - ax), ay + t * (by - ay), math.atan2(by - ay, bx - ax)
 
     def project(self, x: float, y: float) -> tuple[float, float, float]:
         """``(distance, s, tangent)`` of the closest polyline point."""
@@ -74,14 +89,18 @@ class Arc:
         return best
 
     @cached_property
+    def tangent_m(self) -> float:
+        return min(max(TANGENT_MIN_M, self.width_m), self.length_m / 2)
+
+    @cached_property
     def start_tangent(self) -> float:
-        x, y, _ = self.point_at(min(TANGENT_M, self.length_m / 2))
+        x, y, _ = self.point_at(self.tangent_m)
         return math.atan2(y - self.polyline[0][1], x - self.polyline[0][0])
 
     @cached_property
     def end_tangent(self) -> float:
         x, y = self.polyline[-1]
-        px, py, _ = self.point_at(self.length_m - min(TANGENT_M, self.length_m / 2))
+        px, py, _ = self.point_at(self.length_m - self.tangent_m)
         return math.atan2(y - py, x - px)
 
 
@@ -98,7 +117,7 @@ class Graph:
     def successors(self, config, transition) -> dict[str, tuple[tuple[str, float], ...]]:
         """``{arc id: ((next arc id, transition cost s), ...)}`` without banned or refused turns.
 
-        ``transition(arc, next arc, place kind)`` is ``cost.transition`` for ``config``.
+        ``transition(arc, next arc, place kind)`` is the turn cost for ``config``.
         """
         found = self._successors.get(config)
         if found is None:
@@ -129,10 +148,9 @@ def build_graph(site_map, *, version: int | None = None) -> Graph:
     arcs: dict[str, Arc] = {}
     for edge in site_map.edges:
         start, end = places[edge.from_], places[edge.to]
-        points = [(float(x), float(y)) for x, y in edge.polyline]
-        points[0], points[-1] = (float(start.x), float(start.y)), (float(end.x), float(end.y))
+        points = pinned(edge.polyline, (start.x, start.y), (end.x, end.y))
         kinds = tuple(edge.robot_kinds) if edge.robot_kinds is not None else None
-        ways = [(True, edge.from_, edge.to, tuple(points))]
+        ways = [(True, edge.from_, edge.to, points)]
         if edge.direction == "two_way":
             ways.append((False, edge.to, edge.from_, tuple(reversed(points))))
         for forward, src, dst, line in ways:

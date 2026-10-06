@@ -12,10 +12,12 @@ from __future__ import annotations
 
 import math
 from pathlib import Path
-from typing import Literal, Optional
+from typing import Annotated, Literal, Optional
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+from fleet.routing.graph import pinned, polyline_length
 
 SCHEMA = "rosy.site_map/1"
 #: A polyline end may sit this far from its place (generated graphs end exactly on the node).
@@ -23,6 +25,9 @@ ENDPOINT_TOL_M = 0.05
 MAX_PLACES = 500
 MAX_EDGES = 1000
 MAX_POINTS = 20_000
+#: A lane pinned onto its places must be longer than this, and two places must be farther
+#: apart than ``ENDPOINT_TOL_M``: a zero-length lane has no direction to plan with.
+MIN_EDGE_M = 0.10
 #: lane_graph.yaml lane half-width is 92.5 mm (docs/validation map-v2-fleet keep run).
 IMPORT_WIDTH_M = 0.185
 #: Import default only; the operator edits it per edge in the console.
@@ -54,7 +59,8 @@ class SiteEdge(BaseModel):
     width_m: float = Field(gt=0.0, le=10.0, allow_inf_nan=False)
     speed_cap_mps: float = Field(gt=0.0, le=5.0, allow_inf_nan=False)
     drive_mode: Literal["lane", "free"] = "lane"
-    robot_kinds: Optional[list[str]] = None
+    robot_kinds: Optional[list[Annotated[str, Field(pattern=r"^[A-Za-z0-9_.-]{1,32}$")]]] = Field(
+        default=None, max_length=16)
 
     @model_validator(mode="after")
     def _finite(self) -> "SiteEdge":
@@ -94,6 +100,13 @@ class SiteMap(BaseModel):
             raise ValueError("edge ids must be unique")
         if sum(len(edge.polyline) for edge in self.edges) > MAX_POINTS:
             raise ValueError(f"site map holds more than {MAX_POINTS} points")
+        ordered = sorted(self.places, key=lambda place: place.x)
+        for index, place in enumerate(ordered):  # sweep on x: O(n log n) for the usual sparse map
+            for other in ordered[index + 1:]:
+                if other.x - place.x > ENDPOINT_TOL_M:
+                    break
+                if math.dist((place.x, place.y), (other.x, other.y)) <= ENDPOINT_TOL_M:
+                    raise ValueError(f"places {place.id} and {other.id} are at the same point")
         for edge in self.edges:
             for end, point in ((edge.from_, edge.polyline[0]), (edge.to, edge.polyline[-1])):
                 place = places.get(end)
@@ -101,6 +114,9 @@ class SiteMap(BaseModel):
                     raise ValueError(f"edge {edge.id} names unknown place {end}")
                 if math.dist(point, (place.x, place.y)) > ENDPOINT_TOL_M:
                     raise ValueError(f"edge {edge.id} polyline does not end at place {end}")
+            start, finish = places[edge.from_], places[edge.to]
+            if polyline_length(pinned(edge.polyline, (start.x, start.y), (finish.x, finish.y))) <= MIN_EDGE_M:
+                raise ValueError(f"edge {edge.id} is shorter than {MIN_EDGE_M} m between its places")
         for ban in self.turn_bans:
             into, out = edges.get(ban.from_edge), edges.get(ban.to_edge)
             if ban.at not in places or into is None or out is None:
