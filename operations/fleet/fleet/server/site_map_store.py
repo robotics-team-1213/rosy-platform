@@ -2,7 +2,9 @@
 
 The active map is the highest activated version. Activation copies the draft, is done by a
 named operator (routes) and is refused while a lane route is running. Every activation and
-every trip plan (D-486 8) is a row here beside the HTTP audit of the request.
+every trip plan (D-486 8) is a row here beside the HTTP audit of the request. Draft saves
+and activations are rows in ``site_map_events``; plans keep the last ``PLAN_KEEP`` within
+``PLAN_KEEP_S``. Activation refuses a map the planner cannot use.
 """
 
 from __future__ import annotations
@@ -16,10 +18,15 @@ import uuid
 from pathlib import Path
 from typing import Callable, Optional
 
-from fleet.meet.place import Painted, painted_from, use_painted
+from fleet.meet.place import Painted, painted_from
+from fleet.routing.cost import RoutingConfig
 from fleet.routing.graph import Graph, build_graph
+from fleet.routing.trip import prepare
 from fleet.server.sqlite_policy import configure_connection, enable_wal
 from fleet.site_map import SiteMap
+
+PLAN_KEEP = 1000
+PLAN_KEEP_S = 30 * 24 * 3600.0
 
 
 class SiteMapError(ValueError):
@@ -50,6 +57,9 @@ class SiteMapStore:
                     plan_id TEXT PRIMARY KEY, robot_id TEXT NOT NULL, principal_id TEXT NOT NULL,
                     map_version INTEGER, request TEXT NOT NULL, result TEXT NOT NULL,
                     created_at REAL NOT NULL);
+                CREATE TABLE IF NOT EXISTS site_map_events (
+                    event_id INTEGER PRIMARY KEY AUTOINCREMENT, action TEXT NOT NULL,
+                    principal_id TEXT NOT NULL, detail TEXT NOT NULL, at REAL NOT NULL);
             """)
         self._cached: Optional[tuple[int, SiteMap, Graph, Painted]] = None
         self._publish()
@@ -69,12 +79,12 @@ class SiteMapStore:
         """Rebuild the cached map/graph and the meet ``Painted`` for the newest version."""
         with self._lock:
             row = self._active_row()
-            if row is None:  # nothing to publish; the meet geometry keeps what it has
+            if row is None:
                 return
             site_map = SiteMap.model_validate(json.loads(row[1]))
-            painted = painted_from(site_map)
-            self._cached = (row[0], site_map, build_graph(site_map, version=row[0]), painted)
-            use_painted(painted)
+            graph = build_graph(site_map, version=row[0])
+            prepare(graph, RoutingConfig())
+            self._cached = (row[0], site_map, graph, painted_from(site_map))
 
     def active(self) -> Optional[tuple[int, SiteMap, Graph, Painted]]:
         """``(version, map, graph, painted)`` or None. Built once per version (D-486 6)."""
@@ -88,6 +98,23 @@ class SiteMapStore:
         return {"version": row[0], "sha256": row[2], "activated_by": row[3],
                 "activated_at": row[4], "map": json.loads(row[1])}
 
+    @staticmethod
+    def _plannable(site_map: SiteMap) -> None:
+        try:
+            prepare(build_graph(site_map), RoutingConfig())
+        except (ValueError, ArithmeticError, RecursionError) as exc:
+            raise SiteMapError(422, "SITE_MAP_UNPLANNABLE", f"the planner cannot use this map: {exc}") from exc
+
+    def _event(self, action: str, principal_id: str, detail: dict) -> None:
+        self._db.execute("INSERT INTO site_map_events (action, principal_id, detail, at) VALUES (?, ?, ?, ?)",
+                         (action, principal_id, json.dumps(detail, sort_keys=True), self.clock()))
+
+    def events(self, limit: int = 50) -> list[dict]:
+        with self._lock:
+            rows = self._db.execute("SELECT action, principal_id, detail, at FROM site_map_events "
+                                    "ORDER BY event_id DESC LIMIT ?", (limit,)).fetchall()
+        return [{"action": r[0], "principal_id": r[1], "detail": json.loads(r[2]), "at": r[3]} for r in rows]
+
     def _insert_version(self, site_map: SiteMap, principal_id: str) -> int:
         text = json.dumps(site_map.body(), sort_keys=True, ensure_ascii=False)
         cursor = self._db.execute(
@@ -97,6 +124,7 @@ class SiteMapStore:
 
     def import_if_empty(self, site_map: SiteMap, *, source: str) -> Optional[int]:
         """The configured import source becomes version 1 only when the site has no map."""
+        self._plannable(site_map)
         with self._lock, self._db:
             self._db.execute("BEGIN IMMEDIATE")
             if self._active_row() is not None:
@@ -123,6 +151,7 @@ class SiteMapStore:
                 raise SiteMapError(409, "SITE_MAP_DRAFT_CHANGED", "another operator changed the draft; reload first")
             self._db.execute("INSERT OR REPLACE INTO site_map_draft VALUES (1, ?, ?, ?, ?)",
                              (json.dumps(site_map.body(), ensure_ascii=False), revision, principal_id, self.clock()))
+            self._event("draft_saved", principal_id, {"revision": revision})
         return self.draft_view()
 
     def activate(self, *, expected_revision: str, principal_id: str, route_active: bool) -> dict:
@@ -136,7 +165,10 @@ class SiteMapStore:
                 raise SiteMapError(409, "SITE_MAP_NO_DRAFT", "save a draft before activating")
             if row[1] != expected_revision:
                 raise SiteMapError(409, "SITE_MAP_DRAFT_CHANGED", "the draft changed; review it again")
-            self._insert_version(SiteMap.model_validate(json.loads(row[0])), principal_id)
+            site_map = SiteMap.model_validate(json.loads(row[0]))
+            self._plannable(site_map)
+            version = self._insert_version(site_map, principal_id)
+            self._event("activated", principal_id, {"revision": expected_revision, "version": version})
             self._db.execute("DELETE FROM site_map_draft")
         self._publish()
         return self.active_view()
@@ -150,6 +182,10 @@ class SiteMapStore:
                 "INSERT INTO site_trip_plans VALUES (?, ?, ?, ?, ?, ?, ?)",
                 (plan_id, robot_id, principal_id, map_version, json.dumps(request, sort_keys=True),
                  json.dumps(result, sort_keys=True), self.clock()))
+            self._db.execute(
+                "DELETE FROM site_trip_plans WHERE created_at < ? OR plan_id NOT IN "
+                "(SELECT plan_id FROM site_trip_plans ORDER BY rowid DESC LIMIT ?)",
+                (self.clock() - PLAN_KEEP_S, PLAN_KEEP))
 
     def plans(self, limit: int = 50) -> list[dict]:
         with self._lock:

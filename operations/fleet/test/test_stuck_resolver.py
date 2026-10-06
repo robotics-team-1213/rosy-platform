@@ -4,7 +4,8 @@ import math
 
 import pytest
 
-from fleet.meet.place import painted_track, pose_on, project
+from fleet.meet.place import pose_on, project
+from site_map_fixture import painted_track
 from fleet.server.stuck_resolver import Answer, Escalate, ResolverConfig, StuckResolver
 
 
@@ -29,7 +30,7 @@ def _stuck(stuck_id="stuck-1", cause="obstacle_ahead", *, local=True, attempts=0
 
 
 def test_r2_backs_off_from_a_static_obstacle_once_per_stuck():
-    r = StuckResolver(ResolverConfig())
+    r = StuckResolver(ResolverConfig(), painted=painted_track)
     first = r.step(0.0, [_row(stuck=_stuck())])
     assert first == [Answer("rosy_01", "stuck-1", "BACK_AND_RETRY", "R2")]
     r.sent(first[0], 0.0)
@@ -37,7 +38,7 @@ def test_r2_backs_off_from_a_static_obstacle_once_per_stuck():
 
 
 def test_r1_waits_for_a_peer_in_the_front_band():
-    r = StuckResolver(ResolverConfig())
+    r = StuckResolver(ResolverConfig(), painted=painted_track)
     me = _row("rosy_01", _stuck(), pose=(0.0, 0.0, 0.0))
     peer = _row("rosy_02", None, pose=(0.20, 0.03, 3.14))
     assert r.step(0.0, [me, peer]) == [Answer("rosy_01", "stuck-1", "WAIT", "R1")]
@@ -54,20 +55,20 @@ def _east_pair():
 
 def test_on_track_head_on_yields_and_an_off_track_peer_stays_on_r1():
     _painted, door, near, far = _east_pair()
-    yielder = StuckResolver(ResolverConfig())
+    yielder = StuckResolver(ResolverConfig(), painted=painted_track)
     actions = yielder.step(0.0, [_row("near", _stuck(), pose=near), _row("far", None, pose=far)])
     assert len(actions) == 1 and isinstance(actions[0], Answer)
     assert actions[0].decision == "YIELD" and actions[0].rule == "meet"
     assert actions[0].yield_m == pytest.approx(abs(1.2 - door.s_m), abs=0.05)
     assert abs(actions[0].yield_turn_rad) == pytest.approx(math.pi, abs=0.2)
-    holder = StuckResolver(ResolverConfig())
+    holder = StuckResolver(ResolverConfig(), painted=painted_track)
     held = holder.step(0.0, [_row("far", _stuck(), pose=far), _row("near", None, pose=near)])
     assert held == [Answer("far", "stuck-1", "WAIT", "meet")]
 
 
 def test_a_finished_segment_sends_the_sidestep_without_restarting_the_same_one():
     _painted, door, near, far = _east_pair()
-    resolver = StuckResolver(ResolverConfig())
+    resolver = StuckResolver(ResolverConfig(), painted=painted_track)
     first = resolver.step(0.0, [_row("near", _stuck(), pose=near), _row("far", None, pose=far)])[0]
     resolver.sent(first, 0.0)
     yielded = _stuck()
@@ -82,7 +83,7 @@ def test_a_finished_segment_sends_the_sidestep_without_restarting_the_same_one()
 def test_three_robots_on_one_two_way_edge_escalate():
     painted = painted_track()
     poses = [pose_on(painted, "east", s, direction=1) for s in (1.0, 1.08, 1.16)]
-    action = StuckResolver(ResolverConfig()).step(0.0, [
+    action = StuckResolver(ResolverConfig(), painted=painted_track).step(0.0, [
         _row("a", _stuck(), pose=poses[0]),
         _row("b", None, pose=poses[1]),
         _row("c", None, pose=poses[2]),
@@ -91,31 +92,31 @@ def test_three_robots_on_one_two_way_edge_escalate():
 
 
 def test_r1_ignores_a_peer_behind_or_beside_and_unknown_poses():
-    r = StuckResolver(ResolverConfig())
+    r = StuckResolver(ResolverConfig(), painted=painted_track)
     me = _row("rosy_01", _stuck(), pose=(0.0, 0.0, 0.0))
     behind = _row("rosy_02", None, pose=(-0.20, 0.0, 0.0))
     beside = _row("rosy_03", None, pose=(0.10, 0.40, 0.0))
     assert r.step(0.0, [me, behind, beside])[0].rule == "R2"
-    r2 = StuckResolver(ResolverConfig())
+    r2 = StuckResolver(ResolverConfig(), painted=painted_track)
     assert r2.step(0.0, [_row("rosy_01", _stuck(), pose=None),
                          _row("rosy_02", None, pose=(0.2, 0.0, 0.0))])[0].rule == "R2"
 
 
 def test_r3_backs_off_on_lane_lost():
-    r = StuckResolver(ResolverConfig())
+    r = StuckResolver(ResolverConfig(), painted=painted_track)
     assert r.step(0.0, [_row(stuck=_stuck(cause="lane_lost"))]) == [
         Answer("rosy_01", "stuck-1", "BACK_AND_RETRY", "R3")]
 
 
 def test_no_back_off_without_local_recovery_escalates():
-    r = StuckResolver(ResolverConfig())
+    r = StuckResolver(ResolverConfig(), painted=painted_track)
     assert r.step(0.0, [_row(stuck=_stuck(local=False))]) == [
         Escalate("rosy_01", "stuck-1", "no_rule")]
     assert r.step(1.0, [_row(stuck=_stuck(local=False))]) == []      # escalate once
 
 
 def test_attempts_exhausted_escalates():
-    r = StuckResolver(ResolverConfig())
+    r = StuckResolver(ResolverConfig(), painted=painted_track)
     assert r.step(0.0, [_row(stuck=_stuck(attempts=2, max_attempts=2))]) == [
         Escalate("rosy_01", "stuck-1", "no_rule")]
 
@@ -141,7 +142,7 @@ def test_chain_ends_after_restuck_window_or_mode_change():
 
 
 def test_restuck_after_resolver_resume_goes_to_human():
-    r = StuckResolver(ResolverConfig())
+    r = StuckResolver(ResolverConfig(), painted=painted_track)
     r.sent(Answer("rosy_01", "stuck-1", "RESUME", "R1"), 0.0)
     r.step(0.0, [_row(stuck=_stuck("stuck-1"))])
     r.step(1.0, [_row(stuck=None)])
@@ -156,7 +157,7 @@ def test_deadline_escalates():
 
 
 def test_refused_retires_the_rule_and_tries_the_next():
-    r = StuckResolver(ResolverConfig())
+    r = StuckResolver(ResolverConfig(), painted=painted_track)
     me = _row("rosy_01", _stuck(), pose=(0.0, 0.0, 0.0))
     peer = _row("rosy_02", None, pose=(0.20, 0.0, 3.14))
     a = r.step(0.0, [me, peer])[0]
@@ -168,12 +169,12 @@ def test_refused_retires_the_rule_and_tries_the_next():
 
 
 def test_mismatch_forgets_and_other_codes_escalate():
-    r = StuckResolver(ResolverConfig())
+    r = StuckResolver(ResolverConfig(), painted=painted_track)
     a = r.step(0.0, [_row(stuck=_stuck())])[0]
     r.sent(a, 0.0)
     r.result(a, code="STUCK_ID_MISMATCH")
     assert r.step(1.0, [_row(stuck=_stuck())]) == []                 # same id: still answered
-    r2 = StuckResolver(ResolverConfig())
+    r2 = StuckResolver(ResolverConfig(), painted=painted_track)
     a2 = r2.step(0.0, [_row(stuck=_stuck())])[0]
     r2.sent(a2, 0.0)
     assert r2.result(a2, code="CALIBRATION_ACTIVE") == Escalate("rosy_01", "stuck-1",
@@ -181,7 +182,7 @@ def test_mismatch_forgets_and_other_codes_escalate():
 
 
 def test_transport_failure_retries_once_then_escalates():
-    r = StuckResolver(ResolverConfig())
+    r = StuckResolver(ResolverConfig(), painted=painted_track)
     a = r.step(0.0, [_row(stuck=_stuck())])[0]
     r.sent(a, 0.0)
     assert r.result(a, code="ROBOT_UNREACHABLE") is None
@@ -193,13 +194,13 @@ def test_transport_failure_retries_once_then_escalates():
 
 
 def test_human_claim_silences_the_resolver():
-    r = StuckResolver(ResolverConfig())
+    r = StuckResolver(ResolverConfig(), painted=painted_track)
     r.claim("rosy_01", "stuck-1")
     assert r.step(0.0, [_row(stuck=_stuck())]) == []
 
 
 def test_offline_and_estop_robots_are_left_alone():
-    r = StuckResolver(ResolverConfig())
+    r = StuckResolver(ResolverConfig(), painted=painted_track)
     assert r.step(0.0, [_row(stuck=_stuck(), online=False)]) == []
     assert r.step(0.0, [_row(stuck=_stuck(), estop=True)]) == [
         Escalate("rosy_01", "stuck-1", "estop")]
@@ -220,7 +221,7 @@ def test_row_without_mode_keeps_the_chain():
 
 
 def test_restuck_after_resume_without_a_closed_poll():
-    r = StuckResolver(ResolverConfig())
+    r = StuckResolver(ResolverConfig(), painted=painted_track)
     r.sent(Answer("rosy_01", "stuck-1", "RESUME", "R1"), 0.0)
     assert r.step(1.0, [_row(stuck=_stuck("stuck-2"))]) == [
         Escalate("rosy_01", "stuck-2", "restuck_after_resume")]
@@ -238,14 +239,14 @@ def test_transport_resend_counts_once_against_the_budget():
 
 
 def test_active_calibration_escalates():
-    r = StuckResolver(ResolverConfig())
+    r = StuckResolver(ResolverConfig(), painted=painted_track)
     row = _row(stuck=_stuck())
     row["state"]["activity"] = {"kind": "CALIBRATING"}
     assert r.step(0.0, [row]) == [Escalate("rosy_01", "stuck-1", "calibration")]
 
 
 def test_r1_reach_covers_the_peer_body():
-    r = StuckResolver(ResolverConfig())
+    r = StuckResolver(ResolverConfig(), painted=painted_track)
     me = _row("rosy_01", _stuck(), pose=(0.0, 0.0, 0.0))
     peer = _row("rosy_02", None, pose=(0.35, 0.0, 3.14))
     assert r.step(0.0, [me, peer]) == [Answer("rosy_01", "stuck-1", "WAIT", "R1")]
@@ -270,7 +271,7 @@ def test_claims_are_pruned_when_the_chain_ends():
 
 
 def test_claim_survives_a_mode_change_while_the_stuck_is_open():
-    r = StuckResolver(ResolverConfig())
+    r = StuckResolver(ResolverConfig(), painted=painted_track)
     r.claim("rosy_01", "stuck-1")
     r.step(0.0, [_row(stuck=_stuck("stuck-1"))])
     assert r.step(1.0, [_row(stuck=_stuck("stuck-1"), mode="OFF")]) == []
@@ -289,7 +290,7 @@ def test_budget_never_blocks_the_one_transport_resend():
 
 
 def test_robots_that_leave_the_roster_lose_their_chain_and_claims():
-    r = StuckResolver(ResolverConfig())
+    r = StuckResolver(ResolverConfig(), painted=painted_track)
     r.claim("rosy_02", "stuck-9")
     r.step(0.0, [_row(stuck=_stuck()), _row("rosy_02", _stuck("stuck-9"))])
     r.step(1.0, [_row(stuck=_stuck())])
@@ -304,7 +305,7 @@ def _yielded():
 
 def _started_east_yield():
     _painted, door, near, far = _east_pair()
-    resolver = StuckResolver(ResolverConfig())
+    resolver = StuckResolver(ResolverConfig(), painted=painted_track)
     first = resolver.step(0.0, [_row("near", _stuck(), pose=near), _row("far", None, pose=far)])[0]
     resolver.sent(first, 0.0)
     return resolver, door, far
@@ -312,12 +313,12 @@ def _started_east_yield():
 
 def test_localized_map_pose_still_yields_and_odom_frame_does_not():
     _painted, _door, near, far = _east_pair()
-    mapped = StuckResolver(ResolverConfig()).step(0.0, [
+    mapped = StuckResolver(ResolverConfig(), painted=painted_track).step(0.0, [
         _row("near", _stuck(), pose=near, localization=_frame("map")),
         _row("far", None, pose=far, localization=_frame("map")),
     ])
     assert mapped[0].decision == "YIELD" and mapped[0].rule == "meet"
-    odom = StuckResolver(ResolverConfig()).step(0.0, [
+    odom = StuckResolver(ResolverConfig(), painted=painted_track).step(0.0, [
         _row("near", _stuck(), pose=near, localization=_frame("odom")),
         _row("far", None, pose=far, localization=_frame("odom")),
     ])

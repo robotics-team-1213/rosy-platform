@@ -65,4 +65,6 @@ $env:PYTHONPATH = @(
 ) -join ";"
 
 Write-Host "fleet console: http://127.0.0.1:8090/console  (token required)"
-python -m fleet.cli console --robots $robots --host 0.0.0.0 --port 8090 --web-common $webCommon --token $token
+# D-484: the map_v2_fleet lane graph is the first site map (in memory: no --tasks-db here).
+$siteMap = Join-Path $repo "middleware\perception\map\map_v2_fleet\lane_graph.yaml"
+python -m fleet.cli console --robots $robots --host 0.0.0.0 --port 8090 --web-common $webCommon --token $token --site-map-import $siteMap

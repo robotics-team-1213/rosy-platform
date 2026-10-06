@@ -26,19 +26,3 @@ for path in (
     if entry not in sys.path:
         sys.path.insert(0, entry)
 
-
-import pytest  # noqa: E402
-
-#: D-484: the planner and the meet geometry read the active site map. Tests use the
-#: map_v2_fleet lane graph imported the same way ``--site-map-import`` does.
-LANE_GRAPH = SRC.parent / "middleware" / "perception" / "map" / "map_v2_fleet" / "lane_graph.yaml"
-
-
-@pytest.fixture(autouse=True)
-def _active_site_map_painted():
-    from fleet.meet.place import painted_from, use_painted
-    from fleet.site_map import from_lane_graph
-
-    use_painted(painted_from(from_lane_graph(LANE_GRAPH)))
-    yield
-    use_painted(None)

@@ -1,20 +1,24 @@
 """D-484 site map API: read the active map, edit one draft, activate it.
 
 ``GET /api/fleet/site-map`` (D-257 camera rectangle) stays as it is; these live below it.
-Activation needs a named operator, is in the HTTP audit, and is refused while a lane route
-is running. Nothing here talks to a robot.
+Saving the draft and activating it need a named operator and are recorded as site map
+events; activation is also in the HTTP audit and is refused while a lane route is running.
+Errors use ``{"detail": {"code", "detail"}}`` like ``/trip``. Nothing here talks to a robot.
 """
 
 from __future__ import annotations
 
 from typing import Optional
 
-from fastapi import Depends, HTTPException
-from pydantic import BaseModel, ConfigDict, Field
+from fastapi import Depends, HTTPException, Request
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from fleet.server.site_auth import SitePrincipal
 from fleet.server.site_map_store import SiteMapError
 from fleet.site_map import SiteMap
+
+#: A 20k-point map is about 0.5 MB of JSON; the draft body is read at most this far.
+MAX_DRAFT_BYTES = 2 * 1024 * 1024
 
 
 class DraftRequest(BaseModel):
@@ -28,18 +32,34 @@ class ActivateRequest(BaseModel):
     expected_revision: str = Field(min_length=1, max_length=64)
 
 
-def install_site_map_routes(app, *, site_maps, route_active, read_guard,
-                            require_operator, require_named_operator) -> None:
+def site_map_error(status: int, code: str, message: str = "") -> HTTPException:
+    return HTTPException(status_code=status, detail={"code": code, "detail": {"message": message} if message else {}})
+
+
+async def _bounded_body(request: Request) -> bytes:
+    declared = request.headers.get("content-length")
+    if declared and (len(declared) > 12 or not declared.isdigit() or int(declared) > MAX_DRAFT_BYTES):
+        raise site_map_error(413, "SITE_MAP_TOO_LARGE", f"draft body is limited to {MAX_DRAFT_BYTES} bytes")
+    chunks, size = [], 0
+    async for chunk in request.stream():
+        size += len(chunk)
+        if size > MAX_DRAFT_BYTES:
+            raise site_map_error(413, "SITE_MAP_TOO_LARGE", f"draft body is limited to {MAX_DRAFT_BYTES} bytes")
+        chunks.append(chunk)
+    return b"".join(chunks)
+
+
+def install_site_map_routes(app, *, site_maps, route_active, read_guard, require_named_operator) -> None:
     app.state.site_maps = site_maps
 
     def fail(exc: SiteMapError) -> HTTPException:
-        return HTTPException(status_code=exc.status_code, detail={"code": exc.code, "message": str(exc)})
+        return site_map_error(exc.status_code, exc.code, str(exc))
 
     @app.get("/api/fleet/site-map/active", dependencies=read_guard, tags=["site-map"])
     def site_map_active() -> dict:
         view = site_maps.active_view()
         if view is None:
-            raise HTTPException(status_code=404, detail={"code": "SITE_MAP_NOT_ACTIVE"})
+            raise site_map_error(404, "SITE_MAP_NOT_ACTIVE")
         return view
 
     @app.get("/api/fleet/site-map/draft", dependencies=read_guard, tags=["site-map"])
@@ -47,7 +67,13 @@ def install_site_map_routes(app, *, site_maps, route_active, read_guard,
         return site_maps.draft_view()
 
     @app.put("/api/fleet/site-map/draft", tags=["site-map"])
-    def site_map_save_draft(body: DraftRequest, principal: SitePrincipal = Depends(require_operator)) -> dict:
+    async def site_map_save_draft(request: Request,
+                                  principal: SitePrincipal = Depends(require_named_operator)) -> dict:
+        try:
+            body = DraftRequest.model_validate_json(await _bounded_body(request))
+        except ValidationError as exc:
+            raise HTTPException(status_code=422, detail=exc.errors(include_url=False, include_context=False,
+                                                                   include_input=False)) from exc
         try:
             return site_maps.save_draft(body.map, expected_revision=body.expected_revision,
                                         principal_id=principal.principal_id)

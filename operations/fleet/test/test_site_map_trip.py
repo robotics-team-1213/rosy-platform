@@ -12,7 +12,6 @@ from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
 from fakes import FakeRobot
-from fleet.meet.place import painted_track
 from fleet.server.app import create_app
 from fleet.server.console import FleetConsole
 from fleet.server.site_map_store import SiteMapError, SiteMapStore
@@ -81,7 +80,7 @@ def test_store_imports_once_versions_activation_and_survives_reopen(tmp_path):
     assert store.import_if_empty(from_lane_graph(LANE_GRAPH), source="lane_graph.yaml") == 1
     assert store.import_if_empty(SiteMap.model_validate(_line()), source="other") is None
     assert store.active()[0] == 1 and store.active_view()["activated_by"] == "import:lane_graph.yaml"
-    assert painted_track().line("ring_s").start == "SW"
+    assert store.active()[3].line("ring_s").start == "SW"
 
     with pytest.raises(SiteMapError) as err:
         store.activate(expected_revision="x", principal_id="bob", route_active=False)
@@ -97,7 +96,7 @@ def test_store_imports_once_versions_activation_and_survives_reopen(tmp_path):
     assert view["version"] == 2 and view["activated_by"] == "bob"
     assert store.draft_view()["map"] is None
     with pytest.raises(KeyError):
-        painted_track().line("ring_s")
+        store.active()[3].line("ring_s")
     store.close()
 
     again = SiteMapStore(path)
@@ -242,3 +241,95 @@ def test_cli_imports_the_configured_lane_graph_and_reads_fleet_routing(tmp_path)
     config.write_text("fleet:\n  routing:\n    turn_cost_s: -1\n", encoding="utf-8")
     with pytest.raises(SystemExit, match="turn_cost_s"):
         cli._build_site_map(cli.parse_args(["console", "--site-config", str(config)]), None)
+
+
+# ---- review fixes (2026-10-07) --------------------------------------------------------
+
+def test_draft_save_needs_a_named_operator_is_bounded_and_recorded(tmp_path):
+    client, _tasks, store, _robot = _app(tmp_path)
+    saved = client.put("/api/fleet/site-map/draft", json={"map": _line()}, headers=OPERATOR)
+    assert saved.status_code == 200
+    assert store.events()[0]["action"] == "draft_saved" and store.events()[0]["principal_id"] == "bob"
+    huge = client.put("/api/fleet/site-map/draft", content=b"{" + b" " * (3 * 1024 * 1024) + b"}",
+                      headers={**OPERATOR, "Content-Type": "application/json"})
+    assert huge.status_code == 413 and huge.json()["detail"]["code"] == "SITE_MAP_TOO_LARGE"
+    anonymous = TestClient(create_app(FleetConsole([RobotEndpoint("rosy_60", "http://x", "t")],
+                                                   [FakeRobot("rosy_60")]),
+                                      console_token="op", site_maps=SiteMapStore()))
+    denied = anonymous.put("/api/fleet/site-map/draft", json={"map": _line()},
+                           headers={"Authorization": "Bearer op"})
+    assert denied.status_code == 403
+
+
+def test_site_map_errors_use_the_trip_error_shape(tmp_path):
+    client, _tasks, _store, _robot = _app(tmp_path, imported=False)
+    missing = client.get("/api/fleet/site-map/active", headers=VIEWER).json()["detail"]
+    assert missing == {"code": "SITE_MAP_NOT_ACTIVE", "detail": {}}
+    stale = client.post("/api/fleet/site-map/activate", json={"expected_revision": "x"}, headers=OPERATOR)
+    assert set(stale.json()["detail"]) == {"code", "detail"}
+    assert client.post("/api/fleet/trips/abc/start", headers=OPERATOR).json()["detail"]["code"] == \
+        "TRIP_EXECUTION_NOT_AVAILABLE"
+
+
+def test_activation_refuses_a_map_the_planner_cannot_use(tmp_path, monkeypatch):
+    import fleet.server.site_map_store as store_module
+
+    client, _tasks, store, _robot = _app(tmp_path)
+    saved = client.put("/api/fleet/site-map/draft", json={"map": _line()}, headers=OPERATOR).json()
+
+    def broken(_graph, _config):
+        raise RecursionError("planner cannot read this map")
+
+    monkeypatch.setattr(store_module, "prepare", broken)
+    refused = client.post("/api/fleet/site-map/activate", json={"expected_revision": saved["revision"]},
+                          headers=OPERATOR)
+    assert refused.status_code == 422 and refused.json()["detail"]["code"] == "SITE_MAP_UNPLANNABLE"
+    assert store.active()[0] == 1
+
+
+def test_an_unexpected_planner_failure_is_a_coded_refusal_not_a_500(tmp_path, monkeypatch, caplog):
+    import fleet.server.trip_routes as trip_module
+
+    client, _tasks, store, robot = _app(tmp_path)
+    robot._state = _on_ring_s(store)
+
+    def broken(*_args):
+        raise RecursionError("boom")
+
+    monkeypatch.setattr(trip_module, "plan_trip", broken)
+    for _ in range(2):
+        response = client.post("/api/fleet/robots/rosy_60/trip", json={"to": "NW"}, headers=OPERATOR)
+        assert response.status_code == 422 and response.json()["detail"]["code"] == "TRIP_PLAN_FAILED"
+    assert sum("trip planner failed" in r.message for r in caplog.records) == 1
+    assert store.plans()[0]["result"]["error"] == "TRIP_PLAN_FAILED"
+
+
+def test_unknown_robot_is_recorded_and_plans_are_retained_by_count(tmp_path, monkeypatch):
+    import fleet.server.site_map_store as store_module
+
+    monkeypatch.setattr(store_module, "PLAN_KEEP", 3)
+    client, _tasks, store, _robot = _app(tmp_path)
+    for _ in range(5):
+        assert client.post("/api/fleet/robots/nobody/trip", json={"to": "NW"}, headers=OPERATOR).status_code == 404
+    rows = store.plans()
+    assert len(rows) == 3 and rows[0]["result"]["error"] == "UNKNOWN_ROBOT"
+
+
+def test_the_stuck_resolver_reads_the_active_site_map(tmp_path):
+    robot = FakeRobot("rosy_60")
+    console = FleetConsole([RobotEndpoint("rosy_60", "http://127.0.0.1:8080", "t")], [robot])
+    store = SiteMapStore()
+    app = create_app(console, site_maps=store, stuck_resolver_clients={"rosy_60": robot})
+    painted = app.state.stuck_resolver._resolver._painted
+    assert painted() is None
+    store.import_if_empty(from_lane_graph(LANE_GRAPH), source="lane_graph.yaml")
+    assert painted().line("ring_s").start == "SW"
+
+
+def test_cli_warns_about_an_in_memory_store_and_no_active_map(capsys):
+    from fleet import cli
+
+    store, _routing = cli._build_site_map(cli.parse_args(["console"]), None)
+    err = capsys.readouterr().err
+    assert "no --tasks-db" in err and "no active D-484 site map" in err
+    store.close()

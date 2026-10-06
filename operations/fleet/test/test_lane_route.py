@@ -12,7 +12,7 @@ from fastapi.testclient import TestClient
 
 from fakes import FakeRobot
 from fleet.lane_route import STEP_M, LaneRouteError, next_step, route_lines
-from fleet.meet.place import painted_track
+from site_map_fixture import painted_track
 from fleet.server.app import GoalRequest, create_app
 from fleet.server.console import FleetConsole
 from fleet.server.site_map_store import SiteMapStore

@@ -8,6 +8,7 @@ M2; until then both answer 501.
 
 from __future__ import annotations
 
+import logging
 import math
 import time
 import uuid
@@ -26,6 +27,7 @@ from fleet.swarm.transport import RobotApiError
 PlaceRef = Annotated[str, Field(min_length=1, max_length=64)]
 #: D-486 5: a plan may be started within this long on the same map version.
 PLAN_TTL_S = 30.0
+_LOG = logging.getLogger(__name__)
 
 
 class TripPoint(BaseModel):
@@ -44,28 +46,31 @@ class TripRequest(BaseModel):
     execute: bool = False
 
 
-def _refuse(code: str, detail: Optional[dict] = None) -> HTTPException:
-    return HTTPException(status_code=422, detail={"code": code, "detail": detail or {}})
+def _refuse(code: str, detail: Optional[dict] = None, status: int = 422) -> HTTPException:
+    """D-486 부록: every trip error is ``{"detail": {"code", "detail"}}``."""
+    return HTTPException(status_code=status, detail={"code": code, "detail": detail or {}})
 
 
 def install_trip_routes(app, *, console, site_maps, routing_config, require_named_operator) -> None:
-    not_open = HTTPException(status_code=501, detail={
-        "code": "TRIP_EXECUTION_NOT_AVAILABLE", "message": "trip execution opens with D-484 M2"})
+    not_open = _refuse("TRIP_EXECUTION_NOT_AVAILABLE", {"message": "trip execution opens with D-484 M2"}, 501)
+    failed_versions: set = set()  # an unexpected planner failure is logged once per map version
 
     @app.post("/api/fleet/robots/{robot_id}/trip", tags=["fleet"])
     async def fleet_trip(robot_id: str, body: TripRequest,
                          principal: SitePrincipal = Depends(require_named_operator)) -> dict:
         if body.execute:
             raise not_open
-        if robot_id not in console.robot_ids:
-            raise HTTPException(status_code=404, detail={"code": "UNKNOWN_ROBOT"})
         plan_id = uuid.uuid4().hex
         active = site_maps.active()
         summary = body.model_dump(mode="json", exclude={"execute"})
 
         def record(result: dict) -> None:
-            site_maps.record_plan(plan_id=plan_id, robot_id=robot_id, principal_id=principal.principal_id,
+            site_maps.record_plan(plan_id=plan_id, robot_id=robot_id[:96], principal_id=principal.principal_id,
                                   map_version=active[0] if active else None, request=summary, result=result)
+
+        if robot_id not in console.robot_ids:
+            record({"error": "UNKNOWN_ROBOT"})
+            raise _refuse("UNKNOWN_ROBOT", status=404)
 
         if active is None:
             record({"error": "TRIP_NO_ACTIVE_MAP"})
@@ -73,6 +78,7 @@ def install_trip_routes(app, *, console, site_maps, routing_config, require_name
         try:
             pose = await console.trusted_map_pose(robot_id)
         except (HubError, RobotApiError, OSError) as exc:
+            record({"error": "ROBOT_POSE_UNAVAILABLE", "detail": {"kind": type(exc).__name__}})
             raise http_error(exc) from exc
         if pose is None or pose[2] is None:
             record({"error": "TRIP_POSE_UNTRUSTED"})
@@ -87,6 +93,12 @@ def install_trip_routes(app, *, console, site_maps, routing_config, require_name
         except PlanError as exc:
             record({"error": exc.code, "detail": exc.detail})
             raise _refuse(exc.code, exc.detail) from exc
+        except Exception as exc:  # a planner bug must not become a 500 on every trip
+            if active[0] not in failed_versions:
+                failed_versions.add(active[0])
+                _LOG.exception("trip planner failed on site map v%s", active[0])
+            record({"error": "TRIP_PLAN_FAILED", "detail": {"kind": type(exc).__name__}})
+            raise _refuse("TRIP_PLAN_FAILED", {"map_version": active[0]}) from exc
         record({"segments": len(plan.segments), "length_m": plan.length_m, "eta_s": plan.eta_s})
         return {
             "plan_id": plan_id, "map_version": plan.map_version,

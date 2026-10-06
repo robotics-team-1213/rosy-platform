@@ -135,20 +135,6 @@ def painted_from(site_map) -> Painted:
     return Painted(tuple(lines), tuple(rooms), tuple(doors))
 
 
-_ACTIVE: Painted | None = None
-
-
-def use_painted(painted: Painted | None) -> None:
-    """The site map store sets this on start-up and on every activation."""
-    global _ACTIVE
-    _ACTIVE = painted
-
-
-def painted_track() -> Painted | None:
-    """The active site map's lines, or None while no site map is active."""
-    return _ACTIVE
-
-
 def _heading(yaw: float, tangent: float) -> tuple[int, bool]:
     delta = _wrap(yaw - tangent)
     if abs(delta) <= HEADING_CONE:

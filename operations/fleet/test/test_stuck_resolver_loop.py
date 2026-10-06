@@ -16,6 +16,7 @@ from fleet.server.console_routes import SharedGather
 from fleet.server.line_stuck import LineStuckAnswerLog, LineStuckBoard
 from fleet.server.stuck_resolver import ResolverConfig, StuckResolver
 from fleet.server.stuck_resolver_loop import PRINCIPAL_ID, StuckResolverLoop
+from site_map_fixture import painted_track
 from fleet.server.task_service import FleetTaskService
 from fleet.server.task_store import FleetTaskStore
 from fleet.swarm.robots import RobotEndpoint
@@ -59,7 +60,7 @@ def _setup(state=None, *, resolver_robot=None, config=None, log=None):
     clock = FakeClock()
     board = LineStuckBoard(clock=clock, log=log)
     loop = StuckResolverLoop(SharedGather(console, board, max_age_s=0.0), board,
-                             StuckResolver(config or ResolverConfig()),
+                             StuckResolver(config or ResolverConfig(), painted=painted_track),
                              clients=lambda: {"rosy_01": resolver_robot}, clock=clock)
     return loop, board, resolver_robot
 
@@ -106,7 +107,7 @@ def test_robot_without_resolver_token_escalates():
                            [robot])
     board = LineStuckBoard(clock=FakeClock())
     loop = StuckResolverLoop(SharedGather(console, board), board,
-                             StuckResolver(ResolverConfig()), clients=lambda: {},
+                             StuckResolver(ResolverConfig(), painted=painted_track), clients=lambda: {},
                              clock=FakeClock())
     asyncio.run(loop.run_once())
     assert board.view("rosy_01")["resolver"]["escalated"] == "no_resolver_token"
@@ -142,7 +143,7 @@ def test_unexpected_client_error_is_unknown_outcome_and_pass_survives():
 @pytest.mark.parametrize("error", [httpx.ReadTimeout("reply lost"), ValueError("reply lost"),
                                   asyncio.CancelledError()])
 def test_applied_yield_with_lost_reply_is_escalated_without_replay(error):
-    from fleet.meet.place import painted_track, pose_on
+    from fleet.meet.place import pose_on
 
     painted = painted_track()
     door = next(item for item in painted.doors if item.edge_id == "east")
@@ -166,7 +167,7 @@ def test_applied_yield_with_lost_reply_is_escalated_without_replay(error):
 
     robot = type("Robot", (), {})()
     robot.line_stuck_decision = decision
-    loop = StuckResolverLoop(snapshot, board, StuckResolver(ResolverConfig()),
+    loop = StuckResolverLoop(snapshot, board, StuckResolver(ResolverConfig(), painted=painted_track),
                              clients=lambda: {"rosy_01": robot}, clock=FakeClock())
     if isinstance(error, asyncio.CancelledError):
         async def cancelled_reply():
@@ -371,7 +372,7 @@ def test_the_loop_reads_the_shared_gather_and_never_observes_itself():
 
     async def snapshot():
         return {"robots": [{"robot_id": "rosy_01", "online": True, "state": _state()}]}
-    loop = StuckResolverLoop(snapshot, board, StuckResolver(ResolverConfig()),
+    loop = StuckResolverLoop(snapshot, board, StuckResolver(ResolverConfig(), painted=painted_track),
                              clients=lambda: {"rosy_01": robot}, clock=FakeClock())
     asyncio.run(loop.run_once())
     assert ("line_stuck_decision", "stuck-abc", "BACK_AND_RETRY") in robot.calls

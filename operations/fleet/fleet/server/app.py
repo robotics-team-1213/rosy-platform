@@ -293,6 +293,9 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
 
     # D-421: one fence shared by cancel-all and the dispatcher closes the overlap window.
     drive_cancel = DriveCancelFence()
+    if site_maps is None:  # D-484: no --tasks-db -> the site map lives in memory only
+        from fleet.server.site_map_store import SiteMapStore
+        site_maps = SiteMapStore()
 
     @asynccontextmanager
     async def lifespan(app):
@@ -494,7 +497,8 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
 
     if stuck_resolver_clients is not None:
         app.state.stuck_resolver = StuckResolverLoop(
-            app.state.fleet_gather, app.state.line_stuck, StuckResolver(ResolverConfig()),
+            app.state.fleet_gather, app.state.line_stuck,
+            StuckResolver(ResolverConfig(), painted=lambda: (site_maps.active() or (None,) * 4)[3]),
             clients=lambda: stuck_resolver_clients)
     if hub is not None and (task_service is not None or stuck_resolver_clients is not None):
         resolver = getattr(app.state, "stuck_resolver", None)
@@ -512,14 +516,12 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     # D-484: the site map store (in memory without one) and the D-486 trip planner.
     from fleet.routing.cost import RoutingConfig
     from fleet.server.site_map_routes import install_site_map_routes
-    from fleet.server.site_map_store import SiteMapStore
     from fleet.server.trip_routes import install_trip_routes
-    site_maps = site_maps if site_maps is not None else SiteMapStore()
     route_active = install_lane_route_routes(app, console=console, task_service=task_service,
                                              site_maps=site_maps, require_operator=require_operator,
                                              operator_guard=operator_guard)
     install_site_map_routes(app, site_maps=site_maps, route_active=route_active, read_guard=read_guard,
-                            require_operator=require_operator, require_named_operator=require_named_operator)
+                            require_named_operator=require_named_operator)
     install_trip_routes(app, console=console, site_maps=site_maps,
                         routing_config=routing_config or RoutingConfig(),
                         require_named_operator=require_named_operator)

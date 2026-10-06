@@ -585,6 +585,12 @@ def _build_site_map(args, tasks_db):
             site_maps.import_if_empty(from_lane_graph(source), source=Path(source).name)
     except (OSError, ValueError, TypeError, AttributeError, yaml.YAMLError) as exc:
         sys.exit(f"site map / routing config: {exc}")
+    if tasks_db is None:
+        print("warning: no --tasks-db; the D-484 site map lives in memory and is lost on restart",
+              file=sys.stderr, flush=True)
+    if site_maps.active() is None:
+        print("warning: no active D-484 site map; /route and /trip are refused until one is "
+              "imported (--site-map-import) or activated", file=sys.stderr, flush=True)
     return site_maps, routing_config
 
 
