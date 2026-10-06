@@ -174,6 +174,31 @@ def validate_factory_release(value: Any, release_id: str) -> dict[str, str]:
     return value
 
 
+# D-477: the one-time tailnet join section. The auth key is a secret: it rides
+# the one-time bundle to first boot and never appears in a receipt or a log —
+# receipts keep only a digest fingerprint, like the core_api credential.
+TAILSCALE_KEY_PATTERN = re.compile(r"tskey-[a-z]+-[A-Za-z0-9-]{10,128}")
+TAILSCALE_TAG_PATTERN = re.compile(r"tag:[a-z0-9][a-z0-9-]{0,40}")
+DEFAULT_TAILSCALE_TAGS = ("tag:rosy-robot",)
+MAX_TAILSCALE_TAGS = 4
+
+
+def validate_tailscale(value: Any) -> dict[str, Any]:
+    """The bundle's tailnet join section, or raise."""
+    if (not isinstance(value, dict) or set(value) != {"auth_key", "tags"}
+            or not isinstance(value["auth_key"], str)
+            or not TAILSCALE_KEY_PATTERN.fullmatch(value["auth_key"])):
+        raise ValueError("tailscale is invalid")
+    tags = value["tags"]
+    if (not isinstance(tags, list) or not 1 <= len(tags) <= MAX_TAILSCALE_TAGS
+            or len(set(tags)) != len(tags)):
+        raise ValueError("tailscale is invalid")
+    for tag in tags:
+        if not isinstance(tag, str) or not TAILSCALE_TAG_PATTERN.fullmatch(tag):
+            raise ValueError("tailscale is invalid")
+    return value
+
+
 def _checksum(payload: Mapping[str, Any]) -> str:
     canonical = json.dumps(
         payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")
@@ -199,6 +224,8 @@ def create_provision_bundle(
     core_api_token: str,
     core_api_token_id: str,
     factory_release: Mapping[str, str] | None = None,
+    tailscale_auth_key: str | None = None,
+    tailscale_tags: Collection[str] | None = None,
     created_at: datetime | None = None,
     nonce: str | None = None,
 ) -> dict[str, Any]:
@@ -268,6 +295,14 @@ def create_provision_bundle(
     )}
     if factory_release is not None:
         bundle["factory_release"] = validate_factory_release(dict(factory_release), release_id)
+    if tailscale_tags is not None and tailscale_auth_key is None:
+        raise ValueError("tailscale tags require tailscale_auth_key")
+    if tailscale_auth_key is not None:
+        bundle["tailscale"] = validate_tailscale({
+            "auth_key": tailscale_auth_key,
+            "tags": (sorted(set(tailscale_tags)) if tailscale_tags is not None
+                     else list(DEFAULT_TAILSCALE_TAGS)),
+        })
     bundle["payload_checksum"] = _checksum(bundle)
     return validate_provision_bundle(bundle)
 
@@ -277,12 +312,14 @@ def validate_provision_bundle(bundle: dict[str, Any]) -> dict[str, Any]:
         "schema_version", "device_identity", "release", "dds", "runtime",
         "network", "fleet", "created_at", "nonce", "payload_checksum", "core_api",
     }
-    if set(bundle) - {"operator", "factory_release"} != expected_top:
+    if set(bundle) - {"operator", "factory_release", "tailscale"} != expected_top:
         raise ValueError("provision bundle keys are invalid")
     if "factory_release" in bundle:
         release = bundle["release"]
         validate_factory_release(
             bundle["factory_release"], release.get("release_id") if isinstance(release, dict) else None)
+    if "tailscale" in bundle:
+        validate_tailscale(bundle["tailscale"])
     # D-191: required. Without the card's own record CORE would fall back to
     # the shared rosy-dev-* credentials in its package defaults.
     if not isinstance(bundle["core_api"], dict) or set(bundle["core_api"]) != {"record"}:
@@ -386,6 +423,12 @@ def create_provision_receipt(bundle: Mapping[str, Any]) -> dict[str, Any]:
         ]}} if "operator" in bundle else {}),
         **({"factory_release": {"release_id": bundle["factory_release"]["release_id"], "signed": True}}
            if "factory_release" in bundle else {}),
+        # D-477: tailnet membership evidence without the one-time key.
+        **({"tailscale": {
+            "tags": list(bundle["tailscale"]["tags"]),
+            "key_fingerprint": hashlib.sha256(
+                bundle["tailscale"]["auth_key"].encode("utf-8")).hexdigest()[:16],
+        }} if "tailscale" in bundle else {}),
         # D-191: the id and a short digest fingerprint name the card's credential.
         "core_api": {
             "token_id": bundle["core_api"]["record"]["id"],

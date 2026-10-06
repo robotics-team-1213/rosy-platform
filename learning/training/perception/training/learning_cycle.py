@@ -112,6 +112,21 @@ def validate_request(request, trainer):
     if not train or not val or train & val:
         raise JobError("disjoint nonempty train/val sessions required")
     sessions = train | val
+    reservations = store.eval_reservations()
+    if sessions & reservations.keys():
+        raise JobError("training overlaps a reserved eval session")
+    groups = {row.get("capture_group") for row in frames if row.get("capture_group")}
+    grouped_sessions = {row["session"] for row in frames if row.get("capture_group")}
+    sources_for_groups = doc.get("sources", [])
+    if isinstance(sources_for_groups, list):
+        for row in sources_for_groups:
+            if isinstance(row, dict) and row.get("capture_group"):
+                groups.add(row["capture_group"])
+                grouped_sessions.add(row.get("session"))
+    if groups & set(reservations.values()):
+        raise JobError("training overlaps a reserved eval capture group")
+    if reservations and sessions - grouped_sessions:
+        raise JobError("reserved eval capture group cannot be excluded: training source group unknown")
     for name, versions in store.evalsets().items():
         for version in versions:
             path = store.evalset_path(name, version)

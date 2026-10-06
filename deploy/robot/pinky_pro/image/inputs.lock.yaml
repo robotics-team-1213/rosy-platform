@@ -1,4 +1,4 @@
-﻿# ROSY OS v1 product-image inputs (D-161)
+# ROSY OS v1 product-image inputs (D-161)
 #
 # The product target is Ubuntu Server 24.04 LTS arm64 with native ROS 2 Jazzy.
 # Any `null` or `verified: false` value is an explicit release blocker. Replace
@@ -103,6 +103,19 @@ ros:
   apt_key_fingerprint: embedded-in-sha256-pinned-ros2-apt-source-package
   # D-482: payload builds install ROS from this dated snapshot so the build matches the image's ros-jazzy set.
   apt_snapshot_url: http://snapshots.ros.org/jazzy/2026-09-11/ubuntu
+  verified: false
+
+# D-477: the team tailnet. One upstream arm64 deb carries tailscaled (the
+# daemon unit the image enables) and the CLI rosy-tailscale-join.py drives.
+# Its hard dependency (iptables) installs from the locked Ubuntu suites in
+# the same customizer run; verified stays false until a native arm64 build
+# has downloaded, checksum-checked and unpacked it.
+tailscale:
+  version: "1.102.5"
+  url: https://pkgs.tailscale.com/stable/ubuntu/pool/tailscale_1.102.5_arm64.deb
+  sha256: 85315e74a3d04e32419ca31ec11e5eab8743404c94a57558b7effcc92ad110ad
+  size: 35737886
+  key_fingerprint: embedded-in-sha256-pinned-upstream-package
   verified: false
 
 hardware_dependencies:
@@ -219,5 +232,5 @@ provenance:
   record_rosy_package_inventory: true
 
 receiver_crypto:
-  requirements_sha256: d731e8863f4c4238cc756c027854c67e7f0ea201529bfc1558cf5c864fa54693
+  requirements_sha256: 637d418e2279015e78352e5635c068a7a4c2b95f1e689f3572045e57d2e9b5b0
   verified: true

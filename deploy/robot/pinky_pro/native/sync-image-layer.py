@@ -114,6 +114,8 @@ UNITS = (
     "rosy-ssh-access-boot.service",
     "rosy-ssh-password-expire.service",
     "rosy-ssh-password-expire.timer",
+    # D-477: one-shot tailnet join; condition-gated on the provisioned key file.
+    "rosy-tailscale-join.service",
 )
 # Of those, the ones customize-rootfs.sh enables. A unit the sync adds is
 # enabled only if it is here, as a fresh image would have it.
@@ -134,6 +136,7 @@ ENABLED_UNITS = frozenset({
     "rosy-auto-update.timer",
     "rosy-ssh-access.path",
     "rosy-ssh-access-boot.service",
+    "rosy-tailscale-join.service",
 })
 
 # D-433: a unit a newer one replaced. Its file is only ever REPLACED where an
