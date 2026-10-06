@@ -154,6 +154,56 @@ def flood_region_photo(photo_bgr, seed, tolerance):
     return labels == labels[seed[1], seed[0]]
 
 
+def sampled_region_photo(photo_bgr, seeds, tolerance):
+    """Select 4-connected photo regions matching any sampled Lab colour."""
+    lab = cv2.cvtColor(photo_bgr, cv2.COLOR_BGR2Lab).astype(np.int32)
+    if tolerance == 'auto':
+        spread = []
+        for x, y in seeds:
+            patch = lab[max(0, y-1):y+2, max(0, x-1):x+2]
+            spread.extend(np.sqrt(((patch - lab[y, x]) ** 2).sum(axis=2)).ravel())
+        tolerance = int(np.clip(np.percentile(spread, 75) + 6, 8, 40))
+    selected = np.zeros(lab.shape[:2], dtype=bool)
+    for x, y in seeds:
+        selected |= ((lab - lab[y, x]) ** 2).sum(axis=2) <= tolerance ** 2
+    _, components = cv2.connectedComponents(selected.astype(np.uint8), connectivity=4)
+    ids = {int(components[y, x]) for x, y in seeds}
+    return np.isin(components, list(ids)) & selected, tolerance
+
+
+def sample_selection(store, index, review, body):
+    seeds = body.get('seeds')
+    if (not isinstance(seeds, list) or not 1 <= len(seeds) <= 32 or
+            any(not isinstance(seed, list) or len(seed) != 2 or
+                any(type(v) is not int for v in seed) or
+                not 0 <= seed[0] < review['width'] or
+                not 0 <= seed[1] < review['height'] for seed in seeds)):
+        raise ValueError('1..32 sample points inside original image required')
+    tolerance = body.get('tolerance', 'auto')
+    if tolerance != 'auto' and (type(tolerance) is not int or not 0 <= tolerance <= 100):
+        raise ValueError('bounded flood tolerance required')
+    raw = store.image(index).read_bytes()
+    photo = cv2.imdecode(np.frombuffer(raw, np.uint8), cv2.IMREAD_COLOR)
+    if photo is None or (photo.shape[1], photo.shape[0]) != (review['width'], review['height']):
+        raise ValueError('source image dimensions differ')
+    return sampled_region_photo(photo, seeds, tolerance)
+
+
+def preview(store, index, body, conflict):
+    if store.get(index)['status'] == 'excluded':
+        raise ValueError('excluded frame cannot be edited')
+    review = get(store, index)
+    if type(body.get('version')) is not int or body['version'] != review['version']:
+        raise conflict('pixel review version changed; reload before applying')
+    label = body.get('label')
+    if not review['classes'] or type(label) is not int or label not in {c['index'] for c in review['classes']['classes']} | {255}:
+        raise ValueError('known mask index required')
+    region, tolerance = sample_selection(store, index, review, body)
+    image = np.full(region.shape, 255, dtype=np.uint8)
+    image[region] = label
+    return encode(image), int(region.sum()), tolerance
+
+
 def flood_region(store, index, review, seed, tolerance):
     """Load the frame photo and select the flood region on it.
 
@@ -185,12 +235,15 @@ def update(store, index, body, conflict):
         action = body.get('action')
         complete = background = 0
         status = 'pending'
-        if action in ('paint', 'fill', 'flood'):
+        if action in ('paint', 'fill', 'flood', 'sample'):
             value = body.get('label')
             if type(value) is not int or value not in allowed:
                 raise ValueError('known mask index required')
             if action == 'fill':
                 image[:] = value
+            elif action == 'sample':
+                region, _ = sample_selection(store, index, review, body)
+                image[region] = value
             elif action == 'flood':
                 seed = body.get('seed')
                 if (not isinstance(seed, list) or len(seed) != 2
@@ -225,8 +278,8 @@ def update(store, index, body, conflict):
             last = db.execute('SELECT action, review FROM pixel_events WHERE frame=? ORDER BY id DESC LIMIT 1', (index,)).fetchone()
             target = None
             if last and review['status'] == 'pending' and json.loads(last[1]).get('saved_version') == review['version']:
-                want = review['version'] if last[0] in ('paint', 'fill', 'flood', 'apply_draft') else json.loads(last[1]).get('restored_version')
-                target = db.execute("SELECT review FROM pixel_events WHERE frame=? AND version=? AND action IN ('paint','fill','flood','apply_draft')", (index, want)).fetchone()
+                want = review['version'] if last[0] in ('paint', 'fill', 'flood', 'sample', 'apply_draft') else json.loads(last[1]).get('restored_version')
+                target = db.execute("SELECT review FROM pixel_events WHERE frame=? AND version=? AND action IN ('paint','fill','flood','sample','apply_draft')", (index, want)).fetchone()
             if not target:
                 raise ValueError('되돌릴 픽셀 수정이 없습니다.')
             prior = json.loads(target[0])

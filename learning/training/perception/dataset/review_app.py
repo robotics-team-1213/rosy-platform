@@ -7,6 +7,7 @@ Restart with the same --state only. Local HTTP contract: docs/review-app.md.
 from __future__ import annotations
 
 import argparse
+import base64
 import hashlib
 import ipaddress
 import json
@@ -272,7 +273,7 @@ def make_server(store, port=8767, host='127.0.0.1'):
             if etag:
                 self.send_header('ETag', etag)
             self.send_header('X-Content-Type-Options', 'nosniff')
-            self.send_header('Content-Security-Policy', "default-src 'self'; img-src 'self'; style-src 'self'; script-src 'self'; frame-ancestors 'none'; base-uri 'none'")
+            self.send_header('Content-Security-Policy', "default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; frame-ancestors 'none'; base-uri 'none'")
             self.end_headers()
             self.wfile.write(data)
 
@@ -382,6 +383,11 @@ def make_server(store, port=8767, host='127.0.0.1'):
                     if not path:
                         raise ValueError('CAD 검증 자료 경로가 필요합니다.')
                     return self.send(review_evidence.register_map(store, path))
+                if path.startswith('/api/mask-preview/'):
+                    png, count, tolerance = review_masks.preview(
+                        store, int(path.rsplit('/', 1)[1]), body, Conflict)
+                    return self.send({'mask_png': base64.b64encode(png).decode('ascii'),
+                                      'selected_pixels': count, 'tolerance': tolerance})
                 if path.startswith('/api/masks/'):
                     return self.send(review_masks.update(store, int(path.rsplit('/', 1)[1]), body, Conflict))
                 if path == '/api/learning/register':
