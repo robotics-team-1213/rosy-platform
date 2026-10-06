@@ -46,8 +46,8 @@
 
 ## 최근 기록
 
+- 2026-10-06 · uncommitted · fix(sim): sim IR 값을 worker 유효 범위에 맞춤 (리뷰)
+- 2026-10-06 · uncommitted · feat(sim): Gazebo IMU·IR 바닥 광선과 sim_sensors
 - 2026-10-05 · uncommitted · fix(sim): T5 명령·시계와 수동 SIM 경계
 - 2026-10-05 · uncommitted · fix(sim): D-426 T1 domain 적용과 예약 preflight
 - 2026-10-05 · uncommitted · feat(launch): D-426 T1 run_spec — 검증 runner 소유 실행 입력
-- 2026-10-05 · uncommitted · feat(scripts): D-426 T5 sim base command watchdog
-- 2026-10-04 · uncommitted · fix(ui): 경로 뷰어의 미수신 거리

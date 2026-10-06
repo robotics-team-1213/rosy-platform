@@ -7,8 +7,7 @@ adr_log: docs/reference/ROSY ADR Log.md
 
 # IDs absent from the ADR log on purpose. Remove an entry once the ADR is written.
 adr_gaps:
-  D-481: "ADR written on branch docs/fleet-map-only-capture-drive, not yet on main; remove when it lands"
-  D-480: "ADR written on branch docs/sim2real-tiers, not yet on main; remove when it lands"
+  D-483: "ADR written on branch feat/pilot-lcd-approval-code, not yet on main; remove when it lands"
   D-448: "Unused: model-PC code update ADR was renumbered to D-446 during concurrent work"
   D-440: "ADR (per-device power policy) is reserved on feat/device-power-policy; implementation integration does not establish the missing ADR body"
   D-428: "ADR written on branch feat/d428-web-face-sweep (8ce5cc237), not yet on main; remove when it lands"
@@ -27,6 +26,10 @@ adr_gaps:
   D-244: "unused after a same-day numbering collision; the runtime note is D-246 and the E-Stop pilot is D-245"
 
 status: STATUS.md
+
+# sim2real gap registry (linted) and its generated table.
+sim2real_gaps: tools/harness/sim2real_gaps.yaml
+sim2real_table: docs/reference/sim2real-gaps.md
 stale_after_commits: 5
 
 # D-73: `tests` feeds generated index.md. `functional` is the module's own

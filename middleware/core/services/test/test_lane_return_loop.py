@@ -113,8 +113,9 @@ def test_checkpoint_stays_at_a_normal_pose_before_boundary_invasion():
     home=ctl.checkpoint
     for step in range(1,11):
         ctl.tick(inputs(1.2+step*.05,0.,step*.002,0.))
-    assert ctl.checkpoint[0].y <= .014
-    assert ctl.checkpoint[1].margin(BODY) >= .025
+    # Normal = at most half of the .04 m lateral play used (D-468 implementation note).
+    assert ctl.checkpoint[0].y <= .02+1e-9
+    assert ctl.checkpoint[1].margin(BODY) >= .02-1e-9
     assert home is not None
 
 
@@ -148,9 +149,9 @@ def test_verified_near_boundary_pose_does_not_become_normal_checkpoint():
     ctl=ReturnController(BODY)
     ctl.tick(inputs(1.,0.,.055))
     for t in (1.05,1.1,1.15):
-        action=ctl.tick(inputs(t,0.,.02))
+        action=ctl.tick(inputs(t,0.,.03))  # contained, but 3/4 of the lateral play used
     assert action.recovered
     assert ctl.checkpoint is None
     for t in (1.2,1.25,1.3): ctl.tick(inputs(t))
     assert ctl.checkpoint is not None
-    assert ctl.checkpoint[1].margin(BODY) >= .025
+    assert ctl.checkpoint[1].margin(BODY) >= .02

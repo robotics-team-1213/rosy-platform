@@ -14,13 +14,15 @@ from fleet.server.sightings import SightingSource
 
 _REQUIRED = {
     "source_id", "token_env", "robot_ids", "map_id",
-    "calibration_revision", "corner_marker_ids",
+    "calibration_revision",
 }
 _ALLOWED = _REQUIRED | {
     "phone_token_env", "fleet_base_url", "processor_revision",
-    "corner_world_m", "robot_markers", "heading_edge", "credential",
+    "corner_marker_ids", "corner_world_m", "robot_markers", "heading_edge", "credential",
+    "calibration_source",
 }
 CREDENTIAL_KINDS = ("static", "paired")
+CALIBRATION_SOURCES = ("corner_markers", "field_boundary")
 _ENV_NAME = re.compile(r"^[A-Z_][A-Z0-9_]*$")
 
 
@@ -65,11 +67,20 @@ def load_sighting_sources(path: Path | str, *, environ: Mapping[str, str] | None
         if not isinstance(token, str) or not token:
             raise ValueError(f"sighting token environment variable {env_name} is required")
         robot_ids = row["robot_ids"]
-        corner_ids = row["corner_marker_ids"]
+        corner_ids = row.get("corner_marker_ids")
+        calibration_source = row.get("calibration_source", "corner_markers")
+        if calibration_source not in CALIBRATION_SOURCES:
+            raise ValueError(f"sources[{index}].calibration_source must be "
+                             f"{' or '.join(CALIBRATION_SOURCES)}")
+        if calibration_source == "field_boundary" and corner_ids is not None:
+            raise ValueError(f"sources[{index}] is field_boundary and must not set corner_marker_ids")
+        if calibration_source == "field_boundary" and "corner_world_m" not in row:
+            raise ValueError(f"sources[{index}] is field_boundary and needs corner_world_m")
         if (not isinstance(robot_ids, list) or not robot_ids
                 or any(not isinstance(robot_id, str) or not robot_id for robot_id in robot_ids)):
             raise ValueError(f"sources[{index}].robot_ids must be a non-empty string list")
-        if (not isinstance(corner_ids, list) or len(corner_ids) != 4
+        if calibration_source == "corner_markers" and (
+                not isinstance(corner_ids, list) or len(corner_ids) != 4
                 or any(type(marker_id) is not int or marker_id < 0 for marker_id in corner_ids)):
             raise ValueError(f"sources[{index}].corner_marker_ids must contain four integer ids")
         corner_world_m = None
@@ -95,7 +106,7 @@ def load_sighting_sources(path: Path | str, *, environ: Mapping[str, str] | None
                              f"{', '.join(sorted(set(markers) - set(robot_ids)))}")
         if len(set(markers.values())) != len(markers):
             raise ValueError(f"sources[{index}].robot_markers must give each robot a distinct marker id")
-        if set(markers.values()) & set(corner_ids):
+        if corner_ids is not None and set(markers.values()) & set(corner_ids):
             raise ValueError(f"sources[{index}].robot_markers must not reuse corner_marker_ids")
         sources.append(SightingSource(
             source_id=row["source_id"],
@@ -103,10 +114,11 @@ def load_sighting_sources(path: Path | str, *, environ: Mapping[str, str] | None
             robot_ids=tuple(robot_ids),
             map_id=row["map_id"],
             calibration_revision=row["calibration_revision"],
-            corner_marker_ids=tuple(corner_ids),
+            corner_marker_ids=None if corner_ids is None else tuple(corner_ids),
             corner_world_m=corner_world_m,
             robot_markers=tuple(markers.items()),
             credential=credential,
+            calibration_source=calibration_source,
         ))
     if len({source.source_id for source in sources}) != len(sources):
         raise ValueError("sighting source ids must be unique")

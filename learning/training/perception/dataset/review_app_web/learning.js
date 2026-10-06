@@ -106,7 +106,8 @@ function render() {
   setBusy(busy);saveFilters();
 }
 async function load() {
-  workspace=undefined;setBusy(true);$('learning-status').setAttribute('state','pending');$('learning-status').textContent='작업 결과를 확인하는 중입니다.';$('review-counts').textContent='불러오는 중';$('jobs').replaceChildren();$('jobs').hidden=true;$('empty-jobs').hidden=false;$('empty-title').textContent='작업 결과를 확인하는 중';$('empty-description').textContent='현재 작업과 보고서 상태를 불러오고 있습니다.';$('updated').textContent='';
+  workspace=undefined;setBusy(true);$('learning-status').setAttribute('state','pending');$('learning-status').textContent='작업 결과를 확인하는 중입니다.';$('review-counts').textContent='불러오는 중';$('jobs').replaceChildren();$('jobs').hidden=true;$('empty-jobs').hidden=true;$('updated').textContent='';
+  const started=performance.now();const timer=setInterval(()=>{const seconds=Math.floor((performance.now()-started)/1000);if(seconds>=3)$('learning-status').textContent=`서버 응답 대기 ${seconds}초 · 현재 작업과 보고서 상태를 확인하고 있습니다.`;},1000);
   try {workspace=await request('/api/learning');
   const {approved,pending,excluded}=workspace.counts;
   $('review-counts').textContent=`승인 ${approved}장 · 검수 대기 ${pending}장 · 제외 ${excluded}장`;
@@ -122,7 +123,7 @@ async function load() {
   }
   $('updated').textContent=`${new Date().toLocaleString('ko-KR')} 확인 · ${workspace.items.length}개 작업`;
   render();
-  } catch(error) {showUnavailable(error);throw error;} finally {setBusy(false);}
+  } catch(error) {showUnavailable(error);throw error;} finally {clearInterval(timer);setBusy(false);}
 }
 async function register(event) {
   event.preventDefault();if(busy||!workspace||!$('register').reportValidity()) return;setBusy(true);message('learning-error','');

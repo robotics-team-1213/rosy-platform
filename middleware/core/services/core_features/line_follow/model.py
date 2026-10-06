@@ -166,6 +166,14 @@ class LineFollowConfig:
     bridge_slow_scale: float = 0.5
     bridge_distance_scale: float = 1.08
     bridge_time_margin_s: float = 0.5
+    # D-468 containment (implementation note 2026-10-06): the corridor is eroded by the producer's
+    # uncertainty_m. 0 means every URDF footprint corner is inside only if uncertainty_m bounds
+    # every lateral error; jitter and footprint tolerance not in it go in this body margin. The
+    # default 0 is to be revisited from measured 2-sigma boundary jitter once real producers send
+    # uncertainty_m. Entry also subtracts drift at the live linear limit over 0.3 s; a tracking
+    # robot leaves only when margin + u < 0. A normal checkpoint uses at most (1 - fraction) of the play.
+    lane_return_body_margin_m: float = 0.0
+    lane_return_checkpoint_fraction: float = 0.5
 
     def __post_init__(self) -> None:
         self._check_recovery()
@@ -248,6 +256,12 @@ class LineFollowConfig:
         if (not _finite(self.recovery_rear_lateral_margin_m)
                 or not 0.0 <= self.recovery_rear_lateral_margin_m <= 0.10):
             raise ValueError("recovery_rear_lateral_margin_m must be in [0, 0.10]")
+        if (not _finite(self.lane_return_body_margin_m)
+                or not 0.0 <= self.lane_return_body_margin_m <= 0.05):
+            raise ValueError("lane_return_body_margin_m must be in [0, 0.05]")
+        if (not _finite(self.lane_return_checkpoint_fraction)
+                or not 0.0 <= self.lane_return_checkpoint_fraction <= 1.0):
+            raise ValueError("lane_return_checkpoint_fraction must be in [0, 1]")
         if self.body_half_width_m is not None and (
                 not _finite(self.body_half_width_m) or not 0.0 < self.body_half_width_m <= 0.5):
             raise ValueError("body_half_width_m must be in (0, 0.5]")
