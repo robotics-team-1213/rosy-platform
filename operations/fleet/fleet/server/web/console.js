@@ -61,6 +61,18 @@ const auth = {
   locked: false,
 };
 const confirmedAction = createConfirmedAction({scope: pageScope, identity: () => ({...auth}), confirm: confirmIrreversible});
+function stopNotice(message = "", state = "warning") {
+  const notice = el("estop-feedback");
+  notice.textContent = message;
+  notice.hidden = !message;
+  notice.setAttribute("state", state);
+}
+function cancelAllNotice(message = "", details = false) {
+  const result = el("cancel-all-result"), link = el("cancel-all-details");
+  result.textContent = message;
+  result.hidden = !message;
+  link.hidden = !details;
+}
 
 function authHeaders() {
   return auth.token ? { "Authorization": `Bearer ${auth.token}` } : {};
@@ -72,6 +84,8 @@ const connectionView = createConnectionView({scope: pageScope, el});
 
 function markLocked(reason = "auth") {
   confirmedAction.cancel();
+  stopNotice();
+  cancelAllNotice();
   const firstLock = !auth.locked;
   auth.locked = true;
   connectionView.open();
@@ -91,6 +105,8 @@ function markLocked(reason = "auth") {
     visionView.reset(); visionView.refreshSources(); trackingView.reset(); startPointView.reset();
   }
   render();
+  // D-473 4 — the first 401 of a lock asks once whether this console is in development mode.
+  if (firstLock && reason === "auth") renewDevelopmentSession();
 }
 
 function markUnlocked() {
@@ -624,16 +640,24 @@ pageScope.listen(el("map-canvas"), "keydown", async (event) => {
 pageScope.listen(el("estop"), "click", async () => {
   const life = pageScope.capture();
   life.check();
+  stopNotice("비상 정지 요청 중…", "pending");
   try {
     const result = await call("/api/fleet/estop", { method: "POST" });
     life.check();
+    const summary = result.total > 0
+      ? `정지 요청 응답: ${result.stopped}/${result.total} · 물리 정지 미확인`
+      : "정지 요청 대상 로봇 없음 — 등록 목록과 현장 상태를 확인하세요.";
+    stopNotice(summary, result.total > 0 && result.stopped === result.total ? "warning" : "error");
+    log(summary, "bad");
+    (result.robots || []).filter((r) => !r.stopped)
+      .forEach((r) => log(`  ${r.robot_id} 정지 요청 응답 없음 — ${r.error.code}`, "bad"));
     await refreshDispatchControl();
     life.check();
-    log(`정지 요청 응답: ${result.stopped}/${result.total} · 물리 정지 미확인`, "bad");
-    result.robots.filter((r) => !r.stopped)
-      .forEach((r) => log(`  ${r.robot_id} 정지 요청 응답 없음 — ${r.error.code}`, "bad"));
   } catch (err) {
     if (err.name === "AbortError") return;
+    stopNotice(err.status >= 500 || !err.status
+      ? "비상 정지 결과 확인 불가 — Fleet 연결과 로봇 상태를 즉시 확인하세요."
+      : `비상 정지 요청 거절 — ${err.message}`, "error");
     log(`전체 정지 실패 — ${err.message}`, "bad");
   }
 });
@@ -645,12 +669,15 @@ const CANCEL_ALL_STEP = { swarm: "대형 추종", navigation: "내비게이션",
 pageScope.listen(el("cancel-all"), "click", async () => {
   await confirmedAction.run({message: "등록된 모든 로봇의 주행(내비게이션 목표·대형 추종·차선 추종)과 대기 작업을 취소합니다. 비상 정지 래치는 걸지 않습니다. 계속할까요?", opener: el("cancel-all"), eligible: () => !auth.locked,
     request: async owner => {
+    cancelAllNotice("주행 취소 요청 중…");
     const result = await call("/api/fleet/cancel-all", { method: "POST", signals: [owner.signal] });
     if (!owner.current()) return;
     // 0/0 은 성공이 아니다 — 취소할 로봇이 없었다.
     const allAnswered = result.total > 0 && result.cancelled === result.total;
-    log(result.total === 0 ? "주행 취소 대상 로봇 없음 — 등록된 로봇을 확인하세요"
-      : `주행 취소 요청 응답: ${result.cancelled}/${result.total} · 물리 정지 미확인`,
+    const summary = result.total === 0 ? "주행 취소 대상 로봇 없음 — 등록된 로봇을 확인하세요"
+      : `주행 취소 요청 응답: ${result.cancelled}/${result.total} · 물리 정지 미확인`;
+    cancelAllNotice(summary, result.total > 0 && !allAnswered);
+    log(summary,
     allAnswered ? undefined : "bad");
     result.robots.filter((r) => r.result !== "cancelled").forEach((r) => {
       const steps = Object.entries(r.steps).filter(([, step]) => !step.ok).map(([name, step]) =>
@@ -665,7 +692,12 @@ pageScope.listen(el("cancel-all"), "click", async () => {
     // CORE 가 취소를 확인하면 그 로봇은 다시 배정되고, 확인이 없으면 작업은 대조가 필요하다.
     if (awaiting) log("  확인 대기 작업: 로봇이 취소를 알리면 다시 배정, 알리지 않으면 대조 필요", "bad");
     await refreshDispatchControl(owner);
-  }, onError: err => log(`전체 주행 취소 실패 — ${err.message}`, "bad")});
+  }, onError: err => {
+    cancelAllNotice(err.status >= 500 || !err.status
+      ? "주행 취소 결과 확인 불가 — Fleet 연결과 로봇 상태를 다시 확인하세요."
+      : `주행 취소 요청 거절 — ${err.message}`);
+    log(`전체 주행 취소 실패 — ${err.message}`, "bad");
+  }});
 });
 
 
@@ -704,6 +736,7 @@ pageScope.listen(el("log-clear"), "click", () => {
   const box = el("log");
   box.replaceChildren(document.createElement("ui-empty"));
   box.firstChild.textContent = "지웠습니다.";
+  el("cancel-all-details").hidden = true;
 });
 
 // D-415 — 진단 패널 갱신: 상태 주기·발견·로봇 오류·카메라
@@ -743,8 +776,14 @@ function tickClock() {
 // 토큰 입력 — Enter 와 버튼 모두 저장한다 (form 이 아니라 keydown 이다).
 el("console-token").value = auth.token;
 function saveToken() {
+  useToken(el("console-token").value.trim());
+}
+
+function useToken(token) {
+  stopNotice();
+  cancelAllNotice();
   pageScope.invalidate();
-  auth.token = el("console-token").value.trim();
+  auth.token = token;
   // 새 토큰은 직접 재시도한다 — 잠금 플래그가 있으면 직접 호출도 건너뛰므로 먼저 푼다.
   auth.role = null;
   applyRoleToControls(null, operatorControls());
@@ -764,6 +803,31 @@ pageScope.listen(el("console-token"), "keydown", (event) => {
   if (event.key === "Enter") saveToken();
 });
 
+// D-473 — development connection mode. The badge is on only while the server says development;
+// paired, 404 (an older Fleet) or an error leaves the token field as the way in.
+async function connectionMode() {
+  try {
+    const info = await fleetClient("/api/fleet/auth/connection");
+    el("development-badge").hidden = info?.mode !== "development";
+    return info?.mode === "development";
+  } catch (_err) {
+    return false;
+  }
+}
+
+// Called on the first 401 of a lock only, so a refused or rate-limited issue (403/429) is one
+// request, not a loop. useToken() invalidates in-flight polls so their stale 401s are dropped.
+async function renewDevelopmentSession() {
+  if (!(await connectionMode())) return;
+  let session;
+  try {
+    session = await fleetClient("/api/fleet/auth/development-session", { method: "POST" });
+  } catch (_err) {
+    return;
+  }
+  useToken(session.token);
+}
+
 // D-359 §4 — 로봇 계열 색은 ui.js(window.RosyPalette)가 캔버스용으로 푼다. 테마가
 // 바뀌면 다시 풀고 지도를 새로 고침 없이 다시 그린다(캐시는 ui.js가 먼저 비운다).
 const robotColours = () => ["--robot-1", "--robot-2", "--robot-3"].map((name) => window.RosyPalette.cssColor(name));
@@ -776,6 +840,7 @@ tickClock();
 pageScope.interval(tickClock, 1000);
 applyRoleToControls(null, operatorControls());
 render();
+connectionMode();
 refreshAuthorization();
 visionView.refreshSources();
 mapView.refresh();

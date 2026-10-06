@@ -1128,3 +1128,8 @@
 - gate 변화: 없음. SOURCE만. 8kcn 기록 값 약 26–37 mm, URDF 공칭 약 75–100 mm로 15 mm 문턱 초과 → 장치에서는 여전히 excessive로 보류
 - 결정: D-468, D-185 CPU 예산: 경계 1개당 노트북 약 0.25 ms(벡터화, 252 조합), Pi 추정 약 1.2 ms, 경계 2개·8 fps면 코어의 약 2 %
 - 교훈: 오차가 roll에 단조가 아니라 모서리만 보면 최악이 내부에 숨는다. 시험의 진값은 코드의 표본과 달라야 한다
+## 2026-10-06 · uncommitted · refactor(perception): GAZEBO_DETECTOR_LATERAL_PX 이름 (리뷰)
+
+- 변경: GAZEBO 지면 투영 불확실도의 2 px를 `GAZEBO_DETECTOR_LATERAL_PX`로 이름 붙였다. 측정이 아닌 휴리스틱이다. 동작은 같다.
+- 증거: `test_lane_containment_payload.py` 6 PASS.
+- gate 변화: 없음.

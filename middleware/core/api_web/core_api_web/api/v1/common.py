@@ -7,6 +7,8 @@
 from __future__ import annotations
 
 import contextlib
+import logging
+import math
 from typing import Iterator
 
 from core_api_web.api.deps import AuthContext, require_role, CoreServicesLike
@@ -19,6 +21,45 @@ from core_common.protocol.schemas import RobotMode
 viewer = require_role("viewer")
 operator = require_role("operator")
 admin = require_role("administrator")
+
+
+# Stop evidence (D-411 addendum 17/18). A parked robot's velocity flips between 0 and one encoder
+# tick per odometry period; "still" means at most two ticks per period. The geometry comes from the
+# robot package's ``odometry`` config section (URDF nominal, refined per robot), never from here.
+STILL_LINEAR_MPS = 0.005
+#: Strict fallback when the robot package gives no odometry geometry: no tick-noise allowance.
+STILL_ANGULAR_FALLBACK_RPS = 0.01
+_log = logging.getLogger(__name__)
+_warned_no_odometry = False
+
+
+def still_angular_rps(config) -> float:
+    """Two encoder ticks per odometry period, as angular speed; strict fallback if unconfigured."""
+    global _warned_no_odometry
+    odo = (config or {}).get("odometry") or {}
+    try:
+        tick_m = 2 * math.pi * float(odo["wheel_radius_m"]) / float(odo["encoder_ticks_per_rev"])
+        limit = 2 * tick_m / float(odo["wheel_separation_m"]) * float(odo["publish_hz"])
+        if math.isfinite(limit) and limit > 0:
+            return limit
+    except (KeyError, TypeError, ValueError, ZeroDivisionError):
+        pass
+    if not _warned_no_odometry:
+        _warned_no_odometry = True
+        _log.warning("config odometry section missing or invalid; stop evidence uses strict %s rad/s",
+                     STILL_ANGULAR_FALLBACK_RPS)
+    return STILL_ANGULAR_FALLBACK_RPS
+
+
+def robot_still(svc: CoreServicesLike) -> bool:
+    """E-Stop, or fresh velocity within the tick-noise floor. Shared by recordings and traffic."""
+    if svc.safety.estop:
+        return True
+    snapshot = svc.state.snapshot()
+    evidence = snapshot.evidence.get("velocity")
+    return bool(evidence and evidence.evidence.value == "fresh"
+                and abs(float(snapshot.velocity.linear)) <= STILL_LINEAR_MPS
+                and abs(float(snapshot.velocity.angular)) <= still_angular_rps(svc.config))
 
 
 def require_kept(svc: CoreServicesLike, flag: str) -> None:

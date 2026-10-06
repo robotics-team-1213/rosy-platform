@@ -175,6 +175,7 @@ def test_first_overlay_failure_has_no_last_match_claim():
             assert "마지막 수신 값" not in page.locator("#match-announcement").inner_text()
             assert page.locator("#home-score").inner_text() == "—"
             assert page.locator("#score-evidence").is_hidden()
+            assert page.locator("#field-evidence").inner_text() == "호스트 연결 오류 · 경기장 정보 없음"
             assert page.evaluate(
                 "document.documentElement.scrollWidth <= innerWidth && "
                 "document.documentElement.scrollHeight <= innerHeight"
@@ -184,6 +185,7 @@ def test_first_overlay_failure_has_no_last_match_claim():
             board.publish(_play_payload(), jpeg=None)
             page.wait_for_function("() => document.getElementById('phase')?.dataset.phase === 'play'")
             assert page.locator("#connection").inner_text() == "호스트 연결됨"
+            assert page.locator("#field-evidence").is_hidden()
             assert "경기 정보가 없습니다" not in page.locator("#match-announcement").inner_text()
             assert not errors
             browser.close()
@@ -191,21 +193,21 @@ def test_first_overlay_failure_has_no_last_match_claim():
         server.close()
 
 
-def _lost_payload() -> dict:
+def _lost_payload(reason="lost_ball") -> dict:
     field = Field(length_m=2.0, width_m=1.4)
     observation = Observation(
         t=0.0,
-        ball=None,
+        ball=None if reason == "lost_ball" else Pose2D(0.1, -0.2, 0.0),
         robots={"rosy_01": Pose2D(-0.4, 0.0, 0.0)},
-        lost_ball=True,
-        lost_robots=frozenset(),
+        lost_ball=reason == "lost_ball",
+        lost_robots=frozenset({"rosy_02"}) if reason == "lost_robots" else frozenset(),
         home_goal=None,
         away_goal=None,
     )
     state = MatchState(
         phase=Phase.HOLD,
         score={"rosy_01": 2, "rosy_02": 1},
-        reason="공을 잃음 · HOLD",
+        reason=reason,
     )
     return overlay_payload(field, observation, state, markers=())
 
@@ -216,34 +218,53 @@ def _launch_board_page(playwright, url):
     return browser, page, errors
 
 
-def test_match_board_shows_lost_hold_state():
-    """D-103 유실 HOLD — 공을 잃으면 이유와 함께 HOLD가 보드에 보인다."""
+@pytest.mark.parametrize("width,height", [(1280, 800), (390, 844), (320, 568)])
+@pytest.mark.parametrize("reason,label", [("lost_ball", "공을 잃음"), ("lost_robots", "로봇을 잃음")])
+def test_match_board_shows_lost_hold_state(width, height, reason, label):
+    """D-103 유실 HOLD — 공이나 로봇을 잃으면 이유가 보드에 보인다."""
     pytest.importorskip("playwright.sync_api")
     from playwright.sync_api import sync_playwright
 
     board = PreviewBoard(clock=lambda: 100.0)
-    board.publish(_lost_payload(), jpeg=None)
+    board.publish(_lost_payload(reason), jpeg=None)
     server = PreviewServer(board, port=0)
     url = server.start()
     try:
         with sync_playwright() as playwright:
-            browser, page, errors = _launch_board_page(playwright, url)
+            browser, page, errors = open_page(playwright, width, height)
+            page.goto(url, wait_until="domcontentloaded")
             page.wait_for_function(
                 "document.getElementById('phase')?.dataset.phase === 'hold'"
             )
             assert page.locator("#lost").is_visible()
             assert page.locator("#phase").inner_text() == "경기 보류"
-            assert "공을 잃음" in page.locator("#lost").inner_text()
+            assert label in page.locator("#lost").inner_text()
+            assert reason not in page.locator("#lost").inner_text()
             assert page.locator("#markers li.on").count() == 0
-            assert page.evaluate("document.documentElement.scrollHeight <= innerHeight")
+            if width <= 390:
+                layout = page.evaluate("""() => ({
+                  overflow: document.documentElement.scrollWidth - innerWidth,
+                  panels: ['.score', '.pitch-wrap', '.field-details']
+                    .map(selector => document.querySelector(selector).getBoundingClientRect().toJSON()),
+                  stop: document.querySelector('#halt').getBoundingClientRect().toJSON(),
+                })""")
+                assert layout["overflow"] <= 0, layout
+                assert max(box["x"] for box in layout["panels"]) - min(box["x"] for box in layout["panels"]) <= 1, layout
+                assert max(box["width"] for box in layout["panels"]) - min(box["width"] for box in layout["panels"]) <= 1, layout
+                assert layout["stop"]["bottom"] <= height and layout["stop"]["right"] <= width, layout
+                if height <= 568:
+                    assert page.locator("#lost").bounding_box()["y"] + page.locator("#lost").bounding_box()["height"] <= page.locator(".halt-row").bounding_box()["y"]
+            else:
+                assert page.evaluate("document.documentElement.scrollHeight <= innerHeight")
             assert not errors, f"페이지 오류: {errors}"
-            save_temp_screenshot(page, "games_board_lost.png")
+            save_temp_screenshot(page, f"games_board_{reason}_{width}x{height}.png")
             browser.close()
     finally:
         server.close()
 
 
-def test_match_board_initial_state_before_any_publish():
+@pytest.mark.parametrize("width,height", [(1280, 800), (390, 800), (320, 568)])
+def test_match_board_initial_state_before_any_publish(width, height):
     """최초 기동 — publish 전 보드는 기본 안내만 보이고 아무 상태도 그리지 않는다."""
     pytest.importorskip("playwright.sync_api")
     from playwright.sync_api import sync_playwright
@@ -253,16 +274,25 @@ def test_match_board_initial_state_before_any_publish():
     url = server.start()
     try:
         with sync_playwright() as playwright:
-            browser, page, errors = _launch_board_page(playwright, url)
+            browser, page, errors = open_page(playwright, width, height)
+            page.goto(url, wait_until="domcontentloaded")
             page.wait_for_function(
                 "document.getElementById('phase')?.textContent === '대기'"
             )
             assert page.locator("#home-score").inner_text() == "—"
             assert page.locator("#connection").inner_text() == "경기 데이터 대기 중"
+            assert page.locator("#field-evidence").inner_text() == "경기장 정보 대기 중"
+            assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
             assert page.locator("#lost").is_hidden()
             assert page.locator("#markers li").count() == 0
+            if width <= 390:
+                panels = [page.locator(selector).bounding_box() for selector in
+                          (".score", ".pitch-wrap", ".field-details")]
+                assert max(box["width"] for box in panels) - min(box["width"] for box in panels) <= 1
+                assert max(box["x"] for box in panels) - min(box["x"] for box in panels) <= 1
+                assert page.locator("#halt").bounding_box()["y"] + page.locator("#halt").bounding_box()["height"] <= height
             assert not errors, f"페이지 오류: {errors}"
-            save_temp_screenshot(page, "games_board_initial.png")
+            save_temp_screenshot(page, f"games_board_initial_{width}x{height}.png")
             browser.close()
     finally:
         server.close()
@@ -354,6 +384,7 @@ def test_match_layout_uses_desktop_width_and_keeps_narrow_status_separate():
             }""")
             assert desktop["field"]["width"] >= 680
             assert desktop["details"]["left"] > desktop["field"]["right"]
+            assert desktop["details"]["height"] < desktop["field"]["height"] / 2
             assert desktop["halt"]["bottom"] <= 800
             assert desktop["scrollWidth"] <= 1280 and desktop["scrollHeight"] <= 800
 
@@ -372,6 +403,16 @@ def test_match_layout_uses_desktop_width_and_keeps_narrow_status_separate():
             assert narrow["scoreEvidence"]["bottom"] <= narrow["awayName"]["top"]
             assert narrow["scrollWidth"] <= 390
             assert narrow["halt"]["bottom"] <= 800 and narrow["sticky"] == "sticky"
+            save_temp_screenshot(page, "games_board_delayed_390x800.png")
+            page.set_viewport_size({"width": 320, "height": 568})
+            small = page.evaluate("""() => {
+              const rect = (s) => document.querySelector(s).getBoundingClientRect();
+              return {panels: ['.score', '.pitch-wrap', '.field-details'].map(s => rect(s).toJSON()),
+                halt: rect('#halt').toJSON(), scrollWidth: document.documentElement.scrollWidth};
+            }""")
+            assert max(r["width"] for r in small["panels"]) - min(r["width"] for r in small["panels"]) <= 1
+            assert small["scrollWidth"] <= 320 and small["halt"]["bottom"] <= 568
+            save_temp_screenshot(page, "games_board_delayed_320x568.png")
             page.set_viewport_size({"width": 600, "height": 800})
             page.evaluate("window.scrollTo(0, document.documentElement.scrollHeight)")
             page.wait_for_timeout(100)
@@ -461,7 +502,8 @@ def test_match_state_is_announced_only_when_it_changes():
         server.close()
 
 
-def test_stop_failure_is_visible_and_can_be_retried():
+@pytest.mark.parametrize("width,height", [(1280, 800), (390, 844), (320, 568)])
+def test_stop_failure_is_visible_and_can_be_retried(width, height):
     pytest.importorskip("playwright.sync_api")
     from playwright.sync_api import sync_playwright
 
@@ -471,7 +513,8 @@ def test_stop_failure_is_visible_and_can_be_retried():
     url = server.start()
     try:
         with sync_playwright() as playwright:
-            browser, page, errors = _launch_board_page(playwright, url)
+            browser, page, errors = open_page(playwright, width, height)
+            page.goto(url, wait_until="domcontentloaded")
             page.wait_for_function("document.getElementById('phase')?.dataset.phase === 'play'")
             calls = []
 
@@ -488,11 +531,20 @@ def test_stop_failure_is_visible_and_can_be_retried():
             assert "다시" in page.locator("#halt-status").inner_text()
             assert page.locator("#halt-status").get_attribute("role") == "status"
             assert page.locator("#halt").get_attribute("aria-disabled") == "false"
-            assert page.evaluate("document.documentElement.scrollHeight <= innerHeight")
-            save_temp_screenshot(page, "games_board_stop_retry.png")
+            layout = page.evaluate("""() => ({
+              overflow: document.documentElement.scrollWidth - innerWidth,
+              stop: document.querySelector('#halt').getBoundingClientRect().toJSON(),
+              status: document.querySelector('#halt-status').getBoundingClientRect().toJSON(),
+            })""")
+            assert layout["overflow"] <= 0, layout
+            assert layout["stop"]["right"] <= width and layout["stop"]["bottom"] <= height, layout
+            assert layout["status"]["right"] <= width and layout["status"]["bottom"] <= height, layout
+            if width == 1280:
+                assert page.evaluate("document.documentElement.scrollHeight <= innerHeight")
+            save_temp_screenshot(page, f"games_board_stop_retry_{width}x{height}.png")
             page.locator("#halt").focus()
             page.keyboard.press("Space")
-            page.wait_for_function("document.getElementById('halt-status')?.dataset.state === 'sent'")
+            page.locator('#halt-status[data-state="sent"]').wait_for()
             assert "접수" in page.locator("#halt-status").inner_text()
             assert page.evaluate("document.activeElement?.id") == "halt"
             assert calls == ["POST", "POST"]
@@ -536,6 +588,66 @@ def test_overlay_failure_marks_last_received_match_as_stale():
             assert page.locator("#score-evidence").is_hidden()
             assert page.locator(".score").get_attribute("aria-label") == "점수"
             assert not errors, f"페이지 오류: {errors}"
+            browser.close()
+    finally:
+        server.close()
+
+
+@pytest.mark.parametrize("width,height", [(390, 844), (320, 568)])
+def test_compact_board_recovery_keeps_equal_panels_and_stop_visible(width, height):
+    pytest.importorskip("playwright.sync_api")
+    from playwright.sync_api import sync_playwright
+
+    board = PreviewBoard()
+    server = PreviewServer(board, port=0)
+    url = server.start()
+    try:
+        with sync_playwright() as playwright:
+            browser, page, errors = open_page(playwright, width, height)
+            page.route("**/overlay.json", lambda route: route.fulfill(status=503))
+            page.goto(url, wait_until="domcontentloaded")
+            page.wait_for_function("() => document.querySelector('#connection')?.textContent.includes('연결 오류')")
+            assert page.locator("#home-score").inner_text() == "—"
+            assert "경기장 정보 없음" in page.locator("#field-evidence").inner_text()
+
+            def check_layout(state):
+                layout = page.evaluate("""() => ({
+                  overflow: document.documentElement.scrollWidth - innerWidth,
+                  panels: ['.score', '.pitch-wrap', '.field-details']
+                    .map(selector => document.querySelector(selector).getBoundingClientRect().toJSON()),
+                  stop: document.querySelector('#halt').getBoundingClientRect().toJSON(),
+                  connection: (() => { const node = document.querySelector('#connection'); return {
+                    box: node.getBoundingClientRect().toJSON(),
+                    scrollWidth: node.scrollWidth, clientWidth: node.clientWidth,
+                  }; })(),
+                })""")
+                assert layout["overflow"] <= 0, (state, layout)
+                assert max(box["x"] for box in layout["panels"]) - min(box["x"] for box in layout["panels"]) <= 1, (state, layout)
+                assert max(box["width"] for box in layout["panels"]) - min(box["width"] for box in layout["panels"]) <= 1, (state, layout)
+                assert layout["stop"]["right"] <= width and layout["stop"]["bottom"] <= height, (state, layout)
+                connection = layout["connection"]
+                assert connection["box"]["left"] >= 0 and connection["box"]["right"] <= width, (state, connection)
+                assert connection["scrollWidth"] <= connection["clientWidth"], (state, connection)
+                page.wait_for_timeout(100)
+                save_temp_screenshot(page, f"games_board_{state}_{width}x{height}.png")
+
+            check_layout("first_error")
+            page.unroute("**/overlay.json")
+            board.publish(_play_payload(), jpeg=None)
+            page.wait_for_function("() => document.querySelector('#phase')?.dataset.phase === 'play'")
+            page.route("**/overlay.json", lambda route: route.fulfill(status=503))
+            page.wait_for_function("() => document.querySelector('#connection')?.textContent.includes('연결 오류')")
+            assert "현재 위치 아님" in page.locator("#field-evidence").inner_text()
+            assert page.locator(".score").get_attribute("aria-label") == "마지막 수신 점수"
+            check_layout("lost_after_live")
+            page.unroute("**/overlay.json")
+            board.publish(_play_payload(), jpeg=None)
+            page.wait_for_function("() => document.querySelector('#connection')?.dataset.evidence === 'fresh'")
+            assert page.locator("#connection").inner_text() == "호스트 연결됨"
+            assert page.locator("#field-evidence").is_hidden()
+            assert page.locator("#home-score").inner_text() == "2"
+            check_layout("recovered")
+            assert not errors, errors
             browser.close()
     finally:
         server.close()
@@ -612,6 +724,13 @@ def test_compact_board_keeps_header_budget_stop_and_chips_in_view(width, height)
     try:
         with sync_playwright() as playwright:
             browser, page, errors = open_page(playwright, width, height)
+            page.add_init_script("""(() => {
+              const arc = CanvasRenderingContext2D.prototype.arc;
+              CanvasRenderingContext2D.prototype.arc = function(x, y, radius, ...rest) {
+                window.__ballRadius = radius;
+                return arc.call(this, x, y, radius, ...rest);
+              };
+            })()""")
             page.goto(url, wait_until="domcontentloaded")
             page.wait_for_function("() => document.querySelectorAll('#markers li').length === 8")
             page.get_by_text('마커 ID 자세히', exact=True).click()
@@ -620,9 +739,14 @@ def test_compact_board_keeps_header_budget_stop_and_chips_in_view(width, height)
               overflow: document.documentElement.scrollWidth - innerWidth,
               topbar: document.querySelector('ui-topbar').getBoundingClientRect().height,
               halt: document.getElementById('halt').getBoundingClientRect().toJSON(),
+              panels: ['.score', '.pitch-wrap', '.field-details']
+                .map(selector => document.querySelector(selector).getBoundingClientRect().toJSON()),
+              ballRadius: window.__ballRadius,
+              canvasScale: document.querySelector('#pitch').clientWidth / document.querySelector('#pitch').width,
               chips: [...document.querySelectorAll('#markers li')]
                 .filter(li => li.scrollWidth > li.clientWidth).map(li => li.textContent),
             })""")
+            save_temp_screenshot(page, f"games_board_live_{width}x{height}.png")
             browser.close()
     finally:
         server.close()
@@ -632,6 +756,10 @@ def test_compact_board_keeps_header_budget_stop_and_chips_in_view(width, height)
     assert fit["topbar"] <= 0.2 * height, fit
     halt = fit["halt"]
     assert halt["top"] >= 0 and halt["bottom"] <= height and halt["right"] <= width, fit
+    assert abs(halt["x"] - fit["panels"][0]["x"]) <= 1 and abs(halt["width"] - fit["panels"][0]["width"]) <= 1, fit
+    assert max(panel["x"] for panel in fit["panels"]) - min(panel["x"] for panel in fit["panels"]) <= 1, fit
+    assert max(panel["width"] for panel in fit["panels"]) - min(panel["width"] for panel in fit["panels"]) <= 1, fit
+    assert fit["ballRadius"] * fit["canvasScale"] >= 4.99, fit
     assert fit["chips"] == [], fit
 def test_visibility_observations_are_not_operational_approval():
     from playwright.sync_api import sync_playwright, expect

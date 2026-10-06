@@ -50,6 +50,14 @@ Jazzy. This directory is copied into every offline ROSY release payload.
   (`rosy_claim.py`) and share `rosy-release-unpack.sh`. Tests: `test/test_rosy_auto_update.py`,
   `test/test_rosy_claim.py`.
 
+- `rosy-tailscale-join.service` (D-477) is a one-shot root unit, condition-gated on the
+  provisioned `/etc/rosy/tailscale-join.json` (0600; absent → the robot stays LAN-only).
+  `rosy-tailscale-join.py` spends the auth key once (`tailscale up`, `--accept-dns=false`),
+  rewrites the file in place without the key, and records the outcome in
+  `/var/lib/rosy/tailscale/join-result.json`. tailscaled itself is the package unit
+  (image installs the pinned deb); D-418's SSH rules still govern every login. Test:
+  `test/test_rosy_tailscale_join.py`.
+
 ## Tests
 
 ```bash

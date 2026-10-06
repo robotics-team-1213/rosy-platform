@@ -84,10 +84,10 @@ export function mount(root, ctx) {
     finally { posePending = false; if (!disposed) syncControls(); }
   });
 
-  async function run(path, body, prompt, pendingMessage, success) {
+  async function run(button, path, body, prompt, pendingMessage, success) {
     if (disposed || confirming || !slamAvailable || slamPending) return;
     confirming = true;
-    const confirmed = await confirmIrreversible({message: prompt, action: "요청 전송", signal: lifetime.signal});
+    const confirmed = await confirmIrreversible({message: prompt, action: button.textContent.trim(), signal: lifetime.signal});
     confirming = false;
     if (!confirmed || disposed || !slamAvailable || slamPending || (body && body.name !== (mapName.value.trim() || "rosy_map"))) return;
     slamPending = true;
@@ -99,9 +99,9 @@ export function mount(root, ctx) {
     } catch (error) { if (!disposed) slamStatus.textContent = `요청을 완료하지 못했습니다: ${error.message}`; }
     finally { slamPending = false; if (!disposed) syncControls(); }
   }
-  start.addEventListener("click", () => run("/api/v1/slam/start", null, "맵핑을 시작할까요? 세션 중에는 목표 주행이 거부됩니다.", "맵핑 시작 요청을 보내는 중입니다.", "맵핑 시작 요청을 CORE가 받았습니다."));
-  stop.addEventListener("click", () => run("/api/v1/slam/stop", null, "맵핑을 중지할까요?", "맵핑 중지 요청을 보내는 중입니다.", "맵핑 중지 요청을 CORE가 받았습니다."));
-  save.addEventListener("click", () => run("/api/v1/slam/save", {name: mapName.value.trim() || "rosy_map"}, "현재 맵을 저장할까요?", "맵 저장 요청을 보내는 중입니다.", "맵 저장 요청을 CORE가 받았습니다."));
+  start.addEventListener("click", () => run(start, "/api/v1/slam/start", null, "맵핑을 시작할까요? 세션 중에는 목표 주행이 거부됩니다.", "맵핑 시작 요청을 보내는 중입니다.", "맵핑 시작 요청을 CORE가 받았습니다."));
+  stop.addEventListener("click", () => run(stop, "/api/v1/slam/stop", null, "맵핑을 중지할까요?", "맵핑 중지 요청을 보내는 중입니다.", "맵핑 중지 요청을 CORE가 받았습니다."));
+  save.addEventListener("click", () => run(save, "/api/v1/slam/save", {name: mapName.value.trim() || "rosy_map"}, "현재 맵을 저장할까요?", "맵 저장 요청을 보내는 중입니다.", "맵 저장 요청을 CORE가 받았습니다."));
 
   return () => { disposed = true; lifetime.abort(); stopCaps(); };
 }

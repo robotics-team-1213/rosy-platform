@@ -300,8 +300,8 @@
 
 ## 최근 기록
 
-- 2026-10-06 · uncommitted · docs(readme): GitHub landing without lab paths, diagrams
-- 2026-10-06 · uncommitted · D-472 호스트 구현
-- 2026-10-06 · uncommitted · docs(adr): Rosy Cam 지도와 후면 LED 식별 경계
-- 2026-10-05 · uncommitted · docs(readme): short README, developer guide, verified team guide
-- 2026-10-05 · uncommitted · fix(docs): C6 선택 센서 공급자 연결 판정
+- 2026-10-07 · uncommitted · uiux(learning): 대기 중 중복 빈 상태 제거
+- 2026-10-07 · uncommitted · uiux(learning): 작업·자료 등록의 응답 대기 시간
+- 2026-10-07 · uncommitted · uiux(fleet): LED 행동 추가 뒤 전화 폭 재검증
+- 2026-10-07 · uncommitted · uiux(fleet): Cell 빈 평면도 공백 제거
+- 2026-10-07 · uncommitted · uiux(learning): 320px 서비스 장애 복구 확인

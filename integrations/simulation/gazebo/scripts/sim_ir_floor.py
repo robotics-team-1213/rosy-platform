@@ -11,15 +11,23 @@ Started only by launch_sim.launch.xml sim_sensors:=true.
 import math
 
 FLOOR_RAW = 2000
-CLIFF_RAW = 0
+# A valid low reading, not 0: the safety worker (safety/hazard.py on_ir) takes only 0 < v < 4000
+# as valid IR, and cliff_mode low trips below cliff_raw_max 800 (safety/node.py default).
+CLIFF_RAW = 100
 FLOOR_MAX_M = 0.05  # the IR emitters sit 0.013 m above the floor; a drop past 5 cm is a cliff
+# Published order = the device's: ir_adc_node.py sends [ch2, ch1, ch0] = robot left, centre,
+# right (sensing/perception/ir_calibration.py CHANNELS).
 CHANNELS = ('left', 'mid', 'right')
 
 
 def ir_raw(ranges):
-    """[left, mid, right] floor distances (m; None = no reading yet) -> device-shaped ADC values."""
-    return [FLOOR_RAW if r is not None and math.isfinite(r) and r <= FLOOR_MAX_M else CLIFF_RAW
-            for r in ranges]
+    """[left, mid, right] floor distances (m; None = no reading yet) -> device-shaped ADC values.
+
+    None until every channel has a reading: a frame never stands in for an unseen sensor.
+    """
+    if any(r is None for r in ranges):
+        return None
+    return [FLOOR_RAW if math.isfinite(r) and r <= FLOOR_MAX_M else CLIFF_RAW for r in ranges]
 
 
 def main():
@@ -36,7 +44,9 @@ def main():
     def on_ray(name, msg):
         latest[name] = min(msg.ranges) if msg.ranges else None
         if name == 'mid':  # one ADC frame per mid ray, like the device's one read of all three
-            pub.publish(UInt16MultiArray(data=ir_raw([latest[c] for c in CHANNELS])))
+            frame = ir_raw([latest[c] for c in CHANNELS])
+            if frame is not None:
+                pub.publish(UInt16MultiArray(data=frame))
 
     for name in CHANNELS:
         node.create_subscription(LaserScan, f'ir_sim/{name}',

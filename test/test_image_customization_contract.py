@@ -28,6 +28,29 @@ def test_ros_apt_source_package_is_exactly_pinned():
     assert ros["apt_source_sha256"] == "0804d9b13db770eb87019be414cd78378835228ad5fa801fc88758596dd8f7e5"
 
 
+def test_tailscale_deb_is_pinned_and_installed_after_its_dependencies():
+    # D-477: one checksummed upstream deb; its hard dependency (iptables)
+    # comes from the locked Ubuntu suites before dpkg -i, wiringpi-style.
+    lock = yaml.safe_load((IMAGE / "inputs.lock.yaml").read_text(encoding="utf-8"))
+    source = CUSTOMIZER.read_text(encoding="utf-8")
+    ts = lock["tailscale"]
+
+    assert ts["url"] == (
+        "https://pkgs.tailscale.com/stable/ubuntu/pool/tailscale_"
+        f"{ts['version']}_arm64.deb"
+    )
+    assert len(ts["sha256"]) == 64 and ts["sha256"] != ts.get("size")
+    assert 'TAILSCALE_URL="$(lock_value tailscale url)"' in source
+    assert '"$ACTUAL_TAILSCALE_SHA" == "$TAILSCALE_SHA"' in source
+    assert "iptables" in source and "iproute2" in source
+    apt_install = source.index("apt-get install -y --no-install-recommends")
+    dpkg = source.index("dpkg -i /tmp/tailscale.deb")
+    assert apt_install < dpkg
+    # The daemon unit ships in the deb; the customizer enables it beside the
+    # D-477 join helper.
+    assert "tailscaled.service" in source
+
+
 def test_customizer_installs_native_ros_and_never_product_docker():
     source = CUSTOMIZER.read_text(encoding="utf-8")
     build = (IMAGE / "build-image.sh").read_text(encoding="utf-8")

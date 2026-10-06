@@ -58,6 +58,9 @@ STATUS_INTERVAL_S = 1.0
 # A marker report older than this is not repeated in ``status`` (worker stopped
 # detecting, e.g. frames went stale); the phone then sees empty lists again.
 MARKER_REPORT_TTL_S = 3.0
+# D-484: a field-calibration report older than this no longer rectifies the
+# preview (the worker stopped feeding detections; show the raw frame instead).
+FIELD_REPORT_TTL_S = 5.0
 # A peer that upgrades but never sends hello is closed after this long, counted in
 # steps of _HELLO_STEP_S so a stalled event loop cannot use the peer's time up.
 HELLO_TIMEOUT_S = 5.0
@@ -169,6 +172,8 @@ class _Source:
     latest: LatestFrame | None = None
     # (corner ids, robot ids, monotonic report time) from the Vision worker.
     markers: tuple[tuple[int, ...], tuple[str, ...], float] | None = None
+    # D-484: the worker's last field-calibration report (dict + monotonic time).
+    field: tuple[dict, float] | None = None
     # Optional hello.lens ({"kind", "focal_mm", "hfov_deg"}); None for older apps.
     lens: dict | None = None
     # D-341: SHA-256 of a paired phone's bearer (never the bearer) and its credential id.
@@ -262,6 +267,27 @@ class IngestServer:
         src.markers = (tuple(sorted(set(corners_seen))), tuple(sorted(set(robots_seen))),
                        time.monotonic())
 
+    def report_field(self, source: str, report: dict) -> None:
+        """Record the worker's latest field-boundary calibration report (D-484)."""
+        src = self._sources.get(source)
+        if src is None:
+            return
+        src.field = (dict(report), time.monotonic())
+
+    def _field_corners(self, source: str) -> tuple[tuple[tuple[float, float], ...], str] | None:
+        """Fresh auto-rectification corners and the calibration state, or None."""
+        src = self._sources.get(source)
+        report_state = getattr(src, "field", None) if src is not None else None
+        if report_state is None:
+            return None
+        report, at = report_state
+        if time.monotonic() - at > FIELD_REPORT_TTL_S:
+            return None
+        corners = report.get("corners_normalized")
+        if not isinstance(corners, list) or len(corners) != 4:
+            return None
+        return tuple(tuple(point) for point in corners), str(report.get("state", ""))
+
     def _marker_status(self, src: _Source) -> tuple[list[int], list[str]]:
         if src.markers is None or time.monotonic() - src.markers[2] > MARKER_REPORT_TTL_S:
             return [], []
@@ -325,12 +351,34 @@ class IngestServer:
         if view == "map-proposal":
             return await self._map_proposal_response(source, frame)
         jpeg = frame.jpeg
-        rectification_active = False
+        rectified_header = "false"
+        extra_state: dict[str, str] = {}
         if "rectification" in lease:
             try:
                 settings = PreviewRectification.from_mapping(lease["rectification"])
-                rectification_active = not settings.is_identity
-                if rectification_active:
+                if settings.mode == "auto":
+                    # D-484: swap the lease's corners for the calibration's accepted quad.
+                    field = self._field_corners(source)
+                    if field is None:
+                        return _http_response(200, frame.jpeg, extra={
+                            "Content-Type": "image/jpeg", "Cache-Control": "no-store",
+                            "X-Frame-Seq": str(frame.header.seq),
+                            "X-Frame-Age-Ms": str(round(age * 1000)),
+                            "X-Frame-Rectified": "false",
+                            "X-Frame-State": "field-unavailable",
+                            **_lens_header(self.source_lens(source)),
+                        })
+                    corners, calib_state = field
+                    settings = PreviewRectification(
+                        mode="manual",
+                        fx=settings.fx, fy=settings.fy, cx=settings.cx, cy=settings.cy,
+                        k1=settings.k1, k2=settings.k2, p1=settings.p1, p2=settings.p2,
+                        k3=settings.k3, corners=corners, output_aspect=settings.output_aspect)
+                    rectified_header = "auto"
+                    extra_state = {"X-Field-Calib": calib_state}
+                elif not settings.is_identity:
+                    rectified_header = "true"
+                if rectified_header != "false":
                     jpeg = rectify_jpeg(frame.jpeg, settings)
             except (TypeError, ValueError, cv2.error):
                 return _http_response(422, b"rectification failed\n",
@@ -343,7 +391,8 @@ class IngestServer:
             "X-Frame-Width": str(frame.header.width),
             "X-Frame-Height": str(frame.header.height),
             "X-Frame-Rotation-Deg": str(frame.header.rotation_deg),
-            "X-Frame-Rectified": "true" if rectification_active else "false",
+            "X-Frame-Rectified": rectified_header,
+            **extra_state,
             **_lens_header(self.source_lens(source)),
         })
 

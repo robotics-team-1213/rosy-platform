@@ -19,13 +19,41 @@ def _ir():
     return mod
 
 
+def _declared(name, path):
+    text = (REPO / "middleware" / "perception" / "control" / path).read_text(encoding="utf-8")
+    return int(re.search(rf"declare_parameter\('{name}', (\d+)\)", text).group(1))
+
+
 def test_floor_under_each_ray_reads_as_floor_and_a_missing_floor_as_cliff():
     ir = _ir()
     assert ir.ir_raw([0.013, 0.013, 0.013]) == [ir.FLOOR_RAW] * 3
-    assert ir.ir_raw([0.013, math.inf, None]) == [ir.FLOOR_RAW, ir.CLIFF_RAW, ir.CLIFF_RAW]
+    assert ir.ir_raw([0.013, math.inf, 0.2]) == [ir.FLOOR_RAW, ir.CLIFF_RAW, ir.CLIFF_RAW]
     assert ir.ir_raw([ir.FLOOR_MAX_M + 1e-3, 0.013, math.nan]) == [ir.CLIFF_RAW, ir.FLOOR_RAW, ir.CLIFF_RAW]
-    # The safety worker's cliff_mode low thresholds (cliff < 800, clear >= 1500), 12-bit ADC.
-    assert ir.FLOOR_RAW >= 1500 and ir.CLIFF_RAW < 800 and ir.FLOOR_RAW < 4000
+
+
+def test_no_frame_until_every_channel_has_a_reading():
+    ir = _ir()
+    assert ir.ir_raw([None, 0.013, 0.013]) is None
+    assert ir.ir_raw([0.013, 0.013, None]) is None
+
+
+def test_values_are_valid_ir_on_the_worker_thresholds():
+    ir = _ir()
+    hazard = (REPO / "middleware" / "perception" / "control" / "safety" / "hazard.py").read_text(encoding="utf-8")
+    assert "all(0 < v < 4000 for v in self.ir_raw)" in hazard  # on_ir validity window
+    cliff_max = _declared("cliff_raw_max", "safety/node.py")
+    clear = _declared("cliff_clear_raw", "safety/node.py")
+    assert 0 < ir.CLIFF_RAW < cliff_max          # a valid reading that trips cliff_mode low
+    assert clear <= ir.FLOOR_RAW < 4000           # a valid reading that clears it
+
+
+def test_channel_order_matches_the_device_adc_node():
+    ir = _ir()
+    control = REPO / "middleware" / "perception" / "control"
+    assert "return [values[2], values[1], values[0]]" in (control / "ir_adc_node.py").read_text(encoding="utf-8")
+    calib = (control / "sensing" / "perception" / "ir_calibration.py").read_text(encoding="utf-8")
+    assert 'CHANNELS = ("left", "centre", "right")' in calib
+    assert ir.CHANNELS == ("left", "mid", "right")
 
 
 def test_ir_rays_hang_from_the_urdf_ir_links():

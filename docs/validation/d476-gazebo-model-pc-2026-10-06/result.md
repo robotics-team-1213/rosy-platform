@@ -167,9 +167,13 @@ git bundle로 가져와 `gz_sim core control description`만 다시 빌드했다
 | worker가 sim `/scan`을 버림 | `is_simulation_scan`이 공용 Gazebo 모델 모양(640 빔, `range_max` 12, `<ns>rplidar_link`)도 받는다. `SafetyNode`의 새 파라미터 `accept_simulation_scans`(기본 false)가 `enable_simulation_scans`를 부르고, `use_sim_time`이 아니면 시작을 거부한다 | CORE overlay `control.sensor_adapter.simulation_sensors: true` → `resolve_safety_params(simulation=True)`가 worker에 `accept_simulation_scans`, `imu_angular_velocity_unit rad_s`, `use_sim_time`을 넘긴다 | 플래그가 없으면 파라미터가 아예 없다(리비전도 같음). overlay 허용 키가 아니어서 장치 overlay로 넣을 수 없다. `use_sim_time` 없이 플래그를 쓰면 CORE가 시작을 거부한다. C1은 `range_max` 40이라 sim 모양과 겹치지 않는다 |
 | 정책 시계 불일치 | `bind_lane_return_motion(..., policy_clock)`: `use_sim_time`이면 D-468 바닥 증명은 worker 정책을 `time.monotonic`(정책 창과 `SafetyManager`의 시계)으로 묻고, 몸 sweep은 line clock(sim 초)에 둔다 | `node.py`가 `use_sim_time`으로 고른다 | 장치는 `policy_clock=None`, `now`를 그대로 넘긴다(전과 같음) |
 | IMU 없음 | 모델의 기존 Gazebo IMU(`imu_raw`)를 둘째 bridge로 가져온다 | `launch_sim.launch.xml sim_sensors:=true` | 기본 false. Gazebo 모델 파일만 바뀐다 |
-| IR 없음 | URDF IR 링크 셋(`ir_l/ir_mid/ir_r_link`, 바닥 위 0.013 m)에 아래를 보는 한 줄 `gpu_lidar`. `scripts/sim_ir_floor.py`가 장치와 같은 `ir_sensor/range`(`UInt16MultiArray` [left, mid, right])로 바꾼다: 바닥 ≤ 0.05 m → 2000, 없음 → 0. 반사율(테이프·카펫)은 모델링하지 않는다 | 같은 `sim_sensors:=true` | 기본 false |
+| IR 없음 | URDF IR 링크 셋(`ir_l/ir_mid/ir_r_link`, 바닥 위 0.013 m)에 아래를 보는 한 줄 `gpu_lidar`. `scripts/sim_ir_floor.py`가 장치와 같은 `ir_sensor/range`(`UInt16MultiArray` [left, mid, right])로 바꾼다: 바닥 ≤ 0.05 m → 2000, 없음 → 100(worker가 유효로 받는 0 < v < 4000 안이고 `cliff_raw_max` 800 아래), 세 채널이 모두 들어오기 전에는 내지 않는다. 반사율(테이프·카펫)은 모델링하지 않는다 | 같은 `sim_sensors:=true` | 기본 false |
 | Gazebo LiDAR 각도 | `[-π, π]` 양끝 포함 640 빔(증분 2π/639)이 D-468 `return_scan_view`의 한 바퀴 검사에 걸려 모든 스캔이 거부됐다. `max_angle = π − 2π/640` | 늘 (Gazebo 모델) | Gazebo 모델 파일만 바뀐다 |
-| 차로 투영 불확실도 | `containment_payload`가 늘 `uncertainty_m None`을 보내 D-468이 `projection_uncertainty_unknown`으로 첫 프레임부터 이탈을 열었다. `GAZEBO` 지면(`allow_simulation_ground`에서만 생김)은 카메라 기하가 정확하므로 검출기 2 px 측면 오차 `2 × max_range / fx`(0.6 m, 281.6 px → 4.3 mm)를 낸다 | GAZEBO 지면일 때만 | NOMINAL·CALIBRATED는 여전히 `None` |
+| 차로 투영 불확실도 | `containment_payload`가 늘 `uncertainty_m None`을 보내 D-468이 `projection_uncertainty_unknown`으로 첫 프레임부터 이탈을 열었다. `GAZEBO` 지면(`allow_simulation_ground`에서만 생김)은 카메라 기하가 정확하므로 검출기 측면 오차 `GAZEBO_DETECTOR_LATERAL_PX × max_range / fx`(2 px, 0.6 m, 281.6 px → 4.3 mm)를 낸다. 2 px는 측정값이 아닌 휴리스틱이다 | GAZEBO 지면일 때만 | NOMINAL·CALIBRATED는 여전히 `None` |
+
+`evidence/sim_wall_shims.py`, `evidence/d476_real.launch.py`(1차 벽시계 모드)와 `evidence/d476_probe.py`는 이 기록의
+고정 증거다. 실행 경로가 아니다. sim 센서는 `launch_sim.launch.xml sim_sensors:=true`(단일 로봇만, bridge 토픽에 namespace가
+없다)가 대신한다.
 
 sim overlay 조각은 `gz_sim config/sim_sensors_core.yaml`(enforce, `required [lidar, imu, ir]`,
 `simulation_sensors true`)이고 `run_sim.sh SIMSENS=1`이 overlay 끝에 붙인다. 장치 설정(`contracts/foundation/config`,
@@ -236,3 +240,7 @@ python3 evidence/d476_probe.py run --x -1.26955 --y 0.24255 --yaw -1.5708 --out 
 ```
 
 모델 PC의 sim 프로세스는 모두 멈췄고 임시 진단 패치는 되돌렸다. GPU 학습은 돌고 있지 않았다(사용률 0 %).
+
+> 리뷰 반영(2차 실행 뒤, 시뮬 재실행 없음): `CLIFF_RAW` 0 → 100(0은 worker에서 무효 IR이라 절벽 분기를 시험하지
+> 못했다), 세 채널이 모두 들어온 뒤에만 프레임 발행, 채널 순서를 장치(`ir_adc_node.py` [ch2, ch1, ch0] = 좌·중·우)에
+> 고정, `GAZEBO_DETECTOR_LATERAL_PX` 이름. 2.3의 run은 바닥 위에서만 돌아 IR 값이 늘 2000이었으므로 결과는 그대로다.

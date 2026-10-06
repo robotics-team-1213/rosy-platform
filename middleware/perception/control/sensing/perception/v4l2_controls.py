@@ -52,6 +52,12 @@ def freeze_v4l2_controls(capture, cv2_module):
     }
 
 
+def unfreeze_v4l2_controls(capture, cv2_module):
+    """Hand exposure and white balance back to the driver (V4L2 menu: 3 = auto)."""
+    capture.set(cv2_module.CAP_PROP_AUTO_EXPOSURE, 3.0)
+    capture.set(cv2_module.CAP_PROP_AUTO_WB, 1.0)
+
+
 def v4l2_lock_summary(controls) -> str:
     if not controls:
         return "auto"

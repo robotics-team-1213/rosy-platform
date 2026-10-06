@@ -271,3 +271,9 @@
 - 변경: `launch_sim.launch.xml sim_sensors:=true`(기본 false)가 둘째 bridge(`params/rosy_bridge_sim_sensors.yaml`: 모델 IMU `imu_raw`, IR 광선 셋)와 `scripts/sim_ir_floor.py`(장치 모양 `ir_sensor/range`, 바닥 2000 / 없음 0, 반사율 미모델)를 띄운다. `map_v2_fleet_real.launch.py`가 인자를 넘긴다. `config/sim_sensors_core.yaml`은 CORE overlay 조각(enforce, lidar/imu/ir, `simulation_sensors`)이다.
 - 증거: `test/test_sim_sensors.py` 6 PASS. 모델 PC D-476 2차 실행(`docs/validation/d476-gazebo-model-pc-2026-10-06/result.md` 2차 절)에서 `/ir_sim/mid` 0.0127 m, `ir_sensor/range` [2000, 2000, 2000], `imu_raw` 확인.
 - gate 변화: 없음. ROS-SIM 한 대 실행이며 장치·현장 수용이 아니다.
+
+## 2026-10-06 · uncommitted · fix(sim): sim IR 값을 worker 유효 범위에 맞춤 (리뷰)
+
+- 변경: `sim_ir_floor.py` 바닥 없음 값 0 → 100(`hazard.py on_ir`은 0 < v < 4000만 유효로 받아 0은 절벽이 아니라 무효 IR이었다). 세 채널이 모두 들어오기 전에는 프레임을 내지 않는다. 채널 순서를 장치 `ir_adc_node.py`([ch2, ch1, ch0] = 좌·중·우)에 시험으로 고정했다. `sim_sensors`는 단일 로봇 전용임을 launch 주석에 적었다.
+- 증거: `test/test_sim_sensors.py` 9 PASS.
+- gate 변화: 없음.

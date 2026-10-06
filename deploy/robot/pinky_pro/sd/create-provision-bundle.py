@@ -30,6 +30,9 @@ EXPECTED = {
 }
 # D-174 F3: per-card operator public keys; absent keeps the pre-F3 bundle shape.
 OPTIONAL = {"operator_ssh_keys", "ap_password"}
+# D-477: the one-time tailnet join key (a secret; read from private/ by the
+# operator, never echoed), with optional tags; absent keeps the robot LAN-only.
+OPTIONAL |= {"tailscale_auth_key", "tailscale_tags"}
 
 
 def _exclusive_json(path: Path, payload: dict, mode: int) -> None:
@@ -110,6 +113,8 @@ def main(argv: list[str] | None = None) -> int:
             factory_release=(
                 load_factory_release(args.release_root, args.public_key, request["release_id"])
                 if args.release_root is not None else None),
+            tailscale_auth_key=request.get("tailscale_auth_key"),
+            tailscale_tags=request.get("tailscale_tags"),
         )
         _exclusive_json(args.output, bundle, 0o600)
         _exclusive_json(args.receipt, create_provision_receipt(bundle), 0o600)

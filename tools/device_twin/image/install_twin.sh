@@ -41,7 +41,8 @@ for unit in rosy-release-recover.service rosy-sd-provision.service rosy-core.ser
             rosy-config.service rosy-network.service rosy-login-code.service rosy-hw-probe.service \
             rosy-hw-probe.path rosy-hw-test.service rosy-hw-test.path rosy-auto-update.service \
             rosy-auto-update.timer rosy-ssh-access.service rosy-ssh-access.path rosy-ssh-access-boot.service \
-            rosy-ssh-password-expire.service rosy-ssh-password-expire.timer; do
+            rosy-ssh-password-expire.service rosy-ssh-password-expire.timer \
+            rosy-tailscale-join.service; do
     install -m 0644 "$NATIVE/$unit" "/etc/systemd/system/$unit"
 done
 install -m 0644 "$CTX/twin/image/rosy-first-boot.service" /etc/systemd/system/rosy-first-boot.service

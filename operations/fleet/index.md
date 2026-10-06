@@ -85,8 +85,8 @@
 
 ## 최근 기록
 
+- 2026-10-07 · uncommitted · Cell 빈 미리보기 평면도 숨김
+- 2026-10-06 · uncommitted · feat(fleet): D-484 field_boundary sighting 수용
+- 2026-10-06 · uncommitted · D-473 관제 콘솔 개발 연결 모드
 - 2026-10-06 · uncommitted · LED 식별 요청과 실영상 현장지도
-- 2026-10-06 · uncommitted · feat(fleet): 내부망 카메라 미리보기
-- 2026-10-05 · uncommitted · fix(fleet): D-468 계약 문서 버전 검사 정렬
-- 2026-10-05 · uncommitted · fix(fleet): 기능 표시의 안전 경계 의존성 복구
-- 2026-10-05 · uncommitted · fix(fleet): 기능 표시 도우미를 기존 표시 모듈로 이동
+- 2026-10-06 · uncommitted · uiux(fleet): Cell 비활성 사유 공용 계약 복구
