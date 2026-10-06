@@ -1,6 +1,7 @@
 package io.github.livsbittt.rosy.cam.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -11,6 +12,7 @@ import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -76,6 +78,12 @@ object PairingText {
         is PairingState.Rejected -> if (state.reason == PairingClient.CONFIRM_UNANSWERED) state.credentialId.orEmpty() else state.reason
         is PairingState.Expired -> state.reason
         else -> ""
+    }
+
+    fun critical(state: PairingState): Boolean = when (state) {
+        is PairingState.Rejected -> state.credentialId != null || state.reason !in setOf("rejected", "busy", "unreachable")
+        is PairingState.Expired -> state.credentialId != null
+        else -> false
     }
 
     private val RESULT_REASONS = setOf(
@@ -167,7 +175,11 @@ fun PairingScreen(
                 }
                 is PairingState.Rejected, is PairingState.Expired -> {
                     val message = PairingText.failure(state) ?: R.string.pairing_failed_other
-                    CritMessage(stringResource(message, PairingText.failureArg(state)))
+                    val text = stringResource(message, PairingText.failureArg(state))
+                    if (PairingText.critical(state)) CritMessage(text)
+                    else Text(text, color = RosyColors.StatusWarn, style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.fillMaxWidth().border(1.dp, RosyColors.StatusWarn, RoundedCornerShape(6.dp))
+                            .padding(horizontal = 12.dp, vertical = 8.dp))
                     PairingText.unsettledCredential(state)?.let { id ->
                         Text(stringResource(R.string.pairing_credential, id), fontFamily = FontFamily.Monospace)
                     }

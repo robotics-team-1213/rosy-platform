@@ -163,6 +163,10 @@ def test_cell_saved_documents_explains_first_and_empty_states(browser_site, widt
 def test_cell_panels_and_compact_actions_use_uniform_width(browser_site, width, height):
     page, _, _ = browser_site
     page.set_viewport_size({"width": width, "height": height})
+    for kind in ("recipe", "cell"):
+        picker = page.locator(f"#{kind}-file").locator("..")
+        assert picker.locator(f"#{kind}-file-name").inner_text() == "선택한 파일 없음"
+        assert abs(picker.bounding_box()["width"] - page.locator(f"#{kind}-id").bounding_box()["width"]) <= 1
     assert page.locator("#layout-preview").count() == 1
     assert page.locator("#layout-preview").is_hidden()
     panels = [panel.bounding_box() for panel in page.locator(".documents > ui-section").all()]
@@ -444,6 +448,11 @@ def test_import_updates_existing_revision_and_guided_fields(browser_site):
     page.locator("#recipe-file").set_input_files({
         "name": "recipe.json", "mimeType": "application/json", "buffer": json.dumps(recipe).encode()})
     expect(page.locator("#notice")).to_contain_text("파일을 불러왔습니다")
+    expect(page.locator("#recipe-file-name")).to_have_text("recipe.json")
+    if output := os.environ.get("ROSY_SHOT_DIR"):
+        page.set_viewport_size({"width": 320, "height": 568})
+        page.locator("#recipe-file-name").scroll_into_view_if_needed()
+        page.screenshot(path=str(Path(output) / "fleet-cell-file-selected-320x568.png"))
     assert page.locator("#propose").get_attribute("disabled") is not None
     assert page.locator("#recipe-fields input").count() == 6
     assert page.locator("#cell-fields input").count() == 7

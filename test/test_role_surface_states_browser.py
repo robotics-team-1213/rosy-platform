@@ -151,12 +151,14 @@ def test_dashboard_api_preserves_structured_http_errors_and_network_failures():
           window.fetch = originalFetch;
         }""")
 
-        assert page.evaluate("window.__apiErrors") == [
-            {"status": 404, "code": "NOT_FOUND", "message": "map absent"},
-            {"status": 403, "code": "FORBIDDEN", "message": "role denied"},
-            {"status": None, "code": None, "message": "network disconnected"},
-            {"status": 404, "code": None, "message": "route absent"},
+        api_errors = page.evaluate("window.__apiErrors")
+        assert [(error["status"], error["code"]) for error in api_errors] == [
+            (404, "NOT_FOUND"), (403, "FORBIDDEN"), (None, None), (404, None),
         ]
+        assert "HTTP 404" in api_errors[0]["message"] and "map absent" not in api_errors[0]["message"]
+        assert "HTTP 403" in api_errors[1]["message"] and "role denied" not in api_errors[1]["message"]
+        assert api_errors[2]["message"] == "network disconnected"
+        assert "HTTP 404" in api_errors[3]["message"] and "route absent" not in api_errors[3]["message"]
         assert page.evaluate("window.__apiMaybe") is None
         assert errors == []
         browser.close()

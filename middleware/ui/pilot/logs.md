@@ -611,3 +611,9 @@
 - 증거: JVM 신규 badRequestWithoutRemainingAttemptsIsARefusalNotAWrongCode 포함 PeerClientTest 통과, assembleDebug 성공. 실기 태블릿 확인은 하지 않았다.
 - gate 변화: SOURCE/LOCAL만.
 - 결정: D-483
+
+## 2026-10-07 · uiux/pilot-empty-copy · Pilot 로봇 미발견 안내 줄바꿈
+
+- 변경: 연결 로비의 빈 목록 안내를 짧게 써 400dp·글자 130%에서 마지막 음절만 다음 줄로 밀리지 않게 했다. 발견·연결 로직은 그대로다.
+- 증거: 격리 Android 35 에뮬레이터 400/600/1000dp 캡처와 JVM 93 passed. 원본·해시는 `docs/validation/uiux-pilot-empty-copy-2026-10-07/result.md`에 있다.
+- gate 변화: LOCAL 빈 목록 G2 셀만 보강. 실물 태블릿 후보 설치·사용자 G3는 HOLD.

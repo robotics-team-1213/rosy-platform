@@ -146,7 +146,7 @@ def test_legacy_overlay_without_time_evidence_does_not_claim_fresh(width, height
     url = server.start()
     try:
         with sync_playwright() as playwright:
-            browser, page, errors = open_page(playwright, width, height)
+            browser, page, errors = open_page(playwright, width, height, url=url)
             page.route("**/overlay.json", lambda route: route.fulfill(json=legacy))
             page.goto(url, wait_until="domcontentloaded")
             page.wait_for_function("() => document.getElementById('connection')?.dataset.evidence === 'unavailable'")
@@ -177,7 +177,7 @@ def test_first_overlay_failure_has_no_last_match_claim():
     url = server.start()
     try:
         with sync_playwright() as playwright:
-            browser, page, errors = open_page(playwright, 1280, 800)
+            browser, page, errors = open_page(playwright, 1280, 800, url=url)
             page.route("**/overlay.json", lambda route: route.fulfill(status=503))
             page.goto(url, wait_until="domcontentloaded")
             page.wait_for_function("() => document.getElementById('connection')?.textContent.includes('연결 오류')")
@@ -223,9 +223,29 @@ def _lost_payload(reason="lost_ball") -> dict:
 
 
 def _launch_board_page(playwright, url):
-    browser, page, errors = open_page(playwright, 1280, 800)
+    browser, page, errors = open_page(playwright, 1280, 800, url=url)
     page.goto(url, wait_until="domcontentloaded")
     return browser, page, errors
+
+
+def test_chromium_opens_preview_on_a_normally_blocked_port():
+    pytest.importorskip("playwright.sync_api")
+    from playwright.sync_api import sync_playwright
+
+    try:
+        server = PreviewServer(PreviewBoard(), port=6000)
+    except OSError:
+        pytest.skip("port 6000 is occupied")
+    url = server.start()
+    try:
+        with sync_playwright() as playwright:
+            browser, page, errors = open_page(playwright, 390, 844, url=url)
+            page.goto(url, wait_until="domcontentloaded")
+            assert page.locator("#phase").is_visible()
+            assert not errors
+            browser.close()
+    finally:
+        server.close()
 
 
 @pytest.mark.parametrize("width,height", [(1280, 800), (390, 844), (320, 568)])
@@ -241,7 +261,7 @@ def test_match_board_shows_lost_hold_state(width, height, reason, label):
     url = server.start()
     try:
         with sync_playwright() as playwright:
-            browser, page, errors = open_page(playwright, width, height)
+            browser, page, errors = open_page(playwright, width, height, url=url)
             page.goto(url, wait_until="domcontentloaded")
             page.wait_for_function(
                 "() => document.getElementById('phase')?.dataset.phase === 'hold'"
@@ -284,7 +304,7 @@ def test_match_board_initial_state_before_any_publish(width, height):
     url = server.start()
     try:
         with sync_playwright() as playwright:
-            browser, page, errors = open_page(playwright, width, height)
+            browser, page, errors = open_page(playwright, width, height, url=url)
             page.goto(url, wait_until="domcontentloaded")
             page.wait_for_function(
                 "() => document.getElementById('phase')?.textContent === '대기'"
@@ -523,7 +543,7 @@ def test_stop_failure_is_visible_and_can_be_retried(width, height):
     url = server.start()
     try:
         with sync_playwright() as playwright:
-            browser, page, errors = open_page(playwright, width, height)
+            browser, page, errors = open_page(playwright, width, height, url=url)
             page.goto(url, wait_until="domcontentloaded")
             page.wait_for_function("() => document.getElementById('phase')?.dataset.phase === 'play'")
             calls = []
@@ -613,7 +633,7 @@ def test_compact_board_recovery_keeps_equal_panels_and_stop_visible(width, heigh
     url = server.start()
     try:
         with sync_playwright() as playwright:
-            browser, page, errors = open_page(playwright, width, height)
+            browser, page, errors = open_page(playwright, width, height, url=url)
             page.route("**/overlay.json", lambda route: route.fulfill(status=503))
             page.goto(url, wait_until="domcontentloaded")
             page.wait_for_function("() => document.querySelector('#connection')?.textContent.includes('연결 오류')")
@@ -686,7 +706,8 @@ def test_missing_overlay_after_play_marks_cached_score_as_last_received():
         server.close()
 
 
-def test_stalled_stop_request_recovers_for_retry():
+@pytest.mark.parametrize("width,height", [(1280, 800), (390, 844), (320, 568)])
+def test_stalled_stop_request_recovers_for_retry(width, height):
     pytest.importorskip("playwright.sync_api")
     from playwright.sync_api import sync_playwright
 
@@ -696,7 +717,8 @@ def test_stalled_stop_request_recovers_for_retry():
     url = server.start()
     try:
         with sync_playwright() as playwright:
-            browser, page, errors = _launch_board_page(playwright, url)
+            browser, page, errors = open_page(playwright, width, height, url=url)
+            page.goto(url, wait_until="domcontentloaded")
             page.wait_for_function("() => document.getElementById('phase')?.dataset.phase === 'play'")
             page.evaluate("""() => {
               const original = window.fetch;
@@ -706,10 +728,24 @@ def test_stalled_stop_request_recovers_for_retry():
                 : original(url, options);
             }""")
             page.locator("#halt").click()
-            page.wait_for_function(
-                "() => document.getElementById('halt-status')?.dataset.state === 'error'",
-                timeout=8_000,
-            )
+            page.locator('#halt-status[data-state="pending"]').wait_for()
+            assert page.locator("#halt").get_attribute("aria-disabled") == "true"
+            for state in ("pending", "timeout"):
+                if state == "timeout":
+                    page.locator('#halt-status[data-state="error"]').wait_for(timeout=8_000)
+                layout = page.evaluate("""() => ({
+                  overflow: document.documentElement.scrollWidth - innerWidth,
+                  stop: document.querySelector('#halt').getBoundingClientRect().toJSON(),
+                  status: document.querySelector('#halt-status').getBoundingClientRect().toJSON(),
+                  score: document.querySelector('.score').getBoundingClientRect().toJSON(),
+                })""")
+                assert layout["overflow"] <= 0, (state, layout)
+                assert layout["stop"]["right"] <= width and layout["stop"]["bottom"] <= height, (state, layout)
+                assert layout["status"]["right"] <= width and layout["status"]["bottom"] <= height, (state, layout)
+                if width <= 390:
+                    assert abs(layout["stop"]["x"] - layout["score"]["x"]) <= 1, (state, layout)
+                    assert abs(layout["stop"]["width"] - layout["score"]["width"]) <= 1, (state, layout)
+                save_temp_screenshot(page, f"games_board_stop_{state}_{width}x{height}.png")
             assert "시간 초과" in page.locator("#halt-status").inner_text()
             assert page.locator("#halt").get_attribute("aria-disabled") == "false"
             assert not errors, f"페이지 오류: {errors}"
@@ -733,7 +769,7 @@ def test_compact_board_keeps_header_budget_stop_and_chips_in_view(width, height)
     url = server.start()
     try:
         with sync_playwright() as playwright:
-            browser, page, errors = open_page(playwright, width, height)
+            browser, page, errors = open_page(playwright, width, height, url=url)
             page.add_init_script("""(() => {
               const arc = CanvasRenderingContext2D.prototype.arc;
               CanvasRenderingContext2D.prototype.arc = function(x, y, radius, ...rest) {
@@ -781,7 +817,7 @@ def test_visibility_observations_are_not_operational_approval():
     url = server.start()
     try:
         with sync_playwright() as playwright:
-            browser, page, errors = open_page(playwright, 390, 844)
+            browser, page, errors = open_page(playwright, 390, 844, url=url)
             page.goto(url)
             expect(page.locator('#phase')).to_have_text('경기 진행')
             expect(page.locator('#stair1')).to_have_text('마커·공 관측 정보 대기 · 운용 승인 아님')

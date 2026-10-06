@@ -20,7 +20,7 @@ export const TRIP_ERROR_LABEL = {
 export const SITE_MAP_ERROR_LABEL = {
   SITE_MAP_NOT_ACTIVE: '활성 지도가 없습니다',
   SITE_MAP_NO_DRAFT: '저장된 초안이 없습니다',
-  SITE_MAP_DRAFT_CHANGED: '다른 운영자가 초안을 바꿨습니다 · 다시 읽으세요',
+  SITE_MAP_DRAFT_CHANGED: '다른 운영자가 초안을 바꿨습니다. 현재 수정은 저장되지 않았습니다. 변경 내용을 기록한 뒤 다시 접속하세요.',
   SITE_MAP_ROUTE_ACTIVE: '차선 경로가 진행 중입니다 · 끝난 뒤 활성화하세요',
   SITE_MAP_UNPLANNABLE: '경로 계산에 쓸 수 없는 지도입니다',
   SITE_MAP_TOO_LARGE: '지도가 너무 큽니다',
@@ -28,6 +28,11 @@ export const SITE_MAP_ERROR_LABEL = {
 };
 
 export function siteMapErrorText(error) {
+  if (error.status === 401) return '관제 토큰을 확인하고 다시 접속하세요';
+  if (error.status === 403) return '운영자 권한이 필요합니다 · 계정을 확인하세요';
+  if (error.status >= 500) return '관제 서버 응답을 확인할 수 없습니다 · 잠시 뒤 다시 접속하세요';
+  if (!error.status && /Failed to fetch|NetworkError|ERR_/.test(error.message || ''))
+    return '관제 연결이 끊겼습니다 · 네트워크를 확인하고 다시 접속하세요';
   const base = SITE_MAP_ERROR_LABEL[error.code] || error.message || String(error);
   const fields = (error.detail?.errors || []).map(item => `${(item.loc || []).join('.')}: ${item.msg}`);
   return fields.length ? `${base} — ${fields.join(' · ')}` : base;

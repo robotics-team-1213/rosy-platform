@@ -265,3 +265,9 @@
 - 변경: 320px/글자 200%에서 4자리 지문 묶음이 중간에 갈라지지 않도록 묶음 사이에만 줄바꿈 기회를 넣었다. 접근성 읽기 값과 페어링 원본 지문은 그대로 둔다.
 - 증거: `:app:testDebugUnitTest` 366 passed, `:app:assembleDebug` 성공. 격리 Android 35 AVD에서 320×640/글자 200% 지문이 `ABCD-EF12-` / `3456-7890`으로 나뉘고 390×844/글자 130%에서는 한 줄임을 확인했다. X: `captures/cam-fingerprint-wrap/fingerprint-{320x640-font200-groups,390x844-font130-final}.png`.
 - gate 변화: Cam 인증서 확인 LOCAL G2 가독성 근거 추가. 실제 설치자의 콘솔 대조·실물 폰과 G3는 HOLD다.
+
+## 2026-10-07 · uncommitted · Cam 페어링 복구 오류와 신뢰 위험의 색 구분
+
+- 변경: 임시 연결 실패·요청 과다·일반 거절·자격 증명 없는 만료는 주의 글자·테두리로, 지문/인증서·형식 오류와 미정리 자격 증명은 기존 위험 채움으로 표시한다. Debug 전용 미리보기는 거절 사유를 받아 두 시각 범주를 재생한다.
+- 증거: 현재 debug APK JVM 367 passed, 빌드 성공; 320×640/글자 200%와 390×844/글자 130%의 첫 화면·합성 6상태 및 위험/주의 비교 원본은 `docs/validation/uiux-cam-pairing-severity-2026-10-07/result.md`에 기록했다.
+- gate 변화: LOCAL G2 부분 근거. 실제 폰·현장 수신기·설치자 G3는 HOLD.

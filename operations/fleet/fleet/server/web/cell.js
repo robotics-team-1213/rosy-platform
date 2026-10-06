@@ -254,6 +254,7 @@ for (const kind of ['recipe', 'cell']) {
   });
   $(kind + '-file').addEventListener('change', async () => {
     const file = $(kind + '-file').files[0];
+    $(kind + '-file-name').textContent = file?.name || '선택한 파일 없음';
     if (!file || busy) return;
     editEpoch++; invalidate(); const epoch = editEpoch;
     await action(async () => {

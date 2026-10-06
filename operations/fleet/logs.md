@@ -2115,6 +2115,13 @@
 - 변경: 1920×1080에서 관제 문서의 43px 세로 넘침을 확인하고 데스크톱 관제 칸 간격·안쪽 여백과 대형 readout의 기본 margin을 줄였다. D-415의 8줄 로그는 유지했다.
 - 증거: `X:\DevTemp\projects\rosy-platform\2026-10-07-fleet-d487\`의 `browser-fixed2.txt` **8 passed**, `connection.txt` **1 passed**, `contracts.txt` **60 passed**, `node-files.txt` **137 passed**, 각 Python 실행의 `known_failures.py` 0 NEW, `fleet_console_fit.png`에서 하단까지 표시.
 - gate 변화: LOCAL G2 부분 근거. 사이트 PC·카메라·로봇과 운영자 G3는 HOLD.
+
+## 2026-10-07 · uncommitted · Fleet D-153 27셀 재촬영과 예외 상태 데스크톱 맞춤
+
+- 변경: desktop 목록은 한 예외 카드 높이에서 내부 스크롤하고, 예외 큐가 뜰 때 지도와 큐를 뷰포트에 맞췄다. viewer의 중복 버튼 사유를 그룹 안내 한 줄로 정리하고 비상 정지 권한 이유가 보이게 했다.
+- 증거: X: `projects/rosy-platform/2026-10-07-fleet-g2/`의 9상태×3폭 `capture.json`·27장 PNG·`validate.txt` 27/27셀. 변경 전 delayed 154px, disconnected 105px, viewer 48px 데스크톱 넘침; 보정 제거 브라우저 3 failed/복원 4 passed, 권한 Node 변이 1 failed/전체 웹 모듈 137 passed, 전체 Fleet 브라우저 106 passed, G1 90 passed, 서버·팔레트 60 passed, Python `known_failures.py` 0 NEW.
+- gate 변화: 현재 후보 LOCAL G2 상태·폭 근거 추가. 사이트/장치 readback과 운영자 G3는 HOLD.
+
 ## 2026-10-07 · 463ae393a · D-488 M1 현장 지도·주소·경로 계획 (D-489/D-490)
 
 - 변경: `fleet/site_map.py`(`rosy.site_map/1` 장소·방향 있는 차로·선택 `turn_bans`, `lane_graph.yaml` 가져오기), `server/site_map_store.py`(초안 하나·불변 활성 버전·계획 기록, `--tasks-db` 또는 메모리), `site_map_routes.py`(`/api/fleet/site-map/{active,draft,activate}`, 활성화는 이름 있는 운영자·감사·`/route` 30 s 안 진행 시 409), `fleet/routing/`(차로 단위 상태 A*, 시간 비용·회전 분류·`fleet.routing` 설정, 표준 라이브러리만), `trip_routes.py`(`POST /trip` 계획만, `execute`·`/trips/{id}/start` 501). `meet/place.py` `default_graph()` 하드코딩을 없애고 `/route`와 만남 기하가 활성 지도를 읽는다. CLI `--site-map-import`·`--site-config`, 사이트 compose가 이미지의 `lane_graph.yaml`을 첫 지도로 가져온다. 콘솔 `/console/site-map`(지도 보기·초안 편집·활성화·주소/좌표 경로 미리보기). API Ref v1.109.
@@ -2133,3 +2140,20 @@
 - 증거: 전체 Fleet 시험·계약 문서 시험과 `known_failures.py`(X:/DevTemp/fleet-map-route/run.txt, run_docs.txt), 하네스 lint 0 errors.
 - gate 변화: 없음. SOURCE/LOCAL 근거만 보강했다.
 
+## 2026-10-07 · uncommitted · D-488 현장 지도 표시 이름·선언 폭 확인
+
+- 변경: 새 `/console/site-map`의 탭·머리·홈 접근성 이름을 D-487의 `Rosy Fleet`으로 맞췄다. 1440/390/320px에서 초안 편집과 경로 미리보기 칸의 같은 폭, 가로 넘침 없음, 비상 정지 위치를 확인한다.
+- 증거: `X:/DevTemp/projects/rosy-platform/2026-10-07-fleet-g2/site-map-green.txt` 4 passed, `known_failures.py` 0 NEW; 같은 폴더 `site-map-*.png` 9장. 이름 검사 수정 전 1 failed.
+- gate 변화: 합성 서버의 LOCAL G2 부분 근거만 추가. 작은 지도 글씨의 운영자 판독, 예외 상태, 사이트 설치·G3는 HOLD.
+
+## 2026-10-07 · uncommitted · D-488 site-map G2 empty and conflict states
+
+- Change: The first-use empty map, empty robot roster, and draft revision conflict now give the operator a concrete next step without implying that a map or trip is available.
+- Evidence: 9 LOCAL Chromium cells at 1440x1000, 390x844, and 320x568; 28 site-map browser tests passed with 0 NEW known failures. Source screenshots and logs: X:/DevTemp/projects/rosy-platform/2026-10-07--site-map-edge-states/.
+- Gate: LOCAL G2 partial evidence only; site/device readback and operator G3 remain HOLD.
+
+## 2026-10-07 · uncommitted · Cell 문서 파일 선택 어휘와 폭
+
+- 변경: 레시피·셀 JSON 파일 선택을 한국어 전폭 조작과 선택한 파일명으로 표시한다. 네이티브 파일 입력과 기존 JSON 검증·저장 흐름은 유지한다.
+- 증거: 1440/390/320px 브라우저 4 red→4 green, Cell 전체 33 passed, D-153 G1 90 passed, Fleet 웹 144 passed; `docs/validation/uiux-cell-file-picker-2026-10-07/result.md`에 원본·해시.
+- gate 변화: 파일 선택 상태의 LOCAL G2 부분 근거. 현장 설치·작업자 G3는 HOLD.

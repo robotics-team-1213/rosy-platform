@@ -4,6 +4,7 @@ main { display: grid; gap: var(--space-4); padding: var(--space-4); max-width: 9
 ui-section { display: grid; gap: var(--space-3); }
 .columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); align-items: start; }
 .form { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-3); }
+.form[hidden] { display: none; }
 label { display: grid; gap: var(--space-2); }
 label.inline { display: inline-flex; align-items: center; gap: var(--space-2); }
 input, select { box-sizing: border-box; width: 100%; background: var(--field-bg); color: var(--ink); border: 1px solid var(--field-line); border-radius: var(--radius-control); padding: var(--space-2); font: inherit; }
@@ -12,6 +13,10 @@ input:focus-visible, select:focus-visible, a:focus-visible { outline: var(--focu
 .actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); }
 a { color: var(--ink); }
 .console-return { box-sizing: border-box; min-height: var(--target-secondary); display: inline-flex; align-items: center; padding: var(--space-3); }
+.map-viewport { min-width: 0; max-width: 100%; }
+.map-viewport:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
+.map-scroll-hint { display: none; }
+.map-scroll-hint[hidden] { display: none; }
 #site-map-svg { width: 100%; height: 30rem; background: var(--surface-flat); border: 1px solid var(--line-14); border-radius: var(--radius-control); }
 #site-map-svg.picking { cursor: crosshair; }
 #site-map-svg .edge { fill: none; stroke: var(--ink-quiet); stroke-width: 3px; cursor: pointer; }
@@ -31,7 +36,9 @@ a { color: var(--ink); }
 #estop-feedback { margin: var(--space-2) var(--space-4) 0; padding: var(--space-2) var(--space-3); border: 1px solid var(--line-14); background: var(--surface-flat); }
 @media (width < 64rem) {
   .columns, .form { grid-template-columns: 1fr; }
-  #site-map-svg { height: 20rem; }
+  .map-viewport { overflow-x: auto; }
+  .map-scroll-hint { display: block; }
+  #site-map-svg { width: 50rem; height: 30rem; }
 }
 @media (width < 30rem) {
   .actions { display: grid; grid-template-columns: minmax(0, 1fr); }

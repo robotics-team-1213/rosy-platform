@@ -5,8 +5,10 @@ from pathlib import Path
 
 import cv2
 import numpy as np
+import yaml
 
 import build
+import class_sets
 
 
 def sha(data):
@@ -41,13 +43,33 @@ def classes(store):
     return json.loads(row[0]) if row else None
 
 
+def served_classes(store):
+    """The binding as screens see it: a default display filled in, stored binding untouched."""
+    binding = classes(store)
+    if binding:
+        for c in binding['classes']:
+            c.setdefault('display', class_sets.DEFAULT_DISPLAY.get(c['name'], c['name']))
+    return binding
+
+
+def signature(values):
+    """Class identity for approvals; display names are presentation only (D-485)."""
+    plain = [{k: v for k, v in c.items() if k != 'display'} for c in values]
+    return sha(json.dumps(plain, sort_keys=True).encode())
+
+
 def bind_classes(store, raw):
     values = build.load_classes(Path('classes.yaml'), source_bytes=raw)
+    for value, entry in zip(values, yaml.safe_load(raw)['classes']):
+        if 'display' in entry:
+            if not isinstance(entry['display'], str) or not entry['display']:
+                raise ValueError('pixel class display must be a non-empty string')
+            value['display'] = entry['display']
     indices = [c['index'] for c in values]
     if len(set(indices)) != len(indices) or any(not 0 <= index < 255 for index in indices):
         raise ValueError('unique pixel class indices in 0..254 required')
     binding = {'classes': values, 'sha256': sha(raw), 'ignore_index': 255,
-               'classes_signature': sha(json.dumps(values, sort_keys=True).encode())}
+               'classes_signature': signature(values)}
     folder = store.state / 'pixel'
     folder.mkdir(exist_ok=True)
     path = folder / (binding['sha256'] + '.yaml')
@@ -86,7 +108,7 @@ def get(store, index):
                   if row is None or value['sha256'] != row['sha256']]
     result = dict(row) if row else {'frame': index, 'version': 0, 'status': 'pending',
                                    'path': None, 'sha256': None, 'complete': 0, 'background': 0}
-    result.update(width=frame['source']['width'], height=frame['source']['height'], classes=classes(store))
+    result.update(width=frame['source']['width'], height=frame['source']['height'], classes=served_classes(store))
     result['approval'] = json.loads(result['approval']) if result.get('approval') else None
     result['draft_candidates'] = drafts
     return result
@@ -314,7 +336,7 @@ def update(store, index, body, conflict):
         if status == 'approved':
             approval = {'image_sha256': frame['source']['image_sha256'], 'mask_sha256': digest,
                         'mask_version': version, 'classes_sha256': binding['sha256'],
-                        'classes_signature': sha(json.dumps(binding['classes'], sort_keys=True).encode()),
+                        'classes_signature': signature(binding['classes']),
                         'ignore_index': binding['ignore_index'], 'width': review['width'],
                         'height': review['height'], 'complete_frame_review': True,
                         'background_reviewed': True}

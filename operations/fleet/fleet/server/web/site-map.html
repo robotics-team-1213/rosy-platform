@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Rosy Console · 현장 지도</title>
+  <title>Rosy Fleet · 현장 지도</title>
   <link rel="icon" type="image/svg+xml" href="/common/icons/console.svg">
   <link rel="stylesheet" href="/common/tokens.css">
   <script src="/common/theme.js"></script>
@@ -15,13 +15,13 @@
 <body>
 <ui-shell grammar="procedure">
   <ui-topbar>
-    <ui-brand href="/console" aria-label="Rosy Console 홈"><b>Rosy Console</b><small>현장 지도 · 주소와 길</small></ui-brand>
+    <ui-brand href="/console" aria-label="Rosy Fleet 홈"><b>Rosy Fleet</b><small>현장 지도 · 주소와 길</small></ui-brand>
     <span data-spacer></span>
     <ui-tag id="session">접속 전</ui-tag>
-    <ui-button kind="irreversible" id="estop" data-always-live class="estop" type="button" data-action-icon="estop"><span>비상 정지</span><small>래치 · 로봇별 관리자 해제</small></ui-button>
+    <ui-button kind="irreversible" id="estop" data-always-live class="estop" type="button" data-action-icon="estop" disabled reason="관제 접속이 필요합니다"><span>비상 정지</span><small>래치 · 로봇별 관리자 해제</small></ui-button>
   </ui-topbar>
   <div class="site-access">
-    <ui-field id="credential" type="password" placeholder="운영자 토큰" aria-label="관제 운영자 토큰"></ui-field>
+    <ui-field id="credential" type="password" placeholder="관제 토큰" aria-label="관제 토큰"></ui-field>
     <ui-button id="connect" kind="primary">접속</ui-button>
   </div>
   <ui-status id="estop-feedback" hidden></ui-status>
@@ -34,9 +34,12 @@
           <option value="active">활성 지도</option><option value="draft">초안</option>
         </select></label>
       </ui-head>
-      <ui-status id="map-status" state="empty">지도 없음</ui-status>
-      <svg id="site-map-svg" viewBox="0 0 800 480" role="img" aria-label="현장 지도 · 장소와 방향 있는 차로"></svg>
-      <ui-text>점은 주소, 선은 차로, 화살표는 통행 방향입니다. 실선은 차선 주행, 점선은 좌표 주행입니다. 지도 위 장소나 차로를 누르면 아래에서 고칩니다.</ui-text>
+      <ui-status id="map-status" state="empty">관제 접속 필요</ui-status>
+      <ui-text id="map-scroll-hint" class="map-scroll-hint" hidden>좁은 화면에서는 지도를 좌우로 밀어 확인하세요.</ui-text>
+      <div id="map-viewport" class="map-viewport" role="region" aria-label="현장 지도 가로 이동" tabindex="0" hidden>
+        <svg id="site-map-svg" viewBox="0 0 800 480" role="img" aria-label="현장 지도 · 장소와 방향 있는 차로"></svg>
+      </div>
+      <ui-text id="map-legend" hidden>점은 주소, 선은 차로, 화살표는 통행 방향입니다. 실선은 차선 주행, 점선은 좌표 주행입니다. 지도 위 장소나 차로를 누르면 아래에서 고칩니다.</ui-text>
     </ui-section>
     <div class="columns">
       <ui-section aria-labelledby="edit-heading">
@@ -58,7 +61,7 @@
           <ui-button id="save-draft" kind="primary" disabled>초안 저장</ui-button>
           <ui-button id="activate" kind="irreversible" disabled>초안 활성화</ui-button>
         </div>
-        <ui-status id="draft-status" state="empty">저장된 초안 없음</ui-status>
+        <ui-status id="draft-status" state="empty">관제 접속 필요</ui-status>
       </ui-section>
       <ui-section aria-labelledby="trip-heading">
         <ui-head><ui-text id="trip-heading" scale="label">경로 미리보기</ui-text></ui-head>

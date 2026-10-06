@@ -56,6 +56,9 @@ test('actions read the address names and stale plans are refused', async () => {
   assert.equal(planIsCurrent(plan, {version: 2}), true);
   assert.equal(planIsCurrent(plan, {version: 3}), false);
   assert.match(siteMapErrorText({code: 'SITE_MAP_ROUTE_ACTIVE'}), /진행 중/);
+  assert.match(siteMapErrorText({status: 401}), /토큰을 확인하고 다시 접속/);
+  assert.match(siteMapErrorText({status: 503, code: 'SITE_MAP_UNAVAILABLE'}), /잠시 뒤 다시 접속/);
+  assert.match(siteMapErrorText(new TypeError('Failed to fetch')), /연결이 끊겼습니다/);
 });
 
 test('invalid draft errors list the fields', async () => {

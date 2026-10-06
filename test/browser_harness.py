@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from urllib.parse import urlsplit
 
 
 def launch_options() -> dict:
@@ -18,9 +19,12 @@ def launch_options() -> dict:
     return options
 
 
-def open_page(playwright, width: int, height: int):
+def open_page(playwright, width: int, height: int, *, url: str | None = None):
     """Chromium 실행 + 페이지 오류 수집. 호출자이 browser.close() 한다."""
-    browser = playwright.chromium.launch(**launch_options())
+    options = launch_options()
+    if url and (port := urlsplit(url).port):
+        options["args"] = [f"--explicitly-allowed-ports={port}"]
+    browser = playwright.chromium.launch(**options)
     page = browser.new_page(viewport={"width": width, "height": height})
     errors: list[str] = []
     page.on("pageerror", lambda exc: errors.append(str(exc)))

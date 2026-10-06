@@ -37,8 +37,9 @@ def _jsonl(rows):
     return ''.join(json.dumps(row, ensure_ascii=False, allow_nan=False) + '\n' for row in rows).encode('utf-8')
 
 
-def receive_review(source_path, human_path, image_root, out):
+def receive_review(source_path, human_path, image_root, out, *, classes=exporter.OBJECT_CLASSES):
     """Freeze inputs, validate every reference, export size groups, then issue a receipt."""
+    classes = tuple(classes)
     source_bytes, human_bytes = Path(source_path).read_bytes(), Path(human_path).read_bytes()
     source, human = _parse(source_bytes), _parse(human_bytes)
     root, out = Path(image_root).resolve(), Path(out)
@@ -75,7 +76,7 @@ def receive_review(source_path, human_path, image_root, out):
             raise ValueError('source objects must be an explicit list')
         for box in candidates:
             exporter._check_human_box(box)
-            if box.get('label') not in exporter.OBJECT_CLASSES + (None,):
+            if box.get('label') not in classes + (None,):
                 raise ValueError('unknown source object class')
             a = box['bbox_xyxy']
             if not (0 <= a[0] < a[2] <= size[0] and 0 <= a[1] < a[3] <= size[1]):
@@ -90,7 +91,7 @@ def receive_review(source_path, human_path, image_root, out):
                 raise ValueError('explicit review status, completion boolean and boxes required')
             for box in review['boxes']:
                 exporter._check_human_box(box)
-                if box.get('label') not in exporter.OBJECT_CLASSES + (exporter.REJECT,):
+                if box.get('label') not in classes + (exporter.REJECT,):
                     raise ValueError('unknown object class')
                 a = box['bbox_xyxy']
                 if not (0 <= a[0] < a[2] <= size[0] and 0 <= a[1] < a[3] <= size[1]):
@@ -122,13 +123,13 @@ def receive_review(source_path, human_path, image_root, out):
         human_file.write_bytes(_jsonl(human[i] for i in indices if i in human))
         destination = out / 'groups' / group_id
         exporter.main([str(source_file), '--human', str(human_file), '--images', str(snapshots),
-                       '--out', str(destination), '--size', str(size[0]), str(size[1])])
+                       '--out', str(destination), '--size', str(size[0]), str(size[1])], classes=classes)
         manifest = json.loads((destination / 'manifest.json').read_text(encoding='utf-8'))
         records.append({'path': f'groups/{group_id}', 'size_wh': list(size), 'source_indices': indices,
                         'exported_indices': manifest['exported_indices'], 'queued_indices': manifest['queued_indices']})
     files = [{'path': p.relative_to(out).as_posix(), 'sha256': _sha(p.read_bytes()),
               'bytes': p.stat().st_size} for p in sorted(out.rglob('*')) if p.is_file()]
-    result = {'schema': 'rosy.object-review-return/1', 'classes': list(exporter.OBJECT_CLASSES),
+    result = {'schema': 'rosy.object-review-return/1', 'classes': list(classes),
               'source_sha256': _sha(source_bytes), 'human_sha256': _sha(human_bytes), 'groups': records,
               'exported_frames': sum(len(g['exported_indices']) for g in records),
               'queued_frames': sum(len(g['queued_indices']) for g in records),
