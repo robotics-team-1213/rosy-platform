@@ -145,10 +145,12 @@ def test_viewer_cannot_be_offered_operator_actions(page_site, width, height):
     assert page.evaluate("document.documentElement.scrollWidth <= innerWidth && document.querySelector('#estop').getBoundingClientRect().right <= innerWidth")
 
 
-def test_failed_reconnect_clears_old_map_and_actions(page_site):
+@pytest.mark.parametrize("width,height", [(1440, 1000), (390, 844), (320, 568)])
+def test_failed_reconnect_clears_old_map_and_actions(page_site, width, height):
     from playwright.sync_api import expect
 
     page, _, _ = page_site
+    page.set_viewport_size({"width": width, "height": height})
     page.locator("#credential input").fill("operator-token")
     page.locator("#connect").click()
     expect(page.locator("#map-status")).to_contain_text("활성 지도 v1")
@@ -161,6 +163,15 @@ def test_failed_reconnect_clears_old_map_and_actions(page_site):
     expect(page.locator("#draft-status")).to_contain_text("관제 접속 필요")
     expect(page.locator("#site-map-svg [data-place]")).to_have_count(0)
     expect(page.locator("#estop")).to_be_disabled()
+    layout = page.evaluate("""() => ({
+      overflow: document.documentElement.scrollWidth - innerWidth,
+      stop: document.querySelector('#estop').getBoundingClientRect().right,
+      actions: ['apply-edit', 'save-draft', 'activate'].map(id => document.getElementById(id).getBoundingClientRect().width)
+    })""")
+    assert layout["overflow"] <= 0 and layout["stop"] <= width, layout
+    assert max(layout["actions"]) - min(layout["actions"]) <= 1, layout
+    if output := os.environ.get("ROSY_SHOT_DIR"):
+        page.screenshot(path=str(Path(output) / f"site-map-auth-rejected-{width}x{height}.png"), full_page=True)
 
 
 @pytest.mark.parametrize("width,height", [(1440, 1000), (390, 844), (320, 568)])
@@ -189,17 +200,16 @@ def test_slow_site_map_load_shows_elapsed_wait(page_site, width, height):
     page, _, _ = page_site
     page.set_viewport_size({"width": width, "height": height})
 
-    def delay_active(route):
-        time.sleep(2.2)
-        route.continue_()
-
-    page.route("**/api/fleet/site-map/active", delay_active)
+    pending = []
+    page.route("**/api/fleet/site-map/active", lambda route: pending.append(route))
     page.locator("#credential input").fill("operator-token")
     page.locator("#connect").click()
     expect(page.locator("#notice")).to_contain_text("접속 중")
     expect(page.locator("#notice")).to_contain_text(re.compile(r"[1-9]초 경과"), timeout=4000)
     expect(page.locator("#connect")).to_be_disabled()
     expect(page.locator("#estop")).to_be_enabled()
+    assert pending
+    pending[0].continue_()
     expect(page.locator("#map-status")).to_contain_text("활성 지도 v1", timeout=8000)
     expect(page.locator("#connect")).to_be_enabled()
 
