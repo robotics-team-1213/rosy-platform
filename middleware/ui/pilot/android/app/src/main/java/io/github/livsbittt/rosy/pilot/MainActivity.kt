@@ -71,7 +71,7 @@ class MainActivity : Activity() {
         setContentView(root)
         shownCandidates = null
         window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
-        val compact = resources.configuration.screenWidthDp < 600
+        val compact = resources.configuration.screenWidthDp < 720
         val columns = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         root.addView(columns, LinearLayout.LayoutParams(-1, -1))
         healthText = views.label("태블릿 상태 확인 중", 14f, true)

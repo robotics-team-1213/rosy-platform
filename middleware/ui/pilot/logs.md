@@ -566,3 +566,9 @@
 - 변경: 영상이 있는 팔 화면의 작업 공간과 조작 칸을 1:1로 맞추고 넓은 화면에서 조작 카드가 나란히 설 공간을 확보했다.
 - 증거: [UI/UX 점검](../../../docs/validation/uiux-surfaces-2026-10-06/README.md)의 2000×1200 영상 fixture 두 칸 너비 차이 ≤1px, 2000×1200·1200×2000·390×844 집중 브라우저 4 passed, `known_failures.py` 0 NEW. 캡처는 X: `captures/pilot-arm-equal/`.
 - gate 변화: Pilot LOCAL G2 폭 근거 추가. 실제 영상·태블릿 조작과 G3 및 제품 전체는 HOLD.
+
+## 2026-10-06 · uncommitted · uiux(pilot-shell): 후보 행과 600dp 목록 폭
+
+- 변경: debug 전용 합성 후보·보류 행으로 기존 `PilotViews.robot`을 표시했다. 실제 로비의 한 열 경계를 600dp에서 720dp로 올리고 후보 이름에 Android 균형 줄바꿈을 적용했다.
+- 증거: 격리 Android 35 AVD 1000/600/400dp 후보 화면과 600dp 실제 빈 로비, 400dp 보류 행 스크롤 캡처를 X: `captures/pilot-candidate-preview/`에 보존했다. 600dp 두 후보 행은 같은 1136px 폭, 400dp 두 행은 같은 736px 폭이다. 현재 debug APK 빌드 성공; preview Activity는 release manifest에 없다.
+- gate 변화: Pilot Shell LOCAL G2의 합성 후보·폭 부분 근거. 실제 로봇 발견·승인/거부·재접속, Lenovo 태블릿과 사용자 G3는 HOLD다.
