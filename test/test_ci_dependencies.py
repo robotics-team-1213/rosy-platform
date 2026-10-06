@@ -148,5 +148,5 @@ def test_ci_loads_hashlocked_receiver_crypto_before_tls_contracts():
     assert "--target /tmp/rosy-receiver-crypto" in script
     assert 'echo "PYTHONPATH=/tmp/rosy-receiver-crypto${PYTHONPATH:+:$PYTHONPATH}"' in script
     assert "from cryptography.x509.verification import PolicyBuilder, Store" in script
-    assert 'cryptography.__version__ == "49.0.0"' in script
+    assert 'cryptography.__version__ == "50.0.0"' in script
     assert steps.index(step) < next(i for i, s in enumerate(steps) if s["name"] == "Test (matrix suite, D-436)")

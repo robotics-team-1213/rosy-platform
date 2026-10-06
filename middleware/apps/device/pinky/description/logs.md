@@ -70,3 +70,9 @@
 - 증거: `test_urdf_nominal.py`(재생성 비교·드리프트).
 - gate 변화: ROS-SIM HOLD(랩 재실행).
 - 결정: D-397 Proposed.
+
+## 2026-10-06 · uncommitted · feat(sim): Gazebo IR 바닥 광선, LiDAR 한 바퀴 각도
+
+- 변경: `rosy_gz.urdf.xacro`에 URDF IR 링크 셋의 아래 방향 한 줄 `gpu_lidar`(`ir/left|mid|right`)를 더했다. Gazebo LiDAR `max_angle`을 `π − 2π/640`으로 바꿔 시작 빔이 겹치지 않게 했다(D-468 `return_scan_view`가 겹친 스캔을 거부했다). 장치 URDF는 그대로다.
+- 증거: `gz_sim test/test_sim_sensors.py`, 모델 PC xacro 전개와 스캔 증분 0.0098175 확인.
+- gate 변화: 없음.

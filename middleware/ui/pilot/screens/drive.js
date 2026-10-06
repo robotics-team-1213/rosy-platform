@@ -162,7 +162,7 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
   root.querySelector("[data-drive-facts]")?.append(videoFact);
   let streamAlive = true;
   let streaming = false;
-  let retryCancel = null;
+  let retryTimer = null;
   function tryStream() {
     if (!streamAlive || streaming) return;
     if (capture.state().previewMode !== "raw") return;
@@ -170,8 +170,8 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
   }
   function scheduleStreamRetry(ms = 3000) {
     if (!streamAlive) return;
-    clearTimeout(retryCancel);
-    retryCancel = setTimeout(tryStream, ms);
+    clearTimeout(retryTimer);
+    retryTimer = setTimeout(tryStream, ms);
   }
   const stream = createDriverStream({
     headers: () => authHeaders(),
@@ -600,6 +600,24 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
   actionIcon(exit, "back");
   actions.append(fitButton, fillButton, toolsButton, exit);
   element.hud.append(recordingFact, actions);
+  const compactHud = window.matchMedia("(width < 22rem) and (height < 40rem)");
+  const lanePanel = element.hud.querySelectorAll("details.pilot-models")[1];
+  function placeCompactTools() {
+    hideTools();
+    modelPanel.open = false;
+    lanePanel.open = false;
+    if (compactHud.matches) {
+      tools.insertBefore(modelPanel, toolsActions);
+      tools.insertBefore(lanePanel, toolsActions);
+      toolsActions.prepend(fitButton, fillButton);
+    } else {
+      element.hud.insertBefore(modelPanel, idleButton);
+      element.hud.insertBefore(lanePanel, idleButton);
+      actions.prepend(fitButton, fillButton);
+    }
+  }
+  compactHud.addEventListener("change", placeCompactTools);
+  placeCompactTools();
   const robotRecording = mountRobotRecording({
     toggle: robotRecordButton, detail: recordingFact, openButton: recordingsButton,
     sheetHost: root.querySelector("[data-drive-stage]"), anchor: element.hud, save: saveCameraFile,
@@ -675,11 +693,12 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
     modeHeld = false;
     clearTimeout(whoamiTimer);
     streamAlive = false;
-    clearTimeout(retryCancel);
+    clearTimeout(retryTimer);
     stream.stop();
     vision.stop();
     models.stop();
     perception.dispose();
+    compactHud.removeEventListener("change", placeCompactTools);
     window.removeEventListener("keydown", onKey);
     window.removeEventListener("keyup", onKey);
     window.removeEventListener("blur", onBlur);

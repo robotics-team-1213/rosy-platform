@@ -211,3 +211,57 @@
 - 변경: LAN 목록 선택을 앱의 정상 연결 시작으로 두고 camera-peer 프로파일의 Keystore 신원·암호화 관계 기록·same-origin TLS·fresh proof 갱신을 기존 OverheadLink에 연결한다. legacy rollback과 같은 값 재선택을 보존하고 marker 누락 자격은 fail closed한다. Bluetooth·IP 입력·자동 촬영은 추가하지 않는다.
 - 증거: 독립 최종 22 경로 SOURCE PASS; JVM 366 PASS, 최종 marked guard RED/복원 12 PASS. 부모 정규화 소스 일치와 server/native golden 바이트 일치 확인. 실제 widget·Keystore·LAN·APK 업데이트는 별도 검증한다.
 - gate 변화: SOURCE/LOCAL. 기존 capture·Stop·thermal·screen sleep 소유자는 유지한다. 실제 signed 배포와 receiver 두 화면 승인은 완료로 표시하지 않는다.
+
+## 2026-10-06 · uncommitted · uiux(cam): 페어링 선택 너비 통일
+
+- 변경: 페어링 절차를 최대 560dp의 가운데 본문에 배치하고, 지문 확인·거부 후 선택 버튼은 각각 같은 너비로, 단독 버튼은 본문 너비로 맞췄다.
+- 증거: `:app:compileDebugKotlin` 성공. ADB 장치가 없어 네이티브 렌더링·터치 확인은 미실행이다.
+- gate 변화: Cam SOURCE/LOCAL 부분 근거. 네이티브 G2/G3와 제품 전체 UI/UX는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(cam): 송출 화면 동등한 조작 너비
+
+- 변경: 조명·사진과 설정·시작/정지의 나란한 버튼에 동등한 너비를 주고, 사진 공유·화면 끄기 단독 버튼은 본문 너비를 채운다.
+- 증거: `:app:compileDebugKotlin` 성공. ADB 장치가 없어 네이티브 배치·터치 확인은 미실행이다.
+- gate 변화: Cam SOURCE/LOCAL 부분 근거. 네이티브 G2/G3와 제품 전체 UI/UX는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(cam): LAN 연결·설정 조작 너비
+
+- 변경: LAN 기기 선택과 연결 승인·재시도·탐색/이동 단독 조작을 본문 너비로 맞추고, 설정 화면의 뒤로·저장은 같은 너비로 배치했다. 시스템 확인 대화상자의 기본 버튼 배치는 유지한다.
+- 증거: `:app:compileDebugKotlin` 성공. ADB 장치가 없어 네이티브 텍스트 줄바꿈·터치와 연결 작업 독회는 미실행이다.
+- gate 변화: Cam SOURCE/LOCAL 부분 근거. 네이티브 G2/G3와 제품 전체 UI/UX는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(cam): 에뮬레이터 LAN·설정 화면 독회
+
+- 변경: Cam LAN·설정 화면의 네이티브 캡처와 너비 판정을 UI/UX 회차에 추가했다.
+- 증거: Windows 예약 포트 범위를 피해 Android 35 격리 AVD를 `5662,5663`에 부팅, ADB device 확인, 현재 브랜치 debug APK 빌드·설치·실행. 320×640과 390×844(글자 130%) LAN·설정 화면 캡처는 X: 작업 캡처 폴더에 둔다. 설정 하단 뒤로·저장 UI bounds는 각각 173px이다.
+- gate 변화: Cam 네이티브 에뮬레이터 G2 부분 근거. 실제 수신 기기가 없어 Pairing·Peer·송출 상태, 설치자 G3와 실물 폰 수용은 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(cam): 확대 글자 설정 하단 조작
+
+- 변경: 설정 하단의 뒤로·저장을 전폭으로 쌓아 320px/글자 200%에서 「돌아가기」가 한 줄로 읽히게 했다.
+- 증거: Android 35 AVD 320×640/글자 200%와 390×844/글자 130% 네이티브 캡처·UI bounds, Gradle JVM 366 passed, debug APK 빌드 성공. 원본은 X: `captures/`에 둔다.
+- gate 변화: Cam LOCAL 네이티브 G2 부분 근거 추가. 실제 수신기·폰·설치자 G3와 제품 전체 UI/UX는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(cam): 송출 대기 화면 버튼 너비
+
+- 변경: 송출 대기 화면의 연결 설정·카메라 켜기와 실행 중 조명·사진 버튼을 전폭으로 쌓고, 좁은 화면에서 연결 정보가 보이도록 미리보기 높이를 조정했다.
+- 증거: 격리 Android 35 AVD에서 문서용 IP와 가짜 토큰으로 대기 화면을 표시했다. 320×640/글자 200%, 390×844/글자 130% 캡처·UI bounds를 X:에 보존했다. Gradle JVM 366 passed, debug APK 빌드 성공. 실제 송출은 시작하지 않았다.
+- gate 변화: Cam LOCAL 네이티브 G2의 송출 대기 상태 일부 추가. 실제 수신기·폰·설치자 G3와 제품 전체 UI/UX는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(cam): Pairing 결정 조작 너비
+
+- 변경: 인증서 값 확인과 실패 복구의 나란한 반폭 버튼을 같은 본문 전폭으로 쌓았다. 좁은 화면의 큰 글자에서도 결정 문구가 읽히도록 하는 소스 보정이다.
+- 증거: `:app:compileDebugKotlin` 성공. Pairing 화면에 들어갈 수 있는 수신기·ADB 장치가 없어 네이티브 렌더링과 설치자 터치는 미검증이다.
+- gate 변화: Cam SOURCE 부분 근거만 추가. Pairing/Peer G2·G3와 실물 폰 수용은 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(cam): Pairing/Peer 합성 화면과 안전 영역
+
+- 변경: debug 전용 합성 상태 Activity로 Pairing 요청·인증서 확인·거부와 Peer 대기·인증서 확인·실패를 표시한다. LAN·Peer 스크롤의 상태 표시줄 침범을 `safeDrawingPadding`으로 고쳤다.
+- 증거: 격리 Android 35 AVD 320×640/글자 200%와 390×844/글자 130%의 여섯 상태별 캡처를 X: `captures/cam-pairing-preview/`에 보존했다. 320px 인증서 화면은 끝까지 스크롤해 같은 폭의 두 결정을 확인했다. `:app:assembleDebug`와 `:app:processReleaseMainManifest` 성공; preview Activity는 release manifest에 없다.
+- gate 변화: 합성 상태의 LOCAL G2 부분 근거. 실제 수신기 연결·승인/거부·송출, 실물 폰과 설치자 G3는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(cam): 좁은 폰의 인증서 지문 묶음
+
+- 변경: 320px/글자 200%에서 4자리 지문 묶음이 중간에 갈라지지 않도록 묶음 사이에만 줄바꿈 기회를 넣었다. 접근성 읽기 값과 페어링 원본 지문은 그대로 둔다.
+- 증거: `:app:testDebugUnitTest` 366 passed, `:app:assembleDebug` 성공. 격리 Android 35 AVD에서 320×640/글자 200% 지문이 `ABCD-EF12-` / `3456-7890`으로 나뉘고 390×844/글자 130%에서는 한 줄임을 확인했다. X: `captures/cam-fingerprint-wrap/fingerprint-{320x640-font200-groups,390x844-font130-final}.png`.
+- gate 변화: Cam 인증서 확인 LOCAL G2 가독성 근거 추가. 실제 설치자의 콘솔 대조·실물 폰과 G3는 HOLD다.

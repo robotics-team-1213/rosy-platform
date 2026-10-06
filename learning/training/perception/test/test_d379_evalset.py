@@ -77,6 +77,44 @@ def test_training_build_refuses_an_eval_session_and_records_disjointness(tmp_pat
     assert "disjoint_from" not in plain
 
 
+def test_reserved_eval_source_blocks_training_before_eval_version_exists(tmp_path):
+    st = store.Store(tmp_path / "store")
+    st.reserve_eval_source("heldout", "shared-group")
+    assert st.evalsets() == {}
+    a = _labels_dir(tmp_path, "heldout", [(L.FLOOR, False)])
+    with pytest.raises(build.BuildError, match="reserved eval"):
+        build.build_auto_dataset([a], st.root, "lanes")
+    with pytest.raises(store.StoreError, match="already reserved"):
+        st.reserve_eval_source("heldout", "different-group")
+    reservation = next(next((st.root / "eval-reservations").iterdir()).iterdir())
+    reservation.write_text("{}")
+    with pytest.raises(store.StoreError, match="reservation"):
+        st.eval_reservations()
+
+
+def test_reserved_group_blocks_other_session_and_unknown_group(tmp_path):
+    st = store.Store(tmp_path / "store")
+    st.reserve_eval_source("heldout", "shared-group")
+    a = _labels_dir(tmp_path, "other", [(L.FLOOR, False)])
+    with pytest.raises(build.BuildError, match="group unknown"):
+        build.build_auto_dataset([a], st.root, "lanes")
+    meta_path = a / "meta.json"
+    meta = json.loads(meta_path.read_text())
+    meta["capture_group"] = "shared-group"
+    meta_path.write_text(json.dumps(meta))
+    with pytest.raises(build.BuildError, match="reserved eval"):
+        build.build_auto_dataset([a], st.root, "lanes")
+    meta["capture_group"] = "separate-group"
+    meta_path.write_text(json.dumps(meta))
+    b = _labels_dir(tmp_path, "another", [(L.FLOOR, False)])
+    second = b / "meta.json"
+    second_meta = json.loads(second.read_text())
+    second_meta["capture_group"] = "another-group"
+    second.write_text(json.dumps(second_meta))
+    manifest, _ = build.build_auto_dataset([a, b], st.root, "lanes")
+    assert {row["capture_group"] for row in manifest["frames"]} == {"separate-group", "another-group"}
+
+
 def test_exclude_eval_needs_an_eval_manifest(tmp_path):
     a = _labels_dir(tmp_path, "s1", [(L.FLOOR, False)])
     b = _labels_dir(tmp_path, "s2", [(L.FLOOR, False)])

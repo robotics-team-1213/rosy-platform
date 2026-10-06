@@ -691,8 +691,11 @@ SIZE_VERDICTS = {
         "learning/training/perception/test/test_rosy_ml.py (X5, D-411 fetch --http)",
     ),
     "deploy/robot/pinky_pro/native/rosy-face.py": (
-        1119,
-        "accept: re-judged at 1119 on 2026-10-06: bounded LED identity pulse joins the "
+        1133,
+        "accept: re-judged at 1133 on 2026-10-06 for D-483: the pair-request approval-code card "
+        "is one more status row of the same LCD owner; its strict reader and priority live in "
+        "core_common.face_screen, rosy-face only passes the file and draws the notice. "
+        "Re-judged at 1119 on 2026-10-06: bounded LED identity pulse joins the "
         "existing face lamp owner, gated by live IDLE and alarm state; the zero-growth "
         "allowance remains. The one owner of LCD, buzzer and lamp (D-433, was rosy-boot-display.py) — one poll "
         "and one frame tick; the situation table lives in core_common.face_screen; covered by "

@@ -48,7 +48,7 @@ export function mount(root, ctx) {
   saveVideo.type = "button"; saveVideo.setAttribute("kind", "quiet"); actions.append(saveVideo);
   const saveLog = el("ui-button", "", "조작 기록 저장"); saveLog.id = "vision-operations-save";
   saveLog.type = "button"; saveLog.setAttribute("kind", "quiet"); actions.append(saveLog);
-  const primaryActions = el("ui-actions", "surface-actions"); primaryActions.append(expand, stop);
+  const primaryActions = el("ui-actions", "surface-actions surface-camera-primary-actions"); primaryActions.append(expand, stop);
   actions.prepend(storageLabel, browserLabel);
   const tools = el("details", "surface-camera-tools");
   tools.append(el("summary", "", "사진·녹화 저장 도구"), actions);

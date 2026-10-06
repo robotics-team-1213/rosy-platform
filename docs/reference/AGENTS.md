@@ -17,6 +17,7 @@ Shared contracts: REST/WS/protocol, architecture decisions, and the Host Agent u
 | `team-guide.md` | 새 팀원 안내: 첫날 설정(클론·작성자·venv·훅), 공유 범위, 이슈에서 머지까지의 명령, 작업 영역, 막혔을 때. 규칙 원본은 README·AGENTS·ADR |
 | `shared-checkout.md` | 「같이 하는 깃」: 실험실 PC 공유 체크아웃의 착수 순서(README에서 옮김, `test/test_readme_agent_start.py`가 고정). 명령 전문은 루트 `AGENTS.md`
 | `developer-guide.md` | 구조, 빌드·시뮬, 테스트 단계(affected/quick/full), 관제 배치, Pi 5 런타임, 로드맵 — README에서 옮김 |
+| `sim2real-gaps.md` | GENERATED from `tools/harness/sim2real_gaps.yaml` by `rosy_harness.py generate`; edit the YAML, not this table |
 | `ROSY Module Operational Acceptance Criteria.md` | ROSY-MODULE-ACCEPTANCE-001 — per-package operational GO criteria, evidence gates, and M01–M14 traceability |
 
 ## Subdirectories

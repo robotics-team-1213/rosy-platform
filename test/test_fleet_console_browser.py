@@ -368,7 +368,33 @@ def test_gather_failure_names_itself_on_the_pill(console_url):
         browser.close()
 
 
-def test_slow_initial_gather_does_not_spawn_overlapping_polls(console_url):
+@pytest.mark.parametrize("width", [320, 390])
+@pytest.mark.parametrize("scenario", ["empty", "gather-error"])
+def test_mobile_fleet_empty_and_failure_keep_next_step_visible(console_url, width, scenario):
+    from playwright.sync_api import sync_playwright
+
+    api = {
+        "/api/fleet/state": EMPTY_SNAPSHOT if scenario == "empty" else (500, {"detail": "gather failed"}),
+        "/api/fleet/map": MAP_GRID,
+        "/api/fleet/formation": {"active": False, "state": "IDLE"},
+    }
+    expected = "등록된 로봇이 없습니다" if scenario == "empty" else "Fleet 상태를 확인할 수 없습니다"
+    with sync_playwright() as playwright:
+        browser, page, errors = _open_console(playwright, api)
+        page.set_viewport_size({"width": width, "height": 844})
+        page.goto(console_url, wait_until="networkidle")
+        page.get_by_text(expected).first.wait_for()
+        stop = page.locator("#estop").bounding_box()
+        assert stop and stop["width"] > 0 and stop["x"] + stop["width"] <= width
+        assert stop["y"] + stop["height"] <= 844
+        assert page.evaluate("document.documentElement.scrollWidth - innerWidth") == 0
+        assert errors == []
+        save_temp_screenshot(page, f"fleet_console_{scenario}_{width}.png")
+        browser.close()
+
+
+@pytest.mark.parametrize("width,height", [(1920, 1080), (390, 844), (320, 568)])
+def test_slow_initial_gather_does_not_spawn_overlapping_polls(console_url, width, height):
     """The loading state keeps one state request in flight until it resolves."""
     from playwright.sync_api import sync_playwright
 
@@ -396,6 +422,7 @@ def test_slow_initial_gather_does_not_spawn_overlapping_polls(console_url):
     }
     with sync_playwright() as p:
         browser, page, errors = _open_console(p, api, init_script=delayed_state)
+        page.set_viewport_size({"width": width, "height": height})
         page.goto(console_url, wait_until="domcontentloaded")
         page.wait_for_function("() => window.__stateCalls === 1")
         assert "로봇 목록 불러오는 중" in page.inner_text("#roster")
@@ -404,16 +431,26 @@ def test_slow_initial_gather_does_not_spawn_overlapping_polls(console_url):
         assert "로봇 목록 불러오는 중" in page.inner_text("#roster")
         assert page.locator(".queues-panel").is_hidden()
         assert page.locator("#roster-toggle").is_hidden()
-        save_temp_screenshot(page, "fleet_console_slow_loading.png")
-        page.evaluate("snapshot => window.__releaseState(snapshot)", SNAPSHOT)
-        page.wait_for_function("() => document.querySelector('#online-pill')?.textContent === '3/3 연결'")
-        assert "rosy_03" in page.inner_text("#roster")
-        save_temp_screenshot(page, "fleet_console_slow_recovered.png")
+        for state in ("loading", "recovered"):
+            if state == "recovered":
+                page.evaluate("snapshot => window.__releaseState(snapshot)", SNAPSHOT)
+                page.wait_for_function("() => document.querySelector('#online-pill')?.textContent === '3/3 연결'")
+                assert "rosy_03" in page.inner_text("#roster")
+            stop = page.locator("#estop").bounding_box()
+            assert stop and stop["width"] > 0 and stop["y"] + stop["height"] <= height
+            map_panel = page.locator('section[aria-labelledby="map-heading"]').bounding_box()
+            roster_panel = page.locator('section[aria-labelledby="roster-heading"]').bounding_box()
+            assert abs(map_panel["width"] - roster_panel["width"]) <= 1
+            if width < 480:
+                assert abs(map_panel["x"] - roster_panel["x"]) <= 1
+            assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+            save_temp_screenshot(page, f"fleet_console_slow_{state}_{width}.png")
         assert not errors
         browser.close()
 
 
-def test_gather_loss_removes_last_known_robot_position(console_url):
+@pytest.mark.parametrize("width,height", [(1920, 1080), (390, 844), (320, 568)])
+def test_gather_loss_removes_last_known_robot_position(console_url, width, height):
     """A failed refresh must not present the last snapshot as a live position."""
     from playwright.sync_api import sync_playwright
 
@@ -426,6 +463,7 @@ def test_gather_loss_removes_last_known_robot_position(console_url):
     }
     with sync_playwright() as p:
         browser, page, errors = _open_console(p, api)
+        page.set_viewport_size({"width": width, "height": height})
         page.goto(console_url, wait_until="networkidle")
         page.locator("#roster-toggle").click()
         page.wait_for_function("() => document.querySelector('#roster article')?.textContent.includes('1.00')")
@@ -439,11 +477,22 @@ def test_gather_loss_removes_last_known_robot_position(console_url):
         assert "로봇 위치 확인 불가" in page.inner_text("#map-tag")
         assert "로봇 위치 확인 불가" in page.locator("#map-canvas").get_attribute("aria-label")
         assert page.locator("#roster article ui-button").first.is_disabled()
-        save_temp_screenshot(page, "fleet_console_gather-lost-after-live.png")
-        api["/api/fleet/state"] = {"fleet": {"name": "site", "online": 1, "total": 1},
-                                   "robots": [robot]}
-        page.wait_for_function("() => document.querySelector('#roster article')?.textContent.includes('1.00')")
-        assert "로봇 위치 확인 불가" not in page.inner_text("#map-tag")
+        assert page.locator("#online-pill").evaluate("node => node.scrollWidth <= node.clientWidth")
+        for state in ("lost", "recovered"):
+            if state == "recovered":
+                api["/api/fleet/state"] = {"fleet": {"name": "site", "online": 1, "total": 1},
+                                           "robots": [robot]}
+                page.wait_for_function("() => document.querySelector('#roster article')?.textContent.includes('1.00')")
+                assert "로봇 위치 확인 불가" not in page.inner_text("#map-tag")
+            stop = page.locator("#estop").bounding_box()
+            assert stop and stop["width"] > 0 and stop["y"] + stop["height"] <= height
+            map_panel = page.locator('section[aria-labelledby="map-heading"]').bounding_box()
+            roster_panel = page.locator('section[aria-labelledby="roster-heading"]').bounding_box()
+            assert abs(map_panel["width"] - roster_panel["width"]) <= 1
+            if width < 480:
+                assert abs(map_panel["x"] - roster_panel["x"]) <= 1
+            assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+            save_temp_screenshot(page, f"fleet_console_gather_{state}_{width}.png")
         assert not errors
         browser.close()
 
@@ -451,29 +500,79 @@ def test_gather_loss_removes_last_known_robot_position(console_url):
 DECLINE_ESTOP_CONFIRM = DECLINE_CONFIRM
 
 
-def test_fleet_estop_fires_on_one_click_without_any_dialog(console_url):
-    """D-413 — 전체 정지는 확인 없이 한 번의 누름으로 즉시 나간다(D-92a 좁힘).
+@pytest.mark.parametrize("page_file,width,height", [
+    ("index.html", 1920, 1080), ("index.html", 390, 844), ("index.html", 320, 568),
+    ("install.html", 1920, 1080), ("install.html", 390, 844), ("install.html", 320, 568),
+])
+def test_fleet_estop_fires_on_one_click_without_any_dialog(console_url, page_file, width, height):
+    """D-414 — 전체 정지는 확인 없이 한 번의 누름으로 즉시 나간다(D-92a 좁힘).
 
     비상 정지는 비상 출구다: 확인 대화상자는 마찰이고, 거절 경로는 사고다.
     대화상자가 열리지 않는 것까지 확인한다(window.confirm 스텁이 한 번도
     불리지 않으면 통과).
     """
-    from playwright.sync_api import sync_playwright
+    from playwright.sync_api import sync_playwright, expect
 
     posts: list[str] = []
     api = dict(API)
     api["/api/fleet/estop"] = {"stopped": 3, "total": 3, "robots": []}
     with sync_playwright() as p:
-        browser, page, errors = _open_console(p, api, posts=posts, init_script=DECLINE_CONFIRM)
-        page.goto(console_url, wait_until="domcontentloaded")
-        page.fill("#console-token", "operator-token")
-        page.locator("#token-save").click()
+        browser, page, errors = _open_console(p, api, posts=posts, init_script=DECLINE_CONFIRM +
+            "sessionStorage.setItem('rosy-console-token','operator-token');")
+        page.set_viewport_size({"width": width, "height": height})
+        page.goto(console_url.replace("index.html", page_file), wait_until="networkidle")
         page.wait_for_function(
             "() => document.querySelector('#user-role')?.textContent.includes('운영자')", timeout=3000)
         page.locator("#estop").click()
-        page.wait_for_function("() => window.__confirms !== undefined", timeout=3000)
-        page.wait_for_timeout(300)
+        feedback = page.locator("#estop-feedback")
+        expect(feedback).to_contain_text("정지 요청 응답: 3/3 · 물리 정지 미확인")
+        box = feedback.bounding_box()
+        assert box and box["y"] >= 0 and box["y"] + box["height"] <= height
+        edges = page.locator("main").evaluate("""main => {
+            const box = main.getBoundingClientRect(), style = getComputedStyle(main);
+            return [box.left + parseFloat(style.paddingLeft), box.right - parseFloat(style.paddingRight)];
+        }""")
+        assert abs(box["x"] - edges[0]) < 1
+        assert abs(box["x"] + box["width"] - edges[1]) < 1
+        if page_file == "index.html":
+            workflow = page.locator("#console-workflow").bounding_box()
+            assert workflow and abs(workflow["x"] - edges[0]) < 1
+            assert abs(workflow["x"] + workflow["width"] - edges[1]) < 1
+        assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+        save_temp_screenshot(page, f"fleet_estop_result_{page_file[:-5]}_{width}.png")
         assert any(path == "/api/fleet/estop" for _method, path in posts), posts
+        assert page.evaluate("() => window.__confirms.length") == 0
+        assert not errors
+        browser.close()
+
+
+@pytest.mark.parametrize("page_file", ["index.html", "install.html"])
+@pytest.mark.parametrize("response,expected", [
+    ({"stopped": 1, "total": 3, "robots": [
+        {"robot_id": "rosy_02", "stopped": False, "error": {"code": "CONNECT_ERROR"}}]},
+     "정지 요청 응답: 1/3 · 물리 정지 미확인"),
+    ((503, {"detail": {"code": "SERVER_UNAVAILABLE"}}), "비상 정지 결과 확인 불가"),
+])
+def test_fleet_estop_partial_and_unknown_are_visible_on_phone(console_url, page_file, response, expected):
+    from playwright.sync_api import sync_playwright, expect
+
+    api = {**API, "/api/fleet/estop": response}
+    with sync_playwright() as p:
+        browser, page, errors = _open_console(p, api, init_script=DECLINE_CONFIRM +
+            "sessionStorage.setItem('rosy-console-token','operator-token');")
+        page.set_viewport_size({"width": 320, "height": 568})
+        page.goto(console_url.replace("index.html", page_file), wait_until="networkidle")
+        page.locator("#estop").click()
+        feedback = page.locator("#estop-feedback")
+        expect(feedback).to_contain_text(expected)
+        assert feedback.get_attribute("state") == "error"
+        assert "SERVER_UNAVAILABLE" not in feedback.inner_text()
+        box = feedback.bounding_box()
+        assert box and box["y"] >= 0 and box["y"] + box["height"] <= 568
+        assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+        save_temp_screenshot(page, f"fleet_estop_{'partial' if isinstance(response, dict) else 'unknown'}_{page_file[:-5]}_320.png")
+        if isinstance(response, dict):
+            assert "rosy_02" in page.locator("#log").inner_text()
         assert page.evaluate("() => window.__confirms.length") == 0
         assert not errors
         browser.close()
@@ -559,7 +658,8 @@ def test_fleet_confirmation_keeps_stop_live_and_rechecks_dispatch_generation(con
         browser.close()
 
 
-def test_fleet_cancel_all_requires_confirm_and_logs_each_robot_honestly(console_url):
+@pytest.mark.parametrize("width,height", [(1920, 1080), (390, 844), (320, 568)])
+def test_fleet_cancel_all_requires_confirm_and_logs_each_robot_honestly(console_url, width, height):
     """D-421 — 전체 주행 취소는 confirm을 지나고, 로봇별 결과와 물리 정지 미확인을 쓴다."""
     from playwright.sync_api import sync_playwright
 
@@ -600,20 +700,38 @@ def test_fleet_cancel_all_requires_confirm_and_logs_each_robot_honestly(console_
     with sync_playwright() as p:
         browser, page, errors = _open_console(
             p, api, posts=posts, init_script=DECLINE_CONFIRM)
+        page.set_viewport_size({"width": width, "height": height})
         page.goto(console_url, wait_until="networkidle")
         page.locator("#cancel-all").click()
         dialog = page.locator('dialog.ui-confirm')
         dialog.wait_for()
         confirms = [dialog.inner_text()]
+        stop = page.locator("#estop").bounding_box()
+        assert stop and stop["width"] > 0 and stop["y"] >= 0 and stop["y"] + stop["height"] <= height
+        assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+        save_temp_screenshot(page, "fleet_cancel_all_confirm.png" if width == 1920 else f"fleet_cancel_all_confirm_{width}.png")
         dialog.locator('ui-button[kind=quiet]').click()
         declined = [post for post in posts if post[1] == "/api/fleet/cancel-all"]
+        assert page.locator("#cancel-all-result").is_hidden()
         page.locator("#cancel-all").click()
         dialog.locator('ui-button[kind=irreversible]').click()
-        page.get_by_text("주행 취소 요청 응답: 1/3 · 물리 정지 미확인").wait_for()
+        page.locator("#log").get_by_text("주행 취소 요청 응답: 1/3 · 물리 정지 미확인").wait_for()
+        summary = page.locator("#cancel-all-result")
+        assert "1/3 · 물리 정지 미확인" in summary.inner_text()
+        result_box = summary.bounding_box()
+        assert result_box and result_box["y"] >= 0 and result_box["y"] + result_box["height"] <= height
         page.get_by_text("rosy_02 주행 취소 응답 없음 — 대형 추종 ConnectError · 내비게이션 ConnectError · 차선 추종 ConnectError").wait_for()
         page.get_by_text("rosy_03 주행 취소 실패 — 주소 미확인 — 차선 추종 끄기 미전송").wait_for()
         page.get_by_text("대기 작업 2개 취소 · 로봇 취소 확인 대기 작업 1개").wait_for()
-        save_temp_screenshot(page, "fleet_cancel_all_result.png")
+        assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+        save_temp_screenshot(page, "fleet_cancel_all_result.png" if width == 1920 else f"fleet_cancel_all_result_{width}.png")
+        details = page.locator("#cancel-all-details")
+        assert details.is_visible() and details.get_attribute("href") == "#log"
+        details.click()
+        assert page.evaluate("location.hash") == "#log"
+        assert page.locator("#log").is_visible()
+        page.locator("#log-clear").click()
+        assert details.is_hidden()
         assert not errors, f"페이지 오류: {errors}"
         browser.close()
 
@@ -621,6 +739,29 @@ def test_fleet_cancel_all_requires_confirm_and_logs_each_robot_honestly(console_
     assert declined == []
     assert ("POST", "/api/fleet/cancel-all") in posts
     assert ("POST", "/api/fleet/estop") not in posts
+
+
+def test_fleet_cancel_all_failure_is_visible_beside_action_on_phone(console_url):
+    from playwright.sync_api import sync_playwright, expect
+
+    api = {**API, "/api/fleet/cancel-all": (503, {"detail": {"code": "SERVER_UNAVAILABLE"}})}
+    with sync_playwright() as p:
+        browser, page, errors = _open_console(p, api)
+        page.set_viewport_size({"width": 320, "height": 568})
+        page.goto(console_url, wait_until="networkidle")
+        page.locator("#cancel-all").click()
+        page.locator('dialog.ui-confirm ui-button[kind=irreversible]').click()
+        result = page.locator("#cancel-all-result")
+        expect(result).to_contain_text("주행 취소 결과 확인 불가")
+        expect(result).to_contain_text("로봇 상태를 다시 확인하세요")
+        assert "SERVER_UNAVAILABLE" not in result.inner_text()
+        box = result.bounding_box()
+        assert box and box["y"] >= 0 and box["y"] + box["height"] <= 568
+        assert page.locator("#cancel-all-details").is_hidden()
+        assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+        save_temp_screenshot(page, "fleet_cancel_all_failure_320.png")
+        assert not errors
+        browser.close()
 
 
 DELAYED_FORMATION = {
@@ -640,8 +781,8 @@ DELAYED_FORMATION = {
 HOLDING_FORMATION = {
     **FORMATION,
     "state": "HOLDING",
-    "reason": ["STREAM_LOST"],
-    "pending_triggers": [["stream", "rosy_03"]],
+    "reason": ["nav.stuck", "rosy_03"],
+    "pending_triggers": [],
 }
 
 UNREACHABLE_SNAPSHOT = {
@@ -652,14 +793,15 @@ UNREACHABLE_SNAPSHOT = {
         SNAPSHOT["robots"][1],
         _robot(
             "rosy_03", {"x": 0.45, "y": 0.4, "yaw": 0.0},
-            online=False,
+            online=False, state=None,
             error={"reachable": False, "code": "CONNECT_ERROR"},
         ),
     ],
 }
 
 
-def test_delayed_follower_stream_is_named_in_the_roster(console_url):
+@pytest.mark.parametrize("width,height", [(1920, 1080), (390, 844), (320, 568)])
+def test_delayed_follower_stream_is_named_in_the_roster(console_url, width, height):
     """FOR-003 — 바닥 Hz 아래 팔로워는 '지연'으로, 단절 팔로워는 '끊김'으로 갈린다."""
     from playwright.sync_api import sync_playwright
 
@@ -670,6 +812,7 @@ def test_delayed_follower_stream_is_named_in_the_roster(console_url):
     }
     with sync_playwright() as p:
         browser, page, errors = _open_console(p, api)
+        page.set_viewport_size({"width": width, "height": height})
         page.goto(console_url, wait_until="networkidle")
         page.wait_for_function(
             "() => (window.__swarmOverlay?.slots || 0) === 2", timeout=8000
@@ -677,12 +820,17 @@ def test_delayed_follower_stream_is_named_in_the_roster(console_url):
         roster = page.inner_text("#roster")
         assert "지연" in roster, "1.2 Hz 팔로워에 지연 태그가 없다"
         assert "끊김" in roster
+        assert "rosy_02" in page.locator("#roster article").first.inner_text()
+        stop = page.locator("#estop").bounding_box()
+        assert stop and stop["width"] > 0 and stop["y"] >= 0 and stop["y"] + stop["height"] <= height
+        assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
         assert not errors
-        save_temp_screenshot(page, "fleet_console_delayed.png")
+        save_temp_screenshot(page, "fleet_console_delayed.png" if width == 1920 else f"fleet_console_delayed_{width}.png")
         browser.close()
 
 
-def test_unreachable_robot_is_never_drawn_healthy(console_url):
+@pytest.mark.parametrize("width,height", [(1920, 1080), (390, 844), (320, 568)])
+def test_unreachable_robot_is_never_drawn_healthy(console_url, width, height):
     """concept 16 §5 — 연락 두절은 자기 상태다. '닿지 않음'과 이유가 보여야 한다."""
     from playwright.sync_api import sync_playwright
 
@@ -693,6 +841,7 @@ def test_unreachable_robot_is_never_drawn_healthy(console_url):
     }
     with sync_playwright() as p:
         browser, page, errors = _open_console(p, api)
+        page.set_viewport_size({"width": width, "height": height})
         page.goto(console_url, wait_until="networkidle")
         page.wait_for_function(
             "() => document.getElementById('online-pill')?.textContent === '2/3 연결'"
@@ -701,9 +850,17 @@ def test_unreachable_robot_is_never_drawn_healthy(console_url):
         assert "닿지 않음: CONNECT_ERROR" in roster
         assert "오프라인" in roster
         assert "OFFLINE" not in roster
+        offline = page.locator("#roster .robot.offline")
+        assert "rosy_03" in page.locator("#roster article").first.inner_text()
+        assert "NAVIGATING" not in offline.inner_text()
+        assert "0.45" not in offline.inner_text()
         assert page.locator("#roster .robot.offline ui-tag[status=crit]", has_text="오프라인").first.get_attribute("title") == "OFFLINE"
+        offline.scroll_into_view_if_needed()
+        stop = page.locator("#estop").bounding_box()
+        assert stop and stop["width"] > 0 and stop["y"] >= 0 and stop["y"] + stop["height"] <= height
+        assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
         assert not errors
-        save_temp_screenshot(page, "fleet_console_unreachable.png")
+        save_temp_screenshot(page, "fleet_console_unreachable.png" if width == 1920 else f"fleet_console_unreachable_{width}.png")
         browser.close()
 
 
@@ -732,9 +889,12 @@ def test_goal_is_unavailable_when_safety_is_unknown_or_stopped(console_url, safe
         # visible value and goal dispatch remains disabled.
         assert expected in safety_row.inner_text()
         assert reason in card.inner_text()
+        assert "목표 남음" in card.inner_text()
+        assert "NAVIGATING" not in card.inner_text()
         assert card.locator("ui-button[data-goal-robot-id]").evaluate("node => node.disabled")
         assert not card.locator("ui-button").nth(1).evaluate("node => node.disabled")
         assert not errors
+        save_temp_screenshot(page, "fleet_safety_stopped.png" if safety else "fleet_safety_unknown.png")
         browser.close()
 
 
@@ -796,7 +956,58 @@ def test_holding_formation_enables_resume_and_warns(console_url):
         browser.close()
 
 
-def test_formation_read_loss_hides_last_running_evidence_and_recovers(console_url):
+@pytest.mark.parametrize("width,height", [(1920, 1080), (390, 844), (320, 568)])
+def test_holding_formation_pending_trigger_blocks_resume_at_declared_widths(console_url, width, height):
+    """A pending safety trigger must not offer a resume action that the server rejects."""
+    from playwright.sync_api import sync_playwright
+
+    api = {
+        "/api/fleet/state": SNAPSHOT,
+        "/api/fleet/map": MAP_GRID,
+        "/api/fleet/formation": {
+            **HOLDING_FORMATION,
+            "pending_triggers": [["safety.estop", "rosy_02"]],
+        },
+    }
+    with sync_playwright() as p:
+        browser, page, errors = _open_console(p, api)
+        page.set_viewport_size({"width": width, "height": height})
+        page.goto(console_url, wait_until="networkidle")
+        page.wait_for_function("() => document.querySelector('#formation-state')?.textContent === '유지 중'")
+        assert page.locator("#formation-resume").is_disabled()
+        assert "비상 정지" in page.inner_text("#formation-detail")
+        assert "safety.estop" not in page.inner_text("#formation-detail")
+        assert "주행 정체" in page.inner_text("#formation-detail")
+        assert "nav.stuck" not in page.inner_text("#formation-detail")
+        for state in ("blocked", "ready"):
+            if state == "ready":
+                api["/api/fleet/formation"] = HOLDING_FORMATION
+                page.reload(wait_until="networkidle")  # Separate HOLD with no pending trigger.
+                page.wait_for_function("() => !document.querySelector('#formation-resume')?.disabled", timeout=7000)
+                assert "재개 차단" not in page.inner_text("#formation-detail")
+            stop = page.locator("#estop").bounding_box()
+            assert stop and stop["width"] > 0 and stop["y"] + stop["height"] <= height
+            if width < 480:
+                panels = [page.locator(selector).bounding_box() for selector in (
+                    'section[aria-labelledby="map-heading"]',
+                    'section[aria-labelledby="roster-heading"]',
+                    ".ops-block",
+                )]
+                assert max(panel["width"] for panel in panels) - min(panel["width"] for panel in panels) <= 1
+                assert max(panel["x"] for panel in panels) - min(panel["x"] for panel in panels) <= 1
+                actions = [page.locator(f"#formation-{name}").bounding_box() for name in (
+                    "start", "reform", "resume", "stop",
+                )]
+                assert max(action["width"] for action in actions) - min(action["width"] for action in actions) <= 1
+            assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+            page.locator("#formation-state").scroll_into_view_if_needed()
+            save_temp_screenshot(page, f"fleet_formation_hold_{state}_{width}.png")
+        assert errors == []
+        browser.close()
+
+
+@pytest.mark.parametrize("width,height", [(1920, 1080), (390, 844), (320, 568)])
+def test_formation_read_loss_hides_last_running_evidence_and_recovers(console_url, width, height):
     """A failed poll must not present an old leader or relay rate as current."""
     from playwright.sync_api import sync_playwright
 
@@ -807,6 +1018,7 @@ def test_formation_read_loss_hides_last_running_evidence_and_recovers(console_ur
     }
     with sync_playwright() as playwright:
         browser, page, errors = _open_console(playwright, api)
+        page.set_viewport_size({"width": width, "height": height})
         page.goto(console_url, wait_until="networkidle")
         page.wait_for_function("() => document.querySelector('#formation-state')?.textContent === '진행 중'")
         assert "9.8 Hz" in page.inner_text("#formation-detail")
@@ -817,16 +1029,30 @@ def test_formation_read_loss_hides_last_running_evidence_and_recovers(console_ur
                                timeout=7000)
         assert "9.8 Hz" not in page.inner_text("#formation-detail")
         assert "리더 rosy_01" not in page.inner_text("#formation-detail")
+        assert "FORMATION_UNAVAILABLE" not in page.inner_text("#formation-detail")
         assert page.evaluate("window.__swarmOverlay?.slots") == 0
         for control in ("formation-start", "formation-reform", "formation-resume"):
             assert page.locator(f"#{control}").is_disabled()
-        save_temp_screenshot(page, "fleet_formation_read_lost.png")
-
-        api["/api/fleet/formation"] = FORMATION
-        page.wait_for_function("() => document.querySelector('#formation-state')?.textContent === '진행 중'",
-                               timeout=7000)
-        assert "9.8 Hz" in page.inner_text("#formation-detail")
-        assert page.evaluate("window.__swarmOverlay?.slots") == 2
+        for state in ("lost", "recovered"):
+            if state == "recovered":
+                api["/api/fleet/formation"] = FORMATION
+                page.wait_for_function("() => document.querySelector('#formation-state')?.textContent === '진행 중'",
+                                       timeout=7000)
+                assert "9.8 Hz" in page.inner_text("#formation-detail")
+                assert page.evaluate("window.__swarmOverlay?.slots") == 2
+            stop = page.locator("#estop").bounding_box()
+            assert stop and stop["width"] > 0 and stop["y"] + stop["height"] <= height
+            if width < 480:
+                map_panel = page.locator('section[aria-labelledby="map-heading"]').bounding_box()
+                roster_panel = page.locator('section[aria-labelledby="roster-heading"]').bounding_box()
+                ops_panel = page.locator(".ops-block").bounding_box()
+                assert max(map_panel["width"], roster_panel["width"], ops_panel["width"]) - min(
+                    map_panel["width"], roster_panel["width"], ops_panel["width"]) <= 1
+                assert max(map_panel["x"], roster_panel["x"], ops_panel["x"]) - min(
+                    map_panel["x"], roster_panel["x"], ops_panel["x"]) <= 1
+            assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+            page.locator("#formation-state").scroll_into_view_if_needed()
+            save_temp_screenshot(page, f"fleet_formation_read_{state}_{width}.png")
         assert errors == []
         browser.close()
 
@@ -1085,6 +1311,7 @@ def test_fleet_map_keyboard_goal_requires_confirmation_and_can_cancel(console_ur
         dialog = page.locator('dialog.ui-confirm')
         dialog.wait_for()
         assert "rosy_02" in dialog.inner_text()
+        save_temp_screenshot(page, "fleet_goal_confirm_open.png")
         dialog.locator('ui-button[kind=quiet]').click()
         assert not any(method == "POST" and path == goal_path for method, path in posts)
         page.keyboard.press("Escape")
@@ -1210,6 +1437,8 @@ FLEET_FIT_PROBE = """() => {
   };
   return {
     docOverflow: document.documentElement.scrollHeight - window.innerHeight,
+    primary: inside('.console-primary'),
+    secondary: inside('.console-secondary'),
     mapPanel: inside('.panel[aria-labelledby="map-heading"]'),
     mapCanvas: inside('#map-canvas'),
     visionFrame: inside('#vision-frame'),
@@ -1248,13 +1477,15 @@ def test_console_fits_the_declared_viewport(console_url):
         f"문서가 {fit['docOverflow']}px 스크롤된다 — 예외 문법은 한눈에 다"
         " 보인다(D-201): " + str(fit)
     )
+    assert abs(fit["primary"]["width"] - fit["secondary"]["width"]) <= 1, fit
     for name in ("signals", "formation", "rosterPanel"):
         box = fit[name]
         assert box is not None and box["bottom"] <= fit["vh"] and box["top"] >= 0, (
             f"{name} 이(가) 뷰포트 밖이다(D-201): {box}"
         )
-    for name in ("mapCanvas", "visionFrame", "visionPreview", "signals", "formation", "roster", "rosterPanel", "stop"):
+    for name in ("mapCanvas", "visionPreview", "signals", "formation", "roster", "rosterPanel", "stop"):
         assert fit[name]["width"] > 0 and fit[name]["height"] > 0, fit
+    assert fit["visionFrame"]["height"] == 0, fit  # No camera source in this fixture.
     assert fit["stop"]["width"] >= 58 and fit["stop"]["height"] >= 58, fit
     assert fit["stop"]["top"] >= 0 and fit["stop"]["bottom"] <= fit["vh"], fit
     assert fit["roster"]["top"] - fit["rosterHeading"]["bottom"] <= 24, fit
@@ -1643,6 +1874,17 @@ def test_mobile_console_has_no_horizontal_overflow(console_url, width):
         browser, page, errors = _open_console(playwright, API)
         page.set_viewport_size({"width": width, "height": 844})
         page.goto(console_url, wait_until="networkidle")
+        assert page.locator("#roster article").count() == 1
+        assert "rosy_03" in page.locator("#roster article").inner_text()
+        save_temp_screenshot(page, f"fleet_console_mobile_default_{width}.png")
+        actions = page.locator("#roster article .robot-actions")
+        action_widths = actions.locator("ui-button").evaluate_all(
+            "buttons => buttons.map(button => button.getBoundingClientRect().width)")
+        assert len(action_widths) == 3 and abs(action_widths[0] - action_widths[1]) <= 1, action_widths
+        if width == 320:
+            assert abs(action_widths[2] - actions.bounding_box()["width"]) <= 1, action_widths
+        else:
+            assert abs(action_widths[2] - action_widths[0]) <= 1, action_widths
         page.locator("#roster-toggle").click()
         page.wait_for_function("() => document.querySelectorAll('#roster article').length > 0")
         save_temp_screenshot(page, f"fleet_console_mobile_{width}.png")
@@ -1665,6 +1907,7 @@ def test_mobile_console_has_no_horizontal_overflow(console_url, width):
             ).map(b => [a.selector, b.selector]));
           })(),
           brand: document.querySelector('ui-brand').getBoundingClientRect().toJSON(),
+          brandSize: parseFloat(getComputedStyle(document.querySelector('ui-brand b')).fontSize),
           stop: document.querySelector('#estop').getBoundingClientRect().toJSON(),
           status: document.querySelector('#online-pill').getBoundingClientRect().toJSON(),
           operator: document.querySelector('#user-role').getBoundingClientRect().toJSON(),
@@ -1676,11 +1919,15 @@ def test_mobile_console_has_no_horizontal_overflow(console_url, width):
           stopVerb: [...document.querySelectorAll('#estop span')].filter(node => !node.classList.contains('sr-only')).map(node => node.textContent).join(''),
           stopAccessibleName: document.querySelector('#estop').getAttribute('aria-label'),
         })""")
+        if width <= 320:
+            page.locator("#topbar-more").click()
+            assert page.locator('#topbar-extra a[href="/console/cell"]').is_visible()
         browser.close()
     assert errors == []
     assert layout["overflow"] == 0, layout["outside"]
     assert layout["stop"]["right"] <= width, layout
     assert layout["status"]["right"] <= width, layout
+    assert layout["brand"]["left"] >= 0 and layout["brandSize"] >= 12, layout
     assert layout["brand"]["right"] <= layout["status"]["left"] or layout["brand"]["bottom"] <= layout["status"]["top"], layout
     assert layout["headerRows"] <= 4, layout
     assert layout["headerOverlaps"] == [], layout

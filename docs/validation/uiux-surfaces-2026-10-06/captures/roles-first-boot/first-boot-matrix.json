@@ -1,0 +1,104 @@
+[
+  {
+    "role": "operator",
+    "surface": "setup",
+    "viewport": "1366x768",
+    "image": "operator-setup-first-boot-1366x768.png",
+    "pending": [
+      "/api/v1/ui/surfaces/setup",
+      "/api/v1/robot/state"
+    ],
+    "errors": [],
+    "loading": "화면을 불러오는 중입니다.",
+    "safety": "안전 상태 확인 중 · CORE의 첫 상태 응답을 기다리고 있습니다.",
+    "safetyVisible": true,
+    "panelCount": 0,
+    "overflowX": 0,
+    "eStopVisible": true
+  },
+  {
+    "role": "operator",
+    "surface": "setup",
+    "viewport": "390x844",
+    "image": "operator-setup-first-boot-390x844.png",
+    "pending": [
+      "/api/v1/ui/surfaces/setup",
+      "/api/v1/robot/state"
+    ],
+    "errors": [],
+    "loading": "화면을 불러오는 중입니다.",
+    "safety": "안전 상태 확인 중 · CORE의 첫 상태 응답을 기다리고 있습니다.",
+    "safetyVisible": true,
+    "panelCount": 0,
+    "overflowX": 0,
+    "eStopVisible": true
+  },
+  {
+    "role": "administrator",
+    "surface": "setup",
+    "viewport": "1366x768",
+    "image": "administrator-setup-first-boot-1366x768.png",
+    "pending": [
+      "/api/v1/ui/surfaces/setup",
+      "/api/v1/robot/state"
+    ],
+    "errors": [],
+    "loading": "화면을 불러오는 중입니다.",
+    "safety": "안전 상태 확인 중 · CORE의 첫 상태 응답을 기다리고 있습니다.",
+    "safetyVisible": true,
+    "panelCount": 0,
+    "overflowX": 0,
+    "eStopVisible": true
+  },
+  {
+    "role": "administrator",
+    "surface": "setup",
+    "viewport": "390x844",
+    "image": "administrator-setup-first-boot-390x844.png",
+    "pending": [
+      "/api/v1/ui/surfaces/setup",
+      "/api/v1/robot/state"
+    ],
+    "errors": [],
+    "loading": "화면을 불러오는 중입니다.",
+    "safety": "안전 상태 확인 중 · CORE의 첫 상태 응답을 기다리고 있습니다.",
+    "safetyVisible": true,
+    "panelCount": 0,
+    "overflowX": 0,
+    "eStopVisible": true
+  },
+  {
+    "role": "administrator",
+    "surface": "device",
+    "viewport": "1366x768",
+    "image": "administrator-device-first-boot-1366x768.png",
+    "pending": [
+      "/api/v1/ui/surfaces/device",
+      "/api/v1/robot/state"
+    ],
+    "errors": [],
+    "loading": "화면을 불러오는 중입니다.",
+    "safety": "안전 상태 확인 중 · CORE의 첫 상태 응답을 기다리고 있습니다.",
+    "safetyVisible": true,
+    "panelCount": 0,
+    "overflowX": 0,
+    "eStopVisible": true
+  },
+  {
+    "role": "administrator",
+    "surface": "device",
+    "viewport": "390x844",
+    "image": "administrator-device-first-boot-390x844.png",
+    "pending": [
+      "/api/v1/ui/surfaces/device",
+      "/api/v1/robot/state"
+    ],
+    "errors": [],
+    "loading": "화면을 불러오는 중입니다.",
+    "safety": "안전 상태 확인 중 · CORE의 첫 상태 응답을 기다리고 있습니다.",
+    "safetyVisible": true,
+    "panelCount": 0,
+    "overflowX": 0,
+    "eStopVisible": true
+  }
+]

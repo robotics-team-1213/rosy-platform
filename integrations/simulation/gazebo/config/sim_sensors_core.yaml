@@ -1,0 +1,9 @@
+# Gazebo-only CORE overlay fragment: append to a sim core overlay (ROSY_CONFIG) together with
+# launch_sim sim_sensors:=true, which bridges the model IMU and IR floor rays. Never on a device:
+# CORE refuses simulation_sensors without use_sim_time. D-400 enforce here is a sim test of the
+# D-468 floor proof, not G-sim/G-enforce acceptance.
+control:
+  sensor_adapter:
+    mode: "enforce"
+    required: [lidar, imu, ir]
+    simulation_sensors: true
